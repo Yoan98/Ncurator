@@ -1,6 +1,5 @@
 import type { JsonValue } from '../../../../../../shared/types'
 import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../constants'
-import type { HumanDecisionHint } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 
 export const estimateToolResultTokens = (value: JsonValue | string): number => {
@@ -21,7 +20,6 @@ export type ToolResultSizeCheck = {
   tooLarge: boolean
   estimatedTokens: number
   limit: number
-  decisionHint?: Extract<HumanDecisionHint, { code: 'hand_tool_result_too_large' }>
 }
 
 export const checkToolResultSize = (input: {
@@ -46,14 +44,7 @@ export const checkToolResultSize = (input: {
   return {
     tooLarge: true,
     estimatedTokens,
-    limit,
-    decisionHint: {
-      code: 'hand_tool_result_too_large',
-      detail: {
-        toolName: input.toolName,
-        estimatedTokens,
-        limit
-      }
-    }
+    limit
   }
 }
+

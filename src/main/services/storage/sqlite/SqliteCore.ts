@@ -13,7 +13,7 @@ import { aiRunExecutionPermissionMigration } from './migrations/007_ai_run_execu
 import { dropLlmStrategyPreferenceMigration } from './migrations/008_drop_llm_strategy_preference'
 import { repairAiRuntimeSystemNotificationsColumnMigration } from './migrations/009_repair_ai_runtime_system_notifications_column'
 import { scheduledTaskMigration } from './migrations/010_scheduled_task'
-import { chatSessionTranscriptMigration } from './migrations/011_chat_session_transcript'
+import { chatSessionMessageLogMigration } from './migrations/011_chat_session_message_log'
 import { dropChatConversationMemoryMigration } from './migrations/012_drop_chat_conversation_memory'
 
 export type SqliteDatabase = Database.Database
@@ -30,7 +30,7 @@ const MIGRATIONS: Migration[] = [
   dropLlmStrategyPreferenceMigration,
   repairAiRuntimeSystemNotificationsColumnMigration,
   scheduledTaskMigration,
-  chatSessionTranscriptMigration,
+  chatSessionMessageLogMigration,
   dropChatConversationMemoryMigration
 ]
 

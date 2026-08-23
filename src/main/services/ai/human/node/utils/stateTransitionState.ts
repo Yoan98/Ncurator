@@ -3,8 +3,7 @@ import type {
   HumanResult,
   HumanRoundThought,
   HumanState,
-  HumanTraceStep,
-  HumanDecisionHint
+  HumanTraceStep
 } from '../../types'
 
 export type HumanTraceItemInput = {
@@ -73,7 +72,6 @@ export const returnToBrainState = (
 export const returnToBrainAfterTraceState = (input: {
   state: HumanState
   traceItems: HumanTraceItemInput[]
-  decisionHint?: HumanDecisionHint
   overrides?: HumanStateOverrides<'trace'>
 }): HumanState => {
   const traceSteps = appendHumanTraceSteps({
@@ -85,8 +83,7 @@ export const returnToBrainAfterTraceState = (input: {
     ...input.overrides,
     execution: {
       ...input.overrides?.execution,
-      stage: 'dispatch',
-      pendingDecisionHint: input.decisionHint
+      stage: 'dispatch'
     },
     trace: {
       steps: traceSteps
@@ -101,9 +98,7 @@ const resolveBrainNextStage = (action: HumanNextAction['action']): HumanState['e
       ? 'hand'
       : action === 'plan'
         ? 'plan'
-        : action === 'mouth'
-          ? 'mouth'
-          : 'fault'
+        : 'mouth'
 
 export const applyBrainDecisionState = (input: {
   state: HumanState
@@ -125,8 +120,6 @@ export const applyBrainDecisionState = (input: {
         thought: input.thought,
         nextAction: input.nextAction
       },
-      pendingDecisionHint: undefined,
-      pendingFault: undefined,
       evidenceReferences: undefined
     },
     trace: {

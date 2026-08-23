@@ -1,5 +1,4 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import type { JsonObject } from '../../../../../../../shared/types'
 import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
 import type { DocxToolRuntime } from '../runtime'
 import type {
@@ -246,14 +245,6 @@ const buildResultTooLargeFailure = (input: {
     toolCallId: input.toolCallId,
     reason: 'result_too_large',
     error: 'docx result too large',
-    decisionHint: {
-      code: 'hand_tool_result_too_large',
-      detail: {
-        toolName: input.toolName,
-        estimatedTokens: input.estimatedTokens,
-        limit: getDocxAiResultTokenLimit(input.runtime)
-      }
-    } as JsonObject,
     resourceContext: input.runtime.buildResourceContext({
       sourcePath: input.sourcePath,
       effectKind: 'read',

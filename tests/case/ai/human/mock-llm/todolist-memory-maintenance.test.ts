@@ -1,7 +1,6 @@
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { filterAiRunEventsByType } from '../testUtils'
 import { buildToolDecision } from '../testUtils'
 
 describe('ai human mock-llm backend', () => {
@@ -45,7 +44,7 @@ describe('ai human mock-llm backend', () => {
               },
               ({ user }) => {
                 thirdBrainSeesIncompleteHint =
-                  user.includes('上一轮选择了最终交付，但计划中仍有未完成事项') &&
+                  user.includes('交付失败，计划中仍有未完成事项') &&
                   user.includes('确认 B 事项') &&
                   user.includes('检查是否已经满足用户诉求并能进入最终交付')
 
@@ -93,25 +92,17 @@ describe('ai human mock-llm backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const decisionHints = filterAiRunEventsByType(result.events, 'decision_hint')
         runtime.assertThat(
           result.output.status === 'completed' &&
             result.secondBrainSeesTodolist &&
-            result.thirdBrainSeesIncompleteHint &&
-            decisionHints.some(
-              (event) =>
-                event.code === 'brain_plan_incomplete' &&
-                Array.isArray(event.detail?.pendingItems) &&
-                event.detail.pendingItems.includes('确认 B 事项')
-            ),
+            result.thirdBrainSeesIncompleteHint,
           {
             name: 'thought-todolist-persists-and-mouth-is-blocked-while-todo-remains',
             message:
-              'plan 应作为长期任务板在下一轮真实 brain prompt 中继续存在，并在仍有 todo 时收到真实 decision_hint 后返回 brain。',
+              'plan 应作为长期任务板在下一轮真实 brain prompt 中继续存在，并在仍有 todo 时返回 brain 继续推进。',
             data: {
               secondBrainSeesTodolist: result.secondBrainSeesTodolist,
-              thirdBrainSeesIncompleteHint: result.thirdBrainSeesIncompleteHint,
-              decisionHints
+              thirdBrainSeesIncompleteHint: result.thirdBrainSeesIncompleteHint
             }
           }
         )

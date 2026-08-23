@@ -3,7 +3,7 @@ import { HumanMessage, ToolMessage } from '@langchain/core/messages'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { buildMouthDeliveryMessage } from '../../prompts/mouth'
 import { assertExternalLearnedSkillIds } from '../../skills'
-import { completeHumanTask, returnToBrainWithDecisionHint } from '../utils/stateTransitions'
+import { completeHumanTask, returnToBrain } from '../utils/stateTransitions'
 import {
   appendDocxApplyArtifactsAndEmitEvents,
   appendFileChangeArtifactsAndEmitEvents,
@@ -42,24 +42,13 @@ export const createMouthNode = (input: {
 
     const pendingRound = state.execution.pendingRound
     if (!pendingRound || pendingRound.nextAction.action !== 'mouth') {
-      return {
-        ...state,
-        execution: {
-          ...state.execution,
-          stage: 'fault',
-          pendingFault: { result: '决策失败，mouth 节点没有收到可读取的交付决策。' }
-        }
-      }
+      throw new Error('决策失败，mouth 节点没有收到可读取的交付决策。')
     }
 
     const pendingItems = state.memory.plan
       .filter((item) => item.status === 'todo')
       .map((item) => item.title)
     if (pendingItems.length > 0 && state.execution.finalizationReason !== 'brain_content_safety') {
-      const decisionHint = {
-        code: 'brain_plan_incomplete' as const,
-        detail: { pendingItems }
-      }
       const result = `交付失败，计划中仍有未完成事项：${pendingItems.join('、')}。`
       const finishToolCallId =
         pendingRound.nextAction.action === 'mouth' ? pendingRound.nextAction.toolCallId : undefined
@@ -72,19 +61,17 @@ export const createMouthNode = (input: {
           })
         )
         input.cache.messages = messages
-        await input.ctx.appendTranscript([
+        await input.ctx.appendMessageLog([
           { kind: 'tool', toolCallId: finishToolCallId, toolName: 'finish', result: { message: result } }
         ])
       }
-      return returnToBrainWithDecisionHint({
-        ctx: input.ctx,
-        state,
-        source: 'brain',
-        decisionHint,
-        overrides: {
-          memory: {
-            ...state.memory
-          }
+      return returnToBrain(state, {
+        execution: {
+          stage: 'context_budget',
+          pendingDispatch: undefined
+        },
+        memory: {
+          ...state.memory
         }
       })
     }
@@ -126,6 +113,9 @@ export const createMouthNode = (input: {
       state: promptState,
       ctx: input.ctx
     })
+    await input.ctx.appendMessageLog([
+      { kind: 'annotation', eventType: 'finalizing_started', payload: {} }
+    ])
     if (input.emitAnswerEvents) {
       emitFinalizingStarted({
         sendEvent: input.ctx.sendEvent,
@@ -198,7 +188,7 @@ export const createMouthNode = (input: {
         promptState.execution.pendingRound?.thought.text || '任务结束'
       ].join('\n')
 
-    await input.ctx.appendTranscript([
+    await input.ctx.appendMessageLog([
       { kind: 'assistant', content: deliveryMarkdown, toolCalls: [] }
     ])
 

@@ -170,9 +170,7 @@ export type CreateAiRunContextInput = {
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   checkCancelledOverride?: () => void
   humanRuntimeOverrides?: {
-    hardActionLimit?: number
     graphRecursionLimit?: number
-    toolLimitWarningRatio?: number
     modelContextWindowTokens?: number
     terminalEnvironment?: Record<string, string>
   }

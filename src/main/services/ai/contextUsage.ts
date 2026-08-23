@@ -1,23 +1,23 @@
-import type { ChatTranscriptStore } from '../storage/domains/ChatTranscriptStore'
+import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from './human/constants'
-import { deriveTranscriptMessages } from './human/memory/transcript'
+import { deriveMessageLogMessages } from './human/memory/transcript'
 import { extractTextContent } from './structuredOutput'
 import { estimateTextTokens } from './human/utils/tokenEstimate'
 
 export const getAiContextUsage = async (input: {
   sessionId: string
-  chatTranscriptStore: ChatTranscriptStore
+  chatMessageLogStore: ChatMessageLogStore
 }): Promise<{
   contextWindowTokens: number
   usedContextTokens: number
   ratio: number
   updatedAt: number
 }> => {
-  const records = await input.chatTranscriptStore.list(input.sessionId)
-  const messages = deriveTranscriptMessages({
+  const records = await input.chatMessageLogStore.list(input.sessionId)
+  const messages = deriveMessageLogMessages({
     entries: records.map((record) => record.entry)
   })
   const baseText = messages

@@ -993,15 +993,6 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 
 #### human hand 类别
 
-##### `hand-call-limit`
-
-- 测试类型：`backend`
-- What：`hand` 会在执行前拦截超过单轮调用上限的 `calls`。
-- Why：`calls` 数量上限是工具执行失控前的第一道硬边界，不能等到部分工具已执行后才发现超限。
-- How：直接构造 `HUMAN_HAND_CALL_LIMIT + 1` 个安全 terminal 调用交给真实 `hand` node。
-- Oracle：返回 `hand_call_limit_exceeded` decision hint，detail 中包含 limit 与 callCount，且不会产生 `lastToolResults`。
-- Not：不验证 hardActionLimit 的执行后收敛；该场景由 `hand-tool-limit-and-artifact-merge` 覆盖。
-
 ##### `hand-invalid-tool-input`
 
 - 测试类型：`backend`
@@ -1037,15 +1028,6 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - How：通过真实 `hand` 执行 `docx_edit(replace_text) -> docx_read_blocks`。
 - Oracle：工具结果顺序稳定、全部成功，且不会在 hand 内直接产出 docx 交付 artifact。
 - Not：不验证 `brain` 是否自然生成这条计划。
-
-##### `hand-tool-limit-and-artifact-merge`
-
-- 测试类型：`backend`
-- What：`hand` 的工具次数限制与 artifact 合并行为。
-- Why：工具执行层的关键边界。
-- How：先执行会产生命令级 artifact 的 terminal 工具，再向后续状态注入已有 docx artifact，执行不产生 artifact 的 docx read，并触发 hardActionLimit 收敛。
-- Oracle：terminal artifact 在命令完成后进入当前 Run；显式已有 artifact 不被后续无 artifact 工具覆盖；超过 hardActionLimit 后产生 `hand_tool_limit_exceeded` decision hint、交付说明和当前工具结果。
-- Not：不验证 `human` 全链路。
 
 ### 4.2 `human`
 
@@ -1150,33 +1132,6 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - Oracle：任务最终完成；最后一轮真实 `human_learning` 事件中只保留 external skill，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 skill 淘汰文案；builtin skill 不占 active tool budget，但后续真实执行时仍计入工具调用次数限制。
 - Not：不验证超过 `20` 个 active tools 后的淘汰算法细节。
 
-##### `decision-hint-retry`
-
-- 测试类型：`backend`
-- What：duplicate external learning 触发真实 `decision_hint` 后，graph 会回到 `brain` 并继续推进。
-- Why：`decision_hint -> brain` 是 `human` 的核心收敛边之一，断掉后很多异常都无法恢复。
-- How：第一轮先学习一个 external skill（如 `docx-read`），第二轮故意重复学习同一个 external skill 触发 learning decision hint，随后再执行一次真实 `terminal_run(pwd)` 并完成交付。
-- Oracle：事件流中真实出现 source 为 `learning` 的 `decision_hint`，并且在它之后仍发生真实 terminal 工具调用，任务最终完成。
-- Not：不验证 live 模型是否会自然产生这类重复决策。
-
-##### `brain-output-schema-invalid-retry`
-
-- 测试类型：`backend`
-- What：`brain` 输出 hand plan schema 不合法时会产出 `brain_output_schema_invalid` decision hint，并在纠偏后继续完成任务。
-- Why：结构化输出偶发坏参数是 LLM 链路的真实风险，graph 必须把它转成可恢复 hint。
-- How：scripted brain 先返回带非法字段的 `docx_edit` hand plan，再返回完成任务决策。
-- Oracle：任务最终完成；事件流出现 source 为 `brain` 的 `brain_output_schema_invalid` decision hint，且 detail 中包含 `nextAction.calls` 相关 issue。
-- Not：不验证具体工具执行，因为坏 plan 应在执行前被拦截。
-
-##### `decision-hint-contract-and-recovery`
-
-- 测试类型：`backend`
-- What：`decision_hint` 这一区域的回归 contract 稳定，且 `learning / brain / hand` 的关键来源分支都能在真实 graph 中产出 hint 并继续恢复推进。
-- Why：`decision_hint` 是 `human` graph 的统一纠偏机制；一旦某个 hint 的结构或渲染链断裂，原本可恢复的分支就会在真实任务中升级成致命异常。
-- How：在 mock-llm 下仍走真实 `human` graph、真实 learning node、真实 hand node 和真实工具；通过 scripted brain 依次触发 `learning_no_effect`、`brain_output_schema_invalid`、`hand_docx_positioned_write_blocked` 与 `hand_tool_limit_exceeded`，最后进入 `mouth` 收尾。
-- Oracle：事件流中真实出现上述关键 `decision_hint`，且它们都带有稳定 detail contract；在 hint 之后 graph 仍能继续回到 `brain` 并最终完成任务。
-- Not：不要求一条 case 穷举所有业务工具组合；重点是守住 `decision_hint` 的共享 contract 和关键来源回退链。
-
 ##### `tool-failure-recovery`
 
 - 测试类型：`backend`
@@ -1185,15 +1140,6 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - How：直接真实执行一个会失败的 builtin terminal 安全指令，随后由 `brain` 决定停止重试并进入 `mouth`。
 - Oracle：真实 `terminal_run` 结果为失败，且 `human` 最终仍进入 `completed` 并产出最终交付。
 - Not：不验证失败后的最佳补救策略是否最优。
-
-##### `tool-limit-converge`
-
-- 测试类型：`backend`
-- What：真实 `hand` 在超过 `hardActionLimit` 后会发出收敛型 `decision_hint`。
-- Why：工具调用上限是 autonomous 执行的重要失控保护，必须通过真实执行链守住。
-- How：把 `hardActionLimit` 设为 `1`，先后真实执行两次只读 terminal 命令，让第二次调用命中上限保护。
-- Oracle：事件流中出现 source 为 `hand` 且摘要包含“超过临时上限 1”的 `decision_hint`，任务最终完成。
-- Not：不验证更高层是否继续扩展计划。
 
 ##### `approval-denied-restricted-delivery`
 

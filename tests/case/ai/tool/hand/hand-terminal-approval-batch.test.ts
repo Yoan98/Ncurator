@@ -107,10 +107,13 @@ describe('ai tool hand backend', () => {
           result.events,
           'approval_batch_decision'
         )
-        const toolStartedEvents = filterAiRunEventsByType(result.events, 'tool_call_started')
-        const decisionHints = filterAiRunEventsByType(result.events, 'decision_hint')
-        const blockedHint = decisionHints.find(
-          (event) => event.code === 'terminal_approval_blocked'
+        const terminalStepStartedEvents = filterAiRunEventsByType(
+          result.events,
+          'terminal_step_started'
+        )
+        const terminalStepResultEvents = filterAiRunEventsByType(
+          result.events,
+          'terminal_step_result'
         )
 
         runtime.assertThat(
@@ -118,28 +121,19 @@ describe('ai tool hand backend', () => {
             approvalRequiredEvents.length === 1 &&
             approvalRequiredEvents[0].items.length === 2 &&
             approvalDecisionEvents.length === 1 &&
-            toolStartedEvents.length === 0 &&
+            terminalStepStartedEvents.length === 0 &&
+            terminalStepResultEvents.length === 0 &&
             result.blockedDirExists === false &&
-            result.copiedFileExists === false &&
-            Array.isArray(blockedHint?.detail?.allowedCommands) &&
-            blockedHint.detail.allowedCommands.includes('cp allowed.txt allowed-copy.txt') &&
-            Array.isArray(blockedHint?.detail?.blockedCommands) &&
-            blockedHint.detail.blockedCommands.includes('mkdir blocked-dir') &&
-            Array.isArray(blockedHint?.detail?.notes) &&
-            blockedHint.detail.notes.some(
-              (item) =>
-                item.command === 'mkdir blocked-dir' &&
-                item.message === '先不要创建目录，先解释风险并给我备选方案'
-            ),
+            result.copiedFileExists === false,
           {
-            name: 'serial-terminal-approval-batch-blocks-before-execution',
+            name: 'terminal-approval-batch-blocks-before-execution',
             message:
-              'calls 中需审批 terminal 应先整批审核；只要未全部同意，本批 0 执行并回流 terminal_approval_blocked。',
+              'calls 中需审批 terminal 应先整批审核；只要未全部同意，本批 0 执行并回到 brain 重新决策。',
             data: {
               approvalRequiredEvents,
               approvalDecisionEvents,
-              toolStartedEvents,
-              blockedHint
+              terminalStepStartedEvents,
+              terminalStepResultEvents
             }
           }
         )

@@ -1060,7 +1060,6 @@ export type AiLlmIoRecord = {
 }
 export type HumanStepAction = 'brain_decision' | 'learn_skill' | 'call_tool' | 'deliver_result'
 export type HumanStepResultStatus = 'ok' | 'error'
-export type DecisionHintSource = 'brain' | 'learning' | 'hand' | 'memory_reducer'
 
 export type AiRuntimeSettings = {
   llmStreamingMode: AiLlmStreamingMode
@@ -1619,15 +1618,6 @@ type AiRunEventPayload =
       createdAt: number
     }
   | {
-      type: 'decision_hint'
-      runId: string
-      taskId?: string
-      source: DecisionHintSource
-      code: string
-      detail?: JsonObject
-      createdAt: number
-    }
-  | {
       type: 'file_artifact'
       runId: string
       taskId: string
@@ -1761,13 +1751,13 @@ export type AiRunEvent = AiRunEventPayload & {
   stage?: AiRunEventStage
 }
 
-export type ChatTranscriptToolCall = {
+export type ChatMessageLogToolCall = {
   id: string
   name: string
   args: IpcJsonObject
 }
 
-export type ChatTranscriptEntry =
+export type ChatMessageLogEntry =
   | {
       kind: 'user'
       content: string
@@ -1775,7 +1765,7 @@ export type ChatTranscriptEntry =
   | {
       kind: 'assistant'
       content: string
-      toolCalls: ChatTranscriptToolCall[]
+      toolCalls: ChatMessageLogToolCall[]
     }
   | {
       kind: 'tool'
@@ -1785,11 +1775,11 @@ export type ChatTranscriptEntry =
     }
   | {
       kind: 'annotation'
-      eventType: ChatTranscriptAnnotationType
+      eventType: ChatMessageLogAnnotationType
       payload: JsonObject
     }
 
-export type ChatTranscriptAnnotationType =
+export type ChatMessageLogAnnotationType =
   | 'thinking_started'
   | 'thinking_completed'
   | 'learning_started'
@@ -1798,15 +1788,14 @@ export type ChatTranscriptAnnotationType =
   | 'compaction_completed'
   | 'compaction_summary'
   | 'finalizing_started'
-  | 'decision_hint'
   | 'context_budget_evaluated'
 
-export type ChatTranscriptRecord = {
+export type ChatMessageLogRecord = {
   id: string
   sessionId: string
   runId: string
   seq: number
-  entry: ChatTranscriptEntry
+  entry: ChatMessageLogEntry
   createdAt: number
 }
 

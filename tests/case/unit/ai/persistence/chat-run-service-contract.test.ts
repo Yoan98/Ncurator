@@ -79,7 +79,7 @@ const createTestService = async (options?: {
   const events: AiRunEvent[] = []
   const service = new ChatRunService({
     chatStore: storage.chat,
-    chatTranscriptStore: storage.chatTranscript,
+    chatMessageLogStore: storage.chatMessageLog,
     aiRunStore: storage.aiRun,
     documentsStore: storage.documents,
     embeddingService,
@@ -543,7 +543,6 @@ describe('unit ai persistence backend', () => {
         memory: { plan: [], compactions: [] },
         skills: { learnedSkillIds: [] },
         execution: {
-          pendingDecisionHint: undefined,
           deliveryGuidanceItems: [],
           artifacts: [],
           finalizationReason: undefined
@@ -648,7 +647,6 @@ describe('unit ai persistence backend', () => {
         memory: { plan: [], compactions: [] },
         skills: { learnedSkillIds: [] },
         execution: {
-          pendingDecisionHint: undefined,
           deliveryGuidanceItems: [],
           artifacts: [],
           finalizationReason: undefined
@@ -690,7 +688,6 @@ describe('unit ai persistence backend', () => {
         memory: { plan: [], compactions: [] },
         skills: { learnedSkillIds: [] },
         execution: {
-          pendingDecisionHint: undefined,
           deliveryGuidanceItems: [],
           artifacts: [],
           finalizationReason: undefined
@@ -764,7 +761,6 @@ describe('unit ai persistence backend', () => {
         memory: { plan: [], compactions: [] },
         skills: { learnedSkillIds: [] },
         execution: {
-          pendingDecisionHint: undefined,
           deliveryGuidanceItems: [],
           artifacts: [],
           finalizationReason: undefined
@@ -819,7 +815,6 @@ describe('unit ai persistence backend', () => {
         memory: { plan: [], compactions: [] },
         skills: { learnedSkillIds: [] },
         execution: {
-          pendingDecisionHint: undefined,
           deliveryGuidanceItems: [],
           artifacts: [],
           finalizationReason: undefined

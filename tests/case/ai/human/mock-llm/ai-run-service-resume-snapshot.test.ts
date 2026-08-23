@@ -1,5 +1,6 @@
 import { describe, it } from 'vitest'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
+import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import type { BackendTestRuntime } from '../../../../harness/backend/test-types'
 import { createScriptedStructuredOutputDriver } from '../../../../harness/backend/scriptedStructuredOutputDriver'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -15,6 +16,7 @@ const buildDeps = async (
   }
 ) => {
   const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
+  const aiFileChangeService = new AiFileChangeService(runtime.storageService.aiFileChange)
   const controller = new AbortController()
   return {
     controller,
@@ -22,7 +24,7 @@ const buildDeps = async (
       runtimeSettings,
       llmStore: runtime.llmStore,
       chatStore: runtime.chatStore,
-      chatTranscriptStore: runtime.storageService.chatTranscript,
+      chatMessageLogStore: runtime.storageService.chatMessageLog,
       documentsStore: runtime.documentsStore,
       embeddingService: runtime.embeddingService,
       ensureEmbeddingReady: async () => {
@@ -30,10 +32,18 @@ const buildDeps = async (
       },
       docxApplyService: runtime.docxApplyService,
       saveFileChangeRecord: async (record) => {
-        await runtime.storageService.aiFileChange.saveRecord(record)
+        await aiFileChangeService.saveRecord(record, runtime.workspaceRoot)
       },
       listFileChangeRecords: async (request) =>
-        (await runtime.storageService.aiFileChange.listRecords(request)).items,
+        (await aiFileChangeService.listRecords(request)).items,
+      beginTerminalCommandTracking: async (tracking) => {
+        await aiFileChangeService.beginTerminalCommandTracking(tracking)
+      },
+      finishTerminalCommandTracking: async (commandId) =>
+        await aiFileChangeService.finishTerminalCommandTracking(commandId),
+      discardTerminalCommandTracking: (commandId) => {
+        aiFileChangeService.discardTerminalCommandTracking(commandId)
+      },
       isCancelled: () => controller.signal.aborted,
       abortSignal: controller.signal,
       sendEvent: (event) => runtime.eventCollector.add(event),
@@ -141,15 +151,11 @@ describe('ai human mock-llm backend', () => {
 
         let restoredSkillSeen = false
         let restoredRoundSeen = false
-        let resumeHintSeen = false
         const secondDriver = createScriptedStructuredOutputDriver({
           'human.brain': [
             ({ user }) => {
               restoredSkillSeen = user.includes('<learned_skills>') && user.includes('pdf-read')
               restoredRoundSeen = user.includes('先学习一个 skill 再继续。')
-              resumeHintSeen =
-                user.includes('上一次运行因请求超时而中断') &&
-                user.includes('已恢复最近一次上下文信息')
               return buildCompleteTaskDecision({
                 summary: '已从恢复快照继续完成任务。'
               })
@@ -181,15 +187,6 @@ describe('ai human mock-llm backend', () => {
         )
         const skillsAfterResume = await runtime.chatStore.getSessionSkillState(SESSION_ID)
         const clearedSnapshot = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
-        const resumeDecisionHintEventSeen = runtime.eventCollector
-          .snapshot()
-          .some(
-            (event) =>
-              event.type === 'decision_hint' &&
-              event.runId === `${runtime.runId}-resume` &&
-              event.code === 'run_resumed_after_interruption' &&
-              event.detail?.reason === 'timeout'
-          )
 
         const networkDriver = createScriptedStructuredOutputDriver({
           'human.brain': [
@@ -472,8 +469,6 @@ describe('ai human mock-llm backend', () => {
           skillsAfterResume,
           restoredSkillSeen,
           restoredRoundSeen,
-          resumeHintSeen,
-          resumeDecisionHintEventSeen,
           clearedSnapshot,
           networkResult,
           networkSnapshot,
@@ -506,8 +501,8 @@ describe('ai human mock-llm backend', () => {
             result.resumedResult.finalDeliveryMarkdown?.includes('恢复快照') === true &&
             result.skillsAfterResume.learnedSkillIds.join(',') === 'pdf-read' &&
             result.clearedSnapshot === null &&
-            result.resumeHintSeen &&
-            result.resumeDecisionHintEventSeen &&
+            result.restoredSkillSeen &&
+            result.restoredRoundSeen &&
             result.networkResult.status === 'failed' &&
             result.networkResult.failureCode === 'network_error' &&
             result.networkResult.resumeSnapshotSaved === true &&

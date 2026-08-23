@@ -3,7 +3,6 @@ import { tool } from '@langchain/core/tools'
 import type { AiToolCallResult, IpcJsonObject } from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
 import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
-import type { HumanDecisionHint } from '../../types'
 import { getAiResultTokenLimit, estimateToolResultTokens } from '../utils/resultSizeGuard'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
@@ -50,36 +49,6 @@ const buildTerminalToolResult = (input: {
 })
 
 const buildFailure = (input: { error: string }) => ({ error: input.error })
-
-const buildResultTooLargeDecisionHint = (input: {
-  toolName: string
-  estimatedTokens: number
-  limit: number
-}): Extract<HumanDecisionHint, { code: 'hand_tool_result_too_large' }> => ({
-  code: 'hand_tool_result_too_large',
-  detail: {
-    toolName: input.toolName,
-    estimatedTokens: input.estimatedTokens,
-    limit: input.limit
-  }
-})
-
-const buildResultUnusableDecisionHint = (input: {
-  toolName: string
-  quality: ReturnType<typeof inspectTerminalOutputQuality>
-}): Extract<HumanDecisionHint, { code: 'hand_tool_result_unusable' }> => ({
-  code: 'hand_tool_result_unusable',
-  detail: {
-    toolName: input.toolName,
-    totalChars: input.quality.totalChars,
-    nulCount: input.quality.nulCount,
-    replacementCharCount: input.quality.replacementCharCount,
-    replacementCharRatio: input.quality.replacementCharRatio,
-    controlCharCount: input.quality.controlCharCount,
-    controlCharRatio: input.quality.controlCharRatio,
-    matchedSignatures: input.quality.matchedSignatures
-  }
-})
 
 const buildApprovedTerminalCommandKey = (command: string): string => String(command || '').trim()
 
@@ -232,7 +201,6 @@ const applyOutputGuards = (input: {
       ok: false
       output: string
       error: string
-      decisionHint: HumanDecisionHint
       estimatedTokens?: number
       limit?: number
     } => {
@@ -241,8 +209,7 @@ const applyOutputGuards = (input: {
     return {
       ok: false,
       output: '[terminal output omitted: unusable non-text content detected]',
-      error: 'terminal result unusable',
-      decisionHint: buildResultUnusableDecisionHint({ toolName: input.toolName, quality })
+      error: 'terminal result unusable'
     }
   }
   const limit = getAiResultTokenLimit({
@@ -256,12 +223,7 @@ const applyOutputGuards = (input: {
       output: '',
       error: 'terminal result too large',
       estimatedTokens,
-      limit,
-      decisionHint: buildResultTooLargeDecisionHint({
-        toolName: input.toolName,
-        estimatedTokens,
-        limit
-      })
+      limit
     }
   }
   return { ok: true, output: input.output }

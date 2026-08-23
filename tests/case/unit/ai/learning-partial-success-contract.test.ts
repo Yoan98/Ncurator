@@ -32,8 +32,8 @@ const createStubAiRunContext = (): AiRunContext => ({
   },
   sendEvent: () => {},
   requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
-  loadTranscript: async () => [],
-  appendTranscript: async () => undefined,
+  loadMessageLog: async () => [],
+  appendMessageLog: async () => undefined,
   loadSessionSkillState: async (): Promise<ChatSessionSkillState> => ({
     schemaVersion: 1,
     learnedSkillIds: [],
@@ -95,7 +95,6 @@ describe('ai unit learning partial success', () => {
       }
     })
 
-    expect(nextState.execution.pendingDecisionHint).toBeUndefined()
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
       loadedSkillIds: ['docx-write'],
       skippedDuplicateSkillIds: ['docx-read'],
@@ -123,7 +122,6 @@ describe('ai unit learning partial success', () => {
       }
     })
 
-    expect(nextState.execution.pendingDecisionHint).toBeUndefined()
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
       loadedSkillIds: ['docx-read'],
       skippedUnknownSkillIds: ['unknown-skill']
@@ -149,17 +147,12 @@ describe('ai unit learning partial success', () => {
       }
     })
 
-    expect(nextState.execution.pendingDecisionHint).toMatchObject({
-      code: 'learning_no_effect',
-      detail: {
-        requestedSkillIds: ['terminal'],
-        duplicateSkillIds: [],
-        unknownSkillIds: []
-      }
-    })
+    expect(nextState.execution.stage).toBe('context_budget')
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
+      requestedSkillIds: ['terminal'],
       loadedSkillIds: [],
-      skippedDuplicateSkillIds: []
+      skippedDuplicateSkillIds: [],
+      skippedUnknownSkillIds: []
     })
     expect(nextState.skills.learnedSkillIds).toEqual([])
   })

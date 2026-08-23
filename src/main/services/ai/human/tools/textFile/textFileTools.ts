@@ -489,8 +489,7 @@ const readTextFile = async (
     error.resultData = {
       error: error.message,
       estimatedTokens: sizeCheck.estimatedTokens,
-      limit: sizeCheck.limit,
-      ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
+      limit: sizeCheck.limit
     }
     throw error
   }

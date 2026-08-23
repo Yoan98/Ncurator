@@ -1,42 +1,21 @@
 import { randomUUID } from 'node:crypto'
 import { ToolMessage } from '@langchain/core/messages'
 import type { JsonObject } from '../../../../../../shared/types'
-import {
-  HUMAN_DEFAULT_TOOL_CALL_LIMIT,
-  HUMAN_HAND_CALL_LIMIT,
-  HUMAN_TOOL_LIMIT_NEAR_EXHAUSTED_RATIO
-} from '../../constants'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import { buildHistoryToolResult } from '../../memory/historyToolResult'
 import { buildToolResultMessageContent } from '../../shared/historyRenderers'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
-import {
-  createDeliveryGuidanceItem,
-  mergeDeliveryGuidanceItems
-} from '../../shared/deliveryGuidance'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { analyzeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy'
 import type {
   HumanRuntimeCache,
   HumanState,
-  HumanDecisionHint,
   ToolCallResult
 } from '../../types'
-import { renderDeliveryGuidanceForMouth } from '../../prompts/deliveryGuidance'
-import { deriveHandFollowupSignals, shouldStopSerialHandPlan } from './followupSignals'
 import { executeToolCall } from './toolExecutor'
-import {
-  returnToBrainAfterTrace,
-  returnToBrainWithDecisionHint
-} from '../utils/stateTransitions'
+import { returnToBrain, returnToBrainAfterTrace } from '../utils/stateTransitions'
 import { advanceDispatchState } from '../dispatch'
-
-export const resolveHumanToolCallLimit = (override?: number): number =>
-  override ?? HUMAN_DEFAULT_TOOL_CALL_LIMIT
-
-export const resolveHumanToolLimitWarningRatio = (override?: number): number =>
-  override ?? HUMAN_TOOL_LIMIT_NEAR_EXHAUSTED_RATIO
 
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 const isBrowserUseCall = (toolName: string): boolean => toolName === 'browser_use'
@@ -69,49 +48,6 @@ type ParsedHandCall = {
   toolCallId?: string
   toolName: string
   args: JsonObject
-}
-
-const createHandCallLimitDecisionHint = (input: {
-  offendingToolNames: string[]
-  callCount: number
-  limit: number
-}): HumanDecisionHint => ({
-  code: 'hand_call_limit_exceeded',
-  detail: {
-    offendingToolNames: input.offendingToolNames,
-    callCount: input.callCount,
-    limit: input.limit
-  }
-})
-
-const buildToolLimitDecisionHint = (toolCallCount: number, limit: number): HumanDecisionHint => ({
-  code: 'hand_tool_limit_exceeded',
-  detail: {
-    toolCallCount,
-    limit
-  }
-})
-
-const buildToolLimitNearExhaustedDecisionHint = (
-  toolCallCount: number,
-  limit: number
-): HumanDecisionHint => ({
-  code: 'hand_tool_limit_near_exhausted',
-  detail: {
-    toolCallCount,
-    limit
-  }
-})
-
-const validateCalls = (calls: ParsedHandCall[]): HumanDecisionHint | undefined => {
-  if (calls.length > HUMAN_HAND_CALL_LIMIT) {
-    return createHandCallLimitDecisionHint({
-      offendingToolNames: calls.map((item) => item.toolName),
-      callCount: calls.length,
-      limit: HUMAN_HAND_CALL_LIMIT
-    })
-  }
-  return undefined
 }
 
 const collectApprovalBatchItems = (input: {
@@ -162,55 +98,6 @@ const collectApprovalBatchItems = (input: {
 
     return []
   })
-}
-
-const buildApprovalBlockedDecisionHint = (input: {
-  decisions: Array<{
-    itemId: string
-    action: 'approve' | 'reject' | 'guide'
-    message?: string
-  }>
-  approvalItems: Array<{
-    itemId: string
-    order: number
-    toolName: string
-    command: string
-    reason: string
-  }>
-}): Extract<HumanDecisionHint, { code: 'terminal_approval_blocked' }> => {
-  const allowedCommands = input.decisions
-    .filter((decision) => decision.action === 'approve')
-    .map((decision) => input.approvalItems.find((item) => item.itemId === decision.itemId)?.command)
-    .filter((command): command is string => Boolean(command))
-  const blockedCommands = input.approvalItems
-    .filter(
-      (item) =>
-        !input.decisions.some(
-          (decision) => decision.itemId === item.itemId && decision.action === 'approve'
-        )
-    )
-    .map((item) => item.command)
-  const notes = input.decisions
-    .filter((decision) => decision.action === 'guide')
-    .map((decision) => {
-      const matchedItem = input.approvalItems.find((item) => item.itemId === decision.itemId)
-      return matchedItem
-        ? {
-            command: matchedItem.command,
-            message: String(decision.message || '').trim()
-          }
-        : undefined
-    })
-    .filter((item): item is { command: string; message: string } => Boolean(item))
-
-  return {
-    code: 'terminal_approval_blocked',
-    detail: {
-      allowedCommands,
-      blockedCommands,
-      notes
-    }
-  }
 }
 
 const buildApprovedTerminalCommandKey = (command: string): string => String(command || '').trim()
@@ -282,10 +169,6 @@ const executeHandCalls = async (input: {
         args: toolCall.args
       })
     )
-
-    if (shouldStopSerialHandPlan({ calls: input.calls, results })) {
-      break
-    }
   }
   return results
 }
@@ -310,17 +193,50 @@ const appendToolMessages = (input: {
   input.cache.messages = messages
 }
 
+const buildApprovalBlockedToolMessage = (input: {
+  decision: { action: 'approve' | 'reject' | 'guide'; message?: string }
+  command: string
+}): string => {
+  if (input.decision.action === 'reject') {
+    return `该命令未获用户批准，本轮没有执行：${input.command}。`
+  }
+  if (input.decision.action === 'guide') {
+    return `用户对命令「${input.command}」补充了说明，本轮没有执行：${String(
+      input.decision.message || ''
+    ).trim()}`
+  }
+  return `该命令已获批准，但因为本轮存在未获批准的命令，所以整体没有执行，请调整方案后重试：${input.command}。`
+}
+
+const appendBlockedApprovalToolMessages = (input: {
+  cache: HumanRuntimeCache
+  calls: ParsedHandCall[]
+  decisions: Array<{ itemId: string; action: 'approve' | 'reject' | 'guide'; message?: string }>
+  approvalItems: Array<{ itemId: string; order: number; toolName: string; command: string }>
+}): Array<{ toolCallId: string; toolName: string; message: string }> => {
+  const messages = input.cache.messages || []
+  const decisionByItemId = new Map(input.decisions.map((decision) => [decision.itemId, decision]))
+  const transcriptEntries: Array<{ toolCallId: string; toolName: string; message: string }> = []
+
+  input.approvalItems.forEach((item) => {
+    const decision = decisionByItemId.get(item.itemId)
+    const call = input.calls[item.order]
+    if (!decision || !call) return
+    const message = buildApprovalBlockedToolMessage({ decision, command: item.command })
+    const toolCallId = call.toolCallId || `call-${item.order}`
+    messages.push(new ToolMessage({ content: message, tool_call_id: toolCallId }))
+    transcriptEntries.push({ toolCallId, toolName: item.toolName, message })
+  })
+
+  input.cache.messages = messages
+  return transcriptEntries
+}
+
 export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
-    const toolCallLimit = resolveHumanToolCallLimit(
-      input.ctx.humanRuntimeOverrides?.hardActionLimit
-    )
-    const toolLimitWarningRatio = resolveHumanToolLimitWarningRatio(
-      input.ctx.humanRuntimeOverrides?.toolLimitWarningRatio
-    )
 
     const pendingRound = state.execution.pendingRound
     if (!pendingRound || pendingRound.nextAction.action !== 'hand') {
@@ -361,20 +277,6 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       platform: input.ctx.platform,
       cache: input.cache
     })
-    const invalidPlanDecisionHint = validateCalls(calls)
-    if (invalidPlanDecisionHint) {
-      return returnToBrainWithDecisionHint({
-        ctx: input.ctx,
-        state,
-        source: 'hand',
-        decisionHint: invalidPlanDecisionHint,
-        overrides: {
-          memory: {
-            ...state.memory
-          }
-        }
-      })
-    }
 
     if (approvalItems.length > 0) {
       const batchId = randomUUID()
@@ -394,19 +296,27 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         (decision) => decision.action === 'approve'
       )
       if (!allApproved) {
-        const decisionHint = buildApprovalBlockedDecisionHint({
+        const blockedTranscriptEntries = appendBlockedApprovalToolMessages({
+          cache: input.cache,
+          calls,
           decisions: approvalBatchResult.decisions,
           approvalItems
         })
-        return returnToBrainWithDecisionHint({
-          ctx: input.ctx,
-          state,
-          source: 'hand',
-          decisionHint,
-          overrides: {
-            memory: {
-              ...state.memory
-            }
+        await input.ctx.appendMessageLog(
+          blockedTranscriptEntries.map((entry) => ({
+            kind: 'tool' as const,
+            toolCallId: entry.toolCallId,
+            toolName: entry.toolName,
+            result: { message: entry.message }
+          }))
+        )
+        return returnToBrain(state, {
+          execution: {
+            stage: 'context_budget',
+            pendingDispatch: undefined
+          },
+          memory: {
+            ...state.memory
           }
         })
       }
@@ -437,7 +347,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       calls,
       results
     })
-    await input.ctx.appendTranscript(
+    await input.ctx.appendMessageLog(
       calls.map((call, index) => ({
         kind: 'tool' as const,
         toolCallId: call.toolCallId || `call-${index}`,
@@ -446,21 +356,6 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       }))
     )
 
-    const followupSignals = deriveHandFollowupSignals({
-      calls,
-      results
-    })
-    const toolLimitDecisionHint =
-      input.cache.toolCallCount > toolCallLimit
-        ? buildToolLimitDecisionHint(input.cache.toolCallCount, toolCallLimit)
-        : input.cache.toolCallCount >= Math.ceil(toolCallLimit * toolLimitWarningRatio)
-          ? buildToolLimitNearExhaustedDecisionHint(input.cache.toolCallCount, toolCallLimit)
-          : undefined
-    const decisionHint = toolLimitDecisionHint || followupSignals.decisionHint
-    const handDeliveryGuidance = createDeliveryGuidanceItem(
-      'hand',
-      renderDeliveryGuidanceForMouth(decisionHint)
-    )
     const artifacts = mergeArtifactRefs(
       state.execution.artifacts,
       extractArtifactRefsFromToolResults(results)
@@ -469,7 +364,6 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       ctx: input.ctx,
       cache: input.cache,
       state,
-      source: 'hand',
       traceItems: results.map((result) => ({
         action: 'call_tool',
         publicNarrative: buildToolCallDisplayText(result),
@@ -478,15 +372,10 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         summary: buildToolCallDisplayText(result)
       })),
       stage: 'human_hand',
-      decisionHint,
       overrides: {
         execution: {
           lastToolResults: results,
-          artifacts,
-          deliveryGuidanceItems: mergeDeliveryGuidanceItems(
-            state.execution.deliveryGuidanceItems,
-            handDeliveryGuidance
-          )
+          artifacts
         },
         memory: {
           ...state.memory

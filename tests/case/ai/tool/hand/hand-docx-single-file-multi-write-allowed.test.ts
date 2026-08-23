@@ -95,14 +95,12 @@ describe('ai tool hand backend', () => {
       assert: async (result, runtime) => {
         const results = result.state.execution.lastToolResults || []
         runtime.assertThat(
-          result.state.execution.pendingDecisionHint === undefined &&
-            results.length === 2 &&
+          results.length === 2 &&
             results.every((item) => item.toolName === 'docx_edit' && item.ok),
           {
             name: 'same-file-multi-write-plan-is-executed',
             message: '同一文件多次 docx_edit 应按 hand 顺序执行，不再被预拦截。',
             data: {
-              decisionHint: result.state.execution.pendingDecisionHint,
               lastToolResults: results
             }
           }

@@ -101,8 +101,7 @@ describe('ai tool hand backend', () => {
       assert: async (result, runtime) => {
         const results = result.state.execution.lastToolResults || []
         runtime.assertThat(
-          result.state.execution.pendingDecisionHint === undefined &&
-            results.length === 3 &&
+          results.length === 3 &&
             results.map((item) => item.toolName).join(',') ===
               'docx_read_outline,docx_edit,docx_read_blocks' &&
             results.every((item) => item.ok) &&

@@ -35,7 +35,6 @@ export const buildHumanResumeSnapshot = (
     learnedSkillIds: state.skills.learnedSkillIds
   },
   execution: {
-    pendingDecisionHint: state.execution.pendingDecisionHint,
     deliveryGuidanceItems: state.execution.deliveryGuidanceItems,
     artifacts: state.execution.artifacts,
     finalizationReason: state.execution.finalizationReason
@@ -100,12 +99,6 @@ export const restoreHumanStateFromResumeSnapshot = (input: {
       ...baseState.execution,
       stage: 'brain',
       status: 'running',
-      pendingDecisionHint: {
-        code: 'run_resumed_after_interruption',
-        detail: {
-          reason: input.reason
-        }
-      },
       deliveryGuidanceItems: snapshot.execution?.deliveryGuidanceItems,
       artifacts: snapshot.execution?.artifacts || [],
       finalizationReason: snapshot.execution?.finalizationReason

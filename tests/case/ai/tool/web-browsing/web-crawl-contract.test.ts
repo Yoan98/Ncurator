@@ -30,14 +30,8 @@ type WebCrawlResult = {
   }
   error?: string
   statusCode?: number
-  decisionHint?: {
-    code: string
-    detail: {
-      toolName: string
-      estimatedTokens: number
-      limit: number
-    }
-  }
+  estimatedTokens?: number
+  limit?: number
 }
 
 type WebSearchResult = {
@@ -357,7 +351,7 @@ describe('ai tool web backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_crawl 结果过大时走统一 hand_tool_result_too_large 兜底。',
+      description: '验证 web_crawl 结果过大时返回 error 与 estimatedTokens/limit。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -384,10 +378,11 @@ describe('ai tool web backend', () => {
           result.error === 'web_crawl result too large' &&
             result.requestedUrl?.endsWith('/large') === true &&
             result.finalUrl?.endsWith('/large') === true &&
-            result.decisionHint?.code === 'hand_tool_result_too_large',
+            typeof result.estimatedTokens === 'number' &&
+            typeof result.limit === 'number',
           {
-            name: 'web-crawl-too-large-uses-shared-decision-hint',
-            message: 'web_crawl 结果过大时应走统一 hand_tool_result_too_large 兜底。',
+            name: 'web-crawl-too-large-uses-shared-error-contract',
+            message: 'web_crawl 结果过大时应返回 error 及 estimatedTokens/limit 兜底字段。',
             data: result
           }
         )

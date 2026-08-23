@@ -131,8 +131,7 @@ describe('ai tool hand backend', () => {
         const outlineA = result.outlineA.data as DocxOutlineResult
         const outlineB = result.outlineB.data as DocxOutlineResult
         runtime.assertThat(
-          result.state.execution.pendingDecisionHint === undefined &&
-            result.state.execution.lastToolResults?.length === 2 &&
+          result.state.execution.lastToolResults?.length === 2 &&
             result.state.execution.lastToolResults.every((item) => item.ok) &&
             outlineA.blocks.some(
               (block) => block.type === 'paragraph' && block.text === 'Alpha updated'

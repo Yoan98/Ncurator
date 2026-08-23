@@ -10,7 +10,6 @@ import {
   HUMAN_STATUSES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
-  HUMAN_DECISION_HINT_CODES,
   RUNTIME_SKILL_IDS
 } from './constants'
 
@@ -18,18 +17,8 @@ export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
 export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
-export const humanDecisionHintCodeSchema = z.enum(HUMAN_DECISION_HINT_CODES)
 export const humanSkillSourceSchema = z.enum(HUMAN_SKILL_SOURCES)
 export const humanRoundExecutionKindSchema = z.enum(HUMAN_ROUND_EXECUTION_KINDS)
-
-export const humanTaskInterruptionReasonSchema = z.enum([
-  'timeout',
-  'network_error',
-  'user_cancelled',
-  'process_interrupted',
-  'runtime_limit',
-  'unexpected_error'
-])
 
 export const humanTaskInputSchema = z.object({
   taskId: z.string(),
@@ -84,141 +73,6 @@ export const humanLearningOutcomeSchema = z.object({
   activeToolCount: z.number().int().min(0)
 })
 
-export const humanDecisionHintSchema = z.discriminatedUnion('code', [
-  z.object({
-    code: z.literal('run_resumed_after_interruption'),
-    detail: z.object({
-      reason: humanTaskInterruptionReasonSchema
-    })
-  }),
-  z.object({
-    code: z.literal('learning_no_effect'),
-    detail: z.object({
-      requestedSkillIds: z.array(z.string().min(1)),
-      duplicateSkillIds: z.array(runtimeSkillIdSchema),
-      unknownSkillIds: z.array(z.string().min(1))
-    })
-  }),
-  z.object({
-    code: z.literal('terminal_approval_blocked'),
-    detail: z.object({
-      allowedCommands: z.array(z.string().min(1)),
-      blockedCommands: z.array(z.string().min(1)),
-      notes: z.array(
-        z.object({
-          command: z.string().min(1),
-          message: z.string().min(1)
-        })
-      )
-    })
-  }),
-  z.object({
-    code: z.literal('hand_call_limit_exceeded'),
-    detail: z.object({
-      offendingToolNames: z.array(z.string().min(1)),
-      callCount: z.number().int().min(1),
-      limit: z.number().int().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('legacy_doc_edit_unsupported'),
-    detail: z.object({
-      instruction: z.string().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_docx_edit_failed'),
-    detail: z.object({
-      toolName: z.literal('docx_edit'),
-      sourcePath: z.string().min(1).optional(),
-      action: z.string().min(1).optional(),
-      error: z.string().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_docx_positioned_write_blocked'),
-    detail: z.object({
-      toolName: z.literal('docx_edit'),
-      sourcePath: z.string().min(1).optional(),
-      action: z.string().min(1).optional(),
-      error: z.string().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_tool_limit_near_exhausted'),
-    detail: z.object({
-      toolCallCount: z.number().int().min(0),
-      limit: z.number().int().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_tool_limit_exceeded'),
-    detail: z.object({
-      toolCallCount: z.number().int().min(0),
-      limit: z.number().int().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_tool_result_too_large'),
-    detail: z.object({
-      toolName: z.string().min(1),
-      estimatedTokens: z.number().int().min(1),
-      limit: z.number().int().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_tool_result_unusable'),
-    detail: z.object({
-      toolName: z.string().min(1),
-      totalChars: z.number().int().min(0),
-      nulCount: z.number().int().min(0),
-      replacementCharCount: z.number().int().min(0),
-      replacementCharRatio: z.number().min(0).max(1),
-      controlCharCount: z.number().int().min(0),
-      controlCharRatio: z.number().min(0).max(1),
-      matchedSignatures: z.array(z.string().min(1))
-    })
-  }),
-  z.object({
-    code: z.literal('brain_output_schema_invalid'),
-    detail: z.object({
-      issues: z
-        .array(
-          z.object({
-            path: z.string().min(1),
-            message: z.string().min(1)
-          })
-        )
-        .min(1)
-        .max(3)
-    })
-  }),
-  z.object({
-    code: z.literal('brain_plan_incomplete'),
-    detail: z.object({
-      pendingItems: z.array(z.string().min(1)).min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('brain_content_safety'),
-    detail: z.object({ message: z.string().min(1) })
-  }),
-  z.object({
-    code: z.literal('hand_call_invalid'),
-    detail: z.object({
-      invalidCalls: z
-        .array(
-          z.object({
-            callIndex: z.number().int().min(0),
-            toolName: z.string().min(1),
-            message: z.string().min(1)
-          })
-        )
-        .min(1)
-    })
-  })
-])
-
 export const humanHistoryToolResultSchema = z.object({
   toolName: z.string().min(1),
   ok: z.boolean(),
@@ -268,9 +122,6 @@ export const humanNextActionSchema = z.discriminatedUnion('action', [
     action: z.literal('mouth'),
     evidenceReferences: z.array(brainEvidenceReferenceSchema).optional(),
     toolCallId: z.string().min(1).optional()
-  }),
-  z.object({
-    action: z.literal('fault')
   })
 ])
 
@@ -330,13 +181,6 @@ export const humanExecutionSchema = z.object({
     })
     .optional(),
   pendingDispatch: z.array(humanDispatchItemSchema).optional(),
-  pendingFault: z
-    .object({
-      result: z.string().min(1),
-      issues: z.array(z.object({ path: z.string().min(1), message: z.string().min(1) })).optional()
-    })
-    .optional(),
-  pendingDecisionHint: humanDecisionHintSchema.optional(),
   deliveryGuidanceItems: z.array(deliveryGuidanceItemSchema).optional(),
   lastToolResults: z.array(toolCallResultSchema).optional(),
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),

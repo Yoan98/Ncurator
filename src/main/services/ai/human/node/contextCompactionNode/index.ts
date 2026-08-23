@@ -111,7 +111,7 @@ export const createContextCompactionNode = (input: {
     input.cache.lastBrainUsageUnavailable = false
     input.cache.compactSummaryText = String(summary || '').trim()
 
-    void input.ctx.appendTranscript([
+    void input.ctx.appendMessageLog([
       {
         kind: 'annotation',
         eventType: 'compaction_summary',

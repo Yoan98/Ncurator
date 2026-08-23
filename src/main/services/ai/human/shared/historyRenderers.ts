@@ -183,7 +183,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     endLine: true,
     totalLines: true,
     error: true,
-    decisionHint: true,
     estimatedTokens: true,
     limit: true
   },
@@ -310,8 +309,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     },
     pagesWithNoTextCount: true,
     pagesWithSuspiciousTextCount: true,
-    error: true,
-    decisionHint: true
+    error: true
   },
   pdf_read_pages: {
     sourcePath: true,
@@ -326,8 +324,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       height: true,
       rotation: true
     },
-    error: true,
-    decisionHint: true
+    error: true
   },
   pdf_read_visuals: VISUAL_READ_RESULT_WHITELIST,
   web_search: {
@@ -339,7 +336,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       snippet: true
     },
     error: true,
-    decisionHint: true,
     estimatedTokens: true,
     limit: true
   },
@@ -350,7 +346,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     markdown: true,
     publishedAt: true,
     error: true,
-    decisionHint: true,
     estimatedTokens: true,
     limit: true,
     statusCode: true,

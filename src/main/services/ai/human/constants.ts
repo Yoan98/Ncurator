@@ -15,7 +15,6 @@ export const HUMAN_STAGES = [
   'plan',
   'hand',
   'mouth',
-  'fault',
   'context_budget',
   'context_compaction'
 ] as const
@@ -31,35 +30,14 @@ export const HUMAN_STEP_ACTIONS = [
 
 export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error'] as const
 
-export const HUMAN_DECISION_HINT_CODES = [
-  'run_resumed_after_interruption',
-  'learning_no_effect',
-  'terminal_approval_blocked',
-  'hand_call_limit_exceeded',
-  'legacy_doc_edit_unsupported',
-  'hand_docx_positioned_write_blocked',
-  'hand_docx_edit_failed',
-  'hand_tool_limit_near_exhausted',
-  'hand_tool_limit_exceeded',
-  'hand_tool_result_too_large',
-  'hand_tool_result_unusable',
-  'brain_output_schema_invalid',
-  'brain_plan_incomplete',
-  'brain_content_safety',
-  'hand_call_invalid'
-] as const
-
 export const HUMAN_MAX_ACTIVE_TOOLS = 25
-export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 120
-export const HUMAN_HAND_CALL_LIMIT = 5
 export const HUMAN_GRAPH_RECURSION_LIMIT = 200
-export const HUMAN_TOOL_LIMIT_NEAR_EXHAUSTED_RATIO = 0.8
 export const HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO = 0.6
 // 默认按 200k 上下文窗口估算，压缩阈值由 CONTEXT_COMPACTION_TRIGGER_RATIO 控制。
 export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 200_000
 export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8
 export const CONTEXT_COMPACTION_TARGET_RATIO = 0.25
 export const CONTEXT_COMPACTION_MIN_SOURCE_RATIO = 0.1
-export const HUMAN_ROUND_EXECUTION_KINDS = ['learning', 'hand', 'mouth', 'fault'] as const
+export const HUMAN_ROUND_EXECUTION_KINDS = ['learning', 'hand', 'mouth'] as const
 export const HUMAN_MAX_ROUND_HISTORY = 100
 export const HUMAN_MAX_RECENT_HISTORY_ROUNDS = 20

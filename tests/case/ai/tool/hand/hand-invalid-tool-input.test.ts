@@ -13,7 +13,7 @@ describe('ai tool hand backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证双层嵌套坏参数会被工具层 schema 校验拒绝并返回 hand_docx_edit_failed。',
+      description: '验证双层嵌套坏参数会被工具层 schema 校验拒绝并产生失败的工具结果。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -82,14 +82,12 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           toolResult?.ok === false &&
             typeof toolResult.data?.error === 'string' &&
-            toolResult.data.error.includes('did not match expected schema') &&
-            result.state.execution.pendingDecisionHint?.code === 'hand_docx_edit_failed',
+            toolResult.data.error.includes('did not match expected schema'),
           {
             name: 'hand-invalid-tool-input-rejects-nested-args',
-            message: '双层嵌套坏参数应由工具层 schema 校验拒绝，并提升为 hand_docx_edit_failed。',
+            message: '双层嵌套坏参数应由工具层 schema 校验拒绝，并产生失败的工具结果。',
             data: {
-              toolResult,
-              pendingDecisionHint: result.state.execution.pendingDecisionHint
+              toolResult
             }
           }
         )

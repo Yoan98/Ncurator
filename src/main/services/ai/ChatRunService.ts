@@ -24,7 +24,7 @@ import type { WebCrawlerService } from '../webCrawler/types'
 import type { TelemetryService } from '../telemetry/TelemetryService'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 import type { AiRunDeps } from './types'
-import type { ChatTranscriptStore } from '../storage/domains/ChatTranscriptStore'
+import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
@@ -84,7 +84,7 @@ type ActiveRun = {
 
 type ChatRunServiceDeps = {
   chatStore: ChatStore
-  chatTranscriptStore: ChatTranscriptStore
+  chatMessageLogStore: ChatMessageLogStore
   aiRunStore: AiRunStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
@@ -328,7 +328,7 @@ export class ChatRunService {
     await this.deps.chatStore.deleteChatMessagesByIds(messageIdsToDelete)
     if (run) {
       await this.deps.aiRunStore.deleteRunsByIds([run.id])
-      await this.deps.chatTranscriptStore.deleteByRunIds([run.id])
+      await this.deps.chatMessageLogStore.deleteByRunIds([run.id])
     }
     if (shouldClearResumeSnapshot) {
       await this.deps.chatStore.clearSessionResumeSnapshot(sessionId)
@@ -811,7 +811,7 @@ export class ChatRunService {
           runtimeSettings,
           llmStore: this.deps.llmStore,
           chatStore: this.deps.chatStore,
-          chatTranscriptStore: this.deps.chatTranscriptStore,
+          chatMessageLogStore: this.deps.chatMessageLogStore,
           documentsStore: this.deps.documentsStore,
           embeddingService: this.deps.embeddingService,
           ensureEmbeddingReady: this.deps.ensureEmbeddingReady,

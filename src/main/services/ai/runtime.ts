@@ -100,16 +100,16 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     driver: deps.llmDriver
   })
 
-  const appendTranscript: AiRunContext['appendTranscript'] = async (entries) => {
-    await deps.chatTranscriptStore.appendBatch({
+  const appendMessageLog: AiRunContext['appendMessageLog'] = async (entries) => {
+    await deps.chatMessageLogStore.appendBatch({
       sessionId: payload.sessionId,
       runId: payload.runId,
       entries
     })
   }
 
-  const loadTranscript: AiRunContext['loadTranscript'] = async () => {
-    const records = await deps.chatTranscriptStore.list(payload.sessionId)
+  const loadMessageLog: AiRunContext['loadMessageLog'] = async () => {
+    const records = await deps.chatMessageLogStore.list(payload.sessionId)
     return records.map((record) => record.entry)
   }
 
@@ -165,8 +165,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     getVisionLlmConfig: loadRequestedVisionConfig,
     browserUseService: deps.browserUseService,
     webCrawlerService: deps.webCrawlerService,
-    appendTranscript,
-    loadTranscript,
+    appendMessageLog,
+    loadMessageLog,
     loadSessionSkillState,
     saveSessionSkillState,
     trackDocxOpen: ({ docId, sourcePath, replaySession }) => {

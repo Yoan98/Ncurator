@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
+import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { createScriptedStructuredOutputDriver } from '../../../../harness/backend/scriptedStructuredOutputDriver'
 import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
@@ -42,6 +43,7 @@ describe('ai human mock-llm backend', () => {
         let ensureReadyCalls = 0
         const initialEmbeddingStatus = runtime.embeddingService.getStatus()
         const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
+        const aiFileChangeService = new AiFileChangeService(runtime.storageService.aiFileChange)
         const result = await AiRunService.getInstance().run(
           {
             runId: runtime.runId,
@@ -61,7 +63,7 @@ describe('ai human mock-llm backend', () => {
             runtimeSettings,
             llmStore: runtime.llmStore,
             chatStore: runtime.chatStore,
-            chatTranscriptStore: runtime.storageService.chatTranscript,
+            chatMessageLogStore: runtime.storageService.chatMessageLog,
             documentsStore: runtime.documentsStore,
             embeddingService: runtime.embeddingService,
             ensureEmbeddingReady: async () => {
@@ -70,10 +72,18 @@ describe('ai human mock-llm backend', () => {
             },
             docxApplyService: runtime.docxApplyService,
             saveFileChangeRecord: async (record) => {
-              await runtime.storageService.aiFileChange.saveRecord(record)
+              await aiFileChangeService.saveRecord(record, runtime.workspaceRoot)
             },
             listFileChangeRecords: async (request) =>
-              (await runtime.storageService.aiFileChange.listRecords(request)).items,
+              (await aiFileChangeService.listRecords(request)).items,
+            beginTerminalCommandTracking: async (tracking) => {
+              await aiFileChangeService.beginTerminalCommandTracking(tracking)
+            },
+            finishTerminalCommandTracking: async (commandId) =>
+              await aiFileChangeService.finishTerminalCommandTracking(commandId),
+            discardTerminalCommandTracking: (commandId) => {
+              aiFileChangeService.discardTerminalCommandTracking(commandId)
+            },
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
@@ -163,6 +173,7 @@ describe('ai human mock-llm backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
+        const aiFileChangeService = new AiFileChangeService(runtime.storageService.aiFileChange)
         const result = await AiRunService.getInstance().run(
           {
             runId: runtime.runId,
@@ -182,7 +193,7 @@ describe('ai human mock-llm backend', () => {
             runtimeSettings,
             llmStore: runtime.llmStore,
             chatStore: runtime.chatStore,
-            chatTranscriptStore: runtime.storageService.chatTranscript,
+            chatMessageLogStore: runtime.storageService.chatMessageLog,
             documentsStore: runtime.documentsStore,
             embeddingService: runtime.embeddingService,
             ensureEmbeddingReady: async () => {
@@ -190,10 +201,18 @@ describe('ai human mock-llm backend', () => {
             },
             docxApplyService: runtime.docxApplyService,
             saveFileChangeRecord: async (record) => {
-              await runtime.storageService.aiFileChange.saveRecord(record)
+              await aiFileChangeService.saveRecord(record, runtime.workspaceRoot)
             },
             listFileChangeRecords: async (request) =>
-              (await runtime.storageService.aiFileChange.listRecords(request)).items,
+              (await aiFileChangeService.listRecords(request)).items,
+            beginTerminalCommandTracking: async (tracking) => {
+              await aiFileChangeService.beginTerminalCommandTracking(tracking)
+            },
+            finishTerminalCommandTracking: async (commandId) =>
+              await aiFileChangeService.finishTerminalCommandTracking(commandId),
+            discardTerminalCommandTracking: (commandId) => {
+              aiFileChangeService.discardTerminalCommandTracking(commandId)
+            },
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),

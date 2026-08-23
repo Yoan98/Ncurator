@@ -22,8 +22,8 @@ const createBrainContext = (error: Error): AiRunContext =>
     chatTools: async () => {
       throw error
     },
-    loadTranscript: async () => [],
-    appendTranscript: async () => undefined,
+    loadMessageLog: async () => [],
+    appendMessageLog: async () => undefined,
     sendEvent: () => undefined
   }) as AiRunContext
 

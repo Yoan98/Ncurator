@@ -15,7 +15,7 @@ describe('ai tool hand backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['hand'],
-      description: '验证 docx_edit 使用不存在 blockId 时失败并返回统一 hand_docx_edit_failed。',
+      description: '验证 docx_edit 使用不存在 blockId 时失败并返回错误文本。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -85,21 +85,16 @@ describe('ai tool hand backend', () => {
         return { state }
       },
       assert: async (result, runtime) => {
-        const hint = result.state.execution.pendingDecisionHint
         const toolResult = result.state.execution.lastToolResults?.[0]
         runtime.assertThat(
           toolResult?.toolName === 'docx_edit' &&
             toolResult.ok === false &&
-            hint?.code === 'hand_docx_edit_failed' &&
-            hint.detail.toolName === 'docx_edit' &&
-            hint.detail.sourcePath === path.join(runtime.workspaceRoot, 'invalid-blockid.docx') &&
-            hint.detail.action === 'insert_blocks' &&
-            hint.detail.error.includes('stale or unknown docx blockId'),
+            typeof toolResult.data?.error === 'string' &&
+            toolResult.data.error.includes('stale or unknown docx blockId'),
           {
-            name: 'invalid-blockid-produces-unified-docx-edit-hint',
-            message: '不存在/过期 blockId 写入应失败，并统一走 hand_docx_edit_failed。',
+            name: 'invalid-blockid-produces-docx-edit-error',
+            message: '不存在/过期 blockId 写入应失败，并返回包含 stale or unknown docx blockId 的错误。',
             data: {
-              hint,
               lastToolResults: result.state.execution.lastToolResults
             }
           }

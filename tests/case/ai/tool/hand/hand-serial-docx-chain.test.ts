@@ -110,7 +110,6 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           toolNames.join(',') === 'docx_edit,docx_read_blocks' &&
             result.state.execution.lastToolResults?.every((item) => item.ok) &&
-            result.state.execution.pendingDecisionHint === undefined &&
             typeof result.state.execution.lastToolResults?.[0]?.data === 'object' &&
             result.state.execution.lastToolResults?.[0]?.data !== null &&
             Array.isArray(

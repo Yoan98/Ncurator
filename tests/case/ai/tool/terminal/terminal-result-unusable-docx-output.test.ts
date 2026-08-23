@@ -9,19 +9,6 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 type TerminalRunCommandResult = {
   error?: string
   output: string
-  decisionHint?: {
-    code: 'hand_tool_result_unusable'
-    detail: {
-      toolName: string
-      totalChars: number
-      nulCount: number
-      replacementCharCount: number
-      replacementCharRatio: number
-      controlCharCount: number
-      controlCharRatio: number
-      matchedSignatures: string[]
-    }
-  }
 }
 
 const isWindows = process.platform === 'win32'
@@ -35,7 +22,7 @@ describe('ai tool terminal backend', () => {
       suite: 'tool',
       groups: ['terminal'],
       description:
-        '验证 terminal_run 读到明显二进制/结构化文档输出时会省略原始输出并返回 decision hint。',
+        '验证 terminal_run 读到明显二进制/结构化文档输出时会省略原始输出并返回 terminal result unusable。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -65,13 +52,11 @@ describe('ai tool terminal backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.docxRead.error === 'terminal result unusable' &&
-            result.docxRead.decisionHint?.code === 'hand_tool_result_unusable' &&
-            result.docxRead.decisionHint.detail.matchedSignatures.length > 0 &&
             !result.docxRead.output.includes('PK'),
           {
             name: 'terminal-docx-binary-output-is-omitted',
             message:
-              'terminal_run 读取 docx 后应省略不可消费输出，并给出 hand_tool_result_unusable。',
+              'terminal_run 读取 docx 后应省略不可消费输出，并返回 terminal result unusable。',
             data: result.docxRead
           }
         )

@@ -1,5 +1,5 @@
 import type { ChatStore } from '../storage/domains/ChatStore'
-import type { ChatTranscriptStore } from '../storage/domains/ChatTranscriptStore'
+import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
@@ -38,7 +38,7 @@ import type {
   BrainContextBudgetSnapshot,
   ChatSessionResumeSnapshot,
   ChatSessionSkillState,
-  ChatTranscriptEntry,
+  ChatMessageLogEntry,
   DocxApplyRecord,
   SelectedReference,
   WorkbenchSelectedModel
@@ -67,10 +67,7 @@ export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 
 export type HumanResumeSnapshot = Pick<HumanState, 'memory' | 'skills'> & {
   schemaVersion: 3
-  execution: Pick<
-    HumanState['execution'],
-    'pendingDecisionHint' | 'deliveryGuidanceItems' | 'artifacts' | 'finalizationReason'
-  >
+  execution: Pick<HumanState['execution'], 'deliveryGuidanceItems' | 'artifacts' | 'finalizationReason'>
 }
 
 export type RecoverableRunErrorCode = AiRunResumeSnapshotReason
@@ -237,7 +234,7 @@ export type AiRunDeps = {
   runtimeSettings: AiRuntimeSettings
   llmStore: LlmConfigStore
   chatStore: ChatStore
-  chatTranscriptStore: ChatTranscriptStore
+  chatMessageLogStore: ChatMessageLogStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   ensureEmbeddingReady: () => Promise<void>
@@ -257,9 +254,7 @@ export type AiRunDeps = {
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
   humanRuntimeOverrides?: {
-    hardActionLimit?: number
     graphRecursionLimit?: number
-    toolLimitWarningRatio?: number
     modelContextWindowTokens?: number
     terminalEnvironment?: Record<string, string>
   }
@@ -274,9 +269,7 @@ export type AiRunContext = {
   executionPermission: AiExecutionPermission
   referenceScope: AiReferenceScope
   humanRuntimeOverrides?: {
-    hardActionLimit?: number
     graphRecursionLimit?: number
-    toolLimitWarningRatio?: number
     modelContextWindowTokens?: number
     terminalEnvironment?: Record<string, string>
   }
@@ -326,8 +319,8 @@ export type AiRunContext = {
   getVisionLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
-  appendTranscript: (entries: ChatTranscriptEntry[]) => Promise<void>
-  loadTranscript: () => Promise<ChatTranscriptEntry[]>
+  appendMessageLog: (entries: ChatMessageLogEntry[]) => Promise<void>
+  loadMessageLog: () => Promise<ChatMessageLogEntry[]>
   loadSessionSkillState: () => Promise<ChatSessionSkillState>
   saveSessionSkillState: (input: {
     expectedRevision: number

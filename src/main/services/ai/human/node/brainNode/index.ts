@@ -5,9 +5,8 @@ import type { JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { isContentSafetyError } from '../../../utils/runFailure'
 import { normalizeRoundThought } from '../../memory/thoughtMemory'
-import { deriveTranscriptMessages } from '../../memory/transcript'
+import { deriveMessageLogMessages } from '../../memory/transcript'
 import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
-import { renderDecisionHintForBrain } from '../../prompts/decisionHints'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { applyBrainDispatchTransition } from '../utils/stateTransitions'
@@ -31,8 +30,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
 
     let messages = input.cache.messages
     if (!messages || messages.length === 0) {
-      const injectPlan =
-        state.execution.pendingDecisionHint?.code === 'run_resumed_after_interruption'
+      const injectPlan = state.memory.plan.length > 0
       const compactedHistoryText = state.memory.compactions.at(-1)?.summary
       const prefix = [
         new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
@@ -46,23 +44,14 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         )
       ]
       input.cache.prefixMessages = prefix
-      const transcript = await input.ctx.loadTranscript()
+      const transcript = await input.ctx.loadMessageLog()
       messages = [
         ...prefix,
-        ...deriveTranscriptMessages({
+        ...deriveMessageLogMessages({
           entries: transcript,
           skipUserContent: state.task.userInput
         })
       ]
-      input.cache.messages = messages
-    }
-
-    if (state.execution.pendingDecisionHint) {
-      messages.push(
-        new HumanMessage(
-          `<decision_hint>\n${renderDecisionHintForBrain(state.execution.pendingDecisionHint)}\n</decision_hint>`
-        )
-      )
       input.cache.messages = messages
     }
 
@@ -99,6 +88,9 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         runId: input.ctx.runId
       })
       thinkingOpen = true
+      await input.ctx.appendMessageLog([
+        { kind: 'annotation', eventType: 'thinking_started', payload: {} }
+      ])
 
       const result = await input.ctx.chatTools({
         caller: 'human.brain',
@@ -130,7 +122,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       const assistantMessage = result.message
       messages.push(assistantMessage)
       input.cache.messages = messages
-      await input.ctx.appendTranscript([
+      await input.ctx.appendMessageLog([
         {
           kind: 'assistant',
           content: extractTextContent(assistantMessage.content),
@@ -149,6 +141,9 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       const dispatchQueue = buildDispatchQueue(toolCalls)
 
       completeThinking()
+      await input.ctx.appendMessageLog([
+        { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
+      ])
       return applyBrainDispatchTransition({
         ctx: input.ctx,
         cache: input.cache,
@@ -177,12 +172,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
             deliveryGuidanceItems: mergeDeliveryGuidanceItems(
               state.execution.deliveryGuidanceItems,
               guidance
-            ),
-            pendingFault: undefined,
-            pendingDecisionHint: {
-              code: 'brain_content_safety',
-              detail: { message: guidance?.text || '内容安全策略限制' }
-            }
+            )
           }
         }
       }

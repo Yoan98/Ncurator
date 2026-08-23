@@ -141,15 +141,12 @@ describe('ai tool docx backend', () => {
         )
         runtime.assertThat(
           result.failure.error.includes('禁止尝试任何对 .doc 文件的编辑') &&
-            result.failure.decisionHint?.code === 'legacy_doc_edit_unsupported' &&
-            result.failure.decisionHint?.instruction ===
-              'docx_edit 禁止尝试任何对 .doc 文件的编辑，该格式只读不可修改，请立即停止并继续其他事项。' &&
-            result.uppercaseFailure.decisionHint?.code === 'legacy_doc_edit_unsupported' &&
+            result.uppercaseFailure.error.includes('禁止尝试任何对 .doc 文件的编辑') &&
             result.unchanged &&
             result.trackedReplaySessionCount === 0,
           {
-            name: 'legacy-doc-edit-returns-guided-unsupported-error',
-            message: 'legacy .doc edit should fail before mutation with the decision hint',
+            name: 'legacy-doc-edit-returns-unsupported-error',
+            message: 'legacy .doc edit should fail before mutation with the unsupported error',
             data: result.failure
           }
         )

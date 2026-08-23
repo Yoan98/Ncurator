@@ -5,7 +5,6 @@ import type {
   HumanLearningOutcome,
   HumanRuntimeCache,
   HumanState,
-  HumanDecisionHint,
   RuntimeSkillId
 } from '../../types'
 import {
@@ -19,8 +18,8 @@ import {
 import { ensureSkillTools } from './skillLoader'
 import { countActiveToolNamesForSkillIds, fitSkillIdsToToolBudget } from './toolBudget'
 import {
-  returnToBrainAfterTrace,
-  returnToBrainWithDecisionHint
+  returnToBrain,
+  returnToBrainAfterTrace
 } from '../utils/stateTransitions'
 import { advanceDispatchState } from '../dispatch'
 import { emitLearningCompleted, emitLearningStarted } from '../../../events/processEvents'
@@ -39,7 +38,7 @@ const appendLearnToolMessage = (input: {
     })
   )
   input.cache.messages = messages
-  void input.ctx.appendTranscript([
+  void input.ctx.appendMessageLog([
     {
       kind: 'tool',
       toolCallId: input.toolCallId || 'learn_skill',
@@ -65,19 +64,6 @@ const dedupeInOrder = <TValue extends string>(values: readonly TValue[]): TValue
 const BUILTIN_TOOL_NAMES = Array.from(
   new Set(listBuiltinSkillDefinitions().flatMap((definition) => definition.toolNames))
 )
-
-const buildNoEffectDecisionHint = (input: {
-  requestedSkillIds: string[]
-  duplicateSkillIds: HumanLearningOutcome['skippedDuplicateSkillIds']
-  unknownSkillIds: string[]
-}): HumanDecisionHint => ({
-  code: 'learning_no_effect',
-  detail: {
-    requestedSkillIds: input.requestedSkillIds,
-    duplicateSkillIds: input.duplicateSkillIds,
-    unknownSkillIds: input.unknownSkillIds
-  }
-})
 
 const buildLearnSummary = (input: {
   skillId: string
@@ -190,11 +176,6 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         evictedSkillIds: [],
         activeToolCount
       })
-      const noEffectDecisionHint = buildNoEffectDecisionHint({
-        requestedSkillIds,
-        duplicateSkillIds,
-        unknownSkillIds
-      })
       const learningResult = renderLearningResult(lastLearningOutcome)
 
       appendLearnToolMessage({
@@ -203,18 +184,14 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         toolCallId: learnToolCallId,
         content: learningResult
       })
-      return returnToBrainWithDecisionHint({
-        ctx: input.ctx,
-        state,
-        source: 'learning',
-        decisionHint: noEffectDecisionHint,
-        overrides: {
-          execution: {
-            lastLearningOutcome
-          },
-          memory: {
-            ...state.memory
-          }
+      return returnToBrain(state, {
+        execution: {
+          lastLearningOutcome,
+          pendingDispatch: undefined,
+          stage: 'context_budget'
+        },
+        memory: {
+          ...state.memory
         }
       })
     }
@@ -235,11 +212,6 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         evictedSkillIds: [],
         activeToolCount: fittedLearnedSkills.activeToolCount
       })
-      const noEffectDecisionHint = buildNoEffectDecisionHint({
-        requestedSkillIds,
-        duplicateSkillIds,
-        unknownSkillIds
-      })
       const learningResult = '学习失败，加载请求中的技能后会超过当前活动工具数量上限。'
       appendLearnToolMessage({
         cache: input.cache,
@@ -247,18 +219,14 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         toolCallId: learnToolCallId,
         content: learningResult
       })
-      return returnToBrainWithDecisionHint({
-        ctx: input.ctx,
-        state,
-        source: 'learning',
-        decisionHint: noEffectDecisionHint,
-        overrides: {
-          execution: {
-            lastLearningOutcome
-          },
-          memory: {
-            ...state.memory
-          }
+      return returnToBrain(state, {
+        execution: {
+          lastLearningOutcome,
+          pendingDispatch: undefined,
+          stage: 'context_budget'
+        },
+        memory: {
+          ...state.memory
         }
       })
     }
@@ -270,6 +238,13 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         skillId
       })
     })
+    await input.ctx.appendMessageLog(
+      newSkillIds.map((skillId) => ({
+        kind: 'annotation' as const,
+        eventType: 'learning_started' as const,
+        payload: { skillId }
+      }))
+    )
 
     newSkillIds.forEach((skillId) => {
       ensureSkillTools({
@@ -305,7 +280,6 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       ctx: input.ctx,
       cache: input.cache,
       state,
-      source: 'learning',
       traceItems: newSkillIds.map((skillId) => ({
         action: 'learn_skill',
         publicNarrative: `已学习 ${skillId}`,
@@ -337,6 +311,13 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         skillId
       })
     })
+    await input.ctx.appendMessageLog(
+      newSkillIds.map((skillId) => ({
+        kind: 'annotation' as const,
+        eventType: 'learning_completed' as const,
+        payload: { skillId }
+      }))
+    )
     return nextState
   }
 }

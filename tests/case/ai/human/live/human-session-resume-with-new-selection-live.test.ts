@@ -7,6 +7,7 @@ import {
   type AiLlmTextDriverResult
 } from '../../../../../src/main/services/ai/llmExecutor'
 import type { AiRunDeps } from '../../../../../src/main/services/ai/types'
+import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import type { AiRunEvent, JsonObject } from '../../../../../src/shared/types'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -132,6 +133,7 @@ const buildAiRunDeps = async (input: {
 }): Promise<AiRunDeps> => {
   const controller = new AbortController()
   const runtimeSettings = await input.runtime.storageService.aiRuntimeSettings.get()
+  const aiFileChangeService = new AiFileChangeService(input.runtime.storageService.aiFileChange)
   return {
     runtimeSettings,
     llmStore: input.runtime.llmStore,
@@ -143,10 +145,18 @@ const buildAiRunDeps = async (input: {
     },
     docxApplyService: input.runtime.docxApplyService,
     saveFileChangeRecord: async (record) => {
-      await input.runtime.storageService.aiFileChange.saveRecord(record)
+      await aiFileChangeService.saveRecord(record, input.runtime.workspaceRoot)
     },
     listFileChangeRecords: async (request) =>
-      (await input.runtime.storageService.aiFileChange.listRecords(request)).items,
+      (await aiFileChangeService.listRecords(request)).items,
+    beginTerminalCommandTracking: async (tracking) => {
+      await aiFileChangeService.beginTerminalCommandTracking(tracking)
+    },
+    finishTerminalCommandTracking: async (commandId) =>
+      await aiFileChangeService.finishTerminalCommandTracking(commandId),
+    discardTerminalCommandTracking: (commandId) => {
+      aiFileChangeService.discardTerminalCommandTracking(commandId)
+    },
     isCancelled: () => controller.signal.aborted,
     abortSignal: controller.signal,
     sendEvent: (event) => input.runtime.eventCollector.add(event),

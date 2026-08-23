@@ -259,7 +259,7 @@ export function registerHandlers(services: {
   const documentsStore = storageService.documents
   const chatStore = storageService.chat
   const workbenchUiStore = storageService.workbenchUi
-  const chatTranscriptStore = storageService.chatTranscript
+  const chatMessageLogStore = storageService.chatMessageLog
   const aiRunStore = storageService.aiRun
   const llmStore = storageService.llm
   const aiRuntimeSettingsStore = storageService.aiRuntimeSettings
@@ -281,7 +281,7 @@ export function registerHandlers(services: {
   let e2eGraphRecursionLimitUsesRemaining = e2eGraphRecursionLimitOnce ? 1 : 0
   const chatRunService = new ChatRunService({
     chatStore,
-    chatTranscriptStore,
+    chatMessageLogStore,
     aiRunStore,
     documentsStore,
     embeddingService,
@@ -2366,7 +2366,7 @@ export function registerHandlers(services: {
     try {
       const sessionId = String(payload?.sessionId || '').trim()
       if (!sessionId) return { success: false, error: 'sessionId is required' }
-      const usage = await getAiContextUsage({ sessionId, chatTranscriptStore })
+      const usage = await getAiContextUsage({ sessionId, chatMessageLogStore })
       return { success: true, ...usage }
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : String(e) }

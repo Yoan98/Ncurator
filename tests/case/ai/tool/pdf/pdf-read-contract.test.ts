@@ -300,7 +300,7 @@ describe('ai tool pdf backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['pdf'],
-      description: '验证 PDF 正文过大时返回统一 hand_tool_result_too_large 提示。',
+      description: '验证 PDF 正文过大时返回明确的大小超限错误。',
       fixtures: [PDF_FIXTURE],
       runMode: 'single',
       execute: async (runtime) => {
@@ -309,9 +309,7 @@ describe('ai tool pdf backend', () => {
           humanRuntimeOverrides: { modelContextWindowTokens: 100 }
         })
         try {
-          return await harness.invoke<
-            PdfFailure & { decisionHint?: { code?: string; detail?: unknown } }
-          >('pdf_read_pages', {
+          return await harness.invoke<PdfFailure>('pdf_read_pages', {
             sourcePath,
             selection: { type: 'page_numbers', pageNumbers: [1] }
           })
@@ -321,10 +319,10 @@ describe('ai tool pdf backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.ok === false && result.decisionHint?.code === 'hand_tool_result_too_large',
+          result.ok === false && result.error.includes('PDF 工具结果过大'),
           {
-            name: 'pdf-large-result-returns-shared-decision-hint',
-            message: 'PDF 工具结果过大时应复用 hand_tool_result_too_large。',
+            name: 'pdf-large-result-returns-size-error',
+            message: 'PDF 工具结果过大时应返回明确的大小超限错误。',
             data: result
           }
         )

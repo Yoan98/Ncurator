@@ -76,7 +76,7 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       )
     })
     input.cache.messages = messages
-    await input.ctx.appendTranscript(planTranscript)
+    await input.ctx.appendMessageLog(planTranscript)
 
     return advanceDispatchState({
       ...state,

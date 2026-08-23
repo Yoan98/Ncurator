@@ -1,7 +1,7 @@
 import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
-import type { ChatTranscriptEntry, ChatTranscriptToolCall } from '../../../../../shared/types'
+import type { ChatMessageLogEntry, ChatMessageLogToolCall } from '../../../../../shared/types'
 
-const toToolCall = (call: ChatTranscriptToolCall): {
+const toToolCall = (call: ChatMessageLogToolCall): {
   id: string
   name: string
   args: Record<string, unknown>
@@ -13,8 +13,8 @@ const toToolCall = (call: ChatTranscriptToolCall): {
   type: 'tool_call'
 })
 
-export const deriveTranscriptMessages = (input: {
-  entries: ChatTranscriptEntry[]
+export const deriveMessageLogMessages = (input: {
+  entries: ChatMessageLogEntry[]
   skipUserContent?: string
 }): BaseMessage[] => {
   const messages: BaseMessage[] = []

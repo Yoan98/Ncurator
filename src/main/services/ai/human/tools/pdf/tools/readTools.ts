@@ -49,7 +49,6 @@ const runTool = async (input: {
         toolCallId: input.toolCallId,
         reason: 'result_too_large',
         error: `PDF 工具结果过大：预计 ${String(size.estimatedTokens)} tokens，限制 ${String(size.limit)} tokens`,
-        decisionHint: size.decisionHint,
         resourceContext
       })
     }

@@ -96,8 +96,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                   error: 'web_search result too large',
                   query: result.query,
                   estimatedTokens: sizeCheck.estimatedTokens,
-                  limit: sizeCheck.limit,
-                  ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
+                  limit: sizeCheck.limit
                 }
                 session.fail(
                   tooLargePayload.error,
@@ -205,8 +204,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                   requestedUrl: result.requestedUrl,
                   finalUrl: result.finalUrl,
                   estimatedTokens: sizeCheck.estimatedTokens,
-                  limit: sizeCheck.limit,
-                  ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
+                  limit: sizeCheck.limit
                 }
                 session.fail(
                   tooLargePayload.error,
@@ -335,8 +333,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                 const tooLargePayload = {
                   error: 'browser_use result too large',
                   estimatedTokens: sizeCheck.estimatedTokens,
-                  limit: sizeCheck.limit,
-                  ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
+                  limit: sizeCheck.limit
                 }
                 session.fail(
                   tooLargePayload.error,

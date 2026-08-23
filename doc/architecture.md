@@ -98,7 +98,7 @@ AI 架构围绕一次 `run` 展开。每次用户请求都会创建一个 run，
 ```mermaid
 flowchart TD
     U["用户输入"]
-    T["会话转录\nchat_session_transcript"]
+    T["会话消息记录\nchat_session_message_log"]
     R["AI Run"]
     B["context_budget\n检查上下文预算"]
     C["brain\n决定下一步"]
@@ -140,7 +140,9 @@ flowchart TD
 
 brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMessage`（按 `tool_call_id` 配对）追加到 append-only 的 `messages` 数组，不再把历史每轮重渲染成字符串。静态前缀（原则 + 技能目录 + 本地环境）与技能目录只标注「内置 / 需学习」，不随 learn 变化，保证缓存友好。非工具控制动作统一为 `agent-control` 内置技能的三个工具：`learn_skill`、`update_plan`、`finish`。
 
-**模型上下文唯一真相源是会话级 append-only 的消息转录（`chat_session_transcript` 表）**：每条是 `user` / `assistant`（含真实 `tool_calls`）/ `tool`（含结果）/ `annotation`（压缩摘要等过程标记）。模型上下文从转录投影（`deriveTranscriptMessages`），中断恢复与跨 run 上下文都从转录重建后补一条 user 消息继续；UI 过程与模型记忆不再维护 `rounds`/`conversation` 副本。压缩只作用于「投影出的消息」（早段 → `<compacted_history>` + `<current_state>`，尾段保留），转录本身 append-only 不动。
+**模型上下文唯一真相源是会话级 append-only 的会话消息记录（`chat_session_message_log` 表）**：每条是 `user` / `assistant`（含真实 `tool_calls`）/ `tool`（含结果）/ `annotation`（思考/学习/压缩/收尾等过程标记）。模型上下文从会话消息记录投影（`deriveMessageLogMessages`），中断恢复与跨 run 上下文都从记录重建后补一条 user 消息继续；UI 过程展示与模型记忆不再维护 `rounds`/`conversation`/`ai_run_event` 副本。压缩只作用于「投影出的消息」（早段 → `<compacted_history>` + `<current_state>`，尾段保留），记录本身 append-only 不动。
+
+**会话消息记录是「数据唯一、其他投影」的唯一真相源**：一次会话下的所有 run 的消息都写进同一张表（每条带 `run_id` 标识归属 run）。运行中的实时过程（思考、学习、工具调用、压缩、收尾）由节点即时写入 annotation 条目；UI 的「AI 消息 → 工具调用/技能学习 → 一步步展开」过程展示由渲染层从记录按 `seq` 投影重建（`projectProcessGroups`），不再依赖独立的 `ai_run_event` 过程事件副本。live 运行中的 `running → completed` 中间态与 `answer_token` 流式输出仍走瞬时广播，不落库；重开/恢复时从记录投影出 completed 态的完整过程。工具调用与失败不再通过独立的 decision hint 机制回传，而是统一作为该工具的 `ToolMessage` 结果（成功/失败/被拦都保证每个 `tool_call_id` 有且仅有一条结果）返回给模型。
 
 ### Skill 与 Tool
 
@@ -167,7 +169,7 @@ LLM 调用失败严格分两层处理：
 
 ### 会话连续性
 
-跨轮上下文由会话级 append-only 消息转录（`chat_session_transcript`）唯一承载，不再维护 conversation summary / `rounds` / `conversation` 副本。每次 run 开始时把当前用户消息作为 `user` 转录条目追加；brain 从转录投影消息、注入 `<current_state>`（完整 plan + learnedSkillIds）后继续推进。中断恢复同样是往转录尾部补一条 user 消息并把 `task.userInput` 指向新消息，原目标自然保留在转录首条 user 中。
+跨轮上下文由会话级 append-only 会话消息记录（`chat_session_message_log`）唯一承载，不再维护 conversation summary / `rounds` / `conversation` 副本。每次 run 开始时把当前用户消息作为 `user` 记录条目追加；brain 从记录投影消息、注入 `<current_state>`（完整 plan + learnedSkillIds）后继续推进。中断恢复同样是往记录尾部补一条 user 消息并把 `task.userInput` 指向新消息，原目标自然保留在记录首条 user 中。
 
 未正常完成的智能模式任务另有一套按会话持久化的恢复快照。快照保存 plan、compactions、已学习技能和执行收尾态（delivery guidance / artifacts / finalizationReason）；同一会话的下一条用户消息会消费快照、启动新的 run 并补一条 user 转录条目。网络错误、超时、用户停止、进程中断、运行上限和未知异常都保留快照，只有任务正常完成或会话被删除时才清理。不同会话的恢复状态严格隔离。
 

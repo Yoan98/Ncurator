@@ -100,10 +100,6 @@ export type DocxMutationResult = {
 export type DocxFailureResult = {
   error: string
   reason?: string
-  decisionHint?: {
-    code?: string
-    instruction?: string
-  }
 }
 
 export const readDocxNodeText = (node: unknown): string => {

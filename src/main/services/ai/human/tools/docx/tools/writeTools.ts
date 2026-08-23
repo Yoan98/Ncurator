@@ -21,7 +21,6 @@ import type { DocxToolFailure } from '../runtime'
 import { createDocxFile } from '../utils/createDocxFile'
 import {
   isLegacyDocPath,
-  LEGACY_DOC_EDIT_DECISION_HINT,
   LEGACY_DOC_EDIT_ERROR
 } from '../legacyDocPolicy'
 
@@ -90,7 +89,7 @@ const summarizePositionedBlockText = (block: DocxDetailedBlock): string | undefi
 const buildPositionedDiagnostic = (block: DocxDetailedBlock): string => {
   const targetText = summarizePositionedBlockText(block)
   const target = targetText ? `：包含“${targetText}”的区域` : ''
-  return `当前命中复杂定位排版区域${target}，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。`
+  return `当前命中复杂定位排版区域${target}，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；该区域需要用户手动处理，其他非定位区域可继续自动编辑。`
 }
 
 const getOutlineBlockIndex = (blocks: readonly DocxOutlineBlock[], blockId: string): number =>
@@ -347,14 +346,6 @@ const failIfPositionedBlock = async (input: {
     toolCallId: input.toolCallId,
     reason: 'invalid_input',
     error,
-    decisionHint: {
-      code: 'hand_docx_positioned_write_blocked',
-      detail: {
-        toolName: 'docx_edit',
-        sourcePath: input.sourcePath,
-        error
-      }
-    },
     draftDocId: input.docId,
     resourceContext: input.runtime.buildResourceContext({
       sourcePath: input.sourcePath,
@@ -986,7 +977,6 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
             toolCallId,
             reason: 'invalid_input',
             error: LEGACY_DOC_EDIT_ERROR,
-            decisionHint: LEGACY_DOC_EDIT_DECISION_HINT,
             resourceContext: runtime.buildResourceContext({
               sourcePath: args.sourcePath,
               effectKind: 'mutated'

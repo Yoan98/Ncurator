@@ -9,9 +9,7 @@ import { createLearningNode } from '../node/learningNode'
 import { createPlanNode } from '../node/planNode'
 import { createHandNode } from '../node/handNode'
 import { createMouthNode } from '../node/mouthNode'
-import { createFaultNode } from '../node/faultNode'
 import { createHumanRuntimeCache } from '../node/utils/runtimeCache'
-import { emitDecisionHint } from '../node/utils/stateTransitionEvents'
 import { advanceDispatchState } from '../node/dispatch'
 import { createHumanRunStateSchema, createInitialHumanState } from '../state/schema'
 import { isLearnableSkillId } from '../skills'
@@ -70,7 +68,6 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         cache,
         emitAnswerEvents: Boolean(options.emitAnswerEvents)
       })
-      const faultNode = createFaultNode({ ctx, cache })
 
       const routeToolReturn = (state: HumanState): string =>
         state.execution.stage === 'context_budget'
@@ -96,7 +93,6 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         .addNode('human_plan_node', (state) => runNodeWithSnapshot(state as HumanState, planNode))
         .addNode('human_hand_node', (state) => runNodeWithSnapshot(state as HumanState, handNode))
         .addNode('human_mouth_node', (state) => runNodeWithSnapshot(state as HumanState, mouthNode))
-        .addNode('human_fault_node', (state) => runNodeWithSnapshot(state as HumanState, faultNode))
         .addEdge(START, 'human_context_budget_node')
         .addConditionalEdges('human_context_budget_node', (state) => {
           const humanState = state as HumanState
@@ -110,7 +106,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           const humanState = state as HumanState
           if (humanState.execution.stage === 'dispatch') return 'human_dispatch_node'
           if (humanState.execution.stage === 'mouth') return 'human_mouth_node'
-          return 'human_fault_node'
+          return 'human_context_budget_node'
         })
         .addConditionalEdges('human_dispatch_node', (state) => {
           const humanState = state as HumanState
@@ -119,7 +115,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           if (humanState.execution.stage === 'hand') return 'human_hand_node'
           if (humanState.execution.stage === 'mouth') return 'human_mouth_node'
           if (humanState.execution.stage === 'context_budget') return 'human_context_budget_node'
-          return 'human_fault_node'
+          return 'human_context_budget_node'
         })
         .addConditionalEdges('human_learning_node', (state) => routeToolReturn(state as HumanState))
         .addConditionalEdges('human_plan_node', (state) => routeToolReturn(state as HumanState))
@@ -129,7 +125,6 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           if (humanState.execution.status === 'running') return 'human_context_budget_node'
           return END
         })
-        .addEdge('human_fault_node', 'human_context_budget_node')
         .compile()
 
       const baseInitialState = options.initialState || createInitialHumanState(taskInput)
@@ -147,17 +142,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       }
       cache.currentState = initialState
       await saveProcessSnapshot(initialState)
-      const resumed =
-        initialState.execution.pendingDecisionHint?.code === 'run_resumed_after_interruption'
-      await ctx.appendTranscript([{ kind: 'user', content: initialState.task.userInput }])
-      if (resumed && initialState.execution.pendingDecisionHint) {
-        emitDecisionHint({
-          ctx,
-          taskId: initialState.task.taskId,
-          source: 'brain',
-          decisionHint: initialState.execution.pendingDecisionHint
-        })
-      }
+      await ctx.appendMessageLog([{ kind: 'user', content: initialState.task.userInput }])
       const output = (await graph.invoke(initialState as HumanState, {
         recursionLimit:
           ctx.humanRuntimeOverrides?.graphRecursionLimit || HUMAN_GRAPH_RECURSION_LIMIT

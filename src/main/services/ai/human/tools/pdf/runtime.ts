@@ -30,7 +30,6 @@ export type PdfToolResourceContext = {
 export type PdfToolFailure = {
   ok: false
   error: string
-  decisionHint?: JsonObject
   resourceContext?: PdfToolResourceContext
 }
 
@@ -52,7 +51,6 @@ export type PdfToolRuntime = {
     toolCallId: string
     error: string
     reason: string
-    decisionHint?: JsonObject
     resourceContext?: PdfToolResourceContext
   }) => PdfToolFailure
   emitWorkerFailure: (input: {
@@ -140,7 +138,6 @@ export const createPdfToolRuntime = (input: PdfCapabilityToolsInput): PdfToolRun
     const failure: PdfToolFailure = {
       ok: false,
       error: params.error,
-      decisionHint: params.decisionHint,
       resourceContext: params.resourceContext
     }
     toolEvents.emitResult({

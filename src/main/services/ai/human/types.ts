@@ -33,7 +33,6 @@ import {
   humanReferenceSchema,
   fileChangesSummarySchema,
   fileChangeSummaryItemSchema,
-  humanDecisionHintSchema,
   skillDefinitionBaseSchema,
   toolCallParamSchema,
   toolCallResultSchema,
@@ -74,7 +73,6 @@ export type HandCallList = z.infer<typeof handCallsSchema>
 export type ToolResourceContext = z.infer<typeof toolResourceContextSchema>
 export type ToolCallResult = z.infer<typeof toolCallResultSchema>
 export type HumanLearningOutcome = z.infer<typeof humanLearningOutcomeSchema>
-export type HumanDecisionHint = z.infer<typeof humanDecisionHintSchema>
 export type HumanHistoryToolResult = z.infer<typeof humanHistoryToolResultSchema>
 export type HumanCompactionBlock = z.infer<typeof humanCompactionBlockSchema>
 export type HumanResult = z.infer<typeof humanResultSchema>
