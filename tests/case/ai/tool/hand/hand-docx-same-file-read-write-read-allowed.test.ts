@@ -62,6 +62,7 @@ describe('ai tool hand backend', () => {
                 action: 'hand',
                 calls: [
                   {
+                    toolCallId: 'call-0',
                     toolName: 'docx_read_outline',
                     args: {
                       sourcePath: path.join(runtime.workspaceRoot, 'same-file-read-write-read.docx'),
@@ -69,6 +70,7 @@ describe('ai tool hand backend', () => {
                     }
                   },
                   {
+                    toolCallId: 'call-1',
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: path.join(runtime.workspaceRoot, 'same-file-read-write-read.docx'),
@@ -82,6 +84,7 @@ describe('ai tool hand backend', () => {
                     }
                   },
                   {
+                    toolCallId: 'call-2',
                     toolName: 'docx_read_blocks',
                     args: {
                       sourcePath: path.join(runtime.workspaceRoot, 'same-file-read-write-read.docx'),

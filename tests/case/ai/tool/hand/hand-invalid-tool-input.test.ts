@@ -48,6 +48,7 @@ describe('ai tool hand backend', () => {
                 action: 'hand',
                 calls: [
                   {
+                    toolCallId: 'call-0',
                     toolName: 'docx_edit',
                     args: {
                       toolName: 'docx_edit',

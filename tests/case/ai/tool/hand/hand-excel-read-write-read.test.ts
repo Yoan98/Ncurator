@@ -62,12 +62,14 @@ describe('ai tool hand excel backend', () => {
                 action: 'hand',
                 calls: [
                   {
+                    toolCallId: 'call-0',
                     toolName: 'excel_read_outline',
                     args: {
                       sourcePath: path.join(runtime.workspaceRoot, 'hand-report.xlsx')
                     }
                   },
                   {
+                    toolCallId: 'call-1',
                     toolName: 'excel_edit',
                     args: {
                       sourcePath: path.join(runtime.workspaceRoot, 'hand-report.xlsx'),
@@ -75,6 +77,7 @@ describe('ai tool hand excel backend', () => {
                     }
                   },
                   {
+                    toolCallId: 'call-2',
                     toolName: 'excel_read_cells',
                     args: {
                       sourcePath: path.join(runtime.workspaceRoot, 'hand-report.xlsx'),

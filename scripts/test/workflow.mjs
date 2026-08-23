@@ -660,12 +660,7 @@ const formatScope = (input) =>
     .join(' ')
 
 const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, deadlineAt) => {
-  const warmupTargets = targets.filter((target) => target.cacheMode === 'warmup')
-  if (
-    warmupTargets.length > 0 &&
-    !testFiles.includes(VECTOR_WARMUP_TEST_FILE) &&
-    testFiles.length > 1
-  ) {
+  if (!testFiles.includes(VECTOR_WARMUP_TEST_FILE) && testFiles.length > 1) {
     testFiles = [...testFiles, VECTOR_WARMUP_TEST_FILE]
   }
   const fileTasks = await Promise.all(
@@ -685,13 +680,9 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     )
     .map((task, index) => ({ ...task, index }))
   const runnableTasks = tasks
-  const warmupTasks = runnableTasks.filter(
-    (task) => task.cacheMode === 'warmup' && task.execution === 'warmup'
-  )
+  const warmupTasks = runnableTasks.filter((task) => task.execution === 'warmup')
   const concurrentTasks = runnableTasks.filter(
-    (task) =>
-      task.execution !== 'exclusive' &&
-      !(task.cacheMode === 'warmup' && task.execution === 'warmup')
+    (task) => task.execution !== 'exclusive' && task.execution !== 'warmup'
   )
   const exclusiveTasks = runnableTasks.filter((task) => task.execution === 'exclusive')
   const results = []

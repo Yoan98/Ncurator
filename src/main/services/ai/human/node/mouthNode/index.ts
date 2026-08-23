@@ -155,8 +155,10 @@ export const createMouthNode = (input: {
     const messages = [...(input.cache.messages || [])]
     messages.push(new HumanMessage(deliveryMessage))
 
-    // 与最后一轮 brain 绑定完全相同的工具集，使本次调用复用 brain 的 KV 缓存前缀；
-    // 同时用 tool_choice: 'none' 强制只输出文本，避免误触发工具调用。
+    // 与最后一轮 brain 绑定完全相同的工具集（不设 tool_choice，保持默认 auto），
+    // 使工具描述被渲染进 prompt 从而复用 brain 的 KV 缓存前缀。禁止调用工具的约束
+    // 由 delivery 提示词 + 下方空正文兜底承担：实测 tool_choice: 'none' 会导致 DeepSeek
+    // 不渲染工具描述，反而无法命中缓存。
     const tools = buildAvailableTools({
       cache: input.cache,
       ctx: input.ctx,
@@ -172,7 +174,6 @@ export const createMouthNode = (input: {
         taskId: promptState.task.taskId,
         messages,
         tools,
-        toolChoice: 'none',
         schemaName: 'human_mouth_markdown',
         temperature: 0.2,
         onTextDelta: input.emitAnswerEvents

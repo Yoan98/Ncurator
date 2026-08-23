@@ -75,6 +75,7 @@ describe('ai tool hand backend', () => {
                 action: 'hand',
                 calls: [
                   {
+                    toolCallId: 'call-0',
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: path.join(runtime.workspaceRoot, 'serial-docx-chain.docx'),
@@ -88,6 +89,7 @@ describe('ai tool hand backend', () => {
                     }
                   },
                   {
+                    toolCallId: 'call-1',
                     toolName: 'docx_read_blocks',
                     args: {
                       sourcePath: path.join(runtime.workspaceRoot, 'serial-docx-chain.docx'),

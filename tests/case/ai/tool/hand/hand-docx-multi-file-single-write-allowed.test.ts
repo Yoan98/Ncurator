@@ -67,6 +67,7 @@ describe('ai tool hand backend', () => {
                 action: 'hand',
                 calls: [
                   {
+                    toolCallId: 'call-0',
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: path.join(runtime.workspaceRoot, 'multi-file-a.docx'),
@@ -80,6 +81,7 @@ describe('ai tool hand backend', () => {
                     }
                   },
                   {
+                    toolCallId: 'call-1',
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: path.join(runtime.workspaceRoot, 'multi-file-b.docx'),

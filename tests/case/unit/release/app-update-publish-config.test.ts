@@ -114,7 +114,7 @@ describe('app update publish config', () => {
     expect(testWorkflow).toContain("task.execution === 'warmup'")
     expect(testWorkflow).toContain("cacheMode: 'direct'")
     expect(testWorkflow).toContain("cacheMode: 'warmup'")
-    expect(testWorkflow).toContain("task.cacheMode === 'warmup' && task.execution === 'warmup'")
+    expect(testWorkflow).toContain("task.execution !== 'exclusive' && task.execution !== 'warmup'")
     expect(testWorkflow).toContain('VECTOR_WARMUP_TEST_FILE')
     expect(testWorkflow).toContain("testFiles = [...testFiles, VECTOR_WARMUP_TEST_FILE]")
     expect(testWorkflow).toContain("task.execution === 'warmup' ? '' : testNamePattern")

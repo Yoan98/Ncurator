@@ -37,8 +37,6 @@ type TextMessage = {
   usage_metadata?: Record<string, unknown>
 }
 
-export type AiLlmToolChoice = 'none' | 'auto' | 'required'
-
 type TextRunnable = {
   invoke: (
     input: Array<SystemMessage | HumanMessage>,
@@ -49,10 +47,7 @@ type TextRunnable = {
     config?: Partial<RunnableConfig>
   ) => Promise<AsyncIterable<TextMessage>>
   withConfig: (config: Record<string, unknown>) => TextRunnable
-  bindTools?: (
-    tools: StructuredToolInterface[],
-    kwargs?: { tool_choice?: AiLlmToolChoice }
-  ) => TextRunnable
+  bindTools?: (tools: StructuredToolInterface[]) => TextRunnable
 }
 
 type BaseLlmInvocationInput = {
@@ -88,7 +83,6 @@ export type AiLlmTextMessagesDriverInput = {
   schemaName: string
   messages: BaseMessage[]
   tools?: StructuredToolInterface[]
-  toolChoice?: AiLlmToolChoice
   temperature?: number
   streamingMode: AiLlmStreamingMode
   observer?: LlmCallStreamObserver
@@ -128,7 +122,6 @@ export type AiLlmTextMessagesRequest = {
   schemaName: string
   messages: BaseMessage[]
   tools?: StructuredToolInterface[]
-  toolChoice?: AiLlmToolChoice
   temperature?: number
   streamingMode?: AiLlmStreamingMode
   onTextDelta?: (text: string) => void
@@ -493,13 +486,11 @@ const invokeTextMessagesChat = async (input: {
     temperature: request.temperature,
     streaming
   })
-  // mouth 等需要与 brain 共享 prompt 缓存的调用会传入同一批 tools，并要求只输出文本
-  // （tool_choice: 'none'），从而在保持流式的同时让 DeepSeek 命中 brain 的 KV 缓存前缀。
+  // mouth 等需要与 brain 共享 prompt 缓存的调用会传入与 brain 相同的 tools，
+  // 使工具描述被渲染进 prompt 从而命中 DeepSeek 的 KV 缓存前缀，同时保持流式输出。
   const runnable =
     request.tools && request.tools.length > 0 && baseRunnable.bindTools
-      ? baseRunnable.bindTools(request.tools, request.toolChoice
-          ? { tool_choice: request.toolChoice }
-          : undefined)
+      ? baseRunnable.bindTools(request.tools)
       : baseRunnable
   const response = streaming
     ? await streamTextFromRunnable({
@@ -800,7 +791,6 @@ export const createAiLlmExecutor = (input: {
                   schemaName: request.schemaName,
                   messages: request.messages,
                   tools: request.tools,
-                  toolChoice: request.toolChoice,
                   temperature: request.temperature,
                   streamingMode,
                   observer,

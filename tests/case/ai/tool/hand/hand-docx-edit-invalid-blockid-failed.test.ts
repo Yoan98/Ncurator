@@ -53,6 +53,7 @@ describe('ai tool hand backend', () => {
                 action: 'hand',
                 calls: [
                   {
+                    toolCallId: 'call-0',
                     toolName: 'docx_edit',
                     args: {
                       sourcePath: path.join(runtime.workspaceRoot, 'invalid-blockid.docx'),
