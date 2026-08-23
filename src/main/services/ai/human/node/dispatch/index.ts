@@ -65,14 +65,9 @@ const dispatchGroupToNextAction = (group: HumanDispatchItem[]): HumanNextAction 
           ? (first.args as Record<string, unknown>).evidenceReferences
           : undefined
       const parsed = brainEvidenceReferenceSchema.array().optional().safeParse(rawReferences)
-      const rawMessage =
-        first.args && typeof first.args === 'object'
-          ? (first.args as Record<string, unknown>).message
-          : undefined
       return {
         action: 'mouth',
         toolCallId: first.toolCallId,
-        message: typeof rawMessage === 'string' && rawMessage.trim() ? rawMessage.trim() : undefined,
         evidenceReferences: parsed.success ? parsed.data : undefined
       }
     }

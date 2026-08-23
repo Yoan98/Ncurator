@@ -395,8 +395,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     message: true,
     plan: {
       title: true,
-      status: true,
-      evidence: true
+      status: true
     }
   },
   finish: {

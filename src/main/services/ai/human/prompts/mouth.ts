@@ -7,16 +7,12 @@ import {
 import { renderHumanFileChangeLines } from '../shared/runtimeRenderers'
 import type { HumanState } from '../types'
 
-const renderFinishMessage = (finishMessage: string | undefined): string =>
-  finishMessage && finishMessage.trim() ? finishMessage.trim() : 'none'
-
 export const buildMouthDeliveryMessage = (input: {
   state: HumanState
   ctx: AiRunContext
-  finishMessage?: string
 }): string =>
   `
-现在面向用户交付结果。若本轮是因为需要用户协助、确认或等待用户下一步而结束，则说明当前进展和需要用户做什么。
+现在面向用户交付结果。
 
 <delivery_rules>
 - 只输出最终 markdown 正文，不要输出 JSON 或额外说明。
@@ -28,10 +24,6 @@ export const buildMouthDeliveryMessage = (input: {
 </delivery_rules>
 
 <delivery_context>
-  <finish_message>
-${renderFinishMessage(input.finishMessage)}
-  </finish_message>
-
   <delivery_guidance>
 ${renderDeliveryGuidanceItems(input.state.execution.deliveryGuidanceItems)}
   </delivery_guidance>
@@ -45,5 +37,5 @@ ${renderEvidenceReferences(input.state.execution.evidenceReferences)}
   </evidence_references>
 </delivery_context>
 
-当 delivery_guidance 存在时必须吸收；当 file_changes 存在时必须提及这些产出；当 finish_message 存在时按其中要求向用户说明现状与需要用户做什么；当 evidence_references 存在时必须吸收其中信息，并明确说明引用了哪些资料分别支撑了哪部分交付内容。
+当 delivery_guidance 存在时必须吸收；当 file_changes 存在时必须提及这些产出；当 evidence_references 存在时必须吸收其中信息，并明确说明引用了哪些资料分别支撑了哪部分交付内容。
 `.trim()

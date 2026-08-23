@@ -32,7 +32,7 @@ const buildStateWithPlan = () => {
     taskId: 'task-cache-stability',
     userInput: '继续处理资料'
   })
-  state.memory.plan = [{ title: '读取当前目录', status: 'done', evidence: '已读取' }]
+  state.memory.plan = [{ title: '读取当前目录', status: 'done' }]
   state.skills.learnedSkillIds = ['docx-read']
   return state
 }

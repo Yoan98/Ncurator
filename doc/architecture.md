@@ -132,7 +132,7 @@ flowchart TD
 - `learning` 负责按需加载 external skill，执行 `learn_skill` 控制工具并把结果写回消息数组。
 - `plan` 执行 `update_plan` 控制工具，把计划写入 `memory.plan` 并回写 `ToolMessage`。
 - `hand` 负责执行真实工具，把结果以 `ToolMessage` 追加回消息数组。
-- `mouth` 由 `finish` 控制工具（或无工具调用的自然收尾）触发，复用 brain/hand 已累积的消息数组，追加一条交付指令 user 消息后流式生成最终答复（`chatMessages`），并把最终答复作为 `assistant` 转录条目写回。`finish` 统一承担「把当前进展交给用户」：完成任务、需要用户协助或确认、或等待用户下一步时都可调用，并可携带 `message` 说明需要用户做什么。
+- `mouth` 由 `finish` 控制工具（或无工具调用的自然收尾）触发，复用 brain/hand 已累积的消息数组，追加一条交付指令 user 消息后流式生成最终答复（`chatMessages`），并把最终答复作为 `assistant` 转录条目写回。`finish` 统一承担「把当前进展交给用户」：仅在完成任务、或需要用户协助或确认时调用，并携带必填的 `reason` 说明结束原因；mouth 从消息数组里的 finish 调用自行总结复述，不再显式接收 finish 消息。
 - `context_budget` 负责在每一步前检查上下文预算。
 - `context_compaction` 把消息投影的较早区间压缩为一条摘要（`<compacted_history>`）并注入 `<current_state>`（完整 plan + learnedSkillIds），服务本次 run 继续推进。
 

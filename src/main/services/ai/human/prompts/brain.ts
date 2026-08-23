@@ -105,10 +105,7 @@ export const buildBrainUserMessage = (input: {
   const renderPlan =
     input.injectPlan && plan.length > 0
       ? `\n    <plan>\n${plan
-          .map(
-            (item) =>
-              `      - ${item.status === 'done' ? '[done]' : '[todo]'} ${item.title}${item.evidence ? `（${item.evidence}）` : ''}`
-          )
+          .map((item) => `      - ${item.status === 'done' ? '[done]' : '[todo]'} ${item.title}`)
           .join('\n')}\n    </plan>`
       : ''
   const renderLearnedSkills =

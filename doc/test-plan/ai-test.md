@@ -36,9 +36,15 @@
 ### 2026-08-22 变更记录
 
 - `human` 主链由「prompt_json 模拟 toolcall + 每轮重渲染历史字符串」重构为「原生 function calling（`bindTools` + `tool_calls`）+ append-only 消息数组」，详见 `doc/architecture.md`。
-- `todolist` 对外概念与字段统一为 `plan`（项含 `title/status/evidence`，末项为检查项），控制工具统一为 `agent-control` 内置技能下的 `learn_skill` / `update_plan` / `finish`。
+- `todolist` 对外概念与字段统一为 `plan`（项含 `title/status`，末项为检查项），控制工具统一为 `agent-control` 内置技能下的 `learn_skill` / `update_plan` / `finish`。
 - 新增 executor `chatTools` 调用路径（复用重试/telemetry/abort/usage/`AiLlmDriver` mock-seam）；工具结果以 `ToolMessage` 按 `tool_call_id` 回写，历史从轮次日志确定性派生。
 - `mock-llm` 回归用例（约 30 例）本轮暂不改写，`scriptedStructuredOutputDriver` 需在后续补原生 `tool_calls` 支持；期间 `pnpm test:ai:human:mock-llm` 预期失败。
+
+### 2026-08-23 变更记录
+
+- 删除 `utility` skill 及 `wait_time` / `wait_for_user_takeover` 两个工具，连同整套「用户接手」机制（`requestUserTakeover`、`waiting_user_takeover` 状态、`user_takeover_*` 事件、renderer 面板）一并移除。
+- `finish` 控制工具统一为「把当前进展交给用户」：仅在完成任务、或需要用户协助或确认时调用；`message` 字段重命名为必填的 `reason`，说明结束原因；`evidenceReferences` 保留。
+- `mouth` 不再显式接收 finish 消息（去掉 `<finish_message>` 直连），而是从消息数组里的 finish 调用自行总结复述；`update_plan` 删除 `evidence` 字段，`plan` 项只保留 `title/status`。
 
 ## 1. 总体目标
 
@@ -1126,8 +1132,8 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：第一轮 `brain` 写入的 thought memory 字段会在下一轮真实 `brain` prompt 中继续可见。
 - Why：memory 跨轮延续是 `human` 长链路推理的核心能力，必须由真实 graph 保证。
-- How：第一轮 `brain` 通过 `thought.todolist`（每项含 item/status/可选 evidence）更新任务清单记忆（todolist 进全局），并触发一次真实 learning；第二轮 `brain` 读取真实 prompt，检查这些内容是否还在。
-- Oracle：第二轮 `brain` prompt 中出现前一轮写入的 todolist 项及其 evidence 内容，任务最终完成。
+- How：第一轮 `brain` 通过 `update_plan`（每项含 title/status）更新任务清单记忆（plan 进全局）；第二轮 `brain` 读取真实 prompt，检查这些内容是否还在。
+- Oracle：第二轮 `brain` prompt 中出现前一轮写入的 plan 项标题，任务最终完成。
 - Not：不验证更复杂的 memory 压缩策略。
 
 ##### `conversation-memory-multi-run-recall`

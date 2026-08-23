@@ -10,16 +10,10 @@ export const normalizeThoughtText = (value: string): string =>
 
 export const normalizePlanItems = (items: HumanPlanItem[]): HumanPlanItem[] =>
   items
-    .map((item) => {
-      const normalized: HumanPlanItem = {
-        title: String(item.title || '').trim(),
-        status: item.status
-      }
-      if (typeof item.evidence === 'string' && item.evidence.trim().length > 0) {
-        normalized.evidence = normalizeThoughtText(item.evidence)
-      }
-      return normalized
-    })
+    .map((item) => ({
+      title: String(item.title || '').trim(),
+      status: item.status
+    }))
     .filter((item) => item.title.length > 0)
 
 export const normalizeRoundThought = (text: string): HumanRoundThought => ({

@@ -99,10 +99,6 @@ export const createMouthNode = (input: {
     const evidenceReferences = await resolveEvidenceReferenceAccess({
       references: pendingEvidenceReferences
     })
-    const finishMessage =
-      stateWithMouthRound.execution.pendingRound?.nextAction.action === 'mouth'
-        ? stateWithMouthRound.execution.pendingRound.nextAction.message
-        : undefined
     const promptState: HumanState = {
       ...stateWithMouthRound,
       execution: {
@@ -115,8 +111,7 @@ export const createMouthNode = (input: {
 
     const deliveryMessage = buildMouthDeliveryMessage({
       state: promptState,
-      ctx: input.ctx,
-      finishMessage
+      ctx: input.ctx
     })
     await input.ctx.appendMessageLog([
       { kind: 'annotation', eventType: 'finalizing_started', payload: {} }

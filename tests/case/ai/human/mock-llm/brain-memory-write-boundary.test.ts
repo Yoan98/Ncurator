@@ -27,8 +27,7 @@ describe('ai human mock-llm backend', () => {
                     plan: [
                       {
                         title: '确认最终负责人',
-                        status: 'todo',
-                        evidence: '知识库显示项目上线前必须执行复核'
+                        status: 'todo'
                       },
                       {
                         title: '检查是否已经满足用户诉求并能进入最终交付',
@@ -41,15 +40,15 @@ describe('ai human mock-llm backend', () => {
               },
               ({ user }) => {
                 secondBrainSeesMemory =
-                  user.includes('项目上线前必须执行复核') && user.includes('确认最终负责人')
+                  user.includes('确认最终负责人') &&
+                  user.includes('检查是否已经满足用户诉求并能进入最终交付')
                 return buildToolDecision({
                   toolName: 'update_plan',
                   args: {
                     plan: [
                       {
                         title: '确认最终负责人',
-                        status: 'done',
-                        evidence: '第二轮真实 brain prompt 中再次读到了第一轮写入的计划'
+                        status: 'done'
                       },
                       {
                         title: '检查是否已经满足用户诉求并能进入最终交付',

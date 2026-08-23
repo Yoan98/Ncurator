@@ -73,7 +73,7 @@ describe('ai unit brain prompt formatting', () => {
       userInput: '继续处理任务'
     })
     state.memory.plan = [
-      { title: '整理资料', status: 'done', evidence: '已读取工作区文件' },
+      { title: '整理资料', status: 'done' },
       { title: '检查是否满足诉求', status: 'todo' }
     ]
     state.skills.learnedSkillIds = ['docx-read']
@@ -83,7 +83,7 @@ describe('ai unit brain prompt formatting', () => {
     const currentState =
       user.match(/<current_state>([\s\S]*?)<\/current_state>/)?.[1] || ''
     expect(currentState).toContain('<plan>')
-    expect(currentState).toContain('[done] 整理资料（已读取工作区文件）')
+    expect(currentState).toContain('[done] 整理资料')
     expect(currentState).toContain('[todo] 检查是否满足诉求')
     expect(currentState).toContain('<learned_skills>')
     expect(currentState).toContain('- docx-read')
