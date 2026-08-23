@@ -585,15 +585,19 @@ const resolveBetterSqliteNativeBinding = (target) => {
 const runVitest = async (input) => {
   const extraArgs = ['--maxWorkers', String(input.workers)]
   if (input.retries > 0) extraArgs.push('--retry', String(input.retries))
-  const env = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
-    ? {
-        NODE_OPTIONS: appendNodeOption(
-          process.env.NODE_OPTIONS,
-          `--max-old-space-size=${String(LIVE_BACKEND_NODE_OLD_SPACE_MB)}`
-        ),
-        ...input.env
-      }
-    : input.env
+  const isLiveGroup = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
+  const env = {
+    ...(isLiveGroup
+      ? {
+          NODE_OPTIONS: appendNodeOption(
+            process.env.NODE_OPTIONS,
+            `--max-old-space-size=${String(LIVE_BACKEND_NODE_OLD_SPACE_MB)}`
+          )
+        }
+      : {}),
+    ...input.env,
+    LANGSMITH_TRACING: isLiveGroup ? 'true' : 'false'
+  }
   const caseArgs = input.testNamePattern ? ['--testNamePattern', input.testNamePattern] : []
   const commandArgs = [
     'run',
