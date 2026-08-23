@@ -107,6 +107,7 @@ describe('ai unit learning tool budget', () => {
     expect(
       humanNextActionSchema.parse({
         action: 'learning',
+        toolCallId: 'call-learning-budget',
         wantLearnSkillIds: ['terminal', 'docx-read', 'docx-write']
       })
     ).toMatchObject({

@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto'
 import { ToolMessage } from '@langchain/core/messages'
-import type { JsonObject } from '../../../../../../shared/types'
+import type { ChatMessageLogEntry, JsonObject, JsonValue } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import { buildHistoryToolResult } from '../../memory/historyToolResult'
-import { buildToolResultMessageContent } from '../../shared/historyRenderers'
+import { buildToolHistoryReturnValue, buildToolResultMessageContent } from '../../shared/historyRenderers'
+import { buildToolFeedback } from '../../shared/toolFeedback'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { analyzeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy'
@@ -45,7 +46,7 @@ const readBrowserUseApprovalText = (args: JsonObject): string => {
 }
 
 type ParsedHandCall = {
-  toolCallId?: string
+  toolCallId: string
   toolName: string
   args: JsonObject
 }
@@ -177,20 +178,32 @@ const appendToolMessages = (input: {
   cache: HumanRuntimeCache
   calls: ParsedHandCall[]
   results: ToolCallResult[]
-}): void => {
+}): Array<{ toolCallId: string; toolName: string; result: JsonValue | undefined }> => {
   const messages = input.cache.messages || []
+  const transcriptEntries: Array<{
+    toolCallId: string
+    toolName: string
+    result: JsonValue | undefined
+  }> = []
   input.calls.forEach((call, index) => {
     const result = input.results[index]
     if (!result) return
     const historyResult = buildHistoryToolResult(result)
+    const returnValue = buildToolHistoryReturnValue(historyResult)
     messages.push(
       new ToolMessage({
         content: buildToolResultMessageContent(historyResult),
-        tool_call_id: call.toolCallId || `call-${index}`
+        tool_call_id: call.toolCallId
       })
     )
+    transcriptEntries.push({
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
+      result: returnValue
+    })
   })
   input.cache.messages = messages
+  return transcriptEntries
 }
 
 const buildApprovalBlockedToolMessage = (input: {
@@ -213,19 +226,25 @@ const appendBlockedApprovalToolMessages = (input: {
   calls: ParsedHandCall[]
   decisions: Array<{ itemId: string; action: 'approve' | 'reject' | 'guide'; message?: string }>
   approvalItems: Array<{ itemId: string; order: number; toolName: string; command: string }>
-}): Array<{ toolCallId: string; toolName: string; message: string }> => {
+}): ChatMessageLogEntry[] => {
   const messages = input.cache.messages || []
   const decisionByItemId = new Map(input.decisions.map((decision) => [decision.itemId, decision]))
-  const transcriptEntries: Array<{ toolCallId: string; toolName: string; message: string }> = []
+  const transcriptEntries: ChatMessageLogEntry[] = []
 
   input.approvalItems.forEach((item) => {
     const decision = decisionByItemId.get(item.itemId)
     const call = input.calls[item.order]
     if (!decision || !call) return
     const message = buildApprovalBlockedToolMessage({ decision, command: item.command })
-    const toolCallId = call.toolCallId || `call-${item.order}`
-    messages.push(new ToolMessage({ content: message, tool_call_id: toolCallId }))
-    transcriptEntries.push({ toolCallId, toolName: item.toolName, message })
+    const feedback = buildToolFeedback({
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
+      ok: false,
+      errorCode: 'approval_blocked',
+      errorMessage: message
+    })
+    messages.push(feedback.message)
+    transcriptEntries.push(feedback.transcript)
   })
 
   input.cache.messages = messages
@@ -248,6 +267,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       ? rawCalls.flatMap((call) => {
           if (!call || typeof call !== 'object' || Array.isArray(call)) return []
           const candidate = call as Record<string, unknown>
+          if (typeof candidate.toolCallId !== 'string' || !candidate.toolCallId.trim()) return []
           if (typeof candidate.toolName !== 'string' || !candidate.toolName.trim()) return []
           if (
             !candidate.args ||
@@ -257,8 +277,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
             return []
           return [
             {
-              toolCallId:
-                typeof candidate.toolCallId === 'string' ? candidate.toolCallId : undefined,
+              toolCallId: candidate.toolCallId,
               toolName: candidate.toolName,
               args: candidate.args as JsonObject
             }
@@ -302,14 +321,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           decisions: approvalBatchResult.decisions,
           approvalItems
         })
-        await input.ctx.appendMessageLog(
-          blockedTranscriptEntries.map((entry) => ({
-            kind: 'tool' as const,
-            toolCallId: entry.toolCallId,
-            toolName: entry.toolName,
-            result: { message: entry.message }
-          }))
-        )
+        await input.ctx.appendMessageLog(blockedTranscriptEntries)
         return returnToBrain(state, {
           execution: {
             stage: 'context_budget',
@@ -342,17 +354,17 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     })
     input.cache.toolCallCount += results.length
 
-    appendToolMessages({
+    const toolTranscript = appendToolMessages({
       cache: input.cache,
       calls,
       results
     })
     await input.ctx.appendMessageLog(
-      calls.map((call, index) => ({
+      toolTranscript.map((entry) => ({
         kind: 'tool' as const,
-        toolCallId: call.toolCallId || `call-${index}`,
-        toolName: call.toolName,
-        result: results[index]?.data
+        toolCallId: entry.toolCallId,
+        toolName: entry.toolName,
+        result: entry.result
       }))
     )
 

@@ -1,4 +1,13 @@
-import type { HumanPlanItem } from '../types'
+import type { HumanPlanItem, HumanPlanItemStatus } from '../types'
+
+const PLAN_STATUS_LABELS: Record<HumanPlanItemStatus, string> = {
+  todo: '[todo]',
+  in_progress: '[doing]',
+  done: '[done]'
+}
+
+export const renderPlanItemStatus = (status: HumanPlanItemStatus): string =>
+  PLAN_STATUS_LABELS[status]
 
 export const renderPlanItems = (items: HumanPlanItem[]): string =>
-  items.map((item) => `- [${item.status}] ${item.title}`).join('\n')
+  items.map((item) => `- ${renderPlanItemStatus(item.status)} ${item.title}`).join('\n')

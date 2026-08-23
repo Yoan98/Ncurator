@@ -1,6 +1,7 @@
 import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
+import { humanPlanItemSchema } from '../../schema'
 
 export const LEARN_SKILL_SCHEMA = z.object({
   skillIds: z.array(z.string().min(1)).min(1)
@@ -11,14 +12,7 @@ export const LEARN_SKILL_OUTPUT_SCHEMA = z.object({
 })
 
 export const UPDATE_PLAN_SCHEMA = z.object({
-  plan: z
-    .array(
-      z.object({
-        title: z.string().min(1),
-        status: z.enum(['todo', 'done'])
-      })
-    )
-    .min(1),
+  plan: z.array(humanPlanItemSchema).min(1),
   progress: z.string().optional()
 })
 

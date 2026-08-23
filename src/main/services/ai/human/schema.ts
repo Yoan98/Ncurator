@@ -36,7 +36,7 @@ export const skillDefinitionBaseSchema = z.object({
 })
 
 export const toolCallParamSchema = z.object({
-  toolCallId: z.string().min(1).optional(),
+  toolCallId: z.string().min(1),
   toolName: z.string().min(1),
   args: jsonObjectSchema
 })
@@ -81,7 +81,7 @@ export const humanHistoryToolResultSchema = z.object({
   resourceContext: toolResourceContextSchema.optional()
 })
 
-export const humanPlanItemStatusSchema = z.enum(['todo', 'done'])
+export const humanPlanItemStatusSchema = z.enum(['todo', 'in_progress', 'done'])
 
 export const humanPlanItemSchema = z.object({
   title: z.string().min(1),
@@ -107,7 +107,7 @@ export const humanNextActionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('learning'),
     wantLearnSkillIds: z.array(z.string().min(1)).min(1),
-    toolCallId: z.string().min(1).optional()
+    toolCallId: z.string().min(1)
   }),
   z.object({
     action: z.literal('hand'),
@@ -120,6 +120,7 @@ export const humanNextActionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('mouth'),
     evidenceReferences: z.array(brainEvidenceReferenceSchema).optional(),
+    // content-safety 直达 mouth 时没有 finish 工具调用，因此 toolCallId 允许缺省（仅此一个合法例外）。
     toolCallId: z.string().min(1).optional()
   })
 ])
@@ -163,7 +164,7 @@ export const humanTaskOutputSchema = humanDeliveryPayloadSchema.extend({
 })
 
 export const humanDispatchItemSchema = z.object({
-  toolCallId: z.string().min(1).optional(),
+  toolCallId: z.string().min(1),
   toolName: z.string().min(1),
   args: jsonObjectSchema,
   target: z.enum(['learning', 'plan', 'hand', 'mouth'])

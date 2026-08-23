@@ -25,6 +25,7 @@ describe('ai unit human references', () => {
     expect(() =>
       humanNextActionSchema.parse({
         action: 'learning',
+        toolCallId: 'call-learn',
         wantLearnSkillIds: ['docx-read'],
         evidenceReferences: [
           {

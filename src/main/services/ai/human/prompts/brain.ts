@@ -1,5 +1,6 @@
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from './referenceScope'
+import { renderPlanItemStatus } from '../shared/memoryRenderers'
 import {
   getWorkspaceAssetsRootDir,
   getWorkspaceScriptsRootDir
@@ -82,6 +83,7 @@ ${renderSkillCatalog(input.ctx.platform)}
     - 使用 update_plan 初始化或更新任务执行计划，它是你的行动路径，也是推进记忆。
     - 仅当出现新的理解、新的证据或确实无法推进时，才允许新增、修改、废弃或重排计划，禁止无意义的调整。
     - 计划最后一项必须是检查项，用于判断是否已满足用户任务诉求。
+    - 每项的 status 只允许取 todo（待办）/ in_progress（进行中）/ done（完成）。
   </plan_contract>
 
   <finish_contract>
@@ -105,7 +107,7 @@ export const buildBrainUserMessage = (input: {
   const renderPlan =
     input.injectPlan && plan.length > 0
       ? `\n    <plan>\n${plan
-          .map((item) => `      - ${item.status === 'done' ? '[done]' : '[todo]'} ${item.title}`)
+          .map((item) => `      - ${renderPlanItemStatus(item.status)} ${item.title}`)
           .join('\n')}\n    </plan>`
       : ''
   const renderLearnedSkills =

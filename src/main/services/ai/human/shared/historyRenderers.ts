@@ -419,7 +419,7 @@ const filterValueByWhitelist = (
   return reduced
 }
 
-const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): JsonValue => {
+export const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): JsonValue => {
   if (!isJsonObject(result.data)) {
     return result.data === undefined ? null : result.data
   }

@@ -1,5 +1,5 @@
 import type { AiRunContext } from '../../../types'
-import { HumanMessage, ToolMessage } from '@langchain/core/messages'
+import { HumanMessage } from '@langchain/core/messages'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { buildMouthDeliveryMessage } from '../../prompts/mouth'
 import { assertExternalLearnedSkillIds } from '../../skills'
@@ -15,6 +15,7 @@ import { resolveEvidenceReferenceAccess } from '../../shared/evidenceReferenceAc
 import { brainEvidenceReferenceSchema } from '../../schema'
 import { isContentSafetyError } from '../../../utils/runFailure'
 import { renderHumanFileChangeLines } from '../../shared/runtimeRenderers'
+import { appendToolFeedback } from '../../shared/toolFeedback'
 
 const buildContentSafetyFallbackMarkdown = (state: HumanState): string =>
   [
@@ -46,24 +47,22 @@ export const createMouthNode = (input: {
     }
 
     const pendingItems = state.memory.plan
-      .filter((item) => item.status === 'todo')
+      .filter((item) => item.status !== 'done')
       .map((item) => item.title)
     if (pendingItems.length > 0 && state.execution.finalizationReason !== 'brain_content_safety') {
       const result = `交付失败，计划中仍有未完成事项：${pendingItems.join('、')}。`
       const finishToolCallId =
         pendingRound.nextAction.action === 'mouth' ? pendingRound.nextAction.toolCallId : undefined
       if (finishToolCallId) {
-        const messages = input.cache.messages || []
-        messages.push(
-          new ToolMessage({
-            content: result,
-            tool_call_id: finishToolCallId
-          })
-        )
-        input.cache.messages = messages
-        await input.ctx.appendMessageLog([
-          { kind: 'tool', toolCallId: finishToolCallId, toolName: 'finish', result: { message: result } }
-        ])
+        await appendToolFeedback({
+          cache: input.cache,
+          ctx: input.ctx,
+          toolCallId: finishToolCallId,
+          toolName: 'finish',
+          ok: false,
+          errorCode: 'pending_items',
+          errorMessage: result
+        })
       }
       return returnToBrain(state, {
         execution: {

@@ -1,5 +1,4 @@
 import type { AiRunContext } from '../../../types'
-import { ToolMessage } from '@langchain/core/messages'
 import { HUMAN_MAX_ACTIVE_TOOLS } from '../../constants'
 import type {
   HumanLearningOutcome,
@@ -23,29 +22,22 @@ import {
 } from '../utils/stateTransitions'
 import { advanceDispatchState } from '../dispatch'
 import { emitLearningCompleted, emitLearningStarted } from '../../../events/processEvents'
+import { appendToolFeedback } from '../../shared/toolFeedback'
 
-const appendLearnToolMessage = (input: {
+const appendLearnToolMessage = async (input: {
   cache: HumanRuntimeCache
   ctx: AiRunContext
-  toolCallId?: string
+  toolCallId: string
   content: string
-}): void => {
-  const messages = input.cache.messages || []
-  messages.push(
-    new ToolMessage({
-      content: input.content,
-      tool_call_id: input.toolCallId || 'learn_skill'
-    })
-  )
-  input.cache.messages = messages
-  void input.ctx.appendMessageLog([
-    {
-      kind: 'tool',
-      toolCallId: input.toolCallId || 'learn_skill',
-      toolName: 'learn_skill',
-      result: { message: input.content }
-    }
-  ])
+}): Promise<void> => {
+  await appendToolFeedback({
+    cache: input.cache,
+    ctx: input.ctx,
+    toolCallId: input.toolCallId,
+    toolName: 'learn_skill',
+    ok: true,
+    data: { message: input.content }
+  })
 }
 
 const dedupeInOrder = <TValue extends string>(values: readonly TValue[]): TValue[] => {
@@ -178,7 +170,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       })
       const learningResult = renderLearningResult(lastLearningOutcome)
 
-      appendLearnToolMessage({
+      await appendLearnToolMessage({
         cache: input.cache,
         ctx: input.ctx,
         toolCallId: learnToolCallId,
@@ -213,7 +205,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         activeToolCount: fittedLearnedSkills.activeToolCount
       })
       const learningResult = '学习失败，加载请求中的技能后会超过当前活动工具数量上限。'
-      appendLearnToolMessage({
+      await appendLearnToolMessage({
         cache: input.cache,
         ctx: input.ctx,
         toolCallId: learnToolCallId,
@@ -270,7 +262,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       activeToolCount: fittedLearnedSkills.activeToolCount
     })
     const learningResult = renderLearningResult(lastLearningOutcome)
-    appendLearnToolMessage({
+    await appendLearnToolMessage({
       cache: input.cache,
       ctx: input.ctx,
       toolCallId: learnToolCallId,

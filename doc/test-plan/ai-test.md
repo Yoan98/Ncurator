@@ -45,6 +45,9 @@
 - 删除 `utility` skill 及 `wait_time` / `wait_for_user_takeover` 两个工具，连同整套「用户接手」机制（`requestUserTakeover`、`waiting_user_takeover` 状态、`user_takeover_*` 事件、renderer 面板）一并移除。
 - `finish` 控制工具统一为「把当前进展交给用户」：仅在完成任务、或需要用户协助或确认时调用；`message` 字段重命名为必填的 `reason`，说明结束原因；`evidenceReferences` 保留。
 - `mouth` 不再显式接收 finish 消息（去掉 `<finish_message>` 直连），而是从消息数组里的 finish 调用自行总结复述；`update_plan` 删除 `evidence` 字段，`plan` 项只保留 `title/status`。
+- `plan` 项 `status` 值域扩为 `todo` / `in_progress` / `done`（`humanPlanItemStatusSchema` 单一来源，`update_plan` 工具 schema 复用）；`plan` 节点用 `UPDATE_PLAN_SCHEMA` 校验参数，非法 `status` 回写 `invalid_plan` 错误 `ToolMessage` 并回到 brain 重试，不把坏数据写入 `memory.plan`。
+- 控制/反馈类工具结果（`learn_skill` / `update_plan` / `finish` / 审批被拦 / 参数非法 JSON）统一收敛为 `toolFeedback` 工厂的 envelope（成功 `{ ok: true, ...data }`、失败 `{ ok: false, code, error }`，`code` 取 `invalid_json` / `invalid_plan` / `approval_blocked` / `pending_items`），替代各节点散落的裸字符串 `ToolMessage`；`content` 与转录 `result` 同对象保证恢复重放一致。
+- `tool_call_id` 收敛为领域必填（`toolCallParamSchema` / `humanDispatchItemSchema` / learning `nextAction`），删除 hand/plan/learning 节点的 `|| fallback` 兜底；仅在模型响应异常缺 id 时由 brain 边界就地生成局部 id 回喂。
 
 ## 1. 总体目标
 
@@ -1003,7 +1006,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：`hand` 会对当前 `calls` 中需审批的 `terminal_run` 做批量预检，并在整批未全部同意时 0 执行。
 - Why：terminal 审批责任已经前移到 `hand` preflight，回归 case 必须长期守住“先整批审核，再决定是否执行”的主流程。
 - How：通过真实 `human` hand 决策构造两个需审批 terminal 命令，并让审批批次返回 `approve + guide` 混合结果。
-- Oracle：事件流出现 `approval_batch_required / approval_batch_decision`；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；被拦的 terminal 调用会以合成 `ToolMessage` 结果（`terminal_approval_blocked`）回流到 `brain`。
+- Oracle：事件流出现 `approval_batch_required / approval_batch_decision`；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；被拦的 terminal 调用会以合成 `ToolMessage` 结果（`approval_blocked`）回流到 `brain`。
 - Not：不验证前端审批卡片交互。
 
 ##### `hand-serial-docx-chain`
@@ -1124,7 +1127,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：真实批量审批拒绝会阻止需审批命令落地，并把限制带入最终交付。
 - Why：审批拒绝是生产边界，不能只靠 fake 测试覆盖。
 - How：设置 `approvalPolicy=deny-medium-high`，直接尝试真实执行 builtin terminal 命令 `mkdir blocked-dir`，然后进入最终说明。
-- Oracle：事件流真实出现 `approval_batch_decision` 且至少一项为 `reject`；对应 terminal 命令不会真实执行；被拦的 terminal 调用以合成 `ToolMessage` 结果（`terminal_approval_blocked`）回流给后续 brain；磁盘上不会真的创建 `blocked-dir`，任务最终完成。
+- Oracle：事件流真实出现 `approval_batch_decision` 且至少一项为 `reject`；对应 terminal 命令不会真实执行；被拦的 terminal 调用以合成 `ToolMessage` 结果（`approval_blocked`）回流给后续 brain；磁盘上不会真的创建 `blocked-dir`，任务最终完成。
 - Not：不验证用户如何在 UI 中恢复被拒绝的动作。
 
 ##### `brain-memory-write-boundary`

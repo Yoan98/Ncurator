@@ -1,21 +1,22 @@
-import { ToolMessage } from '@langchain/core/messages'
 import type { JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import type { HumanPlanItem, HumanRuntimeCache, HumanState } from '../../types'
 import { normalizePlanItems } from '../../memory/thoughtMemory'
 import { emitToolCallResult, emitToolCallStarted } from '../../tools/utils/toolEvents'
 import { advanceDispatchState } from '../dispatch'
+import { UPDATE_PLAN_SCHEMA } from '../../tools/agentControl/toolSpecs'
+import { appendToolFeedback } from '../../shared/toolFeedback'
+import { returnToBrain } from '../utils/stateTransitions'
 
-const readPlanFromArgs = (args: JsonObject): HumanPlanItem[] => {
-  const raw = Array.isArray(args.plan) ? args.plan : []
-  return normalizePlanItems(
-    raw
-      .filter(
-        (item): item is HumanPlanItem =>
-          Boolean(item && typeof item === 'object' && !Array.isArray(item))
-      )
-      .map((item) => item as HumanPlanItem)
-  )
+const parsePlanArgs = (
+  args: JsonObject
+): { ok: true; plan: HumanPlanItem[] } | { ok: false; message: string } => {
+  const parsed = UPDATE_PLAN_SCHEMA.safeParse(args)
+  if (!parsed.success) {
+    const detail = parsed.error.issues.map((issue) => issue.message).join('；')
+    return { ok: false, message: `update_plan 参数不合法：${detail}` }
+  }
+  return { ok: true, plan: normalizePlanItems(parsed.data.plan) }
 }
 
 export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
@@ -29,7 +30,6 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     }
 
     const calls = pendingRound.nextAction.calls
-    const messages = input.cache.messages || []
 
     for (const call of calls) {
       emitToolCallStarted({
@@ -43,40 +43,70 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       })
     }
 
-    const plansByCall = calls.map((call) => readPlanFromArgs(call.args))
-    const nextPlan =
-      plansByCall.length > 0 ? plansByCall[plansByCall.length - 1]! : state.memory.plan
+    let nextPlan = state.memory.plan
+    let hasInvalid = false
 
-    const planTranscript = calls.map((call, index) => ({
-      kind: 'tool' as const,
-      toolCallId: call.toolCallId || `plan-${index}`,
-      toolName: call.toolName,
-      result: { message: '计划已更新', plan: plansByCall[index] || [] }
-    }))
-    calls.forEach((call, index) => {
-      const plan = plansByCall[index] || []
+    for (const call of calls) {
+      const parsed = parsePlanArgs(call.args)
+      if (!parsed.ok) {
+        hasInvalid = true
+        emitToolCallResult({
+          ctx: input.ctx,
+          runId: input.ctx.runId,
+          taskId: state.task.taskId,
+          toolCallId: call.toolCallId,
+          toolName: call.toolName,
+          error: parsed.message,
+          stage: 'human_plan'
+        })
+        await appendToolFeedback({
+          cache: input.cache,
+          ctx: input.ctx,
+          toolCallId: call.toolCallId,
+          toolName: call.toolName,
+          ok: false,
+          errorCode: 'invalid_plan',
+          errorMessage: parsed.message
+        })
+        continue
+      }
+
+      nextPlan = parsed.plan
       emitToolCallResult({
         ctx: input.ctx,
         runId: input.ctx.runId,
         taskId: state.task.taskId,
-        toolCallId: call.toolCallId || `plan-${index}`,
+        toolCallId: call.toolCallId,
         toolName: call.toolName,
         result: {
           toolName: call.toolName,
           ok: true,
-          data: { message: '计划已更新', plan }
+          data: { message: '计划已更新', plan: parsed.plan }
         },
         stage: 'human_plan'
       })
-      messages.push(
-        new ToolMessage({
-          content: JSON.stringify({ message: '计划已更新', plan }),
-          tool_call_id: call.toolCallId || `plan-${index}`
-        })
-      )
-    })
-    input.cache.messages = messages
-    await input.ctx.appendMessageLog(planTranscript)
+      await appendToolFeedback({
+        cache: input.cache,
+        ctx: input.ctx,
+        toolCallId: call.toolCallId,
+        toolName: call.toolName,
+        ok: true,
+        data: { message: '计划已更新', plan: parsed.plan }
+      })
+    }
+
+    if (hasInvalid) {
+      return returnToBrain(state, {
+        execution: {
+          stage: 'context_budget',
+          pendingDispatch: undefined
+        },
+        memory: {
+          ...state.memory,
+          plan: nextPlan
+        }
+      })
+    }
 
     return advanceDispatchState({
       ...state,

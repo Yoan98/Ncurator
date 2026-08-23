@@ -13,19 +13,19 @@ const classifyToolCallTarget = (toolName: string): HumanDispatchTarget => {
 }
 
 type RawToolCall = {
-  id?: string
-  name?: string
+  id: string
+  name: string
   args?: Record<string, unknown>
 }
 
 export const buildDispatchQueue = (toolCalls: RawToolCall[]): HumanDispatchItem[] =>
   toolCalls
-    .filter((call) => typeof call.name === 'string' && call.name.trim().length > 0)
+    .filter((call) => call.name.trim().length > 0)
     .map((call) => ({
-      toolCallId: typeof call.id === 'string' ? call.id : undefined,
-      toolName: String(call.name).trim(),
+      toolCallId: call.id,
+      toolName: call.name.trim(),
       args: (call.args || {}) as JsonObject,
-      target: classifyToolCallTarget(String(call.name).trim())
+      target: classifyToolCallTarget(call.name.trim())
     }))
 
 const dispatchGroupToNextAction = (group: HumanDispatchItem[]): HumanNextAction => {

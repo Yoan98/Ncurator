@@ -1,4 +1,4 @@
-import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
+import { HumanMessage, SystemMessage } from '@langchain/core/messages'
 import { getToolCalls } from '../../../../../utils/aiCapabilityUtils'
 import { extractTextContent, tryRepairJsonObject } from '../../../structuredOutput'
 import type { JsonObject } from '../../../../../../shared/types'
@@ -13,6 +13,7 @@ import { applyBrainDispatchTransition, returnToBrain } from '../utils/stateTrans
 import { buildAvailableTools } from '../learningNode/skillLoader'
 import { createDeliveryGuidanceItem, mergeDeliveryGuidanceItems } from '../../shared/deliveryGuidance'
 import { buildDispatchQueue } from '../dispatch'
+import { appendToolFeedback } from '../../shared/toolFeedback'
 import {
   emitThinkingCompleted,
   emitThinkingFailed,
@@ -124,26 +125,39 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       const invalidToolCalls = Array.isArray(assistantMessage.invalid_tool_calls)
         ? assistantMessage.invalid_tool_calls
         : []
-      const repairedToolCalls: Array<{ id?: string; name?: string; args?: Record<string, unknown> }> =
-        []
-      const unrecoverableCalls: Array<{ id?: string; name: string; error?: string }> = []
-      for (const invalidCall of invalidToolCalls) {
-        const repaired = tryRepairJsonObject(invalidCall.args)
-        if (repaired.ok) {
-          repairedToolCalls.push({
-            id: typeof invalidCall.id === 'string' ? invalidCall.id : undefined,
-            name: typeof invalidCall.name === 'string' ? invalidCall.name : '',
-            args: repaired.value
+      const dispatchableCalls: Parameters<typeof buildDispatchQueue>[0] = []
+      const unrecoverableCalls: Array<{ id?: string; name: string; errorMessage: string }> = []
+
+      for (const call of validToolCalls) {
+        const id = typeof call.id === 'string' && call.id.trim() ? call.id : undefined
+        const name = typeof call.name === 'string' ? call.name : ''
+        if (id) {
+          dispatchableCalls.push({
+            id,
+            name,
+            args: (call.args || {}) as Record<string, unknown>
           })
         } else {
+          unrecoverableCalls.push({ name, errorMessage: '工具调用缺少 tool_call_id，未执行。' })
+        }
+      }
+      for (const invalidCall of invalidToolCalls) {
+        const repaired = tryRepairJsonObject(invalidCall.args)
+        const id =
+          typeof invalidCall.id === 'string' && invalidCall.id.trim() ? invalidCall.id : undefined
+        const name = typeof invalidCall.name === 'string' ? invalidCall.name : ''
+        if (repaired.ok && id) {
+          dispatchableCalls.push({ id, name, args: repaired.value })
+        } else {
+          const detail =
+            typeof invalidCall.error === 'string' ? ` 具体错误：${invalidCall.error}` : ''
           unrecoverableCalls.push({
-            id: typeof invalidCall.id === 'string' ? invalidCall.id : undefined,
-            name: typeof invalidCall.name === 'string' ? invalidCall.name : '',
-            error: typeof invalidCall.error === 'string' ? invalidCall.error : undefined
+            id,
+            name,
+            errorMessage: `工具 ${name || '未知'} 的调用参数不是合法 JSON，未执行。请重新生成该工具调用并修正 JSON 格式。${detail}`
           })
         }
       }
-      const allToolCalls = [...validToolCalls, ...repairedToolCalls]
 
       messages.push(assistantMessage)
       input.cache.messages = messages
@@ -152,14 +166,14 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
           kind: 'assistant',
           content: extractTextContent(assistantMessage.content),
           toolCalls: [
-            ...allToolCalls.map((call) => ({
-              id: call.id || `call-${input.cache.toolCallCount}`,
-              name: String(call.name || ''),
-              args: (call.args || {}) as JsonObject
+            ...dispatchableCalls.map((call) => ({
+              id: call.id,
+              name: call.name,
+              args: call.args as JsonObject
             })),
-            ...unrecoverableCalls.map((call) => ({
-              id: call.id || `invalid-${input.cache.toolCallCount}`,
-              name: String(call.name || ''),
+            ...unrecoverableCalls.map((call, index) => ({
+              id: call.id || `invalid-${input.cache.toolCallCount}-${index}`,
+              name: call.name,
               args: {} as JsonObject
             }))
           ]
@@ -170,29 +184,19 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       const thought = normalizeRoundThought(thoughtText)
 
       if (unrecoverableCalls.length > 0) {
-        for (const call of unrecoverableCalls) {
-          const callId = call.id || `invalid-${input.cache.toolCallCount}`
-          const toolName = call.name || ''
-          const detail = call.error ? ` 具体错误：${call.error}` : ''
-          const content = `工具 ${toolName || '未知'} 的调用参数不是合法 JSON，未执行。请重新生成该工具调用并修正 JSON 格式。${detail}`
-          messages.push(
-            new ToolMessage({
-              content,
-              tool_call_id: callId
-            })
-          )
-          await input.ctx.appendMessageLog([
-            {
-              kind: 'tool',
-              toolCallId: callId,
-              toolName,
-              result: { error: content }
-            }
-          ])
+        for (const [index, call] of unrecoverableCalls.entries()) {
+          await appendToolFeedback({
+            cache: input.cache,
+            ctx: input.ctx,
+            toolCallId: call.id || `invalid-${input.cache.toolCallCount}-${index}`,
+            toolName: call.name || 'unknown',
+            ok: false,
+            errorCode: 'invalid_json',
+            errorMessage: call.errorMessage
+          })
         }
-        input.cache.messages = messages
 
-        if (allToolCalls.length === 0) {
+        if (dispatchableCalls.length === 0) {
           completeThinking()
           await input.ctx.appendMessageLog([
             { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
@@ -201,7 +205,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         }
       }
 
-      const dispatchQueue = buildDispatchQueue(allToolCalls)
+      const dispatchQueue = buildDispatchQueue(dispatchableCalls)
 
       completeThinking()
       await input.ctx.appendMessageLog([
