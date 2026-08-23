@@ -1,8 +1,4 @@
-import type {
-  HumanThoughtDecision,
-  HumanThought,
-  RuntimeSkillId
-} from '../../../../src/main/services/ai/human/types'
+import type { HumanRoundThought, RuntimeSkillId } from '../../../../src/main/services/ai/human/types'
 import type {
   AiArtifactRef,
   AiRunEvent,
@@ -23,19 +19,14 @@ export const summarizeHumanSteps = (events: readonly AiRunEvent[]): string[] =>
     return `${stage}:${event.action}`
   })
 
-const buildThoughtMetadata = (
-  input: { summary: string } & Partial<HumanThought>
-): HumanThought => ({
-  next: input.next || input.summary,
-  todolist: input.todolist
+const buildThoughtMetadata = (input: { summary: string }): HumanRoundThought => ({
+  text: input.summary
 })
 
-export const buildLearnSkillsDecision = (
-  input: {
-    skillIds: RuntimeSkillId[]
-    summary: string
-  } & Partial<HumanThought>
-): HumanThoughtDecision => ({
+export const buildLearnSkillsDecision = (input: {
+  skillIds: RuntimeSkillId[]
+  summary: string
+}): JsonObject => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'learning',
@@ -43,13 +34,11 @@ export const buildLearnSkillsDecision = (
   }
 })
 
-export const buildToolDecision = (
-  input: {
-    toolName: string
-    args: JsonObject
-    summary: string
-  } & Partial<HumanThought>
-): HumanThoughtDecision => ({
+export const buildToolDecision = (input: {
+  toolName: string
+  args: JsonObject
+  summary: string
+}): JsonObject => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'hand',
@@ -70,11 +59,7 @@ export const buildToolDecision = (
   }
 })
 
-export const buildCompleteTaskDecision = (
-  input: {
-    summary: string
-  } & Partial<HumanThought>
-): HumanThoughtDecision => ({
+export const buildCompleteTaskDecision = (input: { summary: string }): JsonObject => ({
   thought: buildThoughtMetadata(input),
   nextAction: {
     action: 'mouth'

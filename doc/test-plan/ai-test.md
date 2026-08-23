@@ -26,29 +26,6 @@
 | human-pdf-visual-reading-live | 完成 | 92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871 | 同上，视觉配置修复后 PDF 页面视觉读取正常，正确回答图形差异。 |
 | human-docx-dangling-image-edit-live | 完成 | 93 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-dangling-image-edit-live/20260821-230430-129 | 视觉配置修复 + 视觉识别并发池(3)后通过；docx_read_visuals 读图 230s→67s，13 项工时写回文档。 |
 
-### 2026-08-21 变更记录
-
-- 视觉识别串行改并发池 3：新增 `src/main/utils/concurrency.ts` 的 `mapLimit`；`visualRecognition.recognizeImages` 从串行改并发，docx `docx_read_visuals` 改为「两阶段：先提取渲染、再批量识别」，pdf/ppt 走 `recognizeImages` 自动受益。dangling-image 读图 230s→67s，整 case 由超时→159s。
-- 修复 live 视觉失败根因：`scripts/test/workflow.mjs` 的 `loadRootEnv` 增加 `${VAR}` 展开（对齐 `src/main/utils/rootEnv.ts`），此前 `${AI_LIVE_BASE_URL}` 以字面量进入视觉配置导致 `Invalid URL`。
-- 断言调整：ppt-write 期限正则放宽为中英文等价（`/7\s*月\s*15|july\s*15/iu`）；legacy-doc-edit-skip 验收口径收敛为「docx_edit 未成功编辑 .doc」。
-- `progressOverview` 融入 todolist：删除 `thought.progressOverview` 字段，其「证据」维度下沉为任务清单项的 `evidence`；todolist 对外概念统一为「任务清单」（字段名仍为 `todolist`），渲染标题由「代办事项」改为「任务清单」，并收窄 prompt 措辞减少每轮无意义重排。
-
-### 2026-08-22 变更记录
-
-- `human` 主链由「prompt_json 模拟 toolcall + 每轮重渲染历史字符串」重构为「原生 function calling（`bindTools` + `tool_calls`）+ append-only 消息数组」，详见 `doc/architecture.md`。
-- `todolist` 对外概念与字段统一为 `plan`（项含 `title/status`，末项为检查项），控制工具统一为 `agent-control` 内置技能下的 `learn_skill` / `update_plan` / `finish`。
-- 新增 executor `chatTools` 调用路径（复用重试/telemetry/abort/usage/`AiLlmDriver` mock-seam）；工具结果以 `ToolMessage` 按 `tool_call_id` 回写，历史从轮次日志确定性派生。
-- `mock-llm` 回归用例（约 30 例）本轮暂不改写，`scriptedStructuredOutputDriver` 需在后续补原生 `tool_calls` 支持；期间 `pnpm test:ai:human:mock-llm` 预期失败。
-
-### 2026-08-23 变更记录
-
-- 删除 `utility` skill 及 `wait_time` / `wait_for_user_takeover` 两个工具，连同整套「用户接手」机制（`requestUserTakeover`、`waiting_user_takeover` 状态、`user_takeover_*` 事件、renderer 面板）一并移除。
-- `finish` 控制工具统一为「把当前进展交给用户」：仅在完成任务、或需要用户协助或确认时调用；`message` 字段重命名为必填的 `reason`，说明结束原因；`evidenceReferences` 保留。
-- `mouth` 不再显式接收 finish 消息（去掉 `<finish_message>` 直连），而是从消息数组里的 finish 调用自行总结复述；`update_plan` 删除 `evidence` 字段，`plan` 项只保留 `title/status`。
-- `plan` 项 `status` 值域扩为 `todo` / `in_progress` / `done`（`humanPlanItemStatusSchema` 单一来源，`update_plan` 工具 schema 复用）；`plan` 节点用 `UPDATE_PLAN_SCHEMA` 校验参数，非法 `status` 回写 `invalid_plan` 错误 `ToolMessage` 并回到 brain 重试，不把坏数据写入 `memory.plan`。
-- 控制/反馈类工具结果（`learn_skill` / `update_plan` / `finish` / 审批被拦 / 参数非法 JSON）统一收敛为 `toolFeedback` 工厂的 envelope（成功 `{ ok: true, ...data }`、失败 `{ ok: false, code, error }`，`code` 取 `invalid_json` / `invalid_plan` / `approval_blocked` / `pending_items`），替代各节点散落的裸字符串 `ToolMessage`；`content` 与转录 `result` 同对象保证恢复重放一致。
-- `tool_call_id` 收敛为领域必填（`toolCallParamSchema` / `humanDispatchItemSchema` / learning `nextAction`），删除 hand/plan/learning 节点的 `|| fallback` 兜底；仅在模型响应异常缺 id 时由 brain 边界就地生成局部 id 回喂。
-
 ## 1. 总体目标
 
 - 本计划定义 AI 域回归范围和领域规则。通用测试、runner、raw logs、UI E2E 和 live 断言规则统一遵循 `doc/test.md`。

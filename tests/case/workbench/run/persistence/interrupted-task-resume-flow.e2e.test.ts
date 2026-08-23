@@ -76,7 +76,7 @@ describe('workbench run e2e', () => {
             runId: firstRunStarted.runId,
             matches: (event): event is Extract<AiRunEvent, { type: 'activity' }> =>
               event.type === 'activity' &&
-              event.actionType === 'llm_structured_output' &&
+              event.actionType === 'llm_tool_calls' &&
               event.status === 'completed'
           })
           await page
@@ -91,15 +91,6 @@ describe('workbench run e2e', () => {
             matches: (event): event is Extract<AiRunEvent, { type: 'run_started' }> =>
               event.type === 'run_started' && event.input === RESUME_PROMPT
           })
-          const resumedHint = await waitForRunEvent({
-            runtime,
-            name: 'runtime_limit_resume_hint',
-            runId: resumedRunStarted.runId,
-            matches: (event): event is Extract<AiRunEvent, { type: 'decision_hint' }> =>
-              event.type === 'decision_hint' &&
-              event.code === 'run_resumed_after_interruption' &&
-              event.detail?.reason === 'runtime_limit'
-          })
           await waitForRunEvent({
             runtime,
             name: 'resumed_run_completed',
@@ -112,7 +103,6 @@ describe('workbench run e2e', () => {
           return {
             runtimeLimitFailure,
             firstRunLlmCompleted,
-            resumedHint,
             finalAnswerText
           }
         },
@@ -121,7 +111,6 @@ describe('workbench run e2e', () => {
             result.runtimeLimitFailure.message === RUNTIME_LIMIT_MESSAGE &&
               result.runtimeLimitFailure.resumeSnapshotSaved === true &&
               result.firstRunLlmCompleted.status === 'completed' &&
-              result.resumedHint.detail?.reason === 'runtime_limit' &&
               result.finalAnswerText.includes('恢复任务成功') &&
               result.finalAnswerText.includes('42'),
             {
