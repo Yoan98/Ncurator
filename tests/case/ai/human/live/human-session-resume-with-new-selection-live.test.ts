@@ -1,14 +1,8 @@
 import { describe, it } from 'vitest'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
-import {
-  invokeStructuredChat,
-  type AiLlmDriver,
-  type AiLlmStructuredDriverResult,
-  type AiLlmTextDriverResult
-} from '../../../../../src/main/services/ai/llmExecutor'
 import type { AiRunDeps } from '../../../../../src/main/services/ai/types'
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
-import type { AiRunEvent, JsonObject } from '../../../../../src/shared/types'
+import type { AiRunEvent } from '../../../../../src/shared/types'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { BackendTestRuntime } from '../../../../harness/backend/test-types'
@@ -57,15 +51,6 @@ const mentionsOverfittingTopic = (text: string): boolean =>
 const mentionsAntiAliasingTopic = (text: string): boolean =>
   /(反走样|抗锯齿|anti-?aliasing)/i.test(normalizeText(text))
 
-const hasResumeHintEvent = (events: readonly AiRunEvent[], runId: string): boolean =>
-  events.some(
-    (event) =>
-      event.type === 'decision_hint' &&
-      event.runId === runId &&
-      event.code === 'run_resumed_after_interruption' &&
-      event.detail?.reason === 'network_error'
-  )
-
 const runUsedSelectedFile = (
   events: readonly AiRunEvent[],
   runId: string,
@@ -79,57 +64,32 @@ const runUsedSelectedFile = (
       eventText(event).includes(fileName)
   )
 
-const createFaultAfterOverfittingDriver = (input: {
+const createFaultAfterOverfittingWrapper = (input: {
   runtime: BackendTestRuntime
   state: LiveFaultInjectionState
-}): AiLlmDriver => ({
-  chatStructured: async (request): Promise<AiLlmStructuredDriverResult> => {
-    if (request.caller === 'human.brain' && input.state.shouldFailNextBrain) {
-      input.state.shouldFailNextBrain = false
-      input.state.injected = true
-      throw new Error('fetch failed')
-    }
-
-    const result = await invokeStructuredChat({
-      caller: request.caller,
-      cfg: request.cfg,
-      schema: request.schema,
-      schemaName: request.schemaName,
-      system: request.system,
-      user: request.user,
-      temperature: request.temperature,
-      streamingMode: request.streamingMode
-    })
-
-    if (
-      request.caller === 'human.brain' &&
-      !input.state.injected &&
-      hasOverfittingEvidence(input.runtime.eventCollector.snapshot())
-    ) {
-      input.state.shouldFailNextBrain = true
-    }
-
-    return {
-      output: result.output as JsonObject,
-      rawText: result.rawText,
-      streamed: result.streamed,
-      usage: result.usage,
-      responseMetadata: result.responseMetadata,
-      usageMetadata: result.usageMetadata
-    }
-  },
-  chatText: async (): Promise<AiLlmTextDriverResult> => {
-    if (!input.state.injected && hasOverfittingEvidence(input.runtime.eventCollector.snapshot())) {
-      input.state.injected = true
-      throw new Error('fetch failed')
-    }
-    throw new Error('fault_injection_driver_text_not_expected_before_resume')
+}): NonNullable<AiRunDeps['chatToolsWrapper']> => (realChatTools) => async (request) => {
+  if (request.caller === 'human.brain' && input.state.shouldFailNextBrain) {
+    input.state.shouldFailNextBrain = false
+    input.state.injected = true
+    throw new Error('fetch failed')
   }
-})
+
+  const result = await realChatTools(request)
+
+  if (
+    request.caller === 'human.brain' &&
+    !input.state.injected &&
+    hasOverfittingEvidence(input.runtime.eventCollector.snapshot())
+  ) {
+    input.state.shouldFailNextBrain = true
+  }
+
+  return result
+}
 
 const buildAiRunDeps = async (input: {
   runtime: BackendTestRuntime
-  llmDriver?: AiLlmDriver
+  chatToolsWrapper?: AiRunDeps['chatToolsWrapper']
 }): Promise<AiRunDeps> => {
   const controller = new AbortController()
   const runtimeSettings = await input.runtime.storageService.aiRuntimeSettings.get()
@@ -157,12 +117,13 @@ const buildAiRunDeps = async (input: {
     discardTerminalCommandTracking: (commandId) => {
       aiFileChangeService.discardTerminalCommandTracking(commandId)
     },
+    chatMessageLogStore: input.runtime.storageService.chatMessageLog,
     isCancelled: () => controller.signal.aborted,
     abortSignal: controller.signal,
     sendEvent: (event) => input.runtime.eventCollector.add(event),
     recordLlmIo: (record) => input.runtime.eventCollector.addLlmIo(record),
     requestApprovalBatch: async () => ({ accepted: true, decisions: [] as never[] }),
-    llmDriver: input.llmDriver
+    chatToolsWrapper: input.chatToolsWrapper
   }
 }
 
@@ -190,7 +151,6 @@ describe('ai human live backend', () => {
               snapshotAfterResume: null,
               injected: false,
               overfittingEvidenceBeforeFailure: false,
-              resumeHintEventSeen: false,
               run2UsedFileB: false,
               run2BrainPrompt: '',
               run2Delivery: '',
@@ -232,7 +192,7 @@ describe('ai human live backend', () => {
             },
             await buildAiRunDeps({
               runtime,
-              llmDriver: createFaultAfterOverfittingDriver({
+              chatToolsWrapper: createFaultAfterOverfittingWrapper({
                 runtime,
                 state: faultState
               })
@@ -274,7 +234,6 @@ describe('ai human live backend', () => {
             snapshotAfterResume,
             injected: faultState.injected,
             overfittingEvidenceBeforeFailure,
-            resumeHintEventSeen: hasResumeHintEvent(run2Events, run2Id),
             run2UsedFileB: runUsedSelectedFile(run2Events, run2Id, fileBReferences[0]?.name || ''),
             run2BrainPrompt,
             fileAName: fileAReferences[0]?.name || '',
@@ -303,11 +262,10 @@ describe('ai human live backend', () => {
               /(训练时间过久|记住过多训练数据|不太具有展望性)/.test(snapshotText) &&
               result.resumedResult?.status === 'completed' &&
               result.snapshotAfterResume === null &&
-              result.resumeHintEventSeen === true &&
-               result.run2UsedFileB === true &&
-               result.run2BrainPrompt.includes('<current_state>') &&
-               mentionsOverfittingTopic(result.run2BrainPrompt) &&
-               mentionsAntiAliasingTopic(result.run2BrainPrompt),
+              result.run2UsedFileB === true &&
+              result.run2BrainPrompt.includes('<current_state>') &&
+              mentionsOverfittingTopic(result.run2BrainPrompt) &&
+              mentionsAntiAliasingTopic(result.run2BrainPrompt),
             {
               name: 'human-live-session-resume-keeps-interrupted-context-and-uses-new-selection',
               message:

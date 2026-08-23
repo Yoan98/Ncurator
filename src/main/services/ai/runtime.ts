@@ -100,6 +100,9 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     driver: deps.llmDriver
   })
 
+  const resolveChatTools = (): AiRunContext['chatTools'] =>
+    deps.chatToolsWrapper ? deps.chatToolsWrapper(llmExecutor.chatTools) : llmExecutor.chatTools
+
   const appendMessageLog: AiRunContext['appendMessageLog'] = async (entries) => {
     await deps.chatMessageLogStore.appendBatch({
       sessionId: payload.sessionId,
@@ -156,7 +159,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     chatStructured: llmExecutor.chatStructured,
     chatText: llmExecutor.chatText,
     chatMessages: llmExecutor.chatMessages,
-    chatTools: llmExecutor.chatTools,
+    chatTools: resolveChatTools(),
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
     requestApprovalBatch: deps.requestApprovalBatch,

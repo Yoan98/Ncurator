@@ -1,6 +1,6 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages'
+import { HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import { getToolCalls } from '../../../../../utils/aiCapabilityUtils'
-import { extractTextContent } from '../../../structuredOutput'
+import { extractTextContent, tryRepairJsonObject } from '../../../structuredOutput'
 import type { JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { isContentSafetyError } from '../../../utils/runFailure'
@@ -9,7 +9,7 @@ import { deriveMessageLogMessages } from '../../memory/transcript'
 import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { applyBrainDispatchTransition } from '../utils/stateTransitions'
+import { applyBrainDispatchTransition, returnToBrain } from '../utils/stateTransitions'
 import { buildAvailableTools } from '../learningNode/skillLoader'
 import { createDeliveryGuidanceItem, mergeDeliveryGuidanceItems } from '../../shared/deliveryGuidance'
 import { buildDispatchQueue } from '../dispatch'
@@ -120,25 +120,85 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       }
 
       const assistantMessage = result.message
+      const validToolCalls = getToolCalls(assistantMessage)
+      const invalidToolCalls = Array.isArray(assistantMessage.invalid_tool_calls)
+        ? assistantMessage.invalid_tool_calls
+        : []
+      const repairedToolCalls: Array<{ id?: string; name?: string; args?: Record<string, unknown> }> =
+        []
+      const unrecoverableCalls: Array<{ id?: string; name: string }> = []
+      for (const invalidCall of invalidToolCalls) {
+        const repaired = tryRepairJsonObject(invalidCall.args)
+        if (repaired.ok) {
+          repairedToolCalls.push({
+            id: typeof invalidCall.id === 'string' ? invalidCall.id : undefined,
+            name: typeof invalidCall.name === 'string' ? invalidCall.name : '',
+            args: repaired.value
+          })
+        } else {
+          unrecoverableCalls.push({
+            id: typeof invalidCall.id === 'string' ? invalidCall.id : undefined,
+            name: typeof invalidCall.name === 'string' ? invalidCall.name : ''
+          })
+        }
+      }
+      const allToolCalls = [...validToolCalls, ...repairedToolCalls]
+
       messages.push(assistantMessage)
       input.cache.messages = messages
       await input.ctx.appendMessageLog([
         {
           kind: 'assistant',
           content: extractTextContent(assistantMessage.content),
-          toolCalls: getToolCalls(assistantMessage).map((call) => ({
-            id: call.id || `call-${input.cache.toolCallCount}`,
-            name: String(call.name || ''),
-            args: (call.args || {}) as JsonObject
-          }))
+          toolCalls: [
+            ...allToolCalls.map((call) => ({
+              id: call.id || `call-${input.cache.toolCallCount}`,
+              name: String(call.name || ''),
+              args: (call.args || {}) as JsonObject
+            })),
+            ...unrecoverableCalls.map((call) => ({
+              id: call.id || `invalid-${input.cache.toolCallCount}`,
+              name: String(call.name || ''),
+              args: {} as JsonObject
+            }))
+          ]
         }
       ])
 
       const thoughtText = extractTextContent(assistantMessage.content)
       const thought = normalizeRoundThought(thoughtText)
-      const toolCalls = getToolCalls(assistantMessage)
 
-      const dispatchQueue = buildDispatchQueue(toolCalls)
+      if (unrecoverableCalls.length > 0) {
+        for (const call of unrecoverableCalls) {
+          const callId = call.id || `invalid-${input.cache.toolCallCount}`
+          const toolName = call.name || ''
+          messages.push(
+            new ToolMessage({
+              content: `工具 ${toolName || '未知'} 的调用参数不是合法 JSON，未执行。请重新生成该工具调用，确保参数是合法 JSON。`,
+              tool_call_id: callId
+            })
+          )
+          await input.ctx.appendMessageLog([
+            {
+              kind: 'tool',
+              toolCallId: callId,
+              toolName,
+              result: { error: `工具 ${toolName} 调用参数不是合法 JSON，未执行。` }
+            }
+          ])
+        }
+        input.cache.messages = messages
+
+        if (allToolCalls.length === 0) {
+          completeThinking()
+          await input.ctx.appendMessageLog([
+            { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
+          ])
+          return returnToBrain(state)
+        }
+      }
+
+      const dispatchQueue = buildDispatchQueue(allToolCalls)
 
       completeThinking()
       await input.ctx.appendMessageLog([

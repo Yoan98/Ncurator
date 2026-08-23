@@ -95,7 +95,7 @@
 - 允许：脚本化 LLM 输入输出。
 - 不允许：脚本化 runtime 节点执行结果。
 - 断言重点：节点流转、工具调用、审批事件、artifact、memory、错误收敛、状态收口。
-- artifact 进入消息转录（`chat_session_transcript`）与提示词时只允许包含 `kind / path / operation`；内部 `capability / fileName / applyId` 不得进入提示词。
+- artifact 进入会话消息记录（`chat_session_message_log`）与提示词时只允许包含 `kind / path / operation`；内部 `capability / fileName / applyId` 不得进入提示词。
 - 已经落地的文件修改不得因 `run_failed` 或 `run_cancelled` 丢失，终态消息与 Workbench 都必须继续显示对应修改记录。
 
 #### live 类别
@@ -173,8 +173,8 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：旧版 .doc 文件可以通过现有 docx-read 工具读取，并明确拒绝写入。
 - Why：旧格式读取是 AI 文档能力的兼容边界，写入拒绝必须可解释且不产生副作用。
-- How：读取 outline、block、literal/regex 搜索，再尝试编辑并检查 decision hint。
-- Oracle：读取结果有效；编辑返回“禁止尝试任何对 .doc 文件的编辑”及对应提示；源文件 bytes 不变。
+- How：读取 outline、block、literal/regex 搜索，再尝试编辑并检查错误信息。
+- Oracle：读取结果有效；编辑返回“禁止尝试任何对 .doc 文件的编辑”错误信息；源文件 bytes 不变。
 - Not：不把旧版 .doc 写入转换为隐式成功。
 
 ##### `docx-minimal-edit-flow`
@@ -353,8 +353,8 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：`docx_read_outline` 结果超出 AI-facing 体积门禁时返回 `result_too_large`。
 - Why：长文档 outline 不能依赖 AI-controlled 数量上限截断，必须提示 brain 缩小范围。
-- How：对长文档执行过大的真实 `docx_read_outline(ranges=...)`，检查返回 `ok=false`、失败文本与 decision hint。
-- Oracle：返回 `ok=false`，失败文本明确为结果过大，且 decision hint 包含 `toolName/estimatedTokens/limit`。
+- How：对长文档执行过大的真实 `docx_read_outline(ranges=...)`，检查返回 `ok=false` 与失败文本。
+- Oracle：返回 `ok=false`，失败文本明确为结果过大，且包含 `toolName/estimatedTokens/limit`。
 - Not：不验证 human 是否一定继续读取后续内容。
 
 ##### `docx-complex-ops-serial-actions`
@@ -797,7 +797,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `terminal-result-unusable-docx-output`
 
 - 测试类型：`backend`
-- What：`terminal_run` 读到明显非文本/结构化文档输出时，会省略原始输出并回流 decision hint。
+- What：`terminal_run` 读到明显非文本/结构化文档输出时，会省略原始输出并返回错误结果。
 - Why：terminal 不能把 Word / Excel / PPT / PDF 等结构化文档的二进制内容带入后续 brain prompt。
 - How：真实创建 docx 后执行 `terminal_run(cat report.docx)`，并对普通文本文件执行 `cat notes.txt` 作为低误伤对照。
 - Oracle：docx 输出返回 `ok=false / reason=result_unusable / hand_tool_result_unusable`，stdout/stderr 不包含原始 `PK` 乱码；普通文本输出保持可读。
@@ -996,19 +996,19 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `hand-invalid-tool-input`
 
 - 测试类型：`backend`
-- What：双层嵌套的坏工具参数会被工具层 schema 校验拒绝，并提升为 `hand_docx_edit_failed`。
+- What：双层嵌套的坏工具参数会被工具层 schema 校验拒绝，并返回 `hand_docx_edit_failed` 错误。
 - Why：模型常见错误是把工具参数包错层级；工具自身的 zod schema 校验必须在真实执行中给出可恢复的结构化失败。
 - How：向真实 `hand` node 提交双层嵌套的坏 `docx_edit` 参数。
-- Oracle：工具结果为失败，error 指向 `did not match expected schema`，并提升为 `hand_docx_edit_failed` decision hint。
-- Not：不验证 brain 如何根据该 hint 重写计划。
+- Oracle：工具结果为失败，error 指向 `did not match expected schema`，并提升为 `hand_docx_edit_failed` 错误。
+- Not：不验证 brain 如何根据该错误重写计划。
 
 ##### `hand-docx-edit-invalid-blockid-failed`
 
 - 测试类型：`backend`
 - What：`docx_edit` 使用不存在或过期 blockId 时失败，并返回统一 `hand_docx_edit_failed`。
-- Why：无效 blockId 是 docx 多轮编辑的高频失败入口，必须稳定进入可恢复 hint，而不是静默写错位置。
+- Why：无效 blockId 是 docx 多轮编辑的高频失败入口，必须稳定进入可恢复错误，而不是静默写错位置。
 - How：创建真实 docx 后，通过 `hand` 调用 `docx_edit(insert_blocks)`，`location.blockId` 使用不存在的 `b:99`。
-- Oracle：`docx_edit` 返回失败；pending decision hint 为 `hand_docx_edit_failed`，detail 包含 toolName、sourcePath、action 与具体错误。
+- Oracle：`docx_edit` 返回失败，error 包含 toolName、sourcePath、action 与具体错误。
 - Not：不验证 human 最终交付话术。
 
 ##### `hand-terminal-approval-batch`
@@ -1017,7 +1017,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：`hand` 会对当前 `calls` 中需审批的 `terminal_run` 做批量预检，并在整批未全部同意时 0 执行。
 - Why：terminal 审批责任已经前移到 `hand` preflight，回归 case 必须长期守住“先整批审核，再决定是否执行”的主流程。
 - How：通过真实 `human` hand 决策构造两个需审批 terminal 命令，并让审批批次返回 `approve + guide` 混合结果。
-- Oracle：事件流出现 `approval_batch_required / approval_batch_decision`；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；`decision_hint(code='terminal_approval_blocked')` 会回流到 `brain`。
+- Oracle：事件流出现 `approval_batch_required / approval_batch_decision`；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；被拦的 terminal 调用会以合成 `ToolMessage` 结果（`terminal_approval_blocked`）回流到 `brain`。
 - Not：不验证前端审批卡片交互。
 
 ##### `hand-serial-docx-chain`
@@ -1128,7 +1128,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：真实 `learning` 会持续记录当前 active tool 数，并在预算未超限时保留当前已学习 skill 集。
 - Why：`learning` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，回归 case 需要先守住基础统计与状态可见性。
-- How：通过 scripted structured output 依次学习 `docx-read`、`docx-write`，再故意请求 builtin skill（如 `terminal + kb-retrieval`）；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary，并确认出现 builtin learning decision hint。
+- How：通过 scripted structured output 依次学习 `docx-read`、`docx-write`，再故意请求 builtin skill（如 `terminal + kb-retrieval`）；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary，并确认 builtin skill 请求被过滤（learning 返回「学习失败，学习请求中没有可加载的技能。」工具结果）。
 - Oracle：任务最终完成；最后一轮真实 `human_learning` 事件中只保留 external skill，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 skill 淘汰文案；builtin skill 不占 active tool budget，但后续真实执行时仍计入工具调用次数限制。
 - Not：不验证超过 `20` 个 active tools 后的淘汰算法细节。
 
@@ -1147,7 +1147,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：真实批量审批拒绝会阻止需审批命令落地，并把限制带入最终交付。
 - Why：审批拒绝是生产边界，不能只靠 fake 测试覆盖。
 - How：设置 `approvalPolicy=deny-medium-high`，直接尝试真实执行 builtin terminal 命令 `mkdir blocked-dir`，然后进入最终说明。
-- Oracle：事件流真实出现 `approval_batch_decision` 且至少一项为 `reject`；对应 terminal 命令不会真实执行；`decision_hint(code='terminal_approval_blocked')` 回流给后续 brain；磁盘上不会真的创建 `blocked-dir`，任务最终完成。
+- Oracle：事件流真实出现 `approval_batch_decision` 且至少一项为 `reject`；对应 terminal 命令不会真实执行；被拦的 terminal 调用以合成 `ToolMessage` 结果（`terminal_approval_blocked`）回流给后续 brain；磁盘上不会真的创建 `blocked-dir`，任务最终完成。
 - Not：不验证用户如何在 UI 中恢复被拒绝的动作。
 
 ##### `brain-memory-write-boundary`
@@ -1162,7 +1162,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `conversation-memory-multi-run-recall`
 
 - 测试类型：`backend`
-- What：同一 `session` 下之前 run 的用户消息与助手最终回答，会通过会话消息转录（`chat_session_transcript`）作为真实消息带入下一次 `brain` prompt。
+- What：同一 `session` 下之前 run 的用户消息与助手最终回答，会通过会话消息记录（`chat_session_message_log`）作为真实消息带入下一次 `brain` prompt。
 - Why：跨任务连续性依赖 append-only 消息转录（而非 conversation summary / rounds 副本）作为唯一真相源；要证明上一轮沉淀的关键事实在后续 run 仍可被召回。
 - How：同一 session 连续跑三个 run，前两轮分别沉淀「还缺少回滚负责人」「负责人候选改成 Bob、审批未完成、上线窗口冲突待确认」，第三轮追问当前状态并检查 brain prompt 与最终交付。
 - Oracle：第三轮 `brain` prompt 同时命中 Bob、上线窗口冲突与还缺少回滚负责人；最终交付带出负责人候选、未完成审批与下一步安排。
@@ -1308,10 +1308,10 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `human-legacy-doc-edit-skip-live`
 
 - 测试类型：`backend / live`
-- What：真实模型尝试编辑旧版 .doc 后遵循 decision hint，停止重试并跳过。
+- What：真实模型尝试编辑旧版 .doc 后遵循工具错误信息，停止重试并跳过。
 - Why：不可写格式必须快速收敛，避免反复工具调用和误改原文件。
-- How：要求直接编辑旧版文档，检查一次失败、提示事件、最终答复和文件 hash。
-- Oracle：只尝试一次编辑；出现 legacy_doc_edit_unsupported；源文件不变且任务完成。
+- How：要求直接编辑旧版文档，检查一次失败、错误信息、最终答复和文件 hash。
+- Oracle：只尝试一次编辑；docx_edit 返回「禁止尝试任何对 .doc 文件的编辑」错误；源文件不变且任务完成。
 - Not：不要求模型绕过格式限制，也不把失败后的多次重试视为可接受结果。
 
 ##### `human-ppt-read-management-risk-review-live`

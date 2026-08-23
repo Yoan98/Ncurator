@@ -236,3 +236,18 @@ export const parsePromptJsonOutput = (raw: string): Record<string, unknown> => {
 export const parseJsonObjectText = (raw: string): Record<string, unknown> => {
   return parseRepairableJsonObjectText(raw, 'structured_output_empty_response')
 }
+
+export type JsonRepairResult =
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false }
+
+export const tryRepairJsonObject = (raw: string | undefined): JsonRepairResult => {
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    return { ok: false }
+  }
+  try {
+    return { ok: true, value: parseRepairableJsonObjectText(raw, 'repair_empty_response') }
+  } catch {
+    return { ok: false }
+  }
+}

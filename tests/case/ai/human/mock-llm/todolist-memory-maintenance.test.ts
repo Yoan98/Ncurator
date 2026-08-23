@@ -72,7 +72,7 @@ describe('ai human mock-llm backend', () => {
                 output: {
                   summary: 'todolist 已成功跨轮维护，并完成收口拦截验证。',
                   deliveryMarkdown:
-                    '# Plan Memory\n\n已验证 plan 会在下一轮真实 prompt 中继续出现，且在仍有 todo 时选择 finish 会收到 decision hint 并返回 brain。'
+                    '# Plan Memory\n\n已验证 plan 会在下一轮真实 prompt 中继续出现，且在仍有 todo 时选择 finish 会收到交付失败提示并返回 brain。'
                 }
               }
             ]

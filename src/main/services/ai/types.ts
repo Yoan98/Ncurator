@@ -251,6 +251,7 @@ export type AiRunDeps = {
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
   requestUserTakeover: (request: AiUserTakeoverRequest) => Promise<AiUserTakeoverResult>
   llmDriver?: AiLlmDriver
+  chatToolsWrapper?: (real: AiRunContext['chatTools']) => AiRunContext['chatTools']
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
   humanRuntimeOverrides?: {
