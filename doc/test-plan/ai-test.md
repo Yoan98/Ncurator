@@ -128,7 +128,7 @@ AI unit / 辅助测试目录：
 
 结构化输出统一走 `prompt_json`：所有结构化调用都是纯文本请求（不发送 `response_format`），模型按提示词中的 schema 描述输出 JSON，本地通过 `normalizePromptJsonText`（剥离代码块）+ `jsonrepair` + Schema 校验兜底。供应商对 `json_schema` / `json_object` 的能力支持无法可靠探测（`/v1/models` 大多不返回能力声明且分模型差异），因此不再维护任何运行期降级链、策略偏好存储或 transport 切换。
 
-LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负责临时故障重连：429、5xx、超时和 `ResourceExhausted`（指数退避 2/4/8/15 秒）进入重试域；401/402/403 直接失败；其余错误不再触发任何降级。相关单元覆盖在 `tests/case/unit/ai/structured-output-auto-fallback.test.ts`（prompt_json 单一路径与解析兜底矩阵）、`tests/case/unit/ai/structured-output-fallback.test.ts`（fatal/retryable/unknown 分类）和 `tests/case/unit/ai/structured-chat-activity.test.ts`（退避与重试事件）。
+LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负责临时故障重连：429、5xx、超时和 `ResourceExhausted`（指数退避 2/4/8/15 秒）进入重试域；401/402/403 直接失败；其余错误不再触发任何降级。相关单元覆盖在 `tests/case/unit/ai/structured-output-single-path.test.ts`（prompt_json 单一路径与解析兜底矩阵）、`tests/case/unit/ai/llm-error-classification.test.ts`（fatal/retryable/unknown 分类）和 `tests/case/unit/ai/structured-chat-activity.test.ts`（退避与重试事件）。
 
 ### 4.1 `tool`
 
