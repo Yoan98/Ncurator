@@ -191,7 +191,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     status: true,
     output: true,
     readEndPosition: true,
-    hasMoreOutput: true,
     stdout: true,
     stderr: true,
     timedOut: true,

@@ -446,7 +446,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             status,
             output: guarded.output,
             readEndPosition: result.readEndPosition,
-            hasMoreOutput: result.hasMoreOutput,
             exitCode: result.exitCode
           }
           if (!guarded.ok) {

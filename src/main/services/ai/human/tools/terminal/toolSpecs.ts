@@ -23,7 +23,6 @@ export const TERMINAL_RUN_OUTPUT_SCHEMA = z.object({
   status: TERMINAL_STATUS_SCHEMA,
   output: z.string(),
   readEndPosition: z.number().int().nonnegative(),
-  hasMoreOutput: z.boolean(),
   exitCode: z.number().int().nullable()
 })
 
@@ -61,7 +60,7 @@ export const createTerminalRunToolSpec = (
   promptSpec: {
     name: 'terminal_run',
     description:
-      '在终端执行命令，返回 terminalId、status、增量输出、readEndPosition（下次继续读取的位置）、hasMoreOutput（是否还有更多输出未读完）和退出码。终端默认起始目录是用户的工作区目录。'
+      '在终端执行命令，返回 terminalId、status、增量输出、readEndPosition（下次继续读取的位置）和退出码。终端默认起始目录是用户的工作区目录。'
   },
   resolveExecutionMeta: (args) => {
     const command = readStringArg(args, 'command') || ''

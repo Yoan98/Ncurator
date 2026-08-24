@@ -10,7 +10,6 @@ type TerminalRunResult = {
   status: 'running' | 'completed' | 'cancelled'
   output: string
   readEndPosition: number
-  hasMoreOutput: boolean
   exitCode: number | null
 }
 

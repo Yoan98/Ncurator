@@ -38,7 +38,6 @@ export type TerminalCommandResult = {
   currentTerminalPath: string
   output: string
   readEndPosition: number
-  hasMoreOutput: boolean
   exitCode: number | null
 }
 
@@ -253,7 +252,6 @@ export class TerminalSessionManager {
       currentTerminalPath: session.currentTerminalPath,
       output: commandOutput.output,
       readEndPosition: commandOutput.readEndPosition,
-      hasMoreOutput: commandOutput.hasMoreOutput,
       exitCode: completed ? commandState.exitCode : null
     }
     if (completed) {
