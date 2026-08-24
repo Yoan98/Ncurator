@@ -84,6 +84,10 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
     - 工具结果超过字符上限时会被截断：返回的 JSON 中 truncated=true，并附带 filePath（完整结果落盘地址）、maxChars（截断字符上限）、totalChars（落盘文件总字符数）、head（结果开头的截断前缀，与 maxChars 相同长度，可能是未闭合的 JSON 片段）。
   </tool_truncation>
 
+  <terminal_wait_contract>
+    - 当 terminal_run 返回命令仍在执行时，多尝试等待终端命令完成后（再读取结果或继续），不要在命令未完成时空转轮询；仅当判断等待不合理时才中断并分析原因。
+  </terminal_wait_contract>
+
   <skill_catalog>
 ${renderSkillCatalog(input.ctx.platform)}
   </skill_catalog>
@@ -97,10 +101,6 @@ ${renderLocalEnvironmentText(input.ctx)}
     - 仅当出现新的理解、新的证据或确实无法推进时，才允许新增、修改、废弃或重排计划，禁止无意义的调整。
     - 计划最后一项必须是检查项，用于判断是否已满足用户任务诉求。
   </plan_contract>
-
-  <terminal_wait_contract>
-    - 当 terminal_run 返回命令仍在执行时，多次尝试等待终端命令完成后（再读取结果或继续），不要在命令未完成时空转轮询；仅当判断等待不合理时才中断并分析原因。
-  </terminal_wait_contract>
 
   <finish_contract>
     - 结束用户任务并把当前进展或需要协助的信息交给用户。
