@@ -68,7 +68,9 @@ export type CapturedToolActivity = {
 
 type TerminalToolHarnessOptions = {
   yieldMs?: number
-  maxOutputChars?: number
+  retainedScrollbackChars?: number
+  readMaxChars?: number
+  maxConcurrentSessions?: number
 }
 
 const createToolInvoker = (tools: readonly ToolLike[]) => {
@@ -192,7 +194,12 @@ export const createTerminalToolHarness = (
   const activities: CapturedToolActivity[] = []
   const sessionManager = new TerminalSessionManager({
     yieldMs: Math.max(50, Number(options.yieldMs || 3000)),
-    maxOutputChars: Math.max(1024, Number(options.maxOutputChars || 120_000))
+    retainedScrollbackChars: Math.max(
+      1024,
+      Number(options.retainedScrollbackChars || 120_000)
+    ),
+    readMaxChars: options.readMaxChars,
+    maxConcurrentSessions: options.maxConcurrentSessions
   })
   const built = buildTerminalCapabilityTools({
     ctx,
@@ -203,7 +210,6 @@ export const createTerminalToolHarness = (
     workspaceRootPath: runtime.workspaceRoot,
     workspaceId: ctx.workspace?.workspaceId || 'test-workspace',
     sessionManager,
-    aiResultTokenLimitRatio: 0.25,
     emitActivity: (activity) => {
       activities.push(activity)
     }

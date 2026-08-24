@@ -7,8 +7,7 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 type TerminalRunResult = {
   terminalId: string
-  terminalStatus: 'idle' | 'running' | 'stopping' | 'closed'
-  executionStatus: 'running' | 'completed' | 'cancelled'
+  status: 'running' | 'completed' | 'cancelled'
   output: string
   outputCursor: number
   exitCode: number | null
@@ -16,7 +15,7 @@ type TerminalRunResult = {
 
 type TerminalReadResult = {
   terminalId: string
-  terminalStatus: 'idle' | 'running' | 'stopping' | 'closed'
+  status: 'running' | 'completed' | 'cancelled'
   output: string
   outputCursor: number
   exitCode: number | null
@@ -121,9 +120,9 @@ describe('ai tool terminal backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.pwdAtRoot.executionStatus === 'completed' &&
+          result.pwdAtRoot.status === 'completed' &&
             result.pwdAtRoot.output.length > 0 &&
-            result.cdNested.executionStatus === 'completed' &&
+            result.cdNested.status === 'completed' &&
             result.cdNested.output.includes('nested'),
           {
             name: 'terminal-runs-from-workspace-root',
@@ -132,7 +131,7 @@ describe('ai tool terminal backend', () => {
           }
         )
         runtime.assertThat(
-          result.running.executionStatus === 'running' &&
+          result.running.status === 'running' &&
             (result.running.output.includes('terminal-tick') ||
               result.read.output.includes('terminal-tick')) &&
             result.detachedRejected.error.includes('detached shell execution'),
@@ -143,10 +142,10 @@ describe('ai tool terminal backend', () => {
           }
         )
         runtime.assertThat(
-          result.redirectAllowed.executionStatus === 'completed' &&
+          result.redirectAllowed.status === 'completed' &&
             result.redirectAllowed.exitCode === 0 &&
             result.redirectAllowed.output.includes('redirect-ok') &&
-            result.nonZero.executionStatus === 'completed' &&
+            result.nonZero.status === 'completed' &&
             result.nonZero.exitCode === 1,
           {
             name: 'terminal-returns-exit-codes-and-allows-fd-merge-redirection',

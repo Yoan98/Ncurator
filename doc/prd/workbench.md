@@ -520,13 +520,14 @@
 
 #### WB-TERMINAL-001 终端执行
 
-- 系统行为：terminal 每次 `terminal_run` 新建终端并从当前 workspace 根目录执行一条命令，命令执行完即销毁，不保留会话。要切换目录需在同一条命令内用 `cd` 链接。长命令运行超过时限后返回 `command_still_running` 并让出控制权，可通过 `terminal_read` 增量读取，命令结束后由框架清理。工具不接收 `cwd`，默认起始目录是用户的工作区目录。绝对路径可以访问工作区外文件；相对路径以工作区根目录为起点。
+- 系统行为：terminal 每次 `terminal_run` 新建终端并从当前 workspace 根目录执行一条命令，命令执行完即销毁，不保留会话。要切换目录需在同一条命令内用 `cd` 链接。长命令运行超过时限后返回 `status=running` 并让出控制权，可通过 `terminal_read` 携带返回的 `outputCursor` 增量续读，命令结束后由框架清理。`terminal_read` 必须传入 `terminalId`，每次最多返回单次上限字符数，返回的 `outputCursor` 始终指向已返回内容之后的下一读取位置。工具不接收 `cwd`，默认起始目录是用户的工作区目录。绝对路径可以访问工作区外文件；相对路径以工作区根目录为起点。每个会话最多同时存在 5 个运行中的终端，达到上限后 `terminal_run` 返回 `terminal_session_limit_reached`，可等待命令结束，或用新终端执行终止命令（kill/pkill/taskkill）腾出位置。
 - 验收：
   - `WB-TERMINAL-001-AC1` 每次 `terminal_run` 新建从 workspace 根目录开始的终端，命令结束即销毁，不保留 `cd` 后的路径。
-  - `WB-TERMINAL-001-AC2` 长命令固定让出控制权但不被误判为失败；terminal_read 只返回游标后的增量输出和客观状态。
+  - `WB-TERMINAL-001-AC2` 长命令固定让出控制权但不被误判为失败；terminal_read 只返回游标后的增量输出和客观状态，单次返回不超过字符上限，且可用返回的 `outputCursor` 连续读取直到读完。
   - `WB-TERMINAL-001-AC3` 删除会话、取消所属 run 或退出应用不会遗留进程。
   - `WB-TERMINAL-001-AC4` terminal_run 继续遵守命令审批与其他安全策略；terminal_read 不能访问其他会话或 workspace 的终端。
   - `WB-TERMINAL-001-AC5` shell 后台符号、nohup 或 Start-Process 不能绕过终端管理。
+  - `WB-TERMINAL-001-AC6` 达到每会话并发终端上限（5 个）时 terminal_run 返回 `terminal_session_limit_reached` 并给出提示；终止类命令（kill/pkill/taskkill）不受该上限限制。
 
 #### WB-APPLY-003 回退本次 AI 修改
 

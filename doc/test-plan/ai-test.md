@@ -830,7 +830,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：真实 PTY 终端从工作区根目录执行命令、长命令让出控制权并可增量读取，命令级文件追踪与退出码正确；拒绝后台分离执行，放行 fd 合并重定向。
 - Why：后台服务和长任务不能依赖单次 shell 超时或系统孤儿进程；`2>&1` 等 fd 合并重定向只是输出流合并，不能误判为后台执行或危险重定向。
-- How：通过 `terminal_run` 分别执行 `pwd`、单命令内 `cd + pwd`、写文件后长 sleep、持续输出命令、写文件后非零退出；通过 `terminal_read` 增量读取持续输出命令。以 `sleep 1 &`（windows `Start-Process`）验证分离执行被拒，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。
+- How：通过 `terminal_run` 分别执行 `pwd`、单命令内 `cd + pwd`、写文件后长 sleep、持续输出命令、写文件后非零退出；通过 `terminal_read` 携带返回的 `outputCursor` 增量读取持续输出命令，验证单次读取有字符上限且可用返回游标连续读完。以 `sleep 1 &`（windows `Start-Process`）验证分离执行被拒，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。
 - Oracle：命令默认从 workspace 根目录执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出；写文件命令（完成与非零退出）均生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`。分离执行返回 `detached shell execution` 错误；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。
 - Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖。
 

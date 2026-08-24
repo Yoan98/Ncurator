@@ -16,7 +16,6 @@ export type TerminalArtifactCandidate = {
 export type TerminalCapabilityToolsInput = WorkspaceCapabilityBuildInput<TerminalToolContext> & {
   workspaceId: string
   sessionManager: TerminalSessionManager
-  aiResultTokenLimitRatio: number
 }
 
 export type TerminalCapabilityToolsRuntimeState = {

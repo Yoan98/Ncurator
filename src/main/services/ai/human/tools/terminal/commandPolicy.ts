@@ -15,6 +15,24 @@ import {
 
 const EXCEL_FILE_PATTERN = /\.(?:xlsx|xlsm|xltx|xltm)(?:['"\s;|&]|$)/i
 
+const TERMINATION_COMMAND_WORDS = new Set([
+  'kill',
+  'pkill',
+  'killall',
+  'taskkill',
+  'stop-process',
+  'stop-job',
+  'stop-service'
+])
+
+// 终止类命令：在并发终端达到上限时允许放行，供模型腾出已占用的终端位置。
+// 只在命令的第一个 token 匹配时生效，避免 `echo pkill` 之类的误判。
+export const isTerminalTerminationCommand = (command: string): boolean => {
+  const tokens = parseTerminalCommandTokens(command)
+  const first = tokens[0]?.toLowerCase()
+  return first !== undefined && TERMINATION_COMMAND_WORDS.has(first)
+}
+
 export const isTerminalExcelMutationCommand = (command: string): boolean => {
   const normalized = String(command || '').trim()
   if (!EXCEL_FILE_PATTERN.test(normalized)) return false

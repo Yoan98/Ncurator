@@ -7,7 +7,7 @@ import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunCommandResult = {
   error?: string
-  executionStatus?: 'not_executed'
+  status?: 'not_executed'
 }
 
 const isWindows = process.platform === 'win32'

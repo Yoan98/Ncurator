@@ -138,7 +138,6 @@ describe('ai tool terminal backend', () => {
           workspaceRootPath: runtime.workspaceRoot,
           workspaceId: 'test-workspace',
           sessionManager: failedSessionManager,
-          aiResultTokenLimitRatio: 0.25,
           emitActivity: () => undefined
         }).tools.find((tool) => tool.name === 'terminal_run')
         if (!terminalRun) throw new Error('terminal_run tool is missing')

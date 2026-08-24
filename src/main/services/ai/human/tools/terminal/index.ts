@@ -1,5 +1,4 @@
 import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
-import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../constants'
 import { buildTerminalCapabilityTools } from './terminalTools'
 import { terminalSessionManager } from './TerminalSessionManager'
 
@@ -34,7 +33,6 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
       workspaceRootPath,
       workspaceId: ctx.workspace?.workspaceId || '',
       sessionManager: terminalSessionManager,
-      emitActivity,
-      aiResultTokenLimitRatio: HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO
+      emitActivity
     }).tools
 })

@@ -17,6 +17,7 @@ import {
   createTerminalRunToolSpec,
   TERMINAL_READ_TOOL_SPEC
 } from './toolSpecs'
+import { TERMINAL_MAX_CONCURRENT_SESSIONS } from './terminalConstants'
 
 type PendingTerminalCommand = {
   terminalId: string
@@ -46,6 +47,14 @@ const buildTerminalToolResult = (input: {
 })
 
 const buildFailure = (input: { error: string }) => ({ error: input.error })
+
+const SESSION_LIMIT_ERROR = 'terminal_session_limit_reached'
+
+const buildSessionLimitReached = () => ({
+  error: SESSION_LIMIT_ERROR,
+  hint: `当前会话已有 ${TERMINAL_MAX_CONCURRENT_SESSIONS} 个运行中的终端，已达到上限。` +
+    '可等待某个命令结束，或用新终端执行 kill/pkill/taskkill 终止旧的运行命令后重试（终止类命令不受上限限制）。'
+})
 
 const buildApprovedTerminalCommandKey = (command: string): string => String(command || '').trim()
 
@@ -292,7 +301,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             if (!approved) {
               input.ctx.checkCancelled()
               const notExecuted = {
-                executionStatus: 'not_executed' as const,
+                status: 'not_executed' as const,
                 reason: 'approval_denied',
                 output: ''
               }
@@ -353,9 +362,10 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           } catch (error) {
             if (trackingStarted) input.ctx.discardTerminalCommandTracking(trackingId)
             const message = error instanceof Error ? error.message : String(error)
-            const failure = buildFailure({ error: message })
+            const failure =
+              message === SESSION_LIMIT_ERROR ? buildSessionLimitReached() : buildFailure({ error: message })
             session.fail(
-              message,
+              failure.error,
               undefined,
               buildTerminalToolResult({
                 toolName: terminalRunToolSpec.name,
@@ -425,19 +435,19 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             toolName: terminalRunToolSpec.name,
             output: result.output
           })
-          const publicResult = {
-            terminalId: result.terminalId,
-            terminalStatus: result.terminalStatus,
-            outputCursor: result.outputCursor,
-            exitCode: result.exitCode
-          }
-          const executionStatus =
+          const status =
             result.returnReason === 'command_still_running'
               ? ('running' as const)
               : result.returnReason === 'command_stopped'
                 ? ('cancelled' as const)
                 : ('completed' as const)
-          const payload = { ...publicResult, executionStatus, output: guarded.output }
+          const payload = {
+            terminalId: result.terminalId,
+            status,
+            output: guarded.output,
+            outputCursor: result.outputCursor,
+            exitCode: result.exitCode
+          }
           if (!guarded.ok) {
             const failurePayload = { ...payload, ...guarded }
             session.fail(
@@ -478,25 +488,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
         execute: async (session) => {
           input.ctx.checkCancelled()
           const terminalId = String(args.terminalId || '').trim()
-          if (!terminalId) {
-            const terminals = input.sessionManager
-              .list({ chatSessionId: input.sessionId, workspaceId: input.workspaceId })
-              .map((snapshot) => ({
-                terminalId: snapshot.terminalId,
-                status: snapshot.status,
-                currentPath: snapshot.currentTerminalPath,
-                currentCommand: snapshot.currentCommand
-              }))
-            session.succeed(
-              undefined,
-              buildTerminalToolResult({
-                toolName: TERMINAL_READ_TOOL_SPEC.name,
-                ok: true,
-                data: terminals
-              })
-            )
-            return terminals
-          }
           try {
             const result = input.sessionManager.read({
               terminalId,
@@ -518,9 +509,17 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               toolName: TERMINAL_READ_TOOL_SPEC.name,
               output: result.output
             })
+            const status =
+              result.terminalStatus === 'idle'
+                ? ('completed' as const)
+                : result.terminalStatus === 'closed'
+                  ? result.exitCode === 130
+                    ? ('cancelled' as const)
+                    : ('completed' as const)
+                  : ('running' as const)
             const payload = {
               terminalId: result.terminalId,
-              terminalStatus: result.terminalStatus,
+              status,
               output: guarded.output,
               outputCursor: result.outputCursor,
               exitCode: result.exitCode

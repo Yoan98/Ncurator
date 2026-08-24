@@ -8,7 +8,7 @@ import { filterEventsByType } from '../testHelpers'
 type TerminalRunCommandResult = {
   output: string
   reason?: string
-  executionStatus?: 'running' | 'completed' | 'cancelled' | 'not_executed'
+  status?: 'running' | 'completed' | 'cancelled' | 'not_executed'
   exitCode?: number | null
 }
 
@@ -104,7 +104,7 @@ describe('ai tool terminal backend', () => {
         )
 
         runtime.assertThat(
-          result.noMatch.executionStatus === 'completed' &&
+          result.noMatch.status === 'completed' &&
             result.noMatch.exitCode === 1 &&
             stepResults.some(
               (event) => event.executionStatus === 'completed' && event.exitCode === 1

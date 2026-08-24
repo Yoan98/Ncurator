@@ -8,6 +8,12 @@ import type { AiRuntimePlatform } from '../../../types'
 import { buildTerminalEnvironment } from './environment/TerminalEnvironment'
 import { getTerminalPlatformAdapter, type TerminalPlatformAdapter } from './platform'
 import { TerminalProtocol, type TerminalProtocolEvent } from './protocol/TerminalProtocol'
+import { isTerminalTerminationCommand } from './commandPolicy'
+import {
+  TERMINAL_MAX_CONCURRENT_SESSIONS,
+  TERMINAL_READ_MAX_CHARS,
+  TERMINAL_RETAINED_SCROLLBACK_CHARS
+} from './terminalConstants'
 
 export type TerminalSessionStatus = 'idle' | 'running' | 'stopping' | 'closed'
 export type TerminalCommandReturnReason =
@@ -90,7 +96,9 @@ type ManagedTerminalSession = {
 export type TerminalSessionManagerOptions = {
   yieldMs?: number
   stopGraceMs?: number
-  maxOutputChars?: number
+  retainedScrollbackChars?: number
+  readMaxChars?: number
+  maxConcurrentSessions?: number
   environment?: Record<string, string>
 }
 
@@ -133,13 +141,23 @@ export class TerminalSessionManager {
   private readonly completedCommandExitCodes = new Map<string, number>()
   private readonly yieldMs: number
   private readonly stopGraceMs: number
-  private readonly maxOutputChars: number
+  private readonly retainedScrollbackChars: number
+  private readonly readMaxChars: number
+  private readonly maxConcurrentSessions: number
   private readonly environment?: Record<string, string>
 
   public constructor(options: TerminalSessionManagerOptions = {}) {
     this.yieldMs = Math.max(50, Number(options.yieldMs || 8000))
     this.stopGraceMs = Math.max(50, Number(options.stopGraceMs || 2000))
-    this.maxOutputChars = Math.max(1024, Number(options.maxOutputChars || 1_000_000))
+    this.retainedScrollbackChars = Math.max(
+      1024,
+      Number(options.retainedScrollbackChars || TERMINAL_RETAINED_SCROLLBACK_CHARS)
+    )
+    this.readMaxChars = Math.max(1, Number(options.readMaxChars || TERMINAL_READ_MAX_CHARS))
+    this.maxConcurrentSessions = Math.max(
+      1,
+      Number(options.maxConcurrentSessions || TERMINAL_MAX_CONCURRENT_SESSIONS)
+    )
     this.environment = options.environment
   }
 
@@ -170,7 +188,14 @@ export class TerminalSessionManager {
     runId: string
     command: string
   }): Promise<TerminalCommandResult> {
-    const session = await this.createSession(input)
+    const session = await this.createSession({
+      chatSessionId: input.chatSessionId,
+      workspaceId: input.workspaceId,
+      workspaceRootPath: input.workspaceRootPath,
+      environment: input.environment,
+      platform: input.platform,
+      allowConcurrentOverLimit: isTerminalTerminationCommand(input.command)
+    })
 
     const leadingCwd = await session.adapter.resolveCommandCwd({
       command: input.command,
@@ -215,6 +240,7 @@ export class TerminalSessionManager {
     ])
 
     const completed = commandState.returnReason !== undefined
+    const commandOutput = this.readOutput(session, commandState.outputStartCursor)
     const result: TerminalCommandResult = {
       terminalId: session.terminalId,
       commandId,
@@ -223,8 +249,8 @@ export class TerminalSessionManager {
         ? commandState.returnReason || 'command_completed'
         : 'command_still_running',
       currentTerminalPath: session.currentTerminalPath,
-      output: this.readOutput(session, commandState.outputStartCursor).output,
-      outputCursor: session.outputCursor,
+      output: commandOutput.output,
+      outputCursor: commandOutput.outputCursor,
       exitCode: completed ? commandState.exitCode : null
     }
     if (completed) {
@@ -361,7 +387,16 @@ export class TerminalSessionManager {
     workspaceRootPath: string
     environment?: Record<string, string>
     platform: AiRuntimePlatform
+    allowConcurrentOverLimit?: boolean
   }): Promise<ManagedTerminalSession> {
+    if (!input.allowConcurrentOverLimit) {
+      const activeCount = Array.from(this.sessions.values()).filter(
+        (session) => session.chatSessionId === input.chatSessionId
+      ).length
+      if (activeCount >= this.maxConcurrentSessions) {
+        throw new Error('terminal_session_limit_reached')
+      }
+    }
     const rootPath = path.resolve(input.workspaceRootPath)
     const ready = createDeferred()
     const exited = createDeferred()
@@ -557,8 +592,8 @@ export class TerminalSessionManager {
     if (!value) return
     session.output += value
     session.outputCursor += value.length
-    if (session.output.length > this.maxOutputChars) {
-      const trimCount = session.output.length - this.maxOutputChars
+    if (session.output.length > this.retainedScrollbackChars) {
+      const trimCount = session.output.length - this.retainedScrollbackChars
       session.output = session.output.slice(trimCount)
       session.outputBaseCursor += trimCount
     }
@@ -571,18 +606,22 @@ export class TerminalSessionManager {
     if (oldest) this.completedCommandExitCodes.delete(oldest)
   }
 
+  // 从请求游标读到当前末尾，但单次最多返回 readMaxChars 个字符；
+  // 返回的 outputCursor 始终是本次返回内容之后的下一个位置，模型原样传回即可续读。
   private readOutput(
     session: ManagedTerminalSession,
     requestedCursor?: number
   ): { output: string; outputCursor: number } {
-    const cursor = Math.max(
+    const watermark = session.outputCursor
+    const start = Math.max(
       session.outputBaseCursor,
-      Math.min(session.outputCursor, Number(requestedCursor ?? session.outputBaseCursor))
+      Math.min(watermark, Number(requestedCursor ?? session.outputBaseCursor))
     )
-    const offset = cursor - session.outputBaseCursor
+    const end = Math.min(start + this.readMaxChars, watermark)
+    const offset = start - session.outputBaseCursor
     return {
-      output: session.output.slice(offset),
-      outputCursor: session.outputCursor
+      output: session.output.slice(offset, offset + (end - start)),
+      outputCursor: end
     }
   }
 }
