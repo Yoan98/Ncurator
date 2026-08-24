@@ -124,7 +124,9 @@ describe('ai tool ppt visual backend', () => {
               }>
             }>
           | undefined
-        const title = slides?.[0]?.elements.find((element) => element.text === '季度经营复盘')
+        const title = slides
+          ?.flatMap((slide) => slide.elements)
+          .find((element) => element.text === '季度经营复盘')
         const images = rendered.images as Array<{ path: string }>
         return {
           created,
