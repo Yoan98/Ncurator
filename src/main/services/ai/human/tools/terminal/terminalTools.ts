@@ -399,7 +399,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               terminalId: result.terminalId,
               commandId: result.commandId,
               currentTerminalPath: result.currentTerminalPath,
-              outputCursor: result.outputCursor,
+              readEndPosition: result.readEndPosition,
               createdAt: Date.now()
             })
             void input.sessionManager
@@ -445,7 +445,8 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             terminalId: result.terminalId,
             status,
             output: guarded.output,
-            outputCursor: result.outputCursor,
+            readEndPosition: result.readEndPosition,
+            hasMoreOutput: result.hasMoreOutput,
             exitCode: result.exitCode
           }
           if (!guarded.ok) {
@@ -493,7 +494,8 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               terminalId,
               chatSessionId: input.sessionId,
               workspaceId: input.workspaceId,
-              outputCursor: typeof args.outputCursor === 'number' ? args.outputCursor : undefined
+              readEndPosition:
+                typeof args.readEndPosition === 'number' ? args.readEndPosition : undefined
             })
             const pending = Array.from(pendingCommands.entries()).find(
               ([, value]) =>
@@ -521,7 +523,8 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               terminalId: result.terminalId,
               status,
               output: guarded.output,
-              outputCursor: result.outputCursor,
+              readEndPosition: result.readEndPosition,
+              hasMoreOutput: result.hasMoreOutput,
               exitCode: result.exitCode
             }
             if (!guarded.ok) {

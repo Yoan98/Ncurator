@@ -37,7 +37,8 @@ export type TerminalCommandResult = {
   returnReason: TerminalCommandReturnReason
   currentTerminalPath: string
   output: string
-  outputCursor: number
+  readEndPosition: number
+  hasMoreOutput: boolean
   exitCode: number | null
 }
 
@@ -46,7 +47,8 @@ export type TerminalReadResult = {
   terminalStatus: TerminalSessionStatus
   currentTerminalPath: string
   output: string
-  outputCursor: number
+  readEndPosition: number
+  hasMoreOutput: boolean
   exitCode: number | null
 }
 
@@ -250,7 +252,8 @@ export class TerminalSessionManager {
         : 'command_still_running',
       currentTerminalPath: session.currentTerminalPath,
       output: commandOutput.output,
-      outputCursor: commandOutput.outputCursor,
+      readEndPosition: commandOutput.readEndPosition,
+      hasMoreOutput: commandOutput.hasMoreOutput,
       exitCode: completed ? commandState.exitCode : null
     }
     if (completed) {
@@ -263,16 +266,17 @@ export class TerminalSessionManager {
     terminalId: string
     chatSessionId: string
     workspaceId: string
-    outputCursor?: number
+    readEndPosition?: number
   }): TerminalReadResult {
     const session = this.requireSession(input)
-    const result = this.readOutput(session, input.outputCursor)
+    const result = this.readOutput(session, input.readEndPosition)
     return {
       terminalId: session.terminalId,
       terminalStatus: session.status,
       currentTerminalPath: session.currentTerminalPath,
       output: result.output,
-      outputCursor: result.outputCursor,
+      readEndPosition: result.readEndPosition,
+      hasMoreOutput: result.hasMoreOutput,
       exitCode: session.status === 'running' ? null : session.lastExitCode
     }
   }
@@ -607,11 +611,12 @@ export class TerminalSessionManager {
   }
 
   // 从请求游标读到当前末尾，但单次最多返回 readMaxChars 个字符；
-  // 返回的 outputCursor 始终是本次返回内容之后的下一个位置，模型原样传回即可续读。
+  // readEndPosition 是本次返回内容之后的下一个位置，模型原样传回即可续读；
+  // hasMoreOutput 表示缓冲里是否还有更新的输出未读完。
   private readOutput(
     session: ManagedTerminalSession,
     requestedCursor?: number
-  ): { output: string; outputCursor: number } {
+  ): { output: string; readEndPosition: number; hasMoreOutput: boolean } {
     const watermark = session.outputCursor
     const start = Math.max(
       session.outputBaseCursor,
@@ -621,7 +626,8 @@ export class TerminalSessionManager {
     const offset = start - session.outputBaseCursor
     return {
       output: session.output.slice(offset, offset + (end - start)),
-      outputCursor: end
+      readEndPosition: end,
+      hasMoreOutput: end < watermark
     }
   }
 }

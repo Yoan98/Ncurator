@@ -1536,7 +1536,7 @@ type AiRunEventPayload =
       terminalId: string
       commandId: string
       currentTerminalPath: string
-      outputCursor: number
+      readEndPosition: number
       createdAt: number
     }
   | {

@@ -402,20 +402,24 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
     await new Promise<void>((resolve) => setTimeout(resolve, 1500))
 
     const parts = [running.output]
-    let cursor = running.outputCursor
+    const hasMoreValues: boolean[] = []
+    let cursor = running.readEndPosition
     for (let index = 0; index < 200; index += 1) {
       const read = manager.read({
         terminalId: running.terminalId,
         chatSessionId: 'chat-chunk',
         workspaceId: 'workspace-chunk',
-        outputCursor: cursor
+        readEndPosition: cursor
       })
-      expect(read.outputCursor - cursor).toBe(read.output.length)
+      expect(read.readEndPosition - cursor).toBe(read.output.length)
       expect(read.output.length).toBeLessThanOrEqual(20)
+      hasMoreValues.push(read.hasMoreOutput)
       parts.push(read.output)
       if (read.output === '') break
-      cursor = read.outputCursor
+      cursor = read.readEndPosition
     }
+    expect(hasMoreValues[0]).toBe(true)
+    expect(hasMoreValues.at(-1)).toBe(false)
     expect(parts.join('')).toContain('a'.repeat(100))
 
     await manager.stop({

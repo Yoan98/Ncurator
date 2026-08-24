@@ -9,7 +9,8 @@ type TerminalRunResult = {
   terminalId: string
   status: 'running' | 'completed' | 'cancelled'
   output: string
-  outputCursor: number
+  readEndPosition: number
+  hasMoreOutput: boolean
   exitCode: number | null
 }
 
@@ -17,7 +18,8 @@ type TerminalReadResult = {
   terminalId: string
   status: 'running' | 'completed' | 'cancelled'
   output: string
-  outputCursor: number
+  readEndPosition: number
+  hasMoreOutput: boolean
   exitCode: number | null
 }
 
@@ -88,7 +90,7 @@ describe('ai tool terminal backend', () => {
         })
         const read = await harness.invoke<TerminalReadResult>('terminal_read', {
           terminalId: running.terminalId,
-          outputCursor: running.outputCursor
+          readEndPosition: running.readEndPosition
         })
         const nonZero = await harness.invoke<TerminalRunResult>('terminal_run', {
           command: isWindows
