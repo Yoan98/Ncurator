@@ -51,12 +51,18 @@ describe('ai human live terminal backend', () => {
             userInput:
               '请对账 invoices.csv 和 payments.csv。为财务生成 reconciliation-exceptions.csv，列包括 type、recordId、amount，覆盖未开发票的订单和没有对应订单的付款。类型列请填写 unpaid_invoice（未付发票）或 unmatched_payment（无匹配付款）。告诉我匹配与异常的合计金额，不要修改任何输入文件。'
           })
+          const fileChangeRecords = (
+            await runtime.storageService.aiFileChange.listRecords({})
+          ).items
           return {
             output,
             beforeHashes,
             afterHashes: await Promise.all([hashFile(invoicesPath), hashFile(paymentsPath)]),
             rows: await readCsvRows(path.join(runtime.workspaceRoot, 'reconciliation-exceptions.csv')),
-            events: runtime.eventCollector.snapshot()
+            events: runtime.eventCollector.snapshot(),
+            csvRecord: fileChangeRecords.find((record) =>
+              String(record.fileName || record.path || '').endsWith('reconciliation-exceptions.csv')
+            )
           }
         },
         assert: async (result, runtime) => {
@@ -71,12 +77,15 @@ describe('ai human live terminal backend', () => {
             result.output.status === 'completed' &&
               JSON.stringify(result.beforeHashes) === JSON.stringify(result.afterHashes) &&
               results.some((event) => event.toolName === 'terminal_run' && event.result?.ok === true) &&
+              result.csvRecord?.status === 'applied' &&
+              result.csvRecord?.source === 'terminal_tool' &&
               rowAmountKeys.join(',') === 'INV-003:60000,INV-005:30000' &&
               hasMeaningfulTypes,
             {
               name: 'human-live-terminal-data-reconciliation-delivers-finance-exceptions',
-              message: 'The live model must compute the reconciliation and deliver the correct finance exception file.',
-              data: { toolNames, rows: result.rows }
+              message:
+                'The live model must compute the reconciliation via terminal and deliver the correct finance exception file.',
+              data: { toolNames, rows: result.rows, csvSource: result.csvRecord?.source }
             }
           )
         }

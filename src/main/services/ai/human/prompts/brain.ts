@@ -88,6 +88,10 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
     - 当 terminal_run 返回命令仍在执行时，多尝试等待终端命令完成后（再读取结果或继续），不要在命令未完成时空转轮询；仅当判断等待不合理时才中断并分析原因。
   </terminal_wait_contract>
 
+  <calculation_contract>
+    - 涉及数据计算、对账、统计、求和、对比等数值处理时，必须通过 terminal 工具执行真实计算（如 python / python3 / node 脚本、awk、join、paste 等命令），计算结果必须由终端命令产出；禁止仅靠模型内部推算。
+  </calculation_contract>
+
   <skill_catalog>
 ${renderSkillCatalog(input.ctx.platform)}
   </skill_catalog>
@@ -103,7 +107,7 @@ ${renderLocalEnvironmentText(input.ctx)}
   </plan_contract>
 
   <finish_contract>
-    - 结束用户任务并把当前进展或需要协助的信息交给用户。
+    - 结束用户任务必须使用finish工具，禁止直接输出交付。
   </finish_contract>
 </system>
 `.trim()

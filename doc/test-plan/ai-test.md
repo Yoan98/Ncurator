@@ -89,6 +89,7 @@
 - 目的：验证真实业务场景在真实生产调用下可以完成。
 - case 设计必须使用真实用户风格输入，不得把内部固定工具顺序写进用户输入。
 - 断言口径统一遵循 `doc/test.md` 的真实 AI / live 断言规则。
+- 涉及数据计算 / 对账 / 统计的真实 AI 场景，brain 系统提示词已要求计算必须通过 terminal 工具真实执行；live case 硬断言只校验完成态、关键产物与 terminal 计算是否真实发生（如产物修改记录 `source=terminal_tool`）。
 - `human / live` 的完整证据写入测试运行产物；顶部“最新 Live 评估”仅由人工在复核 raw logs 与 artifact 后覆盖更新。
 
 ### 3.3 目录与命令
@@ -1295,7 +1296,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：live 模式下第一诉求已经沉淀局部事实后发生网络中断，同一 session 新诉求可恢复旧语义上下文，同时本轮新选择文件会覆盖中断快照里的旧选择范围。
 - Why：恢复能力的真实价值是让用户在长任务中断后继续对话；如果中断前已读到的事实丢失，或恢复时忽略最新诉求/最新选中文件，就会把恢复退化成重跑或错误沿用旧入口。
 - How：使用已有共享 workspace fixture，即 `tests/fixtures/workspace`。Run 1 选中文件 A `深度学习.docx`，让真实模型读取并沉淀“过拟合/过度拟合”的定义、原因和处理信息；测试 driver 在确认工具结果中已经出现过拟合事实后，于后续 `human.brain` 调用注入 `network_error`，保存恢复快照。Run 2 恢复真实 LLM 配置，同 session 继续提问并显式改选文件 B `图形学.docx`，要求保留过拟合信息并补充反走样信息形成对比小结。
-- Oracle：Run 1 注入失败为 `network_error` 且 `resumeSnapshotSaved=true`；恢复快照中能看到中断前沉淀的过拟合事实；Run 2 成功完成；Run 2 的 brain prompt / llm-io 中出现中断恢复 hint 文案，且包含本轮新选择文件 B 与恢复出的过拟合上下文；最终交付同时包含过拟合与反走样关键事实；Run 2 成功后恢复快照被清空。
+- Oracle：Run 1 注入失败为 `network_error` 且 `resumeSnapshotSaved=true`；恢复快照保持最小化语义（保留 plan / 已学技能等），中断前沉淀的过拟合事实通过会话消息转录在 Run 2 的 brain prompt / llm-io 中恢复；Run 2 成功完成，brain prompt / llm-io 出现中断恢复 hint 文案、本轮新选择文件 B 与恢复出的过拟合上下文（含“训练时间过久 / 记住过多训练数据”等事实短语）；最终交付同时包含过拟合与反走样关键事实；Run 2 成功后恢复快照被清空。
 - Not：不验证真实 provider 的随机网络抖动；不要求 live 模型逐字复述 hint 文案；不恢复 docx 临时运行态。
 
 ##### `human-ppt-write-management-review-live`
@@ -1313,7 +1314,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：真实模型将发票与回款数据对账，并为财务交付异常清单 CSV。
 - Why：这是独立的真实终端智能性场景，不与 Excel 读写 case 混合。
 - How：用户只描述对账和财务异常清单需求，不出现终端或命令概念。
-- Oracle：输入文件不变；真实终端计算成功；`reconciliation-exceptions.csv` 的异常行和金额正确。
+- Oracle：输入文件不变；对账计算与 `reconciliation-exceptions.csv` 产出必须经过 terminal 脚本（`python/awk/join` 等真实计算命令），对应修改记录 `source` 必须为 `terminal_tool`；异常行和金额正确。
 - Not：不生成测试专用 JSON，不混入终端协议、runtime 下载或临时目录契约。
 
 ##### `human-runtime-script-system-python-live`

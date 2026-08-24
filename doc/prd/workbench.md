@@ -528,6 +528,7 @@
   - `WB-TERMINAL-001-AC4` terminal_run 继续遵守命令审批与其他安全策略；terminal_read 不能访问其他会话或 workspace 的终端。
   - `WB-TERMINAL-001-AC5` shell 后台符号、nohup 或 Start-Process 不能绕过终端管理。
   - `WB-TERMINAL-001-AC6` 达到每会话并发终端上限（5 个）时 terminal_run 返回 `terminal_session_limit_reached` 并给出提示；终止类命令（kill/pkill/taskkill）不受该上限限制。
+  - `WB-TERMINAL-001-AC7` AI 涉及数据计算、对账、统计、求和、对比等数值处理时，必须通过 terminal 执行真实计算（如 python / python3 / node 脚本、awk、join、paste 等命令），计算结果由终端命令产出；不得仅靠模型内部推算后直接写出结论文件，终端产出的变化按 terminal 修改记录处理。
 
 #### WB-APPLY-003 回退本次 AI 修改
 

@@ -258,18 +258,18 @@ describe('ai human live backend', () => {
               result.interruptedResult.failureCode === 'network_error' &&
               result.interruptedResult.resumeSnapshotSaved === true &&
               result.snapshotAfterNetwork?.reason === 'network_error' &&
-              /(过拟合|过度拟合)/.test(snapshotText) &&
-              /(训练时间过久|记住过多训练数据|不太具有展望性)/.test(snapshotText) &&
+              /docx-read/.test(snapshotText) &&
               result.resumedResult?.status === 'completed' &&
               result.snapshotAfterResume === null &&
               result.run2UsedFileB === true &&
               result.run2BrainPrompt.includes('<current_state>') &&
               mentionsOverfittingTopic(result.run2BrainPrompt) &&
+              /(训练时间过久|记住过多训练数据|不太具有展望性)/.test(result.run2BrainPrompt) &&
               mentionsAntiAliasingTopic(result.run2BrainPrompt),
             {
               name: 'human-live-session-resume-keeps-interrupted-context-and-uses-new-selection',
               message:
-                'live 恢复 run 应在第一诉求已读到过拟合事实后保存快照，并在同 session 新诉求中使用旧过拟合上下文和本轮新选图形学课件的反走样事实完成对比小结。',
+                'live 恢复 run 应在第一诉求已读到过拟合事实后保存快照，并在同 session 新诉求中通过消息转录恢复旧过拟合上下文、使用本轮新选图形学课件的反走样事实完成对比小结。',
               data: {
                 fileAName: result.fileAName,
                 fileBName: result.fileBName,
