@@ -31,6 +31,37 @@ export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
   })
 ])
 
+const webSearchResultLinkItemSchema = z.object({
+  href: z.string(),
+  text: z.string().optional(),
+  title: z.string().optional(),
+  intrinsicScore: z.number().optional(),
+  contextualScore: z.number().optional(),
+  totalScore: z.number().optional()
+})
+
+const webSearchCrawledItemSchema = z
+  .object({
+    rank: z.number().int().optional(),
+    title: z.string().optional(),
+    url: z.string().optional(),
+    snippet: z.string().optional(),
+    requestedUrl: z.string().optional(),
+    finalUrl: z.string().optional(),
+    markdown: z.string().optional(),
+    links: z
+      .object({
+        internal: z.array(webSearchResultLinkItemSchema),
+        external: z.array(webSearchResultLinkItemSchema)
+      })
+      .optional(),
+    publishedAt: z.string().optional(),
+    error: z.string().optional()
+  })
+  .refine((value) => Boolean(value.error) || Boolean(value.markdown), {
+    message: 'web_search 数组项必须携带 markdown（成功）或 error（失败）'
+  })
+
 export const WEB_SEARCH_OUTPUT_SCHEMA = z.union([
   z.object({
     requestedUrl: z.string(),
@@ -38,26 +69,8 @@ export const WEB_SEARCH_OUTPUT_SCHEMA = z.union([
     title: z.string().optional(),
     markdown: z.string(),
     links: z.object({
-      internal: z.array(
-        z.object({
-          href: z.string(),
-          text: z.string().optional(),
-          title: z.string().optional(),
-          intrinsicScore: z.number().optional(),
-          contextualScore: z.number().optional(),
-          totalScore: z.number().optional()
-        })
-      ),
-      external: z.array(
-        z.object({
-          href: z.string(),
-          text: z.string().optional(),
-          title: z.string().optional(),
-          intrinsicScore: z.number().optional(),
-          contextualScore: z.number().optional(),
-          totalScore: z.number().optional()
-        })
-      )
+      internal: z.array(webSearchResultLinkItemSchema),
+      external: z.array(webSearchResultLinkItemSchema)
     }),
     publishedAt: z.string().optional()
   }),
@@ -66,7 +79,8 @@ export const WEB_SEARCH_OUTPUT_SCHEMA = z.union([
     requestedUrl: z.string().optional(),
     finalUrl: z.string().optional(),
     statusCode: z.number().int().optional()
-  })
+  }),
+  z.array(webSearchCrawledItemSchema)
 ])
 
 const browserUsePageOutputSchema = z.object({
@@ -138,7 +152,7 @@ export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'web_search',
     description:
-      '搜索网页内容。传 query 时按关键词搜索并读取最相关网页内容；传 url 时直接读取该指定网页内容。返回 requestedUrl、finalUrl、title、markdown、分组评分后的 links 与发布时间。'
+      '搜索网页内容。传 query 时按关键词搜索，并返回全部候选网页的数组，每项包含 requestedUrl、finalUrl、title、markdown、分组评分后的 links 与发布时间。传 url 时直接读取该指定网页内容并返回单页结果。'
   },
   resolveExecutionMeta: WEB_EXECUTION_META
 }

@@ -19,8 +19,8 @@
 | human-legacy-doc-reading-live | 完成 | 94 | deepseek-v4-flash | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-legacy-doc-reading-live/20260813-195642-815 | 通过 docx 读取工具成功读取旧版 .doc 并准确回答五级风险与区别率，源文件未改。 |
 | human-text-file-write-checkout-cutover-live | 完成 | 96 | deepseek-v4-flash | 2026-08-13 20:17 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20260813-201727-173 | 两处端点和超时精确更新，重试与 telemetry 不变，写后核对完整。 |
 | human-text-file-read-checkout-readiness-live | 完成 | 93 | deepseek-v4-flash | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260813-201642-554 | 只读审查准确识别就绪性风险与保留配置，源文件未改。 |
-| human-web-crawl-multi-hop-cross-domain-reading-live | 完成 | 94 | deepseek-v4-flash | 2026-08-13 20:21 CST | tests/logs/ai/human/live/human-web-crawl-multi-hop-cross-domain-reading-live/20260813-202113-036 | 跨域多跳取得资格、截止日期、材料和线上提交方式，基于来源完整答复。 |
-| human-web-crawl-url-inference-reading-live | 完成 | 91 | deepseek-v4-flash | 2026-08-13 20:21 CST | tests/logs/ai/human/live/human-web-crawl-url-inference-reading-live/20260813-202108-597 | 找到两页 Pandas 官方 API 并准确说明 CSV 读写，来源与效率保留在 raw logs。 |
+| human-web-search-by-url-live | 通过 | - | deepseek-v4-flash | 2026-08-24 01:05 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260824-012552-756 | 给定指定地址，web_search(url) 读取该页并基于正文回答。 |
+| human-web-search-intent-query-live | 通过 | - | deepseek-v4-flash | 2026-08-24 01:03 CST | tests/logs/ai/human/live/human-web-search-intent-query-live/（isolated run, 已确认通过） | 纯文本诉求提炼意图，web_search(query) 读取官方文档回答。 |
 | human-legacy-doc-edit-skip-live | 完成 | 88 | deepseek-v4-flash | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129 | 验收口径收敛为「docx_edit 未成功编辑 .doc」；模型绕过 docx_edit 用 COM 改源文件的行为不再由本 case 约束。 |
 | human-docx-visual-reading-live | 完成 | 92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243 | 根因是 workflow runner 未展开 `${AI_LIVE_BASE_URL}` 引用导致视觉配置 Invalid URL；修复后真实读取 DOCX 图片内容。 |
 | human-pdf-visual-reading-live | 完成 | 92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871 | 同上，视觉配置修复后 PDF 页面视觉读取正常，正确回答图形差异。 |
@@ -337,10 +337,10 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `docx-outline-truncation-contract`
 
 - 测试类型：`backend`
-- What：`docx_read_outline` 结果超出 AI-facing 体积门禁时返回 `result_too_large`。
-- Why：长文档 outline 不能依赖 AI-controlled 数量上限截断，必须提示 brain 缩小范围。
-- How：对长文档执行过大的真实 `docx_read_outline(ranges=...)`，检查返回 `ok=false` 与失败文本。
-- Oracle：返回 `ok=false`，失败文本明确为结果过大，且包含 `toolName/estimatedTokens/limit`。
+- What：`docx_read_outline` 按请求的 `ranges` 返回对应范围的结构块。
+- Why：长文档 outline 应尊重请求范围返回结构块，便于 brain 精确缩小阅读范围。
+- How：对包含 40 段的真实 docx 执行 `docx_read_outline(ranges=block_index 0-9)`，检查返回的结构块数量与范围。
+- Oracle：返回 10 个结构块，blockIndex 从 0 到 9。
 - Not：不验证 human 是否一定继续读取后续内容。
 
 ##### `docx-complex-ops-serial-actions`
@@ -631,10 +631,10 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `pdf-result-size-contract`
 
 - 测试类型：`backend`
-- What：PDF 工具结果在页数、文本和视觉输出过大时遵守统一大小边界。
-- Why：结果失控会污染上下文并掩盖后续工具调用。
-- How：构造不同大小的 PDF 读取与视觉结果，检查截断、错误和原始文件不变。
-- Oracle：结果不超过约定上限；超限返回可识别错误或受控截断，不生成伪造内容。
+- What：PDF 工具结果过大时不再在工具层硬失败，完整正文直接返回，由 hand 层统一截断并落盘。
+- Why：结果大小统一守卫上移到 hand 层处理（截断 + 落盘 `.log` + `text-file-read` 读取），工具层不再对超长正文直接报错。
+- How：构造 PDF 读取结果，压低 `modelContextWindowTokens`，调用 `pdf_read_pages` 检查完整正文正常返回。
+- Oracle：工具层返回完整 `pages` 正文（不携带 `error`），不生成伪造内容，源 PDF 不变。
 - Not：不评价模型最终回答措辞。
 
 ##### `pdf-failure-boundary-contract`
@@ -848,10 +848,10 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `web-search-reads-content-by-query`
 
 - 测试类型：`backend`
-- What：`web_search` 传 `query` 会先搜索最相关网页再读取其正文。
-- Why：网页搜索与正文读取融合后，query 应直接产出可被 brain 消费的网页正文，而不是只返回候选列表。
-- How：通过真实 web tool harness 调用 `web_search({ query })`，使用可控搜索与抓取服务返回候选页面并读取其正文。
-- Oracle：结果命中搜索到的最相关页面，返回该页面的 `requestedUrl`、`title` 与正文 `markdown`。
+- What：`web_search` 传 `query` 会先搜索候选网页，并行爬取全部候选，返回数组（成功项带正文 markdown、失败项带 `error`）。
+- Why：网页搜索与正文读取融合后，query 应产出可被 brain 消费的网页正文数组；失败项在数组中可见，brain 可据此避免重复访问被墙或失败的来源。
+- How：通过真实 web tool harness 调用 `web_search({ query })`，使用可控搜索返回多个候选 URL，抓取服务对部分 URL 返回失败。
+- Oracle：结果是数组，成功项包含该页 `requestedUrl` 与正文 `markdown`，失败项包含 `error`，两者按候选顺序并存。
 - Not：不验证搜索引擎级网页发现与多跳。
 
 ##### `web-search-reads-entry-page`
@@ -872,13 +872,13 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - Oracle：结果返回明确错误文本，同时保留 `finalUrl` 和 `statusCode`。
 - Not：不验证复杂重定向链或外站错误页样式。
 
-##### `web-search-too-large`
+##### `web-search-returns-full-content-without-tool-level-truncation`
 
 - 测试类型：`backend`
-- What：`web_search` 结果过大时会走统一 `hand_tool_result_too_large` 兜底。
-- Why：网页正文可能很长，回归工具必须复用统一大小守卫，而不是把超长正文直接塞进 prompt。
-- How：启动本地 HTTP server，返回超长正文页，通过真实冻结 sidecar bin 抓取，并把 tool harness 的 `modelContextWindowTokens` 压低到触发阈值，调用 `web_search({ url })`。
-- Oracle：结果返回 `web_search result too large`，且带有统一 `decisionHint`。
+- What：`web_search` 结果过大时不再在工具层硬失败，完整正文直接返回，由 hand 层统一截断并落盘。
+- Why：网页正文可能很长；统一大小守卫上移到 hand 层处理（截断 + 落盘 `.log` + `text-file-read` 读取），工具层不再对超长正文直接报错。
+- How：启动本地 HTTP server，返回超长正文页，通过真实冻结 sidecar bin 抓取，调用 `web_search({ url })`。
+- Oracle：结果返回完整 `markdown`（不携带 `error`），`requestedUrl/finalUrl` 保留，后续截断落盘由 hand 层负责。
 - Not：不验证压缩摘要或自动截断策略。
 
 #### image-generation 类别
@@ -1043,6 +1043,15 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - How：仅固定 LLM 决策和可控搜索/网页响应，真实走 human graph 与 web tools。
 - Oracle：先获得候选再读取选中页面；最终答复只使用成功读取的事实和来源。
 - Not：不验证公网搜索排序质量。
+
+##### `human-tool-result-truncation-read`
+
+- 测试类型：`backend / mock-llm`
+- What：human 读取超大工具结果时完整内容落盘到 `runtime/toolresult` 为 `.log` 文件，模型侧收到整串截断的信封。
+- Why：工具结果大小守卫已从工具层上移到 hand 层（截断 + 落盘 + `text-file-read` 读取），需守住落盘与信封这一关键事实。
+- How：脚本化 LLM 决策读取超大文本文件，真实走 hand 层截断与落盘链路。
+- Oracle：任务完成；`runtime/toolresult` 下存在落盘的 `.log` 文件；落盘内容为完整的可解析 JSON；信封包含 `truncated`、`filePath(.log)`、`maxChars`、`totalChars`、`head` 前缀。
+- Not：不验证公网搜索或真实模型工具选择。
 
 ##### `ai-run-service-human-only`
 
@@ -1388,23 +1397,23 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - Oracle：任务完成；调用 DOCX 读取、视觉读取和成功的 `docx_edit`；视觉结果没有缺失图片错误，最终答复不出现“图片9”，产出的 DOCX 比原文新增至少 12 条有效工时表达。
 - Not：不要求固定的估时数值、工具调用次数或最终答复措辞；未配置 live 模型时按规范跳过。
 
-##### `human-web-crawl-multi-hop-cross-domain-reading-live`
+##### `human-web-search-by-url-live`
 
 - 测试类型：`backend`
-- What：live 模式下 `human` 会围绕用户给出的入口网址持续多次调用 `web_search`，跨域并多跳整理分散网页事实。
-- Why：真实用户常会给一个入口站点，但答案往往分散在专题页、通知页、办理指南页和申报入口页；这条 case 要长期守住“给入口网址后继续探索链接、跨域推进并最终收口”的能力。
-- How：启动两组本地 HTTP server：入口站点先提供城市公共服务导航与就业补贴专题页，再通过外链跳到另一域名下的人社通知页；通知页、办理指南页和申报入口页分别承载申请对象/截止时间、材料清单、线上办理方式等部分事实，且前序页面均有有效信息但不足以一次拿全；输入自然语言诉求，明确要求模型继续找、不要补网页未写内容。
-- Oracle：事件流中至少四次成功调用 `web_search`；成功结果覆盖专题页、通知页、办理指南和申报入口，且访问 URL 覆盖至少两个域名；结论质量由 raw logs 人工评估。
-- Not：不要求固定访问顺序，也不要求单次 `web_search` 内部自动跨域；允许模型通过多轮显式 `web_search` 调用完成跨域推进。
+- What：live 模式下用户直接给指定地址，`human` 通过 `web_search(url)` 读取该页正文并回答。
+- Why：用户给定具体网址时，`human` 应直接读取该地址而不是先搜索，这是网页读取的低成本入口，必须稳定。
+- How：启动本地 HTTP server 承载通知页（含申请对象与截止日期），用户输入明确给出该通知页 URL，要求模型阅读该页并回答两个事实。
+- Oracle：事件流中至少一次成功调用 `web_search(url)` 且 `finalUrl` 命中给定地址；最终答复包含页面正文里的申请对象与截止日期。
+- Not：不要求多跳或跨域；只要给定地址被直接读取并基于正文回答。
 
-##### `human-web-crawl-url-inference-reading-live`
+##### `human-web-search-intent-query-live`
 
 - 测试类型：`backend`
-- What：live 模式下 `human` 在用户不提供网址时，会先推断官网地址，再通过 `web_search` 完成官网文档整理。
-- Why：真实用户有时只会描述“去官网帮我看某两个条目”，不会直接给具体网址；这条 case 要长期守住“先判断目标官网，再继续抓取资料页面完成任务”的能力。
-- How：不向用户输入提供 URL，只给“基于 pandas 官网文档分别说明 `read_csv` 和 `DataFrame.to_csv` 及其最直接使用区别”的自然语言诉求；要求模型自行判断官网地址并通过 `web_search` 读取官网文档页面完成整理。
-- Oracle：至少读取两个 `pandas.pydata.org` 官方 API 页面；不出现 `browser_use` 或 `terminal_run`；非官方冗余抓取记录到 raw logs，由人工评分而非隐藏文本断言决定完成度。
-- Not：不要求复杂跨域或深链路，也不要求模型第一次就命中最终文档页，只要最终能自行推断官网地址并完成整理即可。
+- What：live 模式下用户只给纯文本诉求、不给网址，`human` 提炼搜索意图后通过 `web_search(query)` 搜索并读取官方文档回答。
+- Why：真实用户常只描述诉求不给网址；`human` 应提炼关键词走 query 搜索而非直接 fallback 浏览器。
+- How：不向用户输入提供 URL，只给“查找 pandas 官方文档 CSV 读取和写入 API 并说明”的自然语言诉求；要求模型自行提炼意图并读取官方文档页面完成整理。
+- Oracle：至少一次成功调用带 `query` 的 `web_search`；至少读取一个 `pandas.pydata.org` 官方 API 页面并基于正文回答。
+- Not：不要求复杂跨域或深链路，也不要求模型第一次就命中最终文档页；因 query 搜索偶发不可用，允许模型在搜索失败时用 `browser_use` 兜底读取官方页面。
 
 ##### `human-text-file-read-checkout-readiness-live`
 

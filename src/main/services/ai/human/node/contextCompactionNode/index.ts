@@ -7,8 +7,7 @@ import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/bra
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
-
-const COMPACTION_TAIL_MESSAGE_COUNT = 8
+import { splitMessagesByLastAi } from '../utils/messageTail'
 
 const renderMessagesForCompaction = (messages: BaseMessage[]): string =>
   messages
@@ -31,8 +30,7 @@ export const createContextCompactionNode = (input: {
     input.cache.currentState = state
 
     const messages = input.cache.messages || []
-    const compressible = messages.slice(0, Math.max(0, messages.length - COMPACTION_TAIL_MESSAGE_COUNT))
-    const tail = messages.slice(Math.max(0, messages.length - COMPACTION_TAIL_MESSAGE_COUNT))
+    const { compressible, tail } = splitMessagesByLastAi(messages)
     if (compressible.length === 0) {
       return {
         ...state,

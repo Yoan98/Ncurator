@@ -9,15 +9,15 @@ import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUt
 const normalizeUrl = (value: string): string => value.replace(/\/$/, '')
 
 describe('ai human live backend', () => {
-  it('human-web-crawl-multi-hop-cross-domain-reading-live', async () => {
+  it('human-web-search-by-url-live', async () => {
     await runWithStructuredOutputRetry(async () => {
       await runBackendCase({
-        caseId: 'human-web-crawl-multi-hop-cross-domain-reading-live',
+        caseId: 'human-web-search-by-url-live',
         harnessMode: 'live',
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '跟随真实多跳政务网站并以对话方式答复申请者。',
+        description: '用户给指定地址，AI 直接调用 web_search(url) 读取该页并回答。',
         fixtures: [],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -29,7 +29,7 @@ describe('ai human live backend', () => {
               webCrawlerService
             }).run({
               taskId: runtime.taskId,
-              userInput: `从 ${site.entryUrl} 开始，告诉我谁可以申请灵活就业补贴、截止日期、所需材料以及如何在线提交。只跟随相关链接，不要修改网站。`
+              userInput: `请阅读这个页面并告诉我：灵活就业补贴的申请对象是谁、申报截止日期是哪天。页面地址：${site.noticeUrl}`
             })
             return { output, site, events: runtime.eventCollector.snapshot() }
           } finally {
@@ -38,21 +38,31 @@ describe('ai human live backend', () => {
           }
         },
         assert: async (result, runtime) => {
-          const crawlStarts = filterAiRunEventsByType(result.events, 'tool_call_started')
-            .filter((event) => event.toolName === 'web_search')
-            .map((event) => String(event.input.url || ''))
-          const crawlResults = filterAiRunEventsByType(result.events, 'tool_call_result').filter(
+          const starts = filterAiRunEventsByType(result.events, 'tool_call_started').filter(
+            (event) => event.toolName === 'web_search'
+          )
+          const urlCalls = starts.map((event) => String(event.input?.url || ''))
+          const results = filterAiRunEventsByType(result.events, 'tool_call_result').filter(
             (event) => event.toolName === 'web_search' && event.result?.ok === true
           )
           runtime.assertThat(
             result.output.status === 'completed' &&
-              crawlStarts.length >= 4 &&
-              crawlStarts.some((url) => normalizeUrl(url) === normalizeUrl(result.site.entryUrl)) &&
-              crawlResults.length >= 4,
+              urlCalls.some(
+                (url) => normalizeUrl(url) === normalizeUrl(result.site.noticeUrl)
+              ) &&
+              results.some((event) => {
+                const data = event.result?.data
+                if (!data || typeof data !== 'object' || Array.isArray(data)) return false
+                const finalUrl = String((data as { finalUrl?: unknown }).finalUrl || '')
+                return normalizeUrl(finalUrl) === normalizeUrl(result.site.noticeUrl)
+              }) &&
+              result.output.deliveryMarkdown.includes('杭州市灵活就业人员') &&
+              result.output.deliveryMarkdown.includes('2026') &&
+              result.output.deliveryMarkdown.includes('9月30日'),
             {
-              name: 'human-live-web-crawl-multi-hop-answers-from-real-sources',
-              message: 'The live model must follow the real multi-hop path before answering the user.',
-              data: { crawlStarts }
+              name: 'human-live-web-search-by-url-answers-from-given-address',
+              message: '用户给指定地址时 AI 应直接 web_search(url) 读取该页并基于正文回答。',
+              data: { urlCalls, delivery: result.output.deliveryMarkdown }
             }
           )
         }

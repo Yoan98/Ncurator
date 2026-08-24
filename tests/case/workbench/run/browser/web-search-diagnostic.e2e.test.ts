@@ -20,9 +20,13 @@ const isObjectRecord = (value: JsonValue | undefined): value is Record<string, J
 const readContentMarkdown = (event: AiRunEvent): string => {
   if (event.type !== 'tool_call_result' || event.toolName !== 'web_search') return ''
   const data = event.result?.data
-  if (!isObjectRecord(data)) return ''
-  const markdown = data.markdown
-  return typeof markdown === 'string' ? markdown : ''
+  if (!Array.isArray(data)) return ''
+  for (const item of data) {
+    if (!isObjectRecord(item)) continue
+    const markdown = item.markdown
+    if (typeof markdown === 'string' && markdown.length > 0) return markdown
+  }
+  return ''
 }
 
 describe('workbench run e2e', () => {

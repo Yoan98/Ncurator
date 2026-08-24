@@ -8,8 +8,7 @@ import {
 } from '../../constants'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
-
-const COMPACTION_TAIL_MESSAGE_COUNT = 8
+import { splitMessagesByLastAi } from '../utils/messageTail'
 
 const buildBudgetSnapshot = (input: {
   cache: HumanRuntimeCache
@@ -70,8 +69,8 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
       contextWindowTokens * CONTEXT_COMPACTION_TRIGGER_RATIO
     )
     const messages = input.cache.messages || []
-    const hasCompressibleHistory = messages.length > COMPACTION_TAIL_MESSAGE_COUNT + 2
-    const compressibleMessages = messages.slice(0, Math.max(0, messages.length - COMPACTION_TAIL_MESSAGE_COUNT))
+    const { compressible: compressibleMessages } = splitMessagesByLastAi(messages)
+    const hasCompressibleHistory = compressibleMessages.length > 0
     const compressibleTokenEstimate = estimateTextTokens(
       compressibleMessages
         .map((message) =>

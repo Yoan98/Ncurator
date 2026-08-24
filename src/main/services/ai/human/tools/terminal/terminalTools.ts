@@ -2,8 +2,6 @@ import { randomUUID } from 'node:crypto'
 import { tool } from '@langchain/core/tools'
 import type { AiToolCallResult, IpcJsonObject } from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
-import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
-import { getAiResultTokenLimit, estimateToolResultTokens } from '../utils/resultSizeGuard'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
@@ -182,8 +180,6 @@ const failCommand = async (commandId: string, error: unknown): Promise<void> => 
 const applyOutputGuards = (input: {
   toolName: string
   output: string
-  modelContextWindowTokens: number
-  ratio: number
 }):
   | { ok: true; output: string }
   | {
@@ -201,20 +197,6 @@ const applyOutputGuards = (input: {
       error: 'terminal result unusable'
     }
   }
-  const limit = getAiResultTokenLimit({
-    modelContextWindowTokens: input.modelContextWindowTokens,
-    ratio: input.ratio
-  })
-  const estimatedTokens = estimateToolResultTokens(input.output)
-  if (estimatedTokens > limit) {
-    return {
-      ok: false,
-      output: '',
-      error: 'terminal result too large',
-      estimatedTokens,
-      limit
-    }
-  }
   return { ok: true, output: input.output }
 }
 
@@ -226,8 +208,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
     runId: input.runId,
     taskId: input.taskId
   })
-  const modelContextWindowTokens =
-    input.ctx.humanRuntimeOverrides?.modelContextWindowTokens || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 
   const terminalRun = tool(
     async (args) =>
@@ -443,9 +423,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           }
           const guarded = applyOutputGuards({
             toolName: terminalRunToolSpec.name,
-            output: result.output,
-            modelContextWindowTokens,
-            ratio: input.aiResultTokenLimitRatio
+            output: result.output
           })
           const publicResult = {
             terminalId: result.terminalId,
@@ -538,9 +516,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             }
             const guarded = applyOutputGuards({
               toolName: TERMINAL_READ_TOOL_SPEC.name,
-              output: result.output,
-              modelContextWindowTokens,
-              ratio: input.aiResultTokenLimitRatio
+              output: result.output
             })
             const payload = {
               terminalId: result.terminalId,

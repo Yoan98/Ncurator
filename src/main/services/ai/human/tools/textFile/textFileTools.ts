@@ -9,11 +9,9 @@ import type {
   IpcJsonObject,
   JsonObject
 } from '../../../../../../shared/types'
-import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { WorkspaceCapabilityBuildInput } from '../types'
 import { withToolLifecycle } from '../utils/lifecycle'
-import { checkToolResultSize } from '../utils/resultSizeGuard'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import {
   TEXT_FILE_EDIT_TOOL_SPEC,
@@ -447,10 +445,7 @@ const editTextFile = async (
   })
 }
 
-const readTextFile = async (
-  buildInput: WorkspaceCapabilityBuildInput,
-  args: FileReadInput
-): Promise<FileReadOutput> => {
+const readTextFile = async (args: FileReadInput): Promise<FileReadOutput> => {
   const sourcePath = await resolveSafeTextFilePath({
     sourcePath: args.sourcePath,
     allowMissing: false
@@ -474,24 +469,6 @@ const readTextFile = async (
     startLine,
     endLine,
     totalLines
-  }
-  const sizeCheck = checkToolResultSize({
-    toolName: TEXT_FILE_READ_TOOL_SPEC.name,
-    value: payload,
-    modelContextWindowTokens:
-      buildInput.ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-      DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
-  })
-  if (sizeCheck.tooLarge) {
-    const error = new Error(
-      `text_file_read result is too large (${sizeCheck.estimatedTokens} estimated tokens, limit ${sizeCheck.limit}).`
-    ) as TextFileToolFailure
-    error.resultData = {
-      error: error.message,
-      estimatedTokens: sizeCheck.estimatedTokens,
-      limit: sizeCheck.limit
-    }
-    throw error
   }
   return payload
 }
@@ -518,7 +495,7 @@ export const buildTextFileCapabilityTools = (
         toolName: TEXT_FILE_READ_TOOL_SPEC.name,
         args: args as IpcJsonObject,
         execute: async (session) => {
-          const payload = await readTextFile(buildInput, args)
+          const payload = await readTextFile(args)
           session.succeed(
             undefined,
             toToolResult({ toolName: TEXT_FILE_READ_TOOL_SPEC.name, ok: true, data: payload })

@@ -69,10 +69,11 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         emitAnswerEvents: Boolean(options.emitAnswerEvents)
       })
 
-      const routeToolReturn = (state: HumanState): string =>
-        state.execution.stage === 'context_budget'
-          ? 'human_context_budget_node'
-          : 'human_dispatch_node'
+      const routeToolReturn = (state: HumanState): string => {
+        if (state.execution.stage === 'context_budget') return 'human_context_budget_node'
+        if (state.execution.stage === 'mouth') return 'human_mouth_node'
+        return 'human_dispatch_node'
+      }
 
       const graph = new StateGraph(State)
         .addNode('human_context_budget_node', (state) =>

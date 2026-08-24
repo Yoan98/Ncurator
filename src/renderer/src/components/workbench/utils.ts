@@ -795,6 +795,27 @@ export const extractSearchResultsFromToolOutput = (output: IpcJsonValue): Search
   return output
     .filter((item): item is IpcJsonObject => isIpcJsonObject(item))
     .map((item) => {
+      const webUrl = readStringField(item, 'url')
+      if (webUrl) {
+        const title = readStringField(item, 'title') || '未命名网页'
+        const text = readStringField(item, 'snippet') || readStringField(item, 'markdown') || ''
+        const documentId = readStringField(item, 'requestedUrl') || webUrl
+        return {
+          id: documentId,
+          text,
+          document_name: title,
+          document_id: documentId,
+          source_type: 'web' as const,
+          document: {
+            id: documentId,
+            name: title,
+            source_type: 'web' as const,
+            file_path: webUrl,
+            created_at: 0,
+            import_status: 2
+          }
+        }
+      }
       const nestedDocument = readNestedObject(item, 'document')
       const result: SearchResult = {
         id: readStringField(item, 'id') || crypto.randomUUID(),

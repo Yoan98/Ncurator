@@ -300,7 +300,7 @@ describe('ai tool pdf backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['pdf'],
-      description: '验证 PDF 正文过大时返回明确的大小超限错误。',
+      description: '验证 PDF 正文过大时不再硬失败，完整结果直接返回，由 hand 层统一截断落盘。',
       fixtures: [PDF_FIXTURE],
       runMode: 'single',
       execute: async (runtime) => {
@@ -319,10 +319,13 @@ describe('ai tool pdf backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.ok === false && result.error.includes('PDF 工具结果过大'),
+          Array.isArray(result.pages) &&
+            result.pages.length > 0 &&
+            typeof result.pages[0]?.text === 'string' &&
+            result.pages[0].text.length > 0,
           {
-            name: 'pdf-large-result-returns-size-error',
-            message: 'PDF 工具结果过大时应返回明确的大小超限错误。',
+            name: 'pdf-large-result-returns-full-content',
+            message: 'PDF 工具结果过大时不再硬失败，完整正文由 hand 层统一截断落盘。',
             data: result
           }
         )

@@ -6,6 +6,7 @@ const WORKSPACE_NCURATOR_DIR = '.ncurator'
 const WORKSPACE_RUNTIME_DIR = 'runtime'
 const WORKSPACE_ASSETS_DIR = 'assets'
 const WORKSPACE_SCRIPTS_DIR = 'scripts'
+const WORKSPACE_TOOL_RESULT_DIR = 'toolresult'
 
 const normalizeWorkspaceRoot = (workspaceRootPath: string): string => {
   const value = String(workspaceRootPath || '').trim()
@@ -26,6 +27,9 @@ export const getWorkspaceAssetsRootDir = (workspaceRootPath: string): string =>
 export const getWorkspaceScriptsRootDir = (workspaceRootPath: string): string =>
   path.join(getWorkspaceRuntimeDir(workspaceRootPath), WORKSPACE_SCRIPTS_DIR)
 
+export const getWorkspaceToolResultDir = (workspaceRootPath: string): string =>
+  path.join(getWorkspaceRuntimeDir(workspaceRootPath), WORKSPACE_TOOL_RESULT_DIR)
+
 export const getWorkspaceAssetBucketDir = (
   workspaceRootPath: string,
   assetBucketId: string
@@ -41,7 +45,8 @@ export const ensureWorkspaceRuntimeDirs = async (workspaceRootPath: string): Pro
   const runtimeDir = getWorkspaceRuntimeDir(workspaceRootPath)
   await Promise.all([
     fs.mkdir(path.join(runtimeDir, WORKSPACE_ASSETS_DIR), { recursive: true }),
-    fs.mkdir(getWorkspaceScriptsRootDir(workspaceRootPath), { recursive: true })
+    fs.mkdir(getWorkspaceScriptsRootDir(workspaceRootPath), { recursive: true }),
+    fs.mkdir(getWorkspaceToolResultDir(workspaceRootPath), { recursive: true })
   ])
 }
 

@@ -5,6 +5,11 @@ import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import { buildHistoryToolResult } from '../../memory/historyToolResult'
 import { buildToolHistoryReturnValue, buildToolResultMessageContent } from '../../shared/historyRenderers'
+import {
+  buildTruncatedToolResultMessage,
+  persistToolResult,
+  TOOL_RESULT_MAX_CHARS
+} from '../../shared/toolResultPersistence'
 import { buildToolFeedback } from '../../shared/toolFeedback'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
@@ -49,6 +54,26 @@ type ParsedHandCall = {
   toolCallId: string
   toolName: string
   args: JsonObject
+}
+
+const truncateToolResultMessage = async (input: {
+  ctx: AiRunContext
+  toolCallId: string
+  toolName: string
+  fullContent: string
+}): Promise<string | undefined> => {
+  const persisted = await persistToolResult({
+    ctx: input.ctx,
+    toolCallId: input.toolCallId,
+    content: input.fullContent
+  })
+  if (!persisted) return undefined
+  return buildTruncatedToolResultMessage({
+    toolName: input.toolName,
+    filePath: persisted.filePath,
+    head: input.fullContent.slice(0, TOOL_RESULT_MAX_CHARS),
+    totalChars: persisted.totalChars
+  })
 }
 
 const collectApprovalBatchItems = (input: {
@@ -174,11 +199,12 @@ const executeHandCalls = async (input: {
   return results
 }
 
-const appendToolMessages = (input: {
+const appendToolMessages = async (input: {
   cache: HumanRuntimeCache
+  ctx: AiRunContext
   calls: ParsedHandCall[]
   results: ToolCallResult[]
-}): Array<{ toolCallId: string; toolName: string; ok: boolean; result: JsonValue | undefined }> => {
+}): Promise<Array<{ toolCallId: string; toolName: string; ok: boolean; result: JsonValue | undefined }>> => {
   const messages = input.cache.messages || []
   const transcriptEntries: Array<{
     toolCallId: string
@@ -186,14 +212,25 @@ const appendToolMessages = (input: {
     ok: boolean
     result: JsonValue | undefined
   }> = []
-  input.calls.forEach((call, index) => {
+  for (let index = 0; index < input.calls.length; index += 1) {
+    const call = input.calls[index]
     const result = input.results[index]
-    if (!result) return
+    if (!result) continue
     const historyResult = buildHistoryToolResult(result)
     const returnValue = buildToolHistoryReturnValue(historyResult)
+    const fullContent = buildToolResultMessageContent(historyResult)
+    const messageContent =
+      fullContent.length > TOOL_RESULT_MAX_CHARS
+        ? (await truncateToolResultMessage({
+            ctx: input.ctx,
+            toolCallId: call.toolCallId,
+            toolName: call.toolName,
+            fullContent
+          })) ?? fullContent
+        : fullContent
     messages.push(
       new ToolMessage({
-        content: buildToolResultMessageContent(historyResult),
+        content: messageContent,
         tool_call_id: call.toolCallId
       })
     )
@@ -203,7 +240,7 @@ const appendToolMessages = (input: {
       ok: result.ok,
       result: returnValue
     })
-  })
+  }
   input.cache.messages = messages
   return transcriptEntries
 }
@@ -356,8 +393,9 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     })
     input.cache.toolCallCount += results.length
 
-    const toolTranscript = appendToolMessages({
+    const toolTranscript = await appendToolMessages({
       cache: input.cache,
+      ctx: input.ctx,
       calls,
       results
     })

@@ -14,7 +14,6 @@ import {
   DOCX_SEARCH_TOOL_SPEC
 } from '../toolSpecs'
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
-import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../../constants'
 import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
 import { renderDocxVisualToPng } from '../utils/renderVisual'
 import { projectDocxReadBlocks } from '../publicReadTree'
@@ -224,34 +223,6 @@ const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) 
   totalMatchCount: result.totalMatchCount
 })
 
-const estimateDocxResultTokens = (value: unknown): number =>
-  Math.ceil(JSON.stringify(value).length / 4)
-
-const getDocxAiResultTokenLimit = (runtime: DocxToolRuntime): number => {
-  const contextWindowTokens = runtime.input.modelContextWindowTokens
-  return Math.max(1, Math.floor(contextWindowTokens * HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO))
-}
-
-const buildResultTooLargeFailure = (input: {
-  runtime: DocxToolRuntime
-  toolName: string
-  toolCallId: string
-  sourcePath: string
-  currentRevisionRef: string
-  estimatedTokens: number
-}) =>
-  input.runtime.emitFailure({
-    toolName: input.toolName,
-    toolCallId: input.toolCallId,
-    reason: 'result_too_large',
-    error: 'docx result too large',
-    resourceContext: input.runtime.buildResourceContext({
-      sourcePath: input.sourcePath,
-      effectKind: 'read',
-      currentRevisionRef: input.currentRevisionRef
-    })
-  })
-
 const toOutlineRange = (
   range:
     | { type: 'percent'; fromPercent: number; toPercent: number }
@@ -347,23 +318,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           throw new Error('worker protocol mismatch (outline)')
         }
         const resultBlocks = outlineBlocks.payload.blocks.map(buildOutlineBlock)
-        const estimatedTokens = estimateDocxResultTokens(resultBlocks)
-        if (estimatedTokens > getDocxAiResultTokenLimit(runtime)) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: buildResultTooLargeFailure({
-              runtime,
-              toolName,
-              toolCallId,
-              sourcePath: sessionResult.sourcePath,
-              currentRevisionRef: sessionResult.currentRevisionRef,
-              estimatedTokens
-            }),
-            activity: {
-              actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
         const result = {
           sourcePath: sessionResult.sourcePath,
           totalBlockCount: sessionResult.stats.bodyBlockCount,

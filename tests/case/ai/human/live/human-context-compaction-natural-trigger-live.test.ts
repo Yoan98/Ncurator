@@ -15,7 +15,7 @@ import {
   runWithStructuredOutputRetry
 } from '../testUtils'
 
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 12_000
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 24_000
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '任务锚点：',

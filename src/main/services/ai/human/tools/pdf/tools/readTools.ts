@@ -2,7 +2,6 @@ import { tool } from '@langchain/core/tools'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { JsonObject } from '../../../../../../../shared/types'
 import { withToolLifecycle } from '../../utils/lifecycle'
-import { checkToolResultSize } from '../../utils/resultSizeGuard'
 import {
   PdfToolRuntimeError,
   type PdfToolFailure,
@@ -38,20 +37,6 @@ const runTool = async (input: {
     )
     const result = await input.execute(document)
     if ('ok' in result && result.ok === false) return result
-    const size = checkToolResultSize({
-      toolName: input.toolName,
-      value: result,
-      modelContextWindowTokens: input.runtime.input.modelContextWindowTokens
-    })
-    if (size.tooLarge) {
-      return input.runtime.emitFailure({
-        toolName: input.toolName,
-        toolCallId: input.toolCallId,
-        reason: 'result_too_large',
-        error: `PDF 工具结果过大：预计 ${String(size.estimatedTokens)} tokens，限制 ${String(size.limit)} tokens`,
-        resourceContext
-      })
-    }
     input.runtime.emitSuccess({
       toolName: input.toolName,
       toolCallId: input.toolCallId,

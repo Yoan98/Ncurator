@@ -1,10 +1,8 @@
 import { tool } from '@langchain/core/tools'
 import type { AiToolCallResult, IpcJsonObject, JsonValue } from '../../../../../../shared/types'
-import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
 import { WebSourceService } from '../../../../web/WebSourceService'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
-import { checkToolResultSize } from '../utils/resultSizeGuard'
 import type { ToolFamilyDefinition } from '../types'
 import { BROWSER_USE_TOOL_SPEC, WEB_SEARCH_TOOL_SPEC } from './toolSpecs'
 
@@ -120,88 +118,60 @@ export const webToolFamily: ToolFamilyDefinition = {
             const rawQuery = String(args.query || '').trim()
             const rawUrl = String(args.url || '').trim()
 
-            let crawlUrl: string
-            let topic: string
-            try {
-              if (rawUrl) {
+            if (rawUrl) {
+              let crawlUrl: string
+              try {
                 crawlUrl = webSourceService.normalizeUrl(rawUrl).url
-                topic = crawlUrl
-              } else {
-                const searchResult = await service.search({ query: rawQuery })
-                const top = searchResult.results[0]
-                if (!top?.url) {
-                  const payload = { error: 'web_search 没有找到相关结果', requestedUrl: rawQuery }
-                  session.fail(
-                    payload.error,
-                    undefined,
-                    buildToolResult({
-                      toolName: WEB_SEARCH_TOOL_SPEC.name,
-                      ok: false,
-                      data: payload
-                    })
-                  )
-                  return payload
-                }
-                crawlUrl = webSourceService.normalizeUrl(top.url).url
-                topic = rawQuery
-              }
-            } catch (error) {
-              const payload = {
-                error: getErrorMessage(error instanceof Error ? error : new Error(String(error))),
-                requestedUrl: rawUrl || rawQuery
-              }
-              session.fail(
-                payload.error,
-                undefined,
-                buildToolResult({
-                  toolName: WEB_SEARCH_TOOL_SPEC.name,
-                  ok: false,
-                  data: payload
-                })
-              )
-              return payload
-            }
-
-            try {
-              const result = await service.crawl({ url: crawlUrl, topic })
-              const payload = buildCrawlPayload({ result })
-              const sizeCheck = checkToolResultSize({
-                toolName: WEB_SEARCH_TOOL_SPEC.name,
-                value: payload,
-                modelContextWindowTokens:
-                  ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-                  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
-              })
-              if (sizeCheck.tooLarge) {
-                const tooLargePayload = {
-                  error: 'web_search result too large',
-                  requestedUrl: result.requestedUrl,
-                  finalUrl: result.finalUrl,
-                  estimatedTokens: sizeCheck.estimatedTokens,
-                  limit: sizeCheck.limit
+              } catch (error) {
+                const payload = {
+                  error: getErrorMessage(error instanceof Error ? error : new Error(String(error))),
+                  requestedUrl: rawUrl
                 }
                 session.fail(
-                  tooLargePayload.error,
+                  payload.error,
                   undefined,
                   buildToolResult({
                     toolName: WEB_SEARCH_TOOL_SPEC.name,
                     ok: false,
-                    data: tooLargePayload
+                    data: payload
                   })
                 )
-                return tooLargePayload
+                return payload
               }
+              try {
+                const result = await service.crawl({ url: crawlUrl, topic: crawlUrl })
+                const payload = buildCrawlPayload({ result })
+                session.succeed(
+                  undefined,
+                  buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: true, data: payload })
+                )
+                return payload
+              } catch (error) {
+                const payload = buildCrawlFailurePayload({
+                  error: error instanceof Error ? error : new Error(String(error)),
+                  fallbackUrl: crawlUrl
+                })
+                session.fail(
+                  payload.error,
+                  undefined,
+                  buildToolResult({
+                    toolName: WEB_SEARCH_TOOL_SPEC.name,
+                    ok: false,
+                    data: payload
+                  })
+                )
+                return payload
+              }
+            }
 
-              session.succeed(
-                undefined,
-                buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: true, data: payload })
-              )
-              return payload
+            let searchItems: Array<{ rank: number; title: string; url: string; snippet?: string }>
+            try {
+              searchItems = (await service.search({ query: rawQuery })).results
             } catch (error) {
-              const payload = buildCrawlFailurePayload({
-                error: error instanceof Error ? error : new Error(String(error)),
-                fallbackUrl: crawlUrl
-              })
+              const payload = {
+                error: getErrorMessage(error instanceof Error ? error : new Error(String(error))),
+                requestedUrl: rawQuery
+              }
               session.fail(
                 payload.error,
                 undefined,
@@ -213,6 +183,55 @@ export const webToolFamily: ToolFamilyDefinition = {
               )
               return payload
             }
+
+            if (searchItems.length === 0) {
+              const payload = { error: 'web_search 没有找到相关结果', requestedUrl: rawQuery }
+              session.fail(
+                payload.error,
+                undefined,
+                buildToolResult({
+                  toolName: WEB_SEARCH_TOOL_SPEC.name,
+                  ok: false,
+                  data: payload
+                })
+              )
+              return payload
+            }
+
+            const payload = await Promise.all(
+              searchItems.map(async (item) => {
+                const baseItem = {
+                  rank: item.rank,
+                  title: item.title,
+                  url: item.url,
+                  ...(item.snippet ? { snippet: item.snippet } : {})
+                }
+                let itemCrawlUrl: string
+                try {
+                  itemCrawlUrl = webSourceService.normalizeUrl(item.url).url
+                } catch {
+                  return { ...baseItem, error: '无法解析网页地址' }
+                }
+                try {
+                  const result = await service.crawl({ url: itemCrawlUrl, topic: rawQuery })
+                  return { ...baseItem, ...buildCrawlPayload({ result }) }
+                } catch (error) {
+                  const details = error as WebCrawlerFailureDetails
+                  return {
+                    ...baseItem,
+                    requestedUrl: details.requestedUrl || itemCrawlUrl,
+                    ...(details.finalUrl ? { finalUrl: details.finalUrl } : {}),
+                    error: getErrorMessage(error instanceof Error ? error : new Error(String(error)))
+                  }
+                }
+              })
+            )
+
+            session.succeed(
+              undefined,
+              buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: true, data: payload })
+            )
+            return payload
           }
         }),
       {
@@ -279,31 +298,6 @@ export const webToolFamily: ToolFamilyDefinition = {
                       llmConfig
                     })
               const payload = { ...result }
-              const sizeCheck = checkToolResultSize({
-                toolName: BROWSER_USE_TOOL_SPEC.name,
-                value: payload,
-                modelContextWindowTokens:
-                  ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-                  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
-              })
-              if (sizeCheck.tooLarge) {
-                const tooLargePayload = {
-                  error: 'browser_use result too large',
-                  estimatedTokens: sizeCheck.estimatedTokens,
-                  limit: sizeCheck.limit
-                }
-                session.fail(
-                  tooLargePayload.error,
-                  undefined,
-                  buildToolResult({
-                    toolName: BROWSER_USE_TOOL_SPEC.name,
-                    ok: false,
-                    data: tooLargePayload
-                  })
-                )
-                return tooLargePayload
-              }
-
               if ('error' in result) {
                 session.fail(
                   result.error,

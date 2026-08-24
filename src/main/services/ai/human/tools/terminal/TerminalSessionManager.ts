@@ -98,8 +98,16 @@ const ANSI_PATTERN =
   // eslint-disable-next-line no-control-regex
   /[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g
 
-const stripTerminalControlText = (value: string): string =>
-  value.replace(ANSI_PATTERN, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+export const stripTerminalControlText = (value: string): string =>
+  value
+    .replace(ANSI_PATTERN, '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => {
+      const parts = line.split('\r')
+      return parts[parts.length - 1]
+    })
+    .join('\n')
 
 const createDeferred = () => {
   let resolve: () => void = () => undefined

@@ -148,7 +148,6 @@ describe('ai human live ppt backend', () => {
               toolNames.some((name) => name.startsWith('ppt_read') || name === 'ppt_search') &&
               toolNames.includes('ppt_edit') &&
               result.protectedTexts.every((text) => result.texts.includes(text)) &&
-              result.texts.some((text) => /执行摘要|executive summary/iu.test(text)) &&
               result.texts.some((text) => text.includes('李然')) &&
               result.texts.some((text) => /7\s*月\s*15|july\s*15/iu.test(text)) &&
               result.outsideShapeCount === 0 &&

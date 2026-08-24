@@ -195,7 +195,7 @@ describe('ai tool web backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_search 传 query 会搜索并读取最相关网页正文。',
+      description: '验证 web_search 传 query 会搜索并并行爬取全部候选网页，返回数组（失败项带 error）。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -210,6 +210,12 @@ describe('ai tool web backend', () => {
                     title: 'DeepSeek 510亿A轮融资全解析',
                     url: 'https://example.com/deepseek-funding',
                     snippet: 'DeepSeek 完成首轮外部融资 510 亿元。'
+                  },
+                  {
+                    rank: 2,
+                    title: 'DeepSeek 融资详情',
+                    url: 'https://example.com/deepseek-details',
+                    snippet: '融资细节。'
                   }
                 ],
                 raw: {
@@ -219,6 +225,9 @@ describe('ai tool web backend', () => {
               }
             },
             async crawl(input) {
+              if (input.url === 'https://example.com/deepseek-details') {
+                throw new Error('网页请求失败：403')
+              }
               return {
                 requestedUrl: input.url,
                 finalUrl: input.url,
@@ -233,18 +242,22 @@ describe('ai tool web backend', () => {
             }
           }
         })
-        return await harness.invoke<WebSearchResult>('web_search', {
+        return await harness.invoke<WebSearchResult[]>('web_search', {
           query: '最近 DeepSeek 融资情况'
         })
       },
       assert: async (result, runtime) => {
+        const firstOk = result.find((item) => item.markdown)
         runtime.assertThat(
-          result.requestedUrl === 'https://example.com/deepseek-funding' &&
-            result.title === 'DeepSeek 510亿A轮融资全解析' &&
-            Boolean(result.markdown?.includes('510 亿元')),
+          Array.isArray(result) &&
+            result.length === 2 &&
+            result.some((item) => item.error === '网页请求失败：403') &&
+            Boolean(firstOk?.markdown?.includes('510 亿元')) &&
+            firstOk?.requestedUrl === 'https://example.com/deepseek-funding',
           {
-            name: 'web-search-returns-content-by-query',
-            message: 'web_search 传 query 应搜索并读取最相关网页正文。',
+            name: 'web-search-returns-array-by-query',
+            message:
+              'web_search 传 query 应并行爬取候选网页并返回数组，成功项带 markdown、失败项带 error。',
             data: result
           }
         )
@@ -335,14 +348,15 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('web-search-too-large', async () => {
+  it('web-search-returns-full-content-without-tool-level-truncation', async () => {
     await runBackendCase({
-      caseId: 'web-search-too-large',
+      caseId: 'web-search-returns-full-content-without-tool-level-truncation',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_search 结果过大时返回 error 与 estimatedTokens/limit。',
+      description:
+        '验证 web_search 不再在工具层对过大结果硬失败，完整正文直接返回，由 hand 层统一截断落盘。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -365,14 +379,14 @@ describe('ai tool web backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.error === 'web_search result too large' &&
-            result.requestedUrl?.endsWith('/large') === true &&
+          result.requestedUrl?.endsWith('/large') === true &&
             result.finalUrl?.endsWith('/large') === true &&
-            typeof result.estimatedTokens === 'number' &&
-            typeof result.limit === 'number',
+            typeof result.markdown === 'string' &&
+            result.markdown.length > 0 &&
+            ('error' in result) === false,
           {
-            name: 'web-search-too-large-uses-shared-error-contract',
-            message: 'web_search 结果过大时应返回 error 及 estimatedTokens/limit 兜底字段。',
+            name: 'web-search-returns-full-content',
+            message: 'web_search 结果过大时不再硬失败，完整正文由 hand 层统一截断落盘。',
             data: result
           }
         )
