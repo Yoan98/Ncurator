@@ -53,7 +53,6 @@ describe('ai unit docx tool contract', () => {
       'UUID',
       'blk_',
       'blockIndex',
-      'postWriteReadback',
       '原子',
       'action type='
     ]) {

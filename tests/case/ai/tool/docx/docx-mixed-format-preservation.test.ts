@@ -196,10 +196,7 @@ describe('ai tool docx backend', () => {
         )
 
         runtime.assertThat(
-          result.styledCell.postWriteReadback?.regions.some((region) =>
-            region.blocks.some((block) => block.type === 'table')
-          ) === true &&
-            result.record.change_count === 2 &&
+          result.record.change_count === 2 &&
             result.record.insert_count === 1 &&
             result.record.delete_count === 1 &&
             result.diffXml.includes('Field') &&
@@ -209,9 +206,8 @@ describe('ai tool docx backend', () => {
             result.diffXml.includes('w:fill="E9F7EF"'),
           {
             name: 'existing-table-cell-diff-is-granular-and-readable',
-            message: '已有表格的单元格格式与文字修改都应进入 Diff，修改后回读不得为空。',
+            message: '已有表格的单元格格式与文字修改都应进入 Diff。',
             data: {
-              postWriteReadback: result.styledCell.postWriteReadback,
               record: result.record
             }
           }

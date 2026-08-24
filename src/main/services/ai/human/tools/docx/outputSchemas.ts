@@ -277,18 +277,6 @@ const docxReadRootNodeOutputSchema: z.ZodType<JsonValue> = z.lazy(() =>
   ])
 ) as z.ZodType<JsonValue>
 
-const docxPostWriteReadbackOutputSchema = z.object({
-  regions: z.array(
-    z.object({
-      fromBlockId: z.string(),
-      fromBlockIndex: z.number().int(),
-      toBlockId: z.string(),
-      toBlockIndex: z.number().int(),
-      blocks: z.array(docxReadRootNodeOutputSchema)
-    })
-  )
-})
-
 const docxBaseOutputSchema = z.object({
   sourcePath: z.string().optional()
 })
@@ -334,7 +322,7 @@ export const docxReadBlocksOutputSchema = docxBaseOutputSchema.extend({
 
 export const docxWriteOutputSchema = docxBaseOutputSchema.extend({
   sourcePath: z.string(),
-  postWriteReadback: docxPostWriteReadbackOutputSchema
+  createdBlockIds: z.array(z.string())
 })
 
 export const docxReadVisualsOutputSchema = z

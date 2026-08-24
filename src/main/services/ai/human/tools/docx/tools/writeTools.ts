@@ -10,11 +10,9 @@ import type {
   DocxEditAction,
   DocxOp,
   DocxOpenStats,
-  DocxOutlineBlock,
-  DocxPostWriteReadback
+  DocxOutlineBlock
 } from '../types'
 import type { DocxToolRuntime } from '../runtime'
-import { DOCX_POST_WRITE_READBACK_WINDOW_POLICY } from '../writeReadbackPolicy'
 import { DOCX_EDIT_TOOL_SPEC } from '../toolSpecs'
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
 import type { DocxToolFailure } from '../runtime'
@@ -23,17 +21,6 @@ import {
   isLegacyDocPath,
   LEGACY_DOC_EDIT_ERROR
 } from '../legacyDocPolicy'
-
-const buildEditSummary = (input: {
-  toolName: string
-  actionLabel: string
-  changedBlocks: DocxChangedBlock[]
-}): string => {
-  const base = `${input.actionLabel} 完成`
-  const changed =
-    input.changedBlocks.length > 0 ? `，共 ${String(input.changedBlocks.length)} 处变更` : ''
-  return `${base}${changed}`
-}
 
 const fetchOutlineBlocks = async (
   runtime: DocxToolRuntime,
@@ -78,8 +65,6 @@ const fetchDetailedBlock = async (
   return response.payload.block
 }
 
-const buildCreateSummary = (sourcePath: string): string => `已建立新的 docx 草稿会话：${sourcePath}`
-
 const summarizePositionedBlockText = (block: DocxDetailedBlock): string | undefined => {
   const normalized = block.text.replace(/\s+/g, ' ').trim()
   if (normalized.length === 0) return undefined
@@ -90,202 +75,6 @@ const buildPositionedDiagnostic = (block: DocxDetailedBlock): string => {
   const targetText = summarizePositionedBlockText(block)
   const target = targetText ? `：包含“${targetText}”的区域` : ''
   return `当前命中复杂定位排版区域${target}，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；该区域需要用户手动处理，其他非定位区域可继续自动编辑。`
-}
-
-const getOutlineBlockIndex = (blocks: readonly DocxOutlineBlock[], blockId: string): number =>
-  blocks.findIndex((block) => block.blockId === blockId)
-
-const toRangeRegion = (
-  blocks: readonly DocxOutlineBlock[],
-  startIndex: number,
-  endIndex: number
-): { startBlockId: string; endBlockId: string } | null => {
-  if (blocks.length === 0) return null
-  if (startIndex < 0 || endIndex < 0 || startIndex > endIndex) return null
-  const startBlockId = blocks[startIndex]?.blockId
-  const endBlockId = blocks[endIndex]?.blockId
-  if (!startBlockId || !endBlockId) return null
-  return {
-    startBlockId,
-    endBlockId
-  }
-}
-
-const mergeReadbackRegions = (
-  blocks: readonly DocxOutlineBlock[],
-  regions: Array<{ startBlockId: string; endBlockId: string }>
-): Array<{ startBlockId: string; endBlockId: string }> => {
-  const indexByBlockId = new Map(blocks.map((block, index) => [block.blockId, index] as const))
-  const orderedRanges = regions
-    .map((region) => {
-      const fromIndex = indexByBlockId.get(region.startBlockId)
-      const toIndex = indexByBlockId.get(region.endBlockId)
-      if (typeof fromIndex !== 'number' || typeof toIndex !== 'number' || fromIndex > toIndex) {
-        return null
-      }
-      return {
-        startBlockId: region.startBlockId,
-        endBlockId: region.endBlockId,
-        fromIndex,
-        toIndex
-      }
-    })
-    .filter(
-      (
-        region
-      ): region is {
-        startBlockId: string
-        endBlockId: string
-        fromIndex: number
-        toIndex: number
-      } => Boolean(region)
-    )
-    .sort((left, right) => left.fromIndex - right.fromIndex)
-
-  const merged: Array<{ fromIndex: number; toIndex: number }> = []
-  for (const region of orderedRanges) {
-    const last = merged[merged.length - 1]
-    if (!last || region.fromIndex > last.toIndex + 1) {
-      merged.push({
-        fromIndex: region.fromIndex,
-        toIndex: region.toIndex
-      })
-      continue
-    }
-    last.toIndex = Math.max(last.toIndex, region.toIndex)
-  }
-
-  return merged
-    .map((region) => toRangeRegion(blocks, region.fromIndex, region.toIndex))
-    .filter((region): region is { startBlockId: string; endBlockId: string } => Boolean(region))
-}
-
-const buildCurrentOutlineReadbackRegions = (input: {
-  outlineBlocks: DocxOutlineBlock[]
-  targetBlockIds: string[]
-  beforeBlockCount: number
-  afterBlockCount: number
-}): Array<{ startBlockId: string; endBlockId: string }> => {
-  const regions: Array<{ startBlockId: string; endBlockId: string }> = []
-  const uniqueTargetBlockIds = [...new Set(input.targetBlockIds)]
-  for (const targetBlockId of uniqueTargetBlockIds) {
-    const targetIndex = getOutlineBlockIndex(input.outlineBlocks, targetBlockId)
-    if (targetIndex < 0) continue
-    const startIndex = Math.max(0, targetIndex - input.beforeBlockCount)
-    const endIndex = Math.min(input.outlineBlocks.length - 1, targetIndex + input.afterBlockCount)
-    const region = toRangeRegion(input.outlineBlocks, startIndex, endIndex)
-    if (region) regions.push(region)
-  }
-  return mergeReadbackRegions(input.outlineBlocks, regions)
-}
-
-const buildDeletedReadbackRegions = (input: {
-  previousOutlineBlocks: DocxOutlineBlock[]
-  currentOutlineBlocks: DocxOutlineBlock[]
-  targetBlockIds: string[]
-  beforeBlockCount: number
-  afterBlockCount: number
-}): Array<{ startBlockId: string; endBlockId: string }> => {
-  const currentBlockIdSet = new Set(input.currentOutlineBlocks.map((block) => block.blockId))
-  const regions: Array<{ startBlockId: string; endBlockId: string }> = []
-  const uniqueTargetBlockIds = [...new Set(input.targetBlockIds)]
-
-  for (const targetBlockId of uniqueTargetBlockIds) {
-    const targetIndex = getOutlineBlockIndex(input.previousOutlineBlocks, targetBlockId)
-    if (targetIndex < 0) continue
-    const startIndex = Math.max(0, targetIndex - input.beforeBlockCount)
-    const endIndex = Math.min(
-      input.previousOutlineBlocks.length - 1,
-      targetIndex + input.afterBlockCount
-    )
-    const candidateBlockIds = input.previousOutlineBlocks
-      .slice(startIndex, endIndex + 1)
-      .map((block) => block.blockId)
-      .filter((blockId) => blockId !== targetBlockId && currentBlockIdSet.has(blockId))
-    if (candidateBlockIds.length === 0) continue
-    regions.push({
-      startBlockId: candidateBlockIds[0],
-      endBlockId: candidateBlockIds[candidateBlockIds.length - 1]
-    })
-  }
-
-  return mergeReadbackRegions(input.currentOutlineBlocks, regions)
-}
-
-const buildPostWriteReadback = async (input: {
-  runtime: DocxToolRuntime
-  currentDocId: string
-  previousDocId?: string
-  targets: Array<{
-    action: keyof typeof DOCX_POST_WRITE_READBACK_WINDOW_POLICY
-    targetBlockIds: string[]
-  }>
-}): Promise<DocxPostWriteReadback> => {
-  const currentOutlineBlocks = await fetchOutlineBlocks(input.runtime, input.currentDocId)
-
-  let regions: Array<{ startBlockId: string; endBlockId: string }> = []
-  const previousOutlineBlocks =
-    input.previousDocId && input.targets.some((target) => target.action === 'delete_block')
-      ? await fetchOutlineBlocks(input.runtime, input.previousDocId)
-      : []
-
-  for (const target of input.targets) {
-    const policy = DOCX_POST_WRITE_READBACK_WINDOW_POLICY[target.action]
-    if (target.action === 'create_document') {
-      if (currentOutlineBlocks.length > 0) {
-        const endIndex = Math.min(
-          currentOutlineBlocks.length - 1,
-          Math.max(0, policy.afterBlockCount)
-        )
-        const region = toRangeRegion(currentOutlineBlocks, 0, endIndex)
-        if (region) regions.push(region)
-      }
-      continue
-    }
-    if (target.action === 'delete_block') {
-      regions.push(
-        ...buildDeletedReadbackRegions({
-          previousOutlineBlocks,
-          currentOutlineBlocks,
-          targetBlockIds: target.targetBlockIds,
-          beforeBlockCount: policy.beforeBlockCount,
-          afterBlockCount: policy.afterBlockCount
-        })
-      )
-      continue
-    }
-    regions.push(
-      ...buildCurrentOutlineReadbackRegions({
-        outlineBlocks: currentOutlineBlocks,
-        targetBlockIds: target.targetBlockIds,
-        beforeBlockCount: policy.beforeBlockCount,
-        afterBlockCount: policy.afterBlockCount
-      })
-    )
-  }
-  regions = mergeReadbackRegions(currentOutlineBlocks, regions)
-
-  const indexByBlockId = new Map(
-    currentOutlineBlocks.map((block) => [block.blockId, block.blockIndex] as const)
-  )
-  const indexRegions = regions
-    .map((region) => {
-      const fromBlockIndex = indexByBlockId.get(region.startBlockId)
-      const toBlockIndex = indexByBlockId.get(region.endBlockId)
-      if (typeof fromBlockIndex !== 'number' || typeof toBlockIndex !== 'number') {
-        return null
-      }
-      return {
-        fromBlockIndex,
-        toBlockIndex
-      }
-    })
-    .filter((region): region is { fromBlockIndex: number; toBlockIndex: number } => Boolean(region))
-
-  return input.runtime.buildPostWriteReadback({
-    docId: input.currentDocId,
-    regions: indexRegions
-  })
 }
 
 const documentExists = async (sourcePath: string): Promise<boolean> => {
@@ -412,16 +201,11 @@ const failIfAnyPositionedBlocks = async (input: {
 const bodyBlocksOnly = (blocks: readonly DocxOutlineBlock[]): DocxOutlineBlock[] =>
   blocks.filter((block) => block.type !== 'table_cell')
 
-type BatchReadbackTarget = {
-  action: keyof typeof DOCX_POST_WRITE_READBACK_WINDOW_POLICY
-  targetBlockIds: string[]
-}
-
 type WriteToolResult = {
   sourcePath: string
   changedBlocks: DocxChangedBlock[]
   createdBlocks: DocxCreatedBlock[]
-  postWriteReadback: DocxPostWriteReadback
+  createdBlockIds: string[]
 }
 
 const actionLabel = (action: DocxEditAction): string => {
@@ -458,7 +242,6 @@ type ApplySerialEditResult =
       nextDocId: string
       nextStats: DocxOpenStats
       createdBlocks: DocxCreatedBlock[]
-      readbackTargets: BatchReadbackTarget[]
     }
 
 const compileSerialEditActions = (input: {
@@ -514,7 +297,6 @@ const buildSerialActionOps = async (input: {
 }): Promise<
   | {
       ops: DocxOp[]
-      readbackTarget: BatchReadbackTarget
       positionedCheckBlockIds: string[]
     }
   | { failure: DocxToolFailure }
@@ -537,10 +319,6 @@ const buildSerialActionOps = async (input: {
     }
     return {
       ops: [op],
-      readbackTarget: {
-        action: op.type,
-        targetBlockIds: [anchorBlockId]
-      },
       positionedCheckBlockIds: [anchorBlockId]
     }
   }
@@ -556,10 +334,6 @@ const buildSerialActionOps = async (input: {
           allowVisualLoss: action.allowVisualLoss
         }
       ],
-      readbackTarget: {
-        action: 'replace_block',
-        targetBlockIds: [blockId]
-      },
       positionedCheckBlockIds: [blockId]
     }
   }
@@ -581,10 +355,6 @@ const buildSerialActionOps = async (input: {
           blockIds
         }
       ],
-      readbackTarget: {
-        action: 'replace_text',
-        targetBlockIds
-      },
       positionedCheckBlockIds: targetBlockIds
     }
   }
@@ -609,10 +379,6 @@ const buildSerialActionOps = async (input: {
           patch: action.patch
         }
       ],
-      readbackTarget: {
-        action: 'style',
-        targetBlockIds
-      },
       positionedCheckBlockIds: targetBlockIds
     }
   }
@@ -628,10 +394,6 @@ const buildSerialActionOps = async (input: {
           allowVisualLoss: action.allowVisualLoss
         }
       ],
-      readbackTarget: {
-        action: 'update_table_cell',
-        targetBlockIds: [cellBlockId]
-      },
       positionedCheckBlockIds: [cellBlockId]
     }
   }
@@ -651,10 +413,6 @@ const buildSerialActionOps = async (input: {
       blockId,
       allowVisualLoss: action.allowVisualLoss
     })),
-    readbackTarget: {
-      action: 'delete_block',
-      targetBlockIds: blockIds
-    },
     positionedCheckBlockIds: blockIds
   }
 }
@@ -760,7 +518,6 @@ const applySerialEdit = async (input: {
   let currentDocId = input.currentDocId
   const opRecords: SerialActionOpRecord[] = []
   const changedBlocks: DocxChangedBlock[] = []
-  const readbackTargets: BatchReadbackTarget[] = []
   let nextStats: DocxOpenStats | undefined
 
   for (const [actionIndex, action] of input.compiled.actions.entries()) {
@@ -845,7 +602,6 @@ const applySerialEdit = async (input: {
     }
 
     changedBlocks.push(...appliedPayload.changedBlocks)
-    readbackTargets.push(actionOps.readbackTarget)
     currentDocId = appliedPayload.newDocId
   }
 
@@ -923,35 +679,20 @@ const applySerialEdit = async (input: {
     changedBlocks,
     nextDocId: currentDocId,
     nextStats: nextStats!,
-    createdBlocks,
-    readbackTargets
+    createdBlocks
   }
 }
 
 const buildWriteToolResult = async (input: {
-  runtime: DocxToolRuntime
   sourcePath: string
-  previousRevisionRef: string
-  currentRevisionRef: string
-  nextDocId: string
-  summary: string
   changedBlocks: DocxChangedBlock[]
   createdBlocks: DocxCreatedBlock[]
-  readbackTargets: BatchReadbackTarget[]
-  previousDocId?: string
 }): Promise<WriteToolResult> => {
-  const postWriteReadback = await buildPostWriteReadback({
-    runtime: input.runtime,
-    currentDocId: input.nextDocId,
-    previousDocId: input.previousDocId,
-    targets: input.readbackTargets
-  })
-
   return {
     sourcePath: input.sourcePath,
     changedBlocks: input.changedBlocks,
     createdBlocks: input.createdBlocks,
-    postWriteReadback
+    createdBlockIds: input.createdBlocks.map((block) => block.blockId)
   }
 }
 
@@ -1198,15 +939,9 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
           })
 
           const result = await buildWriteToolResult({
-            runtime,
             sourcePath: registered.session.sourcePath,
-            previousRevisionRef: registered.previousRevisionRef,
-            currentRevisionRef: registered.currentRevisionRef,
-            nextDocId: workingDocId,
-            summary: buildCreateSummary(registered.session.sourcePath),
             changedBlocks: registered.changedBlocks || [],
-            createdBlocks: registered.createdBlocks || [],
-            readbackTargets: [{ action: 'insert_after', targetBlockIds: [] }]
+            createdBlocks: registered.createdBlocks || []
           })
 
           return finalizeDocxToolSuccess({
@@ -1280,20 +1015,9 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
       }
 
       const result = await buildWriteToolResult({
-        runtime,
         sourcePath: sessionResult.sourcePath,
-        previousRevisionRef: applied.previousRevisionRef,
-        currentRevisionRef: applied.currentRevisionRef,
-        nextDocId: applied.nextDocId,
-        summary: buildEditSummary({
-          toolName,
-          actionLabel: `串行编辑 ${String(args.actions.length)} 个 action`,
-          changedBlocks: applied.changedBlocks
-        }),
         changedBlocks: applied.changedBlocks,
-        createdBlocks: applied.createdBlocks,
-        readbackTargets: applied.readbackTargets,
-        previousDocId: sessionResult.docId
+        createdBlocks: applied.createdBlocks
       })
       return finalizeDocxToolSuccess({
         runtime,

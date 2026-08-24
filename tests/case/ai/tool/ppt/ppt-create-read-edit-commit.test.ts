@@ -199,8 +199,8 @@ describe('ai tool ppt backend', () => {
         runtime.assertThat(
           result.created.slideCount === 2 &&
             result.inserted.slideCount === 2 &&
-            Boolean((result.created.postWriteReadback as JsonObject)?.slides) &&
-            Boolean((result.inserted.postWriteReadback as JsonObject)?.slides) &&
+            Array.isArray(result.created.changedSlideIds) &&
+            Array.isArray(result.inserted.changedSlideIds) &&
             result.overview.slideCount === 2 &&
             Array.isArray(result.readSlides.slides) &&
             result.readSlides.slides.length === 1 &&

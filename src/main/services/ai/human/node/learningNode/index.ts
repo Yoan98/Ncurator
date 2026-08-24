@@ -36,7 +36,7 @@ const appendLearnToolMessage = async (input: {
     toolCallId: input.toolCallId,
     toolName: 'learn_skill',
     ok: true,
-    data: { message: input.content }
+    result: { message: input.content }
   })
 }
 

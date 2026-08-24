@@ -61,7 +61,6 @@ export const excelEditOutputSchema = z.object({
   sourcePath: z.string(),
   changed: z.boolean(),
   changes: z.array(excelChangeOutputSchema),
-  postWriteReadback: z.array(excelCellOutputSchema),
   diffPath: z.string().optional(),
   record: z
     .object({

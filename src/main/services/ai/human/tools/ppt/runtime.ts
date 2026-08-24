@@ -1317,7 +1317,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     try {
       const changedSlideIds: string[] = []
       const movedSlideIds = new Set<string>()
-      let outlineAnchorIndex: number | undefined
       for (const action of args.actions) {
         try {
           if (action.type === 'insert_slide') {
@@ -1338,14 +1337,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
               changedSlideIds.push(slideIdOf(slide))
             }
           } else if (action.type === 'delete_slides') {
-            const currentSlides = getSlides(document.presentation)
-            outlineAnchorIndex = Math.min(
-              ...action.slideIds.map((slideId) => {
-                const index = currentSlides.findIndex((slide) => slideIdOf(slide) === slideId)
-                if (index < 0) throw new Error(`找不到页面 slideId=${slideId}`)
-                return index
-              })
-            )
             for (const slideId of action.slideIds) {
               const slide = findSlide(document.presentation, slideId)
               changedSlideIds.push(slideId)
@@ -1355,10 +1346,9 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
             const slide = findSlide(document.presentation, action.slideId)
             if (action.location.slideId === action.slideId)
               throw new Error('move_slide 的 location.slideId 不能等于 slideId')
-            const targetIndex = placeSlide(document.presentation, slide, action.location)
+            placeSlide(document.presentation, slide, action.location)
             changedSlideIds.push(action.slideId)
             movedSlideIds.add(action.slideId)
-            outlineAnchorIndex = targetIndex
           } else if (action.type === 'duplicate_slide') {
             const source = findSlide(document.presentation, action.slideId)
             const duplicate = duplicateSlide(document.presentation, source)
@@ -1433,29 +1423,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       if (uniqueChanged.length > 0) document.dirty = true
       movedSlideIds.forEach((slideId) => document.movedSlideIds.add(slideId))
       const slides = getSlides(document.presentation)
-      const readbackSlides = uniqueChanged.flatMap((slideId) => {
-        const index = slides.findIndex((slide) => slideIdOf(slide) === slideId)
-        return index >= 0 ? [slideReadback(document.presentation, slides[index]!, index, true)] : []
-      })
-      const outlineWindow =
-        outlineAnchorIndex === undefined || slides.length === 0
-          ? []
-          : slides
-              .slice(
-                Math.max(0, outlineAnchorIndex - 1),
-                Math.min(slides.length, outlineAnchorIndex + 2)
-              )
-              .map((slide, offset) =>
-                outlineItem(
-                  document.presentation,
-                  slide,
-                  Math.max(0, outlineAnchorIndex - 1) + offset
-                )
-              )
-      const postWriteReadback = definedObject({
-        slides: readbackSlides.length > 0 ? readbackSlides : undefined,
-        outlineWindow: outlineWindow.length > 0 ? outlineWindow : undefined
-      })
       if (uniqueChanged.length > 0) {
         const issues = validatePresentation(document.presentation).filter(
           (issue) => issue.severity === 'error'
@@ -1472,8 +1439,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       return {
         sourcePath: args.sourcePath,
         slideCount: slides.length,
-        changedSlideIds: uniqueChanged,
-        postWriteReadback
+        changedSlideIds: uniqueChanged
       }
     } catch (error) {
       document.presentation = await loadPresentation(presentationSnapshot)

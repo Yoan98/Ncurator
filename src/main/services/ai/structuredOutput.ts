@@ -268,56 +268,13 @@ const extractContextAroundPosition = (raw: string, position: number, windowSize 
   return `${prefix}${raw.slice(from, to)}${suffix}`
 }
 
-// 字符级词法扫描：在 JSON 字符串内部查找紧邻 CJK 字符的裸 ASCII 双引号。
-// 这类引号通常是模型把中文引号写成了 ASCII `"` 且未转义，导致字符串提前闭合。
-// 在已确定错误位置的前提下，该检测针对"该模式"是确定性的。
-const findCjkAdjacentBareQuote = (raw: string, position: number): { index: number } | undefined => {
-  const start = Math.max(0, position - 200)
-  const end = Math.min(raw.length, position + 200)
-  let inString = false
-  let escaped = false
-  for (let index = start; index < end; index += 1) {
-    const char = raw[index]
-    if (escaped) {
-      escaped = false
-      continue
-    }
-    if (char === '\\') {
-      escaped = true
-      continue
-    }
-    if (char === '"') {
-      inString = !inString
-      continue
-    }
-    if (!inString) continue
-    const next = raw[index + 1]
-    if (next !== '"') continue
-    const isCjkBefore = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(char)
-    const isCjkAfter = next !== undefined && /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(raw[index + 2] || '')
-    if (isCjkBefore || isCjkAfter) {
-      return { index }
-    }
-  }
-  return undefined
-}
-
-// 生成增强后的 JSON 解析失败诊断：错误消息 + 出错位置上下文 + （如命中）CJK 裸引号提示。
+// 生成增强后的 JSON 解析失败诊断：错误消息 + 出错位置上下文。
 export const buildJsonErrorDiagnosis = (raw: string, errorMessage: string): string => {
   const position = extractJsonErrorPosition(errorMessage)
   if (position === undefined) return errorMessage
 
   const context = extractContextAroundPosition(raw, position)
-  const parts = [`${errorMessage}；出错位置附近：${context}`]
-  const cjkQuote = findCjkAdjacentBareQuote(raw, position)
-  if (cjkQuote) {
-    parts.push(
-      '检测到中文文本旁的 ASCII 双引号未转义（模型误用英文引号作中文引号），请改用中文引号「」或对引号做转义，确保字符串内容不会提前闭合。'
-    )
-  } else {
-    parts.push('请检查字符串内容是否包含未转义的特殊字符，并重新生成合法 JSON。')
-  }
-  return parts.join('；')
+  return `${errorMessage}；出错位置附近：${context}`
 }
 
 // LangChain 在解析模型 tool call 的 `arguments` 时只做一次 `JSON.parse`：
@@ -326,8 +283,7 @@ export const buildJsonErrorDiagnosis = (raw: string, errorMessage: string): stri
 // `are not valid JSON.` 以及 `Troubleshooting URL: https://docs.langchain.com/...`）。
 // 那段 `error` 对模型毫无价值，还会把文档链接泄漏进工具反馈，因此这里不读取它：
 // 只取 `invalidCall.args` 原始字符串，先用 jsonrepair 修复再解析；失败时由我们自己
-// 生成干净的错误信息（例如 `Bad escaped character in JSON at position 104`），
-// 并附带出错位置上下文与 CJK 引号诊断，供上层拼进反馈消息，避免任何 LangChain SDK 噪音进入模型上下文。
+// 生成干净的错误信息（附带出错位置上下文），避免任何 LangChain SDK 噪音进入模型上下文。
 export const tryRepairJsonObject = (raw: string | undefined): JsonRepairResult => {
   if (typeof raw !== 'string' || raw.trim().length === 0) {
     return { ok: false, error: 'arguments 为空，无法解析。' }

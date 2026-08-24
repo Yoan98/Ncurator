@@ -8,8 +8,6 @@ import type {
   DocxCreatedBlock,
   DocxDetailedBlock,
   DocxDiskFingerprint,
-  DocxPostWriteReadback,
-  DocxPostWriteReadbackRegion,
   DocxOpenMeta,
   DocxOpenStats,
   DocxOp,
@@ -36,7 +34,6 @@ import {
   createReplaySnapshot
 } from './review/replayTree'
 import { isLegacyDocPath, isReadableWordPath } from './legacyDocPolicy'
-import { projectDocxReadBlocks } from './publicReadTree'
 
 type FailedWorkerResponse = Extract<DocxWorkerResponse, { ok: false }>
 
@@ -213,13 +210,6 @@ export type DocxToolRuntime = {
     currentRevisionRef?: string
     previousRevisionRef?: string
   }) => DocxToolResourceContext
-  buildPostWriteReadback: (input: {
-    docId: string
-    regions: Array<{
-      fromBlockIndex: number
-      toBlockIndex: number
-    }>
-  }) => Promise<DocxPostWriteReadback>
   persistDocId: (input: {
     sourcePath: string
     docId: string
@@ -1760,44 +1750,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     effectKind: params.effectKind
   })
 
-  const buildPostWriteReadback = async (input: {
-    docId: string
-    regions: Array<{
-      fromBlockIndex: number
-      toBlockIndex: number
-    }>
-  }): Promise<DocxPostWriteReadback> => {
-    const readbackRegions: DocxPostWriteReadbackRegion[] = []
-    for (const region of input.regions) {
-      const response = await callWorker({
-        action: 'get_blocks_by_block_index_range',
-        payload: {
-          docId: input.docId,
-          fromBlockIndex: region.fromBlockIndex,
-          toBlockIndex: region.toBlockIndex
-        }
-      })
-      if (!response.ok) {
-        throw new Error(response.error)
-      }
-      if (response.payload.action !== 'get_blocks_by_block_index_range') {
-        throw new Error('worker protocol mismatch (get_blocks_by_block_index_range)')
-      }
-      const startBlockId = response.payload.blocks[0]?.blockId
-      const endBlockId = response.payload.blocks.at(-1)?.blockId
-      readbackRegions.push({
-        fromBlockId: startBlockId || '',
-        fromBlockIndex: region.fromBlockIndex,
-        toBlockId: endBlockId || '',
-        toBlockIndex: region.toBlockIndex,
-        blocks: projectDocxReadBlocks(response.payload.blocks)
-      })
-    }
-    return {
-      regions: readbackRegions
-    }
-  }
-
   const persistDocId = async (inputValue: {
     sourcePath: string
     docId: string
@@ -1897,7 +1849,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     buildReplaySnapshotForDoc,
     applyTempRevisionToReplaySession,
     buildResourceContext,
-    buildPostWriteReadback,
     persistDocId
   }
 }

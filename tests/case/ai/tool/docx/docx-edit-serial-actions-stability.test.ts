@@ -74,7 +74,7 @@ describe('ai tool docx backend', () => {
           JSON.stringify(bodyTexts) === JSON.stringify(['A', 'A1', 'B', 'C updated']) &&
             result.edited.changedBlocks.some((block) => block.action === 'insert_after') &&
             result.edited.changedBlocks.some((block) => block.action === 'replace_block') &&
-            Array.isArray(result.edited.postWriteReadback?.regions),
+            Array.isArray(result.edited.createdBlockIds),
           {
             name: 'serial-actions-resolve-original-target-after-insert-drift',
             message:
@@ -82,7 +82,7 @@ describe('ai tool docx backend', () => {
             data: {
               bodyTexts,
               changedBlocks: result.edited.changedBlocks,
-              postWriteReadback: result.edited.postWriteReadback
+              createdBlockIds: result.edited.createdBlockIds
             }
           }
         )

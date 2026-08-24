@@ -71,7 +71,7 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           JSON.stringify(bodyTexts) === JSON.stringify(['A', 'P1', 'P2', 'T1 | T2', 'P3', 'B']) &&
             (result.inserted.createdBlocks || []).length >= 4 &&
-            Array.isArray(result.inserted.postWriteReadback?.regions),
+            Array.isArray(result.inserted.createdBlockIds),
           {
             name: 'insert-blocks-preserves-input-order',
             message: '在 A 后插入 P1/P2/Table/P3 时，最终顺序必须稳定为 A/P1/P2/Table/P3/B。',

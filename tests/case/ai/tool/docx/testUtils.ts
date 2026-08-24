@@ -71,30 +71,14 @@ export type DocxCreateResult = {
   sourcePath: string
   changedBlocks: DocxChangedBlock[]
   createdBlocks: Array<{ blockId: string; type: 'paragraph' | 'table' | 'table_cell' }>
-  postWriteReadback: {
-    regions: Array<{
-      fromBlockId: string
-      fromBlockIndex: number
-      toBlockId: string
-      toBlockIndex: number
-      blocks: DocxReadResult['blocks']
-    }>
-  }
+  createdBlockIds: string[]
 }
 
 export type DocxMutationResult = {
   sourcePath: string
   changedBlocks: DocxChangedBlock[]
   createdBlocks?: Array<{ blockId: string; type: 'paragraph' | 'table' | 'table_cell' }>
-  postWriteReadback?: {
-    regions: Array<{
-      fromBlockId: string
-      fromBlockIndex: number
-      toBlockId: string
-      toBlockIndex: number
-      blocks: DocxReadResult['blocks']
-    }>
-  }
+  createdBlockIds?: string[]
 }
 
 export type DocxFailureResult = {

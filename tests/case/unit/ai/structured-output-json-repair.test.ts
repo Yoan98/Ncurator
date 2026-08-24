@@ -55,7 +55,7 @@ describe('ai unit structured output json repair', () => {
     expect(parsePromptJsonOutput(raw)).toEqual({ answer: 'say "hello"' })
   })
 
-  it('adds error position context and CJK bare-quote diagnosis for non-repairable CJK quote JSON', () => {
+  it('adds error position context for non-repairable JSON', () => {
     const raw =
       '{"actions":[{"type":"insert_blocks","blocks":[{"type":"paragraph","children":[{"type":"run","children":[{"type":"text","text":"对外口径禁用"风险已解除""全部完成"等绝对化表述"}]}]}]}]}'
     const diagnosis = buildJsonErrorDiagnosis(
@@ -64,15 +64,13 @@ describe('ai unit structured output json repair', () => {
     )
     expect(diagnosis).toMatch(/at position \d+/)
     expect(diagnosis).toMatch(/出错位置附近/)
-    expect(diagnosis).toMatch(/中文文本旁的 ASCII 双引号未转义/)
     expect(diagnosis).not.toContain('Troubleshooting URL')
   })
 
-  it('includes context around error position even without CJK quote pattern', () => {
+  it('includes context around error position', () => {
     const raw = '{"title": "abc", "list": [1, 2,, 3]}'
     const diagnosis = buildJsonErrorDiagnosis(raw, "Unexpected token ',' at position 26")
     expect(diagnosis).toMatch(/at position \d+/)
     expect(diagnosis).toMatch(/出错位置附近/)
-    expect(diagnosis).toMatch(/请检查字符串内容/)
   })
 })

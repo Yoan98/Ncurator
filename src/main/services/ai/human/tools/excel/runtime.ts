@@ -946,19 +946,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       forcedChanges
     )
     if (operationChanges.length === 0)
-      return toJsonObject({ sourcePath, changed: false, changes: [], postWriteReadback: [] })
-    const postWriteReadback = operationChanges.map((change) => {
-      const cell = afterWorkbook.getWorksheet(change.sheetName)?.getCell(change.address)
-      return cell
-        ? { sheetName: change.sheetName, ...getCellSnapshot(cell) }
-        : {
-            sheetName: change.sheetName,
-            address: change.address,
-            value: null,
-            displayValue: '',
-            type: 'blank'
-          }
-    })
+      return toJsonObject({ sourcePath, changed: false, changes: [] })
     if (!isPathInsideRoot(sourcePath, input.workspaceRootPath)) {
       await atomicReplace(sourcePath, afterBytes)
       state.currentBytesByPath.set(sourcePath, afterBytes)
@@ -966,8 +954,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       return toJsonObject({
         sourcePath,
         changed: true,
-        changes: operationChanges,
-        postWriteReadback
+        changes: operationChanges
       })
     }
     const baseline = state.baselineBytesByPath.get(sourcePath)
@@ -1047,7 +1034,6 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       sourcePath,
       changed: true,
       changes: operationChanges,
-      postWriteReadback,
       diffPath: previewPath,
       record
     })

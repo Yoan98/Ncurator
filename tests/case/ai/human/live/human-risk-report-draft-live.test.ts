@@ -161,17 +161,14 @@ describe('ai human live backend', () => {
         const writeResultEvents = filterAiRunEventsByType(events, 'tool_call_result').filter(
           (event) => event.toolName === 'docx_edit'
         )
-        const hasPostWriteReadback =
+        const hasCreatedBlockIds =
           writeResultEvents.length === 0 ||
           writeResultEvents.some((event) => {
             const data = event.result?.data
             return (
               data !== null &&
               typeof data === 'object' &&
-              Array.isArray(
-                (data as { postWriteReadback?: { regions?: Array<object> } }).postWriteReadback
-                  ?.regions
-              )
+              Array.isArray((data as { createdBlockIds?: unknown[] }).createdBlockIds)
             )
           })
         const docxFileArtifact = result.output?.artifacts?.find(
@@ -302,10 +299,10 @@ describe('ai human live backend', () => {
           }
         )
 
-        runtime.assertThat(hasPostWriteReadback, {
-          name: 'human-live-risk-report-write-results-include-post-write-readback',
+        runtime.assertThat(hasCreatedBlockIds, {
+          name: 'human-live-risk-report-write-results-include-created-block-ids',
           message:
-            '同文件 docx 写后，写工具结果应包含 postWriteReadback，用于 brain 判断写入效果。',
+            '同文件 docx 写后，写工具结果应包含 createdBlockIds，用于 brain 判断写入效果。',
           data: {
             writeResultEvents,
             createdRelativePaths,

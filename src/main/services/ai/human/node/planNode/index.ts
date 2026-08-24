@@ -65,7 +65,6 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           toolCallId: call.toolCallId,
           toolName: call.toolName,
           ok: false,
-          errorCode: 'invalid_plan',
           errorMessage: parsed.message
         })
         continue
@@ -91,7 +90,7 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         toolCallId: call.toolCallId,
         toolName: call.toolName,
         ok: true,
-        data: { message: '计划已更新', plan: parsed.plan }
+        result: { message: '计划已更新', plan: parsed.plan }
       })
     }
 

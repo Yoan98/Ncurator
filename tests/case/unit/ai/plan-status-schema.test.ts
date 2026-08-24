@@ -48,44 +48,41 @@ describe('ai unit plan status schema', () => {
 })
 
 describe('ai unit tool feedback envelope', () => {
-  it('builds a success envelope that spreads data after ok:true', () => {
+  it('builds a success envelope with nested result', () => {
     const feedback = buildToolFeedback({
       toolCallId: 'call-1',
       toolName: 'update_plan',
       ok: true,
-      data: { message: '计划已更新' }
+      result: { message: '计划已更新' }
     })
 
     expect(JSON.parse(String(feedback.message.content))).toEqual({
       ok: true,
-      message: '计划已更新'
+      result: { message: '计划已更新' }
     })
     expect(feedback.transcript).toEqual({
       kind: 'tool',
       toolCallId: 'call-1',
       toolName: 'update_plan',
       ok: true,
-      result: { ok: true, message: '计划已更新' }
+      result: { ok: true, result: { message: '计划已更新' } }
     })
   })
 
-  it('builds an error envelope with code and error', () => {
+  it('builds an error envelope with error message', () => {
     const feedback = buildToolFeedback({
       toolCallId: 'call-2',
       toolName: 'update_plan',
       ok: false,
-      errorCode: 'invalid_plan',
       errorMessage: 'status 仅允许 todo/in_progress/done'
     })
 
     expect(JSON.parse(String(feedback.message.content))).toEqual({
       ok: false,
-      code: 'invalid_plan',
       error: 'status 仅允许 todo/in_progress/done'
     })
     expect(feedback.transcript.result).toEqual({
       ok: false,
-      code: 'invalid_plan',
       error: 'status 仅允许 todo/in_progress/done'
     })
   })

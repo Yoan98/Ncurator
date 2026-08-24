@@ -1,16 +1,5 @@
 import { z } from 'zod/v4'
-import type {
-  DocxCreateBlockNode,
-  DocxCreateBreakNode,
-  DocxCreateHyperlinkNode,
-  DocxCreateParagraphNode,
-  DocxCreateRunNode,
-  DocxCreateTabNode,
-  DocxCreateTableCellNode,
-  DocxCreateTableNode,
-  DocxCreateTableRowNode,
-  DocxCreateTextNode
-} from './nodeTypes'
+import type { DocxCreateTableCellNode } from './nodeTypes'
 
 export const docxHexColorSchema = z
   .string()
@@ -147,59 +136,59 @@ export const docxTableCellStyleSchema = z
   .strict()
   .meta({ id: 'DocxTableCellStyle' })
 
-const docxCreateTextNodeSchema: z.ZodType<DocxCreateTextNode> = z
+const docxCreateTextNodeSchema = z
   .object({ type: z.literal('text'), text: z.string() })
   .strict()
   .meta({ id: 'DocxCreateText' })
-const docxCreateTabNodeSchema: z.ZodType<DocxCreateTabNode> = z
+const docxCreateTabNodeSchema = z
   .object({ type: z.literal('tab') })
   .strict()
   .meta({ id: 'DocxCreateTab' })
-const docxCreateBreakNodeSchema: z.ZodType<DocxCreateBreakNode> = z
+const docxCreateBreakNodeSchema = z
   .object({ type: z.literal('break'), kind: z.enum(['line', 'page', 'column']).optional() })
   .strict()
   .meta({ id: 'DocxCreateBreak' })
-const docxCreateRunNodeSchema: z.ZodType<DocxCreateRunNode> = z.lazy(() =>
-  z
-    .object({
-      type: z.literal('run'),
-      style: docxRunStyleSchema.optional(),
-      children: z
-        .array(
-          z.union([docxCreateTextNodeSchema, docxCreateTabNodeSchema, docxCreateBreakNodeSchema])
-        )
-        .min(1)
-    })
-    .strict()
-    .meta({ id: 'DocxCreateRun' })
-)
-const docxCreateHyperlinkNodeSchema: z.ZodType<DocxCreateHyperlinkNode> = z.lazy(() =>
-  z
-    .object({
-      type: z.literal('hyperlink'),
-      target: z.string().trim().min(1).optional(),
-      anchor: z.string().trim().min(1).optional(),
-      children: z.array(docxCreateRunNodeSchema).min(1)
-    })
-    .strict()
-    .refine((value) => Boolean(value.target || value.anchor), {
-      message: 'hyperlink requires target or anchor'
-    })
-    .meta({
-      id: 'DocxCreateHyperlink',
-      'x-constraint': 'hyperlink requires target or anchor'
-    })
-)
-const docxCreateParagraphNodeSchema: z.ZodType<DocxCreateParagraphNode> = z.lazy(() =>
-  z
-    .object({
-      type: z.literal('paragraph'),
-      style: docxParagraphStyleSchema.optional(),
-      children: z.array(z.union([docxCreateRunNodeSchema, docxCreateHyperlinkNodeSchema])).min(1)
-    })
-    .strict()
-    .meta({ id: 'DocxCreateParagraph' })
-)
+const docxCreateRunNodeSchema = z
+  .object({
+    type: z.literal('run'),
+    style: docxRunStyleSchema.optional(),
+    children: z
+      .array(
+        z.discriminatedUnion('type', [
+          docxCreateTextNodeSchema,
+          docxCreateTabNodeSchema,
+          docxCreateBreakNodeSchema
+        ])
+      )
+      .min(1)
+  })
+  .strict()
+  .meta({ id: 'DocxCreateRun' })
+const docxCreateHyperlinkNodeSchema = z
+  .object({
+    type: z.literal('hyperlink'),
+    target: z.string().trim().min(1).optional(),
+    anchor: z.string().trim().min(1).optional(),
+    children: z.array(docxCreateRunNodeSchema).min(1)
+  })
+  .strict()
+  .refine((value) => Boolean(value.target || value.anchor), {
+    message: 'hyperlink requires target or anchor'
+  })
+  .meta({
+    id: 'DocxCreateHyperlink',
+    'x-constraint': 'hyperlink requires target or anchor'
+  })
+const docxCreateParagraphNodeSchema = z
+  .object({
+    type: z.literal('paragraph'),
+    style: docxParagraphStyleSchema.optional(),
+    children: z
+      .array(z.discriminatedUnion('type', [docxCreateRunNodeSchema, docxCreateHyperlinkNodeSchema]))
+      .min(1)
+  })
+  .strict()
+  .meta({ id: 'DocxCreateParagraph' })
 const docxCreateTableCellNodeSchema: z.ZodType<DocxCreateTableCellNode> = z.lazy(() =>
   z
     .object({
@@ -210,29 +199,25 @@ const docxCreateTableCellNodeSchema: z.ZodType<DocxCreateTableCellNode> = z.lazy
     .strict()
     .meta({ id: 'DocxCreateTableCell' })
 )
-const docxCreateTableRowNodeSchema: z.ZodType<DocxCreateTableRowNode> = z.lazy(() =>
-  z
-    .object({
-      type: z.literal('table_row'),
-      style: docxTableRowStyleSchema.optional(),
-      children: z.array(docxCreateTableCellNodeSchema).min(1)
-    })
-    .strict()
-    .meta({ id: 'DocxCreateTableRow' })
-)
-const docxCreateTableNodeSchema: z.ZodType<DocxCreateTableNode> = z.lazy(() =>
-  z
-    .object({
-      type: z.literal('table'),
-      style: docxTableStyleSchema.optional(),
-      children: z.array(docxCreateTableRowNodeSchema).min(1)
-    })
-    .strict()
-    .meta({ id: 'DocxCreateTable' })
-)
+const docxCreateTableRowNodeSchema = z
+  .object({
+    type: z.literal('table_row'),
+    style: docxTableRowStyleSchema.optional(),
+    children: z.array(docxCreateTableCellNodeSchema).min(1)
+  })
+  .strict()
+  .meta({ id: 'DocxCreateTableRow' })
+const docxCreateTableNodeSchema = z
+  .object({
+    type: z.literal('table'),
+    style: docxTableStyleSchema.optional(),
+    children: z.array(docxCreateTableRowNodeSchema).min(1)
+  })
+  .strict()
+  .meta({ id: 'DocxCreateTable' })
 
-export const docxCreateBlockSchema: z.ZodType<DocxCreateBlockNode> = z
-  .lazy(() => z.union([docxCreateParagraphNodeSchema, docxCreateTableNodeSchema]))
+export const docxCreateBlockSchema = z
+  .discriminatedUnion('type', [docxCreateParagraphNodeSchema, docxCreateTableNodeSchema])
   .meta({ id: 'DocxCreateBlock' })
 
 const runStylePatchSchema = z

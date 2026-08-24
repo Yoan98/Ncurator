@@ -5,7 +5,7 @@ import type { JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { isContentSafetyError } from '../../../utils/runFailure'
 import { normalizeRoundThought } from '../../memory/thoughtMemory'
-import { deriveMessageLogMessages } from '../../memory/transcript'
+import { deriveMessageLogMessages, repairInterruptedToolCalls } from '../../memory/transcript'
 import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import type { HumanRuntimeCache, HumanState } from '../../types'
@@ -14,6 +14,7 @@ import { buildAvailableTools } from '../learningNode/skillLoader'
 import { createDeliveryGuidanceItem, mergeDeliveryGuidanceItems } from '../../shared/deliveryGuidance'
 import { buildDispatchQueue } from '../dispatch'
 import { appendToolFeedback } from '../../shared/toolFeedback'
+import { formatZodErrorForTool, type ZodIssueLike } from '../../shared/schemaError'
 import {
   emitThinkingCompleted,
   emitThinkingFailed,
@@ -33,8 +34,16 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
     if (!messages || messages.length === 0) {
       const injectPlan = state.memory.plan.length > 0
       const compactedHistoryText = state.memory.compactions.at(-1)?.summary
-      const prefix = [
+      const transcript = await input.ctx.loadMessageLog()
+      const historyMessages = repairInterruptedToolCalls(
+        deriveMessageLogMessages({
+          entries: transcript,
+          skipLastUserEntry: true
+        })
+      )
+      messages = [
         new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
+        ...historyMessages,
         new HumanMessage(
           buildBrainUserMessage({
             state,
@@ -43,15 +52,6 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
             compactedHistoryText
           })
         )
-      ]
-      input.cache.prefixMessages = prefix
-      const transcript = await input.ctx.loadMessageLog()
-      messages = [
-        ...prefix,
-        ...deriveMessageLogMessages({
-          entries: transcript,
-          skipUserContent: state.task.userInput
-        })
       ]
       input.cache.messages = messages
     }
@@ -63,6 +63,24 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       taskId: state.task.taskId,
       learnedSkillIds: state.skills.learnedSkillIds
     })
+
+    const schemaByToolName = new Map<
+      string,
+      { safeParse: (data: unknown) => { success: boolean; error?: { issues: ZodIssueLike[] } } }
+    >()
+    for (const tool of tools) {
+      const name = String(tool.name || '').trim()
+      if (!name) continue
+      const schema = tool.schema
+      if (!schema || typeof schema !== 'object') continue
+      const safeParse = (schema as { safeParse?: unknown }).safeParse
+      if (typeof safeParse !== 'function') continue
+      schemaByToolName.set(name, {
+        safeParse: safeParse as (
+          data: unknown
+        ) => { success: boolean; error?: { issues: ZodIssueLike[] } }
+      })
+    }
 
     let thinkingOpen = false
     const completeThinking = (): void => {
@@ -162,6 +180,34 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         }
       }
 
+      // 在进入 hand 节点前，用工具自身的 schema 自行校验参数，避免 LangChain 内部校验
+      // 抛出只有路径、没有字段与期望值的 terse 错误。learn_skill/update_plan/finish 由各自
+      // 节点负责校验，这里跳过。
+      const NODE_OWNED_TOOL_NAMES = new Set(['learn_skill', 'update_plan', 'finish'])
+      const schemaInvalidCalls: Array<{ id?: string; name: string; errorMessage: string }> = []
+      const executableCalls: Parameters<typeof buildDispatchQueue>[0] = []
+      for (const call of dispatchableCalls) {
+        if (NODE_OWNED_TOOL_NAMES.has(call.name)) {
+          executableCalls.push(call)
+          continue
+        }
+        const schema = schemaByToolName.get(call.name)
+        if (!schema) {
+          executableCalls.push(call)
+          continue
+        }
+        const parsed = schema.safeParse(call.args)
+        if (parsed.success) {
+          executableCalls.push(call)
+        } else {
+          schemaInvalidCalls.push({
+            id: call.id,
+            name: call.name,
+            errorMessage: formatZodErrorForTool(call.name, { issues: parsed.error?.issues ?? [] })
+          })
+        }
+      }
+
       messages.push(assistantMessage)
       input.cache.messages = messages
       await input.ctx.appendMessageLog([
@@ -169,13 +215,18 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
           kind: 'assistant',
           content: extractTextContent(assistantMessage.content),
           toolCalls: [
-            ...dispatchableCalls.map((call) => ({
+            ...executableCalls.map((call) => ({
               id: call.id,
               name: call.name,
               args: call.args as JsonObject
             })),
             ...unrecoverableCalls.map((call, index) => ({
-              id: call.id || `invalid-${input.cache.toolCallCount}-${index}`,
+              id: call.id || `invalid-${input.cache.toolCallCount}-0-${index}`,
+              name: call.name,
+              args: {} as JsonObject
+            })),
+            ...schemaInvalidCalls.map((call, index) => ({
+              id: call.id || `invalid-${input.cache.toolCallCount}-${unrecoverableCalls.length}-${index}`,
               name: call.name,
               args: {} as JsonObject
             }))
@@ -186,20 +237,27 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       const thoughtText = extractTextContent(assistantMessage.content)
       const thought = normalizeRoundThought(thoughtText)
 
-      if (unrecoverableCalls.length > 0) {
-        for (const [index, call] of unrecoverableCalls.entries()) {
+      const appendInvalidFeedback = async (
+        calls: Array<{ id?: string; name: string; errorMessage: string }>,
+        offset: number
+      ): Promise<void> => {
+        for (const [index, call] of calls.entries()) {
           await appendToolFeedback({
             cache: input.cache,
             ctx: input.ctx,
-            toolCallId: call.id || `invalid-${input.cache.toolCallCount}-${index}`,
+            toolCallId: call.id || `invalid-${input.cache.toolCallCount}-${offset}-${index}`,
             toolName: call.name || 'unknown',
             ok: false,
-            errorCode: 'invalid_json',
             errorMessage: call.errorMessage
           })
         }
+      }
 
-        if (dispatchableCalls.length === 0) {
+      if (unrecoverableCalls.length > 0 || schemaInvalidCalls.length > 0) {
+        await appendInvalidFeedback(unrecoverableCalls, 0)
+        await appendInvalidFeedback(schemaInvalidCalls, unrecoverableCalls.length)
+
+        if (executableCalls.length === 0) {
           completeThinking()
           await input.ctx.appendMessageLog([
             { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
@@ -208,7 +266,7 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         }
       }
 
-      const dispatchQueue = buildDispatchQueue(dispatchableCalls)
+      const dispatchQueue = buildDispatchQueue(executableCalls)
 
       completeThinking()
       await input.ctx.appendMessageLog([

@@ -43,7 +43,7 @@ describe('ai tool ppt professional editing', () => {
           initialElements.find((element) => element.type === 'shape')?.elementId
         )
 
-        const inserted = await harness.invoke<JsonObject>('ppt_edit', {
+        await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
           actions: [
             {
@@ -95,8 +95,12 @@ describe('ai tool ppt professional editing', () => {
             }
           ]
         })
-        const insertedSlides = (inserted.postWriteReadback as { slides: Array<JsonObject> }).slides
-        const elements = insertedSlides[0]!.elements as Array<JsonObject>
+        const insertedReadback = await harness.invoke<JsonObject>('ppt_read_slides', {
+          sourcePath,
+          ranges: [{ type: 'slide_ids', slideIds: [slideId] }]
+        })
+        const elements = (insertedReadback.slides as Array<{ elements: Array<JsonObject> }>)[0]!
+          .elements
         const tableId = String(elements.find((element) => element.type === 'table')?.elementId)
         const chartId = String(elements.find((element) => element.type === 'chart')?.elementId)
         const formulaId = String(elements.find((element) => element.type === 'formula')?.elementId)
@@ -104,7 +108,7 @@ describe('ai tool ppt professional editing', () => {
           elements.filter((element) => element.text === '专业编辑验证').at(-1)?.elementId
         )
 
-        const updated = await harness.invoke<JsonObject>('ppt_edit', {
+        await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath,
           actions: [
             {
@@ -146,22 +150,24 @@ describe('ai tool ppt professional editing', () => {
             }
           ]
         })
+        const updatedReadback = await harness.invoke<JsonObject>('ppt_read_slides', {
+          sourcePath,
+          ranges: [{ type: 'slide_ids', slideIds: [slideId] }]
+        })
         const records = await harness.runtime.commitAll()
         const presentation = await loadPresentation(
           new Uint8Array(await fs.readFile(sourcePath))
         )
         return {
-          inserted,
-          updated,
+          updatedSlides: updatedReadback.slides,
           duplicated,
           records,
           slideCount: getSlides(presentation).length
         }
       },
       assert: async (result, runtime) => {
-        const updatedSlides = (result.updated.postWriteReadback as { slides: Array<JsonObject> })
-          .slides
-        const elements = updatedSlides[0]!.elements as Array<JsonObject>
+        const updatedSlides = result.updatedSlides as Array<{ elements: Array<JsonObject> }>
+        const elements = updatedSlides[0]!.elements
         const table = elements.find((element) => element.type === 'table')
         const chart = elements.find((element) => element.type === 'chart')
         const formula = elements.find((element) => element.type === 'formula')
@@ -171,14 +177,11 @@ describe('ai tool ppt professional editing', () => {
             (chart?.details as { chartType?: string })?.chartType === 'line' &&
             formula?.latex === 'a^2+b^2=c^2' &&
             result.duplicated.slideCount === 2 &&
-            Boolean(
-              (result.duplicated.postWriteReadback as { slides?: unknown[] }).slides?.length
-            ) &&
             result.records.length === 1 &&
             result.slideCount === 2,
           {
             name: 'ppt-professional-operations-round-trip',
-            message: 'PPT 专业元素操作和页面复制应写入成功，并通过 postWriteReadback 回读。',
+            message: 'PPT 专业元素操作和页面复制应写入成功，并能通过 read_slides 回读。',
             data: result
           }
         )

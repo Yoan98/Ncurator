@@ -95,7 +95,6 @@ export type HumanRuntimeCache = {
   approvedBrowserUseTaskIds?: Set<string>
   toolCallCount: number
   messages?: BaseMessage[]
-  prefixMessages?: BaseMessage[]
   compactSummaryText?: string
   currentState?: HumanState
   lastBrainInputTokens?: number

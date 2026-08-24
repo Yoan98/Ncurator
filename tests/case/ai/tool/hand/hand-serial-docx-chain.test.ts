@@ -115,16 +115,13 @@ describe('ai tool hand backend', () => {
             typeof result.state.execution.lastToolResults?.[0]?.data === 'object' &&
             result.state.execution.lastToolResults?.[0]?.data !== null &&
             Array.isArray(
-              (
-                result.state.execution.lastToolResults?.[0]?.data as {
-                  postWriteReadback?: { regions?: unknown[] }
-                }
-              ).postWriteReadback?.regions
+              (result.state.execution.lastToolResults?.[0]?.data as { createdBlockIds?: unknown[] })
+                .createdBlockIds
             ),
           {
             name: 'serial-docx-chain-executes-in-order',
             message:
-              'hand 应按顺序执行 docx_edit、docx_read_blocks，且写工具返回 postWriteReadback。',
+              'hand 应按顺序执行 docx_edit、docx_read_blocks，且写工具返回 createdBlockIds。',
             data: {
               toolNames,
               lastToolUseResults: result.state.execution.lastToolResults

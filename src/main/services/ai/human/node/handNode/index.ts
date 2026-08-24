@@ -279,7 +279,6 @@ const appendBlockedApprovalToolMessages = (input: {
       toolCallId: call.toolCallId,
       toolName: call.toolName,
       ok: false,
-      errorCode: 'approval_blocked',
       errorMessage: message
     })
     messages.push(feedback.message)

@@ -89,7 +89,7 @@ describe('ai tool docx backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.created.createdBlocks.length >= 2 &&
-            Array.isArray(result.created.postWriteReadback.regions) &&
+            Array.isArray(result.created.createdBlockIds) &&
             result.outline.blocks.some(
               (block) => block.type === 'paragraph' && block.text.includes('过拟合：待补充')
             ) &&

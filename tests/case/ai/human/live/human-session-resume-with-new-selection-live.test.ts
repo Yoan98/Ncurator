@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import type { BaseMessage } from '@langchain/core/messages'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
 import type { AiRunDeps } from '../../../../../src/main/services/ai/types'
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
@@ -14,14 +15,16 @@ import {
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
 const SESSION_ID = 'live-session-resume-with-new-selection'
+const MIN_BRAIN_ROUNDS_BEFORE_FAULT = 5
 const INTERRUPTED_RUN_INPUT =
-  '我想做一个复习对比小结。请先只看我刚选的深度学习课件，整理“过拟合/过度拟合”的概念定义、出现原因、处理方式；如果资料没写某一项就标成未写。为了节省时间，请先用 docx_search 搜索“过拟合/过度拟合”来定位，再只读取命中位置附近内容，不要先做全文 outline。后面我会再选另一份课件补第二个概念。'
+  '我想做一个复习对比小结。请先只看深度学习课件，整理“过拟合/过度拟合”的概念定义、出现原因、处理方式；整理时先在资料里定位相关段落并读取原文，再交叉核对“训练时间”和“测试集”这两个相关知识点是否也提到了过拟合的原因和处理方法；整理完更新你的执行计划，并把结果写入工作区草稿文件 复习草稿.md。资料没写某一项就标成未写。后面我会再选另一份课件补第二个概念。'
 const RESUMED_RUN_INPUT =
   '这次我新选了图形学课件。请保留刚才已经整理到的过拟合信息，再补充这份资料里的反走样信息，最后输出一个对比小结。资料没写的地方要直接说明未写。'
 
 type LiveFaultInjectionState = {
   shouldFailNextBrain: boolean
   injected: boolean
+  brainRoundCount: number
 }
 
 const buildWorkspace = (runtime: BackendTestRuntime) => ({
@@ -68,6 +71,10 @@ const createFaultAfterOverfittingWrapper = (input: {
   runtime: BackendTestRuntime
   state: LiveFaultInjectionState
 }): NonNullable<AiRunDeps['chatToolsWrapper']> => (realChatTools) => async (request) => {
+  if (request.caller === 'human.brain') {
+    input.state.brainRoundCount += 1
+  }
+
   if (request.caller === 'human.brain' && input.state.shouldFailNextBrain) {
     input.state.shouldFailNextBrain = false
     input.state.injected = true
@@ -79,6 +86,7 @@ const createFaultAfterOverfittingWrapper = (input: {
   if (
     request.caller === 'human.brain' &&
     !input.state.injected &&
+    input.state.brainRoundCount >= MIN_BRAIN_ROUNDS_BEFORE_FAULT &&
     hasOverfittingEvidence(input.runtime.eventCollector.snapshot())
   ) {
     input.state.shouldFailNextBrain = true
@@ -154,6 +162,7 @@ describe('ai human live backend', () => {
               run2UsedFileB: false,
               run2BrainPrompt: '',
               run2Delivery: '',
+              run2LastMessageIsUser: false,
               fileAName: '',
               fileBName: ''
             }
@@ -168,7 +177,8 @@ describe('ai human live backend', () => {
           ])
           const faultState: LiveFaultInjectionState = {
             shouldFailNextBrain: false,
-            injected: false
+            injected: false,
+            brainRoundCount: 0
           }
 
           await runtime.seedLlmConfig(liveConfig)
@@ -203,6 +213,15 @@ describe('ai human live backend', () => {
           )
           const snapshotAfterNetwork = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
 
+          let run2BrainMessages: BaseMessage[] | null = null
+          const captureRun2Wrapper: NonNullable<AiRunDeps['chatToolsWrapper']> = (
+            realChatTools
+          ) => async (request) => {
+            if (request.caller === 'human.brain' && !run2BrainMessages) {
+              run2BrainMessages = [...request.messages]
+            }
+            return await realChatTools(request)
+          }
           const resumedResult = await AiRunService.getInstance().run(
             {
               runId: `${runtime.runId}-run-2-resume`,
@@ -215,7 +234,7 @@ describe('ai human live backend', () => {
               },
               workspace: buildWorkspace(runtime)
             },
-            await buildAiRunDeps({ runtime })
+            await buildAiRunDeps({ runtime, chatToolsWrapper: captureRun2Wrapper })
           )
           const snapshotAfterResume = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
           const run2Events = runtime.eventCollector.snapshot()
@@ -225,6 +244,13 @@ describe('ai human live backend', () => {
             .filter((record) => record.runId === run2Id && record.caller === 'human.brain')
             .map((record) => record.user)
             .join('\n')
+          const run2LastMessage = run2BrainMessages
+            ? run2BrainMessages[run2BrainMessages.length - 1]
+            : null
+          const run2LastMessageIsUser =
+            run2LastMessage?.getType() === 'human' &&
+            typeof run2LastMessage.content === 'string' &&
+            run2LastMessage.content.includes('<task_goal>')
 
           return {
             configurationMissing: false,
@@ -236,6 +262,7 @@ describe('ai human live backend', () => {
             overfittingEvidenceBeforeFailure,
             run2UsedFileB: runUsedSelectedFile(run2Events, run2Id, fileBReferences[0]?.name || ''),
             run2BrainPrompt,
+            run2LastMessageIsUser,
             fileAName: fileAReferences[0]?.name || '',
             fileBName: fileBReferences[0]?.name || ''
           }
@@ -265,17 +292,19 @@ describe('ai human live backend', () => {
               result.run2BrainPrompt.includes('<current_state>') &&
               mentionsOverfittingTopic(result.run2BrainPrompt) &&
               /(训练时间过久|记住过多训练数据|不太具有展望性)/.test(result.run2BrainPrompt) &&
-              mentionsAntiAliasingTopic(result.run2BrainPrompt),
+              mentionsAntiAliasingTopic(result.run2BrainPrompt) &&
+              result.run2LastMessageIsUser,
             {
               name: 'human-live-session-resume-keeps-interrupted-context-and-uses-new-selection',
               message:
-                'live 恢复 run 应在第一诉求已读到过拟合事实后保存快照，并在同 session 新诉求中通过消息转录恢复旧过拟合上下文、使用本轮新选图形学课件的反走样事实完成对比小结。',
+                'live 恢复 run 应在第一诉求已读到过拟合事实后保存快照，并在同 session 新诉求中通过消息转录恢复旧过拟合上下文、使用本轮新选图形学课件的反走样事实完成对比小结；run-2 消息数组末尾应为 buildBrainUserMessage 的 user 消息。',
               data: {
                 fileAName: result.fileAName,
                 fileBName: result.fileBName,
                 interruptedResult: result.interruptedResult,
                 snapshotAfterNetwork: result.snapshotAfterNetwork,
-                run2BrainPrompt: result.run2BrainPrompt
+                run2BrainPrompt: result.run2BrainPrompt,
+                run2LastMessageIsUser: result.run2LastMessageIsUser
               }
             }
           )

@@ -369,8 +369,7 @@ export const pptSearchOutputSchema = z.object({
 export const pptEditOutputSchema = z.object({
   sourcePath: z.string(),
   slideCount: z.number().int().min(1),
-  changedSlideIds: z.array(z.string()),
-  postWriteReadback: z.custom<JsonObject>()
+  changedSlideIds: z.array(z.string())
 })
 
 export type PptOutlineInput = z.infer<typeof pptOutlineSchema>

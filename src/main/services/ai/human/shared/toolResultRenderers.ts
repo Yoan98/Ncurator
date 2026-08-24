@@ -338,30 +338,11 @@ const renderWebSearchResult = (obj: JsonObject): string =>
 const renderDocxCreateResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([['sourcePath', readStringField(obj, 'sourcePath')]]),
-    'postWriteReadback:',
-    renderDocxPostWriteReadback(obj.postWriteReadback)
+    'createdBlockIds:',
+    renderGenericArray(Array.isArray(obj.createdBlockIds) ? obj.createdBlockIds : [])
   ]
     .filter(Boolean)
     .join('\n')
-
-const renderDocxPostWriteReadback = (value: JsonValue | undefined): string => {
-  if (!isJsonObject(value) || !Array.isArray(value.regions) || value.regions.length === 0) {
-    return 'none'
-  }
-
-  return value.regions
-    .map((region, index) => {
-      if (!isJsonObject(region)) return renderGenericArrayItem(region, index)
-      const header = `region ${index + 1}：${renderKeyValuePairs([
-        ['fromBlockId', readStringField(region, 'fromBlockId')],
-        ['fromBlockIndex', readNumberTextField(region, 'fromBlockIndex')],
-        ['toBlockId', readStringField(region, 'toBlockId')],
-        ['toBlockIndex', readNumberTextField(region, 'toBlockIndex')]
-      ])}`
-      return `${header}\nblocks:\n${renderDocxBlocks(region.blocks)}`
-    })
-    .join('\n')
-}
 
 export const renderToolResourceContextText = (
   resourceContext: ToolResourceContext | undefined

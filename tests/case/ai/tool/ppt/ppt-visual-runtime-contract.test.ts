@@ -50,15 +50,14 @@ describe('ai tool ppt visual backend', () => {
             }
           ]
         })
-        const createdSlides = (created.postWriteReadback as { slides?: Array<{ slideId: string }> })
-          .slides!
+        const createdSlides = created.changedSlideIds as string[]
         const inserted = await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath: path.join(runtime.workspaceRoot, 'visual-runtime.pptx'),
           actions: [
             {
               type: 'insert_slide',
 
-              location: { slideId: createdSlides[0]!.slideId, position: 'before' },
+              location: { slideId: createdSlides[0]!, position: 'before' },
               html: `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
                 <div data-ppt-element="shape" id="second-band" style="position:absolute;left:120px;top:120px;width:1680px;height:180px;background:#17324D"></div>
                 <h2 data-ppt-element="text" id="second-title" style="position:absolute;left:160px;top:155px;width:1400px;height:100px;color:#FFFFFF;font-size:72px">第二页可以在独立调用中追加</h2>
@@ -66,17 +65,15 @@ describe('ai tool ppt visual backend', () => {
             }
           ]
         })
-        const insertedSlideId = (
-          inserted.postWriteReadback as { slides?: Array<{ slideId: string }> }
-        ).slides![0]!.slideId
+        const insertedSlideId = (inserted.changedSlideIds as string[])[0]
         const moved = await harness.invoke<JsonObject>('ppt_edit', {
           sourcePath: path.join(runtime.workspaceRoot, 'visual-runtime.pptx'),
           actions: [
             {
               type: 'move_slide',
-              slideId: createdSlides[1]!.slideId,
+              slideId: createdSlides[1]!,
 
-              location: { slideId: createdSlides[0]!.slideId, position: 'before' }
+              location: { slideId: createdSlides[0]!, position: 'before' }
             }
           ]
         })
@@ -85,9 +82,9 @@ describe('ai tool ppt visual backend', () => {
           actions: [
             {
               type: 'duplicate_slide',
-              slideId: createdSlides[0]!.slideId,
+              slideId: createdSlides[0]!,
 
-              location: { slideId: createdSlides[0]!.slideId, position: 'after' }
+              location: { slideId: createdSlides[0]!, position: 'after' }
             }
           ]
         })
@@ -114,7 +111,11 @@ describe('ai tool ppt visual backend', () => {
             }
           ]
         })
-        const slides = (created.postWriteReadback as { slides?: unknown[] } | undefined)?.slides as
+        const createdRead = await harness.invoke<JsonObject>('ppt_read_slides', {
+          sourcePath: path.join(runtime.workspaceRoot, 'visual-runtime.pptx'),
+          ranges: [{ type: 'slide_ids', slideIds: createdSlides }]
+        })
+        const slides = createdRead.slides as
           | Array<{
               elements: Array<{
                 text?: string

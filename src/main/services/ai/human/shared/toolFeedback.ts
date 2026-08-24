@@ -3,34 +3,21 @@ import type { ChatMessageLogEntry, JsonObject } from '../../../../../shared/type
 import type { AiRunContext } from '../../types'
 import type { HumanRuntimeCache } from '../types'
 
-export const TOOL_FEEDBACK_ERROR_CODES = [
-  'invalid_json',
-  'invalid_plan',
-  'approval_blocked',
-  'pending_items'
-] as const
-
-export type ToolFeedbackErrorCode = (typeof TOOL_FEEDBACK_ERROR_CODES)[number]
-
 type ToolFeedbackEnvelope = JsonObject
 
 export type ToolFeedbackInput = {
   toolCallId: string
   toolName: string
   ok: boolean
-  data?: JsonObject
-  errorCode?: ToolFeedbackErrorCode
+  result?: JsonObject
   errorMessage?: string
 }
 
 const buildEnvelope = (input: ToolFeedbackInput): ToolFeedbackEnvelope => {
   if (input.ok) {
-    return { ok: true, ...(input.data || {}) }
+    return { ok: true, result: input.result ?? {} }
   }
-  const envelope: JsonObject = { ok: false }
-  if (input.errorCode) envelope.code = input.errorCode
-  if (input.errorMessage) envelope.error = input.errorMessage
-  return envelope
+  return { ok: false, error: input.errorMessage ?? 'tool call failed' }
 }
 
 export const buildToolFeedback = (input: ToolFeedbackInput): {
@@ -59,8 +46,7 @@ export const appendToolFeedback = async (input: {
   toolCallId: string
   toolName: string
   ok: boolean
-  data?: JsonObject
-  errorCode?: ToolFeedbackErrorCode
+  result?: JsonObject
   errorMessage?: string
 }): Promise<void> => {
   const feedback = buildToolFeedback(input)

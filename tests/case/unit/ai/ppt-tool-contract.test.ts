@@ -180,7 +180,6 @@ describe('ai unit ppt tool contract', () => {
       'replay',
       'checksum',
       'UUID',
-      'postWriteReadback',
       '原子',
       'runtime/assets',
       'action type=',

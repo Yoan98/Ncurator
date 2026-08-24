@@ -146,7 +146,7 @@ describe('ai unit human tool result renderers', () => {
     expect(rendered).toContain('col=2')
   })
 
-  it('renders docx_edit post-write readback instead of internal revision fields', () => {
+  it('renders docx_edit created block ids instead of internal revision fields', () => {
     const rendered = renderToolResultDataText({
       toolName: 'docx_edit',
       data: {
@@ -154,34 +154,12 @@ describe('ai unit human tool result renderers', () => {
         previousRevisionRef: 'v1',
         currentRevisionRef: 'v2',
         createdBlocks: [{ blockId: 'b:2', type: 'paragraph' }],
-        postWriteReadback: {
-          regions: [
-            {
-              fromBlockIndex: 1,
-              toBlockIndex: 2,
-              blocks: [
-                {
-                  blockId: 'b:2',
-                  type: 'paragraph',
-                  blockIndex: 2,
-                  children: [
-                    {
-                      type: 'run',
-                      nodeId: 'n:readback',
-                      children: [{ type: 'text', text: '补充说明' }]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
+        createdBlockIds: ['b:2']
       }
     })
 
-    expect(rendered).toContain('postWriteReadback:')
+    expect(rendered).toContain('createdBlockIds:')
     expect(rendered).toContain('b:2')
-    expect(rendered).toContain('补充说明')
     expect(rendered).not.toContain('previousRevisionRef')
     expect(rendered).not.toContain('currentRevisionRef')
     expect(rendered).not.toContain('createdBlocks')

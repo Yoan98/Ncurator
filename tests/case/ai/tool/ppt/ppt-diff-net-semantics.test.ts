@@ -125,8 +125,7 @@ describe('ai tool ppt net diff backend', () => {
             }
           ]
         })
-        const insertedId = (inserted.postWriteReadback as { slides: Array<{ slideId: string }> })
-          .slides[0]!.slideId
+        const insertedId = (inserted.changedSlideIds as string[])[0]!
         await harness.invoke('ppt_edit', {
           sourcePath: path.join(runtime.workspaceRoot, 'slide-net.pptx'),
           actions: [
@@ -149,8 +148,7 @@ describe('ai tool ppt net diff backend', () => {
             }
           ]
         })
-        const temporaryId = (temporary.postWriteReadback as { slides: Array<{ slideId: string }> })
-          .slides[0]!.slideId
+        const temporaryId = (temporary.changedSlideIds as string[])[0]!
         await harness.invoke('ppt_edit', {
           sourcePath: path.join(runtime.workspaceRoot, 'slide-net.pptx'),
           actions: [
@@ -319,9 +317,7 @@ describe('ai tool ppt net diff backend', () => {
             }
           ]
         })
-        const zeroTemporaryId = (
-          zeroTemporary.postWriteReadback as { slides: Array<{ slideId: string }> }
-        ).slides[0]!.slideId
+        const zeroTemporaryId = (zeroTemporary.changedSlideIds as string[])[0]!
         await harness.invoke('ppt_edit', {
           sourcePath: path.join(runtime.workspaceRoot, 'zero-net.pptx'),
           actions: [{ type: 'delete_slides', slideIds: [zeroTemporaryId] }]

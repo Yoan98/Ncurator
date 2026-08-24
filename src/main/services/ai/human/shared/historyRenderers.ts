@@ -35,15 +35,7 @@ const DOCX_BLOCK_WHITELIST = DOCX_NODE_WHITELIST
 
 const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
   sourcePath: true,
-  postWriteReadback: {
-    regions: {
-      fromBlockId: true,
-      fromBlockIndex: true,
-      toBlockId: true,
-      toBlockIndex: true,
-      blocks: DOCX_BLOCK_WHITELIST
-    }
-  }
+  createdBlockIds: true
 }
 
 const PPT_SLIDE_WHITELIST: NestedWhitelistConfig = {
@@ -84,10 +76,6 @@ const PPT_RESULT_WHITELIST: NestedWhitelistConfig = {
     mimeType: true,
     width: true,
     height: true
-  },
-  postWriteReadback: {
-    slides: PPT_SLIDE_WHITELIST,
-    outlineWindow: PPT_SLIDE_WHITELIST
   },
   truncated: true,
   error: true
@@ -162,7 +150,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       address: true,
       kind: true
     },
-    postWriteReadback: EXCEL_CELL_WHITELIST,
     diffPath: true,
     record: {
       id: true,
@@ -382,9 +369,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   }
 }
 
-const toJsonValue = (value: JsonValue | undefined): JsonValue =>
-  value === undefined ? null : value
-
 const filterValueByWhitelist = (
   value: JsonValue | undefined,
   whitelist: NestedWhitelistConfig
@@ -416,18 +400,19 @@ const filterValueByWhitelist = (
   return reduced
 }
 
-export const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): JsonValue => {
-  if (!isJsonObject(result.data)) {
-    return result.data === undefined ? null : result.data
+export const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): JsonObject => {
+  if (result.ok) {
+    const config = TOOL_HISTORY_WHITELIST_BY_NAME[result.toolName] || FALLBACK_TOOL_HISTORY_WHITELIST
+    const filteredValue = filterValueByWhitelist(result.data, config)
+    const filtered = isJsonObject(filteredValue) ? filteredValue : {}
+    return { ok: true, result: filtered }
   }
 
-  const config = TOOL_HISTORY_WHITELIST_BY_NAME[result.toolName] || FALLBACK_TOOL_HISTORY_WHITELIST
-  const filteredValue = filterValueByWhitelist(result.data, config)
-  const filtered = isJsonObject(filteredValue) ? filteredValue : {}
-  if (typeof result.data.error === 'string' && result.data.error.trim()) {
-    filtered.error = result.data.error
-  }
-  return toJsonValue(filtered)
+  const error =
+    isJsonObject(result.data) && typeof result.data.error === 'string' && result.data.error.trim()
+      ? result.data.error.trim()
+      : 'tool call failed'
+  return { ok: false, error }
 }
 
 export const buildToolResultMessageContent = (result: HumanHistoryToolResult): string =>

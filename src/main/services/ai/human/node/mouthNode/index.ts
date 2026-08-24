@@ -61,7 +61,6 @@ export const createMouthNode = (input: {
           toolCallId: finishToolCallId,
           toolName: 'finish',
           ok: false,
-          errorCode: 'pending_items',
           errorMessage: result
         })
       }
@@ -114,7 +113,8 @@ export const createMouthNode = (input: {
       ctx: input.ctx
     })
     await input.ctx.appendMessageLog([
-      { kind: 'annotation', eventType: 'finalizing_started', payload: {} }
+      { kind: 'annotation', eventType: 'finalizing_started', payload: {} },
+      { kind: 'user', content: deliveryMessage }
     ])
     if (input.emitAnswerEvents) {
       emitFinalizingStarted({

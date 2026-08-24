@@ -142,6 +142,12 @@ brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMess
 
 **模型上下文唯一真相源是会话级 append-only 的会话消息记录（`chat_session_message_log` 表）**：每条是 `user` / `assistant`（含真实 `tool_calls`）/ `tool`（含结果）/ `annotation`（思考/学习/压缩/收尾等过程标记）。模型上下文从会话消息记录投影（`deriveMessageLogMessages`），中断恢复与跨 run 上下文都从记录重建后补一条 user 消息继续；UI 过程展示与模型记忆不再维护 `rounds`/`conversation`/`ai_run_event` 副本。压缩只作用于「投影出的消息」（早段 → `<compacted_history>` + `<current_state>`，尾段保留），记录本身 append-only 不动。
 
+**消息数组构建顺序（每次 run 首次 brain 重建时）**：`system` → 会话消息记录投影出的历史消息 → 尾部追加一条由 `buildBrainUserMessage` 构建的 user 消息（承载 `<task_goal>`、`<current_state>` 等当前任务上下文）。当前 run 的用户原文通过按位置跳过最后一条 `user` 条目避免重复出现（`skipLastUserEntry`），首条消息时历史为空，该 user 消息就是数组里唯一一条 user 消息。这条尾部 user 消息保留了 `<task_goal>` 结构，使 `system + 历史` 前缀在跨轮与跨 run 之间保持结构稳定，利于 KV 前缀缓存复用。
+
+**悬空 tool_calls 修复**：若历史末条 `assistant` 声明了 `tool_calls` 但记录里没有对应 `tool` 结果（中断发生在 brain 落库后、工具执行前），重建投影时由 `repairInterruptedToolCalls` 在该轮缺失的 `tool_call_id` 位置补一条 `{ ok: false, code: 'interrupted', error: '运行意外中断，该工具调用未执行。' }` 的 `ToolMessage`，再接尾部 user 消息，保证每个 `tool_call_id` 有且仅有一条结果、且接口不因悬空调用报错。
+
+**mouth 交付指令也是 user 消息**：mouth 生成最终答复前追加的「现在面向用户交付结果…」交付指令同样作为 `user` 条目写入会话消息记录，使记录忠实捕获完整消息流（含交付指令与最终答复），跨轮 rebuild 时不丢任何一条。
+
 **会话消息记录是「数据唯一、其他投影」的唯一真相源**：一次会话下的所有 run 的消息都写进同一张表（每条带 `run_id` 标识归属 run）。运行中的实时过程（思考、学习、工具调用、压缩、收尾）由节点即时写入 annotation 条目；UI 的「AI 消息 → 工具调用/技能学习 → 一步步展开」过程展示由渲染层从记录按 `seq` 投影重建（`projectProcessGroups`），不再依赖独立的 `ai_run_event` 过程事件副本。live 运行中的 `running → completed` 中间态与 `answer_token` 流式输出仍走瞬时广播，不落库；重开/恢复时从记录投影出 completed 态的完整过程。工具调用与失败不再通过独立的 decision hint 机制回传，而是统一作为该工具的 `ToolMessage` 结果（成功/失败/被拦都保证每个 `tool_call_id` 有且仅有一条结果）返回给模型。控制/反馈类工具结果统一由 `toolFeedback` 工厂生成，envelope 为成功 `{ ok: true, ...data }`、失败 `{ ok: false, code, error }`，`code` 取 `invalid_json` / `invalid_plan` / `approval_blocked` / `pending_items`；`ToolMessage` 的 `content` 与转录 `result` 始终是同一对象，保证恢复重放与 live 一致。`tool_call_id` 在领域类型中建模为必填（LLM 每个 tool call 必带 id），仅在模型响应异常缺 id 时由 brain 边界就地生成局部 id 回喂，不向领域类型传播可选。
 
 ### Skill 与 Tool
@@ -170,6 +176,8 @@ LLM 调用失败严格分两层处理：
 ### 会话连续性
 
 跨轮上下文由会话级 append-only 会话消息记录（`chat_session_message_log`）唯一承载，不再维护 conversation summary / `rounds` / `conversation` 副本。每次 run 开始时把当前用户消息作为 `user` 记录条目追加；brain 从记录投影消息、注入 `<current_state>`（完整 plan + learnedSkillIds）后继续推进。中断恢复同样是往记录尾部补一条 user 消息并把 `task.userInput` 指向新消息，原目标自然保留在记录首条 user 中。
+
+续接（跨会话与中断恢复）统一为：`system` + 会话消息记录投影出的完整历史 + 尾部 `buildBrainUserMessage` user 消息；不区分「恢复」与「新消息」，只靠是否消费恢复快照决定 `<current_state>` 里的 plan/skills 来源。压缩是唯一允许折叠移除旧消息的机制，且只作用于投影，记录本身 append-only 不动。
 
 未正常完成的智能模式任务另有一套按会话持久化的恢复快照。快照保存 plan、compactions、已学习技能和执行收尾态（delivery guidance / artifacts / finalizationReason）；同一会话的下一条用户消息会消费快照、启动新的 run 并补一条 user 转录条目。网络错误、超时、用户停止、进程中断、运行上限和未知异常都保留快照，只有任务正常完成或会话被删除时才清理。不同会话的恢复状态严格隔离。
 
