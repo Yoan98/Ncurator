@@ -514,7 +514,7 @@
   - `WB-APPLY-002-AC14` `replace_text` 未传 blockIds 时递归处理全部正文和表格单元格，传入时只处理指定 subtree；始终替换范围内全部匹配，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual。
   - `WB-APPLY-002-AC15` 替换或删除 block、更新表格单元格时，如目标后代存在 visual，必须明确传 `allowVisualLoss:true`，否则整次编辑在保存前失败。文本替换和样式修改必须原位保留 visual。
   - `WB-APPLY-002-AC16` `docx_read_outline` 只返回轻量扁平摘要和必要视觉统计，不返回 wrapper、相邻 block、样式、heading、layout 或写保护字段；解析时必须递归穿过 block-level content control、可见 revision 和 `AlternateContent`，并按真实顺序列出其中 paragraph/table。
-  - `WB-APPLY-002-AC17` `docx_edit` 成功结果只向 AI 返回保存路径和按请求生成的 `postWriteReadback`；`changedBlocks/createdBlocks` 仅供内部 review、replay、事件和测试使用，失败统一返回 error，不返回成功 warning。
+  - `WB-APPLY-002-AC17` `docx_edit` 成功结果只向 AI 返回一条 `msg` 成功提示（如「docx编辑成功」），不再返回 `sourcePath` 或 `createdBlockIds`；`changedBlocks/createdBlocks` 仅供内部 review、replay、事件和测试使用，失败统一返回 error，不返回成功 warning。
   - `WB-APPLY-002-AC18` 所有 Human 工具的输入结构由 Zod schema 统一渲染；公共类型使用稳定命名定义并只展开一次，同时保留长度、数量、正则、数值和跨字段语义约束，不生成匿名 schema 名称。
   - `WB-APPLY-002-AC7` 生成 PNG、JPEG 或 WebP 图片后，正式路径立即包含可读取图片并生成一条修改记录；同一次 AI Run 对同一路径再次生成时自动更新并保持首次写入前基线。
 

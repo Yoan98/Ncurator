@@ -152,7 +152,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 **DOCX 递归编辑、样式与视觉防误删测试补充**
 
 - What：递归创建、全文替换、统一 style 和 visual 防误删共同构成新的写入协议。
-- How：覆盖嵌套表格、hyperlink、多层样式、五种 patch、跨 run 匹配、不可跨 visual、`allowVisualLoss`、串行 action 原子失败和 postWriteReadback。
+- How：覆盖嵌套表格、hyperlink、多层样式、五种 patch、跨 run 匹配、不可跨 visual、`allowVisualLoss`、串行 action 原子失败和 docx_edit 成功结果只返回 `msg`。
 - Oracle：旧简化创建 payload 与 `style_text` 被 schema 拒绝；目标类型不匹配不落盘；text-image-text 编辑后媒体、relationship 和非目标 XML 保持不变。
 
 ##### `docx-legacy-doc-read-contract`
@@ -170,7 +170,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：最小 docx 打开、定位、编辑与继续读取链路。
 - Why：docx 工具链最基础的真实生产调用闭环。
 - How：对 fixture docx 真实执行 `docx_search -> docx_read_blocks -> docx_edit(replace_text) -> docx_search -> docx_read_blocks`。
-- Oracle：写入成功并返回 `postWriteReadback`；只目标 block 发生变更，修改后的结果可继续被读取工具消费。
+- Oracle：写入成功并向 AI 返回 `msg` 成功提示；只目标 block 发生变更，修改后的结果可继续被读取工具消费。
 - Not：不验证 `human` 的工具选择。
 
 ##### `docx-create-then-open-and-edit`
@@ -179,7 +179,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：对不存在的路径执行 `docx_edit(insert_blocks)` 后，docx 能立刻进入 `outline / read / edit` 主链。
 - Why：cross-source summary 这类新建 Word 文件的场景，底层必须守住“路径不存在即创建”契约。
 - How：真实执行 `docx_edit(insert_blocks, 无 location) -> docx_read_outline -> docx_read_blocks -> docx_edit(insert_blocks) -> docx_search`。
-- Oracle：结果返回稳定 `sourcePath / postWriteReadback`；工具成功后目标路径立即存在且可被继续读取；后续编辑会生成新的可读状态，新内容可继续被搜索命中。
+- Oracle：内部结果保留 `sourcePath` 与新增 block 信息，面向 AI 只返回 `msg` 成功提示；工具成功后目标路径立即存在且可被继续读取；后续编辑会生成新的可读状态，新内容可继续被搜索命中。
 - Not：不验证 human 是否会自主选择这条创建链路。
 
 ##### `docx-existing-path-is-edited-without-a-create-action`
@@ -350,7 +350,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：多类复杂编辑操作的真实执行契约。
 - Why：复杂写入是 docx 工具层高风险区。
 - How：覆盖 `docx_edit(actions[])` 按输入顺序串行执行 `replace_text / delete_blocks / insert_blocks(before/after, paragraph/heading/table) / update_table_cell` action。
-- Oracle：各类 action 都能写入成功并返回最终文档状态下可继续消费的 `postWriteReadback`。
+- Oracle：各类 action 都能写入成功，内部结果保留 `changedBlocks/createdBlocks` 供继续消费，面向 AI 只返回 `msg` 成功提示。
 - Not：不验证上层 op 选择策略。
 
 ##### `docx-edit-insert-blocks-order`
@@ -359,7 +359,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：`docx_edit(insert_blocks)` 在同一 anchor 后插入多条段落与表格时保持输入顺序。
 - Why：结构插入顺序一旦漂移，后续 AI 读回确认和用户可见文档都会出现错位。
 - How：在段落 A 后一次插入 `P1 / P2 / Table / P3`，再读取完整 outline。
-- Oracle：最终顺序稳定为 `A / P1 / P2 / Table / P3 / B`；内部 raw result 的 `createdBlocks` 与面向 AI 的 `postWriteReadback` 均正确。
+- Oracle：最终顺序稳定为 `A / P1 / P2 / Table / P3 / B`；内部 raw result 的 `createdBlocks/createdBlockIds` 正确，面向 AI 只返回 `msg` 成功提示。
 - Not：不验证多 action 串行插入；该场景由 `docx-edit-serial-multiple-inserts-preserve-created-blocks` 覆盖。
 
 ##### `docx-edit-serial-multiple-inserts-preserve-created-blocks`

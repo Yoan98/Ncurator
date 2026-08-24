@@ -34,8 +34,7 @@ DOCX_NODE_WHITELIST.children = DOCX_NODE_WHITELIST
 const DOCX_BLOCK_WHITELIST = DOCX_NODE_WHITELIST
 
 const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
-  sourcePath: true,
-  createdBlockIds: true
+  msg: true
 }
 
 const PPT_SLIDE_WHITELIST: NestedWhitelistConfig = {
@@ -405,14 +404,14 @@ export const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): Jso
     const config = TOOL_HISTORY_WHITELIST_BY_NAME[result.toolName] || FALLBACK_TOOL_HISTORY_WHITELIST
     const filteredValue = filterValueByWhitelist(result.data, config)
     const filtered = isJsonObject(filteredValue) ? filteredValue : {}
-    return { ok: true, result: filtered }
+    return { status: 'success', result: filtered }
   }
 
   const error =
     isJsonObject(result.data) && typeof result.data.error === 'string' && result.data.error.trim()
       ? result.data.error.trim()
       : 'tool call failed'
-  return { ok: false, error }
+  return { status: 'fail', error }
 }
 
 export const buildToolResultMessageContent = (result: HumanHistoryToolResult): string =>

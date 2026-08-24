@@ -235,7 +235,7 @@ describe('ai human mock-llm backend', () => {
         ) as ToolMessage[]
         const danglingInterrupted = danglingToolMessages.some((message) => {
           const content = String(message.content || '')
-          return content.includes('"ok":false') && content.includes('interrupted')
+          return content.includes('"status":"fail"') && content.includes('interrupted')
         })
         const danglingHasAssistantToolCalls = (danglingRun2Messages || []).some(
           (message) => message.getType() === 'ai' && (message.tool_calls?.length || 0) > 0

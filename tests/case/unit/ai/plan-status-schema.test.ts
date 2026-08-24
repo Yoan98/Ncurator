@@ -57,7 +57,7 @@ describe('ai unit tool feedback envelope', () => {
     })
 
     expect(JSON.parse(String(feedback.message.content))).toEqual({
-      ok: true,
+      status: 'success',
       result: { message: '计划已更新' }
     })
     expect(feedback.transcript).toEqual({
@@ -65,7 +65,7 @@ describe('ai unit tool feedback envelope', () => {
       toolCallId: 'call-1',
       toolName: 'update_plan',
       ok: true,
-      result: { ok: true, result: { message: '计划已更新' } }
+      result: { status: 'success', result: { message: '计划已更新' } }
     })
   })
 
@@ -78,11 +78,11 @@ describe('ai unit tool feedback envelope', () => {
     })
 
     expect(JSON.parse(String(feedback.message.content))).toEqual({
-      ok: false,
+      status: 'fail',
       error: 'status 仅允许 todo/in_progress/done'
     })
     expect(feedback.transcript.result).toEqual({
-      ok: false,
+      status: 'fail',
       error: 'status 仅允许 todo/in_progress/done'
     })
   })

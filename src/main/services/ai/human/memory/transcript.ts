@@ -14,7 +14,7 @@ const toToolCall = (call: ChatMessageLogToolCall): {
 })
 
 const INTERRUPTED_TOOL_RESULT = {
-  ok: false,
+  status: 'fail',
   code: 'interrupted',
   error: '运行意外中断，该工具调用未执行。'
 } as const

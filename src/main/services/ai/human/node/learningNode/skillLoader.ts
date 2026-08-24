@@ -4,6 +4,7 @@ import type { AiToolFamilyId, ToolFamilyBuildInput } from '../../tools/types'
 import { TOOL_FAMILY_DEFINITIONS } from '../../tools'
 import type { HumanRuntimeCache, RuntimeSkillId } from '../../types'
 import { getEffectiveLearnedSkillIds, getSkillDefinition } from '../../skills'
+import { attachProviderToolDefinitions } from '../../tools/utils/toolSchemaSerialization'
 
 const TOOL_FAMILY_BUILDERS: Record<
   AiToolFamilyId,
@@ -39,6 +40,7 @@ const ensureFamilyTools = (input: {
     sessionId: input.ctx.sessionId,
     taskId: input.taskId
   })
+  attachProviderToolDefinitions(built)
   input.cache.familyToolsets[input.familyId] = built
   return built
 }

@@ -206,6 +206,7 @@ type WriteToolResult = {
   changedBlocks: DocxChangedBlock[]
   createdBlocks: DocxCreatedBlock[]
   createdBlockIds: string[]
+  msg: string
 }
 
 const actionLabel = (action: DocxEditAction): string => {
@@ -692,7 +693,8 @@ const buildWriteToolResult = async (input: {
     sourcePath: input.sourcePath,
     changedBlocks: input.changedBlocks,
     createdBlocks: input.createdBlocks,
-    createdBlockIds: input.createdBlocks.map((block) => block.blockId)
+    createdBlockIds: input.createdBlocks.map((block) => block.blockId),
+    msg: 'docx编辑成功'
   }
 }
 

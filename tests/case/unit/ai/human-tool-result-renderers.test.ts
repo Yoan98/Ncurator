@@ -146,7 +146,7 @@ describe('ai unit human tool result renderers', () => {
     expect(rendered).toContain('col=2')
   })
 
-  it('renders docx_edit created block ids instead of internal revision fields', () => {
+  it('renders docx_edit msg hint instead of internal revision fields', () => {
     const rendered = renderToolResultDataText({
       toolName: 'docx_edit',
       data: {
@@ -154,12 +154,12 @@ describe('ai unit human tool result renderers', () => {
         previousRevisionRef: 'v1',
         currentRevisionRef: 'v2',
         createdBlocks: [{ blockId: 'b:2', type: 'paragraph' }],
-        createdBlockIds: ['b:2']
+        createdBlockIds: ['b:2'],
+        msg: 'docx编辑成功'
       }
     })
 
-    expect(rendered).toContain('createdBlockIds:')
-    expect(rendered).toContain('b:2')
+    expect(rendered).toContain('msg=docx编辑成功')
     expect(rendered).not.toContain('previousRevisionRef')
     expect(rendered).not.toContain('currentRevisionRef')
     expect(rendered).not.toContain('createdBlocks')

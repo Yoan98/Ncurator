@@ -44,7 +44,7 @@ describe('ai unit message transcript repair', () => {
     const toolMessages = repaired.filter((message) => message.getType() === 'tool') as ToolMessage[]
     expect(toolMessages.map((message) => message.tool_call_id)).toEqual(['x', 'y'])
     for (const message of toolMessages) {
-      expect(message.content).toContain('"ok":false')
+      expect(message.content).toContain('"status":"fail"')
       expect(message.content).toContain('interrupted')
     }
   })

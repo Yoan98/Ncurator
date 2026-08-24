@@ -111,6 +111,38 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         { kind: 'annotation', eventType: 'thinking_started', payload: {} }
       ])
 
+      const DEBUG_danglingCheck = (): void => {
+        const pendingIds = new Set<string>()
+        const tail: string[] = []
+        for (const message of messages) {
+          const type = message.getType()
+          if (type === 'ai') {
+            const calls = (message as { tool_calls?: Array<{ id?: string; name?: string }> }).tool_calls
+            if (calls) for (const call of calls) if (call.id) pendingIds.add(call.id)
+            tail.push(`ai[${(calls || []).map((c) => `${c.id || '?'}:${c.name || '?'}`).join(',')}]`)
+            continue
+          }
+          if (type === 'tool') {
+            const id = (message as { tool_call_id?: string }).tool_call_id
+            if (id) pendingIds.delete(id)
+            tail.push(`tool(${id || '?'})`)
+          } else {
+            tail.push(type)
+          }
+        }
+        if (pendingIds.size > 0) {
+          console.error(
+            '[DEBUG brain] unsatisfied tool_call_ids before chatTools:',
+            JSON.stringify([...pendingIds]),
+            'TYPES:',
+            messages.map((m) => m.getType()).join(','),
+            'TAIL:',
+            JSON.stringify(tail.slice(-12))
+          )
+        }
+      }
+      DEBUG_danglingCheck()
+
       const result = await input.ctx.chatTools({
         caller: 'human.brain',
         taskId: state.task.taskId,

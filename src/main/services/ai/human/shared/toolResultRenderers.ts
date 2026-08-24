@@ -335,14 +335,16 @@ const renderWebSearchResult = (obj: JsonObject): string =>
     .filter(Boolean)
     .join('\n')
 
-const renderDocxCreateResult = (obj: JsonObject): string =>
-  [
-    renderKeyValuePairs([['sourcePath', readStringField(obj, 'sourcePath')]]),
-    'createdBlockIds:',
-    renderGenericArray(Array.isArray(obj.createdBlockIds) ? obj.createdBlockIds : [])
-  ]
-    .filter(Boolean)
-    .join('\n')
+const renderDocxCreateResult = (obj: JsonObject): string => [
+  renderKeyValuePairs([
+    ['msg', readStringField(obj, 'msg')],
+    ['sourcePath', readStringField(obj, 'sourcePath')]
+  ]),
+  'createdBlockIds:',
+  renderGenericArray(Array.isArray(obj.createdBlockIds) ? obj.createdBlockIds : [])
+]
+  .filter(Boolean)
+  .join('\n')
 
 export const renderToolResourceContextText = (
   resourceContext: ToolResourceContext | undefined

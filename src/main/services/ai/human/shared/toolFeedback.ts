@@ -15,9 +15,9 @@ export type ToolFeedbackInput = {
 
 const buildEnvelope = (input: ToolFeedbackInput): ToolFeedbackEnvelope => {
   if (input.ok) {
-    return { ok: true, result: input.result ?? {} }
+    return { status: 'success', result: input.result ?? {} }
   }
-  return { ok: false, error: input.errorMessage ?? 'tool call failed' }
+  return { status: 'fail', error: input.errorMessage ?? 'tool call failed' }
 }
 
 export const buildToolFeedback = (input: ToolFeedbackInput): {
