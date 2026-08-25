@@ -37,7 +37,7 @@ const runUsedSelectedFile = (
     (event) =>
       event.runId === runId &&
       ['tool_call_started', 'tool_call_result'].includes(event.type) &&
-      ['docx_search', 'docx_read'].includes(String(event.toolName || '')) &&
+      ['docx_search', 'docx_read_nodes'].includes(String(event.toolName || '')) &&
       eventText(event).includes(fileName)
   )
 

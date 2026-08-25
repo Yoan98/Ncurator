@@ -545,7 +545,7 @@ const applyLogicalOp = (
       )
       return
     }
-    if (!op.nodeId || !previousIndex.nodesById.has(op.nodeId)) return
+    if (!op.nodeId) return
     if (op.position !== 'before' && op.position !== 'after') return
     const anchorIndex = body.findIndex((candidate) => candidate.nodeId === op.nodeId)
     if (anchorIndex < 0) return

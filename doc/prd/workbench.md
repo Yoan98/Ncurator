@@ -323,7 +323,7 @@
   - `WB-COMPOSER-009-AC3` assistant 最终 markdown 输出默认无独立背景卡片，保持在过程流下方。
   - `WB-COMPOSER-009-AC4` 用户消息以右对齐紧凑气泡展示。
   - `WB-COMPOSER-009-AC5` 执行层 header 按真实发生顺序将同一轮工具调用合成为一句自然语言，最多展示三类动作，正常动作使用“并”连接，后续动作失败时使用“但”连接，不使用逗号分隔；超过三类时收敛为“正在执行 n 项操作”或“已完成 n 项操作”。例如“已操作浏览器 3 次并等待 1 秒”“已搜索网页但读取网页失败”。header 只展示一个图标；单一工具类型使用对应语义图标，混合工具使用流程图标。
-  - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看文档 xx 的结构”；`docx_read` 展示“读取文档 xx 范围”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search` 展示“搜索网页 query”；`browser_use navigate / observe / extract / act` 分别补充“打开网页 / 查看页面并 / 从页面中 / 在页面上”的动作语义。
+  - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看文档 xx 的结构”；`docx_read_nodes` 展示“读取文档 xx 范围”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search` 展示“搜索网页 query”；`browser_use navigate / observe / extract / act` 分别补充“打开网页 / 查看页面并 / 从页面中 / 在页面上”的动作语义。
   - `WB-COMPOSER-009-AC7` 文件名、query、命令、URL 和技能名不使用粗体或冒号强调，保持正常字重；可以通过文字颜色表达层级。
   - `WB-COMPOSER-009-AC8` 学习步骤使用技能通用名称展示，例如 `docx 阅读器`、`docx 写作器`、`资料查阅器`、`命令执行器`；运行中展示“正在学习 xx 技能”，完成后展示“已学会 xx 技能”。
   - `WB-COMPOSER-009-AC9` 执行层 header、学习层和压缩层展示对应图标；浏览器、等待、网页读取、网页搜索、图片识别、知识库、文件和终端使用不同语义图标。展开后的每条工具句子不展示图标，也不渲染前置小圆点或“AI 思路”类图标。
@@ -513,7 +513,7 @@
   - `WB-APPLY-002-AC13` `docx_format` 分别支持 text、paragraph、table、row、cell 和 section 的直接格式，另支持重置格式、命名样式 CRUD、应用命名样式和编号。patch 类型与目标节点不一致时整次写入失败；`update_named_style` 修改全局样式定义。
   - `WB-APPLY-002-AC14` `replace_text` 只在指定 `nodeId` 子树内替换确定原文，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual；原位保留未修改 run、段落格式和视觉节点。
   - `WB-APPLY-002-AC15` 替换或删除节点、删除表格行列或合并单元格时，如被移除区域存在 visual，必须明确传 `allowVisualLoss:true`，否则保存前失败。表格读写坐标统一从 1 开始。失败不得推进 WorkingPackage，也不得产生部分结果。
-  - `WB-APPLY-002-AC16` `docx_read_outline` 返回轻量顺序摘要；`docx_read` 返回 story 递归语义树。未支持 OOXML 投影为 opaque，局部写入必须原样保留；content control 是可定位容器，空容器可用 `insert_nodes inside_start/inside_end` 写入。
+  - `WB-APPLY-002-AC16` `docx_read_outline` 返回轻量顺序摘要；`docx_read_nodes` 返回 story 递归语义树，一次最多读取 20 个 nodeId 或连续 50 个根节点。未支持 OOXML 投影为 opaque，局部写入必须原样保留；content control 是可定位容器，空容器可用 `insert_nodes inside_start/inside_end` 写入。
   - `WB-APPLY-002-AC17` 五个 DOCX 写工具统一返回 discriminated `changes`：节点创建/更新返回局部完整节点，节点删除返回 `nodeId`，命名样式、批注和修订返回对应实体 ID 与最终状态；禁止只返回成功消息。
   - `WB-APPLY-002-AC17-1` 同一 Run 内五个写工具共享首次接触文件时的 Source 和连续推进的 Working。Diff 比较 Source 与最终 Working：A→B→A、新增后删除不产生 Diff；body、header、footer、footnote、endnote、textbox 均生成红绿审核结果，只有 package part 变化时显示“文档级变更”摘要；Word 原生批注和修订与 NCurator Diff 独立保留。
   - `WB-APPLY-002-AC18` 所有 Human 工具的输入结构由 Zod schema 统一渲染；公共类型使用稳定命名定义并只展开一次，同时保留长度、数量、正则、数值和跨字段语义约束，不生成匿名 schema 名称。

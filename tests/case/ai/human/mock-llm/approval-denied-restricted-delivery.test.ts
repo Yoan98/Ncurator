@@ -3,7 +3,7 @@ import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { buildCompleteTaskDecision, buildToolDecision, filterAiRunEventsByType } from '../testUtils'
+import { buildCompleteTaskDecision, filterAiRunEventsByType } from '../testUtils'
 
 describe('ai human mock-llm backend', () => {
   it('approval-denied-restricted-delivery', async () => {
@@ -23,13 +23,19 @@ describe('ai human mock-llm backend', () => {
           structuredOutputScript: {
             'human.brain': [
               {
-                output: buildToolDecision({
-                  toolName: 'terminal_run',
-                  args: {
-                    command: 'mkdir blocked-dir'
-                  },
-                  summary: '执行会被拒绝的命令'
-                })
+                output: {
+                  thought: { next: '执行会被拒绝的命令，并验证同批其他调用也得到结果。' },
+                  toolCalls: [
+                    {
+                      name: 'terminal_run',
+                      args: {
+                        command: 'mkdir blocked-dir',
+                        commandExplanation: '创建审批测试目录'
+                      }
+                    },
+                    { name: 'kb_list_documents', args: {} }
+                  ]
+                }
               },
               {
                 output: buildCompleteTaskDecision({
@@ -45,6 +51,7 @@ describe('ai human mock-llm backend', () => {
           taskId: runtime.taskId,
           userInput: '请尝试执行一个需要审批的命令，并在被拒绝后说明限制。'
         })
+        const messageLog = await runner.ctx.loadMessageLog()
 
         let blockedDirExists = true
         try {
@@ -56,6 +63,9 @@ describe('ai human mock-llm backend', () => {
         return {
           output,
           blockedDirExists,
+          toolMessageNames: messageLog
+            .filter((entry) => entry.kind === 'tool')
+            .map((entry) => entry.toolName),
           events: runtime.eventCollector.snapshot()
         }
       },
@@ -70,6 +80,8 @@ describe('ai human mock-llm backend', () => {
           result.output.status === 'completed' &&
             result.blockedDirExists === false &&
             terminalResultCount === 0 &&
+            result.toolMessageNames.includes('terminal_run') &&
+            result.toolMessageNames.includes('kb_list_documents') &&
             approvalEvents.some((event) =>
               event.decisions.some((decision) => decision.action === 'reject')
             ),
@@ -78,6 +90,7 @@ describe('ai human mock-llm backend', () => {
             message: '审批拒绝后，真实 terminal 命令不应落地执行。',
             data: {
               terminalResultCount,
+              toolMessageNames: result.toolMessageNames,
               approvalEvents
             }
           }

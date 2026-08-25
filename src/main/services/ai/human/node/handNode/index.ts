@@ -20,8 +20,7 @@ import type {
   ToolCallResult
 } from '../../types'
 import { executeToolCall } from './toolExecutor'
-import { returnToBrain, returnToBrainAfterTrace } from '../utils/stateTransitions'
-import { advanceDispatchState } from '../dispatch'
+import { returnToBrainAfterTrace, returnToDispatch } from '../utils/stateTransitions'
 
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 const isBrowserUseCall = (toolName: string): boolean => toolName === 'browser_use'
@@ -270,11 +269,15 @@ const appendBlockedApprovalToolMessages = (input: {
   const decisionByItemId = new Map(input.decisions.map((decision) => [decision.itemId, decision]))
   const transcriptEntries: ChatMessageLogEntry[] = []
 
-  input.approvalItems.forEach((item) => {
-    const decision = decisionByItemId.get(item.itemId)
-    const call = input.calls[item.order]
-    if (!decision || !call) return
-    const message = buildApprovalBlockedToolMessage({ decision, command: item.command })
+  const approvalItemByOrder = new Map(input.approvalItems.map((item) => [item.order, item]))
+
+  input.calls.forEach((call, order) => {
+    const item = approvalItemByOrder.get(order)
+    const decision = item ? decisionByItemId.get(item.itemId) : undefined
+    const message =
+      item && decision
+        ? buildApprovalBlockedToolMessage({ decision, command: item.command })
+        : '本轮包含未获批准的操作，因此该工具调用没有执行。'
     const feedback = buildToolFeedback({
       toolCallId: call.toolCallId,
       toolName: call.toolName,
@@ -297,7 +300,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
 
     const pendingRound = state.execution.pendingRound
     if (!pendingRound || pendingRound.nextAction.action !== 'hand') {
-      return advanceDispatchState(state)
+      return returnToDispatch(state)
     }
 
     const rawCalls = pendingRound.nextAction.calls
@@ -324,7 +327,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       : []
 
     if (calls.length === 0) {
-      return advanceDispatchState(state)
+      return returnToDispatch(state)
     }
 
     const approvalItems = collectApprovalBatchItems({
@@ -360,15 +363,8 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           approvalItems
         })
         await input.ctx.appendMessageLog(blockedTranscriptEntries)
-        return returnToBrain(state, {
-          execution: {
-            stage: 'context_budget',
-            pendingDispatch: undefined
-          },
-          memory: {
-            ...state.memory
-          }
-        })
+        input.cache.toolCallCount += calls.length
+        return returnToDispatch(state)
       }
       markApprovedTerminalCommands({
         cache: input.cache,

@@ -83,7 +83,8 @@ export const returnToBrainAfterTraceState = (input: {
     ...input.overrides,
     execution: {
       ...input.overrides?.execution,
-      stage: 'dispatch'
+      stage: 'dispatch',
+      pendingRound: undefined
     },
     trace: {
       steps: traceSteps

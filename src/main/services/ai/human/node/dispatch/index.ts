@@ -69,7 +69,11 @@ export const peekDispatchGroup = (queue: HumanDispatchItem[]): DispatchPeek => {
 
   const target = queue[0]!.target
   let splitIndex = 1
-  while (splitIndex < queue.length && queue[splitIndex]!.target === target) {
+  while (
+    target !== 'learning' &&
+    splitIndex < queue.length &&
+    queue[splitIndex]!.target === target
+  ) {
     splitIndex += 1
   }
 

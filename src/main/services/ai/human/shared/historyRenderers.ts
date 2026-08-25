@@ -235,7 +235,7 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       text: true
     }
   },
-  docx_read: {
+  docx_read_nodes: {
     sourcePath: true,
     currentRevisionRef: true,
     nodes: DOCX_NODE_WHITELIST

@@ -9,7 +9,7 @@ import {
   docxFormatSchema,
   docxMediaEditSchema,
   docxOutlineSchema,
-  docxReadSchema,
+  docxReadNodesSchema,
   docxReadVisualsSchema,
   docxSearchSchema,
   docxTableEditSchema
@@ -50,8 +50,7 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   outputSchema: docxOutlineOutputSchema,
   promptSpec: {
     name: 'docx_read_outline',
-    description:
-      '快速读取 Word 文档的正文顺序和结构摘要。返回临时 nodeIndex 与稳定 nodeId；需要详细内容时再调用 docx_read。'
+    description: '快速读取 Word 文档的正文顺序和结构摘要。返回临时 nodeIndex 与稳定 nodeId；'
   },
   resolveExecutionMeta: readMeta,
   activityActionType: 'docx_read_outline'
@@ -82,23 +81,22 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   'docx-read' | 'docx-write'
 >
 
-export const DOCX_READ_TOOL_SPEC = {
-  name: 'docx_read',
+export const DOCX_READ_NODES_TOOL_SPEC = {
+  name: 'docx_read_nodes',
   familyId: 'docx',
   skillIds: ['docx-read', 'docx-write'],
-  inputSchema: docxReadSchema,
+  inputSchema: docxReadNodesSchema,
   outputSchema: docxReadOutputSchema,
   promptSpec: {
-    name: 'docx_read',
-    description:
-      '按 nodeId 或临时 nodeIndex 范围读取 Word 文档递归语义树。写入前优先读取目标并照抄 nodeId。'
+    name: 'docx_read_nodes',
+    description: '读取指定 Word 节点的递归语义树；一次最多读取 20 个 nodeId 或连续 50 个根节点。'
   },
   resolveExecutionMeta: readMeta,
-  activityActionType: 'docx_read'
+  activityActionType: 'docx_read_nodes'
 } satisfies DocxToolSpec<
-  z.infer<typeof docxReadSchema>,
+  z.infer<typeof docxReadNodesSchema>,
   z.infer<typeof docxReadOutputSchema>,
-  'docx_read',
+  'docx_read_nodes',
   'docx-read' | 'docx-write'
 >
 
@@ -175,7 +173,7 @@ export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineWriteSpec({
 export const DOCX_READ_TOOL_SPECS = [
   DOCX_READ_OUTLINE_TOOL_SPEC,
   DOCX_SEARCH_TOOL_SPEC,
-  DOCX_READ_TOOL_SPEC,
+  DOCX_READ_NODES_TOOL_SPEC,
   DOCX_READ_VISUALS_TOOL_SPEC
 ] as const
 

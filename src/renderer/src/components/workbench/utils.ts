@@ -203,7 +203,7 @@ const TOOL_ITEM_RENDERERS = {
   docx_read_outline: (input) =>
     sentence(text('查看文档 '), text(readToolFileLabel(input)), text(' 的结构')),
   docx_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
-  docx_read: (input) =>
+  docx_read_nodes: (input) =>
     sentence(
       text('读取文档 '),
       text(readToolFileLabel(input)),

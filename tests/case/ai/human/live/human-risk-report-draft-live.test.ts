@@ -114,7 +114,7 @@ describe('ai human live backend', () => {
           'docx_read_outline',
           'sourcePath'
         )
-          .concat(collectStartedToolStringArgs(events, 'docx_read', 'sourcePath'))
+          .concat(collectStartedToolStringArgs(events, 'docx_read_nodes', 'sourcePath'))
           .concat(collectStartedToolStringArgs(events, 'docx_search', 'sourcePath'))
         const createSourcePaths = collectStartedDocxWriteSourcePaths(
           events,
@@ -206,7 +206,7 @@ describe('ai human live backend', () => {
         const hasResearchReadStep = toolNames.some((toolName) =>
           [
             'docx_read_outline',
-            'docx_read',
+            'docx_read_nodes',
             'docx_search',
             'kb_list_documents',
             'kb_search'

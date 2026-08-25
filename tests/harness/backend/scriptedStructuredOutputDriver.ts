@@ -16,6 +16,26 @@ type ScriptedToolCall = {
 }
 
 const resolveDecisionToToolCalls = (output: JsonObject, callIndex: number): ScriptedToolCall[] => {
+  if (Array.isArray(output.toolCalls)) {
+    return output.toolCalls.flatMap((call, index) => {
+      if (!call || typeof call !== 'object' || Array.isArray(call)) return []
+      const record = call as JsonObject
+      const name = typeof record.name === 'string' ? record.name : ''
+      if (!name) return []
+      const args =
+        record.args && typeof record.args === 'object' && !Array.isArray(record.args)
+          ? (record.args as JsonObject)
+          : {}
+      return [
+        {
+          id: `mock-${callIndex}-${index}`,
+          name,
+          args,
+          type: 'tool_call' as const
+        }
+      ]
+    })
+  }
   const nextAction = (output.nextAction || {}) as Record<string, unknown>
   const action = String(nextAction.action || '')
   if (action === 'learning') {

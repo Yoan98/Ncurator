@@ -4,7 +4,7 @@ import type { DocxToolRuntime } from '../runtime'
 import type { DocxDetailedNode, DocxOutlineNode, DocxReadSession, DocxSearchMatch } from '../types'
 import {
   DOCX_READ_OUTLINE_TOOL_SPEC,
-  DOCX_READ_TOOL_SPEC,
+  DOCX_READ_NODES_TOOL_SPEC,
   DOCX_READ_VISUALS_TOOL_SPEC,
   DOCX_SEARCH_TOOL_SPEC
 } from '../toolSpecs'
@@ -556,14 +556,14 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     }
   })
 
-  const docxReadTool = createDocxTool({
+  const docxReadNodesTool = createDocxTool({
     runtime,
-    name: DOCX_READ_TOOL_SPEC.name,
-    description: DOCX_READ_TOOL_SPEC.promptSpec.description,
-    schema: DOCX_READ_TOOL_SPEC.inputSchema,
+    name: DOCX_READ_NODES_TOOL_SPEC.name,
+    description: DOCX_READ_NODES_TOOL_SPEC.promptSpec.description,
+    schema: DOCX_READ_NODES_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
-        actionType: DOCX_READ_TOOL_SPEC.activityActionType!,
+        actionType: DOCX_READ_NODES_TOOL_SPEC.activityActionType!,
         status: 'failed',
         summary: message
       })
@@ -609,7 +609,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           },
           draftDocId: sessionResult.docId,
           activity: {
-            actionType: DOCX_READ_TOOL_SPEC.activityActionType!,
+            actionType: DOCX_READ_NODES_TOOL_SPEC.activityActionType!,
             startedSummary: `精读文档区间: ${sessionResult.sourcePath}`,
             buildCompletedSummary: (output) => `文档精读完成：${String(output.nodes.length)} 个节点`
           }
@@ -630,7 +630,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             })
           }),
           activity: {
-            actionType: DOCX_READ_TOOL_SPEC.activityActionType!
+            actionType: DOCX_READ_NODES_TOOL_SPEC.activityActionType!
           }
         })
       }
@@ -793,7 +793,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     }
   })
 
-  return [docxOutlineTool, docxSearchTool, docxReadTool, docxReadVisualsTool]
+  return [docxOutlineTool, docxSearchTool, docxReadNodesTool, docxReadVisualsTool]
 }
 import fs from 'node:fs/promises'
 import os from 'node:os'

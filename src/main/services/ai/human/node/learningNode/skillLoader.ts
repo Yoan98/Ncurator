@@ -77,16 +77,20 @@ export const buildAvailableTools = (input: {
   learnedSkillIds: RuntimeSkillId[]
 }): StructuredToolInterface[] => {
   const tools: StructuredToolInterface[] = []
+  const seenNames = new Set<string>()
   getEffectiveLearnedSkillIds(input.learnedSkillIds).forEach((skillId) => {
-    tools.push(
-      ...ensureSkillTools({
-        cache: input.cache,
-        ctx: input.ctx,
-        runId: input.runId,
-        taskId: input.taskId,
-        skillId
-      })
-    )
+    for (const tool of ensureSkillTools({
+      cache: input.cache,
+      ctx: input.ctx,
+      runId: input.runId,
+      taskId: input.taskId,
+      skillId
+    })) {
+      const name = String(tool.name || '').trim()
+      if (!name || seenNames.has(name)) continue
+      seenNames.add(name)
+      tools.push(tool)
+    }
   })
   return tools
 }

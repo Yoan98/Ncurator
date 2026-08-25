@@ -104,6 +104,109 @@ describe('DOCX v2 stable node identity', () => {
     }
   })
 
+  it('keeps anchor identity and assigns new ids for before and after insertions', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-anchor-identity-v2-'))
+    const filePath = path.join(tempDir, 'anchors.docx')
+    const runId = randomUUID()
+    try {
+      await createDocxFile({
+        filePath,
+        nodes: [
+          {
+            type: 'paragraph',
+            children: [{ type: 'run', children: [{ type: 'text', text: 'Anchor' }] }]
+          }
+        ]
+      })
+      const opened = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'open',
+        payload: { sourcePath: filePath }
+      })
+      expect(opened.ok).toBe(true)
+      if (!opened.ok || opened.payload.action !== 'open') return
+      const outlined = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'outline',
+        payload: {
+          docId: opened.payload.docId,
+          ranges: [{ fromNodeIndex: 0, toNodeIndex: 2 }],
+          includeTables: true,
+          includeCells: true
+        }
+      })
+      expect(outlined.ok).toBe(true)
+      if (!outlined.ok || outlined.payload.action !== 'outline') return
+      const anchorId = outlined.payload.nodes[0]!.nodeId
+      const insertedBefore = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'apply_operation',
+        payload: {
+          docId: opened.payload.docId,
+          operation: {
+            type: 'insert_nodes',
+            nodeId: anchorId,
+            position: 'before',
+            nodes: [
+              { type: 'paragraph', text: 'Before one' },
+              { type: 'paragraph', text: 'Before two' }
+            ]
+          }
+        }
+      })
+      expect(insertedBefore.ok).toBe(true)
+      if (!insertedBefore.ok || insertedBefore.payload.action !== 'apply_operation') return
+      const insertedAfter = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'apply_operation',
+        payload: {
+          docId: insertedBefore.payload.newDocId,
+          operation: {
+            type: 'insert_nodes',
+            nodeId: anchorId,
+            position: 'after',
+            nodes: [{ type: 'paragraph', text: 'After' }]
+          }
+        }
+      })
+      expect(insertedAfter.ok).toBe(true)
+      if (!insertedAfter.ok || insertedAfter.payload.action !== 'apply_operation') return
+      const after = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'outline',
+        payload: {
+          docId: insertedAfter.payload.newDocId,
+          ranges: [{ fromNodeIndex: 0, toNodeIndex: 3 }],
+          includeTables: true,
+          includeCells: true
+        }
+      })
+      expect(after.ok).toBe(true)
+      if (!after.ok || after.payload.action !== 'outline') return
+      expect(after.payload.nodes.map((node) => node.text)).toEqual([
+        'Before one',
+        'Before two',
+        'Anchor',
+        'After'
+      ])
+      expect(after.payload.nodes[2]?.nodeId).toBe(anchorId)
+      expect(new Set(after.payload.nodes.map((node) => node.nodeId)).size).toBe(4)
+    } finally {
+      await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'release_run',
+        payload: {}
+      })
+      await fs.rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
   it('does not give an existing identical run id to a new inside_start run', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-run-identity-v2-'))
     const filePath = path.join(tempDir, 'runs.docx')

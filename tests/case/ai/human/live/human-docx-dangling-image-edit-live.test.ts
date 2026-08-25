@@ -102,7 +102,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.output?.status === 'completed' &&
               toolNames.includes('docx_read_outline') &&
-              toolNames.includes('docx_read') &&
+              toolNames.includes('docx_read_nodes') &&
               toolNames.includes('docx_read_visuals') &&
               docxEditSucceeded &&
               result.output?.artifacts?.some(

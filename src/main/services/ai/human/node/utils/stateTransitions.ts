@@ -30,6 +30,19 @@ export const returnToBrain = (
   overrides: HumanStateOverrides = {}
 ): HumanState => returnToBrainState(state, overrides)
 
+export const returnToDispatch = (
+  state: HumanState,
+  overrides: HumanStateOverrides = {}
+): HumanState =>
+  returnToBrainState(state, {
+    ...overrides,
+    execution: {
+      ...overrides.execution,
+      stage: 'dispatch',
+      pendingRound: undefined
+    }
+  })
+
 export const returnToBrainAfterTrace = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache

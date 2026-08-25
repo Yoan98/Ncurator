@@ -126,10 +126,10 @@ flowchart TD
 
 - `human` 是当前 AI run 的执行核心。
 - `brain` 通过原生 function calling 决定下一步：调用 LLM 时绑定当前可用工具（builtin + agent-control + 已学习 external），根据返回的 `tool_calls` 生成有序分发队列（dispatch）。
-- `dispatch` 按队列逐个把工具调用路由到对应节点：`learn_skill` → learning、`update_plan` → plan、其余真实工具 → hand；队列清空后回 `context_budget`。
-- `learning` 负责按需加载 external skill，执行 `learn_skill` 控制工具并把结果写回消息数组。
-- `plan` 执行 `update_plan` 控制工具，先用 `UPDATE_PLAN_SCHEMA`（`zod`）校验参数（`status` 仅允许 `todo` / `in_progress` / `done`），通过后把计划写入 `memory.plan` 并回写 `ToolMessage`；校验失败则回写 `invalid_plan` 错误 `ToolMessage` 并回到 brain 重试。
-- `hand` 负责执行真实工具，把结果以 `ToolMessage` 追加回消息数组。
+- `dispatch` 是 `tool_calls` 队列的唯一消费者，严格按模型返回顺序分组路由：`learn_skill` → learning、`update_plan` → plan、其余真实工具 → hand；领域节点执行后统一返回 dispatch，队列清空后才回 `context_budget`。
+- `learning` 负责按需加载 external skill，执行 dispatch 分配的 `learn_skill` 并把结果写回消息数组；它不推进或清空分发队列。
+- `plan` 执行 dispatch 分配的 `update_plan`，先用 `UPDATE_PLAN_SCHEMA`（`zod`）校验参数（`status` 仅允许 `todo` / `in_progress` / `done`），通过后把计划写入 `memory.plan` 并回写 `ToolMessage`；校验失败也回写对应错误结果并继续剩余分发队列。
+- `hand` 执行 dispatch 分配的真实工具，把结果以 `ToolMessage` 追加回消息数组；成功、失败或审批拒绝都必须为每个 `tool_call_id` 产生且只产生一条结果，并继续剩余分发队列。
 - `brain` 交付：当 brain 的一轮返回没有任何 `tool_calls` 时，该轮 assistant 的 content 就是最终交付 markdown；brain 直接收尾（apply docx / commit ppt / 收集文件变更 / artifact / `answer_completed`），不再有独立的 mouth 节点与第二次交付 LLM 调用。交付与否由 brain 自主判断，Main 侧不做计划完成度的强制拦截。
 - `context_budget` 负责在每一步前检查上下文预算。
 - `context_compaction` 把消息投影的较早区间压缩为一条摘要（`<compacted_history>`）并注入 `<current_state>`（完整 plan + learnedSkillIds），服务本次 run 继续推进。
@@ -144,6 +144,8 @@ brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMess
 
 **悬空 tool_calls 修复**：若历史末条 `assistant` 声明了 `tool_calls` 但记录里没有对应 `tool` 结果（中断发生在 brain 落库后、工具执行前），重建投影时由 `repairInterruptedToolCalls` 在该轮缺失的 `tool_call_id` 位置补一条 `{ ok: false, code: 'interrupted', error: '运行意外中断，该工具调用未执行。' }` 的 `ToolMessage`，再接尾部 user 消息，保证每个 `tool_call_id` 有且仅有一条结果、且接口不因悬空调用报错。
 
+**混合工具调用**：brain 一次返回的全部调用先完整进入 dispatch；只有 dispatch 可以从队列取出调用。learning、plan、hand 只执行当前分组并返回 dispatch，不得自行消费队列或因本组失败丢弃后续调用。连续 hand 调用可在同组内按资源串并行执行；`learn_skill` 每次只分发一个，避免单值 learning 状态漏掉调用。
+
 **brain 交付指令不再单独成条**：brain 的最终交付就是无工具调用那一轮的 assistant content，直接作为最终答复 `assistant` 转录条目写回（不做第二次交付 LLM 调用，也不再追加「现在面向用户交付结果…」的 user 条目）。
 
 **会话消息记录是「数据唯一、其他投影」的唯一真相源**：一次会话下的所有 run 的消息都写进同一张表（每条带 `run_id` 标识归属 run）。运行中的实时过程（思考、学习、工具调用、压缩、收尾）由节点即时写入 annotation 条目；UI 的「AI 消息 → 工具调用/技能学习 → 一步步展开」过程展示由渲染层从记录按 `seq` 投影重建（`projectProcessGroups`），不再依赖独立的 `ai_run_event` 过程事件副本。live 运行中的 `running → completed` 中间态与 `answer_token` 流式输出仍走瞬时广播，不落库；重开/恢复时从记录投影出 completed 态的完整过程。工具调用与失败不再通过独立的 decision hint 机制回传，而是统一作为该工具的 `ToolMessage` 结果（成功/失败/被拦都保证每个 `tool_call_id` 有且仅有一条结果）返回给模型。控制/反馈类工具结果统一由 `toolFeedback` 工厂生成，envelope 为成功 `{ ok: true, ...data }`、失败 `{ ok: false, code, error }`，`code` 取 `invalid_json` / `invalid_plan` / `approval_blocked` / `pending_items`；`ToolMessage` 的 `content` 与转录 `result` 始终是同一对象，保证恢复重放与 live 一致。`tool_call_id` 在领域类型中建模为必填（LLM 每个 tool call 必带 id），仅在模型响应异常缺 id 时由 brain 边界就地生成局部 id 回喂，不向领域类型传播可选。
@@ -155,8 +157,10 @@ AI 能力通过 skill 和 tool 两层表达：
 - builtin skill 默认可用，不需要 learning 加载。
 - external skill 需要 learning 显式加载后才进入当前有效能力集合。
 - `agent-control` 是内置被动技能，承载 `learn_skill` / `update_plan` 两个任务控制工具。
-- skill 描述能力边界和适用场景。
+- skill 描述只说明能力边界，不重复写“遇到某类文件必须使用该技能”等全局规则。
 - tool 是具体执行入口，输入输出和限制以代码中的 schema 为准，schema 通过 `bindTools` 直接交给模型。
+
+Word、Excel、PPT、PDF 必须使用对应技能处理，terminal 只用于辅助定位、诊断和计算，不得直接修改这些文件。该规则集中在 system prompt 的 `special_notes`，不散落到各 skill 描述。
 
 skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可以对应多个 tool，多个 skill 也可以共享同一实现域。
 
@@ -237,7 +241,7 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 
 - `docx_read_outline`：快速读取顺序、类型、摘要和临时 `nodeIndex`。
 - `docx_search`：literal、regex 或 semantic 搜索，返回可直接读取或写入的 `nodeId`。
-- `docx_read`：按 `nodeId` 或 `nodeIndex` 范围返回递归语义树。
+- `docx_read_nodes`：按 `nodeId` 或 `nodeIndex` 范围返回递归语义树；一次最多读取 20 个 nodeId 或连续 50 个根节点。
 - `docx_read_visuals`：按 `visualId` 读取图片、图表、图形等视觉内容。
 
 写入工具每次调用只执行一个 operation：
@@ -283,12 +287,12 @@ NCurator Diff 与 Word 原生批注、`w:ins`、`w:del` 相互独立。读取和
 
 #### AI 调用原则
 
-- 不知道位置：`docx_read_outline` 或 `docx_search` → `docx_read` → 一个写 operation → 根据返回的 `changes` 继续。
+- 不知道位置：`docx_read_outline` 或 `docx_search` → `docx_read_nodes` → 一个写 operation → 根据返回的 `changes` 继续。
 - 改一句话：读取目标 paragraph/run，调用 `docx_content_edit.replace_text`。
 - 改一段且保留样式：优先 `replace_text`；只有结构确实改变时才 `replace_node`。
 - 改容器内容：读取 content control/cell/header/footer 的内部节点，逐个修改；空容器用 `insert_nodes inside_*`。
 - 表格文字、外观、结构分别使用 content、format、table 工具，避免一个 operation 同时承担三种职责。
-- 图片、批注和修订使用各自领域工具；写后需要确认时再调用 `docx_read` 或 `docx_read_visuals`。
+- 图片、批注和修订使用各自领域工具；写后需要确认时再调用 `docx_read_nodes` 或 `docx_read_visuals`。
 - 同一路径可连续调用多个写工具；每次都基于最新 WorkingModel，旧节点未删除时 `nodeId` 保持可用。
 - `move_node` 只允许在同一 OOXML part/story 内移动；跨 story 移动会涉及关系迁移，当前明确拒绝，AI 应在目标 story 插入新节点后再删除源节点，并按视觉丢失规则确认。
 

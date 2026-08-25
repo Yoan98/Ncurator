@@ -246,7 +246,7 @@ const sourcePathField = z
 const nodeIdField = z
   .string()
   .min(1)
-  .describe('docx_read、docx_search 或写入结果返回的 nodeId，直接照抄')
+  .describe('docx_read_nodes、docx_search 或写入结果返回的 nodeId，直接照抄')
 
 export const docxNodeRangeSchema = z.discriminatedUnion('type', [
   z
@@ -281,14 +281,14 @@ export const docxSearchSchema = z
   })
   .strict()
 
-export const docxReadSchema = z
+export const docxReadNodesSchema = z
   .object({
     sourcePath: sourcePathField,
     range: z.discriminatedUnion('type', [
       z
         .object({
           type: z.literal('node_ids').describe('读取指定节点'),
-          nodeIds: z.array(nodeIdField).min(1).describe('要读取的 nodeId')
+          nodeIds: z.array(nodeIdField).min(1).max(20).describe('要读取的 1 至 20 个 nodeId')
         })
         .strict(),
       z
@@ -301,6 +301,24 @@ export const docxReadSchema = z
     ])
   })
   .strict()
+  .superRefine((value, context) => {
+    if (value.range.type !== 'node_index') return
+    if (value.range.toNodeIndex < value.range.fromNodeIndex) {
+      context.addIssue({
+        code: 'custom',
+        path: ['range', 'toNodeIndex'],
+        message: 'toNodeIndex 必须大于或等于 fromNodeIndex'
+      })
+      return
+    }
+    if (value.range.toNodeIndex - value.range.fromNodeIndex + 1 > 50) {
+      context.addIssue({
+        code: 'custom',
+        path: ['range'],
+        message: '单次最多读取 50 个根节点，请先用 outline 或 search 缩小范围'
+      })
+    }
+  })
 
 const docxParagraphDraftSchema = z
   .object({
@@ -663,7 +681,7 @@ export const docxMediaEditSchema = z.discriminatedUnion('type', [
     .object({
       ...contentEditBase,
       type: z.literal('replace_image'),
-      visualId: z.string().min(1).describe('docx_read 返回的 visualId'),
+      visualId: z.string().min(1).describe('docx_read_nodes 返回的 visualId'),
       imagePath: z.string().min(1).describe('新图片绝对路径')
     })
     .strict(),

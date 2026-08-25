@@ -40,8 +40,7 @@ export const RUNTIME_SKILL_CATALOG = {
     countsTowardToolBudget: false,
     title: 'text-file',
     displayName: '文件编辑器',
-    description:
-      '读取和写入 Markdown、TXT、代码等 UTF-8 普通文本文件，并返回文本、行范围、执行结果和文件修改记录。 碰到有文本文件操作的需要时，必须要使用该技能'
+    description: '读取和写入 Markdown、TXT、代码等 UTF-8 普通文本文件。'
   },
   'kb-retrieval': {
     familyId: 'kb',
@@ -67,8 +66,7 @@ export const RUNTIME_SKILL_CATALOG = {
     countsTowardToolBudget: true,
     title: 'docx-read',
     displayName: 'docx 阅读器',
-    description:
-      '读取 .docx、.doc 文档的结构、递归内容树、检索结果和视觉内容，并返回块级索引、正文、节点、匹配信息或视觉识别结果。 碰到有word文件阅读的需要时，必须要使用该技能'
+    description: '读取 .docx、.doc 的结构、节点、检索结果和视觉内容。'
   },
   'docx-write': {
     familyId: 'docx',
@@ -76,8 +74,7 @@ export const RUNTIME_SKILL_CATALOG = {
     countsTowardToolBudget: true,
     title: 'docx-write',
     displayName: 'docx 写作器',
-    description:
-      '加载 4 个 DOCX 读取工具和 5 个写入工具；先读取稳定 nodeId，再局部修改内容、格式、表格、媒体、批注或修订，并返回变化节点。碰到有操作 Word 文件的需要时，必须使用该技能。'
+    description: '读取稳定 nodeId，并局部修改 DOCX 内容、格式、表格、媒体、批注和修订。'
   },
   'pdf-read': {
     familyId: 'pdf',
@@ -85,8 +82,7 @@ export const RUNTIME_SKILL_CATALOG = {
     countsTowardToolBudget: true,
     title: 'pdf-read',
     displayName: 'PDF 阅读器',
-    description:
-      '读取 PDF 文档信息、页级文本、检索结果和页面视觉内容，并返回元数据、正文、匹配位置或视觉识别结果。 碰到有pdf文件阅读的需要时，必须要使用该技能'
+    description: '读取 PDF 文档信息、页级文本、检索结果和页面视觉内容。'
   },
   'ppt-read': {
     familyId: 'ppt',
@@ -94,8 +90,7 @@ export const RUNTIME_SKILL_CATALOG = {
     countsTowardToolBudget: true,
     title: 'ppt-read',
     displayName: 'PPT 阅读器',
-    description:
-      '读取 PPTX 的页面结构、内容、搜索结果和页面视觉内容，并返回页面提纲、元素、匹配位置或视觉识别结果。碰到有ppt文件阅读的需要时，必须要使用该技能'
+    description: '读取 PPTX 的页面结构、内容、搜索结果和页面视觉内容。'
   },
   'ppt-write': {
     familyId: 'ppt',
@@ -103,8 +98,7 @@ export const RUNTIME_SKILL_CATALOG = {
     countsTowardToolBudget: true,
     title: 'ppt-write',
     displayName: 'PPT 编辑器',
-    description:
-      '使用受限 HTML 创建或编辑 PPTX 页面和元素，并返回变化页面回读和布局警告。碰到操作ppt文件的需要时，必须要使用该技能'
+    description: '使用受限 HTML 创建或编辑 PPTX 页面和元素。'
   },
   'excel-read': {
     familyId: 'excel',
@@ -112,8 +106,7 @@ export const RUNTIME_SKILL_CATALOG = {
     countsTowardToolBudget: true,
     title: 'excel-read',
     displayName: 'Excel 阅读器',
-    description:
-      '读取 Excel 工作簿、工作表、单元格范围、公式和值，并返回结构概览、搜索结果和单元格明细。碰到有excel文件阅读的需要时，必须要使用该技能'
+    description: '读取 Excel 工作簿、工作表、单元格范围、公式和值。'
   },
   'excel-write': {
     familyId: 'excel',
@@ -121,8 +114,7 @@ export const RUNTIME_SKILL_CATALOG = {
     countsTowardToolBudget: true,
     title: 'excel-write',
     displayName: 'Excel 编辑器',
-    description:
-      '创建或编辑 Excel 工作簿中的工作表、单元格、公式、格式和结构，并返回写入后的范围、回读值和文件修改记录。碰到有操作excel文件的需要时，必须要使用该技能'
+    description: '创建或编辑 Excel 工作簿中的工作表、单元格、公式、格式和结构。'
   },
   'image-recognition': {
     familyId: 'image-recognition',
@@ -166,7 +158,7 @@ export const RUNTIME_TOOL_CATALOG = {
   kb_list_documents: { familyId: 'kb', skillId: 'kb-retrieval' },
   docx_read_outline: { familyId: 'docx', skillId: 'docx-read' },
   docx_search: { familyId: 'docx', skillId: 'docx-read' },
-  docx_read: { familyId: 'docx', skillId: 'docx-read' },
+  docx_read_nodes: { familyId: 'docx', skillId: 'docx-read' },
   docx_read_visuals: { familyId: 'docx', skillId: 'docx-read' },
   docx_content_edit: { familyId: 'docx', skillId: 'docx-write' },
   docx_format: { familyId: 'docx', skillId: 'docx-write' },

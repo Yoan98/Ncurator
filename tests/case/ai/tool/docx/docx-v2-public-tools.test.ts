@@ -71,7 +71,7 @@ describe('ai tool docx v2 backend', () => {
           })
           const paragraph = outline.nodes.find((node) => node.type === 'paragraph')!
           const table = outline.nodes.find((node) => node.type === 'table')!
-          const readBefore = await harness.invoke<ReadResult>('docx_read', {
+          const readBefore = await harness.invoke<ReadResult>('docx_read_nodes', {
             sourcePath,
             range: { type: 'node_ids', nodeIds: [paragraph.nodeId, table.nodeId] }
           })
@@ -120,7 +120,7 @@ describe('ai tool docx v2 backend', () => {
             sourcePath,
             query: 'Beta'
           })
-          const readAfter = await harness.invoke<ReadResult>('docx_read', {
+          const readAfter = await harness.invoke<ReadResult>('docx_read_nodes', {
             sourcePath,
             range: { type: 'node_ids', nodeIds: [paragraph.nodeId, table.nodeId] }
           })

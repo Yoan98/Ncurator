@@ -368,7 +368,7 @@ export const renderToolResultDataText = (
     case 'docx_media_edit':
     case 'docx_comments_revisions':
       return renderDocxCreateResult(value)
-    case 'docx_read':
+    case 'docx_read_nodes':
       return renderDocxReadResult(value)
     case 'docx_search':
       return renderDocxSearchResult(value)

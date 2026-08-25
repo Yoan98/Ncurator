@@ -3,10 +3,9 @@ import type { AiRunContext } from '../../../types'
 import type { HumanPlanItem, HumanRuntimeCache, HumanState } from '../../types'
 import { normalizePlanItems } from '../../memory/thoughtMemory'
 import { emitToolCallResult, emitToolCallStarted } from '../../tools/utils/toolEvents'
-import { advanceDispatchState } from '../dispatch'
 import { UPDATE_PLAN_SCHEMA } from '../../tools/agentControl/toolSpecs'
 import { appendToolFeedback } from '../../shared/toolFeedback'
-import { returnToBrain } from '../utils/stateTransitions'
+import { returnToDispatch } from '../utils/stateTransitions'
 
 const parsePlanArgs = (
   args: JsonObject
@@ -26,7 +25,7 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
 
     const pendingRound = state.execution.pendingRound
     if (!pendingRound || pendingRound.nextAction.action !== 'plan') {
-      return advanceDispatchState(state)
+      return returnToDispatch(state)
     }
 
     const calls = pendingRound.nextAction.calls
@@ -44,12 +43,9 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     }
 
     let nextPlan = state.memory.plan
-    let hasInvalid = false
-
     for (const call of calls) {
       const parsed = parsePlanArgs(call.args)
       if (!parsed.ok) {
-        hasInvalid = true
         emitToolCallResult({
           ctx: input.ctx,
           runId: input.ctx.runId,
@@ -94,21 +90,7 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       })
     }
 
-    if (hasInvalid) {
-      return returnToBrain(state, {
-        execution: {
-          stage: 'context_budget',
-          pendingDispatch: undefined
-        },
-        memory: {
-          ...state.memory,
-          plan: nextPlan
-        }
-      })
-    }
-
-    return advanceDispatchState({
-      ...state,
+    return returnToDispatch(state, {
       memory: {
         ...state.memory,
         plan: nextPlan

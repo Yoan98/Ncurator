@@ -104,7 +104,8 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
   </delivery_contract>
 
   <special_notes>
-    - .doc 为只读旧格式，禁止任何编辑,也不要用 terminal 或其他工具尝试修改 .doc 文件。碰到 .doc 时跳过对它的处理，继续推进其他事项。
+    - Word、Excel、PPT、PDF 文件必须使用对应技能处理,terminal 只可辅助，不得直接修改这些文件。
+    - .doc 是只读旧格式，禁止编辑；遇到 .doc 编辑请求时保留原文件并继续处理其他事项。
   </special_notes>
 
   <skill_catalog>

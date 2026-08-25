@@ -21,9 +21,9 @@ describe('ai unit human tool result renderers', () => {
     expect(rendered).toContain('timedOut=false')
   })
 
-  it('renders nested docx_read table, cell and runs details', () => {
+  it('renders nested docx_read_nodes table, cell and runs details', () => {
     const rendered = renderToolResultDataText({
-      toolName: 'docx_read',
+      toolName: 'docx_read_nodes',
       data: {
         sourcePath: 'graphics.docx',
         nodes: [

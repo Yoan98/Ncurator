@@ -154,7 +154,7 @@ describe('ai unit learning partial success', () => {
       }
     })
 
-    expect(nextState.execution.stage).toBe('context_budget')
+    expect(nextState.execution.stage).toBe('dispatch')
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
       requestedSkillIds: ['terminal'],
       loadedSkillIds: [],

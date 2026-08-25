@@ -10,7 +10,7 @@ import {
   docxFormatSchema,
   docxMediaEditSchema,
   docxOutlineSchema,
-  docxReadSchema,
+  docxReadNodesSchema,
   docxSearchSchema,
   docxTableEditSchema,
   docxReadVisualsSchema,
@@ -177,7 +177,7 @@ export type DocxMediaEditRequest = z.infer<typeof docxMediaEditSchema>
 export type DocxCommentsRevisionsRequest = z.infer<typeof docxCommentsRevisionsSchema>
 export type DocxNodeOutlineRequest = z.infer<typeof docxOutlineSchema>
 export type DocxNodeSearchRequest = z.infer<typeof docxSearchSchema>
-export type DocxNodeReadRequest = z.infer<typeof docxReadSchema>
+export type DocxNodeReadRequest = z.infer<typeof docxReadNodesSchema>
 
 export type DocxMutationChange =
   | {

@@ -71,7 +71,7 @@ const TOOL_UI_KINDS = {
   kb_list_documents: 'kb',
   docx_read_outline: 'docx-read',
   docx_search: 'docx-read',
-  docx_read: 'docx-read',
+  docx_read_nodes: 'docx-read',
   docx_read_visuals: 'docx-read',
   docx_content_edit: 'docx-edit',
   docx_format: 'docx-edit',

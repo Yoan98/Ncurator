@@ -6,8 +6,9 @@ import {
   DOCX_TOOL_SPECS,
   DOCX_WRITE_TOOL_SPECS
 } from '../../../../src/main/services/ai/human/tools/docx/toolSpecs'
+import { docxReadNodesSchema } from '../../../../src/main/services/ai/human/tools/docx/schemas'
 
-const READ_TOOLS = ['docx_read_outline', 'docx_search', 'docx_read', 'docx_read_visuals']
+const READ_TOOLS = ['docx_read_outline', 'docx_search', 'docx_read_nodes', 'docx_read_visuals']
 const WRITE_TOOLS = [
   'docx_content_edit',
   'docx_format',
@@ -33,5 +34,29 @@ describe('ai unit docx tool contract', () => {
       expect(spec.promptSpec.description).not.toContain('nodeId')
       expect(spec.promptSpec.description).not.toContain('\n')
     }
+  })
+
+  it('bounds detailed node reads', () => {
+    expect(
+      docxReadNodesSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        range: { type: 'node_index', fromNodeIndex: 10, toNodeIndex: 59 }
+      }).success
+    ).toBe(true)
+    expect(
+      docxReadNodesSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        range: { type: 'node_index', fromNodeIndex: 10, toNodeIndex: 60 }
+      }).success
+    ).toBe(false)
+    expect(
+      docxReadNodesSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        range: {
+          type: 'node_ids',
+          nodeIds: Array.from({ length: 21 }, (_, index) => `node-${String(index)}`)
+        }
+      }).success
+    ).toBe(false)
   })
 })

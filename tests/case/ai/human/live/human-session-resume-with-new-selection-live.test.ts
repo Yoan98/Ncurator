@@ -39,7 +39,7 @@ const hasOverfittingEvidence = (events: readonly AiRunEvent[]): boolean =>
   filterAiRunEventsByType(events, 'tool_call_result').some((event) => {
     const text = eventText(event)
     return (
-      ['docx_search', 'docx_read'].includes(String(event.toolName || '')) &&
+      ['docx_search', 'docx_read_nodes'].includes(String(event.toolName || '')) &&
       /深度学习\.docx/.test(text) &&
       /(过拟合|过度拟合)/.test(text) &&
       /(训练时间过久|记住过多训练数据|只针对于这部分训练数据|不太具有展望性)/.test(text)
@@ -63,7 +63,7 @@ const runUsedSelectedFile = (
     (event) =>
       event.runId === runId &&
       ['tool_call_started', 'tool_call_result'].includes(event.type) &&
-      ['docx_search', 'docx_read'].includes(String(event.toolName || '')) &&
+      ['docx_search', 'docx_read_nodes'].includes(String(event.toolName || '')) &&
       eventText(event).includes(fileName)
   )
 

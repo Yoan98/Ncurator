@@ -77,7 +77,7 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep.availableToolNames.includes('kb_search') &&
             latestLearningStep.availableToolNames.includes('docx_read_outline') &&
             latestLearningStep.availableToolNames.includes('docx_search') &&
-            latestLearningStep.availableToolNames.includes('docx_read') &&
+            latestLearningStep.availableToolNames.includes('docx_read_nodes') &&
             latestLearningStep.availableToolNames.includes('docx_read_visuals') &&
             latestLearningStep.availableToolNames.includes('docx_content_edit') &&
             latestLearningStep.availableToolNames.includes('docx_format') &&

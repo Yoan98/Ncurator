@@ -178,7 +178,7 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、单 
 - What：literal 搜索在直接匹配为空时使用受控别名回退。
 - Why：用户和文档常用词不同，AI 仍需获得可继续 read 的节点。
 - How：以“过拟合/过度拟合”等 fixture 执行搜索。
-- Oracle：回退命中正确节点，返回的 `nodeId` 可直接交给 `docx_read`。
+- Oracle：回退命中正确节点，返回的 `nodeId` 可直接交给 `docx_read_nodes`。
 - Not：不扩展为无边界同义词生成。
 
 ##### `docx-search-regex-contract`
@@ -718,6 +718,24 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、单 
 - Oracle：第二轮 `brain` prompt 中出现前一轮写入的 plan 项标题，任务最终完成。
 - Not：不验证更复杂的 memory 压缩策略。
 
+##### `human-mixed-tool-dispatch`
+
+- 测试类型：`backend / mock-llm`
+- What：同一轮 assistant 返回 learning、plan 和 hand 混合工具调用时，全部调用只由 dispatch 按原顺序消费。
+- Why：任一领域节点自行推进或清空队列，都会造成工具被跳过以及缺少 `tool_call_id` 对应结果的 provider 400。
+- How：覆盖 `update_plan + docx_search + docx_read_nodes`、连续两个 `learn_skill`、工具参数失败和审批拒绝后仍有剩余调用四个子场景。
+- Oracle：dispatch 是唯一改变 `pendingDispatch` 的节点；每个调用产生且只产生一条同 ID ToolMessage；失败不丢弃后续调用；下一轮 provider 消息序列合法。
+- Not：不要求不同资源的 hand 工具并行，执行顺序以原始 tool_calls 为准。
+
+##### `human-mixed-tool-dispatch-after-invalid-plan`
+
+- 测试类型：`backend / mock-llm`
+- What：混合调用中的 `update_plan` 参数无效时，后续 hand 调用仍由 dispatch 执行。
+- Why：控制工具失败不能清空同一 assistant 消息尚未消费的工具队列。
+- How：同一轮依次返回无效 `update_plan` 与 `kb_list_documents`，下一轮检查消息记录。
+- Oracle：plan 获得失败 ToolMessage，KB 工具获得成功 ToolMessage，任务正常完成且没有悬空 tool_call_id。
+- Not：不检查模型如何根据错误计划重新规划。
+
 ##### `conversation-memory-multi-run-recall`
 
 - 测试类型：`backend`
@@ -924,7 +942,7 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、单 
 - What：live 模式下 `human` 在复杂 positioned docx 中会跳过命中的复杂定位排版区域，并继续尝试处理其他可安全编辑的位置。
 - Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 即使只是原地改字也可能因结构重写而错位；这条 case 要长期守住“positioned 区域只读、自动写入必须拒绝并给用户手动提示”的能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；只将 `图形学.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想把‘反走样’这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：事件流中至少一次 `docx_search` / `docx_read` / `docx_read_outline` 覆盖 `图形学.docx`；至少一次 DOCX 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；命中区域不得发生成功写入，但允许继续编辑其他非定位区域；允许改为生成独立补充稿，也允许在最终答复中直接交付可粘贴的完整说明和总结表。按 10 分制评估目标读取、保护触发、写入安全、手动说明、内容可用性和 artifact 一致性，严格超过 8 分通过，不把内部完成状态作为单独失败条件。
+- Oracle：事件流中至少一次 `docx_search` / `docx_read_nodes` / `docx_read_outline` 覆盖 `图形学.docx`；至少一次 DOCX 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；命中区域不得发生成功写入，但允许继续编辑其他非定位区域；允许改为生成独立补充稿，也允许在最终答复中直接交付可粘贴的完整说明和总结表。按 10 分制评估目标读取、保护触发、写入安全、手动说明、内容可用性和 artifact 一致性，严格超过 8 分通过，不把内部完成状态作为单独失败条件。
 - Not：不要求固定使用哪一种 docx 写工具，也不要求最终答复使用固定措辞。
 
 ##### `human-kb-guided-docx-comparison-draft-live`

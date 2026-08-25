@@ -94,7 +94,7 @@ describe('ai human live backend', () => {
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
-              toolNames.includes('docx_read') &&
+              toolNames.includes('docx_read_nodes') &&
               [...visualTexts, ...analyzeTexts].some((text) => /IMAGE/i.test(text)) &&
               !toolNames.some((toolName) =>
                 [

@@ -16,11 +16,7 @@ import {
 } from '../../skills'
 import { ensureSkillTools } from './skillLoader'
 import { countActiveToolNamesForSkillIds, fitSkillIdsToToolBudget } from './toolBudget'
-import {
-  returnToBrain,
-  returnToBrainAfterTrace
-} from '../utils/stateTransitions'
-import { advanceDispatchState } from '../dispatch'
+import { returnToBrainAfterTrace, returnToDispatch } from '../utils/stateTransitions'
 import { emitLearningCompleted, emitLearningStarted } from '../../../events/processEvents'
 import { appendToolFeedback } from '../../shared/toolFeedback'
 
@@ -128,7 +124,7 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
 
     const pendingRound = state.execution.pendingRound
     if (!pendingRound || pendingRound.nextAction.action !== 'learning') {
-      return advanceDispatchState(state)
+      return returnToDispatch(state)
     }
 
     const rawRequestedSkillIds = pendingRound.nextAction.wantLearnSkillIds
@@ -176,11 +172,9 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         toolCallId: learnToolCallId,
         content: learningResult
       })
-      return returnToBrain(state, {
+      return returnToDispatch(state, {
         execution: {
-          lastLearningOutcome,
-          pendingDispatch: undefined,
-          stage: 'context_budget'
+          lastLearningOutcome
         },
         memory: {
           ...state.memory
@@ -211,11 +205,9 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         toolCallId: learnToolCallId,
         content: learningResult
       })
-      return returnToBrain(state, {
+      return returnToDispatch(state, {
         execution: {
-          lastLearningOutcome,
-          pendingDispatch: undefined,
-          stage: 'context_budget'
+          lastLearningOutcome
         },
         memory: {
           ...state.memory
