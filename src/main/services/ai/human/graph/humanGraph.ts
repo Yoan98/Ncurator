@@ -8,7 +8,6 @@ import { createContextBudgetNode } from '../node/contextBudgetNode'
 import { createLearningNode } from '../node/learningNode'
 import { createPlanNode } from '../node/planNode'
 import { createHandNode } from '../node/handNode'
-import { createMouthNode } from '../node/mouthNode'
 import { createHumanRuntimeCache } from '../node/utils/runtimeCache'
 import { advanceDispatchState } from '../node/dispatch'
 import { createHumanRunStateSchema, createInitialHumanState } from '../state/schema'
@@ -59,19 +58,17 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
     try {
       const contextBudgetNode = createContextBudgetNode({ ctx, cache })
       const contextCompactionNode = createContextCompactionNode({ ctx, cache })
-      const brainNode = createBrainNode({ ctx, cache })
-      const learningNode = createLearningNode({ ctx, cache })
-      const planNode = createPlanNode({ ctx, cache })
-      const handNode = createHandNode({ ctx, cache })
-      const mouthNode = createMouthNode({
+      const brainNode = createBrainNode({
         ctx,
         cache,
         emitAnswerEvents: Boolean(options.emitAnswerEvents)
       })
+      const learningNode = createLearningNode({ ctx, cache })
+      const planNode = createPlanNode({ ctx, cache })
+      const handNode = createHandNode({ ctx, cache })
 
       const routeToolReturn = (state: HumanState): string => {
         if (state.execution.stage === 'context_budget') return 'human_context_budget_node'
-        if (state.execution.stage === 'mouth') return 'human_mouth_node'
         return 'human_dispatch_node'
       }
 
@@ -93,7 +90,6 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         )
         .addNode('human_plan_node', (state) => runNodeWithSnapshot(state as HumanState, planNode))
         .addNode('human_hand_node', (state) => runNodeWithSnapshot(state as HumanState, handNode))
-        .addNode('human_mouth_node', (state) => runNodeWithSnapshot(state as HumanState, mouthNode))
         .addEdge(START, 'human_context_budget_node')
         .addConditionalEdges('human_context_budget_node', (state) => {
           const humanState = state as HumanState
@@ -105,8 +101,8 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         .addEdge('human_context_compaction_node', 'human_context_budget_node')
         .addConditionalEdges('human_brain_node', (state) => {
           const humanState = state as HumanState
+          if (humanState.execution.status === 'completed') return END
           if (humanState.execution.stage === 'dispatch') return 'human_dispatch_node'
-          if (humanState.execution.stage === 'mouth') return 'human_mouth_node'
           return 'human_context_budget_node'
         })
         .addConditionalEdges('human_dispatch_node', (state) => {
@@ -114,18 +110,11 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           if (humanState.execution.stage === 'learning') return 'human_learning_node'
           if (humanState.execution.stage === 'plan') return 'human_plan_node'
           if (humanState.execution.stage === 'hand') return 'human_hand_node'
-          if (humanState.execution.stage === 'mouth') return 'human_mouth_node'
-          if (humanState.execution.stage === 'context_budget') return 'human_context_budget_node'
           return 'human_context_budget_node'
         })
         .addConditionalEdges('human_learning_node', (state) => routeToolReturn(state as HumanState))
         .addConditionalEdges('human_plan_node', (state) => routeToolReturn(state as HumanState))
         .addConditionalEdges('human_hand_node', (state) => routeToolReturn(state as HumanState))
-        .addConditionalEdges('human_mouth_node', (state) => {
-          const humanState = state as HumanState
-          if (humanState.execution.status === 'running') return 'human_context_budget_node'
-          return END
-        })
         .compile()
 
       const baseInitialState = options.initialState || createInitialHumanState(taskInput)

@@ -362,9 +362,6 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
       title: true,
       status: true
     }
-  },
-  finish: {
-    message: true
   }
 }
 

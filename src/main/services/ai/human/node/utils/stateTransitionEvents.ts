@@ -8,7 +8,7 @@ import type {
 import { getEffectiveLearnedSkillIds } from '../../skills'
 import { getAvailableToolNames } from './runtimeCache'
 
-export type HumanEventStage = 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
+export type HumanEventStage = 'human_brain' | 'human_learning' | 'human_hand'
 
 const emitHumanStep = (input: {
   ctx: AiRunContext

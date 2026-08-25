@@ -125,17 +125,10 @@ describe('ai human mock-llm backend', () => {
                 },
                 {
                   output: buildCompleteTaskDecision({
-                    summary: 'PDF 文本和图片信息都已读取。'
-                  })
-                }
-              ],
-              'human.mouth': [
-                {
-                  output: {
-                    summary: '已完成 PDF 图文阅读。',
+                    summary: 'PDF 文本和图片信息都已读取。',
                     deliveryMarkdown:
                       '训练闭环由 inputs、parameters、architecture、predictions、labels、loss 和 update 组成；Overfit 时训练与验证表现差距明显。'
-                  }
+                  })
                 }
               ]
             }

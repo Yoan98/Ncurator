@@ -989,7 +989,7 @@ export type RuntimeIssueCode =
   | 'approval_denied'
   | 'llm_usage_unavailable'
 export type RuntimeSkillId = RegisteredRuntimeSkillId
-export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_plan' | 'human_hand' | 'human_mouth'
+export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_plan' | 'human_hand'
 export type AssistantProcessDisplay =
   | { kind: 'thinking' }
   | { kind: 'learning'; skillId: RuntimeSkillId }

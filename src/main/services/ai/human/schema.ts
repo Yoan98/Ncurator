@@ -116,20 +116,12 @@ export const humanNextActionSchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('plan'),
     calls: handCallsSchema
-  }),
-  z.object({
-    action: z.literal('mouth'),
-    evidenceReferences: z.array(brainEvidenceReferenceSchema).optional(),
-    // content-safety 直达 mouth 时没有 finish 工具调用，因此 toolCallId 允许缺省（仅此一个合法例外）。
-    toolCallId: z.string().min(1).optional()
   })
 ])
 
 export const humanDeliveryPayloadSchema = z.object({
   deliveryMarkdown: z.string().default('')
 })
-
-export const mouthOutputSchema = humanDeliveryPayloadSchema
 
 export const fileChangeSummaryItemSchema = z.object({
   id: z.string().min(1),
@@ -167,7 +159,7 @@ export const humanDispatchItemSchema = z.object({
   toolCallId: z.string().min(1),
   toolName: z.string().min(1),
   args: jsonObjectSchema,
-  target: z.enum(['learning', 'plan', 'hand', 'mouth'])
+  target: z.enum(['learning', 'plan', 'hand'])
 })
 
 export const humanExecutionSchema = z.object({

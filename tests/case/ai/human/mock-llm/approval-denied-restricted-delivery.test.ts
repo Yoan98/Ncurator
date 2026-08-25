@@ -33,16 +33,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '审批拒绝已被正确处理。'
-                })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
                   summary: '审批拒绝已被正确处理。',
                   deliveryMarkdown: '# Approval Denied\n\n已说明命令因审批被拒绝而未执行。'
-                }
+                })
               }
             ]
           }

@@ -42,7 +42,8 @@ describe('ai tool docx backend', () => {
               },
               {
                 type: 'insert_blocks',
-                location: { blockId: firstBlockId, position: 'before' },
+                blockId: firstBlockId,
+                position: 'before',
                 blocks: [docxParagraphNode('前置内容。')]
               }
             ]

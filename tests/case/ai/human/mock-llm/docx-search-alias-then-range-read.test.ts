@@ -76,17 +76,10 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: 'alias fallback 与区间精读已验证。'
-                })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
                   summary: 'alias fallback 与区间精读已验证。',
                   deliveryMarkdown:
                     '# Alias Fallback\n\n文档把过拟合写作过度拟合，并给出了训练时间过久与数据增强等线索。'
-                }
+                })
               }
             ]
           }

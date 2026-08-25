@@ -100,18 +100,18 @@ describe('ai tool docx backend', () => {
               {
                 type: 'update_table_cell',
                 cellBlockId: ownerCellBlockId,
-                children: [docxParagraphNode('Bob')]
+                blocks: [docxParagraphNode('Bob')]
               },
               {
                 type: 'insert_blocks',
-
-                location: { blockId: insertAfterAnchor, position: 'after' },
+                blockId: insertAfterAnchor,
+                position: 'after',
                 blocks: [docxParagraphNode('Inserted after anchor.')]
               },
               {
                 type: 'insert_blocks',
-
-                location: { blockId: insertBeforeAnchor, position: 'before' },
+                blockId: insertBeforeAnchor,
+                position: 'before',
                 blocks: [docxParagraphNode('Inserted before anchor.')]
               },
               {

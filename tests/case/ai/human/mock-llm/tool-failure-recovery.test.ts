@@ -33,16 +33,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '工具失败已被识别并吸收。'
-                })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
                   summary: '工具失败已被识别并吸收。',
                   deliveryMarkdown: '# Failure Recovery\n\n已确认命令失败，并在最终结果中说明限制。'
-                }
+                })
               }
             ]
           }

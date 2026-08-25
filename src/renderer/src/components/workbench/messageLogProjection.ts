@@ -13,7 +13,7 @@ import type {
   AssistantProcessThought
 } from './types'
 
-const CONTROL_TOOL_NAMES = new Set(['learn_skill', 'update_plan', 'finish'])
+const CONTROL_TOOL_NAMES = new Set(['learn_skill', 'update_plan'])
 
 const isRuntimeSkillId = (value: unknown): value is RuntimeSkillId =>
   typeof value === 'string' &&

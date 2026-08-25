@@ -131,7 +131,7 @@ describe('docx recursive edit executor', () => {
           },
           {
             type: 'style',
-            target: { type: 'block', blockId },
+            target: { type: 'id', id: blockId },
             patch: { kind: 'paragraph', alignment: 'center' }
           }
         ]
@@ -159,7 +159,7 @@ describe('docx recursive edit executor', () => {
           ops: [
             {
               type: 'style',
-              target: { type: 'block', blockId: styledIndex.bodyBlockIds[0]! },
+              target: { type: 'id', id: styledIndex.bodyBlockIds[0]! },
               patch: { kind: 'table', alignment: 'left' }
             }
           ]

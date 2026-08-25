@@ -80,13 +80,6 @@ export const resolveInternalBlockId = (identity: DocxIdentityIndex, publicId: st
   return internalId
 }
 
-export const resolveInternalNodeId = (identity: DocxIdentityIndex, publicId: string): string => {
-  const internalId = identity.internalNodeIdByPublicId.get(publicId)
-  if (!internalId)
-    throw new Error(`stale or unknown docx nodeId: ${publicId}; read the block again`)
-  return internalId
-}
-
 export const resolveInternalVisualId = (identity: DocxIdentityIndex, publicId: string): string => {
   const internalId = identity.internalVisualIdByPublicId.get(publicId)
   if (!internalId)
@@ -222,16 +215,15 @@ export const toInternalOp = (identity: DocxIdentityIndex, op: DocxOp): DocxOp =>
         target: { ...op.target, blockIds: translateIds(identity, op.target.blockIds) }
       }
     }
-    if (op.target.type === 'node') {
-      return {
-        ...op,
-        target: { ...op.target, nodeId: resolveInternalNodeId(identity, op.target.nodeId) }
-      }
+    const blockInternal = identity.internalIdByPublicId.get(op.target.id)
+    if (blockInternal) {
+      return { ...op, target: { type: 'id', id: blockInternal } }
     }
-    return {
-      ...op,
-      target: { ...op.target, blockId: resolveInternalBlockId(identity, op.target.blockId) }
+    const nodeInternal = identity.internalNodeIdByPublicId.get(op.target.id)
+    if (nodeInternal) {
+      return { ...op, target: { type: 'id', id: nodeInternal } }
     }
+    throw new Error(`stale or unknown docx style target id: ${op.target.id}; read the document again`)
   }
   if (op.type === 'create_document') return op
   return { ...op, blockId: resolveInternalBlockId(identity, op.blockId) }

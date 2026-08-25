@@ -1,6 +1,5 @@
 import type { AiRunContext } from '../../../types'
 import type {
-  HumanNextAction,
   HumanRoundThought,
   HumanRuntimeCache,
   HumanState,
@@ -56,38 +55,6 @@ export const returnToBrainAfterTrace = (input: {
   return nextState
 }
 
-export const applyBrainDecisionTransition = (input: {
-  ctx: AiRunContext
-  cache: HumanRuntimeCache
-  state: HumanState
-  thought: HumanRoundThought
-  nextAction: HumanNextAction
-  overrides?: HumanStateOverrides
-}): HumanState => {
-  const nextState = applyBrainDecisionState({
-    state: input.state,
-    thought: input.thought,
-    nextAction: input.nextAction,
-    createdAt: Date.now(),
-    overrides: input.overrides
-  })
-
-  emitLatestHumanStepForState({
-    ctx: input.ctx,
-    cache: input.cache,
-    taskId: input.state.task.taskId,
-    state: nextState,
-    stage: 'human_brain'
-  })
-  emitAssistantProcessThought({
-    sendEvent: input.ctx.sendEvent,
-    runId: input.ctx.runId,
-    text: input.thought.text
-  })
-
-  return nextState
-}
-
 export const applyBrainDispatchTransition = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
@@ -97,13 +64,7 @@ export const applyBrainDispatchTransition = (input: {
 }): HumanState => {
   const peeked = peekDispatchGroup(input.dispatchQueue)
   if (peeked.empty) {
-    return applyBrainDecisionTransition({
-      ctx: input.ctx,
-      cache: input.cache,
-      state: input.state,
-      thought: input.thought,
-      nextAction: { action: 'mouth' }
-    })
+    throw new Error('brain 交付不应通过空 dispatch 队列处理。')
   }
 
   const base = applyBrainDecisionState({
@@ -155,7 +116,7 @@ export const completeHumanTask = (input: {
       runId: input.ctx.runId,
       taskId: input.state.task.taskId,
       text: input.deliveryMarkdown,
-      stage: 'human_mouth'
+      stage: 'human_brain'
     })
   }
 
@@ -169,7 +130,7 @@ export const completeHumanTask = (input: {
     cache: input.cache,
     taskId: input.state.task.taskId,
     state: nextState,
-    stage: 'human_mouth'
+    stage: 'human_brain'
   })
 
   return nextState

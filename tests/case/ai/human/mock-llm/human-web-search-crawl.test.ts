@@ -62,14 +62,11 @@ describe('ai human mock-llm web backend', () => {
                   summary: '读取通知正文'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: '已查到截止时间。' }) }
-            ],
-            'human.mouth': [
               {
-                output: {
+                output: buildCompleteTaskDecision({
                   summary: '已查到截止时间。',
                   deliveryMarkdown: '申报截止时间为 2026-09-30。来源：https://example.test/policy'
-                }
+                })
               }
             ]
           }

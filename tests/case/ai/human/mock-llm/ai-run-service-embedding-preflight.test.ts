@@ -109,16 +109,9 @@ describe('ai human mock-llm backend', () => {
                 },
                 {
                   output: buildCompleteTaskDecision({
-                    summary: 'embedding preflight 已验证。'
-                  })
-                }
-              ],
-              'human.mouth': [
-                {
-                  output: {
                     summary: 'embedding preflight 已验证。',
                     deliveryMarkdown: '# Embedding Preflight\n\ndocx 读取链路已可用。'
-                  }
+                  })
                 }
               ]
             })

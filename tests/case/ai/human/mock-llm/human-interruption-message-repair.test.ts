@@ -70,7 +70,7 @@ describe('ai human mock-llm backend', () => {
       suite: 'human',
       groups: ['mock-llm'],
       description:
-        '验证续接时消息数组 = system + 历史(含 mouth 交付 user 消息) + 尾部 buildBrainUserMessage user 消息；末条 assistant 悬空 tool_calls 时补 interrupted ToolMessage。',
+        '验证续接时消息数组 = system + 历史(含最终交付 assistant 消息) + 尾部 buildBrainUserMessage user 消息；末条 assistant 悬空 tool_calls 时补 interrupted ToolMessage。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -91,9 +91,13 @@ describe('ai human mock-llm backend', () => {
                 summary: '先学习 docx-read 技能。'
               })
             },
-            { output: buildCompleteTaskDecision({ summary: '已完成过拟合整理。' }) }
-          ],
-          'human.mouth': [{ text: '已整理过拟合：概念、原因、处理方式。' }]
+            {
+              output: buildCompleteTaskDecision({
+                summary: '已完成过拟合整理。',
+                deliveryMarkdown: '已整理过拟合：概念、原因、处理方式。'
+              })
+            }
+          ]
         })
         const run1Controller = new AbortController()
         const run1Result = await AiRunService.getInstance().run(
@@ -115,8 +119,14 @@ describe('ai human mock-llm backend', () => {
           return await realChatTools(request)
         }
         const run2Driver = createScriptedStructuredOutputDriver({
-          'human.brain': [{ output: buildCompleteTaskDecision({ summary: '补充反走样完成。' }) }],
-          'human.mouth': [{ text: '已补充反走样对比。' }]
+          'human.brain': [
+            {
+              output: buildCompleteTaskDecision({
+                summary: '补充反走样完成。',
+                deliveryMarkdown: '已补充反走样对比。'
+              })
+            }
+          ]
         })
         const run2Controller = new AbortController()
         const run2Result = await AiRunService.getInstance().run(
@@ -188,8 +198,14 @@ describe('ai human mock-llm backend', () => {
           return await realChatTools(request)
         }
         const danglingRun2Driver = createScriptedStructuredOutputDriver({
-          'human.brain': [{ output: buildCompleteTaskDecision({ summary: '从中断恢复完成。' }) }],
-          'human.mouth': [{ text: '已从中断恢复继续完成。' }]
+          'human.brain': [
+            {
+              output: buildCompleteTaskDecision({
+                summary: '从中断恢复完成。',
+                deliveryMarkdown: '已从中断恢复继续完成。'
+              })
+            }
+          ]
         })
         const danglingRun2Controller = new AbortController()
         const danglingRun2Result = await AiRunService.getInstance().run(
@@ -210,12 +226,6 @@ describe('ai human mock-llm backend', () => {
 
         const orderLast = run2BrainMessages ? lastMessage(run2BrainMessages) : null
         const orderTypes = (run2BrainMessages || []).map((message) => message.getType())
-        const orderHasMouthDelivery = (run2BrainMessages || []).some(
-          (message) =>
-            message.getType() === 'human' &&
-            typeof message.content === 'string' &&
-            message.content.includes('现在面向用户交付结果')
-        )
         const orderHasRun1Final = (run2BrainMessages || []).some(
           (message) =>
             message.getType() === 'ai' &&
@@ -247,7 +257,6 @@ describe('ai human mock-llm backend', () => {
           orderTypes,
           orderLastType: orderLast?.getType() || '',
           orderLastContent: typeof orderLast?.content === 'string' ? orderLast.content : '',
-          orderHasMouthDelivery,
           orderHasRun1Final,
           orderHasRun1User,
           danglingRun1Result,
@@ -268,7 +277,6 @@ describe('ai human mock-llm backend', () => {
             result.orderLastType === 'human' &&
             result.orderLastContent.includes('<task_goal>') &&
             result.orderLastContent.includes('保留刚才的过拟合信息，再补充反走样') &&
-            result.orderHasMouthDelivery &&
             result.orderHasRun1Final &&
             result.orderHasRun1User &&
             result.danglingRun1Result.status === 'cancelled' &&
@@ -282,7 +290,7 @@ describe('ai human mock-llm backend', () => {
           {
             name: 'human-interruption-message-repair-continues-with-ordered-message-array',
             message:
-              '续接消息数组应为 system + 历史(mouth 交付 user 消息与最终答复) + 尾部 buildBrainUserMessage user 消息；悬空 tool_calls 应补 interrupted ToolMessage。',
+              '续接消息数组应为 system + 历史(最终交付 assistant 消息) + 尾部 buildBrainUserMessage user 消息；悬空 tool_calls 应补 interrupted ToolMessage。',
             data: result
           }
         )

@@ -45,8 +45,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-
-                location: { blockId: anchorA, position: 'after' },
+                blockId: anchorA,
+                position: 'after',
                 blocks: [docxParagraphNode('A1')]
               },
               {

@@ -1,4 +1,12 @@
-import { AIMessage, HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
+import {
+  AIMessage,
+  AIMessageChunk,
+  HumanMessage,
+  SystemMessage,
+  collapseToolCallChunks,
+  type BaseMessage,
+  type ToolCallChunk
+} from '@langchain/core/messages'
 import type { RunnableConfig } from '@langchain/core/runnables'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import { z } from 'zod/v4'
@@ -146,6 +154,7 @@ export type AiLlmToolCallDriverInput = {
   messages: BaseMessage[]
   tools: StructuredToolInterface[]
   temperature?: number
+  streamingMode: AiLlmStreamingMode
   observer?: LlmCallStreamObserver
   signal?: AbortSignal
 }
@@ -165,6 +174,8 @@ export type AiLlmToolCallRequest = {
   messages: BaseMessage[]
   tools: StructuredToolInterface[]
   temperature?: number
+  streamingMode?: AiLlmStreamingMode
+  onTextDelta?: (text: string) => void
   contextBudgetSnapshot?: BrainContextBudgetSnapshot
 }
 
@@ -486,7 +497,7 @@ const invokeTextMessagesChat = async (input: {
     temperature: request.temperature,
     streaming
   })
-  // mouth 等需要与 brain 共享 prompt 缓存的调用会传入与 brain 相同的 tools，
+  // 需要共享 prompt 缓存的调用会传入与 brain 相同的 tools，
   // 使工具描述被渲染进 prompt 从而命中 DeepSeek 的 KV 缓存前缀，同时保持流式输出。
   const runnable =
     request.tools && request.tools.length > 0 && baseRunnable.bindTools
@@ -580,12 +591,64 @@ const invokeStructuredChatCore = async (input: {
 type ToolCallingModel = {
   bindTools: (tools: StructuredToolInterface[]) => {
     invoke: (input: BaseMessage[], config?: Partial<RunnableConfig>) => Promise<AIMessage>
+    stream: (
+      input: BaseMessage[],
+      config?: Partial<RunnableConfig>
+    ) => Promise<AsyncIterable<AIMessageChunk>>
+  }
+}
+
+const streamToolCallingCore = async (input: {
+  request: AiLlmToolCallDriverInput
+  checkCancelled: () => void
+}): Promise<LlmCallExecutionResult<AIMessage>> => {
+  const request = input.request
+  const providerKind = resolveConfigProviderKind(request.cfg)
+  const runnable = createChatModel(request.cfg, {
+    temperature: request.temperature ?? 0.2,
+    streaming: true,
+    timeout: AI_LLM_CALL_TIMEOUT_MS
+  }) as ToolCallingModel
+  const bound = runnable.bindTools(request.tools)
+  const stream = await bound.stream(request.messages, createRunnableConfig(request.signal))
+  const textChunks: string[] = []
+  const toolCallChunks: ToolCallChunk[] = []
+  let lastChunk: AIMessageChunk | undefined
+  for await (const chunk of stream) {
+    input.checkCancelled()
+    lastChunk = chunk
+    const text = extractTextContent(chunk.content)
+    if (text) {
+      textChunks.push(text)
+      request.observer?.onDelta?.(text)
+    }
+    if (chunk.tool_call_chunks && chunk.tool_call_chunks.length > 0) {
+      toolCallChunks.push(...chunk.tool_call_chunks)
+    }
+  }
+  const collapsed = collapseToolCallChunks(toolCallChunks)
+  const rawText = textChunks.join('')
+  const message = new AIMessage({
+    content: rawText,
+    tool_calls: collapsed.tool_calls,
+    invalid_tool_calls: collapsed.invalid_tool_calls
+  })
+  const metadata = toInvocationMetadata({
+    message: lastChunk,
+    providerKind
+  })
+  return {
+    output: message,
+    rawText,
+    streamed: true,
+    ...metadata
   }
 }
 
 const invokeToolCallingCore = async (input: {
   driver?: AiLlmDriver
   request: AiLlmToolCallDriverInput
+  checkCancelled: () => void
 }): Promise<LlmCallExecutionResult<AIMessage>> => {
   if (input.driver?.chatTools) {
     const result = await input.driver.chatTools(input.request)
@@ -599,13 +662,20 @@ const invokeToolCallingCore = async (input: {
     }
   }
 
+  if (input.request.streamingMode === 'force_stream') {
+    return await streamToolCallingCore({
+      request: input.request,
+      checkCancelled: input.checkCancelled
+    })
+  }
+
   const request = input.request
   const providerKind = resolveConfigProviderKind(request.cfg)
   const runnable = createChatModel(request.cfg, {
     temperature: request.temperature ?? 0.2,
     streaming: false,
     timeout: AI_LLM_CALL_TIMEOUT_MS
-  }) as unknown as ToolCallingModel
+  }) as ToolCallingModel
   const bound = runnable.bindTools(request.tools)
   const response = await bound.invoke(request.messages, createRunnableConfig(request.signal))
   const text = extractTextContent(response.content)
@@ -808,6 +878,7 @@ export const createAiLlmExecutor = (input: {
       input.checkCancelled()
       const cfg = await input.getConfig()
       const providerKind = resolveConfigProviderKind(cfg)
+      const streamingMode = request.streamingMode || defaultStreamingMode
       const systemHash = JSON.stringify(
         request.tools.map((tool) => ({
           name: String(tool.name || '').trim(),
@@ -833,10 +904,11 @@ export const createAiLlmExecutor = (input: {
           modelName: cfg.model_name,
           baseUrl: cfg.base_url,
           providerKind,
-          streamingMode: 'force_non_stream',
+          streamingMode,
           attempt: 1,
           contextBudgetSnapshot: request.contextBudgetSnapshot
         },
+        onTextDelta: request.onTextDelta,
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
         classifyRetry: classifyLlmCallRetry,
         execute: async (observer) =>
@@ -846,6 +918,7 @@ export const createAiLlmExecutor = (input: {
             execute: async (signal) =>
               await invokeToolCallingCore({
                 driver: input.driver,
+                checkCancelled: input.checkCancelled,
                 request: {
                   caller: request.caller,
                   cfg,
@@ -853,6 +926,7 @@ export const createAiLlmExecutor = (input: {
                   messages: request.messages,
                   tools: request.tools,
                   temperature: request.temperature,
+                  streamingMode,
                   observer,
                   signal
                 }

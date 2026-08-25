@@ -2,140 +2,49 @@ import { describe, expect, it } from 'vitest'
 import { docxEditSchema } from '../../../../src/main/services/ai/human/tools/docx/schemas'
 
 describe('ai unit docx write schema contract', () => {
-  it('accepts batch docx_edit actions', () => {
+  it('accepts flat docx_edit actions', () => {
     expect(
       docxEditSchema.safeParse({
         sourcePath: 'a.docx',
         actions: [
-          {
-            type: 'replace_text',
-            blockIds: ['b:1'],
-            query: '旧词',
-            replace: '新词'
-          },
-          {
-            type: 'insert_blocks',
-            location: { blockId: 'b:2', position: 'after' },
-            blocks: [
-              {
-                type: 'paragraph',
-                children: [{ type: 'run', children: [{ type: 'text', text: '补充段落' }] }]
-              }
-            ]
-          }
+          { type: 'insert_blocks', blockId: 'b:1', position: 'after', blocks: [{ text: '补充段落' }] },
+          { type: 'replace_text', blockIds: ['b:1'], query: '旧词', replace: '新词' }
         ]
       }).success
     ).toBe(true)
   })
 
-  it('rejects legacy top-level single-action docx_edit input', () => {
+  it('accepts a table as a flat string matrix', () => {
     expect(
       docxEditSchema.safeParse({
         sourcePath: 'a.docx',
-        action: 'insert_after',
-        anchorBlockId: 'b:1',
-        blocks: [
-          {
-            type: 'paragraph',
-            text: 'hello'
-          }
-        ]
+        actions: [{ type: 'insert_blocks', blocks: [{ rows: [['列A', '列B'], ['1', '2']] }] }]
       }).success
-    ).toBe(false)
+    ).toBe(true)
   })
 
-  it('rejects mixed locators inside a docx_edit action', () => {
-    expect(
-      docxEditSchema.safeParse({
-        sourcePath: 'a.docx',
-        actions: [
-          {
-            type: 'update_table_cell',
-            cellBlockId: 'tbl:1.r:1.c:1',
-            anchorBlockId: 'b:1',
-            text: 'Bob'
-          }
-        ]
-      }).success
-    ).toBe(false)
-  })
-
-  it.each(['red', '#FF0000', 'F00', 'GG0000', ''])('rejects invalid color %j', (color) => {
-    const result = docxEditSchema.safeParse({
-      sourcePath: 'a.docx',
-      actions: [
-        {
-          type: 'style',
-          target: { type: 'text_match', query: 'Heading', blockIds: ['b:1'] },
-          patch: { kind: 'run', color }
-        }
-      ]
-    })
-
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.issues).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            path: ['actions', 0, 'patch', 'color'],
-            message: expect.stringContaining('6 hexadecimal characters')
-          })
-        ])
+  it('accepts the five style actions', () => {
+    const actions = [
+      { type: 'style_text', query: '重点', style: { bold: true } },
+      { type: 'style_paragraph', id: 'b:1', style: { alignment: 'center' } },
+      { type: 'style_table', id: 't:1', style: { layout: 'fixed' } },
+      { type: 'style_row', id: 'n:1', style: { repeatHeader: true } },
+      { type: 'style_cell', id: 'c:1', style: { shading: 'FFFF00' } }
+    ]
+    for (const action of actions) {
+      expect(docxEditSchema.safeParse({ sourcePath: 'a.docx', actions: [action] }).success).toBe(
+        true
       )
     }
   })
 
-  it.each(['FF0000', 'ff0000'])('accepts six-digit hexadecimal color %s', (color) => {
-    expect(
-      docxEditSchema.safeParse({
-        sourcePath: 'a.docx',
-        actions: [
-          {
-            type: 'style',
-            target: { type: 'text_match', query: 'Heading', blockIds: ['b:1'] },
-            patch: { kind: 'run', color }
-          }
-        ]
-      }).success
-    ).toBe(true)
-  })
-
-  it('rejects an empty style object', () => {
-    expect(
-      docxEditSchema.safeParse({
-        sourcePath: 'a.docx',
-        actions: [
-          {
-            type: 'style',
-            target: { type: 'text_match', query: 'Heading', blockIds: ['b:1'] },
-            patch: { kind: 'run' }
-          }
-        ]
-      }).success
-    ).toBe(false)
-  })
-
-  it('rejects legacy simplified blocks and style_text', () => {
+  it('rejects legacy rich-tree content blocks', () => {
     expect(
       docxEditSchema.safeParse({
         sourcePath: 'a.docx',
         actions: [
           {
             type: 'insert_blocks',
-            location: { blockId: 'b:1', position: 'after' },
-            blocks: [{ type: 'paragraph', text: 'legacy' }]
-          }
-        ]
-      }).success
-    ).toBe(false)
-    expect(
-      docxEditSchema.safeParse({
-        sourcePath: 'a.docx',
-        actions: [
-          {
-            type: 'insert_blocks',
-            position: 'after',
-            anchorBlockId: 'b:1',
             blocks: [
               {
                 type: 'paragraph',
@@ -146,10 +55,53 @@ describe('ai unit docx write schema contract', () => {
         ]
       }).success
     ).toBe(false)
+  })
+
+  it('rejects legacy unified style action', () => {
     expect(
       docxEditSchema.safeParse({
         sourcePath: 'a.docx',
-        actions: [{ type: 'style_text', blockId: 'b:1', query: 'x', style: { bold: true } }]
+        actions: [
+          { type: 'style', target: { type: 'block', blockId: 'b:1' }, patch: { kind: 'run', bold: true } }
+        ]
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects legacy top-level single-action input', () => {
+    expect(
+      docxEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        action: 'insert_after',
+        anchorBlockId: 'b:1',
+        blocks: [{ text: 'hello' }]
+      }).success
+    ).toBe(false)
+  })
+
+  it.each(['red', '#FF0000', 'F00', 'GG0000', ''])('rejects invalid color %j', (color) => {
+    const result = docxEditSchema.safeParse({
+      sourcePath: 'a.docx',
+      actions: [{ type: 'style_text', query: 'Heading', style: { color } }]
+    })
+
+    expect(result.success).toBe(false)
+  })
+
+  it('accepts a six-digit hexadecimal color', () => {
+    expect(
+      docxEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        actions: [{ type: 'style_text', query: 'Heading', style: { color: 'FF0000' } }]
+      }).success
+    ).toBe(true)
+  })
+
+  it('rejects an empty style object', () => {
+    expect(
+      docxEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        actions: [{ type: 'style_text', query: 'Heading', style: {} }]
       }).success
     ).toBe(false)
   })

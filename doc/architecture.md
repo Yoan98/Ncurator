@@ -101,11 +101,10 @@ flowchart TD
     T["会话消息记录\nchat_session_message_log"]
     R["AI Run"]
     B["context_budget\n检查上下文预算"]
-    C["brain\n决定下一步"]
+    C["brain\n决定下一步 / 最终交付"]
     L["learning\n加载 external skill"]
     D["plan\n更新执行计划"]
     H["hand\n执行工具"]
-    M["mouth\n复用消息数组交付"]
     P["context_compaction\n压缩较早历史"]
 
     U --> R
@@ -117,28 +116,27 @@ flowchart TD
     C -->|需要能力| L
     C -->|更新计划| D
     C -->|需要工具| H
-    C -->|可以答复| M
+    C -->|无工具调用=最终交付| T
     L --> B
     D --> B
     H --> B
-    M -->|最终答复 assistant| T
 ```
 
 ### 主要职责
 
 - `human` 是当前 AI run 的执行核心。
 - `brain` 通过原生 function calling 决定下一步：调用 LLM 时绑定当前可用工具（builtin + agent-control + 已学习 external），根据返回的 `tool_calls` 生成有序分发队列（dispatch）。
-- `dispatch` 按队列逐个把工具调用路由到对应节点：`learn_skill` → learning、`update_plan` → plan、`finish` → mouth、其余真实工具 → hand；队列清空后回 `context_budget`。
+- `dispatch` 按队列逐个把工具调用路由到对应节点：`learn_skill` → learning、`update_plan` → plan、其余真实工具 → hand；队列清空后回 `context_budget`。
 - `learning` 负责按需加载 external skill，执行 `learn_skill` 控制工具并把结果写回消息数组。
 - `plan` 执行 `update_plan` 控制工具，先用 `UPDATE_PLAN_SCHEMA`（`zod`）校验参数（`status` 仅允许 `todo` / `in_progress` / `done`），通过后把计划写入 `memory.plan` 并回写 `ToolMessage`；校验失败则回写 `invalid_plan` 错误 `ToolMessage` 并回到 brain 重试。
 - `hand` 负责执行真实工具，把结果以 `ToolMessage` 追加回消息数组。
-- `mouth` 由 `finish` 控制工具（或无工具调用的自然收尾）触发，复用 brain/hand 已累积的消息数组，追加一条交付指令 user 消息后流式生成最终答复（`chatMessages`），并把最终答复作为 `assistant` 转录条目写回。`finish` 统一承担「把当前进展交给用户」：仅在完成任务、或需要用户协助或确认时调用，并携带必填的 `reason` 说明结束原因；mouth 从消息数组里的 finish 调用自行总结复述，不再显式接收 finish 消息。
+- `brain` 交付：当 brain 的一轮返回没有任何 `tool_calls`（计划已全部完成，含最后的检查项）时，该轮 assistant 的 content 就是最终交付 markdown；brain 直接收尾（apply docx / commit ppt / 收集文件变更 / artifact / `answer_completed`），不再有独立的 mouth 节点与第二次交付 LLM 调用。若此时计划仍有未完成项，brain 会追加一条「交付被拒绝」提示并回到 brain 继续推进。
 - `context_budget` 负责在每一步前检查上下文预算。
 - `context_compaction` 把消息投影的较早区间压缩为一条摘要（`<compacted_history>`）并注入 `<current_state>`（完整 plan + learnedSkillIds），服务本次 run 继续推进。
 
 ### 原生 tool calling 与消息转录（唯一真相源）
 
-brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMessage`（按 `tool_call_id` 配对）追加到 append-only 的 `messages` 数组，不再把历史每轮重渲染成字符串。静态前缀（身份 + 原则 + 技能目录 + 计划契约 + 交付契约 + 本地环境）与技能目录只标注「内置 / 需学习」，不随 learn 变化，保证缓存友好。技能目录按技能渲染工具数量与「最多同时激活 30 个工具」的动态上限，不硬编码。非工具控制动作统一为 `agent-control` 内置技能的三个工具：`learn_skill`、`update_plan`、`finish`。
+brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMessage`（按 `tool_call_id` 配对）追加到 append-only 的 `messages` 数组，不再把历史每轮重渲染成字符串。静态前缀（身份 + 原则 + 技能目录 + 计划契约 + 交付契约 + 本地环境）与技能目录只标注「内置 / 需学习」，不随 learn 变化，保证缓存友好。技能目录按技能渲染工具数量与「最多同时激活 30 个工具」的动态上限，不硬编码。非工具控制动作统一为 `agent-control` 内置技能的两个工具：`learn_skill`、`update_plan`；任务结束由 brain 直接输出最终交付 markdown（无工具调用），不再有 `finish` 工具。
 
 **模型上下文唯一真相源是会话级 append-only 的会话消息记录（`chat_session_message_log` 表）**：每条是 `user` / `assistant`（含真实 `tool_calls`）/ `tool`（含结果）/ `annotation`（思考/学习/压缩/收尾等过程标记）。模型上下文从会话消息记录投影（`deriveMessageLogMessages`），中断恢复与跨 run 上下文都从记录重建后补一条 user 消息继续；UI 过程展示与模型记忆不再维护 `rounds`/`conversation`/`ai_run_event` 副本。压缩只作用于「投影出的消息」（早段 → `<compacted_history>` + `<current_state>`，尾段保留），记录本身 append-only 不动。
 
@@ -146,7 +144,7 @@ brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMess
 
 **悬空 tool_calls 修复**：若历史末条 `assistant` 声明了 `tool_calls` 但记录里没有对应 `tool` 结果（中断发生在 brain 落库后、工具执行前），重建投影时由 `repairInterruptedToolCalls` 在该轮缺失的 `tool_call_id` 位置补一条 `{ ok: false, code: 'interrupted', error: '运行意外中断，该工具调用未执行。' }` 的 `ToolMessage`，再接尾部 user 消息，保证每个 `tool_call_id` 有且仅有一条结果、且接口不因悬空调用报错。
 
-**mouth 交付指令也是 user 消息**：mouth 生成最终答复前追加的「现在面向用户交付结果…」交付指令同样作为 `user` 条目写入会话消息记录，使记录忠实捕获完整消息流（含交付指令与最终答复），跨轮 rebuild 时不丢任何一条。
+**brain 交付指令不再单独成条**：brain 的最终交付就是无工具调用那一轮的 assistant content，直接作为最终答复 `assistant` 转录条目写回（不做第二次交付 LLM 调用，也不再追加「现在面向用户交付结果…」的 user 条目）。
 
 **会话消息记录是「数据唯一、其他投影」的唯一真相源**：一次会话下的所有 run 的消息都写进同一张表（每条带 `run_id` 标识归属 run）。运行中的实时过程（思考、学习、工具调用、压缩、收尾）由节点即时写入 annotation 条目；UI 的「AI 消息 → 工具调用/技能学习 → 一步步展开」过程展示由渲染层从记录按 `seq` 投影重建（`projectProcessGroups`），不再依赖独立的 `ai_run_event` 过程事件副本。live 运行中的 `running → completed` 中间态与 `answer_token` 流式输出仍走瞬时广播，不落库；重开/恢复时从记录投影出 completed 态的完整过程。工具调用与失败不再通过独立的 decision hint 机制回传，而是统一作为该工具的 `ToolMessage` 结果（成功/失败/被拦都保证每个 `tool_call_id` 有且仅有一条结果）返回给模型。控制/反馈类工具结果统一由 `toolFeedback` 工厂生成，envelope 为成功 `{ ok: true, ...data }`、失败 `{ ok: false, code, error }`，`code` 取 `invalid_json` / `invalid_plan` / `approval_blocked` / `pending_items`；`ToolMessage` 的 `content` 与转录 `result` 始终是同一对象，保证恢复重放与 live 一致。`tool_call_id` 在领域类型中建模为必填（LLM 每个 tool call 必带 id），仅在模型响应异常缺 id 时由 brain 边界就地生成局部 id 回喂，不向领域类型传播可选。
 
@@ -156,11 +154,29 @@ AI 能力通过 skill 和 tool 两层表达：
 
 - builtin skill 默认可用，不需要 learning 加载。
 - external skill 需要 learning 显式加载后才进入当前有效能力集合。
-- `agent-control` 是内置被动技能，承载 `learn_skill` / `update_plan` / `finish` 三个任务控制工具。
+- `agent-control` 是内置被动技能，承载 `learn_skill` / `update_plan` 两个任务控制工具。
 - skill 描述能力边界和适用场景。
 - tool 是具体执行入口，输入输出和限制以代码中的 schema 为准，schema 通过 `bindTools` 直接交给模型。
 
 skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可以对应多个 tool，多个 skill 也可以共享同一实现域。
+
+### 工具 schema 设计规范
+
+所有模型可调用的工具（builtin 与 external）都必须遵循以下 schema 设计准则。目标是让模型「简单、清晰、易懂」地生成参数，同时仍能「指哪打哪」地精准改动。`docx_edit` 是首个按此规范重构的代表工具。
+
+1. **参数扁平化，禁止递归 type 判别树进写入 schema**。动作用 `z.discriminatedUnion('type', ...)` 表达时，每个 variant 只允许少量扁平字段；不得出现「段落 → run → text / 表格 → row → cell → block」这类多级递归的 `z.lazy` 判别树。复杂内容应拆成「扁平内容 + 正交动作」，由模型多轮完成，而非要求模型一次生成整棵结构树。
+
+2. **每个字段必须带 `.describe()`**。字段 `description` 是模型在原生 function calling 下唯一能读到的字段语义，必须说明「何时用、怎么选、示例」；不允许出现只有哑字段名、无任何说明的字段。
+
+3. **读→写往返锚定，不重建结构**。写入只填 read 返回的稳定 id（`blockId`/`nodeId` 等）加最小 patch；工具返回结果应回传新生成的 id，供模型二次精准定位。精确性来自「锚点 id + 小颗粒动作」，而不是「让模型重述完整结构」。
+
+4. **按元素类型拆分样式动作**。不同类型的元素（文字/段落/表格/行/单元格）有各自独立的样式字段，应拆成各自的扁平动作（如 `style_text` / `style_paragraph` / `style_table` / `style_row` / `style_cell`），模型按动词选择，天然避免「类型 × 样式」错配。
+
+5. **规范值 vs 呈现分离**。工具返回 handle/id 的规范 JSON（`outputSchema`），面向用户的散文交给结果渲染；不要让模型从散文里反解 id 或字段。
+
+6. **运行期 zod 校验兜底**。模型生成参数后本地以 zod 校验，错配返回带「字段 + 期望值」的 `ToolMessage` 错误（宁可报错、绝不静默改错）。
+
+7. **既有通用规则沿用**（见 AGENTS.md）：类型禁止 `any`/`unknown`；字段遵循最小必要原则，语义必然存在的值建模为 required，禁止「可选类型 + 运行时兜底占位」。
 
 ### 结构化输出与服务重试
 
@@ -201,7 +217,7 @@ LLM 调用失败严格分两层处理：
 
 1. Renderer 发起用户请求。
 2. Main 创建 run，并读取会话上下文和工作区状态。
-3. AI Runtime 通过 human graph 推进 brain、learning、hand、mouth。
+3. AI Runtime 通过 human graph 推进 brain、learning、hand，最终由 brain 输出交付。
 4. 需要资料时进入 Retrieval，读取 SQLite 元数据并检索 LanceDB。
 5. 需要本地能力时由 Tool Runtime 调用对应领域服务。
 6. 工作区内文件写回后记录统一修改记录和对应预览，供 UI 展示和回退；工作区外写入不记录回退。

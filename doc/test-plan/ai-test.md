@@ -51,7 +51,7 @@
 
 - `mock-llm`
   - 目标：在 non-live 条件下验证 `AiRunService -> human` 入口和 `human` 主链的真实执行链路。
-  - 约束：只允许 mock LLM 输入输出；必须真实走 `createAiRunContext -> human graph -> learning / hand / mouth -> store / apply / artifact`。
+  - 约束：只允许 mock LLM 输入输出；必须真实走 `createAiRunContext -> human graph -> learning / hand -> store / apply / artifact`。
   - 禁止：`humanReasonOverrides`、`toolExecutionOverrides`、手工串 node、fake tool/store/docx apply service。
   - 覆盖要求：要通过不同 case 把关键节点与关键边都跑到，而不是只验证一条 happy path。
 - `live`
@@ -149,11 +149,11 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - Oracle：结果顺序与请求一致；有效图片返回识别文字，stale ID 只产生单项错误；源文件 checksum 不变。
 - Not：不验证 chart、diagram、shape 的页面裁剪精度；该能力由专门渲染 fixture 覆盖。
 
-**DOCX 递归编辑、样式与视觉防误删测试补充**
+**DOCX 扁平写入、样式与视觉防误删测试补充**
 
-- What：递归创建、全文替换、统一 style 和 visual 防误删共同构成新的写入协议。
-- How：覆盖嵌套表格、hyperlink、多层样式、五种 patch、跨 run 匹配、不可跨 visual、`allowVisualLoss`、串行 action 原子失败和 docx_edit 成功结果只返回 `msg`。
-- Oracle：旧简化创建 payload 与 `style_text` 被 schema 拒绝；目标类型不匹配不落盘；text-image-text 编辑后媒体、relationship 和非目标 XML 保持不变。
+- What：扁平写入协议（纯文本段落 `text` + 二维字符串表格 `rows`）、按元素类型拆分的样式动作和 visual 防误删共同构成新的写入协议。
+- How：覆盖纯文本段落、二维字符串表格、`update_table_cell` 二次操作、5 个样式动作（`style_text` / `style_paragraph` / `style_table` / `style_row` / `style_cell`）、跨 run 匹配、不可跨 visual、`allowVisualLoss`、串行 action 原子失败和 docx_edit 成功结果只返回 `msg`。
+- Oracle：旧递归创建 payload 与统一 `style` action 被 schema 拒绝；目标类型不匹配不落盘；text-image-text 编辑后媒体、relationship 和非目标 XML 保持不变。
 
 ##### `docx-legacy-doc-read-contract`
 
@@ -349,7 +349,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：多类复杂编辑操作的真实执行契约。
 - Why：复杂写入是 docx 工具层高风险区。
-- How：覆盖 `docx_edit(actions[])` 按输入顺序串行执行 `replace_text / delete_blocks / insert_blocks(before/after, paragraph/heading/table) / update_table_cell` action。
+- How：覆盖 `docx_edit(actions[])` 按输入顺序串行执行 `replace_text / delete_blocks / insert_blocks(before/after, paragraph/table) / update_table_cell / style_text` action。
 - Oracle：各类 action 都能写入成功，内部结果保留 `changedBlocks/createdBlocks` 供继续消费，面向 AI 只返回 `msg` 成功提示。
 - Not：不验证上层 op 选择策略。
 
@@ -421,7 +421,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：命中 positioned block 时，docx 写工具会统一拒绝自动编辑。
 - Why：复杂定位排版 docx 即使只是原地改字也可能因结构重写而错位，这条 case 要长期守住 `positioned = read-only` 的能力边界。
-- How：对真实 `图形学.docx` 执行 `docx_read_outline` 定位一个 positioned block，再分别尝试 `docx_edit(insert_blocks)`、`docx_edit(replace_text)`、`docx_edit(style)` 与 `docx_edit(update_table_cell)`。
+- How：对真实 `图形学.docx` 执行 `docx_read_outline` 定位一个 positioned block，再分别尝试 `docx_edit(insert_blocks)`、`docx_edit(replace_text)`、`docx_edit(style_text)` 与 `docx_edit(update_table_cell)`。
 - Oracle：四类写入都返回 `invalid_input`；错误信息稳定包含“当前命中复杂定位排版区域，暂不支持自动编辑”；不产生新的当前修订。
 - Not：不验证 human 的回退话术，也不验证 positioned 文档中的读取质量。
 
@@ -513,7 +513,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：docx 写后立刻使用 `docx_read_outline(percent)` 读取当前 working draft 时，能看到新增块。
 - Why：这直接覆盖 replay session stats 未同步导致 percent 漏块的回归问题。
-- How：真实执行一次 `docx_edit(insert_blocks heading)`，随后立刻用 `ranges=[{type:'percent',fromPercent:0,toPercent:100}]` 读取。
+- How：真实执行一次 `docx_edit(insert_blocks 插入 Heading 样式段落)`，随后立刻用 `ranges=[{type:'percent',fromPercent:0,toPercent:100}]` 读取。
 - Oracle：outline 返回新增块，且 replay session 的 `stats.blockCount` 等于当前 active revision 的真实块数。
 - Not：不验证更细的分页策略。
 
@@ -1004,9 +1004,9 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 
 - 测试类型：`backend / mock-llm`
 - What：human 直接使用 builtin `image_generate` 生成并交付 PNG，无需学习。
-- Why：Tool 测试不覆盖 Brain、Hand、Mouth 的技能装载和交付主链。
+- Why：Tool 测试不覆盖 Brain、Hand 的技能装载和交付主链。
 - How：只脚本化 LLM 决策，真实执行 human graph、图片渲染、修改记录和 Artifact。
-- Oracle：主链经过 Hand、Mouth；只调用一次 `image_generate`；PNG 可解码且尺寸正确；Artifact 和最终交付文件名一致。
+- Oracle：主链经过 Hand 与 brain 交付；只调用一次 `image_generate`；PNG 可解码且尺寸正确；Artifact 和最终交付文件名一致。
 - Not：不验证真实模型自主选择技能，该行为由 Workbench 图片生成 Live E2E 覆盖。
 
 ##### `human-excel-read-edit`
@@ -1014,7 +1014,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：human 学习 Excel 能力后读取已有工作簿、修改并复读验证。
 - Why：补齐 Excel 在真实 human graph 中完全缺失的 non-live 回归。
-- How：只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 和 mouth。
+- How：只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 与 brain 交付。
 - Oracle：任务完成；调用包含读、写、复读；正式文件、累计 record、artifact 与最终答复一致。
 - Not：不验证真实模型的工具选择能力。
 
@@ -1059,8 +1059,8 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：`AiRunService` 在 mock-llm 模式下会直接进入真实 `human` graph。
 - Why：run 入口已经是 human-only 运行时，必须有回归 case 长期守住这条入口事实。
-- How：通过 `AiRunService.getInstance().run(...)` 启动一次真实 run，再用 scripted structured output 驱动 `brain -> learning -> hand -> mouth` 完成闭环。
-- Oracle：真实出现 `human_brain`、`human_learning`、`human_hand`、`human_mouth` 四个 stage，`AiRunState.finalDeliveryMarkdown` 正常落地，且 `AiRunService` 自身不直接发 `run_completed`。
+- How：通过 `AiRunService.getInstance().run(...)` 启动一次真实 run，再用 scripted structured output 驱动 `brain -> learning -> hand -> brain 交付` 完成闭环。
+- Oracle：真实出现 `human_brain`、`human_learning`、`human_hand` 三个 stage，`AiRunState.finalDeliveryMarkdown` 正常落地，且 `AiRunService` 自身不直接发 `run_completed`。
 - Not：不验证更复杂 live 业务链路。
 
 ##### `ai-run-service-embedding-preflight`
@@ -1084,10 +1084,10 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `learning-hand-mouth-smoke`
 
 - 测试类型：`backend`
-- What：`human` 在 mock-llm 模式下能稳定走通真实 `brain -> learning -> hand -> mouth` 主链路。
+- What：`human` 在 mock-llm 模式下能稳定走通真实 `brain -> learning -> hand -> brain 交付` 主链路。
 - Why：`human` graph 的最小真实闭环，后续所有复杂样例都建立在这条主链路之上。
-- How：通过 scripted structured output 先学习一个真实 external skill（例如 `docx-read`），再直接执行一次 builtin terminal 工具 `terminal_run(pwd)`，最后进入真实 `mouth` 完成交付。
-- Oracle：`human_brain`、`human_learning`、`human_hand`、`human_mouth` 四个 stage 都真实出现，且至少有一次真实 terminal 工具结果与一次真实最终交付。
+- How：通过 scripted structured output 先学习一个真实 external skill（例如 `docx-read`），再直接执行一次 builtin terminal 工具 `terminal_run(pwd)`，最后由 `brain` 无工具调用输出最终交付。
+- Oracle：`human_brain`、`human_learning`、`human_hand` 三个 stage 都真实出现，且至少有一次真实 terminal 工具结果与一次真实最终交付。
 - Not：不验证复杂分支、异常恢复或 live 模型质量。
 
 ##### `learning-tool-budget-tracking`
@@ -1104,7 +1104,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：真实工具失败结果会被 `human` 吸收，并继续收束到最终交付。
 - Why：工具失败是高频真实场景，如果失败后链路无法继续，`human` 就不具备稳定执行能力。
-- How：直接真实执行一个会失败的 builtin terminal 安全指令，随后由 `brain` 决定停止重试并进入 `mouth`。
+- How：直接真实执行一个会失败的 builtin terminal 安全指令，随后由 `brain` 决定停止重试并无工具调用输出最终交付。
 - Oracle：真实 `terminal_run` 结果为失败，且 `human` 最终仍进入 `completed` 并产出最终交付。
 - Not：不验证失败后的最佳补救策略是否最优。
 
@@ -1147,10 +1147,10 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `human-interruption-message-repair`
 
 - 测试类型：`backend / mock-llm`
-- What：续接（跨会话 / 中断恢复）重建消息数组时，顺序为 `system + 完整历史（含 mouth 交付 user 消息与最终答复）+ 尾部 buildBrainUserMessage user 消息`；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
+- What：续接（跨会话 / 中断恢复）重建消息数组时，顺序为 `system + 完整历史（含最终交付 assistant 消息）+ 尾部 buildBrainUserMessage user 消息`；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
 - Why：模型上下文唯一真相源是会话消息记录，续接必须忠实回放历史并把新诉求追加到末尾；若上一条 assistant 声明了 tool_call 却没有对应结果，接口会直接报错，必须补一条意外中断反馈。
-- How：mock-llm 下跑两个子场景：其一 run-1 正常完成（含 learn_skill 与 mouth 交付），run-2 捕获首次 brain 的 `request.messages`；其二 run-1 的 brain 返回 learn_skill tool_call 后在 brain 调用返回时 abort 控制器，run-2 恢复并捕获消息数组。
-- Oracle：子场景一：消息数组首条为 system、末条为含 `<task_goal>` 的 user 消息，历史含 run-1 原始 user、run-1 最终答复与 mouth 交付 user 消息；子场景二：run-1 为 `user_cancelled` 且 `resumeSnapshotSaved=true`，run-2 消息数组中悬空 learn_skill tool_call 后补了 `{ok:false,code:'interrupted'}` 的 ToolMessage，且末条为含 `<task_goal>` 的 user 消息。
+- How：mock-llm 下跑两个子场景：其一 run-1 正常完成（含 learn_skill 与最终交付），run-2 捕获首次 brain 的 `request.messages`；其二 run-1 的 brain 返回 learn_skill tool_call 后在 brain 调用返回时 abort 控制器，run-2 恢复并捕获消息数组。
+- Oracle：子场景一：消息数组首条为 system、末条为含 `<task_goal>` 的 user 消息，历史含 run-1 原始 user 与 run-1 最终答复 assistant 消息；子场景二：run-1 为 `user_cancelled` 且 `resumeSnapshotSaved=true`，run-2 消息数组中悬空 learn_skill tool_call 后补了 `{ok:false,code:'interrupted'}` 的 ToolMessage，且末条为含 `<task_goal>` 的 user 消息。
 - Not：不验证 live provider 真实网络抖动；不恢复 docx 临时运行态。
 
 ##### `session-skill-memory-multi-run`
@@ -1169,7 +1169,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - Why：如果任务清单不能跨轮保留并被重写成最新任务板，brain 很容易把长期记忆退化成单轮摘要。
 - How：第一轮 `brain` 写入只含 todo 的任务清单，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt 后，将任务清单重写为包含 done 与 todo 的新版本。
 - Oracle：第二轮 `brain` prompt 中能看到第一轮写入的结构化任务清单项，任务最终完成，且新的任务清单成功写回 thought memory。
-- Not：不验证除 `mouth` 收口前的 todo 检查之外的更复杂任务清单机读策略。
+- Not：不验证除 brain 交付前的 todo 检查之外的更复杂任务清单机读策略。
 
 ##### `complex-docx-edit`
 
@@ -1239,8 +1239,8 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：mock-llm 下的 KB 回答仍通过真实知识库存储、真实 embedding 与真实检索执行。
 - Why：KB 是当前最敏感的 fake 风险点，必须单独有回归 case 显式守住。
-- How：seed 两份真实 KB 文档，学习 KB skill 后真实执行 `kb_search(strategy=keyword)`，再通过真实 `mouth` 生成最终回答。
-- Oracle：真实 KB 检索结果中包含目标文档 `doc-1` 的证据，且这条证据文本会进入真实 `mouth` prompt，任务最终完成。
+- How：seed 两份真实 KB 文档，学习 KB skill 后真实执行 `kb_search(strategy=keyword)`，再由 `brain` 无工具调用生成最终回答。
+- Oracle：真实 KB 检索结果中包含目标文档 `doc-1` 的证据，且这条证据文本会进入 brain 的最终交付，任务最终完成。
 - Not：不验证答案措辞或检索召回优劣。
 
 ##### `create-ppt-deck`

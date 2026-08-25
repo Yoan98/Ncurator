@@ -80,14 +80,11 @@ describe('ai human mock-llm ppt backend', () => {
                   summary: '复读确认结果'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: 'PPT 已更新并确认。' }) }
-            ],
-            'human.mouth': [
               {
-                output: {
+                output: buildCompleteTaskDecision({
                   summary: 'PPT 已更新并确认。',
                   deliveryMarkdown: '负责人已更新为 Alice。'
-                }
+                })
               }
             ]
           }

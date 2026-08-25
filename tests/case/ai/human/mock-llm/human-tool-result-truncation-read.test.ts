@@ -57,10 +57,12 @@ describe('ai human mock-llm tool result truncation', () => {
                   summary: '读取大文件'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: '已读完大文件内容。' }) }
-            ],
-            'human.mouth': [
-              { output: { summary: '已读完大文件内容。', deliveryMarkdown: '大文件内容已读取。' } }
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '已读完大文件内容。',
+                  deliveryMarkdown: '大文件内容已读取。'
+                })
+              }
             ]
           }
         })

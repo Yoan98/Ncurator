@@ -3,9 +3,18 @@ import os from 'node:os'
 import path from 'node:path'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type {
+  DocxBlockInput,
   DocxChangedBlock,
   DocxCreatedBlock,
   DocxCreateBlock,
+  DocxCreateBreakNode,
+  DocxCreateParagraphNode,
+  DocxCreateRunNode,
+  DocxCreateTabNode,
+  DocxCreateTableCellNode,
+  DocxCreateTableNode,
+  DocxCreateTableRowNode,
+  DocxCreateTextNode,
   DocxDetailedBlock,
   DocxEditAction,
   DocxOp,
@@ -201,6 +210,63 @@ const failIfAnyPositionedBlocks = async (input: {
 const bodyBlocksOnly = (blocks: readonly DocxOutlineBlock[]): DocxOutlineBlock[] =>
   blocks.filter((block) => block.type !== 'table_cell')
 
+const compileRunChildren = (
+  text: string
+): Array<DocxCreateTextNode | DocxCreateTabNode | DocxCreateBreakNode> => {
+  const nodes: Array<DocxCreateTextNode | DocxCreateTabNode | DocxCreateBreakNode> = []
+  let buffer = ''
+  const flush = (): void => {
+    if (buffer.length === 0) return
+    nodes.push({ type: 'text', text: buffer })
+    buffer = ''
+  }
+  for (const char of text) {
+    if (char === '\n') {
+      flush()
+      nodes.push({ type: 'break', kind: 'line' })
+    } else if (char === '\t') {
+      flush()
+      nodes.push({ type: 'tab' })
+    } else {
+      buffer += char
+    }
+  }
+  flush()
+  return nodes
+}
+
+const compileParagraphInput = (input: Extract<DocxBlockInput, { text: string }>): DocxCreateParagraphNode => {
+  const runChildren = compileRunChildren(input.text)
+  const run: DocxCreateRunNode = {
+    type: 'run',
+    children: runChildren.length > 0 ? runChildren : [{ type: 'text', text: '' }]
+  }
+  return {
+    type: 'paragraph',
+    ...(input.style ? { style: input.style } : {}),
+    children: [run]
+  }
+}
+
+const compileTableInput = (input: Extract<DocxBlockInput, { rows: string[][] }>): DocxCreateTableNode => ({
+  type: 'table',
+  ...(input.style ? { style: input.style } : {}),
+  children: input.rows.map(
+    (row): DocxCreateTableRowNode => ({
+      type: 'table_row',
+      children: row.map(
+        (cellText): DocxCreateTableCellNode => ({
+          type: 'table_cell',
+          children: [compileParagraphInput({ text: cellText })]
+        })
+      )
+    })
+  )
+})
+
+const compileBlockInput = (block: DocxBlockInput): DocxCreateBlock =>
+  'text' in block ? compileParagraphInput(block) : compileTableInput(block)
+
 type WriteToolResult = {
   sourcePath: string
   changedBlocks: DocxChangedBlock[]
@@ -211,7 +277,7 @@ type WriteToolResult = {
 
 const actionLabel = (action: DocxEditAction): string => {
   if (action.type === 'insert_blocks')
-    return `${action.type}.${action.location?.position || 'append'}.${String(action.blocks.length)}`
+    return `${action.type}.${action.blockId ? action.position || 'after' : 'append'}.${String(action.blocks.length)}`
   if (action.type === 'delete_blocks') return `${action.type}.${String(action.blockIds.length)}`
   return action.type
 }
@@ -259,9 +325,13 @@ const compileSerialEditActions = (input: {
       action.type === 'insert_blocks' ||
       action.type === 'replace_block' ||
       action.type === 'replace_text' ||
-      action.type === 'style' ||
+      action.type === 'delete_blocks' ||
       action.type === 'update_table_cell' ||
-      action.type === 'delete_blocks'
+      action.type === 'style_text' ||
+      action.type === 'style_paragraph' ||
+      action.type === 'style_table' ||
+      action.type === 'style_row' ||
+      action.type === 'style_cell'
     ) {
       actions.push({ action })
       continue
@@ -305,18 +375,18 @@ const buildSerialActionOps = async (input: {
   const action = input.action.action
 
   if (action.type === 'insert_blocks') {
-    const bodyBlocks = action.location
+    const bodyBlocks = action.blockId
       ? []
       : bodyBlocksOnly(await fetchOutlineBlocks(input.runtime, input.currentDocId))
-    const anchorBlockId = action.location?.blockId || bodyBlocks.at(-1)?.blockId
+    const anchorBlockId = action.blockId || bodyBlocks.at(-1)?.blockId
     if (!anchorBlockId) {
       throw new Error('DOCX 中没有可用于插入内容的正文位置')
     }
-    const position = action.location?.position || 'after'
+    const position = action.position || 'after'
     const op: DocxOp = {
       type: position === 'before' ? 'insert_before' : 'insert_after',
       anchorBlockId,
-      content: action.blocks
+      content: action.blocks.map(compileBlockInput)
     }
     return {
       ops: [op],
@@ -331,7 +401,7 @@ const buildSerialActionOps = async (input: {
         {
           type: 'replace_block',
           blockId,
-          content: action.block,
+          content: compileBlockInput(action.block),
           allowVisualLoss: action.allowVisualLoss
         }
       ],
@@ -360,27 +430,78 @@ const buildSerialActionOps = async (input: {
     }
   }
 
-  if (action.type === 'style') {
-    const targetBlockIds =
-      action.target.type === 'text_match'
-        ? await resolveReplaceTextTargetBlockIds({
-            runtime: input.runtime,
-            docId: input.currentDocId,
-            query: action.target.query,
-            blockIds: action.target.blockIds
-          })
-        : action.target.type === 'block'
-          ? [action.target.blockId]
-          : []
+  if (action.type === 'style_text') {
+    const targetBlockIds = await resolveReplaceTextTargetBlockIds({
+      runtime: input.runtime,
+      docId: input.currentDocId,
+      query: action.query,
+      blockIds: action.blockIds
+    })
     return {
       ops: [
         {
           type: 'style',
-          target: action.target,
-          patch: action.patch
+          target: {
+            type: 'text_match',
+            query: action.query,
+            ...(action.blockIds ? { blockIds: action.blockIds } : {})
+          },
+          patch: { kind: 'run', ...action.style }
         }
       ],
       positionedCheckBlockIds: targetBlockIds
+    }
+  }
+
+  if (action.type === 'style_paragraph') {
+    return {
+      ops: [
+        {
+          type: 'style',
+          target: { type: 'id', id: action.id },
+          patch: { kind: 'paragraph', ...action.style }
+        }
+      ],
+      positionedCheckBlockIds: []
+    }
+  }
+
+  if (action.type === 'style_table') {
+    return {
+      ops: [
+        {
+          type: 'style',
+          target: { type: 'id', id: action.id },
+          patch: { kind: 'table', ...action.style }
+        }
+      ],
+      positionedCheckBlockIds: [action.id]
+    }
+  }
+
+  if (action.type === 'style_row') {
+    return {
+      ops: [
+        {
+          type: 'style',
+          target: { type: 'id', id: action.id },
+          patch: { kind: 'table_row', ...action.style }
+        }
+      ],
+      positionedCheckBlockIds: []
+    }
+  }
+
+  if (action.type === 'style_cell') {
+    return {
+      ops: [
+        {
+          type: 'style',
+          target: { type: 'id', id: action.id },
+          patch: { kind: 'table_cell', ...action.style }
+        }
+      ],
+      positionedCheckBlockIds: [action.id]
     }
   }
 
@@ -391,7 +512,7 @@ const buildSerialActionOps = async (input: {
         {
           type: 'update_table_cell',
           blockId: cellBlockId,
-          content: action.children,
+          content: action.blocks.map(compileBlockInput),
           allowVisualLoss: action.allowVisualLoss
         }
       ],
@@ -774,7 +895,7 @@ export const buildDocxWriteTools = (runtime: DocxToolRuntime): StructuredToolInt
 
         const createBlocks = args.actions.reduce<DocxCreateBlock[]>((blocks, action) => {
           if (action.type !== 'insert_blocks') return blocks
-          return [...blocks, ...action.blocks]
+          return [...blocks, ...action.blocks.map(compileBlockInput)]
         }, [])
 
         const tempPaths = await buildCreateTargetTempPaths(requestedSourcePath)

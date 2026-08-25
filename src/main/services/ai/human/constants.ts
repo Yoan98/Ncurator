@@ -14,7 +14,6 @@ export const HUMAN_STAGES = [
   'learning',
   'plan',
   'hand',
-  'mouth',
   'context_budget',
   'context_compaction'
 ] as const
@@ -38,6 +37,6 @@ export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 200_000
 export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8
 export const CONTEXT_COMPACTION_TARGET_RATIO = 0.25
 export const CONTEXT_COMPACTION_MIN_SOURCE_RATIO = 0.1
-export const HUMAN_ROUND_EXECUTION_KINDS = ['learning', 'hand', 'mouth'] as const
+export const HUMAN_ROUND_EXECUTION_KINDS = ['learning', 'hand'] as const
 export const HUMAN_MAX_ROUND_HISTORY = 100
 export const HUMAN_MAX_RECENT_HISTORY_ROUNDS = 20

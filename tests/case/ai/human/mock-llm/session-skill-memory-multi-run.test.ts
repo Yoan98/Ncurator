@@ -13,7 +13,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证同一会话跨 run 共享技能，并在总工具超过 30 时按 FIFO 遗忘完整技能。',
+      description: '验证同一会话跨 run 共享技能，并在移除 finish 工具后所有可学技能仍在 30 工具上限内。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -27,9 +27,8 @@ describe('ai human mock-llm backend', () => {
                   summary: '学习 Word 和 PDF 阅读技能。'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: '第一轮完成。' }) }
-            ],
-            'human.mouth': [{ text: '第一轮完成。' }]
+              { output: buildCompleteTaskDecision({ summary: '第一轮完成。', deliveryMarkdown: '第一轮完成。' }) }
+            ]
           }
         })
         await run1.run({ taskId: 'session-skills-run-1', userInput: '学习文档技能。' })
@@ -47,9 +46,8 @@ describe('ai human mock-llm backend', () => {
                   summary: '补充 Excel 编辑技能。'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: '第二轮完成。' }) }
-            ],
-            'human.mouth': [{ text: '第二轮完成。' }]
+              { output: buildCompleteTaskDecision({ summary: '第二轮完成。', deliveryMarkdown: '第二轮完成。' }) }
+            ]
           }
         })
         await run2.run({ taskId: 'session-skills-run-2', userInput: '继续使用会话技能。' })
@@ -64,9 +62,8 @@ describe('ai human mock-llm backend', () => {
                   summary: '学习 PPT 阅读和编辑技能。'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: '第三轮完成。' }) }
-            ],
-            'human.mouth': [{ text: '第三轮完成。' }]
+              { output: buildCompleteTaskDecision({ summary: '第三轮完成。', deliveryMarkdown: '第三轮完成。' }) }
+            ]
           }
         })
         await run3.run({ taskId: 'session-skills-run-3', userInput: '继续学习 PPT 技能。' })
@@ -85,10 +82,9 @@ describe('ai human mock-llm backend', () => {
               },
               ({ user }) => {
                 run4Prompt = user
-                return buildCompleteTaskDecision({ summary: '第四轮完成。' })
+                return buildCompleteTaskDecision({ summary: '第四轮完成。', deliveryMarkdown: '第四轮完成。' })
               }
-            ],
-            'human.mouth': [{ text: '第四轮完成。' }]
+            ]
           }
         })
         await run4.run({ taskId: 'session-skills-run-4', userInput: '检查遗忘结果。' })
@@ -103,11 +99,11 @@ describe('ai human mock-llm backend', () => {
             result.stateAtLimit.learnedSkillIds.join(',') ===
               'docx-read,pdf-read,excel-write,ppt-read,ppt-write' &&
             result.stateAfterEviction.learnedSkillIds.join(',') ===
-              'pdf-read,excel-write,ppt-read,ppt-write,excel-read,image-recognition,image-generation,docx-write' &&
+              'docx-read,pdf-read,excel-write,ppt-read,ppt-write,excel-read,image-recognition,image-generation,docx-write' &&
             result.run4Prompt.includes('<learned_skills>'),
           {
-            name: 'session-skills-persist-and-evict-fifo-across-runs',
-            message: '同一会话应跨 run 共享技能，并在总工具超限时遗忘最早技能及其全部工具。',
+            name: 'session-skills-persist-across-runs-within-tool-budget',
+            message: '同一会话应跨 run 共享技能，且移除 finish 工具后全部技能仍在 30 工具上限内。',
             data: result
           }
         )

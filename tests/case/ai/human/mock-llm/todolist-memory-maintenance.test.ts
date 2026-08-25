@@ -36,15 +36,14 @@ describe('ai human mock-llm backend', () => {
               ({ user }) => {
                 secondBrainSeesTodolist =
                   user.includes('确认 A 事项') && user.includes('确认 B 事项')
-                return buildToolDecision({
-                  toolName: 'finish',
-                  args: {},
-                  summary: '故意提前收口，验证仍有 todo 时会被打回。'
-                })
+                return {
+                  thought: { next: '故意提前收口，验证仍有 todo 时会被打回。' },
+                  nextAction: { action: 'deliver' }
+                }
               },
               ({ user }) => {
                 thirdBrainSeesIncompleteHint =
-                  user.includes('交付失败，计划中仍有未完成事项') &&
+                  user.includes('交付被拒绝：计划中仍有未完成事项') &&
                   user.includes('确认 B 事项') &&
                   user.includes('检查是否已经满足用户诉求并能进入最终交付')
 
@@ -63,16 +62,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: {
                   thought: { next: '所有事项已处理完，可以进入最终交付。' },
-                  nextAction: { action: 'mouth' }
-                }
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
-                  summary: 'todolist 已成功跨轮维护，并完成收口拦截验证。',
-                  deliveryMarkdown:
-                    '# Plan Memory\n\n已验证 plan 会在下一轮真实 prompt 中继续出现，且在仍有 todo 时选择 finish 会收到交付失败提示并返回 brain。'
+                  nextAction: { action: 'deliver' }
                 }
               }
             ]
@@ -97,7 +87,7 @@ describe('ai human mock-llm backend', () => {
             result.secondBrainSeesTodolist &&
             result.thirdBrainSeesIncompleteHint,
           {
-            name: 'thought-todolist-persists-and-mouth-is-blocked-while-todo-remains',
+            name: 'thought-todolist-persists-and-delivery-is-blocked-while-todo-remains',
             message:
               'plan 应作为长期任务板在下一轮真实 brain prompt 中继续存在，并在仍有 todo 时返回 brain 继续推进。',
             data: {

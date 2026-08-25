@@ -105,26 +105,19 @@ describe('ai tool docx backend', () => {
             sourcePath: outline.sourcePath,
             actions: [
               {
-                type: 'style',
-                target: {
-                  type: 'text_match',
-                  query: 'Alice',
-                  blockIds: [ownerCellBlockId]
-                },
-                patch: {
-                  kind: 'run',
+                type: 'style_text',
+                query: 'Alice',
+                blockIds: [ownerCellBlockId],
+                style: {
                   italic: true,
                   color: '008000'
                 }
               },
               {
-                type: 'style',
-                target: {
-                  type: 'text_match',
-                  query: 'Field',
-                  blockIds: [fieldCellBlockId]
-                },
-                patch: { kind: 'run', bold: true }
+                type: 'style_text',
+                query: 'Field',
+                blockIds: [fieldCellBlockId],
+                style: { bold: true }
               }
             ]
           })

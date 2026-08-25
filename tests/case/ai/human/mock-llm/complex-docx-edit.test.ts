@@ -99,16 +99,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: 'docx 真实链路已走通。'
-                })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
                   summary: 'docx 真实链路已走通。',
                   deliveryMarkdown: '# Docx Flow\n\n已完成真实 docx 编辑与读取确认。'
-                }
+                })
               }
             ]
           }
@@ -227,7 +220,8 @@ describe('ai human mock-llm backend', () => {
                     actions: [
                       {
                         type: 'insert_blocks',
-                        location: { blockId: anchorBlockId, position: 'after' },
+                        blockId: anchorBlockId,
+                        position: 'after',
 
                         blocks: [
                           docxParagraphNode('补充说明：反走样通过平滑边缘像素来减轻锯齿感。')
@@ -272,7 +266,8 @@ describe('ai human mock-llm backend', () => {
                     actions: [
                       {
                         type: 'insert_blocks',
-                        location: { blockId: anchorBlockId, position: 'after' },
+                        blockId: anchorBlockId,
+                        position: 'after',
 
                         blocks: [
                           docxTableNode([
@@ -298,16 +293,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '结构化 docx 写入已完成。'
-                })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
                   summary: '结构化 docx 写入已完成。',
                   deliveryMarkdown: '# Structured Docx Flow\n\n已完成 paragraph/table 对象化写入。'
-                }
+                })
               }
             ]
           }

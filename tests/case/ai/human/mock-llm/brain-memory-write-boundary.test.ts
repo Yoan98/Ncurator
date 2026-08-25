@@ -62,15 +62,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: {
                   thought: { next: '计划全部完成，进入最终交付。' },
-                  nextAction: { action: 'mouth' }
-                }
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
-                  summary: 'memory 已成功跨轮保持。',
-                  deliveryMarkdown: '# Memory\n\n已验证 memory 会在下一轮真实 prompt 中继续出现。'
+                  nextAction: { action: 'deliver' }
                 }
               }
             ]

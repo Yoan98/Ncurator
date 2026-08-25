@@ -43,16 +43,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '已观察到 learning 的 active tool 预算统计。'
-                })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
                   summary: '已观察到 learning 的 active tool 预算统计。',
                   deliveryMarkdown: '# Learning Budget\n\n已验证 learning 的 active tool 预算统计。'
-                }
+                })
               }
             ]
           }

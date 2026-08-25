@@ -59,10 +59,15 @@ export const buildToolDecision = (input: {
   }
 })
 
-export const buildCompleteTaskDecision = (input: { summary: string }): JsonObject => ({
-  thought: buildThoughtMetadata(input),
+export const buildCompleteTaskDecision = (input: {
+  summary: string
+  deliveryMarkdown?: string
+}): JsonObject => ({
+  thought: {
+    text: input.deliveryMarkdown || input.summary
+  },
   nextAction: {
-    action: 'mouth'
+    action: 'deliver'
   }
 })
 
@@ -185,6 +190,12 @@ const collectDocxBlockKindsFromValue = (
   }
   if (type === 'paragraph' || type === 'table') {
     kinds.add(type)
+  }
+  if (typeof value.text === 'string') {
+    kinds.add('paragraph')
+  }
+  if (Array.isArray(value.rows)) {
+    kinds.add('table')
   }
 
   collectDocxBlockKindsFromValue(value.content, kinds)

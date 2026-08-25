@@ -20,11 +20,21 @@ import {
   emitThinkingFailed,
   emitThinkingStarted
 } from '../../../events/processEvents'
+import {
+  applyDeliverySideEffects,
+  buildContentSafetyFallbackMarkdown,
+  completeDelivery,
+  finalizeDelivery
+} from './finalizeDelivery'
 
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
 
-export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
+export const createBrainNode = (input: {
+  ctx: AiRunContext
+  cache: HumanRuntimeCache
+  emitAnswerEvents: boolean
+}) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
@@ -111,38 +121,6 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         { kind: 'annotation', eventType: 'thinking_started', payload: {} }
       ])
 
-      const DEBUG_danglingCheck = (): void => {
-        const pendingIds = new Set<string>()
-        const tail: string[] = []
-        for (const message of messages) {
-          const type = message.getType()
-          if (type === 'ai') {
-            const calls = (message as { tool_calls?: Array<{ id?: string; name?: string }> }).tool_calls
-            if (calls) for (const call of calls) if (call.id) pendingIds.add(call.id)
-            tail.push(`ai[${(calls || []).map((c) => `${c.id || '?'}:${c.name || '?'}`).join(',')}]`)
-            continue
-          }
-          if (type === 'tool') {
-            const id = (message as { tool_call_id?: string }).tool_call_id
-            if (id) pendingIds.delete(id)
-            tail.push(`tool(${id || '?'})`)
-          } else {
-            tail.push(type)
-          }
-        }
-        if (pendingIds.size > 0) {
-          console.error(
-            '[DEBUG brain] unsatisfied tool_call_ids before chatTools:',
-            JSON.stringify([...pendingIds]),
-            'TYPES:',
-            messages.map((m) => m.getType()).join(','),
-            'TAIL:',
-            JSON.stringify(tail.slice(-12))
-          )
-        }
-      }
-      DEBUG_danglingCheck()
-
       const result = await input.ctx.chatTools({
         caller: 'human.brain',
         taskId: state.task.taskId,
@@ -213,9 +191,9 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
       }
 
       // 在进入 hand 节点前，用工具自身的 schema 自行校验参数，避免 LangChain 内部校验
-      // 抛出只有路径、没有字段与期望值的 terse 错误。learn_skill/update_plan/finish 由各自
+      // 抛出只有路径、没有字段与期望值的 terse 错误。learn_skill/update_plan 由各自
       // 节点负责校验，这里跳过。
-      const NODE_OWNED_TOOL_NAMES = new Set(['learn_skill', 'update_plan', 'finish'])
+      const NODE_OWNED_TOOL_NAMES = new Set(['learn_skill', 'update_plan'])
       const schemaInvalidCalls: Array<{ id?: string; name: string; errorMessage: string }> = []
       const executableCalls: Parameters<typeof buildDispatchQueue>[0] = []
       for (const call of dispatchableCalls) {
@@ -298,6 +276,38 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
         }
       }
 
+      if (executableCalls.length === 0) {
+        const deliveryMarkdown = thoughtText
+        const pendingItems = state.memory.plan
+          .filter((item) => item.status !== 'done')
+          .map((item) => item.title)
+        if (
+          pendingItems.length > 0 &&
+          state.execution.finalizationReason !== 'brain_content_safety'
+        ) {
+          const nudge = `交付被拒绝：计划中仍有未完成事项：${pendingItems.join('、')}。请继续推进或更新计划后再交付。`
+          messages.push(new HumanMessage(nudge))
+          input.cache.messages = messages
+          await input.ctx.appendMessageLog([{ kind: 'user', content: nudge }])
+          completeThinking()
+          await input.ctx.appendMessageLog([
+            { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
+          ])
+          return returnToBrain(state)
+        }
+        completeThinking()
+        await input.ctx.appendMessageLog([
+          { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
+        ])
+        return await finalizeDelivery({
+          ctx: input.ctx,
+          cache: input.cache,
+          state,
+          deliveryMarkdown,
+          emitAnswerEvents: input.emitAnswerEvents
+        })
+      }
+
       const dispatchQueue = buildDispatchQueue(executableCalls)
 
       completeThinking()
@@ -318,23 +328,33 @@ export const createBrainNode = (input: { ctx: AiRunContext; cache: HumanRuntimeC
           'brain',
           '本次处理受到服务端内容安全策略限制，无法继续执行。请调整输入内容或相关资料后重试。'
         )
-        return {
+        const stateWithGuidance: HumanState = {
           ...state,
           execution: {
             ...state.execution,
-            stage: 'mouth',
-            status: 'running',
             finalizationReason: 'brain_content_safety',
-            pendingRound: {
-              thought: { text: '由于服务端内容安全策略限制，本轮直接进入最终收尾。' },
-              nextAction: { action: 'mouth' }
-            },
             deliveryGuidanceItems: mergeDeliveryGuidanceItems(
               state.execution.deliveryGuidanceItems,
               guidance
             )
           }
         }
+        const readyState = await applyDeliverySideEffects({
+          ctx: input.ctx,
+          cache: input.cache,
+          state: stateWithGuidance
+        })
+        const fallbackMarkdown = buildContentSafetyFallbackMarkdown(readyState)
+        await input.ctx.appendMessageLog([
+          { kind: 'assistant', content: fallbackMarkdown, toolCalls: [] }
+        ])
+        return completeDelivery({
+          ctx: input.ctx,
+          cache: input.cache,
+          state: readyState,
+          deliveryMarkdown: fallbackMarkdown,
+          emitAnswerEvents: input.emitAnswerEvents
+        })
       }
 
       failThinking(error)

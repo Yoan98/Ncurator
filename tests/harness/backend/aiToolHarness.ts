@@ -38,27 +38,14 @@ type ToolLike = {
   invoke: (input: ToolArgs) => Promise<ToolOutput>
 }
 
-export const docxParagraphNode = (text: string): JsonObject => ({
-  type: 'paragraph',
-  children: [{ type: 'run', children: [{ type: 'text', text }] }]
-})
+export const docxParagraphNode = (text: string): JsonObject => ({ text })
 
 export const docxHeadingNode = (level: number, text: string): JsonObject => ({
-  type: 'paragraph',
-  style: { styleName: `Heading${level}` },
-  children: [{ type: 'run', children: [{ type: 'text', text }] }]
+  text,
+  style: { styleName: `Heading${level}` }
 })
 
-export const docxTableNode = (rows: string[][]): JsonObject => ({
-  type: 'table',
-  children: rows.map((row) => ({
-    type: 'table_row',
-    children: row.map((text) => ({
-      type: 'table_cell',
-      children: [docxParagraphNode(text)]
-    }))
-  }))
-})
+export const docxTableNode = (rows: string[][]): JsonObject => ({ rows })
 
 export type CapturedToolActivity = {
   actionType: string

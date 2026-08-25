@@ -88,7 +88,7 @@ describe('ai tool docx backend', () => {
               {
                 type: 'update_table_cell',
                 cellBlockId: ownerCellBlockId,
-                children: [docxParagraphNode('Bob')]
+                blocks: [docxParagraphNode('Bob')]
               }
             ]
           })

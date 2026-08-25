@@ -43,8 +43,9 @@ describe('ai unit docx tool contract', () => {
 
   it('keeps the edit prompt as one capability sentence without implementation details', () => {
     const description = DOCX_EDIT_TOOL_SPEC.promptSpec.description
-    expect(description).toContain('递归内容树')
-    expect(description).toContain('visual loss')
+    expect(description).toContain('纯文本')
+    expect(description).toContain('style_text')
+    expect(description).toContain('update_table_cell')
     expect(description).not.toContain('\n')
     for (const internalTerm of [
       'revision',

@@ -64,17 +64,10 @@ describe('ai tool hand backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '审批批次已阻断执行。'
-                })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
                   summary: '审批批次已阻断执行。',
                   deliveryMarkdown:
                     '# Approval Batch Blocked\n\n本轮审批未全部同意，相关命令未执行。'
-                }
+                })
               }
             ]
           }

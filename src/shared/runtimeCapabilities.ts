@@ -146,8 +146,7 @@ export const RUNTIME_SKILL_CATALOG = {
     countsTowardToolBudget: false,
     title: 'agent-control',
     displayName: '任务控制',
-    description:
-      '管理任务推进过程：学习需要的技能、维护并更新执行计划、以及在完成时提交最终交付。'
+    description: '管理任务推进过程：学习需要的技能、维护并更新执行计划。'
   }
 } as const satisfies Record<string, RuntimeSkillCatalogEntry>
 
@@ -188,8 +187,7 @@ export const RUNTIME_TOOL_CATALOG = {
   image_analyze: { familyId: 'image-recognition', skillId: 'image-recognition' },
   image_generate: { familyId: 'image-generation', skillId: 'image-generation' },
   learn_skill: { familyId: 'agent-control', skillId: 'agent-control' },
-  update_plan: { familyId: 'agent-control', skillId: 'agent-control' },
-  finish: { familyId: 'agent-control', skillId: 'agent-control' }
+  update_plan: { familyId: 'agent-control', skillId: 'agent-control' }
 } as const satisfies Record<string, RuntimeToolCatalogEntry>
 
 export type RuntimeToolName = keyof typeof RUNTIME_TOOL_CATALOG

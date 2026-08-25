@@ -24,6 +24,8 @@ const createBrainContext = (error: Error): AiRunContext =>
     },
     loadMessageLog: async () => [],
     appendMessageLog: async () => undefined,
+    applyDocxRunEdits: async () => [],
+    listFileChangeRecords: async () => [],
     sendEvent: () => undefined
   }) as AiRunContext
 
@@ -41,30 +43,35 @@ describe('ai content safety finalization', () => {
     ).toBe(false)
   })
 
-  it('routes a brain content-safety failure directly to mouth with delivery guidance', async () => {
+  it('finalizes a brain content-safety failure with the fallback delivery', async () => {
     const ctx = createBrainContext(
       new Error(
         'reason=400 Input data may contain inappropriate content; code=inappropriate-content'
       )
     )
-    const node = createBrainNode({ ctx, cache: createHumanRuntimeCache() })
+    const node = createBrainNode({
+      ctx,
+      cache: createHumanRuntimeCache(),
+      emitAnswerEvents: false
+    })
     const state = createInitialHumanState({ taskId: 'brain-safety', userInput: 'continue' })
     state.memory.plan = [{ title: 'unfinished item', status: 'todo' }]
 
     const result = await node(state)
 
-    expect(result.execution.stage).toBe('mouth')
+    expect(result.execution.status).toBe('completed')
     expect(result.execution.finalizationReason).toBe('brain_content_safety')
-    expect(result.execution.pendingRound?.nextAction.action).toBe('mouth')
     expect(result.execution.deliveryGuidanceItems).toEqual([
       expect.objectContaining({ source: 'brain', text: expect.stringContaining('内容安全') })
     ])
+    expect(result.result?.deliveryMarkdown).toContain('处理结果')
   })
 
   it('keeps an unrelated brain failure on the existing error path', async () => {
     const node = createBrainNode({
       ctx: createBrainContext(new Error('provider authentication failed')),
-      cache: createHumanRuntimeCache()
+      cache: createHumanRuntimeCache(),
+      emitAnswerEvents: false
     })
     const state = createInitialHumanState({ taskId: 'brain-error', userInput: 'continue' })
 
@@ -79,7 +86,8 @@ describe('ai content safety finalization', () => {
     })
     const node = createBrainNode({
       ctx: createBrainContext(providerError),
-      cache: createHumanRuntimeCache()
+      cache: createHumanRuntimeCache(),
+      emitAnswerEvents: false
     })
     const state = createInitialHumanState({ taskId: 'brain-provider-error', userInput: 'continue' })
 
@@ -93,7 +101,8 @@ describe('ai content safety finalization', () => {
     })
     const node = createBrainNode({
       ctx: createBrainContext(outputError),
-      cache: createHumanRuntimeCache()
+      cache: createHumanRuntimeCache(),
+      emitAnswerEvents: false
     })
     const state = createInitialHumanState({ taskId: 'brain-output-error', userInput: 'continue' })
 

@@ -135,7 +135,7 @@ describe('ai tool hand backend', () => {
           {
             name: 'serial-docx-chain-stays-within-edit-and-read-tools',
             message:
-              'docx 编辑的 hand 链路不直接产出交付 artifact；后续交付由 mouth 收尾 direct apply 并生成已修改文件 artifact。',
+              'docx 编辑的 hand 链路不直接产出交付 artifact；后续交付由 brain 收尾 direct apply 并生成已修改文件 artifact。',
             data: {
               artifacts: result.state.execution.artifacts,
               lastToolUseResults: result.state.execution.lastToolResults

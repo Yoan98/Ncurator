@@ -42,8 +42,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-
-                location: { blockId: anchorBlockId, position: 'after' },
+                blockId: anchorBlockId,
+                position: 'after',
                 blocks: [
                   docxParagraphNode('P1'),
                   docxParagraphNode('P2'),
@@ -116,14 +116,14 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-
-                location: { blockId: anchorA, position: 'after' },
+                blockId: anchorA,
+                position: 'after',
                 blocks: [docxParagraphNode('A1'), docxParagraphNode('A2')]
               },
               {
                 type: 'insert_blocks',
-
-                location: { blockId: anchorC, position: 'before' },
+                blockId: anchorC,
+                position: 'before',
                 blocks: [docxParagraphNode('C-1'), docxTableNode([['T1', 'T2']])]
               }
             ]

@@ -71,14 +71,11 @@ describe('ai human mock-llm excel backend', () => {
                   summary: '复读确认结果'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: 'Excel 已更新并确认。' }) }
-            ],
-            'human.mouth': [
               {
-                output: {
+                output: buildCompleteTaskDecision({
                   summary: 'Excel 已更新并确认。',
                   deliveryMarkdown: 'Data 工作表中 A 的金额已更新为 20。'
-                }
+                })
               }
             ]
           }

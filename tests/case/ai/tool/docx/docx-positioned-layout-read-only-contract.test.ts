@@ -61,8 +61,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-
-                location: { blockId: positionedParagraph.blockId, position: 'after' },
+                blockId: positionedParagraph.blockId,
+                position: 'after',
                 blocks: [docxParagraphNode('补充说明：这里不应自动插入。')]
               }
             ]
@@ -82,13 +82,10 @@ describe('ai tool docx backend', () => {
             sourcePath: outline.sourcePath,
             actions: [
               {
-                type: 'style',
-                target: {
-                  type: 'text_match',
-                  query,
-                  blockIds: [positionedParagraph.blockId]
-                },
-                patch: { kind: 'run', bold: true }
+                type: 'style_text',
+                query,
+                blockIds: [positionedParagraph.blockId],
+                style: { bold: true }
               }
             ]
           })
@@ -97,8 +94,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-
-                location: { blockId: positionedParagraph.blockId, position: 'after' },
+                blockId: positionedParagraph.blockId,
+                position: 'after',
                 blocks: [docxTableNode([['问题类型', '核心原因']])]
               }
             ]

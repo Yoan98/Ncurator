@@ -64,13 +64,10 @@ describe('ai tool docx backend', () => {
             sourcePath,
             actions: [
               {
-                type: 'style',
-                target: {
-                  type: 'text_match',
-                  query: 'Project status',
-                  blockIds: [headingBlockId]
-                },
-                patch: { kind: 'run', color: 'FF0000' }
+                type: 'style_text',
+                query: 'Project status',
+                blockIds: [headingBlockId],
+                style: { color: 'FF0000' }
               },
               {
                 type: 'replace_text',

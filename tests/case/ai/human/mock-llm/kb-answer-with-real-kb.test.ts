@@ -44,7 +44,6 @@ describe('ai human mock-llm backend', () => {
           }
         ])
 
-        let mouthPrompt = ''
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
@@ -61,17 +60,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '已拿到 KB 证据。'
-                })
-              }
-            ],
-            'human.mouth': [
-              ({ user }) => {
-                mouthPrompt = user
-                return {
                   summary: '已拿到 KB 证据。',
                   deliveryMarkdown: '# KB Answer\n\n审批被拒绝时应保留现有文件不变。'
-                }
+                })
               }
             ]
           }
@@ -84,7 +75,6 @@ describe('ai human mock-llm backend', () => {
 
         return {
           output,
-          mouthPrompt,
           events: runtime.eventCollector.snapshot()
         }
       },
@@ -103,10 +93,9 @@ describe('ai human mock-llm backend', () => {
             ),
           {
             name: 'human-kb-answer-uses-real-kb-runtime',
-            message: 'KB 回答 case 应通过真实 KB 检索拿到证据，并完成后续真实 mouth 收口。',
+            message: 'KB 回答 case 应通过真实 KB 检索拿到证据，并完成后续最终交付。',
             data: {
-              kbResult,
-              mouthPrompt: result.mouthPrompt
+              kbResult
             }
           }
         )

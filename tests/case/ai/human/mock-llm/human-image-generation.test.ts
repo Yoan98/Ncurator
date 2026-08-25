@@ -43,14 +43,11 @@ describe('ai human mock-llm image generation backend', () => {
                   summary: '生成目标图片'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: '图片已生成。' }) }
-            ],
-            'human.mouth': [
               {
-                output: {
+                output: buildCompleteTaskDecision({
                   summary: '图片已生成。',
                   deliveryMarkdown: '图片已生成：human-generated.png'
-                }
+                })
               }
             ]
           }
@@ -77,7 +74,6 @@ describe('ai human mock-llm image generation backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             stages.has('human_hand') &&
-            stages.has('human_mouth') &&
             starts.filter((event) => event.toolName === 'image_generate').length === 1 &&
             artifacts.some(
               (event) =>

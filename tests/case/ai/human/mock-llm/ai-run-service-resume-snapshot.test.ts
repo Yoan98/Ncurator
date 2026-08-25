@@ -157,13 +157,9 @@ describe('ai human mock-llm backend', () => {
               restoredSkillSeen = user.includes('<learned_skills>') && user.includes('pdf-read')
               restoredRoundSeen = user.includes('先学习一个 skill 再继续。')
               return buildCompleteTaskDecision({
-                summary: '已从恢复快照继续完成任务。'
+                summary: '已从恢复快照继续完成任务。',
+                deliveryMarkdown: '已从恢复快照继续完成任务。'
               })
-            }
-          ],
-          'human.mouth': [
-            {
-              text: '已从恢复快照继续完成任务。'
             }
           ]
         })
@@ -311,11 +307,6 @@ describe('ai human mock-llm backend', () => {
               error:
                 'reason=400 Input data may contain inappropriate content; code=inappropriate-content'
             }
-          ],
-          'human.mouth': [
-            {
-              text: '本次处理受到内容安全限制，已完成说明。'
-            }
           ]
         })
         await runtime.chatStore.saveChatSession({
@@ -437,10 +428,9 @@ describe('ai human mock-llm backend', () => {
                 user.includes('<task_goal>') &&
                 user.includes('继续完成运行上限测试') &&
                 user.includes('验证达到运行上限后恢复原始任务')
-              return buildCompleteTaskDecision({ summary: '运行上限恢复完成。' })
+              return buildCompleteTaskDecision({ summary: '运行上限恢复完成。', deliveryMarkdown: '运行上限恢复完成。' })
             }
-          ],
-          'human.mouth': [{ text: '运行上限恢复完成。' }]
+          ]
         })
         const { deps: runtimeLimitResumeDeps } = await buildDeps(runtime, runtimeLimitResumeDriver)
         const runtimeLimitResumeResult = await AiRunService.getInstance().run(

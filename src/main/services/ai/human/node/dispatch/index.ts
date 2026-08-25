@@ -1,6 +1,5 @@
 import type { JsonObject } from '../../../../../../shared/types'
 import type { HumanDispatchItem, HumanNextAction, HumanState } from '../../types'
-import { brainEvidenceReferenceSchema } from '../../schema'
 
 export type HumanDispatchTarget = HumanDispatchItem['target']
 
@@ -8,7 +7,6 @@ const classifyToolCallTarget = (toolName: string): HumanDispatchTarget => {
   const normalized = String(toolName || '').trim()
   if (normalized === 'learn_skill') return 'learning'
   if (normalized === 'update_plan') return 'plan'
-  if (normalized === 'finish') return 'mouth'
   return 'hand'
 }
 
@@ -59,18 +57,6 @@ const dispatchGroupToNextAction = (group: HumanDispatchItem[]): HumanNextAction 
           args: item.args
         }))
       }
-    case 'mouth': {
-      const rawReferences =
-        first.args && typeof first.args === 'object'
-          ? (first.args as Record<string, unknown>).evidenceReferences
-          : undefined
-      const parsed = brainEvidenceReferenceSchema.array().optional().safeParse(rawReferences)
-      return {
-        action: 'mouth',
-        toolCallId: first.toolCallId,
-        evidenceReferences: parsed.success ? parsed.data : undefined
-      }
-    }
   }
 }
 

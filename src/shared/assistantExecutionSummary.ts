@@ -92,8 +92,7 @@ const TOOL_UI_KINDS = {
   image_analyze: 'image-recognition',
   image_generate: 'image-generation',
   learn_skill: 'generic',
-  update_plan: 'generic',
-  finish: 'generic'
+  update_plan: 'generic'
 } as const satisfies Record<RuntimeToolName, AssistantExecutionSkillKey>
 
 export const getAssistantToolUiKind = (

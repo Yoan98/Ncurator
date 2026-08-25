@@ -30,7 +30,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 human 学习 PPT 读写技能、批量创建并读回 PPT，mouth 只交付一次文件。',
+      description: '验证 human 学习 PPT 读写技能、批量创建并读回 PPT，最终只交付一次文件。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -75,15 +75,10 @@ describe('ai human mock-llm backend', () => {
                 })
               },
               {
-                output: buildCompleteTaskDecision({ summary: 'PPT 已创建并检查。' })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
+                output: buildCompleteTaskDecision({
                   summary: 'PPT 已创建并检查。',
                   deliveryMarkdown: '已创建两页季度业务复盘 PPT。'
-                }
+                })
               }
             ]
           }

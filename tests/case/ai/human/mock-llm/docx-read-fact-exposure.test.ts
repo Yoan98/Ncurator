@@ -100,16 +100,9 @@ describe('ai human mock-llm backend', () => {
                   throw new Error('brain prompt is missing range read structured facts')
                 }
                 return buildCompleteTaskDecision({
-                  summary: 'docx 读取事实暴露已验证。'
-                })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
                   summary: 'docx 读取事实暴露已验证。',
                   deliveryMarkdown: '# Docx Read Facts\n\n文档里明确写了反走样，不应答成“未写”。'
-                }
+                })
               }
             ]
           }

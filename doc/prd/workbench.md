@@ -62,7 +62,7 @@
 - 直接写回：AI 写工具将最终 docx、pptx、xlsx、生成图片或普通文本结果原子写入源文件或创建目标文件的流程；工具成功即代表正式路径已可读取，run 收尾不再提交文件。
 - 修改记录：一次 AI run 中由受控文件工具直接写回，或由某条 terminal 命令前后差异识别出的创建、更新、删除或重命名记录；提供打开文件、适用格式的审核模式与回退本次修改入口。
 - 回退本次修改：基于写回前 checkpoint 恢复文件；新建文件回退时删除目标文件，若文件在 AI 写回后又被修改，需提示用户确认会丢失后续修改。
-- 内部引用链接：assistant markdown 中的 `ncurator://ref` 链接。`kind=reference` 表示证据引用，`kind=normal` 表示普通资源链接，`resourceType=file/web` 表示资源类型。证据引用在进入 mouth 前检查一次可访问性，并携带 `accessStatus=accessible/unavailable`；历史证据缺少该字段时按不可用处理。可用证据可点击，不可用证据显示为弱化文本；普通资源链接不包含 `accessStatus`。
+- 内部引用链接：assistant markdown 中的 `ncurator://ref` 链接。`kind=reference` 表示证据引用，`kind=normal` 表示普通资源链接，`resourceType=file/web` 表示资源类型。证据引用在最终交付生成后由 Main 检查一次可访问性，并携带 `accessStatus=accessible/unavailable`；历史证据缺少该字段时按不可用处理。可用证据可点击，不可用证据显示为弱化文本；普通资源链接不包含 `accessStatus`。
 - AI 推进偏好：智能模式下用户对资料使用边界的附加约束，界面选项包括“默认”“本地资料·宽松”“本地资料·严谨”。当前“本地资料”范围包含当前工作区知识库资料、工作区文件和显式参考资料。宽松模式优先使用这些资料，资料不足时允许补充模型知识或外部网页；严谨模式只能把这些资料作为事实依据，资料不足时必须明确说明，不得把模型知识、外部搜索或浏览器结果伪装成资料内事实。
 - 执行权限：智能模式下对本次运行是否等待工具审批的选择，独立于 AI 推进偏好。选项为“审核”和“完全访问”。
 
@@ -236,11 +236,11 @@
   - `WB-COMPOSER-003-AC1` 智能模式发送后，主区先可见用户消息与 assistant 占位消息。
   - `WB-COMPOSER-003-AC2` AI 运行成功启动后，assistant 过程流通过事件逐步追加更新，而不是一次性静态替换。
   - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前展示“让俺想想”并带有流动视觉反馈；当后端 thinking 过程事件到达时，本地占位被替换为该 run 的 thinking 过程组，不重复展示；当出现“正在重试”过程组时，必须隐藏“让俺想想”占位，避免两个等待状态同时出现。
-  - `WB-COMPOSER-003-AC4` assistant turn 中 mouth 最终输出始终位于过程流下方，并按 markdown 渲染；mouth 等待 AI 返回时先展示总结层“基本完成了，让俺收尾下吧”，首个 markdown token 或完成事件到达后隐藏该等待层；证据引用链接与普通链接视觉区分，内部文件链接打开右侧文件预览，内部网页链接使用系统浏览器打开。
+  - `WB-COMPOSER-003-AC4` assistant turn 中 brain 最终输出始终位于过程流下方，并按 markdown 渲染；等待 AI 返回最终输出时先展示总结层“基本完成了，让俺收尾下吧”，首个 markdown token 或完成事件到达后隐藏该等待层；证据引用链接与普通链接视觉区分，内部文件链接打开右侧文件预览，内部网页链接使用系统浏览器打开。
   - `WB-COMPOSER-003-AC5` 决策层文本来自 `assistant_process_thought` 中经过 schema 约束的 `thought.next`，不得展示模型原始 chain-of-thought；决策层出现时，当前思考层必须立即隐藏，即使下一步执行正等待审批。
   - `WB-COMPOSER-003-AC6` 过程流使用用户可理解的分层文案，不直接暴露内部 tool 名或底层事件名；同一轮执行中的多个工具调用合并为一个执行层 header，展开后每个工具按其入参生成一句自然语言说明。
   - `WB-COMPOSER-003-AC7` AI 输出中切到 Settings 或触发 renderer 重新挂载后，回到 Workbench 能通过会话消息记录投影恢复过程流、partial answer、最终回答或等待审批状态。
-  - `WB-COMPOSER-003-AC8` brain 负责生成证据引用的名称、地址、资源类型与用途；进入 mouth 前，Main 对引用地址并行去重检查并写入证据专用的 `accessStatus`。可访问引用保留文件或网页链接交互；不可访问引用不得删除，必须使用与可访问引用相同的强调色降低透明度，并显示为无资源图标、无悬浮反馈、普通鼠标且不可点击的文本。缺少 `accessStatus` 的证据按不可访问处理，普通资源链接不使用该字段；renderer 渲染和用户点击时均不再次检查可访问性。
+  - `WB-COMPOSER-003-AC8` brain 负责在最终交付 markdown 中生成证据引用（名称、地址、资源类型）；最终交付生成后、回传 renderer 前，Main 对引用地址并行去重检查并写入证据专用的 `accessStatus`。可访问引用保留文件或网页链接交互；不可访问引用不得删除，必须使用与可访问引用相同的强调色降低透明度，并显示为无资源图标、无悬浮反馈、普通鼠标且不可点击的文本。缺少 `accessStatus` 的证据按不可访问处理，普通资源链接不使用该字段；renderer 渲染和用户点击时均不再次检查可访问性。
   - `WB-COMPOSER-003-AC9` terminal 审批要求表示命令正在等待用户决定，不属于执行失败；用户未允许时命令状态为未执行且不得产生 terminal step。命令启动后自然退出时，无论退出码是否为零，都属于执行完成并保留真实退出码供 brain 判断；只有终端执行器、Shell 或会话在执行期间异常时才显示“执行终端指令失败”。用户主动停止单独记录为已取消；正常中断后终端回到 idle，强制终止进程树后终端进入 closed。
 
 #### WB-COMPOSER-004 搜索模式发送路径
@@ -316,7 +316,7 @@
 
 #### WB-COMPOSER-009 消息流布局
 
-- 系统行为：workbench 消息区不展示用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流没有独立标题或左侧竖线，且与最终 mouth 输出共用消息 rail；最终 markdown 输出直接位于内容流中；用户消息使用右对齐紧凑气泡。空会话时输入区位于主工作区中部；存在消息后输入区固定在主区底部，只允许消息区独立滚动，右侧面板展开或折叠不得改变输入区定位。过程流按真实时间展示决策层与过程层：思考层和总结层是临时等待层，执行层、学习层、压缩层和决策层累计保留；执行层 header 默认折叠，hover 时显示展开箭头并提升文字颜色，展开后每个工具调用展示一句自然语言说明。
+- 系统行为：workbench 消息区不展示用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流没有独立标题或左侧竖线，且与最终 brain 输出共用消息 rail；最终 markdown 输出直接位于内容流中；用户消息使用右对齐紧凑气泡。空会话时输入区位于主工作区中部；存在消息后输入区固定在主区底部，只允许消息区独立滚动，右侧面板展开或折叠不得改变输入区定位。过程流按真实时间展示决策层与过程层：思考层和总结层是临时等待层，执行层、学习层、压缩层和决策层累计保留；执行层 header 默认折叠，hover 时显示展开箭头并提升文字颜色，展开后每个工具调用展示一句自然语言说明。
 - 验收：
   - `WB-COMPOSER-009-AC1` 用户与 assistant 消息不展示头像或头像占位。
   - `WB-COMPOSER-009-AC2` assistant 过程流和最终输出左边缘与底部 composer 内容 rail 对齐。
@@ -505,12 +505,12 @@
   - `WB-APPLY-002-AC6` 创建或修改 `xlsx` 后，正式路径立即包含最终净工作簿并生成一条修改记录；同一次 AI Run 对同一路径连续编辑时保持首次写入前基线，不重复生成记录。
   - `WB-APPLY-002-AC7` `docx_edit`、`ppt_edit` 和 `excel_edit` 统一使用 `sourcePath + actions[]`；目标不存在时由编辑 Action 直接创建，不再提供独立的文档或演示文稿创建 Action。
   - `WB-APPLY-002-AC7-1` 所有文件工具（docx / ppt / excel / pdf / text-file / image）的 `sourcePath`、`outputPath`、`path` 必须是本机绝对路径；系统不做任何路径拼接，相对路径直接返回错误，AI 需自行改为绝对路径后再调用。
-  - `WB-APPLY-002-AC8` `docx_edit.insert_blocks` 使用可选 `location:{blockId,position}`；传入时在目标 block 前后插入，不传时统一追加到正文末尾。旧 `position + anchorBlockId` 参数无效。
+  - `WB-APPLY-002-AC8` `docx_edit.insert_blocks` 使用可选 `blockId` 与 `position:'before'|'after'`；传入 `blockId` 时在目标 block 前后插入，不传时统一追加到正文末尾。旧 `location:{blockId,position}` 与 `position + anchorBlockId` 参数无效。
   - `WB-APPLY-002-AC9` DOCX 详细读取使用严格递归语义树，按真实顺序保留 `paragraph / run / text / tab / break / hyperlink / content_control / revision / field / table / table_row / table_cell / visual` 的归属关系；详细树中的正文只存在于叶子 `text` 节点，不重复返回 paragraph、table 或 cell 的派生文本和行列统计。
   - `WB-APPLY-002-AC10` DOCX visual 类型固定为 `image / chart / diagram / shape / embedded_object`。详细读取返回 visualId；outline 只在存在视觉内容时返回 count 和 kinds，不展开视觉节点。
   - `WB-APPLY-002-AC11` `docx_read_visuals` 接受 1 至 10 个 visualId 和识别要求，按输入顺序逐项返回识别文字或错误；结果不写入正文搜索索引，`.doc` 不支持视觉读取。
-  - `WB-APPLY-002-AC12` `insert_blocks / replace_block / update_table_cell` 使用递归创建树。标题由 paragraph 的 `styleName=Heading1...Heading6` 表达；旧 `{text}`、`heading`、`string[][]` 表格和 `style_text` 参数无效。
-  - `WB-APPLY-002-AC13` DOCX 只提供统一 `style` action。它可以按文字匹配、blockId 或 nodeId 修改 run、paragraph、table、row、cell 的直接样式；patch 类型与实际节点不一致时整次编辑失败。
+  - `WB-APPLY-002-AC12` `insert_blocks / replace_block / update_table_cell` 使用扁平写入协议：段落为 `{text, style?}`，表格为 `{rows: string[][]}`。标题由段落 `style.styleName=Heading1...Heading6` 表达；旧递归创建树（`type:'paragraph'` + `children`）与 `heading` 参数无效。
+  - `WB-APPLY-002-AC13` DOCX 按元素类型提供 5 个样式 action：`style_text`（按文字匹配修改 run 样式）、`style_paragraph` / `style_table` / `style_row` / `style_cell`（按 id 修改对应元素的直接样式）；patch 类型与实际节点不一致时整次编辑失败。
   - `WB-APPLY-002-AC14` `replace_text` 未传 blockIds 时递归处理全部正文和表格单元格，传入时只处理指定 subtree；始终替换范围内全部匹配，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual。
   - `WB-APPLY-002-AC15` 替换或删除 block、更新表格单元格时，如目标后代存在 visual，必须明确传 `allowVisualLoss:true`，否则整次编辑在保存前失败。文本替换和样式修改必须原位保留 visual。
   - `WB-APPLY-002-AC16` `docx_read_outline` 只返回轻量扁平摘要和必要视觉统计，不返回 wrapper、相邻 block、样式、heading、layout 或写保护字段；解析时必须递归穿过 block-level content control、可见 revision 和 `AlternateContent`，并按真实顺序列出其中 paragraph/table。

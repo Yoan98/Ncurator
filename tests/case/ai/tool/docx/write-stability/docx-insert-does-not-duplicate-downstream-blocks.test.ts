@@ -78,7 +78,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                location: { blockId: anchorBlockId, position: 'after' },
+                blockId: anchorBlockId,
+                position: 'after',
 
                 blocks: [docxParagraphNode('学生可以根据按钮提示逐步完成脚手架操作。')]
               }
@@ -92,7 +93,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-                location: { blockId: insertedParagraphBlockId, position: 'after' },
+                blockId: insertedParagraphBlockId,
+                position: 'after',
 
                 blocks: [
                   docxTableNode([

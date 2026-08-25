@@ -41,8 +41,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-
-                location: { blockId: anchorBlockId, position: 'after' },
+                blockId: anchorBlockId,
+                position: 'after',
                 blocks: [docxParagraphNode('新增段落初稿。')]
               }
             ]
@@ -71,8 +71,8 @@ describe('ai tool docx backend', () => {
             actions: [
               {
                 type: 'insert_blocks',
-
-                location: { blockId: insertedParagraphBlockId, position: 'after' },
+                blockId: insertedParagraphBlockId,
+                position: 'after',
                 blocks: [
                   docxTableNode([
                     ['单元格初稿', '说明'],
@@ -96,7 +96,7 @@ describe('ai tool docx backend', () => {
               {
                 type: 'update_table_cell',
                 cellBlockId,
-                children: [docxParagraphNode('单元格终稿')]
+                blocks: [docxParagraphNode('单元格终稿')]
               }
             ]
           })

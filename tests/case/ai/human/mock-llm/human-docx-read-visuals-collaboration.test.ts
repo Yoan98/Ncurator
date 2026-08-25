@@ -159,15 +159,10 @@ describe('ai human mock-llm backend', () => {
                   if (!input.user.includes('灵感测试内容')) {
                     throw new Error('brain prompt is missing visual recognition result')
                   }
-                  return buildCompleteTaskDecision({ summary: 'DOCX 图文内容已读取。' })
-                }
-              ],
-              'human.mouth': [
-                {
-                  output: {
+                  return buildCompleteTaskDecision({
                     summary: 'DOCX 图文内容已读取。',
                     deliveryMarkdown: '已读取文档中的文字结构和图片内容。'
-                  }
+                  })
                 }
               ]
             }

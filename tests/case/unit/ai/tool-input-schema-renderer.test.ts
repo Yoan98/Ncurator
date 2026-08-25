@@ -78,13 +78,11 @@ describe('ai unit tool input schema renderer', () => {
 
     for (const definition of [
       'DocxRunStyle',
-      'DocxCreateRun',
-      'DocxCreateParagraph',
-      'DocxCreateTable',
-      'DocxCreateBlock',
-      'DocxEditAction',
-      'DocxStyleTarget',
-      'DocxStylePatch'
+      'DocxParagraphStyle',
+      'DocxTableStyle',
+      'DocxTableRowStyle',
+      'DocxTableCellStyle',
+      'DocxEditAction'
     ]) {
       expect(editRendered.match(new RegExp(`type ${definition} =`, 'g'))).toHaveLength(1)
     }

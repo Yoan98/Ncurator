@@ -774,7 +774,7 @@ export class ChatRunService {
           runId,
           taskId: runId,
           text: result.finalDeliveryMarkdown || completedRun.partialAnswer || '',
-          stage: 'human_mouth'
+          stage: 'human_brain'
         })
       }
       await this.flushRunEvents(runId)

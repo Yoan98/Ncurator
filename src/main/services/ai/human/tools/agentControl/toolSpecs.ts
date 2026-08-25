@@ -20,24 +20,6 @@ export const UPDATE_PLAN_OUTPUT_SCHEMA = z.object({
   message: z.string()
 })
 
-export const FINISH_SCHEMA = z.object({
-  reason: z.string().min(1),
-  evidenceReferences: z
-    .array(
-      z.object({
-        label: z.string().min(1),
-        path: z.string().min(1),
-        resourceType: z.enum(['file', 'web']),
-        usedFor: z.string().min(1)
-      })
-    )
-    .optional()
-})
-
-export const FINISH_OUTPUT_SCHEMA = z.object({
-  message: z.string()
-})
-
 export const LEARN_SKILL_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof LEARN_SKILL_SCHEMA>,
   z.infer<typeof LEARN_SKILL_OUTPUT_SCHEMA>,
@@ -80,30 +62,7 @@ export const UPDATE_PLAN_TOOL_SPEC: HumanToolSpec<
   })
 }
 
-export const FINISH_TOOL_SPEC: HumanToolSpec<
-  z.infer<typeof FINISH_SCHEMA>,
-  z.infer<typeof FINISH_OUTPUT_SCHEMA>,
-  'finish',
-  'agent-control'
-> = {
-  name: 'finish',
-  familyId: 'agent-control',
-  skillIds: ['agent-control'],
-  inputSchema: FINISH_SCHEMA,
-  outputSchema: FINISH_OUTPUT_SCHEMA,
-  promptSpec: {
-    name: 'finish',
-    description:
-      '仅在完成任务、或需要用户协助或确认时调用，结束本轮。reason 说明结束原因。若交付引用了可追溯的资料（本地文件或网页），必须在 evidenceReferences 中列出（label 为资料名、path 为可追溯地址、resourceType 为 file 或 web、usedFor 说明支撑了哪部分交付内容）。'
-  },
-  resolveExecutionMeta: createStaticExecutionMetaResolver({
-    mutability: 'read_only',
-    defaultResourceKey: 'agent-control'
-  })
-}
-
 export const AGENT_CONTROL_TOOL_SPECS = [
   LEARN_SKILL_TOOL_SPEC,
-  UPDATE_PLAN_TOOL_SPEC,
-  FINISH_TOOL_SPEC
+  UPDATE_PLAN_TOOL_SPEC
 ] as const

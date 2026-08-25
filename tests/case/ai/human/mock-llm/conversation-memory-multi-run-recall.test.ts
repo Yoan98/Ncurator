@@ -22,10 +22,12 @@ describe('ai human mock-llm backend', () => {
           sessionId: SESSION_ID,
           structuredOutputScript: {
             'human.brain': [
-              { output: buildCompleteTaskDecision({ summary: '先准备发布清单。' }) }
-            ],
-            'human.mouth': [
-              { text: '当前已确认主线是发布准备，但还缺少回滚负责人。' }
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '先准备发布清单。',
+                  deliveryMarkdown: '当前已确认主线是发布准备，但还缺少回滚负责人。'
+                })
+              }
             ]
           }
         })
@@ -35,10 +37,12 @@ describe('ai human mock-llm backend', () => {
           sessionId: SESSION_ID,
           structuredOutputScript: {
             'human.brain': [
-              { output: buildCompleteTaskDecision({ summary: '汇报负责人候选。' }) }
-            ],
-            'human.mouth': [
-              { text: '负责人候选改成了 Bob，但审批仍未完成，还发现上线窗口冲突待确认。' }
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '汇报负责人候选。',
+                  deliveryMarkdown: '负责人候选改成了 Bob，但审批仍未完成，还发现上线窗口冲突待确认。'
+                })
+              }
             ]
           }
         })
@@ -58,13 +62,10 @@ describe('ai human mock-llm backend', () => {
                   user.includes('上线窗口冲突待确认') &&
                   user.includes('还缺少回滚负责人')
                 return buildCompleteTaskDecision({
-                  summary: '基于前面的进展，汇报当前状态和下一步。'
+                  summary: '基于前面的进展，汇报当前状态和下一步。',
+                  deliveryMarkdown:
+                    '当前负责人候选是 Bob，审批仍未完成，且上线窗口冲突待确认。下一步先确认窗口，再推进审批。'
                 })
-              }
-            ],
-            'human.mouth': [
-              {
-                text: '当前负责人候选是 Bob，审批仍未完成，且上线窗口冲突待确认。下一步先确认窗口，再推进审批。'
               }
             ]
           }

@@ -609,17 +609,12 @@ const applyStyle = async (buffer: Buffer, op: Extract<DocxOp, { type: 'style' }>
         })
     })
   } else {
-    const editable =
-      op.target.type === 'node'
-        ? index.editableNodesById.get(op.target.nodeId)
-        : index.editableNodesById.get(`node:${op.target.blockId}:self`)
-    const block = op.target.type === 'block' ? index.nodesById.get(op.target.blockId) : undefined
+    const id = op.target.id
+    const editable = index.editableNodesById.get(id)
+    const block = index.nodesById.get(id)
     const actualKind = editable?.kind || block?.kind
     const element = editable?.node || block?.node
-    if (!actualKind || !element)
-      throw new Error(
-        `style target not found: ${op.target.type === 'node' ? op.target.nodeId : op.target.blockId}`
-      )
+    if (!actualKind || !element) throw new Error(`style target not found: ${id}`)
     if (expectedKind(actualKind) !== op.patch.kind)
       throw new Error(
         `style patch type mismatch: target is ${actualKind}, patch is ${op.patch.kind}`
