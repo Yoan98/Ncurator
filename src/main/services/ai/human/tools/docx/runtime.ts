@@ -434,7 +434,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     session: DocxReplaySession,
     nodeId: string
   ): DocxReplayNode | undefined =>
-    session.bodyNodeIds
+    session.rootNodeIds
       .map((nodeId) => session.nodeById.get(nodeId))
       .find((node): node is DocxReplayNode =>
         Boolean(
@@ -446,7 +446,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       )
 
   const listVisibleNodes = (session: DocxReplaySession): DocxReplayNode[] =>
-    session.bodyNodeIds
+    session.rootNodeIds
       .map((nodeId) => session.nodeById.get(nodeId))
       .filter((node): node is DocxReplayNode =>
         Boolean(node && node.reviewState !== 'deleted' && node.reviewState !== 'replaced-old')
@@ -1030,7 +1030,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
 
     return {
       nodeCount: snapshot.nodes.length,
-      bodyNodeCount: snapshot.nodes.length,
+      rootNodeCount: snapshot.nodes.length,
       paragraphCount,
       tableCount,
       imageCount: 0,
@@ -1485,7 +1485,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       },
       stats: params.stats || {
         nodeCount: 0,
-        bodyNodeCount: 0,
+        rootNodeCount: 0,
         paragraphCount: 0,
         tableCount: 0,
         imageCount: 0,
@@ -1608,7 +1608,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       nodeById: new Map(
         [...source.nodeById.entries()].map(([nodeId, node]) => [nodeId, { ...node }] as const)
       ),
-      bodyNodeIds: [...source.bodyNodeIds]
+      rootNodeIds: [...source.rootNodeIds]
     }
     return {
       ok: true,

@@ -444,12 +444,20 @@ export const handleDocxWorkerRequest = async (
         moveFrom: 'move_from',
         moveTo: 'move_to'
       } as const
+      const storyDocuments = [
+        ...new Set([
+          snapshot.bundle.documentDom,
+          ...snapshot.bundle.stories.map((story) => story.dom)
+        ])
+      ]
       const revisions = (Object.keys(revisionKindByName) as Array<keyof typeof revisionKindByName>)
         .flatMap((name) =>
-          Array.from(snapshot.bundle.documentDom.getElementsByTagNameNS('*', name)).map((node) => ({
-            revisionId: localAttribute(node, 'id'),
-            kind: revisionKindByName[name]
-          }))
+          storyDocuments.flatMap((document) =>
+            Array.from(document.getElementsByTagNameNS('*', name)).map((node) => ({
+              revisionId: localAttribute(node, 'id'),
+              kind: revisionKindByName[name]
+            }))
+          )
         )
         .filter(
           (revision, index, all) =>

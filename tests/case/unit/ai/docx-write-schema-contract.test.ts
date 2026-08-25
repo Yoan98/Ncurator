@@ -93,10 +93,10 @@ describe('ai unit docx write schema contract', () => {
         sourcePath: 'a.docx',
         type: 'merge_cells',
         tableNodeId: 'node_table',
-        fromRow: 0,
-        fromColumn: 0,
-        toRow: 1,
-        toColumn: 1
+        fromRow: 1,
+        fromColumn: 1,
+        toRow: 2,
+        toColumn: 2
       }).success
     ).toBe(true)
     expect(
@@ -122,5 +122,54 @@ describe('ai unit docx write schema contract', () => {
         revisionId: '7'
       }).success
     ).toBe(true)
+  })
+
+  it('rejects ambiguous anchors, zero-based table coordinates, and empty updates', () => {
+    expect(
+      docxTableEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'create_table',
+        position: 'before',
+        rows: [['x']]
+      }).success
+    ).toBe(false)
+    expect(
+      docxTableEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'delete_column',
+        tableNodeId: 'node_table',
+        columnIndex: 0
+      }).success
+    ).toBe(false)
+    expect(
+      docxMediaEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'insert_image',
+        nodeId: 'node_1',
+        position: 'document_end',
+        imagePath: '/tmp/a.png'
+      }).success
+    ).toBe(false)
+    expect(
+      docxMediaEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'update_image',
+        visualId: 'visual_1'
+      }).success
+    ).toBe(false)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'update_named_style',
+        styleId: 'Heading1'
+      }).success
+    ).toBe(false)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'format_section',
+        nodeId: 'node_1'
+      }).success
+    ).toBe(false)
   })
 })

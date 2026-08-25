@@ -59,7 +59,7 @@ describe('docx review visual normalization', () => {
       visualIds: ['visual-1']
     })
     const session = makeSession(source)
-    const node = session.nodeById.get(session.bodyNodeIds[0])!
+    const node = session.nodeById.get(session.rootNodeIds[0])!
     node.structureFingerprint = 'empty-paragraph'
     node.visualIds = []
 
@@ -82,7 +82,7 @@ describe('docx review visual normalization', () => {
       visualIds: ['visual-1']
     })
     const session = makeSession(source)
-    const node = session.nodeById.get(session.bodyNodeIds[0])!
+    const node = session.nodeById.get(session.rootNodeIds[0])!
     node.structureFingerprint = 'table-without-image'
     node.visualIds = []
 

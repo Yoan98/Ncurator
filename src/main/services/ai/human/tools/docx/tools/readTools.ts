@@ -321,7 +321,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
       try {
         const ranges = args.ranges.map((range) =>
-          toOutlineRange(range, sessionResult.stats.bodyNodeCount)
+          toOutlineRange(range, sessionResult.stats.rootNodeCount)
         )
         const mergedRanges = mergeOutlineRanges(ranges)
         const outlineNodes = await runtime.callWorker({
@@ -342,7 +342,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         const resultNodes = outlineNodes.payload.nodes.map(buildOutlineNode)
         const result = {
           sourcePath: sessionResult.sourcePath,
-          totalNodeCount: sessionResult.stats.bodyNodeCount,
+          totalNodeCount: sessionResult.stats.rootNodeCount,
           nodes: resultNodes
         }
         return finalizeDocxToolSuccess({

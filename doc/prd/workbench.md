@@ -512,10 +512,10 @@
   - `WB-APPLY-002-AC12` `docx_content_edit` 使用浅层节点构造和最小 patch：支持 `replace_text / insert_nodes / replace_node / delete_node / move_node`，不提供 `replace_content` 或 `replace_children`，也不要求 AI 重建完整递归树。
   - `WB-APPLY-002-AC13` `docx_format` 分别支持 text、paragraph、table、row、cell 和 section 的直接格式，另支持重置格式、命名样式 CRUD、应用命名样式和编号。patch 类型与目标节点不一致时整次写入失败；`update_named_style` 修改全局样式定义。
   - `WB-APPLY-002-AC14` `replace_text` 只在指定 `nodeId` 子树内替换确定原文，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual；原位保留未修改 run、段落格式和视觉节点。
-  - `WB-APPLY-002-AC15` 替换或删除节点时，如目标后代存在 visual，必须明确传 `allowVisualLoss:true`，否则保存前失败。失败不得推进 WorkingPackage，也不得产生部分结果。
+  - `WB-APPLY-002-AC15` 替换或删除节点、删除表格行列或合并单元格时，如被移除区域存在 visual，必须明确传 `allowVisualLoss:true`，否则保存前失败。表格读写坐标统一从 1 开始。失败不得推进 WorkingPackage，也不得产生部分结果。
   - `WB-APPLY-002-AC16` `docx_read_outline` 返回轻量顺序摘要；`docx_read` 返回 story 递归语义树。未支持 OOXML 投影为 opaque，局部写入必须原样保留；content control 是可定位容器，空容器可用 `insert_nodes inside_start/inside_end` 写入。
   - `WB-APPLY-002-AC17` 五个 DOCX 写工具统一返回 discriminated `changes`：节点创建/更新返回局部完整节点，节点删除返回 `nodeId`，命名样式、批注和修订返回对应实体 ID 与最终状态；禁止只返回成功消息。
-  - `WB-APPLY-002-AC17-1` 同一 Run 内五个写工具共享首次接触文件时的 Source 和连续推进的 Working。Diff 比较 Source 与最终 Working：A→B→A、新增后删除不产生 Diff；Word 原生批注和修订与 NCurator Diff 独立保留。
+  - `WB-APPLY-002-AC17-1` 同一 Run 内五个写工具共享首次接触文件时的 Source 和连续推进的 Working。Diff 比较 Source 与最终 Working：A→B→A、新增后删除不产生 Diff；body、header、footer、footnote、endnote、textbox 均生成红绿审核结果，只有 package part 变化时显示“文档级变更”摘要；Word 原生批注和修订与 NCurator Diff 独立保留。
   - `WB-APPLY-002-AC18` 所有 Human 工具的输入结构由 Zod schema 统一渲染；公共类型使用稳定命名定义并只展开一次，同时保留长度、数量、正则、数值和跨字段语义约束，不生成匿名 schema 名称。
   - `WB-APPLY-002-AC7` 生成 PNG、JPEG 或 WebP 图片后，正式路径立即包含可读取图片并生成一条修改记录；同一次 AI Run 对同一路径再次生成时自动更新并保持首次写入前基线。
 

@@ -45,7 +45,7 @@ describe('docx recursive semantic tree visuals', () => {
     expect(
       index.outline.filter((node) => node.type !== 'table_cell').map((node) => node.text)
     ).toEqual(['A\nB', 'deleted', 'C'])
-    expect(index.bodyNodeCount).toBe(3)
+    expect(index.rootNodeCount).toBe(3)
     expect(
       projectDocxReadNodes([index.detailByNodeId.get('body:content_control:0')!])
     ).toMatchObject([
@@ -77,7 +77,7 @@ describe('docx recursive semantic tree visuals', () => {
     const paragraph = new DOMParser().parseFromString(xml, 'application/xml').documentElement
 
     expect(readParagraphStyle(paragraph)).toEqual({
-      styleName: 'Normal',
+      styleId: 'Normal',
       indent: { left: 36 },
       spacing: { after: 6 }
     })
@@ -154,7 +154,7 @@ describe('docx recursive semantic tree visuals', () => {
     ])
     expect(index.visualsById.size).toBe(6)
     expect(index.outline[3]?.text).toBe('Shape text')
-    const shapeDetail = index.detailByNodeId.get(index.bodyNodeIds[3]!)
+    const shapeDetail = index.detailByNodeId.get(index.rootNodeIds[3]!)
     const shapeVisual =
       shapeDetail?.type === 'paragraph' && shapeDetail.children[0]?.type === 'run'
         ? shapeDetail.children[0].children[0]

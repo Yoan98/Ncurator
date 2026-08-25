@@ -56,11 +56,11 @@ export type NodeMapById = Map<string, IndexedNode>
 export type NodeIndex = {
   outline: DocxOutlineNode[]
   nodesById: NodeMapById
-  bodyNodeIds: string[]
+  rootNodeIds: string[]
   paragraphCount: number
   tableCount: number
   charCount: number
-  bodyNodeCount: number
+  rootNodeCount: number
   cellNodeCount: number
   detailByNodeId: Map<string, DocxDetailedNode>
   editableNodesById: Map<string, DocxEditableNode>

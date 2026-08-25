@@ -5,8 +5,195 @@ import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
 import { createDocxFile } from '../../../../src/main/services/ai/human/tools/docx/utils/createDocxFile'
 import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/tools/docx/worker/docxWorker'
+import JSZip from 'jszip'
 
 describe('DOCX v2 stable node identity', () => {
+  it('keeps header identity when document_end adds a body node', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-story-identity-v2-'))
+    const filePath = path.join(tempDir, 'story.docx')
+    const runId = randomUUID()
+    try {
+      await createDocxFile({
+        filePath,
+        nodes: [
+          {
+            type: 'paragraph',
+            children: [{ type: 'run', children: [{ type: 'text', text: 'Body' }] }]
+          }
+        ]
+      })
+      const zip = await JSZip.loadAsync(await fs.readFile(filePath))
+      const relationshipsPath = 'word/_rels/document.xml.rels'
+      const relationships = await zip.file(relationshipsPath)!.async('text')
+      zip.file(
+        relationshipsPath,
+        relationships.replace(
+          '</Relationships>',
+          '<Relationship Id="rIdHeaderStable" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/></Relationships>'
+        )
+      )
+      zip.file(
+        'word/header1.xml',
+        '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Header stable</w:t></w:r></w:p></w:hdr>'
+      )
+      await fs.writeFile(filePath, await zip.generateAsync({ type: 'nodebuffer' }))
+      const opened = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'open',
+        payload: { sourcePath: filePath }
+      })
+      expect(opened.ok).toBe(true)
+      if (!opened.ok || opened.payload.action !== 'open') return
+      const before = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'outline',
+        payload: {
+          docId: opened.payload.docId,
+          ranges: [{ fromNodeIndex: 0, toNodeIndex: 10 }],
+          includeTables: true,
+          includeCells: true
+        }
+      })
+      expect(before.ok).toBe(true)
+      if (!before.ok || before.payload.action !== 'outline') return
+      const header = before.payload.nodes.find((node) => node.story.type === 'header')!
+      const edited = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'apply_operation',
+        payload: {
+          docId: opened.payload.docId,
+          operation: {
+            type: 'insert_nodes',
+            position: 'document_end',
+            nodes: [{ type: 'paragraph', text: 'Body end' }]
+          }
+        }
+      })
+      expect(edited.ok).toBe(true)
+      if (!edited.ok || edited.payload.action !== 'apply_operation') return
+      const after = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'outline',
+        payload: {
+          docId: edited.payload.newDocId,
+          ranges: [{ fromNodeIndex: 0, toNodeIndex: 10 }],
+          includeTables: true,
+          includeCells: true
+        }
+      })
+      expect(after.ok).toBe(true)
+      if (!after.ok || after.payload.action !== 'outline') return
+      expect(after.payload.nodes.find((node) => node.story.type === 'header')?.nodeId).toBe(
+        header.nodeId
+      )
+      expect(
+        after.payload.nodes.filter((node) => node.story.type === 'body').map((node) => node.text)
+      ).toEqual(['Body', 'Body end'])
+    } finally {
+      await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'release_run',
+        payload: {}
+      })
+      await fs.rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('does not give an existing identical run id to a new inside_start run', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-run-identity-v2-'))
+    const filePath = path.join(tempDir, 'runs.docx')
+    const runId = randomUUID()
+    try {
+      await createDocxFile({
+        filePath,
+        nodes: [
+          {
+            type: 'paragraph',
+            children: [{ type: 'run', children: [{ type: 'text', text: 'same' }] }]
+          }
+        ]
+      })
+      const opened = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'open',
+        payload: { sourcePath: filePath }
+      })
+      expect(opened.ok).toBe(true)
+      if (!opened.ok || opened.payload.action !== 'open') return
+      const outlined = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'outline',
+        payload: {
+          docId: opened.payload.docId,
+          ranges: [{ fromNodeIndex: 0, toNodeIndex: 2 }],
+          includeTables: true,
+          includeCells: true
+        }
+      })
+      if (!outlined.ok || outlined.payload.action !== 'outline') return
+      const paragraphId = outlined.payload.nodes[0]!.nodeId
+      const before = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'get_node',
+        payload: { docId: opened.payload.docId, nodeId: paragraphId }
+      })
+      if (
+        !before.ok ||
+        before.payload.action !== 'get_node' ||
+        before.payload.node.type !== 'paragraph'
+      )
+        return
+      const oldRunId = before.payload.node.children[0]!.nodeId
+      const edited = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'apply_operation',
+        payload: {
+          docId: opened.payload.docId,
+          operation: {
+            type: 'insert_nodes',
+            nodeId: paragraphId,
+            position: 'inside_start',
+            nodes: [{ type: 'run', text: 'same' }]
+          }
+        }
+      })
+      expect(edited.ok).toBe(true)
+      if (!edited.ok || edited.payload.action !== 'apply_operation') return
+      const after = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'get_node',
+        payload: { docId: edited.payload.newDocId, nodeId: paragraphId }
+      })
+      if (
+        !after.ok ||
+        after.payload.action !== 'get_node' ||
+        after.payload.node.type !== 'paragraph'
+      )
+        return
+      expect(after.payload.node.children).toHaveLength(2)
+      expect(after.payload.node.children[0]!.nodeId).not.toBe(oldRunId)
+      expect(after.payload.node.children[1]!.nodeId).toBe(oldRunId)
+    } finally {
+      await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'release_run',
+        payload: {}
+      })
+      await fs.rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
   it('preserves existing row and cell nodeIds after inserting a row', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-node-identity-v2-'))
     const filePath = path.join(tempDir, 'table.docx')

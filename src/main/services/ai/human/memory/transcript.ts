@@ -9,7 +9,7 @@ const toToolCall = (call: ChatMessageLogToolCall): {
 } => ({
   id: call.id,
   name: call.name,
-  args: call.args as unknown as Record<string, unknown>,
+  args: { ...call.args },
   type: 'tool_call'
 })
 

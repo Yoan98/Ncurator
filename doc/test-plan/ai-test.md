@@ -134,7 +134,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 
 #### docx 类别
 
-DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、单 operation 写入和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，不在本计划重复登记 Unit case。
+DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、单 operation 写入和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和行列/合并视觉丢失保护，不在本计划重复登记 Unit case。
 
 ##### `docx-v2-public-tools`
 
@@ -159,8 +159,8 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、单 
 - 测试类型：`backend`
 - What：同一 Run 的 Source→Working 净 Diff、正式写回、Review 预览与 checkpoint 回退。
 - Why：Diff 是 DOCX 写入不可丢失的核心能力，不能用操作次数代替最终净变化。
-- How：真实执行 A→B→C、A→B→A 和表格新增行，提交 run 后解析 Review DOCX，再执行回退。
-- Oracle：Review 只含 A 与 C，不含 B；恢复 A 的文档不生成记录；Diff 有红删绿增而正式文件没有标记；回退逐字节恢复 Source。
+- How：真实执行 A→B→C、A→B→A、表格新增行、页眉修改和只修改命名样式的 package 级操作，提交 run 后解析 Review DOCX，再执行回退。
+- Oracle：Review 只含 A 与 C，不含 B；恢复 A 的文档不生成记录；正文与页眉 Diff 都有红删绿增；只有 package part 变化时出现“文档级变更”摘要；正式文件没有 Diff 标记；回退逐字节恢复 Source。
 - Not：不运行 Workbench UI，不验证 live 模型策略。
 
 ##### `docx-search-unicode-normalization-contract`

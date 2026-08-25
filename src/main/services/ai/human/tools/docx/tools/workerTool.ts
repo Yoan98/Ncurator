@@ -4,11 +4,7 @@ import type { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../../shared/types'
 import type { DocxToolFailure, DocxToolRuntime } from '../runtime'
 import { buildDocxToolCallResult } from '../runtime'
-import type {
-  DocxWorkerAction,
-  DocxWorkerRequest,
-  DocxWorkerSuccessPayload
-} from '../worker/types'
+import type { DocxWorkerAction, DocxWorkerRequest, DocxWorkerSuccessPayload } from '../worker/types'
 import { withToolLifecycle } from '../../utils/lifecycle'
 
 export const isDocxToolFailure = (
@@ -118,9 +114,7 @@ export const runDocxWorkerToolAction = async <
   expectedAction: TAction
   draftDocId?: string
   activity?: DocxToolActivityConfig<TResult>
-  buildSuccess: (
-    payload: Extract<DocxWorkerSuccessPayload, { action: TAction }>
-  ) =>
+  buildSuccess: (payload: Extract<DocxWorkerSuccessPayload, { action: TAction }>) =>
     | {
         result: TResult
         draftDocId?: string

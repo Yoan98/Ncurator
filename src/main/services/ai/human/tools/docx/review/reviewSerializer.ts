@@ -178,9 +178,15 @@ const clearBodyContent = (body: Element): void => {
   removable.forEach((child) => body.removeChild(child))
 }
 
-const writeDocumentXml = async (zip: JSZip, doc: Document): Promise<Buffer> => {
-  const xml = new XMLSerializer().serializeToString(doc)
-  zip.file('word/document.xml', xml)
+const writeDocumentXml = async (
+  zip: JSZip,
+  bundle: Awaited<ReturnType<typeof loadDocxBundle>>
+): Promise<Buffer> => {
+  const documentsByPart = new Map<string, Document>([['word/document.xml', bundle.documentDom]])
+  bundle.stories.forEach((story) => documentsByPart.set(story.partName, story.dom))
+  documentsByPart.forEach((document, partName) => {
+    zip.file(partName, new XMLSerializer().serializeToString(document))
+  })
   return await zip.generateAsync({
     type: 'nodebuffer',
     compression: 'DEFLATE'
@@ -232,7 +238,7 @@ const resolveElementForNode = (input: {
       ? input.session.activeSnapshot.nodeById.get(currentNodeId)
       : undefined
     const currentInternalNodeId = currentSnapshotNode
-      ? input.currentIndex.bodyNodeIds[currentSnapshotNode.nodeIndex]
+      ? input.currentIndex.rootNodeIds[currentSnapshotNode.nodeIndex]
       : currentNodeId
     const currentNode = currentInternalNodeId
       ? input.currentIndex.nodesById.get(currentInternalNodeId)
@@ -252,7 +258,7 @@ const resolveElementForNode = (input: {
     ? input.session.sourceSnapshot.nodeById.get(sourceNodeId)
     : undefined
   const sourceInternalNodeId = sourceSnapshotNode
-    ? input.sourceIndex.bodyNodeIds[sourceSnapshotNode.nodeIndex]
+    ? input.sourceIndex.rootNodeIds[sourceSnapshotNode.nodeIndex]
     : sourceNodeId
   const sourceNode = sourceInternalNodeId
     ? input.sourceIndex.nodesById.get(sourceInternalNodeId)
@@ -285,6 +291,20 @@ const applyReviewMarker = (element: Element, node: DocxReplayNode): void => {
   if (node.reviewState === 'deleted' || node.reviewState === 'replaced-old') {
     applyRevisionToRuns(element, 'deleted')
   }
+}
+
+const appendPackageChangeSummary = (body: Element): void => {
+  const paragraph = body.ownerDocument.createElementNS(WORD_NS, 'w:p')
+  const run = body.ownerDocument.createElementNS(WORD_NS, 'w:r')
+  const text = body.ownerDocument.createElementNS(WORD_NS, 'w:t')
+  text.appendChild(
+    body.ownerDocument.createTextNode('文档级变更：样式、批注、修订或文档设置已更新')
+  )
+  run.appendChild(text)
+  paragraph.appendChild(run)
+  applyRevisionToRuns(paragraph, 'inserted')
+  const section = firstChildElement(body, 'sectPr')
+  body.insertBefore(paragraph, section || null)
 }
 
 const ensureStableTableLayout = (
@@ -340,17 +360,28 @@ export const materializeDocxProjectedArtifact = async (input: {
   const sourceBundle = await loadDocxBundle(input.sourceBuffer)
   const currentIndex = buildDocumentNodeIndex(workingBundle)
   const sourceIndex = buildDocumentNodeIndex(sourceBundle)
-  const body = getBody(workingBundle.documentDom)
-  const sectPr = firstChildElement(body, 'sectPr')
-  clearBodyContent(body)
-
   const projectedNodes =
     input.kind === 'review' ? projectReviewView(input.session) : projectCommittedView(input.session)
-  projectedNodes
-    .filter((node) => node.story.type === 'body')
-    .forEach((node) => {
+  const storyIds = [...new Set(projectedNodes.map((node) => node.story.storyId))].sort(
+    (left, right) => {
+      if (left.startsWith('textbox:') && !right.startsWith('textbox:')) return -1
+      if (!left.startsWith('textbox:') && right.startsWith('textbox:')) return 1
+      if (left === 'body') return 1
+      if (right === 'body') return -1
+      return left.localeCompare(right)
+    }
+  )
+  storyIds.forEach((storyId) => {
+    const storyNodes = projectedNodes.filter((node) => node.story.storyId === storyId)
+    const storyPart = workingBundle.stories.find((part) => part.story.storyId === storyId)
+    const root = storyId === 'body' ? getBody(workingBundle.documentDom) : storyPart?.root
+    if (!root) throw new Error(`DOCX review story is missing: ${storyId}`)
+    const preservedSection = storyId === 'body' ? firstChildElement(root, 'sectPr') : null
+    if (storyId === 'body') clearBodyContent(root)
+    else clearChildren(root)
+    storyNodes.forEach((node) => {
       const resolved = resolveElementForNode({
-        shellDocument: workingBundle.documentDom,
+        shellDocument: root.ownerDocument,
         node,
         session: input.session,
         currentIndex,
@@ -363,14 +394,22 @@ export const materializeDocxProjectedArtifact = async (input: {
       if (input.kind === 'review') {
         applyReviewMarker(element, node)
       }
-      if (sectPr) {
-        body.insertBefore(element, sectPr)
+      if (preservedSection) {
+        root.insertBefore(element, preservedSection)
       } else {
-        body.appendChild(element)
+        root.appendChild(element)
       }
     })
+  })
+  if (
+    input.kind === 'review' &&
+    input.session.sourceSnapshot.packageFingerprint !==
+      input.session.activeSnapshot.packageFingerprint
+  ) {
+    appendPackageChangeSummary(getBody(workingBundle.documentDom))
+  }
 
-  const buffer = await writeDocumentXml(workingBundle.zip, workingBundle.documentDom)
+  const buffer = await writeDocumentXml(workingBundle.zip, workingBundle)
   await assertNoNewDocxValidationProblems(
     input.sourceBuffer,
     buffer,

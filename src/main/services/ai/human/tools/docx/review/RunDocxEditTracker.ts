@@ -78,16 +78,22 @@ export class RunDocxEditTracker {
     replaySession?: DocxReplaySession
   }): void {
     const state = this.runEdits.get(input.runId)
-    if (!state || input.changedNodes.length === 0) return
+    if (!state) return
 
     const sourcePath = state.sourcePathByDocId.get(input.previousDocId)
     if (!sourcePath) return
     const document = state.documentBySourcePath.get(sourcePath)
     if (!document) return
+    const packageChanged = Boolean(
+      input.replaySession &&
+      input.replaySession.sourceSnapshot.packageFingerprint !==
+        input.replaySession.activeSnapshot.packageFingerprint
+    )
+    if (input.changedNodes.length === 0 && !packageChanged) return
 
     state.sourcePathByDocId.set(input.nextDocId, sourcePath)
     document.latestDocId = input.nextDocId
-    document.dirtyChangeCount += input.changedNodes.length
+    document.dirtyChangeCount += Math.max(1, input.changedNodes.length)
     document.replaySession = input.replaySession || document.replaySession
   }
 
@@ -286,7 +292,7 @@ export class RunDocxEditTracker {
   }
 
   private countReviewChanges(session: DocxReplaySession): DocxChangeStats {
-    return projectReviewView(session).reduce<DocxChangeStats>(
+    const stats = projectReviewView(session).reduce<DocxChangeStats>(
       (stats, node) => {
         if (node.tableCellChanges?.length) {
           node.tableCellChanges.forEach((change) => {
@@ -306,6 +312,10 @@ export class RunDocxEditTracker {
       },
       { insertCount: 0, deleteCount: 0 }
     )
+    if (session.sourceSnapshot.packageFingerprint !== session.activeSnapshot.packageFingerprint) {
+      stats.insertCount += 1
+    }
+    return stats
   }
 
   public buildChangeHighlights(session: DocxReplaySession): string[] {

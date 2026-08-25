@@ -227,6 +227,7 @@ SourcePackage/Model → editing session → WorkingPackage/Model → OOXML write
 - `nodeIndex` 只是 outline 当前顺序的临时值。重新打开文件后必须重新读取，不承诺跨会话复用 `nodeId`。
 - parent、ancestor、flowIndex、lineageId 和重复路径不写入节点；outline、search 和 read 需要的顺序或路径按当前树计算。
 - 未支持 OOXML 作为 `opaque` 返回。局部编辑时 writer 原样保留未命中的 opaque 子树；会造成视觉内容丢失的替换或删除必须显式设置 `allowVisualLoss:true`。
+- 内部索引按各 story 的根节点维护为 `rootNodeIds`，不再使用会把页眉页脚混成正文的 `bodyNodeIds` 命名或位置假设。`document_end` 只表示正文末尾。
 
 content control 是 Word 的结构化文档标签容器，常用于模板字段、表单区域、可重复区域和受控内容。修改它时操作内部 paragraph/run；空容器使用容器 `nodeId` 加 `insert_nodes(position:'inside_start'|'inside_end')`。
 
@@ -248,6 +249,8 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 - `docx_comments_revisions`：批注新增/更新/回复/删除、修订模式开关、指定或全部修订接受/拒绝。
 
 没有 `replace_content` 或 `replace_children`。AI 不应为局部修改重建完整递归树；容器内容通过其子节点逐个操作。
+
+表格读写坐标统一从 1 开始。删除行、删除列、合并单元格等可能移除视觉内容的操作，也必须按需显式传入 `allowVisualLoss:true`。
 
 #### 写入事务与保真
 
@@ -276,6 +279,8 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 
 NCurator Diff 与 Word 原生批注、`w:ins`、`w:del` 相互独立。读取和局部写入必须保留源文件已有批注及修订；`docx_comments_revisions` 操作的是 Word 原生实体，不能拿 NCurator Diff 代替。审核产物以 Working package 为壳，因此图片、关系、样式、批注和其他 package part 不会在生成 Diff 时丢失。
 
+审核产物对 body、header、footer、footnote、endnote 和 textbox 各 story 都生成红绿净变化；命名样式、批注回复、修订接受/拒绝和修订模式等只有 package part 变化的操作，会在正文末尾增加绿色“文档级变更”摘要，避免出现有变更记录但审核页不可见的情况。
+
 #### AI 调用原则
 
 - 不知道位置：`docx_read_outline` 或 `docx_search` → `docx_read` → 一个写 operation → 根据返回的 `changes` 继续。
@@ -285,6 +290,7 @@ NCurator Diff 与 Word 原生批注、`w:ins`、`w:del` 相互独立。读取和
 - 表格文字、外观、结构分别使用 content、format、table 工具，避免一个 operation 同时承担三种职责。
 - 图片、批注和修订使用各自领域工具；写后需要确认时再调用 `docx_read` 或 `docx_read_visuals`。
 - 同一路径可连续调用多个写工具；每次都基于最新 WorkingModel，旧节点未删除时 `nodeId` 保持可用。
+- `move_node` 只允许在同一 OOXML part/story 内移动；跨 story 移动会涉及关系迁移，当前明确拒绝，AI 应在目标 story 插入新节点后再删除源节点，并按视觉丢失规则确认。
 
 ### 结构化输出与服务重试
 

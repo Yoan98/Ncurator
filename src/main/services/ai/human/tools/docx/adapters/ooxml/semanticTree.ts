@@ -97,8 +97,10 @@ const twipsToPt = (value: number | undefined): number | undefined =>
 const halfPointsToPt = (value: number | undefined): number | undefined =>
   value === undefined ? undefined : value / 2
 
-const compact = <T extends object>(value: T): T | undefined =>
-  Object.values(value).some((entry) => entry !== undefined) ? value : undefined
+const compact = <T extends object>(value: T): T | undefined => {
+  const entries = Object.entries(value).filter(([, entry]) => entry !== undefined)
+  return entries.length > 0 ? (Object.fromEntries(entries) as T) : undefined
+}
 
 const hexColor = (value: string): string | undefined =>
   /^[0-9a-f]{6}$/i.test(value) ? value.toUpperCase() : undefined
@@ -160,7 +162,7 @@ export const readParagraphStyle = (paragraph: Element): DocxParagraphStyle | und
   const indent = firstChildElement(pPr, 'ind')
   const spacing = firstChildElement(pPr, 'spacing')
   return compact({
-    styleName: style ? getAttr(style, 'val') || undefined : undefined,
+    styleId: style ? getAttr(style, 'val') || undefined : undefined,
     alignment: alignment
       ? (getAttr(alignment, 'val') as DocxParagraphStyle['alignment']) || undefined
       : undefined,

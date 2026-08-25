@@ -15,6 +15,78 @@ import { createDocxFile } from '../../../../src/main/services/ai/human/tools/doc
 const fixturePath = path.resolve('tests/fixtures/workspace/灵感测试.docx')
 
 describe('docx recursive edit executor', () => {
+  it('requires explicit visual-loss consent for destructive row, column, and merge edits', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-table-visual-safety-'))
+    const filePath = path.join(tempDir, 'table.docx')
+    try {
+      await createDocxFile({
+        filePath,
+        nodes: [
+          {
+            type: 'table',
+            children: ['A', 'B'].map((prefix) => ({
+              type: 'table_row' as const,
+              children: [`${prefix}1`, `${prefix}2`].map((text) => ({
+                type: 'table_cell' as const,
+                children: [
+                  {
+                    type: 'paragraph' as const,
+                    children: [
+                      { type: 'run' as const, children: [{ type: 'text' as const, text }] }
+                    ]
+                  }
+                ]
+              }))
+            }))
+          }
+        ]
+      })
+      const zip = await JSZip.loadAsync(await fs.readFile(filePath))
+      const xml = await zip.file('word/document.xml')!.async('text')
+      zip.file('word/document.xml', xml.replace('<w:t>A2</w:t>', '<w:t>A2</w:t><w:drawing/>'))
+      const source = await zip.generateAsync({ type: 'nodebuffer' })
+      const bundle = await loadDocxBundle(source)
+      const index = buildDocumentNodeIndex(bundle)
+      const tableId = index.outline.find((node) => node.type === 'table')!.nodeId
+      const detail = index.detailByNodeId.get(tableId)
+      if (!detail || detail.type !== 'table') throw new Error('table detail missing')
+      const firstRowId = detail.children[0]!.nodeId
+      await expect(
+        applyDocxOps({ buffer: source, ops: [{ type: 'delete_row', rowNodeId: firstRowId }] })
+      ).rejects.toThrow('allowVisualLoss=true')
+      await expect(
+        applyDocxOps({
+          buffer: source,
+          ops: [{ type: 'delete_column', tableNodeId: tableId, columnIndex: 2 }]
+        })
+      ).rejects.toThrow('allowVisualLoss=true')
+      await expect(
+        applyDocxOps({
+          buffer: source,
+          ops: [
+            {
+              type: 'merge_cells',
+              tableNodeId: tableId,
+              fromRow: 1,
+              fromColumn: 1,
+              toRow: 1,
+              toColumn: 2
+            }
+          ]
+        })
+      ).rejects.toThrow('allowVisualLoss=true')
+      const allowed = await applyDocxOps({
+        buffer: source,
+        ops: [
+          { type: 'delete_column', tableNodeId: tableId, columnIndex: 2, allowVisualLoss: true }
+        ]
+      })
+      expect(allowed.buffer.byteLength).toBeGreaterThan(0)
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
   it('reads and edits header stories and empty content controls in their original parts', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-story-test-'))
     const sourcePath = path.join(tempDir, 'stories.docx')
@@ -171,7 +243,7 @@ describe('docx recursive edit executor', () => {
       bundle.relationshipTargets,
       bundle.relationshipTypes
     )
-    const anchor = index.bodyNodeIds[0]!
+    const anchor = index.rootNodeIds[0]!
     const inserted = await applyDocxOps({
       buffer: source,
       ops: [
@@ -189,7 +261,7 @@ describe('docx recursive edit executor', () => {
       nextBundle.relationshipTargets,
       nextBundle.relationshipTypes
     )
-    expect(next.bodyNodeIds).toHaveLength(index.bodyNodeIds.length + 1)
+    expect(next.rootNodeIds).toHaveLength(index.rootNodeIds.length + 1)
     expect(next.outline.some((node) => node.text === '递归插入')).toBe(true)
   })
 
@@ -213,7 +285,7 @@ describe('docx recursive edit executor', () => {
         bundle.relationshipTargets,
         bundle.relationshipTypes
       )
-      const nodeId = index.bodyNodeIds[0]!
+      const nodeId = index.rootNodeIds[0]!
       const styled = await applyDocxOps({
         buffer: source,
         ops: [
@@ -236,7 +308,7 @@ describe('docx recursive edit executor', () => {
         styledBundle.relationshipTargets,
         styledBundle.relationshipTypes
       )
-      const detail = styledIndex.detailByNodeId.get(styledIndex.bodyNodeIds[0]!)
+      const detail = styledIndex.detailByNodeId.get(styledIndex.rootNodeIds[0]!)
       expect(detail?.type).toBe('paragraph')
       if (!detail || detail.type !== 'paragraph') return
       const runs = detail.children.filter((child) => child.type === 'run')
@@ -253,7 +325,7 @@ describe('docx recursive edit executor', () => {
           ops: [
             {
               type: 'format_table',
-              nodeId: styledIndex.bodyNodeIds[0]!,
+              nodeId: styledIndex.rootNodeIds[0]!,
               format: { alignment: 'left' }
             }
           ]
@@ -320,13 +392,13 @@ describe('docx recursive edit executor', () => {
         ops: [
           {
             type: 'format_text',
-            nodeId: beforeIndex.bodyNodeIds[0]!,
+            nodeId: beforeIndex.rootNodeIds[0]!,
             text: 'ABCD',
             format: { bold: true }
           },
           {
             type: 'format_text',
-            nodeId: beforeIndex.bodyNodeIds[1]!,
+            nodeId: beforeIndex.rootNodeIds[1]!,
             text: 'MATCH',
             format: { italic: true }
           }
@@ -335,7 +407,7 @@ describe('docx recursive edit executor', () => {
       const styledBundle = await loadDocxBundle(styled.buffer)
       const styledIndex = buildNodeIndex(styledBundle.documentDom)
       expect(styledIndex.visualsById.size).toBe(1)
-      const details = styledIndex.bodyNodeIds.map((id) => styledIndex.detailByNodeId.get(id))
+      const details = styledIndex.rootNodeIds.map((id) => styledIndex.detailByNodeId.get(id))
       const firstRuns = details[0]?.type === 'paragraph' ? details[0].children : []
       const secondRuns = details[1]?.type === 'paragraph' ? details[1].children : []
       const styledText = (runs: typeof firstRuns, style: 'bold' | 'italic') =>
@@ -443,7 +515,7 @@ describe('docx recursive edit executor', () => {
       const source = await fs.readFile(filePath)
       const sourceBundle = await loadDocxBundle(source)
       const sourceIndex = buildNodeIndex(sourceBundle.documentDom)
-      const paragraphId = sourceIndex.bodyNodeIds[0]!
+      const paragraphId = sourceIndex.rootNodeIds[0]!
       const withImage = await applyDocxOps({
         buffer: source,
         ops: [
@@ -473,7 +545,7 @@ describe('docx recursive edit executor', () => {
         ops: [
           {
             type: 'add_comment',
-            nodeId: imageIndex.bodyNodeIds[0]!,
+            nodeId: imageIndex.rootNodeIds[0]!,
             text: '批注',
             comment: '原生 Word 批注',
             author: 'NCurator'

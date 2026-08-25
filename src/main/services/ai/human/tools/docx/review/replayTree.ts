@@ -58,7 +58,7 @@ const normalizeParagraphSpec = (
   node: DocxDetailedParagraphNode
 ): Extract<DocxNodeSpec, { kind: 'paragraph' }> => ({
   kind: 'paragraph',
-  style: node.style?.styleName || 'Normal',
+  style: node.style?.styleId || 'Normal',
   runs: readParagraphRuns(node).length > 0 ? readParagraphRuns(node) : [{ text: node.text || '' }]
 })
 
@@ -188,7 +188,9 @@ export const createReplaySnapshot = (input: {
                 col: cell.col,
                 text: cell.text,
                 rawXml: input.rawXmlByNodeId.get(cell.nodeId) || '',
-                structureFingerprint: structureFingerprint(input.detailedNodesById.get(cell.nodeId)),
+                structureFingerprint: structureFingerprint(
+                  input.detailedNodesById.get(cell.nodeId)
+                ),
                 visuals: collectSnapshotVisuals(input.detailedNodesById.get(cell.nodeId))
               }))
           : undefined
@@ -258,7 +260,7 @@ const buildNode = (input: {
 })
 
 const reindexBodyNodes = (session: DocxReplaySession): void => {
-  session.bodyNodeIds.forEach((nodeId, index) => {
+  session.rootNodeIds.forEach((nodeId, index) => {
     const node = session.nodeById.get(nodeId)
     if (node) node.nodeIndex = index
   })
@@ -321,7 +323,7 @@ const rebindVisibleNodesToSnapshot = (input: {
   reservedNodeIds?: ReadonlySet<string>
 }): void => {
   const { nextSnapshot, session, skipNodeIds, reservedNodeIds } = input
-  const visibleNodes = session.bodyNodeIds
+  const visibleNodes = session.rootNodeIds
     .map((nodeId) => session.nodeById.get(nodeId))
     .filter((node): node is DocxReplayNode =>
       Boolean(node && isVisibleReviewState(node.reviewState))
@@ -356,14 +358,14 @@ const resolveInsertIndex = (
   anchorNodeId: string | undefined,
   position: 'before' | 'after'
 ): number => {
-  if (!anchorNodeId) return position === 'before' ? 0 : session.bodyNodeIds.length
-  const anchorIndex = session.bodyNodeIds.findIndex((nodeId) => nodeId === anchorNodeId)
-  if (anchorIndex < 0) return session.bodyNodeIds.length
+  if (!anchorNodeId) return position === 'before' ? 0 : session.rootNodeIds.length
+  const anchorIndex = session.rootNodeIds.findIndex((nodeId) => nodeId === anchorNodeId)
+  if (anchorIndex < 0) return session.rootNodeIds.length
   if (position === 'before') return anchorIndex
 
   let insertIndex = anchorIndex + 1
-  while (insertIndex < session.bodyNodeIds.length) {
-    const candidate = session.nodeById.get(session.bodyNodeIds[insertIndex])
+  while (insertIndex < session.rootNodeIds.length) {
+    const candidate = session.nodeById.get(session.rootNodeIds[insertIndex])
     if (
       !candidate ||
       candidate.parentNodeId !== anchorNodeId ||
@@ -383,7 +385,7 @@ const insertNodeIds = (
   position: 'before' | 'after'
 ): void => {
   const insertIndex = resolveInsertIndex(session, anchorNodeId, position)
-  session.bodyNodeIds.splice(insertIndex, 0, ...nodeIds)
+  session.rootNodeIds.splice(insertIndex, 0, ...nodeIds)
   reindexBodyNodes(session)
 }
 
@@ -391,7 +393,7 @@ const findVisibleNodeIdByNodeId = (
   session: DocxReplaySession,
   nodeId: string
 ): string | undefined =>
-  session.bodyNodeIds.find((reviewId) => {
+  session.rootNodeIds.find((reviewId) => {
     const node = session.nodeById.get(reviewId)
     return Boolean(
       node &&
@@ -469,11 +471,11 @@ const replaceNodeWithReviewPair = (input: {
   oldNode: DocxReplayNode
   newNode: DocxReplayNode
 }): void => {
-  const index = input.session.bodyNodeIds.findIndex((nodeId) => nodeId === input.targetNodeId)
+  const index = input.session.rootNodeIds.findIndex((nodeId) => nodeId === input.targetNodeId)
   if (index < 0) return
   input.session.nodeById.set(input.oldNode.nodeId, input.oldNode)
   input.session.nodeById.set(input.newNode.nodeId, input.newNode)
-  input.session.bodyNodeIds.splice(index, 1, input.oldNode.nodeId, input.newNode.nodeId)
+  input.session.rootNodeIds.splice(index, 1, input.oldNode.nodeId, input.newNode.nodeId)
   reindexBodyNodes(input.session)
 }
 
@@ -506,7 +508,7 @@ export const createReplaySessionFromSnapshot = (input: {
   snapshot: DocxReplaySnapshot
 }): DocxReplaySession => {
   const nodeById = new Map<string, DocxReplayNode>()
-  const bodyNodeIds: string[] = []
+  const rootNodeIds: string[] = []
 
   input.snapshot.nodes.forEach((snapshotNode) => {
     const reviewNode = buildNode({
@@ -524,7 +526,7 @@ export const createReplaySessionFromSnapshot = (input: {
       createdRevisionRef: 'v1'
     })
     nodeById.set(reviewNode.reviewId, reviewNode)
-    bodyNodeIds.push(reviewNode.reviewId)
+    rootNodeIds.push(reviewNode.reviewId)
   })
 
   return {
@@ -543,7 +545,7 @@ export const createReplaySessionFromSnapshot = (input: {
     revisionRefByDocId: new Map([[input.sourceDocId, 'v1']]),
     revisionByDocId: new Map(),
     nodeById,
-    bodyNodeIds
+    rootNodeIds
   }
 }
 
@@ -576,11 +578,11 @@ export const applyRevisionToReplaySession = (input: {
     const movingNodeId = findVisibleNodeIdByNodeId(session, op.nodeId)
     const anchorNodeId = findVisibleNodeIdByNodeId(session, op.anchorNodeId)
     if (movingNodeId && anchorNodeId && movingNodeId !== anchorNodeId) {
-      const movingIndex = session.bodyNodeIds.indexOf(movingNodeId)
-      if (movingIndex >= 0) session.bodyNodeIds.splice(movingIndex, 1)
-      const anchorIndex = session.bodyNodeIds.indexOf(anchorNodeId)
+      const movingIndex = session.rootNodeIds.indexOf(movingNodeId)
+      if (movingIndex >= 0) session.rootNodeIds.splice(movingIndex, 1)
+      const anchorIndex = session.rootNodeIds.indexOf(anchorNodeId)
       if (anchorIndex >= 0) {
-        session.bodyNodeIds.splice(anchorIndex + (op.position === 'after' ? 1 : 0), 0, movingNodeId)
+        session.rootNodeIds.splice(anchorIndex + (op.position === 'after' ? 1 : 0), 0, movingNodeId)
         reindexBodyNodes(session)
       }
     }
@@ -748,7 +750,7 @@ export const projectReplayNodes = (
   session: DocxReplaySession,
   kind: 'review' | 'committed'
 ): DocxReplayNode[] =>
-  session.bodyNodeIds
+  session.rootNodeIds
     .map((nodeId) => session.nodeById.get(nodeId))
     .filter((node): node is DocxReplayNode => Boolean(node))
     .filter((node) => {

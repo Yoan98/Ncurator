@@ -216,7 +216,7 @@ const compileParagraphDraft = (input: {
   }
   return {
     type: 'paragraph',
-    ...(input.styleId ? { style: { styleName: input.styleId } } : {}),
+    ...(input.styleId ? { style: { styleId: input.styleId } } : {}),
     children: [run]
   }
 }
@@ -287,6 +287,7 @@ type ApplyEditResult =
       nextDocId: string
       nextStats: DocxOpenStats
       createdNodes: DocxCreatedNode[]
+      result: WriteToolResult
     }
 
 const compileEdit = (operation: DocxOperation): CompiledEdit => ({
@@ -428,6 +429,31 @@ const applyEdit = async (input: {
       nextDocId: appliedPayload.newDocId
     })
   }
+  let result: WriteToolResult
+  try {
+    result = await buildWriteToolResult({
+      runtime: input.runtime,
+      docId: appliedPayload.newDocId,
+      changedNodes: appliedPayload.changedNodes,
+      createdNodes,
+      operation
+    })
+  } catch (error) {
+    return {
+      failure: input.runtime.emitFailure({
+        toolName: input.toolName,
+        toolCallId: input.toolCallId,
+        reason: 'failed',
+        error: `docx post-write readback failed: ${error instanceof Error ? error.message : String(error)}`,
+        draftDocId: input.currentDocId,
+        resourceContext: input.runtime.buildResourceContext({
+          sourcePath: input.sourcePath,
+          effectKind: 'mutated',
+          currentRevisionRef: input.currentRevisionRef
+        })
+      })
+    }
+  }
   let persistedStats: Awaited<ReturnType<DocxToolRuntime['persistDocId']>>
   try {
     persistedStats = await input.runtime.persistDocId({
@@ -497,7 +523,8 @@ const applyEdit = async (input: {
     changedNodes: appliedPayload.changedNodes,
     nextDocId: appliedPayload.newDocId,
     nextStats: appliedPayload.stats,
-    createdNodes
+    createdNodes,
+    result
   }
 }
 
@@ -825,6 +852,40 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
           }
           const workingDocId = workingOpen.payload.docId
 
+          let preCommitResult: WriteToolResult
+          try {
+            const createdOutline = (await fetchOutlineNodes(runtime, workingDocId)).filter(
+              (node) => node.story.type === 'body' && node.type !== 'table_cell'
+            )
+            const expectedCreatedCount =
+              operation.type === 'insert_nodes' ? operation.nodes.length : 1
+            const createdNodes = createdOutline
+              .slice(-expectedCreatedCount)
+              .map((node) => ({ nodeId: node.nodeId, type: node.type }))
+            preCommitResult = await buildWriteToolResult({
+              runtime,
+              docId: workingDocId,
+              changedNodes: [],
+              createdNodes,
+              operation
+            })
+          } catch (error) {
+            return finalizeDocxToolFailure({
+              runtime,
+              failure: runtime.emitFailure({
+                toolName,
+                toolCallId,
+                reason: 'failed',
+                error: `docx create readback failed: ${error instanceof Error ? error.message : String(error)}`,
+                resourceContext: runtime.buildResourceContext({
+                  sourcePath: requestedSourcePath,
+                  effectKind: 'mutated'
+                })
+              }),
+              activity: { actionType: input.spec.activityActionType }
+            })
+          }
+
           let persistedStats: Awaited<ReturnType<DocxToolRuntime['persistDocId']>>
           try {
             persistedStats = await runtime.persistDocId({
@@ -890,13 +951,7 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
             replaySession: registered.session
           })
 
-          const result = await buildWriteToolResult({
-            runtime,
-            docId: workingDocId,
-            changedNodes: registered.changedNodes || [],
-            createdNodes: registered.createdNodes || [],
-            operation
-          })
+          const result = preCommitResult
 
           return finalizeDocxToolSuccess({
             runtime,
@@ -955,13 +1010,7 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
         })
       }
 
-      const result = await buildWriteToolResult({
-        runtime,
-        docId: applied.nextDocId,
-        changedNodes: applied.changedNodes,
-        createdNodes: applied.createdNodes,
-        operation
-      })
+      const result = applied.result
       return finalizeDocxToolSuccess({
         runtime,
         toolName,

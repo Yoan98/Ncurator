@@ -309,47 +309,47 @@ const collectLogicalBodyElements = (nodes: readonly Element[]): LogicalBodyEleme
 }
 
 const resolveBodyNeighbors = (
-  bodyNodeIds: readonly string[],
+  rootNodeIds: readonly string[],
   nodeId: string
 ): { previousNodeId?: string; nextNodeId?: string } => {
-  const position = bodyNodeIds.indexOf(nodeId)
+  const position = rootNodeIds.indexOf(nodeId)
   return {
-    previousNodeId: position > 0 ? bodyNodeIds[position - 1] : undefined,
+    previousNodeId: position > 0 ? rootNodeIds[position - 1] : undefined,
     nextNodeId:
-      position >= 0 && position + 1 < bodyNodeIds.length ? bodyNodeIds[position + 1] : undefined
+      position >= 0 && position + 1 < rootNodeIds.length ? rootNodeIds[position + 1] : undefined
   }
 }
 
 const withParagraphStructure = (
-  bodyNodeIds: readonly string[],
+  rootNodeIds: readonly string[],
   node: Omit<DocxOutlineParagraphNode, 'previousNodeId' | 'nextNodeId'>
 ): DocxOutlineParagraphNode => ({
   ...node,
-  ...resolveBodyNeighbors(bodyNodeIds, node.nodeId)
+  ...resolveBodyNeighbors(rootNodeIds, node.nodeId)
 })
 
 const withTableStructure = (
-  bodyNodeIds: readonly string[],
+  rootNodeIds: readonly string[],
   node: Omit<DocxOutlineTableNode, 'previousNodeId' | 'nextNodeId'>
 ): DocxOutlineTableNode => ({
   ...node,
-  ...resolveBodyNeighbors(bodyNodeIds, node.nodeId)
+  ...resolveBodyNeighbors(rootNodeIds, node.nodeId)
 })
 
 const withCellStructure = (
-  bodyNodeIds: readonly string[],
+  rootNodeIds: readonly string[],
   node: Omit<DocxOutlineCellNode, 'previousNodeId' | 'nextNodeId'>
 ): DocxOutlineCellNode => ({
   ...node,
-  ...resolveBodyNeighbors(bodyNodeIds, node.nodeId)
+  ...resolveBodyNeighbors(rootNodeIds, node.nodeId)
 })
 
 const withContainerStructure = (
-  bodyNodeIds: readonly string[],
+  rootNodeIds: readonly string[],
   node: DocxOutlineContainerNode
 ): DocxOutlineContainerNode => ({
   ...node,
-  ...resolveBodyNeighbors(bodyNodeIds, node.nodeId)
+  ...resolveBodyNeighbors(rootNodeIds, node.nodeId)
 })
 
 export const buildNodeIndex = (
@@ -370,7 +370,7 @@ export const buildNodeIndex = (
   const idPrefix = `${story.storyId}:`
   const outlineDraft: DocxOutlineNode[] = []
   const nodesById: NodeMapById = new Map()
-  const bodyNodeIds: string[] = []
+  const rootNodeIds: string[] = []
   let nodeIndex = options?.nodeIndexOffset || 0
   let storyRootCount = 0
   let paragraphCount = 0
@@ -403,7 +403,7 @@ export const buildNodeIndex = (
               : ('insert' as const)
       const nodeId = `${idPrefix}${kind}:${storyRootCount}`
       const layoutMode: DocxLayoutMode = 'normal'
-      bodyNodeIds.push(nodeId)
+      rootNodeIds.push(nodeId)
       if (isContentControl) {
         outlineDraft.push({
           nodeId,
@@ -445,7 +445,7 @@ export const buildNodeIndex = (
       const text = paragraphText(child)
       const style = readParagraphStyle(child)
       const layoutMode = paragraphLayoutMode(child)
-      bodyNodeIds.push(nodeId)
+      rootNodeIds.push(nodeId)
       outlineDraft.push({
         nodeId,
         type: 'paragraph',
@@ -475,7 +475,7 @@ export const buildNodeIndex = (
       const nodeId = `${idPrefix}tbl:${storyRootCount}`
       const tableSummary = summarizeTable(child)
       const layoutMode = tableLayoutMode(child)
-      bodyNodeIds.push(nodeId)
+      rootNodeIds.push(nodeId)
       outlineDraft.push({
         nodeId,
         type: 'table',
@@ -536,19 +536,19 @@ export const buildNodeIndex = (
 
   const outline = outlineDraft.map((node) => {
     if (node.type === 'paragraph') {
-      return withParagraphStructure(bodyNodeIds, node)
+      return withParagraphStructure(rootNodeIds, node)
     }
     if (node.type === 'table') {
-      return withTableStructure(bodyNodeIds, node)
+      return withTableStructure(rootNodeIds, node)
     }
-    if (node.type === 'table_cell') return withCellStructure(bodyNodeIds, node)
-    return withContainerStructure(bodyNodeIds, node)
+    if (node.type === 'table_cell') return withCellStructure(rootNodeIds, node)
+    return withContainerStructure(rootNodeIds, node)
   })
 
-  for (const nodeId of bodyNodeIds) {
+  for (const nodeId of rootNodeIds) {
     const node = nodesById.get(nodeId)
     if (!node || node.kind === 'table_cell') continue
-    const neighbors = resolveBodyNeighbors(bodyNodeIds, nodeId)
+    const neighbors = resolveBodyNeighbors(rootNodeIds, nodeId)
     const shared = {
       nodeId,
       nodeIndex: node.nodeIndex,
@@ -578,7 +578,7 @@ export const buildNodeIndex = (
     if (!table || table.type !== 'table') continue
     const parsed = table.children[node.row - 1]?.children[node.col - 1]
     if (!parsed) continue
-    const neighbors = resolveBodyNeighbors(bodyNodeIds, nodeId)
+    const neighbors = resolveBodyNeighbors(rootNodeIds, nodeId)
     detailByNodeId.set(nodeId, {
       nodeId,
       tableNodeId: node.tableNodeId,
@@ -609,11 +609,11 @@ export const buildNodeIndex = (
   return {
     outline,
     nodesById,
-    bodyNodeIds,
+    rootNodeIds,
     paragraphCount,
     tableCount,
     charCount,
-    bodyNodeCount: storyRootCount,
+    rootNodeCount: storyRootCount,
     cellNodeCount,
     detailByNodeId,
     editableNodesById,
@@ -640,11 +640,11 @@ export const buildDocumentNodeIndex = (bundle: ParsedDocxBundle): NodeIndex => {
   const combined: NodeIndex = {
     outline: [],
     nodesById: new Map(),
-    bodyNodeIds: [],
+    rootNodeIds: [],
     paragraphCount: 0,
     tableCount: 0,
     charCount: 0,
-    bodyNodeCount: 0,
+    rootNodeCount: 0,
     cellNodeCount: 0,
     detailByNodeId: new Map(),
     editableNodesById: new Map(),
@@ -657,10 +657,10 @@ export const buildDocumentNodeIndex = (bundle: ParsedDocxBundle): NodeIndex => {
       storyPart.relationshipTypes,
       storyPart.relationshipTargetModes,
       storyPart.availableRelationshipTargetIds,
-      { storyPart, nodeIndexOffset: combined.bodyNodeCount }
+      { storyPart, nodeIndexOffset: combined.rootNodeCount }
     )
     combined.outline.push(...part.outline)
-    combined.bodyNodeIds.push(...part.bodyNodeIds)
+    combined.rootNodeIds.push(...part.rootNodeIds)
     part.nodesById.forEach((value, key) => combined.nodesById.set(key, value))
     part.detailByNodeId.forEach((value, key) => combined.detailByNodeId.set(key, value))
     part.editableNodesById.forEach((value, key) => combined.editableNodesById.set(key, value))
@@ -668,7 +668,7 @@ export const buildDocumentNodeIndex = (bundle: ParsedDocxBundle): NodeIndex => {
     combined.paragraphCount += part.paragraphCount
     combined.tableCount += part.tableCount
     combined.charCount += part.charCount
-    combined.bodyNodeCount += part.bodyNodeCount
+    combined.rootNodeCount += part.rootNodeCount
     combined.cellNodeCount += part.cellNodeCount
   }
   return combined
@@ -680,8 +680,8 @@ export const toOpenStats = (index: NodeIndex): DocxOpenStats => {
     (visual) => visual.kind === 'image'
   ).length
   return {
-    nodeCount: index.bodyNodeCount + index.cellNodeCount,
-    bodyNodeCount: index.bodyNodeCount,
+    nodeCount: index.rootNodeCount + index.cellNodeCount,
+    rootNodeCount: index.rootNodeCount,
     paragraphCount: index.paragraphCount,
     tableCount: index.tableCount,
     imageCount,
@@ -740,7 +740,7 @@ export const getNodeStructureFacts = (
 } | null => {
   const node = index.nodesById.get(nodeId)
   if (!node) return null
-  const storyNodeIds = index.bodyNodeIds.filter(
+  const storyNodeIds = index.rootNodeIds.filter(
     (candidateId) => index.nodesById.get(candidateId)?.story.storyId === node.story.storyId
   )
   return {

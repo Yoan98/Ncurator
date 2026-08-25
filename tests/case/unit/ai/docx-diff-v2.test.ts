@@ -43,7 +43,7 @@ const sessionFrom = (source: DocxReplaySnapshot): DocxReplaySession =>
     },
     stats: {
       nodeCount: source.nodes.length,
-      bodyNodeCount: source.nodes.length,
+      rootNodeCount: source.nodes.length,
       paragraphCount: source.nodes.length,
       tableCount: 0,
       imageCount: 0,

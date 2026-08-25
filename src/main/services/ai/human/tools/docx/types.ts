@@ -236,7 +236,7 @@ export type DocxOpenMeta = {
 
 export type DocxOpenStats = {
   nodeCount: number
-  bodyNodeCount: number
+  rootNodeCount: number
   paragraphCount: number
   tableCount: number
   imageCount: number
@@ -350,7 +350,7 @@ export type DocxReplaySession = {
   revisionRefByDocId: Map<string, string>
   revisionByDocId: Map<string, DocxRevision>
   nodeById: Map<string, DocxReplayNode>
-  bodyNodeIds: string[]
+  rootNodeIds: string[]
 }
 
 export type DocxReviewState =

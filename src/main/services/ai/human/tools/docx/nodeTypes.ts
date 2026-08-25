@@ -34,7 +34,7 @@ export type DocxRunStyle = {
 }
 
 export type DocxParagraphStyle = {
-  styleName?: string
+  styleId?: string
   alignment?: 'left' | 'center' | 'right' | 'justify'
   indent?: {
     left?: number

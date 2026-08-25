@@ -72,7 +72,7 @@ export const docxRunStyleSchema = z
 
 export const docxParagraphStyleSchema = z
   .object({
-    styleName: z.string().trim().min(1).optional().describe('段落样式名称，如 Heading 1、标题 1'),
+    styleId: z.string().trim().min(1).optional().describe('真实段落 styleId，如 Heading1'),
     alignment: z
       .enum(['left', 'center', 'right', 'justify'])
       .optional()
@@ -476,7 +476,16 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
       marginBottomPt: z.number().min(0).optional().describe('下页边距，磅'),
       marginLeftPt: z.number().min(0).optional().describe('左页边距，磅')
     })
-    .strict(),
+    .strict()
+    .refine(
+      (value) =>
+        value.orientation !== undefined ||
+        value.marginTopPt !== undefined ||
+        value.marginRightPt !== undefined ||
+        value.marginBottomPt !== undefined ||
+        value.marginLeftPt !== undefined,
+      { message: 'format_section 至少设置一个格式属性' }
+    ),
   z.object({ ...contentEditBase, type: z.literal('reset_format'), nodeId: nodeIdField }).strict(),
   z
     .object({
@@ -503,10 +512,15 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
       type: z.literal('update_named_style'),
       styleId: z.string().trim().min(1).describe('要全局修改的 styleId'),
       name: z.string().trim().min(1).optional().describe('新显示名称'),
-      paragraph: docxParagraphStyleSchema.optional().describe('段落属性 patch'),
-      run: docxRunStyleSchema.optional().describe('文字属性 patch')
+      paragraph: nonEmptyParagraphStyleSchema.optional().describe('段落属性 patch'),
+      run: nonEmptyRunStyleSchema.optional().describe('文字属性 patch')
     })
-    .strict(),
+    .strict()
+    .refine(
+      (value) =>
+        value.name !== undefined || value.paragraph !== undefined || value.run !== undefined,
+      { message: 'update_named_style 至少设置一个属性' }
+    ),
   z
     .object({
       ...contentEditBase,
@@ -532,16 +546,26 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
 ])
 
 const tableRowsField = z.array(z.array(z.string()).min(1)).min(1).describe('表格二维文本数组')
+const createTableSchema = z
+  .object({
+    ...contentEditBase,
+    type: z.literal('create_table'),
+    nodeId: nodeIdField.optional().describe('锚点 nodeId；document_end 时不填'),
+    position: z.enum(['before', 'after', 'document_end']).describe('表格插入位置'),
+    rows: tableRowsField
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.position === 'document_end' && value.nodeId) {
+      ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'document_end 不接受 nodeId' })
+    }
+    if (value.position !== 'document_end' && !value.nodeId) {
+      ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'before/after 必须提供 nodeId' })
+    }
+  })
+
 export const docxTableEditSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      ...contentEditBase,
-      type: z.literal('create_table'),
-      nodeId: nodeIdField.optional().describe('锚点 nodeId；document_end 时不填'),
-      position: z.enum(['before', 'after', 'document_end']).describe('表格插入位置'),
-      rows: tableRowsField
-    })
-    .strict(),
+  createTableSchema,
   z
     .object({
       ...contentEditBase,
@@ -560,13 +584,20 @@ export const docxTableEditSchema = z.discriminatedUnion('type', [
       cells: z.array(z.string()).min(1).describe('新行各单元格文字')
     })
     .strict(),
-  z.object({ ...contentEditBase, type: z.literal('delete_row'), rowNodeId: nodeIdField }).strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('delete_row'),
+      rowNodeId: nodeIdField,
+      allowVisualLoss: z.literal(true).optional().describe('行内含视觉内容时必须明确允许丢失')
+    })
+    .strict(),
   z
     .object({
       ...contentEditBase,
       type: z.literal('insert_column'),
       tableNodeId: nodeIdField,
-      columnIndex: z.number().int().min(0).describe('新列插入位置'),
+      columnIndex: z.number().int().min(1).describe('新列插入位置，从 1 开始'),
       cells: z.array(z.string()).optional().describe('逐行的新单元格文字，缺省为空')
     })
     .strict(),
@@ -575,7 +606,8 @@ export const docxTableEditSchema = z.discriminatedUnion('type', [
       ...contentEditBase,
       type: z.literal('delete_column'),
       tableNodeId: nodeIdField,
-      columnIndex: z.number().int().min(0).describe('要删除的列索引')
+      columnIndex: z.number().int().min(1).describe('要删除的列，从 1 开始'),
+      allowVisualLoss: z.literal(true).optional().describe('列内含视觉内容时必须明确允许丢失')
     })
     .strict(),
   z
@@ -583,10 +615,14 @@ export const docxTableEditSchema = z.discriminatedUnion('type', [
       ...contentEditBase,
       type: z.literal('merge_cells'),
       tableNodeId: nodeIdField,
-      fromRow: z.number().int().min(0).describe('起始行'),
-      fromColumn: z.number().int().min(0).describe('起始列'),
-      toRow: z.number().int().min(0).describe('结束行'),
-      toColumn: z.number().int().min(0).describe('结束列')
+      fromRow: z.number().int().min(1).describe('起始行，从 1 开始'),
+      fromColumn: z.number().int().min(1).describe('起始列，从 1 开始'),
+      toRow: z.number().int().min(1).describe('结束行，从 1 开始'),
+      toColumn: z.number().int().min(1).describe('结束列，从 1 开始'),
+      allowVisualLoss: z
+        .literal(true)
+        .optional()
+        .describe('被合并单元格含视觉内容时必须明确允许丢失')
     })
     .strict(),
   z
@@ -600,19 +636,29 @@ export const docxTableEditSchema = z.discriminatedUnion('type', [
     .strict()
 ])
 
+const insertImageSchema = z
+  .object({
+    ...contentEditBase,
+    type: z.literal('insert_image'),
+    nodeId: nodeIdField.optional().describe('锚点 nodeId；document_end 时不填'),
+    position: z.enum(['before', 'after', 'document_end']).describe('图片插入位置'),
+    imagePath: z.string().min(1).describe('本机图片绝对路径'),
+    widthCm: z.number().positive().optional().describe('显示宽度，厘米'),
+    heightCm: z.number().positive().optional().describe('显示高度，厘米'),
+    altText: z.string().optional().describe('替代文字')
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (value.position === 'document_end' && value.nodeId) {
+      ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'document_end 不接受 nodeId' })
+    }
+    if (value.position !== 'document_end' && !value.nodeId) {
+      ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'before/after 必须提供 nodeId' })
+    }
+  })
+
 export const docxMediaEditSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      ...contentEditBase,
-      type: z.literal('insert_image'),
-      nodeId: nodeIdField.optional().describe('锚点 nodeId；document_end 时不填'),
-      position: z.enum(['before', 'after', 'document_end']).describe('图片插入位置'),
-      imagePath: z.string().min(1).describe('本机图片绝对路径'),
-      widthCm: z.number().positive().optional().describe('显示宽度，厘米'),
-      heightCm: z.number().positive().optional().describe('显示高度，厘米'),
-      altText: z.string().optional().describe('替代文字')
-    })
-    .strict(),
+  insertImageSchema,
   z
     .object({
       ...contentEditBase,
@@ -638,6 +684,11 @@ export const docxMediaEditSchema = z.discriminatedUnion('type', [
       altText: z.string().optional().describe('替代文字')
     })
     .strict()
+    .refine(
+      (value) =>
+        value.widthCm !== undefined || value.heightCm !== undefined || value.altText !== undefined,
+      { message: 'update_image 至少设置一个属性' }
+    )
 ])
 
 export const docxCommentsRevisionsSchema = z.discriminatedUnion('type', [

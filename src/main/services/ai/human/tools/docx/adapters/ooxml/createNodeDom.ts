@@ -189,7 +189,7 @@ const createParagraphProperties = (
   const style = node.style
   if (!style) return null
   const pPr = wordElement(doc, 'pPr')
-  if (style.styleName) appendVal(pPr, 'pStyle', style.styleName)
+  if (style.styleId) appendVal(pPr, 'pStyle', style.styleId)
   if (style.alignment) appendVal(pPr, 'jc', style.alignment)
   if (style.indent) {
     const indent = wordElement(doc, 'ind')

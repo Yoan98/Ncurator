@@ -46,6 +46,7 @@ describe('ai tool docx v2 backend', () => {
           }
         ])
         const imagePath = path.join(runtime.workspaceRoot, 'docx-v2-image.png')
+        const createdPath = path.join(runtime.workspaceRoot, 'docx-v2-created.docx')
         await fs.writeFile(
           imagePath,
           Buffer.from(
@@ -55,6 +56,15 @@ describe('ai tool docx v2 backend', () => {
         )
         const harness = createDocxToolHarness(runtime)
         try {
+          const created = await harness.invoke<MutationResult>('docx_content_edit', {
+            sourcePath: createdPath,
+            type: 'insert_nodes',
+            position: 'document_end',
+            nodes: [
+              { type: 'paragraph', text: 'Created one' },
+              { type: 'paragraph', text: 'Created two' }
+            ]
+          })
           const outline = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath,
             ranges: [{ type: 'node_index', fromNodeIndex: 0, toNodeIndex: 20 }]
@@ -116,6 +126,7 @@ describe('ai tool docx v2 backend', () => {
           })
           return {
             outline,
+            created,
             paragraph,
             readBefore,
             content,
@@ -134,6 +145,8 @@ describe('ai tool docx v2 backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.outline.totalNodeCount >= 4 &&
+            result.created.changes.length === 2 &&
+            result.created.changes.every((change) => change.kind === 'created') &&
             result.readBefore.nodes.length === 2 &&
             result.content.changes.some((change) => change.kind === 'updated') &&
             result.format.changes.some((change) => change.kind === 'updated') &&

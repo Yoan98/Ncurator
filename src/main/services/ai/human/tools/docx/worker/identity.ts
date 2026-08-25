@@ -21,9 +21,10 @@ export type DocxIdentityIndex = {
   internalVisualIdByPublicId: Map<string, string>
 }
 
-type LogicalBodyNode = {
+type LogicalRootNode = {
   nodeId: string
   kind: 'paragraph' | 'table' | 'content_control' | 'revision'
+  storyId: string
   cellNodeIds: string[]
 }
 
@@ -71,7 +72,8 @@ const bindNestedIdentities = (
   index: NodeIndex,
   identity: DocxIdentityIndex,
   previousIndex?: NodeIndex,
-  previousIdentity?: DocxIdentityIndex
+  previousIdentity?: DocxIdentityIndex,
+  publicOps: DocxOperation[] = []
 ): void => {
   const previousByFingerprint = new Map<string, Array<{ internalId: string; publicId: string }>>()
   const previousByPath = new Map<string, { internalId: string; publicId: string }>()
@@ -92,6 +94,25 @@ const bindNestedIdentities = (
     })
   }
   const consumedPreviousIds = new Set<string>()
+  const reverseMatchOwners = new Set<string>()
+  if (previousIndex && previousIdentity) {
+    publicOps.forEach((op) => {
+      if (
+        op.type !== 'insert_nodes' ||
+        (op.position !== 'inside_start' && op.position !== 'before') ||
+        !op.nodeId
+      )
+        return
+      const internalId = previousIdentity.internalNodeIdByPublicId.get(op.nodeId)
+      const ownerInternalId = internalId
+        ? previousIndex.editableNodesById.get(internalId)?.ownerNodeId
+        : previousIdentity.internalIdByPublicId.get(op.nodeId)
+      const ownerPublicId = ownerInternalId
+        ? previousIdentity.publicIdByInternalId.get(ownerInternalId)
+        : undefined
+      if (ownerPublicId) reverseMatchOwners.add(ownerPublicId)
+    })
+  }
   const pending = [...index.editableNodesById.entries()].map(([internalNodeId, editable]) => ({
     internalNodeId,
     editable,
@@ -99,7 +120,18 @@ const bindNestedIdentities = (
     relativeKey: internalNodeId.replace(`node:${editable.ownerNodeId}:`, ''),
     publicNodeId: undefined as string | undefined
   }))
-  pending.forEach((entry) => {
+  const fingerprintOrder = [...pending]
+  reverseMatchOwners.forEach((ownerId) => {
+    const positions = fingerprintOrder
+      .map((entry, index) => ({ entry, index }))
+      .filter(({ entry }) => entry.ownerPublicId === ownerId)
+      .map(({ index }) => index)
+    const reversed = positions.map((index) => fingerprintOrder[index]!).reverse()
+    positions.forEach((index, offset) => {
+      fingerprintOrder[index] = reversed[offset]!
+    })
+  })
+  fingerprintOrder.forEach((entry) => {
     const fingerprintCandidates = previousByFingerprint.get(
       `${entry.ownerPublicId}\0${nestedFingerprint(entry.editable)}`
     )
@@ -392,16 +424,18 @@ const tableCellCount = (spec: Extract<DocxCreateContainerChildNode, { type: 'tab
 
 const logicalNodeFromSpec = (
   spec: DocxCreateContainerChildNode,
+  storyId: string,
   nodeId = createNodeId()
-): LogicalBodyNode => ({
+): LogicalRootNode => ({
   nodeId,
   kind: spec.type,
+  storyId,
   cellNodeIds:
     spec.type === 'table' ? Array.from({ length: tableCellCount(spec) }, () => createNodeId()) : []
 })
 
-const currentLogicalBody = (index: NodeIndex, identity: DocxIdentityIndex): LogicalBodyNode[] =>
-  index.bodyNodeIds.map((internalId) => {
+const currentLogicalRoots = (index: NodeIndex, identity: DocxIdentityIndex): LogicalRootNode[] =>
+  index.rootNodeIds.map((internalId) => {
     const node = index.nodesById.get(internalId)
     if (!node || node.kind === 'table_cell') {
       throw new Error(`invalid docx body identity node: ${internalId}`)
@@ -417,16 +451,17 @@ const currentLogicalBody = (index: NodeIndex, identity: DocxIdentityIndex): Logi
     return {
       nodeId: requirePublicNodeId(identity, internalId),
       kind: node.kind,
+      storyId: node.story.storyId,
       cellNodeIds
     }
   })
 
 const tableMutationContext = (input: {
-  body: LogicalBodyNode[]
+  body: LogicalRootNode[]
   op: DocxOperation
   previousIndex: NodeIndex
   previousIdentity: DocxIdentityIndex
-}): { logical: LogicalBodyNode; rows: string[][]; table: Element } | undefined => {
+}): { logical: LogicalRootNode; rows: string[][]; table: Element } | undefined => {
   let publicTableId: string | undefined
   if ('tableNodeId' in input.op && typeof input.op.tableNodeId === 'string') {
     publicTableId = input.op.tableNodeId
@@ -471,7 +506,7 @@ const tableMutationContext = (input: {
 }
 
 const applyLogicalOp = (
-  body: LogicalBodyNode[],
+  body: LogicalRootNode[],
   op: DocxOperation,
   previousIndex: NodeIndex,
   previousIdentity: DocxIdentityIndex
@@ -494,12 +529,18 @@ const applyLogicalOp = (
     if (paragraphNodes.length === 0) return
     if (paragraphNodes.length !== op.nodes.length) return
     if (op.position === 'document_end') {
-      body.push(
+      const insertAt = body.findLastIndex((node) => node.storyId === 'body') + 1
+      body.splice(
+        insertAt,
+        0,
         ...paragraphNodes.map(() =>
-          logicalNodeFromSpec({
-            type: 'paragraph',
-            children: [{ type: 'run', children: [{ type: 'text', text: '' }] }]
-          })
+          logicalNodeFromSpec(
+            {
+              type: 'paragraph',
+              children: [{ type: 'run', children: [{ type: 'text', text: '' }] }]
+            },
+            'body'
+          )
         )
       )
       return
@@ -508,11 +549,15 @@ const applyLogicalOp = (
     if (op.position !== 'before' && op.position !== 'after') return
     const anchorIndex = body.findIndex((candidate) => candidate.nodeId === op.nodeId)
     if (anchorIndex < 0) return
+    const storyId = body[anchorIndex]!.storyId
     const inserted = paragraphNodes.map(() =>
-      logicalNodeFromSpec({
-        type: 'paragraph',
-        children: [{ type: 'run', children: [{ type: 'text', text: '' }] }]
-      })
+      logicalNodeFromSpec(
+        {
+          type: 'paragraph',
+          children: [{ type: 'run', children: [{ type: 'text', text: '' }] }]
+        },
+        storyId
+      )
     )
     body.splice(anchorIndex + (op.position === 'after' ? 1 : 0), 0, ...inserted)
     return
@@ -532,23 +577,29 @@ const applyLogicalOp = (
   }
 
   if (op.type === 'create_table') {
-    const table = logicalNodeFromSpec({
-      type: 'table',
-      children: op.rows.map((row) => ({
-        type: 'table_row',
-        children: row.map(() => ({
-          type: 'table_cell',
-          children: [
-            {
-              type: 'paragraph',
-              children: [{ type: 'run', children: [{ type: 'text', text: '' }] }]
-            }
-          ]
+    const table = logicalNodeFromSpec(
+      {
+        type: 'table',
+        children: op.rows.map((row) => ({
+          type: 'table_row',
+          children: row.map(() => ({
+            type: 'table_cell',
+            children: [
+              {
+                type: 'paragraph',
+                children: [{ type: 'run', children: [{ type: 'text', text: '' }] }]
+              }
+            ]
+          }))
         }))
-      }))
-    })
+      },
+      op.position === 'document_end'
+        ? 'body'
+        : body.find((node) => node.nodeId === op.nodeId)?.storyId || 'body'
+    )
     if (op.position === 'document_end') {
-      body.push(table)
+      const insertAt = body.findLastIndex((node) => node.storyId === 'body') + 1
+      body.splice(insertAt, 0, table)
       return
     }
     if (!op.nodeId) return
@@ -597,13 +648,13 @@ const applyLogicalOp = (
       if (rowIndex < 0) throw new Error('cannot update DOCX identity for deleted row')
       rows.splice(rowIndex, 1)
     } else if (op.type === 'insert_column') {
-      rows.forEach((row) => row.splice(op.columnIndex, 0, createNodeId()))
+      rows.forEach((row) => row.splice(op.columnIndex - 1, 0, createNodeId()))
     } else if (op.type === 'delete_column') {
-      rows.forEach((row) => row.splice(op.columnIndex, 1))
+      rows.forEach((row) => row.splice(op.columnIndex - 1, 1))
     } else if (op.type === 'merge_cells') {
-      const fromRow = Math.min(op.fromRow, op.toRow)
-      const toRow = Math.max(op.fromRow, op.toRow)
-      const fromColumn = Math.min(op.fromColumn, op.toColumn)
+      const fromRow = Math.min(op.fromRow, op.toRow) - 1
+      const toRow = Math.max(op.fromRow, op.toRow) - 1
+      const fromColumn = Math.min(op.fromColumn, op.toColumn) - 1
       const removeCount = Math.abs(op.toColumn - op.fromColumn)
       for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
         rows[rowIndex]?.splice(fromColumn + 1, removeCount)
@@ -656,13 +707,13 @@ export const createNextIdentityIndex = (input: {
   nextIndex: NodeIndex
   publicOps: DocxOperation[]
 }): DocxIdentityIndex => {
-  const logicalBody = currentLogicalBody(input.previousIndex, input.previousIdentity)
+  const logicalRoots = currentLogicalRoots(input.previousIndex, input.previousIdentity)
   for (const op of input.publicOps) {
-    applyLogicalOp(logicalBody, op, input.previousIndex, input.previousIdentity)
+    applyLogicalOp(logicalRoots, op, input.previousIndex, input.previousIdentity)
   }
-  if (logicalBody.length !== input.nextIndex.bodyNodeIds.length) {
+  if (logicalRoots.length !== input.nextIndex.rootNodeIds.length) {
     throw new Error(
-      `docx identity body mismatch: expected ${String(logicalBody.length)}, got ${String(input.nextIndex.bodyNodeIds.length)}`
+      `docx identity body mismatch: expected ${String(logicalRoots.length)}, got ${String(input.nextIndex.rootNodeIds.length)}`
     )
   }
 
@@ -675,11 +726,14 @@ export const createNextIdentityIndex = (input: {
     internalVisualIdByPublicId: new Map()
   }
 
-  input.nextIndex.bodyNodeIds.forEach((internalId, index) => {
-    const logical = logicalBody[index]
+  input.nextIndex.rootNodeIds.forEach((internalId, index) => {
+    const logical = logicalRoots[index]
     if (!logical) throw new Error(`docx logical identity missing at index ${String(index)}`)
     bindIdentity(identity, internalId, logical.nodeId)
     const node = input.nextIndex.nodesById.get(internalId)
+    if (!node || node.kind !== logical.kind || node.story.storyId !== logical.storyId) {
+      throw new Error(`docx identity node mismatch at index ${String(index)}`)
+    }
     if (node?.kind !== 'table') return
     const cells = [...input.nextIndex.nodesById.values()]
       .filter(isTableCellNode)
@@ -695,7 +749,13 @@ export const createNextIdentityIndex = (input: {
     )
   })
 
-  bindNestedIdentities(input.nextIndex, identity, input.previousIndex, input.previousIdentity)
+  bindNestedIdentities(
+    input.nextIndex,
+    identity,
+    input.previousIndex,
+    input.previousIdentity,
+    input.publicOps
+  )
 
   return identity
 }

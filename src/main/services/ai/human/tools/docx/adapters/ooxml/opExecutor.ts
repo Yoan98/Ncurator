@@ -165,19 +165,33 @@ const applyMoveNode = async (
   const index = buildCurrentIndex(bundle)
   const moving = editableElement(index, op.nodeId)
   const anchor = editableElement(index, op.anchorNodeId)
-  if (moving === anchor || moving.contains(anchor))
-    throw new Error('cannot move a node into itself')
+  const movingEntry = index.editableNodesById.get(op.nodeId) || index.nodesById.get(op.nodeId)
+  const anchorEntry =
+    index.editableNodesById.get(op.anchorNodeId) || index.nodesById.get(op.anchorNodeId)
+  if (!movingEntry || !anchorEntry) throw new Error('move node identity is missing')
+  if (movingEntry.partName !== anchorEntry.partName) {
+    throw new Error(
+      'cross-story move is not supported because relationships cannot be preserved safely'
+    )
+  }
+  let anchorAncestor: Node | null = anchor
+  while (anchorAncestor) {
+    if (anchorAncestor === moving) throw new Error('cannot move a node into itself')
+    anchorAncestor = anchorAncestor.parentNode
+  }
   const sourceOwner = ownerNodeId(index, op.nodeId)
   const targetOwner = ownerNodeId(index, op.anchorNodeId)
   if (op.position === 'before' || op.position === 'after') {
     const parent = anchor.parentNode
-    if (!parent) throw new Error('move anchor has no parent')
+    if (!parent || parent.nodeType !== 1) throw new Error('move anchor has no element parent')
+    assertCompatibleInsertion(parent as Element, moving)
     parent.insertBefore(moving, op.position === 'before' ? anchor : anchor.nextSibling)
   } else {
     const container = anchor.localName === 'sdt' ? firstChildElement(anchor, 'sdtContent') : anchor
     if (!container || !['tc', 'sdtContent', 'txbxContent', 'body'].includes(container.localName)) {
       throw new Error(`node ${op.anchorNodeId} cannot contain child content`)
     }
+    assertCompatibleInsertion(container, moving)
     container.insertBefore(moving, op.position === 'inside_start' ? container.firstChild : null)
   }
   return {
@@ -207,7 +221,7 @@ const contentDraftElement = (
       doc,
       {
         type: 'paragraph',
-        ...(draft.styleId ? { style: { styleName: draft.styleId } } : {}),
+        ...(draft.styleId ? { style: { styleId: draft.styleId } } : {}),
         children: [{ type: 'run', children: [{ type: 'text', text: draft.text }] }]
       },
       relationships
@@ -338,7 +352,7 @@ const applyContentDomainOp = async (
         body.insertBefore(node, firstChildElement(body, 'sectPr') || null)
       })
       await relationships.persist()
-      owner = index.bodyNodeIds.at(-1) || ''
+      owner = index.rootNodeIds.at(-1) || ''
     } else {
       if (!op.nodeId) throw new Error(`${op.position} requires nodeId`)
       anchor = editableElement(index, op.nodeId)
@@ -453,7 +467,7 @@ const applyTableDomainOp = async (
       const body = bundle.documentDom.getElementsByTagNameNS(WORD_NS, 'body').item(0)
       if (!body) throw new Error('DOCX body is missing')
       body.insertBefore(table, firstChildElement(body, 'sectPr') || null)
-      const owner = index.bodyNodeIds.at(-1)
+      const owner = index.rootNodeIds.at(-1)
       return {
         buffer: await writeDocumentXml(bundle),
         changedNodes: owner ? [changedNode(index, owner, 'insert_nodes')] : []
@@ -485,6 +499,9 @@ const applyTableDomainOp = async (
   if (op.type === 'delete_row') {
     const row = editableElement(index, op.rowNodeId)
     if (row.localName !== 'tr') throw new Error('delete_row target is not a row')
+    if (hasVisualDescendant(row) && !op.allowVisualLoss) {
+      throw new Error('target contains visual content; set allowVisualLoss=true to continue')
+    }
     table = row.parentNode as Element
     if (childElements(table, 'tr').length <= 1) throw new Error('cannot delete the last table row')
     table.removeChild(row)
@@ -534,39 +551,49 @@ const applyTableDomainOp = async (
       const next = op.position === 'before' ? anchor : anchor.nextSibling
       table.insertBefore(createPlainRow(bundle.documentDom, op.cells), next)
     } else if (op.type === 'insert_column') {
+      if (op.cells && op.cells.length !== rows.length) {
+        throw new Error(`insert_column cells must contain exactly ${String(rows.length)} values`)
+      }
+      const columnIndex = op.columnIndex - 1
       rows.forEach((row, rowIndex) => {
         const cells = childElements(row, 'tc')
-        if (op.columnIndex > cells.length) throw new Error('insert_column index is out of range')
+        if (columnIndex > cells.length) throw new Error('insert_column index is out of range')
         row.insertBefore(
           createPlainCell(bundle.documentDom, op.cells?.[rowIndex] || ''),
-          cells[op.columnIndex] || null
+          cells[columnIndex] || null
         )
       })
     } else if (op.type === 'delete_column') {
+      const columnIndex = op.columnIndex - 1
       rows.forEach((row) => {
         const cells = childElements(row, 'tc')
         if (cells.length <= 1) throw new Error('cannot delete the last table column')
-        const cell = cells[op.columnIndex]
+        const cell = cells[columnIndex]
         if (!cell) throw new Error('delete_column index is out of range')
+        if (hasVisualDescendant(cell) && !op.allowVisualLoss) {
+          throw new Error('target contains visual content; set allowVisualLoss=true to continue')
+        }
         row.removeChild(cell)
       })
     } else {
-      const fromRow = Math.min(op.fromRow, op.toRow)
-      const toRow = Math.max(op.fromRow, op.toRow)
-      const fromColumn = Math.min(op.fromColumn, op.toColumn)
-      const toColumn = Math.max(op.fromColumn, op.toColumn)
+      const fromRow = Math.min(op.fromRow, op.toRow) - 1
+      const toRow = Math.max(op.fromRow, op.toRow) - 1
+      const fromColumn = Math.min(op.fromColumn, op.toColumn) - 1
+      const toColumn = Math.max(op.fromColumn, op.toColumn) - 1
       if (toRow >= rows.length) throw new Error('merge_cells row is out of range')
       for (let rowIndex = fromRow; rowIndex <= toRow; rowIndex += 1) {
         const cells = childElements(rows[rowIndex]!, 'tc')
         if (toColumn >= cells.length) throw new Error('merge_cells column is out of range')
         const keeper = cells[fromColumn]!
+        const removedCells = cells.slice(fromColumn + 1, toColumn + 1)
+        if (removedCells.some(hasVisualDescendant) && !op.allowVisualLoss) {
+          throw new Error('target contains visual content; set allowVisualLoss=true to continue')
+        }
         const properties = ensureProperties(keeper, 'tcPr')
         if (toColumn > fromColumn) setValProperty(properties, 'gridSpan', toColumn - fromColumn + 1)
         if (toRow > fromRow)
           setValProperty(properties, 'vMerge', rowIndex === fromRow ? 'restart' : '')
-        cells
-          .slice(fromColumn + 1, toColumn + 1)
-          .forEach((cell) => rows[rowIndex]!.removeChild(cell))
+        removedCells.forEach((cell) => rows[rowIndex]!.removeChild(cell))
       }
     }
   }
@@ -574,6 +601,12 @@ const applyTableDomainOp = async (
     [...index.nodesById.values()].find((candidate) => candidate.node === table)?.nodeId ||
     [...index.editableNodesById.values()].find((candidate) => candidate.node === table)?.nodeId
   if (!tableId) throw new Error('table owner not found')
+  if (op.type === 'delete_row') {
+    return {
+      buffer: await writeDocumentXml(bundle),
+      changedNodes: [changedNode(index, op.rowNodeId, 'delete_node')]
+    }
+  }
   return {
     buffer: await writeDocumentXml(bundle),
     changedNodes: [changedNode(index, tableId, 'table_update')]
@@ -729,7 +762,11 @@ const applyFormatDomainOp = async (
     }
   }
   if (op.type === 'format_section') {
-    const section = ensureSectionProperties(bundle, editableElement(index, op.nodeId))
+    const targetEntry = index.editableNodesById.get(op.nodeId) || index.nodesById.get(op.nodeId)
+    if (!targetEntry || targetEntry.story.type !== 'body') {
+      throw new Error('format_section target must be in the document body')
+    }
+    const section = ensureSectionProperties(bundle, targetEntry.node)
     if (op.orientation) {
       const size = ensureChild(section, 'pgSz')
       const currentWidth = getAttr(size, 'w') || '11906'
@@ -752,7 +789,7 @@ const applyFormatDomainOp = async (
     }
     return {
       buffer: await writeDocumentXml(bundle),
-      changedNodes: index.bodyNodeIds.map((id) => changedNode(index, id))
+      changedNodes: index.rootNodeIds.map((id) => changedNode(index, id))
     }
   }
   if (op.type === 'set_numbering') {
@@ -813,7 +850,7 @@ const applyFormatDomainOp = async (
   )
   return {
     buffer: await writeDocumentXml(bundle),
-    changedNodes: index.bodyNodeIds.map((id) => changedNode(index, id))
+    changedNodes: index.rootNodeIds.map((id) => changedNode(index, id))
   }
 }
 
@@ -861,7 +898,7 @@ const applyRevisionDomainOp = async (
       '/word/settings.xml',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.settings+xml'
     )
-    const anchor = index.bodyNodeIds.at(0)
+    const anchor = index.rootNodeIds.at(0)
     return {
       buffer: await writeZip(bundle.zip),
       changedNodes: anchor ? [changedNode(index, anchor)] : []
@@ -887,7 +924,7 @@ const applyRevisionDomainOp = async (
   if (revisionId && matched === 0) throw new Error(`revision not found: ${revisionId}`)
   return {
     buffer: await writeDocumentXml(bundle),
-    changedNodes: index.bodyNodeIds.map((id) => changedNode(index, id, 'replace_node'))
+    changedNodes: index.rootNodeIds.map((id) => changedNode(index, id, 'replace_node'))
   }
 }
 
@@ -1193,7 +1230,9 @@ const applyMediaDomainOp = async (
     persistPartRelationships(bundle.zip, partName, relationships)
     const anchor = op.nodeId
       ? editableElement(index, op.nodeId)
-      : [...index.nodesById.values()].filter((node) => node.kind === 'paragraph').at(-1)?.node
+      : [...index.nodesById.values()]
+          .filter((node) => node.kind === 'paragraph' && node.story.type === 'body')
+          .at(-1)?.node
     if (!anchor) throw new Error('image insertion requires an existing paragraph or run anchor')
     const paragraph =
       anchor.localName === 'p'
@@ -1395,13 +1434,11 @@ const appendCommentReference = (parent: Node, before: Node | null, commentId: st
 
 const commentOwnerIds = (index: NodeIndex, commentId: string): string[] => {
   const owners = new Set<string>()
-  descendantElements(
-    index.nodesById.values().next().value?.node?.ownerDocument?.documentElement ||
-      (() => {
-        throw new Error('DOCX body is empty')
-      })(),
-    'commentReference'
-  )
+  const documents = [
+    ...new Set([...index.nodesById.values()].map((entry) => entry.node.ownerDocument))
+  ]
+  documents
+    .flatMap((document) => descendantElements(document.documentElement, 'commentReference'))
     .filter((node) => getAttr(node, 'id') === commentId)
     .forEach((reference) => {
       let current: Element | null = reference
@@ -1456,9 +1493,9 @@ const applyCommentDomainOp = async (
     const parent = anchors.first.parentNode
     if (!parent) throw new Error('comment range has no parent')
     const commentId = nextCommentId(comments)
-    const start = wordElement(bundle.documentDom, 'commentRangeStart')
+    const start = wordElement(paragraph.ownerDocument, 'commentRangeStart')
     setWordAttr(start, 'id', commentId)
-    const end = wordElement(bundle.documentDom, 'commentRangeEnd')
+    const end = wordElement(paragraph.ownerDocument, 'commentRangeEnd')
     setWordAttr(end, 'id', commentId)
     parent.insertBefore(start, anchors.first)
     parent.insertBefore(end, anchors.last.nextSibling)
@@ -1523,7 +1560,8 @@ const applyCommentDomainOp = async (
       })
       bundle.zip.file('word/commentsExtended.xml', new XMLSerializer().serializeToString(extended))
       ;['commentRangeStart', 'commentRangeEnd', 'commentReference'].forEach((name) => {
-        descendantElements(bundle.documentDom.documentElement, name)
+        storyDocuments(bundle)
+          .flatMap((document) => descendantElements(document.documentElement, name))
           .filter((node) => deletedCommentIds.has(getAttr(node, 'id')))
           .forEach((node) => {
             const removable =
@@ -1568,7 +1606,6 @@ const applyCommentDomainOp = async (
     }
   }
   bundle.zip.file('word/comments.xml', new XMLSerializer().serializeToString(comments))
-  bundle.zip.file('word/document.xml', new XMLSerializer().serializeToString(bundle.documentDom))
   await ensureDocumentRelationship(bundle.zip, COMMENTS_REL_TYPE, 'comments.xml')
   await ensureContentTypeOverride(
     bundle.zip,
@@ -1576,7 +1613,7 @@ const applyCommentDomainOp = async (
     'application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml'
   )
   return {
-    buffer: await writeZip(bundle.zip),
+    buffer: await writeDocumentXml(bundle),
     changedNodes: affectedOwners.map((id) => changedNode(index, id, 'replace_node'))
   }
 }
@@ -1742,7 +1779,7 @@ const patchParagraphProperties = (
   patch: Extract<DocxStylePatch, { kind: 'paragraph' }>
 ): void => {
   const pPr = ensureProperties(node, 'pPr')
-  setValProperty(pPr, 'pStyle', patch.styleName)
+  setValProperty(pPr, 'pStyle', patch.styleId)
   setValProperty(pPr, 'jc', patch.alignment)
   setValProperty(pPr, 'keepNext', patch.keepWithNext)
   setValProperty(pPr, 'pageBreakBefore', patch.pageBreakBefore)
@@ -2016,7 +2053,7 @@ const applyDirectFormat = async (buffer: Buffer, op: DirectFormatOp) => {
             ? { kind: 'table_row', ...op.format }
             : op.type === 'format_cell'
               ? { kind: 'table_cell', ...op.format }
-              : { kind: 'paragraph', styleName: op.styleId }
+              : { kind: 'paragraph', styleId: op.styleId }
     if (expectedKind(actualKind) !== patch.kind)
       throw new Error(`format patch type mismatch: target is ${actualKind}, patch is ${patch.kind}`)
     patchNodeStyle(element, patch)
