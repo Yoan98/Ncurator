@@ -11,12 +11,12 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 plan 会跨轮保留，且在仍有 todo 时选择 finish 会收到强制回退提示。',
+      description: '验证 plan 会跨轮保留，且状态更新会写入下一轮 prompt。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         let secondBrainSeesTodolist = false
-        let thirdBrainSeesIncompleteHint = false
+        let thirdBrainSeesUpdatedPlan = false
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
@@ -36,17 +36,22 @@ describe('ai human mock-llm backend', () => {
               ({ user }) => {
                 secondBrainSeesTodolist =
                   user.includes('确认 A 事项') && user.includes('确认 B 事项')
-                return {
-                  thought: { next: '故意提前收口，验证仍有 todo 时会被打回。' },
-                  nextAction: { action: 'deliver' }
-                }
+                return buildToolDecision({
+                  toolName: 'update_plan',
+                  args: {
+                    plan: [
+                      { title: '确认 A 事项', status: 'done' },
+                      { title: '确认 B 事项', status: 'todo' },
+                      { title: '检查是否已经满足用户诉求并能进入最终交付', status: 'todo' }
+                    ]
+                  },
+                  summary: '确认 A 事项已完成，任务板需要跨轮重写。'
+                })
               },
               ({ user }) => {
-                thirdBrainSeesIncompleteHint =
-                  user.includes('交付被拒绝：计划中仍有未完成事项') &&
-                  user.includes('确认 B 事项') &&
-                  user.includes('检查是否已经满足用户诉求并能进入最终交付')
-
+                const planEchoCount = user.split('确认 A 事项').length - 1
+                thirdBrainSeesUpdatedPlan =
+                  planEchoCount >= 2 && user.includes('确认 B 事项')
                 return buildToolDecision({
                   toolName: 'update_plan',
                   args: {
@@ -56,7 +61,7 @@ describe('ai human mock-llm backend', () => {
                       { title: '检查是否已经满足用户诉求并能进入最终交付', status: 'done' }
                     ]
                   },
-                  summary: '收到未完成 todo 的强提示后，先继续推进并把计划收尾。'
+                  summary: '任务板收尾，所有事项已完成。'
                 })
               },
               {
@@ -77,7 +82,7 @@ describe('ai human mock-llm backend', () => {
         return {
           output,
           secondBrainSeesTodolist,
-          thirdBrainSeesIncompleteHint,
+          thirdBrainSeesUpdatedPlan,
           events: runtime.eventCollector.snapshot()
         }
       },
@@ -85,14 +90,14 @@ describe('ai human mock-llm backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             result.secondBrainSeesTodolist &&
-            result.thirdBrainSeesIncompleteHint,
+            result.thirdBrainSeesUpdatedPlan,
           {
-            name: 'thought-todolist-persists-and-delivery-is-blocked-while-todo-remains',
+            name: 'plan-persists-and-updates-across-rounds',
             message:
-              'plan 应作为长期任务板在下一轮真实 brain prompt 中继续存在，并在仍有 todo 时返回 brain 继续推进。',
+              'plan 应作为长期任务板在下一轮真实 brain prompt 中继续存在，且更新后的任务板应写回再下一轮 transcript。',
             data: {
               secondBrainSeesTodolist: result.secondBrainSeesTodolist,
-              thirdBrainSeesIncompleteHint: result.thirdBrainSeesIncompleteHint
+              thirdBrainSeesUpdatedPlan: result.thirdBrainSeesUpdatedPlan
             }
           }
         )

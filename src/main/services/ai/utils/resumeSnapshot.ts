@@ -22,10 +22,7 @@ const cloneWorkspace = (
 ): WorkspaceRuntimeBinding | undefined =>
   workspace ? (JSON.parse(JSON.stringify(workspace)) as WorkspaceRuntimeBinding) : undefined
 
-export const buildHumanResumeSnapshot = (
-  state: HumanState,
-  _reason: ChatSessionResumeSnapshot['reason']
-): HumanResumeSnapshot => ({
+export const buildHumanResumeSnapshot = (state: HumanState): HumanResumeSnapshot => ({
   schemaVersion: 3,
   memory: {
     plan: state.memory.plan,
@@ -36,15 +33,12 @@ export const buildHumanResumeSnapshot = (
   },
   execution: {
     deliveryGuidanceItems: state.execution.deliveryGuidanceItems,
-    artifacts: state.execution.artifacts,
-    finalizationReason: state.execution.finalizationReason
+    artifacts: state.execution.artifacts
   }
 })
 
-export const serializeHumanResumeSnapshot = (
-  state: HumanState,
-  reason: ChatSessionResumeSnapshot['reason']
-): JsonObject => toJsonObject(buildHumanResumeSnapshot(state, reason))
+export const serializeHumanResumeSnapshot = (state: HumanState): JsonObject =>
+  toJsonObject(buildHumanResumeSnapshot(state))
 
 export const saveHumanResumeSnapshot = async (input: {
   chatStore: ChatStore
@@ -64,7 +58,7 @@ export const saveHumanResumeSnapshot = async (input: {
     userInput: String(input.userInput || ''),
     selectedReferences: cloneSelectedReferences(input.selectedReferences),
     workspace: cloneWorkspace(input.workspace),
-    humanState: serializeHumanResumeSnapshot(input.humanState, input.reason),
+    humanState: serializeHumanResumeSnapshot(input.humanState),
     errorMessage: String(input.errorMessage || ''),
     updatedAt: input.updatedAt || Date.now()
   })
@@ -100,8 +94,7 @@ export const restoreHumanStateFromResumeSnapshot = (input: {
       stage: 'brain',
       status: 'running',
       deliveryGuidanceItems: snapshot.execution?.deliveryGuidanceItems,
-      artifacts: snapshot.execution?.artifacts || [],
-      finalizationReason: snapshot.execution?.finalizationReason
+      artifacts: snapshot.execution?.artifacts || []
     },
     result: undefined,
     trace: createDefaultHumanTrace()

@@ -547,8 +547,7 @@ describe('unit ai persistence backend', () => {
         skills: { learnedSkillIds: [] },
         execution: {
           deliveryGuidanceItems: [],
-          artifacts: [],
-          finalizationReason: undefined
+          artifacts: []
         }
       },
       errorMessage: '运行中断恢复快照',
@@ -582,8 +581,7 @@ describe('unit ai persistence backend', () => {
         skills: { learnedSkillIds: [] },
         execution: {
           deliveryGuidanceItems: [],
-          artifacts: [],
-          finalizationReason: undefined
+          artifacts: []
         }
       },
       errorMessage: 'keep snapshot when retract is rejected',
@@ -655,8 +653,7 @@ describe('unit ai persistence backend', () => {
         skills: { learnedSkillIds: [] },
         execution: {
           deliveryGuidanceItems: [],
-          artifacts: [],
-          finalizationReason: undefined
+          artifacts: []
         }
       },
       errorMessage: 'cancelled',
@@ -709,8 +706,7 @@ describe('unit ai persistence backend', () => {
         skills: { learnedSkillIds: [] },
         execution: {
           deliveryGuidanceItems: [],
-          artifacts: [],
-          finalizationReason: undefined
+          artifacts: []
         }
       },
       errorMessage: 'interrupted',

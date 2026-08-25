@@ -130,7 +130,7 @@ flowchart TD
 - `learning` 负责按需加载 external skill，执行 `learn_skill` 控制工具并把结果写回消息数组。
 - `plan` 执行 `update_plan` 控制工具，先用 `UPDATE_PLAN_SCHEMA`（`zod`）校验参数（`status` 仅允许 `todo` / `in_progress` / `done`），通过后把计划写入 `memory.plan` 并回写 `ToolMessage`；校验失败则回写 `invalid_plan` 错误 `ToolMessage` 并回到 brain 重试。
 - `hand` 负责执行真实工具，把结果以 `ToolMessage` 追加回消息数组。
-- `brain` 交付：当 brain 的一轮返回没有任何 `tool_calls`（计划已全部完成，含最后的检查项）时，该轮 assistant 的 content 就是最终交付 markdown；brain 直接收尾（apply docx / commit ppt / 收集文件变更 / artifact / `answer_completed`），不再有独立的 mouth 节点与第二次交付 LLM 调用。若此时计划仍有未完成项，brain 会追加一条「交付被拒绝」提示并回到 brain 继续推进。
+- `brain` 交付：当 brain 的一轮返回没有任何 `tool_calls` 时，该轮 assistant 的 content 就是最终交付 markdown；brain 直接收尾（apply docx / commit ppt / 收集文件变更 / artifact / `answer_completed`），不再有独立的 mouth 节点与第二次交付 LLM 调用。交付与否由 brain 自主判断，Main 侧不做计划完成度的强制拦截。
 - `context_budget` 负责在每一步前检查上下文预算。
 - `context_compaction` 把消息投影的较早区间压缩为一条摘要（`<compacted_history>`）并注入 `<current_state>`（完整 plan + learnedSkillIds），服务本次 run 继续推进。
 
@@ -195,7 +195,7 @@ LLM 调用失败严格分两层处理：
 
 续接（跨会话与中断恢复）统一为：`system` + 会话消息记录投影出的完整历史 + 尾部 `buildBrainUserMessage` user 消息；不区分「恢复」与「新消息」，只靠是否消费恢复快照决定 `<current_state>` 里的 plan/skills 来源。压缩是唯一允许折叠移除旧消息的机制，且只作用于投影，记录本身 append-only 不动。
 
-未正常完成的智能模式任务另有一套按会话持久化的恢复快照。快照保存 plan、compactions、已学习技能和执行收尾态（delivery guidance / artifacts / finalizationReason）；同一会话的下一条用户消息会消费快照、启动新的 run 并补一条 user 转录条目。网络错误、超时、用户停止、进程中断、运行上限和未知异常都保留快照，只有任务正常完成或会话被删除时才清理。不同会话的恢复状态严格隔离。
+未正常完成的智能模式任务另有一套按会话持久化的恢复快照。快照保存 plan、compactions、已学习技能和执行收尾态（delivery guidance / artifacts）；同一会话的下一条用户消息会消费快照、启动新的 run 并补一条 user 转录条目。网络错误、超时、用户停止、进程中断、运行上限和未知异常都保留快照，只有任务正常完成或会话被删除时才清理。不同会话的恢复状态严格隔离。
 
 文件 artifact 是预览、差异与回退所需的内部业务数据；传入模型时只投影必要语义，不暴露内部记录标识。运行失败或取消不会撤销已落地的工作区内修改，所有终态都保留可查看、可回退的工作区内修改记录。
 

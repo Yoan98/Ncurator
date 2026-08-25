@@ -109,7 +109,6 @@ export const applyBrainDecisionState = (input: {
       ...input.overrides?.execution,
       stage: resolveBrainNextStage(input.nextAction.action),
       status: 'running',
-      finalizationReason: undefined,
       pendingRound: {
         thought: input.thought,
         nextAction: input.nextAction

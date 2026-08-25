@@ -1167,9 +1167,9 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend`
 - What：任务清单（todolist）作为长期任务板会在 mock-llm 下跨轮维护 todo、done 状态。
 - Why：如果任务清单不能跨轮保留并被重写成最新任务板，brain 很容易把长期记忆退化成单轮摘要。
-- How：第一轮 `brain` 写入只含 todo 的任务清单，并触发一次真实 learning；第二轮 `brain` 读取真实 prompt 后，将任务清单重写为包含 done 与 todo 的新版本。
-- Oracle：第二轮 `brain` prompt 中能看到第一轮写入的结构化任务清单项，任务最终完成，且新的任务清单成功写回 thought memory。
-- Not：不验证除 brain 交付前的 todo 检查之外的更复杂任务清单机读策略。
+- How：第一轮 `brain` 写入只含 todo 的任务清单；第二轮 `brain` 读取真实 prompt 后将任务清单重写为包含 done 与 todo 的新版本；第三轮验证更新后的状态已写入 prompt，并把任务清单收尾为全 done。
+- Oracle：第二轮 `brain` prompt 中能看到第一轮写入的结构化任务清单项，第三轮能看到第二轮的 done/todo 状态更新，任务最终完成。
+- Not：不验证交付前计划完成度检查（该机制已移除，交付与否由 brain 自主判断）。
 
 ##### `complex-docx-edit`
 

@@ -67,7 +67,7 @@ export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 
 export type HumanResumeSnapshot = Pick<HumanState, 'memory' | 'skills'> & {
   schemaVersion: 3
-  execution: Pick<HumanState['execution'], 'deliveryGuidanceItems' | 'artifacts' | 'finalizationReason'>
+  execution: Pick<HumanState['execution'], 'deliveryGuidanceItems' | 'artifacts'>
 }
 
 export type RecoverableRunErrorCode = AiRunResumeSnapshotReason

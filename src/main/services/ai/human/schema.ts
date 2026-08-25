@@ -165,7 +165,6 @@ export const humanDispatchItemSchema = z.object({
 export const humanExecutionSchema = z.object({
   stage: humanStageSchema,
   status: humanStatusSchema,
-  finalizationReason: z.enum(['brain_content_safety']).optional(),
   pendingRound: z
     .object({
       thought: humanRoundThoughtSchema,

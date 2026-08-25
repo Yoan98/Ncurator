@@ -55,12 +55,10 @@ describe('ai content safety finalization', () => {
       emitAnswerEvents: false
     })
     const state = createInitialHumanState({ taskId: 'brain-safety', userInput: 'continue' })
-    state.memory.plan = [{ title: 'unfinished item', status: 'todo' }]
 
     const result = await node(state)
 
     expect(result.execution.status).toBe('completed')
-    expect(result.execution.finalizationReason).toBe('brain_content_safety')
     expect(result.execution.deliveryGuidanceItems).toEqual([
       expect.objectContaining({ source: 'brain', text: expect.stringContaining('内容安全') })
     ])

@@ -278,23 +278,6 @@ export const createBrainNode = (input: {
 
       if (executableCalls.length === 0) {
         const deliveryMarkdown = thoughtText
-        const pendingItems = state.memory.plan
-          .filter((item) => item.status !== 'done')
-          .map((item) => item.title)
-        if (
-          pendingItems.length > 0 &&
-          state.execution.finalizationReason !== 'brain_content_safety'
-        ) {
-          const nudge = `交付被拒绝：计划中仍有未完成事项：${pendingItems.join('、')}。请继续推进或更新计划后再交付。`
-          messages.push(new HumanMessage(nudge))
-          input.cache.messages = messages
-          await input.ctx.appendMessageLog([{ kind: 'user', content: nudge }])
-          completeThinking()
-          await input.ctx.appendMessageLog([
-            { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
-          ])
-          return returnToBrain(state)
-        }
         completeThinking()
         await input.ctx.appendMessageLog([
           { kind: 'annotation', eventType: 'thinking_completed', payload: {} }
@@ -332,7 +315,6 @@ export const createBrainNode = (input: {
           ...state,
           execution: {
             ...state.execution,
-            finalizationReason: 'brain_content_safety',
             deliveryGuidanceItems: mergeDeliveryGuidanceItems(
               state.execution.deliveryGuidanceItems,
               guidance
