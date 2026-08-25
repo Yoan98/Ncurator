@@ -1,14 +1,11 @@
-import type { DocxOutlineBlock, DocxSearchMatch, SemanticDocIndexEntry } from './types'
+import type { DocxOutlineNode, DocxSearchMatch, SemanticDocIndexEntry } from './types'
 
-export const isSemanticSearchableBlock = (
-  block: DocxOutlineBlock
-): block is Extract<DocxOutlineBlock, { type: 'paragraph' | 'table_cell' }> =>
-  block.type === 'paragraph' || block.type === 'table_cell'
+export const isSemanticSearchableNode = (
+  node: DocxOutlineNode
+): node is Extract<DocxOutlineNode, { type: 'paragraph' | 'table_cell' }> =>
+  node.type === 'paragraph' || node.type === 'table_cell'
 
-export const splitEmbeddingRows = (
-  data: Float32Array,
-  dims: [number, number]
-): Float32Array[] => {
+export const splitEmbeddingRows = (data: Float32Array, dims: [number, number]): Float32Array[] => {
   const rowCount = Math.max(0, Number(dims[0] || 0))
   const colCount = Math.max(0, Number(dims[1] || 0))
   if (rowCount <= 0 || colCount <= 0) return []
@@ -34,15 +31,15 @@ const dotProduct = (left: Float32Array, right: Float32Array): number => {
 export const buildSemanticMatches = (input: {
   entries: SemanticDocIndexEntry[]
   queryEmbedding: Float32Array
-  scopeBlockIds: string[]
+  scopeNodeIds: string[]
   queryText: string
   topK: number
   minScore: number
 }): DocxSearchMatch[] => {
-  const scope = input.scopeBlockIds.length > 0 ? new Set(input.scopeBlockIds) : null
+  const scope = input.scopeNodeIds.length > 0 ? new Set(input.scopeNodeIds) : null
   const normalizedQuery = input.queryText.trim().toLowerCase()
   const scored = input.entries
-    .filter((entry) => (scope ? scope.has(entry.blockId) : true))
+    .filter((entry) => (scope ? scope.has(entry.nodeId) : true))
     .map((entry) => {
       const text = entry.text.trim()
       const textLower = text.toLowerCase()
@@ -56,15 +53,16 @@ export const buildSemanticMatches = (input: {
                 .reduce((score, token) => (textLower.includes(token) ? score + 0.12 : score), 0)
             : 0
       return {
-        blockId: entry.blockId,
-        type: entry.blockType,
-        blockIndex: entry.blockIndex,
-        previousBlockId: entry.previousBlockId,
-        nextBlockId: entry.nextBlockId,
-        tableBlockId: entry.tableBlockId,
+        nodeId: entry.nodeId,
+        type: entry.nodeType,
+        nodeIndex: entry.nodeIndex,
+        previousNodeId: entry.previousNodeId,
+        nextNodeId: entry.nextNodeId,
+        tableNodeId: entry.tableNodeId,
         text: entry.text,
         matchedText: input.queryText,
-        score: dotProduct(entry.embedding, input.queryEmbedding) + tokenBoost
+        score: dotProduct(entry.embedding, input.queryEmbedding) + tokenBoost,
+        story: entry.story
       }
     })
     .filter((item) => item.text.trim().length > 0)
@@ -74,14 +72,15 @@ export const buildSemanticMatches = (input: {
     .filter((item) => item.score >= input.minScore)
     .slice(0, input.topK)
     .map((item) => ({
-      blockId: item.blockId,
+      nodeId: item.nodeId,
       type: item.type,
-      blockIndex: item.blockIndex,
-      previousBlockId: item.previousBlockId,
-      nextBlockId: item.nextBlockId,
-      tableBlockId: item.tableBlockId,
+      nodeIndex: item.nodeIndex,
+      previousNodeId: item.previousNodeId,
+      nextNodeId: item.nextNodeId,
+      tableNodeId: item.tableNodeId,
       text: item.text,
       matchedText: input.queryText,
-      score: item.score
+      score: item.score,
+      story: item.story
     }))
 }

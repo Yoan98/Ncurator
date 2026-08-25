@@ -12,7 +12,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_search 会对兼容字形做归一化，普通查询与 regex 都可命中真实 block。',
+      description: '验证 docx_search 会对兼容字形做归一化，普通查询与 regex 都可命中真实节点。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -51,7 +51,7 @@ describe('ai tool docx backend', () => {
         runtime.assertThat(
           result.literal.matches.length === 1 &&
             result.regex.matches.length === 1 &&
-            result.literal.matches[0]?.blockId === result.regex.matches[0]?.blockId &&
+            result.literal.matches[0]?.nodeId === result.regex.matches[0]?.nodeId &&
             result.literal.matches[0]?.text.includes('反⾛样'),
           {
             name: 'docx-search-normalizes-compatibility-glyphs',

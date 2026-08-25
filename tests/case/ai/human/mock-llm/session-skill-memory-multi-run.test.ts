@@ -13,7 +13,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证同一会话跨 run 共享技能，并在移除 finish 工具后所有可学技能仍在 30 工具上限内。',
+      description: '验证同一会话跨 run 共享技能，并在加载 9 个 DOCX 工具后按 FIFO 保持 30 工具上限。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -99,11 +99,11 @@ describe('ai human mock-llm backend', () => {
             result.stateAtLimit.learnedSkillIds.join(',') ===
               'docx-read,pdf-read,excel-write,ppt-read,ppt-write' &&
             result.stateAfterEviction.learnedSkillIds.join(',') ===
-              'docx-read,pdf-read,excel-write,ppt-read,ppt-write,excel-read,image-recognition,image-generation,docx-write' &&
+              'excel-write,ppt-read,ppt-write,excel-read,image-recognition,image-generation,docx-write' &&
             result.run4Prompt.includes('<learned_skills>'),
           {
             name: 'session-skills-persist-across-runs-within-tool-budget',
-            message: '同一会话应跨 run 共享技能，且移除 finish 工具后全部技能仍在 30 工具上限内。',
+            message: '同一会话应跨 run 共享技能，并在加载 DOCX 全部 9 个工具后按 FIFO 淘汰最早技能。',
             data: result
           }
         )

@@ -31,7 +31,7 @@ const createToolGroups = (toolNames: ToolName[]): AssistantExecutionGroup[] =>
 describe('workbench assistant process icons', () => {
   it('uses action icons for file read, search, and edit steps', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('docx_read_outline'))).toBe('document')
-    expect(resolveAssistantExecutionIcon(createToolGroup('docx_edit'))).toBe('edit')
+    expect(resolveAssistantExecutionIcon(createToolGroup('docx_content_edit'))).toBe('edit')
     expect(resolveAssistantExecutionIcon(createToolGroup('excel_read_outline'))).toBe('document')
     expect(resolveAssistantExecutionIcon(createToolGroup('excel_edit'))).toBe('edit')
     expect(resolveAssistantExecutionIcon(createToolGroup('ppt_read_outline'))).toBe('document')

@@ -77,9 +77,13 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep.availableToolNames.includes('kb_search') &&
             latestLearningStep.availableToolNames.includes('docx_read_outline') &&
             latestLearningStep.availableToolNames.includes('docx_search') &&
-            latestLearningStep.availableToolNames.includes('docx_read_blocks') &&
+            latestLearningStep.availableToolNames.includes('docx_read') &&
             latestLearningStep.availableToolNames.includes('docx_read_visuals') &&
-            latestLearningStep.availableToolNames.includes('docx_edit') &&
+            latestLearningStep.availableToolNames.includes('docx_content_edit') &&
+            latestLearningStep.availableToolNames.includes('docx_format') &&
+            latestLearningStep.availableToolNames.includes('docx_table_edit') &&
+            latestLearningStep.availableToolNames.includes('docx_media_edit') &&
+            latestLearningStep.availableToolNames.includes('docx_comments_revisions') &&
             latestLearningStep.summary.includes('当前 active tools=') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill='),
           {

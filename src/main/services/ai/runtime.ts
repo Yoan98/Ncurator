@@ -3,10 +3,7 @@ import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from 
 import { createAiLlmExecutor } from './llmExecutor'
 import { buildReferenceScope } from './human/prompts/referenceScope'
 import { getAiRuntimePlatform } from './utils/platform'
-import {
-  normalizeSelectedReferences,
-  normalizeWorkspaceBinding
-} from './utils/runContext'
+import { normalizeSelectedReferences, normalizeWorkspaceBinding } from './utils/runContext'
 import type { AiExecutionPermission, AiPreference } from '../../../shared/types'
 import { saveHumanResumeSnapshot } from './utils/resumeSnapshot'
 import { isPathInsideRoot } from './human/tools/terminal/commandPolicy'
@@ -16,8 +13,7 @@ const normalizeAiPreference = (value: unknown): AiPreference =>
 
 const normalizeExecutionPermission = (
   value: AiExecutionPermission | undefined
-): AiExecutionPermission =>
-  value === 'full_access' ? 'full_access' : 'review'
+): AiExecutionPermission => (value === 'full_access' ? 'full_access' : 'review')
 
 export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps): AiRunContext => {
   const checkCancelled = () => {
@@ -183,8 +179,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       previousDocId,
       nextDocId,
       op,
-      changedBlocks,
-      createdBlocks,
+      changedNodes,
+      createdNodes,
       replaySession
     }) => {
       deps.docxApplyService.registerDocxChanges({
@@ -192,28 +188,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         previousDocId,
         nextDocId,
         op,
-        changedBlocks,
-        createdBlocks,
-        replaySession
-      })
-    },
-    trackDocxBatchChanges: ({
-      previousDocId,
-      nextDocId,
-      ops,
-      changedBlocks,
-      createdBlocks,
-      replaySession
-    }) => {
-      const op = ops[0]
-      if (!op) return
-      deps.docxApplyService.registerDocxChanges({
-        runId: payload.runId,
-        previousDocId,
-        nextDocId,
-        op,
-        changedBlocks,
-        createdBlocks,
+        changedNodes,
+        createdNodes,
         replaySession
       })
     },

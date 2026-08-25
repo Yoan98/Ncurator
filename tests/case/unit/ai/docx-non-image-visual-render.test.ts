@@ -5,18 +5,18 @@ import path from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
 import {
-  buildBlockIndex,
+  buildNodeIndex,
   loadDocxBundle
-} from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
+} from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 
 const require = createRequire(import.meta.url)
 const fixturePath = path.resolve('tests/fixtures/workspace/docx-visual-kinds.docx')
 
 type RenderBinding = {
   kind: 'chart' | 'diagram' | 'shape'
-  blockIndex: number
-  visualIndexInBlock: number
-  visualCountInBlock: number
+  nodeIndex: number
+  visualIndexInNode: number
+  visualCountInNode: number
 }
 
 const runElectronRenderer = async (
@@ -146,7 +146,7 @@ const bindings = JSON.parse(Buffer.from(encodedBindings, 'base64').toString('utf
 describe('docx non-image visual rendering', () => {
   it('renders chart, diagram, and shape fixtures to nonblank images in Electron', async () => {
     const bundle = await loadDocxBundle(await fs.readFile(fixturePath))
-    const index = buildBlockIndex(
+    const index = buildNodeIndex(
       bundle.documentDom,
       bundle.relationshipTargets,
       bundle.relationshipTypes
@@ -165,16 +165,16 @@ describe('docx non-image visual rendering', () => {
           entry[1].kind === 'chart' || entry[1].kind === 'diagram' || entry[1].kind === 'shape'
       )
       .map(([visualId, visual]) => {
-        const owner = index.nodesById.get(visual.blockId)!
-        const visualsInBlock = [...index.visualsById.entries()].filter(([, candidate]) => {
-          const candidateOwner = index.nodesById.get(candidate.blockId)
-          return candidateOwner?.blockIndex === owner.blockIndex
+        const owner = index.nodesById.get(visual.ownerNodeId)!
+        const visualsInNode = [...index.visualsById.entries()].filter(([, candidate]) => {
+          const candidateOwner = index.nodesById.get(candidate.ownerNodeId)
+          return candidateOwner?.nodeIndex === owner.nodeIndex
         })
         return {
           kind: visual.kind,
-          blockIndex: owner.blockIndex,
-          visualIndexInBlock: visualsInBlock.findIndex(([id]) => id === visualId),
-          visualCountInBlock: visualsInBlock.length
+          nodeIndex: owner.nodeIndex,
+          visualIndexInNode: visualsInNode.findIndex(([id]) => id === visualId),
+          visualCountInNode: visualsInNode.length
         }
       })
 

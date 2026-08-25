@@ -2,21 +2,125 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { XMLSerializer } from '@xmldom/xmldom'
+import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
 import { applyDocxOps } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/opExecutor'
 import {
-  buildBlockIndex,
+  buildNodeIndex,
+  buildDocumentNodeIndex,
   loadDocxBundle
-} from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
+} from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import { createDocxFile } from '../../../../src/main/services/ai/human/tools/docx/utils/createDocxFile'
 
 const fixturePath = path.resolve('tests/fixtures/workspace/灵感测试.docx')
 
 describe('docx recursive edit executor', () => {
-  it('keeps visuals while replacing visible text and blocks accidental visual deletion', async () => {
+  it('reads and edits header stories and empty content controls in their original parts', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-story-test-'))
+    const sourcePath = path.join(tempDir, 'stories.docx')
+    await createDocxFile({
+      filePath: sourcePath,
+      nodes: [
+        {
+          type: 'paragraph',
+          children: [{ type: 'run', children: [{ type: 'text', text: 'Body' }] }]
+        }
+      ]
+    })
+    const zip = await JSZip.loadAsync(await fs.readFile(sourcePath))
+    const documentXml = await zip.file('word/document.xml')!.async('text')
+    zip.file(
+      'word/document.xml',
+      documentXml.replace(
+        '<w:sectPr>',
+        '<w:sdt><w:sdtPr><w:tag w:val="empty"/></w:sdtPr><w:sdtContent/></w:sdt><w:sectPr>'
+      )
+    )
+    const relationshipsPath = 'word/_rels/document.xml.rels'
+    const relationshipsXml = await zip.file(relationshipsPath)!.async('text')
+    zip.file(
+      relationshipsPath,
+      relationshipsXml.replace(
+        '</Relationships>',
+        '<Relationship Id="rIdHeader" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/header" Target="header1.xml"/></Relationships>'
+      )
+    )
+    zip.file(
+      'word/header1.xml',
+      '<w:hdr xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>Header</w:t></w:r></w:p></w:hdr>'
+    )
+    const source = await zip.generateAsync({ type: 'nodebuffer' })
+    const bundle = await loadDocxBundle(source)
+    const index = buildDocumentNodeIndex(bundle)
+    const header = index.outline.find((node) => node.story.type === 'header')
+    const control = index.outline.find((node) => node.type === 'content_control')
+    expect(header?.text).toBe('Header')
+    expect(control?.text).toBe('')
+    const headerEdited = await applyDocxOps({
+      buffer: source,
+      ops: [
+        {
+          type: 'replace_text',
+          nodeId: header!.nodeId,
+          oldText: 'Header',
+          newText: 'Updated header'
+        }
+      ]
+    })
+    const controlEdited = await applyDocxOps({
+      buffer: headerEdited.buffer,
+      ops: [
+        {
+          type: 'insert_nodes',
+          nodeId: control!.nodeId,
+          position: 'inside_end',
+          nodes: [{ type: 'paragraph', text: 'Filled' }]
+        }
+      ]
+    })
+    const imagePath = path.join(tempDir, 'header-image.png')
+    await fs.writeFile(
+      imagePath,
+      Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nS8AAAAASUVORK5CYII=',
+        'base64'
+      )
+    )
+    const mediaEdited = await applyDocxOps({
+      buffer: controlEdited.buffer,
+      ops: [
+        {
+          type: 'insert_image',
+          nodeId: header!.nodeId,
+          position: 'after',
+          imagePath,
+          widthCm: 1,
+          heightCm: 1,
+          altText: 'Header image'
+        }
+      ]
+    })
+    const afterBundle = await loadDocxBundle(mediaEdited.buffer)
+    const after = buildDocumentNodeIndex(afterBundle)
+    expect(
+      after.outline.some((node) => node.story.type === 'header' && node.text === 'Updated header')
+    ).toBe(true)
+    expect(
+      after.outline.some((node) => node.type === 'content_control' && node.text === 'Filled')
+    ).toBe(true)
+    expect([...after.visualsById.values()].some((visual) => visual.story.type === 'header')).toBe(
+      true
+    )
+    const afterZip = await JSZip.loadAsync(mediaEdited.buffer)
+    expect(await afterZip.file('word/_rels/header1.xml.rels')?.async('text')).toContain(
+      '/relationships/image'
+    )
+  })
+
+  it('keeps visuals while replacing visible text and nodes accidental visual deletion', async () => {
     const source = await fs.readFile(fixturePath)
     const beforeBundle = await loadDocxBundle(source)
-    const before = buildBlockIndex(
+    const before = buildNodeIndex(
       beforeBundle.documentDom,
       beforeBundle.relationshipTargets,
       beforeBundle.relationshipTypes
@@ -28,76 +132,65 @@ describe('docx recursive edit executor', () => {
         buffer: source,
         ops: [
           {
-            type: 'replace_block',
-            blockId: visual!.blockId,
-            content: {
+            type: 'replace_node',
+            nodeId: visual!.ownerNodeId,
+            node: {
               type: 'paragraph',
-              children: [{ type: 'run', children: [{ type: 'text', text: 'replacement' }] }]
+              text: 'replacement'
             }
           }
         ]
       })
-    ).rejects.toThrow('visual loss blocked')
+    ).rejects.toThrow('target contains visual content')
 
     const paragraph = before.outline.find(
-      (block) => block.type === 'paragraph' && block.text.length >= 2
+      (node) => node.type === 'paragraph' && node.text.length >= 2
     )
     expect(paragraph?.type).toBe('paragraph')
     if (!paragraph || paragraph.type !== 'paragraph') return
     const query = paragraph.text.slice(0, 2)
     const replaced = await applyDocxOps({
       buffer: source,
-      ops: [{ type: 'replace_text', query, replace: '测试替换' }]
+      ops: [{ type: 'replace_text', nodeId: paragraph.nodeId, oldText: query, newText: '测试替换' }]
     })
     const afterBundle = await loadDocxBundle(replaced.buffer)
-    const after = buildBlockIndex(
+    const after = buildNodeIndex(
       afterBundle.documentDom,
       afterBundle.relationshipTargets,
       afterBundle.relationshipTypes
     )
     expect(after.visualsById.size).toBe(before.visualsById.size)
-    expect(after.outline.some((block) => block.text.includes('测试替换'))).toBe(true)
+    expect(after.outline.some((node) => node.text.includes('测试替换'))).toBe(true)
   })
 
-  it('inserts a recursive block tree and applies node style in place', async () => {
+  it('inserts a recursive node tree and applies node style in place', async () => {
     const source = await fs.readFile(fixturePath)
     const bundle = await loadDocxBundle(source)
-    const index = buildBlockIndex(
+    const index = buildNodeIndex(
       bundle.documentDom,
       bundle.relationshipTargets,
       bundle.relationshipTypes
     )
-    const anchor = index.bodyBlockIds[0]!
+    const anchor = index.bodyNodeIds[0]!
     const inserted = await applyDocxOps({
       buffer: source,
       ops: [
         {
-          type: 'insert_after',
-          anchorBlockId: anchor,
-          content: [
-            {
-              type: 'paragraph',
-              style: { styleName: 'Heading2' },
-              children: [
-                {
-                  type: 'run',
-                  style: { bold: true },
-                  children: [{ type: 'text', text: '递归插入' }]
-                }
-              ]
-            }
-          ]
+          type: 'insert_nodes',
+          nodeId: anchor,
+          position: 'after',
+          nodes: [{ type: 'paragraph', text: '递归插入', styleId: 'Heading2' }]
         }
       ]
     })
     const nextBundle = await loadDocxBundle(inserted.buffer)
-    const next = buildBlockIndex(
+    const next = buildNodeIndex(
       nextBundle.documentDom,
       nextBundle.relationshipTargets,
       nextBundle.relationshipTypes
     )
-    expect(next.bodyBlockIds).toHaveLength(index.bodyBlockIds.length + 1)
-    expect(next.outline.some((block) => block.text === '递归插入')).toBe(true)
+    expect(next.bodyNodeIds).toHaveLength(index.bodyNodeIds.length + 1)
+    expect(next.outline.some((node) => node.text === '递归插入')).toBe(true)
   })
 
   it('splits a matched run and validates style target types', async () => {
@@ -106,7 +199,7 @@ describe('docx recursive edit executor', () => {
     try {
       await createDocxFile({
         filePath,
-        blocks: [
+        nodes: [
           {
             type: 'paragraph',
             children: [{ type: 'run', children: [{ type: 'text', text: 'before MATCH after' }] }]
@@ -115,34 +208,35 @@ describe('docx recursive edit executor', () => {
       })
       const source = await fs.readFile(filePath)
       const bundle = await loadDocxBundle(source)
-      const index = buildBlockIndex(
+      const index = buildNodeIndex(
         bundle.documentDom,
         bundle.relationshipTargets,
         bundle.relationshipTypes
       )
-      const blockId = index.bodyBlockIds[0]!
+      const nodeId = index.bodyNodeIds[0]!
       const styled = await applyDocxOps({
         buffer: source,
         ops: [
           {
-            type: 'style',
-            target: { type: 'text_match', query: 'MATCH' },
-            patch: { kind: 'run', bold: true }
+            type: 'format_text',
+            nodeId,
+            text: 'MATCH',
+            format: { bold: true }
           },
           {
-            type: 'style',
-            target: { type: 'id', id: blockId },
-            patch: { kind: 'paragraph', alignment: 'center' }
+            type: 'format_paragraph',
+            nodeId,
+            format: { alignment: 'center' }
           }
         ]
       })
       const styledBundle = await loadDocxBundle(styled.buffer)
-      const styledIndex = buildBlockIndex(
+      const styledIndex = buildNodeIndex(
         styledBundle.documentDom,
         styledBundle.relationshipTargets,
         styledBundle.relationshipTypes
       )
-      const detail = styledIndex.detailByBlockId.get(styledIndex.bodyBlockIds[0]!)
+      const detail = styledIndex.detailByNodeId.get(styledIndex.bodyNodeIds[0]!)
       expect(detail?.type).toBe('paragraph')
       if (!detail || detail.type !== 'paragraph') return
       const runs = detail.children.filter((child) => child.type === 'run')
@@ -158,13 +252,13 @@ describe('docx recursive edit executor', () => {
           buffer: styled.buffer,
           ops: [
             {
-              type: 'style',
-              target: { type: 'id', id: styledIndex.bodyBlockIds[0]! },
-              patch: { kind: 'table', alignment: 'left' }
+              type: 'format_table',
+              nodeId: styledIndex.bodyNodeIds[0]!,
+              format: { alignment: 'left' }
             }
           ]
         })
-      ).rejects.toThrow('style patch type mismatch')
+      ).rejects.toThrow('format patch type mismatch')
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true })
     }
@@ -176,7 +270,7 @@ describe('docx recursive edit executor', () => {
     try {
       await createDocxFile({
         filePath,
-        blocks: [
+        nodes: [
           {
             type: 'paragraph',
             children: [
@@ -218,28 +312,30 @@ describe('docx recursive edit executor', () => {
         new XMLSerializer().serializeToString(bundle.documentDom)
       )
       const withVisual = await bundle.zip.generateAsync({ type: 'nodebuffer' })
-      const beforeIndex = buildBlockIndex(bundle.documentDom)
+      const beforeIndex = buildNodeIndex(bundle.documentDom)
       expect(beforeIndex.visualsById.size).toBe(1)
 
       const styled = await applyDocxOps({
         buffer: withVisual,
         ops: [
           {
-            type: 'style',
-            target: { type: 'text_match', query: 'ABCD' },
-            patch: { kind: 'run', bold: true }
+            type: 'format_text',
+            nodeId: beforeIndex.bodyNodeIds[0]!,
+            text: 'ABCD',
+            format: { bold: true }
           },
           {
-            type: 'style',
-            target: { type: 'text_match', query: 'MATCH' },
-            patch: { kind: 'run', italic: true }
+            type: 'format_text',
+            nodeId: beforeIndex.bodyNodeIds[1]!,
+            text: 'MATCH',
+            format: { italic: true }
           }
         ]
       })
       const styledBundle = await loadDocxBundle(styled.buffer)
-      const styledIndex = buildBlockIndex(styledBundle.documentDom)
+      const styledIndex = buildNodeIndex(styledBundle.documentDom)
       expect(styledIndex.visualsById.size).toBe(1)
-      const details = styledIndex.bodyBlockIds.map((id) => styledIndex.detailByBlockId.get(id))
+      const details = styledIndex.bodyNodeIds.map((id) => styledIndex.detailByNodeId.get(id))
       const firstRuns = details[0]?.type === 'paragraph' ? details[0].children : []
       const secondRuns = details[1]?.type === 'paragraph' ? details[1].children : []
       const styledText = (runs: typeof firstRuns, style: 'bold' | 'italic') =>
@@ -254,6 +350,142 @@ describe('docx recursive edit executor', () => {
       expect(styledText(firstRuns, 'bold')).toBe('ABCD')
       expect(styledText(secondRuns, 'italic')).toBe('MATCH')
       expect(details[1]?.text).toBe('beforeMATCHafter')
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('edits run content with stable node targets and inserts native inline nodes', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-content-node-unit-'))
+    const filePath = path.join(tempDir, 'content.docx')
+    try {
+      await createDocxFile({
+        filePath,
+        nodes: [
+          {
+            type: 'paragraph',
+            children: [{ type: 'run', children: [{ type: 'text', text: 'Alpha Beta' }] }]
+          }
+        ]
+      })
+      const source = await fs.readFile(filePath)
+      const sourceBundle = await loadDocxBundle(source)
+      const sourceIndex = buildNodeIndex(
+        sourceBundle.documentDom,
+        sourceBundle.relationshipTargets,
+        sourceBundle.relationshipTypes
+      )
+      const runId = [...sourceIndex.editableNodesById.values()].find(
+        (node) => node.kind === 'run'
+      )?.nodeId
+      expect(runId).toBeDefined()
+      const replaced = await applyDocxOps({
+        buffer: source,
+        ops: [{ type: 'replace_text', nodeId: runId!, oldText: 'Beta', newText: 'Gamma' }]
+      })
+      const replacedBundle = await loadDocxBundle(replaced.buffer)
+      const replacedIndex = buildNodeIndex(
+        replacedBundle.documentDom,
+        replacedBundle.relationshipTargets,
+        replacedBundle.relationshipTypes
+      )
+      const nextRunId = [...replacedIndex.editableNodesById.values()].find(
+        (node) => node.kind === 'run'
+      )?.nodeId
+      const inserted = await applyDocxOps({
+        buffer: replaced.buffer,
+        ops: [
+          {
+            type: 'insert_nodes',
+            nodeId: nextRunId!,
+            position: 'after',
+            nodes: [
+              { type: 'hyperlink', text: ' OpenAI', target: 'https://openai.com' },
+              { type: 'field', instruction: 'DATE', displayText: ' 2026-08-25' },
+              { type: 'break', kind: 'line' }
+            ]
+          }
+        ]
+      })
+      const finalBundle = await loadDocxBundle(inserted.buffer)
+      const finalIndex = buildNodeIndex(
+        finalBundle.documentDom,
+        finalBundle.relationshipTargets,
+        finalBundle.relationshipTypes
+      )
+      expect(finalIndex.outline[0]?.text).toContain('Alpha Gamma OpenAI 2026-08-25')
+      expect([...finalBundle.relationshipTypes.values()]).toContain(
+        'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink'
+      )
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('writes native image relationships and Word comments without rebuilding the paragraph', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-media-comment-unit-'))
+    const filePath = path.join(tempDir, 'media-comments.docx')
+    const imagePath = path.join(tempDir, 'sample.svg')
+    try {
+      await fs.writeFile(
+        imagePath,
+        '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#1677ff"/></svg>'
+      )
+      await createDocxFile({
+        filePath,
+        nodes: [
+          {
+            type: 'paragraph',
+            children: [{ type: 'run', children: [{ type: 'text', text: '需要批注的文字' }] }]
+          }
+        ]
+      })
+      const source = await fs.readFile(filePath)
+      const sourceBundle = await loadDocxBundle(source)
+      const sourceIndex = buildNodeIndex(sourceBundle.documentDom)
+      const paragraphId = sourceIndex.bodyNodeIds[0]!
+      const withImage = await applyDocxOps({
+        buffer: source,
+        ops: [
+          {
+            type: 'insert_image',
+            nodeId: paragraphId,
+            position: 'after',
+            imagePath,
+            widthCm: 2,
+            heightCm: 1,
+            altText: '蓝色测试图片'
+          }
+        ]
+      })
+      const imageBundle = await loadDocxBundle(withImage.buffer)
+      const imageIndex = buildNodeIndex(
+        imageBundle.documentDom,
+        imageBundle.relationshipTargets,
+        imageBundle.relationshipTypes,
+        imageBundle.relationshipTargetModes,
+        imageBundle.availableRelationshipTargetIds
+      )
+      expect(imageIndex.visualsById.size).toBe(1)
+      expect(Object.keys(imageBundle.zip.files).some((name) => name.endsWith('.svg'))).toBe(true)
+      const withComment = await applyDocxOps({
+        buffer: withImage.buffer,
+        ops: [
+          {
+            type: 'add_comment',
+            nodeId: imageIndex.bodyNodeIds[0]!,
+            text: '批注',
+            comment: '原生 Word 批注',
+            author: 'NCurator'
+          }
+        ]
+      })
+      const commentsBundle = await loadDocxBundle(withComment.buffer)
+      const commentsXml = await commentsBundle.zip.file('word/comments.xml')?.async('text')
+      expect(commentsXml).toContain('原生 Word 批注')
+      expect(new XMLSerializer().serializeToString(commentsBundle.documentDom)).toContain(
+        'commentRangeStart'
+      )
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true })
     }

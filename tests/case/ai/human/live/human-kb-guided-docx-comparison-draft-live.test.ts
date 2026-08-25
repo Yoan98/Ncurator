@@ -11,13 +11,13 @@ import {
   SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../../harness/backend/aiLiveTestData'
 import {
-  collectDocxApplyOpsContentKinds,
-  collectStartedDocxEditSourcePaths,
+  collectDocxWriteContentKinds,
+  collectStartedDocxWriteSourcePaths,
   countDocxApplyArtifacts,
   countDocxFileArtifacts,
   filterAiRunEventsByType,
   hasKbToolCall,
-  isDocxEditWriteInput,
+  isDocxWriteInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
 
@@ -33,7 +33,6 @@ const hasSuccessfulKbSearchHit = (events: readonly AiRunEvent[]): boolean =>
     const items = data.items
     return (typeof total === 'number' && total > 0) || (Array.isArray(items) && items.length > 0)
   })
-
 
 describe('ai human live backend', () => {
   it('human-kb-guided-docx-comparison-draft-live', async () => {
@@ -124,8 +123,8 @@ describe('ai human live backend', () => {
             .filter((event) => event.toolName.startsWith('docx_'))
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
-          const writeSourcePaths = collectStartedDocxEditSourcePaths(events, isDocxEditWriteInput)
-          const changedContentKinds = collectDocxApplyOpsContentKinds(events)
+          const writeSourcePaths = collectStartedDocxWriteSourcePaths(events, isDocxWriteInput)
+          const changedContentKinds = collectDocxWriteContentKinds(events)
           const sourceDocRelativePaths = new Set(
             result.workspaceSeed.sourceDocs.map((fixture) => fixture.relativePath)
           )
@@ -161,20 +160,20 @@ describe('ai human live backend', () => {
               sourceDocsUnchanged.every(Boolean) &&
               deliverySatisfied,
             {
-            name: 'human-live-kb-guided-docx-updates-two-target-docs-from-kb-grounded-evidence',
-            message:
-              'live KB-guided DOCX case 应基于 KB 检索证据完成两份目标文档的写入交付，并保持来源文件不变。',
-            data: {
-              openedSourcePaths,
-              writeSourcePaths,
-              toolNames,
-              sourceDocRelativePaths: [...sourceDocRelativePaths],
-              sourceDocsUnchanged,
-              requiredIndexedRelativePaths,
-              indexedSupportedFiles,
-              changedContentKinds,
-              artifacts: result.output?.artifacts
-            }
+              name: 'human-live-kb-guided-docx-updates-two-target-docs-from-kb-grounded-evidence',
+              message:
+                'live KB-guided DOCX case 应基于 KB 检索证据完成两份目标文档的写入交付，并保持来源文件不变。',
+              data: {
+                openedSourcePaths,
+                writeSourcePaths,
+                toolNames,
+                sourceDocRelativePaths: [...sourceDocRelativePaths],
+                sourceDocsUnchanged,
+                requiredIndexedRelativePaths,
+                indexedSupportedFiles,
+                changedContentKinds,
+                artifacts: result.output?.artifacts
+              }
             }
           )
         }

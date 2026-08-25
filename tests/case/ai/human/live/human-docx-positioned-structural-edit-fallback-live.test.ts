@@ -17,7 +17,7 @@ import {
   countDocxFileArtifacts,
   collectToolErrorMessages,
   filterAiRunEventsByType,
-  isDocxEditWriteInput,
+  isDocxWriteInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
 
@@ -118,8 +118,10 @@ describe('ai human live backend', () => {
             .filter((value): value is string => typeof value === 'string')
           const structuralStarted = filterAiRunEventsByType(events, 'tool_call_started').filter(
             (event) =>
-              event.toolName === 'docx_edit' &&
-              isDocxEditWriteInput(event.input) &&
+              ['docx_content_edit', 'docx_format', 'docx_table_edit', 'docx_media_edit'].includes(
+                event.toolName
+              ) &&
+              isDocxWriteInput(event.input) &&
               typeof event.input.sourcePath === 'string'
           )
           const positionedWriteToolCallIds = new Set(

@@ -4,33 +4,95 @@ import { createHash, randomUUID } from 'node:crypto'
 import { parentPort } from 'node:worker_threads'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import { extractLegacyDocBody, splitLegacyDocParagraphs } from '../utils/legacyDocReader'
-import type { DocxDetailedBlock, DocxOp, DocxOutlineBlock, DocxSearchMatch } from '../types'
+import type { DocxDetailedNode, DocxOperation, DocxOutlineNode, DocxSearchMatch } from '../types'
 import { applyDocxOps } from '../adapters/ooxml/opExecutor'
 import {
-  buildBlockIndex,
+  buildNodeIndex,
+  buildDocumentNodeIndex,
   buildOutlineOutput,
-  extractBlockText,
-  getBlockStructureFacts,
-  getDetailedBlock,
+  extractNodeText,
+  getNodeStructureFacts,
+  getDetailedNode,
   loadDocxBundle,
   toOpenStats
-} from '../adapters/ooxml/blockIndex'
+} from '../adapters/ooxml/nodeIndex'
 import { findNewDocxValidationProblems, validateDocxBuffer } from '../adapters/ooxml/validator'
+import { resolveDocxRelationshipTarget } from '../adapters/ooxml/relationshipPath'
 import { normalizeDocxSearchText } from '../utils/searchText'
 import type { DocSnapshot, DocxWorkerRequest, DocxWorkerResponse, RunSessions } from './types'
 import {
   createInitialIdentityIndex,
   createNextIdentityIndex,
-  resolveInternalBlockId,
+  resolveInternalNodeId,
   resolveInternalVisualId,
   toInternalOp,
-  toPublicChangedBlocks,
-  toPublicDetailedBlock,
-  toPublicOutlineBlock,
+  toPublicChangedNodes,
+  toPublicDetailedNode,
+  toPublicOutlineNode,
   toPublicSearchMatch
 } from './identity'
 
 const sessions: RunSessions = new Map()
+
+const localAttribute = (node: Element, name: string): string => {
+  for (let index = 0; index < node.attributes.length; index += 1) {
+    const attribute = node.attributes.item(index)
+    if (attribute?.localName === name) return attribute.value
+  }
+  return ''
+}
+
+const replayModelPart = (name: string): boolean =>
+  /^word\/(styles|numbering|settings|comments|commentsExtended|footnotes|endnotes|header\d+|footer\d+)\.xml$/.test(
+    name
+  ) ||
+  /^word\/(media|embeddings|charts)\//.test(name) ||
+  /^customXml\//.test(name) ||
+  name.endsWith('.rels')
+
+const normalizedReplayPart = (name: string, content: Buffer): Buffer | undefined => {
+  if (!name.endsWith('.xml') && !name.endsWith('.rels')) return content
+  const xml = content.toString('utf8')
+  const doc = new DOMParser().parseFromString(xml, 'application/xml')
+  if (name === 'word/comments.xml' && doc.getElementsByTagNameNS('*', 'comment').length === 0) {
+    return undefined
+  }
+  if (
+    name === 'word/commentsExtended.xml' &&
+    doc.getElementsByTagNameNS('*', 'commentEx').length === 0
+  ) {
+    return undefined
+  }
+  if (name === 'word/settings.xml' && doc.documentElement.childNodes.length === 0) return undefined
+  if (name.endsWith('.rels')) {
+    const relationships = Array.from(doc.getElementsByTagNameNS('*', 'Relationship'))
+    relationships.forEach((relationship) => {
+      const type = relationship.getAttribute('Type') || ''
+      if (type.endsWith('/comments') || type.endsWith('/commentsExtended')) {
+        relationship.parentNode?.removeChild(relationship)
+      }
+    })
+    if (doc.documentElement.childNodes.length === 0) return undefined
+  }
+  return Buffer.from(new XMLSerializer().serializeToString(doc), 'utf8')
+}
+
+const replayPackageFingerprint = async (snapshot: DocSnapshot): Promise<string> => {
+  if (snapshot.format !== 'docx') return createHash('sha256').update(snapshot.buffer).digest('hex')
+  const hash = createHash('sha256')
+  const names = Object.keys(snapshot.bundle.zip.files).filter(replayModelPart).sort()
+  for (const name of names) {
+    const entry = snapshot.bundle.zip.file(name)
+    if (!entry) continue
+    const normalized = normalizedReplayPart(name, await entry.async('nodebuffer'))
+    if (!normalized) continue
+    hash.update(name)
+    hash.update('\0')
+    hash.update(normalized)
+    hash.update('\0')
+  }
+  return hash.digest('hex')
+}
 
 const messageText = (error: Error | string): string =>
   error instanceof Error ? error.message : String(error)
@@ -51,16 +113,10 @@ const createDocSnapshot = async (input: {
   parentDocId?: string
   buffer: Buffer
   previousSnapshot?: DocSnapshot
-  publicOps?: DocxOp[]
+  publicOps?: DocxOperation[]
 }): Promise<DocSnapshot> => {
   const bundle = await loadDocxBundle(input.buffer)
-  const index = buildBlockIndex(
-    bundle.documentDom,
-    bundle.relationshipTargets,
-    bundle.relationshipTypes,
-    bundle.relationshipTargetModes,
-    bundle.availableRelationshipTargetIds
-  )
+  const index = buildDocumentNodeIndex(bundle)
   const baselineValidationProblems =
     input.previousSnapshot?.format === 'docx'
       ? input.previousSnapshot.baselineValidationProblems
@@ -86,7 +142,7 @@ const createDocSnapshot = async (input: {
     meta: bundle.meta,
     index,
     identity,
-    detailByBlockId: new Map<string, DocxDetailedBlock>()
+    detailByNodeId: new Map<string, DocxDetailedNode>()
   }
 }
 
@@ -127,7 +183,7 @@ const createLegacyDocSnapshot = async (input: {
   buffer: Buffer
 }): Promise<DocSnapshot> => {
   const body = await extractLegacyDocBody(input.buffer)
-  const index = buildBlockIndex(buildLegacyDocumentDom(body))
+  const index = buildNodeIndex(buildLegacyDocumentDom(body))
   return {
     format: 'doc',
     docId: input.docId,
@@ -138,7 +194,7 @@ const createLegacyDocSnapshot = async (input: {
     meta: DEFAULT_LEGACY_DOC_META,
     index,
     identity: createInitialIdentityIndex(index),
-    detailByBlockId: new Map<string, DocxDetailedBlock>()
+    detailByNodeId: new Map<string, DocxDetailedNode>()
   }
 }
 
@@ -150,48 +206,44 @@ const getSnapshot = (runId: string, docId: string): DocSnapshot => {
   return snapshot
 }
 
-const getDetailedBlockCached = (
-  snapshot: DocSnapshot,
-  blockId: string
-): DocxDetailedBlock | null => {
-  const cached = snapshot.detailByBlockId.get(blockId)
+const getDetailedNodeCached = (snapshot: DocSnapshot, nodeId: string): DocxDetailedNode | null => {
+  const cached = snapshot.detailByNodeId.get(nodeId)
   if (cached) return cached
-  const internalId = resolveInternalBlockId(snapshot.identity, blockId)
-  const detail = getDetailedBlock(snapshot.index, internalId)
+  const internalId = resolveInternalNodeId(snapshot.identity, nodeId)
+  const detail = getDetailedNode(snapshot.index, internalId)
   if (!detail) return null
-  const publicDetail = toPublicDetailedBlock(snapshot.identity, detail)
-  snapshot.detailByBlockId.set(blockId, publicDetail)
+  const publicDetail = toPublicDetailedNode(snapshot.identity, detail)
+  snapshot.detailByNodeId.set(nodeId, publicDetail)
   return publicDetail
 }
 
-const getDetailedBlocksByIds = (
+const getDetailedNodesByIds = (
   snapshot: DocSnapshot,
-  blockIds: readonly string[]
-): DocxDetailedBlock[] => {
-  const blocks: DocxDetailedBlock[] = []
-  for (const blockId of blockIds) {
-    const detail = getDetailedBlockCached(snapshot, blockId)
+  nodeIds: readonly string[]
+): DocxDetailedNode[] => {
+  const nodes: DocxDetailedNode[] = []
+  for (const nodeId of nodeIds) {
+    const detail = getDetailedNodeCached(snapshot, nodeId)
     if (detail) {
-      blocks.push(detail)
+      nodes.push(detail)
     }
   }
-  return blocks
+  return nodes
 }
 
-const getDetailedBlocksByBlockIndexRange = (
+const getDetailedNodesByNodeIndexRange = (
   snapshot: DocSnapshot,
-  fromBlockIndex: number,
-  toBlockIndex: number
-): DocxDetailedBlock[] => {
-  const start = Math.max(0, Math.min(fromBlockIndex, toBlockIndex))
-  const end = Math.max(0, Math.max(fromBlockIndex, toBlockIndex))
-  const blockIds = snapshot.index.outline
+  fromNodeIndex: number,
+  toNodeIndex: number
+): DocxDetailedNode[] => {
+  const start = Math.max(0, Math.min(fromNodeIndex, toNodeIndex))
+  const end = Math.max(0, Math.max(fromNodeIndex, toNodeIndex))
+  const nodeIds = snapshot.index.outline
     .filter(
-      (block) =>
-        block.type !== 'table_cell' && block.blockIndex >= start && block.blockIndex <= end
+      (node) => node.type !== 'table_cell' && node.nodeIndex >= start && node.nodeIndex <= end
     )
-    .map((block) => toPublicOutlineBlock(snapshot.identity, block).blockId)
-  return getDetailedBlocksByIds(snapshot, blockIds)
+    .map((node) => toPublicOutlineNode(snapshot.identity, node).nodeId)
+  return getDetailedNodesByIds(snapshot, nodeIds)
 }
 
 const replaceAllOffsets = (text: string, query: string): Array<{ start: number; end: number }> => {
@@ -225,20 +277,20 @@ const regexOffsets = (text: string, pattern: string): Array<{ start: number; end
   return offsets
 }
 
-const searchBlocks = (input: {
-  blocks: DocxOutlineBlock[]
+const searchNodes = (input: {
+  nodes: DocxOutlineNode[]
   snapshot: DocSnapshot
   query: string
   mode: 'literal' | 'regex'
-  scopeBlockIds: string[]
+  scopeNodeIds: string[]
 }): DocxSearchMatch[] => {
-  const scope = input.scopeBlockIds.length > 0 ? new Set(input.scopeBlockIds) : null
+  const scope = input.scopeNodeIds.length > 0 ? new Set(input.scopeNodeIds) : null
   const out: DocxSearchMatch[] = []
 
-  for (const block of input.blocks) {
-    if (scope && !scope.has(block.blockId)) continue
-    const internalBlockId = resolveInternalBlockId(input.snapshot.identity, block.blockId)
-    const text = extractBlockText(input.snapshot.index, internalBlockId)
+  for (const node of input.nodes) {
+    if (scope && !scope.has(node.nodeId)) continue
+    const internalNodeId = resolveInternalNodeId(input.snapshot.identity, node.nodeId)
+    const text = extractNodeText(input.snapshot.index, internalNodeId)
     const normalizedText = normalizeDocxSearchText(text)
     if (!normalizedText) continue
     const normalizedQuery =
@@ -250,19 +302,20 @@ const searchBlocks = (input: {
         ? replaceAllOffsets(normalizedText, normalizedQuery)
         : regexOffsets(normalizedText, normalizedQuery)
     if (offsets.length === 0) continue
-    const structureFacts = getBlockStructureFacts(input.snapshot.index, internalBlockId)
+    const structureFacts = getNodeStructureFacts(input.snapshot.index, internalNodeId)
     if (!structureFacts) continue
     out.push(
       toPublicSearchMatch(input.snapshot.identity, {
-        blockId: internalBlockId,
-        type: structureFacts.blockType,
-        blockIndex: structureFacts.blockIndex,
+        nodeId: internalNodeId,
+        type: structureFacts.nodeType,
+        nodeIndex: structureFacts.nodeIndex,
         matchedText: input.query,
-        previousBlockId: structureFacts.previousBlockId,
-        nextBlockId: structureFacts.nextBlockId,
-        tableBlockId: structureFacts.tableBlockId,
+        previousNodeId: structureFacts.previousNodeId,
+        nextNodeId: structureFacts.nextNodeId,
+        tableNodeId: structureFacts.tableNodeId,
         text,
-        offsets
+        offsets,
+        story: structureFacts.story
       })
     )
   }
@@ -334,55 +387,146 @@ export const handleDocxWorkerRequest = async (
         ok: true,
         payload: {
           action: 'outline',
-          blocks: outline.blocks.map((block) => toPublicOutlineBlock(snapshot.identity, block))
+          nodes: outline.nodes.map((node) => toPublicOutlineNode(snapshot.identity, node))
         }
       }
     }
 
-    if (request.action === 'get_block') {
+    if (request.action === 'get_annotations') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
-      const block = getDetailedBlockCached(snapshot, request.payload.blockId)
-      if (!block) {
+      if (snapshot.format !== 'docx') {
         return {
           requestId: request.requestId,
           ok: false,
           code: 'invalid_input',
-          error: `block not found: ${request.payload.blockId}`
+          error: 'annotations are only available for .docx files'
+        }
+      }
+      const commentsXml = await snapshot.bundle.zip.file('word/comments.xml')?.async('text')
+      const extendedXml = await snapshot.bundle.zip.file('word/commentsExtended.xml')?.async('text')
+      const settingsXml = await snapshot.bundle.zip.file('word/settings.xml')?.async('text')
+      const commentsDom = commentsXml
+        ? new DOMParser().parseFromString(commentsXml, 'application/xml')
+        : undefined
+      const extendedDom = extendedXml
+        ? new DOMParser().parseFromString(extendedXml, 'application/xml')
+        : undefined
+      const comments = commentsDom
+        ? Array.from(commentsDom.getElementsByTagNameNS('*', 'comment')).map((comment) => {
+            const paragraph = comment.getElementsByTagNameNS('*', 'p').item(0)
+            return {
+              commentId: localAttribute(comment, 'id'),
+              text: Array.from(comment.getElementsByTagNameNS('*', 't'))
+                .map((text) => text.textContent || '')
+                .join(''),
+              author: localAttribute(comment, 'author'),
+              paragraphId: paragraph ? localAttribute(paragraph, 'paraId') : ''
+            }
+          })
+        : []
+      const commentIdByParagraphId = new Map(
+        comments
+          .filter((comment) => comment.paragraphId)
+          .map((comment) => [comment.paragraphId, comment.commentId] as const)
+      )
+      const parentByParagraphId = new Map<string, string>()
+      if (extendedDom) {
+        Array.from(extendedDom.getElementsByTagNameNS('*', 'commentEx')).forEach((comment) => {
+          const paragraphId = localAttribute(comment, 'paraId')
+          const parentParagraphId = localAttribute(comment, 'paraIdParent')
+          const parentCommentId = commentIdByParagraphId.get(parentParagraphId)
+          if (paragraphId && parentCommentId) parentByParagraphId.set(paragraphId, parentCommentId)
+        })
+      }
+      const revisionKindByName = {
+        ins: 'insert',
+        del: 'delete',
+        moveFrom: 'move_from',
+        moveTo: 'move_to'
+      } as const
+      const revisions = (Object.keys(revisionKindByName) as Array<keyof typeof revisionKindByName>)
+        .flatMap((name) =>
+          Array.from(snapshot.bundle.documentDom.getElementsByTagNameNS('*', name)).map((node) => ({
+            revisionId: localAttribute(node, 'id'),
+            kind: revisionKindByName[name]
+          }))
+        )
+        .filter(
+          (revision, index, all) =>
+            revision.revisionId.length > 0 &&
+            all.findIndex(
+              (candidate) =>
+                candidate.revisionId === revision.revisionId && candidate.kind === revision.kind
+            ) === index
+        )
+      return {
+        requestId: request.requestId,
+        ok: true,
+        payload: {
+          action: 'get_annotations',
+          trackChanges: Boolean(
+            settingsXml &&
+            new DOMParser()
+              .parseFromString(settingsXml, 'application/xml')
+              .getElementsByTagNameNS('*', 'trackRevisions').length > 0
+          ),
+          comments: comments.map((comment) => ({
+            commentId: comment.commentId,
+            text: comment.text,
+            author: comment.author,
+            ...(parentByParagraphId.get(comment.paragraphId)
+              ? { parentCommentId: parentByParagraphId.get(comment.paragraphId) }
+              : {})
+          })),
+          revisions
+        }
+      }
+    }
+
+    if (request.action === 'get_node') {
+      const snapshot = getSnapshot(request.runId, request.payload.docId)
+      const node = getDetailedNodeCached(snapshot, request.payload.nodeId)
+      if (!node) {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'invalid_input',
+          error: `node not found: ${request.payload.nodeId}`
         }
       }
       return {
         requestId: request.requestId,
         ok: true,
         payload: {
-          action: 'get_block',
-          block
+          action: 'get_node',
+          node
         }
       }
     }
 
-    if (request.action === 'get_blocks_by_ids') {
+    if (request.action === 'get_nodes_by_ids') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       return {
         requestId: request.requestId,
         ok: true,
         payload: {
-          action: 'get_blocks_by_ids',
-          blocks: getDetailedBlocksByIds(snapshot, request.payload.blockIds)
+          action: 'get_nodes_by_ids',
+          nodes: getDetailedNodesByIds(snapshot, request.payload.nodeIds)
         }
       }
     }
 
-    if (request.action === 'get_blocks_by_block_index_range') {
+    if (request.action === 'get_nodes_by_index_range') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       return {
         requestId: request.requestId,
         ok: true,
         payload: {
-          action: 'get_blocks_by_block_index_range',
-          blocks: getDetailedBlocksByBlockIndexRange(
+          action: 'get_nodes_by_index_range',
+          nodes: getDetailedNodesByNodeIndexRange(
             snapshot,
-            request.payload.fromBlockIndex,
-            request.payload.toBlockIndex
+            request.payload.fromNodeIndex,
+            request.payload.toNodeIndex
           )
         }
       }
@@ -396,11 +540,12 @@ export const handleDocxWorkerRequest = async (
         ok: true,
         payload: {
           action: 'get_replay_snapshot_xml',
-          blocks: [...snapshot.index.nodesById.entries()].map(([internalBlockId, node]) => {
-            const blockId = snapshot.identity.publicIdByInternalId.get(internalBlockId)
-            if (!blockId)
-              throw new Error(`docx identity missing for internal block: ${internalBlockId}`)
-            return { blockId, rawXml: serializer.serializeToString(node.node) }
+          packageFingerprint: await replayPackageFingerprint(snapshot),
+          nodes: [...snapshot.index.nodesById.entries()].map(([internalNodeId, node]) => {
+            const nodeId = snapshot.identity.publicIdByInternalId.get(internalNodeId)
+            if (!nodeId)
+              throw new Error(`docx identity missing for internal node: ${internalNodeId}`)
+            return { nodeId, rawXml: serializer.serializeToString(node.node) }
           })
         }
       }
@@ -429,14 +574,12 @@ export const handleDocxWorkerRequest = async (
           }
         }
       }
-      const matches = searchBlocks({
-        blocks: snapshot.index.outline.map((block) =>
-          toPublicOutlineBlock(snapshot.identity, block)
-        ),
+      const matches = searchNodes({
+        nodes: snapshot.index.outline.map((node) => toPublicOutlineNode(snapshot.identity, node)),
         snapshot,
         query: request.payload.query,
         mode,
-        scopeBlockIds: request.payload.scopeBlockIds
+        scopeNodeIds: request.payload.scopeNodeIds
       })
       return {
         requestId: request.requestId,
@@ -462,11 +605,11 @@ export const handleDocxWorkerRequest = async (
       const visual = snapshot.index.visualsById.get(internalVisualId)
       if (!visual) throw new Error(`visual not found: ${request.payload.visualId}`)
       if ((visual.kind !== 'image' && visual.kind !== 'embedded_object') || !visual.target) {
-        const owner = snapshot.index.nodesById.get(visual.blockId)
-        if (!owner) throw new Error(`visual owner block not found: ${request.payload.visualId}`)
-        const visualsInBlock = [...snapshot.index.visualsById.entries()].filter(([, candidate]) => {
-          const candidateOwner = snapshot.index.nodesById.get(candidate.blockId)
-          return candidateOwner?.blockIndex === owner.blockIndex
+        const owner = snapshot.index.nodesById.get(visual.ownerNodeId)
+        if (!owner) throw new Error(`visual owner node not found: ${request.payload.visualId}`)
+        const visualsInNode = [...snapshot.index.visualsById.entries()].filter(([, candidate]) => {
+          const candidateOwner = snapshot.index.nodesById.get(candidate.ownerNodeId)
+          return candidateOwner?.nodeIndex === owner.nodeIndex
         })
         return {
           requestId: request.requestId,
@@ -476,14 +619,15 @@ export const handleDocxWorkerRequest = async (
             visualId: request.payload.visualId,
             kind: visual.kind,
             render: {
-              blockIndex: owner.blockIndex,
-              visualIndexInBlock: visualsInBlock.findIndex(([id]) => id === internalVisualId),
-              visualCountInBlock: visualsInBlock.length
+              nodeIndex: owner.nodeIndex,
+              visualIndexInNode: visualsInNode.findIndex(([id]) => id === internalVisualId),
+              visualCountInNode: visualsInNode.length
             }
           }
         }
       }
-      const target = path.posix.normalize(path.posix.join('word', visual.target))
+      const target = resolveDocxRelationshipTarget(visual.target, visual.partName)
+      if (!target) throw new Error(`invalid visual relationship target: ${visual.target}`)
       const file = snapshot.bundle.zip.file(target)
       if (!file) {
         return {
@@ -534,20 +678,20 @@ export const handleDocxWorkerRequest = async (
       }
     }
 
-    if (request.action === 'apply_ops') {
+    if (request.action === 'apply_operation') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       if (snapshot.format !== 'docx') {
         return {
           requestId: request.requestId,
           ok: false,
           code: 'invalid_input',
-          error: 'docx_edit does not support writing legacy .doc files'
+          error: 'DOCX writing tools do not support legacy .doc files'
         }
       }
-      const internalOps = request.payload.ops.map((op) => toInternalOp(snapshot.identity, op))
+      const internalOperation = toInternalOp(snapshot.identity, request.payload.operation)
       const applied = await applyDocxOps({
         buffer: snapshot.buffer,
-        ops: internalOps
+        ops: [internalOperation]
       })
       const validationProblems = findNewDocxValidationProblems(
         snapshot.baselineValidationProblems,
@@ -558,7 +702,7 @@ export const handleDocxWorkerRequest = async (
           requestId: request.requestId,
           ok: false,
           code: 'failed',
-          error: `apply_ops introduced invalid docx structure: ${validationProblems.map((problem) => problem.message).join('; ')}`
+          error: `apply_operation introduced invalid docx structure: ${validationProblems.map((problem) => problem.message).join('; ')}`
         }
       }
       const runSession = getRunSession(request.runId, true)
@@ -571,18 +715,18 @@ export const handleDocxWorkerRequest = async (
         parentDocId: snapshot.docId,
         buffer: applied.buffer,
         previousSnapshot: snapshot,
-        publicOps: request.payload.ops
+        publicOps: [request.payload.operation]
       })
       runSession.set(newDocId, nextSnapshot)
       return {
         requestId: request.requestId,
         ok: true,
         payload: {
-          action: 'apply_ops',
+          action: 'apply_operation',
           newDocId,
           stats: toOpenStats(nextSnapshot.index),
-          changedBlocks: toPublicChangedBlocks({
-            changedBlocks: applied.changedBlocks,
+          changedNodes: toPublicChangedNodes({
+            changedNodes: applied.changedNodes,
             previousIdentity: snapshot.identity,
             nextIdentity: nextSnapshot.identity
           })
@@ -597,7 +741,7 @@ export const handleDocxWorkerRequest = async (
           requestId: request.requestId,
           ok: false,
           code: 'invalid_input',
-          error: 'docx_edit does not support writing legacy .doc files'
+          error: 'DOCX writing tools do not support legacy .doc files'
         }
       }
       await fs.mkdir(path.dirname(request.payload.outPath), { recursive: true })

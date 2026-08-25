@@ -1,13 +1,8 @@
 import { createHash } from 'node:crypto'
-import { paragraphNodeToSpec } from './blockIndex'
+import { paragraphNodeToSpec } from './nodeIndex'
 import { childElements } from './dom'
 import type { IndexedNode } from './types'
-import type {
-  DocxBlockSpec,
-  DocxParagraphSpec,
-  DocxTableSpec,
-  DocxTextRunSpec
-} from '../../types'
+import type { DocxNodeSpec, DocxParagraphSpec, DocxTableSpec, DocxTextRunSpec } from '../../types'
 
 const normalizeColor = (value: string | undefined): string | undefined => {
   const trimmed = String(value || '').trim()
@@ -26,11 +21,10 @@ const normalizeRun = (run: DocxTextRunSpec): DocxTextRunSpec => ({
 export const normalizeParagraphSpec = (spec: DocxParagraphSpec): DocxParagraphSpec => ({
   kind: 'paragraph',
   style: String(spec.style || 'Normal'),
-  runs:
-    spec.runs
-      .map((run) => normalizeRun(run))
-      .filter((run) => run.text.length > 0 || run.bold || run.italic || run.underline || run.color)
-      .map((run) => ({ ...run })) || [{ text: '' }]
+  runs: spec.runs
+    .map((run) => normalizeRun(run))
+    .filter((run) => run.text.length > 0 || run.bold || run.italic || run.underline || run.color)
+    .map((run) => ({ ...run })) || [{ text: '' }]
 })
 
 const normalizeTableSpec = (spec: DocxTableSpec): DocxTableSpec => ({
@@ -45,7 +39,7 @@ const normalizeTableSpec = (spec: DocxTableSpec): DocxTableSpec => ({
   )
 })
 
-export const normalizeBlockSpec = (spec: DocxBlockSpec): DocxBlockSpec => {
+export const normalizeNodeSpec = (spec: DocxNodeSpec): DocxNodeSpec => {
   if (spec.kind === 'paragraph') return normalizeParagraphSpec(spec)
   return normalizeTableSpec(spec)
 }
@@ -69,7 +63,7 @@ export const tableNodeToSpec = (node: Element): DocxTableSpec => {
   }
 }
 
-export const nodeToBlockSpec = (node: IndexedNode): DocxBlockSpec => {
+export const nodeToNodeSpec = (node: IndexedNode): DocxNodeSpec => {
   if (node.kind === 'paragraph') return paragraphNodeToSpec(node.node)
   if (node.kind === 'table') return tableNodeToSpec(node.node)
 
@@ -80,7 +74,11 @@ export const nodeToBlockSpec = (node: IndexedNode): DocxBlockSpec => {
     runs: [
       {
         text: paragraphs
-          .map((paragraph) => paragraphNodeToSpec(paragraph).runs.map((run) => run.text).join(''))
+          .map((paragraph) =>
+            paragraphNodeToSpec(paragraph)
+              .runs.map((run) => run.text)
+              .join('')
+          )
           .join('\n')
       }
     ]
@@ -90,14 +88,12 @@ export const nodeToBlockSpec = (node: IndexedNode): DocxBlockSpec => {
 export const paragraphSpecText = (spec: DocxParagraphSpec): string =>
   spec.runs.map((run) => run.text).join('')
 
-export const blockSpecText = (spec: DocxBlockSpec): string => {
+export const nodeSpecText = (spec: DocxNodeSpec): string => {
   if (spec.kind === 'paragraph') return paragraphSpecText(spec)
   return spec.rows
     .map((row) =>
       row
-        .map((cell) =>
-          cell.paragraphs.map((paragraph) => paragraphSpecText(paragraph)).join('\n')
-        )
+        .map((cell) => cell.paragraphs.map((paragraph) => paragraphSpecText(paragraph)).join('\n'))
         .join(' | ')
     )
     .join('\n')
@@ -130,7 +126,7 @@ export const buildParagraphFormattingSignature = (spec: DocxParagraphSpec): stri
   return `${normalized.style || 'Normal'}::${segments.join(',')}`
 }
 
-export const buildBlockStructureSignature = (spec: DocxBlockSpec): string => {
+export const buildNodeStructureSignature = (spec: DocxNodeSpec): string => {
   if (spec.kind === 'paragraph') {
     return `paragraph:${buildParagraphFormattingSignature(spec)}`
   }
@@ -143,5 +139,7 @@ export const buildBlockStructureSignature = (spec: DocxBlockSpec): string => {
   return `table:${normalized.rows.length}:${rowShape}:${cellShape}`
 }
 
-export const buildBlockExactSignature = (spec: DocxBlockSpec): string =>
-  createHash('sha1').update(JSON.stringify(normalizeBlockSpec(spec))).digest('hex')
+export const buildNodeExactSignature = (spec: DocxNodeSpec): string =>
+  createHash('sha1')
+    .update(JSON.stringify(normalizeNodeSpec(spec)))
+    .digest('hex')

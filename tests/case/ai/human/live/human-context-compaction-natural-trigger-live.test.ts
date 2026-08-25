@@ -11,7 +11,7 @@ import {
   filterAiRunEventsByType,
   hasDocxApplyArtifact,
   hasDocxFileArtifact,
-  isDocxEditCreateInput,
+  isDocxContentCreateInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
 
@@ -102,9 +102,9 @@ describe('ai human live backend', () => {
           const createSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
             .filter(
               (event) =>
-                event.toolName === 'docx_edit' &&
+                event.toolName === 'docx_content_edit' &&
                 successfulToolCallIds.has(event.toolCallId) &&
-                isDocxEditCreateInput(event.input)
+                isDocxContentCreateInput(event.input)
             )
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
@@ -151,8 +151,7 @@ describe('ai human live backend', () => {
             ) &&
             compactionRecords.every(
               (record) =>
-                record.user.includes('<user_goal>') &&
-                record.user.includes('<history_text>')
+                record.user.includes('<user_goal>') && record.user.includes('<history_text>')
             )
           const summaryQualitySatisfied =
             compactionSummaries.every(
@@ -170,7 +169,8 @@ describe('ai human live backend', () => {
             !hasInventedEntityText(latestBrainRecord?.user, inventedLastWeekDocName)
           const taskCompletionSatisfied =
             result.output?.status === 'completed' &&
-            (toolNames.includes('docx_edit') || toolNames.includes('text_file_edit'))
+            (toolNames.some((toolName) => toolName.startsWith('docx_')) ||
+              toolNames.includes('text_file_edit'))
           const artifactSatisfied =
             (hasDocxFileArtifact(result.output?.artifacts) &&
               hasDocxApplyArtifact(result.output?.artifacts) &&
@@ -184,22 +184,22 @@ describe('ai human live backend', () => {
               taskCompletionSatisfied &&
               artifactSatisfied,
             {
-            name: 'human-live-context-compaction-natural-trigger-completes-task',
-            message:
-              '真实风险周报长任务应自然触发上下文压缩，压缩后保持连续性并完成周报文件交付；压缩次数不作为失败条件。',
-            data: {
-              startedEvents,
-              completedEvents,
-              budgetEvents,
-              compactionSummaries,
-              compactionPrompts: compactionRecords.map((record) => record.user),
-              latestBrainPrompt: latestBrainRecord?.user,
-              ratios,
-              toolNames,
-              createSourcePaths,
-              textCreateSourcePaths,
-              artifacts: result.output?.artifacts
-            }
+              name: 'human-live-context-compaction-natural-trigger-completes-task',
+              message:
+                '真实风险周报长任务应自然触发上下文压缩，压缩后保持连续性并完成周报文件交付；压缩次数不作为失败条件。',
+              data: {
+                startedEvents,
+                completedEvents,
+                budgetEvents,
+                compactionSummaries,
+                compactionPrompts: compactionRecords.map((record) => record.user),
+                latestBrainPrompt: latestBrainRecord?.user,
+                ratios,
+                toolNames,
+                createSourcePaths,
+                textCreateSourcePaths,
+                artifacts: result.output?.artifacts
+              }
             }
           )
         }

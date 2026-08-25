@@ -11,9 +11,9 @@ import type {
 } from './llmExecutor'
 import type { WebCrawlerService } from '../webCrawler/types'
 import type {
-  DocxChangedBlock,
-  DocxCreatedBlock,
-  DocxOp,
+  DocxChangedNode,
+  DocxCreatedNode,
+  DocxOperation,
   DocxReplaySession
 } from './human/tools/docx/types'
 import type { DocxApplyService } from './human/tools/docx/review/DocxApplyService'
@@ -319,17 +319,9 @@ export type AiRunContext = {
   trackDocxChanges: (input: {
     previousDocId: string
     nextDocId: string
-    op: DocxOp
-    changedBlocks: DocxChangedBlock[]
-    createdBlocks: DocxCreatedBlock[]
-    replaySession?: DocxReplaySession
-  }) => void
-  trackDocxBatchChanges: (input: {
-    previousDocId: string
-    nextDocId: string
-    ops: DocxOp[]
-    changedBlocks: DocxChangedBlock[]
-    createdBlocks: DocxCreatedBlock[]
+    op: DocxOperation
+    changedNodes: DocxChangedNode[]
+    createdNodes: DocxCreatedNode[]
     replaySession?: DocxReplaySession
   }) => void
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>

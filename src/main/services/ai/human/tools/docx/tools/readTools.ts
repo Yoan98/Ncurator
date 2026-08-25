@@ -1,12 +1,7 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
 import type { DocxToolRuntime } from '../runtime'
-import type {
-  DocxDetailedBlock,
-  DocxOutlineBlock,
-  DocxReadSession,
-  DocxSearchMatch
-} from '../types'
+import type { DocxDetailedNode, DocxOutlineNode, DocxReadSession, DocxSearchMatch } from '../types'
 import {
   DOCX_READ_OUTLINE_TOOL_SPEC,
   DOCX_READ_TOOL_SPEC,
@@ -16,7 +11,7 @@ import {
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
 import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
 import { renderDocxVisualToPng } from '../utils/renderVisual'
-import { projectDocxReadBlocks } from '../publicReadTree'
+import { projectDocxReadNodes } from '../publicReadTree'
 
 const MAX_SEARCH_MATCHES = 20
 const SEMANTIC_TOP_K = 8
@@ -31,90 +26,105 @@ type AppliedAlias = {
   to: string
 }
 
-const buildOutlineBlock = (block: DocxOutlineBlock) => {
-  if (block.type === 'paragraph') {
+const buildOutlineNode = (node: DocxOutlineNode) => {
+  if (node.type === 'paragraph') {
     return {
-      blockId: block.blockId,
-      type: block.type,
-      blockIndex: block.blockIndex,
-      text: block.text,
-      visuals: block.visuals
+      nodeId: node.nodeId,
+      type: node.type,
+      nodeIndex: node.nodeIndex,
+      text: node.text,
+      visuals: node.visuals,
+      story: node.story
     }
   }
-  if (block.type === 'table') {
+  if (node.type === 'table') {
     return {
-      blockId: block.blockId,
-      type: block.type,
-      blockIndex: block.blockIndex,
-      rows: block.rows,
-      cols: block.cols,
-      text: block.text,
-      visuals: block.visuals
+      nodeId: node.nodeId,
+      type: node.type,
+      nodeIndex: node.nodeIndex,
+      rows: node.rows,
+      cols: node.cols,
+      text: node.text,
+      visuals: node.visuals,
+      story: node.story
+    }
+  }
+  if (node.type === 'content_control' || node.type === 'revision') {
+    return {
+      nodeId: node.nodeId,
+      type: node.type,
+      nodeIndex: node.nodeIndex,
+      text: node.text,
+      story: node.story,
+      ...(node.type === 'content_control'
+        ? { tag: node.tag }
+        : { revisionId: node.revisionId, revisionKind: node.revisionKind })
     }
   }
   return {
-    blockId: block.blockId,
-    type: block.type,
-    blockIndex: block.blockIndex,
-    tableBlockId: block.tableBlockId,
-    row: block.row,
-    col: block.col,
-    text: block.text,
-    visuals: block.visuals
+    nodeId: node.nodeId,
+    type: node.type,
+    nodeIndex: node.nodeIndex,
+    tableNodeId: node.tableNodeId,
+    row: node.row,
+    col: node.col,
+    text: node.text,
+    visuals: node.visuals,
+    story: node.story
   }
 }
 
-const fetchBlocksByBlockIds = async (input: {
+const fetchNodesByNodeIds = async (input: {
   runtime: DocxToolRuntime
   session?: DocxReadSession
   docId: string
-  blockIds: string[]
+  nodeIds: string[]
 }) => {
-  const uniqueBlockIds = [...new Set(input.blockIds)]
-  if (uniqueBlockIds.length === 1) {
-    const cached = input.session?.cache.detailByBlockId.get(uniqueBlockIds[0]!)
+  const uniqueNodeIds = [...new Set(input.nodeIds)]
+  if (uniqueNodeIds.length === 1) {
+    const cached = input.session?.cache.detailByNodeId.get(uniqueNodeIds[0]!)
     if (cached) return [cached]
   }
-  const blockResponse = await input.runtime.callWorker({
-    action: 'get_blocks_by_ids',
+  const nodeResponse = await input.runtime.callWorker({
+    action: 'get_nodes_by_ids',
     payload: {
       docId: input.docId,
-      blockIds: uniqueBlockIds
+      nodeIds: uniqueNodeIds
     }
   })
-  if (!blockResponse.ok) {
-    throw new Error(blockResponse.error)
+  if (!nodeResponse.ok) {
+    throw new Error(nodeResponse.error)
   }
-  if (blockResponse.payload.action !== 'get_blocks_by_ids') {
-    throw new Error('worker protocol mismatch (get_blocks_by_ids)')
+  if (nodeResponse.payload.action !== 'get_nodes_by_ids') {
+    throw new Error('worker protocol mismatch (get_nodes_by_ids)')
   }
-  blockResponse.payload.blocks.forEach((block) => {
-    input.session?.cache.detailByBlockId.set(block.blockId, block)
+  nodeResponse.payload.nodes.forEach((node) => {
+    input.session?.cache.detailByNodeId.set(node.nodeId, node)
   })
-  return blockResponse.payload.blocks
+  return nodeResponse.payload.nodes
 }
 
-const fetchBlocksByBlockIndexRange = async (input: {
+const fetchNodesByNodeIndexRange = async (input: {
   runtime: DocxToolRuntime
   docId: string
-  fromBlockIndex: number
-  toBlockIndex: number
+  fromNodeIndex: number
+  toNodeIndex: number
 }) => {
-  const blockResponse = await input.runtime.callWorker({
-    action: 'get_blocks_by_block_index_range',
+  const nodeResponse = await input.runtime.callWorker({
+    action: 'get_nodes_by_index_range',
     payload: {
       docId: input.docId,
-      fromBlockIndex: input.fromBlockIndex,
-      toBlockIndex: input.toBlockIndex
+      fromNodeIndex: input.fromNodeIndex,
+      toNodeIndex: input.toNodeIndex
     }
   })
-  if (!blockResponse.ok) {
-    throw new Error(blockResponse.error)
+  if (!nodeResponse.ok) {
+    throw new Error(nodeResponse.error)
   }
-  if (blockResponse.payload.action !== 'get_blocks_by_block_index_range') {
-    throw new Error('worker protocol mismatch (get_blocks_by_block_index_range)')
+  if (nodeResponse.payload.action !== 'get_nodes_by_index_range') {
+    throw new Error('worker protocol mismatch (get_nodes_by_index_range)')
   }
-  return blockResponse.payload.blocks
+  return nodeResponse.payload.nodes
 }
 
 const executeWorkerSearch = async (input: {
@@ -124,7 +134,7 @@ const executeWorkerSearch = async (input: {
   docId: string
   query: string
   mode: 'literal' | 'regex'
-  scopeBlockIds: string[]
+  scopeNodeIds: string[]
   sourcePath: string
   currentRevisionRef: string
 }): Promise<
@@ -141,7 +151,7 @@ const executeWorkerSearch = async (input: {
       docId: input.docId,
       query: input.query,
       mode: input.mode,
-      scopeBlockIds: input.scopeBlockIds
+      scopeNodeIds: input.scopeNodeIds
     }
   })
   if (!workerResponse.ok) {
@@ -212,7 +222,19 @@ const buildSearchResult = (input: {
   appliedAliases: input.appliedAliases,
   totalMatchCount: input.totalMatchCount,
   returnedMatchCount: input.matches.length,
-  matches: input.matches
+  matches: input.matches.map((match) => ({
+    nodeId: match.nodeId,
+    nodeIndex: match.nodeIndex,
+    type: match.type,
+    matchedText: match.matchedText,
+    previousNodeId: match.previousNodeId,
+    nextNodeId: match.nextNodeId,
+    tableNodeId: match.tableNodeId,
+    text: match.text,
+    offsets: match.offsets,
+    score: match.score,
+    story: match.story
+  }))
 })
 
 const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) => ({
@@ -226,50 +248,50 @@ const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) 
 const toOutlineRange = (
   range:
     | { type: 'percent'; fromPercent: number; toPercent: number }
-    | { type: 'block_index'; fromBlockIndex: number; toBlockIndex: number },
-  totalBlockCount: number
-): { fromBlockIndex: number; toBlockIndex: number } => {
-  if (range.type === 'block_index') {
+    | { type: 'node_index'; fromNodeIndex: number; toNodeIndex: number },
+  totalNodeCount: number
+): { fromNodeIndex: number; toNodeIndex: number } => {
+  if (range.type === 'node_index') {
     return {
-      fromBlockIndex: Math.max(0, Math.min(range.fromBlockIndex, range.toBlockIndex)),
-      toBlockIndex: Math.max(0, Math.max(range.fromBlockIndex, range.toBlockIndex))
+      fromNodeIndex: Math.max(0, Math.min(range.fromNodeIndex, range.toNodeIndex)),
+      toNodeIndex: Math.max(0, Math.max(range.fromNodeIndex, range.toNodeIndex))
     }
   }
   const fromPercent = Math.max(0, Math.min(100, range.fromPercent))
   const toPercent = Math.max(0, Math.min(100, range.toPercent))
-  const fromBlockIndex = Math.max(
+  const fromNodeIndex = Math.max(
     0,
-    Math.floor((Math.min(fromPercent, toPercent) / 100) * totalBlockCount)
+    Math.floor((Math.min(fromPercent, toPercent) / 100) * totalNodeCount)
   )
-  const toBlockIndex = Math.max(
+  const toNodeIndex = Math.max(
     0,
-    Math.ceil((Math.max(fromPercent, toPercent) / 100) * totalBlockCount) - 1
+    Math.ceil((Math.max(fromPercent, toPercent) / 100) * totalNodeCount) - 1
   )
   return {
-    fromBlockIndex,
-    toBlockIndex
+    fromNodeIndex,
+    toNodeIndex
   }
 }
 
 const mergeOutlineRanges = (
-  ranges: Array<{ fromBlockIndex: number; toBlockIndex: number }>
-): Array<{ fromBlockIndex: number; toBlockIndex: number }> => {
+  ranges: Array<{ fromNodeIndex: number; toNodeIndex: number }>
+): Array<{ fromNodeIndex: number; toNodeIndex: number }> => {
   const normalized = ranges
     .map((range) => ({
-      fromBlockIndex: Math.max(0, Math.min(range.fromBlockIndex, range.toBlockIndex)),
-      toBlockIndex: Math.max(0, Math.max(range.fromBlockIndex, range.toBlockIndex))
+      fromNodeIndex: Math.max(0, Math.min(range.fromNodeIndex, range.toNodeIndex)),
+      toNodeIndex: Math.max(0, Math.max(range.fromNodeIndex, range.toNodeIndex))
     }))
-    .filter((range) => range.toBlockIndex >= range.fromBlockIndex)
-    .sort((left, right) => left.fromBlockIndex - right.fromBlockIndex)
+    .filter((range) => range.toNodeIndex >= range.fromNodeIndex)
+    .sort((left, right) => left.fromNodeIndex - right.fromNodeIndex)
 
-  const merged: Array<{ fromBlockIndex: number; toBlockIndex: number }> = []
+  const merged: Array<{ fromNodeIndex: number; toNodeIndex: number }> = []
   for (const range of normalized) {
     const last = merged[merged.length - 1]
-    if (!last || range.fromBlockIndex > last.toBlockIndex + 1) {
+    if (!last || range.fromNodeIndex > last.toNodeIndex + 1) {
       merged.push(range)
       continue
     }
-    last.toBlockIndex = Math.max(last.toBlockIndex, range.toBlockIndex)
+    last.toNodeIndex = Math.max(last.toNodeIndex, range.toNodeIndex)
   }
   return merged
 }
@@ -299,10 +321,10 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
       try {
         const ranges = args.ranges.map((range) =>
-          toOutlineRange(range, sessionResult.stats.bodyBlockCount)
+          toOutlineRange(range, sessionResult.stats.bodyNodeCount)
         )
         const mergedRanges = mergeOutlineRanges(ranges)
-        const outlineBlocks = await runtime.callWorker({
+        const outlineNodes = await runtime.callWorker({
           action: 'outline',
           payload: {
             docId: sessionResult.docId,
@@ -311,17 +333,17 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             includeCells: true
           }
         })
-        if (!outlineBlocks.ok) {
-          throw new Error(outlineBlocks.error)
+        if (!outlineNodes.ok) {
+          throw new Error(outlineNodes.error)
         }
-        if (outlineBlocks.payload.action !== 'outline') {
+        if (outlineNodes.payload.action !== 'outline') {
           throw new Error('worker protocol mismatch (outline)')
         }
-        const resultBlocks = outlineBlocks.payload.blocks.map(buildOutlineBlock)
+        const resultNodes = outlineNodes.payload.nodes.map(buildOutlineNode)
         const result = {
           sourcePath: sessionResult.sourcePath,
-          totalBlockCount: sessionResult.stats.bodyBlockCount,
-          blocks: resultBlocks
+          totalNodeCount: sessionResult.stats.bodyNodeCount,
+          nodes: resultNodes
         }
         return finalizeDocxToolSuccess({
           runtime,
@@ -330,13 +352,13 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           result,
           outputPreview: {
             sourcePath: result.sourcePath,
-            blocks: result.blocks
+            nodes: result.nodes
           },
           draftDocId: sessionResult.docId,
           activity: {
             actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType!,
             startedSummary: `提取结构: ${sessionResult.sourcePath}`,
-            buildCompletedSummary: (output) => `结构提取完成：${String(output.blocks.length)} 个块`
+            buildCompletedSummary: (output) => `结构提取完成：${String(output.nodes.length)} 个节点`
           }
         })
       } catch (error) {
@@ -384,7 +406,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       if ('failure' in sessionResult) return sessionResult.failure
 
       const mode = args.mode || 'literal'
-      const scopeBlockIds = args.scope?.blockIds || []
+      const scopeNodeIds = args.nodeIds || []
 
       if (mode === 'semantic') {
         if (runtime.input.ctx.embeddingService.getStatus() !== 'ready') {
@@ -439,7 +461,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         const allMatches = buildSemanticMatches({
           entries: semanticIndex.entries,
           queryEmbedding,
-          scopeBlockIds,
+          scopeNodeIds,
           queryText: args.query,
           topK: SEMANTIC_TOP_K,
           minScore: SEMANTIC_MIN_SCORE
@@ -486,7 +508,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           docId: sessionResult.docId,
           query: attempt.query,
           mode,
-          scopeBlockIds,
+          scopeNodeIds,
           sourcePath: sessionResult.sourcePath,
           currentRevisionRef: sessionResult.currentRevisionRef
         })
@@ -556,25 +578,25 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       if ('failure' in sessionResult) return sessionResult.failure
 
       try {
-        let blocks: DocxDetailedBlock[]
-        if (args.range.type === 'block_ids') {
-          blocks = await fetchBlocksByBlockIds({
+        let nodes: DocxDetailedNode[]
+        if (args.range.type === 'node_ids') {
+          nodes = await fetchNodesByNodeIds({
             runtime,
             session: sessionResult.readSession,
             docId: sessionResult.docId,
-            blockIds: args.range.blockIds
+            nodeIds: args.range.nodeIds
           })
         } else {
-          blocks = await fetchBlocksByBlockIndexRange({
+          nodes = await fetchNodesByNodeIndexRange({
             runtime,
             docId: sessionResult.docId,
-            fromBlockIndex: args.range.fromBlockIndex,
-            toBlockIndex: args.range.toBlockIndex
+            fromNodeIndex: args.range.fromNodeIndex,
+            toNodeIndex: args.range.toNodeIndex
           })
         }
         const result = {
           sourcePath: sessionResult.sourcePath,
-          blocks: projectDocxReadBlocks(blocks)
+          nodes: projectDocxReadNodes(nodes)
         }
         return finalizeDocxToolSuccess({
           runtime,
@@ -583,13 +605,13 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           result,
           outputPreview: {
             sourcePath: result.sourcePath,
-            blocks: result.blocks
+            nodes: result.nodes
           },
           draftDocId: sessionResult.docId,
           activity: {
             actionType: DOCX_READ_TOOL_SPEC.activityActionType!,
             startedSummary: `精读文档区间: ${sessionResult.sourcePath}`,
-            buildCompletedSummary: (output) => `文档精读完成：${String(output.blocks.length)} 个块`
+            buildCompletedSummary: (output) => `文档精读完成：${String(output.nodes.length)} 个节点`
           }
         })
       } catch (error) {
@@ -687,9 +709,9 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
               const rendered = await renderDocxVisualToPng({
                 sourcePath: renderSourcePath,
                 kind: response.payload.kind,
-                blockIndex: response.payload.render.blockIndex,
-                visualIndexInBlock: response.payload.render.visualIndexInBlock,
-                visualCountInBlock: response.payload.render.visualCountInBlock
+                nodeIndex: response.payload.render.nodeIndex,
+                visualIndexInNode: response.payload.render.visualIndexInNode,
+                visualCountInNode: response.payload.render.visualCountInNode
               })
               if (!rendered.data) {
                 results[index] = {
@@ -734,7 +756,9 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         const result = {
           sourcePath: sessionResult.sourcePath,
           results: results.filter(
-            (item): item is { visualId: string; text: string } | { visualId: string; error: string } =>
+            (
+              item
+            ): item is { visualId: string; text: string } | { visualId: string; error: string } =>
               item !== undefined
           )
         }

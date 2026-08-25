@@ -12,7 +12,7 @@ describe('ai tool docx backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 semantic 搜索能返回相关 block，且结果带 score。',
+      description: '验证 semantic 搜索能返回相关节点，且结果带 score。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -46,8 +46,8 @@ describe('ai tool docx backend', () => {
             result.matches[0]?.text.includes('多个采样点') &&
             typeof result.matches[0]?.score === 'number',
           {
-            name: 'semantic-search-returns-scored-relevant-blocks',
-            message: 'semantic 搜索应返回相关 block，并显式暴露相关度 score。',
+            name: 'semantic-search-returns-scored-relevant-nodes',
+            message: 'semantic 搜索应返回相关节点，并显式暴露相关度 score。',
             data: result
           }
         )

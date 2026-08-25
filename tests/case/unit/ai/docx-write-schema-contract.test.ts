@@ -1,108 +1,126 @@
 import { describe, expect, it } from 'vitest'
-import { docxEditSchema } from '../../../../src/main/services/ai/human/tools/docx/schemas'
+import {
+  docxCommentsRevisionsSchema,
+  docxContentEditSchema,
+  docxFormatSchema,
+  docxMediaEditSchema,
+  docxTableEditSchema
+} from '../../../../src/main/services/ai/human/tools/docx/schemas'
 
 describe('ai unit docx write schema contract', () => {
-  it('accepts flat docx_edit actions', () => {
+  it('accepts one content operation without an actions array', () => {
     expect(
-      docxEditSchema.safeParse({
+      docxContentEditSchema.safeParse({
         sourcePath: 'a.docx',
-        actions: [
-          { type: 'insert_blocks', blockId: 'b:1', position: 'after', blocks: [{ text: '补充段落' }] },
-          { type: 'replace_text', blockIds: ['b:1'], query: '旧词', replace: '新词' }
-        ]
+        type: 'replace_text',
+        nodeId: 'node_1',
+        oldText: '旧词',
+        newText: '新词'
+      }).success
+    ).toBe(true)
+    expect(
+      docxContentEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        actions: [{ type: 'replace_text' }]
+      }).success
+    ).toBe(false)
+  })
+
+  it('supports shallow node insertion and enforces position anchors', () => {
+    expect(
+      docxContentEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'insert_nodes',
+        position: 'inside_end',
+        nodeId: 'node_container',
+        nodes: [{ type: 'paragraph', text: '补充段落', styleId: 'Normal' }]
+      }).success
+    ).toBe(true)
+    expect(
+      docxContentEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'insert_nodes',
+        position: 'document_end',
+        nodeId: 'node_invalid',
+        nodes: [{ type: 'paragraph', text: '尾部' }]
+      }).success
+    ).toBe(false)
+  })
+
+  it('supports local and named style operations', () => {
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'format_paragraph',
+        nodeId: 'node_1',
+        format: { alignment: 'center' }
+      }).success
+    ).toBe(true)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'update_named_style',
+        styleId: 'Heading1',
+        run: { color: 'FF0000' }
       }).success
     ).toBe(true)
   })
 
-  it('accepts a table as a flat string matrix', () => {
+  it('rejects empty format patches and invalid colors', () => {
     expect(
-      docxEditSchema.safeParse({
+      docxFormatSchema.safeParse({
         sourcePath: 'a.docx',
-        actions: [{ type: 'insert_blocks', blocks: [{ rows: [['列A', '列B'], ['1', '2']] }] }]
+        type: 'format_text',
+        nodeId: 'node_1',
+        text: '标题',
+        format: {}
+      }).success
+    ).toBe(false)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'format_text',
+        nodeId: 'node_1',
+        text: '标题',
+        format: { color: '#FF0000' }
+      }).success
+    ).toBe(false)
+  })
+
+  it('covers table, media, comment, and revision operations', () => {
+    expect(
+      docxTableEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'merge_cells',
+        tableNodeId: 'node_table',
+        fromRow: 0,
+        fromColumn: 0,
+        toRow: 1,
+        toColumn: 1
       }).success
     ).toBe(true)
-  })
-
-  it('accepts the five style actions', () => {
-    const actions = [
-      { type: 'style_text', query: '重点', style: { bold: true } },
-      { type: 'style_paragraph', id: 'b:1', style: { alignment: 'center' } },
-      { type: 'style_table', id: 't:1', style: { layout: 'fixed' } },
-      { type: 'style_row', id: 'n:1', style: { repeatHeader: true } },
-      { type: 'style_cell', id: 'c:1', style: { shading: 'FFFF00' } }
-    ]
-    for (const action of actions) {
-      expect(docxEditSchema.safeParse({ sourcePath: 'a.docx', actions: [action] }).success).toBe(
-        true
-      )
-    }
-  })
-
-  it('rejects legacy rich-tree content blocks', () => {
     expect(
-      docxEditSchema.safeParse({
+      docxMediaEditSchema.safeParse({
         sourcePath: 'a.docx',
-        actions: [
-          {
-            type: 'insert_blocks',
-            blocks: [
-              {
-                type: 'paragraph',
-                children: [{ type: 'run', children: [{ type: 'text', text: 'legacy' }] }]
-              }
-            ]
-          }
-        ]
-      }).success
-    ).toBe(false)
-  })
-
-  it('rejects legacy unified style action', () => {
-    expect(
-      docxEditSchema.safeParse({
-        sourcePath: 'a.docx',
-        actions: [
-          { type: 'style', target: { type: 'block', blockId: 'b:1' }, patch: { kind: 'run', bold: true } }
-        ]
-      }).success
-    ).toBe(false)
-  })
-
-  it('rejects legacy top-level single-action input', () => {
-    expect(
-      docxEditSchema.safeParse({
-        sourcePath: 'a.docx',
-        action: 'insert_after',
-        anchorBlockId: 'b:1',
-        blocks: [{ text: 'hello' }]
-      }).success
-    ).toBe(false)
-  })
-
-  it.each(['red', '#FF0000', 'F00', 'GG0000', ''])('rejects invalid color %j', (color) => {
-    const result = docxEditSchema.safeParse({
-      sourcePath: 'a.docx',
-      actions: [{ type: 'style_text', query: 'Heading', style: { color } }]
-    })
-
-    expect(result.success).toBe(false)
-  })
-
-  it('accepts a six-digit hexadecimal color', () => {
-    expect(
-      docxEditSchema.safeParse({
-        sourcePath: 'a.docx',
-        actions: [{ type: 'style_text', query: 'Heading', style: { color: 'FF0000' } }]
+        type: 'update_image',
+        visualId: 'visual_1',
+        widthCm: 5
       }).success
     ).toBe(true)
-  })
-
-  it('rejects an empty style object', () => {
     expect(
-      docxEditSchema.safeParse({
+      docxCommentsRevisionsSchema.safeParse({
         sourcePath: 'a.docx',
-        actions: [{ type: 'style_text', query: 'Heading', style: {} }]
+        type: 'reply_comment',
+        commentId: '1',
+        comment: '同意'
       }).success
-    ).toBe(false)
+    ).toBe(true)
+    expect(
+      docxCommentsRevisionsSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'accept_revision',
+        revisionId: '7'
+      }).success
+    ).toBe(true)
   })
 })

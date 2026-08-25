@@ -42,7 +42,7 @@ describe('ai tool docx backend', () => {
             result.appliedAliases[0]?.to === '过度拟合',
           {
             name: 'literal-search-can-fallback-to-stable-alias',
-            message: 'literal 搜索 0 命中后，应通过稳定 alias fallback 命中真实 block。',
+            message: 'literal 搜索 0 命中后，应通过稳定 alias fallback 命中真实节点。',
             data: result
           }
         )

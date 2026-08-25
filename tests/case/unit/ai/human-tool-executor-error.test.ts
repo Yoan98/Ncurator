@@ -34,7 +34,6 @@ const createStubAiRunContext = (): AiRunContext => ({
   appendMessageLog: async () => undefined,
   trackDocxOpen: () => {},
   trackDocxChanges: () => {},
-  trackDocxBatchChanges: () => {},
   resolveDocxOpenTarget: async () => {
     throw new Error('resolveDocxOpenTarget should not be called in tool executor unit tests')
   },

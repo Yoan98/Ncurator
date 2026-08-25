@@ -1,4 +1,7 @@
-import type { HumanRoundThought, RuntimeSkillId } from '../../../../src/main/services/ai/human/types'
+import type {
+  HumanRoundThought,
+  RuntimeSkillId
+} from '../../../../src/main/services/ai/human/types'
 import type {
   AiArtifactRef,
   AiRunEvent,
@@ -99,32 +102,27 @@ export const collectStartedToolStringArgs = (
     .map((input) => input[argName])
     .filter((value): value is string => typeof value === 'string')
 
-export const isDocxEditCreateInput = (input: JsonObject): boolean =>
-  Array.isArray(input.actions) &&
-  input.actions.length > 0 &&
-  input.actions.every(
-    (action) =>
-      action &&
-      typeof action === 'object' &&
-      !Array.isArray(action) &&
-      (action as JsonObject).type === 'insert_blocks'
-  )
+const DOCX_WRITE_TOOL_NAMES = new Set([
+  'docx_content_edit',
+  'docx_format',
+  'docx_table_edit',
+  'docx_media_edit',
+  'docx_comments_revisions'
+])
 
-export const isDocxEditWriteInput = (input: JsonObject): boolean =>
-  Array.isArray(input.actions) &&
-  input.actions.some(
-    (action) =>
-      action &&
-      typeof action === 'object' &&
-      !Array.isArray(action) &&
-      (action as JsonObject).type !== 'insert_blocks'
-  )
+export const isDocxContentCreateInput = (input: JsonObject): boolean =>
+  (input.type === 'insert_nodes' && input.position === 'document_end') ||
+  (input.type === 'create_table' && input.position === 'document_end')
 
-export const collectStartedDocxEditSourcePaths = (
+export const isDocxWriteInput = (input: JsonObject): boolean => typeof input.type === 'string'
+
+export const collectStartedDocxWriteSourcePaths = (
   events: readonly AiRunEvent[],
   predicate: (input: JsonObject) => boolean
 ): string[] =>
-  collectStartedToolInputs(events, 'docx_edit')
+  filterAiRunEventsByType(events, 'tool_call_started')
+    .filter((event) => DOCX_WRITE_TOOL_NAMES.has(event.toolName))
+    .map((event) => event.input)
     .filter(predicate)
     .map((input) => input.sourcePath)
     .filter((value): value is string => typeof value === 'string')
@@ -170,12 +168,12 @@ const isJsonObject = (value: JsonValue | undefined): value is JsonObject =>
 
 const isJsonArray = (value: JsonValue | undefined): value is JsonArray => Array.isArray(value)
 
-const collectDocxBlockKindsFromValue = (
+const collectDocxNodeKindsFromValue = (
   value: JsonValue | undefined,
   kinds: Set<'paragraph' | 'table'>
 ): void => {
   if (isJsonArray(value)) {
-    value.forEach((item) => collectDocxBlockKindsFromValue(item, kinds))
+    value.forEach((item) => collectDocxNodeKindsFromValue(item, kinds))
     return
   }
 
@@ -198,31 +196,19 @@ const collectDocxBlockKindsFromValue = (
     kinds.add('table')
   }
 
-  collectDocxBlockKindsFromValue(value.content, kinds)
-  collectDocxBlockKindsFromValue(value.ops, kinds)
-  collectDocxBlockKindsFromValue(value.rows, kinds)
-  collectDocxBlockKindsFromValue(value.blocks, kinds)
+  collectDocxNodeKindsFromValue(value.content, kinds)
+  collectDocxNodeKindsFromValue(value.nodes, kinds)
+  collectDocxNodeKindsFromValue(value.node, kinds)
+  collectDocxNodeKindsFromValue(value.rows, kinds)
 }
 
-export const collectDocxApplyOpsContentKinds = (
+export const collectDocxWriteContentKinds = (
   events: readonly AiRunEvent[]
 ): Array<'paragraph' | 'table'> => {
   const kinds = new Set<'paragraph' | 'table'>()
-  collectStartedToolInputs(events, 'docx_edit').forEach((input) => {
-    if (Array.isArray(input.actions)) {
-      input.actions.forEach((action) => {
-        if (!action || typeof action !== 'object' || Array.isArray(action)) return
-        const actionInput = action as JsonObject
-        if (actionInput.type === 'insert_blocks') {
-          collectDocxBlockKindsFromValue(actionInput.blocks, kinds)
-        }
-        if (actionInput.type === 'replace_block') {
-          collectDocxBlockKindsFromValue(actionInput.block, kinds)
-        }
-      })
-    }
-    collectDocxBlockKindsFromValue(input, kinds)
-  })
+  filterAiRunEventsByType(events, 'tool_call_started')
+    .filter((event) => DOCX_WRITE_TOOL_NAMES.has(event.toolName))
+    .forEach((event) => collectDocxNodeKindsFromValue(event.input, kinds))
   return [...kinds]
 }
 

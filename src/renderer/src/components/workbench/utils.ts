@@ -203,14 +203,19 @@ const TOOL_ITEM_RENDERERS = {
   docx_read_outline: (input) =>
     sentence(text('查看文档 '), text(readToolFileLabel(input)), text(' 的结构')),
   docx_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
-  docx_read_blocks: (input) =>
+  docx_read: (input) =>
     sentence(
       text('读取文档 '),
       text(readToolFileLabel(input)),
       text(` ${readDocxRangeLabel(input)}`)
     ),
   docx_read_visuals: (input) => sentence(text('读取文档视觉内容 '), text(readToolFileLabel(input))),
-  docx_edit: (input) => sentence(text('编辑文档 '), text(readToolFileLabel(input))),
+  docx_content_edit: (input) => sentence(text('编辑文档内容 '), text(readToolFileLabel(input))),
+  docx_format: (input) => sentence(text('设置文档格式 '), text(readToolFileLabel(input))),
+  docx_table_edit: (input) => sentence(text('编辑文档表格 '), text(readToolFileLabel(input))),
+  docx_media_edit: (input) => sentence(text('编辑文档媒体 '), text(readToolFileLabel(input))),
+  docx_comments_revisions: (input) =>
+    sentence(text('处理文档批注或修订 '), text(readToolFileLabel(input))),
   pdf_inspect: (input) => sentence(text('查看 PDF 信息 '), text(readToolFileLabel(input))),
   pdf_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
   pdf_read_pages: (input) => sentence(text('读取 PDF 页面 '), text(readToolFileLabel(input))),
@@ -811,7 +816,7 @@ export const extractSearchResultsFromToolOutput = (output: IpcJsonValue): Search
             source_type: 'web' as const,
             file_path: webUrl,
             created_at: 0,
-            import_status: 2
+            import_status: 2 as const
           }
         }
       }

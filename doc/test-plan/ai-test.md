@@ -2,29 +2,29 @@
 
 ## 最新 Live 评估
 
-| caseId | 状态 | 评分（0-100） | 模型 | 时间 | run 路径 | 简短依据 |
-| --- | --- | ---: | --- | --- | --- | --- |
-| human-risk-report-draft-live | 完成 | 97 | deepseek-v4-flash | 2026-08-13 20:15 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260813-201549-550 | 真实读取模板/上周周报与工作文档，docx_edit(insert_blocks) 新建周报并 apply，原文件全部未改。 |
-| human-context-compaction-natural-trigger-live | 完成 | 97 | deepseek-v4-flash | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816 | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。 |
-| human-excel-write-reconciliation-live | 完成 | 96 | deepseek-v4-flash | 2026-08-14 18:39 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260814-183949-614 | 终端真实计算核对，四笔状态精确标记，SUMIF 公式正确，样式保持。 |
-| human-excel-read-sales-gap-analysis-live | 完成 | 95 | deepseek-v4-flash | 2026-08-13 21:02 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260813-210226-107 | 真实读取多 Sheet 并终端/python 计算差额，对话给出 P-100/P-300 优先级，源工作簿未改。 |
-| human-kb-guided-docx-comparison-draft-live | 完成 | 96 | deepseek-v4-flash | 2026-08-13 20:12 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260813-201203-331 | KB 真实检索命中，两份目标 docx 写入并双 applyId artifact，来源课件未改。 |
-| human-ppt-write-management-review-live | 完成 | 94 | deepseek-v4-flash | 2026-08-14 18:42 CST | tests/logs/ai/human/live/human-ppt-write-management-review-live/20260814-184258-961 | 新增摘要页并升级交付风险（李然/7月15日），封面与指标页保持不变，布局无越界、校验零错误。 |
-| human-ppt-read-management-risk-review-live | 完成 | 92 | deepseek-v4-flash | 2026-08-14 18:44 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260814-184455-621 | 真实 ppt 读取完成风险简报，视觉识别返回可用文本，未修改演示文稿。 |
-| human-terminal-data-reconciliation-live | 完成 | 96 | deepseek-v4-flash | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775 | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。 |
-| human-runtime-script-system-python-live | 完成 | 95 | deepseek-v4-flash | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-script-system-python-live/20260814-160300-706 | 本机 Python 在临时脚本目录运行临时脚本，得到确定性结果并核对。 |
-| human-runtime-download-python-live | 完成 | 92 | deepseek-v4-flash | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-download-python-live/20260814-160340-415 | Python 不可用时自主下载便携运行时并运行临时脚本，得到正确结果。 |
-| human-session-resume-with-new-selection-live | 完成 | 93 | deepseek-v4-flash | 2026-08-13 20:11 CST | tests/logs/ai/human/live/human-session-resume-with-new-selection-live/20260813-201154-716 | 新选中文件后会话记忆与任务主线延续，完整完成任务。 |
-| human-docx-positioned-structural-edit-fallback-live | 完成 | 95 | deepseek-v4-flash | 2026-08-13 20:13 CST | tests/logs/ai/human/live/human-docx-positioned-structural-edit-fallback-live/20260813-201354-419 | 复杂定位区域写入被保护并返回明确诊断，其余区域编辑安全完成。 |
-| human-legacy-doc-reading-live | 完成 | 94 | deepseek-v4-flash | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-legacy-doc-reading-live/20260813-195642-815 | 通过 docx 读取工具成功读取旧版 .doc 并准确回答五级风险与区别率，源文件未改。 |
-| human-text-file-write-checkout-cutover-live | 完成 | 96 | deepseek-v4-flash | 2026-08-13 20:17 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20260813-201727-173 | 两处端点和超时精确更新，重试与 telemetry 不变，写后核对完整。 |
-| human-text-file-read-checkout-readiness-live | 完成 | 93 | deepseek-v4-flash | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260813-201642-554 | 只读审查准确识别就绪性风险与保留配置，源文件未改。 |
-| human-web-search-by-url-live | 通过 | - | deepseek-v4-flash | 2026-08-24 01:05 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260824-012552-756 | 给定指定地址，web_search(url) 读取该页并基于正文回答。 |
-| human-web-search-intent-query-live | 通过 | - | deepseek-v4-flash | 2026-08-24 01:03 CST | tests/logs/ai/human/live/human-web-search-intent-query-live/（isolated run, 已确认通过） | 纯文本诉求提炼意图，web_search(query) 读取官方文档回答。 |
-| human-legacy-doc-edit-skip-live | 完成 | 88 | deepseek-v4-flash | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129 | 验收口径收敛为「docx_edit 未成功编辑 .doc」；模型绕过 docx_edit 用 COM 改源文件的行为不再由本 case 约束。 |
-| human-docx-visual-reading-live | 完成 | 92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243 | 根因是 workflow runner 未展开 `${AI_LIVE_BASE_URL}` 引用导致视觉配置 Invalid URL；修复后真实读取 DOCX 图片内容。 |
-| human-pdf-visual-reading-live | 完成 | 92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871 | 同上，视觉配置修复后 PDF 页面视觉读取正常，正确回答图形差异。 |
-| human-docx-dangling-image-edit-live | 完成 | 93 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-dangling-image-edit-live/20260821-230430-129 | 视觉配置修复 + 视觉识别并发池(3)后通过；docx_read_visuals 读图 230s→67s，13 项工时写回文档。 |
+| caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                         | 简短依据                                                                                                         |
+| --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| human-risk-report-draft-live                        | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 20:15 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260813-201549-550                        | 重构前历史运行：真实读取模板、上周周报与工作文档，新建周报并 apply，原文件全部未改。                             |
+| human-context-compaction-natural-trigger-live       | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816       | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。           |
+| human-excel-write-reconciliation-live               | 完成 |            96 | deepseek-v4-flash                | 2026-08-14 18:39 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260814-183949-614               | 终端真实计算核对，四笔状态精确标记，SUMIF 公式正确，样式保持。                                                   |
+| human-excel-read-sales-gap-analysis-live            | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 21:02 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260813-210226-107            | 真实读取多 Sheet 并终端/python 计算差额，对话给出 P-100/P-300 优先级，源工作簿未改。                             |
+| human-kb-guided-docx-comparison-draft-live          | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:12 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260813-201203-331          | KB 真实检索命中，两份目标 docx 写入并双 applyId artifact，来源课件未改。                                         |
+| human-ppt-write-management-review-live              | 完成 |            94 | deepseek-v4-flash                | 2026-08-14 18:42 CST | tests/logs/ai/human/live/human-ppt-write-management-review-live/20260814-184258-961              | 新增摘要页并升级交付风险（李然/7月15日），封面与指标页保持不变，布局无越界、校验零错误。                         |
+| human-ppt-read-management-risk-review-live          | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 18:44 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260814-184455-621          | 真实 ppt 读取完成风险简报，视觉识别返回可用文本，未修改演示文稿。                                                |
+| human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。                        |
+| human-runtime-script-system-python-live             | 完成 |            95 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-script-system-python-live/20260814-160300-706             | 本机 Python 在临时脚本目录运行临时脚本，得到确定性结果并核对。                                                   |
+| human-runtime-download-python-live                  | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-download-python-live/20260814-160340-415                  | Python 不可用时自主下载便携运行时并运行临时脚本，得到正确结果。                                                  |
+| human-session-resume-with-new-selection-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:11 CST | tests/logs/ai/human/live/human-session-resume-with-new-selection-live/20260813-201154-716        | 新选中文件后会话记忆与任务主线延续，完整完成任务。                                                               |
+| human-docx-positioned-structural-edit-fallback-live | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 20:13 CST | tests/logs/ai/human/live/human-docx-positioned-structural-edit-fallback-live/20260813-201354-419 | 复杂定位区域写入被保护并返回明确诊断，其余区域编辑安全完成。                                                     |
+| human-legacy-doc-reading-live                       | 完成 |            94 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-legacy-doc-reading-live/20260813-195642-815                       | 通过 docx 读取工具成功读取旧版 .doc 并准确回答五级风险与区别率，源文件未改。                                     |
+| human-text-file-write-checkout-cutover-live         | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:17 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20260813-201727-173         | 两处端点和超时精确更新，重试与 telemetry 不变，写后核对完整。                                                    |
+| human-text-file-read-checkout-readiness-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260813-201642-554        | 只读审查准确识别就绪性风险与保留配置，源文件未改。                                                               |
+| human-web-search-by-url-live                        | 通过 |             - | deepseek-v4-flash                | 2026-08-24 01:05 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260824-012552-756                        | 给定指定地址，web_search(url) 读取该页并基于正文回答。                                                           |
+| human-web-search-intent-query-live                  | 通过 |             - | deepseek-v4-flash                | 2026-08-24 01:03 CST | tests/logs/ai/human/live/human-web-search-intent-query-live/（isolated run, 已确认通过）         | 纯文本诉求提炼意图，web_search(query) 读取官方文档回答。                                                         |
+| human-legacy-doc-edit-skip-live                     | 完成 |            88 | deepseek-v4-flash                | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129                     | 重构前历史运行：DOCX 写入未成功编辑 .doc；模型绕过受控工具改源文件的行为不由本 case 约束。                       |
+| human-docx-visual-reading-live                      | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243                      | 根因是 workflow runner 未展开 `${AI_LIVE_BASE_URL}` 引用导致视觉配置 Invalid URL；修复后真实读取 DOCX 图片内容。 |
+| human-pdf-visual-reading-live                       | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871                       | 同上，视觉配置修复后 PDF 页面视觉读取正常，正确回答图形差异。                                                    |
+| human-docx-dangling-image-edit-live                 | 完成 |            93 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-dangling-image-edit-live/20260821-230430-129                 | 视觉配置修复 + 视觉识别并发池(3)后通过；docx_read_visuals 读图 230s→67s，13 项工时写回文档。                     |
 
 ## 1. 总体目标
 
@@ -38,7 +38,7 @@
 ### 2.1 `tool`
 
 - `tool` 只验证真实生产工具调用，不允许 fake。
-- `tool / docx` 包含 `docx-edit-serial-actions-stability`，用于守住同一次 `docx_edit(actions)` 内插入、替换、删除后的 block 定位稳定性。
+- `tool / docx` 覆盖 9 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 Source→Working 净 Diff。
 - `tool / text-file` 覆盖普通文本读取、四种写入 action、修改记录、结构化 diff 与回退前置数据。
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作区内修改记录、Artifact、安全校验和工作区外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作区外绝对路径读取、损坏文件和结果大小限制。
@@ -134,460 +134,70 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 
 #### docx 类别
 
-**DOCX 递归语义树与视觉测试补充**
+DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、单 operation 写入和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，不在本计划重复登记 Unit case。
 
-- What：DOCX 读取返回递归语义树，并能按 visualId 读取视觉内容。
-- How：使用 `灵感测试.docx` 验证 18 个 image visual 与 22 个真实空段落；覆盖 wrapper/run/visual 顺序、表格层级、Shape 文本框和五种 visual kind；使用含五种 visual kind 的真实 OOXML fixture，在隐藏 Electron 窗口中验证 chart、diagram、shape 的裁剪结果包含足量非白像素；使用 599/1034 张 VML 图片 fixture 检查性能和结果体积。
-- Oracle：详细 block 只使用 children 递归树；outline 只返回 visual 统计；visualId 在未改视觉时稳定，失效视觉不能继续读取；批量视觉读取保持顺序且单项失败不影响其他项。
-
-##### `docx-read-visuals-contract`
-
-- 测试类型：`backend`，`tool-real`
-- What：`docx_read_visuals` 可以从递归 block 的 public visualId 读取真实图片。
-- Why：视觉节点只有能按需进入视觉模型，才不是仅供展示的无效元数据。
-- How：从 `灵感测试.docx` 的 outline 定位含 visual 的 block，读取 visualId 后提交一个有效请求和一个 stale ID，并使用 mock 视觉模型返回固定识别文字。
-- Oracle：结果顺序与请求一致；有效图片返回识别文字，stale ID 只产生单项错误；源文件 checksum 不变。
-- Not：不验证 chart、diagram、shape 的页面裁剪精度；该能力由专门渲染 fixture 覆盖。
-
-**DOCX 扁平写入、样式与视觉防误删测试补充**
-
-- What：扁平写入协议（纯文本段落 `text` + 二维字符串表格 `rows`）、按元素类型拆分的样式动作和 visual 防误删共同构成新的写入协议。
-- How：覆盖纯文本段落、二维字符串表格、`update_table_cell` 二次操作、5 个样式动作（`style_text` / `style_paragraph` / `style_table` / `style_row` / `style_cell`）、跨 run 匹配、不可跨 visual、`allowVisualLoss`、串行 action 原子失败和 docx_edit 成功结果只返回 `msg`。
-- Oracle：旧递归创建 payload 与统一 `style` action 被 schema 拒绝；目标类型不匹配不落盘；text-image-text 编辑后媒体、relationship 和非目标 XML 保持不变。
-
-##### `docx-legacy-doc-read-contract`
+##### `docx-v2-public-tools`
 
 - 测试类型：`backend`
-- What：旧版 .doc 文件可以通过现有 docx-read 工具读取，并明确拒绝写入。
-- Why：旧格式读取是 AI 文档能力的兼容边界，写入拒绝必须可解释且不产生副作用。
-- How：读取 outline、block、literal/regex 搜索，再尝试编辑并检查错误信息。
-- Oracle：读取结果有效；编辑返回“禁止尝试任何对 .doc 文件的编辑”错误信息；源文件 bytes 不变。
-- Not：不把旧版 .doc 写入转换为隐式成功。
-
-##### `docx-minimal-edit-flow`
-
-- 测试类型：`backend`
-- What：最小 docx 打开、定位、编辑与继续读取链路。
-- Why：docx 工具链最基础的真实生产调用闭环。
-- How：对 fixture docx 真实执行 `docx_search -> docx_read_blocks -> docx_edit(replace_text) -> docx_search -> docx_read_blocks`。
-- Oracle：写入成功并向 AI 返回 `msg` 成功提示；只目标 block 发生变更，修改后的结果可继续被读取工具消费。
-- Not：不验证 `human` 的工具选择。
-
-##### `docx-create-then-open-and-edit`
-
-- 测试类型：`backend`
-- What：对不存在的路径执行 `docx_edit(insert_blocks)` 后，docx 能立刻进入 `outline / read / edit` 主链。
-- Why：cross-source summary 这类新建 Word 文件的场景，底层必须守住“路径不存在即创建”契约。
-- How：真实执行 `docx_edit(insert_blocks, 无 location) -> docx_read_outline -> docx_read_blocks -> docx_edit(insert_blocks) -> docx_search`。
-- Oracle：内部结果保留 `sourcePath` 与新增 block 信息，面向 AI 只返回 `msg` 成功提示；工具成功后目标路径立即存在且可被继续读取；后续编辑会生成新的可读状态，新内容可继续被搜索命中。
-- Not：不验证 human 是否会自主选择这条创建链路。
-
-##### `docx-existing-path-is-edited-without-a-create-action`
-
-- 测试类型：`backend`
-- What：`docx_edit` 根据 `sourcePath` 是否存在自动选择创建或编辑。
-- Why：删除独立创建 Action 后，已有文件必须直接进入安全的增量编辑流程。
-- How：先写入一份真实 docx，再在同一次调用中执行带首块 `location(before)` 的插入和不带 `location` 的末尾追加。
-- Oracle：原内容保留，显式 `before` 内容位于文档开头，无 `location` 内容位于文档末尾；当前 run 建立 docx session。
-- Not：不验证 UI 层如何展示报错。
-
-##### `docx-create-with-content-direct-applies`
-
-- 测试类型：`backend`
-- What：仅对新路径执行一次无锚点 `docx_edit(insert_blocks)` 也会立即创建目标 docx，并在提交当前 run 的 Docx 草稿时生成 apply record。
-- Why：真实模型很可能一次写完新文档内容，这条能力必须由回归测试保护。
-- How：真实执行 `docx_edit(insert_blocks, 无 location)` 并直接 `applyDocxRunEdits`。
-- Oracle：生成 `DocxApplyRecord(operation=created,status=applied)` 并包含 diff 预览 artifact 路径；目标文件立即存在；最终 artifacts 包含携带 `applyId` 的 docx file artifact。
-- Not：不验证 `human` 是否会自然选择一次创建完整文档。
-
-##### `docx-direct-apply-checkpoint-revert`
-
-- 测试类型：`backend`
-- What：existing docx 在提交当前 run 的 Docx 草稿时写回，立即保存 checkpoint 和修改记录，并支持干净回退。
-- Why：direct apply 模式下，写回与回退是替代旧确认提交流程的核心安全边界。
-- How：真实编辑一份 docx，执行 `applyDocxRunEdits`，再执行 `DocxApplyService.revertRecord(force=false)`。
-- Oracle：源文件在 apply 后立即变化；生成 `DocxApplyRecord(operation=updated,status=applied)`、checkpoint 与 diff 预览 artifact；真实源文件不包含 diff 标记；回退后源文件恢复 checkpoint，记录状态变为 `reverted`。
-- Not：不验证用户界面的回退入口展示。
-
-##### `docx-direct-apply-force-revert-after-user-change`
-
-- 测试类型：`backend`
-- What：AI 写回后用户又改文件时，首次回退提示风险，force=true 后仍允许恢复 checkpoint。
-- Why：宽松模式的安全边界是 checkpoint 和显式风险提示，而不是阻止用户强制回退。
-- How：真实编辑并 apply 后，外部改写源文件；先 `revertRecord(force=false)`，再 `revertRecord(force=true)`。
-- Oracle：首次回退返回 `requiresForce=true` 和“恢复到本次修改前”风险 warning；强制回退后恢复 checkpoint 并覆盖后续修改。
-- Not：不验证 UI 二次确认文案。
-
-##### `docx-immediate-create-and-external-change-invalidates-session`
-
-- 测试类型：`backend`
-- What：create-target replay 后目标被外部创建时，apply 按 updated 备份并覆盖，回退恢复外部文件。
-- Why：新建文件写回前若目标已被外部创建，应按 update 语义备份当前文件并覆盖，回退可恢复外部创建版本。
-- How：对新路径真实执行无锚点 `docx_edit(insert_blocks)` 建立 replay session，随后外部创建同名目标文件，再执行 `applyDocxRunEdits` 和回退。
-- Oracle：生成 `DocxApplyRecord(operation=updated,before_exists=true)`；回退后恢复外部创建的文件。
-- Not：不验证目标文件由真实用户还是测试进程创建。
-
-##### `docx-large-document-navigation`
-
-- 测试类型：`backend`
-- What：长文档下的读取、定位和局部精读能力。
-- Why：长文档最容易暴露基础定位问题。
-- How：对高 block 数 fixture 真实调用 `docx_read_outline(ranges=block_index) / docx_search / docx_read_blocks`。
-- Oracle：长文档下仍返回稳定 `blockId/blockIndex` 信息，且能定位并精读目标 block。
-- Not：不验证编辑落盘。
-
-##### `docx-outline-read-search-do-not-create-replay-session`
-
-- 测试类型：`backend`
-- What：纯读 docx 工具首次访问只创建 read session，不会提前创建 replay session。
-- Why：read/write session 分层重构的根契约，破坏后会让只读场景重新回到高内存 replay 路径。
-- How：真实执行 `docx_read_outline -> docx_read_blocks -> docx_search`，检查 runtime session 状态。
-- Oracle：三次调用都成功；`readSessionCount=1`；`replaySessionCount=0`。
-- Not：不验证编辑链路。
-
-##### `docx-read-then-edit-upgrades-to-replay-session`
-
-- 测试类型：`backend`
-- What：纯读后首次编辑会升级到 replay session，并释放旧 read session。
-- Why：升级动作必须把只读缓存收口掉，否则同一路径会长期保留两套运行态，违背本次重构目标。
-- How：真实执行 `docx_read_outline -> docx_edit(insert_blocks) -> docx_search`，检查 runtime session 状态。
-- Oracle：编辑成功；后续搜索可命中新文本；`readSessionCount=0`；`replaySessionCount=1`。
-- Not：不验证 direct apply / revert。
-
-##### `docx-read-then-edit-preserves-long-document-tail`
-
-- 测试类型：`backend`
-- What：长文档在 read 分页后升级到 replay session 时不会丢失尾部 block。
-- Why：如果 replay snapshot 仍走固定 block 上限，read world 与 write world 会在长文档上出现静默分裂。
-- How：先用 `docx_read_outline(ranges=block_index)` 读取 5000 之后的尾部范围，再对尾部 block 执行真实 `docx_edit(insert_blocks)` 与 `docx_search`。
-- Oracle：尾部范围返回正确 `blockIndex`；尾部 block 编辑成功；后续搜索可命中新文本；`readSessionCount=0`；`replaySessionCount=1`。
-- Not：不验证 AI 的读取策略。
-
-##### `docx-search-unicode-normalization-contract`
-
-- 测试类型：`backend`
-- What：`docx_search` 会做兼容字形归一，能用普通查询或 regex 命中兼容字形文本。
-- Why：docx 文本里常见兼容字形，如果检索不归一，AI 会把“文档已写”误判成“文档未写”。
-- How：写入包含兼容字形文本的真实 docx，再分别执行 `docx_search(literal)` 与 `docx_search(regex)`。
-- Oracle：普通查询可命中兼容字形 block，且返回稳定 blockId。
-- Not：不比较字符偏移是否完全映射回原始编码位置。
-
-##### `docx-search-scope-contract`
-
-- 测试类型：`backend`
-- What：`docx_search` 默认搜索当前文档全部 block，且 `docx_edit(replace_text).blockIds` 只在当前文档内进一步缩圈。
-- Why：docx 搜索的核心契约，必须长期稳定，避免 prompt 与工具行为不一致。
-- How：对同一 doc 先执行默认搜索，再通过限定编辑范围验证后续搜索结果只影响指定 block。
-- Oracle：默认搜索可命中文档内多个 block，限定编辑后只修改指定 block 范围内的结果。
-- Not：不验证 human 该如何选择何时缩圈。
-
-##### `docx-search-literal-alias-fallback`
-
-- 测试类型：`backend`
-- What：`docx_search(literal)` 在 0 命中时会触发有限 alias fallback。
-- Why：术语轻微变体是 docx 场景里的高频真实问题，必须由工具契约稳定承接。
-- How：写入只包含“过度拟合”的真实 docx，再以“过拟合”执行 `docx_search(literal)`。
-- Oracle：搜索结果命中目标 block，且显式返回 `effectiveQuery=过度拟合` 与 `appliedAliases`。
-- Not：不引入通用大词库或无限 rewrite。
-
-##### `docx-search-regex-contract`
-
-- 测试类型：`backend`
-- What：`docx_search(regex)` 可用，且非法 regex 会稳定报错。
-- Why：regex 是 AI 换词失败后的重要兜底能力，必须守住输入契约。
-- How：对真实 docx 执行合法 regex 搜索与非法 regex 搜索。
-- Oracle：合法 regex 正常命中并返回 offsets；非法 regex 返回 `invalid_input`。
-- Not：不比较不同 regex 引擎的高级语义差异。
-
-##### `docx-search-semantic-contract`
-
-- 测试类型：`backend`
-- What：`docx_search(semantic)` 能返回相关 block，且结果带 score。
-- Why：semantic 是换词失败后的召回增强能力，必须有回归契约保护。
-- How：在 embedding ready 前提下，对真实 docx 执行 `docx_search(mode=semantic)`。
-- Oracle：至少返回一个相关 block，且结果显式包含 `score`。
-- Not：不比较召回排序的全局最优性。
-
-##### `docx-read-range-contract`
-
-- 测试类型：`backend`
-- What：`docx_read_blocks(range=block_index)` 会返回连续区间 blocks。
-- Why：“搜索 -> 精读”工作流的核心读取契约，必须长期稳定。
-- How：先通过真实 `docx_read_outline` 定位起止 block，再执行区间 `docx_read_blocks`。
-- Oracle：返回结果按文档顺序覆盖闭区间，且详细块都带 `blockId/blockIndex`。
-- Not：不验证 AI 何时该扩大片段范围。
-
-##### `docx-outline-pagination-contract`
-
-- 测试类型：`backend`
-- What：`docx_read_outline(ranges=block_index)` 可以读取长文档后半段。
-- Why：如果只能重复看前几百块，AI 很容易误判“文档没写”。
-- How：对长文档执行带 `block_index` range 的真实 `docx_read_outline`。
-- Oracle：返回结果从指定 `blockIndex` 开始，并按闭区间返回目标块。
-- Not：不验证 UI 层如何呈现分页。
+- What：4 个读取工具和 5 个写入工具使用同一 DOCX 编辑会话，连续读取、内容编辑、格式、表格、媒体、批注与修订后仍可回读。
+- Why：公共工具必须让 AI 通过“定位 nodeId → 单次局部操作 → changes 回读”稳定完成真实任务。
+- How：创建真实 DOCX，依次执行 outline/read/search、内容替换、段落格式、表格结构、图片与批注操作，并再次 read/search。
+- Oracle：每次写入只接收一个 discriminated operation；未删除节点的 `nodeId` 保持稳定；`changes` 为结构化结果；五个写工具看到同一 Working 状态。
+- Not：不调用 live 模型，不验证 Workbench UI。
 
 ##### `docx-auto-open-no-fake-failure`
 
 - 测试类型：`backend`
-- What：AI-facing docx 读取工具首次自动 open 时不再先发假失败结果。
-- Why：同一 toolCallId “先失败后成功”的噪音会误导 brain 对工具稳定性的判断。
-- How：对未预先打开的真实 docx 直接执行 `docx_search`，检查事件流中的 tool result。
-- Oracle：同一次调用只返回一次成功结果，不出现 `sourcePath must be opened before ...`。
-- Not：不验证内部显式 require 场景。
+- What：DOCX 工具自动打开真实绝对路径，不产生伪失败或重复会话。
+- Why：AI 首次调用任意读写工具都应获得一致的 Source/Working 会话。
+- How：对同一路径连续调用读工具并检查运行期 open 与 session 状态。
+- Oracle：只建立一个当前会话，返回真实节点；错误路径和 `.doc` 写入返回明确错误。
+- Not：不验证语义搜索质量。
 
-##### `docx-outline-truncation-contract`
-
-- 测试类型：`backend`
-- What：`docx_read_outline` 按请求的 `ranges` 返回对应范围的结构块。
-- Why：长文档 outline 应尊重请求范围返回结构块，便于 brain 精确缩小阅读范围。
-- How：对包含 40 段的真实 docx 执行 `docx_read_outline(ranges=block_index 0-9)`，检查返回的结构块数量与范围。
-- Oracle：返回 10 个结构块，blockIndex 从 0 到 9。
-- Not：不验证 human 是否一定继续读取后续内容。
-
-##### `docx-complex-ops-serial-actions`
+##### `docx-v2-apply-diff`
 
 - 测试类型：`backend`
-- What：多类复杂编辑操作的真实执行契约。
-- Why：复杂写入是 docx 工具层高风险区。
-- How：覆盖 `docx_edit(actions[])` 按输入顺序串行执行 `replace_text / delete_blocks / insert_blocks(before/after, paragraph/table) / update_table_cell / style_text` action。
-- Oracle：各类 action 都能写入成功，内部结果保留 `changedBlocks/createdBlocks` 供继续消费，面向 AI 只返回 `msg` 成功提示。
-- Not：不验证上层 op 选择策略。
+- What：同一 Run 的 Source→Working 净 Diff、正式写回、Review 预览与 checkpoint 回退。
+- Why：Diff 是 DOCX 写入不可丢失的核心能力，不能用操作次数代替最终净变化。
+- How：真实执行 A→B→C、A→B→A 和表格新增行，提交 run 后解析 Review DOCX，再执行回退。
+- Oracle：Review 只含 A 与 C，不含 B；恢复 A 的文档不生成记录；Diff 有红删绿增而正式文件没有标记；回退逐字节恢复 Source。
+- Not：不运行 Workbench UI，不验证 live 模型策略。
 
-##### `docx-edit-insert-blocks-order`
-
-- 测试类型：`backend`
-- What：`docx_edit(insert_blocks)` 在同一 anchor 后插入多条段落与表格时保持输入顺序。
-- Why：结构插入顺序一旦漂移，后续 AI 读回确认和用户可见文档都会出现错位。
-- How：在段落 A 后一次插入 `P1 / P2 / Table / P3`，再读取完整 outline。
-- Oracle：最终顺序稳定为 `A / P1 / P2 / Table / P3 / B`；内部 raw result 的 `createdBlocks/createdBlockIds` 正确，面向 AI 只返回 `msg` 成功提示。
-- Not：不验证多 action 串行插入；该场景由 `docx-edit-serial-multiple-inserts-preserve-created-blocks` 覆盖。
-
-##### `docx-edit-serial-multiple-inserts-preserve-created-blocks`
+##### `docx-search-unicode-normalization-contract`
 
 - 测试类型：`backend`
-- What：一次 `docx_edit(actions[])` 内多个 `insert_blocks` 会按 action 顺序稳定写入，并分别返回新增 block。
-- Why：批量结构插入需要让后续读回和继续编辑能准确识别每个新增结构。
-- How：在同一文档里先在 A 后插入两个段落，再在 C 前插入段落和表格。
-- Oracle：最终顺序稳定，内部 `createdBlocks` 能对应到本次新增的段落与表格，不误收尾部旧块；该字段不进入 AI 成功输出。
-- Not：不验证 replace/delete 与 insert 的混合漂移；该场景由串行动作稳定性 case 覆盖。
+- What：literal 搜索支持 Unicode 规范化。
+- Why：全角、兼容字形和组合字符不应导致 AI 无法定位节点。
+- How：在真实 DOCX 中写入兼容字形并执行 `docx_search`。
+- Oracle：返回命中节点的稳定 `nodeId`、当前 `nodeIndex` 和文本。
+- Not：不验证 semantic embedding。
 
-##### `docx-structural-op-behavior`
-
-- 测试类型：`backend`
-- What：文本替换不会创建新结构，段落/表格对象编辑可以创建独立结构块。
-- Why：docx 工具必须清晰区分文本级修改与结构级修改，否则会污染后续 outline、read 和内部 createdBlocks 语义。
-- How：先执行 `replace_text`，再执行段落与表格 `insert_blocks`，分别读取 outline。
-- Oracle：`replace_text` 后 body 结构数量不变；对象插入后出现新增 paragraph/table 结构，且 changedBlocks 标记为结构插入。
-- Not：不验证 run 级样式保留。
-
-##### `docx-edit-serial-actions-resolve-original-target-after-insert-drift`
+##### `docx-search-literal-alias-fallback`
 
 - 测试类型：`backend`
-- What：单次 `docx_edit(actions[])` 内前序插入导致 blockIndex 漂移后，后序 action 仍能命中最初读取到的原始 blockId。
-- Why：AI 常基于同一轮读取结果连续提交批量编辑，必须避免前序插入让后续目标误伤相邻旧块。
-- How：先在 A 后插入 A1，再继续用最初读取到的 C blockId 执行 `replace_block`。
-- Oracle：最终文档为 `A / A1 / B / C updated`，changedBlocks 同时记录插入与替换。
-- Not：不支持同一次 actions 内引用本次刚创建且尚未回读的新 blockId。
+- What：literal 搜索在直接匹配为空时使用受控别名回退。
+- Why：用户和文档常用词不同，AI 仍需获得可继续 read 的节点。
+- How：以“过拟合/过度拟合”等 fixture 执行搜索。
+- Oracle：回退命中正确节点，返回的 `nodeId` 可直接交给 `docx_read`。
+- Not：不扩展为无边界同义词生成。
 
-##### `docx-edit-serial-actions-follow-replacement-successor`
-
-- 测试类型：`backend`
-- What：同一次 `docx_edit(actions[])` 内 `replace_block` 后继续引用同一原始 blockId，会解析到替换后的 successor。
-- Why：批量编辑经常需要先替换整段，再继续对新段落做局部文字处理。
-- How：先把目标段落替换为含 `keyword` 的新段落，再用同一原始 blockId 执行 `replace_text`。
-- Oracle：最终文本包含二次修改后的 `styled-keyword`，并同时记录 `replace_block` 与 `replace_text`。
-- Not：不验证跨多轮引用新增 block 的策略。
-
-##### `docx-edit-serial-actions-fail-after-delete-without-committing`
+##### `docx-search-regex-contract`
 
 - 测试类型：`backend`
-- What：同一次 `docx_edit(actions[])` 内删除后再修改同一原始 blockId 会失败，且不会提交部分结果。
-- Why：批量编辑失败必须保持 transaction 边界，不能留下半成功 working draft。
-- How：先删除目标 block，再尝试对同一原始 block 执行 `replace_block`。
-- Oracle：工具返回失败；active 文档仍保留原目标文本，不出现后续替换文本。
-- Not：不支持同一次 actions 内引用本次刚创建且尚未回读的新 blockId。
+- What：regex 搜索执行显式正则并拒绝无效表达式。
+- Why：复杂定位需要可预测的模式匹配和明确失败。
+- How：对真实段落执行有效与无效 regex。
+- Oracle：有效表达式按文档顺序返回节点；无效表达式不修改会话并返回输入错误。
+- Not：不验证 LLM 是否会自行编写正则。
 
-##### `docx-format-variants-contract`
-
-- 测试类型：`backend`
-- What：paragraph、heading、table、table_cell 的读取与修改契约。
-- Why：不同 block 类型最容易只在各自路径暴露问题。
-- How：使用混合 block fixture 真实执行读取、定位与修改。
-- Oracle：各类 block 都可稳定识别和修改，不破坏其余结构。
-- Not：不验证 run 级样式保留。
-
-##### `docx-positioned-layout-read-only-contract`
+##### `docx-search-semantic-contract`
 
 - 测试类型：`backend`
-- What：命中 positioned block 时，docx 写工具会统一拒绝自动编辑。
-- Why：复杂定位排版 docx 即使只是原地改字也可能因结构重写而错位，这条 case 要长期守住 `positioned = read-only` 的能力边界。
-- How：对真实 `图形学.docx` 执行 `docx_read_outline` 定位一个 positioned block，再分别尝试 `docx_edit(insert_blocks)`、`docx_edit(replace_text)`、`docx_edit(style_text)` 与 `docx_edit(update_table_cell)`。
-- Oracle：四类写入都返回 `invalid_input`；错误信息稳定包含“当前命中复杂定位排版区域，暂不支持自动编辑”；不产生新的当前修订。
-- Not：不验证 human 的回退话术，也不验证 positioned 文档中的读取质量。
-
-##### `docx-insert-after-preserves-anchor-xml`
-
-- 测试类型：`backend`
-- What：纯 `insert_after` 不会改写 anchor 段落文本与 run 格式。
-- Why：结构插入的底层实现若重写 anchor，会制造伪样式漂移并污染 replay / committed view 语义。
-- How：构造带 mixed-format run 的 anchor 段落，执行 `docx_edit(insert_blocks after)`，再读取同一 anchor。
-- Oracle：anchor 文本保持不变，run 列表逐项一致，changedBlocks 只记录 `insert_after`。
-- Not：不验证 direct apply 产物。
-
-##### `docx-created-blocks-resolve-inserted-range-not-shifted-tail`
-
-- 测试类型：`backend`
-- What：`createdBlocks` 依据插入区间解析，而不是依据前后 `blockId` 集合差。
-- Why：当前 `blockId` 由 `blockIndex` 派生，结构插入后下游 block 会整体漂移，集合差会天然误认旧块。
-- How：在 anchor 后插入一个段落，再检查 `createdBlocks` 与插入后 outline 的对应关系。
-- Oracle：`createdBlocks` 只命中新插入段落，不包含下游旧段落。
-- Not：不验证 table cell 创建。
-
-##### `docx-insert-does-not-duplicate-downstream-blocks`
-
-- 测试类型：`backend`
-- What：replay projection 中插入后下游旧块不会重复、错位。
-- Why：结构插入后的 replay 重绑若把新块误认成旧块，会直接造成 committed view 重复旧段落。
-- How：对真实 docx 执行“插段落 + 插表格”，materialize committed view 后检查 outline 顺序。
-- Oracle：下游旧段落只出现一次，新增段落与表格保持稳定顺序。
-- Not：不验证 delete/replace 语义。
-
-##### `docx-inserted-table-created-blocks-include-table-and-cells`
-
-- 测试类型：`backend`
-- What：表格插入后的 `createdBlocks` 同时包含 table 与 table_cell。
-- Why：replay session 需要完整的新建结构元信息，否则插入表格容易只落 body block，缺少 cell 级引用。
-- How：执行一次 `docx_edit(insert_blocks table after)`，直接检查 mutation result 的 `createdBlocks`。
-- Oracle：返回 1 个 `table` 和全部对应的 `table_cell`。
-- Not：不验证 direct apply 产物。
-
-##### `docx-mixed-format-preservation`
-
-- 测试类型：`backend`
-- What：混合格式文本在编辑后的样式保留。
-- Why：run 级样式保留是 docx 修改的重要风险。
-- How：对包含 `bold / italic / underline / color` 的真实 docx 执行编辑，再通过 block 读取验证样式结果。
-- Oracle：未修改部分样式保留，修改目标样式正确。
-- Not：不验证 UI。
-
-##### `docx-working-draft-hides-deleted-content`
-
-- 测试类型：`backend`
-- What：删除后的内容不会再出现在 AI 继续读取的 working draft 中。
-- Why：working draft 是 AI 的当前有效视图，必须隐藏 deleted 内容，但不能丢失相邻未修改内容。
-- How：对真实 docx 执行删除，再继续执行 `docx_search` 验证 deleted 文本消失、其余文本仍可读。
-- Oracle：deleted 内容命中为 0，未修改内容仍稳定命中。
-- Not：不验证 UI 展示层。
-
-#### docx hand 类别
-
-##### `hand-docx-single-file-multi-write-allowed`
-
-- 测试类型：`backend`
-- What：同一 `sourcePath` 一轮 hand 中允许连续多个 `docx_edit`。
-- Why：hand 保持串行执行；跨 tool 调用的漂移由每次 `docx_edit` 基于最新 snapshot 绑定输入 blockId 解决，单个 `docx_edit(actions[])` 内的漂移由稳定 locator 串行解析解决，不再做同文件多写预拦截。
-- How：构造同一文件上的 `docx_edit(replace_text) -> docx_edit(replace_text)` serial plan。
-- Oracle：两次写入都成功，且不返回 `hand_docx_edit_failed`。
-- Not：不验证单次 `docx_edit(actions=[...])` 内部串行 transaction。
-
-##### `hand-docx-multi-file-single-write-allowed`
-
-- 测试类型：`backend`
-- What：一轮 hand 内对不同文件各写一次仍允许通过。
-- Why：hand 不再按同文件写入次数做预拦截，多文件连续写也应继续保持稳定。
-- How：真实执行 `fileA:docx_edit(replace_text) -> fileB:docx_edit(replace_text)`。
-- Oracle：两次写都成功，两个文件各自进入最新编辑状态，且最新 outline 可读到更新后的内容。
-- Not：不验证跨文件更多组合。
-
-##### `hand-docx-same-file-read-write-read-allowed`
-
-- 测试类型：`backend`
-- What：同一文件在一轮中执行 `read -> write -> read` 仍允许通过。
-- Why：hand 允许串行读写混排，围绕单次写的读回确认流程不应被误伤。
-- How：真实执行 `docx_read_outline -> docx_edit(replace_text) -> docx_read_blocks`。
-- Oracle：三步都成功，最后一次读取能看到写后内容，且不返回 `hand_docx_edit_failed`。
-- Not：不验证额外的多次写。
-
-##### `docx-write-then-outline-percent-sees-new-block`
-
-- 测试类型：`backend`
-- What：docx 写后立刻使用 `docx_read_outline(percent)` 读取当前 working draft 时，能看到新增块。
-- Why：这直接覆盖 replay session stats 未同步导致 percent 漏块的回归问题。
-- How：真实执行一次 `docx_edit(insert_blocks 插入 Heading 样式段落)`，随后立刻用 `ranges=[{type:'percent',fromPercent:0,toPercent:100}]` 读取。
-- Oracle：outline 返回新增块，且 replay session 的 `stats.blockCount` 等于当前 active revision 的真实块数。
-- Not：不验证更细的分页策略。
-
-##### `docx-replay-stats-track-active-revision`
-
-- 测试类型：`backend`
-- What：replay session 暴露的 `stats` 会随着 revision 前进持续对齐当前 active snapshot。
-- Why：`docx_read_outline(percent)`、写后读回与后续只读工具都依赖这份 stats 一致性。
-- How：真实执行“插入一段 -> 再改写该段”，分别检查 `registerRevision` 后 replay session 的 `stats.blockCount`。
-- Oracle：每次 revision 之后 `stats.blockCount` 都与当前真实 working draft 一致，不残留旧版本统计。
-- Not：不验证 imageCount 等与 replay snapshot 无关的计数来源。
-
-##### `docx-multi-round-created-block-edit`
-
-- 测试类型：`backend`
-- What：第 2/3 轮可继续编辑第 1 轮新增的段落和表格单元格。
-- Why：cumulative replay 的核心价值就是多轮编辑可持续作用于新增结构。
-- How：真实执行“插入段落 -> 改写新增段落 -> 插入表格 -> 更新新增 cell”。
-- Oracle：新增段落与新增 cell 都可继续被定位和修改，最新 working draft 只暴露最新有效内容。
-- Not：不验证 live 模型如何规划多轮编辑。
-
-##### `docx-diff-original-block-net-semantics`
-
-- 测试类型：`backend / tool`
-- What：同一个原始 block 在同一次 actions 和同一 run 多轮编辑后，Diff 只展示相对 run 初始版本的净变化。
-- Why：原始 block 的每次 replacement 都直接进入 review projection 会重复显示旧内容，并放大红绿数量。
-- How：真实覆盖 `A -> B -> C`、`A -> B -> A`、替换后删除，以及同一原始 block 在单次和多次 `docx_edit` 中连续变化；提交当前 run 的 Docx 草稿后解析真实 preview docx。
-- Oracle：`A -> B -> C` 只出现一次红色 A 和一次绿色 C且不出现 B；`A -> B -> A` 不包含红绿标记；替换后删除只出现一次红色 A；正式 docx 始终是最终净稿，record 数量与净变化一致。
-- Not：不验证 live 模型如何规划编辑步骤。
-
-##### `docx-diff-generated-block-net-semantics`
-
-- 测试类型：`backend / tool`
-- What：本轮新增 block 后继续修改或删除时，Diff 只保留最终仍存在的 generated block。
-- Why：新增内容的中间稿和已在本轮删除的临时结构不属于用户需要审核的最终差异。
-- How：真实覆盖新增后多次替换、新增后删除、新增表格后修改单元格，并解析真实 preview docx。
-- Oracle：新增后多次修改只显示最终绿色版本；新增后删除不显示任何净变化；表格不重复；正式文件和 record 统计与最终状态一致。
-- Not：不验证原始 block 的替换链；由 `docx-diff-original-block-net-semantics` 覆盖。
-
-##### `docx-precondition-guard`
-
-- 测试类型：`backend`
-- What：未 `open`、无效 `sourcePath` 或无效修订引用时的前置保护。
-- Why：这些是工具层最常见的异常入口。
-- How：直接调用 `outline / read / edit` 覆盖非法输入。
-- Oracle：返回明确失败，不产生新修订，不污染运行状态。
-- Not：不验证上层重试策略。
-
-##### `docx-apply-ops-invalid-snapshot-guard`
-
-- 测试类型：`backend`
-- What：源 DOCX 已有无效图片关系时，`apply_ops` 仍可正常写入。
-- Why：WPS 可打开的旧文档可能带有不可见的 `NULL` 图片残留，不能因此拒绝用户的正常编辑。
-- How：构造同时含合法 `../customXml/item1.xml` 和缺失 `../NULL` 关系的 DOCX，执行真实 `docx_edit(replace_text)` 后重新读取。
-- Oracle：`customXml` 不误报；`NULL` 被记录为源问题但不阻断编辑；修订正常推进且新文本可搜索。
-- Not：不验证编辑器新增坏关系；由 `docx-validation-detects-new-relationship-problems` 覆盖。
-
-##### `docx-validation-detects-new-relationship-problems`
-
-- 测试类型：`backend`
-- What：编辑结果新增缺失关系时，`docx_edit` 会拒绝该结果且不推进草稿。
-- Why：兼容源文档历史脏数据不能放开编辑器自己生成的结构损坏。
-- How：以无问题 DOCX 为基线，模拟编辑器产出带 `../NULL` 图片关系的结果后调用真实 `docx_edit(replace_text)`。
-- Oracle：返回“本次编辑新增结构问题”；原文本仍可搜索；活动修订保持在 `v1`。
-- Not：不验证完整 human 工具选择。
-
-##### `docx-dangling-image-relationship-contract`
-
-- 测试类型：`backend / tool-real`
-- What：真实需求 DOCX 中的 `NULL` 图片残留不计入图片数量，且不阻止编辑。
-- Why：用户在 WPS 中看不到该残留，模型和用户也不应看到虚假的“图片9”。
-- How：读取真实附件的 outline，统计 visual 数量后替换文档标题并重新搜索写入文本。
-- Oracle：源诊断仅含 `NULL` 缺失关系；读取结果只包含 8 张真实图片；编辑成功，写后残留关系仍保持原样。
-- Not：不调用真实模型；完整自然语言回归由 `human-docx-dangling-image-edit-live` 覆盖。
+- What：semantic 搜索基于 outline 可搜索节点构建临时索引。
+- Why：长文档中 AI 需要先缩圈，再按 `nodeId` 精读。
+- How：对真实 DOCX 节点生成 embedding 并搜索语义相关内容。
+- Oracle：结果来自当前 Working 文档，写入后索引可更新；不持久化重复父链或 flowIndex。
+- Not：不验证 workspace KB 索引。
 
 #### text-file 类别
 
@@ -963,20 +573,11 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 ##### `hand-invalid-tool-input`
 
 - 测试类型：`backend`
-- What：双层嵌套的坏工具参数会被工具层 schema 校验拒绝，并返回 `hand_docx_edit_failed` 错误。
+- What：嵌套错误或缺少必要字段的 DOCX 单操作参数会被工具层 schema 校验拒绝。
 - Why：模型常见错误是把工具参数包错层级；工具自身的 zod schema 校验必须在真实执行中给出可恢复的结构化失败。
-- How：向真实 `hand` node 提交双层嵌套的坏 `docx_edit` 参数。
-- Oracle：工具结果为失败，error 指向 `did not match expected schema`，并提升为 `hand_docx_edit_failed` 错误。
+- How：向真实 `hand` node 提交错误的 `docx_content_edit` 参数。
+- Oracle：工具结果失败，error 指向 `did not match expected schema`，文件和 Working 会话不变。
 - Not：不验证 brain 如何根据该错误重写计划。
-
-##### `hand-docx-edit-invalid-blockid-failed`
-
-- 测试类型：`backend`
-- What：`docx_edit` 使用不存在或过期 blockId 时失败，并返回统一 `hand_docx_edit_failed`。
-- Why：无效 blockId 是 docx 多轮编辑的高频失败入口，必须稳定进入可恢复错误，而不是静默写错位置。
-- How：创建真实 docx 后，通过 `hand` 调用 `docx_edit(insert_blocks)`，`location.blockId` 使用不存在的 `b:99`。
-- Oracle：`docx_edit` 返回失败，error 包含 toolName、sourcePath、action 与具体错误。
-- Not：不验证 human 最终交付话术。
 
 ##### `hand-terminal-approval-batch`
 
@@ -986,15 +587,6 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - How：通过真实 `human` hand 决策构造两个需审批 terminal 命令，并让审批批次返回 `approve + guide` 混合结果。
 - Oracle：事件流出现 `approval_batch_required / approval_batch_decision`；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；被拦的 terminal 调用会以合成 `ToolMessage` 结果（`approval_blocked`）回流到 `brain`。
 - Not：不验证前端审批卡片交互。
-
-##### `hand-serial-docx-chain`
-
-- 测试类型：`backend`
-- What：`hand` 会按顺序执行真实 docx 写入与读回确认链路。
-- Why：复杂 docx 链路依赖当前最新修订，必须通过回归 case 守住顺序执行契约。
-- How：通过真实 `hand` 执行 `docx_edit(replace_text) -> docx_read_blocks`。
-- Oracle：工具结果顺序稳定、全部成功，且不会在 hand 内直接产出 docx 交付 artifact。
-- Not：不验证 `brain` 是否自然生成这条计划。
 
 ### 4.2 `human`
 
@@ -1158,8 +750,8 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - 测试类型：`backend / mock-llm`
 - What：同一 AI session 的多轮 human run 能复用已学习技能记忆。
 - Why：技能记忆是 AI 架构跨轮次协作的核心，不应每轮重复 learning。
-- How：第一轮学习并使用技能，第二轮继续同一任务，检查 brain 输入和 human steps。
-- Oracle：第一轮写入技能；第二轮能看到技能且不重复 learning；两轮均正常完成。
+- How：跨四轮逐步学习 DOCX、PDF、Excel、PPT 和图片技能，最后加载包含全部 9 个工具的 `docx-write`。
+- Oracle：后续轮次能看到已有技能且不重复 learning；超过 30 个活动工具时按最早学习顺序淘汰 `docx-read`、`pdf-read`，`docx-write` 的 9 个工具完整加载。
 - Not：不覆盖 Workbench UI 会话持久化，该路径由 Workbench E2E 覆盖。
 
 ##### `todolist-memory-maintenance`
@@ -1170,51 +762,6 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - How：第一轮 `brain` 写入只含 todo 的任务清单；第二轮 `brain` 读取真实 prompt 后将任务清单重写为包含 done 与 todo 的新版本；第三轮验证更新后的状态已写入 prompt，并把任务清单收尾为全 done。
 - Oracle：第二轮 `brain` prompt 中能看到第一轮写入的结构化任务清单项，第三轮能看到第二轮的 done/todo 状态更新，任务最终完成。
 - Not：不验证交付前计划完成度检查（该机制已移除，交付与否由 brain 自主判断）。
-
-##### `complex-docx-edit`
-
-- 测试类型：`backend`
-- What：mock-llm 下 `human` 仍通过真实 docx 工具链完成打开、编辑和搜索。
-- Why：复杂 docx 编辑是 `human` 的长期高价值真实任务类型。
-- How：先写入 fixture docx，再通过真实 `docx_edit(replace_text) -> docx_read_blocks -> docx_search` 完成一次正文替换、读取确认和定位。
-- Oracle：真实 `docx_edit(replace_text)` 只产生一处 `changedBlocks`，真实 `docx_search` 与 `docx_read_blocks` 都能命中新文本，任务最终完成。
-- Not：不验证 UI 或最终落盘流程。
-
-##### `complex-docx-insert-structured-content`
-
-- 测试类型：`backend`
-- What：mock-llm 下 `human` 可以按对象类型提交段落与表格编辑参数。
-- Why：复杂 docx 编辑不能只覆盖文本替换，还要保护 structured content 插入这类高价值写作场景。
-- How：先读取真实 docx outline，定位 anchor 后通过真实 `docx_edit(insert_blocks)` 插入段落和表格，再读回确认。
-- Oracle：任务最终完成；docx apply artifact 与 file artifact 正常生成；写入内容包含新增段落和表格结构。
-- Not：不验证 live 模型是否自然选择同样的结构化参数。
-
-##### `docx-read-fact-exposure`
-
-- 测试类型：`backend`
-- What：human 在 mock-llm 模式下能收到 docx 读取链路中的关键客观事实，包括 outline 截断说明与归一化后的搜索命中。
-- Why：这一层如果事实暴露不足，human 很容易把“当前结果被截断”或“搜索已命中”误读成别的状态。
-- How：构造包含长文档截断与兼容字形文本的真实 docx，通过 scripted brain 先执行 `docx_read_outline`、再执行 `docx_search` 与 `docx_read_blocks`，检查后续 prompt 是否包含相关事实。
-- Oracle：后续 `brain` prompt 中可读到截断文字说明、归一化搜索命中与区间精读正文，最终任务完成且不会把文档中已写内容误报为“未写”。
-- Not：不验证 live 模型在该场景下的自主策略优劣。
-
-##### `docx-search-alias-then-range-read`
-
-- 测试类型：`backend`
-- What：mock-llm 下 `human` 会先做 alias fallback 搜索，再进入区间精读。
-- Why：docx 新工作流里最关键的自主使用模式，必须有 scripted 回归。
-- How：构造只写“过度拟合”的真实 docx，scripted brain 先执行 `docx_search(query=过拟合)`，再以返回 blockId 执行区间 `docx_read_blocks`。
-- Oracle：`docx_search` 返回 alias fallback 事实，`docx_read_blocks` 返回定义/成因/处理线索，任务最终完成。
-- Not：不验证 live 模型是否一定会采用相同工具顺序。
-
-##### `human-docx-read-visuals-collaboration`
-
-- 测试类型：`backend / mock-llm`
-- What：mock human 看到 DOCX 递归树里的 visual 节点后，可以选择 `docx_read_visuals` 并直接得到识图结果。
-- Why：visualId 只有能进入模型决策上下文并驱动真实视觉读取，才构成完整能力。
-- How：使用 `灵感测试.docx` 和本地视觉服务；脚本化模型先读 outline，再读取含 visual 的 block，并在后续 prompt 确认递归 visual 节点和 visualId 后调用视觉读取工具。
-- Oracle：工具顺序为 outline、block、visual；识图结果进入后续 brain prompt；不调用 `image_analyze`；任务完成。
-- Not：不验证真实模型的自由规划质量，不验证 chart、diagram 和 shape 的裁剪精度。
 
 ##### `multi-tool-collaboration`
 
@@ -1287,7 +834,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：真实模型尝试编辑旧版 .doc 后遵循工具错误信息，停止重试并跳过。
 - Why：不可写格式必须快速收敛，避免反复工具调用和误改原文件。
 - How：要求直接编辑旧版文档，检查一次失败、错误信息、最终答复和文件 hash。
-- Oracle：只尝试一次编辑；docx_edit 返回「禁止尝试任何对 .doc 文件的编辑」错误；源文件不变且任务完成。
+- Oracle：最多尝试一次受控 DOCX 写入；工具返回 `.doc` 只读错误；源文件不变且任务完成。
 - Not：不要求模型绕过格式限制，也不把失败后的多次重试视为可接受结果。
 
 ##### `human-ppt-read-management-risk-review-live`
@@ -1368,8 +915,8 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：live 模式下 `human` 会在一个真实长任务里串起模板定位、上周周报风格参考、多源工作资料取证、新建本周周报 docx 并直接写回交付。
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、跨 `docx + txt` 综合、create-target 写入与最终交付链路；同时守住“共享 workspace 中全部已支持文件都已进入真实 KB，且关键事实可能来自 KB 命中的 txt 或后续读取材料”的更真实用户环境。
 - How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，并在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件索引进 KB；随后由测试在运行时重建 `工作/` 目录：包含一份不可直接覆盖的周报模板、一份只能参考风格的上周已发版周报、多份提供本周事实的 `docx` 工作文档、数份必须读取的 `txt` 口径/跟进材料，以及少量看起来相关但不应直接采用的干扰文件；直接输入“帮我写下这周的周报，基于这个周报模版和我的工作文档信息，记得参考我上周写的周报风格来哦”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤以及一次对新路径的 `docx_edit(insert_blocks)`；模型会打开模板和上周周报；最终输出 artifacts 中包含携带 `applyId` 的 docx file artifact；模板与既有参考 `docx` 文件不被覆盖。按 10 分制评估文件交付、原文件安全、未闭环风险、负责人动作和谨慎结论，严格超过 8 分通过；否定上下文中的“风险已解除”等文字不得误判成正向收口。
-- Not：不绑定最终答案措辞，不要求固定是否使用 `docx_read_outline` 还是 `docx_read_blocks`，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
+- Oracle：任务最终完成；共享 workspace 中全部已支持文件均被索引；事件流中至少出现一次 `terminal_run`、至少一次真实资料读取/检索步骤以及一次对新路径的 `docx_content_edit.insert_nodes(document_end)`；模型会打开模板和上周周报；最终输出 artifacts 中包含携带 `applyId` 的 docx file artifact；模板与既有参考 `docx` 文件不被覆盖。按 10 分制评估文件交付、原文件安全、未闭环风险、负责人动作和谨慎结论，严格超过 8 分通过；否定上下文中的“风险已解除”等文字不得误判成正向收口。
+- Not：不绑定最终答案措辞，不要求固定使用 outline、search 或 read，也不强制一定调用 KB；若模型仅凭工作区材料完成任务，也视为符合预期。
 
 ##### `human-docx-positioned-structural-edit-fallback-live`
 
@@ -1377,7 +924,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：live 模式下 `human` 在复杂 positioned docx 中会跳过命中的复杂定位排版区域，并继续尝试处理其他可安全编辑的位置。
 - Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 即使只是原地改字也可能因结构重写而错位；这条 case 要长期守住“positioned 区域只读、自动写入必须拒绝并给用户手动提示”的能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；只将 `图形学.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想把‘反走样’这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。”的自然语言诉求，让真实 `human` 自主完成。
-- Oracle：事件流中至少一次 `docx_search` / `docx_read_blocks` / `docx_read_outline` 覆盖 `图形学.docx`；至少一次 docx 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；命中区域不得发生成功写入，但允许继续编辑其他非定位区域；允许改为生成独立补充稿，也允许在最终答复中直接交付可粘贴的完整说明和总结表。按 10 分制评估目标读取、保护触发、写入安全、手动说明、内容可用性和 artifact 一致性，严格超过 8 分通过，不把内部完成状态作为单独失败条件。
+- Oracle：事件流中至少一次 `docx_search` / `docx_read` / `docx_read_outline` 覆盖 `图形学.docx`；至少一次 DOCX 写入请求因为命中复杂定位排版区域失败，并返回稳定 `hand_docx_positioned_write_blocked` 与 `diagnostic.message`；命中区域不得发生成功写入，但允许继续编辑其他非定位区域；允许改为生成独立补充稿，也允许在最终答复中直接交付可粘贴的完整说明和总结表。按 10 分制评估目标读取、保护触发、写入安全、手动说明、内容可用性和 artifact 一致性，严格超过 8 分通过，不把内部完成状态作为单独失败条件。
 - Not：不要求固定使用哪一种 docx 写工具，也不要求最终答复使用固定措辞。
 
 ##### `human-kb-guided-docx-comparison-draft-live`
@@ -1404,7 +951,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：真实模型能从 DOCX 递归 visual 节点取得 visualId，并按需读取普通图片。
 - Why：mock 只能证明协议可串联，live 还要验证模型在自然语言任务下会自主选择视觉读取，并能使用真实识图结果回答。
 - How：只选择含五种 visual kind 的真实 OOXML fixture，要求模型找到标有 IMAGE 的普通图片，说明标题、主要颜色和基本图形；只开放 DOCX 读取工具，不在用户输入中提供工具名或调用顺序。
-- Oracle：任务完成；模型读取详细 block 并成功调用 `docx_read_visuals`；识图结果和最终答复都包含 IMAGE，最终答复识别出蓝色、矩形和圆形；不调用 `image_analyze` 或 `docx_edit`；源 DOCX 不变。
+- Oracle：任务完成；模型读取递归节点并成功调用 `docx_read_visuals`；识图结果和最终答复都包含 IMAGE，最终答复识别出蓝色、矩形和圆形；不调用 `image_analyze` 或任何 DOCX 写工具；源 DOCX 不变。
 - Not：不通过 backend live 重复验证 chart、diagram、shape 的 BrowserWindow 渲染；该链路由真实 Electron 渲染测试覆盖。
 
 ##### `human-docx-dangling-image-edit-live`
@@ -1413,7 +960,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 - What：真实模型能读取带 `NULL` 图片残留的需求 DOCX，识别真实图片、评估需求并写回开发时间。
 - Why：这条回归覆盖用户真实的“读图 + 分析 + 同文件编辑”闭环，防止底层脏关系再次被算成虚假图片或阻止写入。
 - How：使用真实附件和用户原句，只开放 DOCX 读取、图片读取和编辑工具，并注入主模型与视觉模型配置。
-- Oracle：任务完成；调用 DOCX 读取、视觉读取和成功的 `docx_edit`；视觉结果没有缺失图片错误，最终答复不出现“图片9”，产出的 DOCX 比原文新增至少 12 条有效工时表达。
+- Oracle：任务完成；调用 DOCX 读取、视觉读取和成功的 `docx_content_edit`；视觉结果没有缺失图片错误，最终答复不出现“图片9”，产出的 DOCX 比原文新增至少 12 条有效工时表达。
 - Not：不要求固定的估时数值、工具调用次数或最终答复措辞；未配置 live 模型时按规范跳过。
 
 ##### `human-web-search-by-url-live`

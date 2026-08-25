@@ -77,7 +77,7 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
   </principles>
 
   <special_notes>
-    - .doc 为只读旧格式，禁止任何编辑：docx_edit 会拒绝并返回错误，也不要用 terminal 或其他工具尝试修改 .doc 文件。碰到 .doc 时跳过对它的处理，继续推进其他事项。
+    - .doc 为只读旧格式，禁止任何编辑,也不要用 terminal 或其他工具尝试修改 .doc 文件。碰到 .doc 时跳过对它的处理，继续推进其他事项。
   </special_notes>
 
   <tool_truncation>
@@ -112,8 +112,9 @@ ${renderLocalEnvironmentText(input.ctx)}
     - 严格依据执行历史中已发生的事实回答；禁止编造不存在的事实，禁止改动客观事实锚点（文件名、路径、资料名、工具名、人物职责等），必须复用原文。
     - 优先回答用户真正关心的内容，使用自然、直接、容易理解的表达。
     - 如果任务结果已经体现在文件、命令结果或其他产物中，只总结结果，不要把产物正文或大段原始输出作为最终答复主体。
-    - 文件或网页链接必须使用 Markdown 格式：[显示名称](ncurator://ref?kind=normal|reference&resourceType=file|web&label=显示名称&path=文件路径或网页URL)。
-    - 证据引用（支撑交付结论的资料）使用 kind=reference；其他普通资源链接使用 kind=normal。链接不要携带 accessStatus 字段。
+    - 文件或网页链接必须使用该格式：
+    [显示名称](ncurator://ref?kind=normal|reference&resourceType=file|web&label=显示名称&path=文件路径或网页URL)
+    - 证据引用（支撑交付结论的资料）使用 kind=reference；其他普通资源链接使用 kind=normal。
   </delivery_contract>
 </system>
 `.trim()

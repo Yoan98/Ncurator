@@ -21,19 +21,16 @@ describe('ai unit human tool result renderers', () => {
     expect(rendered).toContain('timedOut=false')
   })
 
-  it('renders nested docx_read_blocks table, cell and runs details', () => {
+  it('renders nested docx_read table, cell and runs details', () => {
     const rendered = renderToolResultDataText({
-      toolName: 'docx_read_blocks',
+      toolName: 'docx_read',
       data: {
         sourcePath: 'graphics.docx',
-        currentRevisionRef: 'v7',
-        fromBlockIndex: 10,
-        toBlockIndex: 12,
-        blocks: [
+        nodes: [
           {
-            blockId: 'b:10',
+            nodeId: 'node_10',
             type: 'paragraph',
-            blockIndex: 10,
+            story: { storyId: 'body', type: 'body' },
             children: [
               {
                 type: 'run',
@@ -44,10 +41,9 @@ describe('ai unit human tool result renderers', () => {
             ]
           },
           {
-            blockId: 'b:11',
+            nodeId: 'node_11',
             type: 'table',
-            blockIndex: 11,
-            preview: '处理方法表',
+            story: { storyId: 'body', type: 'body' },
             children: [
               {
                 type: 'table_row',
@@ -112,22 +108,24 @@ describe('ai unit human tool result renderers', () => {
       toolName: 'docx_read_outline',
       data: {
         sourcePath: 'graphics.docx',
-        totalBlockCount: 12,
-        blocks: [
+        totalNodeCount: 12,
+        nodes: [
           {
-            blockId: 'b:4',
+            nodeId: 'node_4',
             type: 'table',
-            blockIndex: 4,
+            nodeIndex: 4,
+            story: { storyId: 'body', type: 'body' },
             rows: 2,
             cols: 3,
             text: '视觉方法表',
             visuals: { count: 2, kinds: ['image', 'chart'] }
           },
           {
-            blockId: 'c:4:1:2',
+            nodeId: 'node_cell',
             type: 'table_cell',
-            blockIndex: 4,
-            tableBlockId: 'b:4',
+            nodeIndex: 4,
+            tableNodeId: 'node_4',
+            story: { storyId: 'body', type: 'body' },
             row: 1,
             col: 2,
             text: '图表单元格'
@@ -136,30 +134,36 @@ describe('ai unit human tool result renderers', () => {
       }
     })
 
-    expect(rendered).toContain('totalBlockCount=12')
+    expect(rendered).toContain('totalNodeCount=12')
     expect(rendered).toContain('rows=2')
     expect(rendered).toContain('cols=3')
     expect(rendered).toContain('visualCount=2')
     expect(rendered).toContain('visualKinds=image,chart')
-    expect(rendered).toContain('tableBlockId=b:4')
+    expect(rendered).toContain('tableNodeId=node_4')
     expect(rendered).toContain('row=1')
     expect(rendered).toContain('col=2')
   })
 
-  it('renders docx_edit msg hint instead of internal revision fields', () => {
+  it('renders DOCX mutation changes without internal revision fields', () => {
     const rendered = renderToolResultDataText({
-      toolName: 'docx_edit',
+      toolName: 'docx_content_edit',
       data: {
-        sourcePath: 'graphics.docx',
-        previousRevisionRef: 'v1',
-        currentRevisionRef: 'v2',
-        createdBlocks: [{ blockId: 'b:2', type: 'paragraph' }],
-        createdBlockIds: ['b:2'],
-        msg: 'docx编辑成功'
+        changes: [
+          {
+            kind: 'created',
+            node: {
+              type: 'paragraph',
+              nodeId: 'node_2',
+              story: { storyId: 'body', type: 'body' },
+              children: []
+            }
+          }
+        ]
       }
     })
 
-    expect(rendered).toContain('msg=docx编辑成功')
+    expect(rendered).toContain('changes')
+    expect(rendered).toContain('node_2')
     expect(rendered).not.toContain('previousRevisionRef')
     expect(rendered).not.toContain('currentRevisionRef')
     expect(rendered).not.toContain('createdBlocks')

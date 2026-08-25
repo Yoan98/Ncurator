@@ -39,7 +39,7 @@ const hasOverfittingEvidence = (events: readonly AiRunEvent[]): boolean =>
   filterAiRunEventsByType(events, 'tool_call_result').some((event) => {
     const text = eventText(event)
     return (
-      ['docx_search', 'docx_read_blocks'].includes(String(event.toolName || '')) &&
+      ['docx_search', 'docx_read'].includes(String(event.toolName || '')) &&
       /深度学习\.docx/.test(text) &&
       /(过拟合|过度拟合)/.test(text) &&
       /(训练时间过久|记住过多训练数据|只针对于这部分训练数据|不太具有展望性)/.test(text)
@@ -63,37 +63,40 @@ const runUsedSelectedFile = (
     (event) =>
       event.runId === runId &&
       ['tool_call_started', 'tool_call_result'].includes(event.type) &&
-      ['docx_search', 'docx_read_blocks'].includes(String(event.toolName || '')) &&
+      ['docx_search', 'docx_read'].includes(String(event.toolName || '')) &&
       eventText(event).includes(fileName)
   )
 
-const createFaultAfterOverfittingWrapper = (input: {
-  runtime: BackendTestRuntime
-  state: LiveFaultInjectionState
-}): NonNullable<AiRunDeps['chatToolsWrapper']> => (realChatTools) => async (request) => {
-  if (request.caller === 'human.brain') {
-    input.state.brainRoundCount += 1
+const createFaultAfterOverfittingWrapper =
+  (input: {
+    runtime: BackendTestRuntime
+    state: LiveFaultInjectionState
+  }): NonNullable<AiRunDeps['chatToolsWrapper']> =>
+  (realChatTools) =>
+  async (request) => {
+    if (request.caller === 'human.brain') {
+      input.state.brainRoundCount += 1
+    }
+
+    if (request.caller === 'human.brain' && input.state.shouldFailNextBrain) {
+      input.state.shouldFailNextBrain = false
+      input.state.injected = true
+      throw new Error('fetch failed')
+    }
+
+    const result = await realChatTools(request)
+
+    if (
+      request.caller === 'human.brain' &&
+      !input.state.injected &&
+      input.state.brainRoundCount >= MIN_BRAIN_ROUNDS_BEFORE_FAULT &&
+      hasOverfittingEvidence(input.runtime.eventCollector.snapshot())
+    ) {
+      input.state.shouldFailNextBrain = true
+    }
+
+    return result
   }
-
-  if (request.caller === 'human.brain' && input.state.shouldFailNextBrain) {
-    input.state.shouldFailNextBrain = false
-    input.state.injected = true
-    throw new Error('fetch failed')
-  }
-
-  const result = await realChatTools(request)
-
-  if (
-    request.caller === 'human.brain' &&
-    !input.state.injected &&
-    input.state.brainRoundCount >= MIN_BRAIN_ROUNDS_BEFORE_FAULT &&
-    hasOverfittingEvidence(input.runtime.eventCollector.snapshot())
-  ) {
-    input.state.shouldFailNextBrain = true
-  }
-
-  return result
-}
 
 const buildAiRunDeps = async (input: {
   runtime: BackendTestRuntime
@@ -214,14 +217,13 @@ describe('ai human live backend', () => {
           const snapshotAfterNetwork = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
 
           let run2BrainMessages: BaseMessage[] | null = null
-          const captureRun2Wrapper: NonNullable<AiRunDeps['chatToolsWrapper']> = (
-            realChatTools
-          ) => async (request) => {
-            if (request.caller === 'human.brain' && !run2BrainMessages) {
-              run2BrainMessages = [...request.messages]
+          const captureRun2Wrapper: NonNullable<AiRunDeps['chatToolsWrapper']> =
+            (realChatTools) => async (request) => {
+              if (request.caller === 'human.brain' && !run2BrainMessages) {
+                run2BrainMessages = [...request.messages]
+              }
+              return await realChatTools(request)
             }
-            return await realChatTools(request)
-          }
           const resumedResult = await AiRunService.getInstance().run(
             {
               runId: `${runtime.runId}-run-2-resume`,

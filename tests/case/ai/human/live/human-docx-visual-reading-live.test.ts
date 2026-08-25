@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
 import type { JsonObject } from '../../../../../src/shared/types'
-import { loadLiveLlmConfigFromEnv, loadLiveVisionLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
+import {
+  loadLiveLlmConfigFromEnv,
+  loadLiveVisionLlmConfigFromEnv
+} from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { buildSelectedDocxFixtureReferences } from '../../../../harness/backend/aiLiveTestData'
@@ -91,9 +94,17 @@ describe('ai human live backend', () => {
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
-              toolNames.includes('docx_read_blocks') &&
+              toolNames.includes('docx_read') &&
               [...visualTexts, ...analyzeTexts].some((text) => /IMAGE/i.test(text)) &&
-              !toolNames.includes('docx_edit') &&
+              !toolNames.some((toolName) =>
+                [
+                  'docx_content_edit',
+                  'docx_format',
+                  'docx_table_edit',
+                  'docx_media_edit',
+                  'docx_comments_revisions'
+                ].includes(toolName)
+              ) &&
               result.beforeHash === result.afterHash,
             {
               name: 'human-live-reads-docx-image-from-recursive-visual-node',

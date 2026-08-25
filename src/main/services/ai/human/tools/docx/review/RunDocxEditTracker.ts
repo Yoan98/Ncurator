@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { DocxApplyRecord } from '../../../../../../../shared/types'
 import type { DocxApplyStore } from '../../../../../storage/domains/DocxApplyStore'
-import type { DocxChangedBlock, DocxCreatedBlock, DocxOp, DocxReplaySession } from '../types'
+import type { DocxChangedNode, DocxCreatedNode, DocxOperation, DocxReplaySession } from '../types'
 import { getDocxWorkerClient } from '../worker/docxWorkerClient'
 import { materializeDocxProjectedArtifact } from './reviewSerializer'
 import type { RunDocxEditDocument } from './types'
@@ -72,13 +72,13 @@ export class RunDocxEditTracker {
     runId: string
     previousDocId: string
     nextDocId: string
-    op: DocxOp
-    changedBlocks: DocxChangedBlock[]
-    createdBlocks: DocxCreatedBlock[]
+    op: DocxOperation
+    changedNodes: DocxChangedNode[]
+    createdNodes: DocxCreatedNode[]
     replaySession?: DocxReplaySession
   }): void {
     const state = this.runEdits.get(input.runId)
-    if (!state || input.changedBlocks.length === 0) return
+    if (!state || input.changedNodes.length === 0) return
 
     const sourcePath = state.sourcePathByDocId.get(input.previousDocId)
     if (!sourcePath) return
@@ -87,7 +87,7 @@ export class RunDocxEditTracker {
 
     state.sourcePathByDocId.set(input.nextDocId, sourcePath)
     document.latestDocId = input.nextDocId
-    document.dirtyChangeCount += input.changedBlocks.length
+    document.dirtyChangeCount += input.changedNodes.length
     document.replaySession = input.replaySession || document.replaySession
   }
 
@@ -99,10 +99,16 @@ export class RunDocxEditTracker {
     if (!state) return []
 
     const changedDocuments = [...state.documentBySourcePath.values()].filter((document) => {
+      const packageChanged = Boolean(
+        document.replaySession &&
+        document.replaySession.sourceSnapshot.packageFingerprint !==
+          document.replaySession.activeSnapshot.packageFingerprint
+      )
       if (
         document.dirtyChangeCount <= 0 ||
         !document.replaySession ||
-        !projectReviewView(document.replaySession).some((node) => node.reviewState !== 'normal')
+        (!packageChanged &&
+          !projectReviewView(document.replaySession).some((node) => node.reviewState !== 'normal'))
       ) {
         return false
       }
@@ -269,12 +275,14 @@ export class RunDocxEditTracker {
         return
       }
       if (node.sourceOrigin === 'source') {
-        sourceChanges.add(node.sourceBlockId || node.blockId)
+        sourceChanges.add(node.sourceNodeId || node.nodeId)
       } else if (node.reviewState === 'inserted' || node.reviewState === 'replaced-new') {
         generatedChanges += 1
       }
     })
-    return sourceChanges.size + generatedChanges
+    const packageChanged =
+      session.sourceSnapshot.packageFingerprint !== session.activeSnapshot.packageFingerprint
+    return sourceChanges.size + generatedChanges + (packageChanged ? 1 : 0)
   }
 
   private countReviewChanges(session: DocxReplaySession): DocxChangeStats {
@@ -304,7 +312,7 @@ export class RunDocxEditTracker {
     return [...session.revisionByDocId.values()]
       .filter((revision) => revision.revisionRef !== 'v1' && (revision.ops?.length || 0) > 0)
       .flatMap((revision) =>
-        (revision.changedBlocks || []).map((change, changeIndex) => {
+        (revision.changedNodes || []).map((change, changeIndex) => {
           const op = revision.ops?.[changeIndex] || revision.ops?.[0]
           return op ? buildDocxChangeSummary(op, change) : revision.summary || '文档修改'
         })

@@ -13,9 +13,9 @@ const require = createRequire(import.meta.url)
 export const renderDocxVisualToPng = async (input: {
   sourcePath: string
   kind: DocxVisualKind
-  blockIndex: number
-  visualIndexInBlock: number
-  visualCountInBlock: number
+  nodeIndex: number
+  visualIndexInNode: number
+  visualCountInNode: number
 }): Promise<{ data?: Buffer; error?: string }> => {
   if (typeof BrowserWindow !== 'function') {
     return { error: 'DOCX visual rendering requires the Electron browser runtime' }
@@ -37,28 +37,28 @@ window.renderDocxForCapture=async function(base64,binding){
   if(document.fonts&&document.fonts.ready) await document.fonts.ready;
   await new Promise(resolve=>setTimeout(resolve,100));
   const root=document.getElementById('root');
-  let blocks=Array.from(root.querySelectorAll('section.docx > article')).flatMap(article=>
+  let nodes=Array.from(root.querySelectorAll('section.docx > article')).flatMap(article=>
     Array.from(article.children).filter(element=>['P','TABLE'].includes(element.tagName))
   );
-  if(blocks.length===0){
-    blocks=Array.from(root.querySelectorAll('p,table')).filter(element=>{
+  if(nodes.length===0){
+    nodes=Array.from(root.querySelectorAll('p,table')).filter(element=>{
       const parent=element.parentElement&&element.parentElement.closest('p,table');
       return !parent;
     });
   }
-  const block=blocks[binding.blockIndex];
-  if(!block) return {error:'DOCX preview owner block was not found'};
-  const candidates=Array.from(block.querySelectorAll('img,svg,canvas')).map((element)=>{
+  const node=nodes[binding.nodeIndex];
+  if(!node) return {error:'DOCX preview owner node was not found'};
+  const candidates=Array.from(node.querySelectorAll('img,svg,canvas')).map((element)=>{
     const rect=element.getBoundingClientRect();
     return {x:rect.left+window.scrollX,y:rect.top+window.scrollY,width:rect.width,height:rect.height};
   }).filter(rect=>rect.width>=8&&rect.height>=8);
-  if(candidates.length===binding.visualCountInBlock){
-    const rect=candidates[binding.visualIndexInBlock];
+  if(candidates.length===binding.visualCountInNode){
+    const rect=candidates[binding.visualIndexInNode];
     return rect?{rect}:{error:'DOCX preview visual binding was not found'};
   }
-  if(binding.visualCountInBlock===1){
+  if(binding.visualCountInNode===1){
     if(candidates.length===0){
-      const rect=block.getBoundingClientRect();
+      const rect=node.getBoundingClientRect();
       return {rect:{x:rect.left+window.scrollX,y:rect.top+window.scrollY,width:rect.width,height:rect.height}};
     }
     const left=Math.min(...candidates.map(rect=>rect.x));
@@ -83,9 +83,9 @@ window.renderDocxForCapture=async function(base64,binding){
     const rendered = (await window.webContents.executeJavaScript(
       `window.renderDocxForCapture(${JSON.stringify(base64)},${JSON.stringify({
         kind: input.kind,
-        blockIndex: input.blockIndex,
-        visualIndexInBlock: input.visualIndexInBlock,
-        visualCountInBlock: input.visualCountInBlock
+        nodeIndex: input.nodeIndex,
+        visualIndexInNode: input.visualIndexInNode,
+        visualCountInNode: input.visualCountInNode
       })})`,
       true
     )) as { rect?: RenderRect; error?: string }

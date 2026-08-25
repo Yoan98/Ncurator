@@ -1,6 +1,6 @@
 import type JSZip from 'jszip'
 import { XMLSerializer } from '@xmldom/xmldom'
-import { buildBlockIndex, loadDocxBundle } from './blockIndex'
+import { buildNodeIndex, loadDocxBundle } from './nodeIndex'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
@@ -64,14 +64,14 @@ const writeDocumentXml = async (zip: JSZip, doc: Document): Promise<Buffer> => {
 
 export const injectPatchTag = async (input: {
   buffer: Buffer
-  blockId: string
+  nodeId: string
   tagName: string
 }): Promise<Buffer> => {
   const bundle = await loadDocxBundle(input.buffer)
-  const index = buildBlockIndex(bundle.documentDom)
-  const node = index.nodesById.get(input.blockId)
+  const index = buildNodeIndex(bundle.documentDom)
+  const node = index.nodesById.get(input.nodeId)
   if (!node) {
-    throw new Error(`block not found: ${input.blockId}`)
+    throw new Error(`node not found: ${input.nodeId}`)
   }
 
   if (node.kind === 'paragraph') {

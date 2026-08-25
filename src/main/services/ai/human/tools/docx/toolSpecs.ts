@@ -4,143 +4,173 @@ import type { z } from 'zod/v4'
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import {
-  docxEditSchema,
-  docxOutlineRequestSchema,
-  docxReadRequestSchema,
+  docxCommentsRevisionsSchema,
+  docxContentEditSchema,
+  docxFormatSchema,
+  docxMediaEditSchema,
+  docxOutlineSchema,
+  docxReadSchema,
   docxReadVisualsSchema,
-  docxSearchRequestSchema
+  docxSearchSchema,
+  docxTableEditSchema
 } from './schemas'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import {
+  docxMutationOutputSchema,
   docxOutlineOutputSchema,
-  docxReadBlocksOutputSchema,
+  docxReadOutputSchema,
   docxReadVisualsOutputSchema,
-  docxSearchOutputSchema,
-  docxWriteOutputSchema
+  docxSearchOutputSchema
 } from './outputSchemas'
 
-const createDocxReadExecutionMeta = () =>
-  createStaticExecutionMetaResolver({
-    mutability: 'read_only',
-    getResourceKey: (args) => readStringArg(args, 'sourcePath'),
-    defaultResourceKey: 'docx'
-  })
+const readMeta = createStaticExecutionMetaResolver({
+  mutability: 'read_only',
+  getResourceKey: (args) => readStringArg(args, 'sourcePath'),
+  defaultResourceKey: 'docx'
+})
 
-const createDocxMutatingExecutionMeta = () =>
-  createStaticExecutionMetaResolver({
-    mutability: 'mutating',
-    getResourceKey: (args) => readStringArg(args, 'sourcePath'),
-    defaultResourceKey: 'docx'
-  })
+const writeMeta = createStaticExecutionMetaResolver({
+  mutability: 'mutating',
+  getResourceKey: (args) => readStringArg(args, 'sourcePath'),
+  defaultResourceKey: 'docx'
+})
 
 type DocxToolSpec<
   TArgs extends JsonObject = JsonObject,
   TOutput extends JsonObject = JsonObject,
   TName extends RuntimeToolName = RuntimeToolName,
   TSkillId extends RuntimeSkillId = RuntimeSkillId
-> = HumanToolSpec<TArgs, TOutput, TName, TSkillId> & {
-  activityActionType?: string
-}
+> = HumanToolSpec<TArgs, TOutput, TName, TSkillId> & { activityActionType: string }
 
 export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   name: 'docx_read_outline',
   familyId: 'docx',
-  skillIds: ['docx-read'],
-  inputSchema: docxOutlineRequestSchema,
+  skillIds: ['docx-read', 'docx-write'],
+  inputSchema: docxOutlineSchema,
   outputSchema: docxOutlineOutputSchema,
   promptSpec: {
     name: 'docx_read_outline',
     description:
-      '按 percent 或 blockIndex 范围读取 .docx、.doc 文档的块级 outline，并返回块文本、定位信息和结构类型。'
+      '快速读取 Word 文档的正文顺序和结构摘要。返回临时 nodeIndex 与稳定 nodeId；需要详细内容时再调用 docx_read。'
   },
-  resolveExecutionMeta: createDocxReadExecutionMeta(),
+  resolveExecutionMeta: readMeta,
   activityActionType: 'docx_read_outline'
 } satisfies DocxToolSpec<
-  z.infer<typeof docxOutlineRequestSchema>,
+  z.infer<typeof docxOutlineSchema>,
   z.infer<typeof docxOutlineOutputSchema>,
   'docx_read_outline',
-  'docx-read'
+  'docx-read' | 'docx-write'
 >
 
 export const DOCX_SEARCH_TOOL_SPEC = {
   name: 'docx_search',
   familyId: 'docx',
-  skillIds: ['docx-read'],
-  inputSchema: docxSearchRequestSchema,
+  skillIds: ['docx-read', 'docx-write'],
+  inputSchema: docxSearchSchema,
   outputSchema: docxSearchOutputSchema,
   promptSpec: {
     name: 'docx_search',
     description:
-      '在 .docx、.doc 文档中按 literal、regex 或 semantic 模式检索块级文本，并返回匹配文本、位置和相关性信息。'
+      '在 Word 文档中按 literal、regex 或 semantic 检索文字，返回可直接交给读取和写入工具的 nodeId。'
   },
-  resolveExecutionMeta: createDocxReadExecutionMeta(),
+  resolveExecutionMeta: readMeta,
   activityActionType: 'docx_search'
 } satisfies DocxToolSpec<
-  z.infer<typeof docxSearchRequestSchema>,
+  z.infer<typeof docxSearchSchema>,
   z.infer<typeof docxSearchOutputSchema>,
   'docx_search',
-  'docx-read'
+  'docx-read' | 'docx-write'
 >
 
 export const DOCX_READ_TOOL_SPEC = {
-  name: 'docx_read_blocks',
+  name: 'docx_read',
   familyId: 'docx',
-  skillIds: ['docx-read'],
-  inputSchema: docxReadRequestSchema,
-  outputSchema: docxReadBlocksOutputSchema,
+  skillIds: ['docx-read', 'docx-write'],
+  inputSchema: docxReadSchema,
+  outputSchema: docxReadOutputSchema,
   promptSpec: {
-    name: 'docx_read_blocks',
+    name: 'docx_read',
     description:
-      '按 blockId 集合或 blockIndex 闭区间读取 .docx、.doc 文档的递归语义树，保留段落、行内节点、表格层级和视觉节点的原始归属顺序。'
+      '按 nodeId 或临时 nodeIndex 范围读取 Word 文档递归语义树。写入前优先读取目标并照抄 nodeId。'
   },
-  resolveExecutionMeta: createDocxReadExecutionMeta(),
-  activityActionType: 'docx_read_blocks'
+  resolveExecutionMeta: readMeta,
+  activityActionType: 'docx_read'
 } satisfies DocxToolSpec<
-  z.infer<typeof docxReadRequestSchema>,
-  z.infer<typeof docxReadBlocksOutputSchema>,
-  'docx_read_blocks',
-  'docx-read'
+  z.infer<typeof docxReadSchema>,
+  z.infer<typeof docxReadOutputSchema>,
+  'docx_read',
+  'docx-read' | 'docx-write'
 >
 
 export const DOCX_READ_VISUALS_TOOL_SPEC = {
   name: 'docx_read_visuals',
   familyId: 'docx',
-  skillIds: ['docx-read'],
+  skillIds: ['docx-read', 'docx-write'],
   inputSchema: docxReadVisualsSchema,
   outputSchema: docxReadVisualsOutputSchema,
   promptSpec: {
     name: 'docx_read_visuals',
     description:
-      '按 visualId 读取 DOCX 中的视觉内容并返回识别文本。一次支持 1 至 10 项；每项独立返回结果或错误；不支持 .doc。'
+      '按 visualId 读取 DOCX 图片、图表等视觉内容并返回识别文本；一次支持 1 至 10 项；不支持 .doc。'
   },
-  resolveExecutionMeta: createDocxReadExecutionMeta(),
+  resolveExecutionMeta: readMeta,
   activityActionType: 'docx_read_visuals'
 } satisfies DocxToolSpec<
   z.infer<typeof docxReadVisualsSchema>,
   z.infer<typeof docxReadVisualsOutputSchema>,
   'docx_read_visuals',
-  'docx-read'
+  'docx-read' | 'docx-write'
 >
 
-export const DOCX_EDIT_TOOL_SPEC = {
-  name: 'docx_edit',
-  familyId: 'docx',
-  skillIds: ['docx-write'],
-  inputSchema: docxEditSchema,
-  outputSchema: docxWriteOutputSchema,
-  promptSpec: {
-    name: 'docx_edit',
-    description:
-      '创建或编辑 DOCX 文件。内容用纯文本表达（段落用 text、表格用 rows 二维字符串数组）；行内格式（加粗/颜色/字号等）用 style_text 按文字单独设置，段落/表格/行/单元格样式分别用 style_paragraph / style_table / style_row / style_cell 按 id 设置；复杂单元格内容用 update_table_cell 二次操作。定位目标时优先照抄 read 返回的 blockId / nodeId。'
-  },
-  resolveExecutionMeta: createDocxMutatingExecutionMeta(),
-  activityActionType: 'docx_edit'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxEditSchema>,
-  z.infer<typeof docxWriteOutputSchema>,
-  'docx_edit',
-  'docx-write'
->
+const defineWriteSpec = <TName extends RuntimeToolName, TSchema extends z.ZodType>(input: {
+  name: TName
+  schema: TSchema
+  description: string
+}) => ({
+  name: input.name,
+  familyId: 'docx' as const,
+  skillIds: ['docx-write'] as RuntimeSkillId[],
+  inputSchema: input.schema,
+  outputSchema: docxMutationOutputSchema,
+  promptSpec: { name: input.name, description: input.description },
+  resolveExecutionMeta: writeMeta,
+  activityActionType: input.name
+})
+
+export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineWriteSpec({
+  name: 'docx_content_edit',
+  schema: docxContentEditSchema,
+  description:
+    '创建 DOCX 或局部修改普通内容节点。一次只执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一；不负责格式、表格结构、媒体、批注或修订。'
+})
+
+export const DOCX_FORMAT_TOOL_SPEC = defineWriteSpec({
+  name: 'docx_format',
+  schema: docxFormatSchema,
+  description:
+    '修改文字、段落、表格、行、单元格、section、命名样式或编号。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。'
+})
+
+export const DOCX_TABLE_EDIT_TOOL_SPEC = defineWriteSpec({
+  name: 'docx_table_edit',
+  schema: docxTableEditSchema,
+  description:
+    '创建、删除或修改 DOCX 表格结构，包括行列增删和单元格合并拆分；单元格文字用 docx_content_edit，外观用 docx_format。'
+})
+
+export const DOCX_MEDIA_EDIT_TOOL_SPEC = defineWriteSpec({
+  name: 'docx_media_edit',
+  schema: docxMediaEditSchema,
+  description:
+    '插入、替换、删除或修改 DOCX 图片等视觉对象，负责媒体文件、relationship、尺寸和替代文字。'
+})
+
+export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineWriteSpec({
+  name: 'docx_comments_revisions',
+  schema: docxCommentsRevisionsSchema,
+  description:
+    '新增、修改、回复或删除 Word 批注，切换修订模式，以及接受或拒绝 Word 修订；这不是文档读取检查工具。'
+})
 
 export const DOCX_READ_TOOL_SPECS = [
   DOCX_READ_OUTLINE_TOOL_SPEC,
@@ -149,23 +179,12 @@ export const DOCX_READ_TOOL_SPECS = [
   DOCX_READ_VISUALS_TOOL_SPEC
 ] as const
 
-export const DOCX_WRITE_TOOL_SPECS = [DOCX_EDIT_TOOL_SPEC] as const
+export const DOCX_WRITE_TOOL_SPECS = [
+  DOCX_CONTENT_EDIT_TOOL_SPEC,
+  DOCX_FORMAT_TOOL_SPEC,
+  DOCX_TABLE_EDIT_TOOL_SPEC,
+  DOCX_MEDIA_EDIT_TOOL_SPEC,
+  DOCX_COMMENTS_REVISIONS_TOOL_SPEC
+] as const
 
 export const DOCX_TOOL_SPECS = [...DOCX_READ_TOOL_SPECS, ...DOCX_WRITE_TOOL_SPECS] as const
-
-export type AnyDocxToolSpec = (typeof DOCX_TOOL_SPECS)[number]
-export type DocxToolName = AnyDocxToolSpec['name']
-
-const DOCX_TOOL_SPEC_BY_NAME = new Map<DocxToolName, AnyDocxToolSpec>(
-  DOCX_TOOL_SPECS.map((spec) => [spec.name, spec])
-)
-
-export function getDocxToolSpec<TName extends DocxToolName>(
-  name: TName
-): Extract<AnyDocxToolSpec, { name: TName }> {
-  const spec = DOCX_TOOL_SPEC_BY_NAME.get(name)
-  if (!spec) {
-    throw new Error(`missing docx tool spec for ${name}`)
-  }
-  return spec as Extract<AnyDocxToolSpec, { name: TName }>
-}

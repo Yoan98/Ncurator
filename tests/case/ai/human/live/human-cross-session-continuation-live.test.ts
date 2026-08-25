@@ -12,7 +12,7 @@ import {
   DOCX_READING_FIXTURE_PATHS,
   SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../../harness/backend/aiLiveTestData'
-import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
+import { runWithStructuredOutputRetry } from '../testUtils'
 
 const SESSION_ID = 'live-session-cross-session-continuation'
 const RUN1_INPUT =
@@ -37,7 +37,7 @@ const runUsedSelectedFile = (
     (event) =>
       event.runId === runId &&
       ['tool_call_started', 'tool_call_result'].includes(event.type) &&
-      ['docx_search', 'docx_read_blocks'].includes(String(event.toolName || '')) &&
+      ['docx_search', 'docx_read'].includes(String(event.toolName || '')) &&
       eventText(event).includes(fileName)
   )
 
@@ -147,14 +147,13 @@ describe('ai human live backend', () => {
           )
 
           let run2BrainMessages: BaseMessage[] | null = null
-          const captureRun2Wrapper: NonNullable<AiRunDeps['chatToolsWrapper']> = (
-            realChatTools
-          ) => async (request) => {
-            if (request.caller === 'human.brain' && !run2BrainMessages) {
-              run2BrainMessages = [...request.messages]
+          const captureRun2Wrapper: NonNullable<AiRunDeps['chatToolsWrapper']> =
+            (realChatTools) => async (request) => {
+              if (request.caller === 'human.brain' && !run2BrainMessages) {
+                run2BrainMessages = [...request.messages]
+              }
+              return await realChatTools(request)
             }
-            return await realChatTools(request)
-          }
           const run2Result = await AiRunService.getInstance().run(
             {
               runId: `${runtime.runId}-run-2`,
@@ -197,11 +196,7 @@ describe('ai human live backend', () => {
             run2LastMessageIsUser,
             run2HistoryHasRun1User,
             run2HistoryHasRun1Delivery,
-            run2UsedFileB: runUsedSelectedFile(
-              run2Events,
-              run2Id,
-              fileBReferences[0]?.name || ''
-            ),
+            run2UsedFileB: runUsedSelectedFile(run2Events, run2Id, fileBReferences[0]?.name || ''),
             run2Delivery: run2Result.finalDeliveryMarkdown || '',
             fileAName: fileAReferences[0]?.name || '',
             fileBName: fileBReferences[0]?.name || ''
@@ -211,8 +206,7 @@ describe('ai human live backend', () => {
           if (result.configurationMissing) {
             runtime.assertThat(false, {
               name: 'live-config-not-provided',
-              message:
-                '未提供 live 模型配置，已跳过 human cross-session continuation live case。'
+              message: '未提供 live 模型配置，已跳过 human cross-session continuation live case。'
             })
             return
           }

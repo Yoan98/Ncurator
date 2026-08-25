@@ -50,7 +50,6 @@ const createStubAiRunContext = (): AiRunContext => ({
   }),
   trackDocxOpen: () => {},
   trackDocxChanges: () => {},
-  trackDocxBatchChanges: () => {},
   resolveDocxOpenTarget: async () => {
     throw new Error('resolveDocxOpenTarget should not be called in learning unit tests')
   },
@@ -61,7 +60,9 @@ const createStubAiRunContext = (): AiRunContext => ({
   embeddingService: undefined as never
 })
 
-const buildLearningDecision = (skillIds: string[]): {
+const buildLearningDecision = (
+  skillIds: string[]
+): {
   thought: { text: string }
   nextAction: { action: 'learning'; wantLearnSkillIds: string[] }
 } => ({
@@ -101,7 +102,10 @@ describe('ai unit learning partial success', () => {
       skippedUnknownSkillIds: []
     })
     expect(nextState.skills.learnedSkillIds).toEqual(['docx-read', 'docx-write'])
-    expect(nextState.trace.steps.at(-1)).toMatchObject({ action: 'learn_skill', skillId: 'docx-write' })
+    expect(nextState.trace.steps.at(-1)).toMatchObject({
+      action: 'learn_skill',
+      skillId: 'docx-write'
+    })
     expect(cache.skillToolsets['docx-write']).toBeTruthy()
   })
 
@@ -127,7 +131,10 @@ describe('ai unit learning partial success', () => {
       skippedUnknownSkillIds: ['unknown-skill']
     })
     expect(nextState.skills.learnedSkillIds).toEqual(['docx-read'])
-    expect(nextState.trace.steps.at(-1)).toMatchObject({ action: 'learn_skill', skillId: 'docx-read' })
+    expect(nextState.trace.steps.at(-1)).toMatchObject({
+      action: 'learn_skill',
+      skillId: 'docx-read'
+    })
   })
 
   it('treats builtin-only requests as invalid learning', async () => {

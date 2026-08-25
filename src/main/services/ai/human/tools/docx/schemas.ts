@@ -28,10 +28,9 @@ export const tableSpecSchema = z.object({
   rows: z.array(z.array(tableCellSpecSchema).min(1)).min(1)
 })
 
-export const blockSpecSchema = z.union([paragraphSpecSchema, tableSpecSchema])
+export const nodeSpecSchema = z.union([paragraphSpecSchema, tableSpecSchema])
 export const docxSearchModeSchema = z.enum(['literal', 'regex', 'semantic'])
 
-const nullable = <T extends z.ZodType>(schema: T) => schema.nullable().optional()
 const docxPointSchema = z.number().min(0)
 const docxLengthSchema = z
   .object({
@@ -123,10 +122,7 @@ export const docxTableRowStyleSchema = z
 export const docxTableCellStyleSchema = z
   .object({
     width: docxLengthSchema.optional().describe('单元格宽度，{ value, unit: "pt" | "percent" }'),
-    verticalAlignment: z
-      .enum(['top', 'center', 'bottom'])
-      .optional()
-      .describe('单元格垂直对齐'),
+    verticalAlignment: z.enum(['top', 'center', 'bottom']).optional().describe('单元格垂直对齐'),
     shading: docxHexColorSchema.optional().describe('单元格底纹颜色，6 位十六进制'),
     margins: z
       .object({
@@ -200,7 +196,7 @@ const docxCreateTableCellNodeSchema: z.ZodType<DocxCreateTableCellNode> = z.lazy
     .object({
       type: z.literal('table_cell'),
       style: docxTableCellStyleSchema.optional(),
-      children: z.array(docxCreateBlockSchema).min(1)
+      children: z.array(docxCreateRootNodeSchema).min(1)
     })
     .strict()
     .meta({ id: 'DocxCreateTableCell' })
@@ -222,377 +218,9 @@ const docxCreateTableNodeSchema = z
   .strict()
   .meta({ id: 'DocxCreateTable' })
 
-export const docxCreateBlockSchema = z
+export const docxCreateRootNodeSchema = z
   .discriminatedUnion('type', [docxCreateParagraphNodeSchema, docxCreateTableNodeSchema])
-  .meta({ id: 'DocxCreateBlock' })
-
-const runStylePatchSchema = z
-  .object({
-    kind: z.literal('run'),
-    color: nullable(docxHexColorSchema),
-    bold: nullable(z.boolean()),
-    italic: nullable(z.boolean()),
-    underline: nullable(z.boolean()),
-    strike: nullable(z.boolean()),
-    highlight: nullable(docxHexColorSchema),
-    fontFamily: nullable(z.string().trim().min(1)),
-    fontSize: nullable(z.number().positive())
-  })
-  .strict()
-const paragraphStylePatchSchema = docxParagraphStyleSchema
-  .partial()
-  .extend({
-    kind: z.literal('paragraph'),
-    styleName: nullable(z.string().trim().min(1)),
-    alignment: nullable(z.enum(['left', 'center', 'right', 'justify'])),
-    indent: nullable(docxParagraphStyleSchema.shape.indent.unwrap()),
-    spacing: nullable(docxParagraphStyleSchema.shape.spacing.unwrap()),
-    keepWithNext: nullable(z.boolean()),
-    pageBreakBefore: nullable(z.boolean())
-  })
-  .strict()
-const tableStylePatchSchema = z
-  .object({
-    kind: z.literal('table'),
-    alignment: nullable(z.enum(['left', 'center', 'right'])),
-    width: nullable(docxLengthSchema),
-    layout: nullable(z.enum(['fixed', 'autofit'])),
-    borders: nullable(docxBordersSchema)
-  })
-  .strict()
-const tableRowStylePatchSchema = z
-  .object({
-    kind: z.literal('table_row'),
-    height: nullable(docxPointSchema),
-    repeatHeader: nullable(z.boolean()),
-    cantSplit: nullable(z.boolean())
-  })
-  .strict()
-const tableCellStylePatchSchema = z
-  .object({
-    kind: z.literal('table_cell'),
-    width: nullable(docxLengthSchema),
-    verticalAlignment: nullable(z.enum(['top', 'center', 'bottom'])),
-    shading: nullable(docxHexColorSchema),
-    margins: nullable(docxTableCellStyleSchema.shape.margins.unwrap()),
-    borders: nullable(docxBordersSchema)
-  })
-  .strict()
-
-export const docxStylePatchSchema = z
-  .discriminatedUnion('kind', [
-    runStylePatchSchema,
-    paragraphStylePatchSchema,
-    tableStylePatchSchema,
-    tableRowStylePatchSchema,
-    tableCellStylePatchSchema
-  ])
-  .refine((patch) => Object.keys(patch).some((key) => key !== 'kind'), {
-    message: 'style patch must contain at least one property'
-  })
-  .meta({ id: 'DocxStylePatch', 'x-constraint': 'style patch must contain at least one property' })
-
-export const docxStyleTargetSchema = z
-  .discriminatedUnion('type', [
-    z
-      .object({
-        type: z.literal('text_match'),
-        query: z.string().min(1).describe('要匹配的文字，命中后应用样式'),
-        blockIds: z
-          .array(z.string().min(1))
-          .optional()
-          .describe('限定在哪些 block 内查找，缺省为全文')
-      })
-      .strict(),
-    z
-      .object({
-        type: z.literal('id'),
-        id: z
-          .string()
-          .min(1)
-          .describe(
-            'read 返回的目标元素 id：正文段落/表格/单元格填 blockId，行/单元格内段落/具体 run 填 nodeId，直接照抄'
-          )
-      })
-      .strict()
-  ])
-  .meta({ id: 'DocxStyleTarget' })
-
-export const docOpSchema = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('create_document')
-  }),
-  z.object({
-    type: z.literal('replace_block'),
-    blockId: z.string().min(1),
-    content: docxCreateBlockSchema,
-    allowVisualLoss: z.literal(true).optional()
-  }),
-  z.object({
-    type: z.literal('insert_after'),
-    anchorBlockId: z.string().min(1),
-    content: z.array(docxCreateBlockSchema).min(1)
-  }),
-  z.object({
-    type: z.literal('insert_before'),
-    anchorBlockId: z.string().min(1),
-    content: z.array(docxCreateBlockSchema).min(1)
-  }),
-  z.object({
-    type: z.literal('delete_block'),
-    blockId: z.string().min(1),
-    allowVisualLoss: z.literal(true).optional()
-  }),
-  z.object({
-    type: z.literal('update_table_cell'),
-    blockId: z.string().min(1),
-    content: z.array(docxCreateBlockSchema).min(1),
-    allowVisualLoss: z.literal(true).optional()
-  }),
-  z.object({
-    type: z.literal('replace_text'),
-    query: z.string().min(1),
-    replace: z.string(),
-    blockIds: z.array(z.string().min(1)).optional()
-  }),
-  z.object({
-    type: z.literal('style'),
-    target: docxStyleTargetSchema,
-    patch: docxStylePatchSchema
-  })
-])
-
-export const docxOutlineRangeSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      type: z.literal('percent'),
-      fromPercent: z.number().min(0).max(100),
-      toPercent: z.number().min(0).max(100)
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('block_index'),
-      fromBlockIndex: z.number().int().min(0),
-      toBlockIndex: z.number().int().min(0)
-    })
-    .strict()
-])
-
-export const docxOutlineRequestSchema = z
-  .object({
-    sourcePath: z.string().min(1),
-    ranges: z.array(docxOutlineRangeSchema).min(1)
-  })
-  .strict()
-
-export const docxSearchRequestSchema = z.object({
-  sourcePath: z.string().min(1),
-  query: z.string().min(1),
-  mode: docxSearchModeSchema.optional(),
-  scope: z
-    .object({
-      blockIds: z.array(z.string().min(1)).optional()
-    })
-    .optional()
-})
-
-export const docxReadRangeSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      type: z.literal('block_index'),
-      fromBlockIndex: z.number().int().min(0),
-      toBlockIndex: z.number().int().min(0)
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('block_ids'),
-      blockIds: z.array(z.string().min(1)).min(1)
-    })
-    .strict()
-])
-
-export const docxReadRequestSchema = z
-  .object({
-    sourcePath: z.string().min(1),
-    range: docxReadRangeSchema
-  })
-  .strict()
-
-const docxParagraphInputSchema = z
-  .object({
-    text: z.string().describe('段落纯文本，换行用 \\n，制表符用 \\t'),
-    style: docxParagraphStyleSchema
-      .optional()
-      .describe('段落级样式（对齐/缩进/间距/样式名），可选')
-  })
-  .strict()
-
-const docxTableInputSchema = z
-  .object({
-    rows: z
-      .array(z.array(z.string()).min(1))
-      .min(1)
-      .describe('二维数组，每个单元格是纯文本字符串'),
-    style: docxTableStyleSchema.optional().describe('表格级样式（对齐/宽度/布局/边框），可选')
-  })
-  .strict()
-
-export const docxBlockInputSchema = z.union([docxParagraphInputSchema, docxTableInputSchema])
-
-const docxRunStyleInputSchema = docxRunStyleSchema.refine(
-  (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'style 至少设置一个属性' }
-)
-const docxParagraphStyleInputSchema = docxParagraphStyleSchema.refine(
-  (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'style 至少设置一个属性' }
-)
-const docxTableStyleInputSchema = docxTableStyleSchema.refine(
-  (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'style 至少设置一个属性' }
-)
-const docxRowStyleInputSchema = docxTableRowStyleSchema.refine(
-  (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'style 至少设置一个属性' }
-)
-const docxCellStyleInputSchema = docxTableCellStyleSchema.refine(
-  (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'style 至少设置一个属性' }
-)
-
-const docxEditInsertBlocksActionSchema = z
-  .object({
-    type: z.literal('insert_blocks'),
-    blockId: z
-      .string()
-      .min(1)
-      .optional()
-      .describe('锚点 blockId，缺省表示追加到正文末尾'),
-    position: z.enum(['before', 'after']).optional().describe('相对锚点的位置，缺省 after'),
-    blocks: z.array(docxBlockInputSchema).min(1).describe('要插入的段落或表格')
-  })
-  .strict()
-
-const docxEditReplaceBlockActionSchema = z
-  .object({
-    type: z.literal('replace_block'),
-    blockId: z.string().min(1).describe('read 返回的目标 blockId'),
-    block: docxBlockInputSchema.describe('替换后的段落或表格内容'),
-    allowVisualLoss: z
-      .literal(true)
-      .optional()
-      .describe('目标含图片/图表等视觉内容时必须显式设为 true 才允许替换')
-  })
-  .strict()
-
-const docxEditReplaceTextActionSchema = z
-  .object({
-    type: z.literal('replace_text'),
-    query: z.string().min(1).describe('要查找的原文'),
-    replace: z.string().describe('替换后的文本'),
-    blockIds: z
-      .array(z.string().min(1))
-      .optional()
-      .describe('限定在哪些 block 内替换，缺省为全文')
-  })
-  .strict()
-
-const docxEditDeleteBlocksActionSchema = z
-  .object({
-    type: z.literal('delete_blocks'),
-    blockIds: z.array(z.string().min(1)).min(1).describe('要删除的 blockId 列表'),
-    allowVisualLoss: z
-      .literal(true)
-      .optional()
-      .describe('目标含视觉内容时必须显式设为 true 才允许删除')
-  })
-  .strict()
-
-const docxEditUpdateTableCellActionSchema = z
-  .object({
-    type: z.literal('update_table_cell'),
-    cellBlockId: z.string().min(1).describe('read 返回的单元格 blockId'),
-    blocks: z
-      .array(docxBlockInputSchema)
-      .min(1)
-      .describe('单元格的新内容（多段落或嵌套表格）'),
-    allowVisualLoss: z
-      .literal(true)
-      .optional()
-      .describe('单元格含视觉内容时必须显式设为 true 才允许更新')
-  })
-  .strict()
-
-const docxEditStyleTextActionSchema = z
-  .object({
-    type: z.literal('style_text'),
-    query: z.string().min(1).describe('要套用文字样式的目标文字'),
-    blockIds: z
-      .array(z.string().min(1))
-      .optional()
-      .describe('限定在哪些 block 内查找，缺省为全文'),
-    style: docxRunStyleInputSchema.describe('文字样式（加粗/颜色/字号等）')
-  })
-  .strict()
-
-const docxEditStyleParagraphActionSchema = z
-  .object({
-    type: z.literal('style_paragraph'),
-    id: z
-      .string()
-      .min(1)
-      .describe('read 返回的段落 id：正文段落填 blockId，单元格内段落填 nodeId'),
-    style: docxParagraphStyleInputSchema.describe('段落样式（对齐/缩进/间距等）')
-  })
-  .strict()
-
-const docxEditStyleTableActionSchema = z
-  .object({
-    type: z.literal('style_table'),
-    id: z.string().min(1).describe('read 返回的表格 blockId'),
-    style: docxTableStyleInputSchema.describe('表格样式（边框/宽度/布局等）')
-  })
-  .strict()
-
-const docxEditStyleRowActionSchema = z
-  .object({
-    type: z.literal('style_row'),
-    id: z.string().min(1).describe('read 返回的行 nodeId'),
-    style: docxRowStyleInputSchema.describe('行样式（行高/表头重复/禁止跨页）')
-  })
-  .strict()
-
-const docxEditStyleCellActionSchema = z
-  .object({
-    type: z.literal('style_cell'),
-    id: z.string().min(1).describe('read 返回的单元格 blockId'),
-    style: docxCellStyleInputSchema.describe('单元格样式（底纹/边框/边距/垂直对齐等）')
-  })
-  .strict()
-
-export const docxEditActionSchema = z
-  .discriminatedUnion('type', [
-    docxEditInsertBlocksActionSchema,
-    docxEditReplaceBlockActionSchema,
-    docxEditReplaceTextActionSchema,
-    docxEditDeleteBlocksActionSchema,
-    docxEditUpdateTableCellActionSchema,
-    docxEditStyleTextActionSchema,
-    docxEditStyleParagraphActionSchema,
-    docxEditStyleTableActionSchema,
-    docxEditStyleRowActionSchema,
-    docxEditStyleCellActionSchema
-  ])
-  .meta({ id: 'DocxEditAction' })
-
-export const docxEditSchema = z
-  .object({
-    sourcePath: z.string().min(1).describe('DOCX 文件的本机绝对路径，文件不存在时按新建处理'),
-    actions: z.array(docxEditActionSchema).min(1).describe('按顺序串行执行的编辑动作')
-  })
-  .strict()
+  .meta({ id: 'DocxCreateRootNode' })
 
 export const docxReadVisualsSchema = z
   .object({
@@ -610,3 +238,459 @@ export const docxReadVisualsSchema = z
       .max(10)
   })
   .strict()
+
+const sourcePathField = z
+  .string()
+  .min(1)
+  .describe('DOCX 文件的本机绝对路径；写入工具只支持 .docx，读取工具同时支持只读 .doc')
+const nodeIdField = z
+  .string()
+  .min(1)
+  .describe('docx_read、docx_search 或写入结果返回的 nodeId，直接照抄')
+
+export const docxNodeRangeSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('percent').describe('按文档百分比定位'),
+      fromPercent: z.number().min(0).max(100).describe('起始百分比，0 到 100'),
+      toPercent: z.number().min(0).max(100).describe('结束百分比，0 到 100')
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('node_index').describe('按 outline 返回的临时 nodeIndex 定位'),
+      fromNodeIndex: z.number().int().min(0).describe('起始 nodeIndex，包含'),
+      toNodeIndex: z.number().int().min(0).describe('结束 nodeIndex，包含')
+    })
+    .strict()
+])
+
+export const docxOutlineSchema = z
+  .object({
+    sourcePath: sourcePathField,
+    ranges: z.array(docxNodeRangeSchema).min(1).describe('需要读取的一个或多个文档范围')
+  })
+  .strict()
+
+export const docxSearchSchema = z
+  .object({
+    sourcePath: sourcePathField,
+    query: z.string().min(1).describe('要检索的文字或正则表达式'),
+    mode: docxSearchModeSchema.optional().describe('检索模式，缺省为 literal'),
+    nodeIds: z.array(nodeIdField).min(1).optional().describe('可选的搜索范围；缺省搜索整个文档')
+  })
+  .strict()
+
+export const docxReadSchema = z
+  .object({
+    sourcePath: sourcePathField,
+    range: z.discriminatedUnion('type', [
+      z
+        .object({
+          type: z.literal('node_ids').describe('读取指定节点'),
+          nodeIds: z.array(nodeIdField).min(1).describe('要读取的 nodeId')
+        })
+        .strict(),
+      z
+        .object({
+          type: z.literal('node_index').describe('按 outline 临时顺序读取'),
+          fromNodeIndex: z.number().int().min(0).describe('起始 nodeIndex，包含'),
+          toNodeIndex: z.number().int().min(0).describe('结束 nodeIndex，包含')
+        })
+        .strict()
+    ])
+  })
+  .strict()
+
+const docxParagraphDraftSchema = z
+  .object({
+    type: z.literal('paragraph').describe('段落节点'),
+    text: z.string().describe('段落纯文本；换行用 \\n，制表符用 \\t'),
+    styleId: z.string().trim().min(1).optional().describe('可选的命名段落样式 styleId')
+  })
+  .strict()
+const docxRunDraftSchema = z
+  .object({
+    type: z.literal('run').describe('文字 run 节点'),
+    text: z.string().describe('run 的纯文本')
+  })
+  .strict()
+const docxHyperlinkDraftSchema = z
+  .object({
+    type: z.literal('hyperlink').describe('超链接节点'),
+    text: z.string().describe('链接显示文字'),
+    target: z.string().trim().min(1).describe('链接 URL')
+  })
+  .strict()
+const docxFieldDraftSchema = z
+  .object({
+    type: z.literal('field').describe('Word 字段节点'),
+    instruction: z.string().trim().min(1).describe('字段指令，如 PAGE 或 TOC'),
+    displayText: z.string().optional().describe('字段未更新前显示的文字')
+  })
+  .strict()
+const docxBreakDraftSchema = z
+  .object({
+    type: z.literal('break').describe('换行、分页或分栏节点'),
+    kind: z.enum(['line', 'page', 'column']).describe('break 类型')
+  })
+  .strict()
+
+export const docxContentNodeDraftSchema = z.discriminatedUnion('type', [
+  docxParagraphDraftSchema,
+  docxRunDraftSchema,
+  docxHyperlinkDraftSchema,
+  docxFieldDraftSchema,
+  docxBreakDraftSchema
+])
+
+const contentEditBase = { sourcePath: sourcePathField }
+export const docxContentEditSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('replace_text').describe('在一个节点内替换确定的原文'),
+      nodeId: nodeIdField,
+      oldText: z.string().min(1).describe('必须存在于目标节点内的原文'),
+      newText: z.string().describe('替换后的文字')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('insert_nodes').describe('在锚点前后或容器内部插入节点'),
+      nodeId: nodeIdField.optional().describe('锚点或容器 nodeId；document_end 时不填'),
+      position: z
+        .enum(['before', 'after', 'inside_start', 'inside_end', 'document_end'])
+        .describe('插入位置'),
+      nodes: z.array(docxContentNodeDraftSchema).min(1).describe('按顺序插入的浅层节点')
+    })
+    .strict()
+    .superRefine((value, ctx) => {
+      if (value.position === 'document_end' && value.nodeId) {
+        ctx.addIssue({ code: 'custom', path: ['nodeId'], message: 'document_end 不接受 nodeId' })
+      }
+      if (value.position !== 'document_end' && !value.nodeId) {
+        ctx.addIssue({ code: 'custom', path: ['nodeId'], message: '该 position 必须提供 nodeId' })
+      }
+    }),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('replace_node').describe('用一个新节点替换目标节点本身'),
+      nodeId: nodeIdField,
+      node: docxContentNodeDraftSchema.describe('替换后的浅层节点'),
+      allowVisualLoss: z.literal(true).optional().describe('目标含视觉内容时必须明确允许丢失')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('delete_node').describe('删除一个节点'),
+      nodeId: nodeIdField,
+      allowVisualLoss: z.literal(true).optional().describe('目标含视觉内容时必须明确允许丢失')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('move_node').describe('移动一个节点，保留其 nodeId'),
+      nodeId: nodeIdField,
+      anchorNodeId: nodeIdField.describe('新的锚点或容器 nodeId'),
+      position: z.enum(['before', 'after', 'inside_start', 'inside_end']).describe('移动位置')
+    })
+    .strict()
+])
+
+const nonEmptyRunStyleSchema = docxRunStyleSchema.refine(
+  (value) => Object.values(value).some((entry) => entry !== undefined),
+  { message: 'format 至少设置一个属性' }
+)
+const nonEmptyParagraphStyleSchema = docxParagraphStyleSchema.refine(
+  (value) => Object.values(value).some((entry) => entry !== undefined),
+  { message: 'format 至少设置一个属性' }
+)
+const nonEmptyTableStyleSchema = docxTableStyleSchema.refine(
+  (value) => Object.values(value).some((entry) => entry !== undefined),
+  { message: 'format 至少设置一个属性' }
+)
+const nonEmptyRowStyleSchema = docxTableRowStyleSchema.refine(
+  (value) => Object.values(value).some((entry) => entry !== undefined),
+  { message: 'format 至少设置一个属性' }
+)
+const nonEmptyCellStyleSchema = docxTableCellStyleSchema.refine(
+  (value) => Object.values(value).some((entry) => entry !== undefined),
+  { message: 'format 至少设置一个属性' }
+)
+
+export const docxFormatSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('format_text'),
+      nodeId: nodeIdField,
+      text: z.string().min(1).describe('目标节点内要格式化的文字'),
+      format: nonEmptyRunStyleSchema.describe('文字格式 patch')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('format_paragraph'),
+      nodeId: nodeIdField,
+      format: nonEmptyParagraphStyleSchema.describe('段落格式 patch')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('format_table'),
+      nodeId: nodeIdField,
+      format: nonEmptyTableStyleSchema.describe('表格格式 patch')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('format_row'),
+      nodeId: nodeIdField,
+      format: nonEmptyRowStyleSchema.describe('行格式 patch')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('format_cell'),
+      nodeId: nodeIdField,
+      format: nonEmptyCellStyleSchema.describe('单元格格式 patch')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('format_section'),
+      nodeId: nodeIdField,
+      orientation: z.enum(['portrait', 'landscape']).optional().describe('页面方向'),
+      marginTopPt: z.number().min(0).optional().describe('上页边距，磅'),
+      marginRightPt: z.number().min(0).optional().describe('右页边距，磅'),
+      marginBottomPt: z.number().min(0).optional().describe('下页边距，磅'),
+      marginLeftPt: z.number().min(0).optional().describe('左页边距，磅')
+    })
+    .strict(),
+  z.object({ ...contentEditBase, type: z.literal('reset_format'), nodeId: nodeIdField }).strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('apply_named_style'),
+      nodeId: nodeIdField,
+      styleId: z.string().trim().min(1).describe('要应用的 styleId')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('create_named_style'),
+      styleId: z.string().trim().min(1).describe('新样式的唯一 styleId'),
+      name: z.string().trim().min(1).describe('样式显示名称'),
+      basedOnStyleId: z.string().trim().min(1).optional().describe('可选的基础样式 styleId'),
+      paragraph: docxParagraphStyleSchema.optional().describe('段落属性'),
+      run: docxRunStyleSchema.optional().describe('文字属性')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('update_named_style'),
+      styleId: z.string().trim().min(1).describe('要全局修改的 styleId'),
+      name: z.string().trim().min(1).optional().describe('新显示名称'),
+      paragraph: docxParagraphStyleSchema.optional().describe('段落属性 patch'),
+      run: docxRunStyleSchema.optional().describe('文字属性 patch')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('delete_named_style'),
+      styleId: z.string().trim().min(1).describe('要删除的 styleId'),
+      replacementStyleId: z
+        .string()
+        .trim()
+        .min(1)
+        .optional()
+        .describe('样式仍被引用时用于替换的 styleId')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('set_numbering'),
+      nodeId: nodeIdField,
+      kind: z.enum(['bullet', 'decimal', 'none']).describe('项目符号、数字编号或清除编号'),
+      level: z.number().int().min(0).max(8).optional().describe('编号层级，缺省为 0')
+    })
+    .strict()
+])
+
+const tableRowsField = z.array(z.array(z.string()).min(1)).min(1).describe('表格二维文本数组')
+export const docxTableEditSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('create_table'),
+      nodeId: nodeIdField.optional().describe('锚点 nodeId；document_end 时不填'),
+      position: z.enum(['before', 'after', 'document_end']).describe('表格插入位置'),
+      rows: tableRowsField
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('delete_table'),
+      tableNodeId: nodeIdField,
+      allowVisualLoss: z.literal(true).optional().describe('表格含视觉内容时必须明确允许丢失')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('insert_row'),
+      tableNodeId: nodeIdField,
+      rowNodeId: nodeIdField.optional().describe('相邻行 nodeId；缺省追加'),
+      position: z.enum(['before', 'after']).optional().describe('相对行位置，缺省 after'),
+      cells: z.array(z.string()).min(1).describe('新行各单元格文字')
+    })
+    .strict(),
+  z.object({ ...contentEditBase, type: z.literal('delete_row'), rowNodeId: nodeIdField }).strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('insert_column'),
+      tableNodeId: nodeIdField,
+      columnIndex: z.number().int().min(0).describe('新列插入位置'),
+      cells: z.array(z.string()).optional().describe('逐行的新单元格文字，缺省为空')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('delete_column'),
+      tableNodeId: nodeIdField,
+      columnIndex: z.number().int().min(0).describe('要删除的列索引')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('merge_cells'),
+      tableNodeId: nodeIdField,
+      fromRow: z.number().int().min(0).describe('起始行'),
+      fromColumn: z.number().int().min(0).describe('起始列'),
+      toRow: z.number().int().min(0).describe('结束行'),
+      toColumn: z.number().int().min(0).describe('结束列')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('split_cell'),
+      cellNodeId: nodeIdField,
+      rows: z.number().int().min(1).describe('拆分行数'),
+      columns: z.number().int().min(1).describe('拆分列数')
+    })
+    .strict()
+])
+
+export const docxMediaEditSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('insert_image'),
+      nodeId: nodeIdField.optional().describe('锚点 nodeId；document_end 时不填'),
+      position: z.enum(['before', 'after', 'document_end']).describe('图片插入位置'),
+      imagePath: z.string().min(1).describe('本机图片绝对路径'),
+      widthCm: z.number().positive().optional().describe('显示宽度，厘米'),
+      heightCm: z.number().positive().optional().describe('显示高度，厘米'),
+      altText: z.string().optional().describe('替代文字')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('replace_image'),
+      visualId: z.string().min(1).describe('docx_read 返回的 visualId'),
+      imagePath: z.string().min(1).describe('新图片绝对路径')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('delete_media'),
+      visualId: z.string().min(1).describe('要删除的 visualId')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('update_image'),
+      visualId: z.string().min(1).describe('要修改的 visualId'),
+      widthCm: z.number().positive().optional().describe('显示宽度，厘米'),
+      heightCm: z.number().positive().optional().describe('显示高度，厘米'),
+      altText: z.string().optional().describe('替代文字')
+    })
+    .strict()
+])
+
+export const docxCommentsRevisionsSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('add_comment'),
+      nodeId: nodeIdField,
+      text: z.string().min(1).describe('目标节点中要锚定的文字'),
+      comment: z.string().min(1).describe('批注正文'),
+      author: z.string().trim().min(1).optional().describe('批注作者')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('update_comment'),
+      commentId: z.string().min(1).describe('批注 ID'),
+      comment: z.string().min(1).describe('新批注正文')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('reply_comment'),
+      commentId: z.string().min(1).describe('父批注 ID'),
+      comment: z.string().min(1).describe('回复正文'),
+      author: z.string().trim().min(1).optional().describe('回复作者')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('delete_comment'),
+      commentId: z.string().min(1).describe('要删除的批注 ID')
+    })
+    .strict(),
+  z.object({ ...contentEditBase, type: z.literal('enable_track_changes') }).strict(),
+  z.object({ ...contentEditBase, type: z.literal('disable_track_changes') }).strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('accept_revision'),
+      revisionId: z.string().min(1).describe('要接受的修订 ID')
+    })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('reject_revision'),
+      revisionId: z.string().min(1).describe('要拒绝的修订 ID')
+    })
+    .strict(),
+  z.object({ ...contentEditBase, type: z.literal('accept_all_revisions') }).strict(),
+  z.object({ ...contentEditBase, type: z.literal('reject_all_revisions') }).strict()
+])

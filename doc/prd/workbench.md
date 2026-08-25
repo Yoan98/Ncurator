@@ -323,7 +323,7 @@
   - `WB-COMPOSER-009-AC3` assistant 最终 markdown 输出默认无独立背景卡片，保持在过程流下方。
   - `WB-COMPOSER-009-AC4` 用户消息以右对齐紧凑气泡展示。
   - `WB-COMPOSER-009-AC5` 执行层 header 按真实发生顺序将同一轮工具调用合成为一句自然语言，最多展示三类动作，正常动作使用“并”连接，后续动作失败时使用“但”连接，不使用逗号分隔；超过三类时收敛为“正在执行 n 项操作”或“已完成 n 项操作”。例如“已操作浏览器 3 次并等待 1 秒”“已搜索网页但读取网页失败”。header 只展示一个图标；单一工具类型使用对应语义图标，混合工具使用流程图标。
-  - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看文档 xx 的结构”；`docx_read_blocks` 展示“读取文档 xx 范围”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search` 展示“搜索网页 query”；`browser_use navigate / observe / extract / act` 分别补充“打开网页 / 查看页面并 / 从页面中 / 在页面上”的动作语义。
+  - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看文档 xx 的结构”；`docx_read` 展示“读取文档 xx 范围”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search` 展示“搜索网页 query”；`browser_use navigate / observe / extract / act` 分别补充“打开网页 / 查看页面并 / 从页面中 / 在页面上”的动作语义。
   - `WB-COMPOSER-009-AC7` 文件名、query、命令、URL 和技能名不使用粗体或冒号强调，保持正常字重；可以通过文字颜色表达层级。
   - `WB-COMPOSER-009-AC8` 学习步骤使用技能通用名称展示，例如 `docx 阅读器`、`docx 写作器`、`资料查阅器`、`命令执行器`；运行中展示“正在学习 xx 技能”，完成后展示“已学会 xx 技能”。
   - `WB-COMPOSER-009-AC9` 执行层 header、学习层和压缩层展示对应图标；浏览器、等待、网页读取、网页搜索、图片识别、知识库、文件和终端使用不同语义图标。展开后的每条工具句子不展示图标，也不渲染前置小圆点或“AI 思路”类图标。
@@ -503,18 +503,19 @@
   - `WB-APPLY-002-AC4` 普通文本 `edit` 的每个 `oldText` 必须唯一且互不重叠；`replaceAll` 替换一个 `oldText` 的全部非重叠精确匹配；失败时文件保持原样。
   - `WB-APPLY-002-AC5` 同一次 AI Run 对同一个 pptx 的多次编辑只生成一条修改记录；PPT Diff 固定比较本 Run 第一次接触文件时的状态和 Run 完成后的最终状态，工具调用只用于识别页面、元素和真实移动，不直接累加操作次数。
   - `WB-APPLY-002-AC6` 创建或修改 `xlsx` 后，正式路径立即包含最终净工作簿并生成一条修改记录；同一次 AI Run 对同一路径连续编辑时保持首次写入前基线，不重复生成记录。
-  - `WB-APPLY-002-AC7` `docx_edit`、`ppt_edit` 和 `excel_edit` 统一使用 `sourcePath + actions[]`；目标不存在时由编辑 Action 直接创建，不再提供独立的文档或演示文稿创建 Action。
+  - `WB-APPLY-002-AC7` DOCX 写作技能一次加载 4 个读取工具和 5 个写入工具；`docx_content_edit`、`docx_format`、`docx_table_edit`、`docx_media_edit`、`docx_comments_revisions` 每次调用只接受一个 discriminated operation，不接受批量 action 数组。目标不存在时可用 `docx_content_edit.insert_nodes(document_end)` 或 `docx_table_edit.create_table(document_end)` 创建文档。
   - `WB-APPLY-002-AC7-1` 所有文件工具（docx / ppt / excel / pdf / text-file / image）的 `sourcePath`、`outputPath`、`path` 必须是本机绝对路径；系统不做任何路径拼接，相对路径直接返回错误，AI 需自行改为绝对路径后再调用。
-  - `WB-APPLY-002-AC8` `docx_edit.insert_blocks` 使用可选 `blockId` 与 `position:'before'|'after'`；传入 `blockId` 时在目标 block 前后插入，不传时统一追加到正文末尾。旧 `location:{blockId,position}` 与 `position + anchorBlockId` 参数无效。
+  - `WB-APPLY-002-AC8` DOCX 公开定位统一使用会话内稳定 `nodeId`；不存在 block、blockId、cellBlockId、wrapperPath 或 lineageId 协议。outline 的 `nodeIndex` 只表示当前临时顺序，重新打开文件后必须重新读取。
   - `WB-APPLY-002-AC9` DOCX 详细读取使用严格递归语义树，按真实顺序保留 `paragraph / run / text / tab / break / hyperlink / content_control / revision / field / table / table_row / table_cell / visual` 的归属关系；详细树中的正文只存在于叶子 `text` 节点，不重复返回 paragraph、table 或 cell 的派生文本和行列统计。
   - `WB-APPLY-002-AC10` DOCX visual 类型固定为 `image / chart / diagram / shape / embedded_object`。详细读取返回 visualId；outline 只在存在视觉内容时返回 count 和 kinds，不展开视觉节点。
   - `WB-APPLY-002-AC11` `docx_read_visuals` 接受 1 至 10 个 visualId 和识别要求，按输入顺序逐项返回识别文字或错误；结果不写入正文搜索索引，`.doc` 不支持视觉读取。
-  - `WB-APPLY-002-AC12` `insert_blocks / replace_block / update_table_cell` 使用扁平写入协议：段落为 `{text, style?}`，表格为 `{rows: string[][]}`。标题由段落 `style.styleName=Heading1...Heading6` 表达；旧递归创建树（`type:'paragraph'` + `children`）与 `heading` 参数无效。
-  - `WB-APPLY-002-AC13` DOCX 按元素类型提供 5 个样式 action：`style_text`（按文字匹配修改 run 样式）、`style_paragraph` / `style_table` / `style_row` / `style_cell`（按 id 修改对应元素的直接样式）；patch 类型与实际节点不一致时整次编辑失败。
-  - `WB-APPLY-002-AC14` `replace_text` 未传 blockIds 时递归处理全部正文和表格单元格，传入时只处理指定 subtree；始终替换范围内全部匹配，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual。
-  - `WB-APPLY-002-AC15` 替换或删除 block、更新表格单元格时，如目标后代存在 visual，必须明确传 `allowVisualLoss:true`，否则整次编辑在保存前失败。文本替换和样式修改必须原位保留 visual。
-  - `WB-APPLY-002-AC16` `docx_read_outline` 只返回轻量扁平摘要和必要视觉统计，不返回 wrapper、相邻 block、样式、heading、layout 或写保护字段；解析时必须递归穿过 block-level content control、可见 revision 和 `AlternateContent`，并按真实顺序列出其中 paragraph/table。
-  - `WB-APPLY-002-AC17` `docx_edit` 成功结果只向 AI 返回一条 `msg` 成功提示（如「docx编辑成功」），不再返回 `sourcePath` 或 `createdBlockIds`；`changedBlocks/createdBlocks` 仅供内部 review、replay、事件和测试使用，失败统一返回 error，不返回成功 warning。
+  - `WB-APPLY-002-AC12` `docx_content_edit` 使用浅层节点构造和最小 patch：支持 `replace_text / insert_nodes / replace_node / delete_node / move_node`，不提供 `replace_content` 或 `replace_children`，也不要求 AI 重建完整递归树。
+  - `WB-APPLY-002-AC13` `docx_format` 分别支持 text、paragraph、table、row、cell 和 section 的直接格式，另支持重置格式、命名样式 CRUD、应用命名样式和编号。patch 类型与目标节点不一致时整次写入失败；`update_named_style` 修改全局样式定义。
+  - `WB-APPLY-002-AC14` `replace_text` 只在指定 `nodeId` 子树内替换确定原文，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual；原位保留未修改 run、段落格式和视觉节点。
+  - `WB-APPLY-002-AC15` 替换或删除节点时，如目标后代存在 visual，必须明确传 `allowVisualLoss:true`，否则保存前失败。失败不得推进 WorkingPackage，也不得产生部分结果。
+  - `WB-APPLY-002-AC16` `docx_read_outline` 返回轻量顺序摘要；`docx_read` 返回 story 递归语义树。未支持 OOXML 投影为 opaque，局部写入必须原样保留；content control 是可定位容器，空容器可用 `insert_nodes inside_start/inside_end` 写入。
+  - `WB-APPLY-002-AC17` 五个 DOCX 写工具统一返回 discriminated `changes`：节点创建/更新返回局部完整节点，节点删除返回 `nodeId`，命名样式、批注和修订返回对应实体 ID 与最终状态；禁止只返回成功消息。
+  - `WB-APPLY-002-AC17-1` 同一 Run 内五个写工具共享首次接触文件时的 Source 和连续推进的 Working。Diff 比较 Source 与最终 Working：A→B→A、新增后删除不产生 Diff；Word 原生批注和修订与 NCurator Diff 独立保留。
   - `WB-APPLY-002-AC18` 所有 Human 工具的输入结构由 Zod schema 统一渲染；公共类型使用稳定命名定义并只展开一次，同时保留长度、数量、正则、数值和跨字段语义约束，不生成匿名 schema 名称。
   - `WB-APPLY-002-AC7` 生成 PNG、JPEG 或 WebP 图片后，正式路径立即包含可读取图片并生成一条修改记录；同一次 AI Run 对同一路径再次生成时自动更新并保持首次写入前基线。
 
@@ -541,7 +542,7 @@
   - `WB-APPLY-003-AC5` Docx 工具修改保存 before 和 Review Docx；Review Docx 继续由现有 Docx Renderer 渲染并保留段落、表格、图片、字体和页面结构。
   - `WB-APPLY-003-AC6` PPT 修改记录使用 Diff Manifest v4，在审核模式提供固定的修改前后页面快照；旧 v3 记录明确提示格式过期，正式 PPT 不受影响。Excel 专用工具修改 `xlsx` 时在审核模式提供单元格边框标记，并可切换到预览模式。终端产生的二进制文件变化只提供修改前/修改后版本，不显示模式切换；终端产生的 UTF-8 文本变化按普通文本规则处理。
   - `WB-APPLY-003-AC7` 图片生成记录直接预览最终图片并提供回退，不显示不存在的图片 Diff；更新图片回退后恢复首次生成前的文件，新建图片回退后删除目标文件。
-  - `WB-APPLY-003-AC8` Docx Review 只展示本次 Run 初始文档到最终净稿的净变化；同一原始 block 连续修改只显示一次原始红色版本和一次最终绿色版本，中间稿不得出现，改回原内容不产生修改记录；本轮新增 block 只显示最终仍存在的绿色版本，新增后删除不产生净变化。
+  - `WB-APPLY-003-AC8` Docx Review 只展示本次 Run 初始文档到最终净稿的净变化；同一原始节点连续修改只显示一次原始红色版本和一次最终绿色版本，中间稿不得出现，改回原内容不产生修改记录；本轮新增节点只显示最终仍存在的绿色版本，新增后删除不产生净变化。
   - `WB-APPLY-003-AC9` 专用写工具的成功记录以工具原子写入结果、checkpoint 和前后 checksum 为权威依据；通用扫描匹配到同一路径时可补充快照，未匹配时不得否定已被校验的真实写入。
 
 #### WB-APPLY-004 后续修改后的强制回退

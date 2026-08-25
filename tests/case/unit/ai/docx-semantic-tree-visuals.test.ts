@@ -3,16 +3,28 @@ import path from 'node:path'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import { describe, expect, it } from 'vitest'
 import {
-  buildBlockIndex,
+  buildNodeIndex,
   loadDocxBundle
-} from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
+} from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import { readParagraphStyle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/semanticTree'
 import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/tools/docx/worker/docxWorker'
 import { createReplaySnapshot } from '../../../../src/main/services/ai/human/tools/docx/review/replayTree'
-import { projectDocxReadBlocks } from '../../../../src/main/services/ai/human/tools/docx/publicReadTree'
+import { projectDocxReadNodes } from '../../../../src/main/services/ai/human/tools/docx/publicReadTree'
+import type { DocxReadContentNode } from '../../../../src/main/services/ai/human/tools/docx/nodeTypes'
+
+const findVisualId = (nodes: readonly DocxReadContentNode[]): string => {
+  for (const node of nodes) {
+    if (node.type === 'visual') return node.visualId
+    if ('children' in node) {
+      const visualId = findVisualId(node.children)
+      if (visualId) return visualId
+    }
+  }
+  return ''
+}
 
 describe('docx recursive semantic tree visuals', () => {
-  it('flattens block wrappers for outline and restores only matched wrapper paths for read', () => {
+  it('keeps content controls and revisions as real root nodes', () => {
     const xml = `
       <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">
@@ -28,17 +40,27 @@ describe('docx recursive semantic tree visuals', () => {
           </mc:AlternateContent>
         </w:body>
       </w:document>`
-    const index = buildBlockIndex(new DOMParser().parseFromString(xml, 'application/xml'))
+    const index = buildNodeIndex(new DOMParser().parseFromString(xml, 'application/xml'))
 
     expect(
-      index.outline.filter((block) => block.type !== 'table_cell').map((block) => block.text)
-    ).toEqual(['A', 'B', 'C'])
-    expect(index.bodyBlockCount).toBe(3)
-    expect(projectDocxReadBlocks([index.detailByBlockId.get('b:1')!])).toMatchObject([
+      index.outline.filter((node) => node.type !== 'table_cell').map((node) => node.text)
+    ).toEqual(['A\nB', 'deleted', 'C'])
+    expect(index.bodyNodeCount).toBe(3)
+    expect(
+      projectDocxReadNodes([index.detailByNodeId.get('body:content_control:0')!])
+    ).toMatchObject([
       {
         type: 'content_control',
         tag: 'scope',
-        children: [{ type: 'revision', kind: 'insert', children: [{ blockId: 'b:1' }] }]
+        children: [
+          {
+            type: 'paragraph'
+          },
+          {
+            type: 'revision',
+            kind: 'insert'
+          }
+        ]
       }
     ])
   })
@@ -64,7 +86,7 @@ describe('docx recursive semantic tree visuals', () => {
   it('parses every visual kind from the real OOXML fixture', async () => {
     const fixture = path.resolve('tests/fixtures/workspace/docx-visual-kinds.docx')
     const bundle = await loadDocxBundle(await fs.readFile(fixture))
-    const index = buildBlockIndex(
+    const index = buildNodeIndex(
       bundle.documentDom,
       bundle.relationshipTargets,
       bundle.relationshipTypes
@@ -79,7 +101,7 @@ describe('docx recursive semantic tree visuals', () => {
     ])
     const shape = [...index.visualsById.values()].find((visual) => visual.kind === 'shape')
     expect(shape).toBeDefined()
-    const owner = shape ? index.detailByBlockId.get(shape.blockId) : undefined
+    const owner = shape ? index.detailByNodeId.get(shape.ownerNodeId) : undefined
     const descendants = owner ? [owner] : []
     const text: string[] = []
     while (descendants.length) {
@@ -111,7 +133,7 @@ describe('docx recursive semantic tree visuals', () => {
         </w:body>
       </w:document>`
     const dom = new DOMParser().parseFromString(xml, 'application/xml')
-    const index = buildBlockIndex(
+    const index = buildNodeIndex(
       dom,
       new Map([
         ['rImage', 'media/image.png'],
@@ -132,7 +154,7 @@ describe('docx recursive semantic tree visuals', () => {
     ])
     expect(index.visualsById.size).toBe(6)
     expect(index.outline[3]?.text).toBe('Shape text')
-    const shapeDetail = index.detailByBlockId.get(index.bodyBlockIds[3]!)
+    const shapeDetail = index.detailByNodeId.get(index.bodyNodeIds[3]!)
     const shapeVisual =
       shapeDetail?.type === 'paragraph' && shapeDetail.children[0]?.type === 'run'
         ? shapeDetail.children[0].children[0]
@@ -146,36 +168,35 @@ describe('docx recursive semantic tree visuals', () => {
   it('keeps image visuals distinct from real empty paragraphs', async () => {
     const fixture = path.resolve('tests/fixtures/workspace/灵感测试.docx')
     const bundle = await loadDocxBundle(await fs.readFile(fixture))
-    const index = buildBlockIndex(
+    const index = buildNodeIndex(
       bundle.documentDom,
       bundle.relationshipTargets,
       bundle.relationshipTypes
     )
     const images = [...index.visualsById.values()].filter((visual) => visual.kind === 'image')
     const realEmptyParagraphs = index.outline.filter(
-      (block) => block.type === 'paragraph' && block.text === '' && !block.visuals
+      (node) => node.type === 'paragraph' && node.text === '' && !node.visuals
     )
     expect(images).toHaveLength(18)
     expect(realEmptyParagraphs).toHaveLength(22)
     expect(new Set(images.map((visual) => visual.visualId)).size).toBe(18)
     const snapshot = createReplaySnapshot({
-      outlineBlocks: index.outline,
-      detailedBlocksById: index.detailByBlockId,
-      rawXmlByBlockId: new Map(
-        [...index.nodesById.entries()].map(([blockId, node]) => [
-          blockId,
+      packageFingerprint: 'fixture',
+      outlineNodes: index.outline,
+      detailedNodesById: index.detailByNodeId,
+      rawXmlByNodeId: new Map(
+        [...index.nodesById.entries()].map(([nodeId, node]) => [
+          nodeId,
           new XMLSerializer().serializeToString(node.node)
         ])
       )
     })
-    const bindings = snapshot.blocks.flatMap((block) =>
-      block.visuals.map((visual) => visual.visualId)
-    )
+    const bindings = snapshot.nodes.flatMap((node) => node.visuals.map((visual) => visual.visualId))
     expect(bindings).toHaveLength(18)
     expect(new Set(bindings).size).toBe(18)
-    expect(
-      snapshot.blocks.filter((block) => block.visuals.length).every((block) => block.rawXml)
-    ).toBe(true)
+    expect(snapshot.nodes.filter((node) => node.visuals.length).every((node) => node.rawXml)).toBe(
+      true
+    )
   })
 
   it.each([
@@ -186,13 +207,13 @@ describe('docx recursive semantic tree visuals', () => {
     async (name, expected) => {
       const fixture = path.resolve('tests/fixtures/workspace/学习笔记', name)
       const bundle = await loadDocxBundle(await fs.readFile(fixture))
-      const index = buildBlockIndex(
+      const index = buildNodeIndex(
         bundle.documentDom,
         bundle.relationshipTargets,
         bundle.relationshipTypes
       )
       expect(index.visualsById.size).toBe(expected)
-      expect(index.outline.every((block) => !('children' in block))).toBe(true)
+      expect(index.outline.every((node) => !('children' in node))).toBe(true)
     },
     15_000
   )
@@ -214,31 +235,25 @@ describe('docx recursive semantic tree visuals', () => {
       action: 'outline',
       payload: {
         docId: open.payload.docId,
-        ranges: [{ fromBlockIndex: 0, toBlockIndex: 100 }],
+        ranges: [{ fromNodeIndex: 0, toNodeIndex: 100 }],
         includeTables: true,
         includeCells: true
       }
     })
     expect(outline.ok).toBe(true)
     if (!outline.ok || outline.payload.action !== 'outline') return
-    const owner = outline.payload.blocks.find((block) => block.visuals?.count)
+    const owner = outline.payload.nodes.find((node) => node.visuals?.count)
     expect(owner).toBeDefined()
     if (!owner) return
     const detail = await handleDocxWorkerRequest({
       requestId: 'detail',
       runId,
-      action: 'get_block',
-      payload: { docId: open.payload.docId, blockId: owner.blockId }
+      action: 'get_node',
+      payload: { docId: open.payload.docId, nodeId: owner.nodeId }
     })
     expect(detail.ok).toBe(true)
-    if (!detail.ok || detail.payload.action !== 'get_block') return
-    const stack: unknown[] = [detail.payload.block]
-    let visualId = ''
-    while (stack.length && !visualId) {
-      const node = stack.pop() as { type?: string; visualId?: string; children?: unknown[] }
-      if (node.type === 'visual') visualId = node.visualId || ''
-      else stack.push(...(node.children || []))
-    }
+    if (!detail.ok || detail.payload.action !== 'get_node') return
+    const visualId = findVisualId(detail.payload.node.children)
     expect(visualId).not.toBe('')
     const visual = await handleDocxWorkerRequest({
       requestId: 'visual',

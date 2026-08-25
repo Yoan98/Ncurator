@@ -77,7 +77,7 @@ export const RUNTIME_SKILL_CATALOG = {
     title: 'docx-write',
     displayName: 'docx 写作器',
     description:
-      '使用递归节点创建或修改 Word 文档中的段落、表格、文本和节点样式，并返回写入状态和相邻区域的详细回读信息。 碰到有操作word文件的需要时，必须要使用该技能'
+      '加载 4 个 DOCX 读取工具和 5 个写入工具；先读取稳定 nodeId，再局部修改内容、格式、表格、媒体、批注或修订，并返回变化节点。碰到有操作 Word 文件的需要时，必须使用该技能。'
   },
   'pdf-read': {
     familyId: 'pdf',
@@ -166,9 +166,13 @@ export const RUNTIME_TOOL_CATALOG = {
   kb_list_documents: { familyId: 'kb', skillId: 'kb-retrieval' },
   docx_read_outline: { familyId: 'docx', skillId: 'docx-read' },
   docx_search: { familyId: 'docx', skillId: 'docx-read' },
-  docx_read_blocks: { familyId: 'docx', skillId: 'docx-read' },
+  docx_read: { familyId: 'docx', skillId: 'docx-read' },
   docx_read_visuals: { familyId: 'docx', skillId: 'docx-read' },
-  docx_edit: { familyId: 'docx', skillId: 'docx-write' },
+  docx_content_edit: { familyId: 'docx', skillId: 'docx-write' },
+  docx_format: { familyId: 'docx', skillId: 'docx-write' },
+  docx_table_edit: { familyId: 'docx', skillId: 'docx-write' },
+  docx_media_edit: { familyId: 'docx', skillId: 'docx-write' },
+  docx_comments_revisions: { familyId: 'docx', skillId: 'docx-write' },
   pdf_inspect: { familyId: 'pdf', skillId: 'pdf-read' },
   pdf_search: { familyId: 'pdf', skillId: 'pdf-read' },
   pdf_read_pages: { familyId: 'pdf', skillId: 'pdf-read' },
@@ -205,5 +209,10 @@ export const RUNTIME_TOOL_NAMES = Object.keys(RUNTIME_TOOL_CATALOG) as RuntimeTo
 export const getRuntimeSkillDisplayName = (skillId: string): string | undefined =>
   RUNTIME_SKILL_CATALOG[skillId as RuntimeSkillId]?.displayName
 
-export const listRuntimeToolNamesForSkill = (skillId: RuntimeSkillId): RuntimeToolName[] =>
-  RUNTIME_TOOL_NAMES.filter((toolName) => RUNTIME_TOOL_CATALOG[toolName].skillId === skillId)
+export const listRuntimeToolNamesForSkill = (skillId: RuntimeSkillId): RuntimeToolName[] => {
+  const includedSkillIds: RuntimeSkillId[] =
+    skillId === 'docx-write' ? ['docx-read', 'docx-write'] : [skillId]
+  return RUNTIME_TOOL_NAMES.filter((toolName) =>
+    includedSkillIds.includes(RUNTIME_TOOL_CATALOG[toolName].skillId)
+  )
+}

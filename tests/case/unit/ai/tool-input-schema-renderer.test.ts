@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod/v4'
 import { ALL_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/registry'
 import {
-  docxReadBlocksOutputSchema,
+  docxReadOutputSchema,
   docxOutlineOutputSchema,
   docxSearchOutputSchema,
-  docxWriteOutputSchema
+  docxMutationOutputSchema
 } from '../../../../src/main/services/ai/human/tools/docx/outputSchemas'
 import {
   pdfInspectOutputSchema,
@@ -18,9 +18,7 @@ import {
   pptReadSlidesOutputSchema,
   pptSearchOutputSchema
 } from '../../../../src/main/services/ai/human/tools/ppt/schemas'
-import {
-  renderToolInputSchemaForPrompt
-} from '../../../../src/main/services/ai/human/tools/schemaPromptRenderer'
+import { renderToolInputSchemaForPrompt } from '../../../../src/main/services/ai/human/tools/schemaPromptRenderer'
 
 describe('ai unit tool input schema renderer', () => {
   it('renders every registered Human tool as plain TypeScript-like types', () => {
@@ -41,7 +39,9 @@ describe('ai unit tool input schema renderer', () => {
       terminal_run: renderedByTool.terminal_run,
       ppt_read_outline: renderedByTool.ppt_read_outline,
       ppt_edit: renderedByTool.ppt_edit,
-      docx_edit: renderedByTool.docx_edit
+      docx_content_edit: renderedByTool.docx_content_edit,
+      docx_format: renderedByTool.docx_format,
+      docx_table_edit: renderedByTool.docx_table_edit
     }).toMatchSnapshot()
   })
 
@@ -69,9 +69,9 @@ describe('ai unit tool input schema renderer', () => {
   })
 
   it('renders DOCX shared definitions once without schema constraints', () => {
-    const docxEdit = ALL_TOOL_SPECS.find((spec) => spec.name === 'docx_edit')!
+    const docxFormat = ALL_TOOL_SPECS.find((spec) => spec.name === 'docx_format')!
     const docxVisuals = ALL_TOOL_SPECS.find((spec) => spec.name === 'docx_read_visuals')!
-    const editRendered = renderToolInputSchemaForPrompt(docxEdit.inputSchema, { compact: true })
+    const formatRendered = renderToolInputSchemaForPrompt(docxFormat.inputSchema, { compact: true })
     const visualsRendered = renderToolInputSchemaForPrompt(docxVisuals.inputSchema, {
       compact: true
     })
@@ -81,23 +81,22 @@ describe('ai unit tool input schema renderer', () => {
       'DocxParagraphStyle',
       'DocxTableStyle',
       'DocxTableRowStyle',
-      'DocxTableCellStyle',
-      'DocxEditAction'
+      'DocxTableCellStyle'
     ]) {
-      expect(editRendered.match(new RegExp(`type ${definition} =`, 'g'))).toHaveLength(1)
+      expect(formatRendered.match(new RegExp(`type ${definition} =`, 'g'))).toHaveLength(1)
     }
     expect(visualsRendered).toBe(
       '{ sourcePath: string, requests: { visualId: string, instruction: string }[] }'
     )
-    expect(editRendered).not.toMatch(/constraint=|minItems|hyperlink requires|style patch must/)
+    expect(formatRendered).not.toMatch(/constraint=|minItems|hyperlink requires|style patch must/)
   })
 
   it('does not expose warnings in tool output schemas', () => {
     ;[
       docxOutlineOutputSchema,
       docxSearchOutputSchema,
-      docxReadBlocksOutputSchema,
-      docxWriteOutputSchema,
+      docxReadOutputSchema,
+      docxMutationOutputSchema,
       pdfInspectOutputSchema,
       pdfSearchOutputSchema,
       pdfReadPagesOutputSchema,

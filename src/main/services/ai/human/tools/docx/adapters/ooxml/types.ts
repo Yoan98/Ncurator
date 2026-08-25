@@ -1,38 +1,50 @@
 import type JSZip from 'jszip'
 import type {
-  DocxChangedBlock,
-  DocxBlockWrapper,
-  DocxDetailedBlock,
+  DocxChangedNode,
+  DocxDetailedNode,
   DocxLayoutMode,
   DocxOpenMeta,
-  DocxOutlineBlock,
+  DocxStoryRef,
+  DocxOutlineNode,
   DocxVisualKind
 } from '../../types'
 
 export type IndexedNode =
   | {
       kind: 'paragraph'
-      blockId: string
-      blockIndex: number
+      nodeId: string
+      nodeIndex: number
       layoutMode: DocxLayoutMode
-      wrapperPath: DocxBlockWrapper[]
+      story: DocxStoryRef
+      partName: string
       node: Element
     }
   | {
       kind: 'table'
-      blockId: string
-      blockIndex: number
+      nodeId: string
+      nodeIndex: number
       layoutMode: DocxLayoutMode
-      wrapperPath: DocxBlockWrapper[]
+      story: DocxStoryRef
+      partName: string
+      node: Element
+    }
+  | {
+      kind: 'content_control' | 'revision'
+      nodeId: string
+      nodeIndex: number
+      layoutMode: DocxLayoutMode
+      story: DocxStoryRef
+      partName: string
       node: Element
     }
   | {
       kind: 'table_cell'
-      blockId: string
-      tableBlockId: string
-      blockIndex: number
+      nodeId: string
+      tableNodeId: string
+      nodeIndex: number
       layoutMode: DocxLayoutMode
-      wrapperPath: DocxBlockWrapper[]
+      story: DocxStoryRef
+      partName: string
       row: number
       col: number
       node: Element
@@ -41,34 +53,58 @@ export type IndexedNode =
 
 export type NodeMapById = Map<string, IndexedNode>
 
-export type BlockIndex = {
-  outline: DocxOutlineBlock[]
+export type NodeIndex = {
+  outline: DocxOutlineNode[]
   nodesById: NodeMapById
-  bodyBlockIds: string[]
+  bodyNodeIds: string[]
   paragraphCount: number
   tableCount: number
   charCount: number
-  bodyBlockCount: number
-  cellBlockCount: number
-  detailByBlockId: Map<string, DocxDetailedBlock>
+  bodyNodeCount: number
+  cellNodeCount: number
+  detailByNodeId: Map<string, DocxDetailedNode>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
 }
 
 export type DocxEditableNode = {
   nodeId: string
-  blockId: string
-  kind: 'paragraph' | 'run' | 'table' | 'table_row' | 'table_cell'
+  ownerNodeId: string
+  story: DocxStoryRef
+  partName: string
+  kind:
+    | 'paragraph'
+    | 'run'
+    | 'table'
+    | 'table_row'
+    | 'table_cell'
+    | 'hyperlink'
+    | 'field'
+    | 'content_control'
+    | 'revision'
   node: Element
 }
 
 export type DocxVisualDescriptor = {
   visualId: string
-  blockId: string
+  ownerNodeId: string
   kind: DocxVisualKind
   relationshipId?: string
   target?: string
   contentType?: string
+  story: DocxStoryRef
+  partName: string
+}
+
+export type DocxStoryPart = {
+  story: DocxStoryRef
+  partName: string
+  dom: Document
+  root: Element
+  relationshipTargets: Map<string, string>
+  relationshipTypes: Map<string, string>
+  relationshipTargetModes: Map<string, string>
+  availableRelationshipTargetIds: Set<string>
 }
 
 export type ParsedDocxBundle = {
@@ -80,9 +116,10 @@ export type ParsedDocxBundle = {
   relationshipTypes: Map<string, string>
   relationshipTargetModes: Map<string, string>
   availableRelationshipTargetIds: Set<string>
+  stories: DocxStoryPart[]
 }
 
 export type ApplyOpsResult = {
   buffer: Buffer
-  changedBlocks: DocxChangedBlock[]
+  changedNodes: DocxChangedNode[]
 }

@@ -22,30 +22,30 @@ describe('docx legacy worker', () => {
       action: 'outline',
       payload: {
         docId: opened.payload.docId,
-        ranges: [{ fromBlockIndex: 0, toBlockIndex: 100 }],
+        ranges: [{ fromNodeIndex: 0, toNodeIndex: 100 }],
         includeTables: true,
         includeCells: true
       }
     })
     expect(outline.ok).toBe(true)
     if (!outline.ok || outline.payload.action !== 'outline') return
-    expect(outline.payload.blocks.length).toBeGreaterThan(0)
-    expect(outline.payload.blocks[0]?.text).toContain('second test')
+    expect(outline.payload.nodes.length).toBeGreaterThan(0)
+    expect(outline.payload.nodes[0]?.text).toContain('second test')
 
-    const blockId = outline.payload.blocks[0]!.blockId
-    const blocks = await handleDocxWorkerRequest({
-      requestId: 'blocks',
+    const nodeId = outline.payload.nodes[0]!.nodeId
+    const nodes = await handleDocxWorkerRequest({
+      requestId: 'nodes',
       runId,
-      action: 'get_blocks_by_ids',
+      action: 'get_nodes_by_ids',
       payload: {
         docId: opened.payload.docId,
-        blockIds: [blockId]
+        nodeIds: [nodeId]
       }
     })
-    expect(blocks.ok).toBe(true)
-    if (blocks.ok && blocks.payload.action === 'get_blocks_by_ids') {
-      expect(blocks.payload.blocks[0]?.type).toBe('paragraph')
-      expect(blocks.payload.blocks[0]?.text).toContain('Unicode characters')
+    expect(nodes.ok).toBe(true)
+    if (nodes.ok && nodes.payload.action === 'get_nodes_by_ids') {
+      expect(nodes.payload.nodes[0]?.type).toBe('paragraph')
+      expect(nodes.payload.nodes[0]?.text).toContain('Unicode characters')
     }
 
     const search = await handleDocxWorkerRequest({
@@ -56,7 +56,7 @@ describe('docx legacy worker', () => {
         docId: opened.payload.docId,
         query: 'Unicode characters',
         mode: 'literal',
-        scopeBlockIds: []
+        scopeNodeIds: []
       }
     })
     expect(search.ok).toBe(true)
@@ -67,10 +67,15 @@ describe('docx legacy worker', () => {
     const write = await handleDocxWorkerRequest({
       requestId: 'write',
       runId,
-      action: 'apply_ops',
+      action: 'apply_operation',
       payload: {
         docId: opened.payload.docId,
-        ops: [{ type: 'replace_text', query: 'second test', replace: 'changed' }]
+        operation: {
+          type: 'replace_text',
+          nodeId: outline.payload.nodes[0]!.nodeId,
+          oldText: 'second test',
+          newText: 'changed'
+        }
       }
     })
     expect(write.ok).toBe(false)

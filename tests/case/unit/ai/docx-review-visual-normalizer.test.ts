@@ -14,24 +14,24 @@ const paragraphSpec = {
 
 const makeSnapshot = (input: {
   kind?: 'paragraph' | 'table'
-  spec?: DocxReplaySnapshot['blocks'][number]['spec']
+  spec?: DocxReplaySnapshot['nodes'][number]['spec']
   structureFingerprint: string
   visualIds: string[]
 }): DocxReplaySnapshot => {
-  const block = {
-    blockId: 'block-1',
-    blockIndex: 0,
+  const node = {
+    nodeId: 'node-1',
+    nodeIndex: 0,
     kind: input.kind || 'paragraph',
     rawXml: '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
     spec: input.spec || paragraphSpec,
     structureFingerprint: input.structureFingerprint,
     visuals: input.visualIds.map((visualId) => ({ visualId, kind: 'image' as const })),
-    tableCellBlockIds: []
+    tableCellNodeIds: []
   }
   return {
-    blocks: [block],
-    blockById: new Map([[block.blockId, block]]),
-    tableBlockIdByCellBlockId: new Map()
+    nodes: [node],
+    nodeById: new Map([[node.nodeId, node]]),
+    tableNodeIdByCellNodeId: new Map()
   }
 }
 
@@ -43,10 +43,10 @@ const makeSession = (snapshot: DocxReplaySnapshot): DocxReplaySession =>
     stats: {
       paragraphCount: 1,
       tableCount: 0,
-      imageCount: snapshot.blocks[0]?.visuals.length || 0,
-      visualCount: snapshot.blocks[0]?.visuals.length || 0,
-      visualKinds: snapshot.blocks[0]?.visuals.length ? ['image'] : [],
-      blockCount: 1
+      imageCount: snapshot.nodes[0]?.visuals.length || 0,
+      visualCount: snapshot.nodes[0]?.visuals.length || 0,
+      visualKinds: snapshot.nodes[0]?.visuals.length ? ['image'] : [],
+      nodeCount: 1
     },
     diskFingerprint: { checksum: 'checksum', byteSize: 1, modifiedAt: 1 },
     snapshot

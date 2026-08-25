@@ -1,12 +1,13 @@
 import path from 'node:path'
 import type {
-  DocxDetailedBlock,
-  DocxDetailedCellBlock,
-  DocxDetailedParagraphBlock,
-  DocxDetailedTableBlock,
+  DocxDetailedNode,
+  DocxDetailedCellNode,
+  DocxDetailedContainerNode,
+  DocxDetailedParagraphNode,
+  DocxDetailedTableNode,
   DocxBorders,
   DocxParagraphStyle,
-  DocxReadBlockNode,
+  DocxReadContentNode,
   DocxReadContentControlNode,
   DocxReadFieldNode,
   DocxReadHyperlinkNode,
@@ -21,6 +22,7 @@ import type {
   DocxReadTableRowNode,
   DocxReadVisualNode,
   DocxRunStyle,
+  DocxStoryRef,
   DocxTableCellStyle,
   DocxTableRowStyle,
   DocxTableStyle,
@@ -30,7 +32,9 @@ import type { DocxEditableNode, DocxVisualDescriptor } from './types'
 import { childElements, descendantElements, firstChildElement, getAttr } from './dom'
 
 type SemanticTreeContext = {
-  blockId: string
+  rootNodeId: string
+  story: DocxStoryRef
+  partName: string
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   relationshipTargetModes: ReadonlyMap<string, string>
@@ -40,10 +44,28 @@ type SemanticTreeContext = {
 }
 
 const nodeId = (context: SemanticTreeContext, nodePath: string): string =>
-  `node:${context.blockId}:${nodePath}`
+  `node:${context.rootNodeId}:${nodePath}`
+
+const bindEditableNode = (
+  context: SemanticTreeContext,
+  currentPath: string,
+  kind: DocxEditableNode['kind'],
+  node: Element
+): string => {
+  const id = nodeId(context, currentPath)
+  context.editableNodesById.set(id, {
+    nodeId: id,
+    ownerNodeId: context.rootNodeId,
+    story: context.story,
+    partName: context.partName,
+    kind,
+    node
+  })
+  return id
+}
 
 const visualId = (context: SemanticTreeContext, nodePath: string): string =>
-  `visual:${context.blockId}:${nodePath}`
+  `visual:${context.rootNodeId}:${nodePath}`
 
 const attrByLocalName = (node: Element, names: readonly string[]): string => {
   for (let index = 0; index < node.attributes.length; index += 1) {
@@ -319,19 +341,21 @@ const parseVisual = (
   const target = relationshipId ? context.relationshipTargets.get(relationshipId) : undefined
   const descriptor: DocxVisualDescriptor = {
     visualId: id,
-    blockId: context.blockId,
+    ownerNodeId: context.rootNodeId,
     kind,
     relationshipId,
     target,
-    contentType: relationshipId ? context.relationshipTypes.get(relationshipId) : undefined
+    contentType: relationshipId ? context.relationshipTypes.get(relationshipId) : undefined,
+    story: context.story,
+    partName: context.partName
   }
   context.visualsById.set(id, descriptor)
 
   const textBox = firstDescendant(node, 'txbxContent')
   const children = textBox
     ? childElements(textBox)
-        .map((child, index) => parseBlockNode(child, context, `${currentPath}.textbox.${index}`))
-        .filter((child): child is DocxReadBlockNode => Boolean(child))
+        .map((child, index) => parseContentNode(child, context, `${currentPath}.textbox.${index}`))
+        .filter((child): child is DocxReadContentNode => Boolean(child))
     : []
   return {
     type: 'visual',
@@ -347,13 +371,7 @@ const parseRun = (
   context: SemanticTreeContext,
   currentPath: string
 ): DocxReadRunNode => {
-  const id = nodeId(context, currentPath)
-  context.editableNodesById.set(id, {
-    nodeId: id,
-    blockId: context.blockId,
-    kind: 'run',
-    node: run
-  })
+  const id = bindEditableNode(context, currentPath, 'run', run)
   const children: DocxReadRunChildNode[] = []
   childElements(run).forEach((child, index) => {
     const childPath = `${currentPath}.${index}`
@@ -411,6 +429,7 @@ const parseHyperlink = (
   const relationshipId = attrByLocalName(node, ['id'])
   return {
     type: 'hyperlink',
+    nodeId: bindEditableNode(context, currentPath, 'hyperlink', node),
     target: relationshipId ? context.relationshipTargets.get(relationshipId) : undefined,
     anchor: getAttr(node, 'anchor') || undefined,
     children: childElements(node, 'r').map((run, index) =>
@@ -445,6 +464,7 @@ const parseContentControl = (
   const content = firstChildElement(node, 'sdtContent')
   return {
     type: 'content_control',
+    nodeId: bindEditableNode(context, currentPath, 'content_control', node),
     tag: tag ? getAttr(tag, 'val') || undefined : undefined,
     children: content ? parseContainerChildren(content, context, currentPath) : []
   }
@@ -456,6 +476,7 @@ const parseSimpleField = (
   currentPath: string
 ): DocxReadFieldNode => ({
   type: 'field',
+  nodeId: bindEditableNode(context, currentPath, 'field', node),
   instruction: getAttr(node, 'instr'),
   children: parseContainerChildren(node, context, currentPath)
 })
@@ -472,22 +493,50 @@ const parseSemanticElement = (
     return [
       {
         type: 'revision',
+        nodeId: bindEditableNode(context, currentPath, 'revision', child),
+        revisionId: getAttr(child, 'id'),
         kind: revisionKind(child.localName),
         children: parseContainerChildren(child, context, currentPath)
       }
     ]
   }
   if (child.localName === 'fldSimple') return [parseSimpleField(child, context, currentPath)]
+  if (child.localName === 'bookmarkStart' || child.localName === 'bookmarkEnd') {
+    return [
+      {
+        type: 'bookmark',
+        bookmarkId: getAttr(child, 'id'),
+        kind: child.localName === 'bookmarkStart' ? 'start' : 'end',
+        ...(getAttr(child, 'name') ? { name: getAttr(child, 'name') } : {})
+      }
+    ]
+  }
+  if (child.localName === 'oMath' || child.localName === 'oMathPara') {
+    return [
+      {
+        type: 'math',
+        text: descendantElements(child, 't')
+          .map((node) => node.textContent || '')
+          .join('')
+      }
+    ]
+  }
   if (child.localName === 'p' || child.localName === 'tbl') {
-    const block = parseBlockNode(child, context, currentPath)
-    return block ? [block] : []
+    const node = parseContentNode(child, context, currentPath)
+    return node ? [node] : []
   }
   if (child.localName === 'AlternateContent') {
     return selectAlternateContent(child).flatMap((selected, index) =>
       parseSemanticElement(selected, context, `${currentPath}.${index}`)
     )
   }
-  return parseContainerChildren(child, context, currentPath)
+  return [
+    {
+      type: 'opaque',
+      name: child.nodeName,
+      children: parseContainerChildren(child, context, currentPath)
+    }
+  ]
 }
 
 const containsFieldChar = (run: Element, kind: string): boolean =>
@@ -499,16 +548,27 @@ const parseParagraphChildren = (
   currentPath: string
 ): DocxReadInlineNode[] => {
   const result: DocxReadInlineNode[] = []
-  let field: { instruction: string; children: DocxReadNode[]; readingResult: boolean } | null = null
+  let field: {
+    nodeId: string
+    instruction: string
+    children: DocxReadNode[]
+    readingResult: boolean
+  } | null = null
   childElements(paragraph).forEach((child, index) => {
     if (child.localName === 'pPr') return
     const childPath = `${currentPath}.${index}`
     if (child.localName === 'r' && containsFieldChar(child, 'begin')) {
-      field = { instruction: '', children: [], readingResult: false }
+      field = {
+        nodeId: bindEditableNode(context, childPath, 'field', child),
+        instruction: '',
+        children: [],
+        readingResult: false
+      }
       return
     }
     if (field && child.localName === 'r') {
       const activeField = field as {
+        nodeId: string
         instruction: string
         children: DocxReadNode[]
         readingResult: boolean
@@ -527,6 +587,7 @@ const parseParagraphChildren = (
       if (containsFieldChar(child, 'end')) {
         result.push({
           type: 'field',
+          nodeId: activeField.nodeId,
           instruction: activeField.instruction.trim(),
           children: activeField.children
         })
@@ -543,6 +604,7 @@ export const readNodeText = (node: DocxReadNode): string => {
   if (node.type === 'text') return node.text
   if (node.type === 'tab') return '\t'
   if (node.type === 'break') return '\n'
+  if (node.type === 'math') return node.text
   if (node.type === 'revision' && (node.kind === 'delete' || node.kind === 'move_from')) return ''
   if (!('children' in node) || !node.children) return ''
   return node.children.map((child) => readNodeText(child)).join('')
@@ -556,7 +618,9 @@ const parseParagraph = (
   const id = nodeId(context, currentPath)
   context.editableNodesById.set(id, {
     nodeId: id,
-    blockId: context.blockId,
+    ownerNodeId: context.rootNodeId,
+    story: context.story,
+    partName: context.partName,
     kind: 'paragraph',
     node: paragraph
   })
@@ -578,24 +642,26 @@ const parseCell = (
   currentPath: string,
   row: number,
   col: number,
-  cellBlockId?: string
+  cellNodeId?: string
 ): DocxReadTableCellNode => {
-  const cellContext = cellBlockId ? { ...context, blockId: cellBlockId } : context
-  const id = cellBlockId ? undefined : nodeId(context, currentPath)
-  if (id) {
+  const cellContext = cellNodeId ? { ...context, rootNodeId: cellNodeId } : context
+  const id = cellNodeId || nodeId(context, currentPath)
+  if (!cellNodeId) {
     context.editableNodesById.set(id, {
       nodeId: id,
-      blockId: context.blockId,
+      ownerNodeId: context.rootNodeId,
+      story: context.story,
+      partName: context.partName,
       kind: 'table_cell',
       node: cell
     })
   }
   const children = childElements(cell)
-    .map((child, index) => parseBlockNode(child, cellContext, `${currentPath}.${index}`))
-    .filter((child): child is DocxReadBlockNode => Boolean(child))
+    .map((child, index) => parseContentNode(child, cellContext, `${currentPath}.${index}`))
+    .filter((child): child is DocxReadContentNode => Boolean(child))
   return {
     type: 'table_cell',
-    ...(cellBlockId ? { blockId: cellBlockId } : { nodeId: id! }),
+    nodeId: id,
     row,
     col,
     style: readCellStyle(cell),
@@ -612,7 +678,9 @@ const parseTable = (
   const id = nodeId(context, currentPath)
   context.editableNodesById.set(id, {
     nodeId: id,
-    blockId: context.blockId,
+    ownerNodeId: context.rootNodeId,
+    story: context.story,
+    partName: context.partName,
     kind: 'table',
     node: table
   })
@@ -621,7 +689,9 @@ const parseTable = (
     const rowId = nodeId(context, rowPath)
     context.editableNodesById.set(rowId, {
       nodeId: rowId,
-      blockId: context.blockId,
+      ownerNodeId: context.rootNodeId,
+      story: context.story,
+      partName: context.partName,
       kind: 'table_row',
       node: row
     })
@@ -638,7 +708,7 @@ const parseTable = (
           rowIndex + 1,
           colIndex + 1,
           currentPath === 'root'
-            ? `${context.blockId}.r:${String(rowIndex + 1)}.c:${String(colIndex + 1)}`
+            ? `${context.rootNodeId}.r:${String(rowIndex + 1)}.c:${String(colIndex + 1)}`
             : undefined
         )
       )
@@ -660,17 +730,19 @@ const parseTable = (
   }
 }
 
-const parseBlockNode = (
+const parseContentNode = (
   node: Element,
   context: SemanticTreeContext,
   currentPath: string
-): DocxReadBlockNode | null => {
+): DocxReadContentNode | null => {
   if (node.localName === 'p') return parseParagraph(node, context, currentPath)
   if (node.localName === 'tbl') return parseTable(node, context, currentPath)
   if (node.localName === 'sdt') return parseContentControl(node, context, currentPath)
   if (['ins', 'del', 'moveFrom', 'moveTo'].includes(node.localName)) {
     return {
       type: 'revision',
+      nodeId: bindEditableNode(context, currentPath, 'revision', node),
+      revisionId: getAttr(node, 'id'),
       kind: revisionKind(node.localName),
       children: parseContainerChildren(node, context, currentPath)
     }
@@ -679,102 +751,159 @@ const parseBlockNode = (
 }
 
 const createContext = (input: {
-  blockId: string
+  nodeId: string
+  story: DocxStoryRef
+  partName: string
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
-}): SemanticTreeContext => ({ ...input })
+}): SemanticTreeContext => {
+  const { nodeId: rootNodeId, ...rest } = input
+  return { ...rest, rootNodeId }
+}
 
 export const buildParagraphDetail = (input: {
-  blockId: string
-  blockIndex: number
-  layoutMode: DocxDetailedParagraphBlock['layoutMode']
+  nodeId: string
+  story: DocxStoryRef
+  partName: string
+  nodeIndex: number
+  layoutMode: DocxDetailedParagraphNode['layoutMode']
   paragraph: Element
-  previousBlockId?: string
-  nextBlockId?: string
-  wrapperPath?: DocxDetailedParagraphBlock['wrapperPath']
+  previousNodeId?: string
+  nextNodeId?: string
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
-}): DocxDetailedParagraphBlock => {
+}): DocxDetailedParagraphNode => {
   const parsed = parseParagraph(input.paragraph, createContext(input), 'root')
-  const { nodeId: _nodeId, ...content } = parsed
   return {
-    ...content,
-    blockId: input.blockId,
-    blockIndex: input.blockIndex,
+    ...parsed,
+    nodeId: input.nodeId,
+    nodeIndex: input.nodeIndex,
     layoutMode: input.layoutMode,
-    previousBlockId: input.previousBlockId,
-    nextBlockId: input.nextBlockId,
-    wrapperPath: input.wrapperPath
+    previousNodeId: input.previousNodeId,
+    nextNodeId: input.nextNodeId,
+    story: input.story
   }
 }
 
 export const buildTableDetail = (input: {
-  blockId: string
-  blockIndex: number
-  layoutMode: DocxDetailedTableBlock['layoutMode']
+  nodeId: string
+  story: DocxStoryRef
+  partName: string
+  nodeIndex: number
+  layoutMode: DocxDetailedTableNode['layoutMode']
   table: Element
-  previousBlockId?: string
-  nextBlockId?: string
-  wrapperPath?: DocxDetailedTableBlock['wrapperPath']
+  previousNodeId?: string
+  nextNodeId?: string
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
-}): DocxDetailedTableBlock => {
+}): DocxDetailedTableNode => {
   const parsed = parseTable(input.table, createContext(input), 'root')
-  const { nodeId: _nodeId, ...content } = parsed
   return {
-    ...content,
-    blockId: input.blockId,
-    blockIndex: input.blockIndex,
+    ...parsed,
+    nodeId: input.nodeId,
+    nodeIndex: input.nodeIndex,
     layoutMode: input.layoutMode,
-    previousBlockId: input.previousBlockId,
-    nextBlockId: input.nextBlockId,
-    wrapperPath: input.wrapperPath
+    previousNodeId: input.previousNodeId,
+    nextNodeId: input.nextNodeId,
+    story: input.story
   }
 }
 
-export const buildCellDetail = (input: {
-  blockId: string
-  tableBlockId: string
-  blockIndex: number
-  layoutMode: DocxDetailedCellBlock['layoutMode']
-  row: number
-  col: number
-  cell: Element
-  previousBlockId?: string
-  nextBlockId?: string
+export const buildContainerDetail = (input: {
+  nodeId: string
+  story: DocxStoryRef
+  partName: string
+  nodeIndex: number
+  layoutMode: DocxDetailedContainerNode['layoutMode']
+  container: Element
+  previousNodeId?: string
+  nextNodeId?: string
   relationshipTargets: ReadonlyMap<string, string>
   relationshipTypes: ReadonlyMap<string, string>
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
-}): DocxDetailedCellBlock => {
+}): DocxDetailedContainerNode => {
+  const parsed = parseContentNode(input.container, createContext(input), 'root')
+  if (!parsed || (parsed.type !== 'content_control' && parsed.type !== 'revision')) {
+    throw new Error(`unsupported DOCX root container: ${input.container.localName}`)
+  }
+  const children = parsed.children.filter(
+    (child): child is DocxReadContentNode =>
+      child.type === 'paragraph' ||
+      child.type === 'table' ||
+      child.type === 'content_control' ||
+      child.type === 'revision' ||
+      child.type === 'opaque'
+  )
+  const shared = {
+    nodeId: input.nodeId,
+    nodeIndex: input.nodeIndex,
+    layoutMode: input.layoutMode,
+    previousNodeId: input.previousNodeId,
+    nextNodeId: input.nextNodeId,
+    story: input.story,
+    type: parsed.type,
+    text: children.map(readNodeText).join('\n'),
+    children
+  }
+  return parsed.type === 'content_control'
+    ? { ...shared, type: 'content_control', tag: parsed.tag }
+    : {
+        ...shared,
+        type: 'revision',
+        revisionId: parsed.revisionId,
+        revisionKind: parsed.kind
+      }
+}
+
+export const buildCellDetail = (input: {
+  nodeId: string
+  story: DocxStoryRef
+  partName: string
+  tableNodeId: string
+  nodeIndex: number
+  layoutMode: DocxDetailedCellNode['layoutMode']
+  row: number
+  col: number
+  cell: Element
+  previousNodeId?: string
+  nextNodeId?: string
+  relationshipTargets: ReadonlyMap<string, string>
+  relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
+  editableNodesById: Map<string, DocxEditableNode>
+  visualsById: Map<string, DocxVisualDescriptor>
+}): DocxDetailedCellNode => {
   const parsed = parseCell(input.cell, createContext(input), 'root', input.row, input.col)
   return {
-    blockId: input.blockId,
-    tableBlockId: input.tableBlockId,
-    blockIndex: input.blockIndex,
+    nodeId: input.nodeId,
+    tableNodeId: input.tableNodeId,
+    nodeIndex: input.nodeIndex,
     layoutMode: input.layoutMode,
-    previousBlockId: input.previousBlockId,
-    nextBlockId: input.nextBlockId,
+    previousNodeId: input.previousNodeId,
+    nextNodeId: input.nextNodeId,
     type: 'table_cell',
     row: input.row,
     col: input.col,
     style: parsed.style,
     text: parsed.text,
-    children: parsed.children
+    children: parsed.children,
+    story: input.story
   }
 }
 
@@ -785,9 +914,9 @@ const collectVisualKinds = (node: DocxReadNode, out: DocxReadVisualNode[]): void
   }
 }
 
-export const visualSummaryForBlock = (block: DocxDetailedBlock): DocxVisualSummary | undefined => {
+export const visualSummaryForNode = (node: DocxDetailedNode): DocxVisualSummary | undefined => {
   const visuals: DocxReadVisualNode[] = []
-  block.children.forEach((child) => collectVisualKinds(child, visuals))
+  node.children.forEach((child) => collectVisualKinds(child, visuals))
   if (visuals.length === 0) return undefined
   return {
     count: visuals.length,

@@ -57,7 +57,7 @@ describe('ai unit structured output json repair', () => {
 
   it('adds error position context for non-repairable JSON', () => {
     const raw =
-      '{"actions":[{"type":"insert_blocks","blocks":[{"type":"paragraph","children":[{"type":"run","children":[{"type":"text","text":"对外口径禁用"风险已解除""全部完成"等绝对化表述"}]}]}]}]}'
+      '{"sourcePath":"draft.docx","type":"insert_nodes","position":"document_end","nodes":[{"type":"paragraph","text":"对外口径禁用"风险已解除""全部完成"等绝对化表述"}]}'
     const diagnosis = buildJsonErrorDiagnosis(
       raw,
       'Colon expected at position 78 (line 1 column 79)'

@@ -42,30 +42,19 @@ describe('ai tool hand backend', () => {
             ...baseState.execution,
             pendingRound: {
               thought: {
-                text: '给一个双层嵌套的坏 docx_edit'
+                text: '给一个结构错误的 DOCX 节点'
               },
               nextAction: {
                 action: 'hand',
                 calls: [
                   {
                     toolCallId: 'call-0',
-                    toolName: 'docx_edit',
+                    toolName: 'docx_content_edit',
                     args: {
-                      toolName: 'docx_edit',
-                      args: {
-                        sourcePath: 'broken.docx',
-                        actions: [
-                          {
-                            type: 'insert_blocks',
-                            blocks: [
-                              {
-                                type: 'paragraph',
-                                text: 'hello'
-                              }
-                            ]
-                          }
-                        ]
-                      }
+                      sourcePath: 'broken.docx',
+                      type: 'insert_nodes',
+                      position: 'document_end',
+                      nodes: [{ type: 'paragraph', children: [{ text: 'hello' }] }]
                     }
                   }
                 ]

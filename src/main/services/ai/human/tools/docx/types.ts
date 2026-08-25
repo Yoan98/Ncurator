@@ -2,16 +2,18 @@ import type { DocxToolContext } from '../../../types'
 import type { z } from 'zod/v4'
 import type { WorkspaceCapabilityBuildInput } from '../types'
 import {
-  blockSpecSchema,
-  docxBlockInputSchema,
-  docxCreateBlockSchema,
-  docxEditActionSchema,
-  docxEditSchema,
-  docxOutlineRequestSchema,
-  docxReadRequestSchema,
+  nodeSpecSchema,
+  docxCreateRootNodeSchema,
+  docxCommentsRevisionsSchema,
+  docxContentEditSchema,
+  docxContentNodeDraftSchema,
+  docxFormatSchema,
+  docxMediaEditSchema,
+  docxOutlineSchema,
+  docxReadSchema,
+  docxSearchSchema,
+  docxTableEditSchema,
   docxReadVisualsSchema,
-  docxSearchRequestSchema,
-  docOpSchema,
   docxSearchModeSchema,
   paragraphSpecSchema,
   runSpecSchema,
@@ -20,10 +22,14 @@ import {
 } from './schemas'
 import type {
   DocxParagraphStyle,
-  DocxReadBlockNode,
+  DocxPublicReadInlineNode,
+  DocxPublicReadNestedNode,
+  DocxPublicReadRootNode,
+  DocxReadContentNode,
   DocxReadParagraphNode,
   DocxReadTableCellNode,
   DocxReadTableNode,
+  DocxStoryRef,
   DocxVisualKind
 } from './nodeTypes'
 
@@ -33,132 +39,186 @@ export type DocxTextRunSpec = z.infer<typeof runSpecSchema>
 export type DocxParagraphSpec = z.infer<typeof paragraphSpecSchema>
 export type DocxTableCellSpec = z.infer<typeof tableCellSpecSchema>
 export type DocxTableSpec = z.infer<typeof tableSpecSchema>
-export type DocxBlockSpec = z.infer<typeof blockSpecSchema>
-export type DocxOp = z.infer<typeof docOpSchema>
+export type DocxNodeSpec = z.infer<typeof nodeSpecSchema>
+type WithoutSourcePath<TValue> = TValue extends { sourcePath: string }
+  ? Omit<TValue, 'sourcePath'>
+  : never
+export type DocxOperation =
+  | { type: 'create_document' }
+  | WithoutSourcePath<DocxContentEditRequest>
+  | WithoutSourcePath<DocxFormatRequest>
+  | WithoutSourcePath<DocxTableEditRequest>
+  | WithoutSourcePath<DocxMediaEditRequest>
+  | WithoutSourcePath<DocxCommentsRevisionsRequest>
 export type DocxLayoutMode = 'normal' | 'positioned'
 
-export type DocxBlockWrapper =
-  | { key: string; type: 'content_control'; tag?: string }
-  | { key: string; type: 'revision'; kind: 'insert' | 'move_to' }
-
-export type DocxOutlineParagraphBlock = {
-  blockId: string
+export type DocxOutlineParagraphNode = {
+  nodeId: string
   type: 'paragraph'
-  blockIndex: number
+  nodeIndex: number
   layoutMode: DocxLayoutMode
-  previousBlockId?: string
-  nextBlockId?: string
+  previousNodeId?: string
+  nextNodeId?: string
   style?: DocxParagraphStyle
   text: string
   visuals?: DocxVisualSummary
+  story: DocxStoryRef
 }
 
-export type DocxOutlineTableBlock = {
-  blockId: string
+export type DocxOutlineTableNode = {
+  nodeId: string
   type: 'table'
-  blockIndex: number
+  nodeIndex: number
   layoutMode: DocxLayoutMode
-  previousBlockId?: string
-  nextBlockId?: string
+  previousNodeId?: string
+  nextNodeId?: string
   rows: number
   cols: number
   text: string
   visuals?: DocxVisualSummary
+  story: DocxStoryRef
 }
 
-export type DocxOutlineCellBlock = {
-  blockId: string
+export type DocxOutlineCellNode = {
+  nodeId: string
   type: 'table_cell'
-  blockIndex: number
+  nodeIndex: number
   layoutMode: DocxLayoutMode
-  previousBlockId?: string
-  nextBlockId?: string
-  tableBlockId: string
+  previousNodeId?: string
+  nextNodeId?: string
+  tableNodeId: string
   row: number
   col: number
   text: string
   visuals?: DocxVisualSummary
+  story: DocxStoryRef
 }
+
+type DocxOutlineContainerMeta = {
+  nodeId: string
+  nodeIndex: number
+  layoutMode: DocxLayoutMode
+  previousNodeId?: string
+  nextNodeId?: string
+  text: string
+  story: DocxStoryRef
+  visuals?: DocxVisualSummary
+}
+
+export type DocxOutlineContainerNode =
+  | (DocxOutlineContainerMeta & { type: 'content_control'; tag?: string })
+  | (DocxOutlineContainerMeta & {
+      type: 'revision'
+      revisionId: string
+      revisionKind: 'insert' | 'delete' | 'move_from' | 'move_to'
+    })
 
 export type DocxVisualSummary = {
   count: number
   kinds: DocxVisualKind[]
 }
 
-export type DocxOutlineBlock =
-  | DocxOutlineParagraphBlock
-  | DocxOutlineTableBlock
-  | DocxOutlineCellBlock
+export type DocxOutlineNode =
+  | DocxOutlineParagraphNode
+  | DocxOutlineTableNode
+  | DocxOutlineCellNode
+  | DocxOutlineContainerNode
 
-type DocxDetailedBlockMeta = {
-  blockId: string
-  blockIndex: number
+type DocxDetailedNodeMeta = {
+  nodeId: string
+  nodeIndex: number
   layoutMode: DocxLayoutMode
-  previousBlockId?: string
-  nextBlockId?: string
-  wrapperPath?: DocxBlockWrapper[]
+  previousNodeId?: string
+  nextNodeId?: string
+  story: DocxStoryRef
 }
 
-export type DocxDetailedParagraphBlock = DocxDetailedBlockMeta &
-  Omit<DocxReadParagraphNode, 'nodeId'>
+export type DocxDetailedParagraphNode = DocxDetailedNodeMeta & Omit<DocxReadParagraphNode, 'nodeId'>
 
-export type DocxDetailedTableBlock = DocxDetailedBlockMeta & Omit<DocxReadTableNode, 'nodeId'>
+export type DocxDetailedTableNode = DocxDetailedNodeMeta & Omit<DocxReadTableNode, 'nodeId'>
 
-export type DocxDetailedCellBlock = DocxDetailedBlockMeta & {
+export type DocxDetailedCellNode = DocxDetailedNodeMeta & {
   type: 'table_cell'
-  tableBlockId: string
+  tableNodeId: string
   row: number
   col: number
   style?: DocxReadTableCellNode['style']
   text: string
-  children: DocxReadBlockNode[]
+  children: DocxReadContentNode[]
 }
 
-export type DocxDetailedBlock =
-  | DocxDetailedParagraphBlock
-  | DocxDetailedTableBlock
-  | DocxDetailedCellBlock
+type DocxDetailedContainerMeta = DocxDetailedNodeMeta & {
+  text: string
+  children: DocxReadContentNode[]
+}
+
+export type DocxDetailedContainerNode =
+  | (DocxDetailedContainerMeta & { type: 'content_control'; tag?: string })
+  | (DocxDetailedContainerMeta & {
+      type: 'revision'
+      revisionId: string
+      revisionKind: 'insert' | 'delete' | 'move_from' | 'move_to'
+    })
+
+export type DocxDetailedNode =
+  | DocxDetailedParagraphNode
+  | DocxDetailedTableNode
+  | DocxDetailedCellNode
+  | DocxDetailedContainerNode
 
 export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
-export type DocxCreateBlock = z.infer<typeof docxCreateBlockSchema>
-export type DocxBlockInput = z.infer<typeof docxBlockInputSchema>
-export type DocxEditAction = z.infer<typeof docxEditActionSchema>
-export type DocxEditRequest = z.infer<typeof docxEditSchema>
-export type DocxOutlineRequest = z.infer<typeof docxOutlineRequestSchema>
-export type DocxSearchRequest = z.infer<typeof docxSearchRequestSchema>
-export type DocxReadRequest = z.infer<typeof docxReadRequestSchema>
+export type DocxCreateRootNode = z.infer<typeof docxCreateRootNodeSchema>
 export type DocxReadVisualsRequest = z.infer<typeof docxReadVisualsSchema>
+export type DocxContentNodeDraft = z.infer<typeof docxContentNodeDraftSchema>
+export type DocxContentEditRequest = z.infer<typeof docxContentEditSchema>
+export type DocxFormatRequest = z.infer<typeof docxFormatSchema>
+export type DocxTableEditRequest = z.infer<typeof docxTableEditSchema>
+export type DocxMediaEditRequest = z.infer<typeof docxMediaEditSchema>
+export type DocxCommentsRevisionsRequest = z.infer<typeof docxCommentsRevisionsSchema>
+export type DocxNodeOutlineRequest = z.infer<typeof docxOutlineSchema>
+export type DocxNodeSearchRequest = z.infer<typeof docxSearchSchema>
+export type DocxNodeReadRequest = z.infer<typeof docxReadSchema>
+
+export type DocxMutationChange =
+  | {
+      kind: 'created' | 'updated'
+      node: DocxPublicReadRootNode | DocxPublicReadNestedNode | DocxPublicReadInlineNode
+    }
+  | {
+      kind: 'deleted'
+      nodeId: string
+    }
 export type DocxSearchMatch = {
-  blockId: string
-  blockIndex: number
-  type: 'paragraph' | 'table' | 'table_cell'
+  nodeId: string
+  nodeIndex: number
+  type: 'paragraph' | 'table' | 'table_cell' | 'content_control' | 'revision'
   matchedText: string
-  previousBlockId?: string
-  nextBlockId?: string
-  tableBlockId?: string
+  previousNodeId?: string
+  nextNodeId?: string
+  tableNodeId?: string
   text: string
   offsets?: Array<{ start: number; end: number }>
   score?: number
+  story: DocxStoryRef
 }
 
-export type DocxChangedBlock = {
+export type DocxChangedNode = {
   action:
     | 'inserted'
-    | 'replace_block'
-    | 'insert_after'
-    | 'insert_before'
-    | 'delete_block'
-    | 'update_table_cell'
+    | 'replace_node'
+    | 'insert_nodes'
+    | 'delete_node'
+    | 'table_update'
     | 'replace_text'
-    | 'style'
-  blockId: string
+    | 'format'
+  nodeId: string
   beforeText: string
   afterText: string
 }
 
-export type DocxCreatedBlock = {
-  blockId: string
-  type: 'paragraph' | 'table' | 'table_cell'
+export type DocxCreatedNode = {
+  nodeId: string
+  type: 'paragraph' | 'table' | 'table_cell' | 'content_control' | 'revision'
 }
 
 export type DocxValidationProblem = {
@@ -175,8 +235,8 @@ export type DocxOpenMeta = {
 }
 
 export type DocxOpenStats = {
-  blockCount: number
-  bodyBlockCount: number
+  nodeCount: number
+  bodyNodeCount: number
   paragraphCount: number
   tableCount: number
   imageCount: number
@@ -191,14 +251,15 @@ export type DocxCapabilityToolsInput = WorkspaceCapabilityBuildInput<DocxToolCon
 }
 
 export type SemanticDocIndexEntry = {
-  blockId: string
-  blockType: 'paragraph' | 'table_cell'
-  blockIndex: number
-  previousBlockId?: string
-  nextBlockId?: string
-  tableBlockId?: string
+  nodeId: string
+  nodeType: 'paragraph' | 'table_cell'
+  nodeIndex: number
+  previousNodeId?: string
+  nextNodeId?: string
+  tableNodeId?: string
   text: string
   embedding: Float32Array
+  story: DocxStoryRef
 }
 
 export type SemanticDocIndex = {
@@ -217,24 +278,25 @@ export type DocxRevision = {
   parentRevisionRef?: string
   createdAt: number
   summary?: string
-  changedBlocks?: DocxChangedBlock[]
-  ops?: DocxOp[]
-  createdBlocks?: DocxCreatedBlock[]
-  createdBlocksByOp?: DocxCreatedBlock[][]
+  changedNodes?: DocxChangedNode[]
+  ops?: DocxOperation[]
+  createdNodes?: DocxCreatedNode[]
+  createdNodesByOperation?: DocxCreatedNode[][]
   opNextDocIds?: string[]
 }
 
-export type DocxReplaySnapshotBlock = {
-  blockId: string
-  blockIndex: number
-  kind: 'paragraph' | 'table'
+export type DocxReplaySnapshotNode = {
+  nodeId: string
+  nodeIndex: number
+  kind: 'paragraph' | 'table' | 'content_control' | 'revision'
+  story: DocxStoryRef
   rawXml: string
-  spec: DocxBlockSpec
+  spec: DocxNodeSpec
   structureFingerprint: string
   visuals: Array<{ visualId: string; kind: DocxVisualKind }>
-  tableCellBlockIds: string[]
+  tableCellNodeIds: string[]
   tableCells?: Array<{
-    blockId: string
+    nodeId: string
     row: number
     col: number
     text: string
@@ -245,14 +307,15 @@ export type DocxReplaySnapshotBlock = {
 }
 
 export type DocxReplaySnapshot = {
-  blocks: DocxReplaySnapshotBlock[]
-  blockById: Map<string, DocxReplaySnapshotBlock>
-  tableBlockIdByCellBlockId: Map<string, string>
+  packageFingerprint: string
+  nodes: DocxReplaySnapshotNode[]
+  nodeById: Map<string, DocxReplaySnapshotNode>
+  tableNodeIdByCellNodeId: Map<string, string>
 }
 
 export type DocxReadSessionCache = {
-  outlineByCacheKey: Map<string, { blocks: DocxOutlineBlock[] }>
-  detailByBlockId: Map<string, DocxDetailedBlock>
+  outlineByCacheKey: Map<string, { nodes: DocxOutlineNode[] }>
+  detailByNodeId: Map<string, DocxDetailedNode>
 }
 
 export type DocxReadSession = {
@@ -307,21 +370,22 @@ export type DocxTableCellReviewChange = {
 }
 
 export type DocxReplayNode = {
+  reviewId: string
   nodeId: string
-  blockId: string
-  blockIndex: number
-  kind: 'paragraph' | 'table'
+  nodeIndex: number
+  kind: 'paragraph' | 'table' | 'content_control' | 'revision'
+  story: DocxStoryRef
   sourceOrigin: 'source' | 'generated'
   reviewState: DocxReviewState
   parentNodeId?: string
-  sourceBlockId?: string
-  currentBlockId?: string
+  sourceNodeId?: string
+  currentNodeId?: string
   predecessorNodeId?: string
   successorNodeId?: string
   replacedFromNodeId?: string
   anchorFromNodeId?: string
   anchorSide?: 'before' | 'after'
-  spec: DocxBlockSpec
+  spec: DocxNodeSpec
   structureFingerprint: string
   visualIds: string[]
   createdRevisionRef: string
@@ -340,7 +404,7 @@ export type DocxCapabilityToolsRuntimeState = {
 }
 
 export type DocxSnapshotResolvedLocator = {
-  field: 'blockId' | 'anchorBlockId' | 'cellBlockId' | 'blockIds'
+  field: 'nodeId' | 'anchorNodeId' | 'cellNodeId' | 'nodeIds'
   stableLocators: DocxStableLocator[]
 }
 
@@ -350,21 +414,26 @@ export type DocxSnapshotResolvedToolCall = {
   locators: DocxSnapshotResolvedLocator[]
 }
 
-export type DocxStableLocatorKind = 'paragraph' | 'table' | 'table_cell'
+export type DocxStableLocatorKind =
+  | 'paragraph'
+  | 'table'
+  | 'table_cell'
+  | 'content_control'
+  | 'revision'
 
 export type DocxStableLocator = {
   nodeId: string
-  sourceBlockId?: string
-  currentBlockIdAtResolve?: string
-  blockIndexAtResolve: number
+  sourceNodeId?: string
+  currentNodeIdAtResolve?: string
+  nodeIndexAtResolve: number
   previousVisibleNodeId?: string
   nextVisibleNodeId?: string
   kind: DocxStableLocatorKind
   contentFingerprint: string
   tableNodeId?: string
-  tableSourceBlockId?: string
+  tableSourceNodeId?: string
   tableFingerprint?: string
-  cellBlockId?: string
+  cellNodeId?: string
   rowIndex?: number
   colIndex?: number
   cellContentFingerprint?: string

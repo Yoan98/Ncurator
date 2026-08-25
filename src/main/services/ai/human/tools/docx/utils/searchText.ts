@@ -1,4 +1,4 @@
-import { normalizeDocxText } from '../adapters/ooxml/blockSpec'
+import { normalizeDocxText } from '../adapters/ooxml/nodeSpec'
 
 export const normalizeDocxSearchText = (value: string): string =>
   normalizeDocxText(String(value || '').normalize('NFKC'))

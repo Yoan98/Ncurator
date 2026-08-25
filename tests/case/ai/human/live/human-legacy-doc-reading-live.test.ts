@@ -80,9 +80,10 @@ describe('ai human live backend', () => {
         },
         assert: async (result, runtime) => {
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
-          const successfulResults = filterAiRunEventsByType(result.events, 'tool_call_result').filter(
-            (event) => event.result?.ok === true
-          )
+          const successfulResults = filterAiRunEventsByType(
+            result.events,
+            'tool_call_result'
+          ).filter((event) => event.result?.ok === true)
           const startedToolNames = starts.map((event) => event.toolName)
           const successfulReadToolNames = successfulResults.map((event) => event.toolName)
           const sourcePaths = starts
@@ -91,12 +92,22 @@ describe('ai human live backend', () => {
 
           runtime.assertThat(
             result.output?.status === 'completed' &&
-              startedToolNames.some((name) => name.startsWith('docx_read_') || name === 'docx_search') &&
+              startedToolNames.some(
+                (name) => name.startsWith('docx_read_') || name === 'docx_search'
+              ) &&
               successfulReadToolNames.some(
                 (name) => name.startsWith('docx_read_') || name === 'docx_search'
               ) &&
               sourcePaths.some((sourcePath) => sourcePath.toLowerCase().endsWith('.doc')) &&
-              !startedToolNames.includes('docx_edit') &&
+              !startedToolNames.some((name) =>
+                [
+                  'docx_content_edit',
+                  'docx_format',
+                  'docx_table_edit',
+                  'docx_media_edit',
+                  'docx_comments_revisions'
+                ].includes(name)
+              ) &&
               result.beforeHash === result.afterHash,
             {
               name: 'human-live-reads-selected-legacy-doc-with-docx-read-tools',
@@ -152,12 +163,12 @@ describe('ai human live backend', () => {
         },
         assert: async (result, runtime) => {
           const editStarts = filterAiRunEventsByType(result.events, 'tool_call_started').filter(
-            (event) => event.toolName === 'docx_edit'
+            (event) => event.toolName === 'docx_content_edit'
           )
           const editResults = filterAiRunEventsByType(result.events, 'tool_call_result').filter(
-            (event) => event.toolName === 'docx_edit'
+            (event) => event.toolName === 'docx_content_edit'
           )
-          const errors = collectToolErrorMessages(result.events, 'docx_edit')
+          const errors = collectToolErrorMessages(result.events, 'docx_content_edit')
 
           const editSucceeded = editResults.some((event) => event.result?.ok === true)
           const rejectedProperly =
@@ -172,7 +183,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-docx-does-not-edit-legacy-doc',
               message:
-                'live human 不得通过 docx_edit 成功修改 .doc；若尝试用 docx_edit 编辑 .doc，则应收到只读拒绝错误信息。',
+                'live human 不得通过 DOCX 写工具成功修改 .doc；若尝试编辑 .doc，则应收到只读拒绝错误信息。',
               data: {
                 editAttemptCount: editStarts.length,
                 editSucceeded,

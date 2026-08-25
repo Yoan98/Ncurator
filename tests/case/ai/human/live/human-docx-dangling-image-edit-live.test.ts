@@ -1,8 +1,14 @@
 import fs from 'node:fs/promises'
 import { describe, it } from 'vitest'
-import { buildBlockIndex, loadDocxBundle } from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
+import {
+  buildDocumentNodeIndex,
+  loadDocxBundle
+} from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import type { JsonObject } from '../../../../../src/shared/types'
-import { loadLiveLlmConfigFromEnv, loadLiveVisionLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
+import {
+  loadLiveLlmConfigFromEnv,
+  loadLiveVisionLlmConfigFromEnv
+} from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { buildSelectedDocxFixtureReferences } from '../../../../harness/backend/aiLiveTestData'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -14,14 +20,8 @@ const USER_INPUT =
 
 const readDocxText = async (filePath: string): Promise<string> => {
   const bundle = await loadDocxBundle(await fs.readFile(filePath))
-  return buildBlockIndex(
-    bundle.documentDom,
-    bundle.relationshipTargets,
-    bundle.relationshipTypes,
-    bundle.relationshipTargetModes,
-    bundle.availableRelationshipTargetIds
-  )
-    .outline.map((block) => block.text)
+  return buildDocumentNodeIndex(bundle)
+    .outline.map((node) => node.text)
     .join('\n')
 }
 
@@ -32,14 +32,15 @@ const visualResultItems = (data: unknown): JsonObject[] => {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return []
   const results = (data as JsonObject).results
   if (!Array.isArray(results)) return []
-  return results.filter(
-    (result): result is JsonObject =>
-      Boolean(result && typeof result === 'object' && !Array.isArray(result))
+  return results.filter((result): result is JsonObject =>
+    Boolean(result && typeof result === 'object' && !Array.isArray(result))
   )
 }
 
 const visualResultHasText = (data: unknown): boolean =>
-  visualResultItems(data).some((result) => typeof result.text === 'string' && result.text.length > 0)
+  visualResultItems(data).some(
+    (result) => typeof result.text === 'string' && result.text.length > 0
+  )
 
 const visualResultHasMissingMediaError = (data: unknown): boolean =>
   visualResultItems(data).some(
@@ -77,9 +78,7 @@ describe('ai human live backend', () => {
           const applyRecord = (await runtime.docxApplyStore.listRecords()).items.find(
             (item) => item.run_id === runtime.runId && item.status === 'applied'
           )
-          const appliedText = applyRecord
-            ? await readDocxText(reference.absolutePath || '')
-            : ''
+          const appliedText = applyRecord ? await readDocxText(reference.absolutePath || '') : ''
           return {
             output,
             events: runtime.eventCollector.snapshot(),
@@ -92,7 +91,7 @@ describe('ai human live backend', () => {
           const toolStarts = filterAiRunEventsByType(events, 'tool_call_started')
           const toolNames = toolStarts.map((event) => event.toolName)
           const docxEditSucceeded = filterAiRunEventsByType(events, 'tool_call_result').some(
-            (event) => event.toolName === 'docx_edit' && event.result?.ok === true
+            (event) => event.toolName === 'docx_content_edit' && event.result?.ok === true
           )
           const visualResults = filterAiRunEventsByType(events, 'tool_call_result').filter(
             (event) => event.toolName === 'docx_read_visuals' && event.result?.ok === true
@@ -103,7 +102,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.output?.status === 'completed' &&
               toolNames.includes('docx_read_outline') &&
-              toolNames.includes('docx_read_blocks') &&
+              toolNames.includes('docx_read') &&
               toolNames.includes('docx_read_visuals') &&
               docxEditSucceeded &&
               result.output?.artifacts?.some(

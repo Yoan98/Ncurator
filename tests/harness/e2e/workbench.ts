@@ -9,9 +9,9 @@ import JSZip from 'jszip'
 import type { Locator, Page } from 'playwright'
 import type { AiRunEvent, JsonValue, WorkspaceIndexJobAction } from '../../../src/shared/types'
 import {
-  buildBlockIndex,
+  buildDocumentNodeIndex,
   loadDocxBundle
-} from '../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
+} from '../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import {
   chatSelectors,
   importSelectors,
@@ -111,7 +111,13 @@ type WorkbenchDraftSubmitState = {
   sendButtonText: string
 }
 
-export { chatSelectors, importSelectors, scheduledTaskSelectors, settingsSelectors, workbenchSelectors }
+export {
+  chatSelectors,
+  importSelectors,
+  scheduledTaskSelectors,
+  settingsSelectors,
+  workbenchSelectors
+}
 
 export const selectWorkbenchResourceMenuItem = async (
   runtime: E2ETestRuntime,
@@ -2078,8 +2084,8 @@ export const mutateDocxExternally = async (filePath: string, marker: string): Pr
 
 export const readDocxPlainText = async (filePath: string): Promise<string> => {
   const bundle = await loadDocxBundle(await readFile(filePath))
-  return buildBlockIndex(bundle.documentDom)
-    .outline.filter((block) => block.type !== 'table_cell')
-    .map((block) => block.text)
+  return buildDocumentNodeIndex(bundle)
+    .outline.filter((node) => node.type !== 'table_cell')
+    .map((node) => node.text)
     .join('\n')
 }

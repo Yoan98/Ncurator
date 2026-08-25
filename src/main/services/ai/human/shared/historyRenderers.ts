@@ -11,9 +11,8 @@ type NestedWhitelistConfig = {
 const DOCX_NODE_WHITELIST: NestedWhitelistConfig = {
   nodeId: true,
   visualId: true,
-  blockId: true,
   type: true,
-  blockIndex: true,
+  nodeIndex: true,
   text: true,
   kind: true,
   style: true,
@@ -22,7 +21,7 @@ const DOCX_NODE_WHITELIST: NestedWhitelistConfig = {
   altText: true,
   tag: true,
   instruction: true,
-  tableBlockId: true,
+  tableNodeId: true,
   visuals: {
     count: true,
     kinds: true
@@ -31,10 +30,12 @@ const DOCX_NODE_WHITELIST: NestedWhitelistConfig = {
   col: true
 }
 DOCX_NODE_WHITELIST.children = DOCX_NODE_WHITELIST
-const DOCX_BLOCK_WHITELIST = DOCX_NODE_WHITELIST
-
 const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
-  msg: true
+  changes: {
+    kind: true,
+    nodeId: true,
+    node: DOCX_NODE_WHITELIST
+  }
 }
 
 const PPT_SLIDE_WHITELIST: NestedWhitelistConfig = {
@@ -216,8 +217,8 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
   docx_read_outline: {
     sourcePath: true,
     currentRevisionRef: true,
-    totalBlockCount: true,
-    blocks: DOCX_BLOCK_WHITELIST
+    totalNodeCount: true,
+    nodes: DOCX_NODE_WHITELIST
   },
   docx_search: {
     sourcePath: true,
@@ -227,20 +228,24 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     returnedMatchCount: true,
     totalMatchCount: true,
     matches: {
-      blockId: true,
+      nodeId: true,
       type: true,
-      blockIndex: true,
+      nodeIndex: true,
       matchedText: true,
       text: true
     }
   },
-  docx_read_blocks: {
+  docx_read: {
     sourcePath: true,
     currentRevisionRef: true,
-    blocks: DOCX_BLOCK_WHITELIST
+    nodes: DOCX_NODE_WHITELIST
   },
   docx_read_visuals: VISUAL_READ_RESULT_WHITELIST,
-  docx_edit: DOCX_WRITE_RESULT_WHITELIST,
+  docx_content_edit: DOCX_WRITE_RESULT_WHITELIST,
+  docx_format: DOCX_WRITE_RESULT_WHITELIST,
+  docx_table_edit: DOCX_WRITE_RESULT_WHITELIST,
+  docx_media_edit: DOCX_WRITE_RESULT_WHITELIST,
+  docx_comments_revisions: DOCX_WRITE_RESULT_WHITELIST,
   ppt_read_outline: PPT_RESULT_WHITELIST,
   ppt_read_slides: PPT_RESULT_WHITELIST,
   ppt_search: PPT_RESULT_WHITELIST,

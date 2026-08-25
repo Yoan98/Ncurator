@@ -3,11 +3,11 @@ import path from 'node:path'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import type JSZip from 'jszip'
 import { childElements, firstChildElement, isElementNode } from '../adapters/ooxml/dom'
-import { buildBlockIndex, loadDocxBundle } from '../adapters/ooxml/blockIndex'
+import { buildDocumentNodeIndex, loadDocxBundle } from '../adapters/ooxml/nodeIndex'
 import type { IndexedNode } from '../adapters/ooxml/types'
 import { findNewDocxValidationProblems, validateDocxBuffer } from '../adapters/ooxml/validator'
-import { createBlockElementFromSpec, createParagraphElementFromSpec } from '../utils/specDom'
-import type { DocxBlockSpec, DocxReplayNode, DocxReplaySession } from '../types'
+import { createNodeElementFromSpec, createParagraphElementFromSpec } from '../utils/specDom'
+import type { DocxNodeSpec, DocxReplayNode, DocxReplaySession } from '../types'
 import { projectCommittedView, projectReviewView } from './viewProjector'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -204,67 +204,70 @@ const assertNoNewDocxValidationProblems = async (
 
 const isRenderableIndexedNode = (
   node: IndexedNode | undefined
-): node is Extract<IndexedNode, { kind: 'paragraph' | 'table' }> =>
-  Boolean(node && (node.kind === 'paragraph' || node.kind === 'table'))
+): node is Exclude<IndexedNode, { kind: 'table_cell' }> =>
+  Boolean(node && node.kind !== 'table_cell')
 
 const parseSnapshotElement = (rawXml: string): Element | null => {
   if (!rawXml) return null
   const element = new DOMParser().parseFromString(rawXml, 'application/xml').documentElement
-  return element?.localName === 'p' || element?.localName === 'tbl' ? element : null
+  return element &&
+    ['p', 'tbl', 'sdt', 'ins', 'del', 'moveFrom', 'moveTo'].includes(element.localName)
+    ? element
+    : null
 }
 
 const resolveElementForNode = (input: {
   shellDocument: Document
   node: DocxReplayNode
   session: DocxReplaySession
-  currentIndex: ReturnType<typeof buildBlockIndex>
-  sourceIndex: ReturnType<typeof buildBlockIndex>
+  currentIndex: ReturnType<typeof buildDocumentNodeIndex>
+  sourceIndex: ReturnType<typeof buildDocumentNodeIndex>
 }): { element: Element; reconstructed: boolean } => {
   const shouldUseSourceView =
     input.node.reviewState === 'deleted' || input.node.reviewState === 'replaced-old'
 
   if (!shouldUseSourceView) {
-    const currentBlockId = input.node.currentBlockId || input.node.blockId
-    const currentSnapshotBlock = currentBlockId
-      ? input.session.activeSnapshot.blockById.get(currentBlockId)
+    const currentNodeId = input.node.currentNodeId || input.node.nodeId
+    const currentSnapshotNode = currentNodeId
+      ? input.session.activeSnapshot.nodeById.get(currentNodeId)
       : undefined
-    const currentInternalBlockId = currentSnapshotBlock
-      ? input.currentIndex.bodyBlockIds[currentSnapshotBlock.blockIndex]
-      : currentBlockId
-    const currentNode = currentInternalBlockId
-      ? input.currentIndex.nodesById.get(currentInternalBlockId)
+    const currentInternalNodeId = currentSnapshotNode
+      ? input.currentIndex.bodyNodeIds[currentSnapshotNode.nodeIndex]
+      : currentNodeId
+    const currentNode = currentInternalNodeId
+      ? input.currentIndex.nodesById.get(currentInternalNodeId)
       : undefined
     const renderableCurrentNode = isRenderableIndexedNode(currentNode) ? currentNode : null
     if (renderableCurrentNode) {
       return { element: cloneElement(renderableCurrentNode.node), reconstructed: false }
     }
-    const currentSnapshotElement = parseSnapshotElement(currentSnapshotBlock?.rawXml || '')
+    const currentSnapshotElement = parseSnapshotElement(currentSnapshotNode?.rawXml || '')
     if (currentSnapshotElement) {
       return { element: cloneElement(currentSnapshotElement), reconstructed: false }
     }
   }
 
-  const sourceBlockId = input.node.sourceBlockId || input.node.blockId
-  const sourceSnapshotBlock = sourceBlockId
-    ? input.session.sourceSnapshot.blockById.get(sourceBlockId)
+  const sourceNodeId = input.node.sourceNodeId || input.node.nodeId
+  const sourceSnapshotNode = sourceNodeId
+    ? input.session.sourceSnapshot.nodeById.get(sourceNodeId)
     : undefined
-  const sourceInternalBlockId = sourceSnapshotBlock
-    ? input.sourceIndex.bodyBlockIds[sourceSnapshotBlock.blockIndex]
-    : sourceBlockId
-  const sourceNode = sourceInternalBlockId
-    ? input.sourceIndex.nodesById.get(sourceInternalBlockId)
+  const sourceInternalNodeId = sourceSnapshotNode
+    ? input.sourceIndex.bodyNodeIds[sourceSnapshotNode.nodeIndex]
+    : sourceNodeId
+  const sourceNode = sourceInternalNodeId
+    ? input.sourceIndex.nodesById.get(sourceInternalNodeId)
     : undefined
   const renderableSourceNode = isRenderableIndexedNode(sourceNode) ? sourceNode : null
   if (renderableSourceNode) {
     return { element: cloneElement(renderableSourceNode.node), reconstructed: false }
   }
-  const sourceSnapshotElement = parseSnapshotElement(sourceSnapshotBlock?.rawXml || '')
+  const sourceSnapshotElement = parseSnapshotElement(sourceSnapshotNode?.rawXml || '')
   if (sourceSnapshotElement) {
     return { element: cloneElement(sourceSnapshotElement), reconstructed: false }
   }
 
   return {
-    element: createBlockElementFromSpec(input.shellDocument, input.node.spec, null),
+    element: createNodeElementFromSpec(input.shellDocument, input.node.spec, null),
     reconstructed: true
   }
 }
@@ -286,7 +289,7 @@ const applyReviewMarker = (element: Element, node: DocxReplayNode): void => {
 
 const ensureStableTableLayout = (
   table: Element,
-  spec: Extract<DocxBlockSpec, { kind: 'table' }>
+  spec: Extract<DocxNodeSpec, { kind: 'table' }>
 ): void => {
   const columnCount = Math.max(1, ...spec.rows.map((row) => row.length))
   const tableWidth = 9072
@@ -335,47 +338,37 @@ export const materializeDocxProjectedArtifact = async (input: {
 }): Promise<void> => {
   const workingBundle = await loadDocxBundle(input.workingBuffer)
   const sourceBundle = await loadDocxBundle(input.sourceBuffer)
-  const currentIndex = buildBlockIndex(
-    workingBundle.documentDom,
-    workingBundle.relationshipTargets,
-    workingBundle.relationshipTypes,
-    workingBundle.relationshipTargetModes,
-    workingBundle.availableRelationshipTargetIds
-  )
-  const sourceIndex = buildBlockIndex(
-    sourceBundle.documentDom,
-    sourceBundle.relationshipTargets,
-    sourceBundle.relationshipTypes,
-    sourceBundle.relationshipTargetModes,
-    sourceBundle.availableRelationshipTargetIds
-  )
+  const currentIndex = buildDocumentNodeIndex(workingBundle)
+  const sourceIndex = buildDocumentNodeIndex(sourceBundle)
   const body = getBody(workingBundle.documentDom)
   const sectPr = firstChildElement(body, 'sectPr')
   clearBodyContent(body)
 
   const projectedNodes =
     input.kind === 'review' ? projectReviewView(input.session) : projectCommittedView(input.session)
-  projectedNodes.forEach((node) => {
-    const resolved = resolveElementForNode({
-      shellDocument: workingBundle.documentDom,
-      node,
-      session: input.session,
-      currentIndex,
-      sourceIndex
+  projectedNodes
+    .filter((node) => node.story.type === 'body')
+    .forEach((node) => {
+      const resolved = resolveElementForNode({
+        shellDocument: workingBundle.documentDom,
+        node,
+        session: input.session,
+        currentIndex,
+        sourceIndex
+      })
+      const element = resolved.element
+      if (resolved.reconstructed && node.kind === 'table' && node.spec.kind === 'table') {
+        ensureStableTableLayout(element, node.spec)
+      }
+      if (input.kind === 'review') {
+        applyReviewMarker(element, node)
+      }
+      if (sectPr) {
+        body.insertBefore(element, sectPr)
+      } else {
+        body.appendChild(element)
+      }
     })
-    const element = resolved.element
-    if (resolved.reconstructed && node.kind === 'table' && node.spec.kind === 'table') {
-      ensureStableTableLayout(element, node.spec)
-    }
-    if (input.kind === 'review') {
-      applyReviewMarker(element, node)
-    }
-    if (sectPr) {
-      body.insertBefore(element, sectPr)
-    } else {
-      body.appendChild(element)
-    }
-  })
 
   const buffer = await writeDocumentXml(workingBundle.zip, workingBundle.documentDom)
   await assertNoNewDocxValidationProblems(

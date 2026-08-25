@@ -162,21 +162,129 @@ skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可�
 
 ### 工具 schema 设计规范
 
-所有模型可调用的工具（builtin 与 external）都必须遵循以下 schema 设计准则。目标是让模型「简单、清晰、易懂」地生成参数，同时仍能「指哪打哪」地精准改动。`docx_edit` 是首个按此规范重构的代表工具。
+所有模型可调用的工具（builtin 与 external）都必须遵循以下 schema 设计准则。目标是让模型「简单、清晰、易懂」地生成参数，同时仍能「指哪打哪」地精准改动。DOCX 工具族是首个完整采用此规范的实现。
 
 1. **参数扁平化，禁止递归 type 判别树进写入 schema**。动作用 `z.discriminatedUnion('type', ...)` 表达时，每个 variant 只允许少量扁平字段；不得出现「段落 → run → text / 表格 → row → cell → block」这类多级递归的 `z.lazy` 判别树。复杂内容应拆成「扁平内容 + 正交动作」，由模型多轮完成，而非要求模型一次生成整棵结构树。
 
 2. **每个字段必须带 `.describe()`**。字段 `description` 是模型在原生 function calling 下唯一能读到的字段语义，必须说明「何时用、怎么选、示例」；不允许出现只有哑字段名、无任何说明的字段。
 
-3. **读→写往返锚定，不重建结构**。写入只填 read 返回的稳定 id（`blockId`/`nodeId` 等）加最小 patch；工具返回结果应回传新生成的 id，供模型二次精准定位。精确性来自「锚点 id + 小颗粒动作」，而不是「让模型重述完整结构」。
+3. **读→写往返锚定，不重建结构**。写入只填 read 返回的稳定 `nodeId` 加最小 patch；工具返回变化后的完整局部节点或实体 ID，供模型继续定位。精确性来自「锚点 id + 小颗粒动作」，而不是让模型重述完整结构。
 
-4. **按元素类型拆分样式动作**。不同类型的元素（文字/段落/表格/行/单元格）有各自独立的样式字段，应拆成各自的扁平动作（如 `style_text` / `style_paragraph` / `style_table` / `style_row` / `style_cell`），模型按动词选择，天然避免「类型 × 样式」错配。
+4. **同一领域使用一个工具和明确 operation**。不同元素的格式 patch 统一属于 `docx_format`，通过 `format_text`、`format_paragraph`、`format_table`、`format_row`、`format_cell` 等 operation 区分。不要为每个小能力新增 AI 工具。
 
 5. **规范值 vs 呈现分离**。工具返回 handle/id 的规范 JSON（`outputSchema`），面向用户的散文交给结果渲染；不要让模型从散文里反解 id 或字段。
 
 6. **运行期 zod 校验兜底**。模型生成参数后本地以 zod 校验，错配返回带「字段 + 期望值」的 `ToolMessage` 错误（宁可报错、绝不静默改错）。
 
 7. **既有通用规则沿用**（见 AGENTS.md）：类型禁止 `any`/`unknown`；字段遵循最小必要原则，语义必然存在的值建模为 required，禁止「可选类型 + 运行时兜底占位」。
+
+### DOCX 架构
+
+#### 目标与边界
+
+DOCX 使用“文档聚合模型 + story 内容树”，不再把正文切成业务 block，也没有 `blockId`。`.doc` 只读；创建和修改只支持 `.docx`。公开协议不兼容旧单一编辑工具、批量 `actions` 或 block 定位字段。
+
+DOCX 写作技能加载全部 9 个工具：4 个读取工具和 5 个写入工具。它们合计低于 30 个活动工具上限，不做动态能力注册，也不为未来 operation 建注册层。新增能力时优先扩展现有领域工具的 discriminated operation。
+
+#### 分层与数据流
+
+```text
+DOCX ZIP Package
+├─ package parts / relationships / content types / media
+├─ document aggregate
+│  ├─ styles / numbering / settings / comments / revisions
+│  └─ stories
+│     ├─ body
+│     ├─ header / footer
+│     ├─ footnote / endnote
+│     └─ textbox
+└─ story semantic trees
+   └─ paragraph / run / table / row / cell / hyperlink / field / bookmark /
+      content_control / revision / drawing / math / text / tab / break / opaque
+
+OOXML reader → semantic model → read tools
+                         ↓ stable nodeId
+SourcePackage/Model → editing session → WorkingPackage/Model → OOXML writer
+                         ↓                         ↓
+                    validation             Source ↔ Working Diff
+```
+
+代码职责按以下层次组织：
+
+- model：文档聚合、story、节点、格式、媒体、批注和修订领域类型。
+- OOXML reader：读取 package part、relationship 和 XML，投影语义树；不认识但必须保真的 XML 投影为 `opaque`。
+- OOXML writer：只修改目标局部 XML、关系或 package part；不重建无关段落、表格或视觉内容。
+- editing session：保存首次接触文件时的 Source 和连续写入的 Working；五个写工具共用同一会话。
+- diff：比较 SourceModel 与最终 WorkingModel 的净变化，并生成审核视图、应用和回退材料。
+- tools：4 个读工具和 5 个写工具，只负责编排明确的领域实现，不包含 operation 注册系统。
+
+#### 节点、身份和路径
+
+- paragraph、run、table、row、cell、hyperlink、field、bookmark、content control、revision、drawing、math 等可定位结构使用会话内稳定 `nodeId`。
+- text、tab、break 是叶子值，不单独生成 ID。
+- 样式继续使用 OOXML 的真实 `styleId`；批注和 Word 修订使用各自原生 ID。
+- 修改、格式化、移动和同类型替换保持原 `nodeId`；新增节点生成新 ID；删除节点后 ID 消失。
+- `nodeIndex` 只是 outline 当前顺序的临时值。重新打开文件后必须重新读取，不承诺跨会话复用 `nodeId`。
+- parent、ancestor、flowIndex、lineageId 和重复路径不写入节点；outline、search 和 read 需要的顺序或路径按当前树计算。
+- 未支持 OOXML 作为 `opaque` 返回。局部编辑时 writer 原样保留未命中的 opaque 子树；会造成视觉内容丢失的替换或删除必须显式设置 `allowVisualLoss:true`。
+
+content control 是 Word 的结构化文档标签容器，常用于模板字段、表单区域、可重复区域和受控内容。修改它时操作内部 paragraph/run；空容器使用容器 `nodeId` 加 `insert_nodes(position:'inside_start'|'inside_end')`。
+
+#### 公开工具
+
+读取工具：
+
+- `docx_read_outline`：快速读取顺序、类型、摘要和临时 `nodeIndex`。
+- `docx_search`：literal、regex 或 semantic 搜索，返回可直接读取或写入的 `nodeId`。
+- `docx_read`：按 `nodeId` 或 `nodeIndex` 范围返回递归语义树。
+- `docx_read_visuals`：按 `visualId` 读取图片、图表、图形等视觉内容。
+
+写入工具每次调用只执行一个 operation：
+
+- `docx_content_edit`：`replace_text`、`insert_nodes`、`replace_node`、`delete_node`、`move_node`。
+- `docx_format`：局部格式、重置格式、应用/创建/更新/删除命名样式、编号和 section 格式。
+- `docx_table_edit`：表格创建/删除、行列增删、单元格合并/拆分。
+- `docx_media_edit`：图片插入/替换/删除/属性更新；以后 shape、textbox、chart、SmartArt、OLE 继续扩展到此工具。
+- `docx_comments_revisions`：批注新增/更新/回复/删除、修订模式开关、指定或全部修订接受/拒绝。
+
+没有 `replace_content` 或 `replace_children`。AI 不应为局部修改重建完整递归树；容器内容通过其子节点逐个操作。
+
+#### 写入事务与保真
+
+每次写入按固定事务执行：
+
+1. 从 WorkingModel 解析 `nodeId`，同时验证节点类型和 operation 是否匹配。
+2. 复制当前 working 状态，在副本上局部修改 OOXML。
+3. 更新必要的 relationship、content type、media、style、numbering、comment 或 settings part。
+4. 检查 XML 结构、悬空关系、视觉丢失和长文档完整性。
+5. 只重读受影响区域，并让未修改逻辑节点继续绑定原 `nodeId`。
+6. 全部成功后原子提交 WorkingPackage/WorkingModel；任一步失败都不提交部分结果。
+
+`replace_text` 原位保留 run/paragraph 格式和视觉边界，可跨相邻 run，但不可跨 paragraph、tab、break 或 visual。同类型 `replace_node` 在调用未明确提供格式时保留兼容直接格式；跨类型替换只保留位置。命名样式和直接格式相互独立，`update_named_style` 修改全局定义并影响所有引用该 `styleId` 的节点。
+
+写工具统一返回 `changes`。创建/更新节点返回局部完整节点；删除返回 `nodeId`；命名样式、批注和修订返回对应实体的稳定 ID 与最终状态，不只返回成功文字。
+
+#### 净 Diff、Word 批注与修订
+
+首次写入冻结 SourcePackage/SourceModel，后续五个写工具只推进 WorkingPackage/WorkingModel。Diff 永远比较 Source 与最终 Working，而不是累加工具调用：
+
+- A→B→C 只显示 A→C。
+- A→B→A 不产生 Diff。
+- 新增后删除不产生 Diff。
+- 新增后继续修改仍是一处新增。
+- 移动显示原位置删除和新位置插入；表格、格式、媒体、全局样式、批注和修订设置都进入净比较。
+
+NCurator Diff 与 Word 原生批注、`w:ins`、`w:del` 相互独立。读取和局部写入必须保留源文件已有批注及修订；`docx_comments_revisions` 操作的是 Word 原生实体，不能拿 NCurator Diff 代替。审核产物以 Working package 为壳，因此图片、关系、样式、批注和其他 package part 不会在生成 Diff 时丢失。
+
+#### AI 调用原则
+
+- 不知道位置：`docx_read_outline` 或 `docx_search` → `docx_read` → 一个写 operation → 根据返回的 `changes` 继续。
+- 改一句话：读取目标 paragraph/run，调用 `docx_content_edit.replace_text`。
+- 改一段且保留样式：优先 `replace_text`；只有结构确实改变时才 `replace_node`。
+- 改容器内容：读取 content control/cell/header/footer 的内部节点，逐个修改；空容器用 `insert_nodes inside_*`。
+- 表格文字、外观、结构分别使用 content、format、table 工具，避免一个 operation 同时承担三种职责。
+- 图片、批注和修订使用各自领域工具；写后需要确认时再调用 `docx_read` 或 `docx_read_visuals`。
+- 同一路径可连续调用多个写工具；每次都基于最新 WorkingModel，旧节点未删除时 `nodeId` 保持可用。
 
 ### 结构化输出与服务重试
 
