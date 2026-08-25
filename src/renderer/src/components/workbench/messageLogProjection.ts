@@ -1,10 +1,9 @@
 import type {
   AssistantProcessDisplay,
   ChatMessageLogEntry,
-  IpcJsonObject,
-  RuntimeSkillId
+  IpcJsonObject
 } from '../../../../shared/types'
-import { RUNTIME_SKILL_CATALOG } from '../../../../shared/runtimeCapabilities'
+import { isRuntimeSkillId } from '../../../../shared/runtimeCapabilities'
 import { normalizeThoughtText } from '../../../../shared/thoughtText'
 import { createDisplayProcessGroup, createDisplayProcessItem } from './utils'
 import type {
@@ -14,10 +13,6 @@ import type {
 } from './types'
 
 const CONTROL_TOOL_NAMES = new Set(['learn_skill', 'update_plan'])
-
-const isRuntimeSkillId = (value: unknown): value is RuntimeSkillId =>
-  typeof value === 'string' &&
-  Object.prototype.hasOwnProperty.call(RUNTIME_SKILL_CATALOG, value)
 
 export const projectProcessGroups = (input: {
   runId: string

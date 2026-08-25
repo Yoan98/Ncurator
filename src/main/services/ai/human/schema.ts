@@ -3,7 +3,6 @@ import { aiArtifactRefSchema } from '../schema'
 import { jsonObjectSchema, jsonValueSchema, toolResourceContextSchema } from './toolSchemas'
 import {
   AI_TOOL_FAMILY_IDS,
-  BUILTIN_RUNTIME_SKILL_IDS,
   HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_SOURCES,
   HUMAN_STAGES,
@@ -12,6 +11,7 @@ import {
   HUMAN_STEP_RESULT_STATUSES,
   RUNTIME_SKILL_IDS
 } from './constants'
+import { BUILTIN_RUNTIME_SKILL_IDS } from './skills'
 
 export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
 export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)

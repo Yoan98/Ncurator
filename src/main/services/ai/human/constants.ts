@@ -1,8 +1,5 @@
 export {
   AI_TOOL_FAMILY_IDS,
-  BUILTIN_RUNTIME_SKILL_IDS,
-  EXTERNAL_RUNTIME_SKILL_IDS,
-  LEARNABLE_RUNTIME_SKILL_IDS,
   RUNTIME_SKILL_IDS
 } from '../../../../shared/runtimeCapabilities'
 
