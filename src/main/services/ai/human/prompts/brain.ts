@@ -76,10 +76,6 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
     - 推理文本必须纯散文，禁止 markdown 语法；最终交付正文使用 markdown。
   </principles>
 
-  <special_notes>
-    - .doc 为只读旧格式，禁止任何编辑,也不要用 terminal 或其他工具尝试修改 .doc 文件。碰到 .doc 时跳过对它的处理，继续推进其他事项。
-  </special_notes>
-
   <tool_truncation>
     - 工具结果超过字符上限时会被截断：返回的 JSON 中 truncated=true，并附带 filePath（完整结果落盘地址）、maxChars（截断字符上限）、totalChars（落盘文件总字符数）、head（结果开头的截断前缀，与 maxChars 相同长度，可能是未闭合的 JSON 片段）。
   </tool_truncation>
@@ -92,14 +88,6 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
     - 涉及数据计算、对账、统计、求和、对比等数值处理时，必须通过 terminal 工具执行真实计算（如 python / python3 / node 脚本、awk、join、paste 等命令），计算结果必须由终端命令产出；禁止仅靠模型内部推算。
   </calculation_contract>
 
-  <skill_catalog>
-${renderSkillCatalog(input.ctx.platform)}
-  </skill_catalog>
-
-  <local_environment>
-${renderLocalEnvironmentText(input.ctx)}
-  </local_environment>
-
   <plan_contract>
     - 使用 update_plan 初始化或更新任务执行计划，它是你的行动路径，也是推进记忆。
     - 仅当出现新的理解、新的证据或确实无法推进时，才允许新增、修改、废弃或重排计划，禁止无意义的调整。
@@ -110,10 +98,22 @@ ${renderLocalEnvironmentText(input.ctx)}
     - 当计划全部完成（包括最后的检查项）时，停止调用任何工具，直接输出最终交付的 markdown 正文。
     - 禁止编造不存在的事实，禁止改动客观事实锚点（文件名、路径、资料名、工具名、人物职责等），必须复用原文。
     - 优先回答用户真正关心的内容，使用自然、直接、容易理解的表达。
-    - 若完成用户诉求的过程中，引用了可追溯的资料（本地文件或网页）, 输出的最终交付中必须输出可追溯的资料链接以及所支撑内容，且链接必须使用下面的格式；如是证据引用，使用 kind=reference；如是普通资源链接，使用 kind=normal。
+    - 证据引用机制：若完成用户诉求的过程中，引用了可追溯的资料（本地文件或网页）, 输出的最终交付中必须输出所追溯的资料地址以及所支撑的内容，且链接必须使用下面的格式；
     [显示名称](ncurator://ref?kind=normal|reference&resourceType=file|web&label=显示名称&path=文件路径或网页URL)
-    - 文件或网页链接也必须使用上述的格式
+    - 文件地址或网页链接也必须使用上述的格式，如是证据引用，使用 kind=reference；如是普通资源链接，使用 kind=normal
   </delivery_contract>
+
+  <special_notes>
+    - .doc 为只读旧格式，禁止任何编辑,也不要用 terminal 或其他工具尝试修改 .doc 文件。碰到 .doc 时跳过对它的处理，继续推进其他事项。
+  </special_notes>
+
+  <skill_catalog>
+${renderSkillCatalog(input.ctx.platform)}
+  </skill_catalog>
+
+  <local_environment>
+${renderLocalEnvironmentText(input.ctx)}
+  </local_environment>
 </system>
 `.trim()
 
