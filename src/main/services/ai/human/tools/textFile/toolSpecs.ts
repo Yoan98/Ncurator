@@ -42,7 +42,7 @@ const textFileReadCharsSchema = z.object({
     .int()
     .min(1)
     .optional()
-    .describe('1-based 全文件字符偏移，缺省从第 1 个字符开始'),
+    .describe('读取的起始字符位置（文件字符序列从 1 开始计数），缺省从文件开头开始'),
   charCount: z.number().int().min(1).optional().describe('读取字符数，缺省读至文件末尾')
 })
 
