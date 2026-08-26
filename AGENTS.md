@@ -18,7 +18,7 @@
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
 - `doc/test-plan/workbench-test.md`：涉及 Workbench 回归测试范围、真实 e2e case 设计、发送前置条件验证或 suite 覆盖维护时阅读。
 - `doc/test.md`：涉及测试体系、UI E2E 回归规则、runner 或回归测试流程时阅读。
-- `doc/tidy.md`：需要按周期整理文档、PRD、测试计划和测试用例时，先按其中流程审计并等待决策。
+- `doc/tidy.md`：需要按周期整理文档、PRD、测试计划、测试用例或清理代码整洁度（死代码、兼容残留、无用代码、简洁性）时，先按其中流程审计并等待决策。
 
 ### 1.4 prd产品文档相关
 
@@ -43,7 +43,7 @@
 │   │   ├── ai-test.md                # AI 回归测试计划
 │   │   ├── settings-test.md          # Settings 测试计划
 │   │   └── workbench-test.md         # Workbench 测试计划
-│   └── tidy.md                       # 周期性文档与测试整理流程
+│   └── tidy.md                       # 周期性文档、测试与代码整理流程
 ├── src/                              # 应用源码
 │   ├── main/                         # Electron Main 进程
 │   │   ├── ipc/                      # IPC handler 和通道入口
@@ -135,7 +135,7 @@
    对于过度复杂的代码逻辑，如果存在更简单、更清晰、更易维护的实现，应直接重构替换。
 4. 优化文件与代码组织
    合理拆分或合并文件，避免文件过碎或职责混乱；保持代码结构清晰、直观，降低理解和维护成本。
-5. 类型禁止使用 `any` 与 `unknown`
+5. 类型禁止使用非必要的 `any` 与 `unknown`
 6. 字段遵循最小必要原则
    每个字段必须有明确消费方，非必要不添加；语义上必然存在的值应建模为必填（required），禁止用「可选类型 + 运行时兜底占位」代替——例如 AI 工具调用必然携带 `tool_call_id`，就不应在契约里声明为可选并到处 `|| 'fallback'`。
 
