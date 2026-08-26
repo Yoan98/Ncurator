@@ -140,35 +140,35 @@ export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineWriteSpec({
   name: 'docx_content_edit',
   schema: docxContentEditSchema,
   description:
-    '创建 DOCX 或局部修改普通内容节点。一次只执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一；不负责格式、表格结构、媒体、批注或修订。成功返回的 changes 已完成 OOXML、关系、视觉丢失和受影响区域回读校验。'
+    '创建 DOCX 或局部修改普通内容节点。一次只执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一；不负责格式、表格结构、媒体、批注或修订。成功表示写入及内部校验已完成；创建操作在 result.createdIds 返回新对象 ID。'
 })
 
 export const DOCX_FORMAT_TOOL_SPEC = defineWriteSpec({
   name: 'docx_format',
   schema: docxFormatSchema,
   description:
-    '原子修改一个或多个 DOCX 节点的文字、段落、表格、行、单元格、section、命名样式或编号；同一局部 operation 对所有目标应用同一格式 patch。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。成功返回的 changes 已完成 OOXML、关系、视觉丢失和受影响区域回读校验。'
+    '原子修改一个或多个 DOCX 节点的文字、段落、表格、行、单元格、section、命名样式或编号；同一局部 operation 对所有目标应用同一格式 patch。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。成功表示写入及内部校验已完成。'
 })
 
 export const DOCX_TABLE_EDIT_TOOL_SPEC = defineWriteSpec({
   name: 'docx_table_edit',
   schema: docxTableEditSchema,
   description:
-    '创建、删除或修改 DOCX 表格结构，包括行列增删和单元格合并拆分；单元格文字用 docx_content_edit，外观用 docx_format。成功返回的 changes 已完成 OOXML、关系、视觉丢失和受影响区域回读校验。'
+    '创建、删除或修改 DOCX 表格结构，包括行列增删和单元格合并拆分；单元格文字用 docx_content_edit，外观用 docx_format。成功表示写入及内部校验已完成；创建表格时在 result.createdIds 返回新表格 ID。'
 })
 
 export const DOCX_MEDIA_EDIT_TOOL_SPEC = defineWriteSpec({
   name: 'docx_media_edit',
   schema: docxMediaEditSchema,
   description:
-    '插入、替换、删除或修改 DOCX 图片等视觉对象，负责媒体文件、relationship、尺寸和替代文字。成功返回的 changes 已完成 OOXML、关系、视觉丢失和受影响区域回读校验。'
+    '插入、替换、删除或修改 DOCX 图片等视觉对象，负责媒体文件、relationship、尺寸和替代文字。成功表示写入及内部校验已完成；插入媒体时在 result.createdIds 返回新对象 ID。'
 })
 
 export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineWriteSpec({
   name: 'docx_comments_revisions',
   schema: docxCommentsRevisionsSchema,
   description:
-    '新增、修改、回复或删除 Word 批注，切换修订模式，以及接受或拒绝 Word 修订；这不是文档读取检查工具。成功返回的 changes 是提交后的最终实体状态。'
+    '新增、修改、回复或删除 Word 批注，切换修订模式，以及接受或拒绝 Word 修订；这不是文档读取检查工具。成功表示写入及内部校验已完成；新增批注或回复时在 result.createdIds 返回新批注 ID。'
 })
 
 export const DOCX_READ_TOOL_SPECS = [

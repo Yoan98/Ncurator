@@ -141,9 +141,9 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 - 测试类型：`backend`
 - What：4 个读取工具和 5 个写入工具使用同一 DOCX 编辑会话，连续读取、内容编辑、格式、表格、媒体、批注与修订后仍可回读。
-- Why：公共工具必须让 AI 通过“定位 nodeId → 单次局部操作 → changes 回读”稳定完成真实任务。
+- Why：公共工具必须让 AI 通过“定位 nodeId → 单次局部操作 → 精准读取确认”稳定完成真实任务，同时避免写工具把完整节点再次放入上下文。
 - How：创建真实 DOCX，依次执行 outline/read/search、内容替换、段落格式、表格结构、图片与批注操作，并再次 read/search。
-- Oracle：每次写入只接收一个 discriminated operation；未删除节点的 `nodeId` 保持稳定；`changes` 为结构化结果；五个写工具看到同一 Working 状态。
+- Oracle：每次写入只接收一个 discriminated operation；未删除节点的 `nodeId` 保持稳定；普通写入返回空领域结果，创建操作只返回 `createdIds`；五个写工具看到同一 Working 状态，最终状态可由读取工具确认。
 - Not：不调用 live 模型，不验证 Workbench UI。
 
 ##### `docx-outline-pagination`
@@ -979,7 +979,7 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：live 模式下 `human` 会先用 KB 缩圈找出讲“反走样 / 过拟合”的两份源资料，再把内容分别回写到用户明确指定的两份目标 docx。
 - Why：真实用户常常记得主题、不记得文件名，而且希望把资料内容整理回自己的教学文档；这条 case 要长期守住“工作区默认范围 + KB 缩圈 + 多源读取 + 多目标 docx 回写”的能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；workspace 使用共享 fixture，只把 `学习笔记/图形学.docx` 与 `学习笔记/深度学习.docx` 建入 KB；用户明确指定根目录的 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 为目标文件。case 只开放完成该任务需要的 terminal、KB search、DOCX 读取和写入工具，避免把目标文件误当成待索引来源反复查询。
-- Oracle：真实 `kb_search` 返回有效命中；两份目标文档分别发生成功写入并产生两组携带 `applyId` 的 file artifact；两份来源课件保持不变。按 10 分制评估 KB 证据、两份目标文件、grounded 内容、来源安全和最终交付，严格超过 8 分通过；只完成一个目标文件最多 8 分，不能通过。
+- Oracle：真实 `kb_search` 返回有效命中；两份目标文档分别发生成功 paragraph 写入并产生两组携带 `applyId` 的 file artifact；两份来源课件保持不变。成功的 DOCX 写结果只能是空 `result` 或 `createdIds`，不得返回 `changes`；每个目标最多允许两次成功的文末追加，防止模型在已成功写入后连续生成多个近似版本。按 10 分制评估 KB 证据、两份目标文件、grounded 内容、来源安全和最终交付，严格超过 8 分通过；只完成一个目标文件最多 8 分，不能通过。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
 
 ##### `human-pdf-visual-reading-live`

@@ -16,10 +16,11 @@ type SearchResult = {
 }
 type ReadResult = { sourcePath: string; nodes: DocxPublicReadRootNode[] }
 type MutationResult = {
-  changes: Array<{ kind: string; node?: DocxPublicReadRootNode; nodeId?: string }>
+  createdIds?: string[]
 }
 
 const nodeText = (node: DocxPublicReadRootNode): string => JSON.stringify(node)
+const isEmptyResult = (result: MutationResult): boolean => Object.keys(result).length === 0
 
 describe('ai tool docx v2 backend', () => {
   it('docx-v2-public-tools', async () => {
@@ -53,6 +54,7 @@ describe('ai tool docx v2 backend', () => {
         ])
         const imagePath = path.join(runtime.workspaceRoot, 'docx-v2-image.png')
         const createdPath = path.join(runtime.workspaceRoot, 'docx-v2-created.docx')
+        const createdTablePath = path.join(runtime.workspaceRoot, 'docx-v2-created-table.docx')
         await fs.writeFile(
           imagePath,
           Buffer.from(
@@ -70,6 +72,23 @@ describe('ai tool docx v2 backend', () => {
               { type: 'paragraph', text: 'Created one' },
               { type: 'paragraph', text: 'Created two' }
             ]
+          })
+          const createdReadback = await harness.invoke<ReadResult>('docx_read_nodes', {
+            sourcePath: createdPath,
+            range: { type: 'node_ids', nodeIds: created.createdIds || [] }
+          })
+          const createdTable = await harness.invoke<MutationResult>('docx_table_edit', {
+            sourcePath: createdTablePath,
+            type: 'create_table',
+            position: 'document_end',
+            rows: [
+              ['Header', 'Value'],
+              ['Created', 'Table']
+            ]
+          })
+          const createdTableReadback = await harness.invoke<ReadResult>('docx_read_nodes', {
+            sourcePath: createdTablePath,
+            range: { type: 'node_ids', nodeIds: createdTable.createdIds || [] }
           })
           const outline = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath,
@@ -106,6 +125,16 @@ describe('ai tool docx v2 backend', () => {
             nodeId: paragraph.nodeId,
             oldText: 'Alpha',
             newText: 'Beta'
+          })
+          const appended = await harness.invoke<MutationResult>('docx_content_edit', {
+            sourcePath,
+            type: 'insert_nodes',
+            position: 'document_end',
+            nodes: [{ type: 'paragraph', text: 'Appended once' }]
+          })
+          const appendedReadback = await harness.invoke<ReadResult>('docx_read_nodes', {
+            sourcePath,
+            range: { type: 'node_ids', nodeIds: appended.createdIds || [] }
           })
           const format = await harness.invoke<MutationResult>('docx_format', {
             sourcePath,
@@ -221,9 +250,14 @@ describe('ai tool docx v2 backend', () => {
           return {
             outline,
             created,
+            createdReadback,
+            createdTable,
+            createdTableReadback,
             paragraph,
             readBefore,
             content,
+            appended,
+            appendedReadback,
             format,
             rejectedFormat,
             readAfterRejectedFormat,
@@ -254,11 +288,20 @@ describe('ai tool docx v2 backend', () => {
             result.outline.segments.filter((segment) => segment.textMap.includes('表格 2x2'))
               .length === 2 &&
             !JSON.stringify(result.outline).includes('nodeId') &&
-            result.created.changes.length === 2 &&
-            result.created.changes.every((change) => change.kind === 'created') &&
+            result.created.createdIds?.length === 2 &&
+            result.createdReadback.nodes.length === 2 &&
+            result.createdReadback.nodes.every((node) => nodeText(node).includes('Created')) &&
+            result.createdTable.createdIds?.length === 1 &&
+            result.createdTableReadback.nodes.some(
+              (node) => node.type === 'table' && nodeText(node).includes('Created')
+            ) &&
             result.readBefore.nodes.length === 2 &&
-            result.content.changes.some((change) => change.kind === 'updated') &&
-            result.format.changes.filter((change) => change.kind === 'updated').length === 2 &&
+            isEmptyResult(result.content) &&
+            result.appended.createdIds?.length === 1 &&
+            result.appendedReadback.nodes.some((node) =>
+              nodeText(node).includes('Appended once')
+            ) &&
+            isEmptyResult(result.format) &&
             JSON.stringify(result.rejectedFormat).includes('invalid_input') &&
             result.readAfterRejectedFormat.nodes.every(
               (node) => node.type !== 'paragraph' || node.style?.alignment === 'center'
@@ -267,17 +310,18 @@ describe('ai tool docx v2 backend', () => {
             result.readAfterMissingTarget.nodes.every(
               (node) => node.type !== 'paragraph' || node.style?.alignment === 'center'
             ) &&
-            result.tableFormat.changes.length === 2 &&
-            result.rowFormat.changes.length === 2 &&
-            result.cellFormat.changes.length === 2 &&
-            result.sectionFormat.changes.length >= 1 &&
-            result.resetFormat.changes.length === 2 &&
-            result.namedStyle.changes.length === 2 &&
-            result.numbering.changes.length === 2 &&
-            result.tableEdit.changes.some((change) => change.kind === 'updated') &&
-            result.media.changes.some((change) => change.kind === 'updated') &&
-            result.comment.changes.some((change) => change.kind === 'comment_created') &&
-            result.revisions.changes.some((change) => change.kind === 'track_changes_updated') &&
+            isEmptyResult(result.tableFormat) &&
+            isEmptyResult(result.rowFormat) &&
+            isEmptyResult(result.cellFormat) &&
+            isEmptyResult(result.sectionFormat) &&
+            isEmptyResult(result.resetFormat) &&
+            isEmptyResult(result.namedStyle) &&
+            isEmptyResult(result.numbering) &&
+            isEmptyResult(result.tableEdit) &&
+            result.media.createdIds?.length === 1 &&
+            result.comment.createdIds?.length === 1 &&
+            isEmptyResult(result.revisions) &&
+            !JSON.stringify(result).includes('"changes"') &&
             result.searchAfter.matches[0]?.nodeId === result.paragraph.nodeId &&
             result.readAfter.nodes.some(
               (node) => node.nodeId === result.paragraph.nodeId && nodeText(node).includes('Beta')

@@ -366,45 +366,7 @@ export const docxReadOutputSchema = docxBaseOutputSchema.extend({
 
 export const docxMutationOutputSchema = z
   .object({
-    changes: z.array(
-      z.discriminatedUnion('kind', [
-        z
-          .object({
-            kind: z.enum(['created', 'updated']),
-            node: docxReadRootNodeOutputSchema
-          })
-          .strict(),
-        z.object({ kind: z.literal('deleted'), nodeId: z.string() }).strict(),
-        z
-          .object({
-            kind: z.enum(['style_created', 'style_updated', 'style_deleted']),
-            styleId: z.string()
-          })
-          .strict(),
-        z
-          .object({
-            kind: z.enum(['comment_created', 'comment_updated']),
-            comment: z
-              .object({
-                commentId: z.string(),
-                text: z.string(),
-                author: z.string(),
-                parentCommentId: z.string().optional()
-              })
-              .strict()
-          })
-          .strict(),
-        z.object({ kind: z.literal('comment_deleted'), commentId: z.string() }).strict(),
-        z.object({ kind: z.literal('track_changes_updated'), enabled: z.boolean() }).strict(),
-        z
-          .object({
-            kind: z.literal('revisions_updated'),
-            action: z.enum(['accept', 'reject']),
-            revisionId: z.string().optional()
-          })
-          .strict()
-      ])
-    )
+    createdIds: z.array(z.string().min(1)).min(1).optional()
   })
   .strict()
 

@@ -24,7 +24,7 @@
 - Workbench 附件链路不限文件扩展名，任何可被文件选择器选中的普通文件都可以添加，不因扩展名拒绝；`+` 和拖放保留源文件绝对路径，粘贴文件保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。
 - `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7` 的工具输入输出、完整编辑操作、原子失败、冲突、只读格式、默认 Sheet 和 Sheet 严格校验由 AI tool 回归承担；`WB-EXCEL-002` 的完整 XLSX diff 语义也由 AI tool 解析 diff 文件校验。Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、只读单网格预览和回退闭环，不重复枚举底层操作。
 - docx、ppt、pdf 也按同一分层：格式专用工具的读写、边界、格式保真和 diff artifact 语义放在 AI tool；DOCX tool 必须覆盖已有表格的单元格内容与格式净变化、精确红绿标记、计数和非空回读；其中 PPT tool 必须完整覆盖 baseline 到最终状态的页面/元素净变化、自然位移、零净变化、lineage、v4 schema 和准确计数。Workbench e2e 只验证真实用户流程、现有预览入口、红绿页面标记、`+N/-N`、差异面板交互和回退，不重复枚举底层元素组合。PDF 当前是只读工具，没有 Workbench apply diff 语义。
-- DOCX 工具结果和历史结果按递归 children 树展示，Workbench 必须能显示 `nodeId`、`visualId`、visual kind、story 和结构化 `changes`；格式操作按 text、paragraph、table、row、cell、section 展示。`docx_read_visuals` 使用与 PDF/PPT 视觉读取一致的结果展示。
+- DOCX 读取结果和历史结果按递归 children 树展示，Workbench 必须能显示 `nodeId`、`visualId`、visual kind 和 story；DOCX 写结果复用统一状态展示，普通写入不展示冗余正文，创建操作只展示 `createdIds`。格式操作按 text、paragraph、table、row、cell、section 展示。`docx_read_visuals` 使用与 PDF/PPT 视觉读取一致的结果展示。
 - Workbench 历史只展示白名单内的必要 DOCX 字段，不展示 worker、identity 或 replay 内部状态。DOCX 事件以 `nodeId` 定位，PPT 继续使用自己的 `location`，两套协议互不复用。
 
 ## 3. Suite 设计

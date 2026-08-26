@@ -350,10 +350,8 @@ const renderWebSearchResult = (obj: JsonObject): string =>
     .filter(Boolean)
     .join('\n')
 
-const renderDocxCreateResult = (obj: JsonObject): string =>
-  ['changes:', renderGenericArray(Array.isArray(obj.changes) ? obj.changes : [])]
-    .filter(Boolean)
-    .join('\n')
+const renderDocxMutationResult = (obj: JsonObject): string | undefined =>
+  Array.isArray(obj.createdIds) ? `createdIds:\n${renderGenericArray(obj.createdIds)}` : undefined
 
 export const renderToolResourceContextText = (
   resourceContext: ToolResourceContext | undefined
@@ -385,7 +383,7 @@ export const renderToolResultDataText = (
     case 'docx_table_edit':
     case 'docx_media_edit':
     case 'docx_comments_revisions':
-      return renderDocxCreateResult(value)
+      return renderDocxMutationResult(value)
     case 'docx_read_nodes':
       return renderDocxReadResult(value)
     case 'docx_search':

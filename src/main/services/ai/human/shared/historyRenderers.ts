@@ -37,11 +37,7 @@ const DOCX_NODE_WHITELIST: NestedWhitelistConfig = {
 }
 DOCX_NODE_WHITELIST.children = DOCX_NODE_WHITELIST
 const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
-  changes: {
-    kind: true,
-    nodeId: true,
-    node: DOCX_NODE_WHITELIST
-  }
+  createdIds: true
 }
 
 const PPT_SLIDE_WHITELIST: NestedWhitelistConfig = {

@@ -247,7 +247,7 @@ const sourcePathField = z
 const nodeIdField = z
   .string()
   .min(1)
-  .describe('docx_read_nodes、docx_search 或写入结果返回的 nodeId，直接照抄')
+  .describe('docx_read_nodes、docx_search 或创建操作 result.createdIds 返回的 nodeId，直接照抄')
 const searchScopeNodeIdField = z
   .string()
   .min(1)

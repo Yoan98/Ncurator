@@ -275,7 +275,7 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 
 `replace_text` 原位保留 run/paragraph 格式和视觉边界，可跨相邻 run，但不可跨 paragraph、tab、break 或 visual。同类型 `replace_node` 在调用未明确提供格式时保留兼容直接格式；跨类型替换只保留位置。命名样式和直接格式相互独立，`update_named_style` 修改全局定义并影响所有引用该 `styleId` 的节点。
 
-写工具统一返回 `changes`。创建/更新节点返回局部完整节点；删除返回 `nodeId`；命名样式、批注和修订返回对应实体的稳定 ID 与最终状态，不只返回成功文字。
+写工具使用 Human 统一结果信封：成功为 `{status:"success",result:{...}}`，失败为 `{status:"fail",error}`。DOCX 领域结果不返回节点正文或 `changes`；普通修改成功时 `result` 为空，只有创建新节点、媒体、批注或回复时才在 `result.createdIds` 返回后续定位需要的稳定 ID。
 
 `docx_read_outline` 对所有 DOCX 使用同一套分段算法，不判断文档是否标准。每个 story 独立分段，每个根节点只属于一个 segment；普通段软目标为 20 个根节点，向后最多寻找 10 个节点的可靠结构边界，硬上限为 30 个根节点或 8,000 个可见字符。可靠边界只采用 section、显式分页/分栏、真实 `outlineLevel`、block content control、table 和视觉根节点，不根据字号、加粗、短文本或编号外观猜标题。table、block content control 和视觉根节点独立成段；超长单节点可独立成段。
 
@@ -306,7 +306,7 @@ NCurator Diff 与 Word 原生批注、`w:ins`、`w:del` 相互独立。读取和
 - 改一段且保留样式：优先 `replace_text`；只有结构确实改变时才 `replace_node`。
 - 改容器内容：读取 content control/cell/header/footer 的内部节点，逐个修改；空容器用 `insert_nodes inside_*`。
 - 表格文字、外观、结构分别使用 content、format、table 工具，避免一个 operation 同时承担三种职责。
-- 图片、批注和修订使用各自领域工具。写工具成功返回的 `changes` 已完成 OOXML、关系、视觉丢失和受影响区域回读校验；只有结果缺失、冲突或用户明确要求时才重复读取。
+- 图片、批注和修订使用各自领域工具。写工具返回成功前仍需完成 OOXML、关系、视觉丢失和受影响区域内部回读校验；AI 对最终内容、格式或视觉效果的确认通过精准读取受影响节点或视觉结果完成，不依赖写工具回传完整节点。
 - 同一路径可连续调用多个写工具；每次都基于最新 WorkingModel，旧节点未删除时 `nodeId` 保持可用。
 - `move_node` 只允许在同一 OOXML part/story 内移动；跨 story 移动会涉及关系迁移，当前明确拒绝，AI 应在目标 story 插入新节点后再删除源节点，并按视觉丢失规则确认。
 

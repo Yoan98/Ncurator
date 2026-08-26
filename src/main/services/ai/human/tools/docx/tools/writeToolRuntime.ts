@@ -23,13 +23,13 @@ import type {
   DocxOperation,
   DocxOpenStats,
   DocxOutlineNode,
+  DocxReadNode,
   DocxTableEditRequest
 } from '../types'
 import type { DocxToolRuntime } from '../runtime'
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
 import type { DocxToolFailure } from '../runtime'
 import { createDocxFile } from '../utils/createDocxFile'
-import { projectDocxReadNode } from '../publicReadTree'
 import { isLegacyDocPath, LEGACY_DOC_EDIT_ERROR } from '../legacyDocPolicy'
 
 const fetchOutlineNodes = async (
@@ -73,6 +73,55 @@ const fetchDetailedNode = async (
     throw new Error('worker protocol mismatch (get_node)')
   }
   return response.payload.node
+}
+
+const verifyDetailedNode = async (
+  runtime: DocxToolRuntime,
+  docId: string,
+  nodeId: string
+): Promise<void> => {
+  await fetchDetailedNode(runtime, docId, nodeId)
+}
+
+const collectVisualIds = (nodes: DocxReadNode[]): string[] => {
+  const ids: string[] = []
+  const visit = (current: DocxReadNode): void => {
+    if (current.type === 'visual') ids.push(current.visualId)
+    if ('children' in current && Array.isArray(current.children)) {
+      current.children.forEach(visit)
+    }
+  }
+  nodes.forEach(visit)
+  return ids
+}
+
+const resolveCreatedVisualIds = async (input: {
+  runtime: DocxToolRuntime
+  previousDocId: string
+  nextDocId: string
+  changedNodes: DocxChangedNode[]
+  operation: DocxOperation
+}): Promise<string[]> => {
+  if (input.operation.type !== 'insert_image') return []
+  const changedNodeIds = [
+    ...new Set(
+      input.changedNodes.filter((node) => node.action !== 'delete_node').map((node) => node.nodeId)
+    )
+  ]
+  const createdVisualIds = (
+    await Promise.all(
+      changedNodeIds.map(async (nodeId) => {
+        const before = await fetchDetailedNode(input.runtime, input.previousDocId, nodeId)
+        const after = await fetchDetailedNode(input.runtime, input.nextDocId, nodeId)
+        const previousIds = new Set(collectVisualIds(before.children))
+        return collectVisualIds(after.children).filter((visualId) => !previousIds.has(visualId))
+      })
+    )
+  ).flat()
+  if (createdVisualIds.length === 0) {
+    throw new Error('inserted media could not be read back')
+  }
+  return [...new Set(createdVisualIds)]
 }
 
 const summarizePositionedNodeText = (text: string): string | undefined => {
@@ -281,18 +330,7 @@ export const compileDocxOperations = (request: DocxWriteRequest): DocxOperation[
 }
 
 type WriteToolResult = {
-  changes: Array<
-    | { kind: 'created' | 'updated'; node: ReturnType<typeof projectDocxReadNode> }
-    | { kind: 'deleted'; nodeId: string }
-    | { kind: 'style_created' | 'style_updated' | 'style_deleted'; styleId: string }
-    | {
-        kind: 'comment_created' | 'comment_updated'
-        comment: { commentId: string; text: string; author: string; parentCommentId?: string }
-      }
-    | { kind: 'comment_deleted'; commentId: string }
-    | { kind: 'track_changes_updated'; enabled: boolean }
-    | { kind: 'revisions_updated'; action: 'accept' | 'reject'; revisionId?: string }
-  >
+  createdIds?: string[]
 }
 
 type CompiledEdit = {
@@ -444,6 +482,7 @@ const applyEdit = async (input: {
   try {
     result = await buildWriteToolResult({
       runtime: input.runtime,
+      previousDocId: input.currentDocId,
       docId: appliedPayload.newDocId,
       changedNodes: appliedPayload.changedNodes,
       createdNodes,
@@ -540,6 +579,7 @@ const applyEdit = async (input: {
 
 const buildWriteToolResult = async (input: {
   runtime: DocxToolRuntime
+  previousDocId: string
   docId: string
   changedNodes: DocxChangedNode[]
   createdNodes: DocxCreatedNode[]
@@ -551,23 +591,13 @@ const buildWriteToolResult = async (input: {
     operation.type === 'update_named_style' ||
     operation.type === 'delete_named_style'
   ) {
-    const kind =
-      operation.type === 'create_named_style'
-        ? 'style_created'
-        : operation.type === 'update_named_style'
-          ? 'style_updated'
-          : 'style_deleted'
-    return { changes: [{ kind, styleId: operation.styleId }] }
+    return {}
   }
   if (operation.type === 'delete_comment') {
-    return { changes: [{ kind: 'comment_deleted', commentId: operation.commentId }] }
+    return {}
   }
   if (operation.type === 'enable_track_changes' || operation.type === 'disable_track_changes') {
-    return {
-      changes: [
-        { kind: 'track_changes_updated', enabled: operation.type === 'enable_track_changes' }
-      ]
-    }
+    return {}
   }
   if (
     operation.type === 'accept_revision' ||
@@ -575,17 +605,7 @@ const buildWriteToolResult = async (input: {
     operation.type === 'accept_all_revisions' ||
     operation.type === 'reject_all_revisions'
   ) {
-    const accepting =
-      operation.type === 'accept_revision' || operation.type === 'accept_all_revisions'
-    return {
-      changes: [
-        {
-          kind: 'revisions_updated',
-          action: accepting ? 'accept' : 'reject',
-          ...('revisionId' in operation ? { revisionId: operation.revisionId } : {})
-        }
-      ]
-    }
+    return {}
   }
   if (
     operation.type === 'add_comment' ||
@@ -617,48 +637,30 @@ const buildWriteToolResult = async (input: {
               (candidate) => candidate.commentId === operation.commentId
             )
     if (!comment) throw new Error('written comment could not be read back')
-    return {
-      changes: [
-        {
-          kind:
-            operation.type === 'add_comment' || operation.type === 'reply_comment'
-              ? 'comment_created'
-              : 'comment_updated',
-          comment
-        }
-      ]
-    }
+    return operation.type === 'update_comment' ? {} : { createdIds: [comment.commentId] }
   }
   const createdIds = new Set(input.createdNodes.map((node) => node.nodeId))
-  const changes: WriteToolResult['changes'] = []
   const uniqueCreated = [...new Map(input.createdNodes.map((node) => [node.nodeId, node])).values()]
   const uniqueChanged = [
     ...new Map(input.changedNodes.map((node) => [node.nodeId, node])).values()
   ].filter((node) => !createdIds.has(node.nodeId))
-  const readback = await Promise.all([
-    ...uniqueCreated.map(async (created) => ({
-      kind: 'created' as const,
-      detail: await fetchDetailedNode(input.runtime, input.docId, created.nodeId)
-    })),
+  await Promise.all([
+    ...uniqueCreated.map((created) =>
+      verifyDetailedNode(input.runtime, input.docId, created.nodeId)
+    ),
     ...uniqueChanged
       .filter((changed) => changed.action !== 'delete_node')
-      .map(async (changed) => ({
-        kind: 'updated' as const,
-        detail: await fetchDetailedNode(input.runtime, input.docId, changed.nodeId)
-      }))
+      .map((changed) => verifyDetailedNode(input.runtime, input.docId, changed.nodeId))
   ])
-  readback
-    .sort((left, right) => left.detail.nodeIndex - right.detail.nodeIndex)
-    .forEach((item) => changes.push({ kind: item.kind, node: projectDocxReadNode(item.detail) }))
-  for (const changed of uniqueChanged) {
-    if (createdIds.has(changed.nodeId)) continue
-    if (changed.action === 'delete_node') {
-      changes.push({ kind: 'deleted', nodeId: changed.nodeId })
-    }
-  }
-  return {
-    changes
-  }
+  const createdVisualIds = await resolveCreatedVisualIds({
+    runtime: input.runtime,
+    previousDocId: input.previousDocId,
+    nextDocId: input.docId,
+    changedNodes: input.changedNodes,
+    operation
+  })
+  const resultCreatedIds = [...uniqueCreated.map((created) => created.nodeId), ...createdVisualIds]
+  return resultCreatedIds.length > 0 ? { createdIds: resultCreatedIds } : {}
 }
 
 export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: string }>>(input: {
@@ -887,6 +889,7 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
               .map((node) => ({ nodeId: node.nodeId, type: node.type }))
             preCommitResult = await buildWriteToolResult({
               runtime,
+              previousDocId: baselineDocId,
               docId: workingDocId,
               changedNodes: [],
               createdNodes,
@@ -979,9 +982,6 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
             toolName,
             toolCallId,
             result,
-            outputPreview: {
-              changes: result.changes
-            },
             activity: {
               actionType: input.spec.activityActionType,
               startedSummary: '执行 docx_content_edit: insert_nodes',

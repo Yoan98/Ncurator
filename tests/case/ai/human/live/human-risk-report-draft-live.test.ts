@@ -161,16 +161,28 @@ describe('ai human live backend', () => {
         const writeResultEvents = filterAiRunEventsByType(events, 'tool_call_result').filter(
           (event) => event.toolName === 'docx_content_edit'
         )
-        const hasCreatedNodeChanges =
-          writeResultEvents.length === 0 ||
-          writeResultEvents.some((event) => {
-            const data = event.result?.data
-            return (
-              data !== null &&
-              typeof data === 'object' &&
-              Array.isArray((data as { changes?: object[] }).changes)
-            )
-          })
+        const writeResultsAreMinimal = writeResultEvents.every((event) => {
+          if (event.result?.ok !== true) return true
+          const data = event.result.data
+          return (
+            data !== null &&
+            typeof data === 'object' &&
+            !Array.isArray(data) &&
+            !('changes' in data) &&
+            Object.keys(data).every((key) => key === 'createdIds')
+          )
+        })
+        const hasCreatedIds = writeResultEvents.some((event) => {
+          if (event.result?.ok !== true) return false
+          const data = event.result?.data
+          return (
+            data !== null &&
+            typeof data === 'object' &&
+            !Array.isArray(data) &&
+            Array.isArray((data as { createdIds?: string[] }).createdIds) &&
+            (data as { createdIds: string[] }).createdIds.length > 0
+          )
+        })
         const docxFileArtifact = result.output?.artifacts?.find(
           (artifact) => artifact.kind === 'file' && artifact.capability === 'docx'
         )
@@ -294,9 +306,9 @@ describe('ai human live backend', () => {
           }
         )
 
-        runtime.assertThat(hasCreatedNodeChanges, {
-          name: 'human-live-risk-report-write-results-include-created-node-changes',
-          message: '同文件 DOCX 写后，写工具结果应包含结构化 changes，用于 brain 判断写入效果。',
+        runtime.assertThat(writeResultsAreMinimal && hasCreatedIds, {
+          name: 'human-live-risk-report-write-results-stay-minimal',
+          message: 'DOCX 写结果应保持最小，并只为新建内容返回 createdIds。',
           data: {
             writeResultEvents,
             createdRelativePaths,

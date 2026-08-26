@@ -108,4 +108,11 @@ describe('ai unit tool input schema renderer', () => {
       expect(Object.keys(schema.shape)).not.toContain('warnings')
     })
   })
+
+  it('keeps DOCX mutation results minimal', () => {
+    expect(docxMutationOutputSchema.safeParse({}).success).toBe(true)
+    expect(docxMutationOutputSchema.safeParse({ createdIds: ['node_1'] }).success).toBe(true)
+    expect(docxMutationOutputSchema.safeParse({ createdIds: [] }).success).toBe(false)
+    expect(docxMutationOutputSchema.safeParse({ changes: [] }).success).toBe(false)
+  })
 })

@@ -22,9 +22,6 @@ import {
 } from './schemas'
 import type {
   DocxParagraphStyle,
-  DocxPublicReadInlineNode,
-  DocxPublicReadNestedNode,
-  DocxPublicReadRootNode,
   DocxReadContentNode,
   DocxReadParagraphNode,
   DocxReadTableCellNode,
@@ -201,15 +198,6 @@ export type DocxNodeOutlineRequest = z.infer<typeof docxOutlineSchema>
 export type DocxNodeSearchRequest = z.infer<typeof docxSearchSchema>
 export type DocxNodeReadRequest = z.infer<typeof docxReadNodesSchema>
 
-export type DocxMutationChange =
-  | {
-      kind: 'created' | 'updated'
-      node: DocxPublicReadRootNode | DocxPublicReadNestedNode | DocxPublicReadInlineNode
-    }
-  | {
-      kind: 'deleted'
-      nodeId: string
-    }
 export type DocxSearchMatch = {
   nodeId: string
   nodeIndex: number
