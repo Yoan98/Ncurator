@@ -112,4 +112,57 @@ describe('docx segment map', () => {
     expect(segments[1]?.textMap).toContain('视觉 shape')
     expect(segments[1]?.textMap).toContain('架构总览')
   })
+
+  it('uses page, column, and section properties as structural boundaries', () => {
+    const leading = Array.from({ length: 19 }, (_item, index) =>
+      paragraph(`边界前正文 ${index}`)
+    ).join('')
+    const pageBefore = paragraph('新页开始', '<w:pageBreakBefore/>')
+    const ordinary = paragraph('同页正文')
+    const columnAfter =
+      '<w:p><w:r><w:t>分栏结束</w:t><w:br w:type="column"/></w:r></w:p>'
+    const sectionAfter = paragraph('分节结束', '<w:sectPr/>')
+    const revision =
+      '<w:ins w:id="9"><w:p><w:r><w:t>修订正文</w:t></w:r></w:p></w:ins>'
+    const trailing = paragraph('最后正文')
+    const segments = buildDocxSegmentMap(
+      buildNodeIndex(
+        document(`${leading}${pageBefore}${ordinary}${columnAfter}${sectionAfter}${revision}${trailing}`)
+      )
+    )
+
+    expect(segments.map((segment) => [segment.fromNodeIndex, segment.toNodeIndex])).toEqual([
+      [0, 18],
+      [19, 21],
+      [22, 22],
+      [23, 24]
+    ])
+    expect(
+      segments.reduce(
+        (total, segment) => total + segment.toNodeIndex - segment.fromNodeIndex + 1,
+        0
+      )
+    ).toBe(25)
+  })
+
+  it('does not double-count Latin words in mixed Chinese and English TF-IDF', () => {
+    const segments = buildDocxSegmentMap(
+      buildNodeIndex(document(paragraph('中文 中文 中文 hello hello。补充定位信息。')))
+    )
+
+    expect(segments[0]?.textMap).toContain('关键词：中文、hello')
+  })
+
+  it('extracts DrawingML and VML visual descriptions into structural anchors', () => {
+    const drawing =
+      '<w:p xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"><w:r><w:drawing><a:graphic><a:cNvPr id="2" name="流程图" descr="DrawingML 架构说明"/></a:graphic></w:drawing></w:r></w:p>'
+    const vml =
+      '<w:p xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office"><w:r><w:pict><v:shape id="legacy-shape" alt="VML 旧版流程图"><v:imagedata o:title="VML 图片说明"/></v:shape></w:pict></w:r></w:p>'
+    const segments = buildDocxSegmentMap(buildNodeIndex(document(`${drawing}${vml}`)))
+
+    expect(segments).toHaveLength(2)
+    expect(segments[0]?.textMap).toContain('DrawingML 架构说明')
+    expect(segments[1]?.textMap).toContain('VML 旧版流程图')
+    expect(segments[1]?.textMap).toContain('VML 图片说明')
+  })
 })

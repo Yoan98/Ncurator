@@ -248,6 +248,10 @@ const nodeIdField = z
   .string()
   .min(1)
   .describe('docx_read_nodes、docx_search 或写入结果返回的 nodeId，直接照抄')
+const searchScopeNodeIdField = z
+  .string()
+  .min(1)
+  .describe('限定搜索范围的根节点或 table cell nodeId；不接受 run 等递归子节点 ID')
 
 export const docxOutlineSchema = z
   .object({
@@ -267,7 +271,11 @@ export const docxSearchSchema = z
     sourcePath: sourcePathField,
     query: z.string().min(1).describe('要检索的文字或正则表达式'),
     mode: docxSearchModeSchema.optional().describe('检索模式，缺省为 literal'),
-    nodeIds: z.array(nodeIdField).min(1).optional().describe('可选的搜索范围；缺省搜索整个文档'),
+    nodeIds: z
+      .array(searchScopeNodeIdField)
+      .min(1)
+      .optional()
+      .describe('可选的根节点或 table cell 搜索范围；缺省搜索整个文档'),
     includeContext: z
       .boolean()
       .optional()

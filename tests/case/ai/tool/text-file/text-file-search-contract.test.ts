@@ -59,7 +59,7 @@ describe('ai tool text-file search backend', () => {
         })
 
         const manyPath = path.join(runtime.workspaceRoot, 'many.txt')
-        await fs.writeFile(manyPath, Array.from({ length: 12 }, (_, i) => `行${i + 1} x`).join('\n'), 'utf8')
+        await fs.writeFile(manyPath, 'x\n'.repeat(50_000), 'utf8')
         const manyResult = await harness.invoke<SearchResult>('text_file_search', {
           sourcePath: manyPath,
           query: 'x'
@@ -125,7 +125,7 @@ describe('ai tool text-file search backend', () => {
             result.regexResult.matches[3].matchText === 'hello' &&
             result.emojiResult.matches[0].charOffset === 5 &&
             result.emojiResult.matches[0].line === 1 &&
-            result.manyResult.totalMatchCount === 12 &&
+            result.manyResult.totalMatchCount === 50_000 &&
             result.manyResult.returnedMatchCount === 10 &&
             result.manyResult.matches.length === 10 &&
             result.logResult.totalMatchCount === 1 &&

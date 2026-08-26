@@ -23,12 +23,6 @@ type MatchEntry = {
   matchText: string
 }
 
-type LineEntry = {
-  jsStart: number
-  cpStart: number
-  text: string
-}
-
 const toToolResult = (input: {
   toolName: string
   ok: boolean
@@ -56,41 +50,11 @@ const clipText = (text: string, maxChars: number): { text: string; truncated: bo
   return { text: chars.slice(0, maxChars).join(''), truncated: true }
 }
 
-const buildLineEntries = (content: string): LineEntry[] => {
-  const lines = content.split('\n')
-  const entries: LineEntry[] = []
-  let jsOffset = 0
-  let cpOffset = 0
-  for (const line of lines) {
-    entries.push({ jsStart: jsOffset, cpStart: cpOffset, text: line })
-    jsOffset += line.length + 1
-    cpOffset += Array.from(line).length + 1
-  }
-  return entries
-}
-
-const findLineIndex = (lines: LineEntry[], jsIndex: number): number => {
-  let low = 0
-  let high = lines.length - 1
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2)
-    const entry = lines[mid]
-    if (jsIndex < entry.jsStart) {
-      high = mid - 1
-    } else if (mid + 1 < lines.length && jsIndex >= lines[mid + 1].jsStart) {
-      low = mid + 1
-    } else {
-      return mid
-    }
-  }
-  return 0
-}
-
 const collectMatches = (input: {
   content: string
   query: string
   mode: 'literal' | 'regex'
-}): MatchEntry[] => {
+}): { totalMatchCount: number; matches: MatchEntry[] } => {
   if (input.mode === 'regex') {
     let regex: RegExp
     try {
@@ -100,23 +64,31 @@ const collectMatches = (input: {
       throw new Error(`正则表达式无效：${message}`)
     }
     const matches: MatchEntry[] = []
+    let totalMatchCount = 0
     let match: RegExpExecArray | null
     while ((match = regex.exec(input.content)) !== null) {
-      matches.push({ jsIndex: match.index, matchText: match[0] })
+      totalMatchCount += 1
+      if (matches.length < TEXT_FILE_SEARCH_MAX_MATCHES) {
+        matches.push({ jsIndex: match.index, matchText: match[0] })
+      }
       if (match[0].length === 0) regex.lastIndex += 1
     }
-    return matches
+    return { totalMatchCount, matches }
   }
 
   const matches: MatchEntry[] = []
+  let totalMatchCount = 0
   let from = 0
   while (true) {
     const index = input.content.indexOf(input.query, from)
     if (index < 0) break
-    matches.push({ jsIndex: index, matchText: input.query })
+    totalMatchCount += 1
+    if (matches.length < TEXT_FILE_SEARCH_MAX_MATCHES) {
+      matches.push({ jsIndex: index, matchText: input.query })
+    }
     from = index + input.query.length
   }
-  return matches
+  return { totalMatchCount, matches }
 }
 
 export const searchTextFile = async (args: FileSearchInput): Promise<FileSearchOutput> => {
@@ -127,20 +99,37 @@ export const searchTextFile = async (args: FileSearchInput): Promise<FileSearchO
   const decoded = decodeTextFile(await fs.readFile(sourcePath), args.sourcePath)
   const content = decoded.normalizedContent
   const mode = args.mode || 'literal'
-  const lines = buildLineEntries(content)
-  const allMatches = collectMatches({ content, query: args.query, mode })
+  const collected = collectMatches({ content, query: args.query, mode })
+  let scanJsOffset = 0
+  let scanCodePointOffset = 0
+  let line = 1
+  let lineStartJsOffset = 0
+  let lineStartCodePointOffset = 0
 
-  const matches = allMatches.slice(0, TEXT_FILE_SEARCH_MAX_MATCHES).map((match) => {
-    const lineIndex = findLineIndex(lines, match.jsIndex)
-    const line = lines[lineIndex]
-    const lineInnerJsOffset = match.jsIndex - line.jsStart
-    const lineInnerCpOffset = Array.from(line.text.slice(0, lineInnerJsOffset)).length
-    const charOffset = line.cpStart + lineInnerCpOffset + 1
-    const lineNumber = lineIndex + 1
+  const matches = collected.matches.map((match) => {
+    while (scanJsOffset < match.jsIndex) {
+      const codePoint = content.codePointAt(scanJsOffset)
+      if (codePoint === undefined) break
+      const width = codePoint > 0xffff ? 2 : 1
+      scanJsOffset += width
+      scanCodePointOffset += 1
+      if (codePoint === 10) {
+        line += 1
+        lineStartJsOffset = scanJsOffset
+        lineStartCodePointOffset = scanCodePointOffset
+      }
+    }
+    const lineEndJsOffset = content.indexOf('\n', match.jsIndex)
+    const lineText = content.slice(
+      lineStartJsOffset,
+      lineEndJsOffset < 0 ? content.length : lineEndJsOffset
+    )
+    const lineInnerCpOffset = scanCodePointOffset - lineStartCodePointOffset
+    const charOffset = scanCodePointOffset + 1
     const clippedMatch = clipText(match.matchText, TEXT_FILE_SEARCH_MATCH_TEXT_MAX_CHARS)
 
-    const lineChars = Array.from(line.text)
-    let textContext = line.text
+    const lineChars = Array.from(lineText)
+    let textContext = lineText
     let contextTruncated = false
     if (lineChars.length > TEXT_FILE_SEARCH_CONTEXT_CHARS) {
       const half = Math.floor(TEXT_FILE_SEARCH_CONTEXT_CHARS / 2)
@@ -151,7 +140,7 @@ export const searchTextFile = async (args: FileSearchInput): Promise<FileSearchO
     }
 
     return {
-      line: lineNumber,
+      line,
       charOffset,
       matchText: clippedMatch.text,
       textContext,
@@ -161,7 +150,7 @@ export const searchTextFile = async (args: FileSearchInput): Promise<FileSearchO
 
   return {
     sourcePath: args.sourcePath,
-    totalMatchCount: allMatches.length,
+    totalMatchCount: collected.totalMatchCount,
     returnedMatchCount: matches.length,
     matches
   }

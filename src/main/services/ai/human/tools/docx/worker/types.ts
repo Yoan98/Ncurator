@@ -215,6 +215,7 @@ export type DocxWorkerSuccessPayload =
     }
   | {
       action: 'search'
+      totalMatchCount: number
       matches: DocxSearchMatch[]
     }
   | {

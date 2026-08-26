@@ -11,7 +11,7 @@ import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from
 import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
 import { renderDocxVisualToPng } from '../utils/renderVisual'
 import { projectDocxReadNodes } from '../publicReadTree'
-import { DOCX_OUTLINE_SEGMENTS_PER_PAGE, DOCX_SEARCH_MAX_MATCHES } from '../constants'
+import { DOCX_OUTLINE_SEGMENTS_PER_PAGE } from '../constants'
 
 const fetchNodesByNodeIds = async (input: {
   runtime: DocxToolRuntime
@@ -82,6 +82,7 @@ const executeWorkerSearch = async (input: {
       failure: ReturnType<DocxToolRuntime['emitFailure']>
     }
   | {
+      totalMatchCount: number
       matches: DocxSearchMatch[]
     }
 > => {
@@ -127,6 +128,7 @@ const executeWorkerSearch = async (input: {
     }
   }
   return {
+    totalMatchCount: workerResponse.payload.totalMatchCount,
     matches: workerResponse.payload.matches
   }
 }
@@ -299,11 +301,9 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           activity: { actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType! }
         })
       }
-      const allMatches = searchResult.matches
-      const matches = allMatches.slice(0, DOCX_SEARCH_MAX_MATCHES)
       const result = buildSearchResult({
-        totalMatchCount: allMatches.length,
-        matches
+        totalMatchCount: searchResult.totalMatchCount,
+        matches: searchResult.matches
       })
       return finalizeDocxToolSuccess({
         runtime,

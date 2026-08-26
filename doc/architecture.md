@@ -142,7 +142,7 @@ AI 推进遵循“最小可靠返回 × 最少连续决策轮次”：每次只�
 
 每条工具结果独立执行大小守卫，不存在同一 dispatch 批次的总量额度。结果不超过 `TOOL_RESULT_INLINE_MAX_CHARS = 32_000` 字符时完整进入上下文；超过后把完整结果写入一次性 `runtime/toolresult` 文件，并只给模型返回最多 `TOOL_RESULT_HEAD_MAX_CHARS = 8_000` 字符的 head。截断信封只有 `truncated / filePath / totalChars / head`，因此一个大结果不会挤占同轮其他小结果的返回额度。
 
-截断日志是 `JSON.stringify` 的紧凑单行内容（无真实换行），模型需要完整内容时通过 `text_file_read` 读取：`type=lines`（`startLine/lineCount`）按行、`type=chars`（`startOffset/charCount`）按字符分段。`text_file_read` 对 `runtime/toolresult` 目录下的文件执行单次返回上限守卫 `TEXT_FILE_READ_MAX_CHARS`（略低于截断上限，为 JSON 包装开销留余量）：本次读取内容超限时直接报错，保证分段读取的结果不会被 hand 层再次截断落盘，避免「读日志 → 再截断 → 再读日志」的递归；普通工作区文件不受此守卫限制。`text_file_search` 按 literal/regex 在文本中检索，返回每个命中的 1-based 行号与全文件字符偏移（与 `type=chars` 的 `startOffset` 对齐），单行超长日志的命中上下文按字段级上限裁剪并标记 `truncated`，模型可先用搜索定位关键词、再按偏移精确读取。
+截断日志是 `JSON.stringify` 的紧凑单行内容（无真实换行），模型需要完整内容时通过 `text_file_read` 读取：`type=lines`（`startLine/lineCount`）按行、`type=chars`（`startOffset/charCount`）按字符分段。`text_file_read` 对 `runtime/toolresult` 目录下的文件执行单次返回上限守卫 `TEXT_FILE_READ_MAX_CHARS`（略低于截断上限，为 JSON 包装与路径等开销留余量）：本次读取内容超限时直接报错，保证分段读取的结果不会被 hand 层再次截断落盘，避免「读日志 → 再截断 → 再读日志」的递归；普通工作区文件不受此守卫限制。`text_file_search` 按 literal/regex 在文本中检索，返回每个命中的 1-based 行号与全文件字符偏移（与 `type=chars` 的 `startOffset` 对齐），单行超长日志的命中上下文按字段级上限裁剪并标记 `truncated`。搜索扫描时统计全部命中，但内存中只保留前 10 条详情，不先构造全量命中数组；模型可先用搜索定位关键词、再按偏移精确读取。
 
 **模型上下文唯一真相源是会话级 append-only 的会话消息记录（`chat_session_message_log` 表）**：每条是 `user` / `assistant`（含真实 `tool_calls`）/ `tool`（含结果）/ `annotation`（思考/学习/压缩/收尾等过程标记）。模型上下文从会话消息记录投影（`deriveMessageLogMessages`），中断恢复与跨 run 上下文都从记录重建后补一条 user 消息继续；UI 过程展示与模型记忆不再维护 `rounds`/`conversation`/`ai_run_event` 副本。压缩只作用于「投影出的消息」（早段 → `<compacted_history>` + `<current_state>`，尾段保留），记录本身 append-only 不动。
 
@@ -279,9 +279,9 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 
 `docx_read_outline` 对所有 DOCX 使用同一套分段算法，不判断文档是否标准。每个 story 独立分段，每个根节点只属于一个 segment；普通段软目标为 20 个根节点，向后最多寻找 10 个节点的可靠结构边界，硬上限为 30 个根节点或 8,000 个可见字符。可靠边界只采用 section、显式分页/分栏、真实 `outlineLevel`、block content control、table 和视觉根节点，不根据字号、加粗、短文本或编号外观猜标题。table、block content control 和视觉根节点独立成段；超长单节点可独立成段。
 
-公开 segment 只包含 `story / fromNodeIndex / toNodeIndex / textMap`，不返回 `nodeId`、完整正文或递归 children。`textMap` 最多 360 个 Unicode 字符：先放最多 120 字符的结构锚点，再用 Jieba/Unicode 分词与 TF-IDF 动态选择最多 96 字符的关键词，最后用“TF-IDF 质心 + MMR（0.7 相关性、0.3 多样性）”抽取带来源 `nodeIndex` 的原文代表句。不调用 LLM、不生成改写、不使用 embedding。分页随 Working 文档变化；需要编辑定位时使用 `docx_search`，或用 segment 的连续 `nodeIndex` 范围调用 `docx_read_nodes` 获取稳定 `nodeId`。
+公开 segment 只包含 `story / fromNodeIndex / toNodeIndex / textMap`，不返回 `nodeId`、完整正文或递归 children。`textMap` 最多 360 个 Unicode 字符：先放最多 120 字符的结构锚点，再用 Jieba/Unicode 分词与 TF-IDF 动态选择最多 96 字符的关键词，最后用“TF-IDF 质心 + MMR（0.7 相关性、0.3 多样性）”抽取带来源 `nodeIndex` 的原文代表句。Unicode 词边界负责非中文词，Jieba 只细分汉字词，避免中英文混合文本重复计词；视觉锚点统一读取 DrawingML 与 VML 的描述、标题、替代文字和名称。不调用 LLM、不生成改写、不使用 embedding。分页随 Working 文档变化；需要编辑定位时使用 `docx_search`，或用 segment 的连续 `nodeIndex` 范围调用 `docx_read_nodes` 获取稳定 `nodeId`。
 
-`docx_search` 的 literal 与 regex 都在完整原文上匹配，不做同义词、别名或 Unicode 字形改写。每个实际出现位置算一个 match，`totalMatchCount` 统计全部命中，公开最多返回前 10 个；`textContext` 最多 320 字符。`includeContext:true` 时返回同一 story 前后各 2 个节点，每个预览最多 160 字符。DOCX 不建立向量索引、embedding 或缓存；知识库语义检索不受影响。
+`docx_search` 的 literal 与 regex 都在完整原文上匹配，不做同义词、别名或 Unicode 字形改写。每个实际出现位置算一个 match；Worker 扫描全部原文以计算 `totalMatchCount`，但只构造和传输前 10 个 match，避免高频查询产生全量结果数组。`textContext` 最多 320 字符；`includeContext:true` 时返回同一 story 前后各 2 个节点，每个预览最多 160 字符。传入 `nodeIds` 时先验证全部目标，任一目标过期、未知或不是可搜索节点都返回 `invalid_input`，不把无效范围伪装成零命中。DOCX 不建立向量索引、embedding 或缓存；知识库语义检索不受影响。
 
 `docx_format.format_text` 使用 `targets: [{ nodeId, text? }]`；省略 `text` 表示格式化该节点全部文字。其余局部格式 operation 使用 `nodeIds`，上限均为 20，拒绝重复 ID。编辑会话直接使用当前稳定 `nodeId` 定位；不保存文本指纹、邻近节点或表格坐标 locator，也不提供旧快照目标重新绑定层。
 

@@ -135,7 +135,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 
 #### docx 类别
 
-DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segment map 逻辑分页、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、结构边界、TF-IDF/MMR 摘要预算、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和行列/合并视觉丢失保护。公开工具回归还必须验证错误 ID 不会提交部分修改。
+DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segment map 逻辑分页、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、分页/分栏/section 边界、中英文混合 TF-IDF、DrawingML/VML 视觉锚点、TF-IDF/MMR 摘要预算、搜索全量计数但只构造前 10 条详情、无效搜索 scope、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和行列/合并视觉丢失保护。公开工具回归还必须验证错误 ID 不会提交部分修改。
 
 ##### `docx-v2-public-tools`
 
@@ -188,7 +188,7 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：literal 搜索统计每个实际命中，并可返回前后各 2 个同 story 节点。
 - Why：同节点多次出现也必须准确计数，邻居上下文用于一次调用判断位置。
 - How：在五个连续段落的中心段写入两个相同关键词，分别执行精确查询和近似但不同的查询。
-- Oracle：精确查询 `totalMatchCount=2`，两个 match 使用同一稳定 `nodeId`，邻居各 2 个；不同查询不触发硬编码别名。
+- Oracle：精确查询 `totalMatchCount=2`，两个 match 使用同一稳定 `nodeId`，邻居各 2 个；不同查询不触发硬编码别名；高频查询统计全部命中但只在 Worker 构造前 10 条详情，任一 scope nodeId 无效时返回 `invalid_input`。
 - Not：不调用 LLM 或 embedding。
 
 ##### `docx-search-regex-contract`
@@ -235,7 +235,7 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：`text_file_search` 的 literal/regex 检索返回准确的行号与全文件字符偏移，单行超长日志的上下文裁剪与 truncated 标记，命中数上限与无效正则报错。
 - Why：文本文件（尤其单行 JSON 截断日志）无法按行细分时，搜索定位关键词拿到字符偏移后即可用 `type=chars` 精确读取，是「读日志超限」场景的关键收敛手段。
 - How：真实调用 `text_file_search` 搜索多行文件（literal/regex）、含 emoji 文件（验证码点对齐）、单行超长 toolresult 日志、超过 10 个命中的文件，并构造无效正则。
-- Oracle：行号与 `charOffset` 为 1-based 且按 Unicode 码点计算；命中行未超长时 `textContext` 返回整行且 `truncated=false`；单行超长日志裁剪上下文并标记 `truncated`；超过 10 个命中时 `totalMatchCount` 为全量、`returnedMatchCount` 为 10；无效正则报错。
+- Oracle：行号与 `charOffset` 为 1-based 且按 Unicode 码点计算；命中行未超长时 `textContext` 返回整行且 `truncated=false`；单行超长日志裁剪上下文并标记 `truncated`；5 万个命中只保留前 10 条详情，`totalMatchCount` 仍为全量、`returnedMatchCount` 为 10；无效正则报错。
 - Not：不验证真实模型对搜索结果的利用策略。
 
 #### pdf 类别

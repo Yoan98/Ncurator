@@ -31,7 +31,7 @@ import type {
 import type { DocxEditableNode, DocxVisualDescriptor } from './types'
 import { childElements, descendantElements, firstChildElement, getAttr } from './dom'
 
-type SemanticTreeContext = {
+type ContentTreeContext = {
   rootNodeId: string
   story: DocxStoryRef
   partName: string
@@ -43,11 +43,11 @@ type SemanticTreeContext = {
   visualsById: Map<string, DocxVisualDescriptor>
 }
 
-const nodeId = (context: SemanticTreeContext, nodePath: string): string =>
+const nodeId = (context: ContentTreeContext, nodePath: string): string =>
   `node:${context.rootNodeId}:${nodePath}`
 
 const bindEditableNode = (
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string,
   kind: DocxEditableNode['kind'],
   node: Element
@@ -64,7 +64,7 @@ const bindEditableNode = (
   return id
 }
 
-const visualId = (context: SemanticTreeContext, nodePath: string): string =>
+const visualId = (context: ContentTreeContext, nodePath: string): string =>
   `visual:${context.rootNodeId}:${nodePath}`
 
 const attrByLocalName = (node: Element, names: readonly string[]): string => {
@@ -73,6 +73,18 @@ const attrByLocalName = (node: Element, names: readonly string[]): string => {
     if (attr && names.includes(attr.localName || attr.name)) return attr.value
   }
   return ''
+}
+
+export const collectVisualAltTexts = (node: Element): string[] => {
+  const descriptors = ['docPr', 'cNvPr', 'shape', 'imagedata'].flatMap((localName) =>
+    descendantElements(node, localName)
+  )
+  const values = descriptors.flatMap((descriptor) =>
+    ['descr', 'title', 'alt', 'name']
+      .map((attribute) => attrByLocalName(descriptor, [attribute]).trim())
+      .filter(Boolean)
+  )
+  return [...new Set(values)]
 }
 
 const boolProperty = (parent: Element | null, name: string): boolean | undefined => {
@@ -285,16 +297,7 @@ const visualRelationshipId = (node: Element, kind: DocxVisualDescriptor['kind'])
   return candidate ? attrByLocalName(candidate, ['embed', 'link', 'id', 'dm']) : ''
 }
 
-const visualAltText = (node: Element): string | undefined => {
-  const docPr = firstDescendant(node, 'docPr') || firstDescendant(node, 'cNvPr')
-  if (!docPr) return undefined
-  return (
-    attrByLocalName(docPr, ['descr']) ||
-    attrByLocalName(docPr, ['title']) ||
-    attrByLocalName(docPr, ['name']) ||
-    undefined
-  )
-}
+const visualAltText = (node: Element): string | undefined => collectVisualAltTexts(node)[0]
 
 const selectAlternateContent = (node: Element): Element[] => {
   if (node.localName !== 'AlternateContent') return [node]
@@ -324,7 +327,7 @@ const selectAlternateContent = (node: Element): Element[] => {
 
 const parseVisual = (
   node: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string
 ): DocxReadVisualNode | null => {
   const kind = classifyVisual(node)
@@ -370,7 +373,7 @@ const parseVisual = (
 
 const parseRun = (
   run: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string
 ): DocxReadRunNode => {
   const id = bindEditableNode(context, currentPath, 'run', run)
@@ -425,7 +428,7 @@ const parseRun = (
 
 const parseHyperlink = (
   node: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string
 ): DocxReadHyperlinkNode => {
   const relationshipId = attrByLocalName(node, ['id'])
@@ -449,16 +452,16 @@ const revisionKind = (name: string): DocxReadRevisionNode['kind'] => {
 
 const parseContainerChildren = (
   node: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string
 ): DocxReadNode[] =>
   childElements(node).flatMap((child, index) =>
-    parseSemanticElement(child, context, `${currentPath}.${index}`)
+    parseContentElement(child, context, `${currentPath}.${index}`)
   )
 
 const parseContentControl = (
   node: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string
 ): DocxReadContentControlNode => {
   const properties = firstChildElement(node, 'sdtPr')
@@ -474,7 +477,7 @@ const parseContentControl = (
 
 const parseSimpleField = (
   node: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string
 ): DocxReadFieldNode => ({
   type: 'field',
@@ -483,9 +486,9 @@ const parseSimpleField = (
   children: parseContainerChildren(node, context, currentPath)
 })
 
-const parseSemanticElement = (
+const parseContentElement = (
   child: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string
 ): DocxReadNode[] => {
   if (child.localName === 'r') return [parseRun(child, context, currentPath)]
@@ -529,7 +532,7 @@ const parseSemanticElement = (
   }
   if (child.localName === 'AlternateContent') {
     return selectAlternateContent(child).flatMap((selected, index) =>
-      parseSemanticElement(selected, context, `${currentPath}.${index}`)
+      parseContentElement(selected, context, `${currentPath}.${index}`)
     )
   }
   return [
@@ -546,7 +549,7 @@ const containsFieldChar = (run: Element, kind: string): boolean =>
 
 const parseParagraphChildren = (
   paragraph: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string
 ): DocxReadInlineNode[] => {
   const result: DocxReadInlineNode[] = []
@@ -597,7 +600,7 @@ const parseParagraphChildren = (
       }
       return
     }
-    result.push(...(parseSemanticElement(child, context, childPath) as DocxReadInlineNode[]))
+    result.push(...(parseContentElement(child, context, childPath) as DocxReadInlineNode[]))
   })
   return result
 }
@@ -614,7 +617,7 @@ export const readNodeText = (node: DocxReadNode): string => {
 
 const parseParagraph = (
   paragraph: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string
 ): DocxReadParagraphNode => {
   const id = nodeId(context, currentPath)
@@ -640,7 +643,7 @@ const parseParagraph = (
 
 const parseCell = (
   cell: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string,
   row: number,
   col: number,
@@ -674,7 +677,7 @@ const parseCell = (
 
 const parseTable = (
   table: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string
 ): DocxReadTableNode => {
   const id = nodeId(context, currentPath)
@@ -734,7 +737,7 @@ const parseTable = (
 
 const parseContentNode = (
   node: Element,
-  context: SemanticTreeContext,
+  context: ContentTreeContext,
   currentPath: string
 ): DocxReadContentNode | null => {
   if (node.localName === 'p') return parseParagraph(node, context, currentPath)
@@ -762,7 +765,7 @@ const createContext = (input: {
   availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
   visualsById: Map<string, DocxVisualDescriptor>
-}): SemanticTreeContext => {
+}): ContentTreeContext => {
   const { nodeId: rootNodeId, ...rest } = input
   return { ...rest, rootNodeId }
 }

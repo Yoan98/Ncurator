@@ -16,6 +16,7 @@ import {
 } from './constants'
 import type { DocxOutlineNode, DocxOutlineSegment } from './types'
 import type { NodeIndex, ParsedDocxBundle } from './adapters/ooxml/types'
+import { collectVisualAltTexts } from './adapters/ooxml/contentTree'
 
 type RootItem = {
   node: Exclude<DocxOutlineNode, { type: 'table_cell' }>
@@ -35,11 +36,11 @@ type DraftSegment = {
 type SentenceCandidate = {
   nodeIndex: number
   text: string
-  normalized: string
   vector: Map<string, number>
 }
 
 const jieba = Jieba.withDict(dict)
+const unicodeWordSegmenter = new Intl.Segmenter('und', { granularity: 'word' })
 const STOP_WORDS = new Set([
   'the',
   'and',
@@ -214,9 +215,7 @@ const firstTableRowText = (table: Element): string => {
 
 const visualAnchor = (element: Element, node: RootItem['node']): string => {
   if (!node.visuals) return ''
-  const descriptions = Array.from(element.getElementsByTagNameNS('*', 'docPr'))
-    .flatMap((item) => [localAttribute(item, 'descr'), localAttribute(item, 'title')])
-    .filter(Boolean)
+  const descriptions = collectVisualAltTexts(element)
   const kinds = node.visuals.kinds.join('/')
   return normalizeSpace(
     `视觉 ${kinds}${descriptions.length > 0 ? ` ${descriptions.join(' ')}` : ''}`
@@ -331,9 +330,13 @@ const segmentStory = (items: RootItem[]): DraftSegment[] => {
 
 const tokenize = (text: string): string[] => {
   const normalized = normalizeSpace(text.normalize('NFKC').toLocaleLowerCase())
-  const chinese = jieba.cutForSearch(normalized, true)
-  const english = normalized.match(/[a-z0-9][a-z0-9_-]*/g) || []
-  return [...chinese, ...english]
+  const tokens = Array.from(unicodeWordSegmenter.segment(normalized)).flatMap((item) => {
+    if (!item.isWordLike) return []
+    return /\p{Script=Han}/u.test(item.segment)
+      ? jieba.cutForSearch(item.segment, true)
+      : [item.segment]
+  })
+  return tokens
     .map((token) => token.replace(/^[\p{P}\p{S}\s]+|[\p{P}\p{S}\s]+$/gu, ''))
     .filter((token) => charLength(token) >= 2 && !/^\d+$/u.test(token) && !STOP_WORDS.has(token))
 }
@@ -574,7 +577,6 @@ const buildTextMap = (segment: DraftSegment, idf: Map<string, number>): string =
     })
     .map((item) => ({
       ...item,
-      normalized: normalizeLexical(item.text),
       vector: vectorize(item.text, idf)
     }))
   const representatives = selectRepresentatives(

@@ -7,6 +7,7 @@ import { extractLegacyDocBody, splitLegacyDocParagraphs } from '../utils/legacyD
 import type { DocxDetailedNode, DocxOperation, DocxOutlineNode, DocxSearchMatch } from '../types'
 import {
   DOCX_SEARCH_CONTEXT_NODE_COUNT,
+  DOCX_SEARCH_MAX_MATCHES,
   DOCX_SEARCH_NEIGHBOR_PREVIEW_CHARS,
   DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS
 } from '../constants'
@@ -241,35 +242,50 @@ const getDetailedNodesByNodeIndexRange = (
   return getDetailedNodesByIds(snapshot, nodeIds)
 }
 
-const replaceAllOffsets = (text: string, query: string): Array<{ start: number; end: number }> => {
+type TextMatchOffset = { start: number; end: number }
+
+type TextMatchScan = {
+  totalMatchCount: number
+  offsets: TextMatchOffset[]
+}
+
+const scanLiteralMatches = (text: string, query: string, collectLimit: number): TextMatchScan => {
   const offsets: Array<{ start: number; end: number }> = []
-  if (!query) return offsets
+  if (!query) return { totalMatchCount: 0, offsets }
+  let totalMatchCount = 0
   let cursor = 0
   for (;;) {
     const index = text.indexOf(query, cursor)
     if (index < 0) break
-    offsets.push({ start: index, end: index + query.length })
+    totalMatchCount += 1
+    if (offsets.length < collectLimit) {
+      offsets.push({ start: index, end: index + query.length })
+    }
     cursor = index + Math.max(1, query.length)
   }
-  return offsets
+  return { totalMatchCount, offsets }
 }
 
 const normalizeRegexPattern = (pattern: string): string => String(pattern || '')
 
-const regexOffsets = (text: string, pattern: string): Array<{ start: number; end: number }> => {
+const scanRegexMatches = (text: string, pattern: string, collectLimit: number): TextMatchScan => {
   const offsets: Array<{ start: number; end: number }> = []
   const regExp = new RegExp(normalizeRegexPattern(pattern), 'g')
+  let totalMatchCount = 0
   for (;;) {
     const match = regExp.exec(text)
     if (!match) break
     const matchedText = String(match[0] || '')
-    offsets.push({
-      start: match.index,
-      end: match.index + matchedText.length
-    })
+    totalMatchCount += 1
+    if (offsets.length < collectLimit) {
+      offsets.push({
+        start: match.index,
+        end: match.index + matchedText.length
+      })
+    }
     if (matchedText.length === 0) regExp.lastIndex += 1
   }
-  return offsets
+  return { totalMatchCount, offsets }
 }
 
 const searchNodes = (input: {
@@ -279,9 +295,10 @@ const searchNodes = (input: {
   mode: 'literal' | 'regex'
   scopeNodeIds: string[]
   includeContext: boolean
-}): DocxSearchMatch[] => {
+}): { totalMatchCount: number; matches: DocxSearchMatch[] } => {
   const scope = input.scopeNodeIds.length > 0 ? new Set(input.scopeNodeIds) : null
   const out: DocxSearchMatch[] = []
+  let totalMatchCount = 0
 
   const searchableNodes = input.nodes.filter((node) => {
     if (scope) return scope.has(node.nodeId)
@@ -332,11 +349,12 @@ const searchNodes = (input: {
     const internalNodeId = resolveInternalNodeId(input.snapshot.identity, node.nodeId)
     const text = extractNodeText(input.snapshot.index, internalNodeId)
     if (!text) continue
-    const offsets =
+    const scan =
       input.mode === 'literal'
-        ? replaceAllOffsets(text, input.query)
-        : regexOffsets(text, input.query)
-    if (offsets.length === 0) continue
+        ? scanLiteralMatches(text, input.query, DOCX_SEARCH_MAX_MATCHES - out.length)
+        : scanRegexMatches(text, input.query, DOCX_SEARCH_MAX_MATCHES - out.length)
+    totalMatchCount += scan.totalMatchCount
+    if (scan.offsets.length === 0) continue
     const structureFacts = getNodeStructureFacts(input.snapshot.index, internalNodeId)
     if (!structureFacts) continue
     const storyContextNodes = contextNodes.filter(
@@ -345,7 +363,7 @@ const searchNodes = (input: {
     const contextPosition = storyContextNodes.findIndex(
       (candidate) => candidate.nodeId === node.nodeId
     )
-    offsets.forEach((offset) => {
+    scan.offsets.forEach((offset) => {
       const before =
         input.includeContext && contextPosition >= 0
           ? storyContextNodes
@@ -372,9 +390,10 @@ const searchNodes = (input: {
     })
   }
 
-  return out
-    .sort((left, right) => left.nodeIndex - right.nodeIndex)
-    .map((match) => toPublicSearchMatch(input.snapshot.identity, match))
+  return {
+    totalMatchCount,
+    matches: out.map((match) => toPublicSearchMatch(input.snapshot.identity, match))
+  }
 }
 
 export const handleDocxWorkerRequest = async (
@@ -686,8 +705,23 @@ export const handleDocxWorkerRequest = async (
           }
         }
       }
-      const matches = searchNodes({
-        nodes: snapshot.index.outline.map((node) => toPublicOutlineNode(snapshot.identity, node)),
+      const outline = snapshot.index.outline.map((node) =>
+        toPublicOutlineNode(snapshot.identity, node)
+      )
+      const searchableNodeIds = new Set(outline.map((node) => node.nodeId))
+      const invalidScopeNodeId = request.payload.scopeNodeIds.find(
+        (nodeId) => !searchableNodeIds.has(nodeId)
+      )
+      if (invalidScopeNodeId) {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'invalid_input',
+          error: `stale, unknown, or unsupported search nodeId: ${invalidScopeNodeId}; read the document again`
+        }
+      }
+      const searchResult = searchNodes({
+        nodes: outline,
         snapshot,
         query: request.payload.query,
         mode,
@@ -699,7 +733,8 @@ export const handleDocxWorkerRequest = async (
         ok: true,
         payload: {
           action: 'search',
-          matches
+          totalMatchCount: searchResult.totalMatchCount,
+          matches: searchResult.matches
         }
       }
     }
