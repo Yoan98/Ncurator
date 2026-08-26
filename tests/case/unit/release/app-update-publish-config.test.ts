@@ -127,7 +127,7 @@ describe('app update publish config', () => {
     expect(testWorkflow).toContain("E2E_WORKERS_BY_TARGET = new Map([['macos-x64', 1]])")
     expect(testWorkflow).toContain('const LIVE_WORKERS = 3')
     expect(testWorkflow).not.toContain('LIVE_BACKEND_RETRIES')
-    expect(testWorkflow.match(/retries: 0/g)).toHaveLength(3)
+    expect(testWorkflow).not.toContain("extraArgs.push('--retry'")
     expect(testWorkflow).toContain('parsed.caseIds.push(next)')
     expect(testWorkflow).toContain('no test files match --case')
     expect(testWorkflow).toContain('NCURATOR_TEST_RUNNER_DEADLINE_MS')

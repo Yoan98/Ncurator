@@ -583,7 +583,6 @@ const resolveBetterSqliteNativeBinding = (target) => {
 
 const runVitest = async (input) => {
   const extraArgs = ['--maxWorkers', String(input.workers)]
-  if (input.retries > 0) extraArgs.push('--retry', String(input.retries))
   const isLiveGroup = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
   const env = {
     ...(isLiveGroup
@@ -994,7 +993,6 @@ const runTypeWorkflow = async (input) => {
           env: runtimeEnv,
           testNamePattern,
           workers: BACKEND_WORKERS,
-          retries: 0,
           deadlineAt: input.deadlineAt
         },
         {
@@ -1003,7 +1001,6 @@ const runTypeWorkflow = async (input) => {
           env: runtimeEnv,
           testNamePattern,
           workers: 1,
-          retries: 0,
           deadlineAt: input.deadlineAt
         },
         {
@@ -1012,7 +1009,6 @@ const runTypeWorkflow = async (input) => {
           env: runtimeEnv,
           testNamePattern,
           workers: LIVE_WORKERS,
-          retries: 0,
           deadlineAt: input.deadlineAt
         }
       ].filter((group) => group.testFiles.length > 0)
