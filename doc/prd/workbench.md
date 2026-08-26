@@ -506,17 +506,18 @@
   - `WB-APPLY-002-AC6` 创建或修改 `xlsx` 后，正式路径立即包含最终净工作簿并生成一条修改记录；同一次 AI Run 对同一路径连续编辑时保持首次写入前基线，不重复生成记录。
   - `WB-APPLY-002-AC7` DOCX 写作技能一次加载 4 个读取工具和 5 个写入工具；`docx_content_edit`、`docx_format`、`docx_table_edit`、`docx_media_edit`、`docx_comments_revisions` 每次调用只接受一个 discriminated operation，不接受批量 action 数组。目标不存在时可用 `docx_content_edit.insert_nodes(document_end)` 或 `docx_table_edit.create_table(document_end)` 创建文档。
   - `WB-APPLY-002-AC7-1` 所有文件工具（docx / ppt / excel / pdf / text-file / image）的 `sourcePath`、`outputPath`、`path` 必须是本机绝对路径；系统不做任何路径拼接，相对路径直接返回错误，AI 需自行改为绝对路径后再调用。
-  - `WB-APPLY-002-AC8` DOCX 公开定位统一使用会话内稳定 `nodeId`；不存在 block、blockId、cellBlockId、wrapperPath 或 lineageId 协议。outline 的 `nodeIndex` 只表示当前临时顺序，重新打开文件后必须重新读取。
+  - `WB-APPLY-002-AC8` DOCX 编辑定位统一使用会话内稳定 `nodeId`；不存在 block、blockId、cellBlockId、wrapperPath 或 lineageId 协议。outline segment 的 `nodeIndex` 范围只表示当前临时顺序，重新打开或编辑后允许重新分段。
   - `WB-APPLY-002-AC9` DOCX 详细读取使用严格递归语义树，按真实顺序保留 `paragraph / run / text / tab / break / hyperlink / content_control / revision / field / table / table_row / table_cell / visual` 的归属关系；详细树中的正文只存在于叶子 `text` 节点，不重复返回 paragraph、table 或 cell 的派生文本和行列统计。
-  - `WB-APPLY-002-AC10` DOCX visual 类型固定为 `image / chart / diagram / shape / embedded_object`。详细读取返回 visualId；outline 只在存在视觉内容时返回 count 和 kinds，不展开视觉节点。
+  - `WB-APPLY-002-AC10` DOCX visual 类型固定为 `image / chart / diagram / shape / embedded_object`。详细读取返回 visualId；outline 将视觉根节点独立分段，并仅在 `textMap` 中提供视觉类型与 alt text 锚点。
   - `WB-APPLY-002-AC11` `docx_read_visuals` 接受 1 至 10 个 visualId 和识别要求，按输入顺序逐项返回识别文字或错误；结果不写入正文搜索索引，`.doc` 不支持视觉读取。
   - `WB-APPLY-002-AC12` `docx_content_edit` 使用浅层节点构造和最小 patch：支持 `replace_text / insert_nodes / replace_node / delete_node / move_node`，不提供 `replace_content` 或 `replace_children`，也不要求 AI 重建完整递归树。
   - `WB-APPLY-002-AC13` `docx_format` 分别支持 text、paragraph、table、row、cell 和 section 的直接格式，另支持重置格式、命名样式 CRUD、应用命名样式和编号。`format_text` 使用最多 20 个 `{ nodeId, text? }` target，其余局部格式 operation 使用最多 20 个 `nodeIds`；同次调用共享一个 patch、拒绝重复 ID，并在全部目标预校验后原子提交。patch 类型或任一目标不匹配时整次写入失败；`update_named_style` 修改全局样式定义。
   - `WB-APPLY-002-AC14` `replace_text` 只在指定 `nodeId` 子树内替换确定原文，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual；原位保留未修改 run、段落格式和视觉节点。
   - `WB-APPLY-002-AC15` 替换或删除节点、删除表格行列或合并单元格时，如被移除区域存在 visual，必须明确传 `allowVisualLoss:true`，否则保存前失败。表格读写坐标统一从 1 开始。失败不得推进 WorkingPackage，也不得产生部分结果。
-  - `WB-APPLY-002-AC16` `docx_read_outline` 使用 `startPage/pageCount` 返回轻量逻辑分页，一页 50 个节点、一次最多 2 页，并返回 `startPage/endPage/totalPages`；逻辑页不是 Word 视觉页。节点不展开 table cell、run 或 children，`textPreview` 最多 160 个 Unicode 字符，超限保留首 100 与尾 59 个字符。`docx_read_nodes` 返回 story 递归语义树，一次最多读取 20 个 nodeId 或连续 50 个根节点。未支持 OOXML 投影为 opaque，局部写入必须原样保留；content control 是可定位容器，空容器可用 `insert_nodes inside_start/inside_end` 写入。
+  - `WB-APPLY-002-AC16` `docx_read_outline` 使用 `startPage/pageCount` 返回 segment 逻辑分页，一页 12 个 segment、一次最多 4 页，并返回 `startPage/endPage/totalPages`；逻辑页不是 Word 视觉页。segment 只包含 `story/fromNodeIndex/toNodeIndex/textMap`，不返回 nodeId；`textMap` 最多 360 个 Unicode 字符，由结构锚点、TF-IDF 动态关键词和 TF-IDF 质心 + MMR 原文代表句组成。所有 DOCX 使用相同分段算法，每个 story 根节点无遗漏且不重叠。`docx_read_nodes` 返回 story 递归内容树，一次最多读取 20 个 nodeId 或连续 50 个根节点。未支持 OOXML 投影为 opaque，局部写入必须原样保留；content control 是可定位容器，空容器可用 `insert_nodes inside_start/inside_end` 写入。
+  - `WB-APPLY-002-AC16-2` `docx_search` 只支持 literal/regex 并搜索完整原文，不使用 DOCX embedding、向量索引或硬编码别名。每个实际出现位置为一个 match，`totalMatchCount` 统计全部命中，最多返回 10 个；`includeContext:true` 固定返回同一 story 前后各 2 个节点预览。无效 regex 返回 `invalid_input`。
   - `WB-APPLY-002-AC16-1` 每条工具结果独立判断大小：不超过 32,000 字符时完整进入模型上下文，超过时完整落盘并返回最多 8,000 字符的 head；截断信封只包含 `truncated/filePath/totalChars/head`，同一 dispatch 不设置批次总量限制。
-  - `WB-APPLY-002-AC17` 五个 DOCX 写工具统一返回 discriminated `changes`：节点创建/更新返回局部完整节点，节点删除返回 `nodeId`，命名样式、批注和修订返回对应实体 ID 与最终状态；禁止只返回成功消息。
+  - `WB-APPLY-002-AC17` 五个 DOCX 写工具统一返回 discriminated `changes`：节点创建/更新返回局部完整节点，节点删除返回 `nodeId`，命名样式、批注和修订返回对应实体 ID 与最终状态；禁止只返回成功消息。成功结果已经完成 OOXML、关系、视觉丢失与受影响区域回读校验，不增加 `verified` 字段。
   - `WB-APPLY-002-AC17-1` 同一 Run 内五个写工具共享首次接触文件时的 Source 和连续推进的 Working。Diff 比较 Source 与最终 Working：A→B→A、新增后删除不产生 Diff；body、header、footer、footnote、endnote、textbox 均生成红绿审核结果，只有 package part 变化时显示“文档级变更”摘要；Word 原生批注和修订与 NCurator Diff 独立保留。
   - `WB-APPLY-002-AC18` 所有 Human 工具的输入结构由 Zod schema 统一渲染；公共类型使用稳定命名定义并只展开一次，同时保留长度、数量、正则、数值和跨字段语义约束，不生成匿名 schema 名称。
   - `WB-APPLY-002-AC7` 生成 PNG、JPEG 或 WebP 图片后，正式路径立即包含可读取图片并生成一条修改记录；同一次 AI Run 对同一路径再次生成时自动更新并保持首次写入前基线。

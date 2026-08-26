@@ -323,9 +323,17 @@ export const toPublicSearchMatch = (
   identity: DocxIdentityIndex,
   match: DocxSearchMatch
 ): DocxSearchMatch => ({
-  ...mapNeighborFields(identity, match),
+  ...match,
   nodeId: requirePublicNodeId(identity, match.nodeId),
-  tableNodeId: resolvePublicNodeId(identity, match.tableNodeId)
+  tableNodeId: resolvePublicNodeId(identity, match.tableNodeId),
+  before: match.before?.map((neighbor) => ({
+    ...neighbor,
+    nodeId: requirePublicNodeId(identity, neighbor.nodeId)
+  })),
+  after: match.after?.map((neighbor) => ({
+    ...neighbor,
+    nodeId: requirePublicNodeId(identity, neighbor.nodeId)
+  }))
 })
 
 export const toInternalOp = (identity: DocxIdentityIndex, op: DocxOperation): DocxOperation => {

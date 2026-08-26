@@ -206,11 +206,11 @@ DOCX ZIP Package
 │     ├─ header / footer
 │     ├─ footnote / endnote
 │     └─ textbox
-└─ story semantic trees
+└─ story content trees
    └─ paragraph / run / table / row / cell / hyperlink / field / bookmark /
       content_control / revision / drawing / math / text / tab / break / opaque
 
-OOXML reader → semantic model → read tools
+OOXML reader → document model → read tools
                          ↓ stable nodeId
 SourcePackage/Model → editing session → WorkingPackage/Model → OOXML writer
                          ↓                         ↓
@@ -243,8 +243,8 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 
 读取工具：
 
-- `docx_read_outline`：按逻辑页快速读取顺序、类型、摘要和临时 `nodeIndex`。输入为 `startPage` 与 `pageCount`（最多 2 页），每逻辑页 50 个节点；逻辑页不是 Word 视觉页。
-- `docx_search`：literal、regex 或 semantic 搜索，返回可直接读取或写入的 `nodeId`。
+- `docx_read_outline`：按逻辑页返回自适应 segment map。每页 12 个 segment，`pageCount` 最多 4；逻辑页不是 Word 视觉页。
+- `docx_search`：在完整原文中执行 literal 或 regex 搜索，返回可直接读取或写入的稳定 `nodeId`；可选返回同一 story 前后各 2 个节点的预览。
 - `docx_read_nodes`：按 `nodeId` 或 `nodeIndex` 范围返回递归语义树；一次最多读取 20 个 nodeId 或连续 50 个根节点。
 - `docx_read_visuals`：按 `visualId` 读取图片、图表、图形等视觉内容。
 
@@ -275,9 +275,13 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 
 写工具统一返回 `changes`。创建/更新节点返回局部完整节点；删除返回 `nodeId`；命名样式、批注和修订返回对应实体的稳定 ID 与最终状态，不只返回成功文字。
 
-`docx_read_outline` 不展开 table cell、run 或递归 children，也不投影 Word 自动生成的脚注/尾注分隔符。公开节点只返回 `nodeId / nodeIndex / story / textPreview` 及类型必要摘要；`textPreview` 先合并空白，超过 160 个 Unicode 字符时保留前 100 字符、一个省略号和后 59 字符。分页随 Working 文档结构变化而变化，后续编辑定位始终使用 `nodeId`。`docx_format.format_text` 使用 `targets: [{ nodeId, text? }]`；省略 `text` 表示格式化该节点全部文字。其余局部格式 operation 使用 `nodeIds`，上限均为 20，拒绝重复 ID。
+`docx_read_outline` 对所有 DOCX 使用同一套分段算法，不判断文档是否标准。每个 story 独立分段，每个根节点只属于一个 segment；普通段软目标为 20 个根节点，向后最多寻找 10 个节点的可靠结构边界，硬上限为 30 个根节点或 8,000 个可见字符。可靠边界只采用 section、显式分页/分栏、真实 `outlineLevel`、block content control、table 和视觉根节点，不根据字号、加粗、短文本或编号外观猜标题。table、block content control 和视觉根节点独立成段；超长单节点可独立成段。
 
-outline 的公开页码在 read tool 内换算成一个连续的 `fromNodeIndex / toNodeIndex` 区间，worker 不接受多 range。编辑会话直接使用当前稳定 `nodeId` 定位；不保存文本指纹、邻近节点或表格坐标 locator，也不提供旧快照目标重新绑定层。
+公开 segment 只包含 `story / fromNodeIndex / toNodeIndex / textMap`，不返回 `nodeId`、完整正文或递归 children。`textMap` 最多 360 个 Unicode 字符：先放最多 120 字符的结构锚点，再用 Jieba/Unicode 分词与 TF-IDF 动态选择最多 96 字符的关键词，最后用“TF-IDF 质心 + MMR（0.7 相关性、0.3 多样性）”抽取带来源 `nodeIndex` 的原文代表句。不调用 LLM、不生成改写、不使用 embedding。分页随 Working 文档变化；需要编辑定位时使用 `docx_search`，或用 segment 的连续 `nodeIndex` 范围调用 `docx_read_nodes` 获取稳定 `nodeId`。
+
+`docx_search` 的 literal 与 regex 都在完整原文上匹配，不做同义词、别名或 Unicode 字形改写。每个实际出现位置算一个 match，`totalMatchCount` 统计全部命中，公开最多返回前 10 个；`textContext` 最多 320 字符。`includeContext:true` 时返回同一 story 前后各 2 个节点，每个预览最多 160 字符。DOCX 不建立向量索引、embedding 或缓存；知识库语义检索不受影响。
+
+`docx_format.format_text` 使用 `targets: [{ nodeId, text? }]`；省略 `text` 表示格式化该节点全部文字。其余局部格式 operation 使用 `nodeIds`，上限均为 20，拒绝重复 ID。编辑会话直接使用当前稳定 `nodeId` 定位；不保存文本指纹、邻近节点或表格坐标 locator，也不提供旧快照目标重新绑定层。
 
 #### 净 Diff、Word 批注与修订
 
@@ -295,12 +299,12 @@ NCurator Diff 与 Word 原生批注、`w:ins`、`w:del` 相互独立。读取和
 
 #### AI 调用原则
 
-- 不知道位置：`docx_read_outline` 或 `docx_search` → `docx_read_nodes` → 一个写 operation → 根据返回的 `changes` 继续。
+- 不知道位置：用 segment map 概览，或直接用 literal/regex 搜索完整原文；再通过 `docx_read_nodes` 精读并取得 `nodeId`，执行一个写 operation。
 - 改一句话：读取目标 paragraph/run，调用 `docx_content_edit.replace_text`。
 - 改一段且保留样式：优先 `replace_text`；只有结构确实改变时才 `replace_node`。
 - 改容器内容：读取 content control/cell/header/footer 的内部节点，逐个修改；空容器用 `insert_nodes inside_*`。
 - 表格文字、外观、结构分别使用 content、format、table 工具，避免一个 operation 同时承担三种职责。
-- 图片、批注和修订使用各自领域工具；写后需要确认时再调用 `docx_read_nodes` 或 `docx_read_visuals`。
+- 图片、批注和修订使用各自领域工具。写工具成功返回的 `changes` 已完成 OOXML、关系、视觉丢失和受影响区域回读校验；只有结果缺失、冲突或用户明确要求时才重复读取。
 - 同一路径可连续调用多个写工具；每次都基于最新 WorkingModel，旧节点未删除时 `nodeId` 保持可用。
 - `move_node` 只允许在同一 OOXML part/story 内移动；跨 story 移动会涉及关系迁移，当前明确拒绝，AI 应在目标 story 插入新节点后再删除源节点，并按视觉丢失规则确认。
 

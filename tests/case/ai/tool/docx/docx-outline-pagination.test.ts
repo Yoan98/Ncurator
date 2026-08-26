@@ -4,19 +4,18 @@ import { describe, it } from 'vitest'
 import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
-type OutlineNode = {
-  nodeId: string
-  nodeIndex: number
-  type: 'paragraph' | 'table' | 'content_control' | 'revision'
+type OutlineSegment = {
   story: 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'textbox'
-  textPreview: string
+  fromNodeIndex: number
+  toNodeIndex: number
+  textMap: string
 }
 
 type OutlineResult = {
   startPage: number
   endPage: number
   totalPages: number
-  nodes: OutlineNode[]
+  segments: OutlineSegment[]
 }
 
 describe('ai tool docx outline pagination backend', () => {
@@ -27,22 +26,23 @@ describe('ai tool docx outline pagination backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 DOCX outline 逻辑分页、预览截取、story 和越界错误。',
+      description: '验证 DOCX segment map 分页、覆盖、摘要预算、story 和越界错误。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const longText = `${'前'.repeat(110)} ${'后'.repeat(70)}`
         const sourcePath = await writeTestDocxFile(runtime.workspaceRoot, 'outline-pages.docx', [
-          ...Array.from({ length: 106 }, (_, index) => ({
+          ...Array.from({ length: 486 }, (_, index) => ({
             type: 'paragraph' as const,
-            text: index === 50 ? longText : `Paragraph ${String(index + 1)}`
+            text:
+              index === 250
+                ? `关键中段 ${'前'.repeat(180)} 训练稳定性 ${'后'.repeat(180)}`
+                : `Paragraph ${String(index + 1)} discusses topic ${String(index % 17)}`
           })),
           {
             type: 'table' as const,
             rows: [
-              ['A1', 'A2'],
-              ['B1', 'B2'],
-              ['C1', 'LastCell']
+              ['Capability', 'State'],
+              ['Segment map', 'Ready']
             ]
           }
         ])
@@ -90,35 +90,35 @@ describe('ai tool docx outline pagination backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const longPreview =
-          result.rest.nodes.find((node) => node.nodeIndex === 50)?.textPreview || ''
-        const tablePreview = result.rest.nodes.find((node) => node.type === 'table')?.textPreview
+        const allSegments = [...result.first.segments, ...result.rest.segments]
+        const bodySegments = allSegments.filter((segment) => segment.story === 'body')
+        const coveredBodyNodes = bodySegments.reduce(
+          (total, segment) => total + segment.toNodeIndex - segment.fromNodeIndex + 1,
+          0
+        )
         runtime.assertThat(
-          result.first.startPage === 1 &&
-            result.first.endPage === 1 &&
-            result.first.totalPages === 3 &&
-            result.first.nodes.length === 50 &&
+          result.first.totalPages === 3 &&
+            result.first.segments.length === 12 &&
             result.rest.startPage === 2 &&
             result.rest.endPage === 3 &&
-            result.rest.totalPages === 3 &&
-            result.rest.nodes.every((node) => node.type !== 'table_cell') &&
-            Array.from(longPreview).length === 160 &&
-            longPreview.startsWith('前'.repeat(100)) &&
-            longPreview.includes('…') &&
-            longPreview.endsWith('后'.repeat(59)) &&
-            tablePreview === 'A1 | A2 | B1 | B2 | C1 | LastCell' &&
-            result.rest.nodes.some(
-              (node) => node.story === 'header' && node.textPreview === 'Header outline'
+            result.rest.segments.length === 14 &&
+            coveredBodyNodes === 487 &&
+            allSegments.every((segment) => Array.from(segment.textMap).length <= 360) &&
+            allSegments.some(
+              (segment) =>
+                segment.textMap.includes('表格 2x2') &&
+                segment.fromNodeIndex === segment.toNodeIndex
+            ) &&
+            allSegments.some(
+              (segment) => segment.story === 'header' && segment.textMap.includes('Header outline')
             ) &&
             JSON.stringify(result.outOfRange).includes('invalid_input') &&
             JSON.stringify(result.outOfRange).includes('totalPages=3') &&
             result.empty.totalPages === 1 &&
-            result.empty.startPage === 1 &&
-            result.empty.endPage === 1 &&
-            result.empty.nodes.length === 0,
+            result.empty.segments.length === 0,
           {
-            name: 'docx-outline-logical-pages',
-            message: 'DOCX outline 应按 50 个节点逻辑分页并稳定执行首尾预览截取。',
+            name: 'docx-outline-segment-pages',
+            message: 'DOCX outline 应按每页 12 个 segment 分页，并完整覆盖所有根节点。',
             data: result
           }
         )

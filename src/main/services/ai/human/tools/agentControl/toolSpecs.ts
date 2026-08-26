@@ -54,7 +54,7 @@ export const UPDATE_PLAN_TOOL_SPEC: HumanToolSpec<
   outputSchema: UPDATE_PLAN_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'update_plan',
-    description: '初始化或更新当前任务的执行计划。仅当计划项状态或内容变化时才更新'
+    description: '更新当前任务的执行计划。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
@@ -62,7 +62,4 @@ export const UPDATE_PLAN_TOOL_SPEC: HumanToolSpec<
   })
 }
 
-export const AGENT_CONTROL_TOOL_SPECS = [
-  LEARN_SKILL_TOOL_SPEC,
-  UPDATE_PLAN_TOOL_SPEC
-] as const
+export const AGENT_CONTROL_TOOL_SPECS = [LEARN_SKILL_TOOL_SPEC, UPDATE_PLAN_TOOL_SPEC] as const

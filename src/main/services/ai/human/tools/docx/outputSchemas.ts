@@ -7,13 +7,15 @@ import {
   docxTableRowStyleSchema,
   docxTableStyleSchema
 } from './schemas'
-
-const docxVisualSummaryOutputSchema = z
-  .object({
-    count: z.number().int().positive(),
-    kinds: z.array(z.enum(['image', 'chart', 'diagram', 'shape', 'embedded_object'])).min(1)
-  })
-  .strict()
+import {
+  DOCX_OUTLINE_MAX_PAGE_COUNT,
+  DOCX_OUTLINE_SEGMENT_MAP_MAX_CHARS,
+  DOCX_OUTLINE_SEGMENTS_PER_PAGE,
+  DOCX_SEARCH_CONTEXT_NODE_COUNT,
+  DOCX_SEARCH_MAX_MATCHES,
+  DOCX_SEARCH_NEIGHBOR_PREVIEW_CHARS,
+  DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS
+} from './constants'
 
 const docxStoryOutputSchema = z
   .object({
@@ -29,60 +31,6 @@ const docxOutlineStoryOutputSchema = z.enum([
   'footnote',
   'endnote',
   'textbox'
-])
-
-const docxOutlineParagraphNodeOutputSchema = z
-  .object({
-    nodeId: z.string(),
-    type: z.literal('paragraph'),
-    nodeIndex: z.number().int(),
-    story: docxOutlineStoryOutputSchema,
-    textPreview: z.string(),
-    styleId: z.string().optional(),
-    visuals: docxVisualSummaryOutputSchema.optional()
-  })
-  .strict()
-
-const docxOutlineTableNodeOutputSchema = z
-  .object({
-    nodeId: z.string(),
-    type: z.literal('table'),
-    nodeIndex: z.number().int(),
-    story: docxOutlineStoryOutputSchema,
-    textPreview: z.string(),
-    rows: z.number().int(),
-    columns: z.number().int(),
-    visuals: docxVisualSummaryOutputSchema.optional()
-  })
-  .strict()
-
-const docxOutlineContentControlOutputSchema = z
-  .object({
-    nodeId: z.string(),
-    type: z.literal('content_control'),
-    nodeIndex: z.number().int(),
-    story: docxOutlineStoryOutputSchema,
-    textPreview: z.string(),
-    tag: z.string().optional()
-  })
-  .strict()
-
-const docxOutlineRevisionOutputSchema = z
-  .object({
-    nodeId: z.string(),
-    type: z.literal('revision'),
-    nodeIndex: z.number().int(),
-    story: docxOutlineStoryOutputSchema,
-    textPreview: z.string(),
-    revisionKind: z.enum(['insert', 'delete', 'move_from', 'move_to'])
-  })
-  .strict()
-
-const docxOutlineNodeOutputSchema = z.discriminatedUnion('type', [
-  docxOutlineParagraphNodeOutputSchema,
-  docxOutlineTableNodeOutputSchema,
-  docxOutlineContentControlOutputSchema,
-  docxOutlineRevisionOutputSchema
 ])
 
 const textNode = z.object({ type: z.literal('text'), text: z.string() }).strict()
@@ -351,38 +299,65 @@ export const docxOutlineOutputSchema = z
     startPage: z.number().int().min(1),
     endPage: z.number().int().min(1),
     totalPages: z.number().int().min(1),
-    nodes: z.array(docxOutlineNodeOutputSchema)
+    segments: z
+      .array(
+        z
+          .object({
+            story: docxOutlineStoryOutputSchema,
+            fromNodeIndex: z.number().int().min(0),
+            toNodeIndex: z.number().int().min(0),
+            textMap: z.string().max(DOCX_OUTLINE_SEGMENT_MAP_MAX_CHARS)
+          })
+          .strict()
+      )
+      .max(DOCX_OUTLINE_SEGMENTS_PER_PAGE * DOCX_OUTLINE_MAX_PAGE_COUNT)
   })
   .strict()
 
-export const docxSearchOutputSchema = docxBaseOutputSchema.extend({
-  sourcePath: z.string(),
-  mode: z.enum(['literal', 'regex', 'semantic']),
-  effectiveQuery: z.string(),
-  appliedAliases: z.array(
-    z.object({
-      from: z.string(),
-      to: z.string()
-    })
-  ),
-  totalMatchCount: z.number().int(),
-  returnedMatchCount: z.number().int(),
-  matches: z.array(
-    z.object({
-      nodeId: z.string(),
-      nodeIndex: z.number().int(),
-      type: z.enum(['paragraph', 'table', 'table_cell', 'content_control', 'revision']),
-      matchedText: z.string(),
-      previousNodeId: z.string().optional(),
-      nextNodeId: z.string().optional(),
-      tableNodeId: z.string().optional(),
-      text: z.string(),
-      offsets: z.array(z.object({ start: z.number().int(), end: z.number().int() })).optional(),
-      score: z.number().optional(),
-      story: docxStoryOutputSchema
-    })
-  )
-})
+const docxSearchNodeTypeOutputSchema = z.enum([
+  'paragraph',
+  'table',
+  'table_cell',
+  'content_control',
+  'revision'
+])
+const docxSearchNeighborOutputSchema = z
+  .object({
+    nodeId: z.string(),
+    nodeIndex: z.number().int(),
+    type: docxSearchNodeTypeOutputSchema,
+    textPreview: z.string().max(DOCX_SEARCH_NEIGHBOR_PREVIEW_CHARS)
+  })
+  .strict()
+
+export const docxSearchOutputSchema = z
+  .object({
+    totalMatchCount: z.number().int().min(0),
+    matches: z
+      .array(
+        z
+          .object({
+            nodeId: z.string(),
+            nodeIndex: z.number().int(),
+            type: docxSearchNodeTypeOutputSchema,
+            story: docxOutlineStoryOutputSchema,
+            matchText: z.string(),
+            textContext: z.string().max(DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS),
+            tableNodeId: z.string().optional(),
+            before: z
+              .array(docxSearchNeighborOutputSchema)
+              .max(DOCX_SEARCH_CONTEXT_NODE_COUNT)
+              .optional(),
+            after: z
+              .array(docxSearchNeighborOutputSchema)
+              .max(DOCX_SEARCH_CONTEXT_NODE_COUNT)
+              .optional()
+          })
+          .strict()
+      )
+      .max(DOCX_SEARCH_MAX_MATCHES)
+  })
+  .strict()
 
 export const docxReadOutputSchema = docxBaseOutputSchema.extend({
   sourcePath: z.string(),

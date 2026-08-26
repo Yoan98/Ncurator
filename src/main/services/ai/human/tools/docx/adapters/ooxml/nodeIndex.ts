@@ -20,7 +20,7 @@ import {
   buildTableDetail,
   readParagraphStyle,
   visualSummaryForNode
-} from './semanticTree'
+} from './contentTree'
 import {
   childElements,
   collectText,
@@ -720,6 +720,8 @@ export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> 
     throw new Error('docx missing word/document.xml')
   }
   const documentDom = parseXml(documentXml)
+  const stylesXml = await readZipText(zip, 'word/styles.xml')
+  const stylesDom = stylesXml ? parseXml(stylesXml) : undefined
   const documentRelationships = await parsePartRelationships(zip, 'word/document.xml')
   const relationshipTargets = documentRelationships.targets
   const relationshipTypes = documentRelationships.types
@@ -812,6 +814,7 @@ export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> 
     zip,
     documentXml,
     documentDom,
+    stylesDom,
     relationshipTargets,
     relationshipTypes,
     relationshipTargetModes,

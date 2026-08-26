@@ -224,21 +224,25 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     startPage: true,
     endPage: true,
     totalPages: true,
-    nodes: DOCX_NODE_WHITELIST
+    segments: {
+      story: true,
+      fromNodeIndex: true,
+      toNodeIndex: true,
+      textMap: true
+    }
   },
   docx_search: {
-    sourcePath: true,
-    currentRevisionRef: true,
-    mode: true,
-    effectiveQuery: true,
-    returnedMatchCount: true,
     totalMatchCount: true,
     matches: {
       nodeId: true,
       type: true,
       nodeIndex: true,
-      matchedText: true,
-      text: true
+      story: true,
+      matchText: true,
+      textContext: true,
+      tableNodeId: true,
+      before: DOCX_NODE_WHITELIST,
+      after: DOCX_NODE_WHITELIST
     }
   },
   docx_read_nodes: {

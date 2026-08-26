@@ -5,6 +5,12 @@ import { parentPort } from 'node:worker_threads'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import { extractLegacyDocBody, splitLegacyDocParagraphs } from '../utils/legacyDocReader'
 import type { DocxDetailedNode, DocxOperation, DocxOutlineNode, DocxSearchMatch } from '../types'
+import {
+  DOCX_SEARCH_CONTEXT_NODE_COUNT,
+  DOCX_SEARCH_NEIGHBOR_PREVIEW_CHARS,
+  DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS
+} from '../constants'
+import { buildDocxSegmentMap } from '../segmentMap'
 import { applyDocxOps, validateDocxOperationTargets } from '../adapters/ooxml/opExecutor'
 import {
   buildNodeIndex,
@@ -18,7 +24,6 @@ import {
 } from '../adapters/ooxml/nodeIndex'
 import { findNewDocxValidationProblems, validateDocxBuffer } from '../adapters/ooxml/validator'
 import { resolveDocxRelationshipTarget } from '../adapters/ooxml/relationshipPath'
-import { normalizeDocxSearchText } from '../utils/searchText'
 import type { DocSnapshot, DocxWorkerRequest, DocxWorkerResponse, RunSessions } from './types'
 import {
   createInitialIdentityIndex,
@@ -249,7 +254,7 @@ const replaceAllOffsets = (text: string, query: string): Array<{ start: number; 
   return offsets
 }
 
-const normalizeRegexPattern = (pattern: string): string => String(pattern || '').normalize('NFKC')
+const normalizeRegexPattern = (pattern: string): string => String(pattern || '')
 
 const regexOffsets = (text: string, pattern: string): Array<{ start: number; end: number }> => {
   const offsets: Array<{ start: number; end: number }> = []
@@ -273,44 +278,103 @@ const searchNodes = (input: {
   query: string
   mode: 'literal' | 'regex'
   scopeNodeIds: string[]
+  includeContext: boolean
 }): DocxSearchMatch[] => {
   const scope = input.scopeNodeIds.length > 0 ? new Set(input.scopeNodeIds) : null
   const out: DocxSearchMatch[] = []
 
-  for (const node of input.nodes) {
-    if (scope && !scope.has(node.nodeId)) continue
+  const searchableNodes = input.nodes.filter((node) => {
+    if (scope) return scope.has(node.nodeId)
+    return node.type !== 'table'
+  })
+  const contextNodes = input.nodes.filter(
+    (node) => node.type !== 'table' || scope?.has(node.nodeId)
+  )
+
+  const preview = (text: string): string => {
+    const normalized = text.replace(/\s+/gu, ' ').trim()
+    const values = Array.from(normalized)
+    if (values.length <= DOCX_SEARCH_NEIGHBOR_PREVIEW_CHARS) return normalized
+    const head = Math.ceil((DOCX_SEARCH_NEIGHBOR_PREVIEW_CHARS - 1) / 2)
+    return `${values.slice(0, head).join('')}…${values
+      .slice(-(DOCX_SEARCH_NEIGHBOR_PREVIEW_CHARS - head - 1))
+      .join('')}`
+  }
+
+  const centeredContext = (text: string, start: number, end: number): string => {
+    const values = Array.from(text)
+    if (values.length <= DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS) return text
+    const charStart = Array.from(text.slice(0, start)).length
+    const charEnd = charStart + Array.from(text.slice(start, end)).length
+    const center = Math.floor((charStart + charEnd) / 2)
+    let from = Math.max(0, center - Math.floor(DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS / 2))
+    let to = Math.min(values.length, from + DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS)
+    from = Math.max(0, to - DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS)
+    const prefix = from > 0 ? '…' : ''
+    const suffix = to < values.length ? '…' : ''
+    const contentBudget = DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS - Array.from(prefix + suffix).length
+    if (to - from > contentBudget) {
+      const excess = to - from - contentBudget
+      from += Math.floor(excess / 2)
+      to -= Math.ceil(excess / 2)
+    }
+    return `${prefix}${values.slice(from, to).join('')}${suffix}`
+  }
+
+  const neighbor = (node: DocxOutlineNode) => ({
+    nodeId: resolveInternalNodeId(input.snapshot.identity, node.nodeId),
+    nodeIndex: node.nodeIndex,
+    type: node.type,
+    textPreview: preview(node.text)
+  })
+
+  for (const node of searchableNodes) {
     const internalNodeId = resolveInternalNodeId(input.snapshot.identity, node.nodeId)
     const text = extractNodeText(input.snapshot.index, internalNodeId)
-    const normalizedText = normalizeDocxSearchText(text)
-    if (!normalizedText) continue
-    const normalizedQuery =
-      input.mode === 'literal'
-        ? normalizeDocxSearchText(input.query)
-        : normalizeRegexPattern(input.query)
+    if (!text) continue
     const offsets =
       input.mode === 'literal'
-        ? replaceAllOffsets(normalizedText, normalizedQuery)
-        : regexOffsets(normalizedText, normalizedQuery)
+        ? replaceAllOffsets(text, input.query)
+        : regexOffsets(text, input.query)
     if (offsets.length === 0) continue
     const structureFacts = getNodeStructureFacts(input.snapshot.index, internalNodeId)
     if (!structureFacts) continue
-    out.push(
-      toPublicSearchMatch(input.snapshot.identity, {
+    const storyContextNodes = contextNodes.filter(
+      (candidate) => candidate.story.storyId === node.story.storyId
+    )
+    const contextPosition = storyContextNodes.findIndex(
+      (candidate) => candidate.nodeId === node.nodeId
+    )
+    offsets.forEach((offset) => {
+      const before =
+        input.includeContext && contextPosition >= 0
+          ? storyContextNodes
+              .slice(Math.max(0, contextPosition - DOCX_SEARCH_CONTEXT_NODE_COUNT), contextPosition)
+              .map(neighbor)
+          : undefined
+      const after =
+        input.includeContext && contextPosition >= 0
+          ? storyContextNodes
+              .slice(contextPosition + 1, contextPosition + 1 + DOCX_SEARCH_CONTEXT_NODE_COUNT)
+              .map(neighbor)
+          : undefined
+      out.push({
         nodeId: internalNodeId,
         type: structureFacts.nodeType,
         nodeIndex: structureFacts.nodeIndex,
-        matchedText: input.query,
-        previousNodeId: structureFacts.previousNodeId,
-        nextNodeId: structureFacts.nextNodeId,
+        matchText: text.slice(offset.start, offset.end),
+        textContext: centeredContext(text, offset.start, offset.end),
         tableNodeId: structureFacts.tableNodeId,
-        text,
-        offsets,
-        story: structureFacts.story
+        story: structureFacts.story,
+        ...(before && before.length > 0 ? { before } : {}),
+        ...(after && after.length > 0 ? { after } : {})
       })
-    )
+    })
   }
 
   return out
+    .sort((left, right) => left.nodeIndex - right.nodeIndex)
+    .map((match) => toPublicSearchMatch(input.snapshot.identity, match))
 }
 
 export const handleDocxWorkerRequest = async (
@@ -377,6 +441,21 @@ export const handleDocxWorkerRequest = async (
         payload: {
           action: 'outline',
           nodes: outline.nodes.map((node) => toPublicOutlineNode(snapshot.identity, node))
+        }
+      }
+    }
+
+    if (request.action === 'segment_map') {
+      const snapshot = getSnapshot(request.runId, request.payload.docId)
+      return {
+        requestId: request.requestId,
+        ok: true,
+        payload: {
+          action: 'segment_map',
+          segments: buildDocxSegmentMap(
+            snapshot.index,
+            snapshot.format === 'docx' ? snapshot.bundle : undefined
+          )
         }
       }
     }
@@ -593,14 +672,6 @@ export const handleDocxWorkerRequest = async (
     }
 
     if (request.action === 'search') {
-      if (request.payload.mode === 'semantic') {
-        return {
-          requestId: request.requestId,
-          ok: false,
-          code: 'invalid_input',
-          error: 'semantic search is not implemented in this worker'
-        }
-      }
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       const mode = request.payload.mode
       if (mode === 'regex') {
@@ -620,7 +691,8 @@ export const handleDocxWorkerRequest = async (
         snapshot,
         query: request.payload.query,
         mode,
-        scopeNodeIds: request.payload.scopeNodeIds
+        scopeNodeIds: request.payload.scopeNodeIds,
+        includeContext: request.payload.includeContext
       })
       return {
         requestId: request.requestId,

@@ -6,7 +6,7 @@ import {
   buildNodeIndex,
   loadDocxBundle
 } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
-import { readParagraphStyle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/semanticTree'
+import { readParagraphStyle } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/contentTree'
 import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/tools/docx/worker/docxWorker'
 import { createReplaySnapshot } from '../../../../src/main/services/ai/human/tools/docx/review/replayTree'
 import { projectDocxReadNodes } from '../../../../src/main/services/ai/human/tools/docx/publicReadTree'
@@ -23,7 +23,7 @@ const findVisualId = (nodes: readonly DocxReadContentNode[]): string => {
   return ''
 }
 
-describe('docx recursive semantic tree visuals', () => {
+describe('docx recursive content tree visuals', () => {
   it('keeps content controls and revisions as real root nodes', () => {
     const xml = `
       <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"

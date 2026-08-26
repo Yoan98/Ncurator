@@ -214,14 +214,26 @@ export type DocxSearchMatch = {
   nodeId: string
   nodeIndex: number
   type: 'paragraph' | 'table' | 'table_cell' | 'content_control' | 'revision'
-  matchedText: string
-  previousNodeId?: string
-  nextNodeId?: string
+  matchText: string
+  textContext: string
   tableNodeId?: string
-  text: string
-  offsets?: Array<{ start: number; end: number }>
-  score?: number
   story: DocxStoryRef
+  before?: DocxSearchNeighbor[]
+  after?: DocxSearchNeighbor[]
+}
+
+export type DocxSearchNeighbor = {
+  nodeId: string
+  nodeIndex: number
+  type: 'paragraph' | 'table' | 'table_cell' | 'content_control' | 'revision'
+  textPreview: string
+}
+
+export type DocxOutlineSegment = {
+  story: DocxStoryRef['type']
+  fromNodeIndex: number
+  toNodeIndex: number
+  textMap: string
 }
 
 export type DocxChangedNode = {
@@ -253,22 +265,6 @@ export type DocxOpenStats = {
 }
 
 export type DocxCapabilityToolsInput = WorkspaceCapabilityBuildInput<DocxToolContext>
-
-export type SemanticDocIndexEntry = {
-  nodeId: string
-  nodeType: 'paragraph' | 'table_cell'
-  nodeIndex: number
-  previousNodeId?: string
-  nextNodeId?: string
-  tableNodeId?: string
-  text: string
-  embedding: Float32Array
-  story: DocxStoryRef
-}
-
-export type SemanticDocIndex = {
-  entries: SemanticDocIndexEntry[]
-}
 
 export type DocxRevision = {
   revisionRef: string
@@ -392,7 +388,6 @@ export type DocxReplayNode = {
 
 export type DocxCapabilityToolsRuntimeState = {
   sourcePathByDocId: Map<string, string>
-  semanticIndexByDocId: Map<string, SemanticDocIndex>
   readSessionBySourcePath: Map<string, DocxReadSession>
   replaySessionBySourcePath: Map<string, DocxReplaySession>
 }

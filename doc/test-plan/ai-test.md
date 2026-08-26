@@ -135,7 +135,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 
 #### docx 类别
 
-DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、outline 逻辑分页、单 operation 写入、最多 20 目标的原子格式化和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括分页边界与预览、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和行列/合并视觉丢失保护，不在本计划重复登记 Unit case。公开工具回归还必须执行全部局部格式 operation 的批量请求，并验证错误 ID 不会提交部分修改。
+DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segment map 逻辑分页、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、结构边界、TF-IDF/MMR 摘要预算、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和行列/合并视觉丢失保护。公开工具回归还必须验证错误 ID 不会提交部分修改。
 
 ##### `docx-v2-public-tools`
 
@@ -149,10 +149,10 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、outl
 ##### `docx-outline-pagination`
 
 - 测试类型：`backend`
-- What：`docx_read_outline` 对长文档执行 50 节点逻辑分页、连续两页读取和 160 字符首尾预览，并覆盖多 story、空文档及脚注/尾注系统分隔符过滤。
+- What：`docx_read_outline` 对长文档执行每页 12 个 segment 的逻辑分页、连续多页读取和 360 字符 `textMap`，并覆盖多 story、空文档及结构边界。
 - Why：outline 是 AI 低上下文定位入口，必须同时守住小返回、完整页数和跨 story 顺序。
-- How：创建超过 100 个根节点的真实 DOCX，分别读取第一页和后两页，并请求越界页码。
-- Oracle：返回 `startPage/endPage/totalPages`；不展开 table cell；超长预览为前 100 字符、`…`、后 59 字符；越界返回 `invalid_input` 和实际 `totalPages`。
+- How：创建超过 480 个根节点并带表格、页眉和超长中段的真实 DOCX，分别读取第一页和后两页，并请求越界页码。
+- Oracle：返回 `startPage/endPage/totalPages/segments`；根节点无遗漏、无重叠，table 和跨 story 独立分段，`textMap` 不超过 360 字符且不返回 nodeId；越界返回 `invalid_input` 和实际 `totalPages`。
 - Not：逻辑页不是 Word 视觉页，不调用 live 模型。
 
 ##### `docx-auto-open-no-fake-failure`
@@ -173,23 +173,23 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、outl
 - Oracle：Review 只含 A 与 C，不含 B；恢复 A 的文档不生成记录；正文与页眉 Diff 都有红删绿增；只有 package part 变化时出现“文档级变更”摘要；正式文件没有 Diff 标记；回退逐字节恢复 Source。
 - Not：不运行 Workbench UI，不验证 live 模型策略。
 
-##### `docx-search-unicode-normalization-contract`
+##### `docx-search-original-text-contract`
 
 - 测试类型：`backend`
-- What：literal 搜索支持 Unicode 规范化。
-- Why：全角、兼容字形和组合字符不应导致 AI 无法定位节点。
+- What：literal 与 regex 都只搜索完整原文，不隐式改写 Unicode 字形。
+- Why：工具必须返回真实出现位置，不能把归一化后的偏移误当成原文偏移。
 - How：在真实 DOCX 中写入兼容字形并执行 `docx_search`。
-- Oracle：返回命中节点的稳定 `nodeId`、当前 `nodeIndex` 和文本。
-- Not：不验证 semantic embedding。
+- Oracle：兼容字形的精确查询命中并返回稳定 `nodeId`、当前 `nodeIndex`、`matchText` 和 `textContext`；不同字形不命中。
+- Not：不验证知识库语义检索。
 
-##### `docx-search-literal-alias-fallback`
+##### `docx-search-literal-contract`
 
 - 测试类型：`backend`
-- What：literal 搜索在直接匹配为空时使用受控别名回退。
-- Why：用户和文档常用词不同，AI 仍需获得可继续 read 的节点。
-- How：以“过拟合/过度拟合”等 fixture 执行搜索。
-- Oracle：回退命中正确节点，返回的 `nodeId` 可直接交给 `docx_read_nodes`。
-- Not：不扩展为无边界同义词生成。
+- What：literal 搜索统计每个实际命中，并可返回前后各 2 个同 story 节点。
+- Why：同节点多次出现也必须准确计数，邻居上下文用于一次调用判断位置。
+- How：在五个连续段落的中心段写入两个相同关键词，分别执行精确查询和近似但不同的查询。
+- Oracle：精确查询 `totalMatchCount=2`，两个 match 使用同一稳定 `nodeId`，邻居各 2 个；不同查询不触发硬编码别名。
+- Not：不调用 LLM 或 embedding。
 
 ##### `docx-search-regex-contract`
 
@@ -199,15 +199,6 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、outl
 - How：对真实段落执行有效与无效 regex。
 - Oracle：有效表达式按文档顺序返回节点；无效表达式不修改会话并返回输入错误。
 - Not：不验证 LLM 是否会自行编写正则。
-
-##### `docx-search-semantic-contract`
-
-- 测试类型：`backend`
-- What：semantic 搜索基于 outline 可搜索节点构建临时索引。
-- Why：长文档中 AI 需要先缩圈，再按 `nodeId` 精读。
-- How：对真实 DOCX 节点生成 embedding 并搜索语义相关内容。
-- Oracle：结果来自当前 Working 文档，写入后索引可更新；不持久化重复父链或 flowIndex。
-- Not：不验证 workspace KB 索引。
 
 #### text-file 类别
 
@@ -668,11 +659,11 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、outl
 ##### `ai-run-service-embedding-preflight`
 
 - 测试类型：`backend`
-- What：`AiRunService` 会在进入 `human` 前执行有界 embedding preflight，并支撑后续 semantic docx 搜索。
-- Why：embedding 是 semantic 工具链的基础设施；preflight 应在模型可用时提前完成，但不能无限阻塞 AI run 启动。
-- How：通过 `AiRunService.getInstance().run(...)` 启动真实 run，在 preflight 成功后执行 `docx_search(mode=semantic)`。
-- Oracle：preflight 被调用一次；任务完成；semantic 搜索返回带 score 的真实命中。
-- Not：不验证 preflight 超时后的工具层降级；该场景由 Workbench 持久化 E2E 和 `kb_search(keyword/auto)` 相关 case 覆盖。
+- What：`AiRunService` 会在进入 `human` 前执行有界 embedding preflight，知识库语义检索可继续复用该基础设施。
+- Why：知识库 embedding 初始化应在模型可用时提前完成，但不能无限阻塞 AI run 启动。
+- How：通过 `AiRunService.getInstance().run(...)` 启动真实 run，在 preflight 成功后执行普通 DOCX literal 读取链路。
+- Oracle：preflight 被调用一次；任务完成；DOCX literal 搜索返回真实命中且不依赖 embedding。
+- Not：DOCX 不提供向量搜索模式；知识库 semantic/auto 由 KB case 覆盖。
 
 ##### `ai-run-service-embedding-preflight-failure`
 

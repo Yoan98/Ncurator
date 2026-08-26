@@ -110,16 +110,12 @@ describe('ai unit human tool result renderers', () => {
         startPage: 1,
         endPage: 1,
         totalPages: 3,
-        nodes: [
+        segments: [
           {
-            nodeId: 'node_4',
-            type: 'table',
-            nodeIndex: 4,
             story: 'body',
-            rows: 2,
-            columns: 3,
-            textPreview: '视觉方法表',
-            visuals: { count: 2, kinds: ['image', 'chart'] }
+            fromNodeIndex: 4,
+            toNodeIndex: 4,
+            textMap: '结构：表格 2x3 视觉方法表\n关键词：视觉方法\n代表句：[4] 视觉方法表'
           }
         ]
       }
@@ -127,11 +123,40 @@ describe('ai unit human tool result renderers', () => {
 
     expect(rendered).toContain('startPage=1')
     expect(rendered).toContain('totalPages=3')
-    expect(rendered).toContain('rows=2')
-    expect(rendered).toContain('columns=3')
-    expect(rendered).toContain('visualCount=2')
-    expect(rendered).toContain('visualKinds=image,chart')
-    expect(rendered).not.toContain('table_cell')
+    expect(rendered).toContain('fromNodeIndex=4')
+    expect(rendered).toContain('toNodeIndex=4')
+    expect(rendered).toContain('视觉方法表')
+    expect(rendered).not.toContain('nodeId')
+  })
+
+  it('renders DOCX match-centered and neighboring context', () => {
+    const rendered = renderToolResultDataText({
+      toolName: 'docx_search',
+      data: {
+        totalMatchCount: 1,
+        matches: [
+          {
+            nodeId: 'node_3',
+            nodeIndex: 3,
+            type: 'paragraph',
+            story: 'body',
+            matchText: '过度拟合',
+            textContext: '训练过久时可能出现过度拟合。',
+            before: [
+              { nodeId: 'node_2', nodeIndex: 2, type: 'paragraph', textPreview: '训练背景' }
+            ],
+            after: [{ nodeId: 'node_4', nodeIndex: 4, type: 'table', textPreview: '缓解方法' }]
+          }
+        ]
+      }
+    })
+
+    expect(rendered).toContain('matchText=过度拟合')
+    expect(rendered).toContain('训练过久时可能出现过度拟合')
+    expect(rendered).toContain('node_2')
+    expect(rendered).toContain('训练背景')
+    expect(rendered).toContain('node_4')
+    expect(rendered).toContain('缓解方法')
   })
 
   it('renders DOCX mutation changes without internal revision fields', () => {

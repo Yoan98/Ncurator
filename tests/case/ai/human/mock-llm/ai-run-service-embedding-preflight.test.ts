@@ -33,7 +33,7 @@ describe('ai human mock-llm backend', () => {
           created_at: Date.now(),
           workspace_id: 'test-workspace'
         })
-        await writeTestDocxFile(runtime.workspaceRoot, 'semantic-docx.docx', [
+        await writeTestDocxFile(runtime.workspaceRoot, 'literal-docx.docx', [
           {
             type: 'paragraph',
             text: '反走样是在采样不足时出现的锯齿现象。'
@@ -100,11 +100,11 @@ describe('ai human mock-llm backend', () => {
                   output: buildToolDecision({
                     toolName: 'docx_search',
                     args: {
-                      sourcePath: path.join(runtime.workspaceRoot, 'semantic-docx.docx'),
-                      query: '边缘锯齿怎么处理',
-                      mode: 'semantic'
+                      sourcePath: path.join(runtime.workspaceRoot, 'literal-docx.docx'),
+                      query: '锯齿现象',
+                      mode: 'literal'
                     },
-                    summary: '做语义搜索'
+                    summary: '搜索完整原文'
                   })
                 },
                 {
@@ -135,13 +135,12 @@ describe('ai human mock-llm backend', () => {
           result.initialEmbeddingStatus === 'uninitialized' &&
             result.ensureReadyCalls === 1 &&
             result.result.status === 'completed' &&
-            docxSearchResult.mode === 'semantic' &&
-            docxSearchResult.matches.length >= 1 &&
-            typeof docxSearchResult.matches[0]?.score === 'number',
+            docxSearchResult.matches.length === 1 &&
+            docxSearchResult.matches[0]?.matchText === '锯齿现象',
           {
             name: 'ai-run-service-preflights-embedding-before-human',
             message:
-              'AiRunService 应在进入 human 前完成 embedding preflight，并让后续 docx semantic 搜索直接可用。',
+              'AiRunService 应在进入 human 前完成 embedding preflight，DOCX literal 搜索不依赖 embedding。',
             data: {
               initialEmbeddingStatus: result.initialEmbeddingStatus,
               ensureReadyCalls: result.ensureReadyCalls,

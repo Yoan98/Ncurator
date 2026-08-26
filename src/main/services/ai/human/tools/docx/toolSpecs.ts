@@ -51,7 +51,7 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   promptSpec: {
     name: 'docx_read_outline',
     description:
-      '按逻辑分页返回 Word 文档的轻量顺序和结构摘要；逻辑页不代表 Word 排版页面。返回临时 nodeIndex 与稳定 nodeId。'
+      '按逻辑分页返回 Word 文档的自适应 segment map，用紧凑结构锚点、关键词和原文代表句概览全文；逻辑页不代表 Word 排版页面。'
   },
   resolveExecutionMeta: readMeta,
   activityActionType: 'docx_read_outline'
@@ -71,7 +71,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   promptSpec: {
     name: 'docx_search',
     description:
-      '在 Word 文档中按 literal、regex 或 semantic 检索文字，返回可直接交给读取和写入工具的 nodeId。'
+      '在 Word 完整原文中按 literal 或 regex 检索，每个实际命中返回稳定 nodeId、命中附近文字，并可附带同一 story 的前后节点预览。'
   },
   resolveExecutionMeta: readMeta,
   activityActionType: 'docx_search'
@@ -140,35 +140,35 @@ export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineWriteSpec({
   name: 'docx_content_edit',
   schema: docxContentEditSchema,
   description:
-    '创建 DOCX 或局部修改普通内容节点。一次只执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一；不负责格式、表格结构、媒体、批注或修订。'
+    '创建 DOCX 或局部修改普通内容节点。一次只执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一；不负责格式、表格结构、媒体、批注或修订。成功返回的 changes 已完成 OOXML、关系、视觉丢失和受影响区域回读校验。'
 })
 
 export const DOCX_FORMAT_TOOL_SPEC = defineWriteSpec({
   name: 'docx_format',
   schema: docxFormatSchema,
   description:
-    '原子修改一个或多个 DOCX 节点的文字、段落、表格、行、单元格、section、命名样式或编号；同一局部 operation 对所有目标应用同一格式 patch。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。'
+    '原子修改一个或多个 DOCX 节点的文字、段落、表格、行、单元格、section、命名样式或编号；同一局部 operation 对所有目标应用同一格式 patch。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。成功返回的 changes 已完成 OOXML、关系、视觉丢失和受影响区域回读校验。'
 })
 
 export const DOCX_TABLE_EDIT_TOOL_SPEC = defineWriteSpec({
   name: 'docx_table_edit',
   schema: docxTableEditSchema,
   description:
-    '创建、删除或修改 DOCX 表格结构，包括行列增删和单元格合并拆分；单元格文字用 docx_content_edit，外观用 docx_format。'
+    '创建、删除或修改 DOCX 表格结构，包括行列增删和单元格合并拆分；单元格文字用 docx_content_edit，外观用 docx_format。成功返回的 changes 已完成 OOXML、关系、视觉丢失和受影响区域回读校验。'
 })
 
 export const DOCX_MEDIA_EDIT_TOOL_SPEC = defineWriteSpec({
   name: 'docx_media_edit',
   schema: docxMediaEditSchema,
   description:
-    '插入、替换、删除或修改 DOCX 图片等视觉对象，负责媒体文件、relationship、尺寸和替代文字。'
+    '插入、替换、删除或修改 DOCX 图片等视觉对象，负责媒体文件、relationship、尺寸和替代文字。成功返回的 changes 已完成 OOXML、关系、视觉丢失和受影响区域回读校验。'
 })
 
 export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineWriteSpec({
   name: 'docx_comments_revisions',
   schema: docxCommentsRevisionsSchema,
   description:
-    '新增、修改、回复或删除 Word 批注，切换修订模式，以及接受或拒绝 Word 修订；这不是文档读取检查工具。'
+    '新增、修改、回复或删除 Word 批注，切换修订模式，以及接受或拒绝 Word 修订；这不是文档读取检查工具。成功返回的 changes 是提交后的最终实体状态。'
 })
 
 export const DOCX_READ_TOOL_SPECS = [

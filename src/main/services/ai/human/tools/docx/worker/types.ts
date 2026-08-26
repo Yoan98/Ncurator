@@ -4,6 +4,7 @@ import type {
   DocxOpenStats,
   DocxOperation,
   DocxOutlineNode,
+  DocxOutlineSegment,
   DocxSearchMatch,
   DocxSearchMode,
   DocxValidationProblem
@@ -14,6 +15,7 @@ import type { DocxIdentityIndex } from './identity'
 export type DocxWorkerAction =
   | 'open'
   | 'outline'
+  | 'segment_map'
   | 'get_node'
   | 'get_node_layout'
   | 'get_nodes_by_ids'
@@ -53,6 +55,12 @@ export type DocxWorkerRequest =
       payload: {
         sourcePath: string
       }
+    }
+  | {
+      requestId: string
+      runId: string
+      action: 'segment_map'
+      payload: { docId: string }
     }
   | {
       requestId: string
@@ -111,6 +119,7 @@ export type DocxWorkerRequest =
         query: string
         mode: DocxSearchMode
         scopeNodeIds: string[]
+        includeContext: boolean
       }
     }
   | {
@@ -181,6 +190,10 @@ export type DocxWorkerSuccessPayload =
   | {
       action: 'outline'
       nodes: DocxOutlineNode[]
+    }
+  | {
+      action: 'segment_map'
+      segments: DocxOutlineSegment[]
     }
   | {
       action: 'get_node'

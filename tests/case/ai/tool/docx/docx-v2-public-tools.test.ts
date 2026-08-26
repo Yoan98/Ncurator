@@ -5,21 +5,14 @@ import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/ba
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxPublicReadRootNode } from '../../../../../src/main/services/ai/human/tools/docx/nodeTypes'
 
-type OutlineNode = {
-  nodeId: string
-  nodeIndex: number
-  type: 'paragraph' | 'table' | 'content_control' | 'revision'
-  textPreview: string
-}
-
 type OutlineResult = {
   startPage: number
   endPage: number
   totalPages: number
-  nodes: OutlineNode[]
+  segments: Array<{ story: string; fromNodeIndex: number; toNodeIndex: number; textMap: string }>
 }
 type SearchResult = {
-  matches: Array<{ nodeId: string; nodeIndex: number; text: string }>
+  matches: Array<{ nodeId: string; nodeIndex: number; tableNodeId?: string; textContext: string }>
 }
 type ReadResult = { sourcePath: string; nodes: DocxPublicReadRootNode[] }
 type MutationResult = {
@@ -83,14 +76,26 @@ describe('ai tool docx v2 backend', () => {
             startPage: 1,
             pageCount: 1
           })
-          const paragraph = outline.nodes.find((node) => node.type === 'paragraph')!
-          const secondParagraph = outline.nodes.find(
-            (node) => node.type === 'paragraph' && node.nodeId !== paragraph.nodeId
-          )!
-          const table = outline.nodes.find((node) => node.type === 'table')!
-          const secondTable = outline.nodes.find(
-            (node) => node.type === 'table' && node.nodeId !== table.nodeId
-          )!
+          const alphaSearch = await harness.invoke<SearchResult>('docx_search', {
+            sourcePath,
+            query: 'Alpha paragraph'
+          })
+          const secondSearch = await harness.invoke<SearchResult>('docx_search', {
+            sourcePath,
+            query: 'Second paragraph'
+          })
+          const firstTableSearch = await harness.invoke<SearchResult>('docx_search', {
+            sourcePath,
+            query: 'Risk'
+          })
+          const secondTableSearch = await harness.invoke<SearchResult>('docx_search', {
+            sourcePath,
+            query: 'Score'
+          })
+          const paragraph = alphaSearch.matches[0]!
+          const secondParagraph = secondSearch.matches[0]!
+          const table = { nodeId: firstTableSearch.matches[0]!.tableNodeId! }
+          const secondTable = { nodeId: secondTableSearch.matches[0]!.tableNodeId! }
           const readBefore = await harness.invoke<ReadResult>('docx_read_nodes', {
             sourcePath,
             range: { type: 'node_ids', nodeIds: [paragraph.nodeId, table.nodeId] }
@@ -245,10 +250,10 @@ describe('ai tool docx v2 backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.outline.totalPages === 1 &&
-            result.outline.nodes.filter((node) => node.type === 'paragraph' && node.nodeIndex < 3)
+            result.outline.segments.length === 3 &&
+            result.outline.segments.filter((segment) => segment.textMap.includes('表格 2x2'))
               .length === 2 &&
-            result.outline.nodes.filter((node) => node.type === 'table').length === 2 &&
-            result.outline.nodes.every((node) => node.type !== 'table_cell') &&
+            !JSON.stringify(result.outline).includes('nodeId') &&
             result.created.changes.length === 2 &&
             result.created.changes.every((change) => change.kind === 'created') &&
             result.readBefore.nodes.length === 2 &&

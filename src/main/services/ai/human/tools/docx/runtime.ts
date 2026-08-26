@@ -14,13 +14,11 @@ import type {
   DocxReadSession,
   DocxReplaySession,
   DocxReplaySnapshot,
-  DocxRevision,
-  SemanticDocIndex
+  DocxRevision
 } from './types'
 import { getDocxWorkerClient } from './worker/docxWorkerClient'
 import type { DocxWorkerRequest, DocxWorkerResponse } from './worker/types'
 import { resolveToolPath } from '../terminal/commandPolicy'
-import { isSemanticSearchableNode, splitEmbeddingRows } from './semanticSearch'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolEventEmitter } from '../utils/toolEvents'
 import {
@@ -145,7 +143,6 @@ export type DocxToolRuntime = {
     summary?: string
   }) => Promise<{ currentRevisionRef: string; previousRevisionRef: string }>
   expandOpsForReview: (docId: string, ops: DocxOperation[]) => Promise<DocxOperation[]>
-  buildSemanticDocIndex: (docId: string) => Promise<SemanticDocIndex>
   cloneActiveReplaySession: (
     sourcePath: string
   ) => { ok: true; session: DocxReplaySession } | { ok: false; error: string }
@@ -174,7 +171,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
   const replaySessionBySourcePath = new Map<string, DocxReplaySession>()
   const state: DocxCapabilityToolsRuntimeState = {
     sourcePathByDocId: new Map(),
-    semanticIndexByDocId: new Map(),
     readSessionBySourcePath,
     replaySessionBySourcePath
   }
@@ -910,52 +906,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
       })
     )
 
-  const buildSemanticDocIndex = async (docId: string): Promise<SemanticDocIndex> => {
-    const cached = state.semanticIndexByDocId.get(docId)
-    if (cached) return cached
-
-    const outline = await fetchOutlineNodes({
-      docId,
-      fromNodeIndex: 0,
-      toNodeIndex: Number.MAX_SAFE_INTEGER,
-      includeCells: true
-    })
-
-    const searchableNodes = outline.filter(isSemanticSearchableNode)
-    const texts = searchableNodes.map((node) => node.text.trim()).filter(Boolean)
-    const nodes = searchableNodes.filter((node) => node.text.trim().length > 0)
-
-    if (nodes.length === 0) {
-      const emptyIndex = { entries: [] }
-      state.semanticIndexByDocId.set(docId, emptyIndex)
-      return emptyIndex
-    }
-
-    const embeddings = await input.ctx.embeddingService.embed(texts)
-    const rows = splitEmbeddingRows(embeddings.data, embeddings.dims)
-    if (rows.length !== nodes.length) {
-      throw new Error(
-        `semantic index row mismatch: nodes=${String(nodes.length)}, rows=${String(rows.length)}`
-      )
-    }
-
-    const semanticIndex: SemanticDocIndex = {
-      entries: nodes.map((node, indexRow) => ({
-        nodeId: node.nodeId,
-        nodeType: node.type,
-        nodeIndex: node.nodeIndex,
-        previousNodeId: node.previousNodeId,
-        nextNodeId: node.nextNodeId,
-        tableNodeId: node.type === 'table_cell' ? node.tableNodeId : undefined,
-        text: node.text,
-        story: node.story,
-        embedding: rows[indexRow]
-      }))
-    }
-    state.semanticIndexByDocId.set(docId, semanticIndex)
-    return semanticIndex
-  }
-
   const buildResourceContext = (params: {
     sourcePath: string
     effectKind: DocxToolResourceContext['effectKind']
@@ -1056,7 +1006,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     registerCreatedDocument,
     registerRevision,
     expandOpsForReview,
-    buildSemanticDocIndex,
     cloneActiveReplaySession,
     buildReplaySnapshotForDoc,
     applyTempRevisionToReplaySession,

@@ -150,13 +150,22 @@ const renderDocxSearchMatches = (value: JsonValue | undefined): string => {
       const nodeId = readStringField(item, 'nodeId') || `item-${index + 1}`
       const nodeType = readStringField(item, 'type')
       const nodeIndex = readNumberField(item, 'nodeIndex')
-      const text = readStringField(item, 'text') || JSON.stringify(item)
+      const text = readStringField(item, 'textContext') || JSON.stringify(item)
       const meta =
         renderKeyValuePairs([
           ['type', nodeType],
-          ['nodeIndex', typeof nodeIndex === 'number' ? String(nodeIndex) : undefined]
+          ['nodeIndex', typeof nodeIndex === 'number' ? String(nodeIndex) : undefined],
+          ['story', readStringField(item, 'story')],
+          ['matchText', readStringField(item, 'matchText')],
+          ['tableNodeId', readStringField(item, 'tableNodeId')]
         ]) || undefined
-      return `- ${nodeId}${meta ? `（${meta}）` : ''}：${text}`
+      const neighbors = [
+        Array.isArray(item.before) ? `  before:\n${renderDocxNodes(item.before)}` : '',
+        Array.isArray(item.after) ? `  after:\n${renderDocxNodes(item.after)}` : ''
+      ]
+        .filter(Boolean)
+        .join('\n')
+      return `- ${nodeId}${meta ? `（${meta}）` : ''}：${text}${neighbors ? `\n${neighbors}` : ''}`
     })
     .join('\n')
 }
@@ -172,14 +181,7 @@ const renderDocxReadResult = (obj: JsonObject): string =>
 
 const renderDocxSearchResult = (obj: JsonObject): string =>
   [
-    renderKeyValuePairs([
-      ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
-      ['mode', readStringField(obj, 'mode')],
-      ['effectiveQuery', readStringField(obj, 'effectiveQuery')],
-      ['returnedMatchCount', readNumberTextField(obj, 'returnedMatchCount')],
-      ['totalMatchCount', readNumberTextField(obj, 'totalMatchCount')]
-    ]),
+    renderKeyValuePairs([['totalMatchCount', readNumberTextField(obj, 'totalMatchCount')]]),
     'matches:',
     renderDocxSearchMatches(obj.matches)
   ]
@@ -193,8 +195,19 @@ const renderDocxOutlineResult = (obj: JsonObject): string =>
       ['endPage', readNumberTextField(obj, 'endPage')],
       ['totalPages', readNumberTextField(obj, 'totalPages')]
     ]),
-    'nodes:',
-    renderDocxNodes(obj.nodes)
+    'segments:',
+    Array.isArray(obj.segments) && obj.segments.length > 0
+      ? obj.segments
+          .map((segment, index) => {
+            if (!isJsonObject(segment)) return renderGenericArrayItem(segment, index)
+            return `- ${renderKeyValuePairs([
+              ['story', readStringField(segment, 'story')],
+              ['fromNodeIndex', readNumberTextField(segment, 'fromNodeIndex')],
+              ['toNodeIndex', readNumberTextField(segment, 'toNodeIndex')]
+            ])}：${readStringField(segment, 'textMap') || ''}`
+          })
+          .join('\n')
+      : 'none'
   ]
     .filter(Boolean)
     .join('\n')

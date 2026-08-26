@@ -10,8 +10,7 @@ import {
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxPublicReadRootNode } from '../../../../../src/main/services/ai/human/tools/docx/nodeTypes'
 
-type OutlineNode = { nodeId: string; type: string; textPreview: string }
-type OutlineResult = { nodes: OutlineNode[] }
+type SearchResult = { matches: Array<{ nodeId: string; tableNodeId?: string }> }
 
 const documentXml = async (filePath: string): Promise<string> => {
   const zip = await JSZip.loadAsync(await fs.readFile(filePath))
@@ -99,14 +98,17 @@ describe('ai tool docx v2 apply and diff backend', () => {
         const harness = createDocxToolHarness(runtime)
         try {
           harness.ctx.beginDocxApplyRun()
-          const outline = await harness.invoke<OutlineResult>('docx_read_outline', {
-            sourcePath,
-            startPage: 1,
-            pageCount: 1
-          })
-          const paragraph = outline.nodes.find((node) => node.textPreview === 'Version A')!
-          const header = outline.nodes.find((node) => node.textPreview === 'Header A')!
-          const table = outline.nodes.find((node) => node.type === 'table')!
+          const paragraph = (
+            await harness.invoke<SearchResult>('docx_search', { sourcePath, query: 'Version A' })
+          ).matches[0]!
+          const header = (
+            await harness.invoke<SearchResult>('docx_search', { sourcePath, query: 'Header A' })
+          ).matches[0]!
+          const table = {
+            nodeId: (
+              await harness.invoke<SearchResult>('docx_search', { sourcePath, query: 'Capability' })
+            ).matches[0]!.tableNodeId!
+          }
           await harness.invoke('docx_content_edit', {
             sourcePath,
             type: 'replace_text',
@@ -152,16 +154,17 @@ describe('ai tool docx v2 apply and diff backend', () => {
             type: 'delete_named_style',
             styleId: 'TemporaryAuditStyle'
           })
-          const batchOutline = await harness.invoke<OutlineResult>('docx_read_outline', {
-            sourcePath: batchFormatPath,
-            startPage: 1,
-            pageCount: 1
-          })
+          const batchNode = (
+            await harness.invoke<SearchResult>('docx_search', {
+              sourcePath: batchFormatPath,
+              query: 'First'
+            })
+          ).matches[0]!
           const batchRead = await harness.invoke<{ nodes: DocxPublicReadRootNode[] }>(
             'docx_read_nodes',
             {
               sourcePath: batchFormatPath,
-              range: { type: 'node_ids', nodeIds: [batchOutline.nodes[0]!.nodeId] }
+              range: { type: 'node_ids', nodeIds: [batchNode.nodeId] }
             }
           )
           const batchParagraph = batchRead.nodes[0]
@@ -180,15 +183,16 @@ describe('ai tool docx v2 apply and diff backend', () => {
             ],
             format: { bold: true }
           })
-          const restoredCommentOutline = await harness.invoke<OutlineResult>('docx_read_outline', {
-            sourcePath: restoredCommentPath,
-            startPage: 1,
-            pageCount: 1
-          })
+          const restoredCommentNode = (
+            await harness.invoke<SearchResult>('docx_search', {
+              sourcePath: restoredCommentPath,
+              query: 'Comment restored'
+            })
+          ).matches[0]!
           await harness.invoke('docx_comments_revisions', {
             sourcePath: restoredCommentPath,
             type: 'add_comment',
-            nodeId: restoredCommentOutline.nodes[0]!.nodeId,
+            nodeId: restoredCommentNode.nodeId,
             text: 'Comment',
             comment: 'Temporary comment'
           })
@@ -198,14 +202,12 @@ describe('ai tool docx v2 apply and diff backend', () => {
             commentId: '0'
           })
 
-          const restoredOutline = await harness.invoke<OutlineResult>('docx_read_outline', {
-            sourcePath: restoredPath,
-            startPage: 1,
-            pageCount: 1
-          })
-          const restoredNode = restoredOutline.nodes.find(
-            (node) => node.textPreview === 'Restore A'
-          )!
+          const restoredNode = (
+            await harness.invoke<SearchResult>('docx_search', {
+              sourcePath: restoredPath,
+              query: 'Restore A'
+            })
+          ).matches[0]!
           await harness.invoke('docx_content_edit', {
             sourcePath: restoredPath,
             type: 'replace_text',

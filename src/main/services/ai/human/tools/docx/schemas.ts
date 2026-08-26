@@ -30,7 +30,7 @@ export const tableSpecSchema = z.object({
 })
 
 export const nodeSpecSchema = z.union([paragraphSpecSchema, tableSpecSchema])
-export const docxSearchModeSchema = z.enum(['literal', 'regex', 'semantic'])
+export const docxSearchModeSchema = z.enum(['literal', 'regex'])
 
 const docxPointSchema = z.number().min(0)
 const docxLengthSchema = z
@@ -267,7 +267,11 @@ export const docxSearchSchema = z
     sourcePath: sourcePathField,
     query: z.string().min(1).describe('要检索的文字或正则表达式'),
     mode: docxSearchModeSchema.optional().describe('检索模式，缺省为 literal'),
-    nodeIds: z.array(nodeIdField).min(1).optional().describe('可选的搜索范围；缺省搜索整个文档')
+    nodeIds: z.array(nodeIdField).min(1).optional().describe('可选的搜索范围；缺省搜索整个文档'),
+    includeContext: z
+      .boolean()
+      .optional()
+      .describe('是否返回命中节点在同一 story 中前后各 2 个根节点的预览')
   })
   .strict()
 

@@ -110,6 +110,7 @@ export type ParsedDocxBundle = {
   zip: JSZip
   documentXml: string
   documentDom: Document
+  stylesDom?: Document
   relationshipTargets: Map<string, string>
   relationshipTypes: Map<string, string>
   relationshipTargetModes: Map<string, string>

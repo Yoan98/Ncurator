@@ -5,14 +5,14 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxSearchResult } from './testUtils'
 
 describe('ai tool docx backend', () => {
-  it('docx-search-unicode-normalization-contract', async () => {
+  it('docx-search-original-text-contract', async () => {
     await runBackendCase({
-      caseId: 'docx-search-unicode-normalization-contract',
+      caseId: 'docx-search-original-text-contract',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 docx_search 会对兼容字形做归一化，普通查询与 regex 都可命中真实节点。',
+      description: '验证 literal 与 regex 都搜索完整原文，不隐式改写 Unicode 字形。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -29,19 +29,18 @@ describe('ai tool docx backend', () => {
 
         const harness = createDocxToolHarness(runtime)
         try {
-          const literal = await harness.invoke<DocxSearchResult>('docx_search', {
+          const normalizedLiteral = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: path.join(runtime.workspaceRoot, 'unicode-normalization.docx'),
             query: '反走样'
           })
-          const regex = await harness.invoke<DocxSearchResult>('docx_search', {
+          const exactLiteral = await harness.invoke<DocxSearchResult>('docx_search', {
             sourcePath: path.join(runtime.workspaceRoot, 'unicode-normalization.docx'),
-            query: '反走样',
-            mode: 'regex'
+            query: '反⾛样'
           })
 
           return {
-            literal,
-            regex
+            normalizedLiteral,
+            exactLiteral
           }
         } finally {
           await harness.release()
@@ -49,13 +48,12 @@ describe('ai tool docx backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.literal.matches.length === 1 &&
-            result.regex.matches.length === 1 &&
-            result.literal.matches[0]?.nodeId === result.regex.matches[0]?.nodeId &&
-            result.literal.matches[0]?.text.includes('反⾛样'),
+          result.normalizedLiteral.matches.length === 0 &&
+            result.exactLiteral.matches.length === 1 &&
+            result.exactLiteral.matches[0]?.matchText === '反⾛样',
           {
-            name: 'docx-search-normalizes-compatibility-glyphs',
-            message: 'literal / regex 搜索都应能用普通查询命中兼容字形文本。',
+            name: 'docx-search-preserves-original-glyphs',
+            message: 'DOCX 搜索必须只返回完整原文中的实际命中。',
             data: result
           }
         )

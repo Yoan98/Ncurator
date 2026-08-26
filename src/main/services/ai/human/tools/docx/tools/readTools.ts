@@ -1,7 +1,6 @@
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
 import type { DocxToolRuntime } from '../runtime'
-import type { DocxDetailedNode, DocxOutlineNode, DocxReadSession, DocxSearchMatch } from '../types'
+import type { DocxDetailedNode, DocxReadSession, DocxSearchMatch } from '../types'
 import {
   DOCX_READ_OUTLINE_TOOL_SPEC,
   DOCX_READ_NODES_TOOL_SPEC,
@@ -12,66 +11,7 @@ import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from
 import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
 import { renderDocxVisualToPng } from '../utils/renderVisual'
 import { projectDocxReadNodes } from '../publicReadTree'
-import {
-  DOCX_OUTLINE_ITEMS_PER_PAGE,
-  DOCX_OUTLINE_TEXT_PREVIEW_CHARS,
-  DOCX_OUTLINE_TEXT_PREVIEW_HEAD_CHARS
-} from '../constants'
-
-const MAX_SEARCH_MATCHES = 20
-const SEMANTIC_TOP_K = 8
-const SEMANTIC_MIN_SCORE = 0.35
-
-const DOCX_LITERAL_ALIAS_FALLBACKS: Record<string, string[]> = {
-  过拟合: ['过度拟合']
-}
-
-type AppliedAlias = {
-  from: string
-  to: string
-}
-
-const normalizeOutlineText = (text: string): string => text.replace(/\s+/gu, ' ').trim()
-
-const buildOutlineTextPreview = (text: string): string => {
-  const characters = Array.from(normalizeOutlineText(text))
-  if (characters.length <= DOCX_OUTLINE_TEXT_PREVIEW_CHARS) return characters.join('')
-  const tailChars = DOCX_OUTLINE_TEXT_PREVIEW_CHARS - DOCX_OUTLINE_TEXT_PREVIEW_HEAD_CHARS - 1
-  return `${characters.slice(0, DOCX_OUTLINE_TEXT_PREVIEW_HEAD_CHARS).join('')}…${characters
-    .slice(-tailChars)
-    .join('')}`
-}
-
-const buildOutlineNode = (node: Exclude<DocxOutlineNode, { type: 'table_cell' }>) => {
-  const base = {
-    nodeId: node.nodeId,
-    nodeIndex: node.nodeIndex,
-    story: node.story.type,
-    textPreview: buildOutlineTextPreview(node.text)
-  }
-  if (node.type === 'paragraph') {
-    return {
-      ...base,
-      type: node.type,
-      styleId: node.style?.styleId,
-      visuals: node.visuals
-    }
-  }
-  if (node.type === 'table') {
-    return {
-      ...base,
-      type: node.type,
-      rows: node.rows,
-      columns: node.cols,
-      visuals: node.visuals
-    }
-  }
-  return {
-    ...base,
-    type: node.type,
-    ...(node.type === 'content_control' ? { tag: node.tag } : { revisionKind: node.revisionKind })
-  }
-}
+import { DOCX_OUTLINE_SEGMENTS_PER_PAGE, DOCX_SEARCH_MAX_MATCHES } from '../constants'
 
 const fetchNodesByNodeIds = async (input: {
   runtime: DocxToolRuntime
@@ -136,6 +76,7 @@ const executeWorkerSearch = async (input: {
   scopeNodeIds: string[]
   sourcePath: string
   currentRevisionRef: string
+  includeContext: boolean
 }): Promise<
   | {
       failure: ReturnType<DocxToolRuntime['emitFailure']>
@@ -150,7 +91,8 @@ const executeWorkerSearch = async (input: {
       docId: input.docId,
       query: input.query,
       mode: input.mode,
-      scopeNodeIds: input.scopeNodeIds
+      scopeNodeIds: input.scopeNodeIds,
+      includeContext: input.includeContext
     }
   })
   if (!workerResponse.ok) {
@@ -189,59 +131,24 @@ const executeWorkerSearch = async (input: {
   }
 }
 
-const buildLiteralSearchAttempts = (
-  query: string
-): Array<{ query: string; appliedAliases: AppliedAlias[] }> => {
-  const normalizedQuery = query.trim()
-  const aliases = DOCX_LITERAL_ALIAS_FALLBACKS[normalizedQuery] || []
-  return [
-    {
-      query: normalizedQuery,
-      appliedAliases: []
-    },
-    ...aliases.map((alias) => ({
-      query: alias,
-      appliedAliases: [{ from: normalizedQuery, to: alias }]
-    }))
-  ]
-}
-
-const buildSearchResult = (input: {
-  sourcePath: string
-  mode: 'literal' | 'regex' | 'semantic'
-  effectiveQuery: string
-  appliedAliases: AppliedAlias[]
-  totalMatchCount: number
-  matches: DocxSearchMatch[]
-  runtime: DocxToolRuntime
-}) => ({
-  sourcePath: input.sourcePath,
-  mode: input.mode,
-  effectiveQuery: input.effectiveQuery,
-  appliedAliases: input.appliedAliases,
+const buildSearchResult = (input: { totalMatchCount: number; matches: DocxSearchMatch[] }) => ({
   totalMatchCount: input.totalMatchCount,
-  returnedMatchCount: input.matches.length,
   matches: input.matches.map((match) => ({
     nodeId: match.nodeId,
     nodeIndex: match.nodeIndex,
     type: match.type,
-    matchedText: match.matchedText,
-    previousNodeId: match.previousNodeId,
-    nextNodeId: match.nextNodeId,
+    story: match.story.type,
+    matchText: match.matchText,
+    textContext: match.textContext,
     tableNodeId: match.tableNodeId,
-    text: match.text,
-    offsets: match.offsets,
-    score: match.score,
-    story: match.story
+    before: match.before,
+    after: match.after
   }))
 })
 
 const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) => ({
-  sourcePath: result.sourcePath,
-  mode: result.mode,
-  effectiveQuery: result.effectiveQuery,
-  returnedMatchCount: result.returnedMatchCount,
-  totalMatchCount: result.totalMatchCount
+  totalMatchCount: result.totalMatchCount,
+  matches: result.matches
 })
 
 export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
@@ -268,9 +175,18 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       if ('failure' in sessionResult) return sessionResult.failure
 
       try {
+        const segmentResponse = await runtime.callWorker({
+          action: 'segment_map',
+          payload: { docId: sessionResult.docId }
+        })
+        if (!segmentResponse.ok) throw new Error(segmentResponse.error)
+        if (segmentResponse.payload.action !== 'segment_map') {
+          throw new Error('worker protocol mismatch (segment_map)')
+        }
+        const allSegments = segmentResponse.payload.segments
         const totalPages = Math.max(
           1,
-          Math.ceil(sessionResult.stats.rootNodeCount / DOCX_OUTLINE_ITEMS_PER_PAGE)
+          Math.ceil(allSegments.length / DOCX_OUTLINE_SEGMENTS_PER_PAGE)
         )
         if (args.startPage > totalPages) {
           return finalizeDocxToolFailure({
@@ -291,37 +207,13 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           })
         }
         const endPage = Math.min(totalPages, args.startPage + args.pageCount - 1)
-        const fromNodeIndex = (args.startPage - 1) * DOCX_OUTLINE_ITEMS_PER_PAGE
-        const toNodeIndex = Math.min(
-          sessionResult.stats.rootNodeCount - 1,
-          endPage * DOCX_OUTLINE_ITEMS_PER_PAGE - 1
-        )
-        const outlineNodes = await runtime.callWorker({
-          action: 'outline',
-          payload: {
-            docId: sessionResult.docId,
-            fromNodeIndex,
-            toNodeIndex,
-            includeCells: false
-          }
-        })
-        if (!outlineNodes.ok) {
-          throw new Error(outlineNodes.error)
-        }
-        if (outlineNodes.payload.action !== 'outline') {
-          throw new Error('worker protocol mismatch (outline)')
-        }
-        const resultNodes = outlineNodes.payload.nodes
-          .filter(
-            (node): node is Exclude<DocxOutlineNode, { type: 'table_cell' }> =>
-              node.type !== 'table_cell'
-          )
-          .map(buildOutlineNode)
+        const fromSegment = (args.startPage - 1) * DOCX_OUTLINE_SEGMENTS_PER_PAGE
+        const toSegment = endPage * DOCX_OUTLINE_SEGMENTS_PER_PAGE
         const result = {
           startPage: args.startPage,
           endPage,
           totalPages,
-          nodes: resultNodes
+          segments: allSegments.slice(fromSegment, toSegment)
         }
         return finalizeDocxToolSuccess({
           runtime,
@@ -332,13 +224,14 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             startPage: result.startPage,
             endPage: result.endPage,
             totalPages: result.totalPages,
-            nodes: result.nodes
+            segments: result.segments
           },
           draftDocId: sessionResult.docId,
           activity: {
             actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType!,
             startedSummary: `提取结构: ${sessionResult.sourcePath}`,
-            buildCompletedSummary: (output) => `结构提取完成：${String(output.nodes.length)} 个节点`
+            buildCompletedSummary: (output) =>
+              `结构提取完成：${String(output.segments.length)} 个分段`
           }
         })
       } catch (error) {
@@ -387,137 +280,30 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
 
       const mode = args.mode || 'literal'
       const scopeNodeIds = args.nodeIds || []
-
-      if (mode === 'semantic') {
-        if (runtime.input.ctx.embeddingService.getStatus() !== 'ready') {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: runtime.emitFailure({
-              toolName,
-              toolCallId,
-              reason: 'failed',
-              error: 'semantic search requires embedding runtime to be ready before entering human',
-              draftDocId: sessionResult.docId,
-              resourceContext: runtime.buildResourceContext({
-                sourcePath: sessionResult.sourcePath,
-                effectKind: 'searched',
-                currentRevisionRef: sessionResult.currentRevisionRef
-              })
-            }),
-            activity: {
-              actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-
-        const semanticIndex = await runtime.buildSemanticDocIndex(sessionResult.docId)
-        const queryEmbeddingResponse = await runtime.input.ctx.embeddingService.embed(args.query)
-        const queryEmbeddingRows = splitEmbeddingRows(
-          queryEmbeddingResponse.data,
-          queryEmbeddingResponse.dims
-        )
-        const queryEmbedding = queryEmbeddingRows[0]
-        if (!queryEmbedding || queryEmbedding.length === 0) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: runtime.emitFailure({
-              toolName,
-              toolCallId,
-              reason: 'failed',
-              error: 'semantic query embedding is empty',
-              draftDocId: sessionResult.docId,
-              resourceContext: runtime.buildResourceContext({
-                sourcePath: sessionResult.sourcePath,
-                effectKind: 'searched',
-                currentRevisionRef: sessionResult.currentRevisionRef
-              })
-            }),
-            activity: {
-              actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-
-        const allMatches = buildSemanticMatches({
-          entries: semanticIndex.entries,
-          queryEmbedding,
-          scopeNodeIds,
-          queryText: args.query,
-          topK: SEMANTIC_TOP_K,
-          minScore: SEMANTIC_MIN_SCORE
-        })
-        const matches = allMatches.slice(0, MAX_SEARCH_MATCHES)
-        const result = buildSearchResult({
-          sourcePath: sessionResult.sourcePath,
-          mode,
-          effectiveQuery: args.query,
-          appliedAliases: [],
-          totalMatchCount: allMatches.length,
-          matches,
-          runtime
-        })
-        return finalizeDocxToolSuccess({
-          runtime,
-          toolName,
-          toolCallId,
-          result,
-          outputPreview: buildSearchOutputPreview(result),
-          draftDocId: sessionResult.docId,
-          activity: {
-            actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!,
-            startedSummary: `搜索文档: ${sessionResult.sourcePath}`,
-            buildCompletedSummary: (output) =>
-              `文档搜索完成：${String(output.returnedMatchCount)} 个命中`
-          }
-        })
-      }
-
-      const attempts =
-        mode === 'literal'
-          ? buildLiteralSearchAttempts(args.query)
-          : [{ query: args.query, appliedAliases: [] }]
-      let effectiveQuery = args.query
-      let appliedAliases: AppliedAlias[] = []
-      let allMatches: DocxSearchMatch[] = []
-
-      for (const attempt of attempts) {
-        const searchResult = await executeWorkerSearch({
-          runtime,
-          toolName,
-          toolCallId,
-          docId: sessionResult.docId,
-          query: attempt.query,
-          mode,
-          scopeNodeIds,
-          sourcePath: sessionResult.sourcePath,
-          currentRevisionRef: sessionResult.currentRevisionRef
-        })
-        if ('failure' in searchResult) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: searchResult.failure,
-            activity: {
-              actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-        allMatches = searchResult.matches
-        effectiveQuery = attempt.query
-        appliedAliases = attempt.appliedAliases
-        if (allMatches.length > 0 || mode !== 'literal') {
-          break
-        }
-      }
-
-      const matches = allMatches.slice(0, MAX_SEARCH_MATCHES)
-      const result = buildSearchResult({
-        sourcePath: sessionResult.sourcePath,
+      const searchResult = await executeWorkerSearch({
+        runtime,
+        toolName,
+        toolCallId,
+        docId: sessionResult.docId,
+        query: args.query,
         mode,
-        effectiveQuery,
-        appliedAliases,
+        scopeNodeIds,
+        includeContext: args.includeContext || false,
+        sourcePath: sessionResult.sourcePath,
+        currentRevisionRef: sessionResult.currentRevisionRef
+      })
+      if ('failure' in searchResult) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: searchResult.failure,
+          activity: { actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType! }
+        })
+      }
+      const allMatches = searchResult.matches
+      const matches = allMatches.slice(0, DOCX_SEARCH_MAX_MATCHES)
+      const result = buildSearchResult({
         totalMatchCount: allMatches.length,
-        matches,
-        runtime
+        matches
       })
       return finalizeDocxToolSuccess({
         runtime,
@@ -529,8 +315,7 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         activity: {
           actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!,
           startedSummary: `搜索文档: ${sessionResult.sourcePath}`,
-          buildCompletedSummary: (output) =>
-            `文档搜索完成：${String(output.returnedMatchCount)} 个命中`
+          buildCompletedSummary: (output) => `文档搜索完成：${String(output.matches.length)} 个命中`
         }
       })
     }
