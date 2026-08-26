@@ -1,3 +1,6 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -23,6 +26,8 @@ import {
 const CASE_ID = 'search-results-open-rules'
 const LOCAL_RESULT_FILE = '交付合规同步记录.docx'
 const LOCAL_RESULT_QUERY = 'Alice'
+const XLSX_RESULT_FILE = '销售额统计表.xlsx'
+const XLSX_RESULT_QUERY = '销售额'
 const SIGNAL_COLLECT_TIMEOUT_MS = 3000
 
 type SearchResultSignals =
@@ -78,7 +83,17 @@ describe('workbench result e2e', () => {
               await setupWorkbenchWorkspaceOnly(page, {
                 caseId: CASE_ID,
                 workspaceName: 'Workbench Search Workspace',
-                webSourceUrl: server.url
+                webSourceUrl: server.url,
+                seedWorkspaceRoot: async (rootPath) => {
+                  const workbook = new ExcelJS.Workbook()
+                  workbook.title = '销售额统计表'
+                  workbook.addWorksheet('季度销售').getCell('A1').value = 'cedar-xlsx-cell-secret'
+                  workbook.addWorksheet('客户明细')
+                  await fs.writeFile(
+                    path.join(rootPath, XLSX_RESULT_FILE),
+                    Buffer.from(await workbook.xlsx.writeBuffer())
+                  )
+                }
               })
           })
           const fileSearch = await runtime.step({
@@ -136,6 +151,36 @@ describe('workbench result e2e', () => {
                 compositionText,
                 messagesBeforeShiftEnter,
                 messagesAfterShiftEnter
+              }
+            }
+          })
+
+          const xlsxSearch = await runtime.step({
+            name: 'search-local-xlsx-by-filename',
+            message: `切换搜索模式并按文件名从真实本地索引结果打开 ${XLSX_RESULT_FILE} 预览。`,
+            run: async () => {
+              await switchWorkbenchMode(page, '没头脑')
+              await insertWorkbenchReferenceToken(page, XLSX_RESULT_FILE, XLSX_RESULT_QUERY)
+              await appendWorkbenchInputText(page, XLSX_RESULT_QUERY)
+              await submitWorkbenchCurrentDraft(page)
+              const xlsxResults = await waitForWorkbenchSearchResults(page)
+              const xlsxResultsText = ((await xlsxResults.textContent()) || '').trim()
+              await xlsxResults
+                .locator('div')
+                .filter({ hasText: XLSX_RESULT_FILE })
+                .first()
+                .getByRole('button', { name: '预览文件' })
+                .click()
+              await getWorkbenchLocator(page, workbenchSelectors.documentView).waitFor({
+                state: 'visible'
+              })
+              const excelViewerVisible = await getWorkbenchLocator(
+                page,
+                workbenchSelectors.excelViewer
+              ).isVisible()
+              return {
+                xlsxResultsText,
+                excelViewerVisible
               }
             }
           })
@@ -262,6 +307,8 @@ describe('workbench result e2e', () => {
             compositionText: fileSearch.compositionText,
             messagesBeforeShiftEnter: fileSearch.messagesBeforeShiftEnter,
             messagesAfterShiftEnter: fileSearch.messagesAfterShiftEnter,
+            xlsxResultsText: xlsxSearch.xlsxResultsText,
+            excelViewerVisible: xlsxSearch.excelViewerVisible,
             webResultsText: webSearch.webResultsText,
             populatedLayout: webSearch.populatedLayout,
             legitimateSearchTextVisible: webSearch.legitimateSearchTextVisible,
@@ -280,6 +327,8 @@ describe('workbench result e2e', () => {
               result.shiftEnterText.includes('第二行') &&
               result.messagesBeforeShiftEnter === result.messagesAfterShiftEnter &&
               result.compositionText === '中文输入' &&
+              result.xlsxResultsText.includes(XLSX_RESULT_FILE) &&
+              result.excelViewerVisible &&
               /cedar-search-888/u.test(result.webResultsText) &&
               result.openExternalCalls >= 1 &&
               result.populatedLayout?.composerInsideViewport &&
@@ -294,7 +343,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-search-results-real-open-rules',
               message:
-                '搜索模式应使用真实索引结果且不启动 AI；本地结果进入文件预览，网页结果走系统打开，无可检索资料时应拦截发送并保留输入，对齐 WB-COMPOSER-004、WB-PANEL-002、WB-MODE-002。',
+                '搜索模式应使用真实索引结果且不启动 AI；本地结果进入文件预览（docx 与按文件名命中的 xlsx），网页结果走系统打开，无可检索资料时应拦截发送并保留输入，对齐 WB-COMPOSER-004、WB-PANEL-002、WB-MODE-002。',
               data: result
             }
           )

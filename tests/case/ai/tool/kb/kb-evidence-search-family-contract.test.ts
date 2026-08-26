@@ -68,6 +68,17 @@ describe('ai tool kb backend', () => {
             ]
           },
           {
+            id: 'doc-filename-anchor',
+            name: '季度销售数据.xlsx',
+            filePath: '/workspace/季度销售数据.xlsx',
+            chunks: [
+              {
+                id: 'chunk-filename-anchor',
+                text: '文件名：季度销售数据.xlsx\n标题：2026年度销售汇总\n工作表：季度销售、客户明细'
+              }
+            ]
+          },
+          {
             id: 'doc-3',
             name: 'Archive Notes.md',
             workspaceId: 'other-workspace',
@@ -111,13 +122,25 @@ describe('ai tool kb backend', () => {
           limit: 5,
           documentIds: ['doc-web']
         })
+        const filenameHit = await harness.invoke<KbSearchResult>('kb_search', {
+          queryText: '季度销售数据',
+          strategy: 'keyword',
+          limit: 5
+        })
+        const sheetNameHit = await harness.invoke<KbSearchResult>('kb_search', {
+          queryText: '客户明细',
+          strategy: 'keyword',
+          limit: 5
+        })
 
         return {
           hybridInScope,
           vectorSubset,
           ftsOutOfScope,
           fileHit,
-          webHit
+          webHit,
+          filenameHit,
+          sheetNameHit
         }
       },
       assert: async (result, runtime) => {
@@ -127,7 +150,8 @@ describe('ai tool kb backend', () => {
               (row) =>
                 (row.document_id === 'doc-1' ||
                   row.document_id === 'doc-2' ||
-                  row.document_id === 'doc-web') &&
+                  row.document_id === 'doc-web' ||
+                  row.document_id === 'doc-filename-anchor') &&
                 typeof row.document_name === 'string' &&
                 typeof row.text === 'string'
             ) &&
@@ -189,6 +213,35 @@ describe('ai tool kb backend', () => {
             message:
               'kb_search should expose source_type and source_url so AI can cite web knowledge as a URL.',
             data: result.webHit
+          }
+        )
+
+        runtime.assertThat(
+          result.filenameHit.total >= 1 &&
+            result.filenameHit.items.some(
+              (row) =>
+                row.document_id === 'doc-filename-anchor' &&
+                row.file_path === '/workspace/季度销售数据.xlsx' &&
+                row.text.includes('季度销售数据.xlsx')
+            ),
+          {
+            name: 'knowledge-search-hits-filename-anchor-chunk',
+            message:
+              'kb_search(keyword) 应能按文件名命中文档元数据锚点 chunk，让 excel 等仅元数据索引的文档可被查找到。',
+            data: result.filenameHit
+          }
+        )
+
+        runtime.assertThat(
+          result.sheetNameHit.total >= 1 &&
+            result.sheetNameHit.items.some(
+              (row) => row.document_id === 'doc-filename-anchor' && row.text.includes('客户明细')
+            ),
+          {
+            name: 'knowledge-search-hits-spreadsheet-sheet-name',
+            message:
+              'kb_search(keyword) 应能命中 excel 元数据中的工作表名，支持按 sheet 名称查找工作簿。',
+            data: result.sheetNameHit
           }
         )
       }

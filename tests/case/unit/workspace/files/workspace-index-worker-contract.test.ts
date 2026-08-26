@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
+import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
 import {
   WORKSPACE_EMBEDDING_BATCH_CHUNK_COUNT,
@@ -119,6 +120,19 @@ describe('unit workspace backend', () => {
           contentHash: textContentHash,
           fileExt: '.txt'
         })
+        const xlsxFilePath = path.join(runtime.workspaceRoot, 'sales-data.xlsx')
+        const xlsxWorkbook = new ExcelJS.Workbook()
+        xlsxWorkbook.title = '销售数据汇总'
+        xlsxWorkbook.addWorksheet('季度销售').getCell('A1').value = 'cedar-xlsx-cell-secret'
+        xlsxWorkbook.addWorksheet('客户明细')
+        await fs.writeFile(xlsxFilePath, Buffer.from(await xlsxWorkbook.xlsx.writeBuffer()))
+        const xlsxWorkerSuccess = await handleWorkspacePrepareWorkerRequest({
+          requestId: 'worker-contract-xlsx-success',
+          action: 'prepare_source',
+          payload: {
+            filePath: xlsxFilePath
+          }
+        })
         const legacyDocPath = path.join(runtime.workspaceRoot, 'legacy-readable.doc')
         await fs.copyFile(
           path.resolve('tests/fixtures/legacy-doc/legacy-readable.doc'),
@@ -235,11 +249,13 @@ parentPort.on('message', (request) => {
             markdown: isSupportedLocalFilePath(path.join(runtime.workspaceRoot, 'notes.markdown')),
             txt: isSupportedLocalFilePath(textFilePath),
             doc: isSupportedLocalFilePath(legacyDocPath),
+            xlsx: isSupportedLocalFilePath(xlsxFilePath),
             js: isSupportedLocalFilePath(path.join(runtime.workspaceRoot, 'unsupported.js'))
           },
           markdownSplitSnapshot,
           textSplitSnapshot,
           legacyDocSplitSnapshot,
+          xlsxWorkerSuccess,
           markdownWorkerSuccess,
           emptyTextWorkerSuccess,
           workerSuccess,
@@ -284,10 +300,12 @@ parentPort.on('message', (request) => {
             result.textFileSupport.markdown &&
             result.textFileSupport.txt &&
             result.textFileSupport.doc &&
+            result.textFileSupport.xlsx &&
             !result.textFileSupport.js,
           {
             name: 'text-file-extensions-supported-for-index',
-            message: 'workspace 文件索引应支持 .md/.markdown/.txt，并继续拒绝无关脚本文件。',
+            message:
+              'workspace 文件索引应支持 .md/.markdown/.txt，并继续拒绝无关脚本文件；excel 只索引元数据。',
             data: result
           }
         )
@@ -307,12 +325,15 @@ parentPort.on('message', (request) => {
           result.markdownSplitSnapshot.chunks.some((chunk) =>
             chunk.text.includes('cedar-md-index-118')
           ) &&
+            result.markdownSplitSnapshot.chunks[0].text === 'indexed-notes.md' &&
             result.textSplitSnapshot.chunks.some((chunk) =>
               chunk.text.includes('cedar-txt-index-219')
-            ),
+            ) &&
+            result.textSplitSnapshot.chunks[0].text === 'indexed-notes.txt',
           {
             name: 'text-files-produce-searchable-split-chunks',
-            message: 'md/txt 文本文件应通过 UTF-8 读取进入现有 splitter，生成可检索 chunk。',
+            message:
+              'md/txt 文本文件应通过 UTF-8 读取进入现有 splitter，生成可检索 chunk，并前置文件名锚点 chunk。',
             data: result
           }
         )
@@ -334,10 +355,13 @@ parentPort.on('message', (request) => {
         runtime.assertThat(
           result.emptyTextWorkerSuccess.ok &&
             result.emptyTextWorkerSuccess.payload?.fileExt === '.txt' &&
-            result.emptyTextWorkerSuccess.payload.splitSnapshot.chunks.length === 0,
+            result.emptyTextWorkerSuccess.payload.splitSnapshot.chunks.length === 1 &&
+            result.emptyTextWorkerSuccess.payload.splitSnapshot.chunks[0].text ===
+              'empty-notes.txt',
           {
-            name: 'empty-text-file-indexes-without-embedding',
-            message: '空 md/txt 应收敛为 0 chunk 索引结果，不应因 embedding 未就绪导致文件级失败。',
+            name: 'empty-text-file-keeps-filename-anchor-chunk',
+            message:
+              '空 md/txt 不产生正文 chunk，但保留文件名锚点 chunk，保证空文件仍可按文件名被检索。',
             data: result
           }
         )
@@ -377,6 +401,29 @@ parentPort.on('message', (request) => {
             name: 'worker-legacy-doc-success-uses-text-loader',
             message: 'workspace worker should index legacy .doc files',
             data: result.legacyDocWorkerSuccess
+          }
+        )
+
+        runtime.assertThat(
+          result.xlsxWorkerSuccess.ok &&
+            result.xlsxWorkerSuccess.payload?.fileExt === '.xlsx' &&
+            result.xlsxWorkerSuccess.payload.splitSnapshot.chunks.length === 1 &&
+            result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes(
+              'sales-data.xlsx'
+            ) &&
+            result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes(
+              '销售数据汇总'
+            ) &&
+            result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes('季度销售') &&
+            result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes('客户明细') &&
+            !result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes(
+              'cedar-xlsx-cell-secret'
+            ),
+          {
+            name: 'worker-xlsx-success-indexes-metadata-only',
+            message:
+              'workspace worker 应只索引 excel 的文件名、标题和工作表名元数据，不索引任何单元格内容。',
+            data: result.xlsxWorkerSuccess
           }
         )
 

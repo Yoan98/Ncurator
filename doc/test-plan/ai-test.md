@@ -69,6 +69,7 @@
 - `mock-llm` 只固定 LLM 输出，其余全部真实；`live` 通过真实 `LlmConfigStore` 和生产 LLM executor 执行。
 - 凡是会进入 `human` 的回归 run，必须在进入 `human` 前完成 embedding 基础服务 preflight；不允许把 embedding 初始化推迟到某个工具调用时才暴露。
 - KB fixture 必须走真实导入、真实索引、真实检索。
+- KB 索引范围：所有支持文件都会前置「文件名锚点」内容块，保证按文件名可被检索；Excel 只索引文件名、文档标题与工作表名等元数据，单元格内容不进索引，检索命中时引用其真实文件路径。
 - embedding 模型缺失时，harness 应优先通过真实生产下载链自动检查并下载，不得引入测试专用 embedding 替身。
 - 回归 harness 不得使用旧式 fake API。
 - AI backend 回归统一使用默认 `testTimeout=900_000`、`hookTimeout=900_000`；不再为单个回归 case 单独配置超时。
