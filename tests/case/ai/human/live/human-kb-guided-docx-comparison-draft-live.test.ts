@@ -31,7 +31,7 @@ const DOCX_WRITE_TOOL_NAMES = new Set([
   'docx_media_edit',
   'docx_comments_revisions'
 ])
-const MAX_SUCCESSFUL_APPEND_WRITES_PER_TARGET = 2
+const MAX_SUCCESSFUL_APPEND_WRITES_PER_TARGET = 1
 
 const hasSuccessfulKbSearchHit = (events: readonly AiRunEvent[]): boolean =>
   events.some((event) => {
