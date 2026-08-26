@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import ExcelJS from 'exceljs'
 import JSZip from 'jszip'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -10,6 +9,9 @@ import {
   isSupportedLocalFilePath
 } from '../../../../src/main/services/ingestion/loader'
 
+const SALES_FIXTURE_PATH = path.resolve('tests/fixtures/workspace/销售额统计表.xlsx')
+const BUDGET_FIXTURE_PATH = path.resolve('tests/fixtures/workspace/预算底稿.xlsm')
+
 describe('Excel ingestion boundaries', () => {
   let rootPath = ''
 
@@ -17,26 +19,30 @@ describe('Excel ingestion boundaries', () => {
     if (rootPath) await fs.rm(rootPath, { recursive: true, force: true })
   })
 
-  it('indexes spreadsheets with metadata only, never cell values', async () => {
-    rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-excel-ingestion-'))
-    const filePath = path.join(rootPath, 'data.xlsx')
-    const workbook = new ExcelJS.Workbook()
-    workbook.title = '2026年度销售汇总'
-    workbook.addWorksheet('季度销售').getCell('A1').value = 'sensitive-cell-value'
-    workbook.addWorksheet('客户明细').getCell('A1').value = 'secret-row'
-    await fs.writeFile(filePath, Buffer.from(await workbook.xlsx.writeBuffer()))
+  it('indexes shared fixture spreadsheets with metadata only, never cell values', async () => {
+    expect(isSpreadsheetFilePath(SALES_FIXTURE_PATH)).toBe(true)
+    expect(isSupportedLocalFilePath(SALES_FIXTURE_PATH)).toBe(true)
 
-    expect(isSpreadsheetFilePath(filePath)).toBe(true)
-    expect(isSupportedLocalFilePath(filePath)).toBe(true)
-
-    const docs = await IngestionService.getInstance().loadFile(filePath)
+    const docs = await IngestionService.getInstance().loadFile(SALES_FIXTURE_PATH)
     expect(docs).toHaveLength(1)
-    expect(docs[0].pageContent).toContain('data.xlsx')
+    expect(docs[0].pageContent).toContain('销售额统计表.xlsx')
     expect(docs[0].pageContent).toContain('2026年度销售汇总')
     expect(docs[0].pageContent).toContain('季度销售')
     expect(docs[0].pageContent).toContain('客户明细')
-    expect(docs[0].pageContent).not.toContain('sensitive-cell-value')
-    expect(docs[0].pageContent).not.toContain('secret-row')
+    expect(docs[0].pageContent).toContain('产品&分类')
+    expect(docs[0].pageContent).not.toContain('cedar-xlsx-cell-secret')
+    expect(docs[0].pageContent).not.toContain('cedar-xlsx-sheet-secret')
+    expect(docs[0].pageContent).not.toContain('cedar-xlsx-category-secret')
+  })
+
+  it('keeps default sheet names and omits title for fixture without docProps title', async () => {
+    const docs = await IngestionService.getInstance().loadFile(BUDGET_FIXTURE_PATH)
+    expect(docs).toHaveLength(1)
+    expect(docs[0].pageContent).toContain('预算底稿.xlsm')
+    expect(docs[0].pageContent).toContain('Sheet1')
+    expect(docs[0].pageContent).toContain('Sheet2')
+    expect(docs[0].pageContent).not.toContain('标题')
+    expect(docs[0].pageContent).not.toContain('cedar-xlsm-cell-secret')
   })
 
   it('fails when the spreadsheet has no readable workbook part', async () => {

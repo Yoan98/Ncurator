@@ -1,6 +1,3 @@
-import fs from 'node:fs/promises'
-import path from 'node:path'
-import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -83,17 +80,7 @@ describe('workbench result e2e', () => {
               await setupWorkbenchWorkspaceOnly(page, {
                 caseId: CASE_ID,
                 workspaceName: 'Workbench Search Workspace',
-                webSourceUrl: server.url,
-                seedWorkspaceRoot: async (rootPath) => {
-                  const workbook = new ExcelJS.Workbook()
-                  workbook.title = '销售额统计表'
-                  workbook.addWorksheet('季度销售').getCell('A1').value = 'cedar-xlsx-cell-secret'
-                  workbook.addWorksheet('客户明细')
-                  await fs.writeFile(
-                    path.join(rootPath, XLSX_RESULT_FILE),
-                    Buffer.from(await workbook.xlsx.writeBuffer())
-                  )
-                }
+                webSourceUrl: server.url
               })
           })
           const fileSearch = await runtime.step({

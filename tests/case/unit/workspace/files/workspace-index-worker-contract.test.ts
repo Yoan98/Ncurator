@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
-import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
 import {
   WORKSPACE_EMBEDDING_BATCH_CHUNK_COUNT,
@@ -120,12 +119,7 @@ describe('unit workspace backend', () => {
           contentHash: textContentHash,
           fileExt: '.txt'
         })
-        const xlsxFilePath = path.join(runtime.workspaceRoot, 'sales-data.xlsx')
-        const xlsxWorkbook = new ExcelJS.Workbook()
-        xlsxWorkbook.title = '销售数据汇总'
-        xlsxWorkbook.addWorksheet('季度销售').getCell('A1').value = 'cedar-xlsx-cell-secret'
-        xlsxWorkbook.addWorksheet('客户明细')
-        await fs.writeFile(xlsxFilePath, Buffer.from(await xlsxWorkbook.xlsx.writeBuffer()))
+        const xlsxFilePath = path.join(runtime.workspaceRoot, '销售额统计表.xlsx')
         const xlsxWorkerSuccess = await handleWorkspacePrepareWorkerRequest({
           requestId: 'worker-contract-xlsx-success',
           action: 'prepare_source',
@@ -133,10 +127,9 @@ describe('unit workspace backend', () => {
             filePath: xlsxFilePath
           }
         })
-        const legacyDocPath = path.join(runtime.workspaceRoot, 'legacy-readable.doc')
-        await fs.copyFile(
-          path.resolve('tests/fixtures/legacy-doc/legacy-readable.doc'),
-          legacyDocPath
+        const legacyDocPath = path.join(
+          runtime.workspaceRoot,
+          '风险等级判断标准-图案设计【2026.2.10更新】.doc'
         )
         const legacyDocContentHash = await computeWorkspaceFileContentHash(legacyDocPath)
         const legacyDocSplitSnapshot = await buildWorkspaceKnowledgeSplitSnapshot({
@@ -312,11 +305,12 @@ parentPort.on('message', (request) => {
 
         runtime.assertThat(
           result.legacyDocSplitSnapshot.chunks.some((chunk) =>
-            chunk.text.includes('Unicode characters')
+            chunk.text.includes('风险等级的判断标准')
           ),
           {
             name: 'legacy-doc-file-produces-searchable-split-chunks',
-            message: 'legacy .doc should be read by word-extractor and split into index chunks',
+            message:
+              'workspace fixture 中的 legacy .doc 应被 word-extractor 读取并切分为索引 chunk',
             data: result.legacyDocSplitSnapshot
           }
         )
@@ -395,11 +389,11 @@ parentPort.on('message', (request) => {
           result.legacyDocWorkerSuccess.ok &&
             result.legacyDocWorkerSuccess.payload?.fileExt === '.doc' &&
             result.legacyDocWorkerSuccess.payload.splitSnapshot.chunks.some((chunk) =>
-              chunk.text.includes('Unicode characters')
+              chunk.text.includes('风险等级的判断标准')
             ),
           {
             name: 'worker-legacy-doc-success-uses-text-loader',
-            message: 'workspace worker should index legacy .doc files',
+            message: 'workspace worker should index legacy .doc fixture files',
             data: result.legacyDocWorkerSuccess
           }
         )
@@ -409,15 +403,22 @@ parentPort.on('message', (request) => {
             result.xlsxWorkerSuccess.payload?.fileExt === '.xlsx' &&
             result.xlsxWorkerSuccess.payload.splitSnapshot.chunks.length === 1 &&
             result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes(
-              'sales-data.xlsx'
+              '销售额统计表.xlsx'
             ) &&
             result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes(
-              '销售数据汇总'
+              '2026年度销售汇总'
             ) &&
             result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes('季度销售') &&
             result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes('客户明细') &&
+            result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes('产品&分类') &&
             !result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes(
               'cedar-xlsx-cell-secret'
+            ) &&
+            !result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes(
+              'cedar-xlsx-sheet-secret'
+            ) &&
+            !result.xlsxWorkerSuccess.payload.splitSnapshot.chunks[0].text.includes(
+              'cedar-xlsx-category-secret'
             ),
           {
             name: 'worker-xlsx-success-indexes-metadata-only',

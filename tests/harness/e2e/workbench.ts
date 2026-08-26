@@ -914,13 +914,9 @@ export const prepareWorkbenchWorkspaceThroughUi = async (
     workspaceName: string
     rootPath: string
     webSourceUrl?: string
-    seedWorkspaceRoot?: (rootPath: string) => Promise<void>
   }
 ): Promise<void> => {
   const workspaceId = await createWorkspaceThroughSettingsUi(page, input.workspaceName)
-  if (input.seedWorkspaceRoot) {
-    await input.seedWorkspaceRoot(input.rootPath)
-  }
   await bindWorkspaceRootDirectly(page, workspaceId, input.rootPath)
   await prepareSelectedWorkspaceFilesThroughSettingsUi(page, workspaceId)
   if (input.webSourceUrl) {
@@ -973,7 +969,6 @@ export const setupWorkbenchWorkspaceOnly = async (
     caseId: string
     workspaceName?: string
     webSourceUrl?: string
-    seedWorkspaceRoot?: (rootPath: string) => Promise<void>
   }
 ): Promise<WorkbenchWorkspaceOnlySetupResult> => {
   const workspace = await createTemporaryWorkbenchWorkspace(input.caseId)
@@ -981,8 +976,7 @@ export const setupWorkbenchWorkspaceOnly = async (
   await prepareWorkbenchWorkspaceThroughUi(page, {
     workspaceName,
     rootPath: workspace.rootPath,
-    webSourceUrl: input.webSourceUrl,
-    seedWorkspaceRoot: input.seedWorkspaceRoot
+    webSourceUrl: input.webSourceUrl
   })
   return {
     workspace,

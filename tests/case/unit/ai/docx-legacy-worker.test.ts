@@ -2,7 +2,9 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/tools/docx/worker/docxWorker'
 
-const fixturePath = path.resolve('tests/fixtures/legacy-doc/legacy-readable.doc')
+const fixturePath = path.resolve(
+  'tests/fixtures/workspace/风险等级判断标准-图案设计【2026.2.10更新】.doc'
+)
 
 describe('docx legacy worker', () => {
   it('reads legacy doc through the common worker protocol and rejects writes', async () => {
@@ -30,7 +32,7 @@ describe('docx legacy worker', () => {
     expect(outline.ok).toBe(true)
     if (!outline.ok || outline.payload.action !== 'outline') return
     expect(outline.payload.nodes.length).toBeGreaterThan(0)
-    expect(outline.payload.nodes[0]?.text).toContain('second test')
+    expect(outline.payload.nodes[0]?.text).toContain('风险等级的判断标准')
 
     const nodeId = outline.payload.nodes[0]!.nodeId
     const nodes = await handleDocxWorkerRequest({
@@ -45,7 +47,7 @@ describe('docx legacy worker', () => {
     expect(nodes.ok).toBe(true)
     if (nodes.ok && nodes.payload.action === 'get_nodes_by_ids') {
       expect(nodes.payload.nodes[0]?.type).toBe('paragraph')
-      expect(nodes.payload.nodes[0]?.text).toContain('Unicode characters')
+      expect(nodes.payload.nodes[0]?.text).toContain('风险等级的判断标准')
     }
 
     const search = await handleDocxWorkerRequest({
@@ -54,7 +56,7 @@ describe('docx legacy worker', () => {
       action: 'search',
       payload: {
         docId: opened.payload.docId,
-        query: 'Unicode characters',
+        query: '区别率',
         mode: 'literal',
         scopeNodeIds: []
       }
@@ -74,7 +76,7 @@ describe('docx legacy worker', () => {
           {
             type: 'replace_text',
             nodeId: outline.payload.nodes[0]!.nodeId,
-            oldText: 'second test',
+            oldText: '风险等级的判断标准',
             newText: 'changed'
           }
         ]
