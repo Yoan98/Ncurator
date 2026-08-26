@@ -30,7 +30,6 @@ const BACKEND_WORKERS = 6
 const E2E_WORKERS = 3
 const E2E_WORKERS_BY_TARGET = new Map([['macos-x64', 1]])
 const LIVE_WORKERS = 3
-const LIVE_BACKEND_RETRIES = 1
 const RUNNER_DEADLINE_MS = 55 * 60 * 1000
 const DEADLINE_EXIT_CODE = 124
 const STALE_E2E_TEMP_MAX_AGE_MS = 24 * 60 * 60 * 1000
@@ -1013,7 +1012,7 @@ const runTypeWorkflow = async (input) => {
           env: runtimeEnv,
           testNamePattern,
           workers: LIVE_WORKERS,
-          retries: LIVE_BACKEND_RETRIES,
+          retries: 0,
           deadlineAt: input.deadlineAt
         }
       ].filter((group) => group.testFiles.length > 0)
