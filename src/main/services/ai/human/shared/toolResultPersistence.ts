@@ -3,26 +3,24 @@ import path from 'node:path'
 import type { AiRunContext } from '../../types'
 import { getWorkspaceToolResultDir } from '../../../assets/WorkspaceAssetService'
 
-// 工具结果过大时不再硬失败：完整结果落盘到 runtime/toolresult 一次性目录，
-// 模型侧只收到截断后的前缀 head（与 maxChars 相同长度），需要完整内容时通过 text-file-read 读取落盘文件。
-// 字符串数量上限（而非 token 估算）：通过变量统一控制。
-export const TOOL_RESULT_MAX_CHARS = 80_000
+export const TOOL_RESULT_INLINE_MAX_CHARS = 32_000
+export const TOOL_RESULT_HEAD_MAX_CHARS = 8_000
 
-// 组装模型侧收到的截断工具结果消息（完整结果已落盘，head 为与 maxChars 同长的前缀）。
+export const countUnicodeCharacters = (value: string): number => Array.from(value).length
+
+export const sliceUnicodeCharacters = (value: string, maxChars: number): string =>
+  Array.from(value).slice(0, maxChars).join('')
+
 export const buildTruncatedToolResultMessage = (input: {
-  toolName: string
   filePath: string
   head: string
   totalChars: number
 }): string =>
   JSON.stringify({
     truncated: true,
-    toolName: input.toolName,
     filePath: input.filePath,
-    maxChars: TOOL_RESULT_MAX_CHARS,
     totalChars: input.totalChars,
-    head: input.head,
-    hint: `结果超过 ${TOOL_RESULT_MAX_CHARS} 字符（truncated），完整内容已落盘到 ${input.filePath}（共 ${input.totalChars} 字符）。需要剩余内容时可用 text-file-read 读取该文件，配合 startLine/lineCount 分段读取。`
+    head: input.head
   })
 
 const getResultRef = (toolCallId: string): string =>
@@ -45,7 +43,7 @@ export const persistToolResult = async (input: {
   const filePath = path.join(directoryPath, `${resultRef}.log`)
   await fs.mkdir(directoryPath, { recursive: true })
   await fs.writeFile(filePath, input.content, 'utf8')
-  return { filePath, totalChars: input.content.length }
+  return { filePath, totalChars: countUnicodeCharacters(input.content) }
 }
 
 export const cleanupToolResultDir = async (ctx: AiRunContext): Promise<void> => {

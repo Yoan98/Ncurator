@@ -4,21 +4,23 @@ import type { ChatMessageLogEntry, JsonObject, JsonValue } from '../../../../../
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import { buildHistoryToolResult } from '../../memory/historyToolResult'
-import { buildToolHistoryReturnValue, buildToolResultMessageContent } from '../../shared/historyRenderers'
+import {
+  buildToolHistoryReturnValue,
+  buildToolResultMessageContent
+} from '../../shared/historyRenderers'
 import {
   buildTruncatedToolResultMessage,
+  countUnicodeCharacters,
   persistToolResult,
-  TOOL_RESULT_MAX_CHARS
+  sliceUnicodeCharacters,
+  TOOL_RESULT_HEAD_MAX_CHARS,
+  TOOL_RESULT_INLINE_MAX_CHARS
 } from '../../shared/toolResultPersistence'
 import { buildToolFeedback } from '../../shared/toolFeedback'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import { analyzeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy'
-import type {
-  HumanRuntimeCache,
-  HumanState,
-  ToolCallResult
-} from '../../types'
+import type { HumanRuntimeCache, HumanState, ToolCallResult } from '../../types'
 import { executeToolCall } from './toolExecutor'
 import { returnToBrainAfterTrace, returnToDispatch } from '../utils/stateTransitions'
 
@@ -58,7 +60,6 @@ type ParsedHandCall = {
 const truncateToolResultMessage = async (input: {
   ctx: AiRunContext
   toolCallId: string
-  toolName: string
   fullContent: string
 }): Promise<string | undefined> => {
   const persisted = await persistToolResult({
@@ -68,9 +69,8 @@ const truncateToolResultMessage = async (input: {
   })
   if (!persisted) return undefined
   return buildTruncatedToolResultMessage({
-    toolName: input.toolName,
     filePath: persisted.filePath,
-    head: input.fullContent.slice(0, TOOL_RESULT_MAX_CHARS),
+    head: sliceUnicodeCharacters(input.fullContent, TOOL_RESULT_HEAD_MAX_CHARS),
     totalChars: persisted.totalChars
   })
 }
@@ -203,7 +203,9 @@ const appendToolMessages = async (input: {
   ctx: AiRunContext
   calls: ParsedHandCall[]
   results: ToolCallResult[]
-}): Promise<Array<{ toolCallId: string; toolName: string; ok: boolean; result: JsonValue | undefined }>> => {
+}): Promise<
+  Array<{ toolCallId: string; toolName: string; ok: boolean; result: JsonValue | undefined }>
+> => {
   const messages = input.cache.messages || []
   const transcriptEntries: Array<{
     toolCallId: string
@@ -219,13 +221,12 @@ const appendToolMessages = async (input: {
     const returnValue = buildToolHistoryReturnValue(historyResult)
     const fullContent = buildToolResultMessageContent(historyResult)
     const messageContent =
-      fullContent.length > TOOL_RESULT_MAX_CHARS
-        ? (await truncateToolResultMessage({
+      countUnicodeCharacters(fullContent) > TOOL_RESULT_INLINE_MAX_CHARS
+        ? ((await truncateToolResultMessage({
             ctx: input.ctx,
             toolCallId: call.toolCallId,
-            toolName: call.toolName,
             fullContent
-          })) ?? fullContent
+          })) ?? fullContent)
         : fullContent
     messages.push(
       new ToolMessage({

@@ -319,6 +319,26 @@ describe('docx recursive edit executor', () => {
       ).toEqual(['before ', 'MATCH', ' after'])
       expect(runs.map((run) => run.style?.bold)).toEqual([undefined, true, undefined])
       expect(detail.style?.alignment).toBe('center')
+      const styledAllText = await applyDocxOps({
+        buffer: styled.buffer,
+        ops: [
+          {
+            type: 'format_text',
+            nodeId: styledIndex.rootNodeIds[0]!,
+            format: { italic: true }
+          }
+        ]
+      })
+      const styledAllBundle = await loadDocxBundle(styledAllText.buffer)
+      const styledAllIndex = buildNodeIndex(styledAllBundle.documentDom)
+      const styledAllDetail = styledAllIndex.detailByNodeId.get(styledAllIndex.rootNodeIds[0]!)
+      expect(
+        styledAllDetail?.type === 'paragraph'
+          ? styledAllDetail.children
+              .filter((child) => child.type === 'run')
+              .every((run) => run.style?.italic === true)
+          : false
+      ).toBe(true)
       await expect(
         applyDocxOps({
           buffer: styled.buffer,

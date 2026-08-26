@@ -40,8 +40,8 @@ const fetchOutlineNodes = async (
     action: 'outline',
     payload: {
       docId,
-      ranges: [{ fromNodeIndex: 0, toNodeIndex: Number.MAX_SAFE_INTEGER }],
-      includeTables: true,
+      fromNodeIndex: 0,
+      toNodeIndex: Number.MAX_SAFE_INTEGER,
       includeCells: true
     }
   })
@@ -75,14 +75,14 @@ const fetchDetailedNode = async (
   return response.payload.node
 }
 
-const summarizePositionedNodeText = (node: DocxDetailedNode): string | undefined => {
-  const normalized = node.text.replace(/\s+/g, ' ').trim()
+const summarizePositionedNodeText = (text: string): string | undefined => {
+  const normalized = text.replace(/\s+/g, ' ').trim()
   if (normalized.length === 0) return undefined
   return normalized.length > 80 ? `${normalized.slice(0, 80)}...` : normalized
 }
 
-const buildPositionedDiagnostic = (node: DocxDetailedNode): string => {
-  const targetText = summarizePositionedNodeText(node)
+const buildPositionedDiagnostic = (text: string): string => {
+  const targetText = summarizePositionedNodeText(text)
   const target = targetText ? `：包含“${targetText}”的区域` : ''
   return `当前命中复杂定位排版区域${target}，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；该区域需要用户手动处理，其他非定位区域可继续自动编辑。`
 }
@@ -119,15 +119,16 @@ const failIfPositionedNode = async (input: {
   docId: string
   nodeId: string
 }): Promise<DocxToolFailure | null> => {
-  let node: DocxDetailedNode
-  try {
-    node = await fetchDetailedNode(input.runtime, input.docId, input.nodeId)
-  } catch (error) {
+  const response = await input.runtime.callWorker({
+    action: 'get_node_layout',
+    payload: { docId: input.docId, nodeId: input.nodeId }
+  })
+  if (!response.ok) {
     return input.runtime.emitFailure({
       toolName: input.toolName,
       toolCallId: input.toolCallId,
       reason: 'invalid_input',
-      error: error instanceof Error ? error.message : String(error),
+      error: response.error,
       draftDocId: input.docId,
       resourceContext: input.runtime.buildResourceContext({
         sourcePath: input.sourcePath,
@@ -136,10 +137,19 @@ const failIfPositionedNode = async (input: {
       })
     })
   }
-  if (node.layoutMode !== 'positioned') {
+  if (response.payload.action !== 'get_node_layout') {
+    return input.runtime.emitFailure({
+      toolName: input.toolName,
+      toolCallId: input.toolCallId,
+      reason: 'failed',
+      error: 'worker protocol mismatch (get_node_layout)',
+      draftDocId: input.docId
+    })
+  }
+  if (response.payload.layoutMode !== 'positioned') {
     return null
   }
-  const error = buildPositionedDiagnostic(node)
+  const error = buildPositionedDiagnostic(response.payload.text)
   return input.runtime.emitFailure({
     toolName: input.toolName,
     toolCallId: input.toolCallId,
@@ -243,10 +253,31 @@ type DocxWriteRequest =
   | DocxMediaEditRequest
   | DocxCommentsRevisionsRequest
 
-export const compileDocxOperation = (request: DocxWriteRequest): DocxOperation => {
+export const compileDocxOperations = (request: DocxWriteRequest): DocxOperation[] => {
   const { sourcePath, ...operation } = request
   void sourcePath
-  return operation
+  if (operation.type === 'format_text') {
+    return operation.targets.map((target) => ({
+      type: operation.type,
+      nodeId: target.nodeId,
+      ...(target.text ? { text: target.text } : {}),
+      format: operation.format
+    }))
+  }
+  if (
+    operation.type === 'format_paragraph' ||
+    operation.type === 'format_table' ||
+    operation.type === 'format_row' ||
+    operation.type === 'format_cell' ||
+    operation.type === 'format_section' ||
+    operation.type === 'reset_format' ||
+    operation.type === 'apply_named_style' ||
+    operation.type === 'set_numbering'
+  ) {
+    const { nodeIds, ...shared } = operation
+    return nodeIds.map((nodeId) => ({ ...shared, nodeId }) as DocxOperation)
+  }
+  return [operation]
 }
 
 type WriteToolResult = {
@@ -265,15 +296,8 @@ type WriteToolResult = {
 }
 
 type CompiledEdit = {
-  operation: DocxOperation
+  operations: DocxOperation[]
   summary: string
-}
-
-type OperationRecord = {
-  op: DocxOperation
-  beforeDocId: string
-  nextDocId: string
-  createdNodes: DocxCreatedNode[]
 }
 
 type ApplyEditResult =
@@ -290,9 +314,9 @@ type ApplyEditResult =
       result: WriteToolResult
     }
 
-const compileEdit = (operation: DocxOperation): CompiledEdit => ({
-  operation,
-  summary: `edit:${operation.type}`
+const compileEdit = (operations: DocxOperation[]): CompiledEdit => ({
+  operations,
+  summary: `edit:${operations[0]?.type || 'unknown'}`
 })
 
 const positionedNodeIds = (operation: DocxOperation): string[] => {
@@ -304,6 +328,10 @@ const positionedNodeIds = (operation: DocxOperation): string[] => {
   if ('cellNodeId' in operation) ids.push(operation.cellNodeId)
   return [...new Set(ids)]
 }
+
+const positionedNodeIdsForOperations = (operations: DocxOperation[]): string[] => [
+  ...new Set(operations.flatMap(positionedNodeIds))
+]
 
 const resolveCreatedNodes = async (input: {
   runtime: DocxToolRuntime
@@ -324,22 +352,6 @@ const resolveCreatedNodes = async (input: {
   return afterNodes
     .filter((node) => !previousIds.has(node.nodeId))
     .map((node) => ({ nodeId: node.nodeId, type: node.type }))
-}
-
-const expandOperationForReview = async (input: {
-  runtime: DocxToolRuntime
-  record: OperationRecord
-}): Promise<{
-  ops: DocxOperation[]
-  createdNodesByOperation: DocxCreatedNode[][]
-  opNextDocIds: string[]
-}> => {
-  const ops = await input.runtime.expandOpsForReview(input.record.beforeDocId, [input.record.op])
-  return {
-    ops,
-    createdNodesByOperation: ops.map((_, index) => (index === 0 ? input.record.createdNodes : [])),
-    opNextDocIds: ops.map(() => input.record.nextDocId)
-  }
 }
 
 const applyEdit = async (input: {
@@ -369,7 +381,7 @@ const applyEdit = async (input: {
   }
 
   const tempSession = cloned.session
-  const operation = input.compiled.operation
+  const operations = input.compiled.operations
   const positionedFailure = await failIfAnyPositionedNodes({
     runtime: input.runtime,
     toolName: input.toolName,
@@ -377,13 +389,13 @@ const applyEdit = async (input: {
     sourcePath: input.sourcePath,
     currentRevisionRef: input.currentRevisionRef,
     docId: input.currentDocId,
-    nodeIds: positionedNodeIds(operation)
+    nodeIds: positionedNodeIdsForOperations(operations)
   })
   if (positionedFailure) return { failure: positionedFailure }
 
   const workerResponse = await input.runtime.callWorker({
-    action: 'apply_operation',
-    payload: { docId: input.currentDocId, operation }
+    action: 'apply_operations',
+    payload: { docId: input.currentDocId, operations }
   })
   if (!workerResponse.ok) {
     return {
@@ -395,13 +407,13 @@ const applyEdit = async (input: {
       })
     }
   }
-  if (workerResponse.payload.action !== 'apply_operation') {
+  if (workerResponse.payload.action !== 'apply_operations') {
     return {
       failure: input.runtime.emitFailure({
         toolName: input.toolName,
         toolCallId: input.toolCallId,
         reason: 'failed',
-        error: 'worker protocol mismatch (apply_operation)',
+        error: 'worker protocol mismatch (apply_operations)',
         draftDocId: input.currentDocId
       })
     }
@@ -411,15 +423,14 @@ const applyEdit = async (input: {
     runtime: input.runtime,
     previousDocId: input.currentDocId,
     nextDocId: appliedPayload.newDocId,
-    operation
+    operation: operations[0]!
   })
-  const record: OperationRecord = {
-    op: operation,
-    beforeDocId: input.currentDocId,
-    nextDocId: appliedPayload.newDocId,
-    createdNodes
+  const reviewOps = await input.runtime.expandOpsForReview(input.currentDocId, operations)
+  const review = {
+    ops: reviewOps,
+    createdNodesByOperation: reviewOps.map((_, index) => (index === 0 ? createdNodes : [])),
+    opNextDocIds: reviewOps.map(() => appliedPayload.newDocId)
   }
-  const review = await expandOperationForReview({ runtime: input.runtime, record })
   for (const reviewOp of review.ops) {
     await input.runtime.applyTempRevisionToReplaySession({
       session: tempSession,
@@ -436,7 +447,7 @@ const applyEdit = async (input: {
       docId: appliedPayload.newDocId,
       changedNodes: appliedPayload.changedNodes,
       createdNodes,
-      operation
+      operation: operations[0]!
     })
   } catch (error) {
     return {
@@ -512,7 +523,6 @@ const applyEdit = async (input: {
   input.runtime.input.ctx.trackDocxChanges({
     previousDocId: input.currentDocId,
     nextDocId: appliedPayload.newDocId,
-    op: operation,
     changedNodes: appliedPayload.changedNodes,
     createdNodes,
     replaySession: input.runtime.getReplaySession(input.sourcePath)
@@ -621,18 +631,30 @@ const buildWriteToolResult = async (input: {
   }
   const createdIds = new Set(input.createdNodes.map((node) => node.nodeId))
   const changes: WriteToolResult['changes'] = []
-  for (const created of input.createdNodes) {
-    const detail = await fetchDetailedNode(input.runtime, input.docId, created.nodeId)
-    changes.push({ kind: 'created', node: projectDocxReadNode(detail) })
-  }
-  for (const changed of input.changedNodes) {
+  const uniqueCreated = [...new Map(input.createdNodes.map((node) => [node.nodeId, node])).values()]
+  const uniqueChanged = [
+    ...new Map(input.changedNodes.map((node) => [node.nodeId, node])).values()
+  ].filter((node) => !createdIds.has(node.nodeId))
+  const readback = await Promise.all([
+    ...uniqueCreated.map(async (created) => ({
+      kind: 'created' as const,
+      detail: await fetchDetailedNode(input.runtime, input.docId, created.nodeId)
+    })),
+    ...uniqueChanged
+      .filter((changed) => changed.action !== 'delete_node')
+      .map(async (changed) => ({
+        kind: 'updated' as const,
+        detail: await fetchDetailedNode(input.runtime, input.docId, changed.nodeId)
+      }))
+  ])
+  readback
+    .sort((left, right) => left.detail.nodeIndex - right.detail.nodeIndex)
+    .forEach((item) => changes.push({ kind: item.kind, node: projectDocxReadNode(item.detail) }))
+  for (const changed of uniqueChanged) {
     if (createdIds.has(changed.nodeId)) continue
     if (changed.action === 'delete_node') {
       changes.push({ kind: 'deleted', nodeId: changed.nodeId })
-      continue
     }
-    const detail = await fetchDetailedNode(input.runtime, input.docId, changed.nodeId)
-    changes.push({ kind: 'updated', node: projectDocxReadNode(detail) })
   }
   return {
     changes
@@ -647,7 +669,7 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
     inputSchema: TSchema
     activityActionType: string
   }
-  compile: (args: z.infer<TSchema>) => DocxOperation
+  compile: (args: z.infer<TSchema>) => DocxOperation[]
 }): StructuredToolInterface => {
   const runtime = input.runtime
   return createDocxTool({
@@ -663,9 +685,9 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
       })
     },
     execute: async ({ args, toolName, toolCallId }) => {
-      let operation: DocxOperation
+      let operations: DocxOperation[]
       try {
-        operation = input.compile(args)
+        operations = input.compile(args)
       } catch (error) {
         return finalizeDocxToolFailure({
           runtime,
@@ -718,6 +740,7 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
         (await documentExists(requestedSourcePath))
       )
       if (!sourceExists) {
+        const operation = operations[0]!
         const canCreate =
           (operation.type === 'insert_nodes' &&
             operation.position === 'document_end' &&
@@ -915,7 +938,6 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
               sourcePath: requestedSourcePath,
               baselineDocId,
               workingDocId,
-              meta: workingOpen.payload.meta,
               stats: workingOpen.payload.stats,
               persistedStats,
               summary: operation.type
@@ -945,7 +967,6 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
           runtime.input.ctx.trackDocxChanges({
             previousDocId: baselineDocId,
             nextDocId: workingDocId,
-            op: { type: 'create_document' },
             changedNodes: registered.changedNodes || [],
             createdNodes: registered.createdNodes || [],
             replaySession: registered.session
@@ -991,7 +1012,7 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
       })
       if ('failure' in sessionResult) return sessionResult.failure
 
-      const compiled = compileEdit(operation)
+      const compiled = compileEdit(operations)
 
       const applied = await applyEdit({
         runtime,
@@ -1019,7 +1040,7 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
         draftDocId: applied.nextDocId,
         activity: {
           actionType: input.spec.activityActionType,
-          startedSummary: `执行 ${toolName}: ${operation.type}`,
+          startedSummary: `执行 ${toolName}: ${operations[0]!.type}`,
           buildCompletedSummary: () => `${toolName} 完成`
         }
       })

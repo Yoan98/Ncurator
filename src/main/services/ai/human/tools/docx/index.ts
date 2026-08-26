@@ -1,5 +1,4 @@
 import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
-import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
 import type { DocxCapabilityToolsInput } from './types'
 import { createDocxToolRuntime } from './runtime'
 import { buildDocxReadTools } from './tools/readTools'
@@ -34,9 +33,6 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
       sessionId,
       taskId,
       workspaceRootPath,
-      emitActivity,
-      safePreviewChars: 1400,
-      modelContextWindowTokens:
-        ctx.humanRuntimeOverrides?.modelContextWindowTokens || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+      emitActivity
     }).tools
 })

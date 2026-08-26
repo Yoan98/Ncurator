@@ -175,19 +175,11 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         replaySession
       })
     },
-    trackDocxChanges: ({
-      previousDocId,
-      nextDocId,
-      op,
-      changedNodes,
-      createdNodes,
-      replaySession
-    }) => {
+    trackDocxChanges: ({ previousDocId, nextDocId, changedNodes, createdNodes, replaySession }) => {
       deps.docxApplyService.registerDocxChanges({
         runId: payload.runId,
         previousDocId,
         nextDocId,
-        op,
         changedNodes,
         createdNodes,
         replaySession

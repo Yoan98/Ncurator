@@ -22,8 +22,8 @@ describe('docx legacy worker', () => {
       action: 'outline',
       payload: {
         docId: opened.payload.docId,
-        ranges: [{ fromNodeIndex: 0, toNodeIndex: 100 }],
-        includeTables: true,
+        fromNodeIndex: 0,
+        toNodeIndex: 100,
         includeCells: true
       }
     })
@@ -67,15 +67,17 @@ describe('docx legacy worker', () => {
     const write = await handleDocxWorkerRequest({
       requestId: 'write',
       runId,
-      action: 'apply_operation',
+      action: 'apply_operations',
       payload: {
         docId: opened.payload.docId,
-        operation: {
-          type: 'replace_text',
-          nodeId: outline.payload.nodes[0]!.nodeId,
-          oldText: 'second test',
-          newText: 'changed'
-        }
+        operations: [
+          {
+            type: 'replace_text',
+            nodeId: outline.payload.nodes[0]!.nodeId,
+            oldText: 'second test',
+            newText: 'changed'
+          }
+        ]
       }
     })
     expect(write.ok).toBe(false)

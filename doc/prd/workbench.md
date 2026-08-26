@@ -116,11 +116,12 @@
 
 #### WB-CORE-006 用户诉求应被推进到完成或明确失败
 
-- 系统行为：当用户已提供足够上下文且当前能力允许时，workbench 应持续推进用户诉求直到完成，并返回可消费结果；若当前无法完成，也应明确返回失败原因、限制信息或下一步所需条件，而不是停留在搜索结果、工具调用或过程提示等中间过程。
+- 系统行为：当用户已提供足够上下文且当前能力允许时，workbench 应以“最小可靠返回 × 最少连续决策轮次”持续推进用户诉求直到完成：只读取当前决策所需范围，避免全量或重复读取，独立调用尽量同轮发起，同类批量能力不拆轮。若当前无法完成，也应明确返回失败原因、限制信息或下一步所需条件，而不是停留在搜索结果、工具调用或过程提示等中间过程。
 - 验收：
   - `WB-CORE-006-AC1` 用户诉求可完成时，系统会把任务推进到可消费结果、明确产物或可确认的下一步动作，而不是停留在中间态。
   - `WB-CORE-006-AC2` 用户诉求当前无法完成时，系统会明确说明失败原因、限制信息或下一步所需条件，而不是无声中断或只留下过程信息。
   - `WB-CORE-006-AC3` 最终收口默认直接围绕用户显式提出的问题组织；若同时需要说明产物、依据或限制，也应使用用户可理解的语言表达，而不是依赖内部标识、tool 名或固定章节标题。
+  - `WB-CORE-006-AC4` 简单任务不强制创建 plan；复杂或多依赖任务才维护 plan，不为汇报进度单独更新。目标满足且必要检查通过后可直接交付。
 
 #### WB-CORE-007 网页信息可用于任务推进
 
@@ -510,10 +511,11 @@
   - `WB-APPLY-002-AC10` DOCX visual 类型固定为 `image / chart / diagram / shape / embedded_object`。详细读取返回 visualId；outline 只在存在视觉内容时返回 count 和 kinds，不展开视觉节点。
   - `WB-APPLY-002-AC11` `docx_read_visuals` 接受 1 至 10 个 visualId 和识别要求，按输入顺序逐项返回识别文字或错误；结果不写入正文搜索索引，`.doc` 不支持视觉读取。
   - `WB-APPLY-002-AC12` `docx_content_edit` 使用浅层节点构造和最小 patch：支持 `replace_text / insert_nodes / replace_node / delete_node / move_node`，不提供 `replace_content` 或 `replace_children`，也不要求 AI 重建完整递归树。
-  - `WB-APPLY-002-AC13` `docx_format` 分别支持 text、paragraph、table、row、cell 和 section 的直接格式，另支持重置格式、命名样式 CRUD、应用命名样式和编号。patch 类型与目标节点不一致时整次写入失败；`update_named_style` 修改全局样式定义。
+  - `WB-APPLY-002-AC13` `docx_format` 分别支持 text、paragraph、table、row、cell 和 section 的直接格式，另支持重置格式、命名样式 CRUD、应用命名样式和编号。`format_text` 使用最多 20 个 `{ nodeId, text? }` target，其余局部格式 operation 使用最多 20 个 `nodeIds`；同次调用共享一个 patch、拒绝重复 ID，并在全部目标预校验后原子提交。patch 类型或任一目标不匹配时整次写入失败；`update_named_style` 修改全局样式定义。
   - `WB-APPLY-002-AC14` `replace_text` 只在指定 `nodeId` 子树内替换确定原文，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual；原位保留未修改 run、段落格式和视觉节点。
   - `WB-APPLY-002-AC15` 替换或删除节点、删除表格行列或合并单元格时，如被移除区域存在 visual，必须明确传 `allowVisualLoss:true`，否则保存前失败。表格读写坐标统一从 1 开始。失败不得推进 WorkingPackage，也不得产生部分结果。
-  - `WB-APPLY-002-AC16` `docx_read_outline` 返回轻量顺序摘要；`docx_read_nodes` 返回 story 递归语义树，一次最多读取 20 个 nodeId 或连续 50 个根节点。未支持 OOXML 投影为 opaque，局部写入必须原样保留；content control 是可定位容器，空容器可用 `insert_nodes inside_start/inside_end` 写入。
+  - `WB-APPLY-002-AC16` `docx_read_outline` 使用 `startPage/pageCount` 返回轻量逻辑分页，一页 50 个节点、一次最多 2 页，并返回 `startPage/endPage/totalPages`；逻辑页不是 Word 视觉页。节点不展开 table cell、run 或 children，`textPreview` 最多 160 个 Unicode 字符，超限保留首 100 与尾 59 个字符。`docx_read_nodes` 返回 story 递归语义树，一次最多读取 20 个 nodeId 或连续 50 个根节点。未支持 OOXML 投影为 opaque，局部写入必须原样保留；content control 是可定位容器，空容器可用 `insert_nodes inside_start/inside_end` 写入。
+  - `WB-APPLY-002-AC16-1` 每条工具结果独立判断大小：不超过 32,000 字符时完整进入模型上下文，超过时完整落盘并返回最多 8,000 字符的 head；截断信封只包含 `truncated/filePath/totalChars/head`，同一 dispatch 不设置批次总量限制。
   - `WB-APPLY-002-AC17` 五个 DOCX 写工具统一返回 discriminated `changes`：节点创建/更新返回局部完整节点，节点删除返回 `nodeId`，命名样式、批注和修订返回对应实体 ID 与最终状态；禁止只返回成功消息。
   - `WB-APPLY-002-AC17-1` 同一 Run 内五个写工具共享首次接触文件时的 Source 和连续推进的 Working。Diff 比较 Source 与最终 Working：A→B→A、新增后删除不产生 Diff；body、header、footer、footnote、endnote、textbox 均生成红绿审核结果，只有 package part 变化时显示“文档级变更”摘要；Word 原生批注和修订与 NCurator Diff 独立保留。
   - `WB-APPLY-002-AC18` 所有 Human 工具的输入结构由 Zod schema 统一渲染；公共类型使用稳定命名定义并只展开一次，同时保留长度、数量、正则、数值和跨字段语义约束，不生成匿名 schema 名称。

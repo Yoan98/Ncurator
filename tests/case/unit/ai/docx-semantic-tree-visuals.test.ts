@@ -235,8 +235,8 @@ describe('docx recursive semantic tree visuals', () => {
       action: 'outline',
       payload: {
         docId: open.payload.docId,
-        ranges: [{ fromNodeIndex: 0, toNodeIndex: 100 }],
-        includeTables: true,
+        fromNodeIndex: 0,
+        toNodeIndex: 100,
         includeCells: true
       }
     })

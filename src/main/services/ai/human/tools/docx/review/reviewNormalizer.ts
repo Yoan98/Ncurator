@@ -71,7 +71,7 @@ const normalizeGeneratedNode = (node: DocxReplayNode): DocxReplayNode | null => 
     ...node,
     reviewId: `net-inserted:${node.nodeId}`,
     reviewState: 'inserted',
-    reviewQuery: undefined,
+    reviewQueries: undefined,
     tableCellChanges: undefined
   }
 }
@@ -99,7 +99,7 @@ const normalizeSourceLineage = (input: {
         structureFingerprint: baseline.structureFingerprint,
         visualIds: baseline.visuals.map((visual) => visual.visualId),
         reviewState: 'deleted',
-        reviewQuery: undefined,
+        reviewQueries: undefined,
         tableCellChanges: undefined
       }
     ]
@@ -118,7 +118,7 @@ const normalizeSourceLineage = (input: {
         reviewId: `net-normal:${input.sourceNodeId}`,
         sourceNodeId: input.sourceNodeId,
         reviewState: 'normal',
-        reviewQuery: undefined,
+        reviewQueries: undefined,
         tableCellChanges: undefined
       }
     ]
@@ -138,7 +138,7 @@ const normalizeSourceLineage = (input: {
           reviewId: `net-table-cells:${input.sourceNodeId}`,
           sourceNodeId: input.sourceNodeId,
           reviewState: 'formatted',
-          reviewQuery: undefined,
+          reviewQueries: undefined,
           tableCellChanges
         }
       ]
@@ -152,7 +152,7 @@ const normalizeSourceLineage = (input: {
         reviewId: `net-formatted:${input.sourceNodeId}`,
         sourceNodeId: input.sourceNodeId,
         reviewState: 'formatted',
-        reviewQuery: undefined,
+        reviewQueries: undefined,
         tableCellChanges: undefined
       }
     ]
@@ -169,7 +169,7 @@ const normalizeSourceLineage = (input: {
     structureFingerprint: baseline.structureFingerprint,
     visualIds: baseline.visuals.map((visual) => visual.visualId),
     reviewState: 'replaced-old',
-    reviewQuery: undefined,
+    reviewQueries: undefined,
     tableCellChanges: undefined
   }
   const newNode: DocxReplayNode = {
@@ -177,7 +177,7 @@ const normalizeSourceLineage = (input: {
     reviewId: `net-replaced-new:${input.sourceNodeId}`,
     sourceNodeId: input.sourceNodeId,
     reviewState: 'replaced-new',
-    reviewQuery: undefined,
+    reviewQueries: undefined,
     tableCellChanges: undefined,
     replacedFromNodeId: oldNode.reviewId,
     predecessorNodeId: oldNode.reviewId

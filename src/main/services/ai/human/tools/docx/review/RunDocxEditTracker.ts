@@ -3,7 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { DocxApplyRecord } from '../../../../../../../shared/types'
 import type { DocxApplyStore } from '../../../../../storage/domains/DocxApplyStore'
-import type { DocxChangedNode, DocxCreatedNode, DocxOperation, DocxReplaySession } from '../types'
+import type { DocxChangedNode, DocxCreatedNode, DocxReplaySession } from '../types'
 import { getDocxWorkerClient } from '../worker/docxWorkerClient'
 import { materializeDocxProjectedArtifact } from './reviewSerializer'
 import type { RunDocxEditDocument } from './types'
@@ -72,7 +72,6 @@ export class RunDocxEditTracker {
     runId: string
     previousDocId: string
     nextDocId: string
-    op: DocxOperation
     changedNodes: DocxChangedNode[]
     createdNodes: DocxCreatedNode[]
     replaySession?: DocxReplaySession

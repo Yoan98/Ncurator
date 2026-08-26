@@ -3,12 +3,8 @@ import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { TOOL_RESULT_MAX_CHARS } from '../../../../../src/main/services/ai/human/shared/toolResultPersistence'
-import {
-  buildCompleteTaskDecision,
-  buildLearnSkillsDecision,
-  buildToolDecision
-} from '../testUtils'
+import { TOOL_RESULT_INLINE_MAX_CHARS } from '../../../../../src/main/services/ai/human/shared/toolResultPersistence'
+import { buildCompleteTaskDecision, buildLearnSkillsDecision } from '../testUtils'
 
 const listLogFiles = async (rootPath: string): Promise<string[]> => {
   const entries = await fs.readdir(rootPath, { withFileTypes: true }).catch(() => [])
@@ -35,11 +31,14 @@ describe('ai human mock-llm tool result truncation', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const sourcePath = path.join(runtime.workspaceRoot, 'large.txt')
+        const smallSourcePath = path.join(runtime.workspaceRoot, 'small.txt')
         const longLine = '第 {index} 行内容用于验证工具结果整串截断与落盘。'
         const lines = Array.from({ length: 8_000 }, (_, index) =>
           longLine.replace('{index}', String(index + 1))
         )
         await fs.writeFile(sourcePath, lines.join('\n'), 'utf8')
+        await fs.writeFile(smallSourcePath, 'SMALL_RESULT_REMAINS_COMPLETE', 'utf8')
+        let modelReceivedBothIndependentResults = false
 
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
@@ -51,17 +50,24 @@ describe('ai human mock-llm tool result truncation', () => {
                 })
               },
               {
-                output: buildToolDecision({
-                  toolName: 'text_file_read',
-                  args: { sourcePath },
-                  summary: '读取大文件'
-                })
+                output: {
+                  thought: { next: '同轮读取大小两个文件。' },
+                  toolCalls: [
+                    { name: 'text_file_read', args: { sourcePath } },
+                    { name: 'text_file_read', args: { sourcePath: smallSourcePath } }
+                  ]
+                }
               },
-              {
-                output: buildCompleteTaskDecision({
-                  summary: '已读完大文件内容。',
-                  deliveryMarkdown: '大文件内容已读取。'
-                })
+              ({ user }) => {
+                modelReceivedBothIndependentResults =
+                  user.includes('"truncated":true') &&
+                  user.includes('SMALL_RESULT_REMAINS_COMPLETE')
+                return {
+                  output: buildCompleteTaskDecision({
+                    summary: '已读完大文件内容。',
+                    deliveryMarkdown: '大文件内容已读取。'
+                  })
+                }
               }
             ]
           }
@@ -79,7 +85,8 @@ describe('ai human mock-llm tool result truncation', () => {
         return {
           output,
           toolResultLogFiles,
-          persistedContent
+          persistedContent,
+          modelReceivedBothIndependentResults
         }
       },
       assert: async (result, runtime) => {
@@ -97,7 +104,8 @@ describe('ai human mock-llm tool result truncation', () => {
           result.output.status === 'completed' &&
             result.toolResultLogFiles.length >= 1 &&
             persistedParseable &&
-            result.persistedContent.length > TOOL_RESULT_MAX_CHARS,
+            result.persistedContent.length > TOOL_RESULT_INLINE_MAX_CHARS &&
+            result.modelReceivedBothIndependentResults,
           {
             name: 'human-large-tool-result-persisted-to-toolresult',
             message:
@@ -107,7 +115,8 @@ describe('ai human mock-llm tool result truncation', () => {
               persistedContentLength: result.persistedContent.length
             }
           }
-        )      }
+        )
+      }
     })
   })
 })

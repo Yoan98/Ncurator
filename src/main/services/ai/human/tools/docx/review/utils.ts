@@ -35,7 +35,7 @@ export const describeDocxOperation = (op: DocxOperation): string => {
 
 export const buildDocxChangeTitle = (op: DocxOperation, change: DocxChangedNode): string => {
   if (op.type === 'format_text') {
-    const query = op.text.trim()
+    const query = op.text?.trim() || ''
     return query ? `更新文本样式: ${query}` : '更新文本样式'
   }
   const baseText = String(change.afterText || change.beforeText).trim()
@@ -46,7 +46,7 @@ export const buildDocxChangeTitle = (op: DocxOperation, change: DocxChangedNode)
 
 export const buildDocxChangeSummary = (op: DocxOperation, change: DocxChangedNode): string =>
   op.type === 'format_text'
-    ? `${describeDocxOperation(op)} ${change.nodeId}: ${op.text.trim()}`
+    ? `${describeDocxOperation(op)} ${change.nodeId}${op.text?.trim() ? `: ${op.text.trim()}` : ''}`
     : `${describeDocxOperation(op)} ${change.nodeId}`
 
 export const calculateFileStats = async (

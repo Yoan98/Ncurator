@@ -54,6 +54,18 @@ describe('ai unit brain prompt formatting', () => {
     expect(environment).toContain('runtime_paths.assets：')
   })
 
+  it('keeps context efficiency and planning rules concise', () => {
+    const system = buildBrainSystemPrompt({ ctx: createFakeCtx() })
+    const efficiency =
+      system.match(/<context_efficiency>([\s\S]*?)<\/context_efficiency>/)?.[1] || ''
+
+    expect(efficiency).toContain('最小可靠信息和最少连续决策轮次')
+    expect(efficiency).toContain('同类操作能批量完成时不拆成多轮')
+    expect(system).toContain('仅复杂或存在多项依赖的任务使用 update_plan')
+    expect(system).toContain('必要检查通过且目标满足后，可以直接交付')
+    expect(system).not.toContain('计划最后一项必须是检查项')
+  })
+
   it('renders the default preference and reference scope in the user message', () => {
     const state = createInitialHumanState({
       taskId: 'task-prompt-formatting',
@@ -80,8 +92,7 @@ describe('ai unit brain prompt formatting', () => {
 
     const user = buildBrainUserMessage({ state, ctx: createFakeCtx(), injectPlan: true })
 
-    const currentState =
-      user.match(/<current_state>([\s\S]*?)<\/current_state>/)?.[1] || ''
+    const currentState = user.match(/<current_state>([\s\S]*?)<\/current_state>/)?.[1] || ''
     expect(currentState).toContain('<plan>')
     expect(currentState).toContain('[done] 整理资料')
     expect(currentState).toContain('[todo] 检查是否满足诉求')

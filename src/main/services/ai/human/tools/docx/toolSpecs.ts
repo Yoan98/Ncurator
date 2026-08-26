@@ -50,7 +50,8 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   outputSchema: docxOutlineOutputSchema,
   promptSpec: {
     name: 'docx_read_outline',
-    description: '快速读取 Word 文档的正文顺序和结构摘要。返回临时 nodeIndex 与稳定 nodeId；'
+    description:
+      '按逻辑分页返回 Word 文档的轻量顺序和结构摘要；逻辑页不代表 Word 排版页面。返回临时 nodeIndex 与稳定 nodeId。'
   },
   resolveExecutionMeta: readMeta,
   activityActionType: 'docx_read_outline'
@@ -146,7 +147,7 @@ export const DOCX_FORMAT_TOOL_SPEC = defineWriteSpec({
   name: 'docx_format',
   schema: docxFormatSchema,
   description:
-    '修改文字、段落、表格、行、单元格、section、命名样式或编号。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。'
+    '原子修改一个或多个 DOCX 节点的文字、段落、表格、行、单元格、section、命名样式或编号；同一局部 operation 对所有目标应用同一格式 patch。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。'
 })
 
 export const DOCX_TABLE_EDIT_TOOL_SPEC = defineWriteSpec({

@@ -8,14 +8,6 @@ import {
   docxTableStyleSchema
 } from './schemas'
 
-export const docxResultCodeSchema = z.enum([
-  'ok',
-  'failed',
-  'invalid_input',
-  'approval_denied',
-  'result_too_large'
-])
-
 const docxVisualSummaryOutputSchema = z
   .object({
     count: z.number().int().positive(),
@@ -30,54 +22,67 @@ const docxStoryOutputSchema = z
   })
   .strict()
 
-const docxOutlineParagraphNodeOutputSchema = z.object({
-  nodeId: z.string(),
-  type: z.literal('paragraph'),
-  nodeIndex: z.number().int(),
-  text: z.string(),
-  visuals: docxVisualSummaryOutputSchema.optional(),
-  story: docxStoryOutputSchema
-})
+const docxOutlineStoryOutputSchema = z.enum([
+  'body',
+  'header',
+  'footer',
+  'footnote',
+  'endnote',
+  'textbox'
+])
 
-const docxOutlineTableNodeOutputSchema = z.object({
-  nodeId: z.string(),
-  type: z.literal('table'),
-  nodeIndex: z.number().int(),
-  rows: z.number().int(),
-  cols: z.number().int(),
-  text: z.string(),
-  visuals: docxVisualSummaryOutputSchema.optional(),
-  story: docxStoryOutputSchema
-})
+const docxOutlineParagraphNodeOutputSchema = z
+  .object({
+    nodeId: z.string(),
+    type: z.literal('paragraph'),
+    nodeIndex: z.number().int(),
+    story: docxOutlineStoryOutputSchema,
+    textPreview: z.string(),
+    styleId: z.string().optional(),
+    visuals: docxVisualSummaryOutputSchema.optional()
+  })
+  .strict()
 
-const docxOutlineCellNodeOutputSchema = z.object({
-  nodeId: z.string(),
-  type: z.literal('table_cell'),
-  nodeIndex: z.number().int(),
-  tableNodeId: z.string(),
-  row: z.number().int(),
-  col: z.number().int(),
-  text: z.string(),
-  visuals: docxVisualSummaryOutputSchema.optional(),
-  story: docxStoryOutputSchema
-})
+const docxOutlineTableNodeOutputSchema = z
+  .object({
+    nodeId: z.string(),
+    type: z.literal('table'),
+    nodeIndex: z.number().int(),
+    story: docxOutlineStoryOutputSchema,
+    textPreview: z.string(),
+    rows: z.number().int(),
+    columns: z.number().int(),
+    visuals: docxVisualSummaryOutputSchema.optional()
+  })
+  .strict()
 
-const docxOutlineContainerOutputSchema = z.object({
-  nodeId: z.string(),
-  type: z.enum(['content_control', 'revision']),
-  nodeIndex: z.number().int(),
-  text: z.string(),
-  story: docxStoryOutputSchema,
-  tag: z.string().optional(),
-  revisionId: z.string().optional(),
-  revisionKind: z.enum(['insert', 'delete', 'move_from', 'move_to']).optional()
-})
+const docxOutlineContentControlOutputSchema = z
+  .object({
+    nodeId: z.string(),
+    type: z.literal('content_control'),
+    nodeIndex: z.number().int(),
+    story: docxOutlineStoryOutputSchema,
+    textPreview: z.string(),
+    tag: z.string().optional()
+  })
+  .strict()
+
+const docxOutlineRevisionOutputSchema = z
+  .object({
+    nodeId: z.string(),
+    type: z.literal('revision'),
+    nodeIndex: z.number().int(),
+    story: docxOutlineStoryOutputSchema,
+    textPreview: z.string(),
+    revisionKind: z.enum(['insert', 'delete', 'move_from', 'move_to'])
+  })
+  .strict()
 
 const docxOutlineNodeOutputSchema = z.discriminatedUnion('type', [
   docxOutlineParagraphNodeOutputSchema,
   docxOutlineTableNodeOutputSchema,
-  docxOutlineCellNodeOutputSchema,
-  docxOutlineContainerOutputSchema
+  docxOutlineContentControlOutputSchema,
+  docxOutlineRevisionOutputSchema
 ])
 
 const textNode = z.object({ type: z.literal('text'), text: z.string() }).strict()
@@ -341,11 +346,14 @@ const docxBaseOutputSchema = z.object({
   sourcePath: z.string().optional()
 })
 
-export const docxOutlineOutputSchema = docxBaseOutputSchema.extend({
-  sourcePath: z.string(),
-  totalNodeCount: z.number().int().min(0),
-  nodes: z.array(docxOutlineNodeOutputSchema)
-})
+export const docxOutlineOutputSchema = z
+  .object({
+    startPage: z.number().int().min(1),
+    endPage: z.number().int().min(1),
+    totalPages: z.number().int().min(1),
+    nodes: z.array(docxOutlineNodeOutputSchema)
+  })
+  .strict()
 
 export const docxSearchOutputSchema = docxBaseOutputSchema.extend({
   sourcePath: z.string(),

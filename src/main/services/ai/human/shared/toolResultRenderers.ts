@@ -109,6 +109,7 @@ const renderDocxNodeLine = (value: JsonValue, index: number, depth = 0): string 
       ? visuals.kinds.filter((kind): kind is string => typeof kind === 'string').join(',')
       : undefined
   const text =
+    readStringField(value, 'textPreview') ||
     readStringField(value, 'text') ||
     readStringField(value, 'summary') ||
     readStringField(value, 'message') ||
@@ -121,7 +122,10 @@ const renderDocxNodeLine = (value: JsonValue, index: number, depth = 0): string 
       ['row', readNumberTextField(value, 'row')],
       ['col', readNumberTextField(value, 'col')],
       ['rows', readNumberTextField(value, 'rows')],
-      ['cols', readNumberTextField(value, 'cols')],
+      ['columns', readNumberTextField(value, 'columns') || readNumberTextField(value, 'cols')],
+      ['story', readStringField(value, 'story')],
+      ['styleId', readStringField(value, 'styleId')],
+      ['revisionKind', readStringField(value, 'revisionKind')],
       ['visualCount', visuals ? readNumberTextField(visuals, 'count') : undefined],
       ['visualKinds', visualKinds]
     ]) || undefined
@@ -185,8 +189,9 @@ const renderDocxSearchResult = (obj: JsonObject): string =>
 const renderDocxOutlineResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
-      ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['totalNodeCount', readNumberTextField(obj, 'totalNodeCount')]
+      ['startPage', readNumberTextField(obj, 'startPage')],
+      ['endPage', readNumberTextField(obj, 'endPage')],
+      ['totalPages', readNumberTextField(obj, 'totalPages')]
     ]),
     'nodes:',
     renderDocxNodes(obj.nodes)

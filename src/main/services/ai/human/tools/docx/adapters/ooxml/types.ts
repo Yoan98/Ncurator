@@ -3,7 +3,6 @@ import type {
   DocxChangedNode,
   DocxDetailedNode,
   DocxLayoutMode,
-  DocxOpenMeta,
   DocxStoryRef,
   DocxOutlineNode,
   DocxVisualKind
@@ -111,7 +110,6 @@ export type ParsedDocxBundle = {
   zip: JSZip
   documentXml: string
   documentDom: Document
-  meta: DocxOpenMeta
   relationshipTargets: Map<string, string>
   relationshipTypes: Map<string, string>
   relationshipTargetModes: Map<string, string>

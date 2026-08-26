@@ -1,5 +1,5 @@
-export const DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE =
-  '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
-
-export const isDocxPositionedLayoutProtectionMessage = (message: string | undefined): boolean =>
-  typeof message === 'string' && message.includes('当前命中复杂定位排版区域')
+export const DOCX_OUTLINE_ITEMS_PER_PAGE = 50
+export const DOCX_OUTLINE_MAX_PAGE_COUNT = 2
+export const DOCX_OUTLINE_TEXT_PREVIEW_CHARS = 160
+export const DOCX_OUTLINE_TEXT_PREVIEW_HEAD_CHARS = 100
+export const DOCX_FORMAT_MAX_TARGETS = 20

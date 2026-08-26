@@ -14,6 +14,9 @@ const DOCX_NODE_WHITELIST: NestedWhitelistConfig = {
   type: true,
   nodeIndex: true,
   text: true,
+  textPreview: true,
+  styleId: true,
+  story: true,
   kind: true,
   style: true,
   target: true,
@@ -27,7 +30,10 @@ const DOCX_NODE_WHITELIST: NestedWhitelistConfig = {
     kinds: true
   },
   row: true,
-  col: true
+  col: true,
+  rows: true,
+  columns: true,
+  revisionKind: true
 }
 DOCX_NODE_WHITELIST.children = DOCX_NODE_WHITELIST
 const DOCX_WRITE_RESULT_WHITELIST: NestedWhitelistConfig = {
@@ -215,9 +221,9 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     total: true
   },
   docx_read_outline: {
-    sourcePath: true,
-    currentRevisionRef: true,
-    totalNodeCount: true,
+    startPage: true,
+    endPage: true,
+    totalPages: true,
     nodes: DOCX_NODE_WHITELIST
   },
   docx_search: {
@@ -403,7 +409,8 @@ const filterValueByWhitelist = (
 
 export const buildToolHistoryReturnValue = (result: HumanHistoryToolResult): JsonObject => {
   if (result.ok) {
-    const config = TOOL_HISTORY_WHITELIST_BY_NAME[result.toolName] || FALLBACK_TOOL_HISTORY_WHITELIST
+    const config =
+      TOOL_HISTORY_WHITELIST_BY_NAME[result.toolName] || FALLBACK_TOOL_HISTORY_WHITELIST
     const filteredValue = filterValueByWhitelist(result.data, config)
     const filtered = isJsonObject(filteredValue) ? filteredValue : {}
     return { status: 'success', result: filtered }

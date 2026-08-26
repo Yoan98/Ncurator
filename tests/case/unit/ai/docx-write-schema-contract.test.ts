@@ -52,7 +52,7 @@ describe('ai unit docx write schema contract', () => {
       docxFormatSchema.safeParse({
         sourcePath: 'a.docx',
         type: 'format_paragraph',
-        nodeId: 'node_1',
+        nodeIds: ['node_1', 'node_2'],
         format: { alignment: 'center' }
       }).success
     ).toBe(true)
@@ -71,8 +71,7 @@ describe('ai unit docx write schema contract', () => {
       docxFormatSchema.safeParse({
         sourcePath: 'a.docx',
         type: 'format_text',
-        nodeId: 'node_1',
-        text: '标题',
+        targets: [{ nodeId: 'node_1', text: '标题' }],
         format: {}
       }).success
     ).toBe(false)
@@ -80,8 +79,7 @@ describe('ai unit docx write schema contract', () => {
       docxFormatSchema.safeParse({
         sourcePath: 'a.docx',
         type: 'format_text',
-        nodeId: 'node_1',
-        text: '标题',
+        targets: [{ nodeId: 'node_1', text: '标题' }],
         format: { color: '#FF0000' }
       }).success
     ).toBe(false)

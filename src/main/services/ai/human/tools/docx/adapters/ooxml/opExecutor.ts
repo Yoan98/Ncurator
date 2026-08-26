@@ -5,7 +5,14 @@ import type JSZip from 'jszip'
 import type { DocxBorders, DocxChangedNode, DocxOperation, DocxStylePatch } from '../../types'
 import { buildDocumentNodeIndex, extractNodeText, loadDocxBundle } from './nodeIndex'
 import { createParagraphFromNode, createRelationshipWriter } from './createNodeDom'
-import { childElements, descendantElements, firstChildElement, getAttr, isElementNode } from './dom'
+import {
+  childElements,
+  collectText,
+  descendantElements,
+  firstChildElement,
+  getAttr,
+  isElementNode
+} from './dom'
 import type { ApplyOpsResult, NodeIndex } from './types'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -2010,6 +2017,73 @@ const expectedKind = (kind: string): DocxStylePatch['kind'] =>
           ? 'table_cell'
           : 'run'
 
+export const validateDocxOperationTargets = async (
+  buffer: Buffer,
+  operations: DocxOperation[]
+): Promise<void> => {
+  const bundle = await loadDocxBundle(buffer)
+  const index = buildCurrentIndex(bundle)
+  operations.forEach((operation) => {
+    if (
+      operation.type !== 'format_text' &&
+      operation.type !== 'format_paragraph' &&
+      operation.type !== 'format_table' &&
+      operation.type !== 'format_row' &&
+      operation.type !== 'format_cell' &&
+      operation.type !== 'format_section' &&
+      operation.type !== 'reset_format' &&
+      operation.type !== 'apply_named_style' &&
+      operation.type !== 'set_numbering'
+    ) {
+      return
+    }
+    const editable = index.editableNodesById.get(operation.nodeId)
+    const node = index.nodesById.get(operation.nodeId)
+    const actualKind = editable?.kind || node?.kind
+    const element = editable?.node || node?.node
+    if (!actualKind || !element) throw new Error(`format target not found: ${operation.nodeId}`)
+    if (operation.type === 'format_text') {
+      const targetText = collectText(element)
+      if (operation.text && !targetText.includes(operation.text)) {
+        throw new Error(`format_text target text not found: ${operation.nodeId}`)
+      }
+      if (!operation.text && targetText.length === 0) {
+        throw new Error(`format_text target contains no text: ${operation.nodeId}`)
+      }
+      return
+    }
+    if (
+      operation.type === 'reset_format' &&
+      !['r', 'p', 'tbl', 'tr', 'tc'].includes(element.localName)
+    ) {
+      throw new Error(`reset_format does not support ${element.localName}`)
+    }
+    if (operation.type === 'format_section') {
+      const target = editable || node
+      if (target?.story.type !== 'body') {
+        throw new Error('format_section target must be in the document body')
+      }
+    }
+    const requiredKind =
+      operation.type === 'format_paragraph' || operation.type === 'apply_named_style'
+        ? 'paragraph'
+        : operation.type === 'format_table'
+          ? 'table'
+          : operation.type === 'format_row'
+            ? 'table_row'
+            : operation.type === 'format_cell'
+              ? 'table_cell'
+              : operation.type === 'set_numbering'
+                ? 'paragraph'
+                : undefined
+    if (requiredKind && actualKind !== requiredKind) {
+      throw new Error(
+        `format patch type mismatch: target is ${actualKind}, expected ${requiredKind}`
+      )
+    }
+  })
+}
+
 type DirectFormatOp = Extract<
   DocxOperation,
   {
@@ -2032,12 +2106,24 @@ const applyDirectFormat = async (buffer: Buffer, op: DirectFormatOp) => {
   if (op.type === 'format_text') {
     const target = editableElement(index, op.nodeId)
     let changed = false
-    directParagraphs(target).forEach((paragraph) => {
-      if (styleMatchesInParagraph(paragraph, op.text, { kind: 'run', ...op.format })) {
-        changed = true
+    const textScopes = directParagraphs(target)
+    if (textScopes.length === 0) textScopes.push(target)
+    textScopes.forEach((paragraph) => {
+      if (op.text) {
+        if (styleMatchesInParagraph(paragraph, op.text, { kind: 'run', ...op.format })) {
+          changed = true
+        }
+        return
       }
+      const runs = paragraph.localName === 'r' ? [paragraph] : descendantElements(paragraph, 'r')
+      runs
+        .filter((run) => descendantElements(run, 't').some((text) => Boolean(text.textContent)))
+        .forEach((run) => {
+          patchRunProperties(run, { kind: 'run', ...op.format })
+          changed = true
+        })
     })
-    if (!changed) throw new Error('format_text target text not found')
+    if (!changed) throw new Error('format_text target contains no text')
   } else {
     const editable = index.editableNodesById.get(op.nodeId)
     const node = index.nodesById.get(op.nodeId)

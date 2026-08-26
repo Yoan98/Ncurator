@@ -2,10 +2,15 @@ import fs from 'node:fs/promises'
 import JSZip from 'jszip'
 import { describe, it } from 'vitest'
 import type { DocxApplyRecord } from '../../../../../src/shared/types'
-import { createDocxToolHarness, writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
+import {
+  createDocxToolHarness,
+  writeRichTestDocxFile,
+  writeTestDocxFile
+} from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+import type { DocxPublicReadRootNode } from '../../../../../src/main/services/ai/human/tools/docx/nodeTypes'
 
-type OutlineNode = { nodeId: string; type: string; text: string }
+type OutlineNode = { nodeId: string; type: string; textPreview: string }
 type OutlineResult = { nodes: OutlineNode[] }
 
 const documentXml = async (filePath: string): Promise<string> => {
@@ -78,16 +83,29 @@ describe('ai tool docx v2 apply and diff backend', () => {
         const restoredPath = await writeTestDocxFile(runtime.workspaceRoot, 'v2-restored.docx', [
           { type: 'paragraph', text: 'Restore A' }
         ])
+        const batchFormatPath = await writeRichTestDocxFile(
+          runtime.workspaceRoot,
+          'v2-batch-format.docx',
+          [
+            {
+              type: 'paragraph',
+              paragraph: {
+                runs: [{ text: 'First' }, { text: ' gap ' }, { text: 'Second' }]
+              }
+            }
+          ]
+        )
         const before = await fs.readFile(sourcePath)
         const harness = createDocxToolHarness(runtime)
         try {
           harness.ctx.beginDocxApplyRun()
           const outline = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath,
-            ranges: [{ type: 'node_index', fromNodeIndex: 0, toNodeIndex: 20 }]
+            startPage: 1,
+            pageCount: 1
           })
-          const paragraph = outline.nodes.find((node) => node.text === 'Version A')!
-          const header = outline.nodes.find((node) => node.text === 'Header A')!
+          const paragraph = outline.nodes.find((node) => node.textPreview === 'Version A')!
+          const header = outline.nodes.find((node) => node.textPreview === 'Header A')!
           const table = outline.nodes.find((node) => node.type === 'table')!
           await harness.invoke('docx_content_edit', {
             sourcePath,
@@ -134,9 +152,38 @@ describe('ai tool docx v2 apply and diff backend', () => {
             type: 'delete_named_style',
             styleId: 'TemporaryAuditStyle'
           })
+          const batchOutline = await harness.invoke<OutlineResult>('docx_read_outline', {
+            sourcePath: batchFormatPath,
+            startPage: 1,
+            pageCount: 1
+          })
+          const batchRead = await harness.invoke<{ nodes: DocxPublicReadRootNode[] }>(
+            'docx_read_nodes',
+            {
+              sourcePath: batchFormatPath,
+              range: { type: 'node_ids', nodeIds: [batchOutline.nodes[0]!.nodeId] }
+            }
+          )
+          const batchParagraph = batchRead.nodes[0]
+          if (!batchParagraph || batchParagraph.type !== 'paragraph') {
+            throw new Error('batch format paragraph missing')
+          }
+          const batchRunIds = batchParagraph.children
+            .filter((node) => node.type === 'run')
+            .map((node) => node.nodeId)
+          await harness.invoke('docx_format', {
+            sourcePath: batchFormatPath,
+            type: 'format_text',
+            targets: [
+              { nodeId: batchRunIds[0]!, text: 'First' },
+              { nodeId: batchRunIds[2]!, text: 'Second' }
+            ],
+            format: { bold: true }
+          })
           const restoredCommentOutline = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath: restoredCommentPath,
-            ranges: [{ type: 'node_index', fromNodeIndex: 0, toNodeIndex: 5 }]
+            startPage: 1,
+            pageCount: 1
           })
           await harness.invoke('docx_comments_revisions', {
             sourcePath: restoredCommentPath,
@@ -153,9 +200,12 @@ describe('ai tool docx v2 apply and diff backend', () => {
 
           const restoredOutline = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath: restoredPath,
-            ranges: [{ type: 'node_index', fromNodeIndex: 0, toNodeIndex: 10 }]
+            startPage: 1,
+            pageCount: 1
           })
-          const restoredNode = restoredOutline.nodes.find((node) => node.text === 'Restore A')!
+          const restoredNode = restoredOutline.nodes.find(
+            (node) => node.textPreview === 'Restore A'
+          )!
           await harness.invoke('docx_content_edit', {
             sourcePath: restoredPath,
             type: 'replace_text',
@@ -182,6 +232,11 @@ describe('ai tool docx v2 apply and diff backend', () => {
           const styleRecord = records.find((candidate) => candidate.source_name === 'v2-style.docx')
           if (!styleRecord) throw new Error('expected package-only style apply record')
           const styleDiffXml = await documentXml(styleRecord.preview_diff_artifact_path)
+          const batchFormatRecord = records.find(
+            (candidate) => candidate.source_name === 'v2-batch-format.docx'
+          )
+          if (!batchFormatRecord) throw new Error('expected batch format apply record')
+          const batchFormatDiffXml = await documentXml(batchFormatRecord.preview_diff_artifact_path)
           const finalXml = await documentXml(sourcePath)
           const revert = await runtime.docxApplyService.revertRecord({ applyId: record.id })
           return {
@@ -190,6 +245,7 @@ describe('ai tool docx v2 apply and diff backend', () => {
             diffXml,
             diffHeaderXml,
             styleDiffXml,
+            batchFormatDiffXml,
             finalXml,
             revert,
             revertedMatchesSource: Buffer.compare(before, await fs.readFile(sourcePath)) === 0
@@ -204,7 +260,7 @@ describe('ai tool docx v2 apply and diff backend', () => {
           result.records
             .map((item) => item.source_name)
             .sort()
-            .join(',') === 'v2-apply.docx,v2-style.docx' &&
+            .join(',') === 'v2-apply.docx,v2-batch-format.docx,v2-style.docx' &&
             record.status === 'applied' &&
             count(result.diffXml, 'Version A') === 1 &&
             count(result.diffXml, 'Version B') === 0 &&
@@ -217,6 +273,9 @@ describe('ai tool docx v2 apply and diff backend', () => {
             result.diffHeaderXml.includes('w:fill="FDECEC"') &&
             result.diffHeaderXml.includes('w:fill="E9F7EF"') &&
             result.styleDiffXml.includes('文档级变更') &&
+            result.batchFormatDiffXml.includes('First') &&
+            result.batchFormatDiffXml.includes('Second') &&
+            count(result.batchFormatDiffXml, 'w:fill="E9F7EF"') >= 2 &&
             !result.finalXml.includes('w:fill="FDECEC"') &&
             !result.finalXml.includes('w:fill="E9F7EF"') &&
             result.revert.success === true &&

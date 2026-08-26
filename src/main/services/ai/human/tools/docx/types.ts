@@ -43,10 +43,32 @@ export type DocxNodeSpec = z.infer<typeof nodeSpecSchema>
 type WithoutSourcePath<TValue> = TValue extends { sourcePath: string }
   ? Omit<TValue, 'sourcePath'>
   : never
+
+type DocxFormatTextRequest = Extract<DocxFormatRequest, { type: 'format_text' }>
+type DocxBatchNodeFormatRequest = Extract<DocxFormatRequest, { nodeIds: string[] }>
+type DocxNamedStyleFormatRequest = Exclude<
+  DocxFormatRequest,
+  DocxFormatTextRequest | DocxBatchNodeFormatRequest
+>
+type ExpandNodeFormatRequest<TValue> = TValue extends {
+  sourcePath: string
+  nodeIds: string[]
+}
+  ? Omit<TValue, 'sourcePath' | 'nodeIds'> & { nodeId: string }
+  : never
+
+export type DocxFormatOperation =
+  | (Omit<DocxFormatTextRequest, 'sourcePath' | 'targets'> & {
+      nodeId: string
+      text?: string
+    })
+  | ExpandNodeFormatRequest<DocxBatchNodeFormatRequest>
+  | WithoutSourcePath<DocxNamedStyleFormatRequest>
+
 export type DocxOperation =
   | { type: 'create_document' }
   | WithoutSourcePath<DocxContentEditRequest>
-  | WithoutSourcePath<DocxFormatRequest>
+  | DocxFormatOperation
   | WithoutSourcePath<DocxTableEditRequest>
   | WithoutSourcePath<DocxMediaEditRequest>
   | WithoutSourcePath<DocxCommentsRevisionsRequest>
@@ -226,29 +248,11 @@ export type DocxValidationProblem = {
   message: string
 }
 
-export type DocxOpenMeta = {
-  title: string
-  creator: string
-  lastModifiedBy: string
-  description: string
-  defaultFont: string
-}
-
 export type DocxOpenStats = {
-  nodeCount: number
   rootNodeCount: number
-  paragraphCount: number
-  tableCount: number
-  imageCount: number
-  visualCount: number
-  visualKinds: DocxVisualKind[]
-  charCount: number
 }
 
-export type DocxCapabilityToolsInput = WorkspaceCapabilityBuildInput<DocxToolContext> & {
-  safePreviewChars: number
-  modelContextWindowTokens: number
-}
+export type DocxCapabilityToolsInput = WorkspaceCapabilityBuildInput<DocxToolContext>
 
 export type SemanticDocIndexEntry = {
   nodeId: string
@@ -264,12 +268,6 @@ export type SemanticDocIndexEntry = {
 
 export type SemanticDocIndex = {
   entries: SemanticDocIndexEntry[]
-}
-
-export type DocxSnapshotLineageEntry = {
-  docId: string
-  parentDocId?: string
-  createdAt: number
 }
 
 export type DocxRevision = {
@@ -321,7 +319,6 @@ export type DocxReadSessionCache = {
 export type DocxReadSession = {
   sourcePath: string
   docId: string
-  meta: DocxOpenMeta
   stats: DocxOpenStats
   currentRevisionRef: string
   diskFingerprint: DocxDiskFingerprint
@@ -341,7 +338,6 @@ export type DocxReplaySession = {
   activeDocId: string
   activeRevisionRef: string
   nextRevisionNumber: number
-  meta: DocxOpenMeta
   stats: DocxOpenStats
   diskFingerprint: DocxDiskFingerprint
   sourceSnapshot: DocxReplaySnapshot
@@ -390,51 +386,13 @@ export type DocxReplayNode = {
   visualIds: string[]
   createdRevisionRef: string
   changedRevisionRef?: string
-  reviewQuery?: string
+  reviewQueries?: string[]
   tableCellChanges?: DocxTableCellReviewChange[]
 }
 
 export type DocxCapabilityToolsRuntimeState = {
   sourcePathByDocId: Map<string, string>
   semanticIndexByDocId: Map<string, SemanticDocIndex>
-  snapshotEntryByDocId: Map<string, DocxSnapshotLineageEntry>
-  revisionEntryByDocId: Map<string, DocxRevision>
   readSessionBySourcePath: Map<string, DocxReadSession>
   replaySessionBySourcePath: Map<string, DocxReplaySession>
-}
-
-export type DocxSnapshotResolvedLocator = {
-  field: 'nodeId' | 'anchorNodeId' | 'cellNodeId' | 'nodeIds'
-  stableLocators: DocxStableLocator[]
-}
-
-export type DocxSnapshotResolvedToolCall = {
-  toolName: string
-  sourcePath: string
-  locators: DocxSnapshotResolvedLocator[]
-}
-
-export type DocxStableLocatorKind =
-  | 'paragraph'
-  | 'table'
-  | 'table_cell'
-  | 'content_control'
-  | 'revision'
-
-export type DocxStableLocator = {
-  nodeId: string
-  sourceNodeId?: string
-  currentNodeIdAtResolve?: string
-  nodeIndexAtResolve: number
-  previousVisibleNodeId?: string
-  nextVisibleNodeId?: string
-  kind: DocxStableLocatorKind
-  contentFingerprint: string
-  tableNodeId?: string
-  tableSourceNodeId?: string
-  tableFingerprint?: string
-  cellNodeId?: string
-  rowIndex?: number
-  colIndex?: number
-  cellContentFingerprint?: string
 }

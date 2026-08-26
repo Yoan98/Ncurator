@@ -5,7 +5,7 @@ import { parentPort } from 'node:worker_threads'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import { extractLegacyDocBody, splitLegacyDocParagraphs } from '../utils/legacyDocReader'
 import type { DocxDetailedNode, DocxOperation, DocxOutlineNode, DocxSearchMatch } from '../types'
-import { applyDocxOps } from '../adapters/ooxml/opExecutor'
+import { applyDocxOps, validateDocxOperationTargets } from '../adapters/ooxml/opExecutor'
 import {
   buildNodeIndex,
   buildDocumentNodeIndex,
@@ -139,19 +139,10 @@ const createDocSnapshot = async (input: {
     checksum: createHash('sha256').update(input.buffer).digest('hex'),
     bundle,
     baselineValidationProblems,
-    meta: bundle.meta,
     index,
     identity,
     detailByNodeId: new Map<string, DocxDetailedNode>()
   }
-}
-
-const DEFAULT_LEGACY_DOC_META = {
-  title: '',
-  creator: '',
-  lastModifiedBy: '',
-  description: '',
-  defaultFont: ''
 }
 
 const escapeXmlText = (value: string): string =>
@@ -191,7 +182,6 @@ const createLegacyDocSnapshot = async (input: {
     createdAt: input.createdAt || Date.now(),
     buffer: input.buffer,
     checksum: createHash('sha256').update(input.buffer).digest('hex'),
-    meta: DEFAULT_LEGACY_DOC_META,
     index,
     identity: createInitialIdentityIndex(index),
     detailByNodeId: new Map<string, DocxDetailedNode>()
@@ -367,7 +357,6 @@ export const handleDocxWorkerRequest = async (
         payload: {
           action: 'open',
           docId,
-          meta: snapshot.meta,
           stats: toOpenStats(snapshot.index),
           checksum: snapshot.checksum,
           byteSize: snapshot.buffer.byteLength
@@ -378,8 +367,8 @@ export const handleDocxWorkerRequest = async (
     if (request.action === 'outline') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       const outline = buildOutlineOutput(snapshot.index, {
-        ranges: request.payload.ranges,
-        includeTables: request.payload.includeTables,
+        fromNodeIndex: request.payload.fromNodeIndex,
+        toNodeIndex: request.payload.toNodeIndex,
         includeCells: request.payload.includeCells
       })
       return {
@@ -508,6 +497,50 @@ export const handleDocxWorkerRequest = async (
         payload: {
           action: 'get_node',
           node
+        }
+      }
+    }
+
+    if (request.action === 'get_node_layout') {
+      const snapshot = getSnapshot(request.runId, request.payload.docId)
+      const internalId = resolveInternalNodeId(snapshot.identity, request.payload.nodeId)
+      const entry =
+        snapshot.index.nodesById.get(internalId) || snapshot.index.editableNodesById.get(internalId)
+      if (!entry) {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'invalid_input',
+          error: `node not found: ${request.payload.nodeId}`
+        }
+      }
+      const ownerNodeId = 'ownerNodeId' in entry ? entry.ownerNodeId : entry.nodeId
+      const owner = snapshot.index.nodesById.get(ownerNodeId)
+      if (!owner) {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'invalid_input',
+          error: `node owner not found: ${request.payload.nodeId}`
+        }
+      }
+      const publicOwnerNodeId = snapshot.identity.publicIdByInternalId.get(owner.nodeId)
+      if (!publicOwnerNodeId) {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'failed',
+          error: `node identity missing: ${request.payload.nodeId}`
+        }
+      }
+      return {
+        requestId: request.requestId,
+        ok: true,
+        payload: {
+          action: 'get_node_layout',
+          ownerNodeId: publicOwnerNodeId,
+          layoutMode: owner.layoutMode,
+          text: extractNodeText(snapshot.index, owner.nodeId)
         }
       }
     }
@@ -686,7 +719,7 @@ export const handleDocxWorkerRequest = async (
       }
     }
 
-    if (request.action === 'apply_operation') {
+    if (request.action === 'apply_operations') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       if (snapshot.format !== 'docx') {
         return {
@@ -696,10 +729,30 @@ export const handleDocxWorkerRequest = async (
           error: 'DOCX writing tools do not support legacy .doc files'
         }
       }
-      const internalOperation = toInternalOp(snapshot.identity, request.payload.operation)
+      if (request.payload.operations.length === 0) {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'invalid_input',
+          error: 'apply_operations requires at least one operation'
+        }
+      }
+      const internalOperations = request.payload.operations.map((operation) =>
+        toInternalOp(snapshot.identity, operation)
+      )
+      try {
+        await validateDocxOperationTargets(snapshot.buffer, internalOperations)
+      } catch (error) {
+        return {
+          requestId: request.requestId,
+          ok: false,
+          code: 'invalid_input',
+          error: error instanceof Error ? error.message : String(error)
+        }
+      }
       const applied = await applyDocxOps({
         buffer: snapshot.buffer,
-        ops: [internalOperation]
+        ops: internalOperations
       })
       const validationProblems = findNewDocxValidationProblems(
         snapshot.baselineValidationProblems,
@@ -710,7 +763,7 @@ export const handleDocxWorkerRequest = async (
           requestId: request.requestId,
           ok: false,
           code: 'failed',
-          error: `apply_operation introduced invalid docx structure: ${validationProblems.map((problem) => problem.message).join('; ')}`
+          error: `apply_operations introduced invalid docx structure: ${validationProblems.map((problem) => problem.message).join('; ')}`
         }
       }
       const runSession = getRunSession(request.runId, true)
@@ -723,14 +776,14 @@ export const handleDocxWorkerRequest = async (
         parentDocId: snapshot.docId,
         buffer: applied.buffer,
         previousSnapshot: snapshot,
-        publicOps: [request.payload.operation]
+        publicOps: request.payload.operations
       })
       runSession.set(newDocId, nextSnapshot)
       return {
         requestId: request.requestId,
         ok: true,
         payload: {
-          action: 'apply_operation',
+          action: 'apply_operations',
           newDocId,
           stats: toOpenStats(nextSnapshot.index),
           changedNodes: toPublicChangedNodes({

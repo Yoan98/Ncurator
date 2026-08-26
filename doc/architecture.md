@@ -138,6 +138,10 @@ flowchart TD
 
 brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMessage`（按 `tool_call_id` 配对）追加到 append-only 的 `messages` 数组，不再把历史每轮重渲染成字符串。静态前缀（身份 + 原则 + 技能目录 + 计划契约 + 交付契约 + 本地环境）与技能目录只标注「内置 / 需学习」，不随 learn 变化，保证缓存友好。技能目录按技能渲染工具数量与「最多同时激活 30 个工具」的动态上限，不硬编码。非工具控制动作统一为 `agent-control` 内置技能的两个工具：`learn_skill`、`update_plan`；任务结束由 brain 直接输出最终交付 markdown（无工具调用），不再有 `finish` 工具。
 
+AI 推进遵循“最小可靠返回 × 最少连续决策轮次”：每次只读取当前决策所需的最小可靠范围，不做全量、重复定位或无新增价值的验证；互不依赖的调用尽量同轮分发，同类能力支持批量时一次提交。只有复杂或存在多项依赖的任务才维护 plan，不为进度展示单独更新 plan，目标满足且必要检查通过后可直接交付。工具与技能描述只声明能力、边界和参数语义，不写固定调用教程，保留模型自主组合能力。
+
+每条工具结果独立执行大小守卫，不存在同一 dispatch 批次的总量额度。结果不超过 `TOOL_RESULT_INLINE_MAX_CHARS = 32_000` 字符时完整进入上下文；超过后把完整结果写入一次性 `runtime/toolresult` 文件，并只给模型返回最多 `TOOL_RESULT_HEAD_MAX_CHARS = 8_000` 字符的 head。截断信封只有 `truncated / filePath / totalChars / head`，因此一个大结果不会挤占同轮其他小结果的返回额度。
+
 **模型上下文唯一真相源是会话级 append-only 的会话消息记录（`chat_session_message_log` 表）**：每条是 `user` / `assistant`（含真实 `tool_calls`）/ `tool`（含结果）/ `annotation`（思考/学习/压缩/收尾等过程标记）。模型上下文从会话消息记录投影（`deriveMessageLogMessages`），中断恢复与跨 run 上下文都从记录重建后补一条 user 消息继续；UI 过程展示与模型记忆不再维护 `rounds`/`conversation`/`ai_run_event` 副本。压缩只作用于「投影出的消息」（早段 → `<compacted_history>` + `<current_state>`，尾段保留），记录本身 append-only 不动。
 
 **消息数组构建顺序（每次 run 首次 brain 重建时）**：`system` → 会话消息记录投影出的历史消息 → 尾部追加一条由 `buildBrainUserMessage` 构建的 user 消息（承载 `<task_goal>`、`<current_state>` 等当前任务上下文）。当前 run 的用户原文通过按位置跳过最后一条 `user` 条目避免重复出现（`skipLastUserEntry`），首条消息时历史为空，该 user 消息就是数组里唯一一条 user 消息。这条尾部 user 消息保留了 `<task_goal>` 结构，使 `system + 历史` 前缀在跨轮与跨 run 之间保持结构稳定，利于 KV 前缀缓存复用。
@@ -239,7 +243,7 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 
 读取工具：
 
-- `docx_read_outline`：快速读取顺序、类型、摘要和临时 `nodeIndex`。
+- `docx_read_outline`：按逻辑页快速读取顺序、类型、摘要和临时 `nodeIndex`。输入为 `startPage` 与 `pageCount`（最多 2 页），每逻辑页 50 个节点；逻辑页不是 Word 视觉页。
 - `docx_search`：literal、regex 或 semantic 搜索，返回可直接读取或写入的 `nodeId`。
 - `docx_read_nodes`：按 `nodeId` 或 `nodeIndex` 范围返回递归语义树；一次最多读取 20 个 nodeId 或连续 50 个根节点。
 - `docx_read_visuals`：按 `visualId` 读取图片、图表、图形等视觉内容。
@@ -247,7 +251,7 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 写入工具每次调用只执行一个 operation：
 
 - `docx_content_edit`：`replace_text`、`insert_nodes`、`replace_node`、`delete_node`、`move_node`。
-- `docx_format`：局部格式、重置格式、应用/创建/更新/删除命名样式、编号和 section 格式。
+- `docx_format`：局部格式、重置格式、应用/创建/更新/删除命名样式、编号和 section 格式。局部格式一次最多原子处理 20 个目标，所有目标共享同一 patch；任一目标无效时整次不提交。
 - `docx_table_edit`：表格创建/删除、行列增删、单元格合并/拆分。
 - `docx_media_edit`：图片插入/替换/删除/属性更新；以后 shape、textbox、chart、SmartArt、OLE 继续扩展到此工具。
 - `docx_comments_revisions`：批注新增/更新/回复/删除、修订模式开关、指定或全部修订接受/拒绝。
@@ -270,6 +274,10 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 `replace_text` 原位保留 run/paragraph 格式和视觉边界，可跨相邻 run，但不可跨 paragraph、tab、break 或 visual。同类型 `replace_node` 在调用未明确提供格式时保留兼容直接格式；跨类型替换只保留位置。命名样式和直接格式相互独立，`update_named_style` 修改全局定义并影响所有引用该 `styleId` 的节点。
 
 写工具统一返回 `changes`。创建/更新节点返回局部完整节点；删除返回 `nodeId`；命名样式、批注和修订返回对应实体的稳定 ID 与最终状态，不只返回成功文字。
+
+`docx_read_outline` 不展开 table cell、run 或递归 children，也不投影 Word 自动生成的脚注/尾注分隔符。公开节点只返回 `nodeId / nodeIndex / story / textPreview` 及类型必要摘要；`textPreview` 先合并空白，超过 160 个 Unicode 字符时保留前 100 字符、一个省略号和后 59 字符。分页随 Working 文档结构变化而变化，后续编辑定位始终使用 `nodeId`。`docx_format.format_text` 使用 `targets: [{ nodeId, text? }]`；省略 `text` 表示格式化该节点全部文字。其余局部格式 operation 使用 `nodeIds`，上限均为 20，拒绝重复 ID。
+
+outline 的公开页码在 read tool 内换算成一个连续的 `fromNodeIndex / toNodeIndex` 区间，worker 不接受多 range。编辑会话直接使用当前稳定 `nodeId` 定位；不保存文本指纹、邻近节点或表格坐标 locator，也不提供旧快照目标重新绑定层。
 
 #### 净 Diff、Word 批注与修订
 

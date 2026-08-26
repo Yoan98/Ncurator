@@ -8,7 +8,6 @@ import type {
   DocxOutlineContainerNode,
   DocxOutlineParagraphNode,
   DocxOutlineTableNode,
-  DocxOpenMeta,
   DocxOpenStats,
   DocxOutlineNode,
   DocxParagraphSpec,
@@ -26,7 +25,6 @@ import {
   childElements,
   collectText,
   descendantElements,
-  findFirstElementByLocalName,
   firstChildElement,
   getAttr,
   isElementNode
@@ -34,14 +32,6 @@ import {
 import { resolveDocxRelationshipTarget } from './relationshipPath'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
-const DEFAULT_META: DocxOpenMeta = {
-  title: '',
-  creator: '',
-  lastModifiedBy: '',
-  description: '',
-  defaultFont: ''
-}
-
 const paragraphStyle = (paragraph: Element): string => {
   const pPr = firstChildElement(paragraph, 'pPr')
   if (!pPr) return 'Normal'
@@ -81,9 +71,7 @@ const summarizeTable = (table: Element): { rows: number; cols: number; text: str
     if (cells.length > colCount) colCount = cells.length
     for (const cell of cells) {
       previewCells.push(collectText(cell).trim())
-      if (previewCells.length >= 4) break
     }
-    if (previewCells.length >= 4) break
   }
   return {
     rows: rowCount,
@@ -141,39 +129,6 @@ const parsePartRelationships = async (
     }
   }
   return { targets, types, targetModes, availableTargetIds }
-}
-
-const parseMeta = async (zip: JSZip): Promise<DocxOpenMeta> => {
-  const coreXml = await readZipText(zip, 'docProps/core.xml')
-  const stylesXml = await readZipText(zip, 'word/styles.xml')
-
-  const meta: DocxOpenMeta = { ...DEFAULT_META }
-
-  if (coreXml) {
-    const coreDoc = parseXml(coreXml)
-    const title = findFirstElementByLocalName(coreDoc, 'title')
-    const creator = findFirstElementByLocalName(coreDoc, 'creator')
-    const modifiedBy = findFirstElementByLocalName(coreDoc, 'lastModifiedBy')
-    const description = findFirstElementByLocalName(coreDoc, 'description')
-    meta.title = title ? collectText(title).trim() : ''
-    meta.creator = creator ? collectText(creator).trim() : ''
-    meta.lastModifiedBy = modifiedBy ? collectText(modifiedBy).trim() : ''
-    meta.description = description ? collectText(description).trim() : ''
-  }
-
-  if (stylesXml) {
-    const stylesDoc = parseXml(stylesXml)
-    const fonts = stylesDoc.getElementsByTagNameNS(WORD_NS, 'rFonts')
-    if (fonts.length > 0) {
-      const node = fonts.item(0)
-      if (node) {
-        const font = getAttr(node, 'ascii') || getAttr(node, 'eastAsia') || getAttr(node, 'cs')
-        meta.defaultFont = font
-      }
-    }
-  }
-
-  return meta
 }
 
 const getBody = (doc: Document): Element => {
@@ -675,48 +630,27 @@ export const buildDocumentNodeIndex = (bundle: ParsedDocxBundle): NodeIndex => {
 }
 
 export const toOpenStats = (index: NodeIndex): DocxOpenStats => {
-  const visualKinds = [...new Set([...index.visualsById.values()].map((visual) => visual.kind))]
-  const imageCount = [...index.visualsById.values()].filter(
-    (visual) => visual.kind === 'image'
-  ).length
   return {
-    nodeCount: index.rootNodeCount + index.cellNodeCount,
-    rootNodeCount: index.rootNodeCount,
-    paragraphCount: index.paragraphCount,
-    tableCount: index.tableCount,
-    imageCount,
-    visualCount: index.visualsById.size,
-    visualKinds,
-    charCount: index.charCount
+    rootNodeCount: index.rootNodeCount
   }
 }
 
 export const buildOutlineOutput = (
   index: NodeIndex,
   input: {
-    ranges: Array<{
-      fromNodeIndex: number
-      toNodeIndex: number
-    }>
-    includeTables: boolean
+    fromNodeIndex: number
+    toNodeIndex: number
     includeCells: boolean
   }
 ): {
   nodes: DocxOutlineNode[]
 } => {
-  const normalizedRanges = input.ranges
-    .map((range) => ({
-      fromNodeIndex: Math.max(0, Math.min(range.fromNodeIndex, range.toNodeIndex)),
-      toNodeIndex: Math.max(0, Math.max(range.fromNodeIndex, range.toNodeIndex))
-    }))
-    .filter((range) => range.toNodeIndex >= range.fromNodeIndex)
+  const fromNodeIndex = Math.max(0, Math.min(input.fromNodeIndex, input.toNodeIndex))
+  const toNodeIndex = Math.max(0, Math.max(input.fromNodeIndex, input.toNodeIndex))
 
   const visibleNodes = index.outline.filter((node) => {
-    if (!input.includeTables && (node.type === 'table' || node.type === 'table_cell')) return false
     if (!input.includeCells && node.type === 'table_cell') return false
-    return normalizedRanges.some(
-      (range) => node.nodeIndex >= range.fromNodeIndex && node.nodeIndex <= range.toNodeIndex
-    )
+    return node.nodeIndex >= fromNodeIndex && node.nodeIndex <= toNodeIndex
   })
   return {
     nodes: visibleNodes
@@ -786,7 +720,6 @@ export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> 
     throw new Error('docx missing word/document.xml')
   }
   const documentDom = parseXml(documentXml)
-  const meta = await parseMeta(zip)
   const documentRelationships = await parsePartRelationships(zip, 'word/document.xml')
   const relationshipTargets = documentRelationships.targets
   const relationshipTypes = documentRelationships.types
@@ -824,7 +757,10 @@ export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> 
     const relationships = await parsePartRelationships(zip, partName)
     const [, type] = match
     if (type === 'footnote' || type === 'endnote') {
-      const roots = Array.from(dom.getElementsByTagNameNS(WORD_NS, type))
+      const roots = Array.from(dom.getElementsByTagNameNS(WORD_NS, type)).filter((root) => {
+        const nativeId = Number(getAttr(root, 'id'))
+        return !Number.isFinite(nativeId) || nativeId > 0
+      })
       roots.forEach((root, index) => {
         const nativeId = getAttr(root, 'id') || String(index)
         stories.push({
@@ -876,7 +812,6 @@ export const loadDocxBundle = async (buffer: Buffer): Promise<ParsedDocxBundle> 
     zip,
     documentXml,
     documentDom,
-    meta,
     relationshipTargets,
     relationshipTypes,
     relationshipTargetModes,

@@ -10,12 +10,7 @@ import type {
   AiLlmToolCallResult
 } from './llmExecutor'
 import type { WebCrawlerService } from '../webCrawler/types'
-import type {
-  DocxChangedNode,
-  DocxCreatedNode,
-  DocxOperation,
-  DocxReplaySession
-} from './human/tools/docx/types'
+import type { DocxChangedNode, DocxCreatedNode, DocxReplaySession } from './human/tools/docx/types'
 import type { DocxApplyService } from './human/tools/docx/review/DocxApplyService'
 import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
 import type { z } from 'zod/v4'
@@ -319,7 +314,6 @@ export type AiRunContext = {
   trackDocxChanges: (input: {
     previousDocId: string
     nextDocId: string
-    op: DocxOperation
     changedNodes: DocxChangedNode[]
     createdNodes: DocxCreatedNode[]
     replaySession?: DocxReplaySession

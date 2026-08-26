@@ -12,6 +12,11 @@ import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from
 import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
 import { renderDocxVisualToPng } from '../utils/renderVisual'
 import { projectDocxReadNodes } from '../publicReadTree'
+import {
+  DOCX_OUTLINE_ITEMS_PER_PAGE,
+  DOCX_OUTLINE_TEXT_PREVIEW_CHARS,
+  DOCX_OUTLINE_TEXT_PREVIEW_HEAD_CHARS
+} from '../constants'
 
 const MAX_SEARCH_MATCHES = 20
 const SEMANTIC_TOP_K = 8
@@ -26,51 +31,45 @@ type AppliedAlias = {
   to: string
 }
 
-const buildOutlineNode = (node: DocxOutlineNode) => {
+const normalizeOutlineText = (text: string): string => text.replace(/\s+/gu, ' ').trim()
+
+const buildOutlineTextPreview = (text: string): string => {
+  const characters = Array.from(normalizeOutlineText(text))
+  if (characters.length <= DOCX_OUTLINE_TEXT_PREVIEW_CHARS) return characters.join('')
+  const tailChars = DOCX_OUTLINE_TEXT_PREVIEW_CHARS - DOCX_OUTLINE_TEXT_PREVIEW_HEAD_CHARS - 1
+  return `${characters.slice(0, DOCX_OUTLINE_TEXT_PREVIEW_HEAD_CHARS).join('')}…${characters
+    .slice(-tailChars)
+    .join('')}`
+}
+
+const buildOutlineNode = (node: Exclude<DocxOutlineNode, { type: 'table_cell' }>) => {
+  const base = {
+    nodeId: node.nodeId,
+    nodeIndex: node.nodeIndex,
+    story: node.story.type,
+    textPreview: buildOutlineTextPreview(node.text)
+  }
   if (node.type === 'paragraph') {
     return {
-      nodeId: node.nodeId,
+      ...base,
       type: node.type,
-      nodeIndex: node.nodeIndex,
-      text: node.text,
-      visuals: node.visuals,
-      story: node.story
+      styleId: node.style?.styleId,
+      visuals: node.visuals
     }
   }
   if (node.type === 'table') {
     return {
-      nodeId: node.nodeId,
+      ...base,
       type: node.type,
-      nodeIndex: node.nodeIndex,
       rows: node.rows,
-      cols: node.cols,
-      text: node.text,
-      visuals: node.visuals,
-      story: node.story
-    }
-  }
-  if (node.type === 'content_control' || node.type === 'revision') {
-    return {
-      nodeId: node.nodeId,
-      type: node.type,
-      nodeIndex: node.nodeIndex,
-      text: node.text,
-      story: node.story,
-      ...(node.type === 'content_control'
-        ? { tag: node.tag }
-        : { revisionId: node.revisionId, revisionKind: node.revisionKind })
+      columns: node.cols,
+      visuals: node.visuals
     }
   }
   return {
-    nodeId: node.nodeId,
+    ...base,
     type: node.type,
-    nodeIndex: node.nodeIndex,
-    tableNodeId: node.tableNodeId,
-    row: node.row,
-    col: node.col,
-    text: node.text,
-    visuals: node.visuals,
-    story: node.story
+    ...(node.type === 'content_control' ? { tag: node.tag } : { revisionKind: node.revisionKind })
   }
 }
 
@@ -245,57 +244,6 @@ const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) 
   totalMatchCount: result.totalMatchCount
 })
 
-const toOutlineRange = (
-  range:
-    | { type: 'percent'; fromPercent: number; toPercent: number }
-    | { type: 'node_index'; fromNodeIndex: number; toNodeIndex: number },
-  totalNodeCount: number
-): { fromNodeIndex: number; toNodeIndex: number } => {
-  if (range.type === 'node_index') {
-    return {
-      fromNodeIndex: Math.max(0, Math.min(range.fromNodeIndex, range.toNodeIndex)),
-      toNodeIndex: Math.max(0, Math.max(range.fromNodeIndex, range.toNodeIndex))
-    }
-  }
-  const fromPercent = Math.max(0, Math.min(100, range.fromPercent))
-  const toPercent = Math.max(0, Math.min(100, range.toPercent))
-  const fromNodeIndex = Math.max(
-    0,
-    Math.floor((Math.min(fromPercent, toPercent) / 100) * totalNodeCount)
-  )
-  const toNodeIndex = Math.max(
-    0,
-    Math.ceil((Math.max(fromPercent, toPercent) / 100) * totalNodeCount) - 1
-  )
-  return {
-    fromNodeIndex,
-    toNodeIndex
-  }
-}
-
-const mergeOutlineRanges = (
-  ranges: Array<{ fromNodeIndex: number; toNodeIndex: number }>
-): Array<{ fromNodeIndex: number; toNodeIndex: number }> => {
-  const normalized = ranges
-    .map((range) => ({
-      fromNodeIndex: Math.max(0, Math.min(range.fromNodeIndex, range.toNodeIndex)),
-      toNodeIndex: Math.max(0, Math.max(range.fromNodeIndex, range.toNodeIndex))
-    }))
-    .filter((range) => range.toNodeIndex >= range.fromNodeIndex)
-    .sort((left, right) => left.fromNodeIndex - right.fromNodeIndex)
-
-  const merged: Array<{ fromNodeIndex: number; toNodeIndex: number }> = []
-  for (const range of normalized) {
-    const last = merged[merged.length - 1]
-    if (!last || range.fromNodeIndex > last.toNodeIndex + 1) {
-      merged.push(range)
-      continue
-    }
-    last.toNodeIndex = Math.max(last.toNodeIndex, range.toNodeIndex)
-  }
-  return merged
-}
-
 export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
   const visualRecognitionService = createVisualRecognitionService(runtime.input.ctx)
   const docxOutlineTool = createDocxTool({
@@ -320,17 +268,41 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       if ('failure' in sessionResult) return sessionResult.failure
 
       try {
-        const ranges = args.ranges.map((range) =>
-          toOutlineRange(range, sessionResult.stats.rootNodeCount)
+        const totalPages = Math.max(
+          1,
+          Math.ceil(sessionResult.stats.rootNodeCount / DOCX_OUTLINE_ITEMS_PER_PAGE)
         )
-        const mergedRanges = mergeOutlineRanges(ranges)
+        if (args.startPage > totalPages) {
+          return finalizeDocxToolFailure({
+            runtime,
+            failure: runtime.emitFailure({
+              toolName,
+              toolCallId,
+              reason: 'invalid_input',
+              error: `startPage 超出 outline 范围：startPage=${String(args.startPage)}，totalPages=${String(totalPages)}`,
+              draftDocId: sessionResult.docId,
+              resourceContext: runtime.buildResourceContext({
+                sourcePath: sessionResult.sourcePath,
+                effectKind: 'read',
+                currentRevisionRef: sessionResult.currentRevisionRef
+              })
+            }),
+            activity: { actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType! }
+          })
+        }
+        const endPage = Math.min(totalPages, args.startPage + args.pageCount - 1)
+        const fromNodeIndex = (args.startPage - 1) * DOCX_OUTLINE_ITEMS_PER_PAGE
+        const toNodeIndex = Math.min(
+          sessionResult.stats.rootNodeCount - 1,
+          endPage * DOCX_OUTLINE_ITEMS_PER_PAGE - 1
+        )
         const outlineNodes = await runtime.callWorker({
           action: 'outline',
           payload: {
             docId: sessionResult.docId,
-            ranges: mergedRanges,
-            includeTables: true,
-            includeCells: true
+            fromNodeIndex,
+            toNodeIndex,
+            includeCells: false
           }
         })
         if (!outlineNodes.ok) {
@@ -339,10 +311,16 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         if (outlineNodes.payload.action !== 'outline') {
           throw new Error('worker protocol mismatch (outline)')
         }
-        const resultNodes = outlineNodes.payload.nodes.map(buildOutlineNode)
+        const resultNodes = outlineNodes.payload.nodes
+          .filter(
+            (node): node is Exclude<DocxOutlineNode, { type: 'table_cell' }> =>
+              node.type !== 'table_cell'
+          )
+          .map(buildOutlineNode)
         const result = {
-          sourcePath: sessionResult.sourcePath,
-          totalNodeCount: sessionResult.stats.rootNodeCount,
+          startPage: args.startPage,
+          endPage,
+          totalPages,
           nodes: resultNodes
         }
         return finalizeDocxToolSuccess({
@@ -351,7 +329,9 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           toolCallId,
           result,
           outputPreview: {
-            sourcePath: result.sourcePath,
+            startPage: result.startPage,
+            endPage: result.endPage,
+            totalPages: result.totalPages,
             nodes: result.nodes
           },
           draftDocId: sessionResult.docId,

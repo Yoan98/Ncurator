@@ -1,7 +1,8 @@
 import { z } from 'zod/v4'
 import type { DocxCreateTableCellNode } from './nodeTypes'
+import { DOCX_FORMAT_MAX_TARGETS, DOCX_OUTLINE_MAX_PAGE_COUNT } from './constants'
 
-export const docxHexColorSchema = z
+const docxHexColorSchema = z
   .string()
   .regex(/^[0-9a-fA-F]{6}$/, 'color must be exactly 6 hexadecimal characters, for example FF0000')
 
@@ -248,27 +249,16 @@ const nodeIdField = z
   .min(1)
   .describe('docx_read_nodes、docx_search 或写入结果返回的 nodeId，直接照抄')
 
-export const docxNodeRangeSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      type: z.literal('percent').describe('按文档百分比定位'),
-      fromPercent: z.number().min(0).max(100).describe('起始百分比，0 到 100'),
-      toPercent: z.number().min(0).max(100).describe('结束百分比，0 到 100')
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('node_index').describe('按 outline 返回的临时 nodeIndex 定位'),
-      fromNodeIndex: z.number().int().min(0).describe('起始 nodeIndex，包含'),
-      toNodeIndex: z.number().int().min(0).describe('结束 nodeIndex，包含')
-    })
-    .strict()
-])
-
 export const docxOutlineSchema = z
   .object({
     sourcePath: sourcePathField,
-    ranges: z.array(docxNodeRangeSchema).min(1).describe('需要读取的一个或多个文档范围')
+    startPage: z.number().int().min(1).describe('outline 逻辑起始页，从 1 开始'),
+    pageCount: z
+      .number()
+      .int()
+      .min(1)
+      .max(DOCX_OUTLINE_MAX_PAGE_COUNT)
+      .describe(`连续读取的 outline 逻辑页数，最多 ${String(DOCX_OUTLINE_MAX_PAGE_COUNT)} 页`)
   })
   .strict()
 
@@ -441,13 +431,53 @@ const nonEmptyCellStyleSchema = docxTableCellStyleSchema.refine(
   { message: 'format 至少设置一个属性' }
 )
 
+const rejectDuplicateNodeIds = (value: { nodeIds: string[] }, context: z.RefinementCtx): void => {
+  const seen = new Set<string>()
+  value.nodeIds.forEach((nodeId, index) => {
+    if (seen.has(nodeId)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['nodeIds', index],
+        message: 'nodeIds 不允许重复'
+      })
+    }
+    seen.add(nodeId)
+  })
+}
+
 export const docxFormatSchema = z.discriminatedUnion('type', [
   z
     .object({
       ...contentEditBase,
       type: z.literal('format_text'),
-      nodeId: nodeIdField,
-      text: z.string().min(1).describe('目标节点内要格式化的文字'),
+      targets: z
+        .array(
+          z
+            .object({
+              nodeId: nodeIdField,
+              text: z
+                .string()
+                .min(1)
+                .optional()
+                .describe('目标节点内要格式化的精确文字；省略时格式化节点内全部文字')
+            })
+            .strict()
+        )
+        .min(1)
+        .max(DOCX_FORMAT_MAX_TARGETS)
+        .superRefine((targets, context) => {
+          const seen = new Set<string>()
+          targets.forEach((target, index) => {
+            if (seen.has(target.nodeId)) {
+              context.addIssue({
+                code: 'custom',
+                path: [index, 'nodeId'],
+                message: 'targets 不允许重复 nodeId'
+              })
+            }
+            seen.add(target.nodeId)
+          })
+        }),
       format: nonEmptyRunStyleSchema.describe('文字格式 patch')
     })
     .strict(),
@@ -455,39 +485,43 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
     .object({
       ...contentEditBase,
       type: z.literal('format_paragraph'),
-      nodeId: nodeIdField,
+      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
       format: nonEmptyParagraphStyleSchema.describe('段落格式 patch')
     })
-    .strict(),
+    .strict()
+    .superRefine(rejectDuplicateNodeIds),
   z
     .object({
       ...contentEditBase,
       type: z.literal('format_table'),
-      nodeId: nodeIdField,
+      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
       format: nonEmptyTableStyleSchema.describe('表格格式 patch')
     })
-    .strict(),
+    .strict()
+    .superRefine(rejectDuplicateNodeIds),
   z
     .object({
       ...contentEditBase,
       type: z.literal('format_row'),
-      nodeId: nodeIdField,
+      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
       format: nonEmptyRowStyleSchema.describe('行格式 patch')
     })
-    .strict(),
+    .strict()
+    .superRefine(rejectDuplicateNodeIds),
   z
     .object({
       ...contentEditBase,
       type: z.literal('format_cell'),
-      nodeId: nodeIdField,
+      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
       format: nonEmptyCellStyleSchema.describe('单元格格式 patch')
     })
-    .strict(),
+    .strict()
+    .superRefine(rejectDuplicateNodeIds),
   z
     .object({
       ...contentEditBase,
       type: z.literal('format_section'),
-      nodeId: nodeIdField,
+      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
       orientation: z.enum(['portrait', 'landscape']).optional().describe('页面方向'),
       marginTopPt: z.number().min(0).optional().describe('上页边距，磅'),
       marginRightPt: z.number().min(0).optional().describe('右页边距，磅'),
@@ -503,16 +537,25 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
         value.marginBottomPt !== undefined ||
         value.marginLeftPt !== undefined,
       { message: 'format_section 至少设置一个格式属性' }
-    ),
-  z.object({ ...contentEditBase, type: z.literal('reset_format'), nodeId: nodeIdField }).strict(),
+    )
+    .superRefine(rejectDuplicateNodeIds),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('reset_format'),
+      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS)
+    })
+    .strict()
+    .superRefine(rejectDuplicateNodeIds),
   z
     .object({
       ...contentEditBase,
       type: z.literal('apply_named_style'),
-      nodeId: nodeIdField,
+      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
       styleId: z.string().trim().min(1).describe('要应用的 styleId')
     })
-    .strict(),
+    .strict()
+    .superRefine(rejectDuplicateNodeIds),
   z
     .object({
       ...contentEditBase,
@@ -556,11 +599,12 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
     .object({
       ...contentEditBase,
       type: z.literal('set_numbering'),
-      nodeId: nodeIdField,
+      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
       kind: z.enum(['bullet', 'decimal', 'none']).describe('项目符号、数字编号或清除编号'),
       level: z.number().int().min(0).max(8).optional().describe('编号层级，缺省为 0')
     })
     .strict()
+    .superRefine(rejectDuplicateNodeIds)
 ])
 
 const tableRowsField = z.array(z.array(z.string()).min(1)).min(1).describe('表格二维文本数组')

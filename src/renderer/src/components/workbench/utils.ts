@@ -162,13 +162,13 @@ const readDocxRangeLabel = (input?: IpcJsonObject): string => {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return '内容'
   const range = candidate as Record<string, IpcJsonValue>
   if (
-    range.type === 'block_index' &&
-    typeof range.fromBlockIndex === 'number' &&
-    typeof range.toBlockIndex === 'number'
+    range.type === 'node_index' &&
+    typeof range.fromNodeIndex === 'number' &&
+    typeof range.toNodeIndex === 'number'
   ) {
-    return `${String(range.fromBlockIndex)}-${String(range.toBlockIndex)} 区间`
+    return `${String(range.fromNodeIndex)}-${String(range.toNodeIndex)} 区间`
   }
-  if (range.type === 'block_ids') return '指定区间'
+  if (range.type === 'node_ids') return '指定节点'
   return '内容'
 }
 

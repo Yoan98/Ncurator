@@ -8,11 +8,16 @@ import type { DocxPublicReadRootNode } from '../../../../../src/main/services/ai
 type OutlineNode = {
   nodeId: string
   nodeIndex: number
-  type: 'paragraph' | 'table' | 'table_cell' | 'content_control' | 'revision'
-  text: string
+  type: 'paragraph' | 'table' | 'content_control' | 'revision'
+  textPreview: string
 }
 
-type OutlineResult = { sourcePath: string; totalNodeCount: number; nodes: OutlineNode[] }
+type OutlineResult = {
+  startPage: number
+  endPage: number
+  totalPages: number
+  nodes: OutlineNode[]
+}
 type SearchResult = {
   matches: Array<{ nodeId: string; nodeIndex: number; text: string }>
 }
@@ -37,11 +42,19 @@ describe('ai tool docx v2 backend', () => {
       execute: async (runtime) => {
         const sourcePath = await writeTestDocxFile(runtime.workspaceRoot, 'docx-v2.docx', [
           { type: 'paragraph', text: 'Alpha paragraph' },
+          { type: 'paragraph', text: 'Second paragraph' },
           {
             type: 'table',
             rows: [
               ['Name', 'Owner'],
               ['Risk', 'Alice']
+            ]
+          },
+          {
+            type: 'table',
+            rows: [
+              ['Metric', 'Value'],
+              ['Score', '90']
             ]
           }
         ])
@@ -67,10 +80,17 @@ describe('ai tool docx v2 backend', () => {
           })
           const outline = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath,
-            ranges: [{ type: 'node_index', fromNodeIndex: 0, toNodeIndex: 20 }]
+            startPage: 1,
+            pageCount: 1
           })
           const paragraph = outline.nodes.find((node) => node.type === 'paragraph')!
+          const secondParagraph = outline.nodes.find(
+            (node) => node.type === 'paragraph' && node.nodeId !== paragraph.nodeId
+          )!
           const table = outline.nodes.find((node) => node.type === 'table')!
+          const secondTable = outline.nodes.find(
+            (node) => node.type === 'table' && node.nodeId !== table.nodeId
+          )!
           const readBefore = await harness.invoke<ReadResult>('docx_read_nodes', {
             sourcePath,
             range: { type: 'node_ids', nodeIds: [paragraph.nodeId, table.nodeId] }
@@ -85,8 +105,77 @@ describe('ai tool docx v2 backend', () => {
           const format = await harness.invoke<MutationResult>('docx_format', {
             sourcePath,
             type: 'format_paragraph',
-            nodeId: paragraph.nodeId,
+            nodeIds: [paragraph.nodeId, secondParagraph.nodeId],
             format: { alignment: 'center', keepWithNext: true }
+          })
+          const rejectedFormat = await harness.invoke('docx_format', {
+            sourcePath,
+            type: 'format_paragraph',
+            nodeIds: [paragraph.nodeId, table.nodeId],
+            format: { alignment: 'right' }
+          })
+          const readAfterRejectedFormat = await harness.invoke<ReadResult>('docx_read_nodes', {
+            sourcePath,
+            range: { type: 'node_ids', nodeIds: [paragraph.nodeId, secondParagraph.nodeId] }
+          })
+          const missingTargetFormat = await harness.invoke('docx_format', {
+            sourcePath,
+            type: 'format_paragraph',
+            nodeIds: [paragraph.nodeId, 'missing-node-id'],
+            format: { alignment: 'left' }
+          })
+          const readAfterMissingTarget = await harness.invoke<ReadResult>('docx_read_nodes', {
+            sourcePath,
+            range: { type: 'node_ids', nodeIds: [paragraph.nodeId, secondParagraph.nodeId] }
+          })
+          const tableNodes = await harness.invoke<ReadResult>('docx_read_nodes', {
+            sourcePath,
+            range: { type: 'node_ids', nodeIds: [table.nodeId, secondTable.nodeId] }
+          })
+          const publicTables = tableNodes.nodes.filter((node) => node.type === 'table')
+          const rowNodeIds = publicTables.map((node) => node.children[0]!.nodeId)
+          const cellNodeIds = publicTables.map((node) => node.children[0]!.children[0]!.nodeId)
+          const tableFormat = await harness.invoke<MutationResult>('docx_format', {
+            sourcePath,
+            type: 'format_table',
+            nodeIds: [table.nodeId, secondTable.nodeId],
+            format: { alignment: 'center' }
+          })
+          const rowFormat = await harness.invoke<MutationResult>('docx_format', {
+            sourcePath,
+            type: 'format_row',
+            nodeIds: rowNodeIds,
+            format: { repeatHeader: true }
+          })
+          const cellFormat = await harness.invoke<MutationResult>('docx_format', {
+            sourcePath,
+            type: 'format_cell',
+            nodeIds: cellNodeIds,
+            format: { shading: 'FFFF00' }
+          })
+          const sectionFormat = await harness.invoke<MutationResult>('docx_format', {
+            sourcePath,
+            type: 'format_section',
+            nodeIds: [paragraph.nodeId, secondParagraph.nodeId],
+            orientation: 'landscape'
+          })
+          const resetFormat = await harness.invoke<MutationResult>('docx_format', {
+            sourcePath,
+            type: 'reset_format',
+            nodeIds: [paragraph.nodeId, secondParagraph.nodeId]
+          })
+          const namedStyle = await harness.invoke<MutationResult>('docx_format', {
+            sourcePath,
+            type: 'apply_named_style',
+            nodeIds: [paragraph.nodeId, secondParagraph.nodeId],
+            styleId: 'Normal'
+          })
+          const numbering = await harness.invoke<MutationResult>('docx_format', {
+            sourcePath,
+            type: 'set_numbering',
+            nodeIds: [paragraph.nodeId, secondParagraph.nodeId],
+            kind: 'bullet',
+            level: 0
           })
           const tableEdit = await harness.invoke<MutationResult>('docx_table_edit', {
             sourcePath,
@@ -131,6 +220,17 @@ describe('ai tool docx v2 backend', () => {
             readBefore,
             content,
             format,
+            rejectedFormat,
+            readAfterRejectedFormat,
+            missingTargetFormat,
+            readAfterMissingTarget,
+            tableFormat,
+            rowFormat,
+            cellFormat,
+            sectionFormat,
+            resetFormat,
+            namedStyle,
+            numbering,
             tableEdit,
             media,
             comment,
@@ -144,12 +244,31 @@ describe('ai tool docx v2 backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.outline.totalNodeCount >= 4 &&
+          result.outline.totalPages === 1 &&
+            result.outline.nodes.filter((node) => node.type === 'paragraph' && node.nodeIndex < 3)
+              .length === 2 &&
+            result.outline.nodes.filter((node) => node.type === 'table').length === 2 &&
+            result.outline.nodes.every((node) => node.type !== 'table_cell') &&
             result.created.changes.length === 2 &&
             result.created.changes.every((change) => change.kind === 'created') &&
             result.readBefore.nodes.length === 2 &&
             result.content.changes.some((change) => change.kind === 'updated') &&
-            result.format.changes.some((change) => change.kind === 'updated') &&
+            result.format.changes.filter((change) => change.kind === 'updated').length === 2 &&
+            JSON.stringify(result.rejectedFormat).includes('invalid_input') &&
+            result.readAfterRejectedFormat.nodes.every(
+              (node) => node.type !== 'paragraph' || node.style?.alignment === 'center'
+            ) &&
+            JSON.stringify(result.missingTargetFormat).includes('invalid_input') &&
+            result.readAfterMissingTarget.nodes.every(
+              (node) => node.type !== 'paragraph' || node.style?.alignment === 'center'
+            ) &&
+            result.tableFormat.changes.length === 2 &&
+            result.rowFormat.changes.length === 2 &&
+            result.cellFormat.changes.length === 2 &&
+            result.sectionFormat.changes.length >= 1 &&
+            result.resetFormat.changes.length === 2 &&
+            result.namedStyle.changes.length === 2 &&
+            result.numbering.changes.length === 2 &&
             result.tableEdit.changes.some((change) => change.kind === 'updated') &&
             result.media.changes.some((change) => change.kind === 'updated') &&
             result.comment.changes.some((change) => change.kind === 'comment_created') &&

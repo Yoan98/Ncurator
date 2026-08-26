@@ -51,8 +51,8 @@ describe('DOCX v2 stable node identity', () => {
         action: 'outline',
         payload: {
           docId: opened.payload.docId,
-          ranges: [{ fromNodeIndex: 0, toNodeIndex: 10 }],
-          includeTables: true,
+          fromNodeIndex: 0,
+          toNodeIndex: 10,
           includeCells: true
         }
       })
@@ -62,26 +62,28 @@ describe('DOCX v2 stable node identity', () => {
       const edited = await handleDocxWorkerRequest({
         requestId: randomUUID(),
         runId,
-        action: 'apply_operation',
+        action: 'apply_operations',
         payload: {
           docId: opened.payload.docId,
-          operation: {
-            type: 'insert_nodes',
-            position: 'document_end',
-            nodes: [{ type: 'paragraph', text: 'Body end' }]
-          }
+          operations: [
+            {
+              type: 'insert_nodes',
+              position: 'document_end',
+              nodes: [{ type: 'paragraph', text: 'Body end' }]
+            }
+          ]
         }
       })
       expect(edited.ok).toBe(true)
-      if (!edited.ok || edited.payload.action !== 'apply_operation') return
+      if (!edited.ok || edited.payload.action !== 'apply_operations') return
       const after = await handleDocxWorkerRequest({
         requestId: randomUUID(),
         runId,
         action: 'outline',
         payload: {
           docId: edited.payload.newDocId,
-          ranges: [{ fromNodeIndex: 0, toNodeIndex: 10 }],
-          includeTables: true,
+          fromNodeIndex: 0,
+          toNodeIndex: 10,
           includeCells: true
         }
       })
@@ -132,8 +134,8 @@ describe('DOCX v2 stable node identity', () => {
         action: 'outline',
         payload: {
           docId: opened.payload.docId,
-          ranges: [{ fromNodeIndex: 0, toNodeIndex: 2 }],
-          includeTables: true,
+          fromNodeIndex: 0,
+          toNodeIndex: 2,
           includeCells: true
         }
       })
@@ -143,46 +145,50 @@ describe('DOCX v2 stable node identity', () => {
       const insertedBefore = await handleDocxWorkerRequest({
         requestId: randomUUID(),
         runId,
-        action: 'apply_operation',
+        action: 'apply_operations',
         payload: {
           docId: opened.payload.docId,
-          operation: {
-            type: 'insert_nodes',
-            nodeId: anchorId,
-            position: 'before',
-            nodes: [
-              { type: 'paragraph', text: 'Before one' },
-              { type: 'paragraph', text: 'Before two' }
-            ]
-          }
+          operations: [
+            {
+              type: 'insert_nodes',
+              nodeId: anchorId,
+              position: 'before',
+              nodes: [
+                { type: 'paragraph', text: 'Before one' },
+                { type: 'paragraph', text: 'Before two' }
+              ]
+            }
+          ]
         }
       })
       expect(insertedBefore.ok).toBe(true)
-      if (!insertedBefore.ok || insertedBefore.payload.action !== 'apply_operation') return
+      if (!insertedBefore.ok || insertedBefore.payload.action !== 'apply_operations') return
       const insertedAfter = await handleDocxWorkerRequest({
         requestId: randomUUID(),
         runId,
-        action: 'apply_operation',
+        action: 'apply_operations',
         payload: {
           docId: insertedBefore.payload.newDocId,
-          operation: {
-            type: 'insert_nodes',
-            nodeId: anchorId,
-            position: 'after',
-            nodes: [{ type: 'paragraph', text: 'After' }]
-          }
+          operations: [
+            {
+              type: 'insert_nodes',
+              nodeId: anchorId,
+              position: 'after',
+              nodes: [{ type: 'paragraph', text: 'After' }]
+            }
+          ]
         }
       })
       expect(insertedAfter.ok).toBe(true)
-      if (!insertedAfter.ok || insertedAfter.payload.action !== 'apply_operation') return
+      if (!insertedAfter.ok || insertedAfter.payload.action !== 'apply_operations') return
       const after = await handleDocxWorkerRequest({
         requestId: randomUUID(),
         runId,
         action: 'outline',
         payload: {
           docId: insertedAfter.payload.newDocId,
-          ranges: [{ fromNodeIndex: 0, toNodeIndex: 3 }],
-          includeTables: true,
+          fromNodeIndex: 0,
+          toNodeIndex: 3,
           includeCells: true
         }
       })
@@ -235,8 +241,8 @@ describe('DOCX v2 stable node identity', () => {
         action: 'outline',
         payload: {
           docId: opened.payload.docId,
-          ranges: [{ fromNodeIndex: 0, toNodeIndex: 2 }],
-          includeTables: true,
+          fromNodeIndex: 0,
+          toNodeIndex: 2,
           includeCells: true
         }
       })
@@ -258,19 +264,21 @@ describe('DOCX v2 stable node identity', () => {
       const edited = await handleDocxWorkerRequest({
         requestId: randomUUID(),
         runId,
-        action: 'apply_operation',
+        action: 'apply_operations',
         payload: {
           docId: opened.payload.docId,
-          operation: {
-            type: 'insert_nodes',
-            nodeId: paragraphId,
-            position: 'inside_start',
-            nodes: [{ type: 'run', text: 'same' }]
-          }
+          operations: [
+            {
+              type: 'insert_nodes',
+              nodeId: paragraphId,
+              position: 'inside_start',
+              nodes: [{ type: 'run', text: 'same' }]
+            }
+          ]
         }
       })
       expect(edited.ok).toBe(true)
-      if (!edited.ok || edited.payload.action !== 'apply_operation') return
+      if (!edited.ok || edited.payload.action !== 'apply_operations') return
       const after = await handleDocxWorkerRequest({
         requestId: randomUUID(),
         runId,
@@ -354,8 +362,8 @@ describe('DOCX v2 stable node identity', () => {
         action: 'outline',
         payload: {
           docId: opened.payload.docId,
-          ranges: [{ fromNodeIndex: 0, toNodeIndex: 10 }],
-          includeTables: true,
+          fromNodeIndex: 0,
+          toNodeIndex: 10,
           includeCells: true
         }
       })
@@ -382,20 +390,22 @@ describe('DOCX v2 stable node identity', () => {
       const inserted = await handleDocxWorkerRequest({
         requestId: randomUUID(),
         runId,
-        action: 'apply_operation',
+        action: 'apply_operations',
         payload: {
           docId: opened.payload.docId,
-          operation: {
-            type: 'insert_row',
-            tableNodeId: table.nodeId,
-            rowNodeId: originalRowIds[0],
-            position: 'after',
-            cells: ['N1', 'N2']
-          }
+          operations: [
+            {
+              type: 'insert_row',
+              tableNodeId: table.nodeId,
+              rowNodeId: originalRowIds[0],
+              position: 'after',
+              cells: ['N1', 'N2']
+            }
+          ]
         }
       })
       expect(inserted.ok).toBe(true)
-      if (!inserted.ok || inserted.payload.action !== 'apply_operation') return
+      if (!inserted.ok || inserted.payload.action !== 'apply_operations') return
       const detailAfter = await handleDocxWorkerRequest({
         requestId: randomUUID(),
         runId,

@@ -1,41 +1,50 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildTruncatedToolResultMessage,
-  TOOL_RESULT_MAX_CHARS
+  countUnicodeCharacters,
+  sliceUnicodeCharacters,
+  TOOL_RESULT_HEAD_MAX_CHARS,
+  TOOL_RESULT_INLINE_MAX_CHARS
 } from '../../../../src/main/services/ai/human/shared/toolResultPersistence'
 import { stripTerminalControlText } from '../../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 
 describe('ai unit tool result truncation', () => {
   it('truncates to the max chars prefix and reports totals', () => {
-    const fullContent = 'x'.repeat(TOOL_RESULT_MAX_CHARS + 100)
+    const fullContent = 'x'.repeat(TOOL_RESULT_INLINE_MAX_CHARS + 100)
     const message = buildTruncatedToolResultMessage({
-      toolName: 'text_file_read',
       filePath: '/workspace/.ncurator/runtime/toolresult/run-1/abc.log',
-      head: fullContent.slice(0, TOOL_RESULT_MAX_CHARS),
+      head: fullContent.slice(0, TOOL_RESULT_HEAD_MAX_CHARS),
       totalChars: fullContent.length
     })
     const parsed = JSON.parse(message) as {
       truncated: boolean
       filePath: string
-      maxChars: number
       totalChars: number
       head: string
     }
     expect(parsed.truncated).toBe(true)
-    expect(parsed.maxChars).toBe(TOOL_RESULT_MAX_CHARS)
     expect(parsed.totalChars).toBe(fullContent.length)
-    expect(parsed.head.length).toBe(TOOL_RESULT_MAX_CHARS)
+    expect(parsed.head.length).toBe(TOOL_RESULT_HEAD_MAX_CHARS)
+    expect(Object.keys(parsed).sort()).toEqual(['filePath', 'head', 'totalChars', 'truncated'])
     expect(parsed.filePath.endsWith('.log')).toBe(true)
   })
 
   it('returns a parseable envelope', () => {
     const message = buildTruncatedToolResultMessage({
-      toolName: 'terminal_read',
       filePath: '/workspace/.ncurator/runtime/toolresult/run-1/def.log',
       head: 'prefix',
       totalChars: 200_000
     })
     expect(() => JSON.parse(message)).not.toThrow()
+  })
+
+  it('counts and slices Unicode characters without splitting surrogate pairs', () => {
+    const content = `${'x'.repeat(TOOL_RESULT_HEAD_MAX_CHARS - 1)}😀tail`
+    const head = sliceUnicodeCharacters(content, TOOL_RESULT_HEAD_MAX_CHARS)
+    expect(countUnicodeCharacters(content)).toBe(TOOL_RESULT_HEAD_MAX_CHARS + 4)
+    expect(countUnicodeCharacters(head)).toBe(TOOL_RESULT_HEAD_MAX_CHARS)
+    expect(head.endsWith('😀')).toBe(true)
+    expect(head).not.toContain('�')
   })
 })
 

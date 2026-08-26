@@ -233,7 +233,7 @@ const buildNode = (input: {
   visualIds: string[]
   createdRevisionRef: string
   changedRevisionRef?: string
-  reviewQuery?: string
+  reviewQueries?: string[]
 }): DocxReplayNode => ({
   reviewId: `${input.reviewState}:${input.nodeId}:${input.createdRevisionRef}:${input.changedRevisionRef || 'active'}`,
   nodeId: input.nodeId,
@@ -255,7 +255,7 @@ const buildNode = (input: {
   visualIds: input.visualIds,
   createdRevisionRef: input.createdRevisionRef,
   changedRevisionRef: input.changedRevisionRef,
-  reviewQuery: input.reviewQuery,
+  reviewQueries: input.reviewQueries,
   tableCellChanges: undefined
 })
 
@@ -424,7 +424,7 @@ const cloneNodeAsOldRevision = (
   reviewState,
   successorNodeId: undefined,
   changedRevisionRef: revisionRef,
-  reviewQuery: undefined
+  reviewQueries: undefined
 })
 
 const buildCurrentNodeFromSnapshot = (
@@ -502,7 +502,6 @@ export const createReplaySessionFromSnapshot = (input: {
   sourcePath: string
   targetMode?: DocxReplaySession['targetMode']
   sourceDocId: string
-  meta: DocxReplaySession['meta']
   stats: DocxReplaySession['stats']
   diskFingerprint: DocxReplaySession['diskFingerprint']
   snapshot: DocxReplaySnapshot
@@ -536,7 +535,6 @@ export const createReplaySessionFromSnapshot = (input: {
     activeDocId: input.sourceDocId,
     activeRevisionRef: 'v1',
     nextRevisionNumber: 2,
-    meta: input.meta,
     stats: input.stats,
     diskFingerprint: input.diskFingerprint,
     sourceSnapshot: input.snapshot,
@@ -688,7 +686,10 @@ export const applyRevisionToReplaySession = (input: {
     if (!snapshotNode) {
       targetNode.reviewState = 'formatted'
       targetNode.changedRevisionRef = revisionRef
-      targetNode.reviewQuery = op.type === 'format_text' ? op.text : undefined
+      targetNode.reviewQueries =
+        op.type === 'format_text' && op.text
+          ? [...new Set([...(targetNode.reviewQueries || []), op.text])]
+          : undefined
       session.activeSnapshot = nextSnapshot
       return
     }
@@ -700,7 +701,10 @@ export const applyRevisionToReplaySession = (input: {
     targetNode.structureFingerprint = snapshotNode.structureFingerprint
     targetNode.visualIds = snapshotNode.visuals.map((visual) => visual.visualId)
     targetNode.changedRevisionRef = revisionRef
-    targetNode.reviewQuery = op.type === 'format_text' ? op.text : undefined
+    targetNode.reviewQueries =
+      op.type === 'format_text' && op.text
+        ? [...new Set([...(targetNode.reviewQueries || []), op.text])]
+        : undefined
     session.activeSnapshot = nextSnapshot
     return
   }

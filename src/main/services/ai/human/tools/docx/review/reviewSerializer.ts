@@ -281,7 +281,11 @@ const resolveElementForNode = (input: {
 const applyReviewMarker = (element: Element, node: DocxReplayNode): void => {
   if (applyTableCellReviewMarkers(element, node)) return
   if (node.reviewState === 'formatted') {
-    applyFormattedMarker(element, node.reviewQuery)
+    if (node.reviewQueries?.length) {
+      node.reviewQueries.forEach((query) => applyFormattedMarker(element, query))
+    } else {
+      applyFormattedMarker(element)
+    }
     return
   }
   if (node.reviewState === 'inserted' || node.reviewState === 'replaced-new') {

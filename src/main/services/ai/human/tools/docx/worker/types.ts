@@ -1,7 +1,6 @@
 import type {
   DocxChangedNode,
   DocxDetailedNode,
-  DocxOpenMeta,
   DocxOpenStats,
   DocxOperation,
   DocxOutlineNode,
@@ -16,6 +15,7 @@ export type DocxWorkerAction =
   | 'open'
   | 'outline'
   | 'get_node'
+  | 'get_node_layout'
   | 'get_nodes_by_ids'
   | 'get_nodes_by_range'
   | 'get_nodes_by_index_range'
@@ -23,7 +23,7 @@ export type DocxWorkerAction =
   | 'get_annotations'
   | 'search'
   | 'get_visual'
-  | 'apply_operation'
+  | 'apply_operations'
   | 'materialize_draft'
   | 'release_run'
 
@@ -60,11 +60,8 @@ export type DocxWorkerRequest =
       action: 'outline'
       payload: {
         docId: string
-        ranges: Array<{
-          fromNodeIndex: number
-          toNodeIndex: number
-        }>
-        includeTables: boolean
+        fromNodeIndex: number
+        toNodeIndex: number
         includeCells: boolean
       }
     }
@@ -72,6 +69,15 @@ export type DocxWorkerRequest =
       requestId: string
       runId: string
       action: 'get_node'
+      payload: {
+        docId: string
+        nodeId: string
+      }
+    }
+  | {
+      requestId: string
+      runId: string
+      action: 'get_node_layout'
       payload: {
         docId: string
         nodeId: string
@@ -110,10 +116,10 @@ export type DocxWorkerRequest =
   | {
       requestId: string
       runId: string
-      action: 'apply_operation'
+      action: 'apply_operations'
       payload: {
         docId: string
-        operation: DocxOperation
+        operations: DocxOperation[]
       }
     }
   | {
@@ -168,7 +174,6 @@ export type DocxWorkerSuccessPayload =
   | {
       action: 'open'
       docId: string
-      meta: DocxOpenMeta
       stats: DocxOpenStats
       checksum: string
       byteSize: number
@@ -180,6 +185,12 @@ export type DocxWorkerSuccessPayload =
   | {
       action: 'get_node'
       node: DocxDetailedNode
+    }
+  | {
+      action: 'get_node_layout'
+      ownerNodeId: string
+      layoutMode: 'normal' | 'positioned'
+      text: string
     }
   | {
       action: 'get_nodes_by_ids'
@@ -194,7 +205,7 @@ export type DocxWorkerSuccessPayload =
       matches: DocxSearchMatch[]
     }
   | {
-      action: 'apply_operation'
+      action: 'apply_operations'
       newDocId: string
       stats: DocxOpenStats
       changedNodes: DocxChangedNode[]
@@ -230,7 +241,6 @@ type DocSnapshotBase = {
   parentDocId?: string
   buffer: Buffer
   checksum: string
-  meta: DocxOpenMeta
   index: NodeIndex
   identity: DocxIdentityIndex
   detailByNodeId: Map<string, DocxDetailedNode>

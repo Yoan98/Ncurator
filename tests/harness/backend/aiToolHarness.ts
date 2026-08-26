@@ -70,19 +70,12 @@ const createToolInvoker = (tools: readonly ToolLike[]) => {
         throw new Error(`tool not found: ${name}`)
       }
       const normalizedArgs =
-        name === 'docx_read_outline' && !('ranges' in args)
+        name === 'terminal_run' && !('commandExplanation' in args)
           ? {
               ...args,
-              ranges: [
-                { type: 'block_index', fromBlockIndex: 0, toBlockIndex: Number.MAX_SAFE_INTEGER }
-              ]
+              commandExplanation: '执行当前测试用例声明的终端命令。'
             }
-          : name === 'terminal_run' && !('commandExplanation' in args)
-            ? {
-                ...args,
-                commandExplanation: '执行当前测试用例声明的终端命令。'
-              }
-            : args
+          : args
       return (await tool.invoke(normalizedArgs)) as TResult
     }
   }
@@ -181,10 +174,7 @@ export const createTerminalToolHarness = (
   const activities: CapturedToolActivity[] = []
   const sessionManager = new TerminalSessionManager({
     yieldMs: Math.max(50, Number(options.yieldMs || 3000)),
-    retainedScrollbackChars: Math.max(
-      1024,
-      Number(options.retainedScrollbackChars || 120_000)
-    ),
+    retainedScrollbackChars: Math.max(1024, Number(options.retainedScrollbackChars || 120_000)),
     readMaxChars: options.readMaxChars,
     maxConcurrentSessions: options.maxConcurrentSessions
   })

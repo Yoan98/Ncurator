@@ -6,7 +6,11 @@ import {
   DOCX_TOOL_SPECS,
   DOCX_WRITE_TOOL_SPECS
 } from '../../../../src/main/services/ai/human/tools/docx/toolSpecs'
-import { docxReadNodesSchema } from '../../../../src/main/services/ai/human/tools/docx/schemas'
+import {
+  docxFormatSchema,
+  docxOutlineSchema,
+  docxReadNodesSchema
+} from '../../../../src/main/services/ai/human/tools/docx/schemas'
 
 const READ_TOOLS = ['docx_read_outline', 'docx_search', 'docx_read_nodes', 'docx_read_visuals']
 const WRITE_TOOLS = [
@@ -56,6 +60,64 @@ describe('ai unit docx tool contract', () => {
           type: 'node_ids',
           nodeIds: Array.from({ length: 21 }, (_, index) => `node-${String(index)}`)
         }
+      }).success
+    ).toBe(false)
+  })
+
+  it('uses logical outline pages and rejects the removed range protocol', () => {
+    expect(
+      docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx', startPage: 1, pageCount: 2 }).success
+    ).toBe(true)
+    expect(
+      docxOutlineSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
+      }).success
+    ).toBe(false)
+    expect(
+      docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx', startPage: 1, pageCount: 3 }).success
+    ).toBe(false)
+  })
+
+  it('bounds format batches and rejects duplicate or removed single-target input', () => {
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        type: 'format_paragraph',
+        nodeIds: ['p1', 'p2'],
+        format: { alignment: 'center' }
+      }).success
+    ).toBe(true)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        type: 'format_paragraph',
+        nodeIds: ['p1', 'p1'],
+        format: { alignment: 'center' }
+      }).success
+    ).toBe(false)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        type: 'format_paragraph',
+        nodeIds: Array.from({ length: 21 }, (_, index) => `p${String(index)}`),
+        format: { alignment: 'center' }
+      }).success
+    ).toBe(false)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        type: 'format_text',
+        targets: [{ nodeId: 'p1' }, { nodeId: 'p1', text: 'title' }],
+        format: { bold: true }
+      }).success
+    ).toBe(false)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        type: 'format_paragraph',
+        nodeId: 'p1',
+        format: { alignment: 'center' }
       }).success
     ).toBe(false)
   })
