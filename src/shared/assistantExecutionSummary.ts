@@ -66,6 +66,7 @@ const TOOL_UI_KINDS = {
   terminal_run: 'terminal',
   terminal_read: 'terminal',
   text_file_read: 'file-read',
+  text_file_search: 'file-read',
   text_file_edit: 'file-edit',
   kb_search: 'kb',
   kb_list_documents: 'kb',

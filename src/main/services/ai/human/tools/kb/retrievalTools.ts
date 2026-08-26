@@ -56,10 +56,10 @@ const resolveRequestedDocumentIds = (requestedIds: string[] | undefined): string
 
 const assertDocumentHasSourceLocation = (document: DocumentRecord): void => {
   if (document.source_type === 'file' && !document.file_path?.trim()) {
-    throw new Error(`KB document is missing file_path: ${document.name} (${document.id})`)
+    throw new Error(`知识库文档缺少本地文件路径：${document.name} (${document.id})`)
   }
   if (document.source_type === 'web' && !document.source_url?.trim()) {
-    throw new Error(`KB web document is missing source_url: ${document.name} (${document.id})`)
+    throw new Error(`知识库网页文档缺少来源地址：${document.name} (${document.id})`)
   }
 }
 
@@ -83,7 +83,7 @@ const enrichSearchRowsWithSourceLocation = async (
   return rows.map((row) => {
     const document = row.document_id ? documentMap.get(row.document_id) : undefined
     if (!document) {
-      throw new Error(`KB search result is missing source document metadata: ${row.document_id}`)
+      throw new Error(`知识库搜索结果缺少来源文档元数据：${row.document_id}`)
     }
     assertDocumentHasSourceLocation(document)
 
@@ -140,7 +140,7 @@ export const buildKbCapabilityTools = (input: {
           ctx.checkCancelled()
           const prepared = resolveSearchArgs(args)
           if (!prepared.workspaceId) {
-            throw new Error('workspace is required for kb search')
+            throw new Error('知识库搜索需要绑定工作区。')
           }
           if (
             Array.isArray(prepared.requestedDocumentIds) &&
@@ -247,7 +247,7 @@ export const buildKbCapabilityTools = (input: {
           ctx.checkCancelled()
           const workspaceId = String(ctx.workspace?.workspaceId || '').trim() || undefined
           if (!workspaceId) {
-            throw new Error('workspace is required for kb search')
+            throw new Error('知识库搜索需要绑定工作区。')
           }
           const sourceNameQuery = String(args.sourceNameQuery || '').trim() || undefined
           const page = Math.max(1, Number(args.page ?? 1))

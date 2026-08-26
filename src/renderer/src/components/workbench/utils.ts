@@ -197,6 +197,7 @@ const TOOL_ITEM_RENDERERS = {
   terminal_read: (input) =>
     sentence(text('读取终端 '), text(readStringValue(input || {}, 'terminalId') || '运行结果')),
   text_file_read: (input) => sentence(text('读取文件 '), text(readToolFileLabel(input))),
+  text_file_search: (input) => sentence(text('搜索文件 '), text(readToolQueryLabel(input))),
   text_file_edit: (input) => sentence(text('编辑文件 '), text(readToolFileLabel(input))),
   kb_search: (input) => sentence(text('在知识库中搜索 '), text(readToolQueryLabel(input))),
   kb_list_documents: () => sentence(text('查看工作空间文档列表')),

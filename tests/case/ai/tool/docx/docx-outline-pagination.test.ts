@@ -74,6 +74,21 @@ describe('ai tool docx outline pagination backend', () => {
             startPage: 2,
             pageCount: 2
           })
+          const maximumPageCount = await harness.invoke<OutlineResult>('docx_read_outline', {
+            sourcePath,
+            startPage: 1,
+            pageCount: 4
+          })
+          let excessivePageCountError = ''
+          try {
+            await harness.invoke('docx_read_outline', {
+              sourcePath,
+              startPage: 1,
+              pageCount: 5
+            })
+          } catch (error) {
+            excessivePageCountError = error instanceof Error ? error.message : String(error)
+          }
           const outOfRange = await harness.invoke('docx_read_outline', {
             sourcePath,
             startPage: 4,
@@ -84,7 +99,7 @@ describe('ai tool docx outline pagination backend', () => {
             startPage: 1,
             pageCount: 1
           })
-          return { first, rest, outOfRange, empty }
+          return { first, rest, maximumPageCount, excessivePageCountError, outOfRange, empty }
         } finally {
           await harness.release()
         }
@@ -102,6 +117,10 @@ describe('ai tool docx outline pagination backend', () => {
             result.rest.startPage === 2 &&
             result.rest.endPage === 3 &&
             result.rest.segments.length === 14 &&
+            result.maximumPageCount.startPage === 1 &&
+            result.maximumPageCount.endPage === 3 &&
+            result.maximumPageCount.segments.length === 26 &&
+            result.excessivePageCountError.includes('<=4') &&
             coveredBodyNodes === 487 &&
             allSegments.every((segment) => Array.from(segment.textMap).length <= 360) &&
             allSegments.some(

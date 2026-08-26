@@ -79,7 +79,9 @@ describe('ai unit tool prompt contract', () => {
     const readSpec = getToolSpec('text_file_read')
     const editSpec = getToolSpec('text_file_edit')
 
-    expect(readSpec?.inputSchema.safeParse({ sourcePath: 'report.docx' }).success).toBe(false)
+    expect(readSpec?.inputSchema.safeParse({ type: 'lines', sourcePath: 'report.docx' }).success).toBe(
+      false
+    )
     expect(
       editSpec?.inputSchema.safeParse({
         sourcePath: 'slides.pptx',
@@ -87,7 +89,9 @@ describe('ai unit tool prompt contract', () => {
         content: 'not a presentation'
       }).success
     ).toBe(false)
-    expect(readSpec?.inputSchema.safeParse({ sourcePath: 'notes.md' }).success).toBe(true)
+    expect(
+      readSpec?.inputSchema.safeParse({ type: 'lines', sourcePath: 'notes.md' }).success
+    ).toBe(true)
   })
 
   it('keeps the PPT page creation rules compact and explicitly scoped', () => {

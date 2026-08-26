@@ -23,6 +23,7 @@ export const RUNTIME_TOOL_CATALOG = {
   terminal_run: { familyId: 'terminal', skillId: 'terminal' },
   terminal_read: { familyId: 'terminal', skillId: 'terminal' },
   text_file_read: { familyId: 'text-file', skillId: 'text-file' },
+  text_file_search: { familyId: 'text-file', skillId: 'text-file' },
   text_file_edit: { familyId: 'text-file', skillId: 'text-file' },
   kb_search: { familyId: 'kb', skillId: 'kb-retrieval' },
   kb_list_documents: { familyId: 'kb', skillId: 'kb-retrieval' },

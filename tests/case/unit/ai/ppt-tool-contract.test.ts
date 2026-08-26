@@ -239,12 +239,12 @@ describe('ai unit ppt tool contract', () => {
       compilePptSlideHtml(
         '<section data-ppt-slide style="width:1920px;height:1080px"><div data-ppt-element="shape" style="width:10px;height:10px;filter:blur(2px)"></div></section>'
       )
-    ).rejects.toThrow('Unsupported CSS property')
+    ).rejects.toThrow('不支持的 CSS 属性')
     await expect(
       compilePptSlideHtml(
         '<section data-ppt-slide style="width:1920px;height:1080px"><div data-ppt-element="shape" style="width:100px;height:20px;background:linear-gradient(90deg,#0a0,#00f)"></div></section>'
       )
-    ).rejects.toThrow('Unsupported CSS background')
+    ).rejects.toThrow('不支持的 CSS 背景')
   })
 
   it('requires a readable title and keeps text inside the slide safe area', async () => {

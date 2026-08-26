@@ -59,7 +59,7 @@ const assertRestrictedCss = (html: string): void => {
   const unsupported =
     /(?:^|[;{])\s*(filter|backdrop-filter|mask(?:-image)?|mix-blend-mode|animation(?:-name|-duration|-timing-function|-iteration-count)?|transition(?:-property|-duration|-timing-function|-delay)?)\s*:/i
   const match = unsupported.exec(html)
-  if (match) throw new Error(`Unsupported CSS property: ${match[1]}`)
+  if (match) throw new Error(`不支持的 CSS 属性：${match[1]}`)
 }
 
 const assertCanvasSize = (styleText: string | undefined): void => {
@@ -67,10 +67,10 @@ const assertCanvasSize = (styleText: string | undefined): void => {
   const width = style.width && toNumber(style.width)
   const height = style.height && toNumber(style.height)
   if (width !== undefined && width !== PPT_CANVAS_WIDTH) {
-    throw new Error('Slide root must be exactly 1920x1080.')
+    throw new Error('幻灯片根元素尺寸必须为 1920x1080。')
   }
   if (height !== undefined && height !== PPT_CANVAS_HEIGHT) {
-    throw new Error('Slide root must be exactly 1920x1080.')
+    throw new Error('幻灯片根元素尺寸必须为 1920x1080。')
   }
 }
 
@@ -137,12 +137,12 @@ const mergeRootStyle = (styleText: string | undefined): string => {
 
 const sanitizeHtml = (html: string): string => {
   const source = String(html || '').trim()
-  if (!source) throw new Error('PPT slide HTML cannot be empty.')
+  if (!source) throw new Error('PPT 幻灯片 HTML 不能为空。')
   const $ = load(source)
   const forbidden = [...FORBIDDEN_TAGS].filter((tag) => $(tag).length > 0)
-  if (forbidden.length > 0) throw new Error(`Unsupported HTML tags: ${forbidden.join(', ')}`)
+  if (forbidden.length > 0) throw new Error(`不支持的 HTML 标签：${forbidden.join(', ')}`)
   const roots = $('[data-ppt-slide]')
-  if (roots.length !== 1) throw new Error('HTML must contain exactly one data-ppt-slide root.')
+  if (roots.length !== 1) throw new Error('HTML 必须且只能包含一个 data-ppt-slide 根元素。')
   const root = roots.first()
   assertCanvasSize(root.attr('style'))
   assertRestrictedCss(source)
@@ -192,7 +192,7 @@ const layoutWithElectron = async (html: string): Promise<PptCompiledSlide | null
       return (await window.webContents.executeJavaScript(`(async () => {
         await document.fonts.ready;
         const root = document.querySelector('[data-ppt-slide]');
-        if (!root) throw new Error('Missing data-ppt-slide root.');
+        if (!root) throw new Error('缺少 data-ppt-slide 根元素。');
         const rootRect = root.getBoundingClientRect();
         const cleanText = (value) => String(value || '').replace(/\\s+/g, ' ').trim();
         const color = (value) => {
@@ -265,7 +265,7 @@ const layoutWithElectron = async (html: string): Promise<PptCompiledSlide | null
           }
           if (inferredType === 'chart') {
             let categories = []; let series = [];
-            try { categories = JSON.parse(element.getAttribute('data-pptx-categories') || '[]'); series = JSON.parse(element.getAttribute('data-pptx-series') || '[]'); } catch { throw new Error('Invalid chart data: ' + sourceId); }
+            try { categories = JSON.parse(element.getAttribute('data-pptx-categories') || '[]'); series = JSON.parse(element.getAttribute('data-pptx-series') || '[]'); } catch { throw new Error('图表数据无效：' + sourceId); }
             const rows = [['', ...series.map((item) => String(item.name || 'Data'))], ...categories.map((category, rowIndex) => [String(category), ...series.map((item) => String(item.values?.[rowIndex] ?? 0))])];
             elements.push({ sourceId, type: 'chart', bounds, style: common, chartType: element.getAttribute('data-pptx-chart') || 'column', rows, zIndex: z });
             return;
@@ -297,15 +297,15 @@ const layoutWithElectron = async (html: string): Promise<PptCompiledSlide | null
         });
         const rootStyle = getComputedStyle(root);
         const issues = [];
-        if (Math.abs(rootRect.width - ${PPT_CANVAS_WIDTH}) > 0.5 || Math.abs(rootRect.height - ${PPT_CANVAS_HEIGHT}) > 0.5) issues.push('Slide root must be exactly 1920x1080.');
-        candidates.forEach((element) => { const style = getComputedStyle(element); if (style.filter !== 'none' || style.mixBlendMode !== 'normal' || style.animationName !== 'none') issues.push('Unsupported CSS on ' + (element.id || element.tagName) + '.'); });
+        if (Math.abs(rootRect.width - ${PPT_CANVAS_WIDTH}) > 0.5 || Math.abs(rootRect.height - ${PPT_CANVAS_HEIGHT}) > 0.5) issues.push('幻灯片根元素尺寸必须为 1920x1080。');
+        candidates.forEach((element) => { const style = getComputedStyle(element); if (style.filter !== 'none' || style.mixBlendMode !== 'normal' || style.animationName !== 'none') issues.push('存在不支持的 CSS：' + (element.id || element.tagName) + '。'); });
         return { width: ${PPT_CANVAS_WIDTH}, height: ${PPT_CANVAS_HEIGHT}, background: color(rootStyle.backgroundColor) || '#FFFFFF', notes: document.querySelector('[data-ppt-notes]')?.textContent?.trim(), elements, issues };
       })()`)) as PptCompiledSlide
     } finally {
       window.destroy()
     }
   } catch (error) {
-    if (error instanceof Error && /Unsupported CSS|Invalid chart|exactly 1920/.test(error.message))
+    if (error instanceof Error && /不支持的 CSS|图表|1920x1080/.test(error.message))
       throw error
     return null
   }
@@ -676,7 +676,7 @@ export const compilePptSlideHtml = async (html: string): Promise<PptCompiledSlid
     })
   if (unsupportedBackgrounds.length > 0) {
     throw new Error(
-      `Unsupported CSS background on ${unsupportedBackgrounds.slice(0, 6).join(', ')}. Use a solid background-color or an <img> element.`
+      `元素 ${unsupportedBackgrounds.slice(0, 6).join(', ')} 使用了不支持的 CSS 背景，请改用纯 background-color 或 <img> 元素。`
     )
   }
   const compiled =
@@ -688,7 +688,7 @@ export const compilePptSlideHtml = async (html: string): Promise<PptCompiledSlid
   const invalidChart = compiled.elements.find(
     (element) => element.type === 'chart' && (!element.chartType || (element.rows?.length || 0) < 2)
   )
-  if (invalidChart) throw new Error(`Invalid chart configuration: ${invalidChart.sourceId}`)
+  if (invalidChart) throw new Error(`图表配置无效：${invalidChart.sourceId}`)
   const outside = compiled.elements.filter(
     (element) =>
       element.bounds.x < -1 ||
@@ -705,14 +705,14 @@ export const compilePptSlideHtml = async (html: string): Promise<PptCompiledSlid
       })
       .join('; ')
     throw new Error(
-      `${outside.length} PPT elements exceed the 1920x1080 slide bounds: ${details}. Keep right <= 1920 and bottom <= 1080.`
+      `${outside.length} 个 PPT 元素超出 1920x1080 幻灯片边界：${details}。请保证 right <= 1920 且 bottom <= 1080。`
     )
   }
   const blockingIssues = compiled.issues.filter((issue) =>
-    /Unsupported CSS|exactly 1920/.test(issue)
+    /不支持的 CSS|1920x1080/.test(issue)
   )
   if (blockingIssues.length > 0) throw new Error(blockingIssues.join(' '))
   if (compiled.elements.length === 0)
-    throw new Error('PPT slide contains no supported visual elements.')
+    throw new Error('PPT 幻灯片中没有任何受支持的视觉元素。')
   return compiled
 }

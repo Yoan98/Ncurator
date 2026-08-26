@@ -1429,7 +1429,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         )
         if (issues.length > 0) {
           throw new Error(
-            `PPTX validation failed: ${issues.map((issue) => issue.message).join('; ')}`
+            `PPTX 校验失败：${issues.map((issue) => issue.message).join('; ')}`
           )
         }
         const afterBytes = await savePresentation(document.presentation)

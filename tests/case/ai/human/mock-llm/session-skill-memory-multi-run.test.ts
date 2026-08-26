@@ -99,7 +99,7 @@ describe('ai human mock-llm backend', () => {
             result.stateAtLimit.learnedSkillIds.join(',') ===
               'docx-read,pdf-read,excel-write,ppt-read,ppt-write' &&
             result.stateAfterEviction.learnedSkillIds.join(',') ===
-              'excel-write,ppt-read,ppt-write,excel-read,image-recognition,image-generation,docx-write' &&
+              'ppt-read,ppt-write,excel-read,image-recognition,image-generation,docx-write' &&
             result.run4Prompt.includes('<learned_skills>'),
           {
             name: 'session-skills-persist-across-runs-within-tool-budget',

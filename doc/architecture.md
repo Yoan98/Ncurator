@@ -142,6 +142,8 @@ AI 推进遵循“最小可靠返回 × 最少连续决策轮次”：每次只�
 
 每条工具结果独立执行大小守卫，不存在同一 dispatch 批次的总量额度。结果不超过 `TOOL_RESULT_INLINE_MAX_CHARS = 32_000` 字符时完整进入上下文；超过后把完整结果写入一次性 `runtime/toolresult` 文件，并只给模型返回最多 `TOOL_RESULT_HEAD_MAX_CHARS = 8_000` 字符的 head。截断信封只有 `truncated / filePath / totalChars / head`，因此一个大结果不会挤占同轮其他小结果的返回额度。
 
+截断日志是 `JSON.stringify` 的紧凑单行内容（无真实换行），模型需要完整内容时通过 `text_file_read` 读取：`type=lines`（`startLine/lineCount`）按行、`type=chars`（`startOffset/charCount`）按字符分段。`text_file_read` 对 `runtime/toolresult` 目录下的文件执行单次返回上限守卫 `TEXT_FILE_READ_MAX_CHARS`（略低于截断上限，为 JSON 包装开销留余量）：本次读取内容超限时直接报错，保证分段读取的结果不会被 hand 层再次截断落盘，避免「读日志 → 再截断 → 再读日志」的递归；普通工作区文件不受此守卫限制。`text_file_search` 按 literal/regex 在文本中检索，返回每个命中的 1-based 行号与全文件字符偏移（与 `type=chars` 的 `startOffset` 对齐），单行超长日志的命中上下文按字段级上限裁剪并标记 `truncated`，模型可先用搜索定位关键词、再按偏移精确读取。
+
 **模型上下文唯一真相源是会话级 append-only 的会话消息记录（`chat_session_message_log` 表）**：每条是 `user` / `assistant`（含真实 `tool_calls`）/ `tool`（含结果）/ `annotation`（思考/学习/压缩/收尾等过程标记）。模型上下文从会话消息记录投影（`deriveMessageLogMessages`），中断恢复与跨 run 上下文都从记录重建后补一条 user 消息继续；UI 过程展示与模型记忆不再维护 `rounds`/`conversation`/`ai_run_event` 副本。压缩只作用于「投影出的消息」（早段 → `<compacted_history>` + `<current_state>`，尾段保留），记录本身 append-only 不动。
 
 **消息数组构建顺序（每次 run 首次 brain 重建时）**：`system` → 会话消息记录投影出的历史消息 → 尾部追加一条由 `buildBrainUserMessage` 构建的 user 消息（承载 `<task_goal>`、`<current_state>` 等当前任务上下文）。当前 run 的用户原文通过按位置跳过最后一条 `user` 条目避免重复出现（`skipLastUserEntry`），首条消息时历史为空，该 user 消息就是数组里唯一一条 user 消息。这条尾部 user 消息保留了 `<task_goal>` 结构，使 `system + 历史` 前缀在跨轮与跨 run 之间保持结构稳定，利于 KV 前缀缓存复用。

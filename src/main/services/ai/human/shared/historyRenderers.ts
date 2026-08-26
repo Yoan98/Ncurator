@@ -170,14 +170,29 @@ const TOOL_HISTORY_WHITELIST_BY_NAME: Record<string, NestedWhitelistConfig> = {
     error: true
   },
   text_file_read: {
+    type: true,
     sourcePath: true,
     content: true,
     startLine: true,
     endLine: true,
     totalLines: true,
-    error: true,
-    estimatedTokens: true,
-    limit: true
+    startOffset: true,
+    endOffset: true,
+    totalChars: true,
+    error: true
+  },
+  text_file_search: {
+    sourcePath: true,
+    totalMatchCount: true,
+    returnedMatchCount: true,
+    matches: {
+      line: true,
+      charOffset: true,
+      matchText: true,
+      textContext: true,
+      truncated: true
+    },
+    error: true
   },
   terminal_run: {
     terminalId: true,

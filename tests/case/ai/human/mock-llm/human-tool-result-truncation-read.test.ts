@@ -4,6 +4,7 @@ import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { TOOL_RESULT_INLINE_MAX_CHARS } from '../../../../../src/main/services/ai/human/shared/toolResultPersistence'
+import { TEXT_FILE_READ_MAX_CHARS } from '../../../../../src/main/services/ai/human/tools/textFile/toolSpecs'
 import { buildCompleteTaskDecision, buildLearnSkillsDecision } from '../testUtils'
 
 const listLogFiles = async (rootPath: string): Promise<string[]> => {
@@ -18,6 +19,9 @@ const listLogFiles = async (rootPath: string): Promise<string[]> => {
   return nested.flat()
 }
 
+const readEnvelopeFilePath = (user: string): string | undefined =>
+  user.match(/"filePath":"([^"]+)"/)?.[1]
+
 describe('ai human mock-llm tool result truncation', () => {
   it('human-tool-result-truncation-read', async () => {
     await runBackendCase({
@@ -26,7 +30,7 @@ describe('ai human mock-llm tool result truncation', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 human 读取超大工具结果时完整内容落盘为 .log，模型收到整串截断信封。',
+      description: '验证 human 读取超大工具结果时完整内容落盘为 .log，模型收到整串截断信封；再次全量读取日志会收到超限错误并改为分段读取，不再产生二次落盘。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -39,6 +43,8 @@ describe('ai human mock-llm tool result truncation', () => {
         await fs.writeFile(sourcePath, lines.join('\n'), 'utf8')
         await fs.writeFile(smallSourcePath, 'SMALL_RESULT_REMAINS_COMPLETE', 'utf8')
         let modelReceivedBothIndependentResults = false
+        let modelReceivedReadLimitError = false
+        let modelReadLogInSegments = false
 
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
@@ -53,8 +59,8 @@ describe('ai human mock-llm tool result truncation', () => {
                 output: {
                   thought: { next: '同轮读取大小两个文件。' },
                   toolCalls: [
-                    { name: 'text_file_read', args: { sourcePath } },
-                    { name: 'text_file_read', args: { sourcePath: smallSourcePath } }
+                    { name: 'text_file_read', args: { type: 'lines', sourcePath } },
+                    { name: 'text_file_read', args: { type: 'lines', sourcePath: smallSourcePath } }
                   ]
                 }
               },
@@ -62,6 +68,38 @@ describe('ai human mock-llm tool result truncation', () => {
                 modelReceivedBothIndependentResults =
                   user.includes('"truncated":true') &&
                   user.includes('SMALL_RESULT_REMAINS_COMPLETE')
+                const filePath = readEnvelopeFilePath(user)
+                if (!filePath) throw new Error('missing truncated envelope filePath')
+                return {
+                  thought: { next: '全量读取截断日志。' },
+                  toolCalls: [
+                    { name: 'text_file_read', args: { type: 'chars', sourcePath: filePath } }
+                  ]
+                }
+              },
+              ({ user }) => {
+                modelReceivedReadLimitError = user.includes('超过单次读取上限')
+                const filePath = readEnvelopeFilePath(user)
+                if (!filePath) throw new Error('missing truncated envelope filePath')
+                return {
+                  thought: { next: '按上限分段读取截断日志。' },
+                  toolCalls: [
+                    {
+                      name: 'text_file_read',
+                      args: {
+                        type: 'chars',
+                        sourcePath: filePath,
+                        startOffset: 1,
+                        charCount: TEXT_FILE_READ_MAX_CHARS
+                      }
+                    }
+                  ]
+                }
+              },
+              ({ user }) => {
+                modelReadLogInSegments =
+                  user.includes('"startOffset":1') &&
+                  user.includes(`"endOffset":${TEXT_FILE_READ_MAX_CHARS}`)
                 return {
                   output: buildCompleteTaskDecision({
                     summary: '已读完大文件内容。',
@@ -86,7 +124,9 @@ describe('ai human mock-llm tool result truncation', () => {
           output,
           toolResultLogFiles,
           persistedContent,
-          modelReceivedBothIndependentResults
+          modelReceivedBothIndependentResults,
+          modelReceivedReadLimitError,
+          modelReadLogInSegments
         }
       },
       assert: async (result, runtime) => {
@@ -102,17 +142,21 @@ describe('ai human mock-llm tool result truncation', () => {
           })()
         runtime.assertThat(
           result.output.status === 'completed' &&
-            result.toolResultLogFiles.length >= 1 &&
+            result.toolResultLogFiles.length === 1 &&
             persistedParseable &&
             result.persistedContent.length > TOOL_RESULT_INLINE_MAX_CHARS &&
-            result.modelReceivedBothIndependentResults,
+            result.modelReceivedBothIndependentResults &&
+            result.modelReceivedReadLimitError &&
+            result.modelReadLogInSegments,
           {
             name: 'human-large-tool-result-persisted-to-toolresult',
             message:
-              '超大工具结果应完整落盘为 .log 文件，且落盘内容为完整的可解析 JSON（保留全文）。',
+              '超大工具结果应完整落盘为单个 .log 文件（落盘内容为完整的可解析 JSON），再读日志超限应报错引导分段，分段读取后不再产生二次落盘。',
             data: {
               toolResultLogFiles: result.toolResultLogFiles,
-              persistedContentLength: result.persistedContent.length
+              persistedContentLength: result.persistedContent.length,
+              modelReceivedReadLimitError: result.modelReceivedReadLimitError,
+              modelReadLogInSegments: result.modelReadLogInSegments
             }
           }
         )

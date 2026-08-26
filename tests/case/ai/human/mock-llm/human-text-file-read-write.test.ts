@@ -37,7 +37,7 @@ describe('ai human mock-llm text backend', () => {
               {
                 output: buildToolDecision({
                   toolName: 'text_file_read',
-                  args: { sourcePath },
+                  args: { type: 'lines', sourcePath },
                   summary: '读取原文'
                 })
               },
@@ -55,7 +55,7 @@ describe('ai human mock-llm text backend', () => {
               {
                 output: buildToolDecision({
                   toolName: 'text_file_read',
-                  args: { sourcePath },
+                  args: { type: 'lines', sourcePath },
                   summary: '复读确认'
                 })
               },

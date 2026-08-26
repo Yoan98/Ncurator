@@ -39,7 +39,7 @@
 
 - `tool` 只验证真实生产工具调用，不允许 fake。
 - `tool / docx` 覆盖 9 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 Source→Working 净 Diff。
-- `tool / text-file` 覆盖普通文本读取、四种写入 action、修改记录、结构化 diff 与回退前置数据。
+- `tool / text-file` 覆盖普通文本读取、四种写入 action、修改记录、结构化 diff 与回退前置数据、toolresult 截断日志的范围读取守卫，以及按行号/字符偏移定位的文本搜索。
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作区内修改记录、Artifact、安全校验和工作区外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作区外绝对路径读取、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-search-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。
@@ -219,6 +219,24 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - How：对真实 BOM/CRLF 文件执行歧义 edit、成功 replaceAll 和无匹配 replaceAll，并逐次比较 bytes。
 - Oracle：失败时 bytes 不变；成功替换次数准确；新内容中的 oldText 不会被再次递归替换；BOM 与 CRLF 保持。
 - Not：不支持正则 replaceAll。
+
+##### `text-file-toolresult-log-read-guard`
+
+- 测试类型：`backend`
+- What：`text_file_read` 对 `runtime/toolresult` 截断日志的字符上限守卫：全量读取超限直接报错，按上限分段可读，普通大文件不受限，Unicode 码点切片安全。
+- Why：截断日志是单行 JSON，按行无法细分；若允许全量读回会再次触发 hand 层截断落盘造成递归，守卫报错引导分段是收敛关键。
+- How：真实调用 `text_file_read` 读取 toolresult 目录下超限单行日志（`type=chars/lines` 全量、`type=chars` 分段），并读取普通超限大文件与含 emoji 文件验证边界。
+- Oracle：toolresult 日志全量读取报错且错误包含单次上限字符数；分段读取结果正确（`startOffset/endOffset/totalChars` 准确）；普通大文件可全量读取；切片不产生半个 Unicode 码点。
+- Not：不验证真实模型的分段策略与提示词效果。
+
+##### `text-file-search-contract`
+
+- 测试类型：`backend`
+- What：`text_file_search` 的 literal/regex 检索返回准确的行号与全文件字符偏移，单行超长日志的上下文裁剪与 truncated 标记，命中数上限与无效正则报错。
+- Why：文本文件（尤其单行 JSON 截断日志）无法按行细分时，搜索定位关键词拿到字符偏移后即可用 `type=chars` 精确读取，是「读日志超限」场景的关键收敛手段。
+- How：真实调用 `text_file_search` 搜索多行文件（literal/regex）、含 emoji 文件（验证码点对齐）、单行超长 toolresult 日志、超过 10 个命中的文件，并构造无效正则。
+- Oracle：行号与 `charOffset` 为 1-based 且按 Unicode 码点计算；命中行未超长时 `textContext` 返回整行且 `truncated=false`；单行超长日志裁剪上下文并标记 `truncated`；超过 10 个命中时 `totalMatchCount` 为全量、`returnedMatchCount` 为 10；无效正则报错。
+- Not：不验证真实模型对搜索结果的利用策略。
 
 #### pdf 类别
 
@@ -620,6 +638,15 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：修改落盘且可复读；artifact 和最终答复包含正确文件。
 - Not：不重复穷举四种底层 write action。
 
+##### `human-text-file-search-locate-read`
+
+- 测试类型：`backend / mock-llm`
+- What：截断日志通过 `text_file_search` 定位关键词后，用返回的全文件字符偏移配合 `type=chars` 精确读取目标片段，任务完成且不再产生二次落盘。
+- Why：单行 JSON 截断日志无法按行细分，搜索定位 + 字符偏移精确读取是「读日志超限」场景的收敛闭环，需要 mock 层守住这条链路。
+- How：脚本化 LLM 决策：读取超大文本触发 hand 层截断落盘 → 从信封 `filePath` 执行 `text_file_search` → 从搜索结果提取 `charOffset` 执行 `type=chars` 精确读取 → 交付。
+- Oracle：任务完成；`runtime/toolresult` 下只存在原始的一个 `.log` 文件；真实出现 `text_file_search` 与基于其偏移的 `text_file_read(type=chars)` 调用；最终内容包含定位到的关键词。
+- Not：不验证真实模型的搜索策略。
+
 ##### `human-ppt-read-search-edit`
 
 - 测试类型：`backend`
@@ -641,10 +668,10 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-tool-result-truncation-read`
 
 - 测试类型：`backend / mock-llm`
-- What：human 读取超大工具结果时完整内容落盘到 `runtime/toolresult` 为 `.log` 文件，模型侧收到整串截断的信封。
-- Why：工具结果大小守卫已从工具层上移到 hand 层（截断 + 落盘 + `text-file-read` 读取），需守住落盘与信封这一关键事实。
-- How：脚本化 LLM 决策读取超大文本文件，真实走 hand 层截断与落盘链路。
-- Oracle：任务完成；`runtime/toolresult` 下存在落盘的 `.log` 文件；落盘内容为完整的可解析 JSON；单条结果超过 32,000 字符时信封严格只包含 `truncated`、`filePath(.log)`、`totalChars`、最多 8,000 字符的 `head`。每条 ToolMessage 独立截断，不设置 dispatch 批次总量限制。
+- What：human 读取超大工具结果时完整内容落盘到 `runtime/toolresult` 为 `.log` 文件，模型侧收到整串截断的信封；再全量读取日志会收到超限错误并改为分段读取，不产生二次落盘。
+- Why：工具结果大小守卫已从工具层上移到 hand 层（截断 + 落盘 + `text-file-read` 读取），需守住落盘与信封这一关键事实，并守住「读日志超限 → 报错 → 分段」的收敛链路。
+- How：脚本化 LLM 决策读取超大文本文件，真实走 hand 层截断与落盘链路，再从信封 `filePath` 全量读取日志（收到超限错误）后改为按上限分段读取。
+- Oracle：任务完成；`runtime/toolresult` 下只存在原始的一个 `.log` 文件；落盘内容为完整的可解析 JSON；单条结果超过 32,000 字符时信封严格只包含 `truncated`、`filePath(.log)`、`totalChars`、最多 8,000 字符的 `head`；全量读日志收到单次上限错误；分段读取成功。每条 ToolMessage 独立截断，不设置 dispatch 批次总量限制。
 - Not：不验证公网搜索或真实模型工具选择。
 
 ##### `ai-run-service-human-only`

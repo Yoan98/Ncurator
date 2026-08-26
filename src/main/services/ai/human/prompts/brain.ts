@@ -85,6 +85,7 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
 
   <tool_truncation>
     - 工具结果过大时会独立截断：truncated=true，filePath 是完整结果地址，totalChars 是完整字符数，head 是结果开头的有限内容。
+    - 需要完整内容时，用 text_file相关技能读取 filePath 指向的文件来查看；
   </tool_truncation>
 
   <terminal_wait_contract>
