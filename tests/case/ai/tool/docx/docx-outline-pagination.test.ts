@@ -31,7 +31,7 @@ describe('ai tool docx outline pagination backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 DOCX segment map 按根节点比例切分、覆盖、摘要预算、story 和分段上限。',
+      description: '验证 DOCX segment map 按根节点比例切分、覆盖、摘要预算、story 和全文返回。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -67,9 +67,9 @@ describe('ai tool docx outline pagination backend', () => {
         )
         await fs.writeFile(sourcePath, await zip.generateAsync({ type: 'nodebuffer' }))
         const emptyPath = await writeTestDocxFile(runtime.workspaceRoot, 'outline-empty.docx', [])
-        const overflowPath = await writeTestDocxFile(
+        const denseTablesPath = await writeTestDocxFile(
           runtime.workspaceRoot,
-          'outline-overflow.docx',
+          'outline-dense-tables.docx',
           Array.from({ length: 50 }, (_, index) => ({
             type: 'table' as const,
             rows: [[`Table ${String(index + 1)}`]]
@@ -97,12 +97,12 @@ describe('ai tool docx outline pagination backend', () => {
             fromPercent: 0,
             toPercent: 100
           })
-          const overflow = await harness.invoke('docx_read_outline', {
-            sourcePath: overflowPath,
+          const denseTables = await harness.invoke<OutlineResult>('docx_read_outline', {
+            sourcePath: denseTablesPath,
             fromPercent: 0,
             toPercent: 100
           })
-          return { full, head, tail, empty, overflow }
+          return { full, head, tail, empty, denseTables }
         } finally {
           await harness.release()
         }
@@ -126,7 +126,6 @@ describe('ai tool docx outline pagination backend', () => {
             result.full.toPercent === 100 &&
             result.full.totalRootCount === coveredNodeCount(result.full.segments) &&
             result.full.segments.length > 0 &&
-            result.full.segments.length <= 48 &&
             result.full.segments.every((segment) => Array.from(segment.textMap).length <= 360) &&
             result.full.segments.some(
               (segment) =>
@@ -143,11 +142,13 @@ describe('ai tool docx outline pagination backend', () => {
             [...fullKeys].every((key) => unionKeys.has(key)) &&
             result.empty.totalRootCount === 0 &&
             result.empty.segments.length === 0 &&
-            JSON.stringify(result.overflow).includes('invalid_input') &&
-            JSON.stringify(result.overflow).includes('48'),
+            result.denseTables.fromPercent === 0 &&
+            result.denseTables.toPercent === 100 &&
+            result.denseTables.totalRootCount === 50 &&
+            result.denseTables.segments.length === 50,
           {
             name: 'docx-outline-segment-percent-range',
-            message: 'DOCX outline 应按根节点比例返回完整 segment，并在超过 48 段时拒绝。',
+            message: 'DOCX outline 应按根节点比例返回该区间内的全部完整 segment。',
             data: result
           }
         )

@@ -1,9 +1,7 @@
-import { SystemMessage } from '@langchain/core/messages'
 import type { JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import type { HumanPlanItem, HumanRuntimeCache, HumanState } from '../../types'
 import { normalizePlanItems } from '../../memory/thoughtMemory'
-import { renderPlanItems } from '../../shared/memoryRenderers'
 import { emitToolCallResult, emitToolCallStarted } from '../../tools/utils/toolEvents'
 import { UPDATE_PLAN_SCHEMA } from '../../tools/agentControl/toolSpecs'
 import { appendToolFeedback } from '../../shared/toolFeedback'
@@ -91,18 +89,6 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         ok: true,
         content: 'Plan updated successfully.'
       })
-    }
-
-    if (nextPlan.length > 0) {
-      const messages = input.cache.messages || []
-      messages.push(
-        new SystemMessage(`<runtime_state>
-  <current_plan>
-${renderPlanItems(nextPlan)}
-  </current_plan>
-</runtime_state>`)
-      )
-      input.cache.messages = messages
     }
 
     return returnToDispatch(state, {

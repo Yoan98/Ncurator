@@ -8,7 +8,7 @@
 | human-context-compaction-natural-trigger-live       | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816       | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。                                                                                                                                        |
 | human-excel-write-reconciliation-live               | 完成 |            96 | deepseek-v4-flash                | 2026-08-14 18:39 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260814-183949-614               | 终端真实计算核对，四笔状态精确标记，SUMIF 公式正确，样式保持。                                                                                                                                                                                |
 | human-excel-read-sales-gap-analysis-live            | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 21:02 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260813-210226-107            | 真实读取多 Sheet 并终端/python 计算差额，对话给出 P-100/P-300 优先级，源工作簿未改。                                                                                                                                                          |
-| human-kb-guided-docx-comparison-draft-live          | 完成 |            84 | deepseek-v4-flash                | 2026-08-27 21:18 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-211845-908          | 技能合并后 Oracle 通过：一次学习 `docx-read + docx-write` 即拿到全部写工具；插入草稿直接带 `runStyle`（加粗/颜色），未再调 `docx_format`。19 次调用 / 1,050,958 输入 Token。两个目标都写入，来源未改；产业转移被插入两次相近备课备注，且出现“推力/拉力”类比扩展，故扣分。 |
+| human-kb-guided-docx-comparison-draft-live          | 完成 |        90 / 74 | deepseek-v4-flash                | 2026-08-27 22:27 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-221916-523 与 20260827-222331-799 | outline 改 percent 后连跑两轮均 Oracle 通过。第 1 轮 90：两目标各写 1 次 grounded 备课备注，写后 search 复查。22 次调用 / 1,213,420 输入 / 缓存 67.0%。第 2 轮 74：PRD 连续 5 次、产业转移 2 次高度重复追加，推力/拉力类比回潮。21 次调用 / 987,858 输入 / 缓存 78.5%。大文档 `0–100`/`0–50` 仍会撞 48 段上限。 |
 | human-ppt-write-management-review-live              | 完成 |            94 | deepseek-v4-flash                | 2026-08-14 18:42 CST | tests/logs/ai/human/live/human-ppt-write-management-review-live/20260814-184258-961              | 新增摘要页并升级交付风险（李然/7月15日），封面与指标页保持不变，布局无越界、校验零错误。                                                                                                                                                      |
 | human-ppt-read-management-risk-review-live          | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 18:44 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260814-184455-621          | 真实 ppt 读取完成风险简报，视觉识别返回可用文本，未修改演示文稿。                                                                                                                                                                             |
 | human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。                                                                                                                                                     |
@@ -149,10 +149,10 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `docx-outline-pagination`
 
 - 测试类型：`backend`
-- What：`docx_read_outline` 按 `fromPercent`/`toPercent` 返回覆盖该根节点比例的完整 segment，并覆盖 360 字符 `textMap`、多 story、空文档和 48 段上限。
-- Why：outline 是 AI 低上下文定位入口，必须能直接点名文档比例，同时守住小返回和跨 story 顺序。
-- How：创建超过 480 个根节点并带表格、页眉和超长中段的真实 DOCX，分别读取全文、前半、末尾；另建超过 48 个独立表格的文档请求全文。
-- Oracle：返回 `fromPercent/toPercent/fromNodeIndex/toNodeIndex/totalRootCount/segments`；根节点无遗漏、无重叠，table 和跨 story 独立分段，`textMap` 不超过 360 字符且不返回 nodeId；超过 48 段返回 `invalid_input`。
+- What：`docx_read_outline` 按 `fromPercent`/`toPercent` 返回覆盖该根节点比例的完整 segment，并覆盖 360 字符 `textMap`、多 story、空文档和密集独立表格。
+- Why：outline 是 AI 低上下文定位入口，必须能直接点名文档比例，包括 `0–100` 全文。
+- How：创建超过 480 个根节点并带表格、页眉和超长中段的真实 DOCX，分别读取全文、前半、末尾；另建 50 个独立表格的文档请求全文。
+- Oracle：返回 `fromPercent/toPercent/fromNodeIndex/toNodeIndex/totalRootCount/segments`；根节点无遗漏、无重叠，table 和跨 story 独立分段，`textMap` 不超过 360 字符且不返回 nodeId；`0–100` 返回该文档全部 segment。
 - Not：不调用 live 模型。
 
 ##### `docx-auto-open-no-fake-failure`
@@ -982,14 +982,17 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：真实 `kb_search` 返回有效命中；两份目标文档分别发生成功 paragraph 写入并产生两组携带 `applyId` 的 file artifact；两份来源课件保持不变。成功的 DOCX 写结果只能是空 `result` 或 `createdIds`，不得返回 `changes`。重复写入次数不做硬性限制；是否冗余、是否 grounded 由人工读 logs/产物评分。按 10 分制评估 KB 证据、两份目标文件、grounded 内容、来源安全和最终交付，严格超过 8 分通过；只完成一个目标文件最多 8 分，不能通过。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
 
-最新单轮 live 结果（2026-08-27 21:18 CST）：
+最新两轮 live 结果（outline percent 重构后，2026-08-27 22:19 / 22:23 CST）：
 
-- 日志：`tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-211845-908`
-- 结果：Oracle 通过，人工质量评估 8.4/10。一次学习 `docx-read` 与 `docx-write`，写入技能一次加载 5 个写工具；两份目标均用 `docx_content_edit.insert_nodes` 写入备课备注，段落草稿直接带 `runStyle`（标题红加粗、正文色），未调用 `docx_format` / 表格 / 媒体。两份来源未改。扣分：`产业转移` 对同一锚点成功插入两次相近内容；过拟合类比写进“推力/拉力 / 产业锁死”，超出源课件直接表述。
-- 模型成本：19 次调用，累计输入 1,050,958 Token，输出 19,371 Token，其中缓存命中输入 823,296 Token（命中率 78.3%）。较上轮 15 次 / 584,232 输入回升。
-- 逐轮输入 Token：`4,480 / 11,132 / 26,850 / 42,516 / 43,526 / 47,128 / 60,059 / 60,904 / 61,072 / 61,777 / 62,864 / 67,884 / 70,315 / 70,537 / 70,881 / 71,693 / 71,693 / 72,648 / 72,999`。
-- 工具调用：`kb_list_documents 1`，`kb_search 2`，`docx_read_outline 3`，`docx_read_nodes 6`，`docx_search 7`，`update_plan 2`，`docx_content_edit 3`。无 `docx_format`。
-- 结论：技能合并与“编辑时带样式”按设计生效；本轮内容质量与 Token 不及 17:58 那轮，不据此回退技能方案。
+- 第 1 轮日志：`tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-221916-523`
+- 第 1 轮结果：Oracle 通过，人工质量 9.0/10。两份目标各成功 `insert_nodes(document_end)` 一次：PRD 写过拟合备课备注，产业转移写反走样备课备注；草稿带 `runStyle`（加粗/字号），写后用 `docx_search` 复查命中。无重复追加，无“推力/拉力”类比。`图形学.docx` 的 `0–100`（114 段）和 `0–50`（59 段）撞 48 段上限后改为 search + `read_nodes`。
+- 第 1 轮成本：22 次调用，输入 1,213,420，输出 17,924，缓存命中 812,800（67.0%）。逐轮输入：`4,480 / 19,197 / 20,697 / 24,893 / 25,380 / 36,847 / 37,230 / 38,667 / 48,262 / 50,372 / 57,083 / 71,012 / 72,207 / 75,824 / 76,159 / 76,159 / 77,677 / 78,015 / 79,367 / 79,693 / 81,938 / 82,261`。
+- 第 1 轮工具：`kb_list_documents 1`，`kb_search 2`，`docx_read_outline 9`，`docx_search 8`，`docx_read_nodes 5`，`terminal_run 2`，`update_plan 4`，`docx_content_edit 2`。
+- 第 2 轮日志：`tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-222331-799`
+- 第 2 轮结果：Oracle 通过，人工质量 7.4/10。两份目标都有 grounded 备课备注，但 PRD 连续追加 5 次高度同质的反走样备注，产业转移追加 2 次过拟合备注；第二次把过拟合绑到“推力/拉力”，超出源课件直接表述。写后没有 search/outline 复查。PRD 全量 outline 54 段超限后，改 `0–50`/`50–100` 成功。
+- 第 2 轮成本：21 次调用，输入 987,858，输出 25,903，缓存命中 775,936（78.5%）。逐轮输入：`4,480 / 13,334 / 13,735 / 14,058 / 14,375 / 28,864 / 38,337 / 43,398 / 54,824 / 60,894 / 62,883 / 63,356×8 / 65,750 / 66,078`。
+- 第 2 轮工具：`terminal_run 4`，`kb_search 2`，`docx_read_outline 4`，`docx_search 3`，`docx_read_nodes 5`，`update_plan 2`，`docx_content_edit 7`。
+- 结论：percent 入参已生效，模型会在超 48 段时收窄区间；复查仍不稳定，重复追加仍会出现。不据此回退 percent 方案。
 
 ##### `human-pdf-visual-reading-live`
 

@@ -11,7 +11,6 @@ import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from
 import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
 import { renderDocxVisualToPng } from '../utils/renderVisual'
 import { projectDocxReadNodes } from '../publicReadTree'
-import { DOCX_OUTLINE_MAX_SEGMENTS } from '../constants'
 import {
   countOutlineRootNodes,
   resolveOutlinePercentNodeRange,
@@ -200,24 +199,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         const selectedSegments = nodeRange
           ? selectOutlineSegmentsForNodeRange(allSegments, nodeRange)
           : []
-        if (selectedSegments.length > DOCX_OUTLINE_MAX_SEGMENTS) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: runtime.emitFailure({
-              toolName,
-              toolCallId,
-              reason: 'invalid_input',
-              error: `一次最多返回 ${String(DOCX_OUTLINE_MAX_SEGMENTS)} 个分段，当前区间覆盖 ${String(selectedSegments.length)} 个`,
-              draftDocId: sessionResult.docId,
-              resourceContext: runtime.buildResourceContext({
-                sourcePath: sessionResult.sourcePath,
-                effectKind: 'read',
-                currentRevisionRef: sessionResult.currentRevisionRef
-              })
-            }),
-            activity: { actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType! }
-          })
-        }
         const coveredFromNodeIndex =
           selectedSegments.length > 0
             ? Math.min(...selectedSegments.map((segment) => segment.fromNodeIndex))

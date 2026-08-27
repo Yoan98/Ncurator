@@ -8,7 +8,6 @@ import {
   docxTableStyleSchema
 } from './schemas'
 import {
-  DOCX_OUTLINE_MAX_SEGMENTS,
   DOCX_OUTLINE_SEGMENT_MAP_MAX_CHARS,
   DOCX_SEARCH_CONTEXT_NODE_COUNT,
   DOCX_SEARCH_MAX_MATCHES,
@@ -311,7 +310,6 @@ export const docxOutlineOutputSchema = z
           })
           .strict()
       )
-      .max(DOCX_OUTLINE_MAX_SEGMENTS)
   })
   .strict()
 
