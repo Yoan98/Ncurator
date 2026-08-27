@@ -8,7 +8,7 @@
 | human-context-compaction-natural-trigger-live       | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816       | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。                                                                                                                                        |
 | human-excel-write-reconciliation-live               | 完成 |            96 | deepseek-v4-flash                | 2026-08-14 18:39 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260814-183949-614               | 终端真实计算核对，四笔状态精确标记，SUMIF 公式正确，样式保持。                                                                                                                                                                                |
 | human-excel-read-sales-gap-analysis-live            | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 21:02 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260813-210226-107            | 真实读取多 Sheet 并终端/python 计算差额，对话给出 P-100/P-300 优先级，源工作簿未改。                                                                                                                                                          |
-| human-kb-guided-docx-comparison-draft-live          | 完成 |        90 / 74 | deepseek-v4-flash                | 2026-08-27 22:27 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-221916-523 与 20260827-222331-799 | outline 改 percent 后连跑两轮均 Oracle 通过。第 1 轮 90：两目标各写 1 次 grounded 备课备注，写后 search 复查。22 次调用 / 1,213,420 输入 / 缓存 67.0%。第 2 轮 74：PRD 连续 5 次、产业转移 2 次高度重复追加，推力/拉力类比回潮。21 次调用 / 987,858 输入 / 缓存 78.5%。大文档 `0–100`/`0–50` 仍会撞 48 段上限。 |
+| human-kb-guided-docx-comparison-draft-live          | 完成 |        88 / 86 | deepseek-v4-flash                | 2026-08-27 22:51 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-223957-864 与 20260827-224726-600 | 去掉 48 段硬失败后两轮 `0–100` outline 均成功。第 1 轮 88：11 次调用 / 440,006 输入 / 缓存 76.6%，两目标各写 2 次相近备课备注。第 2 轮 86：17 次调用 / 946,830 输入 / 缓存 91.3%，读了源课件；PRD 第二次写入对比表有增量，产业转移仍绑推力/拉力。 |
 | human-ppt-write-management-review-live              | 完成 |            94 | deepseek-v4-flash                | 2026-08-14 18:42 CST | tests/logs/ai/human/live/human-ppt-write-management-review-live/20260814-184258-961              | 新增摘要页并升级交付风险（李然/7月15日），封面与指标页保持不变，布局无越界、校验零错误。                                                                                                                                                      |
 | human-ppt-read-management-risk-review-live          | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 18:44 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260814-184455-621          | 真实 ppt 读取完成风险简报，视觉识别返回可用文本，未修改演示文稿。                                                                                                                                                                             |
 | human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。                                                                                                                                                     |
@@ -982,17 +982,17 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：真实 `kb_search` 返回有效命中；两份目标文档分别发生成功 paragraph 写入并产生两组携带 `applyId` 的 file artifact；两份来源课件保持不变。成功的 DOCX 写结果只能是空 `result` 或 `createdIds`，不得返回 `changes`。重复写入次数不做硬性限制；是否冗余、是否 grounded 由人工读 logs/产物评分。按 10 分制评估 KB 证据、两份目标文件、grounded 内容、来源安全和最终交付，严格超过 8 分通过；只完成一个目标文件最多 8 分，不能通过。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
 
-最新两轮 live 结果（outline percent 重构后，2026-08-27 22:19 / 22:23 CST）：
+最新两轮 live 结果（去掉 48 段硬失败后，2026-08-27 22:39 / 22:47 CST）：
 
-- 第 1 轮日志：`tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-221916-523`
-- 第 1 轮结果：Oracle 通过，人工质量 9.0/10。两份目标各成功 `insert_nodes(document_end)` 一次：PRD 写过拟合备课备注，产业转移写反走样备课备注；草稿带 `runStyle`（加粗/字号），写后用 `docx_search` 复查命中。无重复追加，无“推力/拉力”类比。`图形学.docx` 的 `0–100`（114 段）和 `0–50`（59 段）撞 48 段上限后改为 search + `read_nodes`。
-- 第 1 轮成本：22 次调用，输入 1,213,420，输出 17,924，缓存命中 812,800（67.0%）。逐轮输入：`4,480 / 19,197 / 20,697 / 24,893 / 25,380 / 36,847 / 37,230 / 38,667 / 48,262 / 50,372 / 57,083 / 71,012 / 72,207 / 75,824 / 76,159 / 76,159 / 77,677 / 78,015 / 79,367 / 79,693 / 81,938 / 82,261`。
-- 第 1 轮工具：`kb_list_documents 1`，`kb_search 2`，`docx_read_outline 9`，`docx_search 8`，`docx_read_nodes 5`，`terminal_run 2`，`update_plan 4`，`docx_content_edit 2`。
-- 第 2 轮日志：`tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-222331-799`
-- 第 2 轮结果：Oracle 通过，人工质量 7.4/10。两份目标都有 grounded 备课备注，但 PRD 连续追加 5 次高度同质的反走样备注，产业转移追加 2 次过拟合备注；第二次把过拟合绑到“推力/拉力”，超出源课件直接表述。写后没有 search/outline 复查。PRD 全量 outline 54 段超限后，改 `0–50`/`50–100` 成功。
-- 第 2 轮成本：21 次调用，输入 987,858，输出 25,903，缓存命中 775,936（78.5%）。逐轮输入：`4,480 / 13,334 / 13,735 / 14,058 / 14,375 / 28,864 / 38,337 / 43,398 / 54,824 / 60,894 / 62,883 / 63,356×8 / 65,750 / 66,078`。
-- 第 2 轮工具：`terminal_run 4`，`kb_search 2`，`docx_read_outline 4`，`docx_search 3`，`docx_read_nodes 5`，`update_plan 2`，`docx_content_edit 7`。
-- 结论：percent 入参已生效，模型会在超 48 段时收窄区间；复查仍不稳定，重复追加仍会出现。不据此回退 percent 方案。
+- 第 1 轮日志：`tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-223957-864`
+- 第 1 轮结果：Oracle 通过，人工质量 8.8/10。两个目标文件 `docx_read_outline(0–100)` 均成功；两份目标各 `insert_nodes(after)` 两次，第二次是更完整的引导语，内容 grounded。写后 `read_nodes` 复查。无 outline 失败，无 `terminal_run`。产业转移第二次把过拟合绑到耐克/推力拉力。
+- 第 1 轮成本：11 次调用，输入 440,006，输出 12,530，缓存命中 336,896（76.6%）。时长 124s。
+- 第 1 轮工具：`kb_list_documents 1`，`kb_search 4`，`docx_read_outline 2`，`docx_read_nodes 5`，`docx_content_edit 4`。
+- 第 2 轮日志：`tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-224726-600`
+- 第 2 轮结果：Oracle 通过，人工质量 8.6/10。目标文件 `0–100` outline 均成功，并精读了 `图形学.docx` / `深度学习.docx`。PRD 写两次（反走样备课 + 反走样/过拟合对比表），产业转移写一次并把概念绑到推力/拉力。写后再次 `read_nodes`。
+- 第 2 轮成本：17 次调用，输入 946,830，输出 23,285，缓存命中 864,000（91.3%）。时长 231s。
+- 第 2 轮工具：`kb_list_documents 1`，`kb_search 2`，`docx_read_outline 2`，`docx_read_nodes 9`，`update_plan 3`，`docx_content_edit 3`。
+- 结论：`0–100` 全文 outline 已不再失败；Token 比撞 48 段上限那两轮明显下降。重复追加和跨文档类比仍在，但不据此回退 percent 方案。
 
 ##### `human-pdf-visual-reading-live`
 

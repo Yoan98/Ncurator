@@ -4,7 +4,7 @@
 
 ### 1.1 架构相关
 
-- `doc/architecture.md`：涉及项目整体架构、AI 架构、Docx 架构、模块关系或主流程时阅读。
+- `doc/architecture.md`：涉及项目整体架构、AI 运行时、工具设计思路、模块关系或主流程时阅读。
 - `doc/database.md`：涉及 SQLite、LanceDB、索引、持久化关系或数据库结构时阅读。
 
 ### 1.2 项目整体相关
