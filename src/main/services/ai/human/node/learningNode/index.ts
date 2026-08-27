@@ -32,7 +32,7 @@ const appendLearnToolMessage = async (input: {
     toolCallId: input.toolCallId,
     toolName: 'learn_skill',
     ok: true,
-    result: { message: input.content }
+    content: input.content
   })
 }
 
@@ -88,29 +88,25 @@ const renderLearningResult = (outcome: HumanLearningOutcome): string => {
   const unknown = outcome.skippedUnknownSkillIds
   if (loaded.length > 0) {
     const details = [
-      `已加载技能 ${loaded.map((item) => `\`${item}\``).join('、')}`,
-      duplicates.length > 0
-        ? `已存在技能 ${duplicates.map((item) => `\`${item}\``).join('、')}`
-        : undefined,
-      unknown.length > 0
-        ? `未识别技能 ${unknown.map((item) => `\`${item}\``).join('、')}`
-        : undefined,
+      `loaded=${loaded.join(', ')}`,
+      duplicates.length > 0 ? `alreadyLoaded=${duplicates.join(', ')}` : undefined,
+      unknown.length > 0 ? `unknown=${unknown.join(', ')}` : undefined,
       outcome.evictedSkillIds.length > 0
-        ? `为满足活动工具数量上限，已移除技能 ${outcome.evictedSkillIds.map((item) => `\`${item}\``).join('、')}`
+        ? `evicted=${outcome.evictedSkillIds.join(', ')}`
         : undefined
     ].filter(Boolean)
-    return `学习${duplicates.length > 0 || unknown.length > 0 ? '部分' : ''}成功，${details.join('；')}。`
+    return `Skill loading completed successfully. ${details.join('; ')}.`
   }
   if (duplicates.length > 0 && unknown.length === 0) {
-    return `学习失败，请求的技能 ${duplicates.map((item) => `\`${item}\``).join('、')} 已经加载，本轮没有获得新能力。`
+    return `No new skill was loaded. Already loaded: ${duplicates.join(', ')}.`
   }
   if (unknown.length > 0 && duplicates.length === 0) {
-    return `学习失败，未识别请求的技能 ${unknown.map((item) => `\`${item}\``).join('、')}。`
+    return `Error: Unknown skill IDs: ${unknown.join(', ')}.`
   }
   if (duplicates.length > 0 || unknown.length > 0) {
-    return `学习失败，本轮没有加载新技能；${duplicates.length > 0 ? `技能 ${duplicates.map((item) => `\`${item}\``).join('、')} 已经存在` : ''}${duplicates.length > 0 && unknown.length > 0 ? '；' : ''}${unknown.length > 0 ? `技能 ${unknown.map((item) => `\`${item}\``).join('、')} 未被识别` : ''}。`
+    return `No new skill was loaded.${duplicates.length > 0 ? ` Already loaded: ${duplicates.join(', ')}.` : ''}${unknown.length > 0 ? ` Unknown skill IDs: ${unknown.join(', ')}.` : ''}`
   }
-  return '学习失败，学习请求中没有可加载的技能。'
+  return 'Error: The skill request did not contain any loadable skill.'
 }
 
 export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCache }) => {
@@ -198,7 +194,8 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         evictedSkillIds: [],
         activeToolCount: fittedLearnedSkills.activeToolCount
       })
-      const learningResult = '学习失败，加载请求中的技能后会超过当前活动工具数量上限。'
+      const learningResult =
+        'Error: Loading the requested skills would exceed the active tool limit.'
       await appendLearnToolMessage({
         cache: input.cache,
         ctx: input.ctx,

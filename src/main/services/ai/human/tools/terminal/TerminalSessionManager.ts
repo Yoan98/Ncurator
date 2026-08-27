@@ -38,6 +38,7 @@ export type TerminalCommandResult = {
   currentTerminalPath: string
   output: string
   readEndPosition: number
+  hasMoreOutput: boolean
   exitCode: number | null
 }
 
@@ -252,23 +253,24 @@ export class TerminalSessionManager {
       currentTerminalPath: session.currentTerminalPath,
       output: commandOutput.output,
       readEndPosition: commandOutput.readEndPosition,
+      hasMoreOutput: commandOutput.hasMoreOutput,
       exitCode: completed ? commandState.exitCode : null
     }
-    if (completed) {
+    if (completed && !commandOutput.hasMoreOutput) {
       await this.closeSession(session)
     }
     return result
   }
 
-  public read(input: {
+  public async read(input: {
     terminalId: string
     chatSessionId: string
     workspaceId: string
     readEndPosition?: number
-  }): TerminalReadResult {
+  }): Promise<TerminalReadResult> {
     const session = this.requireSession(input)
     const result = this.readOutput(session, input.readEndPosition)
-    return {
+    const output: TerminalReadResult = {
       terminalId: session.terminalId,
       terminalStatus: session.status,
       currentTerminalPath: session.currentTerminalPath,
@@ -277,6 +279,10 @@ export class TerminalSessionManager {
       hasMoreOutput: result.hasMoreOutput,
       exitCode: session.status === 'running' ? null : session.lastExitCode
     }
+    if (session.status === 'idle' && !result.hasMoreOutput) {
+      await this.closeSession(session)
+    }
+    return output
   }
 
   public async waitForCommand(input: {
@@ -294,7 +300,6 @@ export class TerminalSessionManager {
     }
     await command.completion
     const exitCode = command.exitCode ?? session.lastExitCode ?? 1
-    await this.closeSession(session)
     return exitCode
   }
 
@@ -393,7 +398,9 @@ export class TerminalSessionManager {
   }): Promise<ManagedTerminalSession> {
     if (!input.allowConcurrentOverLimit) {
       const activeCount = Array.from(this.sessions.values()).filter(
-        (session) => session.chatSessionId === input.chatSessionId
+        (session) =>
+          session.chatSessionId === input.chatSessionId &&
+          (session.status === 'running' || session.status === 'stopping')
       ).length
       if (activeCount >= this.maxConcurrentSessions) {
         throw new Error('terminal_session_limit_reached')

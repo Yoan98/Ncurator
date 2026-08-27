@@ -4,24 +4,41 @@ import type { AiRunContext } from '../../types'
 import { getWorkspaceToolResultDir } from '../../../assets/WorkspaceAssetService'
 
 export const TOOL_RESULT_INLINE_MAX_CHARS = 32_000
-export const TOOL_RESULT_HEAD_MAX_CHARS = 8_000
+export const TOOL_RESULT_HEAD_MAX_CHARS = 6_000
+export const TOOL_RESULT_TAIL_MAX_CHARS = 2_000
 
 export const countUnicodeCharacters = (value: string): number => Array.from(value).length
 
 export const sliceUnicodeCharacters = (value: string, maxChars: number): string =>
   Array.from(value).slice(0, maxChars).join('')
 
+export const sliceUnicodeCharactersFromEnd = (value: string, maxChars: number): string => {
+  const characters = Array.from(value)
+  return characters.slice(Math.max(0, characters.length - maxChars)).join('')
+}
+
+export const countUtf8Bytes = (value: string): number => Buffer.byteLength(value, 'utf8')
+
+export const countPhysicalLines = (value: string): number => value.split(/\r\n|\r|\n/u).length
+
 export const buildTruncatedToolResultMessage = (input: {
   filePath: string
   head: string
+  tail: string
   totalChars: number
+  totalBytes: number
+  totalLines: number
 }): string =>
-  JSON.stringify({
-    truncated: true,
-    filePath: input.filePath,
-    totalChars: input.totalChars,
-    head: input.head
-  })
+  [
+    'Result too large to include inline.',
+    `Full result: ${input.filePath}`,
+    `Size: ${input.totalChars.toLocaleString('en-US')} characters; ${input.totalBytes.toLocaleString('en-US')} UTF-8 bytes; ${input.totalLines.toLocaleString('en-US')} lines.`,
+    'Preview (head):',
+    input.head,
+    '... [content omitted; read the file with text_file_read] ...',
+    'Preview (tail):',
+    input.tail
+  ].join('\n')
 
 const getResultRef = (toolCallId: string): string =>
   path.basename(String(toolCallId || '').trim()).replace(/\.(?:json|log)$/i, '')
@@ -40,7 +57,7 @@ export const persistToolResult = async (input: {
   const directoryPath = resolvePersistedDir(input.ctx)
   if (!directoryPath) return undefined
   const resultRef = getResultRef(input.toolCallId)
-  const filePath = path.join(directoryPath, `${resultRef}.log`)
+  const filePath = path.join(directoryPath, `${resultRef}.txt`)
   await fs.mkdir(directoryPath, { recursive: true })
   await fs.writeFile(filePath, input.content, 'utf8')
   return { filePath, totalChars: countUnicodeCharacters(input.content) }

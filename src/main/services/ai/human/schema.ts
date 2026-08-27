@@ -73,14 +73,6 @@ export const humanLearningOutcomeSchema = z.object({
   activeToolCount: z.number().int().min(0)
 })
 
-export const humanHistoryToolResultSchema = z.object({
-  toolName: z.string().min(1),
-  ok: z.boolean(),
-  data: jsonValueSchema.optional(),
-  artifactRefs: z.array(aiArtifactRefSchema).optional(),
-  resourceContext: toolResourceContextSchema.optional()
-})
-
 export const humanPlanItemStatusSchema = z.enum(['todo', 'in_progress', 'done'])
 
 export const humanPlanItemSchema = z.object({

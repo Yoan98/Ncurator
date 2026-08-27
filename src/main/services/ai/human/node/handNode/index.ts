@@ -1,21 +1,9 @@
 import { randomUUID } from 'node:crypto'
 import { ToolMessage } from '@langchain/core/messages'
-import type { ChatMessageLogEntry, JsonObject, JsonValue } from '../../../../../../shared/types'
+import type { ChatMessageLogEntry, JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
-import { buildHistoryToolResult } from '../../memory/historyToolResult'
-import {
-  buildToolHistoryReturnValue,
-  buildToolResultMessageContent
-} from '../../shared/historyRenderers'
-import {
-  buildTruncatedToolResultMessage,
-  countUnicodeCharacters,
-  persistToolResult,
-  sliceUnicodeCharacters,
-  TOOL_RESULT_HEAD_MAX_CHARS,
-  TOOL_RESULT_INLINE_MAX_CHARS
-} from '../../shared/toolResultPersistence'
+import { buildModelToolResultDelivery } from '../../shared/modelToolResult'
 import { buildToolFeedback } from '../../shared/toolFeedback'
 import { buildToolCallDisplayText } from '../../shared/toolResultRenderers'
 import { assertExternalLearnedSkillIds } from '../../skills'
@@ -55,24 +43,6 @@ type ParsedHandCall = {
   toolCallId: string
   toolName: string
   args: JsonObject
-}
-
-const truncateToolResultMessage = async (input: {
-  ctx: AiRunContext
-  toolCallId: string
-  fullContent: string
-}): Promise<string | undefined> => {
-  const persisted = await persistToolResult({
-    ctx: input.ctx,
-    toolCallId: input.toolCallId,
-    content: input.fullContent
-  })
-  if (!persisted) return undefined
-  return buildTruncatedToolResultMessage({
-    filePath: persisted.filePath,
-    head: sliceUnicodeCharacters(input.fullContent, TOOL_RESULT_HEAD_MAX_CHARS),
-    totalChars: persisted.totalChars
-  })
 }
 
 const collectApprovalBatchItems = (input: {
@@ -203,42 +173,35 @@ const appendToolMessages = async (input: {
   ctx: AiRunContext
   calls: ParsedHandCall[]
   results: ToolCallResult[]
-}): Promise<
-  Array<{ toolCallId: string; toolName: string; ok: boolean; result: JsonValue | undefined }>
-> => {
+}): Promise<Array<{ toolCallId: string; toolName: string; ok: boolean; content: string }>> => {
   const messages = input.cache.messages || []
   const transcriptEntries: Array<{
     toolCallId: string
     toolName: string
     ok: boolean
-    result: JsonValue | undefined
+    content: string
   }> = []
   for (let index = 0; index < input.calls.length; index += 1) {
     const call = input.calls[index]
     const result = input.results[index]
     if (!result) continue
-    const historyResult = buildHistoryToolResult(result)
-    const returnValue = buildToolHistoryReturnValue(historyResult)
-    const fullContent = buildToolResultMessageContent(historyResult)
-    const messageContent =
-      countUnicodeCharacters(fullContent) > TOOL_RESULT_INLINE_MAX_CHARS
-        ? ((await truncateToolResultMessage({
-            ctx: input.ctx,
-            toolCallId: call.toolCallId,
-            fullContent
-          })) ?? fullContent)
-        : fullContent
+    const delivery = await buildModelToolResultDelivery({
+      ctx: input.ctx,
+      toolCallId: call.toolCallId,
+      args: call.args,
+      result
+    })
     messages.push(
       new ToolMessage({
-        content: messageContent,
+        content: delivery.content,
         tool_call_id: call.toolCallId
       })
     )
     transcriptEntries.push({
       toolCallId: call.toolCallId,
       toolName: call.toolName,
-      ok: result.ok,
-      result: returnValue
+      ok: delivery.ok,
+      content: delivery.content
     })
   }
   input.cache.messages = messages
@@ -250,14 +213,14 @@ const buildApprovalBlockedToolMessage = (input: {
   command: string
 }): string => {
   if (input.decision.action === 'reject') {
-    return `该命令未获用户批准，本轮没有执行：${input.command}。`
+    return `The user did not approve this operation, so it was not executed: ${input.command}`
   }
   if (input.decision.action === 'guide') {
-    return `用户对命令「${input.command}」补充了说明，本轮没有执行：${String(
+    return `The user provided additional guidance, so this operation was not executed: ${input.command}. Guidance: ${String(
       input.decision.message || ''
     ).trim()}`
   }
-  return `该命令已获批准，但因为本轮存在未获批准的命令，所以整体没有执行，请调整方案后重试：${input.command}。`
+  return `This operation was approved but was not executed because another operation in the same batch was not approved: ${input.command}`
 }
 
 const appendBlockedApprovalToolMessages = (input: {
@@ -278,12 +241,12 @@ const appendBlockedApprovalToolMessages = (input: {
     const message =
       item && decision
         ? buildApprovalBlockedToolMessage({ decision, command: item.command })
-        : '本轮包含未获批准的操作，因此该工具调用没有执行。'
+        : 'This tool call was not executed because the batch contained an unapproved operation.'
     const feedback = buildToolFeedback({
       toolCallId: call.toolCallId,
       toolName: call.toolName,
       ok: false,
-      errorMessage: message
+      content: `Error: ${message}`
     })
     messages.push(feedback.message)
     transcriptEntries.push(feedback.transcript)
@@ -401,7 +364,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         toolCallId: entry.toolCallId,
         toolName: entry.toolName,
         ok: entry.ok,
-        result: entry.result
+        content: entry.content
       }))
     )
 

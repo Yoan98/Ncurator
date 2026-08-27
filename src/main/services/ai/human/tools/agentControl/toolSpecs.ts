@@ -2,6 +2,10 @@ import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 import { humanPlanItemSchema } from '../../schema'
+import {
+  renderLearnSkillModelResult,
+  renderPlanUpdateModelResult
+} from '../../shared/modelToolResultRenderers'
 
 export const LEARN_SKILL_SCHEMA = z.object({
   skillIds: z.array(z.string().min(1)).min(1)
@@ -38,7 +42,8 @@ export const LEARN_SKILL_TOOL_SPEC: HumanToolSpec<
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
     defaultResourceKey: 'agent-control'
-  })
+  }),
+  modelResult: { renderSuccess: renderLearnSkillModelResult }
 }
 
 export const UPDATE_PLAN_TOOL_SPEC: HumanToolSpec<
@@ -59,7 +64,8 @@ export const UPDATE_PLAN_TOOL_SPEC: HumanToolSpec<
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
     defaultResourceKey: 'agent-control'
-  })
+  }),
+  modelResult: { renderSuccess: renderPlanUpdateModelResult }
 }
 
 export const AGENT_CONTROL_TOOL_SPECS = [LEARN_SKILL_TOOL_SPEC, UPDATE_PLAN_TOOL_SPEC] as const

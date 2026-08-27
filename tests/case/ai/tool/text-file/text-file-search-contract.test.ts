@@ -7,7 +7,6 @@ import { TEXT_FILE_SEARCH_CONTEXT_CHARS } from '../../../../../src/main/services
 
 type SearchMatch = {
   line: number
-  charOffset: number
   matchText: string
   textContext: string
   truncated: boolean
@@ -28,7 +27,8 @@ describe('ai tool text-file search backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['text-file'],
-      description: '验证 text_file_search 的 literal/regex 命中位置（行号与全文件字符偏移）、单行超长日志的上下文裁剪、命中数上限和无效正则报错。',
+      description:
+        '验证 text_file_search 的 literal/regex 行号、单行超长日志的上下文裁剪、命中数上限和无效正则报错。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -65,7 +65,12 @@ describe('ai tool text-file search backend', () => {
           query: 'x'
         })
 
-        const toolResultRoot = path.join(runtime.workspaceRoot, '.ncurator', 'runtime', 'toolresult')
+        const toolResultRoot = path.join(
+          runtime.workspaceRoot,
+          '.ncurator',
+          'runtime',
+          'toolresult'
+        )
         const logPath = path.join(toolResultRoot, 'run-1', 'big.log')
         const longLine = `${'x'.repeat(2_000)}TARGET_KEY${'y'.repeat(20_000)}`
         await fs.mkdir(path.dirname(logPath), { recursive: true })
@@ -93,7 +98,12 @@ describe('ai tool text-file search backend', () => {
             query: 'missing-keyword'
           })
         } catch {
-          noMatchResult = { sourcePath: multiPath, totalMatchCount: -1, returnedMatchCount: -1, matches: [] }
+          noMatchResult = {
+            sourcePath: multiPath,
+            totalMatchCount: -1,
+            returnedMatchCount: -1,
+            matches: []
+          }
         }
 
         return {
@@ -111,11 +121,9 @@ describe('ai tool text-file search backend', () => {
           result.literalResult.totalMatchCount === 3 &&
             result.literalResult.returnedMatchCount === 3 &&
             result.literalResult.matches[0].line === 1 &&
-            result.literalResult.matches[0].charOffset === 1 &&
             result.literalResult.matches[0].textContext === 'hello world' &&
             !result.literalResult.matches[0].truncated &&
             result.literalResult.matches[1].line === 2 &&
-            result.literalResult.matches[1].charOffset === 20 &&
             result.literalResult.matches[2].line === 3 &&
             result.regexResult.totalMatchCount === 4 &&
             result.regexResult.matches[0].matchText === 'hello' &&
@@ -123,14 +131,12 @@ describe('ai tool text-file search backend', () => {
             result.regexResult.matches[2].matchText === 'here' &&
             result.regexResult.matches[2].line === 2 &&
             result.regexResult.matches[3].matchText === 'hello' &&
-            result.emojiResult.matches[0].charOffset === 5 &&
             result.emojiResult.matches[0].line === 1 &&
             result.manyResult.totalMatchCount === 50_000 &&
             result.manyResult.returnedMatchCount === 10 &&
             result.manyResult.matches.length === 10 &&
             result.logResult.totalMatchCount === 1 &&
             result.logResult.matches[0].line === 1 &&
-            result.logResult.matches[0].charOffset === 2_001 &&
             result.logResult.matches[0].matchText === 'TARGET_KEY' &&
             result.logResult.matches[0].textContext.length <= TEXT_FILE_SEARCH_CONTEXT_CHARS &&
             result.logResult.matches[0].truncated &&
@@ -141,7 +147,8 @@ describe('ai tool text-file search backend', () => {
             result.noMatchResult.matches.length === 0,
           {
             name: 'text-file-search-position-and-clipping',
-            message: '搜索应返回准确的行号与全文件字符偏移（Unicode 码点对齐），单行超长日志应裁剪上下文并标记 truncated，匹配数上限与无效正则行为正确。',
+            message:
+              '搜索应返回准确行号，单行超长日志应裁剪上下文并标记 truncated，匹配数上限与无效正则行为正确。',
             data: {
               literalResult: result.literalResult,
               emojiResult: result.emojiResult,

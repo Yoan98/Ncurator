@@ -140,21 +140,25 @@ brain 采用原生 function calling（`bindTools`），工具结果以 `ToolMess
 
 AI 推进遵循“最小可靠返回 × 最少连续决策轮次”：每次只读取当前决策所需的最小可靠范围，不做全量、重复定位或无新增价值的验证；互不依赖的调用尽量同轮分发，同类能力支持批量时一次提交。只有复杂或存在多项依赖的任务才维护 plan，不为进度展示单独更新 plan，目标满足且必要检查通过后可直接交付。工具与技能描述只声明能力、边界和参数语义，不写固定调用教程，保留模型自主组合能力。
 
-每条工具结果独立执行大小守卫，不存在同一 dispatch 批次的总量额度。结果不超过 `TOOL_RESULT_INLINE_MAX_CHARS = 32_000` 字符时完整进入上下文；超过后把完整结果写入一次性 `runtime/toolresult` 文件，并只给模型返回最多 `TOOL_RESULT_HEAD_MAX_CHARS = 8_000` 字符的 head。截断信封只有 `truncated / filePath / totalChars / head`，因此一个大结果不会挤占同轮其他小结果的返回额度。
+工具内部继续使用结构化结果承载运行事件、UI 和调试信息；进入模型前由 `HumanToolSpec.modelResult` 渲染成文本。没有专用渲染器的工具使用保留全部字段的通用多行渲染，KB、DOCX 读取、terminal、text-file 和 agent-control 使用专用英文渲染。会话消息记录直接保存模型实际看到的 `content`，恢复时原样重放，不再从结构化结果重新 `JSON.stringify`。
 
-截断日志是 `JSON.stringify` 的紧凑单行内容（无真实换行），模型需要完整内容时通过 `text_file_read` 读取：`type=lines`（`startLine/lineCount`）按行、`type=chars`（`startOffset/charCount`）按字符分段。`text_file_read` 对 `runtime/toolresult` 目录下的文件执行单次返回上限守卫 `TEXT_FILE_READ_MAX_CHARS`（略低于截断上限，为 JSON 包装与路径等开销留余量）：本次读取内容超限时直接报错，保证分段读取的结果不会被 hand 层再次截断落盘，避免「读日志 → 再截断 → 再读日志」的递归；普通工作区文件不受此守卫限制。`text_file_search` 按 literal/regex 在文本中检索，返回每个命中的 1-based 行号与全文件字符偏移（与 `type=chars` 的 `startOffset` 对齐），单行超长日志的命中上下文按字段级上限裁剪并标记 `truncated`。搜索扫描时统计全部命中，但内存中只保留前 10 条详情，不先构造全量命中数组；模型可先用搜索定位关键词、再按偏移精确读取。
+每条模型结果独立应用工具配置的超限策略：`retry` 用于可重复且可缩小范围的 KB/DOCX 读取，渲染后超过 51,200 UTF-8 bytes 或 2,000 行时只返回英文重试提示；`spill` 是默认策略，结果超过 `TOOL_RESULT_INLINE_MAX_CHARS = 32_000` 字符时把完整多行文本写入 `runtime/toolresult/<run>/<toolCallId>.txt`，模型收到前 6,000、后 2,000 字符及文件路径；`window` 用于 `text_file_read` 这类生产者自身完成分页的工具，避免读取 toolresult 后再次 spill。网页、terminal 和写入工具不会因为 50 KiB 限制被要求重放。
+
+`text_file_read` 只支持 `sourcePath/startLine/lineCount` 按行读取，默认及请求上限为 2,000 行，单行最多展示 2,000 Unicode 字符，并在约 51,200 UTF-8 bytes 的完整行边界停止；返回 `nextStartLine` 和英文续读 footer。`text_file_search` 返回行号、命中和邻近文本，不再返回字符偏移。专用和通用渲染器把长展示行无损折为最多 1,600 字符，使 toolresult 文本可直接按行续读。
+
+`terminal_run/terminal_read` 每次仍最多返回约 16K 字符，并通过 `readEndPosition/hasMoreOutput` 续读。命令完成但仍有未读输出时 session 保留，最后一次 `terminal_read` 读完后才关闭；已完成的待读 session 不占运行中 terminal 数量上限。会话内 scrollback 仍保留最多 1,000,000 字符。
 
 **模型上下文唯一真相源是会话级 append-only 的会话消息记录（`chat_session_message_log` 表）**：每条是 `user` / `assistant`（含真实 `tool_calls`）/ `tool`（含结果）/ `annotation`（思考/学习/压缩/收尾等过程标记）。模型上下文从会话消息记录投影（`deriveMessageLogMessages`），中断恢复与跨 run 上下文都从记录重建后补一条 user 消息继续；UI 过程展示与模型记忆不再维护 `rounds`/`conversation`/`ai_run_event` 副本。压缩只作用于「投影出的消息」（早段 → `<compacted_history>` + `<current_state>`，尾段保留），记录本身 append-only 不动。
 
 **消息数组构建顺序（每次 run 首次 brain 重建时）**：`system` → 会话消息记录投影出的历史消息 → 尾部追加一条由 `buildBrainUserMessage` 构建的 user 消息（承载 `<task_goal>`、`<current_state>` 等当前任务上下文）。当前 run 的用户原文通过按位置跳过最后一条 `user` 条目避免重复出现（`skipLastUserEntry`），首条消息时历史为空，该 user 消息就是数组里唯一一条 user 消息。这条尾部 user 消息保留了 `<task_goal>` 结构，使 `system + 历史` 前缀在跨轮与跨 run 之间保持结构稳定，利于 KV 前缀缓存复用。
 
-**悬空 tool_calls 修复**：若历史末条 `assistant` 声明了 `tool_calls` 但记录里没有对应 `tool` 结果（中断发生在 brain 落库后、工具执行前），重建投影时由 `repairInterruptedToolCalls` 在该轮缺失的 `tool_call_id` 位置补一条 `{ ok: false, code: 'interrupted', error: '运行意外中断，该工具调用未执行。' }` 的 `ToolMessage`，再接尾部 user 消息，保证每个 `tool_call_id` 有且仅有一条结果、且接口不因悬空调用报错。
+**悬空 tool_calls 修复**：若历史末条 `assistant` 声明了 `tool_calls` 但记录里没有对应 `tool` 结果（中断发生在 brain 落库后、工具执行前），重建投影时由 `repairInterruptedToolCalls` 在该轮缺失的 `tool_call_id` 位置补一条英文 interrupted `ToolMessage`，再接尾部 user 消息，保证每个 `tool_call_id` 有且仅有一条结果、且接口不因悬空调用报错。
 
 **混合工具调用**：brain 一次返回的全部调用先完整进入 dispatch；只有 dispatch 可以从队列取出调用。learning、plan、hand 只执行当前分组并返回 dispatch，不得自行消费队列或因本组失败丢弃后续调用。连续 hand 调用可在同组内按资源串并行执行；`learn_skill` 每次只分发一个，避免单值 learning 状态漏掉调用。
 
 **brain 交付指令不再单独成条**：brain 的最终交付就是无工具调用那一轮的 assistant content，直接作为最终答复 `assistant` 转录条目写回（不做第二次交付 LLM 调用，也不再追加「现在面向用户交付结果…」的 user 条目）。
 
-**会话消息记录是「数据唯一、其他投影」的唯一真相源**：一次会话下的所有 run 的消息都写进同一张表（每条带 `run_id` 标识归属 run）。运行中的实时过程（思考、学习、工具调用、压缩、收尾）由节点即时写入 annotation 条目；UI 的「AI 消息 → 工具调用/技能学习 → 一步步展开」过程展示由渲染层从记录按 `seq` 投影重建（`projectProcessGroups`），不再依赖独立的 `ai_run_event` 过程事件副本。live 运行中的 `running → completed` 中间态与 `answer_token` 流式输出仍走瞬时广播，不落库；重开/恢复时从记录投影出 completed 态的完整过程。工具调用与失败不再通过独立的 decision hint 机制回传，而是统一作为该工具的 `ToolMessage` 结果（成功/失败/被拦都保证每个 `tool_call_id` 有且仅有一条结果）返回给模型。控制/反馈类工具结果统一由 `toolFeedback` 工厂生成，envelope 为成功 `{ ok: true, ...data }`、失败 `{ ok: false, code, error }`，`code` 取 `invalid_json` / `invalid_plan` / `approval_blocked` / `pending_items`；`ToolMessage` 的 `content` 与转录 `result` 始终是同一对象，保证恢复重放与 live 一致。`tool_call_id` 在领域类型中建模为必填（LLM 每个 tool call 必带 id），仅在模型响应异常缺 id 时由 brain 边界就地生成局部 id 回喂，不向领域类型传播可选。
+**会话消息记录是「数据唯一、其他投影」的唯一真相源**：一次会话下的所有 run 的消息都写进同一张表（每条带 `run_id` 标识归属 run）。运行中的实时过程（思考、学习、工具调用、压缩、收尾）由节点即时写入 annotation 条目；UI 的「AI 消息 → 工具调用/技能学习 → 一步步展开」过程展示由渲染层从记录按 `seq` 投影重建（`projectProcessGroups`），不再依赖独立的 `ai_run_event` 过程事件副本。live 运行中的 `running → completed` 中间态与 `answer_token` 流式输出仍走瞬时广播，不落库；重开/恢复时从记录投影出 completed 态的完整过程。工具成功、失败、审批拦截和参数错误都作为英文文本 `ToolMessage` 返回模型，且转录保存同一份 `content`。`tool_call_id` 在领域类型中建模为必填，仅在模型响应异常缺 id 时由 brain 边界生成局部 id 回喂。
 
 ### Skill 与 Tool
 

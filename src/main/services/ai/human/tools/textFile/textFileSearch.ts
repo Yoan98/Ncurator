@@ -101,10 +101,8 @@ export const searchTextFile = async (args: FileSearchInput): Promise<FileSearchO
   const mode = args.mode || 'literal'
   const collected = collectMatches({ content, query: args.query, mode })
   let scanJsOffset = 0
-  let scanCodePointOffset = 0
   let line = 1
   let lineStartJsOffset = 0
-  let lineStartCodePointOffset = 0
 
   const matches = collected.matches.map((match) => {
     while (scanJsOffset < match.jsIndex) {
@@ -112,11 +110,9 @@ export const searchTextFile = async (args: FileSearchInput): Promise<FileSearchO
       if (codePoint === undefined) break
       const width = codePoint > 0xffff ? 2 : 1
       scanJsOffset += width
-      scanCodePointOffset += 1
       if (codePoint === 10) {
         line += 1
         lineStartJsOffset = scanJsOffset
-        lineStartCodePointOffset = scanCodePointOffset
       }
     }
     const lineEndJsOffset = content.indexOf('\n', match.jsIndex)
@@ -124,8 +120,7 @@ export const searchTextFile = async (args: FileSearchInput): Promise<FileSearchO
       lineStartJsOffset,
       lineEndJsOffset < 0 ? content.length : lineEndJsOffset
     )
-    const lineInnerCpOffset = scanCodePointOffset - lineStartCodePointOffset
-    const charOffset = scanCodePointOffset + 1
+    const lineInnerCpOffset = Array.from(content.slice(lineStartJsOffset, match.jsIndex)).length
     const clippedMatch = clipText(match.matchText, TEXT_FILE_SEARCH_MATCH_TEXT_MAX_CHARS)
 
     const lineChars = Array.from(lineText)
@@ -141,7 +136,6 @@ export const searchTextFile = async (args: FileSearchInput): Promise<FileSearchO
 
     return {
       line,
-      charOffset,
       matchText: clippedMatch.text,
       textContext,
       truncated: clippedMatch.truncated || contextTruncated

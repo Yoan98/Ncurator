@@ -5,6 +5,7 @@ import { readStringArg } from '../utils/toolSpecUtils'
 import type { AiRuntimePlatform } from '../../../types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
 import { TERMINAL_READ_MAX_CHARS } from './terminalConstants'
+import { renderTerminalModelResult } from '../../shared/modelToolResultRenderers'
 
 const TERMINAL_STATUS_SCHEMA = z.enum(['running', 'completed', 'cancelled'])
 
@@ -23,6 +24,7 @@ export const TERMINAL_RUN_OUTPUT_SCHEMA = z.object({
   status: TERMINAL_STATUS_SCHEMA,
   output: z.string(),
   readEndPosition: z.number().int().nonnegative(),
+  hasMoreOutput: z.boolean(),
   exitCode: z.number().int().nullable()
 })
 
@@ -60,7 +62,7 @@ export const createTerminalRunToolSpec = (
   promptSpec: {
     name: 'terminal_run',
     description:
-      '在终端执行命令，返回 terminalId、status、增量输出、readEndPosition（下次继续读取的位置）和退出码。终端默认起始目录是用户的工作区目录。'
+      '在终端执行命令，返回 terminalId、status、增量输出、readEndPosition（下次继续读取的位置）、hasMoreOutput 和退出码。终端默认起始目录是用户的工作区目录。'
   },
   resolveExecutionMeta: (args) => {
     const command = readStringArg(args, 'command') || ''
@@ -70,7 +72,8 @@ export const createTerminalRunToolSpec = (
       return { mutability: 'read_only', resourceKey: analysis.resourceKey }
     }
     return { mutability: 'mutating', resourceKey: analysis.resourceKey }
-  }
+  },
+  modelResult: { renderSuccess: renderTerminalModelResult }
 })
 
 export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
@@ -85,7 +88,8 @@ export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
       '读取正在运行命令的终端：传入 terminalId 读取该终端从指定位置开始的增量输出和状态，返回 terminalId、status、增量输出、readEndPosition（下次继续读取的位置）、hasMoreOutput 和退出码。' +
       `单次最多返回 ${TERMINAL_READ_MAX_CHARS} 字符。`
   },
-  resolveExecutionMeta: () => ({ mutability: 'read_only' })
+  resolveExecutionMeta: () => ({ mutability: 'read_only' }),
+  modelResult: { renderSuccess: renderTerminalModelResult }
 }
 
 export const TERMINAL_RUN_TOOL_SPEC = createTerminalRunToolSpec()

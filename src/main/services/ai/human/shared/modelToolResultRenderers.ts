@@ -1,0 +1,430 @@
+import path from 'node:path'
+import type { JsonObject, JsonValue } from '../../../../../shared/types'
+import type { ModelResultRenderer, ModelResultRendererInput } from '../tools/types'
+
+const MODEL_TEXT_LINE_CHARS = 1_600
+
+const isObject = (value: JsonValue | undefined): value is JsonObject =>
+  Boolean(value && typeof value === 'object' && !Array.isArray(value))
+
+const readString = (value: JsonValue | undefined): string | undefined =>
+  typeof value === 'string' ? value : undefined
+
+const readNumber = (value: JsonValue | undefined): number | undefined =>
+  typeof value === 'number' && Number.isFinite(value) ? value : undefined
+
+const wrapPhysicalLine = (value: string): string[] => {
+  const characters = Array.from(value)
+  if (characters.length <= MODEL_TEXT_LINE_CHARS) return [value]
+  const lines: string[] = []
+  for (let offset = 0; offset < characters.length; offset += MODEL_TEXT_LINE_CHARS) {
+    lines.push(characters.slice(offset, offset + MODEL_TEXT_LINE_CHARS).join(''))
+  }
+  return lines
+}
+
+export const wrapModelTextLines = (value: string): string =>
+  value
+    .split(/\r\n|\r|\n/u)
+    .flatMap(wrapPhysicalLine)
+    .join('\n')
+
+const indentBlock = (value: string, depth: number): string => {
+  const indent = '  '.repeat(depth)
+  return wrapModelTextLines(value)
+    .split('\n')
+    .map((line) => `${indent}${line}`)
+    .join('\n')
+}
+
+const renderPrimitive = (value: JsonValue, depth: number): string => {
+  if (typeof value !== 'string') return String(value)
+  if (!value.includes('\n') && Array.from(value).length <= 160) return JSON.stringify(value)
+  return `|\n${indentBlock(value, depth + 1)}`
+}
+
+const renderTreeValue = (value: JsonValue, depth: number): string => {
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]'
+    return value
+      .map((item) => {
+        const rendered = renderTreeValue(item, depth + 1)
+        return rendered.includes('\n')
+          ? `${'  '.repeat(depth)}-\n${indentBlock(rendered, 1)}`
+          : `${'  '.repeat(depth)}- ${rendered}`
+      })
+      .join('\n')
+  }
+  if (isObject(value)) {
+    const entries = Object.entries(value)
+    if (entries.length === 0) return '{}'
+    return entries
+      .map(([key, item]) => {
+        const rendered = renderTreeValue(item, depth + 1)
+        return rendered.includes('\n')
+          ? `${'  '.repeat(depth)}${key}:\n${indentBlock(rendered, 1)}`
+          : `${'  '.repeat(depth)}${key}: ${rendered}`
+      })
+      .join('\n')
+  }
+  return renderPrimitive(value, depth)
+}
+
+export const renderGenericModelResult: ModelResultRenderer = ({ toolName, data }) => {
+  if (data === undefined) return `${toolName} completed successfully.`
+  return wrapModelTextLines(
+    [`${toolName} completed successfully.`, 'Result:', renderTreeValue(data, 0)].join('\n')
+  )
+}
+
+const containsOnlyModelSafeDiagnosticText = (value: string): boolean =>
+  /^[\x20-\x7E\r\n\t]+$/u.test(value)
+
+export const renderGenericModelError: ModelResultRenderer = ({ toolName, data }) => {
+  const detail = isObject(data)
+    ? readString(data.error) || readString(data.message)
+    : readString(data)
+  if (detail && containsOnlyModelSafeDiagnosticText(detail)) return `Error: ${detail}`
+  return `Error: ${toolName} failed. Check the tool arguments and try again.`
+}
+
+const normalizeKbSearchItems = (data: JsonValue | undefined): JsonObject[] => {
+  const rawItems = Array.isArray(data)
+    ? data
+    : isObject(data) && Array.isArray(data.items)
+      ? data.items
+      : []
+  return rawItems.filter(isObject)
+}
+
+export const renderKbSearchModelResult: ModelResultRenderer = ({ data }) => {
+  const items = normalizeKbSearchItems(data)
+  const sourceKeys = new Map<string, string>()
+  const sources: Array<{ ref: string; item: JsonObject }> = []
+  items.forEach((item) => {
+    const key =
+      readString(item.document_id) ||
+      `${readString(item.document_name) || ''}\u0000${readString(item.file_path) || readString(item.source_url) || ''}`
+    if (sourceKeys.has(key)) return
+    const ref = `d${sources.length + 1}`
+    sourceKeys.set(key, ref)
+    sources.push({ ref, item })
+  })
+
+  const sourceLines = sources.length
+    ? sources.map(({ ref, item }) => {
+        const fields = [
+          `[${ref}] name=${readString(item.document_name) || ''}`,
+          readString(item.document_id) ? `documentId=${readString(item.document_id)}` : '',
+          readString(item.source_type) ? `type=${readString(item.source_type)}` : '',
+          readString(item.file_path)
+            ? `path=${readString(item.file_path)}`
+            : readString(item.source_url)
+              ? `url=${readString(item.source_url)}`
+              : ''
+        ].filter(Boolean)
+        return `  ${fields.join('; ')}`
+      })
+    : ['  none']
+
+  const matchLines = items.length
+    ? items.flatMap((item, index) => {
+        const key =
+          readString(item.document_id) ||
+          `${readString(item.document_name) || ''}\u0000${readString(item.file_path) || readString(item.source_url) || ''}`
+        const ref = sourceKeys.get(key) || 'unknown'
+        return [
+          `  ${index + 1}. source=${ref}`,
+          '     content:',
+          indentBlock(readString(item.text) || '', 3)
+        ]
+      })
+    : ['  none']
+
+  return [
+    'KB search completed successfully.',
+    `Returned matches: ${items.length}`,
+    'Sources:',
+    ...sourceLines,
+    'Matches:',
+    ...matchLines
+  ].join('\n')
+}
+
+export const renderKbListDocumentsModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const items = Array.isArray(obj.items) ? obj.items.filter(isObject) : []
+  return [
+    'KB document listing completed successfully.',
+    `Total documents: ${readNumber(obj.total) ?? items.length}`,
+    'Documents:',
+    ...(items.length
+      ? items.map((item, index) =>
+          `  ${index + 1}. id=${readString(item.id) || ''}; name=${readString(item.name) || ''}; type=${readString(item.source_type) || ''}; ${
+            readString(item.file_path)
+              ? `path=${readString(item.file_path)}`
+              : readString(item.source_url)
+                ? `url=${readString(item.source_url)}`
+                : ''
+          }`.trimEnd()
+        )
+      : ['  none'])
+  ].join('\n')
+}
+
+export const renderDocxOutlineModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const segments = Array.isArray(obj.segments) ? obj.segments.filter(isObject) : []
+  return [
+    'DOCX outline read completed successfully.',
+    `Pages: ${readNumber(obj.startPage) ?? ''}-${readNumber(obj.endPage) ?? ''} of ${readNumber(obj.totalPages) ?? ''}`,
+    'Segments:',
+    ...(segments.length
+      ? segments.flatMap((segment, index) => [
+          `  ${index + 1}. story=${readString(segment.story) || ''}; nodeIndex=${readNumber(segment.fromNodeIndex) ?? ''}-${readNumber(segment.toNodeIndex) ?? ''}`,
+          indentBlock(readString(segment.textMap) || '', 2)
+        ])
+      : ['  none'])
+  ].join('\n')
+}
+
+const renderDocxNeighbor = (value: JsonValue | undefined, label: string): string[] => {
+  const items = Array.isArray(value) ? value.filter(isObject) : []
+  if (!items.length) return []
+  return [
+    `    ${label}:`,
+    ...items.flatMap((item) => [
+      `      - nodeId=${readString(item.nodeId) || ''}; nodeIndex=${readNumber(item.nodeIndex) ?? ''}; type=${readString(item.type) || ''}`,
+      indentBlock(readString(item.textPreview) || '', 4)
+    ])
+  ]
+}
+
+export const renderDocxSearchModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
+  return [
+    'DOCX search completed successfully.',
+    `Total matches: ${readNumber(obj.totalMatchCount) ?? 0}`,
+    'Returned matches:',
+    ...(matches.length
+      ? matches.flatMap((item, index) => [
+          `  ${index + 1}. nodeId=${readString(item.nodeId) || ''}; nodeIndex=${readNumber(item.nodeIndex) ?? ''}; type=${readString(item.type) || ''}; story=${readString(item.story) || ''}${readString(item.tableNodeId) ? `; tableNodeId=${readString(item.tableNodeId)}` : ''}`,
+          `    matchText=${JSON.stringify(readString(item.matchText) || '')}`,
+          '    context:',
+          indentBlock(readString(item.textContext) || '', 3),
+          ...renderDocxNeighbor(item.before, 'before'),
+          ...renderDocxNeighbor(item.after, 'after')
+        ])
+      : ['  none'])
+  ].join('\n')
+}
+
+type StyleCatalog = {
+  ids: Map<string, string>
+  values: Array<{ id: string; style: JsonObject }>
+}
+
+const stableJson = (value: JsonValue): string => {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (isObject(value)) {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value)
+}
+
+const buildDocxStyleCatalog = (value: JsonValue | undefined): StyleCatalog => {
+  const catalog: StyleCatalog = { ids: new Map(), values: [] }
+  const visit = (item: JsonValue | undefined): void => {
+    if (Array.isArray(item)) {
+      item.forEach(visit)
+      return
+    }
+    if (!isObject(item)) return
+    if (isObject(item.style)) {
+      const key = stableJson(item.style)
+      if (!catalog.ids.has(key)) {
+        const id = `S${catalog.values.length + 1}`
+        catalog.ids.set(key, id)
+        catalog.values.push({ id, style: item.style })
+      }
+    }
+    Object.values(item).forEach(visit)
+  }
+  visit(value)
+  return catalog
+}
+
+const mergeAdjacentTextChildren = (items: JsonValue[]): JsonValue[] => {
+  const merged: JsonValue[] = []
+  for (const item of items) {
+    const previous = merged.at(-1)
+    if (
+      isObject(previous) &&
+      previous.type === 'text' &&
+      isObject(item) &&
+      item.type === 'text' &&
+      typeof previous.text === 'string' &&
+      typeof item.text === 'string'
+    ) {
+      previous.text += item.text
+    } else if (isObject(item)) {
+      merged.push({ ...item })
+    } else {
+      merged.push(item)
+    }
+  }
+  return merged
+}
+
+const renderDocxNode = (value: JsonValue, depth: number, styles: StyleCatalog): string[] => {
+  if (!isObject(value)) return [`${'  '.repeat(depth)}- ${renderTreeValue(value, depth)}`]
+  const indent = '  '.repeat(depth)
+  const fields = Object.entries(value).filter(([key]) => key !== 'children' && key !== 'style')
+  const headerFields: string[] = []
+  const blockFields: Array<[string, string]> = []
+  fields.forEach(([key, item]) => {
+    if (typeof item === 'string' && (item.includes('\n') || Array.from(item).length > 160)) {
+      blockFields.push([key, item])
+      return
+    }
+    if (Array.isArray(item) || isObject(item)) {
+      blockFields.push([key, renderTreeValue(item, depth + 1)])
+      return
+    }
+    headerFields.push(`${key}=${typeof item === 'string' ? JSON.stringify(item) : String(item)}`)
+  })
+  if (isObject(value.style)) {
+    headerFields.push(`style=${styles.ids.get(stableJson(value.style)) || ''}`)
+  }
+  const lines = [`${indent}- ${headerFields.join('; ')}`]
+  blockFields.forEach(([key, item]) => {
+    lines.push(`${indent}  ${key}:`, indentBlock(item, depth + 2))
+  })
+  if (Array.isArray(value.children)) {
+    lines.push(`${indent}  children:`)
+    mergeAdjacentTextChildren(value.children).forEach((child) => {
+      lines.push(...renderDocxNode(child, depth + 2, styles))
+    })
+  }
+  return lines
+}
+
+export const renderDocxReadNodesModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const styles = buildDocxStyleCatalog(obj.nodes)
+  const nodes = Array.isArray(obj.nodes) ? obj.nodes : []
+  return [
+    'DOCX nodes read completed successfully.',
+    `Source: ${readString(obj.sourcePath) || ''}`,
+    'Styles:',
+    ...(styles.values.length
+      ? styles.values.flatMap(({ id, style }) => [
+          `  ${id}:`,
+          indentBlock(renderTreeValue(style, 0), 2)
+        ])
+      : ['  none']),
+    'Nodes:',
+    ...(nodes.length ? nodes.flatMap((node) => renderDocxNode(node, 1, styles)) : ['  none'])
+  ].join('\n')
+}
+
+export const renderDocxContentEditModelResult: ModelResultRenderer = ({ args, data }) => {
+  const obj = isObject(data) ? data : {}
+  const sourcePath = readString(args.sourcePath) || ''
+  const createdIds = Array.isArray(obj.createdIds)
+    ? obj.createdIds.filter((item): item is string => typeof item === 'string')
+    : []
+  return [
+    `DOCX content edit completed successfully: ${path.basename(sourcePath)}`,
+    createdIds.length ? `Created node IDs: ${createdIds.join(', ')}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+export const renderTerminalModelResult: ModelResultRenderer = ({ toolName, data }) => {
+  const obj = isObject(data) ? data : {}
+  const status = readString(obj.status) || 'completed'
+  const exitCode = obj.exitCode === null ? undefined : readNumber(obj.exitCode)
+  const completion =
+    status === 'completed'
+      ? exitCode === undefined || exitCode === 0
+        ? 'completed successfully'
+        : 'completed'
+      : status
+  const lines = [
+    toolName === 'terminal_run'
+      ? `Terminal command ${completion}${exitCode !== undefined ? ` (exit code: ${exitCode})` : ''}.`
+      : `Terminal output read ${status === 'completed' ? 'completed successfully' : status}.`,
+    readString(obj.terminalId) ? `Terminal ID: ${readString(obj.terminalId)}` : '',
+    readNumber(obj.readEndPosition) !== undefined
+      ? `Read end position: ${readNumber(obj.readEndPosition)}`
+      : '',
+    typeof obj.hasMoreOutput === 'boolean' ? `Has more output: ${obj.hasMoreOutput}` : '',
+    'Output:',
+    readString(obj.output) || ''
+  ]
+  return lines.filter((line, index) => Boolean(line) || index === lines.length - 1).join('\n')
+}
+
+export const renderTextFileReadModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const content = readString(obj.content) || ''
+  const startLine = readNumber(obj.startLine) ?? 1
+  const endLine = readNumber(obj.endLine) ?? startLine
+  const totalLines = readNumber(obj.totalLines) ?? endLine
+  const nextLine = readNumber(obj.nextStartLine)
+  const numberedContent = content
+    .split('\n')
+    .map((line, index) => `${startLine + index}: ${line}`)
+    .join('\n')
+  return [
+    `<path>${readString(obj.sourcePath) || ''}</path>`,
+    '<type>file</type>',
+    '<content>',
+    numberedContent,
+    nextLine
+      ? `(Showing lines ${startLine}-${endLine} of ${totalLines}. Use startLine=${nextLine} to continue.)`
+      : `(End of file - total ${totalLines} lines)`,
+    '</content>'
+  ].join('\n')
+}
+
+export const renderTextFileSearchModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
+  return [
+    'Text search completed successfully.',
+    `Path: ${readString(obj.sourcePath) || ''}`,
+    `Total matches: ${readNumber(obj.totalMatchCount) ?? 0}`,
+    'Returned matches:',
+    ...(matches.length
+      ? matches.flatMap((item, index) => [
+          `  ${index + 1}. line=${readNumber(item.line) ?? ''}; match=${JSON.stringify(readString(item.matchText) || '')}; truncated=${String(item.truncated === true)}`,
+          indentBlock(readString(item.textContext) || '', 2)
+        ])
+      : ['  none'])
+  ].join('\n')
+}
+
+export const renderPlanUpdateModelResult: ModelResultRenderer = () => 'Plan updated successfully.'
+
+export const renderLearnSkillModelResult: ModelResultRenderer = ({ args, data }) => {
+  const obj = isObject(data) ? data : {}
+  const requested = Array.isArray(args.skillIds)
+    ? args.skillIds.filter((item): item is string => typeof item === 'string')
+    : []
+  const loaded = Array.isArray(obj.loadedSkillIds)
+    ? obj.loadedSkillIds.filter((item): item is string => typeof item === 'string')
+    : requested
+  return `Skill loaded successfully: ${loaded.join(', ') || requested.join(', ') || 'requested skill'}.`
+}
+
+export const renderModelResultWith = (
+  renderer: ModelResultRenderer | undefined,
+  input: ModelResultRendererInput
+): string => wrapModelTextLines((renderer || renderGenericModelResult)(input))

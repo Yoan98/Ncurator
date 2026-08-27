@@ -11,7 +11,10 @@ import { assertExternalLearnedSkillIds } from '../../skills'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { applyBrainDispatchTransition, returnToBrain } from '../utils/stateTransitions'
 import { buildAvailableTools } from '../learningNode/skillLoader'
-import { createDeliveryGuidanceItem, mergeDeliveryGuidanceItems } from '../../shared/deliveryGuidance'
+import {
+  createDeliveryGuidanceItem,
+  mergeDeliveryGuidanceItems
+} from '../../shared/deliveryGuidance'
 import { buildDispatchQueue } from '../dispatch'
 import { appendToolFeedback } from '../../shared/toolFeedback'
 import { formatZodErrorForTool, type ZodIssueLike } from '../../shared/schemaError'
@@ -86,9 +89,10 @@ export const createBrainNode = (input: {
       const safeParse = (schema as { safeParse?: unknown }).safeParse
       if (typeof safeParse !== 'function') continue
       schemaByToolName.set(name, {
-        safeParse: safeParse as (
-          data: unknown
-        ) => { success: boolean; error?: { issues: ZodIssueLike[] } }
+        safeParse: safeParse as (data: unknown) => {
+          success: boolean
+          error?: { issues: ZodIssueLike[] }
+        }
       })
     }
 
@@ -169,7 +173,10 @@ export const createBrainNode = (input: {
             args: (call.args || {}) as Record<string, unknown>
           })
         } else {
-          unrecoverableCalls.push({ name, errorMessage: '工具调用缺少 tool_call_id，未执行。' })
+          unrecoverableCalls.push({
+            name,
+            errorMessage: 'The tool call is missing tool_call_id and was not executed.'
+          })
         }
       }
       for (const invalidCall of invalidToolCalls) {
@@ -178,14 +185,17 @@ export const createBrainNode = (input: {
           typeof invalidCall.id === 'string' && invalidCall.id.trim() ? invalidCall.id : undefined
         const name = typeof invalidCall.name === 'string' ? invalidCall.name : ''
         if (!id) {
-          unrecoverableCalls.push({ name, errorMessage: '工具调用缺少 tool_call_id，未执行。' })
+          unrecoverableCalls.push({
+            name,
+            errorMessage: 'The tool call is missing tool_call_id and was not executed.'
+          })
         } else if (repaired.ok) {
           dispatchableCalls.push({ id, name, args: repaired.value })
         } else {
           unrecoverableCalls.push({
             id,
             name,
-            errorMessage: `工具 ${name || '未知'} 的调用参数不是合法 JSON，未执行。请重新生成该工具调用并修正 JSON 格式。具体错误：${repaired.error}`
+            errorMessage: `Tool ${name || 'unknown'} arguments are not valid JSON and were not executed. Generate the tool call again with valid JSON. Details: ${repaired.error}`
           })
         }
       }
@@ -236,7 +246,9 @@ export const createBrainNode = (input: {
               args: {} as JsonObject
             })),
             ...schemaInvalidCalls.map((call, index) => ({
-              id: call.id || `invalid-${input.cache.toolCallCount}-${unrecoverableCalls.length}-${index}`,
+              id:
+                call.id ||
+                `invalid-${input.cache.toolCallCount}-${unrecoverableCalls.length}-${index}`,
               name: call.name,
               args: {} as JsonObject
             }))

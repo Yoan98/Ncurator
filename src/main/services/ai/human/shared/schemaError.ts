@@ -16,8 +16,11 @@ const toDotPath = (path: Array<string | number>): string =>
     })
     .join('.')
 
-const renderLeafMessage = (issue: ZodIssueLike): string =>
-  typeof issue.message === 'string' && issue.message.trim() ? issue.message.trim() : 'Invalid input'
+const renderLeafMessage = (issue: ZodIssueLike): string => {
+  const message = typeof issue.message === 'string' ? issue.message.trim() : ''
+  if (message && /^[\x20-\x7E]+$/u.test(message)) return message
+  return issue.code ? `invalid value (${issue.code})` : 'invalid value'
+}
 
 export const formatZodError = (error: ZodErrorLike, maxIssues = 3): string => {
   const leaves: Array<{ path: string; message: string }> = []
@@ -25,7 +28,11 @@ export const formatZodError = (error: ZodErrorLike, maxIssues = 3): string => {
   const walk = (issues: ZodIssueLike[], basePath: Array<string | number>): void => {
     for (const issue of issues) {
       const path = [...basePath, ...(issue.path ?? [])]
-      if (issue.code === 'invalid_union' && Array.isArray(issue.errors) && issue.errors.length > 0) {
+      if (
+        issue.code === 'invalid_union' &&
+        Array.isArray(issue.errors) &&
+        issue.errors.length > 0
+      ) {
         issue.errors.forEach((branch) => walk(branch, path))
         continue
       }
@@ -44,9 +51,9 @@ export const formatZodError = (error: ZodErrorLike, maxIssues = 3): string => {
   walk(error.issues, [])
   return leaves
     .slice(0, maxIssues)
-    .map((leaf) => `${leaf.path}：${leaf.message}`)
-    .join('；')
+    .map((leaf) => `${leaf.path || '<root>'}: ${leaf.message}`)
+    .join('; ')
 }
 
 export const formatZodErrorForTool = (toolName: string, error: ZodErrorLike): string =>
-  `工具 ${toolName} 的调用参数不符合 schema：${formatZodError(error)}`
+  `Tool ${toolName} arguments do not match the schema: ${formatZodError(error)}`

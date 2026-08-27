@@ -12,7 +12,8 @@ describe('ai tool text-file backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['text-file'],
-      description: '验证普通文本文件创建、范围读取、批量精确编辑、replaceAll、diff、修改记录和保存时生成的 diff 预览。',
+      description:
+        '验证普通文本文件创建、范围读取、批量精确编辑、replaceAll、diff、修改记录和保存时生成的 diff 预览。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -45,7 +46,6 @@ describe('ai tool text-file backend', () => {
           endLine: number
           totalLines: number
         }>('text_file_read', {
-          type: 'lines',
           sourcePath,
           startLine: 2,
           lineCount: 2

@@ -2,6 +2,11 @@ import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 import { jsonObjectSchema } from '../../toolSchemas'
+import {
+  renderKbListDocumentsModelResult,
+  renderKbSearchModelResult
+} from '../../shared/modelToolResultRenderers'
+import { createRetryModelResultPolicy } from '../modelResultPolicies'
 
 const KB_EXECUTION_META = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -84,9 +89,16 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   outputSchema: KB_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_search',
-    description: '在用户工作区域知识库中按查询词或语义语句检索内容片段，并返回命中证据、来源文档与内容块信息。'
+    description:
+      '在用户工作区域知识库中按查询词或语义语句检索内容片段，并返回命中证据、来源文档与内容块信息。'
   },
-  resolveExecutionMeta: KB_EXECUTION_META
+  resolveExecutionMeta: KB_EXECUTION_META,
+  modelResult: {
+    renderSuccess: renderKbSearchModelResult,
+    overflowPolicy: createRetryModelResultPolicy(
+      'Call kb_search again with a smaller limit, narrower documentIds/sourceType filters, or a more specific queryText.'
+    )
+  }
 }
 
 export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
@@ -102,9 +114,16 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   outputSchema: KB_LIST_DOCUMENTS_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',
-    description: '查询用户工作区域知识库中已建立索引的文档并支持按文档名过滤，并返回可检索文档的分页列表。'
+    description:
+      '查询用户工作区域知识库中已建立索引的文档并支持按文档名过滤，并返回可检索文档的分页列表。'
   },
-  resolveExecutionMeta: KB_EXECUTION_META
+  resolveExecutionMeta: KB_EXECUTION_META,
+  modelResult: {
+    renderSuccess: renderKbListDocumentsModelResult,
+    overflowPolicy: createRetryModelResultPolicy(
+      'Call kb_list_documents again with a smaller pageSize or narrower sourceNameQuery/documentIds filters.'
+    )
+  }
 }
 
 export const KB_TOOL_SPECS = [KB_SEARCH_TOOL_SPEC, KB_LIST_DOCUMENTS_TOOL_SPEC] as const

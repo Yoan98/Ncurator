@@ -1,7 +1,9 @@
 import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
 import type { ChatMessageLogEntry, ChatMessageLogToolCall } from '../../../../../shared/types'
 
-const toToolCall = (call: ChatMessageLogToolCall): {
+const toToolCall = (
+  call: ChatMessageLogToolCall
+): {
   id: string
   name: string
   args: Record<string, unknown>
@@ -13,13 +15,8 @@ const toToolCall = (call: ChatMessageLogToolCall): {
   type: 'tool_call'
 })
 
-const INTERRUPTED_TOOL_RESULT = {
-  status: 'fail',
-  code: 'interrupted',
-  error: '运行意外中断，该工具调用未执行。'
-} as const
-
-const INTERRUPTED_TOOL_CONTENT = JSON.stringify(INTERRUPTED_TOOL_RESULT)
+const INTERRUPTED_TOOL_CONTENT =
+  'Error: The run was interrupted before this tool call could be executed.'
 
 export const repairInterruptedToolCalls = (messages: BaseMessage[]): BaseMessage[] => {
   const satisfied = new Set<string>()
@@ -96,7 +93,7 @@ export const deriveMessageLogMessages = (input: {
     if (entry.kind === 'tool') {
       messages.push(
         new ToolMessage({
-          content: entry.result === undefined ? '{}' : JSON.stringify(entry.result),
+          content: entry.content,
           tool_call_id: entry.toolCallId
         })
       )

@@ -47,29 +47,26 @@ describe('ai unit plan status schema', () => {
   })
 })
 
-describe('ai unit tool feedback envelope', () => {
-  it('builds a success envelope with nested result', () => {
+describe('ai unit tool feedback text', () => {
+  it('preserves explicit success text in the model message and transcript', () => {
     const feedback = buildToolFeedback({
       toolCallId: 'call-1',
       toolName: 'update_plan',
       ok: true,
-      result: { message: '计划已更新' }
+      content: 'Plan updated successfully.'
     })
 
-    expect(JSON.parse(String(feedback.message.content))).toEqual({
-      status: 'success',
-      result: { message: '计划已更新' }
-    })
+    expect(String(feedback.message.content)).toBe('Plan updated successfully.')
     expect(feedback.transcript).toEqual({
       kind: 'tool',
       toolCallId: 'call-1',
       toolName: 'update_plan',
       ok: true,
-      result: { status: 'success', result: { message: '计划已更新' } }
+      content: String(feedback.message.content)
     })
   })
 
-  it('builds an error envelope with error message', () => {
+  it('builds an English error message without exposing non-English internals', () => {
     const feedback = buildToolFeedback({
       toolCallId: 'call-2',
       toolName: 'update_plan',
@@ -77,13 +74,9 @@ describe('ai unit tool feedback envelope', () => {
       errorMessage: 'status 仅允许 todo/in_progress/done'
     })
 
-    expect(JSON.parse(String(feedback.message.content))).toEqual({
-      status: 'fail',
-      error: 'status 仅允许 todo/in_progress/done'
-    })
-    expect(feedback.transcript.result).toEqual({
-      status: 'fail',
-      error: 'status 仅允许 todo/in_progress/done'
-    })
+    expect(String(feedback.message.content)).toBe(
+      'Error: The tool call failed. Check the tool arguments and try again.'
+    )
+    expect(feedback.transcript.content).toBe(String(feedback.message.content))
   })
 })

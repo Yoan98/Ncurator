@@ -3,39 +3,42 @@ import {
   buildTruncatedToolResultMessage,
   countUnicodeCharacters,
   sliceUnicodeCharacters,
+  sliceUnicodeCharactersFromEnd,
   TOOL_RESULT_HEAD_MAX_CHARS,
-  TOOL_RESULT_INLINE_MAX_CHARS
+  TOOL_RESULT_INLINE_MAX_CHARS,
+  TOOL_RESULT_TAIL_MAX_CHARS
 } from '../../../../src/main/services/ai/human/shared/toolResultPersistence'
 import { stripTerminalControlText } from '../../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 
 describe('ai unit tool result truncation', () => {
-  it('truncates to the max chars prefix and reports totals', () => {
+  it('renders an English head/tail spill message with totals', () => {
     const fullContent = 'x'.repeat(TOOL_RESULT_INLINE_MAX_CHARS + 100)
     const message = buildTruncatedToolResultMessage({
-      filePath: '/workspace/.ncurator/runtime/toolresult/run-1/abc.log',
+      filePath: '/workspace/.ncurator/runtime/toolresult/run-1/abc.txt',
       head: fullContent.slice(0, TOOL_RESULT_HEAD_MAX_CHARS),
-      totalChars: fullContent.length
+      tail: fullContent.slice(-TOOL_RESULT_TAIL_MAX_CHARS),
+      totalChars: fullContent.length,
+      totalBytes: fullContent.length,
+      totalLines: 1
     })
-    const parsed = JSON.parse(message) as {
-      truncated: boolean
-      filePath: string
-      totalChars: number
-      head: string
-    }
-    expect(parsed.truncated).toBe(true)
-    expect(parsed.totalChars).toBe(fullContent.length)
-    expect(parsed.head.length).toBe(TOOL_RESULT_HEAD_MAX_CHARS)
-    expect(Object.keys(parsed).sort()).toEqual(['filePath', 'head', 'totalChars', 'truncated'])
-    expect(parsed.filePath.endsWith('.log')).toBe(true)
+    expect(message).toContain('Result too large to include inline.')
+    expect(message).toContain('abc.txt')
+    expect(message).toContain('Preview (head):')
+    expect(message).toContain('Preview (tail):')
+    expect(message).toContain('read the file with text_file_read')
   })
 
-  it('returns a parseable envelope', () => {
+  it('returns multiline text rather than a JSON envelope', () => {
     const message = buildTruncatedToolResultMessage({
-      filePath: '/workspace/.ncurator/runtime/toolresult/run-1/def.log',
+      filePath: '/workspace/.ncurator/runtime/toolresult/run-1/def.txt',
       head: 'prefix',
-      totalChars: 200_000
+      tail: 'suffix',
+      totalChars: 200_000,
+      totalBytes: 200_000,
+      totalLines: 20
     })
-    expect(() => JSON.parse(message)).not.toThrow()
+    expect(() => JSON.parse(message)).toThrow()
+    expect(message.split('\n').length).toBeGreaterThanOrEqual(8)
   })
 
   it('counts and slices Unicode characters without splitting surrogate pairs', () => {
@@ -45,6 +48,7 @@ describe('ai unit tool result truncation', () => {
     expect(countUnicodeCharacters(head)).toBe(TOOL_RESULT_HEAD_MAX_CHARS)
     expect(head.endsWith('😀')).toBe(true)
     expect(head).not.toContain('�')
+    expect(sliceUnicodeCharactersFromEnd(content, 4)).toBe('tail')
   })
 })
 

@@ -30,6 +30,30 @@ export type ToolExecutionMeta = {
 
 export type ToolExecutionMetaResolver = (args: JsonObject) => ToolExecutionMeta
 
+export type ModelResultRendererInput = {
+  toolName: string
+  args: JsonObject
+  data: JsonValue | undefined
+}
+
+export type ModelResultRenderer = (input: ModelResultRendererInput) => string
+
+export type ModelResultOverflowPolicy =
+  | { mode: 'spill' }
+  | { mode: 'window' }
+  | {
+      mode: 'retry'
+      maxBytes: number
+      maxLines: number
+      retryHint: string
+    }
+
+export type ModelResultSpec = {
+  renderSuccess?: ModelResultRenderer
+  renderError?: ModelResultRenderer
+  overflowPolicy?: ModelResultOverflowPolicy
+}
+
 export type CapabilityActivityStatus = 'started' | 'completed' | 'failed'
 
 export type CapabilityActivityInput = {
@@ -61,4 +85,5 @@ export type HumanToolSpec<
   outputSchema: z.ZodType<TOutput>
   promptSpec: ToolPromptSpec
   resolveExecutionMeta: ToolExecutionMetaResolver
+  modelResult?: ModelResultSpec
 }

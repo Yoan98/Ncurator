@@ -13,10 +13,7 @@ import {
 import { inspectTerminalOutputQuality } from './terminalExec'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
-import {
-  createTerminalRunToolSpec,
-  TERMINAL_READ_TOOL_SPEC
-} from './toolSpecs'
+import { createTerminalRunToolSpec, TERMINAL_READ_TOOL_SPEC } from './toolSpecs'
 import { TERMINAL_MAX_CONCURRENT_SESSIONS } from './terminalConstants'
 
 type PendingTerminalCommand = {
@@ -52,7 +49,8 @@ const SESSION_LIMIT_ERROR = 'terminal_session_limit_reached'
 
 const buildSessionLimitReached = () => ({
   error: SESSION_LIMIT_ERROR,
-  hint: `当前会话已有 ${TERMINAL_MAX_CONCURRENT_SESSIONS} 个运行中的终端，已达到上限。` +
+  hint:
+    `当前会话已有 ${TERMINAL_MAX_CONCURRENT_SESSIONS} 个运行中的终端，已达到上限。` +
     '可等待某个命令结束，或用新终端执行 kill/pkill/taskkill 终止旧的运行命令后重试（终止类命令不受上限限制）。'
 })
 
@@ -363,7 +361,9 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             if (trackingStarted) input.ctx.discardTerminalCommandTracking(trackingId)
             const message = error instanceof Error ? error.message : String(error)
             const failure =
-              message === SESSION_LIMIT_ERROR ? buildSessionLimitReached() : buildFailure({ error: message })
+              message === SESSION_LIMIT_ERROR
+                ? buildSessionLimitReached()
+                : buildFailure({ error: message })
             session.fail(
               failure.error,
               undefined,
@@ -446,6 +446,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             status,
             output: guarded.output,
             readEndPosition: result.readEndPosition,
+            hasMoreOutput: result.hasMoreOutput,
             exitCode: result.exitCode
           }
           if (!guarded.ok) {
@@ -489,7 +490,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           input.ctx.checkCancelled()
           const terminalId = String(args.terminalId || '').trim()
           try {
-            const result = input.sessionManager.read({
+            const result = await input.sessionManager.read({
               terminalId,
               chatSessionId: input.sessionId,
               workspaceId: input.workspaceId,

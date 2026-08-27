@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { buildToolHistoryReturnValue } from '../../../../src/main/services/ai/human/shared/historyRenderers'
 import { renderToolResultDataText } from '../../../../src/main/services/ai/human/shared/toolResultRenderers'
 
 describe('ai unit human tool result renderers', () => {
@@ -172,20 +171,6 @@ describe('ai unit human tool result renderers', () => {
     expect(rendered).toContain('node_2')
     expect(rendered).not.toContain('changes')
     expect(renderToolResultDataText({ toolName: 'docx_format', data: {} })).toBeUndefined()
-  })
-
-  it('wraps minimal DOCX mutation data in the shared tool envelope', () => {
-    expect(
-      buildToolHistoryReturnValue({
-        toolName: 'docx_content_edit',
-        ok: true,
-        data: { createdIds: ['node_2'], changes: [{ kind: 'created' }] }
-      })
-    ).toEqual({ status: 'success', result: { createdIds: ['node_2'] } })
-    expect(buildToolHistoryReturnValue({ toolName: 'docx_format', ok: true, data: {} })).toEqual({
-      status: 'success',
-      result: {}
-    })
   })
 
   it('renders PDF page text, search snippets and rendered image paths', () => {

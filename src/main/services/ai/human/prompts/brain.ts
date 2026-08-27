@@ -86,10 +86,10 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
     - 互不依赖的调用尽量同轮发起。
   </context_efficiency>
 
-  <tool_truncation>
-    - 工具结果过大时会独立截断：truncated=true，filePath 是完整结果地址，totalChars 是完整字符数，head 是结果开头的有限内容。
-    - 需要完整内容时，用 text_file相关技能读取 filePath 指向的文件来查看；
-  </tool_truncation>
+  <tool_results>
+    - 工具结果提示过大时，缩小读取范围后重试。
+    - 工具结果提供完整结果文件时，用 text_file_read 按行续读。
+  </tool_results>
 
   <terminal_wait_contract>
     - 当 terminal_run 返回命令仍在执行时，多尝试等待终端命令完成后（再读取结果或继续），不要在命令未完成时空转轮询；仅当判断等待不合理时才中断并分析原因。

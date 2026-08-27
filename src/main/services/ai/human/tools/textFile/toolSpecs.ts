@@ -1,14 +1,18 @@
 import { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../shared/types'
-import { TOOL_RESULT_INLINE_MAX_CHARS } from '../../shared/toolResultPersistence'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
+import {
+  renderTextFileReadModelResult,
+  renderTextFileSearchModelResult
+} from '../../shared/modelToolResultRenderers'
 
 const STRUCTURED_FILE_EXTENSION_PATTERN = /\.(?:doc|docx|ppt|pptx|pdf|xls|xlsx|odt|ods|odp)$/iu
 
-// 单次 text_file_read 返回字符上限：略低于工具结果截断上限，为 JSON 包装与路径等开销留出余量，
-// 保证按此上限分段读取的结果不会被 hand 层再次截断落盘。
-export const TEXT_FILE_READ_MAX_CHARS = Math.floor(TOOL_RESULT_INLINE_MAX_CHARS * 0.9)
+// text_file_read 自己在完整行边界分页，并为路径、行号和英文续读提示预留空间。
+export const TEXT_FILE_READ_MAX_LINES = 2_000
+export const TEXT_FILE_READ_MAX_BYTES = 51_200
+export const TEXT_FILE_READ_MAX_LINE_CHARS = 2_000
 
 export const TEXT_FILE_SEARCH_MAX_MATCHES = 10
 export const TEXT_FILE_SEARCH_CONTEXT_CHARS = 320
@@ -27,29 +31,17 @@ const textFilePathSchema = z
 
 const textFileSourcePathField = textFilePathSchema.describe('目标文本文件的绝对路径')
 
-const textFileReadLinesSchema = z.object({
-  type: z.literal('lines').describe('按行读取，适合多行文本'),
+export const TEXT_FILE_READ_SCHEMA = z.object({
   sourcePath: textFileSourcePathField,
   startLine: z.number().int().min(1).optional().describe('1-based 起始行号，缺省从第 1 行开始'),
-  lineCount: z.number().int().min(1).optional().describe('读取行数，缺省读至文件末尾')
-})
-
-const textFileReadCharsSchema = z.object({
-  type: z.literal('chars').describe('按字符读取，适合单行超长内容（如工具结果截断日志）'),
-  sourcePath: textFileSourcePathField,
-  startOffset: z
+  lineCount: z
     .number()
     .int()
     .min(1)
+    .max(TEXT_FILE_READ_MAX_LINES)
     .optional()
-    .describe('读取的起始字符位置（文件字符序列从 1 开始计数），缺省从文件开头开始'),
-  charCount: z.number().int().min(1).optional().describe('读取字符数，缺省读至文件末尾')
+    .describe(`读取行数，缺省及最大为 ${TEXT_FILE_READ_MAX_LINES} 行`)
 })
-
-export const TEXT_FILE_READ_SCHEMA = z.discriminatedUnion('type', [
-  textFileReadLinesSchema,
-  textFileReadCharsSchema
-])
 
 const fileEditSchema = z.object({
   oldText: z.string().min(1),
@@ -80,24 +72,16 @@ export const TEXT_FILE_EDIT_SCHEMA = z.discriminatedUnion('action', [
   })
 ])
 
-export const TEXT_FILE_READ_OUTPUT_SCHEMA = z.discriminatedUnion('type', [
-  z.object({
-    type: z.literal('lines'),
+export const TEXT_FILE_READ_OUTPUT_SCHEMA = z
+  .object({
     sourcePath: z.string(),
     content: z.string(),
     startLine: z.number().int().min(1),
     endLine: z.number().int().min(1),
-    totalLines: z.number().int().min(1)
-  }),
-  z.object({
-    type: z.literal('chars'),
-    sourcePath: z.string(),
-    content: z.string(),
-    startOffset: z.number().int().min(1),
-    endOffset: z.number().int().min(1),
-    totalChars: z.number().int().min(1)
+    totalLines: z.number().int().min(1),
+    nextStartLine: z.number().int().min(1).optional()
   })
-])
+  .strict()
 
 export const TEXT_FILE_SEARCH_SCHEMA = z
   .object({
@@ -117,7 +101,6 @@ export const TEXT_FILE_SEARCH_OUTPUT_SCHEMA = z
         z
           .object({
             line: z.number().int().min(1),
-            charOffset: z.number().int().min(1),
             matchText: z.string(),
             textContext: z.string(),
             truncated: z.boolean()
@@ -145,13 +128,16 @@ export const TEXT_FILE_READ_TOOL_SPEC: HumanToolSpec<
   outputSchema: TEXT_FILE_READ_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'text_file_read',
-    description:
-      '读取普通文本文件（UTF-8）并返回文本内容与起止范围，支持按行或按字符读。无法读取结构化文件如 docx、pptx、pdf、xlsx 等。'
+    description: `按行读取 UTF-8 普通文本并返回带续读位置的内容窗口；缺省和单次最多 ${TEXT_FILE_READ_MAX_LINES} 行、约 ${TEXT_FILE_READ_MAX_BYTES} bytes，单行最多展示 ${TEXT_FILE_READ_MAX_LINE_CHARS} 字符。无法读取 docx、pptx、pdf、xlsx 等结构化文件。`
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
     getResourceKey: fileResourceKey
-  })
+  }),
+  modelResult: {
+    renderSuccess: renderTextFileReadModelResult,
+    overflowPolicy: { mode: 'window' }
+  }
 }
 
 export const TEXT_FILE_SEARCH_TOOL_SPEC: HumanToolSpec<
@@ -167,13 +153,13 @@ export const TEXT_FILE_SEARCH_TOOL_SPEC: HumanToolSpec<
   outputSchema: TEXT_FILE_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'text_file_search',
-    description:
-      '在文本文件中按 literal 或 regex 检索，返回每个命中的行号、全文件字符偏移与命中附近文字。'
+    description: '在文本文件中按 literal 或 regex 检索，返回每个命中的行号与命中附近文字。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
     getResourceKey: fileResourceKey
-  })
+  }),
+  modelResult: { renderSuccess: renderTextFileSearchModelResult }
 }
 
 export const TEXT_FILE_EDIT_TOOL_SPEC: HumanToolSpec<

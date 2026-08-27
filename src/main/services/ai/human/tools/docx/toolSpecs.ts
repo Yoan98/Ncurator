@@ -22,6 +22,13 @@ import {
   docxReadVisualsOutputSchema,
   docxSearchOutputSchema
 } from './outputSchemas'
+import {
+  renderDocxContentEditModelResult,
+  renderDocxOutlineModelResult,
+  renderDocxReadNodesModelResult,
+  renderDocxSearchModelResult
+} from '../../shared/modelToolResultRenderers'
+import { createRetryModelResultPolicy } from '../modelResultPolicies'
 
 const readMeta = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -54,6 +61,12 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
       '读取 Word 文档的逻辑结构，按逻辑页返回自适应 segment map、结构锚点、关键词和原文代表句；结果不包含完整正文，逻辑页不代表 Word 排版页面。'
   },
   resolveExecutionMeta: readMeta,
+  modelResult: {
+    renderSuccess: renderDocxOutlineModelResult,
+    overflowPolicy: createRetryModelResultPolicy(
+      'Call docx_read_outline again with a smaller pageCount.'
+    )
+  },
   activityActionType: 'docx_read_outline'
 } satisfies DocxToolSpec<
   z.infer<typeof docxOutlineSchema>,
@@ -74,6 +87,12 @@ export const DOCX_SEARCH_TOOL_SPEC = {
       '在 Word 完整原文中按 literal 或 regex 检索；结果包含实际命中的稳定 nodeId、命中片段，并可附带同一 story 的前后节点预览，不包含完整文档正文。'
   },
   resolveExecutionMeta: readMeta,
+  modelResult: {
+    renderSuccess: renderDocxSearchModelResult,
+    overflowPolicy: createRetryModelResultPolicy(
+      'Call docx_search again with includeContext=false, narrower nodeIds, or a more specific query.'
+    )
+  },
   activityActionType: 'docx_search'
 } satisfies DocxToolSpec<
   z.infer<typeof docxSearchSchema>,
@@ -94,6 +113,12 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
       '返回指定 Word 节点或连续范围的递归语义内容，只包含所选范围；一次最多读取 20 个 nodeId 或连续 50 个根节点。'
   },
   resolveExecutionMeta: readMeta,
+  modelResult: {
+    renderSuccess: renderDocxReadNodesModelResult,
+    overflowPolicy: createRetryModelResultPolicy(
+      'Call docx_read_nodes again with fewer nodeIds or a smaller fromNodeIndex/toNodeIndex range.'
+    )
+  },
   activityActionType: 'docx_read_nodes'
 } satisfies DocxToolSpec<
   z.infer<typeof docxReadNodesSchema>,
@@ -131,6 +156,7 @@ const defineMutationSpec = <
   skillId: TSkillId
   schema: TSchema
   description: string
+  modelResult?: HumanToolSpec['modelResult']
 }) => ({
   name: input.name,
   familyId: 'docx' as const,
@@ -139,6 +165,7 @@ const defineMutationSpec = <
   outputSchema: docxMutationOutputSchema,
   promptSpec: { name: input.name, description: input.description },
   resolveExecutionMeta: writeMeta,
+  modelResult: input.modelResult,
   activityActionType: input.name
 })
 
@@ -147,7 +174,8 @@ export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineMutationSpec({
   skillId: 'docx-write',
   schema: docxContentEditSchema,
   description:
-    '创建 DOCX 或局部修改普通内容节点。一次只执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一；不负责格式、表格结构、媒体、批注或修订。成功表示写入及内部校验已完成；创建操作在 result.createdIds 返回新对象 ID。'
+    '创建 DOCX 或局部修改普通内容节点。一次只执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一；不负责格式、表格结构、媒体、批注或修订。成功表示写入及内部校验已完成；创建操作在 result.createdIds 返回新对象 ID。',
+  modelResult: { renderSuccess: renderDocxContentEditModelResult }
 })
 
 export const DOCX_FORMAT_TOOL_SPEC = defineMutationSpec({

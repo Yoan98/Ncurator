@@ -18,10 +18,10 @@ import {
 import {
   humanRoundThoughtSchema,
   humanNextActionSchema,
-  deliveryGuidanceItemSchema,  humanPlanItemSchema,
+  deliveryGuidanceItemSchema,
+  humanPlanItemSchema,
   humanPlanItemStatusSchema,
   humanExecutionSchema,
-  humanHistoryToolResultSchema,
   humanLearningOutcomeSchema,
   humanResultSchema,
   humanStateContractSchema,
@@ -71,7 +71,6 @@ export type HandCallList = z.infer<typeof handCallsSchema>
 export type ToolResourceContext = z.infer<typeof toolResourceContextSchema>
 export type ToolCallResult = z.infer<typeof toolCallResultSchema>
 export type HumanLearningOutcome = z.infer<typeof humanLearningOutcomeSchema>
-export type HumanHistoryToolResult = z.infer<typeof humanHistoryToolResultSchema>
 export type HumanCompactionBlock = z.infer<typeof humanCompactionBlockSchema>
 export type HumanResult = z.infer<typeof humanResultSchema>
 export type HumanTraceStep = z.infer<typeof humanTraceStepSchema>

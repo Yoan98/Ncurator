@@ -24,13 +24,20 @@ describe('ai unit message transcript repair', () => {
         content: '先学习技能',
         toolCalls: [{ id: 'call-1', name: 'learn_skill', args: { skillIds: ['docx-read'] } }]
       },
-      { kind: 'tool', toolCallId: 'call-1', toolName: 'learn_skill', ok: true, result: { ok: true } },
+      {
+        kind: 'tool',
+        toolCallId: 'call-1',
+        toolName: 'learn_skill',
+        ok: true,
+        content: 'Skill loaded successfully: docx-read.'
+      },
       { kind: 'user', content: '第二个诉求' }
     ]
 
     const skipped = deriveMessageLogMessages({ entries, skipLastUserEntry: true })
     expect(skipped.map((message) => message.getType())).toEqual(['human', 'ai', 'tool'])
     expect(skipped[0].content).toBe('第一个诉求')
+    expect(skipped[2].content).toBe('Skill loaded successfully: docx-read.')
     expect(skipped.some((message) => message.content === '第二个诉求')).toBe(false)
 
     const all = deriveMessageLogMessages({ entries, skipLastUserEntry: false })
@@ -44,16 +51,14 @@ describe('ai unit message transcript repair', () => {
     const toolMessages = repaired.filter((message) => message.getType() === 'tool') as ToolMessage[]
     expect(toolMessages.map((message) => message.tool_call_id)).toEqual(['x', 'y'])
     for (const message of toolMessages) {
-      expect(message.content).toContain('"status":"fail"')
-      expect(message.content).toContain('interrupted')
+      expect(message.content).toBe(
+        'Error: The run was interrupted before this tool call could be executed.'
+      )
     }
   })
 
   it('only inserts interrupted ToolMessage for the missing tool call id', () => {
-    const repaired = repairInterruptedToolCalls([
-      assistantWithCalls(['x', 'y']),
-      toolResult('x')
-    ])
+    const repaired = repairInterruptedToolCalls([assistantWithCalls(['x', 'y']), toolResult('x')])
 
     expect(repaired.map((message) => message.getType())).toEqual(['ai', 'tool', 'tool'])
     const toolMessages = repaired.filter((message) => message.getType() === 'tool') as ToolMessage[]

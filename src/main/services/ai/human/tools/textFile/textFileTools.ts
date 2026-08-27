@@ -9,15 +9,15 @@ import type {
   IpcJsonObject,
   JsonObject
 } from '../../../../../../shared/types'
-import { getWorkspaceToolResultDir } from '../../../../assets/WorkspaceAssetService'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
-import { countUnicodeCharacters } from '../../shared/toolResultPersistence'
 import type { WorkspaceCapabilityBuildInput } from '../types'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import {
   TEXT_FILE_EDIT_TOOL_SPEC,
-  TEXT_FILE_READ_MAX_CHARS,
+  TEXT_FILE_READ_MAX_BYTES,
+  TEXT_FILE_READ_MAX_LINE_CHARS,
+  TEXT_FILE_READ_MAX_LINES,
   TEXT_FILE_READ_TOOL_SPEC,
   type FileEditInput,
   type FileReadInput,
@@ -449,87 +449,54 @@ const editTextFile = async (
   })
 }
 
-const assertToolResultLogReadLimit = (input: {
-  workspaceRootPath: string
-  sourcePath: string
-  argsSourcePath: string
-  content: string
-}): void => {
-  const toolResultRoot = getWorkspaceToolResultDir(input.workspaceRootPath)
-  if (!isPathInsideRoot(input.sourcePath, toolResultRoot)) return
-  const chars = countUnicodeCharacters(input.content)
-  if (chars <= TEXT_FILE_READ_MAX_CHARS) return
-  throw new Error(
-    `无法读取 ${input.argsSourcePath}：该文件是工具结果截断日志，本次读取 ${chars} 字符，超过单次读取上限 ${TEXT_FILE_READ_MAX_CHARS} 字符。`
-  )
+const truncateTextFileLine = (value: string): string => {
+  const characters = Array.from(value)
+  if (characters.length <= TEXT_FILE_READ_MAX_LINE_CHARS) return value
+  return `${characters.slice(0, TEXT_FILE_READ_MAX_LINE_CHARS).join('')}... (line truncated to ${TEXT_FILE_READ_MAX_LINE_CHARS} characters)`
 }
 
-const readTextFile = async (
-  args: FileReadInput,
-  workspaceRootPath: string
-): Promise<FileReadOutput> => {
+const TEXT_FILE_READ_CONTENT_MAX_BYTES = TEXT_FILE_READ_MAX_BYTES - 3_200
+
+const readTextFile = async (args: FileReadInput): Promise<FileReadOutput> => {
   const sourcePath = await resolveSafeTextFilePath({
     sourcePath: args.sourcePath,
     allowMissing: false
   })
   const decoded = decodeTextFile(await fs.readFile(sourcePath), args.sourcePath)
 
-  if (args.type === 'chars') {
-    const chars = Array.from(decoded.normalizedContent)
-    const totalChars = chars.length
-    const startOffset = args.startOffset || 1
-    if (startOffset > totalChars) {
-      throw new Error(
-        `无法读取 ${args.sourcePath}：startOffset ${startOffset} 超出文件总字符数 ${totalChars}。`
-      )
-    }
-    const endOffset = Math.min(
-      totalChars,
-      args.charCount === undefined ? totalChars : startOffset + args.charCount - 1
-    )
-    const content = chars.slice(startOffset - 1, endOffset).join('')
-    assertToolResultLogReadLimit({
-      workspaceRootPath,
-      sourcePath,
-      argsSourcePath: args.sourcePath,
-      content
-    })
-    return {
-      type: 'chars',
-      sourcePath: args.sourcePath,
-      content,
-      startOffset,
-      endOffset,
-      totalChars
-    }
-  }
-
   const lines = decoded.normalizedContent.split('\n')
   const totalLines = lines.length
   const startLine = args.startLine || 1
   if (startLine > totalLines) {
     throw new Error(
-      `无法读取 ${args.sourcePath}：startLine ${startLine} 超出文件总行数 ${totalLines}。`
+      `startLine ${startLine} is out of range for ${args.sourcePath} (${totalLines} lines)`
     )
   }
-  const endLine = Math.min(
+  const requestedEndLine = Math.min(
     totalLines,
-    args.lineCount === undefined ? totalLines : startLine + args.lineCount - 1
+    startLine + (args.lineCount || TEXT_FILE_READ_MAX_LINES) - 1
   )
-  const content = lines.slice(startLine - 1, endLine).join('\n')
-  assertToolResultLogReadLimit({
-    workspaceRootPath,
-    sourcePath,
-    argsSourcePath: args.sourcePath,
-    content
-  })
+  const selected: string[] = []
+  let selectedBytes = 0
+  let endLine = startLine - 1
+  for (let lineNumber = startLine; lineNumber <= requestedEndLine; lineNumber += 1) {
+    const line = truncateTextFileLine(lines[lineNumber - 1] || '')
+    const displayedBytes = Buffer.byteLength(`${lineNumber}: ${line}\n`, 'utf8')
+    if (selected.length > 0 && selectedBytes + displayedBytes > TEXT_FILE_READ_CONTENT_MAX_BYTES)
+      break
+    selected.push(line)
+    selectedBytes += displayedBytes
+    endLine = lineNumber
+  }
+  const content = selected.join('\n')
+  const nextStartLine = endLine < totalLines ? endLine + 1 : undefined
   return {
-    type: 'lines',
     sourcePath: args.sourcePath,
     content,
     startLine,
     endLine,
-    totalLines
+    totalLines,
+    ...(nextStartLine ? { nextStartLine } : {})
   }
 }
 
@@ -555,7 +522,7 @@ export const buildTextFileCapabilityTools = (
         toolName: TEXT_FILE_READ_TOOL_SPEC.name,
         args: args as IpcJsonObject,
         execute: async (session) => {
-          const payload = await readTextFile(args, buildInput.workspaceRootPath)
+          const payload = await readTextFile(args)
           session.succeed(
             undefined,
             toToolResult({ toolName: TEXT_FILE_READ_TOOL_SPEC.name, ok: true, data: payload })

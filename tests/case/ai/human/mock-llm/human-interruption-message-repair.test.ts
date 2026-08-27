@@ -112,12 +112,13 @@ describe('ai human mock-llm backend', () => {
         )
 
         let run2BrainMessages: BaseMessage[] | null = null
-        const captureWrapper: AiRunDeps['chatToolsWrapper'] = (realChatTools) => async (request) => {
-          if (request.caller === 'human.brain' && !run2BrainMessages) {
-            run2BrainMessages = [...request.messages]
+        const captureWrapper: AiRunDeps['chatToolsWrapper'] =
+          (realChatTools) => async (request) => {
+            if (request.caller === 'human.brain' && !run2BrainMessages) {
+              run2BrainMessages = [...request.messages]
+            }
+            return await realChatTools(request)
           }
-          return await realChatTools(request)
-        }
         const run2Driver = createScriptedStructuredOutputDriver({
           'human.brain': [
             {
@@ -186,17 +187,17 @@ describe('ai human mock-llm backend', () => {
             chatToolsWrapper: abortWrapper
           })
         )
-        const danglingSnapshot = await runtime.chatStore.getSessionResumeSnapshot(DANGLING_SESSION_ID)
+        const danglingSnapshot =
+          await runtime.chatStore.getSessionResumeSnapshot(DANGLING_SESSION_ID)
 
         let danglingRun2Messages: BaseMessage[] | null = null
-        const danglingCaptureWrapper: AiRunDeps['chatToolsWrapper'] = (realChatTools) => async (
-          request
-        ) => {
-          if (request.caller === 'human.brain' && !danglingRun2Messages) {
-            danglingRun2Messages = [...request.messages]
+        const danglingCaptureWrapper: AiRunDeps['chatToolsWrapper'] =
+          (realChatTools) => async (request) => {
+            if (request.caller === 'human.brain' && !danglingRun2Messages) {
+              danglingRun2Messages = [...request.messages]
+            }
+            return await realChatTools(request)
           }
-          return await realChatTools(request)
-        }
         const danglingRun2Driver = createScriptedStructuredOutputDriver({
           'human.brain': [
             {
@@ -245,7 +246,9 @@ describe('ai human mock-llm backend', () => {
         ) as ToolMessage[]
         const danglingInterrupted = danglingToolMessages.some((message) => {
           const content = String(message.content || '')
-          return content.includes('"status":"fail"') && content.includes('interrupted')
+          return (
+            content === 'Error: The run was interrupted before this tool call could be executed.'
+          )
         })
         const danglingHasAssistantToolCalls = (danglingRun2Messages || []).some(
           (message) => message.getType() === 'ai' && (message.tool_calls?.length || 0) > 0
@@ -263,7 +266,8 @@ describe('ai human mock-llm backend', () => {
           danglingSnapshotReason: danglingSnapshot?.reason || '',
           danglingRun2Result,
           danglingLastType: danglingLast?.getType() || '',
-          danglingLastContent: typeof danglingLast?.content === 'string' ? danglingLast.content : '',
+          danglingLastContent:
+            typeof danglingLast?.content === 'string' ? danglingLast.content : '',
           danglingInterrupted,
           danglingHasAssistantToolCalls,
           danglingToolMessageCount: danglingToolMessages.length

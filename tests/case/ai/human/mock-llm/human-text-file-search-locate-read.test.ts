@@ -5,24 +5,6 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { buildCompleteTaskDecision, buildLearnSkillsDecision } from '../testUtils'
 
-const listLogFiles = async (rootPath: string): Promise<string[]> => {
-  const entries = await fs.readdir(rootPath, { withFileTypes: true }).catch(() => [])
-  const nested = await Promise.all(
-    entries.map(async (entry) => {
-      const entryPath = path.join(rootPath, entry.name)
-      if (entry.isDirectory()) return listLogFiles(entryPath)
-      return entry.name.endsWith('.log') ? [entryPath] : []
-    })
-  )
-  return nested.flat()
-}
-
-const readEnvelopeFilePath = (user: string): string | undefined =>
-  user.match(/"filePath":"([^"]+)"/)?.[1]
-
-const readFirstCharOffset = (user: string): string | undefined =>
-  user.match(/"charOffset":(\d+)/)?.[1]
-
 describe('ai human mock-llm text-file search', () => {
   it('human-text-file-search-locate-read', async () => {
     await runBackendCase({
@@ -31,7 +13,8 @@ describe('ai human mock-llm text-file search', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证截断日志通过 text_file_search 定位关键词后，用返回的全文件字符偏移配合 type=chars 精确读取，不再二次落盘。',
+      description:
+        '验证通过 text_file_search 的行号定位大文本，再用 text_file_read 的 startLine 精确读取。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -55,42 +38,26 @@ describe('ai human mock-llm text-file search', () => {
               },
               {
                 output: {
-                  thought: { next: '读取大文件触发截断。' },
-                  toolCalls: [
-                    { name: 'text_file_read', args: { type: 'lines', sourcePath } }
-                  ]
-                }
-              },
-              ({ user }) => {
-                const filePath = readEnvelopeFilePath(user)
-                if (!filePath) throw new Error('missing truncated envelope filePath')
-                return {
-                  thought: { next: '在截断日志中定位关键词。' },
+                  thought: { next: '直接搜索目标行。' },
                   toolCalls: [
                     {
                       name: 'text_file_search',
-                      args: { sourcePath: filePath, query: '第 5000 行' }
+                      args: { sourcePath, query: '第 5000 行' }
                     }
                   ]
                 }
               },
               ({ user }) => {
-                modelSearchedLog = user.includes('"totalMatchCount":1')
-                const filePath = readEnvelopeFilePath(user)
-                const charOffset = readFirstCharOffset(user)
-                if (!filePath || !charOffset) {
-                  throw new Error('missing search result filePath or charOffset')
-                }
+                modelSearchedLog = user.includes('Total matches: 1') && user.includes('line=5000')
                 return {
-                  thought: { next: '按定位的字符偏移精确读取。' },
+                  thought: { next: '按命中行号精确读取。' },
                   toolCalls: [
                     {
                       name: 'text_file_read',
                       args: {
-                        type: 'chars',
-                        sourcePath: filePath,
-                        startOffset: Number(charOffset),
-                        charCount: 40
+                        sourcePath,
+                        startLine: 5000,
+                        lineCount: 1
                       }
                     }
                   ]
@@ -112,12 +79,8 @@ describe('ai human mock-llm text-file search', () => {
           taskId: runtime.taskId,
           userInput: '请读取 large.txt 的完整内容。'
         })
-        const toolResultLogFiles = await listLogFiles(
-          path.join(runtime.workspaceRoot, '.ncurator', 'runtime', 'toolresult')
-        )
         return {
           output,
-          toolResultLogFiles,
           modelSearchedLog,
           modelReadLocatedSegment
         }
@@ -125,15 +88,12 @@ describe('ai human mock-llm text-file search', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.output.status === 'completed' &&
-            result.toolResultLogFiles.length === 1 &&
             result.modelSearchedLog &&
             result.modelReadLocatedSegment,
           {
             name: 'human-text-file-search-locate-read-chain',
-            message:
-              '截断日志应通过 text_file_search 定位关键词、用返回的 charOffset 配合 type=chars 精确读取成功，且不再产生二次落盘。',
+            message: '应通过 text_file_search 定位行号，再用 startLine 精确读取成功。',
             data: {
-              toolResultLogFiles: result.toolResultLogFiles,
               modelSearchedLog: result.modelSearchedLog,
               modelReadLocatedSegment: result.modelReadLocatedSegment
             }

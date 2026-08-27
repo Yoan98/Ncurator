@@ -975,12 +975,7 @@ export interface OpenFileWithApplicationResponse {
   error?: string
 }
 
-export type AiRunStatus =
-  | 'running'
-  | 'waiting_approval'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
+export type AiRunStatus = 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
 export type RuntimeIssueCode =
   | 'workspace_binding_missing'
   | 'workspace_missing'
@@ -1722,7 +1717,7 @@ export type ChatMessageLogEntry =
       toolCallId: string
       toolName: string
       ok: boolean
-      result?: JsonValue
+      content: string
     }
   | {
       kind: 'annotation'

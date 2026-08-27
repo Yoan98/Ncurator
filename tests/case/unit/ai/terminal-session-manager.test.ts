@@ -10,7 +10,11 @@ import {
 const managers: TerminalSessionManager[] = []
 const tempRoots: string[] = []
 
-const createManager = (environment?: Record<string, string>, yieldMs = 120, readMaxChars?: number) => {
+const createManager = (
+  environment?: Record<string, string>,
+  yieldMs = 120,
+  readMaxChars?: number
+) => {
   const manager = new TerminalSessionManager({
     yieldMs,
     stopGraceMs: 1000,
@@ -114,6 +118,56 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain('超长命令正常')
+  })
+
+  it('keeps completed output readable until every chunk has been consumed', async () => {
+    const manager = createManager(undefined, 2_000, 1_000)
+    const root = await createRoot()
+    const expected = Array.from({ length: 4_000 }, (_, index) => `output-${index + 1}`).join('\n')
+    const sourcePath = path.join(root, 'expected.txt')
+    await fs.writeFile(sourcePath, expected, 'utf8')
+
+    const result = await manager.run({
+      chatSessionId: 'chat-output',
+      workspaceId: 'workspace-output',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-output',
+      command: `sed -n '1,4000p' "${sourcePath}"`
+    })
+    if (result.exitCode === null) {
+      await manager.waitForCommand({
+        terminalId: result.terminalId,
+        commandId: result.commandId,
+        chatSessionId: 'chat-output',
+        workspaceId: 'workspace-output'
+      })
+    }
+
+    let combined = result.output
+    let cursor = result.readEndPosition
+    let hasMore = result.hasMoreOutput || result.exitCode === null
+    while (hasMore) {
+      const next = await manager.read({
+        terminalId: result.terminalId,
+        chatSessionId: 'chat-output',
+        workspaceId: 'workspace-output',
+        readEndPosition: cursor
+      })
+      combined += next.output
+      cursor = next.readEndPosition
+      hasMore = next.hasMoreOutput
+    }
+
+    expect(combined.replace(/^\n/u, '')).toBe(`${expected}\n`)
+    await expect(
+      manager.read({
+        terminalId: result.terminalId,
+        chatSessionId: 'chat-output',
+        workspaceId: 'workspace-output',
+        readEndPosition: cursor
+      })
+    ).rejects.toThrow()
   })
 
   it('can isolate Node and Python availability without changing the app process', async () => {
@@ -343,11 +397,13 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
     expect(running.returnReason).toBe('command_still_running')
     expect(running.currentTerminalPath).toBe(nested)
     expect(
-      manager.read({
-        terminalId: running.terminalId,
-        chatSessionId: 'chat-cwd',
-        workspaceId: 'workspace-cwd'
-      }).currentTerminalPath
+      (
+        await manager.read({
+          terminalId: running.terminalId,
+          chatSessionId: 'chat-cwd',
+          workspaceId: 'workspace-cwd'
+        })
+      ).currentTerminalPath
     ).toBe(nested)
 
     const stopped = await manager.stop({
@@ -405,7 +461,7 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
     const hasMoreValues: boolean[] = []
     let cursor = running.readEndPosition
     for (let index = 0; index < 200; index += 1) {
-      const read = manager.read({
+      const read = await manager.read({
         terminalId: running.terminalId,
         chatSessionId: 'chat-chunk',
         workspaceId: 'workspace-chunk',

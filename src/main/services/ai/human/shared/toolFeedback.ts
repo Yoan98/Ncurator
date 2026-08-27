@@ -1,33 +1,35 @@
 import { ToolMessage } from '@langchain/core/messages'
-import type { ChatMessageLogEntry, JsonObject } from '../../../../../shared/types'
+import type { ChatMessageLogEntry } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import type { HumanRuntimeCache } from '../types'
-
-type ToolFeedbackEnvelope = JsonObject
 
 export type ToolFeedbackInput = {
   toolCallId: string
   toolName: string
   ok: boolean
-  result?: JsonObject
   errorMessage?: string
+  content?: string
 }
 
-const buildEnvelope = (input: ToolFeedbackInput): ToolFeedbackEnvelope => {
-  if (input.ok) {
-    return { status: 'success', result: input.result ?? {} }
-  }
-  return { status: 'fail', error: input.errorMessage ?? 'tool call failed' }
+const buildContent = (input: ToolFeedbackInput): string => {
+  if (input.content) return input.content
+  if (input.ok) return 'Tool feedback completed successfully.'
+  const error = input.errorMessage ?? 'The tool call failed.'
+  return /^[\x20-\x7E\r\n\t]+$/u.test(error)
+    ? `Error: ${error}`
+    : 'Error: The tool call failed. Check the tool arguments and try again.'
 }
 
-export const buildToolFeedback = (input: ToolFeedbackInput): {
+export const buildToolFeedback = (
+  input: ToolFeedbackInput
+): {
   message: ToolMessage
   transcript: ChatMessageLogEntry
 } => {
-  const envelope = buildEnvelope(input)
+  const content = buildContent(input)
   return {
     message: new ToolMessage({
-      content: JSON.stringify(envelope),
+      content,
       tool_call_id: input.toolCallId
     }),
     transcript: {
@@ -35,7 +37,7 @@ export const buildToolFeedback = (input: ToolFeedbackInput): {
       toolCallId: input.toolCallId,
       toolName: input.toolName,
       ok: input.ok,
-      result: envelope
+      content
     }
   }
 }
@@ -46,8 +48,8 @@ export const appendToolFeedback = async (input: {
   toolCallId: string
   toolName: string
   ok: boolean
-  result?: JsonObject
   errorMessage?: string
+  content?: string
 }): Promise<void> => {
   const feedback = buildToolFeedback(input)
   const messages = input.cache.messages || []
