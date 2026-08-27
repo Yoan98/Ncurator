@@ -107,9 +107,11 @@ describe('ai unit human tool result renderers', () => {
     const rendered = renderToolResultDataText({
       toolName: 'docx_read_outline',
       data: {
-        startPage: 1,
-        endPage: 1,
-        totalPages: 3,
+        fromPercent: 0,
+        toPercent: 50,
+        fromNodeIndex: 4,
+        toNodeIndex: 4,
+        totalRootCount: 12,
         segments: [
           {
             story: 'body',
@@ -121,8 +123,9 @@ describe('ai unit human tool result renderers', () => {
       }
     })
 
-    expect(rendered).toContain('startPage=1')
-    expect(rendered).toContain('totalPages=3')
+    expect(rendered).toContain('fromPercent=0')
+    expect(rendered).toContain('toPercent=50')
+    expect(rendered).toContain('totalRootCount=12')
     expect(rendered).toContain('fromNodeIndex=4')
     expect(rendered).toContain('toNodeIndex=4')
     expect(rendered).toContain('视觉方法表')

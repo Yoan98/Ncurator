@@ -58,13 +58,13 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   promptSpec: {
     name: 'docx_read_outline',
     description:
-      '读取 Word 文档的逻辑结构，按逻辑页返回自适应 segment map、结构锚点、关键词和原文代表句；结果不包含完整正文，逻辑页不代表 Word 排版页面。'
+      '按根节点比例返回结构缩略图。每段含 story、nodeIndex 区间和 textMap；不含完整正文和 nodeId。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
     renderSuccess: renderDocxOutlineModelResult,
     overflowPolicy: createRetryModelResultPolicy(
-      'Call docx_read_outline again with a smaller pageCount.'
+      'Call docx_read_outline again with a narrower fromPercent/toPercent range.'
     )
   },
   activityActionType: 'docx_read_outline'
@@ -84,7 +84,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   promptSpec: {
     name: 'docx_search',
     description:
-      '在 Word 完整原文中按 literal 或 regex 检索；结果包含实际命中的稳定 nodeId、命中片段，并可附带同一 story 的前后节点预览，不包含完整文档正文。'
+      '在全文中按 literal 或 regex 检索，返回命中 nodeId 与片段；可选同一 story 前后预览。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -109,8 +109,7 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
   outputSchema: docxReadOutputSchema,
   promptSpec: {
     name: 'docx_read_nodes',
-    description:
-      '返回指定 Word 节点或连续范围的递归语义内容，只包含所选范围；一次最多读取 20 个 nodeId 或连续 50 个根节点。'
+    description: '返回指定 nodeId 或连续 nodeIndex 范围的语义内容。一次最多 20 个 nodeId 或 50 个根节点。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -135,8 +134,7 @@ export const DOCX_READ_VISUALS_TOOL_SPEC = {
   outputSchema: docxReadVisualsOutputSchema,
   promptSpec: {
     name: 'docx_read_visuals',
-    description:
-      '按 visualId 读取 DOCX 图片、图表等视觉内容并返回识别文本；一次支持 1 至 10 项；不支持 .doc。'
+    description: '按 visualId 识别图片、图表等视觉内容。一次 1 至 10 项；不支持 .doc。'
   },
   resolveExecutionMeta: readMeta,
   activityActionType: 'docx_read_visuals'
@@ -174,7 +172,7 @@ export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineMutationSpec({
   skillId: 'docx-write',
   schema: docxContentEditSchema,
   description:
-    '创建 DOCX，或局部修改正文节点。一次只执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一。插入、替换和 replace_text 时可同时指定段落或文字样式。只改已有外观、命名样式、编号或版心时用 docx_format；表格、媒体、批注和修订用对应工具。成功表示写入及内部校验已完成；创建操作在 result.createdIds 返回新对象 ID。',
+    '创建 DOCX，或对正文节点执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一。',
   modelResult: { renderSuccess: renderDocxContentEditModelResult }
 })
 
@@ -182,32 +180,28 @@ export const DOCX_FORMAT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_format',
   skillId: 'docx-write',
   schema: docxFormatSchema,
-  description:
-    '只改已有内容的显示格式，不改正文。包括局部文字、段落、命名样式、编号和 section；同一局部 operation 对所有目标应用同一 patch。插入或替换时的样式写在 docx_content_edit 上；表格外观用 docx_table_edit。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。成功表示写入及内部校验已完成。'
+  description: '修改已有内容的显示格式：局部文字、段落、命名样式、编号和 section。'
 })
 
 export const DOCX_TABLE_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_table_edit',
   skillId: 'docx-write',
   schema: docxTableEditSchema,
-  description:
-    '创建、删除或修改 DOCX 表格结构（行列增删、单元格合并拆分），以及表、行、单元格外观。不负责修改已有单元格正文。成功表示写入及内部校验已完成；创建表格时在 result.createdIds 返回新表格 ID。'
+  description: '修改表格结构（行列、合并拆分）以及表、行、单元格外观。'
 })
 
 export const DOCX_MEDIA_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_media_edit',
   skillId: 'docx-write',
   schema: docxMediaEditSchema,
-  description:
-    '插入、替换、删除或修改 DOCX 图片等视觉对象，负责媒体文件、relationship、尺寸和替代文字。成功表示写入及内部校验已完成；插入媒体时在 result.createdIds 返回新对象 ID。'
+  description: '插入、替换、删除或修改图片等视觉对象。'
 })
 
 export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineMutationSpec({
   name: 'docx_comments_revisions',
   skillId: 'docx-write',
   schema: docxCommentsRevisionsSchema,
-  description:
-    '新增、修改、回复或删除 Word 批注，切换修订模式，以及接受或拒绝 Word 修订；这不是文档读取检查工具。成功表示写入及内部校验已完成；新增批注或回复时在 result.createdIds 返回新批注 ID。'
+  description: '新增、修改、回复或删除批注；开关修订模式；接受或拒绝修订。'
 })
 
 export const DOCX_READ_TOOL_SPECS = [

@@ -1,6 +1,6 @@
 import { z } from 'zod/v4'
 import type { DocxCreateTableCellNode } from './nodeTypes'
-import { DOCX_FORMAT_MAX_TARGETS, DOCX_OUTLINE_MAX_PAGE_COUNT } from './constants'
+import { DOCX_FORMAT_MAX_TARGETS } from './constants'
 
 const docxHexColorSchema = z
   .string()
@@ -73,11 +73,8 @@ export const docxRunStyleSchema = z
 
 export const docxParagraphStyleSchema = z
   .object({
-    styleId: z.string().trim().min(1).optional().describe('真实段落 styleId，如 Heading1'),
-    alignment: z
-      .enum(['left', 'center', 'right', 'justify'])
-      .optional()
-      .describe('水平对齐：left/center/right/justify'),
+    styleId: z.string().trim().min(1).optional().describe('段落 styleId'),
+    alignment: z.enum(['left', 'center', 'right', 'justify']).optional().describe('水平对齐'),
     indent: z
       .object({
         left: docxPointSchema.optional().describe('左缩进，单位磅'),
@@ -105,7 +102,7 @@ export const docxTableStyleSchema = z
   .object({
     alignment: z.enum(['left', 'center', 'right']).optional().describe('表格水平对齐'),
     width: docxLengthSchema.optional().describe('表格宽度，{ value, unit: "pt" | "percent" }'),
-    layout: z.enum(['fixed', 'autofit']).optional().describe('表格布局：fixed 固定 / autofit 自动'),
+    layout: z.enum(['fixed', 'autofit']).optional().describe('表格布局'),
     borders: docxBordersSchema.optional().describe('表格边框')
   })
   .strict()
@@ -243,43 +240,29 @@ export const docxReadVisualsSchema = z
 const sourcePathField = z
   .string()
   .min(1)
-  .describe('DOCX 文件的本机绝对路径；写入工具只支持 .docx，读取工具同时支持只读 .doc')
-const nodeIdField = z
-  .string()
-  .min(1)
-  .describe('docx_read_nodes、docx_search 或创建操作 result.createdIds 返回的 nodeId，直接照抄')
-const searchScopeNodeIdField = z
-  .string()
-  .min(1)
-  .describe('限定搜索范围的根节点或 table cell nodeId；不接受 run 等递归子节点 ID')
+  .describe('文件本机绝对路径。写操作仅 .docx；读操作同时支持只读 .doc')
+const nodeIdField = z.string().min(1).describe('节点 ID')
+const searchScopeNodeIdField = z.string().min(1).describe('根节点或单元格 nodeId')
 
 export const docxOutlineSchema = z
   .object({
     sourcePath: sourcePathField,
-    startPage: z.number().int().min(1).describe('outline 逻辑起始页，从 1 开始'),
-    pageCount: z
-      .number()
-      .int()
-      .min(1)
-      .max(DOCX_OUTLINE_MAX_PAGE_COUNT)
-      .describe(`连续读取的 outline 逻辑页数，最多 ${String(DOCX_OUTLINE_MAX_PAGE_COUNT)} 页`)
+    fromPercent: z.number().min(0).max(100).describe('起始比例，0–100'),
+    toPercent: z.number().min(0).max(100).describe('结束比例，0–100')
   })
   .strict()
+  .refine((value) => value.toPercent >= value.fromPercent, {
+    path: ['toPercent'],
+    message: 'toPercent 必须大于或等于 fromPercent'
+  })
 
 export const docxSearchSchema = z
   .object({
     sourcePath: sourcePathField,
-    query: z.string().min(1).describe('要检索的文字或正则表达式'),
-    mode: docxSearchModeSchema.optional().describe('检索模式，缺省为 literal'),
-    nodeIds: z
-      .array(searchScopeNodeIdField)
-      .min(1)
-      .optional()
-      .describe('可选的根节点或 table cell 搜索范围；缺省搜索整个文档'),
-    includeContext: z
-      .boolean()
-      .optional()
-      .describe('是否返回命中节点在同一 story 中前后各 2 个根节点的预览')
+    query: z.string().min(1).describe('检索文字或正则'),
+    mode: docxSearchModeSchema.optional().describe('literal 或 regex，缺省 literal'),
+    nodeIds: z.array(searchScopeNodeIdField).min(1).optional().describe('可选搜索范围'),
+    includeContext: z.boolean().optional().describe('是否返回命中前后预览')
   })
   .strict()
 
@@ -289,15 +272,15 @@ export const docxReadNodesSchema = z
     range: z.discriminatedUnion('type', [
       z
         .object({
-          type: z.literal('node_ids').describe('读取指定节点'),
-          nodeIds: z.array(nodeIdField).min(1).max(20).describe('要读取的 1 至 20 个 nodeId')
+          type: z.literal('node_ids').describe('按 nodeId 读取'),
+          nodeIds: z.array(nodeIdField).min(1).max(20).describe('1 至 20 个 nodeId')
         })
         .strict(),
       z
         .object({
-          type: z.literal('node_index').describe('按 outline 临时顺序读取'),
-          fromNodeIndex: z.number().int().min(0).describe('起始 nodeIndex，包含'),
-          toNodeIndex: z.number().int().min(0).describe('结束 nodeIndex，包含')
+          type: z.literal('node_index').describe('按 nodeIndex 连续读取'),
+          fromNodeIndex: z.number().int().min(0).describe('起始 nodeIndex'),
+          toNodeIndex: z.number().int().min(0).describe('结束 nodeIndex')
         })
         .strict()
     ])
@@ -317,7 +300,7 @@ export const docxReadNodesSchema = z
       context.addIssue({
         code: 'custom',
         path: ['range'],
-        message: '单次最多读取 50 个根节点，请先用 outline 或 search 缩小范围'
+        message: '单次最多读取 50 个根节点'
       })
     }
   })
@@ -347,15 +330,15 @@ const docxParagraphDraftSchema = z
   .object({
     type: z.literal('paragraph').describe('段落节点'),
     text: z.string().describe('段落纯文本；换行用 \\n，制表符用 \\t'),
-    style: docxParagraphStyleSchema.optional().describe('段落样式；省略则使用默认段落格式'),
-    runStyle: docxRunStyleSchema.optional().describe('整段文字样式；一段里只有部分字要改样式时改用 docx_format.format_text')
+    style: docxParagraphStyleSchema.optional().describe('段落样式'),
+    runStyle: docxRunStyleSchema.optional().describe('整段文字样式')
   })
   .strict()
 const docxRunDraftSchema = z
   .object({
     type: z.literal('run').describe('文字 run 节点'),
     text: z.string().describe('run 的纯文本'),
-    style: docxRunStyleSchema.optional().describe('该 run 的文字样式；省略则继承或保持默认')
+    style: docxRunStyleSchema.optional().describe('该 run 的文字样式')
   })
   .strict()
 const docxHyperlinkDraftSchema = z
@@ -393,24 +376,22 @@ export const docxContentEditSchema = z.discriminatedUnion('type', [
   z
     .object({
       ...contentEditBase,
-      type: z.literal('replace_text').describe('在一个节点内替换确定的原文'),
+      type: z.literal('replace_text').describe('在一个节点内替换原文'),
       nodeId: nodeIdField,
-      oldText: z.string().min(1).describe('必须存在于目标节点内的原文'),
+      oldText: z.string().min(1).describe('目标节点内的原文'),
       newText: z.string().describe('替换后的文字'),
-      format: nonEmptyRunStyleSchema
-        .optional()
-        .describe('同时应用到被替换文字的样式；省略则保留原样式')
+      format: nonEmptyRunStyleSchema.optional().describe('被替换文字的样式')
     })
     .strict(),
   z
     .object({
       ...contentEditBase,
-      type: z.literal('insert_nodes').describe('在锚点前后或容器内部插入节点'),
-      nodeId: nodeIdField.optional().describe('锚点或容器 nodeId；document_end 时不填'),
+      type: z.literal('insert_nodes').describe('插入节点'),
+      nodeId: nodeIdField.optional().describe('锚点或容器 nodeId'),
       position: z
         .enum(['before', 'after', 'inside_start', 'inside_end', 'document_end'])
         .describe('插入位置'),
-      nodes: z.array(docxContentNodeDraftSchema).min(1).describe('按顺序插入的浅层节点')
+      nodes: z.array(docxContentNodeDraftSchema).min(1).describe('插入的节点')
     })
     .strict()
     .superRefine((value, ctx) => {
@@ -426,7 +407,7 @@ export const docxContentEditSchema = z.discriminatedUnion('type', [
       ...contentEditBase,
       type: z.literal('replace_node').describe('用一个新节点替换目标节点本身'),
       nodeId: nodeIdField,
-      node: docxContentNodeDraftSchema.describe('替换后的浅层节点'),
+      node: docxContentNodeDraftSchema.describe('替换后的节点'),
       allowVisualLoss: z.literal(true).optional().describe('目标含视觉内容时必须明确允许丢失')
     })
     .strict(),
@@ -477,7 +458,7 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
                 .string()
                 .min(1)
                 .optional()
-                .describe('目标节点内要格式化的精确文字；省略时格式化节点内全部文字')
+                .describe('要格式化的文字；省略则格式化节点内全部文字')
             })
             .strict()
         )
@@ -592,7 +573,7 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
       type: z.literal('set_numbering'),
       nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
       kind: z.enum(['bullet', 'decimal', 'none']).describe('项目符号、数字编号或清除编号'),
-      level: z.number().int().min(0).max(8).optional().describe('编号层级，缺省为 0')
+      level: z.number().int().min(0).max(8).optional().describe('编号层级')
     })
     .strict()
     .superRefine(rejectDuplicateNodeIds)
@@ -603,7 +584,7 @@ const createTableSchema = z
   .object({
     ...contentEditBase,
     type: z.literal('create_table'),
-    nodeId: nodeIdField.optional().describe('锚点 nodeId；document_end 时不填'),
+    nodeId: nodeIdField.optional().describe('锚点 nodeId'),
     position: z.enum(['before', 'after', 'document_end']).describe('表格插入位置'),
     rows: tableRowsField
   })
@@ -632,8 +613,8 @@ export const docxTableEditSchema = z.discriminatedUnion('type', [
       ...contentEditBase,
       type: z.literal('insert_row'),
       tableNodeId: nodeIdField,
-      rowNodeId: nodeIdField.optional().describe('相邻行 nodeId；缺省追加'),
-      position: z.enum(['before', 'after']).optional().describe('相对行位置，缺省 after'),
+      rowNodeId: nodeIdField.optional().describe('相邻行 nodeId'),
+      position: z.enum(['before', 'after']).optional().describe('相对行位置'),
       cells: z.array(z.string()).min(1).describe('新行各单元格文字')
     })
     .strict(),
@@ -651,7 +632,7 @@ export const docxTableEditSchema = z.discriminatedUnion('type', [
       type: z.literal('insert_column'),
       tableNodeId: nodeIdField,
       columnIndex: z.number().int().min(1).describe('新列插入位置，从 1 开始'),
-      cells: z.array(z.string()).optional().describe('逐行的新单元格文字，缺省为空')
+      cells: z.array(z.string()).optional().describe('逐行的新单元格文字')
     })
     .strict(),
   z
@@ -720,7 +701,7 @@ const insertImageSchema = z
   .object({
     ...contentEditBase,
     type: z.literal('insert_image'),
-    nodeId: nodeIdField.optional().describe('锚点 nodeId；document_end 时不填'),
+    nodeId: nodeIdField.optional().describe('锚点 nodeId'),
     position: z.enum(['before', 'after', 'document_end']).describe('图片插入位置'),
     imagePath: z.string().min(1).describe('本机图片绝对路径'),
     widthCm: z.number().positive().optional().describe('显示宽度，厘米'),
@@ -743,7 +724,7 @@ export const docxMediaEditSchema = z.discriminatedUnion('type', [
     .object({
       ...contentEditBase,
       type: z.literal('replace_image'),
-      visualId: z.string().min(1).describe('docx_read_nodes 返回的 visualId'),
+      visualId: z.string().min(1).describe('视觉对象 ID'),
       imagePath: z.string().min(1).describe('新图片绝对路径')
     })
     .strict(),

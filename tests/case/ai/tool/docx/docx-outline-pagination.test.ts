@@ -12,11 +12,16 @@ type OutlineSegment = {
 }
 
 type OutlineResult = {
-  startPage: number
-  endPage: number
-  totalPages: number
+  fromPercent: number
+  toPercent: number
+  fromNodeIndex: number
+  toNodeIndex: number
+  totalRootCount: number
   segments: OutlineSegment[]
 }
+
+const coveredNodeCount = (segments: readonly OutlineSegment[]): number =>
+  segments.reduce((total, segment) => total + segment.toNodeIndex - segment.fromNodeIndex + 1, 0)
 
 describe('ai tool docx outline pagination backend', () => {
   it('docx-outline-pagination', async () => {
@@ -26,7 +31,7 @@ describe('ai tool docx outline pagination backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['docx'],
-      description: '验证 DOCX segment map 分页、覆盖、摘要预算、story 和越界错误。',
+      description: '验证 DOCX segment map 按根节点比例切分、覆盖、摘要预算、story 和分段上限。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -62,82 +67,87 @@ describe('ai tool docx outline pagination backend', () => {
         )
         await fs.writeFile(sourcePath, await zip.generateAsync({ type: 'nodebuffer' }))
         const emptyPath = await writeTestDocxFile(runtime.workspaceRoot, 'outline-empty.docx', [])
+        const overflowPath = await writeTestDocxFile(
+          runtime.workspaceRoot,
+          'outline-overflow.docx',
+          Array.from({ length: 50 }, (_, index) => ({
+            type: 'table' as const,
+            rows: [[`Table ${String(index + 1)}`]]
+          }))
+        )
         const harness = createDocxToolHarness(runtime)
         try {
-          const first = await harness.invoke<OutlineResult>('docx_read_outline', {
+          const full = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath,
-            startPage: 1,
-            pageCount: 1
+            fromPercent: 0,
+            toPercent: 100
           })
-          const rest = await harness.invoke<OutlineResult>('docx_read_outline', {
+          const head = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath,
-            startPage: 2,
-            pageCount: 2
+            fromPercent: 0,
+            toPercent: 50
           })
-          const maximumPageCount = await harness.invoke<OutlineResult>('docx_read_outline', {
+          const tail = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath,
-            startPage: 1,
-            pageCount: 4
-          })
-          let excessivePageCountError = ''
-          try {
-            await harness.invoke('docx_read_outline', {
-              sourcePath,
-              startPage: 1,
-              pageCount: 5
-            })
-          } catch (error) {
-            excessivePageCountError = error instanceof Error ? error.message : String(error)
-          }
-          const outOfRange = await harness.invoke('docx_read_outline', {
-            sourcePath,
-            startPage: 4,
-            pageCount: 1
+            fromPercent: 50,
+            toPercent: 100
           })
           const empty = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath: emptyPath,
-            startPage: 1,
-            pageCount: 1
+            fromPercent: 0,
+            toPercent: 100
           })
-          return { first, rest, maximumPageCount, excessivePageCountError, outOfRange, empty }
+          const overflow = await harness.invoke('docx_read_outline', {
+            sourcePath: overflowPath,
+            fromPercent: 0,
+            toPercent: 100
+          })
+          return { full, head, tail, empty, overflow }
         } finally {
           await harness.release()
         }
       },
       assert: async (result, runtime) => {
-        const allSegments = [...result.first.segments, ...result.rest.segments]
-        const bodySegments = allSegments.filter((segment) => segment.story === 'body')
-        const coveredBodyNodes = bodySegments.reduce(
-          (total, segment) => total + segment.toNodeIndex - segment.fromNodeIndex + 1,
-          0
+        const unionSegments = [...result.head.segments, ...result.tail.segments]
+        const unionKeys = new Set(
+          unionSegments.map(
+            (segment) =>
+              `${segment.story}:${String(segment.fromNodeIndex)}:${String(segment.toNodeIndex)}`
+          )
+        )
+        const fullKeys = new Set(
+          result.full.segments.map(
+            (segment) =>
+              `${segment.story}:${String(segment.fromNodeIndex)}:${String(segment.toNodeIndex)}`
+          )
         )
         runtime.assertThat(
-          result.first.totalPages === 3 &&
-            result.first.segments.length === 12 &&
-            result.rest.startPage === 2 &&
-            result.rest.endPage === 3 &&
-            result.rest.segments.length === 14 &&
-            result.maximumPageCount.startPage === 1 &&
-            result.maximumPageCount.endPage === 3 &&
-            result.maximumPageCount.segments.length === 26 &&
-            result.excessivePageCountError.includes('<=4') &&
-            coveredBodyNodes === 487 &&
-            allSegments.every((segment) => Array.from(segment.textMap).length <= 360) &&
-            allSegments.some(
+          result.full.fromPercent === 0 &&
+            result.full.toPercent === 100 &&
+            result.full.totalRootCount === coveredNodeCount(result.full.segments) &&
+            result.full.segments.length > 0 &&
+            result.full.segments.length <= 48 &&
+            result.full.segments.every((segment) => Array.from(segment.textMap).length <= 360) &&
+            result.full.segments.some(
               (segment) =>
                 segment.textMap.includes('表格 2x2') &&
                 segment.fromNodeIndex === segment.toNodeIndex
             ) &&
-            allSegments.some(
+            result.full.segments.some(
               (segment) => segment.story === 'header' && segment.textMap.includes('Header outline')
             ) &&
-            JSON.stringify(result.outOfRange).includes('invalid_input') &&
-            JSON.stringify(result.outOfRange).includes('totalPages=3') &&
-            result.empty.totalPages === 1 &&
-            result.empty.segments.length === 0,
+            !JSON.stringify(result.full).includes('nodeId') &&
+            result.head.toPercent === 50 &&
+            result.tail.fromPercent === 50 &&
+            result.tail.segments.some((segment) => segment.textMap.includes('表格 2x2')) &&
+            [...fullKeys].every((key) => unionKeys.has(key)) &&
+            result.empty.totalRootCount === 0 &&
+            result.empty.segments.length === 0 &&
+            JSON.stringify(result.overflow).includes('invalid_input') &&
+            JSON.stringify(result.overflow).includes('48'),
           {
-            name: 'docx-outline-segment-pages',
-            message: 'DOCX outline 应按每页 12 个 segment 分页，并完整覆盖所有根节点。',
+            name: 'docx-outline-segment-percent-range',
+            message: 'DOCX outline 应按根节点比例返回完整 segment，并在超过 48 段时拒绝。',
             data: result
           }
         )

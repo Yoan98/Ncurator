@@ -74,16 +74,19 @@ describe('ai unit docx tool contract', () => {
     ).toBe(false)
   })
 
-  it('uses bounded logical outline pages', () => {
+  it('uses percent outline ranges', () => {
     expect(
-      docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx', startPage: 1, pageCount: 2 }).success
+      docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx', fromPercent: 0, toPercent: 50 })
+        .success
     ).toBe(true)
     expect(docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx' }).success).toBe(false)
     expect(
-      docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx', startPage: 1, pageCount: 4 }).success
+      docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx', fromPercent: 0, toPercent: 100 })
+        .success
     ).toBe(true)
     expect(
-      docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx', startPage: 1, pageCount: 5 }).success
+      docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx', fromPercent: 80, toPercent: 20 })
+        .success
     ).toBe(false)
   })
 

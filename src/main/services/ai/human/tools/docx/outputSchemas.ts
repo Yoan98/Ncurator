@@ -8,9 +8,8 @@ import {
   docxTableStyleSchema
 } from './schemas'
 import {
-  DOCX_OUTLINE_MAX_PAGE_COUNT,
+  DOCX_OUTLINE_MAX_SEGMENTS,
   DOCX_OUTLINE_SEGMENT_MAP_MAX_CHARS,
-  DOCX_OUTLINE_SEGMENTS_PER_PAGE,
   DOCX_SEARCH_CONTEXT_NODE_COUNT,
   DOCX_SEARCH_MAX_MATCHES,
   DOCX_SEARCH_NEIGHBOR_PREVIEW_CHARS,
@@ -296,9 +295,11 @@ const docxBaseOutputSchema = z.object({
 
 export const docxOutlineOutputSchema = z
   .object({
-    startPage: z.number().int().min(1),
-    endPage: z.number().int().min(1),
-    totalPages: z.number().int().min(1),
+    fromPercent: z.number().min(0).max(100),
+    toPercent: z.number().min(0).max(100),
+    fromNodeIndex: z.number().int().min(0),
+    toNodeIndex: z.number().int().min(0),
+    totalRootCount: z.number().int().min(0),
     segments: z
       .array(
         z
@@ -310,7 +311,7 @@ export const docxOutlineOutputSchema = z
           })
           .strict()
       )
-      .max(DOCX_OUTLINE_SEGMENTS_PER_PAGE * DOCX_OUTLINE_MAX_PAGE_COUNT)
+      .max(DOCX_OUTLINE_MAX_SEGMENTS)
   })
   .strict()
 

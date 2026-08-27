@@ -191,9 +191,11 @@ const renderDocxSearchResult = (obj: JsonObject): string =>
 const renderDocxOutlineResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
-      ['startPage', readNumberTextField(obj, 'startPage')],
-      ['endPage', readNumberTextField(obj, 'endPage')],
-      ['totalPages', readNumberTextField(obj, 'totalPages')]
+      ['fromPercent', readNumberTextField(obj, 'fromPercent')],
+      ['toPercent', readNumberTextField(obj, 'toPercent')],
+      ['fromNodeIndex', readNumberTextField(obj, 'fromNodeIndex')],
+      ['toNodeIndex', readNumberTextField(obj, 'toNodeIndex')],
+      ['totalRootCount', readNumberTextField(obj, 'totalRootCount')]
     ]),
     'segments:',
     Array.isArray(obj.segments) && obj.segments.length > 0

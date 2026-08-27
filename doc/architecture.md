@@ -249,7 +249,7 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 
 读取工具：
 
-- `docx_read_outline`：按逻辑页返回自适应 segment map。每页 12 个 segment，`pageCount` 最多 4；逻辑页不是 Word 视觉页。
+- `docx_read_outline`：按根节点比例（`fromPercent`/`toPercent`）返回自适应 segment map。一次最多 48 个 segment。
 - `docx_search`：在完整原文中执行 literal 或 regex 搜索，返回可直接读取或写入的稳定 `nodeId`；可选返回同一 story 前后各 2 个节点的预览。
 - `docx_read_nodes`：按 `nodeId` 或 `nodeIndex` 范围返回递归语义树；一次最多读取 20 个 nodeId 或连续 50 个根节点。
 - `docx_read_visuals`：按 `visualId` 读取图片、图表、图形等视觉内容。
@@ -283,7 +283,7 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 
 `docx_read_outline` 对所有 DOCX 使用同一套分段算法，不判断文档是否标准。每个 story 独立分段，每个根节点只属于一个 segment；普通段软目标为 20 个根节点，向后最多寻找 10 个节点的可靠结构边界，硬上限为 30 个根节点或 8,000 个可见字符。可靠边界只采用 section、显式分页/分栏、真实 `outlineLevel`、block content control、table 和视觉根节点，不根据字号、加粗、短文本或编号外观猜标题。table、block content control 和视觉根节点独立成段；超长单节点可独立成段。
 
-公开 segment 只包含 `story / fromNodeIndex / toNodeIndex / textMap`，不返回 `nodeId`、完整正文或递归 children。`textMap` 最多 360 个 Unicode 字符：先放最多 120 字符的结构锚点，再用 Jieba/Unicode 分词与 TF-IDF 动态选择最多 96 字符的关键词，最后用“TF-IDF 质心 + MMR（0.7 相关性、0.3 多样性）”抽取带来源 `nodeIndex` 的原文代表句。Unicode 词边界负责非中文词，Jieba 只细分汉字词，避免中英文混合文本重复计词；视觉锚点统一读取 DrawingML 与 VML 的描述、标题、替代文字和名称。不调用 LLM、不生成改写、不使用 embedding。分页随 Working 文档变化；需要编辑定位时使用 `docx_search`，或用 segment 的连续 `nodeIndex` 范围调用 `docx_read_nodes` 获取稳定 `nodeId`。
+公开 segment 只包含 `story / fromNodeIndex / toNodeIndex / textMap`，不返回 `nodeId`、完整正文或递归 children。`textMap` 最多 360 个 Unicode 字符：先放最多 120 字符的结构锚点，再用 Jieba/Unicode 分词与 TF-IDF 动态选择最多 96 字符的关键词，最后用“TF-IDF 质心 + MMR（0.7 相关性、0.3 多样性）”抽取带来源 `nodeIndex` 的原文代表句。Unicode 词边界负责非中文词，Jieba 只细分汉字词，避免中英文混合文本重复计词；视觉锚点统一读取 DrawingML 与 VML 的描述、标题、替代文字和名称。不调用 LLM、不生成改写、不使用 embedding。百分比区间映射到当前 Working 的根节点顺序，再返回覆盖该区间的完整 segment，实际 `fromNodeIndex`/`toNodeIndex` 可能略宽于精确百分比；一次超过 48 个 segment 时返回 `invalid_input`。需要编辑定位时使用 `docx_search`，或用 segment 的连续 `nodeIndex` 范围调用 `docx_read_nodes` 获取稳定 `nodeId`。
 
 `docx_search` 的 literal 与 regex 都在完整原文上匹配，不做同义词、别名或 Unicode 字形改写。每个实际出现位置算一个 match；Worker 扫描全部原文以计算 `totalMatchCount`，但只构造和传输前 10 个 match，避免高频查询产生全量结果数组。`textContext` 最多 320 字符；`includeContext:true` 时返回同一 story 前后各 2 个节点，每个预览最多 160 字符。传入 `nodeIds` 时先验证全部目标，任一目标过期、未知或不是可搜索节点都返回 `invalid_input`，不把无效范围伪装成零命中。DOCX 不建立向量索引、embedding 或缓存；知识库语义检索不受影响。
 
@@ -305,7 +305,7 @@ NCurator Diff 与 Word 原生批注、`w:ins`、`w:del` 相互独立。读取和
 
 #### AI 调用原则
 
-- 不知道位置：用 segment map 概览，或直接用 literal/regex 搜索完整原文；再通过 `docx_read_nodes` 精读并取得 `nodeId`，执行一个写 operation。
+- 不知道位置：用 `fromPercent`/`toPercent` 取 segment map 概览，或直接用 literal/regex 搜索完整原文；再通过 `docx_read_nodes` 精读并取得 `nodeId`，执行一个写 operation。
 - 改一句话：读取目标 paragraph/run，调用 `docx_content_edit.replace_text`。
 - 改一句话并改样式：同一次 `replace_text` 带上 `format`；省略 `format` 则保留原样式。
 - 改一段且保留样式：优先 `replace_text`；只有结构确实改变时才 `replace_node`。

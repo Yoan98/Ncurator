@@ -6,9 +6,11 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import type { DocxPublicReadRootNode } from '../../../../../src/main/services/ai/human/tools/docx/nodeTypes'
 
 type OutlineResult = {
-  startPage: number
-  endPage: number
-  totalPages: number
+  fromPercent: number
+  toPercent: number
+  fromNodeIndex: number
+  toNodeIndex: number
+  totalRootCount: number
   segments: Array<{ story: string; fromNodeIndex: number; toNodeIndex: number; textMap: string }>
 }
 type SearchResult = {
@@ -92,8 +94,8 @@ describe('ai tool docx v2 backend', () => {
           })
           const outline = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath,
-            startPage: 1,
-            pageCount: 1
+            fromPercent: 0,
+            toPercent: 100
           })
           const alphaSearch = await harness.invoke<SearchResult>('docx_search', {
             sourcePath,
@@ -283,7 +285,9 @@ describe('ai tool docx v2 backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.outline.totalPages === 1 &&
+          result.outline.totalRootCount > 0 &&
+            result.outline.fromPercent === 0 &&
+            result.outline.toPercent === 100 &&
             result.outline.segments.length === 3 &&
             result.outline.segments.filter((segment) => segment.textMap.includes('表格 2x2'))
               .length === 2 &&

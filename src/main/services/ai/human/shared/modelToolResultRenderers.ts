@@ -177,7 +177,7 @@ export const renderDocxOutlineModelResult: ModelResultRenderer = ({ data }) => {
   const segments = Array.isArray(obj.segments) ? obj.segments.filter(isObject) : []
   return [
     'DOCX outline read completed successfully.',
-    `Pages: ${readNumber(obj.startPage) ?? ''}-${readNumber(obj.endPage) ?? ''} of ${readNumber(obj.totalPages) ?? ''}`,
+    `Range: ${readNumber(obj.fromPercent) ?? ''}-${readNumber(obj.toPercent) ?? ''}%; nodeIndex=${readNumber(obj.fromNodeIndex) ?? ''}-${readNumber(obj.toNodeIndex) ?? ''}; totalRootCount=${readNumber(obj.totalRootCount) ?? ''}`,
     'Segments:',
     ...(segments.length
       ? segments.flatMap((segment, index) => [

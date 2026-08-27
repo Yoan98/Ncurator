@@ -135,7 +135,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 
 #### docx 类别
 
-DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segment map 逻辑分页、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、分页/分栏/section 边界、中英文混合 TF-IDF、DrawingML/VML 视觉锚点、TF-IDF/MMR 摘要预算、搜索全量计数但只构造前 10 条详情、无效搜索 scope、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和行列/合并视觉丢失保护。公开工具回归还必须验证错误 ID 不会提交部分修改。
+DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segment map 百分比区间、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、分页/分栏/section 边界、中英文混合 TF-IDF、DrawingML/VML 视觉锚点、TF-IDF/MMR 摘要预算、搜索全量计数但只构造前 10 条详情、无效搜索 scope、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和行列/合并视觉丢失保护。公开工具回归还必须验证错误 ID 不会提交部分修改。
 
 ##### `docx-v2-public-tools`
 
@@ -149,11 +149,11 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `docx-outline-pagination`
 
 - 测试类型：`backend`
-- What：`docx_read_outline` 对长文档执行每页 12 个 segment 的逻辑分页、连续多页读取和 360 字符 `textMap`，并覆盖多 story、空文档及结构边界。
-- Why：outline 是 AI 低上下文定位入口，必须同时守住小返回、完整页数和跨 story 顺序。
-- How：创建超过 480 个根节点并带表格、页眉和超长中段的真实 DOCX，分别读取第一页和后两页，并请求越界页码。
-- Oracle：返回 `startPage/endPage/totalPages/segments`；根节点无遗漏、无重叠，table 和跨 story 独立分段，`textMap` 不超过 360 字符且不返回 nodeId；越界返回 `invalid_input` 和实际 `totalPages`。
-- Not：逻辑页不是 Word 视觉页，不调用 live 模型。
+- What：`docx_read_outline` 按 `fromPercent`/`toPercent` 返回覆盖该根节点比例的完整 segment，并覆盖 360 字符 `textMap`、多 story、空文档和 48 段上限。
+- Why：outline 是 AI 低上下文定位入口，必须能直接点名文档比例，同时守住小返回和跨 story 顺序。
+- How：创建超过 480 个根节点并带表格、页眉和超长中段的真实 DOCX，分别读取全文、前半、末尾；另建超过 48 个独立表格的文档请求全文。
+- Oracle：返回 `fromPercent/toPercent/fromNodeIndex/toNodeIndex/totalRootCount/segments`；根节点无遗漏、无重叠，table 和跨 story 独立分段，`textMap` 不超过 360 字符且不返回 nodeId；超过 48 段返回 `invalid_input`。
+- Not：不调用 live 模型。
 
 ##### `docx-auto-open-no-fake-failure`
 
@@ -979,7 +979,7 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：live 模式下 `human` 会先用 KB 缩圈找出讲“反走样 / 过拟合”的两份源资料，再把内容分别回写到用户明确指定的两份目标 docx。
 - Why：真实用户常常记得主题、不记得文件名，而且希望把资料内容整理回自己的教学文档；这条 case 要长期守住“工作区默认范围 + KB 缩圈 + 多源读取 + 多目标 docx 回写”的能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；workspace 使用共享 fixture，只把 `学习笔记/图形学.docx` 与 `学习笔记/深度学习.docx` 建入 KB；用户明确指定根目录的 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 为目标文件。case 只开放完成该任务需要的 terminal、KB search、DOCX 读取和写入工具，避免把目标文件误当成待索引来源反复查询。
-- Oracle：真实 `kb_search` 返回有效命中；两份目标文档分别发生成功 paragraph 写入并产生两组携带 `applyId` 的 file artifact；两份来源课件保持不变。成功的 DOCX 写结果只能是空 `result` 或 `createdIds`，不得返回 `changes`；每个目标最多允许一次成功的文末追加，防止模型在已成功写入后连续生成多个近似版本。按 10 分制评估 KB 证据、两份目标文件、grounded 内容、来源安全和最终交付，严格超过 8 分通过；只完成一个目标文件最多 8 分，不能通过。
+- Oracle：真实 `kb_search` 返回有效命中；两份目标文档分别发生成功 paragraph 写入并产生两组携带 `applyId` 的 file artifact；两份来源课件保持不变。成功的 DOCX 写结果只能是空 `result` 或 `createdIds`，不得返回 `changes`。重复写入次数不做硬性限制；是否冗余、是否 grounded 由人工读 logs/产物评分。按 10 分制评估 KB 证据、两份目标文件、grounded 内容、来源安全和最终交付，严格超过 8 分通过；只完成一个目标文件最多 8 分，不能通过。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
 
 最新单轮 live 结果（2026-08-27 21:18 CST）：

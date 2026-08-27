@@ -11,7 +11,12 @@ import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from
 import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
 import { renderDocxVisualToPng } from '../utils/renderVisual'
 import { projectDocxReadNodes } from '../publicReadTree'
-import { DOCX_OUTLINE_SEGMENTS_PER_PAGE } from '../constants'
+import { DOCX_OUTLINE_MAX_SEGMENTS } from '../constants'
+import {
+  countOutlineRootNodes,
+  resolveOutlinePercentNodeRange,
+  selectOutlineSegmentsForNodeRange
+} from '../outlineRange'
 
 const fetchNodesByNodeIds = async (input: {
   runtime: DocxToolRuntime
@@ -186,18 +191,23 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           throw new Error('worker protocol mismatch (segment_map)')
         }
         const allSegments = segmentResponse.payload.segments
-        const totalPages = Math.max(
-          1,
-          Math.ceil(allSegments.length / DOCX_OUTLINE_SEGMENTS_PER_PAGE)
-        )
-        if (args.startPage > totalPages) {
+        const totalRootCount = countOutlineRootNodes(allSegments)
+        const nodeRange = resolveOutlinePercentNodeRange({
+          fromPercent: args.fromPercent,
+          toPercent: args.toPercent,
+          totalRootCount
+        })
+        const selectedSegments = nodeRange
+          ? selectOutlineSegmentsForNodeRange(allSegments, nodeRange)
+          : []
+        if (selectedSegments.length > DOCX_OUTLINE_MAX_SEGMENTS) {
           return finalizeDocxToolFailure({
             runtime,
             failure: runtime.emitFailure({
               toolName,
               toolCallId,
               reason: 'invalid_input',
-              error: `startPage 超出 outline 范围：startPage=${String(args.startPage)}，totalPages=${String(totalPages)}`,
+              error: `一次最多返回 ${String(DOCX_OUTLINE_MAX_SEGMENTS)} 个分段，当前区间覆盖 ${String(selectedSegments.length)} 个`,
               draftDocId: sessionResult.docId,
               resourceContext: runtime.buildResourceContext({
                 sourcePath: sessionResult.sourcePath,
@@ -208,14 +218,21 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             activity: { actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType! }
           })
         }
-        const endPage = Math.min(totalPages, args.startPage + args.pageCount - 1)
-        const fromSegment = (args.startPage - 1) * DOCX_OUTLINE_SEGMENTS_PER_PAGE
-        const toSegment = endPage * DOCX_OUTLINE_SEGMENTS_PER_PAGE
+        const coveredFromNodeIndex =
+          selectedSegments.length > 0
+            ? Math.min(...selectedSegments.map((segment) => segment.fromNodeIndex))
+            : 0
+        const coveredToNodeIndex =
+          selectedSegments.length > 0
+            ? Math.max(...selectedSegments.map((segment) => segment.toNodeIndex))
+            : 0
         const result = {
-          startPage: args.startPage,
-          endPage,
-          totalPages,
-          segments: allSegments.slice(fromSegment, toSegment)
+          fromPercent: args.fromPercent,
+          toPercent: args.toPercent,
+          fromNodeIndex: coveredFromNodeIndex,
+          toNodeIndex: coveredToNodeIndex,
+          totalRootCount,
+          segments: selectedSegments
         }
         return finalizeDocxToolSuccess({
           runtime,
@@ -223,9 +240,11 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           toolCallId,
           result,
           outputPreview: {
-            startPage: result.startPage,
-            endPage: result.endPage,
-            totalPages: result.totalPages,
+            fromPercent: result.fromPercent,
+            toPercent: result.toPercent,
+            fromNodeIndex: result.fromNodeIndex,
+            toNodeIndex: result.toNodeIndex,
+            totalRootCount: result.totalRootCount,
             segments: result.segments
           },
           draftDocId: sessionResult.docId,

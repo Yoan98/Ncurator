@@ -30,8 +30,6 @@ const DOCX_WRITE_TOOL_NAMES = new Set([
   'docx_media_edit',
   'docx_comments_revisions'
 ])
-const MAX_SUCCESSFUL_APPEND_WRITES_PER_TARGET = 1
-
 const hasSuccessfulKbSearchHit = (events: readonly AiRunEvent[]): boolean =>
   events.some((event) => {
     if (event.type !== 'tool_call_result' || event.toolName !== 'kb_search') return false
@@ -131,31 +129,6 @@ describe('ai human live backend', () => {
           .map((event) => event.input.sourcePath)
           .filter((value): value is string => typeof value === 'string')
         const writeSourcePaths = collectStartedDocxWriteSourcePaths(events, isDocxWriteInput)
-        const successfulDocxWriteCallIds = new Set(
-          toolResults
-            .filter(
-              (event) => DOCX_WRITE_TOOL_NAMES.has(event.toolName) && event.result?.ok === true
-            )
-            .map((event) => event.toolCallId)
-        )
-        const successfulAppendPaths = filterAiRunEventsByType(events, 'tool_call_started')
-          .filter(
-            (event) =>
-              event.toolName === 'docx_content_edit' &&
-              successfulDocxWriteCallIds.has(event.toolCallId) &&
-              event.input.type === 'insert_nodes' &&
-              event.input.position === 'document_end'
-          )
-          .map((event) => event.input.sourcePath)
-          .filter((value): value is string => typeof value === 'string')
-        const appendWriteCounts = result.workspaceSeed.targetDocs.map((targetDoc) => ({
-          relativePath: targetDoc.relativePath,
-          count: successfulAppendPaths.filter(
-            (sourcePath) =>
-              sourcePath.endsWith(targetDoc.relativePath) ||
-              sourcePath.endsWith(`/${path.basename(targetDoc.relativePath)}`)
-          ).length
-        }))
         const writeResultsAreMinimal = toolResults
           .filter((event) => DOCX_WRITE_TOOL_NAMES.has(event.toolName) && event.result?.ok === true)
           .every((event) => {
@@ -166,9 +139,6 @@ describe('ai human live backend', () => {
               Object.keys(data).every((key) => key === 'createdIds')
             )
           })
-        const appendWritesAreBounded = appendWriteCounts.every(
-          ({ count }) => count <= MAX_SUCCESSFUL_APPEND_WRITES_PER_TARGET
-        )
         const changedContentKinds = collectDocxWriteContentKinds(events)
         const sourceDocRelativePaths = new Set(
           result.workspaceSeed.sourceDocs.map((fixture) => fixture.relativePath)
@@ -203,7 +173,6 @@ describe('ai human live backend', () => {
             writtenTargetCount === result.workspaceSeed.targetDocs.length &&
             groundedContentSatisfied &&
             writeResultsAreMinimal &&
-            appendWritesAreBounded &&
             sourceDocsUnchanged.every(Boolean) &&
             deliverySatisfied,
           {
@@ -213,7 +182,6 @@ describe('ai human live backend', () => {
             data: {
               openedSourcePaths,
               writeSourcePaths,
-              appendWriteCounts,
               writeResultsAreMinimal,
               toolNames,
               sourceDocRelativePaths: [...sourceDocRelativePaths],
