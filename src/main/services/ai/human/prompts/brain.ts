@@ -95,8 +95,7 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
   </calculation_contract>
 
   <plan_contract>
-    - 只在复杂任务时使用计划，并只在关键阶段完成、方案变化时才更新，避免完成一项就更新一项。
-    - 更新计划的工具调用，尽可能同其他工具一起发起。
+    - 只在复杂任务时使用计划，并只在关键阶段完成、方案需要变化时才更新。
   </plan_contract>
 
   <delivery_contract>
