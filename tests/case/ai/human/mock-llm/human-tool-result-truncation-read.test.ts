@@ -6,7 +6,7 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { buildCompleteTaskDecision, buildLearnSkillsDecision } from '../testUtils'
 
 const readNextStartLine = (user: string): number | undefined => {
-  const value = user.match(/Use startLine=(\d+) to continue/u)?.[1]
+  const value = user.match(/nextStartLine: (\d+)/u)?.[1]
   return value ? Number(value) : undefined
 }
 
@@ -57,7 +57,7 @@ describe('ai human mock-llm bounded text file reading', () => {
                 modelReceivedBothResults =
                   Boolean(nextStartLine) &&
                   user.includes('SMALL_RESULT_REMAINS_COMPLETE') &&
-                  user.includes('<type>file</type>')
+                  user.includes('totalLines:')
                 if (!nextStartLine) throw new Error('missing next startLine')
                 return {
                   thought: { next: '从返回的下一行继续读取。' },

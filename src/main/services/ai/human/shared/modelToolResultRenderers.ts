@@ -374,24 +374,13 @@ export const renderTerminalModelResult: ModelResultRenderer = ({ toolName, data 
 export const renderTextFileReadModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const content = readString(obj.content) || ''
-  const startLine = readNumber(obj.startLine) ?? 1
-  const endLine = readNumber(obj.endLine) ?? startLine
+  const endLine = readNumber(obj.endLine) ?? readNumber(obj.startLine) ?? 1
   const totalLines = readNumber(obj.totalLines) ?? endLine
   const nextLine = readNumber(obj.nextStartLine)
-  const numberedContent = content
-    .split('\n')
-    .map((line, index) => `${startLine + index}: ${line}`)
-    .join('\n')
-  return [
-    `<path>${readString(obj.sourcePath) || ''}</path>`,
-    '<type>file</type>',
-    '<content>',
-    numberedContent,
-    nextLine
-      ? `(Showing lines ${startLine}-${endLine} of ${totalLines}. Use startLine=${nextLine} to continue.)`
-      : `(End of file - total ${totalLines} lines)`,
-    '</content>'
-  ].join('\n')
+  const metadata = nextLine
+    ? [`totalLines: ${totalLines}`, `nextStartLine: ${nextLine}`]
+    : [`totalLines: ${totalLines}`]
+  return ['<content>', content, '</content>', ...metadata].join('\n')
 }
 
 export const renderTextFileSearchModelResult: ModelResultRenderer = ({ data }) => {

@@ -226,7 +226,7 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：`text_file_read` 只按行返回有界窗口，覆盖最多 2,000 行、约 51,200 UTF-8 bytes、单行 2,000 字符和 `nextStartLine`。
 - Why：工具结果日志已经是多行渲染文本；生产者直接分页比“全量返回后再次 spill”更简单，也不会形成递归落盘。
 - How：真实读取 3,000 行中英文文件、2,500 行短文件、超长单行和越界 `lineCount`，使用返回的 `nextStartLine` 连续读取。
-- Oracle：窗口停在完整行边界；短行最多返回 2,000 行；超长行追加英文裁剪标记且不破坏 Unicode；续读位置连续；超过最大 `lineCount` 被 schema 拒绝。
+- Oracle：窗口停在完整行边界；短行最多返回 2,000 行；超长行追加英文裁剪标记且不破坏 Unicode；续读位置连续；超过最大 `lineCount` 被 schema 拒绝。模型 delivery 为 `<content>` 原始行文本 + `totalLines` + 可选 `nextStartLine`，不含路径、行号前缀或英文 footer。
 - Not：不验证真实模型的分段策略与提示词效果。
 
 ##### `text-file-search-contract`
@@ -668,9 +668,9 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-tool-result-truncation-read`
 
 - 测试类型：`backend / mock-llm`
-- What：human 同轮读取大小两个文本文件，大文件收到英文行窗口和 `nextStartLine`，小文件保持完整，随后按返回行号续读。
+- What：human 同轮读取大小两个文本文件，大文件收到有界窗口和 `nextStartLine`，小文件保持完整，随后按返回行号续读。
 - Why：`text_file_read` 使用生产者有界 `window` 策略，不应进入通用 spill 或产生 toolresult 递归落盘。
-- How：脚本化 LLM 决策同轮读取两个文件，从大文件 footer 提取下一 `startLine` 后继续读取。
+- How：脚本化 LLM 决策同轮读取两个文件，从大文件 delivery 的 `nextStartLine` 字段提取续读位置后继续读取。
 - Oracle：任务完成；两个独立结果都到达模型；第二次调用使用返回的续读行；`runtime/toolresult` 不产生文件。
 - Not：不验证公网搜索或真实模型工具选择。
 
