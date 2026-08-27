@@ -106,7 +106,9 @@ const parseArgs = (argv) => {
     bundles: [],
     results: [],
     freshKnowledgeCache: false,
-    reuseKnowledgeCache: false
+    reuseKnowledgeCache: false,
+    help: false,
+    unknownArgs: []
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -162,8 +164,19 @@ const parseArgs = (argv) => {
       index += 1
       continue
     }
-    if (current === '--fresh-knowledge-cache') parsed.freshKnowledgeCache = true
-    if (current === '--reuse-knowledge-cache') parsed.reuseKnowledgeCache = true
+    if (current === '--fresh-knowledge-cache') {
+      parsed.freshKnowledgeCache = true
+      continue
+    }
+    if (current === '--reuse-knowledge-cache') {
+      parsed.reuseKnowledgeCache = true
+      continue
+    }
+    if (current === '--help' || current === '-h') {
+      parsed.help = true
+      continue
+    }
+    parsed.unknownArgs.push(current)
   }
 
   return parsed
@@ -1036,9 +1049,43 @@ const runTypeWorkflow = async (input) => {
   return { exitCode, e2eResults }
 }
 
+const USAGE = `NCurator 测试 runner
+
+用法:
+  node scripts/test/workflow.mjs [选项]
+
+选项:
+  --domain <ai|unit|settings|workbench>  测试域；默认全量
+  --type <backend|e2e>                  执行类型；不带时按 backend -> e2e 顺序
+  --suite <suite>                        过滤 suite
+  --group <group>                        过滤 group，可重复传入
+  --exclude-group <group>                排除 group，可重复传入
+  --case <caseId>                        只执行指定 case，可重复传入
+  --runs <n>                             重复执行次数，默认 1
+  --target <source|package>              目标，默认 source
+  --bundle <release-bundle.json>         正式包 bundle，可重复传入
+  --result <path>                        bundle 结果路径，可重复传入
+  --fresh-knowledge-cache                删除知识库缓存强制重建
+  --reuse-knowledge-cache                复用知识库缓存（调试用）
+  -h, --help                             显示本帮助并退出
+
+注意:
+  不带任何过滤参数会执行全量测试（含 live 真实模型调用），会消耗真实 API 额度。
+  请使用 --domain/--suite/--case 缩小范围；未知参数会导致立即报错退出。
+`
+
 const main = async () => {
   removeNpmLifecycleEnv()
   const args = parseArgs(process.argv.slice(2))
+  if (args.help) {
+    process.stdout.write(USAGE)
+    process.exit(0)
+  }
+  if (args.unknownArgs.length > 0) {
+    process.stderr.write(`unknown arguments: ${args.unknownArgs.join(' ')}\n\n`)
+    process.stderr.write(USAGE)
+    process.exit(2)
+  }
   const configuredDeadlineMs = Number(process.env.NCURATOR_TEST_RUNNER_DEADLINE_MS || 0)
   const deadlineAt =
     Date.now() +

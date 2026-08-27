@@ -185,6 +185,7 @@ runner 支持的过滤参数：
 - `--bundle`，正式包 E2E 必填，指向已构建候选包的 `release-bundle-*.json`。
 - `--fresh-knowledge-cache`，删除本次构建对应的知识库缓存，强制从零验证完整索引。
 - `--reuse-knowledge-cache`，人工调试时跨构建复用同一类缓存；不能和 `--fresh-knowledge-cache` 同时使用。
+- `--help`（或 `-h`），打印 runner 用法后直接退出；传入未识别的参数会立即报错并退出（退出码 2），防止未知参数被静默忽略而误触发全量执行。
 
 补充规则：
 
