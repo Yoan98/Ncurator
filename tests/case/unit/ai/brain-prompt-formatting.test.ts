@@ -56,14 +56,18 @@ describe('ai unit brain prompt formatting', () => {
 
   it('keeps context efficiency and planning rules concise', () => {
     const system = buildBrainSystemPrompt({ ctx: createFakeCtx() })
+    const skillLoading = system.match(/<skill_loading>([\s\S]*?)<\/skill_loading>/)?.[1] || ''
     const efficiency =
       system.match(/<context_efficiency>([\s\S]*?)<\/context_efficiency>/)?.[1] || ''
 
-    expect(efficiency).toContain('最小可靠信息和最少连续决策轮次')
-    expect(efficiency).toContain('同类操作能批量完成时不拆成多轮')
-    expect(system).toContain('仅复杂或存在多项依赖的任务使用 update_plan')
-    expect(system).toContain('必要检查通过且目标满足后，可以直接交付')
-    expect(system).not.toContain('计划最后一项必须是检查项')
+    expect(skillLoading).toContain('尽早一次性学习当前任务已明确需要的技能')
+    expect(skillLoading).toContain('不学习只是可能用到的技能')
+    expect(efficiency).toContain('选择返回结果最贴近目标的工具')
+    expect(efficiency).toContain('已获取且未变化的信息直接复用')
+    expect(efficiency).not.toContain('outline')
+    expect(system).toContain('复杂任务使用计划，并在关键阶段完成、方案变化或任务受阻时更新')
+    expect(system).toContain('尽量同轮调用下一步工具')
+    expect(system).not.toContain('不为汇报进度单独更新计划')
   })
 
   it('renders the default preference and reference scope in the user message', () => {

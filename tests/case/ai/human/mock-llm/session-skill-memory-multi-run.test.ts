@@ -13,7 +13,8 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证同一会话跨 run 共享技能，并在加载 9 个 DOCX 工具后按 FIFO 保持 30 工具上限。',
+      description:
+        '验证同一会话跨 run 共享技能，并在加载拆分后的 DOCX 技能时按 FIFO 保持 30 工具上限。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -27,7 +28,12 @@ describe('ai human mock-llm backend', () => {
                   summary: '学习 Word 和 PDF 阅读技能。'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: '第一轮完成。', deliveryMarkdown: '第一轮完成。' }) }
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '第一轮完成。',
+                  deliveryMarkdown: '第一轮完成。'
+                })
+              }
             ]
           }
         })
@@ -46,7 +52,12 @@ describe('ai human mock-llm backend', () => {
                   summary: '补充 Excel 编辑技能。'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: '第二轮完成。', deliveryMarkdown: '第二轮完成。' }) }
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '第二轮完成。',
+                  deliveryMarkdown: '第二轮完成。'
+                })
+              }
             ]
           }
         })
@@ -62,7 +73,12 @@ describe('ai human mock-llm backend', () => {
                   summary: '学习 PPT 阅读和编辑技能。'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: '第三轮完成。', deliveryMarkdown: '第三轮完成。' }) }
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '第三轮完成。',
+                  deliveryMarkdown: '第三轮完成。'
+                })
+              }
             ]
           }
         })
@@ -76,13 +92,23 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['excel-read', 'image-recognition', 'image-generation', 'docx-write'],
-                  summary: '补充 Excel 阅读与图片、Word 编辑技能并检查 FIFO 遗忘结果。'
+                  skillIds: [
+                    'excel-read',
+                    'image-recognition',
+                    'image-generation',
+                    'docx-write',
+                    'docx-format',
+                    'docx-rich-write'
+                  ],
+                  summary: '补充 Excel 阅读与图片、拆分后的 Word 编辑技能并检查 FIFO 遗忘结果。'
                 })
               },
               ({ user }) => {
                 run4Prompt = user
-                return buildCompleteTaskDecision({ summary: '第四轮完成。', deliveryMarkdown: '第四轮完成。' })
+                return buildCompleteTaskDecision({
+                  summary: '第四轮完成。',
+                  deliveryMarkdown: '第四轮完成。'
+                })
               }
             ]
           }
@@ -99,11 +125,12 @@ describe('ai human mock-llm backend', () => {
             result.stateAtLimit.learnedSkillIds.join(',') ===
               'docx-read,pdf-read,excel-write,ppt-read,ppt-write' &&
             result.stateAfterEviction.learnedSkillIds.join(',') ===
-              'ppt-read,ppt-write,excel-read,image-recognition,image-generation,docx-write' &&
+              'excel-write,ppt-read,ppt-write,excel-read,image-recognition,image-generation,docx-write,docx-format,docx-rich-write' &&
             result.run4Prompt.includes('<learned_skills>'),
           {
             name: 'session-skills-persist-across-runs-within-tool-budget',
-            message: '同一会话应跨 run 共享技能，并在加载 DOCX 全部 9 个工具后按 FIFO 淘汰最早技能。',
+            message:
+              '同一会话应跨 run 共享技能，并在加载拆分后的 DOCX 技能后按 FIFO 淘汰最早技能。',
             data: result
           }
         )

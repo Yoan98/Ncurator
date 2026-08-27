@@ -17,6 +17,8 @@ describe('ai unit runtime skill contract', () => {
     expect(listExternalSkillDefinitions().map((definition) => definition.skillId)).toEqual([
       'docx-read',
       'docx-write',
+      'docx-format',
+      'docx-rich-write',
       'pdf-read',
       'ppt-read',
       'ppt-write',

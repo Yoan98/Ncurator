@@ -61,7 +61,21 @@ export const RUNTIME_SKILL_CATALOG = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-write',
-    description: '读取稳定 nodeId，并局部修改 DOCX 内容、格式、表格、媒体、批注和修订。'
+    description: '创建 DOCX 或局部修改普通内容节点。'
+  },
+  'docx-format': {
+    familyId: 'docx',
+    source: 'external',
+    countsTowardToolBudget: true,
+    title: 'docx-format',
+    description: '修改 DOCX 的文字、段落、表格、section、命名样式和编号格式。'
+  },
+  'docx-rich-write': {
+    familyId: 'docx',
+    source: 'external',
+    countsTowardToolBudget: true,
+    title: 'docx-rich-write',
+    description: '修改 DOCX 的表格结构、媒体、批注和修订。'
   },
   'pdf-read': {
     familyId: 'pdf',
@@ -132,11 +146,7 @@ export const EXTERNAL_RUNTIME_SKILL_IDS = RUNTIME_SKILL_IDS.filter(
 export const LEARNABLE_RUNTIME_SKILL_IDS = EXTERNAL_RUNTIME_SKILL_IDS
 
 export function listRuntimeToolNamesForSkill(skillId: RuntimeSkillId): RuntimeToolName[] {
-  const includedSkillIds: RuntimeSkillId[] =
-    skillId === 'docx-write' ? ['docx-read', 'docx-write'] : [skillId]
-  return RUNTIME_TOOL_NAMES.filter((toolName) =>
-    includedSkillIds.includes(RUNTIME_TOOL_CATALOG[toolName].skillId)
-  )
+  return RUNTIME_TOOL_NAMES.filter((toolName) => skillId === RUNTIME_TOOL_CATALOG[toolName].skillId)
 }
 
 export const SKILL_DEFINITIONS = Object.fromEntries(

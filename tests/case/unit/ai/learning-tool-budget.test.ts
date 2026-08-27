@@ -108,11 +108,11 @@ describe('ai unit learning tool budget', () => {
       humanNextActionSchema.parse({
         action: 'learning',
         toolCallId: 'call-learning-budget',
-        wantLearnSkillIds: ['terminal', 'docx-read', 'docx-write']
+        wantLearnSkillIds: ['docx-read', 'docx-write', 'docx-format', 'docx-rich-write']
       })
     ).toMatchObject({
       action: 'learning',
-      wantLearnSkillIds: ['terminal', 'docx-read', 'docx-write']
+      wantLearnSkillIds: ['docx-read', 'docx-write', 'docx-format', 'docx-rich-write']
     })
   })
 })

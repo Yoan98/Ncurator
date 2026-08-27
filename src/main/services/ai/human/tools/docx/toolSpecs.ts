@@ -45,13 +45,13 @@ type DocxToolSpec<
 export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   name: 'docx_read_outline',
   familyId: 'docx',
-  skillIds: ['docx-read', 'docx-write'],
+  skillIds: ['docx-read'],
   inputSchema: docxOutlineSchema,
   outputSchema: docxOutlineOutputSchema,
   promptSpec: {
     name: 'docx_read_outline',
     description:
-      '按逻辑分页返回 Word 文档的自适应 segment map，用紧凑结构锚点、关键词和原文代表句概览全文；逻辑页不代表 Word 排版页面。'
+      '读取 Word 文档的逻辑结构，按逻辑页返回自适应 segment map、结构锚点、关键词和原文代表句；结果不包含完整正文，逻辑页不代表 Word 排版页面。'
   },
   resolveExecutionMeta: readMeta,
   activityActionType: 'docx_read_outline'
@@ -59,19 +59,19 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   z.infer<typeof docxOutlineSchema>,
   z.infer<typeof docxOutlineOutputSchema>,
   'docx_read_outline',
-  'docx-read' | 'docx-write'
+  'docx-read'
 >
 
 export const DOCX_SEARCH_TOOL_SPEC = {
   name: 'docx_search',
   familyId: 'docx',
-  skillIds: ['docx-read', 'docx-write'],
+  skillIds: ['docx-read'],
   inputSchema: docxSearchSchema,
   outputSchema: docxSearchOutputSchema,
   promptSpec: {
     name: 'docx_search',
     description:
-      '在 Word 完整原文中按 literal 或 regex 检索，每个实际命中返回稳定 nodeId、命中附近文字，并可附带同一 story 的前后节点预览。'
+      '在 Word 完整原文中按 literal 或 regex 检索；结果包含实际命中的稳定 nodeId、命中片段，并可附带同一 story 的前后节点预览，不包含完整文档正文。'
   },
   resolveExecutionMeta: readMeta,
   activityActionType: 'docx_search'
@@ -79,18 +79,19 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   z.infer<typeof docxSearchSchema>,
   z.infer<typeof docxSearchOutputSchema>,
   'docx_search',
-  'docx-read' | 'docx-write'
+  'docx-read'
 >
 
 export const DOCX_READ_NODES_TOOL_SPEC = {
   name: 'docx_read_nodes',
   familyId: 'docx',
-  skillIds: ['docx-read', 'docx-write'],
+  skillIds: ['docx-read'],
   inputSchema: docxReadNodesSchema,
   outputSchema: docxReadOutputSchema,
   promptSpec: {
     name: 'docx_read_nodes',
-    description: '读取指定 Word 节点的递归语义树；一次最多读取 20 个 nodeId 或连续 50 个根节点。'
+    description:
+      '返回指定 Word 节点或连续范围的递归语义内容，只包含所选范围；一次最多读取 20 个 nodeId 或连续 50 个根节点。'
   },
   resolveExecutionMeta: readMeta,
   activityActionType: 'docx_read_nodes'
@@ -98,13 +99,13 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
   z.infer<typeof docxReadNodesSchema>,
   z.infer<typeof docxReadOutputSchema>,
   'docx_read_nodes',
-  'docx-read' | 'docx-write'
+  'docx-read'
 >
 
 export const DOCX_READ_VISUALS_TOOL_SPEC = {
   name: 'docx_read_visuals',
   familyId: 'docx',
-  skillIds: ['docx-read', 'docx-write'],
+  skillIds: ['docx-read'],
   inputSchema: docxReadVisualsSchema,
   outputSchema: docxReadVisualsOutputSchema,
   promptSpec: {
@@ -118,17 +119,22 @@ export const DOCX_READ_VISUALS_TOOL_SPEC = {
   z.infer<typeof docxReadVisualsSchema>,
   z.infer<typeof docxReadVisualsOutputSchema>,
   'docx_read_visuals',
-  'docx-read' | 'docx-write'
+  'docx-read'
 >
 
-const defineWriteSpec = <TName extends RuntimeToolName, TSchema extends z.ZodType>(input: {
+const defineMutationSpec = <
+  TName extends RuntimeToolName,
+  TSchema extends z.ZodType,
+  TSkillId extends RuntimeSkillId
+>(input: {
   name: TName
+  skillId: TSkillId
   schema: TSchema
   description: string
 }) => ({
   name: input.name,
   familyId: 'docx' as const,
-  skillIds: ['docx-write'] as RuntimeSkillId[],
+  skillIds: [input.skillId],
   inputSchema: input.schema,
   outputSchema: docxMutationOutputSchema,
   promptSpec: { name: input.name, description: input.description },
@@ -136,36 +142,41 @@ const defineWriteSpec = <TName extends RuntimeToolName, TSchema extends z.ZodTyp
   activityActionType: input.name
 })
 
-export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineWriteSpec({
+export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_content_edit',
+  skillId: 'docx-write',
   schema: docxContentEditSchema,
   description:
     '创建 DOCX 或局部修改普通内容节点。一次只执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一；不负责格式、表格结构、媒体、批注或修订。成功表示写入及内部校验已完成；创建操作在 result.createdIds 返回新对象 ID。'
 })
 
-export const DOCX_FORMAT_TOOL_SPEC = defineWriteSpec({
+export const DOCX_FORMAT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_format',
+  skillId: 'docx-format',
   schema: docxFormatSchema,
   description:
     '原子修改一个或多个 DOCX 节点的文字、段落、表格、行、单元格、section、命名样式或编号；同一局部 operation 对所有目标应用同一格式 patch。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。成功表示写入及内部校验已完成。'
 })
 
-export const DOCX_TABLE_EDIT_TOOL_SPEC = defineWriteSpec({
+export const DOCX_TABLE_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_table_edit',
+  skillId: 'docx-rich-write',
   schema: docxTableEditSchema,
   description:
-    '创建、删除或修改 DOCX 表格结构，包括行列增删和单元格合并拆分；单元格文字用 docx_content_edit，外观用 docx_format。成功表示写入及内部校验已完成；创建表格时在 result.createdIds 返回新表格 ID。'
+    '创建、删除或修改 DOCX 表格结构，包括行列增删和单元格合并拆分；不负责修改已有单元格正文或纯外观格式。成功表示写入及内部校验已完成；创建表格时在 result.createdIds 返回新表格 ID。'
 })
 
-export const DOCX_MEDIA_EDIT_TOOL_SPEC = defineWriteSpec({
+export const DOCX_MEDIA_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_media_edit',
+  skillId: 'docx-rich-write',
   schema: docxMediaEditSchema,
   description:
     '插入、替换、删除或修改 DOCX 图片等视觉对象，负责媒体文件、relationship、尺寸和替代文字。成功表示写入及内部校验已完成；插入媒体时在 result.createdIds 返回新对象 ID。'
 })
 
-export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineWriteSpec({
+export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineMutationSpec({
   name: 'docx_comments_revisions',
+  skillId: 'docx-rich-write',
   schema: docxCommentsRevisionsSchema,
   description:
     '新增、修改、回复或删除 Word 批注，切换修订模式，以及接受或拒绝 Word 修订；这不是文档读取检查工具。成功表示写入及内部校验已完成；新增批注或回复时在 result.createdIds 返回新批注 ID。'
@@ -178,12 +189,20 @@ export const DOCX_READ_TOOL_SPECS = [
   DOCX_READ_VISUALS_TOOL_SPEC
 ] as const
 
-export const DOCX_WRITE_TOOL_SPECS = [
-  DOCX_CONTENT_EDIT_TOOL_SPEC,
-  DOCX_FORMAT_TOOL_SPEC,
+export const DOCX_WRITE_TOOL_SPECS = [DOCX_CONTENT_EDIT_TOOL_SPEC] as const
+
+export const DOCX_FORMAT_TOOL_SPECS = [DOCX_FORMAT_TOOL_SPEC] as const
+
+export const DOCX_RICH_WRITE_TOOL_SPECS = [
   DOCX_TABLE_EDIT_TOOL_SPEC,
   DOCX_MEDIA_EDIT_TOOL_SPEC,
   DOCX_COMMENTS_REVISIONS_TOOL_SPEC
 ] as const
 
-export const DOCX_TOOL_SPECS = [...DOCX_READ_TOOL_SPECS, ...DOCX_WRITE_TOOL_SPECS] as const
+export const DOCX_MUTATION_TOOL_SPECS = [
+  ...DOCX_WRITE_TOOL_SPECS,
+  ...DOCX_FORMAT_TOOL_SPECS,
+  ...DOCX_RICH_WRITE_TOOL_SPECS
+] as const
+
+export const DOCX_TOOL_SPECS = [...DOCX_READ_TOOL_SPECS, ...DOCX_MUTATION_TOOL_SPECS] as const
