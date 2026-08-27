@@ -75,7 +75,7 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
   </principles>
 
   <tool_truncation>
-    - 工具返回结果过大时会被截断，截断后应该用text-file-read工具读取完整内容。
+    - 工具返回结果过大时会被截断，截断后应该用text_file_read工具读取被截断内容。
   </tool_truncation>
 
   <terminal_wait_contract>
