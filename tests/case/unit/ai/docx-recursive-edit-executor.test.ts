@@ -251,7 +251,14 @@ describe('docx recursive edit executor', () => {
           type: 'insert_nodes',
           nodeId: anchor,
           position: 'after',
-          nodes: [{ type: 'paragraph', text: '递归插入', styleId: 'Heading2' }]
+          nodes: [
+            {
+              type: 'paragraph',
+              text: '递归插入',
+              style: { styleId: 'Heading2', alignment: 'center' },
+              runStyle: { bold: true }
+            }
+          ]
         }
       ]
     })
@@ -263,6 +270,16 @@ describe('docx recursive edit executor', () => {
     )
     expect(next.rootNodeIds).toHaveLength(index.rootNodeIds.length + 1)
     expect(next.outline.some((node) => node.text === '递归插入')).toBe(true)
+    const insertedDetail = next.detailByNodeId.get(
+      next.outline.find((node) => node.text === '递归插入')!.nodeId
+    )
+    expect(insertedDetail?.type).toBe('paragraph')
+    if (insertedDetail?.type === 'paragraph') {
+      expect(insertedDetail.style?.styleId).toBe('Heading2')
+      expect(insertedDetail.style?.alignment).toBe('center')
+      const runs = insertedDetail.children.filter((child) => child.type === 'run')
+      expect(runs.some((run) => run.style?.bold === true)).toBe(true)
+    }
   })
 
   it('splits a matched run and validates style target types', async () => {

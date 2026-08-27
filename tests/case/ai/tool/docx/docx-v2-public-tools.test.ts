@@ -169,19 +169,19 @@ describe('ai tool docx v2 backend', () => {
           const publicTables = tableNodes.nodes.filter((node) => node.type === 'table')
           const rowNodeIds = publicTables.map((node) => node.children[0]!.nodeId)
           const cellNodeIds = publicTables.map((node) => node.children[0]!.children[0]!.nodeId)
-          const tableFormat = await harness.invoke<MutationResult>('docx_format', {
+          const tableFormat = await harness.invoke<MutationResult>('docx_table_edit', {
             sourcePath,
             type: 'format_table',
             nodeIds: [table.nodeId, secondTable.nodeId],
             format: { alignment: 'center' }
           })
-          const rowFormat = await harness.invoke<MutationResult>('docx_format', {
+          const rowFormat = await harness.invoke<MutationResult>('docx_table_edit', {
             sourcePath,
             type: 'format_row',
             nodeIds: rowNodeIds,
             format: { repeatHeader: true }
           })
-          const cellFormat = await harness.invoke<MutationResult>('docx_format', {
+          const cellFormat = await harness.invoke<MutationResult>('docx_table_edit', {
             sourcePath,
             type: 'format_cell',
             nodeIds: cellNodeIds,

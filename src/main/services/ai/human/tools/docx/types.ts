@@ -54,6 +54,12 @@ type ExpandNodeFormatRequest<TValue> = TValue extends {
   ? Omit<TValue, 'sourcePath' | 'nodeIds'> & { nodeId: string }
   : never
 
+type DocxTableFormatRequest = Extract<
+  DocxTableEditRequest,
+  { type: 'format_table' | 'format_row' | 'format_cell' }
+>
+type DocxTableStructureRequest = Exclude<DocxTableEditRequest, DocxTableFormatRequest>
+
 export type DocxFormatOperation =
   | (Omit<DocxFormatTextRequest, 'sourcePath' | 'targets'> & {
       nodeId: string
@@ -66,9 +72,11 @@ export type DocxOperation =
   | { type: 'create_document' }
   | WithoutSourcePath<DocxContentEditRequest>
   | DocxFormatOperation
-  | WithoutSourcePath<DocxTableEditRequest>
+  | ExpandNodeFormatRequest<DocxTableFormatRequest>
+  | WithoutSourcePath<DocxTableStructureRequest>
   | WithoutSourcePath<DocxMediaEditRequest>
   | WithoutSourcePath<DocxCommentsRevisionsRequest>
+
 export type DocxLayoutMode = 'normal' | 'positioned'
 
 export type DocxOutlineParagraphNode = {

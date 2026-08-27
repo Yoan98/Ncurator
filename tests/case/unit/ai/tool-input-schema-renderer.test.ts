@@ -70,20 +70,21 @@ describe('ai unit tool input schema renderer', () => {
 
   it('renders DOCX shared definitions once without schema constraints', () => {
     const docxFormat = ALL_TOOL_SPECS.find((spec) => spec.name === 'docx_format')!
+    const docxTableEdit = ALL_TOOL_SPECS.find((spec) => spec.name === 'docx_table_edit')!
     const docxVisuals = ALL_TOOL_SPECS.find((spec) => spec.name === 'docx_read_visuals')!
     const formatRendered = renderToolInputSchemaForPrompt(docxFormat.inputSchema, { compact: true })
+    const tableRendered = renderToolInputSchemaForPrompt(docxTableEdit.inputSchema, {
+      compact: true
+    })
     const visualsRendered = renderToolInputSchemaForPrompt(docxVisuals.inputSchema, {
       compact: true
     })
 
-    for (const definition of [
-      'DocxRunStyle',
-      'DocxParagraphStyle',
-      'DocxTableStyle',
-      'DocxTableRowStyle',
-      'DocxTableCellStyle'
-    ]) {
+    for (const definition of ['DocxRunStyle', 'DocxParagraphStyle']) {
       expect(formatRendered.match(new RegExp(`type ${definition} =`, 'g'))).toHaveLength(1)
+    }
+    for (const definition of ['DocxTableStyle', 'DocxTableRowStyle', 'DocxTableCellStyle']) {
+      expect(tableRendered.match(new RegExp(`type ${definition} =`, 'g'))).toHaveLength(1)
     }
     expect(visualsRendered).toBe(
       '{ sourcePath: string, requests: { visualId: string, instruction: string }[] }'

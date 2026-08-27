@@ -31,8 +31,8 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: ['docx-write', 'docx-format', 'docx-rich-write'],
-                  summary: '再学习 DOCX 的正文、格式和复杂编辑技能'
+                  skillIds: ['docx-write'],
+                  summary: '再学习 DOCX 写入技能'
                 })
               },
               {
@@ -69,8 +69,7 @@ describe('ai human mock-llm backend', () => {
 
         runtime.assertThat(
           result.output.status === 'completed' &&
-            latestLearningStep?.learnedSkillIds.join(',') ===
-              'docx-read,docx-write,docx-format,docx-rich-write' &&
+            latestLearningStep?.learnedSkillIds.join(',') === 'docx-read,docx-write' &&
             latestLearningStep?.effectiveSkillIds.includes('terminal') &&
             latestLearningStep?.effectiveSkillIds.includes('kb-retrieval') &&
             latestLearningStep.availableToolNames.includes('terminal_run') &&

@@ -23,7 +23,9 @@ import type {
   DocxOperation,
   DocxOpenStats,
   DocxOutlineNode,
+  DocxParagraphStyle,
   DocxReadNode,
+  DocxRunStyle,
   DocxTableEditRequest
 } from '../types'
 import type { DocxToolRuntime } from '../runtime'
@@ -266,16 +268,18 @@ const compileRunChildren = (
 
 const compileParagraphDraft = (input: {
   text: string
-  styleId?: string
+  style?: DocxParagraphStyle
+  runStyle?: DocxRunStyle
 }): DocxCreateParagraphNode => {
   const runChildren = compileRunChildren(input.text)
   const run: DocxCreateRunNode = {
     type: 'run',
+    ...(input.runStyle ? { style: input.runStyle } : {}),
     children: runChildren.length > 0 ? runChildren : [{ type: 'text', text: '' }]
   }
   return {
     type: 'paragraph',
-    ...(input.styleId ? { style: { styleId: input.styleId } } : {}),
+    ...(input.style ? { style: input.style } : {}),
     children: [run]
   }
 }
@@ -305,6 +309,13 @@ type DocxWriteRequest =
 export const compileDocxOperations = (request: DocxWriteRequest): DocxOperation[] => {
   const { sourcePath, ...operation } = request
   void sourcePath
+  if (operation.type === 'replace_text' && operation.format && operation.newText) {
+    const { format, ...replace } = operation
+    return [
+      replace,
+      { type: 'format_text', nodeId: replace.nodeId, text: replace.newText, format }
+    ]
+  }
   if (operation.type === 'format_text') {
     return operation.targets.map((target) => ({
       type: operation.type,
@@ -776,7 +787,13 @@ export const createDocxWriteTool = <TSchema extends z.ZodType<{ sourcePath: stri
                     (node): node is Extract<typeof node, { type: 'paragraph' }> =>
                       node.type === 'paragraph'
                   )
-                  .map((node) => compileParagraphDraft({ text: node.text, styleId: node.styleId }))
+                  .map((node) =>
+                    compileParagraphDraft({
+                      text: node.text,
+                      style: node.style,
+                      runStyle: node.runStyle
+                    })
+                  )
               : []
 
         const tempPaths = await buildCreateTargetTempPaths(requestedSourcePath)

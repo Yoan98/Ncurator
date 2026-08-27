@@ -228,8 +228,14 @@ const contentDraftElement = (
       doc,
       {
         type: 'paragraph',
-        ...(draft.styleId ? { style: { styleId: draft.styleId } } : {}),
-        children: [{ type: 'run', children: [{ type: 'text', text: draft.text }] }]
+        ...(draft.style ? { style: draft.style } : {}),
+        children: [
+          {
+            type: 'run',
+            ...(draft.runStyle ? { style: draft.runStyle } : {}),
+            children: [{ type: 'text', text: draft.text }]
+          }
+        ]
       },
       relationships
     )
@@ -239,7 +245,13 @@ const contentDraftElement = (
       doc,
       {
         type: 'paragraph',
-        children: [{ type: 'run', children: [{ type: 'text', text: draft.text }] }]
+        children: [
+          {
+            type: 'run',
+            ...(draft.style ? { style: draft.style } : {}),
+            children: [{ type: 'text', text: draft.text }]
+          }
+        ]
       },
       relationships
     )
@@ -254,7 +266,13 @@ const contentDraftElement = (
           {
             type: 'hyperlink',
             target: draft.target,
-            children: [{ type: 'run', children: [{ type: 'text', text: draft.text }] }]
+            children: [
+              {
+                type: 'run',
+                ...(draft.style ? { style: draft.style } : {}),
+                children: [{ type: 'text', text: draft.text }]
+              }
+            ]
           }
         ]
       },

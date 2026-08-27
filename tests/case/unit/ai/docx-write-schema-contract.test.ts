@@ -6,6 +6,7 @@ import {
   docxMediaEditSchema,
   docxTableEditSchema
 } from '../../../../src/main/services/ai/human/tools/docx/schemas'
+import { compileDocxOperations } from '../../../../src/main/services/ai/human/tools/docx/tools/writeToolRuntime'
 
 describe('ai unit docx write schema contract', () => {
   it('accepts one content operation without an actions array', () => {
@@ -33,7 +34,23 @@ describe('ai unit docx write schema contract', () => {
         type: 'insert_nodes',
         position: 'inside_end',
         nodeId: 'node_container',
-        nodes: [{ type: 'paragraph', text: '补充段落', styleId: 'Normal' }]
+        nodes: [{ type: 'paragraph', text: '补充段落', style: { styleId: 'Normal' } }]
+      }).success
+    ).toBe(true)
+    expect(
+      docxContentEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'insert_nodes',
+        position: 'inside_end',
+        nodeId: 'node_container',
+        nodes: [
+          {
+            type: 'paragraph',
+            text: '强调段落',
+            style: { alignment: 'center' },
+            runStyle: { bold: true, color: 'FF0000' }
+          }
+        ]
       }).success
     ).toBe(true)
     expect(
@@ -45,6 +62,52 @@ describe('ai unit docx write schema contract', () => {
         nodes: [{ type: 'paragraph', text: '尾部' }]
       }).success
     ).toBe(false)
+  })
+
+  it('allows replace_text to carry run style and rejects empty format patches', () => {
+    expect(
+      docxContentEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'replace_text',
+        nodeId: 'node_1',
+        oldText: '旧词',
+        newText: '新词',
+        format: { bold: true, color: 'FF0000' }
+      }).success
+    ).toBe(true)
+    expect(
+      docxContentEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'replace_text',
+        nodeId: 'node_1',
+        oldText: '旧词',
+        newText: '新词',
+        format: {}
+      }).success
+    ).toBe(false)
+    expect(
+      compileDocxOperations({
+        sourcePath: 'a.docx',
+        type: 'replace_text',
+        nodeId: 'node_1',
+        oldText: '旧词',
+        newText: '新词',
+        format: { bold: true }
+      })
+    ).toEqual([
+      {
+        type: 'replace_text',
+        nodeId: 'node_1',
+        oldText: '旧词',
+        newText: '新词'
+      },
+      {
+        type: 'format_text',
+        nodeId: 'node_1',
+        text: '新词',
+        format: { bold: true }
+      }
+    ])
   })
 
   it('supports local and named style operations', () => {
@@ -86,6 +149,22 @@ describe('ai unit docx write schema contract', () => {
   })
 
   it('covers table, media, comment, and revision operations', () => {
+    expect(
+      docxTableEditSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'format_table',
+        nodeIds: ['node_table'],
+        format: { alignment: 'center' }
+      }).success
+    ).toBe(true)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'format_table',
+        nodeIds: ['node_table'],
+        format: { alignment: 'center' }
+      }).success
+    ).toBe(false)
     expect(
       docxTableEditSchema.safeParse({
         sourcePath: 'a.docx',

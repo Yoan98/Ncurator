@@ -322,24 +322,48 @@ export const docxReadNodesSchema = z
     }
   })
 
+const nonEmptyRunStyleSchema = docxRunStyleSchema.refine(
+  (value) => Object.values(value).some((entry) => entry !== undefined),
+  { message: 'format 至少设置一个属性' }
+)
+const nonEmptyParagraphStyleSchema = docxParagraphStyleSchema.refine(
+  (value) => Object.values(value).some((entry) => entry !== undefined),
+  { message: 'format 至少设置一个属性' }
+)
+const nonEmptyTableStyleSchema = docxTableStyleSchema.refine(
+  (value) => Object.values(value).some((entry) => entry !== undefined),
+  { message: 'format 至少设置一个属性' }
+)
+const nonEmptyRowStyleSchema = docxTableRowStyleSchema.refine(
+  (value) => Object.values(value).some((entry) => entry !== undefined),
+  { message: 'format 至少设置一个属性' }
+)
+const nonEmptyCellStyleSchema = docxTableCellStyleSchema.refine(
+  (value) => Object.values(value).some((entry) => entry !== undefined),
+  { message: 'format 至少设置一个属性' }
+)
+
 const docxParagraphDraftSchema = z
   .object({
     type: z.literal('paragraph').describe('段落节点'),
     text: z.string().describe('段落纯文本；换行用 \\n，制表符用 \\t'),
-    styleId: z.string().trim().min(1).optional().describe('可选的命名段落样式 styleId')
+    style: docxParagraphStyleSchema.optional().describe('段落样式；省略则使用默认段落格式'),
+    runStyle: docxRunStyleSchema.optional().describe('整段文字样式；一段里只有部分字要改样式时改用 docx_format.format_text')
   })
   .strict()
 const docxRunDraftSchema = z
   .object({
     type: z.literal('run').describe('文字 run 节点'),
-    text: z.string().describe('run 的纯文本')
+    text: z.string().describe('run 的纯文本'),
+    style: docxRunStyleSchema.optional().describe('该 run 的文字样式；省略则继承或保持默认')
   })
   .strict()
 const docxHyperlinkDraftSchema = z
   .object({
     type: z.literal('hyperlink').describe('超链接节点'),
     text: z.string().describe('链接显示文字'),
-    target: z.string().trim().min(1).describe('链接 URL')
+    target: z.string().trim().min(1).describe('链接 URL'),
+    style: docxRunStyleSchema.optional().describe('链接显示文字的样式')
   })
   .strict()
 const docxFieldDraftSchema = z
@@ -372,7 +396,10 @@ export const docxContentEditSchema = z.discriminatedUnion('type', [
       type: z.literal('replace_text').describe('在一个节点内替换确定的原文'),
       nodeId: nodeIdField,
       oldText: z.string().min(1).describe('必须存在于目标节点内的原文'),
-      newText: z.string().describe('替换后的文字')
+      newText: z.string().describe('替换后的文字'),
+      format: nonEmptyRunStyleSchema
+        .optional()
+        .describe('同时应用到被替换文字的样式；省略则保留原样式')
     })
     .strict(),
   z
@@ -421,27 +448,6 @@ export const docxContentEditSchema = z.discriminatedUnion('type', [
     })
     .strict()
 ])
-
-const nonEmptyRunStyleSchema = docxRunStyleSchema.refine(
-  (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'format 至少设置一个属性' }
-)
-const nonEmptyParagraphStyleSchema = docxParagraphStyleSchema.refine(
-  (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'format 至少设置一个属性' }
-)
-const nonEmptyTableStyleSchema = docxTableStyleSchema.refine(
-  (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'format 至少设置一个属性' }
-)
-const nonEmptyRowStyleSchema = docxTableRowStyleSchema.refine(
-  (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'format 至少设置一个属性' }
-)
-const nonEmptyCellStyleSchema = docxTableCellStyleSchema.refine(
-  (value) => Object.values(value).some((entry) => entry !== undefined),
-  { message: 'format 至少设置一个属性' }
-)
 
 const rejectDuplicateNodeIds = (value: { nodeIds: string[] }, context: z.RefinementCtx): void => {
   const seen = new Set<string>()
@@ -499,33 +505,6 @@ export const docxFormatSchema = z.discriminatedUnion('type', [
       type: z.literal('format_paragraph'),
       nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
       format: nonEmptyParagraphStyleSchema.describe('段落格式 patch')
-    })
-    .strict()
-    .superRefine(rejectDuplicateNodeIds),
-  z
-    .object({
-      ...contentEditBase,
-      type: z.literal('format_table'),
-      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
-      format: nonEmptyTableStyleSchema.describe('表格格式 patch')
-    })
-    .strict()
-    .superRefine(rejectDuplicateNodeIds),
-  z
-    .object({
-      ...contentEditBase,
-      type: z.literal('format_row'),
-      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
-      format: nonEmptyRowStyleSchema.describe('行格式 patch')
-    })
-    .strict()
-    .superRefine(rejectDuplicateNodeIds),
-  z
-    .object({
-      ...contentEditBase,
-      type: z.literal('format_cell'),
-      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
-      format: nonEmptyCellStyleSchema.describe('单元格格式 patch')
     })
     .strict()
     .superRefine(rejectDuplicateNodeIds),
@@ -707,7 +686,34 @@ export const docxTableEditSchema = z.discriminatedUnion('type', [
       rows: z.number().int().min(1).describe('拆分行数'),
       columns: z.number().int().min(1).describe('拆分列数')
     })
+    .strict(),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('format_table'),
+      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
+      format: nonEmptyTableStyleSchema.describe('表格格式 patch')
+    })
     .strict()
+    .superRefine(rejectDuplicateNodeIds),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('format_row'),
+      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
+      format: nonEmptyRowStyleSchema.describe('行格式 patch')
+    })
+    .strict()
+    .superRefine(rejectDuplicateNodeIds),
+  z
+    .object({
+      ...contentEditBase,
+      type: z.literal('format_cell'),
+      nodeIds: z.array(nodeIdField).min(1).max(DOCX_FORMAT_MAX_TARGETS),
+      format: nonEmptyCellStyleSchema.describe('单元格格式 patch')
+    })
+    .strict()
+    .superRefine(rejectDuplicateNodeIds)
 ])
 
 const insertImageSchema = z

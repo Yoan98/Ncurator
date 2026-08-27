@@ -184,7 +184,7 @@ skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可�
 
 3. **读→写往返锚定，不重建结构**。写入只填 read 返回的稳定 `nodeId` 加最小 patch；工具返回变化后的完整局部节点或实体 ID，供模型继续定位。精确性来自「锚点 id + 小颗粒动作」，而不是让模型重述完整结构。
 
-4. **同一领域使用一个工具和明确 operation**。不同元素的格式 patch 统一属于 `docx_format`，通过 `format_text`、`format_paragraph`、`format_table`、`format_row`、`format_cell` 等 operation 区分。不要为每个小能力新增 AI 工具。
+4. **同一领域使用一个工具和明确 operation**。正文外观 patch 属于 `docx_format`（`format_text`、`format_paragraph`、命名样式、编号、section 等）；表格外观属于 `docx_table_edit`（`format_table`、`format_row`、`format_cell`）。插入、替换和 `replace_text` 可同时带样式，不必为伴随编辑的样式再调一次 format。不要为每个小能力新增 AI 工具。
 
 5. **规范值 vs 呈现分离**。工具返回 handle/id 的规范 JSON（`outputSchema`），面向用户的散文交给结果渲染；不要让模型从散文里反解 id 或字段。
 
@@ -198,7 +198,7 @@ skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可�
 
 DOCX 使用“文档聚合模型 + story 内容树”，不再把正文切成业务 block，也没有 `blockId`。`.doc` 只读；创建和修改只支持 `.docx`。公开协议不兼容旧单一编辑工具、批量 `actions` 或 block 定位字段。
 
-DOCX 的 9 个工具按能力拆成四个互不包含的技能：`docx-read` 提供 4 个读取工具，`docx-write` 只提供普通内容编辑，`docx-format` 只提供格式编辑，`docx-rich-write` 提供表格结构、媒体、批注和修订 3 个复杂编辑工具。学习多个技能时只合并各自工具，不隐式加载读取或其他写入能力。新增 operation 时优先扩展职责匹配的现有领域工具，不为每个小能力新增工具。
+DOCX 的 9 个工具按读写拆成两个技能：`docx-read` 提供 4 个读取工具，`docx-write` 提供 5 个写入工具（正文、格式、表格、媒体、批注修订）。学习写入技能时一次获得全部写工具，不隐式加载读取能力。新增 operation 时优先扩展职责匹配的现有领域工具，不为每个小能力新增工具。
 
 #### 分层与数据流
 
@@ -256,9 +256,9 @@ content control 是 Word 的结构化文档标签容器，常用于模板字段�
 
 写入工具每次调用只执行一个 operation：
 
-- `docx_content_edit`：`replace_text`、`insert_nodes`、`replace_node`、`delete_node`、`move_node`。
-- `docx_format`：局部格式、重置格式、应用/创建/更新/删除命名样式、编号和 section 格式。局部格式一次最多原子处理 20 个目标，所有目标共享同一 patch；任一目标无效时整次不提交。
-- `docx_table_edit`：表格创建/删除、行列增删、单元格合并/拆分。
+- `docx_content_edit`：`replace_text`、`insert_nodes`、`replace_node`、`delete_node`、`move_node`。插入、替换草稿可带段落或文字样式；`replace_text` 可同时设置被替换文字的样式。
+- `docx_format`：只改已有外观，包括局部文字、段落、重置格式、应用/创建/更新/删除命名样式、编号和 section 格式。局部格式一次最多原子处理 20 个目标，所有目标共享同一 patch；任一目标无效时整次不提交。
+- `docx_table_edit`：表格创建/删除、行列增删、单元格合并/拆分，以及表/行/单元格外观。
 - `docx_media_edit`：图片插入/替换/删除/属性更新；以后 shape、textbox、chart、SmartArt、OLE 继续扩展到此工具。
 - `docx_comments_revisions`：批注新增/更新/回复/删除、修订模式开关、指定或全部修订接受/拒绝。
 
@@ -307,9 +307,12 @@ NCurator Diff 与 Word 原生批注、`w:ins`、`w:del` 相互独立。读取和
 
 - 不知道位置：用 segment map 概览，或直接用 literal/regex 搜索完整原文；再通过 `docx_read_nodes` 精读并取得 `nodeId`，执行一个写 operation。
 - 改一句话：读取目标 paragraph/run，调用 `docx_content_edit.replace_text`。
+- 改一句话并改样式：同一次 `replace_text` 带上 `format`；省略 `format` 则保留原样式。
 - 改一段且保留样式：优先 `replace_text`；只有结构确实改变时才 `replace_node`。
+- 插入带样式的段落：`insert_nodes` 草稿上写 `style` / `runStyle`；一段里只有部分字要改样式时再用 `docx_format.format_text`。
 - 改容器内容：读取 content control/cell/header/footer 的内部节点，逐个修改；空容器用 `insert_nodes inside_*`。
-- 表格文字、外观、结构分别使用 content、format、table 工具，避免一个 operation 同时承担三种职责。
+- 表格文字走 `docx_content_edit`，表格结构与外观走 `docx_table_edit`。
+- 只改已有外观、命名样式、编号或版心时用 `docx_format`。
 - 图片、批注和修订使用各自领域工具。写工具返回成功前仍需完成 OOXML、关系、视觉丢失和受影响区域内部回读校验；AI 对最终内容、格式或视觉效果的确认通过精准读取受影响节点或视觉结果完成，不依赖写工具回传完整节点。
 - 同一路径可连续调用多个写工具；每次都基于最新 WorkingModel，旧节点未删除时 `nodeId` 保持可用。
 - `move_node` 只允许在同一 OOXML part/story 内移动；跨 story 移动会涉及关系迁移，当前明确拒绝，AI 应在目标 story 插入新节点后再删除源节点，并按视觉丢失规则确认。

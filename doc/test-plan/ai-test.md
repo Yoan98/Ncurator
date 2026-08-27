@@ -8,7 +8,7 @@
 | human-context-compaction-natural-trigger-live       | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816       | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。                                                                                                                                        |
 | human-excel-write-reconciliation-live               | 完成 |            96 | deepseek-v4-flash                | 2026-08-14 18:39 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260814-183949-614               | 终端真实计算核对，四笔状态精确标记，SUMIF 公式正确，样式保持。                                                                                                                                                                                |
 | human-excel-read-sales-gap-analysis-live            | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 21:02 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260813-210226-107            | 真实读取多 Sheet 并终端/python 计算差额，对话给出 P-100/P-300 优先级，源工作簿未改。                                                                                                                                                          |
-| human-kb-guided-docx-comparison-draft-live          | 完成 |            92 | deepseek-v4-flash                | 2026-08-27 17:58 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-175647-140          | 工具结果文本化后 Oracle 通过：15 次模型调用 / 584,232 累计输入 Token，较上轮 1,034,331 降低 43.5%；两个目标各成功追加 1 次，两份来源未改，无“推力/拉力”偏离。人工质量评估 9.2/10；少量“欠拟合/噪音”教学扩展不是来源正文的直接表述，因此扣分。 |
+| human-kb-guided-docx-comparison-draft-live          | 完成 |            84 | deepseek-v4-flash                | 2026-08-27 21:18 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-211845-908          | 技能合并后 Oracle 通过：一次学习 `docx-read + docx-write` 即拿到全部写工具；插入草稿直接带 `runStyle`（加粗/颜色），未再调 `docx_format`。19 次调用 / 1,050,958 输入 Token。两个目标都写入，来源未改；产业转移被插入两次相近备课备注，且出现“推力/拉力”类比扩展，故扣分。 |
 | human-ppt-write-management-review-live              | 完成 |            94 | deepseek-v4-flash                | 2026-08-14 18:42 CST | tests/logs/ai/human/live/human-ppt-write-management-review-live/20260814-184258-961              | 新增摘要页并升级交付风险（李然/7月15日），封面与指标页保持不变，布局无越界、校验零错误。                                                                                                                                                      |
 | human-ppt-read-management-risk-review-live          | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 18:44 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260814-184455-621          | 真实 ppt 读取完成风险简报，视觉识别返回可用文本，未修改演示文稿。                                                                                                                                                                             |
 | human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。                                                                                                                                                     |
@@ -715,7 +715,7 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：真实 `learning` 会持续记录当前 active tool 数，并在预算未超限时保留当前已学习 skill 集。
 - Why：`learning` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，回归 case 需要先守住基础统计与状态可见性。
-- How：通过 scripted structured output 先学习 `docx-read`，再一次学习 `docx-write`、`docx-format`、`docx-rich-write`，最后故意请求 builtin skill（如 `terminal + kb-retrieval`）；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary，并确认 builtin skill 请求被过滤（learning 返回「学习失败，学习请求中没有可加载的技能。」工具结果）。
+- How：通过 scripted structured output 先学习 `docx-read`，再学习 `docx-write`，最后故意请求 builtin skill（如 `terminal + kb-retrieval`）；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary，并确认 builtin skill 请求被过滤（learning 返回「学习失败，学习请求中没有可加载的技能。」工具结果）。
 - Oracle：任务最终完成；最后一轮真实 `human_learning` 事件中只保留 external skill，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 skill 淘汰文案；builtin skill 不占 active tool budget，但后续真实执行时仍计入工具调用次数限制。
 - Not：不验证超过 `20` 个 active tools 后的淘汰算法细节。
 
@@ -796,8 +796,8 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend / mock-llm`
 - What：同一 AI session 的多轮 human run 能复用已学习技能记忆。
 - Why：技能记忆是 AI 架构跨轮次协作的核心，不应每轮重复 learning。
-- How：跨四轮逐步学习 DOCX、PDF、Excel、PPT 和图片技能，最后一次加载拆分后的 `docx-write`、`docx-format`、`docx-rich-write`。
-- Oracle：后续轮次能看到已有技能且不重复 learning；超过 30 个活动工具时按最早学习顺序淘汰 `docx-read`、`pdf-read`，三个 DOCX 写入技能各自只加载直接归属的工具。
+- How：跨四轮逐步学习 DOCX、PDF、Excel、PPT 和图片技能，最后一次加载 `docx-write`。
+- Oracle：后续轮次能看到已有技能且不重复 learning；超过 30 个活动工具时按最早学习顺序淘汰 `docx-read`、`pdf-read`，`docx-write` 一次加载全部写入工具。
 - Not：不覆盖 Workbench UI 会话持久化，该路径由 Workbench E2E 覆盖。
 
 ##### `todolist-memory-maintenance`
@@ -982,14 +982,14 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：真实 `kb_search` 返回有效命中；两份目标文档分别发生成功 paragraph 写入并产生两组携带 `applyId` 的 file artifact；两份来源课件保持不变。成功的 DOCX 写结果只能是空 `result` 或 `createdIds`，不得返回 `changes`；每个目标最多允许一次成功的文末追加，防止模型在已成功写入后连续生成多个近似版本。按 10 分制评估 KB 证据、两份目标文件、grounded 内容、来源安全和最终交付，严格超过 8 分通过；只完成一个目标文件最多 8 分，不能通过。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
 
-最新单轮 live 结果（2026-08-27 17:56 CST）：
+最新单轮 live 结果（2026-08-27 21:18 CST）：
 
-- 日志：`tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-175647-140`
-- 结果：Oracle 通过，人工质量评估 9.2/10。两个目标分别只有 1 次成功文末追加，产出 2 个携带 `applyId` 的 DOCX artifact，两份来源文件未变。核心概念与来源一致，未出现“推力/拉力”等偏离；少量“欠拟合/噪音”教学扩展不是来源正文的直接表述，扣 0.8 分。
-- 模型成本：15 次调用，累计输入 584,232 Token，输出 12,692 Token，其中缓存命中输入 307,968 Token（命中率 52.7%）。较上轮 18 次 / 1,034,331 输入分别降低 16.7% / 43.5%；较约 1.34M 原始基线降低 56.4%。
-- 逐轮输入 Token：`4,777 / 6,944 / 7,227 / 8,233 / 11,596 / 14,949 / 39,796 / 40,849 / 55,160 / 62,786 / 63,153 / 65,698 / 66,056 / 68,346 / 68,662`。
-- 工具结果渲染体积（调用数 / 总 UTF-8 bytes / 单次最大 bytes）：`terminal_run 3/2,932/1,404`，`kb_search 5/17,238/9,203`，`kb_list_documents 1/577/577`，`learn_skill 1/67/67`，`docx_read_outline 6/111,903/33,482`，`docx_search 3/1,772/1,618`，`docx_read_nodes 4/45,733/30,969`，`update_plan 3/78/26`，`docx_content_edit 2/1,601/808`。全部工具文本合计 181,901 bytes，本轮没有触发 50 KiB 重试拒绝或 32K 字符 spill。
-- 结论：已达到 85 万有效门槛，并进入 60 万左右的理想区间；本轮不继续修改 KB、compaction、segment 或截断阈值。
+- 日志：`tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-211845-908`
+- 结果：Oracle 通过，人工质量评估 8.4/10。一次学习 `docx-read` 与 `docx-write`，写入技能一次加载 5 个写工具；两份目标均用 `docx_content_edit.insert_nodes` 写入备课备注，段落草稿直接带 `runStyle`（标题红加粗、正文色），未调用 `docx_format` / 表格 / 媒体。两份来源未改。扣分：`产业转移` 对同一锚点成功插入两次相近内容；过拟合类比写进“推力/拉力 / 产业锁死”，超出源课件直接表述。
+- 模型成本：19 次调用，累计输入 1,050,958 Token，输出 19,371 Token，其中缓存命中输入 823,296 Token（命中率 78.3%）。较上轮 15 次 / 584,232 输入回升。
+- 逐轮输入 Token：`4,480 / 11,132 / 26,850 / 42,516 / 43,526 / 47,128 / 60,059 / 60,904 / 61,072 / 61,777 / 62,864 / 67,884 / 70,315 / 70,537 / 70,881 / 71,693 / 71,693 / 72,648 / 72,999`。
+- 工具调用：`kb_list_documents 1`，`kb_search 2`，`docx_read_outline 3`，`docx_read_nodes 6`，`docx_search 7`，`update_plan 2`，`docx_content_edit 3`。无 `docx_format`。
+- 结论：技能合并与“编辑时带样式”按设计生效；本轮内容质量与 Token 不及 17:58 那轮，不据此回退技能方案。
 
 ##### `human-pdf-visual-reading-live`
 

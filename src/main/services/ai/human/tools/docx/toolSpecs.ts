@@ -174,29 +174,29 @@ export const DOCX_CONTENT_EDIT_TOOL_SPEC = defineMutationSpec({
   skillId: 'docx-write',
   schema: docxContentEditSchema,
   description:
-    '创建 DOCX 或局部修改普通内容节点。一次只执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一；不负责格式、表格结构、媒体、批注或修订。成功表示写入及内部校验已完成；创建操作在 result.createdIds 返回新对象 ID。',
+    '创建 DOCX，或局部修改正文节点。一次只执行 replace_text、insert_nodes、replace_node、delete_node、move_node 之一。插入、替换和 replace_text 时可同时指定段落或文字样式。只改已有外观、命名样式、编号或版心时用 docx_format；表格、媒体、批注和修订用对应工具。成功表示写入及内部校验已完成；创建操作在 result.createdIds 返回新对象 ID。',
   modelResult: { renderSuccess: renderDocxContentEditModelResult }
 })
 
 export const DOCX_FORMAT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_format',
-  skillId: 'docx-format',
+  skillId: 'docx-write',
   schema: docxFormatSchema,
   description:
-    '原子修改一个或多个 DOCX 节点的显示格式，包括文字格式、段落格式、表格外观、section、命名样式或编号；同一局部 operation 对所有目标应用同一格式 patch。不负责改写正文内容、表格结构、媒体、批注或修订。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。成功表示写入及内部校验已完成。'
+    '只改已有内容的显示格式，不改正文。包括局部文字、段落、命名样式、编号和 section；同一局部 operation 对所有目标应用同一 patch。插入或替换时的样式写在 docx_content_edit 上；表格外观用 docx_table_edit。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。成功表示写入及内部校验已完成。'
 })
 
 export const DOCX_TABLE_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_table_edit',
-  skillId: 'docx-rich-write',
+  skillId: 'docx-write',
   schema: docxTableEditSchema,
   description:
-    '创建、删除或修改 DOCX 表格结构，包括行列增删和单元格合并拆分；不负责修改已有单元格正文或纯外观格式。成功表示写入及内部校验已完成；创建表格时在 result.createdIds 返回新表格 ID。'
+    '创建、删除或修改 DOCX 表格结构（行列增删、单元格合并拆分），以及表、行、单元格外观。不负责修改已有单元格正文。成功表示写入及内部校验已完成；创建表格时在 result.createdIds 返回新表格 ID。'
 })
 
 export const DOCX_MEDIA_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_media_edit',
-  skillId: 'docx-rich-write',
+  skillId: 'docx-write',
   schema: docxMediaEditSchema,
   description:
     '插入、替换、删除或修改 DOCX 图片等视觉对象，负责媒体文件、relationship、尺寸和替代文字。成功表示写入及内部校验已完成；插入媒体时在 result.createdIds 返回新对象 ID。'
@@ -204,7 +204,7 @@ export const DOCX_MEDIA_EDIT_TOOL_SPEC = defineMutationSpec({
 
 export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineMutationSpec({
   name: 'docx_comments_revisions',
-  skillId: 'docx-rich-write',
+  skillId: 'docx-write',
   schema: docxCommentsRevisionsSchema,
   description:
     '新增、修改、回复或删除 Word 批注，切换修订模式，以及接受或拒绝 Word 修订；这不是文档读取检查工具。成功表示写入及内部校验已完成；新增批注或回复时在 result.createdIds 返回新批注 ID。'
@@ -217,20 +217,14 @@ export const DOCX_READ_TOOL_SPECS = [
   DOCX_READ_VISUALS_TOOL_SPEC
 ] as const
 
-export const DOCX_WRITE_TOOL_SPECS = [DOCX_CONTENT_EDIT_TOOL_SPEC] as const
-
-export const DOCX_FORMAT_TOOL_SPECS = [DOCX_FORMAT_TOOL_SPEC] as const
-
-export const DOCX_RICH_WRITE_TOOL_SPECS = [
+export const DOCX_WRITE_TOOL_SPECS = [
+  DOCX_CONTENT_EDIT_TOOL_SPEC,
+  DOCX_FORMAT_TOOL_SPEC,
   DOCX_TABLE_EDIT_TOOL_SPEC,
   DOCX_MEDIA_EDIT_TOOL_SPEC,
   DOCX_COMMENTS_REVISIONS_TOOL_SPEC
 ] as const
 
-export const DOCX_MUTATION_TOOL_SPECS = [
-  ...DOCX_WRITE_TOOL_SPECS,
-  ...DOCX_FORMAT_TOOL_SPECS,
-  ...DOCX_RICH_WRITE_TOOL_SPECS
-] as const
+export const DOCX_MUTATION_TOOL_SPECS = DOCX_WRITE_TOOL_SPECS
 
 export const DOCX_TOOL_SPECS = [...DOCX_READ_TOOL_SPECS, ...DOCX_MUTATION_TOOL_SPECS] as const
