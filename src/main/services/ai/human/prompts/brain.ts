@@ -96,8 +96,8 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
   </calculation_contract>
 
   <plan_contract>
-    - 复杂任务使用计划，并在关键阶段完成、方案变化或任务受阻时更新。
-    - 更新计划后如果下一步已经明确，尽量同轮调用下一步工具。
+    - 复杂任务使用计划，并在关键阶段完成、方案变化时更新，避免完成一轮就更新一轮。
+    - 更新计划的工具调用，尽可能同其他工具一起发起。
   </plan_contract>
 
   <delivery_contract>
