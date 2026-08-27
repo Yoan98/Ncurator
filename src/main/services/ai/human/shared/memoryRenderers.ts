@@ -2,7 +2,6 @@ import type { HumanPlanItem, HumanPlanItemStatus } from '../types'
 
 const PLAN_STATUS_LABELS: Record<HumanPlanItemStatus, string> = {
   todo: '[todo]',
-  in_progress: '[doing]',
   done: '[done]'
 }
 

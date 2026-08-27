@@ -183,7 +183,7 @@ export const DOCX_FORMAT_TOOL_SPEC = defineMutationSpec({
   skillId: 'docx-format',
   schema: docxFormatSchema,
   description:
-    '原子修改一个或多个 DOCX 节点的文字、段落、表格、行、单元格、section、命名样式或编号；同一局部 operation 对所有目标应用同一格式 patch。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。成功表示写入及内部校验已完成。'
+    '原子修改一个或多个 DOCX 节点的显示格式，包括文字格式、段落格式、表格外观、section、命名样式或编号；同一局部 operation 对所有目标应用同一格式 patch。不负责改写正文内容、表格结构、媒体、批注或修订。省略的格式字段保持不变；update_named_style 会影响所有引用该样式的节点。成功表示写入及内部校验已完成。'
 })
 
 export const DOCX_TABLE_EDIT_TOOL_SPEC = defineMutationSpec({

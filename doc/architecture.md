@@ -128,7 +128,7 @@ flowchart TD
 - `brain` 通过原生 function calling 决定下一步：调用 LLM 时绑定当前可用工具（builtin + agent-control + 已学习 external），根据返回的 `tool_calls` 生成有序分发队列（dispatch）。
 - `dispatch` 是 `tool_calls` 队列的唯一消费者，严格按模型返回顺序分组路由：`learn_skill` → learning、`update_plan` → plan、其余真实工具 → hand；领域节点执行后统一返回 dispatch，队列清空后才回 `context_budget`。
 - `learning` 负责按需加载 external skill，执行 dispatch 分配的 `learn_skill` 并把结果写回消息数组；它不推进或清空分发队列。
-- `plan` 执行 dispatch 分配的 `update_plan`，先用 `UPDATE_PLAN_SCHEMA`（`zod`）校验参数（`status` 仅允许 `todo` / `in_progress` / `done`），通过后把计划写入 `memory.plan` 并回写 `ToolMessage`；校验失败也回写对应错误结果并继续剩余分发队列。
+- `plan` 执行 dispatch 分配的 `update_plan`，先用 `UPDATE_PLAN_SCHEMA`（`zod`）校验参数（`status` 仅允许 `todo` / `done`），通过后把计划写入 `memory.plan` 并回写 `ToolMessage`；校验失败也回写对应错误结果并继续剩余分发队列。
 - `hand` 执行 dispatch 分配的真实工具，把结果以 `ToolMessage` 追加回消息数组；成功、失败或审批拒绝都必须为每个 `tool_call_id` 产生且只产生一条结果，并继续剩余分发队列。
 - `brain` 交付：当 brain 的一轮返回没有任何 `tool_calls` 时，该轮 assistant 的 content 就是最终交付 markdown；brain 直接收尾（apply docx / commit ppt / 收集文件变更 / artifact / `answer_completed`），不再有独立的 mouth 节点与第二次交付 LLM 调用。交付与否由 brain 自主判断，Main 侧不做计划完成度的强制拦截。
 - `context_budget` 负责在每一步前检查上下文预算。

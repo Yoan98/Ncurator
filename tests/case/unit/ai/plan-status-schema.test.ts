@@ -7,18 +7,18 @@ import { getToolSpec } from '../../../../src/main/services/ai/human/tools/regist
 import { buildToolFeedback } from '../../../../src/main/services/ai/human/shared/toolFeedback'
 
 describe('ai unit plan status schema', () => {
-  it('allows todo / in_progress / done as plan item status', () => {
+  it('allows todo / done as plan item status', () => {
     expect(humanPlanItemStatusSchema.parse('todo')).toBe('todo')
-    expect(humanPlanItemStatusSchema.parse('in_progress')).toBe('in_progress')
     expect(humanPlanItemStatusSchema.parse('done')).toBe('done')
+    expect(() => humanPlanItemStatusSchema.parse('in_progress')).toThrow()
     expect(() => humanPlanItemStatusSchema.parse('blocked')).toThrow()
   })
 
-  it('accepts in_progress in the update_plan tool input schema', () => {
+  it('accepts todo and done in the update_plan tool input schema', () => {
     const spec = getToolSpec('update_plan')
     const parsed = spec?.inputSchema.safeParse({
       plan: [
-        { title: '撰写周报', status: 'in_progress' },
+        { title: '撰写周报', status: 'done' },
         { title: '检查是否满足诉求', status: 'todo' }
       ]
     })
@@ -37,9 +37,9 @@ describe('ai unit plan status schema', () => {
 
   it('keeps the plan item schema and update_plan schema on a single shared definition', () => {
     const spec = getToolSpec('update_plan')
-    const planItemParsed = humanPlanItemSchema.safeParse({ title: 'x', status: 'in_progress' })
+    const planItemParsed = humanPlanItemSchema.safeParse({ title: 'x', status: 'done' })
     const updatePlanParsed = spec?.inputSchema.safeParse({
-      plan: [{ title: 'x', status: 'in_progress' }]
+      plan: [{ title: 'x', status: 'done' }]
     })
 
     expect(planItemParsed.success).toBe(true)
@@ -71,7 +71,7 @@ describe('ai unit tool feedback text', () => {
       toolCallId: 'call-2',
       toolName: 'update_plan',
       ok: false,
-      errorMessage: 'status 仅允许 todo/in_progress/done'
+      errorMessage: 'status 仅允许 todo/done'
     })
 
     expect(String(feedback.message.content)).toBe(

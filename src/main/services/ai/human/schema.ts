@@ -73,7 +73,7 @@ export const humanLearningOutcomeSchema = z.object({
   activeToolCount: z.number().int().min(0)
 })
 
-export const humanPlanItemStatusSchema = z.enum(['todo', 'in_progress', 'done'])
+export const humanPlanItemStatusSchema = z.enum(['todo', 'done'])
 
 export const humanPlanItemSchema = z.object({
   title: z.string().min(1),

@@ -26,7 +26,7 @@ describe('ai human mock-llm backend', () => {
                       name: 'update_plan',
                       args: {
                         plan: [
-                          { title: '读取知识库目录', status: 'in_progress' },
+                          { title: '读取知识库目录', status: 'done' },
                           { title: '检查是否满足诉求', status: 'todo' }
                         ]
                       }

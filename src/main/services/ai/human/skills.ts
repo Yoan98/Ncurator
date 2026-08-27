@@ -61,21 +61,24 @@ export const RUNTIME_SKILL_CATALOG = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-write',
-    description: '创建 DOCX 或局部修改普通内容节点。'
+    description:
+      '创建 DOCX，或修改普通内容节点中的文本和内容结构。不负责样式、段落格式、表格结构、媒体、批注或修订。'
   },
   'docx-format': {
     familyId: 'docx',
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-format',
-    description: '修改 DOCX 的文字、段落、表格、section、命名样式和编号格式。'
+    description:
+      '修改已有内容的显示格式，包括文字和段落格式、表格外观、section、命名样式和编号格式。不负责新增或改写正文内容，也不负责表格结构、媒体、批注或修订。'
   },
   'docx-rich-write': {
     familyId: 'docx',
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-rich-write',
-    description: '修改 DOCX 的表格结构、媒体、批注和修订。'
+    description:
+      '修改 DOCX 的复杂结构，包括表格行列和合并、媒体对象、批注和修订。不负责普通正文编辑或一般样式修改。'
   },
   'pdf-read': {
     familyId: 'pdf',
