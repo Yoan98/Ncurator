@@ -19,10 +19,86 @@ import { createDocxFile } from '../../../../src/main/services/ai/human/tools/doc
 const fixturePath = path.resolve('tests/fixtures/workspace/灵感测试.docx')
 
 describe('docx recursive edit executor', () => {
+  it('keeps shared media until its final visual reference is deleted', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-shared-media-'))
+    const filePath = path.join(tempDir, 'shared.docx')
+    const imagePath = path.join(tempDir, 'pixel.png')
+    try {
+      await createDocxFile({
+        filePath,
+        nodes: [
+          {
+            type: 'paragraph',
+            children: [{ type: 'run', children: [{ type: 'text', text: 'anchor' }] }]
+          }
+        ]
+      })
+      await fs.writeFile(
+        imagePath,
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nS8AAAAASUVORK5CYII=',
+          'base64'
+        )
+      )
+      const source = await fs.readFile(filePath)
+      const sourceIndex = buildDocumentNodeIndex(await loadDocxBundle(source))
+      const paragraph = sourceIndex.outline[0]!
+      const paragraphDetail = sourceIndex.detailByNodeId.get(paragraph.nodeId)
+      if (!paragraphDetail || paragraphDetail.type !== 'paragraph') {
+        throw new Error('paragraph fixture missing')
+      }
+      const runNode = paragraphDetail.children.find((node) => node.type === 'run')
+      if (!runNode) throw new Error('run fixture missing')
+      const withImage = await applyDocxOps({
+        buffer: source,
+        ops: [
+          {
+            type: 'replace_node',
+            nodeId: runNode.nodeId,
+            node: { type: 'visual', imagePath }
+          }
+        ]
+      })
+      const duplicatedBundle = await loadDocxBundle(withImage.buffer)
+      const duplicatedIndex = buildDocumentNodeIndex(duplicatedBundle)
+      const firstVisual = collectVisualNodeEntries(duplicatedIndex)[0]?.[1]
+      const run = firstVisual ? removableVisualRun(firstVisual.node) : undefined
+      if (!run?.parentNode) throw new Error('visual run missing')
+      run.parentNode.insertBefore(run.cloneNode(true), run.nextSibling)
+      const duplicated = await duplicatedBundle.zip.generateAsync({ type: 'nodebuffer' })
+      const duplicatedWithXml = await JSZip.loadAsync(duplicated)
+      duplicatedWithXml.file(
+        'word/document.xml',
+        new XMLSerializer().serializeToString(duplicatedBundle.documentDom)
+      )
+      const sharedSource = await duplicatedWithXml.generateAsync({ type: 'nodebuffer' })
+      const sharedIndex = buildDocumentNodeIndex(await loadDocxBundle(sharedSource))
+      const visuals = collectVisualNodeEntries(sharedIndex).map(([, visual]) => visual)
+      expect(new Set(visuals.map((visual) => visual.nodeId)).size).toBe(2)
+
+      const oneDeleted = await applyDocxOps({
+        buffer: sharedSource,
+        ops: [{ type: 'delete_node', nodeId: visuals[0]!.nodeId }]
+      })
+      const oneDeletedZip = await JSZip.loadAsync(oneDeleted.buffer)
+      expect(oneDeletedZip.file('word/media/ncurator-1.png')).not.toBeNull()
+      const remainingIndex = buildDocumentNodeIndex(await loadDocxBundle(oneDeleted.buffer))
+      const remaining = collectVisualNodeEntries(remainingIndex)[0]?.[1]
+      const allDeleted = await applyDocxOps({
+        buffer: oneDeleted.buffer,
+        ops: [{ type: 'delete_node', nodeId: remaining!.nodeId }]
+      })
+      expect((await JSZip.loadAsync(allDeleted.buffer)).file('word/media/ncurator-1.png')).toBeNull()
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
   it('replaces ordinary nodes with visuals and visuals with ordinary nodes', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-node-type-replace-'))
     const filePath = path.join(tempDir, 'type-replace.docx')
     const imagePath = path.join(tempDir, 'pixel.png')
+    const replacementImagePath = path.join(tempDir, 'replacement.png')
     try {
       await createDocxFile({
         filePath,
@@ -40,6 +116,7 @@ describe('docx recursive edit executor', () => {
           'base64'
         )
       )
+      await fs.copyFile(imagePath, replacementImagePath)
       const source = await fs.readFile(filePath)
       const before = buildDocumentNodeIndex(await loadDocxBundle(source))
       const detail = before.detailByNodeId.get(before.rootNodeIds[0]!)
@@ -66,9 +143,26 @@ describe('docx recursive edit executor', () => {
       const withVisual = buildDocumentNodeIndex(await loadDocxBundle(visualReplacement.buffer))
       const visual = collectVisualNodeEntries(withVisual)[0]?.[1]
       expect(visual?.kind).toBe('image')
+      expect(visual?.nodeId).not.toBe(run.nodeId)
+
+      const imageReplaced = await applyDocxOps({
+        buffer: visualReplacement.buffer,
+        ops: [
+          {
+            type: 'replace_node',
+            nodeId: visual!.nodeId,
+            node: { type: 'visual', imagePath: replacementImagePath, altText: 'new image' }
+          }
+        ]
+      })
+      const replacedArchive = await JSZip.loadAsync(imageReplaced.buffer)
+      expect(replacedArchive.file('word/media/ncurator-1.png')).toBeNull()
+      expect(replacedArchive.file('word/media/ncurator-2.png')).not.toBeNull()
+      const imageReplacedIndex = buildDocumentNodeIndex(await loadDocxBundle(imageReplaced.buffer))
+      expect(collectVisualNodeEntries(imageReplacedIndex)[0]?.[1].nodeId).toBe(visual!.nodeId)
 
       const textReplacement = await applyDocxOps({
-        buffer: visualReplacement.buffer,
+        buffer: imageReplaced.buffer,
         ops: [
           {
             type: 'replace_node',
@@ -81,9 +175,21 @@ describe('docx recursive edit executor', () => {
       const after = buildDocumentNodeIndex(afterBundle)
       expect(collectVisualNodeEntries(after)).toHaveLength(0)
       expect(after.outline[0]?.text).toContain('restored text')
+      const restoredDetail = after.detailByNodeId.get(after.rootNodeIds[0]!)
+      if (!restoredDetail || restoredDetail.type !== 'paragraph') {
+        throw new Error('restored paragraph missing')
+      }
+      expect(restoredDetail.children.find((node) => node.type === 'run')?.nodeId).not.toBe(
+        visual!.nodeId
+      )
       const archive = await JSZip.loadAsync(textReplacement.buffer)
       const relationships = await archive.file('word/_rels/document.xml.rels')?.async('text')
       expect(relationships).not.toContain('/relationships/image')
+      expect(
+        Object.keys(archive.files).filter(
+          (name) => name.startsWith('word/media/') && !archive.files[name]?.dir
+        )
+      ).toEqual([])
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true })
     }
@@ -250,6 +356,23 @@ describe('docx recursive edit executor', () => {
     expect(
       collectVisualNodeEntries(after).some(([, visual]) => visual.story.type === 'header')
     ).toBe(true)
+    const headerVisual = collectVisualNodeEntries(after).find(
+      ([, visual]) => visual.story.type === 'header'
+    )?.[1]
+    const bodyAnchor = after.outline.find((node) => node.story.type === 'body')
+    await expect(
+      applyDocxOps({
+        buffer: mediaEdited.buffer,
+        ops: [
+          {
+            type: 'move_node',
+            nodeId: headerVisual!.nodeId,
+            anchorNodeId: bodyAnchor!.nodeId,
+            position: 'after'
+          }
+        ]
+      })
+    ).rejects.toThrow('cross-story move')
     const afterZip = await JSZip.loadAsync(mediaEdited.buffer)
     expect(await afterZip.file('word/_rels/header1.xml.rels')?.async('text')).toContain(
       '/relationships/image'
@@ -284,6 +407,13 @@ describe('docx recursive edit executor', () => {
     expect(collectVisualNodeEntries(ownerReplacedIndex).length).toBeLessThan(
       collectVisualNodeEntries(before).length
     )
+    const beforeMedia = Object.keys((await JSZip.loadAsync(source)).files).filter((name) =>
+      name.startsWith('word/media/')
+    )
+    const afterMedia = Object.keys((await JSZip.loadAsync(ownerReplaced.buffer)).files).filter(
+      (name) => name.startsWith('word/media/')
+    )
+    expect(afterMedia.length).toBeLessThan(beforeMedia.length)
 
     const paragraph = before.outline.find(
       (node) => node.type === 'paragraph' && node.text.length >= 2
@@ -670,3 +800,8 @@ describe('docx recursive edit executor', () => {
     }
   })
 })
+
+const removableVisualRun = (node: Element): Element =>
+  node.parentNode?.nodeType === 1 && (node.parentNode as Element).localName === 'r'
+    ? (node.parentNode as Element)
+    : node

@@ -100,7 +100,7 @@ const ModelSettingsPanel: React.FC = () => {
       setMode('preset')
       setSelectedProviderId(preset.providerId)
       form.resetFields()
-      form.setFieldsValue({ name: record.name, api_key: record.api_key })
+      form.setFieldsValue({ api_key: record.api_key })
     } else {
       setMode('custom')
       setSelectedProviderId(null)
@@ -115,13 +115,6 @@ const ModelSettingsPanel: React.FC = () => {
 
   const handleSelectProvider = (providerId: LlmProviderId): void => {
     setSelectedProviderId(providerId)
-    const preset = getPresetProvider(providerId)
-    const currentName = String(form.getFieldValue('name') || '').trim()
-    const isAutoName =
-      !currentName || LLM_PRESET_PROVIDERS.some((provider) => provider.label === currentName)
-    if (isAutoName) {
-      form.setFieldValue('name', preset?.label || '')
-    }
   }
 
   const handleDelete = async (id: string): Promise<void> => {
@@ -162,7 +155,7 @@ const ModelSettingsPanel: React.FC = () => {
         }
         nextConfig = {
           id,
-          name: String(values.name || '').trim(),
+          name: preset.label,
           providerKind: registry.providerKind,
           base_url: registry.defaultBaseUrl,
           api_key: values.api_key
@@ -206,9 +199,7 @@ const ModelSettingsPanel: React.FC = () => {
         return (
           <div className="flex min-w-0 items-center gap-2">
             <div className="flex h-6 w-6 shrink-0 items-center justify-center">
-              {preset
-                ? getProviderLogo(preset.providerId)
-                : getProviderLogo('custom')}
+              {preset ? getProviderLogo(preset.providerId) : getProviderLogo('custom')}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
@@ -337,14 +328,6 @@ const ModelSettingsPanel: React.FC = () => {
       >
         <Form form={form} layout="vertical">
           <Form.Item
-            name="name"
-            label="配置名称"
-            rules={[{ required: true, message: '请输入配置名称' }]}
-          >
-            <Input placeholder="例如：DeepSeek" data-testid={settingsSelectors.modelNameInput} />
-          </Form.Item>
-
-          <Form.Item
             name="providerKind"
             hidden
             rules={[{ required: true, message: '请选择服务商' }]}
@@ -352,7 +335,7 @@ const ModelSettingsPanel: React.FC = () => {
             <Input data-testid={settingsSelectors.modelProviderInput} />
           </Form.Item>
 
-          <Form.Item label="配置类型" className="!mb-0">
+          <Form.Item label="类型:" className="!mb-0">
             <Radio.Group
               value={mode}
               onChange={(event) => handleModeChange(event.target.value)}
@@ -368,17 +351,15 @@ const ModelSettingsPanel: React.FC = () => {
           </Form.Item>
 
           {mode === 'preset' ? (
-            <Form.Item label="选择服务商" className="!mb-0 !mt-4">
+            <Form.Item label="选择服务商:" className="!mb-0 !mt-4">
               <Select
                 placeholder="选择服务商"
-                disabled={editingPresetProviderId !== null}
                 value={selectedProviderId || undefined}
                 onChange={(value: LlmProviderId) => handleSelectProvider(value)}
                 data-testid={settingsSelectors.modelPresetProviderSelect}
                 options={LLM_PRESET_PROVIDERS.map((provider) => {
                   const configured = configuredPresetProviderIds.has(provider.providerId)
-                  const disabled =
-                    configured && editingPresetProviderId !== provider.providerId
+                  const disabled = configured && editingPresetProviderId !== provider.providerId
                   return {
                     value: provider.providerId,
                     disabled,
@@ -398,34 +379,44 @@ const ModelSettingsPanel: React.FC = () => {
               />
             </Form.Item>
           ) : (
-            <Form.Item
-              name="base_url"
-              label="模型服务地址"
-              rules={[{ required: true, message: '请输入模型服务地址' }]}
-              className="!mb-0 !mt-4"
-            >
-              <Input
-                placeholder="填写模型服务提供的 API Base URL"
-                allowClear
-                data-testid={settingsSelectors.modelBaseUrlInput}
-                onBlur={() => {
-                  const baseUrl = String(form.getFieldValue('base_url') || '')
-                  if (baseUrl) applyProviderFromBaseUrl(baseUrl)
-                }}
-              />
-            </Form.Item>
+            <>
+              <Form.Item
+                name="name"
+                label="名称:"
+                rules={[{ required: true, message: '请输入名称' }]}
+                className="!mb-0 !mt-4"
+              >
+                <Input
+                  placeholder="例如：公司 OpenAI"
+                  data-testid={settingsSelectors.modelNameInput}
+                />
+              </Form.Item>
+              <Form.Item
+                name="base_url"
+                label="模型服务地址:"
+                rules={[{ required: true, message: '请输入模型服务地址' }]}
+                className="!mb-0 !mt-4"
+              >
+                <Input
+                  placeholder="填写模型服务提供的 API Base URL"
+                  allowClear
+                  data-testid={settingsSelectors.modelBaseUrlInput}
+                  onBlur={() => {
+                    const baseUrl = String(form.getFieldValue('base_url') || '')
+                    if (baseUrl) applyProviderFromBaseUrl(baseUrl)
+                  }}
+                />
+              </Form.Item>
+            </>
           )}
 
           <Form.Item
             name="api_key"
-            label="API Key"
+            label="API Key:"
             rules={[{ required: true, message: '请输入 API Key' }]}
             className="!mb-0 !mt-4"
           >
-            <Input.Password
-              placeholder="sk-..."
-              data-testid={settingsSelectors.modelApiKeyInput}
-            />
+            <Input.Password placeholder="sk-..." data-testid={settingsSelectors.modelApiKeyInput} />
           </Form.Item>
         </Form>
       </Modal>

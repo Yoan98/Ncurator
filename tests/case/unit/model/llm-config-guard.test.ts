@@ -21,7 +21,7 @@ const createStore = (existing: LLMConfig[]): LlmConfigStore =>
   }) as unknown as LlmConfigStore
 
 describe('main llm config guard', () => {
-  it('pins base url and provider kind while keeping the provided name', async () => {
+  it('allows creating a preset config and pins name, base url and provider kind', async () => {
     const store = createStore([])
     const check = await validateLlmConfigForSave(
       store,
@@ -65,7 +65,7 @@ describe('main llm config guard', () => {
     expect(check.config.providerKind).toBe('deepseek')
   })
 
-  it('keeps a custom name for preset configs and pins base url and kind', async () => {
+  it('treats renamed provider configs as custom mode without blocking', async () => {
     const store = createStore([])
     const check = await validateLlmConfigForSave(
       store,
@@ -74,20 +74,15 @@ describe('main llm config guard', () => {
     expect(check.ok).toBe(true)
     if (!check.ok) return
     expect(check.config.name).toBe('DeepSeek 改过')
-    expect(check.config.base_url).toBe('https://api.deepseek.com')
-    expect(check.config.providerKind).toBe('deepseek')
   })
 
-  it('classifies by base url even when name belongs to another provider', async () => {
+  it('treats cross-provider name and base url combos as custom mode', async () => {
     const store = createStore([])
     const check = await validateLlmConfigForSave(
       store,
       buildConfig({ id: 'cfg-new', name: 'Kimi', base_url: 'https://api.deepseek.com' })
     )
     expect(check.ok).toBe(true)
-    if (!check.ok) return
-    expect(check.config.base_url).toBe('https://api.deepseek.com')
-    expect(check.config.providerKind).toBe('deepseek')
   })
 
   it('rejects custom configs with a duplicated name', async () => {

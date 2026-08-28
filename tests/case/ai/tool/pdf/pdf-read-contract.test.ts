@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { createElement } from 'react'
+import { Document, Image, Page, renderToBuffer } from '@react-pdf/renderer'
 import { describe, it } from 'vitest'
 import { createPdfToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -35,6 +37,59 @@ const sha256 = async (filePath: string): Promise<string> =>
     .digest('hex')
 
 describe('ai tool pdf backend', () => {
+  it('pdf-image-only-page-contract', async () => {
+    await runBackendCase({
+      caseId: 'pdf-image-only-page-contract',
+      harnessMode: 'tool-real',
+      domain: 'ai',
+      suite: 'tool',
+      groups: ['pdf'],
+      description: '验证没有文本层的扫描 PDF 仍返回可读取的整页图片。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const imagePath = path.join(runtime.workspaceRoot, 'scan.png')
+        const sourcePath = path.join(runtime.workspaceRoot, 'scan.pdf')
+        await fs.writeFile(
+          imagePath,
+          Buffer.from(
+            'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+            'base64'
+          )
+        )
+        const document = createElement(
+          Document,
+          null,
+          createElement(Page, { size: [200, 200] }, createElement(Image, { src: imagePath }))
+        )
+        await fs.writeFile(sourcePath, await renderToBuffer(document))
+        const harness = createPdfToolHarness(runtime)
+        try {
+          return await harness.invoke<PdfReadResult>('pdf_read_pages', {
+            sourcePath,
+            selection: { type: 'page_numbers', pageNumbers: [1] }
+          })
+        } finally {
+          await harness.release()
+        }
+      },
+      assert: async (result, runtime) => {
+        const page = result.pages[0]
+        const imageExists = page?.pageImagePath
+          ? await fs.access(page.pageImagePath).then(() => true).catch(() => false)
+          : false
+        runtime.assertThat(
+          page?.text === '' && page.textStatus === 'empty' && imageExists,
+          {
+            name: 'pdf-image-only-page-remains-readable',
+            message: '纯扫描 PDF 应标记为空文本，同时返回存在的 pageImagePath。',
+            data: result
+          }
+        )
+      }
+    })
+  })
+
   it('pdf-inspect-read-search-contract', async () => {
     await runBackendCase({
       caseId: 'pdf-inspect-read-search-contract',

@@ -131,6 +131,43 @@ describe('ai unit llm executor text path', () => {
     expect(invoke).toHaveBeenCalledTimes(1)
   })
 
+  it('includes image identity in context hashes without recording base64 payloads', async () => {
+    const llmIoRecords: AiLlmIoRecord[] = []
+    createChatModelMock.mockImplementation(() => ({
+      invoke: async () => ({ content: 'ok' })
+    }))
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-image-hash',
+        sendEvent: () => undefined,
+        recordLlmIo: (record) => llmIoRecords.push(record)
+      },
+      runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
+      checkCancelled: () => undefined
+    })
+    for (const payload of ['AA==', 'AQ==']) {
+      await executor.chatMessages({
+        caller: 'human.brain',
+        schemaName: 'human_brain_messages',
+        messages: [
+          new HumanMessage({
+            content: [
+              { type: 'text', text: '读取图片' },
+              { type: 'image_url', image_url: { url: `data:image/png;base64,${payload}` } }
+            ]
+          })
+        ]
+      })
+    }
+
+    expect(llmIoRecords).toHaveLength(2)
+    expect(llmIoRecords[0]?.dynamicContextHash).not.toBe(llmIoRecords[1]?.dynamicContextHash)
+    expect(JSON.stringify(llmIoRecords)).not.toContain('data:image/png;base64,AA==')
+    expect(JSON.stringify(llmIoRecords)).not.toContain('data:image/png;base64,AQ==')
+  })
+
   it('forwards driver structured output and text output without persisting preferences', async () => {
     const saveConfig = vi.fn(async () => undefined)
     const driver: AiLlmDriver = {

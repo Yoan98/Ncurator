@@ -31,7 +31,8 @@ import {
   extractTextContent,
   getErrorText,
   normalizeStructuredOutputError,
-  parsePromptJsonOutput
+  parsePromptJsonOutput,
+  serializeMessageContentForTelemetry
 } from './structuredOutput'
 import {
   runLlmCallWithActivity,
@@ -826,7 +827,7 @@ export const createAiLlmExecutor = (input: {
       const userHash = JSON.stringify(
         request.messages.map((message) => ({
           role: message.getType(),
-          content: extractTextContent(message.content)
+          content: serializeMessageContentForTelemetry(message.content)
         }))
       )
       const result = await runLlmCallWithActivity<string>({
@@ -888,7 +889,7 @@ export const createAiLlmExecutor = (input: {
       const userHash = JSON.stringify(
         request.messages.map((message) => ({
           role: message.getType(),
-          content: extractTextContent(message.content)
+          content: serializeMessageContentForTelemetry(message.content)
         }))
       )
       const result = await runLlmCallWithActivity<AIMessage>({

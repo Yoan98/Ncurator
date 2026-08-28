@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { jsonrepair } from 'jsonrepair'
 
 type ErrorObject = Record<string, unknown>
@@ -190,6 +191,40 @@ export const extractTextContent = (content: unknown): string => {
   }
 
   return ''
+}
+
+const summarizeImageUrl = (url: string): string => {
+  if (!url.startsWith('data:')) return url
+  const separator = url.indexOf(',')
+  const header = separator >= 0 ? url.slice(0, separator) : 'data:'
+  return `${header};sha256=${createHash('sha256').update(url).digest('hex')};length=${url.length}`
+}
+
+export const serializeMessageContentForTelemetry = (content: unknown): string => {
+  const summarize = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(summarize)
+    if (!value || typeof value !== 'object') return value
+    const record = value as Record<string, unknown>
+    const imageUrl = record.image_url
+    if (typeof imageUrl === 'string') {
+      return { ...record, image_url: summarizeImageUrl(imageUrl) }
+    }
+    if (imageUrl && typeof imageUrl === 'object') {
+      const imageRecord = imageUrl as Record<string, unknown>
+      return {
+        ...record,
+        image_url: {
+          ...imageRecord,
+          ...(typeof imageRecord.url === 'string'
+            ? { url: summarizeImageUrl(imageRecord.url) }
+            : {})
+        }
+      }
+    }
+    return Object.fromEntries(Object.entries(record).map(([key, item]) => [key, summarize(item)]))
+  }
+  if (typeof content === 'string') return content
+  return JSON.stringify(summarize(content))
 }
 
 export const normalizePromptJsonText = (raw: string): string => {

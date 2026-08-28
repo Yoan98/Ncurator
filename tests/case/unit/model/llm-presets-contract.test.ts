@@ -67,7 +67,7 @@ describe('shared llm presets catalog', () => {
 })
 
 describe('shared llm presets mode derivation', () => {
-  it('classifies preset mode by host regardless of name', () => {
+  it('classifies preset mode when host matches and name equals provider label', () => {
     expect(
       resolvePresetModeProvider(
         buildConfig({ name: 'DeepSeek', base_url: 'https://api.deepseek.com' })
@@ -78,16 +78,19 @@ describe('shared llm presets mode derivation', () => {
         buildConfig({ name: 'Kimi', base_url: 'https://api.moonshot.cn/v1' })
       )?.providerId
     ).toBe('moonshot')
+  })
+
+  it('classifies custom mode when name differs from the provider label', () => {
     expect(
       resolvePresetModeProvider(
         buildConfig({ name: '我的 DeepSeek', base_url: 'https://api.deepseek.com' })
-      )?.providerId
-    ).toBe('deepseek')
+      )
+    ).toBeNull()
     expect(
       resolvePresetModeProvider(
         buildConfig({ name: 'DeepSeek 配置', base_url: 'https://api.deepseek.com/v1' })
-      )?.providerId
-    ).toBe('deepseek')
+      )
+    ).toBeNull()
   })
 
   it('classifies custom mode for unknown or removed providers', () => {

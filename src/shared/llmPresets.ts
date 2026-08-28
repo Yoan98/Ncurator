@@ -3,12 +3,6 @@ import { LLM_PROVIDER_REGISTRY, resolveLlmProvider } from './llmProvider'
 
 export type LlmPriceTier = 'low' | 'mid' | 'high'
 
-export const LLM_PRICE_TIER_LABELS: Record<LlmPriceTier, string> = {
-  low: '便宜',
-  mid: '有点贵',
-  high: '贵'
-}
-
 export type LlmPresetModel = {
   id: string
   label: string
@@ -108,5 +102,6 @@ export const resolvePresetModeProvider = (
 ): LlmPresetProvider | null => {
   const provider = getPresetProviderByBaseUrl(config.base_url)
   if (!provider) return null
+  if (config.name.trim() !== provider.label) return null
   return provider
 }

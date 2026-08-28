@@ -6,6 +6,7 @@ import { createCanvas } from '@napi-rs/canvas'
 import { describe, expect, it } from 'vitest'
 import {
   createImageReferenceMessage,
+  estimateMessagesForContext,
   projectMessagesForMainModel
 } from '../../../../src/main/services/ai/human/memory/multimodal'
 import { prepareImagesForMainModel } from '../../../../src/main/services/ai/human/tools/agentControl/readImage'
@@ -156,6 +157,22 @@ describe('ai unit read_image multimodal projection', () => {
       'https://example.com/first.webp',
       'https://example.com/second.webp'
     ])
+  })
+
+  it('includes visual input in context estimates', () => {
+    const textOnly = estimateMessagesForContext([createImageReferenceMessage([])])
+    const withImage = estimateMessagesForContext([
+      createImageReferenceMessage([
+        {
+          path: '/tmp/large.webp',
+          mimeType: 'image/webp',
+          sizeBytes: 100,
+          width: 1024,
+          height: 1024
+        }
+      ])
+    ])
+    expect(withImage - textOnly).toBeGreaterThanOrEqual(1024)
   })
 
   it('evicts oldest images in stable batches of twenty without mutating history', async () => {

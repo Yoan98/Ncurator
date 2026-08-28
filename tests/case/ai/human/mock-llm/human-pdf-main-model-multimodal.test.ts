@@ -47,7 +47,7 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: {
-                  thought: { next: '读取页面并把页面图片加入主模型上下文。' },
+                  thought: { next: '先读取目标页面，取得正文和页面图片路径。' },
                   nextAction: {
                     action: 'hand',
                     calls: [
@@ -57,9 +57,17 @@ describe('ai human mock-llm backend', () => {
                           sourcePath: reference.absolutePath,
                           selection: { type: 'page_numbers', pageNumbers: [1, 9] }
                         }
-                      },
-                      { toolName: 'read_image', args: { paths: [pageImagePath] } }
+                      }
                     ]
+                  }
+                }
+              },
+              {
+                output: {
+                  thought: { next: '使用上一轮返回的页面图片路径读取图片。' },
+                  nextAction: {
+                    action: 'hand',
+                    calls: [{ toolName: 'read_image', args: { paths: [pageImagePath] } }]
                   }
                 }
               },
@@ -88,7 +96,9 @@ describe('ai human mock-llm backend', () => {
             starts.some((event) => event.toolName === 'read_image') &&
             toolResults.some(
               (event) => event.toolName === 'read_image' && event.result?.ok === true
-            ),
+            ) &&
+            starts.findIndex((event) => event.toolName === 'pdf_read_pages') <
+              starts.findIndex((event) => event.toolName === 'read_image'),
           {
             name: 'pdf-page-image-is-added-through-read-image',
             message: 'PDF 页面图片应通过 read_image 加入同一个主模型请求。',

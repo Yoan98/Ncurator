@@ -7,7 +7,176 @@ import { createDocxFile } from '../../../../src/main/services/ai/human/tools/doc
 import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/tools/docx/worker/docxWorker'
 import JSZip from 'jszip'
 
+type IdentityNode = { type: string; nodeId: string; children?: IdentityNode[] }
+
+const findNodeByType = (node: IdentityNode, type: string): IdentityNode | undefined => {
+  if (node.type === type) return node
+  for (const child of node.children || []) {
+    const found = findNodeByType(child, type)
+    if (found) return found
+  }
+  return undefined
+}
+
 describe('DOCX v2 stable node identity', () => {
+  it('changes nodeId across node types and preserves it for visual-to-visual replacement', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-type-identity-v2-'))
+    const filePath = path.join(tempDir, 'types.docx')
+    const imagePath = path.join(tempDir, 'pixel.png')
+    const runId = randomUUID()
+    try {
+      await createDocxFile({
+        filePath,
+        nodes: [
+          {
+            type: 'paragraph',
+            children: [{ type: 'run', children: [{ type: 'text', text: 'replace me' }] }]
+          }
+        ]
+      })
+      await fs.writeFile(
+        imagePath,
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+          'base64'
+        )
+      )
+      const opened = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'open',
+        payload: { sourcePath: filePath }
+      })
+      if (!opened.ok || opened.payload.action !== 'open') throw new Error('open failed')
+      const outlined = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'outline',
+        payload: {
+          docId: opened.payload.docId,
+          fromNodeIndex: 0,
+          toNodeIndex: 1,
+          includeCells: true
+        }
+      })
+      if (!outlined.ok || outlined.payload.action !== 'outline') throw new Error('outline failed')
+      const paragraphId = outlined.payload.nodes[0]!.nodeId
+      const before = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'get_node',
+        payload: { docId: opened.payload.docId, nodeId: paragraphId }
+      })
+      if (!before.ok || before.payload.action !== 'get_node' || before.payload.node.type !== 'paragraph') {
+        throw new Error('paragraph missing')
+      }
+      const originalRunId = before.payload.node.children.find((node) => node.type === 'run')!.nodeId
+      const insertedVisual = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'apply_operations',
+        payload: {
+          docId: opened.payload.docId,
+          operations: [
+            {
+              type: 'replace_node',
+              nodeId: originalRunId,
+              node: { type: 'visual', imagePath, altText: 'first' }
+            }
+          ]
+        }
+      })
+      if (!insertedVisual.ok || insertedVisual.payload.action !== 'apply_operations') {
+        throw new Error('visual insertion failed')
+      }
+      const visualParagraph = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'get_node',
+        payload: { docId: insertedVisual.payload.newDocId, nodeId: paragraphId }
+      })
+      if (
+        !visualParagraph.ok ||
+        visualParagraph.payload.action !== 'get_node' ||
+        visualParagraph.payload.node.type !== 'paragraph'
+      ) {
+        throw new Error('visual paragraph missing')
+      }
+      const visualId = findNodeByType(visualParagraph.payload.node, 'visual')!.nodeId
+      expect(visualId).not.toBe(originalRunId)
+
+      const updatedVisual = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'apply_operations',
+        payload: {
+          docId: insertedVisual.payload.newDocId,
+          operations: [
+            {
+              type: 'replace_node',
+              nodeId: visualId,
+              node: { type: 'visual', altText: 'updated' }
+            }
+          ]
+        }
+      })
+      if (!updatedVisual.ok || updatedVisual.payload.action !== 'apply_operations') {
+        throw new Error('visual update failed')
+      }
+      const updatedParagraph = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'get_node',
+        payload: { docId: updatedVisual.payload.newDocId, nodeId: paragraphId }
+      })
+      if (
+        !updatedParagraph.ok ||
+        updatedParagraph.payload.action !== 'get_node' ||
+        updatedParagraph.payload.node.type !== 'paragraph'
+      ) {
+        throw new Error('updated paragraph missing')
+      }
+      expect(findNodeByType(updatedParagraph.payload.node, 'visual')?.nodeId).toBe(visualId)
+
+      const restoredRun = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'apply_operations',
+        payload: {
+          docId: updatedVisual.payload.newDocId,
+          operations: [
+            { type: 'replace_node', nodeId: visualId, node: { type: 'run', text: 'restored' } }
+          ]
+        }
+      })
+      if (!restoredRun.ok || restoredRun.payload.action !== 'apply_operations') {
+        throw new Error('run restoration failed')
+      }
+      const restoredParagraph = await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'get_node',
+        payload: { docId: restoredRun.payload.newDocId, nodeId: paragraphId }
+      })
+      if (
+        !restoredParagraph.ok ||
+        restoredParagraph.payload.action !== 'get_node' ||
+        restoredParagraph.payload.node.type !== 'paragraph'
+      ) {
+        throw new Error('restored paragraph missing')
+      }
+      expect(findNodeByType(restoredParagraph.payload.node, 'run')?.nodeId).not.toBe(visualId)
+    } finally {
+      await handleDocxWorkerRequest({
+        requestId: randomUUID(),
+        runId,
+        action: 'release_run',
+        payload: {}
+      })
+      await fs.rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
   it('keeps header identity when document_end adds a body node', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-story-identity-v2-'))
     const filePath = path.join(tempDir, 'story.docx')

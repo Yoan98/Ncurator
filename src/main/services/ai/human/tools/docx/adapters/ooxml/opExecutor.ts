@@ -5,6 +5,7 @@ import type JSZip from 'jszip'
 import type { DocxBorders, DocxChangedNode, DocxOperation, DocxStylePatch } from '../../types'
 import { buildDocumentNodeIndex, extractNodeText, loadDocxBundle } from './nodeIndex'
 import { createParagraphFromNode, createRelationshipWriter } from './createNodeDom'
+import { resolveDocxRelationshipTarget } from './relationshipPath'
 import {
   childElements,
   collectText,
@@ -64,6 +65,26 @@ const attrByLocalName = (node: Element, name: string): string => {
   return ''
 }
 
+const collectRelationshipIds = (node: Element): string[] => {
+  const ids = new Set<string>()
+  const visit = (current: Element): void => {
+    for (let index = 0; index < current.attributes.length; index += 1) {
+      const attr = current.attributes.item(index)
+      if (attr && ['embed', 'link', 'id', 'dm'].includes(attr.localName) && attr.value) {
+        ids.add(attr.value)
+      }
+    }
+    childElements(current).forEach(visit)
+  }
+  visit(node)
+  return [...ids]
+}
+
+const isRelationshipReferenced = (root: Element, relationshipId: string): boolean =>
+  ['embed', 'link', 'id', 'dm'].some(
+    (attributeName) => attrByLocalName(root, attributeName) === relationshipId
+  ) || childElements(root).some((child) => isRelationshipReferenced(child, relationshipId))
+
 const setText = (node: Element, value: string): void => {
   while (node.firstChild) node.removeChild(node.firstChild)
   node.appendChild(node.ownerDocument.createTextNode(value))
@@ -74,6 +95,7 @@ const setText = (node: Element, value: string): void => {
 const writeDocumentXml = async (
   bundle: Awaited<ReturnType<typeof loadDocxBundle>>
 ): Promise<Buffer> => {
+  await cleanupUnusedImageRelationships(bundle)
   const domByPartName = new Map<string, Document>([['word/document.xml', bundle.documentDom]])
   bundle.stories.forEach((part) => domByPartName.set(part.partName, part.dom))
   domByPartName.forEach((dom, partName) => {
@@ -449,6 +471,8 @@ const applyContentDomainOp = async (
     bundle.zip,
     partNameForNode(index, op.nodeId)
   )
+  const partName = partNameForNode(index, op.nodeId)
+  const removedRelationshipIds = collectRelationshipIds(target)
   if (op.type === 'delete_node') {
     const deletesRoot = index.nodesById.has(op.nodeId)
     target.parentNode?.removeChild(target)
@@ -473,6 +497,9 @@ const applyContentDomainOp = async (
     parent.replaceChild(replacement, target)
   }
   await relationships.persist()
+  for (const relationshipId of removedRelationshipIds) {
+    await removeUnusedRelationship(bundle, partName, relationshipId)
+  }
   return {
     buffer: await writeDocumentXml(bundle),
     changedNodes: [changedNode(index, owner, 'replace_node')]
@@ -1064,6 +1091,86 @@ const persistPartRelationships = (zip: JSZip, partName: string, relationships: D
   zip.file(relationshipPartName(partName), new XMLSerializer().serializeToString(relationships))
 }
 
+const sourcePartForRelationshipPart = (relationshipPart: string): string | undefined => {
+  const normalized = relationshipPart.replace(/\\/g, '/')
+  const marker = '/_rels/'
+  const markerIndex = normalized.lastIndexOf(marker)
+  if (markerIndex < 0 || !normalized.endsWith('.rels')) return undefined
+  return `${normalized.slice(0, markerIndex)}/${normalized
+    .slice(markerIndex + marker.length)
+    .slice(0, -'.rels'.length)}`
+}
+
+const isMediaTargetReferenced = async (zip: JSZip, mediaPath: string): Promise<boolean> => {
+  const relationshipParts = Object.keys(zip.files).filter(
+    (name) => name.endsWith('.rels') && !zip.files[name]?.dir
+  )
+  for (const relationshipPart of relationshipParts) {
+    const sourcePart = sourcePartForRelationshipPart(relationshipPart)
+    if (!sourcePart) continue
+    const xml = await zip.file(relationshipPart)?.async('text')
+    if (!xml) continue
+    const relationships = new DOMParser().parseFromString(xml, 'application/xml')
+    const referencesTarget = childElements(relationships.documentElement, 'Relationship').some(
+      (relation) =>
+        relation.getAttribute('TargetMode') !== 'External' &&
+        resolveDocxRelationshipTarget(relation.getAttribute('Target') || '', sourcePart) === mediaPath
+    )
+    if (referencesTarget) return true
+  }
+  return false
+}
+
+const removeOrphanedMedia = async (
+  zip: JSZip,
+  sourcePart: string,
+  relationship: Element
+): Promise<void> => {
+  if (
+    relationship.getAttribute('Type') !== IMAGE_REL_TYPE ||
+    relationship.getAttribute('TargetMode') === 'External'
+  ) {
+    return
+  }
+  const mediaPath = resolveDocxRelationshipTarget(
+    relationship.getAttribute('Target') || '',
+    sourcePart
+  )
+  if (!mediaPath || !mediaPath.startsWith('word/media/')) return
+  if (!(await isMediaTargetReferenced(zip, mediaPath))) zip.remove(mediaPath)
+}
+
+const cleanupUnusedImageRelationships = async (
+  bundle: Awaited<ReturnType<typeof loadDocxBundle>>
+): Promise<void> => {
+  const parts = [
+    { partName: 'word/document.xml', dom: bundle.documentDom },
+    ...bundle.stories.map((story) => ({ partName: story.partName, dom: story.dom }))
+  ]
+  for (const part of parts) {
+    const relationshipPath = relationshipPartName(part.partName)
+    if (!bundle.zip.file(relationshipPath)) continue
+    const relationships = await partRelationships(bundle.zip, part.partName)
+    const removed: Element[] = []
+    for (const relation of childElements(relationships.documentElement, 'Relationship')) {
+      const relationshipId = relation.getAttribute('Id') || ''
+      if (
+        relation.getAttribute('Type') === IMAGE_REL_TYPE &&
+        relationshipId &&
+        !isRelationshipReferenced(part.dom.documentElement, relationshipId)
+      ) {
+        removed.push(relation.cloneNode(true) as Element)
+        relationships.documentElement.removeChild(relation)
+      }
+    }
+    if (removed.length === 0) continue
+    persistPartRelationships(bundle.zip, part.partName, relationships)
+    for (const relation of removed) {
+      await removeOrphanedMedia(bundle.zip, part.partName, relation)
+    }
+  }
+}
+
 const nextRelationshipId = (relationships: Document): string => {
   const used = new Set(
     childElements(relationships.documentElement, 'Relationship').map(
@@ -1236,11 +1343,13 @@ const replaceExistingImageBytes = async (
     (node) => node.getAttribute('Id') === relationshipId
   )
   if (!relation) throw new Error(`image relationship not found: ${relationshipId}`)
+  const previousRelation = relation.cloneNode(true) as Element
   const nextTarget = nextImageTarget(bundle.zip, image.extension)
   relation.setAttribute('Target', nextTarget)
   await ensureImageContentType(bundle.zip, image.extension, image.contentType)
   bundle.zip.file(path.posix.join('word', nextTarget), image.bytes)
   persistPartRelationships(bundle.zip, partName, relationships)
+  await removeOrphanedMedia(bundle.zip, partName, previousRelation)
 }
 
 const applyVisualNodeReplacement = async (
@@ -1370,18 +1479,16 @@ const removeUnusedRelationship = async (
   relationshipId: string
 ): Promise<void> => {
   const partDocument = documentForPart(bundle, partName)
-  const isReferenced = (node: Element): boolean =>
-    ['embed', 'link', 'id', 'dm'].some(
-      (attributeName) => attrByLocalName(node, attributeName) === relationshipId
-    ) || childElements(node).some(isReferenced)
-  if (isReferenced(partDocument.documentElement)) return
+  if (isRelationshipReferenced(partDocument.documentElement, relationshipId)) return
   const relationships = await partRelationships(bundle.zip, partName)
   const relation = childElements(relationships.documentElement, 'Relationship').find(
     (node) => node.getAttribute('Id') === relationshipId
   )
   if (!relation) return
+  const removedRelation = relation.cloneNode(true) as Element
   relationships.documentElement.removeChild(relation)
   persistPartRelationships(bundle.zip, partName, relationships)
+  await removeOrphanedMedia(bundle.zip, partName, removedRelation)
 }
 
 const applyMediaDomainOp = async (

@@ -16,10 +16,6 @@ export const validateLlmConfigForSave = async (
     if (!registryEntry) {
       return { ok: false, error: '服务商配置不完整' }
     }
-    const name = config.name.trim()
-    if (!name) {
-      return { ok: false, error: '请输入配置名称' }
-    }
     const existing = await llmStore.list()
     const duplicated = existing.some(
       (item) =>
@@ -32,7 +28,7 @@ export const validateLlmConfigForSave = async (
       ok: true,
       config: {
         ...config,
-        name,
+        name: preset.label,
         base_url: registryEntry.defaultBaseUrl,
         providerKind: registryEntry.providerKind
       }

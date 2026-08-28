@@ -22,7 +22,7 @@ const WRITE_TOOLS = [
 ]
 
 describe('ai unit docx tool contract', () => {
-  it('exposes independent 4/5 docx skill toolsets', () => {
+  it('exposes independent 3/4 docx skill toolsets', () => {
     expect(DOCX_READ_TOOL_SPECS.map((spec) => spec.name)).toEqual(READ_TOOLS)
     expect(DOCX_WRITE_TOOL_SPECS.map((spec) => spec.name)).toEqual(WRITE_TOOLS)
     expect(DOCX_MUTATION_TOOL_SPECS.map((spec) => spec.name)).toEqual(WRITE_TOOLS)

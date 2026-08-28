@@ -15,7 +15,7 @@ describe('settings model e2e', () => {
         caseId: 'model-create-edit-segment-flow',
         domain: 'settings',
         suite: 'model',
-        description: '新增与编辑配置弹框的推荐/自定义类型切换、名称自动填充、服务商去重与改名语义。',
+        description: '新增与编辑配置弹框的推荐/自定义类型切换、服务商去重与编辑改服务商语义。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
@@ -35,27 +35,27 @@ describe('settings model e2e', () => {
               .click()
           }
 
+          let presetNameInputCount = 0
+
           await runtime.step({
             name: 'open-create-form-preset-default',
-            message: '打开新增弹框，确认推荐类型默认选中且服务商下拉可见。',
+            message: '打开新增弹框，确认推荐类型默认选中、服务商下拉可见且无名称输入框。',
             run: async () => {
               await navigateToSettingsSection(page, 'model')
               await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
               await providerSelect().waitFor({ state: 'visible' })
+              presetNameInputCount = await getSettingsLocator(
+                page,
+                settingsSelectors.modelNameInput
+              ).count()
             }
           })
 
-          let presetNameAfterSelect = ''
-
           await runtime.step({
             name: 'create-preset-config',
-            message: '服务商下拉选择 DeepSeek 后配置名称自动填充为服务商名，再填写 API Key 保存。',
+            message: '推荐类型选择 DeepSeek 并只填写 API Key 保存。',
             run: async () => {
               await selectProviderOption('DeepSeek')
-              presetNameAfterSelect = await getSettingsLocator(
-                page,
-                settingsSelectors.modelNameInput
-              ).inputValue()
               await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(
                 'sk-segment-preset'
               )
@@ -78,7 +78,7 @@ describe('settings model e2e', () => {
 
           await runtime.step({
             name: 'create-custom-config',
-            message: '切换到自定义类型，填写完整表单保存。',
+            message: '切换到自定义类型，填写名称、地址和 API Key 保存。',
             run: async () => {
               await customRadio().click()
               await getSettingsLocator(page, settingsSelectors.modelNameInput).fill(
@@ -98,9 +98,11 @@ describe('settings model e2e', () => {
             }
           })
 
+          let presetProviderSelectLocked = false
+
           await runtime.step({
-            name: 'edit-preset-rename-stays-preset',
-            message: '编辑 DeepSeek 推荐配置改名保存，改名后仍是推荐类型。',
+            name: 'edit-preset-change-provider',
+            message: '编辑 DeepSeek 推荐配置，服务商下拉可改，换成 Kimi 保存。',
             run: async () => {
               await page
                 .locator('tbody tr')
@@ -108,41 +110,40 @@ describe('settings model e2e', () => {
                 .first()
                 .locator(`[data-testid^="${settingsSelectors.modelEditButtonPrefix}-"]`)
                 .click()
-              await getSettingsLocator(page, settingsSelectors.modelNameInput).fill(
-                'DeepSeek 改名'
-              )
+              await providerSelect().waitFor({ state: 'visible' })
+              presetProviderSelectLocked =
+                (await providerSelect().locator('.ant-select-disabled').count()) > 0
+              await selectProviderOption('Kimi')
               await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
               await page
                 .locator('tbody tr')
-                .filter({ hasText: 'DeepSeek 改名' })
+                .filter({ hasText: 'Kimi' })
                 .waitFor({ state: 'visible' })
             }
           })
 
           const customRow = page.locator('tbody tr').filter({ hasText: 'Segment 自定义' }).first()
-          const renamedRow = page.locator('tbody tr').filter({ hasText: 'DeepSeek 改名' }).first()
+          const kimiRow = page.locator('tbody tr').filter({ hasText: 'Kimi' }).first()
 
           return {
-            presetNameAfterSelect,
+            presetNameInputCount,
             presetProviderDisabled: await providerSelect().locator('.ant-select-disabled').isVisible(),
+            presetProviderSelectLocked,
             customRowText: (await customRow.textContent()) || '',
-            renamedRowText: (await renamedRow.textContent()) || '',
+            kimiRowText: (await kimiRow.textContent()) || '',
             rowCount: await page.locator('tbody tr').count()
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(
-            result.presetNameAfterSelect === 'DeepSeek',
-            {
-              name: 'preset-name-auto-filled',
-              message:
-                '推荐类型选中服务商后配置名称自动填充为服务商名，对齐 SET-MODEL-002-AC1。',
-              data: result
-            }
-          )
+          await runtime.assertThat(result.presetNameInputCount === 0, {
+            name: 'preset-has-no-name-input',
+            message:
+              '推荐类型不展示名称输入框，名称由系统维护为服务商名，对齐 SET-MODEL-002-AC1。',
+            data: result
+          })
 
           await runtime.assertThat(
-            result.presetProviderDisabled && result.renamedRowText.includes('DeepSeek 改名'),
+            result.presetProviderDisabled && result.kimiRowText.includes('Kimi'),
             {
               name: 'preset-config-saved-and-deduped',
               message:
@@ -159,13 +160,14 @@ describe('settings model e2e', () => {
           })
 
           await runtime.assertThat(
-            result.renamedRowText.includes('DeepSeek 改名') &&
-              !result.renamedRowText.includes('自定义') &&
+            !result.presetProviderSelectLocked &&
+              result.kimiRowText.includes('Kimi') &&
+              !result.kimiRowText.includes('自定义') &&
               result.rowCount === 2,
             {
-              name: 'preset-rename-stays-preset',
+              name: 'preset-provider-select-editable',
               message:
-                '编辑推荐配置改名后仍为推荐类型且未新增记录，对齐 SET-MODEL-002-AC5。',
+                '编辑推荐配置时服务商下拉可改，改为其他服务商保存后仍为推荐类型且未新增记录，对齐 SET-MODEL-002-AC4。',
               data: result
             }
           )

@@ -19,6 +19,7 @@ import {
   HiCpuChip,
   HiMagnifyingGlass
 } from 'react-icons/hi2'
+import { PiEyesFill } from 'react-icons/pi'
 import type {
   LLMConfig,
   LlmRemoteModel,
@@ -27,16 +28,32 @@ import type {
 } from '../../../../shared/types'
 import {
   LLM_PRESET_PROVIDERS,
-  LLM_PRICE_TIER_LABELS,
   resolvePresetModeProvider,
   type LlmPresetModel,
-  type LlmPresetProvider
+  type LlmPresetProvider,
+  type LlmPriceTier
 } from '../../../../shared/llmPresets'
 import { resolveFloatingPlacement } from './floatingPlacement'
 import { WORKBENCH_TITLEBAR_HEIGHT } from './constants'
 import { getProviderLogo } from '../settings/constants'
 import { PriceTierBadge } from '../PriceTierBadge'
 import { workbenchSelectors } from '../../testing/selectors'
+
+const PRICE_TIER_LABELS: Record<LlmPriceTier, string> = {
+  low: '较低',
+  mid: '适中',
+  high: '较高'
+}
+
+const VISION_PRESET_MODEL_IDS = new Set<string>([
+  'deepseek-v4-flash-vision-exp',
+  'qwen3.8-max',
+  'qwen3.8-flash',
+  'mimo-v2.5',
+  'glm-5.3-flash',
+  'kimi-k3',
+  'kimi-k2.6'
+])
 
 type WorkbenchModelSelectorProps = {
   configs: LLMConfig[]
@@ -246,7 +263,13 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     const selected = matchedConfig
       ? isSameSelection(value.mainModel, { configId: matchedConfig.id, modelName: model.id })
       : false
+    const isVision = VISION_PRESET_MODEL_IDS.has(model.id)
     const coin = <PriceTierBadge tier={model.priceTier} />
+    const modelLabel = (
+      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+        {model.label}
+      </span>
+    )
     const option = (
       <button
         type="button"
@@ -266,20 +289,25 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
           {getProviderLogo(provider.providerId)}
-          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-            {model.label}
-          </span>
-        </span>
-        <span className="flex shrink-0 items-center gap-1.5">
           {disabled ? (
-            <span className="inline-flex">{coin}</span>
+            modelLabel
           ) : (
-            <Tooltip title={`价格：${LLM_PRICE_TIER_LABELS[model.priceTier]}`}>
-              <span className="inline-flex">{coin}</span>
+            <Tooltip
+              title={`价格：${PRICE_TIER_LABELS[model.priceTier]}${isVision ? '，支持图片理解' : ''}`}
+            >
+              {modelLabel}
             </Tooltip>
           )}
         </span>
-        {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" /> : null}
+        <span className="flex shrink-0 items-center gap-1.5">
+          {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" /> : null}
+          {isVision ? (
+            <span className="inline-flex text-[#787774]">
+              <PiEyesFill className="h-3 w-3" />
+            </span>
+          ) : null}
+          <span className="inline-flex">{coin}</span>
+        </span>
       </button>
     )
     if (disabled) {
@@ -431,48 +459,48 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       data-workbench-select-root="true"
       data-testid={dataTestId}
     >
-        <button
-          ref={triggerRef}
-          type="button"
-          disabled={disabled}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-          aria-controls={listboxId}
-          className={joinClassNames(
-            variant === 'form'
-              ? 'workbench-select-trigger w-full'
-              : 'workbench-select-trigger workbench-select-trigger-compact workbench-composer-pill workbench-composer-model-pill',
-            open ? 'workbench-select-trigger-open' : '',
-            disabled ? 'workbench-select-trigger-disabled' : '',
-            noDrag ? 'workbench-no-drag' : ''
+      <button
+        ref={triggerRef}
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        className={joinClassNames(
+          variant === 'form'
+            ? 'workbench-select-trigger w-full'
+            : 'workbench-select-trigger workbench-select-trigger-compact workbench-composer-pill workbench-composer-model-pill',
+          open ? 'workbench-select-trigger-open' : '',
+          disabled ? 'workbench-select-trigger-disabled' : '',
+          noDrag ? 'workbench-no-drag' : ''
+        )}
+        onClick={() => {
+          if (disabled) return
+          setOpen((current) => !current)
+        }}
+      >
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          {selectedPreset ? (
+            <>
+              {getProviderLogo(selectedPreset.provider.providerId)}
+              <span className="truncate">{selectedPreset.modelLabel}</span>
+            </>
+          ) : (
+            <>
+              {!hideTriggerIcon ? <HiCpuChip className="h-3.5 w-3.5 shrink-0" /> : null}
+              <span className="truncate">{mainLabel}</span>
+            </>
           )}
-          onClick={() => {
-            if (disabled) return
-            setOpen((current) => !current)
-          }}
-        >
-          <span className="flex min-w-0 flex-1 items-center gap-2">
-            {selectedPreset ? (
-              <>
-                {getProviderLogo(selectedPreset.provider.providerId)}
-                <span className="truncate">{selectedPreset.modelLabel}</span>
-              </>
-            ) : (
-              <>
-                {!hideTriggerIcon ? <HiCpuChip className="h-3.5 w-3.5 shrink-0" /> : null}
-                <span className="truncate">{mainLabel}</span>
-              </>
+        </span>
+        {variant === 'form' ? (
+          <HiChevronDown
+            className={joinClassNames(
+              'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
+              open ? 'rotate-180' : ''
             )}
-          </span>
-          {variant === 'form' ? (
-            <HiChevronDown
-              className={joinClassNames(
-                'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
-                open ? 'rotate-180' : ''
-              )}
-            />
-          ) : null}
-        </button>
+          />
+        ) : null}
+      </button>
       {open
         ? createPortal(
             <div

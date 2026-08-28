@@ -140,10 +140,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `docx-v2-public-tools`
 
 - 测试类型：`backend`
-- What：4 个读取工具和 5 个写入工具使用同一 DOCX 编辑会话，连续读取、内容编辑、格式、表格、媒体、批注与修订后仍可回读。
+- What：3 个读取工具和 4 个写入工具使用同一 DOCX 编辑会话，连续读取、内容编辑、格式、表格、图片、批注与修订后仍可回读。
 - Why：公共工具必须让 AI 通过“定位 nodeId → 单次局部操作 → 精准读取确认”稳定完成真实任务，同时避免写工具把完整节点再次放入上下文。
 - How：创建真实 DOCX，依次执行 outline/read/search、内容替换、段落格式、表格结构、图片与批注操作，并再次 read/search。
-- Oracle：每次写入只接收一个 discriminated operation；未删除节点的 `nodeId` 保持稳定；普通写入返回空领域结果，创建操作只返回 `createdIds`；五个写工具看到同一 Working 状态，最终状态可由读取工具确认。
+- Oracle：每次写入只接收一个 discriminated operation；未删除节点的 `nodeId` 保持稳定；普通写入返回空领域结果，创建操作只返回 `createdIds`；四个写工具看到同一 Working 状态，最终状态可由读取工具确认。
 - Not：不调用 live 模型，不验证 Workbench UI。
 
 ##### `docx-outline-pagination`
@@ -239,6 +239,15 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Not：不验证真实模型对搜索结果的利用策略。
 
 #### pdf 类别
+
+##### `pdf-image-only-page-contract`
+
+- 测试类型：`backend`
+- What：没有文本层的纯扫描 PDF 仍返回整页图片路径。
+- Why：纯图片 PDF 不能因为正文为空而失去后续主模型多模态读取能力。
+- How：运行时生成仅包含一张图片的单页 PDF，并调用 `pdf_read_pages`。
+- Oracle：正文为空且 `textStatus=empty`，`pageImagePath` 指向真实存在的页面图片。
+- Not：不在 PDF 工具内部识别图片内容。
 
 ##### `pdf-inspect-read-search-contract`
 

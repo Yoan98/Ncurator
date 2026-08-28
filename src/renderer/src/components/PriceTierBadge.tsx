@@ -4,7 +4,7 @@ import type { LlmPriceTier } from '../../../shared/llmPresets'
 
 const TIER_COLORS: Record<LlmPriceTier, string> = {
   low: '#2F6F4E',
-  mid: '#B45309',
+  mid: '#D97706',
   high: '#B3261E'
 }
 
@@ -15,7 +15,7 @@ const TIER_COUNT: Record<LlmPriceTier, number> = {
 }
 
 const COIN_SIZE = 12
-const COIN_STEP = 4
+const COIN_STEP = 3
 
 export const PriceTierBadge: React.FC<{ tier: LlmPriceTier }> = ({ tier }) => {
   const count = TIER_COUNT[tier]

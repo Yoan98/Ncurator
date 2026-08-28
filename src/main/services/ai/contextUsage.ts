@@ -4,8 +4,7 @@ import {
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from './human/constants'
 import { deriveMessageLogMessages } from './human/memory/transcript'
-import { extractTextContent } from './structuredOutput'
-import { estimateTextTokens } from './human/utils/tokenEstimate'
+import { estimateMessagesForContext } from './human/memory/multimodal'
 
 export const getAiContextUsage = async (input: {
   sessionId: string
@@ -20,10 +19,7 @@ export const getAiContextUsage = async (input: {
   const messages = deriveMessageLogMessages({
     entries: records.map((record) => record.entry)
   })
-  const baseText = messages
-    .map((message) => extractTextContent(message.content))
-    .join('\n\n')
-  const usedContextTokens = estimateTextTokens(baseText)
+  const usedContextTokens = estimateMessagesForContext(messages)
   const contextWindowTokens = DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
   return {
     contextWindowTokens,
