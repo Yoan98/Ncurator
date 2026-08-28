@@ -8,6 +8,7 @@ import {
   buildDocumentNodeIndex,
   loadDocxBundle
 } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
+import { collectVisualNodeEntries } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/types'
 import { createDocxFile } from '../../../../src/main/services/ai/human/tools/docx/utils/createDocxFile'
 
 const pixel = Buffer.from(
@@ -161,7 +162,7 @@ describe('DOCX v2 operation matrix', () => {
         ops: [{ type: 'insert_image', nodeId: paragraphs[0]!.nodeId, position: 'after', imagePath }]
       })
       const imageIndex = buildDocumentNodeIndex(await loadDocxBundle(withImage.buffer))
-      const nodeId = [...imageIndex.visualNodesById.keys()][0]!
+      const nodeId = collectVisualNodeEntries(imageIndex)[0]![0]
       await expect(
         applyDocxOps({
           buffer: withImage.buffer,

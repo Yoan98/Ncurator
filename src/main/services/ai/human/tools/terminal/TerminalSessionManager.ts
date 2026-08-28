@@ -115,7 +115,10 @@ export const stripTerminalControlText = (value: string): string =>
     .split('\n')
     .map((line) => {
       const parts = line.split('\r')
-      return parts[parts.length - 1]
+      for (let index = parts.length - 1; index >= 0; index -= 1) {
+        if (parts[index]!.length > 0) return parts[index]!
+      }
+      return ''
     })
     .join('\n')
 
@@ -554,7 +557,7 @@ export class TerminalSessionManager {
     event: TerminalProtocolEvent
   ): void {
     if (event.type === 'output') {
-      this.appendOutput(session, event.data)
+      if (session.currentCommand) this.appendOutput(session, event.data)
       return
     }
     if (event.type === 'ready') {

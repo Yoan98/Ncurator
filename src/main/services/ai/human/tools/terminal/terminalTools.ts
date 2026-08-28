@@ -29,6 +29,7 @@ type PendingTerminalCommand = {
   trackingId?: string
   emitActivity: (activity: CapabilityActivityInput) => void
   finalized: boolean
+  finalization?: Promise<void>
 }
 
 const pendingCommands = new Map<string, PendingTerminalCommand>()
@@ -158,7 +159,7 @@ const finishTerminalFileChangeTracking = async (pending: PendingTerminalCommand)
       })
     })
   } catch (error) {
-    console.error('[TERMINAL] file change tracking failed:', error)
+    console.error(`[TERMINAL] file change tracking failed for ${pending.command}:`, error)
   }
 }
 
@@ -168,20 +169,28 @@ const finalizeCommand = async (input: {
   executionStatus?: 'completed' | 'cancelled'
 }): Promise<void> => {
   const pending = pendingCommands.get(input.commandId)
-  if (!pending || pending.finalized) return
+  if (!pending) return
+  if (pending.finalization) return await pending.finalization
   pending.finalized = true
-  await finishTerminalFileChangeTracking(pending)
-  emitTerminalStepCompleted(pending, input.exitCode, input.executionStatus || 'completed')
-  pendingCommands.delete(input.commandId)
+  pending.finalization = (async () => {
+    await finishTerminalFileChangeTracking(pending)
+    emitTerminalStepCompleted(pending, input.exitCode, input.executionStatus || 'completed')
+    pendingCommands.delete(input.commandId)
+  })()
+  await pending.finalization
 }
 
 const failCommand = async (commandId: string, error: unknown): Promise<void> => {
   const pending = pendingCommands.get(commandId)
-  if (!pending || pending.finalized) return
+  if (!pending) return
+  if (pending.finalization) return await pending.finalization
   pending.finalized = true
-  await finishTerminalFileChangeTracking(pending)
-  emitTerminalStepFailed(pending, error instanceof Error ? error.message : String(error))
-  pendingCommands.delete(commandId)
+  pending.finalization = (async () => {
+    await finishTerminalFileChangeTracking(pending)
+    emitTerminalStepFailed(pending, error instanceof Error ? error.message : String(error))
+    pendingCommands.delete(commandId)
+  })()
+  await pending.finalization
 }
 
 const applyOutputGuards = (input: {
@@ -501,7 +510,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               ([, value]) =>
                 value.sessionId === input.sessionId &&
                 value.terminalId === result.terminalId &&
-                !value.finalized &&
                 result.terminalStatus !== 'running'
             )
             if (pending && result.exitCode !== null) {

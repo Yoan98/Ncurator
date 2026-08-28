@@ -482,6 +482,7 @@ export const configureLiveModelThroughSettingsUi = async (
 ): Promise<void> => {
   await navigateToSettingsSection(page, 'model')
   await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
+  await getSettingsLocator(page, settingsSelectors.modelTypeCustom).click()
   await getSettingsLocator(page, settingsSelectors.modelNameInput).fill('Live Model')
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
     state: 'visible'
@@ -1264,34 +1265,33 @@ export const readWorkbenchExecutionPermissionSelection = async (page: Page): Pro
 export const selectWorkbenchModel = async (page: Page, modelName: string): Promise<void> => {
   const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
   await modelSelect.click()
-  const searchInput = modelSelect.locator('input').first()
-  await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
-  const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').last()
-  await dropdown.waitFor({ state: 'visible' })
-  const visibleOptions = () => dropdown.getByRole('option')
-  const findModelOption = () => visibleOptions().filter({ hasText: modelName }).first()
+  const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  await menu.waitFor({ state: 'visible' })
 
-  await searchInput.fill(modelName)
-  let modelOption = findModelOption()
-  if (!(await modelOption.isVisible().catch(() => false))) {
-    await searchInput.clear()
-    const customEntry = visibleOptions().filter({ hasText: '自定义模型' }).first()
-    if (await customEntry.isVisible().catch(() => false)) {
-      await customEntry.click()
-    }
-    await searchInput.fill(modelName)
-    modelOption = findModelOption()
+  const presetOption = menu.getByRole('option').filter({ hasText: modelName }).first()
+  if (await presetOption.isVisible().catch(() => false)) {
+    await presetOption.click()
+    return
   }
+
+  const customEntry = menu.locator(
+    `[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`
+  )
+  await customEntry.waitFor({ state: 'visible' })
+  await customEntry.click()
+
+  const searchInput = menu.locator('input[placeholder="搜索模型"]')
+  await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
+  await searchInput.fill(modelName)
+  const options = menu.getByRole('option')
+  const modelOption = options.filter({ hasText: modelName }).first()
   try {
-    await modelOption.waitFor({
-      state: 'visible',
-      timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS
-    })
+    await modelOption.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
   } catch {
-    const optionTexts = (await visibleOptions().allTextContents()).map((item) => item.trim()).filter(Boolean)
+    const optionTexts = (await options.allTextContents()).map((item) => item.trim()).filter(Boolean)
     throw new Error(
       [
-        `AI_LIVE_PRIMARY_MODEL_NAME="${modelName}" was not found in the Workbench model dropdown.`,
+        `AI_LIVE_PRIMARY_MODEL_NAME="${modelName}" was not found in the Workbench model menu.`,
         `Available models: ${optionTexts.join(', ') || '(none)'}`,
         'Workbench formal AI e2e cannot continue without a real UI-selectable live model.'
       ].join('\n')
@@ -1348,24 +1348,25 @@ export const openScheduledTasksView = async (page: Page): Promise<void> => {
 export const selectScheduledTaskModel = async (page: Page, modelName: string): Promise<void> => {
   const modelSelect = getWorkbenchLocator(page, scheduledTaskSelectors.modelSelect)
   await modelSelect.click()
-  const searchInput = modelSelect.locator('input').first()
-  await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
-  const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').last()
-  await dropdown.waitFor({ state: 'visible' })
-  const visibleOptions = () => dropdown.getByRole('option')
-  const findModelOption = () => visibleOptions().filter({ hasText: modelName }).first()
+  const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  await menu.waitFor({ state: 'visible' })
 
-  await searchInput.fill(modelName)
-  let modelOption = findModelOption()
-  if (!(await modelOption.isVisible().catch(() => false))) {
-    await searchInput.clear()
-    const customEntry = visibleOptions().filter({ hasText: '自定义模型' }).first()
-    if (await customEntry.isVisible().catch(() => false)) {
-      await customEntry.click()
-    }
-    await searchInput.fill(modelName)
-    modelOption = findModelOption()
+  const presetOption = menu.getByRole('option').filter({ hasText: modelName }).first()
+  if (await presetOption.isVisible().catch(() => false)) {
+    await presetOption.click()
+    return
   }
+
+  const customEntry = menu.locator(
+    `[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`
+  )
+  await customEntry.waitFor({ state: 'visible' })
+  await customEntry.click()
+
+  const searchInput = menu.locator('input[placeholder="搜索模型"]')
+  await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
+  await searchInput.fill(modelName)
+  const modelOption = menu.getByRole('option').filter({ hasText: modelName }).first()
   await modelOption.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
   await modelOption.click()
 }

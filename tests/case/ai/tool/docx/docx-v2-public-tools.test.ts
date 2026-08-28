@@ -14,7 +14,15 @@ type OutlineResult = {
   segments: Array<{ story: string; fromNodeIndex: number; toNodeIndex: number; textMap: string }>
 }
 type SearchResult = {
-  matches: Array<{ nodeId: string; nodeIndex: number; tableNodeId?: string; textContext: string }>
+  matches: Array<{
+    nodeId: string
+    nodeIndex: number
+    tableNodeId?: string
+    textContext: string
+    node?: DocxPublicReadRootNode
+    beforeNodes?: DocxPublicReadRootNode[]
+    afterNodes?: DocxPublicReadRootNode[]
+  }>
 }
 type ReadResult = { sourcePath: string; nodes: DocxPublicReadRootNode[] }
 type MutationResult = {
@@ -57,6 +65,11 @@ describe('ai tool docx v2 backend', () => {
         const imagePath = path.join(runtime.workspaceRoot, 'docx-v2-image.png')
         const createdPath = path.join(runtime.workspaceRoot, 'docx-v2-created.docx')
         const createdTablePath = path.join(runtime.workspaceRoot, 'docx-v2-created-table.docx')
+        const pureImageDocxPath = await writeTestDocxFile(
+          runtime.workspaceRoot,
+          'docx-v2-pure-image.docx',
+          [{ type: 'paragraph', text: '' }]
+        )
         await fs.writeFile(
           imagePath,
           Buffer.from(
@@ -91,6 +104,19 @@ describe('ai tool docx v2 backend', () => {
           const createdTableReadback = await harness.invoke<ReadResult>('docx_read_nodes', {
             sourcePath: createdTablePath,
             range: { type: 'node_ids', nodeIds: createdTable.createdIds || [] }
+          })
+          const pureImageCreated = await harness.invoke<MutationResult>('docx_content_edit', {
+            sourcePath: pureImageDocxPath,
+            type: 'insert_nodes',
+            position: 'document_end',
+            nodes: [{ type: 'visual', imagePath, altText: 'Only image' }]
+          })
+          if (!pureImageCreated.createdIds?.length) {
+            throw new Error(`pure image insertion failed: ${JSON.stringify(pureImageCreated)}`)
+          }
+          const pureImageReadback = await harness.invoke<ReadResult>('docx_read_nodes', {
+            sourcePath: pureImageDocxPath,
+            range: { type: 'node_index', fromNodeIndex: 0, toNodeIndex: 0 }
           })
           const outline = await harness.invoke<OutlineResult>('docx_read_outline', {
             sourcePath,
@@ -271,6 +297,11 @@ describe('ai tool docx v2 backend', () => {
             sourcePath,
             query: 'Beta'
           })
+          const visualSearch = await harness.invoke<SearchResult>('docx_search', {
+            sourcePath,
+            query: 'Second paragraph',
+            includeContext: true
+          })
           const readAfter = await harness.invoke<ReadResult>('docx_read_nodes', {
             sourcePath,
             range: {
@@ -284,6 +315,8 @@ describe('ai tool docx v2 backend', () => {
             createdReadback,
             createdTable,
             createdTableReadback,
+            pureImageCreated,
+            pureImageReadback,
             paragraph,
             readBefore,
             content,
@@ -309,6 +342,7 @@ describe('ai tool docx v2 backend', () => {
             comment,
             revisions,
             searchAfter,
+            visualSearch,
             readAfter
           }
         } finally {
@@ -331,6 +365,9 @@ describe('ai tool docx v2 backend', () => {
             result.createdTableReadback.nodes.some(
               (node) => node.type === 'table' && nodeText(node).includes('Created')
             ) &&
+            result.pureImageCreated.createdIds?.length === 1 &&
+            JSON.stringify(result.pureImageReadback.nodes).includes('"type":"visual"') &&
+            JSON.stringify(result.pureImageReadback.nodes).includes('"imagePath"') &&
             result.readBefore.nodes.length === 2 &&
             isEmptyResult(result.content) &&
             result.appended.createdIds?.length === 1 &&
@@ -370,7 +407,9 @@ describe('ai tool docx v2 backend', () => {
             JSON.stringify(result.readAfter.nodes).includes('"type":"visual"') &&
             JSON.stringify(result.readAfter.nodes).includes('"imagePath"') &&
             JSON.stringify(result.readAfter.nodes).includes(result.visualNodeId) &&
-            JSON.stringify(result.readAfter.nodes).includes('Replaced DOCX v2 test image'),
+            JSON.stringify(result.readAfter.nodes).includes('Replaced DOCX v2 test image') &&
+            JSON.stringify(result.visualSearch.matches[0]?.node).includes('"type":"visual"') &&
+            JSON.stringify(result.visualSearch.matches[0]?.node).includes('"imagePath"'),
           {
             name: 'docx-v2-tools-share-one-working-session',
             message: 'DOCX v2 工具应共享 Working 文档，连续调用后 nodeId 保持稳定且结果可回读。',

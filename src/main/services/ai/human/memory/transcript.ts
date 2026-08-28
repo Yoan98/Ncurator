@@ -1,5 +1,9 @@
 import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
-import type { ChatMessageLogEntry, ChatMessageLogToolCall } from '../../../../../shared/types'
+import type {
+  ChatMessageImageRef,
+  ChatMessageLogEntry,
+  ChatMessageLogToolCall
+} from '../../../../../shared/types'
 import { createImageReferenceMessage } from './multimodal'
 
 const toToolCall = (
@@ -73,16 +77,24 @@ export const deriveMessageLogMessages = (input: {
   }
 
   const messages: BaseMessage[] = []
+  let pendingImages: ChatMessageImageRef[] = []
+  const flushImages = (): void => {
+    if (pendingImages.length === 0) return
+    messages.push(createImageReferenceMessage(pendingImages))
+    pendingImages = []
+  }
   for (let index = 0; index < input.entries.length; index += 1) {
     const entry = input.entries[index]
     if (input.skipLastUserEntry && entry.kind === 'user' && index === lastUserIndex) {
       continue
     }
     if (entry.kind === 'user') {
+      flushImages()
       messages.push(new HumanMessage(entry.content))
       continue
     }
     if (entry.kind === 'assistant') {
+      flushImages()
       messages.push(
         new AIMessage({
           content: entry.content,
@@ -98,9 +110,10 @@ export const deriveMessageLogMessages = (input: {
           tool_call_id: entry.toolCallId
         })
       )
-      if (entry.images?.length) messages.push(createImageReferenceMessage(entry.images))
+      if (entry.images?.length) pendingImages.push(...entry.images)
       continue
     }
   }
+  flushImages()
   return messages
 }

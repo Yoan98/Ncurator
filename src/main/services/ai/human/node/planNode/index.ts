@@ -87,7 +87,10 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         toolCallId: call.toolCallId,
         toolName: call.toolName,
         ok: true,
-        content: 'Plan updated successfully.'
+        content: [
+          'Plan updated successfully:',
+          ...parsed.plan.map((item) => `- [${item.status}] ${item.title}`)
+        ].join('\n')
       })
     }
 

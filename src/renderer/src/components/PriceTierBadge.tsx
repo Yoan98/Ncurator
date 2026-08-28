@@ -15,7 +15,7 @@ const TIER_COUNT: Record<LlmPriceTier, number> = {
 }
 
 const COIN_SIZE = 12
-const COIN_STEP = 6
+const COIN_STEP = 4
 
 export const PriceTierBadge: React.FC<{ tier: LlmPriceTier }> = ({ tier }) => {
   const count = TIER_COUNT[tier]

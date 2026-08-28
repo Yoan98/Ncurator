@@ -5,10 +5,10 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Radio,
   Select,
   Space,
   Table,
-  Tabs,
   Tag,
   message
 } from 'antd'
@@ -100,7 +100,7 @@ const ModelSettingsPanel: React.FC = () => {
       setMode('preset')
       setSelectedProviderId(preset.providerId)
       form.resetFields()
-      form.setFieldsValue({ api_key: record.api_key })
+      form.setFieldsValue({ name: record.name, api_key: record.api_key })
     } else {
       setMode('custom')
       setSelectedProviderId(null)
@@ -110,24 +110,18 @@ const ModelSettingsPanel: React.FC = () => {
   }
 
   const handleModeChange = (value: string | number): void => {
-    const nextMode = value === 'custom' ? 'custom' : 'preset'
-    if (nextMode === 'custom') {
-      if (selectedProviderId) {
-        const preset = getPresetProvider(selectedProviderId)
-        const registry = getProviderRegistryEntry(selectedProviderId)
-        form.setFieldsValue({
-          name: preset?.label,
-          base_url: registry?.defaultBaseUrl
-        })
-      }
-    } else {
-      form.resetFields(['name', 'base_url'])
-    }
-    setMode(nextMode)
+    setMode(value === 'custom' ? 'custom' : 'preset')
   }
 
   const handleSelectProvider = (providerId: LlmProviderId): void => {
     setSelectedProviderId(providerId)
+    const preset = getPresetProvider(providerId)
+    const currentName = String(form.getFieldValue('name') || '').trim()
+    const isAutoName =
+      !currentName || LLM_PRESET_PROVIDERS.some((provider) => provider.label === currentName)
+    if (isAutoName) {
+      form.setFieldValue('name', preset?.label || '')
+    }
   }
 
   const handleDelete = async (id: string): Promise<void> => {
@@ -168,7 +162,7 @@ const ModelSettingsPanel: React.FC = () => {
         }
         nextConfig = {
           id,
-          name: preset.label,
+          name: String(values.name || '').trim(),
           providerKind: registry.providerKind,
           base_url: registry.defaultBaseUrl,
           api_key: values.api_key
@@ -342,116 +336,98 @@ const ModelSettingsPanel: React.FC = () => {
         className="[&_.ant-modal-content]:!rounded-[8px]"
       >
         <Form form={form} layout="vertical">
-        <Tabs
-          activeKey={mode}
-          onChange={handleModeChange}
-          items={[
-            {
-              key: 'preset',
-              label: '服务商配置',
-              children: (
-                <div className="flex flex-col gap-4">
-                  <Form.Item label="选择服务商" className="!mb-0">
-                    <Select
-                      placeholder="选择服务商"
-                      disabled={editingPresetProviderId !== null}
-                      value={selectedProviderId || undefined}
-                      onChange={(value: LlmProviderId) => handleSelectProvider(value)}
-                      data-testid={settingsSelectors.modelPresetProviderSelect}
-                      options={LLM_PRESET_PROVIDERS.map((provider) => {
-                        const configured = configuredPresetProviderIds.has(provider.providerId)
-                        const disabled =
-                          configured && editingPresetProviderId !== provider.providerId
-                        return {
-                          value: provider.providerId,
-                          disabled,
-                          label: (
-                            <span className="inline-flex items-center gap-2">
-                              <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-                                {getProviderLogo(provider.providerId)}
-                              </span>
-                              <span>{provider.label}</span>
-                              {configured ? (
-                                <span className="text-[11px] text-[#9B9A97]">已配置</span>
-                              ) : null}
-                            </span>
-                          )
-                        }
-                      })}
-                    />
-                  </Form.Item>
-                  <Form.Item
-                    name="api_key"
-                    label="API Key"
-                    rules={[{ required: true, message: '请输入 API Key' }]}
-                    className="!mb-0"
-                  >
-                    <Input.Password
-                      placeholder="sk-..."
-                      data-testid={settingsSelectors.modelApiKeyInput}
-                    />
-                  </Form.Item>
-                </div>
-              )
-            },
-            {
-              key: 'custom',
-              label: '自定义配置',
-              children: (
-                <>
-                  <Form.Item
-                    name="name"
-                    label="配置名称"
-                    rules={[{ required: true, message: '请输入配置名称' }]}
-                  >
-                    <Input
-                      placeholder="例如：公司 OpenAI"
-                      data-testid={settingsSelectors.modelNameInput}
-                    />
-                  </Form.Item>
+          <Form.Item
+            name="name"
+            label="配置名称"
+            rules={[{ required: true, message: '请输入配置名称' }]}
+          >
+            <Input placeholder="例如：DeepSeek" data-testid={settingsSelectors.modelNameInput} />
+          </Form.Item>
 
-                  <Form.Item
-                    name="providerKind"
-                    hidden
-                    rules={[{ required: true, message: '请选择服务商' }]}
-                  >
-                    <Input data-testid={settingsSelectors.modelProviderInput} />
-                  </Form.Item>
+          <Form.Item
+            name="providerKind"
+            hidden
+            rules={[{ required: true, message: '请选择服务商' }]}
+          >
+            <Input data-testid={settingsSelectors.modelProviderInput} />
+          </Form.Item>
 
-                  <Form.Item
-                    name="base_url"
-                    label="模型服务地址"
-                    rules={[{ required: true, message: '请输入模型服务地址' }]}
-                  >
-                    <Input
-                      placeholder="填写模型服务提供的 API Base URL"
-                      allowClear
-                      data-testid={settingsSelectors.modelBaseUrlInput}
-                      onBlur={() => {
-                        const baseUrl = String(form.getFieldValue('base_url') || '')
-                        if (baseUrl) applyProviderFromBaseUrl(baseUrl)
-                      }}
-                    />
-                  </Form.Item>
+          <Form.Item label="配置类型" className="!mb-0">
+            <Radio.Group
+              value={mode}
+              onChange={(event) => handleModeChange(event.target.value)}
+              data-testid={settingsSelectors.modelTypeRadio}
+            >
+              <Radio value="preset" data-testid={settingsSelectors.modelTypeRecommend}>
+                推荐
+              </Radio>
+              <Radio value="custom" data-testid={settingsSelectors.modelTypeCustom}>
+                自定义
+              </Radio>
+            </Radio.Group>
+          </Form.Item>
 
-                  <Form.Item
-                    name="api_key"
-                    label="API Key"
-                    rules={[{ required: true, message: '请输入 API Key' }]}
-                    className="!mb-0"
-                  >
-                    <Input.Password
-                      placeholder="sk-..."
-                      data-testid={settingsSelectors.modelApiKeyInput}
-                    />
-                  </Form.Item>
-                </>
-              )
-            }
-          ]}
-          data-testid={settingsSelectors.modelModeSegment}
-        />
-      </Form>
+          {mode === 'preset' ? (
+            <Form.Item label="选择服务商" className="!mb-0 !mt-4">
+              <Select
+                placeholder="选择服务商"
+                disabled={editingPresetProviderId !== null}
+                value={selectedProviderId || undefined}
+                onChange={(value: LlmProviderId) => handleSelectProvider(value)}
+                data-testid={settingsSelectors.modelPresetProviderSelect}
+                options={LLM_PRESET_PROVIDERS.map((provider) => {
+                  const configured = configuredPresetProviderIds.has(provider.providerId)
+                  const disabled =
+                    configured && editingPresetProviderId !== provider.providerId
+                  return {
+                    value: provider.providerId,
+                    disabled,
+                    label: (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                          {getProviderLogo(provider.providerId)}
+                        </span>
+                        <span>{provider.label}</span>
+                        {configured ? (
+                          <span className="text-[11px] text-[#9B9A97]">已配置</span>
+                        ) : null}
+                      </span>
+                    )
+                  }
+                })}
+              />
+            </Form.Item>
+          ) : (
+            <Form.Item
+              name="base_url"
+              label="模型服务地址"
+              rules={[{ required: true, message: '请输入模型服务地址' }]}
+              className="!mb-0 !mt-4"
+            >
+              <Input
+                placeholder="填写模型服务提供的 API Base URL"
+                allowClear
+                data-testid={settingsSelectors.modelBaseUrlInput}
+                onBlur={() => {
+                  const baseUrl = String(form.getFieldValue('base_url') || '')
+                  if (baseUrl) applyProviderFromBaseUrl(baseUrl)
+                }}
+              />
+            </Form.Item>
+          )}
+
+          <Form.Item
+            name="api_key"
+            label="API Key"
+            rules={[{ required: true, message: '请输入 API Key' }]}
+            className="!mb-0 !mt-4"
+          >
+            <Input.Password
+              placeholder="sk-..."
+              data-testid={settingsSelectors.modelApiKeyInput}
+            />
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   )

@@ -91,6 +91,14 @@ describe('ai tool terminal backend', () => {
           terminalId: running.terminalId,
           readEndPosition: running.readEndPosition
         })
+        let completedRead = read
+        for (let attempt = 0; attempt < 60 && completedRead.status === 'running'; attempt += 1) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 50))
+          completedRead = await harness.invoke<TerminalReadResult>('terminal_read', {
+            terminalId: running.terminalId,
+            readEndPosition: completedRead.readEndPosition
+          })
+        }
         const nonZero = await harness.invoke<TerminalRunResult>('terminal_run', {
           command: isWindows
             ? 'Set-Content -LiteralPath terminal-nonzero.txt -Value nonzero; cmd /c exit 1'
@@ -102,7 +110,11 @@ describe('ai tool terminal backend', () => {
         const redirectAllowed = await harness.invoke<TerminalRunResult>('terminal_run', {
           command: 'echo redirect-ok 2>&1'
         })
-        const trackedFileNames = ['terminal-completed.txt', 'terminal-nonzero.txt'] as const
+        const trackedFileNames = [
+          'terminal-completed.txt',
+          'terminal-running.txt',
+          'terminal-nonzero.txt'
+        ] as const
         const records = await waitForTrackedRecords(trackedFileNames)
         const artifactEvents = await waitForArtifactEvents(trackedFileNames)
         await harness.release()
@@ -112,6 +124,7 @@ describe('ai tool terminal backend', () => {
           completedFile,
           running,
           read,
+          completedRead,
           nonZero,
           detachedRejected,
           redirectAllowed,
@@ -133,6 +146,7 @@ describe('ai tool terminal backend', () => {
         )
         runtime.assertThat(
           result.running.status === 'running' &&
+            result.completedRead.status === 'completed' &&
             (result.running.output.includes('terminal-tick') ||
               result.read.output.includes('terminal-tick')) &&
             result.detachedRejected.error.includes('detached shell execution'),
@@ -157,7 +171,7 @@ describe('ai tool terminal backend', () => {
         const trackedFileNames = new Set(result.records.map((record) => record.fileName))
         const artifactFileNames = new Set(result.artifactEvents.map((event) => event.fileName))
         runtime.assertThat(
-          ['terminal-completed.txt', 'terminal-nonzero.txt'].every(
+          ['terminal-completed.txt', 'terminal-running.txt', 'terminal-nonzero.txt'].every(
             (fileName) => trackedFileNames.has(fileName) && artifactFileNames.has(fileName)
           ) &&
             result.records

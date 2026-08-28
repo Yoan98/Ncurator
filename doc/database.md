@@ -24,6 +24,7 @@ SQLite 保存以下业务数据：
 - 会话、消息和按会话隔离的中断恢复快照；恢复快照只在任务正常完成或会话删除时清理。
 - AI run、审批和文件修改记录。
 - 会话级 append-only 的消息转录（`chat_session_message_log`），作为模型上下文的唯一真相源。
+- 消息中的图片只保存运行时路径或 HTTP(S) 地址，以及 MIME、字节数和尺寸；SQLite 不保存 Base64，也不为临时图片建立独立文件表。运行时文件被清理后允许恢复为不可用占位。
 - 工作区、文件索引任务、文档元数据和网页源。
 - LLM 配置和 AI runtime 设置。
 - AI runtime 设置中的 `systemNotificationsEnabled`，默认值为 `1`，控制 AI 运行终态系统通知。

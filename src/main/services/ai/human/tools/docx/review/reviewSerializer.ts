@@ -4,7 +4,8 @@ import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import type JSZip from 'jszip'
 import { childElements, firstChildElement, isElementNode } from '../adapters/ooxml/dom'
 import { buildDocumentNodeIndex, loadDocxBundle } from '../adapters/ooxml/nodeIndex'
-import type { IndexedNode } from '../adapters/ooxml/types'
+import type { DocxEditableNode, DocxVisualDescriptor, IndexedNode } from '../adapters/ooxml/types'
+import { isRootNode } from '../adapters/ooxml/types'
 import { findNewDocxValidationProblems, validateDocxBuffer } from '../adapters/ooxml/validator'
 import { createNodeElementFromSpec, createParagraphElementFromSpec } from '../utils/specDom'
 import type { DocxNodeSpec, DocxReplayNode, DocxReplaySession } from '../types'
@@ -209,9 +210,9 @@ const assertNoNewDocxValidationProblems = async (
 }
 
 const isRenderableIndexedNode = (
-  node: IndexedNode | undefined
+  node: IndexedNode | DocxEditableNode | DocxVisualDescriptor | undefined
 ): node is Exclude<IndexedNode, { kind: 'table_cell' }> =>
-  Boolean(node && node.kind !== 'table_cell')
+  Boolean(node && isRootNode(node) && node.kind !== 'table_cell')
 
 const parseSnapshotElement = (rawXml: string): Element | null => {
   if (!rawXml) return null

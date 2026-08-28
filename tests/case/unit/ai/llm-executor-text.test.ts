@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod/v4'
+import { HumanMessage } from '@langchain/core/messages'
 
 const { createChatModelMock } = vi.hoisted(() => ({
   createChatModelMock: vi.fn()
@@ -87,6 +88,47 @@ describe('ai unit llm executor text path', () => {
       rawText: 'Hello from the model',
       status: 'completed'
     })
+  })
+
+  it('forwards image blocks to the main model and preserves an unsupported-image error', async () => {
+    const invoke = vi.fn(async (messages: HumanMessage[]) => {
+      expect(JSON.stringify(messages[0]?.content)).toContain('data:image/png;base64,AA==')
+      throw new LlmProviderError({
+        message: 'image input is not supported by this model',
+        httpStatus: 400,
+        providerCode: 'unsupported_image',
+        retryable: false
+      })
+    })
+    createChatModelMock.mockImplementation(() => ({ invoke }))
+    const executor = createAiLlmExecutor({
+      eventCtx: { runId: 'run-image-unsupported', sendEvent: () => undefined },
+      runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
+      checkCancelled: () => undefined
+    })
+
+    await expect(
+      executor.chatMessages({
+        caller: 'human.brain',
+        taskId: 'task-image-unsupported',
+        schemaName: 'human_brain_messages',
+        messages: [
+          new HumanMessage({
+            content: [
+              { type: 'text', text: '读取图片' },
+              { type: 'image_url', image_url: { url: 'data:image/png;base64,AA==' } }
+            ]
+          })
+        ]
+      })
+    ).rejects.toMatchObject({
+      message: 'image input is not supported by this model',
+      httpStatus: 400,
+      providerCode: 'unsupported_image'
+    })
+    expect(invoke).toHaveBeenCalledTimes(1)
   })
 
   it('forwards driver structured output and text output without persisting preferences', async () => {

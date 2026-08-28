@@ -14,9 +14,7 @@ const renderMessagesForCompaction = (messages: BaseMessage[]): string =>
     .map((message) => {
       const role = message.getType()
       const content =
-        typeof message.content === 'string'
-          ? message.content
-          : JSON.stringify(message.content)
+        typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
       return `[${role}] ${content}`
     })
     .join('\n\n')
@@ -105,6 +103,7 @@ export const createContextCompactionNode = (input: {
       stage: 'human_brain'
     })
     input.cache.lastBrainInputTokens = undefined
+    input.cache.lastBrainMessageTokenEstimate = undefined
     input.cache.postCompactionNeedsFreshBrainUsage = true
     input.cache.lastBrainUsageUnavailable = false
     input.cache.compactSummaryText = String(summary || '').trim()

@@ -186,7 +186,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
               if (response.payload.action !== 'read_pages')
                 throw new Error('PDF worker 协议错误（read_pages）')
               const rendered = await runtime.callWorker({
-                action: 'render_pages',
+                action: 'materialize_pages',
                 payload: {
                   docId: document.docId,
                   workspaceRootPath: runtime.workspaceRootPath,
@@ -201,8 +201,8 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                   resourceContext
                 })
               }
-              if (rendered.payload.action !== 'render_pages')
-                throw new Error('PDF worker 协议错误（render_pages）')
+              if (rendered.payload.action !== 'materialize_pages')
+                throw new Error('PDF worker 协议错误（materialize_pages）')
               const imageByPage = new Map(
                 rendered.payload.images.map((image) => [image.pageNumber, image.path])
               )
@@ -211,7 +211,8 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                 pageCount: document.pageCount,
                 pages: response.payload.pages.map((page) => {
                   const pageImagePath = imageByPage.get(page.pageNumber)
-                  if (!pageImagePath) throw new Error(`PDF 第 ${String(page.pageNumber)} 页渲染缺失`)
+                  if (!pageImagePath)
+                    throw new Error(`PDF 第 ${String(page.pageNumber)} 页渲染缺失`)
                   return { ...page, pageImagePath }
                 })
               }

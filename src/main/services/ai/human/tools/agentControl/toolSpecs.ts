@@ -34,9 +34,9 @@ export const READ_IMAGE_OUTPUT_SCHEMA = z.object({
     z.object({
       path: z.string().min(1),
       mimeType: z.string().min(1),
-      sizeBytes: z.number().int().nonnegative().optional(),
-      width: z.number().int().positive().optional(),
-      height: z.number().int().positive().optional()
+      sizeBytes: z.number().int().positive(),
+      width: z.number().int().positive(),
+      height: z.number().int().positive()
     })
   )
 })

@@ -10,6 +10,7 @@ import type {
 
 export type IndexedNode =
   | {
+      category: 'root'
       kind: 'paragraph'
       nodeId: string
       nodeIndex: number
@@ -19,6 +20,7 @@ export type IndexedNode =
       node: Element
     }
   | {
+      category: 'root'
       kind: 'table'
       nodeId: string
       nodeIndex: number
@@ -28,6 +30,7 @@ export type IndexedNode =
       node: Element
     }
   | {
+      category: 'root'
       kind: 'content_control' | 'revision'
       nodeId: string
       nodeIndex: number
@@ -37,6 +40,7 @@ export type IndexedNode =
       node: Element
     }
   | {
+      category: 'root'
       kind: 'table_cell'
       nodeId: string
       tableNodeId: string
@@ -50,7 +54,7 @@ export type IndexedNode =
       firstParagraph: Element | null
     }
 
-export type NodeMapById = Map<string, IndexedNode>
+export type NodeMapById = Map<string, IndexedNode | DocxEditableNode | DocxVisualDescriptor>
 
 export type NodeIndex = {
   outline: DocxOutlineNode[]
@@ -62,11 +66,10 @@ export type NodeIndex = {
   rootNodeCount: number
   cellNodeCount: number
   detailByNodeId: Map<string, DocxDetailedNode>
-  editableNodesById: Map<string, DocxEditableNode>
-  visualNodesById: Map<string, DocxVisualDescriptor>
 }
 
 export type DocxEditableNode = {
+  category: 'editable'
   nodeId: string
   ownerNodeId: string
   story: DocxStoryRef
@@ -85,6 +88,7 @@ export type DocxEditableNode = {
 }
 
 export type DocxVisualDescriptor = {
+  category: 'visual'
   nodeId: string
   ownerNodeId: string
   kind: DocxVisualKind
@@ -97,6 +101,28 @@ export type DocxVisualDescriptor = {
   story: DocxStoryRef
   partName: string
 }
+
+export const isRootNode = (
+  node: IndexedNode | DocxEditableNode | DocxVisualDescriptor
+): node is IndexedNode => node.category === 'root'
+
+export const isEditableNode = (
+  node: IndexedNode | DocxEditableNode | DocxVisualDescriptor
+): node is DocxEditableNode => node.category === 'editable'
+
+export const isVisualNode = (
+  node: IndexedNode | DocxEditableNode | DocxVisualDescriptor
+): node is DocxVisualDescriptor => node.category === 'visual'
+
+export const collectVisualNodeEntries = (index: NodeIndex): Array<[string, DocxVisualDescriptor]> =>
+  [...index.nodesById.entries()].filter((entry): entry is [string, DocxVisualDescriptor] =>
+    isVisualNode(entry[1])
+  )
+
+export const collectEditableNodeEntries = (index: NodeIndex): Array<[string, DocxEditableNode]> =>
+  [...index.nodesById.entries()].filter((entry): entry is [string, DocxEditableNode] =>
+    isEditableNode(entry[1])
+  )
 
 export type DocxStoryPart = {
   story: DocxStoryRef

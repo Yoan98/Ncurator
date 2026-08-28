@@ -95,6 +95,7 @@ export type HumanRuntimeCache = {
   compactSummaryText?: string
   currentState?: HumanState
   lastBrainInputTokens?: number
+  lastBrainMessageTokenEstimate?: number
   postCompactionNeedsFreshBrainUsage?: boolean
   lastBrainUsageUnavailable?: boolean
 }

@@ -6,7 +6,7 @@ import type {
   PdfSearchMode
 } from '../types'
 
-export type PdfWorkerAction = 'open' | 'read_pages' | 'search' | 'render_pages' | 'release_run'
+export type PdfWorkerAction = 'open' | 'read_pages' | 'search' | 'materialize_pages' | 'release_run'
 
 export type PdfWorkerRequest =
   | {
@@ -37,7 +37,7 @@ export type PdfWorkerRequest =
   | {
       requestId: string
       runId: string
-      action: 'render_pages'
+      action: 'materialize_pages'
       payload: {
         docId: string
         workspaceRootPath: string
@@ -62,7 +62,7 @@ export type PdfWorkerSuccessPayload =
       pagesWithSuspiciousTextCount: number
     }
   | {
-      action: 'render_pages'
+      action: 'materialize_pages'
       assetBucketId: string
       images: PdfRenderedImage[]
     }

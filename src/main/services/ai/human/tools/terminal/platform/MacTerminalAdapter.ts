@@ -20,6 +20,7 @@ export class MacTerminalAdapter implements TerminalPlatformAdapter {
     return (
       [
         'stty -echo',
+        "PROMPT=''; RPROMPT=''",
         `__ncurator_cwd_prefix="${decodeProtocolLiteral(protocol.cwdPrefix)}"`,
         `__ncurator_start_prefix="${decodeProtocolLiteral(protocol.startPrefix)}"`,
         `__ncurator_done_prefix="${decodeProtocolLiteral(protocol.donePrefix)}"`,

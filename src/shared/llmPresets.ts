@@ -12,7 +12,6 @@ export const LLM_PRICE_TIER_LABELS: Record<LlmPriceTier, string> = {
 export type LlmPresetModel = {
   id: string
   label: string
-  vision: boolean
   priceTier: LlmPriceTier
 }
 
@@ -31,12 +30,11 @@ export const LLM_PRESET_PROVIDERS: LlmPresetProvider[] = [
     sourceUrl: 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing',
     checkedAt: '2026-08-28',
     models: [
-      { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', vision: false, priceTier: 'mid' },
-      { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', vision: false, priceTier: 'low' },
+      { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', priceTier: 'mid' },
+      { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', priceTier: 'low' },
       {
         id: 'deepseek-v4-flash-vision-exp',
         label: 'DeepSeek V4 Flash Vision',
-        vision: true,
         priceTier: 'low'
       }
     ]
@@ -47,8 +45,8 @@ export const LLM_PRESET_PROVIDERS: LlmPresetProvider[] = [
     sourceUrl: 'https://www.qianwenai.com/models',
     checkedAt: '2026-08-28',
     models: [
-      { id: 'qwen3.8-max', label: 'Qwen3.8 Max', vision: true, priceTier: 'high' },
-      { id: 'qwen3.8-flash', label: 'Qwen3.8 Flash', vision: true, priceTier: 'low' }
+      { id: 'qwen3.8-max', label: 'Qwen3.8 Max', priceTier: 'high' },
+      { id: 'qwen3.8-flash', label: 'Qwen3.8 Flash', priceTier: 'low' }
     ]
   },
   {
@@ -57,8 +55,8 @@ export const LLM_PRESET_PROVIDERS: LlmPresetProvider[] = [
     sourceUrl: 'https://mimo.mi.com/docs/zh-CN/quick-start/summary/model',
     checkedAt: '2026-08-28',
     models: [
-      { id: 'mimo-v2.5-pro', label: 'MiMo V2.5 Pro', vision: false, priceTier: 'mid' },
-      { id: 'mimo-v2.5', label: 'MiMo V2.5', vision: true, priceTier: 'low' }
+      { id: 'mimo-v2.5-pro', label: 'MiMo V2.5 Pro', priceTier: 'mid' },
+      { id: 'mimo-v2.5', label: 'MiMo V2.5', priceTier: 'low' }
     ]
   },
   {
@@ -67,8 +65,8 @@ export const LLM_PRESET_PROVIDERS: LlmPresetProvider[] = [
     sourceUrl: 'https://docs.bigmodel.cn/cn/guide/start/model-overview',
     checkedAt: '2026-08-28',
     models: [
-      { id: 'glm-5.3', label: 'GLM 5.3', vision: false, priceTier: 'high' },
-      { id: 'glm-5.3-flash', label: 'GLM 5.3 Flash', vision: true, priceTier: 'low' }
+      { id: 'glm-5.3', label: 'GLM 5.3', priceTier: 'high' },
+      { id: 'glm-5.3-flash', label: 'GLM 5.3 Flash', priceTier: 'low' }
     ]
   },
   {
@@ -77,8 +75,8 @@ export const LLM_PRESET_PROVIDERS: LlmPresetProvider[] = [
     sourceUrl: 'https://platform.kimi.com/docs/pricing/chat-k3',
     checkedAt: '2026-08-28',
     models: [
-      { id: 'kimi-k3', label: 'Kimi K3', vision: true, priceTier: 'high' },
-      { id: 'kimi-k2.6', label: 'Kimi K2.6', vision: true, priceTier: 'mid' }
+      { id: 'kimi-k3', label: 'Kimi K3', priceTier: 'high' },
+      { id: 'kimi-k2.6', label: 'Kimi K2.6', priceTier: 'mid' }
     ]
   }
 ]
@@ -110,6 +108,5 @@ export const resolvePresetModeProvider = (
 ): LlmPresetProvider | null => {
   const provider = getPresetProviderByBaseUrl(config.base_url)
   if (!provider) return null
-  if (config.name.trim() !== provider.label) return null
   return provider
 }

@@ -109,7 +109,10 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
       const prohibited = [
         ['skipped live result', /\bskipped\s*:/u],
         ['live config probe', /\bhasLiveLlmConfigInEnv\b/u],
-        ['LLM scripted override', /\bstructuredOutputScript\b|\bllmScript\b|\bchatStructuredOverride\b/u],
+        [
+          'LLM scripted override',
+          /\bstructuredOutputScript\b|\bllmScript\b|\bchatStructuredOverride\b/u
+        ],
         ['case score gate', /\bscoreParts\b|\bruntime\.assertThat\(\s*score\b/u]
       ]
       for (const [label, pattern] of prohibited) {
@@ -117,12 +120,6 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
       }
       if (!/\bloadLiveLlmConfigFromEnv\b|\brunBackendCase\b/u.test(source)) {
         failures.push(`${relativePath}: live 必须走严格 env runner`)
-      }
-      if (
-        /\b(?:ppt_read_visuals|docx_read_visuals|pdf_read_visuals)\b/u.test(source) &&
-        !/\brequiresVisionModel\s*:\s*true\b/u.test(source)
-      ) {
-        failures.push(`${relativePath}: 使用视觉工具的 live case 必须声明 requiresVisionModel: true`)
       }
     }
 

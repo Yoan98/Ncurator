@@ -1681,9 +1681,9 @@ export type ChatMessageLogToolCall = {
 export type ChatMessageImageRef = {
   path: string
   mimeType: string
-  sizeBytes?: number
-  width?: number
-  height?: number
+  sizeBytes: number
+  width: number
+  height: number
 }
 
 export type ChatMessageLogEntry =

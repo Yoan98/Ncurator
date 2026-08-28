@@ -18,7 +18,7 @@ import {
 import { buildDispatchQueue } from '../dispatch'
 import { appendToolFeedback } from '../../shared/toolFeedback'
 import { formatZodErrorForTool, type ZodIssueLike } from '../../shared/schemaError'
-import { projectMessagesForMainModel } from '../../memory/multimodal'
+import { estimateMessagesForContext, projectMessagesForMainModel } from '../../memory/multimodal'
 import {
   emitThinkingCompleted,
   emitThinkingFailed,
@@ -126,10 +126,12 @@ export const createBrainNode = (input: {
         { kind: 'annotation', eventType: 'thinking_started', payload: {} }
       ])
 
+      const projectedMessages = await projectMessagesForMainModel(messages)
+      const requestMessageTokenEstimate = estimateMessagesForContext(messages)
       const result = await input.ctx.chatTools({
         caller: 'human.brain',
         taskId: state.task.taskId,
-        messages: await projectMessagesForMainModel(messages),
+        messages: projectedMessages,
         tools,
         temperature: 0.1,
         contextBudgetSnapshot: state.execution.contextBudget
@@ -138,6 +140,7 @@ export const createBrainNode = (input: {
       const inputTokens = result.usage?.inputTokens
       if (inputTokens !== undefined) {
         input.cache.lastBrainInputTokens = inputTokens
+        input.cache.lastBrainMessageTokenEstimate = requestMessageTokenEstimate
         input.cache.postCompactionNeedsFreshBrainUsage = false
         input.cache.lastBrainUsageUnavailable = false
       } else {

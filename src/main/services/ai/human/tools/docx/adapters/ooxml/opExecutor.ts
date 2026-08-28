@@ -13,7 +13,8 @@ import {
   getAttr,
   isElementNode
 } from './dom'
-import type { ApplyOpsResult, NodeIndex } from './types'
+import type { ApplyOpsResult, DocxVisualDescriptor, NodeIndex } from './types'
+import { isRootNode, isVisualNode } from './types'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
@@ -104,30 +105,18 @@ const buildCurrentIndex = (bundle: Awaited<ReturnType<typeof loadDocxBundle>>): 
 const editableElement = (index: NodeIndex, id: string): Element => {
   const node = index.nodesById.get(id)
   if (node) return node.node
-  const nested = index.editableNodesById.get(id)
-  if (nested) return nested.node
-  const visual = index.visualNodesById.get(id)
-  if (visual) return visual.node
   throw new Error(`DOCX node not found: ${id}`)
 }
 
 const ownerNodeId = (index: NodeIndex, id: string): string => {
   const node = index.nodesById.get(id)
-  if (node) return node.nodeId
-  const nested = index.editableNodesById.get(id)
-  if (nested) return nested.ownerNodeId
-  const visual = index.visualNodesById.get(id)
-  if (visual) return visual.ownerNodeId
+  if (node) return isRootNode(node) ? node.nodeId : node.ownerNodeId
   throw new Error(`DOCX node owner not found: ${id}`)
 }
 
 const partNameForNode = (index: NodeIndex, id: string): string => {
-  const root = index.nodesById.get(id)
-  if (root) return root.partName
-  const nested = index.editableNodesById.get(id)
-  if (nested) return nested.partName
-  const visual = index.visualNodesById.get(id)
-  if (visual) return visual.partName
+  const node = index.nodesById.get(id)
+  if (node) return node.partName
   throw new Error(`DOCX node part not found: ${id}`)
 }
 
@@ -176,22 +165,16 @@ const applyMoveNode = async (
 ): Promise<{ buffer: Buffer; changedNodes: DocxChangedNode[] }> => {
   const bundle = await loadDocxBundle(buffer)
   const index = buildCurrentIndex(bundle)
-  const movingVisual = index.visualNodesById.get(op.nodeId)
-  const anchorVisual = index.visualNodesById.get(op.anchorNodeId)
+  const movingEntry = index.nodesById.get(op.nodeId)
+  const anchorEntry = index.nodesById.get(op.anchorNodeId)
+  const movingVisual = movingEntry && isVisualNode(movingEntry) ? movingEntry : undefined
+  const anchorVisual = anchorEntry && isVisualNode(anchorEntry) ? anchorEntry : undefined
   const moving = movingVisual
     ? removableVisualNode(movingVisual.node)
     : editableElement(index, op.nodeId)
   const anchor = anchorVisual
     ? removableVisualNode(anchorVisual.node)
     : editableElement(index, op.anchorNodeId)
-  const movingEntry =
-    index.editableNodesById.get(op.nodeId) ||
-    index.nodesById.get(op.nodeId) ||
-    index.visualNodesById.get(op.nodeId)
-  const anchorEntry =
-    index.editableNodesById.get(op.anchorNodeId) ||
-    index.nodesById.get(op.anchorNodeId) ||
-    index.visualNodesById.get(op.anchorNodeId)
   if (!movingEntry || !anchorEntry) throw new Error('move node identity is missing')
   if (movingEntry.partName !== anchorEntry.partName) {
     throw new Error(
@@ -251,7 +234,9 @@ type ContentDomainOp = Extract<
   }
 >
 
-type ContentDraft = Extract<ContentDomainOp, { type: 'insert_nodes' }>['nodes'][number]
+type ContentDraft =
+  | Extract<ContentDomainOp, { type: 'insert_nodes' }>['nodes'][number]
+  | Extract<ContentDomainOp, { type: 'replace_node' }>['node']
 
 const contentDraftElement = (
   doc: Document,
@@ -371,7 +356,7 @@ const applyContentDomainOp = async (
   const index = buildCurrentIndex(bundle)
   if (
     op.type === 'replace_node' &&
-    (op.node.type === 'visual' || index.visualNodesById.has(op.nodeId))
+    (op.node.type === 'visual' || index.nodesById.get(op.nodeId)?.category === 'visual')
   ) {
     return await applyVisualNodeReplacement(bundle, index, op)
   }
@@ -646,9 +631,9 @@ const applyTableDomainOp = async (
       }
     }
   }
-  const tableId =
-    [...index.nodesById.values()].find((candidate) => candidate.node === table)?.nodeId ||
-    [...index.editableNodesById.values()].find((candidate) => candidate.node === table)?.nodeId
+  const tableId = [...index.nodesById.values()].find(
+    (candidate) => candidate.node === table
+  )?.nodeId
   if (!tableId) throw new Error('table owner not found')
   if (op.type === 'delete_row') {
     return {
@@ -811,7 +796,7 @@ const applyFormatDomainOp = async (
     }
   }
   if (op.type === 'format_section') {
-    const targetEntry = index.editableNodesById.get(op.nodeId) || index.nodesById.get(op.nodeId)
+    const targetEntry = index.nodesById.get(op.nodeId)
     if (!targetEntry || targetEntry.story.type !== 'body') {
       throw new Error('format_section target must be in the document body')
     }
@@ -1195,11 +1180,11 @@ const visualElement = (
   index: NodeIndex,
   nodeId: string
 ): {
-  descriptor: NodeIndex['visualNodesById'] extends Map<string, infer TValue> ? TValue : never
+  descriptor: DocxVisualDescriptor
   node: Element
 } => {
-  const descriptor = index.visualNodesById.get(nodeId)
-  if (!descriptor) throw new Error(`media not found: ${nodeId}`)
+  const descriptor = index.nodesById.get(nodeId)
+  if (!descriptor || !isVisualNode(descriptor)) throw new Error(`media not found: ${nodeId}`)
   return { descriptor, node: descriptor.node }
 }
 
@@ -1263,7 +1248,8 @@ const applyVisualNodeReplacement = async (
   index: NodeIndex,
   op: Extract<ContentDomainOp, { type: 'replace_node' }>
 ): Promise<{ buffer: Buffer; changedNodes: DocxChangedNode[] }> => {
-  const existingVisual = index.visualNodesById.get(op.nodeId)
+  const existingNode = index.nodesById.get(op.nodeId)
+  const existingVisual = existingNode && isVisualNode(existingNode) ? existingNode : undefined
   if (existingVisual) {
     const current = visualElement(index, op.nodeId)
     if (op.node.type === 'visual') {
@@ -1387,8 +1373,7 @@ const removeUnusedRelationship = async (
   const isReferenced = (node: Element): boolean =>
     ['embed', 'link', 'id', 'dm'].some(
       (attributeName) => attrByLocalName(node, attributeName) === relationshipId
-    ) ||
-    childElements(node).some(isReferenced)
+    ) || childElements(node).some(isReferenced)
   if (isReferenced(partDocument.documentElement)) return
   const relationships = await partRelationships(bundle.zip, partName)
   const relation = childElements(relationships.documentElement, 'Relationship').find(
@@ -2213,10 +2198,9 @@ export const validateDocxOperationTargets = async (
     ) {
       return
     }
-    const editable = index.editableNodesById.get(operation.nodeId)
     const node = index.nodesById.get(operation.nodeId)
-    const actualKind = editable?.kind || node?.kind
-    const element = editable?.node || node?.node
+    const actualKind = node?.kind
+    const element = node?.node
     if (!actualKind || !element) throw new Error(`format target not found: ${operation.nodeId}`)
     if (operation.type === 'format_text') {
       const targetText = collectText(element)
@@ -2235,8 +2219,7 @@ export const validateDocxOperationTargets = async (
       throw new Error(`reset_format does not support ${element.localName}`)
     }
     if (operation.type === 'format_section') {
-      const target = editable || node
-      if (target?.story.type !== 'body') {
+      if (node?.story.type !== 'body') {
         throw new Error('format_section target must be in the document body')
       }
     }
@@ -2301,10 +2284,9 @@ const applyDirectFormat = async (buffer: Buffer, op: DirectFormatOp) => {
     })
     if (!changed) throw new Error('format_text target contains no text')
   } else {
-    const editable = index.editableNodesById.get(op.nodeId)
     const node = index.nodesById.get(op.nodeId)
-    const actualKind = editable?.kind || node?.kind
-    const element = editable?.node || node?.node
+    const actualKind = node?.kind
+    const element = node?.node
     if (!actualKind || !element) throw new Error(`format target not found: ${op.nodeId}`)
     const patch: DocxStylePatch =
       op.type === 'format_paragraph'

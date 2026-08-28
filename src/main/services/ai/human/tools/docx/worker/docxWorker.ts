@@ -25,6 +25,7 @@ import {
 } from '../adapters/ooxml/nodeIndex'
 import { findNewDocxValidationProblems, validateDocxBuffer } from '../adapters/ooxml/validator'
 import { resolveDocxRelationshipTarget } from '../adapters/ooxml/relationshipPath'
+import { isRootNode, isVisualNode } from '../adapters/ooxml/types'
 import type { DocSnapshot, DocxWorkerRequest, DocxWorkerResponse, RunSessions } from './types'
 import {
   createInitialIdentityIndex,
@@ -602,10 +603,7 @@ export const handleDocxWorkerRequest = async (
     if (request.action === 'get_node_layout') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       const internalId = resolveInternalNodeId(snapshot.identity, request.payload.nodeId)
-      const entry =
-        snapshot.index.nodesById.get(internalId) ||
-        snapshot.index.editableNodesById.get(internalId) ||
-        snapshot.index.visualNodesById.get(internalId)
+      const entry = snapshot.index.nodesById.get(internalId)
       if (!entry) {
         return {
           requestId: request.requestId,
@@ -616,7 +614,7 @@ export const handleDocxWorkerRequest = async (
       }
       const ownerNodeId = 'ownerNodeId' in entry ? entry.ownerNodeId : entry.nodeId
       const owner = snapshot.index.nodesById.get(ownerNodeId)
-      if (!owner) {
+      if (!owner || !isRootNode(owner)) {
         return {
           requestId: request.requestId,
           ok: false,
@@ -682,12 +680,16 @@ export const handleDocxWorkerRequest = async (
         payload: {
           action: 'get_replay_snapshot_xml',
           packageFingerprint: await replayPackageFingerprint(snapshot),
-          nodes: [...snapshot.index.nodesById.entries()].map(([internalNodeId, node]) => {
-            const nodeId = snapshot.identity.publicIdByInternalId.get(internalNodeId)
-            if (!nodeId)
-              throw new Error(`docx identity missing for internal node: ${internalNodeId}`)
-            return { nodeId, rawXml: serializer.serializeToString(node.node) }
-          })
+          nodes: [...snapshot.index.nodesById.entries()]
+            .filter((entry): entry is [string, Extract<(typeof entry)[1], { category: 'root' }>] =>
+              isRootNode(entry[1])
+            )
+            .map(([internalNodeId, node]) => {
+              const nodeId = snapshot.identity.publicIdByInternalId.get(internalNodeId)
+              if (!nodeId)
+                throw new Error(`docx identity missing for internal node: ${internalNodeId}`)
+              return { nodeId, rawXml: serializer.serializeToString(node.node) }
+            })
         }
       }
     }
@@ -755,15 +757,26 @@ export const handleDocxWorkerRequest = async (
         snapshot.identity,
         request.payload.nodeId
       )
-      const visual = snapshot.index.visualNodesById.get(internalVisualNodeId)
-      if (!visual) throw new Error(`visual not found: ${request.payload.nodeId}`)
+      const visualEntry = snapshot.index.nodesById.get(internalVisualNodeId)
+      if (!visualEntry || !isVisualNode(visualEntry)) {
+        throw new Error(`visual not found: ${request.payload.nodeId}`)
+      }
+      const visual = visualEntry
       if ((visual.kind !== 'image' && visual.kind !== 'embedded_object') || !visual.target) {
         const owner = snapshot.index.nodesById.get(visual.ownerNodeId)
-        if (!owner) throw new Error(`visual owner node not found: ${request.payload.nodeId}`)
-        const visualsInNode = [...snapshot.index.visualNodesById.entries()].filter(
-          ([, candidate]) => {
+        if (!owner || !isRootNode(owner)) {
+          throw new Error(`visual owner node not found: ${request.payload.nodeId}`)
+        }
+        const visualsInNode = [...snapshot.index.nodesById.entries()].filter(
+          (entry): entry is [string, typeof visual] => {
+            const candidate = entry[1]
+            if (!isVisualNode(candidate)) return false
             const candidateOwner = snapshot.index.nodesById.get(candidate.ownerNodeId)
-            return candidateOwner?.nodeIndex === owner.nodeIndex
+            return Boolean(
+              candidateOwner &&
+              isRootNode(candidateOwner) &&
+              candidateOwner.nodeIndex === owner.nodeIndex
+            )
           }
         )
         return {

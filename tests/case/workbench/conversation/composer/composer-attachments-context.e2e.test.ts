@@ -314,6 +314,8 @@ describe('workbench conversation e2e', () => {
           await imageRemoveButton.click()
           const imageRemoved =
             (await getImageAttachmentCardByName(page, 'qa-image.png').count()) === 0
+          await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.imagePath)
+          await waitForAttachmentCardByName(page, 'qa-image.png')
 
           const fileCard = getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
             .filter({ hasText: 'workbench-preview.md' })
@@ -386,6 +388,7 @@ describe('workbench conversation e2e', () => {
             .reverse()
             .find((message) => message.role === 'user')
           const submittedAttachments = submittedUserMessage?.attachments || []
+          const persistedMessagesJson = JSON.stringify(submittedMessages)
 
           const signals = await runtime.collectSignals()
           const openPathCalls = signals.ipcInvokeEntries.filter(
@@ -422,6 +425,7 @@ describe('workbench conversation e2e', () => {
             zipCardText,
             submittedAttachmentNames: submittedAttachments.map((attachment) => attachment.name),
             submittedAttachmentPaths: submittedAttachments.map((attachment) => attachment.path),
+            persistedMessagesContainBase64: persistedMessagesJson.includes(';base64,'),
             largeFileMessage,
             inputText,
             openPathCallCount: openPathCalls.length,
@@ -457,6 +461,7 @@ describe('workbench conversation e2e', () => {
               result.zipCardText.includes('ZIP') &&
               [
                 'workbench-preview.md',
+                'qa-image.png',
                 'legacy-reference.doc',
                 'slides-reference.pptx',
                 'sheet-reference.xlsx',
@@ -466,7 +471,7 @@ describe('workbench conversation e2e', () => {
                 'unknown-bundle.zip',
                 'qa-large.json'
               ].every((name) => result.submittedAttachmentNames.includes(name)) &&
-              result.submittedAttachmentPaths.length === 9 &&
+              result.submittedAttachmentPaths.length === 10 &&
               result.submittedAttachmentPaths.every(
                 (attachmentPath) =>
                   attachmentPath.includes(`${path.sep}ncurator-composer-attachments-`) &&
@@ -474,9 +479,10 @@ describe('workbench conversation e2e', () => {
                     `${path.sep}.ncurator${path.sep}runtime${path.sep}assets${path.sep}`
                   )
               ) &&
+              !result.persistedMessagesContainBase64 &&
               result.largeFileMessage.includes('文件过大，建议放到工作空间索引里使用') &&
               result.inputText.includes('plain paste ok') &&
-              result.openPathCallCount >= 1,
+              result.openPathCallCount >= 1 &&
               result.attachmentSaveFileCallCount === 0,
             {
               name: 'workbench-composer-attachments-prd-flow',

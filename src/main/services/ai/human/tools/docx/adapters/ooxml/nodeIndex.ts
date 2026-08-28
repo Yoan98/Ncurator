@@ -14,6 +14,7 @@ import type {
   DocxTextRunSpec
 } from '../../types'
 import type { NodeIndex, DocxStoryPart, NodeMapById, ParsedDocxBundle } from './types'
+import { isRootNode } from './types'
 import {
   buildParagraphDetail,
   buildContainerDetail,
@@ -333,8 +334,6 @@ export const buildNodeIndex = (
   let charCount = 0
   let cellNodeCount = 0
   const detailByNodeId: NodeIndex['detailByNodeId'] = new Map()
-  const editableNodesById: NodeIndex['editableNodesById'] = new Map()
-  const visualNodesById: NodeIndex['visualNodesById'] = new Map()
 
   const bodyChildren = collectLogicalBodyElements(childElements(body))
   for (const logical of bodyChildren) {
@@ -382,6 +381,7 @@ export const buildNodeIndex = (
         })
       }
       nodesById.set(nodeId, {
+        category: 'root',
         kind,
         nodeId,
         nodeIndex,
@@ -411,6 +411,7 @@ export const buildNodeIndex = (
         story
       })
       nodesById.set(nodeId, {
+        category: 'root',
         kind: 'paragraph',
         nodeId,
         nodeIndex,
@@ -442,6 +443,7 @@ export const buildNodeIndex = (
         story
       })
       nodesById.set(nodeId, {
+        category: 'root',
         kind: 'table',
         nodeId,
         nodeIndex,
@@ -468,6 +470,7 @@ export const buildNodeIndex = (
           story
         })
         nodesById.set(cellNodeId, {
+          category: 'root',
           kind: 'table_cell',
           nodeId: cellNodeId,
           tableNodeId: nodeId,
@@ -502,7 +505,7 @@ export const buildNodeIndex = (
 
   for (const nodeId of rootNodeIds) {
     const node = nodesById.get(nodeId)
-    if (!node || node.kind === 'table_cell') continue
+    if (!node || !isRootNode(node) || node.kind === 'table_cell') continue
     const neighbors = resolveBodyNeighbors(rootNodeIds, nodeId)
     const shared = {
       nodeId,
@@ -515,8 +518,7 @@ export const buildNodeIndex = (
       relationshipTypes,
       relationshipTargetModes,
       availableRelationshipTargetIds,
-      editableNodesById,
-      visualNodesById
+      nodesById
     }
     const detail =
       node.kind === 'paragraph'
@@ -528,7 +530,7 @@ export const buildNodeIndex = (
   }
 
   for (const [nodeId, node] of nodesById) {
-    if (node.kind !== 'table_cell') continue
+    if (!isRootNode(node) || node.kind !== 'table_cell') continue
     const table = detailByNodeId.get(node.tableNodeId)
     if (!table || table.type !== 'table') continue
     const parsed = table.children[node.row - 1]?.children[node.col - 1]
@@ -570,9 +572,7 @@ export const buildNodeIndex = (
     charCount,
     rootNodeCount: storyRootCount,
     cellNodeCount,
-    detailByNodeId,
-    editableNodesById,
-    visualNodesById
+    detailByNodeId
   }
 }
 
@@ -601,9 +601,7 @@ export const buildDocumentNodeIndex = (bundle: ParsedDocxBundle): NodeIndex => {
     charCount: 0,
     rootNodeCount: 0,
     cellNodeCount: 0,
-    detailByNodeId: new Map(),
-    editableNodesById: new Map(),
-    visualNodesById: new Map()
+    detailByNodeId: new Map()
   }
   for (const storyPart of parts) {
     const part = buildNodeIndex(
@@ -618,8 +616,6 @@ export const buildDocumentNodeIndex = (bundle: ParsedDocxBundle): NodeIndex => {
     combined.rootNodeIds.push(...part.rootNodeIds)
     part.nodesById.forEach((value, key) => combined.nodesById.set(key, value))
     part.detailByNodeId.forEach((value, key) => combined.detailByNodeId.set(key, value))
-    part.editableNodesById.forEach((value, key) => combined.editableNodesById.set(key, value))
-    part.visualNodesById.forEach((value, key) => combined.visualNodesById.set(key, value))
     combined.paragraphCount += part.paragraphCount
     combined.tableCount += part.tableCount
     combined.charCount += part.charCount
@@ -673,10 +669,11 @@ export const getNodeStructureFacts = (
   story: import('../../types').DocxStoryRef
 } | null => {
   const node = index.nodesById.get(nodeId)
-  if (!node) return null
-  const storyNodeIds = index.rootNodeIds.filter(
-    (candidateId) => index.nodesById.get(candidateId)?.story.storyId === node.story.storyId
-  )
+  if (!node || !isRootNode(node)) return null
+  const storyNodeIds = index.rootNodeIds.filter((candidateId) => {
+    const candidate = index.nodesById.get(candidateId)
+    return candidate && isRootNode(candidate) && candidate.story.storyId === node.story.storyId
+  })
   return {
     nodeType: node.kind,
     nodeIndex: node.nodeIndex,

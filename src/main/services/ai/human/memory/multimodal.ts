@@ -1,21 +1,22 @@
 import fs from 'node:fs/promises'
 import { HumanMessage, type BaseMessage } from '@langchain/core/messages'
 import type { ChatMessageImageRef } from '../../../../../shared/types'
+import { estimateTextTokens } from '../utils/tokenEstimate'
 
 const IMAGE_REF_SCHEME = 'ncurator-image-ref:'
-const MAX_RETAINED_IMAGES = 20
+const MAX_RETAINED_IMAGES = 600
 const MAX_INLINE_BYTES = 20 * 1024 * 1024
-const TARGET_INLINE_BYTES = 15 * 1024 * 1024
-const EVICTION_QUANTUM = 5
+const COUNT_EVICTION_QUANTUM = 20
+const BYTE_EVICTION_QUANTUM = 10 * 1024 * 1024
 
 type ImageReferenceBlock = {
   type: 'image_url'
   image_url: {
     url: string
     mime_type: string
-    size_bytes?: number
-    width?: number
-    height?: number
+    size_bytes: number
+    width: number
+    height: number
   }
 }
 
@@ -68,9 +69,10 @@ type Occurrence = {
   estimatedInlineBytes: number
 }
 
-const estimateInlineBytes = (block: ImageReferenceBlock): number => {
-  const bytes = block.image_url.size_bytes
-  return typeof bytes === 'number' && bytes > 0 ? Math.ceil((bytes * 4) / 3) : 0
+const estimateInlineBytes = (block: ImageReferenceBlock, path: string): number => {
+  if (/^https?:\/\//i.test(path)) return 0
+  const base64Bytes = Math.ceil(block.image_url.size_bytes / 3) * 4
+  return base64Bytes + `data:${block.image_url.mime_type};base64,`.length
 }
 
 const resolveEvictedOccurrences = (occurrences: Occurrence[]): Set<string> => {
@@ -79,18 +81,25 @@ const resolveEvictedOccurrences = (occurrences: Occurrence[]): Set<string> => {
   if (retainedCount <= MAX_RETAINED_IMAGES && retainedBytes <= MAX_INLINE_BYTES) return new Set()
 
   const evicted = new Set<string>()
-  let minimumEvictions = retainedCount > MAX_RETAINED_IMAGES ? EVICTION_QUANTUM : 0
+  const countOverage = Math.max(0, retainedCount - MAX_RETAINED_IMAGES)
+  const minimumEvictions =
+    countOverage > 0
+      ? Math.max(
+          COUNT_EVICTION_QUANTUM,
+          Math.ceil(countOverage / COUNT_EVICTION_QUANTUM) * COUNT_EVICTION_QUANTUM
+        )
+      : 0
+  const byteOverage = Math.max(0, retainedBytes - MAX_INLINE_BYTES)
+  const minimumBytesToEvict = byteOverage > 0 ? Math.max(BYTE_EVICTION_QUANTUM, byteOverage) : 0
+  let evictedCount = 0
+  let evictedBytes = 0
   for (const item of occurrences) {
-    if (
-      minimumEvictions <= 0 &&
-      retainedCount <= MAX_RETAINED_IMAGES &&
-      retainedBytes <= TARGET_INLINE_BYTES
-    )
-      break
+    if (evictedCount >= minimumEvictions && evictedBytes >= minimumBytesToEvict) break
     evicted.add(`${item.messageIndex}:${item.blockIndex}`)
     retainedCount -= 1
     retainedBytes -= item.estimatedInlineBytes
-    minimumEvictions -= 1
+    evictedCount += 1
+    evictedBytes += item.estimatedInlineBytes
   }
   return evicted
 }
@@ -115,7 +124,7 @@ export const projectMessagesForMainModel = async (
         messageIndex,
         blockIndex,
         path,
-        estimatedInlineBytes: estimateInlineBytes(block)
+        estimatedInlineBytes: estimateInlineBytes(block, path)
       })
     })
   })
@@ -135,10 +144,19 @@ export const projectMessagesForMainModel = async (
               text: `[图片已从当前请求上下文移除：${path}。如需再次查看，请调用 read_image。]`
             }
           }
+          let dataUrl: string
+          try {
+            dataUrl = await toDataUrl(path, block.image_url.mime_type)
+          } catch {
+            return {
+              type: 'text' as const,
+              text: `[图片运行时文件已不可用：${path}。]`
+            }
+          }
           return {
             type: 'image_url' as const,
             image_url: {
-              url: await toDataUrl(path, block.image_url.mime_type)
+              url: dataUrl
             }
           }
         })
@@ -149,15 +167,43 @@ export const projectMessagesForMainModel = async (
 }
 
 export const estimateMessageImageTokens = (messages: BaseMessage[]): number => {
+  const occurrences: Occurrence[] = []
+  messages.forEach((message, messageIndex) => {
+    if (!Array.isArray(message.content)) return
+    message.content.forEach((block, blockIndex) => {
+      if (!isImageReferenceBlock(block)) return
+      const path = decodeRef(block.image_url.url)
+      if (!path) return
+      occurrences.push({
+        messageIndex,
+        blockIndex,
+        path,
+        estimatedInlineBytes: estimateInlineBytes(block, path)
+      })
+    })
+  })
+  const evicted = resolveEvictedOccurrences(occurrences)
   let total = 0
-  for (const message of messages) {
+  for (let messageIndex = 0; messageIndex < messages.length; messageIndex += 1) {
+    const message = messages[messageIndex]!
     if (!Array.isArray(message.content)) continue
-    for (const block of message.content) {
+    for (let blockIndex = 0; blockIndex < message.content.length; blockIndex += 1) {
+      const block = message.content[blockIndex]
       if (!isImageReferenceBlock(block)) continue
-      const width = block.image_url.width || 1024
-      const height = block.image_url.height || 1024
+      if (evicted.has(`${messageIndex}:${blockIndex}`)) continue
+      const width = block.image_url.width
+      const height = block.image_url.height
       total += Math.max(256, Math.ceil(width / 512) * Math.ceil(height / 512) * 256)
     }
   }
   return total
 }
+
+export const estimateMessagesForContext = (messages: BaseMessage[]): number =>
+  estimateTextTokens(
+    messages
+      .map((message) =>
+        typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
+      )
+      .join('\n')
+  ) + estimateMessageImageTokens(messages)

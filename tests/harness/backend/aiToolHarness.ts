@@ -21,6 +21,7 @@ import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/huma
 import { TerminalSessionManager } from '../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/human/tools/textFile'
 import { buildImageGenerationCapabilityTools } from '../../../src/main/services/ai/human/tools/imageGeneration'
+import { agentControlToolFamily } from '../../../src/main/services/ai/human/tools/agentControl'
 import { buildPdfCapabilityTools } from '../../../src/main/services/ai/human/tools/pdf'
 import { buildPptCapabilityTools } from '../../../src/main/services/ai/human/tools/ppt'
 import { buildExcelCapabilityTools } from '../../../src/main/services/ai/human/tools/excel'
@@ -322,6 +323,26 @@ export const createImageGenerationToolHarness = (
     ...createToolInvoker(built.tools as readonly ToolLike[]),
     ctx,
     activities
+  }
+}
+
+export const createAgentControlToolHarness = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput = {}
+) => {
+  const ctx = runtime.createAiRunContext(contextInput)
+  const cache = createHumanRuntimeCache()
+  return {
+    ...createToolInvoker(
+      agentControlToolFamily.buildTools({
+        ctx,
+        cache,
+        runId: runtime.runId,
+        sessionId: contextInput.sessionId || 'test-session',
+        taskId: runtime.taskId
+      }) as readonly ToolLike[]
+    ),
+    ctx
   }
 }
 

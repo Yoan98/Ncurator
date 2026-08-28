@@ -76,15 +76,16 @@ flowchart TD
 
 - 会话级 append-only 的 `chat_session_message_log` 是唯一真相源；模型上下文从记录投影，UI 过程展示亦从记录重建。
 - 每条记录为 `user` / `assistant`（含 `tool_calls`）/ `tool` / `annotation`；压缩只作用于投影，记录本身不动。
-- 图片在记录中只保存稳定路径和元数据；请求主模型前才临时投影为 data URL。工具消息不能携带图片时，紧随其后追加合成的 user 多模态消息。
-- 单次请求最多保留最近 20 张、data URL 估算体积最多 20 MiB；超限从最旧图片开始至少裁剪 5 张并降到 15 MiB 以下，原位置保留可重新调用 `read_image` 的路径占位。
+- 图片在记录中只保存路径、MIME、字节数和尺寸；本地图片在请求主模型前才临时投影为 data URL，HTTP(S) 图片保留原地址。工具消息不能携带图片时，紧随其后追加合成的 user 多模态消息。
+- 单次请求最多保留最近 600 张图片，本地 data URL 估算体积最多 20 MiB。数量超限时从最旧图片开始按至少 20 张的批次裁剪；体积超限时一次至少释放 10 MiB，减少频繁改变消息前缀造成的缓存失效。原位置保留可重新调用 `read_image` 的路径占位。
+- `read_image` 对本地源文件按 SHA-256 复用 `.ncurator/runtime/assets/read_image-cache/<64位哈希>-v1.webp`；不放大小图，大图等比压到最多 64 万像素和 1 MiB。运行时目录丢失后，历史消息保留路径占位，需要时重新读取。
 - 中断恢复：补写缺失的 `ToolMessage`，尾部追加 user 消息继续；未正常完成的 run 保留恢复快照（plan、skills、artifacts）。
 
 **Skill 与 Tool**
 
 - **Skill**：能力包。builtin 默认可用；external 需 `learn_skill` 加载后才进入 bindTools 集合。
 - **Tool**：具体执行入口，以 `HumanToolSpec` 定义 schema、执行与结果投影。
-- `agent-control` 是内置技能，承载 `learn_skill`、`update_plan` 和 `read_image`；`read_image` 将稳定图片引用加入主模型下一轮多模态上下文，不调用第二个模型。
+- `agent-control` 是内置技能，承载 `learn_skill`、`update_plan` 和 `read_image`；`read_image` 一次接受 1 至 10 个路径，将图片引用按顺序加入主模型下一轮多模态上下文，不调用第二个模型，也不预判主模型是否支持图片。
 - skill / tool 描述只声明能力边界与参数语义，不写固定调用流程。
 
 **交付**
@@ -120,14 +121,14 @@ DOCX 读写工具族已按上述原则落地，作为后续 Excel / PPT / PDF �
 
 ## 领域能力（概要）
 
-| 领域                  | 思路                                                                                                                        |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| DOCX                  | 文档聚合模型 + story 内容树；visual 是普通 node 并统一使用 nodeId；读写拆成两个 skill；Source / Working 双态 + 净 Diff 审核 |
-| PDF                   | 页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                             |
-| PPT                   | 受限 HTML 编译读写；读取页面同时返回 slideImagePath                                                                         |
-| Excel                 | 工作簿 / 工作表 / 单元格范围读写                                                                                            |
-| KB                    | 混合召回检索工作区已索引文档                                                                                                |
-| Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                        |
+| 领域                  | 思路                                                                                                                                                            |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DOCX                  | 文档聚合模型 + story 内容树；root、可编辑子节点和 visual 共用一个 `nodesById`，visual 只使用 `nodeId`；读写拆成两个 skill；Source / Working 双态 + 净 Diff 审核 |
+| PDF                   | 页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                                                                 |
+| PPT                   | 受限 HTML 编译读写；读取页面同时返回 slideImagePath                                                                                                             |
+| Excel                 | 工作簿 / 工作表 / 单元格范围读写                                                                                                                                |
+| KB                    | 混合召回检索工作区已索引文档                                                                                                                                    |
+| Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                            |
 
 各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准。
 

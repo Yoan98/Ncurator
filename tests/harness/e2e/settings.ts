@@ -339,10 +339,7 @@ export const createModelConfigThroughSettingsUi = async (
 ): Promise<void> => {
   await navigateToSettingsSection(page, 'model')
   await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
-  await page
-    .locator(`[data-testid="${settingsSelectors.modelModeSegment}"]`)
-    .getByText('自定义配置')
-    .click()
+  await getSettingsLocator(page, settingsSelectors.modelTypeCustom).click()
   await getSettingsLocator(page, settingsSelectors.modelNameInput).fill(input.name || input.baseUrl)
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({ state: 'visible' })
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)

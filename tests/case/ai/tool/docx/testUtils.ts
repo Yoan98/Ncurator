@@ -1,3 +1,5 @@
+import type { DocxPublicReadRootNode } from '../../../../../src/main/services/ai/human/tools/docx/nodeTypes'
+
 export type DocxSearchResult = {
   totalMatchCount: number
   matches: Array<{
@@ -8,8 +10,9 @@ export type DocxSearchResult = {
     matchText: string
     textContext: string
     tableNodeId?: string
-    before?: Array<{ nodeId: string; nodeIndex: number; type: string; textPreview: string }>
-    after?: Array<{ nodeId: string; nodeIndex: number; type: string; textPreview: string }>
+    node?: DocxPublicReadRootNode
+    beforeNodes?: DocxPublicReadRootNode[]
+    afterNodes?: DocxPublicReadRootNode[]
   }>
 }
 

@@ -10,6 +10,10 @@ import {
   buildDocumentNodeIndex,
   loadDocxBundle
 } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
+import {
+  collectEditableNodeEntries,
+  collectVisualNodeEntries
+} from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/types'
 import { createDocxFile } from '../../../../src/main/services/ai/human/tools/docx/utils/createDocxFile'
 
 const fixturePath = path.resolve('tests/fixtures/workspace/灵感测试.docx')
@@ -60,7 +64,7 @@ describe('docx recursive edit executor', () => {
         ]
       })
       const withVisual = buildDocumentNodeIndex(await loadDocxBundle(visualReplacement.buffer))
-      const visual = [...withVisual.visualNodesById.values()][0]
+      const visual = collectVisualNodeEntries(withVisual)[0]?.[1]
       expect(visual?.kind).toBe('image')
 
       const textReplacement = await applyDocxOps({
@@ -75,7 +79,7 @@ describe('docx recursive edit executor', () => {
       })
       const afterBundle = await loadDocxBundle(textReplacement.buffer)
       const after = buildDocumentNodeIndex(afterBundle)
-      expect(after.visualNodesById.size).toBe(0)
+      expect(collectVisualNodeEntries(after)).toHaveLength(0)
       expect(after.outline[0]?.text).toContain('restored text')
       const archive = await JSZip.loadAsync(textReplacement.buffer)
       const relationships = await archive.file('word/_rels/document.xml.rels')?.async('text')
@@ -243,9 +247,9 @@ describe('docx recursive edit executor', () => {
     expect(
       after.outline.some((node) => node.type === 'content_control' && node.text === 'Filled')
     ).toBe(true)
-    expect([...after.visualNodesById.values()].some((visual) => visual.story.type === 'header')).toBe(
-      true
-    )
+    expect(
+      collectVisualNodeEntries(after).some(([, visual]) => visual.story.type === 'header')
+    ).toBe(true)
     const afterZip = await JSZip.loadAsync(mediaEdited.buffer)
     expect(await afterZip.file('word/_rels/header1.xml.rels')?.async('text')).toContain(
       '/relationships/image'
@@ -260,7 +264,7 @@ describe('docx recursive edit executor', () => {
       beforeBundle.relationshipTargets,
       beforeBundle.relationshipTypes
     )
-    const visual = [...before.visualNodesById.values()][0]
+    const visual = collectVisualNodeEntries(before)[0]?.[1]
     expect(visual).toBeDefined()
     const ownerReplaced = await applyDocxOps({
       buffer: source,
@@ -277,7 +281,9 @@ describe('docx recursive edit executor', () => {
     })
     const ownerReplacedBundle = await loadDocxBundle(ownerReplaced.buffer)
     const ownerReplacedIndex = buildDocumentNodeIndex(ownerReplacedBundle)
-    expect(ownerReplacedIndex.visualNodesById.size).toBeLessThan(before.visualNodesById.size)
+    expect(collectVisualNodeEntries(ownerReplacedIndex).length).toBeLessThan(
+      collectVisualNodeEntries(before).length
+    )
 
     const paragraph = before.outline.find(
       (node) => node.type === 'paragraph' && node.text.length >= 2
@@ -295,7 +301,7 @@ describe('docx recursive edit executor', () => {
       afterBundle.relationshipTargets,
       afterBundle.relationshipTypes
     )
-    expect(after.visualNodesById.size).toBe(before.visualNodesById.size)
+    expect(collectVisualNodeEntries(after)).toHaveLength(collectVisualNodeEntries(before).length)
     expect(after.outline.some((node) => node.text.includes('测试替换'))).toBe(true)
   })
 
@@ -486,7 +492,7 @@ describe('docx recursive edit executor', () => {
       )
       const withVisual = await bundle.zip.generateAsync({ type: 'nodebuffer' })
       const beforeIndex = buildNodeIndex(bundle.documentDom)
-      expect(beforeIndex.visualNodesById.size).toBe(1)
+      expect(collectVisualNodeEntries(beforeIndex)).toHaveLength(1)
 
       const styled = await applyDocxOps({
         buffer: withVisual,
@@ -507,7 +513,7 @@ describe('docx recursive edit executor', () => {
       })
       const styledBundle = await loadDocxBundle(styled.buffer)
       const styledIndex = buildNodeIndex(styledBundle.documentDom)
-      expect(styledIndex.visualNodesById.size).toBe(1)
+      expect(collectVisualNodeEntries(styledIndex)).toHaveLength(1)
       const details = styledIndex.rootNodeIds.map((id) => styledIndex.detailByNodeId.get(id))
       const firstRuns = details[0]?.type === 'paragraph' ? details[0].children : []
       const secondRuns = details[1]?.type === 'paragraph' ? details[1].children : []
@@ -548,9 +554,9 @@ describe('docx recursive edit executor', () => {
         sourceBundle.relationshipTargets,
         sourceBundle.relationshipTypes
       )
-      const runId = [...sourceIndex.editableNodesById.values()].find(
-        (node) => node.kind === 'run'
-      )?.nodeId
+      const runId = collectEditableNodeEntries(sourceIndex).find(
+        ([, node]) => node.kind === 'run'
+      )?.[1].nodeId
       expect(runId).toBeDefined()
       const replaced = await applyDocxOps({
         buffer: source,
@@ -562,9 +568,9 @@ describe('docx recursive edit executor', () => {
         replacedBundle.relationshipTargets,
         replacedBundle.relationshipTypes
       )
-      const nextRunId = [...replacedIndex.editableNodesById.values()].find(
-        (node) => node.kind === 'run'
-      )?.nodeId
+      const nextRunId = collectEditableNodeEntries(replacedIndex).find(
+        ([, node]) => node.kind === 'run'
+      )?.[1].nodeId
       const inserted = await applyDocxOps({
         buffer: replaced.buffer,
         ops: [
@@ -639,7 +645,7 @@ describe('docx recursive edit executor', () => {
         imageBundle.relationshipTargetModes,
         imageBundle.availableRelationshipTargetIds
       )
-      expect(imageIndex.visualNodesById.size).toBe(1)
+      expect(collectVisualNodeEntries(imageIndex)).toHaveLength(1)
       expect(Object.keys(imageBundle.zip.files).some((name) => name.endsWith('.svg'))).toBe(true)
       const withComment = await applyDocxOps({
         buffer: withImage.buffer,

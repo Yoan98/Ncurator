@@ -52,10 +52,10 @@ describe('ai tool docx backend', () => {
           result.exact.totalMatchCount === 2 &&
             result.exact.matches.length === 2 &&
             result.exact.matches[0]?.matchText === '过度拟合' &&
-            result.exact.matches[0]?.before?.length === 2 &&
-            result.exact.matches[0]?.after?.length === 2 &&
-            result.exact.matches[0]?.before?.[0]?.textPreview === '前置一。' &&
-            result.exact.matches[0]?.after?.[1]?.textPreview === '后置二。' &&
+            result.exact.matches[0]?.beforeNodes?.length === 2 &&
+            result.exact.matches[0]?.afterNodes?.length === 2 &&
+            JSON.stringify(result.exact.matches[0]?.beforeNodes?.[0]).includes('前置一。') &&
+            JSON.stringify(result.exact.matches[0]?.afterNodes?.[1]).includes('后置二。') &&
             result.different.totalMatchCount === 0 &&
             result.capped.totalMatchCount === 12 &&
             result.capped.matches.length === 10,

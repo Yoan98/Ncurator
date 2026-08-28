@@ -8,6 +8,7 @@ import {
   buildNodeIndex,
   loadDocxBundle
 } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
+import { collectVisualNodeEntries } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/types'
 
 const require = createRequire(import.meta.url)
 const fixturePath = path.resolve('tests/fixtures/workspace/docx-visual-kinds.docx')
@@ -151,7 +152,7 @@ describe('docx non-image visual rendering', () => {
       bundle.relationshipTargets,
       bundle.relationshipTypes
     )
-    expect([...index.visualNodesById.values()].map((visual) => visual.kind)).toEqual([
+    expect(collectVisualNodeEntries(index).map(([, visual]) => visual.kind)).toEqual([
       'image',
       'chart',
       'diagram',
@@ -159,14 +160,14 @@ describe('docx non-image visual rendering', () => {
       'embedded_object'
     ])
 
-    const bindings = [...index.visualNodesById.entries()]
+    const bindings = collectVisualNodeEntries(index)
       .filter(
         (entry): entry is [string, (typeof entry)[1] & { kind: RenderBinding['kind'] }] =>
           entry[1].kind === 'chart' || entry[1].kind === 'diagram' || entry[1].kind === 'shape'
       )
       .map(([nodeId, visual]) => {
         const owner = index.nodesById.get(visual.ownerNodeId)!
-        const visualsInNode = [...index.visualNodesById.entries()].filter(([, candidate]) => {
+        const visualsInNode = collectVisualNodeEntries(index).filter(([, candidate]) => {
           const candidateOwner = index.nodesById.get(candidate.ownerNodeId)
           return candidateOwner?.nodeIndex === owner.nodeIndex
         })

@@ -332,7 +332,7 @@ export const handlePdfWorkerRequest = async (
       }
     }
 
-    if (request.action === 'render_pages') {
+    if (request.action === 'materialize_pages') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       validatePageNumbers(snapshot, request.payload.pageNumbers)
       const assetBucketId = `pdf_read_pages-${randomUUID()}`
@@ -354,7 +354,7 @@ export const handlePdfWorkerRequest = async (
         requestId: request.requestId,
         ok: true,
         payload: {
-          action: 'render_pages',
+          action: 'materialize_pages',
           assetBucketId,
           images
         }

@@ -195,6 +195,7 @@ const appendToolMessages = async (input: {
     content: string
     images?: ChatMessageImageRef[]
   }> = []
+  const imageRefs: ChatMessageImageRef[] = []
   for (let index = 0; index < input.calls.length; index += 1) {
     const call = input.calls[index]
     const result = input.results[index]
@@ -212,7 +213,7 @@ const appendToolMessages = async (input: {
       })
     )
     if (result.ok && result.imageRefs?.length) {
-      messages.push(createImageReferenceMessage(result.imageRefs))
+      imageRefs.push(...result.imageRefs)
     }
     transcriptEntries.push({
       toolCallId: call.toolCallId,
@@ -222,6 +223,7 @@ const appendToolMessages = async (input: {
       images: result.ok ? result.imageRefs : undefined
     })
   }
+  if (imageRefs.length > 0) messages.push(createImageReferenceMessage(imageRefs))
   input.cache.messages = messages
   return transcriptEntries
 }

@@ -87,16 +87,19 @@ const normalizeToolCallResult = (toolName: string, payload: JsonValue): ToolCall
             if (
               !isJsonObject(value) ||
               typeof value.path !== 'string' ||
-              typeof value.mimeType !== 'string'
+              typeof value.mimeType !== 'string' ||
+              typeof value.sizeBytes !== 'number' ||
+              typeof value.width !== 'number' ||
+              typeof value.height !== 'number'
             )
               return []
             return [
               {
                 path: value.path,
                 mimeType: value.mimeType,
-                sizeBytes: typeof value.sizeBytes === 'number' ? value.sizeBytes : undefined,
-                width: typeof value.width === 'number' ? value.width : undefined,
-                height: typeof value.height === 'number' ? value.height : undefined
+                sizeBytes: value.sizeBytes,
+                width: value.width,
+                height: value.height
               }
             ]
           })

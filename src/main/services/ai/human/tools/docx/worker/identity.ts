@@ -9,7 +9,13 @@ import type {
   DocxOutlineNode,
   DocxSearchMatch
 } from '../types'
-import type { NodeIndex, IndexedNode } from '../adapters/ooxml/types'
+import type {
+  DocxEditableNode,
+  DocxVisualDescriptor,
+  NodeIndex,
+  IndexedNode
+} from '../adapters/ooxml/types'
+import { isEditableNode, isRootNode, isVisualNode } from '../adapters/ooxml/types'
 import { childElements } from '../adapters/ooxml/dom'
 
 export type DocxIdentityIndex = {
@@ -26,8 +32,29 @@ type LogicalRootNode = {
   cellNodeIds: string[]
 }
 
-const isTableCellNode = (node: IndexedNode): node is Extract<IndexedNode, { kind: 'table_cell' }> =>
-  node.kind === 'table_cell'
+const isTableCellNode = (
+  node: IndexedNode | DocxEditableNode | DocxVisualDescriptor
+): node is Extract<IndexedNode, { kind: 'table_cell' }> =>
+  isRootNode(node) && node.kind === 'table_cell'
+
+const editableEntries = (index: NodeIndex): Array<[string, DocxEditableNode]> =>
+  [...index.nodesById.entries()].filter((entry): entry is [string, DocxEditableNode] =>
+    isEditableNode(entry[1])
+  )
+
+const visualEntries = (index: NodeIndex): Array<[string, DocxVisualDescriptor]> =>
+  [...index.nodesById.entries()].filter((entry): entry is [string, DocxVisualDescriptor] =>
+    isVisualNode(entry[1])
+  )
+
+const editableNodeAt = (
+  index: NodeIndex,
+  internalId: string | undefined
+): DocxEditableNode | undefined => {
+  if (!internalId) return undefined
+  const node = index.nodesById.get(internalId)
+  return node && isEditableNode(node) ? node : undefined
+}
 
 const createNodeId = (): string => `node_${randomUUID().replace(/-/g, '')}`
 const stableNestedId = (prefix: 'node' | 'visual', nodeId: string, relativeKey: string): string =>
@@ -50,14 +77,14 @@ export const createInitialIdentityIndex = (index: NodeIndex): DocxIdentityIndex 
     publicNodeIdByInternalId: new Map(),
     internalNodeIdByPublicId: new Map()
   }
-  for (const internalId of index.nodesById.keys()) bindIdentity(identity, internalId)
+  for (const [internalId, node] of index.nodesById) {
+    if (isRootNode(node)) bindIdentity(identity, internalId)
+  }
   bindNestedIdentities(index, identity)
   return identity
 }
 
-const nestedFingerprint = (
-  editable: NodeIndex['editableNodesById'] extends Map<string, infer TValue> ? TValue : never
-): string =>
+const nestedFingerprint = (editable: DocxEditableNode): string =>
   createHash('sha256')
     .update(editable.kind)
     .update('\0')
@@ -74,7 +101,7 @@ const bindNestedIdentities = (
   const previousByFingerprint = new Map<string, Array<{ internalId: string; publicId: string }>>()
   const previousByPath = new Map<string, { internalId: string; publicId: string }>()
   if (previousIndex && previousIdentity) {
-    previousIndex.editableNodesById.forEach((editable, internalNodeId) => {
+    editableEntries(previousIndex).forEach(([internalNodeId, editable]) => {
       const publicId = previousIdentity.publicNodeIdByInternalId.get(internalNodeId)
       const rootPublicId = previousIdentity.publicIdByInternalId.get(editable.ownerNodeId)
       if (!publicId || !rootPublicId) return
@@ -105,7 +132,10 @@ const bindNestedIdentities = (
         return
       const internalId = previousIdentity.internalNodeIdByPublicId.get(op.nodeId)
       const ownerInternalId = internalId
-        ? previousIndex.editableNodesById.get(internalId)?.ownerNodeId
+        ? (() => {
+            const node = previousIndex.nodesById.get(internalId)
+            return node && isEditableNode(node) ? node.ownerNodeId : undefined
+          })()
         : previousIdentity.internalIdByPublicId.get(op.nodeId)
       const ownerPublicId = ownerInternalId
         ? previousIdentity.publicIdByInternalId.get(ownerInternalId)
@@ -113,7 +143,7 @@ const bindNestedIdentities = (
       if (ownerPublicId) reverseMatchOwners.add(ownerPublicId)
     })
   }
-  const pending = [...index.editableNodesById.entries()].map(([internalNodeId, editable]) => ({
+  const pending = editableEntries(index).map(([internalNodeId, editable]) => ({
     internalNodeId,
     editable,
     ownerPublicId: requirePublicNodeId(identity, editable.ownerNodeId),
@@ -161,7 +191,7 @@ const bindNestedIdentities = (
     Array<{ internalId: string; publicId: string }>
   >()
   if (previousIndex && previousIdentity) {
-    previousIndex.visualNodesById.forEach((visual, internalVisualNodeId) => {
+    visualEntries(previousIndex).forEach(([internalVisualNodeId, visual]) => {
       const publicId = previousIdentity.publicNodeIdByInternalId.get(internalVisualNodeId)
       const rootPublicId = previousIdentity.publicIdByInternalId.get(visual.ownerNodeId)
       if (!publicId || !rootPublicId) return
@@ -172,23 +202,21 @@ const bindNestedIdentities = (
     })
   }
   const consumedVisualNodeIds = new Set<string>()
-  const movedVisualByRelationship = new Map<
-    string,
-    { internalId: string; publicId: string }
-  >()
+  const movedVisualByRelationship = new Map<string, { internalId: string; publicId: string }>()
   if (previousIndex && previousIdentity) {
     publicOps.forEach((op) => {
       if (op.type !== 'move_node') return
       const internalId = previousIdentity.internalNodeIdByPublicId.get(op.nodeId)
       if (!internalId?.startsWith('visual:')) return
-      const visual = previousIndex.visualNodesById.get(internalId)
+      const candidate = previousIndex.nodesById.get(internalId)
+      const visual = candidate && isVisualNode(candidate) ? candidate : undefined
       const publicId = previousIdentity.publicNodeIdByInternalId.get(internalId)
       if (visual?.relationshipId && publicId) {
         movedVisualByRelationship.set(visual.relationshipId, { internalId, publicId })
       }
     })
   }
-  index.visualNodesById.forEach((visual, internalVisualNodeId) => {
+  visualEntries(index).forEach(([internalVisualNodeId, visual]) => {
     const publicNodeId = requirePublicNodeId(identity, visual.ownerNodeId)
     const relativeKey = internalVisualNodeId.replace(`visual:${visual.ownerNodeId}:`, '')
     const candidates = previousVisualNodeByFingerprint.get(
@@ -475,7 +503,7 @@ const logicalNodeFromSpec = (
 const currentLogicalRoots = (index: NodeIndex, identity: DocxIdentityIndex): LogicalRootNode[] =>
   index.rootNodeIds.map((internalId) => {
     const node = index.nodesById.get(internalId)
-    if (!node || node.kind === 'table_cell') {
+    if (!node || !isRootNode(node) || node.kind === 'table_cell') {
       throw new Error(`invalid docx body identity node: ${internalId}`)
     }
     const cellNodeIds =
@@ -514,7 +542,7 @@ const tableMutationContext = (input: {
       ? input.previousIdentity.internalNodeIdByPublicId.get(targetId)
       : undefined
     let node = internalTarget
-      ? input.previousIndex.editableNodesById.get(internalTarget)?.node
+      ? editableNodeAt(input.previousIndex, internalTarget)?.node
       : undefined
     while (node && node.localName !== 'tbl') node = node.parentNode as Element | undefined
     const internalTableId = node
@@ -677,9 +705,7 @@ const applyLogicalOp = (
       const internalRowId = op.rowNodeId
         ? previousIdentity.internalNodeIdByPublicId.get(op.rowNodeId)
         : undefined
-      const rowNode = internalRowId
-        ? previousIndex.editableNodesById.get(internalRowId)?.node
-        : undefined
+      const rowNode = internalRowId ? editableNodeAt(previousIndex, internalRowId)?.node : undefined
       const anchorIndex = rowNode ? childElements(table, 'tr').indexOf(rowNode) : rows.length - 1
       const insertIndex = Math.max(0, anchorIndex + (op.position === 'before' ? 0 : 1))
       rows.splice(
@@ -689,9 +715,7 @@ const applyLogicalOp = (
       )
     } else if (op.type === 'delete_row') {
       const internalRowId = previousIdentity.internalNodeIdByPublicId.get(op.rowNodeId)
-      const rowNode = internalRowId
-        ? previousIndex.editableNodesById.get(internalRowId)?.node
-        : undefined
+      const rowNode = internalRowId ? editableNodeAt(previousIndex, internalRowId)?.node : undefined
       const rowIndex = rowNode ? childElements(table, 'tr').indexOf(rowNode) : -1
       if (rowIndex < 0) throw new Error('cannot update DOCX identity for deleted row')
       rows.splice(rowIndex, 1)
@@ -710,7 +734,7 @@ const applyLogicalOp = (
     } else {
       const internalCellId = previousIdentity.internalNodeIdByPublicId.get(op.cellNodeId)
       const cellNode = internalCellId
-        ? previousIndex.editableNodesById.get(internalCellId)?.node
+        ? editableNodeAt(previousIndex, internalCellId)?.node
         : undefined
       const rowNode = cellNode?.parentNode as Element | undefined
       const rowIndex = rowNode ? childElements(table, 'tr').indexOf(rowNode) : -1

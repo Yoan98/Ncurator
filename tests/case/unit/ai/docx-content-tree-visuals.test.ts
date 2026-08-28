@@ -11,6 +11,7 @@ import { handleDocxWorkerRequest } from '../../../../src/main/services/ai/human/
 import { createReplaySnapshot } from '../../../../src/main/services/ai/human/tools/docx/review/replayTree'
 import { projectDocxReadNodes } from '../../../../src/main/services/ai/human/tools/docx/publicReadTree'
 import type { DocxReadContentNode } from '../../../../src/main/services/ai/human/tools/docx/nodeTypes'
+import { collectVisualNodeEntries } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/types'
 
 const findVisualNodeId = (nodes: readonly DocxReadContentNode[]): string => {
   for (const node of nodes) {
@@ -24,6 +25,33 @@ const findVisualNodeId = (nodes: readonly DocxReadContentNode[]): string => {
 }
 
 describe('docx recursive content tree visuals', () => {
+  it('keeps every node kind in one nodesById index and gives repeated images distinct nodeIds', () => {
+    const xml = `
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+        xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+        xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+        xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+        <w:body><w:p><w:r>
+          <w:drawing><pic:pic><a:blip r:embed="sameImage"/></pic:pic></w:drawing>
+          <w:drawing><pic:pic><a:blip r:embed="sameImage"/></pic:pic></w:drawing>
+        </w:r></w:p></w:body>
+      </w:document>`
+    const index = buildNodeIndex(
+      new DOMParser().parseFromString(xml, 'application/xml'),
+      new Map([['sameImage', 'media/shared.png']])
+    )
+    const visuals = collectVisualNodeEntries(index)
+
+    expect(visuals).toHaveLength(2)
+    expect(new Set(visuals.map(([nodeId]) => nodeId)).size).toBe(2)
+    expect(visuals.every(([, visual]) => visual.target === 'media/shared.png')).toBe(true)
+    expect(index).not.toHaveProperty('visualNodesById')
+    expect(index).not.toHaveProperty('editableNodesById')
+    expect(visuals.every(([nodeId]) => index.nodesById.get(nodeId)?.category === 'visual')).toBe(
+      true
+    )
+  })
+
   it('keeps content controls and revisions as real root nodes', () => {
     const xml = `
       <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -92,14 +120,16 @@ describe('docx recursive content tree visuals', () => {
       bundle.relationshipTypes
     )
 
-    expect([...index.visualNodesById.values()].map((visual) => visual.kind)).toEqual([
+    expect(collectVisualNodeEntries(index).map(([, visual]) => visual.kind)).toEqual([
       'image',
       'chart',
       'diagram',
       'shape',
       'embedded_object'
     ])
-    const shape = [...index.visualNodesById.values()].find((visual) => visual.kind === 'shape')
+    const shape = collectVisualNodeEntries(index)
+      .map(([, visual]) => visual)
+      .find((visual) => visual.kind === 'shape')
     expect(shape).toBeDefined()
     const owner = shape ? index.detailByNodeId.get(shape.ownerNodeId) : undefined
     const descendants = owner ? [owner] : []
@@ -144,7 +174,7 @@ describe('docx recursive content tree visuals', () => {
       ])
     )
 
-    expect([...index.visualNodesById.values()].map((visual) => visual.kind)).toEqual([
+    expect(collectVisualNodeEntries(index).map(([, visual]) => visual.kind)).toEqual([
       'image',
       'chart',
       'diagram',
@@ -152,7 +182,7 @@ describe('docx recursive content tree visuals', () => {
       'embedded_object',
       'image'
     ])
-    expect(index.visualNodesById.size).toBe(6)
+    expect(collectVisualNodeEntries(index)).toHaveLength(6)
     expect(index.outline[3]?.text).toBe('Shape text')
     const shapeDetail = index.detailByNodeId.get(index.rootNodeIds[3]!)
     const shapeVisual =
@@ -173,7 +203,9 @@ describe('docx recursive content tree visuals', () => {
       bundle.relationshipTargets,
       bundle.relationshipTypes
     )
-    const images = [...index.visualNodesById.values()].filter((visual) => visual.kind === 'image')
+    const images = collectVisualNodeEntries(index)
+      .map(([, visual]) => visual)
+      .filter((visual) => visual.kind === 'image')
     const realEmptyParagraphs = index.outline.filter(
       (node) => node.type === 'paragraph' && node.text === '' && !node.visuals
     )
@@ -212,7 +244,7 @@ describe('docx recursive content tree visuals', () => {
         bundle.relationshipTargets,
         bundle.relationshipTypes
       )
-      expect(index.visualNodesById.size).toBe(expected)
+      expect(collectVisualNodeEntries(index)).toHaveLength(expected)
       expect(index.outline.every((node) => !('children' in node))).toBe(true)
     },
     15_000

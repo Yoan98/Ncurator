@@ -536,19 +536,19 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `read-image-multimodal-contract`
 
 - 测试类型：`backend`
-- What：`read_image(paths)` 按输入顺序返回 1 至 10 个稳定图片引用，并由同一个主模型在下一次请求中直接读取。
+- What：`read_image(paths)` 按输入顺序返回 1 至 10 个图片引用，并由同一个主模型在下一次请求中直接读取。
 - Why：图片理解不再经过独立视觉模型或描述文本，消息历史也不能持久化 Base64。
-- How：分别输入本地图片、多张图片和 HTTP(S) 图片；检查持久消息、请求投影和 provider 请求体。
-- Oracle：本地图片落入 `.ncurator/runtime/assets/read_image-<uuid>/<hash>.<ext>`；数据库只保存路径；同一次请求包含全部图片；不支持图片时直接保留 provider 的自然错误。
+- How：分别输入小图、大图、内容相同或变化的本地图片、多张图片、损坏缓存和 HTTP(S) 图片；检查持久消息、请求投影和 provider 请求体。
+- Oracle：本地图片按源字节 SHA-256 复用 `.ncurator/runtime/assets/read_image-cache/<64位哈希>-v1.webp`，不放大小图，大图不超过 64 万像素和 1 MiB，损坏缓存可重建；HTTP(S) 图片保留原地址；数据库只保存路径与元数据；同一次请求包含全部图片；不支持图片时保留 provider 的自然错误。
 - Not：不验证具体模型的识图质量。
 
 ##### `multimodal-image-budget-contract`
 
 - 测试类型：`backend`
-- What：请求视图按 20 张和 20 MiB 上限稳定裁剪图片，持久消息不变。
+- What：请求视图按 600 张和 20 MiB 本地 data URL 上限稳定裁剪图片，持久消息不变。
 - Why：长期对话不能无限重复发送历史图片，同时需要尽量稳定前缀缓存。
 - How：构造超出数量和体积预算的图片历史，再次调用 `read_image` 读取已裁剪图片。
-- Oracle：最旧图片按至少 5 张的批次替换为带原路径的占位文本；重新读取的引用出现在消息尾部；保留图片才在请求前编码为 data URL。
+- Oracle：数量超限时最旧图片按至少 20 张的批次替换为带原路径的占位文本；体积超限时一次至少释放 10 MiB；重新读取的引用出现在消息尾部；只有保留的本地图片才在请求前编码为 data URL，HTTP(S) 地址不计入 data URL 字节预算。
 - Not：不假定 provider 的图片 token 计费方式。
 
 ##### `browser-use-keeps-one-tab-for-the-whole-run`

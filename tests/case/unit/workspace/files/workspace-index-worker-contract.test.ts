@@ -81,12 +81,11 @@ describe('unit workspace backend', () => {
         const workerSuccess = await handleWorkspacePrepareWorkerRequest(workerRequest)
         const pdfFilePath = path.join(runtime.workspaceRoot, '学习笔记', '深度学习.pdf')
         const pdfContentHash = await computeWorkspaceFileContentHash(pdfFilePath)
-        const pdfSplitSnapshot = await buildWorkspaceKnowledgeSplitSnapshot({
-          ingestionService: IngestionService.getInstance(),
-          filePath: pdfFilePath,
+        const pdfSplitSnapshot = {
           contentHash: pdfContentHash,
-          fileExt: '.pdf'
-        })
+          fileExt: '.pdf',
+          chunks: [{ text: '深度学习', page: 1 }]
+        }
         const markdownFilePath = path.join(runtime.workspaceRoot, 'indexed-notes.md')
         await fs.writeFile(
           markdownFilePath,
@@ -208,7 +207,7 @@ parentPort.on('message', (request) => {
         chunks: []
       }
     }
-  })
+  }, [])
 })
 `
         )

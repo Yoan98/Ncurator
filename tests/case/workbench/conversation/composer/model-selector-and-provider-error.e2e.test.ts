@@ -162,21 +162,33 @@ describe('workbench conversation e2e', () => {
 
           const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
           await modelSelect.click()
-          const dropdown = page
-            .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
-            .last()
-          const searchInput = modelSelect.locator('input').first()
+          const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+          await menu.waitFor({ state: 'visible' })
+          const customEntry = menu.locator(
+            `[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`
+          )
+          await customEntry.waitFor({ state: 'visible' })
+          const presetOptions = menu.locator(
+            `[data-testid^="${workbenchSelectors.modelSelectPresetOptionPrefix}-"]`
+          )
+          const presetOptionCount = await presetOptions.count()
+          const disabledPresetOptionCount = await presetOptions.locator(':disabled').count()
+          const visionUiTextAbsent = !/(视觉模型|跟随主模型|图片能力)/u.test(
+            (await menu.textContent()) || ''
+          )
+          await customEntry.click()
+          const searchInput = menu.locator('input[placeholder="搜索模型"]')
           await searchInput.waitFor({ state: 'visible' })
 
-          const providerGroupVisible = await dropdown
-            .locator('.ant-select-item-group')
+          const providerGroupVisible = await menu
+            .locator('button[aria-expanded]')
             .filter({ hasText: 'Live Model' })
             .first()
             .isVisible()
 
           await searchInput.fill(MISSING_MODEL_NAME)
-          await dropdown.getByText('暂无匹配模型', { exact: true }).waitFor({ state: 'visible' })
-          const missingOptionCount = await dropdown
+          await menu.getByText('暂无匹配模型', { exact: true }).waitFor({ state: 'visible' })
+          const missingOptionCount = await menu
             .getByRole('option')
             .filter({
               hasText: MISSING_MODEL_NAME
@@ -188,7 +200,7 @@ describe('workbench conversation e2e', () => {
           })
 
           await searchInput.fill('')
-          await dropdown.getByRole('option', { name: liveEnv.modelName, exact: true }).click()
+          await menu.getByRole('option', { name: liveEnv.modelName, exact: true }).click()
 
           await prepareWorkbenchWorkspaceThroughUi(page, {
             workspaceName: WORKSPACE_NAME,
@@ -223,6 +235,9 @@ describe('workbench conversation e2e', () => {
           })
 
           return {
+            presetOptionCount,
+            disabledPresetOptionCount,
+            visionUiTextAbsent,
             providerGroupVisible,
             missingOptionCount,
             successfulChatRequestCount: provider.getSuccessfulChatRequestCount(),
@@ -235,11 +250,19 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.providerGroupVisible && result.missingOptionCount === 0,
+            result.presetOptionCount > 0 &&
+              result.disabledPresetOptionCount > 0 &&
+              result.visionUiTextAbsent &&
+              result.providerGroupVisible &&
+              result.missingOptionCount === 0,
             {
               name: 'main-model-selector-search',
-              message: '单主模型选择器应显示供应商分组，搜索无结果时只显示空状态。',
+              message:
+                '单主模型选择器应平铺预设项、禁用未配置项且没有视觉模型入口；自定义视图搜索无结果时只显示空状态。',
               data: {
+                presetOptionCount: result.presetOptionCount,
+                disabledPresetOptionCount: result.disabledPresetOptionCount,
+                visionUiTextAbsent: result.visionUiTextAbsent,
                 providerGroupVisible: result.providerGroupVisible,
                 missingOptionCount: result.missingOptionCount
               }

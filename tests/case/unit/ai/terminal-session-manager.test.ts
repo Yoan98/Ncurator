@@ -159,7 +159,7 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       hasMore = next.hasMoreOutput
     }
 
-    expect(combined.replace(/^\n/u, '')).toBe(`${expected}\n`)
+    expect(combined.replace(/^\n/u, '').trimEnd()).toBe(expected)
     await expect(
       manager.read({
         terminalId: result.terminalId,
@@ -326,7 +326,8 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       runId: 'run-4',
       command: "pkill -f 'sleep 30'"
     })
-    expect(kill.exitCode).toBe(0)
+    const completedKill = await finishCommand(manager, kill, 'chat-limit', 'workspace-limit')
+    expect(completedKill.exitCode).toBe(0)
   })
 })
 

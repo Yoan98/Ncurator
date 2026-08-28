@@ -363,6 +363,16 @@ const docxVisualDraftSchema = z
     { message: 'visual 至少设置 imagePath、尺寸或 altText 之一' }
   )
 
+const docxVisualInsertDraftSchema = z
+  .object({
+    type: z.literal('visual').describe('图片视觉节点'),
+    imagePath: z.string().min(1).describe('本机图片绝对路径'),
+    widthCm: z.number().positive().optional().describe('显示宽度，厘米'),
+    heightCm: z.number().positive().optional().describe('显示高度，厘米'),
+    altText: z.string().optional().describe('替代文字')
+  })
+  .strict()
+
 export const docxContentNodeDraftSchema = z.discriminatedUnion('type', [
   docxParagraphDraftSchema,
   docxRunDraftSchema,
@@ -370,6 +380,15 @@ export const docxContentNodeDraftSchema = z.discriminatedUnion('type', [
   docxFieldDraftSchema,
   docxBreakDraftSchema,
   docxVisualDraftSchema
+])
+
+const docxContentInsertNodeDraftSchema = z.discriminatedUnion('type', [
+  docxParagraphDraftSchema,
+  docxRunDraftSchema,
+  docxHyperlinkDraftSchema,
+  docxFieldDraftSchema,
+  docxBreakDraftSchema,
+  docxVisualInsertDraftSchema
 ])
 
 const contentEditBase = { sourcePath: sourcePathField }
@@ -392,7 +411,7 @@ export const docxContentEditSchema = z.discriminatedUnion('type', [
       position: z
         .enum(['before', 'after', 'inside_start', 'inside_end', 'document_end'])
         .describe('插入位置'),
-      nodes: z.array(docxContentNodeDraftSchema).min(1).describe('插入的节点')
+      nodes: z.array(docxContentInsertNodeDraftSchema).min(1).describe('插入的节点')
     })
     .strict()
     .superRefine((value, ctx) => {
@@ -402,15 +421,6 @@ export const docxContentEditSchema = z.discriminatedUnion('type', [
       if (value.position !== 'document_end' && !value.nodeId) {
         ctx.addIssue({ code: 'custom', path: ['nodeId'], message: '该 position 必须提供 nodeId' })
       }
-      value.nodes.forEach((node, index) => {
-        if (node.type === 'visual' && !node.imagePath) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['nodes', index, 'imagePath'],
-            message: '插入 visual 必须提供 imagePath'
-          })
-        }
-      })
     }),
   z
     .object({
