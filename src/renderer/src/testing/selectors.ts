@@ -82,6 +82,8 @@ export const settingsSelectors = {
   modelFreeKeyButton: 'settings-model-free-key-button',
   modelAddButton: 'settings-model-add-button',
   modelModal: 'settings-model-modal',
+  modelModeSegment: 'settings-model-mode-segment',
+  modelPresetProviderSelect: 'settings-model-preset-provider-select',
   modelNameInput: 'settings-model-name-input',
   modelProviderInput: 'settings-model-provider-input',
   modelBaseUrlInput: 'settings-model-base-url-input',
@@ -89,9 +91,7 @@ export const settingsSelectors = {
   modelSaveButton: 'settings-model-save-button',
   modelCancelButton: 'settings-model-cancel-button',
   modelEditButtonPrefix: 'settings-model-edit-button',
-  modelListButtonPrefix: 'settings-model-list-button',
-  modelListModal: 'settings-model-list-modal',
-  modelListRetryButton: 'settings-model-list-retry-button',
+  modelCustomTag: 'settings-model-custom-tag',
   modelDeleteButtonPrefix: 'settings-model-delete-button'
 } as const
 

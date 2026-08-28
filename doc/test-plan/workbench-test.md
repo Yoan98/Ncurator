@@ -13,7 +13,7 @@
 - Workbench UI E2E 回归测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录，并默认通过 Settings UI 创建工作区、绑定真实目录、检查更新和更新索引。
 - Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；Source 与正式包 E2E 在多 case 时都先执行 `warmup` 预热共享 fixture，正式包 E2E 再把缓存种子复制给隔离 case。
-- Workbench 模型选择 helper 必须通过真实下拉搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`。
+- Workbench 模型选择 helper 优先在预设模型区直接选择命中 `AI_LIVE_PRIMARY_MODEL_NAME` 的预设模型；未命中时通过底部「自定义模型」入口进入全部模型视图，按名称搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，工作区文件和 `.ncurator/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
@@ -177,13 +177,13 @@ tests/case/workbench/
 - Oracle：B 的 Composer 和面板不变化，A 显示延迟结果，对齐 `WB-SESSION-008-AC2`。
 - Not：不评价模型回答质量。
 
-#### `model-selector-and-provider-error`
+#### `model-selector-preset-and-custom`
 
 - 测试类型：`e2e`
-- What：主模型选择按配置分组，并正确展示 provider 错误反馈。
-- Why：主模型配置是智能任务能否启动的直接前提。
-- How：通过真实设置页配置模型，回到 Workbench 选择主模型，触发受控 provider 错误。
-- Oracle：候选按配置分组且可搜索；模型菜单打开后触发器 Tooltip 必须关闭，不能遮挡真实点击；provider 失败显示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
+- What：主模型选择平铺展示预设模型（服务商图标 + 模型名 + 硬币价格标识，视觉模型常驻眼睛图标），未配置服务商置灰且悬浮展示提示，自定义模型入口沿用原分组下拉效果，并正确展示 provider 错误反馈。
+- Why：主模型配置是智能任务能否启动的直接前提，预设区是用户首选的模型入口。
+- How：通过真实设置页分别配置一条预设服务商配置和一条自定义配置；回到 Workbench 展开模型选择，确认预设模型平铺展示且不出现分组标题，每项带服务商图标与模型名，视觉模型项常驻眼睛图标；未配置服务商的模型项置灰，悬浮后出现「未配置」提示；悬浮硬币标识出现价格档位提示、悬浮眼睛图标出现支持图片理解提示；从底部「自定义模型」入口切换全部模型视图并按名称搜索真实 live 模型；在远端模型列表不可用时确认「重新获取模型列表」入口可触发重新拉取；选中预设模型后输入框展示服务商图标与模型名；触发受控 provider 错误。
+- Oracle：预设模型平铺展示、无分组标题、每项带服务商图标与模型名、硬币向上累计叠加，对齐 `WB-COMPOSER-007-AC2`；视觉模型项常驻眼睛图标，悬浮硬币/眼睛分别出现价格与视觉提示，未配置服务商的模型项置灰且悬浮提示未配置，对齐 `WB-COMPOSER-007-AC3`；「自定义模型」入口固定位于底部，进入后为原服务商分组效果且可按模型名称搜索，对齐 `WB-COMPOSER-007-AC1`；全部模型视图无模型时展示重新获取入口且可重新拉取，对齐 `WB-COMPOSER-007`；选中预设模型输入框展示服务商图标与模型名，会话快照存储 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；模型菜单打开后触发器 Tooltip 必须关闭，不能遮挡真实点击；provider 失败显示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
 - Not：不评价模型回答质量。
 
 #### `main-model-image-input`

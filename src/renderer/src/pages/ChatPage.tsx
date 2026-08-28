@@ -43,6 +43,8 @@ import type {
   WorkspaceRuntimeBinding
 } from '../../../shared/types'
 import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE, USER_MANUAL_URL } from '../../../shared/constants'
+import { resolveLlmProvider } from '../../../shared/llmProvider'
+import { getPresetModel, getPresetProvider } from '../../../shared/llmPresets'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
 import { normalizeUserFacingError } from '../utils/userFacingError'
@@ -599,6 +601,36 @@ const isChatModel = (modelId: string): boolean =>
 
 const pickChatModel = (models: readonly LlmRemoteModel[]): LlmRemoteModel | undefined =>
   models.find((item) => isChatModel(item.id))
+
+const isPresetModelSelectable = (config: LLMConfig, modelName: string): boolean => {
+  const providerId = resolveLlmProvider(config.base_url).providerId
+  const preset = getPresetProvider(providerId)
+  return Boolean(preset && getPresetModel(preset, modelName))
+}
+
+const resolveSelectedModel = (
+  configs: LLMConfig[],
+  modelListsByConfigId: Record<string, LlmRemoteModel[]>,
+  selected: WorkbenchModelSelection['mainModel']
+): WorkbenchModelSelection['mainModel'] => {
+  if (!selected?.configId || !selected.modelName) return null
+  const config = configs.find((item) => item.id === selected.configId)
+  if (!config) return null
+  const remote = modelListsByConfigId[config.id]?.find((item) => item.id === selected.modelName)
+  if (remote) return { ...selected }
+  return isPresetModelSelectable(config, selected.modelName) ? { ...selected } : null
+}
+
+const pickFallbackModel = (configs: LLMConfig[]): WorkbenchModelSelection['mainModel'] | null => {
+  for (const config of configs) {
+    const providerId = resolveLlmProvider(config.base_url).providerId
+    const preset = getPresetProvider(providerId)
+    if (preset && preset.models.length > 0) {
+      return { configId: config.id, modelName: preset.models[0].id }
+    }
+  }
+  return null
+}
 
 const createDefaultSessionUiState = (
   modelSelection: WorkbenchModelSelection = { mainModel: null },
@@ -1755,16 +1787,8 @@ const ChatPage: React.FC = () => {
 
       const resolveModel = (
         model: WorkbenchModelSelection['mainModel']
-      ): WorkbenchModelSelection['mainModel'] => {
-        if (!model?.configId || !model.modelName) return null
-        const remoteModel = nextLists[model.configId]?.find((item) => item.id === model.modelName)
-        return remoteModel
-          ? {
-              configId: model.configId,
-              modelName: model.modelName
-            }
-          : null
-      }
+      ): WorkbenchModelSelection['mainModel'] =>
+        resolveSelectedModel(list, nextLists, model)
       const firstConfigWithModel = list.find(
         (config) => (nextLists[config.id] || []).length > 0
       )
@@ -1772,12 +1796,12 @@ const ChatPage: React.FC = () => {
         ? pickChatModel(nextLists[firstConfigWithModel.id])
         : undefined
       const firstModel =
-        firstConfigWithModel && firstRemoteModel
+        (firstConfigWithModel && firstRemoteModel
           ? {
               configId: firstConfigWithModel.id,
               modelName: firstRemoteModel.id
             }
-          : null
+          : null) || pickFallbackModel(list)
       const nextSelection: WorkbenchModelSelection = {
         mainModel: resolveModel(modelSelectionRef.current.mainModel) || firstModel
       }
@@ -1793,27 +1817,40 @@ const ChatPage: React.FC = () => {
     }
   }, [])
 
+  const refreshModelLists = useCallback(async (): Promise<void> => {
+    try {
+      const entries = await Promise.all(
+        modelConfigs.map(async (config) => {
+          try {
+            const response = await window.api.llmConfigModelList(config.id)
+            return [config.id, response.success ? response.items : []] as const
+          } catch {
+            return [config.id, []] as const
+          }
+        })
+      )
+      setModelListsByConfigId(Object.fromEntries(entries))
+    } catch (error) {
+      console.error('Failed to refresh llm model lists', error)
+    }
+  }, [modelConfigs])
+
   useEffect(() => {
     const key = currentSessionIdRef.current || '__draft__'
     if (!modelCatalogLoaded || uiStateReadyKeyRef.current !== key) return
     const resolveModel = (
       selected: WorkbenchModelSelection['mainModel']
-    ): WorkbenchModelSelection['mainModel'] => {
-      if (!selected) return null
-      const remote = modelListsByConfigId[selected.configId]?.find(
-        (item) => item.id === selected.modelName
-      )
-      return remote ? { ...selected } : null
-    }
+    ): WorkbenchModelSelection['mainModel'] =>
+      resolveSelectedModel(modelConfigs, modelListsByConfigId, selected)
     const firstConfig = modelConfigs.find((config) => modelListsByConfigId[config.id]?.length)
     const firstRemote = firstConfig ? pickChatModel(modelListsByConfigId[firstConfig.id]) : undefined
     const fallback =
-      firstConfig && firstRemote
+      (firstConfig && firstRemote
         ? {
             configId: firstConfig.id,
             modelName: firstRemote.id
           }
-        : null
+        : null) || pickFallbackModel(modelConfigs)
     const nextSelection: WorkbenchModelSelection = {
       mainModel: resolveModel(modelSelection.mainModel) || fallback
     }
@@ -4301,6 +4338,7 @@ const ChatPage: React.FC = () => {
                           modelListsByConfigId={modelListsByConfigId}
                           modelSelection={modelSelection}
                           onModelSelectionChange={handleModelSelectionChange}
+                          onRefreshModelLists={refreshModelLists}
                           workspaces={workspaces}
                           selectedWorkspaceId={selectedWorkspaceId}
                           onWorkspaceChange={handleWorkspaceChange}

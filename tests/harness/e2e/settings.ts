@@ -7,10 +7,12 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import type { Locator, Page } from 'playwright'
 import type {
+  LlmProviderId,
   WorkspaceIndexJobRecord,
   WorkspaceListItem,
   WorkspaceTreeListResponse
 } from '../../../src/shared/types'
+import { getPresetProvider } from '../../../src/shared/llmPresets'
 import {
   importSelectors,
   settingsSelectors,
@@ -337,6 +339,10 @@ export const createModelConfigThroughSettingsUi = async (
 ): Promise<void> => {
   await navigateToSettingsSection(page, 'model')
   await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
+  await page
+    .locator(`[data-testid="${settingsSelectors.modelModeSegment}"]`)
+    .getByText('自定义配置')
+    .click()
   await getSettingsLocator(page, settingsSelectors.modelNameInput).fill(input.name || input.baseUrl)
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({ state: 'visible' })
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
@@ -348,6 +354,27 @@ export const createModelConfigThroughSettingsUi = async (
     .locator('tbody tr')
     .filter({ hasText: input.name || input.baseUrl })
     .waitFor({ state: 'visible' })
+}
+
+export const createPresetModelConfigThroughSettingsUi = async (
+  page: Page,
+  input: { providerId: LlmProviderId; apiKey: string }
+): Promise<void> => {
+  await navigateToSettingsSection(page, 'model')
+  await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
+  const providerSelect = getSettingsLocator(page, settingsSelectors.modelPresetProviderSelect)
+  await providerSelect.locator('.ant-select-selector').click()
+  await page
+    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+    .last()
+    .locator('[role="option"]')
+    .filter({ hasText: getPresetProvider(input.providerId)?.label || input.providerId })
+    .first()
+    .click()
+  await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(input.apiKey)
+  await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
+  const label = getPresetProvider(input.providerId)?.label || input.providerId
+  await page.locator('tbody tr').filter({ hasText: label }).waitFor({ state: 'visible' })
 }
 
 export const createWorkspaceThroughSettingsUi = async (

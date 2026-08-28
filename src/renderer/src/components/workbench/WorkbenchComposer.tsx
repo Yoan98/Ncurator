@@ -68,6 +68,7 @@ type WorkbenchComposerProps = {
   modelListsByConfigId: Record<string, LlmRemoteModel[]>
   modelSelection: WorkbenchModelSelection
   onModelSelectionChange: (selection: WorkbenchModelSelection) => void
+  onRefreshModelLists?: () => void | Promise<void>
   workspaces: WorkspaceSource[]
   selectedWorkspaceId: string | null
   onWorkspaceChange: (workspaceId: string) => void
@@ -127,6 +128,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   modelListsByConfigId,
   modelSelection,
   onModelSelectionChange,
+  onRefreshModelLists,
   workspaces,
   selectedWorkspaceId,
   onWorkspaceChange,
@@ -1161,6 +1163,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               value={modelSelection}
               onChange={onModelSelectionChange}
               onAfterChange={focusEditorAfterControlChange}
+              onRefreshModelLists={onRefreshModelLists}
               noDrag
               hideTriggerIcon
               className="workbench-composer-model-select"

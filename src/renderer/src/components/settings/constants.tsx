@@ -10,19 +10,11 @@ import {
 } from 'react-icons/hi2'
 import { LLM_PROVIDER_REGISTRY } from '../../../../shared/llmProvider'
 
-import openaiLogo from '../../assets/img/openai.png'
-import qianwenLogo from '../../assets/img/qianwen.png'
-import doubaoLogo from '../../assets/img/doubao.png'
 import deepseekLogo from '../../assets/img/deepseek.png'
+import qianwenLogo from '../../assets/img/qianwen.png'
 import kimiLogo from '../../assets/img/kimi.png'
-import guijiliudongLogo from '../../assets/img/guijiliudong.png'
-import openrouterLogo from '../../assets/img/openrouter.png'
 import zhipuLogo from '../../assets/img/zhipu.png'
-import qianfanLogo from '../../assets/img/qianfan.png'
-import hunyuanLogo from '../../assets/img/hunyuan.png'
-import minimaxLogo from '../../assets/img/minimax.png'
-import yiLogo from '../../assets/img/yi.png'
-import nvidiaLogo from '../../assets/img/nvidia.png'
+import mimoLogo from '../../assets/img/mimo.png'
 
 export const SETTINGS_SECTION_ORDER: SettingsSectionValue[] = [
   'general',
@@ -46,7 +38,7 @@ export const SETTINGS_SECTION_META: Record<SettingsSectionValue, SettingsSection
     value: 'model',
     label: '大模型',
     title: '大模型',
-    description: '管理可用的大模型服务、API Key 和模型列表。',
+    description: '管理可用的大模型服务与 API Key。',
     path: '/settings/model',
     icon: <HiSparkles className="h-5 w-5" />
   },
@@ -99,21 +91,16 @@ export const APP_MENU_ITEMS = [
   }
 ] as const
 
-const PROVIDER_LOGO_MAP: Partial<Record<LlmProviderId, ReactNode>> = {
-  openai: <img src={openaiLogo} alt="OpenAI" className="w-4 h-4" />,
+export const PROVIDER_LOGO_MAP: Partial<Record<LlmProviderId, ReactNode>> = {
   deepseek: <img src={deepseekLogo} alt="DeepSeek" className="w-4 h-4" />,
   dashscope: <img src={qianwenLogo} alt="Qianwen" className="w-4 h-4" />,
-  volcengine: <img src={doubaoLogo} alt="Doubao" className="w-4 h-4" />,
+  mimo: <img src={mimoLogo} alt="MiMo" className="w-4 h-4" />,
   moonshot: <img src={kimiLogo} alt="Kimi" className="w-4 h-4" />,
-  siliconflow: <img src={guijiliudongLogo} alt="SiliconFlow" className="w-4 h-4" />,
-  openrouter: <img src={openrouterLogo} alt="OpenRouter" className="w-4 h-4" />,
-  zhipu: <img src={zhipuLogo} alt="Zhipu AI" className="w-4 h-4" />,
-  'baidu-qianfan': <img src={qianfanLogo} alt="Baidu Qianfan" className="w-4 h-4" />,
-  'tencent-hunyuan': <img src={hunyuanLogo} alt="Tencent Hunyuan" className="w-4 h-4" />,
-  minimax: <img src={minimaxLogo} alt="MiniMax" className="w-4 h-4" />,
-  yi: <img src={yiLogo} alt="Yi" className="w-4 h-4" />,
-  'nvidia-nim': <img src={nvidiaLogo} alt="NVIDIA NIM" className="w-4 h-4" />
+  zhipu: <img src={zhipuLogo} alt="Zhipu" className="w-4 h-4" />
 }
+
+export const getProviderLogo = (providerId: LlmProviderId): ReactNode =>
+  PROVIDER_LOGO_MAP[providerId] ?? <HiSparkles className="w-4 h-4 text-[#9B9A97]" />
 
 export const PROVIDER_OPTIONS: Array<{
   label: string
@@ -125,42 +112,6 @@ export const PROVIDER_OPTIONS: Array<{
   label: provider.label,
   providerKind: provider.providerKind,
   value: provider.defaultBaseUrl,
-  icon: PROVIDER_LOGO_MAP[provider.id] ?? <HiSparkles className="w-4 h-4 text-[#9B9A97]" />,
-  desc: provider.official ? '官方 API' : 'OpenAI 兼容'
+  icon: getProviderLogo(provider.id),
+  desc: '官方 API'
 }))
-
-export const MODEL_MAPPING: Record<string, { value: string; label: string }[]> = {
-  'https://api.openai.com/v1': [
-    { value: 'gpt-4o', label: 'GPT-4o' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o mini' },
-    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo' },
-    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo' }
-  ],
-  'https://dashscope.aliyuncs.com/compatible-mode/v1': [
-    { value: 'qwen-max', label: '通义千问-Max' },
-    { value: 'qwen-plus', label: '通义千问-Plus' },
-    { value: 'qwen-turbo', label: '通义千问-Turbo' },
-    { value: 'qwen-long', label: '通义千问-Long' }
-  ],
-  'https://ark.cn-beijing.volces.com/api/v3': [
-    { value: 'doubao-pro-32k', label: '豆包-Pro-32k' },
-    { value: 'doubao-lite-32k', label: '豆包-Lite-32k' },
-    { value: 'doubao-pro-4k', label: '豆包-Pro-4k' }
-  ],
-  'https://api.deepseek.com': [
-    { value: 'deepseek-chat', label: 'DeepSeek Chat (V3)' },
-    { value: 'deepseek-reasoner', label: 'DeepSeek Reasoner (R1)' }
-  ],
-  'https://api.moonshot.cn/v1': [
-    { value: 'moonshot-v1-8k', label: 'Moonshot V1 8k' },
-    { value: 'moonshot-v1-32k', label: 'Moonshot V1 32k' },
-    { value: 'moonshot-v1-128k', label: 'Moonshot V1 128k' }
-  ],
-  'https://api.siliconflow.cn/v1': [
-    { value: 'deepseek-ai/DeepSeek-R1', label: 'DeepSeek R1' },
-    { value: 'deepseek-ai/DeepSeek-V3', label: 'DeepSeek V3' },
-    { value: 'Qwen/Qwen2.5-72B-Instruct', label: 'Qwen 2.5 72B' },
-    { value: 'Qwen/Qwen2.5-7B-Instruct', label: 'Qwen 2.5 7B' },
-    { value: 'Qwen/Qwen2.5-Coder-32B-Instruct', label: 'Qwen 2.5 Coder 32B' }
-  ]
-}

@@ -3,8 +3,10 @@ import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   createModelConfigThroughSettingsUi,
+  createPresetModelConfigThroughSettingsUi,
   navigateToSettingsSection
 } from '../../../harness/e2e/settings'
+import { settingsSelectors } from '../../../../src/renderer/src/testing/selectors'
 
 describe('settings model e2e', () => {
   it(
@@ -14,7 +16,7 @@ describe('settings model e2e', () => {
         caseId: 'model-page-load-config-list',
         domain: 'settings',
         suite: 'model',
-        description: '大模型页通过真实 UI 创建配置后，重新进入页面仍能展示配置列表。',
+        description: '大模型页通过真实 UI 创建预设与自定义配置后，重新进入页面仍能展示配置列表。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
@@ -23,17 +25,16 @@ describe('settings model e2e', () => {
 
           await runtime.step({
             name: 'create-configs-through-ui',
-            message: '通过 Settings UI 新增两条连接配置。',
+            message: '通过 Settings UI 新增一条预设配置和一条自定义配置。',
             run: async () => {
-              await createModelConfigThroughSettingsUi(page, {
-                name: '公司 OpenAI',
-                baseUrl: 'https://api.openai.com/v1',
-                apiKey: 'sk-model-page-load-openai'
+              await createPresetModelConfigThroughSettingsUi(page, {
+                providerId: 'moonshot',
+                apiKey: 'sk-model-page-load-kimi'
               })
               await createModelConfigThroughSettingsUi(page, {
-                name: 'DeepSeek 配置',
-                baseUrl: 'https://api.deepseek.com/v1',
-                apiKey: 'sk-model-page-load-deepseek'
+                name: '公司自定义',
+                baseUrl: 'https://custom.example.com/v1',
+                apiKey: 'sk-model-page-load-custom'
               })
             }
           })
@@ -44,20 +45,25 @@ describe('settings model e2e', () => {
             run: async () => {
               await navigateToSettingsSection(page, 'workspace')
               await navigateToSettingsSection(page, 'model')
-              await page.locator('tbody tr').filter({ hasText: '公司 OpenAI' }).waitFor({
+              await page.locator('tbody tr').filter({ hasText: 'Kimi' }).waitFor({
                 state: 'visible'
               })
             }
           })
 
+          const kimiRow = page.locator('tbody tr').filter({ hasText: 'Kimi' }).first()
+          const customRow = page
+            .locator('tbody tr')
+            .filter({ hasText: '公司自定义' })
+            .first()
+
           return {
             rowCount: await page.locator('tbody tr').count(),
-            openAiRowText:
-              (await page.locator('tbody tr').filter({ hasText: '公司 OpenAI' }).textContent()) ||
-              '',
-            deepSeekRowText:
-              (await page.locator('tbody tr').filter({ hasText: 'DeepSeek 配置' }).textContent()) ||
-              ''
+            kimiRowText: (await kimiRow.textContent()) || '',
+            customRowText: (await customRow.textContent()) || '',
+            customTagCount: await page
+              .locator(`[data-testid="${settingsSelectors.modelCustomTag}"]`)
+              .count()
           }
         },
         assert: async (result, runtime) => {
@@ -68,11 +74,14 @@ describe('settings model e2e', () => {
           })
 
           await runtime.assertThat(
-            result.openAiRowText.includes('https://api.openai.com/v1') &&
-              result.deepSeekRowText.includes('https://api.deepseek.com/v1'),
+            result.kimiRowText.includes('Kimi') &&
+              !result.kimiRowText.includes('自定义') &&
+              result.customRowText.includes('公司自定义') &&
+              result.customTagCount === 1,
             {
-              name: 'model-list-renders-config-name-and-url',
-              message: '配置列表应展示用户配置名称和服务地址。',
+              name: 'model-list-distinguishes-preset-and-custom',
+              message:
+                '配置列表应展示服务商图标与名称；自定义配置以「自定义」标签区分，预设配置不展示，对齐 SET-MODEL-001-AC1、SET-MODEL-001-AC2、SET-MODEL-001-AC3。',
               data: result
             }
           )

@@ -171,6 +171,24 @@ const ScheduledTasksView: React.FC = () => {
     })()
   }, [loadTasks])
 
+  const refreshModelLists = useCallback(async (): Promise<void> => {
+    try {
+      const entries = await Promise.all(
+        modelConfigs.map(async (config): Promise<[string, LlmRemoteModel[]]> => {
+          try {
+            const response = await window.api.llmConfigModelList(config.id)
+            return [config.id, response.success ? response.items : []]
+          } catch {
+            return [config.id, []]
+          }
+        })
+      )
+      setModelLists(Object.fromEntries(entries))
+    } catch (error) {
+      console.error('[SCHEDULED-TASKS] model list refresh failed:', error)
+    }
+  }, [modelConfigs])
+
   const openCreate = (): void => {
     setForm(emptyForm())
     setFormOpen(true)
@@ -479,6 +497,7 @@ const ScheduledTasksView: React.FC = () => {
               onChange={(selection) =>
                 setForm((current) => ({ ...current, modelSelection: selection }))
               }
+              onRefreshModelLists={refreshModelLists}
               variant="form"
               className="w-full"
               data-testid={scheduledTaskSelectors.modelSelect}

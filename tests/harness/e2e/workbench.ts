@@ -1266,18 +1266,29 @@ export const selectWorkbenchModel = async (page: Page, modelName: string): Promi
   await modelSelect.click()
   const searchInput = modelSelect.locator('input').first()
   await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
-  await searchInput.fill(modelName)
   const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').last()
-  const options = dropdown.getByRole('option')
-  const modelOption = options.filter({ hasText: modelName }).first()
   await dropdown.waitFor({ state: 'visible' })
+  const visibleOptions = () => dropdown.getByRole('option')
+  const findModelOption = () => visibleOptions().filter({ hasText: modelName }).first()
+
+  await searchInput.fill(modelName)
+  let modelOption = findModelOption()
+  if (!(await modelOption.isVisible().catch(() => false))) {
+    await searchInput.clear()
+    const customEntry = visibleOptions().filter({ hasText: '自定义模型' }).first()
+    if (await customEntry.isVisible().catch(() => false)) {
+      await customEntry.click()
+    }
+    await searchInput.fill(modelName)
+    modelOption = findModelOption()
+  }
   try {
     await modelOption.waitFor({
       state: 'visible',
       timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS
     })
   } catch {
-    const optionTexts = (await options.allTextContents()).map((item) => item.trim()).filter(Boolean)
+    const optionTexts = (await visibleOptions().allTextContents()).map((item) => item.trim()).filter(Boolean)
     throw new Error(
       [
         `AI_LIVE_PRIMARY_MODEL_NAME="${modelName}" was not found in the Workbench model dropdown.`,
@@ -1336,21 +1347,27 @@ export const openScheduledTasksView = async (page: Page): Promise<void> => {
 
 export const selectScheduledTaskModel = async (page: Page, modelName: string): Promise<void> => {
   const modelSelect = getWorkbenchLocator(page, scheduledTaskSelectors.modelSelect)
-  await modelSelect.locator('button.workbench-select-trigger').click()
-  await page
-    .locator('.workbench-select-menu.workbench-composer-menu')
-    .last()
-    .getByRole('button', { name: /^主模型/u })
-    .click()
-  const searchInput = page
-    .locator('.workbench-select-menu.workbench-composer-menu input[placeholder="搜索模型"]')
-    .last()
+  await modelSelect.click()
+  const searchInput = modelSelect.locator('input').first()
   await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
+  const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').last()
+  await dropdown.waitFor({ state: 'visible' })
+  const visibleOptions = () => dropdown.getByRole('option')
+  const findModelOption = () => visibleOptions().filter({ hasText: modelName }).first()
+
   await searchInput.fill(modelName)
-  const dropdown = page.locator('.workbench-select-menu.workbench-composer-menu').last()
-  const option = dropdown.getByRole('option').filter({ hasText: modelName }).first()
-  await option.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
-  await option.click()
+  let modelOption = findModelOption()
+  if (!(await modelOption.isVisible().catch(() => false))) {
+    await searchInput.clear()
+    const customEntry = visibleOptions().filter({ hasText: '自定义模型' }).first()
+    if (await customEntry.isVisible().catch(() => false)) {
+      await customEntry.click()
+    }
+    await searchInput.fill(modelName)
+    modelOption = findModelOption()
+  }
+  await modelOption.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
+  await modelOption.click()
 }
 
 export const selectScheduledTaskWorkspace = async (

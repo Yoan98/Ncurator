@@ -10,6 +10,7 @@ import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
 import { VectorModelDownloadService } from '../services/model/VectorModelDownloadService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
+import { validateLlmConfigForSave } from '../services/llm/configGuard'
 import { AttachmentService } from '../services/attachments/AttachmentService'
 import { isModelSource } from '../../shared/modelSources'
 import { ChatRunService } from '../services/ai/ChatRunService'
@@ -2932,7 +2933,11 @@ export function registerHandlers(services: {
 
   ipcMain.handle('llm-config-save', async (_event, config: LLMConfig) => {
     try {
-      await llmStore.save(config)
+      const check = await validateLlmConfigForSave(llmStore, config)
+      if (!check.ok) {
+        return { success: false, error: check.error }
+      }
+      await llmStore.save(check.config)
       return { success: true }
     } catch (e: unknown) {
       console.error('[LLM-CONFIG-SAVE] Error:', e)
