@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ScheduledTaskService } from '../../../src/main/services/scheduler/ScheduledTaskService'
-import type {
-  ChatSubmitResponse,
-  ScheduledTask,
-  WorkspaceSource
-} from '../../../src/shared/types'
+import type { ChatSubmitResponse, ScheduledTask, WorkspaceSource } from '../../../src/shared/types'
 
 const localAt = (
   year: number,
@@ -27,7 +23,6 @@ const makeTask = (overrides: Partial<ScheduledTask> = {}): ScheduledTask => ({
   weekday: null,
   workspaceId: 'ws-1',
   mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
-  visionModel: null,
   aiPreference: 'default',
   executionPermission: 'full_access',
   nextRunAt: null,
@@ -50,7 +45,8 @@ class FakeTaskStore {
   public list = vi.fn(async (): Promise<ScheduledTask[]> => Array.from(this.tasks.values()))
 
   public listEnabled = vi.fn(
-    async (): Promise<ScheduledTask[]> => Array.from(this.tasks.values()).filter((task) => task.enabled)
+    async (): Promise<ScheduledTask[]> =>
+      Array.from(this.tasks.values()).filter((task) => task.enabled)
   )
 
   public getById = vi.fn(
@@ -65,7 +61,10 @@ class FakeTaskStore {
 type ServiceHarness = {
   taskStore: FakeTaskStore
   workspaceStore: { getWorkspaceById: ReturnType<typeof vi.fn> }
-  chatStore: { saveChatSession: ReturnType<typeof vi.fn>; deleteChatSession: ReturnType<typeof vi.fn> }
+  chatStore: {
+    saveChatSession: ReturnType<typeof vi.fn>
+    deleteChatSession: ReturnType<typeof vi.fn>
+  }
   submitTask: ReturnType<typeof vi.fn>
   emitSessionListRefresh: ReturnType<typeof vi.fn>
   setTimer: ReturnType<typeof vi.fn>
@@ -79,19 +78,18 @@ let nextTimerId = 0
 const createService = (): ServiceHarness => {
   const taskStore = new FakeTaskStore()
   const workspaceStore = {
-    getWorkspaceById: vi.fn(async (id: string): Promise<WorkspaceSource | null> =>
-      id === 'ws-1'
-        ? { id: 'ws-1', name: '工作区', root_path: '/workspace', created_at: 0, updated_at: 0 }
-        : null
+    getWorkspaceById: vi.fn(
+      async (id: string): Promise<WorkspaceSource | null> =>
+        id === 'ws-1'
+          ? { id: 'ws-1', name: '工作区', root_path: '/workspace', created_at: 0, updated_at: 0 }
+          : null
     )
   }
   const chatStore = {
     saveChatSession: vi.fn(async (): Promise<void> => {}),
     deleteChatSession: vi.fn(async (): Promise<void> => {})
   }
-  const submitTask = vi.fn(
-    async (): Promise<ChatSubmitResponse> => ({ success: true, mode: 'ai' })
-  )
+  const submitTask = vi.fn(async (): Promise<ChatSubmitResponse> => ({ success: true, mode: 'ai' }))
   const emitSessionListRefresh = vi.fn()
   const setTimer = vi.fn(() => ++nextTimerId)
   const clearTimer = vi.fn()
@@ -138,9 +136,9 @@ describe('ScheduledTaskService', () => {
       (await service.save({ ...base, mainModel: { configId: '', modelName: 'gpt-4o' } })).success
     ).toBe(false)
     expect((await service.save({ ...base, timeOfDay: '25:00' })).success).toBe(false)
-    expect(
-      (await service.save({ ...base, scheduleType: 'weekly', weekday: null })).success
-    ).toBe(false)
+    expect((await service.save({ ...base, scheduleType: 'weekly', weekday: null })).success).toBe(
+      false
+    )
     expect(taskStore.save).not.toHaveBeenCalled()
   })
 
@@ -202,7 +200,6 @@ describe('ScheduledTaskService', () => {
       sessionId: expect.any(String),
       input: '总结今天的新闻',
       mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
-      visionModel: undefined,
       preference: 'default',
       executionPermission: 'full_access',
       workspace: { workspaceId: 'ws-1', workspaceName: '工作区', rootPath: '/workspace' }

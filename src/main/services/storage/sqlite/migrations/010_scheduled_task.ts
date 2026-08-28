@@ -15,8 +15,6 @@ CREATE TABLE IF NOT EXISTS scheduled_task (
   workspace_id TEXT NOT NULL DEFAULT '',
   main_model_config_id TEXT NOT NULL DEFAULT '',
   main_model_name TEXT NOT NULL DEFAULT '',
-  vision_model_config_id TEXT,
-  vision_model_name TEXT,
   ai_preference TEXT NOT NULL DEFAULT 'default',
   execution_permission TEXT NOT NULL DEFAULT 'full_access',
   next_run_at INTEGER,

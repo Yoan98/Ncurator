@@ -30,7 +30,7 @@ import {
   createInitialIdentityIndex,
   createNextIdentityIndex,
   resolveInternalNodeId,
-  resolveInternalVisualId,
+  resolveInternalVisualNodeId,
   toInternalOp,
   toPublicChangedNodes,
   toPublicDetailedNode,
@@ -603,7 +603,9 @@ export const handleDocxWorkerRequest = async (
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       const internalId = resolveInternalNodeId(snapshot.identity, request.payload.nodeId)
       const entry =
-        snapshot.index.nodesById.get(internalId) || snapshot.index.editableNodesById.get(internalId)
+        snapshot.index.nodesById.get(internalId) ||
+        snapshot.index.editableNodesById.get(internalId) ||
+        snapshot.index.visualNodesById.get(internalId)
       if (!entry) {
         return {
           requestId: request.requestId,
@@ -746,29 +748,34 @@ export const handleDocxWorkerRequest = async (
           requestId: request.requestId,
           ok: false,
           code: 'invalid_input',
-          error: 'docx_read_visuals does not support legacy .doc files'
+          error: 'DOCX visual materialization does not support legacy .doc files'
         }
       }
-      const internalVisualId = resolveInternalVisualId(snapshot.identity, request.payload.visualId)
-      const visual = snapshot.index.visualsById.get(internalVisualId)
-      if (!visual) throw new Error(`visual not found: ${request.payload.visualId}`)
+      const internalVisualNodeId = resolveInternalVisualNodeId(
+        snapshot.identity,
+        request.payload.nodeId
+      )
+      const visual = snapshot.index.visualNodesById.get(internalVisualNodeId)
+      if (!visual) throw new Error(`visual not found: ${request.payload.nodeId}`)
       if ((visual.kind !== 'image' && visual.kind !== 'embedded_object') || !visual.target) {
         const owner = snapshot.index.nodesById.get(visual.ownerNodeId)
-        if (!owner) throw new Error(`visual owner node not found: ${request.payload.visualId}`)
-        const visualsInNode = [...snapshot.index.visualsById.entries()].filter(([, candidate]) => {
-          const candidateOwner = snapshot.index.nodesById.get(candidate.ownerNodeId)
-          return candidateOwner?.nodeIndex === owner.nodeIndex
-        })
+        if (!owner) throw new Error(`visual owner node not found: ${request.payload.nodeId}`)
+        const visualsInNode = [...snapshot.index.visualNodesById.entries()].filter(
+          ([, candidate]) => {
+            const candidateOwner = snapshot.index.nodesById.get(candidate.ownerNodeId)
+            return candidateOwner?.nodeIndex === owner.nodeIndex
+          }
+        )
         return {
           requestId: request.requestId,
           ok: true,
           payload: {
             action: 'get_visual',
-            visualId: request.payload.visualId,
+            nodeId: request.payload.nodeId,
             kind: visual.kind,
             render: {
               nodeIndex: owner.nodeIndex,
-              visualIndexInNode: visualsInNode.findIndex(([id]) => id === internalVisualId),
+              visualIndexInNode: visualsInNode.findIndex(([id]) => id === internalVisualNodeId),
               visualCountInNode: visualsInNode.length
             }
           }
@@ -783,7 +790,7 @@ export const handleDocxWorkerRequest = async (
           ok: true,
           payload: {
             action: 'get_visual',
-            visualId: request.payload.visualId,
+            nodeId: request.payload.nodeId,
             kind: visual.kind,
             error: `visual media is missing: ${target}`
           }
@@ -807,7 +814,7 @@ export const handleDocxWorkerRequest = async (
           ok: true,
           payload: {
             action: 'get_visual',
-            visualId: request.payload.visualId,
+            nodeId: request.payload.nodeId,
             kind: visual.kind,
             error: `unsupported visual media type: ${extension || 'unknown'}`
           }
@@ -818,7 +825,7 @@ export const handleDocxWorkerRequest = async (
         ok: true,
         payload: {
           action: 'get_visual',
-          visualId: request.payload.visualId,
+          nodeId: request.payload.nodeId,
           kind: visual.kind,
           data: await file.async('nodebuffer'),
           mimeType

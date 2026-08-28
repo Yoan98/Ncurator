@@ -11,12 +11,12 @@ const isOldNode = (node: DocxReplayNode): boolean =>
 
 const specKey = (spec: DocxNodeSpec): string => JSON.stringify(spec)
 
-const visualIdsEqual = (
-  expected: Array<{ visualId: string }>,
+const visualNodeIdsEqual = (
+  expected: Array<{ nodeId: string }>,
   actual: readonly string[]
 ): boolean =>
   expected.length === actual.length &&
-  expected.every((visual, index) => visual.visualId === actual[index])
+  expected.every((visual, index) => visual.nodeId === actual[index])
 
 const textKey = (spec: DocxNodeSpec): string => {
   if (spec.kind === 'paragraph') return spec.runs.map((run) => run.text).join('')
@@ -97,7 +97,7 @@ const normalizeSourceLineage = (input: {
         sourceNodeId: input.sourceNodeId,
         spec: baseline.spec,
         structureFingerprint: baseline.structureFingerprint,
-        visualIds: baseline.visuals.map((visual) => visual.visualId),
+        visualNodeIds: baseline.visuals.map((visual) => visual.nodeId),
         reviewState: 'deleted',
         reviewQueries: undefined,
         tableCellChanges: undefined
@@ -105,7 +105,7 @@ const normalizeSourceLineage = (input: {
     ]
   }
 
-  const visualsUnchanged = visualIdsEqual(baseline.visuals, visible.visualIds)
+  const visualsUnchanged = visualNodeIdsEqual(baseline.visuals, visible.visualNodeIds)
   if (
     !input.moved &&
     visualsUnchanged &&
@@ -167,7 +167,7 @@ const normalizeSourceLineage = (input: {
     sourceNodeId: input.sourceNodeId,
     spec: baseline.spec,
     structureFingerprint: baseline.structureFingerprint,
-    visualIds: baseline.visuals.map((visual) => visual.visualId),
+    visualNodeIds: baseline.visuals.map((visual) => visual.nodeId),
     reviewState: 'replaced-old',
     reviewQueries: undefined,
     tableCellChanges: undefined

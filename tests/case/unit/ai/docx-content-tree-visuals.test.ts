@@ -12,12 +12,12 @@ import { createReplaySnapshot } from '../../../../src/main/services/ai/human/too
 import { projectDocxReadNodes } from '../../../../src/main/services/ai/human/tools/docx/publicReadTree'
 import type { DocxReadContentNode } from '../../../../src/main/services/ai/human/tools/docx/nodeTypes'
 
-const findVisualId = (nodes: readonly DocxReadContentNode[]): string => {
+const findVisualNodeId = (nodes: readonly DocxReadContentNode[]): string => {
   for (const node of nodes) {
-    if (node.type === 'visual') return node.visualId
+    if (node.type === 'visual') return node.nodeId
     if ('children' in node) {
-      const visualId = findVisualId(node.children)
-      if (visualId) return visualId
+      const nodeId = findVisualNodeId(node.children)
+      if (nodeId) return nodeId
     }
   }
   return ''
@@ -92,14 +92,14 @@ describe('docx recursive content tree visuals', () => {
       bundle.relationshipTypes
     )
 
-    expect([...index.visualsById.values()].map((visual) => visual.kind)).toEqual([
+    expect([...index.visualNodesById.values()].map((visual) => visual.kind)).toEqual([
       'image',
       'chart',
       'diagram',
       'shape',
       'embedded_object'
     ])
-    const shape = [...index.visualsById.values()].find((visual) => visual.kind === 'shape')
+    const shape = [...index.visualNodesById.values()].find((visual) => visual.kind === 'shape')
     expect(shape).toBeDefined()
     const owner = shape ? index.detailByNodeId.get(shape.ownerNodeId) : undefined
     const descendants = owner ? [owner] : []
@@ -144,7 +144,7 @@ describe('docx recursive content tree visuals', () => {
       ])
     )
 
-    expect([...index.visualsById.values()].map((visual) => visual.kind)).toEqual([
+    expect([...index.visualNodesById.values()].map((visual) => visual.kind)).toEqual([
       'image',
       'chart',
       'diagram',
@@ -152,7 +152,7 @@ describe('docx recursive content tree visuals', () => {
       'embedded_object',
       'image'
     ])
-    expect(index.visualsById.size).toBe(6)
+    expect(index.visualNodesById.size).toBe(6)
     expect(index.outline[3]?.text).toBe('Shape text')
     const shapeDetail = index.detailByNodeId.get(index.rootNodeIds[3]!)
     const shapeVisual =
@@ -173,13 +173,13 @@ describe('docx recursive content tree visuals', () => {
       bundle.relationshipTargets,
       bundle.relationshipTypes
     )
-    const images = [...index.visualsById.values()].filter((visual) => visual.kind === 'image')
+    const images = [...index.visualNodesById.values()].filter((visual) => visual.kind === 'image')
     const realEmptyParagraphs = index.outline.filter(
       (node) => node.type === 'paragraph' && node.text === '' && !node.visuals
     )
     expect(images).toHaveLength(18)
     expect(realEmptyParagraphs).toHaveLength(22)
-    expect(new Set(images.map((visual) => visual.visualId)).size).toBe(18)
+    expect(new Set(images.map((visual) => visual.nodeId)).size).toBe(18)
     const snapshot = createReplaySnapshot({
       packageFingerprint: 'fixture',
       outlineNodes: index.outline,
@@ -191,7 +191,7 @@ describe('docx recursive content tree visuals', () => {
         ])
       )
     })
-    const bindings = snapshot.nodes.flatMap((node) => node.visuals.map((visual) => visual.visualId))
+    const bindings = snapshot.nodes.flatMap((node) => node.visuals.map((visual) => visual.nodeId))
     expect(bindings).toHaveLength(18)
     expect(new Set(bindings).size).toBe(18)
     expect(snapshot.nodes.filter((node) => node.visuals.length).every((node) => node.rawXml)).toBe(
@@ -212,13 +212,13 @@ describe('docx recursive content tree visuals', () => {
         bundle.relationshipTargets,
         bundle.relationshipTypes
       )
-      expect(index.visualsById.size).toBe(expected)
+      expect(index.visualNodesById.size).toBe(expected)
       expect(index.outline.every((node) => !('children' in node))).toBe(true)
     },
     15_000
   )
 
-  it('resolves a public visualId to its package image bytes', async () => {
+  it('resolves a public visual nodeId to its package image bytes', async () => {
     const runId = `visual-unit-${String(Date.now())}`
     const sourcePath = path.resolve('tests/fixtures/workspace/灵感测试.docx')
     const open = await handleDocxWorkerRequest({
@@ -253,13 +253,13 @@ describe('docx recursive content tree visuals', () => {
     })
     expect(detail.ok).toBe(true)
     if (!detail.ok || detail.payload.action !== 'get_node') return
-    const visualId = findVisualId(detail.payload.node.children)
-    expect(visualId).not.toBe('')
+    const visualNodeId = findVisualNodeId(detail.payload.node.children)
+    expect(visualNodeId).not.toBe('')
     const visual = await handleDocxWorkerRequest({
       requestId: 'visual',
       runId,
       action: 'get_visual',
-      payload: { docId: open.payload.docId, visualId }
+      payload: { docId: open.payload.docId, nodeId: visualNodeId }
     })
     expect(visual.ok).toBe(true)
     if (visual.ok && visual.payload.action === 'get_visual') {

@@ -99,8 +99,7 @@ const renderGenericObject = (obj: JsonObject): string => {
 const renderDocxNodeLine = (value: JsonValue, index: number, depth = 0): string => {
   if (!isJsonObject(value)) return renderGenericArrayItem(value, index)
 
-  const nodeId =
-    readStringField(value, 'nodeId') || readStringField(value, 'visualId') || `item-${index + 1}`
+  const nodeId = readStringField(value, 'nodeId') || `item-${index + 1}`
   const type = readStringField(value, 'type')
   const nodeIndex = readNumberField(value, 'nodeIndex')
   const visuals = isJsonObject(value.visuals) ? value.visuals : undefined
@@ -247,21 +246,6 @@ const renderPdfSearchMatches = (value: JsonValue | undefined): string => {
     .join('\n')
 }
 
-const renderVisualResults = (value: JsonValue | undefined): string => {
-  if (!Array.isArray(value) || value.length === 0) return 'none'
-  return value
-    .map((item, index) => {
-      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
-      return `${index + 1}. ${renderKeyValuePairs([
-        ['visualId', readStringField(item, 'visualId')],
-        ['index', readNumberTextField(item, 'index')],
-        ['text', readStringField(item, 'text')],
-        ['error', readStringField(item, 'error')]
-      ])}`
-    })
-    .join('\n')
-}
-
 const renderPdfInspectResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
@@ -297,13 +281,6 @@ const renderPdfReadPagesResult = (obj: JsonObject): string =>
     ]),
     'pages:',
     renderPdfPageList(obj.pages)
-  ].join('\n')
-
-const renderVisualReadResult = (obj: JsonObject): string =>
-  [
-    renderKeyValuePairs([['sourcePath', readStringField(obj, 'sourcePath')]]),
-    'results:',
-    renderVisualResults(obj.results)
   ].join('\n')
 
 const renderWebSearchLinkList = (value: JsonValue | undefined): string => {
@@ -383,7 +360,6 @@ export const renderToolResultDataText = (
     case 'docx_content_edit':
     case 'docx_format':
     case 'docx_table_edit':
-    case 'docx_media_edit':
     case 'docx_comments_revisions':
       return renderDocxMutationResult(value)
     case 'docx_read_nodes':
@@ -398,10 +374,6 @@ export const renderToolResultDataText = (
       return renderPdfSearchResult(value)
     case 'pdf_read_pages':
       return renderPdfReadPagesResult(value)
-    case 'pdf_read_visuals':
-    case 'ppt_read_visuals':
-    case 'docx_read_visuals':
-      return renderVisualReadResult(value)
     case 'web_search':
       return renderWebSearchResult(value)
     default:

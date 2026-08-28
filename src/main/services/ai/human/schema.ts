@@ -52,6 +52,17 @@ export const toolCallResultSchema = z.discriminatedUnion('ok', [
     toolName: z.string().min(1),
     ok: z.literal(true),
     data: jsonValueSchema.optional(),
+    imageRefs: z
+      .array(
+        z.object({
+          path: z.string().min(1),
+          mimeType: z.string().min(1),
+          sizeBytes: z.number().int().nonnegative().optional(),
+          width: z.number().int().positive().optional(),
+          height: z.number().int().positive().optional()
+        })
+      )
+      .optional(),
     resourceContext: toolResourceContextSchema.optional()
   }),
   z.object({

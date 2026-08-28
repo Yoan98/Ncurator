@@ -22,7 +22,7 @@ const createUiState = (input: {
     mode: input.mode,
     aiPreference: input.mode === 'ai' ? 'local_sources_strict' : 'default',
     executionPermission: input.executionPermission,
-    modelSelection: { mainModel: null, visionModel: null },
+    modelSelection: { mainModel: null },
     workspaceId: null,
     draft: {
       input: input.draft,
@@ -76,8 +76,18 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           await navigateToWorkbench(page, { waitForSessionListText: false })
-          const sessionA = { id: 'ui-state-a', title: '状态会话 A', created_at: 10, workspace_id: '' }
-          const sessionB = { id: 'ui-state-b', title: '状态会话 B', created_at: 20, workspace_id: '' }
+          const sessionA = {
+            id: 'ui-state-a',
+            title: '状态会话 A',
+            created_at: 10,
+            workspace_id: ''
+          }
+          const sessionB = {
+            id: 'ui-state-b',
+            title: '状态会话 B',
+            created_at: 20,
+            workspace_id: ''
+          }
           const workspaceId = await page.evaluate(async () => {
             const response = await window.api.workspaceCreate({ name: '会话状态隔离工作区' })
             if (!response.success || !response.workspace) throw new Error('workspace create failed')
@@ -105,7 +115,10 @@ describe('workbench conversation e2e', () => {
               await window.api.chatSessionSave(sessionB)
               await window.api.chatSessionUiStateSave({ sessionId: sessionA.id, state: stateA })
               await window.api.chatSessionUiStateSave({ sessionId: sessionB.id, state: stateB })
-              await window.api.workbenchUiStateSave({ activeViewKey: sessionA.id, draftState: null })
+              await window.api.workbenchUiStateSave({
+                activeViewKey: sessionA.id,
+                draftState: null
+              })
             },
             { sessionA, sessionB, stateA, stateB }
           )
@@ -117,10 +130,16 @@ describe('workbench conversation e2e', () => {
             return (await locator.count()) > 0 ? ((await locator.textContent()) || '').trim() : ''
           }
           const readVisibleState = async () => ({
-            input: ((await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || '').trim(),
-            mode: ((await getWorkbenchLocator(page, workbenchSelectors.modeSwitch).textContent()) || '').trim(),
+            input: (
+              (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
+            ).trim(),
+            mode: (
+              (await getWorkbenchLocator(page, workbenchSelectors.modeSwitch).textContent()) || ''
+            ).trim(),
             preference: await readOptionalText(workbenchSelectors.aiPreferenceSwitch),
-            executionPermission: await readOptionalText(workbenchSelectors.executionPermissionSwitch),
+            executionPermission: await readOptionalText(
+              workbenchSelectors.executionPermissionSwitch
+            ),
             panelText: await readOptionalText(workbenchSelectors.contentPanelShell),
             panelVisible:
               (await getWorkbenchLocator(page, workbenchSelectors.contentPanelShell).getAttribute(
@@ -148,13 +167,16 @@ describe('workbench conversation e2e', () => {
           const secondA = await readVisibleState()
           await selectSession(sessionB.id, stateB.composer.draft.input)
           const secondB = await readVisibleState()
-          const persisted = await page.evaluate(async ({ sessionAId, sessionBId }) => {
-            const [openedA, openedB] = await Promise.all([
-              window.api.chatSessionOpen({ sessionId: sessionAId }),
-              window.api.chatSessionOpen({ sessionId: sessionBId })
-            ])
-            return { stateA: openedA.uiState, stateB: openedB.uiState }
-          }, { sessionAId: sessionA.id, sessionBId: sessionB.id })
+          const persisted = await page.evaluate(
+            async ({ sessionAId, sessionBId }) => {
+              const [openedA, openedB] = await Promise.all([
+                window.api.chatSessionOpen({ sessionId: sessionAId }),
+                window.api.chatSessionOpen({ sessionId: sessionBId })
+              ])
+              return { stateA: openedA.uiState, stateB: openedB.uiState }
+            },
+            { sessionAId: sessionA.id, sessionBId: sessionB.id }
+          )
 
           return { firstA, collapsedB, expandedB, secondA, secondB, persisted }
         },

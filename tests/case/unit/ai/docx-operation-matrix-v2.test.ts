@@ -161,21 +161,21 @@ describe('DOCX v2 operation matrix', () => {
         ops: [{ type: 'insert_image', nodeId: paragraphs[0]!.nodeId, position: 'after', imagePath }]
       })
       const imageIndex = buildDocumentNodeIndex(await loadDocxBundle(withImage.buffer))
-      const visualId = [...imageIndex.visualsById.keys()][0]!
+      const nodeId = [...imageIndex.visualNodesById.keys()][0]!
       await expect(
         applyDocxOps({
           buffer: withImage.buffer,
-          ops: [{ type: 'replace_image', visualId, imagePath }]
+          ops: [{ type: 'replace_image', nodeId, imagePath }]
         })
       ).resolves.toBeDefined()
       await expect(
         applyDocxOps({
           buffer: withImage.buffer,
-          ops: [{ type: 'update_image', visualId, widthCm: 2, altText: 'updated' }]
+          ops: [{ type: 'update_image', nodeId, widthCm: 2, altText: 'updated' }]
         })
       ).resolves.toBeDefined()
       await expect(
-        applyDocxOps({ buffer: withImage.buffer, ops: [{ type: 'delete_media', visualId }] })
+        applyDocxOps({ buffer: withImage.buffer, ops: [{ type: 'delete_media', nodeId }] })
       ).resolves.toBeDefined()
 
       await expect(

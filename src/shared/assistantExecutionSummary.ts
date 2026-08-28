@@ -35,7 +35,6 @@ export type AssistantExecutionSkillKey =
   | 'terminal'
   | 'web-search'
   | 'browser'
-  | 'image-recognition'
   | 'image-generation'
   | 'wait'
   | 'user-takeover'
@@ -73,20 +72,16 @@ const TOOL_UI_KINDS = {
   docx_read_outline: 'docx-read',
   docx_search: 'docx-read',
   docx_read_nodes: 'docx-read',
-  docx_read_visuals: 'docx-read',
   docx_content_edit: 'docx-edit',
   docx_format: 'docx-edit',
   docx_table_edit: 'docx-edit',
-  docx_media_edit: 'docx-edit',
   docx_comments_revisions: 'docx-edit',
   pdf_inspect: 'pdf-read',
   pdf_search: 'pdf-read',
   pdf_read_pages: 'pdf-read',
-  pdf_read_visuals: 'pdf-read',
   ppt_read_outline: 'ppt-read',
   ppt_read_slides: 'ppt-read',
   ppt_search: 'ppt-search',
-  ppt_read_visuals: 'ppt-read',
   ppt_edit: 'ppt-edit',
   excel_read_outline: 'excel-read',
   excel_search: 'excel-read',
@@ -94,10 +89,10 @@ const TOOL_UI_KINDS = {
   excel_edit: 'excel-edit',
   web_search: 'web-search',
   browser_use: 'browser',
-  image_analyze: 'image-recognition',
   image_generate: 'image-generation',
   learn_skill: 'generic',
-  update_plan: 'generic'
+  update_plan: 'generic',
+  read_image: 'generic'
 } as const satisfies Record<RuntimeToolName, AssistantExecutionSkillKey>
 
 export const getAssistantToolUiKind = (
@@ -122,7 +117,7 @@ export const getAssistantToolIconKind = (
   if (skillKey === 'ppt-edit' || skillKey === 'excel-edit') return 'edit'
   if (skillKey === 'kb') return 'knowledge'
   if (skillKey === 'browser' || skillKey === 'user-takeover') return 'browser'
-  if (skillKey === 'image-recognition' || skillKey === 'image-generation') return 'image'
+  if (skillKey === 'image-generation') return 'image'
   if (skillKey === 'wait') return 'wait'
   if (skillKey === 'terminal') return 'terminal'
   return 'default'
@@ -267,14 +262,6 @@ export const getAssistantToolSummaryText = (
       failed: '浏览器操作失败'
     })
   }
-  if (skillKey === 'image-recognition') {
-    return statusText(status, {
-      running: '正在识别图片',
-      completed: '已识别图片',
-      partial_failed: '部分图片识别失败',
-      failed: '图片识别失败'
-    })
-  }
   if (skillKey === 'image-generation') {
     return statusText(status, {
       running: '正在生成图片',
@@ -348,7 +335,7 @@ const getSummaryActionLabel = (kind: AssistantExecutionSkillKey): string => {
   if (kind === 'kb') return '检索'
   if (kind === 'terminal') return '终端'
   if (kind === 'browser' || kind === 'user-takeover') return '浏览器'
-  if (kind === 'image-recognition' || kind === 'image-generation') return '图片'
+  if (kind === 'image-generation') return '图片'
   if (kind === 'wait') return '等待'
   return '处理'
 }

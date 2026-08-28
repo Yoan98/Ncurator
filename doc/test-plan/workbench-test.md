@@ -5,7 +5,7 @@
 - 本计划定义 Workbench 用户可见交互的回归范围，并对齐 [workbench.md](../prd/workbench.md) 的 `WB-*` 需求和验收编号。
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
 - Workbench UI E2E 回归测试必须通过真实 Electron UI 配模型、配工作区、发送消息、选择 `@` 资料、搜索、预览、回退和操作右侧面板。
-- 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；测试只从 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME`、`AI_LIVE_VISUAL_MODEL_NAME` 读取 live 配置，并在应用内未配置时通过 Settings UI 新增配置。
+- 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；测试只从 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME` 读取 live 配置，并在应用内未配置时通过 Settings UI 新增配置。
 - case 因生产行为缺口失败时，不在测试中硬改业务行为，统一记录为产品或生产实现待决项。
 
 ## 2. 测试边界
@@ -13,7 +13,7 @@
 - Workbench UI E2E 回归测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录，并默认通过 Settings UI 创建工作区、绑定真实目录、检查更新和更新索引。
 - Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；Source 与正式包 E2E 在多 case 时都先执行 `warmup` 预热共享 fixture，正式包 E2E 再把缓存种子复制给隔离 case。
-- Workbench 模型选择 helper 必须通过真实下拉搜索分别选择 `AI_LIVE_PRIMARY_MODEL_NAME` 和 `AI_LIVE_VISUAL_MODEL_NAME`。
+- Workbench 模型选择 helper 必须通过真实下拉搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，工作区文件和 `.ncurator/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
@@ -24,7 +24,7 @@
 - Workbench 附件链路不限文件扩展名，任何可被文件选择器选中的普通文件都可以添加，不因扩展名拒绝；`+` 和拖放保留源文件绝对路径，粘贴文件保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。
 - `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7` 的工具输入输出、完整编辑操作、原子失败、冲突、只读格式、默认 Sheet 和 Sheet 严格校验由 AI tool 回归承担；`WB-EXCEL-002` 的完整 XLSX diff 语义也由 AI tool 解析 diff 文件校验。Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、只读单网格预览和回退闭环，不重复枚举底层操作。
 - docx、ppt、pdf 也按同一分层：格式专用工具的读写、边界、格式保真和 diff artifact 语义放在 AI tool；DOCX tool 必须覆盖已有表格的单元格内容与格式净变化、精确红绿标记、计数和非空回读；其中 PPT tool 必须完整覆盖 baseline 到最终状态的页面/元素净变化、自然位移、零净变化、lineage、v4 schema 和准确计数。Workbench e2e 只验证真实用户流程、现有预览入口、红绿页面标记、`+N/-N`、差异面板交互和回退，不重复枚举底层元素组合。PDF 当前是只读工具，没有 Workbench apply diff 语义。
-- DOCX 读取结果和历史结果按递归 children 树展示，Workbench 必须能显示 `nodeId`、`visualId`、visual kind 和 story；DOCX 写结果复用统一状态展示，普通写入不展示冗余正文，创建操作只展示 `createdIds`。格式操作按 text、paragraph、table、row、cell、section 展示。`docx_read_visuals` 使用与 PDF/PPT 视觉读取一致的结果展示。
+- DOCX 读取结果和历史结果按递归 children 树展示，Workbench 必须能显示统一的 `nodeId`、visual kind、`imagePath` 和 story；DOCX 写结果复用统一状态展示，普通写入不展示冗余正文，创建操作只展示 `createdIds`。格式操作按 text、paragraph、table、row、cell、section 展示。图片理解统一由 `agent-control` 内置的 `read_image` 把图片加入主模型请求。
 - Workbench 历史只展示白名单内的必要 DOCX 字段，不展示 worker、identity 或 replay 内部状态。DOCX 事件以 `nodeId` 定位，PPT 继续使用自己的 `location`，两套协议互不复用。
 
 ## 3. Suite 设计
@@ -180,20 +180,20 @@ tests/case/workbench/
 #### `model-selector-and-provider-error`
 
 - 测试类型：`e2e`
-- What：模型选择按配置分组、视觉模型选择和 provider 错误反馈。
-- Why：模型配置和视觉模型是智能任务能否启动的直接前提。
-- How：通过真实设置页配置模型，回到 Workbench 选择主模型和视觉模型，触发受控 provider 错误。
-- Oracle：候选按配置分组可搜索，视觉模型可单独选择；模型菜单打开后触发器 Tooltip 必须关闭，不能遮挡真实点击；provider 失败显示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
+- What：主模型选择按配置分组，并正确展示 provider 错误反馈。
+- Why：主模型配置是智能任务能否启动的直接前提。
+- How：通过真实设置页配置模型，回到 Workbench 选择主模型，触发受控 provider 错误。
+- Oracle：候选按配置分组且可搜索；模型菜单打开后触发器 Tooltip 必须关闭，不能遮挡真实点击；provider 失败显示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
 - Not：不评价模型回答质量。
 
-#### `vision-model-ai-filter`
+#### `main-model-image-input`
 
 - 测试类型：`e2e / live`
-- What：视觉模型选择弹层内的「手动选择 / AI 筛选」分段切换、AI 筛选的本地缓存读取与复用、真实主模型分析返回视觉模型、按配置分组展示、刷新与失败重试，以及无主模型时的禁用提示。
-- Why：AI 筛选是新的视觉模型选择路径，必须守住不产生 run / 会话副作用、真实分析返回视觉模型、按配置分组展示正确、缓存命中直接展示、刷新入口只在有主模型时可用。
-- How：通过真实设置页配置模型，回 Workbench 打开模型选择 → 视觉模型；先验证默认「手动选择」与跟随主模型行为；再切换到「AI 筛选」验证无主模型提示；选择主模型后点击「AI 分析」触发真实主模型分析，检查请求只携带模型名称列表、结果仅含视觉模型并按配置分组折叠展示（与手动选择一致）；点击结果项选中视觉模型；再次打开验证命中缓存不再发起请求；点击刷新重新分析并更新缓存；通过受控 provider 错误验证失败与重试。
-- Oracle：默认「手动选择」保持分组、搜索与跟随主模型；无主模型时「AI 筛选」展示提示且分析入口不可用；有主模型且缓存命中时切到「AI 筛选」直接展示缓存结果；未命中时点击「AI 分析」才发起请求，期间显示加载态；结果仅展示视觉模型并按配置分组；选中后关闭弹层；问号图标悬浮显示刷新消耗 token；分析请求不产生会话消息或 run 记录，对齐 `WB-COMPOSER-013`。
-- Not：不验证 AI 判断是否支持视觉的准确率；不评价模型回答质量。
+- What：图片附件只作为路径进入上下文，AI 可自主调用 `read_image` 将图片交给主模型。
+- Why：Workbench 不应预先识图，也不应保留独立视觉模型入口。
+- How：配置并选择一个主模型，附加本地图片后发送需要查看图片的任务。
+- Oracle：界面没有视觉模型选择器；消息持久化不含 Base64；运行中调用 `read_image` 后由主模型直接使用图片。
+- Not：不验证具体模型识图质量。
 
 #### `user-message-actions`
 

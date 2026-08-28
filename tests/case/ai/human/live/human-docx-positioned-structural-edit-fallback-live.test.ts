@@ -118,9 +118,7 @@ describe('ai human live backend', () => {
             .filter((value): value is string => typeof value === 'string')
           const structuralStarted = filterAiRunEventsByType(events, 'tool_call_started').filter(
             (event) =>
-              ['docx_content_edit', 'docx_format', 'docx_table_edit', 'docx_media_edit'].includes(
-                event.toolName
-              ) &&
+              ['docx_content_edit', 'docx_format', 'docx_table_edit'].includes(event.toolName) &&
               isDocxWriteInput(event.input) &&
               typeof event.input.sourcePath === 'string'
           )

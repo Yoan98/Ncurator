@@ -1,5 +1,4 @@
 import { z } from 'zod/v4'
-import { visualRecognitionRequestSchema } from '../../../../visualRecognition/schemas'
 
 const sourcePathSchema = z.string().trim().min(1)
 const pageNumberSchema = z.number().int().min(1)
@@ -35,10 +34,3 @@ export const pdfReadPagesSchema = z.object({
     })
   ])
 })
-
-export const pdfReadVisualsSchema = z
-  .object({
-    sourcePath: sourcePathSchema,
-    requests: z.array(visualRecognitionRequestSchema).min(1).max(10)
-  })
-  .strict()

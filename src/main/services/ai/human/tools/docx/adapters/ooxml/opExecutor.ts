@@ -106,6 +106,8 @@ const editableElement = (index: NodeIndex, id: string): Element => {
   if (node) return node.node
   const nested = index.editableNodesById.get(id)
   if (nested) return nested.node
+  const visual = index.visualNodesById.get(id)
+  if (visual) return visual.node
   throw new Error(`DOCX node not found: ${id}`)
 }
 
@@ -114,6 +116,8 @@ const ownerNodeId = (index: NodeIndex, id: string): string => {
   if (node) return node.nodeId
   const nested = index.editableNodesById.get(id)
   if (nested) return nested.ownerNodeId
+  const visual = index.visualNodesById.get(id)
+  if (visual) return visual.ownerNodeId
   throw new Error(`DOCX node owner not found: ${id}`)
 }
 
@@ -122,6 +126,8 @@ const partNameForNode = (index: NodeIndex, id: string): string => {
   if (root) return root.partName
   const nested = index.editableNodesById.get(id)
   if (nested) return nested.partName
+  const visual = index.visualNodesById.get(id)
+  if (visual) return visual.partName
   throw new Error(`DOCX node part not found: ${id}`)
 }
 
@@ -170,11 +176,22 @@ const applyMoveNode = async (
 ): Promise<{ buffer: Buffer; changedNodes: DocxChangedNode[] }> => {
   const bundle = await loadDocxBundle(buffer)
   const index = buildCurrentIndex(bundle)
-  const moving = editableElement(index, op.nodeId)
-  const anchor = editableElement(index, op.anchorNodeId)
-  const movingEntry = index.editableNodesById.get(op.nodeId) || index.nodesById.get(op.nodeId)
+  const movingVisual = index.visualNodesById.get(op.nodeId)
+  const anchorVisual = index.visualNodesById.get(op.anchorNodeId)
+  const moving = movingVisual
+    ? removableVisualNode(movingVisual.node)
+    : editableElement(index, op.nodeId)
+  const anchor = anchorVisual
+    ? removableVisualNode(anchorVisual.node)
+    : editableElement(index, op.anchorNodeId)
+  const movingEntry =
+    index.editableNodesById.get(op.nodeId) ||
+    index.nodesById.get(op.nodeId) ||
+    index.visualNodesById.get(op.nodeId)
   const anchorEntry =
-    index.editableNodesById.get(op.anchorNodeId) || index.nodesById.get(op.anchorNodeId)
+    index.editableNodesById.get(op.anchorNodeId) ||
+    index.nodesById.get(op.anchorNodeId) ||
+    index.visualNodesById.get(op.anchorNodeId)
   if (!movingEntry || !anchorEntry) throw new Error('move node identity is missing')
   if (movingEntry.partName !== anchorEntry.partName) {
     throw new Error(
@@ -189,14 +206,32 @@ const applyMoveNode = async (
   const sourceOwner = ownerNodeId(index, op.nodeId)
   const targetOwner = ownerNodeId(index, op.anchorNodeId)
   if (op.position === 'before' || op.position === 'after') {
+    if (movingVisual && anchor.localName === 'p') {
+      anchor.insertBefore(
+        moving,
+        op.position === 'before' ? firstChildElement(anchor, 'r') || null : null
+      )
+      return {
+        buffer: await writeDocumentXml(bundle),
+        changedNodes: [...new Set([sourceOwner, targetOwner])].map((id) =>
+          changedNode(index, id, 'replace_node')
+        )
+      }
+    }
     const parent = anchor.parentNode
     if (!parent || parent.nodeType !== 1) throw new Error('move anchor has no element parent')
     assertCompatibleInsertion(parent as Element, moving)
     parent.insertBefore(moving, op.position === 'before' ? anchor : anchor.nextSibling)
   } else {
     const container = anchor.localName === 'sdt' ? firstChildElement(anchor, 'sdtContent') : anchor
-    if (!container || !['tc', 'sdtContent', 'txbxContent', 'body'].includes(container.localName)) {
+    if (
+      !container ||
+      !['p', 'tc', 'sdtContent', 'txbxContent', 'body'].includes(container.localName)
+    ) {
       throw new Error(`node ${op.anchorNodeId} cannot contain child content`)
+    }
+    if (container.localName === 'p' && !movingVisual) {
+      throw new Error(`only visual nodes can move directly inside paragraph ${op.anchorNodeId}`)
     }
     assertCompatibleInsertion(container, moving)
     container.insertBefore(moving, op.position === 'inside_start' ? container.firstChild : null)
@@ -290,6 +325,9 @@ const contentDraftElement = (
     field.appendChild(run)
     return field
   }
+  if (draft.type === 'visual') {
+    throw new Error('visual drafts must be compiled to media operations before OOXML execution')
+  }
   const run = wordElement(doc, 'r')
   const br = wordElement(doc, 'br')
   if (draft.kind !== 'line') setWordAttr(br, 'type', draft.kind)
@@ -325,17 +363,18 @@ const assertCompatibleInsertion = (parent: Element, node: Element): void => {
   }
 }
 
-const hasVisualDescendant = (node: Element): boolean =>
-  ['drawing', 'pict', 'object'].some(
-    (name) => node.localName === name || descendantElements(node, name).length > 0
-  )
-
 const applyContentDomainOp = async (
   buffer: Buffer,
   op: ContentDomainOp
 ): Promise<{ buffer: Buffer; changedNodes: DocxChangedNode[] }> => {
   const bundle = await loadDocxBundle(buffer)
   const index = buildCurrentIndex(bundle)
+  if (
+    op.type === 'replace_node' &&
+    (op.node.type === 'visual' || index.visualNodesById.has(op.nodeId))
+  ) {
+    return await applyVisualNodeReplacement(bundle, index, op)
+  }
   if (op.type === 'replace_text') {
     const target = editableElement(index, op.nodeId)
     const owner = ownerNodeId(index, op.nodeId)
@@ -425,9 +464,6 @@ const applyContentDomainOp = async (
     bundle.zip,
     partNameForNode(index, op.nodeId)
   )
-  if (hasVisualDescendant(target) && !op.allowVisualLoss) {
-    throw new Error('target contains visual content; set allowVisualLoss=true to continue')
-  }
   if (op.type === 'delete_node') {
     const deletesRoot = index.nodesById.has(op.nodeId)
     target.parentNode?.removeChild(target)
@@ -511,9 +547,6 @@ const applyTableDomainOp = async (
   if (op.type === 'delete_table') {
     const table = editableElement(index, op.tableNodeId)
     if (table.localName !== 'tbl') throw new Error('delete_table target is not a table')
-    if (hasVisualDescendant(table) && !op.allowVisualLoss) {
-      throw new Error('target contains visual content; set allowVisualLoss=true to continue')
-    }
     table.parentNode?.removeChild(table)
     return {
       buffer: await writeDocumentXml(bundle),
@@ -524,9 +557,6 @@ const applyTableDomainOp = async (
   if (op.type === 'delete_row') {
     const row = editableElement(index, op.rowNodeId)
     if (row.localName !== 'tr') throw new Error('delete_row target is not a row')
-    if (hasVisualDescendant(row) && !op.allowVisualLoss) {
-      throw new Error('target contains visual content; set allowVisualLoss=true to continue')
-    }
     table = row.parentNode as Element
     if (childElements(table, 'tr').length <= 1) throw new Error('cannot delete the last table row')
     table.removeChild(row)
@@ -595,9 +625,6 @@ const applyTableDomainOp = async (
         if (cells.length <= 1) throw new Error('cannot delete the last table column')
         const cell = cells[columnIndex]
         if (!cell) throw new Error('delete_column index is out of range')
-        if (hasVisualDescendant(cell) && !op.allowVisualLoss) {
-          throw new Error('target contains visual content; set allowVisualLoss=true to continue')
-        }
         row.removeChild(cell)
       })
     } else {
@@ -611,9 +638,6 @@ const applyTableDomainOp = async (
         if (toColumn >= cells.length) throw new Error('merge_cells column is out of range')
         const keeper = cells[fromColumn]!
         const removedCells = cells.slice(fromColumn + 1, toColumn + 1)
-        if (removedCells.some(hasVisualDescendant) && !op.allowVisualLoss) {
-          throw new Error('target contains visual content; set allowVisualLoss=true to continue')
-        }
         const properties = ensureProperties(keeper, 'tcPr')
         if (toColumn > fromColumn) setValProperty(properties, 'gridSpan', toColumn - fromColumn + 1)
         if (toRow > fromRow)
@@ -1169,28 +1193,167 @@ const drawingRun = (
 
 const visualElement = (
   index: NodeIndex,
-  visualId: string
+  nodeId: string
 ): {
-  descriptor: NodeIndex['visualsById'] extends Map<string, infer TValue> ? TValue : never
+  descriptor: NodeIndex['visualNodesById'] extends Map<string, infer TValue> ? TValue : never
   node: Element
 } => {
-  const descriptor = index.visualsById.get(visualId)
-  if (!descriptor) throw new Error(`media not found: ${visualId}`)
-  if (!descriptor.relationshipId) throw new Error(`media has no editable relationship: ${visualId}`)
-  const related = descendantElements(
-    index.nodesById.get(descriptor.ownerNodeId)?.node ||
-      index.editableNodesById.get(descriptor.ownerNodeId)?.node ||
-      (() => {
-        throw new Error(`media owner not found: ${visualId}`)
-      })(),
-    'blip'
-  ).find((node) => attrByLocalName(node, 'embed') === descriptor.relationshipId)
-  if (!related) throw new Error(`media drawing not found: ${visualId}`)
-  let node: Element | null = related
-  while (node && !['drawing', 'pict', 'object'].includes(node.localName))
-    node = node.parentNode as Element | null
-  if (!node) throw new Error(`media container not found: ${visualId}`)
-  return { descriptor, node }
+  const descriptor = index.visualNodesById.get(nodeId)
+  if (!descriptor) throw new Error(`media not found: ${nodeId}`)
+  return { descriptor, node: descriptor.node }
+}
+
+type VisualDraft = Extract<ContentDraft, { type: 'visual' }>
+
+const createImageRunForPart = async (
+  bundle: Awaited<ReturnType<typeof loadDocxBundle>>,
+  partName: string,
+  targetDocument: Document,
+  visual: VisualDraft
+): Promise<Element> => {
+  if (!visual.imagePath) throw new Error('节点类型替换为 visual 时必须提供 imagePath')
+  const image = await readImage(visual.imagePath)
+  const relationships = await partRelationships(bundle.zip, partName)
+  const relationshipId = nextRelationshipId(relationships)
+  const target = nextImageTarget(bundle.zip, image.extension)
+  appendRelationship(relationships, relationshipId, target, IMAGE_REL_TYPE)
+  await ensureImageContentType(bundle.zip, image.extension, image.contentType)
+  bundle.zip.file(path.posix.join('word', target), image.bytes)
+  persistPartRelationships(bundle.zip, partName, relationships)
+  const drawingIds = storyDocuments(bundle)
+    .flatMap((document) => descendantElements(document.documentElement, 'docPr'))
+    .map((node) => Number(node.getAttribute('id') || '0'))
+    .filter(Number.isFinite)
+  return drawingRun(
+    targetDocument,
+    relationshipId,
+    visual.widthCm || 6,
+    visual.heightCm || 4,
+    visual.altText || '',
+    Math.max(0, ...drawingIds) + 1
+  )
+}
+
+const removableVisualNode = (node: Element): Element =>
+  node.parentNode?.nodeType === 1 && (node.parentNode as Element).localName === 'r'
+    ? (node.parentNode as Element)
+    : node
+
+const replaceExistingImageBytes = async (
+  bundle: Awaited<ReturnType<typeof loadDocxBundle>>,
+  partName: string,
+  relationshipId: string,
+  imagePath: string
+): Promise<void> => {
+  const image = await readImage(imagePath)
+  const relationships = await partRelationships(bundle.zip, partName)
+  const relation = childElements(relationships.documentElement, 'Relationship').find(
+    (node) => node.getAttribute('Id') === relationshipId
+  )
+  if (!relation) throw new Error(`image relationship not found: ${relationshipId}`)
+  const nextTarget = nextImageTarget(bundle.zip, image.extension)
+  relation.setAttribute('Target', nextTarget)
+  await ensureImageContentType(bundle.zip, image.extension, image.contentType)
+  bundle.zip.file(path.posix.join('word', nextTarget), image.bytes)
+  persistPartRelationships(bundle.zip, partName, relationships)
+}
+
+const applyVisualNodeReplacement = async (
+  bundle: Awaited<ReturnType<typeof loadDocxBundle>>,
+  index: NodeIndex,
+  op: Extract<ContentDomainOp, { type: 'replace_node' }>
+): Promise<{ buffer: Buffer; changedNodes: DocxChangedNode[] }> => {
+  const existingVisual = index.visualNodesById.get(op.nodeId)
+  if (existingVisual) {
+    const current = visualElement(index, op.nodeId)
+    if (op.node.type === 'visual') {
+      if (op.node.imagePath) {
+        if (existingVisual.kind === 'image' && existingVisual.relationshipId) {
+          await replaceExistingImageBytes(
+            bundle,
+            existingVisual.partName,
+            existingVisual.relationshipId,
+            op.node.imagePath
+          )
+        } else {
+          const replacement = await createImageRunForPart(
+            bundle,
+            existingVisual.partName,
+            current.node.ownerDocument,
+            op.node
+          )
+          const removable = removableVisualNode(current.node)
+          removable.parentNode?.replaceChild(replacement, removable)
+          if (existingVisual.relationshipId) {
+            await removeUnusedRelationship(
+              bundle,
+              existingVisual.partName,
+              existingVisual.relationshipId
+            )
+          }
+          return {
+            buffer: await writeDocumentXml(bundle),
+            changedNodes: [changedNode(index, existingVisual.ownerNodeId, 'replace_node')]
+          }
+        }
+      }
+      patchImageProperties(current.node, op.node.widthCm, op.node.heightCm, op.node.altText)
+      return {
+        buffer: await writeDocumentXml(bundle),
+        changedNodes: [changedNode(index, existingVisual.ownerNodeId, 'replace_node')]
+      }
+    }
+
+    const relationships = await createRelationshipWriter(bundle.zip, existingVisual.partName)
+    const replacement = contentDraftElement(current.node.ownerDocument, op.node, relationships)
+    const removable = removableVisualNode(current.node)
+    const parent = removable.parentNode
+    if (!parent || parent.nodeType !== 1) throw new Error('visual replacement target has no parent')
+    if (replacement.localName === 'p' && (parent as Element).localName === 'p') {
+      const paragraph = parent as Element
+      const paragraphParent = paragraph.parentNode
+      if (!paragraphParent) throw new Error('visual paragraph has no parent')
+      paragraphParent.replaceChild(replacement, paragraph)
+    } else {
+      assertCompatibleInsertion(parent as Element, replacement)
+      parent.replaceChild(replacement, removable)
+    }
+    await relationships.persist()
+    if (existingVisual.relationshipId) {
+      await removeUnusedRelationship(bundle, existingVisual.partName, existingVisual.relationshipId)
+    }
+    return {
+      buffer: await writeDocumentXml(bundle),
+      changedNodes: [changedNode(index, existingVisual.ownerNodeId, 'replace_node')]
+    }
+  }
+
+  if (op.node.type !== 'visual') throw new Error(`replacement target not found: ${op.nodeId}`)
+  const target = editableElement(index, op.nodeId)
+  const partName = partNameForNode(index, op.nodeId)
+  const replacementRun = await createImageRunForPart(
+    bundle,
+    partName,
+    target.ownerDocument,
+    op.node
+  )
+  const parent = target.parentNode
+  if (!parent || parent.nodeType !== 1) throw new Error('replacement target has no parent')
+  if (target.localName === 'p') {
+    const paragraph = wordElement(target.ownerDocument, 'p')
+    const properties = firstChildElement(target, 'pPr')
+    if (properties) paragraph.appendChild(properties.cloneNode(true))
+    paragraph.appendChild(replacementRun)
+    parent.replaceChild(paragraph, target)
+  } else if ((parent as Element).localName === 'p') {
+    parent.replaceChild(replacementRun, target)
+  } else {
+    throw new Error(`node ${op.nodeId} cannot be replaced by an inline visual`)
+  }
+  return {
+    buffer: await writeDocumentXml(bundle),
+    changedNodes: [changedNode(index, ownerNodeId(index, op.nodeId), 'replace_node')]
+  }
 }
 
 const patchImageProperties = (
@@ -1221,12 +1384,12 @@ const removeUnusedRelationship = async (
   relationshipId: string
 ): Promise<void> => {
   const partDocument = documentForPart(bundle, partName)
-  if (
-    descendantElements(partDocument.documentElement, 'blip').some(
-      (node) => attrByLocalName(node, 'embed') === relationshipId
-    )
-  )
-    return
+  const isReferenced = (node: Element): boolean =>
+    ['embed', 'link', 'id', 'dm'].some(
+      (attributeName) => attrByLocalName(node, attributeName) === relationshipId
+    ) ||
+    childElements(node).some(isReferenced)
+  if (isReferenced(partDocument.documentElement)) return
   const relationships = await partRelationships(bundle.zip, partName)
   const relation = childElements(relationships.documentElement, 'Relationship').find(
     (node) => node.getAttribute('Id') === relationshipId
@@ -1296,7 +1459,7 @@ const applyMediaDomainOp = async (
     }
   }
 
-  const visual = visualElement(index, op.visualId)
+  const visual = visualElement(index, op.nodeId)
   const partName = visual.descriptor.partName
   if (op.type === 'replace_image') {
     const image = await readImage(op.imagePath)
@@ -1312,15 +1475,10 @@ const applyMediaDomainOp = async (
     bundle.zip.file(path.posix.join('word', nextTarget), image.bytes)
     persistPartRelationships(bundle.zip, partName, relationships)
   } else if (op.type === 'delete_media') {
-    const removable =
-      visual.node.parentNode?.nodeType === 1 &&
-      (visual.node.parentNode as Element).localName === 'r'
-        ? (visual.node.parentNode as Element)
-        : visual.node
+    const removable = removableVisualNode(visual.node)
     removable.parentNode?.removeChild(removable)
     const relationshipId = visual.descriptor.relationshipId
-    if (!relationshipId) throw new Error(`media has no editable relationship: ${op.visualId}`)
-    await removeUnusedRelationship(bundle, partName, relationshipId)
+    if (relationshipId) await removeUnusedRelationship(bundle, partName, relationshipId)
   } else {
     patchImageProperties(visual.node, op.widthCm, op.heightCm, op.altText)
   }

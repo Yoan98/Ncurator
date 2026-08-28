@@ -13,12 +13,11 @@ import {
   docxReadNodesSchema
 } from '../../../../src/main/services/ai/human/tools/docx/schemas'
 
-const READ_TOOLS = ['docx_read_outline', 'docx_search', 'docx_read_nodes', 'docx_read_visuals']
+const READ_TOOLS = ['docx_read_outline', 'docx_search', 'docx_read_nodes']
 const WRITE_TOOLS = [
   'docx_content_edit',
   'docx_format',
   'docx_table_edit',
-  'docx_media_edit',
   'docx_comments_revisions'
 ]
 
@@ -30,7 +29,7 @@ describe('ai unit docx tool contract', () => {
     expect(DOCX_TOOL_SPECS.map((spec) => spec.name)).toEqual([...READ_TOOLS, ...WRITE_TOOLS])
     expect(SKILL_DEFINITIONS['docx-read'].toolNames).toEqual(READ_TOOLS)
     expect(SKILL_DEFINITIONS['docx-write'].toolNames).toEqual(WRITE_TOOLS)
-    expect(DOCX_TOOL_SPECS).toHaveLength(9)
+    expect(DOCX_TOOL_SPECS).toHaveLength(7)
     expect(DOCX_TOOL_SPECS.length).toBeLessThan(HUMAN_MAX_ACTIVE_TOOLS)
   })
 

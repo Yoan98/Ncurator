@@ -11,7 +11,6 @@ import {
   DOCX_OUTLINE_SEGMENT_MAP_MAX_CHARS,
   DOCX_SEARCH_CONTEXT_NODE_COUNT,
   DOCX_SEARCH_MAX_MATCHES,
-  DOCX_SEARCH_NEIGHBOR_PREVIEW_CHARS,
   DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS
 } from './constants'
 
@@ -54,9 +53,12 @@ const visualNode = z.lazy(() =>
   z
     .object({
       type: z.literal('visual'),
-      visualId: z.string(),
+      nodeId: z.string(),
       kind: visualKind,
       altText: z.string().optional(),
+      imagePath: z.string().min(1),
+      widthCm: z.number().positive().optional(),
+      heightCm: z.number().positive().optional(),
       children: z.array(visualContentNode).optional()
     })
     .strict()
@@ -299,17 +301,16 @@ export const docxOutlineOutputSchema = z
     fromNodeIndex: z.number().int().min(0),
     toNodeIndex: z.number().int().min(0),
     totalRootCount: z.number().int().min(0),
-    segments: z
-      .array(
-        z
-          .object({
-            story: docxOutlineStoryOutputSchema,
-            fromNodeIndex: z.number().int().min(0),
-            toNodeIndex: z.number().int().min(0),
-            textMap: z.string().max(DOCX_OUTLINE_SEGMENT_MAP_MAX_CHARS)
-          })
-          .strict()
-      )
+    segments: z.array(
+      z
+        .object({
+          story: docxOutlineStoryOutputSchema,
+          fromNodeIndex: z.number().int().min(0),
+          toNodeIndex: z.number().int().min(0),
+          textMap: z.string().max(DOCX_OUTLINE_SEGMENT_MAP_MAX_CHARS)
+        })
+        .strict()
+    )
   })
   .strict()
 
@@ -320,17 +321,9 @@ const docxSearchNodeTypeOutputSchema = z.enum([
   'content_control',
   'revision'
 ])
-const docxSearchNeighborOutputSchema = z
-  .object({
-    nodeId: z.string(),
-    nodeIndex: z.number().int(),
-    type: docxSearchNodeTypeOutputSchema,
-    textPreview: z.string().max(DOCX_SEARCH_NEIGHBOR_PREVIEW_CHARS)
-  })
-  .strict()
-
 export const docxSearchOutputSchema = z
   .object({
+    sourcePath: z.string(),
     totalMatchCount: z.number().int().min(0),
     matches: z
       .array(
@@ -343,12 +336,13 @@ export const docxSearchOutputSchema = z
             matchText: z.string(),
             textContext: z.string().max(DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS),
             tableNodeId: z.string().optional(),
-            before: z
-              .array(docxSearchNeighborOutputSchema)
+            node: docxReadRootNodeOutputSchema,
+            beforeNodes: z
+              .array(docxReadRootNodeOutputSchema)
               .max(DOCX_SEARCH_CONTEXT_NODE_COUNT)
               .optional(),
-            after: z
-              .array(docxSearchNeighborOutputSchema)
+            afterNodes: z
+              .array(docxReadRootNodeOutputSchema)
               .max(DOCX_SEARCH_CONTEXT_NODE_COUNT)
               .optional()
           })
@@ -366,17 +360,5 @@ export const docxReadOutputSchema = docxBaseOutputSchema.extend({
 export const docxMutationOutputSchema = z
   .object({
     createdIds: z.array(z.string().min(1)).min(1).optional()
-  })
-  .strict()
-
-export const docxReadVisualsOutputSchema = z
-  .object({
-    sourcePath: z.string(),
-    results: z.array(
-      z.union([
-        z.object({ visualId: z.string(), text: z.string().min(1) }).strict(),
-        z.object({ visualId: z.string(), error: z.string().min(1) }).strict()
-      ])
-    )
   })
   .strict()

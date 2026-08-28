@@ -205,7 +205,7 @@
 
 - 系统行为：每个真实会话都在 SQLite 保存独立的 Composer 和右侧资源工作台快照；未发送的新对话使用独立 `__draft__` 快照，首次发送创建真实会话时与浏览器标签一起事务提升。正常切换、离开页面和退出应用前强制保存，重启后恢复最后活动会话。异步 AI、搜索和浏览器事件必须按 `sessionId / ownerId` 更新所属会话，不能覆盖当前其他会话。
 - 验收：
-  - `WB-SESSION-008-AC1` A/B 会话可分别保存并恢复工作区、模式、AI 推进偏好、执行权限、主模型、视觉模型、输入文本、内容节点、引用、附件和附件桶，反复切换互不串联。旧快照缺少执行权限时按“审核”恢复。
+  - `WB-SESSION-008-AC1` A/B 会话可分别保存并恢复工作区、模式、AI 推进偏好、执行权限、主模型、输入文本、内容节点、引用、附件和附件桶，反复切换互不串联。旧快照缺少执行权限时按“审核”恢复。
   - `WB-SESSION-008-AC2` A/B 会话可分别保存并恢复搜索结果、资源标签、活动标签和面板展开状态；后台返回只更新事件所属会话。
   - `WB-SESSION-008-AC3` 正常退出并使用同一用户目录重启后，恢复最后活动会话及其完整 UI 状态；异常崩溃最多丢失最后一个输入防抖窗口。
   - `WB-SESSION-008-AC4` 未发送草稿不会创建真实会话；首次发送时草稿 UI 状态和 `__draft__` 浏览器标签在同一事务中转移到新会话。
@@ -269,7 +269,7 @@
 
 #### WB-COMPOSER-007 模型、工作区、AI 推进偏好与执行权限选择
 
-- 系统行为：输入区顶部靠左展示工作区选择按钮，点击后在按钮右侧弹出横向工作区列表，点击候选即确认选择；无工作区候选时，弹层提供前往设置页工作空间配置的入口；输入区底部展示当前模式和模型；模型与工作区入口都有图标提示；模型选择支持主模型和视觉模型，模型列表按用户配置项分组并支持搜索；视觉模型未单独选择时跟随主模型。智能模式额外展示 AI 推进偏好，支持“默认”“本地资料·宽松”“本地资料·严谨”，并展示紧凑执行权限菜单：默认“审核”使用与其他 Composer 模式图标一致的中性灰盾牌图标，标题下显示“涉及到风险操作需要你审核”；可切换“完全访问”，使用橙色警示图标，标题下显示“不受限制的操作你的电脑”；搜索模式不展示这两个智能模式入口。模式、AI 推进偏好、执行权限、主模型、视觉模型和工作区进入当前会话的 SQLite UI 快照，不使用全局浏览器偏好缓存。
+- 系统行为：输入区顶部靠左展示工作区选择按钮，点击后在按钮右侧弹出横向工作区列表，点击候选即确认选择；无工作区候选时，弹层提供前往设置页工作空间配置的入口；输入区底部展示当前模式和主模型；模型与工作区入口都有图标提示；模型列表按用户配置项分组并支持搜索。智能模式额外展示 AI 推进偏好，支持“默认”“本地资料·宽松”“本地资料·严谨”，并展示紧凑执行权限菜单：默认“审核”使用与其他 Composer 模式图标一致的中性灰盾牌图标，标题下显示“涉及到风险操作需要你审核”；可切换“完全访问”，使用橙色警示图标，标题下显示“不受限制的操作你的电脑”；搜索模式不展示这两个智能模式入口。模式、AI 推进偏好、执行权限、主模型和工作区进入当前会话的 SQLite UI 快照，不使用全局浏览器偏好缓存。
 - 验收：
   - `WB-COMPOSER-007-AC1` 模型列表展开后可按模型名称搜索候选。
   - `WB-COMPOSER-007-AC2` 用户切换模式、AI 推进偏好、执行权限、模型或工作区后，切回该会话或重启应用时恢复该会话自己的 SQLite 快照。
@@ -281,17 +281,13 @@
   - `WB-COMPOSER-007-AC8` 发送智能任务时，当前 AI 推进偏好会进入 Main 侧 AI run 上下文并影响资料使用边界。
   - `WB-COMPOSER-007-AC9` 新会话默认“审核”；发送时的执行权限写入本次 AI run，发送后改变 Composer 选择不得影响已启动的 run。
 
-#### WB-COMPOSER-013 视觉模型 AI 筛选
+#### WB-COMPOSER-013 主模型图片输入
 
-- 系统行为：选择视觉模型的弹层内提供「手动选择」与「AI 筛选」两个分段标签页，默认「手动选择」（保持现有分组、搜索、跟随主模型行为）。切到「AI 筛选」后先读取本地缓存的分析结果：命中则直接展示，未命中才展示「AI 分析」入口，不会自动发起请求；点击「AI 分析」或刷新图标时，用用户当前选择的主模型发起一次独立的结构化分析请求（与 human run、工具调用、会话记录无关，不写入任何 run 或消息），只向主模型发送候选模型名称列表，由主模型返回支持视觉输入的模型名称；结果按配置分组展示（与手动选择一致的分组折叠交互），点击即可选中该视觉模型。分析结果按候选模型名称集合缓存到本地（localStorage），模型列表不变时复用缓存，仅点击刷新才重新分析并更新缓存。标题旁提供问号图标，悬浮说明「点击刷新会消耗少量 token」。未选择主模型时 AI 筛选不可用并提示先选择主模型。
+- 系统行为：不单独配置视觉模型。AI 调用内置 `read_image` 后，图片直接加入当前主模型的下一次多模态请求；主模型不支持图片时展示 provider 原始错误。
 - 验收：
-  - `WB-COMPOSER-013-AC1` 视觉模型弹层存在「手动选择」与「AI 筛选」两个分段标签，默认选中「手动选择」且原有分组列表、搜索、跟随主模型行为保持不变。
-  - `WB-COMPOSER-013-AC2` 切到「AI 筛选」且未选择主模型时，展示「请先选择主模型」提示，分析入口不可用，不发起请求。
-  - `WB-COMPOSER-013-AC3` 切到「AI 筛选」且已选择主模型时，先读取本地缓存：命中则直接展示缓存结果；未命中则展示「AI 分析」入口，点击后发起请求，请求期间展示加载态并禁用刷新。
-  - `WB-COMPOSER-013-AC4` 分析结果仅展示被判定支持视觉输入的模型，按配置分组折叠展示，与手动选择的分组交互一致。
-  - `WB-COMPOSER-013-AC5` 点击结果项选中该视觉模型并关闭弹层；点击刷新会重新发起分析并更新缓存结果；候选模型列表变化时缓存失效并重新分析。
-  - `WB-COMPOSER-013-AC6` 问号图标悬浮显示刷新消耗 token 的说明。
-  - `WB-COMPOSER-013-AC7` AI 筛选的分析请求独立于 human run，不产生会话消息、run 记录或技能状态变更；分析失败时展示错误并可重试。
+  - `WB-COMPOSER-013-AC1` 模型选择器只展示主模型，不展示视觉模型、跟随主模型或 AI 筛选入口。
+  - `WB-COMPOSER-013-AC2` 用户附件和 `@` 图片只向 AI 提供路径，不在发送前自动识别。
+  - `WB-COMPOSER-013-AC3` 图片路径和元数据可持久化，Base64 不得进入 SQLite 会话数据。
 
 #### WB-COMPOSER-011 使用帮助入口
 
@@ -504,16 +500,16 @@
   - `WB-APPLY-002-AC4` 普通文本 `edit` 的每个 `oldText` 必须唯一且互不重叠；`replaceAll` 替换一个 `oldText` 的全部非重叠精确匹配；失败时文件保持原样。
   - `WB-APPLY-002-AC5` 同一次 AI Run 对同一个 pptx 的多次编辑只生成一条修改记录；PPT Diff 固定比较本 Run 第一次接触文件时的状态和 Run 完成后的最终状态，工具调用只用于识别页面、元素和真实移动，不直接累加操作次数。
   - `WB-APPLY-002-AC6` 创建或修改 `xlsx` 后，正式路径立即包含最终净工作簿并生成一条修改记录；同一次 AI Run 对同一路径连续编辑时保持首次写入前基线，不重复生成记录。
-  - `WB-APPLY-002-AC7` DOCX 写作技能一次加载 4 个读取工具和 5 个写入工具；`docx_content_edit`、`docx_format`、`docx_table_edit`、`docx_media_edit`、`docx_comments_revisions` 每次调用只接受一个 discriminated operation，不接受批量 action 数组。目标不存在时可用 `docx_content_edit.insert_nodes(document_end)` 或 `docx_table_edit.create_table(document_end)` 创建文档。
+  - `WB-APPLY-002-AC7` DOCX 写作技能使用 `docx_content_edit` 统一处理正文和 visual 节点；支持 `replace_text`、`insert_nodes`、`replace_node`、`delete_node`、`move_node`，不再提供独立媒体工具。
   - `WB-APPLY-002-AC7-1` 所有文件工具（docx / ppt / excel / pdf / text-file / image）的 `sourcePath`、`outputPath`、`path` 必须是本机绝对路径；系统不做任何路径拼接，相对路径直接返回错误，AI 需自行改为绝对路径后再调用。
   - `WB-APPLY-002-AC8` DOCX 编辑定位统一使用会话内稳定 `nodeId`；不存在 block、blockId、cellBlockId、wrapperPath 或 lineageId 协议。outline segment 的 `nodeIndex` 范围只表示当前临时顺序，重新打开或编辑后允许重新分段。
   - `WB-APPLY-002-AC9` DOCX 详细读取使用严格递归语义树，按真实顺序保留 `paragraph / run / text / tab / break / hyperlink / content_control / revision / field / table / table_row / table_cell / visual` 的归属关系；详细树中的正文只存在于叶子 `text` 节点，不重复返回 paragraph、table 或 cell 的派生文本和行列统计。
-  - `WB-APPLY-002-AC10` DOCX visual 类型固定为 `image / chart / diagram / shape / embedded_object`。详细读取返回 visualId；outline 将视觉根节点独立分段，并在 `textMap` 中提供视觉类型以及 DrawingML/VML 的描述、标题、替代文字或名称锚点。
-  - `WB-APPLY-002-AC11` `docx_read_visuals` 接受 1 至 10 个 visualId 和识别要求，按输入顺序逐项返回识别文字或错误；结果不写入正文搜索索引，`.doc` 不支持视觉读取。
+  - `WB-APPLY-002-AC10` DOCX visual 类型固定为 `image / chart / diagram / shape / embedded_object`，与普通节点统一使用 nodeId；读取结果包含可供 `read_image` 使用的本地图片路径。
+  - `WB-APPLY-002-AC11` `read_image` 一次接受 1 至 10 个图片路径，将图片按顺序加入主模型上下文，不调用独立视觉模型。
   - `WB-APPLY-002-AC12` `docx_content_edit` 使用浅层节点构造和最小 patch：支持 `replace_text / insert_nodes / replace_node / delete_node / move_node`，不提供 `replace_content` 或 `replace_children`，也不要求 AI 重建完整递归树。
   - `WB-APPLY-002-AC13` `docx_format` 分别支持 text、paragraph、table、row、cell 和 section 的直接格式，另支持重置格式、命名样式 CRUD、应用命名样式和编号。`format_text` 使用最多 20 个 `{ nodeId, text? }` target，其余局部格式 operation 使用最多 20 个 `nodeIds`；同次调用共享一个 patch、拒绝重复 ID，并在全部目标预校验后原子提交。patch 类型或任一目标不匹配时整次写入失败；`update_named_style` 修改全局样式定义。
   - `WB-APPLY-002-AC14` `replace_text` 只在指定 `nodeId` 子树内替换确定原文，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual；原位保留未修改 run、段落格式和视觉节点。
-  - `WB-APPLY-002-AC15` 替换或删除节点、删除表格行列或合并单元格时，如被移除区域存在 visual，必须明确传 `allowVisualLoss:true`，否则保存前失败。表格读写坐标统一从 1 开始。失败不得推进 WorkingPackage，也不得产生部分结果。
+  - `WB-APPLY-002-AC15` visual 作为普通节点按 nodeId 删除或替换，删除时自动清理无引用媒体。表格读写坐标统一从 1 开始。失败不得推进 WorkingPackage，也不得产生部分结果。
   - `WB-APPLY-002-AC16` `docx_read_outline` 使用 `fromPercent`/`toPercent` 按根节点比例返回 segment map，`0–100` 返回全文结构，并返回 `fromPercent/toPercent/fromNodeIndex/toNodeIndex/totalRootCount`。segment 只包含 `story/fromNodeIndex/toNodeIndex/textMap`，不返回 nodeId；`textMap` 最多 360 个 Unicode 字符，由结构锚点、TF-IDF 动态关键词和 TF-IDF 质心 + MMR 原文代表句组成。所有 DOCX 使用相同分段算法，每个 story 根节点无遗漏且不重叠。`docx_read_nodes` 返回 story 递归内容树，一次最多读取 20 个 nodeId 或连续 50 个根节点。未支持 OOXML 投影为 opaque，局部写入必须原样保留；content control 是可定位容器，空容器可用 `insert_nodes inside_start/inside_end` 写入。
   - `WB-APPLY-002-AC16-2` `docx_search` 只支持 literal/regex 并搜索完整原文，不使用 DOCX embedding、向量索引或硬编码别名。每个实际出现位置为一个 match，Worker 统计全部命中但只构造和返回前 10 个；`includeContext:true` 固定返回同一 story 前后各 2 个节点预览。无效 regex，以及任一过期、未知或不可搜索的 scope nodeId，均返回 `invalid_input`。
   - `WB-APPLY-002-AC16-1` 每条工具结果独立判断大小：不超过 32,000 字符时完整进入模型上下文，超过时完整落盘并返回最多 8,000 字符的 head；截断信封只包含 `truncated/filePath/totalChars/head`，同一 dispatch 不设置批次总量限制。
@@ -687,7 +683,7 @@
 
 #### ST-FORM-001 新增与编辑配置
 
-- 系统行为：新增打开空表单，编辑打开预填表单。字段包括名称、任务提示词、执行时间（每天 / 每周 + 星期 + 时间点）、工作空间、主模型、视觉模型（可选，不选跟随主模型）、AI 推进偏好和执行权限。保存前校验必填项；模型选择复用现有大模型配置与远端模型列表。
+- 系统行为：新增打开空表单，编辑打开预填表单。字段包括名称、任务提示词、执行时间（每天 / 每周 + 星期 + 时间点）、工作空间、主模型、AI 推进偏好和执行权限。保存前校验必填项；模型选择复用现有大模型配置与远端模型列表。
 - 验收：
   - `ST-FORM-001-AC1` 新增时可填写全部字段并保存，编辑时带出当前配置值。
   - `ST-FORM-001-AC2` 名称、任务提示词、执行时间、工作空间或主模型缺失时，保存被拦截并给出明确提示。
@@ -710,7 +706,7 @@
 
 #### ST-RUN-001 到点触发
 
-- 系统行为：程序运行期间，已启用任务到达调度时间时，在其配置的工作空间下创建新会话并发送任务提示词，使用配置的主模型、视觉模型、偏好和执行权限；不操作用户当前页面。工作空间不可用（未绑定目录）或模型失效时跳过本次并推进到下一调度时间。
+- 系统行为：程序运行期间，已启用任务到达调度时间时，在其配置的工作空间下创建新会话并发送任务提示词，使用配置的主模型、偏好和执行权限；不操作用户当前页面。工作空间不可用（未绑定目录）或模型失效时跳过本次并推进到下一调度时间。
 - 验收：
   - `ST-RUN-001-AC1` 到点后在工作空间下创建新会话并发送任务消息，新会话标题取任务提示词前 20 个字符。
   - `ST-RUN-001-AC2` 触发过程不改变用户当前正在查看的会话或输入草稿。

@@ -104,10 +104,7 @@ type ChatRunServiceDeps = {
 }
 
 const jieba = Jieba.withDict(dict)
-const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = [
-  'running',
-  'waiting_approval'
-]
+const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = ['running', 'waiting_approval']
 const INTERRUPTED_RUN_MESSAGE = '运行已中断，请重新发送消息。'
 const PARTIAL_SAVE_DELAY_MS = 500
 
@@ -116,8 +113,7 @@ const normalizeAiPreference = (value: unknown): AiPreference =>
 
 const normalizeExecutionPermission = (
   value: AiExecutionPermission | undefined
-): AiExecutionPermission =>
-  value === 'full_access' ? 'full_access' : 'review'
+): AiExecutionPermission => (value === 'full_access' ? 'full_access' : 'review')
 
 const appendArtifact = (artifacts: AiArtifactRef[] | undefined, artifact: AiArtifactRef) => {
   const current = artifacts || []
@@ -615,7 +611,6 @@ export class ChatRunService {
       workspace: normalizedWorkspace,
       modelName,
       mainModel,
-      visionModel: payload.visionModel || undefined,
       preference,
       executionPermission,
       partialAnswer: '',
@@ -698,7 +693,6 @@ export class ChatRunService {
           selectedReferences: run.selectedReferences,
           attachments: run.attachments,
           mainModel: run.mainModel,
-          visionModel: run.visionModel,
           preference: run.preference,
           executionPermission: run.executionPermission,
           workspace: run.workspace

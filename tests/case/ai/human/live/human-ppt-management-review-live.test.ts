@@ -17,7 +17,9 @@ import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUt
 const FILE_NAME = 'management-review.pptx'
 
 const hashFile = async (filePath: string): Promise<string> =>
-  createHash('sha256').update(await fs.readFile(filePath)).digest('hex')
+  createHash('sha256')
+    .update(await fs.readFile(filePath))
+    .digest('hex')
 
 const slideHtml = (title: string, body: string, color: string): string =>
   `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#F8FAFC">
@@ -37,8 +39,18 @@ const buildFixture = async (runtime: Parameters<typeof createPptToolHarness>[0])
   await setup.invoke('ppt_edit', {
     sourcePath: path.join(runtime.workspaceRoot, FILE_NAME),
     actions: [
-      { type: 'insert_slide', html: slideHtml('Q2 management review', 'Cover page. Do not change.', '#17324D') },
-      { type: 'insert_slide', html: slideHtml('Operating metrics', 'Revenue and retention are on plan. Do not change.', '#0F766E') },
+      {
+        type: 'insert_slide',
+        html: slideHtml('Q2 management review', 'Cover page. Do not change.', '#17324D')
+      },
+      {
+        type: 'insert_slide',
+        html: slideHtml(
+          'Operating metrics',
+          'Revenue and retention are on plan. Do not change.',
+          '#0F766E'
+        )
+      },
       { type: 'insert_slide', html: chartHtml },
       {
         type: 'insert_slide',
@@ -48,7 +60,14 @@ const buildFixture = async (runtime: Parameters<typeof createPptToolHarness>[0])
           '#B45309'
         )
       },
-      { type: 'insert_slide', html: slideHtml('Action plan', 'Finish integration by July 8 and report daily status.', '#7C3AED') }
+      {
+        type: 'insert_slide',
+        html: slideHtml(
+          'Action plan',
+          'Finish integration by July 8 and report daily status.',
+          '#7C3AED'
+        )
+      }
     ]
   })
 }
@@ -62,7 +81,6 @@ describe('ai human live ppt backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        requiresVisionModel: true,
         description: '审阅管理层汇报 PPT 并以对话方式给出风险简报，且不修改 PPT。',
         fixtures: [],
         runMode: 'single',
@@ -117,7 +135,9 @@ describe('ai human live ppt backend', () => {
           await buildFixture(runtime)
           const sourcePath = path.join(runtime.workspaceRoot, FILE_NAME)
           const before = await loadPresentation(new Uint8Array(await fs.readFile(sourcePath)))
-          const protectedTexts = getSlides(before).slice(0, 2).map((slide) => getSlideText(slide))
+          const protectedTexts = getSlides(before)
+            .slice(0, 2)
+            .map((slide) => getSlideText(slide))
           const eventOffset = runtime.eventCollector.snapshot().length
           const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
@@ -134,7 +154,9 @@ describe('ai human live ppt backend', () => {
               (count, slide) => count + findShapesOutsideCanvas(slide, presentation).length,
               0
             ),
-            validationErrors: validatePresentation(presentation).filter((issue) => issue.severity === 'error').length
+            validationErrors: validatePresentation(presentation).filter(
+              (issue) => issue.severity === 'error'
+            ).length
           }
         },
         assert: async (result, runtime) => {
@@ -144,7 +166,7 @@ describe('ai human live ppt backend', () => {
             (artifact) => artifact.kind === 'file' && artifact.capability === 'ppt'
           )
           runtime.assertThat(
-              result.output.status === 'completed' &&
+            result.output.status === 'completed' &&
               toolNames.some((name) => name.startsWith('ppt_read') || name === 'ppt_search') &&
               toolNames.includes('ppt_edit') &&
               result.protectedTexts.every((text) => result.texts.includes(text)) &&

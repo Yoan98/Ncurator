@@ -14,7 +14,6 @@ import {
   selectWorkbenchAiPreference,
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
-  selectWorkbenchVisualModel,
   sendWorkbenchMessage,
   setWorkbenchInput,
   switchWorkbenchMode,
@@ -92,7 +91,6 @@ describe('workbench conversation e2e', () => {
             rootPath: workspace.rootPath
           })
           await selectWorkbenchModel(page, env.modelName)
-          await selectWorkbenchVisualModel(page, env.visualModelName)
           await selectWorkbenchAiPreference(page, '严谨')
           const selectedAiPreferenceBeforeReload = await readWorkbenchAiPreferenceSelection(page)
           await getWorkbenchLocator(page, workbenchSelectors.executionPermissionSwitch).click()
@@ -108,7 +106,8 @@ describe('workbench conversation e2e', () => {
             .filter({ hasText: '完全访问' })
             .first()
           const reviewPermissionMenuText = (await reviewPermissionOption.textContent()) || ''
-          const fullAccessPermissionMenuText = (await fullAccessPermissionOption.textContent()) || ''
+          const fullAccessPermissionMenuText =
+            (await fullAccessPermissionOption.textContent()) || ''
           await page.keyboard.press('Escape')
           await switchWorkbenchMode(page, '没头脑')
           const aiPreferenceHiddenInSearch = !(await getWorkbenchLocator(

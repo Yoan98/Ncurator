@@ -334,7 +334,7 @@ export const buildNodeIndex = (
   let cellNodeCount = 0
   const detailByNodeId: NodeIndex['detailByNodeId'] = new Map()
   const editableNodesById: NodeIndex['editableNodesById'] = new Map()
-  const visualsById: NodeIndex['visualsById'] = new Map()
+  const visualNodesById: NodeIndex['visualNodesById'] = new Map()
 
   const bodyChildren = collectLogicalBodyElements(childElements(body))
   for (const logical of bodyChildren) {
@@ -516,7 +516,7 @@ export const buildNodeIndex = (
       relationshipTargetModes,
       availableRelationshipTargetIds,
       editableNodesById,
-      visualsById
+      visualNodesById
     }
     const detail =
       node.kind === 'paragraph'
@@ -572,7 +572,7 @@ export const buildNodeIndex = (
     cellNodeCount,
     detailByNodeId,
     editableNodesById,
-    visualsById
+    visualNodesById
   }
 }
 
@@ -603,7 +603,7 @@ export const buildDocumentNodeIndex = (bundle: ParsedDocxBundle): NodeIndex => {
     cellNodeCount: 0,
     detailByNodeId: new Map(),
     editableNodesById: new Map(),
-    visualsById: new Map()
+    visualNodesById: new Map()
   }
   for (const storyPart of parts) {
     const part = buildNodeIndex(
@@ -619,7 +619,7 @@ export const buildDocumentNodeIndex = (bundle: ParsedDocxBundle): NodeIndex => {
     part.nodesById.forEach((value, key) => combined.nodesById.set(key, value))
     part.detailByNodeId.forEach((value, key) => combined.detailByNodeId.set(key, value))
     part.editableNodesById.forEach((value, key) => combined.editableNodesById.set(key, value))
-    part.visualsById.forEach((value, key) => combined.visualsById.set(key, value))
+    part.visualNodesById.forEach((value, key) => combined.visualNodesById.set(key, value))
     combined.paragraphCount += part.paragraphCount
     combined.tableCount += part.tableCount
     combined.charCount += part.charCount

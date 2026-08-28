@@ -104,7 +104,7 @@ export const detailedNodeToSpec = (node: DocxDetailedNode): DocxNodeSpec => {
 
 const STRUCTURE_OMITTED_FIELDS = new Set([
   'nodeId',
-  'visualId',
+  'nodeId',
   'nodeIndex',
   'previousNodeId',
   'nextNodeId'
@@ -115,11 +115,11 @@ const structureFingerprint = (value: DocxDetailedNode | undefined): string =>
 
 const collectSnapshotVisuals = (
   value: DocxDetailedNode | undefined
-): Array<{ visualId: string; kind: import('../types').DocxVisualKind }> => {
-  const out: Array<{ visualId: string; kind: import('../types').DocxVisualKind }> = []
+): Array<{ nodeId: string; kind: import('../types').DocxVisualKind }> => {
+  const out: Array<{ nodeId: string; kind: import('../types').DocxVisualKind }> = []
   const visit = (node: DocxReadNode | DocxDetailedNode): void => {
     if (node.type === 'visual') {
-      out.push({ visualId: node.visualId, kind: node.kind })
+      out.push({ nodeId: node.nodeId, kind: node.kind })
       node.children?.forEach(visit)
       return
     }
@@ -230,7 +230,7 @@ const buildNode = (input: {
   currentNodeId?: string
   spec: DocxNodeSpec
   structureFingerprint: string
-  visualIds: string[]
+  visualNodeIds: string[]
   createdRevisionRef: string
   changedRevisionRef?: string
   reviewQueries?: string[]
@@ -252,7 +252,7 @@ const buildNode = (input: {
   anchorSide: undefined,
   spec: input.spec,
   structureFingerprint: input.structureFingerprint,
-  visualIds: input.visualIds,
+  visualNodeIds: input.visualNodeIds,
   createdRevisionRef: input.createdRevisionRef,
   changedRevisionRef: input.changedRevisionRef,
   reviewQueries: input.reviewQueries,
@@ -303,12 +303,12 @@ const findSnapshotMatchIndex = (input: {
     ) {
       continue
     }
-    const visualIdsMatch =
-      input.node.visualIds.length === node.visuals.length &&
-      input.node.visualIds.every(
-        (visualId, visualIndex) => visualId === node.visuals[visualIndex]?.visualId
+    const visualNodeIdsMatch =
+      input.node.visualNodeIds.length === node.visuals.length &&
+      input.node.visualNodeIds.every(
+        (nodeId, visualIndex) => nodeId === node.visuals[visualIndex]?.nodeId
       )
-    if (node.structureFingerprint === input.node.structureFingerprint && visualIdsMatch) {
+    if (node.structureFingerprint === input.node.structureFingerprint && visualNodeIdsMatch) {
       return index
     }
   }
@@ -349,7 +349,7 @@ const rebindVisibleNodesToSnapshot = (input: {
     node.nodeIndex = matchedNode.nodeIndex
     node.spec = matchedNode.spec
     node.structureFingerprint = matchedNode.structureFingerprint
-    node.visualIds = matchedNode.visuals.map((visual) => visual.visualId)
+    node.visualNodeIds = matchedNode.visuals.map((visual) => visual.nodeId)
   })
 }
 
@@ -447,7 +447,7 @@ const buildCurrentNodeFromSnapshot = (
     currentNodeId: snapshotNode.nodeId,
     spec: snapshotNode.spec,
     structureFingerprint: snapshotNode.structureFingerprint,
-    visualIds: snapshotNode.visuals.map((visual) => visual.visualId),
+    visualNodeIds: snapshotNode.visuals.map((visual) => visual.nodeId),
     createdRevisionRef: revisionRef
   })
 
@@ -521,7 +521,7 @@ export const createReplaySessionFromSnapshot = (input: {
       currentNodeId: snapshotNode.nodeId,
       spec: snapshotNode.spec,
       structureFingerprint: snapshotNode.structureFingerprint,
-      visualIds: snapshotNode.visuals.map((visual) => visual.visualId),
+      visualNodeIds: snapshotNode.visuals.map((visual) => visual.nodeId),
       createdRevisionRef: 'v1'
     })
     nodeById.set(reviewNode.reviewId, reviewNode)
@@ -699,7 +699,7 @@ export const applyRevisionToReplaySession = (input: {
     targetNode.nodeIndex = snapshotNode.nodeIndex
     targetNode.spec = snapshotNode.spec
     targetNode.structureFingerprint = snapshotNode.structureFingerprint
-    targetNode.visualIds = snapshotNode.visuals.map((visual) => visual.visualId)
+    targetNode.visualNodeIds = snapshotNode.visuals.map((visual) => visual.nodeId)
     targetNode.changedRevisionRef = revisionRef
     targetNode.reviewQueries =
       op.type === 'format_text' && op.text

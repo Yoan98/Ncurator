@@ -18,6 +18,7 @@ import {
 import { buildDispatchQueue } from '../dispatch'
 import { appendToolFeedback } from '../../shared/toolFeedback'
 import { formatZodErrorForTool, type ZodIssueLike } from '../../shared/schemaError'
+import { projectMessagesForMainModel } from '../../memory/multimodal'
 import {
   emitThinkingCompleted,
   emitThinkingFailed,
@@ -128,7 +129,7 @@ export const createBrainNode = (input: {
       const result = await input.ctx.chatTools({
         caller: 'human.brain',
         taskId: state.task.taskId,
-        messages,
+        messages: await projectMessagesForMainModel(messages),
         tools,
         temperature: 0.1,
         contextBudgetSnapshot: state.execution.contextBudget

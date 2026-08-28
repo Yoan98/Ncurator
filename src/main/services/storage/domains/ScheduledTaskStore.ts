@@ -19,8 +19,6 @@ type ScheduledTaskRow = {
   workspace_id?: unknown
   main_model_config_id?: unknown
   main_model_name?: unknown
-  vision_model_config_id?: unknown
-  vision_model_name?: unknown
   ai_preference?: unknown
   execution_permission?: unknown
   next_run_at?: unknown
@@ -37,10 +35,7 @@ const toPreference = (value: unknown): AiPreference =>
 const toPermission = (value: unknown): AiExecutionPermission =>
   value === 'full_access' ? 'full_access' : 'review'
 
-const toModel = (
-  configId: unknown,
-  modelName: unknown
-): WorkbenchSelectedModel | null => {
+const toModel = (configId: unknown, modelName: unknown): WorkbenchSelectedModel | null => {
   const id = String(configId || '').trim()
   const name = String(modelName || '').trim()
   if (!id || !name) return null
@@ -49,7 +44,6 @@ const toModel = (
 
 const toTask = (row: ScheduledTaskRow): ScheduledTask => {
   const mainModel = toModel(row.main_model_config_id, row.main_model_name)
-  const visionModel = toModel(row.vision_model_config_id, row.vision_model_name)
   const weekday = toOptionalNumber(row.weekday)
   if (!mainModel) {
     throw new Error(`scheduled_task_missing_main_model:${String(row.id || '')}`)
@@ -64,7 +58,6 @@ const toTask = (row: ScheduledTaskRow): ScheduledTask => {
     weekday: weekday ?? null,
     workspaceId: String(row.workspace_id || ''),
     mainModel,
-    visionModel,
     aiPreference: toPreference(row.ai_preference),
     executionPermission: toPermission(row.execution_permission),
     nextRunAt: toOptionalNumber(row.next_run_at) ?? null,
@@ -93,9 +86,9 @@ export class ScheduledTaskStore {
   public async getById(id: string): Promise<ScheduledTask | null> {
     const safeId = String(id || '').trim()
     if (!safeId) return null
-    const row = this.sqlite
-      .prepare('SELECT * FROM scheduled_task WHERE id = ?')
-      .get(safeId) as ScheduledTaskRow | undefined
+    const row = this.sqlite.prepare('SELECT * FROM scheduled_task WHERE id = ?').get(safeId) as
+      | ScheduledTaskRow
+      | undefined
     return row ? toTask(row) : null
   }
 
@@ -105,12 +98,12 @@ export class ScheduledTaskStore {
         `INSERT INTO scheduled_task (
           id, name, prompt, enabled, schedule_type, time_of_day, weekday,
           workspace_id, main_model_config_id, main_model_name,
-          vision_model_config_id, vision_model_name, ai_preference,
+          ai_preference,
           execution_permission, next_run_at, created_at, updated_at
         ) VALUES (
           @id, @name, @prompt, @enabled, @schedule_type, @time_of_day, @weekday,
           @workspace_id, @main_model_config_id, @main_model_name,
-          @vision_model_config_id, @vision_model_name, @ai_preference,
+          @ai_preference,
           @execution_permission, @next_run_at, @created_at, @updated_at
         )
         ON CONFLICT(id) DO UPDATE SET
@@ -123,8 +116,6 @@ export class ScheduledTaskStore {
           workspace_id = excluded.workspace_id,
           main_model_config_id = excluded.main_model_config_id,
           main_model_name = excluded.main_model_name,
-          vision_model_config_id = excluded.vision_model_config_id,
-          vision_model_name = excluded.vision_model_name,
           ai_preference = excluded.ai_preference,
           execution_permission = excluded.execution_permission,
           next_run_at = excluded.next_run_at,
@@ -141,8 +132,6 @@ export class ScheduledTaskStore {
         workspace_id: task.workspaceId,
         main_model_config_id: task.mainModel.configId,
         main_model_name: task.mainModel.modelName,
-        vision_model_config_id: task.visionModel?.configId ?? null,
-        vision_model_name: task.visionModel?.modelName ?? null,
         ai_preference: task.aiPreference,
         execution_permission: task.executionPermission,
         next_run_at: task.nextRunAt,

@@ -8,20 +8,13 @@ import {
   pptEditOutputSchema,
   pptOutlineSchema,
   pptReadOutlineOutputSchema,
-  pptReadVisualsSchema,
   pptReadSlidesSchema,
   pptReadSlidesOutputSchema,
   pptSearchOutputSchema,
   pptSearchSchema
 } from './schemas'
-import { visualRecognitionOutputSchema } from '../../../../visualRecognition/schemas'
 
-type PptToolName =
-  | 'ppt_read_outline'
-  | 'ppt_read_slides'
-  | 'ppt_search'
-  | 'ppt_read_visuals'
-  | 'ppt_edit'
+type PptToolName = 'ppt_read_outline' | 'ppt_read_slides' | 'ppt_search' | 'ppt_edit'
 
 type PptToolSpec<
   TArgs extends JsonObject,
@@ -64,7 +57,7 @@ export const PPT_READ_SLIDES_TOOL_SPEC = {
   promptSpec: {
     name: 'ppt_read_slides',
     description:
-      '按页码区间或 slideId 集合读取 PPTX 页面及元素，并返回页面文字、讲者备注以及元素的位置、类型和样式。'
+      '按页码区间或 slideId 集合读取 PPTX 页面及元素，并返回页面文字、讲者备注、元素信息和可交给 read_image 的 slideImagePath。'
   },
   resolveExecutionMeta: readExecutionMeta
 } satisfies PptToolSpec<
@@ -90,25 +83,6 @@ export const PPT_SEARCH_TOOL_SPEC = {
   z.infer<typeof pptSearchSchema>,
   z.infer<typeof pptSearchOutputSchema>,
   'ppt_search',
-  'ppt-read'
->
-
-export const PPT_READ_VISUALS_TOOL_SPEC = {
-  name: 'ppt_read_visuals',
-  familyId: 'ppt',
-  skillIds: ['ppt-read'],
-  inputSchema: pptReadVisualsSchema,
-  outputSchema: visualRecognitionOutputSchema,
-  promptSpec: {
-    name: 'ppt_read_visuals',
-    description:
-      '读取 PPT 指定页的视觉内容，按 requests 一次性返回每个页面的识别结果；每条 request 包含 index 和 instruction，最多 10 条。'
-  },
-  resolveExecutionMeta: readExecutionMeta
-} satisfies PptToolSpec<
-  z.infer<typeof pptReadVisualsSchema>,
-  z.infer<typeof visualRecognitionOutputSchema>,
-  'ppt_read_visuals',
   'ppt-read'
 >
 
@@ -166,8 +140,7 @@ CSS 使用：
 export const PPT_READ_TOOL_SPECS = [
   PPT_READ_OUTLINE_TOOL_SPEC,
   PPT_READ_SLIDES_TOOL_SPEC,
-  PPT_SEARCH_TOOL_SPEC,
-  PPT_READ_VISUALS_TOOL_SPEC
+  PPT_SEARCH_TOOL_SPEC
 ] as const
 
 export const PPT_WRITE_TOOL_SPECS = [PPT_EDIT_TOOL_SPEC] as const

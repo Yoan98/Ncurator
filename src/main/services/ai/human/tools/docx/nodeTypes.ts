@@ -190,9 +190,12 @@ export type DocxReadOpaqueNode = {
 
 export type DocxReadVisualNode = {
   type: 'visual'
-  visualId: string
+  nodeId: string
   kind: DocxVisualKind
   altText?: string
+  imagePath?: string
+  widthCm?: number
+  heightCm?: number
   children?: DocxReadContentNode[]
 }
 
@@ -272,9 +275,12 @@ export type DocxPublicReadBreakNode = {
 }
 export type DocxPublicReadVisualNode = {
   type: 'visual'
-  visualId: string
+  nodeId: string
   kind: DocxVisualKind
   altText?: string
+  imagePath: string
+  widthCm?: number
+  heightCm?: number
   children?: DocxPublicReadVisualContentNode[]
 }
 export type DocxPublicReadRunChildNode =

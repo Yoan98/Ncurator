@@ -17,8 +17,6 @@ export type DocxIdentityIndex = {
   internalIdByPublicId: Map<string, string>
   publicNodeIdByInternalId: Map<string, string>
   internalNodeIdByPublicId: Map<string, string>
-  publicVisualIdByInternalId: Map<string, string>
-  internalVisualIdByPublicId: Map<string, string>
 }
 
 type LogicalRootNode = {
@@ -50,9 +48,7 @@ export const createInitialIdentityIndex = (index: NodeIndex): DocxIdentityIndex 
     publicIdByInternalId: new Map(),
     internalIdByPublicId: new Map(),
     publicNodeIdByInternalId: new Map(),
-    internalNodeIdByPublicId: new Map(),
-    publicVisualIdByInternalId: new Map(),
-    internalVisualIdByPublicId: new Map()
+    internalNodeIdByPublicId: new Map()
   }
   for (const internalId of index.nodesById.keys()) bindIdentity(identity, internalId)
   bindNestedIdentities(index, identity)
@@ -97,6 +93,10 @@ const bindNestedIdentities = (
   const reverseMatchOwners = new Set<string>()
   if (previousIndex && previousIdentity) {
     publicOps.forEach((op) => {
+      if (op.type === 'replace_node' && op.node.type === 'visual') {
+        const internalId = previousIdentity.internalNodeIdByPublicId.get(op.nodeId)
+        if (internalId && !internalId.startsWith('visual:')) consumedPreviousIds.add(internalId)
+      }
       if (
         op.type !== 'insert_nodes' ||
         (op.position !== 'inside_start' && op.position !== 'before') ||
@@ -156,34 +156,55 @@ const bindNestedIdentities = (
     identity.publicNodeIdByInternalId.set(entry.internalNodeId, publicNodeId)
     identity.internalNodeIdByPublicId.set(publicNodeId, entry.internalNodeId)
   })
-  const previousVisualByFingerprint = new Map<
+  const previousVisualNodeByFingerprint = new Map<
     string,
     Array<{ internalId: string; publicId: string }>
   >()
   if (previousIndex && previousIdentity) {
-    previousIndex.visualsById.forEach((visual, internalVisualId) => {
-      const publicId = previousIdentity.publicVisualIdByInternalId.get(internalVisualId)
+    previousIndex.visualNodesById.forEach((visual, internalVisualNodeId) => {
+      const publicId = previousIdentity.publicNodeIdByInternalId.get(internalVisualNodeId)
       const rootPublicId = previousIdentity.publicIdByInternalId.get(visual.ownerNodeId)
       if (!publicId || !rootPublicId) return
       const key = `${rootPublicId}\0${visual.kind}\0${visual.relationshipId || ''}`
-      const candidates = previousVisualByFingerprint.get(key) || []
-      candidates.push({ internalId: internalVisualId, publicId })
-      previousVisualByFingerprint.set(key, candidates)
+      const candidates = previousVisualNodeByFingerprint.get(key) || []
+      candidates.push({ internalId: internalVisualNodeId, publicId })
+      previousVisualNodeByFingerprint.set(key, candidates)
     })
   }
-  const consumedVisualIds = new Set<string>()
-  index.visualsById.forEach((visual, internalVisualId) => {
+  const consumedVisualNodeIds = new Set<string>()
+  const movedVisualByRelationship = new Map<
+    string,
+    { internalId: string; publicId: string }
+  >()
+  if (previousIndex && previousIdentity) {
+    publicOps.forEach((op) => {
+      if (op.type !== 'move_node') return
+      const internalId = previousIdentity.internalNodeIdByPublicId.get(op.nodeId)
+      if (!internalId?.startsWith('visual:')) return
+      const visual = previousIndex.visualNodesById.get(internalId)
+      const publicId = previousIdentity.publicNodeIdByInternalId.get(internalId)
+      if (visual?.relationshipId && publicId) {
+        movedVisualByRelationship.set(visual.relationshipId, { internalId, publicId })
+      }
+    })
+  }
+  index.visualNodesById.forEach((visual, internalVisualNodeId) => {
     const publicNodeId = requirePublicNodeId(identity, visual.ownerNodeId)
-    const relativeKey = internalVisualId.replace(`visual:${visual.ownerNodeId}:`, '')
-    const candidates = previousVisualByFingerprint.get(
+    const relativeKey = internalVisualNodeId.replace(`visual:${visual.ownerNodeId}:`, '')
+    const candidates = previousVisualNodeByFingerprint.get(
       `${publicNodeId}\0${visual.kind}\0${visual.relationshipId || ''}`
     )
-    const preserved = candidates?.find((candidate) => !consumedVisualIds.has(candidate.internalId))
-    if (preserved) consumedVisualIds.add(preserved.internalId)
-    const publicVisualId =
+    const moved = visual.relationshipId
+      ? movedVisualByRelationship.get(visual.relationshipId)
+      : undefined
+    const preserved =
+      (moved && !consumedVisualNodeIds.has(moved.internalId) ? moved : undefined) ||
+      candidates?.find((candidate) => !consumedVisualNodeIds.has(candidate.internalId))
+    if (preserved) consumedVisualNodeIds.add(preserved.internalId)
+    const publicVisualNodeId =
       preserved?.publicId || stableNestedId('visual', publicNodeId, relativeKey)
-    identity.publicVisualIdByInternalId.set(internalVisualId, publicVisualId)
-    identity.internalVisualIdByPublicId.set(publicVisualId, internalVisualId)
+    identity.publicNodeIdByInternalId.set(internalVisualNodeId, publicVisualNodeId)
+    identity.internalNodeIdByPublicId.set(publicVisualNodeId, internalVisualNodeId)
   })
 }
 
@@ -195,10 +216,13 @@ export const resolveInternalNodeId = (identity: DocxIdentityIndex, publicId: str
   return internalId
 }
 
-export const resolveInternalVisualId = (identity: DocxIdentityIndex, publicId: string): string => {
-  const internalId = identity.internalVisualIdByPublicId.get(publicId)
-  if (!internalId)
-    throw new Error(`stale or unknown docx visualId: ${publicId}; read the node again`)
+export const resolveInternalVisualNodeId = (
+  identity: DocxIdentityIndex,
+  publicId: string
+): string => {
+  const internalId = identity.internalNodeIdByPublicId.get(publicId)
+  if (!internalId?.startsWith('visual:'))
+    throw new Error(`stale or unknown docx visual nodeId: ${publicId}; read the node again`)
   return internalId
 }
 
@@ -249,9 +273,9 @@ const toPublicReadNode = (identity: DocxIdentityIndex, node: DocxReadNode): Docx
       ? node.children.map((child) => toPublicReadNode(identity, child))
       : undefined
   if (node.type === 'visual') {
-    const publicVisualId = identity.publicVisualIdByInternalId.get(node.visualId)
-    if (!publicVisualId) throw new Error(`docx identity missing for visual: ${node.visualId}`)
-    return { ...node, visualId: publicVisualId, children: mappedChildren as typeof node.children }
+    const publicNodeId = identity.publicNodeIdByInternalId.get(node.nodeId)
+    if (!publicNodeId) throw new Error(`docx identity missing for visual node: ${node.nodeId}`)
+    return { ...node, nodeId: publicNodeId, children: mappedChildren as typeof node.children }
   }
   if (node.type === 'table_cell') {
     const publicNodeId = identity.publicIdByInternalId.get(node.nodeId)
@@ -338,6 +362,12 @@ export const toPublicSearchMatch = (
 
 export const toInternalOp = (identity: DocxIdentityIndex, op: DocxOperation): DocxOperation => {
   if (op.type === 'create_document') return op
+  if (
+    op.type === 'delete_node' &&
+    identity.internalNodeIdByPublicId.get(op.nodeId)?.startsWith('visual:')
+  ) {
+    return { type: 'delete_media', nodeId: resolveInternalVisualNodeId(identity, op.nodeId) }
+  }
   if (op.type === 'replace_text' || op.type === 'replace_node' || op.type === 'delete_node') {
     return { ...op, nodeId: resolveInternalNodeId(identity, op.nodeId) }
   }
@@ -403,7 +433,7 @@ export const toInternalOp = (identity: DocxIdentityIndex, op: DocxOperation): Do
     }
   }
   if (op.type === 'replace_image' || op.type === 'delete_media' || op.type === 'update_image') {
-    return { ...op, visualId: resolveInternalVisualId(identity, op.visualId) }
+    return { ...op, nodeId: resolveInternalVisualNodeId(identity, op.nodeId) }
   }
   if (op.type === 'add_comment') {
     return { ...op, nodeId: resolveInternalNodeId(identity, op.nodeId) }
@@ -578,6 +608,16 @@ const applyLogicalOp = (
   if (op.type === 'replace_node') {
     const targetIndex = body.findIndex((candidate) => candidate.nodeId === op.nodeId)
     if (targetIndex < 0) return
+    if (op.node.type === 'visual') {
+      body[targetIndex] = logicalNodeFromSpec(
+        {
+          type: 'paragraph',
+          children: [{ type: 'run', children: [{ type: 'text', text: '' }] }]
+        },
+        body[targetIndex]!.storyId
+      )
+      return
+    }
     if (op.node.type !== 'paragraph') {
       throw new Error('a body paragraph can only be replaced by another node node')
     }
@@ -729,9 +769,7 @@ export const createNextIdentityIndex = (input: {
     publicIdByInternalId: new Map(),
     internalIdByPublicId: new Map(),
     publicNodeIdByInternalId: new Map(),
-    internalNodeIdByPublicId: new Map(),
-    publicVisualIdByInternalId: new Map(),
-    internalVisualIdByPublicId: new Map()
+    internalNodeIdByPublicId: new Map()
   }
 
   input.nextIndex.rootNodeIds.forEach((internalId, index) => {

@@ -20,7 +20,6 @@ import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tool
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
 import { TerminalSessionManager } from '../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/human/tools/textFile'
-import { imageRecognitionToolFamily } from '../../../src/main/services/ai/human/tools/imageRecognition'
 import { buildImageGenerationCapabilityTools } from '../../../src/main/services/ai/human/tools/imageGeneration'
 import { buildPdfCapabilityTools } from '../../../src/main/services/ai/human/tools/pdf'
 import { buildPptCapabilityTools } from '../../../src/main/services/ai/human/tools/ppt'
@@ -291,27 +290,6 @@ export const createWebToolHarness = (
   return {
     ...createToolInvoker(
       webToolFamily.buildTools({
-        ctx,
-        cache,
-        runId: runtime.runId,
-        sessionId: contextInput.sessionId || 'test-session',
-        taskId: runtime.taskId
-      }) as readonly ToolLike[]
-    ),
-    ctx
-  }
-}
-
-export const createImageRecognitionToolHarness = (
-  runtime: BackendTestRuntime,
-  contextInput: CreateAiRunContextInput = {}
-) => {
-  const ctx = runtime.createAiRunContext(contextInput)
-  const cache = createHumanRuntimeCache()
-
-  return {
-    ...createToolInvoker(
-      imageRecognitionToolFamily.buildTools({
         ctx,
         cache,
         runId: runtime.runId,

@@ -1,9 +1,5 @@
 import path from 'node:path'
-import type {
-  BackendHarnessMode,
-  BackendTestRuntime,
-  TestLogEvent
-} from './test-types'
+import type { BackendHarnessMode, BackendTestRuntime, TestLogEvent } from './test-types'
 import type { EventCollector } from '../core/eventCollector'
 import type { FixtureBinding } from './test-types'
 import { createRealAiDepsFactory } from './realAiDepsFactory'
@@ -22,7 +18,6 @@ export const createRealAiHarness = async (input: {
   definition: {
     harnessMode: BackendHarnessMode
     runtimeModelName?: string | null
-    visionModel?: { configId: string; modelName: string }
   }
   runId: string
   taskId: string
@@ -76,9 +71,7 @@ export const createRealAiHarness = async (input: {
     },
     getFixtureWorkspacePath: (sourcePath: string) => {
       const absoluteSource = path.resolve(sourcePath)
-      const matched = input.fixtureBindings.find(
-        (binding) => binding.sourcePath === absoluteSource
-      )
+      const matched = input.fixtureBindings.find((binding) => binding.sourcePath === absoluteSource)
       if (!matched) {
         throw new Error(`fixture not bound into workspace: ${absoluteSource}`)
       }
@@ -88,16 +81,8 @@ export const createRealAiHarness = async (input: {
       appendSeedWorkspaceFile(seedManifest, record)
     },
     getSeedManifest: () => cloneBackendSeedManifest(seedManifest),
-    createAiRunContext: (contextInput = {}) =>
-      depsFactory.createAiRunContext({
-        ...contextInput,
-        visionModel: contextInput.visionModel || input.definition.visionModel
-      }),
-    createHumanTaskRunner: (contextInput = {}) =>
-      depsFactory.createHumanTaskRunner({
-        ...contextInput,
-        visionModel: contextInput.visionModel || input.definition.visionModel
-      }),
+    createAiRunContext: (contextInput = {}) => depsFactory.createAiRunContext(contextInput),
+    createHumanTaskRunner: (contextInput = {}) => depsFactory.createHumanTaskRunner(contextInput),
     ensureEmbeddingReady: async () => {
       await depsFactory.ensureEmbeddingReady()
     },

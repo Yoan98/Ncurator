@@ -16,7 +16,7 @@ const emptyState = (draft: string): ChatSessionUiStateV1 => ({
     mode: 'search',
     aiPreference: 'default',
     executionPermission: 'review',
-    modelSelection: { mainModel: null, visionModel: null },
+    modelSelection: { mainModel: null },
     workspaceId: null,
     draft: {
       input: draft,
@@ -62,19 +62,25 @@ describe('workbench conversation e2e', () => {
           sessionB.workspace_id = workspaceId
           const stateA = emptyState('A 后台草稿')
           const stateB = emptyState('B 当前草稿')
-          await page.evaluate(async ({ sessionA, sessionB, stateA, stateB }) => {
-            await window.api.chatSessionSave(sessionA)
-            await window.api.chatSessionSave(sessionB)
-            await window.api.chatSessionUiStateSave({
-              sessionId: sessionA.id,
-              state: stateA
-            })
-            await window.api.chatSessionUiStateSave({
-              sessionId: sessionB.id,
-              state: stateB
-            })
-            await window.api.workbenchUiStateSave({ activeViewKey: sessionB.id, draftState: null })
-          }, { sessionA, sessionB, stateA, stateB })
+          await page.evaluate(
+            async ({ sessionA, sessionB, stateA, stateB }) => {
+              await window.api.chatSessionSave(sessionA)
+              await window.api.chatSessionSave(sessionB)
+              await window.api.chatSessionUiStateSave({
+                sessionId: sessionA.id,
+                state: stateA
+              })
+              await window.api.chatSessionUiStateSave({
+                sessionId: sessionB.id,
+                state: stateB
+              })
+              await window.api.workbenchUiStateSave({
+                activeViewKey: sessionB.id,
+                draftState: null
+              })
+            },
+            { sessionA, sessionB, stateA, stateB }
+          )
           await page.reload()
           await navigateToWorkbench(page)
           const browser = await page.evaluate(async (ownerId) => {
@@ -84,8 +90,13 @@ describe('workbench conversation e2e', () => {
             return { state: created.state, listed }
           }, sessionA.id)
           const currentAfterBackgroundEvent = {
-            input: ((await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || '').trim(),
-            shellCount: await getWorkbenchLocator(page, workbenchSelectors.contentPanelShell).count()
+            input: (
+              (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
+            ).trim(),
+            shellCount: await getWorkbenchLocator(
+              page,
+              workbenchSelectors.contentPanelShell
+            ).count()
           }
           await getWorkbenchLocator(
             page,

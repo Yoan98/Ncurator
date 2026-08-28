@@ -8,13 +8,7 @@ import {
   type PdfToolResourceContext,
   type PdfToolRuntime
 } from '../runtime'
-import {
-  PDF_INSPECT_TOOL_SPEC,
-  PDF_READ_PAGES_TOOL_SPEC,
-  PDF_READ_VISUALS_TOOL_SPEC,
-  PDF_SEARCH_TOOL_SPEC
-} from '../toolSpecs'
-import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
+import { PDF_INSPECT_TOOL_SPEC, PDF_READ_PAGES_TOOL_SPEC, PDF_SEARCH_TOOL_SPEC } from '../toolSpecs'
 
 const uniquePageNumbers = (pageNumbers: number[]): number[] => [...new Set(pageNumbers)]
 
@@ -49,13 +43,12 @@ const runTool = async (input: {
       toolName: input.toolName,
       toolCallId: input.toolCallId,
       reason: error instanceof PdfToolRuntimeError ? error.reason : 'invalid_input',
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : String(error)
     })
   }
 }
 
 export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterface[] => {
-  const visualRecognitionService = createVisualRecognitionService(runtime.input.ctx)
   const inspectTool = tool(
     async (args) =>
       await withToolLifecycle({
@@ -74,7 +67,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
               pageCount: document.pageCount,
               metadata: document.metadata,
               outline: document.outline,
-              encrypted: document.encrypted,
+              encrypted: document.encrypted
             })
           })
       }),
@@ -133,7 +126,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                 returnedMatchCount: response.payload.matches.length,
                 matches: response.payload.matches,
                 pagesWithNoTextCount: response.payload.pagesWithNoTextCount,
-                pagesWithSuspiciousTextCount: response.payload.pagesWithSuspiciousTextCount,
+                pagesWithSuspiciousTextCount: response.payload.pagesWithSuspiciousTextCount
               }
             }
           })
@@ -192,10 +185,35 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
               }
               if (response.payload.action !== 'read_pages')
                 throw new Error('PDF worker 协议错误（read_pages）')
+              const rendered = await runtime.callWorker({
+                action: 'render_pages',
+                payload: {
+                  docId: document.docId,
+                  workspaceRootPath: runtime.workspaceRootPath,
+                  pageNumbers
+                }
+              })
+              if (!rendered.ok) {
+                return runtime.emitWorkerFailure({
+                  toolName: PDF_READ_PAGES_TOOL_SPEC.name,
+                  toolCallId,
+                  response: rendered,
+                  resourceContext
+                })
+              }
+              if (rendered.payload.action !== 'render_pages')
+                throw new Error('PDF worker 协议错误（render_pages）')
+              const imageByPage = new Map(
+                rendered.payload.images.map((image) => [image.pageNumber, image.path])
+              )
               return {
                 sourcePath: document.sourcePath,
                 pageCount: document.pageCount,
-                pages: response.payload.pages,
+                pages: response.payload.pages.map((page) => {
+                  const pageImagePath = imageByPage.get(page.pageNumber)
+                  if (!pageImagePath) throw new Error(`PDF 第 ${String(page.pageNumber)} 页渲染缺失`)
+                  return { ...page, pageImagePath }
+                })
               }
             }
           })
@@ -207,85 +225,5 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
     }
   )
 
-  const readVisualsTool = tool(
-    async (args) =>
-      await withToolLifecycle({
-        emitter: runtime.toolEvents,
-        toolName: PDF_READ_VISUALS_TOOL_SPEC.name,
-        args: args as JsonObject,
-        execute: async ({ toolCallId }) =>
-          await runTool({
-            runtime,
-            toolName: PDF_READ_VISUALS_TOOL_SPEC.name,
-            toolCallId,
-            sourcePath: args.sourcePath,
-            effectKind: 'read',
-            execute: async (document) => {
-              const validRequests = args.requests.filter(
-                (request) => request.index <= document.pageCount
-              )
-              const invalidResults = args.requests
-                .filter((request) => request.index > document.pageCount)
-                .map((request) => ({
-                  index: request.index,
-                  error: `页码超出范围：PDF 共 ${String(document.pageCount)} 页`
-                }))
-
-              let recognitionResults: Awaited<
-                ReturnType<typeof visualRecognitionService.recognizeImages>
-              > = []
-              if (validRequests.length > 0) {
-                const response = await runtime.callWorker({
-                  action: 'render_pages',
-                  payload: {
-                    docId: document.docId,
-                    workspaceRootPath: runtime.workspaceRootPath,
-                    pageNumbers: uniquePageNumbers(validRequests.map((request) => request.index))
-                  }
-                })
-                const resourceContext = runtime.buildResourceContext(document.sourcePath, 'read')
-                if (!response.ok) {
-                  return runtime.emitWorkerFailure({
-                    toolName: PDF_READ_VISUALS_TOOL_SPEC.name,
-                    toolCallId,
-                    response,
-                    resourceContext
-                  })
-                }
-                if (response.payload.action !== 'render_pages')
-                  throw new Error('PDF worker 协议错误（render_pages）')
-                recognitionResults = await visualRecognitionService.recognizeImages({
-                  images: response.payload.images.map((image) => ({
-                    index: image.pageNumber,
-                    path: image.path,
-                    mimeType: image.mimeType
-                  })),
-                  requests: validRequests
-                })
-              }
-
-              let recognitionIndex = 0
-              const results = args.requests.map((request) => {
-                if (request.index > document.pageCount) {
-                  return invalidResults.shift()!
-                }
-                const result = recognitionResults[recognitionIndex]
-                recognitionIndex += 1
-                return result || { index: request.index, error: '页面识别结果缺失' }
-              })
-              return {
-                sourcePath: document.sourcePath,
-                results
-              }
-            }
-          })
-      }),
-    {
-      name: PDF_READ_VISUALS_TOOL_SPEC.name,
-      description: PDF_READ_VISUALS_TOOL_SPEC.promptSpec.description,
-      schema: PDF_READ_VISUALS_TOOL_SPEC.inputSchema
-    }
-  )
-
-  return [inspectTool, searchTool, readPagesTool, readVisualsTool]
+  return [inspectTool, searchTool, readPagesTool]
 }

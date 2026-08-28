@@ -98,13 +98,6 @@ export const RUNTIME_SKILL_CATALOG = {
     title: 'excel-write',
     description: '创建或编辑 Excel 工作簿中的工作表、单元格、公式、格式和结构。'
   },
-  'image-recognition': {
-    familyId: 'image-recognition',
-    source: 'external',
-    countsTowardToolBudget: true,
-    title: '图像识别',
-    description: '读取图片并按 instruction 分析图片内容，并返回模型生成的文本结果。'
-  },
   'image-generation': {
     familyId: 'image-generation',
     source: 'external',
@@ -117,7 +110,7 @@ export const RUNTIME_SKILL_CATALOG = {
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'agent-control',
-    description: '管理任务推进过程：学习需要的技能、维护并更新执行计划。'
+    description: '管理任务推进过程：学习技能、维护计划，并把本地或远程图片交给当前主模型读取。'
   }
 } as const satisfies Record<RuntimeSkillId, RuntimeSkillCatalogEntry>
 

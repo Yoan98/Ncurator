@@ -6,11 +6,7 @@ import type { AiRunContext } from '../../../types'
 import { ensureSkillTools } from '../learningNode/skillLoader'
 import { resolveToolResultErrorText } from '../../shared/toolResultRenderers'
 import { findEffectiveSkillIdByToolName, getEffectiveLearnedSkillIds } from '../../skills'
-import type {
-  HumanRuntimeCache,
-  RuntimeSkillId,
-  ToolCallResult
-} from '../../types'
+import type { HumanRuntimeCache, RuntimeSkillId, ToolCallResult } from '../../types'
 import { withToolLifecycle } from '../../tools/utils/lifecycle'
 import { createToolEventEmitter } from '../../tools/utils/toolEvents'
 
@@ -40,9 +36,7 @@ const summarizePreviewRow = (value: JsonValue): string | undefined => {
           ? value.id.trim()
           : ''
   const text =
-    typeof value.text === 'string'
-      ? clipText(value.text.trim().replace(/\s+/g, ' '), 80)
-      : ''
+    typeof value.text === 'string' ? clipText(value.text.trim().replace(/\s+/g, ' '), 80) : ''
 
   if (name && text) return `${name}: ${text}`
   if (name) return name
@@ -80,16 +74,33 @@ const resolvePayloadMessage = (toolName: string, payload: JsonObject): string =>
       ? payload.message
       : summarizeObjectPayload(toolName, payload) || `${toolName} executed`
 
-const normalizeToolCallResult = (
-  toolName: string,
-  payload: JsonValue
-): ToolCallResult => {
+const normalizeToolCallResult = (toolName: string, payload: JsonValue): ToolCallResult => {
   if (isJsonObject(payload)) {
     const explicitError =
       typeof payload.error === 'string' && payload.error.trim() ? payload.error.trim() : undefined
     const ok = payload.ok !== false && payload.success !== false && !explicitError
     const payloadMessage = resolvePayloadMessage(toolName, payload)
     const data = { ...payload }
+    const imageRefs =
+      toolName === 'read_image' && Array.isArray(data.images)
+        ? data.images.flatMap((value) => {
+            if (
+              !isJsonObject(value) ||
+              typeof value.path !== 'string' ||
+              typeof value.mimeType !== 'string'
+            )
+              return []
+            return [
+              {
+                path: value.path,
+                mimeType: value.mimeType,
+                sizeBytes: typeof value.sizeBytes === 'number' ? value.sizeBytes : undefined,
+                width: typeof value.width === 'number' ? value.width : undefined,
+                height: typeof value.height === 'number' ? value.height : undefined
+              }
+            ]
+          })
+        : undefined
     const candidateResourceContext = data.resourceContext
     delete data.ok
     delete data.success
@@ -98,35 +109,34 @@ const normalizeToolCallResult = (
     delete data.resourceContext
 
     const resourceContext = (() => {
-        const candidate = candidateResourceContext
-        if (
-          isJsonObject(candidate) &&
-          typeof candidate.family === 'string' &&
-          candidate.family.trim().length > 0
-        ) {
-          return {
-            family: candidate.family,
-            sourcePath:
-              typeof candidate.sourcePath === 'string' ? candidate.sourcePath : undefined,
-            currentRevisionRef:
-              typeof candidate.currentRevisionRef === 'string'
-                ? candidate.currentRevisionRef
-                : undefined,
-            previousRevisionRef:
-              typeof candidate.previousRevisionRef === 'string'
-                ? candidate.previousRevisionRef
-                : undefined,
-            effectKind:
-              typeof candidate.effectKind === 'string' ? candidate.effectKind : undefined
-          }
+      const candidate = candidateResourceContext
+      if (
+        isJsonObject(candidate) &&
+        typeof candidate.family === 'string' &&
+        candidate.family.trim().length > 0
+      ) {
+        return {
+          family: candidate.family,
+          sourcePath: typeof candidate.sourcePath === 'string' ? candidate.sourcePath : undefined,
+          currentRevisionRef:
+            typeof candidate.currentRevisionRef === 'string'
+              ? candidate.currentRevisionRef
+              : undefined,
+          previousRevisionRef:
+            typeof candidate.previousRevisionRef === 'string'
+              ? candidate.previousRevisionRef
+              : undefined,
+          effectKind: typeof candidate.effectKind === 'string' ? candidate.effectKind : undefined
         }
-        return undefined
-      })()
+      }
+      return undefined
+    })()
     if (ok) {
       return {
         toolName,
         ok: true,
         data,
+        imageRefs,
         resourceContext
       }
     }
@@ -209,12 +219,35 @@ export const executeToolCall = async (input: {
       toolName: input.toolName,
       args: input.args as JsonObject,
       execute: async (session) => {
-        session.fail(
-          resolveToolResultErrorText(result),
-          undefined,
-          result
-        )
+        session.fail(resolveToolResultErrorText(result), undefined, result)
         return result
+      }
+    })
+  }
+
+  if (input.toolName === 'read_image') {
+    return await withToolLifecycle({
+      emitter: toolEvents,
+      toolName: input.toolName,
+      args: input.args as JsonObject,
+      execute: async (session) => {
+        try {
+          const result = normalizeToolCallResult(
+            input.toolName,
+            (await tool.invoke(input.args)) as JsonValue
+          )
+          if (result.ok) session.succeed(undefined, result)
+          else session.fail(resolveToolResultErrorText(result), undefined, result)
+          return result
+        } catch (error) {
+          const result: ToolCallResult = {
+            toolName: input.toolName,
+            ok: false,
+            data: { error: error instanceof Error ? error.message : String(error) }
+          }
+          session.fail(resolveToolResultErrorText(result), undefined, result)
+          return result
+        }
       }
     })
   }

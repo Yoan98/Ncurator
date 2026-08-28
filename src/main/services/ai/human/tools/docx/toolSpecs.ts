@@ -7,10 +7,8 @@ import {
   docxCommentsRevisionsSchema,
   docxContentEditSchema,
   docxFormatSchema,
-  docxMediaEditSchema,
   docxOutlineSchema,
   docxReadNodesSchema,
-  docxReadVisualsSchema,
   docxSearchSchema,
   docxTableEditSchema
 } from './schemas'
@@ -19,7 +17,6 @@ import {
   docxMutationOutputSchema,
   docxOutlineOutputSchema,
   docxReadOutputSchema,
-  docxReadVisualsOutputSchema,
   docxSearchOutputSchema
 } from './outputSchemas'
 import {
@@ -84,7 +81,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   promptSpec: {
     name: 'docx_search',
     description:
-      '在全文中按 literal 或 regex 检索，返回命中 nodeId 与片段；可选同一 story 前后预览。'
+      '在全文中按 literal 或 regex 检索，返回完整命中节点；可选返回同一 story 前后的完整上下文节点，其中 visual 节点直接包含 imagePath。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -109,7 +106,8 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
   outputSchema: docxReadOutputSchema,
   promptSpec: {
     name: 'docx_read_nodes',
-    description: '返回指定 nodeId 或连续 nodeIndex 范围的语义内容。一次最多 20 个 nodeId 或 50 个根节点。'
+    description:
+      '返回指定 nodeId 或连续 nodeIndex 范围的完整语义节点树。visual 节点使用普通 nodeId，并包含可交给 read_image 的 imagePath。一次最多 20 个 nodeId 或 50 个根节点。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -123,25 +121,6 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
   z.infer<typeof docxReadNodesSchema>,
   z.infer<typeof docxReadOutputSchema>,
   'docx_read_nodes',
-  'docx-read'
->
-
-export const DOCX_READ_VISUALS_TOOL_SPEC = {
-  name: 'docx_read_visuals',
-  familyId: 'docx',
-  skillIds: ['docx-read'],
-  inputSchema: docxReadVisualsSchema,
-  outputSchema: docxReadVisualsOutputSchema,
-  promptSpec: {
-    name: 'docx_read_visuals',
-    description: '按 visualId 识别图片、图表等视觉内容。一次 1 至 10 项；不支持 .doc。'
-  },
-  resolveExecutionMeta: readMeta,
-  activityActionType: 'docx_read_visuals'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxReadVisualsSchema>,
-  z.infer<typeof docxReadVisualsOutputSchema>,
-  'docx_read_visuals',
   'docx-read'
 >
 
@@ -190,13 +169,6 @@ export const DOCX_TABLE_EDIT_TOOL_SPEC = defineMutationSpec({
   description: '修改表格结构（行列、合并拆分）以及表、行、单元格外观。'
 })
 
-export const DOCX_MEDIA_EDIT_TOOL_SPEC = defineMutationSpec({
-  name: 'docx_media_edit',
-  skillId: 'docx-write',
-  schema: docxMediaEditSchema,
-  description: '插入、替换、删除或修改图片等视觉对象。'
-})
-
 export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineMutationSpec({
   name: 'docx_comments_revisions',
   skillId: 'docx-write',
@@ -207,15 +179,13 @@ export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineMutationSpec({
 export const DOCX_READ_TOOL_SPECS = [
   DOCX_READ_OUTLINE_TOOL_SPEC,
   DOCX_SEARCH_TOOL_SPEC,
-  DOCX_READ_NODES_TOOL_SPEC,
-  DOCX_READ_VISUALS_TOOL_SPEC
+  DOCX_READ_NODES_TOOL_SPEC
 ] as const
 
 export const DOCX_WRITE_TOOL_SPECS = [
   DOCX_CONTENT_EDIT_TOOL_SPEC,
   DOCX_FORMAT_TOOL_SPEC,
   DOCX_TABLE_EDIT_TOOL_SPEC,
-  DOCX_MEDIA_EDIT_TOOL_SPEC,
   DOCX_COMMENTS_REVISIONS_TOOL_SPEC
 ] as const
 

@@ -40,7 +40,7 @@ type ContentTreeContext = {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
-  visualsById: Map<string, DocxVisualDescriptor>
+  visualNodesById: Map<string, DocxVisualDescriptor>
 }
 
 const nodeId = (context: ContentTreeContext, nodePath: string): string =>
@@ -64,7 +64,7 @@ const bindEditableNode = (
   return id
 }
 
-const visualId = (context: ContentTreeContext, nodePath: string): string =>
+const visualNodeId = (context: ContentTreeContext, nodePath: string): string =>
   `visual:${context.rootNodeId}:${nodePath}`
 
 const attrByLocalName = (node: Element, names: readonly string[]): string => {
@@ -299,6 +299,16 @@ const visualRelationshipId = (node: Element, kind: DocxVisualDescriptor['kind'])
 
 const visualAltText = (node: Element): string | undefined => collectVisualAltTexts(node)[0]
 
+const visualDimensions = (node: Element): { widthCm?: number; heightCm?: number } => {
+  const extent = firstDescendant(node, 'extent') || firstDescendant(node, 'ext')
+  const width = Number(extent?.getAttribute('cx') || '')
+  const height = Number(extent?.getAttribute('cy') || '')
+  return {
+    widthCm: Number.isFinite(width) && width > 0 ? width / 360000 : undefined,
+    heightCm: Number.isFinite(height) && height > 0 ? height / 360000 : undefined
+  }
+}
+
 const selectAlternateContent = (node: Element): Element[] => {
   if (node.localName !== 'AlternateContent') return [node]
   const supportedNamespaces = new Set([
@@ -342,19 +352,22 @@ const parseVisual = (
   ) {
     return null
   }
-  const id = visualId(context, currentPath)
+  const id = visualNodeId(context, currentPath)
   const target = relationshipId ? context.relationshipTargets.get(relationshipId) : undefined
+  const dimensions = visualDimensions(node)
   const descriptor: DocxVisualDescriptor = {
-    visualId: id,
+    nodeId: id,
     ownerNodeId: context.rootNodeId,
     kind,
+    node,
     relationshipId,
     target,
     contentType: relationshipId ? context.relationshipTypes.get(relationshipId) : undefined,
+    ...dimensions,
     story: context.story,
     partName: context.partName
   }
-  context.visualsById.set(id, descriptor)
+  context.visualNodesById.set(id, descriptor)
 
   const textBox = firstDescendant(node, 'txbxContent')
   const children = textBox
@@ -364,9 +377,10 @@ const parseVisual = (
     : []
   return {
     type: 'visual',
-    visualId: id,
+    nodeId: id,
     kind,
     altText: visualAltText(node),
+    ...dimensions,
     children: children.length > 0 ? children : undefined
   }
 }
@@ -764,7 +778,7 @@ const createContext = (input: {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
-  visualsById: Map<string, DocxVisualDescriptor>
+  visualNodesById: Map<string, DocxVisualDescriptor>
 }): ContentTreeContext => {
   const { nodeId: rootNodeId, ...rest } = input
   return { ...rest, rootNodeId }
@@ -784,7 +798,7 @@ export const buildParagraphDetail = (input: {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
-  visualsById: Map<string, DocxVisualDescriptor>
+  visualNodesById: Map<string, DocxVisualDescriptor>
 }): DocxDetailedParagraphNode => {
   const parsed = parseParagraph(input.paragraph, createContext(input), 'root')
   return {
@@ -812,7 +826,7 @@ export const buildTableDetail = (input: {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
-  visualsById: Map<string, DocxVisualDescriptor>
+  visualNodesById: Map<string, DocxVisualDescriptor>
 }): DocxDetailedTableNode => {
   const parsed = parseTable(input.table, createContext(input), 'root')
   return {
@@ -840,7 +854,7 @@ export const buildContainerDetail = (input: {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
-  visualsById: Map<string, DocxVisualDescriptor>
+  visualNodesById: Map<string, DocxVisualDescriptor>
 }): DocxDetailedContainerNode => {
   const parsed = parseContentNode(input.container, createContext(input), 'root')
   if (!parsed || (parsed.type !== 'content_control' && parsed.type !== 'revision')) {
@@ -892,7 +906,7 @@ export const buildCellDetail = (input: {
   relationshipTargetModes: ReadonlyMap<string, string>
   availableRelationshipTargetIds?: ReadonlySet<string>
   editableNodesById: Map<string, DocxEditableNode>
-  visualsById: Map<string, DocxVisualDescriptor>
+  visualNodesById: Map<string, DocxVisualDescriptor>
 }): DocxDetailedCellNode => {
   const parsed = parseCell(input.cell, createContext(input), 'root', input.row, input.col)
   return {

@@ -137,7 +137,13 @@ describe('ai unit model-facing tool result renderers', () => {
                   { type: 'text', text: '相邻' },
                   { type: 'text', text: '文字' },
                   { type: 'break', kind: 'page' },
-                  { type: 'visual', visualId: 'v1', kind: 'image', altText: '' }
+                  {
+                    type: 'visual',
+                    nodeId: 'v1',
+                    kind: 'image',
+                    imagePath: '/workspace/image.png',
+                    altText: ''
+                  }
                 ]
               }
             ]
@@ -161,7 +167,8 @@ describe('ai unit model-facing tool result renderers', () => {
     expect(rendered).toContain('fontSize: 0')
     expect(rendered).toContain('text="相邻文字"')
     expect(rendered).toContain('kind="page"')
-    expect(rendered).toContain('visualId="v1"')
+    expect(rendered).toContain('nodeId="v1"')
+    expect(rendered).toContain('imagePath="/workspace/image.png"')
   })
 
   it('renders concise DOCX mutation success text', () => {

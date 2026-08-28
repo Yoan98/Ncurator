@@ -210,23 +210,17 @@ const TOOL_ITEM_RENDERERS = {
       text(readToolFileLabel(input)),
       text(` ${readDocxRangeLabel(input)}`)
     ),
-  docx_read_visuals: (input) => sentence(text('读取文档视觉内容 '), text(readToolFileLabel(input))),
   docx_content_edit: (input) => sentence(text('编辑文档内容 '), text(readToolFileLabel(input))),
   docx_format: (input) => sentence(text('设置文档格式 '), text(readToolFileLabel(input))),
   docx_table_edit: (input) => sentence(text('编辑文档表格 '), text(readToolFileLabel(input))),
-  docx_media_edit: (input) => sentence(text('编辑文档媒体 '), text(readToolFileLabel(input))),
   docx_comments_revisions: (input) =>
     sentence(text('处理文档批注或修订 '), text(readToolFileLabel(input))),
   pdf_inspect: (input) => sentence(text('查看 PDF 信息 '), text(readToolFileLabel(input))),
   pdf_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
   pdf_read_pages: (input) => sentence(text('读取 PDF 页面 '), text(readToolFileLabel(input))),
-  pdf_read_visuals: (input) =>
-    sentence(text('读取 PDF 页面视觉内容 '), text(readToolFileLabel(input))),
   ppt_read_outline: (input) => sentence(text('阅读 PPT 结构 '), text(readToolFileLabel(input))),
   ppt_read_slides: (input) => sentence(text('读取 PPT 页面 '), text(readToolFileLabel(input))),
   ppt_search: (input) => sentence(text('搜索 PPT '), text(readToolQueryLabel(input))),
-  ppt_read_visuals: (input) =>
-    sentence(text('读取 PPT 页面视觉内容 '), text(readToolFileLabel(input))),
   ppt_edit: (input) => sentence(text('编辑 PPT '), text(readToolFileLabel(input))),
   excel_read_outline: (input) => sentence(text('查看 Excel 结构 '), text(readToolFileLabel(input))),
   excel_search: (input) => sentence(text('搜索 Excel '), text(readToolQueryLabel(input))),
@@ -248,7 +242,7 @@ const TOOL_ITEM_RENDERERS = {
     if (action === 'act') return sentence(text('在页面上'), text(instructionLabel))
     return sentence(text('操作浏览器 '), text(instructionLabel))
   },
-  image_analyze: (input) => sentence(text('识别图片 '), text(readToolFileLabel(input))),
+  read_image: () => sentence(text('读取图片')),
   image_generate: (input) => sentence(text('生成图片 '), text(readToolFileLabel(input))),
   learn_skill: () => sentence(text('学习新技能')),
   update_plan: () => sentence(text('更新任务计划'))

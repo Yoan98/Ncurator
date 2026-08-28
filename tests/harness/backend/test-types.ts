@@ -163,10 +163,6 @@ export type CreateAiRunContextInput = {
   selectedReferences?: SelectedReference[]
   runtimeSettingsOverride?: Partial<AiRuntimeSettings>
   modelName?: string
-  visionModel?: {
-    configId: string
-    modelName: string
-  }
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   checkCancelledOverride?: () => void
   humanRuntimeOverrides?: {
@@ -225,7 +221,6 @@ export type TestCaseDefinition<TResult> = {
   fixtures: readonly string[]
   runMode: TestRunMode
   runtimeModelName?: string | null
-  requiresVisionModel?: boolean
   execute: (runtime: BackendTestRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: BackendTestRuntime) => Promise<void>
 }

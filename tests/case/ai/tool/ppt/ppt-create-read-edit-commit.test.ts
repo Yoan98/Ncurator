@@ -1,7 +1,5 @@
 import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
-import { createServer } from 'node:http'
-import type { AddressInfo, Socket } from 'node:net'
 import path from 'node:path'
 import { getSlides, getSlideShapes, getSlideText, isChartShape, loadPresentation } from 'pptx-kit'
 import { describe, it } from 'vitest'
@@ -22,53 +20,6 @@ const detailHtml = `<section data-ppt-slide style="position:relative;width:1920p
   <div data-pptx-chart="column" data-pptx-categories='["Q1","Q2"]' data-pptx-series='[{"name":"收入","values":[12,18]}]' style="position:absolute;left:900px;top:500px;width:760px;height:420px"></div>
 </section>`
 
-const startVisionServer = async (): Promise<{ baseUrl: string; close: () => Promise<void> }> => {
-  const sockets = new Set<Socket>()
-  const server = createServer((request, response) => {
-    request.resume()
-    response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' })
-    response.end(
-      JSON.stringify({
-        id: 'chatcmpl-ppt-visuals',
-        object: 'chat.completion',
-        created: Math.floor(Date.now() / 1000),
-        model: 'gpt-5',
-        choices: [
-          {
-            index: 0,
-            message: {
-              role: 'assistant',
-              content: JSON.stringify({
-                supports_image_recognition: true,
-                result: '第2页展示核心结论，并包含公式和收入柱状图。'
-              })
-            },
-            finish_reason: 'stop'
-          }
-        ]
-      })
-    )
-  })
-  server.on('connection', (socket) => {
-    sockets.add(socket)
-    socket.on('close', () => sockets.delete(socket))
-  })
-  await new Promise<void>((resolve, reject) => {
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => resolve())
-  })
-  const address = server.address() as AddressInfo
-  return {
-    baseUrl: `http://127.0.0.1:${String(address.port)}/v1`,
-    close: async () => {
-      sockets.forEach((socket) => socket.destroy())
-      await new Promise<void>((resolve, reject) =>
-        server.close((error) => (error ? reject(error) : resolve()))
-      )
-    }
-  }
-}
-
 describe('ai tool ppt backend', () => {
   it('ppt-create-read-edit-commit', async () => {
     await runBackendCase({
@@ -81,18 +32,9 @@ describe('ai tool ppt backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const visionServer = await startVisionServer()
         const sourcePath = path.join(runtime.workspaceRoot, 'product-review.pptx')
         try {
-          await runtime.seedLlmConfig({
-            id: 'ai-live-config',
-            name: 'PPT 视觉读取测试配置',
-            providerKind: 'openai-compatible',
-            base_url: visionServer.baseUrl,
-            model_name: 'gpt-5',
-            api_key: 'test-key'
-          })
-          const harness = createPptToolHarness(runtime, { modelName: 'gpt-5' })
+          const harness = createPptToolHarness(runtime)
           const created = await harness.invoke<JsonObject>('ppt_edit', {
             sourcePath,
             actions: [
@@ -136,10 +78,6 @@ describe('ai tool ppt backend', () => {
             sourcePath,
             query: '客户反馈周期'
           })
-          const visual = await harness.invoke<JsonObject>('ppt_read_visuals', {
-            sourcePath,
-            requests: [{ index: 2, instruction: '说明第 2 页视觉内容。' }]
-          })
           const targetPath = sourcePath
           const beforeCommitExists = await fs
             .access(targetPath)
@@ -175,7 +113,6 @@ describe('ai tool ppt backend', () => {
             replaced,
             missingReplace,
             search,
-            visual,
             beforeCommitExists,
             aiPersistedChecksum,
             externallyChangedChecksum,
@@ -187,7 +124,7 @@ describe('ai tool ppt backend', () => {
             manifest
           }
         } finally {
-          await visionServer.close()
+          // The harness owns no external vision service; cleanup is handled by the test runtime.
         }
       },
       assert: async (result, runtime) => {
@@ -196,6 +133,13 @@ describe('ai tool ppt backend', () => {
           message: 'ppt_edit 返回成功前必须已经写入真实 PPTX 文件。',
           data: { beforeCommitExists: result.beforeCommitExists }
         })
+        const readSlideImagePath = String(
+          (result.readSlides.slides as Array<{ slideImagePath?: string }>)[0]?.slideImagePath || ''
+        )
+        const readSlideImageExists = await fs
+          .access(readSlideImagePath)
+          .then(() => true)
+          .catch(() => false)
         runtime.assertThat(
           result.created.slideCount === 2 &&
             result.inserted.slideCount === 2 &&
@@ -214,11 +158,10 @@ describe('ai tool ppt backend', () => {
             Array.isArray(result.search.matches) &&
             result.search.matches.length === 1 &&
             result.search.truncated === false &&
-            Array.isArray(result.visual.results) &&
-            result.visual.results.length === 1 &&
-            String(
-              (result.visual.results as Array<{ index: number; text?: string }>)[0]?.text || ''
-            ).includes('公式和收入柱状图'),
+            readSlideImageExists &&
+            /\.ncurator\/runtime\/assets\/ppt_read_slides-[^/]+\/[a-f0-9]{64}\.png$/u.test(
+              readSlideImagePath
+            ),
           {
             name: 'ppt-edit-persists-before-run-finalization',
             message: 'PPT 编辑成功后应立即写入正式文件，同时保持后续读取和 run 级差异生成能力。',

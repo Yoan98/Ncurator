@@ -322,10 +322,6 @@ const api: DesktopApi = {
     emitE2EIpcCall('llmConfigModelList', id)
     return ipcRenderer.invoke('llm-config-model-list', id)
   },
-  analyzeVisionModels: (payload) => {
-    emitE2EIpcCall('analyzeVisionModels')
-    return ipcRenderer.invoke('llm-analyze-vision-models', payload)
-  },
   isE2EMode: () => isE2EObserverEnabled,
   aiRuntimeSettingsGet: () => ipcRenderer.invoke('ai-runtime-settings-get'),
   aiRuntimeSettingsSave: (settings) => ipcRenderer.invoke('ai-runtime-settings-save', settings),

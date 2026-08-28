@@ -1,7 +1,6 @@
 import type { AiToolFamilyId, ToolFamilyDefinition } from './types'
 import { docxToolFamily } from './docx'
 import { excelToolFamily } from './excel'
-import { imageRecognitionToolFamily } from './imageRecognition'
 import { imageGenerationToolFamily } from './imageGeneration'
 import { pdfToolFamily } from './pdf'
 import { pptToolFamily } from './ppt'
@@ -25,7 +24,6 @@ export const TOOL_FAMILY_DEFINITIONS: Record<AiToolFamilyId, ToolFamilyDefinitio
   ppt: pptToolFamily,
   excel: excelToolFamily,
   web: webToolFamily,
-  'image-recognition': imageRecognitionToolFamily,
   'image-generation': imageGenerationToolFamily,
   'agent-control': agentControlToolFamily
 }

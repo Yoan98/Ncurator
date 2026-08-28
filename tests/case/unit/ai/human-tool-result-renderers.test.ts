@@ -206,10 +206,16 @@ describe('ai unit human tool result renderers', () => {
       }
     })
     const visualRendered = renderToolResultDataText({
-      toolName: 'pdf_read_visuals',
+      toolName: 'pdf_read_pages',
       data: {
         sourcePath: '/workspace/深度学习.pdf',
-        results: [{ index: 9, text: '第9页右侧 Overfit 曲线显示验证表现变差。' }]
+        pages: [
+          {
+            pageNumber: 9,
+            pageImagePath: '/runtime/page-9.png',
+            text: '第9页右侧 Overfit 曲线显示验证表现变差。'
+          }
+        ]
       }
     })
 
@@ -217,25 +223,27 @@ describe('ai unit human tool result renderers', () => {
     expect(readRendered).toContain('architecture')
     expect(searchRendered).toContain('pageNumber=9')
     expect(searchRendered).toContain('右图属于过度拟合')
-    expect(visualRendered).toContain('index=9')
+    expect(visualRendered).toContain('page 9')
     expect(visualRendered).toContain('Overfit 曲线')
   })
 
-  it('renders DOCX visual results with visualId', () => {
+  it('renders DOCX read nodes with nodeId', () => {
     const rendered = renderToolResultDataText({
-      toolName: 'docx_read_visuals',
+      toolName: 'docx_read_nodes',
       data: {
         sourcePath: '/workspace/灵感测试.docx',
-        results: [
-          { visualId: 'visual-18', text: '截图展示了文档中的参考界面。' },
-          { visualId: 'visual-19', error: '无法唯一定位渲染元素' }
+        nodes: [
+          {
+            type: 'paragraph',
+            nodeId: 'node-18',
+            text: '截图展示了文档中的参考界面。',
+            children: []
+          }
         ]
       }
     })
 
-    expect(rendered).toContain('visualId=visual-18')
+    expect(rendered).toContain('node-18')
     expect(rendered).toContain('截图展示了文档中的参考界面')
-    expect(rendered).toContain('visualId=visual-19')
-    expect(rendered).toContain('无法唯一定位渲染元素')
   })
 })

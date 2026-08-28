@@ -13,8 +13,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description:
-        '验证同一会话跨 run 共享技能，并在加载 docx-write 时按 FIFO 保持 30 工具上限。',
+      description: '验证同一会话跨 run 共享技能，并在加载 docx-write 时按 FIFO 保持 30 工具上限。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -92,12 +91,7 @@ describe('ai human mock-llm backend', () => {
             'human.brain': [
               {
                 output: buildLearnSkillsDecision({
-                  skillIds: [
-                    'excel-read',
-                    'image-recognition',
-                    'image-generation',
-                    'docx-write'
-                  ],
+                  skillIds: ['excel-read', 'image-generation', 'docx-write'],
                   summary: '补充 Excel 阅读与图片、Word 编辑技能并检查 FIFO 遗忘结果。'
                 })
               },
@@ -123,12 +117,11 @@ describe('ai human mock-llm backend', () => {
             result.stateAtLimit.learnedSkillIds.join(',') ===
               'docx-read,pdf-read,excel-write,ppt-read,ppt-write' &&
             result.stateAfterEviction.learnedSkillIds.join(',') ===
-              'excel-write,ppt-read,ppt-write,excel-read,image-recognition,image-generation,docx-write' &&
+              'pdf-read,excel-write,ppt-read,ppt-write,excel-read,image-generation,docx-write' &&
             result.run4Prompt.includes('<learned_skills>'),
           {
             name: 'session-skills-persist-across-runs-within-tool-budget',
-            message:
-              '同一会话应跨 run 共享技能，并在加载 docx-write 后按 FIFO 淘汰最早技能。',
+            message: '同一会话应跨 run 共享技能，并在加载 docx-write 后按 FIFO 淘汰最早技能。',
             data: result
           }
         )

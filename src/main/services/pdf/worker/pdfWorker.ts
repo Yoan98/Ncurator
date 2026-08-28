@@ -1,10 +1,10 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import { parentPort } from 'node:worker_threads'
 import { createCanvas } from '@napi-rs/canvas'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/src/display/api'
-import { createWorkspaceAssetBucket } from '../../assets/WorkspaceAssetService'
+import { ensureWorkspaceAssetBucket } from '../../assets/WorkspaceAssetService'
 import { buildPdfPageText, normalizePdfText } from '../textNormalizer'
 import type {
   PdfDocumentMetadata,
@@ -136,7 +136,7 @@ const readPage = async (snapshot: PdfSnapshot, pageNumber: number): Promise<PdfP
     imageCount: await countPageImages(page),
     width: Math.round(viewport.width),
     height: Math.round(viewport.height),
-    rotation: viewport.rotation,
+    rotation: viewport.rotation
   }
   snapshot.pageTextByNumber.set(pageNumber, result)
   return result
@@ -216,8 +216,13 @@ const renderPage = async (input: {
     canvasContext: canvasContext as unknown as CanvasRenderingContext2D,
     viewport
   }).promise
-  const targetPath = `${input.directoryPath}/page-${String(input.pageNumber)}.png`
-  await fs.writeFile(targetPath, canvas.toBuffer('image/png'))
+  const bytes = canvas.toBuffer('image/png')
+  const targetPath = `${input.directoryPath}/${createHash('sha256').update(bytes).digest('hex')}.png`
+  try {
+    await fs.writeFile(targetPath, bytes, { flag: 'wx' })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+  }
   return {
     pageNumber: input.pageNumber,
     path: targetPath,
@@ -270,7 +275,7 @@ export const handlePdfWorkerRequest = async (
           pageCount: snapshot.pageCount,
           metadata: buildMetadata(metadata.info),
           outline: await buildOutline(document),
-          encrypted: false,
+          encrypted: false
         }
       }
     }
@@ -322,7 +327,7 @@ export const handlePdfWorkerRequest = async (
           totalMatchCount: allMatches.length,
           matches: allMatches.slice(0, request.payload.maxMatches),
           pagesWithNoTextCount,
-          pagesWithSuspiciousTextCount,
+          pagesWithSuspiciousTextCount
         }
       }
     }
@@ -330,14 +335,18 @@ export const handlePdfWorkerRequest = async (
     if (request.action === 'render_pages') {
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       validatePageNumbers(snapshot, request.payload.pageNumbers)
-      const bucket = await createWorkspaceAssetBucket(request.payload.workspaceRootPath)
+      const assetBucketId = `pdf_read_pages-${randomUUID()}`
+      const directoryPath = await ensureWorkspaceAssetBucket(
+        request.payload.workspaceRootPath,
+        assetBucketId
+      )
       const images: Array<Awaited<ReturnType<typeof renderPage>>> = []
       for (const pageNumber of request.payload.pageNumbers) {
         images.push(
           await renderPage({
             snapshot,
             pageNumber,
-            directoryPath: bucket.directoryPath
+            directoryPath
           })
         )
       }
@@ -346,8 +355,8 @@ export const handlePdfWorkerRequest = async (
         ok: true,
         payload: {
           action: 'render_pages',
-          assetBucketId: bucket.assetBucketId,
-          images,
+          assetBucketId,
+          images
         }
       }
     }

@@ -20,8 +20,6 @@ import type {
   BrowserTabNavigateRequest,
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
-  AiVisionModelAnalysisRequest,
-  AiVisionModelAnalysisResponse,
   AiRunCancelResponse,
   AiContextUsageRequest,
   AiContextUsageResponse,
@@ -231,9 +229,6 @@ export type DesktopApi = {
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigModelList: (id: string) => Promise<LlmModelListResponse>
-  analyzeVisionModels: (
-    payload: AiVisionModelAnalysisRequest
-  ) => Promise<AiVisionModelAnalysisResponse>
   isE2EMode: () => boolean
   aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>
   aiRuntimeSettingsSave: (

@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { ToolMessage } from '@langchain/core/messages'
-import type { ChatMessageLogEntry, JsonObject } from '../../../../../../shared/types'
+import type {
+  ChatMessageImageRef,
+  ChatMessageLogEntry,
+  JsonObject
+} from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import { buildModelToolResultDelivery } from '../../shared/modelToolResult'
@@ -11,6 +15,7 @@ import { analyzeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy
 import type { HumanRuntimeCache, HumanState, ToolCallResult } from '../../types'
 import { executeToolCall } from './toolExecutor'
 import { returnToBrainAfterTrace, returnToDispatch } from '../utils/stateTransitions'
+import { createImageReferenceMessage } from '../../memory/multimodal'
 
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 const isBrowserUseCall = (toolName: string): boolean => toolName === 'browser_use'
@@ -173,13 +178,22 @@ const appendToolMessages = async (input: {
   ctx: AiRunContext
   calls: ParsedHandCall[]
   results: ToolCallResult[]
-}): Promise<Array<{ toolCallId: string; toolName: string; ok: boolean; content: string }>> => {
+}): Promise<
+  Array<{
+    toolCallId: string
+    toolName: string
+    ok: boolean
+    content: string
+    images?: ChatMessageImageRef[]
+  }>
+> => {
   const messages = input.cache.messages || []
   const transcriptEntries: Array<{
     toolCallId: string
     toolName: string
     ok: boolean
     content: string
+    images?: ChatMessageImageRef[]
   }> = []
   for (let index = 0; index < input.calls.length; index += 1) {
     const call = input.calls[index]
@@ -197,11 +211,15 @@ const appendToolMessages = async (input: {
         tool_call_id: call.toolCallId
       })
     )
+    if (result.ok && result.imageRefs?.length) {
+      messages.push(createImageReferenceMessage(result.imageRefs))
+    }
     transcriptEntries.push({
       toolCallId: call.toolCallId,
       toolName: call.toolName,
       ok: delivery.ok,
-      content: delivery.content
+      content: delivery.content,
+      images: result.ok ? result.imageRefs : undefined
     })
   }
   input.cache.messages = messages
@@ -364,7 +382,8 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         toolCallId: entry.toolCallId,
         toolName: entry.toolName,
         ok: entry.ok,
-        content: entry.content
+        content: entry.content,
+        images: entry.images
       }))
     )
 

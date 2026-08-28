@@ -8,12 +8,11 @@ import {
   docxContentEditSchema,
   docxContentNodeDraftSchema,
   docxFormatSchema,
-  docxMediaEditSchema,
+  docxInternalMediaOperationSchema,
   docxOutlineSchema,
   docxReadNodesSchema,
   docxSearchSchema,
   docxTableEditSchema,
-  docxReadVisualsSchema,
   docxSearchModeSchema,
   paragraphSpecSchema,
   runSpecSchema,
@@ -74,7 +73,7 @@ export type DocxOperation =
   | DocxFormatOperation
   | ExpandNodeFormatRequest<DocxTableFormatRequest>
   | WithoutSourcePath<DocxTableStructureRequest>
-  | WithoutSourcePath<DocxMediaEditRequest>
+  | WithoutSourcePath<DocxInternalMediaOperation>
   | WithoutSourcePath<DocxCommentsRevisionsRequest>
 
 export type DocxLayoutMode = 'normal' | 'positioned'
@@ -195,12 +194,11 @@ export type DocxDetailedNode =
 
 export type DocxSearchMode = z.infer<typeof docxSearchModeSchema>
 export type DocxCreateRootNode = z.infer<typeof docxCreateRootNodeSchema>
-export type DocxReadVisualsRequest = z.infer<typeof docxReadVisualsSchema>
 export type DocxContentNodeDraft = z.infer<typeof docxContentNodeDraftSchema>
 export type DocxContentEditRequest = z.infer<typeof docxContentEditSchema>
 export type DocxFormatRequest = z.infer<typeof docxFormatSchema>
 export type DocxTableEditRequest = z.infer<typeof docxTableEditSchema>
-export type DocxMediaEditRequest = z.infer<typeof docxMediaEditSchema>
+export type DocxInternalMediaOperation = z.infer<typeof docxInternalMediaOperationSchema>
 export type DocxCommentsRevisionsRequest = z.infer<typeof docxCommentsRevisionsSchema>
 export type DocxNodeOutlineRequest = z.infer<typeof docxOutlineSchema>
 export type DocxNodeSearchRequest = z.infer<typeof docxSearchSchema>
@@ -283,7 +281,7 @@ export type DocxReplaySnapshotNode = {
   rawXml: string
   spec: DocxNodeSpec
   structureFingerprint: string
-  visuals: Array<{ visualId: string; kind: DocxVisualKind }>
+  visuals: Array<{ nodeId: string; kind: DocxVisualKind }>
   tableCellNodeIds: string[]
   tableCells?: Array<{
     nodeId: string
@@ -292,7 +290,7 @@ export type DocxReplaySnapshotNode = {
     text: string
     rawXml: string
     structureFingerprint: string
-    visuals: Array<{ visualId: string; kind: DocxVisualKind }>
+    visuals: Array<{ nodeId: string; kind: DocxVisualKind }>
   }>
 }
 
@@ -375,7 +373,7 @@ export type DocxReplayNode = {
   anchorSide?: 'before' | 'after'
   spec: DocxNodeSpec
   structureFingerprint: string
-  visualIds: string[]
+  visualNodeIds: string[]
   createdRevisionRef: string
   changedRevisionRef?: string
   reviewQueries?: string[]

@@ -22,7 +22,6 @@ describe('ai unit runtime skill contract', () => {
       'ppt-write',
       'excel-read',
       'excel-write',
-      'image-recognition',
       'image-generation'
     ])
   })

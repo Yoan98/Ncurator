@@ -16,6 +16,7 @@ import { scheduledTaskMigration } from './migrations/010_scheduled_task'
 import { chatSessionMessageLogMigration } from './migrations/011_chat_session_message_log'
 import { dropChatConversationMemoryMigration } from './migrations/012_drop_chat_conversation_memory'
 import { dropAiRunEventMigration } from './migrations/013_drop_ai_run_event'
+import { dropVisionModelMigration } from './migrations/014_drop_vision_model'
 
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
@@ -33,7 +34,8 @@ const MIGRATIONS: Migration[] = [
   scheduledTaskMigration,
   chatSessionMessageLogMigration,
   dropChatConversationMemoryMigration,
-  dropAiRunEventMigration
+  dropAiRunEventMigration,
+  dropVisionModelMigration
 ]
 
 const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING'

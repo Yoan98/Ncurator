@@ -32,23 +32,3 @@ export const loadLiveLlmConfigFromEnv = (): LiveLlmConfig => {
     api_key: apiKey
   }
 }
-
-export const loadLiveVisionLlmConfigFromEnv = (): LiveLlmConfig => {
-  const baseUrl = normalizeOpenAIBaseUrl(readEnv('AI_LIVE_VISION_BASE_URL'))
-  const apiKey = readEnv('AI_LIVE_VISION_API_KEY')
-  const modelName = readEnv('AI_LIVE_VISUAL_MODEL_NAME')
-  if (!baseUrl || !apiKey || !modelName) {
-    throw missingLiveEnvError(['VISION_BASE_URL', 'VISION_API_KEY', 'VISUAL_MODEL_NAME'])
-  }
-  return {
-    id: 'ai-live-vision-config',
-    name: 'AI Live Vision',
-    providerKind: resolveLlmProviderKind({
-      providerKind: readEnv('AI_LIVE_VISION_PROVIDER_KIND') || inferLlmProviderKind(baseUrl),
-      baseUrl
-    }),
-    base_url: baseUrl,
-    model_name: modelName,
-    api_key: apiKey
-  }
-}

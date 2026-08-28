@@ -507,7 +507,6 @@ export type WorkbenchSelectedModel = {
 
 export type WorkbenchModelSelection = {
   mainModel: WorkbenchSelectedModel | null
-  visionModel: WorkbenchSelectedModel | null
 }
 
 export type LlmRuntimeConfig = LLMConfig & {
@@ -525,17 +524,6 @@ export type LlmRemoteModel = {
 export type LlmModelListResponse = {
   success: boolean
   items: LlmRemoteModel[]
-  error?: string
-}
-
-export type AiVisionModelAnalysisRequest = {
-  mainModel: WorkbenchSelectedModel
-  modelNames: string[]
-}
-
-export type AiVisionModelAnalysisResponse = {
-  success: boolean
-  modelNames: string[]
   error?: string
 }
 
@@ -1099,7 +1087,6 @@ export type ScheduledTask = {
   weekday: number | null
   workspaceId: string
   mainModel: WorkbenchSelectedModel
-  visionModel: WorkbenchSelectedModel | null
   aiPreference: AiPreference
   executionPermission: AiExecutionPermission
   nextRunAt: number | null
@@ -1117,7 +1104,6 @@ export type ScheduledTaskSaveRequest = {
   weekday?: number | null
   workspaceId: string
   mainModel: WorkbenchSelectedModel
-  visionModel?: WorkbenchSelectedModel | null
   aiPreference?: AiPreference
   executionPermission?: AiExecutionPermission
 }
@@ -1143,7 +1129,6 @@ export type ChatSubmitRequest = {
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
   mainModel?: WorkbenchSelectedModel
-  visionModel?: WorkbenchSelectedModel
   workspace?: WorkspaceRuntimeBinding
   searchDocumentIds?: string[]
 }
@@ -1160,7 +1145,6 @@ export type AiRunRecord = {
   workspace?: WorkspaceRuntimeBinding
   modelName?: string
   mainModel?: WorkbenchSelectedModel
-  visionModel?: WorkbenchSelectedModel
   preference?: AiPreference
   executionPermission?: AiExecutionPermission
   partialAnswer: string
@@ -1702,6 +1686,14 @@ export type ChatMessageLogToolCall = {
   args: IpcJsonObject
 }
 
+export type ChatMessageImageRef = {
+  path: string
+  mimeType: string
+  sizeBytes?: number
+  width?: number
+  height?: number
+}
+
 export type ChatMessageLogEntry =
   | {
       kind: 'user'
@@ -1718,6 +1710,7 @@ export type ChatMessageLogEntry =
       toolName: string
       ok: boolean
       content: string
+      images?: ChatMessageImageRef[]
     }
   | {
       kind: 'annotation'

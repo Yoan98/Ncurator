@@ -1,5 +1,4 @@
 import { z } from 'zod/v4'
-import { visualRecognitionOutputSchema } from '../../../../visualRecognition/schemas'
 
 const pdfMetadataSchema = z.object({
   title: z.string().optional(),
@@ -26,7 +25,8 @@ const pdfPageSchema = z.object({
   imageCount: z.number().int(),
   width: z.number(),
   height: z.number(),
-  rotation: z.number()
+  rotation: z.number(),
+  pageImagePath: z.string()
 })
 
 export const pdfInspectOutputSchema = z.object({
@@ -63,5 +63,3 @@ export const pdfReadPagesOutputSchema = z.object({
   pageCount: z.number().int(),
   pages: z.array(pdfPageSchema)
 })
-
-export const pdfReadVisualsOutputSchema = visualRecognitionOutputSchema

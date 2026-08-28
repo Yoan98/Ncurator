@@ -9,10 +9,14 @@ import type {
   TestCaseDefinition
 } from './test-types'
 import { createRealAiHarness } from './realAiHarness'
-import { loadLiveLlmConfigFromEnv, loadLiveVisionLlmConfigFromEnv } from './llmConfig'
+import { loadLiveLlmConfigFromEnv } from './llmConfig'
 import { collectBackendSeedArtifacts } from './seedManifest'
 import { createStreamingRunLogWriter, createRunId } from './write-run-log'
-import { cleanupWorkspace, copyFixturesIntoWorkspace, createIsolatedWorkspace } from './workspaceManager'
+import {
+  cleanupWorkspace,
+  copyFixturesIntoWorkspace,
+  createIsolatedWorkspace
+} from './workspaceManager'
 import { EventCollector } from '../core/eventCollector'
 import {
   TEST_LOG_SCHEMA_VERSION,
@@ -92,11 +96,8 @@ const buildRunScope = (input: {
   return parts.join('/')
 }
 
-const buildTaskId = (input: {
-  suite: string
-  groups: readonly string[]
-  caseId: string
-}): string => [input.suite, ...input.groups, input.caseId].join('-')
+const buildTaskId = (input: { suite: string; groups: readonly string[]; caseId: string }): string =>
+  [input.suite, ...input.groups, input.caseId].join('-')
 
 const buildStats = (
   startedAtMs: number,
@@ -115,12 +116,10 @@ const buildStats = (
   artifacts: artifactCount
 })
 
-export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TResult>): Promise<void> => {
+export const runBackendCase = async <TResult>(
+  definition: TestCaseDefinition<TResult>
+): Promise<void> => {
   const liveConfig = definition.harnessMode === 'live' ? loadLiveLlmConfigFromEnv() : null
-  const liveVisionConfig =
-    definition.harnessMode === 'live' && definition.requiresVisionModel
-      ? loadLiveVisionLlmConfigFromEnv()
-      : null
   const runtimeModelName = liveConfig?.model_name || definition.runtimeModelName || null
   const startedAtMs = Date.now()
   const runId = createRunId(startedAtMs)
@@ -217,16 +216,13 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       fixtureBindings.map((binding) => ({
         from: binding.sourcePath,
         to: toRelativeWorkspaceTarget(workspaceRoot, binding.workspacePath)
-        }))
+      }))
     )
 
     const harness = await createRealAiHarness({
       definition: {
         ...definition,
-        runtimeModelName,
-        visionModel: liveVisionConfig
-          ? { configId: liveVisionConfig.id, modelName: liveVisionConfig.model_name }
-          : undefined
+        runtimeModelName
       },
       runId,
       taskId,
@@ -237,16 +233,6 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
     })
     runtime = harness.runtime
     if (liveConfig) await runtime.seedLlmConfig(liveConfig)
-    if (liveVisionConfig) {
-      await runtime.seedLlmConfig(liveVisionConfig)
-      recordEvent({
-        type: 'signal',
-        name: 'live-vision-config-selected',
-        status: 'info',
-        message: 'live vision model selected',
-        data: { configId: liveVisionConfig.id, modelName: liveVisionConfig.model_name }
-      })
-    }
 
     try {
       const result = await definition.execute(runtime)

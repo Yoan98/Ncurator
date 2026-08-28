@@ -151,7 +151,7 @@ describe('docx non-image visual rendering', () => {
       bundle.relationshipTargets,
       bundle.relationshipTypes
     )
-    expect([...index.visualsById.values()].map((visual) => visual.kind)).toEqual([
+    expect([...index.visualNodesById.values()].map((visual) => visual.kind)).toEqual([
       'image',
       'chart',
       'diagram',
@@ -159,21 +159,21 @@ describe('docx non-image visual rendering', () => {
       'embedded_object'
     ])
 
-    const bindings = [...index.visualsById.entries()]
+    const bindings = [...index.visualNodesById.entries()]
       .filter(
         (entry): entry is [string, (typeof entry)[1] & { kind: RenderBinding['kind'] }] =>
           entry[1].kind === 'chart' || entry[1].kind === 'diagram' || entry[1].kind === 'shape'
       )
-      .map(([visualId, visual]) => {
+      .map(([nodeId, visual]) => {
         const owner = index.nodesById.get(visual.ownerNodeId)!
-        const visualsInNode = [...index.visualsById.entries()].filter(([, candidate]) => {
+        const visualsInNode = [...index.visualNodesById.entries()].filter(([, candidate]) => {
           const candidateOwner = index.nodesById.get(candidate.ownerNodeId)
           return candidateOwner?.nodeIndex === owner.nodeIndex
         })
         return {
           kind: visual.kind,
           nodeIndex: owner.nodeIndex,
-          visualIndexInNode: visualsInNode.findIndex(([id]) => id === visualId),
+          visualIndexInNode: visualsInNode.findIndex(([id]) => id === nodeId),
           visualCountInNode: visualsInNode.length
         }
       })

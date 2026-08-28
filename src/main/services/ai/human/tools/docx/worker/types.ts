@@ -46,7 +46,7 @@ export type DocxWorkerRequest =
       requestId: string
       runId: string
       action: 'get_visual'
-      payload: { docId: string; visualId: string }
+      payload: { docId: string; nodeId: string }
     }
   | {
       requestId: string
@@ -169,7 +169,7 @@ export type DocxWorkerSuccessPayload =
     }
   | {
       action: 'get_visual'
-      visualId: string
+      nodeId: string
       kind: 'image' | 'chart' | 'diagram' | 'shape' | 'embedded_object'
       data?: Buffer
       mimeType?: string

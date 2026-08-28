@@ -26,7 +26,9 @@ describe('workbench conversation e2e', () => {
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
-          const server = await startLocalWorkbenchHttpServer('<html><body>restart state</body></html>')
+          const server = await startLocalWorkbenchHttpServer(
+            '<html><body>restart state</body></html>'
+          )
           runtime.registerResource({
             name: 'session-ui-restart-server',
             phase: 'after-app-close',
@@ -45,56 +47,59 @@ describe('workbench conversation e2e', () => {
             if (!response.success || !response.workspace) throw new Error('workspace create failed')
             return response.workspace.id
           })
-          const browser = await page.evaluate(async ({ session, firstUrl, secondUrl }) => {
-            await window.api.chatSessionSave(session)
-            const created = await window.api.browserTabCreate({ ownerId: session.id })
-            if (!created.success || !created.state) throw new Error('browser tab create failed')
-            await window.api.browserTabNavigate({ tabId: created.state.id, url: firstUrl })
-            await window.api.browserTabNavigate({ tabId: created.state.id, url: secondUrl })
-            await window.api.browserPanelZoomIn({ tabId: created.state.id })
-            const state: ChatSessionUiStateV1 = {
-              version: 1,
-              composer: {
-                mode: 'ai',
-                aiPreference: 'local_sources_relaxed',
-                executionPermission: 'full_access',
-                modelSelection: { mainModel: null, visionModel: null },
-                workspaceId: null,
-                draft: {
-                  input: '重启后仍在的草稿',
-                  contentNodes: [{ kind: 'text', text: '重启后仍在的草稿' }],
-                  selectedReferences: [],
-                  attachments: [],
-                  assetBucketId: null
-                }
-              },
-              panel: {
-                tabs: [
-                  {
-                    id: `browser:${created.state.id}`,
-                    kind: 'browser',
-                    title: '重启浏览器',
-                    browserTabId: created.state.id,
-                    state: {
+          const browser = await page.evaluate(
+            async ({ session, firstUrl, secondUrl }) => {
+              await window.api.chatSessionSave(session)
+              const created = await window.api.browserTabCreate({ ownerId: session.id })
+              if (!created.success || !created.state) throw new Error('browser tab create failed')
+              await window.api.browserTabNavigate({ tabId: created.state.id, url: firstUrl })
+              await window.api.browserTabNavigate({ tabId: created.state.id, url: secondUrl })
+              await window.api.browserPanelZoomIn({ tabId: created.state.id })
+              const state: ChatSessionUiStateV1 = {
+                version: 1,
+                composer: {
+                  mode: 'ai',
+                  aiPreference: 'local_sources_relaxed',
+                  executionPermission: 'full_access',
+                  modelSelection: { mainModel: null },
+                  workspaceId: null,
+                  draft: {
+                    input: '重启后仍在的草稿',
+                    contentNodes: [{ kind: 'text', text: '重启后仍在的草稿' }],
+                    selectedReferences: [],
+                    attachments: [],
+                    assetBucketId: null
+                  }
+                },
+                panel: {
+                  tabs: [
+                    {
+                      id: `browser:${created.state.id}`,
                       kind: 'browser',
                       title: '重启浏览器',
-                      browserTabId: created.state.id
+                      browserTabId: created.state.id,
+                      state: {
+                        kind: 'browser',
+                        title: '重启浏览器',
+                        browserTabId: created.state.id
+                      }
                     }
-                  }
-                ],
-                activeTabId: `browser:${created.state.id}`,
-                collapsed: false,
-                fallbackState: { kind: 'empty', title: '资源工作台', description: '' }
+                  ],
+                  activeTabId: `browser:${created.state.id}`,
+                  collapsed: false,
+                  fallbackState: { kind: 'empty', title: '资源工作台', description: '' }
+                }
               }
+              await window.api.chatSessionUiStateSave({ sessionId: session.id, state })
+              await window.api.workbenchUiStateSave({ activeViewKey: session.id, draftState: null })
+              return created.state
+            },
+            {
+              session,
+              firstUrl: `${server.url}?step=1`,
+              secondUrl: `${server.url}?step=2`
             }
-            await window.api.chatSessionUiStateSave({ sessionId: session.id, state })
-            await window.api.workbenchUiStateSave({ activeViewKey: session.id, draftState: null })
-            return created.state
-          }, {
-            session,
-            firstUrl: `${server.url}?step=1`,
-            secondUrl: `${server.url}?step=2`
-          })
+          )
           await page.reload()
           await navigateToWorkbench(page)
           await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
@@ -132,8 +137,10 @@ describe('workbench conversation e2e', () => {
             `${workbenchSelectors.sessionItemPrefix}-${session.id}`
           ).isVisible()
           const executionPermission = (
-            (await getWorkbenchLocator(page, workbenchSelectors.executionPermissionSwitch).textContent()) ||
-            ''
+            (await getWorkbenchLocator(
+              page,
+              workbenchSelectors.executionPermissionSwitch
+            ).textContent()) || ''
           ).trim()
           return {
             input,
@@ -146,7 +153,7 @@ describe('workbench conversation e2e', () => {
         assert: async (result, runtime) => {
           const restored = result.restoredBrowser.tabs.tabs[0]
           await runtime.assertThat(
-              result.sessionVisible &&
+            result.sessionVisible &&
               result.input === '重启后仍在的草稿' &&
               result.executionPermission.includes('完全访问') &&
               result.restoredBrowser.tabs.success &&

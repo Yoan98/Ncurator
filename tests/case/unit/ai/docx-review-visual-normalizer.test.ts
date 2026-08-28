@@ -16,7 +16,7 @@ const makeSnapshot = (input: {
   kind?: 'paragraph' | 'table'
   spec?: DocxReplaySnapshot['nodes'][number]['spec']
   structureFingerprint: string
-  visualIds: string[]
+  visualNodeIds: string[]
 }): DocxReplaySnapshot => {
   const node = {
     nodeId: 'node-1',
@@ -25,7 +25,7 @@ const makeSnapshot = (input: {
     rawXml: '<w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
     spec: input.spec || paragraphSpec,
     structureFingerprint: input.structureFingerprint,
-    visuals: input.visualIds.map((visualId) => ({ visualId, kind: 'image' as const })),
+    visuals: input.visualNodeIds.map((nodeId) => ({ nodeId, kind: 'image' as const })),
     tableCellNodeIds: []
   }
   return {
@@ -56,18 +56,18 @@ describe('docx review visual normalization', () => {
   it('does not normalize an image paragraph replaced by an empty paragraph as unchanged', () => {
     const source = makeSnapshot({
       structureFingerprint: 'paragraph-with-image',
-      visualIds: ['visual-1']
+      visualNodeIds: ['visual-1']
     })
     const session = makeSession(source)
     const node = session.nodeById.get(session.rootNodeIds[0])!
     node.structureFingerprint = 'empty-paragraph'
-    node.visualIds = []
+    node.visualNodeIds = []
 
     const result = normalizeReviewNodes([node], session)
 
     expect(result.map((item) => item.reviewState)).toEqual(['replaced-old', 'replaced-new'])
-    expect(result[0]?.visualIds).toEqual(['visual-1'])
-    expect(result[1]?.visualIds).toEqual([])
+    expect(result[0]?.visualNodeIds).toEqual(['visual-1'])
+    expect(result[1]?.visualNodeIds).toEqual([])
   })
 
   it('does not reduce a table visual deletion to a text-only formatted cell change', () => {
@@ -79,12 +79,12 @@ describe('docx review visual normalization', () => {
       kind: 'table',
       spec: tableSpec,
       structureFingerprint: 'table-with-image',
-      visualIds: ['visual-1']
+      visualNodeIds: ['visual-1']
     })
     const session = makeSession(source)
     const node = session.nodeById.get(session.rootNodeIds[0])!
     node.structureFingerprint = 'table-without-image'
-    node.visualIds = []
+    node.visualNodeIds = []
 
     const result = normalizeReviewNodes([node], session)
 

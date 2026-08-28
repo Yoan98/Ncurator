@@ -22,8 +22,6 @@ import { releaseDocxRunSession } from '../services/ai/human/tools/docx/worker/do
 import { releasePdfRunSession } from '../services/pdf/worker/pdfWorkerClient'
 import type {
   AiLlmIoRecord,
-  AiVisionModelAnalysisRequest,
-  AiVisionModelAnalysisResponse,
   FileWatchCheckResponse,
   FileWatchMutationRequest,
   FileWatchStartRequest,
@@ -32,20 +30,9 @@ import type {
   ScheduledTaskMutationResponse,
   ScheduledTaskSaveRequest,
   ScheduledTaskSetEnabledRequest,
-  WorkbenchSelectedModel,
   WriteTextFileRequest,
   WriteTextFileResponse
 } from '../../shared/types'
-import { invokeStructuredChat } from '../services/ai/llmExecutor'
-import {
-  normalizeVisionModelAnalysisResult,
-  visionModelAnalysisSchema,
-  type VisionModelAnalysisOutput
-} from '../services/llm/visionModelAnalysis'
-import {
-  buildVisionModelAnalysisSystemPrompt,
-  buildVisionModelAnalysisUserPrompt
-} from '../services/ai/prompts/visionModelAnalysis'
 import {
   buildWebReferenceItem,
   buildWorkspaceReferenceItemsFromCurrentTree
@@ -193,17 +180,6 @@ const takeE2ENativeDialogSelection = (
 const jieba = Jieba.withDict(dict)
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
-
-const errorChainContains = (error: unknown, needle: string): boolean => {
-  const seen = new Set<unknown>()
-  let current: unknown = error
-  while (current && typeof current === 'object' && !seen.has(current)) {
-    seen.add(current)
-    if (current instanceof Error && current.message.toLowerCase().includes(needle)) return true
-    current = 'cause' in current ? (current as { cause?: unknown }).cause : undefined
-  }
-  return false
-}
 
 const normalizeReferenceKindFilters = (
   referenceKinds: ListReferenceItemsRequest['referenceKinds']
@@ -2768,10 +2744,7 @@ export function registerHandlers(services: {
     try {
       const [sessions, activeSessionIds, unreadCompletedSessionIds] = await Promise.all([
         chatStore.getChatSessions(),
-        aiRunStore.listSessionIdsByRunStatuses([
-          'running',
-          'waiting_approval'
-        ]),
+        aiRunStore.listSessionIdsByRunStatuses(['running', 'waiting_approval']),
         chatStore.listUnreadCompletedSessionIds()
       ])
       const activeSessionIdSet = new Set(activeSessionIds)
@@ -2987,68 +2960,6 @@ export function registerHandlers(services: {
       } catch (e: unknown) {
         console.error('[LLM-CONFIG-MODEL-LIST] Error:', e)
         return { success: false, items: [], error: getErrorMessage(e) }
-      }
-    }
-  )
-
-  ipcMain.handle(
-    'llm-analyze-vision-models',
-    async (
-      _event,
-      payload: AiVisionModelAnalysisRequest
-    ): Promise<AiVisionModelAnalysisResponse> => {
-      try {
-        const mainModel: WorkbenchSelectedModel | undefined = payload?.mainModel
-        const modelNames = Array.from(
-          new Set(
-            (Array.isArray(payload?.modelNames) ? payload.modelNames : [])
-              .map((name) => String(name).trim())
-              .filter(Boolean)
-          )
-        )
-        const configId = String(mainModel?.configId || '').trim()
-        const mainModelName = String(mainModel?.modelName || '').trim()
-        if (!configId || !mainModelName) {
-          return { success: false, modelNames: [], error: '请先选择主模型' }
-        }
-        if (modelNames.length === 0) {
-          return { success: false, modelNames: [], error: '暂无可分析的候选模型' }
-        }
-        const config = await llmStore.getById(configId)
-        if (!config) {
-          return { success: false, modelNames: [], error: '主模型对应的大模型配置不存在，请重新选择' }
-        }
-
-        const system = buildVisionModelAnalysisSystemPrompt()
-        const user = buildVisionModelAnalysisUserPrompt(modelNames)
-
-        const maxAttempts = 2
-        let result: { output: VisionModelAnalysisOutput } | undefined
-        for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-          try {
-            result = await invokeStructuredChat({
-              caller: 'llm-analyze-vision-models',
-              cfg: { ...config, model_name: mainModelName },
-              schema: visionModelAnalysisSchema,
-              schemaName: 'vision_model_analysis',
-              system,
-              user,
-              temperature: 0
-            })
-            break
-          } catch (error) {
-            const retryable = errorChainContains(error, 'structured_output_non_object_response')
-            if (!retryable || attempt >= maxAttempts) throw error
-          }
-        }
-        if (!result) throw new Error('llm_vision_analysis_missing_result')
-
-        const visionModelNames = normalizeVisionModelAnalysisResult(modelNames, result.output)
-
-        return { success: true, modelNames: visionModelNames }
-      } catch (e: unknown) {
-        console.error('[LLM-ANALYZE-VISION-MODELS] Error:', e)
-        return { success: false, modelNames: [], error: getErrorMessage(e) }
       }
     }
   )

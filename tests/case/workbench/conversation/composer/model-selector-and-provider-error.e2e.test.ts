@@ -137,7 +137,7 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['composer'],
-        description: '验证模型搜索空状态、配置分组折叠，以及模型服务 404 的统一错误处理。',
+        description: '验证单主模型选择、搜索空状态，以及模型服务 404 的统一错误处理。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -156,47 +156,23 @@ describe('workbench conversation e2e', () => {
           await configureLiveModelThroughSettingsUi(page, {
             baseUrl: provider.baseUrl,
             apiKey: liveEnv.apiKey,
-            modelName: liveEnv.modelName,
-            visualModelName: liveEnv.modelName
+            modelName: liveEnv.modelName
           })
           await navigateToWorkbench(page, { waitForSessionListText: false })
 
           const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
           await modelSelect.click()
-          await page
-            .locator('.workbench-select-menu.workbench-composer-menu')
+          const dropdown = page
+            .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
             .last()
-            .getByRole('button', { name: /^主模型/u })
-            .click()
-          const dropdown = page.locator('.workbench-select-menu.workbench-composer-menu').last()
-          const searchInput = dropdown.locator('input[placeholder="搜索模型"]')
+          const searchInput = modelSelect.locator('input').first()
           await searchInput.waitFor({ state: 'visible' })
 
-          const configButton = dropdown
-            .getByRole('button', { name: /Live Model/u })
-            .filter({ has: page.locator('svg') })
+          const providerGroupVisible = await dropdown
+            .locator('.ant-select-item-group')
+            .filter({ hasText: 'Live Model' })
             .first()
-          await configButton.waitFor({ state: 'visible' })
-          const iconIsRightOfText = await configButton.evaluate((button) => {
-            const content = button.firstElementChild
-            return (
-              content?.children.item(0)?.tagName.toLowerCase() === 'span' &&
-              content?.children.item(1)?.tagName.toLowerCase() === 'svg'
-            )
-          })
-          await configButton.click()
-          const collapsed =
-            (await configButton.getAttribute('aria-expanded')) === 'false' &&
-            !(await dropdown
-              .getByRole('option', { name: liveEnv.modelName, exact: true })
-              .isVisible()
-              .catch(() => false))
-          await configButton.click()
-          const expanded =
-            (await configButton.getAttribute('aria-expanded')) === 'true' &&
-            (await dropdown
-              .getByRole('option', { name: liveEnv.modelName, exact: true })
-              .isVisible())
+            .isVisible()
 
           await searchInput.fill(MISSING_MODEL_NAME)
           await dropdown.getByText('暂无匹配模型', { exact: true }).waitFor({ state: 'visible' })
@@ -247,9 +223,7 @@ describe('workbench conversation e2e', () => {
           })
 
           return {
-            iconIsRightOfText,
-            collapsed,
-            expanded,
+            providerGroupVisible,
             missingOptionCount,
             successfulChatRequestCount: provider.getSuccessfulChatRequestCount(),
             successFinalAnswer: successEvidence.finalAnswerText,
@@ -261,17 +235,12 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.iconIsRightOfText &&
-              result.collapsed &&
-              result.expanded &&
-              result.missingOptionCount === 0,
+            result.providerGroupVisible && result.missingOptionCount === 0,
             {
-              name: 'model-selector-search-and-collapse',
-              message: '模型选择器应支持配置分组折叠，图标在文字右侧，搜索无结果时只显示空状态。',
+              name: 'main-model-selector-search',
+              message: '单主模型选择器应显示供应商分组，搜索无结果时只显示空状态。',
               data: {
-                iconIsRightOfText: result.iconIsRightOfText,
-                collapsed: result.collapsed,
-                expanded: result.expanded,
+                providerGroupVisible: result.providerGroupVisible,
                 missingOptionCount: result.missingOptionCount
               }
             }

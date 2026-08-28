@@ -27,11 +27,15 @@ const projectVisualNode = (node: DocxReadContentNode): DocxPublicReadVisualConte
 
 const projectRunChild = (node: DocxReadRunChildNode): DocxPublicReadRunChildNode => {
   if (node.type === 'text' || node.type === 'tab' || node.type === 'break') return node
+  if (!node.imagePath) throw new Error(`visual node ${node.nodeId} has no materialized imagePath`)
   return compact({
     type: 'visual' as const,
-    visualId: node.visualId,
+    nodeId: node.nodeId,
     kind: node.kind,
     altText: node.altText,
+    imagePath: node.imagePath,
+    widthCm: node.widthCm,
+    heightCm: node.heightCm,
     children: node.children?.map(projectVisualNode)
   })
 }

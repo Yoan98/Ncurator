@@ -183,7 +183,6 @@ export const createRealAiDepsFactory = async (input: {
               defaultModelName: input.runtimeModelName
             }) || ''
         },
-        visionModel: contextInput.visionModel,
         workspace: bindWorkspace
           ? {
               workspaceId: 'test-workspace',

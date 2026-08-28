@@ -18,7 +18,6 @@ const TOOL_FAMILY_BUILDERS: Record<
   ppt: TOOL_FAMILY_DEFINITIONS.ppt.buildTools,
   excel: TOOL_FAMILY_DEFINITIONS.excel.buildTools,
   web: TOOL_FAMILY_DEFINITIONS.web.buildTools,
-  'image-recognition': TOOL_FAMILY_DEFINITIONS['image-recognition'].buildTools,
   'image-generation': TOOL_FAMILY_DEFINITIONS['image-generation'].buildTools,
   'agent-control': TOOL_FAMILY_DEFINITIONS['agent-control'].buildTools
 }

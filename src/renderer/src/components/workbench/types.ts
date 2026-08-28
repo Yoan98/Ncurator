@@ -130,7 +130,6 @@ export type AssistantProcessSkillKey =
   | 'terminal'
   | 'web-search'
   | 'browser'
-  | 'image-recognition'
   | 'image-generation'
   | 'wait'
   | 'user-takeover'

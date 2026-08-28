@@ -84,7 +84,6 @@ export type AiRunStartPayload = {
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
   mainModel?: WorkbenchSelectedModel
-  visionModel?: WorkbenchSelectedModel
   preference?: AiPreference
   executionPermission?: AiExecutionPermission
   workspace?: {
@@ -296,7 +295,6 @@ export type AiRunContext = {
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
   getLlmConfig: () => Promise<LlmRuntimeConfig>
-  getVisionLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
   appendMessageLog: (entries: ChatMessageLogEntry[]) => Promise<void>

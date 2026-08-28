@@ -13,7 +13,13 @@ import {
   TimePicker
 } from 'antd'
 import dayjs from 'dayjs'
-import { HiFolder, HiOutlineClock, HiOutlineFolderPlus, HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi2'
+import {
+  HiFolder,
+  HiOutlineClock,
+  HiOutlineFolderPlus,
+  HiOutlinePlus,
+  HiOutlineTrash
+} from 'react-icons/hi2'
 import { useNavigate } from 'react-router-dom'
 import type {
   AiExecutionPermission,
@@ -72,7 +78,7 @@ const emptyForm = (): FormState => ({
   timeOfDay: '09:00',
   weekday: null,
   workspaceId: '',
-  modelSelection: { mainModel: null, visionModel: null },
+  modelSelection: { mainModel: null },
   aiPreference: 'default',
   executionPermission: 'full_access'
 })
@@ -179,10 +185,7 @@ const ScheduledTasksView: React.FC = () => {
       timeOfDay: task.timeOfDay,
       weekday: task.weekday,
       workspaceId: task.workspaceId,
-      modelSelection: {
-        mainModel: task.mainModel,
-        visionModel: task.visionModel
-      },
+      modelSelection: { mainModel: task.mainModel },
       aiPreference: task.aiPreference,
       executionPermission: task.executionPermission
     })
@@ -225,7 +228,6 @@ const ScheduledTasksView: React.FC = () => {
       weekday: form.scheduleType === 'weekly' ? normalizeWeekday(form.weekday) : null,
       workspaceId: form.workspaceId,
       mainModel: form.modelSelection.mainModel,
-      visionModel: form.modelSelection.visionModel,
       aiPreference: form.aiPreference,
       executionPermission: form.executionPermission
     }
@@ -288,10 +290,7 @@ const ScheduledTasksView: React.FC = () => {
   }
 
   return (
-    <div
-      className="flex h-full min-h-0 flex-col"
-      data-testid={scheduledTaskSelectors.view}
-    >
+    <div className="flex h-full min-h-0 flex-col" data-testid={scheduledTaskSelectors.view}>
       <div
         className="flex h-[44px] shrink-0 items-center justify-between border-b border-[#EEEEEC] bg-white px-4"
         style={{ WebkitAppRegion: 'drag' } as CSSProperties}

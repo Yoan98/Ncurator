@@ -2,29 +2,29 @@
 
 ## 最新 Live 评估
 
-| caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                         | 简短依据                                                                                                                                                                                                                                      |
-| --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| human-risk-report-draft-live                        | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 20:15 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260813-201549-550                        | 真实读取模板、上周周报与工作文档，新建周报并 apply，原文件全部未改。                                                                                                                                                                          |
-| human-context-compaction-natural-trigger-live       | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816       | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。                                                                                                                                        |
-| human-excel-write-reconciliation-live               | 完成 |            96 | deepseek-v4-flash                | 2026-08-14 18:39 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260814-183949-614               | 终端真实计算核对，四笔状态精确标记，SUMIF 公式正确，样式保持。                                                                                                                                                                                |
-| human-excel-read-sales-gap-analysis-live            | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 21:02 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260813-210226-107            | 真实读取多 Sheet 并终端/python 计算差额，对话给出 P-100/P-300 优先级，源工作簿未改。                                                                                                                                                          |
-| human-kb-guided-docx-comparison-draft-live          | 完成 |            86 | deepseek-v4-flash                | 2026-08-27 22:47 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-224726-600            | KB 缩圈后双目标 docx 成功回写，来源课件未改，Oracle 通过。                                                                                                                                                                                    |
-| human-ppt-write-management-review-live              | 完成 |            94 | deepseek-v4-flash                | 2026-08-14 18:42 CST | tests/logs/ai/human/live/human-ppt-write-management-review-live/20260814-184258-961              | 新增摘要页并升级交付风险（李然/7月15日），封面与指标页保持不变，布局无越界、校验零错误。                                                                                                                                                      |
-| human-ppt-read-management-risk-review-live          | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 18:44 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260814-184455-621          | 真实 ppt 读取完成风险简报，视觉识别返回可用文本，未修改演示文稿。                                                                                                                                                                             |
-| human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。                                                                                                                                                     |
-| human-runtime-script-system-python-live             | 完成 |            95 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-script-system-python-live/20260814-160300-706             | 本机 Python 在临时脚本目录运行临时脚本，得到确定性结果并核对。                                                                                                                                                                                |
-| human-runtime-download-python-live                  | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-download-python-live/20260814-160340-415                  | Python 不可用时自主下载便携运行时并运行临时脚本，得到正确结果。                                                                                                                                                                               |
-| human-session-resume-with-new-selection-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:11 CST | tests/logs/ai/human/live/human-session-resume-with-new-selection-live/20260813-201154-716        | 新选中文件后会话记忆与任务主线延续，完整完成任务。                                                                                                                                                                                            |
-| human-docx-positioned-structural-edit-fallback-live | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 20:13 CST | tests/logs/ai/human/live/human-docx-positioned-structural-edit-fallback-live/20260813-201354-419 | 复杂定位区域写入被保护并返回明确诊断，其余区域编辑安全完成。                                                                                                                                                                                  |
-| human-legacy-doc-reading-live                       | 完成 |            94 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-legacy-doc-reading-live/20260813-195642-815                       | 通过 docx 读取工具成功读取旧版 .doc 并准确回答五级风险与区别率，源文件未改。                                                                                                                                                                  |
-| human-text-file-write-checkout-cutover-live         | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:17 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20260813-201727-173         | 两处端点和超时精确更新，重试与 telemetry 不变，写后核对完整。                                                                                                                                                                                 |
-| human-text-file-read-checkout-readiness-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260813-201642-554        | 只读审查准确识别就绪性风险与保留配置，源文件未改。                                                                                                                                                                                            |
-| human-web-search-by-url-live                        | 通过 |             - | deepseek-v4-flash                | 2026-08-24 01:05 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260824-012552-756                        | 给定指定地址，web_search(url) 读取该页并基于正文回答。                                                                                                                                                                                        |
-| human-web-search-intent-query-live                  | 通过 |             - | deepseek-v4-flash                | 2026-08-24 01:03 CST | -                                                                                                | 纯文本诉求提炼意图，web_search(query) 读取官方文档回答。                                                                                                                                                                                      |
-| human-legacy-doc-edit-skip-live                     | 完成 |            88 | deepseek-v4-flash                | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129                     | .doc 写入失败后停止重试，源文件不变，任务完成。                                                                                                                                                                                               |
-| human-docx-visual-reading-live                      | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243                      | 真实读取 DOCX 图片并准确回答，源文件未改。                                                                                                                                                                                                    |
-| human-pdf-visual-reading-live                       | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871                       | PDF 页级视觉读取与识图，正确回答图形差异，源 PDF 未改。                                                                                                                                                                                       |
-| human-docx-dangling-image-edit-live                 | 完成 |            93 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-dangling-image-edit-live/20260821-230430-129                 | 读图、评估需求并写回至少 12 条工时，Oracle 通过。                                                                                                                                                                                             |
+| caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                         | 简短依据                                                                                               |
+| --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| human-risk-report-draft-live                        | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 20:15 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260813-201549-550                        | 真实读取模板、上周周报与工作文档，新建周报并 apply，原文件全部未改。                                   |
+| human-context-compaction-natural-trigger-live       | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816       | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。 |
+| human-excel-write-reconciliation-live               | 完成 |            96 | deepseek-v4-flash                | 2026-08-14 18:39 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260814-183949-614               | 终端真实计算核对，四笔状态精确标记，SUMIF 公式正确，样式保持。                                         |
+| human-excel-read-sales-gap-analysis-live            | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 21:02 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260813-210226-107            | 真实读取多 Sheet 并终端/python 计算差额，对话给出 P-100/P-300 优先级，源工作簿未改。                   |
+| human-kb-guided-docx-comparison-draft-live          | 完成 |            86 | deepseek-v4-flash                | 2026-08-27 22:47 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-224726-600          | KB 缩圈后双目标 docx 成功回写，来源课件未改，Oracle 通过。                                             |
+| human-ppt-write-management-review-live              | 完成 |            94 | deepseek-v4-flash                | 2026-08-14 18:42 CST | tests/logs/ai/human/live/human-ppt-write-management-review-live/20260814-184258-961              | 新增摘要页并升级交付风险（李然/7月15日），封面与指标页保持不变，布局无越界、校验零错误。               |
+| human-ppt-read-management-risk-review-live          | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 18:44 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260814-184455-621          | 真实 ppt 读取完成风险简报，视觉识别返回可用文本，未修改演示文稿。                                      |
+| human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。              |
+| human-runtime-script-system-python-live             | 完成 |            95 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-script-system-python-live/20260814-160300-706             | 本机 Python 在临时脚本目录运行临时脚本，得到确定性结果并核对。                                         |
+| human-runtime-download-python-live                  | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-download-python-live/20260814-160340-415                  | Python 不可用时自主下载便携运行时并运行临时脚本，得到正确结果。                                        |
+| human-session-resume-with-new-selection-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:11 CST | tests/logs/ai/human/live/human-session-resume-with-new-selection-live/20260813-201154-716        | 新选中文件后会话记忆与任务主线延续，完整完成任务。                                                     |
+| human-docx-positioned-structural-edit-fallback-live | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 20:13 CST | tests/logs/ai/human/live/human-docx-positioned-structural-edit-fallback-live/20260813-201354-419 | 复杂定位区域写入被保护并返回明确诊断，其余区域编辑安全完成。                                           |
+| human-legacy-doc-reading-live                       | 完成 |            94 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-legacy-doc-reading-live/20260813-195642-815                       | 通过 docx 读取工具成功读取旧版 .doc 并准确回答五级风险与区别率，源文件未改。                           |
+| human-text-file-write-checkout-cutover-live         | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:17 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20260813-201727-173         | 两处端点和超时精确更新，重试与 telemetry 不变，写后核对完整。                                          |
+| human-text-file-read-checkout-readiness-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260813-201642-554        | 只读审查准确识别就绪性风险与保留配置，源文件未改。                                                     |
+| human-web-search-by-url-live                        | 通过 |             - | deepseek-v4-flash                | 2026-08-24 01:05 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260824-012552-756                        | 给定指定地址，web_search(url) 读取该页并基于正文回答。                                                 |
+| human-web-search-intent-query-live                  | 通过 |             - | deepseek-v4-flash                | 2026-08-24 01:03 CST | -                                                                                                | 纯文本诉求提炼意图，web_search(query) 读取官方文档回答。                                               |
+| human-legacy-doc-edit-skip-live                     | 完成 |            88 | deepseek-v4-flash                | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129                     | .doc 写入失败后停止重试，源文件不变，任务完成。                                                        |
+| human-docx-visual-reading-live                      | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243                      | 真实读取 DOCX 图片并准确回答，源文件未改。                                                             |
+| human-pdf-visual-reading-live                       | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871                       | PDF 页级视觉读取与识图，正确回答图形差异，源 PDF 未改。                                                |
+| human-docx-dangling-image-edit-live                 | 完成 |            93 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-dangling-image-edit-live/20260821-230430-129                 | 读图、评估需求并写回至少 12 条工时，Oracle 通过。                                                      |
 
 ## 1. 总体目标
 
@@ -38,7 +38,7 @@
 ### 2.1 `tool`
 
 - `tool` 只验证真实生产工具调用，不允许 fake。
-- `tool / docx` 覆盖 9 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 Source→Working 净 Diff。
+- `tool / docx` 覆盖 7 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 Source→Working 净 Diff。
 - `tool / text-file` 覆盖普通文本按行分页读取、四种写入 action、修改记录、结构化 diff 与回退前置数据，以及按行号定位的文本搜索。
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作区内修改记录、Artifact、安全校验和工作区外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作区外绝对路径读取、损坏文件和结果大小限制。
@@ -135,7 +135,7 @@ LLM 错误只按 `fatal` / `retryable` / `unknown` 分类，服务重试只负�
 
 #### docx 类别
 
-DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segment map 百分比区间、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、分页/分栏/section 边界、中英文混合 TF-IDF、DrawingML/VML 视觉锚点、TF-IDF/MMR 摘要预算、搜索全量计数但只构造前 10 条详情、无效搜索 scope、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和行列/合并视觉丢失保护。公开工具回归还必须验证错误 ID 不会提交部分修改。
+DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segment map 百分比区间、literal/regex 完整原文搜索、单 operation 写入、最多 20 目标的原子格式化和 Source→Working 净 Diff 为唯一现行协议。底层 OOXML、identity、保真与 Diff 细节由 `tests/case/unit/ai/docx-*.test.ts` 覆盖，包括 segment 无遗漏/无重叠、分页/分栏/section 边界、中英文混合 TF-IDF、DrawingML/VML 视觉锚点、TF-IDF/MMR 摘要预算、搜索全量计数但只构造前 10 条详情、无效搜索 scope、批量格式预校验和回滚、全部写 operation 矩阵、跨 story 身份、相同 run 插入、1-based 表格坐标和 visual 节点编辑清理。公开工具回归还必须验证错误 ID 不会提交部分修改。
 
 ##### `docx-v2-public-tools`
 
@@ -249,13 +249,13 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：页数为 11，标题为“深度学习”，正文没有 NUL，且“过度拟合”能命中第 8 或第 9 页。
 - Not：不识别页面图片。
 
-##### `pdf-read-visuals-contract`
+##### `pdf-read-pages-image-contract`
 
 - 测试类型：`backend`
 - What：指定页面会被渲染为可供其他工具使用的 PNG。
 - Why：PDF 与图像识别需要通过普通图片路径解耦协作。
-- How：渲染第 1、9 页并检查文件路径、PNG 文件头、源文件哈希和事件。
-- Oracle：路径为 `.ncurator/runtime/assets/<uuid>/page-N.png`；图片真实存在；源 PDF 不变；不产生普通 artifact。
+- How：读取第 9 页并检查 `pageImagePath`、图片文件头、源文件哈希和事件。
+- Oracle：路径为 `.ncurator/runtime/assets/pdf_read_pages-<uuid>/<hash>.<ext>`；图片真实存在；源 PDF 不变；不产生普通 artifact。
 - Not：不在 PDF 工具内部做图像识别。
 
 ##### `pdf-result-size-contract`
@@ -531,43 +531,25 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：所有调用均返回明确错误；新目标文件不存在；已有目标文件保持调用前 bytes；不生成图片修改记录或 `file_artifact`。
 - Not：不把内部安全规则写入 Tool 提示词，也不穷举全部 SVG 标签。
 
-#### image-recognition 类别
+#### 主模型多模态类别
 
-##### `image-analyze-contract`
-
-- 测试类型：`backend`
-- What：`image_analyze` 成功时直接返回普通文本。
-- Why：图像识别能力不要求结构化 JSON，human 需要拿到模型原始可读文本自己决策下一步。
-- How：启动本地 OpenAI-compatible HTTP server 返回普通文本，调用 `image_analyze(path, instruction)`。
-- Oracle：工具结果直接是字符串，不包额外结构。
-- Not：不验证具体视觉模型质量。
-
-##### `image-analyze-uncertain-text-contract`
+##### `read-image-multimodal-contract`
 
 - 测试类型：`backend`
-- What：视觉模型返回“无法确认”类文本时，`image_analyze` 仍按正常结果透传。
-- Why：无法确认不属于工具失败，而是模型识别结论的一部分。
-- How：启动本地 OpenAI-compatible HTTP server 返回“无法确认”文本，调用 `image_analyze(path, instruction)`。
-- Oracle：工具结果仍是成功字符串。
-- Not：不验证 UI 渲染。
+- What：`read_image(paths)` 按输入顺序返回 1 至 10 个稳定图片引用，并由同一个主模型在下一次请求中直接读取。
+- Why：图片理解不再经过独立视觉模型或描述文本，消息历史也不能持久化 Base64。
+- How：分别输入本地图片、多张图片和 HTTP(S) 图片；检查持久消息、请求投影和 provider 请求体。
+- Oracle：本地图片落入 `.ncurator/runtime/assets/read_image-<uuid>/<hash>.<ext>`；数据库只保存路径；同一次请求包含全部图片；不支持图片时直接保留 provider 的自然错误。
+- Not：不验证具体模型的识图质量。
 
-##### `image-analyze-unsupported-vision-contract`
-
-- 测试类型：`backend`
-- What：模型协议明确声明不支持图像识别时，`image_analyze` 返回稳定错误结果。
-- Why：不支持图片输入属于模型能力边界，必须与普通“无法确认”文本和底层调用失败区分。
-- How：启动本地 OpenAI-compatible HTTP server，返回 `supports_image_recognition=false`，再调用 `image_analyze`。
-- Oracle：工具结果返回包含当前模型名的固定不支持图像识别错误，提示用户切换模型。
-- Not：不验证 UI 中的模型切换操作。
-
-##### `image-analyze-bottom-error-contract`
+##### `multimodal-image-budget-contract`
 
 - 测试类型：`backend`
-- What：视觉模型底层失败时，`image_analyze` 返回 error。
-- Why：只有底层调用失败才应进入工具错误路径。
-- How：启动本地 OpenAI-compatible HTTP server 返回失败响应，调用 `image_analyze(path, instruction)`。
-- Oracle：工具结果返回 `{ error }`。
-- Not：不验证 provider 重试策略。
+- What：请求视图按 20 张和 20 MiB 上限稳定裁剪图片，持久消息不变。
+- Why：长期对话不能无限重复发送历史图片，同时需要尽量稳定前缀缓存。
+- How：构造超出数量和体积预算的图片历史，再次调用 `read_image` 读取已裁剪图片。
+- Oracle：最旧图片按至少 5 张的批次替换为带原路径的占位文本；重新读取的引用出现在消息尾部；保留图片才在请求前编码为 data URL。
+- Not：不假定 provider 的图片 token 计费方式。
 
 ##### `browser-use-keeps-one-tab-for-the-whole-run`
 
@@ -818,13 +800,13 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：同一条任务中真实出现 terminal 与 KB 两类工具结果，任务最终完成。
 - Not：不验证更复杂的多轮依赖型工具调度。
 
-##### `human-pdf-read-visuals-collaboration`
+##### `human-pdf-read-image-collaboration`
 
 - 测试类型：`backend / mock-llm`
-- What：mock human 能组合 PDF 文本读取与 PDF 视觉读取，直接得到识图结果。
-- Why：PDF 视觉能力属于 AI 架构工具协作，不应依赖 Workbench 或伪造事件。
-- How：用本地视觉服务和脚本化 human 决策调用 `pdf_read_pages` 与 `pdf_read_visuals`。
-- Oracle：两类工具均成功；视觉结果包含服务返回的信息；不调用旧的 render/image-analyze 路径。
+- What：mock human 能组合 PDF 页面读取与主模型图片输入。
+- Why：扫描 PDF 需要页面图片路径，但图片理解应由主模型完成。
+- How：脚本化 human 先调用 `pdf_read_pages`，再把返回的 `pageImagePath` 交给 `read_image`。
+- Oracle：页面读取和图片引用均成功；同一次后续主模型请求包含页面图片；不调用任何旧 visual/render 工具。
 - Not：不验证真实模型的自主决策。
 
 ##### `kb-answer-with-real-kb`
@@ -985,19 +967,19 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-pdf-visual-reading-live`
 
 - 测试类型：`backend / live`
-- What：真实模型会自主组合 PDF 文本读取、页面渲染和通用图像识别。
+- What：真实模型会自主组合 PDF 页面读取和主模型多模态输入。
 - Why：PDF 工具不内置图片理解，必须验证工具解耦后 AI 仍能完成图文结合阅读。
-- How：只选择 `深度学习.pdf`，询问第 1 页训练闭环和第 9 页 Proper fit / Overfit 图形差异，仅开放 PDF 四个工具与 `image_analyze`。
-- Oracle：任务完成；调用 `pdf_read_pages`、包含第 9 页的 `pdf_render_pages` 和 `image_analyze`；第 9 页图像识别必须成功且全部图像识别失败数为 0；识别路径来自 render 输出并位于 `.ncurator/runtime/assets/<uuid>/page-9.png`；不调用 terminal、KB、docx；最终答复同时说明训练闭环和两组曲线差异，不能用“无法识别图片”等内容绕过；源 PDF 不变。
+- How：只选择 `深度学习.pdf`，询问第 1 页训练闭环和第 9 页 Proper fit / Overfit 图形差异，仅开放 PDF 读取工具与内置 `read_image`。
+- Oracle：任务完成；`pdf_read_pages` 返回第 9 页 `pageImagePath`，模型调用 `read_image` 并识别成功；路径位于 `.ncurator/runtime/assets/pdf_read_pages-<uuid>/<hash>.<ext>`；不调用 terminal、KB、docx；最终答复同时说明训练闭环和两组曲线差异；源 PDF 不变。
 - Not：不固定工具调用顺序和最终措辞，不要求把 PDF 页面图片登记为 artifact。
 
 ##### `human-docx-visual-reading-live`
 
 - 测试类型：`backend / live`
-- What：真实模型能从 DOCX 递归 visual 节点取得 visualId，并按需读取普通图片。
+- What：真实模型能从 DOCX 递归 visual 节点取得 `nodeId` 和 `imagePath`，并按需读取普通图片。
 - Why：mock 只能证明协议可串联，live 还要验证模型在自然语言任务下会自主选择视觉读取，并能使用真实识图结果回答。
 - How：只选择含五种 visual kind 的真实 OOXML fixture，要求模型找到标有 IMAGE 的普通图片，说明标题、主要颜色和基本图形；只开放 DOCX 读取工具，不在用户输入中提供工具名或调用顺序。
-- Oracle：任务完成；模型读取递归节点并成功调用 `docx_read_visuals`；识图结果和最终答复都包含 IMAGE，最终答复识别出蓝色、矩形和圆形；不调用 `image_analyze` 或任何 DOCX 写工具；源 DOCX 不变。
+- Oracle：任务完成；模型读取递归节点并成功调用 `read_image`；主模型和最终答复都能使用图片内容，最终答复识别出蓝色、矩形和圆形；不调用任何 DOCX 写工具；源 DOCX 不变。
 - Not：不通过 backend live 重复验证 chart、diagram、shape 的 BrowserWindow 渲染；该链路由真实 Electron 渲染测试覆盖。
 
 ##### `human-docx-dangling-image-edit-live`
@@ -1005,8 +987,8 @@ DOCX tool 回归以 9 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend / live`
 - What：真实模型能读取带 `NULL` 图片残留的需求 DOCX，识别真实图片、评估需求并写回开发时间。
 - Why：这条回归覆盖用户真实的“读图 + 分析 + 同文件编辑”闭环，防止底层脏关系再次被算成虚假图片或阻止写入。
-- How：使用真实附件和用户原句，只开放 DOCX 读取、图片读取和编辑工具，并注入主模型与视觉模型配置。
-- Oracle：任务完成；调用 DOCX 读取、视觉读取和成功的 `docx_content_edit`；视觉结果没有缺失图片错误，最终答复不出现“图片9”，产出的 DOCX 比原文新增至少 12 条有效工时表达。
+- How：使用真实附件和用户原句，只开放 DOCX 读取、内置 `read_image` 和编辑工具，并注入主模型配置。
+- Oracle：任务完成；调用 DOCX 读取、`read_image` 和成功的 `docx_content_edit`；图片读取没有缺失文件错误，最终答复不出现“图片9”，产出的 DOCX 比原文新增至少 12 条有效工时表达。
 - Not：不要求固定的估时数值、工具调用次数或最终答复措辞；未配置 live 模型时按规范跳过。
 
 ##### `human-web-search-by-url-live`

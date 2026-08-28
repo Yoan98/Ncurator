@@ -72,16 +72,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     return await requestedConfigPromise
   }
 
-  let requestedVisionConfigPromise: ReturnType<typeof getRequestedConfig> | undefined
-
-  const loadRequestedVisionConfig = async () => {
-    requestedVisionConfigPromise ||= getModelConfig(
-      payload.visionModel || payload.mainModel,
-      payload.visionModel ? '视觉模型' : '主模型'
-    )
-    return await requestedVisionConfigPromise
-  }
-
   const llmExecutor = createAiLlmExecutor({
     eventCtx: {
       runId: payload.runId,
@@ -160,7 +150,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     recordLlmIo: deps.recordLlmIo,
     requestApprovalBatch: deps.requestApprovalBatch,
     getLlmConfig: loadRequestedConfig,
-    getVisionLlmConfig: loadRequestedVisionConfig,
     browserUseService: deps.browserUseService,
     webCrawlerService: deps.webCrawlerService,
     appendMessageLog,

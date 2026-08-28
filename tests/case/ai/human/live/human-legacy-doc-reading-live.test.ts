@@ -104,7 +104,6 @@ describe('ai human live backend', () => {
                   'docx_content_edit',
                   'docx_format',
                   'docx_table_edit',
-                  'docx_media_edit',
                   'docx_comments_revisions'
                 ].includes(name)
               ) &&

@@ -15,7 +15,77 @@ import { createDocxFile } from '../../../../src/main/services/ai/human/tools/doc
 const fixturePath = path.resolve('tests/fixtures/workspace/灵感测试.docx')
 
 describe('docx recursive edit executor', () => {
-  it('requires explicit visual-loss consent for destructive row, column, and merge edits', async () => {
+  it('replaces ordinary nodes with visuals and visuals with ordinary nodes', async () => {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-node-type-replace-'))
+    const filePath = path.join(tempDir, 'type-replace.docx')
+    const imagePath = path.join(tempDir, 'pixel.png')
+    try {
+      await createDocxFile({
+        filePath,
+        nodes: [
+          {
+            type: 'paragraph',
+            children: [{ type: 'run', children: [{ type: 'text', text: 'target' }] }]
+          }
+        ]
+      })
+      await fs.writeFile(
+        imagePath,
+        Buffer.from(
+          'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl2nS8AAAAASUVORK5CYII=',
+          'base64'
+        )
+      )
+      const source = await fs.readFile(filePath)
+      const before = buildDocumentNodeIndex(await loadDocxBundle(source))
+      const detail = before.detailByNodeId.get(before.rootNodeIds[0]!)
+      if (!detail || detail.type !== 'paragraph') throw new Error('paragraph fixture missing')
+      const run = detail.children.find((node) => node.type === 'run')
+      if (!run || run.type !== 'run') throw new Error('run fixture missing')
+
+      const visualReplacement = await applyDocxOps({
+        buffer: source,
+        ops: [
+          {
+            type: 'replace_node',
+            nodeId: run.nodeId,
+            node: {
+              type: 'visual',
+              imagePath,
+              widthCm: 1,
+              heightCm: 1,
+              altText: 'replacement image'
+            }
+          }
+        ]
+      })
+      const withVisual = buildDocumentNodeIndex(await loadDocxBundle(visualReplacement.buffer))
+      const visual = [...withVisual.visualNodesById.values()][0]
+      expect(visual?.kind).toBe('image')
+
+      const textReplacement = await applyDocxOps({
+        buffer: visualReplacement.buffer,
+        ops: [
+          {
+            type: 'replace_node',
+            nodeId: visual!.nodeId,
+            node: { type: 'run', text: 'restored text' }
+          }
+        ]
+      })
+      const afterBundle = await loadDocxBundle(textReplacement.buffer)
+      const after = buildDocumentNodeIndex(afterBundle)
+      expect(after.visualNodesById.size).toBe(0)
+      expect(after.outline[0]?.text).toContain('restored text')
+      const archive = await JSZip.loadAsync(textReplacement.buffer)
+      const relationships = await archive.file('word/_rels/document.xml.rels')?.async('text')
+      expect(relationships).not.toContain('/relationships/image')
+    } finally {
+      await fs.rm(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('allows destructive table edits without a visual-loss compatibility flag', async () => {
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'docx-table-visual-safety-'))
     const filePath = path.join(tempDir, 'table.docx')
     try {
@@ -51,37 +121,30 @@ describe('docx recursive edit executor', () => {
       const detail = index.detailByNodeId.get(tableId)
       if (!detail || detail.type !== 'table') throw new Error('table detail missing')
       const firstRowId = detail.children[0]!.nodeId
-      await expect(
-        applyDocxOps({ buffer: source, ops: [{ type: 'delete_row', rowNodeId: firstRowId }] })
-      ).rejects.toThrow('allowVisualLoss=true')
-      await expect(
-        applyDocxOps({
-          buffer: source,
-          ops: [{ type: 'delete_column', tableNodeId: tableId, columnIndex: 2 }]
-        })
-      ).rejects.toThrow('allowVisualLoss=true')
-      await expect(
-        applyDocxOps({
-          buffer: source,
-          ops: [
-            {
-              type: 'merge_cells',
-              tableNodeId: tableId,
-              fromRow: 1,
-              fromColumn: 1,
-              toRow: 1,
-              toColumn: 2
-            }
-          ]
-        })
-      ).rejects.toThrow('allowVisualLoss=true')
-      const allowed = await applyDocxOps({
+      const deletedRow = await applyDocxOps({
+        buffer: source,
+        ops: [{ type: 'delete_row', rowNodeId: firstRowId }]
+      })
+      expect(deletedRow.buffer.byteLength).toBeGreaterThan(0)
+      const deletedColumn = await applyDocxOps({
+        buffer: source,
+        ops: [{ type: 'delete_column', tableNodeId: tableId, columnIndex: 2 }]
+      })
+      expect(deletedColumn.buffer.byteLength).toBeGreaterThan(0)
+      const merged = await applyDocxOps({
         buffer: source,
         ops: [
-          { type: 'delete_column', tableNodeId: tableId, columnIndex: 2, allowVisualLoss: true }
+          {
+            type: 'merge_cells',
+            tableNodeId: tableId,
+            fromRow: 1,
+            fromColumn: 1,
+            toRow: 1,
+            toColumn: 2
+          }
         ]
       })
-      expect(allowed.buffer.byteLength).toBeGreaterThan(0)
+      expect(merged.buffer.byteLength).toBeGreaterThan(0)
     } finally {
       await fs.rm(tempDir, { recursive: true, force: true })
     }
@@ -180,7 +243,7 @@ describe('docx recursive edit executor', () => {
     expect(
       after.outline.some((node) => node.type === 'content_control' && node.text === 'Filled')
     ).toBe(true)
-    expect([...after.visualsById.values()].some((visual) => visual.story.type === 'header')).toBe(
+    expect([...after.visualNodesById.values()].some((visual) => visual.story.type === 'header')).toBe(
       true
     )
     const afterZip = await JSZip.loadAsync(mediaEdited.buffer)
@@ -189,7 +252,7 @@ describe('docx recursive edit executor', () => {
     )
   })
 
-  it('keeps visuals while replacing visible text and nodes accidental visual deletion', async () => {
+  it('keeps visuals for text replacement and allows explicit owner-node replacement', async () => {
     const source = await fs.readFile(fixturePath)
     const beforeBundle = await loadDocxBundle(source)
     const before = buildNodeIndex(
@@ -197,23 +260,24 @@ describe('docx recursive edit executor', () => {
       beforeBundle.relationshipTargets,
       beforeBundle.relationshipTypes
     )
-    const visual = [...before.visualsById.values()][0]
+    const visual = [...before.visualNodesById.values()][0]
     expect(visual).toBeDefined()
-    await expect(
-      applyDocxOps({
-        buffer: source,
-        ops: [
-          {
-            type: 'replace_node',
-            nodeId: visual!.ownerNodeId,
-            node: {
-              type: 'paragraph',
-              text: 'replacement'
-            }
+    const ownerReplaced = await applyDocxOps({
+      buffer: source,
+      ops: [
+        {
+          type: 'replace_node',
+          nodeId: visual!.ownerNodeId,
+          node: {
+            type: 'paragraph',
+            text: 'replacement'
           }
-        ]
-      })
-    ).rejects.toThrow('target contains visual content')
+        }
+      ]
+    })
+    const ownerReplacedBundle = await loadDocxBundle(ownerReplaced.buffer)
+    const ownerReplacedIndex = buildDocumentNodeIndex(ownerReplacedBundle)
+    expect(ownerReplacedIndex.visualNodesById.size).toBeLessThan(before.visualNodesById.size)
 
     const paragraph = before.outline.find(
       (node) => node.type === 'paragraph' && node.text.length >= 2
@@ -231,7 +295,7 @@ describe('docx recursive edit executor', () => {
       afterBundle.relationshipTargets,
       afterBundle.relationshipTypes
     )
-    expect(after.visualsById.size).toBe(before.visualsById.size)
+    expect(after.visualNodesById.size).toBe(before.visualNodesById.size)
     expect(after.outline.some((node) => node.text.includes('测试替换'))).toBe(true)
   })
 
@@ -422,7 +486,7 @@ describe('docx recursive edit executor', () => {
       )
       const withVisual = await bundle.zip.generateAsync({ type: 'nodebuffer' })
       const beforeIndex = buildNodeIndex(bundle.documentDom)
-      expect(beforeIndex.visualsById.size).toBe(1)
+      expect(beforeIndex.visualNodesById.size).toBe(1)
 
       const styled = await applyDocxOps({
         buffer: withVisual,
@@ -443,7 +507,7 @@ describe('docx recursive edit executor', () => {
       })
       const styledBundle = await loadDocxBundle(styled.buffer)
       const styledIndex = buildNodeIndex(styledBundle.documentDom)
-      expect(styledIndex.visualsById.size).toBe(1)
+      expect(styledIndex.visualNodesById.size).toBe(1)
       const details = styledIndex.rootNodeIds.map((id) => styledIndex.detailByNodeId.get(id))
       const firstRuns = details[0]?.type === 'paragraph' ? details[0].children : []
       const secondRuns = details[1]?.type === 'paragraph' ? details[1].children : []
@@ -575,7 +639,7 @@ describe('docx recursive edit executor', () => {
         imageBundle.relationshipTargetModes,
         imageBundle.availableRelationshipTargetIds
       )
-      expect(imageIndex.visualsById.size).toBe(1)
+      expect(imageIndex.visualNodesById.size).toBe(1)
       expect(Object.keys(imageBundle.zip.files).some((name) => name.endsWith('.svg'))).toBe(true)
       const withComment = await applyDocxOps({
         buffer: withImage.buffer,

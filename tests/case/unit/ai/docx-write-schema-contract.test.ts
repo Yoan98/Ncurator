@@ -3,7 +3,6 @@ import {
   docxCommentsRevisionsSchema,
   docxContentEditSchema,
   docxFormatSchema,
-  docxMediaEditSchema,
   docxTableEditSchema
 } from '../../../../src/main/services/ai/human/tools/docx/schemas'
 import { compileDocxOperations } from '../../../../src/main/services/ai/human/tools/docx/tools/writeToolRuntime'
@@ -177,13 +176,41 @@ describe('ai unit docx write schema contract', () => {
       }).success
     ).toBe(true)
     expect(
-      docxMediaEditSchema.safeParse({
+      docxContentEditSchema.safeParse({
         sourcePath: 'a.docx',
-        type: 'update_image',
-        visualId: 'visual_1',
-        widthCm: 5
+        type: 'replace_node',
+        nodeId: 'visual_1',
+        node: { type: 'visual', widthCm: 5 }
       }).success
     ).toBe(true)
+    expect(
+      compileDocxOperations({
+        sourcePath: 'a.docx',
+        type: 'replace_node',
+        nodeId: 'visual_1',
+        node: { type: 'visual', widthCm: 5, altText: 'updated' }
+      })
+    ).toEqual([
+      {
+        type: 'replace_node',
+        nodeId: 'visual_1',
+        node: { type: 'visual', widthCm: 5, altText: 'updated' }
+      }
+    ])
+    expect(
+      compileDocxOperations({
+        sourcePath: 'a.docx',
+        type: 'replace_node',
+        nodeId: 'visual_1',
+        node: { type: 'visual', imagePath: '/tmp/new.png', heightCm: 4 }
+      })
+    ).toEqual([
+      {
+        type: 'replace_node',
+        nodeId: 'visual_1',
+        node: { type: 'visual', imagePath: '/tmp/new.png', heightCm: 4 }
+      }
+    ])
     expect(
       docxCommentsRevisionsSchema.safeParse({
         sourcePath: 'a.docx',
@@ -219,19 +246,20 @@ describe('ai unit docx write schema contract', () => {
       }).success
     ).toBe(false)
     expect(
-      docxMediaEditSchema.safeParse({
+      docxContentEditSchema.safeParse({
         sourcePath: 'a.docx',
-        type: 'insert_image',
+        type: 'insert_nodes',
         nodeId: 'node_1',
         position: 'document_end',
-        imagePath: '/tmp/a.png'
+        nodes: [{ type: 'visual', imagePath: '/tmp/a.png' }]
       }).success
     ).toBe(false)
     expect(
-      docxMediaEditSchema.safeParse({
+      docxContentEditSchema.safeParse({
         sourcePath: 'a.docx',
-        type: 'update_image',
-        visualId: 'visual_1'
+        type: 'insert_nodes',
+        position: 'document_end',
+        nodes: [{ type: 'visual' }]
       }).success
     ).toBe(false)
     expect(

@@ -17,7 +17,6 @@ import {
   readDocxPlainText,
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
-  selectWorkbenchVisualModel,
   selectWorkbenchWorkspace,
   sendWorkbenchMessage,
   waitForWorkbenchApplyPanelReady,
@@ -80,7 +79,6 @@ const setupMultiFileApplyWorkspace = async (
   await navigateToWorkbench(page)
   await selectWorkbenchWorkspace(page, workspaceName)
   await selectWorkbenchModel(page, env.modelName)
-  await selectWorkbenchVisualModel(page, env.visualModelName)
 
   return {
     env,
@@ -140,15 +138,12 @@ describe('workbench result e2e', () => {
           await getWorkbenchPrefixLocator(page, workbenchSelectors.assistantTurnApplyPrefix)
             .first()
             .waitFor({ state: 'visible' })
-          await page.waitForFunction(
-            (countPrefix) => {
-              const header = document.querySelector(`[data-testid^="${countPrefix}"]`)
-              if (!(header instanceof HTMLElement)) return false
-              const match = header.innerText.trim().match(/^(\d+) 个$/u)
-              return Boolean(match && Number.parseInt(match[1], 10) >= 4)
-            },
-            workbenchSelectors.assistantTurnApplyCountPrefix
-          )
+          await page.waitForFunction((countPrefix) => {
+            const header = document.querySelector(`[data-testid^="${countPrefix}"]`)
+            if (!(header instanceof HTMLElement)) return false
+            const match = header.innerText.trim().match(/^(\d+) 个$/u)
+            return Boolean(match && Number.parseInt(match[1], 10) >= 4)
+          }, workbenchSelectors.assistantTurnApplyCountPrefix)
           const applyCountHeader = getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.assistantTurnApplyCountPrefix

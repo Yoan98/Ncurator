@@ -63,7 +63,7 @@ export type NodeIndex = {
   cellNodeCount: number
   detailByNodeId: Map<string, DocxDetailedNode>
   editableNodesById: Map<string, DocxEditableNode>
-  visualsById: Map<string, DocxVisualDescriptor>
+  visualNodesById: Map<string, DocxVisualDescriptor>
 }
 
 export type DocxEditableNode = {
@@ -85,12 +85,15 @@ export type DocxEditableNode = {
 }
 
 export type DocxVisualDescriptor = {
-  visualId: string
+  nodeId: string
   ownerNodeId: string
   kind: DocxVisualKind
+  node: Element
   relationshipId?: string
   target?: string
   contentType?: string
+  widthCm?: number
+  heightCm?: number
   story: DocxStoryRef
   partName: string
 }

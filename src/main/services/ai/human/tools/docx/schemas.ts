@@ -220,23 +220,6 @@ export const docxCreateRootNodeSchema = z
   .discriminatedUnion('type', [docxCreateParagraphNodeSchema, docxCreateTableNodeSchema])
   .meta({ id: 'DocxCreateRootNode' })
 
-export const docxReadVisualsSchema = z
-  .object({
-    sourcePath: z.string().min(1),
-    requests: z
-      .array(
-        z
-          .object({
-            visualId: z.string().min(1),
-            instruction: z.string().trim().min(1)
-          })
-          .strict()
-      )
-      .min(1)
-      .max(10)
-  })
-  .strict()
-
 const sourcePathField = z
   .string()
   .min(1)
@@ -362,13 +345,31 @@ const docxBreakDraftSchema = z
     kind: z.enum(['line', 'page', 'column']).describe('break 类型')
   })
   .strict()
+const docxVisualDraftSchema = z
+  .object({
+    type: z.literal('visual').describe('图片视觉节点'),
+    imagePath: z.string().min(1).optional().describe('本机图片绝对路径；插入视觉节点时必填'),
+    widthCm: z.number().positive().optional().describe('显示宽度，厘米'),
+    heightCm: z.number().positive().optional().describe('显示高度，厘米'),
+    altText: z.string().optional().describe('替代文字')
+  })
+  .strict()
+  .refine(
+    (value) =>
+      value.imagePath !== undefined ||
+      value.widthCm !== undefined ||
+      value.heightCm !== undefined ||
+      value.altText !== undefined,
+    { message: 'visual 至少设置 imagePath、尺寸或 altText 之一' }
+  )
 
 export const docxContentNodeDraftSchema = z.discriminatedUnion('type', [
   docxParagraphDraftSchema,
   docxRunDraftSchema,
   docxHyperlinkDraftSchema,
   docxFieldDraftSchema,
-  docxBreakDraftSchema
+  docxBreakDraftSchema,
+  docxVisualDraftSchema
 ])
 
 const contentEditBase = { sourcePath: sourcePathField }
@@ -401,22 +402,29 @@ export const docxContentEditSchema = z.discriminatedUnion('type', [
       if (value.position !== 'document_end' && !value.nodeId) {
         ctx.addIssue({ code: 'custom', path: ['nodeId'], message: '该 position 必须提供 nodeId' })
       }
+      value.nodes.forEach((node, index) => {
+        if (node.type === 'visual' && !node.imagePath) {
+          ctx.addIssue({
+            code: 'custom',
+            path: ['nodes', index, 'imagePath'],
+            message: '插入 visual 必须提供 imagePath'
+          })
+        }
+      })
     }),
   z
     .object({
       ...contentEditBase,
       type: z.literal('replace_node').describe('用一个新节点替换目标节点本身'),
       nodeId: nodeIdField,
-      node: docxContentNodeDraftSchema.describe('替换后的节点'),
-      allowVisualLoss: z.literal(true).optional().describe('目标含视觉内容时必须明确允许丢失')
+      node: docxContentNodeDraftSchema.describe('替换后的节点')
     })
     .strict(),
   z
     .object({
       ...contentEditBase,
       type: z.literal('delete_node').describe('删除一个节点'),
-      nodeId: nodeIdField,
-      allowVisualLoss: z.literal(true).optional().describe('目标含视觉内容时必须明确允许丢失')
+      nodeId: nodeIdField
     })
     .strict(),
   z
@@ -604,8 +612,7 @@ export const docxTableEditSchema = z.discriminatedUnion('type', [
     .object({
       ...contentEditBase,
       type: z.literal('delete_table'),
-      tableNodeId: nodeIdField,
-      allowVisualLoss: z.literal(true).optional().describe('表格含视觉内容时必须明确允许丢失')
+      tableNodeId: nodeIdField
     })
     .strict(),
   z
@@ -622,8 +629,7 @@ export const docxTableEditSchema = z.discriminatedUnion('type', [
     .object({
       ...contentEditBase,
       type: z.literal('delete_row'),
-      rowNodeId: nodeIdField,
-      allowVisualLoss: z.literal(true).optional().describe('行内含视觉内容时必须明确允许丢失')
+      rowNodeId: nodeIdField
     })
     .strict(),
   z
@@ -640,8 +646,7 @@ export const docxTableEditSchema = z.discriminatedUnion('type', [
       ...contentEditBase,
       type: z.literal('delete_column'),
       tableNodeId: nodeIdField,
-      columnIndex: z.number().int().min(1).describe('要删除的列，从 1 开始'),
-      allowVisualLoss: z.literal(true).optional().describe('列内含视觉内容时必须明确允许丢失')
+      columnIndex: z.number().int().min(1).describe('要删除的列，从 1 开始')
     })
     .strict(),
   z
@@ -652,11 +657,7 @@ export const docxTableEditSchema = z.discriminatedUnion('type', [
       fromRow: z.number().int().min(1).describe('起始行，从 1 开始'),
       fromColumn: z.number().int().min(1).describe('起始列，从 1 开始'),
       toRow: z.number().int().min(1).describe('结束行，从 1 开始'),
-      toColumn: z.number().int().min(1).describe('结束列，从 1 开始'),
-      allowVisualLoss: z
-        .literal(true)
-        .optional()
-        .describe('被合并单元格含视觉内容时必须明确允许丢失')
+      toColumn: z.number().int().min(1).describe('结束列，从 1 开始')
     })
     .strict(),
   z
@@ -718,13 +719,13 @@ const insertImageSchema = z
     }
   })
 
-export const docxMediaEditSchema = z.discriminatedUnion('type', [
+export const docxInternalMediaOperationSchema = z.discriminatedUnion('type', [
   insertImageSchema,
   z
     .object({
       ...contentEditBase,
       type: z.literal('replace_image'),
-      visualId: z.string().min(1).describe('视觉对象 ID'),
+      nodeId: z.string().min(1).describe('视觉对象 ID'),
       imagePath: z.string().min(1).describe('新图片绝对路径')
     })
     .strict(),
@@ -732,14 +733,14 @@ export const docxMediaEditSchema = z.discriminatedUnion('type', [
     .object({
       ...contentEditBase,
       type: z.literal('delete_media'),
-      visualId: z.string().min(1).describe('要删除的 visualId')
+      nodeId: z.string().min(1).describe('要删除的 nodeId')
     })
     .strict(),
   z
     .object({
       ...contentEditBase,
       type: z.literal('update_image'),
-      visualId: z.string().min(1).describe('要修改的 visualId'),
+      nodeId: z.string().min(1).describe('要修改的 nodeId'),
       widthCm: z.number().positive().optional().describe('显示宽度，厘米'),
       heightCm: z.number().positive().optional().describe('显示高度，厘米'),
       altText: z.string().optional().describe('替代文字')

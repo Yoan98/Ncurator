@@ -9,6 +9,7 @@ import {
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { splitMessagesByLastAi } from '../utils/messageTail'
+import { estimateMessageImageTokens } from '../../memory/multimodal'
 
 const buildBudgetSnapshot = (input: {
   cache: HumanRuntimeCache
@@ -71,13 +72,14 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
     const messages = input.cache.messages || []
     const { compressible: compressibleMessages } = splitMessagesByLastAi(messages)
     const hasCompressibleHistory = compressibleMessages.length > 0
-    const compressibleTokenEstimate = estimateTextTokens(
-      compressibleMessages
-        .map((message) =>
-          typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
-        )
-        .join('\n')
-    )
+    const compressibleTokenEstimate =
+      estimateTextTokens(
+        compressibleMessages
+          .map((message) =>
+            typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
+          )
+          .join('\n')
+      ) + estimateMessageImageTokens(compressibleMessages)
     const minimumCompressibleTokens = Math.floor(
       contextWindowTokens * CONTEXT_COMPACTION_MIN_SOURCE_RATIO
     )

@@ -180,8 +180,7 @@ const createSessionUiState = (input = 'draft'): ChatSessionUiStateV1 => ({
     aiPreference: 'local_sources_strict',
     executionPermission: 'review',
     modelSelection: {
-      mainModel: { configId: 'provider-1', modelName: 'model-1' },
-      visionModel: null
+      mainModel: { configId: 'provider-1', modelName: 'model-1' }
     },
     workspaceId: 'workspace-1',
     draft: {
@@ -249,15 +248,14 @@ describe('sqlite storage core and stores', () => {
       { version: 10, name: 'scheduled_task' },
       { version: 11, name: 'chat_session_message_log' },
       { version: 12, name: 'drop_chat_conversation_memory' },
-      { version: 13, name: 'drop_ai_run_event' }
+      { version: 13, name: 'drop_ai_run_event' },
+      { version: 14, name: 'drop_vision_model' }
     ])
   })
 
   it('repairs notification settings after a historical migration version collision', async () => {
     sqlite.exec('DELETE FROM schema_migrations WHERE version = 9')
-    sqlite.exec(
-      "UPDATE schema_migrations SET name = 'workspace_change_sets' WHERE version = 2"
-    )
+    sqlite.exec("UPDATE schema_migrations SET name = 'workspace_change_sets' WHERE version = 2")
     sqlite.exec('ALTER TABLE ai_runtime_settings DROP COLUMN systemNotificationsEnabled')
     sqlite.close()
     sqlite.initialize()

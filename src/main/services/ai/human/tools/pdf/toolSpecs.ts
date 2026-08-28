@@ -7,15 +7,9 @@ import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolS
 import {
   pdfInspectOutputSchema,
   pdfReadPagesOutputSchema,
-  pdfReadVisualsOutputSchema,
   pdfSearchOutputSchema
 } from './outputSchemas'
-import {
-  pdfInspectSchema,
-  pdfReadPagesSchema,
-  pdfReadVisualsSchema,
-  pdfSearchSchema
-} from './schemas'
+import { pdfInspectSchema, pdfReadPagesSchema, pdfSearchSchema } from './schemas'
 
 const PDF_READ_EXECUTION_META = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -79,35 +73,15 @@ export const PDF_READ_PAGES_TOOL_SPEC: PdfToolSpec<
   promptSpec: {
     name: 'pdf_read_pages',
     description:
-      '按连续页码范围或指定页码集合读取 PDF 文本层，并逐页返回正文、页码、文本状态、图片数量、尺寸和警告。'
+      '按连续页码范围或指定页码集合读取 PDF，并逐页返回正文、页码、文本状态、图片数量、尺寸和可交给 read_image 的 pageImagePath。'
   },
   inputSchema: pdfReadPagesSchema,
   outputSchema: pdfReadPagesOutputSchema,
   resolveExecutionMeta: PDF_READ_EXECUTION_META
 }
 
-export const PDF_READ_VISUALS_TOOL_SPEC: PdfToolSpec<
-  z.infer<typeof pdfReadVisualsSchema>,
-  z.infer<typeof pdfReadVisualsOutputSchema>,
-  'pdf_read_visuals',
-  'pdf-read'
-> = {
-  name: 'pdf_read_visuals',
-  familyId: 'pdf',
-  skillIds: ['pdf-read'],
-  promptSpec: {
-    name: 'pdf_read_visuals',
-    description:
-      '读取 PDF 指定页的视觉内容，按 requests 一次性返回每个页面的识别结果；每条 request 包含 index 和 instruction，最多 10 条。'
-  },
-  inputSchema: pdfReadVisualsSchema,
-  outputSchema: pdfReadVisualsOutputSchema,
-  resolveExecutionMeta: PDF_READ_EXECUTION_META
-}
-
 export const PDF_TOOL_SPECS = [
   PDF_INSPECT_TOOL_SPEC,
   PDF_SEARCH_TOOL_SPEC,
-  PDF_READ_PAGES_TOOL_SPEC,
-  PDF_READ_VISUALS_TOOL_SPEC
+  PDF_READ_PAGES_TOOL_SPEC
 ] as const

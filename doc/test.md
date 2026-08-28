@@ -87,7 +87,7 @@ tests/
 - 每次运行的模型、耗时、通过情况、失败归因和原始证据统一保存在对应 run 的 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl` 与 artifacts 中；人工完成度评分以最新 Live 评估快照为准。
 - 测试数量和 case 清单以测试源码及 runner 实时发现结果为准，不在文档中维护容易失真的计数副本。
 - `mock-llm` 回归 case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
-- DOCX 回归必须覆盖 story 递归语义树、会话内稳定 `nodeId`、9 个公开工具、每次写入单 operation、统一成功/失败信封、普通写入空结果与创建操作 `createdIds`、写后精准回读、内容/格式/表格/媒体/批注修订的职责边界、visual 防误删、opaque 保真和 Source→Working 净 Diff。旧协议直接判定为无效，不保留兼容层。
+- DOCX 回归必须覆盖 story 递归语义树、会话内稳定 `nodeId`、7 个公开工具、每次写入单 operation、统一成功/失败信封、普通写入空结果与创建操作 `createdIds`、写后精准回读、内容/格式/表格/批注修订的职责边界、visual 节点编辑与清理、opaque 保真和 Source→Working 净 Diff。旧协议直接判定为无效，不保留兼容层。
 - `灵感测试.docx` 的固定基线为 18 个 image visual 和 22 个真实空段落；视觉节点不得再被当成空段落。大型 VML fixture 继续验证 599/1034 张图片时的性能与输出体积。
 - Human 工具 Input Schema 回归覆盖全部已注册工具：不得出现匿名重复定义，公共定义只展开一次，长度/数量/正则/数值和跨字段语义约束不得丢失，并记录各工具 schema 长度快照。
 - DOCX 定位回归验证 `nodeId` 与操作自身的 `position`；PPT 继续验证其独立 `location`。DOCX positioned 写保护只由 DOCX 写入路径判断，terminal 继续走独立审批机制，两者不得通过跨工具命令白名单耦合。
@@ -112,8 +112,7 @@ tests/
 
 ### 3.4 真实 AI / live 断言规则
 
-- Workbench 真实 AI E2E 必须通过应用 UI 同时选择主模型和视觉模型；视觉模型不得静默跟随主模型。
-- backend 视觉模型测试统一读取 `AI_LIVE_VISUAL_MODEL_NAME`；视觉模型专用地址、密钥和 provider 仍可通过 `AI_LIVE_VISION_BASE_URL`、`AI_LIVE_VISION_API_KEY`、`AI_LIVE_VISION_PROVIDER_KIND` 覆盖。
+- Workbench 真实 AI E2E 必须通过应用 UI 选择主模型；图片输入由同一个主模型通过 `read_image` 处理，不配置独立视觉模型。
 - 涉及真实 AI 调用的回归测试，硬断言只验证完成态、关键事实、关键工具或事件、关键 artifact，以及用户诉求是否落地；最终自然语言回答不得作为主要正确性证据。
 - 不对最终文案做逐字断言，不断言固定工具顺序，不断言固定 prompt 原文，不因表达差异判失败。
 - 如果用户诉求已落地但断言过严，应先调整 `Oracle` 和测试代码，再根据 raw logs 记录完成度评分。

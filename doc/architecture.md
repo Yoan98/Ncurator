@@ -31,14 +31,14 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 ## 核心模块
 
-| 模块 | 职责 |
-|------|------|
-| Application Shell | Renderer / Main / Preload / Shared 协作；Workbench UI 快照与浏览器 Tab 状态持久化到 SQLite |
-| AI Runtime | 一次用户请求的 run 生命周期：事件流、审批、工具调用、最终答复 |
-| Storage | `SqliteCore` + `LanceDbCore` + 各领域 Store |
-| Retrieval | 文档索引、混合召回、结果融合 |
-| Tool Runtime | 文件、终端、浏览器等本地能力；审批、命令安全、工作区变更追踪 |
-| Workspace Change Tracking | Run 前后扫描工作区，记录可回退的修改；工作区外路径可读写但不纳入变更记录 |
+| 模块                      | 职责                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| Application Shell         | Renderer / Main / Preload / Shared 协作；Workbench UI 快照与浏览器 Tab 状态持久化到 SQLite |
+| AI Runtime                | 一次用户请求的 run 生命周期：事件流、审批、工具调用、最终答复                              |
+| Storage                   | `SqliteCore` + `LanceDbCore` + 各领域 Store                                                |
+| Retrieval                 | 文档索引、混合召回、结果融合                                                               |
+| Tool Runtime              | 文件、终端、浏览器等本地能力；审批、命令安全、工作区变更追踪                               |
+| Workspace Change Tracking | Run 前后扫描工作区，记录可回退的修改；工作区外路径可读写但不纳入变更记录                   |
 
 工作区是默认执行范围而非硬边界：模型默认在工作区域内操作，系统级需求可访问工作区外绝对路径。文件工具的 `sourcePath` / `outputPath` 必须为本机绝对路径。内置浏览器由 Electron `WebContentsView` 承载，Stagehand 通过本机回环 CDP endpoint 精确连接对应 Tab。
 
@@ -76,13 +76,15 @@ flowchart TD
 
 - 会话级 append-only 的 `chat_session_message_log` 是唯一真相源；模型上下文从记录投影，UI 过程展示亦从记录重建。
 - 每条记录为 `user` / `assistant`（含 `tool_calls`）/ `tool` / `annotation`；压缩只作用于投影，记录本身不动。
+- 图片在记录中只保存稳定路径和元数据；请求主模型前才临时投影为 data URL。工具消息不能携带图片时，紧随其后追加合成的 user 多模态消息。
+- 单次请求最多保留最近 20 张、data URL 估算体积最多 20 MiB；超限从最旧图片开始至少裁剪 5 张并降到 15 MiB 以下，原位置保留可重新调用 `read_image` 的路径占位。
 - 中断恢复：补写缺失的 `ToolMessage`，尾部追加 user 消息继续；未正常完成的 run 保留恢复快照（plan、skills、artifacts）。
 
 **Skill 与 Tool**
 
 - **Skill**：能力包。builtin 默认可用；external 需 `learn_skill` 加载后才进入 bindTools 集合。
 - **Tool**：具体执行入口，以 `HumanToolSpec` 定义 schema、执行与结果投影。
-- `agent-control` 是内置被动技能，承载 `learn_skill` / `update_plan`。
+- `agent-control` 是内置技能，承载 `learn_skill`、`update_plan` 和 `read_image`；`read_image` 将稳定图片引用加入主模型下一轮多模态上下文，不调用第二个模型。
 - skill / tool 描述只声明能力边界与参数语义，不写固定调用流程。
 
 **交付**
@@ -118,14 +120,14 @@ DOCX 读写工具族已按上述原则落地，作为后续 Excel / PPT / PDF �
 
 ## 领域能力（概要）
 
-| 领域 | 思路 |
-|------|------|
-| DOCX | 文档聚合模型 + story 内容树；读写拆成两个 skill；写入共享 editing session，以 nodeId 为会话内稳定锚点；Source / Working 双态 + 净 Diff 审核 |
-| PDF | 页级读取与检索；Worker 隔离解析 |
-| PPT | 受限 HTML 编译读写 |
-| Excel | 工作簿 / 工作表 / 单元格范围读写 |
-| KB | 混合召回检索工作区已索引文档 |
-| Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作 |
+| 领域                  | 思路                                                                                                                        |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| DOCX                  | 文档聚合模型 + story 内容树；visual 是普通 node 并统一使用 nodeId；读写拆成两个 skill；Source / Working 双态 + 净 Diff 审核 |
+| PDF                   | 页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                             |
+| PPT                   | 受限 HTML 编译读写；读取页面同时返回 slideImagePath                                                                         |
+| Excel                 | 工作簿 / 工作表 / 单元格范围读写                                                                                            |
+| KB                    | 混合召回检索工作区已索引文档                                                                                                |
+| Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                        |
 
 各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准。
 

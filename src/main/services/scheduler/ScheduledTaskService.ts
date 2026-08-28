@@ -230,7 +230,6 @@ export class ScheduledTaskService {
 
     const weekday = scheduleType === 'weekly' ? normalizeWeekday(input.weekday) : null
     if (scheduleType === 'weekly' && weekday === null) throw new Error('请选择星期几')
-    const visionModel = input.visionModel?.configId && input.visionModel?.modelName ? input.visionModel : null
     const now = this.deps.now()
     const existingId = String(input.id || '').trim()
     const id = existingId || uuidv4()
@@ -249,7 +248,6 @@ export class ScheduledTaskService {
       weekday,
       workspaceId,
       mainModel: { configId: mainModel.configId, modelName: mainModel.modelName },
-      visionModel,
       aiPreference: normalizeAiPreference(input.aiPreference),
       executionPermission: normalizeExecutionPermission(input.executionPermission),
       nextRunAt: input.enabled ? computeNextRunAt(schedule, now) : null,
@@ -291,7 +289,6 @@ export class ScheduledTaskService {
         sessionId,
         input: task.prompt,
         mainModel: task.mainModel,
-        visionModel: task.visionModel ?? undefined,
         preference: task.aiPreference,
         executionPermission: task.executionPermission,
         workspace: {

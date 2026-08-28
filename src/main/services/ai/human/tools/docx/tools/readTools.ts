@@ -1,16 +1,19 @@
+import { createHash, randomUUID } from 'node:crypto'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { DocxToolRuntime } from '../runtime'
-import type { DocxDetailedNode, DocxReadSession, DocxSearchMatch } from '../types'
+import type { DocxDetailedNode, DocxReadNode, DocxReadSession, DocxSearchMatch } from '../types'
 import {
   DOCX_READ_OUTLINE_TOOL_SPEC,
   DOCX_READ_NODES_TOOL_SPEC,
-  DOCX_READ_VISUALS_TOOL_SPEC,
   DOCX_SEARCH_TOOL_SPEC
 } from '../toolSpecs'
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
-import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
-import { renderDocxVisualToPng } from '../utils/renderVisual'
 import { projectDocxReadNodes } from '../publicReadTree'
+import { renderDocxVisualToPng } from '../utils/renderVisual'
+import { ensureWorkspaceAssetBucket } from '../../../../../assets/WorkspaceAssetService'
 import {
   countOutlineRootNodes,
   resolveOutlinePercentNodeRange,
@@ -68,6 +71,95 @@ const fetchNodesByNodeIndexRange = async (input: {
     throw new Error('worker protocol mismatch (get_nodes_by_index_range)')
   }
   return nodeResponse.payload.nodes
+}
+
+const extensionForMime = (mimeType: string): string => {
+  if (mimeType === 'image/png') return 'png'
+  if (mimeType === 'image/webp') return 'webp'
+  if (mimeType === 'image/gif') return 'gif'
+  return 'jpg'
+}
+
+const collectVisualNodes = (
+  nodes: DocxReadNode[]
+): Array<Extract<DocxReadNode, { type: 'visual' }>> => {
+  const visuals: Array<Extract<DocxReadNode, { type: 'visual' }>> = []
+  const visit = (node: DocxReadNode): void => {
+    if (node.type === 'visual') visuals.push(node)
+    if ('children' in node && Array.isArray(node.children)) {
+      ;(node.children as DocxReadNode[]).forEach(visit)
+    }
+  }
+  nodes.forEach(visit)
+  return visuals
+}
+
+const materializeDocxVisuals = async (input: {
+  runtime: DocxToolRuntime
+  docId: string
+  nodes: DocxDetailedNode[]
+  sourcePrefix: 'docx_read_nodes' | 'docx_search'
+}): Promise<void> => {
+  const readNodes: DocxReadNode[] = []
+  input.nodes.forEach((node) => readNodes.push(...(node.children as DocxReadNode[])))
+  const visuals = collectVisualNodes(readNodes)
+  if (visuals.length === 0) return
+  const bucket = await ensureWorkspaceAssetBucket(
+    input.runtime.workspaceRootPath,
+    `${input.sourcePrefix}-${randomUUID()}`
+  )
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-docx-materialize-'))
+  let renderSourcePath: string | undefined
+  try {
+    for (const visual of visuals) {
+      const response = await input.runtime.callWorker({
+        action: 'get_visual',
+        payload: { docId: input.docId, nodeId: visual.nodeId }
+      })
+      if (!response.ok) throw new Error(response.error)
+      if (response.payload.action !== 'get_visual') {
+        throw new Error('worker protocol mismatch (get_visual)')
+      }
+      if (response.payload.error) throw new Error(response.payload.error)
+      let bytes = response.payload.data ? Buffer.from(response.payload.data) : undefined
+      let mimeType = response.payload.mimeType
+      if ((!bytes || !mimeType) && response.payload.render) {
+        if (!renderSourcePath) {
+          renderSourcePath = path.join(tempDir, 'active-revision.docx')
+          const materialized = await input.runtime.callWorker({
+            action: 'materialize_draft',
+            payload: { docId: input.docId, outPath: renderSourcePath }
+          })
+          if (!materialized.ok) throw new Error(materialized.error)
+          if (materialized.payload.action !== 'materialize_draft') {
+            throw new Error('worker protocol mismatch (materialize_draft)')
+          }
+        }
+        const rendered = await renderDocxVisualToPng({
+          sourcePath: renderSourcePath,
+          kind: response.payload.kind,
+          nodeIndex: response.payload.render.nodeIndex,
+          visualIndexInNode: response.payload.render.visualIndexInNode,
+          visualCountInNode: response.payload.render.visualCountInNode
+        })
+        if (rendered.data) {
+          bytes = Buffer.from(rendered.data)
+          mimeType = 'image/png'
+        }
+      }
+      if (!bytes || !mimeType) throw new Error(`visual node ${visual.nodeId} 无法生成图片`)
+      const hash = createHash('sha256').update(bytes).digest('hex')
+      const imagePath = path.join(bucket, `${hash}.${extensionForMime(mimeType)}`)
+      try {
+        await fs.writeFile(imagePath, bytes, { flag: 'wx' })
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      }
+      visual.imagePath = imagePath
+    }
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true })
+  }
 }
 
 const executeWorkerSearch = async (input: {
@@ -137,7 +229,13 @@ const executeWorkerSearch = async (input: {
   }
 }
 
-const buildSearchResult = (input: { totalMatchCount: number; matches: DocxSearchMatch[] }) => ({
+const buildSearchResult = (input: {
+  sourcePath: string
+  totalMatchCount: number
+  matches: DocxSearchMatch[]
+  nodesById: Map<string, ReturnType<typeof projectDocxReadNodes>[number]>
+}) => ({
+  sourcePath: input.sourcePath,
   totalMatchCount: input.totalMatchCount,
   matches: input.matches.map((match) => ({
     nodeId: match.nodeId,
@@ -147,8 +245,15 @@ const buildSearchResult = (input: { totalMatchCount: number; matches: DocxSearch
     matchText: match.matchText,
     textContext: match.textContext,
     tableNodeId: match.tableNodeId,
-    before: match.before,
-    after: match.after
+    node: input.nodesById.get(match.nodeId),
+    beforeNodes: match.before?.flatMap((neighbor) => {
+      const node = input.nodesById.get(neighbor.nodeId)
+      return node ? [node] : []
+    }),
+    afterNodes: match.after?.flatMap((neighbor) => {
+      const node = input.nodesById.get(neighbor.nodeId)
+      return node ? [node] : []
+    })
   }))
 })
 
@@ -158,7 +263,6 @@ const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) 
 })
 
 export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
-  const visualRecognitionService = createVisualRecognitionService(runtime.input.ctx)
   const docxOutlineTool = createDocxTool({
     runtime,
     name: DOCX_READ_OUTLINE_TOOL_SPEC.name,
@@ -301,9 +405,36 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           activity: { actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType! }
         })
       }
+      const relatedNodeIds = [
+        ...new Set(
+          searchResult.matches.flatMap((match) => [
+            match.nodeId,
+            ...(match.before || []).map((neighbor) => neighbor.nodeId),
+            ...(match.after || []).map((neighbor) => neighbor.nodeId)
+          ])
+        )
+      ]
+      const relatedNodes = relatedNodeIds.length
+        ? await fetchNodesByNodeIds({
+            runtime,
+            session: sessionResult.readSession,
+            docId: sessionResult.docId,
+            nodeIds: relatedNodeIds
+          })
+        : []
+      await materializeDocxVisuals({
+        runtime,
+        docId: sessionResult.docId,
+        nodes: relatedNodes,
+        sourcePrefix: 'docx_search'
+      })
+      const publicNodes = projectDocxReadNodes(relatedNodes)
+      const nodesById = new Map(publicNodes.map((node) => [node.nodeId, node]))
       const result = buildSearchResult({
+        sourcePath: sessionResult.sourcePath,
         totalMatchCount: searchResult.totalMatchCount,
-        matches: searchResult.matches
+        matches: searchResult.matches,
+        nodesById
       })
       return finalizeDocxToolSuccess({
         runtime,
@@ -359,6 +490,12 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             toNodeIndex: args.range.toNodeIndex
           })
         }
+        await materializeDocxVisuals({
+          runtime,
+          docId: sessionResult.docId,
+          nodes,
+          sourcePrefix: 'docx_read_nodes'
+        })
         const result = {
           sourcePath: sessionResult.sourcePath,
           nodes: projectDocxReadNodes(nodes)
@@ -402,164 +539,5 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
     }
   })
 
-  const docxReadVisualsTool = createDocxTool({
-    runtime,
-    name: DOCX_READ_VISUALS_TOOL_SPEC.name,
-    description: DOCX_READ_VISUALS_TOOL_SPEC.promptSpec.description,
-    schema: DOCX_READ_VISUALS_TOOL_SPEC.inputSchema,
-    execute: async ({ args, toolName, toolCallId }) => {
-      runtime.input.ctx.checkCancelled()
-      const sessionResult = await runtime.ensureReadSession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-docx-visual-'))
-      try {
-        let renderSourcePath: string | undefined
-        const results = new Array<
-          { visualId: string; text: string } | { visualId: string; error: string } | undefined
-        >(args.requests.length)
-        const stagedImages: Array<{ index: number; path: string; mimeType: string }> = []
-        const stagedRequests: Array<{ index: number; instruction: string }> = []
-
-        for (const [index, request] of args.requests.entries()) {
-          const tempPath = path.join(tempDir, `${String(index)}.visual`)
-          try {
-            const response = await runtime.callWorker({
-              action: 'get_visual',
-              payload: { docId: sessionResult.docId, visualId: request.visualId }
-            })
-            if (!response.ok) {
-              results[index] = { visualId: request.visualId, error: response.error }
-              continue
-            }
-            if (response.payload.action !== 'get_visual') {
-              results[index] = {
-                visualId: request.visualId,
-                error: 'worker protocol mismatch (get_visual)'
-              }
-              continue
-            }
-            if (response.payload.error) {
-              results[index] = {
-                visualId: request.visualId,
-                error: response.payload.error || 'visual media is missing'
-              }
-              continue
-            }
-            let visualData = response.payload.data
-            let mimeType = response.payload.mimeType
-            if ((!visualData || !mimeType) && response.payload.render) {
-              if (!renderSourcePath) {
-                const draftPath = path.join(tempDir, 'active-revision.docx')
-                const materialized = await runtime.callWorker({
-                  action: 'materialize_draft',
-                  payload: { docId: sessionResult.docId, outPath: draftPath }
-                })
-                if (!materialized.ok) {
-                  results[index] = { visualId: request.visualId, error: materialized.error }
-                  continue
-                }
-                if (materialized.payload.action !== 'materialize_draft') {
-                  results[index] = {
-                    visualId: request.visualId,
-                    error: 'worker protocol mismatch (materialize_draft)'
-                  }
-                  continue
-                }
-                renderSourcePath = materialized.payload.outPath
-              }
-              const rendered = await renderDocxVisualToPng({
-                sourcePath: renderSourcePath,
-                kind: response.payload.kind,
-                nodeIndex: response.payload.render.nodeIndex,
-                visualIndexInNode: response.payload.render.visualIndexInNode,
-                visualCountInNode: response.payload.render.visualCountInNode
-              })
-              if (!rendered.data) {
-                results[index] = {
-                  visualId: request.visualId,
-                  error: rendered.error || 'visual rendering failed'
-                }
-                continue
-              }
-              visualData = rendered.data
-              mimeType = 'image/png'
-            }
-            if (!visualData || !mimeType) {
-              results[index] = { visualId: request.visualId, error: 'visual media is missing' }
-              continue
-            }
-            await fs.writeFile(tempPath, visualData)
-            stagedImages.push({ index, path: tempPath, mimeType })
-            stagedRequests.push({ index, instruction: request.instruction })
-          } catch (error) {
-            results[index] = {
-              visualId: request.visualId,
-              error: error instanceof Error ? error.message : String(error)
-            }
-          }
-        }
-
-        if (stagedImages.length > 0) {
-          const recognition = await visualRecognitionService.recognizeImages({
-            images: stagedImages,
-            requests: stagedRequests
-          })
-          for (const item of recognition) {
-            const request = args.requests[item.index]
-            if (!request) continue
-            results[item.index] =
-              'text' in item
-                ? { visualId: request.visualId, text: item.text }
-                : { visualId: request.visualId, error: item.error }
-          }
-        }
-
-        const result = {
-          sourcePath: sessionResult.sourcePath,
-          results: results.filter(
-            (
-              item
-            ): item is { visualId: string; text: string } | { visualId: string; error: string } =>
-              item !== undefined
-          )
-        }
-        return finalizeDocxToolSuccess({
-          runtime,
-          toolName,
-          toolCallId,
-          result,
-          draftDocId: sessionResult.docId,
-          activity: {
-            actionType: DOCX_READ_VISUALS_TOOL_SPEC.activityActionType!,
-            startedSummary: `读取文档视觉内容: ${sessionResult.sourcePath}`,
-            buildCompletedSummary: (output) =>
-              `文档视觉读取完成：${String(output.results.length)} 项`
-          }
-        })
-      } catch (error) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: runtime.emitFailure({
-            toolName,
-            toolCallId,
-            reason: 'failed',
-            error: error instanceof Error ? error.message : String(error),
-            draftDocId: sessionResult.docId
-          }),
-          activity: { actionType: DOCX_READ_VISUALS_TOOL_SPEC.activityActionType! }
-        })
-      } finally {
-        await fs.rm(tempDir, { recursive: true, force: true })
-      }
-    }
-  })
-
-  return [docxOutlineTool, docxSearchTool, docxReadNodesTool, docxReadVisualsTool]
+  return [docxOutlineTool, docxSearchTool, docxReadNodesTool]
 }
-import fs from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'

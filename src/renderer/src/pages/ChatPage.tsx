@@ -601,7 +601,7 @@ const pickChatModel = (models: readonly LlmRemoteModel[]): LlmRemoteModel | unde
   models.find((item) => isChatModel(item.id))
 
 const createDefaultSessionUiState = (
-  modelSelection: WorkbenchModelSelection = { mainModel: null, visionModel: null },
+  modelSelection: WorkbenchModelSelection = { mainModel: null },
   workspaceId: string | null = null
 ): ChatSessionUiStateV1 => ({
   version: 1,
@@ -683,8 +683,7 @@ const ChatPage: React.FC = () => {
     Record<string, LlmRemoteModel[]>
   >({})
   const [modelSelection, setModelSelection] = useState<WorkbenchModelSelection>({
-    mainModel: null,
-    visionModel: null
+    mainModel: null
   })
   const [composerDraftKey, setComposerDraftKey] = useState('initial')
   const [contextUsage, setContextUsage] = useState<WorkbenchContextUsage | null>(null)
@@ -1492,10 +1491,7 @@ const ChatPage: React.FC = () => {
         const opened = await window.api.chatSessionOpen({ sessionId, limit: 1 })
         const currentState =
           opened.uiState ||
-          createDefaultSessionUiState(
-            { mainModel: null, visionModel: null },
-            opened.session?.workspace_id || null
-          )
+          createDefaultSessionUiState({ mainModel: null }, opened.session?.workspace_id || null)
         await persistUiStateForKey(sessionId, update(currentState))
       } catch (error) {
         console.error('Failed to update background session UI state', error)
@@ -1739,7 +1735,7 @@ const ChatPage: React.FC = () => {
       setModelConfigs(list)
       if (list.length === 0) {
         setModelListsByConfigId({})
-        setModelSelection({ mainModel: null, visionModel: null })
+        setModelSelection({ mainModel: null })
         return
       }
 
@@ -1783,8 +1779,7 @@ const ChatPage: React.FC = () => {
             }
           : null
       const nextSelection: WorkbenchModelSelection = {
-        mainModel: resolveModel(modelSelectionRef.current.mainModel) || firstModel,
-        visionModel: resolveModel(modelSelectionRef.current.visionModel)
+        mainModel: resolveModel(modelSelectionRef.current.mainModel) || firstModel
       }
       modelSelectionRef.current = nextSelection
       setModelSelection(nextSelection)
@@ -1792,7 +1787,7 @@ const ChatPage: React.FC = () => {
       console.error('Failed to load llm configs', error)
       setModelConfigs([])
       setModelListsByConfigId({})
-      setModelSelection({ mainModel: null, visionModel: null })
+      setModelSelection({ mainModel: null })
     } finally {
       setModelCatalogLoaded(true)
     }
@@ -1820,8 +1815,7 @@ const ChatPage: React.FC = () => {
           }
         : null
     const nextSelection: WorkbenchModelSelection = {
-      mainModel: resolveModel(modelSelection.mainModel) || fallback,
-      visionModel: resolveModel(modelSelection.visionModel)
+      mainModel: resolveModel(modelSelection.mainModel) || fallback
     }
     if (JSON.stringify(nextSelection) === JSON.stringify(modelSelection)) return
     modelSelectionRef.current = nextSelection
@@ -3137,7 +3131,6 @@ const ChatPage: React.FC = () => {
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
         attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
         mainModel: modelSelection.mainModel,
-        visionModel: modelSelection.visionModel || undefined,
         workspace: createWorkspaceBinding(selectedWorkspace)
       })
       if (

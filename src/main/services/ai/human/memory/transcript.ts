@@ -1,5 +1,6 @@
 import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
 import type { ChatMessageLogEntry, ChatMessageLogToolCall } from '../../../../../shared/types'
+import { createImageReferenceMessage } from './multimodal'
 
 const toToolCall = (
   call: ChatMessageLogToolCall
@@ -97,6 +98,7 @@ export const deriveMessageLogMessages = (input: {
           tool_call_id: entry.toolCallId
         })
       )
+      if (entry.images?.length) messages.push(createImageReferenceMessage(entry.images))
       continue
     }
   }

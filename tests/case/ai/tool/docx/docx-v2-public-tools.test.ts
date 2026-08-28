@@ -219,15 +219,41 @@ describe('ai tool docx v2 backend', () => {
             tableNodeId: table.nodeId,
             cells: ['Status', 'Open']
           })
-          const media = await harness.invoke<MutationResult>('docx_media_edit', {
+          const media = await harness.invoke<MutationResult>('docx_content_edit', {
             sourcePath,
-            type: 'insert_image',
+            type: 'insert_nodes',
             nodeId: paragraph.nodeId,
             position: 'after',
-            imagePath,
-            widthCm: 1,
-            heightCm: 1,
-            altText: 'DOCX v2 test image'
+            nodes: [
+              {
+                type: 'visual',
+                imagePath,
+                widthCm: 1,
+                heightCm: 1,
+                altText: 'DOCX v2 test image'
+              }
+            ]
+          })
+          const visualNodeId = media.createdIds?.[0]
+          if (!visualNodeId) throw new Error('inserted visual nodeId missing')
+          const visualReplacement = await harness.invoke<MutationResult>('docx_content_edit', {
+            sourcePath,
+            type: 'replace_node',
+            nodeId: visualNodeId,
+            node: {
+              type: 'visual',
+              imagePath,
+              widthCm: 1.5,
+              heightCm: 1.5,
+              altText: 'Replaced DOCX v2 test image'
+            }
+          })
+          const visualMove = await harness.invoke<MutationResult>('docx_content_edit', {
+            sourcePath,
+            type: 'move_node',
+            nodeId: visualNodeId,
+            anchorNodeId: secondParagraph.nodeId,
+            position: 'inside_end'
           })
           const comment = await harness.invoke<MutationResult>('docx_comments_revisions', {
             sourcePath,
@@ -247,7 +273,10 @@ describe('ai tool docx v2 backend', () => {
           })
           const readAfter = await harness.invoke<ReadResult>('docx_read_nodes', {
             sourcePath,
-            range: { type: 'node_ids', nodeIds: [paragraph.nodeId, table.nodeId] }
+            range: {
+              type: 'node_ids',
+              nodeIds: [paragraph.nodeId, secondParagraph.nodeId, table.nodeId]
+            }
           })
           return {
             outline,
@@ -274,6 +303,9 @@ describe('ai tool docx v2 backend', () => {
             numbering,
             tableEdit,
             media,
+            visualNodeId,
+            visualReplacement,
+            visualMove,
             comment,
             revisions,
             searchAfter,
@@ -323,6 +355,8 @@ describe('ai tool docx v2 backend', () => {
             isEmptyResult(result.numbering) &&
             isEmptyResult(result.tableEdit) &&
             result.media.createdIds?.length === 1 &&
+            isEmptyResult(result.visualReplacement) &&
+            isEmptyResult(result.visualMove) &&
             result.comment.createdIds?.length === 1 &&
             isEmptyResult(result.revisions) &&
             !JSON.stringify(result).includes('"changes"') &&
@@ -333,7 +367,10 @@ describe('ai tool docx v2 backend', () => {
             result.readAfter.nodes.some(
               (node) => node.type === 'table' && nodeText(node).includes('Open')
             ) &&
-            result.readAfter.nodes.some((node) => nodeText(node).includes('visualId')),
+            JSON.stringify(result.readAfter.nodes).includes('"type":"visual"') &&
+            JSON.stringify(result.readAfter.nodes).includes('"imagePath"') &&
+            JSON.stringify(result.readAfter.nodes).includes(result.visualNodeId) &&
+            JSON.stringify(result.readAfter.nodes).includes('Replaced DOCX v2 test image'),
           {
             name: 'docx-v2-tools-share-one-working-session',
             message: 'DOCX v2 工具应共享 Working 文档，连续调用后 nodeId 保持稳定且结果可回读。',

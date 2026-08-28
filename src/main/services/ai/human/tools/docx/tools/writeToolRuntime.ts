@@ -19,7 +19,7 @@ import type {
   DocxCreateTextNode,
   DocxDetailedNode,
   DocxFormatRequest,
-  DocxMediaEditRequest,
+  DocxInternalMediaOperation,
   DocxOperation,
   DocxOpenStats,
   DocxOutlineNode,
@@ -88,7 +88,7 @@ const verifyDetailedNode = async (
 const collectVisualIds = (nodes: DocxReadNode[]): string[] => {
   const ids: string[] = []
   const visit = (current: DocxReadNode): void => {
-    if (current.type === 'visual') ids.push(current.visualId)
+    if (current.type === 'visual') ids.push(current.nodeId)
     if ('children' in current && Array.isArray(current.children)) {
       current.children.forEach(visit)
     }
@@ -104,7 +104,11 @@ const resolveCreatedVisualIds = async (input: {
   changedNodes: DocxChangedNode[]
   operation: DocxOperation
 }): Promise<string[]> => {
-  if (input.operation.type !== 'insert_image') return []
+  if (
+    input.operation.type !== 'insert_image' &&
+    !(input.operation.type === 'replace_node' && input.operation.node.type === 'visual')
+  )
+    return []
   const changedNodeIds = [
     ...new Set(
       input.changedNodes.filter((node) => node.action !== 'delete_node').map((node) => node.nodeId)
@@ -116,11 +120,11 @@ const resolveCreatedVisualIds = async (input: {
         const before = await fetchDetailedNode(input.runtime, input.previousDocId, nodeId)
         const after = await fetchDetailedNode(input.runtime, input.nextDocId, nodeId)
         const previousIds = new Set(collectVisualIds(before.children))
-        return collectVisualIds(after.children).filter((visualId) => !previousIds.has(visualId))
+        return collectVisualIds(after.children).filter((nodeId) => !previousIds.has(nodeId))
       })
     )
   ).flat()
-  if (createdVisualIds.length === 0) {
+  if (createdVisualIds.length === 0 && input.operation.type === 'insert_image') {
     throw new Error('inserted media could not be read back')
   }
   return [...new Set(createdVisualIds)]
@@ -303,7 +307,7 @@ type DocxWriteRequest =
   | DocxContentEditRequest
   | DocxFormatRequest
   | DocxTableEditRequest
-  | DocxMediaEditRequest
+  | DocxInternalMediaOperation
   | DocxCommentsRevisionsRequest
 
 export const compileDocxOperations = (request: DocxWriteRequest): DocxOperation[] => {
@@ -311,10 +315,30 @@ export const compileDocxOperations = (request: DocxWriteRequest): DocxOperation[
   void sourcePath
   if (operation.type === 'replace_text' && operation.format && operation.newText) {
     const { format, ...replace } = operation
-    return [
-      replace,
-      { type: 'format_text', nodeId: replace.nodeId, text: replace.newText, format }
-    ]
+    return [replace, { type: 'format_text', nodeId: replace.nodeId, text: replace.newText, format }]
+  }
+  if (operation.type === 'insert_nodes' && operation.nodes.some((node) => node.type === 'visual')) {
+    if (operation.nodes.some((node) => node.type !== 'visual')) {
+      throw new Error('visual 与文字节点请分开调用 insert_nodes，以保证插入顺序明确')
+    }
+    return operation.nodes.map((node) => {
+      if (node.type !== 'visual' || !node.imagePath)
+        throw new Error('插入 visual 必须提供 imagePath')
+      return {
+        type: 'insert_image',
+        nodeId: operation.nodeId,
+        position:
+          operation.position === 'inside_start'
+            ? 'before'
+            : operation.position === 'inside_end'
+              ? 'after'
+              : operation.position,
+        imagePath: node.imagePath,
+        widthCm: node.widthCm,
+        heightCm: node.heightCm,
+        altText: node.altText
+      }
+    })
   }
   if (operation.type === 'format_text') {
     return operation.targets.map((target) => ({
