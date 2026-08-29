@@ -211,6 +211,8 @@ describe('ai unit ppt tool contract', () => {
     expect(rendered).toContain('960×540')
     expect(rendered).toContain('按内容自拟版式')
     expect(rendered).toContain('须 ≤ bounds.height')
+    expect(rendered).toContain('不透明颜色；#RRGGBB 或 RRGGBB')
+    expect(rendered).not.toContain('rgb()')
     expect(rendered).not.toContain('html')
   })
 
@@ -222,14 +224,18 @@ describe('ai unit ppt tool contract', () => {
     expect(svg.endsWith('</svg>')).toBe(true)
   })
 
-  it('normalizes browser colors before writing native PPT styles', () => {
-    expect(normalizePptColor('rgb(12, 34, 56)')).toBe('#0C2238')
-    expect(normalizePptColor('rgba(12, 34, 56, 0)')).toBeUndefined()
+  it('normalizes opaque hex colors before writing native PPT styles', () => {
     expect(normalizePptColor('#abc')).toBe('#AABBCC')
     expect(normalizePptColor('abc')).toBe('#AABBCC')
     expect(normalizePptColor('1FA8A0')).toBe('#1FA8A0')
+    expect(normalizePptColor('#1fa8a0')).toBe('#1FA8A0')
     expect(normalizePptColor('ffffff')).toBe('#FFFFFF')
-    expect(normalizePptColor('rebeccapurple', '#FFFFFF')).toBe('#FFFFFF')
+    expect(normalizePptColor(undefined, '#FFFFFF')).toBe('#FFFFFF')
+    expect(normalizePptColor('', '#222222')).toBe('#222222')
+    expect(() => normalizePptColor('rgb(12, 34, 56)')).toThrow(/#RRGGBB/)
+    expect(() => normalizePptColor('rgba(12, 34, 56, 0.5)')).toThrow(/#RRGGBB/)
+    expect(() => normalizePptColor('transparent')).toThrow(/#RRGGBB/)
+    expect(() => normalizePptColor('rebeccapurple', '#FFFFFF')).toThrow(/#RRGGBB/)
   })
 
   it('rejects elements that leave the 960×540 canvas', () => {

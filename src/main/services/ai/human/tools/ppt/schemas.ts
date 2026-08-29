@@ -6,6 +6,14 @@ const sourcePathSchema = z.string().trim().min(1).describe('PPTX 文件本机绝
 const slideIdSchema = z.string().trim().min(1).describe('页面 slideId')
 const slideIndexSchema = z.number().int().min(1).describe('1-based 页码')
 const elementIdSchema = z.string().min(1).describe('元素 elementId')
+/** Opaque hex; `#` optional. Alpha / rgb() / color names are not supported. */
+const pptHexColorSchema = z
+  .string()
+  .regex(
+    /^#?(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/,
+    '颜色必须是 #RRGGBB 或 RRGGBB（不透明）'
+  )
+  .describe('不透明颜色；#RRGGBB 或 RRGGBB')
 
 export const pptBoundsSchema = z
   .object({
@@ -30,10 +38,10 @@ const pptPointSchema = z
 
 export const pptElementStyleSchema = z
   .object({
-    fill: z.string().optional().describe('填充色；#RRGGBB / RRGGBB / rgb()'),
-    stroke: z.string().optional().describe('描边色；#RRGGBB / RRGGBB / rgb()'),
+    fill: pptHexColorSchema.optional(),
+    stroke: pptHexColorSchema.optional(),
     strokeWidth: z.number().min(0).optional().describe('描边宽度'),
-    color: z.string().optional().describe('文字颜色；#RRGGBB / RRGGBB / rgb()'),
+    color: pptHexColorSchema.optional(),
     fontFamily: z.string().optional().describe('字体'),
     fontSize: z
       .number()
@@ -160,7 +168,7 @@ export const pptElementSchema = z
         type: z.literal('line').describe('直线'),
         from: pptPointSchema.describe('起点'),
         to: pptPointSchema.describe('终点'),
-        color: z.string().optional().describe('线条颜色；#RRGGBB / RRGGBB / rgb()'),
+        color: pptHexColorSchema.optional().describe('线条颜色；#RRGGBB 或 RRGGBB'),
         width: z.number().positive().optional().describe('线条宽度'),
         arrowEnd: z.boolean().optional().describe('终点是否带箭头')
       })
@@ -303,7 +311,7 @@ const pptSlideLocationSchema = z
 
 const pptSlideDefaultsSchema = z
   .object({
-    color: z.string().optional().describe('默认文字颜色；#RRGGBB / RRGGBB / rgb()'),
+    color: pptHexColorSchema.optional().describe('默认文字颜色；#RRGGBB 或 RRGGBB'),
     fontFamily: z.string().optional().describe('默认字体'),
     fontSize: z
       .number()
@@ -315,12 +323,9 @@ const pptSlideDefaultsSchema = z
   .meta({ id: 'PptSlideDefaults' })
 
 const pptSlideSpecFields = {
-  background: z
-    .string()
+  background: pptHexColorSchema
     .optional()
-    .describe(
-      '页面背景色；#RRGGBB / RRGGBB / rgb()；insert_slide 省略为白色，replace_slide 省略则保留原值'
-    ),
+    .describe('页面背景色；#RRGGBB 或 RRGGBB；insert_slide 省略为白色，replace_slide 省略则保留原值'),
   notes: z.string().optional().describe('讲者备注；replace_slide 省略则保留原值'),
   defaults: pptSlideDefaultsSchema.optional().describe('本页未设样式的文字默认值'),
   elements: z
