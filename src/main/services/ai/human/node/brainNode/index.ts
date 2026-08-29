@@ -18,6 +18,7 @@ import {
 import { buildDispatchQueue } from '../dispatch'
 import { appendToolFeedback } from '../../shared/toolFeedback'
 import { formatZodErrorForTool, type ZodIssueLike } from '../../shared/schemaError'
+import { normalizeToolCallArgs } from '../../shared/toolArgsNormalize'
 import { estimateMessagesForContext, projectMessagesForMainModel } from '../../memory/multimodal'
 import {
   emitThinkingCompleted,
@@ -206,23 +207,24 @@ export const createBrainNode = (input: {
 
       // 在进入 hand 节点前，用工具自身的 schema 自行校验参数，避免 LangChain 内部校验
       // 抛出只有路径、没有字段与期望值的 terse 错误。learn_skill/update_plan 由各自
-      // 节点负责校验，这里跳过。
+      // 节点负责校验，这里跳过 schema，但仍统一做嵌套 JSON 字符串展开。
       const NODE_OWNED_TOOL_NAMES = new Set(['learn_skill', 'update_plan'])
       const schemaInvalidCalls: Array<{ id?: string; name: string; errorMessage: string }> = []
       const executableCalls: Parameters<typeof buildDispatchQueue>[0] = []
       for (const call of dispatchableCalls) {
+        const args = normalizeToolCallArgs(call.args)
         if (NODE_OWNED_TOOL_NAMES.has(call.name)) {
-          executableCalls.push(call)
+          executableCalls.push({ ...call, args })
           continue
         }
         const schema = schemaByToolName.get(call.name)
         if (!schema) {
-          executableCalls.push(call)
+          executableCalls.push({ ...call, args })
           continue
         }
-        const parsed = schema.safeParse(call.args)
+        const parsed = schema.safeParse(args)
         if (parsed.success) {
-          executableCalls.push(call)
+          executableCalls.push({ ...call, args })
         } else {
           schemaInvalidCalls.push({
             id: call.id,
