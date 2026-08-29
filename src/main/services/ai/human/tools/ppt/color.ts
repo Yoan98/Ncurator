@@ -2,7 +2,7 @@
 export const PPT_CANVAS_WIDTH = 960
 export const PPT_CANVAS_HEIGHT = 540
 
-/** Opaque hex only: `#RGB` / `#RRGGBB` or bare `RGB` / `RRGGBB`. No rgb()/names/alpha. */
+/** Opaque `#RGB` / `#RRGGBB`; bare hex accepted as兜底. No rgb()/names/alpha. */
 export const normalizePptColor = (
   value: string | undefined,
   fallback?: string
@@ -17,5 +17,5 @@ export const normalizePptColor = (
       .join('')}`.toUpperCase()
   const hex = /^#?([0-9a-f]{6})$/i.exec(raw)
   if (hex) return `#${hex[1]!.toUpperCase()}`
-  throw new Error(`颜色必须是 #RRGGBB 或 RRGGBB（不透明），收到: ${raw}`)
+  throw new Error(`颜色必须是 #RRGGBB（不透明），收到: ${raw}`)
 }
