@@ -223,11 +223,11 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
 
   const presetGroups = useMemo(
     () =>
-      LLM_PRESET_PROVIDERS.map((provider) => {
+      LLM_PRESET_PROVIDERS.flatMap((provider) => {
         const matchedConfig = configs.find(
           (config) => resolvePresetModeProvider(config)?.providerId === provider.providerId
         )
-        return { provider, matchedConfig }
+        return matchedConfig ? [{ provider, matchedConfig }] : []
       }),
     [configs]
   )
@@ -257,12 +257,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const renderPresetModelOption = (
     provider: LlmPresetProvider,
     model: LlmPresetModel,
-    matchedConfig: LLMConfig | undefined
+    matchedConfig: LLMConfig
   ): React.ReactNode => {
-    const disabled = !matchedConfig
-    const selected = matchedConfig
-      ? isSameSelection(value.mainModel, { configId: matchedConfig.id, modelName: model.id })
-      : false
+    const selected = isSameSelection(value.mainModel, {
+      configId: matchedConfig.id,
+      modelName: model.id
+    })
     const isVision = VISION_PRESET_MODEL_IDS.has(model.id)
     const coin = <PriceTierBadge tier={model.priceTier} />
     const modelLabel = (
@@ -270,34 +270,25 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         {model.label}
       </span>
     )
-    const option = (
+    return (
       <button
         type="button"
         role="option"
         aria-selected={selected}
-        disabled={disabled}
         data-testid={`${workbenchSelectors.modelSelectPresetOptionPrefix}-${model.id}`}
         className={joinClassNames(
           'workbench-select-option',
-          selected ? 'workbench-select-option-selected' : '',
-          disabled ? 'cursor-not-allowed opacity-50' : ''
+          selected ? 'workbench-select-option-selected' : ''
         )}
-        onClick={() => {
-          if (!matchedConfig) return
-          selectModel(matchedConfig.id, model.id)
-        }}
+        onClick={() => selectModel(matchedConfig.id, model.id)}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
           {getProviderLogo(provider.providerId)}
-          {disabled ? (
-            modelLabel
-          ) : (
-            <Tooltip
-              title={`价格：${PRICE_TIER_LABELS[model.priceTier]}${isVision ? '，支持图片理解' : ''}`}
-            >
-              {modelLabel}
-            </Tooltip>
-          )}
+          <Tooltip
+            title={`价格：${PRICE_TIER_LABELS[model.priceTier]}${isVision ? '，支持图片理解' : ''}`}
+          >
+            {modelLabel}
+          </Tooltip>
         </span>
         <span className="flex shrink-0 items-center gap-1.5">
           {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" /> : null}
@@ -310,21 +301,19 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         </span>
       </button>
     )
-    if (disabled) {
-      return (
-        <Tooltip title={`未配置 ${provider.label}`}>
-          <span className="block">{option}</span>
-        </Tooltip>
-      )
-    }
-    return option
   }
 
   const renderPresetView = (): React.ReactNode => (
     <>
       <div className="overflow-y-auto py-1.5" style={{ flex: 1, minHeight: 0 }}>
-        {presetGroups.map(({ provider, matchedConfig }) =>
-          provider.models.map((model) => renderPresetModelOption(provider, model, matchedConfig))
+        {presetGroups.length === 0 ? (
+          <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
+            暂无已配置的预设模型
+          </div>
+        ) : (
+          presetGroups.map(({ provider, matchedConfig }) =>
+            provider.models.map((model) => renderPresetModelOption(provider, model, matchedConfig))
+          )
         )}
       </div>
       <div className="border-t border-[#EEEEEC] py-1.5">

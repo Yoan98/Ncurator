@@ -61,10 +61,10 @@ const sleep = async (ms: number): Promise<void> =>
 const reasonFromError = (error: unknown): string =>
   error instanceof Error && error.message.trim() ? error.message.trim() : String(error || 'unknown')
 
-const toProviderFailure = (error: unknown, retryable: boolean): unknown => {
+export const toProviderFailure = (error: unknown, retryable: boolean): unknown => {
   if (isLlmProviderError(error) || isLlmOutputError(error)) return error
   const info = normalizeStructuredOutputError(error)
-  if (info.status === undefined) return error
+  if (!info.hasProviderSignal) return error
   return new LlmProviderError({
     message: info.message || '模型服务请求失败。',
     httpStatus: info.status,

@@ -10,6 +10,7 @@ export type StructuredOutputErrorInfo = {
   param?: string
   message: string
   rawText: string
+  hasProviderSignal: boolean
 }
 
 export type LlmErrorClassification = 'fatal' | 'retryable' | 'unknown'
@@ -86,6 +87,10 @@ export const normalizeStructuredOutputError = (error: unknown): StructuredOutput
     readString(responseDataObject?.param) ||
     readString(root?.param)
 
+  const hasProviderSignal =
+    status !== undefined ||
+    Boolean(readString(providerError?.message) || readString(responseDataObject?.message))
+
   const rawParts = [
     status !== undefined ? `status=${status}` : undefined,
     code ? `code=${code}` : undefined,
@@ -101,7 +106,8 @@ export const normalizeStructuredOutputError = (error: unknown): StructuredOutput
     type,
     param,
     message,
-    rawText: rawParts.join(' ')
+    rawText: rawParts.join(' '),
+    hasProviderSignal
   }
 }
 

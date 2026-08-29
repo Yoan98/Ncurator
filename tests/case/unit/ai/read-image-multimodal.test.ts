@@ -56,7 +56,7 @@ describe('ai unit read_image multimodal projection', () => {
 
     expect(first).toEqual(second)
     expect(first?.path).toMatch(
-      /\.ncurator\/runtime\/assets\/read_image-cache\/[a-f0-9]{64}-v1\.webp$/u
+      /\.ncurator[\\/]runtime[\\/]assets[\\/]read_image-cache[\\/][a-f0-9]{64}-v1\.webp$/u
     )
     expect(first?.mimeType).toBe('image/webp')
     expect(first?.width).toBe(1)

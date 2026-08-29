@@ -137,7 +137,7 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['composer'],
-        description: '验证单主模型选择、搜索空状态，以及模型服务 404 的统一错误处理。',
+        description: '验证未配置预设模型隐藏与空态、搜索空状态，以及模型服务 404 的统一错误处理。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -172,7 +172,9 @@ describe('workbench conversation e2e', () => {
             `[data-testid^="${workbenchSelectors.modelSelectPresetOptionPrefix}-"]`
           )
           const presetOptionCount = await presetOptions.count()
-          const disabledPresetOptionCount = await presetOptions.locator(':disabled').count()
+          const presetEmptyStateVisible = await menu
+            .getByText('暂无已配置的预设模型', { exact: true })
+            .isVisible()
           const visionUiTextAbsent = !/(视觉模型|跟随主模型|图片能力)/u.test(
             (await menu.textContent()) || ''
           )
@@ -236,7 +238,7 @@ describe('workbench conversation e2e', () => {
 
           return {
             presetOptionCount,
-            disabledPresetOptionCount,
+            presetEmptyStateVisible,
             visionUiTextAbsent,
             providerGroupVisible,
             missingOptionCount,
@@ -250,18 +252,18 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.presetOptionCount > 0 &&
-              result.disabledPresetOptionCount > 0 &&
+            result.presetOptionCount === 0 &&
+              result.presetEmptyStateVisible &&
               result.visionUiTextAbsent &&
               result.providerGroupVisible &&
               result.missingOptionCount === 0,
             {
               name: 'main-model-selector-search',
               message:
-                '单主模型选择器应平铺预设项、禁用未配置项且没有视觉模型入口；自定义视图搜索无结果时只显示空状态。',
+                '未配置预设服务商时预设区不展示预设模型并显示空态；没有视觉模型入口；自定义视图搜索无结果时只显示空状态。',
               data: {
                 presetOptionCount: result.presetOptionCount,
-                disabledPresetOptionCount: result.disabledPresetOptionCount,
+                presetEmptyStateVisible: result.presetEmptyStateVisible,
                 visionUiTextAbsent: result.visionUiTextAbsent,
                 providerGroupVisible: result.providerGroupVisible,
                 missingOptionCount: result.missingOptionCount

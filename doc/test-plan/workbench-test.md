@@ -180,10 +180,10 @@ tests/case/workbench/
 #### `model-selector-and-provider-error`
 
 - 测试类型：`e2e`
-- What：主模型选择平铺展示预设模型，未配置服务商置灰，自定义模型入口保留分组搜索，并正确展示 provider 错误反馈。
+- What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示并在无已配置预设服务商时显示空态，自定义模型入口保留分组搜索，并正确展示 provider 错误反馈。
 - Why：主模型配置是智能任务能否启动的直接前提，预设区是用户首选的模型入口。
-- How：通过真实设置页配置 live 自定义模型；回到 Workbench 展开选择器，检查预设项和未配置禁用态，确认不存在视觉模型、跟随主模型或图片能力筛选；进入自定义模型视图按名称搜索，随后完成一次真实请求并触发受控 provider 错误。
-- Oracle：预设模型平铺展示且未配置项禁用，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC3`；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；选择器只保留主模型，对齐 `WB-COMPOSER-013-AC1`；会话保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次并展示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
+- How：通过真实设置页配置 live 自定义模型；回到 Workbench 展开选择器，检查未配置预设模型隐藏与空态，确认不存在视觉模型、跟随主模型或图片能力筛选；进入自定义模型视图按名称搜索，随后完成一次真实请求并触发受控 provider 错误。
+- Oracle：未配置预设模型不展示且无已配置预设服务商时显示空态，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC3`；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；选择器只保留主模型，对齐 `WB-COMPOSER-013-AC1`；会话保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次并展示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
 - Not：不评价模型回答质量。
 
 #### `user-message-actions`

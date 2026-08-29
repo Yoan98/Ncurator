@@ -4,6 +4,7 @@ import {
   LlmProviderError,
   toRendererRunFailure
 } from '../../../../src/main/services/ai/errors'
+import { toProviderFailure } from '../../../../src/main/services/ai/utils/structuredChatActivity'
 
 describe('run failure serialization', () => {
   it('preserves provider messages and metadata', () => {
@@ -31,6 +32,20 @@ describe('run failure serialization', () => {
     ).toEqual({
       source: 'internal',
       message: INTERNAL_RUN_FAILURE_MESSAGE
+    })
+  })
+
+  it('exposes provider messages even without an http status', () => {
+    const raw = Object.assign(new Error('upstream gateway rejected the request'), {
+      response: {
+        data: { error: { message: 'upstream gateway rejected the request' } }
+      }
+    })
+    const wrapped = toProviderFailure(raw, false)
+    expect(wrapped).toBeInstanceOf(LlmProviderError)
+    expect(toRendererRunFailure(wrapped)).toEqual({
+      source: 'provider',
+      message: 'upstream gateway rejected the request'
     })
   })
 
