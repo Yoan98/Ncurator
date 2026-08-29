@@ -9,8 +9,9 @@
 | human-excel-write-reconciliation-live               | 完成 |            96 | deepseek-v4-flash                | 2026-08-14 18:39 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260814-183949-614               | 终端真实计算核对，四笔状态精确标记，SUMIF 公式正确，样式保持。                                         |
 | human-excel-read-sales-gap-analysis-live            | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 21:02 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260813-210226-107            | 真实读取多 Sheet 并终端/python 计算差额，对话给出 P-100/P-300 优先级，源工作簿未改。                   |
 | human-kb-guided-docx-comparison-draft-live          | 完成 |            86 | deepseek-v4-flash                | 2026-08-27 22:47 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-224726-600          | KB 缩圈后双目标 docx 成功回写，来源课件未改，Oracle 通过。                                             |
-| human-ppt-write-management-review-live              | 完成 |            94 | deepseek-v4-flash                | 2026-08-14 18:42 CST | tests/logs/ai/human/live/human-ppt-write-management-review-live/20260814-184258-961              | 新增摘要页并升级交付风险（李然/7月15日），封面与指标页保持不变，布局无越界、校验零错误。               |
-| human-ppt-read-management-risk-review-live          | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 18:44 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260814-184455-621          | 真实 ppt 读取完成风险简报，视觉识别返回可用文本，未修改演示文稿。                                      |
+| human-ppt-create-executive-deck-live                | 完成 |            93 | deepseek-v4-flash                | 2026-08-29 11:28 CST | tests/logs/ai/human/live/human-ppt-create-executive-deck-live/20260829-112844-003                | 从零创建 6 页管理层汇报（封面/摘要/KPI/趋势/风险/下一步），中文业务感强，无越界零校验错误。           |
+| human-ppt-edit-management-review-live               | 完成 |            94 | deepseek-v4-flash                | 2026-08-29 11:34 CST | tests/logs/ai/human/live/human-ppt-edit-management-review-live/20260829-113439-010               | 富稿上插摘要、Presenter→李然、2002→2015，Agenda/Quote 未动，出画布未新增。                           |
+| human-ppt-read-management-risk-review-live          | 完成 |            92 | deepseek-v4-flash                | 2026-08-29 11:28 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260829-112844-003          | 只读审阅静态品牌提案，命中 85% 等关键信息，源文件未改。                                               |
 | human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。              |
 | human-runtime-script-system-python-live             | 完成 |            95 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-script-system-python-live/20260814-160300-706             | 本机 Python 在临时脚本目录运行临时脚本，得到确定性结果并核对。                                         |
 | human-runtime-download-python-live                  | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-download-python-live/20260814-160340-415                  | Python 不可用时自主下载便携运行时并运行临时脚本，得到正确结果。                                        |
@@ -877,11 +878,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-ppt-read-management-risk-review-live`
 
 - 测试类型：`backend / live`
-- What：真实模型审阅经营复盘 PPT，并直接向管理层汇报风险、负责人、期限、决策事项和图表趋势。
-- Why：真实读 PPT 是对话咨询场景，不应要求用户接收测试专用 JSON 文件。
-- How：用户要求核对图表但不修改演示文稿；模型自行读取文字和视觉内容。
-- Oracle：源 PPT 不变；真实文字读取和有可用文本的视觉识别均成功；结论由 raw logs 人工评估。
-- Not：不写 `management-risk-review.json`，不匹配最终回答文案。
+- What：真实模型审阅静态富品牌提案 PPT（`ppt/emcation-brand-proposal.pptx`），口头给出品牌定位、价值、策略、受众与 Metrics（含 85%）简报。
+- Why：真实读 PPT 是对话咨询场景；fixture 固定检入，避免测前用工具造稿污染 LangSmith。
+- How：fixture 拷贝进工作区；用户要求先核对 Metrics & KPIs 页且不修改演示文稿；模型自行读取文字和视觉内容。
+- Oracle：源 PPT hash 不变；调用过 `ppt_read_*`/`ppt_search` 且无 `ppt_edit`；结论由 raw logs 人工评估。
+- Not：不写专用 JSON，不匹配最终回答文案，不在 case 内 `tool.invoke` 造稿。
 
 ##### `human-session-resume-with-new-selection-live`
 
@@ -901,14 +902,23 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：Run 1 与 Run 2 均 `completed`；Run 2 消息数组末尾为 `buildBrainUserMessage` 的 user 消息，其前历史包含 Run 1 原始 user 消息与 Run 1 最终交付；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
 - Not：不验证 UI 会话持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序。
 
-##### `human-ppt-write-management-review-live`
+##### `human-ppt-edit-management-review-live`
 
 - 测试类型：`backend / live`
-- What：真实模型更新既有管理层汇报 PPT，新增摘要页、升级风险并更新行动期限。
-- Why：PPT 修改必须验证真实正式文件、受保护页和视觉复核，而非模型口头说明。
-- How：用户描述管理层评审诉求；模型自行读取、编辑并检查页面可读性。
-- Oracle：目标页和保护页正确，正式 PPT 可解析，artifact 与 apply record 存在，视觉识别返回可用文本。
-- Not：不生成额外 JSON，不检查固定工具顺序。
+- What：真实模型在静态富品牌提案 PPT 上新增 Executive summary、将 Presenter 改为李然、将 Established in 2002 改为 2015，并保持 Agenda/Quote 页不变。
+- Why：编辑必须针对真实富稿与正式文件，而非测前自造简稿；验证读后写与保护页。
+- How：fixture 拷贝进工作区；用户描述上述编辑诉求；模型自行读取、编辑并确认可读。
+- Oracle：读后再写；Agenda/Quote 全文仍在；命中李然与 Established in 2015 与 Executive summary；页数 +1；出画布形状数不超过编辑前基线（富 fixture 自身可能已有越界）、校验 error 0、1 个 ppt artifact。
+- Not：不锁死 operation 类型；不在 case 内造稿；不生成额外 JSON。
+
+##### `human-ppt-create-executive-deck-live`
+
+- 测试类型：`backend / live`
+- What：真实模型在空工作区从零创建约 5–6 页可开会用的 16:9 管理层汇报（封面、执行摘要、KPI、趋势图、风险与负责人、下一步）。
+- Why：创建主路径要验收「真人能开会用」的交付，而不只是文件可解析。
+- How：无 fixture；用户指定文件名与页结构诉求；模型自行 `ppt_edit` 创建并自检。
+- Oracle：`ppt_edit` 成功；正式文件可解析；`slideCount` 5–8；正文含执行摘要/风险/下一步（中英均可）；出画布 0、error 0、1 artifact。质量完成度由 raw logs + artifact 人工评分回写顶部快照。
+- Not：不固定工具顺序；自动化不设分数门槛。
 
 ##### `human-terminal-data-reconciliation-live`
 
