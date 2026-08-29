@@ -23,9 +23,11 @@ describe('ai unit tool result truncation', () => {
     })
     expect(message).toContain('Result too large to include inline.')
     expect(message).toContain('abc.txt')
+    expect(message).toContain('To read the full result, call text_file_read with sourcePath=')
+    expect(message).toContain('To search within that file, call text_file_search on the same path.')
     expect(message).toContain('Preview (head):')
     expect(message).toContain('Preview (tail):')
-    expect(message).toContain('read the file with text_file_read')
+    expect(message.indexOf('text_file_read')).toBeLessThan(message.indexOf('Preview (head):'))
   })
 
   it('returns multiline text rather than a JSON envelope', () => {

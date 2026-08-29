@@ -32,10 +32,12 @@ export const buildTruncatedToolResultMessage = (input: {
   [
     'Result too large to include inline.',
     `Full result: ${input.filePath}`,
+    `To read the full result, call text_file_read with sourcePath=${input.filePath}`,
+    'To search within that file, call text_file_search on the same path.',
     `Size: ${input.totalChars.toLocaleString('en-US')} characters; ${input.totalBytes.toLocaleString('en-US')} UTF-8 bytes; ${input.totalLines.toLocaleString('en-US')} lines.`,
     'Preview (head):',
     input.head,
-    '... [content omitted; read the file with text_file_read] ...',
+    '... [content omitted] ...',
     'Preview (tail):',
     input.tail
   ].join('\n')

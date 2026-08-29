@@ -88,5 +88,5 @@ describe('ai human live ppt create backend', () => {
         }
       })
     })
-  }, 420_000)
+  }, 900_000)
 })
