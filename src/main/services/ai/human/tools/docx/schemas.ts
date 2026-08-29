@@ -2,10 +2,12 @@ import { z } from 'zod/v4'
 import type { DocxCreateTableCellNode } from './nodeTypes'
 import { DOCX_FORMAT_MAX_TARGETS } from './constants'
 
+/** OOXML stores RRGGBB without `#`; leading `#` accepted as兜底 and stripped on write. */
 const docxHexColorSchema = z
   .string()
-  .regex(/^[0-9a-fA-F]{6}$/, 'color must be exactly 6 hexadecimal characters, for example FF0000')
-
+  .trim()
+  .regex(/^#?[0-9a-fA-F]{6}$/, 'color must be 6 hexadecimal characters, for example FF0000')
+  .describe('6 位十六进制，如 FF0000')
 export const runSpecSchema = z.object({
   text: z.string(),
   bold: z.boolean().optional(),
@@ -64,7 +66,7 @@ export const docxRunStyleSchema = z
     italic: z.boolean().optional().describe('是否斜体'),
     underline: z.boolean().optional().describe('是否下划线'),
     strike: z.boolean().optional().describe('是否删除线'),
-    highlight: docxHexColorSchema.optional().describe('文字高亮底色，6 位十六进制'),
+    highlight: docxHexColorSchema.optional().describe('文字高亮底色，6 位十六进制，如 FF0000'),
     fontFamily: z.string().trim().min(1).optional().describe('字体名称，如 宋体、Times New Roman'),
     fontSize: z.number().positive().optional().describe('字号，单位磅')
   })

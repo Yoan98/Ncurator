@@ -13,6 +13,7 @@ import type {
   DocxCreateTableRowNode,
   DocxLength
 } from '../../types'
+import { normalizeDocxHexColor } from '../../utils/color'
 import { childElements } from './dom'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -71,7 +72,7 @@ const appendBorders = (parent: Element, containerName: string, borders: DocxBord
       if (!border) return
       const node = wordElement(parent.ownerDocument, borderName(side))
       setWordAttr(node, 'val', border.style)
-      if (border.color) setWordAttr(node, 'color', border.color)
+      if (border.color) setWordAttr(node, 'color', normalizeDocxHexColor(border.color))
       if (border.size !== undefined) setWordAttr(node, 'sz', String(Math.round(border.size * 8)))
       container.appendChild(node)
     }
@@ -87,10 +88,10 @@ const createRunProperties = (doc: Document, node: DocxCreateRunNode): Element | 
   appendToggle(rPr, 'i', style.italic)
   appendToggle(rPr, 'strike', style.strike)
   if (style.underline !== undefined) appendVal(rPr, 'u', style.underline ? 'single' : 'none')
-  if (style.color) appendVal(rPr, 'color', style.color)
+  if (style.color) appendVal(rPr, 'color', normalizeDocxHexColor(style.color))
   if (style.highlight) {
     const shading = wordElement(doc, 'shd')
-    setWordAttr(shading, 'fill', style.highlight)
+    setWordAttr(shading, 'fill', normalizeDocxHexColor(style.highlight))
     rPr.appendChild(shading)
   }
   if (style.fontFamily) {
@@ -249,7 +250,7 @@ const createCell = (
     if (node.style.verticalAlignment) appendVal(tcPr, 'vAlign', node.style.verticalAlignment)
     if (node.style.shading) {
       const shading = wordElement(doc, 'shd')
-      setWordAttr(shading, 'fill', node.style.shading)
+      setWordAttr(shading, 'fill', normalizeDocxHexColor(node.style.shading))
       tcPr.appendChild(shading)
     }
     if (node.style.margins) {

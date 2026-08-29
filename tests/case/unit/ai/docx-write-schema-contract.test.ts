@@ -6,6 +6,7 @@ import {
   docxTableEditSchema
 } from '../../../../src/main/services/ai/human/tools/docx/schemas'
 import { compileDocxOperations } from '../../../../src/main/services/ai/human/tools/docx/tools/writeToolRuntime'
+import { normalizeDocxHexColor } from '../../../../src/main/services/ai/human/tools/docx/utils/color'
 
 describe('ai unit docx write schema contract', () => {
   it('accepts one content operation without an actions array', () => {
@@ -128,7 +129,7 @@ describe('ai unit docx write schema contract', () => {
     ).toBe(true)
   })
 
-  it('rejects empty format patches and invalid colors', () => {
+  it('rejects empty format patches and accepts optional # on colors', () => {
     expect(
       docxFormatSchema.safeParse({
         sourcePath: 'a.docx',
@@ -144,7 +145,17 @@ describe('ai unit docx write schema contract', () => {
         targets: [{ nodeId: 'node_1', text: '标题' }],
         format: { color: '#FF0000' }
       }).success
+    ).toBe(true)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: 'a.docx',
+        type: 'format_text',
+        targets: [{ nodeId: 'node_1', text: '标题' }],
+        format: { color: 'red' }
+      }).success
     ).toBe(false)
+    expect(normalizeDocxHexColor('#ff0000')).toBe('FF0000')
+    expect(normalizeDocxHexColor('aabbcc')).toBe('AABBCC')
   })
 
   it('covers table, media, comment, and revision operations', () => {

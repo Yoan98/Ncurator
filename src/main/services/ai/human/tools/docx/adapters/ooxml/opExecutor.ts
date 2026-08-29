@@ -3,6 +3,7 @@ import path from 'node:path'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import type JSZip from 'jszip'
 import type { DocxBorders, DocxChangedNode, DocxOperation, DocxStylePatch } from '../../types'
+import { normalizeDocxHexColor } from '../../utils/color'
 import { buildDocumentNodeIndex, extractNodeText, loadDocxBundle } from './nodeIndex'
 import { createParagraphFromNode, createRelationshipWriter } from './createNodeDom'
 import { resolveDocxRelationshipTarget } from './relationshipPath'
@@ -2004,7 +2005,7 @@ const patchBorders = (
     if (border) {
       const node = wordElement(properties.ownerDocument, sideNames[side] || side)
       setWordAttr(node, 'val', border.style)
-      if (border.color) setWordAttr(node, 'color', border.color)
+      if (border.color) setWordAttr(node, 'color', normalizeDocxHexColor(border.color))
       if (border.size !== undefined) setWordAttr(node, 'sz', String(Math.round(border.size * 8)))
       container.appendChild(node)
     }
@@ -2022,12 +2023,18 @@ const patchRunProperties = (
   setValProperty(rPr, 'strike', patch.strike)
   if (patch.underline !== undefined)
     setValProperty(rPr, 'u', patch.underline === null ? null : patch.underline ? 'single' : 'none')
-  setValProperty(rPr, 'color', patch.color)
+  setValProperty(
+    rPr,
+    'color',
+    patch.color === undefined || patch.color === null
+      ? patch.color
+      : normalizeDocxHexColor(patch.color)
+  )
   if (patch.highlight !== undefined) {
     removeProperty(rPr, 'shd')
     if (patch.highlight !== null) {
       const shading = wordElement(run.ownerDocument, 'shd')
-      setWordAttr(shading, 'fill', patch.highlight)
+      setWordAttr(shading, 'fill', normalizeDocxHexColor(patch.highlight))
       rPr.appendChild(shading)
     }
   }
@@ -2127,7 +2134,7 @@ const patchNodeStyle = (node: Element, patch: DocxStylePatch): void => {
     removeProperty(pr, 'shd')
     if (patch.shading !== null) {
       const shd = wordElement(node.ownerDocument, 'shd')
-      setWordAttr(shd, 'fill', patch.shading)
+      setWordAttr(shd, 'fill', normalizeDocxHexColor(patch.shading))
       pr.appendChild(shd)
     }
   }

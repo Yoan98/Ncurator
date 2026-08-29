@@ -3,19 +3,14 @@ import { paragraphNodeToSpec } from './nodeIndex'
 import { childElements } from './dom'
 import type { IndexedNode } from './types'
 import type { DocxNodeSpec, DocxParagraphSpec, DocxTableSpec, DocxTextRunSpec } from '../../types'
-
-const normalizeColor = (value: string | undefined): string | undefined => {
-  const trimmed = String(value || '').trim()
-  if (!trimmed) return undefined
-  return trimmed.replace(/^#/, '').toUpperCase()
-}
+import { normalizeDocxHexColor } from '../../utils/color'
 
 const normalizeRun = (run: DocxTextRunSpec): DocxTextRunSpec => ({
   text: String(run.text || '').replace(/\r\n/g, '\n'),
   bold: run.bold ? true : undefined,
   italic: run.italic ? true : undefined,
   underline: run.underline ? true : undefined,
-  color: normalizeColor(run.color)
+  color: run.color ? normalizeDocxHexColor(run.color) : undefined
 })
 
 export const normalizeParagraphSpec = (spec: DocxParagraphSpec): DocxParagraphSpec => ({
