@@ -12,8 +12,8 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
-const FIXTURE_PATH = 'tests/fixtures/workspace/ppt/emcation-brand-proposal.pptx' as const
-const WORKSPACE_RELATIVE = 'ppt/emcation-brand-proposal.pptx'
+const FIXTURE_PATH = 'tests/fixtures/workspace/emcation-brand-proposal.pptx' as const
+const WORKSPACE_RELATIVE = 'emcation-brand-proposal.pptx'
 
 const PROTECTED_MARKERS = [
   'Agenda About the brand Market analysis',

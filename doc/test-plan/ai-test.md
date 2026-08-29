@@ -878,7 +878,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-ppt-read-management-risk-review-live`
 
 - 测试类型：`backend / live`
-- What：真实模型审阅静态富品牌提案 PPT（`ppt/emcation-brand-proposal.pptx`），口头给出品牌定位、价值、策略、受众与 Metrics（含 85%）简报。
+- What：真实模型审阅静态富品牌提案 PPT（`emcation-brand-proposal.pptx`），口头给出品牌定位、价值、策略、受众与 Metrics（含 85%）简报。
 - Why：真实读 PPT 是对话咨询场景；fixture 固定检入，避免测前用工具造稿污染 LangSmith。
 - How：fixture 拷贝进工作区；用户要求先核对 Metrics & KPIs 页且不修改演示文稿；模型自行读取文字和视觉内容。
 - Oracle：源 PPT hash 不变；调用过 `ppt_read_*`/`ppt_search` 且无 `ppt_edit`；结论由 raw logs 人工评估。
