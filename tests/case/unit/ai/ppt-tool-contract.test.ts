@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { toJSONSchema } from 'zod/v4'
 import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
 import {
   PPT_EDIT_TOOL_SPEC,
   PPT_TOOL_SPECS
 } from '../../../../src/main/services/ai/human/tools/ppt/toolSpecs'
 import {
+  assertPptElementInCanvas,
   pptEditSchema,
   pptOutlineSchema,
   pptReadSlidesSchema,
@@ -12,15 +14,20 @@ import {
 } from '../../../../src/main/services/ai/human/tools/ppt/schemas'
 import { renderLatexToSvg } from '../../../../src/main/services/ai/human/tools/ppt/formula'
 import {
-  compilePptSlideHtml,
   normalizePptColor,
   PPT_CANVAS_HEIGHT,
   PPT_CANVAS_WIDTH
-} from '../../../../src/main/services/ai/human/tools/ppt/htmlCompiler'
+} from '../../../../src/main/services/ai/human/tools/ppt/color'
 import {
   buildPptDiffManifest,
   toPptToolFailure
 } from '../../../../src/main/services/ai/human/tools/ppt/runtime'
+
+const emptySlide = {
+  sourcePath: 'deck.pptx',
+  type: 'insert_slide' as const,
+  elements: [] as const
+}
 
 describe('ai unit ppt tool contract', () => {
   it('splits ppt reading and writing into two skills and five prefixed tools', () => {
@@ -72,65 +79,66 @@ describe('ai unit ppt tool contract', () => {
     })
   })
 
-  it('accepts ordered action arrays and rejects the removed single-action contract', () => {
+  it('accepts one operation and rejects html, actions arrays, and the removed single-action contract', () => {
+    expect(pptEditSchema.safeParse(emptySlide).success).toBe(true)
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        actions: [{ type: 'insert_slide', html: '<section data-ppt-slide></section>' }]
+        type: 'replace_slide',
+        slideId: '/ppt/slides/slide1.xml',
+        elements: []
       }).success
     ).toBe(true)
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        actions: [
-          {
-            type: 'insert_slide',
-            position: 'after',
-            html: '<section data-ppt-slide></section>'
-          }
-        ]
+        type: 'insert_slide',
+        html: '<section data-ppt-slide></section>',
+        elements: []
       }).success
     ).toBe(false)
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        actions: [
-          {
-            type: 'move_slide',
-            slideId: '/ppt/slides/slide1.xml'
-          }
-        ]
+        actions: [{ type: 'insert_slide', elements: [] }]
       }).success
     ).toBe(false)
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        actions: [
-          {
-            type: 'duplicate_slide',
-            slideId: '/ppt/slides/slide1.xml'
-          }
-        ]
+        type: 'insert_slide',
+        position: 'after',
+        elements: []
+      }).success
+    ).toBe(false)
+    expect(
+      pptEditSchema.safeParse({
+        sourcePath: 'deck.pptx',
+        type: 'move_slide',
+        slideId: '/ppt/slides/slide1.xml'
+      }).success
+    ).toBe(false)
+    expect(
+      pptEditSchema.safeParse({
+        sourcePath: 'deck.pptx',
+        type: 'duplicate_slide',
+        slideId: '/ppt/slides/slide1.xml'
       }).success
     ).toBe(true)
     expect(
       pptEditSchema.safeParse({
         sourcePath: 'deck.pptx',
-        actions: [
+        type: 'edit_elements',
+        slideId: '/ppt/slides/slide1.xml',
+        operations: [
           {
-            type: 'edit_elements',
-            slideId: '/ppt/slides/slide1.xml',
-            operations: [
-              {
-                type: 'add_element',
-                element: {
-                  type: 'line',
-                  from: { x: 100, y: 100 },
-                  to: { x: 500, y: 100 },
-                  arrowEnd: true
-                }
-              }
-            ]
+            type: 'add_element',
+            element: {
+              type: 'line',
+              from: { x: 100, y: 100 },
+              to: { x: 500, y: 100 },
+              arrowEnd: true
+            }
           }
         ]
       }).success
@@ -143,34 +151,49 @@ describe('ai unit ppt tool contract', () => {
     ).toBe(false)
   })
 
-  it('exposes the complete PPT HTML contract in the edit prompt', () => {
+  it('keeps tool and skill descriptions as capability boundaries', () => {
     const description = PPT_EDIT_TOOL_SPEC.promptSpec.description
-    for (const requiredRule of [
-      'insert_slide 的 html 对应一张完整页面',
-      'data-ppt-slide',
-      'width:1920px',
-      'data-ppt-element',
-      '禁止使用 CSS 渐变',
-      '任何可见文字不得低于 24px',
-      '允许使用用户工作区域本地图片和远程图片地址',
-      '使用相同尺寸的占位图替代'
+    expect(description).toBe('创建或编辑 PPTX 的页面、元素、文字和备注。')
+    expect(SKILL_DEFINITIONS['ppt-read'].description).toBe(
+      '读取 PPTX 的页面提纲、内容、检索结果和页面视觉内容。'
+    )
+    expect(SKILL_DEFINITIONS['ppt-write'].description).toBe(
+      '创建或编辑 PPTX 的页面、元素、文字和备注。'
+    )
+    for (const text of [
+      description,
+      SKILL_DEFINITIONS['ppt-read'].description,
+      SKILL_DEFINITIONS['ppt-write'].description
     ]) {
-      expect(description).toContain(requiredRule)
-    }
-    for (const internalTerm of [
-      'revision',
-      'replay',
-      'checksum',
-      'UUID',
-      '原子',
-      'runtime/assets',
-      'action type=',
-      '每页只表达一个主要结论',
-      '只使用任务中有依据的事实与数据'
-    ]) {
-      expect(description).not.toContain(internalTerm)
+      for (const forbidden of [
+        'insert_slide',
+        'replace_slide',
+        'elementId',
+        'html',
+        'data-ppt-slide',
+        'data-ppt-element',
+        'CSS',
+        'actions[]',
+        'revision',
+        'replay',
+        'checksum',
+        'UUID',
+        '原子',
+        'runtime/assets'
+      ]) {
+        expect(text).not.toContain(forbidden)
+      }
     }
     expect(PPT_EDIT_TOOL_SPEC.promptSpec).not.toHaveProperty('examples')
+  })
+
+  it('puts operation and canvas semantics on schema field describes', () => {
+    const rendered = JSON.stringify(toJSONSchema(pptEditSchema))
+    expect(rendered).toContain('插入新页面')
+    expect(rendered).toContain('按规格重写已有页面，保留 slideId')
+    expect(rendered).toContain('按 elementId 修改当前页元素')
+    expect(rendered).toContain('1920×1080')
+    expect(rendered).not.toContain('html')
   })
 
   it('renders latex fallback as a standalone svg image', () => {
@@ -188,53 +211,21 @@ describe('ai unit ppt tool contract', () => {
     expect(normalizePptColor('rebeccapurple', '#FFFFFF')).toBe('#FFFFFF')
   })
 
-  it('compiles restricted HTML on a fixed canvas without duplicate nested text', async () => {
-    const slide = await compilePptSlideHtml(`
-      <section data-ppt-slide style="width:1920px;height:1080px;background:#fff">
-        <div data-ppt-element="text" id="title" style="position:absolute;left:100px;top:100px;width:800px;height:100px;color:rgb(12,34,56);font-size:72px"><p>唯一标题</p></div>
-        <div data-ppt-element="shape" id="box" style="position:absolute;left:100px;top:240px;width:400px;height:200px;border-top:2px solid #00ff00;border-right:0 solid #ff0000;background:#eeeeee;box-shadow:0 4px 12px rgba(0,0,0,.15)"></div>
-        <img data-ppt-element="image" id="photo" src="local.png" style="position:absolute;left:600px;top:240px;width:400px;height:200px;object-fit:cover" />
-      </section>
-    `)
-    expect(slide.width).toBe(PPT_CANVAS_WIDTH)
-    expect(slide.height).toBe(PPT_CANVAS_HEIGHT)
-    expect(slide.elements.filter((element) => element.sourceId === 'title')).toHaveLength(1)
-    expect(slide.elements.find((element) => element.sourceId === 'title')?.type).toBe('text')
-    const box = slide.elements.find((element) => element.sourceId === 'box')
-    expect(box?.style.fill).toBe('#EEEEEE')
-    expect(box?.style.borders?.top).toEqual({ color: '#00FF00', width: 2 })
-    expect(box?.style.borders?.right).toBeUndefined()
-    expect(box?.style.shadow).toBeTruthy()
-    expect(
-      slide.elements.find((element) => element.sourceId === 'title')?.style.shadow
-    ).toBeUndefined()
-    expect(slide.elements.find((element) => element.sourceId === 'photo')?.imageFit).toBe('cover')
-  })
-
-  it('rejects unsupported CSS and non-standard slide roots', async () => {
-    await expect(
-      compilePptSlideHtml(
-        '<section data-ppt-slide style="width:1000px;height:1080px"><div data-ppt-element="shape" style="width:10px;height:10px"></div></section>'
-      )
-    ).rejects.toThrow('1920x1080')
-    await expect(
-      compilePptSlideHtml(
-        '<section data-ppt-slide style="width:1920px;height:1080px"><div data-ppt-element="shape" style="width:10px;height:10px;filter:blur(2px)"></div></section>'
-      )
-    ).rejects.toThrow('不支持的 CSS 属性')
-    await expect(
-      compilePptSlideHtml(
-        '<section data-ppt-slide style="width:1920px;height:1080px"><div data-ppt-element="shape" style="width:100px;height:20px;background:linear-gradient(90deg,#0a0,#00f)"></div></section>'
-      )
-    ).rejects.toThrow('不支持的 CSS 背景')
-  })
-
-  it('requires a readable title and keeps text inside the slide safe area', async () => {
-    await expect(
-      compilePptSlideHtml(
-        '<section data-ppt-slide style="width:1920px;height:1080px"><h1 data-ppt-element="text" style="position:absolute;left:20px;top:100px;width:800px;height:100px;font-size:24px">标题</h1></section>'
-      )
-    ).resolves.toBeTruthy()
+  it('rejects elements that leave the 1920×1080 canvas', () => {
+    expect(() =>
+      assertPptElementInCanvas({
+        type: 'text',
+        text: 'out',
+        bounds: { x: 1800, y: 0, width: 200, height: 40 }
+      })
+    ).toThrow(`${PPT_CANVAS_WIDTH}×${PPT_CANVAS_HEIGHT}`)
+    expect(() =>
+      assertPptElementInCanvas({
+        type: 'text',
+        text: 'ok',
+        bounds: { x: 100, y: 100, width: 800, height: 80 }
+      })
+    ).not.toThrow()
   })
 
   it('emits v4 net diff semantics without treating structural shifts as moves', () => {

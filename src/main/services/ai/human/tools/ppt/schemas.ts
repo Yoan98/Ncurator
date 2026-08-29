@@ -1,340 +1,380 @@
 import { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../shared/types'
+import { PPT_CANVAS_HEIGHT, PPT_CANVAS_WIDTH } from './color'
 
-const sourcePathSchema = z.string().trim().min(1)
-const slideIdSchema = z.string().trim().min(1)
-const slideIndexSchema = z.number().int().min(1)
-
-const pptSlideHtmlSchema = z.string().min(1)
+const sourcePathSchema = z.string().trim().min(1).describe('PPTX 文件本机绝对路径')
+const slideIdSchema = z.string().trim().min(1).describe('页面 slideId')
+const slideIndexSchema = z.number().int().min(1).describe('1-based 页码')
+const elementIdSchema = z.string().min(1).describe('元素 elementId')
 
 export const pptBoundsSchema = z
   .object({
-    x: z.number().min(0),
-    y: z.number().min(0),
-    width: z.number().positive(),
-    height: z.number().positive()
+    x: z.number().min(0).describe('左上角 X，画布像素，须落在 1920×1080 内'),
+    y: z.number().min(0).describe('左上角 Y，画布像素，须落在 1920×1080 内'),
+    width: z.number().positive().describe('宽度，画布像素'),
+    height: z.number().positive().describe('高度，画布像素')
   })
   .strict()
   .meta({ id: 'PptBounds' })
 
 const pptPointSchema = z
   .object({
-    x: z.number().min(0),
-    y: z.number().min(0)
+    x: z.number().min(0).describe('X，画布像素，须落在 1920×1080 内'),
+    y: z.number().min(0).describe('Y，画布像素，须落在 1920×1080 内')
   })
   .strict()
   .meta({ id: 'PptPoint' })
 
 export const pptElementStyleSchema = z
   .object({
-    fill: z.string().optional(),
-    stroke: z.string().optional(),
-    strokeWidth: z.number().min(0).optional(),
-    color: z.string().optional(),
-    fontFamily: z.string().optional(),
-    fontSize: z.number().positive().optional(),
-    bold: z.boolean().optional(),
-    italic: z.boolean().optional(),
-    underline: z.boolean().optional(),
-    textAlign: z.enum(['left', 'center', 'right']).optional(),
-    verticalAlign: z.enum(['top', 'middle', 'bottom']).optional(),
-    rotation: z.number().optional(),
-    shadow: z.boolean().optional()
+    fill: z.string().optional().describe('填充色'),
+    stroke: z.string().optional().describe('描边色'),
+    strokeWidth: z.number().min(0).optional().describe('描边宽度'),
+    color: z.string().optional().describe('文字颜色'),
+    fontFamily: z.string().optional().describe('字体'),
+    fontSize: z.number().positive().optional().describe('字号，磅'),
+    bold: z.boolean().optional().describe('是否加粗'),
+    italic: z.boolean().optional().describe('是否斜体'),
+    underline: z.boolean().optional().describe('是否下划线'),
+    textAlign: z.enum(['left', 'center', 'right']).optional().describe('水平对齐'),
+    verticalAlign: z.enum(['top', 'middle', 'bottom']).optional().describe('垂直对齐'),
+    rotation: z.number().optional().describe('旋转角度'),
+    shadow: z.boolean().optional().describe('是否投影')
   })
   .strict()
   .meta({ id: 'PptElementStyle' })
 
-export const pptSlideRangeSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      type: z.literal('slide_index'),
-      fromSlideIndex: slideIndexSchema,
-      toSlideIndex: slideIndexSchema
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('slide_ids'),
-      slideIds: z.array(slideIdSchema).min(1)
-    })
-    .strict()
-]).meta({ id: 'PptSlideRange' })
+export const pptSlideRangeSchema = z
+  .discriminatedUnion('type', [
+    z
+      .object({
+        type: z.literal('slide_index').describe('按页码区间'),
+        fromSlideIndex: slideIndexSchema,
+        toSlideIndex: slideIndexSchema
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('slide_ids').describe('按 slideId 集合'),
+        slideIds: z.array(slideIdSchema).min(1)
+      })
+      .strict()
+  ])
+  .meta({ id: 'PptSlideRange' })
 
-const pptOutlineRangeSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      type: z.literal('percent'),
-      fromPercent: z.number().min(0).max(100),
-      toPercent: z.number().min(0).max(100)
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('slide_index'),
-      fromSlideIndex: slideIndexSchema,
-      toSlideIndex: slideIndexSchema
-    })
-    .strict()
-]).meta({ id: 'PptOutlineRange' })
+const pptOutlineRangeSchema = z
+  .discriminatedUnion('type', [
+    z
+      .object({
+        type: z.literal('percent').describe('按百分比区间'),
+        fromPercent: z.number().min(0).max(100).describe('起始比例，0–100'),
+        toPercent: z.number().min(0).max(100).describe('结束比例，0–100')
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('slide_index').describe('按页码区间'),
+        fromSlideIndex: slideIndexSchema,
+        toSlideIndex: slideIndexSchema
+      })
+      .strict()
+  ])
+  .meta({ id: 'PptOutlineRange' })
 
 export const pptOutlineSchema = z
   .object({
     sourcePath: sourcePathSchema,
-    ranges: z.array(pptOutlineRangeSchema).min(1)
+    ranges: z.array(pptOutlineRangeSchema).min(1).describe('提纲读取区间')
   })
   .strict()
 
 export const pptReadSlidesSchema = z
   .object({
     sourcePath: sourcePathSchema,
-    ranges: z.array(pptSlideRangeSchema).min(1)
+    ranges: z.array(pptSlideRangeSchema).min(1).describe('精读区间')
   })
   .strict()
 
 export const pptSearchSchema = z
   .object({
     sourcePath: sourcePathSchema,
-    query: z.string().min(1),
+    query: z.string().min(1).describe('搜索文字'),
     scope: z
       .object({
-        slideIds: z.array(slideIdSchema).min(1)
+        slideIds: z.array(slideIdSchema).min(1).describe('限定页面')
       })
       .strict()
       .optional()
-  })
-  .strict()
-
-export const pptRenderSchema = z
-  .object({
-    sourcePath: sourcePathSchema,
-    ranges: z.array(pptSlideRangeSchema).min(1)
+      .describe('可选搜索范围')
   })
   .strict()
 
 const chartTypeSchema = z.enum(['bar', 'column', 'line', 'pie', 'doughnut', 'area'])
 const chartSeriesSchema = z
   .object({
-    name: z.string(),
-    values: z.array(z.number()).min(1)
+    name: z.string().describe('系列名'),
+    values: z.array(z.number()).min(1).describe('系列值')
   })
   .strict()
   .meta({ id: 'PptChartSeries' })
 const imageFitSchema = z.enum(['contain', 'cover', 'stretch'])
 
-const pptElementSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      type: z.literal('text'),
-      text: z.string(),
-      bounds: pptBoundsSchema,
-      style: pptElementStyleSchema.optional()
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('shape'),
-      shape: z.enum(['rect', 'roundRect', 'ellipse', 'triangle', 'chevron', 'arrow']),
-      bounds: pptBoundsSchema,
-      text: z.string().optional(),
-      style: pptElementStyleSchema.optional()
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('line'),
-      from: pptPointSchema,
-      to: pptPointSchema,
-      color: z.string().optional(),
-      width: z.number().positive().optional(),
-      arrowEnd: z.boolean().optional()
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('image'),
-      assetPath: z.string().min(1),
-      bounds: pptBoundsSchema,
-      fit: imageFitSchema.optional()
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('table'),
-      bounds: pptBoundsSchema,
-      rows: z.array(z.array(z.string()).min(1)).min(1)
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('chart'),
-      bounds: pptBoundsSchema,
-      chartType: chartTypeSchema,
-      categories: z.array(z.string()).min(1),
-      series: z.array(chartSeriesSchema).min(1),
-      title: z.string().optional()
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('formula'),
-      latex: z.string().min(1),
-      bounds: pptBoundsSchema
-    })
-    .strict()
-]).meta({ id: 'PptElement' })
+export const pptElementSchema = z
+  .discriminatedUnion('type', [
+    z
+      .object({
+        type: z.literal('text').describe('文本框'),
+        text: z.string().describe('文本内容'),
+        bounds: pptBoundsSchema,
+        style: pptElementStyleSchema.optional()
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('shape').describe('形状'),
+        shape: z
+          .enum(['rect', 'roundRect', 'ellipse', 'triangle', 'chevron', 'arrow'])
+          .describe('形状预设'),
+        bounds: pptBoundsSchema,
+        text: z.string().optional().describe('形状内文字'),
+        style: pptElementStyleSchema.optional()
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('line').describe('直线'),
+        from: pptPointSchema.describe('起点'),
+        to: pptPointSchema.describe('终点'),
+        color: z.string().optional().describe('线条颜色'),
+        width: z.number().positive().optional().describe('线条宽度'),
+        arrowEnd: z.boolean().optional().describe('终点是否带箭头')
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('image').describe('图片'),
+        assetPath: z.string().min(1).describe('本机或远程图片路径'),
+        bounds: pptBoundsSchema,
+        fit: imageFitSchema.optional().describe('缩放方式')
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('table').describe('表格'),
+        bounds: pptBoundsSchema,
+        rows: z.array(z.array(z.string()).min(1)).min(1).describe('单元格文字，从左到右、从上到下')
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('chart').describe('图表'),
+        bounds: pptBoundsSchema,
+        chartType: chartTypeSchema.describe('图表类型'),
+        categories: z.array(z.string()).min(1).describe('类目'),
+        series: z.array(chartSeriesSchema).min(1).describe('数据系列'),
+        title: z.string().optional().describe('图表标题')
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('formula').describe('公式'),
+        latex: z.string().min(1).describe('LaTeX'),
+        bounds: pptBoundsSchema
+      })
+      .strict()
+  ])
+  .meta({ id: 'PptElement' })
 
-const pptElementOperationSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      type: z.literal('set_text'),
-      elementId: z.string().min(1),
-      text: z.string()
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('set_bounds'),
-      elementId: z.string().min(1),
-      bounds: pptBoundsSchema
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('set_style'),
-      elementId: z.string().min(1),
-      style: pptElementStyleSchema
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('set_z_order'),
-      elementId: z.string().min(1),
-      placement: z.enum(['front', 'back', 'forward', 'backward'])
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('delete_element'),
-      elementId: z.string().min(1)
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('duplicate_element'),
-      elementId: z.string().min(1)
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('add_element'),
-      element: pptElementSchema
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('replace_image'),
-      elementId: z.string().min(1),
-      assetPath: z.string().min(1),
-      fit: imageFitSchema.optional()
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('update_table'),
-      elementId: z.string().min(1),
-      cells: z
-        .array(
-          z
-            .object({
-              rowIndex: z.number().int().min(1),
-              columnIndex: z.number().int().min(1),
-              text: z.string()
-            })
-            .strict()
-        )
-        .min(1)
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('update_chart'),
-      elementId: z.string().min(1),
-      chartType: chartTypeSchema,
-      categories: z.array(z.string()).min(1),
-      series: z.array(chartSeriesSchema).min(1),
-      title: z.string().optional()
-    })
-    .strict(),
-  z
-    .object({
-      type: z.literal('update_formula'),
-      elementId: z.string().min(1),
-      latex: z.string().min(1)
-    })
-    .strict()
-]).meta({ id: 'PptElementOperation' })
+const pptElementOperationSchema = z
+  .discriminatedUnion('type', [
+    z
+      .object({
+        type: z.literal('set_text').describe('改文字'),
+        elementId: elementIdSchema,
+        text: z.string().describe('新文字')
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('set_bounds').describe('改位置或大小'),
+        elementId: elementIdSchema,
+        bounds: pptBoundsSchema
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('set_style').describe('改样式'),
+        elementId: elementIdSchema,
+        style: pptElementStyleSchema
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('set_z_order').describe('改图层'),
+        elementId: elementIdSchema,
+        placement: z.enum(['front', 'back', 'forward', 'backward']).describe('图层方向')
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('delete_element').describe('删除元素'),
+        elementId: elementIdSchema
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('duplicate_element').describe('复制元素'),
+        elementId: elementIdSchema
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('add_element').describe('新增元素'),
+        element: pptElementSchema
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('replace_image').describe('替换图片'),
+        elementId: elementIdSchema,
+        assetPath: z.string().min(1).describe('本机或远程图片路径'),
+        fit: imageFitSchema.optional().describe('缩放方式')
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('update_table').describe('改表格单元格'),
+        elementId: elementIdSchema,
+        cells: z
+          .array(
+            z
+              .object({
+                rowIndex: z.number().int().min(1).describe('行号，从 1 开始'),
+                columnIndex: z.number().int().min(1).describe('列号，从 1 开始'),
+                text: z.string().describe('单元格文字')
+              })
+              .strict()
+          )
+          .min(1)
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('update_chart').describe('改图表数据'),
+        elementId: elementIdSchema,
+        chartType: chartTypeSchema.describe('图表类型'),
+        categories: z.array(z.string()).min(1).describe('类目'),
+        series: z.array(chartSeriesSchema).min(1).describe('数据系列'),
+        title: z.string().optional().describe('图表标题')
+      })
+      .strict(),
+    z
+      .object({
+        type: z.literal('update_formula').describe('改公式'),
+        elementId: elementIdSchema,
+        latex: z.string().min(1).describe('LaTeX')
+      })
+      .strict()
+  ])
+  .meta({ id: 'PptElementOperation' })
 
 const pptSlideLocationSchema = z
   .object({
-    slideId: slideIdSchema,
-    position: z.enum(['before', 'after'])
+    slideId: slideIdSchema.describe('锚点页面'),
+    position: z.enum(['before', 'after']).describe('相对锚点的位置')
   })
   .strict()
   .meta({ id: 'PptSlideLocation' })
 
-export const pptEditActionSchema = z.discriminatedUnion('type', [
+const pptSlideDefaultsSchema = z
+  .object({
+    color: z.string().optional().describe('默认文字颜色'),
+    fontFamily: z.string().optional().describe('默认字体'),
+    fontSize: z.number().positive().optional().describe('默认字号，磅')
+  })
+  .strict()
+  .meta({ id: 'PptSlideDefaults' })
+
+const pptSlideSpecFields = {
+  background: z
+    .string()
+    .optional()
+    .describe('页面背景色；insert_slide 省略为白色，replace_slide 省略则保留原值'),
+  notes: z.string().optional().describe('讲者备注；replace_slide 省略则保留原值'),
+  defaults: pptSlideDefaultsSchema.optional().describe('本页未设样式的文字默认值'),
+  elements: z
+    .array(pptElementSchema)
+    .describe('页面元素规格，按叠放顺序；须完整位于 1920×1080 画布内，可为空页')
+}
+
+const editBase = { sourcePath: sourcePathSchema }
+
+export const pptEditSchema = z.discriminatedUnion('type', [
   z
     .object({
-      type: z.literal('insert_slide'),
-      location: pptSlideLocationSchema.optional(),
-      html: pptSlideHtmlSchema
+      ...editBase,
+      type: z.literal('insert_slide').describe('插入新页面'),
+      location: pptSlideLocationSchema.optional().describe('插入位置；省略则追加到末尾'),
+      ...pptSlideSpecFields
     })
     .strict(),
-  z.object({ type: z.literal('delete_slides'), slideIds: z.array(slideIdSchema).min(1) }).strict(),
   z
     .object({
-      type: z.literal('move_slide'),
+      ...editBase,
+      type: z.literal('replace_slide').describe('按规格重写已有页面，保留 slideId'),
+      slideId: slideIdSchema,
+      ...pptSlideSpecFields
+    })
+    .strict(),
+  z
+    .object({
+      ...editBase,
+      type: z.literal('delete_slides').describe('删除页面；最终至少保留一页'),
+      slideIds: z.array(slideIdSchema).min(1).describe('要删除的 slideId')
+    })
+    .strict(),
+  z
+    .object({
+      ...editBase,
+      type: z.literal('move_slide').describe('移动页面；location 不能锚定自身'),
       slideId: slideIdSchema,
       location: pptSlideLocationSchema
     })
     .strict(),
   z
     .object({
-      type: z.literal('duplicate_slide'),
+      ...editBase,
+      type: z.literal('duplicate_slide').describe('复制页面'),
       slideId: slideIdSchema,
-      location: pptSlideLocationSchema.optional()
+      location: pptSlideLocationSchema.optional().describe('复制后的位置；省略则追加到末尾')
     })
     .strict(),
   z
     .object({
-      type: z.literal('replace_text'),
-      query: z.string().min(1),
-      replace: z.string(),
-      slideIds: z.array(slideIdSchema).optional()
+      ...editBase,
+      type: z.literal('replace_text').describe('替换页面文字'),
+      query: z.string().min(1).describe('原文'),
+      replace: z.string().describe('替换后的文字'),
+      slideIds: z.array(slideIdSchema).min(1).optional().describe('限定页面；省略则全文替换')
     })
     .strict(),
   z
     .object({
-      type: z.literal('edit_elements'),
+      ...editBase,
+      type: z.literal('edit_elements').describe('按 elementId 修改当前页元素'),
       slideId: slideIdSchema,
-      operations: z.array(pptElementOperationSchema).min(1)
+      operations: z.array(pptElementOperationSchema).min(1).describe('同一页上的元素操作，可批量')
     })
     .strict(),
   z
     .object({
-      type: z.literal('set_notes'),
+      ...editBase,
+      type: z.literal('set_notes').describe('设置讲者备注'),
       slideId: slideIdSchema,
-      text: z.string()
+      text: z.string().describe('备注全文')
     })
     .strict()
-]).meta({ id: 'PptEditAction' })
-
-export const pptEditSchema = z
-  .object({
-    sourcePath: sourcePathSchema,
-    actions: z.array(pptEditActionSchema).min(1)
-  })
-  .strict()
+])
 
 const pptSlideOutputSchema = z.custom<JsonObject>()
 
@@ -361,13 +401,52 @@ export const pptSearchOutputSchema = z.object({
 export const pptEditOutputSchema = z.object({
   sourcePath: z.string(),
   slideCount: z.number().int().min(1),
-  changedSlideIds: z.array(z.string())
+  slideId: z.string().optional(),
+  createdElementIds: z.array(z.string().min(1)).min(1).optional()
 })
 
 export type PptOutlineInput = z.infer<typeof pptOutlineSchema>
 export type PptReadSlidesInput = z.infer<typeof pptReadSlidesSchema>
 export type PptSearchInput = z.infer<typeof pptSearchSchema>
-export type PptRenderInput = z.infer<typeof pptRenderSchema>
 export type PptEditInput = z.infer<typeof pptEditSchema>
 export type PptSlideRange = z.infer<typeof pptSlideRangeSchema>
+export type PptElement = z.infer<typeof pptElementSchema>
 export type PptElementOperation = z.infer<typeof pptElementOperationSchema>
+export type PptSlideDefaults = z.infer<typeof pptSlideDefaultsSchema>
+
+export const assertPptElementInCanvas = (element: PptElement): void => {
+  const fail = (detail: string): never => {
+    throw new Error(`元素超出 ${PPT_CANVAS_WIDTH}×${PPT_CANVAS_HEIGHT} 画布：${detail}`)
+  }
+  const pointInCanvas = (x: number, y: number, label: string): void => {
+    if (x < 0 || y < 0 || x > PPT_CANVAS_WIDTH || y > PPT_CANVAS_HEIGHT) {
+      fail(`${label} (${x}, ${y})`)
+    }
+  }
+  if (element.type === 'line') {
+    pointInCanvas(element.from.x, element.from.y, 'from')
+    pointInCanvas(element.to.x, element.to.y, 'to')
+    return
+  }
+  const { x, y, width, height } = element.bounds
+  pointInCanvas(x, y, 'origin')
+  if (x + width > PPT_CANVAS_WIDTH + 1 || y + height > PPT_CANVAS_HEIGHT + 1) {
+    fail(`right=${x + width}, bottom=${y + height}`)
+  }
+}
+
+export const applyPptSlideDefaults = (
+  element: PptElement,
+  defaults: PptSlideDefaults | undefined
+): PptElement => {
+  if (!defaults || (element.type !== 'text' && element.type !== 'shape')) return element
+  return {
+    ...element,
+    style: {
+      color: defaults.color,
+      fontFamily: defaults.fontFamily,
+      fontSize: defaults.fontSize,
+      ...element.style
+    }
+  }
+}

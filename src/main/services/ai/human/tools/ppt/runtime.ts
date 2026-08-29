@@ -97,27 +97,23 @@ import {
 import type { AiFileChangeRecord, JsonObject } from '../../../../../../shared/types'
 import { fileExists } from '../docx/review/utils'
 import { isPathInsideRoot, resolveToolPath } from '../terminal/commandPolicy'
-import {
-  compilePptSlideHtml,
-  normalizePptColor,
-  PPT_CANVAS_HEIGHT,
-  PPT_CANVAS_WIDTH
-} from './htmlCompiler'
+import { normalizePptColor, PPT_CANVAS_HEIGHT, PPT_CANVAS_WIDTH } from './color'
 import { renderLatexToSvg } from './formula'
 import { buildPptDiffManifest } from './diff'
 import {
+  applyPptSlideDefaults,
+  assertPptElementInCanvas,
   pptEditSchema,
   pptOutlineSchema,
   pptReadSlidesSchema,
-  pptRenderSchema,
   pptSearchSchema,
+  type PptElement,
   type PptElementOperation,
+  type PptSlideDefaults,
   type PptSlideRange
 } from './schemas'
 import type {
   PptBounds,
-  PptCompiledElement,
-  PptCompiledSlide,
   PptDiffFrame,
   PptDiffSlideSnapshot,
   PptOutlineItem,
@@ -343,11 +339,23 @@ const persistMedia = async (input: {
   return target
 }
 
-const applyShapeStyle = (
-  shape: SlideShapeData,
-  style: PptCompiledElement['style'],
-  textShape = false
-) => {
+type PptShapeStyle = {
+  fill?: string
+  stroke?: string
+  strokeWidth?: number
+  color?: string
+  fontFamily?: string
+  fontSize?: number
+  fontWeight?: number
+  italic?: boolean
+  underline?: boolean
+  textAlign?: 'left' | 'center' | 'right'
+  verticalAlign?: 'top' | 'middle' | 'bottom'
+  rotation?: number
+  shadow?: boolean | string
+}
+
+const applyShapeStyle = (shape: SlideShapeData, style: PptShapeStyle, textShape = false) => {
   if (style.fill) setShapeFill(shape, normalizeHex(style.fill))
   else if (textShape) setShapeNoFill(shape)
   if (style.stroke && Number(style.strokeWidth || 0) > 0) {
@@ -372,7 +380,7 @@ const applyShapeStyle = (
     setShapeTextFormat(shape, {
       font: textFont,
       fontEastAsian: textFont,
-      size: Math.max(8, (style.fontSize || 32) * 0.5),
+      size: Math.max(8, style.fontSize || 18),
       color: normalizeHex(style.color, '#222222'),
       bold: (style.fontWeight || 400) >= 600,
       italic: style.italic,
@@ -386,206 +394,6 @@ const applyShapeStyle = (
     setShapeTextWrap(shape, 'square')
     setShapeTextAutoFit(shape, 'normal')
   }
-}
-
-const addCompiledBorders = (input: {
-  presentation: PresentationData
-  slide: SlideData
-  compiled: PptCompiledSlide
-  element: PptCompiledElement
-}): void => {
-  const borders = input.element.style.borders
-  if (!borders) return
-  const slideSize = getSlideDimensions(input.presentation)
-  const point = (x: number, y: number) => ({
-    x: emu(Math.round((x / input.compiled.width) * slideSize.width)),
-    y: emu(Math.round((y / input.compiled.height) * slideSize.height))
-  })
-  const { x, y, width, height } = input.element.bounds
-  const sides = [
-    { border: borders.top, from: point(x, y), to: point(x + width, y) },
-    { border: borders.right, from: point(x + width, y), to: point(x + width, y + height) },
-    { border: borders.bottom, from: point(x + width, y + height), to: point(x, y + height) },
-    { border: borders.left, from: point(x, y + height), to: point(x, y) }
-  ]
-  for (const side of sides) {
-    if (!side.border || side.border.width <= 0) continue
-    addSlideLine(input.slide, {
-      from: side.from,
-      to: side.to,
-      color: normalizeHex(side.border.color, '#000000'),
-      widthEmu: Math.round(side.border.width * 12_700)
-    })
-  }
-}
-
-const addCompiledElement = async (input: {
-  document: PptRuntimeDocument
-  slide: SlideData
-  compiled: PptCompiledSlide
-  element: PptCompiledElement
-  workspaceRootPath: string
-}) => {
-  const bounds = boundsToEmu(
-    input.document.presentation,
-    input.element.type === 'text'
-      ? {
-          ...input.element.bounds,
-          width: Math.min(
-            input.compiled.width - input.element.bounds.x,
-            input.element.bounds.width +
-              Math.max(24, Math.min(72, (input.element.style.fontSize || 32) * 1.5))
-          ),
-          height: Math.min(
-            input.compiled.height - input.element.bounds.y,
-            input.element.bounds.height + Math.max(16, (input.element.style.fontSize || 32) * 0.8)
-          )
-        }
-      : input.element.bounds,
-    input.compiled.width,
-    input.compiled.height
-  )
-  if (input.element.type === 'shape') {
-    const shape = addSlideShape(input.slide, {
-      preset: input.element.style.radius ? 'roundRect' : 'rect',
-      text: '',
-      ...bounds
-    })
-    applyShapeStyle(shape, input.element.style)
-    addCompiledBorders({
-      presentation: input.document.presentation,
-      slide: input.slide,
-      compiled: input.compiled,
-      element: input.element
-    })
-    return
-  }
-  if (input.element.type === 'text') {
-    const shape = addSlideTextBox(input.slide, { ...bounds, text: input.element.text || '' })
-    applyShapeStyle(shape, input.element.style, true)
-    addCompiledBorders({
-      presentation: input.document.presentation,
-      slide: input.slide,
-      compiled: input.compiled,
-      element: input.element
-    })
-    return
-  }
-  if (input.element.type === 'line') {
-    const lineSpec = input.element.line || {
-      from: { x: 0, y: 0 },
-      to: { x: input.element.bounds.width, y: input.element.bounds.height }
-    }
-    const slideSize = getSlideDimensions(input.document.presentation)
-    const point = (offset: { x: number; y: number }) => ({
-      x: emu(
-        Math.round(((input.element.bounds.x + offset.x) / input.compiled.width) * slideSize.width)
-      ),
-      y: emu(
-        Math.round(((input.element.bounds.y + offset.y) / input.compiled.height) * slideSize.height)
-      )
-    })
-    addSlideLine(input.slide, {
-      from: point(lineSpec.from),
-      to: point(lineSpec.to),
-      color: normalizeHex(input.element.style.stroke || input.element.style.color, '#222222'),
-      widthEmu: Math.round(Math.max(1, input.element.style.strokeWidth || 2) * 12_700)
-    })
-    return
-  }
-  if (input.element.type === 'table') {
-    addSlideTable(input.slide, { ...bounds, rows: input.element.rows || [['']] })
-    return
-  }
-  if (input.element.type === 'chart') {
-    const rows = input.element.rows || []
-    const categories = rows.slice(1).map((row) => row[0] || '')
-    const headings = rows[0]?.slice(1) || ['数据']
-    const series = headings.map((name, column) => ({
-      name,
-      values: rows.slice(1).map((row) => Number(row[column + 1]) || 0)
-    }))
-    addSlideChart(input.slide, {
-      ...bounds,
-      spec: { kind: input.element.chartType || 'column', categories, series }
-    })
-    return
-  }
-  let bytes: Uint8Array
-  let format: 'svg' | undefined
-  if (input.element.type === 'formula') {
-    const svg = renderLatexToSvg(input.element.latex || '')
-    bytes = new Uint8Array(Buffer.from(svg, 'utf8'))
-    format = 'svg'
-    await persistMedia({
-      document: input.document,
-      workspaceRootPath: input.workspaceRootPath,
-      bytes,
-      extension: 'svg'
-    })
-  } else if (input.element.type === 'svg') {
-    bytes = new Uint8Array(Buffer.from(input.element.svg || '', 'utf8'))
-    format = 'svg'
-    await persistMedia({
-      document: input.document,
-      workspaceRootPath: input.workspaceRootPath,
-      bytes,
-      extension: 'svg'
-    })
-  } else {
-    bytes = await resolveAssetBytes({
-      rawPath: input.element.src || ''
-    })
-    const extension = /^https?:\/\//i.test(input.element.src || '')
-      ? 'png'
-      : path.extname(input.element.src || '').replace('.', '') || 'bin'
-    await persistMedia({
-      document: input.document,
-      workspaceRootPath: input.workspaceRootPath,
-      bytes,
-      extension
-    })
-  }
-  const image = addSlideImage(input.slide, bytes, {
-    ...bounds,
-    format,
-    fit:
-      input.element.type === 'image'
-        ? input.element.imageFit === 'contain'
-          ? 'contain'
-          : 'fill'
-        : 'contain'
-  })
-  if (input.element.type === 'image' && input.element.imageFit === 'cover') {
-    applyCoverCrop(image, bytes, input.element.bounds)
-  }
-  if (input.element.type === 'formula') {
-    setShapeDescription(image, `ppt-latex:${input.element.latex || ''}`)
-  } else if (input.element.type === 'image' && /^https?:\/\//i.test(input.element.src || '')) {
-    setShapeDescription(image, `ppt-remote-image:${input.element.src || ''}`)
-  }
-}
-
-const addCompiledSlide = async (input: {
-  document: PptRuntimeDocument
-  compiled: PptCompiledSlide
-  workspaceRootPath: string
-  location?: { slideId: string; position: 'before' | 'after' }
-}): Promise<SlideData> => {
-  const slide = addBlankSlide(input.document.presentation)
-  setSlideBackground(slide, normalizeHex(input.compiled.background))
-  if (input.compiled.notes) setSlideNotes(slide, input.compiled.notes)
-  for (const element of [...input.compiled.elements].sort((a, b) => a.zIndex - b.zIndex)) {
-    await addCompiledElement({
-      document: input.document,
-      slide,
-      compiled: input.compiled,
-      element,
-      workspaceRootPath: input.workspaceRootPath
-    })
-  }
-  placeSlide(input.document.presentation, slide, input.location)
-  return slide
 }
 
 const placeSlide = (
@@ -900,6 +708,7 @@ const applyElementOperation = async (input: {
     return
   }
   if (op.type === 'set_bounds') {
+    assertPptElementInCanvas({ type: 'text', text: '', bounds: op.bounds })
     setShapeBounds(
       findElement(input.document.presentation, input.slide, op.elementId),
       boundsToEmu(input.document.presentation, op.bounds)
@@ -1029,6 +838,7 @@ const applyElementOperation = async (input: {
   }
 
   const element = op.element
+  assertPptElementInCanvas(element)
   if (element.type === 'line') {
     const slideSize = getSlideDimensions(input.document.presentation)
     const line = addSlideLine(input.slide, {
@@ -1129,6 +939,46 @@ const applyElementOperation = async (input: {
   })
 }
 
+const elementIdsOf = (slide: SlideData): string[] =>
+  getSlideShapes(slide).map((shape) => elementIdOf(slide, shape))
+
+const createdIdsSince = (beforeIds: readonly string[], slide: SlideData): string[] => {
+  const before = new Set(beforeIds)
+  return elementIdsOf(slide).filter((id) => !before.has(id))
+}
+
+const applySlideSpec = async (input: {
+  document: PptRuntimeDocument
+  slide: SlideData
+  elements: readonly PptElement[]
+  defaults: PptSlideDefaults | undefined
+  workspaceRootPath: string
+}): Promise<void> => {
+  for (const raw of input.elements) {
+    await applyElementOperation({
+      operation: { type: 'add_element', element: applyPptSlideDefaults(raw, input.defaults) },
+      document: input.document,
+      slide: input.slide,
+      workspaceRootPath: input.workspaceRootPath,
+      onReplaceElement: () => undefined
+    })
+  }
+}
+
+const editOutput = (
+  sourcePath: string,
+  slideCount: number,
+  slideId?: string,
+  createdElementIds?: readonly string[]
+): Record<string, unknown> => ({
+  sourcePath,
+  slideCount,
+  ...(slideId ? { slideId } : {}),
+  ...(createdElementIds && createdElementIds.length > 0
+    ? { createdElementIds: [...createdElementIds] }
+    : {})
+})
+
 export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRuntime => {
   const documents = new Map<string, PptRuntimeDocument>()
   const workspaceRootPath = path.resolve(input.workspaceRootPath)
@@ -1161,6 +1011,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       presentation,
       dirty: false,
       movedSlideIds: new Set(),
+      replacedSlideIds: new Set(),
       movedElementIds: new Set(),
       elementLineage: new Map()
     }
@@ -1259,7 +1110,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
   }
 
   const render = async (rawArgs: unknown): Promise<Record<string, unknown>> => {
-    const args = pptRenderSchema.parse(rawArgs)
+    const args = pptReadSlidesSchema.parse(rawArgs)
     const document = await loadDocument(args.sourcePath)
     const slides = getSlides(document.presentation)
     const indices = resolveSlideIndices(slides, args.ranges)
@@ -1304,6 +1155,23 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     }
   }
 
+  const persistDocument = async (document: PptRuntimeDocument): Promise<number> => {
+    if (getSlides(document.presentation).length === 0) {
+      throw new Error('PPT 最终必须至少保留一页')
+    }
+    const issues = validatePresentation(document.presentation).filter(
+      (issue) => issue.severity === 'error'
+    )
+    if (issues.length > 0) {
+      throw new Error(`PPTX 校验失败：${issues.map((issue) => issue.message).join('; ')}`)
+    }
+    const afterBytes = await savePresentation(document.presentation)
+    await replaceFileWithBytes(document.sourcePath, afterBytes)
+    document.lastPersistedBytes = new Uint8Array(afterBytes)
+    document.dirty = true
+    return getSlides(document.presentation).length
+  }
+
   const edit = async (rawArgs: unknown): Promise<Record<string, unknown>> => {
     const args = pptEditSchema.parse(rawArgs)
     const sourcePath = resolvePptPath(args.sourcePath)
@@ -1312,143 +1180,145 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     const presentationSnapshot = await savePresentation(document.presentation)
     const dirtyBeforeAction = document.dirty
     const movedSlideIdsBeforeAction = new Set(document.movedSlideIds)
+    const replacedSlideIdsBeforeAction = new Set(document.replacedSlideIds)
     const movedElementIdsBeforeAction = new Set(document.movedElementIds)
     const elementLineageBeforeAction = new Map(document.elementLineage)
     try {
-      const changedSlideIds: string[] = []
-      const movedSlideIds = new Set<string>()
-      for (const action of args.actions) {
-        try {
-          if (action.type === 'insert_slide') {
-            for (const [pageIndex, html] of [action.html].entries()) {
-              let compiled: PptCompiledSlide
-              try {
-                compiled = await compilePptSlideHtml(html)
-              } catch (error) {
-                const message = error instanceof Error ? error.message : String(error)
-                throw new Error(`第 ${pageIndex + 1} 个 HTML 页面失败：${message}`)
-              }
-              const slide = await addCompiledSlide({
-                document,
-                compiled,
-                workspaceRootPath,
-                location: action.location
-              })
+      let result: Record<string, unknown>
+      if (args.type === 'insert_slide') {
+        const slide = addBlankSlide(document.presentation)
+        setSlideBackground(slide, normalizeHex(args.background, '#FFFFFF'))
+        if (args.notes !== undefined) setSlideNotes(slide, args.notes)
+        await applySlideSpec({
+          document,
+          slide,
+          elements: args.elements,
+          defaults: args.defaults,
+          workspaceRootPath
+        })
+        placeSlide(document.presentation, slide, args.location)
+        result = editOutput(
+          args.sourcePath,
+          await persistDocument(document),
+          slideIdOf(slide),
+          elementIdsOf(slide)
+        )
+      } else if (args.type === 'replace_slide') {
+        const slide = findSlide(document.presentation, args.slideId)
+        document.replacedSlideIds.add(args.slideId)
+        for (const shape of [...getSlideShapes(slide)]) removeShape(shape)
+        if (args.background !== undefined) setSlideBackground(slide, normalizeHex(args.background))
+        if (args.notes !== undefined) setSlideNotes(slide, args.notes)
+        await applySlideSpec({
+          document,
+          slide,
+          elements: args.elements,
+          defaults: args.defaults,
+          workspaceRootPath
+        })
+        result = editOutput(
+          args.sourcePath,
+          await persistDocument(document),
+          args.slideId,
+          elementIdsOf(slide)
+        )
+      } else if (args.type === 'delete_slides') {
+        for (const slideId of args.slideIds) {
+          removeSlide(document.presentation, findSlide(document.presentation, slideId))
+        }
+        result = editOutput(args.sourcePath, await persistDocument(document))
+      } else if (args.type === 'move_slide') {
+        const slide = findSlide(document.presentation, args.slideId)
+        if (args.location.slideId === args.slideId) {
+          throw new Error('move_slide 的 location.slideId 不能等于 slideId')
+        }
+        placeSlide(document.presentation, slide, args.location)
+        document.movedSlideIds.add(args.slideId)
+        result = editOutput(args.sourcePath, await persistDocument(document), args.slideId)
+      } else if (args.type === 'duplicate_slide') {
+        const source = findSlide(document.presentation, args.slideId)
+        const duplicate = duplicateSlide(document.presentation, source)
+        placeSlide(document.presentation, duplicate, args.location)
+        result = editOutput(
+          args.sourcePath,
+          await persistDocument(document),
+          slideIdOf(duplicate),
+          elementIdsOf(duplicate)
+        )
+      } else if (args.type === 'replace_text') {
+        const targetSlides = args.slideIds?.map((slideId) =>
+          findSlide(document.presentation, slideId)
+        )
+        const changedSlideIds: string[] = []
+        let replacements = 0
+        if (targetSlides) {
+          for (const slide of targetSlides) {
+            for (const shape of getSlideShapes(slide)) {
+              const text = getShapeText(shape)
+              if (!text.includes(args.query)) continue
+              setShapeText(shape, text.split(args.query).join(args.replace))
+              replacements += 1
               changedSlideIds.push(slideIdOf(slide))
             }
-          } else if (action.type === 'delete_slides') {
-            for (const slideId of action.slideIds) {
-              const slide = findSlide(document.presentation, slideId)
-              changedSlideIds.push(slideId)
-              removeSlide(document.presentation, slide)
-            }
-          } else if (action.type === 'move_slide') {
-            const slide = findSlide(document.presentation, action.slideId)
-            if (action.location.slideId === action.slideId)
-              throw new Error('move_slide 的 location.slideId 不能等于 slideId')
-            placeSlide(document.presentation, slide, action.location)
-            changedSlideIds.push(action.slideId)
-            movedSlideIds.add(action.slideId)
-          } else if (action.type === 'duplicate_slide') {
-            const source = findSlide(document.presentation, action.slideId)
-            const duplicate = duplicateSlide(document.presentation, source)
-            placeSlide(document.presentation, duplicate, action.location)
-            changedSlideIds.push(slideIdOf(duplicate))
-          } else if (action.type === 'replace_text') {
-            const targetSlides = action.slideIds?.map((slideId) =>
-              findSlide(document.presentation, slideId)
-            )
-            let replacements = 0
-            if (targetSlides) {
-              for (const slide of targetSlides) {
-                for (const shape of getSlideShapes(slide)) {
-                  const text = getShapeText(shape)
-                  if (!text.includes(action.query)) continue
-                  setShapeText(shape, text.split(action.query).join(action.replace))
-                  replacements += 1
-                  changedSlideIds.push(slideIdOf(slide))
-                }
-              }
-            } else {
-              const beforeText = new Map(
-                getSlides(document.presentation).map((slide) => [
-                  slideIdOf(slide),
-                  getSlideText(slide)
-                ])
-              )
-              replacements = replaceTextInPresentation(
-                document.presentation,
-                action.query,
-                action.replace
-              )
-              if (replacements > 0) {
-                getSlides(document.presentation).forEach((slide) => {
-                  if (beforeText.get(slideIdOf(slide)) !== getSlideText(slide))
-                    changedSlideIds.push(slideIdOf(slide))
-                })
-              }
-            }
-            if (replacements === 0) throw new Error(`未找到要替换的文字：${action.query}`)
-          } else if (action.type === 'edit_elements') {
-            const slide = findSlide(document.presentation, action.slideId)
-            for (const operation of action.operations) {
-              if (operation.type === 'set_z_order') {
-                document.movedElementIds.add(operation.elementId)
-              }
-              await applyElementOperation({
-                operation,
-                document,
-                slide,
-                workspaceRootPath,
-                onReplaceElement: (beforeElementId, afterElementId) => {
-                  document.elementLineage.set(beforeElementId, afterElementId)
-                }
-              })
-            }
-            changedSlideIds.push(action.slideId)
-          } else if (action.type === 'set_notes') {
-            const slide = findSlide(document.presentation, action.slideId)
-            setSlideNotes(slide, action.text)
-            changedSlideIds.push(action.slideId)
           }
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          throw new Error(`${action.type} 失败：${message}`)
-        }
-      }
-      if (getSlides(document.presentation).length === 0) {
-        throw new Error('PPT 最终必须至少保留一页')
-      }
-      const uniqueChanged = [...new Set(changedSlideIds)]
-      if (uniqueChanged.length > 0) document.dirty = true
-      movedSlideIds.forEach((slideId) => document.movedSlideIds.add(slideId))
-      const slides = getSlides(document.presentation)
-      if (uniqueChanged.length > 0) {
-        const issues = validatePresentation(document.presentation).filter(
-          (issue) => issue.severity === 'error'
-        )
-        if (issues.length > 0) {
-          throw new Error(
-            `PPTX 校验失败：${issues.map((issue) => issue.message).join('; ')}`
+        } else {
+          const beforeText = new Map(
+            getSlides(document.presentation).map((slide) => [slideIdOf(slide), getSlideText(slide)])
           )
+          replacements = replaceTextInPresentation(document.presentation, args.query, args.replace)
+          if (replacements > 0) {
+            getSlides(document.presentation).forEach((slide) => {
+              if (beforeText.get(slideIdOf(slide)) !== getSlideText(slide)) {
+                changedSlideIds.push(slideIdOf(slide))
+              }
+            })
+          }
         }
-        const afterBytes = await savePresentation(document.presentation)
-        await replaceFileWithBytes(document.sourcePath, afterBytes)
-        document.lastPersistedBytes = new Uint8Array(afterBytes)
+        if (replacements === 0) throw new Error(`未找到要替换的文字：${args.query}`)
+        const uniqueChanged = [...new Set(changedSlideIds)]
+        result = editOutput(
+          args.sourcePath,
+          await persistDocument(document),
+          uniqueChanged.length === 1 ? uniqueChanged[0] : undefined
+        )
+      } else if (args.type === 'edit_elements') {
+        const slide = findSlide(document.presentation, args.slideId)
+        const beforeIds = elementIdsOf(slide)
+        for (const operation of args.operations) {
+          if (operation.type === 'set_z_order') {
+            document.movedElementIds.add(operation.elementId)
+          }
+          await applyElementOperation({
+            operation,
+            document,
+            slide,
+            workspaceRootPath,
+            onReplaceElement: (beforeElementId, afterElementId) => {
+              document.elementLineage.set(beforeElementId, afterElementId)
+            }
+          })
+        }
+        result = editOutput(
+          args.sourcePath,
+          await persistDocument(document),
+          args.slideId,
+          createdIdsSince(beforeIds, slide)
+        )
+      } else {
+        setSlideNotes(findSlide(document.presentation, args.slideId), args.text)
+        result = editOutput(args.sourcePath, await persistDocument(document), args.slideId)
       }
-      return {
-        sourcePath: args.sourcePath,
-        slideCount: slides.length,
-        changedSlideIds: uniqueChanged
-      }
+      return result
     } catch (error) {
       document.presentation = await loadPresentation(presentationSnapshot)
       document.dirty = dirtyBeforeAction
       document.movedSlideIds = movedSlideIdsBeforeAction
+      document.replacedSlideIds = replacedSlideIdsBeforeAction
       document.movedElementIds = movedElementIdsBeforeAction
       document.elementLineage = elementLineageBeforeAction
       if (create) documents.delete(sourcePath)
-      throw error
+      const message = error instanceof Error ? error.message : String(error)
+      throw new Error(`${args.type} 失败：${message}`)
     }
   }
 
@@ -1459,6 +1329,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       if (!isPathInsideRoot(document.sourcePath, workspaceRootPath)) {
         document.dirty = false
         document.movedSlideIds.clear()
+        document.replacedSlideIds.clear()
         document.movedElementIds.clear()
         document.elementLineage.clear()
         continue
@@ -1489,6 +1360,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         afterFrames: new Map(),
         operation,
         movedCandidates: document.movedSlideIds,
+        replacedSlideIds: document.replacedSlideIds,
         elementLineage: document.elementLineage,
         movedElementCandidates: document.movedElementIds
       })
@@ -1497,6 +1369,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         document.lastPersistedBytes = new Uint8Array(afterBytes)
         document.dirty = false
         document.movedSlideIds.clear()
+        document.replacedSlideIds.clear()
         document.movedElementIds.clear()
         document.elementLineage.clear()
         continue
@@ -1522,6 +1395,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         afterFrames,
         operation,
         movedCandidates: document.movedSlideIds,
+        replacedSlideIds: document.replacedSlideIds,
         elementLineage: document.elementLineage,
         movedElementCandidates: document.movedElementIds
       })
@@ -1566,6 +1440,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       document.lastPersistedBytes = new Uint8Array(afterBytes)
       document.dirty = false
       document.movedSlideIds.clear()
+      document.replacedSlideIds.clear()
       document.movedElementIds.clear()
       document.elementLineage.clear()
       records.push(record)

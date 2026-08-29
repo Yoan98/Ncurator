@@ -290,10 +290,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `ppt-create-read-edit-commit`
 
 - 测试类型：`backend / tool`
-- What：`ppt_edit(actions=[insert_slide...])` 一次创建多页、读取、编辑、每次写后立即回读，以及写入时生成单一页面级 diff 记录。
+- What：`ppt_edit` 按单次 operation 用元素规格创建页面、读取、编辑，以及写入时生成单一页面级 diff 记录。
 - Why：PPT 工具必须同时守住直接写回和 run 级差异聚合。
-- How：创建真实多页 PPT，连续读取和编辑，再检查写入保存的记录。
-- Oracle：每次 `ppt_edit` 成功后正式文件立即存在、可解析且页面内容正确；同一文件只生成一条修改记录和页面级 diff。
+- How：分两次 `insert_slide` 创建真实多页 PPT，连续读取和编辑，再检查写入保存的记录。
+- Oracle：每次 `ppt_edit` 成功后正式文件立即存在、可解析且页面内容正确；写回只含 `slideId` / `createdElementIds` 等锚点；同一文件只生成一条修改记录和页面级 diff。
 - Not：不验证 human 的工具选择或页面审美。
 
 ##### `ppt-diff-slide-and-element-net-semantics`
@@ -301,8 +301,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend / tool`
 - What：真实 PPT runtime 按本 Run 首个 baseline 和最终文件生成 Diff Manifest v4，覆盖页面和元素的新增、删除、修改、移动、恢复与组合计数。
 - Why：工具调用次数、插入删除造成的页码偏移和置顶造成的层级编号顺移都可能制造假 Diff，必须直接解析真实 artifact 验证净变化。
-- How：对三个真实 PPT 连续执行页面 A→B→C、A→B→A、修改后删除、新增后继续修改、新增后删除、中间页删除、主动移动及移动后恢复；再分别改变元素内容、样式、位置、大小、层级，覆盖同元素多种修改、公式 replacement lineage、元素新增后修改、修改后删除、新增后删除、修改后恢复、备注修改后恢复，最后提交 Run 并读取 Manifest 和正式 PPT。
-- Oracle：页面组合得到准确 `+3/-2`，元素组合得到准确 `+6/-1`，零净变化文件不生成记录；中间页增删不把后续页标记为移动，置顶只计算真实移动元素；中间稿和临时对象不进入 before/after；正式 PPT 可解析且无 Diff 污染，修改记录的 `insertCount/deleteCount/changeCount` 分别等于 v4 的 positive、negative 和两者之和。
+- How：对三个真实 PPT 连续执行页面 A→B→C、A→B→A、修改后删除、新增后继续修改、新增后删除、中间页删除、主动移动及移动后恢复；再分别改变元素内容、样式、位置、大小、层级，覆盖同元素多种修改、公式 replacement lineage、元素新增后修改、修改后删除、新增后删除、修改后恢复、备注修改后恢复；另对已有页执行 `replace_slide`（同 slideId 整页替换）；最后提交 Run 并读取 Manifest 和正式 PPT。
+- Oracle：页面组合得到准确 `+3/-2`，元素组合得到准确 `+6/-1`，`replace_slide` 页为 modified 且元素旧全部 deleted、新全部 added；零净变化文件不生成记录；中间页增删不把后续页标记为移动，置顶只计算真实移动元素；中间稿和临时对象不进入 before/after；正式 PPT 可解析且无 Diff 污染，修改记录的 `insertCount/deleteCount/changeCount` 分别等于 v4 的 positive、negative 和两者之和。
 - Not：不验证 Workbench 布局、按钮、颜色 CSS 或模型是否会自主选择操作；这些由 Workbench E2E 和 human/live case 承担。
 
 ##### `ppt-professional-element-edit`
@@ -311,16 +311,16 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：元素位置、样式、图层、复制、线条、图片、表格、图表和公式更新。
 - Why：专业 PPT 编辑依赖元素级能力，不能只覆盖整页创建。
 - How：对真实 PPT 依次执行代表性的元素级编辑并重新读取结果。
-- Oracle：操作成功；`postWriteReadback` 返回可继续使用的真实 elementId；最终 pptx 可解析。
+- Oracle：操作成功；写回 `createdElementIds` 可继续用于后续编辑；最终 pptx 可解析。
 - Not：不评价页面设计质量。
 
 ##### `ppt-visual-runtime-contract`
 
 - 测试类型：`backend`
-- What：PPT HTML 视觉 runtime 的页面尺寸、字体、布局和非法输入保护保持稳定。
+- What：PPT 元素规格编译、画布边界、非法输入和原子失败保持稳定。
 - Why：这是生产 PPT 工具的运行时契约，不应由 Unit 重复拥有完整 runtime 流程。
-- How：从原 Unit visual smoke 迁移真实 runtime 输入，执行编译、渲染和产物解析。
-- Oracle：合法页面生成可解析 PPTX 且关键元素位置稳定；非法页面返回可解释错误且不留下半成品。
+- How：用元素规格创建、插入、渲染和解析产物；非法出画布输入应失败。
+- Oracle：合法页面生成可解析 PPTX 且关键元素位置与字号（磅）稳定；非法页面返回可解释错误且不留下半成品。
 - Not：不验证模型是否会生成高质量设计。
 
 #### excel 类别
@@ -830,7 +830,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `create-ppt-deck`
 
 - 测试类型：`backend / mock-llm`
-- What：AI 能学习 `ppt-read / ppt-write`，通过 `ppt_edit.actions[]` 一次创建多页并交付 PPT。
+- What：AI 能学习 `ppt-read / ppt-write`，通过两次 `ppt_edit(insert_slide)` 创建多页并交付 PPT。
 - Why：需要验证 human 主链能正确学习并调用 PPT 能力。
 - How：使用 scripted LLM 输出驱动真实 human graph 创建并交付 PPT。
 - Oracle：最终文件可解析且内容正确；只产生一个 PPT 修改记录和文件交付。

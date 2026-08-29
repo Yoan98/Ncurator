@@ -570,20 +570,21 @@
 
 #### WB-PPT-001 AI 创建和编辑 PPT
 
-- 系统行为：AI 通过 `ppt-read` 和 `ppt-write` 读取、创建和编辑 pptx。`ppt_edit` 的入参统一为 `sourcePath + actions[]`；路径不存在时创建，存在时编辑。Actions 按顺序执行，全部成功后原子写入真实文件；任务结束时只生成 run 级差异记录，不再次提交文件。
+- 系统行为：AI 通过 `ppt-read` 和 `ppt-write` 读取、创建和编辑 pptx。`ppt_edit` 一次调用只执行一个 operation（顶层 `type` 判别联合）；路径不存在时创建，存在时编辑。`insert_slide` / `replace_slide` 使用同一套页面元素规格（`background?`、`notes?`、`defaults?`、`elements[]`）。`replace_slide` 保留原 `slideId`，清空后按规格重写。成功后原子写入真实文件，只返回 `sourcePath`、`slideCount` 和继续写所需的 `slideId`、`createdElementIds`。任务结束时只生成 run 级差异记录，不再次提交文件。
 - 验收：
   - `WB-PPT-001-AC1` AI 可自行新建 pptx，不依赖用户点击新建入口。
-  - `WB-PPT-001-AC2` 新建演示文稿或插入页面时，单次调用只允许一个页面 HTML，不接受页面数组。
-  - `WB-PPT-001-AC3` 文本、形状、图片、SVG、表格、图表和公式按支持类型转换，不把整页默认导出为截图。
+  - `WB-PPT-001-AC2` 新建演示文稿或插入页面时，单次调用只允许一张页面的元素规格，不接受页面数组或 HTML。
+  - `WB-PPT-001-AC3` 文本、形状、线条、图片、表格、图表和公式按支持类型转换，不把整页默认导出为截图。
   - `WB-PPT-001-AC4` AI 可使用真实 slideId 和 elementId 继续编辑已有页面和元素。
   - `WB-PPT-001-AC5` 公式由 LaTeX 渲染为 SVG；公式整体可移动和缩放，内部字符为只读内容。
-  - `WB-PPT-001-AC6` `ppt_read_outline` 支持 percent 和 slide_index；`ppt_read_slides` 与 `ppt_render_slides` 支持 slide_index 和 slide_ids；`ppt_search` 使用可选 `scope.slideIds`。
-  - `WB-PPT-001-AC7` `ppt_edit` 返回变化页面的 `postWriteReadback`；移动或删除页面时返回附近页面顺序。
+  - `WB-PPT-001-AC6` `ppt_read_outline` 支持 percent 和 slide_index；`ppt_read_slides` 支持 slide_index 和 slide_ids，并返回可交给 `read_image` 的 `slideImagePath`；`ppt_search` 使用可选 `scope.slideIds`。
+  - `WB-PPT-001-AC7` `ppt_edit` 成功后只返回继续写所需锚点：`sourcePath`、`slideCount`、相关 `slideId`、`createdElementIds`（insert / replace / add_element / duplicate）；不返回变更清单或整页 readback。
   - `WB-PPT-001-AC8` 元素编辑支持文字、位置、样式、图层、复制、删除、新增、图片、表格、图表和公式更新。
-  - `WB-PPT-001-AC9` 同一次 `ppt_edit(actions[])` 任一 action 失败时，文件和活动 session 都保持调用前状态。
+  - `WB-PPT-001-AC9` 一次 `ppt_edit` 失败时，文件和活动 session 都保持调用前状态。
   - `WB-PPT-001-AC10` `ppt_edit` 返回成功时，其他程序已经可以读取最终 pptx。
-  - `WB-PPT-001-AC11` 不提供 `create_presentation` Action；`insert_slide` 使用可选 `location:{slideId,position}`，不传时追加到末尾。
-  - `WB-PPT-001-AC12` `move_slide` 必须提供 `slideId` 和 `location`；`duplicate_slide` 必须提供 `slideId`，可选 `location`，不传时追加到末尾。移动不能锚定自身，复制可以锚定源页自身；旧 `position + anchorSlideId` 参数无效，最终至少保留一页。
+  - `WB-PPT-001-AC11` 不提供 `create_presentation`；`insert_slide` 使用可选 `location:{slideId,position}`，不传时追加到末尾。
+  - `WB-PPT-001-AC12` `move_slide` 必须提供 `slideId` 和 `location`；`duplicate_slide` 必须提供 `slideId`，可选 `location`，不传时追加到末尾。移动不能锚定自身，复制可以锚定源页自身；旧 `position + anchorSlideId`、`html`、`actions[]` 参数无效，最终至少保留一页。
+  - `WB-PPT-001-AC13` `replace_slide` 必须提供已有 `slideId` 与元素规格；保留该页部件身份，Diff 将该页记为 modified，元素按旧全部 deleted、新全部 added 计数。
 
 #### WB-PPT-002 PPT 单页左右审核模式
 

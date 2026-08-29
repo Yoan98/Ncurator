@@ -21,55 +21,73 @@ const hashFile = async (filePath: string): Promise<string> =>
     .update(await fs.readFile(filePath))
     .digest('hex')
 
-const slideHtml = (title: string, body: string, color: string): string =>
-  `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#F8FAFC">
-    <div style="position:absolute;left:96px;top:84px;width:1728px;height:120px;background:${color}"></div>
-    <h1 style="position:absolute;left:140px;top:112px;width:1500px;height:80px;color:#FFFFFF;font-size:58px">${title}</h1>
-    <p style="position:absolute;left:150px;top:310px;width:1520px;height:500px;color:#1F2937;font-size:36px">${body}</p>
-  </section>`
+const slideSpec = (title: string, body: string, color: string) => ({
+  type: 'insert_slide' as const,
+  background: '#F8FAFC',
+  elements: [
+    {
+      type: 'shape' as const,
+      shape: 'rect' as const,
+      bounds: { x: 96, y: 84, width: 1728, height: 120 },
+      style: { fill: color }
+    },
+    {
+      type: 'text' as const,
+      text: title,
+      bounds: { x: 140, y: 112, width: 1500, height: 80 },
+      style: { color: '#FFFFFF', fontSize: 28 }
+    },
+    {
+      type: 'text' as const,
+      text: body,
+      bounds: { x: 150, y: 310, width: 1520, height: 500 },
+      style: { color: '#1F2937', fontSize: 18 }
+    }
+  ]
+})
 
-const chartHtml = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
-  <h1 style="position:absolute;left:120px;top:90px;width:1500px;height:88px;color:#17324D;font-size:62px">Delivery trend</h1>
-  <div data-pptx-chart="column" data-pptx-categories='["April","May","June"]' data-pptx-series='[{"name":"On-time delivery","values":[96,91,84]}]' style="position:absolute;left:180px;top:270px;width:1420px;height:600px"></div>
-  <p style="position:absolute;left:180px;top:900px;width:1420px;height:60px;color:#334155;font-size:30px">Delivery performance has declined for three consecutive months.</p>
-</section>`
+const chartSlide = {
+  type: 'insert_slide' as const,
+  background: '#FFFFFF',
+  elements: [
+    {
+      type: 'text' as const,
+      text: 'Delivery trend',
+      bounds: { x: 120, y: 90, width: 1500, height: 88 },
+      style: { color: '#17324D', fontSize: 32 }
+    },
+    {
+      type: 'chart' as const,
+      bounds: { x: 180, y: 270, width: 1420, height: 600 },
+      chartType: 'column' as const,
+      categories: ['April', 'May', 'June'],
+      series: [{ name: 'On-time delivery', values: [96, 91, 84] }]
+    },
+    {
+      type: 'text' as const,
+      text: 'Delivery performance has declined for three consecutive months.',
+      bounds: { x: 180, y: 900, width: 1420, height: 60 },
+      style: { color: '#334155', fontSize: 16 }
+    }
+  ]
+}
 
 const buildFixture = async (runtime: Parameters<typeof createPptToolHarness>[0]): Promise<void> => {
   const setup = createPptToolHarness(runtime)
-  await setup.invoke('ppt_edit', {
-    sourcePath: path.join(runtime.workspaceRoot, FILE_NAME),
-    actions: [
-      {
-        type: 'insert_slide',
-        html: slideHtml('Q2 management review', 'Cover page. Do not change.', '#17324D')
-      },
-      {
-        type: 'insert_slide',
-        html: slideHtml(
-          'Operating metrics',
-          'Revenue and retention are on plan. Do not change.',
-          '#0F766E'
-        )
-      },
-      { type: 'insert_slide', html: chartHtml },
-      {
-        type: 'insert_slide',
-        html: slideHtml(
-          'Delivery risk',
-          'Highest priority: core integration is delayed. Owner: Wang Min. Commitment: July 8. Impact: East China launch.',
-          '#B45309'
-        )
-      },
-      {
-        type: 'insert_slide',
-        html: slideHtml(
-          'Action plan',
-          'Finish integration by July 8 and report daily status.',
-          '#7C3AED'
-        )
-      }
-    ]
-  })
+  const sourcePath = path.join(runtime.workspaceRoot, FILE_NAME)
+  for (const spec of [
+    slideSpec('Q2 management review', 'Cover page. Do not change.', '#17324D'),
+    slideSpec('Operating metrics', 'Revenue and retention are on plan. Do not change.', '#0F766E'),
+    chartSlide,
+    slideSpec(
+      'Delivery risk',
+      'Highest priority: core integration is delayed. Owner: Wang Min. Commitment: July 8. Impact: East China launch.',
+      '#B45309'
+    ),
+    slideSpec('Action plan', 'Finish integration by July 8 and report daily status.', '#7C3AED')
+  ]) {
+    await setup.invoke('ppt_edit', { sourcePath, ...spec })
+  }
 }
 
 describe('ai human live ppt backend', () => {

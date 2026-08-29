@@ -7,18 +7,61 @@ import type { JsonObject } from '../../../../../src/shared/types'
 import { createPptToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
-const coverHtml = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#F5F0E8">
-  <div style="position:absolute;left:100px;top:90px;width:1720px;height:220px;background:#17324D;border-radius:28px"></div>
-  <h1 style="position:absolute;left:170px;top:135px;width:1450px;height:120px;color:#FFFFFF;font-size:72px">2026 产品复盘</h1>
-  <p style="position:absolute;left:170px;top:420px;width:1480px;height:120px;color:#25313C;font-size:38px">收入增长 18%，交付质量继续提升。</p>
-</section>`
+const coverSlide = {
+  type: 'insert_slide' as const,
+  background: '#F5F0E8',
+  elements: [
+    {
+      type: 'shape' as const,
+      shape: 'roundRect' as const,
+      bounds: { x: 100, y: 90, width: 1720, height: 220 },
+      style: { fill: '#17324D' }
+    },
+    {
+      type: 'text' as const,
+      text: '2026 产品复盘',
+      bounds: { x: 170, y: 135, width: 1450, height: 120 },
+      style: { color: '#FFFFFF', fontSize: 36, bold: true }
+    },
+    {
+      type: 'text' as const,
+      text: '收入增长 18%，交付质量继续提升。',
+      bounds: { x: 170, y: 420, width: 1480, height: 120 },
+      style: { color: '#25313C', fontSize: 18 }
+    }
+  ]
+}
 
-const detailHtml = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
-  <h2 style="position:absolute;left:140px;top:100px;width:1500px;height:110px;color:#17324D;font-size:72px">核心结论</h2>
-  <p style="position:absolute;left:160px;top:300px;width:1450px;height:120px;color:#333333;font-size:36px">下一季度重点：缩短反馈周期。</p>
-  <span data-pptx-latex="E=mc^2" style="position:absolute;left:160px;top:520px;width:600px;height:160px"></span>
-  <div data-pptx-chart="column" data-pptx-categories='["Q1","Q2"]' data-pptx-series='[{"name":"收入","values":[12,18]}]' style="position:absolute;left:900px;top:500px;width:760px;height:420px"></div>
-</section>`
+const detailSlide = {
+  type: 'insert_slide' as const,
+  background: '#FFFFFF',
+  elements: [
+    {
+      type: 'text' as const,
+      text: '核心结论',
+      bounds: { x: 140, y: 100, width: 1500, height: 110 },
+      style: { color: '#17324D', fontSize: 36, bold: true }
+    },
+    {
+      type: 'text' as const,
+      text: '下一季度重点：缩短反馈周期。',
+      bounds: { x: 160, y: 300, width: 1450, height: 120 },
+      style: { color: '#333333', fontSize: 18 }
+    },
+    {
+      type: 'formula' as const,
+      latex: 'E=mc^2',
+      bounds: { x: 160, y: 520, width: 600, height: 160 }
+    },
+    {
+      type: 'chart' as const,
+      bounds: { x: 900, y: 500, width: 760, height: 420 },
+      chartType: 'column' as const,
+      categories: ['Q1', 'Q2'],
+      series: [{ name: '收入', values: [12, 18] }]
+    }
+  ]
+}
 
 describe('ai tool ppt backend', () => {
   it('ppt-create-read-edit-commit', async () => {
@@ -28,103 +71,98 @@ describe('ai tool ppt backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['ppt'],
-      description: '验证 ppt_edit 批量创建、独立读取工具、写后回读、run 末一次写回和 diff。',
+      description: '验证 ppt_edit 按元素规格创建、独立读取工具、写后回读、run 末一次写回和 diff。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         const sourcePath = path.join(runtime.workspaceRoot, 'product-review.pptx')
-        try {
-          const harness = createPptToolHarness(runtime)
-          const created = await harness.invoke<JsonObject>('ppt_edit', {
-            sourcePath,
-            actions: [
-              { type: 'insert_slide', html: coverHtml },
-              { type: 'insert_slide', html: detailHtml }
-            ]
-          })
-          const inserted = created
-          const overview = await harness.invoke<JsonObject>('ppt_read_outline', {
-            sourcePath,
-            ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
-          })
-          const firstSlideId = (overview.slides as Array<{ slideId: string }>)[0]!.slideId
-          const readSlides = await harness.invoke<JsonObject>('ppt_read_slides', {
-            sourcePath,
-            ranges: [{ type: 'slide_ids', slideIds: [firstSlideId] }]
-          })
-          const failedDelete = await harness.invoke<JsonObject>('ppt_edit', {
-            sourcePath,
-            actions: [
-              { type: 'replace_text', query: '2026 产品复盘', replace: '不应落盘的标题' },
-              {
-                type: 'delete_slides',
-                slideIds: [firstSlideId, '/ppt/slides/missing.xml']
-              }
-            ]
-          })
-          const overviewAfterFailedDelete = await harness.invoke<JsonObject>('ppt_read_outline', {
-            sourcePath,
-            ranges: [{ type: 'slide_index', fromSlideIndex: 1, toSlideIndex: 2 }]
-          })
-          const replaced = await harness.invoke<JsonObject>('ppt_edit', {
-            sourcePath,
-            actions: [{ type: 'replace_text', query: '反馈周期', replace: '客户反馈周期' }]
-          })
-          const missingReplace = await harness.invoke<JsonObject>('ppt_edit', {
-            sourcePath,
-            actions: [{ type: 'replace_text', query: '不存在的文本', replace: '不会写入' }]
-          })
-          const search = await harness.invoke<JsonObject>('ppt_search', {
-            sourcePath,
-            query: '客户反馈周期'
-          })
-          const targetPath = sourcePath
-          const beforeCommitExists = await fs
-            .access(targetPath)
-            .then(() => true)
-            .catch(() => false)
-          const aiPersistedBytes = new Uint8Array(await fs.readFile(targetPath))
-          const aiPersistedChecksum = createHash('sha256').update(aiPersistedBytes).digest('hex')
-          await fs.writeFile(
-            targetPath,
-            Buffer.concat([Buffer.from(aiPersistedBytes), Buffer.from('external-user-change')])
-          )
-          const externallyChangedChecksum = createHash('sha256')
-            .update(await fs.readFile(targetPath))
-            .digest('hex')
-          const records = await harness.runtime.commitAll()
-          const repeatedCommitRecords = await harness.runtime.commitAll()
-          const bytes = new Uint8Array(await fs.readFile(targetPath))
-          const presentation = await loadPresentation(bytes)
-          const texts = getSlides(presentation).map((slide) => getSlideText(slide))
-          const hasChart = getSlides(presentation).some((slide) =>
-            getSlideShapes(slide).some((shape) => isChartShape(shape))
-          )
-          const manifest = JSON.parse(await fs.readFile(records[0]!.previewPath!, 'utf8')) as {
-            slides: Array<{ changed: boolean; after?: unknown; before?: unknown }>
-          }
-          return {
-            created,
-            inserted,
-            overview,
-            readSlides,
-            failedDelete,
-            overviewAfterFailedDelete,
-            replaced,
-            missingReplace,
-            search,
-            beforeCommitExists,
-            aiPersistedChecksum,
-            externallyChangedChecksum,
-            records,
-            repeatedCommitRecords,
-            slideCount: getSlides(presentation).length,
-            texts,
-            hasChart,
-            manifest
-          }
-        } finally {
-          // The harness owns no external vision service; cleanup is handled by the test runtime.
+        const harness = createPptToolHarness(runtime)
+        const created = await harness.invoke<JsonObject>('ppt_edit', {
+          sourcePath,
+          ...coverSlide
+        })
+        const inserted = await harness.invoke<JsonObject>('ppt_edit', {
+          sourcePath,
+          ...detailSlide
+        })
+        const overview = await harness.invoke<JsonObject>('ppt_read_outline', {
+          sourcePath,
+          ranges: [{ type: 'percent', fromPercent: 0, toPercent: 100 }]
+        })
+        const firstSlideId = (overview.slides as Array<{ slideId: string }>)[0]!.slideId
+        const readSlides = await harness.invoke<JsonObject>('ppt_read_slides', {
+          sourcePath,
+          ranges: [{ type: 'slide_ids', slideIds: [firstSlideId] }]
+        })
+        const failedDelete = await harness.invoke<JsonObject>('ppt_edit', {
+          sourcePath,
+          type: 'delete_slides',
+          slideIds: [firstSlideId, '/ppt/slides/missing.xml']
+        })
+        const overviewAfterFailedDelete = await harness.invoke<JsonObject>('ppt_read_outline', {
+          sourcePath,
+          ranges: [{ type: 'slide_index', fromSlideIndex: 1, toSlideIndex: 2 }]
+        })
+        const replaced = await harness.invoke<JsonObject>('ppt_edit', {
+          sourcePath,
+          type: 'replace_text',
+          query: '反馈周期',
+          replace: '客户反馈周期'
+        })
+        const missingReplace = await harness.invoke<JsonObject>('ppt_edit', {
+          sourcePath,
+          type: 'replace_text',
+          query: '不存在的文本',
+          replace: '不会写入'
+        })
+        const search = await harness.invoke<JsonObject>('ppt_search', {
+          sourcePath,
+          query: '客户反馈周期'
+        })
+        const targetPath = sourcePath
+        const beforeCommitExists = await fs
+          .access(targetPath)
+          .then(() => true)
+          .catch(() => false)
+        const aiPersistedBytes = new Uint8Array(await fs.readFile(targetPath))
+        const aiPersistedChecksum = createHash('sha256').update(aiPersistedBytes).digest('hex')
+        await fs.writeFile(
+          targetPath,
+          Buffer.concat([Buffer.from(aiPersistedBytes), Buffer.from('external-user-change')])
+        )
+        const externallyChangedChecksum = createHash('sha256')
+          .update(await fs.readFile(targetPath))
+          .digest('hex')
+        const records = await harness.runtime.commitAll()
+        const repeatedCommitRecords = await harness.runtime.commitAll()
+        const bytes = new Uint8Array(await fs.readFile(targetPath))
+        const presentation = await loadPresentation(bytes)
+        const texts = getSlides(presentation).map((slide) => getSlideText(slide))
+        const hasChart = getSlides(presentation).some((slide) =>
+          getSlideShapes(slide).some((shape) => isChartShape(shape))
+        )
+        const manifest = JSON.parse(await fs.readFile(records[0]!.previewPath!, 'utf8')) as {
+          slides: Array<{ changed: boolean; after?: unknown; before?: unknown }>
+        }
+        return {
+          created,
+          inserted,
+          overview,
+          readSlides,
+          failedDelete,
+          overviewAfterFailedDelete,
+          replaced,
+          missingReplace,
+          search,
+          beforeCommitExists,
+          aiPersistedChecksum,
+          externallyChangedChecksum,
+          records,
+          repeatedCommitRecords,
+          slideCount: getSlides(presentation).length,
+          texts,
+          hasChart,
+          manifest
         }
       },
       assert: async (result, runtime) => {
@@ -141,10 +179,12 @@ describe('ai tool ppt backend', () => {
           .then(() => true)
           .catch(() => false)
         runtime.assertThat(
-          result.created.slideCount === 2 &&
+          result.created.slideCount === 1 &&
             result.inserted.slideCount === 2 &&
-            Array.isArray(result.created.changedSlideIds) &&
-            Array.isArray(result.inserted.changedSlideIds) &&
+            typeof result.created.slideId === 'string' &&
+            typeof result.inserted.slideId === 'string' &&
+            Array.isArray(result.created.createdElementIds) &&
+            Array.isArray(result.inserted.createdElementIds) &&
             result.overview.slideCount === 2 &&
             Array.isArray(result.readSlides.slides) &&
             result.readSlides.slides.length === 1 &&
@@ -159,7 +199,7 @@ describe('ai tool ppt backend', () => {
             result.search.matches.length === 1 &&
             result.search.truncated === false &&
             readSlideImageExists &&
-            /\.ncurator\/runtime\/assets\/ppt_read_slides-[^/]+\/[a-f0-9]{64}\.png$/u.test(
+            /[\\/]\.ncurator[\\/]runtime[\\/]assets[\\/]ppt_read_slides-[^\\/]+[\\/][a-f0-9]{64}\.png$/u.test(
               readSlideImagePath
             ),
           {

@@ -75,14 +75,14 @@ export const RUNTIME_SKILL_CATALOG = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'ppt-read',
-    description: '读取 PPTX 的页面结构、内容、搜索结果和页面视觉内容。'
+    description: '读取 PPTX 的页面提纲、内容、检索结果和页面视觉内容。'
   },
   'ppt-write': {
     familyId: 'ppt',
     source: 'external',
     countsTowardToolBudget: true,
     title: 'ppt-write',
-    description: '使用受限 HTML 创建或编辑 PPTX 页面和元素。'
+    description: '创建或编辑 PPTX 的页面、元素、文字和备注。'
   },
   'excel-read': {
     familyId: 'excel',

@@ -186,4 +186,33 @@ describe('ppt net diff', () => {
       [['added'], 1, 0]
     ])
   })
+
+  it('counts replaced slides as modified with all old elements deleted and all new elements added', () => {
+    const result = buildPptDiffManifest({
+      beforeSlides: [slide('A', 1, [element('old-1', 'same-fp'), element('old-2', 'other-fp')])],
+      afterSlides: [
+        slide('A', 1, [element('new-1', 'same-fp'), element('new-2', 'fresh'), element('new-3', 'x')])
+      ],
+      beforeFrames: new Map(),
+      afterFrames: new Map(),
+      operation: 'updated',
+      replacedSlideIds: new Set(['A'])
+    })
+    expect(result.slides[0]).toMatchObject({
+      changed: true,
+      changes: ['modified'],
+      positiveCount: 3,
+      negativeCount: 2
+    })
+    expect(result.slides[0]?.elementChanges.map((change) => change.kind).sort()).toEqual([
+      'added',
+      'added',
+      'added',
+      'deleted',
+      'deleted'
+    ])
+    expect(result.slides[0]?.elementChanges.some((change) => change.kind === 'modified')).toBe(
+      false
+    )
+  })
 })

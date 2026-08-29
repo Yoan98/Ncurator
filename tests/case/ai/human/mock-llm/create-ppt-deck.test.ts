@@ -11,16 +11,49 @@ import {
   filterAiRunEventsByType
 } from '../testUtils'
 
-const coverHtml = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#F4F0E8">
-  <div style="position:absolute;left:96px;top:88px;width:1728px;height:904px;background:#17324D;border-radius:32px"></div>
-  <h1 style="position:absolute;left:180px;top:300px;width:1500px;height:110px;color:#FFFFFF;font-size:72px">季度业务复盘</h1>
-  <p style="position:absolute;left:184px;top:470px;width:1200px;height:90px;color:#DCE8F1;font-size:38px">增长引擎与下一步行动</p>
-</section>`
+const coverSlide = {
+  type: 'insert_slide' as const,
+  background: '#F4F0E8',
+  elements: [
+    {
+      type: 'shape' as const,
+      shape: 'roundRect' as const,
+      bounds: { x: 96, y: 88, width: 1728, height: 904 },
+      style: { fill: '#17324D' }
+    },
+    {
+      type: 'text' as const,
+      text: '季度业务复盘',
+      bounds: { x: 180, y: 300, width: 1500, height: 110 },
+      style: { color: '#FFFFFF', fontSize: 36 }
+    },
+    {
+      type: 'text' as const,
+      text: '增长引擎与下一步行动',
+      bounds: { x: 184, y: 470, width: 1200, height: 90 },
+      style: { color: '#DCE8F1', fontSize: 18 }
+    }
+  ]
+}
 
-const detailHtml = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
-  <h2 style="position:absolute;left:140px;top:100px;width:1500px;height:110px;color:#17324D;font-size:72px">下一步行动</h2>
-  <p style="position:absolute;left:160px;top:300px;width:1450px;height:120px;color:#333333;font-size:38px">缩短反馈周期，集中投入增长引擎。</p>
-</section>`
+const detailSlide = {
+  type: 'insert_slide' as const,
+  background: '#FFFFFF',
+  elements: [
+    {
+      type: 'text' as const,
+      text: '下一步行动',
+      bounds: { x: 140, y: 100, width: 1500, height: 110 },
+      style: { color: '#17324D', fontSize: 36 }
+    },
+    {
+      type: 'text' as const,
+      text: '缩短反馈周期，集中投入增长引擎。',
+      bounds: { x: 160, y: 300, width: 1450, height: 120 },
+      style: { color: '#333333', fontSize: 18 }
+    }
+  ]
+}
 
 describe('ai human mock-llm backend', () => {
   it('create-ppt-deck', async () => {
@@ -30,7 +63,7 @@ describe('ai human mock-llm backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 human 学习 PPT 读写技能、批量创建并读回 PPT，最终只交付一次文件。',
+      description: '验证 human 学习 PPT 读写技能、按元素规格创建并读回 PPT，最终只交付一次文件。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -47,20 +80,14 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildToolDecision({
                   toolName: 'ppt_edit',
-                  args: {
-                    sourcePath,
-                    actions: [{ type: 'insert_slide', html: coverHtml }]
-                  },
+                  args: { sourcePath, ...coverSlide },
                   summary: '创建封面页'
                 })
               },
               {
                 output: buildToolDecision({
                   toolName: 'ppt_edit',
-                  args: {
-                    sourcePath,
-                    actions: [{ type: 'insert_slide', html: detailHtml }]
-                  },
+                  args: { sourcePath, ...detailSlide },
                   summary: '新增行动页'
                 })
               },
@@ -88,9 +115,7 @@ describe('ai human mock-llm backend', () => {
           taskId: runtime.taskId,
           userInput: '创建两页季度业务复盘 PPT，并确认最终页面数量。'
         })
-        const presentation = await loadPresentation(
-          new Uint8Array(await fs.readFile(sourcePath))
-        )
+        const presentation = await loadPresentation(new Uint8Array(await fs.readFile(sourcePath)))
 
         return {
           output,
@@ -120,7 +145,7 @@ describe('ai human mock-llm backend', () => {
           {
             name: 'human-ppt-run-uses-two-tools-and-commits-once',
             message:
-              'human 应通过 ppt_edit 批量创建、ppt_read_outline 回读，并在 run 结束时只交付一个 PPT 文件记录。',
+              'human 应通过 ppt_edit 创建页面、ppt_read_outline 回读，并在 run 结束时只交付一个 PPT 文件记录。',
             data: {
               tools: startedTools.map((event) => event.toolName),
               pptArtifacts,

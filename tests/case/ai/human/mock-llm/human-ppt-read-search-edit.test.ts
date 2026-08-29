@@ -13,10 +13,24 @@ import {
   filterAiRunEventsByType
 } from '../testUtils'
 
-const html = `<section data-ppt-slide style="position:relative;width:1920px;height:1080px;background:#FFFFFF">
-  <h1 style="position:absolute;left:140px;top:100px;width:1500px;height:110px;font-size:72px">季度复盘</h1>
-  <p style="position:absolute;left:160px;top:300px;width:1450px;height:120px;font-size:38px">负责人：TBD</p>
-</section>`
+const seedSlide = {
+  type: 'insert_slide' as const,
+  background: '#FFFFFF',
+  elements: [
+    {
+      type: 'text' as const,
+      text: '季度复盘',
+      bounds: { x: 140, y: 100, width: 1500, height: 110 },
+      style: { fontSize: 36 }
+    },
+    {
+      type: 'text' as const,
+      text: '负责人：TBD',
+      bounds: { x: 160, y: 300, width: 1450, height: 120 },
+      style: { fontSize: 18 }
+    }
+  ]
+}
 
 describe('ai human mock-llm ppt backend', () => {
   it('human-ppt-read-search-edit', async () => {
@@ -33,7 +47,7 @@ describe('ai human mock-llm ppt backend', () => {
         const sourcePath = path.join(runtime.workspaceRoot, 'existing-review.pptx')
         await createPptToolHarness(runtime).invoke<JsonObject>('ppt_edit', {
           sourcePath,
-          actions: [{ type: 'insert_slide', html }]
+          ...seedSlide
         })
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
@@ -66,9 +80,9 @@ describe('ai human mock-llm ppt backend', () => {
                   toolName: 'ppt_edit',
                   args: {
                     sourcePath,
-                    actions: [
-                      { type: 'replace_text', query: '负责人：TBD', replace: '负责人：Alice' }
-                    ]
+                    type: 'replace_text',
+                    query: '负责人：TBD',
+                    replace: '负责人：Alice'
                   },
                   summary: '更新负责人'
                 })
