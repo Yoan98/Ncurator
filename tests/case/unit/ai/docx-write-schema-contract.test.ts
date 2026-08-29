@@ -7,6 +7,8 @@ import {
 } from '../../../../src/main/services/ai/human/tools/docx/schemas'
 import { compileDocxOperations } from '../../../../src/main/services/ai/human/tools/docx/tools/writeToolRuntime'
 import { normalizeDocxHexColor } from '../../../../src/main/services/ai/human/tools/docx/utils/color'
+import { createParagraphFromNode } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/createNodeDom'
+import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 
 describe('ai unit docx write schema contract', () => {
   it('accepts one content operation without an actions array', () => {
@@ -156,6 +158,31 @@ describe('ai unit docx write schema contract', () => {
     ).toBe(false)
     expect(normalizeDocxHexColor('#ff0000')).toBe('FF0000')
     expect(normalizeDocxHexColor('aabbcc')).toBe('AABBCC')
+  })
+
+  it('strips leading # when writing run colors into OOXML', () => {
+    const doc = new DOMParser().parseFromString(
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"/>',
+      'application/xml'
+    )
+    const paragraph = createParagraphFromNode(
+      doc,
+      {
+        type: 'paragraph',
+        children: [
+          {
+            type: 'run',
+            style: { color: '#a1b2c3', highlight: '#ffee00' },
+            children: [{ type: 'text', text: '色' }]
+          }
+        ]
+      },
+      { addHyperlink: () => 'rId1', persist: async () => undefined }
+    )
+    const xml = new XMLSerializer().serializeToString(paragraph)
+    expect(xml).toContain('w:val="A1B2C3"')
+    expect(xml).toContain('w:fill="FFEE00"')
+    expect(xml).not.toContain('#')
   })
 
   it('covers table, media, comment, and revision operations', () => {
