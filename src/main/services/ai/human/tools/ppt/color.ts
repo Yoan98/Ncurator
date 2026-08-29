@@ -11,13 +11,14 @@ export const normalizePptColor = (
   if (!raw || raw === 'transparent' || /^rgba?\(\s*0\s*,\s*0\s*,\s*0\s*,\s*0\s*\)$/i.test(raw)) {
     return fallback
   }
-  const short = /^#([0-9a-f]{3})$/i.exec(raw)
+  // Accept `#RGB` / `#RRGGBB` and bare `RGB` / `RRGGBB` (models often omit `#`).
+  const short = /^#?([0-9a-f]{3})$/i.exec(raw)
   if (short)
     return `#${short[1]!
       .split('')
       .map((part) => `${part}${part}`)
       .join('')}`.toUpperCase()
-  const hex = /^#([0-9a-f]{6})$/i.exec(raw)
+  const hex = /^#?([0-9a-f]{6})$/i.exec(raw)
   if (hex) return `#${hex[1]!.toUpperCase()}`
   const rgb =
     /^rgba?\(\s*(\d+(?:\.\d+)?)\s*[, ]\s*(\d+(?:\.\d+)?)\s*[, ]\s*(\d+(?:\.\d+)?)(?:\s*[,/]\s*([\d.]+%?))?\s*\)$/i.exec(

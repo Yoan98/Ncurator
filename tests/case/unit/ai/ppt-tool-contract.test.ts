@@ -64,6 +64,20 @@ describe('ai unit ppt tool contract', () => {
       }).success
     ).toBe(true)
     expect(
+      pptReadSlidesSchema.safeParse({
+        sourcePath: 'deck.pptx',
+        ranges: [{ type: 'slide_index', fromSlideIndex: 1, toSlideIndex: 1 }],
+        detail: 'images'
+      }).success
+    ).toBe(true)
+    expect(
+      pptReadSlidesSchema.safeParse({
+        sourcePath: 'deck.pptx',
+        ranges: [{ type: 'slide_index', fromSlideIndex: 1, toSlideIndex: 1 }],
+        detail: 'structure'
+      }).success
+    ).toBe(false)
+    expect(
       pptSearchSchema.safeParse({
         sourcePath: 'deck.pptx',
         query: '结论',
@@ -212,6 +226,9 @@ describe('ai unit ppt tool contract', () => {
     expect(normalizePptColor('rgb(12, 34, 56)')).toBe('#0C2238')
     expect(normalizePptColor('rgba(12, 34, 56, 0)')).toBeUndefined()
     expect(normalizePptColor('#abc')).toBe('#AABBCC')
+    expect(normalizePptColor('abc')).toBe('#AABBCC')
+    expect(normalizePptColor('1FA8A0')).toBe('#1FA8A0')
+    expect(normalizePptColor('ffffff')).toBe('#FFFFFF')
     expect(normalizePptColor('rebeccapurple', '#FFFFFF')).toBe('#FFFFFF')
   })
 

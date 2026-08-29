@@ -55,7 +55,7 @@ export const PPT_READ_SLIDES_TOOL_SPEC = {
   outputSchema: pptReadSlidesOutputSchema,
   promptSpec: {
     name: 'ppt_read_slides',
-    description: '按页码或 slideId 读取 PPTX 页面和元素，并返回可交给 read_image 的 slideImagePath。'
+    description: '按页码或 slideId 读取 PPTX 页面，并返回可交给 read_image 的 slideImagePath。'
   },
   resolveExecutionMeta: readExecutionMeta
 } satisfies PptToolSpec<

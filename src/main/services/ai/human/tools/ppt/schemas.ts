@@ -30,10 +30,10 @@ const pptPointSchema = z
 
 export const pptElementStyleSchema = z
   .object({
-    fill: z.string().optional().describe('填充色'),
-    stroke: z.string().optional().describe('描边色'),
+    fill: z.string().optional().describe('填充色；#RRGGBB / RRGGBB / rgb()'),
+    stroke: z.string().optional().describe('描边色；#RRGGBB / RRGGBB / rgb()'),
     strokeWidth: z.number().min(0).optional().describe('描边宽度'),
-    color: z.string().optional().describe('文字颜色'),
+    color: z.string().optional().describe('文字颜色；#RRGGBB / RRGGBB / rgb()'),
     fontFamily: z.string().optional().describe('字体'),
     fontSize: z
       .number()
@@ -100,7 +100,13 @@ export const pptOutlineSchema = z
 export const pptReadSlidesSchema = z
   .object({
     sourcePath: sourcePathSchema,
-    ranges: z.array(pptSlideRangeSchema).min(1).describe('精读区间')
+    ranges: z.array(pptSlideRangeSchema).min(1).describe('精读区间'),
+    detail: z
+      .enum(['full', 'images'])
+      .optional()
+      .describe(
+        'full（默认）=页面元素+slideImagePath；images=仅 slideId/页码/slideImagePath，供视觉巡检省上下文'
+      )
   })
   .strict()
 
@@ -154,7 +160,7 @@ export const pptElementSchema = z
         type: z.literal('line').describe('直线'),
         from: pptPointSchema.describe('起点'),
         to: pptPointSchema.describe('终点'),
-        color: z.string().optional().describe('线条颜色'),
+        color: z.string().optional().describe('线条颜色；#RRGGBB / RRGGBB / rgb()'),
         width: z.number().positive().optional().describe('线条宽度'),
         arrowEnd: z.boolean().optional().describe('终点是否带箭头')
       })
@@ -297,7 +303,7 @@ const pptSlideLocationSchema = z
 
 const pptSlideDefaultsSchema = z
   .object({
-    color: z.string().optional().describe('默认文字颜色'),
+    color: z.string().optional().describe('默认文字颜色；#RRGGBB / RRGGBB / rgb()'),
     fontFamily: z.string().optional().describe('默认字体'),
     fontSize: z
       .number()
@@ -312,7 +318,9 @@ const pptSlideSpecFields = {
   background: z
     .string()
     .optional()
-    .describe('页面背景色；insert_slide 省略为白色，replace_slide 省略则保留原值'),
+    .describe(
+      '页面背景色；#RRGGBB / RRGGBB / rgb()；insert_slide 省略为白色，replace_slide 省略则保留原值'
+    ),
   notes: z.string().optional().describe('讲者备注；replace_slide 省略则保留原值'),
   defaults: pptSlideDefaultsSchema.optional().describe('本页未设样式的文字默认值'),
   elements: z

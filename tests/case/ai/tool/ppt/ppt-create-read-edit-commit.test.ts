@@ -14,19 +14,19 @@ const coverSlide = {
     {
       type: 'shape' as const,
       shape: 'roundRect' as const,
-      bounds: { x: 100, y: 90, width: 1720, height: 220 },
+      bounds: { x: 50, y: 45, width: 860, height: 110 },
       style: { fill: '#17324D' }
     },
     {
       type: 'text' as const,
       text: '2026 产品复盘',
-      bounds: { x: 170, y: 135, width: 1450, height: 120 },
+      bounds: { x: 85, y: 68, width: 790, height: 60 },
       style: { color: '#FFFFFF', fontSize: 36, bold: true }
     },
     {
       type: 'text' as const,
       text: '收入增长 18%，交付质量继续提升。',
-      bounds: { x: 170, y: 420, width: 1480, height: 120 },
+      bounds: { x: 85, y: 210, width: 790, height: 60 },
       style: { color: '#25313C', fontSize: 18 }
     }
   ]
@@ -39,23 +39,23 @@ const detailSlide = {
     {
       type: 'text' as const,
       text: '核心结论',
-      bounds: { x: 140, y: 100, width: 1500, height: 110 },
+      bounds: { x: 70, y: 50, width: 820, height: 55 },
       style: { color: '#17324D', fontSize: 36, bold: true }
     },
     {
       type: 'text' as const,
       text: '下一季度重点：缩短反馈周期。',
-      bounds: { x: 160, y: 300, width: 1450, height: 120 },
+      bounds: { x: 80, y: 150, width: 800, height: 60 },
       style: { color: '#333333', fontSize: 18 }
     },
     {
       type: 'formula' as const,
       latex: 'E=mc^2',
-      bounds: { x: 160, y: 520, width: 600, height: 160 }
+      bounds: { x: 80, y: 260, width: 300, height: 80 }
     },
     {
       type: 'chart' as const,
-      bounds: { x: 900, y: 500, width: 760, height: 420 },
+      bounds: { x: 450, y: 250, width: 380, height: 210 },
       chartType: 'column' as const,
       categories: ['Q1', 'Q2'],
       series: [{ name: '收入', values: [12, 18] }]
@@ -92,6 +92,11 @@ describe('ai tool ppt backend', () => {
         const firstSlideId = (overview.slides as Array<{ slideId: string }>)[0]!.slideId
         const readSlides = await harness.invoke<JsonObject>('ppt_read_slides', {
           sourcePath,
+          ranges: [{ type: 'slide_ids', slideIds: [firstSlideId] }]
+        })
+        const readImagesOnly = await harness.invoke<JsonObject>('ppt_read_slides', {
+          sourcePath,
+          detail: 'images',
           ranges: [{ type: 'slide_ids', slideIds: [firstSlideId] }]
         })
         const failedDelete = await harness.invoke<JsonObject>('ppt_edit', {
@@ -149,6 +154,7 @@ describe('ai tool ppt backend', () => {
           inserted,
           overview,
           readSlides,
+          readImagesOnly,
           failedDelete,
           overviewAfterFailedDelete,
           replaced,
@@ -174,6 +180,20 @@ describe('ai tool ppt backend', () => {
         const readSlideImagePath = String(
           (result.readSlides.slides as Array<{ slideImagePath?: string }>)[0]?.slideImagePath || ''
         )
+        const imagesOnlySlide = (
+          result.readImagesOnly.slides as Array<{
+            slideId?: string
+            slideIndex?: number
+            slideImagePath?: string
+            elements?: unknown
+            text?: string
+          }>
+        )[0]
+        const imagesOnlyPath = String(imagesOnlySlide?.slideImagePath || '')
+        const imagesOnlyExists = await fs
+          .access(imagesOnlyPath)
+          .then(() => true)
+          .catch(() => false)
         const readSlideImageExists = await fs
           .access(readSlideImagePath)
           .then(() => true)
@@ -188,6 +208,14 @@ describe('ai tool ppt backend', () => {
             result.overview.slideCount === 2 &&
             Array.isArray(result.readSlides.slides) &&
             result.readSlides.slides.length === 1 &&
+            result.readImagesOnly.detail === 'images' &&
+            Array.isArray(result.readImagesOnly.slides) &&
+            result.readImagesOnly.slides.length === 1 &&
+            typeof imagesOnlySlide?.slideId === 'string' &&
+            typeof imagesOnlySlide?.slideIndex === 'number' &&
+            imagesOnlySlide?.elements === undefined &&
+            imagesOnlySlide?.text === undefined &&
+            imagesOnlyExists &&
             result.failedDelete.ok === false &&
             result.overviewAfterFailedDelete.slideCount === 2 &&
             !JSON.stringify(result.overviewAfterFailedDelete).includes('不应落盘的标题') &&

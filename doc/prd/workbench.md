@@ -577,7 +577,7 @@
   - `WB-PPT-001-AC3` 文本、形状、线条、图片、表格、图表和公式按支持类型转换，不把整页默认导出为截图。
   - `WB-PPT-001-AC4` AI 可使用真实 slideId 和 elementId 继续编辑已有页面和元素。
   - `WB-PPT-001-AC5` 公式由 LaTeX 渲染为 SVG；公式整体可移动和缩放，内部字符为只读内容。
-  - `WB-PPT-001-AC6` `ppt_read_outline` 支持 percent 和 slide_index；`ppt_read_slides` 支持 slide_index 和 slide_ids，并返回可交给 `read_image` 的 `slideImagePath`；`ppt_search` 使用可选 `scope.slideIds`。
+  - `WB-PPT-001-AC6` `ppt_read_outline` 支持 percent 和 slide_index；`ppt_read_slides` 支持 slide_index 和 slide_ids，默认 `detail=full` 返回元素与可交给 `read_image` 的 `slideImagePath`，`detail=images` 仅返回 `slideId` / 页码 / `slideImagePath`；`ppt_search` 使用可选 `scope.slideIds`。
   - `WB-PPT-001-AC7` `ppt_edit` 成功后只返回继续写所需锚点：`sourcePath`、`slideCount`、相关 `slideId`、`createdElementIds`（insert / replace / add_element / duplicate）；不返回变更清单或整页 readback。
   - `WB-PPT-001-AC8` 元素编辑支持文字、位置、样式、图层、复制、删除、新增、图片、表格、图表和公式更新。
   - `WB-PPT-001-AC9` 一次 `ppt_edit` 失败时，文件和活动 session 都保持调用前状态。

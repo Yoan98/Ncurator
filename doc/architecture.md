@@ -127,7 +127,7 @@ DOCX 读写工具族已按上述原则落地，作为后续 Excel / PPT / PDF �
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | DOCX                  | 文档聚合模型 + story 内容树；root、可编辑子节点和 visual 共用一个 `nodesById`，visual 只使用 `nodeId`；读写拆成两个 skill；Source / Working 双态 + 净 Diff 审核 |
 | PDF                   | 页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                                                                 |
-| PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；读取页面同时返回 slideImagePath                                                                   |
+| PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；`ppt_read_slides` 默认可读完整元素，`detail=images` 时仅返回 slideImagePath 供视觉巡检 |
 | Excel                 | 工作簿 / 工作表 / 单元格范围读写                                                                                                                                |
 | KB                    | 混合召回检索工作区已索引文档                                                                                                                                    |
 | Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                            |

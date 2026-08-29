@@ -1082,12 +1082,21 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     const document = await loadDocument(args.sourcePath)
     const slides = getSlides(document.presentation)
     const indices = resolveSlideIndices(slides, args.ranges)
+    const detail = args.detail ?? 'full'
     return {
       sourcePath: args.sourcePath,
       slideCount: slides.length,
-      slides: indices.map((index) =>
-        slideReadback(document.presentation, slides[index]!, index, true)
-      ),
+      detail,
+      slides: indices.map((index) => {
+        const slide = slides[index]!
+        if (detail === 'images') {
+          return {
+            slideId: slideIdOf(slide),
+            slideIndex: index + 1
+          }
+        }
+        return slideReadback(document.presentation, slide, index, true)
+      })
     }
   }
 
