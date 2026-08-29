@@ -9,7 +9,7 @@
 | human-excel-write-reconciliation-live               | 完成 |            96 | deepseek-v4-flash                | 2026-08-14 18:39 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260814-183949-614               | 终端真实计算核对，四笔状态精确标记，SUMIF 公式正确，样式保持。                                         |
 | human-excel-read-sales-gap-analysis-live            | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 21:02 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260813-210226-107            | 真实读取多 Sheet 并终端/python 计算差额，对话给出 P-100/P-300 优先级，源工作簿未改。                   |
 | human-kb-guided-docx-comparison-draft-live          | 完成 |            86 | deepseek-v4-flash                | 2026-08-27 22:47 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-224726-600          | KB 缩圈后双目标 docx 成功回写，来源课件未改，Oracle 通过。                                             |
-| human-ppt-create-executive-deck-live                | 完成 |            93 | deepseek-v4-flash                | 2026-08-29 11:28 CST | tests/logs/ai/human/live/human-ppt-create-executive-deck-live/20260829-112844-003                | 从零创建 6 页管理层汇报（封面/摘要/KPI/趋势/风险/下一步），中文业务感强，无越界零校验错误。           |
+| human-ppt-create-executive-deck-live                | 完成 |            58 | deepseek-v4-flash                | 2026-08-29 11:28 CST | tests/logs/ai/human/live/human-ppt-create-executive-deck-live/20260829-112844-003                | 文案完整但 KPI 等页字号(磅)相对 bounds 过高导致叠字；视觉不可用，分数下调。                           |
 | human-ppt-edit-management-review-live               | 完成 |            94 | deepseek-v4-flash                | 2026-08-29 11:34 CST | tests/logs/ai/human/live/human-ppt-edit-management-review-live/20260829-113439-010               | 富稿上插摘要、Presenter→李然、2002→2015，Agenda/Quote 未动，出画布未新增。                           |
 | human-ppt-read-management-risk-review-live          | 完成 |            92 | deepseek-v4-flash                | 2026-08-29 11:28 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260829-112844-003          | 只读审阅静态品牌提案，命中 85% 等关键信息，源文件未改。                                               |
 | human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。              |
@@ -320,8 +320,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：PPT 元素规格编译、画布边界、非法输入和原子失败保持稳定。
 - Why：这是生产 PPT 工具的运行时契约，不应由 Unit 重复拥有完整 runtime 流程。
-- How：用元素规格创建、插入、渲染和解析产物；非法出画布输入应失败。
-- Oracle：合法页面生成可解析 PPTX 且关键元素位置与字号（磅）稳定；非法页面返回可解释错误且不留下半成品。
+- How：用元素规格创建、插入、渲染和解析产物；非法出画布（960×540，单位 pt）或字号超过框高的输入应失败。
+- Oracle：合法页面生成可解析 PPTX 且关键元素位置与字号（pt，与 bounds 同单位）稳定；非法页面返回可解释错误且不留下半成品。
 - Not：不验证模型是否会生成高质量设计。
 
 #### excel 类别

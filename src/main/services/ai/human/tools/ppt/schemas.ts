@@ -9,18 +9,21 @@ const elementIdSchema = z.string().min(1).describe('元素 elementId')
 
 export const pptBoundsSchema = z
   .object({
-    x: z.number().min(0).describe('左上角 X，画布像素，须落在 1920×1080 内'),
-    y: z.number().min(0).describe('左上角 Y，画布像素，须落在 1920×1080 内'),
-    width: z.number().positive().describe('宽度，画布像素'),
-    height: z.number().positive().describe('高度，画布像素')
+    x: z.number().min(0).describe('左上角 X，单位 pt，须落在 960×540 画布内'),
+    y: z.number().min(0).describe('左上角 Y，单位 pt，须落在 960×540 画布内'),
+    width: z.number().positive().describe('宽度，单位 pt'),
+    height: z
+      .number()
+      .positive()
+      .describe('高度，单位 pt；含文字时须 ≥ fontSize（与字号同单位）')
   })
   .strict()
   .meta({ id: 'PptBounds' })
 
 const pptPointSchema = z
   .object({
-    x: z.number().min(0).describe('X，画布像素，须落在 1920×1080 内'),
-    y: z.number().min(0).describe('Y，画布像素，须落在 1920×1080 内')
+    x: z.number().min(0).describe('X，单位 pt，须落在 960×540 画布内'),
+    y: z.number().min(0).describe('Y，单位 pt，须落在 960×540 画布内')
   })
   .strict()
   .meta({ id: 'PptPoint' })
@@ -32,7 +35,13 @@ export const pptElementStyleSchema = z
     strokeWidth: z.number().min(0).optional().describe('描边宽度'),
     color: z.string().optional().describe('文字颜色'),
     fontFamily: z.string().optional().describe('字体'),
-    fontSize: z.number().positive().optional().describe('字号，磅'),
+    fontSize: z
+      .number()
+      .positive()
+      .optional()
+      .describe(
+        '字号，单位 pt，与 bounds 同单位；须 ≤ bounds.height；保持标题>正文>标注的层级，勿在矮框塞超大字'
+      ),
     bold: z.boolean().optional().describe('是否加粗'),
     italic: z.boolean().optional().describe('是否斜体'),
     underline: z.boolean().optional().describe('是否下划线'),
@@ -290,7 +299,11 @@ const pptSlideDefaultsSchema = z
   .object({
     color: z.string().optional().describe('默认文字颜色'),
     fontFamily: z.string().optional().describe('默认字体'),
-    fontSize: z.number().positive().optional().describe('默认字号，磅')
+    fontSize: z
+      .number()
+      .positive()
+      .optional()
+      .describe('默认字号，单位 pt，与 bounds 同单位；须 ≤ 对应文字框 height')
   })
   .strict()
   .meta({ id: 'PptSlideDefaults' })
@@ -304,7 +317,9 @@ const pptSlideSpecFields = {
   defaults: pptSlideDefaultsSchema.optional().describe('本页未设样式的文字默认值'),
   elements: z
     .array(pptElementSchema)
-    .describe('页面元素规格，按叠放顺序；须完整位于 1920×1080 画布内，可为空页')
+    .describe(
+      '页面元素规格，按叠放顺序；画布 960×540（单位 pt，与字号同单位）；元素须完整落在画布内；保持字号层级与对齐，避免重叠抢位与对比不足；按内容自拟版式，不套固定留白模板；可为空页'
+    )
 }
 
 const editBase = { sourcePath: sourcePathSchema }
@@ -414,6 +429,36 @@ export type PptElement = z.infer<typeof pptElementSchema>
 export type PptElementOperation = z.infer<typeof pptElementOperationSchema>
 export type PptSlideDefaults = z.infer<typeof pptSlideDefaultsSchema>
 
+/** Default text fontSize when omitted (matches runtime applyShapeStyle). */
+export const PPT_DEFAULT_TEXT_FONT_SIZE_PT = 18
+
+export const assertPptTextFitsBounds = (input: {
+  fontSize: number
+  boundsHeight: number
+}): void => {
+  if (input.fontSize > input.boundsHeight) {
+    throw new Error(
+      `字号 ${input.fontSize}pt 超过框高 ${input.boundsHeight}pt：请增大 height 或减小 fontSize`
+    )
+  }
+}
+
+export const assertPptElementTextFitsBounds = (element: PptElement): void => {
+  if (element.type === 'text') {
+    assertPptTextFitsBounds({
+      fontSize: element.style?.fontSize ?? PPT_DEFAULT_TEXT_FONT_SIZE_PT,
+      boundsHeight: element.bounds.height
+    })
+    return
+  }
+  if (element.type === 'shape' && String(element.text || '').length > 0) {
+    assertPptTextFitsBounds({
+      fontSize: element.style?.fontSize ?? PPT_DEFAULT_TEXT_FONT_SIZE_PT,
+      boundsHeight: element.bounds.height
+    })
+  }
+}
+
 export const assertPptElementInCanvas = (element: PptElement): void => {
   const fail = (detail: string): never => {
     throw new Error(`元素超出 ${PPT_CANVAS_WIDTH}×${PPT_CANVAS_HEIGHT} 画布：${detail}`)
@@ -433,6 +478,11 @@ export const assertPptElementInCanvas = (element: PptElement): void => {
   if (x + width > PPT_CANVAS_WIDTH + 1 || y + height > PPT_CANVAS_HEIGHT + 1) {
     fail(`right=${x + width}, bottom=${y + height}`)
   }
+}
+
+export const assertPptElementSpec = (element: PptElement): void => {
+  assertPptElementInCanvas(element)
+  assertPptElementTextFitsBounds(element)
 }
 
 export const applyPptSlideDefaults = (

@@ -7,6 +7,8 @@ import {
 } from '../../../../src/main/services/ai/human/tools/ppt/toolSpecs'
 import {
   assertPptElementInCanvas,
+  assertPptElementTextFitsBounds,
+  assertPptTextFitsBounds,
   pptEditSchema,
   pptOutlineSchema,
   pptReadSlidesSchema,
@@ -192,7 +194,9 @@ describe('ai unit ppt tool contract', () => {
     expect(rendered).toContain('插入新页面')
     expect(rendered).toContain('按规格重写已有页面，保留 slideId')
     expect(rendered).toContain('按 elementId 修改当前页元素')
-    expect(rendered).toContain('1920×1080')
+    expect(rendered).toContain('960×540')
+    expect(rendered).toContain('按内容自拟版式')
+    expect(rendered).toContain('须 ≤ bounds.height')
     expect(rendered).not.toContain('html')
   })
 
@@ -211,19 +215,41 @@ describe('ai unit ppt tool contract', () => {
     expect(normalizePptColor('rebeccapurple', '#FFFFFF')).toBe('#FFFFFF')
   })
 
-  it('rejects elements that leave the 1920×1080 canvas', () => {
+  it('rejects elements that leave the 960×540 canvas', () => {
     expect(() =>
       assertPptElementInCanvas({
         type: 'text',
         text: 'out',
-        bounds: { x: 1800, y: 0, width: 200, height: 40 }
+        bounds: { x: 900, y: 0, width: 80, height: 40 }
       })
     ).toThrow(`${PPT_CANVAS_WIDTH}×${PPT_CANVAS_HEIGHT}`)
     expect(() =>
       assertPptElementInCanvas({
         type: 'text',
         text: 'ok',
-        bounds: { x: 100, y: 100, width: 800, height: 80 }
+        bounds: { x: 100, y: 100, width: 400, height: 80 }
+      })
+    ).not.toThrow()
+  })
+
+  it('rejects text whose fontSize exceeds bounds height', () => {
+    expect(() =>
+      assertPptElementTextFitsBounds({
+        type: 'text',
+        text: 'big',
+        bounds: { x: 40, y: 40, width: 200, height: 24 },
+        style: { fontSize: 36 }
+      })
+    ).toThrow('超过框高')
+    expect(() =>
+      assertPptTextFitsBounds({ fontSize: 24, boundsHeight: 24 })
+    ).not.toThrow()
+    expect(() =>
+      assertPptElementTextFitsBounds({
+        type: 'text',
+        text: 'ok',
+        bounds: { x: 40, y: 40, width: 200, height: 40 },
+        style: { fontSize: 28 }
       })
     ).not.toThrow()
   })

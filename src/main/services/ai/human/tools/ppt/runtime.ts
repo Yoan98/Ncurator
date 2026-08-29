@@ -103,6 +103,9 @@ import { buildPptDiffManifest } from './diff'
 import {
   applyPptSlideDefaults,
   assertPptElementInCanvas,
+  assertPptElementSpec,
+  assertPptTextFitsBounds,
+  PPT_DEFAULT_TEXT_FONT_SIZE_PT,
   pptEditSchema,
   pptOutlineSchema,
   pptReadSlidesSchema,
@@ -709,14 +712,32 @@ const applyElementOperation = async (input: {
   }
   if (op.type === 'set_bounds') {
     assertPptElementInCanvas({ type: 'text', text: '', bounds: op.bounds })
-    setShapeBounds(
-      findElement(input.document.presentation, input.slide, op.elementId),
-      boundsToEmu(input.document.presentation, op.bounds)
-    )
+    const shape = findElement(input.document.presentation, input.slide, op.elementId)
+    const existingText = getShapeText(shape)
+    if (existingText) {
+      const runFormat = getShapeRunFormat(shape, 0, 0)
+      assertPptTextFitsBounds({
+        fontSize: runFormat?.size ?? PPT_DEFAULT_TEXT_FONT_SIZE_PT,
+        boundsHeight: op.bounds.height
+      })
+    }
+    setShapeBounds(shape, boundsToEmu(input.document.presentation, op.bounds))
     return
   }
   if (op.type === 'set_style') {
     const shape = findElement(input.document.presentation, input.slide, op.elementId)
+    if (op.style.fontSize !== undefined) {
+      const bounds = boundsFromEmu(
+        input.document.presentation,
+        getShapeBoundsResolved(input.document.presentation, shape)
+      )
+      if (bounds) {
+        assertPptTextFitsBounds({
+          fontSize: op.style.fontSize,
+          boundsHeight: bounds.height
+        })
+      }
+    }
     if (op.style.fill !== undefined) setShapeFill(shape, normalizeHex(op.style.fill))
     if (op.style.stroke !== undefined || op.style.strokeWidth !== undefined) {
       setShapeStroke(shape, {
@@ -838,7 +859,7 @@ const applyElementOperation = async (input: {
   }
 
   const element = op.element
-  assertPptElementInCanvas(element)
+  assertPptElementSpec(element)
   if (element.type === 'line') {
     const slideSize = getSlideDimensions(input.document.presentation)
     const line = addSlideLine(input.slide, {
@@ -1123,7 +1144,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       prefix: 'slide'
     })
     const dimensions = getSlideDimensions(document.presentation)
-    const width = 1920
+    const width = PPT_CANVAS_WIDTH
     const height = Math.round((width * dimensions.height) / dimensions.width)
     const images = await Promise.all(
       [...frames.entries()].map(async ([slideId, frame]) => {

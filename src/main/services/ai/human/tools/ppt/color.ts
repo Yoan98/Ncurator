@@ -1,5 +1,6 @@
-export const PPT_CANVAS_WIDTH = 1920
-export const PPT_CANVAS_HEIGHT = 1080
+/** Authoring canvas in pt (1 unit = 1pt), matching standard 16:9 slide size. */
+export const PPT_CANVAS_WIDTH = 960
+export const PPT_CANVAS_HEIGHT = 540
 
 /** Converts CSS or hex colors to the six-digit format accepted by pptx-kit. */
 export const normalizePptColor = (
