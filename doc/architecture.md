@@ -103,10 +103,19 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 3. **Schema 即契约** — 参数扁平、语义必填、字段带 describe；校验失败返回可修复错误，不静默改写。模型偶发把嵌套 object/array 再编码成 JSON 字符串时，brain 在 schema 校验前经统一的 `normalizeToolCallArgs` 展开（全工具单一入口），不改变业务校验语义。
 4. **结果双通道** — 结构化结果是真相；面向模型的文本是投影，不承担 ID / 锚点解析职责。
 5. **原子与可预期** — 一次调用一个 operation；成功或整次失败；同类输入语义稳定。
-6. **描述声明边界，不教流程** — skill / tool 描述只说明能做什么、不能做什么、参数含义；组合策略由模型自主决定。
+6. **描述声明边界，不教流程** — skill / tool 描述只说明能做什么、不能做什么；组合策略由模型自主决定。
 7. **工具简单可理解** — 作者语言贴近模型对页面的心智模型，所用即所想。
 8. **写回只给新锚点，验证靠再读** — 写工具只返回继续写所需的 id；对错由后续 read 确认，不返回变更清单或整页 readback。
 9. **非必要字段不要设计** — 结构化 output 不回显入参已有字段（如 `sourcePath`）；只保留模型继续决策所需的最小字段。
+
+**描述分层**
+
+| 层 | 写什么 | 不写什么 |
+| --- | --- | --- |
+| `skill.description` | 该 skill 覆盖的能力域 | 工具调用顺序、跨工具编排 |
+| `tool promptSpec.description` | 单工具能力边界与限制 | 字段表、JSON 结构、跨工具下一步、先 A 后 B |
+| `inputSchema` 字段 `.describe()` | 参数语义、单位、缺省、格式、数量上限 | — |
+| `outputSchema` 字段 `.describe()` | 结构化结果字段语义 | 不在 `promptSpec` 重复 |
 
 **统一结果投递（全工具共用）**
 
@@ -138,7 +147,7 @@ DOCX 读写工具族已按上述原则落地，作为后续 Excel / PPT / PDF �
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | DOCX                  | 文档聚合模型 + story 内容树；root、可编辑子节点和 visual 共用一个 `nodesById`，visual 只使用 `nodeId`；读写拆成两个 skill；Source / Working 双态 + 净 Diff 审核 |
 | PDF                   | `pdf_outline` 元数据与书签；页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                                 |
-| PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；`ppt_read_slides` 默认可读完整元素，`detail=images` 时仅返回 slideImagePath 供视觉巡检 |
+| PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；`ppt_read_slides` 支持 `detail=full` 或 `detail=images` |
 | Excel                 | 工作表地图 + A1 范围；`excel_read` 四种 type（workbook / range / style / search）；`excel_edit` 一次一个 type；写回成功 `{}`（当前无系统生成锚点） |
 | KB                    | 混合召回检索工作区已索引文档                                                                                                                                    |
 | Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                            |

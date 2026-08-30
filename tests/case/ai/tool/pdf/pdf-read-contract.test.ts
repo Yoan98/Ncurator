@@ -157,7 +157,7 @@ describe('ai tool pdf backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['pdf'],
-      description: '验证 PDF 页面读取返回可供 read_image 使用的页面图片路径。',
+      description: '验证 PDF 页面读取返回页面渲染图片路径。',
       fixtures: [PDF_FIXTURE],
       runMode: 'single',
       execute: async (runtime) => {

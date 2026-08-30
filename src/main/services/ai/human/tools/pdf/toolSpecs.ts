@@ -42,7 +42,7 @@ export const PDF_OUTLINE_TOOL_SPEC: PdfToolSpec<
   skillIds: ['pdf-read'],
   promptSpec: {
     name: 'pdf_outline',
-    description: '读取 PDF 页数、元数据与书签提纲。'
+    description: '返回 PDF 页数、文档元数据与书签提纲。'
   },
   inputSchema: pdfOutlineSchema,
   outputSchema: pdfOutlineOutputSchema,
@@ -61,8 +61,7 @@ export const PDF_SEARCH_TOOL_SPEC: PdfToolSpec<
   skillIds: ['pdf-read'],
   promptSpec: {
     name: 'pdf_search',
-    description:
-      '在 PDF 文本层中按 literal 或 regex 搜索，支持可选页码范围；最多返回 10 条匹配及文本层统计。'
+    description: '在 PDF 文本层中按文字或正则搜索。'
   },
   inputSchema: pdfSearchSchema,
   outputSchema: pdfSearchOutputSchema,
@@ -81,8 +80,7 @@ export const PDF_READ_PAGES_TOOL_SPEC: PdfToolSpec<
   skillIds: ['pdf-read'],
   promptSpec: {
     name: 'pdf_read_pages',
-    description:
-      '按连续页码范围或指定页码集合读取 PDF，并逐页返回正文、页码、文本状态、图片数量与可交给 read_image 的 pageImagePath。'
+    description: '按页码读取 PDF 文本层与页面信息。'
   },
   inputSchema: pdfReadPagesSchema,
   outputSchema: pdfReadPagesOutputSchema,

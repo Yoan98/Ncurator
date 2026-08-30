@@ -42,7 +42,7 @@ export const PPT_READ_OUTLINE_TOOL_SPEC = {
   outputSchema: pptReadOutlineOutputSchema,
   promptSpec: {
     name: 'ppt_read_outline',
-    description: '按百分比或页码区间读取 PPTX 页面提纲。'
+    description: '返回 PPTX 页面提纲。'
   },
   resolveExecutionMeta: readExecutionMeta,
   modelResult: { renderSuccess: renderPptOutlineModelResult }
@@ -61,7 +61,7 @@ export const PPT_READ_SLIDES_TOOL_SPEC = {
   outputSchema: pptReadSlidesOutputSchema,
   promptSpec: {
     name: 'ppt_read_slides',
-    description: '按页码或 slideId 读取 PPTX 页面，并返回可交给 read_image 的 slideImagePath。'
+    description: '按页码或 slideId 读取 PPTX 页面内容。'
   },
   resolveExecutionMeta: readExecutionMeta,
   modelResult: { renderSuccess: renderPptReadSlidesModelResult }

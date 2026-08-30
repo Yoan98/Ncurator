@@ -85,6 +85,33 @@ describe('ai unit tool prompt contract', () => {
     expect(readSpec?.inputSchema.safeParse({ sourcePath: 'notes.md' }).success).toBe(true)
   })
 
+  it('keeps read-tool prompts free of cross-tool orchestration hints', () => {
+    const readTools = [
+      'pdf_outline',
+      'pdf_search',
+      'pdf_read_pages',
+      'ppt_read_outline',
+      'ppt_read_slides',
+      'ppt_search',
+      'docx_read_outline',
+      'docx_search',
+      'docx_read_nodes',
+      'text_file_read',
+      'text_file_search',
+      'text_file_edit',
+      'web_search',
+      'browser_use'
+    ] as const
+
+    readTools.forEach((toolName) => {
+      const spec = getToolSpec(toolName)
+      const description = spec?.promptSpec.description || ''
+      expect(description).not.toMatch(/read_image|交给|先|然后|再调用|步骤|流程/u)
+      expect(description.length).toBeGreaterThan(0)
+      expect(description.length).toBeLessThan(120)
+    })
+  })
+
   it('keeps the PPT edit prompt as a capability boundary', () => {
     const spec = getToolSpec('ppt_edit')
     const description = spec?.promptSpec.description || ''

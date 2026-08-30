@@ -112,9 +112,7 @@ export const pptReadSlidesSchema = z
     detail: z
       .enum(['full', 'images'])
       .optional()
-      .describe(
-        'full（默认）=页面元素+slideImagePath；images=仅 slideId/页码/slideImagePath，供视觉巡检省上下文'
-      )
+      .describe('full=返回页面元素与 slideImagePath；images=仅返回 slideId、页码与 slideImagePath')
   })
   .strict()
 

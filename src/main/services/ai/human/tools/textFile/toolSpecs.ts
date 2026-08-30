@@ -11,9 +11,6 @@ import {
   TEXT_FILE_EDIT_SCHEMA,
   TEXT_FILE_READ_OUTPUT_SCHEMA,
   TEXT_FILE_READ_SCHEMA,
-  TEXT_FILE_READ_MAX_BYTES,
-  TEXT_FILE_READ_MAX_LINE_CHARS,
-  TEXT_FILE_READ_MAX_LINES,
   TEXT_FILE_SEARCH_OUTPUT_SCHEMA,
   TEXT_FILE_SEARCH_SCHEMA
 } from './toolSchemas'
@@ -33,7 +30,7 @@ export const TEXT_FILE_READ_TOOL_SPEC: HumanToolSpec<
   outputSchema: TEXT_FILE_READ_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'text_file_read',
-    description: `按行读取 UTF-8 普通文本并返回带续读位置的内容窗口；缺省和单次最多 ${TEXT_FILE_READ_MAX_LINES} 行、约 ${TEXT_FILE_READ_MAX_BYTES} bytes，单行最多展示 ${TEXT_FILE_READ_MAX_LINE_CHARS} 字符。无法读取 docx、pptx、pdf、xlsx 等结构化文件。`
+    description: '按行读取 UTF-8 普通文本。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
@@ -57,7 +54,7 @@ export const TEXT_FILE_SEARCH_TOOL_SPEC: HumanToolSpec<
   outputSchema: TEXT_FILE_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'text_file_search',
-    description: '在文本文件中按 literal 或 regex 检索，返回每个命中的行号与命中附近文字。'
+    description: '在文本文件中按文字或正则搜索。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
@@ -79,14 +76,7 @@ export const TEXT_FILE_EDIT_TOOL_SPEC: HumanToolSpec<
   outputSchema: TEXT_FILE_EDIT_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'text_file_edit',
-    description: [
-      '创建或修改普通文本文件,如 txt、md、csv、json，代码等 UTF-8 普通文本文件。',
-      '无法创建或修改结构化文件如 docx、pptx、pdf、xlsx 等。',
-      'action=create：创建新文件并写入完整内容，不覆盖已有文件。',
-      'action=rewrite：使用新内容完整改写已有文件。',
-      'action=edit：对已有文件执行一个或多个精确文本修改；每个 oldText 必须恰好匹配一次。',
-      'action=replaceAll：把已有文件中 oldText 的全部精确匹配替换为 newText。'
-    ].join('\n')
+    description: '创建或修改 UTF-8 普通文本文件。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'mutating',

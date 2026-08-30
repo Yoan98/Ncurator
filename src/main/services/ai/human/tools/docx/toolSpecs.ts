@@ -52,8 +52,7 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   outputSchema: docxOutlineOutputSchema,
   promptSpec: {
     name: 'docx_read_outline',
-    description:
-      '按根节点比例返回结构缩略图。每段含 story、nodeIndex 区间和 textMap；不含完整正文和 nodeId。'
+    description: '按根节点比例返回 DOCX 结构缩略图。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -75,8 +74,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   outputSchema: docxSearchOutputSchema,
   promptSpec: {
     name: 'docx_search',
-    description:
-      '在全文中按 literal 或 regex 检索，返回完整命中节点；可选返回同一 story 前后的完整上下文节点，其中 visual 节点直接包含 imagePath。'
+    description: '在 DOCX 全文中按文字或正则搜索。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -98,8 +96,7 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
   outputSchema: docxReadOutputSchema,
   promptSpec: {
     name: 'docx_read_nodes',
-    description:
-      '返回指定 nodeId 或连续 nodeIndex 范围的完整语义节点树。visual 节点使用普通 nodeId，并包含可交给 read_image 的 imagePath。一次最多 20 个 nodeId 或 50 个根节点。'
+    description: '读取指定 nodeId 或 nodeIndex 范围的语义节点树。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {

@@ -30,8 +30,7 @@ export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
   outputSchema: WEB_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'web_search',
-    description:
-      '搜索或抓取网页。传 query 时按关键词搜索并 crawl 每条结果；传 url 时直接 crawl 该页。统一返回 items 数组，每项含 requestedUrl、finalUrl、title、markdown、links 与 publishedAt，或 error。'
+    description: '搜索或抓取网页正文。'
   },
   resolveExecutionMeta: WEB_EXECUTION_META,
   modelResult: { renderSuccess: renderWebSearchModelResult }
@@ -50,8 +49,7 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   outputSchema: BROWSER_USE_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'browser_use',
-    description:
-      '操作浏览器；action=navigate 打开 URL，action=extract 提取页面内容为 content，action=observe 返回可见交互动作，action=act 执行点击、输入、提交或选择。extract/observe/act 只作用于当前页面；需要切换页面时先 navigate。'
+    description: '操作内置浏览器页面。'
   },
   resolveExecutionMeta: (args) => ({
     mutability: String(args.action || '') === 'act' ? 'mutating' : 'read_only',
