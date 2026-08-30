@@ -341,8 +341,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：`excel_read` 四种 type 的范围、格式与错误边界。
 - Why：当前单一 happy path 无法保护多 Sheet、regex、大结果截断、格子预算和 Office Excel 格式兼容。
-- How：真实读取 `xlsx/xlsm/xltx/xltm`，覆盖 `sheetName` 限定、网格 range、literal/regex、500 条 `truncated`，超格子预算失败，以及非法路径、range、regex 和格式。
-- Oracle：结果 Sheet/range/值稳定；搜索最多返回 500 条并显式 `truncated`；搜索只命中单元格值和公式，不搜表名；合法格式可读，非法输入稳定失败且不产生修改记录。
+- How：真实读取 `xlsx/xlsm/xltx/xltm`，覆盖 `sheetName` 限定、网格 range、literal/regex、10 条 `truncated`，大 range 走统一 spill，以及非法路径、range、regex 和格式。
+- Oracle：结果 Sheet/range/值稳定；搜索最多返回 10 条并显式 `truncated`；搜索只命中单元格值和公式，不搜表名；合法格式可读，非法输入稳定失败且不产生修改记录。
 - Not：不验证模型如何选择读取范围。
 
 ##### `excel-edit-operations-and-atomicity`

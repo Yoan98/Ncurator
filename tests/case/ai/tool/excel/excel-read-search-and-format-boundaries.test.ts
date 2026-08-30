@@ -191,20 +191,20 @@ describe('ai tool excel read backend', () => {
         runtime.assertThat(
           result.capped.truncated === true &&
             Array.isArray(result.capped.matches) &&
-            result.capped.matches.length === 500,
+            result.capped.matches.length === 10,
           {
             name: 'excel-search-result-cap',
-            message: 'Excel 搜索结果应在 500 条截断并显式报告 truncated。',
+            message: 'Excel 搜索结果应在 10 条截断并显式报告 truncated。',
             data: result.capped
           }
         )
         runtime.assertThat(
-          typeof result.overflow.error === 'string' &&
-            String(result.overflow.error).includes('缩小 range') &&
+          Array.isArray(result.overflow.rows) &&
+            result.overflow.rows.length === 80 &&
             result.failures.every((failure) => typeof failure.error === 'string'),
           {
             name: 'excel-read-failure-boundaries',
-            message: '超格子预算、路径、扩展名、损坏文件、Sheet、range 和 regex 错误都应返回结构化失败。',
+            message: '大 range 应正常返回网格；路径、扩展名、损坏文件、Sheet、range 和 regex 错误都应返回结构化失败。',
             data: { overflow: result.overflow, failures: result.failures }
           }
         )

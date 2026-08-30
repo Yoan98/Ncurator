@@ -1,4 +1,5 @@
 import { z } from 'zod/v4'
+import { EXCEL_SEARCH_MAX_MATCHES } from './constants'
 
 const rangeCellOutputSchema = z.union([
   z.string(),
@@ -59,16 +60,18 @@ export const excelReadStyleOutputSchema = z
 export const excelSearchOutputSchema = z
   .object({
     truncated: z.boolean(),
-    matches: z.array(
-      z
-        .object({
-          sheetName: z.string(),
-          address: z.string(),
-          value: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
-          formula: z.string().optional()
-        })
-        .strict()
-    )
+    matches: z
+      .array(
+        z
+          .object({
+            sheetName: z.string(),
+            address: z.string(),
+            value: z.union([z.string(), z.number(), z.boolean(), z.null()]).optional(),
+            formula: z.string().optional()
+          })
+          .strict()
+      )
+      .max(EXCEL_SEARCH_MAX_MATCHES)
   })
   .strict()
 

@@ -83,7 +83,7 @@ describe('ai tool excel row diff backend', () => {
           type: 'set_range',
           sourcePath: path.join(runtime.workspaceRoot, 'row-insert.xlsx'),
           sheetName: '阶段涨幅',
-          range: 'A3',
+          range: 'A3:E3',
           values: [['新增行', '1%', '2%', '3%', '4%']]
         })
         const inserted = await recordOf(path.join(runtime.workspaceRoot, 'row-insert.xlsx'))

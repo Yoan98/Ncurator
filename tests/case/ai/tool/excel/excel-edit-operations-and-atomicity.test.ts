@@ -75,7 +75,7 @@ describe('ai tool excel edit backend', () => {
           type: 'set_range',
           sourcePath: operationsPath,
           sheetName: 'Data',
-          range: 'A1',
+          range: 'A1:C3',
           values: [
             ['Item', 'Amount', 'Double'],
             ['A', 12, { formula: 'B2*2' }],

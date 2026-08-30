@@ -87,7 +87,7 @@ export const excelEditSchema = z.discriminatedUnion('type', [
       ...editBase,
       type: z.literal('set_range').describe('写入一块数据或公式'),
       sheetName: sheetNameSchema,
-      range: a1RangeSchema.describe('单格为起点，或与 values 行列一致的矩形'),
+      range: a1RangeSchema.describe('与 values 行列一致的 A1 矩形，如 A1:C3；单格写入用 A1 或 A1:A1'),
       values: z.array(z.array(rangeCellSchema).min(1)).min(1).describe('二维值，从上到下、从左到右'),
       style: styleSchema.optional().describe('可选；省略则保留原样式')
     })

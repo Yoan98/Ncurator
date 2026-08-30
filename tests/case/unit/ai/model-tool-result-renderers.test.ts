@@ -10,6 +10,7 @@ import {
 import {
   renderDocxContentEditModelResult,
   renderDocxReadNodesModelResult,
+  renderExcelReadModelResult,
   renderGenericModelResult,
   renderKbSearchModelResult
 } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
@@ -49,6 +50,7 @@ describe('ai unit model-facing tool result renderers', () => {
       })
     }
     expect(getToolSpec('text_file_read')?.modelResult?.overflowPolicy).toEqual({ mode: 'window' })
+    expect(getToolSpec('excel_read')?.modelResult?.overflowPolicy).toBeUndefined()
     expect(getToolSpec('terminal_run')?.modelResult?.overflowPolicy).toBeUndefined()
     expect(getToolSpec('web_search')?.modelResult?.overflowPolicy).toBeUndefined()
     expect(getToolSpec('docx_content_edit')?.modelResult?.overflowPolicy).toBeUndefined()
@@ -179,6 +181,52 @@ describe('ai unit model-facing tool result renderers', () => {
         data: { createdIds: ['node-1', 'node-2'] }
       })
     ).toBe('DOCX content edit completed successfully: 目标.docx\nCreated node IDs: node-1, node-2')
+  })
+
+  it('renders Excel range, style and search projections for the model', () => {
+    const range = renderExcelReadModelResult({
+      toolName: 'excel_read',
+      args: { type: 'range' },
+      data: {
+        sheetName: 'Data',
+        range: 'A1:B2',
+        rows: [
+          ['Item', 12],
+          ['A', { formula: 'B2*2', value: 24 }]
+        ]
+      }
+    })
+    expect(range).toContain('Range: A1:B2 (columns A–B, rows 1–2)')
+    expect(range).toContain('| 1 | Item | 12 |')
+    expect(range).toContain('| 2 | A | =B2*2 => 24 |')
+
+    const style = renderExcelReadModelResult({
+      toolName: 'excel_read',
+      args: { type: 'style' },
+      data: {
+        sheetName: 'Data',
+        range: 'A1',
+        rows: [[{ bold: true, fontColor: 'FF0000', fillColor: null, numberFormat: '#,##0' }]]
+      }
+    })
+    expect(style).toContain('Range: A1 (column A, row 1)')
+    expect(style).toContain('| Cell | bold | fontColor | fillColor | numberFormat |')
+    expect(style).toContain('| A1 | true | FF0000 |  | #,##0 |')
+
+    const search = renderExcelReadModelResult({
+      toolName: 'excel_read',
+      args: { type: 'search' },
+      data: {
+        truncated: false,
+        matches: [
+          { sheetName: 'Data', address: 'C2', formula: 'B2*2' },
+          { sheetName: 'Data', address: 'A1', value: 'Item' }
+        ]
+      }
+    })
+    expect(search).toContain('sheet=Data cell=C2 formula=B2*2')
+    expect(search).toContain('sheet=Data cell=A1 value=Item')
+    expect(search).not.toContain('!')
   })
 
   it('uses a lossless multiline generic fallback instead of a JSON envelope', () => {

@@ -610,7 +610,7 @@
 - 系统行为：AI 通过 `excel-read` 的 `excel_read` 读取工作簿地图、A1 范围的值与公式、样式，或按格子值/公式搜索；通过 `excel-write` 的 `excel_edit` 一次一个 type 创建或编辑工作表、范围、样式和结构。路径只出现在入参。路径不存在时第一次 `add_sheet` 创建工作簿（不自动生成 Sheet1），存在时编辑。读取支持 `xlsx`、`xlsm`、`xltx`、`xltm`，写入只支持 `xlsx`。Excel 文件不进入本地知识库内容索引，只索引文件名、文档标题与工作表名等元数据（不含单元格内容），具体单元格数据仍由 Excel 专用工具按工作区路径处理。产品侧 Diff / 修改记录 / 回退仍由系统维护，不投影给模型。
 - 验收：
   - `WB-EXCEL-001-AC1` `excel_read` 按 type 工作：`workbook` 返回各表 `name/range/rowCount/columnCount`（空表 `range` 为 null）；`range` 返回网格，公式格为 `{ formula, value? }`，字面量为原值；`style` 只返回有格式的 `bold/fontColor/fillColor/numberFormat`，否则为 `null`；`search` 只搜单元格值和公式，返回 `{ truncated, matches: [{ sheetName, address, value? 或 formula }] }`。
-  - `WB-EXCEL-001-AC2` `excel_edit` 一次一个 type：`add_sheet` / `delete_sheet` / `rename_sheet` / `set_range` / `clear_range` / `merge_cells` / `unmerge_cells` / 插删行列 / `set_style` / `set_column_width` / `set_row_height` / `auto_fit`。`set_range` 用 `range` 定位：单格为起点贴 `values`，矩形必须与 `values` 行列一致；不传 style 则保留原样式。成功返回 `{}`。
+  - `WB-EXCEL-001-AC2` `excel_edit` 一次一个 type：`add_sheet` / `delete_sheet` / `rename_sheet` / `set_range` / `clear_range` / `merge_cells` / `unmerge_cells` / 插删行列 / `set_style` / `set_column_width` / `set_row_height` / `auto_fit`。`set_range` 的 `range` 必须与 `values` 行列一致的 A1 矩形（如 `A1:C3`）；单格写入可用 `A1` 或 `A1:A1`；不传 style 则保留原样式。成功返回 `{}`。
   - `WB-EXCEL-001-AC3` 单次 `excel_edit` 失败时不产生部分写入；文件在连续编辑之间被外部修改时拒绝覆盖并提示冲突；无实际变化时不生成修改记录。
   - `WB-EXCEL-001-AC4` `xlsm`、`xltx`、`xltm` 可以读取但不能写回；拒绝写入时源文件保持不变，并明确说明是为了避免丢失宏或模板信息。
   - `WB-EXCEL-001-AC5` Excel 创建或编辑成功后，正式文件中的值与公式可被其他程序立即读取，正式文件不包含审核模式使用的红绿边框。

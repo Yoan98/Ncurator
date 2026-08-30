@@ -9,7 +9,7 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { ExcelCapabilityToolsInput, ExcelRuntimeState, ExcelToolRuntime } from './types'
 import type { ExcelEditInput, ExcelReadInput, ExcelStyle } from './schemas'
-import { EXCEL_READ_RANGE_MAX_CELLS, EXCEL_SEARCH_MAX_MATCHES } from './constants'
+import { EXCEL_SEARCH_MAX_MATCHES } from './constants'
 
 const EXCEL_READ_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xltx', '.xltm'])
 const EXCEL_WRITE_EXTENSIONS = new Set(['.xlsx'])
@@ -721,15 +721,6 @@ const projectStyleCell = (
   return Object.keys(style).length > 0 ? style : null
 }
 
-const assertRangeBudget = (range: { top: number; left: number; bottom: number; right: number }): void => {
-  const cellCount = (range.bottom - range.top + 1) * (range.right - range.left + 1)
-  if (cellCount > EXCEL_READ_RANGE_MAX_CELLS) {
-    throw new Error(
-      `range 超过 ${String(EXCEL_READ_RANGE_MAX_CELLS)} 个格子，请缩小 range 后重试`
-    )
-  }
-}
-
 const readGrid = <T>(
   sheet: ExcelJS.Worksheet,
   range: { top: number; left: number; bottom: number; right: number },
@@ -796,16 +787,13 @@ const applyOperation = (input: {
   const sheet = requireSheet(workbook, operation.sheetName)
   if (operation.type === 'set_range') {
     const range = parseRange(operation.range)
-    const isAnchor = range.top === range.bottom && range.left === range.right
+    const expectedRows = range.bottom - range.top + 1
+    const expectedColumns = range.right - range.left + 1
     const rowCount = operation.values.length
-    if (!isAnchor) {
-      const expectedRows = range.bottom - range.top + 1
-      const expectedColumns = range.right - range.left + 1
-      if (rowCount !== expectedRows || operation.values.some((row) => row.length !== expectedColumns)) {
-        throw new Error(
-          `set_range 的 values 行列必须与 range ${operation.range} 一致（${String(expectedRows)}x${String(expectedColumns)}）`
-        )
-      }
+    if (rowCount !== expectedRows || operation.values.some((row) => row.length !== expectedColumns)) {
+      throw new Error(
+        `set_range 的 values 行列必须与 range ${operation.range} 一致（${String(expectedRows)}x${String(expectedColumns)}）`
+      )
     }
     for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
       const values = operation.values[rowIndex]
@@ -991,7 +979,6 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
 
     const sheet = requireSheet(workbook, args.sheetName)
     const range = parseRange(args.range)
-    assertRangeBudget(range)
     if (args.type === 'style') {
       return toJsonObject({
         sheetName: sheet.name,

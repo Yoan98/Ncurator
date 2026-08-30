@@ -418,17 +418,6 @@ const formatExcelRangeCell = (value: JsonValue | undefined): string => {
   return serialized ? `=${formula} => ${serialized}` : `=${formula}`
 }
 
-const formatExcelStyleCell = (value: JsonValue | undefined): string | undefined => {
-  if (!isObject(value)) return undefined
-  const parts = [
-    value.bold === true ? 'bold' : '',
-    readString(value.fontColor) ? `fontColor=${readString(value.fontColor)}` : '',
-    readString(value.fillColor) ? `fillColor=${readString(value.fillColor)}` : '',
-    readString(value.numberFormat) ? `numberFormat=${readString(value.numberFormat)}` : ''
-  ].filter(Boolean)
-  return parts.length ? parts.join(', ') : undefined
-}
-
 const columnLettersFromIndex = (column: number): string => {
   let value = column
   let result = ''
@@ -440,16 +429,49 @@ const columnLettersFromIndex = (column: number): string => {
   return result
 }
 
-const parseExcelA1 = (
+const parseExcelRange = (
   range: string
-): { top: number; left: number } | undefined => {
-  const match = range.trim().match(/^\$?([A-Za-z]+)\$?(\d+)/)
+): { top: number; left: number; bottom: number; right: number } | undefined => {
+  const match = range.trim().match(/^\$?([A-Za-z]+)\$?(\d+)(?::\$?([A-Za-z]+)\$?(\d+))?$/)
   if (!match) return undefined
   const left = match[1]
     .toUpperCase()
     .split('')
     .reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0)
-  return { top: Number(match[2]), left }
+  const top = Number(match[2])
+  const right = match[3]
+    ? match[3]
+        .toUpperCase()
+        .split('')
+        .reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0)
+    : left
+  const bottom = match[4] ? Number(match[4]) : top
+  if (bottom < top || right < left) return undefined
+  return { top, left, bottom, right }
+}
+
+const formatExcelRangeMetadata = (range: string): string => {
+  const parsed = parseExcelRange(range)
+  if (!parsed) return range
+  const startCol = columnLettersFromIndex(parsed.left)
+  const endCol = columnLettersFromIndex(parsed.right)
+  const rangeLabel =
+    parsed.top === parsed.bottom && parsed.left === parsed.right
+      ? `${startCol}${parsed.top}`
+      : `${startCol}${parsed.top}:${endCol}${parsed.bottom}`
+  const columnPart =
+    parsed.left === parsed.right ? `column ${startCol}` : `columns ${startCol}–${endCol}`
+  const rowPart =
+    parsed.top === parsed.bottom ? `row ${parsed.top}` : `rows ${parsed.top}–${parsed.bottom}`
+  return `${rangeLabel} (${columnPart}, ${rowPart})`
+}
+
+const formatExcelStyleField = (value: JsonValue | undefined): string => {
+  if (value === true) return 'true'
+  if (value === false) return 'false'
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string' || typeof value === 'number') return String(value)
+  return ''
 }
 
 export const renderExcelReadModelResult: ModelResultRenderer = ({ args, data }) => {
@@ -485,8 +507,10 @@ export const renderExcelReadModelResult: ModelResultRenderer = ({ args, data }) 
                 : item.value === null
                   ? ''
                   : ''
-            const shown = formula ? `=${formula}` : value
-            return `  ${readString(item.sheetName) || ''}!${readString(item.address) || ''}  ${shown}`.trimEnd()
+            const sheet = readString(item.sheetName) || ''
+            const cell = readString(item.address) || ''
+            const detail = formula ? `formula=${formula}` : `value=${value}`
+            return `  sheet=${sheet} cell=${cell} ${detail}`.trimEnd()
           })
         : ['  none'])
     ].join('\n')
@@ -494,35 +518,45 @@ export const renderExcelReadModelResult: ModelResultRenderer = ({ args, data }) 
   const sheetName = readString(obj.sheetName) || ''
   const range = readString(obj.range) || ''
   const rows = Array.isArray(obj.rows) ? obj.rows : []
-  const origin = parseExcelA1(range)
+  const origin = parseExcelRange(range)
+  const rangeMetadata = formatExcelRangeMetadata(range)
   if (type === 'style') {
-    const lines: string[] = []
+    const styleRows: string[] = []
     rows.forEach((row, rowIndex) => {
       if (!Array.isArray(row) || !origin) return
       row.forEach((cell, columnIndex) => {
-        const formatted = formatExcelStyleCell(cell)
-        if (!formatted) return
+        if (!isObject(cell)) return
+        const hasStyle =
+          cell.bold === true ||
+          typeof cell.fontColor === 'string' ||
+          typeof cell.fillColor === 'string' ||
+          typeof cell.numberFormat === 'string'
+        if (!hasStyle) return
         const address = `${columnLettersFromIndex(origin.left + columnIndex)}${origin.top + rowIndex}`
-        lines.push(`  ${address}: ${formatted}`)
+        styleRows.push(
+          `| ${address} | ${formatExcelStyleField(cell.bold)} | ${formatExcelStyleField(cell.fontColor)} | ${formatExcelStyleField(cell.fillColor)} | ${formatExcelStyleField(cell.numberFormat)} |`
+        )
       })
     })
     return [
       'Excel style read completed.',
       `Sheet: ${sheetName}`,
-      `Range: ${range}`,
-      ...(lines.length ? lines : ['  none'])
+      `Range: ${rangeMetadata}`,
+      '| Cell | bold | fontColor | fillColor | numberFormat |',
+      '| --- | --- | --- | --- | --- |',
+      ...(styleRows.length ? styleRows : ['| none | | | | |'])
     ].join('\n')
   }
   return [
     'Excel range read completed.',
     `Sheet: ${sheetName}`,
-    `Range: ${range}`,
+    `Range: ${rangeMetadata}`,
     ...(rows.length
-      ? rows.map((row) =>
-          Array.isArray(row)
-            ? `| ${row.map((cell) => formatExcelRangeCell(cell)).join(' | ')} |`
-            : ''
-        )
+      ? rows.map((row, rowIndex) => {
+          if (!Array.isArray(row)) return ''
+          const rowNumber = origin ? origin.top + rowIndex : rowIndex + 1
+          return `| ${rowNumber} | ${row.map((cell) => formatExcelRangeCell(cell)).join(' | ')} |`
+        })
       : ['  none'])
   ]
     .filter((line) => line !== '')

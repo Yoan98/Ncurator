@@ -10,8 +10,6 @@ import {
   renderExcelEditModelResult,
   renderExcelReadModelResult
 } from '../../shared/modelToolResultRenderers'
-import { createRetryModelResultPolicy } from '../modelResultPolicies'
-
 type ExcelSpec<
   TArgs extends JsonObject,
   TOutput extends JsonObject,
@@ -41,12 +39,7 @@ export const EXCEL_READ_TOOL_SPEC = {
     description: '读取 Excel 工作簿结构、单元格内容、格式，或按格子搜索。'
   },
   resolveExecutionMeta: readMeta,
-  modelResult: {
-    renderSuccess: renderExcelReadModelResult,
-    overflowPolicy: createRetryModelResultPolicy(
-      'Call excel_read again with a smaller range, a narrower sheetName, or a more specific search query.'
-    )
-  }
+  modelResult: { renderSuccess: renderExcelReadModelResult }
 } satisfies ExcelSpec<
   z.infer<typeof excelReadSchema>,
   z.infer<typeof excelReadOutputSchema>,
