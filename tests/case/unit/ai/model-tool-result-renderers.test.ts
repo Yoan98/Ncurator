@@ -12,7 +12,11 @@ import {
   renderDocxReadNodesModelResult,
   renderExcelReadModelResult,
   renderGenericModelResult,
-  renderKbSearchModelResult
+  renderImageGenerateModelResult,
+  renderKbSearchModelResult,
+  renderPdfReadPagesModelResult,
+  renderPptEditModelResult,
+  renderReadImageModelResult
 } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 
 const tempRoots: string[] = []
@@ -266,6 +270,86 @@ describe('ai unit model-facing tool result renderers', () => {
     const persisted = await fs.readFile(filePath || '', 'utf8')
     expect(persisted).toContain(tail)
     expect(persisted.split('\n').every((line) => Array.from(line).length <= 1_600)).toBe(true)
+  })
+
+  it('renders ppt_edit with new anchors only', () => {
+    expect(renderPptEditModelResult({ toolName: 'ppt_edit', args: {}, data: {} })).toBe(
+      'PPT edit completed.'
+    )
+    expect(
+      renderPptEditModelResult({
+        toolName: 'ppt_edit',
+        args: {},
+        data: { slideId: 'slide-1', createdElementIds: ['el-1', 'el-2'] }
+      })
+    ).toBe('PPT edit completed.\nslideId: slide-1\ncreatedElementIds: el-1, el-2')
+  })
+
+  it('renders image_generate success and failure compactly', () => {
+    expect(
+      renderImageGenerateModelResult({
+        toolName: 'image_generate',
+        args: {},
+        data: { outputPath: '/workspace/images/out.png' }
+      })
+    ).toBe('Image saved: /workspace/images/out.png')
+    expect(
+      renderImageGenerateModelResult({
+        toolName: 'image_generate',
+        args: {},
+        data: { error: 'invalid svg' }
+      })
+    ).toBe('Image generation failed: invalid svg')
+  })
+
+  it('renders read_image paths and dimensions without orchestration hints', () => {
+    const rendered = renderReadImageModelResult({
+      toolName: 'read_image',
+      args: {},
+      data: {
+        message: 'ok',
+        images: [
+          {
+            path: '/workspace/a.png',
+            mimeType: 'image/webp',
+            sizeBytes: 100,
+            width: 16,
+            height: 12
+          },
+          {
+            path: '/workspace/b.png',
+            mimeType: 'image/png',
+            sizeBytes: 200,
+            width: 8,
+            height: 20
+          }
+        ]
+      }
+    })
+    expect(rendered).toContain('2 images loaded:')
+    expect(rendered).toContain('/workspace/a.png 16x12 webp')
+    expect(rendered).toContain('/workspace/b.png 8x20 png')
+    expect(rendered).not.toMatch(/read_image|请|然后|步骤/u)
+  })
+
+  it('keeps pdf read pages renderer free of cross-tool orchestration hints', () => {
+    const rendered = renderPdfReadPagesModelResult({
+      toolName: 'pdf_read_pages',
+      args: {},
+      data: {
+        pages: [
+          {
+            pageNumber: 1,
+            textStatus: 'empty',
+            imageCount: 1,
+            pageImagePath: '/tmp/page-1.png',
+            text: ''
+          }
+        ]
+      }
+    })
+    expect(rendered).toContain('(no text layer)')
+    expect(rendered).not.toContain('read_image')
   })
 
   it('spills producer-bounded text_file_read windows when rendered output exceeds spill threshold', async () => {

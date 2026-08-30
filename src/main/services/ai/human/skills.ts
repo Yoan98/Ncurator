@@ -110,7 +110,7 @@ export const RUNTIME_SKILL_CATALOG = {
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'agent-control',
-    description: '管理任务推进过程：学习技能、维护计划，并把本地或远程图片交给当前主模型读取。'
+    description: '管理任务推进：学习技能、维护计划，并加载图片到主模型上下文。'
   }
 } as const satisfies Record<RuntimeSkillId, RuntimeSkillCatalogEntry>
 

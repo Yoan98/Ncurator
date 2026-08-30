@@ -40,48 +40,49 @@ export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
 
 const webSearchLinkItemSchema = z
   .object({
-    href: z.string(),
-    text: z.string().optional(),
-    title: z.string().optional()
+    href: z.string().describe('链接 URL'),
+    text: z.string().optional().describe('链接文本'),
+    title: z.string().optional().describe('链接标题')
   })
   .strict()
 
 export const webSearchItemSchema = z
   .object({
-    requestedUrl: z.string(),
-    finalUrl: z.string().optional(),
-    title: z.string().optional(),
-    markdown: z.string().optional(),
+    requestedUrl: z.string().describe('请求的 URL'),
+    finalUrl: z.string().optional().describe('最终落地 URL'),
+    title: z.string().optional().describe('页面标题'),
+    markdown: z.string().optional().describe('页面正文（Markdown）'),
     links: z
       .object({
-        internal: z.array(webSearchLinkItemSchema),
-        external: z.array(webSearchLinkItemSchema)
+        internal: z.array(webSearchLinkItemSchema).describe('站内链接'),
+        external: z.array(webSearchLinkItemSchema).describe('站外链接')
       })
-      .optional(),
-    publishedAt: z.string().optional(),
-    error: z.string().optional(),
-    statusCode: z.number().int().optional()
+      .optional()
+      .describe('页面链接分组'),
+    publishedAt: z.string().optional().describe('发布时间（ISO 8601）'),
+    error: z.string().optional().describe('抓取错误信息'),
+    statusCode: z.number().int().optional().describe('HTTP 状态码')
   })
   .strict()
 
 export const WEB_SEARCH_OUTPUT_SCHEMA = z
   .object({
-    items: z.array(webSearchItemSchema)
+    items: z.array(webSearchItemSchema).describe('搜索结果或抓取页面列表')
   })
   .strict()
 
 const browserUsePageOutputSchema = z
   .object({
-    url: z.string(),
-    title: z.string().optional()
+    url: z.string().describe('当前页面 URL'),
+    title: z.string().optional().describe('当前页面标题')
   })
   .strict()
 
 const browserActionCandidateOutputSchema = z
   .object({
-    description: z.string(),
-    method: z.string().optional(),
-    arguments: z.array(z.string()).optional()
+    description: z.string().describe('可执行动作描述'),
+    method: z.string().optional().describe('动作方法名'),
+    arguments: z.array(z.string()).optional().describe('动作参数')
   })
   .strict()
 
@@ -89,40 +90,40 @@ export const BROWSER_USE_OUTPUT_SCHEMA = z.union([
   z.discriminatedUnion('action', [
     z
       .object({
-        action: z.literal('navigate'),
-        page: browserUsePageOutputSchema
+        action: z.literal('navigate').describe('导航动作'),
+        page: browserUsePageOutputSchema.describe('当前页面信息')
       })
       .strict(),
     z
       .object({
-        action: z.literal('extract'),
-        page: browserUsePageOutputSchema,
-        content: z.string()
+        action: z.literal('extract').describe('提取动作'),
+        page: browserUsePageOutputSchema.describe('当前页面信息'),
+        content: z.string().describe('提取到的页面内容')
       })
       .strict(),
     z
       .object({
-        action: z.literal('observe'),
-        page: browserUsePageOutputSchema,
-        actions: z.array(browserActionCandidateOutputSchema)
+        action: z.literal('observe').describe('观察动作'),
+        page: browserUsePageOutputSchema.describe('当前页面信息'),
+        actions: z.array(browserActionCandidateOutputSchema).describe('可见交互动作列表')
       })
       .strict(),
     z
       .object({
-        action: z.literal('act'),
-        page: browserUsePageOutputSchema,
-        success: z.boolean(),
-        message: z.string(),
-        actionDescription: z.string(),
-        actions: z.array(browserActionCandidateOutputSchema).optional()
+        action: z.literal('act').describe('执行动作'),
+        page: browserUsePageOutputSchema.describe('当前页面信息'),
+        success: z.boolean().describe('动作是否成功'),
+        message: z.string().describe('执行结果说明'),
+        actionDescription: z.string().describe('已执行动作描述'),
+        actions: z.array(browserActionCandidateOutputSchema).optional().describe('后续可选动作')
       })
       .strict()
   ]),
   z
     .object({
-      action: z.enum(['navigate', 'extract', 'observe', 'act']).optional(),
-      page: browserUsePageOutputSchema.optional(),
-      error: z.string()
+      action: z.enum(['navigate', 'extract', 'observe', 'act']).optional().describe('失败前的动作'),
+      page: browserUsePageOutputSchema.optional().describe('失败前的页面信息'),
+      error: z.string().describe('错误信息')
     })
     .strict()
 ])

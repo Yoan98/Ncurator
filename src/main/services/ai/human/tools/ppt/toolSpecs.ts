@@ -4,6 +4,7 @@ import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import {
+  renderPptEditModelResult,
   renderPptOutlineModelResult,
   renderPptReadSlidesModelResult,
   renderPptSearchModelResult
@@ -105,7 +106,8 @@ export const PPT_EDIT_TOOL_SPEC = {
     mutability: 'mutating',
     getResourceKey: (args) => readStringArg(args, 'sourcePath'),
     defaultResourceKey: 'ppt'
-  })
+  }),
+  modelResult: { renderSuccess: renderPptEditModelResult }
 } satisfies PptToolSpec<
   z.infer<typeof pptEditSchema>,
   z.infer<typeof pptEditOutputSchema>,

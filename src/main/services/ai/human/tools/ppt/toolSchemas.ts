@@ -1,5 +1,4 @@
 import { z } from 'zod/v4'
-import type { JsonObject } from '../../../../../../shared/types'
 import { PPT_CANVAS_HEIGHT, PPT_CANVAS_WIDTH } from './color'
 
 const sourcePathSchema = z.string().trim().min(1).describe('PPTX 文件本机绝对路径')
@@ -402,22 +401,53 @@ export const pptEditSchema = z.discriminatedUnion('type', [
     .strict()
 ])
 
-const pptSlideOutputSchema = z.custom<JsonObject>()
+const pptOutlineSlideSchema = z
+  .object({
+    slideId: z.string(),
+    slideIndex: z.number().int().min(1),
+    title: z.string().optional(),
+    text: z.string().optional(),
+    notes: z.string().optional(),
+    elementCount: z.number().int().min(0).optional()
+  })
+  .strict()
+
+const pptReadSlideSchema = z
+  .object({
+    slideId: z.string(),
+    slideIndex: z.number().int().min(1),
+    title: z.string().optional(),
+    text: z.string().optional(),
+    notes: z.string().optional(),
+    slideImagePath: z.string(),
+    elements: z.array(z.record(z.string(), z.unknown())).optional()
+  })
+  .strict()
+
+const pptSearchMatchSchema = z
+  .object({
+    slideId: z.string(),
+    slideIndex: z.number().int().min(1),
+    matchedText: z.string(),
+    text: z.string(),
+    source: z.enum(['slide', 'notes'])
+  })
+  .strict()
 
 export const pptReadOutlineOutputSchema = z.object({
   slideCount: z.number().int().min(0),
-  slides: z.array(pptSlideOutputSchema)
+  slides: z.array(pptOutlineSlideSchema)
 })
 
 export const pptReadSlidesOutputSchema = z.object({
-  slides: z.array(z.custom<JsonObject & { slideImagePath: string }>())
+  slides: z.array(pptReadSlideSchema)
 })
 
 export const pptSearchOutputSchema = z.object({
   totalMatchCount: z.number().int().min(0),
   returnedMatchCount: z.number().int().min(0),
   truncated: z.boolean(),
-  matches: z.array(pptSlideOutputSchema)
+  matches: z.array(pptSearchMatchSchema)
 })
 
 export const pptEditOutputSchema = z

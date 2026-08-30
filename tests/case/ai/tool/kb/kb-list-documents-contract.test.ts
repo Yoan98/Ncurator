@@ -6,9 +6,9 @@ type KbListDocumentsResult = {
   items: Array<{
     id: string
     name: string
-    source_type: 'file' | 'web'
-    file_path?: string
-    source_url?: string
+    sourceType: 'file' | 'web'
+    filePath?: string
+    sourceUrl?: string
   }>
   total: number
 }
@@ -109,13 +109,13 @@ describe('ai tool kb backend', () => {
         runtime.assertThat(
           result.webFiltered.total === 1 &&
             result.webFiltered.items[0]?.id === 'doc-web' &&
-            result.webFiltered.items[0]?.source_type === 'web' &&
-            result.webFiltered.items[0]?.source_url ===
+            result.webFiltered.items[0]?.sourceType === 'web' &&
+            result.webFiltered.items[0]?.sourceUrl ===
               'https://docs.langchain.com/oss/javascript/langchain/overview',
           {
             name: 'list-documents-preserves-web-source-url',
             message:
-              'kb_list_documents should expose source_type and source_url for web knowledge documents.',
+              'kb_list_documents should expose sourceType and sourceUrl for web knowledge documents.',
             data: result.webFiltered
           }
         )
@@ -124,9 +124,9 @@ describe('ai tool kb backend', () => {
           result.sourceNameFiltered.total === 1 &&
             result.sourceNameFiltered.items[0]?.id === 'doc-1' &&
             result.sourceNameFiltered.items[0]?.name === 'AI Tool Guide.md' &&
-            result.sourceNameFiltered.items[0]?.source_type === 'file' &&
-            result.sourceNameFiltered.items[0]?.file_path === '/workspace/AI Tool Guide.md' &&
-            !result.sourceNameFiltered.items[0]?.source_url,
+            result.sourceNameFiltered.items[0]?.sourceType === 'file' &&
+            result.sourceNameFiltered.items[0]?.filePath === '/workspace/AI Tool Guide.md' &&
+            !result.sourceNameFiltered.items[0]?.sourceUrl,
           {
             name: 'list-documents-supports-source-name-filter',
             message: 'kb_list_documents 应支持按 sourceNameQuery 过滤并返回稳定字段。',

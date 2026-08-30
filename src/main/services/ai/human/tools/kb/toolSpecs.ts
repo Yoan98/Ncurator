@@ -30,8 +30,7 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   outputSchema: KB_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_search',
-    description:
-      '在用户工作区域知识库中按查询词或语义语句检索内容片段，并返回命中证据、来源文档与内容块信息。'
+    description: '检索工作区知识库中的相关内容片段。'
   },
   resolveExecutionMeta: KB_EXECUTION_META,
   modelResult: {
@@ -52,8 +51,7 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   outputSchema: KB_LIST_DOCUMENTS_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',
-    description:
-      '查询用户工作区域知识库中已建立索引的文档并支持按文档名过滤，并返回可检索文档的分页列表。'
+    description: '列出工作区知识库中已索引的文档。'
   },
   resolveExecutionMeta: KB_EXECUTION_META,
   modelResult: {

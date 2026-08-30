@@ -39,7 +39,7 @@ export type ModelResultRendererInput = {
 export type ModelResultRenderer = (input: ModelResultRendererInput) => string
 
 export type ModelResultSpec = {
-  renderSuccess?: ModelResultRenderer
+  renderSuccess: ModelResultRenderer
   renderError?: ModelResultRenderer
 }
 
@@ -74,5 +74,5 @@ export type HumanToolSpec<
   outputSchema: z.ZodType<TOutput>
   promptSpec: ToolPromptSpec
   resolveExecutionMeta: ToolExecutionMetaResolver
-  modelResult?: ModelResultSpec
+  modelResult: ModelResultSpec
 }

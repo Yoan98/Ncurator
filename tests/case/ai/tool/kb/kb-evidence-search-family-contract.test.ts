@@ -5,12 +5,11 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 type KbSearchRow = {
   id: string
   text: string
-  document_id?: string
-  document_name: string
-  source_type?: string
-  file_path?: string
-  source_url?: string
-  _score?: number
+  documentId?: string
+  documentName: string
+  sourceType?: string
+  filePath?: string
+  sourceUrl?: string
 }
 
 type KbSearchResult = {
@@ -148,14 +147,14 @@ describe('ai tool kb backend', () => {
           result.hybridInScope.total >= 1 &&
             result.hybridInScope.items.every(
               (row) =>
-                (row.document_id === 'doc-1' ||
-                  row.document_id === 'doc-2' ||
-                  row.document_id === 'doc-web' ||
-                  row.document_id === 'doc-filename-anchor') &&
-                typeof row.document_name === 'string' &&
+                (row.documentId === 'doc-1' ||
+                  row.documentId === 'doc-2' ||
+                  row.documentId === 'doc-web' ||
+                  row.documentId === 'doc-filename-anchor') &&
+                typeof row.documentName === 'string' &&
                 typeof row.text === 'string'
             ) &&
-            result.hybridInScope.items.some((row) => row.document_id === 'doc-1'),
+            result.hybridInScope.items.some((row) => row.documentId === 'doc-1'),
           {
             name: 'hybrid-search-returns-stable-rows',
             message: 'kb_search(auto) 应返回稳定 rows 结构，并默认限制在当前工作区范围内。',
@@ -165,7 +164,7 @@ describe('ai tool kb backend', () => {
 
         runtime.assertThat(
           result.vectorSubset.total >= 1 &&
-            result.vectorSubset.items.every((row) => row.document_id === 'doc-2'),
+            result.vectorSubset.items.every((row) => row.documentId === 'doc-2'),
           {
             name: 'vector-search-honors-explicit-document-scope',
             message: 'kb_search(semantic) 应继续遵守 documentIds 在当前工作区内的收窄范围。',
@@ -187,15 +186,15 @@ describe('ai tool kb backend', () => {
           result.fileHit.total >= 1 &&
             result.fileHit.items.some(
               (row) =>
-                row.document_id === 'doc-1' &&
-                row.source_type === 'file' &&
-                row.file_path === '/workspace/AI Tool Guide.md' &&
-                !row.source_url
+                row.documentId === 'doc-1' &&
+                row.sourceType === 'file' &&
+                row.filePath === '/workspace/AI Tool Guide.md' &&
+                !row.sourceUrl
             ),
           {
             name: 'knowledge-search-preserves-file-source-path',
             message:
-              'kb_search should expose source_type and file_path so AI can cite file knowledge as a local path.',
+              'kb_search should expose sourceType and filePath so AI can cite file knowledge as a local path.',
             data: result.fileHit
           }
         )
@@ -204,14 +203,14 @@ describe('ai tool kb backend', () => {
           result.webHit.total >= 1 &&
             result.webHit.items.some(
               (row) =>
-                row.document_id === 'doc-web' &&
-                row.source_type === 'web' &&
-                row.source_url === 'https://docs.langchain.com/oss/javascript/langchain/overview'
+                row.documentId === 'doc-web' &&
+                row.sourceType === 'web' &&
+                row.sourceUrl === 'https://docs.langchain.com/oss/javascript/langchain/overview'
             ),
           {
             name: 'knowledge-search-preserves-web-source-url',
             message:
-              'kb_search should expose source_type and source_url so AI can cite web knowledge as a URL.',
+              'kb_search should expose sourceType and sourceUrl so AI can cite web knowledge as a URL.',
             data: result.webHit
           }
         )
@@ -220,8 +219,8 @@ describe('ai tool kb backend', () => {
           result.filenameHit.total >= 1 &&
             result.filenameHit.items.some(
               (row) =>
-                row.document_id === 'doc-filename-anchor' &&
-                row.file_path === '/workspace/季度销售数据.xlsx' &&
+                row.documentId === 'doc-filename-anchor' &&
+                row.filePath === '/workspace/季度销售数据.xlsx' &&
                 row.text.includes('季度销售数据.xlsx')
             ),
           {
@@ -235,7 +234,7 @@ describe('ai tool kb backend', () => {
         runtime.assertThat(
           result.sheetNameHit.total >= 1 &&
             result.sheetNameHit.items.some(
-              (row) => row.document_id === 'doc-filename-anchor' && row.text.includes('客户明细')
+              (row) => row.documentId === 'doc-filename-anchor' && row.text.includes('客户明细')
             ),
           {
             name: 'knowledge-search-hits-spreadsheet-sheet-name',

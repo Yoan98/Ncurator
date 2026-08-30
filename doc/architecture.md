@@ -139,7 +139,7 @@ Skill（builtin / external）
 
 prompt 措辞、渲染格式、超限阈值等实现细节见代码与测试。实现层类型与字段规范见 AGENTS.md。
 
-DOCX 读写工具族已按上述原则落地，作为后续 Excel / PPT / PDF 等工具对齐的参考实现。
+DOCX、Excel、PDF 等复杂工具族已按上述原则落地；全部 29 个工具均绑定专用 `modelResult.renderSuccess` 投影器，再走统一 delivery 管道。
 
 ## 领域能力（概要）
 

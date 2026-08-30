@@ -45,6 +45,7 @@
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作区内修改记录、Artifact、安全校验和工作区外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作区外绝对路径读取、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-search-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。
+- 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`；`tool-prompt-contract` 与 `model-tool-result-renderers` 单测覆盖 renderer 与描述分层约束。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。
 - `web-browsing` 工具测试先覆盖冻结 sidecar bin 程序抓取与 `browser_use` 服务不可用诊断。
@@ -398,7 +399,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：`kb_list_documents` 在当前工作区默认范围内的真实列表、`sourceNameQuery` 文档名过滤与缩圈契约。
 - Why：KB 资料发现必须真实调用生产检索存储。
 - How：通过真实 `DocumentsStore.addDocument / addChunks` 导入多工作区 fixture 后执行列表查询。
-- Oracle：结果默认只包含当前工作区文档，`documentIds` 只做进一步缩圈，空结果与非空结果都稳定可断言；文件资料返回 `source_type=file` 与真实 `file_path`，网页资料返回 `source_type=web` 与真实 `source_url`。
+- Oracle：结果默认只包含当前工作区文档，`documentIds` 只做进一步缩圈，空结果与非空结果都稳定可断言；文件资料返回 `sourceType=file` 与真实 `filePath`，网页资料返回 `sourceType=web` 与真实 `sourceUrl`。
 - Not：不验证问答文案。
 
 ##### `kb-evidence-search-family-contract`
@@ -407,7 +408,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：`kb_search` 在不同 strategy 下的统一真实检索契约。
 - Why：KB tool family 必须显式覆盖每个回归工具。
 - How：对多工作区真实 seed 数据分别执行三种检索，并覆盖 `documentIds` 缩圈。
-- Oracle：三种检索都返回稳定 `rows`，默认受当前工作区约束，且遵守 `documentIds` 缩圈语义；文件命中保留 `source_type=file` 与 `file_path`，网页命中保留 `source_type=web` 与 `source_url`，供最终引用生成可追溯地址。
+- Oracle：三种检索都返回稳定 `items`，默认受当前工作区约束，且遵守 `documentIds` 缩圈语义；文件命中保留 `sourceType=file` 与 `filePath`，网页命中保留 `sourceType=web` 与 `sourceUrl`，供最终引用生成可追溯地址。
 - Not：不比较召回优劣。
 
 #### terminal 类别
@@ -492,16 +493,16 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：`web_search` 传 `url` 会返回 `requestedUrl/finalUrl`、标题、`markdown`、发布时间与分组 links；其中 `markdown` 内容来源于 crawl4ai 的 `fit_markdown`。
 - Why：程序级网页读取是低成本网页能力入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索，同时保留 crawl4ai 的分组 links 与评分语义。
 - How：启动本地 HTTP server，返回文章页 HTML，通过真实冻结 sidecar bin 返回抓取结果，调用 `web_search({ url })`。
-- Oracle：结果包含 `requestedUrl`、`finalUrl`、`title`、`markdown`、`publishedAt`、`links.internal/external`，且 links 项包含 `intrinsicScore/contextualScore/totalScore`。
+- Oracle：`items[0]` 包含 `requestedUrl`、`finalUrl`、`title`、`markdown`、`publishedAt`、`links.internal/external`。
 - Not：不验证复杂浏览器交互或外网可达性。
 
 ##### `web-search-reads-content-by-query`
 
 - 测试类型：`backend`
-- What：`web_search` 传 `query` 会先搜索候选网页，并行爬取全部候选，返回数组（成功项带正文 markdown、失败项带 `error`）。
+- What：`web_search` 传 `query` 会先搜索候选网页，并行爬取全部候选，返回 `{ items: [...] }`（成功项带正文 markdown、失败项带 `error`）。
 - Why：网页搜索与正文读取融合后，query 应产出可被 brain 消费的网页正文数组；失败项在数组中可见，brain 可据此避免重复访问被墙或失败的来源。
 - How：通过真实 web tool harness 调用 `web_search({ query })`，使用可控搜索返回多个候选 URL，抓取服务对部分 URL 返回失败。
-- Oracle：结果是数组，成功项包含该页 `requestedUrl` 与正文 `markdown`，失败项包含 `error`，两者按候选顺序并存。
+- Oracle：`items` 为数组，成功项包含该页 `requestedUrl` 与正文 `markdown`，失败项包含 `error`，两者按候选顺序并存。
 - Not：不验证搜索引擎级网页发现与多跳。
 
 ##### `web-search-reads-entry-page`

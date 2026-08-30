@@ -629,8 +629,7 @@ export const renderPdfReadPagesModelResult: ModelResultRenderer = ({ data }) => 
             `    pageImagePath: ${pageImagePath}`
           ]
           if (text) lines.push(indentBlock(text, 2))
-          else if (textStatus === 'empty')
-            lines.push('    (no text layer; use read_image on pageImagePath)')
+          else if (textStatus === 'empty') lines.push('    (no text layer)')
           return lines
         })
       : ['  none'])
@@ -713,7 +712,13 @@ export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
       .filter(Boolean)
       .join('\n')
   }
-  return renderGenericModelResult({ toolName: 'browser_use', args: {}, data })
+  return [
+    'Browser action completed.',
+    action ? `Action: ${action}` : '',
+    pageLabel ? `Page: ${pageLabel}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 export const renderPlanUpdateModelResult: ModelResultRenderer = () => 'Plan updated successfully.'
@@ -787,6 +792,47 @@ export const renderPptSearchModelResult: ModelResultRenderer = ({ data }) => {
           ].join('\n')
         })
       : ['  none'])
+  ].join('\n')
+}
+
+export const renderPptEditModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const slideId = readString(obj.slideId)
+  const createdElementIds = Array.isArray(obj.createdElementIds)
+    ? obj.createdElementIds.filter((item): item is string => typeof item === 'string')
+    : []
+  return [
+    'PPT edit completed.',
+    slideId ? `slideId: ${slideId}` : '',
+    createdElementIds.length ? `createdElementIds: ${createdElementIds.join(', ')}` : ''
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+export const renderImageGenerateModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const error = readString(obj.error)
+  if (error) return `Image generation failed: ${error}`
+  const outputPath = readString(obj.outputPath)
+  return outputPath ? `Image saved: ${outputPath}` : 'Image generation completed.'
+}
+
+export const renderReadImageModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const images = Array.isArray(obj.images) ? obj.images.filter(isObject) : []
+  if (images.length === 0) return 'No images loaded.'
+  return [
+    `${images.length} image${images.length === 1 ? '' : 's'} loaded:`,
+    ...images.map((image, index) => {
+      const imagePath = readString(image.path) || ''
+      const width = readNumber(image.width) ?? ''
+      const height = readNumber(image.height) ?? ''
+      const mimeType = readString(image.mimeType) || ''
+      const sizeLabel = width && height ? `${width}x${height}` : ''
+      const meta = [sizeLabel, mimeType.replace(/^image\//u, '')].filter(Boolean).join(' ')
+      return `  ${index + 1}. ${imagePath}${meta ? ` ${meta}` : ''}`
+    })
   ].join('\n')
 }
 

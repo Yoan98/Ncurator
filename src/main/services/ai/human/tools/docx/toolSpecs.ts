@@ -119,7 +119,7 @@ const defineMutationSpec = <
   skillId: TSkillId
   schema: TSchema
   description: string
-  modelResult?: HumanToolSpec['modelResult']
+  modelResult: HumanToolSpec['modelResult']
 }) => ({
   name: input.name,
   familyId: 'docx' as const,

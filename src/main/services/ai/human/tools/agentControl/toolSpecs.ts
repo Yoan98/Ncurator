@@ -3,7 +3,8 @@ import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 import {
   renderLearnSkillModelResult,
-  renderPlanUpdateModelResult
+  renderPlanUpdateModelResult,
+  renderReadImageModelResult
 } from '../../shared/modelToolResultRenderers'
 import {
   LEARN_SKILL_OUTPUT_SCHEMA,
@@ -71,13 +72,13 @@ export const READ_IMAGE_TOOL_SPEC: HumanToolSpec<
   outputSchema: READ_IMAGE_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'read_image',
-    description:
-      '读取 1 至 10 张本地或远程图片，并把图片按输入顺序直接加入当前主模型上下文。工具不生成图片描述。'
+    description: '读取 1 至 10 张本地或远程图片，并按输入顺序加入主模型多模态上下文。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
     defaultResourceKey: 'image'
-  })
+  }),
+  modelResult: { renderSuccess: renderReadImageModelResult }
 }
 
 export const AGENT_CONTROL_TOOL_SPECS = [

@@ -4,7 +4,7 @@ import { createWebToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { createWebCrawlerService } from '../../../../harness/backend/webCrawlerTestUtils'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
-type WebSearchResult = {
+type WebSearchItem = {
   requestedUrl?: string
   finalUrl?: string
   title?: string
@@ -15,23 +15,19 @@ type WebSearchResult = {
       href?: string
       text?: string
       title?: string
-      intrinsicScore?: number
-      contextualScore?: number
-      totalScore?: number
     }>
     external?: Array<{
       href?: string
       text?: string
       title?: string
-      intrinsicScore?: number
-      contextualScore?: number
-      totalScore?: number
     }>
   }
   error?: string
   statusCode?: number
-  estimatedTokens?: number
-  limit?: number
+}
+
+type WebSearchPayload = {
+  items: WebSearchItem[]
 }
 
 type BrowserUseResult = {
@@ -154,7 +150,7 @@ describe('ai tool web backend', () => {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
           })
-          return await harness.invoke<WebSearchResult>('web_search', {
+          return await harness.invoke<WebSearchPayload>('web_search', {
             url: `${server.baseUrl}/policy`
           })
         } finally {
@@ -163,24 +159,19 @@ describe('ai tool web backend', () => {
         }
       },
       assert: async (result, runtime) => {
+        const item = result.items[0]
         runtime.assertThat(
-          result.requestedUrl?.endsWith('/policy') === true &&
-            result.finalUrl?.endsWith('/policy') === true &&
-            result.title === '灵活就业补贴申报通知' &&
-            result.publishedAt === '2026-06-10' &&
-            Boolean(result.markdown?.includes('申报截止时间为 2026-09-30')) &&
-            Array.isArray(result.links?.internal) &&
-            result.links.internal.some((link) => link.href?.endsWith('/guide')) &&
-            result.links.internal.some(
-              (link) =>
-                typeof link.intrinsicScore === 'number' &&
-                typeof link.contextualScore === 'number' &&
-                typeof link.totalScore === 'number'
-            ),
+          item?.requestedUrl?.endsWith('/policy') === true &&
+            item?.finalUrl?.endsWith('/policy') === true &&
+            item?.title === '灵活就业补贴申报通知' &&
+            item?.publishedAt === '2026-06-10' &&
+            Boolean(item?.markdown?.includes('申报截止时间为 2026-09-30')) &&
+            Array.isArray(item?.links?.internal) &&
+            item?.links?.internal?.some((link) => link.href?.endsWith('/guide')),
           {
             name: 'web-search-returns-stable-page-fields',
             message:
-              'web_search 传 url 应返回 requestedUrl/finalUrl、标题、发布时间、markdown 和带评分的分组 links。',
+              'web_search 传 url 应返回 requestedUrl/finalUrl、标题、发布时间、markdown 和分组 links。',
             data: result
           }
         )
@@ -242,22 +233,22 @@ describe('ai tool web backend', () => {
             }
           }
         })
-        return await harness.invoke<WebSearchResult[]>('web_search', {
+        return await harness.invoke<WebSearchPayload>('web_search', {
           query: '最近 DeepSeek 融资情况'
         })
       },
       assert: async (result, runtime) => {
-        const firstOk = result.find((item) => item.markdown)
+        const items = result.items
+        const firstOk = items.find((item) => item.markdown)
         runtime.assertThat(
-          Array.isArray(result) &&
-            result.length === 2 &&
-            result.some((item) => item.error === '网页请求失败：403') &&
+          items.length === 2 &&
+            items.some((item) => item.error === '网页请求失败：403') &&
             Boolean(firstOk?.markdown?.includes('510 亿元')) &&
             firstOk?.requestedUrl === 'https://example.com/deepseek-funding',
           {
             name: 'web-search-returns-array-by-query',
             message:
-              'web_search 传 query 应并行爬取候选网页并返回数组，成功项带 markdown、失败项带 error。',
+              'web_search 传 query 应并行爬取候选网页并返回 items 数组，成功项带 markdown、失败项带 error。',
             data: result
           }
         )
@@ -282,7 +273,7 @@ describe('ai tool web backend', () => {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
           })
-          return await harness.invoke<WebSearchResult>('web_search', {
+          return await harness.invoke<WebSearchPayload>('web_search', {
             url: `${server.baseUrl}/`
           })
         } finally {
@@ -291,12 +282,13 @@ describe('ai tool web backend', () => {
         }
       },
       assert: async (result, runtime) => {
+        const item = result.items[0]
         runtime.assertThat(
-          result.requestedUrl?.endsWith('/') === true &&
-            result.title === '就业服务首页' &&
-            Boolean(result.markdown?.includes('这里汇总了通知公告和办事指南')) &&
-            Array.isArray(result.links?.internal) &&
-            result.links.internal.some((link) => link.href?.endsWith('/policy')),
+          item?.requestedUrl?.endsWith('/') === true &&
+            item?.title === '就业服务首页' &&
+            Boolean(item?.markdown?.includes('这里汇总了通知公告和办事指南')) &&
+            Array.isArray(item?.links?.internal) &&
+            item?.links?.internal?.some((link) => link.href?.endsWith('/policy')),
           {
             name: 'web-search-reads-entry-page-without-auto-follow',
             message: 'web_search 传 url 应读取该网页并返回页面链接，不再自动跟进其他链接。',
@@ -324,7 +316,7 @@ describe('ai tool web backend', () => {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
           })
-          return await harness.invoke<WebSearchResult>('web_search', {
+          return await harness.invoke<WebSearchPayload>('web_search', {
             url: `${server.baseUrl}/missing`
           })
         } finally {
@@ -333,11 +325,12 @@ describe('ai tool web backend', () => {
         }
       },
       assert: async (result, runtime) => {
+        const item = result.items[0]
         runtime.assertThat(
-          result.error === '网页请求失败：404' &&
-            result.statusCode === 404 &&
-            result.requestedUrl?.endsWith('/missing') === true &&
-            result.finalUrl?.endsWith('/missing') === true,
+          item?.error === '网页请求失败：404' &&
+            item?.statusCode === 404 &&
+            item?.requestedUrl?.endsWith('/missing') === true &&
+            item?.finalUrl?.endsWith('/missing') === true,
           {
             name: 'web-search-preserves-http-failure-fields',
             message: 'web_search HTTP 失败时应保留错误文本、requestedUrl/finalUrl 和状态码。',
@@ -369,7 +362,7 @@ describe('ai tool web backend', () => {
               modelContextWindowTokens: 20
             }
           })
-          return await harness.invoke<WebSearchResult>('web_search', {
+          return await harness.invoke<WebSearchPayload>('web_search', {
             url: `${server.baseUrl}/large`
           })
         } finally {
@@ -378,12 +371,13 @@ describe('ai tool web backend', () => {
         }
       },
       assert: async (result, runtime) => {
+        const item = result.items[0]
         runtime.assertThat(
-          result.requestedUrl?.endsWith('/large') === true &&
-            result.finalUrl?.endsWith('/large') === true &&
-            typeof result.markdown === 'string' &&
-            result.markdown.length > 0 &&
-            ('error' in result) === false,
+          item?.requestedUrl?.endsWith('/large') === true &&
+            item?.finalUrl?.endsWith('/large') === true &&
+            typeof item?.markdown === 'string' &&
+            item.markdown.length > 0 &&
+            !('error' in item && item.error),
           {
             name: 'web-search-returns-full-content',
             message: 'web_search 结果过大时不再硬失败，完整正文由 hand 层统一截断落盘。',
