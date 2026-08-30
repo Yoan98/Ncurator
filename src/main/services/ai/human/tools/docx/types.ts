@@ -18,7 +18,7 @@ import {
   runSpecSchema,
   tableCellSpecSchema,
   tableSpecSchema
-} from './schemas'
+} from './toolSchemas'
 import type {
   DocxParagraphStyle,
   DocxReadContentNode,

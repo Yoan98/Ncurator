@@ -11,7 +11,7 @@ import {
   docxFormatSchema,
   docxOutlineSchema,
   docxReadNodesSchema
-} from '../../../../src/main/services/ai/human/tools/docx/schemas'
+} from '../../../../src/main/services/ai/human/tools/docx/toolSchemas'
 
 const READ_TOOLS = ['docx_read_outline', 'docx_search', 'docx_read_nodes']
 const WRITE_TOOLS = [

@@ -4,7 +4,7 @@ import {
   docxContentEditSchema,
   docxFormatSchema,
   docxTableEditSchema
-} from '../../../../src/main/services/ai/human/tools/docx/schemas'
+} from '../../../../src/main/services/ai/human/tools/docx/toolSchemas'
 import { compileDocxOperations } from '../../../../src/main/services/ai/human/tools/docx/tools/writeToolRuntime'
 import { normalizeDocxHexColor } from '../../../../src/main/services/ai/human/tools/docx/utils/color'
 import { createParagraphFromNode } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/createNodeDom'
