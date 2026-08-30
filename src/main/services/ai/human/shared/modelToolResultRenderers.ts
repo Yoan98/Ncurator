@@ -648,8 +648,9 @@ export const renderWebSearchModelResult: ModelResultRenderer = ({ args, data }) 
           const requestedUrl = readString(item.requestedUrl) || ''
           if (error) return `  ${index + 1}. [error] ${title} — ${error}`
           const markdown = readString(item.markdown) || ''
-          if (url && markdown) {
-            return [`  ${index + 1}. ${title}`, indentBlock(markdown, 2)].join('\n')
+          if (markdown) {
+            const urlLine = requestedUrl ? ` (${requestedUrl})` : ''
+            return [`  ${index + 1}. ${title}${urlLine}`, indentBlock(markdown, 2)].join('\n')
           }
           return `  ${index + 1}. ${title}\n     url: ${requestedUrl}`
         })

@@ -374,7 +374,7 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
   web_search: [
     { path: 'args.query? / args.url?', description: '决定标题文案' },
     { path: 'items[].title? / requestedUrl', description: '标题与 URL' },
-    { path: 'items[].markdown?', description: 'url 模式正文' },
+    { path: 'items[].markdown?', description: '抓取正文（query 与 url 模式成功项均有）' },
     { path: 'items[].error?', description: '单条失败' }
   ],
   browser_use: [
@@ -770,11 +770,27 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
         items: [
           {
             requestedUrl: 'https://vitest.dev/guide/snapshot',
-            title: 'Snapshot Testing | Vitest'
+            finalUrl: 'https://vitest.dev/guide/snapshot',
+            title: 'Snapshot Testing | Vitest',
+            markdown: [
+              '# Snapshot Testing',
+              '',
+              'Vitest supports snapshot testing via `expect(value).toMatchSnapshot()`.',
+              '',
+              'Use inline snapshots for small outputs embedded in the test file.'
+            ].join('\n')
           },
           {
             requestedUrl: 'https://vitest.dev/guide/cli',
-            title: 'Command Line Interface | Vitest'
+            finalUrl: 'https://vitest.dev/guide/cli',
+            title: 'Command Line Interface | Vitest',
+            markdown: [
+              '# Command Line Interface',
+              '',
+              'Run tests with `vitest run`. Add a path to filter files.',
+              '',
+              'Terminal output is streamed live unless `--silent` is passed.'
+            ].join('\n')
           }
         ]
       }

@@ -3,7 +3,8 @@ import {
   renderTerminalReadModelResult,
   renderTerminalRunModelResult,
   renderTextFileEditModelResult,
-  renderTextFileReadModelResult
+  renderTextFileReadModelResult,
+  renderWebSearchModelResult
 } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 
 describe('ai unit model tool result renderers', () => {
@@ -69,5 +70,26 @@ describe('ai unit model tool result renderers', () => {
     })
 
     expect(rendered).toBe('The file /workspace/app.ts has been updated successfully.')
+  })
+
+  it('renders web_search query results with markdown bodies', () => {
+    const rendered = renderWebSearchModelResult({
+      toolName: 'web_search',
+      args: { query: 'vitest snapshot' },
+      data: {
+        items: [
+          {
+            requestedUrl: 'https://vitest.dev/guide/snapshot',
+            title: 'Snapshot Testing | Vitest',
+            markdown: '# Snapshot Testing\n\nUse toMatchSnapshot().'
+          }
+        ]
+      }
+    })
+
+    expect(rendered).toContain('Web search completed. Query: vitest snapshot')
+    expect(rendered).toContain('# Snapshot Testing')
+    expect(rendered).toContain('toMatchSnapshot()')
+    expect(rendered).toContain('https://vitest.dev/guide/snapshot')
   })
 })
