@@ -12,12 +12,12 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
-const FIXTURE_PATH = 'tests/fixtures/workspace/emcation-brand-proposal.pptx' as const
-const WORKSPACE_RELATIVE = 'emcation-brand-proposal.pptx'
+const FIXTURE_PATH = 'tests/fixtures/workspace/品牌策略提案.pptx' as const
+const WORKSPACE_RELATIVE = '品牌策略提案.pptx'
 
 const PROTECTED_MARKERS = [
-  'Agenda About the brand Market analysis',
-  'Be the go-to destination for modern, meaningful escapes'
+  '议程 关于品牌 市场分析',
+  '成为现代、有意义出行的首选目的地'
 ] as const
 
 describe('ai human live ppt edit backend', () => {
@@ -29,7 +29,7 @@ describe('ai human live ppt edit backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '在既有富品牌提案 PPT 上做真实编辑并交付可解析文件。',
+        description: '在中文富品牌提案 PPT 上做真实编辑并交付可解析文件。',
         fixtures: [FIXTURE_PATH],
         runMode: 'single',
         execute: async (runtime) => {
@@ -50,11 +50,11 @@ describe('ai human live ppt edit backend', () => {
           const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput: [
-              `请更新工作区中的 ${WORKSPACE_RELATIVE}：`,
-              '1）在封面后新增一页「Executive summary」，概括品牌定位与核心策略；',
-              '2）把封面 Presenter 从 Kendall Collins 改为 李然；',
-              '3）把 About 页里 Established in 2002 改为 Established in 2015；',
-              'Agenda 页和 Quote 页（The vision / go-to destination）保持完全不动。',
+              `请更新工作区里的《${WORKSPACE_RELATIVE}》：`,
+              '1）在封面后新增一页「执行摘要」，概括品牌定位与核心策略；',
+              '2）把封面汇报人从「王晨」改为「李然」；',
+              '3）把「关于品牌」页里的「成立于 2002 年」改为「成立于 2015 年」。',
+              '「议程」页和「品牌愿景」页（含「成为现代、有意义出行的首选目的地」）保持完全不动。',
               '完成后确认文件可正常读取。'
             ].join('')
           })
@@ -91,10 +91,10 @@ describe('ai human live ppt edit backend', () => {
               result.protectedTexts.length >= 2 &&
               result.protectedTexts.every((text) => result.texts.includes(text)) &&
               joined.includes('李然') &&
-              /Established in 2015/iu.test(joined) &&
-              /Executive summary/iu.test(joined) &&
-              !/Kendall Collins/iu.test(joined) &&
-              !/Established in 2002/iu.test(joined) &&
+              /成立于 2015 年/u.test(joined) &&
+              /执行摘要/u.test(joined) &&
+              !/王晨/u.test(joined) &&
+              !/成立于 2002 年/u.test(joined) &&
               result.afterSlideCount === result.beforeSlideCount + 1 &&
               result.outsideShapeCount <= result.beforeOutsideShapeCount &&
               result.validationErrors === 0 &&
@@ -102,7 +102,7 @@ describe('ai human live ppt edit backend', () => {
             {
               name: 'human-live-ppt-edit-delivers-a-valid-reviewed-deck',
               message:
-                'live human 应完成品牌提案 PPT 更新：新增摘要页、改 Presenter 与成立年份，并保持 Agenda/Quote 页不变、产出可解析。',
+                'live human 应完成品牌提案 PPT 更新：新增摘要页、改汇报人与成立年份，并保持议程/愿景页不变、产出可解析。',
               data: {
                 toolNames,
                 artifacts,

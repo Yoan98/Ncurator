@@ -38,8 +38,7 @@ export const EXCEL_READ_TOOL_SPEC = {
   outputSchema: excelReadOutputSchema,
   promptSpec: {
     name: 'excel_read',
-    description:
-      '读取 Excel：workbook 看表清单，range 读值和公式，style 读格式，search 按格子值或公式搜索。'
+    description: '读取 Excel 工作簿结构、单元格内容、格式，或按格子搜索。'
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
@@ -63,8 +62,7 @@ export const EXCEL_EDIT_TOOL_SPEC = {
   outputSchema: excelEditOutputSchema,
   promptSpec: {
     name: 'excel_edit',
-    description:
-      '一次一个 type 创建或编辑 Excel：工作表、范围值/公式、样式、合并、行列和列宽行高。'
+    description: '创建或编辑 Excel 的工作表、单元格、公式、格式和结构。'
   },
   resolveExecutionMeta: writeMeta,
   modelResult: { renderSuccess: renderExcelEditModelResult }

@@ -6,8 +6,8 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
-const FIXTURE_PATH = 'tests/fixtures/workspace/operating-review.xlsx' as const
-const WORKSPACE_RELATIVE = 'operating-review.xlsx'
+const FIXTURE_PATH = 'tests/fixtures/workspace/经营周报.xlsx' as const
+const WORKSPACE_RELATIVE = '经营周报.xlsx'
 
 const hashFile = async (filePath: string): Promise<string> =>
   createHash('sha256')
@@ -23,7 +23,7 @@ describe('ai human live excel read backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '周会前审阅经营工作簿，讲清表结构、关键公式和异常数字，且不改文件。',
+        description: '周会前审阅中文经营工作簿，讲清表结构、关键公式和异常数字，且不改文件。',
         fixtures: [FIXTURE_PATH],
         runMode: 'single',
         execute: async (runtime) => {
@@ -33,9 +33,9 @@ describe('ai human live excel read backend', () => {
           const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput: [
-              `请审阅工作区中的 ${WORKSPACE_RELATIVE}，为销售周会准备口头简报。`,
-              '请讲清有哪些工作表、Orders/Targets/Summary 怎么对应、Summary 里的关键公式，以及异常数字（尤其 P-300 实际销售额和退货）。',
-              '不要修改工作簿。'
+              `请审阅工作区里的《${WORKSPACE_RELATIVE}》，帮我准备销售周会口头简报。`,
+              '请讲清楚：有哪些工作表、订单明细和区域目标怎么对应、汇总看板里的关键公式，以及需要重点解释的异常数字（尤其退货偏高、汇总口径是否有问题）。',
+              '不要修改这个文件。'
             ].join('')
           })
           return {

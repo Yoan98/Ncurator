@@ -6,13 +6,13 @@
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | human-risk-report-draft-live                        | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 20:15 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260813-201549-550                        | 真实读取模板、上周周报与工作文档，新建周报并 apply，原文件全部未改。                                   |
 | human-context-compaction-natural-trigger-live       | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816       | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。 |
-| human-excel-read-weekly-review-live                | 完成 |            92 | qwen3.8-flash                    | 2026-08-30 11:52 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-115249-268                   | 只读讲清四表、Summary 公式与 P-300 异常；hash 不变、有 excel_read 无 excel_edit。过程偏多终端辅助。     |
-| human-excel-edit-weekly-review-live                  | 完成 |            94 | qwen3.8-flash                    | 2026-08-30 11:52 CST | tests/logs/ai/human/live/human-excel-edit-weekly-review-live/20260830-115249-269                   | 先读后写：表头含 CNY、P-300=680000、Summary 净额公式；Notes/P-200/Min margin 未动，1 条修改记录。       |
-| human-excel-create-monthly-budget-live             | 完成 |            93 | qwen3.8-flash                    | 2026-08-30 12:08 CST | tests/logs/ai/human/live/human-excel-create-monthly-budget-live/20260830-120845-565                 | 空工作区建成 Departments/Summary，SUM+SUMIF 与千分位格式，可解析且 1 条 excel 修改记录。               |
+| human-excel-read-weekly-review-live                | 完成 |            84 | qwen3.8-flash                    | 2026-08-30 12:35 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-123502-761                   | Oracle 通过；120 行中文表 hash 不变。过程大量 terminal/脚本辅助，excel_read 仅 5 次，耗时 8min。缓存 94.0%。 |
+| human-excel-edit-weekly-review-live                  | 完成 |            94 | qwen3.8-flash                    | 2026-08-30 12:35 CST | tests/logs/ai/human/live/human-excel-edit-weekly-review-live/20260830-123502-761                   | 先读后写：表头含「元」、华东-旗舰款=680000、汇总净额公式；保护区未动，1 条记录。缓存 86.8%。           |
+| human-excel-create-monthly-budget-live             | 失败 |            28 | qwen3.8-flash                    | 2026-08-30 12:35 CST | tests/logs/ai/human/live/human-excel-create-monthly-budget-live/20260830-123502-761                 | GRAPH_RECURSION 300；36 次 excel_edit / 115 human_step，未交付。缓存 94.6% 但任务失败。                 |
 | human-kb-guided-docx-comparison-draft-live          | 完成 |            86 | deepseek-v4-flash                | 2026-08-27 22:47 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-224726-600          | KB 缩圈后双目标 docx 成功回写，来源课件未改，Oracle 通过。                                             |
 | human-ppt-create-executive-deck-live                | 完成 |            58 | deepseek-v4-flash                | 2026-08-29 11:28 CST | tests/logs/ai/human/live/human-ppt-create-executive-deck-live/20260829-112844-003                | 文案完整但 KPI 等页字号(磅)相对 bounds 过高导致叠字；视觉不可用，分数下调。                           |
-| human-ppt-edit-management-review-live               | 完成 |            94 | deepseek-v4-flash                | 2026-08-29 11:34 CST | tests/logs/ai/human/live/human-ppt-edit-management-review-live/20260829-113439-010               | 富稿上插摘要、Presenter→李然、2002→2015，Agenda/Quote 未动，出画布未新增。                           |
-| human-ppt-read-management-risk-review-live          | 完成 |            92 | deepseek-v4-flash                | 2026-08-29 11:28 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260829-112844-003          | 只读审阅静态品牌提案，命中 85% 等关键信息，源文件未改。                                               |
+| human-ppt-edit-management-review-live               | 完成 |            93 | qwen3.8-flash                    | 2026-08-30 12:36 CST | tests/logs/ai/human/live/human-ppt-edit-management-review-live/20260830-123643-456               | 中文《品牌策略提案》插执行摘要、王晨→李然、2002→2015；议程/愿景未动，页数+1。缓存 81.2%。             |
+| human-ppt-read-management-risk-review-live          | 完成 |            90 | qwen3.8-flash                    | 2026-08-30 12:39 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260830-123903-652          | 中文提案只读，Oracle 通过；KPI 85% 等待 raw logs 复核。缓存 74.1%（首轮占比高）。                     |
 | human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。              |
 | human-runtime-script-system-python-live             | 完成 |            95 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-script-system-python-live/20260814-160300-706             | 本机 Python 在临时脚本目录运行临时脚本，得到确定性结果并核对。                                         |
 | human-runtime-download-python-live                  | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-download-python-live/20260814-160340-415                  | Python 不可用时自主下载便携运行时并运行临时脚本，得到正确结果。                                        |
@@ -845,7 +845,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`live`
 - What：周会前审阅检入的复杂经营 xlsx，口头讲清表结构、关键公式和异常数字，不改文件。
 - Why：真实查看场景必须用现成经营表，不能在 live `execute` 里现造表。
-- How：工作区放入 `tests/fixtures/workspace` 中的复杂 xlsx；用户只描述审阅诉求，不出现工具名。
+- How：工作区放入 `tests/fixtures/workspace/经营周报.xlsx`（120 行订单明细）；用户只描述审阅诉求，不出现工具名。
 - Oracle：源文件 hash 不变；发生 `excel_read`；无 `excel_edit`。结论由 raw logs 人工评估。
 - Not：不使用 `销售额统计表.xlsx`；不在 execute 里用 ExcelJS 现造表。
 
@@ -861,7 +861,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-excel-create-monthly-budget-live`
 
 - 测试类型：`live`
-- What：空工作区从零做月度预算（多表、表头、SUM/SUMIF、金额格式）。
+- What：空工作区从零做《月度预算.xlsx》（多表、表头、SUM/SUMIF、金额格式）。
 - Why：新建场景覆盖工作簿创建、跨表公式和数字格式。
 - How：空工作区，用户描述月度预算交付要求。
 - Oracle：文件可解析；汇总是公式；1 条 excel 修改记录。
@@ -888,7 +888,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-ppt-read-management-risk-review-live`
 
 - 测试类型：`backend / live`
-- What：真实模型审阅静态富品牌提案 PPT（`emcation-brand-proposal.pptx`），口头给出品牌定位、价值、策略、受众与 Metrics（含 85%）简报。
+- What：真实模型审阅静态中文品牌提案 PPT（`品牌策略提案.pptx`），口头给出品牌定位、价值、策略、受众与 KPI（含 85%）简报。
 - Why：真实读 PPT 是对话咨询场景；fixture 固定检入，避免测前用工具造稿污染 LangSmith。
 - How：fixture 拷贝进工作区；用户要求先核对 Metrics & KPIs 页且不修改演示文稿；模型自行读取文字和视觉内容。
 - Oracle：源 PPT hash 不变；调用过 `ppt_read_*`/`ppt_search` 且无 `ppt_edit`；结论由 raw logs 人工评估。

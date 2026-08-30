@@ -6,7 +6,7 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
-const FILE_NAME = 'monthly-budget.xlsx'
+const FILE_NAME = '月度预算.xlsx'
 
 const getFormula = (value: unknown): string => {
   if (!value || typeof value !== 'object' || !('formula' in value)) return ''
@@ -22,7 +22,7 @@ describe('ai human live excel create backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '空工作区从零做月度预算：多表、表头、SUM/SUMIF 和金额格式。',
+        description: '空工作区从零做中文月度预算：多表、表头、SUM/SUMIF 和金额格式。',
         fixtures: [],
         runMode: 'single',
         execute: async (runtime) => {
@@ -31,11 +31,12 @@ describe('ai human live excel create backend', () => {
           const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput: [
-              `请直接在工作区创建“${FILE_NAME}”，做一份很小的月度预算即可：`,
-              '只要 2 个工作表：Departments 和 Summary。',
-              'Departments 写表头（部门、科目、金额）和 3 行示例数据。',
-              'Summary 用 SUM 或 SUMIF 汇总金额，不要手填合计；金额用千分位格式。',
-              '不要再扩展月份列或大表。完成后确认文件可打开并停止。'
+              `请在工作区新建《${FILE_NAME}》，做一份能拿去部门对齐的 9 月费用预算：`,
+              '至少包含「部门明细」和「汇总看板」两个工作表；',
+              '明细里要有部门、费用科目、预算金额，覆盖市场、研发、人事等常见部门（每个部门 2～3 条科目即可）；',
+              '汇总看板用 SUM 或 SUMIF 汇总明细金额，不要手填合计；',
+              '金额列用千分位格式。',
+              '完成后确认文件能打开即可。'
             ].join('')
           })
           const workbook = new ExcelJS.Workbook()
@@ -69,7 +70,11 @@ describe('ai human live excel create backend', () => {
             sheetNames: workbook.worksheets.map((sheet) => sheet.name),
             formulas,
             numberFormats,
-            artifacts: excelRecords.length
+            artifacts: excelRecords.length,
+            excelEditCount: filterAiRunEventsByType(
+              runtime.eventCollector.snapshot().slice(eventOffset),
+              'tool_call_started'
+            ).filter((event) => event.toolName === 'excel_edit').length
           }
         },
         assert: async (result, runtime) => {
@@ -84,13 +89,14 @@ describe('ai human live excel create backend', () => {
               result.artifacts === 1,
             {
               name: 'human-live-excel-create-monthly-budget',
-              message: 'live human 应从零创建可解析的月度预算：多表、汇总为公式，并交付 1 个 artifact。',
+              message: 'live human 应从零创建可解析的月度预算：多表、汇总为公式，并交付 1 条修改记录。',
               data: {
                 toolNames,
                 sheetNames: result.sheetNames,
                 formulas: result.formulas,
                 numberFormats: result.numberFormats,
-                artifacts: result.artifacts
+                artifacts: result.artifacts,
+                excelEditCount: result.excelEditCount
               }
             }
           )

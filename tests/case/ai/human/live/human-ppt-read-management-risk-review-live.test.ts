@@ -6,8 +6,8 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
-const FIXTURE_PATH = 'tests/fixtures/workspace/emcation-brand-proposal.pptx' as const
-const WORKSPACE_RELATIVE = 'emcation-brand-proposal.pptx'
+const FIXTURE_PATH = 'tests/fixtures/workspace/品牌策略提案.pptx' as const
+const WORKSPACE_RELATIVE = '品牌策略提案.pptx'
 
 const hashFile = async (filePath: string): Promise<string> =>
   createHash('sha256')
@@ -23,7 +23,7 @@ describe('ai human live ppt read backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '审阅品牌提案 PPT 并以对话方式给出简报，且不修改 PPT。',
+        description: '审阅中文品牌提案 PPT 并以对话方式给出简报，且不修改 PPT。',
         fixtures: [FIXTURE_PATH],
         runMode: 'single',
         execute: async (runtime) => {
@@ -33,9 +33,9 @@ describe('ai human live ppt read backend', () => {
           const output = await createHumanTestRunner(runtime, {}).run({
             taskId: runtime.taskId,
             userInput: [
-              `请审阅工作区中的 ${WORKSPACE_RELATIVE}，为品牌提案会准备口头简报。`,
-              '请覆盖：品牌定位与成立背景、核心价值、营销策略重点、目标受众、以及 Metrics & KPIs 页的关键数字（含 85%）。',
-              '简报前请先核对 Metrics & KPIs 相关页面。不要修改演示文稿。'
+              `请审阅工作区里的《${WORKSPACE_RELATIVE}》，为提案会准备口头简报。`,
+              '请覆盖：品牌定位与成立背景、核心价值、营销策略重点、目标受众，以及 KPI 页的关键数字（含 85%）。',
+              '简报前请先核对 KPI 相关页面。不要修改演示文稿。'
             ].join('')
           })
           return {
