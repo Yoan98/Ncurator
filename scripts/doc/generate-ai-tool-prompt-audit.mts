@@ -303,8 +303,7 @@ const INPUT_EXAMPLES_OVERRIDE: Record<string, Array<{ label: string; input: Json
 /** renderer 实际读取的字段 */
 const OUTPUT_FIELDS: Record<string, OutField[]> = {
   terminal_run: [
-    { path: 'status', description: "'running' | 'completed' | 'cancelled'" },
-    { path: 'exitCode', description: 'number | null' },
+    { path: 'status', description: "'running' | 'succeeded' | 'failed' | 'cancelled'" },
     { path: 'terminalId', description: '终端会话 ID' },
     { path: 'readEndPosition', description: '读取结束位置' },
     { path: 'hasMoreOutput', description: '是否还有更多输出' },
@@ -312,7 +311,6 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
   ],
   terminal_read: [
     { path: 'status', description: '同上' },
-    { path: 'terminalId', description: '终端会话 ID' },
     { path: 'readEndPosition', description: '读取结束位置' },
     { path: 'hasMoreOutput', description: '是否还有更多输出' },
     { path: 'output', description: '增量输出文本' }
@@ -454,8 +452,7 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
         status: 'running',
         output: 'Installing...\n',
         readEndPosition: 14,
-        hasMoreOutput: true,
-        exitCode: null
+        hasMoreOutput: true
       }
     },
     {
@@ -463,23 +460,21 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
       ok: true,
       data: {
         terminalId: 'term-001',
-        status: 'completed',
+        status: 'succeeded',
         output: 'done\n',
         readEndPosition: 5,
-        hasMoreOutput: false,
-        exitCode: 0
+        hasMoreOutput: false
       }
     },
     {
-      label: '命令非零退出码',
+      label: '命令失败',
       ok: true,
       data: {
         terminalId: 'term-001',
-        status: 'completed',
+        status: 'failed',
         output: 'error: not found\n',
         readEndPosition: 18,
-        hasMoreOutput: false,
-        exitCode: 1
+        hasMoreOutput: false
       }
     },
     { label: '执行失败', ok: false, data: { error: 'Command blocked by policy' } }
@@ -490,12 +485,10 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
       ok: true,
       args: { terminalId: 'term-001', readEndPosition: 14 },
       data: {
-        terminalId: 'term-001',
         status: 'running',
         output: '...more output\n',
         readEndPosition: 30,
-        hasMoreOutput: true,
-        exitCode: null
+        hasMoreOutput: true
       }
     },
     { label: '读取失败', ok: false, data: { error: 'Unknown terminalId' } }

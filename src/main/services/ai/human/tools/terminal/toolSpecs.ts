@@ -4,7 +4,10 @@ import { analyzeTerminalCommandPolicy, analyzeTerminalCommand } from './commandP
 import { readStringArg } from '../utils/toolSpecUtils'
 import type { AiRuntimePlatform } from '../../../types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
-import { renderTerminalModelResult } from '../../shared/modelToolResultRenderers'
+import {
+  renderTerminalReadModelResult,
+  renderTerminalRunModelResult
+} from '../../shared/modelToolResultRenderers'
 import { TERMINAL_READ_SCHEMA, TERMINAL_RUN_SCHEMA } from './toolSchemas'
 
 type TerminalRunToolSpec = HumanToolSpec<
@@ -39,7 +42,7 @@ export const createTerminalRunToolSpec = (
     }
     return { mutability: 'mutating', resourceKey: analysis.resourceKey }
   },
-  modelResult: { renderSuccess: renderTerminalModelResult }
+  modelResult: { renderSuccess: renderTerminalRunModelResult }
 })
 
 export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
@@ -52,7 +55,7 @@ export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
     description: '读取终端会话的增量输出与状态。'
   },
   resolveExecutionMeta: () => ({ mutability: 'read_only' }),
-  modelResult: { renderSuccess: renderTerminalModelResult }
+  modelResult: { renderSuccess: renderTerminalReadModelResult }
 }
 
 export const TERMINAL_RUN_TOOL_SPEC = createTerminalRunToolSpec()

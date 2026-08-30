@@ -7,8 +7,7 @@ import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunResult = {
   output: string
-  exitCode: number | null
-  status: 'running' | 'completed' | 'cancelled'
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled'
 }
 
 const listFiles = async (rootPath: string): Promise<string[]> => {
@@ -60,8 +59,7 @@ describe('ai tool terminal backend', () => {
             decisions.some((event) =>
               event.decisions.some((decision) => decision.action === 'approve')
             ) &&
-            result.result.status === 'completed' &&
-            result.result.exitCode === 0 &&
+            result.result.status === 'succeeded' &&
             result.result.output.includes('NCURATOR_INLINE_OK') &&
             result.scriptFiles.length === 0,
           {

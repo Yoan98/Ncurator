@@ -1,81 +1,31 @@
-import path from 'node:path'
 import type { JsonObject, JsonValue } from '../../../../../shared/types'
 import type { ModelResultRenderer, ModelResultRendererInput } from '../tools/types'
+import {
+  formatReadRangeFooter,
+  renderFileEnvelope,
+  renderNumberedFileLines
+} from './renderFamilies/envelope'
+import { joinGroupedSections, renderGroupedHeader } from './renderFamilies/grouped'
+import { renderUntrustedWebContent } from './renderFamilies/markdownWeb'
+import {
+  renderFileMutationProse,
+  renderPlainConfirmation,
+  renderProse
+} from './renderFamilies/prose'
+import {
+  formatTerminalMarker,
+  renderTerminalStream
+} from './renderFamilies/terminal'
+import {
+  indentBlock,
+  isObject,
+  readNumber,
+  readString,
+  wrapModelTextLines
+} from './renderFamilies/shared'
 
-const MODEL_TEXT_LINE_CHARS = 1_600
-
-const isObject = (value: JsonValue | undefined): value is JsonObject =>
-  Boolean(value && typeof value === 'object' && !Array.isArray(value))
-
-const readString = (value: JsonValue | undefined): string | undefined =>
-  typeof value === 'string' ? value : undefined
-
-const readNumber = (value: JsonValue | undefined): number | undefined =>
-  typeof value === 'number' && Number.isFinite(value) ? value : undefined
-
-const wrapPhysicalLine = (value: string): string[] => {
-  const characters = Array.from(value)
-  if (characters.length <= MODEL_TEXT_LINE_CHARS) return [value]
-  const lines: string[] = []
-  for (let offset = 0; offset < characters.length; offset += MODEL_TEXT_LINE_CHARS) {
-    lines.push(characters.slice(offset, offset + MODEL_TEXT_LINE_CHARS).join(''))
-  }
-  return lines
-}
-
-export const wrapModelTextLines = (value: string): string =>
-  value
-    .split(/\r\n|\r|\n/u)
-    .flatMap(wrapPhysicalLine)
-    .join('\n')
-
-const indentBlock = (value: string, depth: number): string => {
-  const indent = '  '.repeat(depth)
-  return wrapModelTextLines(value)
-    .split('\n')
-    .map((line) => `${indent}${line}`)
-    .join('\n')
-}
-
-const renderPrimitive = (value: JsonValue, depth: number): string => {
-  if (typeof value !== 'string') return String(value)
-  if (!value.includes('\n') && Array.from(value).length <= 160) return JSON.stringify(value)
-  return `|\n${indentBlock(value, depth + 1)}`
-}
-
-const renderTreeValue = (value: JsonValue, depth: number): string => {
-  if (Array.isArray(value)) {
-    if (value.length === 0) return '[]'
-    return value
-      .map((item) => {
-        const rendered = renderTreeValue(item, depth + 1)
-        return rendered.includes('\n')
-          ? `${'  '.repeat(depth)}-\n${indentBlock(rendered, 1)}`
-          : `${'  '.repeat(depth)}- ${rendered}`
-      })
-      .join('\n')
-  }
-  if (isObject(value)) {
-    const entries = Object.entries(value)
-    if (entries.length === 0) return '{}'
-    return entries
-      .map(([key, item]) => {
-        const rendered = renderTreeValue(item, depth + 1)
-        return rendered.includes('\n')
-          ? `${'  '.repeat(depth)}${key}:\n${indentBlock(rendered, 1)}`
-          : `${'  '.repeat(depth)}${key}: ${rendered}`
-      })
-      .join('\n')
-  }
-  return renderPrimitive(value, depth)
-}
-
-export const renderGenericModelResult: ModelResultRenderer = ({ toolName, data }) => {
-  if (data === undefined) return `${toolName} completed successfully.`
-  return wrapModelTextLines(
-    [`${toolName} completed successfully.`, 'Result:', renderTreeValue(data, 0)].join('\n')
-  )
-}
+export const renderGenericModelResult: ModelResultRenderer = ({ toolName }) =>
+  wrapModelTextLines(`${toolName} completed successfully.`)
 
 const containsOnlyModelSafeDiagnosticText = (value: string): boolean =>
   /^[\x20-\x7E\r\n\t]+$/u.test(value)
@@ -86,6 +36,85 @@ export const renderGenericModelError: ModelResultRenderer = ({ toolName, data })
     : readString(data)
   if (detail && containsOnlyModelSafeDiagnosticText(detail)) return `Error: ${detail}`
   return `Error: ${toolName} failed. Check the tool arguments and try again.`
+}
+
+const buildTerminalMarkers = (
+  entries: Array<[string, string | number | boolean | undefined]>
+): string[] =>
+  entries
+    .filter(([, value]) => value !== undefined && value !== '')
+    .map(([key, value]) => formatTerminalMarker(key, value as string | number | boolean))
+
+export const renderTerminalRunModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  return renderTerminalStream({
+    output: readString(obj.output) || '',
+    markers: buildTerminalMarkers([
+      ['status', readString(obj.status) || 'succeeded'],
+      ['terminalId', readString(obj.terminalId)],
+      ['readEndPosition', readNumber(obj.readEndPosition)],
+      ['hasMoreOutput', typeof obj.hasMoreOutput === 'boolean' ? obj.hasMoreOutput : undefined]
+    ])
+  })
+}
+
+export const renderTerminalReadModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  return renderTerminalStream({
+    output: readString(obj.output) || '',
+    markers: buildTerminalMarkers([
+      ['status', readString(obj.status) || 'succeeded'],
+      ['readEndPosition', readNumber(obj.readEndPosition)],
+      ['hasMoreOutput', typeof obj.hasMoreOutput === 'boolean' ? obj.hasMoreOutput : undefined]
+    ])
+  })
+}
+
+/** @deprecated Use renderTerminalRunModelResult or renderTerminalReadModelResult */
+export const renderTerminalModelResult: ModelResultRenderer = (input) =>
+  input.toolName === 'terminal_read'
+    ? renderTerminalReadModelResult(input)
+    : renderTerminalRunModelResult(input)
+
+export const renderTextFileReadModelResult: ModelResultRenderer = ({ args, data }) => {
+  const obj = isObject(data) ? data : {}
+  const path = readString(args.sourcePath) || ''
+  const content = readString(obj.content) || ''
+  const startLine = readNumber(obj.startLine) ?? 1
+  const endLine = readNumber(obj.endLine) ?? startLine
+  const totalLines = readNumber(obj.totalLines) ?? endLine
+  const nextStartLine = readNumber(obj.nextStartLine)
+  return renderFileEnvelope({
+    path,
+    type: 'text',
+    bodyLines: renderNumberedFileLines({ content, startLine }),
+    footer: formatReadRangeFooter({ startLine, endLine, totalLines, nextStartLine })
+  })
+}
+
+export const renderTextFileEditModelResult: ModelResultRenderer = ({ args }) => {
+  const path = readString(args.sourcePath) || ''
+  const action = readString(args.action)
+  return renderFileMutationProse({
+    path,
+    verb: action === 'create' ? 'created' : 'updated'
+  })
+}
+
+export const renderTextFileSearchModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
+  return joinGroupedSections([
+    renderGroupedHeader('Text search completed successfully.'),
+    `Total matches: ${readNumber(obj.totalMatchCount) ?? 0}`,
+    'Returned matches:',
+    ...(matches.length
+      ? matches.flatMap((item, index) => [
+          `  ${index + 1}. line=${readNumber(item.line) ?? ''}; match=${JSON.stringify(readString(item.matchText) || '')}; truncated=${String(item.truncated === true)}`,
+          indentBlock(readString(item.textContext) || '', 2)
+        ])
+      : ['  none'])
+  ])
 }
 
 const normalizeKbSearchItems = (data: JsonValue | undefined): JsonObject[] => {
@@ -137,21 +166,21 @@ export const renderKbSearchModelResult: ModelResultRenderer = ({ data }) => {
       })
     : ['  none']
 
-  return [
-    'KB search completed successfully.',
+  return joinGroupedSections([
+    renderGroupedHeader('KB search completed successfully.'),
     `Returned matches: ${items.length}`,
     'Sources:',
     ...sourceLines,
     'Matches:',
     ...matchLines
-  ].join('\n')
+  ])
 }
 
 export const renderKbListDocumentsModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const items = Array.isArray(obj.items) ? obj.items.filter(isObject) : []
-  return [
-    'KB document listing completed successfully.',
+  return joinGroupedSections([
+    renderGroupedHeader('KB document listing completed successfully.'),
     `Total documents: ${readNumber(obj.total) ?? items.length}`,
     'Documents:',
     ...(items.length
@@ -165,14 +194,14 @@ export const renderKbListDocumentsModelResult: ModelResultRenderer = ({ data }) 
           }`.trimEnd()
         )
       : ['  none'])
-  ].join('\n')
+  ])
 }
 
 export const renderDocxOutlineModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const segments = Array.isArray(obj.segments) ? obj.segments.filter(isObject) : []
-  return [
-    'DOCX outline read completed successfully.',
+  return joinGroupedSections([
+    renderGroupedHeader('DOCX outline read completed successfully.'),
     `Range: ${readNumber(obj.fromPercent) ?? ''}-${readNumber(obj.toPercent) ?? ''}%; nodeIndex=${readNumber(obj.fromNodeIndex) ?? ''}-${readNumber(obj.toNodeIndex) ?? ''}; totalRootCount=${readNumber(obj.totalRootCount) ?? ''}`,
     'Segments:',
     ...(segments.length
@@ -181,7 +210,7 @@ export const renderDocxOutlineModelResult: ModelResultRenderer = ({ data }) => {
           indentBlock(readString(segment.textMap) || '', 2)
         ])
       : ['  none'])
-  ].join('\n')
+  ])
 }
 
 const renderDocxNeighbor = (value: JsonValue | undefined, label: string): string[] => {
@@ -201,8 +230,8 @@ export const renderDocxSearchModelResult: ModelResultRenderer = ({ data }) => {
   const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
   const totalMatchCount = readNumber(obj.totalMatchCount) ?? 0
   const returnedMatchCount = readNumber(obj.returnedMatchCount) ?? matches.length
-  return [
-    'DOCX search completed successfully.',
+  return joinGroupedSections([
+    renderGroupedHeader('DOCX search completed successfully.'),
     `Total matches: ${totalMatchCount}`,
     `Returned matches: ${returnedMatchCount}`,
     ...(totalMatchCount > returnedMatchCount ? ['(more matches not returned)'] : []),
@@ -217,7 +246,7 @@ export const renderDocxSearchModelResult: ModelResultRenderer = ({ data }) => {
           ...renderDocxNeighbor(item.after, 'after')
         ])
       : ['  none'])
-  ].join('\n')
+  ])
 }
 
 type StyleCatalog = {
@@ -280,8 +309,19 @@ const mergeAdjacentTextChildren = (items: JsonValue[]): JsonValue[] => {
   return merged
 }
 
+const renderDocxNodeFieldValue = (value: JsonValue, depth: number): string => {
+  if (typeof value === 'string') {
+    if (!value.includes('\n') && Array.from(value).length <= 160) return JSON.stringify(value)
+    return `\n${indentBlock(value, depth + 1)}`
+  }
+  if (Array.isArray(value) || isObject(value)) {
+    return `\n${indentBlock(JSON.stringify(value), depth + 1)}`
+  }
+  return String(value)
+}
+
 const renderDocxNode = (value: JsonValue, depth: number, styles: StyleCatalog): string[] => {
-  if (!isObject(value)) return [`${'  '.repeat(depth)}- ${renderTreeValue(value, depth)}`]
+  if (!isObject(value)) return [`${'  '.repeat(depth)}- ${String(value)}`]
   const indent = '  '.repeat(depth)
   const fields = Object.entries(value).filter(([key]) => key !== 'children' && key !== 'style')
   const headerFields: string[] = []
@@ -292,7 +332,7 @@ const renderDocxNode = (value: JsonValue, depth: number, styles: StyleCatalog): 
       return
     }
     if (Array.isArray(item) || isObject(item)) {
-      blockFields.push([key, renderTreeValue(item, depth + 1)])
+      blockFields.push([key, renderDocxNodeFieldValue(item, depth + 1).trimStart()])
       return
     }
     headerFields.push(`${key}=${typeof item === 'string' ? JSON.stringify(item) : String(item)}`)
@@ -317,89 +357,41 @@ export const renderDocxReadNodesModelResult: ModelResultRenderer = ({ data }) =>
   const obj = isObject(data) ? data : {}
   const styles = buildDocxStyleCatalog(obj.nodes)
   const nodes = Array.isArray(obj.nodes) ? obj.nodes : []
-  return [
-    'DOCX nodes read completed successfully.',
+  return joinGroupedSections([
+    renderGroupedHeader('DOCX nodes read completed successfully.'),
     'Styles:',
     ...(styles.values.length
       ? styles.values.flatMap(({ id, style }) => [
           `  ${id}:`,
-          indentBlock(renderTreeValue(style, 0), 2)
+          indentBlock(JSON.stringify(style), 2)
         ])
       : ['  none']),
     'Nodes:',
     ...(nodes.length ? nodes.flatMap((node) => renderDocxNode(node, 1, styles)) : ['  none'])
-  ].join('\n')
+  ])
+}
+
+const readCreatedIds = (data: JsonValue | undefined): string[] => {
+  if (!isObject(data) || !Array.isArray(data.createdIds)) return []
+  return data.createdIds.filter((item): item is string => typeof item === 'string')
 }
 
 export const renderDocxContentEditModelResult: ModelResultRenderer = ({ args, data }) => {
-  const obj = isObject(data) ? data : {}
-  const sourcePath = readString(args.sourcePath) || ''
-  const createdIds = Array.isArray(obj.createdIds)
-    ? obj.createdIds.filter((item): item is string => typeof item === 'string')
-    : []
-  return [
-    `DOCX content edit completed successfully: ${path.basename(sourcePath)}`,
-    createdIds.length ? `Created node IDs: ${createdIds.join(', ')}` : ''
-  ]
-    .filter(Boolean)
-    .join('\n')
+  const path = readString(args.sourcePath) || ''
+  const createdIds = readCreatedIds(data)
+  return renderFileMutationProse({
+    path,
+    suffix: createdIds.length ? `Created node IDs: ${createdIds.join(', ')}` : undefined
+  })
 }
 
-export const renderDocxMutationModelResult: ModelResultRenderer = renderDocxContentEditModelResult
-
-export const renderTextFileEditModelResult: ModelResultRenderer = () => 'Text file edit completed.'
-
-export const renderTerminalModelResult: ModelResultRenderer = ({ toolName, data }) => {
-  const obj = isObject(data) ? data : {}
-  const status = readString(obj.status) || 'completed'
-  const exitCode = obj.exitCode === null ? undefined : readNumber(obj.exitCode)
-  const completion =
-    status === 'completed'
-      ? exitCode === undefined || exitCode === 0
-        ? 'completed successfully'
-        : 'completed'
-      : status
-  const lines = [
-    toolName === 'terminal_run'
-      ? `Terminal command ${completion}${exitCode !== undefined ? ` (exit code: ${exitCode})` : ''}.`
-      : `Terminal output read ${status === 'completed' ? 'completed successfully' : status}.`,
-    readString(obj.terminalId) ? `Terminal ID: ${readString(obj.terminalId)}` : '',
-    readNumber(obj.readEndPosition) !== undefined
-      ? `Read end position: ${readNumber(obj.readEndPosition)}`
-      : '',
-    typeof obj.hasMoreOutput === 'boolean' ? `Has more output: ${obj.hasMoreOutput}` : '',
-    'Output:',
-    readString(obj.output) || ''
-  ]
-  return lines.filter((line, index) => Boolean(line) || index === lines.length - 1).join('\n')
-}
-
-export const renderTextFileReadModelResult: ModelResultRenderer = ({ data }) => {
-  const obj = isObject(data) ? data : {}
-  const content = readString(obj.content) || ''
-  const endLine = readNumber(obj.endLine) ?? readNumber(obj.startLine) ?? 1
-  const totalLines = readNumber(obj.totalLines) ?? endLine
-  const nextLine = readNumber(obj.nextStartLine)
-  const metadata = nextLine
-    ? [`totalLines: ${totalLines}`, `nextStartLine: ${nextLine}`]
-    : [`totalLines: ${totalLines}`]
-  return ['<content>', content, '</content>', ...metadata].join('\n')
-}
-
-export const renderTextFileSearchModelResult: ModelResultRenderer = ({ data }) => {
-  const obj = isObject(data) ? data : {}
-  const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
-  return [
-    'Text search completed successfully.',
-    `Total matches: ${readNumber(obj.totalMatchCount) ?? 0}`,
-    'Returned matches:',
-    ...(matches.length
-      ? matches.flatMap((item, index) => [
-          `  ${index + 1}. line=${readNumber(item.line) ?? ''}; match=${JSON.stringify(readString(item.matchText) || '')}; truncated=${String(item.truncated === true)}`,
-          indentBlock(readString(item.textContext) || '', 2)
-        ])
-      : ['  none'])
-  ].join('\n')
+export const renderDocxMutationModelResult: ModelResultRenderer = ({ args, data }) => {
+  const path = readString(args.sourcePath) || ''
+  const createdIds = readCreatedIds(data)
+  return renderFileMutationProse({
+    path,
+    suffix: createdIds.length ? `Created node IDs: ${createdIds.join(', ')}` : undefined
+  })
 }
 
 const formatExcelRangeCell = (value: JsonValue | undefined): string => {
@@ -481,8 +473,8 @@ export const renderExcelReadModelResult: ModelResultRenderer = ({ args, data }) 
   const type = typeof args.type === 'string' ? args.type : undefined
   if (type === 'workbook' || Array.isArray(obj.sheets)) {
     const sheets = Array.isArray(obj.sheets) ? obj.sheets.filter(isObject) : []
-    return [
-      'Excel workbook read completed.',
+    return joinGroupedSections([
+      renderGroupedHeader('Excel workbook read completed.'),
       'Sheets:',
       ...(sheets.length
         ? sheets.map((sheet, index) => {
@@ -490,14 +482,14 @@ export const renderExcelReadModelResult: ModelResultRenderer = ({ args, data }) 
             return `  ${index + 1}. ${readString(sheet.name) || ''}  ${range}  rows=${readNumber(sheet.rowCount) ?? 0} cols=${readNumber(sheet.columnCount) ?? 0}`
           })
         : ['  none'])
-    ].join('\n')
+    ])
   }
   if (type === 'search' || Array.isArray(obj.matches)) {
     const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
     const totalMatchCount = readNumber(obj.totalMatchCount) ?? matches.length
     const returnedMatchCount = readNumber(obj.returnedMatchCount) ?? matches.length
-    return [
-      'Excel search completed.',
+    return joinGroupedSections([
+      renderGroupedHeader('Excel search completed.'),
       `Total matches: ${totalMatchCount}`,
       `Returned matches: ${returnedMatchCount}`,
       ...(totalMatchCount > returnedMatchCount ? ['(more matches not returned)'] : []),
@@ -519,7 +511,7 @@ export const renderExcelReadModelResult: ModelResultRenderer = ({ args, data }) 
             return `  sheet=${sheet} cell=${cell} ${detail}`.trimEnd()
           })
         : ['  none'])
-    ].join('\n')
+    ])
   }
   const sheetName = readString(obj.sheetName) || ''
   const range = readString(obj.range) || ''
@@ -544,17 +536,17 @@ export const renderExcelReadModelResult: ModelResultRenderer = ({ args, data }) 
         )
       })
     })
-    return [
-      'Excel style read completed.',
+    return joinGroupedSections([
+      renderGroupedHeader('Excel style read completed.'),
       `Sheet: ${sheetName}`,
       `Range: ${rangeMetadata}`,
       '| Cell | bold | fontColor | fillColor | numberFormat |',
       '| --- | --- | --- | --- | --- |',
       ...(styleRows.length ? styleRows : ['| none | | | | |'])
-    ].join('\n')
+    ])
   }
-  return [
-    'Excel range read completed.',
+  return joinGroupedSections([
+    renderGroupedHeader('Excel range read completed.'),
     `Sheet: ${sheetName}`,
     `Range: ${rangeMetadata}`,
     ...(rows.length
@@ -564,22 +556,20 @@ export const renderExcelReadModelResult: ModelResultRenderer = ({ args, data }) 
           return `| ${rowNumber} | ${row.map((cell) => formatExcelRangeCell(cell)).join(' | ')} |`
         })
       : ['  none'])
-  ]
-    .filter((line) => line !== '')
-    .join('\n')
+  ])
 }
 
 export const renderExcelEditModelResult: ModelResultRenderer = ({ args }) => {
   const type = typeof args.type === 'string' ? args.type : 'edit'
-  return `Excel ${type} completed.`
+  return renderPlainConfirmation(`Excel ${type} completed.`)
 }
 
 export const renderPdfOutlineModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const metadata = isObject(obj.metadata) ? obj.metadata : {}
   const outline = Array.isArray(obj.outline) ? obj.outline.filter(isObject) : []
-  return [
-    'PDF outline read completed.',
+  return joinGroupedSections([
+    renderGroupedHeader('PDF outline read completed.'),
     `Pages: ${readNumber(obj.pageCount) ?? 0}`,
     readString(metadata.title) ? `Title: ${readString(metadata.title)}` : '',
     readString(metadata.author) ? `Author: ${readString(metadata.author)}` : '',
@@ -592,16 +582,14 @@ export const renderPdfOutlineModelResult: ModelResultRenderer = ({ data }) => {
           return `${indent}${index + 1}. ${readString(item.title) || ''}${page ? ` (p.${page})` : ''}`
         })
       : ['  none'])
-  ]
-    .filter(Boolean)
-    .join('\n')
+  ])
 }
 
 export const renderPdfSearchModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
-  return [
-    'PDF search completed.',
+  return joinGroupedSections([
+    renderGroupedHeader('PDF search completed.'),
     `Total matches: ${readNumber(obj.totalMatchCount) ?? 0}`,
     `Returned matches: ${readNumber(obj.returnedMatchCount) ?? matches.length}`,
     'Matches:',
@@ -616,32 +604,28 @@ export const renderPdfSearchModelResult: ModelResultRenderer = ({ data }) => {
           ].join('\n')
         })
       : ['  none'])
-  ].join('\n')
+  ])
 }
 
-export const renderPdfReadPagesModelResult: ModelResultRenderer = ({ data }) => {
+export const renderPdfReadPagesModelResult: ModelResultRenderer = ({ args, data }) => {
   const obj = isObject(data) ? data : {}
+  const path = readString(args.sourcePath) || readString(obj.sourcePath) || ''
   const pages = Array.isArray(obj.pages) ? obj.pages.filter(isObject) : []
-  return [
-    'PDF pages read completed.',
-    'Pages:',
-    ...(pages.length
-      ? pages.flatMap((page) => {
-          const pageNumber = readNumber(page.pageNumber) ?? ''
-          const textStatus = readString(page.textStatus) || ''
-          const imageCount = readNumber(page.imageCount) ?? 0
-          const pageImagePath = readString(page.pageImagePath) || ''
-          const text = readString(page.text) || ''
-          const lines = [
-            `  p.${pageNumber} [${textStatus}, ${imageCount} images]`,
-            `    pageImagePath: ${pageImagePath}`
-          ]
-          if (text) lines.push(indentBlock(text, 2))
-          else if (textStatus === 'empty') lines.push('    (no text layer)')
-          return lines
-        })
-      : ['  none'])
-  ].join('\n')
+  const bodyLines = pages.length
+    ? pages.flatMap((page) => {
+        const pageNumber = readNumber(page.pageNumber) ?? ''
+        const textStatus = readString(page.textStatus) || ''
+        const imageCount = readNumber(page.imageCount) ?? 0
+        const pageImagePath = readString(page.pageImagePath) || ''
+        const text = readString(page.text) || ''
+        const lines = [`Page ${pageNumber} [${textStatus}, ${imageCount} images]`]
+        if (pageImagePath) lines.push(`pageImagePath: ${pageImagePath}`)
+        if (text) lines.push(...renderNumberedFileLines({ content: text, startLine: 1 }))
+        else if (textStatus === 'empty') lines.push('(no text layer)')
+        return lines
+      })
+    : ['(no pages)']
+  return renderFileEnvelope({ path, type: 'pdf', bodyLines })
 }
 
 export const renderWebSearchModelResult: ModelResultRenderer = ({ args, data }) => {
@@ -654,7 +638,7 @@ export const renderWebSearchModelResult: ModelResultRenderer = ({ args, data }) 
     : url
       ? `Web page fetched. URL: ${url}`
       : 'Web search completed.'
-  return [
+  const sections = [
     header,
     `Results: ${items.length}`,
     ...(items.length
@@ -670,72 +654,67 @@ export const renderWebSearchModelResult: ModelResultRenderer = ({ args, data }) 
           return `  ${index + 1}. ${title}\n     url: ${requestedUrl}`
         })
       : ['  none'])
-  ].join('\n')
+  ]
+  return renderUntrustedWebContent(sections)
 }
 
 export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const error = readString(obj.error)
-  if (error) return `Browser action failed: ${error}`
+  if (error) return `Error: ${error}`
   const action = readString(obj.action) || ''
   const page = isObject(obj.page) ? obj.page : {}
   const pageLabel = [readString(page.title), readString(page.url)].filter(Boolean).join(' — ')
   if (action === 'navigate') {
-    return ['Browser navigate completed.', pageLabel ? `Page: ${pageLabel}` : ''].filter(Boolean).join('\n')
+    return renderProse([
+      'Browser navigate completed.',
+      pageLabel ? `Page: ${pageLabel}` : ''
+    ])
   }
   if (action === 'extract') {
     const content = readString(obj.content) || ''
-    return [
+    return renderUntrustedWebContent([
       'Browser extract completed.',
       pageLabel ? `Page: ${pageLabel}` : '',
       'Content:',
-      content ? indentBlock(content, 0) : '  (empty)'
-    ]
-      .filter(Boolean)
-      .join('\n')
+      content || '(empty)'
+    ])
   }
   if (action === 'observe') {
     const actions = Array.isArray(obj.actions) ? obj.actions.filter(isObject) : []
-    return [
+    return renderProse([
       'Browser observe completed.',
       pageLabel ? `Page: ${pageLabel}` : '',
       'Actions:',
       ...(actions.length
         ? actions.map((item, index) => `  ${index + 1}. ${readString(item.description) || ''}`)
         : ['  none'])
-    ]
-      .filter(Boolean)
-      .join('\n')
+    ])
   }
   if (action === 'act') {
-    return [
+    return renderProse([
       'Browser act completed.',
       pageLabel ? `Page: ${pageLabel}` : '',
       `Success: ${String(obj.success === true)}`,
       readString(obj.message) ? `Message: ${readString(obj.message)}` : '',
-      readString(obj.actionDescription)
-        ? `Action: ${readString(obj.actionDescription)}`
-        : ''
-    ]
-      .filter(Boolean)
-      .join('\n')
+      readString(obj.actionDescription) ? `Action: ${readString(obj.actionDescription)}` : ''
+    ])
   }
-  return [
+  return renderProse([
     'Browser action completed.',
     action ? `Action: ${action}` : '',
     pageLabel ? `Page: ${pageLabel}` : ''
-  ]
-    .filter(Boolean)
-    .join('\n')
+  ])
 }
 
-export const renderPlanUpdateModelResult: ModelResultRenderer = () => 'Plan updated successfully.'
+export const renderPlanUpdateModelResult: ModelResultRenderer = () =>
+  renderPlainConfirmation('Plan updated successfully.')
 
 export const renderPptOutlineModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const slides = Array.isArray(obj.slides) ? obj.slides.filter(isObject) : []
-  return [
-    'PPT outline read completed successfully.',
+  return joinGroupedSections([
+    renderGroupedHeader('PPT outline read completed successfully.'),
     `Slide count: ${readNumber(obj.slideCount) ?? slides.length}`,
     'Slides:',
     ...(slides.length
@@ -746,14 +725,14 @@ export const renderPptOutlineModelResult: ModelResultRenderer = ({ data }) => {
           return `  ${index + 1}. slideIndex=${slideIndex}; slideId=${slideId}${title ? `; title=${JSON.stringify(title)}` : ''}`
         })
       : ['  none'])
-  ].join('\n')
+  ])
 }
 
 export const renderPptReadSlidesModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const slides = Array.isArray(obj.slides) ? obj.slides.filter(isObject) : []
-  return [
-    'PPT slides read completed successfully.',
+  return joinGroupedSections([
+    renderGroupedHeader('PPT slides read completed successfully.'),
     `Returned slides: ${slides.length}`,
     ...(slides.length
       ? slides.flatMap((slide, index) => {
@@ -776,14 +755,14 @@ export const renderPptReadSlidesModelResult: ModelResultRenderer = ({ data }) =>
           return lines.filter(Boolean)
         })
       : ['  none'])
-  ].join('\n')
+  ])
 }
 
 export const renderPptSearchModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
-  return [
-    'PPT search completed successfully.',
+  return joinGroupedSections([
+    renderGroupedHeader('PPT search completed successfully.'),
     `Total matches: ${readNumber(obj.totalMatchCount) ?? 0}`,
     `Returned matches: ${readNumber(obj.returnedMatchCount) ?? matches.length}`,
     ...(obj.truncated === true ? ['(truncated)'] : []),
@@ -800,38 +779,55 @@ export const renderPptSearchModelResult: ModelResultRenderer = ({ data }) => {
           ].join('\n')
         })
       : ['  none'])
-  ].join('\n')
+  ])
 }
 
-export const renderPptEditModelResult: ModelResultRenderer = ({ data }) => {
+export const renderPptEditModelResult: ModelResultRenderer = ({ args, data }) => {
+  const path = readString(args.sourcePath) || ''
   const obj = isObject(data) ? data : {}
-  const slideId = readString(obj.slideId)
   const createdElementIds = Array.isArray(obj.createdElementIds)
     ? obj.createdElementIds.filter((item): item is string => typeof item === 'string')
     : []
-  return [
-    'PPT edit completed.',
-    slideId ? `slideId: ${slideId}` : '',
-    createdElementIds.length ? `createdElementIds: ${createdElementIds.join(', ')}` : ''
-  ]
-    .filter(Boolean)
-    .join('\n')
+  return renderFileMutationProse({
+    path,
+    suffix: createdElementIds.length
+      ? `Created element IDs: ${createdElementIds.join(', ')}`
+      : undefined
+  })
 }
 
 export const renderImageGenerateModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const error = readString(obj.error)
-  if (error) return `Image generation failed: ${error}`
+  if (error) return `Error: ${error}`
   const outputPath = readString(obj.outputPath)
-  return outputPath ? `Image saved: ${outputPath}` : 'Image generation completed.'
+  return outputPath
+    ? renderPlainConfirmation(`Image saved: ${outputPath}`)
+    : renderPlainConfirmation('Image generation completed.')
 }
 
 export const renderReadImageModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const images = Array.isArray(obj.images) ? obj.images.filter(isObject) : []
-  if (images.length === 0) return 'No images loaded.'
-  return [
-    `${images.length} image${images.length === 1 ? '' : 's'} loaded:`,
+  if (images.length === 0) return renderPlainConfirmation('No images loaded.')
+  if (images.length === 1) {
+    const image = images[0]
+    const imagePath = readString(image.path) || ''
+    const width = readNumber(image.width)
+    const height = readNumber(image.height)
+    const mimeType = readString(image.mimeType) || ''
+    const bodyLines = [
+      ...(width && height ? [`dimensions: ${width}x${height}`] : []),
+      ...(mimeType ? [`mimeType: ${mimeType}`] : [])
+    ]
+    return renderFileEnvelope({
+      path: imagePath,
+      type: 'image',
+      bodyLines: bodyLines.length ? bodyLines : ['(loaded)']
+    })
+  }
+  return joinGroupedSections([
+    renderGroupedHeader(`${images.length} images loaded:`),
     ...images.map((image, index) => {
       const imagePath = readString(image.path) || ''
       const width = readNumber(image.width) ?? ''
@@ -841,17 +837,19 @@ export const renderReadImageModelResult: ModelResultRenderer = ({ data }) => {
       const meta = [sizeLabel, mimeType.replace(/^image\//u, '')].filter(Boolean).join(' ')
       return `  ${index + 1}. ${imagePath}${meta ? ` ${meta}` : ''}`
     })
-  ].join('\n')
+  ])
 }
 
 export const renderLearnSkillModelResult: ModelResultRenderer = ({ args }) => {
   const requested = Array.isArray(args.skillIds)
     ? args.skillIds.filter((item): item is string => typeof item === 'string')
     : []
-  return `Skill loaded successfully: ${requested.join(', ') || 'requested skill'}.`
+  return renderPlainConfirmation(
+    `Skill loaded successfully: ${requested.join(', ') || 'requested skill'}.`
+  )
 }
 
 export const renderModelResultWith = (
   renderer: ModelResultRenderer | undefined,
   input: ModelResultRendererInput
-): string => wrapModelTextLines((renderer || renderGenericModelResult)(input))
+): string => (renderer || renderGenericModelResult)(input)

@@ -142,6 +142,21 @@ prompt 措辞、渲染格式、超限阈值等实现细节见代码与测试。�
 
 DOCX、Excel、PDF 等复杂工具族已按上述原则落地；全部 29 个工具均绑定专用 `modelResult.renderSuccess` 投影器，再走统一 delivery 管道。
 
+**渲染格式族（modelResult）**
+
+每个工具保留独立 `renderSuccess`，内部复用共享构建块（`renderFamilies/`）：
+
+| 族 | 典型工具 | 格式要点 |
+| --- | --- | --- |
+| A 纯 prose | 各类 edit / mutation | 单行确认，如文件已更新 |
+| B XML envelope | `text_file_read`、`pdf_read_pages`、`read_image` | `<file path="...">` + 行号正文 |
+| C 终端流 + marker | `terminal_run`、`terminal_read` | 输出正文 + `[status: …]` 等方括号标记 |
+| D 分组纯文本 | search / list / outline | 标题 + 分组列表 |
+| E Markdown/Web | `web_search`、`browser_use` | 不可信内容前缀 + Markdown 正文 |
+| 领域专用 | `docx_read_nodes`、`excel_read`、`ppt_read_slides` | 保留结构化领域布局 |
+
+Terminal 契约：`status` 为 `running | succeeded | failed | cancelled`；`terminal_run` 返回 `terminalId`，`terminal_read` 不回传。
+
 ## 领域能力（概要）
 
 | 领域                  | 思路                                                                                                                                                            |

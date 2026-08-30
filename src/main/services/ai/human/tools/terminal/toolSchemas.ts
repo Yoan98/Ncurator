@@ -18,6 +18,5 @@ export const TERMINAL_READ_SCHEMA = z.object({
 export type {
   TerminalReadOutput,
   TerminalRunOutput,
-  TerminalSessionOutput,
-  TerminalStatus
+  TerminalToolStatus
 } from './outputTypes'

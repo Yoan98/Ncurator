@@ -5,7 +5,14 @@ import {
   TERMINAL_READ_SCHEMA,
   TERMINAL_RUN_SCHEMA
 } from '../../../../src/main/services/ai/human/tools/terminal/toolSchemas'
-import type { TerminalSessionOutput } from '../../../../src/main/services/ai/human/tools/terminal/outputTypes'
+import type {
+  TerminalReadOutput,
+  TerminalRunOutput
+} from '../../../../src/main/services/ai/human/tools/terminal/outputTypes'
+import {
+  mapTerminalReadStatus,
+  mapTerminalRunStatus
+} from '../../../../src/main/services/ai/human/tools/terminal/terminalToolStatus'
 
 describe('ai unit terminal tool contract', () => {
   it('binds both tools to the terminal skill', () => {
@@ -57,17 +64,35 @@ describe('ai unit terminal tool contract', () => {
     ).toBe(false)
   })
 
-  it('declares terminal session output fields', () => {
-    const sample = {
+  it('declares terminal run and read output fields', () => {
+    const runSample = {
       terminalId: 'term-1',
-      status: 'completed',
+      status: 'succeeded',
       output: 'hello\n',
       readEndPosition: 6,
-      hasMoreOutput: false,
-      exitCode: 0
-    } satisfies TerminalSessionOutput
+      hasMoreOutput: false
+    } satisfies TerminalRunOutput
 
-    expect(sample.status).toBe('completed')
-    expect(sample.hasMoreOutput).toBe(false)
+    const readSample = {
+      status: 'running',
+      output: 'more\n',
+      readEndPosition: 12,
+      hasMoreOutput: true
+    } satisfies TerminalReadOutput
+
+    expect(runSample.status).toBe('succeeded')
+    expect(readSample.hasMoreOutput).toBe(true)
+  })
+
+  it('maps terminal run and read statuses to four-state contract', () => {
+    expect(mapTerminalRunStatus('command_still_running', null)).toBe('running')
+    expect(mapTerminalRunStatus('command_stopped', 130)).toBe('cancelled')
+    expect(mapTerminalRunStatus('command_completed', 0)).toBe('succeeded')
+    expect(mapTerminalRunStatus('command_completed', 1)).toBe('failed')
+
+    expect(mapTerminalReadStatus('running', null, true)).toBe('running')
+    expect(mapTerminalReadStatus('idle', 130, false)).toBe('cancelled')
+    expect(mapTerminalReadStatus('idle', 0, false)).toBe('succeeded')
+    expect(mapTerminalReadStatus('idle', 2, false)).toBe('failed')
   })
 })

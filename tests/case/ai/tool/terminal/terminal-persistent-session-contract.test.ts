@@ -7,19 +7,17 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 type TerminalRunResult = {
   terminalId: string
-  status: 'running' | 'completed' | 'cancelled'
-  output: string
-  readEndPosition: number
-  exitCode: number | null
-}
-
-type TerminalReadResult = {
-  terminalId: string
-  status: 'running' | 'completed' | 'cancelled'
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled'
   output: string
   readEndPosition: number
   hasMoreOutput: boolean
-  exitCode: number | null
+}
+
+type TerminalReadResult = {
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled'
+  output: string
+  readEndPosition: number
+  hasMoreOutput: boolean
 }
 
 type TerminalFailureResult = { error: string }
@@ -134,9 +132,9 @@ describe('ai tool terminal backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.pwdAtRoot.status === 'completed' &&
+          result.pwdAtRoot.status === 'succeeded' &&
             result.pwdAtRoot.output.length > 0 &&
-            result.cdNested.status === 'completed' &&
+            result.cdNested.status === 'succeeded' &&
             result.cdNested.output.includes('nested'),
           {
             name: 'terminal-runs-from-workspace-root',
@@ -146,7 +144,7 @@ describe('ai tool terminal backend', () => {
         )
         runtime.assertThat(
           result.running.status === 'running' &&
-            result.completedRead.status === 'completed' &&
+            result.completedRead.status === 'succeeded' &&
             (result.running.output.includes('terminal-tick') ||
               result.read.output.includes('terminal-tick')) &&
             result.detachedRejected.error.includes('detached shell execution'),
@@ -157,14 +155,12 @@ describe('ai tool terminal backend', () => {
           }
         )
         runtime.assertThat(
-          result.redirectAllowed.status === 'completed' &&
-            result.redirectAllowed.exitCode === 0 &&
+          result.redirectAllowed.status === 'succeeded' &&
             result.redirectAllowed.output.includes('redirect-ok') &&
-            result.nonZero.status === 'completed' &&
-            result.nonZero.exitCode === 1,
+            result.nonZero.status === 'failed',
           {
-            name: 'terminal-returns-exit-codes-and-allows-fd-merge-redirection',
-            message: '命令应返回正确退出码，带 2>&1 fd 合并重定向的验证命令应正常执行。',
+            name: 'terminal-returns-status-and-allows-fd-merge-redirection',
+            message: '命令应返回 succeeded/failed 状态，带 2>&1 fd 合并重定向的验证命令应正常执行。',
             data: result
           }
         )

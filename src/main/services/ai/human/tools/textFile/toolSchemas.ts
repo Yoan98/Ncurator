@@ -41,35 +41,34 @@ export const TEXT_FILE_READ_SCHEMA = z.object({
     .describe(`读取行数，缺省及最大为 ${TEXT_FILE_READ_MAX_LINES} 行`)
 })
 
-const fileEditSchema = z.object({
-  oldText: z.string().min(1),
-  newText: z.string()
-})
+const fileEditItemSchema = z
+  .object({
+    oldText: z.string().min(1).describe('被替换的原文片段'),
+    newText: z.string().describe('替换后的文字')
+  })
+  .strict()
 
 export const TEXT_FILE_EDIT_SCHEMA = z.discriminatedUnion('action', [
   z.object({
     sourcePath: textFileSourcePathField,
-    action: z.literal('create').describe('创建新文件；目标路径不得已存在'),
+    action: z.literal('create').describe('新建文件'),
     content: z.string().describe('完整文件内容')
   }),
   z.object({
     sourcePath: textFileSourcePathField,
-    action: z.literal('rewrite').describe('用新内容完整改写已有文件'),
+    action: z.literal('rewrite').describe('完整改写已有文件'),
     content: z.string().describe('完整文件内容')
   }),
   z.object({
     sourcePath: textFileSourcePathField,
-    action: z.literal('edit').describe('对已有文件执行一个或多个精确文本修改'),
-    edits: z
-      .array(fileEditSchema)
-      .min(1)
-      .describe('每个 oldText 必须恰好匹配一处')
+    action: z.literal('edit').describe('批量文本替换'),
+    edits: z.array(fileEditItemSchema).min(1).describe('替换项列表')
   }),
   z.object({
     sourcePath: textFileSourcePathField,
-    action: z.literal('replaceAll').describe('替换文件中 oldText 的全部精确匹配'),
-    oldText: z.string().min(1).describe('待替换文字'),
-    newText: z.string().describe('替换为')
+    action: z.literal('replaceAll').describe('全文替换所有匹配'),
+    oldText: z.string().min(1).describe('被替换的原文片段'),
+    newText: z.string().describe('替换后的文字')
   })
 ])
 

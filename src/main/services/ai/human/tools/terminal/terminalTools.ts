@@ -14,6 +14,7 @@ import { inspectTerminalOutputQuality } from './terminalExec'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
 import { createTerminalRunToolSpec, TERMINAL_READ_TOOL_SPEC } from './toolSpecs'
+import { mapTerminalReadStatus, mapTerminalRunStatus } from './terminalToolStatus'
 import { TERMINAL_MAX_CONCURRENT_SESSIONS } from './terminalConstants'
 
 type PendingTerminalCommand = {
@@ -444,19 +445,13 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             toolName: terminalRunToolSpec.name,
             output: result.output
           })
-          const status =
-            result.returnReason === 'command_still_running'
-              ? ('running' as const)
-              : result.returnReason === 'command_stopped'
-                ? ('cancelled' as const)
-                : ('completed' as const)
+          const status = mapTerminalRunStatus(result.returnReason, result.exitCode)
           const payload = {
             terminalId: result.terminalId,
             status,
             output: guarded.output,
             readEndPosition: result.readEndPosition,
-            hasMoreOutput: result.hasMoreOutput,
-            exitCode: result.exitCode
+            hasMoreOutput: result.hasMoreOutput
           }
           if (!guarded.ok) {
             const failurePayload = { ...payload, ...guarded }
@@ -519,21 +514,16 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               toolName: TERMINAL_READ_TOOL_SPEC.name,
               output: result.output
             })
-            const status =
-              result.terminalStatus === 'idle'
-                ? ('completed' as const)
-                : result.terminalStatus === 'closed'
-                  ? result.exitCode === 130
-                    ? ('cancelled' as const)
-                    : ('completed' as const)
-                  : ('running' as const)
+            const status = mapTerminalReadStatus(
+              result.terminalStatus,
+              result.exitCode,
+              result.hasMoreOutput
+            )
             const payload = {
-              terminalId: result.terminalId,
               status,
               output: guarded.output,
               readEndPosition: result.readEndPosition,
-              hasMoreOutput: result.hasMoreOutput,
-              exitCode: result.exitCode
+              hasMoreOutput: result.hasMoreOutput
             }
             if (!guarded.ok) {
               const failurePayload = { ...payload, ...guarded }

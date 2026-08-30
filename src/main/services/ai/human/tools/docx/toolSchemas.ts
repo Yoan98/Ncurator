@@ -224,10 +224,17 @@ export const docxCreateRootNodeSchema = z
   .discriminatedUnion('type', [docxCreateParagraphNodeSchema, docxCreateTableNodeSchema])
   .meta({ id: 'DocxCreateRootNode' })
 
-const sourcePathField = z
+const docxReadSourcePathField = z
   .string()
   .min(1)
-  .describe('文件本机绝对路径。写操作仅 .docx；读操作同时支持只读 .doc')
+  .describe('Word 文件本机绝对路径；支持 .docx 与只读 .doc')
+
+const docxWriteSourcePathField = z
+  .string()
+  .min(1)
+  .describe('Word 文件本机绝对路径；仅 .docx')
+
+const sourcePathField = docxReadSourcePathField
 const nodeIdField = z.string().min(1).describe('节点 ID')
 const searchScopeNodeIdField = z.string().min(1).describe('根节点或单元格 nodeId')
 
@@ -395,7 +402,7 @@ const docxContentInsertNodeDraftSchema = z.discriminatedUnion('type', [
   docxVisualInsertDraftSchema
 ])
 
-const contentEditBase = { sourcePath: sourcePathField }
+const contentEditBase = { sourcePath: docxWriteSourcePathField }
 export const docxContentEditSchema = z.discriminatedUnion('type', [
   z
     .object({

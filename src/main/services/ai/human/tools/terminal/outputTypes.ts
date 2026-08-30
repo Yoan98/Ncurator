@@ -1,13 +1,16 @@
-export type TerminalStatus = 'running' | 'completed' | 'cancelled'
+export type TerminalToolStatus = 'running' | 'succeeded' | 'failed' | 'cancelled'
 
-export type TerminalSessionOutput = {
+export type TerminalRunOutput = {
   terminalId: string
-  status: TerminalStatus
+  status: TerminalToolStatus
   output: string
   readEndPosition: number
   hasMoreOutput: boolean
-  exitCode: number | null
 }
 
-export type TerminalRunOutput = TerminalSessionOutput
-export type TerminalReadOutput = TerminalSessionOutput
+export type TerminalReadOutput = {
+  status: TerminalToolStatus
+  output: string
+  readEndPosition: number
+  hasMoreOutput: boolean
+}
