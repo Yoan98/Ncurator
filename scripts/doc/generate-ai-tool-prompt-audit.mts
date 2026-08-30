@@ -24,7 +24,13 @@ const OUT_PATH = path.join(ROOT, 'doc/ai-tool-prompt-audit.md')
 type JsonSchemaNode = Record<string, unknown>
 type FieldRow = { path: string; type: string; required: boolean; description: string }
 type OutField = { path: string; description: string }
-type OutputCase = { label: string; ok: boolean; args?: JsonObject; data?: JsonValue }
+type OutputCase = {
+  label: string
+  ok: boolean
+  input?: JsonObject
+  args?: JsonObject
+  data?: JsonValue
+}
 type ExampleCase = { label: string; ok: boolean; input: JsonObject; data?: JsonValue }
 
 const isJsonObject = (value: unknown): value is JsonSchemaNode =>
@@ -266,11 +272,33 @@ const INPUT_EXAMPLES_OVERRIDE: Record<string, Array<{ label: string; input: Json
   text_file_search: [
     {
       label: 'literal',
-      input: { sourcePath: '/workspace/app.ts', query: 'TODO', mode: 'literal' }
+      input: { sourcePath: '/workspace/src/app.ts', query: 'TODO', mode: 'literal' }
     },
     {
       label: 'regex',
-      input: { sourcePath: '/workspace/app.ts', query: 'function\\s+\\w+', mode: 'regex' }
+      input: {
+        sourcePath: '/workspace/src/app.ts',
+        query: 'function\\s+\\w+',
+        mode: 'regex'
+      }
+    }
+  ],
+  text_file_edit: [
+    {
+      label: 'edit',
+      input: {
+        sourcePath: '/workspace/src/config.ts',
+        action: 'edit',
+        edits: [{ oldText: 'debug: true', newText: 'debug: false' }]
+      }
+    },
+    {
+      label: 'create',
+      input: {
+        sourcePath: '/workspace/notes/todo.md',
+        action: 'create',
+        content: '# TODO\n\n- [ ] 补全测试\n'
+      }
     }
   ],
   kb_search: [
@@ -445,120 +473,287 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
 const OUTPUT_CASES: Record<string, OutputCase[]> = {
   terminal_run: [
     {
-      label: '命令执行中',
+      label: '命令执行中（长命令让出控制权）',
+      input: {
+        command: 'pnpm install',
+        commandExplanation: '安装项目依赖，命令可能持续输出数秒'
+      },
       ok: true,
       data: {
-        terminalId: 'term-001',
+        terminalId: 'term-a1b2c3',
         status: 'running',
-        output: 'Installing...\n',
-        readEndPosition: 14,
+        output: [
+          'Lockfile is up to date, resolution step is skipped',
+          'Progress: resolved 1, reused 0, downloaded 0, added 0',
+          'Packages: +128',
+          '++++++++++++++++++++++++++++++++++++++++',
+          'Downloading @esbuild/win32-x64@0.25.9: 5.12 MB/5.12 MB, done',
+          'Progress: resolved 128, reused 96, downloaded 12, added 48'
+        ].join('\n'),
+        readEndPosition: 312,
         hasMoreOutput: true
       }
     },
     {
-      label: '命令成功完成',
+      label: '命令成功完成（测试通过）',
+      input: {
+        command: 'pnpm exec vitest run tests/case/unit/ai/terminal-tool-contract.test.ts',
+        commandExplanation: '运行 terminal 契约单元测试，确认四态 status 与 payload 字段'
+      },
       ok: true,
       data: {
-        terminalId: 'term-001',
+        terminalId: 'term-a1b2c3',
         status: 'succeeded',
-        output: 'done\n',
-        readEndPosition: 5,
+        output: [
+          '',
+          ' RUN  v4.0.18 D:/1-work-space/Ncurator-Desktop',
+          '',
+          ' ✓ tests/case/unit/ai/terminal-tool-contract.test.ts (5 tests) 6ms',
+          '',
+          ' Test Files  1 passed (1)',
+          '      Tests  5 passed (5)',
+          '   Start at  18:18:34',
+          '   Duration  701ms',
+          ''
+        ].join('\n'),
+        readEndPosition: 248,
         hasMoreOutput: false
       }
     },
     {
-      label: '命令失败',
+      label: '命令失败（非零退出码）',
+      input: {
+        command: 'pnpm exec vitest run tests/case/unit/app.test.ts',
+        commandExplanation: '运行 app 单元测试，预期因断言失败而返回 failed'
+      },
       ok: true,
       data: {
-        terminalId: 'term-001',
+        terminalId: 'term-a1b2c3',
         status: 'failed',
-        output: 'error: not found\n',
-        readEndPosition: 18,
+        output: [
+          '',
+          ' FAIL  tests/case/unit/app.test.ts > compile > should pass typecheck',
+          'AssertionError: expected true to be false',
+          ' ❯ tests/case/unit/app.test.ts:42:5',
+          '     40|   it(\'should pass typecheck\', () => {',
+          '     41|     const ok = validateProject()',
+          '     42|     expect(ok).toBe(false)',
+          '       |     ^',
+          '',
+          ' Test Files  1 failed (1)',
+          '      Tests  1 failed | 2 passed (3)',
+          ''
+        ].join('\n'),
+        readEndPosition: 386,
         hasMoreOutput: false
       }
     },
-    { label: '执行失败', ok: false, data: { error: 'Command blocked by policy' } }
+    {
+      label: '策略拦截（工具级失败）',
+      input: {
+        command: 'Start-Process powershell',
+        commandExplanation: '尝试分离启动子 shell，应被 detached 策略拒绝'
+      },
+      ok: false,
+      data: { error: 'Command blocked by policy: detached shell execution is not allowed' }
+    }
   ],
   terminal_read: [
     {
-      label: '增量读取',
+      label: '增量读取（命令仍在运行）',
+      input: { terminalId: 'term-a1b2c3', readEndPosition: 312 },
       ok: true,
-      args: { terminalId: 'term-001', readEndPosition: 14 },
       data: {
         status: 'running',
-        output: '...more output\n',
-        readEndPosition: 30,
+        output: [
+          'Progress: resolved 128, reused 96, downloaded 24, added 96',
+          'Progress: resolved 128, reused 96, downloaded 31, added 118',
+          'Progress: resolved 128, reused 96, downloaded 32, added 128, done',
+          'node_modules/.pnpm postinstall$ node scripts/postinstall.mjs',
+          'node_modules/.pnpm postinstall: Done'
+        ].join('\n'),
+        readEndPosition: 548,
         hasMoreOutput: true
       }
     },
-    { label: '读取失败', ok: false, data: { error: 'Unknown terminalId' } }
+    {
+      label: '读取完成（命令已结束）',
+      input: { terminalId: 'term-a1b2c3', readEndPosition: 548 },
+      ok: true,
+      data: {
+        status: 'succeeded',
+        output: [
+          '',
+          'dependencies:',
+          '+ typescript 5.9.2',
+          '+ vitest 4.0.18',
+          '',
+          'Done in 8.4s using pnpm v10.15.0',
+          ''
+        ].join('\n'),
+        readEndPosition: 642,
+        hasMoreOutput: false
+      }
+    },
+    {
+      label: '读取失败',
+      input: { terminalId: 'term-expired' },
+      ok: false,
+      data: { error: 'Unknown terminalId: term-expired' }
+    }
   ],
   text_file_read: [
     {
-      label: '首次读取',
+      label: '首次读取（含续读提示）',
+      input: { sourcePath: '/workspace/docs/architecture.md' },
       ok: true,
-      args: { sourcePath: '/workspace/readme.md' },
-      data: { content: '# Title\n', startLine: 1, endLine: 1, totalLines: 10, nextStartLine: 2 }
+      data: {
+        content: [
+          '# NCurator Architecture',
+          '',
+          '## AI Runtime',
+          '',
+          'Tools return structured data, then modelResult renders compact text.',
+          '',
+          '## Storage',
+          '',
+          'SQLite stores runs; LanceDB stores embeddings.'
+        ].join('\n'),
+        startLine: 1,
+        endLine: 9,
+        totalLines: 48,
+        nextStartLine: 10
+      }
     },
     {
       label: '分页续读',
+      input: {
+        sourcePath: '/workspace/docs/architecture.md',
+        startLine: 10,
+        lineCount: 6
+      },
       ok: true,
-      args: { sourcePath: '/workspace/readme.md', startLine: 2, lineCount: 5 },
-      data: { content: 'body\n', startLine: 2, endLine: 6, totalLines: 10 }
+      data: {
+        content: [
+          '## Terminal',
+          '',
+          'Persistent sessions support incremental reads via terminal_read.',
+          '',
+          'Status uses running | succeeded | failed | cancelled.',
+          ''
+        ].join('\n'),
+        startLine: 10,
+        endLine: 15,
+        totalLines: 48
+      }
     },
-    { label: '读取失败', ok: false, data: { error: 'File not found' } }
+    { label: '读取失败', ok: false, data: { error: 'ENOENT: no such file or directory' } }
   ],
   text_file_search: [
     {
       label: '有命中',
+      input: {
+        sourcePath: '/workspace/src/main/services/ai/human/shared/modelToolResultRenderers.ts',
+        query: 'renderTerminalStream',
+        mode: 'literal'
+      },
       ok: true,
       data: {
-        totalMatchCount: 2,
-        returnedMatchCount: 1,
-        matches: [{ line: 5, matchText: 'TODO', textContext: '// TODO: fix', truncated: false }]
+        totalMatchCount: 3,
+        returnedMatchCount: 2,
+        matches: [
+          {
+            line: 18,
+            matchText: 'renderTerminalStream',
+            textContext:
+              "import {\n  formatTerminalMarker,\n  renderTerminalStream\n} from './renderFamilies/terminal'",
+            truncated: false
+          },
+          {
+            line: 52,
+            matchText: 'renderTerminalStream',
+            textContext:
+              '  return renderTerminalStream({\n    output: readString(obj.output) || \'\',\n    markers: buildTerminalMarkers([',
+            truncated: true
+          }
+        ]
       }
     },
     { label: '无命中', ok: true, data: { totalMatchCount: 0, returnedMatchCount: 0, matches: [] } },
-    { label: '搜索失败', ok: false, data: { error: 'Invalid regex' } }
+    { label: '搜索失败', ok: false, data: { error: 'Invalid regular expression: Unterminated group' } }
   ],
   text_file_edit: [
-    { label: '编辑成功', ok: true, args: { action: 'edit' }, data: {} },
-    { label: '编辑失败', ok: false, data: { error: 'oldText not found' } }
+    {
+      label: '批量替换成功',
+      input: {
+        sourcePath: '/workspace/src/config.ts',
+        action: 'edit',
+        edits: [{ oldText: 'debug: true', newText: 'debug: false' }]
+      },
+      ok: true,
+      data: {}
+    },
+    { label: '编辑失败', ok: false, data: { error: 'oldText not found in file (0 matches)' } }
   ],
   kb_search: [
     {
-      label: '有结果',
+      label: '有结果（多文档命中）',
+      input: { queryText: 'terminal 四态 status 契约', strategy: 'semantic', limit: 5 },
       ok: true,
       data: {
-        total: 1,
+        total: 2,
         items: [
           {
-            id: 'chunk-1',
-            text: '知识库片段内容',
-            documentName: 'notes.md',
-            documentId: 'doc-1',
+            id: 'chunk-17',
+            text: 'Terminal 工具输出 status 为 running | succeeded | failed | cancelled；terminal_run 返回 terminalId，terminal_read 不回传。',
+            documentName: 'architecture.md',
+            documentId: 'doc-arch',
             sourceType: 'file',
-            filePath: '/workspace/notes.md'
+            filePath: '/workspace/docs/architecture.md'
+          },
+          {
+            id: 'chunk-42',
+            text: 'modelResult 对 terminal 使用 C 类渲染：正文输出后追加 [status: …]、[terminalId: …] 等方括号 marker。',
+            documentName: 'ai-tool-prompt-audit.md',
+            documentId: 'doc-audit',
+            sourceType: 'file',
+            filePath: '/workspace/doc/ai-tool-prompt-audit.md'
           }
         ]
       }
     },
     { label: '无结果', ok: true, data: { total: 0, items: [] } },
-    { label: '检索失败', ok: false, data: { error: 'Index unavailable' } }
+    { label: '检索失败', ok: false, data: { error: 'Embedding index unavailable for workspace' } }
   ],
   kb_list_documents: [
     {
       label: '有文档',
       ok: true,
       data: {
-        total: 1,
+        total: 3,
         items: [
           {
-            id: 'doc-1',
-            name: 'notes.md',
+            id: 'doc-arch',
+            name: 'architecture.md',
             sourceType: 'file',
-            filePath: '/workspace/notes.md',
-            createdAt: 1,
+            filePath: '/workspace/docs/architecture.md',
+            createdAt: 1725000000000,
+            importStatus: 1
+          },
+          {
+            id: 'doc-prd',
+            name: 'workbench.md',
+            sourceType: 'file',
+            filePath: '/workspace/docs/prd/workbench.md',
+            createdAt: 1725003600000,
+            importStatus: 1
+          },
+          {
+            id: 'doc-web',
+            name: 'Release Notes',
+            sourceType: 'url',
+            sourceUrl: 'https://example.com/releases/v1.2',
+            createdAt: 1725007200000,
             importStatus: 1
           }
         ]
@@ -570,19 +765,41 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
     {
       label: '关键词搜索',
       ok: true,
-      args: { query: 'typescript tutorial' },
-      data: { items: [{ requestedUrl: 'https://example.com/a', title: 'Tutorial A' }] }
+      input: { query: 'vitest terminal output snapshot testing' },
+      data: {
+        items: [
+          {
+            requestedUrl: 'https://vitest.dev/guide/snapshot',
+            title: 'Snapshot Testing | Vitest'
+          },
+          {
+            requestedUrl: 'https://vitest.dev/guide/cli',
+            title: 'Command Line Interface | Vitest'
+          }
+        ]
+      }
     },
     {
       label: 'URL 直读',
       ok: true,
-      args: { url: 'https://example.com/page' },
+      input: { url: 'https://example.com/docs/terminal' },
       data: {
         items: [
           {
-            requestedUrl: 'https://example.com/page',
-            title: 'Page',
-            markdown: '# Heading\nBody text'
+            requestedUrl: 'https://example.com/docs/terminal',
+            title: 'Terminal Sessions',
+            markdown: [
+              '# Terminal Sessions',
+              '',
+              'Commands run in a persistent shell. Use `terminal_read` to poll output.',
+              '',
+              '## Status values',
+              '',
+              '- `running` — command still producing output',
+              '- `succeeded` — exited 0',
+              '- `failed` — exited non-zero',
+              '- `cancelled` — user stopped (exit 130)'
+            ].join('\n')
           }
         ]
       }
@@ -590,8 +807,16 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
     {
       label: '单条抓取失败',
       ok: true,
-      args: { query: 'test' },
-      data: { items: [{ requestedUrl: 'https://bad.example', title: 'bad', error: 'HTTP 403' }] }
+      input: { query: 'blocked page example' },
+      data: {
+        items: [
+          {
+            requestedUrl: 'https://private.example/internal',
+            title: 'private.example',
+            error: 'HTTP 403 Forbidden'
+          }
+        ]
+      }
     },
     { label: '工具失败', ok: false, data: { error: 'Search service unavailable' } }
   ],
@@ -599,51 +824,71 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
     {
       label: 'navigate',
       ok: true,
-      args: { action: 'navigate', url: 'https://example.com' },
-      data: { action: 'navigate', page: { url: 'https://example.com', title: 'Example' } }
+      input: { action: 'navigate', url: 'https://example.com/docs' },
+      data: {
+        action: 'navigate',
+        page: { url: 'https://example.com/docs', title: 'Example Docs — Getting Started' }
+      }
     },
     {
       label: 'extract',
       ok: true,
-      args: { action: 'extract', instruction: '提取正文' },
+      input: { action: 'extract', instruction: '提取安装步骤与注意事项' },
       data: {
         action: 'extract',
-        page: { url: 'https://example.com', title: 'Example' },
-        content: 'Page body text'
+        page: { url: 'https://example.com/docs/install', title: 'Install Guide' },
+        content: [
+          '## Prerequisites',
+          '',
+          '- Node.js 20+',
+          '- pnpm 10+',
+          '',
+          '## Steps',
+          '',
+          '1. Clone the repository',
+          '2. Run `pnpm install`',
+          '3. Run `pnpm dev` to start the desktop app',
+          '',
+          'Note: first launch may download embedding models (~400 MB).'
+        ].join('\n')
       }
     },
     {
       label: 'observe',
       ok: true,
-      args: { action: 'observe', instruction: '列出按钮' },
+      input: { action: 'observe', instruction: '列出可点击的提交与取消按钮' },
       data: {
         action: 'observe',
-        page: { url: 'https://example.com' },
-        actions: [{ description: 'Click Submit button' }]
+        page: { url: 'https://example.com/form', title: 'Contact Form' },
+        actions: [
+          { description: 'Click primary button "Submit"' },
+          { description: 'Click secondary button "Cancel"' },
+          { description: 'Focus text field "Email address"' }
+        ]
       }
     },
     {
       label: 'act 成功',
       ok: true,
-      args: { action: 'act', instruction: '点击提交' },
+      input: { action: 'act', instruction: '在 Email 输入框填入 test@example.com 并点击 Submit' },
       data: {
         action: 'act',
-        page: { url: 'https://example.com' },
+        page: { url: 'https://example.com/form', title: 'Contact Form' },
         success: true,
-        message: 'Clicked',
-        actionDescription: 'Click Submit'
+        message: 'Filled email and clicked Submit',
+        actionDescription: 'Type test@example.com into Email field, then click Submit'
       }
     },
     {
       label: 'act 失败',
       ok: true,
-      args: { action: 'act', instruction: '点击缺失元素' },
+      input: { action: 'act', instruction: '点击不存在的 Confirm 按钮' },
       data: {
         action: 'act',
-        page: { url: 'https://example.com' },
+        page: { url: 'https://example.com/form', title: 'Contact Form' },
         success: false,
-        message: 'Element not found',
-        actionDescription: 'Click Missing'
+        message: 'Element not found: button[name="Confirm"]',
+        actionDescription: 'Click button[name="Confirm"]'
       }
     },
     { label: '浏览器错误', ok: true, data: { error: 'Browser service unavailable' } }
@@ -651,15 +896,33 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
   docx_read_outline: [
     {
       label: '成功',
+      input: {
+        sourcePath: '/workspace/reports/q3-summary.docx',
+        fromPercent: 0,
+        toPercent: 40
+      },
       ok: true,
       data: {
         fromPercent: 0,
-        toPercent: 50,
+        toPercent: 40,
         fromNodeIndex: 0,
-        toNodeIndex: 4,
-        totalRootCount: 12,
+        toNodeIndex: 6,
+        totalRootCount: 18,
         segments: [
-          { story: 'body', fromNodeIndex: 0, toNodeIndex: 4, textMap: '结构：3 段\n关键词：摘要' }
+          {
+            story: 'body',
+            fromNodeIndex: 0,
+            toNodeIndex: 2,
+            textMap:
+              '结构：标题 + 摘要段\n关键词：Q3、营收、同比\n代表句：[1] 第三季度业务回顾\n代表句：[2] 核心指标如下表'
+          },
+          {
+            story: 'body',
+            fromNodeIndex: 3,
+            toNodeIndex: 6,
+            textMap:
+              '结构：表格 4x3 KPI 表\n关键词：GMV、转化率、留存\n代表句：[5] 华东区增长最快'
+          }
         ]
       }
     }
@@ -667,20 +930,40 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
   docx_search: [
     {
       label: '有命中',
+      input: {
+        sourcePath: '/workspace/reports/q3-summary.docx',
+        query: '同比增长',
+        mode: 'literal',
+        includeContext: true
+      },
       ok: true,
       data: {
-        totalMatchCount: 1,
+        totalMatchCount: 2,
         returnedMatchCount: 1,
         matches: [
           {
-            nodeId: 'node_3',
-            nodeIndex: 3,
+            nodeId: 'node_14',
+            nodeIndex: 14,
             type: 'paragraph',
             story: 'body',
-            matchText: '关键词',
-            textContext: '包含关键词的句子。',
-            before: [{ nodeId: 'node_2', nodeIndex: 2, type: 'paragraph', textPreview: '上文' }],
-            after: [{ nodeId: 'node_4', nodeIndex: 4, type: 'paragraph', textPreview: '下文' }]
+            matchText: '同比增长',
+            textContext: '本季度 GMV 达到 1.2 亿元，同比增长 18%，主要由新客转化驱动。',
+            before: [
+              {
+                nodeId: 'node_13',
+                nodeIndex: 13,
+                type: 'paragraph',
+                textPreview: '## 经营结果'
+              }
+            ],
+            after: [
+              {
+                nodeId: 'node_15',
+                nodeIndex: 15,
+                type: 'table',
+                textPreview: '区域 | GMV | 同比'
+              }
+            ]
           }
         ]
       }
@@ -689,19 +972,61 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
   ],
   docx_read_nodes: [
     {
-      label: '成功',
+      label: '段落与表格',
+      input: {
+        sourcePath: '/workspace/reports/q3-summary.docx',
+        range: { type: 'node_index', fromNodeIndex: 12, toNodeIndex: 13 }
+      },
       ok: true,
       data: {
         nodes: [
           {
-            nodeId: 'node_1',
+            nodeId: 'node_12',
             type: 'paragraph',
+            story: { storyId: 'body', type: 'body' },
             children: [
               {
                 type: 'run',
-                nodeId: 'n:1',
-                style: { bold: true },
-                children: [{ type: 'text', text: 'Hello' }]
+                nodeId: 'n:12:1',
+                style: { bold: true, color: '1F3864' },
+                children: [{ type: 'text', text: '核心 KPI' }]
+              }
+            ]
+          },
+          {
+            nodeId: 'node_13',
+            type: 'table',
+            story: { storyId: 'body', type: 'body' },
+            children: [
+              {
+                type: 'table_row',
+                nodeId: 'row:1',
+                children: [
+                  {
+                    nodeId: 'cell:1:1',
+                    type: 'table_cell',
+                    row: 0,
+                    col: 0,
+                    children: [
+                      {
+                        type: 'paragraph',
+                        children: [{ type: 'run', children: [{ type: 'text', text: 'GMV' }] }]
+                      }
+                    ]
+                  },
+                  {
+                    nodeId: 'cell:1:2',
+                    type: 'table_cell',
+                    row: 0,
+                    col: 1,
+                    children: [
+                      {
+                        type: 'paragraph',
+                        children: [{ type: 'run', children: [{ type: 'text', text: '1.2 亿' }] }]
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           }
@@ -711,86 +1036,155 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
   ],
   docx_content_edit: [
     {
-      label: '成功',
+      label: '插入段落成功',
+      input: {
+        sourcePath: '/workspace/reports/q3-summary.docx',
+        type: 'insert_nodes',
+        anchorNodeId: 'node_10',
+        position: 'after',
+        nodes: [
+          {
+            type: 'paragraph',
+            kind: 'paragraph',
+            runs: [{ text: '本段为模型新增的执行摘要补充。', bold: true }]
+          }
+        ]
+      },
       ok: true,
-      args: { sourcePath: '/workspace/doc.docx', type: 'insert_nodes' },
-      data: { createdIds: ['node_new_1'] }
+      data: { createdIds: ['node_27', 'n:27:1'] }
     },
-    { label: '失败', ok: false, data: { error: 'Node not found' } }
+    { label: '失败', ok: false, data: { error: 'anchorNodeId node_999 not found' } }
   ],
   docx_format: [
     {
-      label: '成功',
+      label: '局部加粗成功',
+      input: {
+        sourcePath: '/workspace/reports/q3-summary.docx',
+        type: 'format_text',
+        nodeId: 'n:14:1',
+        bold: true,
+        color: 'C00000'
+      },
       ok: true,
-      args: { sourcePath: '/workspace/doc.docx', type: 'format_text' },
       data: {}
     }
   ],
   docx_table_edit: [
     {
-      label: '成功',
+      label: '插入表格行成功',
+      input: {
+        sourcePath: '/workspace/reports/q3-summary.docx',
+        type: 'insert_row',
+        tableNodeId: 'node_15',
+        rowIndex: 2,
+        cells: [{ paragraphs: [{ kind: 'paragraph', runs: [{ text: '华南' }] }] }]
+      },
       ok: true,
-      args: { sourcePath: '/workspace/doc.docx', type: 'insert_row' },
-      data: {}
+      data: { createdIds: ['row:4'] }
     }
   ],
   docx_comments_revisions: [
     {
-      label: '成功',
+      label: '添加批注成功',
+      input: {
+        sourcePath: '/workspace/reports/q3-summary.docx',
+        type: 'add_comment',
+        nodeId: 'node_14',
+        text: '请核对 GMV 口径是否与 BI 一致'
+      },
       ok: true,
-      args: { sourcePath: '/workspace/doc.docx', type: 'add_comment' },
-      data: {}
+      data: { createdIds: ['comment-8'] }
     }
   ],
   pdf_outline: [
     {
       label: '成功',
+      input: { sourcePath: '/workspace/papers/deep-learning.pdf' },
       ok: true,
       data: {
-        pageCount: 10,
-        metadata: { title: 'Sample PDF', author: 'Author' },
-        outline: [{ title: 'Chapter 1', pageNumber: 1, depth: 1 }]
+        pageCount: 42,
+        metadata: { title: 'Deep Learning (draft)', author: 'A. Researcher' },
+        outline: [
+          { title: '1 Introduction', pageNumber: 1, depth: 1 },
+          { title: '1.1 Motivation', pageNumber: 2, depth: 2 },
+          { title: '2 Architecture', pageNumber: 8, depth: 1 },
+          { title: '2.1 CNN', pageNumber: 9, depth: 2 }
+        ]
       }
     }
   ],
   pdf_search: [
     {
       label: '有命中',
+      input: {
+        sourcePath: '/workspace/papers/deep-learning.pdf',
+        query: 'overfitting',
+        mode: 'literal'
+      },
       ok: true,
       data: {
-        totalMatchCount: 1,
-        returnedMatchCount: 1,
-        matches: [{ pageNumber: 2, matchedText: 'term', snippet: '...matching term...' }]
+        totalMatchCount: 3,
+        returnedMatchCount: 2,
+        matches: [
+          {
+            pageNumber: 9,
+            matchedText: 'overfitting',
+            snippet: '…training too long may cause overfitting on the validation set…'
+          },
+          {
+            pageNumber: 31,
+            matchedText: 'overfitting',
+            snippet: '…regularization reduces overfitting by penalizing large weights…'
+          }
+        ]
       }
     }
   ],
   pdf_read_pages: [
     {
       label: '有文本层',
+      input: { sourcePath: '/workspace/papers/deep-learning.pdf', pageNumbers: [1, 2] },
       ok: true,
       data: {
+        sourcePath: '/workspace/papers/deep-learning.pdf',
+        pageCount: 42,
         pages: [
           {
             pageNumber: 1,
-            text: 'Page one text',
+            text: [
+              'Deep Learning Overview',
+              '',
+              'Inputs → parameters → architecture → predictions → labels → loss → update'
+            ].join('\n'),
             textStatus: 'available',
+            charCount: 92,
+            imageCount: 1,
+            pageImagePath: '/runtime/deep-learning/page-1.png'
+          },
+          {
+            pageNumber: 2,
+            text: 'We study neural networks with multiple hidden layers and backpropagation.',
+            textStatus: 'available',
+            charCount: 68,
             imageCount: 0,
-            pageImagePath: '/runtime/page-1.png'
+            pageImagePath: '/runtime/deep-learning/page-2.png'
           }
         ]
       }
     },
     {
-      label: '无文本层',
+      label: '无文本层（扫描页）',
+      input: { sourcePath: '/workspace/scans/invoice-scan.pdf', pageNumbers: [1] },
       ok: true,
       data: {
+        sourcePath: '/workspace/scans/invoice-scan.pdf',
         pages: [
           {
-            pageNumber: 2,
+            pageNumber: 1,
             text: '',
             textStatus: 'empty',
             imageCount: 1,
-            pageImagePath: '/runtime/page-2.png'
+            pageImagePath: '/runtime/invoice-scan/page-1.png'
           }
         ]
       }
@@ -799,12 +1193,16 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
   ppt_read_outline: [
     {
       label: '成功',
+      input: { sourcePath: '/workspace/decks/q3-review.pptx' },
       ok: true,
       data: {
-        slideCount: 2,
+        slideCount: 5,
         slides: [
-          { slideId: 's1', slideIndex: 1, title: 'Intro' },
-          { slideId: 's2', slideIndex: 2, title: 'Body' }
+          { slideId: 's1', slideIndex: 1, title: 'Q3 Business Review' },
+          { slideId: 's2', slideIndex: 2, title: 'Executive Summary' },
+          { slideId: 's3', slideIndex: 3, title: 'KPI Dashboard' },
+          { slideId: 's4', slideIndex: 4, title: 'Regional Breakdown' },
+          { slideId: 's5', slideIndex: 5, title: 'Next Steps' }
         ]
       }
     }
@@ -812,14 +1210,24 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
   ppt_read_slides: [
     {
       label: '成功',
+      input: {
+        sourcePath: '/workspace/decks/q3-review.pptx',
+        slideIds: ['s3'],
+        detail: 'full'
+      },
       ok: true,
       data: {
         slides: [
           {
-            slideId: 's1',
-            slideIndex: 1,
-            slideImagePath: '/runtime/slide-1.png',
-            elements: [{ type: 'text', elementId: 'e1' }]
+            slideId: 's3',
+            slideIndex: 3,
+            slideImagePath: '/runtime/q3-review/slide-3.png',
+            elements: [
+              { type: 'title', elementId: 'e-title', text: 'KPI Dashboard' },
+              { type: 'chart', elementId: 'e-chart-gmv' },
+              { type: 'table', elementId: 'e-table-region' },
+              { type: 'text', elementId: 'e-footnote', text: 'Source: internal BI' }
+            ]
           }
         ]
       }
@@ -828,57 +1236,118 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
   ppt_search: [
     {
       label: '有命中',
+      input: {
+        sourcePath: '/workspace/decks/q3-review.pptx',
+        query: 'GMV',
+        mode: 'literal'
+      },
       ok: true,
       data: {
-        totalMatchCount: 1,
-        returnedMatchCount: 1,
+        totalMatchCount: 2,
+        returnedMatchCount: 2,
         truncated: false,
         matches: [
           {
-            slideIndex: 1,
-            slideId: 's1',
-            source: 'slide',
-            matchedText: '关键词',
-            text: '幻灯片含关键词'
+            slideIndex: 3,
+            slideId: 's3',
+            source: 'table_cell',
+            matchedText: 'GMV',
+            text: 'GMV | 1.2B | +18% YoY'
+          },
+          {
+            slideIndex: 4,
+            slideId: 's4',
+            source: 'text_box',
+            matchedText: 'GMV',
+            text: 'East China led GMV growth this quarter.'
           }
         ]
       }
     }
   ],
   ppt_edit: [
-    { label: '成功', ok: true, data: { slideId: 's_new', createdElementIds: ['e_new_1'] } }
+    {
+      label: '成功',
+      input: {
+        sourcePath: '/workspace/decks/q3-review.pptx',
+        type: 'add_text_box',
+        slideId: 's5',
+        text: 'Contact: ops@example.com'
+      },
+      ok: true,
+      data: { slideId: 's5', createdElementIds: ['e-contact-1'] }
+    }
   ],
   excel_read: [
     {
       label: 'workbook',
       ok: true,
-      args: { type: 'workbook', sourcePath: '/workspace/book.xlsx' },
-      data: { sheets: [{ name: 'Sheet1', range: 'A1:D10', rowCount: 10, columnCount: 4 }] }
+      input: { type: 'workbook', sourcePath: '/workspace/data/q3-kpi.xlsx' },
+      data: {
+        sheets: [
+          { name: 'Summary', range: 'A1:F20', rowCount: 20, columnCount: 6 },
+          { name: 'Regions', range: 'A1:D50', rowCount: 50, columnCount: 4 },
+          { name: 'Raw', range: 'A1:Z500', rowCount: 500, columnCount: 26 }
+        ]
+      }
     },
     {
       label: 'range',
       ok: true,
-      args: { type: 'range', sourcePath: '/workspace/book.xlsx', sheetName: 'Sheet1', range: 'A1:B2' },
-      data: { sheetName: 'Sheet1', range: 'A1:B2', rows: [['Name', 'Score'], ['Alice', 90]] }
+      input: {
+        type: 'range',
+        sourcePath: '/workspace/data/q3-kpi.xlsx',
+        sheetName: 'Summary',
+        range: 'A1:C4'
+      },
+      data: {
+        sheetName: 'Summary',
+        range: 'A1:C4',
+        rows: [
+          ['Metric', 'Value', 'YoY'],
+          ['GMV', 1200000000, 0.18],
+          ['Orders', 842000, 0.11],
+          ['Conversion', 0.034, 0.006]
+        ]
+      }
     },
     {
       label: 'style',
       ok: true,
-      args: { type: 'style', sourcePath: '/workspace/book.xlsx', sheetName: 'Sheet1', range: 'A1' },
+      input: {
+        type: 'style',
+        sourcePath: '/workspace/data/q3-kpi.xlsx',
+        sheetName: 'Summary',
+        range: 'A1:C1'
+      },
       data: {
-        sheetName: 'Sheet1',
-        range: 'A1',
-        rows: [[{ bold: true, fontColor: 'FF0000', fillColor: null, numberFormat: null }]]
+        sheetName: 'Summary',
+        range: 'A1:C1',
+        rows: [
+          [
+            { bold: true, fontColor: 'FFFFFF', fillColor: '1F3864', numberFormat: null },
+            { bold: true, fontColor: 'FFFFFF', fillColor: '1F3864', numberFormat: null },
+            { bold: true, fontColor: 'FFFFFF', fillColor: '1F3864', numberFormat: '0.0%' }
+          ]
+        ]
       }
     },
     {
       label: 'search',
       ok: true,
-      args: { type: 'search', sourcePath: '/workspace/book.xlsx', query: 'Alice' },
+      input: {
+        type: 'search',
+        sourcePath: '/workspace/data/q3-kpi.xlsx',
+        query: 'GMV',
+        mode: 'literal'
+      },
       data: {
-        totalMatchCount: 1,
-        returnedMatchCount: 1,
-        matches: [{ sheetName: 'Sheet1', address: 'B2', value: 'Alice' }]
+        totalMatchCount: 2,
+        returnedMatchCount: 2,
+        matches: [
+          { sheetName: 'Summary', address: 'A2', value: 'GMV' },
+          { sheetName: 'Regions', address: 'B12', value: 'East GMV' }
+        ]
       }
     }
   ],
@@ -886,31 +1355,64 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
     {
       label: '编辑成功',
       ok: true,
-      args: { type: 'set_range', sourcePath: '/workspace/book.xlsx' },
+      input: {
+        type: 'set_range',
+        sourcePath: '/workspace/data/q3-kpi.xlsx',
+        sheetName: 'Summary',
+        range: 'B4',
+        values: [[0.036]]
+      },
       data: {}
     },
-    { label: '编辑失败', ok: false, data: { error: 'Sheet not found' } }
+    { label: '编辑失败', ok: false, data: { error: 'Sheet "Missing" not found' } }
   ],
   image_generate: [
-    { label: '成功', ok: true, data: { outputPath: '/workspace/assets/chart.png' } },
-    { label: '失败', ok: true, data: { error: 'Invalid SVG' } }
+    {
+      label: '成功',
+      input: {
+        outputPath: '/workspace/assets/q3-gmv-chart.png',
+        format: 'png',
+        svg: '<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360">…</svg>'
+      },
+      ok: true,
+      data: { outputPath: '/workspace/assets/q3-gmv-chart.png', width: 640, height: 360 }
+    },
+    { label: '失败', ok: true, data: { error: 'Invalid SVG: unclosed tag <rect>' } }
   ],
   learn_skill: [
-    { label: '成功', ok: true, args: { skillIds: ['docx-read'] }, data: {} }
+    {
+      label: '成功',
+      input: { skillIds: ['docx-read', 'terminal'] },
+      ok: true,
+      data: {}
+    }
   ],
   update_plan: [{ label: '成功', ok: true, data: {} }],
   read_image: [
     {
       label: '加载成功',
+      input: {
+        images: [
+          { path: '/workspace/screenshots/workbench-run.png' },
+          { path: '/workspace/screenshots/terminal-output.png' }
+        ]
+      },
       ok: true,
       data: {
         images: [
           {
-            path: '/workspace/screenshot.png',
+            path: '/workspace/screenshots/workbench-run.png',
             mimeType: 'image/png',
-            sizeBytes: 1024,
-            width: 800,
-            height: 600
+            sizeBytes: 248_320,
+            width: 1440,
+            height: 900
+          },
+          {
+            path: '/workspace/screenshots/terminal-output.png',
+            mimeType: 'image/png',
+            sizeBytes: 96_512,
+            width: 960,
+            height: 540
           }
         ]
       }
@@ -942,7 +1444,7 @@ const buildExamples = (toolName: string, spec: HumanToolSpec): ExampleCase[] => 
     return {
       label: c.label,
       ok: c.ok,
-      input: { ...(matched?.input || {}), ...(c.args || {}) },
+      input: c.input ?? { ...(matched?.input || {}), ...(c.args || {}) },
       data: c.data
     }
   })
