@@ -18,19 +18,19 @@ const coverSlide = {
     {
       type: 'shape' as const,
       shape: 'roundRect' as const,
-      bounds: { x: 96, y: 88, width: 1728, height: 904 },
+      bounds: { x: 50, y: 45, width: 860, height: 110 },
       style: { fill: '#17324D' }
     },
     {
       type: 'text' as const,
       text: '季度业务复盘',
-      bounds: { x: 180, y: 300, width: 1500, height: 110 },
-      style: { color: '#FFFFFF', fontSize: 36 }
+      bounds: { x: 85, y: 68, width: 790, height: 60 },
+      style: { color: '#FFFFFF', fontSize: 36, bold: true }
     },
     {
       type: 'text' as const,
       text: '增长引擎与下一步行动',
-      bounds: { x: 184, y: 470, width: 1200, height: 90 },
+      bounds: { x: 85, y: 210, width: 790, height: 60 },
       style: { color: '#DCE8F1', fontSize: 18 }
     }
   ]
@@ -43,13 +43,13 @@ const detailSlide = {
     {
       type: 'text' as const,
       text: '下一步行动',
-      bounds: { x: 140, y: 100, width: 1500, height: 110 },
-      style: { color: '#17324D', fontSize: 36 }
+      bounds: { x: 70, y: 50, width: 820, height: 55 },
+      style: { color: '#17324D', fontSize: 36, bold: true }
     },
     {
       type: 'text' as const,
       text: '缩短反馈周期，集中投入增长引擎。',
-      bounds: { x: 160, y: 300, width: 1450, height: 120 },
+      bounds: { x: 80, y: 150, width: 800, height: 60 },
       style: { color: '#333333', fontSize: 18 }
     }
   ]

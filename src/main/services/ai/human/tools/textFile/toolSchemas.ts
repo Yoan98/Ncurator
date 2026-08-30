@@ -1,4 +1,9 @@
 import { z } from 'zod/v4'
+import type {
+  TextFileEditOutput,
+  TextFileReadOutput,
+  TextFileSearchOutput
+} from './outputTypes'
 
 const STRUCTURED_FILE_EXTENSION_PATTERN = /\.(?:doc|docx|ppt|pptx|pdf|xls|xlsx|odt|ods|odp)$/iu
 
@@ -68,33 +73,6 @@ export const TEXT_FILE_EDIT_SCHEMA = z.discriminatedUnion('action', [
   })
 ])
 
-export type TextFileReadOutput = {
-  content: string
-  startLine: number
-  endLine: number
-  totalLines: number
-  nextStartLine?: number
-}
-
-export const TEXT_FILE_SEARCH_OUTPUT = {
-  totalMatchCount: 0 as number,
-  returnedMatchCount: 0 as number,
-  matches: [] as Array<{
-    line: number
-    matchText: string
-    textContext: string
-    truncated: boolean
-  }>
-}
-export type TextFileSearchOutput = typeof TEXT_FILE_SEARCH_OUTPUT
-
-export type TextFileEditOutput = Record<string, never>
-
-export type FileReadInput = z.infer<typeof TEXT_FILE_READ_SCHEMA>
-export type FileReadOutput = TextFileReadOutput
-export type FileEditInput = z.infer<typeof TEXT_FILE_EDIT_SCHEMA>
-export type FileEditOutput = TextFileEditOutput
-
 export const TEXT_FILE_SEARCH_SCHEMA = z
   .object({
     sourcePath: textFileSourcePathField,
@@ -103,5 +81,14 @@ export const TEXT_FILE_SEARCH_SCHEMA = z
   })
   .strict()
 
+export type FileReadInput = z.infer<typeof TEXT_FILE_READ_SCHEMA>
+export type FileEditInput = z.infer<typeof TEXT_FILE_EDIT_SCHEMA>
 export type FileSearchInput = z.infer<typeof TEXT_FILE_SEARCH_SCHEMA>
+
+export type FileReadOutput = TextFileReadOutput
+export type FileEditOutput = TextFileEditOutput
 export type FileSearchOutput = TextFileSearchOutput
+
+export type { TextFileEditOutput, TextFileReadOutput, TextFileSearchOutput } from './outputTypes'
+
+export { TEXT_FILE_SEARCH_OUTPUT } from './outputTypes'

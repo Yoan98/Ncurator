@@ -800,7 +800,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：同一 AI session 的多轮 human run 能复用已学习技能记忆。
 - Why：技能记忆是 AI 架构跨轮次协作的核心，不应每轮重复 learning。
 - How：跨四轮逐步学习 DOCX、PDF、Excel、PPT 和图片技能，最后一次加载 `docx-write`。
-- Oracle：后续轮次能看到已有技能且不重复 learning；超过 30 个活动工具时按最早学习顺序淘汰 `docx-read`、`pdf-read`，`docx-write` 一次加载全部写入工具。
+- Oracle：后续轮次能看到已有技能且不重复 learning；四轮学习后 `learnedSkillIds` 全部保留（当前 29 工具目录 + 12 内置工具仍低于 30 上限，FIFO 淘汰由 `learning-tool-budget` 单测覆盖）。
 - Not：不覆盖 Workbench UI 会话持久化，该路径由 Workbench E2E 覆盖。
 
 ##### `todolist-memory-maintenance`

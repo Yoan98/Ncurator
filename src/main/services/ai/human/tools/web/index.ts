@@ -6,6 +6,7 @@ import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolFamilyDefinition } from '../types'
 import { BROWSER_USE_TOOL_SPEC, WEB_SEARCH_TOOL_SPEC } from './toolSpecs'
+import type { WebSearchItem, WebSearchLinkItem } from './outputTypes'
 
 const webSourceService = new WebSourceService()
 
@@ -17,24 +18,7 @@ type WebCrawlerFailureDetails = Error & {
   statusCode?: number
 }
 
-type WebSearchLink = {
-  href: string
-  text?: string
-  title?: string
-}
-
-type WebSearchItem = {
-  requestedUrl: string
-  finalUrl?: string
-  title?: string
-  markdown?: string
-  links?: { internal: WebSearchLink[]; external: WebSearchLink[] }
-  publishedAt?: string
-  error?: string
-  statusCode?: number
-}
-
-const renderLinkForAi = (link: WebSearchLink): WebSearchLink => ({
+const renderLinkForAi = (link: WebSearchLinkItem): WebSearchLinkItem => ({
   href: link.href,
   ...(link.text ? { text: link.text } : {}),
   ...(link.title ? { title: link.title } : {})
@@ -56,7 +40,7 @@ const buildCrawlItem = (input: {
     finalUrl: string
     title?: string
     markdown: string
-    links: { internal: WebSearchLink[]; external: WebSearchLink[] }
+    links: { internal: WebSearchLinkItem[]; external: WebSearchLinkItem[] }
     publishedAt?: string
   }
 }): WebSearchItem => ({

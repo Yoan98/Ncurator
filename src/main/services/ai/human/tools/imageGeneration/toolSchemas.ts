@@ -19,6 +19,4 @@ export const imageGenerateSchema = z
 
 export type ImageGenerateInput = z.infer<typeof imageGenerateSchema>
 
-export type ImageGenerateOutput =
-  | { outputPath: string }
-  | { error: string }
+export type { ImageGenerateOutput } from './outputTypes'

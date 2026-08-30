@@ -1,5 +1,4 @@
 import { z } from 'zod/v4'
-import { jsonObjectSchema } from '../../toolSchemas'
 
 export const KB_SEARCH_SCHEMA = z.object({
   queryText: z.string().min(1).describe('检索查询词或语义语句'),
@@ -22,43 +21,9 @@ export const KB_LIST_DOCUMENTS_SCHEMA = z.object({
   documentIds: z.array(z.string()).optional().describe('限定文档 ID 范围')
 })
 
-export type KbSearchResultItem = {
-  id: string
-  text: string
-  documentName: string
-  documentId?: string
-  sourceType?: string
-  filePath?: string
-  sourceUrl?: string
-  metadata?: string | z.infer<typeof jsonObjectSchema>
-  createdAt?: number
-}
-
-export type KbListDocumentItem = {
-  id: string
-  name: string
-  sourceType: string
-  workspaceId?: string
-  filePath?: string
-  createdAt: number
-  importStatus: number
-  sourceId?: string
-  sourceUrl?: string
-  sourceTitle?: string
-  normalizedSourceUrl?: string
-  fetchedAt?: number
-  updatedAt?: number
-  lastError?: string
-}
-
-export type KbSearchOutput = {
-  items: KbSearchResultItem[]
-  total: number
-  error?: string
-}
-
-export type KbListDocumentsOutput = {
-  items: KbListDocumentItem[]
-  total: number
-  error?: string
-}
+export type {
+  KbListDocumentItem,
+  KbListDocumentsOutput,
+  KbSearchOutput,
+  KbSearchResultItem
+} from './outputTypes'

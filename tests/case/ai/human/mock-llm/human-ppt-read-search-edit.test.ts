@@ -20,13 +20,13 @@ const seedSlide = {
     {
       type: 'text' as const,
       text: '季度复盘',
-      bounds: { x: 140, y: 100, width: 1500, height: 110 },
-      style: { fontSize: 36 }
+      bounds: { x: 70, y: 50, width: 820, height: 55 },
+      style: { fontSize: 36, bold: true }
     },
     {
       type: 'text' as const,
       text: '负责人：TBD',
-      bounds: { x: 160, y: 300, width: 1450, height: 120 },
+      bounds: { x: 80, y: 150, width: 800, height: 60 },
       style: { fontSize: 18 }
     }
   ]
