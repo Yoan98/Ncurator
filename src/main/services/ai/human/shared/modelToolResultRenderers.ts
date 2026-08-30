@@ -199,10 +199,14 @@ const renderDocxNeighbor = (value: JsonValue | undefined, label: string): string
 export const renderDocxSearchModelResult: ModelResultRenderer = ({ data }) => {
   const obj = isObject(data) ? data : {}
   const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
+  const totalMatchCount = readNumber(obj.totalMatchCount) ?? 0
+  const returnedMatchCount = readNumber(obj.returnedMatchCount) ?? matches.length
   return [
     'DOCX search completed successfully.',
-    `Total matches: ${readNumber(obj.totalMatchCount) ?? 0}`,
-    'Returned matches:',
+    `Total matches: ${totalMatchCount}`,
+    `Returned matches: ${returnedMatchCount}`,
+    ...(totalMatchCount > returnedMatchCount ? ['(more matches not returned)'] : []),
+    'Matches:',
     ...(matches.length
       ? matches.flatMap((item, index) => [
           `  ${index + 1}. nodeId=${readString(item.nodeId) || ''}; nodeIndex=${readNumber(item.nodeIndex) ?? ''}; type=${readString(item.type) || ''}; story=${readString(item.story) || ''}${readString(item.tableNodeId) ? `; tableNodeId=${readString(item.tableNodeId)}` : ''}`,
@@ -490,9 +494,13 @@ export const renderExcelReadModelResult: ModelResultRenderer = ({ args, data }) 
   }
   if (type === 'search' || Array.isArray(obj.matches)) {
     const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
+    const totalMatchCount = readNumber(obj.totalMatchCount) ?? matches.length
+    const returnedMatchCount = readNumber(obj.returnedMatchCount) ?? matches.length
     return [
       'Excel search completed.',
-      `truncated: ${String(obj.truncated === true)}`,
+      `Total matches: ${totalMatchCount}`,
+      `Returned matches: ${returnedMatchCount}`,
+      ...(totalMatchCount > returnedMatchCount ? ['(more matches not returned)'] : []),
       'Matches:',
       ...(matches.length
         ? matches.map((item) => {

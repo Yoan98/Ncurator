@@ -46,6 +46,7 @@ export type DocxSearchMatchOutput = {
 
 export type DocxSearchOutput = {
   totalMatchCount: number
+  returnedMatchCount: number
   matches: DocxSearchMatchOutput[]
 }
 

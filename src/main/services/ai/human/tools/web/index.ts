@@ -331,7 +331,6 @@ export const webToolFamily: ToolFamilyDefinition = {
                       tabId: browserTab.id,
                       action: 'navigate',
                       url: args.url,
-                      instruction: instruction || undefined,
                       llmConfig
                     })
                   : await service.run({

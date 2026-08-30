@@ -65,10 +65,7 @@ const buildKbResult = (input: {
 
   const normalizedData =
     input.ok === false && input.error
-      ? {
-          ...(data && typeof data === 'object' && !Array.isArray(data) ? data : {}),
-          error: input.error
-        }
+      ? ({ error: input.error } satisfies JsonObject)
       : data
 
   return {

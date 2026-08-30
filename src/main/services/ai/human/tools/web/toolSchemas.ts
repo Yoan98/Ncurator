@@ -14,8 +14,7 @@ export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
   z
     .object({
       action: z.literal('navigate').describe('打开 URL 并加载页面'),
-      url: z.string().min(1).describe('目标 URL'),
-      instruction: z.string().optional().describe('可选操作说明')
+      url: z.string().min(1).describe('目标 URL')
     })
     .strict(),
   z

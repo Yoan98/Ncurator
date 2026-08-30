@@ -11,6 +11,5 @@ export type ReadImageItem = {
 }
 
 export type ReadImageOutput = {
-  message: string
   images: ReadImageItem[]
 }

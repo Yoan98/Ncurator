@@ -473,7 +473,6 @@ describe('ai tool web backend', () => {
         })
         const first = await harness.invoke<BrowserUseResult>('browser_use', {
           action: 'navigate',
-          instruction: '打开任务页',
           url: 'https://example.com/task'
         })
         const second = await harness.invoke<BrowserUseResult>('browser_use', {

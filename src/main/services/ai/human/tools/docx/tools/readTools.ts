@@ -235,6 +235,7 @@ const buildSearchResult = (input: {
   nodesById: Map<string, ReturnType<typeof projectDocxReadNodes>[number]>
 }) => ({
   totalMatchCount: input.totalMatchCount,
+  returnedMatchCount: input.matches.length,
   matches: input.matches.map((match) => ({
     nodeId: match.nodeId,
     nodeIndex: match.nodeIndex,
@@ -257,6 +258,7 @@ const buildSearchResult = (input: {
 
 const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) => ({
   totalMatchCount: result.totalMatchCount,
+  returnedMatchCount: result.returnedMatchCount,
   matches: result.matches
 })
 

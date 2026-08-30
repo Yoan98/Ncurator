@@ -8,13 +8,13 @@ import { prepareImagesForMainModel } from './readImage'
 export const agentControlToolFamily: ToolFamilyDefinition = {
   familyId: 'agent-control',
   buildTools: ({ ctx }) => {
-    const learnSkill = tool(async () => ({ message: 'learn_skill handled by learning node' }), {
+    const learnSkill = tool(async () => ({}), {
       name: LEARN_SKILL_TOOL_SPEC.name,
       description: LEARN_SKILL_TOOL_SPEC.promptSpec.description,
       schema: LEARN_SKILL_TOOL_SPEC.inputSchema
     })
 
-    const updatePlan = tool(async () => ({ message: 'update_plan handled by plan node' }), {
+    const updatePlan = tool(async () => ({}), {
       name: UPDATE_PLAN_TOOL_SPEC.name,
       description: UPDATE_PLAN_TOOL_SPEC.promptSpec.description,
       schema: UPDATE_PLAN_TOOL_SPEC.inputSchema
@@ -28,10 +28,7 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
           workspaceRootPath,
           paths: args.paths
         })
-        return {
-          message: `已按顺序读取 ${String(images.length)} 张图片，图片已加入当前主模型上下文。`,
-          images
-        }
+        return { images }
       },
       {
         name: READ_IMAGE_TOOL_SPEC.name,

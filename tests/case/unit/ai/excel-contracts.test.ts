@@ -17,7 +17,8 @@ describe('Excel static contracts', () => {
       rows: [['a', 1]]
     } satisfies ExcelReadOutput
     const searchSample = {
-      truncated: false,
+      totalMatchCount: 1,
+      returnedMatchCount: 1,
       matches: [{ sheetName: 'Sheet1', address: 'A1', value: 'x' }]
     } satisfies ExcelReadOutput
     const editSample = {} satisfies ExcelEditOutput

@@ -32,11 +32,9 @@ export type KbListDocumentItem = {
 export type KbSearchOutput = {
   items: KbSearchResultItem[]
   total: number
-  error?: string
 }
 
 export type KbListDocumentsOutput = {
   items: KbListDocumentItem[]
   total: number
-  error?: string
 }

@@ -189,12 +189,14 @@ describe('ai tool excel read backend', () => {
           }
         )
         runtime.assertThat(
-          result.capped.truncated === true &&
+          result.capped.totalMatchCount === 525 &&
+            result.capped.returnedMatchCount === 10 &&
             Array.isArray(result.capped.matches) &&
             result.capped.matches.length === 10,
           {
             name: 'excel-search-result-cap',
-            message: 'Excel 搜索结果应在 10 条截断并显式报告 truncated。',
+            message:
+              'Excel 搜索结果应统计全量 totalMatchCount，并最多返回 10 条 returnedMatchCount。',
             data: result.capped
           }
         )

@@ -37,7 +37,8 @@ export type ExcelReadStyleOutput = {
 }
 
 export type ExcelSearchOutput = {
-  truncated: boolean
+  totalMatchCount: number
+  returnedMatchCount: number
   matches: Array<{
     sheetName: string
     address: string

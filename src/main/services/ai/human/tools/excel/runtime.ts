@@ -949,6 +949,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
         value?: string | number | boolean | null
         formula?: string
       }> = []
+      let totalMatchCount = 0
       for (const sheet of workbook.worksheets) {
         if (args.sheetName && sheet.name !== args.sheetName) continue
         const maxRow = Math.max(sheet.rowCount, 1)
@@ -959,22 +960,26 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
             const formula = getFormula(cell.value)
             const matched = isMatch(cell.text) || isMatch(formula || '')
             if (!matched) continue
-            matches.push(
-              formula
-                ? { sheetName: sheet.name, address: cell.address, formula }
-                : {
-                    sheetName: sheet.name,
-                    address: cell.address,
-                    value: serializeLiteral(cell.value, cell.text)
-                  }
-            )
-            if (matches.length >= EXCEL_SEARCH_MAX_MATCHES) {
-              return toJsonObject({ truncated: true, matches })
+            totalMatchCount += 1
+            if (matches.length < EXCEL_SEARCH_MAX_MATCHES) {
+              matches.push(
+                formula
+                  ? { sheetName: sheet.name, address: cell.address, formula }
+                  : {
+                      sheetName: sheet.name,
+                      address: cell.address,
+                      value: serializeLiteral(cell.value, cell.text)
+                    }
+              )
             }
           }
         }
       }
-      return toJsonObject({ truncated: false, matches })
+      return toJsonObject({
+        totalMatchCount,
+        returnedMatchCount: matches.length,
+        matches
+      })
     }
 
     const sheet = requireSheet(workbook, args.sheetName)

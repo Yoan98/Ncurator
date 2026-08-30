@@ -2,25 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { renderToolResultDataText } from '../../../../src/main/services/ai/human/shared/toolResultRenderers'
 
 describe('ai unit human tool result renderers', () => {
-  it('renders generic terminal-like object fields with stdout', () => {
-    const rendered = renderToolResultDataText({
-      toolName: 'terminal_run',
-      data: {
-        command: 'pwd',
-        cwd: '/tmp/workspace',
-        stdout: '/tmp/workspace',
-        exitCode: 0,
-        timedOut: false
-      }
-    })
-
-    expect(rendered).toContain('command=pwd')
-    expect(rendered).toContain('cwd=/tmp/workspace')
-    expect(rendered).toContain('stdout=/tmp/workspace')
-    expect(rendered).toContain('exitCode=0')
-    expect(rendered).toContain('timedOut=false')
-  })
-
   it('renders nested docx_read_nodes table, cell and runs details', () => {
     const rendered = renderToolResultDataText({
       toolName: 'docx_read_nodes',

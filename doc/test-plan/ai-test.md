@@ -41,11 +41,11 @@
 
 - `tool` 只验证真实生产工具调用，不允许 fake。
 - `tool / docx` 覆盖 7 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 Source→Working 净 Diff。
-- `tool / text-file` 覆盖普通文本按行分页读取、四种写入 action、修改记录、结构化 diff 与回退前置数据，以及按行号定位的文本搜索。
+- `tool / text-file` 覆盖普通文本按行分页读取、四种写入 action、修改记录、结构化 diff 与回退前置数据，以及按行号定位的文本搜索；unit 侧见 `tests/case/unit/ai/text-file-tool-contract.test.ts`。
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作区内修改记录、Artifact、安全校验和工作区外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作区外绝对路径读取、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-search-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。
-- 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`；`tool-prompt-contract` 与 `model-tool-result-renderers` 单测覆盖 renderer 与描述分层约束。
+- 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。
 - `web-browsing` 工具测试先覆盖冻结 sidecar bin 程序抓取与 `browser_use` 服务不可用诊断。
@@ -107,6 +107,7 @@ AI 回归测试目录：
 AI unit / 辅助测试目录：
 
 - `tests/case/unit/ai/<case>.test.ts`
+- 工具 family 轻量契约（schema / outputTypes / skill 归属，不断言 prompt 或 render 文字）：`terminal-tool-contract`、`text-file-tool-contract`，以及既有 `docx-tool-contract`、`ppt-tool-contract`、`pdf-tool-contract`、`excel-contracts` 等。
 
 推荐命令：
 
@@ -342,8 +343,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：`excel_read` 四种 type 的范围、格式与错误边界。
 - Why：当前单一 happy path 无法保护多 Sheet、regex、大结果截断、格子预算和 Office Excel 格式兼容。
-- How：真实读取 `xlsx/xlsm/xltx/xltm`，覆盖 `sheetName` 限定、网格 range、literal/regex、10 条 `truncated`，大 range 走统一 spill，以及非法路径、range、regex 和格式。
-- Oracle：结果 Sheet/range/值稳定；搜索最多返回 10 条并显式 `truncated`；搜索只命中单元格值和公式，不搜表名；合法格式可读，非法输入稳定失败且不产生修改记录。
+- How：真实读取 `xlsx/xlsm/xltx/xltm`，覆盖 `sheetName` 限定、网格 range、literal/regex、10 条 `returnedMatchCount` 与全量 `totalMatchCount`，大 range 走统一 spill，以及非法路径、range、regex 和格式。
+- Oracle：结果 Sheet/range/值稳定；搜索最多返回 10 条且 `totalMatchCount` 反映全量命中；搜索只命中单元格值和公式，不搜表名；合法格式可读，非法输入稳定失败且不产生修改记录。
 - Not：不验证模型如何选择读取范围。
 
 ##### `excel-set-style-number-format-persistence`
