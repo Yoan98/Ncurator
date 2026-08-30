@@ -6,9 +6,9 @@
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | human-risk-report-draft-live                        | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 20:15 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260813-201549-550                        | 真实读取模板、上周周报与工作文档，新建周报并 apply，原文件全部未改。                                   |
 | human-context-compaction-natural-trigger-live       | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816       | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。 |
-| human-excel-read-weekly-review-live                | 完成 |            84 | qwen3.8-flash                    | 2026-08-30 12:35 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-123502-761                   | Oracle 通过；120 行中文表 hash 不变。过程大量 terminal/脚本辅助，excel_read 仅 5 次，耗时 8min。缓存 94.0%。 |
-| human-excel-edit-weekly-review-live                  | 完成 |            94 | qwen3.8-flash                    | 2026-08-30 12:35 CST | tests/logs/ai/human/live/human-excel-edit-weekly-review-live/20260830-123502-761                   | 先读后写：表头含「元」、华东-旗舰款=680000、汇总净额公式；保护区未动，1 条记录。缓存 86.8%。           |
-| human-excel-create-monthly-budget-live             | 失败 |            28 | qwen3.8-flash                    | 2026-08-30 12:35 CST | tests/logs/ai/human/live/human-excel-create-monthly-budget-live/20260830-123502-761                 | GRAPH_RECURSION 300；36 次 excel_edit / 115 human_step，未交付。缓存 94.6% 但任务失败。                 |
+| human-excel-read-weekly-review-live                | 完成 |            79 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-134623-663                   | Oracle 通过；120 行中文表 hash 不变。6×excel_read + 6×terminal，耗时 197s 偏长。缓存 83.6%。 |
+| human-excel-edit-weekly-review-live                  | 完成 |            95 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-edit-weekly-review-live/20260830-134623-663                   | 先读后写：4×set_range，无多余 set_style；66s 交付，1 条记录。缓存 86.0%。           |
+| human-excel-create-monthly-budget-live             | 完成 |            92 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-create-monthly-budget-live/20260830-134623-662                 | Oracle 通过；9×excel_edit（2 表 + 2 set_range + 5 set_style），87s。较 qwen 300 步失败大幅改善。缓存 89.3%。 |
 | human-kb-guided-docx-comparison-draft-live          | 完成 |            86 | deepseek-v4-flash                | 2026-08-27 22:47 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-224726-600          | KB 缩圈后双目标 docx 成功回写，来源课件未改，Oracle 通过。                                             |
 | human-ppt-create-executive-deck-live                | 完成 |            58 | deepseek-v4-flash                | 2026-08-29 11:28 CST | tests/logs/ai/human/live/human-ppt-create-executive-deck-live/20260829-112844-003                | 文案完整但 KPI 等页字号(磅)相对 bounds 过高导致叠字；视觉不可用，分数下调。                           |
 | human-ppt-edit-management-review-live               | 完成 |            93 | qwen3.8-flash                    | 2026-08-30 12:36 CST | tests/logs/ai/human/live/human-ppt-edit-management-review-live/20260830-123643-456               | 中文《品牌策略提案》插执行摘要、王晨→李然、2002→2015；议程/愿景未动，页数+1。缓存 81.2%。             |
@@ -344,6 +344,15 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - How：真实读取 `xlsx/xlsm/xltx/xltm`，覆盖 `sheetName` 限定、网格 range、literal/regex、10 条 `truncated`，大 range 走统一 spill，以及非法路径、range、regex 和格式。
 - Oracle：结果 Sheet/range/值稳定；搜索最多返回 10 条并显式 `truncated`；搜索只命中单元格值和公式，不搜表名；合法格式可读，非法输入稳定失败且不产生修改记录。
 - Not：不验证模型如何选择读取范围。
+
+##### `excel-set-style-number-format-persistence`
+
+- 测试类型：`backend`
+- What：`set_range` 写值后 `set_style` 设 `#,##0`，并在 merge/auto_fit 后仍能被 ExcelJS、openpyxl 与 `excel_read type=style` 读回。
+- Why：Create live 曾出现 openpyxl 验算报 D3–D19 为 General 而 D20 有千分位；需守住 standalone `set_style` 的 numberFormat 落盘路径。
+- How：模拟部门明细表写入、合计行 inline style、`set_style D3:D20`、表头样式、merge 标题、auto_fit；分别用 ExcelJS、openpyxl 和 `excel_read style` 断言。
+- Oracle：`D3`/`D19`/`D20` 的 number format 均为 `#,##0`。
+- Not：不验证模型是否会走两段式排版 workflow。
 
 ##### `excel-edit-operations-and-atomicity`
 
