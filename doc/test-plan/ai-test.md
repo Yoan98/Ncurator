@@ -6,7 +6,7 @@
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | human-risk-report-draft-live                        | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 20:15 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260813-201549-550                        | 真实读取模板、上周周报与工作文档，新建周报并 apply，原文件全部未改。                                   |
 | human-context-compaction-natural-trigger-live       | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816       | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。 |
-| human-excel-read-weekly-review-live                | 完成 |            79 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-134623-663                   | Oracle 通过；120 行中文表 hash 不变。6×excel_read + 6×terminal，耗时 197s 偏长。缓存 83.6%。 |
+| human-excel-read-weekly-review-live                | 完成 |            91 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-134623-663                   | Oracle 通过；四表结构/公式/退货异常/口径不对等讲清；6×excel_read。过程仍 6×terminal 验算略多。缓存 83.6%。 |
 | human-excel-edit-weekly-review-live                  | 完成 |            95 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-edit-weekly-review-live/20260830-134623-663                   | 先读后写：4×set_range，无多余 set_style；66s 交付，1 条记录。缓存 86.0%。           |
 | human-excel-create-monthly-budget-live             | 完成 |            92 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-create-monthly-budget-live/20260830-134623-662                 | Oracle 通过；9×excel_edit（2 表 + 2 set_range + 5 set_style），87s。较 qwen 300 步失败大幅改善。缓存 89.3%。 |
 | human-kb-guided-docx-comparison-draft-live          | 完成 |            86 | deepseek-v4-flash                | 2026-08-27 22:47 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-224726-600          | KB 缩圈后双目标 docx 成功回写，来源课件未改，Oracle 通过。                                             |
@@ -251,12 +251,12 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：正文为空且 `textStatus=empty`，`pageImagePath` 指向真实存在的页面图片。
 - Not：不在 PDF 工具内部识别图片内容。
 
-##### `pdf-inspect-read-search-contract`
+##### `pdf-outline-read-search-contract`
 
 - 测试类型：`backend`
 - What：真实 PDF 的元数据、页级文本和搜索结果。
 - Why：守住 PDF 文本阅读的基础契约。
-- How：对 `深度学习.pdf` 执行 `pdf_inspect -> pdf_read_pages -> pdf_search`。
+- How：对 `深度学习.pdf` 执行 `pdf_outline -> pdf_read_pages -> pdf_search`。
 - Oracle：页数为 11，标题为“深度学习”，正文没有 NUL，且“过度拟合”能命中第 8 或第 9 页。
 - Not：不识别页面图片。
 
@@ -671,9 +671,9 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 - 测试类型：`backend / mock-llm`
 - What：human 同轮读取大小两个文本文件，大文件收到有界窗口和 `nextStartLine`，小文件保持完整，随后按返回行号续读。
-- Why：`text_file_read` 使用生产者有界 `window` 策略，不应进入通用 spill 或产生 toolresult 递归落盘。
+- Why：`text_file_read` 在工具执行层按行分页；若投影后仍超统一 spill 阈值，则与其他工具一样走 render 后落盘管道。
 - How：脚本化 LLM 决策同轮读取两个文件，从大文件 delivery 的 `nextStartLine` 字段提取续读位置后继续读取。
-- Oracle：任务完成；两个独立结果都到达模型；第二次调用使用返回的续读行；`runtime/toolresult` 不产生文件。
+- Oracle：任务完成；两个独立结果都到达模型；第二次调用使用返回的续读行。
 - Not：不验证公网搜索或真实模型工具选择。
 
 ##### `ai-run-service-human-only`

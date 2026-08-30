@@ -407,31 +407,27 @@ export const pptEditSchema = z.discriminatedUnion('type', [
 const pptSlideOutputSchema = z.custom<JsonObject>()
 
 export const pptReadOutlineOutputSchema = z.object({
-  sourcePath: z.string(),
   slideCount: z.number().int().min(0),
   slides: z.array(pptSlideOutputSchema)
 })
 
 export const pptReadSlidesOutputSchema = z.object({
-  sourcePath: z.string(),
-  slideCount: z.number().int().min(0),
   slides: z.array(z.custom<JsonObject & { slideImagePath: string }>())
 })
 
 export const pptSearchOutputSchema = z.object({
-  sourcePath: z.string(),
   totalMatchCount: z.number().int().min(0),
   returnedMatchCount: z.number().int().min(0),
   truncated: z.boolean(),
   matches: z.array(pptSlideOutputSchema)
 })
 
-export const pptEditOutputSchema = z.object({
-  sourcePath: z.string(),
-  slideCount: z.number().int().min(1),
-  slideId: z.string().optional(),
-  createdElementIds: z.array(z.string().min(1)).min(1).optional()
-})
+export const pptEditOutputSchema = z
+  .object({
+    slideId: z.string().optional(),
+    createdElementIds: z.array(z.string().min(1)).min(1).optional()
+  })
+  .strict()
 
 export type PptOutlineInput = z.infer<typeof pptOutlineSchema>
 export type PptReadSlidesInput = z.infer<typeof pptReadSlidesSchema>

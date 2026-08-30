@@ -89,12 +89,8 @@ export const renderGenericModelError: ModelResultRenderer = ({ toolName, data })
 }
 
 const normalizeKbSearchItems = (data: JsonValue | undefined): JsonObject[] => {
-  const rawItems = Array.isArray(data)
-    ? data
-    : isObject(data) && Array.isArray(data.items)
-      ? data.items
-      : []
-  return rawItems.filter(isObject)
+  if (!isObject(data) || !Array.isArray(data.items)) return []
+  return data.items.filter(isObject)
 }
 
 export const renderKbSearchModelResult: ModelResultRenderer = ({ data }) => {
@@ -103,8 +99,8 @@ export const renderKbSearchModelResult: ModelResultRenderer = ({ data }) => {
   const sources: Array<{ ref: string; item: JsonObject }> = []
   items.forEach((item) => {
     const key =
-      readString(item.document_id) ||
-      `${readString(item.document_name) || ''}\u0000${readString(item.file_path) || readString(item.source_url) || ''}`
+      readString(item.documentId) ||
+      `${readString(item.documentName) || ''}\u0000${readString(item.filePath) || readString(item.sourceUrl) || ''}`
     if (sourceKeys.has(key)) return
     const ref = `d${sources.length + 1}`
     sourceKeys.set(key, ref)
@@ -114,13 +110,13 @@ export const renderKbSearchModelResult: ModelResultRenderer = ({ data }) => {
   const sourceLines = sources.length
     ? sources.map(({ ref, item }) => {
         const fields = [
-          `[${ref}] name=${readString(item.document_name) || ''}`,
-          readString(item.document_id) ? `documentId=${readString(item.document_id)}` : '',
-          readString(item.source_type) ? `type=${readString(item.source_type)}` : '',
-          readString(item.file_path)
-            ? `path=${readString(item.file_path)}`
-            : readString(item.source_url)
-              ? `url=${readString(item.source_url)}`
+          `[${ref}] name=${readString(item.documentName) || ''}`,
+          readString(item.documentId) ? `documentId=${readString(item.documentId)}` : '',
+          readString(item.sourceType) ? `type=${readString(item.sourceType)}` : '',
+          readString(item.filePath)
+            ? `path=${readString(item.filePath)}`
+            : readString(item.sourceUrl)
+              ? `url=${readString(item.sourceUrl)}`
               : ''
         ].filter(Boolean)
         return `  ${fields.join('; ')}`
@@ -130,8 +126,8 @@ export const renderKbSearchModelResult: ModelResultRenderer = ({ data }) => {
   const matchLines = items.length
     ? items.flatMap((item, index) => {
         const key =
-          readString(item.document_id) ||
-          `${readString(item.document_name) || ''}\u0000${readString(item.file_path) || readString(item.source_url) || ''}`
+          readString(item.documentId) ||
+          `${readString(item.documentName) || ''}\u0000${readString(item.filePath) || readString(item.sourceUrl) || ''}`
         const ref = sourceKeys.get(key) || 'unknown'
         return [
           `  ${index + 1}. source=${ref}`,
@@ -160,11 +156,11 @@ export const renderKbListDocumentsModelResult: ModelResultRenderer = ({ data }) 
     'Documents:',
     ...(items.length
       ? items.map((item, index) =>
-          `  ${index + 1}. id=${readString(item.id) || ''}; name=${readString(item.name) || ''}; type=${readString(item.source_type) || ''}; ${
-            readString(item.file_path)
-              ? `path=${readString(item.file_path)}`
-              : readString(item.source_url)
-                ? `url=${readString(item.source_url)}`
+          `  ${index + 1}. id=${readString(item.id) || ''}; name=${readString(item.name) || ''}; type=${readString(item.sourceType) || ''}; ${
+            readString(item.filePath)
+              ? `path=${readString(item.filePath)}`
+              : readString(item.sourceUrl)
+                ? `url=${readString(item.sourceUrl)}`
                 : ''
           }`.trimEnd()
         )
@@ -319,7 +315,6 @@ export const renderDocxReadNodesModelResult: ModelResultRenderer = ({ data }) =>
   const nodes = Array.isArray(obj.nodes) ? obj.nodes : []
   return [
     'DOCX nodes read completed successfully.',
-    `Source: ${readString(obj.sourcePath) || ''}`,
     'Styles:',
     ...(styles.values.length
       ? styles.values.flatMap(({ id, style }) => [
@@ -345,6 +340,10 @@ export const renderDocxContentEditModelResult: ModelResultRenderer = ({ args, da
     .filter(Boolean)
     .join('\n')
 }
+
+export const renderDocxMutationModelResult: ModelResultRenderer = renderDocxContentEditModelResult
+
+export const renderTextFileEditModelResult: ModelResultRenderer = () => 'Text file edit completed.'
 
 export const renderTerminalModelResult: ModelResultRenderer = ({ toolName, data }) => {
   const obj = isObject(data) ? data : {}
@@ -388,7 +387,6 @@ export const renderTextFileSearchModelResult: ModelResultRenderer = ({ data }) =
   const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
   return [
     'Text search completed successfully.',
-    `Path: ${readString(obj.sourcePath) || ''}`,
     `Total matches: ${readNumber(obj.totalMatchCount) ?? 0}`,
     'Returned matches:',
     ...(matches.length
@@ -568,7 +566,229 @@ export const renderExcelEditModelResult: ModelResultRenderer = ({ args }) => {
   return `Excel ${type} completed.`
 }
 
+export const renderPdfOutlineModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const metadata = isObject(obj.metadata) ? obj.metadata : {}
+  const outline = Array.isArray(obj.outline) ? obj.outline.filter(isObject) : []
+  return [
+    'PDF outline read completed.',
+    `Pages: ${readNumber(obj.pageCount) ?? 0}`,
+    readString(metadata.title) ? `Title: ${readString(metadata.title)}` : '',
+    readString(metadata.author) ? `Author: ${readString(metadata.author)}` : '',
+    'Outline:',
+    ...(outline.length
+      ? outline.map((item, index) => {
+          const depth = readNumber(item.depth) ?? 1
+          const indent = '  '.repeat(Math.max(0, depth - 1))
+          const page = readNumber(item.pageNumber)
+          return `${indent}${index + 1}. ${readString(item.title) || ''}${page ? ` (p.${page})` : ''}`
+        })
+      : ['  none'])
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
+export const renderPdfSearchModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
+  return [
+    'PDF search completed.',
+    `Total matches: ${readNumber(obj.totalMatchCount) ?? 0}`,
+    `Returned matches: ${readNumber(obj.returnedMatchCount) ?? matches.length}`,
+    'Matches:',
+    ...(matches.length
+      ? matches.map((item, index) => {
+          const pageNumber = readNumber(item.pageNumber) ?? ''
+          const matchedText = readString(item.matchedText) || ''
+          const snippet = readString(item.snippet) || ''
+          return [
+            `  ${index + 1}. p.${pageNumber}: matched=${JSON.stringify(matchedText)}`,
+            indentBlock(snippet, 2)
+          ].join('\n')
+        })
+      : ['  none'])
+  ].join('\n')
+}
+
+export const renderPdfReadPagesModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const pages = Array.isArray(obj.pages) ? obj.pages.filter(isObject) : []
+  return [
+    'PDF pages read completed.',
+    'Pages:',
+    ...(pages.length
+      ? pages.flatMap((page) => {
+          const pageNumber = readNumber(page.pageNumber) ?? ''
+          const textStatus = readString(page.textStatus) || ''
+          const imageCount = readNumber(page.imageCount) ?? 0
+          const pageImagePath = readString(page.pageImagePath) || ''
+          const text = readString(page.text) || ''
+          const lines = [
+            `  p.${pageNumber} [${textStatus}, ${imageCount} images]`,
+            `    pageImagePath: ${pageImagePath}`
+          ]
+          if (text) lines.push(indentBlock(text, 2))
+          else if (textStatus === 'empty')
+            lines.push('    (no text layer; use read_image on pageImagePath)')
+          return lines
+        })
+      : ['  none'])
+  ].join('\n')
+}
+
+export const renderWebSearchModelResult: ModelResultRenderer = ({ args, data }) => {
+  const obj = isObject(data) ? data : {}
+  const items = Array.isArray(obj.items) ? obj.items.filter(isObject) : []
+  const query = readString(args.query)
+  const url = readString(args.url)
+  const header = query
+    ? `Web search completed. Query: ${query}`
+    : url
+      ? `Web page fetched. URL: ${url}`
+      : 'Web search completed.'
+  return [
+    header,
+    `Results: ${items.length}`,
+    ...(items.length
+      ? items.map((item, index) => {
+          const error = readString(item.error)
+          const title = readString(item.title) || readString(item.requestedUrl) || ''
+          const requestedUrl = readString(item.requestedUrl) || ''
+          if (error) return `  ${index + 1}. [error] ${title} — ${error}`
+          const markdown = readString(item.markdown) || ''
+          if (url && markdown) {
+            return [`  ${index + 1}. ${title}`, indentBlock(markdown, 2)].join('\n')
+          }
+          return `  ${index + 1}. ${title}\n     url: ${requestedUrl}`
+        })
+      : ['  none'])
+  ].join('\n')
+}
+
+export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const error = readString(obj.error)
+  if (error) return `Browser action failed: ${error}`
+  const action = readString(obj.action) || ''
+  const page = isObject(obj.page) ? obj.page : {}
+  const pageLabel = [readString(page.title), readString(page.url)].filter(Boolean).join(' — ')
+  if (action === 'navigate') {
+    return ['Browser navigate completed.', pageLabel ? `Page: ${pageLabel}` : ''].filter(Boolean).join('\n')
+  }
+  if (action === 'extract') {
+    const content = readString(obj.content) || ''
+    return [
+      'Browser extract completed.',
+      pageLabel ? `Page: ${pageLabel}` : '',
+      'Content:',
+      content ? indentBlock(content, 0) : '  (empty)'
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+  if (action === 'observe') {
+    const actions = Array.isArray(obj.actions) ? obj.actions.filter(isObject) : []
+    return [
+      'Browser observe completed.',
+      pageLabel ? `Page: ${pageLabel}` : '',
+      'Actions:',
+      ...(actions.length
+        ? actions.map((item, index) => `  ${index + 1}. ${readString(item.description) || ''}`)
+        : ['  none'])
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+  if (action === 'act') {
+    return [
+      'Browser act completed.',
+      pageLabel ? `Page: ${pageLabel}` : '',
+      `Success: ${String(obj.success === true)}`,
+      readString(obj.message) ? `Message: ${readString(obj.message)}` : '',
+      readString(obj.actionDescription)
+        ? `Action: ${readString(obj.actionDescription)}`
+        : ''
+    ]
+      .filter(Boolean)
+      .join('\n')
+  }
+  return renderGenericModelResult({ toolName: 'browser_use', args: {}, data })
+}
+
 export const renderPlanUpdateModelResult: ModelResultRenderer = () => 'Plan updated successfully.'
+
+export const renderPptOutlineModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const slides = Array.isArray(obj.slides) ? obj.slides.filter(isObject) : []
+  return [
+    'PPT outline read completed successfully.',
+    `Slide count: ${readNumber(obj.slideCount) ?? slides.length}`,
+    'Slides:',
+    ...(slides.length
+      ? slides.map((slide, index) => {
+          const slideId = readString(slide.slideId) || ''
+          const slideIndex = readNumber(slide.slideIndex) ?? index + 1
+          const title = readString(slide.title) || ''
+          return `  ${index + 1}. slideIndex=${slideIndex}; slideId=${slideId}${title ? `; title=${JSON.stringify(title)}` : ''}`
+        })
+      : ['  none'])
+  ].join('\n')
+}
+
+export const renderPptReadSlidesModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const slides = Array.isArray(obj.slides) ? obj.slides.filter(isObject) : []
+  return [
+    'PPT slides read completed successfully.',
+    `Returned slides: ${slides.length}`,
+    ...(slides.length
+      ? slides.flatMap((slide, index) => {
+          const slideId = readString(slide.slideId) || ''
+          const slideIndex = readNumber(slide.slideIndex) ?? index + 1
+          const slideImagePath = readString(slide.slideImagePath) || ''
+          const lines = [
+            `  ${index + 1}. slideIndex=${slideIndex}; slideId=${slideId}`,
+            slideImagePath ? `     slideImagePath: ${slideImagePath}` : ''
+          ]
+          const elements = Array.isArray(slide.elements) ? slide.elements.filter(isObject) : []
+          if (elements.length) {
+            lines.push('     elements:')
+            elements.forEach((element, elementIndex) => {
+              lines.push(
+                `       ${elementIndex + 1}. type=${readString(element.type) || ''}; elementId=${readString(element.elementId) || ''}`
+              )
+            })
+          }
+          return lines.filter(Boolean)
+        })
+      : ['  none'])
+  ].join('\n')
+}
+
+export const renderPptSearchModelResult: ModelResultRenderer = ({ data }) => {
+  const obj = isObject(data) ? data : {}
+  const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
+  return [
+    'PPT search completed successfully.',
+    `Total matches: ${readNumber(obj.totalMatchCount) ?? 0}`,
+    `Returned matches: ${readNumber(obj.returnedMatchCount) ?? matches.length}`,
+    ...(obj.truncated === true ? ['(truncated)'] : []),
+    'Matches:',
+    ...(matches.length
+      ? matches.map((item, index) => {
+          const slideIndex = readNumber(item.slideIndex) ?? ''
+          const slideId = readString(item.slideId) || ''
+          const source = readString(item.source) || ''
+          const text = readString(item.text) || ''
+          return [
+            `  ${index + 1}. slideIndex=${slideIndex}; slideId=${slideId}; source=${source}; matchedText=${JSON.stringify(readString(item.matchedText) || '')}`,
+            indentBlock(text, 2)
+          ].join('\n')
+        })
+      : ['  none'])
+  ].join('\n')
+}
 
 export const renderLearnSkillModelResult: ModelResultRenderer = ({ args, data }) => {
   const obj = isObject(data) ? data : {}

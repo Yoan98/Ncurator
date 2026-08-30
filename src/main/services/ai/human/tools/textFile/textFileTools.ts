@@ -491,7 +491,6 @@ const readTextFile = async (args: FileReadInput): Promise<FileReadOutput> => {
   const content = selected.join('\n')
   const nextStartLine = endLine < totalLines ? endLine + 1 : undefined
   return {
-    sourcePath: args.sourcePath,
     content,
     startLine,
     endLine,
@@ -574,12 +573,13 @@ export const buildTextFileCapabilityTools = (
         args: args as IpcJsonObject,
         execute: async (session) => {
           const applied = await editTextFile(buildInput, args)
+          const payload = {}
           session.succeed(
             undefined,
             toToolResult({
               toolName: TEXT_FILE_EDIT_TOOL_SPEC.name,
               ok: true,
-              data: applied.message
+              data: payload
             })
           )
           safeEmitActivity(buildInput, {
@@ -587,7 +587,7 @@ export const buildTextFileCapabilityTools = (
             status: 'completed',
             summary: applied.message
           })
-          return applied.message
+          return payload
         },
         onError: (error, session) => {
           session.fail(

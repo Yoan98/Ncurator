@@ -15,6 +15,35 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 const MAX_RETRIEVAL_LIMIT = 50
 const MAX_LIST_PAGE_SIZE = 50
 
+const mapKbSearchItem = (row: SearchResult) => ({
+  id: row.id,
+  text: row.text,
+  documentName: row.document_name,
+  documentId: row.document_id,
+  sourceType: row.source_type,
+  filePath: row.file_path,
+  sourceUrl: row.source_url,
+  metadata: row.metadata,
+  createdAt: row.created_at
+})
+
+const mapKbDocumentItem = (document: DocumentRecord) => ({
+  id: document.id,
+  name: document.name,
+  sourceType: document.source_type,
+  workspaceId: document.workspace_id,
+  filePath: document.file_path,
+  createdAt: document.created_at,
+  importStatus: document.import_status,
+  sourceId: document.source_id,
+  sourceUrl: document.source_url,
+  sourceTitle: document.source_title,
+  normalizedSourceUrl: document.normalized_source_url,
+  fetchedAt: document.fetched_at,
+  updatedAt: document.updated_at,
+  lastError: document.last_error
+})
+
 const toStringIdList = (value: string[] | undefined): string[] => {
   if (!Array.isArray(value)) return []
   return value.map((item) => String(item).trim()).filter(Boolean)
@@ -200,7 +229,7 @@ export const buildKbCapabilityTools = (input: {
             )
           })()
           const enrichedRows = await enrichSearchRowsWithSourceLocation(ctx, rows)
-          const normalized = enrichedRows.map(normalizeForIpc)
+          const normalized = enrichedRows.map((row) => normalizeForIpc(mapKbSearchItem(row)))
           const payload = {
             items: normalized,
             total: normalized.length
@@ -275,14 +304,18 @@ export const buildKbCapabilityTools = (input: {
               documentIds: requestedDocumentIds || undefined
             })
           )
+          const payload = {
+            items: normalized.items.map((document) => normalizeForIpc(mapKbDocumentItem(document))),
+            total: normalized.total
+          }
           session.succeed(
             undefined,
             buildKbResult({
               toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
-              data: normalized
+              data: payload
             })
           )
-          return normalized
+          return payload
         },
         onError: (error, session) => {
           session.fail(

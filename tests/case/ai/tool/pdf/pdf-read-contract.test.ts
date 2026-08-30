@@ -10,14 +10,12 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 const PDF_FIXTURE = path.resolve('tests/fixtures/workspace/学习笔记/深度学习.pdf')
 
 type PdfFailure = { ok: false; error: string; reason: string }
-type PdfInspectResult = {
-  sourcePath: string
+type PdfOutlineResult = {
   pageCount: number
   metadata: { title?: string }
+  outline: Array<{ title: string; pageNumber: number; depth: number }>
 }
 type PdfReadResult = {
-  sourcePath: string
-  pageCount: number
   pages: Array<{
     pageNumber: number
     text: string
@@ -90,9 +88,9 @@ describe('ai tool pdf backend', () => {
     })
   })
 
-  it('pdf-inspect-read-search-contract', async () => {
+  it('pdf-outline-read-search-contract', async () => {
     await runBackendCase({
-      caseId: 'pdf-inspect-read-search-contract',
+      caseId: 'pdf-outline-read-search-contract',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
@@ -104,7 +102,7 @@ describe('ai tool pdf backend', () => {
         const sourcePath = runtime.getFixtureWorkspacePath(PDF_FIXTURE)
         const harness = createPdfToolHarness(runtime)
         try {
-          const inspect = await harness.invoke<PdfInspectResult>('pdf_inspect', { sourcePath })
+          const inspect = await harness.invoke<PdfOutlineResult>('pdf_outline', { sourcePath })
           const read = await harness.invoke<PdfReadResult>('pdf_read_pages', {
             sourcePath,
             selection: { type: 'page_numbers', pageNumbers: [1, 9] }
@@ -112,8 +110,7 @@ describe('ai tool pdf backend', () => {
           const search = await harness.invoke<PdfSearchResult>('pdf_search', {
             sourcePath,
             query: '过度拟合',
-            mode: 'literal',
-            maxMatches: 20
+            mode: 'literal'
           })
           return { inspect, read, search }
         } finally {
@@ -124,8 +121,8 @@ describe('ai tool pdf backend', () => {
         runtime.assertThat(
           result.inspect.pageCount === 11 && result.inspect.metadata.title === '深度学习',
           {
-            name: 'pdf-inspect-returns-real-metadata',
-            message: 'pdf_inspect 应返回 fixture 的真实页数和标题。',
+            name: 'pdf-outline-returns-real-metadata',
+            message: 'pdf_outline 应返回 fixture 的真实页数和标题。',
             data: result.inspect
           }
         )
@@ -256,10 +253,10 @@ describe('ai tool pdf backend', () => {
             sourcePath,
             selection: { type: 'page_range', fromPage: 1, toPage: 1000000 }
           })
-          const corrupt = await harness.invoke<PdfFailure>('pdf_inspect', {
+          const corrupt = await harness.invoke<PdfFailure>('pdf_outline', {
             sourcePath: corruptPath
           })
-          const outside = await harness.invoke<Record<string, unknown>>('pdf_inspect', {
+          const outside = await harness.invoke<Record<string, unknown>>('pdf_outline', {
             sourcePath: escapedPdfPath
           })
           return { outOfRange, badRegex, oversizedRange, corrupt, outside }

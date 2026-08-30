@@ -1,123 +1,28 @@
-import { z } from 'zod/v4'
 import type { JsonObject } from '../../../../../../shared/types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import {
+  renderTextFileEditModelResult,
   renderTextFileReadModelResult,
   renderTextFileSearchModelResult
 } from '../../shared/modelToolResultRenderers'
-
-const STRUCTURED_FILE_EXTENSION_PATTERN = /\.(?:doc|docx|ppt|pptx|pdf|xls|xlsx|odt|ods|odp)$/iu
-
-// text_file_read 自己在完整行边界分页，并为路径、行号和英文续读提示预留空间。
-export const TEXT_FILE_READ_MAX_LINES = 2_000
-export const TEXT_FILE_READ_MAX_BYTES = 51_200
-export const TEXT_FILE_READ_MAX_LINE_CHARS = 2_000
-
-export const TEXT_FILE_SEARCH_MAX_MATCHES = 10
-export const TEXT_FILE_SEARCH_CONTEXT_CHARS = 320
-export const TEXT_FILE_SEARCH_MATCH_TEXT_MAX_CHARS = 160
-
-const textFilePathSchema = z
-  .string()
-  .min(1)
-  .refine((value) => !STRUCTURED_FILE_EXTENSION_PATTERN.test(value), {
-    message: 'text_file 工具只支持 UTF-8 普通文本；DOCX、PPT/PPTX、PDF、XLS/XLSX 等结构化文档不支持'
-  })
-  .meta({
-    'x-constraint':
-      'text_file 工具只支持 UTF-8 普通文本；DOCX、PPT/PPTX、PDF、XLS/XLSX 等结构化文档不支持'
-  })
-
-const textFileSourcePathField = textFilePathSchema.describe('目标文本文件的绝对路径')
-
-export const TEXT_FILE_READ_SCHEMA = z.object({
-  sourcePath: textFileSourcePathField,
-  startLine: z.number().int().min(1).optional().describe('1-based 起始行号，缺省从第 1 行开始'),
-  lineCount: z
-    .number()
-    .int()
-    .min(1)
-    .max(TEXT_FILE_READ_MAX_LINES)
-    .optional()
-    .describe(`读取行数，缺省及最大为 ${TEXT_FILE_READ_MAX_LINES} 行`)
-})
-
-const fileEditSchema = z.object({
-  oldText: z.string().min(1),
-  newText: z.string()
-})
-
-export const TEXT_FILE_EDIT_SCHEMA = z.discriminatedUnion('action', [
-  z.object({
-    sourcePath: textFileSourcePathField,
-    action: z.literal('create'),
-    content: z.string()
-  }),
-  z.object({
-    sourcePath: textFileSourcePathField,
-    action: z.literal('rewrite'),
-    content: z.string()
-  }),
-  z.object({
-    sourcePath: textFileSourcePathField,
-    action: z.literal('edit'),
-    edits: z.array(fileEditSchema).min(1)
-  }),
-  z.object({
-    sourcePath: textFileSourcePathField,
-    action: z.literal('replaceAll'),
-    oldText: z.string().min(1),
-    newText: z.string()
-  })
-])
-
-export const TEXT_FILE_READ_OUTPUT_SCHEMA = z
-  .object({
-    sourcePath: z.string(),
-    content: z.string(),
-    startLine: z.number().int().min(1),
-    endLine: z.number().int().min(1),
-    totalLines: z.number().int().min(1),
-    nextStartLine: z.number().int().min(1).optional()
-  })
-  .strict()
-
-export const TEXT_FILE_SEARCH_SCHEMA = z
-  .object({
-    sourcePath: textFileSourcePathField,
-    query: z.string().min(1).describe('要检索的文字或正则表达式'),
-    mode: z.enum(['literal', 'regex']).optional().describe('检索模式，缺省为 literal')
-  })
-  .strict()
-
-export const TEXT_FILE_SEARCH_OUTPUT_SCHEMA = z
-  .object({
-    sourcePath: z.string(),
-    totalMatchCount: z.number().int().min(0),
-    returnedMatchCount: z.number().int().min(0),
-    matches: z
-      .array(
-        z
-          .object({
-            line: z.number().int().min(1),
-            matchText: z.string(),
-            textContext: z.string(),
-            truncated: z.boolean()
-          })
-          .strict()
-      )
-      .max(TEXT_FILE_SEARCH_MAX_MATCHES)
-  })
-  .strict()
-
-export const TEXT_FILE_EDIT_OUTPUT_SCHEMA = z.string().min(1)
+import {
+  TEXT_FILE_EDIT_OUTPUT_SCHEMA,
+  TEXT_FILE_EDIT_SCHEMA,
+  TEXT_FILE_READ_OUTPUT_SCHEMA,
+  TEXT_FILE_READ_SCHEMA,
+  TEXT_FILE_READ_MAX_BYTES,
+  TEXT_FILE_READ_MAX_LINE_CHARS,
+  TEXT_FILE_READ_MAX_LINES,
+  TEXT_FILE_SEARCH_OUTPUT_SCHEMA,
+  TEXT_FILE_SEARCH_SCHEMA
+} from './toolSchemas'
 
 const fileResourceKey = (args: JsonObject): string | undefined => readStringArg(args, 'sourcePath')
 
 export const TEXT_FILE_READ_TOOL_SPEC: HumanToolSpec<
-  z.infer<typeof TEXT_FILE_READ_SCHEMA>,
-  z.infer<typeof TEXT_FILE_READ_OUTPUT_SCHEMA>,
+  import('zod/v4').infer<typeof TEXT_FILE_READ_SCHEMA>,
+  import('zod/v4').infer<typeof TEXT_FILE_READ_OUTPUT_SCHEMA>,
   'text_file_read',
   'text-file'
 > = {
@@ -135,14 +40,13 @@ export const TEXT_FILE_READ_TOOL_SPEC: HumanToolSpec<
     getResourceKey: fileResourceKey
   }),
   modelResult: {
-    renderSuccess: renderTextFileReadModelResult,
-    overflowPolicy: { mode: 'window' }
+    renderSuccess: renderTextFileReadModelResult
   }
 }
 
 export const TEXT_FILE_SEARCH_TOOL_SPEC: HumanToolSpec<
-  z.infer<typeof TEXT_FILE_SEARCH_SCHEMA>,
-  z.infer<typeof TEXT_FILE_SEARCH_OUTPUT_SCHEMA>,
+  import('zod/v4').infer<typeof TEXT_FILE_SEARCH_SCHEMA>,
+  import('zod/v4').infer<typeof TEXT_FILE_SEARCH_OUTPUT_SCHEMA>,
   'text_file_search',
   'text-file'
 > = {
@@ -163,8 +67,8 @@ export const TEXT_FILE_SEARCH_TOOL_SPEC: HumanToolSpec<
 }
 
 export const TEXT_FILE_EDIT_TOOL_SPEC: HumanToolSpec<
-  z.infer<typeof TEXT_FILE_EDIT_SCHEMA>,
-  z.infer<typeof TEXT_FILE_EDIT_OUTPUT_SCHEMA>,
+  import('zod/v4').infer<typeof TEXT_FILE_EDIT_SCHEMA>,
+  import('zod/v4').infer<typeof TEXT_FILE_EDIT_OUTPUT_SCHEMA>,
   'text_file_edit',
   'text-file'
 > = {
@@ -181,14 +85,14 @@ export const TEXT_FILE_EDIT_TOOL_SPEC: HumanToolSpec<
       'action=create：创建新文件并写入完整内容，不覆盖已有文件。',
       'action=rewrite：使用新内容完整改写已有文件。',
       'action=edit：对已有文件执行一个或多个精确文本修改；每个 oldText 必须恰好匹配一次。',
-      'action=replaceAll：把已有文件中 oldText 的全部精确匹配替换为 newText。',
-      '返回文件路径和实际修改数量，并记录可查看、可回退的文件修改。'
+      'action=replaceAll：把已有文件中 oldText 的全部精确匹配替换为 newText。'
     ].join('\n')
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'mutating',
     getResourceKey: fileResourceKey
-  })
+  }),
+  modelResult: { renderSuccess: renderTextFileEditModelResult }
 }
 
 export const TEXT_FILE_TOOL_SPECS = [
@@ -197,8 +101,19 @@ export const TEXT_FILE_TOOL_SPECS = [
   TEXT_FILE_EDIT_TOOL_SPEC
 ] as const
 
-export type FileReadInput = z.infer<typeof TEXT_FILE_READ_SCHEMA>
-export type FileReadOutput = z.infer<typeof TEXT_FILE_READ_OUTPUT_SCHEMA>
-export type FileSearchInput = z.infer<typeof TEXT_FILE_SEARCH_SCHEMA>
-export type FileSearchOutput = z.infer<typeof TEXT_FILE_SEARCH_OUTPUT_SCHEMA>
-export type FileEditInput = z.infer<typeof TEXT_FILE_EDIT_SCHEMA>
+export type {
+  FileEditInput,
+  FileReadInput,
+  FileReadOutput,
+  FileSearchInput,
+  FileSearchOutput
+} from './toolSchemas'
+
+export {
+  TEXT_FILE_READ_MAX_BYTES,
+  TEXT_FILE_READ_MAX_LINE_CHARS,
+  TEXT_FILE_READ_MAX_LINES,
+  TEXT_FILE_SEARCH_CONTEXT_CHARS,
+  TEXT_FILE_SEARCH_MATCH_TEXT_MAX_CHARS,
+  TEXT_FILE_SEARCH_MAX_MATCHES
+} from './toolSchemas'

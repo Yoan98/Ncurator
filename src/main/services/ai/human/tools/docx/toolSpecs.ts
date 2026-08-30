@@ -7,25 +7,23 @@ import {
   docxCommentsRevisionsSchema,
   docxContentEditSchema,
   docxFormatSchema,
-  docxOutlineSchema,
-  docxReadNodesSchema,
-  docxSearchSchema,
-  docxTableEditSchema
-} from './schemas'
-import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
-import {
   docxMutationOutputSchema,
   docxOutlineOutputSchema,
+  docxOutlineSchema,
+  docxReadNodesSchema,
   docxReadOutputSchema,
-  docxSearchOutputSchema
-} from './outputSchemas'
+  docxSearchOutputSchema,
+  docxSearchSchema,
+  docxTableEditSchema
+} from './toolSchemas'
+import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import {
   renderDocxContentEditModelResult,
+  renderDocxMutationModelResult,
   renderDocxOutlineModelResult,
   renderDocxReadNodesModelResult,
   renderDocxSearchModelResult
 } from '../../shared/modelToolResultRenderers'
-import { createRetryModelResultPolicy } from '../modelResultPolicies'
 
 const readMeta = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -59,10 +57,7 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
-    renderSuccess: renderDocxOutlineModelResult,
-    overflowPolicy: createRetryModelResultPolicy(
-      'Call docx_read_outline again with a narrower fromPercent/toPercent range.'
-    )
+    renderSuccess: renderDocxOutlineModelResult
   },
   activityActionType: 'docx_read_outline'
 } satisfies DocxToolSpec<
@@ -85,10 +80,7 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
-    renderSuccess: renderDocxSearchModelResult,
-    overflowPolicy: createRetryModelResultPolicy(
-      'Call docx_search again with includeContext=false, narrower nodeIds, or a more specific query.'
-    )
+    renderSuccess: renderDocxSearchModelResult
   },
   activityActionType: 'docx_search'
 } satisfies DocxToolSpec<
@@ -111,10 +103,7 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
   },
   resolveExecutionMeta: readMeta,
   modelResult: {
-    renderSuccess: renderDocxReadNodesModelResult,
-    overflowPolicy: createRetryModelResultPolicy(
-      'Call docx_read_nodes again with fewer nodeIds or a smaller fromNodeIndex/toNodeIndex range.'
-    )
+    renderSuccess: renderDocxReadNodesModelResult
   },
   activityActionType: 'docx_read_nodes'
 } satisfies DocxToolSpec<
@@ -159,21 +148,24 @@ export const DOCX_FORMAT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_format',
   skillId: 'docx-write',
   schema: docxFormatSchema,
-  description: '修改已有内容的显示格式：局部文字、段落、命名样式、编号和 section。'
+  description: '修改已有内容的显示格式：局部文字、段落、命名样式、编号和 section。',
+  modelResult: { renderSuccess: renderDocxMutationModelResult }
 })
 
 export const DOCX_TABLE_EDIT_TOOL_SPEC = defineMutationSpec({
   name: 'docx_table_edit',
   skillId: 'docx-write',
   schema: docxTableEditSchema,
-  description: '修改表格结构（行列、合并拆分）以及表、行、单元格外观。'
+  description: '修改表格结构（行列、合并拆分）以及表、行、单元格外观。',
+  modelResult: { renderSuccess: renderDocxMutationModelResult }
 })
 
 export const DOCX_COMMENTS_REVISIONS_TOOL_SPEC = defineMutationSpec({
   name: 'docx_comments_revisions',
   skillId: 'docx-write',
   schema: docxCommentsRevisionsSchema,
-  description: '新增、修改、回复或删除批注；开关修订模式；接受或拒绝修订。'
+  description: '新增、修改、回复或删除批注；开关修订模式；接受或拒绝修订。',
+  modelResult: { renderSuccess: renderDocxMutationModelResult }
 })
 
 export const DOCX_READ_TOOL_SPECS = [

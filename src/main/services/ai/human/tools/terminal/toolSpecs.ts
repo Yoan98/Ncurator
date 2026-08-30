@@ -6,36 +6,12 @@ import type { AiRuntimePlatform } from '../../../types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
 import { TERMINAL_READ_MAX_CHARS } from './terminalConstants'
 import { renderTerminalModelResult } from '../../shared/modelToolResultRenderers'
-
-const TERMINAL_STATUS_SCHEMA = z.enum(['running', 'completed', 'cancelled'])
-
-export const TERMINAL_RUN_SCHEMA = z.object({
-  command: z.string().min(1),
-  commandExplanation: z.string().min(1)
-})
-
-export const TERMINAL_READ_SCHEMA = z.object({
-  terminalId: z.string().min(1),
-  readEndPosition: z.number().int().nonnegative().optional()
-})
-
-export const TERMINAL_RUN_OUTPUT_SCHEMA = z.object({
-  terminalId: z.string(),
-  status: TERMINAL_STATUS_SCHEMA,
-  output: z.string(),
-  readEndPosition: z.number().int().nonnegative(),
-  hasMoreOutput: z.boolean(),
-  exitCode: z.number().int().nullable()
-})
-
-export const TERMINAL_READ_OUTPUT_SCHEMA = z.object({
-  terminalId: z.string(),
-  status: TERMINAL_STATUS_SCHEMA,
-  output: z.string(),
-  readEndPosition: z.number().int().nonnegative(),
-  hasMoreOutput: z.boolean(),
-  exitCode: z.number().int().nullable()
-})
+import {
+  TERMINAL_READ_OUTPUT_SCHEMA,
+  TERMINAL_READ_SCHEMA,
+  TERMINAL_RUN_OUTPUT_SCHEMA,
+  TERMINAL_RUN_SCHEMA
+} from './toolSchemas'
 
 type TerminalRunToolSpec = HumanToolSpec<
   z.infer<typeof TERMINAL_RUN_SCHEMA>,

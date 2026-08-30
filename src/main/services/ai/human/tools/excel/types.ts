@@ -1,7 +1,7 @@
 import type { AiFileChangeRecord, JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import type { ToolEventEmitter } from '../utils/toolEvents'
-import type { ExcelEditInput, ExcelReadInput } from './schemas'
+import type { ExcelEditInput, ExcelReadInput } from './toolSchemas'
 
 export type ExcelToolRuntime = {
   read: (args: ExcelReadInput) => Promise<JsonObject>

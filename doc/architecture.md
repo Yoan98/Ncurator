@@ -106,7 +106,17 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 6. **描述声明边界，不教流程** — skill / tool 描述只说明能做什么、不能做什么、参数含义；组合策略由模型自主决定。
 7. **工具简单可理解** — 作者语言贴近模型对页面的心智模型，所用即所想。
 8. **写回只给新锚点，验证靠再读** — 写工具只返回继续写所需的 id；对错由后续 read 确认，不返回变更清单或整页 readback。
-9. **非必要字段不要设计**- 只设计真正需要的字段，给必要字段不要设计进来。
+9. **非必要字段不要设计** — 结构化 output 不回显入参已有字段（如 `sourcePath`）；只保留模型继续决策所需的最小字段。
+
+**统一结果投递（全工具共用）**
+
+工具执行得到结构化 `data` 后，经 `modelResult.renderSuccess` 投影为 `renderedText`，再按整段文本统一判断：
+
+1. 超过 51,200 UTF-8 bytes 或 2,000 行 → 打回 `ok: false`，提示缩小范围；
+2. 否则超过 32,000 字符 → 将整段 `renderedText` 落盘，返回首尾预览与路径；
+3. 否则整段直出 `ToolMessage`。
+
+搜索类工具在**执行层**默认最多返回 10 条 match；`text_file_read` 的 `startLine` / `lineCount` 分页属于生产者有界读取，不是 per-tool delivery 策略。
 
 **运行时分层**
 
@@ -115,7 +125,7 @@ Skill（builtin / external）
   └─ Tool（HumanToolSpec）
        ├─ inputSchema / outputSchema   本地校验 + 结构化真相
        ├─ promptSpec                   暴露给模型的最小契约
-       └─ modelResult                  投影为模型可读文本（含超限策略）
+       └─ modelResult                  投影为模型可读文本，再走统一投递管道
 ```
 
 prompt 措辞、渲染格式、超限阈值等实现细节见代码与测试。实现层类型与字段规范见 AGENTS.md。
@@ -127,7 +137,7 @@ DOCX 读写工具族已按上述原则落地，作为后续 Excel / PPT / PDF �
 | 领域                  | 思路                                                                                                                                                            |
 | --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | DOCX                  | 文档聚合模型 + story 内容树；root、可编辑子节点和 visual 共用一个 `nodesById`，visual 只使用 `nodeId`；读写拆成两个 skill；Source / Working 双态 + 净 Diff 审核 |
-| PDF                   | 页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                                                                 |
+| PDF                   | `pdf_outline` 元数据与书签；页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                                 |
 | PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；`ppt_read_slides` 默认可读完整元素，`detail=images` 时仅返回 slideImagePath 供视觉巡检 |
 | Excel                 | 工作表地图 + A1 范围；`excel_read` 四种 type（workbook / range / style / search）；`excel_edit` 一次一个 type；写回成功 `{}`（当前无系统生成锚点） |
 | KB                    | 混合召回检索工作区已索引文档                                                                                                                                    |

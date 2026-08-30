@@ -13,7 +13,7 @@ import {
   pptOutlineSchema,
   pptReadSlidesSchema,
   pptSearchSchema
-} from '../../../../src/main/services/ai/human/tools/ppt/schemas'
+} from '../../../../src/main/services/ai/human/tools/ppt/toolSchemas'
 import { renderLatexToSvg } from '../../../../src/main/services/ai/human/tools/ppt/formula'
 import {
   normalizePptColor,

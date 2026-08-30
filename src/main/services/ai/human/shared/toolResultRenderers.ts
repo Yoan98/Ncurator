@@ -368,7 +368,7 @@ export const renderToolResultDataText = (
       return renderDocxSearchResult(value)
     case 'docx_read_outline':
       return renderDocxOutlineResult(value)
-    case 'pdf_inspect':
+    case 'pdf_outline':
       return renderPdfInspectResult(value)
     case 'pdf_search':
       return renderPdfSearchResult(value)

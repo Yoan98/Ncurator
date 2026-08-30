@@ -1,137 +1,16 @@
-import { z } from 'zod/v4'
+import type { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
-
-export const WEB_SEARCH_SCHEMA = z
-  .object({
-    query: z.string().min(1).optional(),
-    url: z.string().min(1).optional()
-  })
-  .refine((value) => Boolean(value.query) !== Boolean(value.url), {
-    message: 'query 与 url 必须二选一'
-  })
-
-export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
-  z.object({
-    action: z.literal('navigate'),
-    url: z.string().min(1),
-    instruction: z.string().optional()
-  }),
-  z.object({
-    action: z.literal('extract'),
-    instruction: z.string().min(1)
-  }),
-  z.object({
-    action: z.literal('observe'),
-    instruction: z.string().min(1)
-  }),
-  z.object({
-    action: z.literal('act'),
-    instruction: z.string().min(1)
-  })
-])
-
-const webSearchResultLinkItemSchema = z.object({
-  href: z.string(),
-  text: z.string().optional(),
-  title: z.string().optional(),
-  intrinsicScore: z.number().optional(),
-  contextualScore: z.number().optional(),
-  totalScore: z.number().optional()
-})
-
-const webSearchCrawledItemSchema = z
-  .object({
-    rank: z.number().int().optional(),
-    title: z.string().optional(),
-    url: z.string().optional(),
-    snippet: z.string().optional(),
-    requestedUrl: z.string().optional(),
-    finalUrl: z.string().optional(),
-    markdown: z.string().optional(),
-    links: z
-      .object({
-        internal: z.array(webSearchResultLinkItemSchema),
-        external: z.array(webSearchResultLinkItemSchema)
-      })
-      .optional(),
-    publishedAt: z.string().optional(),
-    error: z.string().optional()
-  })
-  .refine((value) => Boolean(value.error) || Boolean(value.markdown), {
-    message: 'web_search 数组项必须携带 markdown（成功）或 error（失败）'
-  })
-
-export const WEB_SEARCH_OUTPUT_SCHEMA = z.union([
-  z.object({
-    requestedUrl: z.string(),
-    finalUrl: z.string(),
-    title: z.string().optional(),
-    markdown: z.string(),
-    links: z.object({
-      internal: z.array(webSearchResultLinkItemSchema),
-      external: z.array(webSearchResultLinkItemSchema)
-    }),
-    publishedAt: z.string().optional()
-  }),
-  z.object({
-    error: z.string(),
-    requestedUrl: z.string().optional(),
-    finalUrl: z.string().optional(),
-    statusCode: z.number().int().optional()
-  }),
-  z.array(webSearchCrawledItemSchema)
-])
-
-const browserUsePageOutputSchema = z.object({
-  url: z.string(),
-  title: z.string().optional()
-})
-
-const browserActionCandidateOutputSchema = z.object({
-  description: z.string(),
-  method: z.string().optional(),
-  arguments: z.array(z.string()).optional()
-})
-
-export const BROWSER_USE_OUTPUT_SCHEMA = z.union([
-  z.discriminatedUnion('action', [
-    z.object({
-      action: z.literal('navigate'),
-      page: browserUsePageOutputSchema,
-      result: z.null()
-    }),
-    z.object({
-      action: z.literal('extract'),
-      page: browserUsePageOutputSchema,
-      result: z.object({
-        extracted: z.string()
-      })
-    }),
-    z.object({
-      action: z.literal('observe'),
-      page: browserUsePageOutputSchema,
-      result: z.object({
-        actions: z.array(browserActionCandidateOutputSchema)
-      })
-    }),
-    z.object({
-      action: z.literal('act'),
-      page: browserUsePageOutputSchema,
-      result: z.object({
-        success: z.boolean(),
-        message: z.string(),
-        actionDescription: z.string(),
-        actions: z.array(browserActionCandidateOutputSchema)
-      })
-    })
-  ]),
-  z.object({
-    action: z.enum(['navigate', 'extract', 'observe', 'act']).optional(),
-    page: browserUsePageOutputSchema.optional(),
-    error: z.string()
-  })
-])
+import {
+  renderBrowserUseModelResult,
+  renderWebSearchModelResult
+} from '../../shared/modelToolResultRenderers'
+import {
+  BROWSER_USE_OUTPUT_SCHEMA,
+  BROWSER_USE_SCHEMA,
+  WEB_SEARCH_OUTPUT_SCHEMA,
+  WEB_SEARCH_SCHEMA
+} from './toolSchemas'
 
 const WEB_EXECUTION_META = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -152,9 +31,10 @@ export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'web_search',
     description:
-      '搜索网页内容。传 query 时按关键词搜索，并返回全部候选网页的数组，每项包含 requestedUrl、finalUrl、title、markdown、分组评分后的 links 与发布时间。传 url 时直接读取该指定网页内容并返回单页结果。'
+      '搜索或抓取网页。传 query 时按关键词搜索并 crawl 每条结果；传 url 时直接 crawl 该页。统一返回 items 数组，每项含 requestedUrl、finalUrl、title、markdown、links 与 publishedAt，或 error。'
   },
-  resolveExecutionMeta: WEB_EXECUTION_META
+  resolveExecutionMeta: WEB_EXECUTION_META,
+  modelResult: { renderSuccess: renderWebSearchModelResult }
 }
 
 export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
@@ -171,12 +51,13 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'browser_use',
     description:
-      '操作浏览器；action=navigate 打开 URL，action=extract 提取页面内容，action=observe 返回可见的交互动作，action=act 执行点击、输入、提交或选择。extract/observe/act 只作用于当前页面、不会跳转；需要切换页面时先调用 navigate。返回当前页面信息，以及对应 action 的提取内容、可见动作或执行结果。'
+      '操作浏览器；action=navigate 打开 URL，action=extract 提取页面内容为 content，action=observe 返回可见交互动作，action=act 执行点击、输入、提交或选择。extract/observe/act 只作用于当前页面；需要切换页面时先 navigate。'
   },
   resolveExecutionMeta: (args) => ({
     mutability: String(args.action || '') === 'act' ? 'mutating' : 'read_only',
     resourceKey: String(args.url || 'embedded-browser')
-  })
+  }),
+  modelResult: { renderSuccess: renderBrowserUseModelResult }
 }
 
 export const WEB_TOOL_SPECS = [WEB_SEARCH_TOOL_SPEC, BROWSER_USE_TOOL_SPEC] as const

@@ -6,18 +6,18 @@ import {
   docxOutlineOutputSchema,
   docxSearchOutputSchema,
   docxMutationOutputSchema
-} from '../../../../src/main/services/ai/human/tools/docx/outputSchemas'
+} from '../../../../src/main/services/ai/human/tools/docx/toolSchemas'
 import {
-  pdfInspectOutputSchema,
+  pdfOutlineOutputSchema,
   pdfReadPagesOutputSchema,
   pdfSearchOutputSchema
-} from '../../../../src/main/services/ai/human/tools/pdf/outputSchemas'
+} from '../../../../src/main/services/ai/human/tools/pdf/toolSchemas'
 import {
   pptEditOutputSchema,
   pptReadOutlineOutputSchema,
   pptReadSlidesOutputSchema,
   pptSearchOutputSchema
-} from '../../../../src/main/services/ai/human/tools/ppt/schemas'
+} from '../../../../src/main/services/ai/human/tools/ppt/toolSchemas'
 import { renderToolInputSchemaForPrompt } from '../../../../src/main/services/ai/human/tools/schemaPromptRenderer'
 
 describe('ai unit tool input schema renderer', () => {
@@ -91,7 +91,7 @@ describe('ai unit tool input schema renderer', () => {
       docxSearchOutputSchema,
       docxReadOutputSchema,
       docxMutationOutputSchema,
-      pdfInspectOutputSchema,
+      pdfOutlineOutputSchema,
       pdfSearchOutputSchema,
       pdfReadPagesOutputSchema,
       pptReadOutlineOutputSchema,

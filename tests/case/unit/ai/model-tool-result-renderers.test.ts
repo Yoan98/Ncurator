@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import {
   buildModelToolResultDelivery,
-  exceedsModelResultRetryLimit
+  exceedsToolResultRejectLimit
 } from '../../../../src/main/services/ai/human/shared/modelToolResult'
 import {
   renderDocxContentEditModelResult,
@@ -14,7 +14,6 @@ import {
   renderGenericModelResult,
   renderKbSearchModelResult
 } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
-import { getToolSpec } from '../../../../src/main/services/ai/human/tools/registry'
 
 const tempRoots: string[] = []
 
@@ -35,49 +34,23 @@ afterEach(async () => {
 })
 
 describe('ai unit model-facing tool result renderers', () => {
-  it('configures retry only for range-reducible KB and DOCX reads', () => {
-    for (const toolName of [
-      'kb_search',
-      'kb_list_documents',
-      'docx_read_outline',
-      'docx_search',
-      'docx_read_nodes'
-    ] as const) {
-      expect(getToolSpec(toolName)?.modelResult?.overflowPolicy).toMatchObject({
-        mode: 'retry',
-        maxBytes: 51_200,
-        maxLines: 2_000
-      })
-    }
-    expect(getToolSpec('text_file_read')?.modelResult?.overflowPolicy).toEqual({ mode: 'window' })
-    expect(getToolSpec('excel_read')?.modelResult?.overflowPolicy).toBeUndefined()
-    expect(getToolSpec('terminal_run')?.modelResult?.overflowPolicy).toBeUndefined()
-    expect(getToolSpec('web_search')?.modelResult?.overflowPolicy).toBeUndefined()
-    expect(getToolSpec('docx_content_edit')?.modelResult?.overflowPolicy).toBeUndefined()
-  })
-  it('accepts exact retry limits and rejects the first byte or line beyond them', () => {
+  it('accepts exact reject limits and rejects the first byte or line beyond them', () => {
     expect(
-      exceedsModelResultRetryLimit({
+      exceedsToolResultRejectLimit({
         totalBytes: 51_200,
-        totalLines: 2_000,
-        maxBytes: 51_200,
-        maxLines: 2_000
+        totalLines: 2_000
       })
     ).toBe(false)
     expect(
-      exceedsModelResultRetryLimit({
+      exceedsToolResultRejectLimit({
         totalBytes: 51_201,
-        totalLines: 2_000,
-        maxBytes: 51_200,
-        maxLines: 2_000
+        totalLines: 2_000
       })
     ).toBe(true)
     expect(
-      exceedsModelResultRetryLimit({
+      exceedsToolResultRejectLimit({
         totalBytes: 1,
-        totalLines: 2_001,
-        maxBytes: 51_200,
-        maxLines: 2_000
+        totalLines: 2_001
       })
     ).toBe(true)
   })
@@ -90,19 +63,18 @@ describe('ai unit model-facing tool result renderers', () => {
         items: [
           {
             id: 'chunk-internal-1',
-            document_id: 'doc-1',
-            document_name: '方法论.md',
-            source_type: 'file',
-            file_path: '/workspace/方法论.md',
-            text: content,
-            _score: 0.99
+            documentId: 'doc-1',
+            documentName: '方法论.md',
+            sourceType: 'file',
+            filePath: '/workspace/方法论.md',
+            text: content
           },
           {
             id: 'chunk-internal-2',
-            document_id: 'doc-1',
-            document_name: '方法论.md',
-            source_type: 'file',
-            file_path: '/workspace/方法论.md',
+            documentId: 'doc-1',
+            documentName: '方法论.md',
+            sourceType: 'file',
+            filePath: '/workspace/方法论.md',
             text: '第二个完整知识块。'
           }
         ],
@@ -123,7 +95,6 @@ describe('ai unit model-facing tool result renderers', () => {
       toolName: 'docx_read_nodes',
       args: {},
       data: {
-        sourcePath: '/workspace/sample.docx',
         nodes: [
           {
             type: 'paragraph',
@@ -242,7 +213,7 @@ describe('ai unit model-facing tool result renderers', () => {
     expect(rendered).not.toMatch(/^\{"status"/u)
   })
 
-  it('rejects oversized repeatable reads without exposing a spill path', async () => {
+  it('rejects oversized rendered tool results for any tool without exposing a spill path', async () => {
     const ctx = await createContext()
     const delivery = await buildModelToolResultDelivery({
       ctx,
@@ -251,24 +222,27 @@ describe('ai unit model-facing tool result renderers', () => {
       result: {
         toolName: 'kb_search',
         ok: true,
-        data: [
-          {
-            document_id: 'doc-1',
-            document_name: 'large.txt',
-            source_type: 'file',
-            file_path: '/workspace/large.txt',
-            text: 'x'.repeat(60_000)
-          }
-        ]
+        data: {
+          items: [
+            {
+              documentId: 'doc-1',
+              documentName: 'large.txt',
+              sourceType: 'file',
+              filePath: '/workspace/large.txt',
+              text: 'x'.repeat(60_000)
+            }
+          ],
+          total: 1
+        }
       }
     })
     expect(delivery.ok).toBe(false)
     expect(delivery.content).toContain('Error: The result from kb_search is too large')
-    expect(delivery.content).toContain('smaller limit')
+    expect(delivery.content).toContain('Narrow the tool arguments')
     expect(delivery.content).not.toContain('Full result:')
   })
 
-  it('spills oversized non-replayable results with head and tail previews', async () => {
+  it('spills oversized rendered tool results with head and tail previews', async () => {
     const ctx = await createContext()
     const tail = 'TAIL_SENTINEL'
     const delivery = await buildModelToolResultDelivery({
@@ -278,7 +252,9 @@ describe('ai unit model-facing tool result renderers', () => {
       result: {
         toolName: 'web_search',
         ok: true,
-        data: { markdown: `${'x'.repeat(40_000)}${tail}` }
+        data: {
+          items: [{ markdown: `${'x'.repeat(40_000)}${tail}`, requestedUrl: 'https://example.com' }]
+        }
       }
     })
     expect(delivery.ok).toBe(true)
@@ -292,8 +268,9 @@ describe('ai unit model-facing tool result renderers', () => {
     expect(persisted.split('\n').every((line) => Array.from(line).length <= 1_600)).toBe(true)
   })
 
-  it('does not recursively spill a producer-bounded text_file_read window', async () => {
+  it('spills producer-bounded text_file_read windows when rendered output exceeds spill threshold', async () => {
     const ctx = await createContext()
+    const tail = 'TAIL_SENTINEL'
     const delivery = await buildModelToolResultDelivery({
       ctx,
       toolCallId: 'text-window',
@@ -302,8 +279,7 @@ describe('ai unit model-facing tool result renderers', () => {
         toolName: 'text_file_read',
         ok: true,
         data: {
-          sourcePath: '/workspace/large.txt',
-          content: 'x'.repeat(40_000),
+          content: `${'x'.repeat(40_000)}${tail}`,
           startLine: 1,
           endLine: 1,
           totalLines: 2,
@@ -312,11 +288,8 @@ describe('ai unit model-facing tool result renderers', () => {
       }
     })
     expect(delivery.ok).toBe(true)
-    expect(delivery.content).not.toContain('Result too large to include inline.')
-    expect(delivery.content).toContain('<content>')
-    expect(delivery.content).toContain('nextStartLine: 2')
-    expect(delivery.content).toContain('totalLines: 2')
-    expect(delivery.content).not.toContain('<path>')
-    expect(delivery.content).not.toContain('Use startLine=')
+    expect(delivery.content).toContain('Result too large to include inline.')
+    expect(delivery.content).toContain('Preview (tail):')
+    expect(delivery.content).toContain(tail)
   })
 })

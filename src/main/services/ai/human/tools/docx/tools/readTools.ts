@@ -230,12 +230,10 @@ const executeWorkerSearch = async (input: {
 }
 
 const buildSearchResult = (input: {
-  sourcePath: string
   totalMatchCount: number
   matches: DocxSearchMatch[]
   nodesById: Map<string, ReturnType<typeof projectDocxReadNodes>[number]>
 }) => ({
-  sourcePath: input.sourcePath,
   totalMatchCount: input.totalMatchCount,
   matches: input.matches.map((match) => ({
     nodeId: match.nodeId,
@@ -431,7 +429,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       const publicNodes = projectDocxReadNodes(relatedNodes)
       const nodesById = new Map(publicNodes.map((node) => [node.nodeId, node]))
       const result = buildSearchResult({
-        sourcePath: sessionResult.sourcePath,
         totalMatchCount: searchResult.totalMatchCount,
         matches: searchResult.matches,
         nodesById
@@ -497,7 +494,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           sourcePrefix: 'docx_read_nodes'
         })
         const result = {
-          sourcePath: sessionResult.sourcePath,
           nodes: projectDocxReadNodes(nodes)
         }
         return finalizeDocxToolSuccess({
@@ -506,7 +502,6 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           toolCallId,
           result,
           outputPreview: {
-            sourcePath: result.sourcePath,
             nodes: result.nodes
           },
           draftDocId: sessionResult.docId,

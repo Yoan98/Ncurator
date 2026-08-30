@@ -215,7 +215,7 @@ const TOOL_ITEM_RENDERERS = {
   docx_table_edit: (input) => sentence(text('编辑文档表格 '), text(readToolFileLabel(input))),
   docx_comments_revisions: (input) =>
     sentence(text('处理文档批注或修订 '), text(readToolFileLabel(input))),
-  pdf_inspect: (input) => sentence(text('查看 PDF 信息 '), text(readToolFileLabel(input))),
+  pdf_outline: (input) => sentence(text('查看 PDF 提纲 '), text(readToolFileLabel(input))),
   pdf_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
   pdf_read_pages: (input) => sentence(text('读取 PDF 页面 '), text(readToolFileLabel(input))),
   ppt_read_outline: (input) => sentence(text('阅读 PPT 结构 '), text(readToolFileLabel(input))),

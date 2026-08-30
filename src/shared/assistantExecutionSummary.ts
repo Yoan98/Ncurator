@@ -76,7 +76,7 @@ const TOOL_UI_KINDS = {
   docx_format: 'docx-edit',
   docx_table_edit: 'docx-edit',
   docx_comments_revisions: 'docx-edit',
-  pdf_inspect: 'pdf-read',
+  pdf_outline: 'pdf-read',
   pdf_search: 'pdf-read',
   pdf_read_pages: 'pdf-read',
   ppt_read_outline: 'ppt-read',

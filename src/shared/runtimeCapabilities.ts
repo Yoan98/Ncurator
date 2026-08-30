@@ -33,7 +33,7 @@ export const RUNTIME_TOOL_CATALOG = {
   docx_format: { familyId: 'docx', skillId: 'docx-write' },
   docx_table_edit: { familyId: 'docx', skillId: 'docx-write' },
   docx_comments_revisions: { familyId: 'docx', skillId: 'docx-write' },
-  pdf_inspect: { familyId: 'pdf', skillId: 'pdf-read' },
+  pdf_outline: { familyId: 'pdf', skillId: 'pdf-read' },
   pdf_search: { familyId: 'pdf', skillId: 'pdf-read' },
   pdf_read_pages: { familyId: 'pdf', skillId: 'pdf-read' },
   ppt_read_outline: { familyId: 'ppt', skillId: 'ppt-read' },

@@ -1,5 +1,6 @@
 import { tool } from '@langchain/core/tools'
-import type { AiToolCallResult, IpcJsonObject, JsonValue } from '../../../../../../shared/types'
+import type { AiToolCallResult, IpcJsonObject, JsonObject, JsonValue } from '../../../../../../shared/types'
+import type { BrowserUseResult } from '../../../types'
 import { WebSourceService } from '../../../../web/WebSourceService'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
@@ -16,20 +17,27 @@ type WebCrawlerFailureDetails = Error & {
   statusCode?: number
 }
 
-const renderLinkForAi = (link: {
+type WebSearchLink = {
   href: string
   text?: string
   title?: string
-  intrinsicScore?: number
-  contextualScore?: number
-  totalScore?: number
-}) => ({
+}
+
+type WebSearchItem = {
+  requestedUrl: string
+  finalUrl?: string
+  title?: string
+  markdown?: string
+  links?: { internal: WebSearchLink[]; external: WebSearchLink[] }
+  publishedAt?: string
+  error?: string
+  statusCode?: number
+}
+
+const renderLinkForAi = (link: WebSearchLink): WebSearchLink => ({
   href: link.href,
   ...(link.text ? { text: link.text } : {}),
-  ...(link.title ? { title: link.title } : {}),
-  ...(typeof link.intrinsicScore === 'number' ? { intrinsicScore: link.intrinsicScore } : {}),
-  ...(typeof link.contextualScore === 'number' ? { contextualScore: link.contextualScore } : {}),
-  ...(typeof link.totalScore === 'number' ? { totalScore: link.totalScore } : {})
+  ...(link.title ? { title: link.title } : {})
 })
 
 const buildToolResult = (input: {
@@ -42,16 +50,16 @@ const buildToolResult = (input: {
   data: input.data
 })
 
-const buildCrawlPayload = (input: {
+const buildCrawlItem = (input: {
   result: {
     requestedUrl: string
     finalUrl: string
     title?: string
     markdown: string
-    links: { internal: Parameters<typeof renderLinkForAi>[0][]; external: Parameters<typeof renderLinkForAi>[0][] }
+    links: { internal: WebSearchLink[]; external: WebSearchLink[] }
     publishedAt?: string
   }
-}) => ({
+}): WebSearchItem => ({
   requestedUrl: input.result.requestedUrl,
   finalUrl: input.result.finalUrl,
   ...(input.result.title ? { title: input.result.title } : {}),
@@ -63,15 +71,10 @@ const buildCrawlPayload = (input: {
   ...(input.result.publishedAt ? { publishedAt: input.result.publishedAt } : {})
 })
 
-const buildCrawlFailurePayload = (input: {
+const buildCrawlFailureItem = (input: {
   error: Error
   fallbackUrl: string
-}): {
-  error: string
-  requestedUrl: string
-  finalUrl: string
-  statusCode?: number
-} => {
+}): WebSearchItem => {
   const details = input.error as WebCrawlerFailureDetails
   const statusCode = typeof details.statusCode === 'number' ? details.statusCode : undefined
   return {
@@ -80,6 +83,46 @@ const buildCrawlFailurePayload = (input: {
     finalUrl: details.finalUrl || input.fallbackUrl,
     ...(statusCode !== undefined ? { statusCode } : {})
   }
+}
+
+const wrapWebSearchItems = (items: WebSearchItem[]): { items: WebSearchItem[] } => ({ items })
+
+const normalizeBrowserUseOutput = (result: BrowserUseResult): JsonObject => {
+  if ('error' in result && result.error) {
+    return {
+      ...(result.action ? { action: result.action } : {}),
+      ...(result.page ? { page: result.page } : {}),
+      error: result.error
+    }
+  }
+  if (result.action === 'navigate') {
+    return { action: 'navigate', page: result.page }
+  }
+  if (result.action === 'extract') {
+    return {
+      action: 'extract',
+      page: result.page,
+      content: result.result.extracted
+    }
+  }
+  if (result.action === 'observe') {
+    return {
+      action: 'observe',
+      page: result.page,
+      actions: result.result.actions
+    }
+  }
+  if (result.action === 'act') {
+    return {
+      action: 'act',
+      page: result.page,
+      success: result.result.success,
+      message: result.result.message,
+      actionDescription: result.result.actionDescription,
+      ...(result.result.actions?.length ? { actions: result.result.actions } : {})
+    }
+  }
+  return result as JsonObject
 }
 
 export const webToolFamily: ToolFamilyDefinition = {
@@ -102,9 +145,11 @@ export const webToolFamily: ToolFamilyDefinition = {
             ctx.checkCancelled()
             const service = ctx.webCrawlerService
             if (!service) {
-              const payload = { error: 'web_search service unavailable' }
+              const payload = wrapWebSearchItems([
+                { requestedUrl: '', error: 'web_search service unavailable' }
+              ])
               session.fail(
-                payload.error,
+                'web_search service unavailable',
                 undefined,
                 buildToolResult({
                   toolName: WEB_SEARCH_TOOL_SPEC.name,
@@ -123,12 +168,14 @@ export const webToolFamily: ToolFamilyDefinition = {
               try {
                 crawlUrl = webSourceService.normalizeUrl(rawUrl).url
               } catch (error) {
-                const payload = {
-                  error: getErrorMessage(error instanceof Error ? error : new Error(String(error))),
-                  requestedUrl: rawUrl
-                }
+                const payload = wrapWebSearchItems([
+                  {
+                    requestedUrl: rawUrl,
+                    error: getErrorMessage(error instanceof Error ? error : new Error(String(error)))
+                  }
+                ])
                 session.fail(
-                  payload.error,
+                  payload.items[0]?.error || 'invalid url',
                   undefined,
                   buildToolResult({
                     toolName: WEB_SEARCH_TOOL_SPEC.name,
@@ -140,19 +187,21 @@ export const webToolFamily: ToolFamilyDefinition = {
               }
               try {
                 const result = await service.crawl({ url: crawlUrl, topic: crawlUrl })
-                const payload = buildCrawlPayload({ result })
+                const payload = wrapWebSearchItems([buildCrawlItem({ result })])
                 session.succeed(
                   undefined,
                   buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: true, data: payload })
                 )
                 return payload
               } catch (error) {
-                const payload = buildCrawlFailurePayload({
-                  error: error instanceof Error ? error : new Error(String(error)),
-                  fallbackUrl: crawlUrl
-                })
+                const payload = wrapWebSearchItems([
+                  buildCrawlFailureItem({
+                    error: error instanceof Error ? error : new Error(String(error)),
+                    fallbackUrl: crawlUrl
+                  })
+                ])
                 session.fail(
-                  payload.error,
+                  payload.items[0]?.error || 'crawl failed',
                   undefined,
                   buildToolResult({
                     toolName: WEB_SEARCH_TOOL_SPEC.name,
@@ -164,16 +213,21 @@ export const webToolFamily: ToolFamilyDefinition = {
               }
             }
 
-            let searchItems: Array<{ rank: number; title: string; url: string; snippet?: string }>
+            let searchItems: Array<{ title: string; url: string }>
             try {
-              searchItems = (await service.search({ query: rawQuery })).results
+              searchItems = (await service.search({ query: rawQuery })).results.map((item) => ({
+                title: item.title,
+                url: item.url
+              }))
             } catch (error) {
-              const payload = {
-                error: getErrorMessage(error instanceof Error ? error : new Error(String(error))),
-                requestedUrl: rawQuery
-              }
+              const payload = wrapWebSearchItems([
+                {
+                  requestedUrl: rawQuery,
+                  error: getErrorMessage(error instanceof Error ? error : new Error(String(error)))
+                }
+              ])
               session.fail(
-                payload.error,
+                payload.items[0]?.error || 'search failed',
                 undefined,
                 buildToolResult({
                   toolName: WEB_SEARCH_TOOL_SPEC.name,
@@ -185,9 +239,11 @@ export const webToolFamily: ToolFamilyDefinition = {
             }
 
             if (searchItems.length === 0) {
-              const payload = { error: 'web_search 没有找到相关结果', requestedUrl: rawQuery }
+              const payload = wrapWebSearchItems([
+                { requestedUrl: rawQuery, error: 'web_search 没有找到相关结果' }
+              ])
               session.fail(
-                payload.error,
+                payload.items[0]?.error || 'no results',
                 undefined,
                 buildToolResult({
                   toolName: WEB_SEARCH_TOOL_SPEC.name,
@@ -198,35 +254,37 @@ export const webToolFamily: ToolFamilyDefinition = {
               return payload
             }
 
-            const payload = await Promise.all(
+            const items = await Promise.all(
               searchItems.map(async (item) => {
-                const baseItem = {
-                  rank: item.rank,
-                  title: item.title,
-                  url: item.url,
-                  ...(item.snippet ? { snippet: item.snippet } : {})
-                }
                 let itemCrawlUrl: string
                 try {
                   itemCrawlUrl = webSourceService.normalizeUrl(item.url).url
                 } catch {
-                  return { ...baseItem, error: '无法解析网页地址' }
+                  return {
+                    requestedUrl: item.url,
+                    title: item.title,
+                    error: '无法解析网页地址'
+                  } satisfies WebSearchItem
                 }
                 try {
                   const result = await service.crawl({ url: itemCrawlUrl, topic: rawQuery })
-                  return { ...baseItem, ...buildCrawlPayload({ result }) }
+                  return {
+                    ...buildCrawlItem({ result }),
+                    ...(item.title ? { title: item.title } : {})
+                  } satisfies WebSearchItem
                 } catch (error) {
                   const details = error as WebCrawlerFailureDetails
                   return {
-                    ...baseItem,
                     requestedUrl: details.requestedUrl || itemCrawlUrl,
                     ...(details.finalUrl ? { finalUrl: details.finalUrl } : {}),
+                    ...(item.title ? { title: item.title } : {}),
                     error: getErrorMessage(error instanceof Error ? error : new Error(String(error)))
-                  }
+                  } satisfies WebSearchItem
                 }
               })
             )
 
+            const payload = wrapWebSearchItems(items)
             session.succeed(
               undefined,
               buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: true, data: payload })
@@ -297,7 +355,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                       instruction,
                       llmConfig
                     })
-              const payload = { ...result }
+              const payload = normalizeBrowserUseOutput(result)
               if ('error' in result) {
                 session.fail(
                   result.error,

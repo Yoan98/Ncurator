@@ -8,7 +8,7 @@ import { isPathInsideRoot, resolveToolPath } from '../terminal/commandPolicy'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { ExcelCapabilityToolsInput, ExcelRuntimeState, ExcelToolRuntime } from './types'
-import type { ExcelEditInput, ExcelReadInput, ExcelStyle } from './schemas'
+import type { ExcelEditInput, ExcelReadInput, ExcelStyle } from './toolSchemas'
 import { EXCEL_SEARCH_MAX_MATCHES } from './constants'
 
 const EXCEL_READ_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xltx', '.xltm'])

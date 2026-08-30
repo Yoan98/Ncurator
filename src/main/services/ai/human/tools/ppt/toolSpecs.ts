@@ -4,6 +4,11 @@ import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import {
+  renderPptOutlineModelResult,
+  renderPptReadSlidesModelResult,
+  renderPptSearchModelResult
+} from '../../shared/modelToolResultRenderers'
+import {
   pptEditSchema,
   pptEditOutputSchema,
   pptOutlineSchema,
@@ -12,7 +17,7 @@ import {
   pptReadSlidesOutputSchema,
   pptSearchOutputSchema,
   pptSearchSchema
-} from './schemas'
+} from './toolSchemas'
 
 type PptToolName = 'ppt_read_outline' | 'ppt_read_slides' | 'ppt_search' | 'ppt_edit'
 
@@ -39,7 +44,8 @@ export const PPT_READ_OUTLINE_TOOL_SPEC = {
     name: 'ppt_read_outline',
     description: '按百分比或页码区间读取 PPTX 页面提纲。'
   },
-  resolveExecutionMeta: readExecutionMeta
+  resolveExecutionMeta: readExecutionMeta,
+  modelResult: { renderSuccess: renderPptOutlineModelResult }
 } satisfies PptToolSpec<
   z.infer<typeof pptOutlineSchema>,
   z.infer<typeof pptReadOutlineOutputSchema>,
@@ -57,7 +63,8 @@ export const PPT_READ_SLIDES_TOOL_SPEC = {
     name: 'ppt_read_slides',
     description: '按页码或 slideId 读取 PPTX 页面，并返回可交给 read_image 的 slideImagePath。'
   },
-  resolveExecutionMeta: readExecutionMeta
+  resolveExecutionMeta: readExecutionMeta,
+  modelResult: { renderSuccess: renderPptReadSlidesModelResult }
 } satisfies PptToolSpec<
   z.infer<typeof pptReadSlidesSchema>,
   z.infer<typeof pptReadSlidesOutputSchema>,
@@ -75,7 +82,8 @@ export const PPT_SEARCH_TOOL_SPEC = {
     name: 'ppt_search',
     description: '在 PPTX 页面文字和讲者备注中搜索文本。'
   },
-  resolveExecutionMeta: readExecutionMeta
+  resolveExecutionMeta: readExecutionMeta,
+  modelResult: { renderSuccess: renderPptSearchModelResult }
 } satisfies PptToolSpec<
   z.infer<typeof pptSearchSchema>,
   z.infer<typeof pptSearchOutputSchema>,

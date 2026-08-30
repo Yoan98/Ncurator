@@ -4,8 +4,8 @@ import type { RuntimeToolName } from '../../../../../../shared/runtimeCapabiliti
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
-import { excelEditSchema, excelReadSchema } from './schemas'
-import { excelEditOutputSchema, excelReadOutputSchema } from './outputSchemas'
+import { excelEditSchema, excelReadSchema } from './toolSchemas'
+import { excelEditOutputSchema, excelReadOutputSchema } from './toolSchemas'
 import {
   renderExcelEditModelResult,
   renderExcelReadModelResult

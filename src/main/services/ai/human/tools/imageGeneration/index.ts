@@ -5,7 +5,7 @@ import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { generateImage } from './runtime'
-import type { ImageGenerateInput } from './schemas'
+import type { ImageGenerateInput } from './toolSchemas'
 import { IMAGE_GENERATE_TOOL_SPEC } from './toolSpecs'
 
 export const buildImageGenerationCapabilityTools = (

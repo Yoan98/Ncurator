@@ -5,7 +5,7 @@ import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createExcelToolRuntime, toExcelToolFailure } from './runtime'
-import { excelEditSchema, excelReadSchema } from './schemas'
+import { excelEditSchema, excelReadSchema } from './toolSchemas'
 import { EXCEL_EDIT_TOOL_SPEC, EXCEL_READ_TOOL_SPEC } from './toolSpecs'
 import type { ExcelCapabilityToolsInput } from './types'
 

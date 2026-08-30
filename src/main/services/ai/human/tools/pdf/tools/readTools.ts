@@ -8,7 +8,12 @@ import {
   type PdfToolResourceContext,
   type PdfToolRuntime
 } from '../runtime'
-import { PDF_INSPECT_TOOL_SPEC, PDF_READ_PAGES_TOOL_SPEC, PDF_SEARCH_TOOL_SPEC } from '../toolSpecs'
+import { PDF_SEARCH_MAX_MATCHES } from '../constants'
+import {
+  PDF_OUTLINE_TOOL_SPEC,
+  PDF_READ_PAGES_TOOL_SPEC,
+  PDF_SEARCH_TOOL_SPEC
+} from '../toolSpecs'
 
 const uniquePageNumbers = (pageNumbers: number[]): number[] => [...new Set(pageNumbers)]
 
@@ -49,32 +54,30 @@ const runTool = async (input: {
 }
 
 export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterface[] => {
-  const inspectTool = tool(
+  const outlineTool = tool(
     async (args) =>
       await withToolLifecycle({
         emitter: runtime.toolEvents,
-        toolName: PDF_INSPECT_TOOL_SPEC.name,
+        toolName: PDF_OUTLINE_TOOL_SPEC.name,
         args: args as JsonObject,
         execute: async ({ toolCallId }) =>
           await runTool({
             runtime,
-            toolName: PDF_INSPECT_TOOL_SPEC.name,
+            toolName: PDF_OUTLINE_TOOL_SPEC.name,
             toolCallId,
             sourcePath: args.sourcePath,
             effectKind: 'inspected',
             execute: async (document) => ({
-              sourcePath: document.sourcePath,
               pageCount: document.pageCount,
               metadata: document.metadata,
-              outline: document.outline,
-              encrypted: document.encrypted
+              outline: document.outline
             })
           })
       }),
     {
-      name: PDF_INSPECT_TOOL_SPEC.name,
-      description: PDF_INSPECT_TOOL_SPEC.promptSpec.description,
-      schema: PDF_INSPECT_TOOL_SPEC.inputSchema
+      name: PDF_OUTLINE_TOOL_SPEC.name,
+      description: PDF_OUTLINE_TOOL_SPEC.promptSpec.description,
+      schema: PDF_OUTLINE_TOOL_SPEC.inputSchema
     }
   )
 
@@ -102,7 +105,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                   mode: args.mode || 'literal',
                   fromPage,
                   toPage,
-                  maxMatches: args.maxMatches || 20
+                  maxMatches: PDF_SEARCH_MAX_MATCHES
                 }
               })
               const resourceContext = runtime.buildResourceContext(document.sourcePath, 'searched')
@@ -117,11 +120,6 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
               if (response.payload.action !== 'search')
                 throw new Error('PDF worker 协议错误（search）')
               return {
-                sourcePath: document.sourcePath,
-                pageCount: document.pageCount,
-                query: args.query,
-                mode: args.mode || 'literal',
-                pageRange: { fromPage, toPage },
                 totalMatchCount: response.payload.totalMatchCount,
                 returnedMatchCount: response.payload.matches.length,
                 matches: response.payload.matches,
@@ -207,13 +205,17 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                 rendered.payload.images.map((image) => [image.pageNumber, image.path])
               )
               return {
-                sourcePath: document.sourcePath,
-                pageCount: document.pageCount,
                 pages: response.payload.pages.map((page) => {
                   const pageImagePath = imageByPage.get(page.pageNumber)
                   if (!pageImagePath)
                     throw new Error(`PDF 第 ${String(page.pageNumber)} 页渲染缺失`)
-                  return { ...page, pageImagePath }
+                  return {
+                    pageNumber: page.pageNumber,
+                    text: page.text,
+                    textStatus: page.textStatus,
+                    imageCount: page.imageCount,
+                    pageImagePath
+                  }
                 })
               }
             }
@@ -226,5 +228,5 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
     }
   )
 
-  return [inspectTool, searchTool, readPagesTool]
+  return [outlineTool, searchTool, readPagesTool]
 }

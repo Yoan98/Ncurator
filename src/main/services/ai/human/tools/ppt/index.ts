@@ -8,7 +8,7 @@ import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createPptToolRuntime, toPptToolFailure } from './runtime'
-import { pptEditSchema, pptOutlineSchema, pptReadSlidesSchema, pptSearchSchema } from './schemas'
+import { pptEditSchema, pptOutlineSchema, pptReadSlidesSchema, pptSearchSchema } from './toolSchemas'
 import {
   PPT_EDIT_TOOL_SPEC,
   PPT_READ_OUTLINE_TOOL_SPEC,

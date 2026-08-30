@@ -9,7 +9,7 @@ import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { WorkspaceCapabilityBuildInput } from '../types'
 import { isPathInsideRoot } from '../terminal/commandPolicy'
 import { resolveSafeTextFilePath, withTextFileMutationQueue } from '../textFile/textFileUtils'
-import type { ImageGenerateInput, ImageGenerateOutput } from './schemas'
+import type { ImageGenerateInput, ImageGenerateOutput } from './toolSchemas'
 
 const MAX_SVG_BYTES = 1_048_576
 const MAX_IMAGE_EDGE = 8_192

@@ -290,9 +290,7 @@ const docxReadRootNodeOutputSchema: z.ZodType<JsonValue> = z.lazy(() =>
   ])
 ) as z.ZodType<JsonValue>
 
-const docxBaseOutputSchema = z.object({
-  sourcePath: z.string().optional()
-})
+const docxBaseOutputSchema = z.object({})
 
 export const docxOutlineOutputSchema = z
   .object({
@@ -323,7 +321,6 @@ const docxSearchNodeTypeOutputSchema = z.enum([
 ])
 export const docxSearchOutputSchema = z
   .object({
-    sourcePath: z.string(),
     totalMatchCount: z.number().int().min(0),
     matches: z
       .array(
@@ -353,7 +350,6 @@ export const docxSearchOutputSchema = z
   .strict()
 
 export const docxReadOutputSchema = docxBaseOutputSchema.extend({
-  sourcePath: z.string(),
   nodes: z.array(docxReadRootNodeOutputSchema)
 })
 

@@ -38,20 +38,9 @@ export type ModelResultRendererInput = {
 
 export type ModelResultRenderer = (input: ModelResultRendererInput) => string
 
-export type ModelResultOverflowPolicy =
-  | { mode: 'spill' }
-  | { mode: 'window' }
-  | {
-      mode: 'retry'
-      maxBytes: number
-      maxLines: number
-      retryHint: string
-    }
-
 export type ModelResultSpec = {
   renderSuccess?: ModelResultRenderer
   renderError?: ModelResultRenderer
-  overflowPolicy?: ModelResultOverflowPolicy
 }
 
 export type CapabilityActivityStatus = 'started' | 'completed' | 'failed'

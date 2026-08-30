@@ -143,7 +143,6 @@ export const searchTextFile = async (args: FileSearchInput): Promise<FileSearchO
   })
 
   return {
-    sourcePath: args.sourcePath,
     totalMatchCount: collected.totalMatchCount,
     returnedMatchCount: matches.length,
     matches

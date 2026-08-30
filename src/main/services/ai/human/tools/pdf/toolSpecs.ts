@@ -5,11 +5,18 @@ import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
 import {
-  pdfInspectOutputSchema,
+  pdfOutlineOutputSchema,
+  pdfOutlineSchema,
   pdfReadPagesOutputSchema,
-  pdfSearchOutputSchema
-} from './outputSchemas'
-import { pdfInspectSchema, pdfReadPagesSchema, pdfSearchSchema } from './schemas'
+  pdfReadPagesSchema,
+  pdfSearchOutputSchema,
+  pdfSearchSchema
+} from './toolSchemas'
+import {
+  renderPdfOutlineModelResult,
+  renderPdfReadPagesModelResult,
+  renderPdfSearchModelResult
+} from '../../shared/modelToolResultRenderers'
 
 const PDF_READ_EXECUTION_META = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -24,22 +31,23 @@ type PdfToolSpec<
   TSkillId extends RuntimeSkillId = 'pdf-read'
 > = HumanToolSpec<TArgs, TOutput, TName, TSkillId>
 
-export const PDF_INSPECT_TOOL_SPEC: PdfToolSpec<
-  z.infer<typeof pdfInspectSchema>,
-  z.infer<typeof pdfInspectOutputSchema>,
-  'pdf_inspect',
+export const PDF_OUTLINE_TOOL_SPEC: PdfToolSpec<
+  z.infer<typeof pdfOutlineSchema>,
+  z.infer<typeof pdfOutlineOutputSchema>,
+  'pdf_outline',
   'pdf-read'
 > = {
-  name: 'pdf_inspect',
+  name: 'pdf_outline',
   familyId: 'pdf',
   skillIds: ['pdf-read'],
   promptSpec: {
-    name: 'pdf_inspect',
-    description: '读取 PDF 的基础信息，并返回页数、元数据、书签提纲和警告。'
+    name: 'pdf_outline',
+    description: '读取 PDF 页数、元数据与书签提纲。'
   },
-  inputSchema: pdfInspectSchema,
-  outputSchema: pdfInspectOutputSchema,
-  resolveExecutionMeta: PDF_READ_EXECUTION_META
+  inputSchema: pdfOutlineSchema,
+  outputSchema: pdfOutlineOutputSchema,
+  resolveExecutionMeta: PDF_READ_EXECUTION_META,
+  modelResult: { renderSuccess: renderPdfOutlineModelResult }
 }
 
 export const PDF_SEARCH_TOOL_SPEC: PdfToolSpec<
@@ -54,11 +62,12 @@ export const PDF_SEARCH_TOOL_SPEC: PdfToolSpec<
   promptSpec: {
     name: 'pdf_search',
     description:
-      '在 PDF 文本层中按 literal 或 regex 搜索并支持限制页码和数量，并返回页码、匹配文本、上下文、位置和文本层统计。'
+      '在 PDF 文本层中按 literal 或 regex 搜索，支持可选页码范围；最多返回 10 条匹配及文本层统计。'
   },
   inputSchema: pdfSearchSchema,
   outputSchema: pdfSearchOutputSchema,
-  resolveExecutionMeta: PDF_READ_EXECUTION_META
+  resolveExecutionMeta: PDF_READ_EXECUTION_META,
+  modelResult: { renderSuccess: renderPdfSearchModelResult }
 }
 
 export const PDF_READ_PAGES_TOOL_SPEC: PdfToolSpec<
@@ -73,15 +82,16 @@ export const PDF_READ_PAGES_TOOL_SPEC: PdfToolSpec<
   promptSpec: {
     name: 'pdf_read_pages',
     description:
-      '按连续页码范围或指定页码集合读取 PDF，并逐页返回正文、页码、文本状态、图片数量、尺寸和可交给 read_image 的 pageImagePath。'
+      '按连续页码范围或指定页码集合读取 PDF，并逐页返回正文、页码、文本状态、图片数量与可交给 read_image 的 pageImagePath。'
   },
   inputSchema: pdfReadPagesSchema,
   outputSchema: pdfReadPagesOutputSchema,
-  resolveExecutionMeta: PDF_READ_EXECUTION_META
+  resolveExecutionMeta: PDF_READ_EXECUTION_META,
+  modelResult: { renderSuccess: renderPdfReadPagesModelResult }
 }
 
 export const PDF_TOOL_SPECS = [
-  PDF_INSPECT_TOOL_SPEC,
+  PDF_OUTLINE_TOOL_SPEC,
   PDF_SEARCH_TOOL_SPEC,
   PDF_READ_PAGES_TOOL_SPEC
 ] as const

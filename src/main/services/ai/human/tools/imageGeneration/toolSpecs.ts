@@ -1,7 +1,7 @@
 import type { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
-import { imageGenerateOutputSchema, imageGenerateSchema } from './schemas'
+import { imageGenerateOutputSchema, imageGenerateSchema } from './toolSchemas'
 
 export const IMAGE_GENERATE_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof imageGenerateSchema>,

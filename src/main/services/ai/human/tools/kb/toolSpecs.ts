@@ -1,79 +1,20 @@
 import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
-import { jsonObjectSchema } from '../../toolSchemas'
 import {
   renderKbListDocumentsModelResult,
   renderKbSearchModelResult
 } from '../../shared/modelToolResultRenderers'
-import { createRetryModelResultPolicy } from '../modelResultPolicies'
+import {
+  KB_LIST_DOCUMENTS_OUTPUT_SCHEMA,
+  KB_LIST_DOCUMENTS_SCHEMA,
+  KB_SEARCH_OUTPUT_SCHEMA,
+  KB_SEARCH_SCHEMA
+} from './toolSchemas'
 
 const KB_EXECUTION_META = createStaticExecutionMetaResolver({
   mutability: 'read_only',
   defaultResourceKey: 'local-kb'
-})
-
-export const KB_SEARCH_SCHEMA = z.object({
-  queryText: z.string().min(1),
-  strategy: z.enum(['auto', 'semantic', 'keyword']).optional(),
-  limit: z.number().int().min(1).max(50).optional(),
-  sourceType: z.enum(['all', 'file', 'web']).optional(),
-  documentIds: z.array(z.string()).optional()
-})
-
-export const KB_LIST_DOCUMENTS_SCHEMA = z.object({
-  sourceNameQuery: z.string().optional(),
-  page: z.number().int().min(1).optional(),
-  pageSize: z.number().int().min(1).max(50).optional(),
-  documentIds: z.array(z.string()).optional()
-})
-
-const kbSearchResultItemSchema = z.object({
-  id: z.string(),
-  text: z.string(),
-  document_name: z.string(),
-  document_id: z.string().optional(),
-  source_type: z.string().optional(),
-  file_path: z.string().optional(),
-  source_url: z.string().optional(),
-  metadata: z.union([z.string(), jsonObjectSchema]).optional(),
-  _distance: z.number().optional(),
-  created_at: z.number().optional(),
-  _score: z.number().optional(),
-  _relevance_score: z.number().optional(),
-  document: jsonObjectSchema.optional()
-})
-
-const kbListDocumentItemSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  source_type: z.string(),
-  workspace_id: z.string().optional(),
-  file_path: z.string().optional(),
-  created_at: z.number(),
-  import_status: z.number(),
-  source_id: z.string().optional(),
-  source_url: z.string().optional(),
-  source_title: z.string().optional(),
-  normalized_source_url: z.string().optional(),
-  fetched_at: z.number().optional(),
-  updated_at: z.number().optional(),
-  last_error: z.string().optional()
-})
-
-export const KB_SEARCH_OUTPUT_SCHEMA = z.union([
-  z.array(kbSearchResultItemSchema),
-  z.object({
-    items: z.array(kbSearchResultItemSchema),
-    total: z.number(),
-    error: z.string().optional()
-  })
-])
-
-export const KB_LIST_DOCUMENTS_OUTPUT_SCHEMA = z.object({
-  items: z.array(kbListDocumentItemSchema),
-  total: z.number(),
-  error: z.string().optional()
 })
 
 export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
@@ -94,10 +35,7 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   },
   resolveExecutionMeta: KB_EXECUTION_META,
   modelResult: {
-    renderSuccess: renderKbSearchModelResult,
-    overflowPolicy: createRetryModelResultPolicy(
-      'Call kb_search again with a smaller limit, narrower documentIds/sourceType filters, or a more specific queryText.'
-    )
+    renderSuccess: renderKbSearchModelResult
   }
 }
 
@@ -119,10 +57,7 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   },
   resolveExecutionMeta: KB_EXECUTION_META,
   modelResult: {
-    renderSuccess: renderKbListDocumentsModelResult,
-    overflowPolicy: createRetryModelResultPolicy(
-      'Call kb_list_documents again with a smaller pageSize or narrower sourceNameQuery/documentIds filters.'
-    )
+    renderSuccess: renderKbListDocumentsModelResult
   }
 }
 

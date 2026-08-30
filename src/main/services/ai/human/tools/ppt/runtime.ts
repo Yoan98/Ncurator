@@ -97,6 +97,7 @@ import {
 import type { AiFileChangeRecord, JsonObject } from '../../../../../../shared/types'
 import { fileExists } from '../docx/review/utils'
 import { isPathInsideRoot, resolveToolPath } from '../terminal/commandPolicy'
+import { PPT_SEARCH_MAX_MATCHES } from './constants'
 import { normalizePptColor, PPT_CANVAS_HEIGHT, PPT_CANVAS_WIDTH } from './color'
 import { renderLatexToSvg } from './formula'
 import { buildPptDiffManifest } from './diff'
@@ -114,7 +115,7 @@ import {
   type PptElementOperation,
   type PptSlideDefaults,
   type PptSlideRange
-} from './schemas'
+} from './toolSchemas'
 import type {
   PptBounds,
   PptDiffFrame,
@@ -987,13 +988,9 @@ const applySlideSpec = async (input: {
 }
 
 const editOutput = (
-  sourcePath: string,
-  slideCount: number,
   slideId?: string,
   createdElementIds?: readonly string[]
 ): Record<string, unknown> => ({
-  sourcePath,
-  slideCount,
   ...(slideId ? { slideId } : {}),
   ...(createdElementIds && createdElementIds.length > 0
     ? { createdElementIds: [...createdElementIds] }
@@ -1069,7 +1066,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       for (let index = from; index < toExclusive; index += 1) selected.add(index)
     }
     return {
-      sourcePath: args.sourcePath,
       slideCount: slides.length,
       slides: [...selected]
         .sort((left, right) => left - right)
@@ -1084,9 +1080,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     const indices = resolveSlideIndices(slides, args.ranges)
     const detail = args.detail ?? 'full'
     return {
-      sourcePath: args.sourcePath,
-      slideCount: slides.length,
-      detail,
       slides: indices.map((index) => {
         const slide = slides[index]!
         if (detail === 'images') {
@@ -1129,9 +1122,8 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
           : []
       )
     })
-    const matches = allMatches.slice(0, 100)
+    const matches = allMatches.slice(0, PPT_SEARCH_MAX_MATCHES)
     return {
-      sourcePath: args.sourcePath,
       totalMatchCount: allMatches.length,
       returnedMatchCount: matches.length,
       truncated: matches.length < allMatches.length,
@@ -1227,12 +1219,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
           workspaceRootPath
         })
         placeSlide(document.presentation, slide, args.location)
-        result = editOutput(
-          args.sourcePath,
-          await persistDocument(document),
-          slideIdOf(slide),
-          elementIdsOf(slide)
-        )
+        result = editOutput(slideIdOf(slide), elementIdsOf(slide))
       } else if (args.type === 'replace_slide') {
         const slide = findSlide(document.presentation, args.slideId)
         document.replacedSlideIds.add(args.slideId)
@@ -1246,17 +1233,12 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
           defaults: args.defaults,
           workspaceRootPath
         })
-        result = editOutput(
-          args.sourcePath,
-          await persistDocument(document),
-          args.slideId,
-          elementIdsOf(slide)
-        )
+        result = editOutput(args.slideId, elementIdsOf(slide))
       } else if (args.type === 'delete_slides') {
         for (const slideId of args.slideIds) {
           removeSlide(document.presentation, findSlide(document.presentation, slideId))
         }
-        result = editOutput(args.sourcePath, await persistDocument(document))
+        result = editOutput()
       } else if (args.type === 'move_slide') {
         const slide = findSlide(document.presentation, args.slideId)
         if (args.location.slideId === args.slideId) {
@@ -1264,14 +1246,12 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         }
         placeSlide(document.presentation, slide, args.location)
         document.movedSlideIds.add(args.slideId)
-        result = editOutput(args.sourcePath, await persistDocument(document), args.slideId)
+        result = editOutput(args.slideId)
       } else if (args.type === 'duplicate_slide') {
         const source = findSlide(document.presentation, args.slideId)
         const duplicate = duplicateSlide(document.presentation, source)
         placeSlide(document.presentation, duplicate, args.location)
         result = editOutput(
-          args.sourcePath,
-          await persistDocument(document),
           slideIdOf(duplicate),
           elementIdsOf(duplicate)
         )
@@ -1307,8 +1287,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
         if (replacements === 0) throw new Error(`未找到要替换的文字：${args.query}`)
         const uniqueChanged = [...new Set(changedSlideIds)]
         result = editOutput(
-          args.sourcePath,
-          await persistDocument(document),
           uniqueChanged.length === 1 ? uniqueChanged[0] : undefined
         )
       } else if (args.type === 'edit_elements') {
@@ -1329,15 +1307,14 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
           })
         }
         result = editOutput(
-          args.sourcePath,
-          await persistDocument(document),
           args.slideId,
           createdIdsSince(beforeIds, slide)
         )
       } else {
         setSlideNotes(findSlide(document.presentation, args.slideId), args.text)
-        result = editOutput(args.sourcePath, await persistDocument(document), args.slideId)
+        result = editOutput(args.slideId)
       }
+      await persistDocument(document)
       return result
     } catch (error) {
       document.presentation = await loadPresentation(presentationSnapshot)
