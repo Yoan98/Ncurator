@@ -36,25 +36,25 @@ describe('ai tool ppt visual backend', () => {
             {
               type: 'image',
               assetPath: pathToFileURL(imagePath).href,
-              bounds: { x: 1700, y: 72, width: 80, height: 80 },
+              bounds: { x: 820, y: 72, width: 80, height: 80 },
               fit: 'contain'
             },
             {
               type: 'shape',
               shape: 'roundRect',
-              bounds: { x: 96, y: 72, width: 1728, height: 168 },
+              bounds: { x: 48, y: 72, width: 864, height: 120 },
               style: { fill: '#17324D' }
             },
             {
               type: 'text',
               text: '季度经营复盘',
-              bounds: { x: 144, y: 112, width: 1500, height: 96 },
+              bounds: { x: 144, y: 112, width: 780, height: 96 },
               style: { color: '#FFFFFF', fontFamily: 'Microsoft YaHei', fontSize: 36, bold: true }
             },
             {
               type: 'text',
               text: '收入增长 18%，交付质量保持稳定',
-              bounds: { x: 144, y: 330, width: 1500, height: 96 },
+              bounds: { x: 144, y: 330, width: 780, height: 96 },
               style: { color: '#1E293B', fontSize: 18 }
             }
           ]
@@ -73,7 +73,7 @@ describe('ai tool ppt visual backend', () => {
             {
               type: 'text',
               text: '远程图片失败也继续生成',
-              bounds: { x: 520, y: 120, width: 1200, height: 100 },
+              bounds: { x: 520, y: 120, width: 400, height: 80 },
               style: { color: '#111827', fontSize: 36 }
             }
           ]
@@ -88,13 +88,13 @@ describe('ai tool ppt visual backend', () => {
             {
               type: 'shape',
               shape: 'rect',
-              bounds: { x: 120, y: 120, width: 1680, height: 180 },
+              bounds: { x: 60, y: 120, width: 840, height: 120 },
               style: { fill: '#17324D' }
             },
             {
               type: 'text',
               text: '第二页可以在独立调用中追加',
-              bounds: { x: 160, y: 155, width: 1400, height: 100 },
+              bounds: { x: 80, y: 155, width: 760, height: 80 },
               style: { color: '#FFFFFF', fontSize: 36 }
             }
           ]
@@ -176,7 +176,7 @@ describe('ai tool ppt visual backend', () => {
           result.slideCount === 2 &&
             result.title?.bounds.x === 144 &&
             result.title?.bounds.y === 112 &&
-            Math.abs(Number(result.title?.bounds.width) - 1500) < 2 &&
+            Math.abs(Number(result.title?.bounds.width) - 780) < 2 &&
             result.title?.style?.fontFamily === 'Microsoft YaHei' &&
             Math.abs(Number(result.title?.style?.fontSize) - 36) < 2 &&
             result.pptxSize > 1000,

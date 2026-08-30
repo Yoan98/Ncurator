@@ -80,7 +80,7 @@ describe('ai tool agent-control backend', () => {
             result.result.images[0]?.path === result.result.images[1]?.path &&
             result.result.images[0]?.path !== result.result.images[2]?.path &&
             result.result.images.every((image) =>
-              /read_image-cache\/[a-f0-9]{64}-v1\.webp$/u.test(image.path)
+              /read_image-cache[\\/][a-f0-9]{64}-v1\.webp$/u.test(image.path.replace(/\\/g, '/'))
             ) &&
             result.projectedUrls.length === 3 &&
             result.projectedUrls.every((url) => url.startsWith('data:image/webp;base64,')) &&

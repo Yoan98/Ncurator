@@ -64,6 +64,7 @@ export const buildPptCapabilityTools = (input: Parameters<typeof createPptToolRu
     const slides = Array.isArray(readResult.slides) ? readResult.slides : []
     return {
       ...readResult,
+      detail: args.detail ?? 'full',
       slides: slides.map((value) => {
         const slide = value as Record<string, unknown>
         const slideId = String(slide.slideId || '')

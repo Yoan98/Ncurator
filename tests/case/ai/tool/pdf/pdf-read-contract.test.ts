@@ -192,8 +192,8 @@ describe('ai tool pdf backend', () => {
         runtime.assertThat(
           page?.pageNumber === 9 &&
             imageExists &&
-            /\.ncurator\/runtime\/assets\/pdf_read_pages-[^/]+\/[a-f0-9]{64}\./u.test(
-              page.pageImagePath || ''
+            /\.ncurator[\\/]runtime[\\/]assets[\\/]pdf_read_pages-[^\\/]+[\\/][a-f0-9]{64}\./u.test(
+              (page.pageImagePath || '').replace(/\\/g, '/')
             ),
           {
             name: 'pdf-read-pages-returns-page-image-path',

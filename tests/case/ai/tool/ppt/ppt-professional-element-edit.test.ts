@@ -13,7 +13,7 @@ const baseSlide = {
     {
       type: 'text' as const,
       text: '专业编辑验证',
-      bounds: { x: 140, y: 100, width: 1500, height: 110 },
+      bounds: { x: 140, y: 100, width: 780, height: 110 },
       style: { color: '#17324D', fontSize: 36 }
     }
   ]
@@ -64,7 +64,7 @@ describe('ai tool ppt professional editing', () => {
                   element: {
                     type: 'line',
                     from: { x: 140, y: 250 },
-                    to: { x: 1760, y: 250 },
+                    to: { x: 820, y: 250 },
                     color: '#C18B25',
                     width: 3,
                     arrowEnd: true
@@ -74,7 +74,7 @@ describe('ai tool ppt professional editing', () => {
                   type: 'add_element',
                   element: {
                     type: 'table',
-                    bounds: { x: 140, y: 330, width: 700, height: 300 },
+                    bounds: { x: 140, y: 300, width: 360, height: 150 },
                     rows: [
                       ['指标', '结果'],
                       ['增长', '18%']
@@ -85,7 +85,7 @@ describe('ai tool ppt professional editing', () => {
                   type: 'add_element',
                   element: {
                     type: 'chart',
-                    bounds: { x: 980, y: 330, width: 700, height: 340 },
+                    bounds: { x: 520, y: 300, width: 360, height: 150 },
                     chartType: 'column',
                     categories: ['Q1', 'Q2'],
                     series: [{ name: '收入', values: [12, 18] }]
@@ -95,7 +95,7 @@ describe('ai tool ppt professional editing', () => {
                   type: 'add_element',
                   element: {
                     type: 'formula',
-                    bounds: { x: 140, y: 730, width: 650, height: 180 },
+                    bounds: { x: 140, y: 470, width: 360, height: 60 },
                     latex: 'E=mc^2'
                   }
                 }
@@ -173,7 +173,7 @@ describe('ai tool ppt professional editing', () => {
             (table?.details as { rows?: string[][] })?.rows?.[1]?.[1] === '24%' &&
             (chart?.details as { chartType?: string })?.chartType === 'line' &&
             formula?.latex === 'a^2+b^2=c^2' &&
-            result.duplicated.slideCount === 2 &&
+            typeof result.duplicated.slideId === 'string' &&
             result.records.length === 1 &&
             result.slideCount === 2,
           {

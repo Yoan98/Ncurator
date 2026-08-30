@@ -17,7 +17,7 @@ type SlideSpec = {
 const labeledText = (text: string, y: number) => ({
   type: 'text' as const,
   text,
-  bounds: { x: 100, y, width: 420, height: 70 },
+  bounds: { x: 100, y, width: 420, height: 50 },
   style: { color: '#111827', fontSize: 14 }
 })
 
@@ -27,7 +27,7 @@ const slideSpec = (title: string, body = ''): SlideSpec => ({
     {
       type: 'text',
       text: title,
-      bounds: { x: 140, y: 100, width: 1500, height: 110 },
+      bounds: { x: 140, y: 100, width: 780, height: 110 },
       style: { color: '#17324D', fontSize: 36 }
     },
     ...(body
@@ -35,7 +35,7 @@ const slideSpec = (title: string, body = ''): SlideSpec => ({
           {
             type: 'text' as const,
             text: body,
-            bounds: { x: 140, y: 300, width: 1500, height: 100 },
+            bounds: { x: 140, y: 300, width: 780, height: 100 },
             style: { color: '#334155', fontSize: 18 }
           }
         ]
@@ -46,17 +46,17 @@ const slideSpec = (title: string, body = ''): SlideSpec => ({
 const elementDeck: SlideSpec = {
   background: '#FFFFFF',
   elements: [
-    labeledText('Layer Original', 80),
-    labeledText('Text Original', 180),
-    labeledText('Style Original', 280),
-    labeledText('Move Original', 380),
-    labeledText('Resize Original', 480),
-    labeledText('Delete Original', 580),
-    labeledText('Restore Original', 680),
+    labeledText('Layer Original', 40),
+    labeledText('Text Original', 100),
+    labeledText('Style Original', 160),
+    labeledText('Move Original', 220),
+    labeledText('Resize Original', 280),
+    labeledText('Delete Original', 340),
+    labeledText('Restore Original', 400),
     {
       type: 'formula',
       latex: 'E=mc^2',
-      bounds: { x: 900, y: 180, width: 600, height: 180 }
+      bounds: { x: 540, y: 80, width: 380, height: 120 }
     }
   ]
 }
@@ -255,7 +255,7 @@ describe('ai tool ppt net diff backend', () => {
               element: {
                 type: 'text',
                 text: 'Added Draft',
-                bounds: { x: 900, y: 500, width: 500, height: 80 }
+                bounds: { x: 520, y: 420, width: 400, height: 60 }
               }
             },
             {
@@ -263,7 +263,7 @@ describe('ai tool ppt net diff backend', () => {
               element: {
                 type: 'text',
                 text: 'Temporary Element',
-                bounds: { x: 900, y: 650, width: 500, height: 80 }
+                bounds: { x: 520, y: 470, width: 400, height: 60 }
               }
             }
           ]
@@ -403,19 +403,19 @@ describe('ai tool ppt net diff backend', () => {
             {
               type: 'text',
               text: 'Replace After A',
-              bounds: { x: 140, y: 80, width: 1500, height: 90 },
+              bounds: { x: 140, y: 80, width: 780, height: 90 },
               style: { fontSize: 28 }
             },
             {
               type: 'text',
               text: 'Replace After B',
-              bounds: { x: 140, y: 220, width: 1500, height: 90 },
+              bounds: { x: 140, y: 220, width: 780, height: 90 },
               style: { fontSize: 20 }
             },
             {
               type: 'text',
               text: 'Replace After C',
-              bounds: { x: 140, y: 360, width: 1500, height: 90 },
+              bounds: { x: 140, y: 360, width: 780, height: 90 },
               style: { fontSize: 20 }
             }
           ]

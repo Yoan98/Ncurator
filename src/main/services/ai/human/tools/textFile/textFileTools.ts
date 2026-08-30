@@ -587,7 +587,7 @@ export const buildTextFileCapabilityTools = (
             status: 'completed',
             summary: applied.message
           })
-          return payload
+          return applied.message
         },
         onError: (error, session) => {
           session.fail(

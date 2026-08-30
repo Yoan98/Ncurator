@@ -401,66 +401,12 @@ export const pptEditSchema = z.discriminatedUnion('type', [
     .strict()
 ])
 
-const pptOutlineSlideSchema = z
-  .object({
-    slideId: z.string(),
-    slideIndex: z.number().int().min(1),
-    title: z.string().optional(),
-    text: z.string().optional(),
-    notes: z.string().optional(),
-    elementCount: z.number().int().min(0).optional()
-  })
-  .strict()
-
-const pptReadSlideSchema = z
-  .object({
-    slideId: z.string(),
-    slideIndex: z.number().int().min(1),
-    title: z.string().optional(),
-    text: z.string().optional(),
-    notes: z.string().optional(),
-    slideImagePath: z.string(),
-    elements: z.array(z.record(z.string(), z.unknown())).optional()
-  })
-  .strict()
-
-const pptSearchMatchSchema = z
-  .object({
-    slideId: z.string(),
-    slideIndex: z.number().int().min(1),
-    matchedText: z.string(),
-    text: z.string(),
-    source: z.enum(['slide', 'notes'])
-  })
-  .strict()
-
-export const pptReadOutlineOutputShape = z.object({
-  slideCount: z.number().int().min(0),
-  slides: z.array(pptOutlineSlideSchema)
-})
-
-export const pptReadSlidesOutputShape = z.object({
-  slides: z.array(pptReadSlideSchema)
-})
-
-export const pptSearchOutputShape = z.object({
-  totalMatchCount: z.number().int().min(0),
-  returnedMatchCount: z.number().int().min(0),
-  truncated: z.boolean(),
-  matches: z.array(pptSearchMatchSchema)
-})
-
-export const pptEditOutputShape = z
-  .object({
-    slideId: z.string().optional(),
-    createdElementIds: z.array(z.string().min(1)).min(1).optional()
-  })
-  .strict()
-
-export type PptReadOutlineOutput = z.infer<typeof pptReadOutlineOutputShape>
-export type PptReadSlidesOutput = z.infer<typeof pptReadSlidesOutputShape>
-export type PptSearchOutput = z.infer<typeof pptSearchOutputShape>
-export type PptEditOutput = z.infer<typeof pptEditOutputShape>
+export type {
+  PptEditOutput,
+  PptReadOutlineOutput,
+  PptReadSlidesOutput,
+  PptSearchOutput
+} from './outputTypes'
 
 export type PptOutlineInput = z.infer<typeof pptOutlineSchema>
 export type PptReadSlidesInput = z.infer<typeof pptReadSlidesSchema>

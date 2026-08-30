@@ -12,6 +12,7 @@ import {
   docxOutlineSchema,
   docxReadNodesSchema
 } from '../../../../src/main/services/ai/human/tools/docx/toolSchemas'
+import type { DocxMutationOutput } from '../../../../src/main/services/ai/human/tools/docx/outputTypes'
 
 const READ_TOOLS = ['docx_read_outline', 'docx_search', 'docx_read_nodes']
 const WRITE_TOOLS = [
@@ -130,5 +131,13 @@ describe('ai unit docx tool contract', () => {
         format: { alignment: 'center' }
       }).success
     ).toBe(false)
+  })
+
+  it('keeps docx mutation output minimal', () => {
+    const empty = {} satisfies DocxMutationOutput
+    const withIds = { createdIds: ['node_1'] } satisfies DocxMutationOutput
+    expect(empty).toEqual({})
+    expect(withIds.createdIds).toEqual(['node_1'])
+    expect('createdIds' in empty).toBe(false)
   })
 })

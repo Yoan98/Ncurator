@@ -1,32 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import { getSkillDefinition } from '../../../../src/main/services/ai/human/skills'
-import {
-  excelEditOutputShape,
-  excelReadOutputShape
-} from '../../../../src/main/services/ai/human/tools/excel/toolSchemas'
+import type {
+  ExcelEditOutput,
+  ExcelReadOutput
+} from '../../../../src/main/services/ai/human/tools/excel/outputTypes'
 import { isTerminalExcelMutationCommand } from '../../../../src/main/services/ai/human/tools/terminal/commandPolicy'
 
 describe('Excel static contracts', () => {
   it('declares readable output shapes and skill ownership', () => {
-    expect(
-      excelReadOutputShape.safeParse({
-        sheets: [{ name: 'Sheet1', range: 'A1:B2', rowCount: 2, columnCount: 2 }]
-      }).success
-    ).toBe(true)
-    expect(
-      excelReadOutputShape.safeParse({
-        sheetName: 'Sheet1',
-        range: 'A1:B2',
-        rows: [['a', 1]]
-      }).success
-    ).toBe(true)
-    expect(
-      excelReadOutputShape.safeParse({
-        truncated: false,
-        matches: [{ sheetName: 'Sheet1', address: 'A1', value: 'x' }]
-      }).success
-    ).toBe(true)
-    expect(excelEditOutputShape.safeParse({}).success).toBe(true)
+    const workbookSample = {
+      sheets: [{ name: 'Sheet1', range: 'A1:B2', rowCount: 2, columnCount: 2 }]
+    } satisfies ExcelReadOutput
+    const rangeSample = {
+      sheetName: 'Sheet1',
+      range: 'A1:B2',
+      rows: [['a', 1]]
+    } satisfies ExcelReadOutput
+    const searchSample = {
+      truncated: false,
+      matches: [{ sheetName: 'Sheet1', address: 'A1', value: 'x' }]
+    } satisfies ExcelReadOutput
+    const editSample = {} satisfies ExcelEditOutput
+
+    expect(workbookSample.sheets).toHaveLength(1)
+    expect(rangeSample.rows[0]).toEqual(['a', 1])
+    expect(searchSample.matches[0]?.address).toBe('A1')
+    expect(editSample).toEqual({})
     expect(getSkillDefinition('excel-read').toolNames).toEqual(['excel_read'])
     expect(getSkillDefinition('excel-write').toolNames).toEqual(['excel_edit'])
   })
