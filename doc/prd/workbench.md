@@ -324,7 +324,7 @@
   - `WB-COMPOSER-009-AC3` assistant 最终 markdown 输出默认无独立背景卡片，保持在过程流下方。
   - `WB-COMPOSER-009-AC4` 用户消息以右对齐紧凑气泡展示。
   - `WB-COMPOSER-009-AC5` 执行层 header 按真实发生顺序将同一轮工具调用合成为一句自然语言，最多展示三类动作，正常动作使用“并”连接，后续动作失败时使用“但”连接，不使用逗号分隔；超过三类时收敛为“正在执行 n 项操作”或“已完成 n 项操作”。例如“已操作浏览器 3 次并等待 1 秒”“已搜索网页但读取网页失败”。header 只展示一个图标；单一工具类型使用对应语义图标，混合工具使用流程图标。
-  - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看文档 xx 的结构”；`docx_read_nodes` 展示“读取文档 xx 范围”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search` 展示“搜索网页 query”；`browser_use navigate / observe / extract / act` 分别补充“打开网页 / 查看页面并 / 从页面中 / 在页面上”的动作语义。
+  - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看文档 xx 的结构”；`docx_read_nodes` 展示“读取文档 xx 范围”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search search / fetch` 分别展示“搜索网页 query”“抓取网页 url”；`browser_use navigate / observe / extract / act` 分别补充“打开网页 / 查看页面并 / 从页面中 / 在页面上”的动作语义。
   - `WB-COMPOSER-009-AC7` 文件名、query、命令、URL 和技能名不使用粗体或冒号强调，保持正常字重；可以通过文字颜色表达层级。
   - `WB-COMPOSER-009-AC8` 学习步骤使用技能通用名称展示，例如 `docx 阅读器`、`docx 编辑器`、`资料查阅器`、`命令执行器`；运行中展示“正在学习 xx 技能”，完成后展示“已学会 xx 技能”。
   - `WB-COMPOSER-009-AC9` 执行层 header、学习层和压缩层展示对应图标；浏览器、等待、网页读取、网页搜索、图片识别、知识库、文件和终端使用不同语义图标。展开后的每条工具句子不展示图标，也不渲染前置小圆点或“AI 思路”类图标。

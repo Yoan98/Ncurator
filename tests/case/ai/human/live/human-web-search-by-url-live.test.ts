@@ -17,7 +17,7 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '用户给指定地址，AI 直接调用 web_search(url) 读取该页并回答。',
+        description: '用户给指定地址，AI 直接调用 web_search(type=fetch) 读取该页并回答。',
         fixtures: [],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -41,7 +41,9 @@ describe('ai human live backend', () => {
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started').filter(
             (event) => event.toolName === 'web_search'
           )
-          const urlCalls = starts.map((event) => String(event.input?.url || ''))
+          const urlCalls = starts
+            .filter((event) => event.input?.type === 'fetch')
+            .map((event) => String(event.input?.url || ''))
           const results = filterAiRunEventsByType(result.events, 'tool_call_result').filter(
             (event) => event.toolName === 'web_search' && event.result?.ok === true
           )
@@ -61,7 +63,7 @@ describe('ai human live backend', () => {
               result.output.deliveryMarkdown.includes('9月30日'),
             {
               name: 'human-live-web-search-by-url-answers-from-given-address',
-              message: '用户给指定地址时 AI 应直接 web_search(url) 读取该页并基于正文回答。',
+              message: '用户给指定地址时 AI 应直接 web_search(type=fetch) 读取该页并基于正文回答。',
               data: { urlCalls, delivery: result.output.deliveryMarkdown }
             }
           )

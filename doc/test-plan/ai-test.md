@@ -21,8 +21,8 @@
 | human-legacy-doc-reading-live                       | 完成 |            94 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-legacy-doc-reading-live/20260813-195642-815                       | 通过 docx 读取工具成功读取旧版 .doc 并准确回答五级风险与区别率，源文件未改。                           |
 | human-text-file-write-checkout-cutover-live         | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:17 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20260813-201727-173         | 两处端点和超时精确更新，重试与 telemetry 不变，写后核对完整。                                          |
 | human-text-file-read-checkout-readiness-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260813-201642-554        | 只读审查准确识别就绪性风险与保留配置，源文件未改。                                                     |
-| human-web-search-by-url-live                        | 通过 |             - | deepseek-v4-flash                | 2026-08-24 01:05 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260824-012552-756                        | 给定指定地址，web_search(url) 读取该页并基于正文回答。                                                 |
-| human-web-search-intent-query-live                  | 通过 |             - | deepseek-v4-flash                | 2026-08-24 01:03 CST | -                                                                                                | 纯文本诉求提炼意图，web_search(query) 读取官方文档回答。                                               |
+| human-web-search-by-url-live                        | 通过 |             - | deepseek-v4-flash                | 2026-08-24 01:05 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260824-012552-756                        | 给定指定地址，web_search(type=fetch) 读取该页并基于正文回答。                                          |
+| human-web-search-intent-query-live                  | 通过 |             - | deepseek-v4-flash                | 2026-08-24 01:03 CST | -                                                                                                | 纯文本诉求提炼意图，web_search(type=search/fetch) 读取官方文档回答。                                    |
 | human-legacy-doc-edit-skip-live                     | 完成 |            88 | deepseek-v4-flash                | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129                     | .doc 写入失败后停止重试，源文件不变，任务完成。                                                        |
 | human-docx-visual-reading-live                      | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243                      | 真实读取 DOCX 图片并准确回答，源文件未改。                                                             |
 | human-pdf-visual-reading-live                       | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871                       | PDF 页级视觉读取与识图，正确回答图形差异，源 PDF 未改。                                                |
@@ -488,48 +488,48 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 #### web-browsing 类别
 
-##### `web-search-reads-page-by-url`
+##### `web-search-fetch-page-by-url`
 
 - 测试类型：`backend`
-- What：`web_search` 传 `url` 会返回 `requestedUrl/finalUrl`、标题、`markdown`、发布时间与分组 links；其中 `markdown` 内容来源于 crawl4ai 的 `fit_markdown`。
-- Why：程序级网页读取是低成本网页能力入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索，同时保留 crawl4ai 的分组 links 与评分语义。
-- How：启动本地 HTTP server，返回文章页 HTML，通过真实冻结 sidecar bin 返回抓取结果，调用 `web_search({ url })`。
-- Oracle：`items[0]` 包含 `requestedUrl`、`finalUrl`、`title`、`markdown`、`publishedAt`、`links.internal/external`。
+- What：`web_search` 传 `{ type: 'fetch', url }` 会返回扁平结构的 `requestedUrl/finalUrl`、标题、`markdown`、发布时间与分组 links；其中 `markdown` 内容来源于 crawl4ai 的 `fit_markdown`。
+- Why：单页抓取是网页正文入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索。
+- How：启动本地 HTTP server，返回文章页 HTML，通过真实冻结 sidecar bin 返回抓取结果，调用 `web_search({ type: 'fetch', url })`。
+- Oracle：结果包含 `requestedUrl`、`finalUrl`、`title`、`markdown`、`publishedAt`、`links.internal/external`。
 - Not：不验证复杂浏览器交互或外网可达性。
 
-##### `web-search-reads-content-by-query`
+##### `web-search-returns-serp-by-search-type`
 
 - 测试类型：`backend`
-- What：`web_search` 传 `query` 会先搜索候选网页，并行爬取全部候选，返回 `{ items: [...] }`（成功项带正文 markdown、失败项带 `error`）。
-- Why：网页搜索与正文读取融合后，query 应产出可被 brain 消费的网页正文数组；失败项在数组中可见，brain 可据此避免重复访问被墙或失败的来源。
-- How：通过真实 web tool harness 调用 `web_search({ query })`，使用可控搜索返回多个候选 URL，抓取服务对部分 URL 返回失败。
-- Oracle：`items` 为数组，成功项包含该页 `requestedUrl` 与正文 `markdown`，失败项包含 `error`，两者按候选顺序并存。
+- What：`web_search` 传 `{ type: 'search', query }` 只返回 `{ query, results[] }`（rank/title/url/snippet），不调用 crawl。
+- Why：SERP 与正文抓取分离，避免一次 query 拉取多页正文占用上下文。
+- How：通过真实 web tool harness 调用 `web_search({ type: 'search', query })`，mock search 返回多个候选 URL，并断言 crawl 未被调用。
+- Oracle：`results` 为数组且含 snippet；结果中无 `markdown`。
 - Not：不验证搜索引擎级网页发现与多跳。
 
-##### `web-search-reads-entry-page`
+##### `web-search-fetch-entry-page`
 
 - 测试类型：`backend`
-- What：`web_search` 传 `url` 只读取该 URL 对应网页，并保留该页 links。
-- Why：当前 contract 不让工具自己多跳跟进，后续要不要继续探索由 human 自己看 links 决定。
-- How：启动本地 HTTP server，返回包含通知页和指南页链接的入口页，通过真实冻结 sidecar bin 抓取该页，调用 `web_search({ url })`。
+- What：`web_search` 传 `{ type: 'fetch', url }` 只读取该 URL 对应网页，并保留该页 links。
+- Why：fetch 不让工具自己多跳跟进，后续要不要继续探索由 human 自己看 links 决定。
+- How：启动本地 HTTP server，返回包含通知页和指南页链接的入口页，通过真实冻结 sidecar bin 抓取该页，调用 `web_search({ type: 'fetch', url })`。
 - Oracle：结果命中输入 URL 对应页面正文，同时 links 中保留该页相关链接。
 - Not：不验证自动多跳或搜索引擎级网页发现。
 
-##### `web-search-http-failure`
+##### `web-search-fetch-http-failure`
 
 - 测试类型：`backend`
-- What：`web_search` 传 `url` 遇到 HTTP 失败时会保留错误文本、最终 URL 和状态码。
+- What：`web_search` 传 `{ type: 'fetch', url }` 遇到 HTTP 失败时会保留错误文本、最终 URL 和状态码。
 - Why：网页读取失败也必须保持可诊断，避免 `human` 误把空结果当成“网页无信息”。
-- How：启动本地 HTTP server，返回 404 页面，通过真实冻结 sidecar bin 执行抓取，调用 `web_search({ url })`。
+- How：启动本地 HTTP server，返回 404 页面，通过真实冻结 sidecar bin 执行抓取，调用 `web_search({ type: 'fetch', url })`。
 - Oracle：结果返回明确错误文本，同时保留 `finalUrl` 和 `statusCode`。
 - Not：不验证复杂重定向链或外站错误页样式。
 
-##### `web-search-returns-full-content-without-tool-level-truncation`
+##### `web-search-fetch-returns-full-content-without-tool-level-truncation`
 
 - 测试类型：`backend`
-- What：`web_search` 结果过大时不再在工具层硬失败，完整正文直接返回，由 hand 层统一截断并落盘。
+- What：`web_search` type=fetch 结果过大时不再在工具层硬失败，完整正文直接返回，由 hand 层统一截断并落盘。
 - Why：网页正文可能很长；统一大小守卫上移到 hand 层处理（完整多行文本落盘 `.txt` + 首尾预览 + `text_file_read` 续读），工具层不再对超长正文直接报错。
-- How：启动本地 HTTP server，返回超长正文页，通过真实冻结 sidecar bin 抓取，调用 `web_search({ url })`。
+- How：启动本地 HTTP server，返回超长正文页，通过真实冻结 sidecar bin 抓取，调用 `web_search({ type: 'fetch', url })`。
 - Oracle：结果返回完整 `markdown`（不携带 `error`），`requestedUrl/finalUrl` 保留，后续截断落盘由 hand 层负责。
 - Not：不验证压缩摘要或自动截断策略。
 
@@ -1034,19 +1034,19 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-web-search-by-url-live`
 
 - 测试类型：`backend`
-- What：live 模式下用户直接给指定地址，`human` 通过 `web_search(url)` 读取该页正文并回答。
-- Why：用户给定具体网址时，`human` 应直接读取该地址而不是先搜索，这是网页读取的低成本入口，必须稳定。
+- What：live 模式下用户直接给指定地址，`human` 通过 `web_search({ type: 'fetch', url })` 读取该页正文并回答。
+- Why：用户给定具体网址时，`human` 应直接 fetch 该地址而不是先搜索，这是网页读取的低成本入口，必须稳定。
 - How：启动本地 HTTP server 承载通知页（含申请对象与截止日期），用户输入明确给出该通知页 URL，要求模型阅读该页并回答两个事实。
-- Oracle：事件流中至少一次成功调用 `web_search(url)` 且 `finalUrl` 命中给定地址；最终答复包含页面正文里的申请对象与截止日期。
+- Oracle：事件流中至少一次成功调用 `web_search(type=fetch)` 且 `finalUrl` 命中给定地址；最终答复包含页面正文里的申请对象与截止日期。
 - Not：不要求多跳或跨域；只要给定地址被直接读取并基于正文回答。
 
 ##### `human-web-search-intent-query-live`
 
 - 测试类型：`backend`
-- What：live 模式下用户只给纯文本诉求、不给网址，`human` 提炼搜索意图后通过 `web_search(query)` 搜索并读取官方文档回答。
-- Why：真实用户常只描述诉求不给网址；`human` 应提炼关键词走 query 搜索而非直接 fallback 浏览器。
+- What：live 模式下用户只给纯文本诉求、不给网址，`human` 提炼搜索意图后通过 `web_search(type=search)` 获取候选，并用 `type=fetch` 读取官方文档回答。
+- Why：真实用户常只描述诉求不给网址；`human` 应提炼关键词走 search 而非直接 fallback 浏览器。
 - How：不向用户输入提供 URL，只给“查找 pandas 官方文档 CSV 读取和写入 API 并说明”的自然语言诉求；要求模型自行提炼意图并读取官方文档页面完成整理。
-- Oracle：至少一次成功调用带 `query` 的 `web_search`；至少读取一个 `pandas.pydata.org` 官方 API 页面并基于正文回答。
+- Oracle：至少一次成功调用 `web_search(type=search)`；至少一次成功 `web_search(type=fetch)` 读取 `pandas.pydata.org` 官方 API 页面并基于正文回答。
 - Not：不要求复杂跨域或深链路，也不要求模型第一次就命中最终文档页；因 query 搜索偶发不可用，允许模型在搜索失败时用 `browser_use` 兜底读取官方页面。
 
 ##### `human-text-file-read-checkout-readiness-live`

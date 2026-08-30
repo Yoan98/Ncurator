@@ -4,7 +4,7 @@ import { createWebToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { createWebCrawlerService } from '../../../../harness/backend/webCrawlerTestUtils'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
-type WebSearchItem = {
+type WebSearchFetchPayload = {
   requestedUrl?: string
   finalUrl?: string
   title?: string
@@ -26,8 +26,14 @@ type WebSearchItem = {
   statusCode?: number
 }
 
-type WebSearchPayload = {
-  items: WebSearchItem[]
+type WebSearchSearchPayload = {
+  query: string
+  results: Array<{
+    rank: number
+    title: string
+    url: string
+    snippet?: string
+  }>
 }
 
 type BrowserUseResult = {
@@ -133,14 +139,14 @@ const createLocalServer = async (): Promise<{
 }
 
 describe('ai tool web backend', () => {
-  it('web-search-reads-page-by-url', async () => {
+  it('web-search-fetch-page-by-url', async () => {
     await runBackendCase({
-      caseId: 'web-search-reads-page-by-url',
+      caseId: 'web-search-fetch-page-by-url',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_search 传 url 会返回该页面的标题、markdown、发布时间与后续链接。',
+      description: '验证 web_search type=fetch 会返回该页面的标题、markdown、发布时间与后续链接。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -150,7 +156,8 @@ describe('ai tool web backend', () => {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
           })
-          return await harness.invoke<WebSearchPayload>('web_search', {
+          return await harness.invoke<WebSearchFetchPayload>('web_search', {
+            type: 'fetch',
             url: `${server.baseUrl}/policy`
           })
         } finally {
@@ -159,19 +166,18 @@ describe('ai tool web backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const item = result.items[0]
         runtime.assertThat(
-          item?.requestedUrl?.endsWith('/policy') === true &&
-            item?.finalUrl?.endsWith('/policy') === true &&
-            item?.title === '灵活就业补贴申报通知' &&
-            item?.publishedAt === '2026-06-10' &&
-            Boolean(item?.markdown?.includes('申报截止时间为 2026-09-30')) &&
-            Array.isArray(item?.links?.internal) &&
-            item?.links?.internal?.some((link) => link.href?.endsWith('/guide')),
+          result.requestedUrl?.endsWith('/policy') === true &&
+            result.finalUrl?.endsWith('/policy') === true &&
+            result.title === '灵活就业补贴申报通知' &&
+            result.publishedAt === '2026-06-10' &&
+            Boolean(result.markdown?.includes('申报截止时间为 2026-09-30')) &&
+            Array.isArray(result.links?.internal) &&
+            result.links?.internal?.some((link) => link.href?.endsWith('/guide')),
           {
-            name: 'web-search-returns-stable-page-fields',
+            name: 'web-search-fetch-returns-stable-page-fields',
             message:
-              'web_search 传 url 应返回 requestedUrl/finalUrl、标题、发布时间、markdown 和分组 links。',
+              'web_search type=fetch 应返回 requestedUrl/finalUrl、标题、发布时间、markdown 和分组 links。',
             data: result
           }
         )
@@ -179,14 +185,14 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('web-search-reads-content-by-query', async () => {
+  it('web-search-returns-serp-by-search-type', async () => {
     await runBackendCase({
-      caseId: 'web-search-reads-content-by-query',
+      caseId: 'web-search-returns-serp-by-search-type',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_search 传 query 会搜索并并行爬取全部候选网页，返回数组（失败项带 error）。',
+      description: '验证 web_search type=search 只返回 SERP 候选，不抓取正文。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -215,40 +221,29 @@ describe('ai tool web backend', () => {
                 }
               }
             },
-            async crawl(input) {
-              if (input.url === 'https://example.com/deepseek-details') {
-                throw new Error('网页请求失败：403')
-              }
-              return {
-                requestedUrl: input.url,
-                finalUrl: input.url,
-                title: 'DeepSeek 510亿A轮融资全解析',
-                markdown: 'DeepSeek 完成首轮外部融资 510 亿元。',
-                links: { internal: [], external: [] },
-                raw: {}
-              }
+            async crawl() {
+              throw new Error('crawl should not be called for type=search')
             },
             async close() {
               return
             }
           }
         })
-        return await harness.invoke<WebSearchPayload>('web_search', {
+        return await harness.invoke<WebSearchSearchPayload>('web_search', {
+          type: 'search',
           query: '最近 DeepSeek 融资情况'
         })
       },
       assert: async (result, runtime) => {
-        const items = result.items
-        const firstOk = items.find((item) => item.markdown)
         runtime.assertThat(
-          items.length === 2 &&
-            items.some((item) => item.error === '网页请求失败：403') &&
-            Boolean(firstOk?.markdown?.includes('510 亿元')) &&
-            firstOk?.requestedUrl === 'https://example.com/deepseek-funding',
+          result.query === '最近 DeepSeek 融资情况' &&
+            result.results.length === 2 &&
+            result.results[0]?.url === 'https://example.com/deepseek-funding' &&
+            result.results[0]?.snippet?.includes('510 亿元') &&
+            !('markdown' in result),
           {
-            name: 'web-search-returns-array-by-query',
-            message:
-              'web_search 传 query 应并行爬取候选网页并返回 items 数组，成功项带 markdown、失败项带 error。',
+            name: 'web-search-returns-serp-only',
+            message: 'web_search type=search 应只返回 query 与 rank/title/url/snippet 列表。',
             data: result
           }
         )
@@ -256,14 +251,14 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('web-search-reads-entry-page', async () => {
+  it('web-search-fetch-entry-page', async () => {
     await runBackendCase({
-      caseId: 'web-search-reads-entry-page',
+      caseId: 'web-search-fetch-entry-page',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_search 传 url 只读取该网页并保留页面链接。',
+      description: '验证 web_search type=fetch 只读取该网页并保留页面链接。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -273,7 +268,8 @@ describe('ai tool web backend', () => {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
           })
-          return await harness.invoke<WebSearchPayload>('web_search', {
+          return await harness.invoke<WebSearchFetchPayload>('web_search', {
+            type: 'fetch',
             url: `${server.baseUrl}/`
           })
         } finally {
@@ -282,16 +278,15 @@ describe('ai tool web backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const item = result.items[0]
         runtime.assertThat(
-          item?.requestedUrl?.endsWith('/') === true &&
-            item?.title === '就业服务首页' &&
-            Boolean(item?.markdown?.includes('这里汇总了通知公告和办事指南')) &&
-            Array.isArray(item?.links?.internal) &&
-            item?.links?.internal?.some((link) => link.href?.endsWith('/policy')),
+          result.requestedUrl?.endsWith('/') === true &&
+            result.title === '就业服务首页' &&
+            Boolean(result.markdown?.includes('这里汇总了通知公告和办事指南')) &&
+            Array.isArray(result.links?.internal) &&
+            result.links?.internal?.some((link) => link.href?.endsWith('/policy')),
           {
-            name: 'web-search-reads-entry-page-without-auto-follow',
-            message: 'web_search 传 url 应读取该网页并返回页面链接，不再自动跟进其他链接。',
+            name: 'web-search-fetch-reads-entry-page-without-auto-follow',
+            message: 'web_search type=fetch 应读取该网页并返回页面链接，不自动跟进其他链接。',
             data: result
           }
         )
@@ -299,14 +294,14 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('web-search-http-failure', async () => {
+  it('web-search-fetch-http-failure', async () => {
     await runBackendCase({
-      caseId: 'web-search-http-failure',
+      caseId: 'web-search-fetch-http-failure',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证 web_search 传 url 遇到 HTTP 失败时会保留错误文本、最终 URL 和状态码。',
+      description: '验证 web_search type=fetch 遇到 HTTP 失败时会保留错误文本、最终 URL 和状态码。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -316,7 +311,8 @@ describe('ai tool web backend', () => {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
           })
-          return await harness.invoke<WebSearchPayload>('web_search', {
+          return await harness.invoke<WebSearchFetchPayload>('web_search', {
+            type: 'fetch',
             url: `${server.baseUrl}/missing`
           })
         } finally {
@@ -325,15 +321,14 @@ describe('ai tool web backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const item = result.items[0]
         runtime.assertThat(
-          item?.error === '网页请求失败：404' &&
-            item?.statusCode === 404 &&
-            item?.requestedUrl?.endsWith('/missing') === true &&
-            item?.finalUrl?.endsWith('/missing') === true,
+          result.error === '网页请求失败：404' &&
+            result.statusCode === 404 &&
+            result.requestedUrl?.endsWith('/missing') === true &&
+            result.finalUrl?.endsWith('/missing') === true,
           {
-            name: 'web-search-preserves-http-failure-fields',
-            message: 'web_search HTTP 失败时应保留错误文本、requestedUrl/finalUrl 和状态码。',
+            name: 'web-search-fetch-preserves-http-failure-fields',
+            message: 'web_search type=fetch HTTP 失败时应保留错误文本、requestedUrl/finalUrl 和状态码。',
             data: result
           }
         )
@@ -341,15 +336,15 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('web-search-returns-full-content-without-tool-level-truncation', async () => {
+  it('web-search-fetch-returns-full-content-without-tool-level-truncation', async () => {
     await runBackendCase({
-      caseId: 'web-search-returns-full-content-without-tool-level-truncation',
+      caseId: 'web-search-fetch-returns-full-content-without-tool-level-truncation',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
       description:
-        '验证 web_search 不再在工具层对过大结果硬失败，完整正文直接返回，由 hand 层统一截断落盘。',
+        '验证 web_search type=fetch 不再在工具层对过大结果硬失败，完整正文直接返回，由 hand 层统一截断落盘。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -362,7 +357,8 @@ describe('ai tool web backend', () => {
               modelContextWindowTokens: 20
             }
           })
-          return await harness.invoke<WebSearchPayload>('web_search', {
+          return await harness.invoke<WebSearchFetchPayload>('web_search', {
+            type: 'fetch',
             url: `${server.baseUrl}/large`
           })
         } finally {
@@ -371,16 +367,15 @@ describe('ai tool web backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const item = result.items[0]
         runtime.assertThat(
-          item?.requestedUrl?.endsWith('/large') === true &&
-            item?.finalUrl?.endsWith('/large') === true &&
-            typeof item?.markdown === 'string' &&
-            item.markdown.length > 0 &&
-            !('error' in item && item.error),
+          result.requestedUrl?.endsWith('/large') === true &&
+            result.finalUrl?.endsWith('/large') === true &&
+            typeof result.markdown === 'string' &&
+            result.markdown.length > 0 &&
+            !result.error,
           {
-            name: 'web-search-returns-full-content',
-            message: 'web_search 结果过大时不再硬失败，完整正文由 hand 层统一截断落盘。',
+            name: 'web-search-fetch-returns-full-content',
+            message: 'web_search type=fetch 结果过大时不再硬失败，完整正文由 hand 层统一截断落盘。',
             data: result
           }
         )

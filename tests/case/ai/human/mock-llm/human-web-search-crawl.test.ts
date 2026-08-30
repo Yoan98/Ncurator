@@ -51,14 +51,14 @@ describe('ai human mock-llm web backend', () => {
               {
                 output: buildToolDecision({
                   toolName: 'web_search',
-                  args: { query: '灵活就业补贴截止时间' },
+                  args: { type: 'search', query: '灵活就业补贴截止时间' },
                   summary: '搜索候选网页'
                 })
               },
               {
                 output: buildToolDecision({
                   toolName: 'web_search',
-                  args: { url: 'https://example.test/policy' },
+                  args: { type: 'fetch', url: 'https://example.test/policy' },
                   summary: '读取通知正文'
                 })
               },

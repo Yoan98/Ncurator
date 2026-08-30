@@ -46,8 +46,7 @@ export const RUNTIME_SKILL_CATALOG = {
     source: 'builtin',
     countsTowardToolBudget: false,
     title: 'web-browsing',
-    description:
-      '按关键词搜索并读取公开网页正文，或直接读取指定网页，或操作内置浏览器，并返回网页正文、链接或浏览器动作结果。'
+    description: '搜索公开网页、抓取网页正文，或操作内置浏览器。'
   },
   'docx-read': {
     familyId: 'docx',

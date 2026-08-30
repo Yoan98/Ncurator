@@ -4,22 +4,35 @@ export type WebSearchLinkItem = {
   title?: string
 }
 
-export type WebSearchItem = {
+export type WebSearchResultItem = {
+  rank: number
+  title: string
+  url: string
+  snippet?: string
+}
+
+export type WebSearchSearchOutput = {
+  query: string
+  results: WebSearchResultItem[]
+}
+
+export type WebSearchFetchOutput = {
   requestedUrl: string
-  finalUrl?: string
+  finalUrl: string
   title?: string
-  markdown?: string
-  links?: {
+  markdown: string
+  links: {
     internal: WebSearchLinkItem[]
     external: WebSearchLinkItem[]
   }
   publishedAt?: string
-  error?: string
-  statusCode?: number
 }
 
-export type WebSearchOutput = {
-  items: WebSearchItem[]
+export type WebSearchFetchFailureOutput = {
+  error: string
+  requestedUrl: string
+  finalUrl?: string
+  statusCode?: number
 }
 
 export type BrowserUsePage = {

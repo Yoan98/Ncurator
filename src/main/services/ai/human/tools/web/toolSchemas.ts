@@ -1,14 +1,19 @@
 import { z } from 'zod/v4'
 
-export const WEB_SEARCH_SCHEMA = z
-  .object({
-    query: z.string().min(1).optional().describe('搜索关键词；与 url 二选一'),
-    url: z.string().min(1).optional().describe('直接抓取的网页 URL；与 query 二选一')
-  })
-  .strict()
-  .refine((value) => Boolean(value.query) !== Boolean(value.url), {
-    message: 'query 与 url 必须二选一'
-  })
+export const WEB_SEARCH_SCHEMA = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('search').describe('按关键词搜索公开网页'),
+      query: z.string().min(1).describe('搜索关键词')
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('fetch').describe('抓取单个 URL 的正文'),
+      url: z.string().min(1).describe('目标 URL')
+    })
+    .strict()
+])
 
 export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
   z
@@ -46,7 +51,9 @@ export type {
   BrowserUseObserveOutput,
   BrowserUseOutput,
   BrowserUsePage,
-  WebSearchItem,
+  WebSearchFetchFailureOutput,
+  WebSearchFetchOutput,
   WebSearchLinkItem,
-  WebSearchOutput
+  WebSearchResultItem,
+  WebSearchSearchOutput
 } from './outputTypes'

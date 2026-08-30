@@ -253,8 +253,8 @@ const extractUnionExamples = (schema: z.ZodType): Array<{ label: string; input: 
 
 const INPUT_EXAMPLES_OVERRIDE: Record<string, Array<{ label: string; input: JsonObject }>> = {
   web_search: [
-    { label: 'query', input: { query: 'typescript tutorial' } },
-    { label: 'url', input: { url: 'https://example.com/page' } }
+    { label: 'search', input: { type: 'search', query: 'typescript tutorial' } },
+    { label: 'fetch', input: { type: 'fetch', url: 'https://example.com/page' } }
   ],
   terminal_run: [
     {
@@ -372,10 +372,11 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
     { path: 'items[].filePath? / sourceUrl?', description: '路径或 URL' }
   ],
   web_search: [
-    { path: 'args.query? / args.url?', description: '决定标题文案' },
-    { path: 'items[].title? / requestedUrl', description: '标题与 URL' },
-    { path: 'items[].markdown?', description: '抓取正文（query 与 url 模式成功项均有）' },
-    { path: 'items[].error?', description: '单条失败' }
+    { path: 'args.type', description: 'search | fetch' },
+    { path: 'query / results[]', description: 'search：关键词与 SERP 列表' },
+    { path: 'results[].rank / title / url / snippet?', description: 'search 候选' },
+    { path: 'requestedUrl / finalUrl / title? / markdown / links / publishedAt?', description: 'fetch 单页正文' },
+    { path: 'error?', description: '失败文案' }
   ],
   browser_use: [
     { path: 'error?', description: '失败文案' },
@@ -763,78 +764,61 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
   ],
   web_search: [
     {
-      label: '关键词搜索',
+      label: 'search',
+      input: { type: 'search', query: 'DeepSeek 最近融资' },
       ok: true,
-      input: { query: 'vitest terminal output snapshot testing' },
       data: {
-        items: [
+        query: 'DeepSeek 最近融资',
+        results: [
           {
-            requestedUrl: 'https://vitest.dev/guide/snapshot',
-            finalUrl: 'https://vitest.dev/guide/snapshot',
-            title: 'Snapshot Testing | Vitest',
-            markdown: [
-              '# Snapshot Testing',
-              '',
-              'Vitest supports snapshot testing via `expect(value).toMatchSnapshot()`.',
-              '',
-              'Use inline snapshots for small outputs embedded in the test file.'
-            ].join('\n')
+            rank: 1,
+            title: 'DeepSeek 510亿A轮融资全解析',
+            url: 'https://example.com/deepseek-funding',
+            snippet: 'DeepSeek 完成首轮外部融资 510 亿元。'
           },
           {
-            requestedUrl: 'https://vitest.dev/guide/cli',
-            finalUrl: 'https://vitest.dev/guide/cli',
-            title: 'Command Line Interface | Vitest',
-            markdown: [
-              '# Command Line Interface',
-              '',
-              'Run tests with `vitest run`. Add a path to filter files.',
-              '',
-              'Terminal output is streamed live unless `--silent` is passed.'
-            ].join('\n')
+            rank: 2,
+            title: 'DeepSeek 融资详情',
+            url: 'https://example.com/deepseek-details',
+            snippet: '融资细节与投资方名单。'
           }
         ]
       }
     },
     {
-      label: 'URL 直读',
+      label: 'fetch',
+      input: { type: 'fetch', url: 'https://example.com/deepseek-funding' },
       ok: true,
-      input: { url: 'https://example.com/docs/terminal' },
       data: {
-        items: [
-          {
-            requestedUrl: 'https://example.com/docs/terminal',
-            title: 'Terminal Sessions',
-            markdown: [
-              '# Terminal Sessions',
-              '',
-              'Commands run in a persistent shell. Use `terminal_read` to poll output.',
-              '',
-              '## Status values',
-              '',
-              '- `running` — command still producing output',
-              '- `succeeded` — exited 0',
-              '- `failed` — exited non-zero',
-              '- `cancelled` — user stopped (exit 130)'
-            ].join('\n')
-          }
-        ]
+        requestedUrl: 'https://example.com/deepseek-funding',
+        finalUrl: 'https://example.com/deepseek-funding',
+        title: 'DeepSeek 510亿A轮融资全解析',
+        markdown: [
+          '# DeepSeek 510亿A轮融资全解析',
+          '',
+          'DeepSeek 完成首轮外部融资 510 亿元，资金将用于算力与研发扩张。'
+        ].join('\n'),
+        links: { internal: [], external: [] },
+        publishedAt: '2026-03-01'
       }
     },
     {
-      label: '单条抓取失败',
-      ok: true,
-      input: { query: 'blocked page example' },
+      label: 'fetch 失败',
+      input: { type: 'fetch', url: 'https://private.example/internal' },
+      ok: false,
       data: {
-        items: [
-          {
-            requestedUrl: 'https://private.example/internal',
-            title: 'private.example',
-            error: 'HTTP 403 Forbidden'
-          }
-        ]
+        error: 'HTTP 403 Forbidden',
+        requestedUrl: 'https://private.example/internal',
+        finalUrl: 'https://private.example/internal',
+        statusCode: 403
       }
     },
-    { label: '工具失败', ok: false, data: { error: 'Search service unavailable' } }
+    {
+      label: 'search 无结果',
+      input: { type: 'search', query: 'xyz-no-results-query' },
+      ok: false,
+      data: { error: 'web_search 没有找到相关结果' }
+    }
   ],
   browser_use: [
     {

@@ -17,9 +17,9 @@ const PROMPT =
 const isObjectRecord = (value: JsonValue | undefined): value is Record<string, JsonValue> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const readToolInputString = (
+const readWebSearchInput = (
   event: Extract<AiRunEvent, { type: 'tool_call_started' }>,
-  key: string
+  key: 'query' | 'url' | 'type'
 ): string => {
   const input = event.input as JsonValue
   if (!isObjectRecord(input)) return ''
@@ -69,8 +69,12 @@ describe('workbench run e2e', () => {
           return {
             finalAnswerText: evidence.finalAnswerText,
             eventTypes: evidence.events.map((event) => event.type),
-            searchQueries: searchStarts.map((event) => readToolInputString(event, 'query')),
-            searchUrls: searchStarts.map((event) => readToolInputString(event, 'url')),
+            searchQueries: searchStarts
+              .filter((event) => readWebSearchInput(event, 'type') === 'search')
+              .map((event) => readWebSearchInput(event, 'query')),
+            fetchUrls: searchStarts
+              .filter((event) => readWebSearchInput(event, 'type') === 'fetch')
+              .map((event) => readWebSearchInput(event, 'url')),
             searchOk: searchResults.some((event) => event.result?.ok === true),
             searchErrors: searchResults.map((event) => event.error || '').filter(Boolean)
           }

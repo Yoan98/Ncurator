@@ -312,7 +312,7 @@ const renderWebSearchLinks = (value: JsonValue | undefined): string => {
   ].join('\n')
 }
 
-const renderWebSearchResult = (obj: JsonObject): string =>
+const renderWebSearchFetchResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
       ['requestedUrl', readStringField(obj, 'requestedUrl')],
@@ -328,6 +328,31 @@ const renderWebSearchResult = (obj: JsonObject): string =>
   ]
     .filter(Boolean)
     .join('\n')
+
+const renderWebSearchSearchResult = (obj: JsonObject): string =>
+  [
+    renderKeyValuePairs([['query', readStringField(obj, 'query')]]),
+    'results:',
+    ...(Array.isArray(obj.results)
+      ? obj.results.map((item, index) => {
+          if (!isJsonObject(item)) return `${index + 1}. ${renderGenericArrayItem(item, index)}`
+          return `${index + 1}. ${renderKeyValuePairs([
+            ['rank', readNumberTextField(item, 'rank')],
+            ['title', readStringField(item, 'title')],
+            ['url', readStringField(item, 'url')],
+            ['snippet', readStringField(item, 'snippet')]
+          ])}`
+        })
+      : ['none'])
+  ].join('\n')
+
+const renderWebSearchResult = (obj: JsonObject): string => {
+  if (Array.isArray(obj.results)) return renderWebSearchSearchResult(obj)
+  if (typeof obj.markdown === 'string' || readStringField(obj, 'requestedUrl')) {
+    return renderWebSearchFetchResult(obj)
+  }
+  return renderGenericObject(obj)
+}
 
 const renderDocxMutationResult = (obj: JsonObject): string | undefined =>
   Array.isArray(obj.createdIds) ? `createdIds:\n${renderGenericArray(obj.createdIds)}` : undefined

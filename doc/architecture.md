@@ -152,7 +152,8 @@ DOCX、Excel、PDF 等复杂工具族已按上述原则落地；全部 29 个工
 | B XML envelope | `text_file_read`、`pdf_read_pages`、`read_image` | `<file path="...">` + 行号正文 |
 | C 终端流 + marker | `terminal_run`、`terminal_read` | 输出正文 + `[status: …]` 等方括号标记 |
 | D 分组纯文本 | search / list / outline | 标题 + 分组列表 |
-| E Markdown/Web | `web_search`、`browser_use` | 不可信内容前缀 + Markdown 正文 |
+| E Markdown/Web | `web_search`（fetch）、`browser_use` | fetch 与 browser extract：不可信内容前缀 + Markdown 正文 |
+| D 分组纯文本 | `web_search`（search） | SERP：rank / title / url / snippet |
 | 领域专用 | `docx_read_nodes`、`excel_read`、`ppt_read_slides` | 保留结构化领域布局 |
 
 Terminal 契约：`status` 为 `running | succeeded | failed | cancelled`；`terminal_run` 返回 `terminalId`，`terminal_read` 不回传。

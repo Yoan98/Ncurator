@@ -1,16 +1,11 @@
 import type { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
-import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
+import { readStringArg } from '../utils/toolSpecUtils'
 import {
   renderBrowserUseModelResult,
   renderWebSearchModelResult
 } from '../../shared/modelToolResultRenderers'
 import { BROWSER_USE_SCHEMA, WEB_SEARCH_SCHEMA } from './toolSchemas'
-
-const WEB_EXECUTION_META = createStaticExecutionMetaResolver({
-  mutability: 'read_only',
-  defaultResourceKey: 'web'
-})
 
 export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof WEB_SEARCH_SCHEMA>,
@@ -23,9 +18,15 @@ export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
   inputSchema: WEB_SEARCH_SCHEMA,
   promptSpec: {
     name: 'web_search',
-    description: '搜索或抓取网页正文。'
+    description: '搜索公开网页，或抓取单个 URL 的正文。'
   },
-  resolveExecutionMeta: WEB_EXECUTION_META,
+  resolveExecutionMeta: (args) => ({
+    mutability: 'read_only',
+    resourceKey:
+      args.type === 'fetch'
+        ? readStringArg(args, 'url') || 'web-fetch'
+        : readStringArg(args, 'query') || 'web-search'
+  }),
   modelResult: { renderSuccess: renderWebSearchModelResult }
 }
 

@@ -72,24 +72,45 @@ describe('ai unit model tool result renderers', () => {
     expect(rendered).toBe('The file /workspace/app.ts has been updated successfully.')
   })
 
-  it('renders web_search query results with markdown bodies', () => {
+  it('renders web_search search results as SERP list', () => {
     const rendered = renderWebSearchModelResult({
       toolName: 'web_search',
-      args: { query: 'vitest snapshot' },
+      args: { type: 'search', query: 'DeepSeek funding' },
       data: {
-        items: [
+        query: 'DeepSeek funding',
+        results: [
           {
-            requestedUrl: 'https://vitest.dev/guide/snapshot',
-            title: 'Snapshot Testing | Vitest',
-            markdown: '# Snapshot Testing\n\nUse toMatchSnapshot().'
+            rank: 1,
+            title: 'Funding news',
+            url: 'https://example.com/news',
+            snippet: 'Raised 510 billion yuan.'
           }
         ]
       }
     })
 
-    expect(rendered).toContain('Web search completed. Query: vitest snapshot')
-    expect(rendered).toContain('# Snapshot Testing')
-    expect(rendered).toContain('toMatchSnapshot()')
-    expect(rendered).toContain('https://vitest.dev/guide/snapshot')
+    expect(rendered).toContain('Web search completed.')
+    expect(rendered).toContain('Query: DeepSeek funding')
+    expect(rendered).toContain('Funding news')
+    expect(rendered).toContain('Raised 510 billion yuan.')
+    expect(rendered).not.toContain('External web content follows')
+  })
+
+  it('renders web_search fetch results with untrusted markdown', () => {
+    const rendered = renderWebSearchModelResult({
+      toolName: 'web_search',
+      args: { type: 'fetch', url: 'https://example.com/news' },
+      data: {
+        requestedUrl: 'https://example.com/news',
+        finalUrl: 'https://example.com/news',
+        title: 'Funding news',
+        markdown: '# Funding\n\nRaised 510 billion yuan.',
+        links: { internal: [], external: [] }
+      }
+    })
+
+    expect(rendered).toContain('External web content follows')
+    expect(rendered).toContain('# Funding')
+    expect(rendered).toContain('510 billion yuan')
   })
 })

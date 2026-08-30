@@ -629,34 +629,41 @@ export const renderPdfReadPagesModelResult: ModelResultRenderer = ({ args, data 
 }
 
 export const renderWebSearchModelResult: ModelResultRenderer = ({ args, data }) => {
+  const type = readString(args.type)
   const obj = isObject(data) ? data : {}
-  const items = Array.isArray(obj.items) ? obj.items.filter(isObject) : []
-  const query = readString(args.query)
-  const url = readString(args.url)
-  const header = query
-    ? `Web search completed. Query: ${query}`
-    : url
-      ? `Web page fetched. URL: ${url}`
-      : 'Web search completed.'
-  const sections = [
-    header,
-    `Results: ${items.length}`,
-    ...(items.length
-      ? items.map((item, index) => {
-          const error = readString(item.error)
-          const title = readString(item.title) || readString(item.requestedUrl) || ''
-          const requestedUrl = readString(item.requestedUrl) || ''
-          if (error) return `  ${index + 1}. [error] ${title} — ${error}`
-          const markdown = readString(item.markdown) || ''
-          if (markdown) {
-            const urlLine = requestedUrl ? ` (${requestedUrl})` : ''
-            return [`  ${index + 1}. ${title}${urlLine}`, indentBlock(markdown, 2)].join('\n')
-          }
-          return `  ${index + 1}. ${title}\n     url: ${requestedUrl}`
+  if (type === 'fetch') {
+    const title = readString(obj.title) || readString(obj.requestedUrl) || ''
+    const requestedUrl = readString(obj.requestedUrl) || readString(args.url) || ''
+    const finalUrl = readString(obj.finalUrl) || requestedUrl
+    const markdown = readString(obj.markdown) || ''
+    const pageLabel = [title, finalUrl].filter(Boolean).join(' — ')
+    return renderUntrustedWebContent([
+      'Web page fetched.',
+      pageLabel ? `Page: ${pageLabel}` : '',
+      markdown || '(empty)'
+    ])
+  }
+
+  const query = readString(obj.query) || readString(args.query) || ''
+  const results = Array.isArray(obj.results) ? obj.results.filter(isObject) : []
+  return joinGroupedSections([
+    renderGroupedHeader('Web search completed.'),
+    query ? `Query: ${query}` : '',
+    `Results: ${results.length}`,
+    ...(results.length
+      ? results.flatMap((item, index) => {
+          const rank = readNumber(item.rank) ?? index + 1
+          const title = readString(item.title) || ''
+          const url = readString(item.url) || ''
+          const snippet = readString(item.snippet) || ''
+          return [
+            `  ${index + 1}. [${rank}] ${title}`,
+            url ? `     url: ${url}` : '',
+            snippet ? indentBlock(snippet, 2) : '     snippet: (none)'
+          ].filter(Boolean)
         })
       : ['  none'])
-  ]
-  return renderUntrustedWebContent(sections)
+  ])
 }
 
 export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {

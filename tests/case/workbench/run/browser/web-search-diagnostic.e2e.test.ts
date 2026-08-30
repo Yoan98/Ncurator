@@ -17,17 +17,25 @@ const PROMPT =
 const isObjectRecord = (value: JsonValue | undefined): value is Record<string, JsonValue> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const readContentMarkdown = (event: AiRunEvent): string => {
-  if (event.type !== 'tool_call_result' || event.toolName !== 'web_search') return ''
-  const data = event.result?.data
-  if (!Array.isArray(data)) return ''
-  for (const item of data) {
-    if (!isObjectRecord(item)) continue
-    const markdown = item.markdown
+const readContentMarkdown = (events: AiRunEvent[]): string => {
+  for (const event of events) {
+    if (event.type !== 'tool_call_result' || event.toolName !== 'web_search') continue
+    const data = event.result?.data
+    if (!isObjectRecord(data)) continue
+    const markdown = data.markdown
     if (typeof markdown === 'string' && markdown.length > 0) return markdown
   }
   return ''
 }
+
+const readSearchQueries = (events: AiRunEvent[]): string[] =>
+  events.flatMap((event) => {
+    if (event.type !== 'tool_call_started' || event.toolName !== 'web_search') return []
+    const input = event.input as JsonValue
+    if (!isObjectRecord(input) || input.type !== 'search') return []
+    const query = input.query
+    return typeof query === 'string' ? [query] : []
+  })
 
 describe('workbench run e2e', () => {
   it(
@@ -67,18 +75,22 @@ describe('workbench run e2e', () => {
             (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
               event.type === 'tool_call_result' && event.toolName === 'web_search'
           )
-          const latestSearchResult = searchResults.at(-1)
+          const fetchOk = searchResults.some(
+            (event) =>
+              event.result?.ok === true &&
+              isObjectRecord(event.result.data) &&
+              typeof event.result.data.markdown === 'string' &&
+              event.result.data.markdown.length > 0
+          )
 
           return {
             finalAnswerText: evidence.finalAnswerText,
             eventTypes: evidence.events.map((event) => event.type),
-            searchQueries: searchStarts.map((event) => {
-              const input = event.input as JsonValue
-              return isObjectRecord(input) ? String(input.query || '') : ''
-            }),
-            contentMarkdown: latestSearchResult ? readContentMarkdown(latestSearchResult) : '',
-            searchError: latestSearchResult?.error || '',
-            searchOk: latestSearchResult?.result?.ok === true
+            searchQueries: readSearchQueries(evidence.events),
+            searchCallCount: searchStarts.length,
+            contentMarkdown: readContentMarkdown(evidence.events),
+            searchError: searchResults.map((event) => event.error || '').filter(Boolean).join('; '),
+            fetchOk
           }
         },
         assert: async (result, runtime) => {
@@ -86,7 +98,7 @@ describe('workbench run e2e', () => {
             result.eventTypes.includes('run_completed') &&
               result.searchQueries.length > 0 &&
               result.searchQueries.some((query) => /deepseek/i.test(query)) &&
-              result.searchOk &&
+              result.fetchOk &&
               result.contentMarkdown.length > 0 &&
               !result.searchError,
             {

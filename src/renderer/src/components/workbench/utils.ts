@@ -231,10 +231,14 @@ const TOOL_ITEM_RENDERERS = {
   },
   excel_edit: (input) => sentence(text('编辑 Excel '), text(readToolFileLabel(input))),
   web_search: (input) => {
-    const url = readStringValue(input || {}, 'url')
-    return url
-      ? sentence(text('读取网页 '), text(truncateMiddle(url, 96)))
-      : sentence(text('搜索网页 '), text(readToolQueryLabel(input)))
+    const type = readStringValue(input || {}, 'type')
+    if (type === 'fetch') {
+      const url = readStringValue(input || {}, 'url')
+      return url
+        ? sentence(text('抓取网页 '), text(truncateMiddle(url, 96)))
+        : sentence(text('抓取网页'))
+    }
+    return sentence(text('搜索网页 '), text(readToolQueryLabel(input)))
   },
   browser_use: (input) => {
     const action = input ? readStringValue(input, 'action') || '' : ''
@@ -794,31 +798,46 @@ export const extractReadableFilesFromToolOutput = (
 }
 
 export const extractSearchResultsFromToolOutput = (output: IpcJsonValue): SearchResult[] => {
+  const mapWebItem = (item: IpcJsonObject): SearchResult | null => {
+    const webUrl = readStringField(item, 'url') || readStringField(item, 'requestedUrl')
+    if (!webUrl) return null
+    const title = readStringField(item, 'title') || '未命名网页'
+    const text = readStringField(item, 'snippet') || readStringField(item, 'markdown') || ''
+    const documentId = readStringField(item, 'requestedUrl') || webUrl
+    return {
+      id: documentId,
+      text,
+      document_name: title,
+      document_id: documentId,
+      source_type: 'web' as const,
+      document: {
+        id: documentId,
+        name: title,
+        source_type: 'web' as const,
+        file_path: webUrl,
+        created_at: 0,
+        import_status: 2 as const
+      }
+    }
+  }
+
+  if (isIpcJsonObject(output)) {
+    if (Array.isArray(output.results)) {
+      return output.results
+        .filter((item): item is IpcJsonObject => isIpcJsonObject(item))
+        .map(mapWebItem)
+        .filter((item): item is SearchResult => item !== null)
+    }
+    const fetched = mapWebItem(output)
+    return fetched ? [fetched] : []
+  }
+
   if (!Array.isArray(output)) return []
   return output
     .filter((item): item is IpcJsonObject => isIpcJsonObject(item))
     .map((item) => {
-      const webUrl = readStringField(item, 'url')
-      if (webUrl) {
-        const title = readStringField(item, 'title') || '未命名网页'
-        const text = readStringField(item, 'snippet') || readStringField(item, 'markdown') || ''
-        const documentId = readStringField(item, 'requestedUrl') || webUrl
-        return {
-          id: documentId,
-          text,
-          document_name: title,
-          document_id: documentId,
-          source_type: 'web' as const,
-          document: {
-            id: documentId,
-            name: title,
-            source_type: 'web' as const,
-            file_path: webUrl,
-            created_at: 0,
-            import_status: 2 as const
-          }
-        }
-      }
+      const webResult = mapWebItem(item)
+      if (webResult) return webResult
       const nestedDocument = readNestedObject(item, 'document')
       const result: SearchResult = {
         id: readStringField(item, 'id') || crypto.randomUUID(),
