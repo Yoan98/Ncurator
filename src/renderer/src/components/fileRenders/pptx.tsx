@@ -83,6 +83,7 @@ const CustomPptxRenderer: DocRenderer = ({ mainState }: DocRendererProps) => {
       error={error}
       afterTestId="ppt-preview-after"
       thumbnailsTestId="ppt-preview-thumbnails"
+      hintTestId="ppt-preview-zoom-hint"
       testId="ppt-preview-viewer"
     />
   )

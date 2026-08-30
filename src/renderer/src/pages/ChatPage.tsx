@@ -4402,12 +4402,12 @@ const ChatPage: React.FC = () => {
               className="min-h-0 shrink-0 overflow-hidden transition-[width] duration-200 ease-out"
               data-testid={workbenchSelectors.contentPanelShell}
               data-panel-visible={contentPanelShellVisible ? 'true' : 'false'}
-              style={{ width: contentPanelShellVisible ? 'min(48vw, 780px)' : 0 }}
+              style={{ width: contentPanelShellVisible ? '48vw' : 0 }}
             >
               <div
                 className="h-full transition-[transform,opacity] duration-200 ease-out"
                 style={{
-                  width: 'min(48vw, 780px)',
+                  width: '48vw',
                   transform: contentPanelShellVisible ? 'translateX(0)' : 'translateX(24px)',
                   opacity: contentPanelShellVisible ? 1 : 0
                 }}

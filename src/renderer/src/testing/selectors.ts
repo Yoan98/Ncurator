@@ -233,6 +233,7 @@ export const workbenchSelectors = {
   pptDiffBefore: 'workbench-ppt-diff-before',
   pptDiffAfter: 'workbench-ppt-diff-after',
   pptDiffThumbnails: 'workbench-ppt-diff-thumbnails',
+  pptViewerHint: 'workbench-ppt-viewer-hint',
   excelViewer: 'workbench-excel-viewer',
   excelGrid: 'workbench-excel-grid',
   referenceAiWarning: 'workbench-reference-ai-warning',

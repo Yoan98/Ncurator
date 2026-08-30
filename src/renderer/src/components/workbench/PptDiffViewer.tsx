@@ -133,6 +133,7 @@ const PptDiffViewer: React.FC<{ record: AiFileChangeRecord }> = ({ record }) => 
       beforeTestId={workbenchSelectors.pptDiffBefore}
       afterTestId={workbenchSelectors.pptDiffAfter}
       thumbnailsTestId={workbenchSelectors.pptDiffThumbnails}
+      hintTestId={workbenchSelectors.pptViewerHint}
     />
   )
 }
