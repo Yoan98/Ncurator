@@ -5,23 +5,16 @@ import { readStringArg } from '../utils/toolSpecUtils'
 import type { AiRuntimePlatform } from '../../../types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
 import { renderTerminalModelResult } from '../../shared/modelToolResultRenderers'
-import {
-  TERMINAL_READ_OUTPUT_SCHEMA,
-  TERMINAL_READ_SCHEMA,
-  TERMINAL_RUN_OUTPUT_SCHEMA,
-  TERMINAL_RUN_SCHEMA
-} from './toolSchemas'
+import { TERMINAL_READ_SCHEMA, TERMINAL_RUN_SCHEMA } from './toolSchemas'
 
 type TerminalRunToolSpec = HumanToolSpec<
   z.infer<typeof TERMINAL_RUN_SCHEMA>,
-  z.infer<typeof TERMINAL_RUN_OUTPUT_SCHEMA>,
   'terminal_run',
   'terminal'
 >
 
 type TerminalReadToolSpec = HumanToolSpec<
   z.infer<typeof TERMINAL_READ_SCHEMA>,
-  z.infer<typeof TERMINAL_READ_OUTPUT_SCHEMA>,
   'terminal_read',
   'terminal'
 >
@@ -33,7 +26,6 @@ export const createTerminalRunToolSpec = (
   familyId: 'terminal',
   skillIds: ['terminal'],
   inputSchema: TERMINAL_RUN_SCHEMA,
-  outputSchema: TERMINAL_RUN_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_run',
     description: '在工作区终端执行命令。'
@@ -55,7 +47,6 @@ export const TERMINAL_READ_TOOL_SPEC: TerminalReadToolSpec = {
   familyId: 'terminal',
   skillIds: ['terminal'],
   inputSchema: TERMINAL_READ_SCHEMA,
-  outputSchema: TERMINAL_READ_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'terminal_read',
     description: '读取终端会话的增量输出与状态。'

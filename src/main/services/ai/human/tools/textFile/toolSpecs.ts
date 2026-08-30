@@ -7,11 +7,8 @@ import {
   renderTextFileSearchModelResult
 } from '../../shared/modelToolResultRenderers'
 import {
-  TEXT_FILE_EDIT_OUTPUT_SCHEMA,
   TEXT_FILE_EDIT_SCHEMA,
-  TEXT_FILE_READ_OUTPUT_SCHEMA,
   TEXT_FILE_READ_SCHEMA,
-  TEXT_FILE_SEARCH_OUTPUT_SCHEMA,
   TEXT_FILE_SEARCH_SCHEMA
 } from './toolSchemas'
 
@@ -19,7 +16,6 @@ const fileResourceKey = (args: JsonObject): string | undefined => readStringArg(
 
 export const TEXT_FILE_READ_TOOL_SPEC: HumanToolSpec<
   import('zod/v4').infer<typeof TEXT_FILE_READ_SCHEMA>,
-  import('zod/v4').infer<typeof TEXT_FILE_READ_OUTPUT_SCHEMA>,
   'text_file_read',
   'text-file'
 > = {
@@ -27,7 +23,6 @@ export const TEXT_FILE_READ_TOOL_SPEC: HumanToolSpec<
   familyId: 'text-file',
   skillIds: ['text-file'],
   inputSchema: TEXT_FILE_READ_SCHEMA,
-  outputSchema: TEXT_FILE_READ_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'text_file_read',
     description: '按行读取 UTF-8 普通文本。'
@@ -43,7 +38,6 @@ export const TEXT_FILE_READ_TOOL_SPEC: HumanToolSpec<
 
 export const TEXT_FILE_SEARCH_TOOL_SPEC: HumanToolSpec<
   import('zod/v4').infer<typeof TEXT_FILE_SEARCH_SCHEMA>,
-  import('zod/v4').infer<typeof TEXT_FILE_SEARCH_OUTPUT_SCHEMA>,
   'text_file_search',
   'text-file'
 > = {
@@ -51,7 +45,6 @@ export const TEXT_FILE_SEARCH_TOOL_SPEC: HumanToolSpec<
   familyId: 'text-file',
   skillIds: ['text-file'],
   inputSchema: TEXT_FILE_SEARCH_SCHEMA,
-  outputSchema: TEXT_FILE_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'text_file_search',
     description: '在文本文件中按文字或正则搜索。'
@@ -65,7 +58,6 @@ export const TEXT_FILE_SEARCH_TOOL_SPEC: HumanToolSpec<
 
 export const TEXT_FILE_EDIT_TOOL_SPEC: HumanToolSpec<
   import('zod/v4').infer<typeof TEXT_FILE_EDIT_SCHEMA>,
-  import('zod/v4').infer<typeof TEXT_FILE_EDIT_OUTPUT_SCHEMA>,
   'text_file_edit',
   'text-file'
 > = {
@@ -73,7 +65,6 @@ export const TEXT_FILE_EDIT_TOOL_SPEC: HumanToolSpec<
   familyId: 'text-file',
   skillIds: ['text-file'],
   inputSchema: TEXT_FILE_EDIT_SCHEMA,
-  outputSchema: TEXT_FILE_EDIT_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'text_file_edit',
     description: '创建或修改 UTF-8 普通文本文件。'
@@ -93,6 +84,7 @@ export const TEXT_FILE_TOOL_SPECS = [
 
 export type {
   FileEditInput,
+  FileEditOutput,
   FileReadInput,
   FileReadOutput,
   FileSearchInput,

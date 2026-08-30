@@ -1105,7 +1105,7 @@ const docxReadRootNodeOutputSchema: z.ZodType<JsonValue> = z.lazy(() =>
 
 const docxBaseOutputSchema = z.object({})
 
-export const docxOutlineOutputSchema = z
+export const docxOutlineOutputShape = z
   .object({
     fromPercent: z.number().min(0).max(100),
     toPercent: z.number().min(0).max(100),
@@ -1132,7 +1132,7 @@ const docxSearchNodeTypeOutputSchema = z.enum([
   'content_control',
   'revision'
 ])
-export const docxSearchOutputSchema = z
+export const docxSearchOutputShape = z
   .object({
     totalMatchCount: z.number().int().min(0),
     matches: z
@@ -1162,12 +1162,17 @@ export const docxSearchOutputSchema = z
   })
   .strict()
 
-export const docxReadOutputSchema = docxBaseOutputSchema.extend({
+export const docxReadOutputShape = docxBaseOutputSchema.extend({
   nodes: z.array(docxReadRootNodeOutputSchema)
 })
 
-export const docxMutationOutputSchema = z
+export const docxMutationOutputShape = z
   .object({
     createdIds: z.array(z.string().min(1)).min(1).optional()
   })
   .strict()
+
+export type DocxOutlineOutput = z.infer<typeof docxOutlineOutputShape>
+export type DocxSearchOutput = z.infer<typeof docxSearchOutputShape>
+export type DocxReadOutput = z.infer<typeof docxReadOutputShape>
+export type DocxMutationOutput = z.infer<typeof docxMutationOutputShape>

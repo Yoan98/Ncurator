@@ -836,15 +836,11 @@ export const renderReadImageModelResult: ModelResultRenderer = ({ data }) => {
   ].join('\n')
 }
 
-export const renderLearnSkillModelResult: ModelResultRenderer = ({ args, data }) => {
-  const obj = isObject(data) ? data : {}
+export const renderLearnSkillModelResult: ModelResultRenderer = ({ args }) => {
   const requested = Array.isArray(args.skillIds)
     ? args.skillIds.filter((item): item is string => typeof item === 'string')
     : []
-  const loaded = Array.isArray(obj.loadedSkillIds)
-    ? obj.loadedSkillIds.filter((item): item is string => typeof item === 'string')
-    : requested
-  return `Skill loaded successfully: ${loaded.join(', ') || requested.join(', ') || 'requested skill'}.`
+  return `Skill loaded successfully: ${requested.join(', ') || 'requested skill'}.`
 }
 
 export const renderModelResultWith = (

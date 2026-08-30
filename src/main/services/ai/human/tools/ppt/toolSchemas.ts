@@ -434,28 +434,33 @@ const pptSearchMatchSchema = z
   })
   .strict()
 
-export const pptReadOutlineOutputSchema = z.object({
+export const pptReadOutlineOutputShape = z.object({
   slideCount: z.number().int().min(0),
   slides: z.array(pptOutlineSlideSchema)
 })
 
-export const pptReadSlidesOutputSchema = z.object({
+export const pptReadSlidesOutputShape = z.object({
   slides: z.array(pptReadSlideSchema)
 })
 
-export const pptSearchOutputSchema = z.object({
+export const pptSearchOutputShape = z.object({
   totalMatchCount: z.number().int().min(0),
   returnedMatchCount: z.number().int().min(0),
   truncated: z.boolean(),
   matches: z.array(pptSearchMatchSchema)
 })
 
-export const pptEditOutputSchema = z
+export const pptEditOutputShape = z
   .object({
     slideId: z.string().optional(),
     createdElementIds: z.array(z.string().min(1)).min(1).optional()
   })
   .strict()
+
+export type PptReadOutlineOutput = z.infer<typeof pptReadOutlineOutputShape>
+export type PptReadSlidesOutput = z.infer<typeof pptReadSlidesOutputShape>
+export type PptSearchOutput = z.infer<typeof pptSearchOutputShape>
+export type PptEditOutput = z.infer<typeof pptEditOutputShape>
 
 export type PptOutlineInput = z.infer<typeof pptOutlineSchema>
 export type PptReadSlidesInput = z.infer<typeof pptReadSlidesSchema>

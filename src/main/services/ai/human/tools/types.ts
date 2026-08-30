@@ -63,7 +63,6 @@ export type WorkspaceCapabilityBuildInput<TContext = AiRunContext> = {
 
 export type HumanToolSpec<
   TInput extends JsonObject = JsonObject,
-  TOutput extends JsonValue = JsonValue,
   TName extends RuntimeToolName = RuntimeToolName,
   TSkillId extends RuntimeSkillId = RuntimeSkillId
 > = {
@@ -71,7 +70,6 @@ export type HumanToolSpec<
   familyId: AiToolFamilyId
   skillIds: TSkillId[]
   inputSchema: z.ZodType<TInput>
-  outputSchema: z.ZodType<TOutput>
   promptSpec: ToolPromptSpec
   resolveExecutionMeta: ToolExecutionMetaResolver
   modelResult: ModelResultSpec

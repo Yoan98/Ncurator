@@ -305,7 +305,7 @@ export const buildKbCapabilityTools = (input: {
             })
           )
           const payload = {
-            items: normalized.items.map((document) => normalizeForIpc(mapKbDocumentItem(document))),
+            items: normalized.items.map((document) => mapKbDocumentItem(document)),
             total: normalized.total
           }
           session.succeed(

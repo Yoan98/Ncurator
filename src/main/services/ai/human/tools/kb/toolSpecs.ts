@@ -6,9 +6,7 @@ import {
   renderKbSearchModelResult
 } from '../../shared/modelToolResultRenderers'
 import {
-  KB_LIST_DOCUMENTS_OUTPUT_SCHEMA,
   KB_LIST_DOCUMENTS_SCHEMA,
-  KB_SEARCH_OUTPUT_SCHEMA,
   KB_SEARCH_SCHEMA
 } from './toolSchemas'
 
@@ -19,7 +17,6 @@ const KB_EXECUTION_META = createStaticExecutionMetaResolver({
 
 export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof KB_SEARCH_SCHEMA>,
-  z.infer<typeof KB_SEARCH_OUTPUT_SCHEMA>,
   'kb_search',
   'kb-retrieval'
 > = {
@@ -27,7 +24,6 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   familyId: 'kb',
   skillIds: ['kb-retrieval'],
   inputSchema: KB_SEARCH_SCHEMA,
-  outputSchema: KB_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_search',
     description: '检索工作区知识库中的相关内容片段。'
@@ -40,7 +36,6 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
 
 export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof KB_LIST_DOCUMENTS_SCHEMA>,
-  z.infer<typeof KB_LIST_DOCUMENTS_OUTPUT_SCHEMA>,
   'kb_list_documents',
   'kb-retrieval'
 > = {
@@ -48,7 +43,6 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   familyId: 'kb',
   skillIds: ['kb-retrieval'],
   inputSchema: KB_LIST_DOCUMENTS_SCHEMA,
-  outputSchema: KB_LIST_DOCUMENTS_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'kb_list_documents',
     description: '列出工作区知识库中已索引的文档。'

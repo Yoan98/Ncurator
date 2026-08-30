@@ -17,10 +17,8 @@ export const imageGenerateSchema = z
   })
   .strict()
 
-export const imageGenerateOutputSchema = z.union([
-  z.object({ outputPath: z.string().min(1) }).strict(),
-  z.object({ error: z.string().min(1) }).strict()
-])
-
 export type ImageGenerateInput = z.infer<typeof imageGenerateSchema>
-export type ImageGenerateOutput = z.infer<typeof imageGenerateOutputSchema>
+
+export type ImageGenerateOutput =
+  | { outputPath: string }
+  | { error: string }

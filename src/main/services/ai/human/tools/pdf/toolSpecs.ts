@@ -4,14 +4,7 @@ import type { RuntimeToolName } from '../../../../../../shared/runtimeCapabiliti
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
-import {
-  pdfOutlineOutputSchema,
-  pdfOutlineSchema,
-  pdfReadPagesOutputSchema,
-  pdfReadPagesSchema,
-  pdfSearchOutputSchema,
-  pdfSearchSchema
-} from './toolSchemas'
+import { pdfOutlineSchema, pdfReadPagesSchema, pdfSearchSchema } from './toolSchemas'
 import {
   renderPdfOutlineModelResult,
   renderPdfReadPagesModelResult,
@@ -26,14 +19,12 @@ const PDF_READ_EXECUTION_META = createStaticExecutionMetaResolver({
 
 type PdfToolSpec<
   TArgs extends JsonObject = JsonObject,
-  TOutput extends JsonObject = JsonObject,
   TName extends RuntimeToolName = RuntimeToolName,
   TSkillId extends RuntimeSkillId = 'pdf-read'
-> = HumanToolSpec<TArgs, TOutput, TName, TSkillId>
+> = HumanToolSpec<TArgs, TName, TSkillId>
 
 export const PDF_OUTLINE_TOOL_SPEC: PdfToolSpec<
   z.infer<typeof pdfOutlineSchema>,
-  z.infer<typeof pdfOutlineOutputSchema>,
   'pdf_outline',
   'pdf-read'
 > = {
@@ -45,14 +36,12 @@ export const PDF_OUTLINE_TOOL_SPEC: PdfToolSpec<
     description: '返回 PDF 页数、文档元数据与书签提纲。'
   },
   inputSchema: pdfOutlineSchema,
-  outputSchema: pdfOutlineOutputSchema,
   resolveExecutionMeta: PDF_READ_EXECUTION_META,
   modelResult: { renderSuccess: renderPdfOutlineModelResult }
 }
 
 export const PDF_SEARCH_TOOL_SPEC: PdfToolSpec<
   z.infer<typeof pdfSearchSchema>,
-  z.infer<typeof pdfSearchOutputSchema>,
   'pdf_search',
   'pdf-read'
 > = {
@@ -64,14 +53,12 @@ export const PDF_SEARCH_TOOL_SPEC: PdfToolSpec<
     description: '在 PDF 文本层中按文字或正则搜索。'
   },
   inputSchema: pdfSearchSchema,
-  outputSchema: pdfSearchOutputSchema,
   resolveExecutionMeta: PDF_READ_EXECUTION_META,
   modelResult: { renderSuccess: renderPdfSearchModelResult }
 }
 
 export const PDF_READ_PAGES_TOOL_SPEC: PdfToolSpec<
   z.infer<typeof pdfReadPagesSchema>,
-  z.infer<typeof pdfReadPagesOutputSchema>,
   'pdf_read_pages',
   'pdf-read'
 > = {
@@ -83,7 +70,6 @@ export const PDF_READ_PAGES_TOOL_SPEC: PdfToolSpec<
     description: '按页码读取 PDF 文本层与页面信息。'
   },
   inputSchema: pdfReadPagesSchema,
-  outputSchema: pdfReadPagesOutputSchema,
   resolveExecutionMeta: PDF_READ_EXECUTION_META,
   modelResult: { renderSuccess: renderPdfReadPagesModelResult }
 }

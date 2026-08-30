@@ -88,41 +88,42 @@ const buildCrawlFailureItem = (input: {
 const wrapWebSearchItems = (items: WebSearchItem[]): { items: WebSearchItem[] } => ({ items })
 
 const normalizeBrowserUseOutput = (result: BrowserUseResult): JsonObject => {
-  if ('error' in result && result.error) {
+  if ('error' in result) {
     return {
       ...(result.action ? { action: result.action } : {}),
-      ...(result.page ? { page: result.page } : {}),
+      ...(result.page ? { page: result.page as unknown as JsonObject } : {}),
       error: result.error
     }
   }
-  if (result.action === 'navigate') {
-    return { action: 'navigate', page: result.page }
+  switch (result.action) {
+    case 'navigate':
+      return { action: 'navigate', page: result.page as unknown as JsonObject }
+    case 'extract':
+      return {
+        action: 'extract',
+        page: result.page as unknown as JsonObject,
+        content: result.result.extracted
+      }
+    case 'observe':
+      return {
+        action: 'observe',
+        page: result.page as unknown as JsonObject,
+        actions: result.result.actions as unknown as JsonObject
+      }
+    case 'act':
+      return {
+        action: 'act',
+        page: result.page as unknown as JsonObject,
+        success: result.result.success,
+        message: result.result.message,
+        actionDescription: result.result.actionDescription,
+        ...(result.result.actions?.length
+          ? { actions: result.result.actions as unknown as JsonObject }
+          : {})
+      }
+    default:
+      return result as unknown as JsonObject
   }
-  if (result.action === 'extract') {
-    return {
-      action: 'extract',
-      page: result.page,
-      content: result.result.extracted
-    }
-  }
-  if (result.action === 'observe') {
-    return {
-      action: 'observe',
-      page: result.page,
-      actions: result.result.actions
-    }
-  }
-  if (result.action === 'act') {
-    return {
-      action: 'act',
-      page: result.page,
-      success: result.result.success,
-      message: result.result.message,
-      actionDescription: result.result.actionDescription,
-      ...(result.result.actions?.length ? { actions: result.result.actions } : {})
-    }
-  }
-  return result as JsonObject
 }
 
 export const webToolFamily: ToolFamilyDefinition = {

@@ -22,51 +22,43 @@ export const KB_LIST_DOCUMENTS_SCHEMA = z.object({
   documentIds: z.array(z.string()).optional().describe('限定文档 ID 范围')
 })
 
-const kbSearchResultItemSchema = z
-  .object({
-    id: z.string().describe('内容块 ID'),
-    text: z.string().describe('命中文本片段'),
-    documentName: z.string().describe('来源文档名'),
-    documentId: z.string().optional().describe('来源文档 ID'),
-    sourceType: z.string().optional().describe('来源类型：file 或 web'),
-    filePath: z.string().optional().describe('本地文件路径（file 来源）'),
-    sourceUrl: z.string().optional().describe('网页 URL（web 来源）'),
-    metadata: z.union([z.string(), jsonObjectSchema]).optional().describe('附加元数据'),
-    createdAt: z.number().optional().describe('索引时间戳')
-  })
-  .strict()
+export type KbSearchResultItem = {
+  id: string
+  text: string
+  documentName: string
+  documentId?: string
+  sourceType?: string
+  filePath?: string
+  sourceUrl?: string
+  metadata?: string | z.infer<typeof jsonObjectSchema>
+  createdAt?: number
+}
 
-const kbListDocumentItemSchema = z
-  .object({
-    id: z.string().describe('文档 ID'),
-    name: z.string().describe('文档名'),
-    sourceType: z.string().describe('来源类型：file 或 web'),
-    workspaceId: z.string().optional().describe('所属工作区 ID'),
-    filePath: z.string().optional().describe('本地文件路径（file 来源）'),
-    createdAt: z.number().describe('创建时间戳'),
-    importStatus: z.number().describe('导入状态码'),
-    sourceId: z.string().optional().describe('外部来源 ID'),
-    sourceUrl: z.string().optional().describe('网页 URL（web 来源）'),
-    sourceTitle: z.string().optional().describe('网页标题（web 来源）'),
-    normalizedSourceUrl: z.string().optional().describe('规范化网页 URL'),
-    fetchedAt: z.number().optional().describe('抓取时间戳'),
-    updatedAt: z.number().optional().describe('更新时间戳'),
-    lastError: z.string().optional().describe('最近一次导入错误')
-  })
-  .strict()
+export type KbListDocumentItem = {
+  id: string
+  name: string
+  sourceType: string
+  workspaceId?: string
+  filePath?: string
+  createdAt: number
+  importStatus: number
+  sourceId?: string
+  sourceUrl?: string
+  sourceTitle?: string
+  normalizedSourceUrl?: string
+  fetchedAt?: number
+  updatedAt?: number
+  lastError?: string
+}
 
-export const KB_SEARCH_OUTPUT_SCHEMA = z
-  .object({
-    items: z.array(kbSearchResultItemSchema).describe('命中内容块列表'),
-    total: z.number().describe('命中总数'),
-    error: z.string().optional().describe('检索错误信息')
-  })
-  .strict()
+export type KbSearchOutput = {
+  items: KbSearchResultItem[]
+  total: number
+  error?: string
+}
 
-export const KB_LIST_DOCUMENTS_OUTPUT_SCHEMA = z
-  .object({
-    items: z.array(kbListDocumentItemSchema).describe('文档列表'),
-    total: z.number().describe('匹配文档总数'),
-    error: z.string().optional().describe('查询错误信息')
-  })
-  .strict()
+export type KbListDocumentsOutput = {
+  items: KbListDocumentItem[]
+  total: number
+  error?: string
+}

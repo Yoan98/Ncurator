@@ -225,7 +225,7 @@ const styleCellOutputSchema = z.union([
     .strict()
 ])
 
-export const excelReadWorkbookOutputSchema = z
+export const excelReadWorkbookOutputShape = z
   .object({
     sheets: z.array(
       z
@@ -240,7 +240,7 @@ export const excelReadWorkbookOutputSchema = z
   })
   .strict()
 
-export const excelReadRangeOutputSchema = z
+export const excelReadRangeOutputShape = z
   .object({
     sheetName: z.string(),
     range: z.string(),
@@ -248,7 +248,7 @@ export const excelReadRangeOutputSchema = z
   })
   .strict()
 
-export const excelReadStyleOutputSchema = z
+export const excelReadStyleOutputShape = z
   .object({
     sheetName: z.string(),
     range: z.string(),
@@ -256,7 +256,7 @@ export const excelReadStyleOutputSchema = z
   })
   .strict()
 
-export const excelSearchOutputSchema = z
+export const excelSearchOutputShape = z
   .object({
     truncated: z.boolean(),
     matches: z
@@ -274,11 +274,18 @@ export const excelSearchOutputSchema = z
   })
   .strict()
 
-export const excelReadOutputSchema = z.union([
-  excelReadWorkbookOutputSchema,
-  excelReadRangeOutputSchema,
-  excelReadStyleOutputSchema,
-  excelSearchOutputSchema
+export const excelReadOutputShape = z.union([
+  excelReadWorkbookOutputShape,
+  excelReadRangeOutputShape,
+  excelReadStyleOutputShape,
+  excelSearchOutputShape
 ])
 
-export const excelEditOutputSchema = z.object({}).strict()
+export const excelEditOutputShape = z.object({}).strict()
+
+export type ExcelReadWorkbookOutput = z.infer<typeof excelReadWorkbookOutputShape>
+export type ExcelReadRangeOutput = z.infer<typeof excelReadRangeOutputShape>
+export type ExcelReadStyleOutput = z.infer<typeof excelReadStyleOutputShape>
+export type ExcelSearchOutput = z.infer<typeof excelSearchOutputShape>
+export type ExcelReadOutput = z.infer<typeof excelReadOutputShape>
+export type ExcelEditOutput = z.infer<typeof excelEditOutputShape>

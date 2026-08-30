@@ -212,7 +212,7 @@ export const createBrainNode = (input: {
       const schemaInvalidCalls: Array<{ id?: string; name: string; errorMessage: string }> = []
       const executableCalls: Parameters<typeof buildDispatchQueue>[0] = []
       for (const call of dispatchableCalls) {
-        const args = normalizeToolCallArgs(call.args)
+        const args = normalizeToolCallArgs(call.args ?? {})
         if (NODE_OWNED_TOOL_NAMES.has(call.name)) {
           executableCalls.push({ ...call, args })
           continue

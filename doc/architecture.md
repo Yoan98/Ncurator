@@ -115,7 +115,7 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 | `skill.description` | 该 skill 覆盖的能力域 | 工具调用顺序、跨工具编排 |
 | `tool promptSpec.description` | 单工具能力边界与限制 | 字段表、JSON 结构、跨工具下一步、先 A 后 B |
 | `inputSchema` 字段 `.describe()` | 参数语义、单位、缺省、格式、数量上限 | — |
-| `outputSchema` 字段 `.describe()` | 结构化结果字段语义 | 不在 `promptSpec` 重复 |
+| `toolSchemas` 输出 TS 类型 / 契约测试 | 结构化结果字段语义（内部真相） | 不在 `promptSpec` 重复；不暴露给模型 |
 
 **统一结果投递（全工具共用）**
 
@@ -132,7 +132,8 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 ```text
 Skill（builtin / external）
   └─ Tool（HumanToolSpec）
-       ├─ inputSchema / outputSchema   本地校验 + 结构化真相
+       ├─ inputSchema                  参数校验 + 模型可见输入契约
+       ├─ toolSchemas 输出类型         结构化真相（TS + 契约测试，不经 prompt 暴露）
        ├─ promptSpec                   暴露给模型的最小契约
        └─ modelResult                  投影为模型可读文本，再走统一投递管道
 ```

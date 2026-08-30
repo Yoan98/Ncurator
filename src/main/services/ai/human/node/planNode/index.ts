@@ -3,7 +3,7 @@ import type { AiRunContext } from '../../../types'
 import type { HumanPlanItem, HumanRuntimeCache, HumanState } from '../../types'
 import { normalizePlanItems } from '../../memory/thoughtMemory'
 import { emitToolCallResult, emitToolCallStarted } from '../../tools/utils/toolEvents'
-import { UPDATE_PLAN_SCHEMA } from '../../tools/agentControl/toolSpecs'
+import { UPDATE_PLAN_SCHEMA } from '../../tools/agentControl/toolSchemas'
 import { appendToolFeedback } from '../../shared/toolFeedback'
 import { returnToDispatch } from '../utils/stateTransitions'
 

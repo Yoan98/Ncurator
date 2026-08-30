@@ -1,22 +1,32 @@
 import { describe, expect, it } from 'vitest'
 import { getSkillDefinition } from '../../../../src/main/services/ai/human/skills'
-import { EXCEL_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/excel/toolSpecs'
-import { renderToolOutputSchemaForPrompt } from '../../../../src/main/services/ai/human/tools/schemaPromptRenderer'
+import {
+  excelEditOutputShape,
+  excelReadOutputShape
+} from '../../../../src/main/services/ai/human/tools/excel/toolSchemas'
 import { isTerminalExcelMutationCommand } from '../../../../src/main/services/ai/human/tools/terminal/commandPolicy'
 
 describe('Excel static contracts', () => {
   it('declares readable output shapes and skill ownership', () => {
-    const rendered = Object.fromEntries(
-      EXCEL_TOOL_SPECS.map((spec) => [
-        spec.name,
-        renderToolOutputSchemaForPrompt(spec.outputSchema)
-      ])
-    )
-    expect(rendered.excel_read).toContain('sheets')
-    expect(rendered.excel_read).toContain('rows')
-    expect(rendered.excel_read).toContain('truncated')
-    expect(rendered.excel_read).toContain('matches')
-    expect(rendered.excel_edit.replace(/\s/g, '')).toBe('{}')
+    expect(
+      excelReadOutputShape.safeParse({
+        sheets: [{ name: 'Sheet1', range: 'A1:B2', rowCount: 2, columnCount: 2 }]
+      }).success
+    ).toBe(true)
+    expect(
+      excelReadOutputShape.safeParse({
+        sheetName: 'Sheet1',
+        range: 'A1:B2',
+        rows: [['a', 1]]
+      }).success
+    ).toBe(true)
+    expect(
+      excelReadOutputShape.safeParse({
+        truncated: false,
+        matches: [{ sheetName: 'Sheet1', address: 'A1', value: 'x' }]
+      }).success
+    ).toBe(true)
+    expect(excelEditOutputShape.safeParse({}).success).toBe(true)
     expect(getSkillDefinition('excel-read').toolNames).toEqual(['excel_read'])
     expect(getSkillDefinition('excel-write').toolNames).toEqual(['excel_edit'])
   })

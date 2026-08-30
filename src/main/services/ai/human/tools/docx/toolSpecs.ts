@@ -7,12 +7,8 @@ import {
   docxCommentsRevisionsSchema,
   docxContentEditSchema,
   docxFormatSchema,
-  docxMutationOutputSchema,
-  docxOutlineOutputSchema,
   docxOutlineSchema,
   docxReadNodesSchema,
-  docxReadOutputSchema,
-  docxSearchOutputSchema,
   docxSearchSchema,
   docxTableEditSchema
 } from './toolSchemas'
@@ -39,17 +35,15 @@ const writeMeta = createStaticExecutionMetaResolver({
 
 type DocxToolSpec<
   TArgs extends JsonObject = JsonObject,
-  TOutput extends JsonObject = JsonObject,
   TName extends RuntimeToolName = RuntimeToolName,
   TSkillId extends RuntimeSkillId = RuntimeSkillId
-> = HumanToolSpec<TArgs, TOutput, TName, TSkillId> & { activityActionType: string }
+> = HumanToolSpec<TArgs, TName, TSkillId> & { activityActionType: string }
 
 export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   name: 'docx_read_outline',
   familyId: 'docx',
   skillIds: ['docx-read'],
   inputSchema: docxOutlineSchema,
-  outputSchema: docxOutlineOutputSchema,
   promptSpec: {
     name: 'docx_read_outline',
     description: '按根节点比例返回 DOCX 结构缩略图。'
@@ -61,7 +55,6 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
   activityActionType: 'docx_read_outline'
 } satisfies DocxToolSpec<
   z.infer<typeof docxOutlineSchema>,
-  z.infer<typeof docxOutlineOutputSchema>,
   'docx_read_outline',
   'docx-read'
 >
@@ -71,7 +64,6 @@ export const DOCX_SEARCH_TOOL_SPEC = {
   familyId: 'docx',
   skillIds: ['docx-read'],
   inputSchema: docxSearchSchema,
-  outputSchema: docxSearchOutputSchema,
   promptSpec: {
     name: 'docx_search',
     description: '在 DOCX 全文中按文字或正则搜索。'
@@ -81,19 +73,13 @@ export const DOCX_SEARCH_TOOL_SPEC = {
     renderSuccess: renderDocxSearchModelResult
   },
   activityActionType: 'docx_search'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxSearchSchema>,
-  z.infer<typeof docxSearchOutputSchema>,
-  'docx_search',
-  'docx-read'
->
+} satisfies DocxToolSpec<z.infer<typeof docxSearchSchema>, 'docx_search', 'docx-read'>
 
 export const DOCX_READ_NODES_TOOL_SPEC = {
   name: 'docx_read_nodes',
   familyId: 'docx',
   skillIds: ['docx-read'],
   inputSchema: docxReadNodesSchema,
-  outputSchema: docxReadOutputSchema,
   promptSpec: {
     name: 'docx_read_nodes',
     description: '读取指定 nodeId 或 nodeIndex 范围的语义节点树。'
@@ -105,7 +91,6 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
   activityActionType: 'docx_read_nodes'
 } satisfies DocxToolSpec<
   z.infer<typeof docxReadNodesSchema>,
-  z.infer<typeof docxReadOutputSchema>,
   'docx_read_nodes',
   'docx-read'
 >
@@ -125,7 +110,6 @@ const defineMutationSpec = <
   familyId: 'docx' as const,
   skillIds: [input.skillId],
   inputSchema: input.schema,
-  outputSchema: docxMutationOutputSchema,
   promptSpec: { name: input.name, description: input.description },
   resolveExecutionMeta: writeMeta,
   modelResult: input.modelResult,

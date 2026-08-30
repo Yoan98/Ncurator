@@ -430,9 +430,6 @@ export const renderToolInputSchemaForPrompt = (
   ].join('\n')
 }
 
-export const renderToolOutputSchemaForPrompt = (schema: z.ZodType): string =>
-  renderSchemaShape(schema)
-
 export const renderBrainOutputSchemaForPrompt = (
   schema: z.ZodType,
   options?: { compact?: boolean }

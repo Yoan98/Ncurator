@@ -68,15 +68,32 @@ export const TEXT_FILE_EDIT_SCHEMA = z.discriminatedUnion('action', [
   })
 ])
 
-export const TEXT_FILE_READ_OUTPUT_SCHEMA = z
-  .object({
-    content: z.string().describe('本次返回的文本内容'),
-    startLine: z.number().int().min(1).describe('本次起始行号'),
-    endLine: z.number().int().min(1).describe('本次结束行号'),
-    totalLines: z.number().int().min(1).describe('文件总行数'),
-    nextStartLine: z.number().int().min(1).optional().describe('续读起始行号；无更多内容时省略')
-  })
-  .strict()
+export type TextFileReadOutput = {
+  content: string
+  startLine: number
+  endLine: number
+  totalLines: number
+  nextStartLine?: number
+}
+
+export const TEXT_FILE_SEARCH_OUTPUT = {
+  totalMatchCount: 0 as number,
+  returnedMatchCount: 0 as number,
+  matches: [] as Array<{
+    line: number
+    matchText: string
+    textContext: string
+    truncated: boolean
+  }>
+}
+export type TextFileSearchOutput = typeof TEXT_FILE_SEARCH_OUTPUT
+
+export type TextFileEditOutput = Record<string, never>
+
+export type FileReadInput = z.infer<typeof TEXT_FILE_READ_SCHEMA>
+export type FileReadOutput = TextFileReadOutput
+export type FileEditInput = z.infer<typeof TEXT_FILE_EDIT_SCHEMA>
+export type FileEditOutput = TextFileEditOutput
 
 export const TEXT_FILE_SEARCH_SCHEMA = z
   .object({
@@ -86,30 +103,5 @@ export const TEXT_FILE_SEARCH_SCHEMA = z
   })
   .strict()
 
-export const TEXT_FILE_SEARCH_OUTPUT_SCHEMA = z
-  .object({
-    totalMatchCount: z.number().int().min(0),
-    returnedMatchCount: z.number().int().min(0),
-    matches: z
-      .array(
-        z
-          .object({
-            line: z.number().int().min(1),
-            matchText: z.string(),
-            textContext: z.string(),
-            truncated: z.boolean()
-          })
-          .strict()
-      )
-      .max(TEXT_FILE_SEARCH_MAX_MATCHES)
-      .describe(`命中列表，最多 ${TEXT_FILE_SEARCH_MAX_MATCHES} 条`)
-  })
-  .strict()
-
-export const TEXT_FILE_EDIT_OUTPUT_SCHEMA = z.object({}).strict()
-
-export type FileReadInput = z.infer<typeof TEXT_FILE_READ_SCHEMA>
-export type FileReadOutput = z.infer<typeof TEXT_FILE_READ_OUTPUT_SCHEMA>
 export type FileSearchInput = z.infer<typeof TEXT_FILE_SEARCH_SCHEMA>
-export type FileSearchOutput = z.infer<typeof TEXT_FILE_SEARCH_OUTPUT_SCHEMA>
-export type FileEditInput = z.infer<typeof TEXT_FILE_EDIT_SCHEMA>
+export type FileSearchOutput = TextFileSearchOutput

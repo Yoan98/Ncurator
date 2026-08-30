@@ -2,21 +2,21 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod/v4'
 import { ALL_TOOL_SPECS } from '../../../../src/main/services/ai/human/tools/registry'
 import {
-  docxReadOutputSchema,
-  docxOutlineOutputSchema,
-  docxSearchOutputSchema,
-  docxMutationOutputSchema
+  docxMutationOutputShape,
+  docxOutlineOutputShape,
+  docxReadOutputShape,
+  docxSearchOutputShape
 } from '../../../../src/main/services/ai/human/tools/docx/toolSchemas'
 import {
-  pdfOutlineOutputSchema,
-  pdfReadPagesOutputSchema,
-  pdfSearchOutputSchema
+  pdfOutlineOutputShape,
+  pdfReadPagesOutputShape,
+  pdfSearchOutputShape
 } from '../../../../src/main/services/ai/human/tools/pdf/toolSchemas'
 import {
-  pptEditOutputSchema,
-  pptReadOutlineOutputSchema,
-  pptReadSlidesOutputSchema,
-  pptSearchOutputSchema
+  pptEditOutputShape,
+  pptReadOutlineOutputShape,
+  pptReadSlidesOutputShape,
+  pptSearchOutputShape
 } from '../../../../src/main/services/ai/human/tools/ppt/toolSchemas'
 import { renderToolInputSchemaForPrompt } from '../../../../src/main/services/ai/human/tools/schemaPromptRenderer'
 
@@ -85,28 +85,28 @@ describe('ai unit tool input schema renderer', () => {
     expect(formatRendered).not.toMatch(/constraint=|minItems|hyperlink requires|style patch must/)
   })
 
-  it('does not expose warnings in tool output schemas', () => {
+  it('does not expose warnings in tool output contract shapes', () => {
     ;[
-      docxOutlineOutputSchema,
-      docxSearchOutputSchema,
-      docxReadOutputSchema,
-      docxMutationOutputSchema,
-      pdfOutlineOutputSchema,
-      pdfSearchOutputSchema,
-      pdfReadPagesOutputSchema,
-      pptReadOutlineOutputSchema,
-      pptReadSlidesOutputSchema,
-      pptSearchOutputSchema,
-      pptEditOutputSchema
+      docxOutlineOutputShape,
+      docxSearchOutputShape,
+      docxReadOutputShape,
+      docxMutationOutputShape,
+      pdfOutlineOutputShape,
+      pdfSearchOutputShape,
+      pdfReadPagesOutputShape,
+      pptReadOutlineOutputShape,
+      pptReadSlidesOutputShape,
+      pptSearchOutputShape,
+      pptEditOutputShape
     ].forEach((schema) => {
       expect(Object.keys(schema.shape)).not.toContain('warnings')
     })
   })
 
   it('keeps DOCX mutation results minimal', () => {
-    expect(docxMutationOutputSchema.safeParse({}).success).toBe(true)
-    expect(docxMutationOutputSchema.safeParse({ createdIds: ['node_1'] }).success).toBe(true)
-    expect(docxMutationOutputSchema.safeParse({ createdIds: [] }).success).toBe(false)
-    expect(docxMutationOutputSchema.safeParse({ changes: [] }).success).toBe(false)
+    expect(docxMutationOutputShape.safeParse({}).success).toBe(true)
+    expect(docxMutationOutputShape.safeParse({ createdIds: ['node_1'] }).success).toBe(true)
+    expect(docxMutationOutputShape.safeParse({ createdIds: [] }).success).toBe(false)
+    expect(docxMutationOutputShape.safeParse({ changes: [] }).success).toBe(false)
   })
 })

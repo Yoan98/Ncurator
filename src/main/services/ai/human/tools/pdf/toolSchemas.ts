@@ -86,7 +86,7 @@ const pdfPageOutputSchema = z
   })
   .strict()
 
-export const pdfOutlineOutputSchema = z
+export const pdfOutlineOutputShape = z
   .object({
     pageCount: z.number().int().describe('总页数'),
     metadata: pdfMetadataSchema.describe('文档元数据'),
@@ -94,7 +94,7 @@ export const pdfOutlineOutputSchema = z
   })
   .strict()
 
-export const pdfSearchOutputSchema = z
+export const pdfSearchOutputShape = z
   .object({
     totalMatchCount: z.number().int().describe('全书命中总数'),
     returnedMatchCount: z.number().int().describe('本次返回命中数'),
@@ -117,8 +117,12 @@ export const pdfSearchOutputSchema = z
   })
   .strict()
 
-export const pdfReadPagesOutputSchema = z
+export const pdfReadPagesOutputShape = z
   .object({
     pages: z.array(pdfPageOutputSchema).describe('按请求顺序返回的页面列表')
   })
   .strict()
+
+export type PdfOutlineOutput = z.infer<typeof pdfOutlineOutputShape>
+export type PdfSearchOutput = z.infer<typeof pdfSearchOutputShape>
+export type PdfReadPagesOutput = z.infer<typeof pdfReadPagesOutputShape>

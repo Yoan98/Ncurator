@@ -5,12 +5,7 @@ import {
   renderBrowserUseModelResult,
   renderWebSearchModelResult
 } from '../../shared/modelToolResultRenderers'
-import {
-  BROWSER_USE_OUTPUT_SCHEMA,
-  BROWSER_USE_SCHEMA,
-  WEB_SEARCH_OUTPUT_SCHEMA,
-  WEB_SEARCH_SCHEMA
-} from './toolSchemas'
+import { BROWSER_USE_SCHEMA, WEB_SEARCH_SCHEMA } from './toolSchemas'
 
 const WEB_EXECUTION_META = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -19,7 +14,6 @@ const WEB_EXECUTION_META = createStaticExecutionMetaResolver({
 
 export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof WEB_SEARCH_SCHEMA>,
-  z.infer<typeof WEB_SEARCH_OUTPUT_SCHEMA>,
   'web_search',
   'web-browsing'
 > = {
@@ -27,7 +21,6 @@ export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
   familyId: 'web',
   skillIds: ['web-browsing'],
   inputSchema: WEB_SEARCH_SCHEMA,
-  outputSchema: WEB_SEARCH_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'web_search',
     description: '搜索或抓取网页正文。'
@@ -38,7 +31,6 @@ export const WEB_SEARCH_TOOL_SPEC: HumanToolSpec<
 
 export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof BROWSER_USE_SCHEMA>,
-  z.infer<typeof BROWSER_USE_OUTPUT_SCHEMA>,
   'browser_use',
   'web-browsing'
 > = {
@@ -46,7 +38,6 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   familyId: 'web',
   skillIds: ['web-browsing'],
   inputSchema: BROWSER_USE_SCHEMA,
-  outputSchema: BROWSER_USE_OUTPUT_SCHEMA,
   promptSpec: {
     name: 'browser_use',
     description: '操作内置浏览器页面。'
