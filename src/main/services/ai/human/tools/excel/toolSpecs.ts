@@ -4,18 +4,13 @@ import type { RuntimeToolName } from '../../../../../../shared/runtimeCapabiliti
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
+import { excelEditSchema, excelReadSchema } from './schemas'
+import { excelEditOutputSchema, excelReadOutputSchema } from './outputSchemas'
 import {
-  excelEditSchema,
-  excelReadCellsSchema,
-  excelReadOutlineSchema,
-  excelSearchSchema
-} from './schemas'
-import {
-  excelEditOutputSchema,
-  excelReadCellsOutputSchema,
-  excelReadOutlineOutputSchema,
-  excelSearchOutputSchema
-} from './outputSchemas'
+  renderExcelEditModelResult,
+  renderExcelReadModelResult
+} from '../../shared/modelToolResultRenderers'
+import { createRetryModelResultPolicy } from '../modelResultPolicies'
 
 type ExcelSpec<
   TArgs extends JsonObject,
@@ -35,57 +30,28 @@ const writeMeta = createStaticExecutionMetaResolver({
   defaultResourceKey: 'excel'
 })
 
-export const EXCEL_READ_OUTLINE_TOOL_SPEC = {
-  name: 'excel_read_outline',
+export const EXCEL_READ_TOOL_SPEC = {
+  name: 'excel_read',
   familyId: 'excel',
   skillIds: ['excel-read'],
-  inputSchema: excelReadOutlineSchema,
-  outputSchema: excelReadOutlineOutputSchema,
+  inputSchema: excelReadSchema,
+  outputSchema: excelReadOutputSchema,
   promptSpec: {
-    name: 'excel_read_outline',
-    description: '读取 Excel 工作簿、工作表、使用范围、表格和公式数量概览。'
+    name: 'excel_read',
+    description:
+      '读取 Excel：workbook 看表清单，range 读值和公式，style 读格式，search 按格子值或公式搜索。'
   },
-  resolveExecutionMeta: readMeta
+  resolveExecutionMeta: readMeta,
+  modelResult: {
+    renderSuccess: renderExcelReadModelResult,
+    overflowPolicy: createRetryModelResultPolicy(
+      'Call excel_read again with a smaller range, a narrower sheetName, or a more specific search query.'
+    )
+  }
 } satisfies ExcelSpec<
-  z.infer<typeof excelReadOutlineSchema>,
-  z.infer<typeof excelReadOutlineOutputSchema>,
-  'excel_read_outline',
-  'excel-read'
->
-
-export const EXCEL_SEARCH_TOOL_SPEC = {
-  name: 'excel_search',
-  familyId: 'excel',
-  skillIds: ['excel-read'],
-  inputSchema: excelSearchSchema,
-  outputSchema: excelSearchOutputSchema,
-  promptSpec: {
-    name: 'excel_search',
-    description: '搜索 Excel 单元格值、显示值、公式、工作表名和表格列名。'
-  },
-  resolveExecutionMeta: readMeta
-} satisfies ExcelSpec<
-  z.infer<typeof excelSearchSchema>,
-  z.infer<typeof excelSearchOutputSchema>,
-  'excel_search',
-  'excel-read'
->
-
-export const EXCEL_READ_CELLS_TOOL_SPEC = {
-  name: 'excel_read_cells',
-  familyId: 'excel',
-  skillIds: ['excel-read'],
-  inputSchema: excelReadCellsSchema,
-  outputSchema: excelReadCellsOutputSchema,
-  promptSpec: {
-    name: 'excel_read_cells',
-    description: '按工作表和 A1 范围读取 Excel 单元格地址、值、显示值、公式、类型和数字格式。'
-  },
-  resolveExecutionMeta: readMeta
-} satisfies ExcelSpec<
-  z.infer<typeof excelReadCellsSchema>,
-  z.infer<typeof excelReadCellsOutputSchema>,
-  'excel_read_cells',
+  z.infer<typeof excelReadSchema>,
+  z.infer<typeof excelReadOutputSchema>,
+  'excel_read',
   'excel-read'
 >
 
@@ -98,9 +64,10 @@ export const EXCEL_EDIT_TOOL_SPEC = {
   promptSpec: {
     name: 'excel_edit',
     description:
-      '创建或编辑 Excel 工作簿中的工作表、单元格、公式、格式和结构，并返回写入后的回读信息。'
+      '一次一个 type 创建或编辑 Excel：工作表、范围值/公式、样式、合并、行列和列宽行高。'
   },
-  resolveExecutionMeta: writeMeta
+  resolveExecutionMeta: writeMeta,
+  modelResult: { renderSuccess: renderExcelEditModelResult }
 } satisfies ExcelSpec<
   z.infer<typeof excelEditSchema>,
   z.infer<typeof excelEditOutputSchema>,
@@ -108,9 +75,4 @@ export const EXCEL_EDIT_TOOL_SPEC = {
   'excel-write'
 >
 
-export const EXCEL_TOOL_SPECS = [
-  EXCEL_READ_OUTLINE_TOOL_SPEC,
-  EXCEL_SEARCH_TOOL_SPEC,
-  EXCEL_READ_CELLS_TOOL_SPEC,
-  EXCEL_EDIT_TOOL_SPEC
-] as const
+export const EXCEL_TOOL_SPECS = [EXCEL_READ_TOOL_SPEC, EXCEL_EDIT_TOOL_SPEC] as const

@@ -12,16 +12,12 @@ describe('Excel static contracts', () => {
         renderToolOutputSchemaForPrompt(spec.outputSchema)
       ])
     )
-    expect(rendered.excel_read_outline).toContain('sheetCount')
-    expect(rendered.excel_search).toContain('matches')
-    expect(rendered.excel_read_cells).toContain('cells')
-    expect(rendered.excel_edit).toContain('changes')
-    expect(Object.values(rendered)).not.toContain('  {}')
-    expect(getSkillDefinition('excel-read').toolNames).toEqual([
-      'excel_read_outline',
-      'excel_search',
-      'excel_read_cells'
-    ])
+    expect(rendered.excel_read).toContain('sheets')
+    expect(rendered.excel_read).toContain('rows')
+    expect(rendered.excel_read).toContain('truncated')
+    expect(rendered.excel_read).toContain('matches')
+    expect(rendered.excel_edit.replace(/\s/g, '')).toBe('{}')
+    expect(getSkillDefinition('excel-read').toolNames).toEqual(['excel_read'])
     expect(getSkillDefinition('excel-write').toolNames).toEqual(['excel_edit'])
   })
 

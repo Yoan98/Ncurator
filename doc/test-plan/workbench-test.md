@@ -470,7 +470,7 @@ tests/case/workbench/
 - What：真实 AI 修改已有 Excel 后，用户在同一个只读网格中查看红绿单元格边框，并能回退到原始文件。
 - Why：Excel 修改预览不能依赖模型描述，也不适合 PPT 式左右画面对比，必须直接验证工作簿数据、公式和单元格级 diff。
 - How：通过真实 Workbench UI 用自然语言请求 AI 对已有 xlsx 分两轮修改；打开修改记录，显式切换“预览/审核”，在两种模式下尝试编辑、切换工作表和拖列宽；通过 E2E no-op 成功分支打开关联应用，再执行回退。
-- Oracle：正式 xlsx 的值和公式准确且没有 diff 边框；同一 run 两轮修改只形成相对首个 baseline 的累计记录；两种模式都通过 Univer 只读预览、可切换工作表且不出现 PPT 前后预览；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；回退后 bytes 与修改前一致；真实调用包含 Excel 读工具和至少两次 `excel_edit`；对齐 `WB-PANEL-003-AC19`、`WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC4`。
+- Oracle：正式 xlsx 的值和公式准确且没有 diff 边框；同一 run 两轮修改只形成相对首个 baseline 的累计记录；两种模式都通过 Univer 只读预览、可切换工作表且不出现 PPT 前后预览；已应用记录成功交给外部应用后显示“关闭后重新打开”提示；回退后 bytes 与修改前一致；真实调用包含 `excel_read` 和至少两次 `excel_edit`；对齐 `WB-PANEL-003-AC19`、`WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC4`。
 - Not：不逐字断言最终回答，不把模型直接计算的文本结果当作数据正确性证据；不在 Workbench e2e 枚举新增、修改、删除、清空、删除 Sheet 的全部 diff 细节，这些由 AI tool Excel case 直接解析 diff xlsx 覆盖。
 
 #### `excel-create-diff-and-revert`

@@ -6,8 +6,9 @@
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
 | human-risk-report-draft-live                        | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 20:15 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260813-201549-550                        | 真实读取模板、上周周报与工作文档，新建周报并 apply，原文件全部未改。                                   |
 | human-context-compaction-natural-trigger-live       | 完成 |            97 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260813-195642-816       | 真实长任务自然触发多轮压缩（usage_plus_delta），摘要结构与关键事实保留，压缩后连续推进并完成周报交付。 |
-| human-excel-write-reconciliation-live               | 完成 |            96 | deepseek-v4-flash                | 2026-08-14 18:39 CST | tests/logs/ai/human/live/human-excel-write-reconciliation-live/20260814-183949-614               | 终端真实计算核对，四笔状态精确标记，SUMIF 公式正确，样式保持。                                         |
-| human-excel-read-sales-gap-analysis-live            | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 21:02 CST | tests/logs/ai/human/live/human-excel-read-sales-gap-analysis-live/20260813-210226-107            | 真实读取多 Sheet 并终端/python 计算差额，对话给出 P-100/P-300 优先级，源工作簿未改。                   |
+| human-excel-read-weekly-review-live                | 完成 |            92 | qwen3.8-flash                    | 2026-08-30 11:52 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-115249-268                   | 只读讲清四表、Summary 公式与 P-300 异常；hash 不变、有 excel_read 无 excel_edit。过程偏多终端辅助。     |
+| human-excel-edit-weekly-review-live                  | 完成 |            94 | qwen3.8-flash                    | 2026-08-30 11:52 CST | tests/logs/ai/human/live/human-excel-edit-weekly-review-live/20260830-115249-269                   | 先读后写：表头含 CNY、P-300=680000、Summary 净额公式；Notes/P-200/Min margin 未动，1 条修改记录。       |
+| human-excel-create-monthly-budget-live             | 完成 |            93 | qwen3.8-flash                    | 2026-08-30 12:08 CST | tests/logs/ai/human/live/human-excel-create-monthly-budget-live/20260830-120845-565                 | 空工作区建成 Departments/Summary，SUM+SUMIF 与千分位格式，可解析且 1 条 excel 修改记录。               |
 | human-kb-guided-docx-comparison-draft-live          | 完成 |            86 | deepseek-v4-flash                | 2026-08-27 22:47 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260827-224726-600          | KB 缩圈后双目标 docx 成功回写，来源课件未改，Oracle 通过。                                             |
 | human-ppt-create-executive-deck-live                | 完成 |            58 | deepseek-v4-flash                | 2026-08-29 11:28 CST | tests/logs/ai/human/live/human-ppt-create-executive-deck-live/20260829-112844-003                | 文案完整但 KPI 等页字号(磅)相对 bounds 过高导致叠字；视觉不可用，分数下调。                           |
 | human-ppt-edit-management-review-live               | 完成 |            94 | deepseek-v4-flash                | 2026-08-29 11:34 CST | tests/logs/ai/human/live/human-ppt-edit-management-review-live/20260829-113439-010               | 富稿上插摘要、Presenter→李然、2002→2015，Agenda/Quote 未动，出画布未新增。                           |
@@ -329,28 +330,28 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `excel-create-read-edit`
 
 - 测试类型：`backend / tool`
-- What：Excel 专用工具创建工作簿、批量写入数据和公式，并继续执行概览、搜索、范围读取和修改。
+- What：Excel 专用工具创建工作簿、用 `set_range` 写入数据和公式，并继续执行 workbook / search / range 读取和修改。
 - Why：Excel 的值与公式必须由程序真实读写，不能用模型推算或用伪造工具结果代替。
-- How：真实调用 `excel_edit` 创建 xlsx，再调用三个只读工具并继续修改同一路径；另对已有 xlsx 执行修改和删除单元格，最后直接解析正式文件与 diff xlsx 文件。
+- How：真实调用 `excel_edit` 一次一个 type 创建 xlsx，再调用 `excel_read` 的 workbook/search/range，并继续修改同一路径；另对已有 xlsx 执行修改和清空单元格，最后直接解析正式文件与 diff xlsx 文件。修改记录从 `listFileChangeRecords` 读取，不依赖工具写回。
 - Oracle：新文件只包含显式新增的 Sheet，没有默认 `Sheet1`；正式文件包含准确值和公式且不带 diff 边框；diff 文件对新增、修改显示绿色中等粗细边框，对删除显示红色中等粗细边框并保留修改前值；同一路径只保留一条修改记录，对齐 `WB-EXCEL-001`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`。
 - Not：不验证 human 是否会选择 Excel 技能，也不评价表格视觉设计。
 
 ##### `excel-read-search-and-format-boundaries`
 
 - 测试类型：`backend`
-- What：Excel outline、search、read-cells 的范围、格式与错误边界。
-- Why：当前单一 happy path 无法保护多 Sheet、regex、大结果截断和 Office Excel 格式兼容。
-- How：真实读取 `xlsx/xlsm/xltx/xltm`，覆盖 Sheet scope、多 ranges、literal/regex、500 条截断，以及非法路径、range、regex 和格式。
-- Oracle：结果 Sheet/range/值稳定；搜索最多返回 500 条并显式标记截断；合法格式可读，非法输入稳定失败且不产生修改记录。
+- What：`excel_read` 四种 type 的范围、格式与错误边界。
+- Why：当前单一 happy path 无法保护多 Sheet、regex、大结果截断、格子预算和 Office Excel 格式兼容。
+- How：真实读取 `xlsx/xlsm/xltx/xltm`，覆盖 `sheetName` 限定、网格 range、literal/regex、500 条 `truncated`，超格子预算失败，以及非法路径、range、regex 和格式。
+- Oracle：结果 Sheet/range/值稳定；搜索最多返回 500 条并显式 `truncated`；搜索只命中单元格值和公式，不搜表名；合法格式可读，非法输入稳定失败且不产生修改记录。
 - Not：不验证模型如何选择读取范围。
 
 ##### `excel-edit-operations-and-atomicity`
 
 - 测试类型：`backend`
-- What：Excel 全部编辑 action、样式、工作簿结构、原子写入和累计修改记录，并校验非行位移类 diff xlsx 语义。
+- What：Excel 全部编辑 type、样式、工作簿结构、原子写入和累计修改记录，并校验非行位移类 diff xlsx 语义。
 - Why：写入失败、外部并发修改或 record 持久化失败都不能留下半提交状态；同一次 run 的多轮编辑必须相对首个 baseline 生成累计 Diff；删除 Sheet、清空范围和边框粗细不能只靠 UI e2e 间接发现。
-- How：真实覆盖单元格写入/清空、公式、样式、行列与 Sheet 操作、no-op、外部修改冲突、record 持久化失败回滚和同 run 两轮编辑；直接解析 diff xlsx 检查 sheet 顺序、tab 色、单元格值、边框、行高、列宽和合并单元格。
-- Oracle：每个 action 落盘后可读；删除最后一个 Sheet 失败；新增 Sheet 在 Diff 中为绿色标签；删除 Sheet 按 baseline 原位置恢复完整旧内容并显示红色标签；清空范围保留修改前值并显示红色中等粗细边框；源 xlsx 不包含 diff 标记；no-op 不产生记录；冲突与持久化失败恢复到安全状态；最终仅一条累计 record，Diff 相对首个 baseline。
+- How：真实覆盖 `set_range`/清空、公式、样式、行列与 Sheet 操作、no-op、外部修改冲突、record 持久化失败回滚和同 run 两轮编辑；直接解析 diff xlsx 检查 sheet 顺序、tab 色、单元格值、边框、行高、列宽和合并单元格。
+- Oracle：每个 type 落盘后可读；删除最后一个 Sheet 失败；新增 Sheet 在 Diff 中为绿色标签；删除 Sheet 按 baseline 原位置恢复完整旧内容并显示红色标签；清空范围保留修改前值并显示红色中等粗细边框；源 xlsx 不包含 diff 标记；no-op 不产生记录；冲突与持久化失败恢复到安全状态；最终仅一条累计 record，Diff 相对首个 baseline。
 - Not：不验证 Workbench 的 Diff 交互。
 
 ##### `excel-diff-row-structure-semantics`
@@ -376,7 +377,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：hand 在同一次调用中允许 Excel 读取、写入、再读取的真实串联。
 - Why：Excel 工具单测通过不代表 hand 的 schema 预检、调用预算和 artifact 合并可以承载完整链路。
-- How：真实执行 `excel_read_outline -> excel_edit -> excel_read_cells`。
+- How：真实执行 `excel_read(workbook) -> excel_edit -> excel_read(range)`。
 - Oracle：三步均成功；后读可见前写结果；最终 artifact 和修改记录只指向目标工作簿。
 - Not：不验证 human 是否自主选择这条顺序。
 
@@ -617,7 +618,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：human 学习 Excel 能力后读取已有工作簿、修改并复读验证。
 - Why：补齐 Excel 在真实 human graph 中完全缺失的 non-live 回归。
-- How：只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 与 brain 交付。
+- How：只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 与 brain 交付。脚本调用 `excel_read` / `excel_edit` 学技能后读-写-复读。脚本调用 `excel_read` / `excel_edit` 学技能后读-写-复读。
 - Oracle：任务完成；调用包含读、写、复读；正式文件、累计 record、artifact 与最终答复一致。
 - Not：不验证真实模型的工具选择能力。
 
@@ -839,23 +840,32 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 #### live 类别
 
-##### `human-excel-read-sales-gap-analysis-live`
+##### `human-excel-read-weekly-review-live`
 
 - 测试类型：`live`
-- What：真实模型在销售周会前审阅多 Sheet 工作簿，并给出未达标产品和优先级分析。
-- Why：用户只表达经营诉求；模型必须自行选择读取和真实计算能力。
-- How：不出现工具名，不修改工作簿；要求计算实际额、目标额和差额后直接向用户汇报。
-- Oracle：源文件完整；发生真实 Excel 读取和终端计算；结论由 raw logs 人工评估。
-- Not：不生成仅供测试消费的 JSON，不断言最终回答文案。
+- What：周会前审阅检入的复杂经营 xlsx，口头讲清表结构、关键公式和异常数字，不改文件。
+- Why：真实查看场景必须用现成经营表，不能在 live `execute` 里现造表。
+- How：工作区放入 `tests/fixtures/workspace` 中的复杂 xlsx；用户只描述审阅诉求，不出现工具名。
+- Oracle：源文件 hash 不变；发生 `excel_read`；无 `excel_edit`。结论由 raw logs 人工评估。
+- Not：不使用 `销售额统计表.xlsx`；不在 execute 里用 ExcelJS 现造表。
 
-##### `human-excel-write-reconciliation-live`
+##### `human-excel-edit-weekly-review-live`
 
 - 测试类型：`live`
-- What：真实模型在财务结账场景中更新既有对账工作簿。
-- Why：对账、精确标记、公式和写后复核是实际 Excel 交付能力。
-- How：用户只描述销售与回款核对、待补票标记和汇总需求；模型自行选择计算手段。
-- Oracle：正式工作簿的目标单元格、公式、样式和非目标数据正确；发生真实终端计算、Excel 写入和写后复核。
-- Not：不生成额外 JSON，不断言最终回答文案。
+- What：在同一份检入的复杂经营 xlsx 上更正/补公式/改表头，并保护部分区域。
+- Why：真实编辑必须先读后写，且不能破坏保护区。
+- How：与查看 live 共用同一 fixture；用户描述要改的几处和不可动区域。
+- Oracle：先读后写；目标单元格正确；保护区原值保留；1 条修改记录。
+- Not：不在 execute 里现造表。
+
+##### `human-excel-create-monthly-budget-live`
+
+- 测试类型：`live`
+- What：空工作区从零做月度预算（多表、表头、SUM/SUMIF、金额格式）。
+- Why：新建场景覆盖工作簿创建、跨表公式和数字格式。
+- How：空工作区，用户描述月度预算交付要求。
+- Oracle：文件可解析；汇总是公式；1 条 excel 修改记录。
+- Not：不评价表格视觉设计。
 
 ##### `human-legacy-doc-reading-live`
 

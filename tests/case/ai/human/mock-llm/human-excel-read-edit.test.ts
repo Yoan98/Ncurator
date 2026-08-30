@@ -42,15 +42,15 @@ describe('ai human mock-llm excel backend', () => {
               },
               {
                 output: buildToolDecision({
-                  toolName: 'excel_read_outline',
-                  args: { sourcePath },
+                  toolName: 'excel_read',
+                  args: { type: 'workbook', sourcePath },
                   summary: '读取工作簿概览'
                 })
               },
               {
                 output: buildToolDecision({
-                  toolName: 'excel_read_cells',
-                  args: { sourcePath, ranges: [{ sheetName: 'Data', range: 'A1:B2' }] },
+                  toolName: 'excel_read',
+                  args: { type: 'range', sourcePath, sheetName: 'Data', range: 'A1:B2' },
                   summary: '读取目标数据'
                 })
               },
@@ -58,16 +58,19 @@ describe('ai human mock-llm excel backend', () => {
                 output: buildToolDecision({
                   toolName: 'excel_edit',
                   args: {
+                    type: 'set_range',
                     sourcePath,
-                    actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 20 }]
+                    sheetName: 'Data',
+                    range: 'B2',
+                    values: [[20]]
                   },
                   summary: '更新金额'
                 })
               },
               {
                 output: buildToolDecision({
-                  toolName: 'excel_read_cells',
-                  args: { sourcePath, ranges: [{ sheetName: 'Data', range: 'A1:B2' }] },
+                  toolName: 'excel_read',
+                  args: { type: 'range', sourcePath, sheetName: 'Data', range: 'A1:B2' },
                   summary: '复读确认结果'
                 })
               },
@@ -99,8 +102,7 @@ describe('ai human mock-llm excel backend', () => {
         )
         runtime.assertThat(
           result.output.status === 'completed' &&
-            starts.some((event) => event.toolName === 'excel_read_outline') &&
-            starts.filter((event) => event.toolName === 'excel_read_cells').length === 2 &&
+            starts.filter((event) => event.toolName === 'excel_read').length === 3 &&
             starts.some((event) => event.toolName === 'excel_edit') &&
             result.value === 20 &&
             Boolean(excelArtifact?.applyId),

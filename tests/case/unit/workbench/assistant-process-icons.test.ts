@@ -32,7 +32,7 @@ describe('workbench assistant process icons', () => {
   it('uses action icons for file read, search, and edit steps', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('docx_read_outline'))).toBe('document')
     expect(resolveAssistantExecutionIcon(createToolGroup('docx_content_edit'))).toBe('edit')
-    expect(resolveAssistantExecutionIcon(createToolGroup('excel_read_outline'))).toBe('document')
+    expect(resolveAssistantExecutionIcon(createToolGroup('excel_read'))).toBe('document')
     expect(resolveAssistantExecutionIcon(createToolGroup('excel_edit'))).toBe('edit')
     expect(resolveAssistantExecutionIcon(createToolGroup('ppt_read_outline'))).toBe('document')
     expect(resolveAssistantExecutionIcon(createToolGroup('ppt_search'))).toBe('search')
@@ -40,7 +40,7 @@ describe('workbench assistant process icons', () => {
   })
 
   it('uses workflow icon and a concise sentence for mixed tool summaries', () => {
-    const groups = createToolGroups(['excel_read_outline', 'excel_edit'])
+    const groups = createToolGroups(['excel_read', 'excel_edit'])
 
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe(
@@ -50,7 +50,7 @@ describe('workbench assistant process icons', () => {
 
   it('summarizes more than three tool kinds with action labels', () => {
     const groups = createToolGroups([
-      'excel_read_outline',
+      'excel_read',
       'web_search',
       'excel_edit',
       'terminal_run'

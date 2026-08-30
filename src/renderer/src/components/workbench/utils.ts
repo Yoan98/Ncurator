@@ -222,9 +222,13 @@ const TOOL_ITEM_RENDERERS = {
   ppt_read_slides: (input) => sentence(text('读取 PPT 页面 '), text(readToolFileLabel(input))),
   ppt_search: (input) => sentence(text('搜索 PPT '), text(readToolQueryLabel(input))),
   ppt_edit: (input) => sentence(text('编辑 PPT '), text(readToolFileLabel(input))),
-  excel_read_outline: (input) => sentence(text('查看 Excel 结构 '), text(readToolFileLabel(input))),
-  excel_search: (input) => sentence(text('搜索 Excel '), text(readToolQueryLabel(input))),
-  excel_read_cells: (input) => sentence(text('读取 Excel 单元格 '), text(readToolFileLabel(input))),
+  excel_read: (input) => {
+    const type = readStringValue(input || {}, 'type') || ''
+    if (type === 'search') return sentence(text('搜索 Excel '), text(readToolQueryLabel(input)))
+    if (type === 'style') return sentence(text('读取 Excel 样式 '), text(readToolFileLabel(input)))
+    if (type === 'range') return sentence(text('读取 Excel 范围 '), text(readToolFileLabel(input)))
+    return sentence(text('查看 Excel 结构 '), text(readToolFileLabel(input)))
+  },
   excel_edit: (input) => sentence(text('编辑 Excel '), text(readToolFileLabel(input))),
   web_search: (input) => {
     const url = readStringValue(input || {}, 'url')

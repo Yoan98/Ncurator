@@ -2,7 +2,6 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
-import path from 'node:path'
 import { createHandNode } from '../../../../../src/main/services/ai/human/node/handNode'
 import { ensureSkillTools } from '../../../../../src/main/services/ai/human/node/learningNode/skillLoader'
 import { createHumanRuntimeCache } from '../../../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -63,8 +62,9 @@ describe('ai tool hand excel backend', () => {
                 calls: [
                   {
                     toolCallId: 'call-0',
-                    toolName: 'excel_read_outline',
+                    toolName: 'excel_read',
                     args: {
+                      type: 'workbook',
                       sourcePath: path.join(runtime.workspaceRoot, 'hand-report.xlsx')
                     }
                   },
@@ -72,16 +72,21 @@ describe('ai tool hand excel backend', () => {
                     toolCallId: 'call-1',
                     toolName: 'excel_edit',
                     args: {
+                      type: 'set_range',
                       sourcePath: path.join(runtime.workspaceRoot, 'hand-report.xlsx'),
-                      actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 20 }]
+                      sheetName: 'Data',
+                      range: 'B2',
+                      values: [[20]]
                     }
                   },
                   {
                     toolCallId: 'call-2',
-                    toolName: 'excel_read_cells',
+                    toolName: 'excel_read',
                     args: {
+                      type: 'range',
                       sourcePath: path.join(runtime.workspaceRoot, 'hand-report.xlsx'),
-                      ranges: [{ sheetName: 'Data', range: 'A1:B2' }]
+                      sheetName: 'Data',
+                      range: 'A1:B2'
                     }
                   }
                 ]
@@ -95,7 +100,7 @@ describe('ai tool hand excel backend', () => {
         const results = result.state.execution.lastToolResults || []
         runtime.assertThat(
           results.map((item) => item.toolName).join(',') ===
-            'excel_read_outline,excel_edit,excel_read_cells' &&
+            'excel_read,excel_edit,excel_read' &&
             results.every((item) => item.ok) &&
             JSON.stringify(results[2]?.data).includes('20'),
           {

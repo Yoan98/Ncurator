@@ -5,27 +5,18 @@ import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createExcelToolRuntime, toExcelToolFailure } from './runtime'
-import {
-  excelEditSchema,
-  excelReadCellsSchema,
-  excelReadOutlineSchema,
-  excelSearchSchema
-} from './schemas'
-import {
-  EXCEL_EDIT_TOOL_SPEC,
-  EXCEL_READ_CELLS_TOOL_SPEC,
-  EXCEL_READ_OUTLINE_TOOL_SPEC,
-  EXCEL_SEARCH_TOOL_SPEC
-} from './toolSpecs'
+import { excelEditSchema, excelReadSchema } from './schemas'
+import { EXCEL_EDIT_TOOL_SPEC, EXCEL_READ_TOOL_SPEC } from './toolSpecs'
 import type { ExcelCapabilityToolsInput } from './types'
 
-type ExcelToolName = 'excel_read_outline' | 'excel_search' | 'excel_read_cells' | 'excel_edit'
+type ExcelToolName = 'excel_read' | 'excel_edit'
 
-const ACTIVITY: Record<ExcelToolName, string> = {
-  excel_read_outline: '读取 Excel 概览',
-  excel_search: '搜索 Excel',
-  excel_read_cells: '读取 Excel 单元格',
-  excel_edit: '编辑 Excel'
+const readActivity = (args: JsonObject): string => {
+  const type = typeof args.type === 'string' ? args.type : 'workbook'
+  if (type === 'search') return '搜索 Excel'
+  if (type === 'style') return '读取 Excel 样式'
+  if (type === 'range') return '读取 Excel 范围'
+  return '读取 Excel 工作簿'
 }
 
 export const buildExcelCapabilityTools = (input: ExcelCapabilityToolsInput) => {
@@ -42,6 +33,7 @@ export const buildExcelCapabilityTools = (input: ExcelCapabilityToolsInput) => {
     description: string
     schema: TSchema
     execute: (args: never) => Promise<JsonObject>
+    summary: (args: JsonObject) => string
   }) =>
     tool(
       async (args) =>
@@ -51,10 +43,11 @@ export const buildExcelCapabilityTools = (input: ExcelCapabilityToolsInput) => {
           args: args as JsonObject,
           execute: async (session) => {
             input.ctx.checkCancelled()
+            const summary = params.summary(args as JsonObject)
             input.emitActivity({
               actionType: params.name,
               status: 'started',
-              summary: ACTIVITY[params.name]
+              summary
             })
             try {
               const result = await params.execute(args as never)
@@ -62,7 +55,7 @@ export const buildExcelCapabilityTools = (input: ExcelCapabilityToolsInput) => {
               input.emitActivity({
                 actionType: params.name,
                 status: 'completed',
-                summary: `${ACTIVITY[params.name]}完成`
+                summary: `${summary}完成`
               })
               return result
             } catch (error) {
@@ -92,28 +85,18 @@ export const buildExcelCapabilityTools = (input: ExcelCapabilityToolsInput) => {
     runtime,
     tools: [
       createTool({
-        name: 'excel_read_outline',
-        description: EXCEL_READ_OUTLINE_TOOL_SPEC.promptSpec.description,
-        schema: excelReadOutlineSchema,
-        execute: runtime.outline as never
-      }),
-      createTool({
-        name: 'excel_search',
-        description: EXCEL_SEARCH_TOOL_SPEC.promptSpec.description,
-        schema: excelSearchSchema,
-        execute: runtime.search as never
-      }),
-      createTool({
-        name: 'excel_read_cells',
-        description: EXCEL_READ_CELLS_TOOL_SPEC.promptSpec.description,
-        schema: excelReadCellsSchema,
-        execute: runtime.readCells as never
+        name: 'excel_read',
+        description: EXCEL_READ_TOOL_SPEC.promptSpec.description,
+        schema: excelReadSchema,
+        execute: runtime.read as never,
+        summary: readActivity
       }),
       createTool({
         name: 'excel_edit',
         description: EXCEL_EDIT_TOOL_SPEC.promptSpec.description,
         schema: excelEditSchema,
-        execute: runtime.edit as never
+        execute: runtime.edit as never,
+        summary: () => '编辑 Excel'
       })
     ]
   }

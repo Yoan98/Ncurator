@@ -66,75 +66,186 @@ describe('ai tool excel edit backend', () => {
         })
 
         const harness = createExcelToolHarness(runtime)
-        const firstEdit = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: path.join(runtime.workspaceRoot, 'operations.xlsx'),
-          actions: [
-            {
-              type: 'set_range',
-              sheetName: 'Data',
-              startCell: 'A1',
-              values: [
-                ['Item', 'Amount', 'Double'],
-                ['A', 12, { formula: 'B2*2' }],
-                ['B', 8, { formula: 'B3*2' }]
-              ],
-              style: {
-                bold: true,
-                italic: true,
-                fontColor: '#FFFFFF',
-                fillColor: '#2266AA',
-                numberFormat: '0.00',
-                horizontalAlignment: 'center',
-                verticalAlignment: 'middle'
-              }
-            },
-            { type: 'clear_range', sheetName: 'Data', range: 'D2' },
-            { type: 'add_sheet', sheetName: 'Summary' },
-            { type: 'set_cell', sheetName: 'Summary', address: 'A1', value: 'Overview' }
-          ]
+        const operationsPath = path.join(runtime.workspaceRoot, 'operations.xlsx')
+        const recordOf = async (filePath: string) =>
+          (await harness.ctx.listFileChangeRecords({ runId: runtime.runId })).find(
+            (record) => record.path === filePath
+          )
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
+          sourcePath: operationsPath,
+          sheetName: 'Data',
+          range: 'A1',
+          values: [
+            ['Item', 'Amount', 'Double'],
+            ['A', 12, { formula: 'B2*2' }],
+            ['B', 8, { formula: 'B3*2' }]
+          ],
+          style: {
+            bold: true,
+            italic: true,
+            fontColor: '#FFFFFF',
+            fillColor: '#2266AA',
+            numberFormat: '0.00',
+            horizontalAlignment: 'center',
+            verticalAlignment: 'middle'
+          }
         })
-        const secondEdit = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: path.join(runtime.workspaceRoot, 'operations.xlsx'),
-          actions: [
-            { type: 'rename_sheet', sheetName: 'Summary', newName: 'Overview' },
-            { type: 'merge_cells', sheetName: 'Overview', range: 'A1:B1' },
-            { type: 'set_column_width', sheetName: 'Data', column: 'B', width: 24 },
-            { type: 'insert_rows', sheetName: 'Data', startRow: 2, count: 1 },
-            { type: 'set_cell', sheetName: 'Data', address: 'A2', value: 'Inserted' },
-            { type: 'delete_rows', sheetName: 'Data', startRow: 4, count: 1 },
-            { type: 'delete_sheet', sheetName: 'DeleteMe' }
-          ]
+        await harness.invoke('excel_edit', {
+          type: 'clear_range',
+          sourcePath: operationsPath,
+          sheetName: 'Data',
+          range: 'D2'
         })
+        await harness.invoke('excel_edit', {
+          type: 'add_sheet',
+          sourcePath: operationsPath,
+          sheetName: 'Summary'
+        })
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
+          sourcePath: operationsPath,
+          sheetName: 'Summary',
+          range: 'A1',
+          values: [['Overview']]
+        })
+        await harness.invoke('excel_edit', {
+          type: 'rename_sheet',
+          sourcePath: operationsPath,
+          sheetName: 'Summary',
+          newName: 'Overview'
+        })
+        await harness.invoke('excel_edit', {
+          type: 'merge_cells',
+          sourcePath: operationsPath,
+          sheetName: 'Overview',
+          range: 'A1:B1'
+        })
+        await harness.invoke('excel_edit', {
+          type: 'set_column_width',
+          sourcePath: operationsPath,
+          sheetName: 'Data',
+          column: 'B',
+          width: 24
+        })
+        await harness.invoke('excel_edit', {
+          type: 'insert_rows',
+          sourcePath: operationsPath,
+          sheetName: 'Data',
+          startRow: 2,
+          count: 1
+        })
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
+          sourcePath: operationsPath,
+          sheetName: 'Data',
+          range: 'A2',
+          values: [['Inserted']]
+        })
+        await harness.invoke('excel_edit', {
+          type: 'delete_rows',
+          sourcePath: operationsPath,
+          sheetName: 'Data',
+          startRow: 4,
+          count: 1
+        })
+        await harness.invoke('excel_edit', {
+          type: 'delete_sheet',
+          sourcePath: operationsPath,
+          sheetName: 'DeleteMe'
+        })
+        await harness.invoke('excel_edit', {
+          type: 'set_style',
+          sourcePath: operationsPath,
+          sheetName: 'Overview',
+          range: 'A1',
+          style: { italic: true }
+        })
+        await harness.invoke('excel_edit', {
+          type: 'set_row_height',
+          sourcePath: operationsPath,
+          sheetName: 'Overview',
+          row: 1,
+          height: 22
+        })
+        await harness.invoke('excel_edit', {
+          type: 'auto_fit',
+          sourcePath: operationsPath,
+          sheetName: 'Overview',
+          range: 'A1:B1'
+        })
+        await harness.invoke('excel_edit', {
+          type: 'insert_columns',
+          sourcePath: operationsPath,
+          sheetName: 'Overview',
+          startColumn: 'C',
+          count: 1
+        })
+        await harness.invoke('excel_edit', {
+          type: 'delete_columns',
+          sourcePath: operationsPath,
+          sheetName: 'Overview',
+          startColumn: 'C',
+          count: 1
+        })
+        await harness.invoke('excel_edit', {
+          type: 'merge_cells',
+          sourcePath: operationsPath,
+          sheetName: 'Overview',
+          range: 'D1:E1'
+        })
+        await harness.invoke('excel_edit', {
+          type: 'unmerge_cells',
+          sourcePath: operationsPath,
+          sheetName: 'Overview',
+          range: 'D1:E1'
+        })
+        const secondEditRecord = await recordOf(operationsPath)
         const noOp = await harness.invoke<Record<string, unknown>>('excel_edit', {
+          type: 'set_range',
           sourcePath: path.join(runtime.workspaceRoot, 'noop.xlsx'),
-          actions: [
-            { type: 'set_cell', sheetName: 'Data', address: 'A1', value: 'same' },
-            { type: 'delete_cell', sheetName: 'Data', address: 'C3' },
-            { type: 'clear_range', sheetName: 'Data', range: 'D4:E5' }
-          ]
+          sheetName: 'Data',
+          range: 'A1',
+          values: [['same']]
         })
         const deleteLastSheet = await harness.invoke<Record<string, unknown>>('excel_edit', {
+          type: 'delete_sheet',
           sourcePath: path.join(runtime.workspaceRoot, 'noop.xlsx'),
-          actions: [{ type: 'delete_sheet', sheetName: 'Data' }]
+          sheetName: 'Data'
         })
-        const baselineFirst = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: path.join(runtime.workspaceRoot, 'baseline.xlsx'),
-          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 2 }]
+        const baselinePath = path.join(runtime.workspaceRoot, 'baseline.xlsx')
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
+          sourcePath: baselinePath,
+          sheetName: 'Data',
+          range: 'A1',
+          values: [[2]]
         })
-        const baselineSecond = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: path.join(runtime.workspaceRoot, 'baseline.xlsx'),
-          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B1', value: 20 }]
+        const baselineFirstId = (await recordOf(baselinePath))?.id
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
+          sourcePath: baselinePath,
+          sheetName: 'Data',
+          range: 'B1',
+          values: [[20]]
         })
-        await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: path.join(runtime.workspaceRoot, 'conflict.xlsx'),
-          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 2 }]
+        const conflictPath = path.join(runtime.workspaceRoot, 'conflict.xlsx')
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
+          sourcePath: conflictPath,
+          sheetName: 'Data',
+          range: 'A1',
+          values: [[2]]
         })
         const external = new ExcelJS.Workbook()
         external.addWorksheet('Data').getCell('A1').value = 99
         await fs.writeFile(conflictFile.filePath, Buffer.from(await external.xlsx.writeBuffer()))
         const conflict = await harness.invoke<Record<string, unknown>>('excel_edit', {
-          sourcePath: path.join(runtime.workspaceRoot, 'conflict.xlsx'),
-          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 3 }]
+          type: 'set_range',
+          sourcePath: conflictPath,
+          sheetName: 'Data',
+          range: 'A1',
+          values: [[3]]
         })
 
         const rollbackRoot = path.join(runtime.workspaceRoot, 'rollback-scope')
@@ -162,8 +273,11 @@ describe('ai tool excel edit backend', () => {
         let rollbackError = ''
         try {
           await rollbackRuntime.edit({
+            type: 'set_range',
             sourcePath: rollbackPath,
-            actions: [{ type: 'set_cell', sheetName: 'Data', address: 'A1', value: 'after' }]
+            sheetName: 'Data',
+            range: 'A1',
+            values: [['after']]
           })
         } catch (error) {
           rollbackError = error instanceof Error ? error.message : String(error)
@@ -186,22 +300,19 @@ describe('ai tool excel edit backend', () => {
         }
 
         const operations = await loadWorkbook(operationsFile.filePath)
-        const operationsDiff = await loadWorkbook(
-          String((secondEdit.record as { previewPath?: string } | undefined)?.previewPath)
-        )
+        const operationsDiff = await loadWorkbook(String(secondEditRecord?.previewPath))
         const operationsXml = await JSZip.loadAsync(
           await fs.readFile(operationsFile.filePath)
         ).then((zip) => zip.file('xl/workbook.xml')!.async('text'))
-        const baselineRecord = baselineSecond.record as
-          | { id?: string; previewPath?: string; beforeSnapshotPath?: string; changeCount?: number }
-          | undefined
+        const baselineRecord = await recordOf(baselinePath)
         const baselineDiff = await loadWorkbook(String(baselineRecord?.previewPath))
         const baselineSource = await loadWorkbook(baselineFile.filePath)
 
         return {
-          firstEdit,
-          secondEdit,
+          firstEdit: {},
+          secondEdit: {},
           noOp,
+          noOpRecord: await recordOf(path.join(runtime.workspaceRoot, 'noop.xlsx')),
           deleteLastSheet,
           conflict,
           rollback,
@@ -258,8 +369,7 @@ describe('ai tool excel edit backend', () => {
             fullCalcOnLoad: operationsXml.includes('fullCalcOnLoad="1"')
           },
           baseline: {
-            sameRecordId:
-              (baselineFirst.record as { id?: string } | undefined)?.id === baselineRecord?.id,
+            sameRecordId: baselineFirstId === baselineRecord?.id,
             changeCount: baselineRecord?.changeCount,
             originalSnapshot:
               Boolean(baselineRecord?.beforeSnapshotPath) &&
@@ -309,17 +419,11 @@ describe('ai tool excel edit backend', () => {
             data: result.operations
           }
         )
-        runtime.assertThat(
-          result.noOp.changed === false &&
-            Array.isArray(result.noOp.changes) &&
-            result.noOp.changes.length === 0 &&
-            !result.noOp.record,
-          {
+        runtime.assertThat(Object.keys(result.noOp).length === 0 && !result.noOpRecord, {
             name: 'excel-no-op-has-no-record',
             message: '无变化的 Excel 编辑不能生成修改记录。',
             data: result.noOp
-          }
-        )
+          })
         runtime.assertThat(
           result.deleteLastSheet.ok === false &&
             String(result.deleteLastSheet.error).includes('至少保留一个工作表'),

@@ -400,6 +400,140 @@ export const renderTextFileSearchModelResult: ModelResultRenderer = ({ data }) =
   ].join('\n')
 }
 
+const formatExcelRangeCell = (value: JsonValue | undefined): string => {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  if (!isObject(value)) return ''
+  const formula = readString(value.formula)
+  if (!formula) return ''
+  const result = value.value
+  const serialized =
+    result === null || result === undefined
+      ? undefined
+      : typeof result === 'string' || typeof result === 'number' || typeof result === 'boolean'
+        ? String(result)
+        : undefined
+  return serialized ? `=${formula} => ${serialized}` : `=${formula}`
+}
+
+const formatExcelStyleCell = (value: JsonValue | undefined): string | undefined => {
+  if (!isObject(value)) return undefined
+  const parts = [
+    value.bold === true ? 'bold' : '',
+    readString(value.fontColor) ? `fontColor=${readString(value.fontColor)}` : '',
+    readString(value.fillColor) ? `fillColor=${readString(value.fillColor)}` : '',
+    readString(value.numberFormat) ? `numberFormat=${readString(value.numberFormat)}` : ''
+  ].filter(Boolean)
+  return parts.length ? parts.join(', ') : undefined
+}
+
+const columnLettersFromIndex = (column: number): string => {
+  let value = column
+  let result = ''
+  while (value > 0) {
+    const remainder = (value - 1) % 26
+    result = String.fromCharCode(65 + remainder) + result
+    value = Math.floor((value - 1) / 26)
+  }
+  return result
+}
+
+const parseExcelA1 = (
+  range: string
+): { top: number; left: number } | undefined => {
+  const match = range.trim().match(/^\$?([A-Za-z]+)\$?(\d+)/)
+  if (!match) return undefined
+  const left = match[1]
+    .toUpperCase()
+    .split('')
+    .reduce((total, letter) => total * 26 + letter.charCodeAt(0) - 64, 0)
+  return { top: Number(match[2]), left }
+}
+
+export const renderExcelReadModelResult: ModelResultRenderer = ({ args, data }) => {
+  const obj = isObject(data) ? data : {}
+  const type = typeof args.type === 'string' ? args.type : undefined
+  if (type === 'workbook' || Array.isArray(obj.sheets)) {
+    const sheets = Array.isArray(obj.sheets) ? obj.sheets.filter(isObject) : []
+    return [
+      'Excel workbook read completed.',
+      'Sheets:',
+      ...(sheets.length
+        ? sheets.map((sheet, index) => {
+            const range = readString(sheet.range) || 'empty'
+            return `  ${index + 1}. ${readString(sheet.name) || ''}  ${range}  rows=${readNumber(sheet.rowCount) ?? 0} cols=${readNumber(sheet.columnCount) ?? 0}`
+          })
+        : ['  none'])
+    ].join('\n')
+  }
+  if (type === 'search' || Array.isArray(obj.matches)) {
+    const matches = Array.isArray(obj.matches) ? obj.matches.filter(isObject) : []
+    return [
+      'Excel search completed.',
+      `truncated: ${String(obj.truncated === true)}`,
+      'Matches:',
+      ...(matches.length
+        ? matches.map((item) => {
+            const formula = readString(item.formula)
+            const value =
+              typeof item.value === 'string' ||
+              typeof item.value === 'number' ||
+              typeof item.value === 'boolean'
+                ? String(item.value)
+                : item.value === null
+                  ? ''
+                  : ''
+            const shown = formula ? `=${formula}` : value
+            return `  ${readString(item.sheetName) || ''}!${readString(item.address) || ''}  ${shown}`.trimEnd()
+          })
+        : ['  none'])
+    ].join('\n')
+  }
+  const sheetName = readString(obj.sheetName) || ''
+  const range = readString(obj.range) || ''
+  const rows = Array.isArray(obj.rows) ? obj.rows : []
+  const origin = parseExcelA1(range)
+  if (type === 'style') {
+    const lines: string[] = []
+    rows.forEach((row, rowIndex) => {
+      if (!Array.isArray(row) || !origin) return
+      row.forEach((cell, columnIndex) => {
+        const formatted = formatExcelStyleCell(cell)
+        if (!formatted) return
+        const address = `${columnLettersFromIndex(origin.left + columnIndex)}${origin.top + rowIndex}`
+        lines.push(`  ${address}: ${formatted}`)
+      })
+    })
+    return [
+      'Excel style read completed.',
+      `Sheet: ${sheetName}`,
+      `Range: ${range}`,
+      ...(lines.length ? lines : ['  none'])
+    ].join('\n')
+  }
+  return [
+    'Excel range read completed.',
+    `Sheet: ${sheetName}`,
+    `Range: ${range}`,
+    ...(rows.length
+      ? rows.map((row) =>
+          Array.isArray(row)
+            ? `| ${row.map((cell) => formatExcelRangeCell(cell)).join(' | ')} |`
+            : ''
+        )
+      : ['  none'])
+  ]
+    .filter((line) => line !== '')
+    .join('\n')
+}
+
+export const renderExcelEditModelResult: ModelResultRenderer = ({ args }) => {
+  const type = typeof args.type === 'string' ? args.type : 'edit'
+  return `Excel ${type} completed.`
+}
+
 export const renderPlanUpdateModelResult: ModelResultRenderer = () => 'Plan updated successfully.'
 
 export const renderLearnSkillModelResult: ModelResultRenderer = ({ args, data }) => {

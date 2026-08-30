@@ -89,7 +89,7 @@ export const RUNTIME_SKILL_CATALOG = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'excel-read',
-    description: '读取 Excel 工作簿、工作表、单元格范围、公式和值。'
+    description: '读取 Excel 工作簿地图、单元格范围的值与公式、样式，以及按格子搜索。'
   },
   'excel-write': {
     familyId: 'excel',

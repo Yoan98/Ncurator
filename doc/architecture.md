@@ -106,6 +106,7 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 6. **描述声明边界，不教流程** — skill / tool 描述只说明能做什么、不能做什么、参数含义；组合策略由模型自主决定。
 7. **工具简单可理解** — 作者语言贴近模型对页面的心智模型，所用即所想。
 8. **写回只给新锚点，验证靠再读** — 写工具只返回继续写所需的 id；对错由后续 read 确认，不返回变更清单或整页 readback。
+9. **非必要字段不要设计**- 只设计真正需要的字段，给必要字段不要设计进来。
 
 **运行时分层**
 
@@ -128,7 +129,7 @@ DOCX 读写工具族已按上述原则落地，作为后续 Excel / PPT / PDF �
 | DOCX                  | 文档聚合模型 + story 内容树；root、可编辑子节点和 visual 共用一个 `nodesById`，visual 只使用 `nodeId`；读写拆成两个 skill；Source / Working 双态 + 净 Diff 审核 |
 | PDF                   | 页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                                                                 |
 | PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；`ppt_read_slides` 默认可读完整元素，`detail=images` 时仅返回 slideImagePath 供视觉巡检 |
-| Excel                 | 工作簿 / 工作表 / 单元格范围读写                                                                                                                                |
+| Excel                 | 工作表地图 + A1 范围；`excel_read` 四种 type（workbook / range / style / search）；`excel_edit` 一次一个 type；写回成功 `{}`（当前无系统生成锚点） |
 | KB                    | 混合召回检索工作区已索引文档                                                                                                                                    |
 | Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                            |
 

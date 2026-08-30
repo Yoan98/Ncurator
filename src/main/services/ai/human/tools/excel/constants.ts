@@ -1,0 +1,2 @@
+export const EXCEL_SEARCH_MAX_MATCHES = 500
+export const EXCEL_READ_RANGE_MAX_CELLS = 2_000

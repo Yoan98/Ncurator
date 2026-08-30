@@ -57,49 +57,69 @@ describe('ai tool excel row diff backend', () => {
         )
 
         const harness = createExcelToolHarness(runtime)
-        const edited = await harness.invoke<{
-          record: { previewPath: string; insertCount: number; deleteCount: number }
-        }>('excel_edit', {
+        const recordOf = async (filePath: string) => {
+          const record = (await harness.ctx.listFileChangeRecords({ runId: runtime.runId })).find(
+            (item) => item.path === filePath
+          )
+          if (!record?.previewPath) throw new Error(`missing preview for ${filePath}`)
+          return record as { previewPath: string; insertCount: number; deleteCount: number }
+        }
+        await harness.invoke('excel_edit', {
+          type: 'delete_rows',
           sourcePath,
-          actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 3, count: 1 }]
+          sheetName: '阶段涨幅',
+          startRow: 3,
+          count: 1
         })
-        const inserted = await harness.invoke<{
-          record: { previewPath: string; insertCount: number; deleteCount: number }
-        }>('excel_edit', {
+        const edited = await recordOf(sourcePath)
+        await harness.invoke('excel_edit', {
+          type: 'insert_rows',
           sourcePath: path.join(runtime.workspaceRoot, 'row-insert.xlsx'),
-          actions: [
-            { type: 'insert_rows', sheetName: '阶段涨幅', startRow: 3, count: 1 },
-            {
-              type: 'set_range',
-              sheetName: '阶段涨幅',
-              startCell: 'A3',
-              values: [['新增行', '1%', '2%', '3%', '4%']]
-            }
-          ]
+          sheetName: '阶段涨幅',
+          startRow: 3,
+          count: 1
         })
-        const deletedFirst = await harness.invoke<{
-          record: { previewPath: string; insertCount: number; deleteCount: number }
-        }>('excel_edit', {
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
+          sourcePath: path.join(runtime.workspaceRoot, 'row-insert.xlsx'),
+          sheetName: '阶段涨幅',
+          range: 'A3',
+          values: [['新增行', '1%', '2%', '3%', '4%']]
+        })
+        const inserted = await recordOf(path.join(runtime.workspaceRoot, 'row-insert.xlsx'))
+        await harness.invoke('excel_edit', {
+          type: 'delete_rows',
           sourcePath: path.join(runtime.workspaceRoot, 'row-delete-first.xlsx'),
-          actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 2, count: 1 }]
+          sheetName: '阶段涨幅',
+          startRow: 2,
+          count: 1
         })
-        const deletedLast = await harness.invoke<{
-          record: { previewPath: string; insertCount: number; deleteCount: number }
-        }>('excel_edit', {
+        const deletedFirst = await recordOf(
+          path.join(runtime.workspaceRoot, 'row-delete-first.xlsx')
+        )
+        await harness.invoke('excel_edit', {
+          type: 'delete_rows',
           sourcePath: path.join(runtime.workspaceRoot, 'row-delete-last.xlsx'),
-          actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 9, count: 1 }]
+          sheetName: '阶段涨幅',
+          startRow: 9,
+          count: 1
         })
-        const deletedContiguous = await harness.invoke<{
-          record: { previewPath: string; insertCount: number; deleteCount: number }
-        }>('excel_edit', {
+        const deletedLast = await recordOf(path.join(runtime.workspaceRoot, 'row-delete-last.xlsx'))
+        await harness.invoke('excel_edit', {
+          type: 'delete_rows',
           sourcePath: path.join(runtime.workspaceRoot, 'row-delete-contiguous.xlsx'),
-          actions: [{ type: 'delete_rows', sheetName: '阶段涨幅', startRow: 3, count: 2 }]
+          sheetName: '阶段涨幅',
+          startRow: 3,
+          count: 2
         })
+        const deletedContiguous = await recordOf(
+          path.join(runtime.workspaceRoot, 'row-delete-contiguous.xlsx')
+        )
 
         const actual = new ExcelJS.Workbook()
         await actual.xlsx.load((await fs.readFile(sourcePath)) as never)
         const diff = new ExcelJS.Workbook()
-        await diff.xlsx.load((await fs.readFile(edited.record.previewPath)) as never)
+        await diff.xlsx.load((await fs.readFile(edited.previewPath)) as never)
         const actualSheet = actual.getWorksheet('阶段涨幅')!
         const diffSheet = diff.getWorksheet('阶段涨幅')!
         const inspectDiff = async (previewPath: string) => {
@@ -118,12 +138,12 @@ describe('ai tool excel row diff backend', () => {
           redAddresses: collectBorderAddresses(diffSheet, RED),
           greenAddresses: collectBorderAddresses(diffSheet, GREEN),
           deletedRowHeight: diffSheet.getRow(3).height,
-          insertCount: edited.record.insertCount,
-          deleteCount: edited.record.deleteCount,
-          inserted: await inspectDiff(inserted.record.previewPath),
-          deletedFirst: await inspectDiff(deletedFirst.record.previewPath),
-          deletedLast: await inspectDiff(deletedLast.record.previewPath),
-          deletedContiguous: await inspectDiff(deletedContiguous.record.previewPath)
+          insertCount: edited.insertCount,
+          deleteCount: edited.deleteCount,
+          inserted: await inspectDiff(inserted.previewPath),
+          deletedFirst: await inspectDiff(deletedFirst.previewPath),
+          deletedLast: await inspectDiff(deletedLast.previewPath),
+          deletedContiguous: await inspectDiff(deletedContiguous.previewPath)
         }
       },
       assert: async (result, runtime) => {
@@ -203,75 +223,89 @@ describe('ai tool excel row diff backend', () => {
         )
 
         const harness = createExcelToolHarness(runtime)
+        const recordOf = async (filePath: string) => {
+          const record = (await harness.ctx.listFileChangeRecords({ runId: runtime.runId })).find(
+            (item) => item.path === filePath
+          )
+          if (!record?.previewPath) throw new Error(`missing preview for ${filePath}`)
+          return {
+            previewPath: record.previewPath,
+            changeCount: record.changeCount,
+            insertCount: record.insertCount,
+            deleteCount: record.deleteCount
+          }
+        }
         await harness.invoke('excel_edit', {
+          type: 'set_range',
           sourcePath: path.join(runtime.workspaceRoot, 'cell-restored.xlsx'),
-          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 'B' }]
+          sheetName: 'Data',
+          range: 'B2',
+          values: [['B']]
         })
-        const cellRestored = await harness.invoke<{
-          record: {
-            previewPath: string
-            changeCount: number
-            insertCount: number
-            deleteCount: number
-          }
-        }>('excel_edit', {
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
           sourcePath: path.join(runtime.workspaceRoot, 'cell-restored.xlsx'),
-          actions: [{ type: 'set_cell', sheetName: 'Data', address: 'B2', value: 'A' }]
+          sheetName: 'Data',
+          range: 'B2',
+          values: [['A']]
         })
+        const cellRestored = await recordOf(path.join(runtime.workspaceRoot, 'cell-restored.xlsx'))
 
         await harness.invoke('excel_edit', {
+          type: 'insert_rows',
           sourcePath: path.join(runtime.workspaceRoot, 'row-restored.xlsx'),
-          actions: [
-            { type: 'insert_rows', sheetName: 'Data', startRow: 2, count: 1 },
-            { type: 'set_cell', sheetName: 'Data', address: 'A2', value: 'Temporary' }
-          ]
+          sheetName: 'Data',
+          startRow: 2,
+          count: 1
         })
-        const rowRestored = await harness.invoke<{
-          record: {
-            previewPath: string
-            changeCount: number
-            insertCount: number
-            deleteCount: number
-          }
-        }>('excel_edit', {
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
           sourcePath: path.join(runtime.workspaceRoot, 'row-restored.xlsx'),
-          actions: [{ type: 'delete_rows', sheetName: 'Data', startRow: 2, count: 1 }]
+          sheetName: 'Data',
+          range: 'A2',
+          values: [['Temporary']]
         })
+        await harness.invoke('excel_edit', {
+          type: 'delete_rows',
+          sourcePath: path.join(runtime.workspaceRoot, 'row-restored.xlsx'),
+          sheetName: 'Data',
+          startRow: 2,
+          count: 1
+        })
+        const rowRestored = await recordOf(path.join(runtime.workspaceRoot, 'row-restored.xlsx'))
 
         await harness.invoke('excel_edit', {
+          type: 'add_sheet',
           sourcePath: path.join(runtime.workspaceRoot, 'sheet-restored.xlsx'),
-          actions: [
-            { type: 'add_sheet', sheetName: 'Temporary' },
-            { type: 'set_cell', sheetName: 'Temporary', address: 'A1', value: 'Temporary' }
-          ]
+          sheetName: 'Temporary'
         })
-        const sheetRestored = await harness.invoke<{
-          record: {
-            previewPath: string
-            changeCount: number
-            insertCount: number
-            deleteCount: number
-          }
-        }>('excel_edit', {
+        await harness.invoke('excel_edit', {
+          type: 'set_range',
           sourcePath: path.join(runtime.workspaceRoot, 'sheet-restored.xlsx'),
-          actions: [{ type: 'delete_sheet', sheetName: 'Temporary' }]
+          sheetName: 'Temporary',
+          range: 'A1',
+          values: [['Temporary']]
         })
+        await harness.invoke('excel_edit', {
+          type: 'delete_sheet',
+          sourcePath: path.join(runtime.workspaceRoot, 'sheet-restored.xlsx'),
+          sheetName: 'Temporary'
+        })
+        const sheetRestored = await recordOf(path.join(runtime.workspaceRoot, 'sheet-restored.xlsx'))
 
         await harness.invoke('excel_edit', {
+          type: 'rename_sheet',
           sourcePath: path.join(runtime.workspaceRoot, 'sheet-renamed.xlsx'),
-          actions: [{ type: 'rename_sheet', sheetName: 'Data', newName: 'Intermediate' }]
+          sheetName: 'Data',
+          newName: 'Intermediate'
         })
-        const sheetRenamed = await harness.invoke<{
-          record: {
-            previewPath: string
-            changeCount: number
-            insertCount: number
-            deleteCount: number
-          }
-        }>('excel_edit', {
+        await harness.invoke('excel_edit', {
+          type: 'rename_sheet',
           sourcePath: path.join(runtime.workspaceRoot, 'sheet-renamed.xlsx'),
-          actions: [{ type: 'rename_sheet', sheetName: 'Intermediate', newName: 'Final' }]
+          sheetName: 'Intermediate',
+          newName: 'Final'
         })
+        const sheetRenamed = await recordOf(path.join(runtime.workspaceRoot, 'sheet-renamed.xlsx'))
 
         const inspect = async (record: {
           previewPath: string
@@ -293,10 +327,10 @@ describe('ai tool excel row diff backend', () => {
         }
 
         return {
-          cell: await inspect(cellRestored.record),
-          row: await inspect(rowRestored.record),
-          sheet: await inspect(sheetRestored.record),
-          renamed: await inspect(sheetRenamed.record)
+          cell: await inspect(cellRestored),
+          row: await inspect(rowRestored),
+          sheet: await inspect(sheetRestored),
+          renamed: await inspect(sheetRenamed)
         }
       },
       assert: async (result, runtime) => {
