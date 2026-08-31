@@ -8,6 +8,7 @@
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
+    "knip": "knip",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "tsc --noEmit -p tsconfig.web.json --composite false",
     "typecheck": "tsc --noEmit -p tsconfig.node.json --composite false && tsc --noEmit -p tsconfig.web.json --composite false",
@@ -86,7 +87,6 @@
     "apache-arrow": "^17.0.0",
     "better-sqlite3": "^12.11.1",
     "cheerio": "^1.2.0",
-    "chromium-bidi": "0.8.1",
     "dayjs": "^1.11.19",
     "diff": "^9.0.0",
     "docx": "^9.5.1",
@@ -114,7 +114,6 @@
     "rehype-katex": "^7.0.1",
     "remark-gfm": "^4.0.1",
     "remark-math": "^6.0.0",
-    "utf-8-validate": "6.0.5",
     "uuid": "^13.0.0",
     "vditor": "^3.11.3",
     "word-extractor": "^1.0.4",

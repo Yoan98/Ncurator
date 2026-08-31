@@ -152,11 +152,7 @@ export const assertSafePackagePaths = (paths) => {
       continue
     }
 
-    if (
-      lowerSegments.some(
-        (segment) => segment.startsWith('chromium-') && !segment.startsWith('chromium-bidi')
-      )
-    ) {
+    if (lowerSegments.some((segment) => segment.startsWith('chromium-'))) {
       violations.push(`${relativePath}: full Chromium is forbidden; only headless shell is allowed`)
       continue
     }
