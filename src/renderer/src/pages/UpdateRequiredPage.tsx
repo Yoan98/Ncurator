@@ -30,7 +30,7 @@ const UpdateRequiredPage: React.FC<{ startupStatus: UpdateRequiredStatus }> = ({
           : status === 'downloaded'
             ? '重启并安装'
             : status === 'error'
-              ? '重试更新'
+              ? '重试'
               : status === 'not-available'
                 ? '重新检查'
                 : '检查更新'

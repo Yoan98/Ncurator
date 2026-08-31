@@ -152,7 +152,7 @@ describe('sidebar app update e2e', () => {
             platform: 'darwin',
             error: 'network unavailable'
           })
-          await primaryButton.getByText('重试更新', { exact: true }).waitFor({ state: 'visible' })
+          await primaryButton.getByText('重试', { exact: true }).waitFor({ state: 'visible' })
           await primaryButton.click()
           await primaryButton.getByText('下载最新版', { exact: true }).waitFor({ state: 'visible' })
           const recoveryStillVisibleAfterFailure = await recoveryPage.isVisible()
