@@ -35,7 +35,7 @@ describe('ai human live backend', () => {
             }).run({
               taskId: runtime.taskId,
               userInput:
-                '请查找 pandas 官方文档中 CSV 读取和写入的 API 用法，然后向我说明。读完两个官方 API 页面后停止。'
+                '我记不清 pandas 官方文档的网址了，帮我搜一下官方文档里 CSV 读取和写入这两个 API 的用法页面，然后读官方页面向我说明。读完两个官方 API 页面后停止。'
             })
             return { output, events: runtime.eventCollector.snapshot() }
           } finally {

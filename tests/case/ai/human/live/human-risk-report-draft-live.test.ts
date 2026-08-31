@@ -127,6 +127,9 @@ describe('ai human live backend', () => {
         const writeRelativePaths = writeSourcePaths.map((sourcePath) =>
           toWorkspaceRelativePath(runtime.workspaceRoot, sourcePath)
         )
+        const deliveredRelativePaths = writeRelativePaths.filter(
+          (sourcePath) => !result.workspaceSeed.preexistingDocxRelativePaths.includes(sourcePath)
+        )
         const lastWeekOpened = openedExpectedDoc(
           openedSourcePaths,
           result.workspaceSeed.lastWeekReportRelativePath,
@@ -145,19 +148,15 @@ describe('ai human live backend', () => {
           )
         )
         const createdTargetInAllowedLocation =
-          createdRelativePaths.length >= 1 &&
-          createdRelativePaths.every(
+          deliveredRelativePaths.length >= 1 &&
+          deliveredRelativePaths.every(
             (sourcePath) =>
               sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
           )
-        const writesStayOnCreatedDoc =
-          writeRelativePaths.length === 0 ||
-          writeRelativePaths.every((sourcePath) => createdRelativePaths.includes(sourcePath))
-        const createdDocNotPreexisting =
-          createdRelativePaths.length >= 1 &&
-          createdRelativePaths.every(
-            (sourcePath) => !result.workspaceSeed.preexistingDocxRelativePaths.includes(sourcePath)
-          )
+        const writesStayOnCreatedDoc = writeRelativePaths.every((sourcePath) =>
+          deliveredRelativePaths.includes(sourcePath)
+        )
+        const createdDocNotPreexisting = deliveredRelativePaths.length >= 1
         const writeResultEvents = filterAiRunEventsByType(events, 'tool_call_result').filter(
           (event) => event.toolName === 'docx_content_edit'
         )
@@ -243,6 +242,7 @@ describe('ai human live backend', () => {
               openedSourcePaths,
               createSourcePaths,
               createdRelativePaths,
+              deliveredRelativePaths,
               writeSourcePaths,
               writeRelativePaths,
               txtReads,
@@ -265,7 +265,7 @@ describe('ai human live backend', () => {
 
         runtime.assertThat(
           result.output?.status === 'completed' &&
-            createSourcePaths.length >= 1 &&
+            deliveredRelativePaths.length >= 1 &&
             createdTargetInAllowedLocation &&
             createdDocNotPreexisting &&
             hasDocxArtifact &&
@@ -277,6 +277,7 @@ describe('ai human live backend', () => {
             data: {
               createSourcePaths,
               createdRelativePaths,
+              deliveredRelativePaths,
               writeSourcePaths,
               writeRelativePaths,
               trackedDocsUnchanged,

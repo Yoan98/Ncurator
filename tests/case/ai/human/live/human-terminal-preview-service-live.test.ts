@@ -76,7 +76,6 @@ describe('ai human live terminal backend', () => {
             result.output.status === 'completed' &&
               toolNames.includes('terminal_run') &&
               toolNames.includes('terminal_read') &&
-              toolNames.includes('terminal_write') &&
               results.some(
                 (event) => event.toolName === 'terminal_read' && event.result?.ok === true
               ) &&

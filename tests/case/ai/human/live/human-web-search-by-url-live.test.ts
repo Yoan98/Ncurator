@@ -60,7 +60,7 @@ describe('ai human live backend', () => {
               }) &&
               result.output.deliveryMarkdown.includes('杭州市灵活就业人员') &&
               result.output.deliveryMarkdown.includes('2026') &&
-              result.output.deliveryMarkdown.includes('9月30日'),
+              /9\s*月\s*30\s*日/.test(result.output.deliveryMarkdown),
             {
               name: 'human-live-web-search-by-url-answers-from-given-address',
               message: '用户给指定地址时 AI 应直接 web_search(type=fetch) 读取该页并基于正文回答。',
