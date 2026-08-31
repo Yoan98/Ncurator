@@ -10,17 +10,17 @@ const require = createRequire(import.meta.url)
 const obfuscatorPackage = require('javascript-obfuscator/package.json')
 
 export const MAIN_OBFUSCATION_SCHEMA_VERSION = 1
-export const MAIN_OBFUSCATION_CONFIGURATION_VERSION = 1
+export const MAIN_OBFUSCATION_CONFIGURATION_VERSION = 2
 export const MAX_MAIN_OBFUSCATION_GROWTH_BYTES = 3 * 1024 * 1024
 
 export const PROTECTED_MAIN_PLAINTEXT_MARKERS = [
   {
     id: 'brain-system-prompt',
-    value: '像一个判断稳定的人类执行者一样工作'
+    value: '根据已有信息自主决策下一步工具的使用来推进任务'
   },
   {
-    id: 'mouth-system-prompt',
-    value: '你的职责是基于已经提供的信息，面向用户交付最终结果'
+    id: 'delivery-contract',
+    value: '停止调用工具，直接输出最终交付的 markdown 正文'
   }
 ]
 
