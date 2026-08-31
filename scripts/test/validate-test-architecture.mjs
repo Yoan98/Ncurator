@@ -31,6 +31,13 @@ const stringConstants = (source) =>
     ])
   )
 
+const fixturePathConstants = (source) =>
+  new Set(
+    [...source.matchAll(/\bconst\s+([A-Za-z_$][\w$]*)\s*=[^;]*tests\/fixtures[^;]*;/gu)].map(
+      (match) => match[1]
+    )
+  )
+
 const resolveString = (raw, constants) => {
   const value = raw.trim()
   const quoted = value.match(/^['"]([^'"]+)['"]$/u)
@@ -103,6 +110,75 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
       failures.push(
         `${relativePath}: 完整生产工具 runtime 流程必须放到 ai/tool，不允许由 Unit 直接拥有`
       )
+    }
+    const fixtureConstants = fixturePathConstants(source)
+    const writeTargetArgIndex = {
+      writeFile: 0,
+      appendFile: 0,
+      writeFileSync: 0,
+      appendFileSync: 0,
+      mkdir: 0,
+      mkdirSync: 0,
+      rm: 0,
+      rmSync: 0,
+      unlink: 0,
+      unlinkSync: 0,
+      copyFile: 1,
+      copyFileSync: 1,
+      cp: 1,
+      rename: 1,
+      renameSync: 1
+    }
+    const writeOpPattern = new RegExp(
+      `\\b(${Object.keys(writeTargetArgIndex).join('|')})\\s*\\(`,
+      'gu'
+    )
+    const extractArgs = (sourceText, argsStart) => {
+      const args = []
+      let depth = 1
+      let current = ''
+      let inString = null
+      for (let index = argsStart; index < sourceText.length && depth > 0; index += 1) {
+        const char = sourceText[index]
+        if (inString) {
+          current += char
+          if (char === inString && sourceText[index - 1] !== '\\') inString = null
+        } else if (char === '"' || char === "'" || char === '`') {
+          inString = char
+          current += char
+        } else if (char === '(') {
+          depth += 1
+          current += char
+        } else if (char === ')') {
+          depth -= 1
+          if (depth === 0) {
+            args.push(current)
+            break
+          }
+          current += char
+        } else if (char === ',' && depth === 1) {
+          args.push(current)
+          current = ''
+        } else {
+          current += char
+        }
+      }
+      return args
+    }
+    for (const match of source.matchAll(writeOpPattern)) {
+      const targetIndex = writeTargetArgIndex[match[1]]
+      const targetArg = extractArgs(source, match.index + match[0].length)[targetIndex] ?? ''
+      const targetsFixture =
+        targetArg.includes('tests/fixtures') ||
+        /path\.(?:resolve|join)\(\s*['"`](?:[^'"`,)]*,\s*)?fixtures['"`]/u.test(targetArg) ||
+        [...fixtureConstants].some(
+          (name) => new RegExp(`\\b${name}\\b`, 'u').test(targetArg)
+        )
+      if (targetsFixture && !/\bgetFixtureWorkspacePath\b/u.test(targetArg)) {
+        failures.push(
+          `${relativePath}: 禁止向 tests/fixtures/** 写入或修改（fixture 只读，需要写入时复制到隔离 workspace）：${targetArg.slice(0, 100)}`
+        )
+      }
     }
     const isAiLive = relativePath.split(path.sep).join('/').includes('tests/case/ai/human/live/')
     if (isAiLive) {

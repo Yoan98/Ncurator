@@ -51,6 +51,8 @@ tests/
 - 当某个 `suite` 不需要继续细分时，回归 case 可以直接放在该 `suite` 目录下。
 - `tests/case/**` 中除 `unit/**` 外，只允许放已在 `doc/test-plan/**` 登记的回归 case。
 - `tests/fixtures/workspace/` 是共享工作区 fixture 根目录；凡是依赖“工作区里有什么文件”的测试，优先复用该目录。
+- `tests/fixtures/backend/` 是非 live backend 测试直接引用的固定输入目录；`tests/fixtures/sqlite/` 放数据库迁移 fixture。
+- `tests/fixtures/**` 全部是只读测试输入：测试禁止对其中任何文件原地写入、覆盖或修改；需要写入时，必须通过 `fixtures: []` 声明由 runner/harness 复制到隔离临时 workspace（或按 E2E 规则复制到临时目录），测完删除。fixture 需要更新时直接提交新二进制，禁止引入任何 fixture 生成器脚本（生成器不得以 `.test.ts` 形态进入 `tests/case/**` 自动发现）。
 - 当 case 直接传入 `tests/fixtures/workspace` 目录时，runner 应把该目录下的子内容原样复制到临时 workspace 根目录，而不是保留 `tests/fixtures/**` 中间层路径。
 
 ### 2.3 稳定映射模型

@@ -6,6 +6,19 @@ import { describe, it } from 'vitest'
 import { createExcelToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
+const resolvePythonBin = (): string => {
+  const candidates = process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python']
+  for (const name of candidates) {
+    try {
+      execFileSync(name, ['--version'], { stdio: 'ignore' })
+      return name
+    } catch {
+      // try next candidate
+    }
+  }
+  throw new Error('python executable not found (tried python3/python)')
+}
+
 const readOpenpyxlFormats = (filePath: string, sheetName: string, addresses: string[]): string[] => {
   const script = [
     'import json, openpyxl, sys',
@@ -15,7 +28,7 @@ const readOpenpyxlFormats = (filePath: string, sheetName: string, addresses: str
     'print(json.dumps([sheet[addr].number_format for addr in addrs]))'
   ].join('\n')
   const output = execFileSync(
-    'python',
+    resolvePythonBin(),
     ['-c', script, filePath, sheetName, JSON.stringify(addresses)],
     { encoding: 'utf8' }
   ).trim()

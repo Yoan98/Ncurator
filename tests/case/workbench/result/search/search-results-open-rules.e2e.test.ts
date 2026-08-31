@@ -56,7 +56,7 @@ describe('workbench result e2e', () => {
         groups: ['search'],
         description:
           '真实索引本地文件和网页资料后，搜索模式展示右侧结果并按本地/网页规则打开，不启动 AI。',
-        fixtures: ['tests/fixtures/workspace'],
+        fixtures: ['tests/fixtures/workspace', 'tests/fixtures/backend'],
         serviceMode: 'real',
         windowMode: 'visible',
         runMode: 'single',

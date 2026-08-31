@@ -7,7 +7,7 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { buildSelectedDocxFixtureReferences } from '../../../../harness/backend/aiLiveTestData'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
-const FIXTURE_PATH = 'tests/fixtures/workspace/docx-visual-kinds.docx' as const
+const FIXTURE_PATH = 'tests/fixtures/backend/docx-visual-kinds.docx' as const
 
 const fileHash = async (filePath: string): Promise<string> =>
   createHash('sha256')

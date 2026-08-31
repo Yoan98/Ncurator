@@ -11,7 +11,7 @@ import {
 import { collectVisualNodeEntries } from '../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/types'
 
 const require = createRequire(import.meta.url)
-const fixturePath = path.resolve('tests/fixtures/workspace/docx-visual-kinds.docx')
+const fixturePath = path.resolve('tests/fixtures/backend/docx-visual-kinds.docx')
 
 type RenderBinding = {
   kind: 'chart' | 'diagram' | 'shape'
