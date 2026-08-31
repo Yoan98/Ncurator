@@ -48,6 +48,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足回归 case 口径。
 - 依赖工作区语义的测试统一复用 `tests/fixtures/workspace` 作为共享输入目录，但该目录只作为真实输入文件来源。
 - `How` 和 `Oracle` 必须映射到 [workbench.md](../prd/workbench.md) 的需求或验收编号。
+- `WB-BLOCKER-003`（上下文压缩提示）依赖真实模型使用量与正式压缩阈值触发，运行成本不确定，不作为每次源码回归的固定 case，发布时按影响评估单独执行真实检查，检查运行中与完成态过程组，且不得为 E2E 降低生产阈值或伪造 compaction 事件。
 
 ## 4. 目录与命令
 
@@ -280,10 +281,6 @@ tests/case/workbench/
 - How：在真实工作区创建 Unicode 文件名，通过真实终端读取目录并返回结果。
 - Oracle：终端结果保留 Unicode 文件名，任务完成后无乱码或跨会话泄漏，对齐 `WB-TERMINAL-001`。
 - Not：不覆盖全部 shell 命令策略。
-
-### 3.5 发布前真实检查
-
-- `WB-BLOCKER-003`：上下文压缩必须由真实模型使用量和正式压缩阈值触发，检查运行中与完成态过程组；不得为 E2E 降低生产阈值或伪造 compaction 事件。该检查运行成本取决于模型上下文，不作为每次源码回归的固定 case。
 
 #### `run-navigation-snapshot-replay`
 
