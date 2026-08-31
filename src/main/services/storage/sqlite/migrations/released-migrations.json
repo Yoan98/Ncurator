@@ -1,0 +1,59 @@
+{
+  "publishedThrough": 9,
+  "migrations": [
+    {
+      "version": 1,
+      "name": "initial_schema",
+      "file": "001_initial_schema.ts",
+      "sha256": "60e8e78b1cbf4646a9dc73c8b8d2b9174fcd097f32e2665457c76ed71af36df4"
+    },
+    {
+      "version": 2,
+      "name": "ai_runtime_system_notifications",
+      "file": "002_ai_runtime_system_notifications.ts",
+      "sha256": "ccf4f37fd865241a4cde3dcdfdb4f2dc5e3601fd1cfc5e7735e9e93300f7f1b0"
+    },
+    {
+      "version": 3,
+      "name": "chat_session_skill_state",
+      "file": "003_chat_session_skill_state.ts",
+      "sha256": "d449e0c5bc05138b5b3e15806c1edbf514d40f73ca06b95ce2b351c225957414"
+    },
+    {
+      "version": 4,
+      "name": "reset_resume_snapshots_v2",
+      "file": "004_reset_resume_snapshots_v2.ts",
+      "sha256": "b2770eac778d9c62eed125436239cef4cbe7ce6ff75965f80cf7bcc2569443fc"
+    },
+    {
+      "version": 5,
+      "name": "repair_false_docx_change_failures",
+      "file": "005_repair_false_docx_change_failures.ts",
+      "sha256": "b5933e516e99b2da8fce3ab7688e743074b5a970e85d1f16ede9ae9381541e49"
+    },
+    {
+      "version": 6,
+      "name": "workbench_session_ui_state",
+      "file": "006_workbench_session_ui_state.ts",
+      "sha256": "c7d2406ba62fc477087682a10e992a59cc60a7f47e704da2085cca56f7327a04"
+    },
+    {
+      "version": 7,
+      "name": "ai_run_execution_permission",
+      "file": "007_ai_run_execution_permission.ts",
+      "sha256": "9f5734e1e7ab83802891aa61e1152dd74b08ab99160c35b9ea51259a5e2f8a27"
+    },
+    {
+      "version": 8,
+      "name": "drop_llm_strategy_preference",
+      "file": "008_drop_llm_strategy_preference.ts",
+      "sha256": "acb266199f33bbdc9f3aa2e406506054b457afccf335ca2b1bdfc9c006780611"
+    },
+    {
+      "version": 9,
+      "name": "repair_ai_runtime_system_notifications_column",
+      "file": "009_repair_ai_runtime_system_notifications_column.ts",
+      "sha256": "963ec3586c987fb9355afa1e2183a57b592d5cd6ef167fec5679ed32783f79c1"
+    }
+  ]
+}

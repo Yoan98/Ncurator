@@ -15,9 +15,9 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 
 - 打开 `app.sqlite`。
 - 设置 `PRAGMA foreign_keys = ON`。
-- 设置 `PRAGMA journal_mode = WAL`。
 - 设置 `PRAGMA busy_timeout = 5000`。
-- 执行未执行的 migration。
+- 在任何迁移写入前读取并校验 `schema_migrations`。
+- 数据库版本兼容时设置 `PRAGMA journal_mode = WAL`，并执行全部待执行 migration。
 
 SQLite 保存以下业务数据：
 
@@ -48,21 +48,56 @@ SQLite 保存以下业务数据：
 
 ## SQLite Migration
 
-- migration 记录在 `schema_migrations`。
-- migration 定义统一放在 `src/main/services/storage/sqlite/migrations/00X_*.ts`，每个文件导出一个 `Migration`（含 `version`、`name`、`sql` 或 `run`），`SqliteCore` 按文件导入并组成 `MIGRATIONS` 数组。
-- migration 按版本递增执行。
-- 每个 migration 都在 SQLite transaction 中执行。
-- migration 失败会阻止启动，并抛出明确错误。
-- 上线后只允许向前迁移，不做自动降级。
-- 新字段优先用 `ALTER TABLE ADD COLUMN`。
-- 改名或删除字段时，使用建新表、复制数据、删旧表、rename 的方式。
-- 大数据变更需要分批处理，不能在启动时长时间阻塞。
+### 当前边界
+
+- 当前代码支持的最终 schema version 是 `10`，由 `CURRENT_SCHEMA_VERSION` 定义。
+- version `1–9` 已随正式版发布，永久保留且不可改写。已知历史例外只有 version 2 的旧名称 `workspace_change_sets`；version 9 继续负责修复通知字段。
+- version `10` 把上次正式版之后尚未发布的变更合并为一次 `upgrade_from_v9`：创建最终版定时任务和消息日志表，并删除旧 memory/event 表与废弃字段，不保留中间态字段。
+- 哪些 migration 已正式发布，以 `migrations/released-migrations.json` 为唯一边界。未进入清单的连续迁移可以在发布前合并或重写；进入清单后只能新增更高版本修复。
+- 当前开发机若已经执行过被合并掉的旧 version `10–14`，直接删除开发环境的 `app.sqlite` 和 `lancedb` 后重建，不提供兼容或修复路径。
+
+### 版本身份与执行规则
+
+- migration 记录在 `schema_migrations`，身份由 `version + name` 共同确定，不能只看最大版本号。
+- migration 定义统一放在 `src/main/services/storage/sqlite/migrations/00X_*.ts`。版本必须从 1 开始连续、严格递增且唯一；文件版本、定义版本和执行顺序必须一致。
+- 已执行记录必须是当前 migration 列表的合法连续前缀。除明确登记的历史别名外，缺号、名称冲突或未知记录都视为数据库历史损坏，拒绝启动。
+- 数据库版本高于 `CURRENT_SCHEMA_VERSION` 时，在写 migration、切换 WAL 或初始化业务服务前抛出 `DatabaseVersionTooNewError`，错误同时携带检测版本和支持版本。
+- 一次启动中的全部待执行 migration、对应的 `schema_migrations` 记录、`PRAGMA quick_check` 和 `PRAGMA foreign_key_check` 位于同一个 SQLite transaction。任一步失败，整批升级回滚，数据库不会停留在半升级状态。
+- migration 必须可重复初始化：已经完整执行的版本不会再次执行。不提供 down migration、自动数据库复制、自动备份或自动恢复。
+
+### 启动状态机与禁止降级
+
+应用先初始化错误日志与 `AppUpdateService`，再检查 SQLite：
+
+1. 数据库兼容且迁移成功：启动状态为 `{ mode: 'normal' }`，继续初始化 Storage、LanceDB、AI、Workbench、定时任务和业务 IPC。
+2. 数据库版本高于当前应用支持版本：启动状态为 `{ mode: 'update_required', databaseVersion, supportedDatabaseVersion, manualDownloadUrl }`，只创建更新恢复页，不初始化任何业务服务。
+3. 其他迁移错误：按启动错误处理并保留错误日志，不能把 schema 损坏误判成可更新状态。
+
+恢复页会自动检查更新，只允许检查、下载、重启安装、打开最新版手动下载页或退出。更新不可用、网络失败或用户尚未完成升级时，都不能进入 Workbench。官方最新版本必须支持所有已公开发布的数据库版本。
+
+Windows 从本方案发布的 NSIS 安装包开始，会在卸载或写文件前读取 HKCU/HKLM 已安装版本：允许更高版本安装和同版本修复，拒绝低版本安装包。macOS DMG 无法阻止手动用旧 `.app` 覆盖，由上述运行时版本检查兜底。历史上已经发布的旧安装包无法追溯增加安装器保护。
+
+### DDL 与数据安全规则
+
+- 新增普通字段优先使用 `ALTER TABLE ... ADD COLUMN`。
+- 删除无索引、外键、唯一约束等依赖的普通字段，可以直接使用 SQLite `DROP COLUMN`。
+- 修改类型、主键、唯一约束、外键，或进行复杂数据转换时，使用“建新表 → 复制并校验 → 替换旧表”。
+- 正式 schema 迁移不使用宽泛的 `IF EXISTS` / `IF NOT EXISTS` 掩盖结构异常；预期表或字段不存在时应让事务失败并暴露问题。
+- 启动迁移应保持可控时长。确实需要处理大量数据时，应先设计可恢复的产品流程，不能把长时间分批任务偷偷塞进启动 migration。
+- 本项目不做自动数据库备份。备份无法替代版本兼容和原子事务，而且应用无法替用户判断何时恢复。对“SQL 本身错误但成功提交”的风险，通过已发布迁移冻结、正式 v9 fixture 升级测试、完整性检查和发布门禁控制。
+
+### 发布锁与测试门禁
+
+- `released-migrations.json` 保存已发布 migration 的 version、name、文件和源码 SHA-256。
+- `release:start` 在 Tag 前先验证所有已锁 migration 未被修改；Unit 全部通过后，把当前连续 migration 纳入锁清单，再与版本号一起提交。任一已锁源码变化都会直接阻止发布。
+- 独立迁移 Unit 必须覆盖：空库到当前版本、正式 v9 带数据升级、两条路径最终 schema 一致、重复初始化、批量失败整批回滚、高版本零写入拒绝、历史缺号/重名/名称冲突、已知别名、锁文件篡改以及两项 SQLite 完整性检查。
+- `sidebar-app-update` E2E 使用隔离 `userData` 写入高版本 migration 记录并重启，验证只出现恢复页、Workbench 不启动、更新全流程和失败重试仍可用。这个 fixture 只准备启动前数据库，不改生产 schema 检查逻辑。
 
 ## Native 依赖
 
 `better-sqlite3` 是 native 模块，Node backend 测试和 Electron e2e 使用不同 ABI。项目通过独立缓存保存两套 binding，不覆盖 `node_modules` 中的同一个 `.node` 文件。
 
-测试 runner 和打包流程会自动准备并注入正确 binding，正常开发与回归不手工 rebuild。已发布 migration 不修改、重排或复用；任何 schema 或数据变更都新增更高版本 migration，具体历史以 migration 源码为准。migration 版本号必须全局唯一且只递增；启动时会校验当前定义中没有重复版本。旧版本曾发生冲突时，必须新增更高版本的修复 migration，不能修改用户已有的 `schema_migrations` 记录。
+测试 runner 和打包流程会自动准备并注入正确 binding，正常开发与回归不手工 rebuild。
 
 ## LanceDB
 

@@ -1,6 +1,6 @@
 ﻿import React from 'react'
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { App as AntdApp, Layout, ConfigProvider, theme } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import dayjs from 'dayjs'
@@ -12,6 +12,8 @@ import NotificationCenter from './components/NotificationCenter'
 import { WorkbenchModeProvider } from './contexts/WorkbenchModeProvider'
 import { AppUpdateProvider } from './contexts/AppUpdateProvider'
 import AppWindowFrame from './components/app/AppWindowFrame'
+import UpdateRequiredPage from './pages/UpdateRequiredPage'
+import type { AppStartupStatus } from '../../shared/types'
 
 dayjs.locale('zh-cn')
 
@@ -34,6 +36,21 @@ const SystemNotificationNavigationBridge: React.FC = () => {
 }
 
 function App(): React.JSX.Element {
+  const [startupStatus, setStartupStatus] = useState<AppStartupStatus | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    window.api
+      .appStartupGetStatus()
+      .then((status) => {
+        if (mounted) setStartupStatus(status)
+      })
+      .catch((error) => console.error('Failed to read app startup status', error))
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   return (
     <ConfigProvider
       locale={zhCN}
@@ -109,15 +126,25 @@ function App(): React.JSX.Element {
     >
       <AntdApp>
         <AppUpdateProvider>
-          <WorkbenchModeProvider>
-            <HashRouter>
-              <SystemNotificationNavigationBridge />
-              <AppWindowFrame>
-                <MainLayout />
-                <NotificationCenter />
-              </AppWindowFrame>
-            </HashRouter>
-          </WorkbenchModeProvider>
+          {!startupStatus ? (
+            <AppWindowFrame>
+              <div className="h-full bg-white" aria-label="正在启动" />
+            </AppWindowFrame>
+          ) : startupStatus.mode === 'update_required' ? (
+            <AppWindowFrame>
+              <UpdateRequiredPage startupStatus={startupStatus} />
+            </AppWindowFrame>
+          ) : (
+            <WorkbenchModeProvider>
+              <HashRouter>
+                <SystemNotificationNavigationBridge />
+                <AppWindowFrame>
+                  <MainLayout />
+                  <NotificationCenter />
+                </AppWindowFrame>
+              </HashRouter>
+            </WorkbenchModeProvider>
+          )}
         </AppUpdateProvider>
       </AntdApp>
     </ConfigProvider>

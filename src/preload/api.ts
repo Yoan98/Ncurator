@@ -26,6 +26,7 @@ import type {
   AiRunEvent,
   AppUpdateActionResponse,
   AppUpdateSnapshot,
+  AppStartupStatus,
   ChatMessage,
   AttachmentPickRequest,
   AttachmentPickResponse,
@@ -278,6 +279,8 @@ export type DesktopApi = {
   appUpdateDownload: () => Promise<AppUpdateActionResponse>
   appUpdateInstall: () => Promise<AppUpdateActionResponse>
   onAppUpdateStatus: (cb: (snapshot: AppUpdateSnapshot) => void) => () => void
+  appStartupGetStatus: () => Promise<AppStartupStatus>
+  appQuit: () => Promise<void>
   listOpenWithApplications: (
     payload: ListOpenWithApplicationsRequest
   ) => Promise<ListOpenWithApplicationsResponse>

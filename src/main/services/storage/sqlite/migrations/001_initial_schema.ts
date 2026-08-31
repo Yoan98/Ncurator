@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS ai_run (
   workspace_json TEXT,
   model_name TEXT,
   main_model_json TEXT,
+  vision_model_json TEXT,
   partial_answer TEXT NOT NULL DEFAULT '',
   final_answer TEXT,
   error TEXT,

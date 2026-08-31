@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AiRunEvent,
+  AppStartupStatus,
   AppUpdateSnapshot,
   BrowserTabState,
   JsonValue,
@@ -9,6 +10,8 @@ import type {
   WorkspaceIndexJobRecord
 } from '../shared/types'
 import {
+  APP_QUIT_CHANNEL,
+  APP_STARTUP_GET_STATUS_CHANNEL,
   APP_UPDATE_CHECK_CHANNEL,
   APP_UPDATE_DOWNLOAD_CHANNEL,
   APP_UPDATE_GET_SNAPSHOT_CHANNEL,
@@ -99,6 +102,9 @@ if (isE2EFixtureMode) {
 
 // Custom APIs for renderer
 const api: DesktopApi = {
+  appStartupGetStatus: () =>
+    ipcRenderer.invoke(APP_STARTUP_GET_STATUS_CHANNEL) as Promise<AppStartupStatus>,
+  appQuit: () => ipcRenderer.invoke(APP_QUIT_CHANNEL),
   ingestWeb: (payload): Promise<{ success: boolean; count?: number; error?: string }> =>
     ipcRenderer.invoke('ingest-web', payload),
   ingestWebs: (payload): Promise<{ success: boolean; created?: number; error?: string }> =>

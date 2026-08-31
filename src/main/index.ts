@@ -16,13 +16,15 @@ import { BrowserEmbedService } from './services/browser/BrowserEmbedService'
 import { CdpEndpointService } from './services/browser/CdpEndpointService'
 import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerService'
 import { AppUpdateService } from './services/update/AppUpdateService'
-import { APP_ID } from '../shared/constants'
+import { APP_ID, APP_QUIT_CHANNEL, APP_STARTUP_GET_STATUS_CHANNEL } from '../shared/constants'
+import type { AppStartupStatus } from '../shared/types'
 import { getModelsPath } from './utils/paths'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
 import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
 import { SystemNotificationService } from './services/SystemNotificationService'
 import { TelemetryService } from './services/telemetry/TelemetryService'
 import { AppErrorLogService } from './services/logging/AppErrorLogService'
+import { DatabaseVersionTooNewError, SqliteCore } from './services/storage/sqlite/SqliteCore'
 
 if (!app.isPackaged) {
   loadRootEnvOnce()
@@ -42,6 +44,7 @@ const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
   : app.requestSingleInstanceLock()
 const shutdownCoordinator = new AppShutdownCoordinator()
+let appStartupStatus: AppStartupStatus = { mode: 'normal' }
 let quitAfterShutdown = false
 let shutdownRequested = false
 let rendererFlushSequence = 0
@@ -68,12 +71,23 @@ const requestRendererWorkbenchFlush = async (window: BrowserWindow): Promise<voi
 const prepareAppShutdown = async (): Promise<void> => {
   if (quitAfterShutdown) return
   shutdownRequested = true
-  await Promise.all(BrowserWindow.getAllWindows().map(requestRendererWorkbenchFlush))
+  if (appStartupStatus.mode === 'normal') {
+    await Promise.all(BrowserWindow.getAllWindows().map(requestRendererWorkbenchFlush))
+  }
   const failures = await shutdownCoordinator.shutdown()
   for (const failure of failures) {
     console.error(`[APP-SHUTDOWN] ${failure.name} failed:`, failure.error)
   }
   quitAfterShutdown = true
+}
+
+const getLatestDownloadUrl = (): string => {
+  if (process.platform === 'win32') {
+    return 'https://download.ncurator.com/downloads/latest/windows-x64.exe'
+  }
+  return process.arch === 'x64'
+    ? 'https://download.ncurator.com/downloads/latest/macos-x64.dmg'
+    : 'https://download.ncurator.com/downloads/latest/macos-arm64.dmg'
 }
 
 if (process.env.NCURATOR_E2E_OBSERVER) {
@@ -145,7 +159,13 @@ function createWindow(): BrowserWindow {
   })
   let closeAfterRendererFlush = false
   mainWindow.on('close', (event) => {
-    if (quitAfterShutdown || shutdownRequested || closeAfterRendererFlush) return
+    if (
+      appStartupStatus.mode === 'update_required' ||
+      quitAfterShutdown ||
+      shutdownRequested ||
+      closeAfterRendererFlush
+    )
+      return
     event.preventDefault()
     void requestRendererWorkbenchFlush(mainWindow).finally(() => {
       closeAfterRendererFlush = true
@@ -234,7 +254,11 @@ if (!singleInstanceLock) {
       appVersion: app.getVersion()
     })
     process.on('uncaughtException', (error) => {
-      errorLogService.write({ module: 'main-process', error, context: { event: 'uncaughtException' } })
+      errorLogService.write({
+        module: 'main-process',
+        error,
+        context: { event: 'uncaughtException' }
+      })
     })
     process.on('unhandledRejection', (reason) => {
       errorLogService.write({
@@ -243,6 +267,38 @@ if (!singleInstanceLock) {
         context: { event: 'unhandledRejection' }
       })
     })
+    const appUpdateService = new AppUpdateService({ shutdownApp: prepareAppShutdown })
+    appUpdateService.initialize()
+    ipcMain.handle(APP_STARTUP_GET_STATUS_CHANNEL, () => appStartupStatus)
+    ipcMain.handle(APP_QUIT_CHANNEL, async () => {
+      await prepareAppShutdown()
+      app.quit()
+    })
+    const startupSqlite = new SqliteCore()
+    try {
+      startupSqlite.initialize()
+      startupSqlite.close()
+    } catch (error) {
+      if (!(error instanceof DatabaseVersionTooNewError)) throw error
+      appStartupStatus = {
+        mode: 'update_required',
+        databaseVersion: error.databaseVersion,
+        supportedDatabaseVersion: error.supportedDatabaseVersion,
+        manualDownloadUrl: getLatestDownloadUrl()
+      }
+      errorLogService.write({
+        module: 'sqlite-migration',
+        error,
+        context: { event: 'database-version-too-new' }
+      })
+      createWindow()
+      appUpdateService.checkForUpdatesOnLaunch()
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow()
+      })
+      return
+    }
+
     const ingestionService = IngestionService.getInstance()
     const embeddingRuntimeClient = new EmbeddingRuntimeClient({
       entryPath: fileURLToPath(new URL('./embeddingRuntimeProcess.js', import.meta.url)),
@@ -262,13 +318,15 @@ if (!singleInstanceLock) {
     })
 
     console.log('Starting background initialization of services...')
-    embeddingService
-      .initialize()
-      .catch((err) => {
-        console.error('Failed to initialize EmbeddingService:', err)
-        errorLogService.write({ module: 'embedding-runtime', error: err, context: { event: 'startup' } })
-      })
     await storageService.initialize()
+    embeddingService.initialize().catch((err) => {
+      console.error('Failed to initialize EmbeddingService:', err)
+      errorLogService.write({
+        module: 'embedding-runtime',
+        error: err,
+        context: { event: 'startup' }
+      })
+    })
 
     const mainWindow = createWindow()
     mainWindow.webContents.on('render-process-gone', (_event, details) => {
@@ -284,7 +342,6 @@ if (!singleInstanceLock) {
       createMainWindow: () => createWindow(),
       notificationIcon: icon
     })
-    const appUpdateService = new AppUpdateService({ shutdownApp: prepareAppShutdown })
     const cdpEndpointService = new CdpEndpointService({
       userDataPath: app.getPath('userData')
     })
@@ -321,7 +378,6 @@ if (!singleInstanceLock) {
       errorLogService
     })
     telemetryService.track('app_started')
-    appUpdateService.initialize()
     appUpdateService.checkForUpdatesOnLaunch()
 
     shutdownCoordinator.register({

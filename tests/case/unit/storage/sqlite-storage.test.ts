@@ -18,6 +18,8 @@ import { WorkbenchUiStore } from '../../../../src/main/services/storage/domains/
 import { StorageService } from '../../../../src/main/services/storage/StorageService'
 import { SqliteCore } from '../../../../src/main/services/storage/sqlite/SqliteCore'
 import { AiRuntimeSettingsStore } from '../../../../src/main/services/storage/domains/AiRuntimeSettingsStore'
+import { repairFalseDocxChangeFailuresMigration } from '../../../../src/main/services/storage/sqlite/migrations/005_repair_false_docx_change_failures'
+import { repairAiRuntimeSystemNotificationsColumnMigration } from '../../../../src/main/services/storage/sqlite/migrations/009_repair_ai_runtime_system_notifications_column'
 
 type VectorRow = Record<string, unknown>
 
@@ -245,18 +247,14 @@ describe('sqlite storage core and stores', () => {
       { version: 7, name: 'ai_run_execution_permission' },
       { version: 8, name: 'drop_llm_strategy_preference' },
       { version: 9, name: 'repair_ai_runtime_system_notifications_column' },
-      { version: 10, name: 'scheduled_task' },
-      { version: 11, name: 'chat_session_message_log' },
-      { version: 12, name: 'drop_chat_conversation_memory' },
-      { version: 13, name: 'drop_ai_run_event' },
-      { version: 14, name: 'drop_vision_model' }
+      { version: 10, name: 'upgrade_from_v9' }
     ])
   })
 
   it('repairs notification settings after a historical migration version collision', async () => {
-    sqlite.exec('DELETE FROM schema_migrations WHERE version = 9')
     sqlite.exec("UPDATE schema_migrations SET name = 'workspace_change_sets' WHERE version = 2")
     sqlite.exec('ALTER TABLE ai_runtime_settings DROP COLUMN systemNotificationsEnabled')
+    repairAiRuntimeSystemNotificationsColumnMigration.run?.(sqlite.getConnection())
     sqlite.close()
     sqlite.initialize()
 
@@ -369,7 +367,6 @@ describe('sqlite storage core and stores', () => {
   })
 
   it('repairs historical DOCX changes that were falsely marked as failed', () => {
-    sqlite.prepare('DELETE FROM schema_migrations WHERE version = 5').run()
     sqlite
       .prepare(
         `INSERT INTO ai_file_change (
@@ -422,8 +419,7 @@ describe('sqlite storage core and stores', () => {
         2
       )
 
-    sqlite.close()
-    sqlite.initialize()
+    sqlite.exec(repairFalseDocxChangeFailuresMigration.sql || '')
 
     const repaired = sqlite
       .prepare('SELECT status, last_error FROM ai_file_change WHERE id = ?')

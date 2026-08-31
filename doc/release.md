@@ -39,7 +39,9 @@ pnpm typecheck:web
 node scripts/test/workflow.mjs --type backend --exclude-group live
 ```
 
-这些是创建 Tag 前的基础检查，不是正式包回归：两套 typecheck 并行执行；全部 Unit、update backend 和除 `live` 外的 AI 测试进入统一的 6 worker backend 队列，避免重复执行 update 子集。检查通过后，脚本更新 `package.json`、提交版本号、创建 annotated Tag，并原子推送 `main` 与 Tag。
+在这些检查之前，脚本会校验 `released-migrations.json` 中所有已发布 SQLite migration 的 version、name、文件名和源码 SHA-256，已锁文件发生任何变化都会直接失败。两套 typecheck 并行执行；全部 Unit（包含正式 v9 到当前 schema 的升级测试）、update backend 和除 `live` 外的 AI 测试进入统一的 6 worker backend 队列。全部通过后，脚本把当前连续 migration 纳入发布锁清单，再与 `package.json` 版本号一起提交，创建 annotated Tag，并原子推送 `main` 与 Tag。
+
+第一个平台执行 `release:start` 时会锁定本次新增 migration；另一个平台随后使用同一份已锁源码。已经进入发布锁清单的 migration 永远不能合并、重排或修改，只能新增更高版本修复。
 
 Windows 在本地 Windows x64 构建候选包；macOS 只创建 Tag，候选包需要在 Apple Silicon Mac 上单独构建。
 
@@ -239,7 +241,13 @@ macOS 更新：https://download.ncurator.com/updates/latest/latest-mac.yml
 
 Windows 更新采用“先完成应用关闭、再启动安装器”的时序：点击立即安装时会先等待应用完成关闭（刷新工作区、终止 embedding / 网页抓取 sidecar / 终端会话等子进程），再调用 `quitAndInstall` 触发 NSIS 安装器，避免旧版本文件被运行中的进程占用而导致“Failed to uninstall old application files”。
 
+从当前方案发布的 Windows NSIS 安装包开始，安装器在卸载旧版或写入应用文件前读取 HKCU/HKLM 的已安装版本：更高版本安装与同版本修复允许继续，低版本安装包直接提示安装最新版并退出。自动更新仍是正常的高版本覆盖安装。macOS DMG 无法阻止用户手动覆盖旧 `.app`，由应用启动时的 SQLite schema version 检查兜底。
+
+应用不支持数据库降级，也不自动备份数据库。旧应用发现数据库版本更高时不初始化 Storage、LanceDB、AI、Workbench、定时任务或业务 IPC，只提供自动更新、手动下载最新版和退出。已经公开发布的历史安装包无法被追溯加入安装器保护；完整保护从包含本方案的版本开始。
+
 页面 fixture 只验证更新交互，不证明真实安装包下载或升级成功。真实更新验证需要使用已发布的旧版本安装包连接公开更新通道。
+
+正式发布涉及 SQLite 变更时，除 Tag 前全量 Unit 外，正式包回归至少包含 `sidebar-app-update`，并用上一公开 schema 的可审查 fixture 验证原地升级。Windows 禁止降级专项必须使用两个都包含新版 NSIS 保护的候选安装包：先安装较高版本，再运行较低版本，断言安装被拒绝且已安装版本和隔离 userData 不变。不能拿历史旧安装包验证这一点，因为历史安装包本身没有可追溯增加的版本检查。
 
 ### 中断、恢复与回滚
 

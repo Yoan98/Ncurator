@@ -365,6 +365,7 @@ export const launchElectronApp = async (input: {
   extraEnv?: Readonly<Record<string, string>>
   signalSink?: ElectronSignalSink
   userDataDir?: string
+  prepareUserData?: (userDataDir: string) => Promise<void>
 }): Promise<LaunchedElectronApp> => {
   const launch = await resolveElectronLaunch()
 
@@ -387,6 +388,14 @@ export const launchElectronApp = async (input: {
     ? path.resolve(input.userDataDir)
     : await mkdtemp(path.join(e2eTempRoot, 'ncurator-e2e-user-data-'))
   await mkdir(userDataDir, { recursive: true })
+  try {
+    await input.prepareUserData?.(userDataDir)
+  } catch (error) {
+    if (!input.userDataDir) {
+      await rm(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    }
+    throw error
+  }
   const launchEnv = buildElectronLaunchEnv(
     userDataDir,
     input.serviceMode,

@@ -198,7 +198,7 @@ runner 支持的过滤参数：
 
 ### 4.3 自动更新模拟测试
 
-自动更新是当前唯一允许在测试侧注入受控状态的 E2E 特例：可提供更新可用、下载进度、完成和失败快照，但不得修改生产代码来支持模拟。
+自动更新是当前唯一允许在测试侧注入受控状态的 E2E 特例：可提供更新可用、下载进度、完成和失败快照，但不得修改生产代码来支持模拟。该用例还允许测试框架在 Electron 启动前向隔离 `userData/app.sqlite` 写入未来 migration 记录，用于真实触发仅更新模式；只能准备数据库输入，不能伪造主进程启动状态或绕过版本检查。
 
 自动更新测试运行后端契约测试和模拟页面 E2E：
 
@@ -213,7 +213,7 @@ pnpm test:update:backend
 pnpm test:update:e2e
 ```
 
-后端测试验证主进程更新状态、发布配置、R2 元数据和 release fragment。模拟 E2E 验证页面按钮、进度、错误提示和 IPC。自动化测试不下载或安装真实更新包。
+后端测试验证主进程更新状态、发布配置、R2 元数据和 release fragment。模拟 E2E 验证普通更新入口与高版本数据库恢复页的按钮、进度、错误提示和 IPC，并验证恢复模式不加载 Workbench。自动化测试不下载或安装真实更新包。
 
 #### 4.3.1 自动更新真实升级专项（按需，不进回归/发布门禁）
 
@@ -223,7 +223,8 @@ pnpm test:update:e2e
 pnpm test:update:real:win -- \
   --source-installer <已发布旧版安装包.exe> \
   --source-version 0.1.68 \
-  --expected-version 0.1.69
+  --expected-version 0.1.69 \
+  --downgrade-installer <包含禁止降级逻辑的较低版本候选包.exe>
 ```
 
 该专项是独立、按需的工具，与回归测试和发布门禁完全隔离：
@@ -240,6 +241,7 @@ pnpm test:update:real:win -- \
 3. 启动旧版，检查更新、下载、触发重启安装；
 4. 安装器以静默方式完成覆盖升级，不再出现 "Failed to uninstall old application files"；
 5. 已安装版本变成 `--expected-version`，测试用户数据（`update-smoke-marker.txt`）保留。
+6. 传入 `--downgrade-installer` 时，升级完成后静默运行该较低版本候选包，断言安装被拒绝、已安装版本仍为 `--expected-version` 且 marker 不变。该参数只能使用已经包含本方案 NSIS 检查的候选包；历史旧安装包不具备保护，不能用于此断言。
 
 报告写入 `tests/logs/settings/update/real-windows/<运行时间>/report.json`，附截图与 `process.log`。卸载失败会表现为版本无法升级，脚本会明确报错并关联该失败模式。
 

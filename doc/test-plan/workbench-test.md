@@ -130,11 +130,11 @@ tests/case/workbench/
 #### `sidebar-app-update`
 
 - 测试类型：`e2e`
-- What：Workbench 左侧更新入口的隐藏、下载、进度、稍后重启、安装和失败重试状态。
-- Why：更新入口属于 Workbench 用户交互，设置页不再重复提供该入口。
-- How：使用更新 fixture 驱动各状态，通过真实 Renderer 交互观察按钮和 IPC observer。
-- Oracle：无更新时入口隐藏；用户点击后才下载；下载中显示进度；下载完成可稍后或重启；失败可重试；旧设置路由回到大模型页，对齐 `WB-COMPOSER-012-AC1`、`WB-COMPOSER-012-AC2`、`WB-COMPOSER-012-AC3`。
-- Not：fixture 不证明真实安装包下载、签名或安装成功。
+- What：Workbench 左侧更新入口，以及数据库版本过高时的仅更新恢复模式。
+- Why：更新入口属于 Workbench 用户交互；旧应用误开新 schema 数据库时，必须先升级应用，不能初始化业务层继续读写。
+- How：先用更新 fixture 驱动常规入口各状态；再关闭应用，在同一隔离 `userData/app.sqlite` 的合法迁移前缀后写入更高版本记录并重启，通过真实主进程版本检查进入恢复页，继续用更新 fixture 验证自动检查、下载、进度、失败和重启安装。
+- Oracle：无更新时入口隐藏；用户点击后才下载；下载中显示进度；下载完成可稍后或重启；失败可重试；旧设置路由回到大模型页。高版本数据库只显示恢复页及检测/支持版本，Workbench 不存在；恢复页自动检查更新，提供下载、重启安装、失败重试、手动下载和退出，失败后仍不能进入业务界面。对齐 `WB-COMPOSER-012-AC1`、`WB-COMPOSER-012-AC2`、`WB-COMPOSER-012-AC3`、`WB-COMPOSER-012-AC4`、`WB-COMPOSER-012-AC5`。
+- Not：启动前数据库 fixture 只制造“未来 schema version”，不绕过或替换生产版本检查；更新 fixture 不证明真实安装包下载、签名或安装成功。
 
 #### `context-ring-usage`
 

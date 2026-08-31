@@ -12,16 +12,12 @@ import { workbenchSessionUiStateMigration } from './migrations/006_workbench_ses
 import { aiRunExecutionPermissionMigration } from './migrations/007_ai_run_execution_permission'
 import { dropLlmStrategyPreferenceMigration } from './migrations/008_drop_llm_strategy_preference'
 import { repairAiRuntimeSystemNotificationsColumnMigration } from './migrations/009_repair_ai_runtime_system_notifications_column'
-import { scheduledTaskMigration } from './migrations/010_scheduled_task'
-import { chatSessionMessageLogMigration } from './migrations/011_chat_session_message_log'
-import { dropChatConversationMemoryMigration } from './migrations/012_drop_chat_conversation_memory'
-import { dropAiRunEventMigration } from './migrations/013_drop_ai_run_event'
-import { dropVisionModelMigration } from './migrations/014_drop_vision_model'
+import { upgradeFromV9Migration } from './migrations/010_upgrade_from_v9'
 
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
 
-const MIGRATIONS: Migration[] = [
+const MIGRATIONS: readonly Migration[] = [
   initialSchemaMigration,
   aiRuntimeSystemNotificationsMigration,
   chatSessionSkillStateMigration,
@@ -31,12 +27,40 @@ const MIGRATIONS: Migration[] = [
   aiRunExecutionPermissionMigration,
   dropLlmStrategyPreferenceMigration,
   repairAiRuntimeSystemNotificationsColumnMigration,
-  scheduledTaskMigration,
-  chatSessionMessageLogMigration,
-  dropChatConversationMemoryMigration,
-  dropAiRunEventMigration,
-  dropVisionModelMigration
+  upgradeFromV9Migration
 ]
+
+export const CURRENT_SCHEMA_VERSION = 10
+
+const MIGRATION_NAME_ALIASES = new Map<number, ReadonlySet<string>>([
+  [2, new Set(['workspace_change_sets'])]
+])
+
+type AppliedMigration = {
+  version: number
+  name: string
+}
+
+export class DatabaseVersionTooNewError extends Error {
+  public readonly databaseVersion: number
+  public readonly supportedDatabaseVersion: number
+
+  public constructor(databaseVersion: number, supportedDatabaseVersion: number) {
+    super(
+      `SQLite schema version ${databaseVersion} is newer than supported version ${supportedDatabaseVersion}`
+    )
+    this.name = 'DatabaseVersionTooNewError'
+    this.databaseVersion = databaseVersion
+    this.supportedDatabaseVersion = supportedDatabaseVersion
+  }
+}
+
+export class InvalidMigrationHistoryError extends Error {
+  public constructor(message: string) {
+    super(message)
+    this.name = 'InvalidMigrationHistoryError'
+  }
+}
 
 const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING'
 
@@ -99,11 +123,20 @@ export class SqliteCore {
     const db = new Database(this.dbPath, {
       nativeBinding: resolveBetterSqliteNativeBinding()
     })
-    db.pragma('foreign_keys = ON')
-    db.pragma('journal_mode = WAL')
-    db.pragma('busy_timeout = 5000')
     this.db = db
-    this.runMigrations()
+    try {
+      db.pragma('foreign_keys = ON')
+      db.pragma('busy_timeout = 5000')
+      this.assertMigrationDefinitions()
+      const applied = this.readAppliedMigrations()
+      this.assertMigrationHistory(applied)
+      db.pragma('journal_mode = WAL')
+      this.runMigrations(applied)
+    } catch (error) {
+      db.close()
+      this.db = null
+      throw error
+    }
   }
 
   public getConnection(): SqliteDatabase {
@@ -131,43 +164,90 @@ export class SqliteCore {
     this.db = null
   }
 
-  private runMigrations(): void {
+  private readAppliedMigrations(): AppliedMigration[] {
     const db = this.getConnection()
-    this.assertMigrationDefinitions()
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS schema_migrations (
-        version INTEGER PRIMARY KEY,
-        name TEXT NOT NULL,
-        applied_at INTEGER NOT NULL
-      );
-    `)
-    const appliedRows = db.prepare('SELECT version FROM schema_migrations').all() as Array<{
-      version: number
-    }>
-    const applied = new Set(appliedRows.map((row) => Number(row.version)))
-    const applyMigration = db.transaction((migration: Migration) => {
-      if (migration.sql) db.exec(migration.sql)
-      migration.run?.(db)
-      db.prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)').run(
-        migration.version,
-        migration.name,
-        Date.now()
-      )
-    })
+    const table = db
+      .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migrations'")
+      .get()
+    if (!table) return []
+    return db
+      .prepare('SELECT version, name FROM schema_migrations ORDER BY version ASC')
+      .all()
+      .map((row) => {
+        const migration = row as { version: number; name: string }
+        return { version: Number(migration.version), name: String(migration.name) }
+      })
+  }
 
-    for (const migration of MIGRATIONS) {
-      if (applied.has(migration.version)) continue
-      applyMigration(migration)
+  private assertMigrationHistory(applied: readonly AppliedMigration[]): void {
+    const databaseVersion = applied.at(-1)?.version || 0
+    if (databaseVersion > CURRENT_SCHEMA_VERSION) {
+      throw new DatabaseVersionTooNewError(databaseVersion, CURRENT_SCHEMA_VERSION)
     }
+
+    applied.forEach((row, index) => {
+      const expectedVersion = index + 1
+      if (row.version !== expectedVersion) {
+        throw new InvalidMigrationHistoryError(
+          `SQLite migration history must be contiguous: expected version ${expectedVersion}, found ${row.version}`
+        )
+      }
+      const expectedName = MIGRATIONS[index]?.name
+      const aliases = MIGRATION_NAME_ALIASES.get(row.version)
+      if (row.name !== expectedName && !aliases?.has(row.name)) {
+        throw new InvalidMigrationHistoryError(
+          `SQLite migration ${row.version} name mismatch: expected ${expectedName}, found ${row.name}`
+        )
+      }
+    })
+  }
+
+  private runMigrations(applied: readonly AppliedMigration[]): void {
+    const pending = MIGRATIONS.slice(applied.length)
+    if (pending.length === 0) return
+    const db = this.getConnection()
+    const applyPendingMigrations = db.transaction(() => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS schema_migrations (
+          version INTEGER PRIMARY KEY,
+          name TEXT NOT NULL,
+          applied_at INTEGER NOT NULL
+        );
+      `)
+      const insertMigration = db.prepare(
+        'INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)'
+      )
+      for (const migration of pending) {
+        if (migration.sql) db.exec(migration.sql)
+        migration.run?.(db)
+        insertMigration.run(migration.version, migration.name, Date.now())
+      }
+
+      const quickCheck = db.pragma('quick_check') as Array<{ quick_check: string }>
+      if (quickCheck.length !== 1 || quickCheck[0]?.quick_check !== 'ok') {
+        throw new Error(`SQLite quick_check failed: ${JSON.stringify(quickCheck)}`)
+      }
+      const foreignKeyErrors = db.pragma('foreign_key_check') as unknown[]
+      if (foreignKeyErrors.length > 0) {
+        throw new Error(`SQLite foreign_key_check failed: ${JSON.stringify(foreignKeyErrors)}`)
+      }
+    })
+    applyPendingMigrations()
   }
 
   private assertMigrationDefinitions(): void {
-    const versions = new Set<number>()
-    for (const migration of MIGRATIONS) {
-      if (versions.has(migration.version)) {
-        throw new Error(`Duplicate SQLite migration version: ${migration.version}`)
-      }
-      versions.add(migration.version)
+    if (MIGRATIONS.length !== CURRENT_SCHEMA_VERSION) {
+      throw new Error(
+        `SQLite migration definitions end at ${MIGRATIONS.length}, expected ${CURRENT_SCHEMA_VERSION}`
+      )
     }
+    MIGRATIONS.forEach((migration, index) => {
+      const expectedVersion = index + 1
+      if (migration.version !== expectedVersion) {
+        throw new Error(
+          `SQLite migrations must be contiguous: expected version ${expectedVersion}, found ${migration.version}`
+        )
+      }
+    })
   }
 }

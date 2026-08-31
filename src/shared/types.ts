@@ -67,6 +67,15 @@ export interface AppUpdateActionResponse {
   error?: string
 }
 
+export type AppStartupStatus =
+  | { mode: 'normal' }
+  | {
+      mode: 'update_required'
+      databaseVersion: number
+      supportedDatabaseVersion: number
+      manualDownloadUrl: string
+    }
+
 export interface WebIngestPayload {
   workspaceId: string
   url: string
