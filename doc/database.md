@@ -70,10 +70,10 @@ SQLite 保存以下业务数据：
 应用先初始化错误日志与 `AppUpdateService`，再检查 SQLite：
 
 1. 数据库兼容且迁移成功：启动状态为 `{ mode: 'normal' }`，继续初始化 Storage、LanceDB、AI、Workbench、定时任务和业务 IPC。
-2. 数据库版本高于当前应用支持版本：启动状态为 `{ mode: 'update_required', databaseVersion, supportedDatabaseVersion, manualDownloadUrl }`，只创建更新恢复页，不初始化任何业务服务。
+2. 数据库版本高于当前应用支持版本：启动状态为 `{ mode: 'update_required', databaseVersion, supportedDatabaseVersion, downloadPageUrl }`，只创建更新恢复页，不初始化任何业务服务。`downloadPageUrl` 指向官网中文下载页，由官网提供平台选择和安装说明，不在恢复页维护安装包直链。
 3. 其他迁移错误：按启动错误处理并保留错误日志，不能把 schema 损坏误判成可更新状态。
 
-恢复页会自动检查更新，只允许检查、下载、重启安装、打开最新版手动下载页或退出。更新不可用、网络失败或用户尚未完成升级时，都不能进入 Workbench。官方最新版本必须支持所有已公开发布的数据库版本。
+恢复页会自动检查更新，只允许检查、下载、重启安装、打开官网中文下载页或退出。更新不可用、网络失败或用户尚未完成升级时，都不能进入 Workbench。官方最新版本必须支持所有已公开发布的数据库版本。
 
 Windows 从本方案发布的 NSIS 安装包开始，会在卸载或写文件前读取 HKCU/HKLM 已安装版本：允许更高版本安装和同版本修复，拒绝低版本安装包。macOS DMG 无法阻止手动用旧 `.app` 覆盖，由上述运行时版本检查兜底。历史上已经发布的旧安装包无法追溯增加安装器保护。
 
@@ -91,7 +91,7 @@ Windows 从本方案发布的 NSIS 安装包开始，会在卸载或写文件前
 - `released-migrations.json` 保存已发布 migration 的 version、name、文件和源码 SHA-256。
 - `release:start` 在 Tag 前先验证所有已锁 migration 未被修改；Unit 全部通过后，把当前连续 migration 纳入锁清单，再与版本号一起提交。任一已锁源码变化都会直接阻止发布。
 - 独立迁移 Unit 必须覆盖：空库到当前版本、正式 v9 带数据升级、两条路径最终 schema 一致、重复初始化、批量失败整批回滚、高版本零写入拒绝、历史缺号/重名/名称冲突、已知别名、锁文件篡改以及两项 SQLite 完整性检查。
-- `sidebar-app-update` E2E 使用隔离 `userData` 写入高版本 migration 记录并重启，验证只出现恢复页、Workbench 不启动、更新全流程和失败重试仍可用。这个 fixture 只准备启动前数据库，不改生产 schema 检查逻辑。
+- `database-version-update-required` E2E 使用隔离 `userData` 写入高版本 migration 记录并重启，验证只出现恢复页、Workbench 不启动、更新全流程、中文失败提示和官网下载入口仍可用。这个 fixture 只准备启动前数据库，不改生产 schema 检查逻辑。
 
 ## Native 依赖
 

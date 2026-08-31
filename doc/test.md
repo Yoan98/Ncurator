@@ -213,7 +213,7 @@ pnpm test:update:backend
 pnpm test:update:e2e
 ```
 
-后端测试验证主进程更新状态、发布配置、R2 元数据和 release fragment。模拟 E2E 验证普通更新入口与高版本数据库恢复页的按钮、进度、错误提示和 IPC，并验证恢复模式不加载 Workbench。自动化测试不下载或安装真实更新包。
+后端测试验证主进程更新状态、发布配置、R2 元数据和 release fragment。模拟 E2E 分为两个独立 case：`sidebar-app-update` 验证普通更新入口，`database-version-update-required` 验证高版本数据库恢复页的按钮、进度、中文错误提示、官网下载入口和 IPC，并验证恢复模式不加载 Workbench。自动化测试不下载或安装真实更新包。
 
 #### 4.3.1 自动更新真实升级专项（按需，不进回归/发布门禁）
 

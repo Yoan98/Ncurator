@@ -73,7 +73,7 @@ export type AppStartupStatus =
       mode: 'update_required'
       databaseVersion: number
       supportedDatabaseVersion: number
-      manualDownloadUrl: string
+      downloadPageUrl: string
     }
 
 export interface WebIngestPayload {

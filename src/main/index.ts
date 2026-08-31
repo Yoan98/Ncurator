@@ -16,7 +16,12 @@ import { BrowserEmbedService } from './services/browser/BrowserEmbedService'
 import { CdpEndpointService } from './services/browser/CdpEndpointService'
 import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerService'
 import { AppUpdateService } from './services/update/AppUpdateService'
-import { APP_ID, APP_QUIT_CHANNEL, APP_STARTUP_GET_STATUS_CHANNEL } from '../shared/constants'
+import {
+  APP_ID,
+  APP_QUIT_CHANNEL,
+  APP_STARTUP_GET_STATUS_CHANNEL,
+  OFFICIAL_DOWNLOAD_PAGE_URL
+} from '../shared/constants'
 import type { AppStartupStatus } from '../shared/types'
 import { getModelsPath } from './utils/paths'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
@@ -79,15 +84,6 @@ const prepareAppShutdown = async (): Promise<void> => {
     console.error(`[APP-SHUTDOWN] ${failure.name} failed:`, failure.error)
   }
   quitAfterShutdown = true
-}
-
-const getLatestDownloadUrl = (): string => {
-  if (process.platform === 'win32') {
-    return 'https://download.ncurator.com/downloads/latest/windows-x64.exe'
-  }
-  return process.arch === 'x64'
-    ? 'https://download.ncurator.com/downloads/latest/macos-x64.dmg'
-    : 'https://download.ncurator.com/downloads/latest/macos-arm64.dmg'
 }
 
 if (process.env.NCURATOR_E2E_OBSERVER) {
@@ -284,7 +280,7 @@ if (!singleInstanceLock) {
         mode: 'update_required',
         databaseVersion: error.databaseVersion,
         supportedDatabaseVersion: error.supportedDatabaseVersion,
-        manualDownloadUrl: getLatestDownloadUrl()
+        downloadPageUrl: OFFICIAL_DOWNLOAD_PAGE_URL
       }
       errorLogService.write({
         module: 'sqlite-migration',

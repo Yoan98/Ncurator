@@ -152,7 +152,7 @@ export const workbenchSelectors = {
   updateRestartLaterButton: 'workbench-update-restart-later-button',
   updateRequiredPage: 'workbench-update-required-page',
   updateRequiredPrimaryButton: 'workbench-update-required-primary-button',
-  updateRequiredManualDownload: 'workbench-update-required-manual-download',
+  updateRequiredDownloadPage: 'workbench-update-required-download-page',
   updateRequiredQuitButton: 'workbench-update-required-quit-button',
   topbar: 'workbench-topbar',
   emptyDragRegion: 'workbench-empty-drag-region',

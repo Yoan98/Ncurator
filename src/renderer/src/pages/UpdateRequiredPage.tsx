@@ -48,30 +48,20 @@ const UpdateRequiredPage: React.FC<{ startupStatus: UpdateRequiredStatus }> = ({
     >
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#EEEEEC]" />
       <section className="w-full max-w-[560px]" aria-labelledby="update-required-title">
-        <div className="mb-10 flex items-center gap-3 text-[13px] font-medium tracking-[0.08em] text-[#787774]">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#F4F4F2] text-[#37352F]">
-            馆
-          </span>
-          馆长
-        </div>
-
-        <div className="mb-7 flex h-11 w-11 items-center justify-center rounded-full bg-[#EDF3F8] text-[#2F5F8F]">
-          <RiDownloadCloud2Line className="h-5 w-5" aria-hidden="true" />
-        </div>
-        <h1 id="update-required-title" className="m-0 text-[30px] font-semibold tracking-[-0.03em]">
+        <h1 id="update-required-title" className="m-0 text-[30px] font-semibold tracking-normal">
           需要升级馆长
         </h1>
         <p className="mt-3 max-w-[500px] text-[14px] leading-7 text-[#787774]">
-          当前应用版本早于本机数据版本。为保护数据，升级完成前不能进入工作台。
+          当前应用版本太低，与本机数据库版本不匹配。继续使用可能导致您的本地数据丢失，请升级后再使用。
         </p>
 
         <dl className="my-8 grid grid-cols-2 border-y border-[#EEEEEC] py-4 text-[13px]">
           <div>
-            <dt className="text-[#91918E]">本机数据版本</dt>
+            <dt className="text-[#91918E]">本机数据库版本</dt>
             <dd className="mt-1 font-medium text-[#37352F]">v{startupStatus.databaseVersion}</dd>
           </div>
           <div>
-            <dt className="text-[#91918E]">当前应用支持</dt>
+            <dt className="text-[#91918E]">当前应用支持的数据库版本</dt>
             <dd className="mt-1 font-medium text-[#37352F]">
               v{startupStatus.supportedDatabaseVersion}
             </dd>
@@ -90,9 +80,11 @@ const UpdateRequiredPage: React.FC<{ startupStatus: UpdateRequiredStatus }> = ({
           </div>
         ) : null}
 
-        {snapshot?.error ? (
+        {status === 'error' || status === 'not-available' ? (
           <p className="mb-4 text-[13px] leading-6 text-[#B3261E]" role="alert">
-            {snapshot.error}
+            {status === 'error'
+              ? '暂时无法检查更新，请检查网络后重试。'
+              : '当前更新通道未发现可用版本，请前往官网下载最新版。'}
           </p>
         ) : null}
 
@@ -114,12 +106,16 @@ const UpdateRequiredPage: React.FC<{ startupStatus: UpdateRequiredStatus }> = ({
         <div className="mt-5 flex items-center justify-between text-[13px]">
           <a
             className="inline-flex cursor-pointer items-center gap-1 text-[#0B6BCB] hover:text-[#0958A5]"
-            href={startupStatus.manualDownloadUrl}
+            href={startupStatus.downloadPageUrl}
             target="_blank"
             rel="noreferrer"
-            data-testid={workbenchSelectors.updateRequiredManualDownload}
+            onClick={(event) => {
+              event.preventDefault()
+              void window.api.openExternal(startupStatus.downloadPageUrl)
+            }}
+            data-testid={workbenchSelectors.updateRequiredDownloadPage}
           >
-            手动下载最新版
+            前往官网下载
             <RiArrowRightUpLine className="h-4 w-4" aria-hidden="true" />
           </a>
           <button

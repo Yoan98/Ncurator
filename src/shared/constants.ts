@@ -1,6 +1,7 @@
 export const APP_ID = 'com.yoan.ncurator'
 export const USER_MANUAL_URL = 'https://www.ncurator.com/zh/manual'
 export const FREE_AI_KEYS_URL = 'https://www.ncurator.com/zh/free-keys'
+export const OFFICIAL_DOWNLOAD_PAGE_URL = 'https://www.ncurator.com/zh'
 export const NO_EFFECTIVE_FILE_CHANGE_MESSAGE = '本次未检测到文件内容变化'
 
 export const APP_UPDATE_GET_SNAPSHOT_CHANNEL = 'app-update-get-snapshot'
