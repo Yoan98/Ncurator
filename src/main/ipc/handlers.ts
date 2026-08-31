@@ -2117,10 +2117,6 @@ export function registerHandlers(services: {
     }
   )
 
-  ipcMain.handle('legacy-local-import-migration-status', async () => {
-    return storageService.getLegacyLocalImportMigrationStatus()
-  })
-
   ipcMain.handle(
     'web-source-refresh',
     async (event, payload: RefreshWebSourceRequest): Promise<WebSourceMutationResponse> => {

@@ -4,9 +4,9 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { buildToolDecision } from '../testUtils'
 
 describe('ai human mock-llm backend', () => {
-  it('todolist-memory-maintenance', async () => {
+  it('plan-memory-maintenance', async () => {
     await runBackendCase({
-      caseId: 'todolist-memory-maintenance',
+      caseId: 'plan-memory-maintenance',
       harnessMode: 'mock-llm',
       domain: 'ai',
       suite: 'human',
@@ -15,7 +15,7 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        let secondBrainSeesTodolist = false
+        let secondBrainSeesPlan = false
         let thirdBrainSeesUpdatedPlan = false
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
@@ -34,7 +34,7 @@ describe('ai human mock-llm backend', () => {
                 })
               },
               ({ user }) => {
-                secondBrainSeesTodolist =
+                secondBrainSeesPlan =
                   user.includes('确认 A 事项') && user.includes('确认 B 事项')
                 return buildToolDecision({
                   toolName: 'update_plan',
@@ -81,7 +81,7 @@ describe('ai human mock-llm backend', () => {
 
         return {
           output,
-          secondBrainSeesTodolist,
+          secondBrainSeesPlan,
           thirdBrainSeesUpdatedPlan,
           events: runtime.eventCollector.snapshot()
         }
@@ -89,14 +89,14 @@ describe('ai human mock-llm backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.output.status === 'completed' &&
-            result.secondBrainSeesTodolist &&
+            result.secondBrainSeesPlan &&
             result.thirdBrainSeesUpdatedPlan,
           {
             name: 'plan-persists-and-updates-across-rounds',
             message:
               'plan 应作为长期任务板在下一轮真实 brain prompt 中继续存在，且更新后的任务板应写回再下一轮 transcript。',
             data: {
-              secondBrainSeesTodolist: result.secondBrainSeesTodolist,
+              secondBrainSeesPlan: result.secondBrainSeesPlan,
               thirdBrainSeesUpdatedPlan: result.thirdBrainSeesUpdatedPlan
             }
           }

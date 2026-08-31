@@ -1,9 +1,8 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Button, Empty, Input, Modal, Popover, Tabs, Tooltip, message } from 'antd'
+import { Button, Empty, Input, Modal, Popover, Tabs, Tooltip, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import type {
   WorkspaceIndexJobRecord,
-  LegacyLocalImportMigrationStatus,
   WorkspaceListItem,
   WorkspaceTreeEntry,
   WorkspaceDirectoryListResponse
@@ -50,8 +49,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const [workspaceDirectoryReloadVersion, setWorkspaceDirectoryReloadVersion] = useState(0)
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
   const [selectedTabKey, setSelectedTabKey] = useState<'files' | 'web'>('files')
-  const [legacyMigrationStatus, setLegacyMigrationStatus] =
-    useState<LegacyLocalImportMigrationStatus | null>(null)
   const [createModalVisible, setCreateModalVisible] = useState(false)
   const [createWorkspaceName, setCreateWorkspaceName] = useState('')
   const [createSubmitting, setCreateSubmitting] = useState(false)
@@ -177,13 +174,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
   useEffect(() => {
     void loadVectorModelAvailability()
   }, [loadVectorModelAvailability])
-
-  useEffect(() => {
-    void window.api
-      .legacyLocalImportMigrationStatus()
-      .then(setLegacyMigrationStatus)
-      .catch(console.error)
-  }, [])
 
   useEffect(() => {
     const unsubscribe = window.api.sourceListRefresh(() => {
@@ -472,15 +462,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
       className="flex h-full min-h-0 flex-col gap-4 overflow-hidden"
       data-testid={settingsSelectors.workspacePanel}
     >
-      {legacyMigrationStatus?.hasLegacyLocalImports ? (
-        <Alert
-          showIcon
-          className="rounded-[8px] border-[#EEEEEC] bg-[#F7F7F5] text-[#787774]"
-          message="检测到旧本地导入记录"
-          description={`已清理 ${legacyMigrationStatus.removedDocumentCount} 条旧记录与 ${legacyMigrationStatus.removedChunkCount} 条 chunk。`}
-        />
-      ) : null}
-
       <div className="nc-page-split">
         <section
           className="flex min-h-0 flex-col overflow-hidden border-r border-[#EEEEEC] bg-white"

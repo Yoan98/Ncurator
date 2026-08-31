@@ -10,7 +10,6 @@ import type {
   BrowserResourceMenuRequest,
   BrowserPanelPresentationResponse,
   BrowserPanelShowRequest,
-  BrowserPanelState,
   BrowserPanelStateResponse,
   BrowserTabCreateRequest,
   BrowserTabCreateResponse,
@@ -18,6 +17,7 @@ import type {
   BrowserTabListResponse,
   BrowserTabMutationRequest,
   BrowserTabNavigateRequest,
+  BrowserTabState,
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
   AiRunCancelResponse,
@@ -56,7 +56,6 @@ import type {
   FileWatchStartRequest,
   FileWatchStartResponse,
   FileWatchStopResponse,
-  LegacyLocalImportMigrationStatus,
   ListReferenceItemsRequest,
   ListWebSourcesRequest,
   ListWorkspaceTreeRequest,
@@ -176,7 +175,6 @@ export type DesktopApi = {
   webSourcesPrepare: (payload: PrepareWebSourcesRequest) => Promise<WorkspaceJobResponse>
   webSourceRefresh: (payload: RefreshWebSourceRequest) => Promise<WebSourceMutationResponse>
   webSourceDelete: (payload: DeleteWebSourceRequest) => Promise<DeleteWebSourceResponse>
-  legacyLocalImportMigrationStatus: () => Promise<LegacyLocalImportMigrationStatus | null>
   sourceListRefresh: (cb: () => void) => () => void
   downloadModel: (
     repoId: string,
@@ -267,7 +265,7 @@ export type DesktopApi = {
   browserPanelZoomIn: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
   browserPanelZoomOut: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
   browserPanelZoomReset: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
-  onBrowserPanelStateChange: (cb: (state: BrowserPanelState) => void) => () => void
+  onBrowserPanelStateChange: (cb: (state: BrowserTabState) => void) => () => void
   onBrowserResourceMenuAction: (cb: (action: BrowserResourceMenuAction) => void) => () => void
   docxApplyGet: (payload: GetDocxApplyRecordRequest) => Promise<GetDocxApplyRecordResponse>
   aiFileChangeList: (

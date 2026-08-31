@@ -70,12 +70,6 @@ export const renderTerminalReadModelResult: ModelResultRenderer = ({ data }) => 
   })
 }
 
-/** @deprecated Use renderTerminalRunModelResult or renderTerminalReadModelResult */
-export const renderTerminalModelResult: ModelResultRenderer = (input) =>
-  input.toolName === 'terminal_read'
-    ? renderTerminalReadModelResult(input)
-    : renderTerminalRunModelResult(input)
-
 export const renderTextFileReadModelResult: ModelResultRenderer = ({ args, data }) => {
   const obj = isObject(data) ? data : {}
   const path = readString(args.sourcePath) || ''

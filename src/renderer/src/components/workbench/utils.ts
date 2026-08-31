@@ -61,6 +61,12 @@ const readNestedObject = (value: IpcJsonObject, key: string): IpcJsonObject | un
     : undefined
 }
 
+const readArrayField = (value: IpcJsonObject, key: string): IpcJsonValue[] | undefined => {
+  const record = value as Record<string, IpcJsonValue>
+  const candidate = record[key]
+  return Array.isArray(candidate) ? candidate : undefined
+}
+
 const isRuntimeToolName = (toolName: string): toolName is RuntimeToolName =>
   Object.prototype.hasOwnProperty.call(RUNTIME_TOOL_CATALOG, toolName)
 
@@ -822,8 +828,9 @@ export const extractSearchResultsFromToolOutput = (output: IpcJsonValue): Search
   }
 
   if (isIpcJsonObject(output)) {
-    if (Array.isArray(output.results)) {
-      return output.results
+    const results = readArrayField(output, 'results')
+    if (results) {
+      return results
         .filter((item): item is IpcJsonObject => isIpcJsonObject(item))
         .map(mapWebItem)
         .filter((item): item is SearchResult => item !== null)

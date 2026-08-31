@@ -64,28 +64,24 @@ export const APP_MENU_ITEMS = [
   {
     key: 'general',
     label: '通用',
-    description: '桌面通知与应用偏好',
     path: '/settings/general',
     icon: <HiOutlineAdjustmentsHorizontal className="h-4 w-4" />
   },
   {
     key: 'model',
     label: '大模型',
-    description: '默认对话模型与 API 配置',
     path: '/settings/model',
     icon: <HiSparkles className="h-4 w-4" />
   },
   {
     key: 'workspace',
     label: '工作空间',
-    description: '本地项目路径、网页资料、目录变化与索引',
     path: '/settings/workspace',
     icon: <HiOutlineRectangleStack className="h-4 w-4" />
   },
   {
     key: 'model-download',
     label: '向量模型',
-    description: '下载本地检索模型',
     path: '/settings/vector',
     icon: <HiCloudArrowDown className="h-4 w-4" />
   }

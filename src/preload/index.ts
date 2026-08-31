@@ -3,7 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AiRunEvent,
   AppUpdateSnapshot,
-  BrowserPanelState,
+  BrowserTabState,
   JsonValue,
   SearchSourceFilter,
   WorkspaceIndexJobRecord
@@ -205,8 +205,6 @@ const api: DesktopApi = {
     return ipcRenderer.invoke('web-source-refresh', payload)
   },
   webSourceDelete: (payload) => ipcRenderer.invoke('web-source-delete', payload),
-  legacyLocalImportMigrationStatus: () =>
-    ipcRenderer.invoke('legacy-local-import-migration-status'),
   sourceListRefresh: (cb: () => void) => {
     const listener = (): void => cb()
     ipcRenderer.on('source-list-refresh', listener)
@@ -497,8 +495,8 @@ const api: DesktopApi = {
       ipcRenderer.removeListener('workbench-ui-flush-request', listener)
     }
   },
-  onBrowserPanelStateChange: (cb: (state: BrowserPanelState) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, state: BrowserPanelState): void => {
+  onBrowserPanelStateChange: (cb: (state: BrowserTabState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: BrowserTabState): void => {
       cb(state)
     }
     ipcRenderer.on('browser-panel-state-change', listener)

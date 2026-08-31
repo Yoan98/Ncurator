@@ -15,7 +15,6 @@ import { WorkbenchUiStore } from './domains/WorkbenchUiStore'
 import { BrowserTabStateStore } from './domains/BrowserTabStateStore'
 import { ScheduledTaskStore } from './domains/ScheduledTaskStore'
 import { ChatMessageLogStore } from './domains/ChatMessageLogStore'
-import type { LegacyLocalImportMigrationStatus } from '../../../shared/types'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 
 export class StorageService {
@@ -38,7 +37,6 @@ export class StorageService {
   public readonly browserTabs: BrowserTabStateStore
   public readonly scheduledTask: ScheduledTaskStore
   public readonly chatMessageLog: ChatMessageLogStore
-  private legacyLocalImportMigrationStatus: LegacyLocalImportMigrationStatus | null = null
 
   public constructor(
     input: {
@@ -81,11 +79,6 @@ export class StorageService {
     this.sqlite.initialize()
     await this.vector.initialize()
     await this.failInterruptedWorkspaceIndexJobs()
-    this.legacyLocalImportMigrationStatus = {
-      hasLegacyLocalImports: false,
-      removedDocumentCount: 0,
-      removedChunkCount: 0
-    }
   }
 
   public async failInterruptedWorkspaceIndexJobs(
@@ -97,10 +90,6 @@ export class StorageService {
       this.workspace.failIndexingFileRecords(message, now),
       this.webSource.failRunningSources(message, now)
     ])
-  }
-
-  public getLegacyLocalImportMigrationStatus(): LegacyLocalImportMigrationStatus | null {
-    return this.legacyLocalImportMigrationStatus
   }
 
   public async optimizeChatStorage(): Promise<void> {

@@ -96,7 +96,7 @@ flowchart TD
 
 AI 通过工具操作本地环境。工具应像「手」：模型指定**位置（锚点）**和**意图（动作）**，工具执行并返回**下一步决策所需的最小可靠反馈**。工具契约（schema + 结果形态）是模型唯一能依赖的语义来源。目的是让AI调用工具时所用即所想，结果预期一致。
 
-**八条原则**
+**九条原则**
 
 1. **锚点，非重建** — 读写通过稳定引用（nodeId、路径、行号等）定位；不要求模型一次生成深层结构树。
 2. **读写分离、职责单一** — 发现用 read，变更用 write；同一领域少量工具 + `operation` 区分，不为小能力膨胀工具数。
@@ -151,10 +151,10 @@ DOCX、Excel、PDF 等复杂工具族已按上述原则落地；全部 29 个工
 | A 纯 prose | 各类 edit / mutation | 单行确认，如文件已更新 |
 | B XML envelope | `text_file_read`、`pdf_read_pages`、`read_image` | `<file path="...">` + 行号正文 |
 | C 终端流 + marker | `terminal_run`、`terminal_read` | 输出正文 + `[status: …]` 等方括号标记 |
-| D 分组纯文本 | search / list / outline | 标题 + 分组列表 |
+| D 分组纯文本 | search / list / outline；`web_search`（search） | 标题 + 分组列表；SERP 用 rank / title / url / snippet |
 | E Markdown/Web | `web_search`（fetch）、`browser_use` | fetch 与 browser extract：不可信内容前缀 + Markdown 正文 |
-| D 分组纯文本 | `web_search`（search） | SERP：rank / title / url / snippet |
-| 领域专用 | `docx_read_nodes`、`excel_read`、`ppt_read_slides` | 保留结构化领域布局 |
+
+领域专用工具（`docx_read_nodes`、`excel_read`、`ppt_read_slides`）复用 D 分组布局，保留结构化领域字段。
 
 Terminal 契约：`status` 为 `running | succeeded | failed | cancelled`；`terminal_run` 返回 `terminalId`，`terminal_read` 不回传。
 

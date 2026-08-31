@@ -293,13 +293,6 @@ export interface WebSourceListResponse {
   summary: WorkspaceWebSummary
 }
 
-export interface LegacyLocalImportMigrationStatus {
-  hasLegacyLocalImports: boolean
-  removedDocumentCount: number
-  removedChunkCount: number
-  migratedAt?: number
-}
-
 export interface CreateWorkspaceSourceRequest {
   name: string
 }
@@ -463,9 +456,6 @@ export interface ChunkListResponse {
   items: ChunkListItem[]
   total: number
 }
-
-// Deprecated: kept for backward compatibility if needed, but should be removed eventually
-export interface DocumentListItem extends ChunkListItem {}
 
 export interface DocumentListResponse {
   items: DocumentRecord[]
@@ -1327,9 +1317,6 @@ export type BrowserTabNavigateRequest = BrowserTabMutationRequest & {
 }
 
 export type BrowserTabCreateResponse = BrowserPanelStateResponse
-
-/** @deprecated Use BrowserTabState. */
-export type BrowserPanelState = BrowserTabState
 
 export type AiContextUsageRequest = {
   sessionId: string

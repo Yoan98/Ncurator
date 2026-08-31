@@ -37,7 +37,6 @@ export type AssistantExecutionSkillKey =
   | 'browser'
   | 'image-generation'
   | 'wait'
-  | 'user-takeover'
   | 'generic'
 
 export type AssistantExecutionTextSegment = {
@@ -114,7 +113,7 @@ export const getAssistantToolIconKind = (
   if (skillKey === 'ppt-search' || skillKey === 'web-search') return 'search'
   if (skillKey === 'ppt-edit' || skillKey === 'excel-edit') return 'edit'
   if (skillKey === 'kb') return 'knowledge'
-  if (skillKey === 'browser' || skillKey === 'user-takeover') return 'browser'
+  if (skillKey === 'browser') return 'browser'
   if (skillKey === 'image-generation') return 'image'
   if (skillKey === 'wait') return 'wait'
   if (skillKey === 'terminal') return 'terminal'
@@ -276,14 +275,6 @@ export const getAssistantToolSummaryText = (
       failed: '等待失败'
     })
   }
-  if (skillKey === 'user-takeover') {
-    return statusText(status, {
-      running: '正在等待用户接管浏览器',
-      completed: '用户已完成浏览器操作',
-      partial_failed: '等待用户接管浏览器时部分失败',
-      failed: '等待用户接管浏览器失败'
-    })
-  }
   return statusText(status, {
     running: '正在处理任务',
     completed: '已处理任务',
@@ -332,7 +323,7 @@ const getSummaryActionLabel = (kind: AssistantExecutionSkillKey): string => {
   if (kind === 'ppt-search' || kind === 'web-search') return '搜索'
   if (kind === 'kb') return '检索'
   if (kind === 'terminal') return '终端'
-  if (kind === 'browser' || kind === 'user-takeover') return '浏览器'
+  if (kind === 'browser') return '浏览器'
   if (kind === 'image-generation') return '图片'
   if (kind === 'wait') return '等待'
   return '处理'

@@ -27,6 +27,17 @@ const readWebSearchInput = (
   return typeof value === 'string' ? value : ''
 }
 
+const readContentMarkdown = (events: AiRunEvent[]): string => {
+  for (const event of events) {
+    if (event.type !== 'tool_call_result' || event.toolName !== 'web_search') continue
+    const data = event.result?.data
+    if (!isObjectRecord(data)) continue
+    const markdown = data.markdown
+    if (typeof markdown === 'string' && markdown.length > 0) return markdown
+  }
+  return ''
+}
+
 describe('workbench run e2e', () => {
   it(
     CASE_ID,
@@ -65,6 +76,13 @@ describe('workbench run e2e', () => {
             (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
               event.type === 'tool_call_result' && event.toolName === 'web_search'
           )
+          const fetchOk = searchResults.some(
+            (event) =>
+              event.result?.ok === true &&
+              isObjectRecord(event.result.data) &&
+              typeof event.result.data.markdown === 'string' &&
+              event.result.data.markdown.length > 0
+          )
 
           return {
             finalAnswerText: evidence.finalAnswerText,
@@ -76,6 +94,8 @@ describe('workbench run e2e', () => {
               .filter((event) => readWebSearchInput(event, 'type') === 'fetch')
               .map((event) => readWebSearchInput(event, 'url')),
             searchOk: searchResults.some((event) => event.result?.ok === true),
+            fetchOk,
+            contentMarkdown: readContentMarkdown(evidence.events),
             searchErrors: searchResults.map((event) => event.error || '').filter(Boolean)
           }
         },
@@ -84,6 +104,8 @@ describe('workbench run e2e', () => {
             result.eventTypes.includes('run_completed') &&
               result.searchQueries.some((query) => /deepseek/i.test(query)) &&
               result.searchOk &&
+              result.fetchOk &&
+              result.contentMarkdown.length > 0 &&
               /deepseek/i.test(result.finalAnswerText) &&
               /融资|估值|投资|fund|financ/i.test(result.finalAnswerText),
             {

@@ -34,12 +34,14 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 1. `conversation`
 2. `run`
 3. `result`
+4. `scheduled-task`
 
 领域规则：
 
 - `conversation` 验证会话、composer、模式、模型 / 工作区偏好、工作目录前置条件和 `@` 参考资料 token。
 - `run` 验证智能模式运行中的过程流、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
 - `result` 验证搜索结果、普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退和多文件修改入口。
+- `scheduled-task` 验证定时任务的入口、配置、启用开关与到点自动创建会话并发送任务。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
@@ -56,6 +58,7 @@ tests/case/workbench/
   conversation/
     session/
     composer/
+    message/
     scope/
   run/
     process/
@@ -80,8 +83,8 @@ tests/case/workbench/
 
 - `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 回归测试入口。
 - 需要验证正式安装包时使用 `pnpm test:e2e:package -- --bundle <release-bundle.json>`；它会校验并安装已构建候选包，再对安装后的真实应用执行 E2E，不重新构建，也不属于普通开发回归。发布时按 `doc/release.md` 的影响评估选择范围，不带过滤参数时执行全部 E2E。
-- `conversation / run / result` 是稳定 suite，不因 PRD 小节增删而轻易重排。
-- suite 下的 `session / composer / message / scope / process / blocker / browser / search / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。
+- `conversation / run / result / scheduled-task` 是稳定 suite，不因 PRD 小节增删而轻易重排。
+- suite 下的 `session / composer / message / scope / process / blocker / browser / persistence / search / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。
 
 ## 5. 回归测试清单
 
@@ -228,7 +231,7 @@ tests/case/workbench/
 - What：`@` 参考资料候选覆盖工作区当前真实的全部本地目录 / 文件与网页资料、目录 / 文件 / 网页 token 插入、多 token 共存、键盘删除、去重、切工作区清理和空候选提示。
 - Why：显式参考资料是用户控制 AI 上下文的核心入口，错误会直接导致搜索或 AI 执行范围偏离用户意图。
 - How：创建真实 workspace，绑定 `tests/fixtures/workspace`，等待真实文件扫描并准备索引状态；添加真实 web source 并等待真实网页索引完成；随后直接在工作区磁盘中新建文件，不触发“检查更新”或“更新索引”；输入 `@` 触发候选，选择文件、目录、网页；候选应覆盖工作区下当前本地项并显示索引状态，其中新增文件显示未索引，md/txt 索引完成后显示已索引；选中即追加，同一资料才去重；通过 Backspace 删除 token；切工作区清理旧 token。
-- Oracle：候选来源和发送范围对齐 `WB-SCOPE-001`、`WB-CORE-002`、`WB-CORE-004`；真实目录快照和新增未索引文件对齐 `WB-SCOPE-001-AC3`；token 插入、共存、发送参数、键盘删除和图标对齐 `WB-SCOPE-002`；去重、跨工作区清理和空候选对齐 `WB-SCOPE-003`、`WB-SCOPE-004`；智能模式无 warning，搜索模式说明只覆盖已索引子文件，对齐 `WB-BLOCKER-003`。
+- Oracle：候选来源和发送范围对齐 `WB-SCOPE-001`、`WB-CORE-002`、`WB-CORE-004`；真实目录快照和新增未索引文件对齐 `WB-SCOPE-001-AC3`；token 插入、共存、发送参数、键盘删除和图标对齐 `WB-SCOPE-002`；去重、跨工作区清理和空候选对齐 `WB-SCOPE-003`、`WB-SCOPE-004`；智能模式无 warning，搜索模式说明只覆盖已索引子文件，对齐 `WB-BLOCKER-002`。
 - Not：不验证底层 KB 检索排序质量，也不验证 Settings 工作区资料配置细节。
 
 #### `right-panel-layout-and-tabs`
@@ -260,9 +263,27 @@ tests/case/workbench/
 - Oracle：用户消息、assistant 占位、各过程层、总结等待层、最终 markdown 和链接行为对齐 `WB-COMPOSER-003`、`WB-COMPOSER-009`；最终回答使用 workspace 中间结果并围绕用户诉求收口，对齐 `WB-CORE-005`、`WB-CORE-006`。
 - Not：不对最终文案逐字断言，也不把真实模型质量问题误归因为 UI bug。
 
+#### `terminal-background-service-flow`
+
+- 测试类型：`e2e`
+- What：真实 AI 使用终端启动本地 HTTP 服务、让出控制权、通过内置浏览器验证页面。
+- Why：终端后台服务、浏览器联动和进程清理的完整用户路径，静态事件或 fake tool result 无法覆盖。
+- How：在真实临时 workspace 创建带唯一标记的 HTML；通过可见 Electron Workbench 发送请求，真实审批 terminal 命令，使用真实 PTY 启动 Python HTTP server，真实 browser_use 打开页面。
+- Oracle：事件包含 terminal_command_yielded、terminal_run 和 browser_use；最终答复包含页面唯一标记；不存在 fake AI/tool/browser 信号。
+- Not：不依赖公网，不允许测试进程替 AI 启动目标 HTTP 服务。
+
+#### `terminal-unicode-file-list`
+
+- 测试类型：`e2e`
+- What：终端在当前平台处理 Unicode 路径和文件列表。
+- Why：中文路径是 macOS 与 Windows 用户的常见场景，编码错误会直接破坏终端任务。
+- How：在真实工作区创建 Unicode 文件名，通过真实终端读取目录并返回结果。
+- Oracle：终端结果保留 Unicode 文件名，任务完成后无乱码或跨会话泄漏，对齐 `WB-TERMINAL-001`。
+- Not：不覆盖全部 shell 命令策略。
+
 ### 3.5 发布前真实检查
 
-- `WB-BLOCKER-004`：上下文压缩必须由真实模型使用量和正式压缩阈值触发，检查运行中与完成态过程组；不得为 E2E 降低生产阈值或伪造 compaction 事件。该检查运行成本取决于模型上下文，不作为每次源码回归的固定 case。
+- `WB-BLOCKER-003`：上下文压缩必须由真实模型使用量和正式压缩阈值触发，检查运行中与完成态过程组；不得为 E2E 降低生产阈值或伪造 compaction 事件。该检查运行成本取决于模型上下文，不作为每次源码回归的固定 case。
 
 #### `run-navigation-snapshot-replay`
 
@@ -336,22 +357,13 @@ tests/case/workbench/
 - Oracle：运行期折叠或切换会话不销毁 WebContents；无论切走的会话面板是否展开，切回后同一 `webContents.id` 必须重新挂载到主窗口并恢复显示；重启后重新创建 WebContents 并恢复 URL、历史和缩放，但不要求表单、滚动内存或 JS 连续；关闭 Tab 或删除所属会话后状态清理，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC12`。
 - Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。
 
-#### `web-search-diagnostic`
-
-- 测试类型：`e2e`
-- What：真实 AI 针对“DeepSeek 最近融资情况”调用 `web_search(type=search)` 获取候选，并通过 `type=fetch` 读取网页正文。
-- Why：网页搜索与正文抓取分离后，e2e 仍须守住“搜索后读取正文”的真实网页信息闭环。
-- How：通过真实 Workbench UI 发送 DeepSeek 融资搜索请求；等待真实 AI run 完成；从 run event 中读取 `web_search` 的 search/fetch 调用与正文。
-- Oracle：run 完成；至少一次 `web_search(type=search)` 的 query 包含 DeepSeek；至少一次 `type=fetch` 返回 `ok=true` 且正文非空；不出现 fake search / fake AI 信号。
-- Not：不要求读取特定新闻网页；正文细节由 `web-read-from-search-result` 覆盖。
-
 #### `web-read-from-search-result`
 
 - 测试类型：`e2e`
 - What：真实 AI 用 `web_search(type=search)` 搜索 DeepSeek 融资，并用 `type=fetch` 读取最相关网页正文后总结。
 - Why：搜索必须落到网页正文证据上；必须守住 search → fetch 的真实网页信息闭环。
 - How：通过真实 Workbench UI 发送“搜索 DeepSeek 最近融资情况并读取最相关网页正文后总结”；等待真实 AI run 完成；检查 `web_search` 的 search/fetch 工具调用和结果。
-- Oracle：run 完成；`web_search` 返回网页正文，最终回答使用网页事实；搜索、读取、失败边界和严谨偏好限制由网页组 case 合并对齐 `WB-CORE-007`；不出现 fake 信号。
+- Oracle：run 完成；至少一次 `web_search(type=search)` 的 query 包含 DeepSeek；至少一次 `type=fetch` 返回 `ok=true` 且正文非空；最终回答使用网页事实；搜索、读取、失败边界和严谨偏好限制由网页组 case 合并对齐 `WB-CORE-007`；不出现 fake 信号。
 - Not：不固定具体新闻网页、金额或日期，避免公网搜索结果变化导致误判。
 
 #### `web-read-direct-url`
@@ -481,24 +493,6 @@ tests/case/workbench/
 - How：通过真实 Workbench UI 用自然语言请求创建包含 Data/Notes 的 xlsx；打开修改入口，在两个 Sheet 检查新增边框，再执行回退。
 - Oracle：正式文件可解析且两个 Sheet 数据正确；所有抽查新增单元格为绿色；真实调用包含 Excel 写入和创建后的读取核对；回退后新建文件不存在。
 - Not：不评价表格视觉设计，不要求固定工具调用顺序。
-
-#### `terminal-background-service-flow`
-
-- 测试类型：`e2e`
-- What：真实 AI 使用终端启动本地 HTTP 服务、让出控制权、通过内置浏览器验证页面。
-- Why：终端后台服务、浏览器联动和进程清理的完整用户路径，静态事件或 fake tool result 无法覆盖。
-- How：在真实临时 workspace 创建带唯一标记的 HTML；通过可见 Electron Workbench 发送请求，真实审批 terminal 命令，使用真实 PTY 启动 Python HTTP server，真实 browser_use 打开页面。
-- Oracle：事件包含 terminal_command_yielded、terminal_run 和 browser_use；最终答复包含页面唯一标记；不存在 fake AI/tool/browser 信号。
-- Not：不依赖公网，不允许测试进程替 AI 启动目标 HTTP 服务。
-
-#### `terminal-unicode-file-list`
-
-- 测试类型：`e2e`
-- What：终端在当前平台处理 Unicode 路径和文件列表。
-- Why：中文路径是 macOS 与 Windows 用户的常见场景，编码错误会直接破坏终端任务。
-- How：在真实工作区创建 Unicode 文件名，通过真实终端读取目录并返回结果。
-- Oracle：终端结果保留 Unicode 文件名，任务完成后无乱码或跨会话泄漏，对齐 `WB-TERMINAL-001`。
-- Not：不覆盖全部 shell 命令策略。
 
 #### `docx-apply-panel-preview-and-revert`
 

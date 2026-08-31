@@ -28,7 +28,7 @@
 - 包含智能模式下 AI 推进偏好的选择与本机恢复。
 - 包含附件拖放和智能模式下执行权限的选择与会话恢复。
 - 包含 `@` 参考资料 token 的插入与维护。
-- 包含 AI 运行中的审批、补工作区和未索引资料提示。
+- 包含 AI 运行中的审批、搜索模式提示与上下文压缩过程提示。
 - 包含右侧内容面板中的搜索结果、文档查看与修改的文件回退入口。
 - 包含基于本地资料和网页资料的上下文使用。
 - 包含定时任务的入口、配置、启用开关与到点自动创建会话并发送任务。
@@ -404,19 +404,19 @@
   - `WB-BLOCKER-001-AC4` 用户不操作审批卡片时，审批不会因固定超时时间自动失败。
   - `WB-BLOCKER-001-AC5` 完全访问 run 的审批项会自动通过且继续执行，不产生 `waiting_approval`、审批事件或审批卡片。
 
-#### WB-BLOCKER-003 搜索模式部分可检索目录 warning
+#### WB-BLOCKER-002 搜索模式部分可检索目录 warning
 
 - 系统行为：搜索模式下未索引的本地目录或文件可以作为 `@` 候选被选择，但不会产生纯搜索结果；当搜索范围包含部分可检索目录时，界面提示搜索只覆盖其已索引子文件。智能模式直接进入 AI 运行，不展示索引耗时 warning。
 - 验收：
-  - `WB-BLOCKER-003-AC1` 智能模式下，未完全索引参考资料不额外展示耗时 warning。
-  - `WB-BLOCKER-003-AC2` 搜索模式下明确说明部分可检索目录只覆盖其已索引子文件。
+  - `WB-BLOCKER-002-AC1` 智能模式下，未完全索引参考资料不额外展示耗时 warning。
+  - `WB-BLOCKER-002-AC2` 搜索模式下明确说明部分可检索目录只覆盖其已索引子文件。
 
-#### WB-BLOCKER-004 上下文压缩过程提示
+#### WB-BLOCKER-003 上下文压缩过程提示
 
 - 系统行为：当 AI 运行触发上下文压缩时，后端通过 `assistant_process_group_started` 派发 compaction 过程组，assistant turn 展示“东西太多了，让俺整理下”；压缩完成后通过 `assistant_process_group_completed` 更新为“呼，终于整理好了，累死俺了”。
 - 验收：
-  - `WB-BLOCKER-004-AC1` 收到 compaction 类型的 `assistant_process_group_started` 事件后，当前 assistant turn 中出现运行中的上下文整理过程组。
-  - `WB-BLOCKER-004-AC2` 收到 compaction 类型的 `assistant_process_group_completed` 事件后，该过程组更新为完成态并展示完成文案。
+  - `WB-BLOCKER-003-AC1` 收到 compaction 类型的 `assistant_process_group_started` 事件后，当前 assistant turn 中出现运行中的上下文整理过程组。
+  - `WB-BLOCKER-003-AC2` 收到 compaction 类型的 `assistant_process_group_completed` 事件后，该过程组更新为完成态并展示完成文案。
 
 ### 8.7 右侧内容面板
 

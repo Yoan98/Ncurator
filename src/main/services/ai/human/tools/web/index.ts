@@ -1,6 +1,10 @@
 import { tool } from '@langchain/core/tools'
 import type { AiToolCallResult, IpcJsonObject, JsonObject, JsonValue } from '../../../../../../shared/types'
-import type { BrowserUseResult } from '../../../types'
+import type {
+  BrowserActionCandidate,
+  BrowserUsePage,
+  BrowserUseResult
+} from '../../../types'
 import type { WebSearchResult } from '../../../../webCrawler/types'
 import { WebSourceService } from '../../../../web/WebSourceService'
 import { withToolLifecycle } from '../utils/lifecycle'
@@ -85,42 +89,51 @@ const buildSearchOutput = (searchResult: WebSearchResult): WebSearchSearchOutput
   }))
 })
 
+const toBrowserUsePageJson = (page: BrowserUsePage): JsonObject => ({
+  url: page.url,
+  ...(page.title ? { title: page.title } : {})
+})
+
+const toBrowserActionCandidateJson = (candidate: BrowserActionCandidate): JsonObject => ({
+  description: candidate.description,
+  ...(candidate.method ? { method: candidate.method } : {}),
+  ...(candidate.arguments?.length ? { arguments: candidate.arguments } : {})
+})
+
 const normalizeBrowserUseOutput = (result: BrowserUseResult): JsonObject => {
   if ('error' in result) {
     return {
       ...(result.action ? { action: result.action } : {}),
-      ...(result.page ? { page: result.page as unknown as JsonObject } : {}),
+      ...(result.page ? { page: toBrowserUsePageJson(result.page) } : {}),
       error: result.error
     }
   }
   switch (result.action) {
     case 'navigate':
-      return { action: 'navigate', page: result.page as unknown as JsonObject }
+      return { action: 'navigate', page: toBrowserUsePageJson(result.page) }
     case 'extract':
       return {
         action: 'extract',
-        page: result.page as unknown as JsonObject,
+        page: toBrowserUsePageJson(result.page),
         content: result.result.extracted
       }
     case 'observe':
       return {
         action: 'observe',
-        page: result.page as unknown as JsonObject,
-        actions: result.result.actions as unknown as JsonObject
+        page: toBrowserUsePageJson(result.page),
+        actions: result.result.actions.map(toBrowserActionCandidateJson)
       }
     case 'act':
       return {
         action: 'act',
-        page: result.page as unknown as JsonObject,
+        page: toBrowserUsePageJson(result.page),
         success: result.result.success,
         message: result.result.message,
         actionDescription: result.result.actionDescription,
-        ...(result.result.actions?.length
-          ? { actions: result.result.actions as unknown as JsonObject }
+        ...(result.result.actions.length
+          ? { actions: result.result.actions.map(toBrowserActionCandidateJson) }
           : {})
       }
-    default:
-      return result as unknown as JsonObject
   }
 }
 
@@ -273,7 +286,8 @@ export const webToolFamily: ToolFamilyDefinition = {
               return payload
             }
 
-            const instruction = String(args.instruction || '').trim()
+            const instruction =
+              args.action === 'navigate' ? '' : String(args.instruction || '').trim()
             try {
               automationBrowserTabPromise ||= service.ensureAutomationTab(ctx.sessionId)
               let browserTab: { id: string }

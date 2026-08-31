@@ -11,7 +11,7 @@ import {
   selectScheduledTaskWorkspace,
   setupWorkbenchWithTempWorkspace
 } from '../../../harness/e2e/workbench'
-import type { ScheduledTask } from '../../../src/shared/types'
+import type { ScheduledTask } from '../../../../src/shared/types'
 
 const CASE_ID = 'scheduled-task-config-lifecycle'
 const TASK_NAME = '定时任务生命周期'

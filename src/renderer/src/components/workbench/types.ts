@@ -6,8 +6,7 @@ import type {
   AiFileChangeStatus,
   IpcJsonObject,
   RuntimeSkillId,
-  SearchResult,
-  WorkspaceSource
+  SearchResult
 } from '../../../../shared/types'
 import type { RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 
@@ -36,26 +35,6 @@ export type WorkbenchSelectOption = {
   trailing?: ReactNode
   disabled?: boolean
   children?: WorkbenchSelectOption[]
-}
-
-export type WorkspaceQuickSelectProps = {
-  workspaces: WorkspaceSource[]
-  selectedWorkspaceId: string | null
-  onWorkspaceChange: (workspaceId: string) => void
-  onEmptyAction?: () => void
-  placeholder?: string
-  className?: string
-  noDrag?: boolean
-  'data-testid'?: string
-}
-
-export type WorkspaceQuickSelectPopupPosition = {
-  top?: number
-  bottom?: number
-  left: number
-  width: number
-  maxHeight: number
-  placement: 'top' | 'bottom'
 }
 
 export type SearchWorkbenchTurn = {
@@ -132,7 +111,6 @@ export type AssistantProcessSkillKey =
   | 'browser'
   | 'image-generation'
   | 'wait'
-  | 'user-takeover'
   | 'generic'
 
 export type AssistantProcessGroupItem = {

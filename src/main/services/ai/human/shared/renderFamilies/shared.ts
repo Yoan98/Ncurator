@@ -1,4 +1,4 @@
-import type { JsonObject, JsonValue } from '../../../../../shared/types'
+import type { JsonObject, JsonValue } from '../../../../../../shared/types'
 
 const MODEL_TEXT_LINE_CHARS = 1_600
 

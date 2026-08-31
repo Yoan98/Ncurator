@@ -13,7 +13,7 @@ import {
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
-import type { ChatSessionListItem, ScheduledTask } from '../../../src/shared/types'
+import type { ChatSessionListItem, ScheduledTask } from '../../../../src/shared/types'
 
 const CASE_ID = 'scheduled-task-trigger-and-session-refresh'
 const FIRST_PROMPT = '请只回复 ok，用于建立当前会话。'
