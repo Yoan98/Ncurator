@@ -216,13 +216,11 @@ downloads/latest/macos-x64.dmg
 国内默认目标使用：
 
 ```text
-RELEASE_STORAGE_TARGET=cos
-TENCENT_SECRET_ID
-TENCENT_SECRET_KEY
-COS_BUCKET=ncurator-1324873382
-COS_REGION=ap-guangzhou
-COS_PUBLIC_BASE_URL=https://download.guanzhangai.cn
+SecretId
+SecretKey
 ```
+
+COS 默认值已经固化为桶 `ncurator-1324873382`、地域 `ap-guangzhou`、公开地址 `https://download.guanzhangai.cn`，无需重复写入 `.env`。只有切换海外发布时才设置 `RELEASE_STORAGE_TARGET=r2`。
 
 海外发布时显式设置 `RELEASE_STORAGE_TARGET=r2`，并使用：
 

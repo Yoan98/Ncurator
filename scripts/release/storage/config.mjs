@@ -10,6 +10,14 @@ const required = (environment, name) => {
   return value
 }
 
+const requiredOneOf = (environment, names) => {
+  for (const name of names) {
+    const value = String(environment[name] || '').trim()
+    if (value) return value
+  }
+  throw new Error(`missing environment variable: ${names.join(' or ')}`)
+}
+
 const normalizedBucket = (value) => value.replace(/^\/+|\/+$/gu, '')
 const normalizedBaseUrl = (value) => value.replace(/\/$/u, '')
 
@@ -18,21 +26,23 @@ export const resolveReleaseStorageConfig = (environment = process.env) => {
     .trim()
     .toLowerCase()
   if (target === 'cos') {
-    const region = required(environment, 'COS_REGION')
-    const publicBaseUrl = normalizedBaseUrl(required(environment, 'COS_PUBLIC_BASE_URL'))
+    const region = String(environment.COS_REGION || 'ap-guangzhou').trim()
+    const publicBaseUrl = normalizedBaseUrl(
+      String(environment.COS_PUBLIC_BASE_URL || DOMESTIC_DOWNLOAD_BASE_URL).trim()
+    )
     if (publicBaseUrl !== DOMESTIC_DOWNLOAD_BASE_URL) {
       throw new Error(`COS_PUBLIC_BASE_URL must be ${DOMESTIC_DOWNLOAD_BASE_URL}`)
     }
     return {
       target,
       label: 'Tencent COS',
-      bucket: normalizedBucket(required(environment, 'COS_BUCKET')),
+      bucket: normalizedBucket(String(environment.COS_BUCKET || 'ncurator-1324873382').trim()),
       region,
       endpoint: `https://cos.${region}.myqcloud.com`,
       publicBaseUrl,
       credentials: {
-        AWS_ACCESS_KEY_ID: required(environment, 'TENCENT_SECRET_ID'),
-        AWS_SECRET_ACCESS_KEY: required(environment, 'TENCENT_SECRET_KEY'),
+        AWS_ACCESS_KEY_ID: requiredOneOf(environment, ['SecretId', 'TENCENT_SECRET_ID']),
+        AWS_SECRET_ACCESS_KEY: requiredOneOf(environment, ['SecretKey', 'TENCENT_SECRET_KEY']),
         AWS_REQUEST_CHECKSUM_CALCULATION: 'WHEN_REQUIRED',
         AWS_RESPONSE_CHECKSUM_VALIDATION: 'WHEN_REQUIRED'
       }

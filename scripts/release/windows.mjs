@@ -159,6 +159,8 @@ const testEnvironment = (environment) => {
     'COS_BUCKET',
     'COS_REGION',
     'COS_PUBLIC_BASE_URL',
+    'SecretId',
+    'SecretKey',
     'NCURATOR_ALLOW_LIVE_PUBLISH'
   ]) {
     delete sanitized[name]

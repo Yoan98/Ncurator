@@ -7,11 +7,8 @@ import {
 describe('release storage config', () => {
   it('uses the domestic COS channel by default', () => {
     const config = resolveReleaseStorageConfig({
-      COS_BUCKET: 'ncurator-1324873382',
-      COS_REGION: 'ap-guangzhou',
-      COS_PUBLIC_BASE_URL: 'https://download.guanzhangai.cn',
-      TENCENT_SECRET_ID: 'test-id',
-      TENCENT_SECRET_KEY: 'test-key'
+      SecretId: 'test-id',
+      SecretKey: 'test-key'
     })
 
     expect(config.target).toBe('cos')
