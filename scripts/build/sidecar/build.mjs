@@ -16,14 +16,13 @@ const VENV_ROOT = path.resolve(
 )
 const VENV_DIR = path.join(VENV_ROOT, `web_crawler_sidecar-${process.platform}-${process.arch}`)
 const STAMP_PATH = path.join(VENV_DIR, '.requirements.sha256')
-const PLAYWRIGHT_BROWSER_STAMP_PATH = path.join(VENV_DIR, '.playwright-browser.sha256')
 const PIP_CACHE_DIR = path.resolve(
   String(process.env.NCURATOR_SIDECAR_PIP_CACHE || '').trim() ||
     path.join(ROOT, '.pip-cache', 'web_crawler_sidecar')
 )
 const BIN_DIR = path.join(SIDECAR_DIR, 'bin')
 const SOURCE_STAMP_PATH = path.join(BIN_DIR, '.source.sha256')
-const SIDECAR_RUNTIME_LAYOUT_VERSION = 'headless-shell-v1'
+const SIDECAR_RUNTIME_LAYOUT_VERSION = 'electron-cdp-v1'
 
 const pathExists = (targetPath) => fs.existsSync(targetPath)
 
@@ -137,33 +136,24 @@ const hasCurrentBuiltSidecar = () => {
     process.platform === 'win32' ? 'web_crawler_sidecar.exe' : 'web_crawler_sidecar'
   if (!pathExists(path.join(BIN_DIR, 'web_crawler_sidecar', executableName))) return false
 
-  const browserRoots = []
+  const forbiddenBrowserPaths = []
   const walk = (directory) => {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const entryPath = path.join(directory, entry.name)
+      if (entry.name === '.local-browsers' || entry.name.startsWith('chromium_headless_shell-')) {
+        forbiddenBrowserPaths.push(entryPath)
+      }
       if (entry.isDirectory()) {
-        if (entry.name === '.local-browsers') browserRoots.push(entryPath)
-        else walk(entryPath)
+        walk(entryPath)
       }
     }
   }
   walk(BIN_DIR)
-  if (browserRoots.length !== 1) return false
-  const browserNames = fs.readdirSync(browserRoots[0])
-  return (
-    !browserNames.some((name) => name.startsWith('chromium-')) &&
-    browserNames.some((name) => name.startsWith('chromium_headless_shell-')) &&
-    browserNames.some((name) => name.startsWith('ffmpeg-'))
-  )
+  return forbiddenBrowserPaths.length === 0
 }
 
 const readInstalledRequirementsHash = () =>
   pathExists(STAMP_PATH) ? fs.readFileSync(STAMP_PATH, 'utf8').trim() : ''
-
-const readInstalledPlaywrightBrowserHash = () =>
-  pathExists(PLAYWRIGHT_BROWSER_STAMP_PATH)
-    ? fs.readFileSync(PLAYWRIGHT_BROWSER_STAMP_PATH, 'utf8').trim()
-    : ''
 
 const ensureSidecarDependencies = (pythonPath) => {
   const expectedHash = computeRequirementsHash()
@@ -183,194 +173,8 @@ const ensureSidecarDependencies = (pythonPath) => {
   fs.writeFileSync(STAMP_PATH, `${expectedHash}\n`, 'utf8')
 }
 
-const PLAYWRIGHT_BROWSER_CHECK_SNIPPET = [
-  'import pathlib',
-  'import playwright',
-  "base = pathlib.Path(playwright.__file__).resolve().parent / 'driver' / 'package' / '.local-browsers'",
-  "prefixes = ('chromium_headless_shell-', 'ffmpeg-')",
-  'names = {item.name for item in base.iterdir()} if base.exists() else set()',
-  "has_full_chromium = any(name.startswith('chromium-') for name in names)",
-  'ok = not has_full_chromium and all(any(name.startswith(prefix) for name in names) for prefix in prefixes)',
-  'raise SystemExit(0 if ok else 1)'
-].join('\n')
-
-const hasBundledPlaywrightBrowser = (pythonPath) =>
-  canRun(pythonPath, ['-c', PLAYWRIGHT_BROWSER_CHECK_SNIPPET])
-
-const resolveBundledPlaywrightBrowserDirectory = (pythonPath) => {
-  const result = spawnSync(
-    pythonPath,
-    [
-      '-c',
-      "import pathlib, playwright; print(pathlib.Path(playwright.__file__).resolve().parent / 'driver' / 'package' / '.local-browsers')"
-    ],
-    { cwd: ROOT, encoding: 'utf8' }
-  )
-  if (result.error || result.status !== 0 || !result.stdout.trim()) {
-    throw new Error('could not locate the bundled Playwright browser directory')
-  }
-  return result.stdout.trim()
-}
-
-const resolveExpectedPlaywrightBrowserRevision = (pythonPath) => {
-  const result = spawnSync(
-    pythonPath,
-    [
-      '-c',
-      [
-        'import json',
-        'import pathlib',
-        'import playwright',
-        "browsers = json.loads((pathlib.Path(playwright.__file__).resolve().parent / 'driver' / 'package' / 'browsers.json').read_text())",
-        "revisions = {str(browser['name']): str(browser['revision']) for browser in browsers['browsers']}",
-        'print(revisions.get("chromium-headless-shell") or revisions.get("chromium") or "")'
-      ].join('; ')
-    ],
-    { cwd: ROOT, encoding: 'utf8' }
-  )
-  if (result.error || result.status !== 0) {
-    throw new Error('could not resolve the expected Playwright browser revision')
-  }
-  return result.stdout.trim()
-}
-
-const readBrowserRootRevision = (browserRoot) => {
-  if (!browserRoot || !pathExists(browserRoot)) return ''
-  const entry = fs
-    .readdirSync(browserRoot)
-    .find((name) => name.startsWith('chromium_headless_shell-'))
-  return entry ? entry.slice('chromium_headless_shell-'.length) : ''
-}
-
-const pruneStaleBrowsers = (browserRoot, expectedRevision) => {
-  if (!browserRoot || !pathExists(browserRoot)) return
-  for (const entry of fs.readdirSync(browserRoot)) {
-    if (
-      entry.startsWith('chromium_headless_shell-') &&
-      (!expectedRevision || entry.slice('chromium_headless_shell-'.length) !== expectedRevision)
-    ) {
-      fs.rmSync(path.join(browserRoot, entry), { recursive: true, force: true })
-      process.stdout.write(`[sidecar] removed stale browser ${entry}\n`)
-    }
-  }
-}
-
-const restoreBundledPlaywrightBrowserCache = (pythonPath) => {
-  const source = String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim()
-  if (!source || !pathExists(source)) return false
-
-  const target = resolveBundledPlaywrightBrowserDirectory(pythonPath)
-  const expectedRevision = resolveExpectedPlaywrightBrowserRevision(pythonPath)
-  const cachedRevision = readBrowserRootRevision(source)
-  if (expectedRevision && cachedRevision && cachedRevision !== expectedRevision) {
-    process.stdout.write(
-      `[sidecar] browser cache revision ${cachedRevision} does not match Playwright revision ${expectedRevision}; ignoring stale cache\n`
-    )
-    pruneStaleBrowsers(target, expectedRevision)
-    return false
-  }
-  pruneStaleBrowsers(target, expectedRevision)
-  fs.rmSync(target, { recursive: true, force: true })
-  fs.cpSync(source, target, { recursive: true, force: true })
-  for (const entry of fs.readdirSync(target)) {
-    if (entry.startsWith('chromium-')) {
-      fs.rmSync(path.join(target, entry), { recursive: true, force: true })
-    }
-  }
-  return hasBundledPlaywrightBrowser(pythonPath)
-}
-
-const syncBundledPlaywrightBrowserCache = (pythonPath) => {
-  const source = String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim()
-  if (!source) return
-  const installed = resolveBundledPlaywrightBrowserDirectory(pythonPath)
-  fs.rmSync(source, { recursive: true, force: true })
-  fs.mkdirSync(source, { recursive: true })
-  fs.cpSync(installed, source, { recursive: true, force: true })
-  process.stdout.write(`[sidecar] refreshed Playwright browser cache at ${source}\n`)
-}
-
-const ensureBundledPlaywrightBrowser = (pythonPath) => {
-  const expectedHash = computeRequirementsHash()
-  const installedHash = readInstalledPlaywrightBrowserHash()
-  const expectedRevision = resolveExpectedPlaywrightBrowserRevision(pythonPath)
-  const currentRevision = readBrowserRootRevision(
-    resolveBundledPlaywrightBrowserDirectory(pythonPath)
-  )
-  // The stamp alone is not enough: an interrupted build can wipe the browser
-  // bundle from the venv while the stamp still claims it is installed, and a
-  // stale cache can bundle a revision that no longer matches the venv Playwright.
-  if (
-    expectedHash === installedHash &&
-    currentRevision === expectedRevision &&
-    hasBundledPlaywrightBrowser(pythonPath)
-  ) {
-    return
-  }
-
-  if (restoreBundledPlaywrightBrowserCache(pythonPath)) {
-    fs.writeFileSync(PLAYWRIGHT_BROWSER_STAMP_PATH, `${expectedHash}\n`, 'utf8')
-    return
-  }
-
-  const browserEnv = {
-    ...process.env,
-    PLAYWRIGHT_BROWSERS_PATH: '0',
-    PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT: '300000'
-  }
-  spawnChecked(pythonPath, ['-m', 'playwright', 'install', '--only-shell', 'chromium'], {
-    env: browserEnv
-  })
-  fs.writeFileSync(PLAYWRIGHT_BROWSER_STAMP_PATH, `${expectedHash}\n`, 'utf8')
-  syncBundledPlaywrightBrowserCache(pythonPath)
-}
-
 const buildSidecar = (pythonPath) => {
   spawnChecked(pythonPath, [BUILD_SCRIPT_PATH])
-}
-
-const normalizeBundledPlaywrightSymlinks = () => {
-  const browserRoots = []
-  const symlinks = []
-  const walk = (directory) => {
-    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      const entryPath = path.join(directory, entry.name)
-      if (entry.isSymbolicLink()) symlinks.push(entryPath)
-      else if (entry.isDirectory()) {
-        if (entry.name === '.local-browsers') browserRoots.push(entryPath)
-        walk(entryPath)
-      }
-    }
-  }
-  walk(BIN_DIR)
-
-  if (browserRoots.length !== 1) {
-    throw new Error(
-      `expected one bundled Playwright browser directory, found ${browserRoots.length}`
-    )
-  }
-  const browserRoot = browserRoots[0]
-  const marker = `${path.sep}.local-browsers${path.sep}`
-  const cacheSourceValue = String(process.env.NCURATOR_SIDECAR_BROWSER_CACHE || '').trim()
-  const cacheSource = cacheSourceValue ? path.resolve(cacheSourceValue) : ''
-  for (const symlinkPath of symlinks) {
-    const target = fs.readlinkSync(symlinkPath)
-    if (!path.isAbsolute(target)) continue
-    const markerIndex = target.lastIndexOf(marker)
-    const isCachedTarget =
-      cacheSource && (target === cacheSource || target.startsWith(`${cacheSource}${path.sep}`))
-    if (markerIndex < 0 && !isCachedTarget) continue
-
-    const suffix = isCachedTarget
-      ? path.relative(cacheSource, target)
-      : target.slice(markerIndex + marker.length)
-    const bundledTarget = path.join(browserRoot, suffix)
-    if (!pathExists(bundledTarget)) {
-      throw new Error(`bundled Playwright symlink target does not exist: ${bundledTarget}`)
-    }
-    fs.unlinkSync(symlinkPath)
-    fs.symlinkSync(path.relative(path.dirname(symlinkPath), bundledTarget), symlinkPath)
-  }
 }
 
 const writeSourceStamp = (sourceHash) => {
@@ -392,9 +196,7 @@ const main = () => {
   const sourceHash = computeSourceHash()
   const venvPythonPath = ensureVenv(bootstrapPython)
   ensureSidecarDependencies(venvPythonPath)
-  ensureBundledPlaywrightBrowser(venvPythonPath)
   buildSidecar(venvPythonPath)
-  normalizeBundledPlaywrightSymlinks()
   writeSourceStamp(sourceHash)
 }
 

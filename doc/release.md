@@ -166,7 +166,7 @@ macOS 需要已安装并信任的 `Ncurator Update Signing` P12。当前使用�
 
 `pnpm run build` 主要完成：
 
-1. 准备 native 模块和网页抓取 sidecar，完成类型检查与应用构建。
+1. 准备 native 模块和网页抓取 Python sidecar，完成类型检查与应用构建；sidecar 保留 DDG、Crawl4AI 和 Playwright 驱动，但复用 Electron Chromium，不下载或打包 Playwright 浏览器。
 2. 追踪生产依赖，生成最小化 `release-stage/app`。
 3. 验证 DOCX、PDF、PDF worker 和进程边界，混淆 `out/main`。
 4. 审计 staging，再由 electron-builder 生成安装包。
@@ -186,7 +186,7 @@ release-stage/
     └── resources/{native,web_crawler_sidecar,open-with}/
 ```
 
-安装包不得包含源码、测试、文档、开发配置、`.env`、锁文件、Source Map、测试日志、fixture、私钥或错误平台文件。`app.asar` 不是加密，所有 `VITE_*` 变量都按公开信息处理。
+安装包不得包含源码、测试、文档、开发配置、`.env`、锁文件、Source Map、测试日志、fixture、私钥或错误平台文件。网页抓取 sidecar 不得包含 `.local-browsers` 或 `chromium_headless_shell-*`，且解包体积不得超过 340 MiB；staging 和正式包审计都会硬校验。`app.asar` 不是加密，所有 `VITE_*` 变量都按公开信息处理。
 
 候选 bundle 绑定 Tag、commit、release fragment、安装包、更新文件、大小、sha256 和 sha512。测试和发布前都会重新验证这些内容。
 
@@ -251,7 +251,7 @@ publish 会上传候选产物和 fragment，更新对应平台的自动更新 me
 
 prepare 和 test 的临时代码、依赖与构建目录位于 `.ncurator/release-work`，阶段结束后自动删除。候选包位于 `.ncurator/release-candidates`；发布并完成公开验证后，本地只保留本平台最新候选及其 E2E 结果。
 
-`.ncurator/release-tools` 保存 Python 环境、浏览器和构建缓存，`.ncurator/runtime` 保存运行资源；它们可复用且不属于历史安装包，不随发布自动删除。
+`.ncurator/release-tools` 保存 Python 环境和构建缓存，`.ncurator/runtime` 保存运行资源；它们可复用且不属于历史安装包，不随发布自动删除。
 
 ### 自动更新与下载
 

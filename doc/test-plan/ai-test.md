@@ -50,7 +50,7 @@
 - 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。
-- `web-browsing` 工具测试先覆盖冻结 sidecar bin 程序抓取与 `browser_use` 服务不可用诊断。
+- `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再覆盖冻结 sidecar bin 通过隔离 context 抓取，以及 `browser_use` 服务不可用诊断；禁止使用 sidecar 内置浏览器或 Electron 默认 context。
 
 ### 2.2 `human`
 
@@ -495,7 +495,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：`web_search` 传 `{ type: 'fetch', url }` 会返回扁平结构的 `requestedUrl/finalUrl`、标题、`markdown`、发布时间与分组 links；其中 `markdown` 内容来源于 crawl4ai 的 `fit_markdown`。
 - Why：单页抓取是网页正文入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索。
-- How：启动本地 HTTP server，返回文章页 HTML，通过真实冻结 sidecar bin 返回抓取结果，调用 `web_search({ type: 'fetch', url })`。
+- How：启动本地 HTTP server 和测试 Electron CDP host，创建专用非持久化 partition，通过真实冻结 sidecar bin 连接唯一 marker 对应的隔离 context 返回抓取结果，调用 `web_search({ type: 'fetch', url })`。
 - Oracle：结果包含 `requestedUrl`、`finalUrl`、`title`、`markdown`、`publishedAt`、`links.internal/external`。
 - Not：不验证复杂浏览器交互或外网可达性。
 
@@ -513,7 +513,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：`web_search` 传 `{ type: 'fetch', url }` 只读取该 URL 对应网页，并保留该页 links。
 - Why：fetch 不让工具自己多跳跟进，后续要不要继续探索由 human 自己看 links 决定。
-- How：启动本地 HTTP server，返回包含通知页和指南页链接的入口页，通过真实冻结 sidecar bin 抓取该页，调用 `web_search({ type: 'fetch', url })`。
+- How：启动本地 HTTP server 和测试 Electron CDP host，通过真实冻结 sidecar bin 在专用非持久化 partition 中抓取包含通知页和指南页链接的入口页，调用 `web_search({ type: 'fetch', url })`。
 - Oracle：结果命中输入 URL 对应页面正文，同时 links 中保留该页相关链接。
 - Not：不验证自动多跳或搜索引擎级网页发现。
 
@@ -522,7 +522,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：`web_search` 传 `{ type: 'fetch', url }` 遇到 HTTP 失败时会保留错误文本、最终 URL 和状态码。
 - Why：网页读取失败也必须保持可诊断，避免 `human` 误把空结果当成“网页无信息”。
-- How：启动本地 HTTP server，返回 404 页面，通过真实冻结 sidecar bin 执行抓取，调用 `web_search({ type: 'fetch', url })`。
+- How：启动本地 HTTP server 和测试 Electron CDP host，通过真实冻结 sidecar bin 在专用非持久化 partition 中抓取 404 页面，调用 `web_search({ type: 'fetch', url })`。
 - Oracle：结果返回明确错误文本，同时保留 `finalUrl` 和 `statusCode`。
 - Not：不验证复杂重定向链或外站错误页样式。
 
@@ -531,7 +531,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：`web_search` type=fetch 结果过大时不再在工具层硬失败，完整正文直接返回，由 hand 层统一截断并落盘。
 - Why：网页正文可能很长；统一大小守卫上移到 hand 层处理（完整多行文本落盘 `.txt` + 首尾预览 + `text_file_read` 续读），工具层不再对超长正文直接报错。
-- How：启动本地 HTTP server，返回超长正文页，通过真实冻结 sidecar bin 抓取，调用 `web_search({ type: 'fetch', url })`。
+- How：启动本地 HTTP server 和测试 Electron CDP host，通过真实冻结 sidecar bin 在专用非持久化 partition 中抓取超长正文页，调用 `web_search({ type: 'fetch', url })`。
 - Oracle：结果返回完整 `markdown`（不携带 `error`），`requestedUrl/finalUrl` 保留，后续截断落盘由 hand 层负责。
 - Not：不验证压缩摘要或自动截断策略。
 

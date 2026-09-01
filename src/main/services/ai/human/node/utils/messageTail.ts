@@ -42,33 +42,52 @@ const formatToolCallArgs = (args: Record<string, unknown>): string =>
     .map(([key, value]) => `${key}=${formatToolCallArgValue(value)}`)
     .join(', ')
 
-const renderMessageForCompaction = (message: BaseMessage): string => {
-  const role = message.getType()
+const renderAiMessageLines = (message: AIMessage): string[] => {
+  const lines: string[] = []
   const content =
     typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
-  if (role === 'ai') {
-    const lines: string[] = []
-    if (content.trim()) {
-      lines.push(`[ai] ${content}`)
-    }
-    const toolCalls = (message as AIMessage).tool_calls
-    if (Array.isArray(toolCalls)) {
-      for (const call of toolCalls) {
-        const name = typeof call?.name === 'string' && call.name ? call.name : 'unknown'
-        const args = (call?.args ?? {}) as Record<string, unknown>
-        lines.push(`[tool_call] ${name}(${formatToolCallArgs(args)})`)
-      }
-    }
-    return lines.join('\n')
+  if (content.trim()) {
+    lines.push(`[ai] ${content}`)
   }
-  if (role === 'tool') {
-    return `[tool] ${content}`
+  const toolCalls = message.tool_calls
+  if (Array.isArray(toolCalls)) {
+    for (const call of toolCalls) {
+      const name = typeof call?.name === 'string' && call.name ? call.name : 'unknown'
+      const args = (call?.args ?? {}) as Record<string, unknown>
+      lines.push(`[tool_call] ${name}(${formatToolCallArgs(args)})`)
+    }
   }
-  return ''
+  return lines
 }
 
-export const renderMessagesForCompaction = (messages: BaseMessage[]): string =>
-  messages
-    .map(renderMessageForCompaction)
-    .filter((line) => line.length > 0)
-    .join('\n\n')
+const renderToolMessageLine = (message: BaseMessage): string => {
+  const content =
+    typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
+  return `[tool] ${content}`
+}
+
+// 每个 AI 消息及其触发的工具调用、紧随的工具结果为一轮，轮首加 [round N]。
+// 轮内 \n 紧凑，轮间 \n\n 分隔。
+export const renderMessagesForCompaction = (messages: BaseMessage[]): string => {
+  const rounds: string[] = []
+  let roundLines: string[] = []
+  let roundIndex = 0
+  const flushRound = (): void => {
+    if (roundLines.length > 0) {
+      rounds.push(roundLines.join('\n'))
+      roundLines = []
+    }
+  }
+  for (const message of messages) {
+    const role = message.getType()
+    if (role === 'ai') {
+      flushRound()
+      roundIndex += 1
+      roundLines = [`[round ${roundIndex}]`, ...renderAiMessageLines(message as AIMessage)]
+    } else if (role === 'tool') {
+      roundLines.push(renderToolMessageLine(message))
+    }
+  }
+  flushRound()
+  return rounds.join('\n\n')
+}

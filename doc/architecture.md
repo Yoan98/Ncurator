@@ -42,6 +42,8 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 工作区是默认执行范围而非硬边界：模型默认在工作区域内操作，系统级需求可访问工作区外绝对路径。文件工具的 `sourcePath` / `outputPath` 必须为本机绝对路径。内置浏览器由 Electron `WebContentsView` 承载，Stagehand 通过本机回环 CDP endpoint 精确连接对应 Tab。
 
+网页搜索继续由冻结的 Python sidecar 提供 DDG 搜索和 Crawl4AI 抓取。sidecar 不再携带 Playwright Chromium：首次使用网页工具时，Electron 创建专用、非持久化的 `WebContentsView` partition，sidecar 通过本机回环 CDP 连接 Electron Chromium，并按唯一 marker 选择该隔离 context。找不到唯一 context 时直接失败，禁止退回用户浏览器 context。
+
 开发版使用独立 `*-dev` user-data 目录；E2E 可通过 `NCURATOR_USER_DATA_PATH` 提供隔离目录。
 
 ## AI 运行时

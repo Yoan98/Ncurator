@@ -152,8 +152,14 @@ export const assertSafePackagePaths = (paths) => {
       continue
     }
 
-    if (lowerSegments.some((segment) => segment.startsWith('chromium-'))) {
-      violations.push(`${relativePath}: full Chromium is forbidden; only headless shell is allowed`)
+    if (
+      lowerSegments.includes('.local-browsers') ||
+      lowerSegments.some(
+        (segment) =>
+          segment.startsWith('chromium-') || segment.startsWith('chromium_headless_shell-')
+      )
+    ) {
+      violations.push(`${relativePath}: Playwright Chromium must not be bundled`)
       continue
     }
 
@@ -198,6 +204,25 @@ export const assertSafePackagePaths = (paths) => {
   if (violations.length > 0) {
     throw new Error(`package content policy failed:\n${violations.slice(0, 100).join('\n')}`)
   }
+}
+
+const WEB_CRAWLER_SIDECAR_HARD_LIMIT_BYTES = 340 * 1024 * 1024
+
+export const assertWebCrawlerSidecarPackage = (files, sourceLabel) => {
+  const sidecarFiles = files.filter((item) =>
+    normalizeRelativePath(item.relativePath).split('/').includes('web_crawler_sidecar')
+  )
+  if (sidecarFiles.length === 0) {
+    throw new Error(`${sourceLabel} is missing the web crawler sidecar`)
+  }
+  const bytes = sidecarFiles.reduce((sum, item) => sum + item.size, 0)
+  if (bytes > WEB_CRAWLER_SIDECAR_HARD_LIMIT_BYTES) {
+    throw new Error(
+      `${sourceLabel} web crawler sidecar is ${(bytes / 1024 / 1024).toFixed(1)} MiB; ` +
+        `hard limit is ${String(WEB_CRAWLER_SIDECAR_HARD_LIMIT_BYTES / 1024 / 1024)} MiB`
+    )
+  }
+  return bytes
 }
 
 export const listDirectoryFiles = (rootDirectory) => {

@@ -15,6 +15,7 @@ import { loadRootEnvOnce } from './utils/rootEnv'
 import { BrowserEmbedService } from './services/browser/BrowserEmbedService'
 import { CdpEndpointService } from './services/browser/CdpEndpointService'
 import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerService'
+import { ElectronWebCrawlerBrowserHost } from './services/webCrawler/ElectronWebCrawlerBrowserHost'
 import { AppUpdateService } from './services/update/AppUpdateService'
 import {
   APP_ID,
@@ -352,13 +353,15 @@ if (!singleInstanceLock) {
       isPackaged: app.isPackaged
     })
     const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
+    const webCrawlerBrowserHost = new ElectronWebCrawlerBrowserHost(cdpEndpointService)
     const webCrawlerService = createWebCrawlerService({
       appRootPath: app.getAppPath(),
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,
       sidecarEnv: {
         CRAWL4_AI_BASE_DIRECTORY: webCrawlerBaseDirectory
-      }
+      },
+      resolveCdpConnection: () => webCrawlerBrowserHost.getConnection()
     })
 
     registerHandlers({
@@ -386,7 +389,10 @@ if (!singleInstanceLock) {
     })
     shutdownCoordinator.register({
       name: 'web-crawler',
-      dispose: () => webCrawlerService.close()
+      dispose: async () => {
+        await webCrawlerService.close()
+        await webCrawlerBrowserHost.close()
+      }
     })
     shutdownCoordinator.register({
       name: 'browser-embed-service',

@@ -18,9 +18,8 @@ import {
 // 固定开销（23 工具 schema ~18k + system/模板 ~2k ≈ 20k）几乎不随压缩减少；
 // 压缩后上下文仍需远低于 80% 触发线才能避免"压缩后仍超阈值、每轮压缩"的抖动。
 // 24k 时触发线 19.2k 被固定开销直接顶破，导致 21 次压缩死循环并撞递归上限；
-// 64k 时任务峰值 ~40k 达不到 51.2k 触发线，0 次压缩。40k（触发线 32k）能自然触发 1-2 次，
-// 且压缩后 ~20-25k 离触发线仍有 7k+ 余量，不会抖动。
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 40_000
+// 60k 时任务峰值 ~47.4k 达不到 48k 触发线，0 次压缩。52k（触发线 41.6k）能自然触发 1-2 次。
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 52_000
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '任务锚点：',

@@ -46,14 +46,14 @@ describe('splitMessagesByLastAi', () => {
 })
 
 describe('renderMessagesForCompaction', () => {
-  it('renders thought and tool calls as separate lines', () => {
+  it('renders thought and tool calls as separate lines within a round', () => {
     const rendered = renderMessagesForCompaction([
       new AIMessage({
         content: '先看目录',
         tool_calls: [toolCall('1', 'terminal_run', { command: 'cd /tmp && ls' })]
       })
     ])
-    expect(rendered).toBe('[ai] 先看目录\n[tool_call] terminal_run(command="cd /tmp && ls")')
+    expect(rendered).toBe('[round 1]\n[ai] 先看目录\n[tool_call] terminal_run(command="cd /tmp && ls")')
   })
 
   it('renders only tool_call lines when the AI message has no content', () => {
@@ -63,10 +63,10 @@ describe('renderMessagesForCompaction', () => {
         tool_calls: [toolCall('1', 'docx_read_outline', { sourcePath: '工作/上周周报.docx' })]
       })
     ])
-    expect(rendered).toBe('[tool_call] docx_read_outline(sourcePath="工作/上周周报.docx")')
+    expect(rendered).toBe('[round 1]\n[tool_call] docx_read_outline(sourcePath="工作/上周周报.docx")')
   })
 
-  it('renders multiple tool calls and tool results in order', () => {
+  it('groups each AI message with its tool results and numbers rounds', () => {
     const rendered = renderMessagesForCompaction([
       new AIMessage({
         content: '读取并写入',
@@ -76,17 +76,25 @@ describe('renderMessagesForCompaction', () => {
         ]
       }),
       new ToolMessage({ content: 'hello', tool_call_id: '1' }),
-      new ToolMessage({ content: 'created', tool_call_id: '2' })
+      new ToolMessage({ content: 'created', tool_call_id: '2' }),
+      new AIMessage({
+        content: '',
+        tool_calls: [toolCall('3', 'terminal_run', { command: 'ls' })]
+      }),
+      new ToolMessage({ content: 'total 1', tool_call_id: '3' })
     ])
     expect(rendered).toBe(
       [
+        '[round 1]',
         '[ai] 读取并写入',
         '[tool_call] text_file_read(sourcePath="a.txt")',
         '[tool_call] text_file_edit(action="create", sourcePath="b.txt")',
-        '',
         '[tool] hello',
+        '[tool] created',
         '',
-        '[tool] created'
+        '[round 2]',
+        '[tool_call] terminal_run(command="ls")',
+        '[tool] total 1'
       ].join('\n')
     )
   })
@@ -99,9 +107,10 @@ describe('renderMessagesForCompaction', () => {
         tool_calls: [toolCall('1', 'terminal_run', { command: long, options: { a: 1 } })]
       })
     ])
+    expect(rendered).toContain('[round 1]')
     expect(rendered).toContain('[tool_call] terminal_run(')
     expect(rendered).toContain('options={"a":1}')
     expect(rendered).toContain('…')
-    expect(rendered.length).toBeLessThan(400)
+    expect(rendered.length).toBeLessThan(450)
   })
 })

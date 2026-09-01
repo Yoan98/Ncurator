@@ -151,7 +151,7 @@ describe('ai tool web backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const server = await createLocalServer()
-        const webCrawlerService = createWebCrawlerService()
+        const webCrawlerService = await createWebCrawlerService()
         try {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
@@ -263,7 +263,7 @@ describe('ai tool web backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const server = await createLocalServer()
-        const webCrawlerService = createWebCrawlerService()
+        const webCrawlerService = await createWebCrawlerService()
         try {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
@@ -306,7 +306,7 @@ describe('ai tool web backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const server = await createLocalServer()
-        const webCrawlerService = createWebCrawlerService()
+        const webCrawlerService = await createWebCrawlerService()
         try {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService
@@ -349,7 +349,7 @@ describe('ai tool web backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const server = await createLocalServer()
-        const webCrawlerService = createWebCrawlerService()
+        const webCrawlerService = await createWebCrawlerService()
         try {
           const harness = createWebToolHarness(runtime, {
             webCrawlerService,

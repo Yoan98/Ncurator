@@ -154,7 +154,7 @@ describe('ai human mock-llm backend', () => {
         const secondDriver = createScriptedStructuredOutputDriver({
           'human.brain': [
             ({ user }) => {
-              restoredSkillSeen = user.includes('<learned_skills>') && user.includes('pdf-read')
+              restoredSkillSeen = user.includes('已学习技能') && user.includes('pdf-read')
               restoredRoundSeen = user.includes('先学习一个 skill 再继续。')
               return buildCompleteTaskDecision({
                 summary: '已从恢复快照继续完成任务。',

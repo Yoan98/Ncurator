@@ -291,7 +291,7 @@ describe('ai human live backend', () => {
               result.resumedResult?.status === 'completed' &&
               result.snapshotAfterResume === null &&
               result.run2UsedFileB === true &&
-              result.run2BrainPrompt.includes('<current_state>') &&
+              result.run2BrainPrompt.includes('<active_state>') &&
               mentionsOverfittingTopic(result.run2BrainPrompt) &&
               /(训练时间过久|记住过多训练数据|不太具有展望性)/.test(result.run2BrainPrompt) &&
               mentionsAntiAliasingTopic(result.run2BrainPrompt) &&

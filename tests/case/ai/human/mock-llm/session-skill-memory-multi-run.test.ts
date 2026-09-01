@@ -114,12 +114,12 @@ describe('ai human mock-llm backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.stateAfterRun1.learnedSkillIds.join(',') === 'docx-read,pdf-read' &&
-            result.run2Prompt.includes('<learned_skills>') &&
+            result.run2Prompt.includes('已学习技能') &&
             result.stateAtLimit.learnedSkillIds.join(',') ===
               'docx-read,pdf-read,excel-write,ppt-read,ppt-write' &&
             result.stateAfterEviction.learnedSkillIds.join(',') ===
               'docx-read,pdf-read,excel-write,ppt-read,ppt-write,excel-read,image-generation,docx-write' &&
-            result.run4Prompt.includes('<learned_skills>'),
+            result.run4Prompt.includes('已学习技能'),
           {
             name: 'session-skills-persist-across-runs-within-tool-budget',
             message:

@@ -28,7 +28,7 @@ describe('ai human live backend', () => {
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
         execute: async (runtime) => {
-          const webCrawlerService = createWebCrawlerService()
+          const webCrawlerService = await createWebCrawlerService()
           try {
             const output = await createHumanTestRunner(runtime, {
               webCrawlerService

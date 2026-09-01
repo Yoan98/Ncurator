@@ -23,7 +23,7 @@ describe('ai human live backend', () => {
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
         execute: async (runtime) => {
           const site = await createMultiHopCrossDomainWebCrawlSite()
-          const webCrawlerService = createWebCrawlerService()
+          const webCrawlerService = await createWebCrawlerService()
           try {
             const output = await createHumanTestRunner(runtime, {
               webCrawlerService
