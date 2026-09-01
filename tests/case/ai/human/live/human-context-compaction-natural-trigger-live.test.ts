@@ -166,12 +166,17 @@ describe('ai human live backend', () => {
                 !LOW_QUALITY_COMPACTION_PHRASES.some((phrase) => summary.includes(phrase)) &&
                 !hasContradictoryProgress(summary)
             ) && ratios.every((ratio) => ratio <= 0.5)
+          const latestUserText = latestBrainRecord?.user ?? ''
           const continuitySatisfied =
-            Boolean(latestBrainRecord?.user.includes('<current_state>')) &&
-            Boolean(latestBrainRecord?.user.includes('<compacted_history>')) &&
-            Boolean(latestBrainRecord?.user.includes('<learned_skills>')) &&
-            hasExactEntityText(latestBrainRecord?.user, expectedLastWeekDocAnchor) &&
-            !hasInventedEntityText(latestBrainRecord?.user, inventedLastWeekDocName)
+            hasExactEntityText(latestUserText, expectedLastWeekDocAnchor) &&
+            !hasInventedEntityText(latestUserText, inventedLastWeekDocName) &&
+            compactionSummaries.some((summary) => {
+              const goalLine = summary
+                .split('\n')
+                .map((line) => line.trim())
+                .find((line) => line.startsWith('- 目标'))
+              return Boolean(goalLine && latestUserText.includes(goalLine))
+            })
           const taskCompletionSatisfied =
             result.output?.status === 'completed' &&
             (toolNames.some((toolName) => toolName.startsWith('docx_')) ||

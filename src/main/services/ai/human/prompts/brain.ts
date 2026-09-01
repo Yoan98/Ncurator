@@ -118,21 +118,22 @@ export const buildBrainUserMessage = (input: {
 }): string => {
   const learnedSkillIds = input.state.skills.learnedSkillIds
   const plan = input.state.memory.plan
-  const renderPlan =
-    input.injectPlan && plan.length > 0
-      ? `\n    <plan>\n${plan
-          .map((item) => `      - ${renderPlanItemStatus(item.status)} ${item.title}`)
-          .join('\n')}\n    </plan>`
-      : ''
-  const renderLearnedSkills =
-    learnedSkillIds.length > 0
-      ? `\n    <learned_skills>\n${learnedSkillIds
-          .map((skillId) => `      - ${skillId}`)
-          .join('\n')}\n    </learned_skills>`
-      : '\n    <learned_skills>none</learned_skills>'
   const renderCompactedHistory = input.compactedHistoryText
     ? `\n  <compacted_history>\n${input.compactedHistoryText}\n  </compacted_history>`
     : ''
+  const renderActiveState = (): string => {
+    const skillsLine =
+      learnedSkillIds.length > 0
+        ? `已学习技能：${learnedSkillIds.join('、')}`
+        : '已学习技能：无'
+    const planLine =
+      input.injectPlan && plan.length > 0
+        ? `计划进度：${plan
+            .map((item) => `${renderPlanItemStatus(item.status)} ${item.title}`)
+            .join('；')}`
+        : ''
+    return [skillsLine, planLine].filter((line) => line.length > 0).join('\n')
+  }
 
   return `
 <user_context>
@@ -148,8 +149,9 @@ ${renderPreferenceText(input.ctx.preference)}
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 ${renderCompactedHistory}
-  <current_state>${renderPlan}${renderLearnedSkills}
-  </current_state>
+  <active_state>
+${renderActiveState()}
+  </active_state>
 </user_context>
 `.trim()
 }

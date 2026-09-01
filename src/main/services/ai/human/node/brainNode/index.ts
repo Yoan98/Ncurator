@@ -45,10 +45,10 @@ export const createBrainNode = (input: {
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
 
+    const injectPlan = state.memory.plan.length > 0
+    const compactedHistoryText = state.memory.compactions.at(-1)?.summary
     let messages = input.cache.messages
     if (!messages || messages.length === 0) {
-      const injectPlan = state.memory.plan.length > 0
-      const compactedHistoryText = state.memory.compactions.at(-1)?.summary
       const transcript = await input.ctx.loadMessageLog()
       const historyMessages = repairInterruptedToolCalls(
         deriveMessageLogMessages({
@@ -69,6 +69,23 @@ export const createBrainNode = (input: {
         )
       ]
       input.cache.messages = messages
+    } else {
+      // 每轮刷新 user 消息，保证 plan / learned_skills / compacted_history 都是最新 state 渲染，
+      // 避免 update_plan / learn_skill 之后后续 brain 轮次仍看到旧快照（"丢 plan"）。
+      const humanIndex = messages.findIndex((message) => message.getType() === 'human')
+      const refreshedHuman = new HumanMessage(
+        buildBrainUserMessage({
+          state,
+          ctx: input.ctx,
+          injectPlan,
+          compactedHistoryText
+        })
+      )
+      if (humanIndex >= 0) {
+        messages[humanIndex] = refreshedHuman
+      } else {
+        messages.push(refreshedHuman)
+      }
     }
 
     const tools = buildAvailableTools({

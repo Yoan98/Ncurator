@@ -7,17 +7,7 @@ import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/bra
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
-import { splitMessagesByLastAi } from '../utils/messageTail'
-
-const renderMessagesForCompaction = (messages: BaseMessage[]): string =>
-  messages
-    .map((message) => {
-      const role = message.getType()
-      const content =
-        typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
-      return `[${role}] ${content}`
-    })
-    .join('\n\n')
+import { renderMessagesForCompaction, splitMessagesByLastAi } from '../utils/messageTail'
 
 export const createContextCompactionNode = (input: {
   ctx: AiRunContext
