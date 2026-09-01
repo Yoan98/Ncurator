@@ -53,7 +53,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：大模型配置页展示免费 AI Key 官网入口，并保持与配置操作区的正确位置关系。
 - Why：用户需要在新增配置前快速获得可体验的 Key，同时外链操作不能破坏当前设置页状态。
 - How：进入大模型配置页，检查入口位于配置数量与“新增配置”之间，点击后收集真实 Renderer → Preload 外链调用信号。
-- Oracle：入口位置和可访问名称符合 `SET-MODEL-004-AC1`；外链目标为 `https://www.ncurator.com/zh/free-keys` 且当前路由不变，对齐 `SET-MODEL-004-AC2`。
+- Oracle：入口位置和可访问名称符合 `SET-MODEL-004-AC1`；外链目标为 `https://www.guanzhangai.cn/zh/free-keys` 且当前路由不变，对齐 `SET-MODEL-004-AC2`。
 - Not：不访问外部网页内容，也不验证免费 Key 的实时可用性。
 
 #### `model-delete-config-feedback`

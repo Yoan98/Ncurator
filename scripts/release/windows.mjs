@@ -16,8 +16,9 @@ import {
   inspectLocalWindowsRelease,
   readPublicReleaseFragment,
   verifyPublicReleaseFragment,
-  verifyR2ReleaseFragment
+  verifyReleaseStorageFragment
 } from './shared/windows.mjs'
+import { assertLivePublishAllowed, resolveReleaseStorageConfig } from './storage/config.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
 import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
@@ -75,6 +76,7 @@ const run = (command, commandArgs, options = {}) =>
   })
 
 const requirePublish = mode === 'publish'
+if (requirePublish) assertLivePublishAllowed()
 const inspection = await inspectLocalWindowsRelease(ROOT, { requirePublish })
 if (!inspection.ready) {
   throw new Error(`local Windows release is unavailable:\n- ${inspection.issues.join('\n- ')}`)
@@ -151,7 +153,13 @@ const testEnvironment = (environment) => {
     'AWS_SECRET_ACCESS_KEY',
     'R2_ACCOUNT_ID',
     'R2_BUCKET_NAME',
-    'R2_PUBLIC_BASE_URL'
+    'R2_PUBLIC_BASE_URL',
+    'TENCENT_SECRET_ID',
+    'TENCENT_SECRET_KEY',
+    'COS_BUCKET',
+    'COS_REGION',
+    'COS_PUBLIC_BASE_URL',
+    'NCURATOR_ALLOW_LIVE_PUBLISH'
   ]) {
     delete sanitized[name]
   }
@@ -278,14 +286,15 @@ if (mode === 'test') {
   process.exit(0)
 }
 
-const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '')
+const storage = resolveReleaseStorageConfig()
+const publicBaseUrl = storage.publicBaseUrl
 const existing = await readPublicReleaseFragment(releaseTag, 'windows-x64', publicBaseUrl)
 if (existing) {
   await verifyPublicReleaseFragment(existing, publicBaseUrl)
-  await verifyR2ReleaseFragment(existing, inspection.awsExecutable)
+  await verifyReleaseStorageFragment(existing, inspection.awsExecutable)
   await cleanupLocalTestLogsSafely()
   await cleanupLocalCandidates()
-  process.stdout.write(`[release] Windows ${releaseTag} is already complete on R2\n`)
+  process.stdout.write(`[release] Windows ${releaseTag} is already complete on ${storage.label}\n`)
   process.exit(0)
 }
 const candidate = await assertCandidatePublishable({
@@ -308,7 +317,7 @@ await run(
   { cwd: ROOT, env: process.env }
 )
 await verifyPublicReleaseFragment(candidate.verified.fragment, publicBaseUrl)
-await verifyR2ReleaseFragment(candidate.verified.fragment, inspection.awsExecutable)
+await verifyReleaseStorageFragment(candidate.verified.fragment, inspection.awsExecutable)
 await markCandidatePublished({ tag: releaseTag, platform: 'windows-x64' })
 await cleanupLocalTestLogsSafely()
 await cleanupLocalCandidates()

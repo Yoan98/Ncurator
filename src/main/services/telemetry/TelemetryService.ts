@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { OFFICIAL_WEBSITE_URL } from '../../../shared/constants'
 
 export type TelemetryEventName = 'app_started' | 'message_submit_completed'
 
@@ -49,7 +50,7 @@ type PersistedTelemetryState = {
 
 type DeliveryResult = 'accepted' | 'discard' | 'retry'
 
-const DEFAULT_ENDPOINT = 'https://www.ncurator.com/api/telemetry/events'
+const DEFAULT_ENDPOINT = `${OFFICIAL_WEBSITE_URL}/api/telemetry/events`
 const MAX_PENDING_EVENTS = 500
 const RETRY_BACKOFF_MS = 30_000
 const DELIVERY_TIMEOUT_MS = 20_000

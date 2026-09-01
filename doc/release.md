@@ -1,6 +1,6 @@
 # 桌面端构建与发布
 
-本文是 Windows、macOS 构建、正式包回归和 R2 发布的统一说明。当前发布 Windows x64、macOS arm64 和 macOS x64，不发布 Linux。Windows 使用 `windows-vX.Y.Z`，macOS 使用 `mac-vX.Y.Z`，两个平台独立递增和发布。
+本文是 Windows、macOS 构建、正式包回归和对象存储发布的统一说明。国内默认发布到腾讯云 COS，海外可显式切换到 Cloudflare R2。当前发布 Windows x64、macOS arm64 和 macOS x64，不发布 Linux。Windows 使用 `windows-vX.Y.Z`，macOS 使用 `mac-vX.Y.Z`，两个平台独立递增和发布。
 
 注意评估改动影响，只回归需要回归的测试用例，避免动不动就全部回归，尤其是在回归一次后，修复的代码并不影响已通过的测试用例时。
 
@@ -52,9 +52,9 @@ pnpm release:start -- --platform mac --version X.Y.Z
 
 ### 干净构建与候选包
 
-prepare 阶段从 Tag 创建独立工作区，执行 `pnpm install --frozen-lockfile`、正式构建、安装包审计和 bundle 固化。它不复用当前源码、旧 `node_modules` 或旧 `dist`，也不上传 R2。
+prepare 阶段从 Tag 创建独立工作区，执行 `pnpm install --frozen-lockfile`、正式构建、安装包审计和 bundle 固化。它不复用当前源码、旧 `node_modules` 或旧 `dist`，也不上传任何对象存储。
 
-Windows 的用户可见名称统一为“馆长”：安装包为 `馆长-X.Y.Z-Windows-x64.exe`，安装后的主程序为 `馆长.exe`，快捷方式与卸载项也使用“馆长”。npm 包名、`appId`、`.ncurator` 目录和 R2 对象键等内部技术标识保持不变。
+Windows 的用户可见名称统一为“馆长”：安装包为 `馆长-X.Y.Z-Windows-x64.exe`，安装后的主程序为 `馆长.exe`，快捷方式与卸载项也使用“馆长”。npm 包名、`appId`、`.ncurator` 目录和对象键等内部技术标识保持不变。
 
 候选包保存在：
 
@@ -116,6 +116,14 @@ pnpm release:mac -- --tag mac-vX.Y.Z --publish-only
 pnpm release:status -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
 ```
 
+真实发布默认锁定。只有用户明确批准上线后，才可在单次发布终端中设置：
+
+```bash
+export NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production
+```
+
+普通构建、候选包测试和 `pnpm release:storage:plan` 都不需要这个变量。未设置时，`--publish-only`、上传脚本和 finalize 都会在发起网络写入前失败。
+
 ## 2. 构建与平台
 
 ### Windows
@@ -132,9 +140,9 @@ Windows 本地发布环境：
 
 - Windows x64、Node.js 22 x64、项目指定版本的 pnpm；
 - Python 3.12 x64、Git、tar；
-- 发布到 R2 时还需要 AWS CLI 和 R2 配置。
+- 发布到 COS 或 R2 时还需要 AWS CLI 和对应存储配置。
 
-`pnpm release:doctor` 当前检查 Windows 本地发布与 R2 访问条件。
+`pnpm release:doctor` 检查 Windows 本地发布与当前存储目标的访问条件。
 
 ### macOS
 
@@ -184,7 +192,7 @@ release-stage/
 
 ## 3. 发布与维护
 
-### R2 与公开通道
+### COS、R2 与公开通道
 
 Windows 和 macOS 使用独立目录、latest metadata 和固定下载地址：
 
@@ -203,9 +211,20 @@ downloads/latest/macos-arm64.dmg
 downloads/latest/macos-x64.dmg
 ```
 
-版本化产物使用不可变缓存；latest、manifest 和固定下载使用 `no-store`。fragment 中的 `name` 记录用户可见文件名，`storageName` 记录 R2 ASCII 对象名；二者共同进入候选 bundle 校验。Windows 固定下载与 manifest 返回 `馆长-X.Y.Z-Windows-x64.exe`，自动更新 metadata 则指向对应的 ASCII 对象键。
+版本化产物使用不可变缓存；latest、manifest 和固定下载使用 `no-store`。fragment 中的 `name` 记录用户可见文件名，`storageName` 记录对象存储的 ASCII 对象名；二者共同进入候选 bundle 校验。Windows 固定下载与 manifest 返回 `馆长-X.Y.Z-Windows-x64.exe`，自动更新 metadata 则指向对应的 ASCII 对象键。
 
-本地 `.env` 使用：
+国内默认目标使用：
+
+```text
+RELEASE_STORAGE_TARGET=cos
+TENCENT_SECRET_ID
+TENCENT_SECRET_KEY
+COS_BUCKET=ncurator-1324873382
+COS_REGION=ap-guangzhou
+COS_PUBLIC_BASE_URL=https://download.guanzhangai.cn
+```
+
+海外发布时显式设置 `RELEASE_STORAGE_TARGET=r2`，并使用：
 
 ```text
 R2_ACCESS_KEY_ID
@@ -215,9 +234,20 @@ R2_BUCKET_NAME
 R2_PUBLIC_BASE_URL=https://download.ncurator.com
 ```
 
+腾讯云侧固定配置：COS 桶为 `ncurator-1324873382`、地域为广州；`download.guanzhangai.cn` 在备案通过后接入腾讯云 CDN，CDN 回源该私有桶。发布子用户使用 [最小 COS 权限模板](../scripts/release/cos/cam-policy.json)，不授予账号管理、域名、DNS 或其他桶权限。CDN 刷新权限后续单独配置，不混入上传密钥。
+
+官网与桌面端的国内地址固定为：
+
+```text
+官网：https://www.guanzhangai.cn
+下载：https://download.guanzhangai.cn
+```
+
+海外官网 `www.ncurator.com` 仍通过 Cloudflare 访问，官网下载 API 会按请求域名选择国内 COS 或海外 R2。桌面端发行包统一使用国内官网与国内更新通道。
+
 publish 会上传候选产物和 fragment，更新对应平台的自动更新 metadata、官网 manifest 与固定下载地址，然后验证公开文件大小、sha512、文件名和 manifest。公开验证成功后才把候选状态标记为 `published`；随后清理本地 `tests/logs/**`，不在失败、prepare-only 或 test-only 阶段清理。
 
-公开验证成功后会清理该平台更早版本的 artifacts 与 release-status，R2 只保留当前最新版本。
+公开验证成功后会清理该平台更早版本的 artifacts 与 release-status，当前发布目标只保留最新版本。
 
 ### 本地保留与清理
 
@@ -228,13 +258,13 @@ prepare 和 test 的临时代码、依赖与构建目录位于 `.ncurator/releas
 ### 自动更新与下载
 
 ```text
-Windows 清单：https://download.ncurator.com/releases/latest/windows.json
-macOS 清单：https://download.ncurator.com/releases/latest/macos.json
-Windows 下载：https://download.ncurator.com/downloads/latest/windows-x64.exe
-macOS arm64：https://download.ncurator.com/downloads/latest/macos-arm64.dmg
-macOS x64：https://download.ncurator.com/downloads/latest/macos-x64.dmg
-Windows 更新：https://download.ncurator.com/updates/latest/latest.yml
-macOS 更新：https://download.ncurator.com/updates/latest/latest-mac.yml
+Windows 清单：https://download.guanzhangai.cn/releases/latest/windows.json
+macOS 清单：https://download.guanzhangai.cn/releases/latest/macos.json
+Windows 下载：https://download.guanzhangai.cn/downloads/latest/windows-x64.exe
+macOS arm64：https://download.guanzhangai.cn/downloads/latest/macos-arm64.dmg
+macOS x64：https://download.guanzhangai.cn/downloads/latest/macos-x64.dmg
+Windows 更新：https://download.guanzhangai.cn/updates/latest/latest.yml
+macOS 更新：https://download.guanzhangai.cn/updates/latest/latest-mac.yml
 ```
 
 应用启动 5 秒后静默检查更新，持续运行时每 4 小时检查一次。发现新版本后由用户主动下载；下载完成后可以立即重启或稍后安装。
@@ -253,10 +283,10 @@ Windows 更新采用“先完成应用关闭、再启动安装器”的时序：
 
 - Tag 已创建但 prepare 中断：基于原 Tag 重新执行 `--prepare-only`。
 - 候选包已生成但测试中断：基于原候选包重新执行 `--test-only`。
-- 上传或 finalize 中断：基于原候选包恢复 publish，或使用 `release:r2:finalize`。
+- 上传或 finalize 中断：基于原候选包恢复 publish，或使用 `release:storage:finalize`。
 - 已发布版本存在问题：通常发布更高版本修复包。回退下载通道不会让已安装客户端自动降级。
 
-同一个 Tag 的 R2 对象如果已存在但哈希不同，禁止覆盖。恢复过程中也不能重新构建并替换候选包。
+同一个 Tag 的对象如果已存在但哈希不同，禁止覆盖。恢复过程中也不能重新构建并替换候选包。
 
 ## 4. 命令参考
 
@@ -297,7 +327,8 @@ pnpm test:e2e:package -- --bundle <release-bundle.json> --case <caseId-1> --case
 
 ```bash
 pnpm release:status -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
-pnpm release:r2:finalize -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
+pnpm release:storage:plan
+pnpm release:storage:finalize -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
 ```
 
 常见失败处理：构建或审计失败时先确认真实运行依赖，不直接放宽包规则；macOS 签名或启动失败时停止该架构发布；正式包 E2E 失败时读取 package summary 和对应 case raw logs；公开 metadata、下载或哈希验证失败时停止更新 latest 通道。

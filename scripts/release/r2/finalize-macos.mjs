@@ -6,7 +6,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { assertReleaseFragment } from './fragment-contract.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
-import { createR2Client } from './client.mjs'
+import { createReleaseStorageClient } from '../storage/client.mjs'
 import { artifactKey, fixedDownloadKey, statusKey } from './storage-layout.mjs'
 import { parseReleaseTag } from '../tag.mjs'
 
@@ -22,7 +22,8 @@ try {
   throw new Error('usage: node scripts/release/r2/finalize-macos.mjs --tag <mac-v1.2.3>')
 }
 
-const { aws, bucket, publicBaseUrl, listKeys, deleteKeys } = await createR2Client(ROOT)
+const { aws, bucket, publicBaseUrl, listKeys, deleteKeys, label } =
+  await createReleaseStorageClient(ROOT)
 const workDirectory = await mkdtemp(path.join(os.tmpdir(), `ncurator-macos-${releaseTag}-`))
 
 const downloadAndVerifyFragment = async (platform) => {
@@ -43,7 +44,7 @@ const downloadAndVerifyFragment = async (platform) => {
         .stdout
     )
     if (Number(remote.ContentLength) !== file.size || remote.Metadata?.sha512 !== file.sha512) {
-      throw new Error(`R2 object does not match release fragment: ${key}`)
+      throw new Error(`${label} object does not match release fragment: ${key}`)
     }
   }
   return fragment

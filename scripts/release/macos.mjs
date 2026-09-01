@@ -18,6 +18,7 @@ import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
 import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
+import { assertLivePublishAllowed, resolveReleaseStorageConfig } from './storage/config.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -56,6 +57,7 @@ if (!releaseVersion || modes.length !== 1) {
   )
 }
 const mode = modes[0][0]
+if (mode === 'publish') assertLivePublishAllowed()
 if (includeX64E2E && mode !== 'test') {
   throw new Error('--include-x64-e2e is only valid with --test-only')
 }
@@ -113,22 +115,7 @@ const validateEnvironment = async () => {
   }
 
   if (mode === 'publish') {
-    for (const name of [
-      'AWS_ACCESS_KEY_ID',
-      'AWS_SECRET_ACCESS_KEY',
-      'R2_ACCOUNT_ID',
-      'R2_BUCKET_NAME',
-      'R2_PUBLIC_BASE_URL'
-    ]) {
-      if (!String(process.env[name] || '').trim()) {
-        throw new Error(`missing environment variable: ${name}`)
-      }
-    }
-    if (
-      String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '') !== 'https://download.ncurator.com'
-    ) {
-      throw new Error('R2_PUBLIC_BASE_URL must be https://download.ncurator.com')
-    }
+    resolveReleaseStorageConfig()
     const awsExecutable =
       String(process.env.NCURATOR_AWS_CLI || '').trim() ||
       path.join(defaultToolRoot, 'awscli', 'bin', 'aws')
@@ -227,7 +214,13 @@ const sanitizedTestEnvironment = () => {
     'AWS_SECRET_ACCESS_KEY',
     'R2_ACCOUNT_ID',
     'R2_BUCKET_NAME',
-    'R2_PUBLIC_BASE_URL'
+    'R2_PUBLIC_BASE_URL',
+    'TENCENT_SECRET_ID',
+    'TENCENT_SECRET_KEY',
+    'COS_BUCKET',
+    'COS_REGION',
+    'COS_PUBLIC_BASE_URL',
+    'NCURATOR_ALLOW_LIVE_PUBLISH'
   ]) {
     delete environment[name]
   }

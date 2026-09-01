@@ -4,7 +4,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { assertReleaseFragment } from './fragment-contract.mjs'
 import { artifactKey, fixedDownloadKey, statusKey } from './storage-layout.mjs'
-import { createR2Client } from './client.mjs'
+import { createReleaseStorageClient } from '../storage/client.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import { parseReleaseTag } from '../tag.mjs'
 
@@ -18,7 +18,8 @@ try {
   throw new Error('usage: node scripts/release/r2/finalize-windows.mjs --tag <windows-v1.2.3>')
 }
 
-const { aws, bucket, publicBaseUrl, listKeys, deleteKeys } = await createR2Client(ROOT)
+const { aws, bucket, publicBaseUrl, listKeys, deleteKeys, label } =
+  await createReleaseStorageClient(ROOT)
 const workDirectory = await mkdtemp(path.join(os.tmpdir(), `ncurator-windows-${releaseTag}-`))
 
 try {
@@ -39,7 +40,7 @@ try {
         .stdout
     )
     if (Number(remote.ContentLength) !== file.size || remote.Metadata?.sha512 !== file.sha512) {
-      throw new Error(`R2 object does not match release fragment: ${key}`)
+      throw new Error(`${label} object does not match release fragment: ${key}`)
     }
   }
 

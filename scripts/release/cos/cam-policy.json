@@ -1,0 +1,22 @@
+{
+  "version": "2.0",
+  "statement": [
+    {
+      "effect": "allow",
+      "action": [
+        "name/cos:GetBucket",
+        "name/cos:HeadObject",
+        "name/cos:GetObject",
+        "name/cos:PutObject",
+        "name/cos:DeleteObject",
+        "name/cos:InitiateMultipartUpload",
+        "name/cos:ListMultipartUploads",
+        "name/cos:ListParts",
+        "name/cos:UploadPart",
+        "name/cos:CompleteMultipartUpload",
+        "name/cos:AbortMultipartUpload"
+      ],
+      "resource": ["qcs::cos:ap-guangzhou:uid/1324873382:ncurator-1324873382/*"]
+    }
+  ]
+}

@@ -74,4 +74,4 @@ dmg:
 npmRebuild: false
 publish:
   provider: generic
-  url: https://download.ncurator.com/updates/latest
+  url: https://download.guanzhangai.cn/updates/latest

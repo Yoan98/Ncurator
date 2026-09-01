@@ -295,7 +295,7 @@
 
 #### WB-COMPOSER-011 使用帮助入口
 
-- 系统行为：Workbench 左侧栏底部在设置入口旁展示使用帮助按钮，点击后通过系统默认浏览器打开官方中文使用手册 `https://www.ncurator.com/zh/manual`。
+- 系统行为：Workbench 左侧栏底部在设置入口旁展示使用帮助按钮，点击后通过系统默认浏览器打开国内官网中文使用手册 `https://www.guanzhangai.cn/zh/manual`。
 - 验收：
   - `WB-COMPOSER-011-AC1` 使用帮助按钮可见，具有“查看使用帮助”的可访问名称和说明。
   - `WB-COMPOSER-011-AC2` 点击使用帮助按钮后，系统打开官方中文使用手册，不改变当前会话和输入草稿。

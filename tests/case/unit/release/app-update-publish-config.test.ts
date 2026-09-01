@@ -2,6 +2,12 @@ import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import {
+  FREE_AI_KEYS_URL,
+  OFFICIAL_DOWNLOAD_PAGE_URL,
+  OFFICIAL_WEBSITE_URL,
+  USER_MANUAL_URL
+} from '../../../../src/shared/constants'
 
 type BuilderConfig = {
   productName?: string
@@ -16,6 +22,21 @@ const readBuilderConfig = async (): Promise<BuilderConfig> =>
   parse(await readFile(path.resolve('electron-builder.yml'), 'utf8')) as BuilderConfig
 
 describe('app update publish config', () => {
+  it('uses one domestic website base for every desktop website entry', async () => {
+    const [packageJsonText, telemetryService] = await Promise.all([
+      readFile(path.resolve('package.json'), 'utf8'),
+      readFile(path.resolve('src/main/services/telemetry/TelemetryService.ts'), 'utf8')
+    ])
+    const packageJson = JSON.parse(packageJsonText) as { homepage?: string }
+
+    expect(OFFICIAL_WEBSITE_URL).toBe('https://www.guanzhangai.cn')
+    expect(USER_MANUAL_URL).toBe(`${OFFICIAL_WEBSITE_URL}/zh/manual`)
+    expect(FREE_AI_KEYS_URL).toBe(`${OFFICIAL_WEBSITE_URL}/zh/free-keys`)
+    expect(OFFICIAL_DOWNLOAD_PAGE_URL).toBe(`${OFFICIAL_WEBSITE_URL}/zh`)
+    expect(packageJson.homepage).toBe(OFFICIAL_WEBSITE_URL)
+    expect(telemetryService).toContain('`${OFFICIAL_WEBSITE_URL}/api/telemetry/events`')
+  })
+
   it('uses the direct update feed and updater-aware NSIS behavior', async () => {
     const [config, include] = await Promise.all([
       readBuilderConfig(),
@@ -24,7 +45,7 @@ describe('app update publish config', () => {
 
     expect(config.publish).toEqual({
       provider: 'generic',
-      url: 'https://download.ncurator.com/updates/latest'
+      url: 'https://download.guanzhangai.cn/updates/latest'
     })
     expect(config.nsis?.include).toBe('build/nsis-updated-silent.nsh')
     expect(config.nsis?.oneClick).toBe(false)
@@ -87,14 +108,15 @@ describe('app update publish config', () => {
     expect(prepareRelease).not.toContain('--actions')
   })
 
-  it('finalizes Windows and macOS release channels independently', async () => {
-    const [windowsRelease, macRelease, windowsFinalize, macFinalize, tagContract] =
+  it('finalizes Windows and macOS release channels independently with a live-publish lock', async () => {
+    const [windowsRelease, macRelease, windowsFinalize, macFinalize, tagContract, storageConfig] =
       await Promise.all([
         readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
         readFile(path.resolve('scripts/release/macos.mjs'), 'utf8'),
         readFile(path.resolve('scripts/release/r2/finalize-windows.mjs'), 'utf8'),
         readFile(path.resolve('scripts/release/r2/finalize-macos.mjs'), 'utf8'),
-        readFile(path.resolve('scripts/release/tag.mjs'), 'utf8')
+        readFile(path.resolve('scripts/release/tag.mjs'), 'utf8'),
+        readFile(path.resolve('scripts/release/storage/config.mjs'), 'utf8')
       ])
 
     expect(windowsRelease).toContain("'r2', 'finalize-windows.mjs'")
@@ -106,6 +128,10 @@ describe('app update publish config', () => {
     expect(windowsFinalize).not.toContain('--keep-old')
     expect(macFinalize).not.toContain('--keep-old')
     expect(tagContract).toContain('/^(mac|windows)-v')
+    expect(windowsRelease).toContain('assertLivePublishAllowed')
+    expect(macRelease).toContain('assertLivePublishAllowed')
+    expect(storageConfig).toContain("RELEASE_STORAGE_TARGET || 'cos'")
+    expect(storageConfig).toContain('download.guanzhangai.cn')
   })
 
   it('shares source caches directly and warms packaged E2E before parallel workers', async () => {
