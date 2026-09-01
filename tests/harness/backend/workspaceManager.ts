@@ -1,4 +1,4 @@
-import { mkdtemp, rm, mkdir, cp } from 'node:fs/promises'
+import { mkdtemp, rm, mkdir, cp, realpath } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 
@@ -9,7 +9,7 @@ export type FixtureCopy = {
 
 export const createIsolatedWorkspace = async (caseId: string): Promise<string> => {
   const safeCaseId = caseId.replace(/[^a-zA-Z0-9-_]/g, '-')
-  return await mkdtemp(path.join(os.tmpdir(), `ncurator-ai-${safeCaseId}-`))
+  return await realpath(await mkdtemp(path.join(os.tmpdir(), `ncurator-ai-${safeCaseId}-`)))
 }
 
 export const copyFixturesIntoWorkspace = async (

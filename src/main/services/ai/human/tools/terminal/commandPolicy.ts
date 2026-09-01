@@ -1,3 +1,4 @@
+import fs from 'node:fs'
 import path from 'node:path'
 import type { AiRuntimePlatform } from '../../../types'
 import { getAiRuntimePlatform } from '../../../utils/platform'
@@ -119,6 +120,23 @@ export const analyzeTerminalCommandPolicy = (
 const isRedirectionOperator = (token: string): boolean =>
   token === '>' || token === '>>' || token === '1>' || token === '1>>'
 
+const realPathCache = new Map<string, string>()
+
+const realpathNearestExisting = (value: string, pathApi: typeof path): string => {
+  const cached = realPathCache.get(value)
+  if (cached) return cached
+  let resolved: string
+  try {
+    resolved = fs.realpathSync.native(value)
+  } catch {
+    const parent = pathApi.dirname(value)
+    if (parent === value) return value
+    resolved = pathApi.join(realpathNearestExisting(parent, pathApi), pathApi.basename(value))
+  }
+  realPathCache.set(value, resolved)
+  return resolved
+}
+
 export const isPathInsideRoot = (candidatePath: string, rootPath: string) => {
   const useWindowsPaths =
     /^[a-z]:[\\/]/i.test(candidatePath) ||
@@ -129,7 +147,12 @@ export const isPathInsideRoot = (candidatePath: string, rootPath: string) => {
   const root = pathApi.resolve(rootPath)
   const candidate = pathApi.resolve(candidatePath)
   const rel = pathApi.relative(root, candidate)
-  return rel === '' || (!rel.startsWith('..') && !pathApi.isAbsolute(rel))
+  if (rel === '' || (!rel.startsWith('..') && !pathApi.isAbsolute(rel))) return true
+
+  const resolvedRoot = realpathNearestExisting(root, pathApi)
+  const resolvedCandidate = realpathNearestExisting(candidate, pathApi)
+  const resolvedRel = pathApi.relative(resolvedRoot, resolvedCandidate)
+  return resolvedRel === '' || (!resolvedRel.startsWith('..') && !pathApi.isAbsolute(resolvedRel))
 }
 
 export const resolveToolPath = (rawPath: string): string | null => {

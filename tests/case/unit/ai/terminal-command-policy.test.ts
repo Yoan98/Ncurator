@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import fs from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 import {
   analyzeTerminalCommand,
   analyzeTerminalCommandPolicy,
   hasDetachedExecution,
+  isPathInsideRoot,
   isTerminalTerminationCommand,
   resolveToolPath
 } from '../../../../src/main/services/ai/human/tools/terminal/commandPolicy'
@@ -257,5 +260,38 @@ describe('ai unit terminal dangerous-command policy', () => {
     expect(resolveToolPath('notes/report.docx')).toBeNull()
     expect(resolveToolPath('')).toBeNull()
     expect(resolveToolPath('   ')).toBeNull()
+  })
+
+  it('isPathInsideRoot accepts paths inside the root and rejects escapes', () => {
+    const root = path.resolve('/tmp/workspace')
+    expect(isPathInsideRoot(path.resolve('/tmp/workspace/report.docx'), root)).toBe(true)
+    expect(isPathInsideRoot(path.resolve('/tmp/workspace/a/b/c.docx'), root)).toBe(true)
+    expect(isPathInsideRoot(path.resolve('/tmp/workspace'), root)).toBe(true)
+    expect(isPathInsideRoot(path.resolve('/tmp/other/report.docx'), root)).toBe(false)
+    expect(isPathInsideRoot(path.resolve('/tmp/workspace/../escape.docx'), root)).toBe(false)
+  })
+
+  it('isPathInsideRoot resolves symlink aliases before comparing', () => {
+    const tmp = os.tmpdir()
+    const root = path.join(tmp, 'workspace')
+    const candidate = path.join(fs.realpathSync(tmp), 'workspace', 'report.docx')
+    expect(isPathInsideRoot(candidate, root)).toBe(true)
+    expect(
+      isPathInsideRoot(path.join(fs.realpathSync(tmp), 'other', 'x.docx'), root)
+    ).toBe(false)
+  })
+
+  it('isPathInsideRoot tolerates non-existent candidate paths', () => {
+    const tmp = os.tmpdir()
+    const root = path.join(tmp, 'workspace')
+    const candidate = path.join(fs.realpathSync(tmp), 'workspace', 'not-created-yet.docx')
+    expect(isPathInsideRoot(candidate, root)).toBe(true)
+  })
+
+  it('isPathInsideRoot handles windows-style drive letter casing', () => {
+    const root = 'C:\\Users\\Foo\\workspace'
+    const candidate = 'c:\\users\\foo\\workspace\\a.docx'
+    expect(isPathInsideRoot(candidate, root)).toBe(true)
+    expect(isPathInsideRoot('c:\\users\\foo\\other\\a.docx', root)).toBe(false)
   })
 })
