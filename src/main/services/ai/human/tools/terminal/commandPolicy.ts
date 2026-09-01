@@ -34,14 +34,36 @@ export const isTerminalTerminationCommand = (command: string): boolean => {
   return first !== undefined && TERMINATION_COMMAND_WORDS.has(first)
 }
 
+// 直接读写文件的命令（cp/mv/rm/...），参数或目标含 xlsx 时视为变更。
+const EXCEL_FILE_COMMAND_WORDS =
+  /(?:^|\s)(?:cp|mv|rm|touch|tee|sed|rsync|convert|set-content|add-content|out-file|copy-item|move-item|remove-item)(?:\s|$)/i
+
+// 显式写入/导出动作词。
+const EXCEL_WRITE_ACTION_WORDS = /(?:^|\s)(?:set-cell|write|save|export)(?:\s|$)/i
+
+// 运行脚本的解释器：外部脚本看不到内容，把 xlsx 作为参数时保守拦截；
+// 内联执行（-c/-e/heredoc）则改为检查代码内是否出现写 Excel 的 API。
+const EXCEL_SCRIPT_INTERPRETER_WORDS =
+  /(?:^|\s)(?:python|python3|node|perl|powershell|pwsh)(?:\s|$)/i
+
+// 内联代码执行：`python3 -c "..."`、`node -e "..."`、heredoc `<<'EOF'`。
+const INLINE_CODE_EXECUTION =
+  /(?:python|python3|node|perl|powershell|pwsh)\b[^\n]*\s-[ce]\b|<<\s*['"]?[A-Za-z_]*['"]?/i
+
+// 内联代码中显式写 Excel 的 API。
+const EXCEL_INLINE_WRITE_API =
+  /\.save\s*\(|to_excel\s*\(|xlsxwriter|exceljs|writeFile(?:Sync)?\s*\(/i
+
 export const isTerminalExcelMutationCommand = (command: string): boolean => {
   const normalized = String(command || '').trim()
   if (!EXCEL_FILE_PATTERN.test(normalized)) return false
-  return (
-    /(?:^|\s)(?:cp|mv|rm|touch|tee|sed|perl|python|python3|node|powershell|pwsh|rsync|set-content|add-content|out-file|copy-item|move-item|remove-item|set-cell|write|save|export|convert)(?:\s|$)/i.test(
-      normalized
-    ) || /(?:>|>>|\bopenpyxl\b|\bexceljs\b|\bwriteFile\b|\bwrite\b|\bsave\b)/i.test(normalized)
-  )
+  if (INLINE_CODE_EXECUTION.test(normalized)) {
+    return EXCEL_INLINE_WRITE_API.test(normalized)
+  }
+  if (/>/.test(normalized)) return true
+  if (EXCEL_FILE_COMMAND_WORDS.test(normalized)) return true
+  if (EXCEL_WRITE_ACTION_WORDS.test(normalized)) return true
+  return EXCEL_SCRIPT_INTERPRETER_WORDS.test(normalized)
 }
 
 const isWindowsPlatform = (platform?: AiRuntimePlatform): boolean =>
