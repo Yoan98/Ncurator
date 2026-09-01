@@ -188,7 +188,8 @@ describe('settings general e2e', () => {
             message: '点击新增配置，确认顶部拖动层没有遮挡页面操作按钮。',
             run: async () => {
               await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
-              await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
+              // 新增默认是推荐类型；模态框本身可见即可证明拖动层没有挡住操作按钮。
+              await getSettingsLocator(page, settingsSelectors.modelModal).waitFor({
                 state: 'visible'
               })
             }
@@ -199,7 +200,7 @@ describe('settings general e2e', () => {
             sidebarCollapseRoundTrip,
             addModalVisible: await getSettingsLocator(
               page,
-              settingsSelectors.modelBaseUrlInput
+              settingsSelectors.modelModal
             ).isVisible()
           }
         },

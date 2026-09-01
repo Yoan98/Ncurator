@@ -9,8 +9,8 @@ import {
   isSupportedLocalFilePath
 } from '../../../../src/main/services/ingestion/loader'
 
-const SALES_FIXTURE_PATH = path.resolve('tests/fixtures/backend/销售额统计表.xlsx')
-const BUDGET_FIXTURE_PATH = path.resolve('tests/fixtures/backend/预算底稿.xlsm')
+const SALES_FIXTURE_PATH = path.resolve('tests/fixtures/workspace/销售额统计表.xlsx')
+const BUDGET_FIXTURE_PATH = path.resolve('tests/fixtures/workspace/预算底稿.xlsm')
 
 describe('Excel ingestion boundaries', () => {
   let rootPath = ''

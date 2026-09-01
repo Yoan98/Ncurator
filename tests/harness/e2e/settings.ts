@@ -333,6 +333,26 @@ export const navigateToSettingsSection = async (
   })
 }
 
+export const selectSettingsPresetProviderOption = async (
+  page: Page,
+  label: string
+): Promise<void> => {
+  const providerSelect = getSettingsLocator(page, settingsSelectors.modelPresetProviderSelect)
+  await providerSelect.waitFor({ state: 'visible' })
+  await providerSelect.locator('.ant-select-selector').click()
+  const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').last()
+  await dropdown.waitFor({ state: 'visible' })
+  const option = dropdown.locator('.ant-select-item-option').filter({ hasText: label }).first()
+  await option.waitFor({ state: 'attached' })
+  await option.scrollIntoViewIfNeeded()
+  // Ant Select virtual list / animated options can briefly report as unstable; force keeps the
+  // real UI click path without waiting out the animation race.
+  await option.click({ force: true })
+  await providerSelect.locator('.ant-select-selection-item').filter({ hasText: label }).waitFor({
+    state: 'visible'
+  })
+}
+
 export const createModelConfigThroughSettingsUi = async (
   page: Page,
   input: { name?: string; baseUrl: string; apiKey: string }
@@ -342,9 +362,8 @@ export const createModelConfigThroughSettingsUi = async (
   await getSettingsLocator(page, settingsSelectors.modelTypeCustom).click()
   await getSettingsLocator(page, settingsSelectors.modelNameInput).fill(input.name || input.baseUrl)
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({ state: 'visible' })
-  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
-    .locator('input')
-    .fill(input.baseUrl)
+  // data-testid is on the real <input>; do not nest another .locator('input').
+  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).fill(input.baseUrl)
   await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(input.apiKey)
   await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
   await page
@@ -359,18 +378,10 @@ export const createPresetModelConfigThroughSettingsUi = async (
 ): Promise<void> => {
   await navigateToSettingsSection(page, 'model')
   await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
-  const providerSelect = getSettingsLocator(page, settingsSelectors.modelPresetProviderSelect)
-  await providerSelect.locator('.ant-select-selector').click()
-  await page
-    .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
-    .last()
-    .locator('[role="option"]')
-    .filter({ hasText: getPresetProvider(input.providerId)?.label || input.providerId })
-    .first()
-    .click()
+  const label = getPresetProvider(input.providerId)?.label || input.providerId
+  await selectSettingsPresetProviderOption(page, label)
   await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(input.apiKey)
   await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
-  const label = getPresetProvider(input.providerId)?.label || input.providerId
   await page.locator('tbody tr').filter({ hasText: label }).waitFor({ state: 'visible' })
 }
 

@@ -35,7 +35,7 @@ describe('unit workspace backend', () => {
       suite: 'workspace',
       groups: ['files'],
       description: 'workspace 文件索引 worker 协议与 embedding batch 限制保持稳定。',
-      fixtures: ['tests/fixtures/workspace', 'tests/fixtures/backend'],
+      fixtures: ['tests/fixtures/workspace'],
       runMode: 'single',
       execute: async (runtime) => {
         const normalChunks = [
@@ -118,7 +118,7 @@ describe('unit workspace backend', () => {
           contentHash: textContentHash,
           fileExt: '.txt'
         })
-        const xlsxFilePath = path.join(runtime.workspaceRoot, 'backend', '销售额统计表.xlsx')
+        const xlsxFilePath = path.join(runtime.workspaceRoot, '销售额统计表.xlsx')
         const xlsxWorkerSuccess = await handleWorkspacePrepareWorkerRequest({
           requestId: 'worker-contract-xlsx-success',
           action: 'prepare_source',

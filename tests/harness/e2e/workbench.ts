@@ -487,9 +487,8 @@ export const configureLiveModelThroughSettingsUi = async (
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
     state: 'visible'
   })
-  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
-    .locator('input')
-    .fill(env.baseUrl)
+  // data-testid is on the real <input>; do not nest another .locator('input').
+  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).fill(env.baseUrl)
   await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(env.apiKey)
   await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
   await page.locator('tbody tr').filter({ hasText: 'Live Model' }).waitFor({

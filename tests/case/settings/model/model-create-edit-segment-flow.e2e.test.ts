@@ -4,7 +4,8 @@ import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_LONG_E2E_TIMEOUT_MS,
   getSettingsLocator,
-  navigateToSettingsSection
+  navigateToSettingsSection,
+  selectSettingsPresetProviderOption
 } from '../../../harness/e2e/settings'
 
 describe('settings model e2e', () => {
@@ -24,16 +25,6 @@ describe('settings model e2e', () => {
           const customRadio = () => getSettingsLocator(page, settingsSelectors.modelTypeCustom)
           const providerSelect = () =>
             getSettingsLocator(page, settingsSelectors.modelPresetProviderSelect)
-          const selectProviderOption = async (label: string): Promise<void> => {
-            await providerSelect().locator('.ant-select-selector').click()
-            await page
-              .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
-              .last()
-              .locator('[role="option"]')
-              .filter({ hasText: label })
-              .first()
-              .click()
-          }
 
           let presetNameInputCount = 0
 
@@ -55,7 +46,7 @@ describe('settings model e2e', () => {
             name: 'create-preset-config',
             message: '推荐类型选择 DeepSeek 并只填写 API Key 保存。',
             run: async () => {
-              await selectProviderOption('DeepSeek')
+              await selectSettingsPresetProviderOption(page, 'DeepSeek')
               await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(
                 'sk-segment-preset'
               )
@@ -84,9 +75,9 @@ describe('settings model e2e', () => {
               await getSettingsLocator(page, settingsSelectors.modelNameInput).fill(
                 'Segment 自定义'
               )
-              await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
-                .locator('input')
-                .fill('https://segment.local/v1')
+              await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).fill(
+                'https://segment.local/v1'
+              )
               await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(
                 'sk-segment-custom'
               )
@@ -113,7 +104,7 @@ describe('settings model e2e', () => {
               await providerSelect().waitFor({ state: 'visible' })
               presetProviderSelectLocked =
                 (await providerSelect().locator('.ant-select-disabled').count()) > 0
-              await selectProviderOption('Kimi')
+              await selectSettingsPresetProviderOption(page, 'Kimi')
               await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
               await page
                 .locator('tbody tr')

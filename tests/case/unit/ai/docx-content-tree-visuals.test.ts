@@ -112,7 +112,7 @@ describe('docx recursive content tree visuals', () => {
   })
 
   it('parses every visual kind from the real OOXML fixture', async () => {
-    const fixture = path.resolve('tests/fixtures/backend/docx-visual-kinds.docx')
+    const fixture = path.resolve('tests/fixtures/workspace/docx-visual-kinds.docx')
     const bundle = await loadDocxBundle(await fs.readFile(fixture))
     const index = buildNodeIndex(
       bundle.documentDom,
