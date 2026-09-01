@@ -50,7 +50,7 @@
 - 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。
-- `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再覆盖冻结 sidecar bin 通过隔离 context 抓取，以及 `browser_use` 服务不可用诊断；禁止使用 sidecar 内置浏览器或 Electron 默认 context。
+- `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再让冻结 sidecar bin 的 Python Playwright 显式复用该测试 Electron 的 Node，通过隔离 context 抓取；另覆盖 `browser_use` 服务不可用诊断。禁止使用 sidecar 内置 Node/浏览器或 Electron 默认 context。
 
 ### 2.2 `human`
 
@@ -495,7 +495,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：`web_search` 传 `{ type: 'fetch', url }` 会返回扁平结构的 `requestedUrl/finalUrl`、标题、`markdown`、发布时间与分组 links；其中 `markdown` 内容来源于 crawl4ai 的 `fit_markdown`。
 - Why：单页抓取是网页正文入口，必须稳定返回可被 brain 继续消费的网页事实和导航线索。
-- How：启动本地 HTTP server 和测试 Electron CDP host，创建专用非持久化 partition，通过真实冻结 sidecar bin 连接唯一 marker 对应的隔离 context 返回抓取结果，调用 `web_search({ type: 'fetch', url })`。
+- How：启动本地 HTTP server 和测试 Electron CDP host，创建专用非持久化 partition，通过 `PLAYWRIGHT_NODEJS_PATH` 让真实冻结 sidecar bin 的 Python Playwright 复用测试 Electron Node，再连接唯一 marker 对应的隔离 context 返回抓取结果，调用 `web_search({ type: 'fetch', url })`。
 - Oracle：结果包含 `requestedUrl`、`finalUrl`、`title`、`markdown`、`publishedAt`、`links.internal/external`。
 - Not：不验证复杂浏览器交互或外网可达性。
 

@@ -76,6 +76,7 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
 
   <terminal_wait_contract>
     - 当 terminal_run 返回命令仍在执行时，多尝试等待终端命令完成后（再读取结果或继续），不要在命令未完成时空转轮询；仅当判断等待不合理时才中断并分析原因。
+    - 当需要等待操作时，使用终端指令来进行等待。
   </terminal_wait_contract>
 
   <calculation_contract>
@@ -123,9 +124,7 @@ export const buildBrainUserMessage = (input: {
     : ''
   const renderActiveState = (): string => {
     const skillsLine =
-      learnedSkillIds.length > 0
-        ? `已学习技能：${learnedSkillIds.join('、')}`
-        : '已学习技能：无'
+      learnedSkillIds.length > 0 ? `已学习技能：${learnedSkillIds.join('、')}` : '已学习技能：无'
     const planLine =
       input.injectPlan && plan.length > 0
         ? `计划进度：${plan

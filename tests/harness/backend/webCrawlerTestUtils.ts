@@ -8,6 +8,9 @@ import { CdpEndpointService } from '../../../src/main/services/browser/CdpEndpoi
 import { ManagedWebCrawlerService } from '../../../src/main/services/webCrawler/WebCrawlerService'
 
 const electronExecutablePath = createRequire(import.meta.url)('electron') as string
+const playwrightNodeExecutablePath = path.resolve(
+  String(process.env.NCURATOR_TEST_PLAYWRIGHT_NODEJS_PATH || electronExecutablePath)
+)
 
 const stopProcess = async (child: ChildProcess): Promise<void> => {
   if (child.exitCode !== null || child.signalCode !== null) return
@@ -63,6 +66,7 @@ export const createWebCrawlerService = async (): Promise<ManagedWebCrawlerServic
   const service = new ManagedWebCrawlerService({
     appRootPath: process.cwd(),
     isPackaged: false,
+    playwrightNodeExecutablePath,
     sidecarEnv: {
       CRAWL4_AI_BASE_DIRECTORY: baseDirectory
     },

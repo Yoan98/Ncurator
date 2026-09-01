@@ -32,6 +32,7 @@ type PendingRequest = {
 export type WebCrawlerServiceOptions = {
   sidecarCommand?: SidecarCommand
   sidecarEnv?: NodeJS.ProcessEnv
+  playwrightNodeExecutablePath?: string
   resolveCdpConnection?: () => Promise<WebCrawlerCdpConnection>
   appRootPath?: string
   isPackaged?: boolean
@@ -45,6 +46,8 @@ const PACKAGED_SIDECAR_BIN_DIR = 'bin'
 const PYTHON_SIDECAR_DEBUG_ENV = 'NCURATOR_WEB_CRAWLER_USE_PYTHON_SIDECAR'
 const SIDECAR_CDP_URL_ENV = 'NCURATOR_WEB_CRAWLER_CDP_URL'
 const SIDECAR_CDP_CONTEXT_MARKER_ENV = 'NCURATOR_WEB_CRAWLER_CDP_CONTEXT_MARKER_URL'
+const PLAYWRIGHT_NODEJS_PATH_ENV = 'PLAYWRIGHT_NODEJS_PATH'
+const ELECTRON_RUN_AS_NODE_ENV = 'ELECTRON_RUN_AS_NODE'
 const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 const DEV_SIDECAR_SCRIPT_PATH = path.join(
   'resources',
@@ -437,6 +440,7 @@ const buildSidecarError = (response: WebCrawlerSidecarResponse): Error => {
 
 export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
   private readonly sidecarCommand: SidecarCommand
+  private readonly playwrightNodeExecutablePath: string
   private readonly resolveCdpConnection?: () => Promise<WebCrawlerCdpConnection>
   private readonly requestTimeoutMs: number
   private child?: ChildProcessWithoutNullStreams
@@ -448,6 +452,13 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
 
   public constructor(options: WebCrawlerServiceOptions = {}) {
     this.sidecarCommand = options.sidecarCommand || resolveDefaultSidecarCommand(options)
+    this.playwrightNodeExecutablePath = path.resolve(
+      options.playwrightNodeExecutablePath || process.execPath
+    )
+    assertExecutableExists(
+      this.playwrightNodeExecutablePath,
+      'missing Node runtime for Python Playwright'
+    )
     this.resolveCdpConnection = options.resolveCdpConnection
     this.requestTimeoutMs = Math.max(
       1_000,
@@ -523,6 +534,8 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
       env: {
         ...process.env,
         ...this.sidecarCommand.env,
+        [PLAYWRIGHT_NODEJS_PATH_ENV]: this.playwrightNodeExecutablePath,
+        [ELECTRON_RUN_AS_NODE_ENV]: '1',
         [SIDECAR_CDP_URL_ENV]: cdpUrl,
         [SIDECAR_CDP_CONTEXT_MARKER_ENV]: contextMarkerUrl
       },

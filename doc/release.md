@@ -157,9 +157,9 @@ macOS 需要已安装并信任的 `Ncurator Update Signing` P12。当前使用�
 
 `pnpm run build` 主要完成：
 
-1. 准备 native 模块和网页抓取 Python sidecar，完成类型检查与应用构建；sidecar 保留 DDG、Crawl4AI 和 Playwright 驱动，但复用 Electron Chromium，不下载或打包 Playwright 浏览器。
-2. 追踪生产依赖，生成最小化 `release-stage/app`。
-3. 验证 DOCX、PDF、PDF worker 和进程边界，混淆 `out/main`。
+1. 准备 native 模块和网页抓取 Python sidecar，完成类型检查与应用构建；sidecar 保留 DDG、Crawl4AI、Python Playwright 和 Playwright 驱动 JavaScript，但复用 Electron 的 Chromium 与 Node，不下载或打包 Playwright 浏览器和 Node。
+2. 追踪生产依赖，生成最小化 `release-stage/app`；只在 trace 未触达待删目录时，定向移除 MathJax 重复发行物、`pdf-parse` 未使用的 PDF.js 版本、已进入 Renderer bundle 的 ExcelJS browser dist，以及非 Windows 包中的 ConPTY 源码。
+3. 在裁剪后真实验证 DOCX/PDF 读取、MathJax 公式转 SVG、ExcelJS 写入回读、PDF worker 和进程边界，再混淆 `out/main`。
 4. 审计 staging，再由 electron-builder 生成安装包。
 5. 审计真实 `win-unpacked` 或 `.app` 的文件、依赖、敏感信息和体积。
 6. macOS 额外执行签名和真实启动验证。
@@ -177,7 +177,9 @@ release-stage/
     └── resources/{native,web_crawler_sidecar,open-with}/
 ```
 
-安装包不得包含源码、测试、文档、开发配置、`.env`、锁文件、Source Map、测试日志、fixture、私钥或错误平台文件。网页抓取 sidecar 不得包含 `.local-browsers` 或 `chromium_headless_shell-*`，且解包体积不得超过 400 MiB；staging 和正式包审计都会硬校验。`app.asar` 不是加密，所有 `VITE_*` 变量都按公开信息处理。
+安装包不得包含源码、测试、文档、开发配置、`.env`、锁文件、Source Map、测试日志、fixture、私钥或错误平台文件。网页抓取 sidecar 必须保留 Playwright 驱动 JavaScript，不得包含 Playwright Node、`.local-browsers` 或 `chromium_headless_shell-*`，且解包体积不得超过 400 MiB；staging 和正式包审计都会硬校验。被定向裁剪的 Node 目录同样属于审计禁区，未来 trace 如果触达这些目录会在删除前直接使构建失败。`app.asar` 不是加密，所有 `VITE_*` 变量都按公开信息处理。
+
+electron-builder 使用 `maximum` 压缩，以更慢的发布构建换取更小的安装包，不改变安装后的文件和运行逻辑。2026-09-01 的 macOS arm64 实测基线为：`.app` 776.2 MiB、`app.asar` 184.0 MiB、DMG 273.9 MiB、ZIP 289.1 MiB；同一 staging 下，`maximum` 相比默认压缩使 DMG 减少 26.1 MiB，ZIP 减少约 1.0 MiB。
 
 候选 bundle 绑定 Tag、commit、release fragment、安装包、更新文件、大小、sha256 和 sha512。测试和发布前都会重新验证这些内容。
 

@@ -1,6 +1,7 @@
 appId: com.yoan.ncurator
 productName: 馆长
 artifactName: Ncurator-${os}-${arch}.${ext}
+compression: maximum
 directories:
   app: release-stage/app
   buildResources: build

@@ -7,6 +7,7 @@ import { createPackage } from '@electron/asar'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertSafePackagePaths,
+  assertWebCrawlerSidecarPackage,
   normalizeRelativePath
 } from '../../../../scripts/build/package/content-policy.mjs'
 import { PROTECTED_MAIN_PLAINTEXT_MARKERS } from '../../../../scripts/build/package/obfuscation.mjs'
@@ -31,12 +32,49 @@ describe('package content policy paths', () => {
   })
 
   it('permits ExcelJS runtime modules while rejecting other doc directories', () => {
+    expect(() => assertSafePackagePaths(['node_modules/exceljs/lib/doc/workbook.js'])).not.toThrow()
     expect(() =>
-      assertSafePackagePaths(['node_modules/exceljs/lib/doc/workbook.js'])
-    ).not.toThrow()
-    expect(() => assertSafePackagePaths(['node_modules/runtime-package/lib/doc/readme.js'])).toThrow(
-      'forbidden directory doc'
+      assertSafePackagePaths(['node_modules/runtime-package/lib/doc/readme.js'])
+    ).toThrow('forbidden directory doc')
+  })
+
+  it('rejects runtime directories covered by deterministic package pruning', () => {
+    expect(() => assertSafePackagePaths(['node_modules/mathjax-full/es5/tex-svg.js'])).toThrow(
+      'removable MathJax distribution'
     )
+    expect(() =>
+      assertSafePackagePaths(['node_modules/pdf-parse/lib/pdf.js/v2.0.550/build/pdf.js'])
+    ).toThrow('unused PDF.js version')
+    expect(() => assertSafePackagePaths(['node_modules/exceljs/dist/exceljs.js'])).toThrow(
+      'bundled ExcelJS browser distribution'
+    )
+  })
+
+  it('requires Playwright driver JavaScript and rejects its bundled Node runtime', () => {
+    const driver = {
+      relativePath:
+        'resources/web_crawler_sidecar/bin/app/_internal/playwright/driver/package/cli.js',
+      size: 10
+    }
+    expect(assertWebCrawlerSidecarPackage([driver], 'fixture')).toBe(10)
+    expect(() =>
+      assertWebCrawlerSidecarPackage(
+        [
+          driver,
+          {
+            relativePath: 'resources/web_crawler_sidecar/bin/app/_internal/playwright/driver/node',
+            size: 100
+          }
+        ],
+        'fixture'
+      )
+    ).toThrow('bundled Playwright Node runtime')
+    expect(() =>
+      assertWebCrawlerSidecarPackage(
+        [{ relativePath: 'resources/web_crawler_sidecar/bin/app/app', size: 10 }],
+        'fixture'
+      )
+    ).toThrow('missing the Python Playwright driver JavaScript')
   })
 
   it('audits nested files in an asar archive on the current platform', async () => {
@@ -54,10 +92,32 @@ describe('package content policy paths', () => {
       'Release',
       'spawn-helper'
     )
+    const sidecarExecutablePath = path.join(
+      packagedApp,
+      'resources',
+      'web_crawler_sidecar',
+      'bin',
+      'web_crawler_sidecar'
+    )
+    const playwrightDriverPath = path.join(
+      packagedApp,
+      'resources',
+      'web_crawler_sidecar',
+      'bin',
+      '_internal',
+      'playwright',
+      'driver',
+      'package',
+      'cli.js'
+    )
     await mkdir(path.join(appSource, 'out', 'main'), { recursive: true })
     await mkdir(path.dirname(archivePath), { recursive: true })
     await mkdir(path.dirname(nodePtyHelperPath), { recursive: true })
+    await mkdir(path.dirname(sidecarExecutablePath), { recursive: true })
+    await mkdir(path.dirname(playwrightDriverPath), { recursive: true })
     await writeFile(nodePtyHelperPath, '', { mode: 0o755 })
+    await writeFile(sidecarExecutablePath, '', { mode: 0o755 })
+    await writeFile(playwrightDriverPath, 'module.exports = {}\n')
     const vcRuntimeDllDirectory = resolveVcRuntimeDllDirectory(packagedApp)
     await mkdir(vcRuntimeDllDirectory, { recursive: true })
     for (const filename of VC_REDIST_DLL_NAMES) {

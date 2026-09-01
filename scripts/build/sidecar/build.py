@@ -50,6 +50,21 @@ def copy_playwright_driver_bundle(sidecar_dist_dir: Path) -> None:
         ignore=shutil.ignore_patterns(".local-browsers"),
     )
 
+    bundled_node = target / (
+        "node.exe" if platform.system().lower().startswith("windows") else "node"
+    )
+    if bundled_node.exists():
+        bundled_node.unlink()
+
+
+def assert_no_playwright_bundled_node(sidecar_dist_dir: Path) -> None:
+    driver_dir = sidecar_dist_dir / "_internal" / "playwright" / "driver"
+    bundled_nodes = [driver_dir / "node", driver_dir / "node.exe"]
+    forbidden = [candidate for candidate in bundled_nodes if candidate.exists()]
+    if forbidden:
+        paths = ", ".join(str(item.relative_to(sidecar_dist_dir)) for item in forbidden)
+        raise RuntimeError(f"Playwright must reuse the Electron Node runtime: {paths}")
+
 
 def assert_no_playwright_browser_bundle(sidecar_dist_dir: Path) -> None:
     forbidden = []
@@ -148,6 +163,7 @@ def main() -> int:
     copy_playwright_driver_bundle(sidecar_dist_dir)
     prune_non_runtime_files(sidecar_dist_dir)
     assert_no_playwright_browser_bundle(sidecar_dist_dir)
+    assert_no_playwright_bundled_node(sidecar_dist_dir)
     return 0
 
 
