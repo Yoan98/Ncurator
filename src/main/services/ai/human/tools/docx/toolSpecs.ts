@@ -53,11 +53,7 @@ export const DOCX_READ_OUTLINE_TOOL_SPEC = {
     renderSuccess: renderDocxOutlineModelResult
   },
   activityActionType: 'docx_read_outline'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxOutlineSchema>,
-  'docx_read_outline',
-  'docx-read'
->
+} satisfies DocxToolSpec<z.infer<typeof docxOutlineSchema>, 'docx_read_outline', 'docx-read'>
 
 export const DOCX_SEARCH_TOOL_SPEC = {
   name: 'docx_search',
@@ -89,11 +85,7 @@ export const DOCX_READ_NODES_TOOL_SPEC = {
     renderSuccess: renderDocxReadNodesModelResult
   },
   activityActionType: 'docx_read_nodes'
-} satisfies DocxToolSpec<
-  z.infer<typeof docxReadNodesSchema>,
-  'docx_read_nodes',
-  'docx-read'
->
+} satisfies DocxToolSpec<z.infer<typeof docxReadNodesSchema>, 'docx_read_nodes', 'docx-read'>
 
 const defineMutationSpec = <
   TName extends RuntimeToolName,
