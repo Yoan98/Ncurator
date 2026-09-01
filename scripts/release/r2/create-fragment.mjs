@@ -25,16 +25,6 @@ const definitions = {
       ['Ncurator-mac-arm64.zip', 'Ncurator-mac-arm64.zip', 'update'],
       ['Ncurator-mac-arm64.zip.blockmap', 'Ncurator-mac-arm64.zip.blockmap', 'update']
     ]
-  },
-  'macos-x64': {
-    metadata: 'latest-mac.yml',
-    signature: 'mac-update-signature.txt',
-    assets: () => [
-      ['Ncurator-mac-x64.dmg', 'Ncurator-mac-x64.dmg', 'installer'],
-      ['Ncurator-mac-x64.dmg.blockmap', 'Ncurator-mac-x64.dmg.blockmap', 'update'],
-      ['Ncurator-mac-x64.zip', 'Ncurator-mac-x64.zip', 'update'],
-      ['Ncurator-mac-x64.zip.blockmap', 'Ncurator-mac-x64.zip.blockmap', 'update']
-    ]
   }
 }
 

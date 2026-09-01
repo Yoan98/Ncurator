@@ -294,6 +294,53 @@ describe('ai tool web backend', () => {
     })
   })
 
+  it('web-search-fetch-reuses-one-sidecar-for-multiple-pages', async () => {
+    await runBackendCase({
+      caseId: 'web-search-fetch-reuses-one-sidecar-for-multiple-pages',
+      harnessMode: 'tool-real',
+      domain: 'ai',
+      suite: 'tool',
+      groups: ['web-browsing'],
+      description: '验证同一个 sidecar 和 Crawl4AI 实例可以连续抓取多个页面。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const server = await createLocalServer()
+        const webCrawlerService = await createWebCrawlerService()
+        try {
+          const harness = createWebToolHarness(runtime, { webCrawlerService })
+          const policy = await harness.invoke<WebSearchFetchPayload>('web_search', {
+            type: 'fetch',
+            url: `${server.baseUrl}/policy`
+          })
+          const guide = await harness.invoke<WebSearchFetchPayload>('web_search', {
+            type: 'fetch',
+            url: `${server.baseUrl}/guide`
+          })
+          return { policy, guide }
+        } finally {
+          await webCrawlerService.close()
+          await server.close()
+        }
+      },
+      assert: async (result, runtime) => {
+        runtime.assertThat(
+          !result.policy.error &&
+            !result.guide.error &&
+            result.policy.finalUrl?.endsWith('/policy') === true &&
+            result.guide.finalUrl?.endsWith('/guide') === true &&
+            result.policy.markdown?.includes('申报截止时间为 2026-09-30') === true &&
+            result.guide.markdown?.includes('办理材料包括身份证') === true,
+          {
+            name: 'web-search-fetch-reuses-sidecar-without-serialization-failure',
+            message: '连续抓取应复用同一个 sidecar，并且两个页面都返回可用正文。',
+            data: result
+          }
+        )
+      }
+    })
+  })
+
   it('web-search-fetch-http-failure', async () => {
     await runBackendCase({
       caseId: 'web-search-fetch-http-failure',
@@ -328,7 +375,8 @@ describe('ai tool web backend', () => {
             result.finalUrl?.endsWith('/missing') === true,
           {
             name: 'web-search-fetch-preserves-http-failure-fields',
-            message: 'web_search type=fetch HTTP 失败时应保留错误文本、requestedUrl/finalUrl 和状态码。',
+            message:
+              'web_search type=fetch HTTP 失败时应保留错误文本、requestedUrl/finalUrl 和状态码。',
             data: result
           }
         )

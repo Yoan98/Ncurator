@@ -156,6 +156,35 @@ export const hasDocxFileArtifact = (artifacts: readonly AiArtifactRef[] | undefi
   Array.isArray(artifacts) &&
   artifacts.some((artifact) => artifact.kind === 'file' && artifact.capability === 'docx')
 
+export const hasDocxApplyArtifactEvent = (events: readonly AiRunEvent[]): boolean =>
+  filterAiRunEventsByType(events, 'file_artifact').some(
+    (event) =>
+      event.capability === 'docx' &&
+      typeof event.applyId === 'string' &&
+      event.applyId.length > 0
+  )
+
+export const hasDocxDeliveryEvidence = (input: {
+  artifacts?: readonly AiArtifactRef[]
+  events: readonly AiRunEvent[]
+}): boolean =>
+  (hasDocxFileArtifact(input.artifacts) && hasDocxApplyArtifact(input.artifacts)) ||
+  hasDocxApplyArtifactEvent(input.events)
+
+export const collectSuccessfulDocxWriteSourcePaths = (
+  events: readonly AiRunEvent[],
+  successfulToolCallIds: ReadonlySet<string>
+): string[] =>
+  filterAiRunEventsByType(events, 'tool_call_started')
+    .filter(
+      (event) =>
+        DOCX_WRITE_TOOL_NAMES.has(event.toolName) &&
+        successfulToolCallIds.has(event.toolCallId) &&
+        isDocxWriteInput(event.input)
+    )
+    .map((event) => event.input.sourcePath)
+    .filter((value): value is string => typeof value === 'string')
+
 export const countDocxFileArtifacts = (artifacts: readonly AiArtifactRef[] | undefined): number =>
   Array.isArray(artifacts)
     ? artifacts.filter((artifact) => artifact.kind === 'file' && artifact.capability === 'docx')

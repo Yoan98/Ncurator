@@ -23,7 +23,8 @@ describe('ai human live backend', () => {
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
-        description: '用户给纯文本诉求，AI 提炼搜索意图后走 web_search(type=search/fetch) 读官方文档回答。',
+        description:
+          '用户给纯文本诉求，AI 提炼搜索意图后走 web_search(type=search/fetch) 读官方文档回答。',
         fixtures: [],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -65,16 +66,21 @@ describe('ai human live backend', () => {
               return Boolean(input)
             })
             .map((event) => {
-            const data = event.result?.data
-            if (!data || typeof data !== 'object' || Array.isArray(data)) return ''
-            const value = data as { finalUrl?: unknown; requestedUrl?: unknown }
-            return String(value.finalUrl || value.requestedUrl || '')
-          })
+              const data = event.result?.data
+              if (!data || typeof data !== 'object' || Array.isArray(data)) return ''
+              const value = data as { finalUrl?: unknown; requestedUrl?: unknown }
+              return String(value.finalUrl || value.requestedUrl || '')
+            })
           const officialUrls = fetchUrls.filter(isPandasHost)
+          const readCsvFetched = officialUrls.some((url) => url.includes('/pandas.read_csv.html'))
+          const toCsvFetched = officialUrls.some((url) =>
+            url.includes('/pandas.DataFrame.to_csv.html')
+          )
           runtime.assertThat(
             result.output.status === 'completed' &&
               searchCalls.length >= 1 &&
-              officialUrls.length >= 1,
+              readCsvFetched &&
+              toCsvFetched,
             {
               name: 'human-live-web-search-intent-query-reads-official-sources',
               message:
@@ -83,7 +89,9 @@ describe('ai human live backend', () => {
                 outputStatus: result.output?.status,
                 searchCalls: searchCalls.map((event) => event.input?.query),
                 fetchUrls,
-                officialUrls
+                officialUrls,
+                readCsvFetched,
+                toCsvFetched
               }
             }
           )

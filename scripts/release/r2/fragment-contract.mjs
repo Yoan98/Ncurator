@@ -2,8 +2,7 @@ import { parseReleaseTag } from '../tag.mjs'
 
 const PLATFORM_AUDIT = Object.freeze({
   'windows-x64': { platform: 'win32', arch: 'x64', requiresSignature: false },
-  'macos-arm64': { platform: 'darwin', arch: 'arm64', requiresSignature: true },
-  'macos-x64': { platform: 'darwin', arch: 'x64', requiresSignature: true }
+  'macos-arm64': { platform: 'darwin', arch: 'arm64', requiresSignature: true }
 })
 
 const SHA512_BASE64 = /^[A-Za-z0-9+/]{86}==$/u
@@ -105,7 +104,8 @@ export const assertReleaseFragment = (
     if (!isNonEmptyString(file.storageName) || !STORAGE_NAME.test(file.storageName)) {
       fail(label, `storageName must be an ASCII filename for ${file.name}`)
     }
-    if (storageNames.has(file.storageName)) fail(label, `duplicate storage asset ${file.storageName}`)
+    if (storageNames.has(file.storageName))
+      fail(label, `duplicate storage asset ${file.storageName}`)
     storageNames.add(file.storageName)
     if (!['installer', 'update'].includes(file.role)) fail(label, `invalid role for ${file.name}`)
     if (!isPositiveInteger(file.size)) fail(label, `invalid size for ${file.name}`)

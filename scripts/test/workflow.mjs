@@ -28,13 +28,11 @@ const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 const BACKEND_WORKERS = 6
 const E2E_WORKERS = 3
-const E2E_WORKERS_BY_TARGET = new Map([['macos-x64', 1]])
 const LIVE_WORKERS = 3
 const RUNNER_DEADLINE_MS = 55 * 60 * 1000
 const DEADLINE_EXIT_CODE = 124
 const STALE_E2E_TEMP_MAX_AGE_MS = 24 * 60 * 60 * 1000
 const E2E_EXECUTION_CLASSES = new Set(['normal', 'live', 'exclusive', 'warmup'])
-const CROSS_ARCH_WARMUP_SOURCE_TARGET = new Map([['macos-x64', 'macos-arm64']])
 const USE_WINDOWS_SHELL = process.platform === 'win32'
 const activeAsyncChildren = new Set()
 let stoppingActiveChildren = false
@@ -328,17 +326,6 @@ const seedCaseKnowledgeCache = async (caseEnv, seedPath) => {
     errorOnExist: false,
     filter: (source) => path.basename(source) !== 'stats.json'
   })
-}
-
-const resolveWarmupSeedPath = (task, warmupCacheByTarget) => {
-  const explicitSeedPath = String(
-    task.env.NCURATOR_E2E_CROSS_ARCH_WARMUP_SEED_PATH ||
-      process.env.NCURATOR_E2E_CROSS_ARCH_WARMUP_SEED_PATH ||
-      ''
-  ).trim()
-  if (explicitSeedPath) return explicitSeedPath
-  const sourceTargetId = CROSS_ARCH_WARMUP_SOURCE_TARGET.get(task.targetId)
-  return sourceTargetId ? String(warmupCacheByTarget.get(sourceTargetId) || '').trim() : ''
 }
 
 const fileContainsCaseId = async (filePath, caseId) => {
@@ -778,21 +765,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     process.stdout.write(
       `[test-workflow] vector warm-up ${String(index + 1)}/${String(warmupTasks.length)} must pass before parallel E2E starts\n`
     )
-    const sourceTargetId = CROSS_ARCH_WARMUP_SOURCE_TARGET.get(task.targetId)
-    const warmupSeedPath = resolveWarmupSeedPath(task, warmupCacheByTarget)
-    if (sourceTargetId && !warmupSeedPath) {
-      throw new Error(
-        `${task.targetId} vector warm-up requires a passed ${sourceTargetId} cache seed; ` +
-          'run both package targets in release order or set ' +
-          'NCURATOR_E2E_CROSS_ARCH_WARMUP_SEED_PATH'
-      )
-    }
-    if (warmupSeedPath) {
-      process.stdout.write(
-        `[test-workflow] ${task.targetId} vector warm-up uses verified cross-architecture cache seed\n`
-      )
-    }
-    const outcome = await runTask(task, warmupSeedPath)
+    const outcome = await runTask(task)
     if (outcome.code !== 0) {
       exitCode = outcome.code
       process.stderr.write(
@@ -818,7 +791,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     while (pending.length > 0 && active.size < E2E_WORKERS && Date.now() < deadlineAt) {
       const nextIndex = pending.findIndex((task) => {
         if (task.execution === 'live' && liveActive >= LIVE_WORKERS) return false
-        const targetLimit = E2E_WORKERS_BY_TARGET.get(task.targetId) || E2E_WORKERS
+        const targetLimit = E2E_WORKERS
         return Number(activeByTarget.get(task.targetId) || 0) < targetLimit
       })
       if (nextIndex < 0) break

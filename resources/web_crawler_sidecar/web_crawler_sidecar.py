@@ -23,6 +23,7 @@ LINK_PREVIEW_MAX_LINKS = 120
 LINK_PREVIEW_TIMEOUT_SECONDS = 5
 CDP_URL_ENV = "NCURATOR_WEB_CRAWLER_CDP_URL"
 CDP_CONTEXT_MARKER_ENV = "NCURATOR_WEB_CRAWLER_CDP_CONTEXT_MARKER_URL"
+CRAWLER_SESSION_ID = "ncurator-electron-cdp"
 
 
 class CrawlFailure(Exception):
@@ -87,7 +88,9 @@ def to_jsonable(value: Any) -> Any:
     if isinstance(value, (list, tuple, set)):
         return [to_jsonable(item) for item in value]
     if hasattr(value, "model_dump"):
-        return to_jsonable(value.model_dump(mode="json"))
+        # Crawl4AI can retain Python descriptors in reused result models. JSON
+        # mode rejects those descriptors before our recursive fallback can run.
+        return to_jsonable(value.model_dump(mode="python"))
     if hasattr(value, "dict"):
         return to_jsonable(value.dict())
     if hasattr(value, "__dict__"):
@@ -196,6 +199,10 @@ def build_failure_data(
 
 def build_crawler_run_config(topic: str) -> CrawlerRunConfig:
     return CrawlerRunConfig(
+        # Electron's CDP context does not support creating a fresh target for
+        # every crawl. The sidecar processes requests serially, so one stable
+        # Crawl4AI session safely reuses the page across fetches.
+        session_id=CRAWLER_SESSION_ID,
         markdown_generator=DefaultMarkdownGenerator(
             content_filter=PruningContentFilter(
                 user_query="",

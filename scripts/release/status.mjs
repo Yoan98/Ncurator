@@ -29,7 +29,7 @@ try {
 } catch {
   // Public status checks can still run against the domestic channel without local credentials.
 }
-const platforms = releaseFamily === 'mac' ? ['macos-arm64', 'macos-x64'] : ['windows-x64']
+const platforms = releaseFamily === 'mac' ? ['macos-arm64'] : ['windows-x64']
 const awsExecutable = await resolveAwsExecutable()
 if (!awsExecutable) throw new Error('AWS CLI is required to verify release sha512 metadata')
 for (const platform of platforms) {

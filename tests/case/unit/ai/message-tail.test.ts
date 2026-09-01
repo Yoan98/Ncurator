@@ -99,6 +99,32 @@ describe('renderMessagesForCompaction', () => {
     )
   })
 
+  it('trims leading and trailing whitespace from AI thoughts and tool results', () => {
+    const rendered = renderMessagesForCompaction([
+      new AIMessage({
+        content: '材料齐了。\n\n',
+        tool_calls: [toolCall('1', 'terminal_run', { command: 'ls' })]
+      }),
+      new ToolMessage({ content: '\n\ntotal 1\n', tool_call_id: '1' })
+    ])
+    expect(rendered).toBe(
+      '[round 1]\n[ai] 材料齐了。\n[tool_call] terminal_run(command="ls")\n[tool] total 1'
+    )
+  })
+
+  it('preserves internal blank lines in tool output', () => {
+    const rendered = renderMessagesForCompaction([
+      new AIMessage({
+        content: '',
+        tool_calls: [toolCall('1', 'terminal_run', { command: 'ls' })]
+      }),
+      new ToolMessage({ content: '\nline 1\n\nline 3\n', tool_call_id: '1' })
+    ])
+    expect(rendered).toBe(
+      '[round 1]\n[tool_call] terminal_run(command="ls")\n[tool] line 1\n\nline 3'
+    )
+  })
+
   it('json-stringifies nested args and truncates long values', () => {
     const long = 'x'.repeat(400)
     const rendered = renderMessagesForCompaction([

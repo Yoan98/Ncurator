@@ -2,7 +2,7 @@ export const RELEASE_VERSION_PATTERN = /^\d+\.\d+\.\d+$/u
 export const RELEASE_TAG_PATTERN = /^(mac|windows)-v(\d+\.\d+\.\d+)$/u
 
 const normalizeFamily = (platform) => {
-  if (platform === 'mac' || platform === 'macos-arm64' || platform === 'macos-x64') return 'mac'
+  if (platform === 'mac' || platform === 'macos-arm64') return 'mac'
   if (platform === 'windows' || platform === 'windows-x64') return 'windows'
   throw new Error(`unsupported release platform: ${String(platform)}`)
 }

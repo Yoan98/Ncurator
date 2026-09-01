@@ -51,24 +51,12 @@ const downloadAndVerifyFragment = async (platform) => {
 }
 
 try {
-  const [arm64, x64] = await Promise.all([
-    downloadAndVerifyFragment('macos-arm64'),
-    downloadAndVerifyFragment('macos-x64')
-  ])
-  if (!arm64.signature || arm64.signature !== x64.signature) {
-    throw new Error('macOS arm64 and x64 release signatures do not match')
-  }
+  const arm64 = await downloadAndVerifyFragment('macos-arm64')
 
   const metadataInput = path.join(workDirectory, 'metadata-input')
   const metadataOutput = path.join(workDirectory, 'metadata-output')
-  await mkdir(path.join(metadataInput, 'mac-arm64'), { recursive: true })
-  await mkdir(path.join(metadataInput, 'mac-x64'), { recursive: true })
-  await writeFile(path.join(metadataInput, 'mac-arm64', 'latest-mac.yml'), arm64.metadata, 'utf8')
-  await writeFile(path.join(metadataInput, 'mac-x64', 'latest-mac.yml'), x64.metadata, 'utf8')
-  await execFileAsync(process.execPath, [
-    path.join(ROOT, 'scripts', 'release', 'r2', 'merge-mac-metadata.mjs'),
-    metadataInput
-  ])
+  await mkdir(metadataInput, { recursive: true })
+  await writeFile(path.join(metadataInput, 'latest-mac.yml'), arm64.metadata, 'utf8')
   await execFileAsync(process.execPath, [
     path.join(ROOT, 'scripts', 'release', 'r2', 'metadata.mjs'),
     metadataInput,
@@ -87,46 +75,36 @@ try {
     '--no-progress'
   ])
 
-  const installers = new Map()
-  for (const fragment of [arm64, x64]) {
-    const installer = fragment.files.find((file) => file.role === 'installer')
-    const sourceKey = artifactKey(fragment, installer.storageName)
-    const downloadKey = fixedDownloadKey(fragment.platform)
-    const downloadName =
-      fragment.platform === 'macos-arm64'
-        ? `Ncurator-${fragment.version}-macos-arm64.dmg`
-        : `Ncurator-${fragment.version}-macos-x64.dmg`
-    await aws([
-      's3api',
-      'copy-object',
-      '--bucket',
-      bucket,
-      '--copy-source',
-      `${bucket}/${sourceKey}`,
-      '--key',
-      downloadKey,
-      '--content-type',
-      'application/octet-stream',
-      '--cache-control',
-      'no-store',
-      '--content-disposition',
-      `attachment; filename="${downloadName}"`,
-      '--metadata-directive',
-      'REPLACE',
-      '--metadata',
-      `sha512=${installer.sha512}`
-    ])
-    installers.set(fragment.platform, { installer, downloadKey, downloadName })
-  }
+  const installer = arm64.files.find((file) => file.role === 'installer')
+  const sourceKey = artifactKey(arm64, installer.storageName)
+  const downloadKey = fixedDownloadKey(arm64.platform)
+  const downloadName = `Ncurator-${arm64.version}-macos-arm64.dmg`
+  await aws([
+    's3api',
+    'copy-object',
+    '--bucket',
+    bucket,
+    '--copy-source',
+    `${bucket}/${sourceKey}`,
+    '--key',
+    downloadKey,
+    '--content-type',
+    'application/octet-stream',
+    '--cache-control',
+    'no-store',
+    '--content-disposition',
+    `attachment; filename="${downloadName}"`,
+    '--metadata-directive',
+    'REPLACE',
+    '--metadata',
+    `sha512=${installer.sha512}`
+  ])
 
-  const toDownload = (platform) => {
-    const { installer, downloadKey, downloadName } = installers.get(platform)
-    return {
-      name: downloadName,
-      url: `${publicBaseUrl}/${downloadKey}`,
-      size: installer.size,
-      sha512: installer.sha512
-    }
+  const download = {
+    name: downloadName,
+    url: `${publicBaseUrl}/${downloadKey}`,
+    size: installer.size,
+    sha512: installer.sha512
   }
   const manifest = {
     schemaVersion: 2,
@@ -134,7 +112,7 @@ try {
     version: arm64.version,
     tag: arm64.tag,
     publishedAt: new Date().toISOString(),
-    downloads: { arm64: toDownload('macos-arm64'), x64: toDownload('macos-x64') }
+    downloads: { arm64: download }
   }
   const manifestPath = path.join(workDirectory, 'latest.json')
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8')
@@ -157,47 +135,59 @@ try {
   const metadata = metadataResponse.ok ? await metadataResponse.text() : ''
   if (
     !metadata.includes(`version: ${releaseVersion}`) ||
-    !metadata.includes(`artifacts/macos/${releaseTag}/Ncurator-mac-arm64.zip`) ||
-    !metadata.includes(`artifacts/macos/${releaseTag}/Ncurator-mac-x64.zip`)
+    !metadata.includes(`artifacts/macos/${releaseTag}/Ncurator-mac-arm64.zip`)
   ) {
     throw new Error('public latest-mac.yml does not match the Mac release')
   }
-  for (const { installer, downloadKey, downloadName } of installers.values()) {
-    const response = await fetchWithRetry(`${publicBaseUrl}/${downloadKey}?check=${Date.now()}`, {
-      method: 'HEAD',
-      cache: 'no-store'
-    })
-    if (
-      !response.ok ||
-      Number(response.headers.get('content-length')) !== installer.size ||
-      !String(response.headers.get('content-disposition') || '').includes(
-        `filename="${downloadName}"`
-      )
-    ) {
-      throw new Error(`public fixed macOS download verification failed: ${downloadKey}`)
-    }
+  const response = await fetchWithRetry(`${publicBaseUrl}/${downloadKey}?check=${Date.now()}`, {
+    method: 'HEAD',
+    cache: 'no-store'
+  })
+  if (
+    !response.ok ||
+    Number(response.headers.get('content-length')) !== installer.size ||
+    !String(response.headers.get('content-disposition') || '').includes(
+      `filename="${downloadName}"`
+    )
+  ) {
+    throw new Error(`public fixed macOS download verification failed: ${downloadKey}`)
   }
 
   const removable = (await listKeys('artifacts/macos/')).filter(
     (key) => !key.startsWith(`artifacts/macos/${releaseTag}/`)
+  )
+  const activeArtifactKeys = new Set(
+    arm64.files.map((file) => artifactKey(arm64, file.storageName))
+  )
+  removable.push(
+    ...(await listKeys(`artifacts/macos/${releaseTag}/`)).filter(
+      (key) => !activeArtifactKeys.has(key)
+    )
   )
   removable.push(
     ...(await listKeys('release-status/macos/')).filter(
       (key) => !key.startsWith(`release-status/macos/${releaseTag}/`)
     )
   )
+  const activeStatusKey = statusKey(releaseTag, arm64.platform)
+  removable.push(
+    ...(await listKeys(`release-status/macos/${releaseTag}/`)).filter(
+      (key) => key !== activeStatusKey
+    )
+  )
+  removable.push(
+    ...(await listKeys('downloads/latest/')).filter(
+      (key) => key.startsWith('downloads/latest/macos-') && key !== downloadKey
+    )
+  )
   removable.push(
     ...(await listKeys('artifacts/v')).filter((key) => /\/Ncurator-mac-[^/]+$/u.test(key))
   )
   removable.push(
-    ...(await listKeys('release-status/v')).filter((key) =>
-      /\/macos-(?:arm64|x64)\.json$/u.test(key)
-    )
+    ...(await listKeys('release-status/v')).filter((key) => /\/macos-arm64\.json$/u.test(key))
   )
   await deleteKeys(removable)
-  process.stdout.write(
-    `[release] macOS ${releaseTag} is live on independent fixed download channels\n`
-  )
+  process.stdout.write(`[release] macOS arm64 ${releaseTag} is live\n`)
 } finally {
   await rm(workDirectory, { recursive: true, force: true })
 }

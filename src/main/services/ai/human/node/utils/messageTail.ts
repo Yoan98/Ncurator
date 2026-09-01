@@ -1,4 +1,5 @@
 import { AIMessage, type BaseMessage } from '@langchain/core/messages'
+import { normalizeThoughtText } from '../../../../../../shared/thoughtText'
 
 const isProcessMessage = (message: BaseMessage): boolean => {
   const type = message.getType()
@@ -42,11 +43,15 @@ const formatToolCallArgs = (args: Record<string, unknown>): string =>
     .map(([key, value]) => `${key}=${formatToolCallArgValue(value)}`)
     .join(', ')
 
+const normalizeCompactionText = (content: string): string => content.trim()
+
 const renderAiMessageLines = (message: AIMessage): string[] => {
   const lines: string[] = []
-  const content =
+  const rawContent =
     typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
-  if (content.trim()) {
+  const content =
+    typeof message.content === 'string' ? normalizeThoughtText(rawContent) : normalizeCompactionText(rawContent)
+  if (content) {
     lines.push(`[ai] ${content}`)
   }
   const toolCalls = message.tool_calls
@@ -61,9 +66,9 @@ const renderAiMessageLines = (message: AIMessage): string[] => {
 }
 
 const renderToolMessageLine = (message: BaseMessage): string => {
-  const content =
+  const rawContent =
     typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
-  return `[tool] ${content}`
+  return `[tool] ${normalizeCompactionText(rawContent)}`
 }
 
 // 每个 AI 消息及其触发的工具调用、紧随的工具结果为一轮，轮首加 [round N]。

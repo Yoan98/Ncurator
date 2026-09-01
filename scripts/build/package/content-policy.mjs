@@ -206,7 +206,9 @@ export const assertSafePackagePaths = (paths) => {
   }
 }
 
-const WEB_CRAWLER_SIDECAR_HARD_LIMIT_BYTES = 340 * 1024 * 1024
+// Windows' frozen Python runtime is larger than macOS' runtime. Keep one
+// cross-platform ceiling that still rejects the old bundled-browser layout.
+const WEB_CRAWLER_SIDECAR_HARD_LIMIT_BYTES = 400 * 1024 * 1024
 
 export const assertWebCrawlerSidecarPackage = (files, sourceLabel) => {
   const sidecarFiles = files.filter((item) =>

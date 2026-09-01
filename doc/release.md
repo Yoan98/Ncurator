@@ -1,6 +1,6 @@
 # 桌面端构建与发布
 
-本文是 Windows、macOS 构建、正式包回归和对象存储发布的统一说明。国内默认发布到腾讯云 COS，海外可显式切换到 Cloudflare R2。当前发布 Windows x64、macOS arm64 和 macOS x64，不发布 Linux。Windows 使用 `windows-vX.Y.Z`，macOS 使用 `mac-vX.Y.Z`，两个平台独立递增和发布。
+本文是 Windows、macOS 构建、正式包回归和对象存储发布的统一说明。国内默认发布到腾讯云 COS，海外可显式切换到 Cloudflare R2。当前只发布 Windows x64 和 macOS arm64，不支持 Intel Mac，也不发布 Linux。Windows 使用 `windows-vX.Y.Z`，macOS 使用 `mac-vX.Y.Z`，两个平台独立递增和发布。
 
 注意评估改动影响，只回归需要回归的测试用例，避免动不动就全部回归，尤其是在回归一次后，修复的代码并不影响已通过的测试用例时。
 
@@ -92,13 +92,9 @@ pnpm release:mac -- --tag mac-vX.Y.Z --test-only --case <caseId-1> --case <caseI
 
 回归范围由执行者根据改动影响评估决定：影响面广时跑全量，修复后的定向复测用 `--case` 列出受影响的用例。`--case` 指定的用例必须能匹配到测试文件，匹配不到时 runner 直接失败，不会静默通过。
 
-macOS arm64 候选包必须通过选定的回归范围。macOS x64 仍正常构建、签名、审计、启动验证和发布，但由于 Rosetta 下正式包 E2E 速度过慢，默认不执行 x64 正式包 E2E，也不把它作为发布门禁。需要人工诊断时可显式执行 `--include-x64-e2e`，x64 E2E 固定单并发：
+macOS arm64 候选包必须通过选定的回归范围。项目不再构建、测试或发布 Intel Mac 安装包。
 
-```bash
-pnpm release:mac -- --tag mac-vX.Y.Z --test-only --include-x64-e2e
-```
-
-所有发布阶段最多运行 60 分钟；测试 runner 在 55 分钟停止领取新用例并保存部分结果。正式并发开始前，每个实际参加 E2E 的候选包先串行通过唯一的 `warmup` 向量索引用例，让模型和磁盘缓存完成冷启动；warm-up 产生的 split/vector 缓存会作为种子复制到后续 case 的隔离缓存目录，warm-up 失败时不会启动后续并发。使用 `--domain`/`--suite`/`--case` 收窄回归范围时，只要本次执行的 case 数超过 1，runner 也会自动纳入全仓唯一的 `warmup` 用例并先预热，不会因过滤漏掉它。随后 E2E 总并发和 live 并发上限均为 3，原生对话框、鼠标和桌面焦点用例独占执行。显式启用 macOS x64 E2E 时，x64 仍固定为单并发。
+所有发布阶段最多运行 60 分钟；测试 runner 在 55 分钟停止领取新用例并保存部分结果。正式并发开始前，每个实际参加 E2E 的候选包先串行通过唯一的 `warmup` 向量索引用例，让模型和磁盘缓存完成冷启动；warm-up 产生的 split/vector 缓存会作为种子复制到后续 case 的隔离缓存目录，warm-up 失败时不会启动后续并发。使用 `--domain`/`--suite`/`--case` 收窄回归范围时，只要本次执行的 case 数超过 1，runner 也会自动纳入全仓唯一的 `warmup` 用例并先预热，不会因过滤漏掉它。随后 E2E 总并发和 live 并发上限均为 3，原生对话框、鼠标和桌面焦点用例独占执行。
 
 选中的正式包 E2E 全部执行，其中使用真实 AI 或真实服务的 E2E 也不排除。源码 E2E、backend、unit 和独立的 `test:ai*` 测试集只用于开发验证或问题排查，不替代正式包 E2E，也不属于标准发布门。
 
@@ -146,12 +142,7 @@ Windows 本地发布环境：
 
 ### macOS
 
-macOS 没有 Actions 构建路线。prepare 必须在 Apple Silicon Mac 执行，并从同一 Tag 分别导出 arm64 与 x64 两份干净代码。
-
-- arm64 使用本机 arm64 Node/Python。
-- x64 使用 Rosetta、x64 Node 和 x64 Python。
-- 两个架构分别安装依赖、构建、签名、审计和生成候选包。
-- arm64 候选包必须完成正式包 E2E；x64 默认跳过正式包 E2E，但发布时仍会检查两个架构的更新签名一致。
+macOS 没有 Actions 构建路线。prepare 必须在 Apple Silicon Mac 执行，使用本机 arm64 Node/Python 安装依赖、构建、签名、审计和生成唯一的 arm64 候选包。该候选包必须完成正式包 E2E。
 
 ```bash
 git fetch --tags
@@ -186,7 +177,7 @@ release-stage/
     └── resources/{native,web_crawler_sidecar,open-with}/
 ```
 
-安装包不得包含源码、测试、文档、开发配置、`.env`、锁文件、Source Map、测试日志、fixture、私钥或错误平台文件。网页抓取 sidecar 不得包含 `.local-browsers` 或 `chromium_headless_shell-*`，且解包体积不得超过 340 MiB；staging 和正式包审计都会硬校验。`app.asar` 不是加密，所有 `VITE_*` 变量都按公开信息处理。
+安装包不得包含源码、测试、文档、开发配置、`.env`、锁文件、Source Map、测试日志、fixture、私钥或错误平台文件。网页抓取 sidecar 不得包含 `.local-browsers` 或 `chromium_headless_shell-*`，且解包体积不得超过 400 MiB；staging 和正式包审计都会硬校验。`app.asar` 不是加密，所有 `VITE_*` 变量都按公开信息处理。
 
 候选 bundle 绑定 Tag、commit、release fragment、安装包、更新文件、大小、sha256 和 sha512。测试和发布前都会重新验证这些内容。
 
@@ -201,14 +192,12 @@ artifacts/windows/windows-vX.Y.Z/*
 artifacts/macos/mac-vX.Y.Z/*
 release-status/windows/windows-vX.Y.Z.json
 release-status/macos/mac-vX.Y.Z/macos-arm64.json
-release-status/macos/mac-vX.Y.Z/macos-x64.json
 updates/latest/latest.yml
 updates/latest/latest-mac.yml
 releases/latest/windows.json
 releases/latest/macos.json
 downloads/latest/windows-x64.exe
 downloads/latest/macos-arm64.dmg
-downloads/latest/macos-x64.dmg
 ```
 
 版本化产物使用不可变缓存；latest、manifest 和固定下载使用 `no-store`。fragment 中的 `name` 记录用户可见文件名，`storageName` 记录对象存储的 ASCII 对象名；二者共同进入候选 bundle 校验。Windows 固定下载与 manifest 返回 `馆长-X.Y.Z-Windows-x64.exe`，自动更新 metadata 则指向对应的 ASCII 对象键。
@@ -260,7 +249,6 @@ Windows 清单：https://download.guanzhangai.cn/releases/latest/windows.json
 macOS 清单：https://download.guanzhangai.cn/releases/latest/macos.json
 Windows 下载：https://download.guanzhangai.cn/downloads/latest/windows-x64.exe
 macOS arm64：https://download.guanzhangai.cn/downloads/latest/macos-arm64.dmg
-macOS x64：https://download.guanzhangai.cn/downloads/latest/macos-x64.dmg
 Windows 更新：https://download.guanzhangai.cn/updates/latest/latest.yml
 macOS 更新：https://download.guanzhangai.cn/updates/latest/latest-mac.yml
 ```
@@ -295,7 +283,6 @@ pnpm run build
 pnpm run build:unpack
 pnpm run build:win
 pnpm run build:mac:arm64
-pnpm run build:mac:x64
 pnpm run package:audit
 pnpm run package:audit:summary
 ```

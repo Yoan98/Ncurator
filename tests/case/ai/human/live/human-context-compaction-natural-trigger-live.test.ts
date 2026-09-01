@@ -8,9 +8,9 @@ import {
   loadContextCompactionWorkspaceSeed
 } from '../../../../harness/backend/liveScenarios/contextCompactionScenario'
 import {
+  collectSuccessfulDocxWriteSourcePaths,
   filterAiRunEventsByType,
-  hasDocxApplyArtifact,
-  hasDocxFileArtifact,
+  hasDocxDeliveryEvidence,
   isDocxContentCreateInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
@@ -112,6 +112,10 @@ describe('ai human live backend', () => {
             )
             .map((event) => event.input.sourcePath)
             .filter((value): value is string => typeof value === 'string')
+          const docxWriteSourcePaths = collectSuccessfulDocxWriteSourcePaths(
+            events,
+            successfulToolCallIds
+          )
           const textCreateSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
             .filter(
               (event) =>
@@ -181,10 +185,13 @@ describe('ai human live backend', () => {
             (toolNames.some((toolName) => toolName.startsWith('docx_')) ||
               toolNames.includes('text_file_edit'))
           const artifactSatisfied =
-            (hasDocxFileArtifact(result.output?.artifacts) &&
-              hasDocxApplyArtifact(result.output?.artifacts) &&
-              createSourcePaths.length >= 1) ||
-            textCreateSourcePaths.length >= 1
+            hasDocxDeliveryEvidence({
+              artifacts: result.output?.artifacts,
+              events
+            }) &&
+            (docxWriteSourcePaths.length >= 1 ||
+              createSourcePaths.length >= 1 ||
+              textCreateSourcePaths.length >= 1)
           runtime.assertThat(
             lifecycleSatisfied &&
               summaryFormatSatisfied &&
@@ -206,6 +213,7 @@ describe('ai human live backend', () => {
                 ratios,
                 toolNames,
                 createSourcePaths,
+                docxWriteSourcePaths,
                 textCreateSourcePaths,
                 artifacts: result.output?.artifacts
               }

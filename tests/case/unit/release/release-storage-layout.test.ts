@@ -16,14 +16,14 @@ describe('release storage layout', () => {
     expect(statusKey('windows-v0.2.0', 'windows-x64')).toBe(
       'release-status/windows/windows-v0.2.0.json'
     )
-    expect(statusKey('mac-v0.1.6', 'macos-x64')).toBe(
-      'release-status/macos/mac-v0.1.6/macos-x64.json'
+    expect(statusKey('mac-v0.1.6', 'macos-arm64')).toBe(
+      'release-status/macos/mac-v0.1.6/macos-arm64.json'
     )
   })
 
   it('uses stable direct-download object keys', () => {
     expect(fixedDownloadKey('windows-x64')).toBe('downloads/latest/windows-x64.exe')
     expect(fixedDownloadKey('macos-arm64')).toBe('downloads/latest/macos-arm64.dmg')
-    expect(fixedDownloadKey('macos-x64')).toBe('downloads/latest/macos-x64.dmg')
+    expect(() => fixedDownloadKey('macos-x64')).toThrow(/unsupported release platform/u)
   })
 })

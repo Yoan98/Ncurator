@@ -22,8 +22,8 @@
 | human-legacy-doc-reading-live                       | 完成 |            94 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-legacy-doc-reading-live/20260813-195642-815                       | 通过 docx 读取工具成功读取旧版 .doc 并准确回答五级风险与区别率，源文件未改。                           |
 | human-text-file-write-checkout-cutover-live         | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:17 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20260813-201727-173         | 两处端点和超时精确更新，重试与 telemetry 不变，写后核对完整。                                          |
 | human-text-file-read-checkout-readiness-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260813-201642-554        | 只读审查准确识别就绪性风险与保留配置，源文件未改。                                                     |
-| human-web-search-by-url-live                        | 完成 |            95 | qwen3.8-flash                    | 2026-08-31 18:29 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260831-182946-081                        | 指定地址直接 type=fetch 读取并回答申请对象/截止日期；日期断言已容忍空格。                            |
-| human-web-search-intent-query-live                  | 完成 |            90 | qwen3.8-flash                    | 2026-08-31 18:31 CST | tests/logs/ai/human/live/human-web-search-intent-query-live/20260831-183108-765                 | 语句优化后 2×type=search + 2×fetch 官方 API 页，基于正文回答。                                      |
+| human-web-search-by-url-live                        | 完成 |            95 | qwen3.8-flash                    | 2026-09-01 16:24 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260901-162353-087                        | 指定地址后连续 2×fetch 通知页与指南页，事实回答正确，errors=0。                                      |
+| human-web-search-intent-query-live                  | 完成 |            90 | qwen3.8-flash                    | 2026-09-01 16:24 CST | tests/logs/ai/human/live/human-web-search-intent-query-live/20260901-162353-087                  | 2×search + 2×fetch 成功读取 read_csv 与 DataFrame.to_csv 官方 API 页，errors=0。                     |
 | human-terminal-preview-service-live                  | 完成 |            88 | qwen3.8-flash                    | 2026-08-31 18:30 CST | tests/logs/ai/human/live/human-terminal-preview-service-live/20260831-183019-685                | 启动预览服务、terminal_read 读请求日志、交付页面标记并关闭服务（已移除不存在的 terminal_write 断言）。 |
 | human-legacy-doc-edit-skip-live                     | 完成 |            88 | deepseek-v4-flash                | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129                     | .doc 写入失败后停止重试，源文件不变，任务完成。                                                        |
 | human-docx-visual-reading-live                      | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243                      | 真实读取 DOCX 图片并准确回答，源文件未改。                                                             |
@@ -526,6 +526,15 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：结果返回明确错误文本，同时保留 `finalUrl` 和 `statusCode`。
 - Not：不验证复杂重定向链或外站错误页样式。
 
+##### `web-search-fetch-reuses-one-sidecar-for-multiple-pages`
+
+- 测试类型：`backend`
+- What：同一个冻结 sidecar、Crawl4AI 实例和 Electron CDP context 可以连续抓取多个页面。
+- Why：真实 human 会在一次任务中读取多个搜索结果；只验证第一次 fetch 会漏掉连接复用和结果序列化回归。
+- How：启动本地 HTTP server 和测试 Electron CDP host，复用同一个 `webCrawlerService` 依次 fetch 通知页与指南页。
+- Oracle：两次调用都成功，分别返回对应 `finalUrl` 和正文，不出现重复抓取序列化错误。
+- Not：不验证并发抓取或跨 run 复用。
+
 ##### `web-search-fetch-returns-full-content-without-tool-level-truncation`
 
 - 测试类型：`backend`
@@ -976,7 +985,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：live 模式下 `human` 会基于真实 brain usage 与新增 history 增量在风险周报长任务中自然触发 `context_compaction`，并在压缩后继续完成交付。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩且不影响任务完成”的能力。
 - How：复用风险周报 live 的真实 workspace 与业务输入，通过 `humanRuntimeOverrides.modelContextWindowTokens=40_000` 提供可工作的上下文空间，并让真实任务在多轮资料读取后自然进入 `context_budget -> context_compaction -> context_budget -> brain`。窗口不能太小：固定开销（23 工具 schema ~18k + system/模板 ~2k ≈ 20k）几乎不随压缩减少，若窗口 24k 则触发线 19.2k 被固定开销直接顶破，压缩后仍超阈值、每轮压缩死循环；也不能太大（64k 时任务峰值 ~40k 达不到 51.2k 触发线，0 次压缩）。
-- Oracle：至少发生一次完整 compaction；不限制压缩次数。逐次检查固定摘要结构、任务锚点、已确认路径、无编造和无“已完成又未读取”的进度矛盾，并检查全部压缩比；后续 `brain` prompt 保留 compaction 与 task progress；最终周报文件成功 apply。按 10 分制评估压缩生命周期、摘要结构、摘要质量、连续性和文件交付，严格超过 8 分通过。
+- Oracle：至少发生一次完整 compaction；不限制压缩次数。逐次检查固定摘要结构、任务锚点、已确认路径、无编造和无“已完成又未读取”的进度矛盾，并检查全部压缩比；后续 `brain` prompt 保留 compaction 与 task progress；最终周报文件成功交付并产出 docx `applyId` 证据，且至少一次成功的 docx 写入（允许 `document_end` 新建，也允许复制底本后 `replace_text` / `insert_nodes` 改写）。按 10 分制评估压缩生命周期、摘要结构、摘要质量、连续性和文件交付，严格超过 8 分通过。
 - Not：不绑定压缩次数，不要求固定资料读取顺序，也不因合理表达差异判失败。
 
 ##### `human-risk-report-draft-live`
@@ -1048,7 +1057,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：live 模式下用户只给纯文本诉求、不给网址，`human` 提炼搜索意图后通过 `web_search(type=search)` 获取候选，并用 `type=fetch` 读取官方文档回答。
 - Why：真实用户常只描述诉求不给网址；`human` 应提炼关键词走 search 而非直接 fallback 浏览器。
 - How：不向用户输入提供 URL，用户以「记不清官方网址、帮忙搜索官方文档中 CSV 读取与写入 API 用法」的自然语言诉求要求搜索并阅读官方页面；要求模型自行提炼意图并读取官方文档页面完成整理。
-- Oracle：至少一次成功调用 `web_search(type=search)`；至少一次成功 `web_search(type=fetch)` 读取 `pandas.pydata.org` 官方 API 页面并基于正文回答。
+- Oracle：至少一次成功调用 `web_search(type=search)`；`pandas.read_csv` 与 `pandas.DataFrame.to_csv` 两个 `pandas.pydata.org` 官方 API 页面都必须成功 fetch，并基于正文回答。
 - Not：不要求复杂跨域或深链路，也不要求模型第一次就命中最终文档页；因 query 搜索偶发不可用，允许模型在搜索失败时用 `browser_use` 兜底读取官方页面。
 
 ##### `human-text-file-read-checkout-readiness-live`
