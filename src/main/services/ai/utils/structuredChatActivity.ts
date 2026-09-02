@@ -22,6 +22,8 @@ import { normalizeStructuredOutputError } from '../structuredOutput'
 export type LlmCallStreamObserver = {
   onStart?: () => void
   onDelta?: (text: string) => void
+  onReset?: () => void
+  onToolCallDelta?: () => void
   onComplete?: (input: { rawText?: string }) => void
   onError?: (error: Error) => void
 }
@@ -47,6 +49,7 @@ export type LlmCallExecutionResult<T> = {
   usage?: AiLlmUsage
   responseMetadata?: JsonObject
   usageMetadata?: JsonObject
+  finishReason?: string
 }
 
 type LlmCallRetryDecision = {
@@ -121,6 +124,8 @@ export const runLlmCallWithActivity = async <T>(input: {
   user: string
   telemetry: LlmCallTelemetry
   onTextDelta?: (text: string) => void
+  onTextReset?: () => void
+  onToolCallDelta?: () => void
   execute: (observer: LlmCallStreamObserver, callId: string) => Promise<LlmCallExecutionResult<T>>
   maxAttempts?: number
   classifyRetry?: (error: unknown, attempt: number) => LlmCallRetryDecision
@@ -182,6 +187,8 @@ export const runLlmCallWithActivity = async <T>(input: {
       })
       input.onTextDelta?.(text)
     },
+    onReset: () => input.onTextReset?.(),
+    onToolCallDelta: () => input.onToolCallDelta?.(),
     onComplete: (payload) => {
       latestRawText = payload.rawText || latestRawText
     },
@@ -235,6 +242,10 @@ export const runLlmCallWithActivity = async <T>(input: {
           throw toProviderFailure(error, retry.retryable)
         }
         attempt += 1
+        latestRawText = ''
+        chunkCount = 0
+        firstTokenAt = undefined
+        observer.onReset?.()
         retryGroupStarted = true
         emitLlmRetryProcessStarted({
           sendEvent: input.ctx.sendEvent,

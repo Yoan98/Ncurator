@@ -72,16 +72,17 @@ flowchart TD
 - `brain`：原生 function calling，绑定当前可用工具，决定下一步或最终交付。
 - `dispatch`：`tool_calls` 队列的唯一消费者，按模型返回顺序路由至 learning / plan / hand。
 - `learning` / `plan` / `hand`：执行分配的工具调用，写回 `ToolMessage`，继续剩余队列。
-- `context_budget` / `context_compaction`：检查上下文预算；必要时压缩较早历史，注入 `<current_state>`（plan + learnedSkillIds）。
+- `context_budget` / `context_compaction`：在调用 Brain 前按“历史 + 当前 user”检查预算；必要时只压缩历史，checkpoint 落库成功后才进入 Brain。
 
 **消息与上下文**
 
 - 会话级 append-only 的 `chat_session_message_log` 是唯一真相源；模型上下文从记录投影，UI 过程展示亦从记录重建。
-- 每条记录为 `user` / `assistant`（含 `tool_calls`）/ `tool` / `annotation`；压缩只作用于投影，记录本身不动。
+- 每条记录为 `user` / `assistant`（含 `tool_calls`）/ `tool` / `annotation`；user 同时保存该轮工作区、参考资料与附件上下文。`plan_updated` 保存规范化计划，`compaction_checkpoint` 保存摘要和 `coveredThroughSeq`。
+- 新 run 使用最新 checkpoint 投影为“摘要 + checkpoint 后历史”，修复悬空工具边界后再追加当前 user 一次；摘要和被覆盖的完整历史不会同时发送。日志记录永不因恢复或压缩而改写。
 - 图片在记录中只保存路径、MIME、字节数和尺寸；本地图片在请求主模型前才临时投影为 data URL，HTTP(S) 图片保留原地址。工具消息不能携带图片时，紧随其后追加合成的 user 多模态消息。
 - 单次请求最多保留最近 600 张图片，本地 data URL 估算体积最多 20 MiB。数量超限时从最旧图片开始按至少 20 张的批次裁剪；体积超限时一次至少释放 10 MiB，减少频繁改变消息前缀造成的缓存失效。原位置保留可重新调用 `read_image` 的路径占位。
 - `read_image` 对本地源文件按 SHA-256 复用 `.ncurator/runtime/assets/read_image-cache/<64位哈希>-v1.webp`；不放大小图，大图等比压到最多 64 万像素和 1 MiB。运行时目录丢失后，历史消息保留路径占位，需要时重新读取。
-- 中断恢复：补写缺失的 `ToolMessage`，尾部追加 user 消息继续；未正常完成的 run 保留恢复快照（plan、skills、artifacts）。
+- 中断恢复只依赖消息日志投影：补齐缺失的同 `tool_call_id` 失败 `ToolMessage`，尾部追加新的 user 消息。计划从 `plan_updated` 投影，技能从 `chat_session_skill_state` 读取，产物由 run 和文件修改记录负责；应用重启只把活动 run 标记为 `process_interrupted`，不自动调用模型。
 
 **Skill 与 Tool**
 
@@ -92,7 +93,7 @@ flowchart TD
 
 **交付**
 
-`brain` 一轮返回无 `tool_calls` 时，assistant content 即为最终交付 markdown；Main 侧不做计划完成度强制拦截。结构化 JSON 输出（非 tool calling 场景）统一走 `prompt_json`，本地 jsonrepair + schema 校验兜底。
+`brain` 公开每次尝试的开始、内容增量、重置、角色归类和完成事件。内容先作为 Markdown 回答流展示；收到工具分片后转为 Markdown Thought。完整响应正常关闭且无工具调用才完成；`tool_calls` 执行后继续，`length/max_tokens` 记为 `output_truncated` 并保留服务端确认的半截 assistant 内容，网络中断草稿只保存在 `ai_run` UI 投影中。Provider 没有给出 `finish_reason` 时，也必须等流正常关闭后再按完整组装结果判断。当前 user 自身超过模型窗口时直接返回 `input_too_long`，不写入消息日志且不调用 Brain。Main 侧不做计划完成度强制拦截。
 
 ## 工具设计
 

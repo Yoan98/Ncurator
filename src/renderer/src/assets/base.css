@@ -1355,6 +1355,28 @@ mark {
   color: var(--ink);
 }
 
+.markdown-body--thought {
+  font-size: 14px;
+  line-height: 1.72;
+}
+
+.markdown-body--thought h1,
+.markdown-body--thought h2,
+.markdown-body--thought h3,
+.markdown-body--thought h4,
+.markdown-body--thought h5,
+.markdown-body--thought h6 {
+  margin: 0.65rem 0 0.3rem;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.markdown-body--thought p,
+.markdown-body--thought ul,
+.markdown-body--thought ol {
+  margin-bottom: 0.4rem;
+}
+
 .markdown-body a {
   color: var(--notion-accent-blue);
   text-decoration: none;

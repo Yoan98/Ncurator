@@ -90,7 +90,21 @@ export const createPlanNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         content: [
           'Plan updated successfully:',
           ...parsed.plan.map((item) => `- [${item.status}] ${item.title}`)
-        ].join('\n')
+        ].join('\n'),
+        additionalTranscriptEntries: [
+          {
+            kind: 'annotation',
+            eventType: 'plan_updated',
+            payload: { plan: parsed.plan }
+          }
+        ]
+      })
+      input.ctx.sendEvent({
+        type: 'assistant_plan_updated',
+        runId: input.ctx.runId,
+        plan: parsed.plan,
+        createdAt: Date.now(),
+        stage: 'human_plan'
       })
     }
 

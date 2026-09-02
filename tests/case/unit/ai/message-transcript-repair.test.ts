@@ -6,6 +6,20 @@ import {
 } from '../../../../src/main/services/ai/human/memory/transcript'
 import type { ChatMessageLogEntry } from '../../../../src/shared/types'
 
+const userEntry = (content: string): ChatMessageLogEntry => ({
+  kind: 'user',
+  content,
+  context: {
+    workspace: {
+      workspaceId: 'workspace-1',
+      workspaceName: 'workspace-1',
+      rootPath: '/tmp/workspace-1'
+    },
+    selectedReferences: [],
+    attachments: []
+  }
+})
+
 const assistantWithCalls = (ids: string[]): AIMessage =>
   new AIMessage({
     content: '调用工具',
@@ -18,7 +32,7 @@ const toolResult = (id: string): ToolMessage =>
 describe('ai unit message transcript repair', () => {
   it('skips only the last user entry when skipLastUserEntry is set', () => {
     const entries: ChatMessageLogEntry[] = [
-      { kind: 'user', content: '第一个诉求' },
+      userEntry('第一个诉求'),
       {
         kind: 'assistant',
         content: '先学习技能',
@@ -31,14 +45,14 @@ describe('ai unit message transcript repair', () => {
         ok: true,
         content: 'Skill loaded successfully: docx-read.'
       },
-      { kind: 'user', content: '第二个诉求' }
+      userEntry('第二个诉求')
     ]
 
     const skipped = deriveMessageLogMessages({ entries, skipLastUserEntry: true })
     expect(skipped.map((message) => message.getType())).toEqual(['human', 'ai', 'tool'])
-    expect(skipped[0].content).toBe('第一个诉求')
+    expect(String(skipped[0].content)).toContain('第一个诉求')
     expect(skipped[2].content).toBe('Skill loaded successfully: docx-read.')
-    expect(skipped.some((message) => message.content === '第二个诉求')).toBe(false)
+    expect(skipped.some((message) => String(message.content).includes('第二个诉求'))).toBe(false)
 
     const all = deriveMessageLogMessages({ entries, skipLastUserEntry: false })
     expect(all.map((message) => message.getType())).toEqual(['human', 'ai', 'tool', 'human'])

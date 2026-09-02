@@ -50,10 +50,14 @@ export const appendToolFeedback = async (input: {
   ok: boolean
   errorMessage?: string
   content?: string
+  additionalTranscriptEntries?: ChatMessageLogEntry[]
 }): Promise<void> => {
   const feedback = buildToolFeedback(input)
   const messages = input.cache.messages || []
   messages.push(feedback.message)
   input.cache.messages = messages
-  await input.ctx.appendMessageLog([feedback.transcript])
+  await input.ctx.appendMessageLog([
+    feedback.transcript,
+    ...(input.additionalTranscriptEntries || [])
+  ])
 }

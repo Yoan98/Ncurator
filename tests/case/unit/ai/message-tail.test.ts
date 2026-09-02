@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import {
   renderMessagesForCompaction,
-  splitMessagesByLastAi
+  splitMessagesByLastAi,
+  createCurrentBrainUserMessage
 } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 
 const toolCall = (id: string, name: string, args: Record<string, unknown>) => ({
@@ -13,17 +14,18 @@ const toolCall = (id: string, name: string, args: Record<string, unknown>) => ({
 })
 
 describe('splitMessagesByLastAi', () => {
-  it('excludes system and human templates from compressible', () => {
+  it('compresses only history before the marked current user', () => {
     const messages = [
       new SystemMessage('<system>fixed template</system>'),
-      new HumanMessage('<user_context>task goal</user_context>'),
+      new HumanMessage('<historical_user_turn>old task</historical_user_turn>'),
       new AIMessage({ content: '', tool_calls: [toolCall('1', 'terminal_run', { command: 'ls' })] }),
       new ToolMessage({ content: 'total 1', tool_call_id: '1' }),
+      createCurrentBrainUserMessage('<user_context>current task</user_context>'),
       new AIMessage({ content: '', tool_calls: [toolCall('2', 'text_file_read', { sourcePath: 'a.txt' })] })
     ]
     const { compressible, tail } = splitMessagesByLastAi(messages)
-    expect(compressible.map((m) => m.getType())).toEqual(['ai', 'tool'])
-    expect(tail.map((m) => m.getType())).toEqual(['ai'])
+    expect(compressible.map((m) => m.getType())).toEqual(['human', 'ai', 'tool'])
+    expect(tail.map((m) => m.getType())).toEqual(['human', 'ai'])
   })
 
   it('keeps the last AI message and everything after it as tail', () => {

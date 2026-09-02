@@ -2,6 +2,8 @@ import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langcha
 import type {
   ChatMessageImageRef,
   ChatMessageLogEntry,
+  ChatMessageLogPlanItem,
+  ChatMessageLogRecord,
   ChatMessageLogToolCall
 } from '../../../../../shared/types'
 import { createImageReferenceMessage } from './multimodal'
@@ -90,7 +92,18 @@ export const deriveMessageLogMessages = (input: {
     }
     if (entry.kind === 'user') {
       flushImages()
-      messages.push(new HumanMessage(entry.content))
+      messages.push(
+        new HumanMessage(
+          [
+            '<historical_user_turn>',
+            `  <task_goal>\n${entry.content}\n  </task_goal>`,
+            `  <workspace>${JSON.stringify(entry.context.workspace)}</workspace>`,
+            `  <selected_references>${JSON.stringify(entry.context.selectedReferences)}</selected_references>`,
+            `  <attachments>${JSON.stringify(entry.context.attachments)}</attachments>`,
+            '</historical_user_turn>'
+          ].join('\n')
+        )
+      )
       continue
     }
     if (entry.kind === 'assistant') {
@@ -116,4 +129,71 @@ export const deriveMessageLogMessages = (input: {
   }
   flushImages()
   return messages
+}
+
+export type MessageLogProjection = {
+  messages: BaseMessage[]
+  plan: ChatMessageLogPlanItem[]
+  checkpoint?: {
+    compactBlockId: string
+    summary: string
+    coveredThroughSeq: number
+    sourceMessageCount: number
+    createdAt: number
+  }
+}
+
+/**
+ * 把不可变日志投影为下一次模型调用需要的历史。
+ * checkpoint 之前的对话由一条摘要替代，绝不同时发送摘要和完整旧历史。
+ */
+export const projectMessageLogRecords = (
+  records: ChatMessageLogRecord[]
+): MessageLogProjection => {
+  const ordered = [...records].sort((a, b) => a.seq - b.seq)
+  const checkpointRecord = [...ordered]
+    .reverse()
+    .find(
+      (record) =>
+        record.entry.kind === 'annotation' &&
+        record.entry.eventType === 'compaction_checkpoint'
+    )
+  const checkpoint =
+    checkpointRecord?.entry.kind === 'annotation' &&
+    checkpointRecord.entry.eventType === 'compaction_checkpoint'
+      ? {
+          ...checkpointRecord.entry.payload,
+          createdAt: checkpointRecord.createdAt
+        }
+      : undefined
+
+  const projectedRecords = checkpoint
+    ? ordered.filter((record) => record.seq > checkpoint.coveredThroughSeq)
+    : ordered
+  const messages = deriveMessageLogMessages({
+    entries: projectedRecords.map((record) => record.entry)
+  })
+  if (checkpoint) {
+    messages.unshift(
+      new HumanMessage(
+        `<compacted_history>\n${checkpoint.summary}\n</compacted_history>`
+      )
+    )
+  }
+
+  let plan: ChatMessageLogPlanItem[] = []
+  for (const record of ordered) {
+    const entry = record.entry
+    if (entry.kind === 'annotation' && entry.eventType === 'plan_updated') {
+      plan = entry.payload.plan.map((item) => ({ ...item }))
+    } else if (entry.kind === 'annotation' && entry.eventType === 'finalizing_started') {
+      plan = []
+    }
+  }
+
+  return {
+    messages: repairInterruptedToolCalls(messages),
+    plan,
+    checkpoint
+  }
 }

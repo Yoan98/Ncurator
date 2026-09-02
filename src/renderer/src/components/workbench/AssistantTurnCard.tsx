@@ -144,7 +144,7 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
     className="text-[14px] leading-7 text-[#37352F]"
     data-testid={workbenchSelectors.assistantThoughts}
   >
-    {thought.text}
+    <MarkdownRenderer content={thought.text} variant="thought" />
   </div>
 )
 
@@ -353,7 +353,12 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   const processGroups = useMemo(() => turn?.processGroups || [], [turn?.processGroups])
   const processThoughts = useMemo(() => turn?.processThoughts || [], [turn?.processThoughts])
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
-  const hasFinalAnswer = finalAnswerMarkdown.trim().length > 0
+  const streamingMarkdown = turn?.streamingMarkdown || ''
+  const streamingRole = turn?.streamingRole || 'answer'
+  const visibleAnswerMarkdown =
+    finalAnswerMarkdown || (streamingRole === 'answer' ? streamingMarkdown : '')
+  const hasFinalAnswer = visibleAnswerMarkdown.trim().length > 0
+  const hasStreamingThought = streamingRole === 'thought' && streamingMarkdown.trim().length > 0
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({
@@ -377,7 +382,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   return (
     <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
       <div className="space-y-4">
-        {timeline.length > 0 ? (
+        {timeline.length > 0 || hasStreamingThought ? (
           <div
             className={`transition-opacity duration-200 ${
               turn.status === 'completed' && hasFinalAnswer ? 'opacity-75' : ''
@@ -400,6 +405,11 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 }
                 return <AssistantProcessGroupView key={entry.id} group={entry.group} />
               })}
+              {streamingRole === 'thought' && streamingMarkdown.trim() ? (
+                <div className="text-[14px] leading-7 text-[#37352F]">
+                  <MarkdownRenderer content={streamingMarkdown} variant="thought" />
+                </div>
+              ) : null}
             </div>
           </div>
         ) : null}
@@ -409,11 +419,11 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             className="min-w-0 text-[15px] leading-7 text-[#37352F]"
             data-testid={`${workbenchSelectors.assistantFinalAnswerPrefix}-${messageId}`}
           >
-            <MarkdownRenderer content={finalAnswerMarkdown} onOpenReference={onOpenReference} />
+            <MarkdownRenderer content={visibleAnswerMarkdown} onOpenReference={onOpenReference} />
           </div>
         ) : null}
 
-        {!hasFinalAnswer && turn.status === 'failed' && turn.error ? (
+        {turn.status === 'failed' && turn.error ? (
           <div className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-sm leading-6 text-[#B3261E]">
             {turn.error}
           </div>

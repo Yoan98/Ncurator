@@ -475,11 +475,17 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
         const content = resolveDecisionContent(output)
         const toolCalls = resolveDecisionToToolCalls(output, payload.callIndex)
         const rawText = JSON.stringify(output)
+        emitChunks(
+          toChunkList({ rawText: content, streamingMode: input.streamingMode }),
+          input.observer?.onDelta
+        )
+        if (toolCalls.length > 0) input.observer?.onToolCallDelta?.()
         return {
           message: new AIMessage({ content, tool_calls: toolCalls }),
           rawText,
           usage: estimateScriptedUsage({ system: '', user, rawText }),
-          streamed: false
+          streamed: input.streamingMode === 'force_stream',
+          finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop'
         }
       }
 

@@ -19,6 +19,7 @@ import {
 interface MarkdownRendererProps {
   content: string
   className?: string
+  variant?: 'default' | 'thought'
   onOpenReference?: (reference: {
     kind: ParsedNcuratorRefKind
     resourceType: ParsedNcuratorRefResourceType
@@ -37,6 +38,7 @@ const transformMarkdownUrl = (url: string): string => {
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   className,
+  variant = 'default',
   onOpenReference
 }) => {
   const normalizedContent = React.useMemo(
@@ -45,7 +47,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   )
 
   return (
-    <div className={`markdown-body ${className || ''}`}>
+    <div
+      className={`markdown-body ${variant === 'thought' ? 'markdown-body--thought' : ''} ${className || ''}`}
+    >
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeKatex]}

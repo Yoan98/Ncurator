@@ -1,6 +1,6 @@
 # Skill / Tool 契约审计
 
-> `pnpm dlx tsx scripts/doc/generate-ai-tool-prompt-audit.mts` · 2026-08-30T11:14:27.064Z
+> `pnpm dlx tsx scripts/doc/generate-ai-tool-prompt-audit.mts` · 2026-09-02T04:33:12.499Z
 
 # Skill: terminal
 > 在用户工作区根目录执行和读取命令，并返回终端状态、增量输出、退出状态和用户工作区域文件产物。
@@ -2452,8 +2452,8 @@ Error: Sheet "Missing" not found
 > 搜索公开网页，或抓取单个 URL 的正文。
 
 ### 输入
-- `[search].type` · "search" · 必填 · 按关键词搜索公开网页
-- `[search].query` · string · 必填 · 搜索关键词
+- `[search].type` · "search" · 必填 · 按搜索查询检索公开网页
+- `[search].query` · string · 必填 · 单条搜索查询；整串原样提交，多词以空格分隔，写法同浏览器搜索框；多个独立主题请分次调用
 - `[fetch].type` · "fetch" · 必填 · 抓取单个 URL 的正文
 - `[fetch].url` · string · 必填 · 目标 URL
 

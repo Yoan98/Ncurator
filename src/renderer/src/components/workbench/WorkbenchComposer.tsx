@@ -20,6 +20,7 @@ import type {
   WorkbenchModelSelection,
   WorkspaceSource
 } from '../../../../shared/types'
+import type { ChatMessageLogPlanItem } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import type {
@@ -49,6 +50,7 @@ import WorkbenchModelSelector from './WorkbenchModelSelector'
 import { AI_PREFERENCE_OPTIONS, EXECUTION_PERMISSION_OPTIONS } from './selectOptions'
 import type { ImageLightboxImage } from './ImageLightbox'
 import { getAttachmentTypeLabel } from './utils'
+import WorkbenchPlanProgress from './WorkbenchPlanProgress'
 
 type MentionContext = {
   textNode: Text
@@ -86,6 +88,7 @@ type WorkbenchComposerProps = {
   draftValue: ComposerDraftValue
   draftKey: string
   contextUsage?: WorkbenchContextUsage | null
+  plan?: ChatMessageLogPlanItem[]
   requestAttachmentTarget: () => Promise<{
     assetBucketId: string
     workspaceRootPath: string
@@ -146,6 +149,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   draftValue,
   draftKey,
   contextUsage,
+  plan = [],
   requestAttachmentTarget,
   onFileDropHandlerReady
 }) => {
@@ -901,6 +905,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
   return (
     <div className="relative">
+      <WorkbenchPlanProgress plan={plan} />
       {mentionQuery !== null ? (
         <ReferenceMentionPanel
           loading={mentionLoading}

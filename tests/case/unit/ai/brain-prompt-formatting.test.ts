@@ -92,12 +92,11 @@ describe('ai unit brain prompt formatting', () => {
 
     const user = buildBrainUserMessage({ state, ctx: createFakeCtx(), injectPlan: true })
 
-    const currentState = user.match(/<current_state>([\s\S]*?)<\/current_state>/)?.[1] || ''
-    expect(currentState).toContain('<plan>')
+    const currentState = user.match(/<active_state>([\s\S]*?)<\/active_state>/)?.[1] || ''
+    expect(currentState).toContain('计划进度：')
     expect(currentState).toContain('[done] 整理资料')
     expect(currentState).toContain('[todo] 检查是否满足诉求')
-    expect(currentState).toContain('<learned_skills>')
-    expect(currentState).toContain('- docx-read')
+    expect(currentState).toContain('已学习技能：docx-read')
   })
 
   it('renders learned_skills as none when no skill has been learned', () => {
@@ -107,7 +106,7 @@ describe('ai unit brain prompt formatting', () => {
     })
 
     const user = buildBrainUserMessage({ state, ctx: createFakeCtx() })
-    expect(user).toContain('<learned_skills>none</learned_skills>')
-    expect(user).not.toContain('<plan>')
+    expect(user).toContain('已学习技能：无')
+    expect(user).not.toContain('计划进度：')
   })
 })

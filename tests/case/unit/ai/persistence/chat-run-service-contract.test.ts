@@ -434,7 +434,7 @@ describe('unit ai persistence backend', () => {
 
     expect(opened.messages).toHaveLength(2)
     expect(opened.activeRuns).toHaveLength(1)
-    expect(opened.activeRuns[0].messageLogEntries?.map((entry) => entry.kind)).toEqual([
+    expect(opened.activeRuns[0].messageLogRecords?.map((record) => record.entry.kind)).toEqual([
       'annotation',
       'assistant',
       'annotation'
@@ -472,8 +472,8 @@ describe('unit ai persistence backend', () => {
     expect(snapshot.activeRuns).toEqual([])
     expect(snapshot.runs).toHaveLength(1)
     expect(snapshot.runs?.[0].run.status).toBe('completed')
-    expect(snapshot.runs?.[0].messageLogEntries).toHaveLength(3)
-    expect(snapshot.runs?.[0].messageLogEntries?.[1]).toMatchObject({
+    expect(snapshot.runs?.[0].messageLogRecords).toHaveLength(3)
+    expect(snapshot.runs?.[0].messageLogRecords?.[1].entry).toMatchObject({
       kind: 'assistant',
       content: '先检索资料'
     })
@@ -507,8 +507,8 @@ describe('unit ai persistence backend', () => {
 
     expect(summaries.runs).toHaveLength(1)
     expect(summaries.runs[0].run.status).toBe('completed')
-    expect(summaries.runs[0].messageLogEntries).toHaveLength(3)
-    expect(summaries.runs[0].messageLogEntries?.[0]).toMatchObject({
+    expect(summaries.runs[0].messageLogRecords).toHaveLength(3)
+    expect(summaries.runs[0].messageLogRecords?.[0].entry).toMatchObject({
       kind: 'annotation',
       eventType: 'thinking_started'
     })
@@ -536,57 +536,21 @@ describe('unit ai persistence backend', () => {
       createdAt: now,
       updatedAt: now
     })
-    await setup.storage.chat.saveSessionResumeSnapshot('session-1', {
-      reason: 'process_interrupted',
-      runId: 'run-1',
-      userInput: '测试中断',
-      selectedReferences: [],
-      humanState: {
-        schemaVersion: 3,
-        memory: { plan: [], compactions: [] },
-        skills: { learnedSkillIds: [] },
-        execution: {
-          deliveryGuidanceItems: [],
-          artifacts: []
-        }
-      },
-      errorMessage: '运行中断恢复快照',
-      updatedAt: now
-    })
-
     await setup.service.failInterruptedRuns()
 
     const storedRun = await setup.storage.aiRun.getRun('run-1')
     const messages = await setup.storage.chat.getChatMessages('session-1')
-    const snapshot = await setup.storage.chat.getSessionResumeSnapshot('session-1')
 
     expect(storedRun?.status).toBe('failed')
+    expect(storedRun?.failureCode).toBe('process_interrupted')
     expect(storedRun?.error).toContain('运行已中断')
     expect(messages[0].content).toContain('运行已中断')
     expect(messages[0].error).toBe(true)
-    expect(snapshot?.reason).toBe('process_interrupted')
   })
 
   it('retract-latest-turn-guards-running-and-non-latest-user-message', async () => {
     const runningSetup = await createTestService()
     const runningRun = await submitAiRun(runningSetup)
-    await runningSetup.storage.chat.saveSessionResumeSnapshot('session-1', {
-      reason: 'user_cancelled',
-      runId: runningRun.id,
-      userInput: runningRun.input,
-      selectedReferences: [],
-      humanState: {
-        schemaVersion: 3,
-        memory: { plan: [], compactions: [] },
-        skills: { learnedSkillIds: [] },
-        execution: {
-          deliveryGuidanceItems: [],
-          artifacts: []
-        }
-      },
-      errorMessage: 'keep snapshot when retract is rejected',
-      updatedAt: Date.now()
-    })
     const runningMessages = await runningSetup.storage.chat.getChatMessages('session-1')
     const runningResponse = await runningSetup.service.retractLatestTurn({
       sessionId: 'session-1',
@@ -597,7 +561,6 @@ describe('unit ai persistence backend', () => {
     expect(await runningSetup.storage.chat.getChatMessages('session-1')).toHaveLength(
       runningMessages.length
     )
-    expect(await runningSetup.storage.chat.getSessionResumeSnapshot('session-1')).not.toBeNull()
 
     const setup = await createTestService()
     await seedSession(setup.storage)
@@ -619,7 +582,7 @@ describe('unit ai persistence backend', () => {
     expect(await setup.storage.chat.getChatMessages('session-1')).toHaveLength(4)
   })
 
-  it('retract-latest-turn-removes-user-assistant-run-and-clears-its-resume-snapshot', async () => {
+  it('retract-latest-turn-removes-user-assistant-run-and-its-message-log', async () => {
     const setup = await createTestService()
     await seedSession(setup.storage)
     const baseTime = Date.now()
@@ -642,22 +605,10 @@ describe('unit ai persistence backend', () => {
       updatedAt: baseTime + 3,
       finishedAt: baseTime + 3
     })
-    await setup.storage.chat.saveSessionResumeSnapshot('session-1', {
-      reason: 'user_cancelled',
+    await setup.storage.chatMessageLog.appendBatch({
+      sessionId: 'session-1',
       runId: 'retract-run',
-      userInput: 'retract me',
-      selectedReferences: [],
-      humanState: {
-        schemaVersion: 3,
-        memory: { plan: [], compactions: [] },
-        skills: { learnedSkillIds: [] },
-        execution: {
-          deliveryGuidanceItems: [],
-          artifacts: []
-        }
-      },
-      errorMessage: 'cancelled',
-      updatedAt: Date.now()
+      entries: [{ kind: 'annotation', eventType: 'thinking_started', payload: {} }]
     })
 
     const response = await setup.service.retractLatestTurn({
@@ -671,10 +622,10 @@ describe('unit ai persistence backend', () => {
     expect(response.runId).toBe('retract-run')
     expect(response.messages.map((message) => message.id)).toEqual(['kept-user', 'kept-assistant'])
     expect(await setup.storage.aiRun.getRun('retract-run')).toBeNull()
-    expect(await setup.storage.chat.getSessionResumeSnapshot('session-1')).toBeNull()
+    expect(await setup.storage.chatMessageLog.listByRun('retract-run')).toEqual([])
   })
 
-  it('retract-latest-turn-keeps-a-resume-snapshot-for-a-different-run', async () => {
+  it('retract-latest-turn-keeps-message-log-for-a-different-run', async () => {
     const setup = await createTestService()
     await seedSession(setup.storage)
     const baseTime = Date.now()
@@ -695,22 +646,10 @@ describe('unit ai persistence backend', () => {
       updatedAt: baseTime + 1,
       finishedAt: baseTime + 1
     })
-    await setup.storage.chat.saveSessionResumeSnapshot('session-1', {
-      reason: 'process_interrupted',
+    await setup.storage.chatMessageLog.appendBatch({
+      sessionId: 'session-1',
       runId: 'newer-unfinished-run',
-      userInput: 'continue the newer task',
-      selectedReferences: [],
-      humanState: {
-        schemaVersion: 3,
-        memory: { plan: [], compactions: [] },
-        skills: { learnedSkillIds: [] },
-        execution: {
-          deliveryGuidanceItems: [],
-          artifacts: []
-        }
-      },
-      errorMessage: 'interrupted',
-      updatedAt: Date.now()
+      entries: [{ kind: 'annotation', eventType: 'thinking_started', payload: {} }]
     })
 
     const response = await setup.service.retractLatestTurn({
@@ -719,9 +658,7 @@ describe('unit ai persistence backend', () => {
     })
 
     expect(response.success).toBe(true)
-    expect((await setup.storage.chat.getSessionResumeSnapshot('session-1'))?.runId).toBe(
-      'newer-unfinished-run'
-    )
+    expect(await setup.storage.chatMessageLog.listByRun('newer-unfinished-run')).toHaveLength(1)
   })
 
   it('delete-session-cleans-run-and-message-log-records', async () => {
@@ -739,12 +676,10 @@ describe('unit ai persistence backend', () => {
     const messages = await setup.storage.chat.getChatMessages('session-1')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
     const messageLog = await setup.storage.chatMessageLog.list('session-1')
-    const resumeSnapshot = await setup.storage.chat.getSessionResumeSnapshot('session-1')
 
     expect(sessions).toEqual([])
     expect(messages).toEqual([])
     expect(storedRun).toBeNull()
     expect(messageLog).toEqual([])
-    expect(resumeSnapshot).toBeNull()
   })
 })

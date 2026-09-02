@@ -65,7 +65,7 @@ export const projectProcessGroups = (input: {
         const skillId = entry.payload.skillId
         if (!isRuntimeSkillId(skillId)) continue
         completeGroup(`${input.runId}:learning:${skillId}`, 'completed')
-      } else if (entry.eventType === 'compaction_summary') {
+      } else if (entry.eventType === 'compaction_checkpoint') {
         upsertGroup(
           createDisplayProcessGroup({
             groupId: `${input.runId}:compaction:${stamp()}`,

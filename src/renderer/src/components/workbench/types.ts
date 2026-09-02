@@ -179,6 +179,10 @@ export type AssistantTurnViewModel = {
   processThoughts: AssistantProcessThought[]
   processGroups: AssistantProcessGroup[]
   finalAnswerMarkdown: string
+  streamingRoundId?: string
+  streamingMarkdown: string
+  streamingRole: 'answer' | 'thought'
+  plan: import('../../../../shared/types').ChatMessageLogPlanItem[]
   artifacts: AssistantArtifactItem[]
   applyTargets: AssistantTurnApplyTarget[]
   blockers: AssistantTurnBlocker[]

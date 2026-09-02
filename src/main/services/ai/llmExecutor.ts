@@ -25,7 +25,7 @@ import type {
 } from '../../../shared/types'
 import type { AiEventDispatchContext } from './types'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS, AI_LLM_CALL_TIMEOUT_MS } from './constants'
-import { isLlmProviderError, toLlmOutputError } from './errors'
+import { LlmProviderError, isLlmProviderError, toLlmOutputError } from './errors'
 import { classifyLlmFailureCode } from './utils/runFailure'
 import {
   extractTextContent,
@@ -167,7 +167,16 @@ export type AiLlmToolCallDriverResult = {
   usage?: AiLlmUsage
   responseMetadata?: JsonObject
   usageMetadata?: JsonObject
+  finishReason?: AiLlmFinishReason
 }
+
+export type AiLlmFinishReason =
+  | 'stop'
+  | 'tool_calls'
+  | 'length'
+  | 'content_filter'
+  | 'resource_exhausted'
+  | 'unknown'
 
 export type AiLlmToolCallRequest = {
   caller: string
@@ -177,12 +186,15 @@ export type AiLlmToolCallRequest = {
   temperature?: number
   streamingMode?: AiLlmStreamingMode
   onTextDelta?: (text: string) => void
+  onTextReset?: () => void
+  onToolCallDelta?: () => void
   contextBudgetSnapshot?: BrainContextBudgetSnapshot
 }
 
 export type AiLlmToolCallResult = {
   message: AIMessage
   usage?: AiLlmUsage
+  finishReason: AiLlmFinishReason
 }
 
 export type AiLlmExecutor = {
@@ -281,6 +293,43 @@ const toInvocationMetadata = (input: {
   responseMetadata: normalizeJsonObject(input.message?.response_metadata),
   usageMetadata: normalizeJsonObject(input.message?.usage_metadata)
 })
+
+const normalizeFinishReason = (value: unknown): AiLlmFinishReason => {
+  const reason = String(value || '').trim().toLowerCase()
+  if (reason === 'stop' || reason === 'end_turn' || reason === 'completed') return 'stop'
+  if (reason === 'tool_calls' || reason === 'tool_call' || reason === 'tool_use') {
+    return 'tool_calls'
+  }
+  if (reason === 'length' || reason === 'max_tokens') return 'length'
+  if (reason === 'content_filter' || reason === 'filtered') return 'content_filter'
+  if (reason === 'resource_exhausted' || reason === 'resourceexhausted') {
+    return 'resource_exhausted'
+  }
+  return 'unknown'
+}
+
+const resolveFinishReason = (input: {
+  explicit?: unknown
+  responseMetadata?: JsonObject
+  hasToolCalls: boolean
+}): AiLlmFinishReason => {
+  const metadata = input.responseMetadata
+  const fromProvider = normalizeFinishReason(
+    input.explicit ?? metadata?.finish_reason ?? metadata?.stop_reason
+  )
+  if (fromProvider !== 'unknown') return fromProvider
+  // 没有 finish_reason 时，只有在完整 stream/invoke 已正常关闭后才会走到这里。
+  return input.hasToolCalls ? 'tool_calls' : 'stop'
+}
+
+const assertFinishReasonIsUsable = (finishReason: AiLlmFinishReason): void => {
+  if (finishReason !== 'resource_exhausted') return
+  throw new LlmProviderError({
+    message: '模型服务资源暂时不可用，请稍后重试。',
+    providerCode: 'resource_exhausted',
+    retryable: true
+  })
+}
 
 const streamTextFromRunnable = async (input: {
   runnable: TextRunnable
@@ -624,6 +673,7 @@ const streamToolCallingCore = async (input: {
       request.observer?.onDelta?.(text)
     }
     if (chunk.tool_call_chunks && chunk.tool_call_chunks.length > 0) {
+      request.observer?.onToolCallDelta?.()
       toolCallChunks.push(...chunk.tool_call_chunks)
     }
   }
@@ -638,10 +688,17 @@ const streamToolCallingCore = async (input: {
     message: lastChunk,
     providerKind
   })
+  const finishReason = resolveFinishReason({
+    responseMetadata: metadata.responseMetadata,
+    hasToolCalls:
+      collapsed.tool_calls.length > 0 || collapsed.invalid_tool_calls.length > 0
+  })
+  assertFinishReasonIsUsable(finishReason)
   return {
     output: message,
     rawText,
     streamed: true,
+    finishReason,
     ...metadata
   }
 }
@@ -653,13 +710,22 @@ const invokeToolCallingCore = async (input: {
 }): Promise<LlmCallExecutionResult<AIMessage>> => {
   if (input.driver?.chatTools) {
     const result = await input.driver.chatTools(input.request)
+    const finishReason = resolveFinishReason({
+      explicit: result.finishReason,
+      responseMetadata: result.responseMetadata,
+      hasToolCalls:
+        Boolean(result.message.tool_calls?.length) ||
+        Boolean(result.message.invalid_tool_calls?.length)
+    })
+    assertFinishReasonIsUsable(finishReason)
     return {
       output: result.message,
       rawText: result.rawText,
       streamed: result.streamed,
       usage: result.usage,
       responseMetadata: result.responseMetadata,
-      usageMetadata: result.usageMetadata
+      usageMetadata: result.usageMetadata,
+      finishReason
     }
   }
 
@@ -684,10 +750,17 @@ const invokeToolCallingCore = async (input: {
     message: response,
     providerKind
   })
+  const finishReason = resolveFinishReason({
+    responseMetadata: metadata.responseMetadata,
+    hasToolCalls:
+      Boolean(response.tool_calls?.length) || Boolean(response.invalid_tool_calls?.length)
+  })
+  assertFinishReasonIsUsable(finishReason)
   return {
     output: response,
     rawText: text,
     streamed: false,
+    finishReason,
     ...metadata
   }
 }
@@ -910,6 +983,8 @@ export const createAiLlmExecutor = (input: {
           contextBudgetSnapshot: request.contextBudgetSnapshot
         },
         onTextDelta: request.onTextDelta,
+        onTextReset: request.onTextReset,
+        onToolCallDelta: request.onToolCallDelta,
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
         classifyRetry: classifyLlmCallRetry,
         execute: async (observer) =>
@@ -937,7 +1012,8 @@ export const createAiLlmExecutor = (input: {
 
       return {
         message: result.output,
-        usage: result.usage
+        usage: result.usage,
+        finishReason: (result.finishReason as AiLlmFinishReason) || 'unknown'
       }
     }
   }

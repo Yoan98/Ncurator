@@ -2,8 +2,6 @@ import type {
   AiArtifactRef,
   ChatMessage,
   ChatSession,
-  ChatSessionResumeSnapshot,
-  ChatSessionResumeSnapshotRow,
   ChatSessionSkillState
 } from '../../../types/store'
 import type { SqliteCore } from '../sqlite/SqliteCore'
@@ -67,77 +65,6 @@ const toMessage = (row: ChatMessageRow): ChatMessage & { seq?: number } => ({
 
 export class ChatStore {
   public constructor(private readonly sqlite: SqliteCore) {}
-
-  public async saveSessionResumeSnapshot(
-    sessionId: string,
-    snapshot: ChatSessionResumeSnapshot
-  ): Promise<void> {
-    this.sqlite
-      .prepare(
-        `
-        INSERT OR REPLACE INTO chat_session_resume_snapshot (
-          session_id, run_id, reason, user_input, selected_references_json, workspace_json,
-          human_state_json, error_message, updated_at
-        ) VALUES (
-          @session_id, @run_id, @reason, @user_input, @selected_references_json, @workspace_json,
-          @human_state_json, @error_message, @updated_at
-        )
-      `
-      )
-      .run({
-        session_id: sessionId,
-        run_id: snapshot.runId,
-        reason: snapshot.reason,
-        user_input: snapshot.userInput,
-        selected_references_json: JSON.stringify(snapshot.selectedReferences || []),
-        workspace_json: jsonStringify(snapshot.workspace),
-        human_state_json: JSON.stringify(snapshot.humanState),
-        error_message: snapshot.errorMessage,
-        updated_at: snapshot.updatedAt
-      })
-  }
-
-  public async getSessionResumeSnapshot(
-    sessionId: string
-  ): Promise<ChatSessionResumeSnapshot | null> {
-    const row = this.sqlite
-      .prepare('SELECT * FROM chat_session_resume_snapshot WHERE session_id = ?')
-      .get(sessionId) as ChatSessionResumeSnapshotRow | undefined
-    if (!row?.human_state_json) return null
-    try {
-      const selectedReferences = JSON.parse(String(row.selected_references_json || '[]'))
-      const workspace = row.workspace_json ? JSON.parse(String(row.workspace_json)) : undefined
-      const humanState = JSON.parse(String(row.human_state_json))
-      if (!humanState || humanState.schemaVersion !== 3) return null
-      const reasonText = String(row.reason || '')
-      const reason =
-        reasonText === 'network_error' ||
-        reasonText === 'user_cancelled' ||
-        reasonText === 'process_interrupted' ||
-        reasonText === 'runtime_limit' ||
-        reasonText === 'unexpected_error'
-          ? reasonText
-          : 'timeout'
-      return {
-        reason,
-        runId: String(row.run_id || ''),
-        userInput: String(row.user_input || ''),
-        selectedReferences: Array.isArray(selectedReferences) ? selectedReferences : [],
-        workspace,
-        humanState,
-        errorMessage: String(row.error_message || ''),
-        updatedAt: Number(row.updated_at || 0)
-      }
-    } catch {
-      return null
-    }
-  }
-
-  public async clearSessionResumeSnapshot(sessionId: string): Promise<void> {
-    this.sqlite
-      .prepare('DELETE FROM chat_session_resume_snapshot WHERE session_id = ?')
-      .run(sessionId)
-  }
 
   public async getSessionSkillState(sessionId: string): Promise<ChatSessionSkillState> {
     const row = this.sqlite

@@ -222,9 +222,8 @@ describe('ai human mock-llm backend', () => {
         const humanSteps = filterAiRunEventsByType(result.events, 'human_step')
 
         runtime.assertThat(
-          result.result.status === 'failed' &&
+            result.result.status === 'failed' &&
             result.result.error === '运行失败，请重试。如果问题持续出现，请查看应用日志。' &&
-            result.result.resumeSnapshotSaved === false &&
             humanSteps.length === 0,
           {
             name: 'ai-run-service-aborts-before-human-on-preflight-failure',
@@ -233,7 +232,6 @@ describe('ai human mock-llm backend', () => {
             data: {
               status: result.result.status,
               error: result.result.error,
-              resumeSnapshotSaved: result.result.resumeSnapshotSaved,
               humanStepCount: humanSteps.length
             }
           }

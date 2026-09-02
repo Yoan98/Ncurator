@@ -1,12 +1,13 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages'
+import { randomUUID } from 'node:crypto'
+import { SystemMessage } from '@langchain/core/messages'
 import { getToolCalls } from '../../../../../utils/aiCapabilityUtils'
 import { extractTextContent, tryRepairJsonObject } from '../../../structuredOutput'
 import type { JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { isContentSafetyError } from '../../../utils/runFailure'
 import { normalizeRoundThought } from '../../memory/thoughtMemory'
-import { deriveMessageLogMessages, repairInterruptedToolCalls } from '../../memory/transcript'
 import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
+import { projectMessageLogRecords } from '../../memory/transcript'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { applyBrainDispatchTransition, returnToBrain } from '../utils/stateTransitions'
@@ -31,6 +32,8 @@ import {
   completeDelivery,
   finalizeDelivery
 } from './finalizeDelivery'
+import { createCurrentBrainUserMessage } from '../utils/messageTail'
+import { LlmOutputTruncatedError } from '../../../errors'
 
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
@@ -46,45 +49,34 @@ export const createBrainNode = (input: {
     input.cache.currentState = state
 
     const injectPlan = state.memory.plan.length > 0
-    const compactedHistoryText = state.memory.compactions.at(-1)?.summary
     let messages = input.cache.messages
-    if (!messages || messages.length === 0) {
-      const transcript = await input.ctx.loadMessageLog()
-      const historyMessages = repairInterruptedToolCalls(
-        deriveMessageLogMessages({
-          entries: transcript,
-          skipLastUserEntry: true
-        })
-      )
+    if (!messages || messages.length === 0 || input.cache.currentUserMessageIndex === undefined) {
+      const projection = projectMessageLogRecords(await input.ctx.loadMessageLog())
       messages = [
         new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
-        ...historyMessages,
-        new HumanMessage(
-          buildBrainUserMessage({
-            state,
-            ctx: input.ctx,
-            injectPlan,
-            compactedHistoryText
-          })
+        ...projection.messages,
+        createCurrentBrainUserMessage(
+          buildBrainUserMessage({ state, ctx: input.ctx, injectPlan })
         )
       ]
       input.cache.messages = messages
+      input.cache.currentUserMessageIndex = messages.length - 1
     } else {
       // 每轮刷新 user 消息，保证 plan / learned_skills / compacted_history 都是最新 state 渲染，
       // 避免 update_plan / learn_skill 之后后续 brain 轮次仍看到旧快照（"丢 plan"）。
-      const humanIndex = messages.findIndex((message) => message.getType() === 'human')
-      const refreshedHuman = new HumanMessage(
+      const humanIndex = input.cache.currentUserMessageIndex
+      const refreshedHuman = createCurrentBrainUserMessage(
         buildBrainUserMessage({
           state,
           ctx: input.ctx,
-          injectPlan,
-          compactedHistoryText
+          injectPlan
         })
       )
-      if (humanIndex >= 0) {
+      if (humanIndex >= 0 && humanIndex < messages.length) {
         messages[humanIndex] = refreshedHuman
       } else {
         messages.push(refreshedHuman)
+        input.cache.currentUserMessageIndex = messages.length - 1
       }
     }
 
@@ -146,13 +138,55 @@ export const createBrainNode = (input: {
 
       const projectedMessages = await projectMessagesForMainModel(messages)
       const requestMessageTokenEstimate = estimateMessagesForContext(messages)
+      const roundId = randomUUID()
+      let streamClassifiedAsThought = false
+      input.ctx.sendEvent({
+        type: 'assistant_brain_stream_started',
+        runId: input.ctx.runId,
+        roundId,
+        createdAt: Date.now(),
+        stage: 'human_brain'
+      })
+      const classifyStreamAsThought = (): void => {
+        if (streamClassifiedAsThought) return
+        streamClassifiedAsThought = true
+        input.ctx.sendEvent({
+          type: 'assistant_brain_stream_classified',
+          runId: input.ctx.runId,
+          roundId,
+          role: 'thought',
+          createdAt: Date.now(),
+          stage: 'human_brain'
+        })
+      }
       const result = await input.ctx.chatTools({
         caller: 'human.brain',
         taskId: state.task.taskId,
         messages: projectedMessages,
         tools,
         temperature: 0.1,
-        contextBudgetSnapshot: state.execution.contextBudget
+        contextBudgetSnapshot: state.execution.contextBudget,
+        onTextDelta: (text) => {
+          input.ctx.sendEvent({
+            type: 'assistant_brain_stream_delta',
+            runId: input.ctx.runId,
+            roundId,
+            text,
+            createdAt: Date.now(),
+            stage: 'human_brain'
+          })
+        },
+        onTextReset: () => {
+          streamClassifiedAsThought = false
+          input.ctx.sendEvent({
+            type: 'assistant_brain_stream_reset',
+            runId: input.ctx.runId,
+            roundId,
+            createdAt: Date.now(),
+            stage: 'human_brain'
+          })
+        },
+        onToolCallDelta: classifyStreamAsThought
       })
 
       const inputTokens = result.usage?.inputTokens
@@ -182,6 +216,35 @@ export const createBrainNode = (input: {
       const invalidToolCalls = Array.isArray(assistantMessage.invalid_tool_calls)
         ? assistantMessage.invalid_tool_calls
         : []
+      const assembledText = extractTextContent(assistantMessage.content)
+
+      if (result.finishReason === 'content_filter') {
+        const error = new Error('content_filter') as Error & { code?: string }
+        error.code = 'CONTENT_FILTER'
+        throw error
+      }
+      if (result.finishReason === 'length') {
+        await input.ctx.appendMessageLog([
+          { kind: 'assistant', content: assembledText, toolCalls: [] }
+        ])
+        input.ctx.sendEvent({
+          type: 'assistant_brain_stream_completed',
+          runId: input.ctx.runId,
+          roundId,
+          role: 'answer',
+          text: assembledText,
+          completedAt: Date.now(),
+          stage: 'human_brain'
+        })
+        throw new LlmOutputTruncatedError(assembledText)
+      }
+      if (
+        result.finishReason === 'tool_calls' &&
+        validToolCalls.length === 0 &&
+        invalidToolCalls.length === 0
+      ) {
+        throw new Error('模型声明了工具调用，但没有返回任何工具调用内容。')
+      }
       const dispatchableCalls: Parameters<typeof buildDispatchQueue>[0] = []
       const unrecoverableCalls: Array<{ id?: string; name: string; errorMessage: string }> = []
 
@@ -251,6 +314,21 @@ export const createBrainNode = (input: {
         }
       }
 
+      const hasAnyToolCall =
+        executableCalls.length > 0 ||
+        unrecoverableCalls.length > 0 ||
+        schemaInvalidCalls.length > 0
+      if (hasAnyToolCall) classifyStreamAsThought()
+      input.ctx.sendEvent({
+        type: 'assistant_brain_stream_completed',
+        runId: input.ctx.runId,
+        roundId,
+        role: hasAnyToolCall ? 'thought' : 'answer',
+        text: assembledText,
+        completedAt: Date.now(),
+        stage: 'human_brain'
+      })
+
       messages.push(assistantMessage)
       input.cache.messages = messages
       await input.ctx.appendMessageLog([
@@ -279,7 +357,7 @@ export const createBrainNode = (input: {
         }
       ])
 
-      const thoughtText = extractTextContent(assistantMessage.content)
+      const thoughtText = assembledText
       const thought = normalizeRoundThought(thoughtText)
 
       const appendInvalidFeedback = async (

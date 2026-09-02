@@ -1,5 +1,5 @@
 import { createHumanGraphRunner } from './human/graph/humanGraph'
-import { toRendererRunFailure } from './errors'
+import { isLlmInputTooLongError, toRendererRunFailure } from './errors'
 import { createAiRunContext } from './runtime'
 import { runAiRuntimePreflight } from './runtimePreflight'
 import {
@@ -8,16 +8,8 @@ import {
   createFailedAiRunState
 } from './run/state'
 import type { AiRunDeps, AiRunStartPayload, AiRunState } from './types'
-import {
-  resolveResumeSelectedReferences,
-  resolveResumeWorkspace,
-  restoreHumanStateFromResumeSnapshot,
-  saveHumanResumeSnapshot
-} from './utils/resumeSnapshot'
 import { isCancelledError, isRecoverableHumanRunError } from './utils/runFailure'
 import { classifyInterruptionReason } from './utils/runFailure'
-import { createInitialHumanState } from './human/state/schema'
-import type { HumanState } from './human/types'
 
 export class AiRunService {
   private static instance: AiRunService
@@ -32,38 +24,9 @@ export class AiRunService {
   }
 
   public async run(payload: AiRunStartPayload, deps: AiRunDeps): Promise<AiRunState> {
-    const userInput = String(payload.input || '')
-    let mergedSelectedReferences = payload.selectedReferences
-    let mergedWorkspace = payload.workspace
-    let initialState: HumanState = createInitialHumanState({
-      taskId: payload.runId,
-      userInput
-    })
     try {
-      const resumeSnapshot = await deps.chatStore.getSessionResumeSnapshot(payload.sessionId)
-      mergedSelectedReferences = resolveResumeSelectedReferences({
-        payloadSelectedReferences: payload.selectedReferences,
-        snapshotSelectedReferences: resumeSnapshot?.selectedReferences
-      })
-      mergedWorkspace = resolveResumeWorkspace({
-        payloadWorkspace: payload.workspace,
-        snapshotWorkspace: resumeSnapshot?.workspace
-      })
-      const effectivePayload: AiRunStartPayload = {
-        ...payload,
-        selectedReferences: mergedSelectedReferences,
-        workspace: mergedWorkspace
-      }
-      initialState = resumeSnapshot
-        ? restoreHumanStateFromResumeSnapshot({
-            runId: payload.runId,
-            userInput,
-            reason: resumeSnapshot.reason,
-            snapshot: resumeSnapshot.humanState
-          })
-        : initialState
       await runAiRuntimePreflight(deps)
-      const ctx = createAiRunContext(effectivePayload, deps)
+      const ctx = createAiRunContext(payload, deps)
       const runHumanTask = createHumanGraphRunner({ ctx })
       const output = await runHumanTask(
         {
@@ -71,11 +34,9 @@ export class AiRunService {
           userInput: String(payload.input || '')
         },
         {
-          emitAnswerEvents: true,
-          initialState
+          emitAnswerEvents: true
         }
       )
-      await deps.chatStore.clearSessionResumeSnapshot(payload.sessionId)
       return createCompletedAiRunState({
         runId: payload.runId,
         sessionId: payload.sessionId,
@@ -84,51 +45,39 @@ export class AiRunService {
         finalArtifacts: output.artifacts || []
       })
     } catch (e) {
-      const reason = isRecoverableHumanRunError(e) ? e.reason : classifyInterruptionReason(e)
-      const humanState =
-        isRecoverableHumanRunError(e) && e.lastHumanState ? e.lastHumanState : initialState
-      let resumeSnapshotSaved = false
-      try {
-        const session = await deps.chatStore.getChatSession(payload.sessionId)
-        if (session) {
-          await saveHumanResumeSnapshot({
-            chatStore: deps.chatStore,
-            sessionId: payload.sessionId,
-            reason,
-            runId: payload.runId,
-            userInput,
-            selectedReferences: mergedSelectedReferences || [],
-            workspace: mergedWorkspace,
-            humanState,
-            errorMessage: e instanceof Error ? e.message : String(e || ''),
-            updatedAt: Date.now()
-          })
-          resumeSnapshotSaved = true
-        }
-      } catch (snapshotError) {
-        console.error('[AI-RUN] failed to save resume snapshot:', snapshotError)
-      }
+      const reason = isLlmInputTooLongError(e)
+        ? 'input_too_long'
+        : isRecoverableHumanRunError(e)
+          ? e.reason
+          : classifyInterruptionReason(e)
       if (reason === 'user_cancelled' || isCancelledError(e)) {
         return createCancelledAiRunState({
           runId: payload.runId,
           sessionId: payload.sessionId,
-          input: payload.input,
-          resumeSnapshotSaved
+          input: payload.input
         })
       }
       const failure = toRendererRunFailure(e)
       const message =
-        reason === 'runtime_limit' ? '已达到运行上限，可继续对话推进' : failure.message
+        reason === 'input_too_long'
+          ? '当前输入超过模型上下文限制，请缩短后重试。'
+          : reason === 'runtime_limit'
+          ? '已达到运行上限，可继续对话推进'
+          : reason === 'output_truncated'
+            ? '模型输出达到长度限制，可发送“继续”接着完成'
+            : failure.message
       return createFailedAiRunState({
         runId: payload.runId,
         sessionId: payload.sessionId,
         input: payload.input,
         error: message,
-        failureSource: reason === 'runtime_limit' ? 'internal' : failure.source,
+        failureSource:
+          reason === 'input_too_long' || reason === 'runtime_limit' || reason === 'output_truncated'
+            ? 'internal'
+            : failure.source,
         failureHttpStatus: failure.httpStatus,
         failureProviderCode: failure.providerCode,
-        failureCode: reason,
-        resumeSnapshotSaved
+        failureCode: reason
       })
     }
   }

@@ -92,7 +92,9 @@ export type HumanRuntimeCache = {
   approvedBrowserUseTaskIds?: Set<string>
   toolCallCount: number
   messages?: BaseMessage[]
-  compactSummaryText?: string
+  currentUserMessageIndex?: number
+  currentUserLogAppended?: boolean
+  messageLogRecords?: import('../../../../shared/types').ChatMessageLogRecord[]
   currentState?: HumanState
   lastBrainInputTokens?: number
   lastBrainMessageTokenEstimate?: number

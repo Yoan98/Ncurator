@@ -55,6 +55,31 @@ export const isLlmProviderError = (error: unknown): error is LlmProviderError =>
 export const isLlmOutputError = (error: unknown): error is LlmOutputError =>
   error instanceof LlmOutputError
 
+export class LlmOutputTruncatedError extends Error {
+  public readonly partialText: string
+
+  public constructor(partialText: string) {
+    super('模型输出达到长度限制。')
+    this.name = 'LlmOutputTruncatedError'
+    this.partialText = partialText
+  }
+}
+
+export const isLlmOutputTruncatedError = (
+  error: unknown
+): error is LlmOutputTruncatedError => error instanceof LlmOutputTruncatedError
+
+export class LlmInputTooLongError extends Error {
+  public constructor() {
+    super('当前输入超过模型上下文限制，请缩短后重试。')
+    this.name = 'LlmInputTooLongError'
+  }
+}
+
+export const isLlmInputTooLongError = (error: unknown): error is LlmInputTooLongError =>
+  error instanceof LlmInputTooLongError
+
+
 const readCause = (error: unknown): unknown =>
   error && typeof error === 'object' && 'cause' in error ? error.cause : undefined
 

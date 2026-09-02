@@ -138,6 +138,7 @@ export class ChatRunService {
       const nextRun: AiRunRecord = {
         ...run,
         status: 'failed',
+        failureCode: 'process_interrupted',
         error: INTERRUPTED_RUN_MESSAGE,
         partialAnswer: run.partialAnswer || INTERRUPTED_RUN_MESSAGE,
         finalAnswer: run.finalAnswer || INTERRUPTED_RUN_MESSAGE,
@@ -274,17 +275,10 @@ export class ChatRunService {
         .map((message) => message.id)
     ]
 
-    // A snapshot for this run would make the edited message resume the withdrawn task.
-    const resumeSnapshot = await this.deps.chatStore.getSessionResumeSnapshot(sessionId)
-    const shouldClearResumeSnapshot = Boolean(run && resumeSnapshot?.runId === run.id)
-
     await this.deps.chatStore.deleteChatMessagesByIds(messageIdsToDelete)
     if (run) {
       await this.deps.aiRunStore.deleteRunsByIds([run.id])
       await this.deps.chatMessageLogStore.deleteByRunIds([run.id])
-    }
-    if (shouldClearResumeSnapshot) {
-      await this.deps.chatStore.clearSessionResumeSnapshot(sessionId)
     }
     const nextMessages = await this.deps.chatStore.getChatMessages(sessionId)
 
@@ -473,7 +467,7 @@ export class ChatRunService {
     const records = await this.deps.chatMessageLogStore.listByRun(run.id)
     return {
       run,
-      messageLogEntries: records.map((record) => record.entry),
+      messageLogRecords: records,
       pendingApproval: run.pendingApproval
     }
   }
@@ -735,8 +729,7 @@ export class ChatRunService {
         this.deps.docxApplyService.discardRun(runId)
         await this.queueRunEvent(runId, {
           type: 'run_cancelled',
-          runId,
-          resumeSnapshotSaved: result.resumeSnapshotSaved
+          runId
         })
         return
       }
@@ -755,8 +748,7 @@ export class ChatRunService {
           message: result.error || '运行失败，请重试。',
           httpStatus: result.failureHttpStatus,
           providerCode: result.failureProviderCode,
-          code: result.failureCode,
-          resumeSnapshotSaved: result.resumeSnapshotSaved
+          code: result.failureCode
         })
         return
       }
@@ -778,10 +770,7 @@ export class ChatRunService {
       if (this.activeRuns.get(runId)?.cancelled) {
         await this.queueRunEvent(runId, {
           type: 'run_cancelled',
-          runId,
-          resumeSnapshotSaved: Boolean(
-            await this.deps.chatStore.getSessionResumeSnapshot(run.sessionId)
-          )
+          runId
         })
         return
       }
@@ -937,13 +926,43 @@ export class ChatRunService {
     let saveImmediately = event.type !== 'answer_token'
     let assistantMessage: ChatMessage | null = null
 
-    if (event.type === 'answer_token') {
+    if (event.type === 'assistant_brain_stream_started') {
+      run.partialAnswer = ''
+      run.partialAnswerRole = 'answer'
+      run.updatedAt = now
+      assistantMessage = this.buildAssistantMessage(run, '')
+    } else if (event.type === 'assistant_brain_stream_delta') {
+      run.partialAnswer = `${run.partialAnswer || ''}${event.text}`
+      run.updatedAt = now
+      assistantMessage = this.buildAssistantMessage(run, run.partialAnswer)
+      this.scheduleProjectionFlush(runId)
+    } else if (event.type === 'assistant_brain_stream_reset') {
+      run.partialAnswer = ''
+      run.partialAnswerRole = 'answer'
+      run.updatedAt = now
+      assistantMessage = this.buildAssistantMessage(run, '')
+    } else if (event.type === 'assistant_brain_stream_classified') {
+      run.partialAnswerRole = 'thought'
+      run.updatedAt = now
+    } else if (event.type === 'assistant_brain_stream_completed') {
+      run.partialAnswerRole = event.role
+      run.partialAnswer = event.text
+      run.updatedAt = now
+      assistantMessage = this.buildAssistantMessage(run, run.partialAnswer)
+    } else if (event.type === 'assistant_process_thought') {
+      run.partialAnswer = ''
+      run.partialAnswerRole = 'answer'
+      run.updatedAt = now
+      assistantMessage = this.buildAssistantMessage(run, '')
+    } else if (event.type === 'answer_token') {
       run.partialAnswer = `${run.partialAnswer || ''}${event.token}`
+      run.partialAnswerRole = 'answer'
       run.updatedAt = now
       assistantMessage = this.buildAssistantMessage(run, run.partialAnswer)
       this.scheduleProjectionFlush(runId)
     } else if (event.type === 'answer_completed') {
       run.partialAnswer = event.text
+      run.partialAnswerRole = 'answer'
       run.finalAnswer = event.text
       run.updatedAt = now
       assistantMessage = this.buildAssistantMessage(run, event.text)
@@ -974,6 +993,7 @@ export class ChatRunService {
       assistantMessage = this.buildAssistantMessage(run, run.finalAnswer || run.partialAnswer)
     } else if (event.type === 'run_failed') {
       run.status = 'failed'
+      run.failureCode = event.code
       run.pendingApproval = undefined
       run.error = event.message
       run.updatedAt = now
@@ -984,6 +1004,7 @@ export class ChatRunService {
       assistantMessage = this.buildAssistantMessage(run, content, true)
     } else if (event.type === 'run_cancelled') {
       run.status = 'cancelled'
+      run.failureCode = 'user_cancelled'
       run.pendingApproval = undefined
       run.error = '已取消'
       run.updatedAt = now

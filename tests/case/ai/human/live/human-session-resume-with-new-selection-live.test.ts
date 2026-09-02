@@ -158,8 +158,8 @@ describe('ai human live backend', () => {
               configurationMissing: true,
               interruptedResult: null,
               resumedResult: null,
-              snapshotAfterNetwork: null,
-              snapshotAfterResume: null,
+              logAfterNetwork: [],
+              logAfterResume: [],
               injected: false,
               overfittingEvidenceBeforeFailure: false,
               run2UsedFileB: false,
@@ -214,7 +214,7 @@ describe('ai human live backend', () => {
           const overfittingEvidenceBeforeFailure = hasOverfittingEvidence(
             runtime.eventCollector.snapshot()
           )
-          const snapshotAfterNetwork = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
+          const logAfterNetwork = await runtime.storageService.chatMessageLog.list(SESSION_ID)
 
           let run2BrainMessages: BaseMessage[] | null = null
           const captureRun2Wrapper: NonNullable<AiRunDeps['chatToolsWrapper']> =
@@ -238,7 +238,7 @@ describe('ai human live backend', () => {
             },
             await buildAiRunDeps({ runtime, chatToolsWrapper: captureRun2Wrapper })
           )
-          const snapshotAfterResume = await runtime.chatStore.getSessionResumeSnapshot(SESSION_ID)
+          const logAfterResume = await runtime.storageService.chatMessageLog.list(SESSION_ID)
           const run2Events = runtime.eventCollector.snapshot()
           const run2Id = `${runtime.runId}-run-2-resume`
           const run2BrainPrompt = runtime.eventCollector
@@ -258,8 +258,8 @@ describe('ai human live backend', () => {
             configurationMissing: false,
             interruptedResult,
             resumedResult,
-            snapshotAfterNetwork,
-            snapshotAfterResume,
+            logAfterNetwork,
+            logAfterResume,
             injected: faultState.injected,
             overfittingEvidenceBeforeFailure,
             run2UsedFileB: runUsedSelectedFile(run2Events, run2Id, fileBReferences[0]?.name || ''),
@@ -279,17 +279,15 @@ describe('ai human live backend', () => {
             return
           }
 
-          const snapshotText = JSON.stringify(result.snapshotAfterNetwork)
+          const logText = JSON.stringify(result.logAfterNetwork)
           runtime.assertThat(
             result.injected === true &&
               result.overfittingEvidenceBeforeFailure === true &&
               result.interruptedResult?.status === 'failed' &&
               result.interruptedResult.failureCode === 'network_error' &&
-              result.interruptedResult.resumeSnapshotSaved === true &&
-              result.snapshotAfterNetwork?.reason === 'network_error' &&
-              /docx-read/.test(snapshotText) &&
+              /docx-read/.test(logText) &&
               result.resumedResult?.status === 'completed' &&
-              result.snapshotAfterResume === null &&
+              result.logAfterResume.length > result.logAfterNetwork.length &&
               result.run2UsedFileB === true &&
               result.run2BrainPrompt.includes('<active_state>') &&
               mentionsOverfittingTopic(result.run2BrainPrompt) &&
@@ -299,12 +297,12 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-session-resume-keeps-interrupted-context-and-uses-new-selection',
               message:
-                'live 恢复 run 应在第一诉求已读到过拟合事实后保存快照，并在同 session 新诉求中通过消息转录恢复旧过拟合上下文、使用本轮新选图形学课件的反走样事实完成对比小结；run-2 消息数组末尾应为 buildBrainUserMessage 的 user 消息。',
+                'live 恢复 run 应在第一诉求已读到过拟合事实后保留不可变消息日志，并在同 session 新诉求中通过日志投影恢复旧过拟合上下文、使用本轮新选图形学课件的反走样事实完成对比小结；run-2 消息数组末尾应为 buildBrainUserMessage 的 user 消息。',
               data: {
                 fileAName: result.fileAName,
                 fileBName: result.fileBName,
                 interruptedResult: result.interruptedResult,
-                snapshotAfterNetwork: result.snapshotAfterNetwork,
+                logAfterNetwork: result.logAfterNetwork,
                 run2BrainPrompt: result.run2BrainPrompt,
                 run2LastMessageIsUser: result.run2LastMessageIsUser
               }

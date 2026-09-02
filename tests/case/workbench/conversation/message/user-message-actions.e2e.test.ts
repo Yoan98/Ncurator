@@ -221,11 +221,8 @@ describe('workbench conversation e2e', () => {
             matches: (event) =>
               event.type === 'run_cancelled' && event.runId === interruptedRunStarted.runId
           })
-          if (
-            interruptedRunCancelled.type !== 'run_cancelled' ||
-            !interruptedRunCancelled.resumeSnapshotSaved
-          ) {
-            throw new Error('stopped run did not persist a resume snapshot before message edit')
+          if (interruptedRunCancelled.type !== 'run_cancelled') {
+            throw new Error('stopped run did not reach the cancelled state before message edit')
           }
           await page.waitForFunction(
             (input: { sendButtonTestId: string }) => {
@@ -297,9 +294,7 @@ describe('workbench conversation e2e', () => {
             messageAttachmentTexts,
             assistantProcessTextAfterSend,
             assistantProcessTextAfterWait,
-            interruptedSnapshotSaved:
-              interruptedRunCancelled.type === 'run_cancelled' &&
-              interruptedRunCancelled.resumeSnapshotSaved === true,
+            interruptedRunCancelled: interruptedRunCancelled.type === 'run_cancelled',
             attachmentsAboveBubble: Boolean(
               firstAttachmentBox && bubbleBox && firstAttachmentBox.y < bubbleBox.y
             )
@@ -316,12 +311,12 @@ describe('workbench conversation e2e', () => {
               result.assistantProcessTextAfterSend.includes('让俺想想') &&
               (result.assistantProcessTextAfterWait.includes('让俺想想') ||
                 result.assistantProcessTextAfterWait.includes('处理中')) &&
-              result.interruptedSnapshotSaved &&
+              result.interruptedRunCancelled &&
               result.attachmentsAboveBubble,
             {
               name: 'workbench-user-message-actions-and-attachments',
               message:
-                '用户消息 hover 后应显示时间/复制/编辑；编辑会撤回 latest turn、清理中断恢复快照并以新 run 重发；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示，文件副标题显示扩展名，输入框附件关闭按钮无遮挡。',
+                '用户消息 hover 后应显示时间/复制/编辑；编辑会撤回 latest turn 及其消息日志并以新 run 重发；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示，文件副标题显示扩展名，输入框附件关闭按钮无遮挡。',
               data: result
             }
           )

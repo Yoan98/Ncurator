@@ -109,7 +109,6 @@ import {
   BrowserTabNavigateRequest,
   JsonObject,
   JsonValue,
-  ChatSessionResumeSnapshot,
   ChatSessionSkillState,
   DocxApplyRecord,
   DocxApplyStatus,
@@ -127,7 +126,6 @@ import {
   GetAiFileChangeRecordResponse,
   RevertAiFileChangeRequest,
   RevertAiFileChangeResponse,
-  ChatSessionResumeSnapshotRow,
   WorkbenchUiStateResponse,
   WorkbenchUiStateSaveRequest
 } from '../../shared/types'
@@ -240,7 +238,6 @@ export type {
   BrowserTabNavigateRequest,
   JsonObject,
   JsonValue,
-  ChatSessionResumeSnapshot,
   ChatSessionSkillState,
   DocxApplyRecord,
   DocxApplyStatus,
@@ -258,7 +255,6 @@ export type {
   GetAiFileChangeRecordResponse,
   RevertAiFileChangeRequest,
   RevertAiFileChangeResponse,
-  ChatSessionResumeSnapshotRow,
   ListWorkspaceDirectoryRequest,
   WorkspaceDirectoryListResponse,
   WorkbenchUiStateResponse,

@@ -5,7 +5,6 @@ import { buildReferenceScope } from './human/prompts/referenceScope'
 import { getAiRuntimePlatform } from './utils/platform'
 import { normalizeSelectedReferences, normalizeWorkspaceBinding } from './utils/runContext'
 import type { AiExecutionPermission, AiPreference } from '../../../shared/types'
-import { saveHumanResumeSnapshot } from './utils/resumeSnapshot'
 import { isPathInsideRoot } from './human/tools/terminal/commandPolicy'
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
@@ -32,20 +31,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   const platform = getAiRuntimePlatform()
   const preference = normalizeAiPreference(payload.preference)
   const executionPermission = normalizeExecutionPermission(payload.executionPermission)
-
-  const saveResumeSnapshot: AiRunContext['saveResumeSnapshot'] = async (input) => {
-    await saveHumanResumeSnapshot({
-      chatStore: deps.chatStore,
-      sessionId: payload.sessionId,
-      runId: payload.runId,
-      userInput: payload.input,
-      reason: input.reason,
-      selectedReferences: normalizedReferences,
-      workspace: normalizedWorkspace,
-      humanState: input.humanState,
-      errorMessage: input.errorMessage
-    })
-  }
 
   const getModelConfig = async (
     selection: typeof payload.mainModel,
@@ -98,8 +83,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   }
 
   const loadMessageLog: AiRunContext['loadMessageLog'] = async () => {
-    const records = await deps.chatMessageLogStore.list(payload.sessionId)
-    return records.map((record) => record.entry)
+    return await deps.chatMessageLogStore.list(payload.sessionId)
   }
 
   let sessionSkillStatePromise: ReturnType<typeof deps.chatStore.getSessionSkillState> | undefined
@@ -141,7 +125,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     }),
     workspace: normalizedWorkspace,
     checkCancelled,
-    saveResumeSnapshot,
     chatStructured: llmExecutor.chatStructured,
     chatText: llmExecutor.chatText,
     chatMessages: llmExecutor.chatMessages,

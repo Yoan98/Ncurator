@@ -23,7 +23,6 @@ import type {
   AiExecutionPermission,
   AiPreference,
   AiRunFailureCode,
-  AiRunResumeSnapshotReason,
   AiRuntimeSettings,
   AiRunEvent,
   AiRunEventStage,
@@ -31,9 +30,9 @@ import type {
   AiFileChangeRecord,
   ChatAttachment,
   BrainContextBudgetSnapshot,
-  ChatSessionResumeSnapshot,
   ChatSessionSkillState,
   ChatMessageLogEntry,
+  ChatMessageLogRecord,
   DocxApplyRecord,
   SelectedReference,
   WorkbenchSelectedModel
@@ -60,12 +59,7 @@ export type HumanTaskRunner = (
 
 export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 
-export type HumanResumeSnapshot = Pick<HumanState, 'memory' | 'skills'> & {
-  schemaVersion: 3
-  execution: Pick<HumanState['execution'], 'deliveryGuidanceItems' | 'artifacts'>
-}
-
-export type RecoverableRunErrorCode = AiRunResumeSnapshotReason
+export type RecoverableRunErrorCode = Exclude<AiRunFailureCode, 'error' | 'input_too_long'>
 
 export type RecoverableHumanRunError = Error & {
   code: 'RECOVERABLE_HUMAN_RUN'
@@ -260,11 +254,6 @@ export type AiRunContext = {
     policyProfile?: string
   }
   checkCancelled: () => void
-  saveResumeSnapshot: (input: {
-    reason: AiRunResumeSnapshotReason
-    humanState: HumanState
-    errorMessage?: string
-  }) => Promise<void>
   chatStructured: <T extends Record<string, unknown>>(input: {
     caller: string
     taskId?: string
@@ -298,7 +287,7 @@ export type AiRunContext = {
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
   appendMessageLog: (entries: ChatMessageLogEntry[]) => Promise<void>
-  loadMessageLog: () => Promise<ChatMessageLogEntry[]>
+  loadMessageLog: () => Promise<ChatMessageLogRecord[]>
   loadSessionSkillState: () => Promise<ChatSessionSkillState>
   saveSessionSkillState: (input: {
     expectedRevision: number
@@ -331,11 +320,7 @@ export type AiRunContext = {
 
 export type AiRunFailureMetadata = {
   failureCode?: AiRunFailureCode
-  resumeHumanState?: HumanState
-  resumeSnapshotSaved?: boolean
 }
-
-export type ChatSessionResumeSnapshotRecord = ChatSessionResumeSnapshot
 
 export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent' | 'recordLlmIo'>
 

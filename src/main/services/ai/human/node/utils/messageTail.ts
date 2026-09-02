@@ -1,16 +1,36 @@
-import { AIMessage, type BaseMessage } from '@langchain/core/messages'
+import { AIMessage, HumanMessage, type BaseMessage } from '@langchain/core/messages'
 import { normalizeThoughtText } from '../../../../../../shared/thoughtText'
 
 const isProcessMessage = (message: BaseMessage): boolean => {
   const type = message.getType()
-  return type === 'ai' || type === 'tool'
+  return type === 'human' || type === 'ai' || type === 'tool'
 }
+
+const CURRENT_USER_MARKER = 'ncurator_current_user'
+
+export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
+  new HumanMessage({
+    content,
+    additional_kwargs: { [CURRENT_USER_MARKER]: true }
+  })
+
+export const isCurrentBrainUserMessage = (message: BaseMessage): boolean =>
+  message.getType() === 'human' && message.additional_kwargs?.[CURRENT_USER_MARKER] === true
 
 // 压缩只针对过程历史（AI 消息 + 工具结果），固定模板（system / brain user）不进压缩。
 // 压缩后保留最后一条 AI 消息及其后的工具结果作为 tail，重建时重新生成 system 与 brain user。
 export const splitMessagesByLastAi = (
   messages: BaseMessage[]
 ): { compressible: BaseMessage[]; tail: BaseMessage[] } => {
+  const currentUserIndex = messages.findIndex(isCurrentBrainUserMessage)
+  if (currentUserIndex >= 0) {
+    return {
+      compressible: messages
+        .slice(0, currentUserIndex)
+        .filter((message) => isProcessMessage(message) && !isCurrentBrainUserMessage(message)),
+      tail: messages.slice(currentUserIndex)
+    }
+  }
   let lastAiIndex = -1
   for (let index = 0; index < messages.length; index += 1) {
     if (messages[index].getType() === 'ai') {
@@ -21,7 +41,9 @@ export const splitMessagesByLastAi = (
     return { compressible: [], tail: [] }
   }
   return {
-    compressible: messages.slice(0, lastAiIndex).filter(isProcessMessage),
+    compressible: messages
+      .slice(0, lastAiIndex)
+      .filter((message) => isProcessMessage(message) && !isCurrentBrainUserMessage(message)),
     tail: messages.slice(lastAiIndex)
   }
 }
@@ -91,6 +113,12 @@ export const renderMessagesForCompaction = (messages: BaseMessage[]): string => 
       roundLines = [`[round ${roundIndex}]`, ...renderAiMessageLines(message as AIMessage)]
     } else if (role === 'tool') {
       roundLines.push(renderToolMessageLine(message))
+    } else if (role === 'human') {
+      flushRound()
+      roundIndex += 1
+      const rawContent =
+        typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
+      roundLines = [`[round ${roundIndex}]`, `[user] ${normalizeCompactionText(rawContent)}`]
     }
   }
   flushRound()

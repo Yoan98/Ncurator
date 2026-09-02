@@ -103,7 +103,9 @@ describe('ai human mock-llm backend', () => {
         const messageLog = await runner.ctx.loadMessageLog()
         return {
           output,
-          toolEntries: messageLog.filter((entry) => entry.kind === 'tool')
+          toolEntries: messageLog
+            .map((record) => record.entry)
+            .filter((entry) => entry.kind === 'tool')
         }
       },
       assert: async (result, runtime) => {

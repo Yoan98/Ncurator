@@ -33,13 +33,11 @@ export const createCancelledAiRunState = (input: {
   runId: string
   sessionId: string
   input: string
-  resumeSnapshotSaved?: boolean
 }): AiRunState => ({
   ...createInitialAiRunState(input),
   status: 'cancelled',
   error: '已取消',
-  failureCode: 'user_cancelled',
-  resumeSnapshotSaved: input.resumeSnapshotSaved
+  failureCode: 'user_cancelled'
 })
 
 export const createFailedAiRunState = (input: {
@@ -51,7 +49,6 @@ export const createFailedAiRunState = (input: {
   failureHttpStatus?: number
   failureProviderCode?: string
   failureCode?: AiRunState['failureCode']
-  resumeSnapshotSaved?: boolean
 }): AiRunState => ({
   ...createInitialAiRunState(input),
   status: 'failed',
@@ -59,6 +56,5 @@ export const createFailedAiRunState = (input: {
   failureSource: input.failureSource,
   failureHttpStatus: input.failureHttpStatus,
   failureProviderCode: input.failureProviderCode,
-  failureCode: input.failureCode,
-  resumeSnapshotSaved: input.resumeSnapshotSaved
+  failureCode: input.failureCode
 })

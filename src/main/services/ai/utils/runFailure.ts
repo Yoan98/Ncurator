@@ -1,6 +1,7 @@
 import type { AiRunFailureCode } from '../../../../shared/types'
 import type { HumanState } from '../human/types'
 import type { RecoverableHumanRunError, RecoverableRunErrorCode } from '../types'
+import { isLlmOutputTruncatedError } from '../errors'
 
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error || 'unknown')
@@ -82,12 +83,14 @@ export const isRecoverableRunErrorCode = (
 ): code is RecoverableRunErrorCode =>
   code === 'timeout' ||
   code === 'network_error' ||
+  code === 'output_truncated' ||
   code === 'user_cancelled' ||
   code === 'process_interrupted' ||
   code === 'runtime_limit' ||
   code === 'unexpected_error'
 
 export const classifyInterruptionReason = (error: unknown): RecoverableRunErrorCode => {
+  if (isLlmOutputTruncatedError(error)) return 'output_truncated'
   if (isCancelledError(error)) return 'user_cancelled'
   if (isGraphRuntimeLimitError(error)) return 'runtime_limit'
   const code = classifyLlmFailureCode(error)
@@ -119,6 +122,7 @@ export const isRecoverableHumanRunError = (error: unknown): error is Recoverable
     'reason' in error &&
     (error.reason === 'timeout' ||
       error.reason === 'network_error' ||
+      error.reason === 'output_truncated' ||
       error.reason === 'user_cancelled' ||
       error.reason === 'process_interrupted' ||
       error.reason === 'runtime_limit' ||

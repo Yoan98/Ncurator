@@ -270,7 +270,7 @@ tests/case/workbench/
 - What：智能模式真实发送后用户消息、assistant 占位、过程流、最终 markdown 输出和中间结果收口。
 - Why：Workbench 的核心体验不是只启动 AI，而是让用户看见过程并得到可消费结果。
 - How：真实工作区内准备带唯一事实的文件；用户通过 UI 发送自然语言总结请求；等待真实 AI run 完成。
-- Oracle：用户消息、assistant 占位、各过程层、总结等待层、最终 markdown 和链接行为对齐 `WB-COMPOSER-003`、`WB-COMPOSER-009`；最终回答使用 workspace 中间结果并围绕用户诉求收口，对齐 `WB-CORE-005`、`WB-CORE-006`。
+- Oracle：用户消息、assistant 占位、各过程层、总结等待层、最终 markdown 和链接行为对齐 `WB-COMPOSER-003`、`WB-COMPOSER-009`；Brain 多段内容在 run 完成前逐段渲染为 Markdown，工具调用内容转入紧凑 Thought，工具聚合/展开详情和红色失败反馈保持现有 UI；无工具的正常关闭才收口为最终回答，`max_tokens` 显示可继续的截断提示且不标记完成；Composer 计划存在时显示 24px 进度环和 Todo 浮层，正常完成后隐藏，对齐 `WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`、`WB-COMPOSER-014-AC3`、`WB-COMPOSER-014-AC4`、`WB-COMPOSER-014-AC5`。最终回答使用 workspace 中间结果并围绕用户诉求收口，对齐 `WB-CORE-005`、`WB-CORE-006`。
 - Not：不对最终文案逐字断言，也不把真实模型质量问题误归因为 UI bug。
 
 #### `terminal-background-service-flow`
@@ -324,16 +324,16 @@ tests/case/workbench/
 - What：智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死。
 - How：E2E 发送真实长任务和审批等待请求，运行中点击停止。
-- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`，会话运行标记对齐 `WB-SESSION-002-AC5`；用户停止后保存中断快照（`resumeSnapshotSaved`），对齐 `WB-SESSION-007-AC1`。
+- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`，会话运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`。
 - Not：不覆盖 Graph 运行上限；上限触发与恢复由 `interrupted-task-resume-flow` 覆盖。
 
 #### `interrupted-task-resume-flow`
 
 - 测试类型：`backend contract + real-model e2e`
-- What：同一会话中的任务因达到 Graph 运行上限等原因中断后，保存完整恢复上下文，并在用户后续消息中继续原任务。
+- What：同一会话中的任务因达到 Graph 运行上限等原因中断后，从不可变消息日志与会话技能状态恢复，并在用户后续消息中继续原任务。
 - Why：恢复能力必须经过真实 Workbench、真实模型、Main 进程、持久化和 Renderer 的完整链路验证，不能只依赖 Mock LLM。
-- How：真实模型 E2E 通过仅测试进程可用的一次性覆盖把首轮 Graph 上限降为 2，验证上限错误和快照，再发送继续语句；第二轮自动恢复正式上限 200 并完成。Backend 使用 Mock LLM 和真实测试数据库覆盖全部中断原因、连续中断、重启、跨会话隔离、编辑、删除和 `task_goal` 结构。生产默认值 200、工具软上限 120 和 80% 提醒由常量契约测试锁定，不真实跑满。
-- Oracle：全部中断原因均保存并可恢复，对齐 `WB-SESSION-007-AC1`；原始目标、历次中断和恢复语句按顺序进入 `task_goal`，对齐 `WB-SESSION-007-AC2`、`WB-SESSION-007-AC3`；重启、跨会话、编辑和清理规则对齐 `WB-SESSION-007-AC4`、`WB-SESSION-007-AC5`、`WB-SESSION-007-AC6`；真实模型首轮显示“已达到运行上限，可继续对话推进”且第二轮恢复完成，对齐 `WB-SESSION-007-AC7`。
+- How：真实模型 E2E 把首轮 Graph 上限降为 2，验证上限错误后发送继续语句；第二轮恢复正式上限并完成。Backend 覆盖日志投影、相同 `tool_call_id` 修复、计划投影、checkpoint 边界、重启标记、跨会话隔离、编辑和删除。
+- Oracle：全部中断原因均可只靠日志继续；恢复语句只追加一次，历史 user 配置不变；压缩后只发送一次摘要与 checkpoint 后历史；连续多次恢复不递归嵌套原始任务；切换会话或重启后只投影所属日志；编辑只撤回目标 user、关联 assistant/run 和该 run 日志；正常完成清空计划但保留日志；真实模型首轮显示“已达到运行上限，可继续对话推进”且第二轮恢复完成，对齐 `WB-SESSION-007-AC1`、`WB-SESSION-007-AC2`、`WB-SESSION-007-AC3`、`WB-SESSION-007-AC4`、`WB-SESSION-007-AC5`、`WB-SESSION-007-AC6`、`WB-SESSION-007-AC7`。
 - Not：不使用真实模型执行 200 个 Graph 步骤或调用 120 次真实工具；测试覆盖参数不能通过产品正常请求传入，也不改变工具软上限语义。
 
 #### `cancelled-run-keeps-artifact`

@@ -1,4 +1,4 @@
-import { HumanMessage } from '@langchain/core/messages'
+import { AIMessage, HumanMessage } from '@langchain/core/messages'
 import { describe, expect, it } from 'vitest'
 import { createContextBudgetNode } from '../../../../src/main/services/ai/human/node/contextBudgetNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -9,6 +9,7 @@ import {
 } from '../../../../src/main/services/ai/human/constants'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import type { AiRunEvent } from '../../../../src/shared/types'
+import { LlmInputTooLongError } from '../../../../src/main/services/ai/errors'
 
 const DEFAULT_COMPACTION_TRIGGER_TOKENS = Math.floor(
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS * CONTEXT_COMPACTION_TRIGGER_RATIO
@@ -74,7 +75,7 @@ describe('ai unit context budget node', () => {
       contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
       compactionTriggerTokens: DEFAULT_COMPACTION_TRIGGER_TOKENS,
       hasCompressibleHistory: false,
-      usageAvailable: false,
+      usageAvailable: true,
       evaluationId: expect.any(String)
     })
     const event = events.find((item) => item.type === 'context_budget_evaluated')
@@ -96,10 +97,17 @@ describe('ai unit context budget node', () => {
       taskId: 'task-2',
       userInput: '请完成一个会触发压缩的长任务。'
     })
-    cache.messages = Array.from(
-      { length: 12 },
-      (_, index) => new HumanMessage(`long message ${index} ${'x'.repeat(200)}`)
-    )
+    cache.messages = [
+      ...Array.from(
+        { length: 12 },
+        (_, index) => new HumanMessage(`long message ${index} ${'x'.repeat(200)}`)
+      ),
+      new AIMessage({ content: 'previous brain turn' }),
+      new HumanMessage({
+        content: '请完成一个会触发压缩的长任务。',
+        additional_kwargs: { ncurator_current_user: true }
+      })
+    ]
     const ctxWithSmallWindow = {
       ...ctx,
       humanRuntimeOverrides: {
@@ -153,7 +161,7 @@ describe('ai unit context budget node', () => {
       snapshot: {
         basis: 'usage_unavailable',
         budgetTokens: 0,
-        usageAvailable: false,
+        usageAvailable: true,
         hasCompressibleHistory: false,
         contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
       }
@@ -207,9 +215,34 @@ describe('ai unit context budget node', () => {
       snapshot: {
         basis: 'post_compaction',
         budgetTokens: 0,
-        usageAvailable: false,
+        usageAvailable: true,
         contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
       }
     })
+  })
+
+  it('rejects a current user message larger than the model context window', async () => {
+    const events: AiRunEvent[] = []
+    const ctx = createBaseContext(events)
+    const cache = createHumanRuntimeCache()
+    cache.messages = [
+      new HumanMessage({
+        content: 'x'.repeat(10_000),
+        additional_kwargs: { ncurator_current_user: true }
+      })
+    ]
+    const node = createContextBudgetNode({
+      ctx: { ...ctx, humanRuntimeOverrides: { modelContextWindowTokens: 100 } },
+      cache
+    })
+
+    await expect(
+      node(
+        createInitialHumanState({
+          taskId: 'task-input-too-long',
+          userInput: 'x'.repeat(10_000)
+        })
+      )
+    ).rejects.toBeInstanceOf(LlmInputTooLongError)
   })
 })

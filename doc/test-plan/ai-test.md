@@ -788,22 +788,13 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：第三轮 `brain` prompt 同时命中 Bob、上线窗口冲突与还缺少回滚负责人；最终交付带出负责人候选、未完成审批与下一步安排。
 - Not：不验证 live 模型总结质量；不验证 session 隔离。
 
-##### `ai-run-service-resume-snapshot`
-
-- 测试类型：`backend`
-- What：`AiRunService` 在同一 `session` 下会对 `timeout / network_error` 保存恢复快照，并在下一次 run 自动恢复语义上下文继续完成。
-- Why：中断恢复依赖最小持久化快照，而不是在同一 run 内盲目重试；这条 contract 需要回归保护。
-- How：首轮通过真实 `AiRunService` 启动一次 run，让真实 `brain` 先写入可恢复状态后命中 `timeout`；第二轮在同一 session 下不再显式传引用范围与工作区，验证真实 run 会自动恢复并继续完成；同时补一条 `network_error` 分支和一条普通 `error` 分支。
-- Oracle：`timeout / network_error` 失败态会写出 `failureCode` 与 `resumeSnapshotSaved=true`，`ChatStore` 中保留最新恢复快照；下一轮同 session 会从 `context_budget -> brain` 重新开始，但带回恢复快照中的已学 skill / 任务计划语义；成功完成后恢复快照被清空；普通 `error` 不保存恢复快照。
-- Not：不验证 docx 临时运行态恢复；不验证 live provider 的真实网络抖动概率。
-
 ##### `human-interruption-message-repair`
 
 - 测试类型：`backend / mock-llm`
 - What：续接（跨会话 / 中断恢复）重建消息数组时，顺序为 `system + 完整历史（含最终交付 assistant 消息）+ 尾部 buildBrainUserMessage user 消息`；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
 - Why：模型上下文唯一真相源是会话消息记录，续接必须忠实回放历史并把新诉求追加到末尾；若上一条 assistant 声明了 tool_call 却没有对应结果，接口会直接报错，必须补一条意外中断反馈。
 - How：mock-llm 下跑两个子场景：其一 run-1 正常完成（含 learn_skill 与最终交付），run-2 捕获首次 brain 的 `request.messages`；其二 run-1 的 brain 返回 learn_skill tool_call 后在 brain 调用返回时 abort 控制器，run-2 恢复并捕获消息数组。
-- Oracle：子场景一：消息数组首条为 system、末条为含 `<task_goal>` 的 user 消息，历史含 run-1 原始 user 与 run-1 最终答复 assistant 消息；子场景二：run-1 为 `user_cancelled` 且 `resumeSnapshotSaved=true`，run-2 消息数组中悬空 learn_skill tool_call 后补了 `{ok:false,code:'interrupted'}` 的 ToolMessage，且末条为含 `<task_goal>` 的 user 消息。
+- Oracle：子场景一：消息数组首条为 system、末条为含 `<task_goal>` 的 user 消息，历史含 run-1 原始 user、该轮配置与最终答复 assistant 消息；子场景二：run-1 为 `user_cancelled`，run-2 只靠日志投影在悬空 learn_skill tool_call 后补相同 ID 的失败 ToolMessage，且末条为新的 user 消息。
 - Not：不验证 live provider 真实网络抖动；不恢复 docx 临时运行态。
 
 ##### `session-skill-memory-multi-run`
@@ -919,10 +910,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-session-resume-with-new-selection-live`
 
 - 测试类型：`backend`
-- What：live 模式下第一诉求已经沉淀局部事实后发生网络中断，同一 session 新诉求可恢复旧语义上下文，同时本轮新选择文件会覆盖中断快照里的旧选择范围。
+- What：live 模式下第一诉求已经沉淀局部事实后发生网络中断，同一 session 新诉求可从不可变消息日志恢复旧语义上下文，同时本轮新选择文件只作用于新 user 消息。
 - Why：恢复能力的真实价值是让用户在长任务中断后继续对话；如果中断前已读到的事实丢失，或恢复时忽略最新诉求/最新选中文件，就会把恢复退化成重跑或错误沿用旧入口。
-- How：使用已有共享 workspace fixture，即 `tests/fixtures/workspace`。Run 1 选中文件 A `深度学习.docx`，让真实模型读取并沉淀“过拟合/过度拟合”的定义、原因和处理信息（需完成多轮定位、交叉核对、更新计划、写草稿）；测试 driver 在确认工具结果中已经出现过拟合事实且脑回合数达到门槛后，于后续 `human.brain` 调用注入 `network_error`，保存恢复快照。Run 2 恢复真实 LLM 配置，同 session 继续提问并显式改选文件 B `图形学.docx`，要求保留过拟合信息并补充反走样信息形成对比小结。
-- Oracle：Run 1 注入失败为 `network_error` 且 `resumeSnapshotSaved=true`；恢复快照保持最小化语义（保留 plan / 已学技能等），中断前沉淀的过拟合事实通过会话消息转录在 Run 2 的 brain prompt / llm-io 中恢复；Run 2 消息数组末尾为 `buildBrainUserMessage` 的 user 消息（`<task_goal>` 为 Run 2 输入），其前是 Run 1 完整历史；Run 2 成功完成，brain prompt / llm-io 出现本轮新选择文件 B 与恢复出的过拟合上下文（含“训练时间过久 / 记住过多训练数据”等事实短语）；最终交付同时包含过拟合与反走样关键事实；Run 2 成功后恢复快照被清空。
+- How：使用共享 workspace fixture。Run 1 选中文件 A `深度学习.docx`，在读取并沉淀过拟合事实后注入 `network_error`。Run 2 在同 session 追加“继续”类 user 消息并改选文件 B `图形学.docx`，检查历史 user 配置未变、新 user 使用文件 B、计划来自 `plan_updated`、技能来自 session skill state。
+- Oracle：Run 1 为 `network_error`；中断前事实和计划记录仍在 `chat_session_message_log`。Run 2 消息数组末尾是新的 user 消息，其前是日志投影历史；Run 2 使用文件 B 且不会改写 Run 1 的文件 A 配置，最终交付包含过拟合与反走样事实。
 - Not：不验证真实 provider 的随机网络抖动；不要求 live 模型逐字复述 hint 文案；不恢复 docx 临时运行态。
 
 ##### `human-cross-session-continuation-live`

@@ -64,6 +64,7 @@ describe('ai human mock-llm backend', () => {
           output,
           blockedDirExists,
           toolMessageNames: messageLog
+            .map((record) => record.entry)
             .filter((entry) => entry.kind === 'tool')
             .map((entry) => entry.toolName),
           events: runtime.eventCollector.snapshot()

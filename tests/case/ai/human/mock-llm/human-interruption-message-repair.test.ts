@@ -187,9 +187,6 @@ describe('ai human mock-llm backend', () => {
             chatToolsWrapper: abortWrapper
           })
         )
-        const danglingSnapshot =
-          await runtime.chatStore.getSessionResumeSnapshot(DANGLING_SESSION_ID)
-
         let danglingRun2Messages: BaseMessage[] | null = null
         const danglingCaptureWrapper: AiRunDeps['chatToolsWrapper'] =
           (realChatTools) => async (request) => {
@@ -237,7 +234,7 @@ describe('ai human mock-llm backend', () => {
           (message) =>
             message.getType() === 'human' &&
             typeof message.content === 'string' &&
-            message.content === RUN1_INPUT
+            message.content.includes(RUN1_INPUT)
         )
 
         const danglingLast = danglingRun2Messages ? lastMessage(danglingRun2Messages) : null
@@ -263,7 +260,6 @@ describe('ai human mock-llm backend', () => {
           orderHasRun1Final,
           orderHasRun1User,
           danglingRun1Result,
-          danglingSnapshotReason: danglingSnapshot?.reason || '',
           danglingRun2Result,
           danglingLastType: danglingLast?.getType() || '',
           danglingLastContent:
@@ -284,8 +280,7 @@ describe('ai human mock-llm backend', () => {
             result.orderHasRun1Final &&
             result.orderHasRun1User &&
             result.danglingRun1Result.status === 'cancelled' &&
-            result.danglingRun1Result.resumeSnapshotSaved === true &&
-            result.danglingSnapshotReason === 'user_cancelled' &&
+            result.danglingRun1Result.failureCode === 'user_cancelled' &&
             result.danglingRun2Result.status === 'completed' &&
             result.danglingLastType === 'human' &&
             result.danglingLastContent.includes('<task_goal>') &&

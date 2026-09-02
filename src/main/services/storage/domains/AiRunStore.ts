@@ -33,8 +33,10 @@ type AiRunRow = {
   main_model_json?: unknown
   execution_permission?: string | null
   partial_answer?: unknown
+  partial_answer_role?: unknown
   final_answer?: unknown
   error?: unknown
+  failure_code?: unknown
   pending_approval_json?: unknown
   artifacts_json?: unknown
   created_at?: unknown
@@ -73,8 +75,12 @@ const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   mainModel: parseJsonObject<AiRunRecord['mainModel']>(row.main_model_json),
   executionPermission: normalizeExecutionPermission(row.execution_permission || ''),
   partialAnswer: toRequiredString(row.partial_answer),
+  partialAnswerRole: row.partial_answer_role === 'thought' ? 'thought' : 'answer',
   finalAnswer: row.final_answer ? String(row.final_answer) : undefined,
   error: row.error ? String(row.error) : undefined,
+  failureCode: row.failure_code
+    ? (String(row.failure_code) as AiRunRecord['failureCode'])
+    : undefined,
   pendingApproval: parseJsonObject<AiRunRecord['pendingApproval']>(row.pending_approval_json),
   artifacts: parseJsonArray<AiArtifactRef>(row.artifacts_json),
   createdAt: toRequiredNumber(row.created_at),
@@ -93,13 +99,13 @@ export class AiRunStore {
           id, session_id, user_message_id, assistant_message_id, status, input,
           selected_references_json, attachments_json, workspace_json, model_name,
           main_model_json, execution_permission,
-          partial_answer, final_answer, error, pending_approval_json,
+          partial_answer, partial_answer_role, final_answer, error, failure_code, pending_approval_json,
           artifacts_json, created_at, updated_at, finished_at
         ) VALUES (
           @id, @session_id, @user_message_id, @assistant_message_id, @status, @input,
           @selected_references_json, @attachments_json, @workspace_json, @model_name,
           @main_model_json, @execution_permission,
-          @partial_answer, @final_answer, @error, @pending_approval_json,
+          @partial_answer, @partial_answer_role, @final_answer, @error, @failure_code, @pending_approval_json,
           @artifacts_json, @created_at, @updated_at, @finished_at
         )
         ON CONFLICT(id) DO UPDATE SET
@@ -115,8 +121,10 @@ export class AiRunStore {
           main_model_json = excluded.main_model_json,
           execution_permission = excluded.execution_permission,
           partial_answer = excluded.partial_answer,
+          partial_answer_role = excluded.partial_answer_role,
           final_answer = excluded.final_answer,
           error = excluded.error,
+          failure_code = excluded.failure_code,
           pending_approval_json = excluded.pending_approval_json,
           artifacts_json = excluded.artifacts_json,
           updated_at = excluded.updated_at,
@@ -137,8 +145,10 @@ export class AiRunStore {
         main_model_json: jsonStringify(record.mainModel),
         execution_permission: record.executionPermission || 'review',
         partial_answer: record.partialAnswer || '',
+        partial_answer_role: record.partialAnswerRole || 'answer',
         final_answer: record.finalAnswer || null,
         error: record.error || null,
+        failure_code: record.failureCode || null,
         pending_approval_json: jsonStringify(record.pendingApproval),
         artifacts_json: jsonStringify(record.artifacts),
         created_at: record.createdAt,

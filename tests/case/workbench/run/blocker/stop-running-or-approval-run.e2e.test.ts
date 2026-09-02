@@ -138,11 +138,8 @@ describe('workbench run e2e', () => {
               matches: (event) =>
                 event.type === 'run_cancelled' && event.runId === approvalRunStarted.runId
             })
-            if (
-              approvalCancelled.type !== 'run_cancelled' ||
-              !approvalCancelled.resumeSnapshotSaved
-            ) {
-              throw new Error('approval cancellation did not persist a resume snapshot')
+            if (approvalCancelled.type !== 'run_cancelled') {
+              throw new Error('approval cancellation did not reach the cancelled state')
             }
           }
 

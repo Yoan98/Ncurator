@@ -36,7 +36,6 @@ import type {
   ChatSessionUiStateV1,
   LLMConfig,
   LlmRemoteModel,
-  SearchResult,
   SelectedReference,
   WorkbenchModelSelection,
   WorkspaceSource,
@@ -224,6 +223,9 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   processThoughts: [],
   processGroups: [],
   finalAnswerMarkdown: '',
+  streamingMarkdown: '',
+  streamingRole: 'answer',
+  plan: [],
   artifacts: [],
   applyTargets: [],
   blockers: []
@@ -241,6 +243,9 @@ const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel =>
   processThoughts: [],
   processGroups: [createSearchProcessGroup(messageId)],
   finalAnswerMarkdown: '',
+  streamingMarkdown: '',
+  streamingRole: 'answer',
+  plan: [],
   artifacts: [],
   applyTargets: [],
   blockers: []
@@ -273,6 +278,9 @@ const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewM
     processThoughts: [],
     processGroups: [],
     finalAnswerMarkdown: message.content,
+    streamingMarkdown: '',
+    streamingRole: 'answer',
+    plan: [],
     artifacts: artifacts.map((artifact) => ({
       path: artifact.path,
       fileName: artifact.fileName,
@@ -380,6 +388,59 @@ const reduceAssistantTurnByRunEvent = (
     next = { ...next, blockers: [] }
   }
 
+  if (event.type === 'assistant_brain_stream_started') {
+    next = {
+      ...next,
+      streamingRoundId: event.roundId,
+      streamingMarkdown: '',
+      streamingRole: 'answer'
+    }
+  }
+
+  if (
+    event.type === 'assistant_brain_stream_delta' &&
+    next.streamingRoundId === event.roundId
+  ) {
+    next = { ...next, streamingMarkdown: `${next.streamingMarkdown}${event.text}` }
+  }
+
+  if (
+    event.type === 'assistant_brain_stream_reset' &&
+    next.streamingRoundId === event.roundId
+  ) {
+    next = { ...next, streamingMarkdown: '', streamingRole: 'answer' }
+  }
+
+  if (
+    event.type === 'assistant_brain_stream_classified' &&
+    next.streamingRoundId === event.roundId
+  ) {
+    next = { ...next, streamingRole: 'thought' }
+  }
+
+  if (
+    event.type === 'assistant_brain_stream_completed' &&
+    next.streamingRoundId === event.roundId
+  ) {
+    next =
+      event.role === 'answer'
+        ? {
+            ...next,
+            finalAnswerMarkdown: event.text,
+            streamingMarkdown: '',
+            streamingRole: 'answer'
+          }
+        : { ...next, streamingMarkdown: event.text, streamingRole: 'thought' }
+  }
+
+  if (event.type === 'assistant_process_thought') {
+    next = { ...next, streamingMarkdown: '', streamingRole: 'answer' }
+  }
+
+  if (event.type === 'assistant_plan_updated') {
+    next = { ...next, plan: event.plan }
+  }
+
   if (event.type === 'answer_token') {
     next = {
       ...next,
@@ -392,6 +453,7 @@ const reduceAssistantTurnByRunEvent = (
     next = {
       ...next,
       finalAnswerMarkdown: event.text,
+      streamingMarkdown: '',
       processGroups: completeAssistantProcessGroups(next.processGroups)
     }
   }
@@ -413,7 +475,8 @@ const reduceAssistantTurnByRunEvent = (
     next = {
       ...next,
       runFinished: true,
-      status: next.status === 'failed' ? 'failed' : 'completed'
+      status: next.status === 'failed' ? 'failed' : 'completed',
+      plan: []
     }
   }
 
@@ -441,7 +504,12 @@ const applyRunRecordToTurn = (
       run.status === 'completed' || Boolean(getRunMessageContent(run))
         ? completeAssistantProcessGroups(turn.processGroups)
         : turn.processGroups,
-    finalAnswerMarkdown: getRunMessageContent(run) || turn.finalAnswerMarkdown,
+    finalAnswerMarkdown:
+      run.finalAnswer ||
+      (run.partialAnswerRole !== 'thought' ? run.partialAnswer : '') ||
+      turn.finalAnswerMarkdown,
+    streamingMarkdown: run.finalAnswer ? '' : run.partialAnswer || turn.streamingMarkdown,
+    streamingRole: run.partialAnswerRole || turn.streamingRole,
     artifacts: dedupeFileRefs([
       ...turn.artifacts,
       ...artifacts.map((artifact) => ({
@@ -484,13 +552,21 @@ const buildAssistantTurnFromRunSnapshot = (
 ): AssistantTurnViewModel => {
   const projected = projectProcessGroups({
     runId: snapshot.run.id,
-    entries: snapshot.messageLogEntries || []
+    entries: (snapshot.messageLogRecords || []).map((record) => record.entry)
   })
   const base: AssistantTurnViewModel = {
     ...createAssistantTurn(snapshot.run.assistantMessageId),
     runId: snapshot.run.id,
     processThoughts: projected.processThoughts,
     processGroups: projected.processGroups
+  }
+  for (const record of snapshot.messageLogRecords || []) {
+    const entry = record.entry
+    if (entry.kind === 'annotation' && entry.eventType === 'plan_updated') {
+      base.plan = entry.payload.plan
+    } else if (entry.kind === 'annotation' && entry.eventType === 'finalizing_started') {
+      base.plan = []
+    }
   }
   return applyRunRecordToTurn(base, snapshot.run)
 }
@@ -2894,9 +2970,13 @@ const ChatPage: React.FC = () => {
         emitErrorMessage(
           event.code === 'runtime_limit'
             ? '已达到运行上限，可继续对话推进'
-            : event.source === 'provider'
-              ? '模型请求失败'
-              : '运行失败'
+            : event.code === 'output_truncated'
+              ? '模型输出达到长度限制，可发送“继续”接着完成'
+              : event.code === 'input_too_long'
+                ? '当前输入超过模型上下文限制，请缩短后重试'
+              : event.source === 'provider'
+                ? '模型请求失败'
+                : '运行失败'
         )
         return
       }
@@ -3702,6 +3782,22 @@ const ChatPage: React.FC = () => {
     () => !sessionSwitching && currentMessages.length === 0,
     [currentMessages, sessionSwitching]
   )
+  const composerPlan = useMemo(() => {
+    const activeTurn = aiRunId
+      ? Object.values(assistantTurns).find((turn) => turn.runId === aiRunId)
+      : undefined
+    if (activeTurn?.status === 'completed') return []
+    if (activeTurn?.plan.length) return activeTurn.plan
+
+    for (let index = currentMessages.length - 1; index >= 0; index -= 1) {
+      const messageItem = currentMessages[index]
+      if (messageItem.role !== 'assistant') continue
+      const turn = assistantTurns[messageItem.id]
+      if (!turn || turn.status === 'completed') return []
+      return turn.plan
+    }
+    return []
+  }, [aiRunId, assistantTurns, currentMessages])
 
   // 获取平台信息
   const [platform, setPlatform] = useState<string>(() => detectRendererPlatform())
@@ -4317,6 +4413,7 @@ const ChatPage: React.FC = () => {
                           draftValue={composerDraftValue}
                           draftKey={composerDraftKey}
                           contextUsage={contextUsage}
+                          plan={composerPlan}
                           requestAttachmentTarget={ensureAttachmentTarget}
                           onFileDropHandlerReady={(handler) => {
                             composerFileDropHandlerRef.current = handler

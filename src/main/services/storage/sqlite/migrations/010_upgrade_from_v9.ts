@@ -41,10 +41,13 @@ CREATE INDEX idx_chat_session_message_log_session_created
   ON chat_session_message_log(session_id, created_at);
 
 DROP TABLE chat_conversation_memory;
+DROP TABLE chat_session_resume_snapshot;
 DROP TABLE ai_run_event;
 ALTER TABLE ai_run DROP COLUMN event_count;
 ALTER TABLE ai_run DROP COLUMN visible_event_count;
 ALTER TABLE ai_run DROP COLUMN last_event_at;
 ALTER TABLE ai_run DROP COLUMN vision_model_json;
+ALTER TABLE ai_run ADD COLUMN failure_code TEXT;
+ALTER TABLE ai_run ADD COLUMN partial_answer_role TEXT NOT NULL DEFAULT 'answer';
 `
 }

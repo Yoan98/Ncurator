@@ -9,6 +9,8 @@ import {
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { splitMessagesByLastAi } from '../utils/messageTail'
 import { estimateMessagesForContext } from '../../memory/multimodal'
+import { isCurrentBrainUserMessage } from '../utils/messageTail'
+import { LlmInputTooLongError } from '../../../errors'
 
 const buildBudgetSnapshot = (input: {
   cache: HumanRuntimeCache
@@ -21,11 +23,11 @@ const buildBudgetSnapshot = (input: {
     return {
       evaluationId: randomUUID(),
       basis: 'post_compaction' as const,
-      budgetTokens: 0,
+      budgetTokens: input.currentMessageTokenEstimate,
       contextWindowTokens: input.contextWindowTokens,
       compactionTriggerTokens: input.compactionTriggerTokens,
       hasCompressibleHistory: input.hasCompressibleHistory,
-      usageAvailable: false
+      usageAvailable: true
     }
   }
 
@@ -37,11 +39,11 @@ const buildBudgetSnapshot = (input: {
     return {
       evaluationId: randomUUID(),
       basis,
-      budgetTokens: 0,
+      budgetTokens: input.currentMessageTokenEstimate,
       contextWindowTokens: input.contextWindowTokens,
       compactionTriggerTokens: input.compactionTriggerTokens,
       hasCompressibleHistory: input.hasCompressibleHistory,
-      usageAvailable: false
+      usageAvailable: true
     }
   }
 
@@ -78,6 +80,10 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
     const hasCompressibleHistory = compressibleMessages.length > 0
     const compressibleTokenEstimate = estimateMessagesForContext(compressibleMessages)
     const currentMessageTokenEstimate = estimateMessagesForContext(messages)
+    const currentUser = messages.find(isCurrentBrainUserMessage)
+    if (currentUser && estimateMessagesForContext([currentUser]) > contextWindowTokens) {
+      throw new LlmInputTooLongError()
+    }
     const minimumCompressibleTokens = Math.floor(
       contextWindowTokens * CONTEXT_COMPACTION_MIN_SOURCE_RATIO
     )
@@ -104,6 +110,21 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
       snapshot: contextBudgetSnapshot,
       createdAt
     })
+
+    if (!shouldCompact && !input.cache.currentUserLogAppended) {
+      await input.ctx.appendMessageLog([
+        {
+          kind: 'user',
+          content: state.task.userInput,
+          context: {
+            selectedReferences: input.ctx.referenceScope.selectedReferences,
+            attachments: input.ctx.referenceScope.attachments,
+            workspace: input.ctx.referenceScope.workspace
+          }
+        }
+      ])
+      input.cache.currentUserLogAppended = true
+    }
 
     return {
       ...state,

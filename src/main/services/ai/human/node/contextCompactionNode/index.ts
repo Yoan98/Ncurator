@@ -1,9 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { HumanMessage, SystemMessage, type BaseMessage } from '@langchain/core/messages'
+import { HumanMessage } from '@langchain/core/messages'
 import type { AiRunContext } from '../../../types'
 import { CONTEXT_COMPACTION_TARGET_RATIO } from '../../constants'
 import { buildHistoryCompactionPrompt } from '../../prompts/compaction'
-import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
@@ -18,7 +17,7 @@ export const createContextCompactionNode = (input: {
     input.cache.currentState = state
 
     const messages = input.cache.messages || []
-    const { compressible, tail } = splitMessagesByLastAi(messages)
+    const { compressible } = splitMessagesByLastAi(messages)
     if (compressible.length === 0) {
       return {
         ...state,
@@ -75,6 +74,36 @@ export const createContextCompactionNode = (input: {
       tokenEstimateAfter
     }
 
+    const currentRecords = await input.ctx.loadMessageLog()
+    const currentUserRecord = currentRecords.find(
+      (record) => record.runId === input.ctx.runId && record.entry.kind === 'user'
+    )
+    const coveredRecord = currentUserRecord
+      ? [...currentRecords].reverse().find((record) => record.seq < currentUserRecord.seq)
+      : [...currentRecords].reverse()[0]
+    if (!coveredRecord) {
+      return {
+        ...state,
+        execution: {
+          ...state.execution,
+          stage: 'brain'
+        }
+      }
+    }
+
+    await input.ctx.appendMessageLog([
+      {
+        kind: 'annotation',
+        eventType: 'compaction_checkpoint',
+        payload: {
+          compactBlockId,
+          summary: compactBlock.summary,
+          coveredThroughSeq: coveredRecord.seq,
+          sourceMessageCount: compressible.length
+        }
+      }
+    ])
+
     emitCompactionCompleted({
       sendEvent: input.ctx.sendEvent,
       runId: input.ctx.runId
@@ -96,33 +125,17 @@ export const createContextCompactionNode = (input: {
     input.cache.lastBrainMessageTokenEstimate = undefined
     input.cache.postCompactionNeedsFreshBrainUsage = true
     input.cache.lastBrainUsageUnavailable = false
-    input.cache.compactSummaryText = String(summary || '').trim()
-
-    void input.ctx.appendMessageLog([
-      {
-        kind: 'annotation',
-        eventType: 'compaction_summary',
-        payload: {
-          compactBlockId,
-          summary: compactBlock.summary,
-          sourceMessageCount: compressible.length
-        }
-      }
-    ])
-
-    const rebuilt: BaseMessage[] = [
-      new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
-      new HumanMessage(
-        buildBrainUserMessage({
-          state,
-          ctx: input.ctx,
-          compactedHistoryText: input.cache.compactSummaryText || undefined,
-          injectPlan: true
-        })
-      )
-    ]
-    rebuilt.push(...tail)
+    const compressibleSet = new Set(compressible)
+    const firstCompressibleIndex = messages.findIndex((message) => compressibleSet.has(message))
+    const rebuilt = messages.filter((message) => !compressibleSet.has(message))
+    const summaryMessage = new HumanMessage(
+      `<compacted_history>\n${compactBlock.summary}\n</compacted_history>`
+    )
+    rebuilt.splice(Math.max(1, firstCompressibleIndex), 0, summaryMessage)
     input.cache.messages = rebuilt
+    input.cache.currentUserMessageIndex = rebuilt.findIndex(
+      (message) => message.additional_kwargs?.ncurator_current_user === true
+    )
 
     return {
       ...state,

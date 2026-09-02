@@ -3,7 +3,7 @@ import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from './human/constants'
-import { deriveMessageLogMessages } from './human/memory/transcript'
+import { projectMessageLogRecords } from './human/memory/transcript'
 import { estimateMessagesForContext } from './human/memory/multimodal'
 
 export const getAiContextUsage = async (input: {
@@ -16,9 +16,7 @@ export const getAiContextUsage = async (input: {
   updatedAt: number
 }> => {
   const records = await input.chatMessageLogStore.list(input.sessionId)
-  const messages = deriveMessageLogMessages({
-    entries: records.map((record) => record.entry)
-  })
+  const messages = projectMessageLogRecords(records).messages
   const usedContextTokens = estimateMessagesForContext(messages)
   const contextWindowTokens = DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
   return {

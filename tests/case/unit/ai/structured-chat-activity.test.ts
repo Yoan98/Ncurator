@@ -7,6 +7,45 @@ import { classifyLlmCallRetry } from '../../../../src/main/services/ai/llmExecut
 import type { AiLlmIoRecord, AiRunEvent } from '../../../../src/shared/types'
 
 describe('ai unit structured chat activity', () => {
+  it('resets streamed draft before a retry so stale chunks are not duplicated', async () => {
+    let attempt = 0
+    let visible = ''
+    const result = await runLlmCallWithActivity({
+      ctx: { runId: 'retry-run', sendEvent: () => undefined },
+      runId: 'retry-run',
+      system: 'system',
+      user: 'user',
+      telemetry: {
+        actionType: 'llm_tool_calls',
+        caller: 'human.brain',
+        schemaName: 'brain',
+        modelName: 'model',
+        baseUrl: 'https://example.test/v1',
+        streamingMode: 'force_stream'
+      },
+      maxAttempts: 2,
+      classifyRetry: () => ({ retryable: true, message: 'retry', delayMs: 0 }),
+      onTextDelta: (text) => {
+        visible += text
+      },
+      onTextReset: () => {
+        visible = ''
+      },
+      execute: async (observer) => {
+        attempt += 1
+        if (attempt === 1) {
+          observer.onDelta?.('stale')
+          throw new Error('network')
+        }
+        observer.onDelta?.('fresh')
+        return { output: 'fresh', rawText: 'fresh', streamed: true }
+      }
+    })
+
+    expect(result.output).toBe('fresh')
+    expect(visible).toBe('fresh')
+  })
+
   it('uses exponential backoff for provider capacity exhaustion', () => {
     const error = Object.assign(
       new Error('ResourceExhausted: Worker local total request limit reached (69/48)'),

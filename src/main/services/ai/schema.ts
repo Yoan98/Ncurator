@@ -30,7 +30,6 @@ export const aiRunStateFieldSchemas = {
   failureHttpStatus: z.number().int().optional(),
   failureProviderCode: z.string().optional(),
   failureCode: z.custom<AiRunFailureCode>().optional(),
-  resumeSnapshotSaved: z.boolean().optional(),
   finalDeliveryMarkdown: z.string().optional(),
   finalArtifacts: z.array(aiArtifactRefSchema)
 }

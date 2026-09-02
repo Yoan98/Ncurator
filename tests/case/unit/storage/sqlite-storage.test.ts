@@ -249,6 +249,14 @@ describe('sqlite storage core and stores', () => {
       { version: 9, name: 'repair_ai_runtime_system_notifications_column' },
       { version: 10, name: 'upgrade_from_v9' }
     ])
+
+    const legacyTables = sqlite
+      .prepare(
+        `SELECT name FROM sqlite_master
+         WHERE type = 'table' AND name IN ('chat_session_resume_snapshot', 'chat_conversation_memory', 'ai_run_event')`
+      )
+      .all() as Array<{ name: string }>
+    expect(legacyTables).toEqual([])
   })
 
   it('repairs notification settings after a historical migration version collision', async () => {

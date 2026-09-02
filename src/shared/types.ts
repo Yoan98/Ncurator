@@ -1139,8 +1139,10 @@ export type AiRunRecord = {
   preference?: AiPreference
   executionPermission?: AiExecutionPermission
   partialAnswer: string
+  partialAnswerRole?: 'answer' | 'thought'
   finalAnswer?: string
   error?: string
+  failureCode?: AiRunFailureCode
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
   artifacts?: AiArtifactRef[]
   createdAt: number
@@ -1150,7 +1152,7 @@ export type AiRunRecord = {
 
 export type ChatSessionRunSnapshot = {
   run: AiRunRecord
-  messageLogEntries?: ChatMessageLogEntry[]
+  messageLogRecords?: ChatMessageLogRecord[]
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
 }
 
@@ -1367,9 +1369,10 @@ export type AiRunFailureCode =
   | 'user_cancelled'
   | 'process_interrupted'
   | 'runtime_limit'
+  | 'output_truncated'
+  | 'input_too_long'
   | 'unexpected_error'
   | 'error'
-export type AiRunResumeSnapshotReason = Exclude<AiRunFailureCode, 'error'>
 export type AiRunFailureSource = 'provider' | 'internal'
 
 type AiRunEventPayload =
@@ -1592,6 +1595,46 @@ type AiRunEventPayload =
       createdAt: number
     }
   | {
+      type: 'assistant_brain_stream_started'
+      runId: string
+      roundId: string
+      createdAt: number
+    }
+  | {
+      type: 'assistant_brain_stream_delta'
+      runId: string
+      roundId: string
+      text: string
+      createdAt: number
+    }
+  | {
+      type: 'assistant_brain_stream_reset'
+      runId: string
+      roundId: string
+      createdAt: number
+    }
+  | {
+      type: 'assistant_brain_stream_classified'
+      runId: string
+      roundId: string
+      role: 'thought'
+      createdAt: number
+    }
+  | {
+      type: 'assistant_brain_stream_completed'
+      runId: string
+      roundId: string
+      role: 'thought' | 'answer'
+      text: string
+      completedAt: number
+    }
+  | {
+      type: 'assistant_plan_updated'
+      runId: string
+      plan: ChatMessageLogPlanItem[]
+      createdAt: number
+    }
+  | {
       type: 'answer_token'
       runId: string
       taskId?: string
@@ -1655,12 +1698,10 @@ type AiRunEventPayload =
       httpStatus?: number
       providerCode?: string
       code?: AiRunFailureCode
-      resumeSnapshotSaved?: boolean
     }
   | {
       type: 'run_cancelled'
       runId: string
-      resumeSnapshotSaved?: boolean
     }
 
 export type AiRunEvent = AiRunEventPayload & {
@@ -1682,10 +1723,49 @@ export type ChatMessageImageRef = {
   height: number
 }
 
+export type ChatMessageLogUserContext = {
+  selectedReferences: SelectedReference[]
+  attachments: ChatAttachment[]
+  workspace: WorkspaceRuntimeBinding
+}
+
+export type ChatMessageLogPlanItem = {
+  title: string
+  status: 'todo' | 'done'
+}
+
+export type ChatMessageLogAnnotationEntry =
+  | {
+      kind: 'annotation'
+      eventType: 'thinking_started' | 'thinking_completed' | 'finalizing_started'
+      payload: JsonObject
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'learning_started' | 'learning_completed'
+      payload: { skillId: string }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'plan_updated'
+      payload: { plan: ChatMessageLogPlanItem[] }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'compaction_checkpoint'
+      payload: {
+        compactBlockId: string
+        summary: string
+        coveredThroughSeq: number
+        sourceMessageCount: number
+      }
+    }
+
 export type ChatMessageLogEntry =
   | {
       kind: 'user'
       content: string
+      context: ChatMessageLogUserContext
     }
   | {
       kind: 'assistant'
@@ -1700,19 +1780,7 @@ export type ChatMessageLogEntry =
       content: string
       images?: ChatMessageImageRef[]
     }
-  | {
-      kind: 'annotation'
-      eventType: ChatMessageLogAnnotationType
-      payload: JsonObject
-    }
-
-export type ChatMessageLogAnnotationType =
-  | 'thinking_started'
-  | 'thinking_completed'
-  | 'learning_started'
-  | 'learning_completed'
-  | 'compaction_summary'
-  | 'finalizing_started'
+  | ChatMessageLogAnnotationEntry
 
 export type ChatMessageLogRecord = {
   id: string
@@ -1721,29 +1789,6 @@ export type ChatMessageLogRecord = {
   seq: number
   entry: ChatMessageLogEntry
   createdAt: number
-}
-
-export type ChatSessionResumeSnapshot = {
-  reason: AiRunResumeSnapshotReason
-  runId: string
-  userInput: string
-  selectedReferences: SelectedReference[]
-  workspace?: WorkspaceRuntimeBinding
-  humanState: JsonObject
-  errorMessage: string
-  updatedAt: number
-}
-
-export type ChatSessionResumeSnapshotRow = {
-  session_id: string
-  run_id: string
-  reason: string
-  user_input: string
-  selected_references_json: string
-  workspace_json?: string
-  human_state_json: string
-  error_message: string
-  updated_at: number
 }
 
 export type ChatSessionSkillState = {

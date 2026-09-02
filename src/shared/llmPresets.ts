@@ -7,6 +7,8 @@ export type LlmPresetModel = {
   id: string
   label: string
   priceTier: LlmPriceTier
+  description: string
+  capabilities: Array<'text' | 'vision'>
 }
 
 export type LlmPresetProvider = {
@@ -24,12 +26,26 @@ export const LLM_PRESET_PROVIDERS: LlmPresetProvider[] = [
     sourceUrl: 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing',
     checkedAt: '2026-08-28',
     models: [
-      { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro', priceTier: 'mid' },
-      { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash', priceTier: 'low' },
+      {
+        id: 'deepseek-v4-pro',
+        label: 'DeepSeek V4 Pro',
+        priceTier: 'mid',
+        description: '面向复杂推理、代码与长任务的高质量模型。',
+        capabilities: ['text']
+      },
+      {
+        id: 'deepseek-v4-flash',
+        label: 'DeepSeek V4 Flash',
+        priceTier: 'low',
+        description: '响应更快，适合日常问答和轻量任务。',
+        capabilities: ['text']
+      },
       {
         id: 'deepseek-v4-flash-vision-exp',
         label: 'DeepSeek V4 Flash Vision',
-        priceTier: 'low'
+        priceTier: 'low',
+        description: '兼顾快速响应，并可理解图片内容。',
+        capabilities: ['text', 'vision']
       }
     ]
   },
@@ -39,8 +55,20 @@ export const LLM_PRESET_PROVIDERS: LlmPresetProvider[] = [
     sourceUrl: 'https://www.qianwenai.com/models',
     checkedAt: '2026-08-28',
     models: [
-      { id: 'qwen3.8-max', label: 'Qwen3.8 Max', priceTier: 'high' },
-      { id: 'qwen3.8-flash', label: 'Qwen3.8 Flash', priceTier: 'low' }
+      {
+        id: 'qwen3.8-max',
+        label: 'Qwen3.8 Max',
+        priceTier: 'high',
+        description: '适合复杂知识、代码和多模态任务。',
+        capabilities: ['text', 'vision']
+      },
+      {
+        id: 'qwen3.8-flash',
+        label: 'Qwen3.8 Flash',
+        priceTier: 'low',
+        description: '强调速度与成本，支持常用多模态任务。',
+        capabilities: ['text', 'vision']
+      }
     ]
   },
   {
@@ -49,8 +77,20 @@ export const LLM_PRESET_PROVIDERS: LlmPresetProvider[] = [
     sourceUrl: 'https://mimo.mi.com/docs/zh-CN/quick-start/summary/model',
     checkedAt: '2026-08-28',
     models: [
-      { id: 'mimo-v2.5-pro', label: 'MiMo V2.5 Pro', priceTier: 'mid' },
-      { id: 'mimo-v2.5', label: 'MiMo V2.5', priceTier: 'low' }
+      {
+        id: 'mimo-v2.5-pro',
+        label: 'MiMo V2.5 Pro',
+        priceTier: 'mid',
+        description: '适合较复杂的推理、代码和知识工作。',
+        capabilities: ['text']
+      },
+      {
+        id: 'mimo-v2.5',
+        label: 'MiMo V2.5',
+        priceTier: 'low',
+        description: '面向高频日常任务，兼顾图片理解。',
+        capabilities: ['text', 'vision']
+      }
     ]
   },
   {
@@ -59,8 +99,20 @@ export const LLM_PRESET_PROVIDERS: LlmPresetProvider[] = [
     sourceUrl: 'https://docs.bigmodel.cn/cn/guide/start/model-overview',
     checkedAt: '2026-08-28',
     models: [
-      { id: 'glm-5.3', label: 'GLM 5.3', priceTier: 'high' },
-      { id: 'glm-5.3-flash', label: 'GLM 5.3 Flash', priceTier: 'low' }
+      {
+        id: 'glm-5.3',
+        label: 'GLM 5.3',
+        priceTier: 'high',
+        description: '面向高难度推理、代码和专业任务。',
+        capabilities: ['text']
+      },
+      {
+        id: 'glm-5.3-flash',
+        label: 'GLM 5.3 Flash',
+        priceTier: 'low',
+        description: '快速、经济，支持图片理解。',
+        capabilities: ['text', 'vision']
+      }
     ]
   },
   {
@@ -69,8 +121,20 @@ export const LLM_PRESET_PROVIDERS: LlmPresetProvider[] = [
     sourceUrl: 'https://platform.kimi.com/docs/pricing/chat-k3',
     checkedAt: '2026-08-28',
     models: [
-      { id: 'kimi-k3', label: 'Kimi K3', priceTier: 'high' },
-      { id: 'kimi-k2.6', label: 'Kimi K2.6', priceTier: 'mid' }
+      {
+        id: 'kimi-k3',
+        label: 'Kimi K3',
+        priceTier: 'high',
+        description: '适合长上下文、复杂推理与多模态工作。',
+        capabilities: ['text', 'vision']
+      },
+      {
+        id: 'kimi-k2.6',
+        label: 'Kimi K2.6',
+        priceTier: 'mid',
+        description: '兼顾质量和速度，支持图片理解。',
+        capabilities: ['text', 'vision']
+      }
     ]
   }
 ]

@@ -110,7 +110,7 @@ describe('workbench run e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.runtimeLimitFailure.message === RUNTIME_LIMIT_MESSAGE &&
-              result.runtimeLimitFailure.resumeSnapshotSaved === true &&
+              result.runtimeLimitFailure.code === 'runtime_limit' &&
               result.firstRunLlmCompleted.status === 'completed' &&
               result.finalAnswerText.includes('恢复任务成功') &&
               result.finalAnswerText.includes('42'),

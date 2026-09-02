@@ -8,7 +8,6 @@ import React, {
   useState
 } from 'react'
 import { createPortal } from 'react-dom'
-import { Tooltip } from 'antd'
 import {
   HiAdjustmentsHorizontal,
   HiArrowPath,
@@ -19,7 +18,6 @@ import {
   HiCpuChip,
   HiMagnifyingGlass
 } from 'react-icons/hi2'
-import { PiEyesFill } from 'react-icons/pi'
 import type {
   LLMConfig,
   LlmRemoteModel,
@@ -33,10 +31,10 @@ import {
   type LlmPresetProvider,
   type LlmPriceTier
 } from '../../../../shared/llmPresets'
+import { resolveLlmProvider } from '../../../../shared/llmProvider'
 import { resolveFloatingPlacement } from './floatingPlacement'
 import { WORKBENCH_TITLEBAR_HEIGHT } from './constants'
 import { getProviderLogo } from '../settings/constants'
-import { PriceTierBadge } from '../PriceTierBadge'
 import { workbenchSelectors } from '../../testing/selectors'
 
 const PRICE_TIER_LABELS: Record<LlmPriceTier, string> = {
@@ -44,16 +42,6 @@ const PRICE_TIER_LABELS: Record<LlmPriceTier, string> = {
   mid: '适中',
   high: '较高'
 }
-
-const VISION_PRESET_MODEL_IDS = new Set<string>([
-  'deepseek-v4-flash-vision-exp',
-  'qwen3.8-max',
-  'qwen3.8-flash',
-  'mimo-v2.5',
-  'glm-5.3-flash',
-  'kimi-k3',
-  'kimi-k2.6'
-])
 
 type WorkbenchModelSelectorProps = {
   configs: LLMConfig[]
@@ -71,6 +59,10 @@ type WorkbenchModelSelectorProps = {
 }
 
 type PanelView = 'preset' | 'custom'
+
+type ModelInspector =
+  | { kind: 'preset'; provider: LlmPresetProvider; model: LlmPresetModel }
+  | { kind: 'custom'; config: LLMConfig; model: LlmRemoteModel }
 
 type MenuPosition = {
   top?: number
@@ -130,6 +122,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const inspectorRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const listboxId = useId()
   const [open, setOpen] = useState(false)
@@ -140,6 +133,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     () => new Set()
   )
   const [position, setPosition] = useState<MenuPosition>(DEFAULT_POSITION)
+  const [inspectedModel, setInspectedModel] = useState<ModelInspector | null>(null)
 
   const mainLabel = value.mainModel?.modelName || '选择模型'
 
@@ -180,6 +174,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       if (!(target instanceof Node)) return
       if (rootRef.current?.contains(target)) return
       if (menuRef.current?.contains(target)) return
+      if (inspectorRef.current?.contains(target)) return
       setOpen(false)
     }
     const handleResize = (): void => updatePosition()
@@ -205,6 +200,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (!open) {
       setView('preset')
       setQuery('')
+      setInspectedModel(null)
       return
     }
     if (view === 'preset') return
@@ -263,13 +259,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       configId: matchedConfig.id,
       modelName: model.id
     })
-    const isVision = VISION_PRESET_MODEL_IDS.has(model.id)
-    const coin = <PriceTierBadge tier={model.priceTier} />
-    const modelLabel = (
-      <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-        {model.label}
-      </span>
-    )
     return (
       <button
         type="button"
@@ -281,24 +270,16 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           selected ? 'workbench-select-option-selected' : ''
         )}
         onClick={() => selectModel(matchedConfig.id, model.id)}
+        onMouseEnter={() => setInspectedModel({ kind: 'preset', provider, model })}
+        onFocus={() => setInspectedModel({ kind: 'preset', provider, model })}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
           {getProviderLogo(provider.providerId)}
-          <Tooltip
-            title={`价格：${PRICE_TIER_LABELS[model.priceTier]}${isVision ? '，支持图片理解' : ''}`}
-          >
-            {modelLabel}
-          </Tooltip>
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+            {model.label}
+          </span>
         </span>
-        <span className="flex shrink-0 items-center gap-1.5">
-          {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" /> : null}
-          {isVision ? (
-            <span className="inline-flex text-[#787774]">
-              <PiEyesFill className="h-3 w-3" />
-            </span>
-          ) : null}
-          <span className="inline-flex">{coin}</span>
-        </span>
+        {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" /> : null}
       </button>
     )
   }
@@ -322,6 +303,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           className="workbench-select-option min-h-[44px]"
           data-testid={workbenchSelectors.modelSelectCustomEntry}
           onClick={() => setView('custom')}
+          onMouseEnter={() => setInspectedModel(null)}
         >
           <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
             <HiAdjustmentsHorizontal className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
@@ -407,9 +389,15 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                           selected ? 'workbench-select-option-selected' : ''
                         )}
                         onClick={() => selectModel(group.config.id, model.id)}
+                        onMouseEnter={() =>
+                          setInspectedModel({ kind: 'custom', config: group.config, model })
+                        }
+                        onFocus={() =>
+                          setInspectedModel({ kind: 'custom', config: group.config, model })
+                        }
                       >
                         <span className="flex min-w-0 items-center gap-2">
-                          <HiCpuChip className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
+                          {getProviderLogo(resolveLlmProvider(group.config.base_url).providerId)}
                           <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
                             {model.label || model.id}
                           </span>
@@ -440,6 +428,77 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       </div>
     </>
   )
+
+  const inspectorWidth = 292
+  const inspectorGap = 8
+  const inspectorLeft =
+    window.innerWidth - (position.left + position.width) >= inspectorWidth + inspectorGap + 8
+      ? position.left + position.width + inspectorGap
+      : Math.max(8, position.left - inspectorWidth - inspectorGap)
+  const inspectorTop =
+    position.top ??
+    Math.max(8, window.innerHeight - (position.bottom || 0) - Math.min(position.maxHeight, 320))
+
+  const renderInspector = (): React.ReactNode => {
+    if (!inspectedModel) return null
+    const preset = inspectedModel.kind === 'preset'
+    const title = preset
+      ? inspectedModel.model.label
+      : inspectedModel.model.label || inspectedModel.model.id
+    const subtitle = preset ? inspectedModel.provider.label : getConfigLabel(inspectedModel.config)
+    return (
+      <div
+        ref={inspectorRef}
+        className="rounded-[12px] border border-[#E5E4E0] bg-white p-4 shadow-[0_14px_36px_rgba(15,15,15,0.13)]"
+        style={{
+          position: 'fixed',
+          top: inspectorTop,
+          left: inspectorLeft,
+          width: inspectorWidth,
+          zIndex: 1001
+        }}
+      >
+        <div className="flex items-center gap-2">
+          {preset
+            ? getProviderLogo(inspectedModel.provider.providerId)
+            : getProviderLogo(resolveLlmProvider(inspectedModel.config.base_url).providerId)}
+          <div className="min-w-0">
+            <div className="truncate text-[15px] font-semibold text-[#252521]">{title}</div>
+            <div className="mt-0.5 truncate text-[12px] text-[#9B9A97]">{subtitle}</div>
+          </div>
+        </div>
+        {preset ? (
+          <>
+            <p className="mt-3 text-[13px] leading-5 text-[#5F5E5A]">
+              {inspectedModel.model.description}
+            </p>
+            <div className="mt-4 border-t border-[#EEEEEC] pt-3 text-[12px]">
+              <div className="flex items-start justify-between gap-4 py-1">
+                <span className="text-[#9B9A97]">能力</span>
+                <span className="text-right font-medium text-[#37352F]">
+                  {inspectedModel.model.capabilities
+                    .map((capability) => (capability === 'vision' ? '视觉理解' : '文本理解'))
+                    .join('、')}
+                </span>
+              </div>
+              <div className="flex items-start justify-between gap-4 py-1">
+                <span className="text-[#9B9A97]">价格档位</span>
+                <span className="font-medium text-[#37352F]">
+                  {PRICE_TIER_LABELS[inspectedModel.model.priceTier]}
+                </span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="mt-3 border-t border-[#EEEEEC] pt-3 text-[12px] leading-5">
+            <div className="text-[#9B9A97]">模型 ID</div>
+            <div className="break-all font-medium text-[#37352F]">{inspectedModel.model.id}</div>
+            <div className="mt-3 text-[#787774]">能力与价格信息未提供</div>
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div
@@ -492,26 +551,29 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       </button>
       {open
         ? createPortal(
-            <div
-              ref={menuRef}
-              id={listboxId}
-              role="listbox"
-              className="workbench-select-menu workbench-composer-menu"
-              data-workbench-select-root="true"
-              style={{
-                position: 'fixed',
-                top: position.top,
-                bottom: position.bottom,
-                left: position.left,
-                width: position.width,
-                maxHeight: position.maxHeight,
-                display: 'flex',
-                flexDirection: 'column',
-                zIndex: 1000
-              }}
-            >
-              {view === 'preset' ? renderPresetView() : renderCustomView()}
-            </div>,
+            <>
+              <div
+                ref={menuRef}
+                id={listboxId}
+                role="listbox"
+                className="workbench-select-menu workbench-composer-menu"
+                data-workbench-select-root="true"
+                style={{
+                  position: 'fixed',
+                  top: position.top,
+                  bottom: position.bottom,
+                  left: position.left,
+                  width: position.width,
+                  maxHeight: position.maxHeight,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  zIndex: 1000
+                }}
+              >
+                {view === 'preset' ? renderPresetView() : renderCustomView()}
+              </div>
+              {renderInspector()}
+            </>,
             document.body
           )
         : null}
