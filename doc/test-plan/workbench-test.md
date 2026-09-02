@@ -213,7 +213,7 @@ tests/case/workbench/
 - 测试类型：`e2e / live`
 - What：`+`、粘贴与拖入中间聊天区添加附件时，不会提前创建真实会话；图片只以路径和元数据进入会话，常规文档和非白名单扩展名也能加入，并保持图片预览、文件打开、删除、普通文本粘贴和大文件提示行为。
 - Why：`+` 与拖放必须把源文件路径交给 AI，粘贴仍需保存副本，回归必须守住这两条不同链路。
-- How：创建并绑定真实工作区；通过系统文件窗口选择图片和多种文件，覆盖拖入、删除后重新添加图片、大文件 warning，并通过真实模型发送一次带附件消息；发送后读取 SQLite 会话消息。
+- How：创建并绑定真实工作区；通过系统文件窗口选择图片和多种文件，覆盖拖入、删除后重新添加图片、大文件 warning，并通过真实模型发送一次带附件消息；发送后读取 `ai_run` 与 log 投影消息。
 - Oracle：文件拖入中间聊天区时显示覆盖层，放下后消失；未绑定工作区时不添加附件；`+` 选择的文件保留原始源路径且不提前创建会话；图片预览和删除正常；发送后图片附件仍是路径，持久消息不含 Base64，对齐 `WB-COMPOSER-010`、`WB-COMPOSER-013-AC2`、`WB-COMPOSER-013-AC3`；运行时缓存、HTTP(S) 原地址和失效占位由 AI tool 契约覆盖，对齐 `WB-COMPOSER-013-AC4`。
 - Not：不在跨平台业务回归中验证系统原生文件选择器的视觉细节；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
 
@@ -330,7 +330,7 @@ tests/case/workbench/
 #### `interrupted-task-resume-flow`
 
 - 测试类型：`backend contract + real-model e2e`
-- What：同一会话中的任务因达到 Graph 运行上限等原因中断后，从不可变消息日志与会话技能状态恢复，并在用户后续消息中继续原任务。
+- What：同一会话中的任务因达到 Graph 运行上限等原因中断后，从不可变消息日志恢复，并在用户后续消息中继续原任务。
 - Why：恢复能力必须经过真实 Workbench、真实模型、Main 进程、持久化和 Renderer 的完整链路验证，不能只依赖 Mock LLM。
 - How：真实模型 E2E 把首轮 Graph 上限降为 2，验证上限错误后发送继续语句；第二轮恢复正式上限并完成。Backend 覆盖日志投影、相同 `tool_call_id` 修复、计划投影、checkpoint 边界、重启标记、跨会话隔离、编辑和删除。
 - Oracle：全部中断原因均可只靠日志继续；恢复语句只追加一次，历史 user 配置不变；压缩后只发送一次摘要与 checkpoint 后历史；连续多次恢复不递归嵌套原始任务；切换会话或重启后只投影所属日志；编辑只撤回目标 user、关联 assistant/run 和该 run 日志；正常完成清空计划但保留日志；真实模型首轮显示“已达到运行上限，可继续对话推进”且第二轮恢复完成，对齐 `WB-SESSION-007-AC1`、`WB-SESSION-007-AC2`、`WB-SESSION-007-AC3`、`WB-SESSION-007-AC4`、`WB-SESSION-007-AC5`、`WB-SESSION-007-AC6`、`WB-SESSION-007-AC7`。

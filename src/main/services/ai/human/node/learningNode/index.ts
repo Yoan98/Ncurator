@@ -237,11 +237,6 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       })
     })
     const learnedSkillIds = fittedLearnedSkills.learnedSkillIds
-    const sessionSkillState = await input.ctx.loadSessionSkillState()
-    await input.ctx.saveSessionSkillState({
-      expectedRevision: sessionSkillState.revision,
-      learnedSkillIds
-    })
     const lastLearningOutcome = buildLearningOutcome({
       requestedSkillIds,
       loadedSkillIds: newSkillIds,
@@ -257,6 +252,25 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       toolCallId: learnToolCallId,
       content: learningResult
     })
+    newSkillIds.forEach((skillId) => {
+      emitLearningCompleted({
+        sendEvent: input.ctx.sendEvent,
+        runId: input.ctx.runId,
+        skillId
+      })
+    })
+    await input.ctx.appendMessageLog([
+      ...newSkillIds.map((skillId) => ({
+        kind: 'annotation' as const,
+        eventType: 'learning_completed' as const,
+        payload: { skillId }
+      })),
+      {
+        kind: 'annotation' as const,
+        eventType: 'skill_state_updated' as const,
+        payload: { learnedSkillIds: [...learnedSkillIds] }
+      }
+    ])
     const nextState = returnToBrainAfterTrace({
       ctx: input.ctx,
       cache: input.cache,
@@ -285,20 +299,6 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
         }
       }
     })
-    newSkillIds.forEach((skillId) => {
-      emitLearningCompleted({
-        sendEvent: input.ctx.sendEvent,
-        runId: input.ctx.runId,
-        skillId
-      })
-    })
-    await input.ctx.appendMessageLog(
-      newSkillIds.map((skillId) => ({
-        kind: 'annotation' as const,
-        eventType: 'learning_completed' as const,
-        payload: { skillId }
-      }))
-    )
     return nextState
   }
 }

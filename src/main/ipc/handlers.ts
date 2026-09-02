@@ -234,6 +234,7 @@ export function registerHandlers(services: {
   const chatStore = storageService.chat
   const workbenchUiStore = storageService.workbenchUi
   const chatMessageLogStore = storageService.chatMessageLog
+  const chatSearchTurnStore = storageService.chatSearchTurn
   const aiRunStore = storageService.aiRun
   const llmStore = storageService.llm
   const aiRuntimeSettingsStore = storageService.aiRuntimeSettings
@@ -256,6 +257,7 @@ export function registerHandlers(services: {
   const chatRunService = new ChatRunService({
     chatStore,
     chatMessageLogStore,
+    chatSearchTurnStore,
     aiRunStore,
     documentsStore,
     embeddingService,
@@ -2841,7 +2843,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle('chat-message-list', async (_event, sessionId: string) => {
     try {
-      return await chatStore.getChatMessages(sessionId)
+      return await chatRunService.listSessionMessages(sessionId)
     } catch (e: unknown) {
       console.error('[CHAT-MESSAGE-LIST] Error:', e)
       return []

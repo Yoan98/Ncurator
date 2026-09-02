@@ -46,7 +46,8 @@ describe('ai human context compaction message shape', () => {
       ctx: createContext(),
       state,
       summary: '任务锚点：继续完成任务',
-      tail
+      tail,
+      existingMessages: []
     })
 
     expect(messages.map((message) => message.getType())).toEqual(['system', 'human', 'ai', 'tool'])

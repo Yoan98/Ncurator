@@ -24,6 +24,7 @@ SQLite 保存以下业务数据：
 - 会话、消息，以及用于中断恢复和压缩投影的 append-only 会话消息日志；不保存独立恢复快照。
 - AI run、审批和文件修改记录。
 - 会话级 append-only 的消息转录（`chat_session_message_log`），作为模型上下文的唯一真相源。
+- 搜索模式对话轮次（`chat_search_turn`），与 AI log 解耦；Workbench 打开会话时合并投影。
 - 消息中的图片只保存运行时路径或 HTTP(S) 地址，以及 MIME、字节数和尺寸；SQLite 不保存 Base64，也不为临时图片建立独立文件表。运行时文件被清理后允许恢复为不可用占位。
 - 工作区、文件索引任务、文档元数据和网页源。
 - LLM 配置和 AI runtime 设置。
@@ -33,7 +34,7 @@ SQLite 保存以下业务数据：
 
 关键规则：
 
-- `chat_message` 使用会话内 `seq` 保证稳定顺序。
+- `chat_search_turn` 使用会话内 `seq` 保证搜索轮次稳定顺序。
 - `chat_session_message_log` 使用 `session_id + seq` 保证会话内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated` 和 `compaction_checkpoint` 是强类型 annotation。恢复投影读取记录自身的 `seq/run_id`，不会修改历史行。
 - `ai_run.partial_answer` 与 `partial_answer_role` 只保存当前流式 UI 草稿；它们不参与下一次模型上下文恢复。`failure_code` 保存 `process_interrupted`、`output_truncated`、`input_too_long` 等终止原因。
 - 待审批状态以 SQLite 中的 run 记录为准。
@@ -51,9 +52,10 @@ SQLite 保存以下业务数据：
 
 ### 当前边界
 
-- 当前代码支持的最终 schema version 是 `10`，由 `CURRENT_SCHEMA_VERSION` 定义。
+- 当前代码支持的最终 schema version 是 `13`，由 `CURRENT_SCHEMA_VERSION` 定义。
 - version `1–9` 已随正式版发布，永久保留且不可改写。已知历史例外只有 version 2 的旧名称 `workspace_change_sets`；version 9 继续负责修复通知字段。
 - version `10` 把上次正式版之后尚未发布的变更合并为一次 `upgrade_from_v9`：创建最终版定时任务和消息日志表，删除 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event` 与废弃字段，并为 `ai_run` 增加失败原因及流式 UI 草稿角色字段，不保留中间态字段。
+- version `11–13` 继续 human harness 对齐：删除 `chat_session_skill_state`、新增 `chat_search_turn`、删除 `chat_message`。
 - 哪些 migration 已正式发布，以 `migrations/released-migrations.json` 为唯一边界。未进入清单的连续迁移可以在发布前合并或重写；进入清单后只能新增更高版本修复。
 - 当前开发机若已经执行过被合并掉的旧 version `10–14`，直接删除开发环境的 `app.sqlite` 和 `lancedb` 后重建，不提供兼容或修复路径。
 

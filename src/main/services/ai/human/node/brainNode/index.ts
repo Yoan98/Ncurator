@@ -7,7 +7,7 @@ import type { AiRunContext } from '../../../types'
 import { isContentSafetyError } from '../../../utils/runFailure'
 import { normalizeRoundThought } from '../../memory/thoughtMemory'
 import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
-import { projectMessageLogRecords } from '../../memory/transcript'
+import { projectBrainMessagesFromLog } from '../../memory/brainMessageProjection'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { applyBrainDispatchTransition, returnToBrain } from '../utils/stateTransitions'
@@ -52,16 +52,20 @@ export const createBrainNode = (input: {
     const compactedHistoryText = state.memory.compactions.at(-1)?.summary
     let messages = input.cache.messages
     if (!messages || messages.length === 0 || input.cache.currentUserMessageIndex === undefined) {
-      const projection = projectMessageLogRecords(await input.ctx.loadMessageLog())
+      const logRecords = await input.ctx.loadMessageLog()
+      const brainProjection = projectBrainMessagesFromLog({
+        records: logRecords,
+        ctx: input.ctx,
+        state,
+        compactedHistoryText,
+        injectPlan
+      })
       messages = [
         new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
-        ...projection.messages,
-        createCurrentBrainUserMessage(
-          buildBrainUserMessage({ state, ctx: input.ctx, compactedHistoryText, injectPlan })
-        )
+        ...brainProjection.messages
       ]
       input.cache.messages = messages
-      input.cache.currentUserMessageIndex = messages.length - 1
+      input.cache.currentUserMessageIndex = brainProjection.currentUserMessageIndex + 1
     } else {
       // 每轮刷新 user 消息，保证 plan / learned_skills / compacted_history 都是最新 state 渲染，
       // 避免 update_plan / learn_skill 之后后续 brain 轮次仍看到旧快照（"丢 plan"）。

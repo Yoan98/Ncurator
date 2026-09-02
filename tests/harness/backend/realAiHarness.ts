@@ -120,6 +120,7 @@ export const createRealAiHarness = async (input: {
     seedChatHistory: async (payload) => {
       await seedChatHistory({
         chatStore: depsFactory.storageService.chat,
+        chatSearchTurnStore: depsFactory.storageService.chatSearchTurn,
         payload
       })
     },

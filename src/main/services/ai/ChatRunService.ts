@@ -25,6 +25,7 @@ import type { TelemetryService } from '../telemetry/TelemetryService'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 import type { AiRunDeps } from './types'
 import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
+import type { ChatSearchTurnStore } from '../storage/domains/ChatSearchTurnStore'
 import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
@@ -46,6 +47,10 @@ import type {
   ChatSubmitRequest,
   ChatSubmitResponse
 } from '../../../shared/types'
+import {
+  mergeConversationMessages,
+  projectAiConversationMessages
+} from '../../../shared/workbench/conversationProjection'
 
 type ActiveApproval = {
   batchId: string
@@ -76,6 +81,7 @@ type ActiveRun = {
 type ChatRunServiceDeps = {
   chatStore: ChatStore
   chatMessageLogStore: ChatMessageLogStore
+  chatSearchTurnStore: ChatSearchTurnStore
   aiRunStore: AiRunStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
@@ -131,6 +137,40 @@ export class ChatRunService {
 
   public constructor(private readonly deps: ChatRunServiceDeps) {}
 
+  private async loadProjectedSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+    const [records, runs, searchMessages] = await Promise.all([
+      this.deps.chatMessageLogStore.list(sessionId),
+      this.deps.aiRunStore.listRunsBySession(sessionId),
+      this.deps.chatSearchTurnStore.list(sessionId)
+    ])
+    const aiMessages = projectAiConversationMessages({ sessionId, records, runs })
+    return mergeConversationMessages({ aiMessages, legacyMessages: searchMessages })
+  }
+
+  private async getProjectedMessagesPage(input: {
+    sessionId: string
+    limit: number
+    beforeTimestamp?: number
+  }): Promise<{ messages: ChatMessage[]; hasMoreBefore: boolean }> {
+    const safeLimit = Math.max(1, Math.min(100, Number(input.limit || 50)))
+    const sorted = (await this.loadProjectedSessionMessages(input.sessionId)).sort(
+      (left, right) => left.timestamp - right.timestamp
+    )
+    const beforeTimestamp = Number(input.beforeTimestamp)
+    const eligible = Number.isFinite(beforeTimestamp)
+      ? sorted.filter((message) => message.timestamp < beforeTimestamp)
+      : sorted
+    const hasMoreBefore = eligible.length > safeLimit
+    return {
+      messages: eligible.slice(-safeLimit),
+      hasMoreBefore
+    }
+  }
+
+  public async listSessionMessages(sessionId: string): Promise<ChatMessage[]> {
+    return await this.loadProjectedSessionMessages(sessionId)
+  }
+
   public async failInterruptedRuns(): Promise<void> {
     const interrupted = await this.deps.aiRunStore.listRunsByStatuses(ACTIVE_RUN_STATUSES)
     for (const run of interrupted) {
@@ -147,15 +187,6 @@ export class ChatRunService {
         finishedAt: now
       }
       await this.deps.aiRunStore.saveRun(nextRun)
-      await this.deps.chatStore.saveChatMessage({
-        id: run.assistantMessageId,
-        session_id: run.sessionId,
-        role: 'assistant',
-        content: nextRun.finalAnswer || INTERRUPTED_RUN_MESSAGE,
-        timestamp: now,
-        artifacts: nextRun.artifacts,
-        error: true
-      })
       try {
         await this.deps.onRunTerminal?.(nextRun, 'failed')
       } catch (error) {
@@ -167,11 +198,8 @@ export class ChatRunService {
   public async getSessionSnapshot(sessionId: string): Promise<ChatSessionSnapshotResponse> {
     const normalizedSessionId = String(sessionId || '').trim()
     if (!normalizedSessionId) return { messages: [], runs: [], activeRuns: [] }
-    const messages = await this.deps.chatStore.getChatMessages(normalizedSessionId)
-    const messageIds = new Set(messages.map((message) => message.id))
-    const runs = (await this.deps.aiRunStore.listRunsBySession(normalizedSessionId)).filter((run) =>
-      messageIds.has(run.assistantMessageId)
-    )
+    const messages = await this.loadProjectedSessionMessages(normalizedSessionId)
+    const runs = await this.deps.aiRunStore.listRunsBySession(normalizedSessionId)
     const runSnapshots = await Promise.all(runs.map((run) => this.buildRunSnapshot(run)))
     const activeRuns = runSnapshots.filter((snapshot) =>
       ACTIVE_RUN_STATUSES.includes(snapshot.run.status)
@@ -189,7 +217,7 @@ export class ChatRunService {
     if (!normalizedSessionId) return { messages: [], hasMoreBefore: false, activeRuns: [] }
     const [session, page, activeRunRecords] = await Promise.all([
       this.deps.chatStore.getChatSession(normalizedSessionId),
-      this.deps.chatStore.getChatMessagesPage({
+      this.getProjectedMessagesPage({
         sessionId: normalizedSessionId,
         limit: input.limit || 50,
         beforeTimestamp: input.beforeTimestamp
@@ -215,14 +243,10 @@ export class ChatRunService {
     const startedAt = Date.now()
     const normalizedSessionId = String(sessionId || '').trim()
     if (!normalizedSessionId) return { runs: [] }
-    const recentMessages = await this.deps.chatStore.getRecentChatMessages(normalizedSessionId, 50)
-    const recentMessageIds = recentMessages.map((message) => message.id)
-    const runs = await this.deps.aiRunStore.listRunsByMessageIds(
-      normalizedSessionId,
-      recentMessageIds
-    )
+    const runs = await this.deps.aiRunStore.listRunsBySession(normalizedSessionId)
+    const recentRuns = [...runs].sort((left, right) => right.createdAt - left.createdAt).slice(0, 50)
     const response = {
-      runs: await Promise.all(runs.map((run) => this.buildRunSnapshot(run)))
+      runs: await Promise.all(recentRuns.map((run) => this.buildRunSnapshot(run)))
     }
     this.logSlowChatQuery('chat-session-run-summaries', startedAt, {
       sessionId: normalizedSessionId,
@@ -246,47 +270,31 @@ export class ChatRunService {
       return { success: false, messages: [], error: '当前会话仍在运行，不能编辑消息' }
     }
 
-    const messages = await this.deps.chatStore.getChatMessages(sessionId)
-    const targetIndex = messages.findIndex((message) => message.id === userMessageId)
-    const target = targetIndex >= 0 ? messages[targetIndex] : null
-    if (!target || target.role !== 'user') {
-      return { success: false, messages, error: '只能撤回用户消息' }
-    }
-    const latestUser = [...messages].reverse().find((message) => message.role === 'user')
-    if (latestUser?.id !== target.id) {
+    const runs = await this.deps.aiRunStore.listRunsBySession(sessionId)
+    const latestRun = [...runs].sort((left, right) => right.createdAt - left.createdAt)[0]
+    if (!latestRun || latestRun.userMessageId !== userMessageId) {
+      const messages = await this.loadProjectedSessionMessages(sessionId)
       return { success: false, messages, error: '只能编辑最新一条用户消息' }
     }
 
-    const following = messages.slice(targetIndex + 1)
-    if (following.some((message) => message.role === 'user')) {
-      return { success: false, messages, error: '只能撤回最后一轮对话' }
+    const messages = await this.loadProjectedSessionMessages(sessionId)
+    const target = messages.find((message) => message.id === userMessageId)
+    if (!target || target.role !== 'user') {
+      return { success: false, messages, error: '只能撤回用户消息' }
     }
-    const assistantMessage = following.find((message) => message.role === 'assistant')
-    const runs = await this.deps.aiRunStore.listRunsBySession(sessionId)
-    const run = runs.find(
-      (item) =>
-        item.userMessageId === target.id ||
-        (assistantMessage ? item.assistantMessageId === assistantMessage.id : false)
-    )
-    const messageIdsToDelete = [
-      target.id,
-      ...following
-        .filter((message) => !run || message.id === run.assistantMessageId)
-        .map((message) => message.id)
-    ]
 
-    await this.deps.chatStore.deleteChatMessagesByIds(messageIdsToDelete)
-    if (run) {
-      await this.deps.aiRunStore.deleteRunsByIds([run.id])
-      await this.deps.chatMessageLogStore.deleteByRunIds([run.id])
-    }
-    const nextMessages = await this.deps.chatStore.getChatMessages(sessionId)
+    const run = latestRun
+    const assistantMessage = messages.find((message) => message.id === run.assistantMessageId)
+
+    await this.deps.aiRunStore.deleteRunsByIds([run.id])
+    await this.deps.chatMessageLogStore.deleteByRunIds([run.id])
+    const nextMessages = await this.loadProjectedSessionMessages(sessionId)
 
     return {
       success: true,
       userMessage: target,
       assistantMessageId: assistantMessage?.id,
-      runId: run?.id,
+      runId: run.id,
       messages: nextMessages
     }
   }
@@ -488,22 +496,22 @@ export class ChatRunService {
     const createdAt = Date.now()
     const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
     const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
-    const userMessage: ChatMessage = {
-      id: uuidv4(),
-      session_id: payload.sessionId,
-      role: 'user',
-      content: payload.input,
-      timestamp: createdAt,
-      contentNodes: payload.contentNodes,
-      selectedReferences: normalizedReferences,
-      attachments
-    }
-    await this.saveUserMessageAndTitle(userMessage)
-
-    const { data: queryVector } = await this.deps.embeddingService.embed(payload.input)
     const documentIds = Array.isArray(payload.searchDocumentIds)
       ? payload.searchDocumentIds.map((id) => String(id).trim()).filter(Boolean)
       : undefined
+    const userMessage = await this.deps.chatSearchTurnStore.appendTurn({
+      sessionId: payload.sessionId,
+      role: 'user',
+      content: payload.input,
+      contentNodes: payload.contentNodes,
+      selectedReferences: normalizedReferences,
+      attachments,
+      searchDocumentIds: documentIds,
+      createdAt
+    })
+    await this.ensureSessionTitle(payload.sessionId, payload.input)
+
+    const { data: queryVector } = await this.deps.embeddingService.embed(payload.input)
     const results = await this.deps.documentsStore.search(
       queryVector,
       payload.input,
@@ -518,14 +526,12 @@ export class ChatRunService {
       normalizedResults.length > 0
         ? `已在当前资料范围中找到 ${normalizedResults.length} 条结果，右侧可以直接查看命中详情。`
         : '未在当前资料范围中找到匹配结果。'
-    const assistantMessage: ChatMessage = {
-      id: uuidv4(),
-      session_id: payload.sessionId,
+    const assistantMessage = await this.deps.chatSearchTurnStore.appendTurn({
+      sessionId: payload.sessionId,
       role: 'assistant',
       content,
-      timestamp: Date.now()
-    }
-    await this.deps.chatStore.saveChatMessage(assistantMessage)
+      resultPayload: normalizedResults
+    })
 
     return {
       success: true,
@@ -613,8 +619,7 @@ export class ChatRunService {
       updatedAt: createdAt
     }
 
-    await this.saveUserMessageAndTitle(userMessage)
-    await this.deps.chatStore.saveChatMessage(assistantMessage)
+    await this.ensureSessionTitle(payload.sessionId, payload.input)
     await this.deps.aiRunStore.saveRun(run)
 
     const activeRun: ActiveRun = {
@@ -642,16 +647,19 @@ export class ChatRunService {
     }
   }
 
-  private async saveUserMessageAndTitle(userMessage: ChatMessage): Promise<void> {
-    const existingMessages = await this.deps.chatStore.getChatMessages(userMessage.session_id)
-    await this.deps.chatStore.saveChatMessage(userMessage)
-    if (existingMessages.length !== 0) return
-    const sessions = await this.deps.chatStore.getChatSessions()
-    const session = sessions.find((item) => item.id === userMessage.session_id)
+  private async ensureSessionTitle(sessionId: string, titleSource: string): Promise<void> {
+    const [runs, logRecords, searchTurns, sessions] = await Promise.all([
+      this.deps.aiRunStore.listRunsBySession(sessionId),
+      this.deps.chatMessageLogStore.list(sessionId),
+      this.deps.chatSearchTurnStore.list(sessionId),
+      this.deps.chatStore.getChatSessions()
+    ])
+    if (runs.length > 0 || logRecords.length > 0 || searchTurns.length > 1) return
+    const session = sessions.find((item) => item.id === sessionId)
     if (!session) return
     await this.deps.chatStore.saveChatSession({
       ...session,
-      title: userMessage.content.slice(0, 20)
+      title: titleSource.slice(0, 20)
     })
   }
 
@@ -1001,6 +1009,8 @@ export class ChatRunService {
       const content = run.partialAnswer
         ? `${run.partialAnswer}\n\n失败：${event.message}`
         : `失败：${event.message}`
+      run.partialAnswer = content
+      run.finalAnswer = content
       assistantMessage = this.buildAssistantMessage(run, content, true)
     } else if (event.type === 'run_cancelled') {
       run.status = 'cancelled'
@@ -1010,6 +1020,8 @@ export class ChatRunService {
       run.updatedAt = now
       run.finishedAt = now
       const content = run.partialAnswer ? `${run.partialAnswer}\n\n已取消` : '已取消'
+      run.partialAnswer = content
+      run.finalAnswer = content
       assistantMessage = this.buildAssistantMessage(run, content, true)
     } else if (!event.internal && event.type === 'runtime_issue') {
       run.status = 'failed'
@@ -1022,7 +1034,6 @@ export class ChatRunService {
     }
 
     if (entry) entry.run = run
-    if (assistantMessage) await this.deps.chatStore.saveChatMessage(assistantMessage)
     if (saveImmediately) {
       this.clearProjectionFlush(runId)
       await this.deps.aiRunStore.saveRun(run)

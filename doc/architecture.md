@@ -21,7 +21,7 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 **存储层**
 
-- SQLite：业务真相（会话、消息、AI run、审批、文件修改记录、文档元数据、工作区状态、配置）。
+- SQLite：业务真相（会话、AI log、搜索轮次、AI run、审批、文件修改记录、文档元数据、工作区状态、配置）。
 - LanceDB：可重建的 `vector_chunk` 向量索引。
 - SQLite 通过 migration 演进；LanceDB 可按文档 generation 重建。
 
@@ -59,7 +59,7 @@ AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`c
 
 **稳定结构摘要**
 
-- **Transcript 真相源**：`chat_session_message_log`（append-only）；`ai_run` 管生命周期与 UI 运行态；`ai_file_change` 管文件域，不进 brain prompt。
+- **Transcript 真相源**：`chat_session_message_log`（append-only）；`ai_run` 管生命周期与 UI 运行态；`chat_search_turn` 管搜索模式对话；`ai_file_change` 管文件域，不进 brain prompt。
 - **Skill / Tool**：builtin skill 默认可 bind；external 需 `learn_skill`；`agent-control` 承载 `learn_skill`、`update_plan`、`read_image`。
 - **搜索模式**：独立存储，不写 session message log。
 

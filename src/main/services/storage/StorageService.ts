@@ -15,6 +15,7 @@ import { WorkbenchUiStore } from './domains/WorkbenchUiStore'
 import { BrowserTabStateStore } from './domains/BrowserTabStateStore'
 import { ScheduledTaskStore } from './domains/ScheduledTaskStore'
 import { ChatMessageLogStore } from './domains/ChatMessageLogStore'
+import { ChatSearchTurnStore } from './domains/ChatSearchTurnStore'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 
 export class StorageService {
@@ -37,6 +38,7 @@ export class StorageService {
   public readonly browserTabs: BrowserTabStateStore
   public readonly scheduledTask: ScheduledTaskStore
   public readonly chatMessageLog: ChatMessageLogStore
+  public readonly chatSearchTurn: ChatSearchTurnStore
 
   public constructor(
     input: {
@@ -66,6 +68,7 @@ export class StorageService {
     this.browserTabs = new BrowserTabStateStore(this.sqlite)
     this.scheduledTask = new ScheduledTaskStore(this.sqlite)
     this.chatMessageLog = new ChatMessageLogStore(this.sqlite)
+    this.chatSearchTurn = new ChatSearchTurnStore(this.sqlite)
   }
 
   public static getInstance(input: { errorLogService?: AppErrorLogService } = {}): StorageService {

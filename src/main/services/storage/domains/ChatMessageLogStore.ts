@@ -85,6 +85,39 @@ export class ChatMessageLogStore {
       .filter((record): record is ChatMessageLogRecord => record !== null)
   }
 
+  public async listPage(input: {
+    sessionId: string
+    limit: number
+    beforeSeq?: number
+  }): Promise<{ records: ChatMessageLogRecord[]; hasMoreBefore: boolean }> {
+    const safeLimit = Math.max(1, Math.min(500, Number(input.limit || 50)))
+    const beforeSeq = Number(input.beforeSeq)
+    const params = {
+      session_id: input.sessionId,
+      before: Number.isFinite(beforeSeq) ? Math.floor(beforeSeq) : null,
+      limit: safeLimit + 1
+    }
+    const rows = this.sqlite
+      .prepare(
+        `
+        SELECT * FROM chat_session_message_log
+        WHERE session_id = @session_id
+          AND (@before IS NULL OR seq < @before)
+        ORDER BY seq DESC
+        LIMIT @limit
+      `
+      )
+      .all(params) as ChatMessageLogRow[]
+    const hasMoreBefore = rows.length > safeLimit
+    const pageRows = rows.slice(0, safeLimit).reverse()
+    return {
+      records: pageRows
+        .map(toMessageLogRecord)
+        .filter((record): record is ChatMessageLogRecord => record !== null),
+      hasMoreBefore
+    }
+  }
+
   public async listByRun(runId: string): Promise<ChatMessageLogRecord[]> {
     const rows = this.sqlite
       .prepare('SELECT * FROM chat_session_message_log WHERE run_id = ? ORDER BY seq ASC')

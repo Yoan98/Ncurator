@@ -1,5 +1,7 @@
+import type { ChatMessageLogUserContext } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from './referenceScope'
+import { buildReferenceScope } from './referenceScope'
 import { renderPlanItemStatus } from '../shared/memoryRenderers'
 import {
   getWorkspaceAssetsRootDir,
@@ -151,6 +153,34 @@ ${compactedHistory}
   <active_state>
 ${renderActiveState()}
   </active_state>
+</user_context>
+`.trim()
+}
+
+export const buildBrainUserMessageFromLogEntry = (input: {
+  content: string
+  context: ChatMessageLogUserContext
+  ctx: AiRunContext
+}): string => {
+  const referenceScope = buildReferenceScope({
+    workspace: input.context.workspace,
+    selectedReferences: input.context.selectedReferences,
+    attachments: input.context.attachments
+  })
+
+  return `
+<user_context>
+  <task_goal>
+${input.content}
+  </task_goal>
+
+  <preference>
+${renderPreferenceText(input.ctx.preference)}
+  </preference>
+
+  <reference_scope>
+${renderReferenceScopeText(referenceScope)}
+  </reference_scope>
 </user_context>
 `.trim()
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
-import type { ChatSessionSkillState } from '../../../../src/shared/types'
+import type { ChatMessageLogEntry } from '../../../../src/shared/types'
 import { createLearningNode } from '../../../../src/main/services/ai/human/node/learningNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
@@ -34,20 +34,6 @@ const createStubAiRunContext = (): AiRunContext => ({
   requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
   loadMessageLog: async () => [],
   appendMessageLog: async () => undefined,
-  loadSessionSkillState: async (): Promise<ChatSessionSkillState> => ({
-    schemaVersion: 1,
-    learnedSkillIds: [],
-    revision: 0,
-    updatedAt: 0,
-    lastUpdatedRunId: ''
-  }),
-  saveSessionSkillState: async (input): Promise<ChatSessionSkillState> => ({
-    schemaVersion: 1,
-    learnedSkillIds: input.learnedSkillIds,
-    revision: input.expectedRevision + 1,
-    updatedAt: 1,
-    lastUpdatedRunId: 'run-learning-unit'
-  }),
   trackDocxOpen: () => {},
   trackDocxChanges: () => {},
   resolveDocxOpenTarget: async () => {

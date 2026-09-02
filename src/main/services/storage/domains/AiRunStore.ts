@@ -179,6 +179,34 @@ export class AiRunStore {
     return rows.map(toRunRecord)
   }
 
+  public async listRunsPage(input: {
+    sessionId: string
+    limit: number
+    beforeCreatedAt?: number
+  }): Promise<{ runs: AiRunRecord[]; hasMoreBefore: boolean }> {
+    const safeLimit = Math.max(1, Math.min(100, Number(input.limit || 50)))
+    const beforeCreatedAt = Number(input.beforeCreatedAt)
+    const params = {
+      session_id: input.sessionId,
+      before: Number.isFinite(beforeCreatedAt) ? Math.floor(beforeCreatedAt) : null,
+      limit: safeLimit + 1
+    }
+    const rows = this.sqlite
+      .prepare(
+        `
+        SELECT * FROM ai_run
+        WHERE session_id = @session_id
+          AND (@before IS NULL OR created_at < @before)
+        ORDER BY created_at DESC
+        LIMIT @limit
+      `
+      )
+      .all(params) as AiRunRow[]
+    const hasMoreBefore = rows.length > safeLimit
+    const pageRows = rows.slice(0, safeLimit).reverse()
+    return { runs: pageRows.map(toRunRecord), hasMoreBefore }
+  }
+
   public async listRunsByMessageIds(
     sessionId: string,
     messageIds: string[]

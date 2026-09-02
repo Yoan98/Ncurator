@@ -7,6 +7,7 @@ import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/bra
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
+import { listHistoricalBuildUserMessages } from '../../memory/brainMessageProjection'
 import {
   createCurrentBrainUserMessage,
   renderMessagesForCompaction,
@@ -146,7 +147,8 @@ export const createContextCompactionNode = (input: {
         }
       },
       summary: compactBlock.summary,
-      tail
+      tail,
+      existingMessages: messages
     })
     input.cache.messages = rebuilt
     input.cache.currentUserMessageIndex = rebuilt.findIndex(
@@ -175,8 +177,10 @@ export const buildCompactedMessages = (input: {
   state: HumanState
   summary: string
   tail: BaseMessage[]
+  existingMessages: BaseMessage[]
 }): BaseMessage[] => [
   new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
+  ...listHistoricalBuildUserMessages(input.existingMessages),
   createCurrentBrainUserMessage(
     buildBrainUserMessage({
       state: input.state,

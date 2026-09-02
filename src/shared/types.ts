@@ -1747,6 +1747,11 @@ export type ChatMessageLogAnnotationEntry =
     }
   | {
       kind: 'annotation'
+      eventType: 'skill_state_updated'
+      payload: { learnedSkillIds: string[] }
+    }
+  | {
+      kind: 'annotation'
       eventType: 'plan_updated'
       payload: { plan: ChatMessageLogPlanItem[] }
     }
@@ -1791,11 +1796,4 @@ export type ChatMessageLogRecord = {
   createdAt: number
 }
 
-export type ChatSessionSkillState = {
-  schemaVersion: 1
-  learnedSkillIds: string[]
-  revision: number
-  updatedAt: number
-  lastUpdatedRunId: string
-}
 import type { RuntimeSkillId as RegisteredRuntimeSkillId } from './runtimeCapabilities'

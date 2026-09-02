@@ -12,9 +12,9 @@ import { createHandNode } from '../node/handNode'
 import { createHumanRuntimeCache } from '../node/utils/runtimeCache'
 import { advanceDispatchState } from '../node/dispatch'
 import { createHumanRunStateSchema, createInitialHumanState } from '../state/schema'
-import { buildBrainSystemPrompt, buildBrainUserMessage } from '../prompts/brain'
+import { buildBrainSystemPrompt } from '../prompts/brain'
 import { projectMessageLogRecords } from '../memory/transcript'
-import { createCurrentBrainUserMessage } from '../node/utils/messageTail'
+import { projectBrainMessagesFromLog } from '../memory/brainMessageProjection'
 import { isLearnableSkillId } from '../skills'
 import {
   classifyLlmFailureCode,
@@ -112,10 +112,9 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
 
       const baseInitialState = options.initialState || createInitialHumanState(taskInput)
       cache.currentState = baseInitialState
-      const sessionSkillState = await ctx.loadSessionSkillState()
       const messageLogRecords = await ctx.loadMessageLog()
       const logProjection = projectMessageLogRecords(messageLogRecords)
-      const learnedSkillIds = Array.from(new Set(sessionSkillState.learnedSkillIds)).filter(
+      const learnedSkillIds = Array.from(new Set(logProjection.learnedSkillIds)).filter(
         isLearnableSkillId
       )
       const initialState: HumanState = {
@@ -141,20 +140,18 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       cache.currentState = initialState
       cache.messageLogRecords = messageLogRecords
       cache.currentUserLogAppended = false
-      const currentUserMessage = createCurrentBrainUserMessage(
-        buildBrainUserMessage({
-          state: initialState,
-          ctx,
-          compactedHistoryText: logProjection.checkpoint?.summary,
-          injectPlan: initialState.memory.plan.length > 0
-        })
-      )
+      const brainProjection = projectBrainMessagesFromLog({
+        records: messageLogRecords,
+        ctx,
+        state: initialState,
+        compactedHistoryText: logProjection.checkpoint?.summary,
+        injectPlan: initialState.memory.plan.length > 0
+      })
       cache.messages = [
         new SystemMessage(buildBrainSystemPrompt({ ctx })),
-        ...logProjection.messages,
-        currentUserMessage
+        ...brainProjection.messages
       ]
-      cache.currentUserMessageIndex = cache.messages.length - 1
+      cache.currentUserMessageIndex = brainProjection.currentUserMessageIndex + 1
       const output = (await graph.invoke(initialState as HumanState, {
         recursionLimit:
           ctx.humanRuntimeOverrides?.graphRecursionLimit || HUMAN_GRAPH_RECURSION_LIMIT

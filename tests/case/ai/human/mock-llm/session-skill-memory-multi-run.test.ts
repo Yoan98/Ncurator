@@ -2,8 +2,20 @@ import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { buildCompleteTaskDecision, buildLearnSkillsDecision } from '../testUtils'
+import type { ChatMessageLogRecord } from '../../../../../src/shared/types'
 
 const SESSION_ID = 'session-skill-memory-multi-run'
+
+const readLatestLearnedSkillIds = (records: ChatMessageLogRecord[]): string[] => {
+  let learnedSkillIds: string[] = []
+  for (const record of records) {
+    const entry = record.entry
+    if (entry.kind === 'annotation' && entry.eventType === 'skill_state_updated') {
+      learnedSkillIds = [...entry.payload.learnedSkillIds]
+    }
+  }
+  return learnedSkillIds
+}
 
 describe('ai human mock-llm backend', () => {
   it('session-skill-memory-multi-run', async () => {
@@ -38,7 +50,9 @@ describe('ai human mock-llm backend', () => {
           }
         })
         await run1.run({ taskId: 'session-skills-run-1', userInput: '学习文档技能。' })
-        const stateAfterRun1 = await runtime.chatStore.getSessionSkillState(SESSION_ID)
+        const stateAfterRun1 = readLatestLearnedSkillIds(
+          await runtime.storageService.chatMessageLog.list(SESSION_ID)
+        )
 
         let run2Prompt = ''
         const run2 = createHumanTestRunner(runtime, {
@@ -83,7 +97,9 @@ describe('ai human mock-llm backend', () => {
           }
         })
         await run3.run({ taskId: 'session-skills-run-3', userInput: '继续学习 PPT 技能。' })
-        const stateAtLimit = await runtime.chatStore.getSessionSkillState(SESSION_ID)
+        const stateAtLimit = readLatestLearnedSkillIds(
+          await runtime.storageService.chatMessageLog.list(SESSION_ID)
+        )
 
         let run4Prompt = ''
         const run4 = createHumanTestRunner(runtime, {
@@ -107,17 +123,19 @@ describe('ai human mock-llm backend', () => {
           }
         })
         await run4.run({ taskId: 'session-skills-run-4', userInput: '检查遗忘结果。' })
-        const stateAfterEviction = await runtime.chatStore.getSessionSkillState(SESSION_ID)
+        const stateAfterEviction = readLatestLearnedSkillIds(
+          await runtime.storageService.chatMessageLog.list(SESSION_ID)
+        )
 
         return { stateAfterRun1, stateAtLimit, stateAfterEviction, run2Prompt, run4Prompt }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.stateAfterRun1.learnedSkillIds.join(',') === 'docx-read,pdf-read' &&
+          result.stateAfterRun1.join(',') === 'docx-read,pdf-read' &&
             result.run2Prompt.includes('已学习技能') &&
-            result.stateAtLimit.learnedSkillIds.join(',') ===
+            result.stateAtLimit.join(',') ===
               'docx-read,pdf-read,excel-write,ppt-read,ppt-write' &&
-            result.stateAfterEviction.learnedSkillIds.join(',') ===
+            result.stateAfterEviction.join(',') ===
               'docx-read,pdf-read,excel-write,ppt-read,ppt-write,excel-read,image-generation,docx-write' &&
             result.run4Prompt.includes('已学习技能'),
           {

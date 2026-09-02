@@ -1,14 +1,8 @@
 import type {
-  AiArtifactRef,
-  ChatMessage,
-  ChatSession,
-  ChatSessionSkillState
+  ChatSession
 } from '../../../types/store'
 import type { SqliteCore } from '../sqlite/SqliteCore'
 import {
-  jsonStringify,
-  parseJsonArray,
-  toOptionalNumber,
   toRequiredNumber,
   toRequiredString
 } from '../sqlite/sqliteUtils'
@@ -22,26 +16,6 @@ type ChatSessionRow = {
   workspace_id?: unknown
 }
 
-type ChatMessageRow = {
-  id?: unknown
-  session_id?: unknown
-  seq?: unknown
-  role?: unknown
-  content?: unknown
-  content_nodes_json?: unknown
-  selected_references_json?: unknown
-  attachments_json?: unknown
-  artifacts_json?: unknown
-  error?: unknown
-  created_at?: unknown
-}
-
-const toChatRole = (value: unknown): ChatMessage['role'] => {
-  const role = String(value || '')
-  if (role === 'assistant' || role === 'system') return role
-  return 'user'
-}
-
 const toSession = (row: ChatSessionRow): ChatSession => ({
   id: toRequiredString(row.id),
   title: toRequiredString(row.title),
@@ -49,96 +23,8 @@ const toSession = (row: ChatSessionRow): ChatSession => ({
   workspace_id: toRequiredString(row.workspace_id)
 })
 
-const toMessage = (row: ChatMessageRow): ChatMessage & { seq?: number } => ({
-  id: toRequiredString(row.id),
-  session_id: toRequiredString(row.session_id),
-  role: toChatRole(row.role),
-  content: toRequiredString(row.content),
-  timestamp: toRequiredNumber(row.created_at),
-  seq: toOptionalNumber(row.seq),
-  contentNodes: parseJsonArray(row.content_nodes_json),
-  selectedReferences: parseJsonArray(row.selected_references_json),
-  attachments: parseJsonArray(row.attachments_json),
-  artifacts: parseJsonArray<AiArtifactRef>(row.artifacts_json),
-  error: row.error === 1 || row.error === true ? true : undefined
-})
-
 export class ChatStore {
   public constructor(private readonly sqlite: SqliteCore) {}
-
-  public async getSessionSkillState(sessionId: string): Promise<ChatSessionSkillState> {
-    const row = this.sqlite
-      .prepare(
-        'SELECT state_json, revision, updated_at FROM chat_session_skill_state WHERE session_id = ?'
-      )
-      .get(sessionId) as
-      | { state_json?: unknown; revision?: unknown; updated_at?: unknown }
-      | undefined
-    if (!row?.state_json) {
-      return {
-        schemaVersion: 1,
-        learnedSkillIds: [],
-        revision: 0,
-        updatedAt: 0,
-        lastUpdatedRunId: ''
-      }
-    }
-    try {
-      const parsed = JSON.parse(String(row.state_json)) as Partial<ChatSessionSkillState>
-      return {
-        schemaVersion: 1,
-        learnedSkillIds: Array.isArray(parsed.learnedSkillIds)
-          ? parsed.learnedSkillIds.map((id) => String(id).trim()).filter(Boolean)
-          : [],
-        revision: Number(row.revision || parsed.revision || 0),
-        updatedAt: Number(row.updated_at || parsed.updatedAt || 0),
-        lastUpdatedRunId: String(parsed.lastUpdatedRunId || '')
-      }
-    } catch {
-      return {
-        schemaVersion: 1,
-        learnedSkillIds: [],
-        revision: Number(row.revision || 0),
-        updatedAt: Number(row.updated_at || 0),
-        lastUpdatedRunId: ''
-      }
-    }
-  }
-
-  public async saveSessionSkillStateIfCurrent(input: {
-    sessionId: string
-    expectedRevision: number
-    learnedSkillIds: string[]
-    runId: string
-  }): Promise<ChatSessionSkillState | null> {
-    return this.sqlite.transaction(() => {
-      const current = this.sqlite
-        .prepare('SELECT revision FROM chat_session_skill_state WHERE session_id = ?')
-        .get(input.sessionId) as { revision?: unknown } | undefined
-      const currentRevision = Number(current?.revision || 0)
-      if (currentRevision !== input.expectedRevision) return null
-      const next: ChatSessionSkillState = {
-        schemaVersion: 1,
-        learnedSkillIds: [...input.learnedSkillIds],
-        revision: currentRevision + 1,
-        updatedAt: Date.now(),
-        lastUpdatedRunId: input.runId
-      }
-      this.sqlite
-        .prepare(
-          `INSERT OR REPLACE INTO chat_session_skill_state
-             (session_id, state_json, revision, updated_at)
-           VALUES (@session_id, @state_json, @revision, @updated_at)`
-        )
-        .run({
-          session_id: input.sessionId,
-          state_json: JSON.stringify(next),
-          revision: next.revision,
-          updated_at: next.updatedAt
-        })
-      return next
-    })
-  }
 
   public async saveChatSession(session: ChatSession): Promise<void> {
     const now = Date.now()
@@ -262,116 +148,5 @@ export class ChatStore {
         .run(Date.now(), id)
       this.sqlite.prepare('DELETE FROM chat_session WHERE id = ?').run(id)
     })
-  }
-
-  public async deleteChatMessagesByIds(messageIds: string[]): Promise<void> {
-    const ids = messageIds.map((id) => String(id || '').trim()).filter(Boolean)
-    if (ids.length === 0) return
-    this.sqlite.transaction(() => {
-      const stmt = this.sqlite.prepare('DELETE FROM chat_message WHERE id = ?')
-      for (const id of ids) stmt.run(id)
-    })
-  }
-
-  public async saveChatMessage(message: ChatMessage): Promise<void> {
-    this.sqlite.transaction(() => {
-      const existing = this.sqlite
-        .prepare('SELECT seq FROM chat_message WHERE id = ?')
-        .get(message.id) as { seq?: unknown } | undefined
-      const seq =
-        toOptionalNumber(existing?.seq) ||
-        ((
-          this.sqlite
-            .prepare(
-              'SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM chat_message WHERE session_id = ?'
-            )
-            .get(message.session_id) as { next_seq?: unknown }
-        ).next_seq as number)
-      const createdAt = message.timestamp || Date.now()
-
-      this.sqlite
-        .prepare(
-          `
-          INSERT INTO chat_message (
-            id, session_id, seq, role, content, content_nodes_json, selected_references_json,
-            attachments_json, artifacts_json, error, created_at
-          ) VALUES (
-            @id, @session_id, @seq, @role, @content, @content_nodes_json, @selected_references_json,
-            @attachments_json, @artifacts_json, @error, @created_at
-          )
-          ON CONFLICT(id) DO UPDATE SET
-            session_id = excluded.session_id,
-            seq = excluded.seq,
-            role = excluded.role,
-            content = excluded.content,
-            content_nodes_json = excluded.content_nodes_json,
-            selected_references_json = excluded.selected_references_json,
-            attachments_json = excluded.attachments_json,
-            artifacts_json = excluded.artifacts_json,
-            error = excluded.error,
-            created_at = excluded.created_at
-        `
-        )
-        .run({
-          id: message.id,
-          session_id: message.session_id,
-          seq,
-          role: message.role,
-          content: message.content,
-          content_nodes_json: jsonStringify(message.contentNodes),
-          selected_references_json: jsonStringify(message.selectedReferences),
-          attachments_json: jsonStringify(message.attachments),
-          artifacts_json: jsonStringify(message.artifacts),
-          error: message.error ? 1 : null,
-          created_at: createdAt
-        })
-
-      this.sqlite
-        .prepare('UPDATE chat_session SET updated_at = ? WHERE id = ?')
-        .run(createdAt, message.session_id)
-    })
-  }
-
-  public async getChatMessages(sessionId: string): Promise<ChatMessage[]> {
-    const rows = this.sqlite
-      .prepare('SELECT * FROM chat_message WHERE session_id = ? ORDER BY seq ASC')
-      .all(sessionId) as ChatMessageRow[]
-    return rows.map(toMessage)
-  }
-
-  public async getChatMessagesPage(input: {
-    sessionId: string
-    limit: number
-    beforeTimestamp?: number
-  }): Promise<{ messages: ChatMessage[]; hasMoreBefore: boolean }> {
-    const safeLimit = Math.max(1, Math.min(100, Number(input.limit || 50)))
-    const beforeTimestamp = Number(input.beforeTimestamp)
-    const params = {
-      session_id: input.sessionId,
-      before: Number.isFinite(beforeTimestamp) ? Math.floor(beforeTimestamp) : null,
-      limit: safeLimit + 1
-    }
-    const rows = this.sqlite
-      .prepare(
-        `
-        SELECT * FROM chat_message
-        WHERE session_id = @session_id
-          AND (@before IS NULL OR created_at < @before)
-        ORDER BY seq DESC
-        LIMIT @limit
-      `
-      )
-      .all(params) as ChatMessageRow[]
-    const hasMoreBefore = rows.length > safeLimit
-    const pageRows = rows.slice(0, safeLimit).reverse()
-    return {
-      messages: pageRows.map(toMessage),
-      hasMoreBefore
-    }
-  }
-
-  public async getRecentChatMessages(sessionId: string, limit: number): Promise<ChatMessage[]> {
-    const result = await this.getChatMessagesPage({ sessionId, limit })
-    return result.messages
   }
 }

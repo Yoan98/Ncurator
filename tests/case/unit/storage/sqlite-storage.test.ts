@@ -5,12 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
   AiRunEvent,
   AiRunRecord,
-  ChatMessage,
   ChatSession,
   ChatSessionUiStateV1
 } from '../../../../src/shared/types'
 import { LanceDbCore } from '../../../../src/main/services/storage/core/LanceDbCore'
 import { ChatStore } from '../../../../src/main/services/storage/domains/ChatStore'
+import { ChatSearchTurnStore } from '../../../../src/main/services/storage/domains/ChatSearchTurnStore'
 import { AiRunStore } from '../../../../src/main/services/storage/domains/AiRunStore'
 import { DocumentsStore } from '../../../../src/main/services/storage/domains/DocumentsStore'
 import { BrowserTabStateStore } from '../../../../src/main/services/storage/domains/BrowserTabStateStore'
@@ -151,16 +151,6 @@ const createSession = (id = 'session-1'): ChatSession => ({
   workspace_id: 'workspace-1'
 })
 
-const createMessage = (
-  input: Partial<ChatMessage> & { id: string; timestamp: number }
-): ChatMessage => ({
-  id: input.id,
-  session_id: input.session_id || 'session-1',
-  role: input.role || 'user',
-  content: input.content || input.id,
-  timestamp: input.timestamp
-})
-
 const createRun = (input: Partial<AiRunRecord> = {}): AiRunRecord => ({
   id: input.id || 'run-1',
   sessionId: input.sessionId || 'session-1',
@@ -211,6 +201,7 @@ describe('sqlite storage core and stores', () => {
   let tempDir = ''
   let sqlite: SqliteCore
   let chatStore: ChatStore
+  let chatSearchTurnStore: ChatSearchTurnStore
   let aiRunStore: AiRunStore
 
   beforeEach(async () => {
@@ -218,6 +209,7 @@ describe('sqlite storage core and stores', () => {
     sqlite = new SqliteCore(path.join(tempDir, 'app.sqlite'))
     sqlite.initialize()
     chatStore = new ChatStore(sqlite)
+    chatSearchTurnStore = new ChatSearchTurnStore(sqlite)
     aiRunStore = new AiRunStore(sqlite)
     await chatStore.saveChatSession(createSession())
   })
@@ -247,7 +239,10 @@ describe('sqlite storage core and stores', () => {
       { version: 7, name: 'ai_run_execution_permission' },
       { version: 8, name: 'drop_llm_strategy_preference' },
       { version: 9, name: 'repair_ai_runtime_system_notifications_column' },
-      { version: 10, name: 'upgrade_from_v9' }
+      { version: 10, name: 'upgrade_from_v9' },
+      { version: 11, name: 'drop_chat_session_skill_state' },
+      { version: 12, name: 'chat_search_turn' },
+      { version: 13, name: 'drop_chat_message' }
     ])
 
     const legacyTables = sqlite
@@ -435,50 +430,40 @@ describe('sqlite storage core and stores', () => {
     expect(repaired).toEqual({ status: 'applied', last_error: null })
   })
 
-  it('keeps chat message seq stable and returns the latest 50 in ascending order', async () => {
+  it('keeps search turn seq stable in ascending order', async () => {
     for (let index = 1; index <= 60; index += 1) {
-      await chatStore.saveChatMessage(createMessage({ id: `message-${index}`, timestamp: index }))
+      await chatSearchTurnStore.appendTurn({
+        sessionId: 'session-1',
+        role: index % 2 === 0 ? 'assistant' : 'user',
+        content: `turn-${index}`,
+        createdAt: index
+      })
     }
 
-    const page = await chatStore.getChatMessagesPage({ sessionId: 'session-1', limit: 50 })
+    const turns = await chatSearchTurnStore.list('session-1')
     const seqRows = sqlite
-      .prepare('SELECT id, seq FROM chat_message WHERE session_id = ? ORDER BY seq ASC')
+      .prepare('SELECT id, seq FROM chat_search_turn WHERE session_id = ? ORDER BY seq ASC')
       .all('session-1') as Array<{ id: string; seq: number }>
 
-    expect(seqRows[0]).toEqual({ id: 'message-1', seq: 1 })
-    expect(seqRows[59]).toEqual({ id: 'message-60', seq: 60 })
-    expect(page.hasMoreBefore).toBe(true)
-    expect(page.messages.map((message) => message.id)).toEqual(
-      Array.from({ length: 50 }, (_, index) => `message-${index + 11}`)
-    )
+    expect(seqRows[0]?.seq).toBe(1)
+    expect(seqRows[59]?.seq).toBe(60)
+    expect(turns).toHaveLength(60)
+    expect(turns[0]?.content).toBe('turn-1')
+    expect(turns[59]?.content).toBe('turn-60')
   })
 
-  it('persists session skills with revision checks and deletes them with the session', async () => {
-    const initial = await chatStore.getSessionSkillState('session-1')
-    const saved = await chatStore.saveSessionSkillStateIfCurrent({
-      sessionId: 'session-1',
-      expectedRevision: initial.revision,
-      learnedSkillIds: ['docx-read'],
-      runId: 'run-skill-1'
-    })
-    const staleWrite = await chatStore.saveSessionSkillStateIfCurrent({
-      sessionId: 'session-1',
-      expectedRevision: initial.revision,
-      learnedSkillIds: ['pdf-read'],
-      runId: 'run-skill-stale'
-    })
-    const reloaded = await new ChatStore(sqlite).getSessionSkillState('session-1')
+  it('drops chat_message after migration 13', async () => {
+    const table = sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get('chat_message')
+    expect(table).toBeUndefined()
+  })
 
-    expect(initial).toMatchObject({ learnedSkillIds: [], revision: 0 })
-    expect(saved).toMatchObject({ learnedSkillIds: ['docx-read'], revision: 1 })
-    expect(staleWrite).toBeNull()
-    expect(reloaded).toMatchObject({ learnedSkillIds: ['docx-read'], revision: 1 })
-
-    await chatStore.deleteChatSession('session-1')
-    expect(await chatStore.getSessionSkillState('session-1')).toMatchObject({
-      learnedSkillIds: [],
-      revision: 0
-    })
+  it('drops chat_session_skill_state after migration 11', async () => {
+    const table = sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get('chat_session_skill_state')
+    expect(table).toBeUndefined()
   })
 
   it('restores active and pending approval runs from sqlite', async () => {

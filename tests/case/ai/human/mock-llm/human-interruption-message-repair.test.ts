@@ -230,10 +230,15 @@ describe('ai human mock-llm backend', () => {
             typeof message.content === 'string' &&
             message.content.includes('已整理过拟合')
         )
-        const orderHasOnlyCurrentUser =
+        const orderHasResumeBuildUsers =
           (run2BrainMessages || []).filter((message) => message.getType() === 'human').length ===
-            1 &&
+            2 &&
           orderLast?.getType() === 'human'
+        const orderFirstHuman = (run2BrainMessages || []).find(
+          (message) => message.getType() === 'human'
+        )
+        const orderFirstHumanContent =
+          typeof orderFirstHuman?.content === 'string' ? orderFirstHuman.content : ''
 
         const danglingLast = danglingRun2Messages ? lastMessage(danglingRun2Messages) : null
         const danglingToolMessages = (danglingRun2Messages || []).filter(
@@ -256,7 +261,8 @@ describe('ai human mock-llm backend', () => {
           orderLastType: orderLast?.getType() || '',
           orderLastContent: typeof orderLast?.content === 'string' ? orderLast.content : '',
           orderHasRun1Final,
-          orderHasOnlyCurrentUser,
+          orderHasResumeBuildUsers,
+          orderFirstHumanContent,
           danglingRun1Result,
           danglingRun2Result,
           danglingLastType: danglingLast?.getType() || '',
@@ -276,7 +282,8 @@ describe('ai human mock-llm backend', () => {
             result.orderLastContent.includes('<task_goal>') &&
             result.orderLastContent.includes('保留刚才的过拟合信息，再补充反走样') &&
             result.orderHasRun1Final &&
-            result.orderHasOnlyCurrentUser &&
+            result.orderHasResumeBuildUsers &&
+            result.orderFirstHumanContent.includes('请整理过拟合概念') &&
             result.danglingRun1Result.status === 'cancelled' &&
             result.danglingRun1Result.failureCode === 'user_cancelled' &&
             result.danglingRun2Result.status === 'completed' &&
@@ -287,7 +294,7 @@ describe('ai human mock-llm backend', () => {
           {
             name: 'human-interruption-message-repair-continues-with-ordered-message-array',
             message:
-              '续接消息数组应为 system + 历史(最终交付 assistant 消息) + 尾部 buildBrainUserMessage user 消息；悬空 tool_calls 应补 interrupted ToolMessage。',
+              '续接消息数组应为 system + 历史 build user + 过程 tail + 当前 build user；悬空 tool_calls 应补 interrupted ToolMessage。',
             data: result
           }
         )

@@ -59,10 +59,8 @@ flowchart TD
 新 run 启动时（目标态）：
 
 1. 读全 session `chat_session_message_log` → `projectMessageLogRecords` 得 tail + plan + checkpoint。
-2. 拼 runtime messages：`[System] + history tail + [User built_current]`（§3.2 resume 形态）。
+2. 拼 runtime messages：`[System] + projectBrainMessages(...)`（§6 多条 build user + interleaved tail）。
 3. `graph.invoke` 从 `context_budget` 进入循环。
-
-> **重构对齐项**：当前 `humanGraph.ts` 初始化顺序为 `System → tail → User`（user 在末尾 append，与 resume 目标一致）；同 run 稳态 brain 内仍通过 `currentUserMessageIndex` refresh **当前 run** 的 build user。跨 run 多条 build user 的完整形态见 §6。
 
 ### 1.5 runtime cache 要点
 
@@ -94,7 +92,7 @@ human harness 涉及的数据从哪来、到哪去。只有 **`chat_session_mess
 ```
 
 - **AI 会话**走 human harness；**搜索模式**用独立存储，不写 `chat_session_message_log`。
-- **目标态**：UI 对话轮次由 log 投影；技能由 `skill_state_updated` annotation 投影；移除 `chat_message` 与 `chat_session_skill_state`（重构前代码仍可能读写旧表，以本文为准对齐）。
+- **实现**：UI 对话轮次由 `chat_session_message_log` + `ai_run` 投影；技能由 `skill_state_updated` annotation 投影；搜索模式使用独立 `chat_search_turn` 表。
 
 ### 2.2 Transcript：`chat_session_message_log`
 
@@ -401,7 +399,7 @@ annotation 扫描用**完整** log；tail 用 checkpoint **截断后**的行。
 
 ### 3.4 UI 投影
 
-UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投影（目标态）。重构完成前 Renderer 可能仍用 `chat_message` 作气泡缓存，以 log 为准对齐。
+UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投影。AI 会话气泡由 `projectAiConversationMessages` 生成；搜索轮次来自 `chat_search_turn`。
 
 #### 对话轮次（按 run 切分）
 
@@ -664,8 +662,6 @@ brain 返回 learn_skill
 | 新 skill 加载成功 | `tool` + `skill_state_updated` | replace 当前 build user 技能块 → **打破 §4 前缀缓存** |
 | 重复 / unknown / 超限 | 仅 `tool` | 技能块不变 |
 | 审批 / 取消 | 按 hand 规则 | — |
-
-> **重构对齐项**：当前 `learning` 节点仍写 `chat_session_skill_state`；目标态改为 log 的 `skill_state_updated` annotation 投影（§2.2），并移除独立 skill 表。
 
 ### 7.3 update_plan 流程
 

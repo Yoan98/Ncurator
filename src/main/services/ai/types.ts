@@ -30,7 +30,6 @@ import type {
   AiFileChangeRecord,
   ChatAttachment,
   BrainContextBudgetSnapshot,
-  ChatSessionSkillState,
   ChatMessageLogEntry,
   ChatMessageLogRecord,
   DocxApplyRecord,
@@ -288,11 +287,6 @@ export type AiRunContext = {
   webCrawlerService?: WebCrawlerService
   appendMessageLog: (entries: ChatMessageLogEntry[]) => Promise<void>
   loadMessageLog: () => Promise<ChatMessageLogRecord[]>
-  loadSessionSkillState: () => Promise<ChatSessionSkillState>
-  saveSessionSkillState: (input: {
-    expectedRevision: number
-    learnedSkillIds: string[]
-  }) => Promise<ChatSessionSkillState>
   trackDocxOpen: (input: {
     docId: string
     sourcePath: string

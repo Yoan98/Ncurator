@@ -123,6 +123,7 @@ export const deriveMessageLogMessages = (input: {
 export type MessageLogProjection = {
   messages: BaseMessage[]
   plan: ChatMessageLogPlanItem[]
+  learnedSkillIds: string[]
   checkpoint?: {
     compactBlockId: string
     summary: string
@@ -168,18 +169,22 @@ export const projectMessageLogRecords = (
       .filter((entry) => entry.kind !== 'user')
   })
   let plan: ChatMessageLogPlanItem[] = []
+  let learnedSkillIds: string[] = []
   for (const record of ordered) {
     const entry = record.entry
     if (entry.kind === 'annotation' && entry.eventType === 'plan_updated') {
       plan = entry.payload.plan.map((item) => ({ ...item }))
     } else if (entry.kind === 'annotation' && entry.eventType === 'finalizing_started') {
       plan = []
+    } else if (entry.kind === 'annotation' && entry.eventType === 'skill_state_updated') {
+      learnedSkillIds = [...entry.payload.learnedSkillIds]
     }
   }
 
   return {
     messages: repairInterruptedToolCalls(messages),
     plan,
+    learnedSkillIds,
     checkpoint
   }
 }

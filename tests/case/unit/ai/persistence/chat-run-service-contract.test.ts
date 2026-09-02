@@ -76,6 +76,7 @@ const createTestService = async (options?: {
   const service = new ChatRunService({
     chatStore: storage.chat,
     chatMessageLogStore: storage.chatMessageLog,
+    chatSearchTurnStore: storage.chatSearchTurn,
     aiRunStore: storage.aiRun,
     documentsStore: storage.documents,
     embeddingService,
@@ -107,28 +108,58 @@ const seedSession = async (storage: StorageService): Promise<ChatSession> => {
   return session
 }
 
-const buildMessage = (input: {
-  id: string
-  sessionId?: string
-  role?: ChatMessage['role']
-  timestamp: number
-  content?: string
-}): ChatMessage => ({
-  id: input.id,
-  session_id: input.sessionId || 'session-1',
-  role: input.role || (Number(input.id.replace(/\D/g, '') || 0) % 2 === 0 ? 'user' : 'assistant'),
-  content: input.content || `message ${input.id}`,
-  timestamp: input.timestamp
+const buildWorkspace = (workspaceRoot: string) => ({
+  workspaceId: 'workspace-1',
+  workspaceName: 'workspace-1',
+  rootPath: workspaceRoot
 })
 
-const saveMessages = async (
+const seedAiTurn = async (
   storage: StorageService,
-  messages: readonly ChatMessage[]
-): Promise<void> => {
-  for (const message of messages) {
-    await storage.chat.saveChatMessage(message)
+  workspaceRoot: string,
+  turn: {
+    runId: string
+    userMessageId: string
+    assistantMessageId: string
+    userContent: string
+    assistantContent?: string
+    status?: AiRunRecord['status']
+    partialAnswer?: string
+    finalAnswer?: string
+    artifacts?: AiRunRecord['artifacts']
+    createdAt: number
+    error?: string
+    failureCode?: AiRunRecord['failureCode']
   }
+): Promise<void> => {
+  const assistantContent = turn.assistantContent ?? turn.finalAnswer ?? turn.partialAnswer ?? ''
+  await storage.aiRun.saveRun({
+    id: turn.runId,
+    sessionId: 'session-1',
+    userMessageId: turn.userMessageId,
+    assistantMessageId: turn.assistantMessageId,
+    status: turn.status ?? 'completed',
+    input: turn.userContent,
+    partialAnswer: turn.partialAnswer ?? assistantContent,
+    finalAnswer: turn.finalAnswer ?? assistantContent,
+    artifacts: turn.artifacts,
+    workspace: buildWorkspace(workspaceRoot),
+    modelName: 'mock-model',
+    mainModel: { configId: 'mock-config', modelName: 'mock-model' },
+    preference: 'local_sources_strict',
+    executionPermission: 'review',
+    error: turn.error,
+    failureCode: turn.failureCode,
+    createdAt: turn.createdAt,
+    updatedAt: turn.createdAt + 1,
+    finishedAt: turn.status === 'running' ? undefined : turn.createdAt + 1
+  })
 }
+
+const listSessionMessages = async (
+  service: ChatRunService,
+  sessionId: string
+): Promise<ChatMessage[]> => await service.listSessionMessages(sessionId)
 
 const submitAiRun = async (
   { workspaceRoot, storage, service }: TestService,
@@ -166,7 +197,7 @@ describe('unit ai persistence backend', () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)
 
-    const messages = await setup.storage.chat.getChatMessages('session-1')
+    const messages = await listSessionMessages(setup.service, 'session-1')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
 
     expect(messages.map((message) => message.role)).toEqual(['user', 'assistant'])
@@ -241,7 +272,7 @@ describe('unit ai persistence backend', () => {
       runId: run.id
     })
 
-    const messages = await setup.storage.chat.getChatMessages('session-1')
+    const messages = await listSessionMessages(setup.service, 'session-1')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
 
     expect(messages[1].content).toBe('Hello world')
@@ -315,7 +346,7 @@ describe('unit ai persistence backend', () => {
     })
     await service.queueRunEvent(run.id, terminalEvent(run.id))
 
-    const messages = await setup.storage.chat.getChatMessages('session-1')
+    const messages = await listSessionMessages(setup.service, 'session-1')
     const assistantMessage = messages.find((message) => message.role === 'assistant')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
 
@@ -518,13 +549,6 @@ describe('unit ai persistence backend', () => {
     const setup = await createTestService()
     await seedSession(setup.storage)
     const now = Date.now()
-    await setup.storage.chat.saveChatMessage({
-      id: 'assistant-1',
-      session_id: 'session-1',
-      role: 'assistant',
-      content: '',
-      timestamp: now
-    })
     await setup.storage.aiRun.saveRun({
       id: 'run-1',
       sessionId: 'session-1',
@@ -533,44 +557,60 @@ describe('unit ai persistence backend', () => {
       status: 'running',
       input: '测试中断',
       partialAnswer: '',
+      workspace: buildWorkspace(setup.workspaceRoot),
+      modelName: 'mock-model',
+      mainModel: { configId: 'mock-config', modelName: 'mock-model' },
+      preference: 'local_sources_strict',
+      executionPermission: 'review',
       createdAt: now,
       updatedAt: now
     })
     await setup.service.failInterruptedRuns()
 
     const storedRun = await setup.storage.aiRun.getRun('run-1')
-    const messages = await setup.storage.chat.getChatMessages('session-1')
+    const messages = await listSessionMessages(setup.service, 'session-1')
+    const assistantMessage = messages.find((message) => message.role === 'assistant')
 
     expect(storedRun?.status).toBe('failed')
     expect(storedRun?.failureCode).toBe('process_interrupted')
     expect(storedRun?.error).toContain('运行已中断')
-    expect(messages[0].content).toContain('运行已中断')
-    expect(messages[0].error).toBe(true)
+    expect(assistantMessage?.content).toContain('运行已中断')
+    expect(assistantMessage?.error).toBe(true)
   })
 
   it('retract-latest-turn-guards-running-and-non-latest-user-message', async () => {
     const runningSetup = await createTestService()
     const runningRun = await submitAiRun(runningSetup)
-    const runningMessages = await runningSetup.storage.chat.getChatMessages('session-1')
+    const runningMessages = await listSessionMessages(runningSetup.service, 'session-1')
     const runningResponse = await runningSetup.service.retractLatestTurn({
       sessionId: 'session-1',
       userMessageId: runningRun.userMessageId
     })
     expect(runningResponse.success).toBe(false)
     expect(runningResponse.error).toContain('仍在运行')
-    expect(await runningSetup.storage.chat.getChatMessages('session-1')).toHaveLength(
+    expect(await listSessionMessages(runningSetup.service, 'session-1')).toHaveLength(
       runningMessages.length
     )
 
     const setup = await createTestService()
     await seedSession(setup.storage)
     const baseTime = Date.now()
-    await saveMessages(setup.storage, [
-      buildMessage({ id: 'old-user', role: 'user', timestamp: baseTime }),
-      buildMessage({ id: 'old-assistant', role: 'assistant', timestamp: baseTime + 1 }),
-      buildMessage({ id: 'latest-user', role: 'user', timestamp: baseTime + 2 }),
-      buildMessage({ id: 'latest-assistant', role: 'assistant', timestamp: baseTime + 3 })
-    ])
+    await seedAiTurn(setup.storage, setup.workspaceRoot, {
+      runId: 'run-1',
+      userMessageId: 'old-user',
+      assistantMessageId: 'old-assistant',
+      userContent: 'old',
+      assistantContent: 'old reply',
+      createdAt: baseTime
+    })
+    await seedAiTurn(setup.storage, setup.workspaceRoot, {
+      runId: 'run-2',
+      userMessageId: 'latest-user',
+      assistantMessageId: 'latest-assistant',
+      userContent: 'latest',
+      assistantContent: 'latest reply',
+      createdAt: baseTime + 2
+    })
 
     const response = await setup.service.retractLatestTurn({
       sessionId: 'session-1',
@@ -579,31 +619,28 @@ describe('unit ai persistence backend', () => {
 
     expect(response.success).toBe(false)
     expect(response.error).toContain('最新')
-    expect(await setup.storage.chat.getChatMessages('session-1')).toHaveLength(4)
+    expect(await listSessionMessages(setup.service, 'session-1')).toHaveLength(4)
   })
 
   it('retract-latest-turn-removes-user-assistant-run-and-its-message-log', async () => {
     const setup = await createTestService()
     await seedSession(setup.storage)
     const baseTime = Date.now()
-    await saveMessages(setup.storage, [
-      buildMessage({ id: 'kept-user', role: 'user', timestamp: baseTime }),
-      buildMessage({ id: 'kept-assistant', role: 'assistant', timestamp: baseTime + 1 }),
-      buildMessage({ id: 'retract-user', role: 'user', timestamp: baseTime + 2 }),
-      buildMessage({ id: 'retract-assistant', role: 'assistant', timestamp: baseTime + 3 })
-    ])
-    await setup.storage.aiRun.saveRun({
-      id: 'retract-run',
-      sessionId: 'session-1',
+    await seedAiTurn(setup.storage, setup.workspaceRoot, {
+      runId: 'kept-run',
+      userMessageId: 'kept-user',
+      assistantMessageId: 'kept-assistant',
+      userContent: 'keep',
+      assistantContent: 'kept reply',
+      createdAt: baseTime
+    })
+    await seedAiTurn(setup.storage, setup.workspaceRoot, {
+      runId: 'retract-run',
       userMessageId: 'retract-user',
       assistantMessageId: 'retract-assistant',
-      status: 'completed',
-      input: 'retract me',
-      partialAnswer: 'done',
-      finalAnswer: 'done',
-      createdAt: baseTime + 2,
-      updatedAt: baseTime + 3,
-      finishedAt: baseTime + 3
+      userContent: 'retract me',
+      assistantContent: 'done',
+      createdAt: baseTime + 2
     })
     await setup.storage.chatMessageLog.appendBatch({
       sessionId: 'session-1',
@@ -629,22 +666,13 @@ describe('unit ai persistence backend', () => {
     const setup = await createTestService()
     await seedSession(setup.storage)
     const baseTime = Date.now()
-    await saveMessages(setup.storage, [
-      buildMessage({ id: 'retract-user', role: 'user', timestamp: baseTime }),
-      buildMessage({ id: 'retract-assistant', role: 'assistant', timestamp: baseTime + 1 })
-    ])
-    await setup.storage.aiRun.saveRun({
-      id: 'retract-run',
-      sessionId: 'session-1',
+    await seedAiTurn(setup.storage, setup.workspaceRoot, {
+      runId: 'retract-run',
       userMessageId: 'retract-user',
       assistantMessageId: 'retract-assistant',
-      status: 'completed',
-      input: 'replace this message',
-      partialAnswer: 'done',
-      finalAnswer: 'done',
-      createdAt: baseTime,
-      updatedAt: baseTime + 1,
-      finishedAt: baseTime + 1
+      userContent: 'replace this message',
+      assistantContent: 'done',
+      createdAt: baseTime
     })
     await setup.storage.chatMessageLog.appendBatch({
       sessionId: 'session-1',
@@ -673,7 +701,7 @@ describe('unit ai persistence backend', () => {
     await setup.service.deleteSession('session-1')
 
     const sessions = await setup.storage.chat.getChatSessions()
-    const messages = await setup.storage.chat.getChatMessages('session-1')
+    const messages = await listSessionMessages(setup.service, 'session-1')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
     const messageLog = await setup.storage.chatMessageLog.list('session-1')
 
