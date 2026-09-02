@@ -275,6 +275,9 @@ const buildElectronLaunchEnv = (
     delete env.NCURATOR_E2E_MODE
     env.NCURATOR_E2E_OBSERVER = '1'
   }
+  env.NCURATOR_E2E_WINDOW_MODE = windowMode || process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
+  env.NCURATOR_USER_DATA_PATH = userDataDir
+
   for (const [key, value] of Object.entries(extraEnv || {})) {
     env[key] = value
   }

@@ -315,7 +315,9 @@ describe('workbench conversation e2e', () => {
           const imageRemoved =
             (await getImageAttachmentCardByName(page, 'qa-image.png').count()) === 0
           await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.imagePath)
-          await waitForAttachmentCardByName(page, 'qa-image.png')
+          await getImageAttachmentCardByName(page, 'qa-image.png')
+            .first()
+            .waitFor({ state: 'visible' })
 
           const fileCard = getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
             .filter({ hasText: 'workbench-preview.md' })

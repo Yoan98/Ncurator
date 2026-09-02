@@ -32,10 +32,12 @@ describe('settings model e2e', () => {
             message: '通过 UI 创建保留配置和待删除配置。',
             run: async () => {
               await createModelConfigThroughSettingsUi(page, {
+                name: '保留配置',
                 baseUrl: 'https://api.openai.com/v1',
                 apiKey: 'sk-model-delete-active'
               })
               await createModelConfigThroughSettingsUi(page, {
+                name: '待删除配置',
                 baseUrl: 'https://api.deepseek.com/v1',
                 apiKey: 'sk-model-delete-success'
               })
@@ -49,7 +51,7 @@ describe('settings model e2e', () => {
             run: async () => {
               await page
                 .locator('tbody tr')
-                .filter({ hasText: 'https://api.deepseek.com/v1' })
+                .filter({ hasText: '待删除配置' })
                 .locator('button')
                 .last()
                 .click()
@@ -57,7 +59,7 @@ describe('settings model e2e', () => {
               await page.locator('.ant-popover .ant-btn-primary').click()
               await page
                 .locator('tbody tr')
-                .filter({ hasText: 'https://api.deepseek.com/v1' })
+                .filter({ hasText: '待删除配置' })
                 .waitFor({ state: 'detached' })
             }
           })
@@ -89,7 +91,7 @@ describe('settings model e2e', () => {
 
               await page
                 .locator('tbody tr')
-                .filter({ hasText: 'https://api.openai.com/v1' })
+                .filter({ hasText: '保留配置' })
                 .locator('button')
                 .last()
                 .click()
@@ -102,7 +104,7 @@ describe('settings model e2e', () => {
               failedDeleteRowVisible =
                 (await page
                   .locator('tbody tr')
-                  .filter({ hasText: 'https://api.openai.com/v1' })
+                  .filter({ hasText: '保留配置' })
                   .count()) === 1
             }
           })
@@ -110,11 +112,11 @@ describe('settings model e2e', () => {
           return {
             deletedRowVisible: await page
               .locator('tbody tr')
-              .filter({ hasText: 'https://api.deepseek.com/v1' })
+              .filter({ hasText: '待删除配置' })
               .count(),
             activeRowStillVisible: await page
               .locator('tbody tr')
-              .filter({ hasText: 'https://api.openai.com/v1' })
+              .filter({ hasText: '保留配置' })
               .count(),
             deleteFailureVisible,
             failedDeleteRowVisible,
@@ -130,7 +132,7 @@ describe('settings model e2e', () => {
           })
 
           await runtime.assertThat(
-            result.activeRowStillVisible === 1 && result.tableText.includes('OpenAI'),
+            result.activeRowStillVisible === 1 && result.tableText.includes('保留配置'),
             {
               name: 'delete-success-keeps-other-configs',
               message: '删除一条配置不应影响其他配置继续展示。',

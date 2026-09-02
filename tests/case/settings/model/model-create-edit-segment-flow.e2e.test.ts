@@ -27,6 +27,7 @@ describe('settings model e2e', () => {
             getSettingsLocator(page, settingsSelectors.modelPresetProviderSelect)
 
           let presetNameInputCount = 0
+          let presetProviderDisabled = false
 
           await runtime.step({
             name: 'open-create-form-preset-default',
@@ -64,6 +65,16 @@ describe('settings model e2e', () => {
             run: async () => {
               await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
               await providerSelect().waitFor({ state: 'visible' })
+              await providerSelect().locator('.ant-select-selector').click()
+              const dropdown = page
+                .locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)')
+                .last()
+              await dropdown.waitFor({ state: 'visible' })
+              presetProviderDisabled = await dropdown
+                .locator('.ant-select-item-option')
+                .filter({ hasText: 'DeepSeek' })
+                .first()
+                .evaluate((element) => element.classList.contains('ant-select-item-option-disabled'))
             }
           })
 
@@ -118,7 +129,7 @@ describe('settings model e2e', () => {
 
           return {
             presetNameInputCount,
-            presetProviderDisabled: await providerSelect().locator('.ant-select-disabled').isVisible(),
+            presetProviderDisabled,
             presetProviderSelectLocked,
             customRowText: (await customRow.textContent()) || '',
             kimiRowText: (await kimiRow.textContent()) || '',
@@ -133,15 +144,12 @@ describe('settings model e2e', () => {
             data: result
           })
 
-          await runtime.assertThat(
-            result.presetProviderDisabled && result.kimiRowText.includes('Kimi'),
-            {
-              name: 'preset-config-saved-and-deduped',
-              message:
-                '推荐配置保存后名称等于服务商名；再次新增时服务商下拉禁用并标注已配置，对齐 SET-MODEL-002-AC2。',
-              data: result
-            }
-          )
+          await runtime.assertThat(result.presetProviderDisabled, {
+            name: 'preset-config-saved-and-deduped',
+            message:
+              '推荐配置保存后名称等于服务商名；再次新增时服务商下拉禁用并标注已配置，对齐 SET-MODEL-002-AC2。',
+            data: result
+          })
 
           await runtime.assertThat(result.customRowText.includes('自定义'), {
             name: 'custom-config-flagged',

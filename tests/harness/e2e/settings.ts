@@ -167,8 +167,8 @@ const SETTINGS_TARGET_HASHES: Record<SettingsPageTarget, string> = {
 
 const SETTINGS_TARGET_SELECTORS: Record<SettingsPageTarget, string> = {
   general: settingsSelectors.generalPanel,
-  model: settingsSelectors.page,
-  workspace: settingsSelectors.page,
+  model: settingsSelectors.modelPanel,
+  workspace: settingsSelectors.workspacePanel,
   vector: vectorSelectors.page
 }
 
@@ -252,7 +252,8 @@ const readElectronProcessId = async (page: Page): Promise<number | null> =>
 
 const selectDirectoryInNativeDialog = async (
   directoryPath: string,
-  electronProcessId: number | null
+  electronProcessId: number | null,
+  strategy: 'applescript-paste' | 'applescript-type' | 'swift' = 'applescript-paste'
 ): Promise<string> => {
   if (process.platform === 'win32') {
     return await selectDirectoryInWindowsDialog(directoryPath, electronProcessId)
@@ -261,6 +262,71 @@ const selectDirectoryInNativeDialog = async (
   if (!electronProcessId) {
     throw new Error('native directory dialog automation requires Electron process id')
   }
+  if (strategy === 'swift') {
+    const NATIVE_DIALOG_SWIFT_SCRIPT_PATH = path.join(
+      os.tmpdir(),
+      'ncurator-settings-select-directory.swift'
+    )
+    const NATIVE_DIALOG_SWIFT_SCRIPT = `
+import AppKit
+import ApplicationServices
+import Foundation
+
+func postKey(_ keyCode: CGKeyCode, _ flags: CGEventFlags = []) {
+  let source = CGEventSource(stateID: .hidSystemState)
+  guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
+    return
+  }
+  keyDown.flags = flags
+  keyUp.flags = flags
+  keyDown.post(tap: .cghidEventTap)
+  keyUp.post(tap: .cghidEventTap)
+}
+
+let targetPath = CommandLine.arguments[1]
+let processId = pid_t(Int32(CommandLine.arguments[2]) ?? 0)
+let bundleIdentifier = CommandLine.arguments[3]
+
+let beforeFrontmost = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+let processApp = NSRunningApplication(processIdentifier: processId)
+let bundleApp = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first
+let targetApp = processApp ?? bundleApp
+
+if let app = targetApp {
+  app.activate(options: [.activateAllWindows])
+}
+
+Thread.sleep(forTimeInterval: 0.25)
+NSPasteboard.general.clearContents()
+NSPasteboard.general.setString(targetPath, forType: .string)
+
+postKey(5, [.maskCommand, .maskShift])
+Thread.sleep(forTimeInterval: 0.6)
+postKey(9, [.maskCommand])
+Thread.sleep(forTimeInterval: 0.15)
+postKey(36)
+Thread.sleep(forTimeInterval: 0.8)
+postKey(36)
+Thread.sleep(forTimeInterval: 0.15)
+
+let afterFrontmost = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+print("frontmost-before=\\(beforeFrontmost); frontmost-after=\\(afterFrontmost); target-app=\\(targetApp?.localizedName ?? "none")")
+`
+    await writeFile(NATIVE_DIALOG_SWIFT_SCRIPT_PATH, NATIVE_DIALOG_SWIFT_SCRIPT, 'utf8')
+    const output = await execFileAsync(
+      '/usr/bin/swift',
+      [
+        NATIVE_DIALOG_SWIFT_SCRIPT_PATH,
+        directoryPath,
+        String(electronProcessId),
+        MACOS_ELECTRON_BUNDLE_ID
+      ],
+      { timeout: 30_000 }
+    )
+    return `${output.stdout}\n${output.stderr}`.trim()
+  }
+
   await writeFile(NATIVE_DIALOG_APPLESCRIPT_PATH, NATIVE_DIALOG_APPLESCRIPT, 'utf8')
   const output = await execFileAsync(
     '/usr/bin/osascript',
@@ -269,7 +335,8 @@ const selectDirectoryInNativeDialog = async (
       directoryPath,
       String(electronProcessId),
       MACOS_ELECTRON_BUNDLE_ID,
-      MACOS_ELECTRON_PROCESS_NAME
+      MACOS_ELECTRON_PROCESS_NAME,
+      strategy === 'applescript-type' ? 'type' : 'paste'
     ],
     {
       timeout: 30_000
@@ -320,10 +387,19 @@ export const readWorkspaceIdFromSettingsCard = async (
   return testId.slice(prefix.length)
 }
 
+export const waitForSettingsAppReady = async (page: Page): Promise<void> => {
+  await page.waitForFunction(() => Boolean(window.api))
+  await page.waitForFunction(async () => {
+    const status = await window.api.appStartupGetStatus()
+    return status.mode === 'normal'
+  })
+}
+
 export const navigateToSettingsSection = async (
   page: Page,
   section: SettingsPageTarget
 ): Promise<void> => {
+  await waitForSettingsAppReady(page)
   await page.evaluate((nextHash: string) => {
     window.location.hash = nextHash
   }, SETTINGS_TARGET_HASHES[section])
@@ -413,19 +489,34 @@ export const bindWorkspaceRootThroughSettingsUi = async (
   await rootPathButton.waitFor({ state: 'visible' })
   const diagnostics: string[] = []
   const electronProcessId = await readElectronProcessId(page)
-  if (process.platform === 'win32') {
-    await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
-  }
+
+  // E2E observer intercepts pick-directory IPC on every platform; prefer this over native UI automation.
+  await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
   await rootPathButton.click()
-  try {
-    if (process.platform !== 'win32') {
-      await page.waitForTimeout(1_000)
-      diagnostics.push(await selectDirectoryInNativeDialog(rootPath, electronProcessId))
+  if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
+
+  if (process.platform === 'darwin') {
+    const strategies: Array<'applescript-paste' | 'applescript-type' | 'swift'> = [
+      'applescript-paste',
+      'applescript-type',
+      'swift'
+    ]
+    for (const strategy of strategies) {
+      try {
+        await page.waitForTimeout(1_000)
+        diagnostics.push(
+          await selectDirectoryInNativeDialog(rootPath, electronProcessId, strategy)
+        )
+        if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
+      } catch (error) {
+        diagnostics.push(error instanceof Error ? error.message : String(error))
+      }
+      await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
+      await rootPathButton.click()
+      if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
     }
-    if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
-  } catch (error) {
-    diagnostics.push(error instanceof Error ? error.message : String(error))
   }
+
   throw new Error(
     [
       `failed to select workspace root path through native dialog: ${rootPath}`,

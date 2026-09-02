@@ -646,9 +646,7 @@ export const bindWorkspaceRootThroughSettingsUi = async (
     const strategy = strategies[Math.min(attempt, strategies.length - 1)]
     if (attempt > 0 && (await waitForSelectedRootPath(1_000))) return
     const electronProcessId = await readElectronProcessId(page)
-    if (process.platform === 'win32') {
-      await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
-    }
+    await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
     await rootPathButton.click()
     try {
       const output =

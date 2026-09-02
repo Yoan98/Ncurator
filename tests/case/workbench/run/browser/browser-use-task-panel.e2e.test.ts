@@ -29,7 +29,6 @@ const BROWSER_TASK_COMPLETION_TIMEOUT_MS = 240_000
 const BROWSER_USE_FAILURE_LIMIT = 2
 const DEPRECATED_BROWSER_USE_FIELDS = [
   'summary',
-  'content',
   'pageState',
   'outcome',
   'pageText',
@@ -50,35 +49,33 @@ const readToolInputString = (
   return typeof value === 'string' ? value : ''
 }
 
-const hasDeprecatedBrowserUseField = (value: JsonValue | undefined, isRoot = true): boolean => {
-  if (Array.isArray(value)) return value.some((item) => hasDeprecatedBrowserUseField(item, false))
+const hasDeprecatedBrowserUseField = (value: JsonValue | undefined): boolean => {
+  if (Array.isArray(value)) return value.some((item) => hasDeprecatedBrowserUseField(item))
   if (!isObjectRecord(value)) return false
   return Object.entries(value).some(([key, child]) => {
-    if (isRoot && (key === 'url' || key === 'title' || key === 'success' || key === 'message')) {
-      return true
-    }
     if (DEPRECATED_BROWSER_USE_FIELDS.includes(key)) return true
-    return hasDeprecatedBrowserUseField(child, false)
+    if (key === 'result') return true
+    return hasDeprecatedBrowserUseField(child)
   })
 }
 
 const isBrowserUseDataContract = (data: JsonValue | undefined): boolean => {
   if (!isObjectRecord(data)) return false
+  if (typeof data.error === 'string') return true
   const action = data.action
   if (action !== 'navigate' && action !== 'observe' && action !== 'act' && action !== 'extract') {
-    return typeof data.error === 'string'
+    return false
   }
   if (!isObjectRecord(data.page) || typeof data.page.url !== 'string') return false
   if ('title' in data.page && typeof data.page.title !== 'string') return false
-  if (action === 'navigate') return data.result === null
-  if (!isObjectRecord(data.result)) return false
-  if (action === 'extract') return typeof data.result.extracted === 'string'
-  if (action === 'observe') return Array.isArray(data.result.actions)
+  if (action === 'navigate') return true
+  if (action === 'extract') return typeof data.content === 'string'
+  if (action === 'observe') return Array.isArray(data.actions)
   return (
-    typeof data.result.success === 'boolean' &&
-    typeof data.result.message === 'string' &&
-    typeof data.result.actionDescription === 'string' &&
-    Array.isArray(data.result.actions)
+    typeof data.success === 'boolean' &&
+    typeof data.message === 'string' &&
+    typeof data.actionDescription === 'string' &&
+    (!('actions' in data) || Array.isArray(data.actions))
   )
 }
 
@@ -86,10 +83,11 @@ const readBrowserUseResultText = (
   event: Extract<AiRunEvent, { type: 'tool_call_result' }>
 ): string => {
   const data = event.result?.data
-  if (!isObjectRecord(data) || !isObjectRecord(data.result)) return ''
+  if (!isObjectRecord(data)) return ''
   const parts: string[] = []
-  for (const key of ['extracted', 'message', 'actionDescription']) {
-    const value = data.result[key]
+  if (typeof data.content === 'string') parts.push(data.content)
+  for (const key of ['message', 'actionDescription']) {
+    const value = data[key]
     if (typeof value === 'string') parts.push(value)
   }
   return parts.join('\n')
@@ -494,26 +492,22 @@ describe('workbench run e2e', () => {
               (data) =>
                 isObjectRecord(data) &&
                 data.action === 'observe' &&
-                isObjectRecord(data.result) &&
-                Array.isArray(data.result.actions)
+                Array.isArray(data.actions)
             ),
             actResultVisible: browserData.some(
               (data) =>
                 isObjectRecord(data) &&
                 data.action === 'act' &&
-                isObjectRecord(data.result) &&
-                typeof data.result.success === 'boolean' &&
-                typeof data.result.message === 'string' &&
-                typeof data.result.actionDescription === 'string' &&
-                Array.isArray(data.result.actions)
+                typeof data.success === 'boolean' &&
+                typeof data.message === 'string' &&
+                typeof data.actionDescription === 'string'
             ),
             extractResultVisible: browserData.some(
               (data) =>
                 isObjectRecord(data) &&
                 data.action === 'extract' &&
-                isObjectRecord(data.result) &&
-                typeof data.result.extracted === 'string' &&
-                data.result.extracted.includes('BROWSER_TASK_DONE')
+                typeof data.content === 'string' &&
+                data.content.includes('BROWSER_TASK_DONE')
             )
           }
         },

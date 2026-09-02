@@ -28,25 +28,25 @@ const slideSpec = (title: string, body: string, accent: string) => ({
     {
       type: 'shape' as const,
       shape: 'rect' as const,
-      bounds: { x: 100, y: 78, width: 24, height: 170 },
+      bounds: { x: 72, y: 64, width: 20, height: 120 },
       style: { fill: accent }
     },
     {
       type: 'text' as const,
       text: title,
-      bounds: { x: 170, y: 96, width: 1500, height: 100 },
+      bounds: { x: 112, y: 72, width: 760, height: 72 },
       style: { color: '#17324D', fontFamily: 'Microsoft YaHei', fontSize: 36, bold: true }
     },
     {
       type: 'text' as const,
       text: body,
-      bounds: { x: 170, y: 330, width: 1450, height: 150 },
+      bounds: { x: 112, y: 180, width: 760, height: 120 },
       style: { color: '#334155', fontFamily: 'Microsoft YaHei', fontSize: 18 }
     },
     {
       type: 'line' as const,
-      from: { x: 170, y: 820 },
-      to: { x: 1620, y: 820 },
+      from: { x: 112, y: 468 },
+      to: { x: 872, y: 468 },
       color: accent,
       width: 2
     }

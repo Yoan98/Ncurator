@@ -100,7 +100,11 @@ const ModelSettingsPanel: React.FC = () => {
       setMode('preset')
       setSelectedProviderId(preset.providerId)
       form.resetFields()
-      form.setFieldsValue({ api_key: record.api_key })
+      const registry = getProviderRegistryEntry(preset.providerId)
+      form.setFieldsValue({
+        api_key: record.api_key,
+        providerKind: registry?.providerKind || 'openai-compatible'
+      })
     } else {
       setMode('custom')
       setSelectedProviderId(null)
