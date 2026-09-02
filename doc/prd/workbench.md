@@ -125,11 +125,13 @@
 
 #### WB-CORE-007 网页信息可用于任务推进
 
-- 系统行为：默认或宽松偏好允许 AI 搜索网页、读取指定网页，并在需要登录或人工操作时使用内置浏览器继续任务；严谨偏好不得把外部网页作为资料内事实依据。
+- 系统行为：默认或宽松偏好允许 AI 通过后台 `web_search` 搜索网页、读取指定网页正文，并在需要登录或人工操作时使用 `browser_use` 打开右侧内置浏览器继续任务；严谨偏好不得把外部网页作为资料内事实依据。`web_search` 是 Human 图后台工具，结果只回模型与过程层，不得自动展开右侧 `search_list` 面板，也不得替代 `browser_use` 的可见浏览器交互。
 - 验收：
   - `WB-CORE-007-AC1` 用户要求查找公开网页信息时，AI 可搜索并读取搜索结果或用户给出的 URL，再用所得内容完成回答或产物。
   - `WB-CORE-007-AC2` 网页搜索、读取或浏览失败时，系统明确说明失败边界，不伪造网页内容。
   - `WB-CORE-007-AC3` 严谨偏好下，外部网页能力不会绕过资料范围限制。
+  - `WB-CORE-007-AC4` AI 调用 `web_search` 时，Workbench 不得因工具结果自动打开右侧「搜索结果」列表；过程层可展示“搜索网页 / 抓取网页”等状态，但右侧面板保持原状，除非用户处于 Composer 搜索模式或 AI 触发 `browser_use`。
+  - `WB-CORE-007-AC5` `web_search` 的外网抓取在后台 headless CDP host 中完成，用户不得看到带窗框的独立浏览器窗口或主界面被网页内容遮挡。
 
 #### WB-CORE-008 Workbench 窗口层与业务内容分层
 
@@ -472,7 +474,7 @@
 
 #### WB-PANEL-004 内置浏览器面板
 
-- 系统行为：每个浏览器 Tab 对应独立 Electron `WebContentsView`，全部视图共享持久分区 `persist:ncurator-browser`。浏览器 Runtime、界面 Presentation 和 AI Automation 相互独立：切换文件、折叠右侧栏或切换会话时，只从主窗口显示树移除 View，不关闭 `webContents`，不改变 AI 的 CDP target；重新显示时挂载同一个 View 并展示后台操作后的实时最终状态。浏览器导航栏提供后退、前进、刷新/停止、URL 输入、输入框内“前往”按钮和更多操作；浏览器更多菜单及新增标签页菜单使用主窗口原生子窗口承载自绘内容，覆盖在浏览器上方且不隐藏浏览器。
+- 系统行为：每个浏览器 Tab 对应独立 Electron `WebContentsView`，全部视图共享持久分区 `persist:ncurator-browser`。该面板只服务用户手动开标签和 `browser_use`；`web_search` 的外网抓取使用独立隐藏 CDP host，不得复用或污染本面板。浏览器 Runtime、界面 Presentation 和 AI Automation 相互独立：切换文件、折叠右侧栏或切换会话时，只从主窗口显示树移除 View，不关闭 `webContents`，不改变 AI 的 CDP target；重新显示时挂载同一个 View 并展示后台操作后的实时最终状态。浏览器导航栏提供后退、前进、刷新/停止、URL 输入、输入框内“前往”按钮和更多操作；浏览器更多菜单及新增标签页菜单使用主窗口原生子窗口承载自绘内容，覆盖在浏览器上方且不隐藏浏览器。
 - 验收：
   - `WB-PANEL-004-AC1` 收到 AI 浏览器面板事件后，右侧显示事件指定的浏览器 Tab；面板动画期间不逐帧缩放原生 View，动画结束后按最终 bounds 一次挂载并与正文视口对齐。
   - `WB-PANEL-004-AC2` AI 通过 `browser_use` 的 `navigate` 动作传入 URL 时，右侧内置浏览器先导航到该 URL；`extract / observe / act` 只作用于当前页面、不会跳转，需要切换页面时先调用 `navigate`。

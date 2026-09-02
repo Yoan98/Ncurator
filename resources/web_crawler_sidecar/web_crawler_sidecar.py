@@ -18,6 +18,7 @@ MAX_SEARCH_ATTEMPTS = 3
 SEARCH_RETRY_BASE_DELAY_SECONDS = 0.4
 SEARCH_RETRY_MAX_DELAY_SECONDS = 1.5
 SEARCH_RETRY_JITTER_SECONDS = 0.2
+SIDECAR_REQUEST_TIMEOUT_SECONDS = 50
 FIT_MARKDOWN_THRESHOLD = 0.48
 LINK_PREVIEW_MAX_LINKS = 120
 LINK_PREVIEW_TIMEOUT_SECONDS = 5
@@ -436,13 +437,20 @@ async def process_requests() -> None:
                             ),
                             config=browser_config,
                         )
-                        await crawler.start()
-                    data = await handle_crawl(crawler, url, topic)
+                        await asyncio.wait_for(
+                            crawler.start(), timeout=SIDECAR_REQUEST_TIMEOUT_SECONDS
+                        )
+                    data = await asyncio.wait_for(
+                        handle_crawl(crawler, url, topic),
+                        timeout=SIDECAR_REQUEST_TIMEOUT_SECONDS,
+                    )
                 else:
                     query = read_string(input_payload.get("query"))
                     if not query:
                         raise ValueError("missing search query")
-                    data = await handle_search(query)
+                    data = await asyncio.wait_for(
+                        handle_search(query), timeout=SIDECAR_REQUEST_TIMEOUT_SECONDS
+                    )
                 response = {"id": request_id, "ok": True, "data": data}
             except CrawlFailure as error:
                 response = {

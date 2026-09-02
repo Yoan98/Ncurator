@@ -604,6 +604,7 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     return await new Promise<JsonObject>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(request.id)
+        this.childStartupPromise = undefined
         void this.stopChild()
         reject(new Error('web crawler sidecar request timeout'))
       }, this.requestTimeoutMs)

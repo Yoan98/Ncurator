@@ -12,6 +12,7 @@ import {
   loadWorkbenchLiveModelEnv,
   navigateToWorkbench,
   prepareWorkbenchWorkspaceThroughUi,
+  selectWorkbenchModel,
   sendWorkbenchMessage,
   switchWorkbenchMode,
   waitForWorkbenchAiRunCompletion,
@@ -184,7 +185,7 @@ describe('workbench conversation e2e', () => {
 
           const providerGroupVisible = await menu
             .locator('button[aria-expanded]')
-            .filter({ hasText: 'Live Model' })
+            .filter({ hasText: liveEnv.modelName })
             .first()
             .isVisible()
 
@@ -209,6 +210,7 @@ describe('workbench conversation e2e', () => {
             rootPath: workspace.rootPath
           })
           await switchWorkbenchMode(page, '大聪明')
+          await selectWorkbenchModel(page, liveEnv.modelName, { preferCustom: true })
           const successStartedAt = Date.now()
           await sendWorkbenchMessage(page, '不要调用任何工具，只回复“测试成功”。')
           const successEvidence = await waitForWorkbenchAiRunCompletion(

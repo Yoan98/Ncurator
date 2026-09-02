@@ -89,7 +89,6 @@ import {
   createSearchProcessGroup,
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
-  extractSearchResultsFromToolOutput,
   formatRelativeTime,
   getAttachmentTypeLabel,
   getSearchResultFileRef,
@@ -1532,28 +1531,6 @@ const ChatPage: React.FC = () => {
     [persistUiStateForKey]
   )
 
-  const persistBackgroundSearchResults = useCallback(
-    (sessionId: string, query: string, results: SearchResult[]): void => {
-      const panel: WorkbenchContentPanelState = {
-        kind: 'search_list',
-        title: '搜索结果',
-        query,
-        results,
-        tokens: []
-      }
-      void updateBackgroundPanelState(sessionId, (state) => ({
-        ...state,
-        panel: {
-          ...state.panel,
-          activeTabId: null,
-          collapsed: false,
-          fallbackState: panel
-        }
-      }))
-    },
-    [updateBackgroundPanelState]
-  )
-
   const persistBackgroundBrowserTab = useCallback(
     (sessionId: string, browserTabId: string): void => {
       void window.api.browserPanelStateGet({ tabId: browserTabId }).then((response) => {
@@ -2793,12 +2770,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (eventSessionId !== currentSessionIdRef.current) {
-        if (event.type === 'tool_call_result') {
-          const searchResults = extractSearchResultsFromToolOutput(event.result?.data ?? null)
-          if (eventSessionId && searchResults.length > 0) {
-            persistBackgroundSearchResults(eventSessionId, event.toolName, searchResults)
-          }
-        } else if (event.type === 'browser_panel_opened' && eventSessionId) {
+        if (event.type === 'browser_panel_opened' && eventSessionId) {
           persistBackgroundBrowserTab(eventSessionId, event.browserTabId)
         }
         return
@@ -2809,21 +2781,6 @@ const ChatPage: React.FC = () => {
       }
 
       updateTurnForRun(event.runId, (current) => reduceAssistantTurnByRunEvent(current, event))
-
-      if (event.type === 'tool_call_result') {
-        const toolOutput = event.result?.data ?? null
-        const searchResults = extractSearchResultsFromToolOutput(toolOutput)
-        if (searchResults.length > 0) {
-          showContentPanel({
-            kind: 'search_list',
-            title: '搜索结果',
-            query: lastSubmittedInputRef.current || event.toolName,
-            results: searchResults,
-            tokens: []
-          })
-        }
-        return
-      }
 
       if (event.type === 'browser_panel_opened') {
         void openBrowserTab(event.browserTabId)

@@ -17,6 +17,7 @@ import type {
   WebSearchLinkItem,
   WebSearchSearchOutput
 } from './outputTypes'
+import { fetchLoopbackPage, isLoopbackHttpUrl } from './loopbackFetch'
 
 const webSourceService = new WebSourceService()
 
@@ -192,8 +193,11 @@ export const webToolFamily: ToolFamilyDefinition = {
                 return payload
               }
               try {
-                const result = await service.crawl({ url: crawlUrl, topic: crawlUrl })
-                const payload = buildFetchOutput({ result })
+                const payload = isLoopbackHttpUrl(crawlUrl)
+                  ? await fetchLoopbackPage(crawlUrl)
+                  : buildFetchOutput({
+                      result: await service.crawl({ url: crawlUrl, topic: crawlUrl })
+                    })
                 session.succeed(
                   undefined,
                   buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: true, data: payload })

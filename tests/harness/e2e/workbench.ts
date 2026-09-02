@@ -483,7 +483,7 @@ export const configureLiveModelThroughSettingsUi = async (
   await navigateToSettingsSection(page, 'model')
   await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
   await getSettingsLocator(page, settingsSelectors.modelTypeCustom).click()
-  await getSettingsLocator(page, settingsSelectors.modelNameInput).fill('Live Model')
+  await getSettingsLocator(page, settingsSelectors.modelNameInput).fill(env.modelName)
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
     state: 'visible'
   })
@@ -491,12 +491,12 @@ export const configureLiveModelThroughSettingsUi = async (
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).fill(env.baseUrl)
   await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(env.apiKey)
   await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
-  await page.locator('tbody tr').filter({ hasText: 'Live Model' }).waitFor({
+  await page.locator('tbody tr').filter({ hasText: env.modelName }).waitFor({
     state: 'visible'
   })
 
   await navigateToWorkbench(page, { waitForSessionListText: false })
-  await selectWorkbenchModel(page, env.modelName)
+  await selectWorkbenchModel(page, env.modelName, { preferCustom: true })
 }
 
 export const createWorkspaceThroughSettingsUi = async (
@@ -1259,16 +1259,22 @@ export const readWorkbenchExecutionPermissionSelection = async (page: Page): Pro
   return label
 }
 
-export const selectWorkbenchModel = async (page: Page, modelName: string): Promise<void> => {
+export const selectWorkbenchModel = async (
+  page: Page,
+  modelName: string,
+  selection?: { preferCustom?: boolean }
+): Promise<void> => {
   const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
   await modelSelect.click()
   const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
   await menu.waitFor({ state: 'visible' })
 
-  const presetOption = menu.getByRole('option').filter({ hasText: modelName }).first()
-  if (await presetOption.isVisible().catch(() => false)) {
-    await presetOption.click()
-    return
+  if (!selection?.preferCustom) {
+    const presetOption = menu.getByRole('option').filter({ hasText: modelName }).first()
+    if (await presetOption.isVisible().catch(() => false)) {
+      await presetOption.click()
+      return
+    }
   }
 
   const customEntry = menu.locator(
@@ -1280,12 +1286,12 @@ export const selectWorkbenchModel = async (page: Page, modelName: string): Promi
   const searchInput = menu.locator('input[placeholder="搜索模型"]')
   await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
   await searchInput.fill(modelName)
-  const options = menu.getByRole('option')
-  const modelOption = options.filter({ hasText: modelName }).first()
+  const modelOptions = menu.getByRole('option')
+  const modelOption = modelOptions.filter({ hasText: modelName }).first()
   try {
     await modelOption.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
   } catch {
-    const optionTexts = (await options.allTextContents()).map((item) => item.trim()).filter(Boolean)
+    const optionTexts = (await modelOptions.allTextContents()).map((item) => item.trim()).filter(Boolean)
     throw new Error(
       [
         `AI_LIVE_PRIMARY_MODEL_NAME="${modelName}" was not found in the Workbench model menu.`,
@@ -2028,6 +2034,15 @@ export const waitForWorkbenchSearchResults = async (page: Page): Promise<Locator
     { timeout: WORKBENCH_E2E_TIMEOUT_MS }
   )
   return results
+}
+
+export const assertWorkbenchLocalSearchResultsPanelHidden = async (page: Page): Promise<void> => {
+  const results = getWorkbenchLocator(page, workbenchSelectors.searchResults)
+  const count = await results.count()
+  if (count === 0) return
+  const visible = await results.isVisible().catch(() => false)
+  if (!visible) return
+  throw new Error('Composer search results panel should stay hidden during web_search AI runs')
 }
 
 export const assertNoWorkbenchFakeSignals = async (

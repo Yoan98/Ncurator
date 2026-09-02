@@ -7,7 +7,8 @@ import {
   collectWorkbenchAiRunEvents,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
-  waitForLatestAssistantFinalAnswerText
+  waitForLatestAssistantFinalAnswerText,
+  waitForWorkbenchAiRunCompletion
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'interrupted-task-resume-flow'
@@ -54,7 +55,7 @@ describe('workbench run e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
 
           await sendWorkbenchMessage(page, INITIAL_PROMPT)
           const firstRunStarted = await waitForRunEvent({
@@ -91,13 +92,13 @@ describe('workbench run e2e', () => {
             matches: (event): event is Extract<AiRunEvent, { type: 'run_started' }> =>
               event.type === 'run_started' && event.input === RESUME_PROMPT
           })
-          await waitForRunEvent({
+          await waitForWorkbenchAiRunCompletion(
             runtime,
-            name: 'resumed_run_completed',
-            runId: resumedRunStarted.runId,
-            matches: (event): event is Extract<AiRunEvent, { type: 'run_completed' }> =>
-              event.type === 'run_completed'
-          })
+            resumedRunStarted.createdAt,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
           const finalAnswerText = await waitForLatestAssistantFinalAnswerText(page)
 
           return {

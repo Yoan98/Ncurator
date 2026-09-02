@@ -4,6 +4,7 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
+  assertWorkbenchLocalSearchResultsPanelHidden,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
@@ -108,6 +109,7 @@ describe('workbench run e2e', () => {
             }
           )
           await assertNoWorkbenchFakeSignals(runtime)
+          await assertWorkbenchLocalSearchResultsPanelHidden(runtime.page)
         }
       })
     },
