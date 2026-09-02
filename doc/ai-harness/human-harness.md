@@ -6,11 +6,73 @@ human graph 的消息与上下文设计约束。修改 `src/main/services/ai/hum
 
 ## 1. Graph 流转
 
-<!-- TODO：细化 -->
-<!-- human graph 节点：context_budget / context_compaction / brain / dispatch / learning / plan / hand -->
-<!-- 流转图 + 各节点职责（谁写 log、谁改 runtime cache、谁调模型） -->
-<!-- dispatch 路由：learn_skill → learning；update_plan → plan；其余 → hand -->
-<!-- 每轮 brain 前必过 context_budget -->
+human graph 是单次 AI run 的 LangGraph 编排；**每轮调主模型前必过 `context_budget`**。节点只通过 `AiRunContext.appendMessageLog` 写 transcript，通过 `HumanRuntimeCache.messages` 维护 brain 侧运行时消息序。
+
+### 1.1 流转图
+
+```mermaid
+flowchart TD
+  START([START]) --> CB[context_budget]
+  CB -->|超预算且可压缩| CC[context_compaction]
+  CB -->|继续| BR[brain]
+  CC --> CB
+  BR -->|无 tool_calls| FD[finalizeDelivery → END]
+  BR -->|有 tool_calls| DP[dispatch]
+  DP -->|learn_skill| LN[learning]
+  DP -->|update_plan| PN[plan]
+  DP -->|其余工具| HN[hand]
+  LN --> CB
+  PN --> CB
+  HN --> CB
+```
+
+**循环主干**：`context_budget → brain → dispatch → (learning | plan | hand) → context_budget`。
+
+### 1.2 节点职责
+
+| 节点 | 调模型 | 写 log | 改 runtime cache |
+|------|--------|--------|------------------|
+| `context_budget` | 否 | 首次进 brain 时写 `user` | 判定 compaction；不拼消息 |
+| `context_compaction` | 是（压缩模型） | `compaction_checkpoint` | **整段替换** messages（§5） |
+| `brain` | 是（主模型） | `thinking_*` + `assistant`；交付经 `finalizeDelivery` | append assistant；refresh 当前 build user |
+| `dispatch` | 否 | 否 | 消费 `tool_calls` 队列，路由下一 stage |
+| `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`**（目标态） | 加载 skill 工具；refresh build user 技能块 |
+| `plan` | 否 | `tool` + `plan_updated` | 更新 state.plan；refresh build user 计划块 |
+| `hand` | 否 | `tool`（+ 可选 `images[]`） | append ToolMessage；`read_image` 后 append 多模态 HumanMessage |
+| `finalizeDelivery` | 否 | `finalizing_started` + 交付 `assistant` | 完成 run；docx/ppt 落盘 side effect |
+
+### 1.3 dispatch 路由
+
+`dispatch` 是 **`tool_calls` 队列的唯一消费者**，严格按模型返回顺序处理：
+
+| `toolName` | 目标节点 | 批处理 |
+|------------|----------|--------|
+| `learn_skill` | `learning` | 单次仅处理队首一条 |
+| `update_plan` | `plan` | 连续同类 call 合并一批 |
+| 其余 | `hand` | 连续同类 call 合并一批 |
+
+`learning` / `plan` / `hand` 执行完后：`stage → context_budget`（不是直接回 brain）。  
+`brain` 在 schema 校验前对全部 call 做 `normalizeToolCallArgs`；`learn_skill` / `update_plan` 的参数校验由各节点负责。
+
+### 1.4 启动与 cache 初始化
+
+新 run 启动时（目标态）：
+
+1. 读全 session `chat_session_message_log` → `projectMessageLogRecords` 得 tail + plan + checkpoint。
+2. 拼 runtime messages：`[System] + history tail + [User built_current]`（§3.2 resume 形态）。
+3. `graph.invoke` 从 `context_budget` 进入循环。
+
+> **重构对齐项**：当前 `humanGraph.ts` 初始化顺序为 `System → tail → User`（user 在末尾 append，与 resume 目标一致）；同 run 稳态 brain 内仍通过 `currentUserMessageIndex` refresh **当前 run** 的 build user。跨 run 多条 build user 的完整形态见 §6。
+
+### 1.5 runtime cache 要点
+
+| 字段 | 用途 |
+|------|------|
+| `messages` | brain 请求的 LangChain 消息序 |
+| `currentUserMessageIndex` | 当前 run 的 build user 下标（同 run refresh；resume 时为末尾） |
+| `currentUserLogAppended` | 本 run 是否已写 log `user` |
+| `messageLogRecords` | 启动时快照；compaction 后刷新 |
+| `lastBrainInputTokens` | 预算估算；compaction 后需 fresh usage |
 
 ---
 
@@ -339,12 +401,73 @@ annotation 扫描用**完整** log；tail 用 checkpoint **截断后**的行。
 
 ### 3.4 UI 投影
 
-<!-- TODO：对话轮次：log 按 run 切分 -->
-<!-- TODO：projectProcessGroups：thinking / learning / tool / compaction -->
+UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投影（目标态）。重构完成前 Renderer 可能仍用 `chat_message` 作气泡缓存，以 log 为准对齐。
+
+#### 对话轮次（按 run 切分）
+
+| UI 元素 | log 来源 | 规则 |
+|---------|----------|------|
+| 用户气泡 | `kind=user`，按 `run_id` | 展示 `content` + `context`（`@` 引用、附件、工作区） |
+| 助手气泡 | 该 run 最后一条交付 `assistant`（`toolCalls: []`） | 经 `finalizeDelivery` 写入；展示 Markdown 正文 |
+| 运行态 / 错误 | `ai_run` | `status`、`error`、`failure_code`、审批、流式草稿 |
+| 文件改动 | `ai_file_change` | Workbench diff / 回退；不进对话正文 |
+
+同一 session 多 run：按 `run_id` + `seq` 排序；resume 产生新 run，用户可见**多条** user 气泡，对应 brain 侧多条 build user（§6）。
+
+#### 过程层（单 run）
+
+`projectProcessGroups({ runId, entries })` 扫描**该 run** 的 log 条目：
+
+| log 信号 | UI 过程组 |
+|----------|-----------|
+| `thinking_started` … `thinking_completed` 之间的 `assistant` | Thought 文本流（`processThoughts`） |
+| `learning_started` / `learning_completed` | learning 组（按 skillId） |
+| `compaction_checkpoint` | compaction 组 |
+| `tool`（排除 `learn_skill` / `update_plan`） | tool 组；展示 toolName + 入参 snapshot |
+| `plan_updated` | 计划条（非过程组；run snapshot 扫描 annotation） |
+| `finalizing_started` | 清空计划条 |
+
+控制类工具（`learn_skill`、`update_plan`）**不出** tool 过程组；learning 走专用 learning 组。
+
+#### 流式与终态
+
+- brain 流式：`assistant_brain_stream_*` 事件；收到 tool 分片后归类为 Thought。
+- 无 tool_calls 且流正常关闭 → Answer，触发 `finalizeDelivery`。
+- 网络中断等：草稿仅 `ai_run.partial_answer`；**不进 log、不参与 resume**（§6.5）。
 
 ### 3.5 多模态投影
 
-<!-- TODO：tool.images[] → 合成 HumanMessage → projectMessagesForMainModel -->
+图片**不进 ToolMessage**；log 的 `tool.images[]` 只存路径引用，brain 请求前再投影。
+
+#### 写入（hand / read_image）
+
+1. 工具执行成功 → `buildModelToolResultDelivery` 得文本 → 写 log `tool`（`content` + 可选 `images[]`）。
+2. runtime cache：`ToolMessage` + 若有多图 → **紧随其后** `createImageReferenceMessage(images)`（合成 HumanMessage）。
+3. `read_image`：本地源按 SHA-256 缓存为 `.ncurator/runtime/assets/read_image-cache/<hash>-v1.webp`；log 存缓存路径 ref。
+
+#### 读路径（发给主模型）
+
+`projectMessagesForMainModel(messages)` 在每次 brain 请求前执行：
+
+1. 扫描含 `ncurator-image-ref:` 的多模态 HumanMessage。
+2. 本地路径 → 临时读盘转 `data:` URL；`http(s)` 保留原 URL。
+3. **配额裁剪**（减少前缀抖动）：
+   - 最多保留 **600** 张 inline 图；
+   - 本地 data URL 估算体积最多 **20 MiB**；
+   - 数量超限：从最旧起按 ≥20 张批次 evict；
+   - 体积超限：一次至少释放 10 MiB。
+4. 被 evict 的位置保留文本占位，提示可再调 `read_image`。
+
+log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为多模态 HumanMessage（与 runtime 一致）。
+
+#### 约束摘要
+
+| 项 | 值 |
+|----|-----|
+| `read_image` 单次 | 1–10 路径 |
+| 源图上限 | 20 MiB / 8192 边 / 6400 万像素 |
+| 请求图上限 | 64 万像素 / 1 MiB（webp 转换后） |
+| ToolMessage 携带图片 | **不支持**；必须合成 HumanMessage |
 
 ---
 
@@ -380,7 +503,7 @@ human harness 通过 **tail 只 append、resume 只 append 新 build user（不�
 | 操作 | 原因 |
 |------|------|
 | **Compaction**（§5） | 摘要写入 `<compacted_history>`；tail 截断重建 |
-| **learn_skill**（§7） | 首条 build user 的 `<active_state>` 技能列表变化 |
+| **learn_skill**（§7） | 当前 run 的 build user 的 `<active_state>` 技能列表变化 |
 
 **resume 不属于打破**：历史保持原样，只在末尾追加新 build user。  
 设计约束：除 §4.3 外，不得 rewrite 已发送的 tail 段；resume 不得替换首条 build user 的 `<task_goal>`。
@@ -510,17 +633,131 @@ seq N  user      content=继续把周报写完    context=当前 Composer   ← 
 
 ## 7. Skill 与 Plan
 
-<!-- TODO：learn_skill → learning 节点 → tool 反馈 + skill_state_updated -->
-<!-- TODO：update_plan → plan 节点 → tool 反馈 + plan_updated -->
-<!-- TODO：active tool 上限与 FIFO → 新 skill_state_updated -->
-<!-- TODO：agent-control：learn_skill / update_plan / read_image -->
+### 7.1 概念
+
+| 概念 | 含义 |
+|------|------|
+| **Skill** | 能力包；`builtin` 默认可 bind；`external` 需 `learn_skill` 后才进入 bindTools |
+| **Tool** | 具体执行入口；归属一个或多个 skill |
+| **agent-control** | 内置 skill，承载 `learn_skill`、`update_plan`、`read_image` |
+
+skill / tool 的 prompt **只声明边界**，不写固定调用顺序（细节见 `tool-design.md` §1）。
+
+### 7.2 learn_skill 流程
+
+```text
+brain 返回 learn_skill
+  → dispatch → learning
+  → learning_started（annotation）
+  → 加载 skill 工具定义到 cache
+  → tool 反馈（loaded / duplicate / unknown / 超限）
+  → learning_completed（annotation）
+  → skill_state_updated（annotation，完整 learnedSkillIds 快照）  ← 目标态
+  → refresh 当前 build user 的 <active_state> 技能列表
+  → context_budget → brain
+```
+
+**active tool 上限**：`HUMAN_MAX_ACTIVE_TOOLS = 30`（含 builtin / agent-control 工具）。新 skill 超限时 **FIFO 淘汰**最早学习的 external skill，写 tool 反馈说明 `evicted=…`。
+
+| 结果 | log | brain |
+|------|-----|-------|
+| 新 skill 加载成功 | `tool` + `skill_state_updated` | replace 当前 build user 技能块 → **打破 §4 前缀缓存** |
+| 重复 / unknown / 超限 | 仅 `tool` | 技能块不变 |
+| 审批 / 取消 | 按 hand 规则 | — |
+
+> **重构对齐项**：当前 `learning` 节点仍写 `chat_session_skill_state`；目标态改为 log 的 `skill_state_updated` annotation 投影（§2.2），并移除独立 skill 表。
+
+### 7.3 update_plan 流程
+
+```text
+brain 返回 update_plan
+  → dispatch → plan
+  → 校验 UPDATE_PLAN_SCHEMA
+  → tool 反馈 + plan_updated（同 batch）
+  → state.memory.plan 更新
+  → refresh 当前 build user 的 plan 行
+  → context_budget → brain
+```
+
+计划项：`{ title, status }`，`status ∈ todo | doing | done`。  
+全 session 扫描 log：**最后**一条 `plan_updated` 生效；`finalizing_started` 后投影清空 plan。
+
+参数非法：写失败 `tool`，plan 不变，回 dispatch 继续队列。
+
+### 7.4 bindTools 集合
+
+每轮 brain 前 `buildAvailableTools`：
+
+- 始终包含 **agent-control** 三工具；
+- 加上 `state.skills.learnedSkillIds` 对应 skill 的全部 tool；
+- 受 active tool 上限约束（§7.2）。
+
+### 7.5 read_image（agent-control）
+
+- 一次 1–10 路径；不调用第二模型。
+- 成功：`tool` + `images[]` ref；runtime append 多模态 HumanMessage（§3.5）。
+- 不预判主模型是否支持 vision；由 provider 处理。
+- 缓存与 evict 规则见 §3.5。
 
 ---
 
 ## 8. 交付与失败
 
-<!-- TODO：Thought vs Answer；finalizeDelivery -->
-<!-- TODO：终态 assistant 写 log；failure 写 ai_run -->
+### 8.1 Thought 与 Answer
+
+| 阶段 | UI 角色 | log |
+|------|---------|-----|
+| brain 流式中、尚无 tool_calls | Answer 草稿（可转 Thought） | 尚未写 assistant |
+| 收到 tool_calls 分片 | Thought | 本轮结束写 `assistant` + `toolCalls` |
+| 无 tool_calls、流正常关闭 | Answer → 交付 | `finalizeDelivery` 写交付 `assistant` |
+
+**判定顺序**：Provider 无 `finish_reason` 时，仍等流关闭后再按完整响应判定。  
+Main **不**强制计划全部 `done` 才允许交付。
+
+### 8.2 finalizeDelivery
+
+无 tool_calls 时 brain 调用：
+
+```text
+applyDeliverySideEffects
+  → docx/ppt 落盘、汇总 ai_file_change
+  → finalizing_started（annotation，清空 plan 投影）
+  → 注入 reference 访问状态到 Markdown
+  → append 交付 assistant（toolCalls: []）
+  → ai_run.status = completed
+```
+
+交付正文进 log **与** `ai_run.final_answer`；Workbench 展示 artifacts / file changes。
+
+### 8.3 内容安全
+
+`content_filter` / 内容安全错误：
+
+- 写 fallback 交付 `assistant`（说明限制 + 已保存文件列表 + 重试提示）；
+- run 仍尽量 `completed`，已 `applied` 的文件变更保留。
+
+### 8.4 失败与可恢复
+
+| 场景 | `failure_code` / 行为 | log / brain |
+|------|------------------------|-------------|
+| 用户停止 | `user_cancelled` | 已写段保留；repair 悬空 tool_calls |
+| 应用重启 | `process_interrupted` | 活动 run 标记 failed；不自动调模型 |
+| 输出截断 | `output_truncated` | 写半截 `assistant` 后失败；可 resume |
+| 图递归上限 | `runtime_limit` | 可 resume |
+| 当前 user 超窗 | `input_too_long` | **不写** log user，不调 brain |
+| 网络 / provider | `recoverable` 类 | 可 resume |
+| 审批拒绝 | hand 写失败 `tool` | 继续 dispatch / brain |
+
+**Resume**（§6）：新建 run；log append `user`；brain append 新 build user；不自动重试 failed run。
+
+### 8.5 与存储的关系
+
+| 数据 | run 失败后 |
+|------|------------|
+| `chat_session_message_log` | append-only，已写行保留 |
+| `ai_file_change`（`applied`） | 保留，Workbench 可预览/回退 |
+| `ai_run.partial_answer` | 仅 UI 草稿，丢弃不参与恢复 |
+| docx apply 事务 | 失败 run discard；成功 apply 已在 finalize 前提交 |
 
 ---
 
@@ -530,8 +767,11 @@ seq N  user      content=继续把周报写完    context=当前 Composer   ← 
 |---------|------|
 | Graph | `src/main/services/ai/human/graph/humanGraph.ts` |
 | Log 投影 | `src/main/services/ai/human/memory/transcript.ts` |
+| 多模态 | `src/main/services/ai/human/memory/multimodal.ts` |
 | Build user | `src/main/services/ai/human/prompts/brain.ts` |
 | Compaction | `src/main/services/ai/human/node/contextCompactionNode/` |
 | Log 存储 | `src/main/services/storage/domains/ChatMessageLogStore.ts` |
 | Resume | `src/main/services/ai/ChatRunService.ts` |
+| 交付 | `src/main/services/ai/human/node/brainNode/finalizeDelivery.ts` |
 | UI 过程投影 | `src/renderer/src/components/workbench/messageLogProjection.ts` |
+| 工具 registry | `src/main/services/ai/human/tools/registry.ts` |

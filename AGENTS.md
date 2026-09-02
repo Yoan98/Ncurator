@@ -4,7 +4,9 @@
 
 ### 1.1 架构相关
 
-- `doc/architecture.md`：涉及项目整体架构、AI 运行时、工具设计思路、模块关系或主流程时阅读。
+- `doc/architecture.md`：项目整体架构、模块关系、领域能力概要。
+- `doc/ai-harness/human-harness.md`：human graph 消息、投影、compaction、resume、brain 上下文。
+- `doc/ai-harness/tool-design.md`：工具 schema、modelResult、统一投递管道。
 - `doc/database.md`：涉及 SQLite、LanceDB、索引、持久化关系或数据库结构时阅读。
 
 ### 1.2 项目整体相关
@@ -31,7 +33,10 @@
 .
 ├── AGENTS.md                         # 根规则、文档入口、目录结构和协作规范
 ├── doc/                              # 项目文档
-│   ├── architecture.md               # 项目总架构，包含 AI 架构和 Docx 架构
+│   ├── architecture.md               # 项目总架构
+│   ├── ai-harness/                   # AI human harness 与工具契约
+│   │   ├── human-harness.md          # 消息、投影、compaction、resume
+│   │   └── tool-design.md            # 工具 schema 与结果投递
 │   ├── database.md                   # SQLite 与 LanceDB 存储说明
 │   ├── release.md                    # 打包、发布和更新
 │   ├── test.md                       # 测试体系和执行规则

@@ -1,6 +1,6 @@
 # NCurator-Desktop 架构
 
-本文是项目唯一架构入口，只描述长期稳定的系统结构、模块职责和设计思路。具体字段、工具 schema、阈值与实现细节以代码和测试为准。应用只支持 macOS 和 Windows。
+本文是项目唯一架构入口，只描述长期稳定的系统结构、模块职责和设计思路。Human harness 消息/投影/compaction/resume、工具契约与投递管道的详细约束见 `doc/ai-harness/`。具体字段、schema、阈值与实现细节以代码和测试为准。应用只支持 macOS 和 Windows。
 
 ## 技术栈
 
@@ -48,118 +48,22 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 ## AI 运行时
 
-AI 架构围绕一次 `run` 展开，由 `human` graph 推进任务。
+AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`context_budget → brain → dispatch → (learning | plan | hand) → …`，无工具调用时 `finalizeDelivery` 结束 run。
 
-```mermaid
-flowchart TD
-    U["用户输入"] --> R["AI Run"]
-    R --> B["context_budget"]
-    B -->|预算正常| C["brain"]
-    B -->|需要压缩| P["context_compaction"]
-    P --> B
-    C -->|learn_skill| L["learning"]
-    C -->|update_plan| D["plan"]
-    C -->|工具调用| H["hand"]
-    C -->|无工具调用| T["最终交付"]
-    L --> B
-    D --> B
-    H --> B
-    T --> R
-```
+**设计文档（修改 AI 行为前必读）**
 
-**节点职责**
+| 文档 | 范围 |
+|------|------|
+| [`doc/ai-harness/human-harness.md`](ai-harness/human-harness.md) | Graph 流转、log 数据源、brain 投影、前缀缓存、compaction、resume、skill/plan、交付与失败 |
+| [`doc/ai-harness/tool-design.md`](ai-harness/tool-design.md) | 工具九条原则、HumanToolSpec、参数规范化、统一投递、渲染格式族 |
 
-- `brain`：原生 function calling，绑定当前可用工具，决定下一步或最终交付。
-- `dispatch`：`tool_calls` 队列的唯一消费者，按模型返回顺序路由至 learning / plan / hand。
-- `learning` / `plan` / `hand`：执行分配的工具调用，写回 `ToolMessage`，继续剩余队列。
-- `context_budget` / `context_compaction`：在调用 Brain 前按“历史 + 当前 user”检查预算；必要时只压缩历史，checkpoint 落库成功后才进入 Brain。
+**稳定结构摘要**
 
-**消息与上下文**
+- **Transcript 真相源**：`chat_session_message_log`（append-only）；`ai_run` 管生命周期与 UI 运行态；`ai_file_change` 管文件域，不进 brain prompt。
+- **Skill / Tool**：builtin skill 默认可 bind；external 需 `learn_skill`；`agent-control` 承载 `learn_skill`、`update_plan`、`read_image`。
+- **搜索模式**：独立存储，不写 session message log。
 
-- 会话级 append-only 的 `chat_session_message_log` 是唯一真相源；模型上下文从记录投影，UI 过程展示亦从记录重建。
-- 每条记录为 `user` / `assistant`（含 `tool_calls`）/ `tool` / `annotation`；user 同时保存该轮工作区、参考资料与附件上下文。`plan_updated` 保存规范化计划，`compaction_checkpoint` 保存摘要和 `coveredThroughSeq`。
-- 新 run 使用最新 checkpoint 投影为“摘要 + checkpoint 后历史”，修复悬空工具边界后再追加当前 user 一次；摘要和被覆盖的完整历史不会同时发送。日志记录永不因恢复或压缩而改写。
-- 图片在记录中只保存路径、MIME、字节数和尺寸；本地图片在请求主模型前才临时投影为 data URL，HTTP(S) 图片保留原地址。工具消息不能携带图片时，紧随其后追加合成的 user 多模态消息。
-- 单次请求最多保留最近 600 张图片，本地 data URL 估算体积最多 20 MiB。数量超限时从最旧图片开始按至少 20 张的批次裁剪；体积超限时一次至少释放 10 MiB，减少频繁改变消息前缀造成的缓存失效。原位置保留可重新调用 `read_image` 的路径占位。
-- `read_image` 对本地源文件按 SHA-256 复用 `.ncurator/runtime/assets/read_image-cache/<64位哈希>-v1.webp`；不放大小图，大图等比压到最多 64 万像素和 1 MiB。运行时目录丢失后，历史消息保留路径占位，需要时重新读取。
-- 中断恢复只依赖消息日志投影：补齐缺失的同 `tool_call_id` 失败 `ToolMessage`，尾部追加新的 user 消息。计划从 `plan_updated` 投影，技能从 `chat_session_skill_state` 读取，产物由 run 和文件修改记录负责；应用重启只把活动 run 标记为 `process_interrupted`，不自动调用模型。
-
-**Skill 与 Tool**
-
-- **Skill**：能力包。builtin 默认可用；external 需 `learn_skill` 加载后才进入 bindTools 集合。
-- **Tool**：具体执行入口，以 `HumanToolSpec` 定义 schema、执行与结果投影。
-- `agent-control` 是内置技能，承载 `learn_skill`、`update_plan` 和 `read_image`；`read_image` 一次接受 1 至 10 个路径，将图片引用按顺序加入主模型下一轮多模态上下文，不调用第二个模型，也不预判主模型是否支持图片。
-- skill / tool 描述只声明能力边界与参数语义，不写固定调用流程。
-
-**交付**
-
-`brain` 公开每次尝试的开始、内容增量、重置、角色归类和完成事件。内容先作为 Markdown 回答流展示；收到工具分片后转为 Markdown Thought。完整响应正常关闭且无工具调用才完成；`tool_calls` 执行后继续，`length/max_tokens` 记为 `output_truncated` 并保留服务端确认的半截 assistant 内容，网络中断草稿只保存在 `ai_run` UI 投影中。Provider 没有给出 `finish_reason` 时，也必须等流正常关闭后再按完整组装结果判断。当前 user 自身超过模型窗口时直接返回 `input_too_long`，不写入消息日志且不调用 Brain。Main 侧不做计划完成度强制拦截。
-
-## 工具设计
-
-AI 通过工具操作本地环境。工具应像「手」：模型指定**位置（锚点）**和**意图（动作）**，工具执行并返回**下一步决策所需的最小可靠反馈**。工具契约（schema + 结果形态）是模型唯一能依赖的语义来源。目的是让AI调用工具时所用即所想，结果预期一致。
-
-**九条原则**
-
-1. **锚点，非重建** — 读写通过稳定引用（nodeId、路径、行号等）定位；不要求模型一次生成深层结构树。
-2. **读写分离、职责单一** — 发现用 read，变更用 write；同一领域少量工具 + `operation` 区分，不为小能力膨胀工具数。
-3. **Schema 即契约** — 参数扁平、语义必填、字段带 describe；校验失败返回可修复错误，不静默改写。模型偶发把嵌套 object/array 再编码成 JSON 字符串时，brain 在 schema 校验前经统一的 `normalizeToolCallArgs` 展开（全工具单一入口），不改变业务校验语义。
-4. **结果双通道** — 结构化结果是真相；面向模型的文本是投影，不承担 ID / 锚点解析职责。
-5. **原子与可预期** — 一次调用一个 operation；成功或整次失败；同类输入语义稳定。
-6. **描述声明边界，不教流程** — skill / tool 描述只说明能做什么、不能做什么；组合策略由模型自主决定。
-7. **工具简单可理解** — 作者语言贴近模型对页面的心智模型，所用即所想。
-8. **写回只给新锚点，验证靠再读** — 写工具只返回继续写所需的 id；对错由后续 read 确认，不返回变更清单或整页 readback。
-9. **非必要字段不要设计** — 结构化 output 不回显入参已有字段（如 `sourcePath`）；只保留模型继续决策所需的最小字段。
-
-**描述分层**
-
-| 层 | 写什么 | 不写什么 |
-| --- | --- | --- |
-| `skill.description` | 该 skill 覆盖的能力域 | 工具调用顺序、跨工具编排 |
-| `tool promptSpec.description` | 单工具能力边界与限制 | 字段表、JSON 结构、跨工具下一步、先 A 后 B |
-| `inputSchema` 字段 `.describe()` | 参数语义、单位、缺省、格式、数量上限 | — |
-| `toolSchemas` / `outputTypes.ts` 输出 TS 类型 | 结构化结果字段语义（内部真相） | 不在 `promptSpec` 重复；不暴露给模型 |
-
-**统一结果投递（全工具共用）**
-
-工具执行得到结构化 `data` 后，经 `modelResult.renderSuccess` 投影为 `renderedText`，再按整段文本统一判断：
-
-1. 超过 51,200 UTF-8 bytes 或 2,000 行 → 打回 `ok: false`，提示缩小范围；
-2. 否则超过 32,000 字符 → 将整段 `renderedText` 落盘，返回首尾预览与路径；
-3. 否则整段直出 `ToolMessage`。
-
-搜索类工具在**执行层**默认最多返回 10 条 match；`text_file_read` 的 `startLine` / `lineCount` 分页属于生产者有界读取，不是 per-tool delivery 策略。
-
-**运行时分层**
-
-```text
-Skill（builtin / external）
-  └─ Tool（HumanToolSpec）
-       ├─ inputSchema                  参数校验 + 模型可见输入契约
-       ├─ toolSchemas 输出类型         结构化真相（TS + 契约测试，不经 prompt 暴露）
-       ├─ promptSpec                   暴露给模型的最小契约
-       └─ modelResult                  投影为模型可读文本，再走统一投递管道
-```
-
-prompt 措辞、渲染格式、超限阈值等实现细节见代码与测试。实现层类型与字段规范见 AGENTS.md。
-
-DOCX、Excel、PDF 等复杂工具族已按上述原则落地；全部 29 个工具均绑定专用 `modelResult.renderSuccess` 投影器，再走统一 delivery 管道。
-
-**渲染格式族（modelResult）**
-
-每个工具保留独立 `renderSuccess`，内部复用共享构建块（`renderFamilies/`）：
-
-| 族 | 典型工具 | 格式要点 |
-| --- | --- | --- |
-| A 纯 prose | 各类 edit / mutation | 单行确认，如文件已更新 |
-| B XML envelope | `text_file_read`、`pdf_read_pages`、`read_image` | `<file path="...">` + 行号正文 |
-| C 终端流 + marker | `terminal_run`、`terminal_read` | 输出正文 + `[status: …]` 等方括号标记 |
-| D 分组纯文本 | search / list / outline；`web_search`（search） | 标题 + 分组列表；SERP 用 rank / title / url / snippet |
-| E Markdown/Web | `web_search`（fetch）、`browser_use` | fetch 与 browser extract：不可信内容前缀 + Markdown 正文 |
-
-领域专用工具（`docx_read_nodes`、`excel_read`、`ppt_read_slides`）复用 D 分组布局，保留结构化领域字段。
-
-Terminal 契约：`status` 为 `running | succeeded | failed | cancelled`；`terminal_run` 返回 `terminalId`，`terminal_read` 不回传。
+细节（消息形态、resume append、compaction 范围、多模态配额、failure_code 等）一律以 human-harness 为准，本文不再重复。
 
 ## 领域能力（概要）
 
@@ -172,7 +76,7 @@ Terminal 契约：`status` 为 `running | succeeded | failed | cancelled`；`ter
 | KB                    | 混合召回检索工作区已索引文档                                                                                                                                    |
 | Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                            |
 
-各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准。
+各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准；工具契约见 `tool-design.md`，活例子见 `doc/ai-tool-prompt-audit.md`。
 
 ## 存储与索引
 
