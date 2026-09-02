@@ -3,8 +3,8 @@ import { z } from 'zod/v4'
 export const WEB_SEARCH_SCHEMA = z.discriminatedUnion('type', [
   z
     .object({
-      type: z.literal('search').describe('按关键词搜索公开网页'),
-      query: z.string().min(1).describe('搜索关键词')
+      type: z.literal('search').describe('按搜索查询检索公开网页'),
+      query: z.string().min(1).describe('查询语句')
     })
     .strict(),
   z
