@@ -254,15 +254,9 @@ describe('ai human live backend', () => {
             typeof run2LastMessage.content === 'string' &&
             run2LastMessage.content.includes('<task_goal>')
           const run2MessageTypes = run2BrainMessages?.map((message) => message.getType()) || []
-          const run2HistoricalUsersAreRaw =
-            run2BrainMessages
-              ?.filter((message, index) => message.getType() === 'human' && index !== run2BrainMessages.length - 1)
-              .every(
-                (message) =>
-                  typeof message.content === 'string' &&
-                  !message.content.includes('<historical_user_turn>') &&
-                  !message.content.includes('<workspace>')
-              ) ?? false
+          const run2HasOnlyCurrentBrainUser =
+            run2BrainMessages?.filter((message) => message.getType() === 'human').length === 1 &&
+            run2BrainMessages?.[run2BrainMessages.length - 1]?.getType() === 'human'
 
           return {
             configurationMissing: false,
@@ -276,7 +270,7 @@ describe('ai human live backend', () => {
             run2BrainPrompt,
             run2LastMessageIsUser,
             run2MessageTypes,
-            run2HistoricalUsersAreRaw,
+            run2HasOnlyCurrentBrainUser,
             fileAName: fileAReferences[0]?.name || '',
             fileBName: fileBReferences[0]?.name || ''
           }
@@ -308,7 +302,7 @@ describe('ai human live backend', () => {
               result.run2LastMessageIsUser,
               result.run2MessageTypes[0] === 'system' &&
               result.run2MessageTypes[result.run2MessageTypes.length - 1] === 'human' &&
-              result.run2HistoricalUsersAreRaw,
+              result.run2HasOnlyCurrentBrainUser,
             {
               name: 'human-live-session-resume-keeps-interrupted-context-and-uses-new-selection',
               message:

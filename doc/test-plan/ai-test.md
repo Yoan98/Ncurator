@@ -791,10 +791,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-interruption-message-repair`
 
 - 测试类型：`backend / mock-llm`
-- What：续接（跨会话 / 中断恢复）重建消息数组时，顺序为 `system + 完整历史（含最终交付 assistant 消息）+ 尾部 buildBrainUserMessage user 消息`；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
+- What：续接（跨会话 / 中断恢复）重建消息数组时，顺序为 `system + 历史 assistant/tool（含最终交付 assistant 消息）+ 尾部唯一一条 buildBrainUserMessage user 消息`；历史 user 仅保留在不可变日志，不直接作为裸 HumanMessage 发给 Brain；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
 - Why：模型上下文唯一真相源是会话消息记录，续接必须忠实回放历史并把新诉求追加到末尾；若上一条 assistant 声明了 tool_call 却没有对应结果，接口会直接报错，必须补一条意外中断反馈。
 - How：mock-llm 下跑两个子场景：其一 run-1 正常完成（含 learn_skill 与最终交付），run-2 捕获首次 brain 的 `request.messages`；其二 run-1 的 brain 返回 learn_skill tool_call 后在 brain 调用返回时 abort 控制器，run-2 恢复并捕获消息数组。
-- Oracle：子场景一：消息数组首条为 system、末条为含 `<task_goal>` 的 user 消息，历史含 run-1 原始 user、该轮配置与最终答复 assistant 消息；子场景二：run-1 为 `user_cancelled`，run-2 只靠日志投影在悬空 learn_skill tool_call 后补相同 ID 的失败 ToolMessage，且末条为新的 user 消息。
+- Oracle：子场景一：消息数组首条为 system、末条为含 `<task_goal>` 的 user 消息，历史含 run-1 的 assistant/tool 结果且只存在这一条当前 user；子场景二：run-1 为 `user_cancelled`，run-2 只靠日志投影在悬空 learn_skill tool_call 后补相同 ID 的失败 ToolMessage，且末条为新的 user 消息。
 - Not：不验证 live provider 真实网络抖动；不恢复 docx 临时运行态。
 
 ##### `session-skill-memory-multi-run`
@@ -913,16 +913,16 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：live 模式下第一诉求已经沉淀局部事实后发生网络中断，同一 session 新诉求可从不可变消息日志恢复旧语义上下文，同时本轮新选择文件只作用于新 user 消息。
 - Why：恢复能力的真实价值是让用户在长任务中断后继续对话；如果中断前已读到的事实丢失，或恢复时忽略最新诉求/最新选中文件，就会把恢复退化成重跑或错误沿用旧入口。
 - How：使用共享 workspace fixture。Run 1 选中文件 A `深度学习.docx`，在读取并沉淀过拟合事实后注入 `network_error`。Run 2 在同 session 追加“继续”类 user 消息并改选文件 B `图形学.docx`，检查历史 user 配置未变、新 user 使用文件 B、计划来自 `plan_updated`、技能来自 session skill state。
-- Oracle：Run 1 为 `network_error`；中断前事实和计划记录仍在 `chat_session_message_log`。Run 2 消息数组末尾是新的 user 消息，其前是日志投影历史；Run 2 使用文件 B 且不会改写 Run 1 的文件 A 配置，最终交付包含过拟合与反走样事实。
+- Oracle：Run 1 为 `network_error`；中断前事实和计划记录仍在 `chat_session_message_log`。Run 2 消息数组只包含历史 assistant/tool 投影和末尾唯一一条新的 `buildBrainUserMessage` user 消息；Run 2 使用文件 B 且不会改写 Run 1 的文件 A 配置，最终交付包含过拟合与反走样事实。
 - Not：不验证真实 provider 的随机网络抖动；不要求 live 模型逐字复述 hint 文案；不恢复 docx 临时运行态。
 
 ##### `human-cross-session-continuation-live`
 
 - 测试类型：`backend / live`
-- What：同一 session 先正常完成第一件事，再续接第二件相关联的事，消息数组按“完整历史 + 尾部 user 消息”叠加。
+- What：同一 session 先正常完成第一件事，再续接第二件相关联的事，消息数组按“历史 assistant/tool + 尾部唯一一条 buildBrainUserMessage user 消息”叠加。
 - Why：跨会话续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文。
 - How：使用共享 workspace fixture。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同 session 改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组。
-- Oracle：Run 1 与 Run 2 均 `completed`；Run 2 消息数组末尾为 `buildBrainUserMessage` 的 user 消息，其前历史包含 Run 1 原始 user 消息与 Run 1 最终交付；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
+- Oracle：Run 1 与 Run 2 均 `completed`；Run 2 消息数组仅有一条末尾 `buildBrainUserMessage` user 消息，其前为 Run 1 的 assistant/tool 历史与最终交付；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
 - Not：不验证 UI 会话持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序。
 
 ##### `human-ppt-edit-management-review-live`

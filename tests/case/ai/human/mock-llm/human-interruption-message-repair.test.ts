@@ -230,12 +230,10 @@ describe('ai human mock-llm backend', () => {
             typeof message.content === 'string' &&
             message.content.includes('已整理过拟合')
         )
-        const orderHasRun1User = (run2BrainMessages || []).some(
-          (message) =>
-            message.getType() === 'human' &&
-            typeof message.content === 'string' &&
-            message.content.includes(RUN1_INPUT)
-        )
+        const orderHasOnlyCurrentUser =
+          (run2BrainMessages || []).filter((message) => message.getType() === 'human').length ===
+            1 &&
+          orderLast?.getType() === 'human'
 
         const danglingLast = danglingRun2Messages ? lastMessage(danglingRun2Messages) : null
         const danglingToolMessages = (danglingRun2Messages || []).filter(
@@ -258,7 +256,7 @@ describe('ai human mock-llm backend', () => {
           orderLastType: orderLast?.getType() || '',
           orderLastContent: typeof orderLast?.content === 'string' ? orderLast.content : '',
           orderHasRun1Final,
-          orderHasRun1User,
+          orderHasOnlyCurrentUser,
           danglingRun1Result,
           danglingRun2Result,
           danglingLastType: danglingLast?.getType() || '',
@@ -278,7 +276,7 @@ describe('ai human mock-llm backend', () => {
             result.orderLastContent.includes('<task_goal>') &&
             result.orderLastContent.includes('保留刚才的过拟合信息，再补充反走样') &&
             result.orderHasRun1Final &&
-            result.orderHasRun1User &&
+            result.orderHasOnlyCurrentUser &&
             result.danglingRun1Result.status === 'cancelled' &&
             result.danglingRun1Result.failureCode === 'user_cancelled' &&
             result.danglingRun2Result.status === 'completed' &&

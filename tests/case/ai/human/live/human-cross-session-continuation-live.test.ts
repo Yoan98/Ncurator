@@ -110,7 +110,7 @@ describe('ai human live backend', () => {
               run1Result: null,
               run2Result: null,
               run2LastMessageIsUser: false,
-              run2HistoryHasRun1User: false,
+              run2HasOnlyCurrentBrainUser: false,
               run2HistoryHasRun1Delivery: false,
               run2Delivery: '',
               fileAName: '',
@@ -176,12 +176,10 @@ describe('ai human live backend', () => {
             typeof run2LastMessage.content === 'string' &&
             run2LastMessage.content.includes('<task_goal>')
           const historyMessages = (run2BrainMessages || []).slice(0, -1)
-          const run2HistoryHasRun1User = historyMessages.some(
-            (message) =>
-              message.getType() === 'human' &&
-              typeof message.content === 'string' &&
-              message.content === RUN1_INPUT
-          )
+          const run2HasOnlyCurrentBrainUser =
+            (run2BrainMessages || []).filter((message) => message.getType() === 'human').length ===
+              1 &&
+            run2LastMessage?.getType() === 'human'
           const run2HistoryHasRun1Delivery = historyMessages.some(
             (message) =>
               message.getType() === 'ai' &&
@@ -194,7 +192,7 @@ describe('ai human live backend', () => {
             run1Result,
             run2Result,
             run2LastMessageIsUser,
-            run2HistoryHasRun1User,
+            run2HasOnlyCurrentBrainUser,
             run2HistoryHasRun1Delivery,
             run2UsedFileB: runUsedSelectedFile(run2Events, run2Id, fileBReferences[0]?.name || ''),
             run2Delivery: run2Result.finalDeliveryMarkdown || '',
@@ -215,7 +213,7 @@ describe('ai human live backend', () => {
             result.run1Result?.status === 'completed' &&
               result.run2Result?.status === 'completed' &&
               result.run2LastMessageIsUser &&
-              result.run2HistoryHasRun1User &&
+              result.run2HasOnlyCurrentBrainUser &&
               result.run2HistoryHasRun1Delivery &&
               result.run2UsedFileB === true &&
               mentionsOverfittingTopic(result.run2Delivery) &&
@@ -228,7 +226,7 @@ describe('ai human live backend', () => {
                 run1Status: result.run1Result?.status,
                 run2Status: result.run2Result?.status,
                 run2LastMessageIsUser: result.run2LastMessageIsUser,
-                run2HistoryHasRun1User: result.run2HistoryHasRun1User,
+                run2HasOnlyCurrentBrainUser: result.run2HasOnlyCurrentBrainUser,
                 run2HistoryHasRun1Delivery: result.run2HistoryHasRun1Delivery,
                 run2Delivery: result.run2Delivery
               }
