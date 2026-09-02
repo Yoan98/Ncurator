@@ -114,10 +114,14 @@ ${renderLocalEnvironmentText(input.ctx)}
 export const buildBrainUserMessage = (input: {
   state: HumanState
   ctx: AiRunContext
+  compactedHistoryText?: string
   injectPlan?: boolean
 }): string => {
   const learnedSkillIds = input.state.skills.learnedSkillIds
   const plan = input.state.memory.plan
+  const compactedHistory = input.compactedHistoryText?.trim()
+    ? `  <compacted_history>\n${input.compactedHistoryText.trim()}\n  </compacted_history>`
+    : ''
   const renderActiveState = (): string => {
     const skillsLine =
       learnedSkillIds.length > 0 ? `已学习技能：${learnedSkillIds.join('、')}` : '已学习技能：无'
@@ -143,6 +147,7 @@ ${renderPreferenceText(input.ctx.preference)}
   <reference_scope>
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
+${compactedHistory}
   <active_state>
 ${renderActiveState()}
   </active_state>

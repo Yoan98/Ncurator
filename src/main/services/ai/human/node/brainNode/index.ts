@@ -49,6 +49,7 @@ export const createBrainNode = (input: {
     input.cache.currentState = state
 
     const injectPlan = state.memory.plan.length > 0
+    const compactedHistoryText = state.memory.compactions.at(-1)?.summary
     let messages = input.cache.messages
     if (!messages || messages.length === 0 || input.cache.currentUserMessageIndex === undefined) {
       const projection = projectMessageLogRecords(await input.ctx.loadMessageLog())
@@ -56,7 +57,7 @@ export const createBrainNode = (input: {
         new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
         ...projection.messages,
         createCurrentBrainUserMessage(
-          buildBrainUserMessage({ state, ctx: input.ctx, injectPlan })
+          buildBrainUserMessage({ state, ctx: input.ctx, compactedHistoryText, injectPlan })
         )
       ]
       input.cache.messages = messages
@@ -69,6 +70,7 @@ export const createBrainNode = (input: {
         buildBrainUserMessage({
           state,
           ctx: input.ctx,
+          compactedHistoryText,
           injectPlan
         })
       )

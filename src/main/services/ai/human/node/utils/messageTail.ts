@@ -3,13 +3,7 @@ import { normalizeThoughtText } from '../../../../../../shared/thoughtText'
 
 const isProcessMessage = (message: BaseMessage): boolean => {
   const type = message.getType()
-  return type === 'human' || type === 'ai' || type === 'tool'
-}
-
-const isCompactedHistoryMessage = (message: BaseMessage): boolean => {
-  if (message.getType() !== 'human') return false
-  const content = typeof message.content === 'string' ? message.content : ''
-  return content.startsWith('<compacted_history>')
+  return type === 'ai' || type === 'tool'
 }
 
 const CURRENT_USER_MARKER = 'ncurator_current_user'
@@ -38,15 +32,8 @@ export const splitMessagesByLastAi = (
     return { compressible: [], tail: [] }
   }
 
-  // Keep the active user turn and the last AI/tool exchange intact. All
-  // earlier process messages, including rounds produced after the current
-  // user message, are safe compaction candidates.
   return {
-    compressible: messages.filter((message, index) => {
-      if (index >= lastAiIndex) return false
-      if (isCurrentBrainUserMessage(message) || isCompactedHistoryMessage(message)) return false
-      return isProcessMessage(message)
-    }),
+    compressible: messages.slice(0, lastAiIndex).filter(isProcessMessage),
     tail: messages.slice(lastAiIndex)
   }
 }

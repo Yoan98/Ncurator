@@ -15,9 +15,9 @@ import {
   runWithStructuredOutputRetry
 } from '../testUtils'
 
-// 真实模型的工具路径会有一定波动；48k（触发线 38.4k）让长任务在交付前稳定进入压缩，
-// 同时仍为压缩摘要和最后一轮工具结果保留足够空间。
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 48_000
+// 固定开销（23 工具 schema ~18k + system/模板 ~2k ≈ 20k）几乎不随压缩减少；
+// 52k（触发线 41.6k）用于验证真实长任务自然进入压缩，且压缩后仍保留足够空间。
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 52_000
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '任务锚点：',

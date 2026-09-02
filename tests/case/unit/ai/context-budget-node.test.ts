@@ -1,4 +1,4 @@
-import { AIMessage, HumanMessage } from '@langchain/core/messages'
+import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages'
 import { describe, expect, it } from 'vitest'
 import { createContextBudgetNode } from '../../../../src/main/services/ai/human/node/contextBudgetNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
@@ -99,9 +99,12 @@ describe('ai unit context budget node', () => {
     })
     cache.messages = [
       ...Array.from(
-        { length: 12 },
-        (_, index) => new HumanMessage(`long message ${index} ${'x'.repeat(200)}`)
-      ),
+        { length: 6 },
+        (_, index) => [
+          new AIMessage({ content: `long message ${index} ${'x'.repeat(400)}` }),
+          new ToolMessage({ content: `tool result ${index} ${'x'.repeat(400)}`, tool_call_id: `call-${index}` })
+        ]
+      ).flat(),
       new AIMessage({ content: 'previous brain turn' }),
       new HumanMessage({
         content: '请完成一个会触发压缩的长任务。',

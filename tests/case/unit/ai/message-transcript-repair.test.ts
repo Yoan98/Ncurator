@@ -51,6 +51,9 @@ describe('ai unit message transcript repair', () => {
     const skipped = deriveMessageLogMessages({ entries, skipLastUserEntry: true })
     expect(skipped.map((message) => message.getType())).toEqual(['human', 'ai', 'tool'])
     expect(String(skipped[0].content)).toContain('第一个诉求')
+    expect(String(skipped[0].content)).toBe('第一个诉求')
+    expect(String(skipped[0].content)).not.toContain('<historical_user_turn>')
+    expect(String(skipped[0].content)).not.toContain('workspace-1')
     expect(skipped[2].content).toBe('Skill loaded successfully: docx-read.')
     expect(skipped.some((message) => String(message.content).includes('第二个诉求'))).toBe(false)
 

@@ -109,4 +109,22 @@ describe('ai unit brain prompt formatting', () => {
     expect(user).toContain('已学习技能：无')
     expect(user).not.toContain('计划进度：')
   })
+
+  it('renders compacted history as a sibling before the text active state', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-prompt-compaction',
+      userInput: '继续处理任务'
+    })
+    state.skills.learnedSkillIds = ['docx-read']
+    const user = buildBrainUserMessage({
+      state,
+      ctx: createFakeCtx(),
+      compactedHistoryText: '任务锚点：继续处理已确认事实',
+      injectPlan: true
+    })
+    expect(user).toContain('<compacted_history>\n任务锚点：继续处理已确认事实\n  </compacted_history>')
+    expect(user.indexOf('</reference_scope>')).toBeLessThan(user.indexOf('<compacted_history>'))
+    expect(user.indexOf('</compacted_history>')).toBeLessThan(user.indexOf('<active_state>'))
+    expect(user.match(/<active_state>[\s\S]*<compacted_history>/)).toBeNull()
+  })
 })

@@ -92,18 +92,7 @@ export const deriveMessageLogMessages = (input: {
     }
     if (entry.kind === 'user') {
       flushImages()
-      messages.push(
-        new HumanMessage(
-          [
-            '<historical_user_turn>',
-            `  <task_goal>\n${entry.content}\n  </task_goal>`,
-            `  <workspace>${JSON.stringify(entry.context.workspace)}</workspace>`,
-            `  <selected_references>${JSON.stringify(entry.context.selectedReferences)}</selected_references>`,
-            `  <attachments>${JSON.stringify(entry.context.attachments)}</attachments>`,
-            '</historical_user_turn>'
-          ].join('\n')
-        )
-      )
+      messages.push(new HumanMessage(entry.content))
       continue
     }
     if (entry.kind === 'assistant') {
@@ -173,14 +162,6 @@ export const projectMessageLogRecords = (
   const messages = deriveMessageLogMessages({
     entries: projectedRecords.map((record) => record.entry)
   })
-  if (checkpoint) {
-    messages.unshift(
-      new HumanMessage(
-        `<compacted_history>\n${checkpoint.summary}\n</compacted_history>`
-      )
-    )
-  }
-
   let plan: ChatMessageLogPlanItem[] = []
   for (const record of ordered) {
     const entry = record.entry

@@ -145,6 +145,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         buildBrainUserMessage({
           state: initialState,
           ctx,
+          compactedHistoryText: logProjection.checkpoint?.summary,
           injectPlan: initialState.memory.plan.length > 0
         })
       )

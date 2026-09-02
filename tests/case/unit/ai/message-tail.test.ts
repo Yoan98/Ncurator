@@ -3,8 +3,7 @@ import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/
 import {
   renderMessagesForCompaction,
   splitMessagesByLastAi,
-  createCurrentBrainUserMessage,
-  isCurrentBrainUserMessage
+  createCurrentBrainUserMessage
 } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 
 const toolCall = (id: string, name: string, args: Record<string, unknown>) => ({
@@ -15,44 +14,18 @@ const toolCall = (id: string, name: string, args: Record<string, unknown>) => ({
 })
 
 describe('splitMessagesByLastAi', () => {
-  it('compresses only history before the marked current user', () => {
+  it('compresses only earlier AI/tool history and keeps the final AI/tool tail', () => {
     const messages = [
       new SystemMessage('<system>fixed template</system>'),
-      new HumanMessage('<historical_user_turn>old task</historical_user_turn>'),
+      new HumanMessage('old task'),
       new AIMessage({ content: '', tool_calls: [toolCall('1', 'terminal_run', { command: 'ls' })] }),
       new ToolMessage({ content: 'total 1', tool_call_id: '1' }),
       createCurrentBrainUserMessage('<user_context>current task</user_context>'),
       new AIMessage({ content: '', tool_calls: [toolCall('2', 'text_file_read', { sourcePath: 'a.txt' })] })
     ]
     const { compressible, tail } = splitMessagesByLastAi(messages)
-    expect(compressible.map((m) => m.getType())).toEqual(['human', 'ai', 'tool'])
+    expect(compressible.map((m) => m.getType())).toEqual(['ai', 'tool'])
     expect(tail.map((m) => m.getType())).toEqual(['ai'])
-  })
-
-  it('compresses completed rounds produced after the marked current user', () => {
-    const messages = [
-      new HumanMessage('<historical_user_turn>old task</historical_user_turn>'),
-      createCurrentBrainUserMessage('<user_context>current task</user_context>'),
-      new AIMessage({ content: '先读取资料', tool_calls: [toolCall('1', 'terminal_run', { command: 'ls' })] }),
-      new ToolMessage({ content: '资料内容', tool_call_id: '1' }),
-      new AIMessage({ content: '', tool_calls: [toolCall('2', 'text_file_read', { sourcePath: 'a.txt' })] }),
-      new ToolMessage({ content: '最新结果', tool_call_id: '2' })
-    ]
-    const { compressible, tail } = splitMessagesByLastAi(messages)
-    expect(compressible.map((m) => m.getType())).toEqual(['human', 'ai', 'tool'])
-    expect(tail.map((m) => m.getType())).toEqual(['ai', 'tool'])
-    expect(compressible.some((message) => isCurrentBrainUserMessage(message))).toBe(false)
-  })
-
-  it('does not compact an existing summary again', () => {
-    const messages = [
-      new HumanMessage('<compacted_history>已完成摘要</compacted_history>'),
-      createCurrentBrainUserMessage('<user_context>current task</user_context>'),
-      new AIMessage({ content: '继续处理', tool_calls: [toolCall('1', 'terminal_run', { command: 'pwd' })] }),
-      new ToolMessage({ content: '/tmp', tool_call_id: '1' })
-    ]
-    const { compressible } = splitMessagesByLastAi(messages)
-    expect(compressible).toEqual([])
   })
 
   it('keeps the last AI message and everything after it as tail', () => {

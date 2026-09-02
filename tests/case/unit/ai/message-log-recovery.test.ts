@@ -69,12 +69,13 @@ describe('ai human message-log recovery', () => {
     )
 
     const text = projection.messages.map((message) => String(message.content)).join('\n')
-    expect(text).toContain('compressed history')
+    expect(projection.checkpoint?.summary).toBe('compressed history')
+    expect(text).not.toContain('compressed history')
     expect(text).toContain('continue from summary')
-    expect(text).toContain('workspace-b')
+    expect(text).not.toContain('<historical_user_turn>')
+    expect(text).not.toContain('workspace-b')
     expect(text).toContain('new answer')
     expect(text).not.toContain('old secret that must be compacted')
-    expect(text.match(/compressed history/g)).toHaveLength(1)
   })
 
   it('keeps the latest unfinished plan and clears it after normal finalization', () => {

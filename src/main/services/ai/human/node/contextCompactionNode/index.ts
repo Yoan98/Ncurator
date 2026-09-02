@@ -1,12 +1,17 @@
 import { randomUUID } from 'node:crypto'
-import { HumanMessage } from '@langchain/core/messages'
+import { SystemMessage, type BaseMessage } from '@langchain/core/messages'
 import type { AiRunContext } from '../../../types'
 import { CONTEXT_COMPACTION_TARGET_RATIO } from '../../constants'
 import { buildHistoryCompactionPrompt } from '../../prompts/compaction'
+import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
-import { renderMessagesForCompaction, splitMessagesByLastAi } from '../utils/messageTail'
+import {
+  createCurrentBrainUserMessage,
+  renderMessagesForCompaction,
+  splitMessagesByLastAi
+} from '../utils/messageTail'
 
 export const createContextCompactionNode = (input: {
   ctx: AiRunContext
@@ -17,7 +22,7 @@ export const createContextCompactionNode = (input: {
     input.cache.currentState = state
 
     const messages = input.cache.messages || []
-    const { compressible } = splitMessagesByLastAi(messages)
+    const { compressible, tail } = splitMessagesByLastAi(messages)
     if (compressible.length === 0) {
       return {
         ...state,
@@ -75,15 +80,15 @@ export const createContextCompactionNode = (input: {
     }
 
     const currentRecords = await input.ctx.loadMessageLog()
-    // The current user is intentionally part of this run's in-memory context.
-    // The checkpoint may cover it as well: on the next run the projection
-    // replaces everything through this boundary with the summary, then the
-    // new user message is appended exactly once. Looking only before the
-    // current user fails when this is the first record in a session and causes
-    // an endless compaction loop with no checkpoint.
-    const coveredRecord = [...currentRecords]
+    const orderedCurrentRecords = currentRecords
       .filter((record) => record.runId === input.ctx.runId)
-      .reverse()[0]
+      .sort((a, b) => a.seq - b.seq)
+    const latestAssistantIndex = orderedCurrentRecords.reduce(
+      (latest, record, index) => (record.entry.kind === 'assistant' ? index : latest),
+      -1
+    )
+    const coveredRecord =
+      latestAssistantIndex > 0 ? orderedCurrentRecords[latestAssistantIndex - 1] : undefined
     if (!coveredRecord) {
       return {
         ...state,
@@ -128,13 +133,21 @@ export const createContextCompactionNode = (input: {
     input.cache.lastBrainMessageTokenEstimate = undefined
     input.cache.postCompactionNeedsFreshBrainUsage = true
     input.cache.lastBrainUsageUnavailable = false
-    const compressibleSet = new Set(compressible)
-    const firstCompressibleIndex = messages.findIndex((message) => compressibleSet.has(message))
-    const rebuilt = messages.filter((message) => !compressibleSet.has(message))
-    const summaryMessage = new HumanMessage(
-      `<compacted_history>\n${compactBlock.summary}\n</compacted_history>`
-    )
-    rebuilt.splice(Math.max(1, firstCompressibleIndex), 0, summaryMessage)
+    const rebuilt = buildCompactedMessages({
+      ctx: input.ctx,
+      state: {
+        ...state,
+        memory: {
+          ...state.memory,
+          compactions: [
+            ...state.memory.compactions.filter((block) => block.kind !== 'compacted_history'),
+            compactBlock
+          ]
+        }
+      },
+      summary: compactBlock.summary,
+      tail
+    })
     input.cache.messages = rebuilt
     input.cache.currentUserMessageIndex = rebuilt.findIndex(
       (message) => message.additional_kwargs?.ncurator_current_user === true
@@ -156,3 +169,21 @@ export const createContextCompactionNode = (input: {
     }
   }
 }
+
+export const buildCompactedMessages = (input: {
+  ctx: AiRunContext
+  state: HumanState
+  summary: string
+  tail: BaseMessage[]
+}): BaseMessage[] => [
+  new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
+  createCurrentBrainUserMessage(
+    buildBrainUserMessage({
+      state: input.state,
+      ctx: input.ctx,
+      compactedHistoryText: input.summary,
+      injectPlan: true
+    })
+  ),
+  ...input.tail
+]
