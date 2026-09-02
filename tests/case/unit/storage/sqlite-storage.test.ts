@@ -239,10 +239,7 @@ describe('sqlite storage core and stores', () => {
       { version: 7, name: 'ai_run_execution_permission' },
       { version: 8, name: 'drop_llm_strategy_preference' },
       { version: 9, name: 'repair_ai_runtime_system_notifications_column' },
-      { version: 10, name: 'upgrade_from_v9' },
-      { version: 11, name: 'drop_chat_session_skill_state' },
-      { version: 12, name: 'chat_search_turn' },
-      { version: 13, name: 'drop_chat_message' }
+      { version: 10, name: 'upgrade_from_v9' }
     ])
 
     const legacyTables = sqlite
@@ -452,18 +449,19 @@ describe('sqlite storage core and stores', () => {
     expect(turns[59]?.content).toBe('turn-60')
   })
 
-  it('drops chat_message after migration 13', async () => {
-    const table = sqlite
+  it('drops legacy chat tables after migration 10', async () => {
+    const chatMessage = sqlite
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get('chat_message')
-    expect(table).toBeUndefined()
-  })
-
-  it('drops chat_session_skill_state after migration 11', async () => {
-    const table = sqlite
+    const skillState = sqlite
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get('chat_session_skill_state')
-    expect(table).toBeUndefined()
+    const searchTurn = sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get('chat_search_turn')
+    expect(chatMessage).toBeUndefined()
+    expect(skillState).toBeUndefined()
+    expect(searchTurn).toBeDefined()
   })
 
   it('restores active and pending approval runs from sqlite', async () => {

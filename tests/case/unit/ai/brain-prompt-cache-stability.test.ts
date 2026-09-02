@@ -1,10 +1,14 @@
+import { SystemMessage, type BaseMessage } from '@langchain/core/messages'
 import { describe, expect, it } from 'vitest'
+import { projectBrainMessagesFromLog } from '../../../../src/main/services/ai/human/memory/brainMessageProjection'
+import { isCurrentBrainUserMessage } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 import {
   buildBrainSystemPrompt,
   buildBrainUserMessage
 } from '../../../../src/main/services/ai/human/prompts/brain'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
+import type { ChatMessageLogRecord } from '../../../../src/shared/types'
 
 const createFakeCtx = (): AiRunContext =>
   ({
@@ -36,6 +40,95 @@ const buildStateWithPlan = () => {
   state.skills.learnedSkillIds = ['docx-read']
   return state
 }
+
+const messageSignature = (messages: BaseMessage[]): string =>
+  messages
+    .map((message) => {
+      const type = message.getType()
+      const marker =
+        type === 'human' && isCurrentBrainUserMessage(message) ? ':current' : ':historical'
+      return `${type}${marker}:${String(message.content)}`
+    })
+    .join('\n---\n')
+
+const prefixBeforeCurrentUser = (messages: BaseMessage[]): string => {
+  const currentIndex = messages.findIndex((message) => isCurrentBrainUserMessage(message))
+  if (currentIndex < 0) return messageSignature(messages)
+  return messageSignature(messages.slice(0, currentIndex))
+}
+
+const buildResumeBrainMessages = (input: {
+  records: ChatMessageLogRecord[]
+  state: ReturnType<typeof createInitialHumanState>
+}): BaseMessage[] => {
+  const ctx = createFakeCtx()
+  const brainProjection = projectBrainMessagesFromLog({
+    records: input.records,
+    ctx,
+    state: input.state,
+    injectPlan: input.state.memory.plan.length > 0
+  })
+  return [new SystemMessage(buildBrainSystemPrompt({ ctx })), ...brainProjection.messages]
+}
+
+const resumeRecords: ChatMessageLogRecord[] = [
+  {
+    id: 'log-1',
+    sessionId: 'session-cache-stability',
+    runId: 'run-1',
+    seq: 1,
+    createdAt: 1,
+    entry: {
+      kind: 'user',
+      content: '请整理过拟合概念。',
+      context: {
+        selectedReferences: [],
+        attachments: [],
+        workspace: {
+          workspaceId: 'ws-1',
+          workspaceName: '测试工作区',
+          rootPath: '/tmp/workspace'
+        }
+      }
+    }
+  },
+  {
+    id: 'log-2',
+    sessionId: 'session-cache-stability',
+    runId: 'run-1',
+    seq: 2,
+    createdAt: 2,
+    entry: {
+      kind: 'assistant',
+      content: '先检索资料',
+      toolCalls: [{ id: 'call-1', name: 'grep_search', args: { query: '过拟合' } }]
+    }
+  },
+  {
+    id: 'log-3',
+    sessionId: 'session-cache-stability',
+    runId: 'run-1',
+    seq: 3,
+    createdAt: 3,
+    entry: {
+      kind: 'tool',
+      toolCallId: 'call-1',
+      content: '命中 2 条结果'
+    }
+  },
+  {
+    id: 'log-4',
+    sessionId: 'session-cache-stability',
+    runId: 'run-1',
+    seq: 4,
+    createdAt: 4,
+    entry: {
+      kind: 'assistant',
+      content: '已整理过拟合：概念、原因、处理方式。',
+      toolCalls: []
+    }
+  }
+]
 
 describe('ai unit brain prompt cache stability', () => {
   it('renders byte-identical output for the same state', () => {
@@ -76,5 +169,43 @@ describe('ai unit brain prompt cache stability', () => {
     expect(system).toContain('platform：macos')
     expect(system).toContain('runtime_paths.assets：')
     expect(system).toContain('runtime_paths.scripts：')
+  })
+
+  it('rebuilds resume messages with historical and current build users', () => {
+    const state = createInitialHumanState({
+      taskId: 'run-2',
+      userInput: '保留刚才的过拟合信息，再补充反走样。'
+    })
+
+    const messages = buildResumeBrainMessages({ records: resumeRecords, state })
+    const humanMessages = messages.filter((message) => message.getType() === 'human')
+
+    expect(messages[0]?.getType()).toBe('system')
+    expect(humanMessages).toHaveLength(2)
+    expect(String(humanMessages[0]?.content)).toContain('请整理过拟合概念。')
+    expect(String(humanMessages[1]?.content)).toContain('保留刚才的过拟合信息，再补充反走样。')
+    expect(isCurrentBrainUserMessage(humanMessages[1] as BaseMessage)).toBe(true)
+  })
+
+  it('keeps resume prefix stable while only the current build user changes', () => {
+    const baseState = createInitialHumanState({
+      taskId: 'run-2',
+      userInput: '保留刚才的过拟合信息，再补充反走样。'
+    })
+    const stateWithPlan = {
+      ...baseState,
+      memory: {
+        ...baseState.memory,
+        plan: [{ title: '补充反走样', status: 'todo' }]
+      }
+    }
+
+    const firstPass = buildResumeBrainMessages({ records: resumeRecords, state: baseState })
+    const secondPass = buildResumeBrainMessages({ records: resumeRecords, state: baseState })
+    const withPlan = buildResumeBrainMessages({ records: resumeRecords, state: stateWithPlan })
+
+    expect(messageSignature(secondPass)).toBe(messageSignature(firstPass))
+    expect(prefixBeforeCurrentUser(withPlan)).toBe(prefixBeforeCurrentUser(firstPass))
+    expect(messageSignature(withPlan)).not.toBe(messageSignature(firstPass))
   })
 })

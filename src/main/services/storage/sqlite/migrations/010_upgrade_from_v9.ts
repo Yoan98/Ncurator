@@ -49,5 +49,26 @@ ALTER TABLE ai_run DROP COLUMN last_event_at;
 ALTER TABLE ai_run DROP COLUMN vision_model_json;
 ALTER TABLE ai_run ADD COLUMN failure_code TEXT;
 ALTER TABLE ai_run ADD COLUMN partial_answer_role TEXT NOT NULL DEFAULT 'answer';
+
+DROP TABLE IF EXISTS chat_session_skill_state;
+
+CREATE TABLE chat_search_turn (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  role TEXT NOT NULL,
+  content TEXT NOT NULL DEFAULT '',
+  search_document_ids_json TEXT,
+  result_payload_json TEXT,
+  content_nodes_json TEXT,
+  selected_references_json TEXT,
+  attachments_json TEXT,
+  created_at INTEGER NOT NULL,
+  FOREIGN KEY (session_id) REFERENCES chat_session(id) ON DELETE CASCADE
+);
+CREATE UNIQUE INDEX idx_chat_search_turn_session_seq
+  ON chat_search_turn(session_id, seq);
+
+DROP TABLE IF EXISTS chat_message;
 `
 }

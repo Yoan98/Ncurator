@@ -268,36 +268,27 @@ const artifactToApplyTarget = (
   }
 }
 
-const buildAssistantTurnFromMessage = (message: ChatMessage): AssistantTurnViewModel | null => {
-  if (message.role !== 'assistant') return null
-  const artifacts = message.artifacts || []
-  return {
-    messageId: message.id,
-    status: message.error ? 'failed' : 'completed',
-    runFinished: true,
-    processThoughts: [],
-    processGroups: [],
-    finalAnswerMarkdown: message.content,
-    streamingMarkdown: '',
-    streamingRole: 'answer',
-    plan: [],
-    artifacts: artifacts.map((artifact) => ({
-      path: artifact.path,
-      fileName: artifact.fileName,
-      origin: 'artifact',
-      applyId: artifact.applyId,
-      operation: artifact.operation,
-      format:
-        artifact.capability === 'docx' ? 'docx' : artifact.capability === 'ppt' ? 'pptx' : undefined
-    })),
-    applyTargets: artifacts
-      .map(artifactToApplyTarget)
-      .filter((target): target is AssistantTurnViewModel['applyTargets'][number] =>
-        Boolean(target)
-      ),
-    blockers: []
-  }
-}
+const buildSearchTurnFromProjectedMessage = (message: ChatMessage): AssistantTurnViewModel => ({
+  ...createSearchAssistantTurn(message.id),
+  status: message.error ? 'failed' : 'completed',
+  runFinished: true,
+  processGroups: completeAssistantProcessGroups(
+    createSearchAssistantTurn(message.id).processGroups
+  ),
+  finalAnswerMarkdown: message.content,
+  artifacts: (message.artifacts || []).map((artifact) => ({
+    path: artifact.path,
+    fileName: artifact.fileName,
+    origin: 'artifact' as const,
+    applyId: artifact.applyId,
+    operation: artifact.operation,
+    format:
+      artifact.capability === 'docx' ? 'docx' : artifact.capability === 'ppt' ? 'pptx' : undefined
+  })),
+  applyTargets: (message.artifacts || [])
+    .map(artifactToApplyTarget)
+    .filter((target): target is AssistantTurnViewModel['applyTargets'][number] => Boolean(target))
+})
 
 const getRunMessageContent = (run: AiRunRecord): string =>
   run.finalAnswer || run.partialAnswer || ''
@@ -1714,14 +1705,15 @@ const ChatPage: React.FC = () => {
   ): void => {
     assistantArtifactsRef.current = {}
     activeRunMessageIdsRef.current = {}
+    const runAssistantMessageIds = new Set(
+      runSnapshots.map((snapshot) => snapshot.run.assistantMessageId)
+    )
     setAssistantTurns(() => {
       const nextTurns: Record<string, AssistantTurnViewModel> = {}
       for (const message of messages) {
-        if (message.artifacts && message.artifacts.length > 0) {
-          assistantArtifactsRef.current[message.id] = message.artifacts
+        if (message.role === 'assistant' && !runAssistantMessageIds.has(message.id)) {
+          nextTurns[message.id] = buildSearchTurnFromProjectedMessage(message)
         }
-        const turn = buildAssistantTurnFromMessage(message)
-        if (turn) nextTurns[message.id] = turn
       }
       const activeRunIds = new Set(activeRuns.map((item) => item.run.id))
       for (const runSnapshot of runSnapshots) {

@@ -19,6 +19,7 @@ import type {
 } from './outputTypes'
 import {
   fetchHttpPage,
+  isHttpPageFetchError,
   isLoopbackHttpUrl,
   shouldBypassCrawlerForLoopbackFetch
 } from './httpPageFetch'
@@ -96,11 +97,22 @@ const buildFetchFailureOutput = (input: {
   fallbackUrl: string
 }): WebSearchFetchFailureOutput => {
   const details = input.error as WebCrawlerFailureDetails
-  const statusCode = typeof details.statusCode === 'number' ? details.statusCode : undefined
+  const statusCode =
+    typeof details.statusCode === 'number'
+      ? details.statusCode
+      : isHttpPageFetchError(input.error)
+        ? input.error.statusCode
+        : undefined
+  const requestedUrl =
+    details.requestedUrl
+    || (isHttpPageFetchError(input.error) ? input.error.requestedUrl : undefined)
+    || input.fallbackUrl
+  const finalUrl =
+    details.finalUrl || (isHttpPageFetchError(input.error) ? input.error.finalUrl : undefined)
   return {
     error: getErrorMessage(input.error),
-    requestedUrl: details.requestedUrl || input.fallbackUrl,
-    ...(details.finalUrl ? { finalUrl: details.finalUrl } : {}),
+    requestedUrl,
+    ...(finalUrl ? { finalUrl } : {}),
     ...(statusCode !== undefined ? { statusCode } : {})
   }
 }
@@ -227,7 +239,10 @@ export const webToolFamily: ToolFamilyDefinition = {
                   try {
                     const httpResult = await fetchHttpPage(crawlUrl)
                     return httpResult.markdown.length > 0 ? httpResult : null
-                  } catch {
+                  } catch (error) {
+                    if (isHttpPageFetchError(error)) {
+                      throw error
+                    }
                     return null
                   }
                 }

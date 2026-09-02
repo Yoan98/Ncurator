@@ -13,9 +13,6 @@ import { aiRunExecutionPermissionMigration } from './migrations/007_ai_run_execu
 import { dropLlmStrategyPreferenceMigration } from './migrations/008_drop_llm_strategy_preference'
 import { repairAiRuntimeSystemNotificationsColumnMigration } from './migrations/009_repair_ai_runtime_system_notifications_column'
 import { upgradeFromV9Migration } from './migrations/010_upgrade_from_v9'
-import { dropChatSessionSkillStateMigration } from './migrations/011_drop_chat_session_skill_state'
-import { chatSearchTurnMigration } from './migrations/012_chat_search_turn'
-import { dropChatMessageMigration } from './migrations/013_drop_chat_message'
 
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
@@ -30,13 +27,10 @@ const MIGRATIONS: readonly Migration[] = [
   aiRunExecutionPermissionMigration,
   dropLlmStrategyPreferenceMigration,
   repairAiRuntimeSystemNotificationsColumnMigration,
-  upgradeFromV9Migration,
-  dropChatSessionSkillStateMigration,
-  chatSearchTurnMigration,
-  dropChatMessageMigration
+  upgradeFromV9Migration
 ]
 
-export const CURRENT_SCHEMA_VERSION = 13
+export const CURRENT_SCHEMA_VERSION = 10
 
 const MIGRATION_NAME_ALIASES = new Map<number, ReadonlySet<string>>([
   [2, new Set(['workspace_change_sets'])]

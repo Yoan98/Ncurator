@@ -80,16 +80,7 @@ human harness 涉及的数据从哪来、到哪去。只有 **`chat_session_mess
 
 ### 2.1 总览
 
-```text
-写入：用户发送 → graph 节点 → chat_session_message_log
-                              └→ 工具写文件 → ai_file_change
-
-读取：
-  chat_session_message_log ──投影──→ brain / UI 对话 / UI 过程   （见 §3）
-  ai_run ──────────────────→ UI 运行态、审批、流式草稿           （不进 brain）
-  ai_file_change ──────────→ Workbench 改动 / 回退               （不进 brain）
-  Composer ──注入──────────→ 新 run 的 reference_scope           （不进 log，见 §2.5）
-```
+数据源写入与消费方总览见 [`doc/architecture.md`](../architecture.md) §AI 运行时「AI 数据源与消费方」。
 
 - **AI 会话**走 human harness；**搜索模式**用独立存储，不写 `chat_session_message_log`。
 - **实现**：UI 对话轮次由 `chat_session_message_log` + `ai_run` 投影；技能由 `skill_state_updated` annotation 投影；搜索模式使用独立 `chat_search_turn` 表。
@@ -303,6 +294,30 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 
 投影入口：`projectMessageLogRecords(records)` → `{ messages, plan, checkpoint }`；graph 再拼 System、build user 与 runtime cache。  
 Compaction / Resume / 前缀缓存 → 见 §4–§6。
+
+```mermaid
+flowchart TD
+  Log[(chat_session_message_log)]
+
+  Log --> PM[projectMessageLogRecords]
+
+  PM --> Tail[tail: assistant / tool]
+  PM --> Meta[checkpoint / plan / skill 状态]
+
+  Tail --> BrainMsg[Brain messages]
+  Meta --> BuildUser[build user 块]
+  BuildUser --> BrainMsg
+  Sys[System prompt] --> BrainMsg
+
+  Log --> ByRun[按 run_id 聚合]
+  ByRun --> Bubbles[用户气泡 + 交付 assistant]
+
+  Log --> ProcessScan[单 run 扫描]
+  ProcessScan --> Process[过程层: Thought / tool / learning / compaction]
+
+  Run[(ai_run)] -.不进 brain.-> Status[status / error / partial_answer]
+  FC[(ai_file_change)] -.不进 brain.-> Diff[文件 diff UI]
+```
 
 ### 3.1 投影产物
 

@@ -29,6 +29,42 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 向量搜索（语义）+ LanceDB FTS（关键词）+ RRF 融合。检索前先经 SQLite 确认有效 `document.active_generation_id`，再查 LanceDB。
 
+### 分层与主链路
+
+```mermaid
+flowchart TB
+  subgraph renderer [Renderer]
+    WB[Workbench UI]
+    Composer[Composer]
+  end
+
+  subgraph bridge [Preload]
+    IPC[IPC 契约]
+  end
+
+  subgraph main [Main]
+    Run[ChatRunService / ai_run]
+    Graph[human graph]
+    Retrieval[Retrieval]
+    Tools[Tool Runtime]
+  end
+
+  subgraph storage [存储层]
+    SQLite[(SQLite 业务真相)]
+    Lance[(LanceDB 可重建索引)]
+  end
+
+  Composer --> WB
+  WB --> IPC --> Run --> Graph
+  Graph --> Retrieval
+  Retrieval --> SQLite
+  Retrieval --> Lance
+  Graph --> Tools
+  Tools --> SQLite
+  Graph --> IPC --> WB
+  Run --> SQLite
+```
+
 ## 核心模块
 
 | 模块                      | 职责                                                                                       |
@@ -62,6 +98,27 @@ AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`c
 - **Transcript 真相源**：`chat_session_message_log`（append-only）；`ai_run` 管生命周期与 UI 运行态；`chat_search_turn` 管搜索模式对话；`ai_file_change` 管文件域，不进 brain prompt。
 - **Skill / Tool**：builtin skill 默认可 bind；external 需 `learn_skill`；`agent-control` 承载 `learn_skill`、`update_plan`、`read_image`。
 - **搜索模式**：独立存储，不写 session message log。
+
+### AI 数据源与消费方
+
+```mermaid
+flowchart LR
+  subgraph write [写入]
+    User[用户发送] --> Graph[human graph 节点]
+    Graph --> Log[(chat_session_message_log)]
+    Tools[Tool Runtime 写文件] --> FC[(ai_file_change)]
+    Graph --> Run[(ai_run)]
+  end
+
+  subgraph read [读取 / 投影]
+    Log --> Brain[brain 上下文]
+    Log --> Conv[UI 对话轮次]
+    Log --> Proc[UI 过程层]
+    Run --> RunUI[运行态 / 审批 / 流式草稿]
+    FC --> WB[Workbench 改动 / 回退]
+    Composer[Composer 配置] -.运行时注入.-> Brain
+  end
+```
 
 细节（消息形态、resume append、compaction 范围、多模态配额、failure_code 等）一律以 human-harness 为准，本文不再重复。
 
