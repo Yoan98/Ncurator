@@ -230,10 +230,10 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 | | log 里的 `user.context` | Composer → build user |
 |--|-------------------------|------------------------|
 | 作用 | 审计「当时用户说了什么、配了什么」 | 驱动**当前 run** brain 输入 |
-| resume / 新 run | 保留在 log，供 UI 与测试核对 | **始终用当前 Composer**，不复用历史 user 的 context |
-| `<task_goal>` | log `user.content` 存当轮原文 | build user 用**当前 run** 的 `input` |
+| 同 run | 首条 build user 的 `<reference_scope>` | 来自发送时 Composer |
+| resume | 每条 log `user` 各存各的 snapshot | **append** 新 build user 在末尾；`<reference_scope>` 用**当前** Composer |
 
-因此：同 session 续跑时，历史 assistant/tool 从 log 投影，但 `@` 范围可以换（例如 run-2 改选另一份文件），以 Composer 为准。
+同 session 续跑：历史 build user 与 tail **不改写**；新诉求在**末尾**新 build user 的 `<task_goal>`（§6）。
 
 ---
 
@@ -255,37 +255,49 @@ Compaction / Resume / 前缀缓存 → 见 §4–§6。
 
 ### 3.2 Brain messages 标准形态
 
-**唯一合法顺序**：
+发给模型的消息由 **System + 若干 build user + tail（assistant/tool）** 组成；**log 裸 `user` 不得直接进入**。
+
+**同 run 内（稳态）**——单条 build user 紧跟 System，tail 在其后：
 
 ```text
-[System]              buildBrainSystemPrompt
-[User built]          buildBrainUserMessage（ncurator_current_user 标记）
-[Assistant / Tool …]  tail
+[System]
+[User built]          ← 本 run 的 task_goal；plan/skill 更新时原地 refresh
+[Assistant / Tool …]  tail（只许末尾 append）
+```
+
+**跨 run resume**——在**已有整段历史末尾**再 append 一条新的 build user；**不替换、不改写**前面的 build user 与 tail（§6）。
+
+```text
+[System]
+[User built]          ← run-1 的 task_goal（保持不变）
+[Assistant / Tool …]  run-1 过程 + 更早历史
+[User built]          ← run-2 续发，append 在末尾
 ```
 
 | 段 | 含义 |
 |----|------|
-| System | 系统提示；可每轮重建，内容稳定 |
-| User built | 每个 run **一条**；每轮 brain 前**原地刷新**（不 append 第二条 user） |
-| tail | 仅 `assistant` / `tool` / 多模态合成 HumanMessage；**不含** log 裸 `user` |
+| System | 系统提示 |
+| User built（首条） | 该 run 首次 user 诉求；同 run 内可 refresh `<active_state>`，**不改** `<task_goal>` |
+| tail | assistant / tool / 多模态合成 HumanMessage |
+| User built（续发） | 仅 resume / 新 run 时 **append 在整段末尾**；走 build，不是 log 裸文本 |
 
-**build user 块**（各字段来源见 §3.3 表）：
+**build user 块**（各字段来源见 §3.3）：
 
 ```text
 <user_context>
   <task_goal>…</task_goal>
   <preference>…</preference>
   <reference_scope>…</reference_scope>
-  <compacted_history>…</compacted_history>   ← 可选
+  <compacted_history>…</compacted_history>
   <active_state>…</active_state>
 </user_context>
 ```
 
-**稳态行为**（同 run、未触发 §5–§6 时）：
+**稳态行为**（同 run、未触发 §5–§6）：
 
-- 首次 brain：tail 为空，仅 `[System, User built]`。
-- brain → 工具 → 再 brain：新 assistant/tool **append 在 tail 末尾**；brain 前 **replace** 原 build user（plan 更新反映到 `<active_state>`）。
-- 前缀结构与 tail 已发送段保持稳定，以利 §4 前缀缓存；compaction 与 learn_skill 会打破（§4）。
+- 首次 brain：`[System, User built]`，tail 为空。
+- brain → 工具 → 再 brain：tail 末尾 append；brain 前 **replace** 首条 build user 的 `<active_state>`（及 plan），**`<task_goal>` 不变**。
+- 前缀 `[System, User built, …已发送 tail]` 字节序不变 → §4 缓存命中。
 
 ### 3.3 稳态投影规则
 
@@ -317,11 +329,11 @@ annotation 扫描用**完整** log；tail 用 checkpoint **截断后**的行。
 
 **组装**
 
-```text
-brainMessages = [System] + [User built] + tail
-```
+- **同 run 首次 brain**：`[System] + [User built] + tail`（tail 可为空）。
+- **同 run 后续 brain**：replace 首条 build user 的 `<active_state>`；tail append。
+- **resume 新 run**：`[System] + [User built₁] + …history tail… + [User built₂]`（见 §6）；**不**改写 built₁ 与 history。
 
-**同 run 刷新**：固定 `currentUserMessageIndex`，brain 前 replace build user；新 assistant/tool 只 append tail。不从 log 全量重建（§5 compaction 的整段替换除外）。
+**同 run 刷新**：固定首条 `currentUserMessageIndex`；compaction 整段替换见 §5。
 
 **投影不做的事**：log 裸 `user`、`ai_run.partial_answer`、`ai_file_change` 不进 brain。
 
@@ -338,41 +350,40 @@ brainMessages = [System] + [User built] + tail
 
 ## 4. 前缀缓存
 
-主模型 provider 的前缀缓存（prefix cache）要求：**多次请求中，发给 AI 的前缀字节序一致**，才能命中缓存。  
-human harness 通过 §3.2 的固定顺序与 append-only tail 满足这一点。
+主模型 provider 的前缀缓存要求：**多次请求中，已发送的前缀字节序一致**。  
+human harness 通过 **tail 只 append、resume 只 append 新 build user（不改写历史）** 满足这一点。
 
 ### 4.1 什么算「前缀」
 
-一次 brain 请求中，按顺序发送：
+一次 brain 请求里，**本轮新内容之前**的全部消息，例如：
 
 ```text
-[System] + [User built] + tail 中「本轮新 append 之前」的全部消息
+[System] + [User built₁] + … + tail 已发送段 + （resume 时已有的 User built₂ 之前）
 ```
 
-- **tail 只许在末尾增长**（append assistant/tool），不得在中间插入或改写已发送段。
-- **User built 只占固定槽位**（`currentUserMessageIndex`），每轮 brain 前 **replace** 整段内容，不追加第二条 user HumanMessage。
-
-因此：同 run 内多轮 tool 循环时，上一轮已发给模型的 `[System, User built, …旧 tail]` 字节序不变，provider 可复用缓存。
+- tail 只许 **末尾 append** assistant/tool。
+- 同 run 内：仅 **replace 首条** build user 的 `<active_state>` / plan；**`<task_goal>` 不动**。
+- resume：**append** 新 build user 在整段末尾；**前面的 user 与 tail 一字不改**。
 
 ### 4.2 稳态下如何保持命中
 
 | 操作 | 对前缀的影响 |
 |------|--------------|
-| brain → hand → 再 brain | 旧 tail 不变；仅 append 新 tool/assistant |
-| `update_plan` | replace build user 的 `<active_state>` 计划行；**不**改 tail |
-| resume（用户续发新消息） | 见 §6：新诉求进 build user 的 `<task_goal>`；历史 tail 投影段不变 |
+| brain → hand → 再 brain | 已发送段不变；tail 末尾 append |
+| `update_plan` | replace 首条 build user 的 plan 行；tail 不变 |
+| **resume** | 历史段 **不变**；末尾 **append** 新 build user（§6） |
 
 ### 4.3 打破前缀缓存的操作
 
-仅以下两类会改变已建立的前缀语义，**视为打破缓存**：
+仅以下两类 **改写** 已建立的前缀，视为打破缓存：
 
 | 操作 | 原因 |
 |------|------|
-| **Compaction**（§5） | `<compacted_history>` 写入摘要；tail 截断重建；前缀内容变化 |
-| **learn_skill**（§7） | `<active_state>` 技能列表变化；写 `skill_state_updated` 后 replace build user |
+| **Compaction**（§5） | 摘要写入 `<compacted_history>`；tail 截断重建 |
+| **learn_skill**（§7） | 首条 build user 的 `<active_state>` 技能列表变化 |
 
-其他 replace build user 的字段（如 plan 进度、`task_goal` 在 resume 时更新）不改变「打破」判定：**打破仅指 compaction 与 learn_skill**。  
-设计约束：除 §4.3 两类外，不得重写 tail 已发送段或追加第二条 user HumanMessage。
+**resume 不属于打破**：历史保持原样，只在末尾追加新 build user。  
+设计约束：除 §4.3 外，不得 rewrite 已发送的 tail 段；resume 不得替换首条 build user 的 `<task_goal>`。
 
 ---
 
@@ -430,50 +441,65 @@ log 行 append-only 保留；被覆盖段不再进入 tail。
 
 ## 6. Resume 机制
 
-上一 run 未正常完成；用户在同 session **继续发送消息**。不自动重试 failed run，而是 **新建 run**，从 log 投影后再走 graph。
+上一 run 未正常完成；用户在同 session **继续发送消息**。不自动重试 failed run，**新建 run**，在**已有 brain 历史末尾 append 新 build user**。
 
 ### 6.1 触发
 
 用户停止、网络错误、超时、`process_interrupted`（重启）、`output_truncated`、`runtime_limit`、其他失败。  
-重启时 `failInterruptedRuns` 标记活动 run，**不**自动调模型。
+重启：`failInterruptedRuns` 标记活动 run，不自动调模型。
 
-### 6.2 用户续发：log 与 brain 各发生什么
+### 6.2 核心规则
 
-用户新输入会 **append 到 log 末尾**（新 `user` 行，含当轮 Composer `context` 快照）。  
-但 brain **不会**在 messages 数组 tail 后再加一条裸 HumanMessage——新诉求必须进 **build user** 的 `<task_goal>`（§3.2 固定槽位）。
+1. **log**：append 新 `user` 行在转录末尾（含 Composer `context` 快照）。
+2. **brain**：在**已有** `[System, User built₁, …tail…]` **末尾 append** `User built₂`（新 run 的 input + Composer）；**不替换** `User built₁`，**不改写**中间 tail。
+3. 新诉求只出现在 **末尾** 那条 build user 的 `<task_goal>`；仍走 `buildBrainUserMessage`，不是裸 HumanMessage。
+4. 符合 §4：历史前缀不变 → 缓存可命中；打破仍仅 compaction / learn_skill。
+
+### 6.3 示例
+
+**续跑前**（run-1 中断后，session 已有 log；brain 侧最后一轮发给模型的形态）：
 
 ```text
-log（转录 append 在末尾）:
-  … 历史 assistant / tool / annotation …
-  [user] content="继续把周报写完"  context=当前 Composer 快照   ← 新 run 写入
-
-brain messages（新 run 首次 brain，仍 §3.2 顺序）:
-  [System]
-  [User built]   task_goal=继续把周报写完        ← 来自新 run input，走 build
-                 reference_scope=当前 Composer
-                 compacted_history=…  active_state=…
-  [Assistant/Tool …]  checkpoint 后历史 + repair 补全
+[System]
+[User built]   task_goal=帮我把上周周报模板复制一份，填好本周内容
+[Assistant]    …（含未闭合 tool_calls 时由 repair 补 ToolMessage）
+[Tool]         …
+[Tool]         Error: The run was interrupted…
 ```
 
-要点：
+**续跑后**（用户发送「继续把周报写完」；log 末尾多一条 `user`；brain **append** 新 build user）：
 
-- **log 末尾**多一条 `user` → 审计与 UI 对话轮次。
-- **brain 上**没有「第三条 user 消息」；新话在 build user 的 `<task_goal>`，位置仍在 System 之后、tail 之前。
-- 历史 tail 投影段不变；**不**属于 §4.3 的缓存打破（打破仍仅 compaction / learn_skill）。
+```text
+[System]
+[User built]   task_goal=帮我把上周周报模板复制一份…     ← 与续跑前一致，不替换
+[Assistant]    …
+[Tool]         …
+[Tool]         Error: The run was interrupted…
+[User built]   task_goal=继续把周报写完                  ← append；reference_scope=当前 Composer
+               compacted_history=…（若有） active_state=…
+```
 
-### 6.3 构建步骤
+log 侧（示意）：
 
-1. 读全 session `chat_session_message_log`；checkpoint 截断；`repairInterruptedToolCalls`。
-2. `context_budget` append 本轮 `user` 到 log（若尚未写入）。
-3. 组装 `[System, User built(新 task_goal + Composer), …tail]`。
-4. 进入 brain。
+```text
+seq …  user      content=帮我把上周周报…
+seq …  assistant / tool / …
+seq N  user      content=继续把周报写完    context=当前 Composer   ← 新 append
+```
 
-### 6.4 边界
+### 6.4 构建步骤
+
+1. 从 log 投影已有 tail（checkpoint 截断 + repair）。
+2. 还原/保留续跑前的 `[System, User built₁, …tail]`（字节级不变）。
+3. append `User built₂` = build（新 `input`、当前 Composer、annotation 投影的 compacted/active_state）。
+4. `context_budget` 将本轮 `user` 写入 log（若尚未写入）→ brain。
+
+### 6.5 边界
 
 | 情况 | 行为 |
 |------|------|
-| 多次 resume | 首条 log `user` 保留原始任务；每次续发 append 新 `user`，对应新 run 的 `<task_goal>` |
-| `output_truncated` / `runtime_limit` | 可继续对话；半截 assistant 已在 log |
+| 多次 resume | 每次 append 新 build user 在末尾；首条 `User built₁` 保留原始 task_goal |
+| `output_truncated` / `runtime_limit` | 可继续；半截 assistant 已在 log/tail |
 | `input_too_long` | 不写 log user，不调 brain |
 | 编辑重发 | 删该 user + assistant + run + 该 run 的 log 行 |
 | session 隔离 | 只读本 session log |
