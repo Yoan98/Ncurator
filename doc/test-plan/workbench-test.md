@@ -368,7 +368,7 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：真实 AI 用 `web_search(type=search)` 搜索 DeepSeek 融资，并用 `type=fetch` 读取最相关网页正文后总结。
 - Why：搜索必须落到网页正文证据上；必须守住 search → fetch 的真实网页信息闭环。
-- How：通过真实 Workbench UI 发送“搜索 DeepSeek 最近融资情况并读取最相关网页正文后总结”；等待真实 AI run 完成；检查 `web_search` 的 search/fetch 工具调用和结果。
+- How：通过真实 Workbench UI 发送约束型提示：只搜索一次、只 fetch 一条最相关新闻链接后总结；等待真实 AI run 完成；检查 `web_search` 的 search/fetch 工具调用和结果。
 - Oracle：run 完成；至少一次 `web_search(type=search)` 的 query 包含 DeepSeek；至少一次 `type=fetch` 返回 `ok=true` 且正文非空；最终回答使用网页事实；运行期间右侧不得出现 Composer 搜索模式的 `search_list` 列表，对齐 `WB-CORE-007-AC4`；搜索、读取、失败边界和严谨偏好限制由网页组 case 合并对齐 `WB-CORE-007`；不出现 fake 信号。
 - Not：不固定具体新闻网页、金额或日期，避免公网搜索结果变化导致误判。
 

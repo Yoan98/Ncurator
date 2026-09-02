@@ -42,7 +42,7 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 工作区是默认执行范围而非硬边界：模型默认在工作区域内操作，系统级需求可访问工作区外绝对路径。文件工具的 `sourcePath` / `outputPath` 必须为本机绝对路径。内置浏览器由 Electron `WebContentsView` 承载，Stagehand 通过本机回环 CDP endpoint 精确连接对应 Tab。
 
-网页搜索继续由冻结的 Python sidecar 提供 DDG 搜索和 Crawl4AI 抓取。sidecar 保留 Python Playwright 和 Playwright 驱动 JavaScript，但不再携带 Playwright Chromium 或 Node；驱动通过 `PLAYWRIGHT_NODEJS_PATH` 和 `ELECTRON_RUN_AS_NODE=1` 复用当前 Electron 可执行文件中的 Node。`web_search` 的 fetch 首次使用时，Electron 在**专用隐藏 host 窗口**中创建非持久化 `WebContentsView` partition（`show: false`、`skipTaskbar`、`frame: false`、屏外坐标、`setVisible(false)`），sidecar 通过本机回环 CDP 连接该隔离 Chromium context，并按唯一 marker 选择页面。该 host 不得挂到主窗口，也不得进入任务栏或显示窗框。找不到唯一 context 时直接失败，禁止退回用户内置浏览器 context。`web_search` 只向 AI 返回结构化结果，不驱动 Workbench 右侧面板；右侧 `search_list` 仅服务 Composer 搜索模式，右侧 `browser` 仅由 `browser_use` 或用户手动开标签触发。
+网页搜索继续由冻结的 Python sidecar 提供 DDG 搜索和 Crawl4AI 抓取。sidecar 保留 Python Playwright 和 Playwright 驱动 JavaScript，但不再携带 Playwright Chromium 或 Node；驱动通过 `PLAYWRIGHT_NODEJS_PATH` 和 `ELECTRON_RUN_AS_NODE=1` 复用当前 Electron 可执行文件中的 Node。`web_search` 的 fetch 首次使用时，Electron 在**专用隐藏 host 窗口**中创建非持久化 `WebContentsView` partition（`show: false`、`skipTaskbar`、`frame: false`、屏外坐标），sidecar 通过本机回环 CDP 连接该隔离 Chromium context，并按唯一 marker 选择页面。该 host 不得挂到主窗口，也不得进入任务栏或显示窗框。找不到唯一 context 时直接失败，禁止退回用户内置浏览器 context。`web_search` fetch 默认优先走 Crawl4AI；若抓取超时或失败，可降级为 Node 侧 HTTP 正文提取；E2E 对本机 loopback URL 可通过 `NCURATOR_WEB_SEARCH_LOOPBACK_FETCH=1` 跳过 CDP 直接 HTTP 读取。`web_search` 只向 AI 返回结构化结果，不驱动 Workbench 右侧面板；右侧 `search_list` 仅服务 Composer 搜索模式，右侧 `browser` 仅由 `browser_use` 或用户手动开标签触发。
 
 开发版使用独立 `*-dev` user-data 目录；E2E 可通过 `NCURATOR_USER_DATA_PATH` 提供隔离目录。
 

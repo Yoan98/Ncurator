@@ -519,7 +519,15 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     if (!resolveCdpConnection) {
       throw new Error('missing isolated Electron CDP connection resolver for web crawler sidecar')
     }
-    const connection = await resolveCdpConnection()
+    const connection = await Promise.race([
+      resolveCdpConnection(),
+      new Promise<WebCrawlerCdpConnection>((_, reject) => {
+        setTimeout(
+          () => reject(new Error('web crawler CDP connection timed out')),
+          20_000
+        )
+      })
+    ])
     if (this.closed) {
       throw new Error('web crawler sidecar is closed')
     }

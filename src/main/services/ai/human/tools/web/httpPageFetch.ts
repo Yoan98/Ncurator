@@ -2,7 +2,7 @@ import { CheerioWebBaseLoader } from '@langchain/community/document_loaders/web/
 import type { WebSearchFetchOutput } from './outputTypes'
 
 const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
-const LOOPBACK_FETCH_TIMEOUT_MS = 20_000
+const HTTP_PAGE_FETCH_TIMEOUT_MS = 20_000
 
 export const isLoopbackHttpUrl = (url: string): boolean => {
   try {
@@ -16,6 +16,9 @@ export const isLoopbackHttpUrl = (url: string): boolean => {
   }
 }
 
+export const shouldBypassCrawlerForLoopbackFetch = (): boolean =>
+  process.env.NCURATOR_WEB_SEARCH_LOOPBACK_FETCH === '1'
+
 const normalizePageText = (input: string): string =>
   input
     .replace(/\u00a0/g, ' ')
@@ -25,8 +28,8 @@ const normalizePageText = (input: string): string =>
     .filter(Boolean)
     .join('\n')
 
-export const fetchLoopbackPage = async (url: string): Promise<WebSearchFetchOutput> => {
-  const loader = new CheerioWebBaseLoader(url, { timeout: LOOPBACK_FETCH_TIMEOUT_MS })
+export const fetchHttpPage = async (url: string): Promise<WebSearchFetchOutput> => {
+  const loader = new CheerioWebBaseLoader(url, { timeout: HTTP_PAGE_FETCH_TIMEOUT_MS })
   const $ = await loader.scrape()
   const title = $('title').first().text().trim() || undefined
   const markdown = normalizePageText($('body').text() || $.root().text())

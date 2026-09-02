@@ -132,6 +132,7 @@
   - `WB-CORE-007-AC3` 严谨偏好下，外部网页能力不会绕过资料范围限制。
   - `WB-CORE-007-AC4` AI 调用 `web_search` 时，Workbench 不得因工具结果自动打开右侧「搜索结果」列表；过程层可展示“搜索网页 / 抓取网页”等状态，但右侧面板保持原状，除非用户处于 Composer 搜索模式或 AI 触发 `browser_use`。
   - `WB-CORE-007-AC5` `web_search` 的外网抓取在后台 headless CDP host 中完成，用户不得看到带窗框的独立浏览器窗口或主界面被网页内容遮挡。
+  - `WB-CORE-007-AC6` `web_search` fetch 默认走 Crawl4AI；抓取超时或失败时可降级为 HTTP 正文提取，以保证任务能返回可读正文或明确失败，而不是无限挂起。
 
 #### WB-CORE-008 Workbench 窗口层与业务内容分层
 

@@ -13,7 +13,7 @@ import {
 
 const CASE_ID = 'web-read-from-search-result'
 const PROMPT =
-  '请搜索 DeepSeek 最近融资情况，读取最相关网页正文后再总结。必须使用网页搜索工具读取网页正文，不要只列搜索结果，也不要直接编造。'
+  '请用网页搜索工具搜索一次「DeepSeek 最近融资」，从结果里选 1 条最相关新闻链接，再用 fetch 读取该页正文后总结。只搜索一次、只 fetch 一个 URL，不要重复搜索或多个网页，不要编造。'
 
 const isObjectRecord = (value: JsonValue | undefined): value is Record<string, JsonValue> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)

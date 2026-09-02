@@ -277,6 +277,7 @@ const buildElectronLaunchEnv = (
   }
   env.NCURATOR_E2E_WINDOW_MODE = windowMode || process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
   env.NCURATOR_USER_DATA_PATH = userDataDir
+  env.NCURATOR_WEB_SEARCH_LOOPBACK_FETCH = '1'
 
   for (const [key, value] of Object.entries(extraEnv || {})) {
     env[key] = value

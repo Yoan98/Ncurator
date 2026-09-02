@@ -17,7 +17,32 @@ import type {
   WebSearchLinkItem,
   WebSearchSearchOutput
 } from './outputTypes'
-import { fetchLoopbackPage, isLoopbackHttpUrl } from './loopbackFetch'
+import {
+  fetchHttpPage,
+  isLoopbackHttpUrl,
+  shouldBypassCrawlerForLoopbackFetch
+} from './httpPageFetch'
+
+const WEB_SEARCH_FETCH_TIMEOUT_MS = 70_000
+const WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS = 200
+
+const withTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string
+): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+      })
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 const webSourceService = new WebSourceService()
 
@@ -193,11 +218,47 @@ export const webToolFamily: ToolFamilyDefinition = {
                 return payload
               }
               try {
-                const payload = isLoopbackHttpUrl(crawlUrl)
-                  ? await fetchLoopbackPage(crawlUrl)
-                  : buildFetchOutput({
-                      result: await service.crawl({ url: crawlUrl, topic: crawlUrl })
-                    })
+                const crawlPage = async (): Promise<WebSearchFetchOutput> =>
+                  buildFetchOutput({
+                    result: await service.crawl({ url: crawlUrl, topic: crawlUrl })
+                  })
+
+                const tryHttpPage = async (): Promise<WebSearchFetchOutput | null> => {
+                  try {
+                    const httpResult = await fetchHttpPage(crawlUrl)
+                    return httpResult.markdown.length > 0 ? httpResult : null
+                  } catch {
+                    return null
+                  }
+                }
+
+                let payload: WebSearchFetchOutput
+                if (shouldBypassCrawlerForLoopbackFetch() && isLoopbackHttpUrl(crawlUrl)) {
+                  const httpOnly = await tryHttpPage()
+                  if (!httpOnly) {
+                    throw new Error('网页正文为空')
+                  }
+                  payload = httpOnly
+                } else {
+                  const httpResult = await tryHttpPage()
+                  if (httpResult && httpResult.markdown.length >= WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS) {
+                    payload = httpResult
+                  } else {
+                    try {
+                      payload = await withTimeout(
+                        crawlPage(),
+                        WEB_SEARCH_FETCH_TIMEOUT_MS,
+                        'web_search fetch timed out'
+                      )
+                    } catch (crawlError) {
+                      if (httpResult) {
+                        payload = httpResult
+                      } else {
+                        throw crawlError
+                      }
+                    }
+                  }
+                }
                 session.succeed(
                   undefined,
                   buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: true, data: payload })

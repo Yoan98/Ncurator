@@ -126,7 +126,6 @@ export class ElectronWebCrawlerBrowserHost {
     this.view = view
     hostWindow.contentView.addChildView(view)
     view.setBounds(WEB_CRAWLER_HOST_VIEW_BOUNDS)
-    view.setVisible(false)
     await waitForWebContentsLoad(view.webContents, contextMarkerUrl)
     const endpoint = await this.cdpEndpointService.getEndpoint()
     if (this.closed) {
