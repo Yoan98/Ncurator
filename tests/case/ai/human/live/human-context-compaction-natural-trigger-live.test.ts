@@ -15,11 +15,9 @@ import {
   runWithStructuredOutputRetry
 } from '../testUtils'
 
-// 固定开销（23 工具 schema ~18k + system/模板 ~2k ≈ 20k）几乎不随压缩减少；
-// 压缩后上下文仍需远低于 80% 触发线才能避免"压缩后仍超阈值、每轮压缩"的抖动。
-// 24k 时触发线 19.2k 被固定开销直接顶破，导致 21 次压缩死循环并撞递归上限；
-// 60k 时任务峰值 ~47.4k 达不到 48k 触发线，0 次压缩。52k（触发线 41.6k）能自然触发 1-2 次。
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 52_000
+// 真实模型的工具路径会有一定波动；48k（触发线 38.4k）让长任务在交付前稳定进入压缩，
+// 同时仍为压缩摘要和最后一轮工具结果保留足够空间。
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 48_000
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '任务锚点：',

@@ -75,12 +75,15 @@ export const createContextCompactionNode = (input: {
     }
 
     const currentRecords = await input.ctx.loadMessageLog()
-    const currentUserRecord = currentRecords.find(
-      (record) => record.runId === input.ctx.runId && record.entry.kind === 'user'
-    )
-    const coveredRecord = currentUserRecord
-      ? [...currentRecords].reverse().find((record) => record.seq < currentUserRecord.seq)
-      : [...currentRecords].reverse()[0]
+    // The current user is intentionally part of this run's in-memory context.
+    // The checkpoint may cover it as well: on the next run the projection
+    // replaces everything through this boundary with the summary, then the
+    // new user message is appended exactly once. Looking only before the
+    // current user fails when this is the first record in a session and causes
+    // an endless compaction loop with no checkpoint.
+    const coveredRecord = [...currentRecords]
+      .filter((record) => record.runId === input.ctx.runId)
+      .reverse()[0]
     if (!coveredRecord) {
       return {
         ...state,

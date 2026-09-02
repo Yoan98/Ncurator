@@ -6,6 +6,12 @@ const isProcessMessage = (message: BaseMessage): boolean => {
   return type === 'human' || type === 'ai' || type === 'tool'
 }
 
+const isCompactedHistoryMessage = (message: BaseMessage): boolean => {
+  if (message.getType() !== 'human') return false
+  const content = typeof message.content === 'string' ? message.content : ''
+  return content.startsWith('<compacted_history>')
+}
+
 const CURRENT_USER_MARKER = 'ncurator_current_user'
 
 export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
@@ -22,15 +28,6 @@ export const isCurrentBrainUserMessage = (message: BaseMessage): boolean =>
 export const splitMessagesByLastAi = (
   messages: BaseMessage[]
 ): { compressible: BaseMessage[]; tail: BaseMessage[] } => {
-  const currentUserIndex = messages.findIndex(isCurrentBrainUserMessage)
-  if (currentUserIndex >= 0) {
-    return {
-      compressible: messages
-        .slice(0, currentUserIndex)
-        .filter((message) => isProcessMessage(message) && !isCurrentBrainUserMessage(message)),
-      tail: messages.slice(currentUserIndex)
-    }
-  }
   let lastAiIndex = -1
   for (let index = 0; index < messages.length; index += 1) {
     if (messages[index].getType() === 'ai') {
@@ -40,10 +37,16 @@ export const splitMessagesByLastAi = (
   if (lastAiIndex < 0) {
     return { compressible: [], tail: [] }
   }
+
+  // Keep the active user turn and the last AI/tool exchange intact. All
+  // earlier process messages, including rounds produced after the current
+  // user message, are safe compaction candidates.
   return {
-    compressible: messages
-      .slice(0, lastAiIndex)
-      .filter((message) => isProcessMessage(message) && !isCurrentBrainUserMessage(message)),
+    compressible: messages.filter((message, index) => {
+      if (index >= lastAiIndex) return false
+      if (isCurrentBrainUserMessage(message) || isCompactedHistoryMessage(message)) return false
+      return isProcessMessage(message)
+    }),
     tail: messages.slice(lastAiIndex)
   }
 }
