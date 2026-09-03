@@ -8,6 +8,7 @@ import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
 import { listHistoricalBuildUserMessages } from '../../memory/brainMessageProjection'
+import { persistCurrentBrainUserSnapshot } from '../../memory/brainUserSnapshot'
 import {
   createCurrentBrainUserMessage,
   renderMessagesForCompaction,
@@ -154,6 +155,16 @@ export const createContextCompactionNode = (input: {
     input.cache.currentUserMessageIndex = rebuilt.findIndex(
       (message) => message.additional_kwargs?.ncurator_current_user === true
     )
+    const compactedUserIndex = input.cache.currentUserMessageIndex
+    const compactedUserText =
+      compactedUserIndex !== undefined && compactedUserIndex >= 0
+        ? String(rebuilt[compactedUserIndex]?.content || '')
+        : ''
+    await persistCurrentBrainUserSnapshot({
+      ctx: input.ctx,
+      cache: input.cache,
+      text: compactedUserText
+    })
 
     return {
       ...state,

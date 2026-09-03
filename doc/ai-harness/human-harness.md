@@ -118,6 +118,7 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 | `learning_started` / `learning_completed` | `{ skillId }` | UI 过程层 |
 | `skill_state_updated` | `{ learnedSkillIds: string[] }` | brain `<active_state>` 技能（**取最新一条**） |
 | `plan_updated` | `{ plan: [{ title, status }] }` | brain `<active_state>` 计划 + UI 计划条 |
+| `brain_user_snapshot` | `{ text: string }` | 当前 build user **最后一次发给模型的原文**；resume 还原历史 build user（取该 `user` 之后、下一条 `user` 之前的**最后一条**） |
 | `compaction_checkpoint` | 见示例 | brain `<compacted_history>` + UI 压缩层 |
 | `finalizing_started` | `{}` | 投影时**清空** plan |
 
@@ -186,6 +187,10 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 
 ```json
 { "kind": "annotation", "eventType": "skill_state_updated", "payload": { "learnedSkillIds": ["docx-read", "docx-write"] } }
+```
+
+```json
+{ "kind": "annotation", "eventType": "brain_user_snapshot", "payload": { "text": "<user_context>…</user_context>" } }
 ```
 
 ```json
@@ -364,15 +369,16 @@ flowchart TD
   <preference>…</preference>
   <reference_scope>…</reference_scope>
   <compacted_history>…</compacted_history>
+  <current_time>…</current_time>          ← 仅当前 build user；System 不含时间
   <active_state>…</active_state>
 </user_context>
 ```
 
 **稳态行为**（同 run、未触发 §5–§6）：
 
-- 首次 brain：`[System, User built]`，tail 为空。
-- brain → 工具 → 再 brain：tail 末尾 append；brain 前 **replace** 首条 build user 的 `<active_state>`（及 plan），**`<task_goal>` 不变**。
-- 前缀 `[System, User built, …已发送 tail]` 字节序不变 → §4 缓存命中。
+- 首次 brain：`[System, User built]`，tail 为空；写入 `brain_user_snapshot`。
+- brain → 工具 → 再 brain：tail 末尾 append；brain 前 **replace** 当前 build user 的 `<active_state>`（及 plan），**`<task_goal>` 不变**；若原文变化再写 `brain_user_snapshot`。
+- 前缀 `[System, …已发送历史 build user / tail]` 字节序不变 → §4 缓存命中。System **跨 run 稳定**（无 `current_time`）。
 
 ### 3.3 稳态投影规则
 
@@ -397,16 +403,18 @@ flowchart TD
 | `<preference>` | 当前 run Composer |
 | `<reference_scope>` | 当前 run Composer（§2.5） |
 | `<compacted_history>` | 最新 `compaction_checkpoint.summary`（无则省略） |
+| `<current_time>` | 当前 run `runStartedAt`（**只写当前 build user**；历史冻结文本不再改） |
 | 已学习技能 | 最新 `skill_state_updated.learnedSkillIds` |
 | 计划进度 | 全 session log 顺序扫描：最后 `plan_updated`；`finalizing_started` 清空 |
 
-annotation 扫描用**完整** log；tail 用 checkpoint **截断后**的行。
+annotation 扫描用**完整** log；tail 用 checkpoint **截断后**的行。  
+历史 build user：**禁止**从 log `user` 重算；必须用该 user 之后最后一条 `brain_user_snapshot.text`。
 
 **组装**
 
 - **同 run 首次 brain**：`[System] + [User built] + tail`（tail 可为空）。
-- **同 run 后续 brain**：replace 首条 build user 的 `<active_state>`；tail append。
-- **resume 新 run**：`[System] + [User built₁] + …history tail… + [User built₂]`（见 §6）；**不**改写 built₁ 与 history。
+- **同 run 后续 brain**：replace 当前 build user 的 `<active_state>`；tail append。
+- **resume 新 run**：`[System] + [冻结 User built₁] + …history tail… + [新 User built₂]`（见 §6）；**不**改写 built₁ 与 history。
 
 **同 run 刷新**：固定首条 `currentUserMessageIndex`；compaction 整段替换见 §5。
 
@@ -487,7 +495,7 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 ## 4. 前缀缓存
 
 主模型 provider 的前缀缓存要求：**多次请求中，已发送的前缀字节序一致**。  
-human harness 通过 **tail 只 append、resume 只 append 新 build user（不改写历史）** 满足这一点。
+human harness 通过 **tail 只 append、resume 只 append 新 build user（历史 build user 取 `brain_user_snapshot` 冻结原文）、System 不含易变时间** 满足这一点。
 
 ### 4.1 什么算「前缀」
 
@@ -497,17 +505,18 @@ human harness 通过 **tail 只 append、resume 只 append 新 build user（不�
 [System] + [User built₁] + … + tail 已发送段 + （resume 时已有的 User built₂ 之前）
 ```
 
+- System 跨 run **字节稳定**（platform / paths / 技能目录；**不含** `current_time`）。
 - tail 只许 **末尾 append** assistant/tool。
-- 同 run 内：仅 **replace 首条** build user 的 `<active_state>` / plan；**`<task_goal>` 不动**。
-- resume：**append** 新 build user 在整段末尾；**前面的 user 与 tail 一字不改**。
+- 同 run 内：仅 **replace 当前** build user 的 `<active_state>` / plan；`<current_time>` 取本 run `runStartedAt`（同 run 内不变）；**`<task_goal>` 不动**。
+- resume：**append** 新 build user 在整段末尾；历史 build user / tail **一字不改**（来自冻结 snapshot，禁止重算）。
 
 ### 4.2 稳态下如何保持命中
 
 | 操作 | 对前缀的影响 |
 |------|--------------|
-| brain → hand → 再 brain | 已发送段不变；tail 末尾 append |
-| `update_plan` | replace 首条 build user 的 plan 行；tail 不变 |
-| **resume** | 历史段 **不变**；末尾 **append** 新 build user（§6） |
+| brain → hand → 再 brain | 已发送段不变；tail 末尾 append；当前 build user 可变块 refresh 后写 snapshot |
+| `update_plan` | replace 当前 build user 的 plan 行；tail 不变 |
+| **resume** | 历史段 **不变**（冻结 snapshot）；末尾 **append** 新 build user（§6） |
 
 ### 4.3 打破前缀缓存的操作
 
@@ -519,7 +528,7 @@ human harness 通过 **tail 只 append、resume 只 append 新 build user（不�
 | **learn_skill**（§7） | 当前 run 的 build user 的 `<active_state>` 技能列表变化 |
 
 **resume 不属于打破**：历史保持原样，只在末尾追加新 build user。  
-设计约束：除 §4.3 外，不得 rewrite 已发送的 tail 段；resume 不得替换首条 build user 的 `<task_goal>`。
+设计约束：除 §4.3 外，不得 rewrite 已发送的 tail 段；resume 不得替换历史 build user，也不得从 log `user` 重拼可变块。
 
 ---
 
@@ -587,17 +596,20 @@ log 行 append-only 保留；被覆盖段不再进入 tail。
 ### 6.2 核心规则
 
 1. **log**：append 新 `user` 行在转录末尾（含 Composer `context` 快照）。
-2. **brain**：在**已有** `[System, User built₁, …tail…]` **末尾 append** `User built₂`（新 run 的 input + Composer）；**不替换** `User built₁`，**不改写**中间 tail。
-3. 新诉求只出现在 **末尾** 那条 build user 的 `<task_goal>`；仍走 `buildBrainUserMessage`，不是裸 HumanMessage。
-4. 符合 §4：历史前缀不变 → 缓存可命中；打破仍仅 compaction / learn_skill。
+2. **brain**：在**已有** `[System, 冻结 User built₁, …tail…]` **末尾 append** `User built₂`（新 run 的 input + Composer + 最新 active_state + 本 run `current_time`）；**不替换** `User built₁`，**不改写**中间 tail。
+3. 历史 `User built₁` = 该 `user` 之后最后一条 `brain_user_snapshot.text`（**禁止** `FromLogEntry` 式重算）。
+4. 新诉求只出现在 **末尾** 那条 build user 的 `<task_goal>`；仍走 `buildBrainUserMessage`，不是裸 HumanMessage。
+5. 符合 §4：历史前缀不变 → 缓存可命中；打破仍仅 compaction / learn_skill。
+6. **tools**：`bindTools` 按全 session 最新 `learnedSkillIds` 重绑（与 `User built₂` 的 `<active_state>` 技能对齐），不是冻住进程内 tool 对象。
 
 ### 6.3 示例
 
 **续跑前**（run-1 中断后，session 已有 log；brain 侧最后一轮发给模型的形态）：
 
 ```text
-[System]
+[System]                 ← 无 current_time
 [User built]   task_goal=帮我把上周周报模板复制一份，填好本周内容
+               （含当时的 current_time / active_state；已写入 brain_user_snapshot）
 [Assistant]    …（含未闭合 tool_calls 时由 repair 补 ToolMessage）
 [Tool]         …
 [Tool]         Error: The run was interrupted…
@@ -606,19 +618,20 @@ log 行 append-only 保留；被覆盖段不再进入 tail。
 **续跑后**（用户发送「继续把周报写完」；log 末尾多一条 `user`；brain **append** 新 build user）：
 
 ```text
-[System]
-[User built]   task_goal=帮我把上周周报模板复制一份…     ← 与续跑前一致，不替换
+[System]                 ← 与续跑前一致
+[User built]   …         ← 冻结 snapshot 原文，不替换、不重算
 [Assistant]    …
 [Tool]         …
 [Tool]         Error: The run was interrupted…
 [User built]   task_goal=继续把周报写完                  ← append；reference_scope=当前 Composer
-               compacted_history=…（若有） active_state=…
+               current_time=本 run；compacted_history=…（若有）；active_state=最新技能/计划
 ```
 
 log 侧（示意）：
 
 ```text
 seq …  user      content=帮我把上周周报…
+seq …  brain_user_snapshot  text=<user_context>…</user_context>   ← 最后发送原文
 seq …  assistant / tool / …
 seq N  user      content=继续把周报写完    context=当前 Composer   ← 新 append
 ```
@@ -626,9 +639,10 @@ seq N  user      content=继续把周报写完    context=当前 Composer   ← 
 ### 6.4 构建步骤
 
 1. 从 log 投影已有 tail（checkpoint 截断 + repair）。
-2. 还原/保留续跑前的 `[System, User built₁, …tail]`（字节级不变）。
-3. append `User built₂` = build（新 `input`、当前 Composer、annotation 投影的 compacted/active_state）。
-4. `context_budget` 将本轮 `user` 写入 log（若尚未写入）→ brain。
+2. 还原续跑前的历史 build user：每条可见 `user` → 对应最后一条 `brain_user_snapshot`（缺则失败）；System 重渲染但内容跨 run 稳定。
+3. append `User built₂` = build（新 `input`、当前 Composer、annotation 投影的 compacted/active_state、本 run `current_time`）。
+4. `context_budget` 将本轮 `user` 写入 log（若尚未写入）→ brain；brain 发送前写入/更新本轮 `brain_user_snapshot`。
+5. `buildAvailableTools(learnedSkillIds)`：从最新 `skill_state_updated` 恢复技能后绑定工具。
 
 ### 6.5 边界
 
@@ -780,6 +794,7 @@ applyDeliverySideEffects
 | Log 投影 | `src/main/services/ai/human/memory/transcript.ts` |
 | 多模态 | `src/main/services/ai/human/memory/multimodal.ts` |
 | Build user | `src/main/services/ai/human/prompts/brain.ts` |
+| Build user 冻结 | `src/main/services/ai/human/memory/brainUserSnapshot.ts` |
 | Compaction | `src/main/services/ai/human/node/contextCompactionNode/` |
 | Log 存储 | `src/main/services/storage/domains/ChatMessageLogStore.ts` |
 | Resume | `src/main/services/ai/ChatRunService.ts` |

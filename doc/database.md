@@ -35,7 +35,7 @@ SQLite 保存以下业务数据：
 关键规则：
 
 - `chat_search_turn` 使用会话内 `seq` 保证搜索轮次稳定顺序。
-- `chat_session_message_log` 使用 `session_id + seq` 保证会话内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated` 和 `compaction_checkpoint` 是强类型 annotation。恢复投影读取记录自身的 `seq/run_id`，不会修改历史行。
+- `chat_session_message_log` 使用 `session_id + seq` 保证会话内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated`、`brain_user_snapshot` 和 `compaction_checkpoint` 是强类型 annotation。恢复投影读取记录自身的 `seq/run_id`，不会修改历史行；历史 build user 必须来自 `brain_user_snapshot` 冻结原文。
 - `ai_run.partial_answer` 与 `partial_answer_role` 只保存当前流式 UI 草稿；它们不参与下一次模型上下文恢复。`failure_code` 保存 `process_interrupted`、`output_truncated`、`input_too_long` 等终止原因。
 - 待审批状态以 SQLite 中的 run 记录为准。
 - `document.active_generation_id` 是当前有效索引版本。

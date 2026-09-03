@@ -33,6 +33,7 @@ import {
   finalizeDelivery
 } from './finalizeDelivery'
 import { createCurrentBrainUserMessage } from '../utils/messageTail'
+import { persistCurrentBrainUserSnapshot } from '../../memory/brainUserSnapshot'
 import { LlmOutputTruncatedError } from '../../../errors'
 
 const getErrorMessage = (error: unknown): string =>
@@ -85,6 +86,17 @@ export const createBrainNode = (input: {
         input.cache.currentUserMessageIndex = messages.length - 1
       }
     }
+
+    const currentUserIndex = input.cache.currentUserMessageIndex
+    const currentUserText =
+      currentUserIndex !== undefined && currentUserIndex >= 0 && currentUserIndex < messages.length
+        ? String(messages[currentUserIndex]?.content || '')
+        : ''
+    await persistCurrentBrainUserSnapshot({
+      ctx: input.ctx,
+      cache: input.cache,
+      text: currentUserText
+    })
 
     const tools = buildAvailableTools({
       cache: input.cache,

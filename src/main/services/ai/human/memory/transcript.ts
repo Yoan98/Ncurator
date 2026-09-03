@@ -160,9 +160,8 @@ export const projectMessageLogRecords = (
   const projectedRecords = checkpoint
     ? ordered.filter((record) => record.seq > checkpoint.coveredThroughSeq)
     : ordered
-  // 历史 user 只属于不可变日志和聊天 UI，不直接作为裸 HumanMessage
-  // 发给 Brain。每次新 run 的当前 user 统一由 buildBrainUserMessage 构造，
-  // 这样恢复时不会把旧诉求误当成一条新的用户输入。
+  // 历史 user 只属于不可变日志和聊天 UI；brain 侧历史 build user 必须来自
+  // brain_user_snapshot 冻结原文。每次新 run 的当前 user 统一由 buildBrainUserMessage 构造。
   const messages = deriveMessageLogMessages({
     entries: projectedRecords
       .map((record) => record.entry)

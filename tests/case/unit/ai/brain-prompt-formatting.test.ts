@@ -44,7 +44,7 @@ describe('ai unit brain prompt formatting', () => {
     expect(skillCatalog).not.toMatch(/^- [^\n]+\n\n- /m)
   })
 
-  it('renders the local environment inside the system prompt', () => {
+  it('renders the local environment inside the system prompt without current time', () => {
     const system = buildBrainSystemPrompt({ ctx: createFakeCtx() })
     const environment =
       system.match(/<local_environment>([\s\S]*?)<\/local_environment>/)?.[1] || ''
@@ -52,6 +52,8 @@ describe('ai unit brain prompt formatting', () => {
     expect(environment).toContain('platform：windows')
     expect(environment).toContain('runtime_paths.scripts：')
     expect(environment).toContain('runtime_paths.assets：')
+    expect(environment).not.toContain('current_time')
+    expect(system).not.toContain('current_time.local_iso')
   })
 
   it('keeps context efficiency and planning rules concise', () => {
@@ -66,7 +68,7 @@ describe('ai unit brain prompt formatting', () => {
     expect(system).not.toContain('<context_efficiency>')
   })
 
-  it('renders the default preference and reference scope in the user message', () => {
+  it('renders the default preference, reference scope and current time in the user message', () => {
     const state = createInitialHumanState({
       taskId: 'task-prompt-formatting',
       userInput: '继续处理任务'
@@ -77,6 +79,8 @@ describe('ai unit brain prompt formatting', () => {
     expect(user).toContain('继续处理任务')
     expect(user.match(/<preference>([\s\S]*?)<\/preference>/)?.[1].trim()).toBe('无')
     expect(user).toContain('<reference_scope>')
+    expect(user).toContain('<current_time>')
+    expect(user).toContain('current_time.local_iso')
   })
 
   it('renders plan and learned skills inside current_state when injectPlan is set', () => {
@@ -124,7 +128,8 @@ describe('ai unit brain prompt formatting', () => {
     })
     expect(user).toContain('<compacted_history>\n任务锚点：继续处理已确认事实\n  </compacted_history>')
     expect(user.indexOf('</reference_scope>')).toBeLessThan(user.indexOf('<compacted_history>'))
-    expect(user.indexOf('</compacted_history>')).toBeLessThan(user.indexOf('<active_state>'))
+    expect(user.indexOf('</compacted_history>')).toBeLessThan(user.indexOf('<current_time>'))
+    expect(user.indexOf('</current_time>')).toBeLessThan(user.indexOf('<active_state>'))
     expect(user.match(/<active_state>[\s\S]*<compacted_history>/)).toBeNull()
   })
 })

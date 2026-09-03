@@ -1765,6 +1765,11 @@ export type ChatMessageLogAnnotationEntry =
         sourceMessageCount: number
       }
     }
+  | {
+      kind: 'annotation'
+      eventType: 'brain_user_snapshot'
+      payload: { text: string }
+    }
 
 export type ChatMessageLogEntry =
   | {

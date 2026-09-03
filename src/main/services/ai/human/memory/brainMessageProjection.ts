@@ -6,13 +6,14 @@ import type {
 } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import type { HumanState } from '../types'
-import { buildBrainUserMessage, buildBrainUserMessageFromLogEntry } from '../prompts/brain'
+import { buildBrainUserMessage } from '../prompts/brain'
 import { createImageReferenceMessage } from './multimodal'
 import {
   createCurrentBrainUserMessage,
   isCurrentBrainUserMessage
 } from '../node/utils/messageTail'
 import { repairInterruptedToolCalls } from './transcript'
+import { resolveHistoricalBrainUserTextsByUserSeq } from './brainUserSnapshot'
 
 const toToolCall = (
   call: ChatMessageLogToolCall
@@ -58,6 +59,7 @@ export const projectBrainMessagesFromLog = (input: {
     ? ordered.filter((record) => record.seq > checkpoint.coveredThroughSeq)
     : ordered
 
+  const frozenBrainUserByUserSeq = resolveHistoricalBrainUserTextsByUserSeq(ordered)
   const messages: BaseMessage[] = []
   let pendingImages: ChatMessageImageRef[] = []
   const flushImages = (): void => {
@@ -70,15 +72,13 @@ export const projectBrainMessagesFromLog = (input: {
     const entry = record.entry
     if (entry.kind === 'user') {
       flushImages()
-      messages.push(
-        new HumanMessage(
-          buildBrainUserMessageFromLogEntry({
-            content: entry.content,
-            context: entry.context,
-            ctx: input.ctx
-          })
+      const frozenText = frozenBrainUserByUserSeq.get(record.seq)
+      if (!frozenText) {
+        throw new Error(
+          `历史 build user 缺少 brain_user_snapshot（user seq=${record.seq}）。resume 必须还原上次发给模型的原文，禁止重算。`
         )
-      )
+      }
+      messages.push(new HumanMessage(frozenText))
       continue
     }
     if (entry.kind === 'assistant') {

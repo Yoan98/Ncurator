@@ -791,10 +791,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-interruption-message-repair`
 
 - 测试类型：`backend / mock-llm`
-- What：续接（跨会话 / 中断恢复）重建消息数组时，顺序为 `system + 历史 build user + interleaved assistant/tool + 当前 run buildBrainUserMessage user`；每条 log `user` 投影为一条 build user；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
-- Why：模型上下文唯一真相源是会话消息记录，续接必须忠实回放历史并把新诉求追加到末尾；若上一条 assistant 声明了 tool_call 却没有对应结果，接口会直接报错，必须补一条意外中断反馈。
+- What：续接（跨会话 / 中断恢复）重建消息数组时，顺序为 `system + 冻结历史 build user（brain_user_snapshot）+ interleaved assistant/tool + 当前 run buildBrainUserMessage user`；每条可见 log `user` 对应一条冻结 build user；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
+- Why：模型上下文唯一真相源是会话消息记录，续接必须忠实回放**上次发给模型的**历史并把新诉求追加到末尾；若上一条 assistant 声明了 tool_call 却没有对应结果，接口会直接报错，必须补一条意外中断反馈。
 - How：mock-llm 下跑两个子场景：其一 run-1 正常完成（含 learn_skill 与最终交付），run-2 捕获首次 brain 的 `request.messages`；其二 run-1 的 brain 返回 learn_skill tool_call 后在 brain 调用返回时 abort 控制器，run-2 恢复并捕获消息数组。
-- Oracle：子场景一：消息数组首条为 system，历史含 run-1 的 build user、assistant/tool 与 run-2 末尾 build user（共 2 条 human）；子场景二：run-1 为 `user_cancelled`，run-2 在悬空 learn_skill tool_call 后补相同 ID 的失败 ToolMessage，且含 run-1 与 run-2 两条 build user。
+- Oracle：子场景一：消息数组首条为 system（无 `current_time`），历史含 run-1 的冻结 build user、assistant/tool 与 run-2 末尾 build user（共 2 条 human，末条含本 run `current_time` / 最新 active_state）；子场景二：run-1 为 `user_cancelled`，run-2 在悬空 learn_skill tool_call 后补相同 ID 的失败 ToolMessage，且含 run-1 与 run-2 两条 build user。
 - Not：不验证 live provider 真实网络抖动；不恢复 docx 临时运行态。
 
 ##### `session-skill-memory-multi-run`

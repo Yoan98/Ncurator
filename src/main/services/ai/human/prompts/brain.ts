@@ -1,7 +1,5 @@
-import type { ChatMessageLogUserContext } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from './referenceScope'
-import { buildReferenceScope } from './referenceScope'
 import { renderPlanItemStatus } from '../shared/memoryRenderers'
 import {
   getWorkspaceAssetsRootDir,
@@ -14,6 +12,14 @@ import { listBuiltinSkillDefinitions, listExternalSkillDefinitions } from '../sk
 
 export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
   const workspace = ctx.workspace
+  return [
+    `- platform：${ctx.platform}`,
+    `- runtime_paths.scripts：${workspace ? getWorkspaceScriptsRootDir(workspace.rootPath) : 'none'}（用户工作区内的一次性临时脚本目录）`,
+    `- runtime_paths.assets：${workspace ? getWorkspaceAssetsRootDir(workspace.rootPath) : 'none'}（运行期生成的临时产物目录，如图片、渲染中间结果等）`
+  ].join('\n')
+}
+
+export const renderCurrentTimeText = (ctx: AiRunContext): string => {
   const startedAt = new Date(ctx.runStartedAt)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
   const offsetMinutes = -startedAt.getTimezoneOffset()
@@ -25,13 +31,7 @@ export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
     .replace(/\.\d{3}/, '')
     .replace('Z', `${offsetSign}${offsetHours}:${offsetRemainderMinutes}`)
 
-  return [
-    `- platform：${ctx.platform}`,
-    `- runtime_paths.scripts：${workspace ? getWorkspaceScriptsRootDir(workspace.rootPath) : 'none'}（用户工作区内的一次性临时脚本目录）`,
-    `- runtime_paths.assets：${workspace ? getWorkspaceAssetsRootDir(workspace.rootPath) : 'none'}（运行期生成的临时产物目录，如图片、渲染中间结果等）`,
-    `- current_time.timezone：${timezone}`,
-    `- current_time.local_iso：${localIso}`
-  ].join('\n')
+  return [`- current_time.timezone：${timezone}`, `- current_time.local_iso：${localIso}`].join('\n')
 }
 
 const renderPreferenceText = (preference: AiRunContext['preference']): string => {
@@ -150,37 +150,12 @@ ${renderPreferenceText(input.ctx.preference)}
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
 ${compactedHistory}
+  <current_time>
+${renderCurrentTimeText(input.ctx)}
+  </current_time>
   <active_state>
 ${renderActiveState()}
   </active_state>
-</user_context>
-`.trim()
-}
-
-export const buildBrainUserMessageFromLogEntry = (input: {
-  content: string
-  context: ChatMessageLogUserContext
-  ctx: AiRunContext
-}): string => {
-  const referenceScope = buildReferenceScope({
-    workspace: input.context.workspace,
-    selectedReferences: input.context.selectedReferences,
-    attachments: input.context.attachments
-  })
-
-  return `
-<user_context>
-  <task_goal>
-${input.content}
-  </task_goal>
-
-  <preference>
-${renderPreferenceText(input.ctx.preference)}
-  </preference>
-
-  <reference_scope>
-${renderReferenceScopeText(referenceScope)}
-  </reference_scope>
 </user_context>
 `.trim()
 }
