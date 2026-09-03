@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   emitCompactionCompleted,
-  emitLearningCompleted,
   emitToolProcessCompleted,
   emitToolProcessStarted
 } from '../../../../src/main/services/ai/events/processEvents'
@@ -36,11 +35,12 @@ describe('ai process events', () => {
       ok: true
     })
 
-    const groupEvents = events.filter(
-      (event) =>
-        event.type === 'assistant_process_group_started' ||
-        event.type === 'assistant_process_group_completed'
-    )
+    const groupEvents = events
+      .filter(
+        (event) =>
+          event.type === 'assistant_process_group_started' ||
+          event.type === 'assistant_process_group_completed'
+      )
       .filter((event) => event.groupId.startsWith('run-1:tool:'))
 
     expect(groupEvents.map((event) => event.groupId)).toEqual([
@@ -50,16 +50,18 @@ describe('ai process events', () => {
     ])
   })
 
-  it('does not restart thinking after learning or compaction completes', () => {
+  it('does not restart thinking after tool or compaction completes', () => {
     const events: AiRunEvent[] = []
     const sendEvent = (event: AiRunEvent): void => {
       events.push(event)
     }
 
-    emitLearningCompleted({
+    emitToolProcessCompleted({
       sendEvent,
       runId: 'run-1',
-      skillId: 'docx-read'
+      toolCallId: 'learn-1',
+      toolName: 'learn_skill',
+      ok: true
     })
     emitCompactionCompleted({
       sendEvent,

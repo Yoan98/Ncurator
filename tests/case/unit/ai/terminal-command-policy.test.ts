@@ -5,7 +5,6 @@ import path from 'node:path'
 import {
   analyzeTerminalCommand,
   analyzeTerminalCommandPolicy,
-  hasDetachedExecution,
   isPathInsideRoot,
   isTerminalTerminationCommand,
   resolveToolPath
@@ -186,19 +185,6 @@ describe('ai unit terminal dangerous-command policy', () => {
       'destructive_command'
     )
     approve('foreach ($f in $files) { Remove-Item $f }', 'windows', 'destructive_command')
-  })
-
-  it('detects detached background execution while allowing redirection ampersands', () => {
-    expect(hasDetachedExecution('sleep 1 &', 'macos')).toBe(true)
-    expect(hasDetachedExecution('npm run dev&', 'macos')).toBe(true)
-    expect(hasDetachedExecution('echo a && echo b', 'macos')).toBe(false)
-    expect(hasDetachedExecution('ls -l "x.docx" 2>&1; echo done', 'macos')).toBe(false)
-    expect(hasDetachedExecution('ls -l "x.docx" 2>&1; echo "exit:$?"', 'macos')).toBe(false)
-    expect(hasDetachedExecution('echo hi &> file.log', 'macos')).toBe(false)
-    expect(hasDetachedExecution('cat 0<&1', 'macos')).toBe(false)
-    expect(hasDetachedExecution('nohup sleep 1', 'macos')).toBe(true)
-    expect(hasDetachedExecution('sleep 1 &', 'windows')).toBe(false)
-    expect(hasDetachedExecution('Start-Process notepad', 'windows')).toBe(true)
   })
 
   it('requires approval for privilege and process control', () => {

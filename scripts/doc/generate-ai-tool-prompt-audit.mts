@@ -550,13 +550,19 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
       }
     },
     {
-      label: '策略拦截（工具级失败）',
+      label: '命令执行失败（非零退出）',
       input: {
-        command: 'Start-Process powershell',
-        commandExplanation: '尝试分离启动子 shell，应被 detached 策略拒绝'
+        command: 'node -e "process.exit(2)"',
+        commandExplanation: '故意以非零退出码结束，验证 failed 状态回流'
       },
-      ok: false,
-      data: { error: 'Command blocked by policy: detached shell execution is not allowed' }
+      ok: true,
+      data: {
+        terminalId: 'term-fail-exit',
+        status: 'failed',
+        output: '',
+        readEndPosition: 0,
+        hasMoreOutput: false
+      }
     }
   ],
   terminal_read: [

@@ -1,4 +1,4 @@
-import type { IpcJsonObject, IpcJsonValue } from './types'
+import type { IpcJsonObject } from './types'
 import type { RuntimeToolName } from './runtimeCapabilities'
 
 export type AssistantExecutionStatus = 'running' | 'completed' | 'failed' | 'partial_failed'
@@ -6,7 +6,6 @@ export type AssistantExecutionStatus = 'running' | 'completed' | 'failed' | 'par
 export type AssistantExecutionIconKind =
   | 'search'
   | 'browser'
-  | 'wait'
   | 'web'
   | 'image'
   | 'knowledge'
@@ -17,7 +16,6 @@ export type AssistantExecutionIconKind =
   | 'retry'
   | 'learning'
   | 'compaction'
-  | 'finalizing'
   | 'default'
 
 export type AssistantExecutionSkillKey =
@@ -36,7 +34,7 @@ export type AssistantExecutionSkillKey =
   | 'web-search'
   | 'browser'
   | 'image-generation'
-  | 'wait'
+  | 'learning'
   | 'generic'
 
 export type AssistantExecutionTextSegment = {
@@ -53,6 +51,11 @@ export type AssistantExecutionGroup = {
     toolName?: RuntimeToolName | 'unnamed'
     targetLabel?: string
     input?: IpcJsonObject
+    status?: AssistantExecutionStatus
+    runningText?: readonly AssistantExecutionTextSegment[]
+    completedText?: readonly AssistantExecutionTextSegment[]
+    failedText?: readonly AssistantExecutionTextSegment[]
+    partialFailedText?: readonly AssistantExecutionTextSegment[]
   }[]
 }
 
@@ -87,7 +90,7 @@ const TOOL_UI_KINDS = {
   web_search: 'web-search',
   browser_use: 'browser',
   image_generate: 'image-generation',
-  learn_skill: 'generic',
+  learn_skill: 'learning',
   update_plan: 'generic',
   read_image: 'generic'
 } as const satisfies Record<RuntimeToolName, AssistantExecutionSkillKey>
@@ -115,7 +118,7 @@ export const getAssistantToolIconKind = (
   if (skillKey === 'kb') return 'knowledge'
   if (skillKey === 'browser') return 'browser'
   if (skillKey === 'image-generation') return 'image'
-  if (skillKey === 'wait') return 'wait'
+  if (skillKey === 'learning') return 'learning'
   if (skillKey === 'terminal') return 'terminal'
   return 'default'
 }
@@ -141,6 +144,7 @@ const statusText = (
   values: StatusText
 ): AssistantExecutionTextSegment[] => sentence(text(values[status]))
 
+/** Fallback summaries for non-tool process groups (e.g. search mode kb placeholder). */
 export const getAssistantToolSummaryText = (
   skillKey: AssistantExecutionSkillKey,
   status: AssistantExecutionStatus,
@@ -149,18 +153,18 @@ export const getAssistantToolSummaryText = (
   const normalizedCount = String(Math.max(1, count))
   if (skillKey === 'docx-read') {
     return statusText(status, {
-      running: `正在读取 ${normalizedCount} 个 docx 文件`,
-      completed: `已读取 ${normalizedCount} 个 docx 文件`,
-      partial_failed: `部分读取 ${normalizedCount} 个 docx 文件失败`,
-      failed: `读取 ${normalizedCount} 个 docx 文件失败`
+      running: `正在读取 ${normalizedCount} 个 Word 文档`,
+      completed: `已读取 ${normalizedCount} 个 Word 文档`,
+      partial_failed: `部分读取 ${normalizedCount} 个 Word 文档失败`,
+      failed: `读取 ${normalizedCount} 个 Word 文档失败`
     })
   }
   if (skillKey === 'docx-edit') {
     return statusText(status, {
-      running: `正在编辑 ${normalizedCount} 个 docx 文件`,
-      completed: `已编辑 ${normalizedCount} 个 docx 文件`,
-      partial_failed: `部分编辑 ${normalizedCount} 个 docx 文件失败`,
-      failed: `编辑 ${normalizedCount} 个 docx 文件失败`
+      running: `正在编辑 ${normalizedCount} 个 Word 文档`,
+      completed: `已编辑 ${normalizedCount} 个 Word 文档`,
+      partial_failed: `部分编辑 ${normalizedCount} 个 Word 文档失败`,
+      failed: `编辑 ${normalizedCount} 个 Word 文档失败`
     })
   }
   if (skillKey === 'file-read') {
@@ -267,12 +271,12 @@ export const getAssistantToolSummaryText = (
       failed: '图片生成失败'
     })
   }
-  if (skillKey === 'wait') {
+  if (skillKey === 'learning') {
     return statusText(status, {
-      running: '正在等待',
-      completed: '已等待',
-      partial_failed: '部分等待失败',
-      failed: '等待失败'
+      running: '正在学习技能',
+      completed: '已学会技能',
+      partial_failed: '部分技能学习失败',
+      failed: '学习技能失败'
     })
   }
   return statusText(status, {
@@ -283,135 +287,58 @@ export const getAssistantToolSummaryText = (
   })
 }
 
-const readWaitDurationLabel = (input?: IpcJsonObject): string => {
-  if (!input) return '一段时间'
-  const seconds = (input as Record<string, IpcJsonValue>).seconds
-  if (typeof seconds === 'number' && Number.isFinite(seconds)) return `${String(seconds)} 秒`
-  if (typeof seconds === 'string' && seconds.trim()) return `${seconds.trim()} 秒`
-  return '一段时间'
-}
-
-type ExecutionActionSummary = {
-  kind: AssistantExecutionSkillKey
-  fileLabels: Set<string>
-  count: number
-  statuses: AssistantExecutionStatus[]
-  waitLabels: Set<string>
-}
-
 const getExecutionStatus = (groups: readonly AssistantExecutionGroup[]): AssistantExecutionStatus =>
   getAssistantMixedStatus(groups.map((group) => group.status))
 
-const getSummaryActionLabel = (kind: AssistantExecutionSkillKey): string => {
-  if (
-    kind === 'docx-read' ||
-    kind === 'file-read' ||
-    kind === 'pdf-read' ||
-    kind === 'ppt-read' ||
-    kind === 'excel-read'
-  ) {
-    return '读取'
-  }
-  if (
-    kind === 'docx-edit' ||
-    kind === 'file-edit' ||
-    kind === 'ppt-edit' ||
-    kind === 'excel-edit'
-  ) {
-    return '编辑'
-  }
-  if (kind === 'ppt-search' || kind === 'web-search') return '搜索'
-  if (kind === 'kb') return '检索'
-  if (kind === 'terminal') return '终端'
-  if (kind === 'browser') return '浏览器'
-  if (kind === 'image-generation') return '图片'
-  if (kind === 'wait') return '等待'
-  return '处理'
+const getItemSegments = (
+  item: AssistantExecutionGroup['items'][number],
+  fallbackStatus: AssistantExecutionStatus
+): AssistantExecutionTextSegment[] => {
+  const status = item.status || fallbackStatus
+  if (status === 'completed' && item.completedText) return [...item.completedText]
+  if (status === 'failed' && item.failedText) return [...item.failedText]
+  if (status === 'partial_failed' && item.partialFailedText) return [...item.partialFailedText]
+  if (status === 'running' && item.runningText) return [...item.runningText]
+  if (item.completedText) return [...item.completedText]
+  if (item.runningText) return [...item.runningText]
+  const kind = item.toolName ? getAssistantToolUiKind(item.toolName) : 'generic'
+  return getAssistantToolSummaryText(kind, status)
 }
 
-const getSummaryActionLabelText = (summaries: readonly ExecutionActionSummary[]): string => {
-  const labels = Array.from(
-    new Set(summaries.map((summary) => getSummaryActionLabel(summary.kind)))
-  )
-  if (labels.length === 0) return ''
-  return `${labels.slice(0, 3).join('、')}${summaries.length > 3 ? '等' : ''}`
-}
-
+/**
+ * Activity header: 1 item = body text; 2–3 items joined with 并/但; >3 = count only.
+ */
 export const buildAssistantExecutionSummaryText = (
   groups: readonly AssistantExecutionGroup[]
 ): AssistantExecutionTextSegment[] => {
-  const summaries = new Map<AssistantExecutionSkillKey, ExecutionActionSummary>()
-  for (const group of groups) {
-    const entries =
-      group.items.length > 0
-        ? group.items.map((item) => ({
-            toolName: item.toolName,
-            targetLabel: item.targetLabel,
-            input: item.input
-          }))
-        : [{ toolName: undefined, targetLabel: undefined, input: undefined }]
-    for (const entry of entries) {
-      const kind = entry.toolName ? getAssistantToolUiKind(entry.toolName) : group.skillKey
-      const current =
-        summaries.get(kind) ||
-        ({
-          kind,
-          fileLabels: new Set<string>(),
-          count: 0,
-          statuses: [],
-          waitLabels: new Set<string>()
-        } satisfies ExecutionActionSummary)
-      current.count += 1
-      current.statuses.push(group.status)
-      if (
-        kind === 'docx-read' ||
-        kind === 'docx-edit' ||
-        kind === 'ppt-read' ||
-        kind === 'ppt-edit' ||
-        kind === 'excel-read' ||
-        kind === 'excel-edit'
-      ) {
-        current.fileLabels.add(entry.targetLabel || group.id)
-      }
-      if (kind === 'wait') current.waitLabels.add(readWaitDurationLabel(entry.input))
-      summaries.set(kind, current)
-    }
-  }
-
   const status = getExecutionStatus(groups)
-  const ordered = [...summaries.values()]
-  if (ordered.length === 0) return sentence(text('正在处理任务'))
-
-  const totalCount = ordered.reduce((sum, summary) => sum + summary.count, 0)
-  if (ordered.length > 3) {
-    const actionText = getSummaryActionLabelText(ordered)
-    const suffix = actionText ? `：${actionText}` : ''
-    if (status === 'running') return sentence(text(`正在执行 ${totalCount} 项操作${suffix}`))
-    if (status === 'completed') return sentence(text(`已完成 ${totalCount} 项操作${suffix}`))
-    if (status === 'partial_failed') {
-      return sentence(text(`${totalCount} 项操作中有部分失败${suffix}`))
-    }
-    return sentence(text(`${totalCount} 项操作执行失败${suffix}`))
+  const list = groups.flatMap((group) =>
+    group.items.map((item) => ({ ...item, status: item.status || group.status }))
+  )
+  if (list.length === 0) {
+    return statusText(status, {
+      running: '正在处理任务',
+      completed: '已处理任务',
+      partial_failed: '部分任务处理失败',
+      failed: '处理任务失败'
+    })
   }
 
-  return ordered.flatMap((summary, index) => {
-    const count = summary.fileLabels.size || summary.count || 1
-    const summaryStatus = getAssistantMixedStatus(summary.statuses, status)
-    const prefix =
-      index === 0
-        ? ''
-        : summaryStatus === 'failed' || summaryStatus === 'partial_failed'
-          ? '但'
-          : '并'
-    if (summary.kind === 'wait' && summary.waitLabels.size === 1) {
-      const waitLabel = [...summary.waitLabels][0]
-      if (summaryStatus === 'running') return sentence(text(prefix), text(`正在等待 ${waitLabel}`))
-      if (summaryStatus === 'completed') return sentence(text(prefix), text(`等待 ${waitLabel}`))
+  if (list.length > 3) {
+    const totalCount = list.length
+    if (status === 'running') return sentence(text(`正在执行 ${totalCount} 项操作`))
+    if (status === 'completed') return sentence(text(`已完成 ${totalCount} 项操作`))
+    if (status === 'partial_failed') {
+      return sentence(text(`${totalCount} 项操作中有部分失败`))
     }
-    return sentence(
-      text(prefix),
-      ...getAssistantToolSummaryText(summary.kind, summaryStatus, count)
-    )
+    return sentence(text(`${totalCount} 项操作执行失败`))
+  }
+
+  return list.flatMap((item, index) => {
+    const itemStatus = item.status || status
+    const prefix =
+      index === 0 ? '' : itemStatus === 'failed' || itemStatus === 'partial_failed' ? '但' : '并'
+    return sentence(text(prefix), ...getItemSegments(item, status))
   })
 }
 

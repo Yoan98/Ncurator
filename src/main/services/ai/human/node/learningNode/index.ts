@@ -17,7 +17,7 @@ import {
 import { ensureSkillTools } from './skillLoader'
 import { countActiveToolNamesForSkillIds, fitSkillIdsToToolBudget } from './toolBudget'
 import { returnToBrainAfterTrace, returnToDispatch } from '../utils/stateTransitions'
-import { emitLearningCompleted, emitLearningStarted } from '../../../events/processEvents'
+import { emitToolCallResult, emitToolCallStarted } from '../../tools/utils/toolEvents'
 import { appendToolFeedback } from '../../shared/toolFeedback'
 
 const appendLearnToolMessage = async (input: {
@@ -33,6 +33,43 @@ const appendLearnToolMessage = async (input: {
     toolName: 'learn_skill',
     ok: true,
     content: input.content
+  })
+}
+
+const emitLearnSkillProcessStarted = (input: {
+  ctx: AiRunContext
+  toolCallId: string
+  skillIds: string[]
+}): void => {
+  emitToolCallStarted({
+    ctx: input.ctx,
+    runId: input.ctx.runId,
+    toolCallId: input.toolCallId,
+    toolName: 'learn_skill',
+    args: { skillIds: input.skillIds },
+    stage: 'human_learning'
+  })
+}
+
+const emitLearnSkillProcessCompleted = (input: {
+  ctx: AiRunContext
+  toolCallId: string
+  skillIds: string[]
+  ok: boolean
+  error?: string
+}): void => {
+  emitToolCallResult({
+    ctx: input.ctx,
+    runId: input.ctx.runId,
+    toolCallId: input.toolCallId,
+    toolName: 'learn_skill',
+    result: {
+      toolName: 'learn_skill',
+      ok: input.ok,
+      data: input.ok ? { skillIds: input.skillIds } : { error: input.error || 'learn_skill failed' }
+    },
+    error: input.error,
+    stage: 'human_learning'
   })
 }
 
@@ -162,6 +199,17 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       })
       const learningResult = renderLearningResult(lastLearningOutcome)
 
+      emitLearnSkillProcessStarted({
+        ctx: input.ctx,
+        toolCallId: learnToolCallId,
+        skillIds: requestedSkillIds
+      })
+      emitLearnSkillProcessCompleted({
+        ctx: input.ctx,
+        toolCallId: learnToolCallId,
+        skillIds: requestedSkillIds,
+        ok: true
+      })
       await appendLearnToolMessage({
         cache: input.cache,
         ctx: input.ctx,
@@ -196,6 +244,18 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       })
       const learningResult =
         'Error: Loading the requested skills would exceed the active tool limit.'
+      emitLearnSkillProcessStarted({
+        ctx: input.ctx,
+        toolCallId: learnToolCallId,
+        skillIds: requestedSkillIds
+      })
+      emitLearnSkillProcessCompleted({
+        ctx: input.ctx,
+        toolCallId: learnToolCallId,
+        skillIds: requestedSkillIds,
+        ok: false,
+        error: 'Loading the requested skills would exceed the active tool limit.'
+      })
       await appendLearnToolMessage({
         cache: input.cache,
         ctx: input.ctx,
@@ -212,12 +272,10 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       })
     }
 
-    newSkillIds.forEach((skillId) => {
-      emitLearningStarted({
-        sendEvent: input.ctx.sendEvent,
-        runId: input.ctx.runId,
-        skillId
-      })
+    emitLearnSkillProcessStarted({
+      ctx: input.ctx,
+      toolCallId: learnToolCallId,
+      skillIds: requestedSkillIds
     })
     await input.ctx.appendMessageLog(
       newSkillIds.map((skillId) => ({
@@ -252,12 +310,11 @@ export const createLearningNode = (input: { ctx: AiRunContext; cache: HumanRunti
       toolCallId: learnToolCallId,
       content: learningResult
     })
-    newSkillIds.forEach((skillId) => {
-      emitLearningCompleted({
-        sendEvent: input.ctx.sendEvent,
-        runId: input.ctx.runId,
-        skillId
-      })
+    emitLearnSkillProcessCompleted({
+      ctx: input.ctx,
+      toolCallId: learnToolCallId,
+      skillIds: requestedSkillIds,
+      ok: true
     })
     await input.ctx.appendMessageLog([
       ...newSkillIds.map((skillId) => ({

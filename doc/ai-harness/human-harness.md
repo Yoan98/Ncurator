@@ -443,13 +443,13 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 | log 信号 | UI 过程组 |
 |----------|-----------|
 | `thinking_started` … `thinking_completed` 之间的 `assistant` | Thought 文本流（`processThoughts`） |
-| `learning_started` / `learning_completed` | learning 组（按 skillId） |
-| `compaction_checkpoint` | compaction 组 |
-| `tool`（排除 `learn_skill` / `update_plan`） | tool 组；展示 toolName + 入参 snapshot |
+| `compaction_checkpoint` | compaction 组（单独成行） |
+| `tool`（排除 `update_plan`；**含** `learn_skill`） | tool 组；展示 toolName + 入参 snapshot；两次 Thought 之间在 UI 合并为 Activity 面板 |
 | `plan_updated` | 计划条（非过程组；run snapshot 扫描 annotation） |
-| `finalizing_started` | 清空计划条 |
+| `finalizing_started` | 清空计划条（不渲染过程层） |
+| `learning_started` / `learning_completed` | 仅 harness / 状态注解；**不**投影为独立学习过程组 |
 
-控制类工具（`learn_skill`、`update_plan`）**不出** tool 过程组；learning 走专用 learning 组。
+`update_plan` **不出** tool 过程组。`learn_skill` 与其它工具一样进入 Activity。
 
 #### 流式与终态
 

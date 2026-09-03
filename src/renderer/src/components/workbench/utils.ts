@@ -183,14 +183,25 @@ const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessS
 
 const getDisplayIconKind = (display: AssistantProcessDisplay): AssistantProcessIconKind => {
   if (display.kind === 'thinking') return 'default'
-  if (display.kind === 'learning') return 'learning'
   if (display.kind === 'retry') return 'retry'
   if (display.kind === 'compaction') return 'compaction'
-  if (display.kind === 'finalizing') return 'finalizing'
   return getToolIconKind(getDisplaySkillKey(display))
 }
 
-type ToolItemRenderer = (input?: IpcJsonObject) => AssistantRichTextSegment[]
+const readLearnSkillNames = (input?: IpcJsonObject): string => {
+  if (!input) return '新能力'
+  const raw = (input as Record<string, IpcJsonValue>).skillIds
+  if (!Array.isArray(raw)) return '新能力'
+  const names = raw
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((skillId) => getSkillDisplayName(skillId as RuntimeSkillId))
+  return names.length > 0 ? names.join('、') : '新能力'
+}
+
+type ToolItemRenderer = (
+  input: IpcJsonObject | undefined,
+  status: AssistantProcessStatus
+) => AssistantRichTextSegment[]
 
 const TOOL_ITEM_RENDERERS = {
   terminal_run: (input) => sentence(text('执行命令 '), text(readCommandLabel(input))),
@@ -202,19 +213,20 @@ const TOOL_ITEM_RENDERERS = {
   kb_search: (input) => sentence(text('在知识库中搜索 '), text(readToolQueryLabel(input))),
   kb_list_documents: () => sentence(text('查看工作空间文档列表')),
   docx_read_outline: (input) =>
-    sentence(text('查看文档 '), text(readToolFileLabel(input)), text(' 的结构')),
-  docx_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
+    sentence(text('查看 Word 文档 '), text(readToolFileLabel(input)), text(' 的结构')),
+  docx_search: (input) => sentence(text('在 Word 文档中搜索 '), text(readToolQueryLabel(input))),
   docx_read_nodes: (input) =>
     sentence(
-      text('读取文档 '),
+      text('读取 Word 文档 '),
       text(readToolFileLabel(input)),
       text(` ${readDocxRangeLabel(input)}`)
     ),
-  docx_content_edit: (input) => sentence(text('编辑文档内容 '), text(readToolFileLabel(input))),
-  docx_format: (input) => sentence(text('设置文档格式 '), text(readToolFileLabel(input))),
-  docx_table_edit: (input) => sentence(text('编辑文档表格 '), text(readToolFileLabel(input))),
+  docx_content_edit: (input) =>
+    sentence(text('编辑 Word 文档内容 '), text(readToolFileLabel(input))),
+  docx_format: (input) => sentence(text('设置 Word 文档格式 '), text(readToolFileLabel(input))),
+  docx_table_edit: (input) => sentence(text('编辑 Word 文档表格 '), text(readToolFileLabel(input))),
   docx_comments_revisions: (input) =>
-    sentence(text('处理文档批注或修订 '), text(readToolFileLabel(input))),
+    sentence(text('处理 Word 文档批注或修订 '), text(readToolFileLabel(input))),
   pdf_outline: (input) => sentence(text('查看 PDF 提纲 '), text(readToolFileLabel(input))),
   pdf_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
   pdf_read_pages: (input) => sentence(text('读取 PDF 页面 '), text(readToolFileLabel(input))),
@@ -252,16 +264,25 @@ const TOOL_ITEM_RENDERERS = {
   },
   read_image: () => sentence(text('读取图片')),
   image_generate: (input) => sentence(text('生成图片 '), text(readToolFileLabel(input))),
-  learn_skill: () => sentence(text('学习新技能')),
+  learn_skill: (input, status) => {
+    const skillName = readLearnSkillNames(input)
+    if (status === 'running') return sentence(text('正在学习 '), text(skillName))
+    if (status === 'completed') return sentence(text('已学会 '), text(skillName))
+    if (status === 'partial_failed')
+      return sentence(text('学习 '), text(skillName), text(' 有部分失败'))
+    return sentence(text('学习 '), text(skillName), text(' 失败了'))
+  },
   update_plan: () => sentence(text('更新任务计划'))
 } satisfies Record<RuntimeToolName, ToolItemRenderer>
 
 const getToolItemText = (
   toolName: AssistantToolName,
-  _status: AssistantProcessStatus,
+  status: AssistantProcessStatus,
   input?: IpcJsonObject
 ): AssistantRichTextSegment[] =>
-  toolName === 'unnamed' ? sentence(text('处理任务中的一步')) : TOOL_ITEM_RENDERERS[toolName](input)
+  toolName === 'unnamed'
+    ? sentence(text('处理任务中的一步'))
+    : TOOL_ITEM_RENDERERS[toolName](input, status)
 
 const getDisplayGroupText = (
   display: AssistantProcessDisplay,
@@ -272,14 +293,6 @@ const getDisplayGroupText = (
     if (status === 'completed') return sentence(text('俺想好了'))
     if (status === 'partial_failed') return sentence(text('俺有一部分没想明白'))
     return sentence(text('俺没想明白'))
-  }
-  if (display.kind === 'learning') {
-    const skillName = getSkillDisplayName(display.skillId)
-    if (status === 'running') return sentence(text('正在学习 '), text(skillName, true))
-    if (status === 'completed') return sentence(text('已学会 '), text(skillName, true))
-    if (status === 'partial_failed')
-      return sentence(text('学习 '), text(skillName, true), text(' 有部分失败'))
-    return sentence(text('学习 '), text(skillName, true), text(' 失败了'))
   }
   if (display.kind === 'retry') {
     const progress = `${display.attempt}/${display.maxAttempts}`
@@ -294,11 +307,8 @@ const getDisplayGroupText = (
     if (status === 'partial_failed') return sentence(text('上下文整理有部分失败'))
     return sentence(text('上下文整理失败了'))
   }
-  if (display.kind === 'finalizing') {
-    if (status === 'running') return sentence(text('让俺想想'))
-    if (status === 'completed') return sentence(text('俺想好了'))
-    if (status === 'partial_failed') return sentence(text('俺还有一部分没想明白'))
-    return sentence(text('俺没想明白'))
+  if (display.kind === 'tool') {
+    return getToolItemText(normalizeToolName(display.toolName), status, display.input)
   }
   return getToolSummaryText(getDisplaySkillKey(display), status)
 }
@@ -390,8 +400,7 @@ export const createDisplayProcessGroup = (input: {
     failedText: getDisplayGroupText(input.display, 'failed'),
     partialFailedText: getDisplayGroupText(input.display, 'partial_failed'),
     createdAt: input.createdAt,
-    sourceEventType: input.sourceEventType,
-    skillId: input.display.kind === 'learning' ? input.display.skillId : undefined
+    sourceEventType: input.sourceEventType
   })
 }
 
@@ -515,7 +524,7 @@ export const completeAssistantProcessGroups = (
   status: AssistantProcessStatus = 'completed'
 ): AssistantProcessGroup[] =>
   groups
-    .filter((group) => !(status === 'completed' && group.kind === 'finalizing'))
+    .filter((group) => group.kind !== 'finalizing' && group.kind !== 'learning')
     .map((group) => {
       if (group.status !== 'running') return group
       const nextItems = group.items.map((item) =>
@@ -691,6 +700,8 @@ export const reduceAssistantProcessGroups = (
   }
 
   if (event.type === 'assistant_process_group_started') {
+    if (event.kind === 'learning' || event.kind === 'finalizing') return current
+    if (event.display.kind === 'learning' || event.display.kind === 'finalizing') return current
     return upsertGroupFromDisplayEvent(current, {
       groupId: event.groupId,
       kind: event.kind,
@@ -705,10 +716,12 @@ export const reduceAssistantProcessGroups = (
     if (event.groupId.endsWith(':thinking') || event.groupId.endsWith(':finalizing')) {
       return current.filter((group) => group.id !== event.groupId)
     }
+    if (event.display?.kind === 'learning' || event.display?.kind === 'finalizing') return current
     return completeProcessGroupById(current, event.groupId, 'completed', event.display)
   }
 
   if (event.type === 'assistant_process_group_failed') {
+    if (event.display?.kind === 'learning' || event.display?.kind === 'finalizing') return current
     return completeProcessGroupById(current, event.groupId, 'failed', event.display)
   }
 

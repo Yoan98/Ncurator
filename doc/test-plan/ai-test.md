@@ -24,7 +24,7 @@
 | human-text-file-read-checkout-readiness-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260813-201642-554        | 只读审查准确识别就绪性风险与保留配置，源文件未改。                                                     |
 | human-web-search-by-url-live                        | 完成 |            95 | qwen3.8-flash                    | 2026-09-01 16:24 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260901-162353-087                        | 指定地址后连续 2×fetch 通知页与指南页，事实回答正确，errors=0。                                      |
 | human-web-search-intent-query-live                  | 完成 |            90 | qwen3.8-flash                    | 2026-09-01 16:24 CST | tests/logs/ai/human/live/human-web-search-intent-query-live/20260901-162353-087                  | 2×search + 2×fetch 成功读取 read_csv 与 DataFrame.to_csv 官方 API 页，errors=0。                     |
-| human-terminal-preview-service-live                  | 完成 |            88 | qwen3.8-flash                    | 2026-08-31 18:30 CST | tests/logs/ai/human/live/human-terminal-preview-service-live/20260831-183019-685                | 启动预览服务、terminal_read 读请求日志、交付页面标记并关闭服务（已移除不存在的 terminal_write 断言）。 |
+| human-terminal-preview-service-live                  | 完成 |            88 | qwen3.8-flash                    | 2026-08-31 18:30 CST | tests/logs/ai/human/live/human-terminal-preview-service-live/20260831-183019-685                | 启动预览服务、确认页面并关闭服务（Oracle 已改为双路径：前台 yield/读终端或后台+wait；不再拒绝 detached）。 |
 | human-legacy-doc-edit-skip-live                     | 完成 |            88 | deepseek-v4-flash                | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129                     | .doc 写入失败后停止重试，源文件不变，任务完成。                                                        |
 | human-docx-visual-reading-live                      | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243                      | 真实读取 DOCX 图片并准确回答，源文件未改。                                                             |
 | human-pdf-visual-reading-live                       | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871                       | PDF 页级视觉读取与识图，正确回答图形差异，源 PDF 未改。                                                |
@@ -499,11 +499,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `terminal-execution-contract`
 
 - 测试类型：`backend`
-- What：真实 PTY 终端从工作区根目录执行命令、长命令让出控制权并可增量读取，命令级文件追踪与退出码正确；拒绝后台分离执行，放行 fd 合并重定向。
-- Why：后台服务和长任务不能依赖单次 shell 超时或系统孤儿进程；`2>&1` 等 fd 合并重定向只是输出流合并，不能误判为后台执行或危险重定向。
-- How：通过 `terminal_run` 分别执行 `pwd`、单命令内 `cd + pwd`、写文件后长 sleep、持续输出命令、写文件后非零退出；通过 `terminal_read` 携带返回的 `readEndPosition` 增量读取持续输出命令，验证单次读取有字符上限、`hasMoreOutput` 指示未读完且可用返回位置连续读完。以 `sleep 1 &`（windows `Start-Process`）验证分离执行被拒，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。
-- Oracle：命令默认从 workspace 根目录执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出；写文件命令（完成与非零退出）均生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`。分离执行返回 `detached shell execution` 错误；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。
-- Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖。
+- What：真实 PTY 终端从工作区根目录执行命令、长命令让出控制权并可增量读取，命令级文件追踪与退出码正确；允许后台分离执行，放行 fd 合并重定向。
+- Why：后台服务和长任务不能依赖单次 shell 超时；分离执行（`&` / `Start-Process`）由模型自行管理生命周期，框架只关闭 PTY 会话本身；`2>&1` 等 fd 合并重定向只是输出流合并，不能误判为危险重定向。
+- How：通过 `terminal_run` 分别执行 `pwd`、单命令内 `cd + pwd`、写文件后长 sleep、持续输出命令、写文件后非零退出；通过 `terminal_read` 携带返回的 `readEndPosition` 增量读取持续输出命令，验证单次读取有字符上限、`hasMoreOutput` 指示未读完且可用返回位置连续读完。以 `sleep … & wait`（windows `Start-Process … -Wait`）验证分离执行可完成，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。
+- Oracle：命令默认从 workspace 根目录执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出；写文件命令（完成与非零退出）均生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`。分离执行成功完成且输出含 `detached-ok`；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。
+- Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖；不在会话结束时强制清理模型拆出去的后台进程。
 
 #### web-browsing 类别
 
@@ -939,8 +939,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：同一 session 先正常完成第一件事，再续接第二件相关联的事，消息数组按“历史 build user + assistant/tool + 当前 run buildBrainUserMessage user”叠加。
 - Why：跨会话续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文。
 - How：使用共享 workspace fixture。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同 session 改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组。
-- Oracle：Run 1 与 Run 2 均 `completed`；Run 2 消息数组含 Run 1 的 build user 与 assistant/tool 历史，以及 Run 2 末尾 build user；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
-- Not：不验证 UI 会话持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序。
+- Oracle：Run 1 与 Run 2 均 `completed`；Run 2 消息数组历史中含 Run 1 的 build user 与最终交付，末尾是 Run 2 当前 build user；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
+- Not：不验证 UI 会话持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。
 
 ##### `human-ppt-edit-management-review-live`
 
@@ -1089,8 +1089,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-terminal-preview-service-live`
 
 - 测试类型：`backend`
-- What：live 模型能在项目子目录启动临时 HTTP 预览服务，真实访问页面、读取服务日志并彻底停止服务。
-- Why：工具契约正确不代表模型能理解 `command_still_running`，也不代表它会在完成检查后主动清理长时间运行的进程。
-- How：在临时 workspace 的 `preview-site` 中创建带唯一标记的页面，为用户提供一个随机空闲端口；用户只描述“进入目录启动预览、确认页面、检查请求日志、用完关闭”的真实诉求，不指定工具或命令。仅开放三个 terminal 工具，由真实模型自主决策。
-- Oracle：服务命令在 `preview-site` 中运行并返回 `command_still_running`；模型使用 `terminal_read` 读取服务终端，页面标记出现在真实终端结果和最终答复中；运行结束后服务终端由框架清理；工具结果不包含 `availableActions` 或内部 `commandId`。
-- Not：不绑定 Python、curl 等具体命令，不要求固定工具调用轮数，不验证 Workbench UI 或公网访问。
+- What：live 模型能在项目子目录启动临时 HTTP 预览服务，真实访问页面、确认服务收到请求并彻底停止服务。
+- Why：工具契约正确不代表模型能完成「起服务 → 确认 → 用完关掉」；放行后台分离后，模型可走前台长跑 + 读终端，也可走 `nohup`/后台 + 等待再确认，不强制 `terminal_read`。
+- How：在临时 workspace 的 `preview-site` 中创建带唯一标记的页面，为用户提供一个随机空闲端口；用户只描述启动预览、真实访问确认标记、确认服务收到请求、用完关闭的诉求，不指定工具或命令。由真实模型自主决策。
+- Oracle：任务 `completed`；页面标记出现在最终交付或真实工具结果中；服务在模型完成后不可达（由模型关闭，框架不在会话结束时强杀拆出去的后台进程）。路径满足其一即可：① 出现 `command_still_running`/`terminal_command_yielded` 且随后有成功的 `terminal_read` 或 wait-like 终端命令；② 出现 wait-like 终端命令（`sleep` / `Start-Sleep` / `time.sleep` / `ping -c|-n` / `timeout` 等跨平台等待语义）。
+- Not：不绑定 Python、curl、`nohup`、`sleep` 字面量或固定工具调用轮数；不要求必须使用 `terminal_read`；不验证 Workbench UI 或公网访问。

@@ -110,7 +110,7 @@ describe('ai human live backend', () => {
               run1Result: null,
               run2Result: null,
               run2LastMessageIsUser: false,
-              run2HasOnlyCurrentBrainUser: false,
+              run2HistoryHasRun1User: false,
               run2HistoryHasRun1Delivery: false,
               run2Delivery: '',
               fileAName: '',
@@ -174,12 +174,16 @@ describe('ai human live backend', () => {
           const run2LastMessageIsUser =
             run2LastMessage?.getType() === 'human' &&
             typeof run2LastMessage.content === 'string' &&
-            run2LastMessage.content.includes('<task_goal>')
+            run2LastMessage.content.includes('<task_goal>') &&
+            run2LastMessage.content.includes(RUN2_INPUT)
           const historyMessages = (run2BrainMessages || []).slice(0, -1)
-          const run2HasOnlyCurrentBrainUser =
-            (run2BrainMessages || []).filter((message) => message.getType() === 'human').length ===
-              1 &&
-            run2LastMessage?.getType() === 'human'
+          const run2HistoryHasRun1User = historyMessages.some(
+            (message) =>
+              message.getType() === 'human' &&
+              typeof message.content === 'string' &&
+              message.content.includes('<task_goal>') &&
+              message.content.includes(RUN1_INPUT)
+          )
           const run2HistoryHasRun1Delivery = historyMessages.some(
             (message) =>
               message.getType() === 'ai' &&
@@ -192,7 +196,7 @@ describe('ai human live backend', () => {
             run1Result,
             run2Result,
             run2LastMessageIsUser,
-            run2HasOnlyCurrentBrainUser,
+            run2HistoryHasRun1User,
             run2HistoryHasRun1Delivery,
             run2UsedFileB: runUsedSelectedFile(run2Events, run2Id, fileBReferences[0]?.name || ''),
             run2Delivery: run2Result.finalDeliveryMarkdown || '',
@@ -213,7 +217,7 @@ describe('ai human live backend', () => {
             result.run1Result?.status === 'completed' &&
               result.run2Result?.status === 'completed' &&
               result.run2LastMessageIsUser &&
-              result.run2HasOnlyCurrentBrainUser &&
+              result.run2HistoryHasRun1User &&
               result.run2HistoryHasRun1Delivery &&
               result.run2UsedFileB === true &&
               mentionsOverfittingTopic(result.run2Delivery) &&
@@ -221,14 +225,14 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-cross-session-continuation-stacks-message-array',
               message:
-                '同 session 第二件事应在完整历史（含第一件事的最终交付）之后尾部追加 buildBrainUserMessage user 消息，并完成双主题对比交付。',
+                '同 session 第二件事应在完整历史（含第一件事的 build user 与最终交付）之后尾部追加当前 build user，并完成双主题对比交付。',
               data: {
                 run1Status: result.run1Result?.status,
                 run1Error: result.run1Result?.error,
                 run1FailureCode: result.run1Result?.failureCode,
                 run2Status: result.run2Result?.status,
                 run2LastMessageIsUser: result.run2LastMessageIsUser,
-                run2HasOnlyCurrentBrainUser: result.run2HasOnlyCurrentBrainUser,
+                run2HistoryHasRun1User: result.run2HistoryHasRun1User,
                 run2HistoryHasRun1Delivery: result.run2HistoryHasRun1Delivery,
                 run2Delivery: result.run2Delivery
               }

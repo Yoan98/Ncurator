@@ -1,16 +1,12 @@
 import type {
   AiRunEvent,
   AssistantProcessDisplay,
-  IpcJsonObject,
-  RuntimeSkillId
+  IpcJsonObject
 } from '../../../../shared/types'
 
 type SendEvent = (event: AiRunEvent) => void
 
 const getThinkingProcessGroupId = (runId: string): string => `${runId}:thinking`
-
-const getLearningProcessGroupId = (runId: string, skillId: RuntimeSkillId): string =>
-  `${runId}:learning:${skillId}`
 
 const getCompactionProcessGroupId = (runId: string): string => `${runId}:compaction`
 
@@ -82,37 +78,6 @@ export const emitThinkingFailed = (input: {
     display: { kind: 'thinking' },
     error: input.error,
     failedAt: input.failedAt || Date.now()
-  })
-}
-
-export const emitLearningStarted = (input: {
-  sendEvent: SendEvent
-  runId: string
-  skillId: RuntimeSkillId
-  createdAt?: number
-}): void => {
-  input.sendEvent({
-    type: 'assistant_process_group_started',
-    runId: input.runId,
-    groupId: getLearningProcessGroupId(input.runId, input.skillId),
-    kind: 'learning',
-    display: { kind: 'learning', skillId: input.skillId },
-    createdAt: input.createdAt || Date.now()
-  })
-}
-
-export const emitLearningCompleted = (input: {
-  sendEvent: SendEvent
-  runId: string
-  skillId: RuntimeSkillId
-  completedAt?: number
-}): void => {
-  input.sendEvent({
-    type: 'assistant_process_group_completed',
-    runId: input.runId,
-    groupId: getLearningProcessGroupId(input.runId, input.skillId),
-    display: { kind: 'learning', skillId: input.skillId },
-    completedAt: input.completedAt || Date.now()
   })
 }
 

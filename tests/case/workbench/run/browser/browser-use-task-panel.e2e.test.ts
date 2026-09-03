@@ -518,7 +518,9 @@ describe('workbench run e2e', () => {
               result.browserActions.includes('observe') &&
               result.browserActions.includes('act') &&
               result.browserActions.includes('extract') &&
-              result.executionSummaryTexts.some((text) => text.includes('已操作浏览器')) &&
+              result.executionSummaryTexts.some(
+                (text) => text.includes('项操作') || text.includes('打开网页') || text.includes('操作浏览器')
+              ) &&
               result.executionSummaryTexts.every((text) => !text.includes('，')) &&
               (result.executionIconKinds.includes('workflow') ||
                 result.executionIconKinds.includes('browser')) &&

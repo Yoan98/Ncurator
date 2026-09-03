@@ -20,8 +20,6 @@ type TerminalReadResult = {
   hasMoreOutput: boolean
 }
 
-type TerminalFailureResult = { error: string }
-
 const isWindows = process.platform === 'win32'
 
 describe('ai tool terminal backend', () => {
@@ -33,7 +31,7 @@ describe('ai tool terminal backend', () => {
       suite: 'tool',
       groups: ['terminal'],
       description:
-        '验证终端在工作区根目录执行命令、长命令让出控制权并可增量读取、文件追踪与退出码。',
+        '验证终端在工作区根目录执行命令、长命令让出控制权并可增量读取、文件追踪与退出码；允许后台分离执行。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -102,8 +100,10 @@ describe('ai tool terminal backend', () => {
             ? 'Set-Content -LiteralPath terminal-nonzero.txt -Value nonzero; cmd /c exit 1'
             : 'printf "nonzero\\n" > terminal-nonzero.txt; false'
         })
-        const detachedRejected = await harness.invoke<TerminalFailureResult>('terminal_run', {
-          command: isWindows ? 'Start-Process powershell' : 'sleep 1 &'
+        const detachedAllowed = await harness.invoke<TerminalRunResult>('terminal_run', {
+          command: isWindows
+            ? 'Start-Process -FilePath cmd.exe -ArgumentList "/c","echo detached-ok" -Wait -NoNewWindow; Write-Output detached-ok'
+            : 'sleep 0.2 & wait; echo detached-ok'
         })
         const redirectAllowed = await harness.invoke<TerminalRunResult>('terminal_run', {
           command: 'echo redirect-ok 2>&1'
@@ -124,7 +124,7 @@ describe('ai tool terminal backend', () => {
           read,
           completedRead,
           nonZero,
-          detachedRejected,
+          detachedAllowed,
           redirectAllowed,
           records,
           artifactEvents
@@ -147,10 +147,12 @@ describe('ai tool terminal backend', () => {
             result.completedRead.status === 'succeeded' &&
             (result.running.output.includes('terminal-tick') ||
               result.read.output.includes('terminal-tick')) &&
-            result.detachedRejected.error.includes('detached shell execution'),
+            result.detachedAllowed.status === 'succeeded' &&
+            result.detachedAllowed.output.includes('detached-ok'),
           {
-            name: 'terminal-yields-and-reads-long-commands',
-            message: '长命令应固定让出控制权，并允许增量读取输出；分离执行应被拒绝。',
+            name: 'terminal-yields-reads-and-allows-detached',
+            message:
+              '长命令应固定让出控制权并允许增量读取；后台分离执行（& / Start-Process）应可正常完成。',
             data: result
           }
         )

@@ -7,7 +7,6 @@ import {
   HiOutlineArchiveBox,
   HiOutlineBolt,
   HiOutlineBookOpen,
-  HiOutlineClock,
   HiOutlineCommandLine,
   HiOutlineCursorArrowRays,
   HiOutlineDocumentText,
@@ -64,7 +63,6 @@ const getLayerIconClassName = (iconKind: AssistantProcessIconKind): string => {
   if (iconKind === 'edit') return 'text-[#787774]'
   if (iconKind === 'search') return 'text-[#787774]'
   if (iconKind === 'browser') return 'text-[#787774]'
-  if (iconKind === 'wait') return 'text-[#787774]'
   if (iconKind === 'web') return 'text-[#787774]'
   if (iconKind === 'image') return 'text-[#787774]'
   if (iconKind === 'knowledge') return 'text-[#787774]'
@@ -86,7 +84,6 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   if (iconKind === 'edit') return <HiOutlinePencilSquare {...iconProps} />
   if (iconKind === 'search') return <HiOutlineMagnifyingGlass {...iconProps} />
   if (iconKind === 'browser') return <HiOutlineCursorArrowRays {...iconProps} />
-  if (iconKind === 'wait') return <HiOutlineClock {...iconProps} />
   if (iconKind === 'web') return <HiOutlineGlobeAlt {...iconProps} />
   if (iconKind === 'image') return <HiOutlinePhoto {...iconProps} />
   if (iconKind === 'knowledge') return <HiOutlineBookOpen {...iconProps} />
@@ -151,8 +148,7 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
 const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
   const isRunning = group.status === 'running'
   const groupText = getGroupText(group)
-  const shouldShowIcon =
-    group.kind === 'learning' || group.kind === 'compaction' || group.kind === 'retry'
+  const shouldShowIcon = group.kind === 'compaction' || group.kind === 'retry'
   return (
     <details
       className="group/process"
@@ -168,7 +164,7 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
           className={`inline-flex min-w-0 flex-1 items-center gap-1 text-[14px] leading-7 ${getProcessStatusClassName(group.status)}`}
         >
           {shouldShowIcon ? <LayerIcon iconKind={group.iconKind} /> : null}
-          <span className={isRunning ? 'font-medium' : undefined}>
+          <span className={`min-w-0 truncate ${isRunning ? 'font-medium' : ''}`}>
             {renderSegments(groupText, { shimmer: isRunning })}
           </span>
           {group.items.length > 0 ? (
@@ -204,7 +200,7 @@ type AssistantTimelineEntry =
       thought: AssistantProcessThought
     }
   | {
-      kind: 'execution'
+      kind: 'activity'
       id: string
       createdAt: number
       groups: AssistantProcessGroup[]
@@ -230,10 +226,12 @@ type RawTimelineEntry =
       group: AssistantProcessGroup
     }
 
+const isActivityToolGroup = (group: AssistantProcessGroup): boolean =>
+  group.kind === 'skill' && group.sourceEventType !== 'thinking'
+
 const buildAssistantTimeline = (input: {
   thoughts: AssistantProcessThought[]
   groups: AssistantProcessGroup[]
-  hasFinalAnswer: boolean
 }): AssistantTimelineEntry[] => {
   const rawEntries: RawTimelineEntry[] = [
     ...input.thoughts.map((thought) => ({
@@ -243,7 +241,7 @@ const buildAssistantTimeline = (input: {
       thought
     })),
     ...input.groups
-      .filter((group) => !(input.hasFinalAnswer && group.kind === 'finalizing'))
+      .filter((group) => group.kind !== 'finalizing' && group.kind !== 'learning')
       .map((group) => ({
         kind: 'group' as const,
         id: group.id,
@@ -254,21 +252,17 @@ const buildAssistantTimeline = (input: {
 
   const timeline: AssistantTimelineEntry[] = []
   for (const entry of rawEntries) {
-    if (
-      entry.kind !== 'group' ||
-      entry.group.kind !== 'skill' ||
-      entry.group.sourceEventType === 'thinking'
-    ) {
+    if (entry.kind === 'decision' || !isActivityToolGroup(entry.group)) {
       timeline.push(entry)
       continue
     }
     const last = timeline[timeline.length - 1]
-    if (last?.kind === 'execution') {
+    if (last?.kind === 'activity') {
       last.groups.push(entry.group)
       continue
     }
     timeline.push({
-      kind: 'execution',
+      kind: 'activity',
       id: entry.group.id,
       createdAt: entry.createdAt,
       groups: [entry.group]
@@ -277,7 +271,7 @@ const buildAssistantTimeline = (input: {
   return timeline
 }
 
-const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; id: string }> = ({
+const AssistantActivityGroupView: React.FC<{ groups: AssistantProcessGroup[]; id: string }> = ({
   groups,
   id
 }) => {
@@ -286,7 +280,23 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
   const items = groups
     .flatMap((group) => group.items)
     .sort((left, right) => left.createdAt - right.createdAt)
-  const summaryText = buildAssistantExecutionSummaryText(groups)
+  const summaryText = buildAssistantExecutionSummaryText(
+    groups.map((group) => ({
+      id: group.id,
+      skillKey: group.skillKey,
+      status: group.status,
+      items: group.items.map((item) => ({
+        toolName: item.toolName,
+        targetLabel: item.targetLabel,
+        input: item.input,
+        status: item.status,
+        runningText: item.runningText,
+        completedText: item.completedText,
+        failedText: item.failedText,
+        partialFailedText: item.partialFailedText
+      }))
+    }))
+  )
   const iconKind = resolveAssistantExecutionIcon(groups)
   return (
     <details
@@ -308,7 +318,7 @@ const AssistantExecutionGroupView: React.FC<{ groups: AssistantProcessGroup[]; i
           }`}
         >
           <LayerIcon iconKind={iconKind} />
-          <span className={isRunning ? 'font-medium' : undefined}>
+          <span className={`min-w-0 flex-1 truncate ${isRunning ? 'font-medium' : ''}`}>
             {renderSegments(summaryText, { shimmer: isRunning })}
           </span>
           {items.length > 0 ? (
@@ -363,10 +373,9 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     () =>
       buildAssistantTimeline({
         thoughts: processThoughts,
-        groups: processGroups,
-        hasFinalAnswer
+        groups: processGroups
       }),
-    [hasFinalAnswer, processGroups, processThoughts]
+    [processGroups, processThoughts]
   )
   const applyTargets = turn?.applyTargets || []
   const applyTargetsCollapsed =
@@ -394,9 +403,9 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 if (entry.kind === 'decision') {
                   return <AssistantProcessThoughtView key={entry.id} thought={entry.thought} />
                 }
-                if (entry.kind === 'execution') {
+                if (entry.kind === 'activity') {
                   return (
-                    <AssistantExecutionGroupView
+                    <AssistantActivityGroupView
                       key={entry.id}
                       id={entry.id}
                       groups={entry.groups}

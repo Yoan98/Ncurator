@@ -3,7 +3,6 @@ import type {
   ChatMessageLogEntry,
   IpcJsonObject
 } from '../../../../shared/types'
-import { isRuntimeSkillId } from '../../../../shared/runtimeCapabilities'
 import { normalizeThoughtText } from '../../../../shared/thoughtText'
 import { createDisplayProcessGroup, createDisplayProcessItem } from './utils'
 import type {
@@ -12,7 +11,7 @@ import type {
   AssistantProcessThought
 } from './types'
 
-const CONTROL_TOOL_NAMES = new Set(['learn_skill', 'update_plan'])
+const HIDDEN_PROCESS_TOOL_NAMES = new Set(['update_plan'])
 
 export const projectProcessGroups = (input: {
   runId: string
@@ -32,39 +31,12 @@ export const projectProcessGroups = (input: {
     groupById.set(group.id, group)
   }
 
-  const completeGroup = (groupId: string, status: AssistantProcessStatus): void => {
-    const existing = groupById.get(groupId)
-    if (!existing) return
-    groupById.set(groupId, {
-      ...existing,
-      status,
-      items: existing.items.map((item) => ({ ...item, status }))
-    })
-  }
-
   for (const entry of input.entries) {
     if (entry.kind === 'annotation') {
       if (entry.eventType === 'thinking_started') {
         thinkingOpen = true
       } else if (entry.eventType === 'thinking_completed') {
         thinkingOpen = false
-      } else if (entry.eventType === 'learning_started') {
-        const skillId = entry.payload.skillId
-        if (!isRuntimeSkillId(skillId)) continue
-        upsertGroup(
-          createDisplayProcessGroup({
-            groupId: `${input.runId}:learning:${skillId}`,
-            kind: 'learning',
-            display: { kind: 'learning', skillId },
-            status: 'running',
-            createdAt: stamp(),
-            sourceEventType: 'assistant_process_group_started'
-          })
-        )
-      } else if (entry.eventType === 'learning_completed') {
-        const skillId = entry.payload.skillId
-        if (!isRuntimeSkillId(skillId)) continue
-        completeGroup(`${input.runId}:learning:${skillId}`, 'completed')
       } else if (entry.eventType === 'compaction_checkpoint') {
         upsertGroup(
           createDisplayProcessGroup({
@@ -99,7 +71,7 @@ export const projectProcessGroups = (input: {
     }
 
     if (entry.kind === 'tool') {
-      if (CONTROL_TOOL_NAMES.has(entry.toolName)) continue
+      if (HIDDEN_PROCESS_TOOL_NAMES.has(entry.toolName)) continue
       const display: AssistantProcessDisplay = {
         kind: 'tool',
         toolName: entry.toolName,

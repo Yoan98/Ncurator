@@ -72,7 +72,6 @@ export type AssistantToolName = RuntimeToolName | 'unnamed'
 export type AssistantProcessIconKind =
   | 'search'
   | 'browser'
-  | 'wait'
   | 'web'
   | 'image'
   | 'knowledge'
@@ -83,15 +82,14 @@ export type AssistantProcessIconKind =
   | 'retry'
   | 'learning'
   | 'compaction'
-  | 'finalizing'
   | 'default'
 
 export type AssistantProcessGroupKind =
   | 'thinking'
   | 'skill'
   | 'retry'
-  | 'learning'
   | 'compaction'
+  | 'learning'
   | 'finalizing'
 
 export type AssistantProcessSkillKey =
@@ -110,7 +108,7 @@ export type AssistantProcessSkillKey =
   | 'web-search'
   | 'browser'
   | 'image-generation'
-  | 'wait'
+  | 'learning'
   | 'generic'
 
 export type AssistantProcessGroupItem = {

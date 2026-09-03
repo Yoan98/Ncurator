@@ -7,7 +7,6 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 import type { CapabilityActivityInput } from '../types'
 import {
   analyzeTerminalCommandPolicy,
-  hasDetachedExecution,
   isTerminalExcelMutationCommand
 } from './commandPolicy'
 import {
@@ -253,22 +252,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             )
             return failure
           }
-          if (hasDetachedExecution(command, input.ctx.platform)) {
-            const failure = buildFailure({
-              error: 'detached shell execution is not supported in persistent terminals'
-            })
-            session.fail(
-              failure.error,
-              undefined,
-              buildTerminalToolResult({
-                toolName: terminalRunToolSpec.name,
-                ok: false,
-                data: failure
-              })
-            )
-            return failure
-          }
-
           if (isTerminalExcelMutationCommand(command)) {
             const failure = buildFailure({
               error: '禁止使用 terminal_exec 创建或修改 Excel 文件，请使用 excel_edit。'
