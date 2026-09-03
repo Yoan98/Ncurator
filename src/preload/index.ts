@@ -109,9 +109,23 @@ const api: DesktopApi = {
     ipcRenderer.invoke('ingest-web', payload),
   ingestWebs: (payload): Promise<{ success: boolean; created?: number; error?: string }> =>
     ipcRenderer.invoke('ingest-webs', payload),
-  openExternal: (url: string): Promise<{ success: boolean; error?: string }> => {
+  openExternal: async (url: string): Promise<{ success: boolean; error?: string }> => {
     emitE2EIpcCall('openExternal', String(url || '').trim())
-    return ipcRenderer.invoke('open-external', url)
+    try {
+      const response = (await ipcRenderer.invoke('open-external', url)) as {
+        success: boolean
+        error?: string
+      }
+      emitE2EIpcCall('openExternalResult', response)
+      return response
+    } catch (error) {
+      const response = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
+      emitE2EIpcCall('openExternalResult', response)
+      return response
+    }
   },
   openPath: (filePath: string): Promise<{ success: boolean; error?: string }> => {
     const safePath = String(filePath || '').trim()

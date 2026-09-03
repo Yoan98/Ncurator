@@ -3,7 +3,7 @@ import { join } from 'path'
 import { fileURLToPath } from 'node:url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { registerHandlers } from './ipc/handlers'
+import { registerHandlers, registerOpenExternalHandler } from './ipc/handlers'
 import { IngestionService } from './services/ingestion/loader'
 import { DEFAULT_EMBEDDING_MODEL_NAME, EmbeddingService } from './services/vector/EmbeddingService'
 import { EmbeddingRuntimeClient } from './services/vector/runtime/EmbeddingRuntimeClient'
@@ -288,6 +288,7 @@ if (!singleInstanceLock) {
         error,
         context: { event: 'database-version-too-new' }
       })
+      registerOpenExternalHandler()
       createWindow()
       appUpdateService.checkForUpdatesOnLaunch()
       app.on('activate', () => {

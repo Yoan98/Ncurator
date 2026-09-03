@@ -43,9 +43,14 @@ const UpdateRequiredPage: React.FC<{ startupStatus: UpdateRequiredStatus }> = ({
 
   return (
     <main
-      className="relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-white px-8 py-16 text-[#37352F]"
+      className="nc-update-required-page relative flex h-full min-h-0 items-center justify-center overflow-hidden bg-white px-8 py-16 text-[#37352F]"
       data-testid={workbenchSelectors.updateRequiredPage}
     >
+      <div
+        className="nc-update-required-titlebar-drag"
+        data-testid={workbenchSelectors.updateRequiredDragRegion}
+        aria-hidden="true"
+      />
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#EEEEEC]" />
       <section className="w-full max-w-[560px]" aria-labelledby="update-required-title">
         <h1 id="update-required-title" className="m-0 text-[30px] font-semibold tracking-normal">
@@ -90,7 +95,7 @@ const UpdateRequiredPage: React.FC<{ startupStatus: UpdateRequiredStatus }> = ({
 
         <button
           type="button"
-          className="flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-[#2F3437] px-4 text-[14px] font-medium text-white transition-colors hover:bg-[#1F2325] disabled:cursor-not-allowed disabled:bg-[#D8D8D5]"
+          className="workbench-no-drag flex h-10 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-[#2F3437] px-4 text-[14px] font-medium text-white transition-colors hover:bg-[#1F2325] disabled:cursor-not-allowed disabled:bg-[#D8D8D5]"
           disabled={primaryDisabled}
           onClick={handlePrimaryAction}
           data-testid={workbenchSelectors.updateRequiredPrimaryButton}
@@ -105,7 +110,7 @@ const UpdateRequiredPage: React.FC<{ startupStatus: UpdateRequiredStatus }> = ({
 
         <div className="mt-5 flex items-center justify-between text-[13px]">
           <a
-            className="inline-flex cursor-pointer items-center gap-1 text-[#0B6BCB] hover:text-[#0958A5]"
+            className="workbench-no-drag inline-flex cursor-pointer items-center gap-1 text-[#0B6BCB] hover:text-[#0958A5]"
             href={startupStatus.downloadPageUrl}
             target="_blank"
             rel="noreferrer"
@@ -120,7 +125,7 @@ const UpdateRequiredPage: React.FC<{ startupStatus: UpdateRequiredStatus }> = ({
           </a>
           <button
             type="button"
-            className="cursor-pointer border-0 bg-transparent p-0 text-[#787774] hover:text-[#37352F]"
+            className="workbench-no-drag cursor-pointer border-0 bg-transparent p-0 text-[#787774] hover:text-[#37352F]"
             onClick={() => void window.api.appQuit()}
             data-testid={workbenchSelectors.updateRequiredQuitButton}
           >

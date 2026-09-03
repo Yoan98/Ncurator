@@ -154,6 +154,7 @@ export const workbenchSelectors = {
   updateRequiredPrimaryButton: 'workbench-update-required-primary-button',
   updateRequiredDownloadPage: 'workbench-update-required-download-page',
   updateRequiredQuitButton: 'workbench-update-required-quit-button',
+  updateRequiredDragRegion: 'workbench-update-required-drag-region',
   topbar: 'workbench-topbar',
   emptyDragRegion: 'workbench-empty-drag-region',
   topbarDragRegion: 'workbench-topbar-drag-region',

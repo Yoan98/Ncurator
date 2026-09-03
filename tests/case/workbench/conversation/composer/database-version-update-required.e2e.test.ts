@@ -63,6 +63,34 @@ describe('database version update required e2e', () => {
               .getByTestId(rendererSelectors.updateRequiredDownloadPage)
               .getAttribute('href')) || ''
           await page.getByTestId(rendererSelectors.updateRequiredDownloadPage).click()
+          await page.waitForFunction(() => {
+            const observer = (
+              window as Window & {
+                __NCURATOR_E2E_OBSERVER__?: {
+                  ipcInvokeEntries: Array<{ name: string }>
+                }
+              }
+            ).__NCURATOR_E2E_OBSERVER__
+            return Boolean(observer?.ipcInvokeEntries.some((entry) => entry.name === 'openExternalResult'))
+          })
+          const officialDownloadIpc = await page.evaluate(() => {
+            const observer = (
+              window as Window & {
+                __NCURATOR_E2E_OBSERVER__?: {
+                  ipcInvokeEntries: Array<{ name: string; payload?: unknown }>
+                }
+              }
+            ).__NCURATOR_E2E_OBSERVER__
+            const entries = observer?.ipcInvokeEntries || []
+            const lastCall = [...entries].reverse().find((entry) => entry.name === 'openExternal')
+            const lastResult = [...entries]
+              .reverse()
+              .find((entry) => entry.name === 'openExternalResult')
+            return {
+              url: lastCall?.payload,
+              result: lastResult?.payload
+            }
+          })
 
           await primaryButton.click()
           const restartModal = page.getByRole('dialog', { name: '更新已准备好' })
@@ -113,6 +141,7 @@ describe('database version update required e2e', () => {
               .getByTestId(rendererSelectors.updateRequiredQuitButton)
               .isVisible(),
             downloadPageUrl,
+            officialDownloadIpc,
             autoCheckReachedAvailable: recoverySnapshot.status === 'available',
             userFacingError,
             unavailableMessage,
@@ -146,11 +175,19 @@ describe('database version update required e2e', () => {
           await runtime.assertThat(
             result.downloadPageUrl === OFFICIAL_DOWNLOAD_PAGE_URL &&
               result.bodyText.includes('前往官网下载') &&
-              result.openedOfficialDownloadPage,
+              result.openedOfficialDownloadPage &&
+              result.officialDownloadIpc.url === OFFICIAL_DOWNLOAD_PAGE_URL &&
+              result.officialDownloadIpc.result !== null &&
+              typeof result.officialDownloadIpc.result === 'object' &&
+              (result.officialDownloadIpc.result as { success?: boolean }).success === true,
             {
               name: 'recovery-page-links-to-official-download-page',
-              message: '备用下载入口应打开包含平台选择的官网中文下载页。',
-              data: { downloadPageUrl: result.downloadPageUrl }
+              message:
+                '备用下载入口应通过 open-external IPC 打开官网中文下载页，恢复模式也必须真正成功。',
+              data: {
+                downloadPageUrl: result.downloadPageUrl,
+                officialDownloadIpc: result.officialDownloadIpc
+              }
             }
           )
           await runtime.assertThat(

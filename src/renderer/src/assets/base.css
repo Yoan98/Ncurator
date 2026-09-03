@@ -911,7 +911,8 @@ textarea,
   position: relative;
 }
 
-.nc-settings-main-titlebar-drag {
+.nc-settings-main-titlebar-drag,
+.nc-update-required-titlebar-drag {
   position: absolute;
   top: 0;
   right: 0;
@@ -920,6 +921,11 @@ textarea,
   height: var(--workbench-titlebar-height);
   pointer-events: auto;
   -webkit-app-region: drag;
+}
+
+.nc-update-required-page button,
+.nc-update-required-page a {
+  -webkit-app-region: no-drag;
 }
 
 .nc-settings-header {

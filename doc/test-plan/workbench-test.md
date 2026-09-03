@@ -140,8 +140,8 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：数据库版本高于当前应用支持版本时的仅更新恢复模式。
 - Why：旧应用误开新 schema 数据库时，必须先升级应用，不能初始化业务层继续读写。
-- How：先启动应用创建正式 schema，再关闭应用，在同一隔离 `userData/app.sqlite` 的合法迁移前缀后写入更高版本记录并重启，通过真实主进程版本检查进入恢复页；继续用更新 fixture 验证自动检查、下载、失败和重启安装。
-- Oracle：只显示恢复页及本机数据库版本和当前应用支持版本，Workbench 不存在；恢复页提供下载、重启安装、中文失败提示、官网下载页和退出入口，底层英文错误不直接展示，失败后仍不能进入业务界面。对齐 `WB-COMPOSER-012-AC4`、`WB-COMPOSER-012-AC5`。
+- How：先启动应用创建正式 schema，再关闭应用，在同一隔离 `userData/app.sqlite` 的合法迁移前缀后写入更高版本记录并重启，通过真实主进程版本检查进入恢复页；继续用更新 fixture 验证自动检查、下载、失败和重启安装。点击「前往官网下载」后除记录 renderer 调用外，还等待 `openExternalResult` 并断言 IPC 返回成功。
+- Oracle：只显示恢复页及本机数据库版本和当前应用支持版本，Workbench 不存在；恢复页提供下载、重启安装、中文失败提示、官网下载页和退出入口，点击官网入口时 `open-external` 必须真正成功；底层英文错误不直接展示，失败后仍不能进入业务界面。对齐 `WB-COMPOSER-012-AC4`、`WB-COMPOSER-012-AC5`。
 - Not：启动前数据库 fixture 只制造“未来 schema version”，不绕过或替换生产版本检查；更新 fixture 不证明真实安装包下载、签名、安装成功或安装后数据库兼容。
 
 #### `context-ring-usage`

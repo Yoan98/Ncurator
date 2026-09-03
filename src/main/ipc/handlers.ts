@@ -195,6 +195,21 @@ const normalizeReferenceKindFilters = (
   return normalized.length > 0 ? new Set(normalized) : null
 }
 
+export function registerOpenExternalHandler(): void {
+  ipcMain.handle('open-external', async (_event, url: string) => {
+    try {
+      const parsed = new URL(String(url))
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        return { success: false, error: '仅支持 http/https URL' }
+      }
+      await shell.openExternal(parsed.toString())
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: getErrorMessage(error) }
+    }
+  })
+}
+
 export function registerHandlers(services: {
   ingestionService: IngestionService
   embeddingService: EmbeddingService
@@ -1495,18 +1510,7 @@ export function registerHandlers(services: {
     }
   )
 
-  ipcMain.handle('open-external', async (_event, url: string) => {
-    try {
-      const parsed = new URL(String(url))
-      if (!['http:', 'https:'].includes(parsed.protocol)) {
-        return { success: false, error: '仅支持 http/https URL' }
-      }
-      await shell.openExternal(parsed.toString())
-      return { success: true }
-    } catch (error) {
-      return { success: false, error: getErrorMessage(error) }
-    }
-  })
+  registerOpenExternalHandler()
 
   ipcMain.handle(
     'file-watch-start',
