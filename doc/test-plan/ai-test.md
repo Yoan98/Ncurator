@@ -106,6 +106,23 @@ AI 回归测试目录：
 - `tests/case/ai/human/mock-llm/<case>.test.ts`
 - `tests/case/ai/human/live/<case>.test.ts`
 
+一文件多 `caseId` 合法；计划 headings 与文件归属：
+
+| 文件 | 包含的 caseId |
+|------|----------------|
+| `tool/web-browsing/web-crawl-contract.test.ts` | `web-search-*`、`browser-use-*` |
+| `tool/pdf/pdf-read-contract.test.ts` | `pdf-*-contract` |
+| `tool/text-file/text-file-read-write-contract.test.ts` | `text-file-read-write-contract`、`text-file-atomic-guards-and-format-preservation` |
+| `tool/terminal/terminal-inline-edit-artifact-contract.test.ts` | `terminal-inline-edit-artifact-contract`、`terminal-tracking-start-failure-cleanup` |
+| `tool/image-generation/image-generate-contract.test.ts` | `image-generate-*-contract` |
+| `tool/excel/excel-diff-row-structure-semantics.test.ts` | `excel-diff-row-structure-semantics`、`excel-diff-cumulative-net-semantics` |
+| `tool/agent-control/read-image-multimodal-contract.test.ts` | `read-image-multimodal-contract`、`multimodal-image-budget-contract` |
+| `human/mock-llm/human-mixed-tool-dispatch.test.ts` | `human-mixed-tool-dispatch`、`human-mixed-tool-dispatch-after-invalid-plan` |
+| `human/mock-llm/ai-run-service-embedding-preflight.test.ts` | `ai-run-service-embedding-preflight`、`ai-run-service-embedding-preflight-failure` |
+| `human/live/human-text-file-read-write-live.test.ts` | `human-text-file-*-live` |
+| `human/live/human-runtime-script-execution-live.test.ts` | `human-runtime-*-python-live` |
+| `human/live/human-legacy-doc-reading-live.test.ts` | `human-legacy-doc-*-live` |
+
 AI unit / 辅助测试目录：
 
 - `tests/case/unit/ai/<case>.test.ts`
@@ -571,8 +588,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：`read_image(paths)` 按输入顺序返回 1 至 10 个图片引用，并由同一个主模型在下一次请求中直接读取。
 - Why：图片理解不再经过独立视觉模型或描述文本，消息历史也不能持久化 Base64。
-- How：分别输入小图、大图、内容相同或变化的本地图片、多张图片、损坏缓存和 HTTP(S) 图片；检查持久消息、请求投影和 provider 请求体。
-- Oracle：本地图片按源字节 SHA-256 复用 `.ncurator/runtime/assets/read_image-cache/<64位哈希>-v1.webp`，不放大小图，大图不超过 64 万像素和 1 MiB，损坏缓存可重建；HTTP(S) 图片保留原地址；数据库只保存路径与元数据；同一次请求包含全部图片；不支持图片时保留 provider 的自然错误。
+- How：对内容相同的本地图片与多张不同图片调用真实 `read_image`，检查持久消息与请求投影。
+- Oracle：同内容缓存路径复用；多图按输入顺序投影到同一主模型消息；持久消息不含 Base64。本地尺寸边界、HTTP 原址、损坏缓存修复、上下文估算与缺失占位由 unit `read-image-multimodal` 覆盖。
 - Not：不验证具体模型的识图质量。
 
 ##### `multimodal-image-budget-contract`

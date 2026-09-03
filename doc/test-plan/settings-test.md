@@ -82,7 +82,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：无工作空间和未绑定目录时的空状态，以及按名称创建空容器后自动切换到新工作空间。
 - Why：工作空间已从“目录快照”改为“具名容器”，首个创建动作必须反映这一语义。
 - How：进入无工作空间页面检查列表和详情空状态，覆盖空名称提交和有效名称提交，再检查新建未绑定工作空间的文件区空状态。
-- Oracle：没有工作空间时显示选择提示；名称校验和创建流程对齐 `SET-WORKSPACE-002`；未绑定目录时明确提示设置后才能在 Workbench 发送，对齐 `SET-WORKSPACE-006-AC3`、`SET-WORKSPACE-007`。
+- Oracle：没有工作空间时显示选择提示；名称校验和创建流程对齐 `SET-WORKSPACE-002`；未绑定目录时文件区空态与「设置后才能在 Workbench 发送」轻提示对齐 `SET-WORKSPACE-006-AC3`、`SET-WORKSPACE-007`。Workbench 发送门禁由 `workspace-root-path-required` 覆盖，本 case 不断言发送按钮。
 - Not：不验证创建后自动扫描或自动索引；该需求未在 PRD 中定义。
 
 #### `workspace-set-root-path`
@@ -140,16 +140,16 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：点击“更新索引”后，文件状态会刷新为已索引并同步更新摘要。
 - Why：“索引已经可用”的核心用户反馈链路。
 - How：复制共享 workspace 输入的隔离副本，通过 Settings UI 和原生目录选择完成创建与绑定；随后点击更新索引，读取刷新后的文件树和全部支持文件状态。共享 fixture 含 `.doc`、`docx`、`pdf`、`md`、`txt`、`xlsx`、`xlsm` 等全部受支持类型，其中 excel 只以元数据方式索引进库。
-- Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮保持可用，对齐 `SET-WORKSPACE-004-AC3`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC6`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+- Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮保持可用，对齐 `SET-WORKSPACE-004-AC3`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC7`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 - Not：不验证向量内容质量和搜索召回结果。
 
 #### `workspace-prepare-failed-retry`
 
 - 测试类型：`e2e`
-- What：已有失败文件再次点击“更新索引”时会被纳入本次处理范围，并且文件 tab 的可索引数量包含失败数量。
-- Why：失败文件是用户最常见的重试对象，如果失败记录不再进入目标集，或者 UI 不把失败数算进可操作数量，用户会误判“没有东西可更新”。
-- How：通过原生目录选择绑定包含真实损坏 docx 的临时目录，首次点击“更新索引”形成真实 failed 文件；再次点击更新索引，读取 active job、文件摘要和页面可索引数字。
-- Oracle：本次 job 的目标数量包含失败文件，对齐 `SET-WORKSPACE-004-AC1`；页面“可索引”数字等于 `needs_index_count + failed_file_count`，并在存在失败文件时展示 `含失败 N 个` 辅助文案，且失败文件重试后状态发生收敛，对齐 `SET-WORKSPACE-004-AC2`、`SET-WORKSPACE-005-AC2`。
+- What：已有失败文件再次点击“更新索引”时会被纳入本次处理范围。
+- Why：失败文件是用户最常见的重试对象，如果失败记录不再进入目标集，用户会误判“没有东西可更新”。
+- How：通过原生目录选择绑定包含真实损坏 docx 的临时目录，首次点击“更新索引”形成真实 failed 文件；再次点击更新索引，读取 active job 与文件状态。
+- Oracle：本次 job 的目标数量包含失败文件，对齐 `SET-WORKSPACE-004-AC1`；失败文件重试后状态发生收敛，对齐 `SET-WORKSPACE-004-AC2`。可索引数含失败与「含失败 N 个」文案由 `workspace-detail-status-and-error` 覆盖 `SET-WORKSPACE-005-AC2`，本 case 不断言。
 - Not：不要求失败文件最终一定成功；允许因真实文件内容或环境依赖再次失败，但必须确认发生了重试。
 
 #### `workspace-prepare-file-failure-isolated`
@@ -158,7 +158,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：单个文件索引失败不会导致 Settings 页面或 Electron 应用退出，并会留下文件级失败状态与错误信息。
 - Why：真实更新索引可能遇到损坏文件、过大文件或 loader/native 异常；单文件失败必须被隔离为资料级失败，不能拖垮整个应用。
 - How：在真实工作空间隔离目录中放入一个会触发索引失败的支持文件和一个可索引文件，从 Settings 文件 tab 点击“更新索引”，观察 job、页面存活状态、成功文件与失败文件状态。
-- Oracle：应用在索引结束后仍可响应 IPC 和页面查询，对齐 `SET-WORKSPACE-004-AC5` 的失败收敛语义；失败文件保留 `failed / last_error`，其他文件不因该失败丢失状态，对齐 `SET-WORKSPACE-004-AC2`、`SET-WORKSPACE-008-AC2`。
+- Oracle：应用在索引结束后仍可响应 IPC 和页面查询，对齐 `SET-WORKSPACE-004-AC8`；失败文件保留 `failed / last_error`，其他文件不因该失败丢失状态，对齐 `SET-WORKSPACE-004-AC2`、`SET-WORKSPACE-008-AC2`。
 - Not：不模拟操作系统强杀；如果 native 崩溃导致进程退出，该 case 应失败并作为后续 worker/child process 隔离修复的回归目标。
 
 #### `workspace-prepare-progress-restore`

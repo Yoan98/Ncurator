@@ -22,8 +22,7 @@
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地网页任务；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 验证 type=fetch 读取网页正文后再回答。两类 case 均不得因 `web_search` 自动展开右侧 Composer 搜索模式的 `search_list` 面板，对齐 `WB-CORE-007-AC4`。
 - Workbench 附件链路不限文件扩展名，任何可被文件选择器选中的普通文件都可以添加，不因扩展名拒绝；`+` 和拖放保留源文件绝对路径，粘贴文件保存到 `<workspace>/.ncurator/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。
-- `WB-EXCEL-001-AC1`、`WB-EXCEL-001-AC2`、`WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7` 的工具输入输出、完整编辑操作、原子失败、冲突、只读格式、默认 Sheet 和 Sheet 严格校验由 AI tool 回归承担；`WB-EXCEL-002` 的完整 XLSX diff 语义也由 AI tool 解析 diff 文件校验。Workbench 的 Excel apply case 负责真实模型选用工具、正式文件、修改入口、只读单网格预览和回退闭环，不重复枚举底层操作。
-- docx、ppt、pdf 也按同一分层：格式专用工具的读写、边界、格式保真和 diff artifact 语义放在 AI tool；DOCX tool 必须覆盖已有表格的单元格内容与格式净变化、精确红绿标记、计数和非空回读；其中 PPT tool 必须完整覆盖 baseline 到最终状态的页面/元素净变化、自然位移、零净变化、lineage、v4 schema 和准确计数。Workbench e2e 只验证真实用户流程、现有预览入口、红绿页面标记、`+N/-N`、差异面板交互和回退，不重复枚举底层元素组合。PDF 当前是只读工具，没有 Workbench apply diff 语义。
+- Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 回归承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。
 - DOCX 读取结果和历史结果按递归 children 树展示，Workbench 必须能显示统一的 `nodeId`、visual kind、`imagePath` 和 story；DOCX 写结果复用统一状态展示，普通写入不展示冗余正文，创建操作只展示 `createdIds`。格式操作按 text、paragraph、table、row、cell、section 展示。图片理解统一由 `agent-control` 内置的 `read_image` 把图片加入主模型请求。
 - Workbench 历史只展示白名单内的必要 DOCX 字段，不展示 worker、identity 或 replay 内部状态。DOCX 事件以 `nodeId` 定位，PPT 继续使用自己的 `location`，两套协议互不复用。
 
@@ -229,11 +228,11 @@ tests/case/workbench/
 #### `workspace-root-path-required`
 
 - 测试类型：`e2e`
-- What：已选工作区但未设置工作文件地址时，Settings 和 Workbench 都会给出轻提示，且 Workbench 发送按钮保持禁用；绑定目录后恢复可发送。
+- What：已选工作区但未设置工作文件地址时，Workbench 发送按钮保持禁用并提示前往设置；绑定目录后恢复可发送。
 - Why：工作区名称选择和工作目录绑定已经拆开，若缺少“未绑定目录不可发送”的明确反馈，用户会误以为工作区已经可用。
-- How：通过 Settings UI 创建未绑定目录的真实工作区；在 Settings 文件 tab 验证轻提示；进入 Workbench 选择该工作区和真实模型，确认发送按钮禁用与 composer 提示；再回到 Settings 绑定真实目录，返回 Workbench 发送真实请求。
-- Oracle：未设置工作文件地址时，Settings 文件 tab 会提示设置后才能在 Workbench 发送任务，对齐 `SET-WORKSPACE-006-AC3`；Workbench 发送按钮保持禁用且 composer 提示前往设置页绑定地址，对齐 `WB-COMPOSER-005-AC1`、`WB-COMPOSER-005-AC2`；绑定目录后恢复发送并完成真实 AI 运行，对齐 `WB-CORE-006-AC1`；记录模型、耗时、完成度评分和失败归因。
-- Not：不验证运行中的工作区恢复流。
+- How：通过 Settings UI 创建未绑定目录的真实工作区；进入 Workbench 选择该工作区和真实模型，确认发送按钮禁用与 composer 提示；再回到 Settings 绑定真实目录，返回 Workbench 发送真实请求。Settings 未绑目录轻提示由 Settings `workspace-add-selection-flow` 覆盖 `SET-WORKSPACE-006-AC3`，本 case 不断言。
+- Oracle：Workbench 发送按钮保持禁用且 composer 提示前往设置页绑定地址，对齐 `WB-COMPOSER-005-AC1`、`WB-COMPOSER-005-AC2`；绑定目录后恢复发送并完成真实 AI 运行，对齐 `WB-CORE-006-AC1`；记录模型、耗时、完成度评分和失败归因。
+- Not：不验证运行中的工作区恢复流，也不重复断言 Settings 文件 tab 文案。
 
 #### `reference-token-lifecycle`
 
@@ -565,7 +564,7 @@ tests/case/workbench/
 
 ### 5.4 `scheduled-task`
 
-定时任务回归单独归类，复用 Workbench 的 UI E2E 与 live 规则，Oracle 引用 [workbench.md](../prd/workbench.md) 的 `ST-*` 编号。调度触发时点由真实程序运行与系统时间决定，case 通过「下一分钟」级别的短周期调度验证端到端触发，不伪造系统时钟；错过的补跑、跳过不可用工作区、空会话清理与 `nextRunAt` 推进等调度边界由 backend 单测覆盖（`tests/case/unit/scheduled-task-*.test.ts`）。
+定时任务回归单独归类，Oracle 引用 [`scheduled-task.md`](../prd/scheduled-task.md) 的 `ST-*` 编号。调度触发时点由真实程序运行与系统时间决定，case 通过「下一分钟」级别的短周期调度验证端到端触发，不伪造系统时钟；错过的补跑、跳过不可用工作区、空会话清理与 `nextRunAt` 推进等调度边界由 backend 单测覆盖（`tests/case/unit/scheduled-task-*.test.ts`，不进入 Workbench E2E 发现范围）。
 
 #### `scheduled-task-view-entry-and-isolation`
 

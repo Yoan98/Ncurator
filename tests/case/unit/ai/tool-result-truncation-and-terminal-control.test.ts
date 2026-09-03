@@ -5,14 +5,14 @@ import {
   sliceUnicodeCharacters,
   sliceUnicodeCharactersFromEnd,
   TOOL_RESULT_HEAD_MAX_CHARS,
-  TOOL_RESULT_INLINE_MAX_CHARS,
+  TOOL_RESULT_SPILL_MAX_CHARS,
   TOOL_RESULT_TAIL_MAX_CHARS
 } from '../../../../src/main/services/ai/human/shared/toolResultPersistence'
 import { stripTerminalControlText } from '../../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 
 describe('ai unit tool result truncation', () => {
   it('renders an English head/tail spill message with totals', () => {
-    const fullContent = 'x'.repeat(TOOL_RESULT_INLINE_MAX_CHARS + 100)
+    const fullContent = 'x'.repeat(TOOL_RESULT_SPILL_MAX_CHARS + 100)
     const message = buildTruncatedToolResultMessage({
       filePath: '/workspace/.ncurator/runtime/toolresult/run-1/abc.txt',
       head: fullContent.slice(0, TOOL_RESULT_HEAD_MAX_CHARS),

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { HUMAN_MAX_ACTIVE_TOOLS } from '../../../../src/main/services/ai/human/constants'
 import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
 import {
-  DOCX_MUTATION_TOOL_SPECS,
+  DOCX_WRITE_TOOL_SPECS,
   DOCX_READ_TOOL_SPECS,
   DOCX_TOOL_SPECS,
   DOCX_WRITE_TOOL_SPECS
@@ -26,7 +26,7 @@ describe('ai unit docx tool contract', () => {
   it('exposes independent 3/4 docx skill toolsets', () => {
     expect(DOCX_READ_TOOL_SPECS.map((spec) => spec.name)).toEqual(READ_TOOLS)
     expect(DOCX_WRITE_TOOL_SPECS.map((spec) => spec.name)).toEqual(WRITE_TOOLS)
-    expect(DOCX_MUTATION_TOOL_SPECS.map((spec) => spec.name)).toEqual(WRITE_TOOLS)
+    expect(DOCX_WRITE_TOOL_SPECS.map((spec) => spec.name)).toEqual(WRITE_TOOLS)
     expect(DOCX_TOOL_SPECS.map((spec) => spec.name)).toEqual([...READ_TOOLS, ...WRITE_TOOLS])
     expect(SKILL_DEFINITIONS['docx-read'].toolNames).toEqual(READ_TOOLS)
     expect(SKILL_DEFINITIONS['docx-write'].toolNames).toEqual(WRITE_TOOLS)
@@ -43,7 +43,7 @@ describe('ai unit docx tool contract', () => {
   })
 
   it('keeps every public call to one discriminated operation', () => {
-    for (const spec of DOCX_MUTATION_TOOL_SPECS) {
+    for (const spec of DOCX_WRITE_TOOL_SPECS) {
       expect(spec.promptSpec.description).not.toContain('actions[]')
       expect(spec.promptSpec.description).not.toContain('nodeId')
       expect(spec.promptSpec.description).not.toContain('\n')

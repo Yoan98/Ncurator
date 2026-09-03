@@ -174,14 +174,6 @@ export const appendFileChangeArtifactsAndEmitEvents = (input: {
   return nextArtifacts
 }
 
-export const buildFileChangesSummaryFromDocxApplyRecords = (
-  records: readonly DocxApplyRecord[]
-): FileChangesSummary => ({
-  changed_files: records.map((record) =>
-    toFileChangeSummaryItem(toAiFileChangeRecordFromDocxApply(record))
-  )
-})
-
 export const buildFileChangesSummaryFromFileChangeRecords = (
   records: readonly AiFileChangeRecord[]
 ): FileChangesSummary => ({

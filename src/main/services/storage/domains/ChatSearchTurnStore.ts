@@ -4,7 +4,7 @@ import type {
   ChatMessage,
   ChatMessageContentNode,
   SelectedReference
-} from '../../../shared/types'
+} from '../../../../shared/types'
 import type { SqliteCore } from '../sqlite/SqliteCore'
 import { jsonStringify, parseJsonArray, toRequiredNumber, toRequiredString } from '../sqlite/sqliteUtils'
 

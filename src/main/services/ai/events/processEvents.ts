@@ -7,19 +7,19 @@ import type {
 
 type SendEvent = (event: AiRunEvent) => void
 
-export const getThinkingProcessGroupId = (runId: string): string => `${runId}:thinking`
+const getThinkingProcessGroupId = (runId: string): string => `${runId}:thinking`
 
-export const getLearningProcessGroupId = (runId: string, skillId: RuntimeSkillId): string =>
+const getLearningProcessGroupId = (runId: string, skillId: RuntimeSkillId): string =>
   `${runId}:learning:${skillId}`
 
-export const getCompactionProcessGroupId = (runId: string): string => `${runId}:compaction`
+const getCompactionProcessGroupId = (runId: string): string => `${runId}:compaction`
 
-export const getFinalizingProcessGroupId = (runId: string): string => `${runId}:finalizing`
+const getFinalizingProcessGroupId = (runId: string): string => `${runId}:finalizing`
 
-export const getToolProcessGroupId = (runId: string, toolCallId: string): string =>
+const getToolProcessGroupId = (runId: string, toolCallId: string): string =>
   `${runId}:tool:${toolCallId}`
 
-export const getLlmRetryProcessGroupId = (runId: string, callId: string): string =>
+const getLlmRetryProcessGroupId = (runId: string, callId: string): string =>
   `${runId}:llm-retry:${callId}`
 
 export const emitAssistantProcessThought = (input: {

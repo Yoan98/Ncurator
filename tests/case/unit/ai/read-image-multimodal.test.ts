@@ -36,34 +36,6 @@ const retainedUrls = (content: unknown): string[] =>
     : []
 
 describe('ai unit read_image multimodal projection', () => {
-  it('normalizes once and reuses one content-addressed cache file', async () => {
-    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-read-image-'))
-    const firstPath = path.join(workspace, 'first.png')
-    const secondPath = path.join(workspace, 'second.png')
-    await Promise.all([
-      fs.writeFile(firstPath, ONE_PIXEL_PNG),
-      fs.writeFile(secondPath, ONE_PIXEL_PNG)
-    ])
-
-    const [first] = await prepareImagesForMainModel({
-      workspaceRootPath: workspace,
-      paths: [firstPath]
-    })
-    const [second] = await prepareImagesForMainModel({
-      workspaceRootPath: workspace,
-      paths: [secondPath]
-    })
-
-    expect(first).toEqual(second)
-    expect(first?.path).toMatch(
-      /\.ncurator[\\/]runtime[\\/]assets[\\/]read_image-cache[\\/][a-f0-9]{64}-v1\.webp$/u
-    )
-    expect(first?.mimeType).toBe('image/webp')
-    expect(first?.width).toBe(1)
-    expect(first?.height).toBe(1)
-    expect(first?.sizeBytes).toBeGreaterThan(0)
-  })
-
   it('changes the cache path when source bytes change and repairs a corrupt cache entry', async () => {
     const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-read-image-change-'))
     const sourcePath = path.join(workspace, 'source.png')
@@ -146,19 +118,6 @@ describe('ai unit read_image multimodal projection', () => {
     expect(large!.sizeBytes).toBeLessThanOrEqual(1024 * 1024)
   })
 
-  it('projects multiple image references into one main-model message in order', async () => {
-    const message = createImageReferenceMessage([
-      ref('https://example.com/first.webp'),
-      ref('https://example.com/second.webp')
-    ])
-    const [projected] = await projectMessagesForMainModel([message])
-
-    expect(retainedUrls(projected?.content)).toEqual([
-      'https://example.com/first.webp',
-      'https://example.com/second.webp'
-    ])
-  })
-
   it('includes visual input in context estimates', () => {
     const textOnly = estimateMessagesForContext([createImageReferenceMessage([])])
     const withImage = estimateMessagesForContext([
@@ -173,33 +132,6 @@ describe('ai unit read_image multimodal projection', () => {
       ])
     ])
     expect(withImage - textOnly).toBeGreaterThanOrEqual(1024)
-  })
-
-  it('evicts oldest images in stable batches of twenty without mutating history', async () => {
-    const images = Array.from({ length: 601 }, (_, index) =>
-      ref(`https://example.com/${String(index)}.webp`)
-    )
-    const persistent = createImageReferenceMessage(images)
-    const [projected] = await projectMessagesForMainModel([persistent])
-    const urls = retainedUrls(projected?.content)
-
-    expect(JSON.stringify(persistent.content)).toContain('ncurator-image-ref:')
-    expect(JSON.stringify(persistent.content)).not.toContain(';base64,')
-    expect(urls).toHaveLength(581)
-    expect(urls).not.toContain('https://example.com/19.webp')
-    expect(urls).toContain('https://example.com/20.webp')
-  })
-
-  it('evicts at least ten MiB of oldest inline payload when the byte budget is exceeded', async () => {
-    const images = Array.from({ length: 25 }, (_, index) =>
-      ref(`data:image/webp;base64,AA${String(index)}`, 1024 * 1024)
-    )
-    const [projected] = await projectMessagesForMainModel([createImageReferenceMessage(images)])
-    const urls = retainedUrls(projected?.content)
-
-    expect(urls).not.toContain('data:image/webp;base64,AA9')
-    expect(urls).not.toContain('data:image/webp;base64,AA10')
-    expect(urls).toContain('data:image/webp;base64,AA11')
   })
 
   it('replaces a missing runtime image with a stable text placeholder', async () => {

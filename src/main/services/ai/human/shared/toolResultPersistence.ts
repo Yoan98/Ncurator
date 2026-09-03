@@ -6,8 +6,6 @@ import { getWorkspaceToolResultDir } from '../../../assets/WorkspaceAssetService
 export const TOOL_RESULT_REJECT_MAX_BYTES = 51_200
 export const TOOL_RESULT_REJECT_MAX_LINES = 2_000
 export const TOOL_RESULT_SPILL_MAX_CHARS = 32_000
-/** @deprecated Use TOOL_RESULT_SPILL_MAX_CHARS */
-export const TOOL_RESULT_INLINE_MAX_CHARS = TOOL_RESULT_SPILL_MAX_CHARS
 export const TOOL_RESULT_HEAD_MAX_CHARS = 6_000
 export const TOOL_RESULT_TAIL_MAX_CHARS = 2_000
 

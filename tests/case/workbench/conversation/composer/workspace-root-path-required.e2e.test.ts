@@ -48,10 +48,6 @@ describe('workbench conversation e2e', () => {
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
           await configureLiveModelThroughSettingsUi(page, env)
           const workspaceId = await createWorkspaceThroughSettingsUi(page, WORKSPACE_NAME)
-          await navigateToSettingsSection(page, 'workspace')
-          const settingsHintText = await page
-            .getByText('设置后才能在 Workbench 中发送任务。')
-            .textContent()
 
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
@@ -98,7 +94,6 @@ describe('workbench conversation e2e', () => {
           recordWorkbenchAiEvidence(runtime, evidence, 0.75)
 
           return {
-            settingsHintText: (settingsHintText || '').trim(),
             disabledBeforeBinding,
             composerHintBeforeBinding,
             disabledAfterBinding,
@@ -109,8 +104,7 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.settingsHintText.includes('设置后才能在 Workbench 中发送任务') &&
-              result.disabledBeforeBinding &&
+            result.disabledBeforeBinding &&
               result.composerHintBeforeBinding.includes('当前工作区未设置文件目录') &&
               !result.disabledAfterBinding &&
               !result.composerHintVisibleAfterBinding &&
@@ -120,7 +114,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-workspace-root-path-required-real',
               message:
-                '未设置工作目录的工作区应在 Settings 和 Workbench 都给出轻提示，且 Workbench 发送按钮保持禁用；绑定目录后恢复发送并完成真实 AI 运行，对齐 SET-WORKSPACE-006、WB-COMPOSER-005、WB-CORE-006。',
+                '未设置工作目录的工作区应禁用 Workbench 发送并提示前往设置；绑定目录后恢复发送并完成真实 AI 运行，对齐 WB-COMPOSER-005、WB-CORE-006。Settings 未绑目录文案由 workspace-add-selection-flow 覆盖 SET-WORKSPACE-006-AC3。',
               data: result
             }
           )

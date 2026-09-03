@@ -31,9 +31,10 @@
 - 包含 AI 运行中的审批、搜索模式提示与上下文压缩过程提示。
 - 包含右侧内容面板中的搜索结果、文档查看与修改的文件回退入口。
 - 包含基于本地资料和网页资料的上下文使用。
-- 包含定时任务的入口、配置、启用开关与到点自动创建会话并发送任务。
+- 定时任务的产品规格见 `doc/prd/scheduled-task.md`（`ST-*`）；Workbench 仅提供入口与会话侧消费。
 - 不包含设置页中的资料配置逻辑。
 - 不包含视觉风格与基础控件样式定义。
+- 不包含 AI 工具协议、operation 矩阵、结果信封或 graph / prompt 细节（见 `doc/ai-harness/**` 与 `doc/test-plan/ai-test.md`）。
 
 ## 5. 当前能力边界
 
@@ -71,7 +72,7 @@
 - 需求编号使用 `WB-<模块>-<三位序号>`。
 - 验收编号使用 `WB-<模块>-<三位序号>-AC<序号>`。
 - 需求编号稳定后不因措辞微调而重排；只有功能被废弃时才标记为废弃。
-- 定时任务需求编号使用 `ST-<模块>-<三位序号>`，验收编号使用 `ST-<模块>-<三位序号>-AC<序号>`，详见 `8.13 定时任务`。
+- 定时任务编号与验收见 `doc/prd/scheduled-task.md`。
 
 ## 8. 需求明细
 
@@ -512,43 +513,23 @@
 
 #### WB-APPLY-002 AI 修改完成后直接写回
 
-- 系统行为：受支持 `docx`、`pptx`、`xlsx`、图片生成和普通文本写任务完成后直接写回源文件或创建目标文件，并生成修改记录。普通文本支持 `create`、`rewrite`、唯一非重叠 `edit` 和精确 `replaceAll`；任一校验失败时不产生部分写入。
+- 系统行为：受支持 `docx`、`pptx`、`xlsx`、图片生成和普通文本写任务完成后直接写回源文件或创建目标文件，并生成修改记录。普通文本支持 `create`、`rewrite`、唯一非重叠 `edit` 和精确 `replaceAll`；任一校验失败时不产生部分写入。各格式工具的锚点、operation 与结果信封见 `doc/ai-harness/tool-design.md`，由 AI tool / live 回归覆盖。
 - 验收：
-  - `WB-APPLY-002-AC1` 修改现有 `docx` 后，源文件立即变为 AI 最终净稿，assistant turn 展示本轮“修改的文件”入口。
-  - `WB-APPLY-002-AC2` 新建 `docx` 后，目标文件立即存在，assistant turn 展示本轮“修改的文件”入口。
-  - `WB-APPLY-002-AC3` 创建或修改普通文本文件后，目标文件立即更新并生成修改记录；运行期间不展示修改入口，收到 `run_completed / run_failed / run_cancelled` 后 assistant turn 才展示本轮“修改的文件”，右侧可查看由真实写入前后内容计算的文本 diff。`answer_completed` 不视为 run 已结束。
+  - `WB-APPLY-002-AC1` 修改现有 `docx` 后，源文件立即变为 AI 最终净稿，assistant turn 展示本轮「修改的文件」入口。
+  - `WB-APPLY-002-AC2` 新建 `docx` 后，目标文件立即存在，assistant turn 展示本轮「修改的文件」入口。
+  - `WB-APPLY-002-AC3` 创建或修改普通文本文件后，目标文件立即更新并生成修改记录；运行期间不展示修改入口，收到 `run_completed / run_failed / run_cancelled` 后 assistant turn 才展示本轮「修改的文件」，右侧可查看由真实写入前后内容计算的文本 diff。`answer_completed` 不视为 run 已结束。
   - `WB-APPLY-002-AC4` 普通文本 `edit` 的每个 `oldText` 必须唯一且互不重叠；`replaceAll` 替换一个 `oldText` 的全部非重叠精确匹配；失败时文件保持原样。
-  - `WB-APPLY-002-AC5` 同一次 AI Run 对同一个 pptx 的多次编辑只生成一条修改记录；PPT Diff 固定比较本 Run 第一次接触文件时的状态和 Run 完成后的最终状态，工具调用只用于识别页面、元素和真实移动，不直接累加操作次数。
+  - `WB-APPLY-002-AC5` 同一次 AI Run 对同一个 pptx 的多次编辑只生成一条修改记录；PPT Diff 固定比较本 Run 第一次接触文件时的状态和 Run 完成后的最终状态。
   - `WB-APPLY-002-AC6` 创建或修改 `xlsx` 后，正式路径立即包含最终净工作簿并生成一条修改记录；同一次 AI Run 对同一路径连续编辑时保持首次写入前基线，不重复生成记录。
-  - `WB-APPLY-002-AC7` DOCX 写作技能使用 `docx_content_edit` 统一处理正文和 visual 节点；支持 `replace_text`、`insert_nodes`、`replace_node`、`delete_node`、`move_node`，不再提供独立媒体工具。
-  - `WB-APPLY-002-AC7-1` 所有文件工具（docx / ppt / excel / pdf / text-file / image）的 `sourcePath`、`outputPath`、`path` 必须是本机绝对路径；系统不做任何路径拼接，相对路径直接返回错误，AI 需自行改为绝对路径后再调用。
-  - `WB-APPLY-002-AC8` DOCX 编辑定位统一使用会话内稳定 `nodeId`；不存在 block、blockId、cellBlockId、wrapperPath 或 lineageId 协议。outline segment 的 `nodeIndex` 范围只表示当前临时顺序，重新打开或编辑后允许重新分段。
-  - `WB-APPLY-002-AC9` DOCX 详细读取使用严格递归语义树，按真实顺序保留 `paragraph / run / text / tab / break / hyperlink / content_control / revision / field / table / table_row / table_cell / visual` 的归属关系；详细树中的正文只存在于叶子 `text` 节点，不重复返回 paragraph、table 或 cell 的派生文本和行列统计。
-  - `WB-APPLY-002-AC10` DOCX visual 类型固定为 `image / chart / diagram / shape / embedded_object`，与普通节点统一使用 nodeId；读取结果包含可供 `read_image` 使用的本地图片路径。
-  - `WB-APPLY-002-AC11` `read_image` 一次接受 1 至 10 个图片路径，将图片按顺序加入主模型上下文，不调用独立视觉模型。
-  - `WB-APPLY-002-AC12` `docx_content_edit` 使用浅层节点构造和最小 patch：支持 `replace_text / insert_nodes / replace_node / delete_node / move_node`，不提供 `replace_content` 或 `replace_children`，也不要求 AI 重建完整递归树。
-  - `WB-APPLY-002-AC13` `docx_format` 分别支持 text、paragraph、table、row、cell 和 section 的直接格式，另支持重置格式、命名样式 CRUD、应用命名样式和编号。`format_text` 使用最多 20 个 `{ nodeId, text? }` target，其余局部格式 operation 使用最多 20 个 `nodeIds`；同次调用共享一个 patch、拒绝重复 ID，并在全部目标预校验后原子提交。patch 类型或任一目标不匹配时整次写入失败；`update_named_style` 修改全局样式定义。
-  - `WB-APPLY-002-AC14` `replace_text` 只在指定 `nodeId` 子树内替换确定原文，可跨相邻 run，但不能跨 paragraph、tab、break 或 visual；原位保留未修改 run、段落格式和视觉节点。
-  - `WB-APPLY-002-AC15` visual 作为普通节点按 nodeId 删除或替换，删除时自动清理无引用媒体。表格读写坐标统一从 1 开始。失败不得推进 WorkingPackage，也不得产生部分结果。
-  - `WB-APPLY-002-AC16` `docx_read_outline` 使用 `fromPercent`/`toPercent` 按根节点比例返回 segment map，`0–100` 返回全文结构，并返回 `fromPercent/toPercent/fromNodeIndex/toNodeIndex/totalRootCount`。segment 只包含 `story/fromNodeIndex/toNodeIndex/textMap`，不返回 nodeId；`textMap` 最多 360 个 Unicode 字符，由结构锚点、TF-IDF 动态关键词和 TF-IDF 质心 + MMR 原文代表句组成。所有 DOCX 使用相同分段算法，每个 story 根节点无遗漏且不重叠。`docx_read_nodes` 返回 story 递归内容树，一次最多读取 20 个 nodeId 或连续 50 个根节点。未支持 OOXML 投影为 opaque，局部写入必须原样保留；content control 是可定位容器，空容器可用 `insert_nodes inside_start/inside_end` 写入。
-  - `WB-APPLY-002-AC16-2` `docx_search` 只支持 literal/regex 并搜索完整原文，不使用 DOCX embedding、向量索引或硬编码别名。每个实际出现位置为一个 match，Worker 统计全部命中但只构造和返回前 10 个；`includeContext:true` 固定返回同一 story 前后各 2 个节点预览。无效 regex，以及任一过期、未知或不可搜索的 scope nodeId，均返回 `invalid_input`。
-  - `WB-APPLY-002-AC16-1` 每条工具结果独立判断大小：不超过 32,000 字符时完整进入模型上下文，超过时完整落盘并返回最多 8,000 字符的 head；截断信封只包含 `truncated/filePath/totalChars/head`，同一 dispatch 不设置批次总量限制。
-  - `WB-APPLY-002-AC17` 四个 DOCX 写工具复用 Human 统一 `status/result/error` 信封。普通修改成功时 `result` 为空；创建新节点、图片、批注或回复时只在 `result.createdIds` 返回后续定位需要的稳定 ID，不返回完整节点或 `changes`。成功前仍须完成 OOXML、relationship/media 一致性与受影响区域内部回读校验；最终内容、格式和图片效果由读取工具按受影响范围确认。
-  - `WB-APPLY-002-AC17-1` 同一 Run 内四个写工具共享首次接触文件时的 Source 和连续推进的 Working。Diff 比较 Source 与最终 Working：A→B→A、新增后删除不产生 Diff；body、header、footer、footnote、endnote、textbox 均生成红绿审核结果，只有 package part 变化时显示“文档级变更”摘要；Word 原生批注和修订与 NCurator Diff 独立保留。
-  - `WB-APPLY-002-AC18` 所有 Human 工具的输入结构由 Zod schema 统一渲染；公共类型使用稳定命名定义并只展开一次，同时保留长度、数量、正则、数值和跨字段语义约束，不生成匿名 schema 名称。
   - `WB-APPLY-002-AC7` 生成 PNG、JPEG 或 WebP 图片后，正式路径立即包含可读取图片并生成一条修改记录；同一次 AI Run 对同一路径再次生成时自动更新并保持首次写入前基线。
 
 #### WB-TERMINAL-001 终端执行
 
-- 系统行为：terminal 每次 `terminal_run` 新建终端并从当前 workspace 根目录执行一条命令，命令执行完即销毁，不保留会话。要切换目录需在同一条命令内用 `cd` 链接。长命令运行超过时限后返回 `status=running` 并让出控制权，可通过 `terminal_read` 携带返回的 `readEndPosition` 增量续读，命令结束后由框架清理。`terminal_read` 必须传入 `terminalId`，每次最多返回单次上限字符数，返回的 `readEndPosition` 是本次已返回内容之后的下一读取位置；返回 `hasMoreOutput=true` 表示还有更多输出未读完，应继续用 `readEndPosition` 读取。工具不接收 `cwd`，默认起始目录是用户的工作区目录。绝对路径可以访问工作区外文件；相对路径以工作区根目录为起点。每个会话最多同时存在 5 个运行中的终端，达到上限后 `terminal_run` 返回 `terminal_session_limit_reached`，可等待命令结束，或用新终端执行终止命令（kill/pkill/taskkill）腾出位置。
+- 系统行为：智能模式可通过终端在当前工作区执行命令；长命令可在运行中让出控制权并由后续读取续接；命令遵守审批与安全策略。绝对路径可访问工作区外文件，但工作区外变更不进入修改记录与回退。涉及数据计算、对账、统计等数值处理时，须通过终端真实执行计算，不得仅靠模型推算后直接写出结论文件。终端工具协议与并发/游标细节由 AI tool 回归覆盖。
 - 验收：
-  - `WB-TERMINAL-001-AC1` 每次 `terminal_run` 新建从 workspace 根目录开始的终端，命令结束即销毁，不保留 `cd` 后的路径。
-  - `WB-TERMINAL-001-AC2` 长命令固定让出控制权但不被误判为失败；terminal_read 只返回游标后的增量输出和客观状态，单次返回不超过字符上限，`hasMoreOutput=true` 时可用返回的 `readEndPosition` 连续读取直到 `hasMoreOutput=false`。
   - `WB-TERMINAL-001-AC3` 删除会话、取消所属 run 或退出应用不会遗留进程。
-  - `WB-TERMINAL-001-AC4` terminal_run 继续遵守命令审批与其他安全策略；terminal_read 不能访问其他会话或 workspace 的终端。
-  - `WB-TERMINAL-001-AC5` shell 后台符号、nohup 或 Start-Process 不能绕过终端管理。
-  - `WB-TERMINAL-001-AC6` 达到每会话并发终端上限（5 个）时 terminal_run 返回 `terminal_session_limit_reached` 并给出提示；终止类命令（kill/pkill/taskkill）不受该上限限制。
-  - `WB-TERMINAL-001-AC7` AI 涉及数据计算、对账、统计、求和、对比等数值处理时，必须通过 terminal 执行真实计算（如 python / python3 / node 脚本、awk、join、paste 等命令），计算结果由终端命令产出；不得仅靠模型内部推算后直接写出结论文件，终端产出的变化按 terminal 修改记录处理。
+  - `WB-TERMINAL-001-AC4` terminal 命令继续遵守审批与其他安全策略；不能访问其他会话的终端。
+  - `WB-TERMINAL-001-AC7` AI 涉及数据计算、对账、统计、求和、对比等数值处理时，必须通过 terminal 执行真实计算；计算结果由终端命令产出，对应变化按 terminal 修改记录处理。
 
 #### WB-APPLY-003 回退本次 AI 修改
 
@@ -586,21 +567,15 @@
 
 #### WB-PPT-001 AI 创建和编辑 PPT
 
-- 系统行为：AI 通过 `ppt-read` 和 `ppt-write` 读取、创建和编辑 pptx。`ppt_edit` 一次调用只执行一个 operation（顶层 `type` 判别联合）；路径不存在时创建，存在时编辑。`insert_slide` / `replace_slide` 使用同一套页面元素规格（`background?`、`notes?`、`defaults?`、`elements[]`）。`replace_slide` 保留原 `slideId`，清空后按规格重写。成功后原子写入真实文件，只返回 `sourcePath`、`slideCount` 和继续写所需的 `slideId`、`createdElementIds`。任务结束时只生成 run 级差异记录，不再次提交文件。
+- 系统行为：AI 可通过 PPT 读写能力创建和编辑 pptx；写回成功后正式文件立即可读，同一 Run 对同一路径聚合为一条修改记录。页面元素规格、operation 与返回锚点由 AI tool 回归覆盖。
 - 验收：
   - `WB-PPT-001-AC1` AI 可自行新建 pptx，不依赖用户点击新建入口。
   - `WB-PPT-001-AC2` 新建演示文稿或插入页面时，单次调用只允许一张页面的元素规格，不接受页面数组或 HTML。
   - `WB-PPT-001-AC3` 文本、形状、线条、图片、表格、图表和公式按支持类型转换，不把整页默认导出为截图。
-  - `WB-PPT-001-AC4` AI 可使用真实 slideId 和 elementId 继续编辑已有页面和元素。
+  - `WB-PPT-001-AC4` AI 可继续编辑已有页面和元素。
   - `WB-PPT-001-AC5` 公式由 LaTeX 渲染为 SVG；公式整体可移动和缩放，内部字符为只读内容。
-  - `WB-PPT-001-AC6` `ppt_read_outline` 支持 percent 和 slide_index；`ppt_read_slides` 支持 slide_index 和 slide_ids，默认 `detail=full` 返回元素与可交给 `read_image` 的 `slideImagePath`，`detail=images` 仅返回 `slideId` / 页码 / `slideImagePath`；`ppt_search` 使用可选 `scope.slideIds`。
-  - `WB-PPT-001-AC7` `ppt_edit` 成功后只返回继续写所需锚点：`sourcePath`、`slideCount`、相关 `slideId`、`createdElementIds`（insert / replace / add_element / duplicate）；不返回变更清单或整页 readback。
-  - `WB-PPT-001-AC8` 元素编辑支持文字、位置、样式、图层、复制、删除、新增、图片、表格、图表和公式更新。
-  - `WB-PPT-001-AC9` 一次 `ppt_edit` 失败时，文件和活动 session 都保持调用前状态。
-  - `WB-PPT-001-AC10` `ppt_edit` 返回成功时，其他程序已经可以读取最终 pptx。
-  - `WB-PPT-001-AC11` 不提供 `create_presentation`；`insert_slide` 使用可选 `location:{slideId,position}`，不传时追加到末尾。
-  - `WB-PPT-001-AC12` `move_slide` 必须提供 `slideId` 和 `location`；`duplicate_slide` 必须提供 `slideId`，可选 `location`，不传时追加到末尾。移动不能锚定自身，复制可以锚定源页自身；旧 `position + anchorSlideId`、`html`、`actions[]` 参数无效，最终至少保留一页。
-  - `WB-PPT-001-AC13` `replace_slide` 必须提供已有 `slideId` 与元素规格；保留该页部件身份，Diff 将该页记为 modified，元素按旧全部 deleted、新全部 added 计数。
+  - `WB-PPT-001-AC9` 一次编辑失败时，正式文件保持调用前状态。
+  - `WB-PPT-001-AC10` 编辑返回成功时，其他程序已经可以读取最终 pptx。
 
 #### WB-PPT-002 PPT 单页左右审核模式
 
@@ -622,14 +597,12 @@
 
 #### WB-EXCEL-001 AI 读取和编辑 Excel
 
-- 系统行为：AI 通过 `excel-read` 的 `excel_read` 读取工作簿地图、A1 范围的值与公式、样式，或按格子值/公式搜索；通过 `excel-write` 的 `excel_edit` 一次一个 type 创建或编辑工作表、范围、样式和结构。路径只出现在入参。路径不存在时第一次 `add_sheet` 创建工作簿（不自动生成 Sheet1），存在时编辑。读取支持 `xlsx`、`xlsm`、`xltx`、`xltm`，写入只支持 `xlsx`。Excel 文件不进入本地知识库内容索引，只索引文件名、文档标题与工作表名等元数据（不含单元格内容），具体单元格数据仍由 Excel 专用工具按工作区路径处理。产品侧 Diff / 修改记录 / 回退仍由系统维护，不投影给模型。
+- 系统行为：AI 可通过 Excel 读写能力读取工作簿并创建或编辑 `xlsx`；读取支持 `xlsx`、`xlsm`、`xltx`、`xltm`，写入只支持 `xlsx`。Excel 不进入本地知识库单元格内容索引，只索引文件名、文档标题与工作表名等元数据。产品侧 Diff / 修改记录 / 回退由系统维护。读写 type 与字段契约由 AI tool 回归覆盖。
 - 验收：
-  - `WB-EXCEL-001-AC1` `excel_read` 按 type 工作：`workbook` 返回各表 `name/range/rowCount/columnCount`（空表 `range` 为 null）；`range` 返回网格，公式格为 `{ formula, value? }`，字面量为原值；`style` 只返回有格式的 `bold/fontColor/fillColor/numberFormat`，否则为 `null`；`search` 只搜单元格值和公式，返回 `{ totalMatchCount, returnedMatchCount, matches: [{ sheetName, address, value? 或 formula }] }`。
-  - `WB-EXCEL-001-AC2` `excel_edit` 一次一个 type：`add_sheet` / `delete_sheet` / `rename_sheet` / `set_range` / `clear_range` / `merge_cells` / `unmerge_cells` / 插删行列 / `set_style` / `set_column_width` / `set_row_height` / `auto_fit`。`set_range` 的 `range` 必须与 `values` 行列一致的 A1 矩形（如 `A1:C3`）；单格写入可用 `A1` 或 `A1:A1`；不传 style 则保留原样式。成功返回 `{}`。
-  - `WB-EXCEL-001-AC3` 单次 `excel_edit` 失败时不产生部分写入；文件在连续编辑之间被外部修改时拒绝覆盖并提示冲突；无实际变化时不生成修改记录。
+  - `WB-EXCEL-001-AC3` 单次编辑失败时不产生部分写入；文件在连续编辑之间被外部修改时拒绝覆盖并提示冲突；无实际变化时不生成修改记录。
   - `WB-EXCEL-001-AC4` `xlsm`、`xltx`、`xltm` 可以读取但不能写回；拒绝写入时源文件保持不变，并明确说明是为了避免丢失宏或模板信息。
   - `WB-EXCEL-001-AC5` Excel 创建或编辑成功后，正式文件中的值与公式可被其他程序立即读取，正式文件不包含审核模式使用的红绿边框。
-  - `WB-EXCEL-001-AC6` 新建工作簿只包含 `add_sheet` 显式创建的 Sheet，不自动生成 `Sheet1`；最终至少保留一个 Sheet，删除最后一个 Sheet 必须失败。
+  - `WB-EXCEL-001-AC6` 新建工作簿只包含显式创建的 Sheet，不自动生成 `Sheet1`；最终至少保留一个 Sheet，删除最后一个 Sheet 必须失败。
   - `WB-EXCEL-001-AC7` 新增已存在的 Sheet、删除不存在的 Sheet、重命名到已存在名称都必须失败，且不写入部分结果。
 
 #### WB-EXCEL-002 Excel 单网格审核模式
@@ -678,79 +651,10 @@
 
 ### 8.13 定时任务
 
-定时任务复用 Workbench 的「可用工作区」前置条件与模型 / 偏好 / 执行权限语义，需求编号使用 `ST-*`。
-
-#### ST-ENTRY-001 左侧栏入口
-
-- 系统行为：Workbench 左侧栏「新对话」下方展示同级、同样式的「定时任务」入口；点击后整个主区域（除左侧会话列表外）切换为定时任务视图，不展示聊天对话和资源面板。
-- 验收：
-  - `ST-ENTRY-001-AC1` 「定时任务」入口位于「新对话」下方，使用与「新对话」一致的侧栏选项样式。
-  - `ST-ENTRY-001-AC2` 点击入口后，主区域整块切换为定时任务视图，聊天对话与资源面板不再显示。
-
-#### ST-VIEW-001 视图独立与返回
-
-- 系统行为：定时任务视图是独立自包含组件，占据除左侧会话列表外的整个主区域；该视图没有聊天对话。视图顶部提供标题栏，点击「新对话」或点击左侧任意会话即返回聊天视图并切换 / 停留在该会话。
-- 验收：
-  - `ST-VIEW-001-AC1` 定时任务视图中不展示聊天对话或资源面板。
-  - `ST-VIEW-001-AC2` 点击左侧任意会话后返回聊天视图并切换到该会话。
-  - `ST-VIEW-001-AC3` 点击「新对话」后返回聊天视图并进入新对话草稿。
-
-#### ST-LIST-001 列表展示
-
-- 系统行为：视图打开后拉取全部定时任务并展示；每个任务项展示名称、调度时间摘要、主模型名称和启用开关。无任务时展示空态与「新增配置」入口。
-- 验收：
-  - `ST-LIST-001-AC1` 视图打开后可见已配置任务列表，而不是未初始化状态。
-  - `ST-LIST-001-AC2` 任务项展示名称、调度时间摘要和主模型名称。
-  - `ST-LIST-001-AC3` 无任务时展示空态和「新增配置」入口。
-
-#### ST-FORM-001 新增与编辑配置
-
-- 系统行为：新增打开空表单，编辑打开预填表单。字段包括名称、任务提示词、执行时间（每天 / 每周 + 星期 + 时间点）、工作空间、主模型、AI 推进偏好和执行权限。保存前校验必填项；模型选择复用现有模型选择器（预设推荐模型与自定义模型双视图）。
-- 验收：
-  - `ST-FORM-001-AC1` 新增时可填写全部字段并保存，编辑时带出当前配置值。
-  - `ST-FORM-001-AC2` 名称、任务提示词、执行时间、工作空间或主模型缺失时，保存被拦截并给出明确提示。
-  - `ST-FORM-001-AC3` 选择「每周」时必须选择星期几。
-  - `ST-FORM-001-AC4` 新增表单点击遮罩不关闭，避免误触丢失输入。
-
-#### ST-SWITCH-001 启用开关
-
-- 系统行为：每个任务项提供启用开关，默认关闭；只有开启后该定时任务才会在到点执行。切换后立即生效。
-- 验收：
-  - `ST-SWITCH-001-AC1` 新建任务默认关闭，需用户主动开启才会执行。
-  - `ST-SWITCH-001-AC2` 关闭后该任务到点不再触发。
-
-#### ST-DELETE-001 删除
-
-- 系统行为：删除前二次确认，确认后从列表移除。
-- 验收：
-  - `ST-DELETE-001-AC1` 删除前有确认弹窗，取消不删除。
-  - `ST-DELETE-001-AC2` 确认后任务从列表移除。
-
-#### ST-RUN-001 到点触发
-
-- 系统行为：程序运行期间，已启用任务到达调度时间时，在其配置的工作空间下创建新会话并发送任务提示词，使用配置的主模型、偏好和执行权限；不操作用户当前页面。工作空间不可用（未绑定目录）或模型失效时跳过本次并推进到下一调度时间。
-- 验收：
-  - `ST-RUN-001-AC1` 到点后在工作空间下创建新会话并发送任务消息，新会话标题取任务提示词前 20 个字符。
-  - `ST-RUN-001-AC2` 触发过程不改变用户当前正在查看的会话或输入草稿。
-  - `ST-RUN-001-AC3` 工作空间未绑定目录时跳过本次执行，不产生空会话。
-
-#### ST-RUN-002 会话列表刷新
-
-- 系统行为：定时任务触发并创建新会话后，广播会话列表刷新，Workbench 会话列表展示新会话及其运行状态。
-- 验收：
-  - `ST-RUN-002-AC1` 定时任务触发后，会话列表出现新会话并显示运行状态。
-  - `ST-RUN-002-AC2` 用户无需手动刷新即可看到新会话。
-
-#### ST-RUN-003 程序关闭错过不补跑
-
-- 系统行为：程序关闭期间错过的调度时间不补跑，重新打开后只等待下一次到点。
-- 系统行为：程序运行期间因系统休眠跨过触发点（超过 60 秒宽限）同样视为错过，不补跑并顺延到下一周期；到点后 60 秒内的正常延迟仍触发。
-- 验收：
-  - `ST-RUN-003-AC1` 程序关闭期间错过的调度时间，重新打开后不会立即触发补跑。
-  - `ST-RUN-003-AC2` 系统休眠跨过触发点后唤醒，不补跑并顺延到下一周期。
+定时任务的入口、配置、启用与到点触发见 [`doc/prd/scheduled-task.md`](scheduled-task.md)（`ST-*`）。Workbench 会话列表与「可用工作区」前置条件仍适用。
 
 ## 9. 非目标
 
 - 不定义设置页中的工作空间、网页资料或模型配置行为。
 - 不定义按钮尺寸、颜色 token、面板圆角等视觉风格。
-- 不定义 AI 内部节点实现、prompt 结构或工具路由细节。
+- 不定义 AI 内部节点实现、prompt 结构、工具路由或工具 operation / schema / 结果信封细节。

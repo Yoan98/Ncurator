@@ -121,8 +121,6 @@ export const EXTERNAL_RUNTIME_SKILL_IDS = RUNTIME_SKILL_IDS.filter(
   (skillId) => RUNTIME_SKILL_CATALOG[skillId].source === 'external'
 )
 
-export const LEARNABLE_RUNTIME_SKILL_IDS = EXTERNAL_RUNTIME_SKILL_IDS
-
 export function listRuntimeToolNamesForSkill(skillId: RuntimeSkillId): RuntimeToolName[] {
   return RUNTIME_TOOL_NAMES.filter((toolName) => skillId === RUNTIME_TOOL_CATALOG[toolName].skillId)
 }
@@ -152,7 +150,7 @@ export const isBuiltinSkillId = (skillId: string): skillId is RuntimeSkillId =>
   BUILTIN_RUNTIME_SKILL_IDS.includes(skillId as (typeof BUILTIN_RUNTIME_SKILL_IDS)[number])
 
 export const isLearnableSkillId = (skillId: string): skillId is RuntimeSkillId =>
-  LEARNABLE_RUNTIME_SKILL_IDS.includes(skillId as (typeof LEARNABLE_RUNTIME_SKILL_IDS)[number])
+  EXTERNAL_RUNTIME_SKILL_IDS.includes(skillId as (typeof EXTERNAL_RUNTIME_SKILL_IDS)[number])
 
 export const assertExternalLearnedSkillIds = (learnedSkillIds: RuntimeSkillId[]): void => {
   const invalidBuiltinSkillIds = learnedSkillIds.filter((skillId) => isBuiltinSkillId(skillId))
