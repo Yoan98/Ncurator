@@ -192,10 +192,10 @@ tests/case/workbench/
 #### `model-selector-and-provider-error`
 
 - 测试类型：`e2e`
-- What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示并在无已配置预设服务商时显示空态，自定义模型入口保留分组搜索，并正确展示 provider 错误反馈。
+- What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示并在无已配置预设服务商时显示空态；推荐配置默认选中预设稳定调用名；预设行含价格档位硬币；不可用预设禁用；自定义入口保留分组搜索且无信息侧栏，并正确展示 provider 错误反馈。
 - Why：主模型配置是智能任务能否启动的直接前提，预设区是用户首选的模型入口。
-- How：通过真实设置页配置 live 自定义模型；回到 Workbench 展开选择器，检查未配置预设模型隐藏与空态，确认不存在视觉模型、跟随主模型或图片能力筛选；进入自定义模型视图按名称搜索，随后完成一次真实请求并触发受控 provider 错误。
-- Oracle：未配置预设模型不展示且无已配置预设服务商时显示空态，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC3`；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；选择器只保留主模型，对齐 `WB-COMPOSER-013-AC1`；会话保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次并展示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
+- How：通过真实设置页配置 live 推荐/自定义模型；回到 Workbench 展开选择器，检查未配置预设隐藏与空态、默认展示名为预设 label 而非 remote 带日期 id、预设行硬币与侧栏字段、不可用预设禁用文案；进入自定义模型视图确认无侧栏并按名称搜索，随后完成一次真实请求并触发受控 provider 错误。
+- Oracle：未配置预设模型不展示且无已配置预设服务商时显示空态，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC3`；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且视觉能力仅在侧栏说明，对齐 `WB-COMPOSER-013-AC1`；会话保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次并展示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
 - Not：不评价模型回答质量。
 
 #### `user-message-actions`

@@ -42,8 +42,10 @@ import type {
   WorkspaceRuntimeBinding
 } from '../../../shared/types'
 import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE, USER_MANUAL_URL } from '../../../shared/constants'
-import { resolveLlmProvider } from '../../../shared/llmProvider'
-import { getPresetModel, getPresetProvider } from '../../../shared/llmPresets'
+import {
+  pickFallbackWorkbenchModel,
+  resolveSelectedWorkbenchModel
+} from '../../../shared/workbenchModelSelection'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
 import { normalizeUserFacingError } from '../utils/userFacingError'
@@ -659,44 +661,6 @@ const toPersistedComposerDraft = (
   attachments: draft.attachments,
   assetBucketId: draft.assetBucketId || null
 })
-
-const isChatModel = (modelId: string): boolean =>
-  !/(image|audio|video|tts|asr|realtime|embedding|rerank|ocr|transcri|whisper|search|speech)/u.test(
-    modelId.toLowerCase()
-  )
-
-const pickChatModel = (models: readonly LlmRemoteModel[]): LlmRemoteModel | undefined =>
-  models.find((item) => isChatModel(item.id))
-
-const isPresetModelSelectable = (config: LLMConfig, modelName: string): boolean => {
-  const providerId = resolveLlmProvider(config.base_url).providerId
-  const preset = getPresetProvider(providerId)
-  return Boolean(preset && getPresetModel(preset, modelName))
-}
-
-const resolveSelectedModel = (
-  configs: LLMConfig[],
-  modelListsByConfigId: Record<string, LlmRemoteModel[]>,
-  selected: WorkbenchModelSelection['mainModel']
-): WorkbenchModelSelection['mainModel'] => {
-  if (!selected?.configId || !selected.modelName) return null
-  const config = configs.find((item) => item.id === selected.configId)
-  if (!config) return null
-  const remote = modelListsByConfigId[config.id]?.find((item) => item.id === selected.modelName)
-  if (remote) return { ...selected }
-  return isPresetModelSelectable(config, selected.modelName) ? { ...selected } : null
-}
-
-const pickFallbackModel = (configs: LLMConfig[]): WorkbenchModelSelection['mainModel'] | null => {
-  for (const config of configs) {
-    const providerId = resolveLlmProvider(config.base_url).providerId
-    const preset = getPresetProvider(providerId)
-    if (preset && preset.models.length > 0) {
-      return { configId: config.id, modelName: preset.models[0].id }
-    }
-  }
-  return null
-}
 
 const createDefaultSessionUiState = (
   modelSelection: WorkbenchModelSelection = { mainModel: null },
@@ -1833,20 +1797,15 @@ const ChatPage: React.FC = () => {
       const resolveModel = (
         model: WorkbenchModelSelection['mainModel']
       ): WorkbenchModelSelection['mainModel'] =>
-        resolveSelectedModel(list, nextLists, model)
-      const firstConfigWithModel = list.find(
-        (config) => (nextLists[config.id] || []).length > 0
-      )
-      const firstRemoteModel = firstConfigWithModel
-        ? pickChatModel(nextLists[firstConfigWithModel.id])
-        : undefined
-      const firstModel =
-        (firstConfigWithModel && firstRemoteModel
-          ? {
-              configId: firstConfigWithModel.id,
-              modelName: firstRemoteModel.id
-            }
-          : null) || pickFallbackModel(list)
+        resolveSelectedWorkbenchModel({
+          configs: list,
+          modelListsByConfigId: nextLists,
+          selected: model
+        })
+      const firstModel = pickFallbackWorkbenchModel({
+        configs: list,
+        modelListsByConfigId: nextLists
+      })
       const nextSelection: WorkbenchModelSelection = {
         mainModel: resolveModel(modelSelectionRef.current.mainModel) || firstModel
       }
@@ -1886,16 +1845,15 @@ const ChatPage: React.FC = () => {
     const resolveModel = (
       selected: WorkbenchModelSelection['mainModel']
     ): WorkbenchModelSelection['mainModel'] =>
-      resolveSelectedModel(modelConfigs, modelListsByConfigId, selected)
-    const firstConfig = modelConfigs.find((config) => modelListsByConfigId[config.id]?.length)
-    const firstRemote = firstConfig ? pickChatModel(modelListsByConfigId[firstConfig.id]) : undefined
-    const fallback =
-      (firstConfig && firstRemote
-        ? {
-            configId: firstConfig.id,
-            modelName: firstRemote.id
-          }
-        : null) || pickFallbackModel(modelConfigs)
+      resolveSelectedWorkbenchModel({
+        configs: modelConfigs,
+        modelListsByConfigId,
+        selected
+      })
+    const fallback = pickFallbackWorkbenchModel({
+      configs: modelConfigs,
+      modelListsByConfigId
+    })
     const nextSelection: WorkbenchModelSelection = {
       mainModel: resolveModel(modelSelection.mainModel) || fallback
     }

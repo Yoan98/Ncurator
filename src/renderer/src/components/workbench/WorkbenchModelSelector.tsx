@@ -18,6 +18,7 @@ import {
   HiCpuChip,
   HiMagnifyingGlass
 } from 'react-icons/hi2'
+import { RiCoinLine } from 'react-icons/ri'
 import type {
   LLMConfig,
   LlmRemoteModel,
@@ -32,6 +33,7 @@ import {
   type LlmPriceTier
 } from '../../../../shared/llmPresets'
 import { resolveLlmProvider } from '../../../../shared/llmProvider'
+import { isPresetModelAvailableInRemoteList } from '../../../../shared/workbenchModelSelection'
 import { resolveFloatingPlacement } from './floatingPlacement'
 import { WORKBENCH_TITLEBAR_HEIGHT } from './constants'
 import { getProviderLogo } from '../settings/constants'
@@ -41,6 +43,12 @@ const PRICE_TIER_LABELS: Record<LlmPriceTier, string> = {
   low: '较低',
   mid: '适中',
   high: '较高'
+}
+
+const PRICE_TIER_COIN_COUNT: Record<LlmPriceTier, number> = {
+  low: 1,
+  mid: 2,
+  high: 3
 }
 
 type WorkbenchModelSelectorProps = {
@@ -60,9 +68,11 @@ type WorkbenchModelSelectorProps = {
 
 type PanelView = 'preset' | 'custom'
 
-type ModelInspector =
-  | { kind: 'preset'; provider: LlmPresetProvider; model: LlmPresetModel }
-  | { kind: 'custom'; config: LLMConfig; model: LlmRemoteModel }
+type PresetInspector = {
+  provider: LlmPresetProvider
+  model: LlmPresetModel
+  available: boolean
+}
 
 type MenuPosition = {
   top?: number
@@ -72,9 +82,13 @@ type MenuPosition = {
   maxHeight: number
 }
 
+const PRESET_MENU_MIN_WIDTH = 200
+const PRESET_MENU_MAX_WIDTH = 300
+const CUSTOM_MENU_MIN_WIDTH = 280
+const CUSTOM_MENU_MAX_WIDTH = 360
 const DEFAULT_POSITION: MenuPosition = {
   left: 0,
-  width: 320,
+  width: PRESET_MENU_MIN_WIDTH,
   maxHeight: 360
 }
 
@@ -105,6 +119,24 @@ const isSameSelection = (
   right: WorkbenchSelectedModel | null
 ): boolean => left?.configId === right?.configId && left?.modelName === right?.modelName
 
+const PriceTierCoins: React.FC<{ tier: LlmPriceTier }> = ({ tier }) => {
+  const count = PRICE_TIER_COIN_COUNT[tier]
+  return (
+    <span
+      className="relative inline-flex h-[18px] w-[14px] shrink-0 items-end justify-center"
+      aria-label={`价格档位 ${PRICE_TIER_LABELS[tier]}`}
+    >
+      {Array.from({ length: count }, (_, index) => (
+        <RiCoinLine
+          key={index}
+          className="absolute h-[11px] w-[11px] text-[#B0AFA9]"
+          style={{ bottom: index * 4 }}
+        />
+      ))}
+    </span>
+  )
+}
+
 const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   configs,
   modelListsByConfigId,
@@ -133,7 +165,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     () => new Set()
   )
   const [position, setPosition] = useState<MenuPosition>(DEFAULT_POSITION)
-  const [inspectedModel, setInspectedModel] = useState<ModelInspector | null>(null)
+  const [inspectedPreset, setInspectedPreset] = useState<PresetInspector | null>(null)
 
   const mainLabel = value.mainModel?.modelName || '选择模型'
 
@@ -141,14 +173,15 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     const trigger = triggerRef.current
     if (!trigger) return
     const rect = trigger.getBoundingClientRect()
+    const preferredWidth = view === 'custom' ? 320 : 240
     const placement = resolveFloatingPlacement({
       triggerRect: rect,
       viewportWidth: window.innerWidth,
       viewportHeight: window.innerHeight,
-      preferredWidth: 320,
+      preferredWidth,
       preferredHeight: 320,
-      minWidth: 300,
-      maxWidth: 360,
+      minWidth: view === 'custom' ? CUSTOM_MENU_MIN_WIDTH : PRESET_MENU_MIN_WIDTH,
+      maxWidth: view === 'custom' ? CUSTOM_MENU_MAX_WIDTH : PRESET_MENU_MAX_WIDTH,
       maxHeight: 360,
       align: 'end',
       topInset: WORKBENCH_TITLEBAR_HEIGHT + 12
@@ -160,12 +193,43 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       width: placement.width,
       maxHeight: placement.maxHeight
     })
-  }, [])
+  }, [view])
 
   useLayoutEffect(() => {
     if (!open) return
     updatePosition()
-  }, [open, updatePosition])
+  }, [open, updatePosition, view])
+
+  useLayoutEffect(() => {
+    if (!open || !menuRef.current) return
+    const measured = Math.ceil(menuRef.current.scrollWidth)
+    const minWidth = view === 'custom' ? CUSTOM_MENU_MIN_WIDTH : PRESET_MENU_MIN_WIDTH
+    const maxWidth = view === 'custom' ? CUSTOM_MENU_MAX_WIDTH : PRESET_MENU_MAX_WIDTH
+    const nextWidth = Math.min(Math.max(measured, minWidth), maxWidth)
+    if (Math.abs(nextWidth - position.width) < 1) return
+    const trigger = triggerRef.current
+    if (!trigger) return
+    const rect = trigger.getBoundingClientRect()
+    const placement = resolveFloatingPlacement({
+      triggerRect: rect,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      preferredWidth: nextWidth,
+      preferredHeight: 320,
+      minWidth,
+      maxWidth,
+      maxHeight: 360,
+      align: 'end',
+      topInset: WORKBENCH_TITLEBAR_HEIGHT + 12
+    })
+    setPosition({
+      left: placement.left,
+      top: placement.top,
+      bottom: placement.bottom,
+      width: placement.width,
+      maxHeight: placement.maxHeight
+    })
+  }, [open, view, position.width, inspectedPreset, query, configs, modelListsByConfigId])
 
   useEffect(() => {
     if (!open) return
@@ -200,7 +264,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (!open) {
       setView('preset')
       setQuery('')
-      setInspectedModel(null)
+      setInspectedPreset(null)
       return
     }
     if (view === 'preset') return
@@ -236,7 +300,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     const model = LLM_PRESET_PROVIDERS.find(
       (provider) => provider.providerId === preset.providerId
     )?.models.find((item) => item.id === value.mainModel?.modelName)
-    return { provider: preset, modelLabel: model?.label || value.mainModel.modelName }
+    if (!model) return null
+    return { provider: preset, modelLabel: model.label }
   }, [value.mainModel, configs])
 
   const groupedModels = useMemo(() => {
@@ -255,6 +320,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     model: LlmPresetModel,
     matchedConfig: LLMConfig
   ): React.ReactNode => {
+    const remoteModels = modelListsByConfigId[matchedConfig.id] || []
+    const available = isPresetModelAvailableInRemoteList(model.id, remoteModels)
     const selected = isSameSelection(value.mainModel, {
       configId: matchedConfig.id,
       modelName: model.id
@@ -264,20 +331,26 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         type="button"
         role="option"
         aria-selected={selected}
+        aria-disabled={!available}
         data-testid={`${workbenchSelectors.modelSelectPresetOptionPrefix}-${model.id}`}
         className={joinClassNames(
           'workbench-select-option',
-          selected ? 'workbench-select-option-selected' : ''
+          selected ? 'workbench-select-option-selected' : '',
+          !available ? 'workbench-select-option-disabled' : ''
         )}
-        onClick={() => selectModel(matchedConfig.id, model.id)}
-        onMouseEnter={() => setInspectedModel({ kind: 'preset', provider, model })}
-        onFocus={() => setInspectedModel({ kind: 'preset', provider, model })}
+        onClick={() => {
+          if (!available) return
+          selectModel(matchedConfig.id, model.id)
+        }}
+        onMouseEnter={() => setInspectedPreset({ provider, model, available })}
+        onFocus={() => setInspectedPreset({ provider, model, available })}
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
           {getProviderLogo(provider.providerId)}
-          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+          <span className="whitespace-nowrap text-[13px] font-medium text-[#37352F]">
             {model.label}
           </span>
+          <PriceTierCoins tier={model.priceTier} />
         </span>
         {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" /> : null}
       </button>
@@ -302,8 +375,11 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           type="button"
           className="workbench-select-option min-h-[44px]"
           data-testid={workbenchSelectors.modelSelectCustomEntry}
-          onClick={() => setView('custom')}
-          onMouseEnter={() => setInspectedModel(null)}
+          onClick={() => {
+            setInspectedPreset(null)
+            setView('custom')
+          }}
+          onMouseEnter={() => setInspectedPreset(null)}
         >
           <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
             <HiAdjustmentsHorizontal className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
@@ -389,12 +465,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                           selected ? 'workbench-select-option-selected' : ''
                         )}
                         onClick={() => selectModel(group.config.id, model.id)}
-                        onMouseEnter={() =>
-                          setInspectedModel({ kind: 'custom', config: group.config, model })
-                        }
-                        onFocus={() =>
-                          setInspectedModel({ kind: 'custom', config: group.config, model })
-                        }
                       >
                         <span className="flex min-w-0 items-center gap-2">
                           {getProviderLogo(resolveLlmProvider(group.config.base_url).providerId)}
@@ -429,7 +499,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     </>
   )
 
-  const inspectorWidth = 292
+  const inspectorWidth = 260
   const inspectorGap = 8
   const inspectorLeft =
     window.innerWidth - (position.left + position.width) >= inspectorWidth + inspectorGap + 8
@@ -440,12 +510,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     Math.max(8, window.innerHeight - (position.bottom || 0) - Math.min(position.maxHeight, 320))
 
   const renderInspector = (): React.ReactNode => {
-    if (!inspectedModel) return null
-    const preset = inspectedModel.kind === 'preset'
-    const title = preset
-      ? inspectedModel.model.label
-      : inspectedModel.model.label || inspectedModel.model.id
-    const subtitle = preset ? inspectedModel.provider.label : getConfigLabel(inspectedModel.config)
+    if (view !== 'preset' || !inspectedPreset) return null
+    const supportsVision = inspectedPreset.model.capabilities.includes('vision')
     return (
       <div
         ref={inspectorRef}
@@ -458,42 +524,34 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           zIndex: 1001
         }}
       >
-        <div className="flex items-center gap-2">
-          {preset
-            ? getProviderLogo(inspectedModel.provider.providerId)
-            : getProviderLogo(resolveLlmProvider(inspectedModel.config.base_url).providerId)}
-          <div className="min-w-0">
-            <div className="truncate text-[15px] font-semibold text-[#252521]">{title}</div>
-            <div className="mt-0.5 truncate text-[12px] text-[#9B9A97]">{subtitle}</div>
-          </div>
-        </div>
-        {preset ? (
+        <div className="text-[15px] font-semibold text-[#252521]">{inspectedPreset.model.label}</div>
+        {inspectedPreset.available ? (
           <>
-            <p className="mt-3 text-[13px] leading-5 text-[#5F5E5A]">
-              {inspectedModel.model.description}
+            <p className="mt-2 text-[13px] leading-5 text-[#5F5E5A]">
+              {inspectedPreset.model.description}
             </p>
-            <div className="mt-4 border-t border-[#EEEEEC] pt-3 text-[12px]">
+            <div className="mt-3 border-t border-[#EEEEEC] pt-3 text-[12px]">
               <div className="flex items-start justify-between gap-4 py-1">
-                <span className="text-[#9B9A97]">能力</span>
-                <span className="text-right font-medium text-[#37352F]">
-                  {inspectedModel.model.capabilities
-                    .map((capability) => (capability === 'vision' ? '视觉理解' : '文本理解'))
-                    .join('、')}
+                <span className="text-[#9B9A97]">价格档位</span>
+                <span className="inline-flex items-center gap-1.5 font-medium text-[#37352F]">
+                  <PriceTierCoins tier={inspectedPreset.model.priceTier} />
+                  {PRICE_TIER_LABELS[inspectedPreset.model.priceTier]}
                 </span>
               </div>
               <div className="flex items-start justify-between gap-4 py-1">
-                <span className="text-[#9B9A97]">价格档位</span>
+                <span className="text-[#9B9A97]">视觉理解</span>
                 <span className="font-medium text-[#37352F]">
-                  {PRICE_TIER_LABELS[inspectedModel.model.priceTier]}
+                  {supportsVision ? '支持' : '不支持'}
                 </span>
               </div>
             </div>
           </>
         ) : (
-          <div className="mt-3 border-t border-[#EEEEEC] pt-3 text-[12px] leading-5">
-            <div className="text-[#9B9A97]">模型 ID</div>
-            <div className="break-all font-medium text-[#37352F]">{inspectedModel.model.id}</div>
-            <div className="mt-3 text-[#787774]">能力与价格信息未提供</div>
+          <div className="mt-3 border-t border-[#EEEEEC] pt-3 text-[12px] leading-5 text-[#5F5E5A]">
+            <div>该模型不存在</div>
+            <div className="mt-2 break-all text-[#9B9A97]">
+              模型名：{inspectedPreset.model.id}
+            </div>
           </div>
         )}
       </div>
@@ -563,7 +621,11 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                   top: position.top,
                   bottom: position.bottom,
                   left: position.left,
-                  width: position.width,
+                  width: view === 'preset' ? 'max-content' : position.width,
+                  minWidth:
+                    view === 'custom' ? CUSTOM_MENU_MIN_WIDTH : PRESET_MENU_MIN_WIDTH,
+                  maxWidth:
+                    view === 'custom' ? CUSTOM_MENU_MAX_WIDTH : PRESET_MENU_MAX_WIDTH,
                   maxHeight: position.maxHeight,
                   display: 'flex',
                   flexDirection: 'column',
