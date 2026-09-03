@@ -159,8 +159,17 @@ tests/case/workbench/
 - What：缺少模型时的模式提示、发送前置条件、模式切换保留输入，以及模型 / 工作区 / AI 推进偏好 / 执行权限的当前会话恢复。
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务、把任务发到错误上下文或使用错误资料边界。
 - How：先在无模型配置状态下切换智能 / 搜索模式检查提示，再通过 UI 配置真实模型和工作区；覆盖无工作区、输入保留、模型 / 工作区选择、AI 推进偏好、执行权限菜单的两条说明、切换会话后的独立恢复和真实发送。
-- Oracle：无模型时智能模式快速显示配置提示；发送禁用态给出原因，工作区可用且输入非空时可发送；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；不要求显式本地参考资料，模式切换保持输入和内部行为；模式、模型、工作区、推进偏好和执行权限按会话恢复且不再读取全局偏好，对齐 `WB-CORE-001-AC1`、`WB-CORE-001-AC2`、`WB-MODE-001-AC1`、`WB-MODE-001-AC2`、`WB-COMPOSER-001`、`WB-COMPOSER-005`、`WB-COMPOSER-007`、`WB-SESSION-008`。
+- Oracle：无模型时智能模式快速显示配置提示；发送禁用态给出原因，工作区可用且输入非空时可发送；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；不要求显式本地参考资料，模式切换保持输入和内部行为；AI 发送完成后搜索模式禁用且悬浮提示原因；模式、模型、工作区、推进偏好和执行权限按会话恢复且不再读取全局偏好，对齐 `WB-CORE-001-AC1`、`WB-CORE-001-AC2`、`WB-MODE-001-AC1`、`WB-MODE-001-AC2`、`WB-MODE-003-AC1`、`WB-MODE-003-AC2`、`WB-COMPOSER-001`、`WB-COMPOSER-005`、`WB-COMPOSER-007`、`WB-SESSION-008`。
 - Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。
+
+#### `session-mode-lock`
+
+- 测试类型：`e2e`
+- What：同一会话内搜索模式与智能模式互斥；禁用项悬浮 Tooltip 说明原因；新建对话后解锁。
+- Why：混用同一会话会把搜索轮次和 AI 上下文串在一起。
+- How：绑定真实工作区后，先在空草稿确认可切换；搜索发送成功后检查 AI 选项禁用与 Tooltip；新建对话后确认两边可再切换。
+- Oracle：空草稿可切换，对齐 `WB-MODE-003-AC1`；搜索后 AI 禁用并提示，对齐 `WB-MODE-003-AC3`；新对话解锁，对齐 `WB-MODE-003-AC4`。智能对话后搜索禁用由 `send-guard-mode-switch-and-preferences` 覆盖 `WB-MODE-003-AC2`。Main 拒绝另一模式提交由 unit `chat-run-service-contract` 的 `rejects-submit-when-session-already-used-the-other-mode` 覆盖 `WB-MODE-003-AC5`。
+- Not：不验证检索质量或模型回答。
 
 #### `session-ui-state-isolation`
 
@@ -192,10 +201,10 @@ tests/case/workbench/
 #### `model-selector-and-provider-error`
 
 - 测试类型：`e2e`
-- What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示并在无已配置预设服务商时显示空态；推荐配置默认选中预设稳定调用名；预设行含横向价格档位钱袋图标；不可用预设禁用；自定义入口保留分组搜索且无信息侧栏，并正确展示 provider 错误反馈。
+- What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示并在无已配置预设服务商时显示空态；推荐配置默认选中预设稳定调用名；预设行含竖向不重叠价格档位图标；不可用预设禁用；自定义入口可选中 remote id 且不被强制改回预设；自定义视图无信息侧栏，并正确展示 provider 错误反馈。
 - Why：主模型配置是智能任务能否启动的直接前提，预设区是用户首选的模型入口。
-- How：通过真实设置页配置 live 推荐/自定义模型；回到 Workbench 展开选择器，检查未配置预设隐藏与空态、默认展示名为预设 label 而非 remote 带日期 id、预设行钱袋图标与侧栏字段、不可用预设禁用文案；进入自定义模型视图确认无侧栏并按名称搜索，随后完成一次真实请求并触发受控 provider 错误。
-- Oracle：未配置预设模型不展示且无已配置预设服务商时显示空态，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC3`；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且视觉能力仅在侧栏说明，对齐 `WB-COMPOSER-013-AC1`；会话保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次并展示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
+- How：通过真实设置页配置 live 推荐/自定义模型；回到 Workbench 展开选择器，检查未配置预设隐藏与空态、默认展示名为预设 label 而非 remote 带日期 id、预设行档位图标与侧栏字段、不可用预设禁用文案；进入自定义模型视图确认无侧栏、按名称搜索并选中后 pill 保持该模型名，随后完成一次真实请求并触发受控 provider 错误。
+- Oracle：未配置预设模型不展示且无已配置预设服务商时显示空态，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC3`；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中、自定义选中不被强制改回预设与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且视觉能力仅在侧栏说明，对齐 `WB-COMPOSER-013-AC1`；会话保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次并展示用户可读错误，对齐 `WB-COMPOSER-007` 与 `WB-CORE-006`。
 - Not：不评价模型回答质量。
 
 #### `user-message-actions`

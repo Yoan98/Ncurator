@@ -53,16 +53,23 @@ export const resolveSelectedWorkbenchModel = (input: {
   if (!config) return null
 
   const remoteModels = input.modelListsByConfigId[config.id] || []
-  const preset = resolvePresetModeProvider(config)
-  if (preset) {
-    const presetModel = getPresetModel(preset, selected.modelName)
-    if (!presetModel) return null
-    if (!isPresetModelAvailableInRemoteList(selected.modelName, remoteModels)) return null
+
+  // Exact id in the remote list is always valid — including custom picks under a
+  // recommend config (e.g. dated snapshot ids chosen from the custom view).
+  if (isExactRemoteModelAvailable(selected.modelName, remoteModels)) {
     return { configId: config.id, modelName: selected.modelName }
   }
 
-  if (!isExactRemoteModelAvailable(selected.modelName, remoteModels)) return null
-  return { configId: config.id, modelName: selected.modelName }
+  // Empty remote list (fetch failed): keep known preset ids so recommend configs
+  // remain usable; never invent or keep unmatched custom ids.
+  if (remoteModels.length === 0) {
+    const preset = resolvePresetModeProvider(config)
+    if (preset && getPresetModel(preset, selected.modelName)) {
+      return { configId: config.id, modelName: selected.modelName }
+    }
+  }
+
+  return null
 }
 
 export const pickFallbackWorkbenchModel = (input: {

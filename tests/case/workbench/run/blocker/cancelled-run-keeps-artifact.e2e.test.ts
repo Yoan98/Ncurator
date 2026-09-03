@@ -41,7 +41,7 @@ describe('workbench run e2e', () => {
           })
           const targetPath = path.join(setup.workspace.rootPath, 'workbench-preview.md')
 
-          await switchWorkbenchMode(page, '大聪明')
+          await switchWorkbenchMode(page, 'AI')
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
           await appendWorkbenchInputText(
             page,

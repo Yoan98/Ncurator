@@ -87,7 +87,7 @@ describe('workbench result e2e', () => {
             name: 'search-local-docx',
             message: `切换搜索模式并从真实本地索引结果打开 ${LOCAL_RESULT_FILE} 预览。`,
             run: async () => {
-              await switchWorkbenchMode(page, '没头脑')
+              await switchWorkbenchMode(page, '搜索')
               const composer = getWorkbenchLocator(page, workbenchSelectors.input)
               await setWorkbenchInput(page, '第一行')
               const messagesBeforeShiftEnter = await getWorkbenchLocator(
@@ -146,7 +146,7 @@ describe('workbench result e2e', () => {
             name: 'search-local-xlsx-by-filename',
             message: `切换搜索模式并按文件名从真实本地索引结果打开 ${XLSX_RESULT_FILE} 预览。`,
             run: async () => {
-              await switchWorkbenchMode(page, '没头脑')
+              await switchWorkbenchMode(page, '搜索')
               await insertWorkbenchReferenceToken(page, XLSX_RESULT_FILE, XLSX_RESULT_QUERY)
               await appendWorkbenchInputText(page, XLSX_RESULT_QUERY)
               await submitWorkbenchCurrentDraft(page)
@@ -176,7 +176,7 @@ describe('workbench result e2e', () => {
             name: 'search-web-source',
             message: '切换搜索模式并从真实网页索引结果触发系统浏览器打开。',
             run: async () => {
-              await switchWorkbenchMode(page, '没头脑')
+              await switchWorkbenchMode(page, '搜索')
               await insertWorkbenchReferenceToken(page, 'Workbench Search Web', server.url)
               await appendWorkbenchInputText(page, 'cedar-search-888')
               await submitWorkbenchCurrentDraft(page)
@@ -233,7 +233,7 @@ describe('workbench result e2e', () => {
               await navigateToWorkbench(page)
               await createWorkbenchNewSession(page)
               await selectWorkbenchWorkspace(page, 'Workbench Empty Search Workspace')
-              await switchWorkbenchMode(page, '没头脑')
+              await switchWorkbenchMode(page, '搜索')
               const emptyScopeProbe = await waitForWorkbenchSearchScopeEmptyThroughUi(page)
               runtime.signal({
                 name: 'workbench-empty-search-scope-settled',
@@ -273,7 +273,7 @@ describe('workbench result e2e', () => {
               ).trim()
               const rightPanelPresent =
                 (await getWorkbenchLocator(page, workbenchSelectors.contentPanel).count()) > 0
-              await switchWorkbenchMode(page, '大聪明')
+              await switchWorkbenchMode(page, 'AI')
               const cleanAiSessionKnowledgeTextCount = await page.getByText('已检索知识库').count()
               return {
                 messagesBefore,

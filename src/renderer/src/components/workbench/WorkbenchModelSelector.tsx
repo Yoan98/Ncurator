@@ -18,7 +18,7 @@ import {
   HiCpuChip,
   HiMagnifyingGlass
 } from 'react-icons/hi2'
-import { FaSackDollar } from 'react-icons/fa6'
+import { PiCoinBold } from 'react-icons/pi'
 import type {
   LLMConfig,
   LlmRemoteModel,
@@ -123,15 +123,30 @@ const isSameSelection = (
   right: WorkbenchSelectedModel | null
 ): boolean => left?.configId === right?.configId && left?.modelName === right?.modelName
 
+const PRICE_TIER_COIN_SIZE = 12
+const PRICE_TIER_COIN_STEP = 4
+const PRICE_TIER_COIN_GAP_PX = 2
+const PRICE_TIER_TEXT_LINE_PX = 13
+
 const PriceTierCoins: React.FC<{ tier: LlmPriceTier }> = ({ tier }) => {
   const count = PRICE_TIER_COIN_COUNT[tier]
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-0.5"
       aria-label={`价格档位 ${PRICE_TIER_LABELS[tier]}`}
+      className="relative top-[2px] inline-block shrink-0 overflow-visible"
+      style={{ width: PRICE_TIER_COIN_SIZE, height: PRICE_TIER_TEXT_LINE_PX }}
     >
       {Array.from({ length: count }, (_, index) => (
-        <FaSackDollar key={index} className="h-3 w-3 text-[#9B9A97]" />
+        <PiCoinBold
+          key={index}
+          className="pointer-events-none absolute left-0 block text-[#9B9A97]"
+          style={{
+            width: PRICE_TIER_COIN_SIZE,
+            height: PRICE_TIER_COIN_SIZE,
+            bottom: index * PRICE_TIER_COIN_STEP,
+            zIndex: index + 1
+          }}
+        />
       ))}
     </span>
   )
@@ -381,10 +396,18 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
           {getProviderLogo(provider.providerId)}
-          <span className="whitespace-nowrap text-[13px] font-medium text-[#37352F]">
-            {model.label}
+          <span
+            className="inline-flex items-end"
+            style={{ gap: PRICE_TIER_COIN_GAP_PX }}
+          >
+            <span
+              className="whitespace-nowrap text-[13px] font-medium text-[#37352F]"
+              style={{ lineHeight: `${PRICE_TIER_TEXT_LINE_PX}px` }}
+            >
+              {model.label}
+            </span>
+            <PriceTierCoins tier={model.priceTier} />
           </span>
-          <PriceTierCoins tier={model.priceTier} />
         </span>
         {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" /> : null}
       </button>
@@ -542,7 +565,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     return (
       <div
         ref={inspectorRef}
-        className="rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3 shadow-[0_14px_36px_rgba(15,15,15,0.13)]"
+        className="rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3"
         style={{
           position: 'fixed',
           top: inspectorTop,

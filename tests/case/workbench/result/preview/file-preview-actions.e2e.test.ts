@@ -219,7 +219,7 @@ describe('workbench result e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           await setupPreviewWorkspace(page)
-          await switchWorkbenchMode(page, '没头脑')
+          await switchWorkbenchMode(page, '搜索')
           await insertWorkbenchReferenceToken(page, '深度学习.pdf')
           await appendWorkbenchInputText(page, '反走样')
           await submitWorkbenchCurrentDraft(page)
@@ -229,7 +229,7 @@ describe('workbench result e2e', () => {
           await page.getByRole('button', { name: '选择打开应用' }).last().click()
           await page.getByRole('menuitem', { name: '打开所在文件夹' }).last().click()
 
-          await switchWorkbenchMode(page, '没头脑')
+          await switchWorkbenchMode(page, '搜索')
           await insertWorkbenchReferenceToken(page, '深度学习.docx')
           await appendWorkbenchInputText(page, '过拟合')
           await submitWorkbenchCurrentDraft(page)
@@ -249,7 +249,7 @@ describe('workbench result e2e', () => {
             .last()
             .isVisible()
             .catch(() => false)
-          await switchWorkbenchMode(page, '没头脑')
+          await switchWorkbenchMode(page, '搜索')
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
           await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
           await submitWorkbenchCurrentDraft(page)
@@ -257,7 +257,7 @@ describe('workbench result e2e', () => {
           await openSearchPreview(page, markdownResults, 'workbench-preview.md')
           const markdownPreviewVisible = await waitForMarkdownPreview(page)
 
-          await switchWorkbenchMode(page, '没头脑')
+          await switchWorkbenchMode(page, '搜索')
           await insertWorkbenchReferenceToken(page, 'human-input.txt')
           await appendWorkbenchInputText(page, 'workspace read validation')
           await submitWorkbenchCurrentDraft(page)

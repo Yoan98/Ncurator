@@ -26,6 +26,11 @@ import type { AppErrorLogService } from '../logging/AppErrorLogService'
 import type { AiRunDeps } from './types'
 import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import type { ChatSearchTurnStore } from '../storage/domains/ChatSearchTurnStore'
+import {
+  isWorkbenchModeSwitchAllowed,
+  resolveWorkbenchSessionModeLock,
+  WORKBENCH_MODE_LOCK_HINTS
+} from '../../../shared/workbenchSessionModeLock'
 import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
@@ -328,6 +333,29 @@ export class ChatRunService {
     const input = String(payload?.input || '').trim()
     if (!sessionId) return { success: false, error: 'sessionId is required' }
     if (!input) return { success: false, error: 'input is required' }
+    const [runs, searchTurns] = await Promise.all([
+      this.deps.aiRunStore.listRunsBySession(sessionId),
+      this.deps.chatSearchTurnStore.list(sessionId)
+    ])
+    const modeLock = resolveWorkbenchSessionModeLock({
+      hasAiHistory: runs.length > 0,
+      hasSearchHistory: searchTurns.length > 0,
+      fallbackMode: mode
+    })
+    if (!isWorkbenchModeSwitchAllowed(modeLock, mode)) {
+      this.deps.telemetryService?.track('message_submit_completed', {
+        mode,
+        outcome: 'failed',
+        failureCode: 'REQUEST_FAILED'
+      })
+      return {
+        success: false,
+        error:
+          mode === 'search'
+            ? WORKBENCH_MODE_LOCK_HINTS.disableSearch
+            : WORKBENCH_MODE_LOCK_HINTS.disableAi
+      }
+    }
     if (mode === 'search') {
       try {
         const response = await this.submitSearch({ ...payload, mode, sessionId, input })

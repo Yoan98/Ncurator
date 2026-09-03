@@ -8,9 +8,59 @@ import React, {
   useState
 } from 'react'
 import { createPortal } from 'react-dom'
+import { Tooltip } from 'antd'
 import { HiCheck, HiChevronDown, HiChevronRight, HiMagnifyingGlass } from 'react-icons/hi2'
 import type { WorkbenchSelectOption } from './types'
 import { resolveFloatingPlacement, type FloatingPlacementAlign } from './floatingPlacement'
+
+const wrapDisabledOptionTooltip = (
+  option: WorkbenchSelectOption,
+  node: React.ReactElement
+): React.ReactElement => {
+  if (!option.disabled || !option.disabledReason) return node
+  return (
+    <Tooltip
+      title={option.disabledReason}
+      placement="right"
+      mouseEnterDelay={0.05}
+      zIndex={1200}
+      getPopupContainer={() => document.body}
+    >
+      {node}
+    </Tooltip>
+  )
+}
+
+const renderSelectOptionButton = (input: {
+  option: WorkbenchSelectOption
+  selected: boolean
+  className: string
+  onMouseEnter?: (event: React.MouseEvent<HTMLButtonElement>) => void
+  onClick: () => void
+  children: React.ReactNode
+}): React.ReactElement => {
+  const { option, selected, className, onMouseEnter, onClick, children } = input
+  const keepPointerForTooltip = Boolean(option.disabled && option.disabledReason)
+  return wrapDisabledOptionTooltip(
+    option,
+    <button
+      type="button"
+      role="option"
+      aria-selected={selected}
+      aria-disabled={option.disabled || undefined}
+      disabled={option.disabled && !keepPointerForTooltip}
+      data-disabled-reason={option.disabledReason || undefined}
+      className={className}
+      onMouseEnter={onMouseEnter}
+      onClick={() => {
+        if (option.disabled) return
+        onClick()
+      }}
+    >
+      {children}
+    </button>
+  )
+}
 
 type WorkbenchSelectProps = {
   value: string | null
@@ -412,68 +462,70 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                     const childSelected = hasSelectedChild(option, value)
                     const hasChildren = Boolean(option.children?.length)
                     return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        role="option"
-                        aria-selected={selected || childSelected}
-                        disabled={option.disabled}
-                        className={joinClassNames(
-                          'workbench-select-option',
-                          showDescriptions && option.description
-                            ? 'workbench-select-option-with-description'
-                            : '',
-                          selected || childSelected ? 'workbench-select-option-selected' : '',
-                          (selected || childSelected) && selectedWithoutBackground
-                            ? 'workbench-select-option-selected-plain'
-                            : '',
-                          option.disabled ? 'workbench-select-option-disabled' : ''
-                        )}
-                        onMouseEnter={(event) => {
-                          openSubmenu(option, event.currentTarget)
-                        }}
-                        onClick={() => handleOptionSelect(option)}
-                      >
-                        <span className="flex min-w-0 flex-1 items-center gap-2">
-                          {option.icon ? (
-                            <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
-                              {option.icon}
-                            </span>
-                          ) : null}
-                          <span className="min-w-0 flex-1">
-                            <span
-                              className={joinClassNames(
-                                'block truncate text-[13px] font-medium text-[#37352F]',
-                                option.labelClassName
-                              )}
-                            >
-                              {option.label}
-                            </span>
-                            {showDescriptions && option.description ? (
-                              <span
-                                className={joinClassNames(
-                                  'mt-0.5 block truncate text-[12px] leading-4 text-[#91918E]',
-                                  option.descriptionClassName
-                                )}
-                              >
-                                {option.description}
+                      <React.Fragment key={option.value}>
+                        {renderSelectOptionButton({
+                          option,
+                          selected: selected || childSelected,
+                          className: joinClassNames(
+                            'workbench-select-option',
+                            showDescriptions && option.description
+                              ? 'workbench-select-option-with-description'
+                              : '',
+                            selected || childSelected ? 'workbench-select-option-selected' : '',
+                            (selected || childSelected) && selectedWithoutBackground
+                              ? 'workbench-select-option-selected-plain'
+                              : '',
+                            option.disabled ? 'workbench-select-option-disabled' : ''
+                          ),
+                          onMouseEnter: (event) => {
+                            openSubmenu(option, event.currentTarget)
+                          },
+                          onClick: () => handleOptionSelect(option),
+                          children: (
+                            <>
+                              <span className="flex min-w-0 flex-1 items-center gap-2">
+                                {option.icon ? (
+                                  <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
+                                    {option.icon}
+                                  </span>
+                                ) : null}
+                                <span className="min-w-0 flex-1">
+                                  <span
+                                    className={joinClassNames(
+                                      'block truncate text-[13px] font-medium text-[#37352F]',
+                                      option.labelClassName
+                                    )}
+                                  >
+                                    {option.label}
+                                  </span>
+                                  {showDescriptions && option.description ? (
+                                    <span
+                                      className={joinClassNames(
+                                        'mt-0.5 block truncate text-[12px] leading-4 text-[#91918E]',
+                                        option.descriptionClassName
+                                      )}
+                                    >
+                                      {option.description}
+                                    </span>
+                                  ) : null}
+                                </span>
+                                {!hasChildren && option.trailing ? (
+                                  <span className="ml-0.5 flex shrink-0 items-center text-[#787774]">
+                                    {option.trailing}
+                                  </span>
+                                ) : null}
                               </span>
-                            ) : null}
-                          </span>
-                          {!hasChildren && option.trailing ? (
-                            <span className="ml-0.5 flex shrink-0 items-center text-[#787774]">
-                              {option.trailing}
-                            </span>
-                          ) : null}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
-                          {hasChildren ? (
-                            <HiChevronRight className="h-3.5 w-3.5 text-[#9B9A97]" />
-                          ) : selected ? (
-                            <HiCheck className="h-3.5 w-3.5 text-[#37352F]" />
-                          ) : null}
-                        </span>
-                      </button>
+                              <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
+                                {hasChildren ? (
+                                  <HiChevronRight className="h-3.5 w-3.5 text-[#9B9A97]" />
+                                ) : selected ? (
+                                  <HiCheck className="h-3.5 w-3.5 text-[#37352F]" />
+                                ) : null}
+                              </span>
+                            </>
+                          )
+                        })}
+                      </React.Fragment>
                     )
                   })
                 ) : emptyAction && options.length === 0 && query.trim().length === 0 ? (
@@ -526,43 +578,45 @@ const WorkbenchSelect: React.FC<WorkbenchSelectProps> = ({
                 {submenu.options.map((option) => {
                   const selected = option.value === value
                   return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      role="option"
-                      aria-selected={selected}
-                      disabled={option.disabled}
-                      className={joinClassNames(
-                        'workbench-select-option',
-                        selected ? 'workbench-select-option-selected' : '',
-                        selected && selectedWithoutBackground
-                          ? 'workbench-select-option-selected-plain'
-                          : '',
-                        option.disabled ? 'workbench-select-option-disabled' : ''
-                      )}
-                      onClick={() => handleOptionSelect(option)}
-                    >
-                      <span className="flex min-w-0 flex-1 items-center gap-2">
-                        {option.icon ? (
-                          <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
-                            {option.icon}
-                          </span>
-                        ) : null}
-                        <span className="min-w-0 truncate text-[13px] font-medium text-[#37352F]">
-                          {option.label}
-                        </span>
-                        {option.trailing ? (
-                          <span className="ml-0.5 flex shrink-0 items-center text-[#787774]">
-                            {option.trailing}
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
-                        {selected ? (
-                          <HiCheck className="h-3.5 w-3.5 text-[#37352F]" />
-                        ) : null}
-                      </span>
-                    </button>
+                    <React.Fragment key={option.value}>
+                      {renderSelectOptionButton({
+                        option,
+                        selected,
+                        className: joinClassNames(
+                          'workbench-select-option',
+                          selected ? 'workbench-select-option-selected' : '',
+                          selected && selectedWithoutBackground
+                            ? 'workbench-select-option-selected-plain'
+                            : '',
+                          option.disabled ? 'workbench-select-option-disabled' : ''
+                        ),
+                        onClick: () => handleOptionSelect(option),
+                        children: (
+                          <>
+                            <span className="flex min-w-0 flex-1 items-center gap-2">
+                              {option.icon ? (
+                                <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-[#787774]">
+                                  {option.icon}
+                                </span>
+                              ) : null}
+                              <span className="min-w-0 truncate text-[13px] font-medium text-[#37352F]">
+                                {option.label}
+                              </span>
+                              {option.trailing ? (
+                                <span className="ml-0.5 flex shrink-0 items-center text-[#787774]">
+                                  {option.trailing}
+                                </span>
+                              ) : null}
+                            </span>
+                            <span className="flex shrink-0 items-center gap-1.5 text-[#787774]">
+                              {selected ? (
+                                <HiCheck className="h-3.5 w-3.5 text-[#37352F]" />
+                              ) : null}
+                            </span>
+                          </>
+                        )
+                      })}
+                    </React.Fragment>
                   )
                 })}
               </div>

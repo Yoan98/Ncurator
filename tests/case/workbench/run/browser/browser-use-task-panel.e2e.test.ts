@@ -14,10 +14,12 @@ import {
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   selectWorkbenchResourceMenuItem,
+  selectWorkbenchWorkspace,
   setupWorkbenchWithTempWorkspace,
   startLocalWorkbenchHttpServer,
   submitWorkbenchCurrentDraft,
   switchWorkbenchMode,
+  createWorkbenchNewSession,
   waitForWorkbenchSearchResults,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -282,7 +284,7 @@ describe('workbench run e2e', () => {
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID
           })
-          await switchWorkbenchMode(page, '没头脑')
+          await switchWorkbenchMode(page, '搜索')
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
           await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
           await submitWorkbenchCurrentDraft(page)
@@ -298,7 +300,9 @@ describe('workbench run e2e', () => {
             timeout: 30_000
           })
 
-          await switchWorkbenchMode(page, '大聪明')
+          await createWorkbenchNewSession(page)
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
+          await switchWorkbenchMode(page, 'AI')
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,

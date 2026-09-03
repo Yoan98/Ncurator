@@ -34,6 +34,8 @@ export type WorkbenchSelectOption = {
   keywords?: string[]
   trailing?: ReactNode
   disabled?: boolean
+  /** Shown via Tooltip when the option is disabled (hover). */
+  disabledReason?: string
   children?: WorkbenchSelectOption[]
 }
 

@@ -1187,11 +1187,12 @@ textarea,
 
 .workbench-select-menu {
   @apply overflow-hidden rounded-[18px] border border-[#E5E4E0] bg-white;
-  box-shadow: 0 18px 48px rgba(15, 15, 15, 0.14);
+  box-shadow: none;
 }
 
 .workbench-composer-menu {
   border-radius: 18px;
+  box-shadow: none;
 }
 
 .workbench-select-search {

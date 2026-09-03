@@ -209,8 +209,11 @@ describe('workbench conversation e2e', () => {
             workspaceName: WORKSPACE_NAME,
             rootPath: workspace.rootPath
           })
-          await switchWorkbenchMode(page, '大聪明')
+          await switchWorkbenchMode(page, 'AI')
           await selectWorkbenchModel(page, liveEnv.modelName, { preferCustom: true })
+          const customSelectedLabel = (
+            await getWorkbenchLocator(page, workbenchSelectors.modelSelect).innerText()
+          ).trim()
           const successStartedAt = Date.now()
           await sendWorkbenchMessage(page, '不要调用任何工具，只回复“测试成功”。')
           const successEvidence = await waitForWorkbenchAiRunCompletion(
@@ -244,6 +247,7 @@ describe('workbench conversation e2e', () => {
             visionUiTextAbsent,
             providerGroupVisible,
             missingOptionCount,
+            customSelectedLabel,
             successfulChatRequestCount: provider.getSuccessfulChatRequestCount(),
             successFinalAnswer: successEvidence.finalAnswerText,
             chatRequestCount: provider.getChatRequestCount(),
@@ -272,6 +276,14 @@ describe('workbench conversation e2e', () => {
               }
             }
           )
+          await runtime.assertThat(result.customSelectedLabel.includes(result.modelName), {
+            name: 'custom-model-selection-retained',
+            message: '从自定义视图选中的模型名应保留在 Composer pill 上，不得被强制改回预设。',
+            data: {
+              customSelectedLabel: result.customSelectedLabel,
+              modelName: result.modelName
+            }
+          })
           await runtime.assertThat(
             result.successfulChatRequestCount > 0 && result.successFinalAnswer.includes('测试成功'),
             {

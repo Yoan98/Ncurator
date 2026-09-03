@@ -30,6 +30,10 @@ import type {
   WorkbenchMode,
   WorkbenchSelectOption
 } from './types'
+import {
+  WORKBENCH_MODE_LOCK_HINTS,
+  type WorkbenchSessionModeLock
+} from '../../../../shared/workbenchSessionModeLock'
 import { COMPOSER_PLACEHOLDER, COMPOSER_REFERENCE_KINDS } from './composer/constants'
 import AttachmentFileIcon from './composer/AttachmentFileIcon'
 import ReferenceMentionPanel from './composer/ReferenceMentionPanel'
@@ -61,6 +65,7 @@ type MentionContext = {
 
 type WorkbenchComposerProps = {
   mode: WorkbenchMode
+  modeLock?: WorkbenchSessionModeLock
   onModeChange: (mode: WorkbenchMode) => void
   aiPreference: WorkbenchAiPreference
   onAiPreferenceChange: (preference: WorkbenchAiPreference) => void
@@ -122,6 +127,7 @@ const filterMentionReferences = (
 
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   mode,
+  modeLock = 'none',
   onModeChange,
   aiPreference,
   onAiPreferenceChange,
@@ -821,15 +827,19 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       {
         value: 'ai',
         label: 'AI',
-        icon: <HiSparkles className="h-3.5 w-3.5" />
+        icon: <HiSparkles className="h-3.5 w-3.5" />,
+        disabled: modeLock === 'search',
+        disabledReason: modeLock === 'search' ? WORKBENCH_MODE_LOCK_HINTS.disableAi : undefined
       },
       {
         value: 'search',
         label: '搜索',
-        icon: <HiMagnifyingGlass className="h-3.5 w-3.5" />
+        icon: <HiMagnifyingGlass className="h-3.5 w-3.5" />,
+        disabled: modeLock === 'ai',
+        disabledReason: modeLock === 'ai' ? WORKBENCH_MODE_LOCK_HINTS.disableSearch : undefined
       }
     ],
-    []
+    [modeLock]
   )
   const workspaceOptions = useMemo<WorkbenchSelectOption[]>(
     () =>

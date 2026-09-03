@@ -34,7 +34,7 @@ describe('workbench model selection', () => {
     expect(isPresetModelAvailableInRemoteList('qwen3.8-max', [])).toBe(true)
   })
 
-  it('rejects dated remote ids as selected preset models', () => {
+  it('keeps custom remote ids selected under a recommend config', () => {
     const configs = [presetConfig('cfg-1')]
     const lists = { 'cfg-1': remote('qwen3.8-max-0902', 'qwen3.8-max') }
     expect(
@@ -43,7 +43,7 @@ describe('workbench model selection', () => {
         modelListsByConfigId: lists,
         selected: { configId: 'cfg-1', modelName: 'qwen3.8-max-0902' }
       })
-    ).toBeNull()
+    ).toEqual({ configId: 'cfg-1', modelName: 'qwen3.8-max-0902' })
     expect(
       resolveSelectedWorkbenchModel({
         configs,
@@ -51,6 +51,36 @@ describe('workbench model selection', () => {
         selected: { configId: 'cfg-1', modelName: 'qwen3.8-max' }
       })
     ).toEqual({ configId: 'cfg-1', modelName: 'qwen3.8-max' })
+  })
+
+  it('rejects selected ids that are absent from a non-empty remote list', () => {
+    const configs = [presetConfig('cfg-1')]
+    const lists = { 'cfg-1': remote('qwen3.8-max') }
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs,
+        modelListsByConfigId: lists,
+        selected: { configId: 'cfg-1', modelName: 'missing-model' }
+      })
+    ).toBeNull()
+  })
+
+  it('keeps preset ids when the remote list is empty', () => {
+    const configs = [presetConfig('cfg-1')]
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs,
+        modelListsByConfigId: { 'cfg-1': [] },
+        selected: { configId: 'cfg-1', modelName: 'qwen3.8-max' }
+      })
+    ).toEqual({ configId: 'cfg-1', modelName: 'qwen3.8-max' })
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs,
+        modelListsByConfigId: { 'cfg-1': [] },
+        selected: { configId: 'cfg-1', modelName: 'qwen3.8-max-0902' }
+      })
+    ).toBeNull()
   })
 
   it('falls back to the first available preset id instead of the first remote id', () => {

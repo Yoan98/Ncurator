@@ -86,7 +86,7 @@ describe('workbench conversation e2e', () => {
           )
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, setup.workspaceName)
-          await switchWorkbenchMode(page, '大聪明')
+          await switchWorkbenchMode(page, 'AI')
           await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
           const afterFile = await getWorkbenchReferenceTokenTexts(page)
           await insertWorkbenchReferenceToken(page, '工作')
@@ -216,7 +216,7 @@ describe('workbench conversation e2e', () => {
           )
             .isVisible()
             .catch(() => false)
-          await switchWorkbenchMode(page, '没头脑')
+          await switchWorkbenchMode(page, '搜索')
           const searchWarning = getWorkbenchLocator(page, workbenchSelectors.referenceSearchWarning)
           await searchWarning.waitFor({ state: 'visible' })
           const searchWarningText = ((await searchWarning.textContent()) || '').trim()
@@ -248,7 +248,9 @@ describe('workbench conversation e2e', () => {
             state: 'visible'
           })
 
-          await switchWorkbenchMode(page, '大聪明')
+          await createWorkbenchNewSession(page)
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
+          await switchWorkbenchMode(page, 'AI')
           await insertWorkbenchReferenceToken(page, 'sample-edit.docx')
           await insertWorkbenchReferenceToken(page, '工作')
           await insertWorkbenchReferenceToken(page, 'Workbench Web Fixture', server.url)

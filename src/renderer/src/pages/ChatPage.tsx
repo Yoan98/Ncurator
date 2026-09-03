@@ -46,6 +46,10 @@ import {
   pickFallbackWorkbenchModel,
   resolveSelectedWorkbenchModel
 } from '../../../shared/workbenchModelSelection'
+import {
+  isWorkbenchModeSwitchAllowed,
+  resolveWorkbenchSessionModeLock
+} from '../../../shared/workbenchSessionModeLock'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
 import { normalizeUserFacingError } from '../utils/userFacingError'
@@ -1910,14 +1914,33 @@ const ChatPage: React.FC = () => {
     [persistCurrentUiStateNow]
   )
 
+  const sessionModeLock = useMemo(() => {
+    const turns = Object.values(assistantTurns)
+    const hasConversation = currentMessages.length > 0 || loading
+    const hasAiHistory =
+      Boolean(aiRunId) ||
+      turns.some((turn) => Boolean(turn.runId)) ||
+      (composerMode === 'ai' && hasConversation)
+    const hasSearchHistory =
+      turns.some(
+        (turn) => !turn.runId && (turn.runFinished || turn.status === 'completed')
+      ) || (composerMode === 'search' && hasConversation)
+    return resolveWorkbenchSessionModeLock({
+      hasAiHistory,
+      hasSearchHistory,
+      fallbackMode: composerMode
+    })
+  }, [aiRunId, assistantTurns, composerMode, currentMessages.length, loading])
+
   const handleModeChange = useCallback(
     (mode: WorkbenchMode): void => {
+      if (!isWorkbenchModeSwitchAllowed(sessionModeLock, mode)) return
       uiStateInteractionVersionRef.current += 1
       composerModeRef.current = mode
       setComposerMode(mode)
       void persistCurrentUiStateNow({ requireReady: false })
     },
-    [persistCurrentUiStateNow, setComposerMode]
+    [persistCurrentUiStateNow, sessionModeLock, setComposerMode]
   )
 
   const handleAiPreferenceChange = useCallback(
@@ -4332,6 +4355,7 @@ const ChatPage: React.FC = () => {
                       ) : (
                         <WorkbenchComposer
                           mode={composerMode}
+                          modeLock={sessionModeLock}
                           onModeChange={handleModeChange}
                           aiPreference={composerAiPreference}
                           onAiPreferenceChange={handleAiPreferenceChange}

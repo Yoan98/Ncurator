@@ -16,11 +16,13 @@ import {
   selectWorkbenchModel,
   sendWorkbenchMessage,
   setWorkbenchInput,
+  inspectWorkbenchModeOption,
   switchWorkbenchMode,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors,
   loadWorkbenchLiveModelEnv
 } from '../../../../harness/e2e/workbench'
+import { WORKBENCH_MODE_LOCK_HINTS } from '../../../../../src/shared/workbenchSessionModeLock'
 
 const CASE_ID = 'send-guard-mode-switch-and-preferences'
 const DRAFT_TEXT = '请先保留这段输入，再切换模式。'
@@ -55,14 +57,14 @@ describe('workbench conversation e2e', () => {
             (await missingModelNotification.textContent()) || ''
           ).trim()
 
-          await switchWorkbenchMode(page, '没头脑')
+          await switchWorkbenchMode(page, '搜索')
           await missingModelNotification.waitFor({ state: 'hidden' })
           const missingModelHiddenInSearch = !(await missingModelNotification
             .isVisible()
             .catch(() => false))
 
           const missingModelReturnedAt = Date.now()
-          await switchWorkbenchMode(page, '大聪明')
+          await switchWorkbenchMode(page, 'AI')
           await missingModelNotification.waitFor({ state: 'visible', timeout: 1500 })
           const missingModelReturnDelayMs = Date.now() - missingModelReturnedAt
 
@@ -77,11 +79,11 @@ describe('workbench conversation e2e', () => {
             workbenchSelectors.sendButton
           ).evaluate((element) => element instanceof HTMLButtonElement && element.disabled)
 
-          await switchWorkbenchMode(page, '没头脑')
+          await switchWorkbenchMode(page, '搜索')
           const searchModeInputText = (
             (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
           ).trim()
-          await switchWorkbenchMode(page, '大聪明')
+          await switchWorkbenchMode(page, 'AI')
           const aiModeInputText = (
             (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
           ).trim()
@@ -109,14 +111,14 @@ describe('workbench conversation e2e', () => {
           const fullAccessPermissionMenuText =
             (await fullAccessPermissionOption.textContent()) || ''
           await page.keyboard.press('Escape')
-          await switchWorkbenchMode(page, '没头脑')
+          await switchWorkbenchMode(page, '搜索')
           const aiPreferenceHiddenInSearch = !(await getWorkbenchLocator(
             page,
             workbenchSelectors.aiPreferenceSwitch
           )
             .isVisible()
             .catch(() => false))
-          await switchWorkbenchMode(page, '大聪明')
+          await switchWorkbenchMode(page, 'AI')
           const selectedAiPreferenceAfterModeRoundTrip =
             await readWorkbenchAiPreferenceSelection(page)
           const selectedModelBeforeReload = await readWorkbenchSelectedControlText(
@@ -160,6 +162,7 @@ describe('workbench conversation e2e', () => {
             { page, blockerPolicy: 'auto_approve' }
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.75)
+          const searchOptionAfterAi = await inspectWorkbenchModeOption(page, '搜索')
 
           return {
             missingModelInitialDelayMs,
@@ -180,6 +183,7 @@ describe('workbench conversation e2e', () => {
             selectedAiPreferenceAfterReload,
             aiPreferenceHiddenInSearch,
             runningButtonLabel,
+            searchOptionAfterAi,
             finalAnswerText: evidence.finalAnswerText,
             antMessageText: await getAntMessageText(page)
           }
@@ -213,11 +217,15 @@ describe('workbench conversation e2e', () => {
               result.fullAccessPermissionMenuText.includes('不受限制的操作你的电脑') &&
               result.aiPreferenceHiddenInSearch &&
               result.runningButtonLabel.includes('停止') &&
+              result.searchOptionAfterAi.disabled &&
+              result.searchOptionAfterAi.tooltip.includes(
+                WORKBENCH_MODE_LOCK_HINTS.disableSearch
+              ) &&
               result.finalAnswerText.trim().length > 0,
             {
               name: 'workbench-send-guard-mode-preference-real-path',
               message:
-                'Workbench 应在未选工作区时禁用发送，切换“大聪明/没头脑”保留输入，权限菜单展示两条说明，模型、工作区和 AI 推进偏好重进页面后恢复，搜索模式隐藏偏好入口，真实发送时按钮进入停止态并最终完成。',
+                'Workbench 应在未选工作区时禁用发送，切换“AI/搜索”保留输入，权限菜单展示两条说明，模型、工作区和 AI 推进偏好重进页面后恢复，搜索模式隐藏偏好入口，真实发送后搜索模式禁用并提示，发送时按钮进入停止态并最终完成。',
               data: result
             }
           )

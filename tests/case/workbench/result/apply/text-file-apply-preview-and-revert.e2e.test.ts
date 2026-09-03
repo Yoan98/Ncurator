@@ -12,6 +12,7 @@ import {
   insertWorkbenchReferenceToken,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
+  selectWorkbenchWorkspace,
   setupWorkbenchWithTempWorkspace,
   submitWorkbenchCurrentDraft,
   switchWorkbenchMode,
@@ -51,7 +52,7 @@ describe('workbench result e2e', () => {
           const targetPath = path.join(setup.workspace.rootPath, 'workbench-preview.md')
           const beforeBytes = await fs.readFile(targetPath)
 
-          await switchWorkbenchMode(page, '没头脑')
+          await switchWorkbenchMode(page, '搜索')
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
           await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
           await submitWorkbenchCurrentDraft(page)
@@ -95,7 +96,9 @@ describe('workbench result e2e', () => {
             })
           }, '检测到当前文件被外部修改，已自动刷新')
 
-          await switchWorkbenchMode(page, '大聪明')
+          await createWorkbenchNewSession(page)
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
+          await switchWorkbenchMode(page, 'AI')
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(

@@ -710,4 +710,41 @@ describe('unit ai persistence backend', () => {
     expect(storedRun).toBeNull()
     expect(messageLog).toEqual([])
   })
+
+  it('rejects-submit-when-session-already-used-the-other-mode', async () => {
+    const setup = await createTestService({ autoStartRuns: false })
+    await submitAiRun(setup)
+    const searchAfterAi = await setup.service.submit({
+      mode: 'search',
+      sessionId: 'session-1',
+      input: '查询资料',
+      workspace: buildWorkspace(setup.workspaceRoot)
+    })
+    expect(searchAfterAi.success).toBe(false)
+    expect(searchAfterAi.error).toContain('不能切换到搜索')
+
+    await setup.storage.chat.saveChatSession({
+      id: 'session-search',
+      title: '搜索会话',
+      created_at: Date.now(),
+      workspace_id: 'workspace-1'
+    })
+    await setup.storage.chatSearchTurn.appendTurn({
+      sessionId: 'session-search',
+      role: 'user',
+      content: '查询资料'
+    })
+    const aiAfterSearch = await setup.service.submit({
+      mode: 'ai',
+      sessionId: 'session-search',
+      input: '继续对话',
+      mainModel: {
+        configId: 'mock-config',
+        modelName: 'mock-model'
+      },
+      workspace: buildWorkspace(setup.workspaceRoot)
+    })
+    expect(aiAfterSearch.success).toBe(false)
+    expect(aiAfterSearch.error).toContain('不能切回 AI')
+  })
 })

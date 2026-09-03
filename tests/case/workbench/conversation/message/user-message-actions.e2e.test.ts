@@ -147,7 +147,7 @@ describe('workbench conversation e2e', () => {
               await navigateToWorkbench(page)
               await createWorkbenchNewSession(page)
               await selectWorkbenchWorkspace(page, setup.workspaceName)
-              await switchWorkbenchMode(page, '大聪明')
+              await switchWorkbenchMode(page, 'AI')
               await getWorkbenchLocator(page, workbenchSelectors.input).click()
               await page.keyboard.type(RUNNING_MESSAGE)
               await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.markdownPath)

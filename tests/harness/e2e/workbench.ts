@@ -1190,16 +1190,43 @@ export const createWorkbenchNewSession = async (page: Page): Promise<void> => {
 
 export const switchWorkbenchMode = async (
   page: Page,
-  modeLabel: '大聪明' | '没头脑'
+  modeLabel: 'AI' | '搜索'
 ): Promise<void> => {
-  const optionLabel = modeLabel === '大聪明' ? 'AI' : '搜索'
   await getWorkbenchLocator(page, workbenchSelectors.modeSwitch).click()
   const option = page
     .locator('.workbench-composer-menu [role="option"]')
-    .filter({ hasText: optionLabel })
+    .filter({ hasText: modeLabel })
     .first()
   await option.waitFor({ state: 'visible' })
   await option.click()
+}
+
+export const inspectWorkbenchModeOption = async (
+  page: Page,
+  modeLabel: 'AI' | '搜索'
+): Promise<{ disabled: boolean; tooltip: string }> => {
+  await getWorkbenchLocator(page, workbenchSelectors.modeSwitch).click()
+  const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  const option = menu.locator('[role="option"]').filter({ hasText: modeLabel }).first()
+  await option.waitFor({ state: 'visible' })
+  const disabled =
+    (await option.getAttribute('aria-disabled')) === 'true' || (await option.isDisabled())
+  let tooltip = ''
+  if (disabled) {
+    const expectedReason = (await option.getAttribute('data-disabled-reason')) || ''
+    await option.hover({ force: true })
+    if (expectedReason) {
+      const tip = page
+        .locator('.ant-tooltip:not(.ant-tooltip-hidden) .ant-tooltip-inner')
+        .filter({ hasText: expectedReason })
+        .first()
+      await tip.waitFor({ state: 'visible', timeout: 3000 })
+      tooltip = ((await tip.textContent()) || '').trim()
+    }
+  }
+  await page.keyboard.press('Escape')
+  await menu.waitFor({ state: 'hidden' }).catch(() => {})
+  return { disabled, tooltip }
 }
 
 export const selectWorkbenchAiPreference = async (

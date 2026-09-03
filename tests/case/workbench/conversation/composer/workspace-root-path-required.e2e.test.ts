@@ -52,7 +52,7 @@ describe('workbench conversation e2e', () => {
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
           await selectWorkbenchModel(page, env.modelName)
-          await switchWorkbenchMode(page, '大聪明')
+          await switchWorkbenchMode(page, 'AI')
           await setWorkbenchInput(page, PROMPT)
 
           const disabledBeforeBinding = await getWorkbenchLocator(
@@ -68,7 +68,7 @@ describe('workbench conversation e2e', () => {
           await navigateToWorkbench(page)
           await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
           await selectWorkbenchModel(page, env.modelName)
-          await switchWorkbenchMode(page, '大聪明')
+          await switchWorkbenchMode(page, 'AI')
           await setWorkbenchInput(page, PROMPT)
 
           const disabledAfterBinding = await getWorkbenchLocator(
