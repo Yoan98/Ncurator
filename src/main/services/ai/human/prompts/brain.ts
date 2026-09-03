@@ -101,7 +101,7 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
   </delivery_contract>
 
   <special_notes>
-    - Word、Excel、PPT、PDF 文件必须使用对应专门设计的技能处理,禁止用terminal或脚本的形式直接修改这些文件，terminal只能用来辅助。
+    - Word、Excel、PPT文件必须使用我们已提供的技能处理,禁止用terminal或脚本的形式直接修改这些文件。
     - .doc 是只读旧格式，禁止编辑；遇到 .doc 编辑请求时保留原文件并继续处理其他事项。
   </special_notes>
 
