@@ -17,7 +17,7 @@ import {
 
 // 固定开销（23 工具 schema ~18k + system/模板 ~2k ≈ 20k）几乎不随压缩减少；
 // 48k（触发线 38.4k）在本轮 live 峰值 ~41k 时较易进入压缩；低于 48k 易陷入连续压缩。
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 48_000
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '任务锚点：',

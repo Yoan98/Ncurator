@@ -22,7 +22,7 @@ describe('ai tool terminal backend', () => {
       suite: 'tool',
       groups: ['terminal'],
       description:
-        '验证 terminal_run 读到明显二进制/结构化文档输出时会省略原始输出并返回 terminal result unusable。',
+        '验证 terminal_run 读到高比例不可读字符输出时会省略原始输出并返回比例事实提示。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -51,12 +51,14 @@ describe('ai tool terminal backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.docxRead.error === 'terminal result unusable' &&
+          typeof result.docxRead.error === 'string' &&
+            result.docxRead.error.includes('终端输出含过多不可读字符') &&
+            result.docxRead.output.includes('omitted') &&
             !result.docxRead.output.includes('PK'),
           {
             name: 'terminal-docx-binary-output-is-omitted',
             message:
-              'terminal_run 读取 docx 后应省略不可消费输出，并返回 terminal result unusable。',
+              'terminal_run 读取 docx 后应省略不可读输出，并返回不可读字符比例提示。',
             data: result.docxRead
           }
         )
@@ -67,7 +69,7 @@ describe('ai tool terminal backend', () => {
             result.textRead.output.includes('beta'),
           {
             name: 'terminal-normal-text-output-is-preserved',
-            message: '普通文本输出不应被不可消费输出检测误伤。',
+            message: '普通文本输出不应被不可读字符比例检测误伤。',
             data: result.textRead
           }
         )

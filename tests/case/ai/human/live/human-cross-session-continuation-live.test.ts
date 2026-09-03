@@ -224,6 +224,8 @@ describe('ai human live backend', () => {
                 '同 session 第二件事应在完整历史（含第一件事的最终交付）之后尾部追加 buildBrainUserMessage user 消息，并完成双主题对比交付。',
               data: {
                 run1Status: result.run1Result?.status,
+                run1Error: result.run1Result?.error,
+                run1FailureCode: result.run1Result?.failureCode,
                 run2Status: result.run2Result?.status,
                 run2LastMessageIsUser: result.run2LastMessageIsUser,
                 run2HasOnlyCurrentBrainUser: result.run2HasOnlyCurrentBrainUser,

@@ -66,15 +66,25 @@ export class AiRunService {
           : reason === 'output_truncated'
             ? '模型输出达到长度限制，可发送“继续”接着完成'
             : failure.message
+      const failureSource =
+        reason === 'input_too_long' || reason === 'runtime_limit' || reason === 'output_truncated'
+          ? 'internal'
+          : failure.source
+      deps.sendEvent({
+        type: 'run_failed',
+        runId: payload.runId,
+        source: failureSource,
+        message,
+        httpStatus: failure.httpStatus,
+        providerCode: failure.providerCode,
+        code: reason
+      })
       return createFailedAiRunState({
         runId: payload.runId,
         sessionId: payload.sessionId,
         input: payload.input,
         error: message,
-        failureSource:
-          reason === 'input_too_long' || reason === 'runtime_limit' || reason === 'output_truncated'
-            ? 'internal'
-            : failure.source,
+        failureSource,
         failureHttpStatus: failure.httpStatus,
         failureProviderCode: failure.providerCode,
         failureCode: reason

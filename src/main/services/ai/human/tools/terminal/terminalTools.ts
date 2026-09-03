@@ -10,7 +10,11 @@ import {
   hasDetachedExecution,
   isTerminalExcelMutationCommand
 } from './commandPolicy'
-import { inspectTerminalOutputQuality } from './terminalExec'
+import {
+  formatTerminalUnusableError,
+  inspectTerminalOutputQuality,
+  TERMINAL_UNUSABLE_OUTPUT_PLACEHOLDER
+} from './terminalExec'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
 import { createTerminalRunToolSpec, TERMINAL_READ_TOOL_SPEC } from './toolSpecs'
@@ -210,8 +214,8 @@ const applyOutputGuards = (input: {
   if (quality.unusable) {
     return {
       ok: false,
-      output: '[terminal output omitted: unusable non-text content detected]',
-      error: 'terminal result unusable'
+      output: TERMINAL_UNUSABLE_OUTPUT_PLACEHOLDER,
+      error: formatTerminalUnusableError({ report: quality, output: input.output })
     }
   }
   return { ok: true, output: input.output }

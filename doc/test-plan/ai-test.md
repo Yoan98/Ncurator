@@ -454,11 +454,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `terminal-result-unusable-docx-output`
 
 - 测试类型：`backend`
-- What：`terminal_run` 读到明显非文本/结构化文档输出时，会省略原始输出并返回错误结果。
-- Why：terminal 不能把 Word / Excel / PPT / PDF 等结构化文档的二进制内容带入后续 brain prompt。
+- What：`terminal_run` 读到高比例不可读字符输出时，会省略原始输出并返回比例事实错误提示。
+- Why：terminal 不能把大量替换符/控制字符灌进后续 brain prompt；提示只需陈述不可读比例与样例，不教命令改法。
 - How：真实创建 docx 后执行 `terminal_run(cat report.docx)`，并对普通文本文件执行 `cat notes.txt` 作为低误伤对照。
-- Oracle：docx 输出返回 `ok=false / reason=result_unusable / hand_tool_result_unusable`，stdout/stderr 不包含原始 `PK` 乱码；普通文本输出保持可读。
-- Not：不验证所有二进制格式的 MIME 识别覆盖率。
+- Oracle：docx 输出返回 `ok=false`，`error` 含「终端输出含过多不可读字符」及计数/占比/样例；stdout 为省略占位且不含原始 `PK` 乱码；普通文本输出保持可读。不按 PK/PDF/OOXML 路径等特征签名拦截。
+- Not：不验证所有二进制格式的 MIME 识别覆盖率，也不要求错误文案教模型改用何种命令。
 
 ##### `terminal-risk-and-boundary-guard`
 
@@ -992,7 +992,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：live 模式下 `human` 会基于真实 brain usage 与新增 history 增量在风险周报长任务中自然触发 `context_compaction`，并在压缩后继续完成交付。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩且不影响任务完成”的能力。
-- How：复用风险周报 live 的真实 workspace 与业务输入，通过 `humanRuntimeOverrides.modelContextWindowTokens=40_000` 提供可工作的上下文空间，并让真实任务在多轮资料读取后自然进入 `context_budget -> context_compaction -> context_budget -> brain`。窗口不能太小：固定开销（23 工具 schema ~18k + system/模板 ~2k ≈ 20k）几乎不随压缩减少，若窗口 24k 则触发线 19.2k 被固定开销直接顶破，压缩后仍超阈值、每轮压缩死循环；也不能太大（64k 时任务峰值 ~40k 达不到 51.2k 触发线，0 次压缩）。
+- How：复用风险周报 live 的真实 workspace 与业务输入，通过 `humanRuntimeOverrides.modelContextWindowTokens=45_000` 提供可工作的上下文空间，并让真实任务在多轮资料读取后自然进入 `context_budget -> context_compaction -> context_budget -> brain`。窗口不能太小：固定开销（23 工具 schema ~18k + system/模板 ~2k ≈ 20k）几乎不随压缩减少，若窗口过小则触发线被固定开销顶破，压缩后仍超阈值、每轮压缩死循环；下限为 45k，也不能太大（过大时任务峰值达不到触发线，0 次压缩）。
 - Oracle：至少发生一次完整 compaction；不限制压缩次数。逐次检查固定摘要结构、任务锚点、已确认路径、无编造和无“已完成又未读取”的进度矛盾，并检查全部压缩比；后续 `brain` prompt 保留 compaction 与 task progress；最终周报文件成功交付并产出 docx `applyId` 证据，且至少一次成功的 docx 写入（允许 `document_end` 新建，也允许复制底本后 `replace_text` / `insert_nodes` 改写）。按 10 分制评估压缩生命周期、摘要结构、摘要质量、连续性和文件交付，严格超过 8 分通过。
 - Not：不绑定压缩次数，不要求固定资料读取顺序，也不因合理表达差异判失败。
 
