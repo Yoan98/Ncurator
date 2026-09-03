@@ -154,10 +154,10 @@ ${renderPreferenceText(input.ctx.preference)}
   <reference_scope>
 ${renderReferenceScopeText(input.ctx.referenceScope)}
   </reference_scope>
-${compactedHistory}
   <current_time>
 ${renderCurrentTimeText(input.ctx)}
   </current_time>
+${compactedHistory}
 ${activeState}
 </user_context>
 `.trim()

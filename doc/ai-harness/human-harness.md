@@ -368,8 +368,8 @@ flowchart TD
   <task_goal>…</task_goal>
   <preference>…</preference>
   <reference_scope>…</reference_scope>
-  <compacted_history>…</compacted_history>   ← 仅 compaction 后
   <current_time>…</current_time>
+  <compacted_history>…</compacted_history>   ← 仅 compaction 后
   <active_state>…</active_state>             ← 仅 compaction / resume（新 run）
 </user_context>
 ```
@@ -402,8 +402,8 @@ flowchart TD
 | `<task_goal>` | 当前 run `input` |
 | `<preference>` | 当前 run Composer |
 | `<reference_scope>` | 当前 run Composer（§2.5） |
-| `<compacted_history>` | 最新 `compaction_checkpoint.summary`（无则省略；**仅 compact 后**） |
 | `<current_time>` | 当前 run `runStartedAt`（**只写当前 build user**；历史冻结文本不再改） |
+| `<compacted_history>` | 最新 `compaction_checkpoint.summary`（无则省略；**仅 compact 后**） |
 | `<active_state>` | **仅 compact / resume**：最新 `skill_state_updated` + 最后 `plan_updated`（`finalizing_started` 清空）。同 run 稳态不写。 |
 
 annotation 扫描用**完整** log；tail 用 checkpoint **截断后**的行。  
@@ -570,7 +570,8 @@ human harness 通过 **tail 只 append、resume 只 append 新 build user（历�
 
 ```text
 [System]
-[User built]   <compacted_history>摘要…</compacted_history>
+[User built]   <current_time>…</current_time>
+               <compacted_history>摘要…</compacted_history>
                <active_state>当时技能/计划</active_state>
 [Assistant]    保留的最后一条 AI
 [Tool]         其 tool 结果
