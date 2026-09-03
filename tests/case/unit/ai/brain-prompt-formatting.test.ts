@@ -81,9 +81,23 @@ describe('ai unit brain prompt formatting', () => {
     expect(user).toContain('<reference_scope>')
     expect(user).toContain('<current_time>')
     expect(user).toContain('current_time.local_iso')
+    expect(user).not.toContain('<active_state>')
   })
 
-  it('renders plan and learned skills inside current_state when injectPlan is set', () => {
+  it('omits active_state on the normal first-run user even if skills and plan exist', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-prompt-formatting',
+      userInput: '继续处理任务'
+    })
+    state.memory.plan = [{ title: '整理资料', status: 'done' }]
+    state.skills.learnedSkillIds = ['docx-read']
+    const user = buildBrainUserMessage({ state, ctx: createFakeCtx() })
+    expect(user).not.toContain('<active_state>')
+    expect(user).not.toContain('已学习技能')
+    expect(user).not.toContain('计划进度')
+  })
+
+  it('renders plan and learned skills inside active_state only when injected', () => {
     const state = createInitialHumanState({
       taskId: 'task-prompt-formatting',
       userInput: '继续处理任务'
@@ -94,7 +108,11 @@ describe('ai unit brain prompt formatting', () => {
     ]
     state.skills.learnedSkillIds = ['docx-read']
 
-    const user = buildBrainUserMessage({ state, ctx: createFakeCtx(), injectPlan: true })
+    const user = buildBrainUserMessage({
+      state,
+      ctx: createFakeCtx(),
+      injectActiveState: true
+    })
 
     const currentState = user.match(/<active_state>([\s\S]*?)<\/active_state>/)?.[1] || ''
     expect(currentState).toContain('计划进度：')
@@ -103,18 +121,22 @@ describe('ai unit brain prompt formatting', () => {
     expect(currentState).toContain('已学习技能：docx-read')
   })
 
-  it('renders learned_skills as none when no skill has been learned', () => {
+  it('renders learned_skills as none when injected with no learned skill', () => {
     const state = createInitialHumanState({
       taskId: 'task-prompt-formatting',
       userInput: '继续处理任务'
     })
 
-    const user = buildBrainUserMessage({ state, ctx: createFakeCtx() })
+    const user = buildBrainUserMessage({
+      state,
+      ctx: createFakeCtx(),
+      injectActiveState: true
+    })
     expect(user).toContain('已学习技能：无')
     expect(user).not.toContain('计划进度：')
   })
 
-  it('renders compacted history as a sibling before the text active state', () => {
+  it('renders compacted history as a sibling before current time and active state', () => {
     const state = createInitialHumanState({
       taskId: 'task-prompt-compaction',
       userInput: '继续处理任务'
@@ -124,7 +146,7 @@ describe('ai unit brain prompt formatting', () => {
       state,
       ctx: createFakeCtx(),
       compactedHistoryText: '任务锚点：继续处理已确认事实',
-      injectPlan: true
+      injectActiveState: true
     })
     expect(user).toContain('<compacted_history>\n任务锚点：继续处理已确认事实\n  </compacted_history>')
     expect(user.indexOf('</reference_scope>')).toBeLessThan(user.indexOf('<compacted_history>'))

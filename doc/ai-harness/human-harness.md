@@ -34,10 +34,10 @@ flowchart TD
 |------|--------|--------|------------------|
 | `context_budget` | 否 | 首次进 brain 时写 `user` | 判定 compaction；不拼消息 |
 | `context_compaction` | 是（压缩模型） | `compaction_checkpoint` | **整段替换** messages（§5） |
-| `brain` | 是（主模型） | `thinking_*` + `assistant`；交付经 `finalizeDelivery` | append assistant；refresh 当前 build user |
+| `brain` | 是（主模型） | `thinking_*` + `assistant`；交付经 `finalizeDelivery` | append assistant；**不** refresh build user |
 | `dispatch` | 否 | 否 | 消费 `tool_calls` 队列，路由下一 stage |
-| `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`**（目标态） | 加载 skill 工具；refresh build user 技能块 |
-| `plan` | 否 | `tool` + `plan_updated` | 更新 state.plan；refresh build user 计划块 |
+| `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`**（目标态） | 加载 skill 工具；**不**改 build user |
+| `plan` | 否 | `tool` + `plan_updated` | 更新 state.plan；**不**改 build user |
 | `hand` | 否 | `tool`（+ 可选 `images[]`） | append ToolMessage；`read_image` 后 append 多模态 HumanMessage |
 | `finalizeDelivery` | 否 | `finalizing_started` + 交付 `assistant` | 完成 run；docx/ppt 落盘 side effect |
 
@@ -116,8 +116,8 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 |-------------|-----------|----------|
 | `thinking_started` / `thinking_completed` | `{}` | UI 过程层 |
 | `learning_started` / `learning_completed` | `{ skillId }` | UI 过程层 |
-| `skill_state_updated` | `{ learnedSkillIds: string[] }` | brain `<active_state>` 技能（**取最新一条**） |
-| `plan_updated` | `{ plan: [{ title, status }] }` | brain `<active_state>` 计划 + UI 计划条 |
+| `skill_state_updated` | `{ learnedSkillIds: string[] }` | compact / resume 时写入 `<active_state>` 技能（**取最新一条**）；同 run 只驱动 bindTools |
+| `plan_updated` | `{ plan: [{ title, status }] }` | compact / resume 时写入 `<active_state>` 计划 + UI 计划条 |
 | `brain_user_snapshot` | `{ text: string }` | 当前 build user **最后一次发给模型的原文**；resume 还原历史 build user（取该 `user` 之后、下一条 `user` 之前的**最后一条**） |
 | `compaction_checkpoint` | 见示例 | brain `<compacted_history>` + UI 压缩层 |
 | `finalizing_started` | `{}` | 投影时**清空** plan |
@@ -357,9 +357,9 @@ flowchart TD
 | 段 | 含义 |
 |----|------|
 | System | 系统提示 |
-| User built（首条） | 该 run 首次 user 诉求；同 run 内可 refresh `<active_state>`，**不改** `<task_goal>` |
+| User built（首条） | 该 run 首次 user 诉求；同 run 内**不 refresh**；无 `<active_state>` |
 | tail | assistant / tool / 多模态合成 HumanMessage |
-| User built（续发） | 仅 resume / 新 run 时 **append 在整段末尾**；走 build，不是 log 裸文本 |
+| User built（续发） | 仅 resume / 新 run 时 **append 在整段末尾**；含最新 `<active_state>` |
 
 **build user 块**（各字段来源见 §3.3）：
 
@@ -368,17 +368,17 @@ flowchart TD
   <task_goal>…</task_goal>
   <preference>…</preference>
   <reference_scope>…</reference_scope>
-  <compacted_history>…</compacted_history>
-  <current_time>…</current_time>          ← 仅当前 build user；System 不含时间
-  <active_state>…</active_state>
+  <compacted_history>…</compacted_history>   ← 仅 compaction 后
+  <current_time>…</current_time>
+  <active_state>…</active_state>             ← 仅 compaction / resume（新 run）
 </user_context>
 ```
 
 **稳态行为**（同 run、未触发 §5–§6）：
 
-- 首次 brain：`[System, User built]`，tail 为空；写入 `brain_user_snapshot`。
-- brain → 工具 → 再 brain：tail 末尾 append；brain 前 **replace** 当前 build user 的 `<active_state>`（及 plan），**`<task_goal>` 不变**；若原文变化再写 `brain_user_snapshot`。
-- 前缀 `[System, …已发送历史 build user / tail]` 字节序不变 → §4 缓存命中。System **跨 run 稳定**（无 `current_time`）。
+- 首次 brain：`[System, User built]`（无 `<active_state>`），tail 为空；写入 `brain_user_snapshot`。
+- brain → 工具 → 再 brain：tail 末尾 append；**当前 build user 一字不改**（技能/计划只在 tool 结果与 `bindTools` 中可见）。
+- 前缀 `[System, User built, …已发送 tail]` 字节序不变 → §4 缓存命中。System **跨 run 稳定**（无 `current_time`）。
 
 ### 3.3 稳态投影规则
 
@@ -402,19 +402,19 @@ flowchart TD
 | `<task_goal>` | 当前 run `input` |
 | `<preference>` | 当前 run Composer |
 | `<reference_scope>` | 当前 run Composer（§2.5） |
-| `<compacted_history>` | 最新 `compaction_checkpoint.summary`（无则省略） |
+| `<compacted_history>` | 最新 `compaction_checkpoint.summary`（无则省略；**仅 compact 后**） |
 | `<current_time>` | 当前 run `runStartedAt`（**只写当前 build user**；历史冻结文本不再改） |
-| 已学习技能 | 最新 `skill_state_updated.learnedSkillIds` |
-| 计划进度 | 全 session log 顺序扫描：最后 `plan_updated`；`finalizing_started` 清空 |
+| `<active_state>` | **仅 compact / resume**：最新 `skill_state_updated` + 最后 `plan_updated`（`finalizing_started` 清空）。同 run 稳态不写。 |
 
 annotation 扫描用**完整** log；tail 用 checkpoint **截断后**的行。  
 历史 build user：**禁止**从 log `user` 重算；必须用该 user 之后最后一条 `brain_user_snapshot.text`。
 
 **组装**
 
-- **同 run 首次 brain**：`[System] + [User built] + tail`（tail 可为空）。
-- **同 run 后续 brain**：replace 当前 build user 的 `<active_state>`；tail append。
-- **resume 新 run**：`[System] + [冻结 User built₁] + …history tail… + [新 User built₂]`（见 §6）；**不**改写 built₁ 与 history。
+- **同 run 首次 brain**：`[System] + [User built]`（无 active_state）+ tail（可空）。
+- **同 run 后续 brain**：build user 不变；tail append。
+- **compaction**：重建当前 User built，写入 `<compacted_history>` + `<active_state>`。
+- **resume 新 run**：`[System] + [冻结 User built₁] + …history tail… + [新 User built₂（含 active_state）]`（见 §6）。
 
 **同 run 刷新**：固定首条 `currentUserMessageIndex`；compaction 整段替换见 §5。
 
@@ -507,28 +507,23 @@ human harness 通过 **tail 只 append、resume 只 append 新 build user（历�
 
 - System 跨 run **字节稳定**（platform / paths / 技能目录；**不含** `current_time`）。
 - tail 只许 **末尾 append** assistant/tool。
-- 同 run 内：仅 **replace 当前** build user 的 `<active_state>` / plan；`<current_time>` 取本 run `runStartedAt`（同 run 内不变）；**`<task_goal>` 不动**。
+- 同 run 内：**不改** 当前 build user；`<current_time>` 取本 run `runStartedAt`。
 - resume：**append** 新 build user 在整段末尾；历史 build user / tail **一字不改**（来自冻结 snapshot，禁止重算）。
 
 ### 4.2 稳态下如何保持命中
 
 | 操作 | 对前缀的影响 |
 |------|--------------|
-| brain → hand → 再 brain | 已发送段不变；tail 末尾 append；当前 build user 可变块 refresh 后写 snapshot |
-| `update_plan` | replace 当前 build user 的 plan 行；tail 不变 |
+| brain → hand → 再 brain | 已发送段不变；tail 末尾 append；当前 build user 不变 |
+| `update_plan` / `learn_skill` | 只改 state + tool 结果 + bindTools；**不改** build user |
 | **resume** | 历史段 **不变**（冻结 snapshot）；末尾 **append** 新 build user（§6） |
 
 ### 4.3 打破前缀缓存的操作
 
-仅以下两类 **改写** 已建立的前缀，视为打破缓存：
+仅 **Compaction**（§5）改写已建立的前缀：摘要写入 `<compacted_history>`，当前 user 写入当时的 `<active_state>`，tail 截断重建。
 
-| 操作 | 原因 |
-|------|------|
-| **Compaction**（§5） | 摘要写入 `<compacted_history>`；tail 截断重建 |
-| **learn_skill**（§7） | 当前 run 的 build user 的 `<active_state>` 技能列表变化 |
-
-**resume 不属于打破**：历史保持原样，只在末尾追加新 build user。  
-设计约束：除 §4.3 外，不得 rewrite 已发送的 tail 段；resume 不得替换历史 build user，也不得从 log `user` 重拼可变块。
+**resume / learn_skill / update_plan 不属于打破**：resume 只在末尾追加；同 run 内技能与计划不改写 user。  
+设计约束：除 compaction 外，不得 rewrite 已发送的 build user 与 tail；resume 不得从 log `user` 重拼可变块。
 
 ---
 
@@ -555,8 +550,8 @@ human harness 通过 **tail 只 append、resume 只 append 新 build user（历�
 
 1. 可压缩段 → compaction 模型 → 摘要。
 2. log append `compaction_checkpoint`。
-3. 整段替换：`[System, User built(compacted_history=摘要), …tail]`。
-4. 回到 `context_budget` → brain。
+3. 整段替换：`[System, User built(compacted_history=摘要, active_state=当时技能/计划), …tail]`。
+4. 写入 `brain_user_snapshot`；回到 `context_budget` → brain。
 
 ### 5.4 示例
 
@@ -576,6 +571,7 @@ human harness 通过 **tail 只 append、resume 只 append 新 build user（历�
 ```text
 [System]
 [User built]   <compacted_history>摘要…</compacted_history>
+               <active_state>当时技能/计划</active_state>
 [Assistant]    保留的最后一条 AI
 [Tool]         其 tool 结果
 ```
@@ -599,7 +595,7 @@ log 行 append-only 保留；被覆盖段不再进入 tail。
 2. **brain**：在**已有** `[System, 冻结 User built₁, …tail…]` **末尾 append** `User built₂`（新 run 的 input + Composer + 最新 active_state + 本 run `current_time`）；**不替换** `User built₁`，**不改写**中间 tail。
 3. 历史 `User built₁` = 该 `user` 之后最后一条 `brain_user_snapshot.text`（**禁止** `FromLogEntry` 式重算）。
 4. 新诉求只出现在 **末尾** 那条 build user 的 `<task_goal>`；仍走 `buildBrainUserMessage`，不是裸 HumanMessage。
-5. 符合 §4：历史前缀不变 → 缓存可命中；打破仍仅 compaction / learn_skill。
+5. 符合 §4：历史前缀不变 → 缓存可命中；打破仅 compaction。
 6. **tools**：`bindTools` 按全 session 最新 `learnedSkillIds` 重绑（与 `User built₂` 的 `<active_state>` 技能对齐），不是冻住进程内 tool 对象。
 
 ### 6.3 示例
@@ -609,7 +605,7 @@ log 行 append-only 保留；被覆盖段不再进入 tail。
 ```text
 [System]                 ← 无 current_time
 [User built]   task_goal=帮我把上周周报模板复制一份，填好本周内容
-               （含当时的 current_time / active_state；已写入 brain_user_snapshot）
+               （含 current_time；无 active_state，除非本 run 已经 compaction）
 [Assistant]    …（含未闭合 tool_calls 时由 repair 补 ToolMessage）
 [Tool]         …
 [Tool]         Error: The run was interrupted…
@@ -680,15 +676,14 @@ brain 返回 learn_skill
   → tool 反馈（loaded / duplicate / unknown / 超限）
   → learning_completed（annotation）
   → skill_state_updated（annotation，完整 learnedSkillIds 快照）  ← 目标态
-  → refresh 当前 build user 的 <active_state> 技能列表
-  → context_budget → brain
+  → context_budget → brain   （bindTools 用最新 learnedSkillIds；不改 build user）
 ```
 
 **active tool 上限**：`HUMAN_MAX_ACTIVE_TOOLS = 30`（含 builtin / agent-control 工具）。新 skill 超限时 **FIFO 淘汰**最早学习的 external skill，写 tool 反馈说明 `evicted=…`。
 
 | 结果 | log | brain |
 |------|-----|-------|
-| 新 skill 加载成功 | `tool` + `skill_state_updated` | replace 当前 build user 技能块 → **打破 §4 前缀缓存** |
+| 新 skill 加载成功 | `tool` + `skill_state_updated` | 下轮 bindTools 含新工具；**不改** build user |
 | 重复 / unknown / 超限 | 仅 `tool` | 技能块不变 |
 | 审批 / 取消 | 按 hand 规则 | — |
 
@@ -700,8 +695,7 @@ brain 返回 update_plan
   → 校验 UPDATE_PLAN_SCHEMA
   → tool 反馈 + plan_updated（同 batch）
   → state.memory.plan 更新
-  → refresh 当前 build user 的 plan 行
-  → context_budget → brain
+  → context_budget → brain   （不改 build user；计划在 tool 结果中可见）
 ```
 
 计划项：`{ title, status }`，`status ∈ todo | doing | done`。  

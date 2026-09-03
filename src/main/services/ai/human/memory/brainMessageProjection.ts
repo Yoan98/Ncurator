@@ -39,7 +39,6 @@ export const projectBrainMessagesFromLog = (input: {
   ctx: AiRunContext
   state: HumanState
   compactedHistoryText?: string
-  injectPlan?: boolean
 }): BrainMessagesProjection => {
   const ordered = [...input.records].sort((a, b) => a.seq - b.seq)
   const checkpointRecord = [...ordered]
@@ -103,13 +102,19 @@ export const projectBrainMessagesFromLog = (input: {
   }
   flushImages()
 
+  // 同 run 稳态不写 active_state（技能/计划在 tool 结果与 bindTools）。
+  // compact 后或 log 里已有历史 user（resume / 新 run）才注入。
+  const injectActiveState =
+    Boolean(input.compactedHistoryText?.trim()) ||
+    projectedRecords.some((record) => record.entry.kind === 'user')
+
   messages.push(
     createCurrentBrainUserMessage(
       buildBrainUserMessage({
         state: input.state,
         ctx: input.ctx,
         compactedHistoryText: input.compactedHistoryText,
-        injectPlan: input.injectPlan
+        injectActiveState
       })
     )
   )

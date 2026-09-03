@@ -197,7 +197,7 @@ export const buildCompactedMessages = (input: {
       state: input.state,
       ctx: input.ctx,
       compactedHistoryText: input.summary,
-      injectPlan: true
+      injectActiveState: true
     })
   ),
   ...input.tail

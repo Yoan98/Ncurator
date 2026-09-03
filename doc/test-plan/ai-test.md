@@ -812,7 +812,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：任务板（plan）作为长期任务板会在 mock-llm 下跨轮维护 todo、done 状态。
 - Why：如果任务板不能跨轮保留并被重写成最新任务板，brain 很容易把长期记忆退化成单轮摘要。
 - How：第一轮 `brain` 通过 `update_plan` 写入只含 todo 的任务板；第二轮 `brain` 读取真实 prompt 后将任务板重写为包含 done 与 todo 的新版本；第三轮验证更新后的状态已写入 prompt，并把任务板收尾为全 done。
-- Oracle：第二轮 `brain` prompt 中能看到第一轮写入的结构化任务板项，第三轮能看到第二轮的 done/todo 状态更新，任务最终完成。
+- Oracle：第二轮 `brain` 的完整 messages（含 `update_plan` 的 tool 结果）能看到第一轮写入的任务板项，第三轮能看到第二轮的 done/todo 更新，任务最终完成。同 run 不把 plan 写进 build user 的 `<active_state>`。
 - Not：不验证交付前计划完成度检查（该机制已移除，交付与否由 brain 自主判断）。
 
 ##### `multi-tool-collaboration`

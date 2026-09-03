@@ -73,9 +73,6 @@ const FROZEN_HISTORICAL_USER = `<user_context>
 - current_time.timezone：UTC
 - current_time.local_iso：1970-01-01T00:00:00+00:00
   </current_time>
-  <active_state>
-已学习技能：docx-read
-  </active_state>
 </user_context>`
 
 const buildResumeBrainMessages = (input: {
@@ -88,7 +85,7 @@ const buildResumeBrainMessages = (input: {
     records: input.records,
     ctx,
     state: input.state,
-    injectPlan: input.state.memory.plan.length > 0
+    compactedHistoryText: input.state.memory.compactions.at(-1)?.summary
   })
   return [new SystemMessage(buildBrainSystemPrompt({ ctx })), ...brainProjection.messages]
 }
@@ -173,8 +170,8 @@ describe('ai unit brain prompt cache stability', () => {
 
     const firstSystem = buildBrainSystemPrompt({ ctx })
     const secondSystem = buildBrainSystemPrompt({ ctx })
-    const firstUser = buildBrainUserMessage({ state, ctx, injectPlan: true })
-    const secondUser = buildBrainUserMessage({ state, ctx, injectPlan: true })
+    const firstUser = buildBrainUserMessage({ state, ctx })
+    const secondUser = buildBrainUserMessage({ state, ctx })
 
     expect(secondSystem).toBe(firstSystem)
     expect(secondUser).toBe(firstUser)
@@ -224,8 +221,9 @@ describe('ai unit brain prompt cache stability', () => {
     expect(messages[0]?.getType()).toBe('system')
     expect(humanMessages).toHaveLength(2)
     expect(String(humanMessages[0]?.content)).toBe(FROZEN_HISTORICAL_USER)
-    expect(String(humanMessages[0]?.content)).toContain('已学习技能：docx-read')
+    expect(String(humanMessages[0]?.content)).not.toContain('<active_state>')
     expect(String(humanMessages[1]?.content)).toContain('保留刚才的过拟合信息，再补充反走样。')
+    expect(String(humanMessages[1]?.content)).toContain('<active_state>')
     expect(isCurrentBrainUserMessage(humanMessages[1] as BaseMessage)).toBe(true)
   })
 
@@ -288,5 +286,14 @@ describe('ai unit brain prompt cache stability', () => {
     expect(() =>
       buildResumeBrainMessages({ records: recordsWithoutSnapshot, state })
     ).toThrow(/brain_user_snapshot/)
+  })
+
+  it('does not inject active_state on the first-run current build user', () => {
+    const state = buildStateWithPlan()
+    const messages = buildResumeBrainMessages({ records: [], state })
+    const humanMessages = messages.filter((message) => message.getType() === 'human')
+    expect(humanMessages).toHaveLength(1)
+    expect(String(humanMessages[0]?.content)).not.toContain('<active_state>')
+    expect(String(humanMessages[0]?.content)).toContain('继续处理资料')
   })
 })

@@ -144,8 +144,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         records: messageLogRecords,
         ctx,
         state: initialState,
-        compactedHistoryText: logProjection.checkpoint?.summary,
-        injectPlan: initialState.memory.plan.length > 0
+        compactedHistoryText: logProjection.checkpoint?.summary
       })
       cache.messages = [
         new SystemMessage(buildBrainSystemPrompt({ ctx })),

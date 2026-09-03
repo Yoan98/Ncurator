@@ -31,7 +31,9 @@ export const renderCurrentTimeText = (ctx: AiRunContext): string => {
     .replace(/\.\d{3}/, '')
     .replace('Z', `${offsetSign}${offsetHours}:${offsetRemainderMinutes}`)
 
-  return [`- current_time.timezone：${timezone}`, `- current_time.local_iso：${localIso}`].join('\n')
+  return [`- current_time.timezone：${timezone}`, `- current_time.local_iso：${localIso}`].join(
+    '\n'
+  )
 }
 
 const renderPreferenceText = (preference: AiRunContext['preference']): string => {
@@ -117,24 +119,27 @@ export const buildBrainUserMessage = (input: {
   state: HumanState
   ctx: AiRunContext
   compactedHistoryText?: string
-  injectPlan?: boolean
+  injectActiveState?: boolean
 }): string => {
   const learnedSkillIds = input.state.skills.learnedSkillIds
   const plan = input.state.memory.plan
   const compactedHistory = input.compactedHistoryText?.trim()
     ? `  <compacted_history>\n${input.compactedHistoryText.trim()}\n  </compacted_history>`
     : ''
-  const renderActiveState = (): string => {
-    const skillsLine =
-      learnedSkillIds.length > 0 ? `已学习技能：${learnedSkillIds.join('、')}` : '已学习技能：无'
-    const planLine =
-      input.injectPlan && plan.length > 0
-        ? `计划进度：${plan
-            .map((item) => `${renderPlanItemStatus(item.status)} ${item.title}`)
-            .join('；')}`
-        : ''
-    return [skillsLine, planLine].filter((line) => line.length > 0).join('\n')
-  }
+  const activeState = input.injectActiveState
+    ? `  <active_state>
+${[
+  learnedSkillIds.length > 0 ? `已学习技能：${learnedSkillIds.join('、')}` : '已学习技能：无',
+  plan.length > 0
+    ? `计划进度：${plan
+        .map((item) => `${renderPlanItemStatus(item.status)} ${item.title}`)
+        .join('；')}`
+    : ''
+]
+  .filter((line) => line.length > 0)
+  .join('\n')}
+  </active_state>`
+    : ''
 
   return `
 <user_context>
@@ -153,9 +158,7 @@ ${compactedHistory}
   <current_time>
 ${renderCurrentTimeText(input.ctx)}
   </current_time>
-  <active_state>
-${renderActiveState()}
-  </active_state>
+${activeState}
 </user_context>
 `.trim()
 }

@@ -6,7 +6,7 @@ import type { JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { isContentSafetyError } from '../../../utils/runFailure'
 import { normalizeRoundThought } from '../../memory/thoughtMemory'
-import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
+import { buildBrainSystemPrompt } from '../../prompts/brain'
 import { projectBrainMessagesFromLog } from '../../memory/brainMessageProjection'
 import { assertExternalLearnedSkillIds } from '../../skills'
 import type { HumanRuntimeCache, HumanState } from '../../types'
@@ -32,7 +32,6 @@ import {
   completeDelivery,
   finalizeDelivery
 } from './finalizeDelivery'
-import { createCurrentBrainUserMessage } from '../utils/messageTail'
 import { persistCurrentBrainUserSnapshot } from '../../memory/brainUserSnapshot'
 import { LlmOutputTruncatedError } from '../../../errors'
 
@@ -49,8 +48,6 @@ export const createBrainNode = (input: {
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
 
-    const injectPlan = state.memory.plan.length > 0
-    const compactedHistoryText = state.memory.compactions.at(-1)?.summary
     let messages = input.cache.messages
     if (!messages || messages.length === 0 || input.cache.currentUserMessageIndex === undefined) {
       const logRecords = await input.ctx.loadMessageLog()
@@ -58,8 +55,7 @@ export const createBrainNode = (input: {
         records: logRecords,
         ctx: input.ctx,
         state,
-        compactedHistoryText,
-        injectPlan
+        compactedHistoryText: state.memory.compactions.at(-1)?.summary
       })
       messages = [
         new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
@@ -67,24 +63,6 @@ export const createBrainNode = (input: {
       ]
       input.cache.messages = messages
       input.cache.currentUserMessageIndex = brainProjection.currentUserMessageIndex + 1
-    } else {
-      // 每轮刷新 user 消息，保证 plan / learned_skills / compacted_history 都是最新 state 渲染，
-      // 避免 update_plan / learn_skill 之后后续 brain 轮次仍看到旧快照（"丢 plan"）。
-      const humanIndex = input.cache.currentUserMessageIndex
-      const refreshedHuman = createCurrentBrainUserMessage(
-        buildBrainUserMessage({
-          state,
-          ctx: input.ctx,
-          compactedHistoryText,
-          injectPlan
-        })
-      )
-      if (humanIndex >= 0 && humanIndex < messages.length) {
-        messages[humanIndex] = refreshedHuman
-      } else {
-        messages.push(refreshedHuman)
-        input.cache.currentUserMessageIndex = messages.length - 1
-      }
     }
 
     const currentUserIndex = input.cache.currentUserMessageIndex
