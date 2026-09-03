@@ -582,7 +582,7 @@ tests/case/workbench/
 - Why：配置是定时任务可执行的前提，字段校验与开关语义决定任务是否按预期触发。
 - How：通过真实 UI 打开视图新增任务并填写名称、提示词、执行时间（TimePicker）、工作空间、主模型（复用模型选择器）、偏好与执行权限，保存后确认出现在列表；编辑并保存；切换启用开关；删除并二次确认。
 - Oracle：新增与编辑预填对齐 `ST-FORM-001-AC1`；必填缺失拦截对齐 `ST-FORM-001-AC2`；每周必选星期对齐 `ST-FORM-001-AC3`；默认关闭对齐 `ST-SWITCH-001-AC1`；删除二次确认对齐 `ST-DELETE-001-AC1/AC2`；列表展示对齐 `ST-LIST-001-AC2`。
-- Not：不验证到点后的真实 AI 执行，只验证配置与开关生命周期。
+- Not：不验证到点后的真实 AI 执行，只验证配置与开关生命周期。`ST-FORM-001-AC4`（遮罩点击不关弹窗）、`ST-SWITCH-001-AC2`（关闭后到点不触发）标为不测。
 
 #### `scheduled-task-trigger-and-session-refresh`
 

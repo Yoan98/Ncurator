@@ -1,6 +1,6 @@
 # Skill / Tool 契约审计
 
-> `pnpm dlx tsx scripts/doc/generate-ai-tool-prompt-audit.mts` · 2026-09-02T04:33:12.499Z
+> `pnpm doc:ai-tool-prompt-audit`（`scripts/doc/generate-ai-tool-prompt-audit.mts`）· 2026-09-02T04:33:12.499Z
 
 # Skill: terminal
 > 在用户工作区根目录执行和读取命令，并返回终端状态、增量输出、退出状态和用户工作区域文件产物。

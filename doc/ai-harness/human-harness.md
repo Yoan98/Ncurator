@@ -36,10 +36,11 @@ flowchart TD
 | `context_compaction` | 是（压缩模型） | `compaction_checkpoint` | **整段替换** messages（第 5 节） |
 | `brain` | 是（主模型） | `thinking_*` + `assistant`；交付经 `finalizeDelivery` | append assistant；**不** refresh build user |
 | `dispatch` | 否 | 否 | 消费 `tool_calls` 队列，路由下一 stage |
-| `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`**（目标态） | 加载 skill 工具；**不**改 build user |
+| `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`** | 加载 skill 工具；**不**改 build user |
 | `plan` | 否 | `tool` + `plan_updated` | 更新 state.plan；**不**改 build user |
 | `hand` | 否 | `tool`（+ 可选 `images[]`） | append ToolMessage；`read_image` 后 append 多模态 HumanMessage |
-| `finalizeDelivery` | 否 | `finalizing_started` + 交付 `assistant` | 完成 run；docx/ppt 落盘 side effect |
+
+交付收尾由 brain 内的 `finalizeDelivery` 完成（**不是**独立图节点）：写 `finalizing_started` + 交付 `assistant`，并处理 docx/ppt 落盘 side effect。
 
 ### 1.3 dispatch 路由
 
@@ -56,10 +57,10 @@ flowchart TD
 
 ### 1.4 启动与 cache 初始化
 
-新 run 启动时（目标态）：
+新 run 启动时：
 
 1. 读全 session `chat_session_message_log` → `projectMessageLogRecords` 得 tail + plan + checkpoint。
-2. 拼 runtime messages：`[System] + projectBrainMessages(...)`（第 6 节：多条 build user + interleaved tail）。
+2. 拼 runtime messages：`[System] + projectBrainMessagesFromLog(...)`（第 6 节：多条 build user + interleaved tail）。
 3. `graph.invoke` 从 `context_budget` 进入循环。
 
 ### 1.5 runtime cache 要点
@@ -676,7 +677,7 @@ brain 返回 learn_skill
   → 加载 skill 工具定义到 cache
   → tool 反馈（loaded / duplicate / unknown / 超限）
   → learning_completed（annotation）
-  → skill_state_updated（annotation，完整 learnedSkillIds 快照）  ← 目标态
+  → skill_state_updated（annotation，完整 learnedSkillIds 快照）
   → context_budget → brain   （bindTools 用最新 learnedSkillIds；不改 build user）
 ```
 

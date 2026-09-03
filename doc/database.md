@@ -21,9 +21,8 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 
 SQLite 保存以下业务数据：
 
-- 会话、消息，以及用于中断恢复和压缩投影的 append-only 会话消息日志；不保存独立恢复快照。
+- 会话与用于中断恢复、压缩投影的 append-only 会话消息日志（`chat_session_message_log`）；不保存独立恢复快照，也不再使用已删除的 `chat_message` / `chat_session_skill_state` 表。
 - AI run、审批和文件修改记录。
-- 会话级 append-only 的消息转录（`chat_session_message_log`），作为模型上下文的唯一真相源。
 - 搜索模式对话轮次（`chat_search_turn`），与 AI log 解耦；Workbench 打开会话时合并投影。
 - 消息中的图片只保存运行时路径或 HTTP(S) 地址，以及 MIME、字节数和尺寸；SQLite 不保存 Base64，也不为临时图片建立独立文件表。运行时文件被清理后允许恢复为不可用占位。
 - 工作区、文件索引任务、文档元数据和网页源。

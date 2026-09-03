@@ -23,8 +23,6 @@ import { peekDispatchGroup } from '../dispatch'
 
 export type { HumanTraceItemInput } from './stateTransitionState'
 
-export { appendHumanTraceStep } from './stateTransitionState'
-
 export const returnToBrain = (
   state: HumanState,
   overrides: HumanStateOverrides = {}

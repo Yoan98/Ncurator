@@ -25,10 +25,6 @@ import {
 } from '../../utils/runFailure'
 import { isLlmInputTooLongError, isLlmOutputTruncatedError } from '../../errors'
 
-export const HUMAN_GRAPH_INVOKE_CONFIG = {
-  recursionLimit: HUMAN_GRAPH_RECURSION_LIMIT
-} as const
-
 export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
   const State = createHumanRunStateSchema()

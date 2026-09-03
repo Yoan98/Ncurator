@@ -119,11 +119,11 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：后台任务若在进程退出后永久保持 running，会残留执行中状态并给用户错误进度。
 - How：通过 Settings UI 对 25,000 个真实文件启动检查；再对延迟响应的本地真实网页分别启动检查和更新索引；每次在进度可见时关闭并复用同一用户目录重启应用。
 - Oracle：文件检查退出执行中状态、按钮恢复且 job 为失败，对齐 `SET-WORKSPACE-003-AC4`；网页检查 job 为失败，对齐 `SET-WEB-003-AC4`；网页索引 job 与执行中的网页均收敛为失败，对齐 `SET-WEB-004-AC6`。
-- Not：只读 SQLite 查询用于确认已触发任务的最终状态，不写数据库、不伪造 running job；文件更新索引的底层记录收敛继续由 unit 覆盖。
+- Not：只读 SQLite 查询用于确认已触发任务的最终状态，不写数据库、不伪造 running job；文件「更新索引」进程中断后 job 与文件收敛为失败（`SET-WORKSPACE-004-AC5`）由 unit `workspace-interrupted-job-recovery-contract` / `workspace-index-job-store-contract` 覆盖，本 E2E 不跑文件更新索引中断。
 
 ### 3.3 `workspace / files`
 
-本回归范围新增目录刷新生命周期约束：索引 job 运行期间目录树 IPC 必须为 0；任务成功或失败终态后，当前选中工作空间目录树只允许刷新一次。测试同时确认旧目录节点不因刷新被清空或折叠，扫描无可计算总数时显示活动状态而不是静态 0%。
+本回归范围新增目录刷新生命周期约束：索引 job 运行期间目录树 IPC 必须为 0；任务成功或失败终态后，当前选中工作空间目录树只允许刷新一次。测试同时确认旧目录节点不因刷新被清空或折叠，扫描无可计算总数时显示活动状态而不是静态 0%。向量模型未安装时「更新索引」禁用与说明（`SET-WORKSPACE-004-AC6`）标为手动 / 暂缓，不进日常自动化。
 
 #### `workspace-scan-progress-refresh`
 
@@ -197,7 +197,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：网页索引是“爬取 + 建索引”两阶段链路，失败类型必须可区分。
 - How：预置一条成功网页和一条带失败标记的网页，先执行“检查更新”，再执行“更新索引”。
 - Oracle：网页列表、摘要、失败数量和操作区初始化对齐 `SET-WEB-001-AC1`、`SET-WEB-001-AC2`；检查进度和完成状态对齐 `SET-WEB-003-AC1`、`SET-WEB-003-AC2`；更新时网页进入抓取/索引状态，对齐 `SET-WEB-004-AC1`；成功与失败分别收敛，对齐 `SET-WEB-004-AC2`、`SET-WEB-004-AC3`；分阶段进度对齐 `SET-WEB-004-AC4`。
-- Not：不验证真实网页正文切块、embedding 写入质量和索引失败以外的网络细节；向量模型未安装时“更新索引”禁用与提示由 `SET-WEB-004-AC7` 定义，本 case 运行于共享模型就绪环境，不触发该分支。
+- Not：不验证真实网页正文切块、embedding 写入质量和索引失败以外的网络细节；向量模型未安装时「更新索引」禁用与说明（`SET-WEB-004-AC7`，文件侧姊妹 `SET-WORKSPACE-004-AC6`）标为手动 / 暂缓，不进日常自动化回归。
 
 #### `web-prepare-progress-restore`
 

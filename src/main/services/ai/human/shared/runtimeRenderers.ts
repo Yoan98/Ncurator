@@ -44,4 +44,3 @@ export const renderHumanFileChangeLines = (
     }
   )
 
-export const renderHumanArtifactLines = renderHumanFileChangeLines

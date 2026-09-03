@@ -1,8 +1,6 @@
 import type { HumanPlanItem, HumanRoundThought } from '../types'
 import { normalizeThoughtText } from '../../../../../shared/thoughtText'
 
-export { normalizeThoughtText }
-
 export const normalizePlanItems = (items: HumanPlanItem[]): HumanPlanItem[] =>
   items
     .map((item) => ({

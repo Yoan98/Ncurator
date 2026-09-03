@@ -72,5 +72,3 @@ export const imageGenerationToolFamily = createWorkspaceBoundToolFamily({
   familyId: 'image-generation',
   buildWorkspaceTools: (input) => buildImageGenerationCapabilityTools(input).tools
 })
-
-export { IMAGE_GENERATE_TOOL_SPEC } from './toolSpecs'

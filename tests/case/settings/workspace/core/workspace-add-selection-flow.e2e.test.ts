@@ -147,7 +147,7 @@ describe('settings workspace e2e', () => {
             {
               name: 'created-workspace-is-selected-immediately',
               message:
-                '创建成功后，新工作空间应立刻进入列表并成为当前选中项，同时作为空容器显示未绑定文件目录，对齐 SET-WORKSPACE-002-AC2。',
+                '创建成功后，新工作空间应立刻进入列表并成为当前选中项，同时作为空容器显示未绑定文件目录与「设置后才能在 Workbench 发送」轻提示，对齐 SET-WORKSPACE-002-AC2、SET-WORKSPACE-006-AC3。',
               data: result
             }
           )

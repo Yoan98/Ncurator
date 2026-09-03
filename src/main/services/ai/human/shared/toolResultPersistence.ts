@@ -65,9 +65,3 @@ export const persistToolResult = async (input: {
   await fs.writeFile(filePath, input.content, 'utf8')
   return { filePath, totalChars: countUnicodeCharacters(input.content) }
 }
-
-export const cleanupToolResultDir = async (ctx: AiRunContext): Promise<void> => {
-  const directoryPath = resolvePersistedDir(ctx)
-  if (!directoryPath) return
-  await fs.rm(directoryPath, { recursive: true, force: true }).catch(() => undefined)
-}

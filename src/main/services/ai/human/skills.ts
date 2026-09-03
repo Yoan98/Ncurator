@@ -172,9 +172,6 @@ export const getSkillDefinition = (skillId: RuntimeSkillId): SkillDefinition => 
   }
 }
 
-export const listSkillDefinitions = (): SkillDefinition[] =>
-  RUNTIME_SKILL_IDS.map((skillId) => getSkillDefinition(skillId))
-
 export const listBuiltinSkillDefinitions = (): SkillDefinition[] =>
   BUILTIN_RUNTIME_SKILL_IDS.map((skillId) => getSkillDefinition(skillId))
 
