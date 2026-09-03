@@ -1,6 +1,6 @@
 /**
- * 生成 doc/ai-tool-prompt-audit.md
- * 运行：pnpm dlx tsx scripts/doc/generate-ai-tool-prompt-audit.mts
+ * 生成 doc/ai-tool-prompt-audit.md（按需生成，不入库）
+ * 运行：pnpm doc:ai-tool-prompt-audit
  */
 import fs from 'node:fs'
 import path from 'node:path'
@@ -1511,7 +1511,7 @@ const buildDocument = (): string => {
   const lines: string[] = []
   lines.push('# Skill / Tool 契约审计')
   lines.push('')
-  lines.push(`> \`pnpm dlx tsx scripts/doc/generate-ai-tool-prompt-audit.mts\` · ${new Date().toISOString()}`)
+  lines.push(`> \`pnpm doc:ai-tool-prompt-audit\` · ${new Date().toISOString()}`)
   lines.push('')
 
   for (const skillId of RUNTIME_SKILL_IDS) {

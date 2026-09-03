@@ -133,7 +133,7 @@ flowchart LR
 | KB                    | 混合召回检索工作区已索引文档                                                                                                                                    |
 | Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                            |
 
-各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准；工具契约见 `tool-design.md`，活例子见 `doc/ai-tool-prompt-audit.md`。
+各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准；工具契约见 `tool-design.md`，活例子按需生成（`pnpm doc:ai-tool-prompt-audit`，不入库）。
 
 ## 存储与索引
 

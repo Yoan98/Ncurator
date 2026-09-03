@@ -27,7 +27,7 @@
 - `doc/prd/workbench.md`：涉及 Workbench 产品需求、发送前置条件、消息流/过程层交互或 composer 偏好验收标准时阅读。
 - `doc/prd/scheduled-task.md`：涉及定时任务入口、配置、启用开关或到点触发验收标准时阅读。
 - `doc/prd/settings.md`：涉及 Settings 产品需求、工作区目录绑定提示、具名工作空间资料/索引交互或验收标准时阅读。
-- `doc/ai-tool-prompt-audit.md`：Skill / Tool 契约活例子（`pnpm doc:ai-tool-prompt-audit` / `scripts/doc/generate-ai-tool-prompt-audit.mts` 生成）；改工具契约时对照并重生，不替代 `tool-design.md`。
+- `doc/ai-tool-prompt-audit.md`：Skill / Tool 契约活例子，**按需生成、不入库**（`pnpm doc:ai-tool-prompt-audit`）；改工具契约时本地生成对照，不替代 `tool-design.md`。
 
 ## 2. 项目目录结构
 
@@ -51,7 +51,6 @@
 │   │   ├── ai-test.md                # AI 回归测试计划
 │   │   ├── settings-test.md          # Settings 测试计划
 │   │   └── workbench-test.md         # Workbench 测试计划
-│   ├── ai-tool-prompt-audit.md       # 工具契约生成快照（活例子）
 │   └── tidy.md                       # 周期性文档、测试与代码整理流程
 ├── src/                              # 应用源码
 │   ├── main/                         # Electron Main 进程

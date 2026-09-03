@@ -19,4 +19,7 @@ resources/native
 release-stage
 design/
 
+# 按需生成，不入库（`pnpm doc:ai-tool-prompt-audit`）
+doc/ai-tool-prompt-audit.md
+
 .venv

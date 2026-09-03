@@ -2,7 +2,7 @@
 
 工具契约与结果投递设计约束。涉及 `src/main/services/ai/human/tools/**` 的 schema、modelResult、投递逻辑时必读。
 
-活例子见 `doc/ai-tool-prompt-audit.md`（自动生成）；human 消息上下文见 `human-harness.md`；测试约束见 `doc/test-plan/ai-test.md`。
+活例子按需生成（`pnpm doc:ai-tool-prompt-audit`，输出 `doc/ai-tool-prompt-audit.md`，不入库）；human 消息上下文见 `human-harness.md`；测试约束见 `doc/test-plan/ai-test.md`。
 
 ---
 
@@ -173,7 +173,7 @@ hand 收到 call batch
 | 文档 / 测试 | 职责 |
 |-------------|------|
 | 本文 | 设计原则与管道约束 |
-| `doc/ai-tool-prompt-audit.md` | 各工具 input/output/渲染活例子 |
+| `doc/ai-tool-prompt-audit.md` | 各工具 input/output/渲染活例子（按需生成，不入库） |
 | `doc/test-plan/ai-test.md` | tool / human 回归范围与 Oracle |
 | `tests/case/unit/ai/*-tool-contract.test.ts` | 按 family 轻量契约（schema + renderSuccess 存在性） |
 | `tests/case/ai/tool/**` | 领域工具行为与 terminal 契约 |
