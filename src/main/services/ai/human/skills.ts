@@ -53,49 +53,49 @@ export const RUNTIME_SKILL_CATALOG = {
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-read',
-    description: '读取 .docx、.doc 的结构、节点、检索结果和视觉内容。'
+    description: '读取 .docx、.doc 文件的内容。'
   },
   'docx-write': {
     familyId: 'docx',
     source: 'external',
     countsTowardToolBudget: true,
     title: 'docx-write',
-    description: '创建或编辑 DOCX 的正文、样式、表格、媒体、批注和修订。'
+    description: '创建或编辑 DOCX 文件。'
   },
   'pdf-read': {
     familyId: 'pdf',
     source: 'external',
     countsTowardToolBudget: true,
     title: 'pdf-read',
-    description: '读取 PDF 文档信息、页级文本、检索结果和页面视觉内容。'
+    description: '读取 PDF 文件内容。'
   },
   'ppt-read': {
     familyId: 'ppt',
     source: 'external',
     countsTowardToolBudget: true,
     title: 'ppt-read',
-    description: '读取 PPTX 的页面提纲、内容、检索结果和页面视觉内容。'
+    description: '读取 PPTX 文件内容。'
   },
   'ppt-write': {
     familyId: 'ppt',
     source: 'external',
     countsTowardToolBudget: true,
     title: 'ppt-write',
-    description: '创建或编辑 PPTX 的页面、元素、文字和备注。'
+    description: '创建或编辑 PPTX 文件。'
   },
   'excel-read': {
     familyId: 'excel',
     source: 'external',
     countsTowardToolBudget: true,
     title: 'excel-read',
-    description: '读取 Excel 工作簿地图、单元格范围的值与公式、样式，以及按格子搜索。'
+    description: '读取 Excel 文件内容。'
   },
   'excel-write': {
     familyId: 'excel',
     source: 'external',
     countsTowardToolBudget: true,
     title: 'excel-write',
-    description: '创建或编辑 Excel 工作簿中的工作表、单元格、公式、格式和结构。'
+    description: '创建或编辑 Excel 文件。'
   },
   'image-generation': {
     familyId: 'image-generation',
