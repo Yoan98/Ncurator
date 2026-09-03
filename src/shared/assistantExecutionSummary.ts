@@ -290,30 +290,33 @@ export const getAssistantToolSummaryText = (
 const getExecutionStatus = (groups: readonly AssistantExecutionGroup[]): AssistantExecutionStatus =>
   getAssistantMixedStatus(groups.map((group) => group.status))
 
-const getItemSegments = (
-  item: AssistantExecutionGroup['items'][number],
-  fallbackStatus: AssistantExecutionStatus
+const buildCountOnlySummary = (
+  status: AssistantExecutionStatus,
+  totalCount: number
 ): AssistantExecutionTextSegment[] => {
-  const status = item.status || fallbackStatus
-  if (status === 'completed' && item.completedText) return [...item.completedText]
-  if (status === 'failed' && item.failedText) return [...item.failedText]
-  if (status === 'partial_failed' && item.partialFailedText) return [...item.partialFailedText]
-  if (status === 'running' && item.runningText) return [...item.runningText]
-  if (item.completedText) return [...item.completedText]
-  if (item.runningText) return [...item.runningText]
-  const kind = item.toolName ? getAssistantToolUiKind(item.toolName) : 'generic'
-  return getAssistantToolSummaryText(kind, status)
+  if (status === 'running') return sentence(text(`正在执行 ${totalCount} 项操作`))
+  if (status === 'completed') return sentence(text(`已完成 ${totalCount} 项操作`))
+  if (status === 'partial_failed') {
+    return sentence(text(`${totalCount} 项操作中有部分失败`))
+  }
+  return sentence(text(`${totalCount} 项操作执行失败`))
 }
 
 /**
- * Activity header: 1 item = body text; 2–3 items joined with 并/但; >3 = count only.
+ * Activity header: short skill summary only (no tool args).
+ * Same skill → skill status text with count; mixed skills → count-only.
+ * Expanded body rows still carry the full action + object sentences.
  */
 export const buildAssistantExecutionSummaryText = (
   groups: readonly AssistantExecutionGroup[]
 ): AssistantExecutionTextSegment[] => {
   const status = getExecutionStatus(groups)
   const list = groups.flatMap((group) =>
-    group.items.map((item) => ({ ...item, status: item.status || group.status }))
+    group.items.map((item) => ({
+      ...item,
+      status: item.status || group.status,
+      skillKey: item.toolName ? getAssistantToolUiKind(item.toolName) : group.skillKey
+    }))
   )
   if (list.length === 0) {
     return statusText(status, {
@@ -324,22 +327,13 @@ export const buildAssistantExecutionSummaryText = (
     })
   }
 
-  if (list.length > 3) {
-    const totalCount = list.length
-    if (status === 'running') return sentence(text(`正在执行 ${totalCount} 项操作`))
-    if (status === 'completed') return sentence(text(`已完成 ${totalCount} 项操作`))
-    if (status === 'partial_failed') {
-      return sentence(text(`${totalCount} 项操作中有部分失败`))
-    }
-    return sentence(text(`${totalCount} 项操作执行失败`))
+  const skillKeys = new Set(list.map((item) => item.skillKey))
+  if (skillKeys.size !== 1) {
+    return buildCountOnlySummary(status, list.length)
   }
 
-  return list.flatMap((item, index) => {
-    const itemStatus = item.status || status
-    const prefix =
-      index === 0 ? '' : itemStatus === 'failed' || itemStatus === 'partial_failed' ? '但' : '并'
-    return sentence(text(prefix), ...getItemSegments(item, status))
-  })
+  const skillKey = [...skillKeys][0] || 'generic'
+  return getAssistantToolSummaryText(skillKey, status, list.length)
 }
 
 export const resolveAssistantExecutionIcon = (

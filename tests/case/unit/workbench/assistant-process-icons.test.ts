@@ -58,7 +58,14 @@ describe('assistant process icons and activity summary', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('learn_skill'))).toBe('learning')
   })
 
-  it('joins up to three tool item texts with 并/但', () => {
+  it('uses short skill summary for same-skill activity headers without tool args', () => {
+    const groups = createToolGroups(['terminal_run', 'terminal_run', 'terminal_read'])
+
+    expect(resolveAssistantExecutionIcon(groups)).toBe('terminal')
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已执行终端指令')
+  })
+
+  it('summarizes mixed skills as count-only operations', () => {
     const groups = [
       ...createToolGroup('learn_skill', 1, { completedText: '已学会 docx 阅读器' }),
       ...createToolGroup('docx_read_outline', 2, {
@@ -67,24 +74,7 @@ describe('assistant process icons and activity summary', () => {
     ]
 
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe(
-      '已学会 docx 阅读器并查看 Word 文档 合同.docx 的结构'
-    )
-  })
-
-  it('uses but connector when a later item failed', () => {
-    const groups = [
-      ...createToolGroup('web_search', 1, { completedText: '搜索网页 React' }),
-      ...createToolGroup('text_file_read', 2, {
-        status: 'failed',
-        failedText: '读取文件 notes.md 失败了'
-      })
-    ]
-    groups[1] = { ...groups[1], status: 'failed' }
-
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe(
-      '搜索网页 React但读取文件 notes.md 失败了'
-    )
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已完成 2 项操作')
   })
 
   it('summarizes more than three tools as n operations without action-class suffix', () => {
@@ -97,5 +87,12 @@ describe('assistant process icons and activity summary', () => {
 
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已完成 4 项操作')
+  })
+
+  it('keeps single-tool header short even when body text has args', () => {
+    const groups = createToolGroup('terminal_run', 1, {
+      completedText: '执行命令 find /tmp -name "*.docx"'
+    })
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已执行终端指令')
   })
 })

@@ -83,9 +83,10 @@ export const getFileExtension = (fileName: string): string => {
 export const resolveRegisteredPreviewType = (
   fileName: string,
   declaredType?: string,
-  mimeType?: string
+  mimeType?: string,
+  filePath?: string
 ): string | null => {
-  const candidates = [declaredType, mimeType, getFileExtension(fileName)]
+  const candidates = [declaredType, mimeType, getFileExtension(fileName), getFileExtension(filePath || '')]
   for (const candidate of candidates) {
     const normalized = candidate?.trim().toLowerCase()
     if (normalized && TYPE_ALIASES[normalized]) return TYPE_ALIASES[normalized]
@@ -96,10 +97,11 @@ export const resolveRegisteredPreviewType = (
 export const isKnownUnsupportedBinaryType = (
   fileName: string,
   declaredType?: string,
-  mimeType?: string
+  mimeType?: string,
+  filePath?: string
 ): boolean =>
-  [declaredType, mimeType, getFileExtension(fileName)].some((candidate) =>
-    KNOWN_UNSUPPORTED_BINARY_TYPES.has(candidate?.trim().toLowerCase() || '')
+  [declaredType, mimeType, getFileExtension(fileName), getFileExtension(filePath || '')].some(
+    (candidate) => KNOWN_UNSUPPORTED_BINARY_TYPES.has(candidate?.trim().toLowerCase() || '')
   )
 
 export const isUtf8Text = (bytes: ArrayBuffer): boolean => {

@@ -524,7 +524,10 @@ export const completeAssistantProcessGroups = (
   status: AssistantProcessStatus = 'completed'
 ): AssistantProcessGroup[] =>
   groups
-    .filter((group) => group.kind !== 'finalizing' && group.kind !== 'learning')
+    .filter(
+      (group) =>
+        group.kind !== 'finalizing' && group.kind !== 'learning' && group.kind !== 'thinking'
+    )
     .map((group) => {
       if (group.status !== 'running') return group
       const nextItems = group.items.map((item) =>
@@ -555,6 +558,9 @@ export const reduceAssistantProcessThoughts = (
   )
 }
 
+const withoutThinkingGroups = (groups: AssistantProcessGroup[]): AssistantProcessGroup[] =>
+  groups.filter((group) => group.kind !== 'thinking')
+
 const upsertGroupFromDisplayEvent = (
   current: AssistantProcessGroup[],
   input: {
@@ -566,11 +572,10 @@ const upsertGroupFromDisplayEvent = (
     sourceEventType: AssistantProcessGroup['sourceEventType']
   }
 ): AssistantProcessGroup[] => {
-  const currentWithoutLocalThinking = current.filter(
-    (group) =>
-      group.kind !== 'thinking' || (input.kind !== 'retry' && group.sourceEventType !== 'thinking')
-  )
-  const existing = currentWithoutLocalThinking.find((group) => group.id === input.groupId)
+  // Thinking is a temporary wait indicator. Any non-thinking process content replaces it;
+  // a new thinking event also replaces any previous thinking group.
+  const baseGroups = withoutThinkingGroups(current)
+  const existing = baseGroups.find((group) => group.id === input.groupId)
   const next = createDisplayProcessGroup({
     groupId: input.groupId,
     kind: input.kind,
@@ -579,7 +584,7 @@ const upsertGroupFromDisplayEvent = (
     createdAt: existing?.createdAt || input.createdAt,
     sourceEventType: input.sourceEventType
   })
-  return upsertProcessGroup(currentWithoutLocalThinking, {
+  return upsertProcessGroup(baseGroups, {
     ...next,
     items: existing?.items || []
   })
@@ -621,15 +626,11 @@ const upsertProcessItem = (
     sourceEventType: AssistantProcessGroupItem['sourceEventType']
   }
 ): AssistantProcessGroup[] => {
-  const currentWithoutLocalThinking = current.filter(
-    (group) =>
-      group.kind !== 'thinking' ||
-      (input.display.kind !== 'retry' && group.sourceEventType !== 'thinking')
-  )
-  const existingGroup = currentWithoutLocalThinking.find((group) => group.id === input.groupId)
+  const currentWithoutThinking = withoutThinkingGroups(current)
+  const existingGroup = currentWithoutThinking.find((group) => group.id === input.groupId)
   const groupsWithParent = existingGroup
-    ? currentWithoutLocalThinking
-    : upsertGroupFromDisplayEvent(currentWithoutLocalThinking, {
+    ? currentWithoutThinking
+    : upsertGroupFromDisplayEvent(currentWithoutThinking, {
         groupId: input.groupId,
         kind: input.display.kind === 'tool' ? 'skill' : input.display.kind,
         display: input.display,

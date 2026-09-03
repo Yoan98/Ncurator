@@ -398,7 +398,11 @@ const reduceAssistantTurnByRunEvent = (
     event.type === 'assistant_brain_stream_delta' &&
     next.streamingRoundId === event.roundId
   ) {
-    next = { ...next, streamingMarkdown: `${next.streamingMarkdown}${event.text}` }
+    next = {
+      ...next,
+      streamingMarkdown: `${next.streamingMarkdown}${event.text}`,
+      processGroups: next.processGroups.filter((group) => group.kind !== 'thinking')
+    }
   }
 
   if (
@@ -412,22 +416,33 @@ const reduceAssistantTurnByRunEvent = (
     event.type === 'assistant_brain_stream_classified' &&
     next.streamingRoundId === event.roundId
   ) {
-    next = { ...next, streamingRole: 'thought' }
+    next = {
+      ...next,
+      streamingRole: 'thought',
+      processGroups: next.processGroups.filter((group) => group.kind !== 'thinking')
+    }
   }
 
   if (
     event.type === 'assistant_brain_stream_completed' &&
     next.streamingRoundId === event.roundId
   ) {
+    const withoutThinking = next.processGroups.filter((group) => group.kind !== 'thinking')
     next =
       event.role === 'answer'
         ? {
             ...next,
             finalAnswerMarkdown: event.text,
             streamingMarkdown: '',
-            streamingRole: 'answer'
+            streamingRole: 'answer',
+            processGroups: withoutThinking
           }
-        : { ...next, streamingMarkdown: event.text, streamingRole: 'thought' }
+        : {
+            ...next,
+            streamingMarkdown: event.text,
+            streamingRole: 'thought',
+            processGroups: withoutThinking
+          }
   }
 
   if (event.type === 'assistant_process_thought') {
@@ -2575,7 +2590,12 @@ const ChatPage: React.FC = () => {
 
       await openFile({
         path: reference.path,
-        fileName: reference.label,
+        fileName:
+          reference.path
+            .replace(/\\/g, '/')
+            .split('/')
+            .filter(Boolean)
+            .pop() || reference.label,
         origin: reference.kind === 'reference' ? 'source' : 'read'
       })
     },

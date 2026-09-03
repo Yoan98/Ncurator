@@ -360,7 +360,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   onOpenReference
 }) => {
   const [applyTargetsExpanded, setApplyTargetsExpanded] = useState(false)
-  const processGroups = useMemo(() => turn?.processGroups || [], [turn?.processGroups])
+  const rawProcessGroups = useMemo(() => turn?.processGroups || [], [turn?.processGroups])
   const processThoughts = useMemo(() => turn?.processThoughts || [], [turn?.processThoughts])
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
   const streamingMarkdown = turn?.streamingMarkdown || ''
@@ -369,6 +369,16 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     finalAnswerMarkdown || (streamingRole === 'answer' ? streamingMarkdown : '')
   const hasFinalAnswer = visibleAnswerMarkdown.trim().length > 0
   const hasStreamingThought = streamingRole === 'thought' && streamingMarkdown.trim().length > 0
+  const processGroups = useMemo(() => {
+    const hasOtherProcessContent =
+      processThoughts.length > 0 ||
+      hasFinalAnswer ||
+      hasStreamingThought ||
+      rawProcessGroups.some((group) => group.kind !== 'thinking')
+    return hasOtherProcessContent
+      ? rawProcessGroups.filter((group) => group.kind !== 'thinking')
+      : rawProcessGroups
+  }, [hasFinalAnswer, hasStreamingThought, processThoughts.length, rawProcessGroups])
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({

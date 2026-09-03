@@ -800,9 +800,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const contextUsageVisiblePercent = contextUsage
     ? Math.max(contextUsage.usedContextTokens > 0 ? 1 : 0, contextUsagePercent)
     : 0
-  const contextUsageRemainingTokens = contextUsage
-    ? Math.max(0, contextUsage.contextWindowTokens - contextUsage.usedContextTokens)
-    : 0
   const contextUsageStroke =
     contextUsagePercent >= 90 ? '#B3261E' : contextUsagePercent >= 70 ? '#B26A00' : '#787774'
   const contextUsageTitle = contextUsage
@@ -815,8 +812,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       <div>剩余 {contextUsageRemainingPercent}%</div>
       <div className="text-[#787774]">
         {contextUsage.usedContextTokens.toLocaleString()} /{' '}
-        {contextUsage.contextWindowTokens.toLocaleString()} tokens，剩余{' '}
-        {contextUsageRemainingTokens.toLocaleString()} tokens
+        {contextUsage.contextWindowTokens.toLocaleString()} tokens
       </div>
     </div>
   ) : (
@@ -1143,7 +1139,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               <div
                 className="workbench-context-ring relative inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
                 aria-label={contextUsageTitle}
-                title={contextUsageTitle}
                 data-testid={workbenchSelectors.contextRing}
               >
                 <svg className="h-4 w-4 -rotate-90" viewBox="0 0 16 16">
