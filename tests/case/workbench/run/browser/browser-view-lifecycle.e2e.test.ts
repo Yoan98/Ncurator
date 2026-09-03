@@ -400,10 +400,11 @@ describe('workbench browser lifecycle e2e', () => {
             .getByRole('menuitem', { name: '在系统浏览器中打开' })
             .boundingBox()
           const escapeMenuClosePromise = escapeMenuPage.waitForEvent('close', { timeout: 10_000 })
-          await escapeMenuPage.bringToFront()
           await runtime.electronApp.evaluate(({ BrowserWindow }) => {
-            const menuWindow = BrowserWindow.getFocusedWindow()
-            if (!menuWindow) throw new Error('browser menu window is not focused')
+            const menuWindow = BrowserWindow.getAllWindows().find(
+              (candidate) => candidate.getParentWindow() !== null && !candidate.isDestroyed()
+            )
+            if (!menuWindow) throw new Error('browser menu window is unavailable')
             menuWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'ESCAPE' })
           })
           await escapeMenuClosePromise

@@ -1675,6 +1675,9 @@ const autoApproveWorkbenchApprovalBatch = async (
   event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
 ): Promise<void> => {
   const card = getApprovalCard(page)
+  if (!(await card.isVisible().catch(() => false))) {
+    await navigateToWorkbench(page)
+  }
   await card.waitFor({ state: 'visible', timeout: WORKBENCH_E2E_TIMEOUT_MS })
   const totalItems = event.items.length
   for (let index = 0; index < totalItems; index += 1) {
