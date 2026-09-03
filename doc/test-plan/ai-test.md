@@ -462,12 +462,12 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 ##### `terminal-risk-and-boundary-guard`
 
-- 测试类型：`backend`
-- What：危险命令与普通文件写入命令都会按统一风险策略进入审批，审批拒绝后不会执行。
-- Why：terminal 风险边界必须靠回归测试长期守住，并区分“等待/拒绝审批”和“执行失败”。
-- How：在临时 workspace 中准备受保护文件，通过 deny-all 审批策略分别调用删除命令和创建目录命令。
-- Oracle：两条命令各产生一次审批要求并返回 `approval_denied` 与 `not_executed`；受保护文件仍存在、目标目录未创建，不产生 `terminal_step_error`。
-- Not：不验证 UI 提示。
+- 测试类型：`backend / mock-llm`
+- What：危险命令与普通文件写入命令都在 `hand` 按统一风险策略进入审批，审批拒绝后不会执行。
+- Why：terminal 风险边界必须靠回归测试长期守住；审批责任在 `hand` 预检，不在 `terminal_run` 内二次问审。
+- How：在临时 workspace 中准备受保护文件，通过 deny-all 审批策略经 human hand 分别发起删除命令和创建目录命令。
+- Oracle：两次 hand 各产生一次非 internal 的审批要求与 reject 决策；不产生 `terminal_step_started` / `tool_call_result(terminal_run)` / `terminal_step_error`；受保护文件仍存在、目标目录未创建。
+- Not：不验证 UI 提示；不验证 `terminal_run` 被直接调用时的行为（工具层不再独立请求审批）。
 
 ##### `terminal-inline-edit-artifact-contract`
 
@@ -475,7 +475,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：terminal 只通过真实命令前后差异生成修改记录和 artifact，不根据命令字符串猜测文件产物。
 - Why：terminal 命令需要在不依赖整次 Run 收尾扫描的前提下，记录无法静态分析的真实文件变化。
 - How：通过 terminal 修改已有文件并创建新文件，检查工具结果、文件结果、工具期修改记录和 `file_artifact` 事件。
-- Oracle：命令真实生效并经过审批；terminal 工具结果不包含 `artifacts`；命令完成后产生带当前 Run ID 的修改记录和 `file_artifact`。
+- Oracle：命令真实生效；不在 `terminal_run` 内产生审批事件；terminal 工具结果不包含 `artifacts`；命令完成后产生带当前 Run ID 的修改记录和 `file_artifact`。
 - Not：不根据命令文本推断文件路径；差异只来自命令前后工作区快照。
 
 ##### `terminal-tracking-start-failure-cleanup`
@@ -634,7 +634,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 - 测试类型：`backend`
 - What：`hand` 会对当前 `calls` 中需审批的 `terminal_run` 做批量预检，并在整批未全部同意时 0 执行。
-- Why：terminal 审批责任已经前移到 `hand` preflight，回归 case 必须长期守住“先整批审核，再决定是否执行”的主流程。
+- Why：terminal 审批责任已经前移到 `hand` preflight，回归 case 必须长期守住“先整批审核，再决定是否执行”的主流程；`terminal_run` 不再独立请求审批。
 - How：通过真实 `human` hand 决策构造两个需审批 terminal 命令，并让审批批次返回 `approve + guide` 混合结果。
 - Oracle：事件流出现 `approval_batch_required / approval_batch_decision`；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；被拦的 terminal 调用会以合成 `ToolMessage` 结果（`approval_blocked`）回流到 `brain`。
 - Not：不验证前端审批卡片交互。

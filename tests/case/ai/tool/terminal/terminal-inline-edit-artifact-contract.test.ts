@@ -69,7 +69,7 @@ describe('ai tool terminal backend', () => {
         runtime.assertThat(
           !result.updateExisting.reason &&
             !result.createNew.reason &&
-            result.approvalEvents.length === 2 &&
+            result.approvalEvents.length === 0 &&
             result.notesContent === 'after\n' &&
             result.createdExists &&
             !Object.hasOwn(result.updateExisting, 'artifacts') &&
@@ -110,7 +110,6 @@ describe('ai tool terminal backend', () => {
           checkCancelled: baseCtx.checkCancelled,
           humanRuntimeOverrides: baseCtx.humanRuntimeOverrides,
           sendEvent: (event: AiRunEvent) => events.push(event),
-          requestApprovalBatch: baseCtx.requestApprovalBatch,
           saveFileChangeRecord: baseCtx.saveFileChangeRecord,
           beginTerminalCommandTracking: async ({ commandId }) => {
             begunTrackingIds.push(commandId)

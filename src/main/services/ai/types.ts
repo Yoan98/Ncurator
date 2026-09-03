@@ -324,7 +324,6 @@ export type TerminalToolContext = Pick<
   | 'platform'
   | 'checkCancelled'
   | 'sendEvent'
-  | 'requestApprovalBatch'
   | 'humanRuntimeOverrides'
   | 'saveFileChangeRecord'
   | 'beginTerminalCommandTracking'

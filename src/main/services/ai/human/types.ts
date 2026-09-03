@@ -88,7 +88,6 @@ export type HumanRuntimeCache = {
   pdfRuntime?: PdfToolRuntime
   pptRuntime?: PptToolRuntime
   excelRuntime?: ExcelToolRuntime
-  approvedTerminalCommandCounts?: Map<string, number>
   approvedBrowserUseTaskIds?: Set<string>
   toolCallCount: number
   messages?: BaseMessage[]

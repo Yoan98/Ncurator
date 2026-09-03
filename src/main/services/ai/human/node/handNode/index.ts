@@ -100,33 +100,6 @@ const collectApprovalBatchItems = (input: {
   })
 }
 
-const buildApprovedTerminalCommandKey = (command: string): string => String(command || '').trim()
-
-const markApprovedTerminalCommands = (input: {
-  cache: HumanRuntimeCache
-  decisions: Array<{
-    itemId: string
-    action: 'approve' | 'reject' | 'guide'
-  }>
-  approvalItems: Array<{
-    itemId: string
-    command: string
-  }>
-}): void => {
-  const approvedCommands = input.decisions
-    .filter((decision) => decision.action === 'approve')
-    .map((decision) => input.approvalItems.find((item) => item.itemId === decision.itemId)?.command)
-    .filter((command): command is string => Boolean(command))
-
-  if (approvedCommands.length === 0) return
-  const approvedCounts = input.cache.approvedTerminalCommandCounts || new Map<string, number>()
-  approvedCommands.forEach((command) => {
-    const key = buildApprovedTerminalCommandKey(command)
-    approvedCounts.set(key, (approvedCounts.get(key) || 0) + 1)
-  })
-  input.cache.approvedTerminalCommandCounts = approvedCounts
-}
-
 const markApprovedBrowserUseTask = (input: {
   cache: HumanRuntimeCache
   taskId: string
@@ -350,11 +323,6 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         input.cache.toolCallCount += calls.length
         return returnToDispatch(state)
       }
-      markApprovedTerminalCommands({
-        cache: input.cache,
-        decisions: approvalBatchResult.decisions,
-        approvalItems
-      })
       markApprovedBrowserUseTask({
         cache: input.cache,
         taskId: state.task.taskId,

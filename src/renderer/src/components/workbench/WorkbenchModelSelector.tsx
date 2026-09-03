@@ -18,7 +18,7 @@ import {
   HiCpuChip,
   HiMagnifyingGlass
 } from 'react-icons/hi2'
-import { RiCoinLine } from 'react-icons/ri'
+import { FaSackDollar } from 'react-icons/fa6'
 import type {
   LLMConfig,
   LlmRemoteModel,
@@ -72,6 +72,7 @@ type PresetInspector = {
   provider: LlmPresetProvider
   model: LlmPresetModel
   available: boolean
+  top: number
 }
 
 type MenuPosition = {
@@ -86,6 +87,9 @@ const PRESET_MENU_MIN_WIDTH = 200
 const PRESET_MENU_MAX_WIDTH = 300
 const CUSTOM_MENU_MIN_WIDTH = 280
 const CUSTOM_MENU_MAX_WIDTH = 360
+const INSPECTOR_WIDTH = 200
+const INSPECTOR_GAP = 1
+const VIEWPORT_PADDING = 12
 const DEFAULT_POSITION: MenuPosition = {
   left: 0,
   width: PRESET_MENU_MIN_WIDTH,
@@ -123,15 +127,11 @@ const PriceTierCoins: React.FC<{ tier: LlmPriceTier }> = ({ tier }) => {
   const count = PRICE_TIER_COIN_COUNT[tier]
   return (
     <span
-      className="relative inline-flex h-[18px] w-[14px] shrink-0 items-end justify-center"
+      className="inline-flex shrink-0 items-center gap-0.5"
       aria-label={`价格档位 ${PRICE_TIER_LABELS[tier]}`}
     >
       {Array.from({ length: count }, (_, index) => (
-        <RiCoinLine
-          key={index}
-          className="absolute h-[11px] w-[11px] text-[#B0AFA9]"
-          style={{ bottom: index * 4 }}
-        />
+        <FaSackDollar key={index} className="h-3 w-3 text-[#9B9A97]" />
       ))}
     </span>
   )
@@ -201,15 +201,16 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   }, [open, updatePosition, view])
 
   useLayoutEffect(() => {
-    if (!open || !menuRef.current) return
-    const measured = Math.ceil(menuRef.current.scrollWidth)
+    if (!open || !menuRef.current || !triggerRef.current) return
+    const menu = menuRef.current
+    const previousWidth = menu.style.width
+    menu.style.width = 'max-content'
+    const measured = Math.ceil(menu.getBoundingClientRect().width)
+    menu.style.width = previousWidth
     const minWidth = view === 'custom' ? CUSTOM_MENU_MIN_WIDTH : PRESET_MENU_MIN_WIDTH
     const maxWidth = view === 'custom' ? CUSTOM_MENU_MAX_WIDTH : PRESET_MENU_MAX_WIDTH
     const nextWidth = Math.min(Math.max(measured, minWidth), maxWidth)
-    if (Math.abs(nextWidth - position.width) < 1) return
-    const trigger = triggerRef.current
-    if (!trigger) return
-    const rect = trigger.getBoundingClientRect()
+    const rect = triggerRef.current.getBoundingClientRect()
     const placement = resolveFloatingPlacement({
       triggerRect: rect,
       viewportWidth: window.innerWidth,
@@ -222,14 +223,33 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       align: 'end',
       topInset: WORKBENCH_TITLEBAR_HEIGHT + 12
     })
+    let nextLeft = placement.left
+    // Keep the inspector fixed to the menu's right. If the pair would overflow,
+    // shift the menu left so both stay in viewport.
+    if (view === 'preset' && inspectedPreset) {
+      const pairWidth = nextWidth + INSPECTOR_GAP + INSPECTOR_WIDTH
+      const maxLeft = Math.max(
+        VIEWPORT_PADDING,
+        window.innerWidth - VIEWPORT_PADDING - pairWidth
+      )
+      nextLeft = Math.min(nextLeft, maxLeft)
+    }
+    if (
+      Math.abs(nextWidth - position.width) < 1 &&
+      Math.abs(nextLeft - position.left) < 1 &&
+      placement.top === position.top &&
+      placement.bottom === position.bottom
+    ) {
+      return
+    }
     setPosition({
-      left: placement.left,
+      left: nextLeft,
       top: placement.top,
       bottom: placement.bottom,
-      width: placement.width,
+      width: nextWidth,
       maxHeight: placement.maxHeight
     })
-  }, [open, view, position.width, inspectedPreset, query, configs, modelListsByConfigId])
+  }, [open, view, position, inspectedPreset, query, configs, modelListsByConfigId])
 
   useEffect(() => {
     if (!open) return
@@ -342,8 +362,22 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           if (!available) return
           selectModel(matchedConfig.id, model.id)
         }}
-        onMouseEnter={() => setInspectedPreset({ provider, model, available })}
-        onFocus={() => setInspectedPreset({ provider, model, available })}
+        onMouseEnter={(event) =>
+          setInspectedPreset({
+            provider,
+            model,
+            available,
+            top: event.currentTarget.getBoundingClientRect().top
+          })
+        }
+        onFocus={(event) =>
+          setInspectedPreset({
+            provider,
+            model,
+            available,
+            top: event.currentTarget.getBoundingClientRect().top
+          })
+        }
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
           {getProviderLogo(provider.providerId)}
@@ -499,15 +533,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     </>
   )
 
-  const inspectorWidth = 260
-  const inspectorGap = 8
-  const inspectorLeft =
-    window.innerWidth - (position.left + position.width) >= inspectorWidth + inspectorGap + 8
-      ? position.left + position.width + inspectorGap
-      : Math.max(8, position.left - inspectorWidth - inspectorGap)
-  const inspectorTop =
-    position.top ??
-    Math.max(8, window.innerHeight - (position.bottom || 0) - Math.min(position.maxHeight, 320))
+  const inspectorTop = inspectedPreset?.top ?? 0
+  const inspectorLeft = position.left + position.width + INSPECTOR_GAP
 
   const renderInspector = (): React.ReactNode => {
     if (view !== 'preset' || !inspectedPreset) return null
@@ -515,31 +542,30 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     return (
       <div
         ref={inspectorRef}
-        className="rounded-[12px] border border-[#E5E4E0] bg-white p-4 shadow-[0_14px_36px_rgba(15,15,15,0.13)]"
+        className="rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3 shadow-[0_14px_36px_rgba(15,15,15,0.13)]"
         style={{
           position: 'fixed',
           top: inspectorTop,
           left: inspectorLeft,
-          width: inspectorWidth,
+          width: INSPECTOR_WIDTH,
           zIndex: 1001
         }}
       >
-        <div className="text-[15px] font-semibold text-[#252521]">{inspectedPreset.model.label}</div>
+        <div className="text-[14px] font-semibold text-[#252521]">{inspectedPreset.model.label}</div>
         {inspectedPreset.available ? (
           <>
-            <p className="mt-2 text-[13px] leading-5 text-[#5F5E5A]">
+            <p className="mt-1.5 text-[12px] leading-[18px] text-[#5F5E5A]">
               {inspectedPreset.model.description}
             </p>
-            <div className="mt-3 border-t border-[#EEEEEC] pt-3 text-[12px]">
-              <div className="flex items-start justify-between gap-4 py-1">
-                <span className="text-[#9B9A97]">价格档位</span>
-                <span className="inline-flex items-center gap-1.5 font-medium text-[#37352F]">
-                  <PriceTierCoins tier={inspectedPreset.model.priceTier} />
+            <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px]">
+              <div className="flex items-center justify-between gap-3 py-0.5">
+                <span className="shrink-0 text-[#9B9A97]">价格档位</span>
+                <span className="font-medium text-[#37352F]">
                   {PRICE_TIER_LABELS[inspectedPreset.model.priceTier]}
                 </span>
               </div>
-              <div className="flex items-start justify-between gap-4 py-1">
-                <span className="text-[#9B9A97]">视觉理解</span>
+              <div className="flex items-center justify-between gap-3 py-0.5">
+                <span className="shrink-0 text-[#9B9A97]">视觉理解</span>
                 <span className="font-medium text-[#37352F]">
                   {supportsVision ? '支持' : '不支持'}
                 </span>
@@ -547,9 +573,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             </div>
           </>
         ) : (
-          <div className="mt-3 border-t border-[#EEEEEC] pt-3 text-[12px] leading-5 text-[#5F5E5A]">
+          <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px] leading-[18px] text-[#5F5E5A]">
             <div>该模型不存在</div>
-            <div className="mt-2 break-all text-[#9B9A97]">
+            <div className="mt-1.5 break-all text-[#9B9A97]">
               模型名：{inspectedPreset.model.id}
             </div>
           </div>
@@ -621,11 +647,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
                   top: position.top,
                   bottom: position.bottom,
                   left: position.left,
-                  width: view === 'preset' ? 'max-content' : position.width,
-                  minWidth:
-                    view === 'custom' ? CUSTOM_MENU_MIN_WIDTH : PRESET_MENU_MIN_WIDTH,
-                  maxWidth:
-                    view === 'custom' ? CUSTOM_MENU_MAX_WIDTH : PRESET_MENU_MAX_WIDTH,
+                  width: position.width,
                   maxHeight: position.maxHeight,
                   display: 'flex',
                   flexDirection: 'column',

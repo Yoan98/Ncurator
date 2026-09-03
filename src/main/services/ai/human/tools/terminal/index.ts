@@ -20,7 +20,6 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
         checkCancelled: ctx.checkCancelled,
         humanRuntimeOverrides: ctx.humanRuntimeOverrides,
         sendEvent: ctx.sendEvent,
-        requestApprovalBatch: ctx.requestApprovalBatch,
         saveFileChangeRecord: ctx.saveFileChangeRecord,
         beginTerminalCommandTracking: ctx.beginTerminalCommandTracking,
         finishTerminalCommandTracking: ctx.finishTerminalCommandTracking,
