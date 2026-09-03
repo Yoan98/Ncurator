@@ -136,7 +136,7 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 |------|----------|
 | `learn_skill` | loaded / duplicate / unknown / evicted 摘要 |
 | `update_plan` | 计划项列表 `[status] title` |
-| `read_image` | 路径列表 + 尺寸；`images[]` 进 log 供多模态（human-harness §3.5） |
+| `read_image` | 路径列表 + 尺寸；`images[]` 进 log 供多模态（human-harness 第 3.5 节） |
 
 ### 6.2 写工具输出
 
