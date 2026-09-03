@@ -4,7 +4,7 @@ import type {
   IpcJsonObject
 } from '../../../../shared/types'
 import { normalizeThoughtText } from '../../../../shared/thoughtText'
-import { createDisplayProcessGroup, createDisplayProcessItem } from './utils'
+import { createDisplayProcessGroup, createDisplayProcessItem, shouldShowAssistantThinkingWait } from './utils'
 import type {
   AssistantProcessGroup,
   AssistantProcessStatus,
@@ -97,12 +97,35 @@ export const projectProcessGroups = (input: {
     }
   }
 
+  const projectedGroups = orderedGroupIds
+    .map((id) => groupById.get(id))
+    .filter((group): group is AssistantProcessGroup => Boolean(group))
+  const processThoughts = thoughts.sort((left, right) => left.createdAt - right.createdAt)
+
+  // Annotation window still open: restore UI wait only when the segment rule allows it.
+  if (
+    thinkingOpen &&
+    shouldShowAssistantThinkingWait({
+      processGroups: projectedGroups,
+      processThoughts
+    })
+  ) {
+    upsertGroup(
+      createDisplayProcessGroup({
+        groupId: `${input.runId}:thinking`,
+        kind: 'thinking',
+        display: { kind: 'thinking' },
+        status: 'running',
+        createdAt: stamp(),
+        sourceEventType: 'thinking'
+      })
+    )
+  }
+
   const processGroups = orderedGroupIds
     .map((id) => groupById.get(id))
     .filter((group): group is AssistantProcessGroup => Boolean(group))
     .sort((left, right) => left.createdAt - right.createdAt)
-
-  const processThoughts = thoughts.sort((left, right) => left.createdAt - right.createdAt)
 
   return { processGroups, processThoughts }
 }

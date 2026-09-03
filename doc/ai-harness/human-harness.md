@@ -30,17 +30,20 @@ flowchart TD
 
 ### 1.2 节点职责
 
+原则：**谁产出事实，谁写对应 log**（详见第 2.2 节「写入分工」）。
+
 | 节点 | 调模型 | 写 log | 改 runtime cache |
 |------|--------|--------|------------------|
 | `context_budget` | 否 | 首次进 brain 时写 `user` | 判定 compaction；不拼消息 |
 | `context_compaction` | 是（压缩模型） | `compaction_checkpoint` | **整段替换** messages（第 5 节） |
-| `brain` | 是（主模型） | `thinking_*` + `assistant`；交付经 `finalizeDelivery` | append assistant；**不** refresh build user |
+| `brain` | 是（主模型） | `thinking_*`；**仅当有 `toolCalls`（或截断 / 内容安全）时写 `assistant`** | 有 tool 时 append assistant；**不** refresh build user |
 | `dispatch` | 否 | 否 | 消费 `tool_calls` 队列，路由下一 stage |
 | `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`** | 加载 skill 工具；**不**改 build user |
 | `plan` | 否 | `tool` + `plan_updated` | 更新 state.plan；**不**改 build user |
 | `hand` | 否 | `tool`（+ 可选 `images[]`） | append ToolMessage；`read_image` 后 append 多模态 HumanMessage |
 
-交付收尾由 brain 内的 `finalizeDelivery` 完成（**不是**独立图节点）：写 `finalizing_started` + 交付 `assistant`，并处理 docx/ppt 落盘 side effect。
+交付收尾由 brain 内的 `finalizeDelivery` 完成（**不是**独立图节点）：docx/ppt 落盘 side effect → `finalizing_started` → **写交付 `assistant`（`toolCalls: []`）** → completed。  
+无 `tool_calls` 的正常交付路径上，**brain 不向 log 写 `assistant`**（流式 Answer 只走事件 / `partial_answer`）。
 
 ### 1.3 dispatch 路由
 
@@ -104,11 +107,11 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 
 #### 四种 `kind`
 
-| `kind` | 存什么 | 典型写入时机 |
-|--------|--------|--------------|
-| `user` | 用户原文 + `context` | 本轮首次进入 brain 前（`context_budget`） |
-| `assistant` | 文本 + `toolCalls[]` | 每轮 `brain`；最终交付 |
-| `tool` | 工具反馈正文 + 可选 `images[]` | `hand` / `plan` / `learning` |
+| `kind` | 存什么 | 谁写 |
+|--------|--------|------|
+| `user` | 用户原文 + `context` | **仅** `context_budget`（首次进 brain） |
+| `assistant` | 文本 + `toolCalls[]` | **brain**（过程决策 / 截断 / 内容安全 fallback）或 **`finalizeDelivery`**（正常交付）；**同一轮交付正文不叠写** |
+| `tool` | 工具反馈正文 + 可选 `images[]` | **`hand` / `plan` / `learning`**（执行结果；不写 assistant） |
 | `annotation` | 过程与状态事件 | 见下表 |
 
 #### `annotation` 事件
@@ -147,7 +150,7 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 }
 ```
 
-**`assistant`** — 过程 Thought 或最终交付；带工具决策时 `toolCalls` 非空。
+**`assistant`（过程）** — brain 在有 `toolCalls` 时写入；`toolCalls` 非空。
 
 ```json
 {
@@ -160,6 +163,16 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
       "args": { "skillIds": ["docx-read"] }
     }
   ]
+}
+```
+
+**`assistant`（交付）** — 仅 `finalizeDelivery`（或内容安全 fallback）写入；`toolCalls` 为空数组。
+
+```json
+{
+  "kind": "assistant",
+  "content": "# 本周周报\n\n已按模板填好本周内容。",
+  "toolCalls": []
 }
 ```
 
@@ -220,31 +233,36 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 }
 ```
 
-#### 写入闭环
+#### 写入分工与闭环
 
-| 节点 | 写入 `kind` / `eventType` | 说明 |
-|------|---------------------------|------|
-| `context_budget` | `user` | 本轮首次确定进入 brain 时写一条；若首轮先 compaction，则在 compaction 返回后再写 |
-| `brain` | `thinking_started` → `assistant` → `thinking_completed` | 每轮 brain 一次；`finish_reason=length` 时先写半截 `assistant` 再失败 |
-| `brain`（交付） | `assistant`（`toolCalls: []`） | 经 `finalizeDelivery` 写最终交付正文 |
-| `brain`（内容安全） | `assistant` | fallback 交付正文 |
-| `dispatch` → `learning` | `learning_started` → `tool`（`learn_skill`）→ `learning_completed` → **`skill_state_updated`** | 学习成功写完整 `learnedSkillIds` 快照；重复学习 / 失败只写 `tool` |
-| `dispatch` → `plan` | `tool`（`update_plan`）+ `plan_updated` | 参数合法时同批写 tool 反馈与计划快照 |
-| `dispatch` → `hand` | `tool` | 每个 tool call 一条；审批拒绝时写失败 `tool` |
-| `context_compaction` | `compaction_checkpoint` | 压缩模型产出摘要后落库 |
-| `finalizeDelivery` | `finalizing_started` → `assistant` | 交付前清空 plan 投影；写最终 assistant |
+按「谁产出事实，谁写」落库；**禁止**为对称在多个节点重复写同一语义正文（尤其正常交付不得 brain + `finalizeDelivery` 各写一条空 `toolCalls` 的 `assistant`，否则续跑会出现连续重复 AI）。
+
+| 节点 / 步骤 | 写入 `kind` / `eventType` | 说明 |
+|-------------|---------------------------|------|
+| `context_budget` | `user` | 本轮首次进 brain 时写；brain **不**写 `user`。若首轮先 compaction，则 compaction 返回后再写 |
+| `brain`（有 tool_calls） | `thinking_started` → `assistant`（含 `toolCalls`）→ `thinking_completed` | 固化主模型过程决策；须在 hand/plan/learning **之前**落库 |
+| `brain`（正常交付） | `thinking_started` → `thinking_completed` | **不**写 log `assistant`；Answer 草稿仅事件 / `partial_answer` |
+| `brain`（截断） | 半截 `assistant` | `finish_reason=length`：先写再失败，可 resume |
+| `brain`（内容安全） | `assistant`（`toolCalls: []`） | fallback 交付；走 `completeDelivery`，**不**再经 `finalizeDelivery` 叠写 |
+| `dispatch` → `learning` | `learning_started` → `tool`（`learn_skill`）→ `learning_completed` → **`skill_state_updated`** | 成功写完整 `learnedSkillIds`；重复学习 / 失败只写 `tool` |
+| `dispatch` → `plan` | `tool`（`update_plan`）+ `plan_updated` | 参数合法时同批写；**不**写 assistant |
+| `dispatch` → `hand` | `tool`（+ 可选 `images[]`） | 每个 call 一条；审批拒绝写失败 `tool`；**不**写 assistant |
+| `context_compaction` | `compaction_checkpoint` | 压缩摘要落库 |
+| `finalizeDelivery` | `finalizing_started` → `assistant`（`toolCalls: []`） | 正常交付正文的**唯一** writer（落盘与 ref 注入之后）；清空 plan 投影 |
 
 ```text
 用户发送
   → context_budget ──→ user（首次进 brain）
-  → brain ──→ thinking_* + assistant
-  → dispatch → learning / plan / hand ──→ tool + annotation
-  → context_budget → brain（循环）
-  → finalizeDelivery ──→ finalizing_started + assistant（交付）
-  → context_compaction ──→ compaction_checkpoint（预算触发时）
+  → brain
+       ├─ 有 tool_calls ──→ thinking_* + assistant(toolCalls)
+       │     → dispatch → learning / plan / hand ──→ tool + annotation
+       │     → context_budget → brain（循环）
+       └─ 无 tool_calls ──→ thinking_*（不写 assistant）
+             → finalizeDelivery ──→ finalizing_started + assistant（交付）
+  → context_compaction ──→ compaction_checkpoint（预算触发时，插在进 brain 前）
 ```
 
-同一次 `appendMessageLog([…])` 可 batch 多条（如 `plan` 节点的 `tool` + `plan_updated`），共享连续 `seq`。
+同一次 `appendMessageLog([…])` 可 batch 多条（如 `plan` 的 `tool` + `plan_updated`），共享连续 `seq`。
 
 ### 2.3 Run 编排：`ai_run`
 
@@ -728,16 +746,18 @@ brain 返回 update_plan
 
 | 阶段 | UI 角色 | log |
 |------|---------|-----|
-| brain 流式中、尚无 tool_calls | Answer 草稿（可转 Thought） | 尚未写 assistant |
-| 收到 tool_calls 分片 | Thought | 本轮结束写 `assistant` + `toolCalls` |
-| 无 tool_calls、流正常关闭 | Answer → 交付 | `finalizeDelivery` 写交付 `assistant` |
+| brain 流式中、尚无 tool_calls | Answer 草稿（可转 Thought） | **尚未**写 `assistant` |
+| 收到 tool_calls 分片 | Thought | 本轮结束由 **brain** 写 `assistant` + `toolCalls` |
+| 无 tool_calls、流正常关闭 | Answer → 交付 | **仅** `finalizeDelivery` 写交付 `assistant`（brain 本轮不写 log `assistant`） |
 
 **判定顺序**：Provider 无 `finish_reason` 时，仍等流关闭后再按完整响应判定。  
 Main **不**强制计划全部 `done` 才允许交付。
 
+与第 2.2 节一致：过程 `assistant` 与交付 `assistant` 语义不同、writer 不同，**同一轮交付不得双写**。
+
 ### 8.2 finalizeDelivery
 
-无 tool_calls 时 brain 调用：
+无 tool_calls 时 brain 调用（交付正文的**唯一**正常 log writer）：
 
 ```text
 applyDeliverySideEffects
@@ -748,7 +768,8 @@ applyDeliverySideEffects
   → ai_run.status = completed
 ```
 
-交付正文进 log **与** `ai_run.final_answer`；Workbench 展示 artifacts / file changes。
+交付正文进 log **与** `ai_run.final_answer`；Workbench 展示 artifacts / file changes。  
+brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则续跑 `projectBrainMessagesFromLog` 会出现连续重复 AI。
 
 ### 8.3 内容安全
 

@@ -296,9 +296,6 @@ const buildSearchTurnFromProjectedMessage = (message: ChatMessage): AssistantTur
     .filter((target): target is AssistantTurnViewModel['applyTargets'][number] => Boolean(target))
 })
 
-const getRunMessageContent = (run: AiRunRecord): string =>
-  run.finalAnswer || run.partialAnswer || ''
-
 const formatRunFailureMessage = (event: Extract<AiRunEvent, { type: 'run_failed' }>): string => {
   if (event.source !== 'provider') return event.message || '运行失败，请重试。'
   const metadata = [
@@ -398,11 +395,7 @@ const reduceAssistantTurnByRunEvent = (
     event.type === 'assistant_brain_stream_delta' &&
     next.streamingRoundId === event.roundId
   ) {
-    next = {
-      ...next,
-      streamingMarkdown: `${next.streamingMarkdown}${event.text}`,
-      processGroups: next.processGroups.filter((group) => group.kind !== 'thinking')
-    }
+    next = { ...next, streamingMarkdown: `${next.streamingMarkdown}${event.text}` }
   }
 
   if (
@@ -416,33 +409,22 @@ const reduceAssistantTurnByRunEvent = (
     event.type === 'assistant_brain_stream_classified' &&
     next.streamingRoundId === event.roundId
   ) {
-    next = {
-      ...next,
-      streamingRole: 'thought',
-      processGroups: next.processGroups.filter((group) => group.kind !== 'thinking')
-    }
+    next = { ...next, streamingRole: 'thought' }
   }
 
   if (
     event.type === 'assistant_brain_stream_completed' &&
     next.streamingRoundId === event.roundId
   ) {
-    const withoutThinking = next.processGroups.filter((group) => group.kind !== 'thinking')
     next =
       event.role === 'answer'
         ? {
             ...next,
             finalAnswerMarkdown: event.text,
             streamingMarkdown: '',
-            streamingRole: 'answer',
-            processGroups: withoutThinking
+            streamingRole: 'answer'
           }
-        : {
-            ...next,
-            streamingMarkdown: event.text,
-            streamingRole: 'thought',
-            processGroups: withoutThinking
-          }
+        : { ...next, streamingMarkdown: event.text, streamingRole: 'thought' }
   }
 
   if (event.type === 'assistant_process_thought') {
@@ -513,9 +495,11 @@ const applyRunRecordToTurn = (
     runFinished:
       run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled',
     processGroups:
-      run.status === 'completed' || Boolean(getRunMessageContent(run))
+      run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled'
         ? completeAssistantProcessGroups(turn.processGroups)
-        : turn.processGroups,
+        : run.partialAnswer || run.finalAnswer
+          ? turn.processGroups.filter((group) => group.kind !== 'thinking')
+          : turn.processGroups,
     finalAnswerMarkdown:
       run.finalAnswer ||
       (run.partialAnswerRole !== 'thought' ? run.partialAnswer : '') ||

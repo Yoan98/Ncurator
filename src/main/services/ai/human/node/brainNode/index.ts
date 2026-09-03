@@ -146,6 +146,9 @@ export const createBrainNode = (input: {
       const classifyStreamAsThought = (): void => {
         if (streamClassifiedAsThought) return
         streamClassifiedAsThought = true
+        // Process-layer "让俺想想" closes as soon as brain produces visible output.
+        // Log annotation thinking_completed stays until the round finishes (thought projection).
+        completeThinking()
         input.ctx.sendEvent({
           type: 'assistant_brain_stream_classified',
           runId: input.ctx.runId,
@@ -163,6 +166,7 @@ export const createBrainNode = (input: {
         temperature: 0.1,
         contextBudgetSnapshot: state.execution.contextBudget,
         onTextDelta: (text) => {
+          completeThinking()
           input.ctx.sendEvent({
             type: 'assistant_brain_stream_delta',
             runId: input.ctx.runId,
@@ -325,33 +329,36 @@ export const createBrainNode = (input: {
         stage: 'human_brain'
       })
 
-      messages.push(assistantMessage)
-      input.cache.messages = messages
-      await input.ctx.appendMessageLog([
-        {
-          kind: 'assistant',
-          content: extractTextContent(assistantMessage.content),
-          toolCalls: [
-            ...executableCalls.map((call) => ({
-              id: call.id,
-              name: call.name,
-              args: call.args as JsonObject
-            })),
-            ...unrecoverableCalls.map((call, index) => ({
-              id: call.id || `invalid-${input.cache.toolCallCount}-0-${index}`,
-              name: call.name,
-              args: {} as JsonObject
-            })),
-            ...schemaInvalidCalls.map((call, index) => ({
-              id:
-                call.id ||
-                `invalid-${input.cache.toolCallCount}-${unrecoverableCalls.length}-${index}`,
-              name: call.name,
-              args: {} as JsonObject
-            }))
-          ]
-        }
-      ])
+      // 过程决策（含无效 tool_calls）才写 log/cache assistant；正常交付仅由 finalizeDelivery 写。
+      if (hasAnyToolCall) {
+        messages.push(assistantMessage)
+        input.cache.messages = messages
+        await input.ctx.appendMessageLog([
+          {
+            kind: 'assistant',
+            content: extractTextContent(assistantMessage.content),
+            toolCalls: [
+              ...executableCalls.map((call) => ({
+                id: call.id,
+                name: call.name,
+                args: call.args as JsonObject
+              })),
+              ...unrecoverableCalls.map((call, index) => ({
+                id: call.id || `invalid-${input.cache.toolCallCount}-0-${index}`,
+                name: call.name,
+                args: {} as JsonObject
+              })),
+              ...schemaInvalidCalls.map((call, index) => ({
+                id:
+                  call.id ||
+                  `invalid-${input.cache.toolCallCount}-${unrecoverableCalls.length}-${index}`,
+                name: call.name,
+                args: {} as JsonObject
+              }))
+            ]
+          }
+        ])
+      }
 
       const thoughtText = assembledText
       const thought = normalizeRoundThought(thoughtText)

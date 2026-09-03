@@ -240,7 +240,7 @@
 - 验收：
   - `WB-COMPOSER-003-AC1` 智能模式发送后，主区先可见用户消息与 assistant 占位消息。
   - `WB-COMPOSER-003-AC2` AI 运行成功启动后，assistant 过程流通过事件逐步追加更新，而不是一次性静态替换。
-  - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前展示“让俺想想”并带有流动视觉反馈；当后端 thinking 过程事件到达时，本地占位被替换为该 run 的 thinking 过程组，不重复展示；思考层仅在 brain 请求等待期间显示，一旦出现 tool call、决策层、流式正文/Thought、压缩或重试等其他过程内容，必须立即隐藏，不得夹在 Activity 与最终回答之间继续展示；当出现“正在重试”过程组时，必须隐藏“让俺想想”占位，避免两个等待状态同时出现。
+  - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前可展示“让俺想想”并带有流动视觉反馈；当后端 thinking 过程事件到达时，本地占位被替换为该 run 的 thinking 过程组，不重复展示。“让俺想想”只在段内尚无工具时展示：本 turn 首次（尚无 Thought / Activity），或上一段决策层 Thought 落地之后、下一组工具出现之前；一旦出现 Activity，等待态改由 Activity header 的 running 滑动表达，不再插入独立 think 行；上一段以 Activity 收尾后再请求时也不再展示“让俺想想”。过程层 brain 等待仍由 thinking process started/completed（或 failed）驱动；brain 一旦开始产出可见正文或 tool call，即发出 thinking completed。消息日志注解 `thinking_started/completed` 仍覆盖整轮 brain 调用，仅用于 Thought 投影。当出现“正在重试”过程组时，必须隐藏“让俺想想”占位，避免两个等待状态同时出现。
   - `WB-COMPOSER-003-AC4` assistant turn 中 brain 最终输出始终位于过程流下方，并按 markdown 渲染；最终回答在内容分片到达后直接流式渲染，不展示独立收尾等待层；证据引用链接与普通链接视觉区分，内部文件链接打开右侧文件预览，内部网页链接使用系统浏览器打开。
   - `WB-COMPOSER-003-AC5` 决策层（Thought）只展示面向用户的短摘要，不得展示模型原始长篇推理；决策层出现时，当前思考层必须立即隐藏，即使下一步执行正等待审批。
   - `WB-COMPOSER-003-AC6` 过程流使用用户可理解的文案，不直接暴露内部 tool 名或底层事件名；两次 Thought 之间的工具调用（含 `learn_skill`）合并为一个 Activity 面板 header，展开后按时间平铺每条工具的自然语言说明；压缩与重试过程单独成行，不并入 Activity。
@@ -340,7 +340,7 @@
 
 #### WB-COMPOSER-009 消息流布局
 
-- 系统行为：workbench 消息区不展示用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流没有独立标题或左侧竖线，且与最终 brain 输出共用消息 rail；最终 markdown 输出直接位于内容流中；用户消息使用右对齐紧凑气泡。空会话时输入区位于主工作区中部；存在消息后输入区固定在主区底部，只允许消息区独立滚动，右侧面板展开或折叠不得改变输入区定位。过程流按真实时间展示决策层与过程层：思考层是临时等待层，仅在 brain 请求等待时显示，一旦出现其他过程内容即隐藏；Activity（工具面板）、压缩层、重试层和决策层累计保留。两次 Thought 之间的全部工具调用（含 `learn_skill`）合并为一个 Activity 面板，header 只展示简短动作汇总（不带参数），默认折叠，hover 时显示展开箭头并提升文字颜色，展开后按时间平铺每条工具的自然语言说明。压缩与重试单独成行，不并入 Activity。
+- 系统行为：workbench 消息区不展示用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流没有独立标题或左侧竖线，且与最终 brain 输出共用消息 rail；最终 markdown 输出直接位于内容流中；用户消息使用右对齐紧凑气泡。空会话时输入区位于主工作区中部；存在消息后输入区固定在主区底部，只允许消息区独立滚动，右侧面板展开或折叠不得改变输入区定位。过程流按真实时间展示决策层与过程层：思考层“让俺想想”是段内临时等待层，仅在首次或上一段 Thought 之后且尚未出现工具时显示；Activity（工具面板）运行中由 header 滑动表达等待，压缩层、重试层和决策层累计保留。两次 Thought 之间的全部工具调用（含 `learn_skill`）合并为一个 Activity 面板，header 只展示简短动作汇总（不带参数），默认折叠，hover 时显示展开箭头并提升文字颜色，展开后按时间平铺每条工具的自然语言说明。压缩与重试单独成行，不并入 Activity。
 - 验收：
   - `WB-COMPOSER-009-AC1` 用户与 assistant 消息不展示头像或头像占位。
   - `WB-COMPOSER-009-AC2` assistant 过程流和最终输出左边缘与底部 composer 内容 rail 对齐。

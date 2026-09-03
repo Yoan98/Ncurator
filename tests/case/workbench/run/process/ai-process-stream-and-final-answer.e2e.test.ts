@@ -39,9 +39,7 @@ const collectProcessRenderSnapshot = async (page: Page): Promise<ProcessRenderSn
   const processRoot = getWorkbenchPrefixLocator(page, workbenchSelectors.assistantProcessPrefix).last()
   await processRoot.waitFor({ state: 'visible', timeout: 30_000 })
   const processRootText = ((await processRoot.textContent()) || '').trim()
-  const thoughtCount = await processRoot
-    .getByTestId(workbenchSelectors.assistantThoughts)
-    .count()
+  const thoughtCount = await processRoot.getByTestId(workbenchSelectors.assistantThoughts).count()
 
   const blocks = getWorkbenchPrefixLocator(page, workbenchSelectors.assistantProcessItemPrefix)
   const blockCount = await blocks.count()
@@ -73,8 +71,7 @@ const collectProcessRenderSnapshot = async (page: Page): Promise<ProcessRenderSn
           .filter(Boolean)
       : []
     const hasChevronAffordances = (await block.locator(':scope > summary svg').count()) >= 1
-    const summaryTruncates =
-      (await block.locator(':scope > summary .truncate').count()) > 0
+    const summaryTruncates = (await block.locator(':scope > summary .truncate').count()) > 0
     activityPanels.push({
       summaryText,
       itemTexts,
@@ -106,6 +103,43 @@ const listVisibleToolNames = (events: AiRunEvent[]): string[] =>
     )
   )
 
+/** Activity header: short skill/count summary only; never 并/但 body joins. */
+const isShortActivityHeader = (summaryText: string, itemCount: number): boolean => {
+  if (itemCount <= 0) return summaryText.length > 0
+  if (itemCount > 3) return /项操作/u.test(summaryText)
+  return (
+    summaryText.length > 0 &&
+    !/并|但/u.test(summaryText) &&
+    !summaryText.includes('，') &&
+    !/项操作：/u.test(summaryText)
+  )
+}
+
+const sampleThinkingWaitEarly = async (
+  page: Page,
+  processLocator: Awaited<ReturnType<typeof waitForLatestAssistantProcess>>,
+  timeoutMs = 12_000
+): Promise<{ sawThinkingWait: boolean; processTextDuringRun: string }> => {
+  const deadline = Date.now() + timeoutMs
+  let processTextDuringRun = ((await processLocator.textContent()) || '').trim()
+  let sawThinkingWait = /让俺想想/u.test(processTextDuringRun)
+  while (Date.now() < deadline && !sawThinkingWait) {
+    processTextDuringRun = ((await processLocator.textContent()) || '').trim()
+    if (/让俺想想/u.test(processTextDuringRun)) {
+      sawThinkingWait = true
+      break
+    }
+    const activityCount = await processLocator.locator('details.group\\/execution').count()
+    if (activityCount > 0) break
+    await page.waitForTimeout(120)
+  }
+  if (!sawThinkingWait) {
+    processTextDuringRun = ((await processLocator.textContent()) || '').trim()
+    sawThinkingWait = /让俺想想/u.test(processTextDuringRun)
+  }
+  return { sawThinkingWait, processTextDuringRun }
+}
+
 describe('workbench run e2e', () => {
   it(
     CASE_ID,
@@ -128,9 +162,10 @@ describe('workbench run e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(page, PROMPT)
           const processLocator = await waitForLatestAssistantProcess(page)
-          const processTextDuringRun = ((await processLocator.textContent()) || '').trim()
+          const earlySample = await sampleThinkingWaitEarly(page, processLocator)
           const retryAndThinkingCoexist =
-            /正在重试/u.test(processTextDuringRun) && /让俺想想/u.test(processTextDuringRun)
+            /正在重试/u.test(earlySample.processTextDuringRun) &&
+            /让俺想想/u.test(earlySample.processTextDuringRun)
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
@@ -143,8 +178,10 @@ describe('workbench run e2e', () => {
           const processRender = await collectProcessRenderSnapshot(page)
           const visibleToolNames = listVisibleToolNames(evidence.events)
           return {
-            processTextDuringRun,
+            sawThinkingWait: earlySample.sawThinkingWait,
+            processTextDuringRun: earlySample.processTextDuringRun,
             retryAndThinkingCoexist,
+            thinkingStuckAfterComplete: /让俺想想/u.test(processRender.processRootText),
             processRender,
             visibleToolNames,
             finalAnswerText,
@@ -158,17 +195,9 @@ describe('workbench run e2e', () => {
           const hasTools = result.visibleToolNames.length > 0
           const hasLearnSkill = result.visibleToolNames.includes('learn_skill')
           const hasDocxTool = result.visibleToolNames.some((name) => name.startsWith('docx_'))
-          const headerRulesOk = panels.every((panel) => {
-            if (panel.itemTexts.length > 3) return /项操作/u.test(panel.summaryText)
-            if (panel.itemTexts.length >= 2) {
-              return (
-                /并|但/u.test(panel.summaryText) &&
-                !panel.summaryText.includes('，') &&
-                !/项操作：/u.test(panel.summaryText)
-              )
-            }
-            return panel.itemTexts.length === 0 || panel.summaryText.length > 0
-          })
+          const headerRulesOk = panels.every((panel) =>
+            isShortActivityHeader(panel.summaryText, panel.itemTexts.length)
+          )
           const noFinalizingWait = !/让俺收尾|基本完成了/u.test(result.processRender.processRootText)
           const noColonItemLabels = allItemTexts.every((text) => !text.includes('：'))
           const activityStructureOk =
@@ -183,15 +212,22 @@ describe('workbench run e2e', () => {
           const learnSkillCopyOk =
             !hasLearnSkill ||
             allItemTexts.some((text) => /已学会|正在学习/u.test(text)) ||
-            allSummaryTexts.some((text) => /已学会|正在学习|项操作/u.test(text))
+            allSummaryTexts.some((text) => /已学会|正在学习|项操作|技能/u.test(text))
           const docxCopyOk =
             !hasDocxTool ||
             allItemTexts.some((text) => text.includes('Word 文档')) ||
             allSummaryTexts.some((text) => text.includes('Word 文档') || /项操作/u.test(text))
+          const thinkingSegmentOk =
+            !result.retryAndThinkingCoexist &&
+            !result.thinkingStuckAfterComplete &&
+            (result.sawThinkingWait ||
+              hasTools ||
+              result.processRender.thoughtCount > 0 ||
+              result.processTextDuringRun.length > 0)
 
           await runtime.assertThat(
             result.processTextDuringRun.length > 0 &&
-              !result.retryAndThinkingCoexist &&
+              thinkingSegmentOk &&
               noFinalizingWait &&
               result.eventTypes.includes('answer_completed') &&
               result.eventTypes.includes('run_completed') &&
@@ -208,7 +244,7 @@ describe('workbench run e2e', () => {
             {
               name: 'workbench-ai-process-activity-render-real',
               message:
-                '真实 AI run 应渲染 Thought/Activity 过程层（header 1/2～3/并但/>3 项操作、展开平铺、无收尾等待层），并产出围绕工作区事实的最终 markdown，对齐 WB-COMPOSER-003、WB-COMPOSER-009、WB-COMPOSER-014、WB-CORE-005、WB-CORE-006。',
+                '真实 AI run 应渲染 Thought/Activity 过程层（header 短动作汇总/>3 项操作、展开平铺、无收尾等待层、让俺想想不卡在完成后），并产出围绕工作区事实的最终 markdown，对齐 WB-COMPOSER-003、WB-COMPOSER-009、WB-COMPOSER-014、WB-CORE-005、WB-CORE-006。',
               data: result
             }
           )

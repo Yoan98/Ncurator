@@ -572,9 +572,11 @@ const upsertGroupFromDisplayEvent = (
     sourceEventType: AssistantProcessGroup['sourceEventType']
   }
 ): AssistantProcessGroup[] => {
-  // Thinking is a temporary wait indicator. Any non-thinking process content replaces it;
-  // a new thinking event also replaces any previous thinking group.
-  const baseGroups = withoutThinkingGroups(current)
+  // Thinking UI is driven by thinking started/completed process events.
+  // A new thinking started replaces any previous thinking row (incl. optimistic placeholder).
+  // Retry is a competing wait state and must replace thinking immediately.
+  const baseGroups =
+    input.kind === 'thinking' || input.kind === 'retry' ? withoutThinkingGroups(current) : current
   const existing = baseGroups.find((group) => group.id === input.groupId)
   const next = createDisplayProcessGroup({
     groupId: input.groupId,
@@ -626,11 +628,10 @@ const upsertProcessItem = (
     sourceEventType: AssistantProcessGroupItem['sourceEventType']
   }
 ): AssistantProcessGroup[] => {
-  const currentWithoutThinking = withoutThinkingGroups(current)
-  const existingGroup = currentWithoutThinking.find((group) => group.id === input.groupId)
+  const existingGroup = current.find((group) => group.id === input.groupId)
   const groupsWithParent = existingGroup
-    ? currentWithoutThinking
-    : upsertGroupFromDisplayEvent(currentWithoutThinking, {
+    ? current
+    : upsertGroupFromDisplayEvent(current, {
         groupId: input.groupId,
         kind: input.display.kind === 'tool' ? 'skill' : input.display.kind,
         display: input.display,
@@ -714,7 +715,10 @@ export const reduceAssistantProcessGroups = (
   }
 
   if (event.type === 'assistant_process_group_completed') {
-    if (event.groupId.endsWith(':thinking') || event.groupId.endsWith(':finalizing')) {
+    if (event.groupId.endsWith(':thinking') || event.display?.kind === 'thinking') {
+      return withoutThinkingGroups(current)
+    }
+    if (event.groupId.endsWith(':finalizing')) {
       return current.filter((group) => group.id !== event.groupId)
     }
     if (event.display?.kind === 'learning' || event.display?.kind === 'finalizing') return current
@@ -722,6 +726,9 @@ export const reduceAssistantProcessGroups = (
   }
 
   if (event.type === 'assistant_process_group_failed') {
+    if (event.groupId.endsWith(':thinking') || event.display?.kind === 'thinking') {
+      return withoutThinkingGroups(current)
+    }
     if (event.display?.kind === 'learning' || event.display?.kind === 'finalizing') return current
     return completeProcessGroupById(current, event.groupId, 'failed', event.display)
   }
@@ -772,6 +779,12 @@ export const shouldShowAssistantApplyTargets = (input: {
   runFinished: boolean
   applyTargetCount: number
 }): boolean => input.runFinished && input.applyTargetCount > 0
+
+export {
+  isAssistantActivityToolGroup,
+  shouldShowAssistantThinkingWait,
+  visibleAssistantProcessGroups
+} from '../../../../shared/assistantThinkingWait'
 
 export const dedupeFileRefs = (items: WorkbenchFileRef[]): WorkbenchFileRef[] => {
   const seen = new Set<string>()

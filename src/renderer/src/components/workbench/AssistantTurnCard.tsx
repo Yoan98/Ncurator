@@ -30,7 +30,9 @@ import {
   buildAssistantExecutionSummaryText,
   resolveAssistantExecutionIcon,
   resolveAssistantExecutionStatus,
-  shouldShowAssistantApplyTargets
+  shouldShowAssistantApplyTargets,
+  visibleAssistantProcessGroups,
+  isAssistantActivityToolGroup
 } from './utils'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
@@ -161,7 +163,7 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
         }`}
       >
         <span
-          className={`inline-flex min-w-0 flex-1 items-center gap-1 text-[14px] leading-7 ${getProcessStatusClassName(group.status)}`}
+          className={`inline-flex min-w-0 max-w-full items-center gap-1 text-[14px] leading-7 ${getProcessStatusClassName(group.status)}`}
         >
           {shouldShowIcon ? <LayerIcon iconKind={group.iconKind} /> : null}
           <span className={`min-w-0 truncate ${isRunning ? 'font-medium' : ''}`}>
@@ -226,8 +228,7 @@ type RawTimelineEntry =
       group: AssistantProcessGroup
     }
 
-const isActivityToolGroup = (group: AssistantProcessGroup): boolean =>
-  group.kind === 'skill' && group.sourceEventType !== 'thinking'
+const isActivityToolGroup = isAssistantActivityToolGroup
 
 const buildAssistantTimeline = (input: {
   thoughts: AssistantProcessThought[]
@@ -309,7 +310,7 @@ const AssistantActivityGroupView: React.FC<{ groups: AssistantProcessGroup[]; id
         }`}
       >
         <span
-          className={`inline-flex min-w-0 flex-1 items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
+          className={`inline-flex min-w-0 max-w-full items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
             status === 'failed' || status === 'partial_failed'
               ? 'text-[#B3261E]'
               : isRunning
@@ -318,7 +319,7 @@ const AssistantActivityGroupView: React.FC<{ groups: AssistantProcessGroup[]; id
           }`}
         >
           <LayerIcon iconKind={iconKind} />
-          <span className={`min-w-0 flex-1 truncate ${isRunning ? 'font-medium' : ''}`}>
+          <span className={`min-w-0 truncate ${isRunning ? 'font-medium' : ''}`}>
             {renderSegments(summaryText, { shimmer: isRunning })}
           </span>
           {items.length > 0 ? (
@@ -360,7 +361,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   onOpenReference
 }) => {
   const [applyTargetsExpanded, setApplyTargetsExpanded] = useState(false)
-  const rawProcessGroups = useMemo(() => turn?.processGroups || [], [turn?.processGroups])
   const processThoughts = useMemo(() => turn?.processThoughts || [], [turn?.processThoughts])
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
   const streamingMarkdown = turn?.streamingMarkdown || ''
@@ -369,16 +369,17 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     finalAnswerMarkdown || (streamingRole === 'answer' ? streamingMarkdown : '')
   const hasFinalAnswer = visibleAnswerMarkdown.trim().length > 0
   const hasStreamingThought = streamingRole === 'thought' && streamingMarkdown.trim().length > 0
-  const processGroups = useMemo(() => {
-    const hasOtherProcessContent =
-      processThoughts.length > 0 ||
-      hasFinalAnswer ||
-      hasStreamingThought ||
-      rawProcessGroups.some((group) => group.kind !== 'thinking')
-    return hasOtherProcessContent
-      ? rawProcessGroups.filter((group) => group.kind !== 'thinking')
-      : rawProcessGroups
-  }, [hasFinalAnswer, hasStreamingThought, processThoughts.length, rawProcessGroups])
+  const hasVisibleBrainOutput =
+    hasFinalAnswer || hasStreamingThought || streamingMarkdown.trim().length > 0
+  const processGroups = useMemo(
+    () =>
+      visibleAssistantProcessGroups({
+        processGroups: turn?.processGroups || [],
+        processThoughts,
+        hasVisibleBrainOutput
+      }),
+    [hasVisibleBrainOutput, processThoughts, turn?.processGroups]
+  )
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({
