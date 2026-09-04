@@ -109,43 +109,50 @@ const WorkbenchTabBar = ({
           <div className="flex h-full w-max min-w-full items-center gap-1">
             {tabs.map((tab) => {
               const active = tab.id === activeTabId
+              const tabNode = (
+                <div
+                  ref={(element) => {
+                    if (element) tabRefs.current.set(tab.id, element)
+                    else tabRefs.current.delete(tab.id)
+                  }}
+                  className={`group flex h-8 min-w-[108px] max-w-[200px] items-center gap-2 rounded-[8px] px-2.5 text-left text-[13px] transition-colors ${
+                    active
+                      ? 'bg-[#F2F2F0] font-medium text-[#37352F]'
+                      : 'text-[#787774] hover:bg-[#F7F7F5] hover:text-[#37352F]'
+                  }`}
+                  data-testid={`${workbenchSelectors.resourceTabPrefix}-${tab.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
+                  onClick={() => onActivateTab(tab.id)}
+                >
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    {getTabIcon(tab)}
+                    <span className="min-w-0 flex-1 truncate">{tab.title}</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`关闭 ${tab.title}`}
+                    className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] hover:bg-[#E6E6E3] ${
+                      active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    }`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onCloseTab(tab.id)
+                    }}
+                  >
+                    <HiXMark className="h-4 w-4" />
+                  </button>
+                </div>
+              )
+              // Browser tabs already show a truncated title; long page-title tooltips are noisy.
+              if (tab.kind === 'browser') {
+                return <div key={tab.id}>{tabNode}</div>
+              }
               return (
                 <Tooltip key={tab.id} title={tab.filePath || tab.title} mouseEnterDelay={0.5}>
-                  <div
-                    ref={(element) => {
-                      if (element) tabRefs.current.set(tab.id, element)
-                      else tabRefs.current.delete(tab.id)
-                    }}
-                    className={`group flex h-8 min-w-[108px] max-w-[200px] items-center gap-2 rounded-[8px] px-2.5 text-left text-[13px] transition-colors ${
-                      active
-                        ? 'bg-[#F2F2F0] font-medium text-[#37352F]'
-                        : 'text-[#787774] hover:bg-[#F7F7F5] hover:text-[#37352F]'
-                    }`}
-                    data-testid={`${workbenchSelectors.resourceTabPrefix}-${tab.id.replace(/[^a-zA-Z0-9_-]/g, '-')}`}
-                    onClick={() => onActivateTab(tab.id)}
-                  >
-                    <button
-                      type="button"
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                      aria-current={active ? 'page' : undefined}
-                    >
-                      {getTabIcon(tab)}
-                      <span className="min-w-0 flex-1 truncate">{tab.title}</span>
-                    </button>
-                    <button
-                      type="button"
-                      aria-label={`关闭 ${tab.title}`}
-                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[5px] hover:bg-[#E6E6E3] ${
-                        active ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                      }`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        onCloseTab(tab.id)
-                      }}
-                    >
-                      <HiXMark className="h-4 w-4" />
-                    </button>
-                  </div>
+                  {tabNode}
                 </Tooltip>
               )
             })}

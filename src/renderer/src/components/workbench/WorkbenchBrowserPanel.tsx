@@ -214,7 +214,6 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
             onFocus={(event) => event.currentTarget.select()}
             placeholder="输入 URL"
             aria-label="浏览器地址"
-            autoFocus={!state.url}
             className="h-7 w-full rounded-[7px] border border-transparent bg-[#F7F7F5] pr-8 pl-3 text-left text-[13px] text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#E0DFDC] focus:bg-white"
           />
           <Tooltip title="前往">
