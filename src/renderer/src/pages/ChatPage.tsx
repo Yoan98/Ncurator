@@ -2499,6 +2499,26 @@ const ChatPage: React.FC = () => {
     syncContentPanelWidthFromRatio()
   }, [contentPanelShellMounted, syncContentPanelWidthFromRatio])
 
+  // 窗口 live-resize：标记 body，供 CSS 关掉面板过渡、浏览器面板跳过 renderer setBounds。
+  useEffect(() => {
+    let settleTimer: number | null = null
+    const handleWindowResize = (): void => {
+      document.body.classList.add('workbench-window-resizing')
+      if (settleTimer !== null) window.clearTimeout(settleTimer)
+      settleTimer = window.setTimeout(() => {
+        document.body.classList.remove('workbench-window-resizing')
+        settleTimer = null
+        window.dispatchEvent(new CustomEvent('ncurator:workbench-window-resize-settled'))
+      }, 120)
+    }
+    window.addEventListener('resize', handleWindowResize)
+    return () => {
+      window.removeEventListener('resize', handleWindowResize)
+      if (settleTimer !== null) window.clearTimeout(settleTimer)
+      document.body.classList.remove('workbench-window-resizing')
+    }
+  }, [])
+
   // 向主进程注册右侧面板水平布局锚点：窗口 resize 时主进程同进程实时重算原生浏览器 view 的 bounds，
   // 避免 renderer→IPC→main 一拍延迟。仅在布局模型（比例/侧栏宽/挂载/折叠）变化时注册一次，缩放本身不发 IPC。
   useEffect(() => {

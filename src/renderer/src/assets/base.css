@@ -908,6 +908,12 @@ textarea,
     max-width 200ms ease-out;
 }
 
+/* 窗口 live-resize 期间关掉面板尺寸过渡，避免比例目标变化时再插值 200ms，叠加上 Chromium 出帧延迟。 */
+.workbench-window-resizing .nc-content-panel-shell,
+.workbench-window-resizing .nc-content-panel-shell-inner {
+  transition: none !important;
+}
+
 .nc-content-panel-shell[data-panel-visible='true'] {
   /* 静止态用主区比例，窗口缩放由浏览器布局直接跟手，不经 JS */
   flex-basis: calc(var(--nc-content-panel-ratio) * 100%);

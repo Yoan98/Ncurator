@@ -124,6 +124,26 @@ function getInitialWindowBounds(): { width: number; height: number; x: number; y
   }
 }
 
+function attachDarwinLiveResizeThrottle(mainWindow: BrowserWindow): void {
+  // macOS live-resize 时系统改窗口快于 Chromium 出帧，会露出底色空白。
+  // 拦截 will-resize 并限到 ~60fps 自行 setBounds，减轻 Electron 29+ 的排队丢帧（Windows 无效，不启用）。
+  let lastAppliedAt = 0
+  let applying = false
+  mainWindow.on('will-resize', (event, newBounds) => {
+    event.preventDefault()
+    if (applying || mainWindow.isDestroyed()) return
+    const now = performance.now()
+    if (now - lastAppliedAt < 1000 / 60) return
+    lastAppliedAt = now
+    applying = true
+    try {
+      mainWindow.setBounds(newBounds)
+    } finally {
+      applying = false
+    }
+  })
+}
+
 function createWindow(): BrowserWindow {
   const initialWindowBounds = getInitialWindowBounds()
 
@@ -156,6 +176,9 @@ function createWindow(): BrowserWindow {
       sandbox: false
     }
   })
+  if (process.platform === 'darwin') {
+    attachDarwinLiveResizeThrottle(mainWindow)
+  }
   let closeAfterRendererFlush = false
   mainWindow.on('close', (event) => {
     if (

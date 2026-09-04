@@ -88,6 +88,8 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
 
     const flushBounds = (): void => {
       if (activePresentationId === null) return
+      // 窗口 live-resize 期间交给 Main follow-layout，避免与系统缩放抢同一帧 IPC。
+      if (document.body.classList.contains('workbench-window-resizing')) return
       notifyBounds(tabId, activePresentationId, viewportRef.current)
     }
 
@@ -121,6 +123,10 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
       if (viewportRef.current) observer.observe(viewportRef.current)
       window.addEventListener('resize', scheduleBounds)
       window.addEventListener('scroll', scheduleBounds, true)
+      window.addEventListener(
+        'ncurator:workbench-window-resize-settled',
+        flushBounds as EventListener
+      )
     })
 
     return () => {
@@ -128,6 +134,10 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
       observer?.disconnect()
       window.removeEventListener('resize', scheduleBounds)
       window.removeEventListener('scroll', scheduleBounds, true)
+      window.removeEventListener(
+        'ncurator:workbench-window-resize-settled',
+        flushBounds as EventListener
+      )
       if (boundsFrameRef.current !== null) {
         window.cancelAnimationFrame(boundsFrameRef.current)
         boundsFrameRef.current = null
