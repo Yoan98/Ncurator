@@ -86,7 +86,7 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   iconKind,
   className
 }) => {
-  const iconClassName = `h-[18px] w-[18px] shrink-0 ${getLayerIconClassName(iconKind)} ${className || ''}`
+  const iconClassName = `h-4 w-4 shrink-0 ${getLayerIconClassName(iconKind)} ${className || ''}`
   const iconProps = { className: iconClassName, 'data-process-icon-kind': iconKind }
   if (iconKind === 'learning') return <HiOutlineAcademicCap {...iconProps} />
   if (iconKind === 'compaction') return <HiOutlineArchiveBox {...iconProps} />
@@ -178,7 +178,7 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
             {renderSegments(groupText, { shimmer: isRunning })}
           </span>
           {group.items.length > 0 ? (
-            <HiChevronDown className="h-[18px] w-[18px] shrink-0 text-[#9B9A97] transition-transform duration-200 group-open/process:rotate-180" />
+            <HiChevronDown className="h-4 w-4 shrink-0 text-[#9B9A97] transition-transform duration-200 group-open/process:rotate-180" />
           ) : null}
         </span>
       </summary>
@@ -305,12 +305,12 @@ const ApprovalReviewIcon: React.FC<{ action: AssistantApprovalReview['action'] }
   action
 }) => {
   if (action === 'approve') {
-    return <FiCheckCircle className="h-[18px] w-[18px] shrink-0 text-[#2F6F4E]" aria-hidden />
+    return <FiCheckCircle className="h-4 w-4 shrink-0 text-[#2F6F4E]" aria-hidden />
   }
   if (action === 'reject') {
-    return <RiForbidLine className="h-[18px] w-[18px] shrink-0 text-[#B3261E]" aria-hidden />
+    return <RiForbidLine className="h-4 w-4 shrink-0 text-[#B3261E]" aria-hidden />
   }
-  return <MdOutlineSmsFailed className="h-[18px] w-[18px] shrink-0 text-[#B45309]" aria-hidden />
+  return <MdOutlineSmsFailed className="h-4 w-4 shrink-0 text-[#B45309]" aria-hidden />
 }
 
 const AssistantActivityItemView: React.FC<{
@@ -334,7 +334,7 @@ const AssistantActivityItemView: React.FC<{
       className={`flex min-w-0 items-center gap-1.5 leading-[22px] ${failed ? 'text-[#B3261E]' : ''}`}
     >
       <span
-        className="inline-flex h-6 w-6 shrink-0 cursor-help items-center justify-center rounded-[5px] transition-colors duration-150 hover:bg-[#EFEFEE]"
+        className="inline-flex h-5 w-5 shrink-0 cursor-help items-center justify-center rounded-[4px] transition-colors duration-150 hover:bg-[#EFEFEE]"
         onMouseEnter={() => setRevealing(true)}
         onMouseLeave={() => setRevealing(false)}
       >
@@ -422,8 +422,8 @@ const AssistantActivityGroupView: React.FC<{
           </span>
           {items.length > 0 ? (
             <>
-              <HiChevronRight className="h-[18px] w-[18px] shrink-0 text-[#9B9A97] opacity-0 transition-all duration-200 group-hover/execution:opacity-100 group-open/execution:hidden" />
-              <HiChevronDown className="hidden h-[18px] w-[18px] shrink-0 text-[#9B9A97] transition-all duration-200 group-open/execution:block" />
+              <HiChevronRight className="h-4 w-4 shrink-0 text-[#9B9A97] opacity-0 transition-all duration-200 group-hover/execution:opacity-100 group-open/execution:hidden" />
+              <HiChevronDown className="hidden h-4 w-4 shrink-0 text-[#9B9A97] transition-all duration-200 group-open/execution:block" />
             </>
           ) : null}
         </span>
