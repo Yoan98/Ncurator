@@ -425,7 +425,7 @@ describe('ai tool excel edit backend', () => {
             data: result.noOp
           })
         runtime.assertThat(
-          result.deleteLastSheet.ok === false &&
+          result.deleteLastSheet.error &&
             String(result.deleteLastSheet.error).includes('至少保留一个工作表'),
           {
             name: 'excel-cannot-delete-last-sheet',

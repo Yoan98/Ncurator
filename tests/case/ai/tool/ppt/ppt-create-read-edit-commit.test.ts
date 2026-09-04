@@ -214,10 +214,10 @@ describe('ai tool ppt backend', () => {
             imagesOnlySlide?.elements === undefined &&
             imagesOnlySlide?.text === undefined &&
             imagesOnlyExists &&
-            result.failedDelete.ok === false &&
+            typeof result.failedDelete.error === 'string' &&
             result.overviewAfterFailedDelete.slideCount === 2 &&
             !JSON.stringify(result.overviewAfterFailedDelete).includes('不应落盘的标题') &&
-            result.missingReplace.ok === false &&
+            typeof result.missingReplace.error === 'string' &&
             String(result.missingReplace.error).includes('未找到要替换的文字') &&
             !Object.hasOwn(result.overview, 'warnings') &&
             !Object.hasOwn(result.created, 'warnings') &&

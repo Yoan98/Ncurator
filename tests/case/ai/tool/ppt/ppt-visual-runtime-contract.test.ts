@@ -196,8 +196,8 @@ describe('ai tool ppt visual backend', () => {
         )
         runtime.assertThat(
           result.insertedSlideId &&
-            result.moved.ok !== false &&
-            result.duplicated.ok !== false &&
+            !result.moved.error &&
+            !result.duplicated.error &&
             result.orderedSlideTexts[0]?.includes('第二页可以在独立调用中追加') &&
             result.orderedSlideTexts[1]?.includes('远程图片失败也继续生成') &&
             result.orderedSlideTexts[2]?.includes('季度经营复盘') &&
@@ -208,7 +208,9 @@ describe('ai tool ppt visual backend', () => {
             data: result.orderedSlideTexts
           }
         )
-        runtime.assertThat(result.invalid.ok === false && result.invalidExists === false, {
+        runtime.assertThat(
+          typeof result.invalid.error === 'string' && result.invalidExists === false,
+          {
           name: 'ppt-invalid-spec-is-atomic',
           message: '出画布元素应整次失败且不留下半成品。',
           data: result.invalid
