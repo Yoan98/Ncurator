@@ -67,6 +67,8 @@ export type AssistantRichTextSegment = {
   text: string
   emphasis?: boolean
   iconKind?: AssistantProcessIconKind
+  /** Dynamic tool argument (path/command/query/url). Omitted from Activity header short text. */
+  param?: boolean
 }
 
 export type AssistantToolName = RuntimeToolName | 'unnamed'

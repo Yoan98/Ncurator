@@ -63,3 +63,16 @@ export const visibleAssistantProcessGroups = <T extends AssistantThinkingWaitGro
   if (shouldShowAssistantThinkingWait(input)) return groups
   return groups.filter((group) => group.kind !== 'thinking')
 }
+
+/**
+ * Activity header keeps shimmer until the next AI content (Thought or final/streaming answer).
+ */
+export const shouldActivityHeaderShimmer = (input: {
+  activityCreatedAt: number
+  thoughts: readonly { createdAt: number }[]
+  hasNextAiContent: boolean
+}): boolean => {
+  if (input.thoughts.some((thought) => thought.createdAt > input.activityCreatedAt)) return false
+  if (input.hasNextAiContent) return false
+  return true
+}

@@ -34,6 +34,7 @@ import {
   visibleAssistantProcessGroups,
   isAssistantActivityToolGroup
 } from './utils'
+import { shouldActivityHeaderShimmer } from '../../../../shared/assistantThinkingWait'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
 
@@ -272,12 +273,12 @@ const buildAssistantTimeline = (input: {
   return timeline
 }
 
-const AssistantActivityGroupView: React.FC<{ groups: AssistantProcessGroup[]; id: string }> = ({
-  groups,
-  id
-}) => {
+const AssistantActivityGroupView: React.FC<{
+  groups: AssistantProcessGroup[]
+  id: string
+  shimmerActive: boolean
+}> = ({ groups, id, shimmerActive }) => {
   const status = resolveAssistantExecutionStatus(groups)
-  const isRunning = status === 'running'
   const items = groups
     .flatMap((group) => group.items)
     .sort((left, right) => left.createdAt - right.createdAt)
@@ -313,14 +314,14 @@ const AssistantActivityGroupView: React.FC<{ groups: AssistantProcessGroup[]; id
           className={`inline-flex min-w-0 max-w-full items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
             status === 'failed' || status === 'partial_failed'
               ? 'text-[#B3261E]'
-              : isRunning
+              : shimmerActive
                 ? 'text-[#37352F]'
                 : 'text-[#9B9A97] group-hover/execution:text-[#37352F]'
           }`}
         >
           <LayerIcon iconKind={iconKind} />
-          <span className={`min-w-0 truncate ${isRunning ? 'font-medium' : ''}`}>
-            {renderSegments(summaryText, { shimmer: isRunning })}
+          <span className={`min-w-0 truncate ${shimmerActive ? 'font-medium' : ''}`}>
+            {renderSegments(summaryText, { shimmer: shimmerActive })}
           </span>
           {items.length > 0 ? (
             <>
@@ -371,6 +372,11 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   const hasStreamingThought = streamingRole === 'thought' && streamingMarkdown.trim().length > 0
   const hasVisibleBrainOutput =
     hasFinalAnswer || hasStreamingThought || streamingMarkdown.trim().length > 0
+  const hasNextAiContentForActivity =
+    hasFinalAnswer ||
+    hasStreamingThought ||
+    turn?.status === 'completed' ||
+    turn?.status === 'failed'
   const processGroups = useMemo(
     () =>
       visibleAssistantProcessGroups({
@@ -420,6 +426,11 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                       key={entry.id}
                       id={entry.id}
                       groups={entry.groups}
+                      shimmerActive={shouldActivityHeaderShimmer({
+                        activityCreatedAt: entry.createdAt,
+                        thoughts: processThoughts,
+                        hasNextAiContent: hasNextAiContentForActivity
+                      })}
                     />
                   )
                 }

@@ -15,9 +15,9 @@ const createToolGroup = (
   index = 1,
   options?: {
     status?: AssistantExecutionGroup['status']
-    completedText?: string
-    runningText?: string
-    failedText?: string
+    completedText?: Array<{ text: string; param?: boolean }>
+    runningText?: Array<{ text: string; param?: boolean }>
+    failedText?: Array<{ text: string; param?: boolean }>
   }
 ): AssistantExecutionGroup[] => [
   {
@@ -29,15 +29,9 @@ const createToolGroup = (
         toolName,
         status: options?.status || 'completed',
         targetLabel: `${toolName}-${index}`,
-        completedText: options?.completedText
-          ? [{ text: options.completedText }]
-          : [{ text: `已完成 ${toolName}` }],
-        runningText: options?.runningText
-          ? [{ text: options.runningText }]
-          : [{ text: `正在执行 ${toolName}` }],
-        failedText: options?.failedText
-          ? [{ text: options.failedText }]
-          : [{ text: `${toolName} 失败` }]
+        completedText: options?.completedText || [{ text: `已完成 ${toolName}` }],
+        runningText: options?.runningText || [{ text: `正在执行 ${toolName}` }],
+        failedText: options?.failedText || [{ text: `${toolName} 失败` }]
       }
     ]
   }
@@ -58,23 +52,35 @@ describe('assistant process icons and activity summary', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('learn_skill'))).toBe('learning')
   })
 
-  it('uses short skill summary for same-skill activity headers without tool args', () => {
-    const groups = createToolGroups(['terminal_run', 'terminal_run', 'terminal_read'])
-
-    expect(resolveAssistantExecutionIcon(groups)).toBe('terminal')
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已执行终端指令')
-  })
-
-  it('summarizes mixed skills as count-only operations', () => {
+  it('joins up to three tool short texts with 并/但 and drops param segments', () => {
     const groups = [
-      ...createToolGroup('learn_skill', 1, { completedText: '已学会 docx 阅读器' }),
-      ...createToolGroup('docx_read_outline', 2, {
-        completedText: '查看 Word 文档 合同.docx 的结构'
+      ...createToolGroup('learn_skill', 1, {
+        completedText: [{ text: '已学会 ' }, { text: 'docx 阅读器' }]
+      }),
+      ...createToolGroup('terminal_run', 2, {
+        completedText: [{ text: '执行命令 ' }, { text: 'find /tmp -name "*.docx"', param: true }]
       })
     ]
 
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已完成 2 项操作')
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe(
+      '已学会 docx 阅读器并执行命令 '
+    )
+  })
+
+  it('uses but connector when a later item failed', () => {
+    const groups = [
+      ...createToolGroup('web_search', 1, {
+        completedText: [{ text: '搜索网页 ' }, { text: 'React', param: true }]
+      }),
+      ...createToolGroup('text_file_read', 2, {
+        status: 'failed',
+        failedText: [{ text: '读取文件 ' }, { text: 'notes.md', param: true }]
+      })
+    ]
+    groups[1] = { ...groups[1], status: 'failed' }
+
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页 但读取文件 ')
   })
 
   it('summarizes more than three tools as n operations without action-class suffix', () => {
@@ -89,10 +95,13 @@ describe('assistant process icons and activity summary', () => {
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已完成 4 项操作')
   })
 
-  it('keeps single-tool header short even when body text has args', () => {
+  it('keeps single-tool header as action short text without args', () => {
     const groups = createToolGroup('terminal_run', 1, {
-      completedText: '执行命令 find /tmp -name "*.docx"'
+      completedText: [
+        { text: '执行命令 ' },
+        { text: 'find /tmp -name "*.docx"', param: true }
+      ]
     })
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已执行终端指令')
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('执行命令 ')
   })
 })

@@ -41,6 +41,8 @@ export type AssistantExecutionTextSegment = {
   text: string
   emphasis?: boolean
   iconKind?: AssistantExecutionIconKind
+  /** Dynamic tool argument (path/command/query/url). Omitted from Activity header short text. */
+  param?: boolean
 }
 
 export type AssistantExecutionGroup = {
@@ -62,6 +64,13 @@ export type AssistantExecutionGroup = {
 const text = (value: string): AssistantExecutionTextSegment => ({ text: value })
 const sentence = (...segments: AssistantExecutionTextSegment[]): AssistantExecutionTextSegment[] =>
   segments
+
+const toHeaderShortSegments = (
+  segments: readonly AssistantExecutionTextSegment[]
+): AssistantExecutionTextSegment[] => {
+  const shortSegments = segments.filter((segment) => !segment.param)
+  return shortSegments.length > 0 ? [...shortSegments] : [...segments]
+}
 
 const TOOL_UI_KINDS = {
   terminal_run: 'terminal',
@@ -290,6 +299,21 @@ export const getAssistantToolSummaryText = (
 const getExecutionStatus = (groups: readonly AssistantExecutionGroup[]): AssistantExecutionStatus =>
   getAssistantMixedStatus(groups.map((group) => group.status))
 
+const getItemSegments = (
+  item: AssistantExecutionGroup['items'][number],
+  fallbackStatus: AssistantExecutionStatus
+): AssistantExecutionTextSegment[] => {
+  const status = item.status || fallbackStatus
+  if (status === 'completed' && item.completedText) return [...item.completedText]
+  if (status === 'failed' && item.failedText) return [...item.failedText]
+  if (status === 'partial_failed' && item.partialFailedText) return [...item.partialFailedText]
+  if (status === 'running' && item.runningText) return [...item.runningText]
+  if (item.completedText) return [...item.completedText]
+  if (item.runningText) return [...item.runningText]
+  const kind = item.toolName ? getAssistantToolUiKind(item.toolName) : 'generic'
+  return getAssistantToolSummaryText(kind, status)
+}
+
 const buildCountOnlySummary = (
   status: AssistantExecutionStatus,
   totalCount: number
@@ -303,20 +327,16 @@ const buildCountOnlySummary = (
 }
 
 /**
- * Activity header: short skill summary only (no tool args).
- * Same skill → skill status text with count; mixed skills → count-only.
- * Expanded body rows still carry the full action + object sentences.
+ * Activity header from tool-rendered sentences:
+ * - drop param segments for short text
+ * - 1 item = short sentence; 2–3 = join with 并/但; >3 = count only
  */
 export const buildAssistantExecutionSummaryText = (
   groups: readonly AssistantExecutionGroup[]
 ): AssistantExecutionTextSegment[] => {
   const status = getExecutionStatus(groups)
   const list = groups.flatMap((group) =>
-    group.items.map((item) => ({
-      ...item,
-      status: item.status || group.status,
-      skillKey: item.toolName ? getAssistantToolUiKind(item.toolName) : group.skillKey
-    }))
+    group.items.map((item) => ({ ...item, status: item.status || group.status }))
   )
   if (list.length === 0) {
     return statusText(status, {
@@ -327,13 +347,16 @@ export const buildAssistantExecutionSummaryText = (
     })
   }
 
-  const skillKeys = new Set(list.map((item) => item.skillKey))
-  if (skillKeys.size !== 1) {
+  if (list.length > 3) {
     return buildCountOnlySummary(status, list.length)
   }
 
-  const skillKey = [...skillKeys][0] || 'generic'
-  return getAssistantToolSummaryText(skillKey, status, list.length)
+  return list.flatMap((item, index) => {
+    const itemStatus = item.status || status
+    const prefix =
+      index === 0 ? '' : itemStatus === 'failed' || itemStatus === 'partial_failed' ? '但' : '并'
+    return sentence(text(prefix), ...toHeaderShortSegments(getItemSegments(item, status)))
+  })
 }
 
 export const resolveAssistantExecutionIcon = (

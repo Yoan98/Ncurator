@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  shouldActivityHeaderShimmer,
   shouldShowAssistantThinkingWait,
   visibleAssistantProcessGroups,
   type AssistantThinkingWaitGroup,
@@ -78,5 +79,33 @@ describe('shouldShowAssistantThinkingWait', () => {
       processThoughts: []
     })
     expect(groups.some((group) => group.kind === 'thinking')).toBe(false)
+  })
+})
+
+describe('shouldActivityHeaderShimmer', () => {
+  it('keeps shimmer until the next thought or other AI content', () => {
+    expect(
+      shouldActivityHeaderShimmer({
+        activityCreatedAt: 2,
+        thoughts: [{ createdAt: 1 }],
+        hasNextAiContent: false
+      })
+    ).toBe(true)
+
+    expect(
+      shouldActivityHeaderShimmer({
+        activityCreatedAt: 2,
+        thoughts: [{ createdAt: 1 }, { createdAt: 3 }],
+        hasNextAiContent: false
+      })
+    ).toBe(false)
+
+    expect(
+      shouldActivityHeaderShimmer({
+        activityCreatedAt: 2,
+        thoughts: [{ createdAt: 1 }],
+        hasNextAiContent: true
+      })
+    ).toBe(false)
   })
 })

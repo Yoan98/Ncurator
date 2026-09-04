@@ -103,16 +103,18 @@ const listVisibleToolNames = (events: AiRunEvent[]): string[] =>
     )
   )
 
-/** Activity header: short skill/count summary only; never 并/但 body joins. */
+/** Activity header: tool short sentences; 2–3 join with 并/但; >3 = n 项操作. */
 const isShortActivityHeader = (summaryText: string, itemCount: number): boolean => {
   if (itemCount <= 0) return summaryText.length > 0
   if (itemCount > 3) return /项操作/u.test(summaryText)
-  return (
-    summaryText.length > 0 &&
-    !/并|但/u.test(summaryText) &&
-    !summaryText.includes('，') &&
-    !/项操作：/u.test(summaryText)
-  )
+  if (itemCount >= 2) {
+    return (
+      /并|但/u.test(summaryText) &&
+      !summaryText.includes('，') &&
+      !/项操作/u.test(summaryText)
+    )
+  }
+  return summaryText.length > 0 && !/项操作/u.test(summaryText)
 }
 
 const sampleThinkingWaitEarly = async (
@@ -244,7 +246,7 @@ describe('workbench run e2e', () => {
             {
               name: 'workbench-ai-process-activity-render-real',
               message:
-                '真实 AI run 应渲染 Thought/Activity 过程层（header 短动作汇总/>3 项操作、展开平铺、无收尾等待层、让俺想想不卡在完成后），并产出围绕工作区事实的最终 markdown，对齐 WB-COMPOSER-003、WB-COMPOSER-009、WB-COMPOSER-014、WB-CORE-005、WB-CORE-006。',
+                '真实 AI run 应渲染 Thought/Activity 过程层（header 工具短句 1/并但/>3 项操作、展开平铺、无收尾等待层、让俺想想不卡在完成后），并产出围绕工作区事实的最终 markdown，对齐 WB-COMPOSER-003、WB-COMPOSER-009、WB-COMPOSER-014、WB-CORE-005、WB-CORE-006。',
               data: result
             }
           )

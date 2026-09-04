@@ -77,6 +77,11 @@ const text = (
   iconKind
 })
 
+const param = (value: string): AssistantRichTextSegment => ({
+  text: value,
+  param: true
+})
+
 const sentence = (...segments: AssistantRichTextSegment[]): AssistantRichTextSegment[] => segments
 
 const plainText = (segments: AssistantRichTextSegment[]): string =>
@@ -204,66 +209,67 @@ type ToolItemRenderer = (
 ) => AssistantRichTextSegment[]
 
 const TOOL_ITEM_RENDERERS = {
-  terminal_run: (input) => sentence(text('执行命令 '), text(readCommandLabel(input))),
+  terminal_run: (input) => sentence(text('执行命令 '), param(readCommandLabel(input))),
   terminal_read: (input) =>
-    sentence(text('读取终端 '), text(readStringValue(input || {}, 'terminalId') || '运行结果')),
-  text_file_read: (input) => sentence(text('读取文件 '), text(readToolFileLabel(input))),
-  text_file_search: (input) => sentence(text('搜索文件 '), text(readToolQueryLabel(input))),
-  text_file_edit: (input) => sentence(text('编辑文件 '), text(readToolFileLabel(input))),
-  kb_search: (input) => sentence(text('在知识库中搜索 '), text(readToolQueryLabel(input))),
+    sentence(text('读取终端 '), param(readStringValue(input || {}, 'terminalId') || '运行结果')),
+  text_file_read: (input) => sentence(text('读取文件 '), param(readToolFileLabel(input))),
+  text_file_search: (input) => sentence(text('搜索文件 '), param(readToolQueryLabel(input))),
+  text_file_edit: (input) => sentence(text('编辑文件 '), param(readToolFileLabel(input))),
+  kb_search: (input) => sentence(text('在知识库中搜索 '), param(readToolQueryLabel(input))),
   kb_list_documents: () => sentence(text('查看工作空间文档列表')),
   docx_read_outline: (input) =>
-    sentence(text('查看 Word 文档 '), text(readToolFileLabel(input)), text(' 的结构')),
-  docx_search: (input) => sentence(text('在 Word 文档中搜索 '), text(readToolQueryLabel(input))),
+    sentence(text('查看 Word 文档 '), param(readToolFileLabel(input)), text(' 的结构')),
+  docx_search: (input) => sentence(text('在 Word 文档中搜索 '), param(readToolQueryLabel(input))),
   docx_read_nodes: (input) =>
     sentence(
       text('读取 Word 文档 '),
-      text(readToolFileLabel(input)),
-      text(` ${readDocxRangeLabel(input)}`)
+      param(readToolFileLabel(input)),
+      param(` ${readDocxRangeLabel(input)}`)
     ),
   docx_content_edit: (input) =>
-    sentence(text('编辑 Word 文档内容 '), text(readToolFileLabel(input))),
-  docx_format: (input) => sentence(text('设置 Word 文档格式 '), text(readToolFileLabel(input))),
-  docx_table_edit: (input) => sentence(text('编辑 Word 文档表格 '), text(readToolFileLabel(input))),
+    sentence(text('编辑 Word 文档内容 '), param(readToolFileLabel(input))),
+  docx_format: (input) => sentence(text('设置 Word 文档格式 '), param(readToolFileLabel(input))),
+  docx_table_edit: (input) =>
+    sentence(text('编辑 Word 文档表格 '), param(readToolFileLabel(input))),
   docx_comments_revisions: (input) =>
-    sentence(text('处理 Word 文档批注或修订 '), text(readToolFileLabel(input))),
-  pdf_outline: (input) => sentence(text('查看 PDF 提纲 '), text(readToolFileLabel(input))),
-  pdf_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
-  pdf_read_pages: (input) => sentence(text('读取 PDF 页面 '), text(readToolFileLabel(input))),
-  ppt_read_outline: (input) => sentence(text('阅读 PPT 结构 '), text(readToolFileLabel(input))),
-  ppt_read_slides: (input) => sentence(text('读取 PPT 页面 '), text(readToolFileLabel(input))),
-  ppt_search: (input) => sentence(text('搜索 PPT '), text(readToolQueryLabel(input))),
-  ppt_edit: (input) => sentence(text('编辑 PPT '), text(readToolFileLabel(input))),
+    sentence(text('处理 Word 文档批注或修订 '), param(readToolFileLabel(input))),
+  pdf_outline: (input) => sentence(text('查看 PDF 提纲 '), param(readToolFileLabel(input))),
+  pdf_search: (input) => sentence(text('在文档中搜索 '), param(readToolQueryLabel(input))),
+  pdf_read_pages: (input) => sentence(text('读取 PDF 页面 '), param(readToolFileLabel(input))),
+  ppt_read_outline: (input) => sentence(text('阅读 PPT 结构 '), param(readToolFileLabel(input))),
+  ppt_read_slides: (input) => sentence(text('读取 PPT 页面 '), param(readToolFileLabel(input))),
+  ppt_search: (input) => sentence(text('搜索 PPT '), param(readToolQueryLabel(input))),
+  ppt_edit: (input) => sentence(text('编辑 PPT '), param(readToolFileLabel(input))),
   excel_read: (input) => {
     const type = readStringValue(input || {}, 'type') || ''
-    if (type === 'search') return sentence(text('搜索 Excel '), text(readToolQueryLabel(input)))
-    if (type === 'style') return sentence(text('读取 Excel 样式 '), text(readToolFileLabel(input)))
-    if (type === 'range') return sentence(text('读取 Excel 范围 '), text(readToolFileLabel(input)))
-    return sentence(text('查看 Excel 结构 '), text(readToolFileLabel(input)))
+    if (type === 'search') return sentence(text('搜索 Excel '), param(readToolQueryLabel(input)))
+    if (type === 'style') return sentence(text('读取 Excel 样式 '), param(readToolFileLabel(input)))
+    if (type === 'range') return sentence(text('读取 Excel 范围 '), param(readToolFileLabel(input)))
+    return sentence(text('查看 Excel 结构 '), param(readToolFileLabel(input)))
   },
-  excel_edit: (input) => sentence(text('编辑 Excel '), text(readToolFileLabel(input))),
+  excel_edit: (input) => sentence(text('编辑 Excel '), param(readToolFileLabel(input))),
   web_search: (input) => {
     const type = readStringValue(input || {}, 'type')
     if (type === 'fetch') {
       const url = readStringValue(input || {}, 'url')
       return url
-        ? sentence(text('抓取网页 '), text(truncateMiddle(url, 96)))
+        ? sentence(text('抓取网页 '), param(truncateMiddle(url, 96)))
         : sentence(text('抓取网页'))
     }
-    return sentence(text('搜索网页 '), text(readToolQueryLabel(input)))
+    return sentence(text('搜索网页 '), param(readToolQueryLabel(input)))
   },
   browser_use: (input) => {
     const action = input ? readStringValue(input, 'action') || '' : ''
     const urlLabel = readWebUrlLabel(input)
     const instructionLabel = readInstructionLabel(input)
-    if (action === 'navigate') return sentence(text('打开网页 '), text(urlLabel))
-    if (action === 'observe') return sentence(text('查看页面并'), text(instructionLabel))
-    if (action === 'extract') return sentence(text('从页面中'), text(instructionLabel))
-    if (action === 'act') return sentence(text('在页面上'), text(instructionLabel))
-    return sentence(text('操作浏览器 '), text(instructionLabel))
+    if (action === 'navigate') return sentence(text('打开网页 '), param(urlLabel))
+    if (action === 'observe') return sentence(text('查看页面并'), param(instructionLabel))
+    if (action === 'extract') return sentence(text('从页面中'), param(instructionLabel))
+    if (action === 'act') return sentence(text('在页面上'), param(instructionLabel))
+    return sentence(text('操作浏览器 '), param(instructionLabel))
   },
   read_image: () => sentence(text('读取图片')),
-  image_generate: (input) => sentence(text('生成图片 '), text(readToolFileLabel(input))),
+  image_generate: (input) => sentence(text('生成图片 '), param(readToolFileLabel(input))),
   learn_skill: (input, status) => {
     const skillName = readLearnSkillNames(input)
     if (status === 'running') return sentence(text('正在学习 '), text(skillName))
