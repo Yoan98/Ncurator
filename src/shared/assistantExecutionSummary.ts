@@ -58,6 +58,8 @@ export type AssistantExecutionGroup = {
     completedText?: readonly AssistantExecutionTextSegment[]
     failedText?: readonly AssistantExecutionTextSegment[]
     partialFailedText?: readonly AssistantExecutionTextSegment[]
+    /** Standalone header verb phrase; preferred over stripping param segments. */
+    headerShortText?: string
   }[]
 }
 
@@ -314,6 +316,15 @@ const getItemSegments = (
   return getAssistantToolSummaryText(kind, status)
 }
 
+const getItemHeaderShortSegments = (
+  item: AssistantExecutionGroup['items'][number],
+  fallbackStatus: AssistantExecutionStatus
+): AssistantExecutionTextSegment[] => {
+  const short = item.headerShortText?.trim()
+  if (short) return sentence(text(short))
+  return trimHeaderSegments(toHeaderShortSegments(getItemSegments(item, fallbackStatus)))
+}
+
 const buildCountOnlySummary = (
   status: AssistantExecutionStatus,
   totalCount: number
@@ -341,8 +352,8 @@ const trimHeaderSegments = (
 }
 
 /**
- * Activity header from tool-rendered sentences:
- * - drop param segments for short text
+ * Activity header from tool copy:
+ * - prefer explicit headerShortText; else drop param segments (legacy)
  * - merge same tool UI kind; single = short sentence; count>1 append「N 次」
  * - ≤3 merged kinds join with 并/但; >3 kinds →「已完成 n 项」(n = total tools)
  */
@@ -385,7 +396,7 @@ export const buildAssistantExecutionSummaryText = (
     )
     const representative = kindItems[0]
     const shortSegments = trimHeaderSegments(
-      toHeaderShortSegments(getItemSegments(representative, kindStatus))
+      getItemHeaderShortSegments(representative, kindStatus)
     )
     const prefix =
       index === 0 ? '' : kindStatus === 'failed' || kindStatus === 'partial_failed' ? ' 但 ' : ' 并 '

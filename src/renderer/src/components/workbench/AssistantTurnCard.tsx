@@ -294,7 +294,8 @@ const AssistantActivityGroupView: React.FC<{
         runningText: item.runningText,
         completedText: item.completedText,
         failedText: item.failedText,
-        partialFailedText: item.partialFailedText
+        partialFailedText: item.partialFailedText,
+        headerShortText: item.headerShortText
       }))
     }))
   )

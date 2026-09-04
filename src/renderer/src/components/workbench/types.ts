@@ -122,6 +122,8 @@ export type AssistantProcessGroupItem = {
   completedText: AssistantRichTextSegment[]
   failedText: AssistantRichTextSegment[]
   partialFailedText: AssistantRichTextSegment[]
+  /** Standalone Activity header verb phrase; not derived by stripping expand-row params. */
+  headerShortText?: string
   createdAt: number
   sourceEventType: AssistantProcessSourceEventType
   toolName?: AssistantToolName

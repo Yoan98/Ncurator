@@ -853,6 +853,7 @@ const ChatPage: React.FC = () => {
   const sidebarResizeFrameRef = useRef<number | null>(null)
   const mainSplitRef = useRef<HTMLDivElement>(null)
   const contentPanelShellRef = useRef<HTMLDivElement>(null)
+  const contentPanelResizeGuideRef = useRef<HTMLDivElement>(null)
   const contentPanelRatioRef = useRef(contentPanelRatio)
   const contentPanelCommittedRatioRef = useRef(contentPanelRatio)
   const contentPanelWidthPxRef = useRef(0)
@@ -1491,17 +1492,40 @@ const ChatPage: React.FC = () => {
   const collapseContentPanelRef = useRef(collapseContentPanel)
   collapseContentPanelRef.current = collapseContentPanel
 
+  const applyContentPanelRatioCss = useCallback((ratio: number): void => {
+    const next = clampWorkbenchContentPanelRatio(ratio)
+    contentPanelRatioRef.current = next
+    mainSplitRef.current?.style.setProperty('--nc-content-panel-ratio', String(next))
+  }, [])
+
   const applyContentPanelWidthPx = useCallback((widthPx: number): void => {
     contentPanelWidthPxRef.current = widthPx
     mainSplitRef.current?.style.setProperty('--nc-content-panel-width', `${Math.max(0, widthPx)}px`)
   }, [])
 
+  const setContentPanelResizeGuide = useCallback((active: boolean, x?: number): void => {
+    const guide = contentPanelResizeGuideRef.current
+    if (!guide) return
+    guide.dataset.active = active ? 'true' : 'false'
+    if (typeof x === 'number') {
+      guide.style.left = `${Math.round(x)}px`
+    }
+  }, [])
+
   const syncContentPanelWidthFromRatio = useCallback((): void => {
     const available = mainSplitRef.current?.clientWidth ?? 0
-    applyContentPanelWidthPx(
-      resolveWorkbenchContentPanelWidth(available, contentPanelRatioRef.current)
-    )
-  }, [applyContentPanelWidthPx])
+    const width = resolveWorkbenchContentPanelWidth(available, contentPanelRatioRef.current)
+    applyContentPanelWidthPx(width)
+    applyContentPanelRatioCss(contentPanelRatioRef.current)
+  }, [applyContentPanelRatioCss, applyContentPanelWidthPx])
+
+  const enterContentPanelPixelResize = useCallback((): void => {
+    mainSplitRef.current?.setAttribute('data-panel-resize', 'pixel')
+  }, [])
+
+  const exitContentPanelPixelResize = useCallback((): void => {
+    mainSplitRef.current?.removeAttribute('data-panel-resize')
+  }, [])
 
   const expandContentPanel = useCallback((): void => {
     setPanelCollapsedForSession(tabWorkspaceKey, false)
@@ -2452,40 +2476,22 @@ const ChatPage: React.FC = () => {
     contentPanelRatioRef.current = contentPanelRatio
     contentPanelCommittedRatioRef.current = contentPanelRatio
     window.localStorage.setItem(WORKBENCH_CONTENT_PANEL_RATIO_STORAGE_KEY, String(contentPanelRatio))
+    applyContentPanelRatioCss(contentPanelRatio)
     if (contentPanelShellMounted && !contentPanelDragStartRef.current) {
       syncContentPanelWidthFromRatio()
     }
-  }, [contentPanelRatio, contentPanelShellMounted, syncContentPanelWidthFromRatio])
+  }, [
+    applyContentPanelRatioCss,
+    contentPanelRatio,
+    contentPanelShellMounted,
+    syncContentPanelWidthFromRatio
+  ])
 
   useEffect(() => {
-    const split = mainSplitRef.current
-    if (!split || !contentPanelShellMounted) return
-    const observer = new ResizeObserver(() => {
-      if (contentPanelDragStartRef.current) return
-      syncContentPanelWidthFromRatio()
-    })
-    observer.observe(split)
+    if (!contentPanelShellMounted) return
+    // 只在挂载/展开时校准一次像素缓存；窗口缩放交给 CSS flex-basis 比例，避免每帧 JS 写宽。
     syncContentPanelWidthFromRatio()
-    return () => observer.disconnect()
   }, [contentPanelShellMounted, syncContentPanelWidthFromRatio])
-
-  useEffect(() => {
-    let settleTimer: number | null = null
-    const handleWindowResize = (): void => {
-      document.body.classList.add('workbench-window-resizing')
-      if (settleTimer !== null) window.clearTimeout(settleTimer)
-      settleTimer = window.setTimeout(() => {
-        document.body.classList.remove('workbench-window-resizing')
-        settleTimer = null
-      }, 120)
-    }
-    window.addEventListener('resize', handleWindowResize)
-    return () => {
-      window.removeEventListener('resize', handleWindowResize)
-      if (settleTimer !== null) window.clearTimeout(settleTimer)
-      document.body.classList.remove('workbench-window-resizing')
-    }
-  }, [])
 
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent): void => {
@@ -2531,6 +2537,8 @@ const ChatPage: React.FC = () => {
         contentPanelResizeFrameRef.current = null
       }
       contentPanelDragStartRef.current = null
+      exitContentPanelPixelResize()
+      setContentPanelResizeGuide(false)
       document.body.classList.remove('workbench-content-panel-resizing')
     }
 
@@ -2544,13 +2552,11 @@ const ChatPage: React.FC = () => {
       if (nextWidth < WORKBENCH_CONTENT_PANEL_COLLAPSE_WIDTH) {
         endContentPanelDrag()
         contentPanelRatioRef.current = contentPanelCommittedRatioRef.current
+        applyContentPanelRatioCss(contentPanelCommittedRatioRef.current)
         collapseContentPanelRef.current()
         return
       }
-      const maxByMiddle = Math.max(
-        0,
-        available - WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH
-      )
+      const maxByMiddle = Math.max(0, available - WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH)
       const maxByRatio = available * WORKBENCH_CONTENT_PANEL_MAX_RATIO
       const maxWidth = Math.max(
         WORKBENCH_CONTENT_PANEL_COLLAPSE_WIDTH,
@@ -2565,6 +2571,8 @@ const ChatPage: React.FC = () => {
       contentPanelResizeFrameRef.current = window.requestAnimationFrame(() => {
         applyContentPanelWidthPx(clamped)
         contentPanelRatioRef.current = clamped / available
+        const splitLeft = mainSplitRef.current?.getBoundingClientRect().left ?? 0
+        setContentPanelResizeGuide(true, splitLeft + available - clamped)
         contentPanelResizeFrameRef.current = null
       })
     }
@@ -2576,7 +2584,9 @@ const ChatPage: React.FC = () => {
       const width = contentPanelWidthPxRef.current
       endContentPanelDrag()
       if (available > 0 && width > 0) {
-        setContentPanelRatio(clampWorkbenchContentPanelRatio(width / available))
+        const nextRatio = clampWorkbenchContentPanelRatio(width / available)
+        applyContentPanelRatioCss(nextRatio)
+        setContentPanelRatio(nextRatio)
       }
     }
 
@@ -2589,7 +2599,12 @@ const ChatPage: React.FC = () => {
       window.removeEventListener('pointercancel', handlePointerUp)
       endContentPanelDrag()
     }
-  }, [applyContentPanelWidthPx])
+  }, [
+    applyContentPanelRatioCss,
+    applyContentPanelWidthPx,
+    exitContentPanelPixelResize,
+    setContentPanelResizeGuide
+  ])
 
   useEffect(() => {
     scrollToBottom()
@@ -4601,18 +4616,33 @@ const ChatPage: React.FC = () => {
           {contentPanelShellMounted ? (
             <>
               <div
+                ref={contentPanelResizeGuideRef}
+                className="nc-content-panel-resize-guide"
+                data-active="false"
+                aria-hidden="true"
+              />
+              <div
                 className="nc-content-panel-resizer workbench-no-drag"
                 data-testid={workbenchSelectors.contentPanelResizer}
                 onPointerDown={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
                   event.currentTarget.setPointerCapture(event.pointerId)
-                  syncContentPanelWidthFromRatio()
+                  // 用当前真实渲染宽度作为起点，避免从 flex-basis 比例切到像素时跳变。
+                  const startWidth = Math.round(
+                    contentPanelShellRef.current?.getBoundingClientRect().width ??
+                      contentPanelWidthPxRef.current
+                  )
+                  applyContentPanelWidthPx(startWidth)
+                  enterContentPanelPixelResize()
                   contentPanelDragStartRef.current = {
                     pointerId: event.pointerId,
                     startX: event.clientX,
-                    startWidth: contentPanelWidthPxRef.current
+                    startWidth
                   }
+                  const splitLeft = mainSplitRef.current?.getBoundingClientRect().left ?? 0
+                  const available = mainSplitRef.current?.clientWidth ?? 0
+                  setContentPanelResizeGuide(true, splitLeft + available - startWidth)
                   document.body.classList.add('workbench-content-panel-resizing')
                 }}
               />

@@ -260,6 +260,15 @@ export class BrowserEmbedService implements BrowserUseService {
 
   public setBounds(tabId: string, presentationId: number, bounds: BrowserPanelBoundsState): void {
     if (!this.isCurrentPresentation(tabId, presentationId)) return
+    const prev = this.bounds
+    if (
+      Math.round(prev.x) === Math.round(bounds.x) &&
+      Math.round(prev.y) === Math.round(bounds.y) &&
+      Math.round(prev.width) === Math.round(bounds.width) &&
+      Math.round(prev.height) === Math.round(bounds.height)
+    ) {
+      return
+    }
     this.bounds = bounds
     this.applyAllVisibility()
   }

@@ -312,7 +312,7 @@
   - `WB-COMPOSER-014-AC2` 有工具调用的内容成为 Thought；无工具且正常结束的内容成为最终回答。未确认结束前不会提前收尾。
   - `WB-COMPOSER-014-AC3` 自动重试不会重复拼接上一尝试；输出被截断时显示可继续错误，已确认的半截回答进入日志，网络中断草稿不进入后续对话上下文。
   - `WB-COMPOSER-014-AC4` 有计划时显示环形进度；Todo 浮层支持鼠标和键盘，正常完成后短动画隐藏，中断后保留。
-  - `WB-COMPOSER-014-AC5` 两次 Thought 之间的工具调用合并为 Activity 面板：header 先按工具 UI 类型归并同类；归并后类别 ≤ 3 时用短句汇总（单次为短句，同类多次追加「N 次」，多类用「并」「但」连接）；归并后类别 > 3 时收敛为「已完成 n 项」（n 为总工具次数，进行中也使用该完成态句式；失败态使用对应失败句式）；header 从 Activity 出现起保持滑动直到下一段 AI content（Thought 或最终回答）；header 单行 CSS 省略；展开后按时间平铺带参数的工具原句，失败行红色；聊天区不直接展示工具原始结果。
+  - `WB-COMPOSER-014-AC5` 两次 Thought 之间的工具调用合并为 Activity 面板：header 先按工具 UI 类型归并同类；归并后类别 ≤ 3 时用各工具独立维护的 header 短句汇总（单次为短句，同类多次追加「N 次」，多类用「并」「但」连接）；归并后类别 > 3 时收敛为「已完成 n 项」（n 为总工具次数，进行中也使用该完成态句式；失败态使用对应失败句式）；header 从 Activity 出现起保持滑动直到下一段 AI content（Thought 或最终回答）；header 单行 CSS 省略；展开后按时间平铺带参数的工具原句，失败行红色；聊天区不直接展示工具原始结果。
 
 #### WB-COMPOSER-011 使用帮助入口
 
@@ -340,14 +340,14 @@
 
 #### WB-COMPOSER-009 消息流布局
 
-- 系统行为：workbench 消息区不展示用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流没有独立标题或左侧竖线，且与最终 brain 输出共用消息 rail；最终 markdown 输出直接位于内容流中；用户消息使用右对齐紧凑气泡。空会话时输入区位于主工作区中部；存在消息后输入区固定在主区底部，只允许消息区独立滚动，右侧面板展开或折叠不得改变输入区定位。过程流按真实时间展示决策层与过程层：思考层“让俺想想”是段内临时等待层，仅在首次或上一段 AI content 之后且尚未出现工具时显示；Activity（工具面板）header 按工具类型归并后做短句汇总（去掉 path/command/query/URL 等参数段；同类多次带次数；超过三类收敛为「已完成 n 项」），从出现起滑动直到下一段 AI content；压缩层、重试层和决策层累计保留。两次 Thought 之间的全部工具调用（含 `learn_skill`）合并为一个 Activity 面板，header 默认折叠，hover 时显示展开箭头并提升文字颜色，展开后按时间平铺带参数的工具原句。压缩与重试单独成行，不并入 Activity。
+- 系统行为：workbench 消息区不展示用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流没有独立标题或左侧竖线，且与最终 brain 输出共用消息 rail；最终 markdown 输出直接位于内容流中；用户消息使用右对齐紧凑气泡。空会话时输入区位于主工作区中部；存在消息后输入区固定在主区底部，只允许消息区独立滚动，右侧面板展开或折叠不得改变输入区定位。过程流按真实时间展示决策层与过程层：思考层“让俺想想”是段内临时等待层，仅在首次或上一段 AI content 之后且尚未出现工具时显示；Activity（工具面板）header 按工具类型归并后，使用各工具独立维护的 header 短句汇总（不携带 path/command/query/URL 等参数；同类多次带次数；超过三类收敛为「已完成 n 项」），从出现起滑动直到下一段 AI content；压缩层、重试层和决策层累计保留。两次 Thought 之间的全部工具调用（含 `learn_skill`）合并为一个 Activity 面板，header 默认折叠，hover 时显示展开箭头并提升文字颜色，展开后按时间平铺带参数的工具原句。压缩与重试单独成行，不并入 Activity。
 - 验收：
   - `WB-COMPOSER-009-AC1` 用户与 assistant 消息不展示头像或头像占位。
   - `WB-COMPOSER-009-AC2` assistant 过程流和最终输出左边缘与底部 composer 内容 rail 对齐。
   - `WB-COMPOSER-009-AC3` assistant 最终 markdown 输出默认无独立背景卡片，保持在过程流下方。
   - `WB-COMPOSER-009-AC4` 用户消息以右对齐紧凑气泡展示。
-  - `WB-COMPOSER-009-AC5` Activity header 按工具 UI 类型归并后做短句汇总：去掉参数段；同类多次展示为「短句 N 次」（例如「搜索网页 3 次」）；归并后类别为 1 时与短句（或带次数）一致；2～3 类时用「并」连接，后续失败类用「但」连接，不使用逗号分隔；归并后类别大于 3 时收敛为「已完成 n 项」（n 为总工具次数；进行中也使用该句式，不再在「正在执行 / 已完成」间切换；失败态使用对应失败句式）。header 不携带命令参数、文件路径、query 或 URL；展开行仍展示带对象的完整工具原句。header 从 Activity 出现起保持滑动，直到下一段 AI content（Thought 或最终回答）出现。header 文本单行显示，超出宽度时 CSS 省略号裁切。header 只展示一个图标；单一工具类型使用对应语义图标，混合工具使用流程图标。
-  - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看 Word 文档 xx 的结构”；`docx_read_nodes` 展示“读取 Word 文档 xx 范围”；`learn_skill` 展示“正在学习 / 已学会 xx”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search search / fetch` 分别展示“搜索网页 query”“抓取网页 url”；`browser_use navigate / observe / extract / act` 分别补充“打开网页 / 查看页面并 / 从页面中 / 在页面上”的动作语义。
+  - `WB-COMPOSER-009-AC5` Activity header 按工具 UI 类型归并后做短句汇总：短句来自各工具独立维护的 `headerShortText`（可独立成句的动词短语），不得靠展开行剥参得到半截连词；同类多次展示为「短句 N 次」（例如「搜索网页 3 次」）；归并后类别为 1 时与短句（或带次数）一致；2～3 类时用「并」连接，后续失败类用「但」连接，不使用逗号分隔；归并后类别大于 3 时收敛为「已完成 n 项」（n 为总工具次数；进行中也使用该句式，不再在「正在执行 / 已完成」间切换；失败态使用对应失败句式）。header 不携带命令参数、文件路径、query 或 URL；展开行仍展示带对象的完整工具原句。header 从 Activity 出现起保持滑动，直到下一段 AI content（Thought 或最终回答）出现。header 文本单行显示，超出宽度时 CSS 省略号裁切。header 只展示一个图标；单一工具类型使用对应语义图标，混合工具使用流程图标。示例：`browser_use` observe/extract/act 的 header 分别为「查看页面 / 提取内容 / 操作页面」，不得出现「查看页面并」「从页面中」「在页面上」；`docx_read_outline` header 为「查看 Word 文档结构」。
+  - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看 Word 文档 xx 的结构”；`docx_read_nodes` 展示“读取 Word 文档 xx 范围”；`learn_skill` 展示“正在学习 / 已学会 xx”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search search / fetch` 分别展示“搜索网页 query”“抓取网页 url”；`browser_use navigate / observe / extract / act` 分别补充“打开网页 / 查看页面并 / 从页面中 / 在页面上”的动作语义（这些半截连词仅用于展开行接对象，不用于 header）。
   - `WB-COMPOSER-009-AC7` 文件名、query、命令、URL 和技能名不使用粗体或冒号强调，保持正常字重；可以通过文字颜色表达层级。
   - `WB-COMPOSER-009-AC8` `learn_skill` 作为普通工具行展示，使用技能通用名称，例如 `docx 阅读器`、`docx 编辑器`、`资料查阅器`、`命令执行器`；运行中展示“正在学习 xx”，完成后展示“已学会 xx”，不再作为独立学习层。
   - `WB-COMPOSER-009-AC9` Activity header、压缩层和重试层展示对应图标；浏览器、网页读取、网页搜索、图片识别、知识库、文件、终端和学习使用不同语义图标。展开后的每条工具句子不展示图标，也不渲染前置小圆点或“AI 思路”类图标。

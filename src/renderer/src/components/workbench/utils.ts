@@ -203,92 +203,189 @@ const readLearnSkillNames = (input?: IpcJsonObject): string => {
   return names.length > 0 ? names.join('、') : '新能力'
 }
 
+type ToolItemCopy = {
+  headerShort: string
+  detail: AssistantRichTextSegment[]
+}
+
 type ToolItemRenderer = (
   input: IpcJsonObject | undefined,
   status: AssistantProcessStatus
-) => AssistantRichTextSegment[]
+) => ToolItemCopy
+
+const toolCopy = (headerShort: string, detail: AssistantRichTextSegment[]): ToolItemCopy => ({
+  headerShort,
+  detail
+})
 
 const TOOL_ITEM_RENDERERS = {
-  terminal_run: (input) => sentence(text('执行命令 '), param(readCommandLabel(input))),
+  terminal_run: (input) =>
+    toolCopy('执行命令', sentence(text('执行命令 '), param(readCommandLabel(input)))),
   terminal_read: (input) =>
-    sentence(text('读取终端 '), param(readStringValue(input || {}, 'terminalId') || '运行结果')),
-  text_file_read: (input) => sentence(text('读取文件 '), param(readToolFileLabel(input))),
-  text_file_search: (input) => sentence(text('搜索文件 '), param(readToolQueryLabel(input))),
-  text_file_edit: (input) => sentence(text('编辑文件 '), param(readToolFileLabel(input))),
-  kb_search: (input) => sentence(text('在知识库中搜索 '), param(readToolQueryLabel(input))),
-  kb_list_documents: () => sentence(text('查看工作空间文档列表')),
+    toolCopy(
+      '读取终端',
+      sentence(text('读取终端 '), param(readStringValue(input || {}, 'terminalId') || '运行结果'))
+    ),
+  text_file_read: (input) =>
+    toolCopy('读取文件', sentence(text('读取文件 '), param(readToolFileLabel(input)))),
+  text_file_search: (input) =>
+    toolCopy('搜索文件', sentence(text('搜索文件 '), param(readToolQueryLabel(input)))),
+  text_file_edit: (input) =>
+    toolCopy('编辑文件', sentence(text('编辑文件 '), param(readToolFileLabel(input)))),
+  kb_search: (input) =>
+    toolCopy('在知识库中搜索', sentence(text('在知识库中搜索 '), param(readToolQueryLabel(input)))),
+  kb_list_documents: () =>
+    toolCopy('查看工作空间文档列表', sentence(text('查看工作空间文档列表'))),
   docx_read_outline: (input) =>
-    sentence(text('查看 Word 文档 '), param(readToolFileLabel(input)), text(' 的结构')),
-  docx_search: (input) => sentence(text('在 Word 文档中搜索 '), param(readToolQueryLabel(input))),
+    toolCopy(
+      '查看 Word 文档结构',
+      sentence(text('查看 Word 文档 '), param(readToolFileLabel(input)), text(' 的结构'))
+    ),
+  docx_search: (input) =>
+    toolCopy(
+      '在 Word 文档中搜索',
+      sentence(text('在 Word 文档中搜索 '), param(readToolQueryLabel(input)))
+    ),
   docx_read_nodes: (input) =>
-    sentence(
-      text('读取 Word 文档 '),
-      param(readToolFileLabel(input)),
-      param(` ${readDocxRangeLabel(input)}`)
+    toolCopy(
+      '读取 Word 文档',
+      sentence(
+        text('读取 Word 文档 '),
+        param(readToolFileLabel(input)),
+        param(` ${readDocxRangeLabel(input)}`)
+      )
     ),
   docx_content_edit: (input) =>
-    sentence(text('编辑 Word 文档内容 '), param(readToolFileLabel(input))),
-  docx_format: (input) => sentence(text('设置 Word 文档格式 '), param(readToolFileLabel(input))),
+    toolCopy(
+      '编辑 Word 文档内容',
+      sentence(text('编辑 Word 文档内容 '), param(readToolFileLabel(input)))
+    ),
+  docx_format: (input) =>
+    toolCopy(
+      '设置 Word 文档格式',
+      sentence(text('设置 Word 文档格式 '), param(readToolFileLabel(input)))
+    ),
   docx_table_edit: (input) =>
-    sentence(text('编辑 Word 文档表格 '), param(readToolFileLabel(input))),
+    toolCopy(
+      '编辑 Word 文档表格',
+      sentence(text('编辑 Word 文档表格 '), param(readToolFileLabel(input)))
+    ),
   docx_comments_revisions: (input) =>
-    sentence(text('处理 Word 文档批注或修订 '), param(readToolFileLabel(input))),
-  pdf_outline: (input) => sentence(text('查看 PDF 提纲 '), param(readToolFileLabel(input))),
-  pdf_search: (input) => sentence(text('在文档中搜索 '), param(readToolQueryLabel(input))),
-  pdf_read_pages: (input) => sentence(text('读取 PDF 页面 '), param(readToolFileLabel(input))),
-  ppt_read_outline: (input) => sentence(text('阅读 PPT 结构 '), param(readToolFileLabel(input))),
-  ppt_read_slides: (input) => sentence(text('读取 PPT 页面 '), param(readToolFileLabel(input))),
-  ppt_search: (input) => sentence(text('搜索 PPT '), param(readToolQueryLabel(input))),
-  ppt_edit: (input) => sentence(text('编辑 PPT '), param(readToolFileLabel(input))),
+    toolCopy(
+      '处理 Word 文档批注或修订',
+      sentence(text('处理 Word 文档批注或修订 '), param(readToolFileLabel(input)))
+    ),
+  pdf_outline: (input) =>
+    toolCopy('查看 PDF 提纲', sentence(text('查看 PDF 提纲 '), param(readToolFileLabel(input)))),
+  pdf_search: (input) =>
+    toolCopy('在文档中搜索', sentence(text('在文档中搜索 '), param(readToolQueryLabel(input)))),
+  pdf_read_pages: (input) =>
+    toolCopy('读取 PDF 页面', sentence(text('读取 PDF 页面 '), param(readToolFileLabel(input)))),
+  ppt_read_outline: (input) =>
+    toolCopy('阅读 PPT 结构', sentence(text('阅读 PPT 结构 '), param(readToolFileLabel(input)))),
+  ppt_read_slides: (input) =>
+    toolCopy('读取 PPT 页面', sentence(text('读取 PPT 页面 '), param(readToolFileLabel(input)))),
+  ppt_search: (input) =>
+    toolCopy('搜索 PPT', sentence(text('搜索 PPT '), param(readToolQueryLabel(input)))),
+  ppt_edit: (input) =>
+    toolCopy('编辑 PPT', sentence(text('编辑 PPT '), param(readToolFileLabel(input)))),
   excel_read: (input) => {
     const type = readStringValue(input || {}, 'type') || ''
-    if (type === 'search') return sentence(text('搜索 Excel '), param(readToolQueryLabel(input)))
-    if (type === 'style') return sentence(text('读取 Excel 样式 '), param(readToolFileLabel(input)))
-    if (type === 'range') return sentence(text('读取 Excel 范围 '), param(readToolFileLabel(input)))
-    return sentence(text('查看 Excel 结构 '), param(readToolFileLabel(input)))
+    if (type === 'search') {
+      return toolCopy('搜索 Excel', sentence(text('搜索 Excel '), param(readToolQueryLabel(input))))
+    }
+    if (type === 'style') {
+      return toolCopy(
+        '读取 Excel 样式',
+        sentence(text('读取 Excel 样式 '), param(readToolFileLabel(input)))
+      )
+    }
+    if (type === 'range') {
+      return toolCopy(
+        '读取 Excel 范围',
+        sentence(text('读取 Excel 范围 '), param(readToolFileLabel(input)))
+      )
+    }
+    return toolCopy(
+      '查看 Excel 结构',
+      sentence(text('查看 Excel 结构 '), param(readToolFileLabel(input)))
+    )
   },
-  excel_edit: (input) => sentence(text('编辑 Excel '), param(readToolFileLabel(input))),
+  excel_edit: (input) =>
+    toolCopy('编辑 Excel', sentence(text('编辑 Excel '), param(readToolFileLabel(input)))),
   web_search: (input) => {
     const type = readStringValue(input || {}, 'type')
     if (type === 'fetch') {
       const url = readStringValue(input || {}, 'url')
       return url
-        ? sentence(text('抓取网页 '), param(truncateMiddle(url, 96)))
-        : sentence(text('抓取网页'))
+        ? toolCopy('抓取网页', sentence(text('抓取网页 '), param(truncateMiddle(url, 96))))
+        : toolCopy('抓取网页', sentence(text('抓取网页')))
     }
-    return sentence(text('搜索网页 '), param(readToolQueryLabel(input)))
+    return toolCopy('搜索网页', sentence(text('搜索网页 '), param(readToolQueryLabel(input))))
   },
   browser_use: (input) => {
     const action = input ? readStringValue(input, 'action') || '' : ''
     const urlLabel = readWebUrlLabel(input)
     const instructionLabel = readInstructionLabel(input)
-    if (action === 'navigate') return sentence(text('打开网页 '), param(urlLabel))
-    if (action === 'observe') return sentence(text('查看页面并'), param(instructionLabel))
-    if (action === 'extract') return sentence(text('从页面中'), param(instructionLabel))
-    if (action === 'act') return sentence(text('在页面上'), param(instructionLabel))
-    return sentence(text('操作浏览器 '), param(instructionLabel))
+    if (action === 'navigate') {
+      return toolCopy('打开网页', sentence(text('打开网页 '), param(urlLabel)))
+    }
+    if (action === 'observe') {
+      return toolCopy('查看页面', sentence(text('查看页面并'), param(instructionLabel)))
+    }
+    if (action === 'extract') {
+      return toolCopy('提取内容', sentence(text('从页面中'), param(instructionLabel)))
+    }
+    if (action === 'act') {
+      return toolCopy('操作页面', sentence(text('在页面上'), param(instructionLabel)))
+    }
+    return toolCopy('操作浏览器', sentence(text('操作浏览器 '), param(instructionLabel)))
   },
-  read_image: () => sentence(text('读取图片')),
-  image_generate: (input) => sentence(text('生成图片 '), param(readToolFileLabel(input))),
+  read_image: () => toolCopy('读取图片', sentence(text('读取图片'))),
+  image_generate: (input) =>
+    toolCopy('生成图片', sentence(text('生成图片 '), param(readToolFileLabel(input)))),
   learn_skill: (input, status) => {
     const skillName = readLearnSkillNames(input)
-    if (status === 'running') return sentence(text('正在学习 '), text(skillName))
-    if (status === 'completed') return sentence(text('已学会 '), text(skillName))
-    if (status === 'partial_failed')
-      return sentence(text('学习 '), text(skillName), text(' 有部分失败'))
-    return sentence(text('学习 '), text(skillName), text(' 失败了'))
+    if (status === 'running') {
+      return toolCopy(`正在学习 ${skillName}`, sentence(text('正在学习 '), text(skillName)))
+    }
+    if (status === 'completed') {
+      return toolCopy(`已学会 ${skillName}`, sentence(text('已学会 '), text(skillName)))
+    }
+    if (status === 'partial_failed') {
+      return toolCopy(
+        `学习 ${skillName} 有部分失败`,
+        sentence(text('学习 '), text(skillName), text(' 有部分失败'))
+      )
+    }
+    return toolCopy(
+      `学习 ${skillName} 失败了`,
+      sentence(text('学习 '), text(skillName), text(' 失败了'))
+    )
   },
-  update_plan: () => sentence(text('更新任务计划'))
+  update_plan: () => toolCopy('更新任务计划', sentence(text('更新任务计划')))
 } satisfies Record<RuntimeToolName, ToolItemRenderer>
+
+const getToolItemCopy = (
+  toolName: AssistantToolName,
+  status: AssistantProcessStatus,
+  input?: IpcJsonObject
+): ToolItemCopy =>
+  toolName === 'unnamed'
+    ? toolCopy('处理任务中的一步', sentence(text('处理任务中的一步')))
+    : TOOL_ITEM_RENDERERS[toolName](input, status)
 
 const getToolItemText = (
   toolName: AssistantToolName,
   status: AssistantProcessStatus,
   input?: IpcJsonObject
-): AssistantRichTextSegment[] =>
-  toolName === 'unnamed'
-    ? sentence(text('处理任务中的一步'))
-    : TOOL_ITEM_RENDERERS[toolName](input, status)
+): AssistantRichTextSegment[] => getToolItemCopy(toolName, status, input).detail
+
+const getToolItemHeaderShort = (
+  toolName: AssistantToolName,
+  status: AssistantProcessStatus,
+  input?: IpcJsonObject
+): string => getToolItemCopy(toolName, status, input).headerShort
 
 const getDisplayGroupText = (
   display: AssistantProcessDisplay,
@@ -420,6 +517,13 @@ export const createDisplayProcessItem = (input: {
 }): AssistantProcessGroupItem => {
   const toolName =
     input.display.kind === 'tool' ? normalizeToolName(input.display.toolName) : undefined
+  const headerShortText = toolName
+    ? getToolItemHeaderShort(
+        toolName,
+        input.status,
+        input.display.kind === 'tool' ? input.display.input : undefined
+      )
+    : input.existing?.headerShortText
   return {
     id: input.itemId,
     status: input.status,
@@ -428,6 +532,7 @@ export const createDisplayProcessItem = (input: {
     failedText: input.existing?.failedText || getDisplayItemText(input.display, 'failed'),
     partialFailedText:
       input.existing?.partialFailedText || getDisplayItemText(input.display, 'partial_failed'),
+    headerShortText,
     createdAt: input.existing?.createdAt || input.createdAt,
     sourceEventType: input.sourceEventType,
     toolName,
@@ -679,6 +784,10 @@ const completeProcessItem = (
   mergeProcessGroup(current, input.groupId, (group) => {
     const nextItems = group.items.map((item) => {
       if (item.id !== input.itemId) return item
+      const toolName =
+        input.display?.kind === 'tool'
+          ? normalizeToolName(input.display.toolName)
+          : item.toolName
       return {
         ...item,
         status: input.status,
@@ -689,6 +798,14 @@ const completeProcessItem = (
         partialFailedText: input.display
           ? getDisplayItemText(input.display, 'partial_failed')
           : item.partialFailedText,
+        headerShortText:
+          input.display && toolName
+            ? getToolItemHeaderShort(
+                toolName,
+                input.status,
+                input.display.kind === 'tool' ? input.display.input : item.input
+              )
+            : item.headerShortText,
         sourceEventType: input.sourceEventType
       }
     })

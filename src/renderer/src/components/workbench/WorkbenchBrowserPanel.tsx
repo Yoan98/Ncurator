@@ -92,6 +92,8 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
       notifyBounds(tabId, activePresentationId, element)
     }
 
+    // 每帧实时跟随：resize/scroll 触发时用 rAF 合并成一次 setBounds，
+    // 保证原生 view 与 DOM 布局同步移动，不冻结、不整段延迟。
     const scheduleBounds = (): void => {
       if (boundsFrameRef.current !== null) return
       boundsFrameRef.current = window.requestAnimationFrame(() => {

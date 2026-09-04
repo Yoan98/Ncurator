@@ -744,6 +744,25 @@ textarea,
   -webkit-app-region: drag;
 }
 
+/* Tab tooltip：向下弹、单行限高，压缩到资源栏与原生浏览器 view 之间的 DOM 空档内，避免被浏览器遮挡 */
+.nc-tab-tooltip {
+  max-width: 360px;
+}
+
+.nc-tab-tooltip .ant-tooltip-arrow {
+  display: none;
+}
+
+.nc-tab-tooltip .ant-tooltip-inner {
+  min-height: 0;
+  padding: 3px 8px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .nc-content-panel-titlebar-toggle {
   position: relative;
   z-index: 5;
@@ -872,6 +891,7 @@ textarea,
 }
 
 .nc-main-split {
+  --nc-content-panel-ratio: 0.48;
   --nc-content-panel-width: 0px;
 }
 
@@ -880,24 +900,46 @@ textarea,
   min-height: 0;
   overflow: hidden;
   width: 0;
-  transition: width 200ms ease-out;
+  flex-basis: 0;
+  transition:
+    width 200ms ease-out,
+    flex-basis 200ms ease-out,
+    min-width 200ms ease-out,
+    max-width 200ms ease-out;
 }
 
 .nc-content-panel-shell[data-panel-visible='true'] {
+  /* 静止态用主区比例，窗口缩放由浏览器布局直接跟手，不经 JS */
+  flex-basis: calc(var(--nc-content-panel-ratio) * 100%);
+  width: auto;
+  min-width: 280px;
+  max-width: calc(100% - 360px);
+}
+
+.nc-main-split[data-panel-resize='pixel'] .nc-content-panel-shell[data-panel-visible='true'] {
+  flex-basis: auto;
   width: var(--nc-content-panel-width);
+  min-width: 0;
+  max-width: none;
+  transition: none !important;
 }
 
 .nc-content-panel-shell-inner {
   height: 100%;
-  width: var(--nc-content-panel-width);
+  width: 100%;
   transition:
     transform 200ms ease-out,
     opacity 200ms ease-out;
 }
 
+.nc-main-split[data-panel-resize='pixel'] .nc-content-panel-shell-inner {
+  width: var(--nc-content-panel-width);
+  transition: none !important;
+}
+
 .nc-content-panel-resizer {
   position: relative;
-  z-index: 20;
+  z-index: 30;
   width: 0;
   flex-shrink: 0;
   cursor: col-resize;
@@ -921,12 +963,27 @@ textarea,
   width: 2px;
   height: 100%;
   background: transparent;
-  transition: background-color 120ms ease;
+  pointer-events: none;
 }
 
-.nc-content-panel-resizer:hover::after,
-.workbench-content-panel-resizing .nc-content-panel-resizer::after {
+.nc-content-panel-resizer:hover::after {
   background: rgba(55, 53, 47, 0.16);
+}
+
+.nc-content-panel-resize-guide {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  z-index: 80;
+  width: 2px;
+  margin-left: -1px;
+  pointer-events: none;
+  background: rgba(55, 53, 47, 0.28);
+  opacity: 0;
+}
+
+.nc-content-panel-resize-guide[data-active='true'] {
+  opacity: 1;
 }
 
 .workbench-content-panel-resizing {
@@ -937,10 +994,6 @@ textarea,
 .workbench-content-panel-resizing .nc-content-panel-shell,
 .workbench-content-panel-resizing .nc-content-panel-shell-inner {
   transition: none !important;
-}
-
-.workbench-window-resizing .nc-main-pane {
-  pointer-events: none;
 }
 
 .nc-sidebar-resize-guide {
