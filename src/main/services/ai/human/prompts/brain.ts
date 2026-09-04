@@ -95,9 +95,9 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
     - 当目标满足时必须完成相关检查或者需要用户确认协助时，停止调用工具，直接输出最终交付的 markdown 正文。
     - 禁止编造不存在的事实，禁止改动客观事实锚点（文件名、路径、资料名、工具名、人物职责等），必须复用原文。
     - 优先回答用户真正关心的内容，使用自然、直接、容易理解的表达。
-    - 证据引用机制：若完成用户诉求的过程中，引用了可追溯的资料（本地文件或网页）, 输出的最终交付中，必须输出所引用的资料地址以及它支撑了什么；链接必须使用下面的格式；
-    [显示名称](ncurator://ref?kind=normal|reference&resourceType=file|web&label=显示名称&path=文件路径或网页URL)
-    - 文件地址或网页链接也必须使用上述的格式，如是证据引用，使用 kind=reference；如是普通资源链接，使用 kind=normal
+    - 证据引用机制：若完成用户诉求的过程中，引用了可追溯的资料（本地文件或网页），最终交付中必须用标准 Markdown 链接写出资料地址，并说明它支撑了什么：
+      [显示名称](绝对本地路径或 https URL)
+      含空格或括号的路径使用尖括号形式：[显示名称](<绝对路径>)。
   </delivery_contract>
 
   <special_notes>

@@ -103,18 +103,30 @@ const listVisibleToolNames = (events: AiRunEvent[]): string[] =>
     )
   )
 
-/** Activity header: tool short sentences; 2–3 join with 并/但; >3 = n 项操作. */
+/** Activity header: merge by tool kind; ≤3 kinds → short text /「N 次」/并但; >3 kinds → 已完成 n 项. */
+const isCountOnlyActivityHeader = (summaryText: string): boolean =>
+  /^已完成\s+\d+\s*项$/u.test(summaryText) ||
+  /^\d+\s*项操作中有部分失败$/u.test(summaryText) ||
+  /^\d+\s*项操作执行失败$/u.test(summaryText)
+
 const isShortActivityHeader = (summaryText: string, itemCount: number): boolean => {
   if (itemCount <= 0) return summaryText.length > 0
-  if (itemCount > 3) return /项操作/u.test(summaryText)
-  if (itemCount >= 2) {
-    return (
-      /并|但/u.test(summaryText) &&
-      !summaryText.includes('，') &&
-      !/项操作/u.test(summaryText)
-    )
+  if (summaryText.includes('，')) return false
+  // Old wording must not appear.
+  if (/正在执行\s+\d+\s*项操作|已完成\s+\d+\s*项操作/u.test(summaryText)) return false
+
+  if (isCountOnlyActivityHeader(summaryText)) {
+    // Count form requires enough items to exceed 3 merged kinds.
+    return itemCount > 3
   }
-  return summaryText.length > 0 && !/项操作/u.test(summaryText)
+
+  if (/项操作/u.test(summaryText)) return false
+
+  if (itemCount >= 2) {
+    // Same-kind merge uses「N 次」; multi-kind uses 并/但.
+    return /并|但|\d+\s*次/u.test(summaryText)
+  }
+  return summaryText.length > 0
 }
 
 const sampleThinkingWaitEarly = async (
@@ -214,11 +226,13 @@ describe('workbench run e2e', () => {
           const learnSkillCopyOk =
             !hasLearnSkill ||
             allItemTexts.some((text) => /已学会|正在学习/u.test(text)) ||
-            allSummaryTexts.some((text) => /已学会|正在学习|项操作|技能/u.test(text))
+            allSummaryTexts.some((text) => /已学会|正在学习|已完成\s+\d+\s*项|技能/u.test(text))
           const docxCopyOk =
             !hasDocxTool ||
             allItemTexts.some((text) => text.includes('Word 文档')) ||
-            allSummaryTexts.some((text) => text.includes('Word 文档') || /项操作/u.test(text))
+            allSummaryTexts.some(
+              (text) => text.includes('Word 文档') || /已完成\s+\d+\s*项/u.test(text)
+            )
           const thinkingSegmentOk =
             !result.retryAndThinkingCoexist &&
             !result.thinkingStuckAfterComplete &&
@@ -246,7 +260,7 @@ describe('workbench run e2e', () => {
             {
               name: 'workbench-ai-process-activity-render-real',
               message:
-                '真实 AI run 应渲染 Thought/Activity 过程层（header 工具短句 1/并但/>3 项操作、展开平铺、无收尾等待层、让俺想想不卡在完成后），并产出围绕工作区事实的最终 markdown，对齐 WB-COMPOSER-003、WB-COMPOSER-009、WB-COMPOSER-014、WB-CORE-005、WB-CORE-006。',
+                '真实 AI run 应渲染 Thought/Activity 过程层（header 同类归并/并但/>3 类已完成 n 项、展开平铺、无收尾等待层、让俺想想不卡在完成后），并产出围绕工作区事实的最终 markdown，对齐 WB-COMPOSER-003、WB-COMPOSER-009、WB-COMPOSER-014、WB-CORE-005、WB-CORE-006。',
               data: result
             }
           )

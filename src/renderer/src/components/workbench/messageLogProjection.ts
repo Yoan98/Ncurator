@@ -1,6 +1,7 @@
 import type {
   AssistantProcessDisplay,
   ChatMessageLogEntry,
+  ChatMessageLogRecord,
   IpcJsonObject
 } from '../../../../shared/types'
 import { normalizeThoughtText } from '../../../../shared/thoughtText'
@@ -15,36 +16,42 @@ const HIDDEN_PROCESS_TOOL_NAMES = new Set(['update_plan'])
 
 export const projectProcessGroups = (input: {
   runId: string
-  entries: ChatMessageLogEntry[]
+  records: readonly Pick<ChatMessageLogRecord, 'entry' | 'seq' | 'createdAt'>[]
 }): { processGroups: AssistantProcessGroup[]; processThoughts: AssistantProcessThought[] } => {
   const groupById = new Map<string, AssistantProcessGroup>()
   const orderedGroupIds: string[] = []
   const thoughts: AssistantProcessThought[] = []
   const toolArgsById = new Map<string, IpcJsonObject>()
   let thinkingOpen = false
-  let monotonic = 0
+  let fallbackOrder = 0
 
-  const stamp = (): number => monotonic++
+  const resolveCreatedAt = (record: Pick<ChatMessageLogRecord, 'seq' | 'createdAt'>): number => {
+    if (Number.isFinite(record.createdAt) && record.createdAt > 0) return record.createdAt
+    // Stable fallback that preserves log order when createdAt is missing.
+    return record.seq > 0 ? record.seq : ++fallbackOrder
+  }
 
   const upsertGroup = (group: AssistantProcessGroup): void => {
     if (!groupById.has(group.id)) orderedGroupIds.push(group.id)
     groupById.set(group.id, group)
   }
 
-  for (const entry of input.entries) {
+  for (const record of input.records) {
+    const entry: ChatMessageLogEntry = record.entry
     if (entry.kind === 'annotation') {
       if (entry.eventType === 'thinking_started') {
         thinkingOpen = true
       } else if (entry.eventType === 'thinking_completed') {
         thinkingOpen = false
       } else if (entry.eventType === 'compaction_checkpoint') {
+        const createdAt = resolveCreatedAt(record)
         upsertGroup(
           createDisplayProcessGroup({
-            groupId: `${input.runId}:compaction:${stamp()}`,
+            groupId: `${input.runId}:compaction:${record.seq}`,
             kind: 'compaction',
             display: { kind: 'compaction' },
             status: 'completed',
-            createdAt: stamp(),
+            createdAt,
             sourceEventType: 'assistant_process_group_started'
           })
         )
@@ -56,9 +63,9 @@ export const projectProcessGroups = (input: {
       if (!thinkingOpen) continue
       const text = normalizeThoughtText(entry.content)
       if (text) {
-        const thoughtCreatedAt = stamp()
+        const thoughtCreatedAt = resolveCreatedAt(record)
         thoughts.push({
-          id: `${input.runId}:thought:${thoughtCreatedAt}`,
+          id: `${input.runId}:thought:seq:${record.seq}`,
           text,
           createdAt: thoughtCreatedAt,
           sourceEventType: 'assistant_process_thought'
@@ -78,11 +85,12 @@ export const projectProcessGroups = (input: {
         input: toolArgsById.get(entry.toolCallId) || {}
       }
       const status: AssistantProcessStatus = entry.ok ? 'completed' : 'failed'
+      const createdAt = resolveCreatedAt(record)
       const item = createDisplayProcessItem({
         itemId: entry.toolCallId,
         display,
         status,
-        createdAt: stamp(),
+        createdAt,
         sourceEventType: 'assistant_process_item_started'
       })
       const group = createDisplayProcessGroup({
@@ -90,7 +98,7 @@ export const projectProcessGroups = (input: {
         kind: 'skill',
         display,
         status,
-        createdAt: item.createdAt,
+        createdAt,
         sourceEventType: 'assistant_process_group_started'
       })
       upsertGroup({ ...group, items: [item] })
@@ -110,13 +118,15 @@ export const projectProcessGroups = (input: {
       processThoughts
     })
   ) {
+    const createdAt =
+      processThoughts.at(-1)?.createdAt ?? projectedGroups.at(-1)?.createdAt ?? Date.now()
     upsertGroup(
       createDisplayProcessGroup({
         groupId: `${input.runId}:thinking`,
         kind: 'thinking',
         display: { kind: 'thinking' },
         status: 'running',
-        createdAt: stamp(),
+        createdAt: createdAt + 1,
         sourceEventType: 'thinking'
       })
     )

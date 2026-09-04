@@ -1,5 +1,6 @@
 import type { AiRunContext } from '../../../types'
 import type { HumanRuntimeCache, HumanState } from '../../types'
+import type { MarkdownLinkAccessEntry } from '../../../../../../shared/types'
 import {
   appendDocxApplyArtifactsAndEmitEvents,
   appendFileChangeArtifactsAndEmitEvents,
@@ -8,7 +9,7 @@ import {
 } from '../../../utils/artifacts'
 import { emitFinalizingStarted } from '../../../events/processEvents'
 import { renderHumanFileChangeLines } from '../../shared/runtimeRenderers'
-import { injectReferenceAccessStatus } from '../../shared/referenceAccessMarkdown'
+import { resolveDeliveryLinkAccess } from '../../shared/referenceAccessMarkdown'
 import { completeHumanTask } from '../utils/stateTransitions'
 
 export const buildContentSafetyFallbackMarkdown = (state: HumanState): string =>
@@ -76,6 +77,7 @@ export const completeDelivery = (input: {
   state: HumanState
   deliveryMarkdown: string
   emitAnswerEvents: boolean
+  linkAccess?: MarkdownLinkAccessEntry[]
 }): HumanState => {
   if (input.emitAnswerEvents) {
     emitFinalizingStarted({
@@ -88,7 +90,8 @@ export const completeDelivery = (input: {
     cache: input.cache,
     state: input.state,
     deliveryMarkdown: input.deliveryMarkdown,
-    emitAnswerEvents: input.emitAnswerEvents
+    emitAnswerEvents: input.emitAnswerEvents,
+    linkAccess: input.linkAccess
   })
 }
 
@@ -104,15 +107,21 @@ export const finalizeDelivery = async (input: {
     cache: input.cache,
     state: input.state
   })
-  const resolvedMarkdown = await injectReferenceAccessStatus(input.deliveryMarkdown)
+  const linkAccess = await resolveDeliveryLinkAccess(input.deliveryMarkdown)
   await input.ctx.appendMessageLog([
-    { kind: 'assistant', content: resolvedMarkdown, toolCalls: [] }
+    {
+      kind: 'assistant',
+      content: input.deliveryMarkdown,
+      toolCalls: [],
+      linkAccess
+    }
   ])
   return completeDelivery({
     ctx: input.ctx,
     cache: input.cache,
     state: readyState,
-    deliveryMarkdown: resolvedMarkdown,
-    emitAnswerEvents: input.emitAnswerEvents
+    deliveryMarkdown: input.deliveryMarkdown,
+    emitAnswerEvents: input.emitAnswerEvents,
+    linkAccess
   })
 }

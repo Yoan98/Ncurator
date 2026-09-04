@@ -5,6 +5,7 @@ import type {
   HumanState,
   HumanDispatchItem
 } from '../../types'
+import type { MarkdownLinkAccessEntry } from '../../../../../../shared/types'
 import {
   emitLatestHumanStepForState,
   emitTailHumanStepsForState
@@ -18,7 +19,6 @@ import {
   type HumanStateOverrides,
   type HumanTraceItemInput
 } from './stateTransitionState'
-import { emitAssistantProcessThought } from '../../../events/processEvents'
 import { peekDispatchGroup } from '../dispatch'
 
 export type { HumanTraceItemInput } from './stateTransitionState'
@@ -100,11 +100,6 @@ export const applyBrainDispatchTransition = (input: {
     state: nextState,
     stage: 'human_brain'
   })
-  emitAssistantProcessThought({
-    sendEvent: input.ctx.sendEvent,
-    runId: input.ctx.runId,
-    text: input.thought.text
-  })
 
   return nextState
 }
@@ -115,6 +110,7 @@ export const completeHumanTask = (input: {
   state: HumanState
   deliveryMarkdown: string
   emitAnswerEvents: boolean
+  linkAccess?: MarkdownLinkAccessEntry[]
 }): HumanState => {
   const finalResult = buildHumanResult({
     state: input.state,
@@ -127,7 +123,7 @@ export const completeHumanTask = (input: {
       runId: input.ctx.runId,
       taskId: input.state.task.taskId,
       text: input.deliveryMarkdown,
-      stage: 'human_brain'
+      linkAccess: input.linkAccess || []
     })
   }
 

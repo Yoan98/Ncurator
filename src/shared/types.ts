@@ -586,6 +586,16 @@ export type AttachmentSaveRequest = {
   kind?: ChatAttachmentKind
 }
 
+export type MarkdownLinkAccessStatus = 'accessible' | 'unavailable'
+export type MarkdownLinkResourceType = 'file' | 'web'
+
+/** Sidecar for assistant delivery links; body markdown is never rewritten. */
+export type MarkdownLinkAccessEntry = {
+  href: string
+  resourceType: MarkdownLinkResourceType
+  accessStatus: MarkdownLinkAccessStatus
+}
+
 export interface ChatMessage {
   id: string
   session_id: string
@@ -596,6 +606,8 @@ export interface ChatMessage {
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
   artifacts?: AiArtifactRef[]
+  /** Present on delivery assistant messages after finalizeDelivery access checks. */
+  linkAccess?: MarkdownLinkAccessEntry[]
   error?: boolean
 }
 
@@ -1645,6 +1657,7 @@ type AiRunEventPayload =
       runId: string
       taskId?: string
       text: string
+      linkAccess?: MarkdownLinkAccessEntry[]
     }
   | {
       type: 'context_budget_evaluated'
@@ -1781,6 +1794,8 @@ export type ChatMessageLogEntry =
       kind: 'assistant'
       content: string
       toolCalls: ChatMessageLogToolCall[]
+      /** Delivery-only sidecar; process assistants omit this. */
+      linkAccess?: MarkdownLinkAccessEntry[]
     }
   | {
       kind: 'tool'

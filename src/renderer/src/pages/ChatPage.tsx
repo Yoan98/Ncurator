@@ -84,10 +84,7 @@ import type {
   WorkbenchExecutionPermission,
   WorkbenchMode
 } from '../components/workbench/types'
-import type {
-  ParsedNcuratorRefKind,
-  ParsedNcuratorRefResourceType
-} from '../components/markdownReference'
+import type { OpenableMarkdownReference } from '../components/markdownReference'
 import {
   completeAssistantProcessGroups,
   createAssistantThinkingGroup,
@@ -447,6 +444,7 @@ const reduceAssistantTurnByRunEvent = (
     next = {
       ...next,
       finalAnswerMarkdown: event.text,
+      linkAccess: event.linkAccess || [],
       streamingMarkdown: '',
       processGroups: completeAssistantProcessGroups(next.processGroups)
     }
@@ -548,7 +546,7 @@ const buildAssistantTurnFromRunSnapshot = (
 ): AssistantTurnViewModel => {
   const projected = projectProcessGroups({
     runId: snapshot.run.id,
-    entries: (snapshot.messageLogRecords || []).map((record) => record.entry)
+    records: snapshot.messageLogRecords || []
   })
   const base: AssistantTurnViewModel = {
     ...createAssistantTurn(snapshot.run.assistantMessageId),
@@ -562,6 +560,12 @@ const buildAssistantTurnFromRunSnapshot = (
       base.plan = entry.payload.plan
     } else if (entry.kind === 'annotation' && entry.eventType === 'finalizing_started') {
       base.plan = []
+    } else if (
+      entry.kind === 'assistant' &&
+      entry.toolCalls.length === 0 &&
+      entry.linkAccess !== undefined
+    ) {
+      base.linkAccess = entry.linkAccess
     }
   }
   return applyRunRecordToTurn(base, snapshot.run)
@@ -1689,6 +1693,12 @@ const ChatPage: React.FC = () => {
           activeRunMessageIdsRef.current[runSnapshot.run.id] = runSnapshot.run.assistantMessageId
         }
         const turn = buildAssistantTurnFromRunSnapshot(runSnapshot)
+        const projectedMessage = messages.find(
+          (message) => message.id === runSnapshot.run.assistantMessageId
+        )
+        if (projectedMessage?.linkAccess !== undefined) {
+          turn.linkAccess = projectedMessage.linkAccess
+        }
         nextTurns[runSnapshot.run.assistantMessageId] = turn
         if (runSnapshot.run.artifacts && runSnapshot.run.artifacts.length > 0) {
           assistantArtifactsRef.current[runSnapshot.run.assistantMessageId] =
@@ -2558,17 +2568,34 @@ const ChatPage: React.FC = () => {
   )
 
   const openMarkdownReference = useCallback(
-    async (reference: {
-      kind: ParsedNcuratorRefKind
-      resourceType: ParsedNcuratorRefResourceType
-      label: string
-      path: string
-    }): Promise<void> => {
+    async (reference: OpenableMarkdownReference): Promise<void> => {
       if (reference.resourceType === 'web') {
-        const response = await window.api.openExternal(reference.path)
-        if (!response.success) {
-          emitErrorMessage(response.error || '打开链接失败')
+        const createResponse = await window.api.browserTabCreate({
+          ownerId: currentSessionIdRef.current || '__draft__'
+        })
+        if (!createResponse.success || !createResponse.state) {
+          emitErrorMessage(createResponse.error || '无法打开内置浏览器')
+          return
         }
+        const browser = createResponse.state
+        const navigateResponse = await window.api.browserTabNavigate({
+          tabId: browser.id,
+          url: reference.path
+        })
+        if (!navigateResponse.success) {
+          emitErrorMessage(navigateResponse.error || '打开链接失败')
+        }
+        openResourceTab({
+          id: `browser:${browser.id}`,
+          kind: 'browser',
+          browserTabId: browser.id,
+          title: browser.title || reference.label || '浏览器',
+          state: {
+            kind: 'browser',
+            title: browser.title || reference.label || '浏览器',
+            browserTabId: browser.id
+          }
+        })
         return
       }
 
@@ -2580,19 +2607,14 @@ const ChatPage: React.FC = () => {
             .split('/')
             .filter(Boolean)
             .pop() || reference.label,
-        origin: reference.kind === 'reference' ? 'source' : 'read'
+        origin: 'source'
       })
     },
-    [emitErrorMessage, openFile]
+    [emitErrorMessage, openFile, openResourceTab]
   )
 
   const handleOpenMarkdownReference = useCallback(
-    (reference: {
-      kind: ParsedNcuratorRefKind
-      resourceType: ParsedNcuratorRefResourceType
-      label: string
-      path: string
-    }): void => {
+    (reference: OpenableMarkdownReference): void => {
       void openMarkdownReference(reference)
     },
     [openMarkdownReference]
@@ -3707,6 +3729,7 @@ const ChatPage: React.FC = () => {
           <div className="min-w-0 text-[15px] leading-7 text-[#37352F]">
             <MarkdownRenderer
               content={messageItem.content}
+              linkAccess={messageItem.linkAccess}
               onOpenReference={handleOpenMarkdownReference}
             />
           </div>

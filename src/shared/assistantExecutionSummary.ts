@@ -318,18 +318,33 @@ const buildCountOnlySummary = (
   status: AssistantExecutionStatus,
   totalCount: number
 ): AssistantExecutionTextSegment[] => {
-  if (status === 'running') return sentence(text(`正在执行 ${totalCount} 项操作`))
-  if (status === 'completed') return sentence(text(`已完成 ${totalCount} 项操作`))
   if (status === 'partial_failed') {
     return sentence(text(`${totalCount} 项操作中有部分失败`))
   }
-  return sentence(text(`${totalCount} 项操作执行失败`))
+  if (status === 'failed') {
+    return sentence(text(`${totalCount} 项操作执行失败`))
+  }
+  // Form 2: always completed tense (no running/completed flicker).
+  return sentence(text(`已完成 ${totalCount} 项`))
+}
+
+const trimHeaderSegments = (
+  segments: readonly AssistantExecutionTextSegment[]
+): AssistantExecutionTextSegment[] => {
+  if (segments.length === 0) return []
+  const next = segments.map((segment) => ({ ...segment }))
+  const last = next[next.length - 1]
+  if (last) last.text = last.text.replace(/\s+$/u, '')
+  const first = next[0]
+  if (first) first.text = first.text.replace(/^\s+/u, '')
+  return next.filter((segment) => segment.text.length > 0)
 }
 
 /**
  * Activity header from tool-rendered sentences:
  * - drop param segments for short text
- * - 1 item = short sentence; 2–3 = join with 并/但; >3 = count only
+ * - merge same tool UI kind; single = short sentence; count>1 append「N 次」
+ * - ≤3 merged kinds join with 并/但; >3 kinds →「已完成 n 项」(n = total tools)
  */
 export const buildAssistantExecutionSummaryText = (
   groups: readonly AssistantExecutionGroup[]
@@ -347,15 +362,36 @@ export const buildAssistantExecutionSummaryText = (
     })
   }
 
-  if (list.length > 3) {
+  const kindOrder: AssistantExecutionSkillKey[] = []
+  const itemsByKind = new Map<AssistantExecutionSkillKey, typeof list>()
+  for (const item of list) {
+    const kind = item.toolName ? getAssistantToolUiKind(item.toolName) : 'generic'
+    if (!itemsByKind.has(kind)) {
+      kindOrder.push(kind)
+      itemsByKind.set(kind, [])
+    }
+    itemsByKind.get(kind)?.push(item)
+  }
+
+  if (kindOrder.length > 3) {
     return buildCountOnlySummary(status, list.length)
   }
 
-  return list.flatMap((item, index) => {
-    const itemStatus = item.status || status
+  return kindOrder.flatMap((kind, index) => {
+    const kindItems = itemsByKind.get(kind) || []
+    const kindStatus = getAssistantMixedStatus(
+      kindItems.map((item) => item.status || status),
+      status
+    )
+    const representative = kindItems[0]
+    const shortSegments = trimHeaderSegments(
+      toHeaderShortSegments(getItemSegments(representative, kindStatus))
+    )
     const prefix =
-      index === 0 ? '' : itemStatus === 'failed' || itemStatus === 'partial_failed' ? '但' : '并'
-    return sentence(text(prefix), ...toHeaderShortSegments(getItemSegments(item, status)))
+      index === 0 ? '' : kindStatus === 'failed' || kindStatus === 'partial_failed' ? ' 但 ' : ' 并 '
+    const countSuffix =
+      kindItems.length > 1 ? [text(` ${kindItems.length} 次`)] : ([] as AssistantExecutionTextSegment[])
+    return sentence(text(prefix), ...shortSegments, ...countSuffix)
   })
 }
 

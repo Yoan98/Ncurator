@@ -24,7 +24,7 @@ import type {
   AssistantTurnViewModel
 } from './types'
 import type { WorkspaceSource } from '../../../../shared/types'
-import type { ParsedNcuratorRefKind, ParsedNcuratorRefResourceType } from '../markdownReference'
+import type { OpenableMarkdownReference } from '../markdownReference'
 import { workbenchSelectors } from '../../testing/selectors'
 import {
   buildAssistantExecutionSummaryText,
@@ -45,12 +45,7 @@ type AssistantTurnCardProps = {
   onOpenApply: (changeId: string) => void
   workspaces: WorkspaceSource[]
   fallbackWorkspaceName?: string | null
-  onOpenReference: (reference: {
-    kind: ParsedNcuratorRefKind
-    resourceType: ParsedNcuratorRefResourceType
-    label: string
-    path: string
-  }) => void
+  onOpenReference: (reference: OpenableMarkdownReference) => void
 }
 
 const getProcessStatusClassName = (status: AssistantProcessGroup['status']): string => {
@@ -450,7 +445,11 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             className="min-w-0 text-[15px] leading-7 text-[#37352F]"
             data-testid={`${workbenchSelectors.assistantFinalAnswerPrefix}-${messageId}`}
           >
-            <MarkdownRenderer content={visibleAnswerMarkdown} onOpenReference={onOpenReference} />
+            <MarkdownRenderer
+              content={visibleAnswerMarkdown}
+              linkAccess={turn.linkAccess}
+              onOpenReference={onOpenReference}
+            />
           </div>
         ) : null}
 

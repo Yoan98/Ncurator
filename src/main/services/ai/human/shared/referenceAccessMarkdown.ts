@@ -1,58 +1,46 @@
-import {
-  buildNcuratorRefHref,
-  parseNcuratorRefHref
-} from '../../../../../shared/ncuratorRef'
+import type { MarkdownLinkAccessEntry } from '../../../../../shared/types'
+import { classifyMarkdownHref, extractMarkdownLinkHrefs } from '../../../../../shared/markdownLink'
 import {
   resolveReferencePathsAccess,
   type ReferenceAccessRequest
 } from './evidenceReferenceAccess'
 
-const REF_HREF_RE = /ncurator:\/\/ref\?[^)\s]+/g
+/**
+ * Scan delivery markdown for standard links, dedupe, resolve access once.
+ * Does not modify markdown text — returns a sidecar for renderer matching.
+ */
+export const resolveDeliveryLinkAccess = async (
+  markdown: string
+): Promise<MarkdownLinkAccessEntry[]> => {
+  const requests: ReferenceAccessRequest[] = []
+  const requestKeys: string[] = []
+  const hrefByRequestKey = new Map<string, string>()
 
-export const injectReferenceAccessStatus = async (markdown: string): Promise<string> => {
-  const referenceLinks: Array<{
-    href: string
-    request: ReferenceAccessRequest
-  }> = []
+  for (const href of extractMarkdownLinkHrefs(markdown)) {
+    const classified = classifyMarkdownHref(href)
+    if (classified.type === 'unknown') continue
 
-  for (const match of markdown.matchAll(REF_HREF_RE)) {
-    const href = match[0]
-    const parsed = parseNcuratorRefHref(href)
-    if (parsed.type === 'reference' && parsed.kind === 'reference') {
-      referenceLinks.push({
-        href,
-        request: { resourceType: parsed.resourceType, path: parsed.path }
-      })
+    const request: ReferenceAccessRequest =
+      classified.type === 'file'
+        ? { resourceType: 'file', path: classified.path }
+        : { resourceType: 'web', path: classified.url }
+    const key = `${request.resourceType}\u0000${request.path}`
+    if (hrefByRequestKey.has(key)) continue
+    hrefByRequestKey.set(key, href)
+    requestKeys.push(key)
+    requests.push(request)
+  }
+
+  if (requests.length === 0) return []
+
+  const resolutions = await resolveReferencePathsAccess({ references: requests })
+  return resolutions.map((resolution, index) => {
+    const requestKey = requestKeys[index]
+    const href = (requestKey && hrefByRequestKey.get(requestKey)) || resolution.path
+    return {
+      href,
+      resourceType: resolution.resourceType,
+      accessStatus: resolution.accessStatus
     }
-  }
-
-  if (referenceLinks.length === 0) return markdown
-
-  const resolutions = await resolveReferencePathsAccess({
-    references: referenceLinks.map((link) => link.request)
   })
-  const statusByKey = new Map(
-    resolutions.map((resolution) => [
-      `${resolution.resourceType}\u0000${resolution.path}`,
-      resolution.accessStatus
-    ])
-  )
-
-  let output = markdown
-  for (const link of referenceLinks) {
-    const parsed = parseNcuratorRefHref(link.href)
-    if (parsed.type !== 'reference') continue
-    const accessStatus =
-      statusByKey.get(`${link.request.resourceType}\u0000${link.request.path}`) || 'unavailable'
-    const nextHref = buildNcuratorRefHref({
-      kind: 'reference',
-      resourceType: parsed.resourceType,
-      label: parsed.label,
-      path: parsed.path,
-      accessStatus
-    })
-    output = output.replace(link.href, nextHref)
-  }
-
-  return output
 }

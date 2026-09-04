@@ -64,7 +64,7 @@ describe('assistant process icons and activity summary', () => {
 
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe(
-      '已学会 docx 阅读器并执行命令 '
+      '已学会 docx 阅读器 并 执行命令'
     )
   })
 
@@ -80,10 +80,25 @@ describe('assistant process icons and activity summary', () => {
     ]
     groups[1] = { ...groups[1], status: 'failed' }
 
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页 但读取文件 ')
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页 但 读取文件')
   })
 
-  it('summarizes more than three tools as n operations without action-class suffix', () => {
+  it('merges same tool kind with count instead of repeating short text', () => {
+    const groups = [
+      ...createToolGroup('web_search', 1, {
+        completedText: [{ text: '搜索网页 ' }, { text: 'a', param: true }]
+      }),
+      ...createToolGroup('web_search', 2, {
+        completedText: [{ text: '搜索网页 ' }, { text: 'b', param: true }]
+      }),
+      ...createToolGroup('web_search', 3, {
+        completedText: [{ text: '搜索网页 ' }, { text: 'c', param: true }]
+      })
+    ]
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页 3 次')
+  })
+
+  it('summarizes more than three merged kinds as 已完成 n 项', () => {
     const groups = createToolGroups([
       'excel_read',
       'web_search',
@@ -92,7 +107,19 @@ describe('assistant process icons and activity summary', () => {
     ])
 
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已完成 4 项操作')
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已完成 4 项')
+  })
+
+  it('keeps count form as 已完成 n 项 even while some tools are still running', () => {
+    const groups = createToolGroups([
+      'excel_read',
+      'web_search',
+      'excel_edit',
+      'terminal_run'
+    ]).map((group, index) =>
+      index === 3 ? { ...group, status: 'running' as const, items: group.items.map((item) => ({ ...item, status: 'running' as const })) } : group
+    )
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已完成 4 项')
   })
 
   it('keeps single-tool header as action short text without args', () => {
@@ -102,6 +129,6 @@ describe('assistant process icons and activity summary', () => {
         { text: 'find /tmp -name "*.docx"', param: true }
       ]
     })
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('执行命令 ')
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('执行命令')
   })
 })

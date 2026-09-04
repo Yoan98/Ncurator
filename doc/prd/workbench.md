@@ -63,7 +63,7 @@
 - 直接写回：AI 写工具将最终 docx、pptx、xlsx、生成图片或普通文本结果原子写入源文件或创建目标文件的流程；工具成功即代表正式路径已可读取，run 收尾不再提交文件。
 - 修改记录：一次 AI run 中由受控文件工具直接写回，或由某条 terminal 命令前后差异识别出的创建、更新、删除或重命名记录；提供打开文件、适用格式的审核模式与回退本次修改入口。
 - 回退本次修改：基于写回前 checkpoint 恢复文件；新建文件回退时删除目标文件，若文件在 AI 写回后又被修改，需提示用户确认会丢失后续修改。
-- 内部引用链接：assistant markdown 中的 `ncurator://ref` 链接。`kind=reference` 表示证据引用，`kind=normal` 表示普通资源链接，`resourceType=file/web` 表示资源类型。证据引用在最终交付生成后由 Main 检查一次可访问性，并携带 `accessStatus=accessible/unavailable`；历史证据缺少该字段时按不可用处理。可用证据可点击，不可用证据显示为弱化文本；普通资源链接不包含 `accessStatus`。
+- 内部引用链接：assistant markdown 中的标准 Markdown 链接 `[显示名](绝对本地路径或 https URL)`（含空格/括号时可用尖括号形式）。最终交付生成后，Main 对链接目标并行去重检查一次可访问性，结果写入交付 assistant 的 `linkAccess` sidecar，**不改写** markdown 正文。渲染时用 href 匹配 sidecar：可访问则可点击（本地文件打开右侧预览，网页打开右侧内置浏览器）；不可访问或无法识别时显示为弱化灰色文本，悬浮提示「链接无法访问」。历史消息若无 sidecar：旧 `ncurator://ref` 仍按嵌入的 accessStatus 解析；标准链接在流式阶段（尚未检查）保持可点。
 - AI 推进偏好：智能模式下用户对资料使用边界的附加约束，界面选项包括“默认”“本地资料·宽松”“本地资料·严谨”。当前“本地资料”范围包含当前工作区知识库资料、工作区文件和显式参考资料。宽松模式优先使用这些资料，资料不足时允许补充模型知识或外部网页；严谨模式只能把这些资料作为事实依据，资料不足时必须明确说明，不得把模型知识、外部搜索或浏览器结果伪装成资料内事实。
 - 执行权限：智能模式下对本次运行是否等待工具审批的选择，独立于 AI 推进偏好。选项为“审核”和“完全访问”。
 
@@ -241,11 +241,11 @@
   - `WB-COMPOSER-003-AC1` 智能模式发送后，主区先可见用户消息与 assistant 占位消息。
   - `WB-COMPOSER-003-AC2` AI 运行成功启动后，assistant 过程流通过事件逐步追加更新，而不是一次性静态替换。
   - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前可展示“让俺想想”并带有流动视觉反馈；当后端 thinking 过程事件到达时，本地占位被替换为该 run 的 thinking 过程组，不重复展示。“让俺想想”只在段内尚无工具时展示：本 turn 首次（尚无 Thought / Activity），或上一段决策层 Thought / AI content 落地之后、下一组工具出现之前；一旦出现 Activity，不再插入独立 think 行，改由该 Activity header 保持滑动，直到下一段 AI content（Thought 或最终回答）出现（run 失败/取消且无 content 时停滑）。过程层 brain 等待仍由 thinking process started/completed（或 failed）驱动；brain 一旦开始产出可见正文或 tool call，即发出 thinking completed。消息日志注解 `thinking_started/completed` 仍覆盖整轮 brain 调用，仅用于 Thought 投影。当出现“正在重试”过程组时，必须隐藏“让俺想想”占位，避免两个等待状态同时出现。
-  - `WB-COMPOSER-003-AC4` assistant turn 中 brain 最终输出始终位于过程流下方，并按 markdown 渲染；最终回答在内容分片到达后直接流式渲染，不展示独立收尾等待层；证据引用链接与普通链接视觉区分，内部文件链接打开右侧文件预览，内部网页链接使用系统浏览器打开。
+  - `WB-COMPOSER-003-AC4` assistant turn 中 brain 最终输出始终位于过程流下方，并按 markdown 渲染；最终回答在内容分片到达后直接流式渲染，不展示独立收尾等待层；内部文件链接打开右侧文件预览，网页链接打开右侧内置浏览器。
   - `WB-COMPOSER-003-AC5` 决策层（Thought）只展示面向用户的短摘要，不得展示模型原始长篇推理；决策层出现时，当前思考层必须立即隐藏，即使下一步执行正等待审批。
   - `WB-COMPOSER-003-AC6` 过程流使用用户可理解的文案，不直接暴露内部 tool 名或底层事件名；两次 Thought 之间的工具调用（含 `learn_skill`）合并为一个 Activity 面板 header，展开后按时间平铺每条工具的自然语言说明；压缩与重试过程单独成行，不并入 Activity。
   - `WB-COMPOSER-003-AC7` AI 输出中切到 Settings 或触发 renderer 重新挂载后，回到 Workbench 能通过会话消息记录投影恢复过程流、partial answer、最终回答或等待审批状态。
-  - `WB-COMPOSER-003-AC8` brain 负责在最终交付 markdown 中生成证据引用（名称、地址、资源类型）；最终交付生成后、回传 renderer 前，Main 对引用地址并行去重检查并写入证据专用的 `accessStatus`。可访问引用保留文件或网页链接交互；不可访问引用不得删除，必须使用与可访问引用相同的强调色降低透明度，并显示为无资源图标、无悬浮反馈、普通鼠标且不可点击的文本。缺少 `accessStatus` 的证据按不可访问处理，普通资源链接不使用该字段；renderer 渲染和用户点击时均不再次检查可访问性。
+  - `WB-COMPOSER-003-AC8` brain 在最终交付 markdown 中使用标准 Markdown 链接引用资料（名称 + 绝对路径或 https URL）；最终交付生成后、回传 renderer 前，Main 对链接地址并行去重检查并写入交付 `linkAccess` sidecar（不改写正文）。可访问链接保留文件或内置浏览器交互；不可访问或无法识别的链接不得删除，必须使用强调色降低透明度的灰色弱化文本，悬浮提示「链接无法访问」，且不可点击。renderer 渲染和用户点击时均不再次检查可访问性；流式阶段尚无 sidecar 时链接可先保持可点，交付落库后按 sidecar 更新。
   - `WB-COMPOSER-003-AC9` terminal 审批要求表示命令正在等待用户决定，不属于执行失败；用户未允许时命令状态为未执行且不得产生 terminal step。命令启动后自然退出时，无论退出码是否为零，都属于执行完成并保留真实退出码供 brain 判断；只有终端执行器、Shell 或会话在执行期间异常时才显示“执行终端指令失败”。用户主动停止单独记录为已取消；正常中断后终端回到 idle，强制终止进程树后终端进入 closed。
 
 #### WB-COMPOSER-004 搜索模式发送路径
@@ -312,7 +312,7 @@
   - `WB-COMPOSER-014-AC2` 有工具调用的内容成为 Thought；无工具且正常结束的内容成为最终回答。未确认结束前不会提前收尾。
   - `WB-COMPOSER-014-AC3` 自动重试不会重复拼接上一尝试；输出被截断时显示可继续错误，已确认的半截回答进入日志，网络中断草稿不进入后续对话上下文。
   - `WB-COMPOSER-014-AC4` 有计划时显示环形进度；Todo 浮层支持鼠标和键盘，正常完成后短动画隐藏，中断后保留。
-  - `WB-COMPOSER-014-AC5` 两次 Thought 之间的工具调用合并为 Activity 面板：header 使用各工具渲染句去掉参数段后的短句，按 1 条短句 / 2～3 条「并」「但」拼接 / 大于 3 条收敛为「正在执行 / 已完成 n 项操作」；header 从 Activity 出现起保持滑动直到下一段 AI content（Thought 或最终回答）；header 单行 CSS 省略；展开后按时间平铺带参数的工具原句，失败行红色；聊天区不直接展示工具原始结果。
+  - `WB-COMPOSER-014-AC5` 两次 Thought 之间的工具调用合并为 Activity 面板：header 先按工具 UI 类型归并同类；归并后类别 ≤ 3 时用短句汇总（单次为短句，同类多次追加「N 次」，多类用「并」「但」连接）；归并后类别 > 3 时收敛为「已完成 n 项」（n 为总工具次数，进行中也使用该完成态句式；失败态使用对应失败句式）；header 从 Activity 出现起保持滑动直到下一段 AI content（Thought 或最终回答）；header 单行 CSS 省略；展开后按时间平铺带参数的工具原句，失败行红色；聊天区不直接展示工具原始结果。
 
 #### WB-COMPOSER-011 使用帮助入口
 
@@ -340,13 +340,13 @@
 
 #### WB-COMPOSER-009 消息流布局
 
-- 系统行为：workbench 消息区不展示用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流没有独立标题或左侧竖线，且与最终 brain 输出共用消息 rail；最终 markdown 输出直接位于内容流中；用户消息使用右对齐紧凑气泡。空会话时输入区位于主工作区中部；存在消息后输入区固定在主区底部，只允许消息区独立滚动，右侧面板展开或折叠不得改变输入区定位。过程流按真实时间展示决策层与过程层：思考层“让俺想想”是段内临时等待层，仅在首次或上一段 AI content 之后且尚未出现工具时显示；Activity（工具面板）header 使用工具级短句汇总（去掉 path/command/query/URL 等参数段），从出现起滑动直到下一段 AI content；压缩层、重试层和决策层累计保留。两次 Thought 之间的全部工具调用（含 `learn_skill`）合并为一个 Activity 面板，header 默认折叠，hover 时显示展开箭头并提升文字颜色，展开后按时间平铺带参数的工具原句。压缩与重试单独成行，不并入 Activity。
+- 系统行为：workbench 消息区不展示用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流没有独立标题或左侧竖线，且与最终 brain 输出共用消息 rail；最终 markdown 输出直接位于内容流中；用户消息使用右对齐紧凑气泡。空会话时输入区位于主工作区中部；存在消息后输入区固定在主区底部，只允许消息区独立滚动，右侧面板展开或折叠不得改变输入区定位。过程流按真实时间展示决策层与过程层：思考层“让俺想想”是段内临时等待层，仅在首次或上一段 AI content 之后且尚未出现工具时显示；Activity（工具面板）header 按工具类型归并后做短句汇总（去掉 path/command/query/URL 等参数段；同类多次带次数；超过三类收敛为「已完成 n 项」），从出现起滑动直到下一段 AI content；压缩层、重试层和决策层累计保留。两次 Thought 之间的全部工具调用（含 `learn_skill`）合并为一个 Activity 面板，header 默认折叠，hover 时显示展开箭头并提升文字颜色，展开后按时间平铺带参数的工具原句。压缩与重试单独成行，不并入 Activity。
 - 验收：
   - `WB-COMPOSER-009-AC1` 用户与 assistant 消息不展示头像或头像占位。
   - `WB-COMPOSER-009-AC2` assistant 过程流和最终输出左边缘与底部 composer 内容 rail 对齐。
   - `WB-COMPOSER-009-AC3` assistant 最终 markdown 输出默认无独立背景卡片，保持在过程流下方。
   - `WB-COMPOSER-009-AC4` 用户消息以右对齐紧凑气泡展示。
-  - `WB-COMPOSER-009-AC5` Activity header 使用各工具已渲染文案去掉参数段后的短句做汇总：仅 1 条时与短句一致；2～3 条时用「并」连接，后续失败用「但」连接，不使用逗号分隔；大于 3 条时收敛为「正在执行 n 项操作」或「已完成 n 项操作」（失败态使用对应失败句式）。header 不携带命令参数、文件路径、query 或 URL；展开行仍展示带对象的完整工具原句。header 从 Activity 出现起保持滑动，直到下一段 AI content（Thought 或最终回答）出现。header 文本单行显示，超出宽度时 CSS 省略号裁切。header 只展示一个图标；单一工具类型使用对应语义图标，混合工具使用流程图标。
+  - `WB-COMPOSER-009-AC5` Activity header 按工具 UI 类型归并后做短句汇总：去掉参数段；同类多次展示为「短句 N 次」（例如「搜索网页 3 次」）；归并后类别为 1 时与短句（或带次数）一致；2～3 类时用「并」连接，后续失败类用「但」连接，不使用逗号分隔；归并后类别大于 3 时收敛为「已完成 n 项」（n 为总工具次数；进行中也使用该句式，不再在「正在执行 / 已完成」间切换；失败态使用对应失败句式）。header 不携带命令参数、文件路径、query 或 URL；展开行仍展示带对象的完整工具原句。header 从 Activity 出现起保持滑动，直到下一段 AI content（Thought 或最终回答）出现。header 文本单行显示，超出宽度时 CSS 省略号裁切。header 只展示一个图标；单一工具类型使用对应语义图标，混合工具使用流程图标。
   - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看 Word 文档 xx 的结构”；`docx_read_nodes` 展示“读取 Word 文档 xx 范围”；`learn_skill` 展示“正在学习 / 已学会 xx”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search search / fetch` 分别展示“搜索网页 query”“抓取网页 url”；`browser_use navigate / observe / extract / act` 分别补充“打开网页 / 查看页面并 / 从页面中 / 在页面上”的动作语义。
   - `WB-COMPOSER-009-AC7` 文件名、query、命令、URL 和技能名不使用粗体或冒号强调，保持正常字重；可以通过文字颜色表达层级。
   - `WB-COMPOSER-009-AC8` `learn_skill` 作为普通工具行展示，使用技能通用名称，例如 `docx 阅读器`、`docx 编辑器`、`资料查阅器`、`命令执行器`；运行中展示“正在学习 xx”，完成后展示“已学会 xx”，不再作为独立学习层。

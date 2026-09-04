@@ -110,7 +110,7 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 | `kind` | 存什么 | 谁写 |
 |--------|--------|------|
 | `user` | 用户原文 + `context` | **仅** `context_budget`（首次进 brain） |
-| `assistant` | 文本 + `toolCalls[]` | **brain**（过程决策 / 截断 / 内容安全 fallback）或 **`finalizeDelivery`**（正常交付）；**同一轮交付正文不叠写** |
+| `assistant` | 文本 + `toolCalls[]`（交付另含 `linkAccess`） | **brain**（过程决策 / 截断 / 内容安全 fallback）或 **`finalizeDelivery`**（正常交付）；**同一轮交付正文不叠写** |
 | `tool` | 工具反馈正文 + 可选 `images[]` | **`hand` / `plan` / `learning`**（执行结果；不写 assistant） |
 | `annotation` | 过程与状态事件 | 见下表 |
 
@@ -166,13 +166,20 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 }
 ```
 
-**`assistant`（交付）** — 仅 `finalizeDelivery`（或内容安全 fallback）写入；`toolCalls` 为空数组。
+**`assistant`（交付）** — 仅 `finalizeDelivery`（或内容安全 fallback）写入；`toolCalls` 为空数组；正常交付含 `linkAccess` sidecar（不改写 `content`）。
 
 ```json
 {
   "kind": "assistant",
-  "content": "# 本周周报\n\n已按模板填好本周内容。",
-  "toolCalls": []
+  "content": "结论见 [周报模板](/Users/me/workspace/周报模板.docx)。",
+  "toolCalls": [],
+  "linkAccess": [
+    {
+      "href": "/Users/me/workspace/周报模板.docx",
+      "resourceType": "file",
+      "accessStatus": "accessible"
+    }
+  ]
 }
 ```
 
@@ -248,7 +255,7 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 | `dispatch` → `plan` | `tool`（`update_plan`）+ `plan_updated` | 参数合法时同批写；**不**写 assistant |
 | `dispatch` → `hand` | `tool`（+ 可选 `images[]`） | 每个 call 一条；审批拒绝写失败 `tool`；**不**写 assistant |
 | `context_compaction` | `compaction_checkpoint` | 压缩摘要落库 |
-| `finalizeDelivery` | `finalizing_started` → `assistant`（`toolCalls: []`） | 正常交付正文的**唯一** writer（落盘与 ref 注入之后）；清空 plan 投影 |
+| `finalizeDelivery` | `finalizing_started` → `assistant`（`toolCalls: []` + `linkAccess`） | 正常交付正文的**唯一** writer（落盘与链接访问检查之后）；清空 plan 投影 |
 
 ```text
 用户发送
@@ -456,7 +463,7 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 
 #### 过程层（单 run）
 
-`projectProcessGroups({ runId, entries })` 扫描**该 run** 的 log 条目：
+`projectProcessGroups({ runId, records })` 扫描**该 run** 的 log 记录（使用 `seq` / `createdAt` 保证顺序与时间基）：
 
 | log 信号 | UI 过程组 |
 |----------|-----------|
@@ -468,6 +475,8 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 | `learning_started` / `learning_completed` | 仅 harness / 状态注解；**不**投影为独立学习过程组 |
 
 `update_plan` **不出** tool 过程组。`learn_skill` 与其它工具一样进入 Activity。
+
+Live 运行中的 Thought 由 `assistant_process_thought` 事件写入 `processThoughts`（不依赖中途重投影 log）；凡 brain 本轮有正文且带 tool_calls（含全部不可执行），都必须发出该事件，避免流式缓冲被下一轮清空后正文从 UI 消失。会话恢复时再由 log 投影补齐。
 
 #### 流式与终态
 
@@ -763,8 +772,8 @@ Main **不**强制计划全部 `done` 才允许交付。
 applyDeliverySideEffects
   → docx/ppt 落盘、汇总 ai_file_change
   → finalizing_started（annotation，清空 plan 投影）
-  → 注入 reference 访问状态到 Markdown
-  → append 交付 assistant（toolCalls: []）
+  → 扫描交付 markdown 链接、去重检查访问，写入 `linkAccess` sidecar（不改写正文）
+  → append 交付 assistant（toolCalls: []，含 linkAccess）
   → ai_run.status = completed
 ```
 

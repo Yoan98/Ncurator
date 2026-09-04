@@ -22,6 +22,8 @@ export const emitAssistantProcessThought = (input: {
   sendEvent: SendEvent
   runId: string
   text: string
+  /** Stable id for this brain round; preferred over createdAt to avoid same-ms collisions. */
+  thoughtId?: string
   createdAt?: number
 }): void => {
   const text = input.text.trim()
@@ -30,7 +32,7 @@ export const emitAssistantProcessThought = (input: {
   input.sendEvent({
     type: 'assistant_process_thought',
     runId: input.runId,
-    thoughtId: `${input.runId}:thought:${createdAt}`,
+    thoughtId: input.thoughtId || `${input.runId}:thought:${createdAt}`,
     text,
     createdAt
   })

@@ -51,10 +51,10 @@ export const projectAiConversationMessages = (input: {
     })
 
     const deliveryRecord = [...runRecords].reverse().find(isDeliveryAssistant)
+    const deliveryEntry =
+      deliveryRecord?.entry.kind === 'assistant' ? deliveryRecord.entry : undefined
     const deliveryContent =
-      deliveryRecord?.entry.kind === 'assistant'
-        ? deliveryRecord.entry.content
-        : run.finalAnswer || run.partialAnswer || ''
+      deliveryEntry?.content ?? (run.finalAnswer || run.partialAnswer || '')
 
     const isActive = ACTIVE_RUN_STATUSES.has(run.status)
     if (deliveryContent || isActive || run.error) {
@@ -66,6 +66,7 @@ export const projectAiConversationMessages = (input: {
         timestamp:
           deliveryRecord?.createdAt ?? run.finishedAt ?? run.updatedAt ?? run.createdAt + 1,
         artifacts: run.artifacts as AiArtifactRef[] | undefined,
+        linkAccess: deliveryEntry?.linkAccess,
         error: run.status === 'failed' ? true : undefined
       })
     }

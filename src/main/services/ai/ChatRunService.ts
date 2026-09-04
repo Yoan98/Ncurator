@@ -1001,7 +1001,7 @@ export class ChatRunService {
       run.partialAnswerRole = 'answer'
       run.finalAnswer = event.text
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, event.text)
+      assistantMessage = this.buildAssistantMessage(run, event.text, false, event.linkAccess)
     } else if (event.type === 'file_artifact') {
       run.artifacts = appendArtifact(run.artifacts, {
         kind: 'file',
@@ -1086,7 +1086,12 @@ export class ChatRunService {
     entry.projectionFlushTimer = null
   }
 
-  private buildAssistantMessage(run: AiRunRecord, content: string, error = false): ChatMessage {
+  private buildAssistantMessage(
+    run: AiRunRecord,
+    content: string,
+    error = false,
+    linkAccess?: ChatMessage['linkAccess']
+  ): ChatMessage {
     return {
       id: run.assistantMessageId,
       session_id: run.sessionId,
@@ -1094,6 +1099,7 @@ export class ChatRunService {
       content,
       timestamp: run.createdAt + 1,
       artifacts: run.artifacts && run.artifacts.length > 0 ? run.artifacts : undefined,
+      linkAccess,
       error
     }
   }

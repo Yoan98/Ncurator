@@ -523,7 +523,11 @@ describe('workbench run e2e', () => {
               result.browserActions.includes('act') &&
               result.browserActions.includes('extract') &&
               result.executionSummaryTexts.some(
-                (text) => text.includes('项操作') || text.includes('打开网页') || text.includes('操作浏览器')
+                (text) =>
+                  /已完成\s+\d+\s*项/u.test(text) ||
+                  text.includes('项操作') ||
+                  text.includes('打开网页') ||
+                  text.includes('操作浏览器')
               ) &&
               result.executionSummaryTexts.every((text) => !text.includes('，')) &&
               (result.executionIconKinds.includes('workflow') ||

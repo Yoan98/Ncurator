@@ -22,6 +22,7 @@ import { formatZodErrorForTool, type ZodIssueLike } from '../../shared/schemaErr
 import { normalizeToolCallArgs } from '../../shared/toolArgsNormalize'
 import { estimateMessagesForContext, projectMessagesForMainModel } from '../../memory/multimodal'
 import {
+  emitAssistantProcessThought,
   emitThinkingCompleted,
   emitThinkingFailed,
   emitThinkingStarted
@@ -362,6 +363,17 @@ export const createBrainNode = (input: {
 
       const thoughtText = assembledText
       const thought = normalizeRoundThought(thoughtText)
+
+      // Live UI depends on this event (not log projection). Emit whenever this round is a
+      // thought — including all-invalid tool calls that returnToBrain without dispatch.
+      if (hasAnyToolCall && thought.text) {
+        emitAssistantProcessThought({
+          sendEvent: input.ctx.sendEvent,
+          runId: input.ctx.runId,
+          text: thought.text,
+          thoughtId: `${input.ctx.runId}:thought:${roundId}`
+        })
+      }
 
       const appendInvalidFeedback = async (
         calls: Array<{ id?: string; name: string; errorMessage: string }>,

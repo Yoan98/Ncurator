@@ -181,6 +181,8 @@ export type AssistantTurnViewModel = {
   processThoughts: AssistantProcessThought[]
   processGroups: AssistantProcessGroup[]
   finalAnswerMarkdown: string
+  /** Present after delivery access checks; undefined while streaming. */
+  linkAccess?: import('../../../../shared/types').MarkdownLinkAccessEntry[]
   streamingRoundId?: string
   streamingMarkdown: string
   streamingRole: 'answer' | 'thought'
