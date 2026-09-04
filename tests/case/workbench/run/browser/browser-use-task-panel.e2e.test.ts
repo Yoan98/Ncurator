@@ -4,28 +4,22 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   type WorkbenchAiCompletionEvidence,
-  appendWorkbenchInputText,
   assertNoWorkbenchFakeSignals,
   collectWorkbenchAiRunEvents,
   decideWorkbenchApprovalBatch,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
-  insertWorkbenchReferenceToken,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   selectWorkbenchResourceMenuItem,
-  selectWorkbenchWorkspace,
   setupWorkbenchWithTempWorkspace,
   startLocalWorkbenchHttpServer,
-  submitWorkbenchCurrentDraft,
   switchWorkbenchMode,
-  createWorkbenchNewSession,
-  waitForWorkbenchSearchResults,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'browser-use-task-panel'
-const TASK_CODE = 'cedar-browser-731'
+const LOGOUT_TOKEN = 'LOGOUT_OK_cedar-browser-731'
 const BROWSER_PANEL_WAIT_TIMEOUT_MS = 180_000
 const BROWSER_TASK_COMPLETION_TIMEOUT_MS = 240_000
 const BROWSER_USE_FAILURE_LIMIT = 2
@@ -34,7 +28,6 @@ const DEPRECATED_BROWSER_USE_FIELDS = [
   'pageState',
   'outcome',
   'pageText',
-  'selector',
   'cacheStatus',
   'success'
 ]
@@ -62,22 +55,47 @@ const hasDeprecatedBrowserUseField = (value: JsonValue | undefined): boolean => 
   })
 }
 
+const isBrowserActionCandidate = (value: JsonValue | undefined): boolean => {
+  if (!isObjectRecord(value)) return false
+  return (
+    typeof value.actionId === 'string' &&
+    typeof value.method === 'string' &&
+    typeof value.description === 'string' &&
+    Array.isArray(value.arguments) &&
+    typeof value.selector === 'string'
+  )
+}
+
 const isBrowserUseDataContract = (data: JsonValue | undefined): boolean => {
   if (!isObjectRecord(data)) return false
   if (typeof data.error === 'string') return true
   const action = data.action
-  if (action !== 'navigate' && action !== 'observe' && action !== 'act' && action !== 'extract') {
+  if (
+    action !== 'navigate' &&
+    action !== 'list_tabs' &&
+    action !== 'observe' &&
+    action !== 'act' &&
+    action !== 'extract' &&
+    action !== 'screenshot'
+  ) {
     return false
   }
+  if (action === 'list_tabs') {
+    return Array.isArray(data.tabs)
+  }
+  if (typeof data.tabId !== 'string') return false
   if (!isObjectRecord(data.page) || typeof data.page.url !== 'string') return false
   if ('title' in data.page && typeof data.page.title !== 'string') return false
   if (action === 'navigate') return true
   if (action === 'extract') return typeof data.content === 'string'
-  if (action === 'observe') return Array.isArray(data.actions)
+  if (action === 'screenshot') return typeof data.path === 'string'
+  if (action === 'observe') {
+    return Array.isArray(data.actions) && data.actions.every(isBrowserActionCandidate)
+  }
   return (
     typeof data.message === 'string' &&
     typeof data.actionDescription === 'string' &&
-    (!('actions' in data) || Array.isArray(data.actions)) &&
+    isBrowserActionCandidate(data.executed) &&
     (!('error' in data) || typeof data.error === 'string')
   )
 }
@@ -186,7 +204,7 @@ const waitForBrowserTaskCompletion = async (
           event.type === 'tool_call_result' && event.toolName === 'browser_use'
       )
       .map(readBrowserUseResultText)
-      .find((text) => text.includes('BROWSER_TASK_DONE') && text.includes(TASK_CODE))
+      .find((text) => text.includes(LOGOUT_TOKEN))
     if (runCompleted?.type === 'run_completed') {
       const finalAnswerText =
         events
@@ -268,14 +286,46 @@ describe('workbench run e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const server = await startLocalWorkbenchHttpServer(`<!doctype html>
-          <title>Workbench Browser Task</title>
-          <label>Task code <input id="task-code" aria-label="Task code" /></label>
-          <button id="submit-task">Submit task</button>
-          <output id="task-result">Waiting for submit</output>
+          <title>Workbench Browser Logout Task</title>
+          <style>
+            header { display: flex; gap: 12px; align-items: center; }
+            #account-menu { display: none; border: 1px solid #ccc; padding: 8px; min-width: 120px; }
+          </style>
+          <header>
+            <button id="role" type="button">教师</button>
+            <ul id="role-menu" hidden>
+              <li>教师</li>
+              <li>学生</li>
+            </ul>
+            <button id="msg" type="button" aria-label="消息">消息</button>
+            <div id="account-menu" role="menu"></div>
+          </header>
+          <main id="status">已登录</main>
           <script>
-            document.querySelector('#submit-task').addEventListener('click', () => {
-              document.querySelector('#task-result').textContent = 'BROWSER_TASK_DONE:' + document.querySelector('#task-code').value
+            const role = document.querySelector('#role')
+            const roleMenu = document.querySelector('#role-menu')
+            const msg = document.querySelector('#msg')
+            const accountMenu = document.querySelector('#account-menu')
+            const status = document.querySelector('#status')
+            role.addEventListener('click', () => {
+              roleMenu.hidden = !roleMenu.hidden
             })
+            const showAccountMenu = () => {
+              if (!accountMenu.querySelector('#logout')) {
+                const logout = document.createElement('button')
+                logout.id = 'logout'
+                logout.type = 'button'
+                logout.textContent = '退出登录'
+                logout.addEventListener('click', () => {
+                  status.textContent = '${LOGOUT_TOKEN}'
+                })
+                accountMenu.appendChild(logout)
+              }
+              accountMenu.style.display = 'block'
+            }
+            msg.addEventListener('mouseenter', showAccountMenu)
+            msg.addEventListener('focus', showAccountMenu)
+            accountMenu.addEventListener('mouseenter', showAccountMenu)
           </script>`)
           runtime.registerResource({
             name: 'browser-task-http-server',
@@ -285,29 +335,34 @@ describe('workbench run e2e', () => {
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID
           })
-          await switchWorkbenchMode(page, '搜索')
-          await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
-          await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
-          await submitWorkbenchCurrentDraft(page)
-          const previewResults = await waitForWorkbenchSearchResults(page)
-          await previewResults
-            .locator('div')
-            .filter({ hasText: 'workbench-preview.md' })
-            .first()
-            .getByRole('button', { name: '预览文件' })
-            .click()
+          const panelToggleForFile = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
+          if ((await panelToggleForFile.getAttribute('aria-label')) === '展开右侧栏') {
+            await panelToggleForFile.click()
+          }
+          await selectWorkbenchResourceMenuItem(runtime, 'file')
+          const fileFilter = page.getByPlaceholder('筛选文件…')
+          if (!(await fileFilter.isVisible().catch(() => false))) {
+            await getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle).click()
+            await fileFilter.waitFor({ state: 'visible' })
+          }
+          await fileFilter.fill('workbench-preview.md')
+          await page.getByTitle('workbench-preview.md', { exact: true }).click()
           await getWorkbenchLocator(page, workbenchSelectors.markdownEditor).waitFor({
             state: 'visible',
             timeout: 30_000
           })
 
-          await createWorkbenchNewSession(page)
-          await selectWorkbenchWorkspace(page, setup.workspaceName)
           await switchWorkbenchMode(page, 'AI')
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `Use the right embedded browser to complete this page task. Use browser_use navigate to open ${server.url}, use observe to inspect the form controls, then do not combine form actions: use one act to fill the Task code input with ${TASK_CODE}, use another act to click Submit task, then use extract to read the full displayed result. Tell me the exact result text.`
+            `Use the right embedded browser to complete this logout task on ${server.url}.
+Rules:
+1) browser_use navigate without tabId to open the URL, then keep using the returned tabId for all later calls.
+2) Use observe to discover actions; act MUST use actionId from observe (never natural-language act instruction).
+3) The "教师" button only opens role switch (教师/学生) — that is NOT logout.
+4) Hover the "消息" button so the account menu appears, observe again, then act on the "退出登录" actionId.
+5) Finally extract the #status text. Tell me the exact status text.`
           )
 
           await waitForBrowserPanelOpenedWithApproval(runtime)
@@ -340,7 +395,7 @@ describe('workbench run e2e', () => {
                 return { alive: false, id: null, resultText: null, allContents }
               }
               const resultText = (await contents.executeJavaScript(
-                `document.querySelector('#task-result')?.textContent || null`
+                `document.querySelector('#status')?.textContent || null`
               )) as string | null
               return { alive: true, id: contents.id, resultText, allContents }
             }, server.url)
@@ -356,7 +411,7 @@ describe('workbench run e2e', () => {
           await waitForBrowserTaskPause(runtime)
           const resourceMenu = await selectWorkbenchResourceMenuItem(runtime, 'browser')
           const openFileMenuItemVisible = resourceMenu.fileVisible
-          await resourceTabs.nth(2).waitFor({ state: 'visible', timeout: 10_000 })
+          await resourceTabs.nth(initialResourceTabCount).waitFor({ state: 'visible', timeout: 10_000 })
           const resourceTabCountAfterReopen = await resourceTabs.count()
           const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
           const browserBackButtonCount = await browserPanel
@@ -463,9 +518,9 @@ describe('workbench run e2e', () => {
             browserRuntimeAfterBackgroundRun: taskBrowserAfterBackgroundRun,
             browserRuntimeAfterRestore: taskBrowserAfterRestore,
             backgroundBrowserFinishedTask:
-              taskBrowserAfterBackgroundRun.resultText === `BROWSER_TASK_DONE:${TASK_CODE}`,
+              taskBrowserAfterBackgroundRun.resultText === LOGOUT_TOKEN,
             restoredLatestBrowserState:
-              taskBrowserAfterRestore.resultText === `BROWSER_TASK_DONE:${TASK_CODE}`,
+              taskBrowserAfterRestore.resultText === LOGOUT_TOKEN,
             browserWebContentsPreserved:
               taskBrowserBeforeBackground.id !== null &&
               taskBrowserBeforeBackground.id === taskBrowserWhileCollapsed.id &&
@@ -497,21 +552,46 @@ describe('workbench run e2e', () => {
               (data) =>
                 isObjectRecord(data) &&
                 data.action === 'observe' &&
-                Array.isArray(data.actions)
+                Array.isArray(data.actions) &&
+                data.actions.every(isBrowserActionCandidate)
             ),
+            actUsesActionId: browserStarts.every((event) => {
+              if (readToolInputString(event, 'action') !== 'act') return true
+              return Boolean(readToolInputString(event, 'actionId'))
+            }),
+            actOmitsInstruction: browserStarts.every((event) => {
+              if (readToolInputString(event, 'action') !== 'act') return true
+              const input = event.input
+              return !(isObjectRecord(input) && 'instruction' in input)
+            }),
+            followUpCallsUseTabId: (() => {
+              const navigateResult = browserData.find(
+                (data) => isObjectRecord(data) && data.action === 'navigate'
+              )
+              if (!isObjectRecord(navigateResult) || typeof navigateResult.tabId !== 'string') {
+                return false
+              }
+              const tabId = navigateResult.tabId
+              return browserStarts.every((event) => {
+                const action = readToolInputString(event, 'action')
+                if (action === 'navigate' || action === 'list_tabs' || !action) return true
+                return readToolInputString(event, 'tabId') === tabId
+              })
+            })(),
             actResultVisible: browserData.some(
               (data) =>
                 isObjectRecord(data) &&
                 data.action === 'act' &&
                 typeof data.message === 'string' &&
-                typeof data.actionDescription === 'string'
+                typeof data.actionDescription === 'string' &&
+                isBrowserActionCandidate(data.executed)
             ),
             extractResultVisible: browserData.some(
               (data) =>
                 isObjectRecord(data) &&
                 data.action === 'extract' &&
                 typeof data.content === 'string' &&
-                data.content.includes('BROWSER_TASK_DONE')
+                data.content.includes(LOGOUT_TOKEN)
             )
           }
         },
@@ -542,6 +622,9 @@ describe('workbench run e2e', () => {
               result.deprecatedBrowserUseFieldsAbsent &&
               result.observeResultVisible &&
               result.actResultVisible &&
+              result.actUsesActionId &&
+              result.actOmitsInstruction &&
+              result.followUpCallsUseTabId &&
               result.extractResultVisible &&
               result.initialResourceTabCount === 2 &&
               result.openFileMenuItemVisible &&
@@ -553,12 +636,11 @@ describe('workbench run e2e', () => {
               result.fileTabRestored &&
               result.browserUrlPreserved &&
               result.browserBackButtonCount === 1 &&
-              /BROWSER_TASK_DONE/u.test(result.finalAnswerText) &&
-              result.finalAnswerText.includes(TASK_CODE),
+              result.finalAnswerText.includes(LOGOUT_TOKEN),
             {
               name: 'workbench-browser-use-panel-real',
               message:
-                '真实 browser_use 任务应在右栏折叠后继续操作同一浏览器实例，恢复时显示最新网页结果，并保留文件与多浏览器 Tab。',
+                '真实 browser_use 应走 observe→actionId act（含 hover 退出），右栏折叠后继续同一实例，并保留文件与多浏览器 Tab。',
               data: result
             }
           )

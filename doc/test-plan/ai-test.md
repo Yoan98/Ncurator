@@ -601,13 +601,13 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：数量超限时最旧图片按至少 20 张的批次替换为带原路径的占位文本；体积超限时一次至少释放 10 MiB；重新读取的引用出现在消息尾部；只有保留的本地图片才在请求前编码为 data URL，HTTP(S) 地址不计入 data URL 字节预算。
 - Not：不假定 provider 的图片 token 计费方式。
 
-##### `browser-use-keeps-one-tab-for-the-whole-run`
+##### `browser-use-navigate-returns-tab-for-follow-up`
 
 - 测试类型：`backend`
-- What：同一 browser-use run 复用一个浏览器 tab，并在多次操作后保持上下文连续。
-- Why：重复建 tab 会丢失页面状态、泄漏资源并改变 AI 工具语义。
-- How：执行连续浏览器操作，记录 tab 标识和生命周期事件。
-- Oracle：整个 run 只有一个 tab；后续操作使用同一上下文，run 结束后资源被清理。
+- What：`navigate` 返回 `tabId`，后续 `extract/observe/act/screenshot` 必须显式使用该 `tabId`。
+- Why：去掉隐式 automation tab 黏连后，tab 坐标系必须由工具结果显式回传，否则会串页或丢状态。
+- How：在 tool harness 中 mock `browserUseService.run`，先 `navigate` 再带返回的 `tabId` 调用 `extract`。
+- Oracle：两次操作使用同一 `tabId`；不再依赖 `ensureAutomationTab` 隐式绑定。
 - Not：不评价浏览器页面视觉质量。
 
 ##### `browser-use-service-unavailable-error`

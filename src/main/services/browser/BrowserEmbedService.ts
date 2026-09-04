@@ -2,7 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { shell, webContents, WebContentsView } from 'electron'
 import type { BrowserWindow, Rectangle, WebContents } from 'electron'
 import { z } from 'zod/v4'
-import type { BrowserActionCandidate, BrowserUsePage, BrowserUseService } from '../ai/types'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import type {
+  BrowserActionCandidate,
+  BrowserStagehandAction,
+  BrowserUsePage,
+  BrowserUseService
+} from '../ai/types'
 import {
   EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS,
   EMBEDDED_BROWSER_PARTITION,
@@ -92,14 +99,27 @@ const stringifyStagehandExtraction = (value: object): string =>
     ? value.extraction
     : JSON.stringify(value)
 
-const toBrowserActionCandidate = (action: {
+const toBrowserStagehandAction = (action: {
   description: string
   method?: string
   arguments?: string[]
-}): BrowserActionCandidate => ({
+  selector?: string
+}): BrowserStagehandAction => ({
   description: action.description,
-  ...(action.method ? { method: action.method } : {}),
-  ...(action.arguments ? { arguments: action.arguments } : {})
+  method: action.method || 'click',
+  arguments: Array.isArray(action.arguments) ? action.arguments.map(String) : [],
+  selector: action.selector || ''
+})
+
+const toBrowserActionCandidate = (
+  actionId: string,
+  action: BrowserStagehandAction
+): BrowserActionCandidate => ({
+  actionId,
+  description: action.description,
+  method: action.method,
+  arguments: action.arguments,
+  selector: action.selector
 })
 
 const toBrowserUsePage = (url: string, title?: string): BrowserUsePage => ({
@@ -460,17 +480,41 @@ export class BrowserEmbedService implements BrowserUseService {
     return this.toState(runtime)
   }
 
+  public getActiveTabId(): string | null {
+    return this.activeTabId
+  }
+
   public async run(input: BrowserUseRunInput): Promise<BrowserUseRunResult> {
-    const runtime = this.requireTab(input.tabId || this.activeTabId)
+    if (input.action === 'list_tabs') {
+      const tabs = this.listTabs(input.ownerId)
+      return {
+        action: 'list_tabs',
+        tabs: tabs.map((tab) => ({
+          tabId: tab.id,
+          title: tab.title || tab.url || 'Untitled',
+          url: tab.url || '',
+          active: tab.id === this.activeTabId
+        })),
+        result: null
+      }
+    }
+
     if (input.action === 'navigate') {
-      await this.navigate(input.url, runtime.persisted.id)
+      const tabId = input.tabId
+        ? this.requireTab(input.tabId).persisted.id
+        : (await this.createTab(input.ownerId)).id
+      await this.navigate(input.url, tabId)
+      const runtime = this.requireTab(tabId)
       const view = await this.ensureReady(runtime)
       return {
         action: 'navigate',
+        tabId,
         page: toBrowserUsePage(view.webContents.getURL(), view.webContents.getTitle()),
         result: null
       }
     }
+
+    const runtime = this.requireTab(input.tabId)
     return await this.runDom(input, runtime)
   }
 
@@ -742,11 +786,15 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   private async runDom(
-    input: Extract<BrowserUseRunInput, { action: 'extract' | 'observe' | 'act' }>,
+    input: Extract<
+      BrowserUseRunInput,
+      { action: 'extract' | 'observe' | 'act' | 'screenshot' }
+    >,
     runtime: BrowserTabRuntime
   ): Promise<BrowserUseRunResult> {
     const view = await this.ensureReady(runtime)
     await waitForWebContentsLoad(view.webContents)
+    const tabId = runtime.persisted.id
     const stagehandModule = await import('@browserbasehq/stagehand')
     const cdpUrl = await this.getCdpWebSocketUrl()
     const targetId = await this.resolveDevToolsTargetId(view.webContents)
@@ -769,42 +817,73 @@ export class BrowserEmbedService implements BrowserUseService {
       if (!page) throw new Error('Stagehand target page not found')
       stagehand.context.setActivePage(page)
       const title = await page.title()
+      const pageInfo = toBrowserUsePage(page.url(), title)
+
       if (input.action === 'extract') {
         const result = await stagehand.extract(input.instruction, { page })
         return {
           action: 'extract',
-          page: toBrowserUsePage(page.url(), title),
+          tabId,
+          page: pageInfo,
           result: { extracted: stringifyStagehandExtraction(result) }
         }
       }
+
       if (input.action === 'observe') {
         const actions = await stagehand.observe(input.instruction, { page })
         return {
           action: 'observe',
-          page: toBrowserUsePage(page.url(), title),
-          result: { actions: actions.map(toBrowserActionCandidate) }
+          tabId,
+          page: pageInfo,
+          result: { actions: actions.map(toBrowserStagehandAction) }
         }
       }
+
+      if (input.action === 'screenshot') {
+        await fs.mkdir(path.dirname(input.screenshotPath), { recursive: true })
+        await page.screenshot({ fullPage: true, path: input.screenshotPath, type: 'png' })
+        return {
+          action: 'screenshot',
+          tabId,
+          page: pageInfo,
+          result: { path: input.screenshotPath }
+        }
+      }
+
+      if (input.action !== 'act') {
+        throw new Error(`unsupported browser run action: ${String(input.action)}`)
+      }
+
       const visualizer = new BrowserActionVisualizer()
       await visualizer.prepare(page)
       const listener = (event: unknown): void => visualizer.handleFlowEvent(page, event)
       stagehand.bus.on('*', listener)
       let result: Awaited<ReturnType<StagehandInstance['act']>>
       try {
-        result = await stagehand.act(input.instruction, { page })
+        result = await stagehand.act(
+          {
+            selector: input.stagehandAction.selector,
+            description: input.stagehandAction.description,
+            method: input.stagehandAction.method,
+            arguments: input.stagehandAction.arguments
+          },
+          { page }
+        )
       } finally {
         stagehand.bus.off('*', listener)
         await visualizer.flush()
         await visualizer.hide(page)
       }
+      const executed = toBrowserActionCandidate(input.actionId, input.stagehandAction)
       return {
         action: 'act',
+        tabId,
         page: toBrowserUsePage(page.url(), await page.title()),
         result: {
           success: result.success,
           message: result.message,
-          actionDescription: result.actionDescription,
-          actions: result.actions.map(toBrowserActionCandidate)
+          actionDescription: result.actionDescription || input.stagehandAction.description,
+          executed
         }
       }
     } finally {

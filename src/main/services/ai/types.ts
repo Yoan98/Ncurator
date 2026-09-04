@@ -123,34 +123,65 @@ export type AiTerminalApprovalFallback = {
   stage?: AiRunEventStage
 }
 
-export type BrowserUseAction = 'navigate' | 'extract' | 'observe' | 'act'
+export type BrowserUseAction =
+  | 'navigate'
+  | 'list_tabs'
+  | 'extract'
+  | 'observe'
+  | 'act'
+  | 'screenshot'
 
 export type BrowserUsePage = {
   url: string
   title?: string
 }
 
+/** Stagehand Action 原样字段 + 工具层分配的 actionId */
 export type BrowserActionCandidate = {
+  actionId: string
   description: string
-  method?: string
-  arguments?: string[]
+  method: string
+  arguments: string[]
+  selector: string
+}
+
+export type BrowserUseTabItem = {
+  tabId: string
+  title: string
+  url: string
+  active: boolean
+}
+
+/** 供确定性 act 回放的 Stagehand Action（不含 actionId） */
+export type BrowserStagehandAction = {
+  description: string
+  method: string
+  arguments: string[]
+  selector: string
 }
 
 export type BrowserUseActResult = {
   success: boolean
   message: string
   actionDescription: string
-  actions: BrowserActionCandidate[]
+  executed: BrowserActionCandidate
 }
 
 export type BrowserUseResult =
   | {
       action: 'navigate'
+      tabId: string
       page: BrowserUsePage
       result: null
     }
   | {
+      action: 'list_tabs'
+      tabs: BrowserUseTabItem[]
+      result: null
+    }
+  | {
       action: 'extract'
+      tabId: string
       page: BrowserUsePage
       result: {
         extracted: string
@@ -158,39 +189,72 @@ export type BrowserUseResult =
     }
   | {
       action: 'observe'
+      tabId: string
       page: BrowserUsePage
       result: {
-        actions: BrowserActionCandidate[]
+        /** 尚未分配 actionId 的 Stagehand 候选，由工具层补齐 */
+        actions: BrowserStagehandAction[]
       }
     }
   | {
       action: 'act'
+      tabId: string
       page: BrowserUsePage
       result: BrowserUseActResult
     }
   | {
+      action: 'screenshot'
+      tabId: string
+      page: BrowserUsePage
+      result: {
+        path: string
+      }
+    }
+  | {
       action?: BrowserUseAction
+      tabId?: string
       page?: BrowserUsePage
       error: string
     }
 
 export type BrowserUseRunRequest =
   | {
-      tabId: string
+      tabId?: string
+      ownerId: string
       action: 'navigate'
       url: string
-      instruction?: string
+      llmConfig: LlmRuntimeConfig
+    }
+  | {
+      ownerId: string
+      action: 'list_tabs'
       llmConfig: LlmRuntimeConfig
     }
   | {
       tabId: string
-      action: 'extract' | 'observe' | 'act'
+      action: 'extract' | 'observe'
       instruction: string
+      llmConfig: LlmRuntimeConfig
+    }
+  | {
+      tabId: string
+      action: 'act'
+      stagehandAction: BrowserStagehandAction
+      actionId: string
+      llmConfig: LlmRuntimeConfig
+    }
+  | {
+      tabId: string
+      action: 'screenshot'
+      screenshotPath: string
       llmConfig: LlmRuntimeConfig
     }
 
 export type BrowserUseService = {
+  createTab: (ownerId: string) => Promise<{ id: string }>
   ensureAutomationTab: (ownerId: string) => Promise<{ id: string }>
+  getActiveTabId: () => string | null
+  listTabs: (ownerId: string) => Array<{ id: string; title?: string; url: string }>
   navigate: (url: string, tabId?: string) => Promise<void>
   run: (input: BrowserUseRunRequest) => Promise<BrowserUseResult>
 }

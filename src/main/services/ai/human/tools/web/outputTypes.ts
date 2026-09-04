@@ -41,38 +41,64 @@ export type BrowserUsePage = {
 }
 
 export type BrowserActionCandidate = {
+  actionId: string
   description: string
-  method?: string
-  arguments?: string[]
+  method: string
+  arguments: string[]
+  selector: string
+}
+
+export type BrowserUseTabItem = {
+  tabId: string
+  title: string
+  url: string
+  active: boolean
 }
 
 export type BrowserUseNavigateOutput = {
   action: 'navigate'
+  tabId: string
   page: BrowserUsePage
+}
+
+export type BrowserUseListTabsOutput = {
+  action: 'list_tabs'
+  tabs: BrowserUseTabItem[]
 }
 
 export type BrowserUseExtractOutput = {
   action: 'extract'
+  tabId: string
   page: BrowserUsePage
   content: string
 }
 
 export type BrowserUseObserveOutput = {
   action: 'observe'
+  tabId: string
   page: BrowserUsePage
   actions: BrowserActionCandidate[]
 }
 
 export type BrowserUseActOutput = {
   action: 'act'
+  tabId: string
   page: BrowserUsePage
   message: string
   actionDescription: string
-  actions?: BrowserActionCandidate[]
+  executed: BrowserActionCandidate
+}
+
+export type BrowserUseScreenshotOutput = {
+  action: 'screenshot'
+  tabId: string
+  page: BrowserUsePage
+  path: string
 }
 
 export type BrowserUseErrorOutput = {
-  action?: 'navigate' | 'extract' | 'observe' | 'act'
+  action?: 'navigate' | 'list_tabs' | 'extract' | 'observe' | 'act' | 'screenshot'
+  tabId?: string
   page?: BrowserUsePage
   error: string
   message?: string
@@ -81,7 +107,9 @@ export type BrowserUseErrorOutput = {
 
 export type BrowserUseOutput =
   | BrowserUseNavigateOutput
+  | BrowserUseListTabsOutput
   | BrowserUseExtractOutput
   | BrowserUseObserveOutput
   | BrowserUseActOutput
+  | BrowserUseScreenshotOutput
   | BrowserUseErrorOutput

@@ -41,10 +41,15 @@ const readBrowserUseApprovalText = (args: JsonObject): string => {
       ? args.instruction.trim()
       : '使用内置浏览器'
   const url = typeof args.url === 'string' && args.url.trim() ? args.url.trim() : ''
+  const tabId = typeof args.tabId === 'string' && args.tabId.trim() ? args.tabId.trim() : ''
+  const actionId =
+    typeof args.actionId === 'string' && args.actionId.trim() ? args.actionId.trim() : ''
   if (action === 'navigate') return `打开网页：${url || instruction}`
+  if (action === 'list_tabs') return '列出浏览器标签'
   if (action === 'observe') return `观察页面：${instruction}`
   if (action === 'extract') return `提取页面内容：${instruction}`
-  if (action === 'act') return `操作页面：${instruction}`
+  if (action === 'act') return `操作页面：${actionId || instruction}`
+  if (action === 'screenshot') return `截取页面：${tabId || instruction}`
   return `操作浏览器：${instruction}`
 }
 

@@ -327,8 +327,13 @@ const TOOL_ITEM_RENDERERS = {
     const action = input ? readStringValue(input, 'action') || '' : ''
     const urlLabel = readWebUrlLabel(input)
     const instructionLabel = readInstructionLabel(input)
+    const actionIdLabel = input ? readStringValue(input, 'actionId') || '' : ''
+    const tabIdLabel = input ? readStringValue(input, 'tabId') || '' : ''
     if (action === 'navigate') {
       return toolCopy('打开网页', sentence(text('打开网页 '), param(urlLabel)))
+    }
+    if (action === 'list_tabs') {
+      return toolCopy('列出标签', sentence(text('列出浏览器标签')))
     }
     if (action === 'observe') {
       return toolCopy('查看页面', sentence(text('查看页面并'), param(instructionLabel)))
@@ -337,7 +342,16 @@ const TOOL_ITEM_RENDERERS = {
       return toolCopy('提取内容', sentence(text('从页面中'), param(instructionLabel)))
     }
     if (action === 'act') {
-      return toolCopy('操作页面', sentence(text('在页面上'), param(instructionLabel)))
+      return toolCopy(
+        '操作页面',
+        sentence(text('在页面上执行 '), param(actionIdLabel || instructionLabel || '动作'))
+      )
+    }
+    if (action === 'screenshot') {
+      return toolCopy(
+        '截取页面',
+        sentence(text('截取页面 '), param(tabIdLabel || '当前标签'))
+      )
     }
     return toolCopy('操作浏览器', sentence(text('操作浏览器 '), param(instructionLabel)))
   },

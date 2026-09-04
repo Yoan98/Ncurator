@@ -1,12 +1,16 @@
 import { tool } from '@langchain/core/tools'
+import { randomUUID } from 'node:crypto'
+import path from 'node:path'
 import type { AiToolCallResult, IpcJsonObject, JsonObject, JsonValue } from '../../../../../../shared/types'
 import type {
   BrowserActionCandidate,
+  BrowserStagehandAction,
   BrowserUsePage,
   BrowserUseResult
 } from '../../../types'
 import type { WebSearchResult } from '../../../../webCrawler/types'
 import { WebSourceService } from '../../../../web/WebSourceService'
+import { ensureWorkspaceAssetBucket } from '../../../../assets/WorkspaceAssetService'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolFamilyDefinition } from '../types'
@@ -26,6 +30,7 @@ import {
 
 const WEB_SEARCH_FETCH_TIMEOUT_MS = 70_000
 const WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS = 200
+const BROWSER_SCREENSHOT_BUCKET = 'browser-screenshots'
 
 const withTimeout = async <T>(
   promise: Promise<T>,
@@ -133,51 +138,83 @@ const toBrowserUsePageJson = (page: BrowserUsePage): JsonObject => ({
 })
 
 const toBrowserActionCandidateJson = (candidate: BrowserActionCandidate): JsonObject => ({
+  actionId: candidate.actionId,
+  method: candidate.method,
   description: candidate.description,
-  ...(candidate.method ? { method: candidate.method } : {}),
-  ...(candidate.arguments?.length ? { arguments: candidate.arguments } : {})
+  arguments: candidate.arguments,
+  selector: candidate.selector
 })
 
-const normalizeBrowserUseOutput = (result: BrowserUseResult): JsonObject => {
+const normalizeBrowserUseOutput = (
+  result: BrowserUseResult,
+  observeActions?: BrowserActionCandidate[]
+): JsonObject => {
   if ('error' in result) {
     return {
       ...(result.action ? { action: result.action } : {}),
+      ...(result.tabId ? { tabId: result.tabId } : {}),
       ...(result.page ? { page: toBrowserUsePageJson(result.page) } : {}),
       error: result.error
     }
   }
   switch (result.action) {
     case 'navigate':
-      return { action: 'navigate', page: toBrowserUsePageJson(result.page) }
+      return {
+        action: 'navigate',
+        tabId: result.tabId,
+        page: toBrowserUsePageJson(result.page)
+      }
+    case 'list_tabs':
+      return {
+        action: 'list_tabs',
+        tabs: result.tabs.map((tab) => ({
+          tabId: tab.tabId,
+          title: tab.title,
+          url: tab.url,
+          active: tab.active
+        }))
+      }
     case 'extract':
       return {
         action: 'extract',
+        tabId: result.tabId,
         page: toBrowserUsePageJson(result.page),
         content: result.result.extracted
       }
     case 'observe':
       return {
         action: 'observe',
+        tabId: result.tabId,
         page: toBrowserUsePageJson(result.page),
-        actions: result.result.actions.map(toBrowserActionCandidateJson)
+        actions: (observeActions || []).map(toBrowserActionCandidateJson)
       }
     case 'act': {
       const actBase = {
         action: 'act' as const,
+        tabId: result.tabId,
         page: toBrowserUsePageJson(result.page),
         message: result.result.message,
         actionDescription: result.result.actionDescription,
-        ...(result.result.actions.length
-          ? { actions: result.result.actions.map(toBrowserActionCandidateJson) }
-          : {})
+        executed: toBrowserActionCandidateJson(result.result.executed)
       }
-      // Stagehand act 失败走工具级 error 信封，不再回传领域字段 success
       if (!result.result.success) {
         return { ...actBase, error: result.result.message }
       }
       return actBase
     }
+    case 'screenshot':
+      return {
+        action: 'screenshot',
+        tabId: result.tabId,
+        page: toBrowserUsePageJson(result.page),
+        path: result.result.path
+      }
   }
+}
+
+type CachedObserveAction = {
+  tabId: string
+  action: BrowserStagehandAction
 }
 
 export const webToolFamily: ToolFamilyDefinition = {
@@ -188,7 +225,47 @@ export const webToolFamily: ToolFamilyDefinition = {
       runId,
       taskId
     })
-    let automationBrowserTabPromise: Promise<{ id: string }> | null = null
+    const observeActionCache = new Map<string, CachedObserveAction>()
+
+    const emitBrowserPanelOpened = (browserTabId: string): void => {
+      ctx.sendEvent({
+        type: 'browser_panel_opened',
+        runId,
+        taskId,
+        browserTabId,
+        createdAt: Date.now()
+      })
+    }
+
+    const finishBrowserUse = (input: {
+      session: {
+        succeed: (message: undefined, result: AiToolCallResult) => void
+        fail: (error: string, message: undefined, result: AiToolCallResult) => void
+      }
+      payload: JsonObject
+    }): JsonObject => {
+      const errorText =
+        typeof input.payload.error === 'string' && input.payload.error.trim()
+          ? input.payload.error.trim()
+          : undefined
+      if (errorText) {
+        input.session.fail(
+          errorText,
+          undefined,
+          buildToolResult({
+            toolName: BROWSER_USE_TOOL_SPEC.name,
+            ok: false,
+            data: input.payload
+          })
+        )
+        return input.payload
+      }
+      input.session.succeed(
+        undefined,
+        buildToolResult({ toolName: BROWSER_USE_TOOL_SPEC.name, ok: true, data: input.payload })
+      )
+      return input.payload
+    }
 
     const webSearch = tool(
       async (args) =>
@@ -371,62 +448,133 @@ export const webToolFamily: ToolFamilyDefinition = {
               return payload
             }
 
-            const instruction =
-              args.action === 'navigate' ? '' : String(args.instruction || '').trim()
             try {
-              automationBrowserTabPromise ||= service.ensureAutomationTab(ctx.sessionId)
-              let browserTab: { id: string }
-              try {
-                browserTab = await automationBrowserTabPromise
-              } catch (error) {
-                automationBrowserTabPromise = null
-                throw error
-              }
-              ctx.sendEvent({
-                type: 'browser_panel_opened',
-                runId,
-                taskId,
-                browserTabId: browserTab.id,
-                createdAt: Date.now()
-              })
               const llmConfig = await ctx.getLlmConfig()
-              const result =
-                args.action === 'navigate'
-                  ? await service.run({
-                      tabId: browserTab.id,
-                      action: 'navigate',
-                      url: args.url,
-                      llmConfig
-                    })
-                  : await service.run({
-                      tabId: browserTab.id,
-                      action: args.action,
-                      instruction,
-                      llmConfig
-                    })
-              const payload = normalizeBrowserUseOutput(result)
-              const errorText =
-                typeof payload.error === 'string' && payload.error.trim()
-                  ? payload.error.trim()
-                  : undefined
-              if (errorText) {
-                session.fail(
-                  errorText,
-                  undefined,
-                  buildToolResult({
-                    toolName: BROWSER_USE_TOOL_SPEC.name,
-                    ok: false,
-                    data: payload
+              const ownerId = ctx.sessionId
+              let result: BrowserUseResult
+              let observeActions: BrowserActionCandidate[] | undefined
+
+              if (args.action === 'list_tabs') {
+                result = await service.run({ action: 'list_tabs', ownerId, llmConfig })
+              } else if (args.action === 'navigate') {
+                const tabIdArg =
+                  typeof args.tabId === 'string' && args.tabId.trim() ? args.tabId.trim() : undefined
+                result = await service.run({
+                  action: 'navigate',
+                  ownerId,
+                  url: String(args.url || '').trim(),
+                  ...(tabIdArg ? { tabId: tabIdArg } : {}),
+                  llmConfig
+                })
+                if (!('error' in result) && result.action === 'navigate') {
+                  emitBrowserPanelOpened(result.tabId)
+                }
+              } else if (args.action === 'observe') {
+                const tabId = String(args.tabId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                result = await service.run({
+                  action: 'observe',
+                  tabId,
+                  instruction: String(args.instruction || '').trim(),
+                  llmConfig
+                })
+                if (!('error' in result) && result.action === 'observe') {
+                  observeActions = result.result.actions.map((action) => {
+                    const actionId = `obs_${randomUUID().replaceAll('-', '').slice(0, 12)}`
+                    observeActionCache.set(actionId, { tabId, action })
+                    return {
+                      actionId,
+                      description: action.description,
+                      method: action.method,
+                      arguments: action.arguments,
+                      selector: action.selector
+                    }
                   })
+                }
+              } else if (args.action === 'act') {
+                const tabId = String(args.tabId || '').trim()
+                const actionId = String(args.actionId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                const cached = observeActionCache.get(actionId)
+                if (!cached) {
+                  return finishBrowserUse({
+                    session,
+                    payload: {
+                      action: 'act',
+                      tabId,
+                      error: `未知 actionId：${actionId}。请先 observe 获取候选动作后再 act。`
+                    }
+                  })
+                }
+                if (cached.tabId !== tabId) {
+                  return finishBrowserUse({
+                    session,
+                    payload: {
+                      action: 'act',
+                      tabId,
+                      error: `actionId ${actionId} 属于 tab ${cached.tabId}，与请求的 tabId ${tabId} 不一致。`
+                    }
+                  })
+                }
+                result = await service.run({
+                  action: 'act',
+                  tabId,
+                  actionId,
+                  stagehandAction: cached.action,
+                  llmConfig
+                })
+              } else if (args.action === 'extract') {
+                const tabId = String(args.tabId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                result = await service.run({
+                  action: 'extract',
+                  tabId,
+                  instruction: String(args.instruction || '').trim(),
+                  llmConfig
+                })
+              } else if (args.action === 'screenshot') {
+                const tabId = String(args.tabId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                const workspaceRoot = ctx.workspace?.rootPath
+                if (!workspaceRoot) {
+                  return finishBrowserUse({
+                    session,
+                    payload: {
+                      action: 'screenshot',
+                      tabId,
+                      error: 'screenshot 需要已绑定工作区'
+                    }
+                  })
+                }
+                const bucketDir = await ensureWorkspaceAssetBucket(
+                  workspaceRoot,
+                  BROWSER_SCREENSHOT_BUCKET
                 )
-                return payload
+                const screenshotPath = path.join(
+                  bucketDir,
+                  `browser-screenshot-${randomUUID()}.png`
+                )
+                result = await service.run({
+                  action: 'screenshot',
+                  tabId,
+                  screenshotPath,
+                  llmConfig
+                })
+              } else {
+                const unknownAction =
+                  typeof args === 'object' && args && 'action' in args
+                    ? String((args as { action?: unknown }).action)
+                    : 'unknown'
+                return finishBrowserUse({
+                  session,
+                  payload: { error: `unsupported browser_use action: ${unknownAction}` }
+                })
               }
 
-              session.succeed(
-                undefined,
-                buildToolResult({ toolName: BROWSER_USE_TOOL_SPEC.name, ok: true, data: payload })
-              )
-              return payload
+              return finishBrowserUse({
+                session,
+                payload: normalizeBrowserUseOutput(result, observeActions)
+              })
             } catch (error) {
               const payload = {
                 error: getErrorMessage(error instanceof Error ? error : new Error(String(error)))

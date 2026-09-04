@@ -665,18 +665,40 @@ export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
   const error = readString(obj.error)
   if (error) return `Error: ${error}`
   const action = readString(obj.action) || ''
+  const tabId = readString(obj.tabId) || ''
   const page = isObject(obj.page) ? obj.page : {}
   const pageLabel = [readString(page.title), readString(page.url)].filter(Boolean).join(' — ')
+  const tabLine = tabId ? `Tab: ${tabId}` : ''
   if (action === 'navigate') {
     return renderProse([
       'Browser navigate completed.',
+      tabLine,
       pageLabel ? `Page: ${pageLabel}` : ''
+    ])
+  }
+  if (action === 'list_tabs') {
+    const tabs = Array.isArray(obj.tabs) ? obj.tabs.filter(isObject) : []
+    return renderProse([
+      'Browser list_tabs completed.',
+      'Tabs:',
+      ...(tabs.length
+        ? tabs.flatMap((tab, index) => {
+            const id = readString(tab.tabId) || ''
+            const active = tab.active === true
+            const label = [readString(tab.title), readString(tab.url)].filter(Boolean).join(' — ')
+            return [
+              `  ${index + 1}. tabId=${id}; active=${active ? 'true' : 'false'}`,
+              label ? `     ${label}` : ''
+            ]
+          })
+        : ['  none'])
     ])
   }
   if (action === 'extract') {
     const content = readString(obj.content) || ''
     return renderUntrustedWebContent([
       'Browser extract completed.',
+      tabLine,
       pageLabel ? `Page: ${pageLabel}` : '',
       'Content:',
       content || '(empty)'
@@ -686,24 +708,61 @@ export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
     const actions = Array.isArray(obj.actions) ? obj.actions.filter(isObject) : []
     return renderProse([
       'Browser observe completed.',
+      tabLine,
       pageLabel ? `Page: ${pageLabel}` : '',
       'Actions:',
       ...(actions.length
-        ? actions.map((item, index) => `  ${index + 1}. ${readString(item.description) || ''}`)
+        ? actions.flatMap((item, index) => {
+            const actionId = readString(item.actionId) || ''
+            const method = readString(item.method) || ''
+            const args = Array.isArray(item.arguments)
+              ? item.arguments.map((value) => String(value))
+              : []
+            const selector = readString(item.selector) || ''
+            const description = readString(item.description) || ''
+            return [
+              `  ${index + 1}. actionId=${actionId}; method=${method}; arguments=${JSON.stringify(args)}`,
+              selector ? `     selector: ${selector}` : '',
+              description ? `     ${description}` : ''
+            ]
+          })
         : ['  none'])
     ])
   }
   if (action === 'act') {
+    const executed = isObject(obj.executed) ? obj.executed : {}
+    const executedArgs = Array.isArray(executed.arguments)
+      ? executed.arguments.map((value) => String(value))
+      : []
+    const executedLine = [
+      readString(executed.actionId) ? `actionId=${readString(executed.actionId)}` : '',
+      readString(executed.method) ? `method=${readString(executed.method)}` : '',
+      `arguments=${JSON.stringify(executedArgs)}`
+    ]
+      .filter(Boolean)
+      .join('; ')
     return renderProse([
       'Browser act completed.',
+      tabLine,
       pageLabel ? `Page: ${pageLabel}` : '',
       readString(obj.message) ? `Message: ${readString(obj.message)}` : '',
-      readString(obj.actionDescription) ? `Action: ${readString(obj.actionDescription)}` : ''
+      readString(obj.actionDescription) ? `Action: ${readString(obj.actionDescription)}` : '',
+      executedLine ? `Executed: ${executedLine}` : '',
+      readString(executed.selector) ? `selector: ${readString(executed.selector)}` : ''
+    ])
+  }
+  if (action === 'screenshot') {
+    return renderProse([
+      'Browser screenshot completed.',
+      tabLine,
+      pageLabel ? `Page: ${pageLabel}` : '',
+      readString(obj.path) ? `Path: ${readString(obj.path)}` : ''
     ])
   }
   return renderProse([
     'Browser action completed.',
     action ? `Action: ${action}` : '',
+    tabLine,
     pageLabel ? `Page: ${pageLabel}` : ''
   ])
 }
@@ -712,14 +771,29 @@ export const renderBrowserUseModelError: ModelResultRenderer = (input) => {
   const obj = isObject(input.data) ? input.data : {}
   const action = readString(obj.action) || ''
   if (action !== 'act') return renderGenericModelError(input)
+  const tabId = readString(obj.tabId) || ''
   const page = isObject(obj.page) ? obj.page : {}
   const pageLabel = [readString(page.title), readString(page.url)].filter(Boolean).join(' — ')
   const message = readString(obj.message) || readString(obj.error) || ''
+  const executed = isObject(obj.executed) ? obj.executed : {}
+  const executedArgs = Array.isArray(executed.arguments)
+    ? executed.arguments.map((value) => String(value))
+    : []
+  const executedLine = [
+    readString(executed.actionId) ? `actionId=${readString(executed.actionId)}` : '',
+    readString(executed.method) ? `method=${readString(executed.method)}` : '',
+    `arguments=${JSON.stringify(executedArgs)}`
+  ]
+    .filter(Boolean)
+    .join('; ')
   return renderProse([
     'Browser act failed.',
+    tabId ? `Tab: ${tabId}` : '',
     pageLabel ? `Page: ${pageLabel}` : '',
     message ? `Message: ${message}` : '',
-    readString(obj.actionDescription) ? `Action: ${readString(obj.actionDescription)}` : ''
+    readString(obj.actionDescription) ? `Action: ${readString(obj.actionDescription)}` : '',
+    executedLine ? `Executed: ${executedLine}` : '',
+    readString(executed.selector) ? `selector: ${readString(executed.selector)}` : ''
   ])
 }
 

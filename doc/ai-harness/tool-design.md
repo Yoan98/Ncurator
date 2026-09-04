@@ -126,7 +126,9 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 | **B** XML envelope | `text_file_read`、`pdf_read_pages`、`read_image` | `<file path="…">` + 行号或正文 |
 | **C** 终端流 + marker | `terminal_run`、`terminal_read` | 输出正文 + `[status: …]` 等方括号标记 |
 | **D** 分组纯文本 | search / list / outline；`web_search`（search） | 标题 + 分组列表；SERP 用 rank / title / url / snippet |
-| **E** Markdown/Web | `web_search`（fetch）、`browser_use` | 不可信内容前缀 + Markdown 正文 |
+| **E** Markdown/Web | `web_search`（fetch）、`browser_use`（extract） | 不可信内容前缀 + Markdown 正文 |
+
+`browser_use` 其它动作（navigate / list_tabs / observe / act / screenshot）走 prose 列表渲染：一律回传 `tabId`（list_tabs 除外）；observe 候选透传 `actionId/method/description/arguments/selector`；act 仅接受 `actionId` 并确定性回放 Stagehand Action。
 
 领域专用（`docx_read_nodes`、`excel_read`、`ppt_read_slides` 等）复用 **D** 分组布局，保留领域字段。
 

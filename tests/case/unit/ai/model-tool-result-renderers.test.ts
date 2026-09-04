@@ -119,39 +119,86 @@ describe('ai unit model tool result renderers', () => {
   it('renders browser_use act success without Success line', () => {
     const rendered = renderBrowserUseModelResult({
       toolName: 'browser_use',
-      args: { action: 'act', instruction: 'click submit' },
+      args: { action: 'act', tabId: 'tab_a1', actionId: 'obs_1' },
       data: {
         action: 'act',
+        tabId: 'tab_a1',
         page: { url: 'https://example.com/form', title: 'Contact Form' },
         message: 'Action [click] performed successfully on selector: xpath=//button',
-        actionDescription: 'Click Submit'
+        actionDescription: 'Click Submit',
+        executed: {
+          actionId: 'obs_1',
+          method: 'click',
+          description: 'Click Submit',
+          arguments: [],
+          selector: 'xpath=//button'
+        }
       }
     })
 
     expect(rendered).toContain('Browser act completed.')
+    expect(rendered).toContain('Tab: tab_a1')
     expect(rendered).toContain('Page: Contact Form — https://example.com/form')
     expect(rendered).toContain('Message: Action [click] performed successfully')
     expect(rendered).toContain('Action: Click Submit')
+    expect(rendered).toContain('Executed: actionId=obs_1; method=click; arguments=[]')
+    expect(rendered).toContain('selector: xpath=//button')
     expect(rendered).not.toContain('Success:')
   })
 
   it('renders browser_use act failure with page context', () => {
     const rendered = renderBrowserUseModelError({
       toolName: 'browser_use',
-      args: { action: 'act', instruction: 'click missing' },
+      args: { action: 'act', tabId: 'tab_a1', actionId: 'obs_2' },
       data: {
         action: 'act',
+        tabId: 'tab_a1',
         page: { url: 'https://example.com/form', title: 'Contact Form' },
         message: 'Element not found',
         actionDescription: 'Click Confirm',
-        error: 'Element not found'
+        error: 'Element not found',
+        executed: {
+          actionId: 'obs_2',
+          method: 'click',
+          description: 'Click Confirm',
+          arguments: [],
+          selector: 'xpath=//missing'
+        }
       }
     })
 
     expect(rendered).toContain('Browser act failed.')
+    expect(rendered).toContain('Tab: tab_a1')
     expect(rendered).toContain('Page: Contact Form — https://example.com/form')
     expect(rendered).toContain('Message: Element not found')
     expect(rendered).toContain('Action: Click Confirm')
     expect(rendered).not.toContain('Success:')
+  })
+
+  it('renders browser_use observe actions with full fields', () => {
+    const rendered = renderBrowserUseModelResult({
+      toolName: 'browser_use',
+      args: { action: 'observe', tabId: 'tab_a1', instruction: 'find logout' },
+      data: {
+        action: 'observe',
+        tabId: 'tab_a1',
+        page: { url: 'https://example.com', title: 'Home' },
+        actions: [
+          {
+            actionId: 'obs_a',
+            method: 'hover',
+            description: '消息图标',
+            arguments: [],
+            selector: 'xpath=//button[1]'
+          }
+        ]
+      }
+    })
+
+    expect(rendered).toContain('Browser observe completed.')
+    expect(rendered).toContain('Tab: tab_a1')
+    expect(rendered).toContain('actionId=obs_a; method=hover; arguments=[]')
+    expect(rendered).toContain('selector: xpath=//button[1]')
+    expect(rendered).toContain('消息图标')
   })
 })

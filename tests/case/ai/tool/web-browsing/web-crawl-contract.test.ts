@@ -445,6 +445,7 @@ describe('ai tool web backend', () => {
         const harness = createWebToolHarness(runtime)
         return await harness.invoke<BrowserUseResult>('browser_use', {
           action: 'extract',
+          tabId: 'missing-tab',
           instruction: '读取当前网页正文'
         })
       },
@@ -458,14 +459,14 @@ describe('ai tool web backend', () => {
     })
   })
 
-  it('browser-use-keeps-one-tab-for-the-whole-run', async () => {
+  it('browser-use-navigate-returns-tab-for-follow-up', async () => {
     await runBackendCase({
-      caseId: 'browser-use-keeps-one-tab-for-the-whole-run',
+      caseId: 'browser-use-navigate-returns-tab-for-follow-up',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['web-browsing'],
-      description: '验证同一轮 AI Run 的多次 browser_use 调用始终使用首次绑定的浏览器标签。',
+      description: '验证 navigate 返回 tabId，后续 observe/extract 必须使用该 tabId。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -477,61 +478,124 @@ describe('ai tool web backend', () => {
           model_name: 'browser-tab-binding-test',
           api_key: 'test-key'
         })
-        const ensuredTabIds = ['automation-tab-a', 'ui-active-tab-b']
         const runTabIds: string[] = []
-        let ensureCallCount = 0
+        let createTabCount = 0
         const harness = createWebToolHarness(runtime, {
           sessionId: 'browser-tab-binding-session',
           modelName: 'browser-tab-binding-test',
           browserUseService: {
+            async createTab() {
+              createTabCount += 1
+              return { id: 'automation-tab-a' }
+            },
             async ensureAutomationTab() {
-              const id = ensuredTabIds[Math.min(ensureCallCount, ensuredTabIds.length - 1)]
-              ensureCallCount += 1
-              return { id }
+              return { id: 'should-not-use' }
+            },
+            getActiveTabId() {
+              return 'automation-tab-a'
+            },
+            listTabs() {
+              return [{ id: 'automation-tab-a', title: 'Task', url: 'https://example.com/task' }]
             },
             async navigate() {
               return
             },
             async run(input) {
+              if (input.action === 'list_tabs') {
+                return {
+                  action: 'list_tabs',
+                  tabs: [
+                    {
+                      tabId: 'automation-tab-a',
+                      title: 'Task',
+                      url: 'https://example.com/task',
+                      active: true
+                    }
+                  ],
+                  result: null
+                }
+              }
+              if (input.action === 'navigate') {
+                const tabId = input.tabId || 'automation-tab-a'
+                runTabIds.push(tabId)
+                return {
+                  action: 'navigate',
+                  tabId,
+                  page: { url: 'https://example.com/task' },
+                  result: null
+                }
+              }
               runTabIds.push(input.tabId)
+              if (input.action === 'extract') {
+                return {
+                  action: 'extract',
+                  tabId: input.tabId,
+                  page: { url: 'https://example.com/task' },
+                  result: { extracted: 'done' }
+                }
+              }
+              if (input.action === 'observe') {
+                return {
+                  action: 'observe',
+                  tabId: input.tabId,
+                  page: { url: 'https://example.com/task' },
+                  result: { actions: [] }
+                }
+              }
+              if (input.action === 'act') {
+                return {
+                  action: 'act',
+                  tabId: input.tabId,
+                  page: { url: 'https://example.com/task' },
+                  result: {
+                    success: true,
+                    message: 'done',
+                    actionDescription: input.stagehandAction.description,
+                    executed: {
+                      actionId: input.actionId,
+                      ...input.stagehandAction
+                    }
+                  }
+                }
+              }
               return {
-                action: input.action,
+                action: 'screenshot',
+                tabId: input.tabId,
                 page: { url: 'https://example.com/task' },
-                result:
-                  input.action === 'extract'
-                    ? { extracted: 'done' }
-                    : input.action === 'observe'
-                      ? { actions: [] }
-                      : input.action === 'act'
-                        ? {
-                            success: true,
-                            message: 'done',
-                            actionDescription: input.instruction,
-                            actions: []
-                          }
-                        : null
+                result: { path: input.screenshotPath }
               }
             }
           }
         })
-        const first = await harness.invoke<BrowserUseResult>('browser_use', {
+        const first = await harness.invoke<{
+          action: string
+          tabId: string
+          page: { url: string }
+        }>('browser_use', {
           action: 'navigate',
           url: 'https://example.com/task'
         })
-        const second = await harness.invoke<BrowserUseResult>('browser_use', {
+        const second = await harness.invoke<{
+          action: string
+          tabId: string
+          content: string
+        }>('browser_use', {
           action: 'extract',
+          tabId: first.tabId,
           instruction: '读取结果'
         })
-        return { first, second, ensureCallCount, runTabIds }
+        return { first, second, createTabCount, runTabIds }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.ensureCallCount === 1 &&
+          result.first.tabId === 'automation-tab-a' &&
+            result.second.tabId === 'automation-tab-a' &&
+            result.createTabCount === 0 &&
             result.runTabIds.length === 2 &&
             result.runTabIds.every((tabId) => tabId === 'automation-tab-a'),
           {
-            name: 'browser-use-run-keeps-initial-tab-binding',
-            message: '同一轮 Run 不应因 UI 活动标签变化而切换 browser_use 的目标标签。',
+            name: 'browser-use-follow-up-uses-navigate-tab-id',
+            message: '后续 browser_use 调用应显式使用 navigate 返回的 tabId。',
             data: result
           }
         )

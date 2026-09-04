@@ -356,7 +356,7 @@
   - `WB-COMPOSER-009-AC3` assistant 最终 markdown 输出默认无独立背景卡片，保持在过程流下方。
   - `WB-COMPOSER-009-AC4` 用户消息以右对齐紧凑气泡展示。
   - `WB-COMPOSER-009-AC5` Activity header 按工具 UI 类型归并后做短句汇总：短句来自各工具独立维护的 `headerShortText`（可独立成句的动词短语），不得靠展开行剥参得到半截连词；同类多次展示为「短句 N 次」（例如「搜索网页 3 次」）；归并后类别为 1 时与短句（或带次数）一致；2～3 类时用「并」连接，后续失败类用「但」连接，不使用逗号分隔；归并后类别大于 3 时收敛为「已完成 n 项」（n 为总工具次数；进行中也使用该句式，不再在「正在执行 / 已完成」间切换；失败态使用对应失败句式）。header 不携带命令参数、文件路径、query 或 URL；展开行仍展示带对象的完整工具原句。header 从 Activity 出现起保持滑动，直到下一段 AI content（Thought 或最终回答）出现。header 文本单行显示，超出宽度时 CSS 省略号裁切。header 只展示一个图标；单一工具类型使用对应语义图标，混合工具使用流程图标。示例：`browser_use` observe/extract/act 的 header 分别为「查看页面 / 提取内容 / 操作页面」，不得出现「查看页面并」「从页面中」「在页面上」；`docx_read_outline` header 为「查看 Word 文档结构」。
-  - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看 Word 文档 xx 的结构”；`docx_read_nodes` 展示“读取 Word 文档 xx 范围”；`learn_skill` 展示“正在学习 / 已学会 xx”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search search / fetch` 分别展示“搜索网页 query”“抓取网页 url”；`browser_use navigate / observe / extract / act` 分别补充“打开网页 / 查看页面并 / 从页面中 / 在页面上”的动作语义（这些半截连词仅用于展开行接对象，不用于 header）。
+  - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看 Word 文档 xx 的结构”；`docx_read_nodes` 展示“读取 Word 文档 xx 范围”；`learn_skill` 展示“正在学习 / 已学会 xx”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search search / fetch` 分别展示“搜索网页 query”“抓取网页 url”；`browser_use navigate / list_tabs / observe / extract / act / screenshot` 分别补充“打开网页 / 列出浏览器标签 / 查看页面并 / 从页面中 / 在页面上执行 / 截取页面”的动作语义（半截连词仅用于展开行接对象，不用于 header）。
   - `WB-COMPOSER-009-AC7` 文件名、query、命令、URL 和技能名不使用粗体或冒号强调，保持正常字重；可以通过文字颜色表达层级。
   - `WB-COMPOSER-009-AC8` `learn_skill` 作为普通工具行展示，使用技能通用名称，例如 `docx 阅读器`、`docx 编辑器`、`资料查阅器`、`命令执行器`；运行中展示“正在学习 xx”，完成后展示“已学会 xx”，不再作为独立学习层。
   - `WB-COMPOSER-009-AC9` Activity header、压缩层和重试层展示对应图标；浏览器、网页读取、网页搜索、图片识别、知识库、文件、终端和学习使用不同语义图标。展开后的每条工具句子不展示图标，也不渲染前置小圆点或“AI 思路”类图标。
@@ -517,7 +517,7 @@
 - 系统行为：每个浏览器 Tab 对应独立 Electron `WebContentsView`，全部视图共享持久分区 `persist:ncurator-browser`。该面板只服务用户手动开标签和 `browser_use`；`web_search` 的外网抓取使用独立隐藏 CDP host，不得复用或污染本面板。浏览器 Runtime、界面 Presentation 和 AI Automation 相互独立：切换文件、折叠右侧栏或切换会话时，只从主窗口显示树移除 View，不关闭 `webContents`，不改变 AI 的 CDP target；重新显示时挂载同一个 View 并展示后台操作后的实时最终状态。浏览器导航栏提供后退、前进、刷新/停止、URL 输入、输入框内“前往”按钮、地址栏右侧“将打开外部浏览器”按钮和更多操作；从 Markdown 网页链接打开内置浏览器时，先按当前会话已有 Tab 的当前 URL 匹配，命中则激活已有 Tab，未命中再新建并导航；地址栏导航仍作用于当前 Tab。页面可在后台继续加载，不得等加载完成才显示面板。浏览器更多菜单及新增标签页菜单使用主窗口原生子窗口承载自绘内容，覆盖在浏览器上方且不隐藏浏览器。
 - 验收：
   - `WB-PANEL-004-AC1` 收到 AI 浏览器面板事件后，右侧显示事件指定的浏览器 Tab；面板动画期间不逐帧缩放原生 View，动画结束后按最终 bounds 一次挂载并与正文视口对齐。
-  - `WB-PANEL-004-AC2` AI 通过 `browser_use` 的 `navigate` 动作传入 URL 时，右侧内置浏览器先导航到该 URL；`extract / observe / act` 只作用于当前页面、不会跳转，需要切换页面时先调用 `navigate`。
+  - `WB-PANEL-004-AC2` AI 通过 `browser_use` 的 `navigate` 打开 URL：不传 `tabId` 时新建标签并返回 `tabId`，传了则在指定标签导航。`list_tabs` 可列出当前会话标签。`observe / extract / act / screenshot` 必须显式传入 `tabId`；`act` 只能执行此前 `observe` 返回的单个 `actionId`（确定性回放，不再接受自然语言 instruction）。需要切换页面时先 `navigate`。
   - `WB-PANEL-004-AC3` 切换到文件 Tab、收起面板或切换会话时，浏览器 View 从主窗口显示树移除，不使用窗口外坐标停放；`webContents`、页面 JS、网络请求、Cookie、滚动位置、表单和 SPA 状态继续存在。
   - `WB-PANEL-004-AC4` AI 浏览器任务完成后，assistant 最终输出应使用浏览器操作获得的结果完成用户诉求，右侧浏览器面板状态与最终回答形成可理解的任务闭环。
   - `WB-PANEL-004-AC5` 多个浏览器标签可以打开相同 URL；Stagehand 必须按浏览器 Tab 对应的 CDP targetId 精确选择页面，不得按 URL 猜测或串页。
