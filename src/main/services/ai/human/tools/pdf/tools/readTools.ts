@@ -17,6 +17,9 @@ import {
 
 const uniquePageNumbers = (pageNumbers: number[]): number[] => [...new Set(pageNumbers)]
 
+const isPdfToolFailure = (value: JsonObject | PdfToolFailure): value is PdfToolFailure =>
+  'error' in value && typeof value.error === 'string'
+
 const runTool = async (input: {
   runtime: PdfToolRuntime
   toolName: string
@@ -35,7 +38,7 @@ const runTool = async (input: {
       input.effectKind
     )
     const result = await input.execute(document)
-    if ('ok' in result && result.ok === false) return result
+    if (isPdfToolFailure(result)) return result
     input.runtime.emitSuccess({
       toolName: input.toolName,
       toolCallId: input.toolCallId,

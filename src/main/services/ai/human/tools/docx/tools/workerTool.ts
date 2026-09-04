@@ -9,7 +9,7 @@ import { withToolLifecycle } from '../../utils/lifecycle'
 
 export const isDocxToolFailure = (
   value: DocxToolFailure | DocxWorkerSuccessPayload
-): value is DocxToolFailure => 'ok' in value && value.ok === false
+): value is DocxToolFailure => 'error' in value && typeof value.error === 'string' && !('action' in value)
 
 type DocxToolActivityConfig<TResult extends object> = {
   actionType: string

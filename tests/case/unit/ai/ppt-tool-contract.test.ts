@@ -89,7 +89,6 @@ describe('ai unit ppt tool contract', () => {
 
   it('returns failures without warnings', () => {
     expect(toPptToolFailure('deck.pptx', new Error('找不到页面'))).toEqual({
-      ok: false,
       sourcePath: 'deck.pptx',
       error: '找不到页面'
     })

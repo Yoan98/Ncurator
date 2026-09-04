@@ -28,7 +28,6 @@ export type PdfToolResourceContext = {
 }
 
 export type PdfToolFailure = {
-  ok: false
   error: string
   resourceContext?: PdfToolResourceContext
 }
@@ -136,7 +135,6 @@ export const createPdfToolRuntime = (input: PdfCapabilityToolsInput): PdfToolRun
 
   const emitFailure: PdfToolRuntime['emitFailure'] = (params) => {
     const failure: PdfToolFailure = {
-      ok: false,
       error: params.error,
       resourceContext: params.resourceContext
     }

@@ -378,7 +378,11 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             hasMoreOutput: result.hasMoreOutput
           }
           if (!guarded.ok) {
-            const failurePayload = { ...payload, ...guarded }
+            const failurePayload = {
+              ...payload,
+              output: guarded.output,
+              error: guarded.error
+            }
             session.fail(
               guarded.error,
               undefined,
@@ -450,7 +454,11 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               hasMoreOutput: result.hasMoreOutput
             }
             if (!guarded.ok) {
-              const failurePayload = { ...payload, ...guarded }
+              const failurePayload = {
+                ...payload,
+                output: guarded.output,
+                error: guarded.error
+              }
               session.fail(
                 guarded.error,
                 undefined,

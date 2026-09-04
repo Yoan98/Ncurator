@@ -1118,7 +1118,6 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
 }
 
 export const toExcelToolFailure = (sourcePath: string, error: unknown): JsonObject => ({
-  ok: false,
   sourcePath,
   error: error instanceof Error ? error.message : String(error)
 })

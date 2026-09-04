@@ -9,7 +9,7 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 const PDF_FIXTURE = path.resolve('tests/fixtures/workspace/学习笔记/深度学习.pdf')
 
-type PdfFailure = { ok: false; error: string; reason: string }
+type PdfFailure = { error: string }
 type PdfOutlineResult = {
   pageCount: number
   metadata: { title?: string }
@@ -268,7 +268,7 @@ describe('ai tool pdf backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           [result.outOfRange, result.badRegex, result.oversizedRange, result.corrupt].every(
-            (failure) => failure.ok === false && failure.error.length > 0
+            (failure) => typeof failure.error === 'string' && failure.error.length > 0
           ) &&
             typeof result.outside.pageCount === 'number' &&
             result.outside.pageCount > 0,

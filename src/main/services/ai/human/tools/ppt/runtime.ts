@@ -1459,7 +1459,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
 }
 
 export const toPptToolFailure = (sourcePath: string, error: unknown): JsonObject => ({
-  ok: false,
   sourcePath,
   error: error instanceof Error ? error.message : String(error)
 })

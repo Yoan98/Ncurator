@@ -72,7 +72,6 @@ export const buildDocxToolCallResult = (input: {
 })
 
 export type DocxToolFailure = {
-  ok: false
   code: string
   error: string
   resourceContext?: DocxToolResourceContext
@@ -191,7 +190,6 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     error: string
     resourceContext?: DocxToolResourceContext
   }): DocxToolFailure => ({
-    ok: false,
     code: params.reason,
     error: params.error,
     resourceContext: params.resourceContext
