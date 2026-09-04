@@ -871,6 +871,78 @@ textarea,
   user-select: none;
 }
 
+.nc-main-split {
+  --nc-content-panel-width: 0px;
+}
+
+.nc-content-panel-shell {
+  flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
+  width: 0;
+  transition: width 200ms ease-out;
+}
+
+.nc-content-panel-shell[data-panel-visible='true'] {
+  width: var(--nc-content-panel-width);
+}
+
+.nc-content-panel-shell-inner {
+  height: 100%;
+  width: var(--nc-content-panel-width);
+  transition:
+    transform 200ms ease-out,
+    opacity 200ms ease-out;
+}
+
+.nc-content-panel-resizer {
+  position: relative;
+  z-index: 20;
+  width: 0;
+  flex-shrink: 0;
+  cursor: col-resize;
+  -webkit-app-region: no-drag;
+}
+
+.nc-content-panel-resizer::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -4px;
+  width: 8px;
+  height: 100%;
+}
+
+.nc-content-panel-resizer::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -1px;
+  width: 2px;
+  height: 100%;
+  background: transparent;
+  transition: background-color 120ms ease;
+}
+
+.nc-content-panel-resizer:hover::after,
+.workbench-content-panel-resizing .nc-content-panel-resizer::after {
+  background: rgba(55, 53, 47, 0.16);
+}
+
+.workbench-content-panel-resizing {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+.workbench-content-panel-resizing .nc-content-panel-shell,
+.workbench-content-panel-resizing .nc-content-panel-shell-inner {
+  transition: none !important;
+}
+
+.workbench-window-resizing .nc-main-pane {
+  pointer-events: none;
+}
+
 .nc-sidebar-resize-guide {
   position: fixed;
   top: 0;

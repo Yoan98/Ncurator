@@ -143,6 +143,7 @@ export const workbenchSelectors = {
   scheduledTasksButton: 'workbench-scheduled-tasks-button',
   sessionsToggle: 'workbench-sessions-toggle',
   sidebarResizer: 'workbench-sidebar-resizer',
+  contentPanelResizer: 'workbench-content-panel-resizer',
   settingsHelpButton: 'workbench-settings-help-button',
   appVersion: 'workbench-app-version',
   updateButton: 'workbench-update-button',

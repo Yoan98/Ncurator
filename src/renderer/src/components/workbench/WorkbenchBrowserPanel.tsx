@@ -53,6 +53,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
   onStateChange
 }) => {
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const boundsFrameRef = useRef<number | null>(null)
   const [state, setState] = useState<BrowserTabState>(() => createEmptyState(tabId))
   const [address, setAddress] = useState('')
   const [error, setError] = useState('')
@@ -85,10 +86,18 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
     let cancelled = false
     let activePresentationId: number | null = null
     let observer: ResizeObserver | null = null
-    const handleWindowChange = (): void => {
-      if (activePresentationId !== null) {
-        notifyBounds(tabId, activePresentationId, element)
-      }
+
+    const flushBounds = (): void => {
+      if (activePresentationId === null) return
+      notifyBounds(tabId, activePresentationId, element)
+    }
+
+    const scheduleBounds = (): void => {
+      if (boundsFrameRef.current !== null) return
+      boundsFrameRef.current = window.requestAnimationFrame(() => {
+        boundsFrameRef.current = null
+        flushBounds()
+      })
     }
 
     void window.api.browserPanelShow({ tabId }).then((response) => {
@@ -98,18 +107,20 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         void window.api.browserPanelHide({ presentationId: activePresentationId })
         return
       }
-      notifyBounds(tabId, activePresentationId, element)
-      observer = new ResizeObserver(handleWindowChange)
+      flushBounds()
+      observer = new ResizeObserver(scheduleBounds)
       if (element) observer.observe(element)
-      window.addEventListener('resize', handleWindowChange)
-      window.addEventListener('scroll', handleWindowChange, true)
+      window.addEventListener('scroll', scheduleBounds, true)
     })
 
     return () => {
       cancelled = true
       observer?.disconnect()
-      window.removeEventListener('resize', handleWindowChange)
-      window.removeEventListener('scroll', handleWindowChange, true)
+      window.removeEventListener('scroll', scheduleBounds, true)
+      if (boundsFrameRef.current !== null) {
+        window.cancelAnimationFrame(boundsFrameRef.current)
+        boundsFrameRef.current = null
+      }
       if (activePresentationId !== null) {
         void window.api.browserPanelHide({ presentationId: activePresentationId })
       }

@@ -64,13 +64,20 @@ import ReferenceInlineToken from '../components/workbench/composer/ReferenceInli
 import type { ImageLightboxImage } from '../components/workbench/ImageLightbox'
 import type { ComposerDraftValue } from '../components/workbench/composer/types'
 import {
+  WORKBENCH_CONTENT_PANEL_COLLAPSE_WIDTH,
+  WORKBENCH_CONTENT_PANEL_DEFAULT_RATIO,
+  WORKBENCH_CONTENT_PANEL_MAX_RATIO,
+  WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH,
+  WORKBENCH_CONTENT_PANEL_RATIO_STORAGE_KEY,
   WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH,
   WORKBENCH_LEGACY_PREFERENCE_STORAGE_KEYS,
   WORKBENCH_SIDEBAR_DEFAULT_WIDTH,
   WORKBENCH_SIDEBAR_MAX_WIDTH,
   WORKBENCH_SIDEBAR_MIN_WIDTH,
   WORKBENCH_SIDEBAR_STORAGE_KEY,
-  WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY
+  WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY,
+  clampWorkbenchContentPanelRatio,
+  resolveWorkbenchContentPanelWidth
 } from '../components/workbench/constants'
 import type {
   AssistantTurnViewModel,
@@ -771,6 +778,12 @@ const ChatPage: React.FC = () => {
     const stored = window.localStorage.getItem(WORKBENCH_SIDEBAR_WIDTH_STORAGE_KEY)
     return clampWorkbenchSidebarWidth(stored ? Number(stored) : WORKBENCH_SIDEBAR_DEFAULT_WIDTH)
   })
+  const [contentPanelRatio, setContentPanelRatio] = useState<number>(() => {
+    const stored = window.localStorage.getItem(WORKBENCH_CONTENT_PANEL_RATIO_STORAGE_KEY)
+    return clampWorkbenchContentPanelRatio(
+      stored ? Number(stored) : WORKBENCH_CONTENT_PANEL_DEFAULT_RATIO
+    )
+  })
   const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(() => new Set())
   const [expandedWorkspaceSessionIds, setExpandedWorkspaceSessionIds] = useState<Set<string>>(
     () => new Set()
@@ -838,6 +851,17 @@ const ChatPage: React.FC = () => {
     startWidth: number
   } | null>(null)
   const sidebarResizeFrameRef = useRef<number | null>(null)
+  const mainSplitRef = useRef<HTMLDivElement>(null)
+  const contentPanelShellRef = useRef<HTMLDivElement>(null)
+  const contentPanelRatioRef = useRef(contentPanelRatio)
+  const contentPanelCommittedRatioRef = useRef(contentPanelRatio)
+  const contentPanelWidthPxRef = useRef(0)
+  const contentPanelDragStartRef = useRef<{
+    pointerId: number
+    startX: number
+    startWidth: number
+  } | null>(null)
+  const contentPanelResizeFrameRef = useRef<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
   const scrollFrameRef = useRef<number | null>(null)
@@ -1463,6 +1487,21 @@ const ChatPage: React.FC = () => {
       setContentPanelCollapsed(true)
     })()
   }, [captureBrowserTransition, contentPanel, setPanelCollapsedForSession, tabWorkspaceKey])
+
+  const collapseContentPanelRef = useRef(collapseContentPanel)
+  collapseContentPanelRef.current = collapseContentPanel
+
+  const applyContentPanelWidthPx = useCallback((widthPx: number): void => {
+    contentPanelWidthPxRef.current = widthPx
+    mainSplitRef.current?.style.setProperty('--nc-content-panel-width', `${Math.max(0, widthPx)}px`)
+  }, [])
+
+  const syncContentPanelWidthFromRatio = useCallback((): void => {
+    const available = mainSplitRef.current?.clientWidth ?? 0
+    applyContentPanelWidthPx(
+      resolveWorkbenchContentPanelWidth(available, contentPanelRatioRef.current)
+    )
+  }, [applyContentPanelWidthPx])
 
   const expandContentPanel = useCallback((): void => {
     setPanelCollapsedForSession(tabWorkspaceKey, false)
@@ -2410,6 +2449,45 @@ const ChatPage: React.FC = () => {
   }, [sidebarWidth])
 
   useEffect(() => {
+    contentPanelRatioRef.current = contentPanelRatio
+    contentPanelCommittedRatioRef.current = contentPanelRatio
+    window.localStorage.setItem(WORKBENCH_CONTENT_PANEL_RATIO_STORAGE_KEY, String(contentPanelRatio))
+    if (contentPanelShellMounted && !contentPanelDragStartRef.current) {
+      syncContentPanelWidthFromRatio()
+    }
+  }, [contentPanelRatio, contentPanelShellMounted, syncContentPanelWidthFromRatio])
+
+  useEffect(() => {
+    const split = mainSplitRef.current
+    if (!split || !contentPanelShellMounted) return
+    const observer = new ResizeObserver(() => {
+      if (contentPanelDragStartRef.current) return
+      syncContentPanelWidthFromRatio()
+    })
+    observer.observe(split)
+    syncContentPanelWidthFromRatio()
+    return () => observer.disconnect()
+  }, [contentPanelShellMounted, syncContentPanelWidthFromRatio])
+
+  useEffect(() => {
+    let settleTimer: number | null = null
+    const handleWindowResize = (): void => {
+      document.body.classList.add('workbench-window-resizing')
+      if (settleTimer !== null) window.clearTimeout(settleTimer)
+      settleTimer = window.setTimeout(() => {
+        document.body.classList.remove('workbench-window-resizing')
+        settleTimer = null
+      }, 120)
+    }
+    window.addEventListener('resize', handleWindowResize)
+    return () => {
+      window.removeEventListener('resize', handleWindowResize)
+      if (settleTimer !== null) window.clearTimeout(settleTimer)
+      document.body.classList.remove('workbench-window-resizing')
+    }
+  }, [])
+
+  useEffect(() => {
     const handlePointerMove = (event: PointerEvent): void => {
       const drag = sidebarDragStartRef.current
       if (!drag || event.pointerId !== drag.pointerId) return
@@ -2445,6 +2523,73 @@ const ChatPage: React.FC = () => {
       }
     }
   }, [])
+
+  useEffect(() => {
+    const endContentPanelDrag = (): void => {
+      if (contentPanelResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(contentPanelResizeFrameRef.current)
+        contentPanelResizeFrameRef.current = null
+      }
+      contentPanelDragStartRef.current = null
+      document.body.classList.remove('workbench-content-panel-resizing')
+    }
+
+    const handlePointerMove = (event: PointerEvent): void => {
+      const drag = contentPanelDragStartRef.current
+      if (!drag || event.pointerId !== drag.pointerId) return
+      const available = mainSplitRef.current?.clientWidth ?? 0
+      if (available <= 0) return
+      // 分隔条在右侧面板左缘：向左拖加大宽度，向右拖减小。
+      const nextWidth = drag.startWidth + (drag.startX - event.clientX)
+      if (nextWidth < WORKBENCH_CONTENT_PANEL_COLLAPSE_WIDTH) {
+        endContentPanelDrag()
+        contentPanelRatioRef.current = contentPanelCommittedRatioRef.current
+        collapseContentPanelRef.current()
+        return
+      }
+      const maxByMiddle = Math.max(
+        0,
+        available - WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH
+      )
+      const maxByRatio = available * WORKBENCH_CONTENT_PANEL_MAX_RATIO
+      const maxWidth = Math.max(
+        WORKBENCH_CONTENT_PANEL_COLLAPSE_WIDTH,
+        Math.min(maxByMiddle, maxByRatio)
+      )
+      const clamped = Math.round(
+        Math.max(WORKBENCH_CONTENT_PANEL_COLLAPSE_WIDTH, Math.min(maxWidth, nextWidth))
+      )
+      if (contentPanelResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(contentPanelResizeFrameRef.current)
+      }
+      contentPanelResizeFrameRef.current = window.requestAnimationFrame(() => {
+        applyContentPanelWidthPx(clamped)
+        contentPanelRatioRef.current = clamped / available
+        contentPanelResizeFrameRef.current = null
+      })
+    }
+
+    const handlePointerUp = (event: PointerEvent): void => {
+      const drag = contentPanelDragStartRef.current
+      if (!drag || event.pointerId !== drag.pointerId) return
+      const available = mainSplitRef.current?.clientWidth ?? 0
+      const width = contentPanelWidthPxRef.current
+      endContentPanelDrag()
+      if (available > 0 && width > 0) {
+        setContentPanelRatio(clampWorkbenchContentPanelRatio(width / available))
+      }
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointercancel', handlePointerUp)
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointercancel', handlePointerUp)
+      endContentPanelDrag()
+    }
+  }, [applyContentPanelWidthPx])
 
   useEffect(() => {
     scrollToBottom()
@@ -4107,7 +4252,7 @@ const ChatPage: React.FC = () => {
           <ScheduledTasksView />
         ) : (
           <>
-            <div className="flex h-full min-h-0 overflow-hidden">
+            <div className="nc-main-split flex h-full min-h-0 overflow-hidden" ref={mainSplitRef}>
               <div className="relative flex min-w-0 flex-1 flex-col">
                 {isNewSession ? (
               <div className="nc-main-empty-titlebar" aria-hidden="true">
@@ -4454,54 +4599,71 @@ const ChatPage: React.FC = () => {
           </div>
 
           {contentPanelShellMounted ? (
-            <div
-              className="min-h-0 shrink-0 overflow-hidden transition-[width] duration-200 ease-out"
-              data-testid={workbenchSelectors.contentPanelShell}
-              data-panel-visible={contentPanelShellVisible ? 'true' : 'false'}
-              style={{ width: contentPanelShellVisible ? '48vw' : 0 }}
-            >
+            <>
               <div
-                className="h-full transition-[transform,opacity] duration-200 ease-out"
-                style={{
-                  width: '48vw',
-                  transform: contentPanelShellVisible ? 'translateX(0)' : 'translateX(24px)',
-                  opacity: contentPanelShellVisible ? 1 : 0
-                }}
-              >
-                <WorkbenchContentPanel
-                  state={contentPanel}
-                  tabs={tabWorkspace.tabs}
-                  activeTabId={tabWorkspace.activeTabId}
-                  activeApplyRecord={activeApplyRecord}
-                  applyLoading={applyLoading}
-                  applyReverting={applyReverting}
-                  workspaces={workspaces}
-                  fallbackWorkspaceName={selectedWorkspace?.name || null}
-                  selectedWorkspace={selectedWorkspace || null}
-                  fileChangeRecords={fileChangeRecords}
-                  onOpenSearchResult={(turn, resultIndex) =>
-                    void openSearchResult(turn, resultIndex)
+                className="nc-content-panel-resizer workbench-no-drag"
+                data-testid={workbenchSelectors.contentPanelResizer}
+                onPointerDown={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                  event.currentTarget.setPointerCapture(event.pointerId)
+                  syncContentPanelWidthFromRatio()
+                  contentPanelDragStartRef.current = {
+                    pointerId: event.pointerId,
+                    startX: event.clientX,
+                    startWidth: contentPanelWidthPxRef.current
                   }
-                  onRevertApply={() => void handleApplyRevert()}
-                  onBackToPanelState={showContentPanel}
-                  onOpenPath={openPathOrNotify}
-                  onRevealPath={revealPathOrNotify}
-                  onActivateTab={activateResourceTab}
-                  onCloseTab={closeResourceTab}
-                  onAddFileTab={addFileTab}
-                  onAddBrowserTab={addBrowserTab}
-                  onCollapse={collapseContentPanel}
-                  onBrowserStateChange={handleBrowserStateChange}
-                  onOpenWorkspaceFile={openWorkspaceFile}
-                  onOpenWorkspaceChange={openWorkspaceChange}
-                  isAiRunActive={Boolean(aiRunId)}
-                  onSuccessMessage={emitSuccessMessage}
-                  onInfoMessage={emitInfoMessage}
-                  browserPresentationEnabled={browserPresentationEnabled}
-                  browserTransitionImage={browserTransitionImage}
-                />
+                  document.body.classList.add('workbench-content-panel-resizing')
+                }}
+              />
+              <div
+                ref={contentPanelShellRef}
+                className="nc-content-panel-shell"
+                data-testid={workbenchSelectors.contentPanelShell}
+                data-panel-visible={contentPanelShellVisible ? 'true' : 'false'}
+              >
+                <div
+                  className="nc-content-panel-shell-inner"
+                  style={{
+                    transform: contentPanelShellVisible ? 'translateX(0)' : 'translateX(24px)',
+                    opacity: contentPanelShellVisible ? 1 : 0
+                  }}
+                >
+                  <WorkbenchContentPanel
+                    state={contentPanel}
+                    tabs={tabWorkspace.tabs}
+                    activeTabId={tabWorkspace.activeTabId}
+                    activeApplyRecord={activeApplyRecord}
+                    applyLoading={applyLoading}
+                    applyReverting={applyReverting}
+                    workspaces={workspaces}
+                    fallbackWorkspaceName={selectedWorkspace?.name || null}
+                    selectedWorkspace={selectedWorkspace || null}
+                    fileChangeRecords={fileChangeRecords}
+                    onOpenSearchResult={(turn, resultIndex) =>
+                      void openSearchResult(turn, resultIndex)
+                    }
+                    onRevertApply={() => void handleApplyRevert()}
+                    onBackToPanelState={showContentPanel}
+                    onOpenPath={openPathOrNotify}
+                    onRevealPath={revealPathOrNotify}
+                    onActivateTab={activateResourceTab}
+                    onCloseTab={closeResourceTab}
+                    onAddFileTab={addFileTab}
+                    onAddBrowserTab={addBrowserTab}
+                    onCollapse={collapseContentPanel}
+                    onBrowserStateChange={handleBrowserStateChange}
+                    onOpenWorkspaceFile={openWorkspaceFile}
+                    onOpenWorkspaceChange={openWorkspaceChange}
+                    isAiRunActive={Boolean(aiRunId)}
+                    onSuccessMessage={emitSuccessMessage}
+                    onInfoMessage={emitInfoMessage}
+                    browserPresentationEnabled={browserPresentationEnabled}
+                    browserTransitionImage={browserTransitionImage}
+                  />
+                </div>
               </div>
-            </div>
+            </>
           ) : null}
         </div>
         <Modal

@@ -74,20 +74,6 @@ const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
       .control:hover { background: #f1f1ef; color: #24231f; }
       .control[data-disabled="true"] { color: #c9c7c2; pointer-events: none; }
       .percent { min-width: 58px; border-right: 1px solid #deddd9; border-left: 1px solid #deddd9; font-variant-numeric: tabular-nums; }
-      .separator { height: 1px; margin: 0 8px; background: #eeeeec; }
-      .external {
-        display: flex;
-        height: 47px;
-        align-items: center;
-        margin: 0 5px;
-        padding: 0 8px;
-        border-radius: 6px;
-        color: #37352f;
-        text-decoration: none;
-        user-select: none;
-      }
-      .external:hover { background: #f4f4f2; }
-      .external[data-disabled="true"] { color: #c9c7c2; pointer-events: none; }
     </style>
   </head>
   <body>
