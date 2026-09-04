@@ -82,6 +82,16 @@ describe('shouldShowAssistantThinkingWait', () => {
     ).toBe(false)
   })
 
+  it('hides when the run has finished even after a thought', () => {
+    expect(
+      shouldShowAssistantThinkingWait({
+        processGroups: [toolGroup('completed', 2)],
+        processThoughts: [thought(3)],
+        runFinished: true
+      })
+    ).toBe(false)
+  })
+
   it('filters thinking groups from visible process groups when segment forbids it', () => {
     const groups = visibleAssistantProcessGroups({
       processGroups: [toolGroup('completed', 2), thinkingGroup(4)],

@@ -480,13 +480,15 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     shouldShowAssistantThinkingWait({
       processGroups: turn?.processGroups || [],
       processThoughts,
-      hasVisibleBrainOutput
+      hasVisibleBrainOutput,
+      runFinished: Boolean(turn?.runFinished)
     })
   const processGroups = useMemo(() => {
     const visible = visibleAssistantProcessGroups({
       processGroups: turn?.processGroups || [],
       processThoughts,
-      hasVisibleBrainOutput
+      hasVisibleBrainOutput,
+      runFinished: Boolean(turn?.runFinished)
     })
     if (!showThinkingWait) return visible
     if (visible.some((group) => group.kind === 'thinking' && group.status === 'running')) {
@@ -504,7 +506,14 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
         createdAt: lastCreatedAt + 1
       }
     ]
-  }, [hasVisibleBrainOutput, messageId, processThoughts, showThinkingWait, turn?.processGroups])
+  }, [
+    hasVisibleBrainOutput,
+    messageId,
+    processThoughts,
+    showThinkingWait,
+    turn?.processGroups,
+    turn?.runFinished
+  ])
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({

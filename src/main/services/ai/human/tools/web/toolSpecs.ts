@@ -43,7 +43,7 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'browser_use',
     description:
-      '操作内置浏览器：navigate 打开页面（可新建或指定 tab），list_tabs 查看标签，observe 列出可交互动作，act 按 actionId 执行单个动作，extract 提取内容，screenshot 全页截图。observe/extract/act/screenshot 必须传 tabId；act 只能使用此前 observe 返回的 actionId。'
+      '在内置浏览器中导航、观察可交互动作、按 actionId 执行、提取内容或截图。'
   },
   resolveExecutionMeta: (args) => ({
     mutability: String(args.action || '') === 'act' ? 'mutating' : 'read_only',

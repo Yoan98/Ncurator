@@ -19,6 +19,7 @@ export { projectApprovalReviews } from '../../../../shared/workbench/approvalRev
 export const projectProcessGroups = (input: {
   runId: string
   records: readonly Pick<ChatMessageLogRecord, 'entry' | 'seq' | 'createdAt'>[]
+  runFinished?: boolean
 }): { processGroups: AssistantProcessGroup[]; processThoughts: AssistantProcessThought[] } => {
   const groupById = new Map<string, AssistantProcessGroup>()
   const orderedGroupIds: string[] = []
@@ -117,7 +118,8 @@ export const projectProcessGroups = (input: {
     thinkingOpen &&
     shouldShowAssistantThinkingWait({
       processGroups: projectedGroups,
-      processThoughts
+      processThoughts,
+      runFinished: Boolean(input.runFinished)
     })
   ) {
     const createdAt =

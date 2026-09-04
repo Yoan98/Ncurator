@@ -18,9 +18,9 @@ export const WEB_SEARCH_SCHEMA = z.discriminatedUnion('type', [
 export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
   z
     .object({
-      action: z.literal('navigate').describe('打开 URL；不传 tabId 则新建标签，传了则在指定标签导航'),
+      action: z.literal('navigate').describe('打开 URL'),
       url: z.string().min(1).describe('目标 URL'),
-      tabId: z.string().min(1).optional().describe('已有浏览器标签 ID；省略则新建标签')
+      tabId: z.string().min(1).optional().describe('已有标签 ID；省略则新建标签')
     })
     .strict(),
   z
@@ -37,21 +37,21 @@ export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
     .strict(),
   z
     .object({
-      action: z.literal('observe').describe('列出当前页面可见交互动作，供后续 act 使用'),
+      action: z.literal('observe').describe('列出当前页面可见的可交互动作'),
       tabId: z.string().min(1).describe('目标浏览器标签 ID'),
       instruction: z.string().min(1).describe('观察目标说明')
     })
     .strict(),
   z
     .object({
-      action: z.literal('act').describe('执行此前 observe 返回的单个动作'),
+      action: z.literal('act').describe('执行单个已观察动作'),
       tabId: z.string().min(1).describe('目标浏览器标签 ID'),
-      actionId: z.string().min(1).describe('observe 返回的 actionId')
+      actionId: z.string().min(1).describe('observe 返回的动作 ID')
     })
     .strict(),
   z
     .object({
-      action: z.literal('screenshot').describe('截取当前标签页全页截图并保存为工作区资产文件'),
+      action: z.literal('screenshot').describe('截取当前标签页全页截图并保存为工作区资产'),
       tabId: z.string().min(1).describe('目标浏览器标签 ID')
     })
     .strict()

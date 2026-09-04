@@ -574,7 +574,11 @@ const buildAssistantTurnFromRunSnapshot = (
 ): AssistantTurnViewModel => {
   const projected = projectProcessGroups({
     runId: snapshot.run.id,
-    records: snapshot.messageLogRecords || []
+    records: snapshot.messageLogRecords || [],
+    runFinished:
+      snapshot.run.status === 'completed' ||
+      snapshot.run.status === 'failed' ||
+      snapshot.run.status === 'cancelled'
   })
   const approvalReviews = projectApprovalReviews({
     records: snapshot.messageLogRecords || []

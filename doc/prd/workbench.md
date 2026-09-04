@@ -249,7 +249,7 @@
 - 验收：
   - `WB-COMPOSER-003-AC1` 智能模式发送后，主区先可见用户消息与 assistant 占位消息。
   - `WB-COMPOSER-003-AC2` AI 运行成功启动后，assistant 过程流通过事件逐步追加更新，而不是一次性静态替换。
-  - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前可展示“让俺想想”并带有流动视觉反馈。“让俺想想”由 Renderer 按段规则合成占位行（不依赖 Main thinking process group 是否仍存活）：本 turn 首次（尚无 Thought / Activity / 可见正文），或上一段决策层 Thought / AI content 落地之后、下一组工具出现之前；一旦出现 Activity，不再插入独立 think 行，改由该 Activity header 保持滑动，直到下一段 AI content（Thought 或最终回答）出现（run 失败/取消且无 content 时停滑）。消息日志注解 `thinking_started/completed` 仍覆盖整轮 brain 调用，仅用于 Thought 投影。当出现“正在重试”过程组、或已有可见流式 Thought / 最终回答时，必须隐藏“让俺想想”占位。
+  - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前可展示“让俺想想”并带有流动视觉反馈。“让俺想想”由 Renderer 按段规则合成占位行（不依赖 Main thinking process group 是否仍存活）：本 turn 首次（尚无 Thought / Activity / 可见正文），或上一段决策层 Thought / AI content 落地之后、下一组工具出现之前；一旦出现 Activity，不再插入独立 think 行，改由该 Activity header 保持滑动，直到下一段 AI content（Thought 或最终回答）出现（run 失败/取消且无 content 时停滑）。消息日志注解 `thinking_started/completed` 仍覆盖整轮 brain 调用，仅用于 Thought 投影。当出现“正在重试”过程组、已有可见流式 Thought / 最终回答、或 run 已结束（完成 / 失败 / 取消）时，必须隐藏“让俺想想”占位。
   - `WB-COMPOSER-003-AC4` assistant turn 中 brain 最终输出始终位于过程流下方，并按 markdown 渲染；最终回答在内容分片到达后直接流式渲染，不展示独立收尾等待层；内部文件链接打开右侧文件预览，网页链接打开右侧内置浏览器；若当前会话已有浏览器 Tab 正停留在同一 URL，则激活该 Tab，不新开。
   - `WB-COMPOSER-003-AC5` 决策层（Thought）只展示面向用户的短摘要，不得展示模型原始长篇推理；决策层出现时，当前思考层必须立即隐藏，即使下一步执行正等待审批。
   - `WB-COMPOSER-003-AC6` 过程流使用用户可理解的文案，不直接暴露内部 tool 名或底层事件名；两次 Thought 之间的工具调用（含 `learn_skill`）合并为一个 Activity 面板 header，展开后按时间平铺每条工具的自然语言说明；等待审批时 Activity header 临时显示「等待用户审核中」，审完后恢复工具汇总；走过审批的工具行仅前缀结果图标，悬停图标揭示解释文案；压缩与重试过程单独成行，不并入 Activity。
