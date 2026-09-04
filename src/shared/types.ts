@@ -1806,6 +1806,20 @@ export type ChatMessageLogAnnotationEntry =
       eventType: 'brain_user_snapshot'
       payload: { text: string }
     }
+  | {
+      kind: 'annotation'
+      eventType: 'approval_batch_resolved'
+      payload: {
+        batchId: string
+        items: Array<{
+          toolCallId: string
+          toolName: string
+          command: string
+          action: 'approve' | 'reject' | 'guide'
+          message?: string
+        }>
+      }
+    }
 
 export type ChatMessageLogEntry =
   | {

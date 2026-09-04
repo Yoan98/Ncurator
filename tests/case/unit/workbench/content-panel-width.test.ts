@@ -6,7 +6,7 @@ import {
   WORKBENCH_CONTENT_PANEL_MIN_WIDTH,
   clampWorkbenchContentPanelRatio,
   resolveWorkbenchContentPanelWidth
-} from '../../../../src/renderer/src/components/workbench/constants'
+} from '../../../../src/shared/workbench/contentPanelWidth'
 
 describe('workbench content panel width', () => {
   it('clamps invalid ratios to the default range', () => {

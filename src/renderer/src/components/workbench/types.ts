@@ -165,12 +165,6 @@ export type AssistantTurnApplyTarget = {
   status?: AiFileChangeStatus
 }
 
-export type AssistantTurnBlocker = {
-  kind: 'approval' | 'workspace'
-  title: string
-  description: string
-}
-
 export type AssistantArtifactItem = WorkbenchFileRef & {
   operation?: 'created' | 'updated' | 'deleted' | 'renamed'
 }
@@ -191,7 +185,9 @@ export type AssistantTurnViewModel = {
   plan: import('../../../../shared/types').ChatMessageLogPlanItem[]
   artifacts: AssistantArtifactItem[]
   applyTargets: AssistantTurnApplyTarget[]
-  blockers: AssistantTurnBlocker[]
+  waitingApproval: boolean
+  pendingApprovalItems: import('../../../../shared/types').AiApprovalBatchItem[]
+  approvalReviews: import('../../../../shared/workbench/approvalReview').AssistantApprovalReview[]
   error?: string
 }
 

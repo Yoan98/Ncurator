@@ -1,4 +1,5 @@
 ﻿import React, { useMemo, useState } from 'react'
+import { Tooltip } from 'antd'
 import {
   HiChevronDown,
   HiChevronRight,
@@ -13,7 +14,8 @@ import {
   HiOutlineGlobeAlt,
   HiOutlineMagnifyingGlass,
   HiOutlinePhoto,
-  HiOutlinePencilSquare
+  HiOutlinePencilSquare,
+  HiOutlineShieldCheck
 } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
 import type {
@@ -25,6 +27,11 @@ import type {
 } from './types'
 import type { WorkspaceSource } from '../../../../shared/types'
 import type { OpenableMarkdownReference } from '../markdownReference'
+import {
+  findApprovalReviewForProcessItem,
+  formatApprovalReviewHoverText,
+  type AssistantApprovalReview
+} from '../../../../shared/workbench/approvalReview'
 import { workbenchSelectors } from '../../testing/selectors'
 import {
   buildAssistantExecutionSummaryText,
@@ -206,6 +213,7 @@ type AssistantTimelineEntry =
       id: string
       createdAt: number
       groups: AssistantProcessGroup[]
+      waitingApproval?: boolean
     }
   | {
       kind: 'group'
@@ -233,6 +241,8 @@ const isActivityToolGroup = isAssistantActivityToolGroup
 const buildAssistantTimeline = (input: {
   thoughts: AssistantProcessThought[]
   groups: AssistantProcessGroup[]
+  waitingApproval: boolean
+  messageId: string
 }): AssistantTimelineEntry[] => {
   const rawEntries: RawTimelineEntry[] = [
     ...input.thoughts.map((thought) => ({
@@ -269,59 +279,116 @@ const buildAssistantTimeline = (input: {
       groups: [entry.group]
     })
   }
+
+  if (!input.waitingApproval) return timeline
+
+  const last = timeline[timeline.length - 1]
+  if (last?.kind === 'activity') {
+    last.waitingApproval = true
+    return timeline
+  }
+
+  timeline.push({
+    kind: 'activity',
+    id: `${input.messageId}:approval-wait`,
+    createdAt: Date.now(),
+    groups: [],
+    waitingApproval: true
+  })
   return timeline
+}
+
+const WAITING_APPROVAL_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户审核中' }]
+
+const AssistantActivityItemView: React.FC<{
+  item: AssistantProcessGroup['items'][number]
+  review?: AssistantApprovalReview
+}> = ({ item, review }) => {
+  const failed = item.status === 'failed' || item.status === 'partial_failed'
+  const content = (
+    <div
+      data-testid={review ? workbenchSelectors.assistantApprovalReviewedItem : undefined}
+      className={
+        review
+          ? `inline-flex max-w-full items-start gap-1 rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-2 py-0.5 text-[#2F3437] ${
+              failed ? 'text-[#B3261E]' : ''
+            }`
+          : failed
+            ? 'text-[#B3261E]'
+            : undefined
+      }
+    >
+      {review ? (
+        <HiOutlineShieldCheck className="mt-[3px] h-3.5 w-3.5 shrink-0 text-[#787774]" />
+      ) : null}
+      <span className="min-w-0">{renderSegments(getItemText(item))}</span>
+    </div>
+  )
+  if (!review) return content
+  return (
+    <Tooltip title={formatApprovalReviewHoverText(review)} placement="topLeft">
+      <div className="inline-flex max-w-full cursor-default">{content}</div>
+    </Tooltip>
+  )
 }
 
 const AssistantActivityGroupView: React.FC<{
   groups: AssistantProcessGroup[]
   id: string
   shimmerActive: boolean
-}> = ({ groups, id, shimmerActive }) => {
+  waitingApproval?: boolean
+  approvalReviews?: readonly AssistantApprovalReview[]
+}> = ({ groups, id, shimmerActive, waitingApproval = false, approvalReviews = [] }) => {
   const status = resolveAssistantExecutionStatus(groups)
   const items = groups
     .flatMap((group) => group.items)
     .sort((left, right) => left.createdAt - right.createdAt)
-  const summaryText = buildAssistantExecutionSummaryText(
-    groups.map((group) => ({
-      id: group.id,
-      skillKey: group.skillKey,
-      status: group.status,
-      items: group.items.map((item) => ({
-        toolName: item.toolName,
-        targetLabel: item.targetLabel,
-        input: item.input,
-        status: item.status,
-        runningText: item.runningText,
-        completedText: item.completedText,
-        failedText: item.failedText,
-        partialFailedText: item.partialFailedText,
-        headerShortText: item.headerShortText
-      }))
-    }))
-  )
-  const iconKind = resolveAssistantExecutionIcon(groups)
+  const summaryText = waitingApproval
+    ? WAITING_APPROVAL_SUMMARY
+    : buildAssistantExecutionSummaryText(
+        groups.map((group) => ({
+          id: group.id,
+          skillKey: group.skillKey,
+          status: group.status,
+          items: group.items.map((item) => ({
+            toolName: item.toolName,
+            targetLabel: item.targetLabel,
+            input: item.input,
+            status: item.status,
+            runningText: item.runningText,
+            completedText: item.completedText,
+            failedText: item.failedText,
+            partialFailedText: item.partialFailedText,
+            headerShortText: item.headerShortText
+          }))
+        }))
+      )
+  const iconKind = waitingApproval ? 'terminal' : resolveAssistantExecutionIcon(groups)
+  const headerShimmer = waitingApproval || shimmerActive
   return (
     <details
       className="group/execution"
       data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${id}`}
+      data-approval-waiting={waitingApproval ? 'true' : undefined}
     >
       <summary
         className={`flex list-none items-start rounded-[8px] outline-none [&::-webkit-details-marker]:hidden ${
           items.length > 0 ? 'cursor-pointer' : ''
         }`}
+        data-testid={waitingApproval ? workbenchSelectors.assistantApprovalWaiting : undefined}
       >
         <span
           className={`inline-flex min-w-0 max-w-full items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
-            status === 'failed' || status === 'partial_failed'
+            !waitingApproval && (status === 'failed' || status === 'partial_failed')
               ? 'text-[#B3261E]'
-              : shimmerActive
+              : headerShimmer
                 ? 'text-[#37352F]'
                 : 'text-[#9B9A97] group-hover/execution:text-[#37352F]'
           }`}
         >
           <LayerIcon iconKind={iconKind} />
-          <span className={`min-w-0 truncate ${shimmerActive ? 'font-medium' : ''}`}>
-            {renderSegments(summaryText, { shimmer: shimmerActive })}
+          <span className={`min-w-0 truncate ${headerShimmer ? 'font-medium' : ''}`}>
+            {renderSegments(summaryText, { shimmer: headerShimmer })}
           </span>
           {items.length > 0 ? (
             <>
@@ -334,16 +401,16 @@ const AssistantActivityGroupView: React.FC<{
       {items.length > 0 ? (
         <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#787774]">
           {items.map((item) => (
-            <div
+            <AssistantActivityItemView
               key={item.id}
-              className={
-                item.status === 'failed' || item.status === 'partial_failed'
-                  ? 'text-[#B3261E]'
-                  : undefined
-              }
-            >
-              {renderSegments(getItemText(item))}
-            </div>
+              item={item}
+              review={findApprovalReviewForProcessItem({
+                itemId: item.id,
+                toolName: item.toolName,
+                itemInput: item.input,
+                reviews: approvalReviews
+              })}
+            />
           ))}
         </div>
       ) : null}
@@ -378,11 +445,13 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     hasStreamingThought ||
     turn?.status === 'completed' ||
     turn?.status === 'failed'
-  const showThinkingWait = shouldShowAssistantThinkingWait({
-    processGroups: turn?.processGroups || [],
-    processThoughts,
-    hasVisibleBrainOutput
-  })
+  const showThinkingWait =
+    !turn?.waitingApproval &&
+    shouldShowAssistantThinkingWait({
+      processGroups: turn?.processGroups || [],
+      processThoughts,
+      hasVisibleBrainOutput
+    })
   const processGroups = useMemo(() => {
     const visible = visibleAssistantProcessGroups({
       processGroups: turn?.processGroups || [],
@@ -410,10 +479,13 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     () =>
       buildAssistantTimeline({
         thoughts: processThoughts,
-        groups: processGroups
+        groups: processGroups,
+        waitingApproval: Boolean(turn?.waitingApproval),
+        messageId
       }),
-    [processGroups, processThoughts]
+    [messageId, processGroups, processThoughts, turn?.waitingApproval]
   )
+  const approvalReviews = turn?.approvalReviews || []
   const applyTargets = turn?.applyTargets || []
   const applyTargetsCollapsed =
     applyTargets.length > MAX_VISIBLE_APPLY_TARGETS && !applyTargetsExpanded
@@ -446,11 +518,16 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                       key={entry.id}
                       id={entry.id}
                       groups={entry.groups}
-                      shimmerActive={shouldActivityHeaderShimmer({
-                        activityCreatedAt: entry.createdAt,
-                        thoughts: processThoughts,
-                        hasNextAiContent: hasNextAiContentForActivity
-                      })}
+                      waitingApproval={entry.waitingApproval}
+                      approvalReviews={approvalReviews}
+                      shimmerActive={
+                        Boolean(entry.waitingApproval) ||
+                        shouldActivityHeaderShimmer({
+                          activityCreatedAt: entry.createdAt,
+                          thoughts: processThoughts,
+                          hasNextAiContent: hasNextAiContentForActivity
+                        })
+                      }
                     />
                   )
                 }
@@ -568,22 +645,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   : `显示剩余 ${turn.applyTargets.length - MAX_VISIBLE_APPLY_TARGETS} 个文件`}
               </button>
             ) : null}
-          </div>
-        ) : null}
-
-        {turn.blockers.length > 0 ? (
-          <div className="space-y-2">
-            {turn.blockers.map((blocker) => (
-              <div
-                key={`${blocker.kind}-${blocker.title}`}
-                className="rounded-[8px] border border-[#EEEEEC] bg-[#F7F7F5] px-4 py-3 text-sm text-[#787774]"
-              >
-                <div className="font-medium text-[#787774]">{blocker.title}</div>
-                <div className="mt-1 text-xs leading-relaxed text-[#787774]">
-                  {blocker.description}
-                </div>
-              </div>
-            ))}
           </div>
         ) : null}
       </div>

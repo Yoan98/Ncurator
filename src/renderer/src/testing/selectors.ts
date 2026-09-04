@@ -207,6 +207,8 @@ export const workbenchSelectors = {
   assistantProcessPrefix: 'workbench-assistant-process',
   assistantThoughts: 'workbench-assistant-thoughts',
   assistantProcessItemPrefix: 'workbench-assistant-process-item',
+  assistantApprovalWaiting: 'workbench-assistant-approval-waiting',
+  assistantApprovalReviewedItem: 'workbench-assistant-approval-reviewed-item',
   assistantFinalAnswerPrefix: 'workbench-assistant-final-answer',
   assistantTurnApplyPrefix: 'workbench-assistant-turn-apply',
   assistantTurnApplyCountPrefix: 'workbench-assistant-apply-header-count',

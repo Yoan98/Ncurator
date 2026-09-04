@@ -3,7 +3,7 @@ import { fromMarkdown } from 'mdast-util-from-markdown'
 import {
   gfmNoAutolinkFromMarkdown,
   gfmNoAutolinkMicromarkExtension
-} from '../../../../src/renderer/src/components/remarkGfmNoAutolink'
+} from '../../../../src/shared/markdown/remarkGfmNoAutolink'
 
 const parse = (markdown: string) =>
   fromMarkdown(markdown, {

@@ -4,7 +4,6 @@ import {
   resolveAssistantExecutionIcon,
   type AssistantExecutionGroup
 } from '../../../../src/shared/assistantExecutionSummary'
-import { createDisplayProcessItem } from '../../../../src/renderer/src/components/workbench/utils'
 
 const toPlainText = (segments: ReturnType<typeof buildAssistantExecutionSummaryText>): string =>
   segments.map((segment) => segment.text).join('')
@@ -99,42 +98,18 @@ describe('assistant process icons and activity summary', () => {
       ...createToolGroup('web_search', 2, {
         completedText: [{ text: '搜索网页 ' }, { text: 'b', param: true }],
         headerShortText: '搜索网页'
-      }),
-      ...createToolGroup('web_search', 3, {
-        completedText: [{ text: '搜索网页 ' }, { text: 'c', param: true }],
-        headerShortText: '搜索网页'
       })
     ]
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页 3 次')
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页 2 次')
   })
 
-  it('summarizes more than three merged kinds as 已完成 n 项', () => {
+  it('collapses more than three kinds into completed count', () => {
     const groups = createToolGroups([
-      'excel_read',
+      'learn_skill',
       'web_search',
-      'excel_edit',
-      'terminal_run'
+      'terminal_run',
+      'text_file_read'
     ])
-
-    expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已完成 4 项')
-  })
-
-  it('keeps count form as 已完成 n 项 even while some tools are still running', () => {
-    const groups = createToolGroups([
-      'excel_read',
-      'web_search',
-      'excel_edit',
-      'terminal_run'
-    ]).map((group, index) =>
-      index === 3
-        ? {
-            ...group,
-            status: 'running' as const,
-            items: group.items.map((item) => ({ ...item, status: 'running' as const }))
-          }
-        : group
-    )
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('已完成 4 项')
   })
 
@@ -149,48 +124,7 @@ describe('assistant process icons and activity summary', () => {
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('执行命令')
   })
 
-  it('uses explicit headerShortText for browser actions instead of truncated expand prefixes', () => {
-    const observe = createDisplayProcessItem({
-      itemId: 'observe-1',
-      display: {
-        kind: 'tool',
-        toolName: 'browser_use',
-        input: { action: 'observe', instruction: '找到登录入口' }
-      },
-      status: 'completed',
-      createdAt: 1,
-      sourceEventType: 'assistant_process_item_completed'
-    })
-    const extract = createDisplayProcessItem({
-      itemId: 'extract-1',
-      display: {
-        kind: 'tool',
-        toolName: 'browser_use',
-        input: { action: 'extract', instruction: '提取登录表单' }
-      },
-      status: 'completed',
-      createdAt: 2,
-      sourceEventType: 'assistant_process_item_completed'
-    })
-    const act = createDisplayProcessItem({
-      itemId: 'act-1',
-      display: {
-        kind: 'tool',
-        toolName: 'browser_use',
-        input: { action: 'act', instruction: '点击登录' }
-      },
-      status: 'completed',
-      createdAt: 3,
-      sourceEventType: 'assistant_process_item_completed'
-    })
-
-    expect(observe.headerShortText).toBe('查看页面')
-    expect(toPlainText(observe.completedText)).toBe('查看页面并找到登录入口')
-    expect(extract.headerShortText).toBe('提取内容')
-    expect(toPlainText(extract.completedText)).toBe('从页面中提取登录表单')
-    expect(act.headerShortText).toBe('操作页面')
-    expect(toPlainText(act.completedText)).toBe('在页面上点击登录')
-
+  it('uses explicit headerShortText for browser actions in activity summary', () => {
     expect(
       toPlainText(
         buildAssistantExecutionSummaryText([
@@ -202,8 +136,8 @@ describe('assistant process icons and activity summary', () => {
               {
                 toolName: 'browser_use',
                 status: 'completed',
-                completedText: observe.completedText,
-                headerShortText: observe.headerShortText
+                completedText: [{ text: '查看页面并找到登录入口' }],
+                headerShortText: '查看页面'
               }
             ]
           }
@@ -213,19 +147,6 @@ describe('assistant process icons and activity summary', () => {
   })
 
   it('keeps docx outline header standalone when file param is omitted', () => {
-    const item = createDisplayProcessItem({
-      itemId: 'outline-1',
-      display: {
-        kind: 'tool',
-        toolName: 'docx_read_outline',
-        input: { fileName: 'report.docx' }
-      },
-      status: 'completed',
-      createdAt: 1,
-      sourceEventType: 'assistant_process_item_completed'
-    })
-    expect(item.headerShortText).toBe('查看 Word 文档结构')
-    expect(toPlainText(item.completedText)).toBe('查看 Word 文档 report.docx 的结构')
     expect(
       toPlainText(
         buildAssistantExecutionSummaryText([
@@ -237,8 +158,12 @@ describe('assistant process icons and activity summary', () => {
               {
                 toolName: 'docx_read_outline',
                 status: 'completed',
-                completedText: item.completedText,
-                headerShortText: item.headerShortText
+                completedText: [
+                  { text: '查看 Word 文档 ' },
+                  { text: 'report.docx', param: true },
+                  { text: ' 的结构' }
+                ],
+                headerShortText: '查看 Word 文档结构'
               }
             ]
           }

@@ -40,7 +40,7 @@ flowchart TD
 | `dispatch` | 否 | 否 | 消费 `tool_calls` 队列，路由下一 stage |
 | `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`** | 加载 skill 工具；**不**改 build user |
 | `plan` | 否 | `tool` + `plan_updated` | 更新 state.plan；**不**改 build user |
-| `hand` | 否 | `tool`（+ 可选 `images[]`） | append ToolMessage；`read_image` 后 append 多模态 HumanMessage |
+| `hand` | 否 | `tool`（+ 可选 `images[]`）+ 审批后 `approval_batch_resolved` | append ToolMessage；`read_image` 后 append 多模态 HumanMessage |
 
 交付收尾由 brain 内的 `finalizeDelivery` 完成（**不是**独立图节点）：docx/ppt 落盘 side effect → `finalizing_started` → **写交付 `assistant`（`toolCalls: []`）** → completed。  
 无 `tool_calls` 的正常交付路径上，**brain 不向 log 写 `assistant`**（流式 Answer 只走事件 / `partial_answer`）。
@@ -125,6 +125,7 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 | `brain_user_snapshot` | `{ text: string }` | 当前 build user **最后一次发给模型的原文**；resume 还原历史 build user（取该 `user` 之后、下一条 `user` 之前的**最后一条**） |
 | `compaction_checkpoint` | 见示例 | brain `<compacted_history>` + UI 压缩层 |
 | `finalizing_started` | `{}` | 投影时**清空** plan |
+| `approval_batch_resolved` | `{ batchId, items: [{ toolCallId, toolName, command, action, message? }] }` | UI Activity：走过审批的工具行样式 / 图标 / hover 结果；`hand` 在审批决策后写入 |
 
 #### `entry_json` 示例
 

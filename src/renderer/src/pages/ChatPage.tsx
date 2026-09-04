@@ -107,7 +107,7 @@ import {
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts
 } from '../components/workbench/utils'
-import { projectProcessGroups } from '../components/workbench/messageLogProjection'
+import { projectApprovalReviews, projectProcessGroups } from '../components/workbench/messageLogProjection'
 import {
   groupApplyTargetsByRunId,
   mergeApplyTargets
@@ -241,7 +241,9 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   plan: [],
   artifacts: [],
   applyTargets: [],
-  blockers: []
+  waitingApproval: false,
+  pendingApprovalItems: [],
+  approvalReviews: []
 })
 
 const createThinkingAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
@@ -261,7 +263,9 @@ const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel =>
   plan: [],
   artifacts: [],
   applyTargets: [],
-  blockers: []
+  waitingApproval: false,
+  pendingApprovalItems: [],
+  approvalReviews: []
 })
 
 const artifactToApplyTarget = (
@@ -373,20 +377,40 @@ const reduceAssistantTurnByRunEvent = (
   }
 
   if (event.type === 'approval_batch_required') {
-    next = {
-      ...next,
-      blockers: [
-        {
-          kind: 'approval',
-          title: '等待批量审核',
-          description: `共有 ${event.items.length} 条命令待审核`
-        }
-      ]
+    if (!event.internal) {
+      next = {
+        ...next,
+        waitingApproval: true,
+        pendingApprovalItems: event.items
+      }
     }
   }
 
   if (event.type === 'approval_batch_decision') {
-    next = { ...next, blockers: [] }
+    if (!event.internal) {
+      const decisionByItemId = new Map(
+        event.decisions.map((decision) => [decision.itemId, decision] as const)
+      )
+      const nextReviews = next.pendingApprovalItems.map((item) => {
+        const decision = decisionByItemId.get(item.itemId)
+        return {
+          toolCallId: item.itemId,
+          toolName: item.toolName,
+          command: item.command,
+          action: (decision?.action || 'reject') as 'approve' | 'reject' | 'guide',
+          message:
+            typeof decision?.message === 'string' && decision.message.trim()
+              ? decision.message.trim()
+              : undefined
+        }
+      })
+      next = {
+        ...next,
+        waitingApproval: false,
+        pendingApprovalItems: [],
+        approvalReviews: [...next.approvalReviews, ...nextReviews]
+      }
+    }
   }
 
   if (event.type === 'assistant_brain_stream_started') {
@@ -538,15 +562,8 @@ const applyRunRecordToTurn = (
       },
       turn.applyTargets
     ),
-    blockers: run.pendingApproval
-      ? [
-          {
-            kind: 'approval',
-            title: '等待批量审核',
-            description: `共有 ${run.pendingApproval.items.length} 条命令待审核`
-            }
-          ]
-        : turn.blockers,
+    waitingApproval: Boolean(run.pendingApproval),
+    pendingApprovalItems: run.pendingApproval?.items ?? turn.pendingApprovalItems,
     error: run.error || turn.error
   }
 }
@@ -558,11 +575,17 @@ const buildAssistantTurnFromRunSnapshot = (
     runId: snapshot.run.id,
     records: snapshot.messageLogRecords || []
   })
+  const approvalReviews = projectApprovalReviews({
+    records: snapshot.messageLogRecords || []
+  })
   const base: AssistantTurnViewModel = {
     ...createAssistantTurn(snapshot.run.assistantMessageId),
     runId: snapshot.run.id,
     processThoughts: projected.processThoughts,
-    processGroups: projected.processGroups
+    processGroups: projected.processGroups,
+    waitingApproval: Boolean(snapshot.run.pendingApproval),
+    pendingApprovalItems: snapshot.run.pendingApproval?.items || [],
+    approvalReviews
   }
   for (const record of snapshot.messageLogRecords || []) {
     const entry = record.entry
@@ -3163,7 +3186,6 @@ const ChatPage: React.FC = () => {
           setPendingApprovalBatch(event)
           setApprovalCurrentIndex(0)
           setApprovalDraftDecisions({})
-          message.info(`有 ${event.items.length} 条命令需要审核`)
         }
         return
       }
@@ -3174,7 +3196,6 @@ const ChatPage: React.FC = () => {
         const allApproved = event.decisions.every((decision) => decision.action === 'approve')
         if (allApproved) {
           setLoading(true)
-          message.success('审核已通过')
         } else {
           setPendingApprovalBatch(null)
           setApprovalCurrentIndex(0)

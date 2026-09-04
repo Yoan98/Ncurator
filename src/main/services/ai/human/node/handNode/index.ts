@@ -6,6 +6,10 @@ import type {
   JsonObject
 } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
+import {
+  emitToolProcessCompleted,
+  emitToolProcessStarted
+} from '../../../events/processEvents'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import { buildModelToolResultDelivery } from '../../shared/modelToolResult'
 import { buildToolFeedback } from '../../shared/toolFeedback'
@@ -69,7 +73,7 @@ const collectApprovalBatchItems = (input: {
       if (input.cache.approvedBrowserUseTaskIds?.has(input.taskId)) return []
       return [
         {
-          itemId: randomUUID(),
+          itemId: call.toolCallId,
           order: index,
           toolName: call.toolName,
           command: readBrowserUseApprovalText(call.args),
@@ -86,7 +90,7 @@ const collectApprovalBatchItems = (input: {
       if (riskPolicy.executionPolicy === 'auto_allow') return []
       return [
         {
-          itemId: randomUUID(),
+          itemId: call.toolCallId,
           order: index,
           toolName: call.toolName,
           command,
@@ -216,8 +220,41 @@ const buildApprovalBlockedToolMessage = (input: {
   return `This operation was approved but was not executed because another operation in the same batch was not approved: ${input.command}`
 }
 
+const buildApprovalBatchResolvedAnnotation = (input: {
+  batchId: string
+  decisions: Array<{ itemId: string; action: 'approve' | 'reject' | 'guide'; message?: string }>
+  approvalItems: Array<{
+    itemId: string
+    toolName: string
+    command: string
+  }>
+}): ChatMessageLogEntry => {
+  const decisionByItemId = new Map(input.decisions.map((decision) => [decision.itemId, decision]))
+  return {
+    kind: 'annotation',
+    eventType: 'approval_batch_resolved',
+    payload: {
+      batchId: input.batchId,
+      items: input.approvalItems.map((item) => {
+        const decision = decisionByItemId.get(item.itemId)
+        return {
+          toolCallId: item.itemId,
+          toolName: item.toolName,
+          command: item.command,
+          action: decision?.action || 'reject',
+          message:
+            typeof decision?.message === 'string' && decision.message.trim()
+              ? decision.message.trim()
+              : undefined
+        }
+      })
+    }
+  }
+}
+
 const appendBlockedApprovalToolMessages = (input: {
   cache: HumanRuntimeCache
+  ctx: AiRunContext
   calls: ParsedHandCall[]
   decisions: Array<{ itemId: string; action: 'approve' | 'reject' | 'guide'; message?: string }>
   approvalItems: Array<{ itemId: string; order: number; toolName: string; command: string }>
@@ -235,6 +272,21 @@ const appendBlockedApprovalToolMessages = (input: {
       item && decision
         ? buildApprovalBlockedToolMessage({ decision, command: item.command })
         : 'This tool call was not executed because the batch contained an unapproved operation.'
+    emitToolProcessStarted({
+      sendEvent: input.ctx.sendEvent,
+      runId: input.ctx.runId,
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
+      args: call.args
+    })
+    emitToolProcessCompleted({
+      sendEvent: input.ctx.sendEvent,
+      runId: input.ctx.runId,
+      toolCallId: call.toolCallId,
+      toolName: call.toolName,
+      ok: false,
+      error: message
+    })
     const feedback = buildToolFeedback({
       toolCallId: call.toolCallId,
       toolName: call.toolName,
@@ -312,17 +364,27 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       const allApproved = approvalBatchResult.decisions.every(
         (decision) => decision.action === 'approve'
       )
+      const approvalResolvedAnnotation = buildApprovalBatchResolvedAnnotation({
+        batchId,
+        decisions: approvalBatchResult.decisions,
+        approvalItems
+      })
       if (!allApproved) {
         const blockedTranscriptEntries = appendBlockedApprovalToolMessages({
           cache: input.cache,
+          ctx: input.ctx,
           calls,
           decisions: approvalBatchResult.decisions,
           approvalItems
         })
-        await input.ctx.appendMessageLog(blockedTranscriptEntries)
+        await input.ctx.appendMessageLog([
+          approvalResolvedAnnotation,
+          ...blockedTranscriptEntries
+        ])
         input.cache.toolCallCount += calls.length
         return returnToDispatch(state)
       }
+      await input.ctx.appendMessageLog([approvalResolvedAnnotation])
       markApprovedBrowserUseTask({
         cache: input.cache,
         taskId: state.task.taskId,

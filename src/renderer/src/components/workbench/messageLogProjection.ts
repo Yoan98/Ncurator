@@ -14,6 +14,8 @@ import type {
 
 const HIDDEN_PROCESS_TOOL_NAMES = new Set(['update_plan'])
 
+export { projectApprovalReviews } from '../../../../shared/workbench/approvalReview'
+
 export const projectProcessGroups = (input: {
   runId: string
   records: readonly Pick<ChatMessageLogRecord, 'entry' | 'seq' | 'createdAt'>[]
