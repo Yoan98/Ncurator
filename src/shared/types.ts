@@ -616,11 +616,18 @@ export interface ChatSession {
   title: string
   created_at: number
   workspace_id: string
+  pinned: boolean
+  pinned_at: number | null
 }
 
 export interface ChatSessionListItem extends ChatSession {
   isRunning: boolean
   hasUnreadCompletion: boolean
+}
+
+export type ChatSessionSetPinnedRequest = {
+  id: string
+  pinned: boolean
 }
 
 export type ChatSessionUiMode = 'ai' | 'search'

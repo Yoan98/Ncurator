@@ -76,7 +76,9 @@ describe('workbench result e2e', () => {
                 id: SESSION_B_ID,
                 title: SESSION_B_TITLE,
                 created_at: Math.floor(Date.now() / 1000) - 60,
-                workspace_id: targetWorkspace.id
+                workspace_id: targetWorkspace.id,
+              pinned: false,
+              pinned_at: null
               }
             }
           )

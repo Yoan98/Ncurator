@@ -40,7 +40,9 @@ describe('workbench conversation e2e', () => {
             id: 'restart-ui-session',
             title: '重启恢复会话',
             created_at: Date.now(),
-            workspace_id: ''
+            workspace_id: '',
+            pinned: false,
+            pinned_at: null
           }
           session.workspace_id = await page.evaluate(async () => {
             const response = await window.api.workspaceCreate({ name: '会话重启恢复工作区' })

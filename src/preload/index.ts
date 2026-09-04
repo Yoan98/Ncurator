@@ -287,6 +287,7 @@ const api: DesktopApi = {
   chatSessionList: () => ipcRenderer.invoke('chat-session-list'),
   chatSessionSave: (session) => ipcRenderer.invoke('chat-session-save', session),
   chatSessionMarkViewed: (id: string) => ipcRenderer.invoke('chat-session-mark-viewed', id),
+  chatSessionSetPinned: (payload) => ipcRenderer.invoke('chat-session-set-pinned', payload),
   chatSessionDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
   chatMessageList: (sessionId: string) => ipcRenderer.invoke('chat-message-list', sessionId),
   scheduledTaskList: () => {

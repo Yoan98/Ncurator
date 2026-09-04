@@ -4,6 +4,7 @@ out
 .env
 .DS_Store
 .eslintcache
+*.tsbuildinfo
 *.log*
 tests/logs
 tests/.cache

@@ -282,7 +282,9 @@ export class ScheduledTaskService {
         id: sessionId,
         title: task.name || '定时任务',
         created_at: now,
-        workspace_id: task.workspaceId
+        workspace_id: task.workspaceId,
+        pinned: false,
+        pinned_at: null
       })
       const response = await this.deps.submitTask({
         mode: 'ai',

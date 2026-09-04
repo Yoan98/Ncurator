@@ -3,8 +3,11 @@ import type {
 } from '../../../types/store'
 import type { SqliteCore } from '../sqlite/SqliteCore'
 import {
+  fromSqliteBoolean,
+  toOptionalNumber,
   toRequiredNumber,
-  toRequiredString
+  toRequiredString,
+  toSqliteBoolean
 } from '../sqlite/sqliteUtils'
 
 type ChatSessionRow = {
@@ -14,14 +17,21 @@ type ChatSessionRow = {
   updated_at?: unknown
   last_viewed_at?: unknown
   workspace_id?: unknown
+  pinned?: unknown
+  pinned_at?: unknown
 }
 
 const toSession = (row: ChatSessionRow): ChatSession => ({
   id: toRequiredString(row.id),
   title: toRequiredString(row.title),
   created_at: toRequiredNumber(row.created_at),
-  workspace_id: toRequiredString(row.workspace_id)
+  workspace_id: toRequiredString(row.workspace_id),
+  pinned: fromSqliteBoolean(row.pinned),
+  pinned_at: toOptionalNumber(row.pinned_at) ?? null
 })
+
+const SESSION_SELECT_COLUMNS =
+  'id, title, created_at, updated_at, workspace_id, pinned, pinned_at'
 
 export class ChatStore {
   public constructor(private readonly sqlite: SqliteCore) {}
@@ -31,8 +41,8 @@ export class ChatStore {
     this.sqlite
       .prepare(
         `
-        INSERT INTO chat_session (id, title, created_at, updated_at, last_viewed_at, workspace_id)
-        VALUES (@id, @title, @created_at, @updated_at, @last_viewed_at, @workspace_id)
+        INSERT INTO chat_session (id, title, created_at, updated_at, last_viewed_at, workspace_id, pinned, pinned_at)
+        VALUES (@id, @title, @created_at, @updated_at, @last_viewed_at, @workspace_id, @pinned, @pinned_at)
         ON CONFLICT(id) DO UPDATE SET
           title = excluded.title,
           updated_at = excluded.updated_at,
@@ -45,7 +55,9 @@ export class ChatStore {
         created_at: session.created_at,
         updated_at: now,
         last_viewed_at: session.created_at,
-        workspace_id: session.workspace_id || ''
+        workspace_id: session.workspace_id || '',
+        pinned: toSqliteBoolean(session.pinned),
+        pinned_at: session.pinned_at
       })
   }
 
@@ -54,8 +66,8 @@ export class ChatStore {
     this.sqlite.transaction(() => {
       this.sqlite
         .prepare(
-          `INSERT INTO chat_session (id, title, created_at, updated_at, last_viewed_at, workspace_id)
-           VALUES (@id, @title, @created_at, @updated_at, @last_viewed_at, @workspace_id)
+          `INSERT INTO chat_session (id, title, created_at, updated_at, last_viewed_at, workspace_id, pinned, pinned_at)
+           VALUES (@id, @title, @created_at, @updated_at, @last_viewed_at, @workspace_id, @pinned, @pinned_at)
            ON CONFLICT(id) DO UPDATE SET
              title = excluded.title,
              updated_at = excluded.updated_at,
@@ -67,7 +79,9 @@ export class ChatStore {
           created_at: session.created_at,
           updated_at: now,
           last_viewed_at: session.created_at,
-          workspace_id: session.workspace_id || ''
+          workspace_id: session.workspace_id || '',
+          pinned: toSqliteBoolean(session.pinned),
+          pinned_at: session.pinned_at
         })
       const draft = this.sqlite
         .prepare('SELECT draft_state_json FROM workbench_ui_state WHERE id = 1')
@@ -96,6 +110,16 @@ export class ChatStore {
     })
   }
 
+  public async setChatSessionPinned(sessionId: string, pinned: boolean): Promise<void> {
+    const pinnedAt = pinned ? Date.now() : null
+    const result = this.sqlite
+      .prepare('UPDATE chat_session SET pinned = ?, pinned_at = ? WHERE id = ?')
+      .run(toSqliteBoolean(pinned), pinnedAt, sessionId)
+    if (result.changes === 0) {
+      throw new Error('session not found')
+    }
+  }
+
   public async markChatSessionViewed(sessionId: string, viewedAt = Date.now()): Promise<void> {
     this.sqlite
       .prepare('UPDATE chat_session SET last_viewed_at = ? WHERE id = ?')
@@ -120,9 +144,7 @@ export class ChatStore {
 
   public async getChatSession(id: string): Promise<ChatSession | null> {
     const row = this.sqlite
-      .prepare(
-        'SELECT id, title, created_at, updated_at, workspace_id FROM chat_session WHERE id = ?'
-      )
+      .prepare(`SELECT ${SESSION_SELECT_COLUMNS} FROM chat_session WHERE id = ?`)
       .get(id) as ChatSessionRow | undefined
     return row ? toSession(row) : null
   }
@@ -130,7 +152,8 @@ export class ChatStore {
   public async getChatSessions(): Promise<ChatSession[]> {
     const rows = this.sqlite
       .prepare(
-        'SELECT id, title, created_at, updated_at, workspace_id FROM chat_session ORDER BY updated_at DESC, created_at DESC'
+        `SELECT ${SESSION_SELECT_COLUMNS} FROM chat_session
+         ORDER BY pinned DESC, pinned_at DESC, updated_at DESC, created_at DESC`
       )
       .all() as ChatSessionRow[]
     return rows.map(toSession)

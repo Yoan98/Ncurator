@@ -131,7 +131,9 @@ describe('ai human live backend', () => {
             id: SESSION_ID,
             title: 'live cross-session continuation test',
             created_at: Date.now(),
-            workspace_id: 'test-workspace'
+            workspace_id: 'test-workspace',
+          pinned: false,
+          pinned_at: null
           })
 
           const run1Result = await AiRunService.getInstance().run(

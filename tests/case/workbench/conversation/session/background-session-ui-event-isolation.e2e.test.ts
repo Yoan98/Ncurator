@@ -51,8 +51,22 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           await navigateToWorkbench(page, { waitForSessionListText: false })
-          const sessionA = { id: 'background-a', title: '后台 A', created_at: 10, workspace_id: '' }
-          const sessionB = { id: 'background-b', title: '当前 B', created_at: 20, workspace_id: '' }
+          const sessionA = {
+            id: 'background-a',
+            title: '后台 A',
+            created_at: 10,
+            workspace_id: '',
+            pinned: false,
+            pinned_at: null
+          }
+          const sessionB = {
+            id: 'background-b',
+            title: '当前 B',
+            created_at: 20,
+            workspace_id: '',
+            pinned: false,
+            pinned_at: null
+          }
           const workspaceId = await page.evaluate(async () => {
             const response = await window.api.workspaceCreate({ name: '后台会话隔离工作区' })
             if (!response.success || !response.workspace) throw new Error('workspace create failed')

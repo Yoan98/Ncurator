@@ -148,7 +148,9 @@ const createSession = (id = 'session-1'): ChatSession => ({
   id,
   title: 'Test session',
   created_at: 1,
-  workspace_id: 'workspace-1'
+  workspace_id: 'workspace-1',
+  pinned: false,
+  pinned_at: null
 })
 
 const createRun = (input: Partial<AiRunRecord> = {}): AiRunRecord => ({
@@ -492,6 +494,27 @@ describe('sqlite storage core and stores', () => {
     await chatStore.markChatSessionViewed('session-1', 21)
 
     expect(await chatStore.listUnreadCompletedSessionIds()).toEqual([])
+  })
+
+  it('pins sessions to the front of the list and restores them on unpin', async () => {
+    await chatStore.saveChatSession(createSession('session-2'))
+    await chatStore.setChatSessionPinned('session-1', true)
+
+    const pinned = await chatStore.getChatSessions()
+    expect(pinned.map((session) => session.id)).toEqual(['session-1', 'session-2'])
+    expect(pinned[0]).toMatchObject({
+      id: 'session-1',
+      pinned: true
+    })
+    expect(pinned[0].pinned_at).toEqual(expect.any(Number))
+
+    await chatStore.setChatSessionPinned('session-1', false)
+    const unpinned = await chatStore.getChatSessions()
+    expect(unpinned.map((session) => session.id)).toEqual(['session-2', 'session-1'])
+    expect(unpinned.find((session) => session.id === 'session-1')).toMatchObject({
+      pinned: false,
+      pinned_at: null
+    })
   })
 
   it('commits approval decision and clears pending approval', async () => {

@@ -16,7 +16,9 @@ export const seedChatHistory = async (input: {
     id: input.payload.sessionId,
     title: input.payload.title || input.payload.sessionId,
     created_at: createdAt,
-    workspace_id: ''
+    workspace_id: '',
+    pinned: false,
+    pinned_at: null
   })
 
   for (const message of input.payload.messages) {

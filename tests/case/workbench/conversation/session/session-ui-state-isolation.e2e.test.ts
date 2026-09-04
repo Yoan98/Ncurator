@@ -80,13 +80,17 @@ describe('workbench conversation e2e', () => {
             id: 'ui-state-a',
             title: '状态会话 A',
             created_at: 10,
-            workspace_id: ''
+            workspace_id: '',
+          pinned: false,
+          pinned_at: null
           }
           const sessionB = {
             id: 'ui-state-b',
             title: '状态会话 B',
             created_at: 20,
-            workspace_id: ''
+            workspace_id: '',
+          pinned: false,
+          pinned_at: null
           }
           const workspaceId = await page.evaluate(async () => {
             const response = await window.api.workspaceCreate({ name: '会话状态隔离工作区' })

@@ -30,7 +30,9 @@ describe('ai human mock-llm backend', () => {
           id: 'human-only-session',
           title: 'human only session',
           created_at: Date.now(),
-          workspace_id: 'test-workspace'
+          workspace_id: 'test-workspace',
+        pinned: false,
+        pinned_at: null
         })
         const result = await AiRunService.getInstance().run(
           {

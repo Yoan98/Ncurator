@@ -164,7 +164,9 @@ export const createRealAiDepsFactory = async (input: {
       id: sessionId,
       title: 'backend test session',
       created_at: Date.now(),
-      workspace_id: 'test-workspace'
+      workspace_id: 'test-workspace',
+      pinned: false,
+      pinned_at: null
     })
     const ctx = createAiRunContext(
       {

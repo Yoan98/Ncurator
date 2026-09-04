@@ -70,5 +70,10 @@ CREATE UNIQUE INDEX idx_chat_search_turn_session_seq
   ON chat_search_turn(session_id, seq);
 
 DROP TABLE IF EXISTS chat_message;
+
+ALTER TABLE chat_session ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE chat_session ADD COLUMN pinned_at INTEGER;
+CREATE INDEX idx_chat_session_pinned
+  ON chat_session(pinned, pinned_at DESC, updated_at DESC);
 `
 }

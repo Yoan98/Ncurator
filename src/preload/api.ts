@@ -38,6 +38,7 @@ import type {
   ChatSessionListItem,
   ChatSessionOpenRequest,
   ChatSessionOpenResponse,
+  ChatSessionSetPinnedRequest,
   ChatSessionUiStateSaveRequest,
   ChatSessionUiStateSaveResponse,
   ChatSessionRunSummariesRequest,
@@ -200,6 +201,9 @@ export type DesktopApi = {
   chatSessionList: () => Promise<ChatSessionListItem[]>
   chatSessionSave: (session: ChatSession) => Promise<{ success: boolean; error?: string }>
   chatSessionMarkViewed: (id: string) => Promise<{ success: boolean; error?: string }>
+  chatSessionSetPinned: (
+    payload: ChatSessionSetPinnedRequest
+  ) => Promise<{ success: boolean; error?: string }>
   chatSessionDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   chatMessageList: (sessionId: string) => Promise<ChatMessage[]>
   scheduledTaskList: () => Promise<ScheduledTask[]>

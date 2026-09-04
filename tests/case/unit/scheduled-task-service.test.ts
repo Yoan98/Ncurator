@@ -191,7 +191,9 @@ describe('ScheduledTaskService', () => {
       id: expect.any(String),
       title: '每日晨报',
       created_at: NOW,
-      workspace_id: 'ws-1'
+      workspace_id: 'ws-1',
+      pinned: false,
+      pinned_at: null
     })
 
     expect(harness.submitTask).toHaveBeenCalledTimes(1)

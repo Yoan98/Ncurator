@@ -50,6 +50,7 @@ import { v4 as uuidv4 } from 'uuid'
 import type {
   ChatSession,
   ChatSessionListItem,
+  ChatSessionSetPinnedRequest,
   ChatSessionSnapshotRequest,
   ChatSessionSnapshotResponse,
   ChatSessionOpenRequest,
@@ -2846,6 +2847,19 @@ export function registerHandlers(services: {
       return { success: false, error: getErrorMessage(e) }
     }
   })
+
+  ipcMain.handle(
+    'chat-session-set-pinned',
+    async (_event, payload: ChatSessionSetPinnedRequest) => {
+      try {
+        await chatStore.setChatSessionPinned(payload.id, payload.pinned)
+        return { success: true }
+      } catch (e: unknown) {
+        console.error('[CHAT-SESSION-SET-PINNED] Error:', e)
+        return { success: false, error: getErrorMessage(e) }
+      }
+    }
+  )
 
   ipcMain.handle('chat-session-delete', async (_event, id: string) => {
     try {

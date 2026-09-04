@@ -81,7 +81,9 @@ describe('ai human mock-llm backend', () => {
           id: ORDER_SESSION_ID,
           title: 'order session',
           created_at: Date.now(),
-          workspace_id: 'test-workspace'
+          workspace_id: 'test-workspace',
+        pinned: false,
+        pinned_at: null
         })
         const run1Driver = createScriptedStructuredOutputDriver({
           'human.brain': [
@@ -150,7 +152,9 @@ describe('ai human mock-llm backend', () => {
           id: DANGLING_SESSION_ID,
           title: 'dangling session',
           created_at: Date.now(),
-          workspace_id: 'test-workspace'
+          workspace_id: 'test-workspace',
+        pinned: false,
+        pinned_at: null
         })
         let aborted = false
         const danglingController = new AbortController()

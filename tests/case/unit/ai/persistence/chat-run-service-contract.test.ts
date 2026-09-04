@@ -102,7 +102,9 @@ const seedSession = async (storage: StorageService): Promise<ChatSession> => {
     id: 'session-1',
     title: '新对话',
     created_at: Date.now(),
-    workspace_id: 'workspace-1'
+    workspace_id: 'workspace-1',
+    pinned: false,
+    pinned_at: null
   }
   await storage.chat.saveChatSession(session)
   return session
@@ -727,7 +729,9 @@ describe('unit ai persistence backend', () => {
       id: 'session-search',
       title: '搜索会话',
       created_at: Date.now(),
-      workspace_id: 'workspace-1'
+      workspace_id: 'workspace-1',
+      pinned: false,
+      pinned_at: null
     })
     await setup.storage.chatSearchTurn.appendTurn({
       sessionId: 'session-search',

@@ -20,6 +20,7 @@ import {
   HiTrash,
   HiXMark
 } from 'react-icons/hi2'
+import { BsPinAngle, BsPinAngleFill } from 'react-icons/bs'
 import type {
   AiArtifactRef,
   AiFileChangeRecord,
@@ -2709,6 +2710,35 @@ const ChatPage: React.FC = () => {
     setDeleteConfirmSession(session)
   }
 
+  const toggleSessionPinned = (
+    event: React.MouseEvent,
+    session: ChatSessionListItem
+  ): void => {
+    event.stopPropagation()
+    const nextPinned = !session.pinned
+    const nextPinnedAt = nextPinned ? Date.now() : null
+    setSessions((items) => {
+      const next = items.map((item) =>
+        item.id === session.id
+          ? { ...item, pinned: nextPinned, pinned_at: nextPinnedAt }
+          : item
+      )
+      return next.sort((left, right) => {
+        if (left.pinned !== right.pinned) return left.pinned ? -1 : 1
+        if (left.pinned && right.pinned) {
+          return (right.pinned_at || 0) - (left.pinned_at || 0)
+        }
+        return 0
+      })
+    })
+    void window.api.chatSessionSetPinned({ id: session.id, pinned: nextPinned }).then((response) => {
+      if (!response.success) {
+        emitErrorMessage(response.error || (nextPinned ? '置顶失败' : '取消置顶失败'))
+        void loadSessions()
+      }
+    })
+  }
+
   const confirmDeleteSession = async (): Promise<void> => {
     const session = deleteConfirmSession
     if (!session || deletingSessionIds.has(session.id)) return
@@ -3266,7 +3296,9 @@ const ChatPage: React.FC = () => {
       id: crypto.randomUUID(),
       title: '新对话',
       created_at: Date.now(),
-      workspace_id: workspace.id
+      workspace_id: workspace.id,
+      pinned: false,
+      pinned_at: null
     }
   }
 
@@ -3325,7 +3357,9 @@ const ChatPage: React.FC = () => {
         id: crypto.randomUUID(),
         title: '新对话',
         created_at: Date.now(),
-        workspace_id: selectedWorkspace.id
+        workspace_id: selectedWorkspace.id,
+        pinned: false,
+        pinned_at: null
       }
       submitSessionId = createdSession.id
     }
@@ -3993,10 +4027,16 @@ const ChatPage: React.FC = () => {
     [currentSessionId, saveComposerDraftForSession]
   )
 
-  // 按工作空间分组会话
+  const pinnedSessions = useMemo(
+    () => sessions.filter((session) => session.pinned),
+    [sessions]
+  )
+
+  // 按工作空间分组未置顶会话
   const sessionsByWorkspace = useMemo(() => {
     const groups = new Map<string, ChatSessionListItem[]>()
     sessions.forEach((session) => {
+      if (session.pinned) return
       const wsId = session.workspace_id || ''
       if (!groups.has(wsId)) {
         groups.set(wsId, [])
@@ -4122,22 +4162,104 @@ const ChatPage: React.FC = () => {
           className="flex-1 overflow-y-auto px-2 py-2"
           data-testid={workbenchSelectors.sessionsList}
         >
-          {workspacesLoaded ? (
-            <div className="group flex items-center justify-between gap-2 px-3 pb-1 pt-2 text-[12px] font-medium text-[#8F8E8B]">
-              <span className="truncate">工作空间</span>
-              <Tooltip title="添加工作空间" placement="right">
-                <button
-                  type="button"
-                  className="workbench-no-drag flex h-5 w-5 items-center justify-center rounded-[5px] text-[#91918E] opacity-0 transition hover:bg-white hover:text-[#37352F] group-hover:opacity-100"
-                  onClick={openWorkspaceSettings}
-                  aria-label="添加工作空间"
+          {(() => {
+            const renderSession = (session: ChatSessionListItem): React.JSX.Element => {
+              const PinIcon = session.pinned ? BsPinAngleFill : BsPinAngle
+              return (
+                <div
+                  key={session.id}
+                  role="button"
+                  tabIndex={0}
+                  data-testid={`${workbenchSelectors.sessionItemPrefix}-${session.id}`}
+                  className={`nc-sidebar-item group relative ${
+                    currentSessionId === session.id ? 'nc-sidebar-item-active' : 'bg-transparent'
+                  } ${
+                    deletingSessionIds.has(session.id) ? 'pointer-events-none opacity-60' : ''
+                  } px-3 py-2`}
+                  onClick={() => selectSession(session)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      selectSession(session)
+                    }
+                  }}
                 >
-                  <HiOutlineFolderPlus className="h-3.5 w-3.5" />
-                </button>
-              </Tooltip>
-            </div>
-          ) : null}
-          {workspaces.map((workspace) => {
+                  <div className="flex min-w-0 items-center gap-2 pl-4">
+                    <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                      {session.title}
+                    </div>
+                    <div className="flex h-4 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
+                      {session.isRunning ? (
+                        <span className="nc-session-running-spinner" aria-label="任务运行中" />
+                      ) : session.hasUnreadCompletion ? (
+                        <span className="nc-session-unread-dot" aria-label="任务已完成，未查看" />
+                      ) : (
+                        <>
+                          <HiClock className="h-3 w-3" />
+                          <span>{formatRelativeTime(session.created_at)}</span>
+                        </>
+                      )}
+                    </div>
+                    <div className="ml-2 hidden shrink-0 items-center gap-0.5 group-hover:flex">
+                      <Tooltip title={session.pinned ? '取消置顶' : '置顶'} placement="top">
+                        <button
+                          type="button"
+                          className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[#91918E] transition hover:bg-white hover:text-[#37352F]"
+                          data-testid={`${workbenchSelectors.sessionPinButtonPrefix}-${session.id}`}
+                          aria-label={session.pinned ? '取消置顶' : '置顶'}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClick={(event) => toggleSessionPinned(event, session)}
+                        >
+                          <PinIcon className="h-3.5 w-3.5" />
+                        </button>
+                      </Tooltip>
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<HiTrash className="h-3.5 w-3.5" />}
+                        className="!h-6 !w-6 !rounded-[6px] !p-0"
+                        loading={deletingSessionIds.has(session.id)}
+                        disabled={deletingSessionIds.has(session.id)}
+                        data-testid={`${workbenchSelectors.sessionDeleteButtonPrefix}-${session.id}`}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => requestDeleteSession(event, session)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )
+            }
+            return (
+              <>
+                {pinnedSessions.length > 0 ? (
+                  <div
+                    className="mb-2"
+                    data-testid={workbenchSelectors.pinnedSessionsSection}
+                  >
+                    <div className="px-3 pb-1 pt-2 text-[12px] font-medium text-[#8F8E8B]">
+                      已置顶
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      {pinnedSessions.map(renderSession)}
+                    </div>
+                  </div>
+                ) : null}
+                {workspacesLoaded ? (
+                  <div className="group flex items-center justify-between gap-2 px-3 pb-1 pt-2 text-[12px] font-medium text-[#8F8E8B]">
+                    <span className="truncate">工作空间</span>
+                    <Tooltip title="添加工作空间" placement="right">
+                      <button
+                        type="button"
+                        className="workbench-no-drag flex h-5 w-5 items-center justify-center rounded-[5px] text-[#91918E] opacity-0 transition hover:bg-white hover:text-[#37352F] group-hover:opacity-100"
+                        onClick={openWorkspaceSettings}
+                        aria-label="添加工作空间"
+                      >
+                        <HiOutlineFolderPlus className="h-3.5 w-3.5" />
+                      </button>
+                    </Tooltip>
+                  </div>
+                ) : null}
+                {workspaces.map((workspace) => {
             const workspaceSessions = sessionsByWorkspace.get(workspace.id) || []
             const workspaceCollapsed = collapsedWorkspaceIds.has(workspace.id)
             const workspaceSessionsExpanded = expandedWorkspaceSessionIds.has(workspace.id)
@@ -4149,55 +4271,6 @@ const ChatPage: React.FC = () => {
               COLLAPSED_WORKSPACE_SESSION_LIMIT
             )
             const hasOverflowSessions = overflowWorkspaceSessions.length > 0
-            const renderSession = (session: ChatSessionListItem): React.JSX.Element => (
-              <div
-                key={session.id}
-                role="button"
-                tabIndex={0}
-                data-testid={`${workbenchSelectors.sessionItemPrefix}-${session.id}`}
-                className={`nc-sidebar-item group relative ${
-                  currentSessionId === session.id ? 'nc-sidebar-item-active' : 'bg-transparent'
-                } ${
-                  deletingSessionIds.has(session.id) ? 'pointer-events-none opacity-60' : ''
-                } px-3 py-2`}
-                onClick={() => selectSession(session)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    selectSession(session)
-                  }
-                }}
-              >
-                <div className="flex min-w-0 items-center gap-2 pl-4">
-                  <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-                    {session.title}
-                  </div>
-                  <div className="flex h-4 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
-                    {session.isRunning ? (
-                      <span className="nc-session-running-spinner" aria-label="任务运行中" />
-                    ) : session.hasUnreadCompletion ? (
-                      <span className="nc-session-unread-dot" aria-label="任务已完成，未查看" />
-                    ) : (
-                      <>
-                        <HiClock className="h-3 w-3" />
-                        <span>{formatRelativeTime(session.created_at)}</span>
-                      </>
-                    )}
-                  </div>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<HiTrash className="h-3.5 w-3.5" />}
-                    className="!absolute !right-1 !top-1/2 !z-10 !h-6 !w-6 !-translate-y-1/2 !rounded-[6px] !p-0 opacity-0 transition-opacity group-hover:opacity-100"
-                    loading={deletingSessionIds.has(session.id)}
-                    disabled={deletingSessionIds.has(session.id)}
-                    data-testid={`${workbenchSelectors.sessionDeleteButtonPrefix}-${session.id}`}
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onClick={(event) => requestDeleteSession(event, session)}
-                  />
-                </div>
-              </div>
-            )
             return (
               <div key={workspace.id} className="nc-sidebar-workspace-group">
                 <div className="nc-sidebar-workspace-header group">
@@ -4287,6 +4360,9 @@ const ChatPage: React.FC = () => {
               </div>
             )
           })}
+              </>
+            )
+          })()}
         </div>
 
         <div className="px-2 py-2">

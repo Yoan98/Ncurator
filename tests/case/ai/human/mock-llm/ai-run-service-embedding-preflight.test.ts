@@ -31,7 +31,9 @@ describe('ai human mock-llm backend', () => {
           id: 'embedding-preflight-session',
           title: 'embedding preflight',
           created_at: Date.now(),
-          workspace_id: 'test-workspace'
+          workspace_id: 'test-workspace',
+        pinned: false,
+        pinned_at: null
         })
         await writeTestDocxFile(runtime.workspaceRoot, 'literal-docx.docx', [
           {

@@ -189,7 +189,9 @@ describe('ai human live backend', () => {
             id: SESSION_ID,
             title: 'live session resume test',
             created_at: Date.now(),
-            workspace_id: 'test-workspace'
+            workspace_id: 'test-workspace',
+          pinned: false,
+          pinned_at: null
           })
           const interruptedResult = await AiRunService.getInstance().run(
             {
