@@ -74,6 +74,7 @@ import type {
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
   BrowserPanelBoundsRequest,
+  BrowserPanelFollowRequest,
   BrowserPanelCaptureResponse,
   BrowserPanelHideRequest,
   BrowserPanelMenuRequest,
@@ -2370,6 +2371,18 @@ export function registerHandlers(services: {
       }
     }
   )
+
+  ipcMain.on('browser-panel-set-follow', (_event, payload: BrowserPanelFollowRequest) => {
+    if (!browserEmbedService) return
+    browserEmbedService.setFollowLayout({
+      splitLeft: Number(payload?.splitLeft || 0),
+      rightMargin: Number(payload?.rightMargin || 0),
+      ratio: Number(payload?.ratio || 0),
+      minWidth: Number(payload?.minWidth || 0),
+      middleMin: Number(payload?.middleMin || 0),
+      maxRatio: Number(payload?.maxRatio || 0)
+    })
+  })
 
   ipcMain.handle(
     'browser-tab-list',

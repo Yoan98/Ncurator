@@ -2,6 +2,7 @@ import type { ModelSource } from '../shared/modelSources'
 import type {
   AiRuntimeSettings,
   BrowserPanelBoundsRequest,
+  BrowserPanelFollowRequest,
   BrowserPanelHideRequest,
   BrowserPanelMenuRequest,
   BrowserPanelMutationResponse,
@@ -242,6 +243,7 @@ export type DesktopApi = {
   browserPanelSetBounds: (
     payload: BrowserPanelBoundsRequest
   ) => Promise<BrowserPanelMutationResponse>
+  browserPanelSetFollow: (payload: BrowserPanelFollowRequest) => void
   browserTabList: (payload: BrowserTabListRequest) => Promise<BrowserTabListResponse>
   browserTabCreate: (payload: BrowserTabCreateRequest) => Promise<BrowserTabCreateResponse>
   browserTabActivate: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>

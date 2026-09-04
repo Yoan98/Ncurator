@@ -1270,6 +1270,22 @@ export type BrowserPanelBoundsRequest = BrowserPanelBounds & {
   presentationId: number
 }
 
+/**
+ * 右侧面板水平布局锚点：让主进程在窗口 resize 时同步（同进程、无 IPC 往返）重算原生浏览器 view 的 bounds，
+ * 实现与窗口一起实时缩放，而不是等 renderer→IPC→main 的一拍延迟。仅在布局模型（比例/侧栏宽/挂载）变化时注册一次。
+ */
+export type BrowserPanelFollowRequest = {
+  /** 主分栏容器左边界（= 侧栏宽度，窗口横向缩放时稳定） */
+  splitLeft: number
+  /** 主分栏右边界到窗口内容右缘的固定间距 */
+  rightMargin: number
+  /** 右侧面板占「中间+右侧」可分配宽度的比例 */
+  ratio: number
+  minWidth: number
+  middleMin: number
+  maxRatio: number
+}
+
 export type BrowserPanelShowRequest = {
   tabId: string
 }

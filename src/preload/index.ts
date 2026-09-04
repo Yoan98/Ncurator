@@ -355,6 +355,7 @@ const api: DesktopApi = {
   },
   aiContextUsageGet: (payload) => ipcRenderer.invoke('ai-context-usage-get', payload),
   browserPanelSetBounds: (payload) => ipcRenderer.invoke('browser-panel-set-bounds', payload),
+  browserPanelSetFollow: (payload) => ipcRenderer.send('browser-panel-set-follow', payload),
   browserTabList: (payload) => ipcRenderer.invoke('browser-tab-list', payload),
   browserTabCreate: (payload) => ipcRenderer.invoke('browser-tab-create', payload),
   browserTabActivate: (payload) => ipcRenderer.invoke('browser-tab-activate', payload),

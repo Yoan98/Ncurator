@@ -42,6 +42,7 @@ import type {
   WorkspaceRuntimeBinding
 } from '../../../shared/types'
 import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE, USER_MANUAL_URL } from '../../../shared/constants'
+import { findBrowserTabByUrl } from '../../../shared/browserUrl'
 import {
   pickFallbackWorkbenchModel,
   resolveSelectedWorkbenchModel
@@ -68,6 +69,7 @@ import {
   WORKBENCH_CONTENT_PANEL_DEFAULT_RATIO,
   WORKBENCH_CONTENT_PANEL_MAX_RATIO,
   WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH,
+  WORKBENCH_CONTENT_PANEL_MIN_WIDTH,
   WORKBENCH_CONTENT_PANEL_RATIO_STORAGE_KEY,
   WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH,
   WORKBENCH_LEGACY_PREFERENCE_STORAGE_KEYS,
@@ -2493,6 +2495,26 @@ const ChatPage: React.FC = () => {
     syncContentPanelWidthFromRatio()
   }, [contentPanelShellMounted, syncContentPanelWidthFromRatio])
 
+  // 向主进程注册右侧面板水平布局锚点：窗口 resize 时主进程同进程实时重算原生浏览器 view 的 bounds，
+  // 避免 renderer→IPC→main 一拍延迟。仅在布局模型（比例/侧栏宽/挂载/折叠）变化时注册一次，缩放本身不发 IPC。
+  useEffect(() => {
+    const raf = window.requestAnimationFrame(() => {
+      const split = mainSplitRef.current
+      if (!split) return
+      const rect = split.getBoundingClientRect()
+      const contentWidth = document.documentElement.clientWidth
+      window.api.browserPanelSetFollow({
+        splitLeft: Math.round(rect.left),
+        rightMargin: Math.max(0, Math.round(contentWidth - rect.right)),
+        ratio: contentPanelRatioRef.current,
+        minWidth: WORKBENCH_CONTENT_PANEL_MIN_WIDTH,
+        middleMin: WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH,
+        maxRatio: WORKBENCH_CONTENT_PANEL_MAX_RATIO
+      })
+    })
+    return () => window.cancelAnimationFrame(raf)
+  }, [contentPanelRatio, contentPanelShellMounted, sidebarWidth, sidebarCollapsed])
+
   useEffect(() => {
     const handlePointerMove = (event: PointerEvent): void => {
       const drag = sidebarDragStartRef.current
@@ -2730,9 +2752,29 @@ const ChatPage: React.FC = () => {
   const openMarkdownReference = useCallback(
     async (reference: OpenableMarkdownReference): Promise<void> => {
       if (reference.resourceType === 'web') {
-        const createResponse = await window.api.browserTabCreate({
-          ownerId: currentSessionIdRef.current || '__draft__'
-        })
+        const ownerId = currentSessionIdRef.current || '__draft__'
+        const listResponse = await window.api.browserTabList({ ownerId })
+        const existing =
+          listResponse.success && listResponse.tabs.length > 0
+            ? findBrowserTabByUrl(listResponse.tabs, reference.path)
+            : undefined
+
+        if (existing) {
+          openResourceTab({
+            id: `browser:${existing.id}`,
+            kind: 'browser',
+            browserTabId: existing.id,
+            title: existing.title || reference.label || existing.url || '浏览器',
+            state: {
+              kind: 'browser',
+              title: existing.title || reference.label || existing.url || '浏览器',
+              browserTabId: existing.id
+            }
+          })
+          return
+        }
+
+        const createResponse = await window.api.browserTabCreate({ ownerId })
         if (!createResponse.success || !createResponse.state) {
           emitErrorMessage(createResponse.error || '无法打开内置浏览器')
           return

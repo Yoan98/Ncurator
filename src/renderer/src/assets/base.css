@@ -1092,6 +1092,8 @@ textarea,
 
 .nc-document-scroll {
   @apply min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pt-5;
+  /* 把消息列表的重排/重绘限制在滚动区内，窗口缩放时不向外扩散布局代价，帮助 Chromium 更快出帧。 */
+  contain: layout paint;
 }
 
 .nc-document {

@@ -120,6 +120,18 @@ export class BrowserEmbedService implements BrowserUseService {
   private presentedTabId: string | null = null
   private presentationId = 0
   private bounds: BrowserPanelBoundsState = EMPTY_BOUNDS
+  // 垂直 inset（顶/底到内容边缘的固定距离）来自 renderer 的权威 bounds；
+  // 水平锚点（splitLeft/rightMargin/ratio）来自 renderer 的布局注册。
+  // 两者齐备后，窗口 resize 时主进程可同进程实时重算 bounds。
+  private verticalInset: { top: number; bottom: number } | null = null
+  private followLayout: {
+    splitLeft: number
+    rightMargin: number
+    ratio: number
+    minWidth: number
+    middleMin: number
+    maxRatio: number
+  } | null = null
   private readonly menuWindowService: BrowserMenuWindowService
   public constructor(
     private readonly mainWindow: BrowserWindow,
@@ -127,6 +139,52 @@ export class BrowserEmbedService implements BrowserUseService {
     private readonly stateStore: BrowserTabStateStore
   ) {
     this.menuWindowService = new BrowserMenuWindowService(mainWindow)
+    this.mainWindow.on('resize', this.handleWindowResize)
+    this.mainWindow.once('closed', () => {
+      this.mainWindow.removeListener('resize', this.handleWindowResize)
+    })
+  }
+
+  private readonly handleWindowResize = (): void => {
+    if (!this.presentedTabId || !this.followLayout || !this.verticalInset) return
+    if (this.mainWindow.isDestroyed()) return
+    const content = this.mainWindow.getContentBounds()
+    const next = this.computeFollowBounds(content.width, content.height)
+    if (!next) return
+    this.bounds = next
+    this.applyAllVisibility()
+  }
+
+  private computeFollowBounds(
+    contentWidth: number,
+    contentHeight: number
+  ): BrowserPanelBoundsState | null {
+    const fl = this.followLayout
+    const vi = this.verticalInset
+    if (!fl || !vi || contentWidth <= 0 || contentHeight <= 0) return null
+    const splitWidth = Math.max(1, contentWidth - fl.splitLeft - fl.rightMargin)
+    const maxByMiddle = Math.max(0, splitWidth - fl.middleMin)
+    const maxByRatio = splitWidth * fl.maxRatio
+    const maxWidth = Math.max(0, Math.min(maxByMiddle, maxByRatio))
+    if (maxWidth <= 0) return null
+    const minWidth = Math.min(fl.minWidth, maxWidth)
+    const width = Math.round(Math.max(minWidth, Math.min(maxWidth, splitWidth * fl.ratio)))
+    const x = Math.round(contentWidth - fl.rightMargin - width)
+    const height = Math.round(contentHeight - vi.top - vi.bottom)
+    if (width <= 0 || height <= 0) return null
+    return { x, y: Math.round(vi.top), width, height }
+  }
+
+  public setFollowLayout(layout: {
+    splitLeft: number
+    rightMargin: number
+    ratio: number
+    minWidth: number
+    middleMin: number
+    maxRatio: number
+  }): void {
+    if (!Number.isFinite(layout.ratio) || layout.ratio <= 0) return
+    this.followLayout = layout
   }
 
   public listTabs(ownerId: string): BrowserTabState[] {
@@ -260,6 +318,16 @@ export class BrowserEmbedService implements BrowserUseService {
 
   public setBounds(tabId: string, presentationId: number, bounds: BrowserPanelBoundsState): void {
     if (!this.isCurrentPresentation(tabId, presentationId)) return
+    // renderer 的 bounds 是权威值：顺带刷新垂直 inset，供窗口 resize 时主进程实时跟随。
+    if (!this.mainWindow.isDestroyed()) {
+      const contentHeight = this.mainWindow.getContentBounds().height
+      if (contentHeight > 0 && bounds.height > 0) {
+        this.verticalInset = {
+          top: bounds.y,
+          bottom: Math.max(0, contentHeight - (bounds.y + bounds.height))
+        }
+      }
+    }
     const prev = this.bounds
     if (
       Math.round(prev.x) === Math.round(bounds.x) &&

@@ -960,23 +960,19 @@ export class ChatRunService {
     const entry = this.activeRuns.get(runId)
     const now = Date.now()
     let saveImmediately = event.type !== 'answer_token'
-    let assistantMessage: ChatMessage | null = null
 
     if (event.type === 'assistant_brain_stream_started') {
       run.partialAnswer = ''
       run.partialAnswerRole = 'answer'
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, '')
     } else if (event.type === 'assistant_brain_stream_delta') {
       run.partialAnswer = `${run.partialAnswer || ''}${event.text}`
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, run.partialAnswer)
       this.scheduleProjectionFlush(runId)
     } else if (event.type === 'assistant_brain_stream_reset') {
       run.partialAnswer = ''
       run.partialAnswerRole = 'answer'
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, '')
     } else if (event.type === 'assistant_brain_stream_classified') {
       run.partialAnswerRole = 'thought'
       run.updatedAt = now
@@ -984,24 +980,20 @@ export class ChatRunService {
       run.partialAnswerRole = event.role
       run.partialAnswer = event.text
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, run.partialAnswer)
     } else if (event.type === 'assistant_process_thought') {
       run.partialAnswer = ''
       run.partialAnswerRole = 'answer'
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, '')
     } else if (event.type === 'answer_token') {
       run.partialAnswer = `${run.partialAnswer || ''}${event.token}`
       run.partialAnswerRole = 'answer'
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, run.partialAnswer)
       this.scheduleProjectionFlush(runId)
     } else if (event.type === 'answer_completed') {
       run.partialAnswer = event.text
       run.partialAnswerRole = 'answer'
       run.finalAnswer = event.text
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, event.text, false, event.linkAccess)
     } else if (event.type === 'file_artifact') {
       run.artifacts = appendArtifact(run.artifacts, {
         kind: 'file',
@@ -1012,7 +1004,6 @@ export class ChatRunService {
         applyId: event.applyId
       })
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, run.finalAnswer || run.partialAnswer)
     } else if (event.type === 'approval_batch_required') {
       run.status = 'waiting_approval'
       run.pendingApproval = event
@@ -1026,7 +1017,6 @@ export class ChatRunService {
       run.pendingApproval = undefined
       run.updatedAt = now
       run.finishedAt = now
-      assistantMessage = this.buildAssistantMessage(run, run.finalAnswer || run.partialAnswer)
     } else if (event.type === 'run_failed') {
       run.status = 'failed'
       run.failureCode = event.code
@@ -1039,7 +1029,6 @@ export class ChatRunService {
         : `失败：${event.message}`
       run.partialAnswer = content
       run.finalAnswer = content
-      assistantMessage = this.buildAssistantMessage(run, content, true)
     } else if (event.type === 'run_cancelled') {
       run.status = 'cancelled'
       run.failureCode = 'user_cancelled'
@@ -1050,7 +1039,6 @@ export class ChatRunService {
       const content = run.partialAnswer ? `${run.partialAnswer}\n\n已取消` : '已取消'
       run.partialAnswer = content
       run.finalAnswer = content
-      assistantMessage = this.buildAssistantMessage(run, content, true)
     } else if (!event.internal && event.type === 'runtime_issue') {
       run.status = 'failed'
       run.pendingApproval = undefined
@@ -1084,24 +1072,6 @@ export class ChatRunService {
     if (!entry?.projectionFlushTimer) return
     clearTimeout(entry.projectionFlushTimer)
     entry.projectionFlushTimer = null
-  }
-
-  private buildAssistantMessage(
-    run: AiRunRecord,
-    content: string,
-    error = false,
-    linkAccess?: ChatMessage['linkAccess']
-  ): ChatMessage {
-    return {
-      id: run.assistantMessageId,
-      session_id: run.sessionId,
-      role: 'assistant',
-      content,
-      timestamp: run.createdAt + 1,
-      artifacts: run.artifacts && run.artifacts.length > 0 ? run.artifacts : undefined,
-      linkAccess,
-      error
-    }
   }
 
   private broadcastEvent(event: AiRunEvent): void {
