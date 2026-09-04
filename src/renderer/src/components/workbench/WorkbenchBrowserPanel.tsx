@@ -4,6 +4,7 @@ import {
   HiArrowLeft,
   HiArrowPath,
   HiArrowRight,
+  HiArrowTopRightOnSquare,
   HiEllipsisVertical,
   HiGlobeAlt,
   HiXMark
@@ -216,6 +217,33 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
             </button>
           </Tooltip>
         </form>
+        <Tooltip title="将打开外部浏览器">
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2] disabled:text-[#C9C7C2]"
+            aria-label="将打开外部浏览器"
+            data-testid={workbenchSelectors.browserOpenExternal}
+            disabled={!state.url && !address.trim()}
+            onClick={() => {
+              setError('')
+              const open = async (): Promise<void> => {
+                if (state.url) {
+                  const response = await window.api.browserPanelOpenExternal({ tabId })
+                  if (!response.success) setError(response.error || '打开外部浏览器失败')
+                  return
+                }
+                const raw = address.trim()
+                if (!raw) return
+                const withProtocol = /^[a-z][a-z\d+.-]*:/iu.test(raw) ? raw : `https://${raw}`
+                const response = await window.api.openExternal(withProtocol)
+                if (!response.success) setError(response.error || '打开外部浏览器失败')
+              }
+              void open()
+            }}
+          >
+            <HiArrowTopRightOnSquare className="h-4 w-4" />
+          </button>
+        </Tooltip>
         <button
           type="button"
           className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2]"

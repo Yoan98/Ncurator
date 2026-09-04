@@ -240,7 +240,7 @@
 - 验收：
   - `WB-COMPOSER-003-AC1` 智能模式发送后，主区先可见用户消息与 assistant 占位消息。
   - `WB-COMPOSER-003-AC2` AI 运行成功启动后，assistant 过程流通过事件逐步追加更新，而不是一次性静态替换。
-  - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前可展示“让俺想想”并带有流动视觉反馈；当后端 thinking 过程事件到达时，本地占位被替换为该 run 的 thinking 过程组，不重复展示。“让俺想想”只在段内尚无工具时展示：本 turn 首次（尚无 Thought / Activity），或上一段决策层 Thought / AI content 落地之后、下一组工具出现之前；一旦出现 Activity，不再插入独立 think 行，改由该 Activity header 保持滑动，直到下一段 AI content（Thought 或最终回答）出现（run 失败/取消且无 content 时停滑）。过程层 brain 等待仍由 thinking process started/completed（或 failed）驱动；brain 一旦开始产出可见正文或 tool call，即发出 thinking completed。消息日志注解 `thinking_started/completed` 仍覆盖整轮 brain 调用，仅用于 Thought 投影。当出现“正在重试”过程组时，必须隐藏“让俺想想”占位，避免两个等待状态同时出现。
+  - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前可展示“让俺想想”并带有流动视觉反馈。“让俺想想”由 Renderer 按段规则合成占位行（不依赖 Main thinking process group 是否仍存活）：本 turn 首次（尚无 Thought / Activity / 可见正文），或上一段决策层 Thought / AI content 落地之后、下一组工具出现之前；一旦出现 Activity，不再插入独立 think 行，改由该 Activity header 保持滑动，直到下一段 AI content（Thought 或最终回答）出现（run 失败/取消且无 content 时停滑）。消息日志注解 `thinking_started/completed` 仍覆盖整轮 brain 调用，仅用于 Thought 投影。当出现“正在重试”过程组、或已有可见流式 Thought / 最终回答时，必须隐藏“让俺想想”占位。
   - `WB-COMPOSER-003-AC4` assistant turn 中 brain 最终输出始终位于过程流下方，并按 markdown 渲染；最终回答在内容分片到达后直接流式渲染，不展示独立收尾等待层；内部文件链接打开右侧文件预览，网页链接打开右侧内置浏览器。
   - `WB-COMPOSER-003-AC5` 决策层（Thought）只展示面向用户的短摘要，不得展示模型原始长篇推理；决策层出现时，当前思考层必须立即隐藏，即使下一步执行正等待审批。
   - `WB-COMPOSER-003-AC6` 过程流使用用户可理解的文案，不直接暴露内部 tool 名或底层事件名；两次 Thought 之间的工具调用（含 `learn_skill`）合并为一个 Activity 面板 header，展开后按时间平铺每条工具的自然语言说明；压缩与重试过程单独成行，不并入 Activity。
@@ -503,7 +503,7 @@
 
 #### WB-PANEL-004 内置浏览器面板
 
-- 系统行为：每个浏览器 Tab 对应独立 Electron `WebContentsView`，全部视图共享持久分区 `persist:ncurator-browser`。该面板只服务用户手动开标签和 `browser_use`；`web_search` 的外网抓取使用独立隐藏 CDP host，不得复用或污染本面板。浏览器 Runtime、界面 Presentation 和 AI Automation 相互独立：切换文件、折叠右侧栏或切换会话时，只从主窗口显示树移除 View，不关闭 `webContents`，不改变 AI 的 CDP target；重新显示时挂载同一个 View 并展示后台操作后的实时最终状态。浏览器导航栏提供后退、前进、刷新/停止、URL 输入、输入框内“前往”按钮和更多操作；浏览器更多菜单及新增标签页菜单使用主窗口原生子窗口承载自绘内容，覆盖在浏览器上方且不隐藏浏览器。
+- 系统行为：每个浏览器 Tab 对应独立 Electron `WebContentsView`，全部视图共享持久分区 `persist:ncurator-browser`。该面板只服务用户手动开标签和 `browser_use`；`web_search` 的外网抓取使用独立隐藏 CDP host，不得复用或污染本面板。浏览器 Runtime、界面 Presentation 和 AI Automation 相互独立：切换文件、折叠右侧栏或切换会话时，只从主窗口显示树移除 View，不关闭 `webContents`，不改变 AI 的 CDP target；重新显示时挂载同一个 View 并展示后台操作后的实时最终状态。浏览器导航栏提供后退、前进、刷新/停止、URL 输入、输入框内“前往”按钮、地址栏右侧“将打开外部浏览器”按钮和更多操作；从 Markdown 网页链接或地址栏导航打开内置浏览器时，先展开面板并写入目标 URL，页面可在后台继续加载，不得等加载完成才显示面板。浏览器更多菜单及新增标签页菜单使用主窗口原生子窗口承载自绘内容，覆盖在浏览器上方且不隐藏浏览器。
 - 验收：
   - `WB-PANEL-004-AC1` 收到 AI 浏览器面板事件后，右侧显示事件指定的浏览器 Tab；面板动画期间不逐帧缩放原生 View，动画结束后按最终 bounds 一次挂载并与正文视口对齐。
   - `WB-PANEL-004-AC2` AI 通过 `browser_use` 的 `navigate` 动作传入 URL 时，右侧内置浏览器先导航到该 URL；`extract / observe / act` 只作用于当前页面、不会跳转，需要切换页面时先调用 `navigate`。
@@ -512,8 +512,9 @@
   - `WB-PANEL-004-AC5` 多个浏览器标签可以打开相同 URL；Stagehand 必须按浏览器 Tab 对应的 CDP targetId 精确选择页面，不得按 URL 猜测或串页。
   - `WB-PANEL-004-AC6` 浏览器标签共享 Cookie、登录态、LocalStorage、IndexedDB、Service Worker 和 HTTP 缓存；除非用户主动清除浏览数据，应用不得自动清空持久分区。
   - `WB-PANEL-004-AC7` 新增标签页和浏览器更多菜单使用无边框原生子窗口显示在浏览器上方；菜单打开期间浏览器保持原尺寸和可见状态，点击外部、按 Escape、主窗口移动或切换 Tab 时关闭菜单。
-  - `WB-PANEL-004-AC8` 浏览器更多菜单的缩小、百分比、放大必须位于同一行且都可点击；缩放操作不关闭菜单，百分比可恢复 100%，系统浏览器打开入口位于分割线下一行。
-  - `WB-PANEL-004-AC9` 地址为空时“前往”按钮禁用；地址非空时点击按钮或按 Enter 都导航到相同目标，按钮 tooltip 与无障碍名称均为“前往”。
+  - `WB-PANEL-004-AC8` 浏览器更多菜单的缩小、百分比、放大必须位于同一行且都可点击；缩放操作不关闭菜单，百分比可恢复 100%；更多菜单不再提供系统浏览器打开入口。
+  - `WB-PANEL-004-AC9` 地址为空时“前往”按钮禁用；地址非空时点击按钮或按 Enter 都导航到相同目标，按钮 tooltip 与无障碍名称均为“前往”。用户导航（含 Markdown 网页链接与地址栏前往）启动后立即返回，不等待页面 `did-finish-load`；AI `browser_use` 自动化路径仍可等待页面就绪。
+  - `WB-PANEL-004-AC9b` 地址栏右侧提供“将打开外部浏览器”按钮（右上角外链图标）；有可打开 URL 时可点击，tooltip 与无障碍名称为“将打开外部浏览器”，点击后通过系统默认浏览器打开当前页或地址栏中的 URL。
   - `WB-PANEL-004-AC10` 内置浏览器自动化不得依赖固定 CDP 端口；旧端口 `9333` 或其他本地端口已被占用时，应用仍应正常启动并通过随机回环端口完成浏览器任务。
   - `WB-PANEL-004-AC11` AI 在浏览器未显示时仍可按原 targetId 连续执行 observe、act、extract 和导航；恢复后必须直接显示 AI 操作后的最新网址、页面内容、滚动位置和表单状态，恢复前后 `webContents.id` 不变。
   - `WB-PANEL-004-AC12` 后台浏览器在应用运行期间不得自动销毁；仅应用退出、用户主动关闭浏览器 Tab 或删除所属会话时销毁。应用重启后按会话恢复标签顺序、URL、导航历史和缩放并按需重新创建；不承诺恢复页面 JS、内存滚动状态或未提交表单。

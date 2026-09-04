@@ -36,6 +36,15 @@ describe('shouldShowAssistantThinkingWait', () => {
     ).toBe(true)
   })
 
+  it('shows after a thought even when no thinking process group remains', () => {
+    expect(
+      shouldShowAssistantThinkingWait({
+        processGroups: [toolGroup('completed', 2)],
+        processThoughts: [thought(3)]
+      })
+    ).toBe(true)
+  })
+
   it('shows again after a thought when waiting before next tools', () => {
     expect(
       shouldShowAssistantThinkingWait({

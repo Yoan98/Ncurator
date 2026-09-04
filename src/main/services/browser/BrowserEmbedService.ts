@@ -82,6 +82,11 @@ const loadWebContentsUrl = async (contents: WebContents, url: string): Promise<v
   await waitForWebContentsLoad(contents)
 }
 
+/** User/UI navigation: start load immediately without waiting for did-finish-load. */
+const startWebContentsUrl = (contents: WebContents, url: string): void => {
+  void contents.loadURL(url).catch(() => undefined)
+}
+
 const stringifyStagehandExtraction = (value: object): string =>
   'extraction' in value && typeof value.extraction === 'string'
     ? value.extraction
@@ -263,7 +268,12 @@ export class BrowserEmbedService implements BrowserUseService {
     const runtime = this.requireTab(tabId || this.activeTabId)
     const url = normalizeUrl(rawUrl)
     const view = await this.ensureReady(runtime)
-    await loadWebContentsUrl(view.webContents, url)
+    runtime.persisted.url = url
+    runtime.persisted.updatedAt = Date.now()
+    this.stateStore.save(runtime.persisted)
+    // Emit target URL before load finishes so the panel address bar updates immediately.
+    this.emitState(runtime)
+    startWebContentsUrl(view.webContents, url)
     this.captureRuntimeState(runtime)
   }
 
@@ -305,7 +315,8 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   public openExternal(tabId: string): void {
-    const url = this.requireTab(tabId).view?.webContents.getURL()
+    const runtime = this.requireTab(tabId)
+    const url = runtime.view?.webContents.getURL() || runtime.persisted.url
     if (url) void shell.openExternal(url)
   }
 
@@ -318,8 +329,7 @@ export class BrowserEmbedService implements BrowserUseService {
       actions: {
         zoomIn: () => this.zoomIn(tabId),
         zoomOut: () => this.zoomOut(tabId),
-        zoomReset: () => this.zoomReset(tabId),
-        openExternal: () => this.openExternal(tabId)
+        zoomReset: () => this.zoomReset(tabId)
       }
     })
   }
@@ -533,7 +543,9 @@ export class BrowserEmbedService implements BrowserUseService {
     if (runtime.restoring) return
     const contents = runtime.view?.webContents
     if (!contents || contents.isDestroyed()) return
-    runtime.persisted.url = contents.getURL()
+    const nextUrl = contents.getURL()
+    // Keep the optimistic navigate target until webContents reports a real URL.
+    if (nextUrl) runtime.persisted.url = nextUrl
     runtime.persisted.title = contents.getTitle().trim() || undefined
     runtime.persisted.zoomFactor = contents.getZoomFactor()
     runtime.persisted.updatedAt = Date.now()

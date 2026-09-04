@@ -2578,13 +2578,6 @@ const ChatPage: React.FC = () => {
           return
         }
         const browser = createResponse.state
-        const navigateResponse = await window.api.browserTabNavigate({
-          tabId: browser.id,
-          url: reference.path
-        })
-        if (!navigateResponse.success) {
-          emitErrorMessage(navigateResponse.error || '打开链接失败')
-        }
         openResourceTab({
           id: `browser:${browser.id}`,
           kind: 'browser',
@@ -2594,6 +2587,14 @@ const ChatPage: React.FC = () => {
             kind: 'browser',
             title: browser.title || reference.label || '浏览器',
             browserTabId: browser.id
+          }
+        })
+        void window.api.browserTabNavigate({
+          tabId: browser.id,
+          url: reference.path
+        }).then((navigateResponse) => {
+          if (!navigateResponse.success) {
+            emitErrorMessage(navigateResponse.error || '打开链接失败')
           }
         })
         return

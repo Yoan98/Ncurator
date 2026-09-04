@@ -28,13 +28,17 @@ import type { OpenableMarkdownReference } from '../markdownReference'
 import { workbenchSelectors } from '../../testing/selectors'
 import {
   buildAssistantExecutionSummaryText,
+  createAssistantThinkingGroup,
   resolveAssistantExecutionIcon,
   resolveAssistantExecutionStatus,
   shouldShowAssistantApplyTargets,
   visibleAssistantProcessGroups,
   isAssistantActivityToolGroup
 } from './utils'
-import { shouldActivityHeaderShimmer } from '../../../../shared/assistantThinkingWait'
+import {
+  shouldActivityHeaderShimmer,
+  shouldShowAssistantThinkingWait
+} from '../../../../shared/assistantThinkingWait'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
 
@@ -365,22 +369,42 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     finalAnswerMarkdown || (streamingRole === 'answer' ? streamingMarkdown : '')
   const hasFinalAnswer = visibleAnswerMarkdown.trim().length > 0
   const hasStreamingThought = streamingRole === 'thought' && streamingMarkdown.trim().length > 0
-  const hasVisibleBrainOutput =
-    hasFinalAnswer || hasStreamingThought || streamingMarkdown.trim().length > 0
+  // Only treat settled/visible brain text as output — bare streaming buffer before classify
+  // must not suppress the wait placeholder.
+  const hasVisibleBrainOutput = hasFinalAnswer || hasStreamingThought
   const hasNextAiContentForActivity =
     hasFinalAnswer ||
     hasStreamingThought ||
     turn?.status === 'completed' ||
     turn?.status === 'failed'
-  const processGroups = useMemo(
-    () =>
-      visibleAssistantProcessGroups({
-        processGroups: turn?.processGroups || [],
-        processThoughts,
-        hasVisibleBrainOutput
-      }),
-    [hasVisibleBrainOutput, processThoughts, turn?.processGroups]
-  )
+  const showThinkingWait = shouldShowAssistantThinkingWait({
+    processGroups: turn?.processGroups || [],
+    processThoughts,
+    hasVisibleBrainOutput
+  })
+  const processGroups = useMemo(() => {
+    const visible = visibleAssistantProcessGroups({
+      processGroups: turn?.processGroups || [],
+      processThoughts,
+      hasVisibleBrainOutput
+    })
+    if (!showThinkingWait) return visible
+    if (visible.some((group) => group.kind === 'thinking' && group.status === 'running')) {
+      return visible
+    }
+    const lastCreatedAt = Math.max(
+      0,
+      ...processThoughts.map((thought) => thought.createdAt),
+      ...visible.map((group) => group.createdAt)
+    )
+    return [
+      ...visible.filter((group) => group.kind !== 'thinking'),
+      {
+        ...createAssistantThinkingGroup(messageId),
+        createdAt: lastCreatedAt + 1
+      }
+    ]
+  }, [hasVisibleBrainOutput, messageId, processThoughts, showThinkingWait, turn?.processGroups])
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({
@@ -403,7 +427,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   return (
     <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
       <div className="space-y-4">
-        {timeline.length > 0 || hasStreamingThought ? (
+        {timeline.length > 0 || hasStreamingThought || showThinkingWait ? (
           <div
             className={`transition-opacity duration-200 ${
               turn.status === 'completed' && hasFinalAnswer ? 'opacity-75' : ''

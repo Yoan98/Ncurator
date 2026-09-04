@@ -18,7 +18,8 @@ export const isAssistantActivityToolGroup = (group: AssistantThinkingWaitGroup):
  * 「让俺想想」只在段内尚无工具时展示：
  * - 本 turn 首次（尚无 Thought / Activity），或
  * - 上一段 AI content（Thought）之后、下一组工具出现之前。
- * Activity 运行中、正在重试、或已有流式/最终正文时不展示；上一段若以 Activity 收尾则不再插 think 行。
+ * Activity 运行中、正在重试、或已有可见流式/最终正文时不展示；上一段若以 Activity 收尾则不再插 think 行。
+ * Renderer 在规则为 true 时合成占位行，不依赖 Main thinking process group 是否仍存活。
  */
 export const shouldShowAssistantThinkingWait = (input: {
   processGroups: readonly AssistantThinkingWaitGroup[]

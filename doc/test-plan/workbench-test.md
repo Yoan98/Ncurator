@@ -255,7 +255,7 @@ tests/case/workbench/
 #### `right-panel-layout-and-tabs`
 
 - 测试类型：`e2e`
-- What：空会话输入区布局、右侧默认无占位折叠、标签栏密度与折叠入口、Tab 溢出滚动、会话级标签和展开状态恢复、浏览器缩放菜单和地址栏“前往”按钮。
+- What：空会话输入区布局、右侧默认无占位折叠、标签栏密度与折叠入口、Tab 溢出滚动、会话级标签和展开状态恢复、浏览器缩放菜单、地址栏“前往”与“将打开外部浏览器”按钮。
 - Why：右侧资源工作台和聊天输入区共享窗口高度与标题栏命中区域，普通功能测试无法发现输入框被推出窗口、折叠按钮放错区域、Tab 无法滚动或原生浏览器遮挡浮层等视觉交互回归。
 - How：直接进入真实 Workbench，先确认空草稿右侧 shell 不存在并测量输入区位置；在 A/B 会话分别创建不同标签并设置不同活动标签和展开状态，来回切换；再连续创建八个浏览器 Tab 验证滚动和菜单。
 - Oracle：各会话恢复自己的标签、活动状态和展开状态；其余布局、动画、滚动和菜单要求不变，对齐 `WB-PANEL-001`、`WB-SESSION-008`。
@@ -359,7 +359,7 @@ tests/case/workbench/
 - What：AI 通过内置浏览器完成网页任务时，文件 / 多浏览器 Tab、独立页面导航、持久站点数据和真实网页操作结果形成闭环。
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题。
 - How：先打开真实 Markdown 文件，再让 AI 使用 `browser_use` 操作本地测试页；AI Run 仍在进行时，用户通过 `+` 新建另一个浏览器标签并折叠右栏，验证后续 observe / act / extract 在后台继续操作原目标；任务完成后展开右栏并切回 AI 浏览器标签，再切换文件和浏览器检查状态保持。
-- Oracle：文件和多个浏览器 Tab 可共存；折叠期间原浏览器 `webContents` 不销毁且 AI 能完成输入和点击，展开后同一个 `webContents.id` 直接显示最新 `BROWSER_TASK_DONE` 结果；真实 URL 导航、结果收口、targetId 隔离、共享持久分区、缩放/前往和随机 CDP 端口由浏览器组 case 合并对齐 `WB-PANEL-004`。
+- Oracle：文件和多个浏览器 Tab 可共存；折叠期间原浏览器 `webContents` 不销毁且 AI 能完成输入和点击，展开后同一个 `webContents.id` 直接显示最新 `BROWSER_TASK_DONE` 结果；真实 URL 导航、结果收口、targetId 隔离、共享持久分区、缩放/前往/外链打开和随机 CDP 端口由浏览器组 case 合并对齐 `WB-PANEL-004`。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成输入、点击和结果读取即可判定 browser panel 能力有效。
 
 #### `browser-view-lifecycle`
@@ -368,7 +368,7 @@ tests/case/workbench/
 - What：内置浏览器原生视图在初次显示、面板折叠、原生自绘菜单和会话切换后仍可见、尺寸稳定且持续运行，包括切走的会话面板同样处于展开状态后切回的呈现恢复。
 - Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换会话时误销毁仍在运行的网页。会话切换后浏览器呈现依赖 `contentPanelCollapsed` 值变化触发的恢复，若前后两个会话面板均展开（值不变）会漏掉重新呈现，表现为地址栏正常但网页白屏。
 - How：通过 Settings UI 创建工作空间并形成会话；在 Workbench UI 新建浏览器 Tab，导航真实本地网页并调整缩放；折叠、切换会话后验证运行期状态，再正常重启同一用户目录，验证 URL、历史和缩放恢复；最后分别通过关闭 Tab 和删除所属会话销毁浏览器。会话切换分支覆盖两种路径：新建会话（面板默认折叠）后切回，以及切到面板已展开的会话后切回，并直接断言主窗口 `contentView.children` 原生挂载计数恢复到 1 而非仅依赖像素采样。
-- Oracle：运行期折叠或切换会话不销毁 WebContents；无论切走的会话面板是否展开，切回后同一 `webContents.id` 必须重新挂载到主窗口并恢复显示；重启后重新创建 WebContents 并恢复 URL、历史和缩放，但不要求表单、滚动内存或 JS 连续；关闭 Tab 或删除所属会话后状态清理，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC12`。
+- Oracle：运行期折叠或切换会话不销毁 WebContents；无论切走的会话面板是否展开，切回后同一 `webContents.id` 必须重新挂载到主窗口并恢复显示；重启后重新创建 WebContents 并恢复 URL、历史和缩放，但不要求表单、滚动内存或 JS 连续；关闭 Tab 或删除所属会话后状态清理；地址栏右侧“将打开外部浏览器”按钮可见且更多菜单不再含系统浏览器入口，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC8`、`WB-PANEL-004-AC9b`、`WB-PANEL-004-AC12`。
 - Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。
 
 #### `web-read-from-search-result`

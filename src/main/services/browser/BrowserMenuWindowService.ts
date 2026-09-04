@@ -5,7 +5,6 @@ type BrowserMenuActions = {
   zoomIn: () => BrowserTabState
   zoomOut: () => BrowserTabState
   zoomReset: () => BrowserTabState
-  openExternal: () => void
 }
 
 type BrowserMenuOpenOptions = {
@@ -22,7 +21,7 @@ type ResourceMenuOpenOptions = {
 }
 
 const MENU_WIDTH = 286
-const MENU_HEIGHT = 116
+const MENU_HEIGHT = 68
 const MIN_ZOOM_PERCENT = 50
 const MAX_ZOOM_PERCENT = 200
 const RESOURCE_MENU_WIDTH = 166
@@ -121,14 +120,6 @@ const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
           >+</a>
         </div>
       </div>
-      <div class="separator"></div>
-      <a
-        class="external"
-        href="ncurator-browser-menu://open-external"
-        target="_blank"
-        role="menuitem"
-        data-disabled="${!state.url}"
-      >在系统浏览器中打开</a>
     </div>
   </body>
 </html>`
@@ -205,10 +196,6 @@ export class BrowserMenuWindowService {
       if (action === 'zoom-out') updateZoom(options.actions.zoomOut())
       if (action === 'zoom-reset') updateZoom(options.actions.zoomReset())
       if (action === 'zoom-in') updateZoom(options.actions.zoomIn())
-      if (action === 'open-external') {
-        options.actions.openExternal()
-        this.close()
-      }
       return { action: 'deny' }
     })
     await this.present(menuWindow, renderMenuHtml(options.state))

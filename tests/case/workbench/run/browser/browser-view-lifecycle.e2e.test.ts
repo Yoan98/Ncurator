@@ -393,12 +393,9 @@ describe('workbench browser lifecycle e2e', () => {
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             browserTabId
           )
-          const zoomControlsBox = await escapeMenuPage
-            .locator('[data-testid="workbench-browser-zoom-controls"]')
-            .boundingBox()
-          const externalMenuItemBox = await escapeMenuPage
-            .getByRole('menuitem', { name: '在系统浏览器中打开' })
-            .boundingBox()
+          const openExternalButton = getWorkbenchLocator(page, workbenchSelectors.browserOpenExternal)
+          const openExternalVisible = await openExternalButton.isVisible()
+          const openExternalLabel = (await openExternalButton.getAttribute('aria-label')) || ''
           const escapeMenuClosePromise = escapeMenuPage.waitForEvent('close', { timeout: 10_000 })
           await runtime.electronApp.evaluate(({ BrowserWindow }) => {
             const menuWindow = BrowserWindow.getAllWindows().find(
@@ -627,10 +624,8 @@ describe('workbench browser lifecycle e2e', () => {
             menuZoom: menuState.state?.zoomPercent,
             restoreSamples,
             emptyGoDisabled,
-            externalMenuItemBelowZoom:
-              zoomControlsBox !== null &&
-              externalMenuItemBox !== null &&
-              externalMenuItemBox.y > zoomControlsBox.y + zoomControlsBox.height,
+            openExternalButton:
+              openExternalVisible && openExternalLabel === '将打开外部浏览器',
             closedTabDestroyed,
             deletedOwnerDestroyed
           }
@@ -667,7 +662,7 @@ describe('workbench browser lifecycle e2e', () => {
               result.restoredZoom === 100 &&
               result.menuZoom === 100 &&
               result.emptyGoDisabled &&
-              result.externalMenuItemBelowZoom,
+              result.openExternalButton,
             {
               name: 'embedded-browser-native-pixels-remain-visible',
               message:
