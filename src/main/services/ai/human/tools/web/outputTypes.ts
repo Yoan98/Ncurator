@@ -66,7 +66,6 @@ export type BrowserUseObserveOutput = {
 export type BrowserUseActOutput = {
   action: 'act'
   page: BrowserUsePage
-  success: boolean
   message: string
   actionDescription: string
   actions?: BrowserActionCandidate[]
@@ -76,6 +75,8 @@ export type BrowserUseErrorOutput = {
   action?: 'navigate' | 'extract' | 'observe' | 'act'
   page?: BrowserUsePage
   error: string
+  message?: string
+  actionDescription?: string
 }
 
 export type BrowserUseOutput =

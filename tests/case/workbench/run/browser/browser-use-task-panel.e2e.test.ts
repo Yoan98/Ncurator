@@ -35,7 +35,8 @@ const DEPRECATED_BROWSER_USE_FIELDS = [
   'outcome',
   'pageText',
   'selector',
-  'cacheStatus'
+  'cacheStatus',
+  'success'
 ]
 
 const isObjectRecord = (value: JsonValue | undefined): value is Record<string, JsonValue> =>
@@ -74,10 +75,10 @@ const isBrowserUseDataContract = (data: JsonValue | undefined): boolean => {
   if (action === 'extract') return typeof data.content === 'string'
   if (action === 'observe') return Array.isArray(data.actions)
   return (
-    typeof data.success === 'boolean' &&
     typeof data.message === 'string' &&
     typeof data.actionDescription === 'string' &&
-    (!('actions' in data) || Array.isArray(data.actions))
+    (!('actions' in data) || Array.isArray(data.actions)) &&
+    (!('error' in data) || typeof data.error === 'string')
   )
 }
 
@@ -502,7 +503,6 @@ describe('workbench run e2e', () => {
               (data) =>
                 isObjectRecord(data) &&
                 data.action === 'act' &&
-                typeof data.success === 'boolean' &&
                 typeof data.message === 'string' &&
                 typeof data.actionDescription === 'string'
             ),

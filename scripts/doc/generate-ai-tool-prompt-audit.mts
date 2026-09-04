@@ -379,12 +379,12 @@ const OUTPUT_FIELDS: Record<string, OutField[]> = {
     { path: 'error?', description: '失败文案' }
   ],
   browser_use: [
-    { path: 'error?', description: '失败文案' },
+    { path: 'error?', description: '失败文案（含 act 执行失败）' },
     { path: 'action', description: 'navigate | extract | observe | act' },
     { path: 'page.url / page.title?', description: '当前页' },
     { path: 'content', description: 'extract 正文' },
     { path: 'actions[].description', description: 'observe 候选动作' },
-    { path: 'success / message / actionDescription', description: 'act 结果' }
+    { path: 'message / actionDescription', description: 'act 执行说明（成败由 ToolCallResult.ok 表达）' }
   ],
   docx_read_outline: [
     { path: 'fromPercent / toPercent', description: '比例区间' },
@@ -880,24 +880,23 @@ const OUTPUT_CASES: Record<string, OutputCase[]> = {
       data: {
         action: 'act',
         page: { url: 'https://example.com/form', title: 'Contact Form' },
-        success: true,
         message: 'Filled email and clicked Submit',
         actionDescription: 'Type test@example.com into Email field, then click Submit'
       }
     },
     {
       label: 'act 失败',
-      ok: true,
+      ok: false,
       input: { action: 'act', instruction: '点击不存在的 Confirm 按钮' },
       data: {
         action: 'act',
         page: { url: 'https://example.com/form', title: 'Contact Form' },
-        success: false,
         message: 'Element not found: button[name="Confirm"]',
-        actionDescription: 'Click button[name="Confirm"]'
+        actionDescription: 'Click button[name="Confirm"]',
+        error: 'Element not found: button[name="Confirm"]'
       }
     },
-    { label: '浏览器错误', ok: true, data: { error: 'Browser service unavailable' } }
+    { label: '浏览器错误', ok: false, data: { error: 'Browser service unavailable' } }
   ],
   docx_read_outline: [
     {

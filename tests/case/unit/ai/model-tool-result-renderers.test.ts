@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+  renderBrowserUseModelError,
+  renderBrowserUseModelResult,
   renderTerminalReadModelResult,
   renderTerminalRunModelResult,
   renderTextFileEditModelResult,
@@ -112,5 +114,44 @@ describe('ai unit model tool result renderers', () => {
     expect(rendered).toContain('External web content follows')
     expect(rendered).toContain('# Funding')
     expect(rendered).toContain('510 billion yuan')
+  })
+
+  it('renders browser_use act success without Success line', () => {
+    const rendered = renderBrowserUseModelResult({
+      toolName: 'browser_use',
+      args: { action: 'act', instruction: 'click submit' },
+      data: {
+        action: 'act',
+        page: { url: 'https://example.com/form', title: 'Contact Form' },
+        message: 'Action [click] performed successfully on selector: xpath=//button',
+        actionDescription: 'Click Submit'
+      }
+    })
+
+    expect(rendered).toContain('Browser act completed.')
+    expect(rendered).toContain('Page: Contact Form — https://example.com/form')
+    expect(rendered).toContain('Message: Action [click] performed successfully')
+    expect(rendered).toContain('Action: Click Submit')
+    expect(rendered).not.toContain('Success:')
+  })
+
+  it('renders browser_use act failure with page context', () => {
+    const rendered = renderBrowserUseModelError({
+      toolName: 'browser_use',
+      args: { action: 'act', instruction: 'click missing' },
+      data: {
+        action: 'act',
+        page: { url: 'https://example.com/form', title: 'Contact Form' },
+        message: 'Element not found',
+        actionDescription: 'Click Confirm',
+        error: 'Element not found'
+      }
+    })
+
+    expect(rendered).toContain('Browser act failed.')
+    expect(rendered).toContain('Page: Contact Form — https://example.com/form')
+    expect(rendered).toContain('Message: Element not found')
+    expect(rendered).toContain('Action: Click Confirm')
+    expect(rendered).not.toContain('Success:')
   })
 })

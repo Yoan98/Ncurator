@@ -13,7 +13,7 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 1. **锚点，非重建** — 读写通过稳定引用（nodeId、路径、行号等）定位；不要求模型一次生成深层结构树。
 2. **读写分离、职责单一** — 发现用 read，变更用 write；同一领域少量工具 + `operation` 区分，不为小能力膨胀工具数。
 3. **Schema 即契约** — 参数扁平、语义必填、字段带 describe；校验失败返回可修复错误，不静默改写。模型偶发把嵌套 object/array 再编码成 JSON 字符串时，brain 在 schema 校验前经统一的 `normalizeToolCallArgs` 展开（全工具单一入口），不改变业务校验语义。
-4. **结果双通道** — 结构化结果是真相；面向模型的文本是投影，不承担 ID / 锚点解析职责。
+4. **结果双通道** — 结构化结果是真相；面向模型的文本是投影，不承担 ID / 锚点解析职责。工具级成败只放在 `ToolCallResult.ok`（可由 payload 的信封字段 `ok: false` 或 `error` 推导）；领域 `data` 不重复塞 `success` / `ok`。
 5. **原子与可预期** — 一次调用一个 operation；成功或整次失败；同类输入语义稳定。
 6. **描述声明边界，不教流程** — skill / tool 描述只说明能做什么、不能做什么；组合策略由模型自主决定。
 7. **工具简单可理解** — 作者语言贴近模型对领域的心智模型，所用即所想。
@@ -99,7 +99,7 @@ brain 在 hand 前、schema 校验前，对**全部** tool call 统一调用：
 | 否则 > 32,000 字符 | 全文落盘 workspace tool-result 目录，返回 head/tail 预览 + 路径 + `text_file_read` 指引 |
 | 否则 | 整段直出 ToolMessage |
 
-实现：`buildModelToolResultDelivery`（`shared/modelToolResult.ts`）。  
+实现：`buildModelToolResultDelivery`（`shared/modelToolResult.ts`）。
 预览常量：`HEAD=6000` chars，`TAIL=2000` chars。
 
 ### 5.1 生产者有界读取（非 delivery 管道）

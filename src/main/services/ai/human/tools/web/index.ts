@@ -161,17 +161,22 @@ const normalizeBrowserUseOutput = (result: BrowserUseResult): JsonObject => {
         page: toBrowserUsePageJson(result.page),
         actions: result.result.actions.map(toBrowserActionCandidateJson)
       }
-    case 'act':
-      return {
-        action: 'act',
+    case 'act': {
+      const actBase = {
+        action: 'act' as const,
         page: toBrowserUsePageJson(result.page),
-        success: result.result.success,
         message: result.result.message,
         actionDescription: result.result.actionDescription,
         ...(result.result.actions.length
           ? { actions: result.result.actions.map(toBrowserActionCandidateJson) }
           : {})
       }
+      // Stagehand act 失败走工具级 error 信封，不再回传领域字段 success
+      if (!result.result.success) {
+        return { ...actBase, error: result.result.message }
+      }
+      return actBase
+    }
   }
 }
 
@@ -400,9 +405,13 @@ export const webToolFamily: ToolFamilyDefinition = {
                       llmConfig
                     })
               const payload = normalizeBrowserUseOutput(result)
-              if ('error' in result) {
+              const errorText =
+                typeof payload.error === 'string' && payload.error.trim()
+                  ? payload.error.trim()
+                  : undefined
+              if (errorText) {
                 session.fail(
-                  result.error,
+                  errorText,
                   undefined,
                   buildToolResult({
                     toolName: BROWSER_USE_TOOL_SPEC.name,
@@ -413,23 +422,10 @@ export const webToolFamily: ToolFamilyDefinition = {
                 return payload
               }
 
-              const ok = result.action !== 'act' || result.result.success
-              if (ok) {
-                session.succeed(
-                  undefined,
-                  buildToolResult({ toolName: BROWSER_USE_TOOL_SPEC.name, ok: true, data: payload })
-                )
-              } else {
-                session.fail(
-                  result.result.message,
-                  undefined,
-                  buildToolResult({
-                    toolName: BROWSER_USE_TOOL_SPEC.name,
-                    ok: false,
-                    data: payload
-                  })
-                )
-              }
+              session.succeed(
+                undefined,
+                buildToolResult({ toolName: BROWSER_USE_TOOL_SPEC.name, ok: true, data: payload })
+              )
               return payload
             } catch (error) {
               const payload = {

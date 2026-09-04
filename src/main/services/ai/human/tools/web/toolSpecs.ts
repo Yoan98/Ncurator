@@ -2,6 +2,7 @@ import type { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { readStringArg } from '../utils/toolSpecUtils'
 import {
+  renderBrowserUseModelError,
   renderBrowserUseModelResult,
   renderWebSearchModelResult
 } from '../../shared/modelToolResultRenderers'
@@ -47,7 +48,10 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
     mutability: String(args.action || '') === 'act' ? 'mutating' : 'read_only',
     resourceKey: String(args.url || 'embedded-browser')
   }),
-  modelResult: { renderSuccess: renderBrowserUseModelResult }
+  modelResult: {
+    renderSuccess: renderBrowserUseModelResult,
+    renderError: renderBrowserUseModelError
+  }
 }
 
 export const WEB_TOOL_SPECS = [WEB_SEARCH_TOOL_SPEC, BROWSER_USE_TOOL_SPEC] as const

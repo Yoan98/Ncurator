@@ -697,7 +697,6 @@ export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
     return renderProse([
       'Browser act completed.',
       pageLabel ? `Page: ${pageLabel}` : '',
-      `Success: ${String(obj.success === true)}`,
       readString(obj.message) ? `Message: ${readString(obj.message)}` : '',
       readString(obj.actionDescription) ? `Action: ${readString(obj.actionDescription)}` : ''
     ])
@@ -706,6 +705,21 @@ export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
     'Browser action completed.',
     action ? `Action: ${action}` : '',
     pageLabel ? `Page: ${pageLabel}` : ''
+  ])
+}
+
+export const renderBrowserUseModelError: ModelResultRenderer = (input) => {
+  const obj = isObject(input.data) ? input.data : {}
+  const action = readString(obj.action) || ''
+  if (action !== 'act') return renderGenericModelError(input)
+  const page = isObject(obj.page) ? obj.page : {}
+  const pageLabel = [readString(page.title), readString(page.url)].filter(Boolean).join(' — ')
+  const message = readString(obj.message) || readString(obj.error) || ''
+  return renderProse([
+    'Browser act failed.',
+    pageLabel ? `Page: ${pageLabel}` : '',
+    message ? `Message: ${message}` : '',
+    readString(obj.actionDescription) ? `Action: ${readString(obj.actionDescription)}` : ''
   ])
 }
 

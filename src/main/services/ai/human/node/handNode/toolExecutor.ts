@@ -78,7 +78,8 @@ const normalizeToolCallResult = (toolName: string, payload: JsonValue): ToolCall
   if (isJsonObject(payload)) {
     const explicitError =
       typeof payload.error === 'string' && payload.error.trim() ? payload.error.trim() : undefined
-    const ok = payload.ok !== false && payload.success !== false && !explicitError
+    // 只认信封字段 ok / error；领域 payload 不得再用 success 表达工具成败
+    const ok = payload.ok !== false && !explicitError
     const payloadMessage = resolvePayloadMessage(toolName, payload)
     const data = { ...payload }
     const imageRefs =
@@ -105,8 +106,8 @@ const normalizeToolCallResult = (toolName: string, payload: JsonValue): ToolCall
           })
         : undefined
     const candidateResourceContext = data.resourceContext
+    // 剥离工具信封字段，避免与 ToolCallResult.ok 双通道重复
     delete data.ok
-    delete data.success
     delete data.code
     delete data.summary
     delete data.resourceContext
