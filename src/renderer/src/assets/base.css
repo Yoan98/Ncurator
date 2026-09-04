@@ -913,7 +913,7 @@ textarea,
   flex-basis: calc(var(--nc-content-panel-ratio) * 100%);
   width: auto;
   min-width: 280px;
-  max-width: calc(100% - 360px);
+  max-width: calc(100% - 500px);
 }
 
 .nc-main-split[data-panel-resize='pixel'] .nc-content-panel-shell[data-panel-visible='true'] {

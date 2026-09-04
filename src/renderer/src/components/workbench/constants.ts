@@ -15,7 +15,7 @@ export const WORKBENCH_CONTENT_PANEL_MAX_RATIO = 0.7
 export const WORKBENCH_CONTENT_PANEL_MIN_WIDTH = 280
 /** 拖过该宽度立即吸合折叠 */
 export const WORKBENCH_CONTENT_PANEL_COLLAPSE_WIDTH = 200
-export const WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH = 360
+export const WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH = 500
 
 export const clampWorkbenchContentPanelRatio = (ratio: number): number => {
   if (!Number.isFinite(ratio)) return WORKBENCH_CONTENT_PANEL_DEFAULT_RATIO

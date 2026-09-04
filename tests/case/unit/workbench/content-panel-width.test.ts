@@ -16,14 +16,14 @@ describe('workbench content panel width', () => {
   })
 
   it('resolves width from the main-split available width, not the full viewport', () => {
-    const available = 1000
+    const available = 1600
     const width = resolveWorkbenchContentPanelWidth(available, 0.48)
-    expect(width).toBe(480)
+    expect(width).toBe(768)
     expect(width).toBeLessThanOrEqual(available - WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH)
   })
 
   it('keeps a usable minimum while preserving middle min width', () => {
-    const available = 800
+    const available = 1200
     const width = resolveWorkbenchContentPanelWidth(available, 0.1)
     expect(width).toBe(WORKBENCH_CONTENT_PANEL_MIN_WIDTH)
     expect(available - width).toBeGreaterThanOrEqual(WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH)
@@ -31,10 +31,17 @@ describe('workbench content panel width', () => {
 
   it('scales proportionally when the available width changes', () => {
     const ratio = 0.4
-    const narrow = resolveWorkbenchContentPanelWidth(900, ratio)
-    const wide = resolveWorkbenchContentPanelWidth(1200, ratio)
-    expect(narrow / 900).toBeCloseTo(ratio, 5)
-    expect(wide / 1200).toBeCloseTo(ratio, 5)
+    const narrow = resolveWorkbenchContentPanelWidth(1600, ratio)
+    const wide = resolveWorkbenchContentPanelWidth(2000, ratio)
+    expect(narrow / 1600).toBeCloseTo(ratio, 5)
+    expect(wide / 2000).toBeCloseTo(ratio, 5)
     expect(wide).toBeGreaterThan(narrow)
+  })
+
+  it('caps the panel so the middle dialogue keeps its min width', () => {
+    const available = 900
+    const width = resolveWorkbenchContentPanelWidth(available, 0.48)
+    expect(width).toBe(available - WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH)
+    expect(available - width).toBe(WORKBENCH_CONTENT_PANEL_MIDDLE_MIN_WIDTH)
   })
 })

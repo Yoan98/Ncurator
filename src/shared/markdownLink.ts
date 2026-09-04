@@ -2,6 +2,7 @@
  * Standard Markdown link helpers for assistant delivery.
  *
  * AI emits CommonMark / GFM links: `[label](destination)` or `[label](<destination>)`.
+ * Bare URLs / `www.…` are not treated as links (renderer disables GFM autolink literals).
  * Access status is stored as a sidecar (`MarkdownLinkAccessEntry[]`), never rewritten
  * into the markdown body.
  */

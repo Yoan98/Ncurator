@@ -134,7 +134,9 @@ function createWindow(): BrowserWindow {
     minHeight: MIN_WINDOW_HEIGHT,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#FBFBFA',
+    // 主内容区（右侧/底部边缘）为白色；窗口底色对齐为白，
+    // 使 macOS live-resize 时 OS 先填充的一帧与内容同色，消除拖动露白（对齐主流应用做法）。
+    backgroundColor: '#ffffff',
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 16 } }
       : {}),
