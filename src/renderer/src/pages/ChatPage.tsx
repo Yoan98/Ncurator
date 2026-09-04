@@ -1587,6 +1587,10 @@ const ChatPage: React.FC = () => {
       })
       setContentPanel(tab.state)
       expandContentPanel()
+      // 面板已展开时 contentPanelCollapsed 不变，不会重跑呈现动画；切到浏览器时必须显式打开呈现。
+      if (tab.kind === 'browser' && !contentPanelCollapsedRef.current) {
+        setBrowserPresentationEnabled(true)
+      }
     },
     [contentPanel, expandContentPanel, updateCurrentTabWorkspace]
   )
@@ -2891,6 +2895,9 @@ const ChatPage: React.FC = () => {
       expandContentPanel()
       if (tab.kind === 'browser' && tab.browserTabId) {
         void window.api.browserTabActivate({ tabId: tab.browserTabId })
+        if (!contentPanelCollapsedRef.current) {
+          setBrowserPresentationEnabled(true)
+        }
       }
       if (
         tab.state.kind === 'apply_workspace' &&

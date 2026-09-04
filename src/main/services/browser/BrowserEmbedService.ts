@@ -303,7 +303,12 @@ export class BrowserEmbedService implements BrowserUseService {
       runtime.ready = null
       runtime.attached = false
       runtime.visible = false
-      void this.ensureReady(runtime)
+      void this.ensureReady(runtime).then(() => {
+        if (this.presentedTabId === tabId) this.applyAllVisibility()
+      })
+    } else {
+      // 后台加载完成后再挂载时，强制重绘，避免地址栏有 URL 但视口白屏。
+      this.forcePresentedPaint(runtime)
     }
     this.emitState(runtime)
     return this.presentationId
@@ -329,15 +334,15 @@ export class BrowserEmbedService implements BrowserUseService {
       }
     }
     const prev = this.bounds
-    if (
+    const unchanged =
       Math.round(prev.x) === Math.round(bounds.x) &&
       Math.round(prev.y) === Math.round(bounds.y) &&
       Math.round(prev.width) === Math.round(bounds.width) &&
       Math.round(prev.height) === Math.round(bounds.height)
-    ) {
-      return
-    }
     this.bounds = bounds
+    const runtime = this.tabs.get(tabId)
+    // bounds 相同也必须继续 apply：show 时 view 可能尚未创建，或 hide 后未重新挂载。
+    if (unchanged && runtime?.attached && runtime.visible) return
     this.applyAllVisibility()
   }
 
@@ -508,10 +513,20 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   private async ensureReady(runtime: BrowserTabRuntime): Promise<WebContentsView> {
-    if (runtime.view && runtime.ready) {
+    if (runtime.ready) {
       await runtime.ready
-      return runtime.view
+      if (runtime.view && !runtime.view.webContents.isDestroyed()) return runtime.view
+      runtime.view = null
+      runtime.ready = null
+      runtime.attached = false
+      runtime.visible = false
     }
+
+    let resolveReady: (() => void) | undefined
+    runtime.ready = new Promise<void>((resolve) => {
+      resolveReady = resolve
+    })
+
     const view = new WebContentsView({
       webPreferences: {
         backgroundThrottling: false,
@@ -525,9 +540,13 @@ export class BrowserEmbedService implements BrowserUseService {
     runtime.view = view
     runtime.attached = false
     this.bindViewEvents(runtime, view)
-    runtime.ready = this.restoreRuntime(runtime, view)
     this.applyAllVisibility()
-    await runtime.ready
+    try {
+      await this.restoreRuntime(runtime, view)
+    } finally {
+      resolveReady?.()
+      if (this.presentedTabId === runtime.persisted.id) this.applyAllVisibility()
+    }
     return view
   }
 
@@ -570,6 +589,14 @@ export class BrowserEmbedService implements BrowserUseService {
     if (runtime.persisted.url) await loadWebContentsUrl(view.webContents, runtime.persisted.url)
   }
 
+  private forcePresentedPaint(runtime: BrowserTabRuntime): void {
+    if (!runtime.view || runtime.view.webContents.isDestroyed()) return
+    if (runtime.persisted.id !== this.presentedTabId) return
+    if (this.bounds.width <= 0 || this.bounds.height <= 0) return
+    runtime.view.setVisible(true)
+    runtime.view.webContents.invalidate()
+  }
+
   private applyAllVisibility(): void {
     if (this.mainWindow.isDestroyed()) return
     for (const [tabId, runtime] of this.tabs) {
@@ -586,13 +613,14 @@ export class BrowserEmbedService implements BrowserUseService {
           width: Math.max(1, Math.round(this.bounds.width)),
           height: Math.max(1, Math.round(this.bounds.height))
         }
+        const becomingVisible = !runtime.visible || !runtime.attached
         if (!runtime.attached) {
           this.mainWindow.contentView.addChildView(runtime.view)
           runtime.attached = true
         }
         runtime.view.setBounds(nextBounds)
         runtime.view.setVisible(true)
-        if (!runtime.visible) {
+        if (becomingVisible) {
           runtime.view.webContents.invalidate()
         }
       } else {
@@ -600,6 +628,7 @@ export class BrowserEmbedService implements BrowserUseService {
           this.mainWindow.contentView.removeChildView(runtime.view)
           runtime.attached = false
         }
+        runtime.view.setVisible(false)
       }
       runtime.visible = visible
     }

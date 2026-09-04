@@ -82,14 +82,13 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
 
   useEffect(() => {
     if (!presentationEnabled) return
-    const element = viewportRef.current
     let cancelled = false
     let activePresentationId: number | null = null
     let observer: ResizeObserver | null = null
 
     const flushBounds = (): void => {
       if (activePresentationId === null) return
-      notifyBounds(tabId, activePresentationId, element)
+      notifyBounds(tabId, activePresentationId, viewportRef.current)
     }
 
     // 每帧实时跟随：resize/scroll 触发时用 rAF 合并成一次 setBounds，
@@ -110,14 +109,24 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         return
       }
       flushBounds()
+      // 布局可能在 show 当帧尚未稳定（右侧面板 ratio/动画），下一帧再对齐一次。
+      window.requestAnimationFrame(() => {
+        if (cancelled) return
+        flushBounds()
+        window.requestAnimationFrame(() => {
+          if (!cancelled) flushBounds()
+        })
+      })
       observer = new ResizeObserver(scheduleBounds)
-      if (element) observer.observe(element)
+      if (viewportRef.current) observer.observe(viewportRef.current)
+      window.addEventListener('resize', scheduleBounds)
       window.addEventListener('scroll', scheduleBounds, true)
     })
 
     return () => {
       cancelled = true
       observer?.disconnect()
+      window.removeEventListener('resize', scheduleBounds)
       window.removeEventListener('scroll', scheduleBounds, true)
       if (boundsFrameRef.current !== null) {
         window.cancelAnimationFrame(boundsFrameRef.current)

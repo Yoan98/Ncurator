@@ -366,7 +366,7 @@ tests/case/workbench/
 
 - 测试类型：`e2e`
 - What：内置浏览器原生视图在初次显示、面板折叠、原生自绘菜单和会话切换后仍可见、尺寸稳定且持续运行，包括切走的会话面板同样处于展开状态后切回的呈现恢复。
-- Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换会话时误销毁仍在运行的网页。会话切换后浏览器呈现依赖 `contentPanelCollapsed` 值变化触发的恢复，若前后两个会话面板均展开（值不变）会漏掉重新呈现，表现为地址栏正常但网页白屏。
+- Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换会话时误销毁仍在运行的网页。会话切换后浏览器呈现依赖 `contentPanelCollapsed` 值变化触发的恢复，若前后两个会话面板均展开（值不变）会漏掉重新呈现，表现为地址栏正常但网页白屏。`setBounds` 在 bounds 未变时跳过 `applyAllVisibility`、或后台加载完成后挂载未强制重绘，也会出现同样白屏；此时加号 / 三点菜单还可能因 `WebContentsView` 抢焦点被立刻关掉。
 - How：通过 Settings UI 创建工作空间并形成会话；在 Workbench UI 新建浏览器 Tab，导航真实本地网页并调整缩放；折叠、切换会话后验证运行期状态，再正常重启同一用户目录，验证 URL、历史和缩放恢复；最后分别通过关闭 Tab 和删除所属会话销毁浏览器。会话切换分支覆盖两种路径：新建会话（面板默认折叠）后切回，以及切到面板已展开的会话后切回，并直接断言主窗口 `contentView.children` 原生挂载计数恢复到 1 而非仅依赖像素采样。
 - Oracle：运行期折叠或切换会话不销毁 WebContents；无论切走的会话面板是否展开，切回后同一 `webContents.id` 必须重新挂载到主窗口并恢复显示；重启后重新创建 WebContents 并恢复 URL、历史和缩放，但不要求表单、滚动内存或 JS 连续；关闭 Tab 或删除所属会话后状态清理；地址栏右侧“将打开外部浏览器”按钮可见且更多菜单不再含系统浏览器入口，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC8`、`WB-PANEL-004-AC9b`、`WB-PANEL-004-AC12`。
 - Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。

@@ -154,7 +154,6 @@ export class BrowserMenuWindowService {
 
   public constructor(private readonly mainWindow: BrowserWindow) {
     this.mainWindow.on('move', this.close)
-    this.mainWindow.on('resize', this.close)
     this.mainWindow.on('closed', this.close)
   }
 
@@ -269,10 +268,18 @@ export class BrowserMenuWindowService {
       if (this.menuWindow !== menuWindow || menuWindow.isDestroyed()) return
       menuWindow.show()
       menuWindow.focus()
+      // 内置 WebContentsView 可能在菜单获得焦点后立刻抢回焦点；延迟并复核 isFocused，
+      // 避免加号 / 三点菜单刚打开就被误关（表现为“点击没反应”）。
       setTimeout(() => {
         if (this.menuWindow !== menuWindow || menuWindow.isDestroyed()) return
-        menuWindow.once('blur', this.close)
-      }, 100)
+        menuWindow.on('blur', () => {
+          setTimeout(() => {
+            if (this.menuWindow !== menuWindow || menuWindow.isDestroyed()) return
+            if (menuWindow.isFocused()) return
+            this.close()
+          }, 50)
+        })
+      }, 150)
     })
     try {
       await menuWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(html)}`)
@@ -299,7 +306,6 @@ export class BrowserMenuWindowService {
     this.close()
     if (!this.mainWindow.isDestroyed()) {
       this.mainWindow.removeListener('move', this.close)
-      this.mainWindow.removeListener('resize', this.close)
       this.mainWindow.removeListener('closed', this.close)
     }
   }
