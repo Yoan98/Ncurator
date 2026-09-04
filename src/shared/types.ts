@@ -1815,6 +1815,7 @@ export type ChatMessageLogAnnotationEntry =
           toolCallId: string
           toolName: string
           command: string
+          commandExplanation?: string
           action: 'approve' | 'reject' | 'guide'
           message?: string
         }>

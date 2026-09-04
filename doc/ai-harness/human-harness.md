@@ -125,7 +125,7 @@ append-only 会话转录；模型上下文、UI、resume 均由此投影。Compa
 | `brain_user_snapshot` | `{ text: string }` | 当前 build user **最后一次发给模型的原文**；resume 还原历史 build user（取该 `user` 之后、下一条 `user` 之前的**最后一条**） |
 | `compaction_checkpoint` | 见示例 | brain `<compacted_history>` + UI 压缩层 |
 | `finalizing_started` | `{}` | 投影时**清空** plan |
-| `approval_batch_resolved` | `{ batchId, items: [{ toolCallId, toolName, command, action, message? }] }` | UI Activity：走过审批的工具行样式 / 图标 / hover 结果；`hand` 在审批决策后写入 |
+| `approval_batch_resolved` | `{ batchId, items: [{ toolCallId, toolName, command, commandExplanation?, action, message? }] }` | UI Activity：走过审批的工具行图标 / 悬停揭示文案；`hand` 在审批决策后写入 |
 
 #### `entry_json` 示例
 

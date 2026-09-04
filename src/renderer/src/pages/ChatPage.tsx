@@ -397,6 +397,7 @@ const reduceAssistantTurnByRunEvent = (
           toolCallId: item.itemId,
           toolName: item.toolName,
           command: item.command,
+          commandExplanation: item.commandExplanation,
           action: (decision?.action || 'reject') as 'approve' | 'reject' | 'guide',
           message:
             typeof decision?.message === 'string' && decision.message.trim()

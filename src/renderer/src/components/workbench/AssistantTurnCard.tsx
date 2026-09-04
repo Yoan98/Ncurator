@@ -1,5 +1,7 @@
 ﻿import React, { useMemo, useState } from 'react'
-import { Tooltip } from 'antd'
+import { FiCheckCircle } from 'react-icons/fi'
+import { MdOutlineSmsFailed } from 'react-icons/md'
+import { RiForbidLine } from 'react-icons/ri'
 import {
   HiChevronDown,
   HiChevronRight,
@@ -14,8 +16,7 @@ import {
   HiOutlineGlobeAlt,
   HiOutlineMagnifyingGlass,
   HiOutlinePhoto,
-  HiOutlinePencilSquare,
-  HiOutlineShieldCheck
+  HiOutlinePencilSquare
 } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
 import type {
@@ -29,7 +30,7 @@ import type { WorkspaceSource } from '../../../../shared/types'
 import type { OpenableMarkdownReference } from '../markdownReference'
 import {
   findApprovalReviewForProcessItem,
-  formatApprovalReviewHoverText,
+  formatApprovalReviewRevealText,
   type AssistantApprovalReview
 } from '../../../../shared/workbench/approvalReview'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -85,7 +86,7 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   iconKind,
   className
 }) => {
-  const iconClassName = `h-4 w-4 shrink-0 ${getLayerIconClassName(iconKind)} ${className || ''}`
+  const iconClassName = `h-[18px] w-[18px] shrink-0 ${getLayerIconClassName(iconKind)} ${className || ''}`
   const iconProps = { className: iconClassName, 'data-process-icon-kind': iconKind }
   if (iconKind === 'learning') return <HiOutlineAcademicCap {...iconProps} />
   if (iconKind === 'compaction') return <HiOutlineArchiveBox {...iconProps} />
@@ -177,7 +178,7 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
             {renderSegments(groupText, { shimmer: isRunning })}
           </span>
           {group.items.length > 0 ? (
-            <HiChevronDown className="mt-[1px] h-4 w-4 shrink-0 text-[#9B9A97] transition-transform duration-200 group-open/process:rotate-180" />
+            <HiChevronDown className="h-[18px] w-[18px] shrink-0 text-[#9B9A97] transition-transform duration-200 group-open/process:rotate-180" />
           ) : null}
         </span>
       </summary>
@@ -300,35 +301,64 @@ const buildAssistantTimeline = (input: {
 
 const WAITING_APPROVAL_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户审核中' }]
 
+const ApprovalReviewIcon: React.FC<{ action: AssistantApprovalReview['action'] }> = ({
+  action
+}) => {
+  if (action === 'approve') {
+    return <FiCheckCircle className="h-[18px] w-[18px] shrink-0 text-[#2F6F4E]" aria-hidden />
+  }
+  if (action === 'reject') {
+    return <RiForbidLine className="h-[18px] w-[18px] shrink-0 text-[#B3261E]" aria-hidden />
+  }
+  return <MdOutlineSmsFailed className="h-[18px] w-[18px] shrink-0 text-[#B45309]" aria-hidden />
+}
+
 const AssistantActivityItemView: React.FC<{
   item: AssistantProcessGroup['items'][number]
   review?: AssistantApprovalReview
 }> = ({ item, review }) => {
+  const [revealing, setRevealing] = useState(false)
   const failed = item.status === 'failed' || item.status === 'partial_failed'
-  const content = (
-    <div
-      data-testid={review ? workbenchSelectors.assistantApprovalReviewedItem : undefined}
-      className={
-        review
-          ? `inline-flex max-w-full items-start gap-1 rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-2 py-0.5 text-[#2F3437] ${
-              failed ? 'text-[#B3261E]' : ''
-            }`
-          : failed
-            ? 'text-[#B3261E]'
-            : undefined
-      }
-    >
-      {review ? (
-        <HiOutlineShieldCheck className="mt-[3px] h-3.5 w-3.5 shrink-0 text-[#787774]" />
-      ) : null}
-      <span className="min-w-0">{renderSegments(getItemText(item))}</span>
-    </div>
-  )
-  if (!review) return content
+  const toolText = getItemText(item)
+  const revealText = review ? formatApprovalReviewRevealText(review) : ''
+
+  if (!review) {
+    return (
+      <div className={failed ? 'text-[#B3261E]' : undefined}>{renderSegments(toolText)}</div>
+    )
+  }
+
   return (
-    <Tooltip title={formatApprovalReviewHoverText(review)} placement="topLeft">
-      <div className="inline-flex max-w-full cursor-default">{content}</div>
-    </Tooltip>
+    <div
+      data-testid={workbenchSelectors.assistantApprovalReviewedItem}
+      className={`flex min-w-0 items-center gap-1.5 leading-[22px] ${failed ? 'text-[#B3261E]' : ''}`}
+    >
+      <span
+        className="inline-flex h-6 w-6 shrink-0 cursor-help items-center justify-center rounded-[5px] transition-colors duration-150 hover:bg-[#EFEFEE]"
+        onMouseEnter={() => setRevealing(true)}
+        onMouseLeave={() => setRevealing(false)}
+      >
+        <ApprovalReviewIcon action={review.action} />
+      </span>
+      <span className="relative min-w-0 flex-1 overflow-hidden">
+        <span
+          className={`block truncate transition-all duration-150 ${
+            revealing
+              ? 'pointer-events-none translate-x-1 opacity-0'
+              : 'translate-x-0 opacity-100'
+          }`}
+        >
+          {renderSegments(toolText)}
+        </span>
+        <span
+          className={`absolute inset-0 flex items-center truncate text-[#787774] transition-all duration-150 ${
+            revealing ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-1 opacity-0'
+          }`}
+        >
+          {revealText}
+        </span>
+      </span>
+    </div>
   )
 }
 
@@ -392,8 +422,8 @@ const AssistantActivityGroupView: React.FC<{
           </span>
           {items.length > 0 ? (
             <>
-              <HiChevronRight className="mt-[1px] h-4 w-4 shrink-0 text-[#9B9A97] opacity-0 transition-all duration-200 group-hover/execution:opacity-100 group-open/execution:hidden" />
-              <HiChevronDown className="mt-[1px] hidden h-4 w-4 shrink-0 text-[#9B9A97] transition-all duration-200 group-open/execution:block" />
+              <HiChevronRight className="h-[18px] w-[18px] shrink-0 text-[#9B9A97] opacity-0 transition-all duration-200 group-hover/execution:opacity-100 group-open/execution:hidden" />
+              <HiChevronDown className="hidden h-[18px] w-[18px] shrink-0 text-[#9B9A97] transition-all duration-200 group-open/execution:block" />
             </>
           ) : null}
         </span>

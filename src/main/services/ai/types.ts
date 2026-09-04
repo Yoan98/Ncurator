@@ -217,7 +217,7 @@ export type BrowserUseResult =
       error: string
     }
 
-export type BrowserUseRunRequest =
+export type BrowserUseRunRequest = (
   | {
       tabId?: string
       ownerId: string
@@ -249,6 +249,9 @@ export type BrowserUseRunRequest =
       screenshotPath: string
       llmConfig: LlmRuntimeConfig
     }
+) & {
+  abortSignal?: AbortSignal
+}
 
 export type BrowserUseService = {
   createTab: (ownerId: string) => Promise<{ id: string }>
@@ -317,6 +320,7 @@ export type AiRunContext = {
     policyProfile?: string
   }
   checkCancelled: () => void
+  abortSignal?: AbortSignal
   chatStructured: <T extends Record<string, unknown>>(input: {
     caller: string
     taskId?: string

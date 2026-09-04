@@ -58,35 +58,86 @@ const normalizeUrl = (rawUrl: string): string => {
   return parsed.toString()
 }
 
-const waitForWebContentsLoad = async (contents: WebContents): Promise<void> => {
-  if (!contents.isLoadingMainFrame()) return
-  await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(
-      () => finish(new Error('浏览器页面加载超时')),
-      EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS
+const createCancelledError = (): Error & { code: 'CANCELLED' } => {
+  const error = new Error('cancelled') as Error & { code: 'CANCELLED' }
+  error.code = 'CANCELLED'
+  return error
+}
+
+const raceAbort = async <T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+  onAbort?: () => void | Promise<void>
+): Promise<T> => {
+  if (!signal) return promise
+  if (signal.aborted) {
+    void Promise.resolve(onAbort?.()).catch(() => undefined)
+    throw createCancelledError()
+  }
+  return await new Promise<T>((resolve, reject) => {
+    const onAbortEvent = (): void => {
+      signal.removeEventListener('abort', onAbortEvent)
+      void Promise.resolve(onAbort?.()).catch(() => undefined)
+      reject(createCancelledError())
+    }
+    signal.addEventListener('abort', onAbortEvent, { once: true })
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbortEvent)
+        resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbortEvent)
+        reject(error)
+      }
     )
-    const cleanup = (): void => {
-      clearTimeout(timeout)
-      contents.removeListener('did-finish-load', onDone)
-      contents.removeListener('did-stop-loading', onDone)
-      contents.removeListener('did-fail-load', onFail)
-    }
-    const finish = (error?: Error): void => {
-      cleanup()
-      error ? reject(error) : resolve()
-    }
-    const onDone = (): void => finish()
-    const onFail = (_event: Electron.Event, _code: number, description: string): void =>
-      finish(new Error(description || '浏览器页面加载失败'))
-    contents.once('did-finish-load', onDone)
-    contents.once('did-stop-loading', onDone)
-    contents.once('did-fail-load', onFail)
   })
 }
 
-const loadWebContentsUrl = async (contents: WebContents, url: string): Promise<void> => {
-  await contents.loadURL(url)
-  await waitForWebContentsLoad(contents)
+const waitForWebContentsLoad = async (
+  contents: WebContents,
+  signal?: AbortSignal
+): Promise<void> => {
+  if (!contents.isLoadingMainFrame()) return
+  await raceAbort(
+    new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => finish(new Error('浏览器页面加载超时')),
+        EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS
+      )
+      const cleanup = (): void => {
+        clearTimeout(timeout)
+        contents.removeListener('did-finish-load', onDone)
+        contents.removeListener('did-stop-loading', onDone)
+        contents.removeListener('did-fail-load', onFail)
+      }
+      const finish = (error?: Error): void => {
+        cleanup()
+        error ? reject(error) : resolve()
+      }
+      const onDone = (): void => finish()
+      const onFail = (_event: Electron.Event, _code: number, description: string): void =>
+        finish(new Error(description || '浏览器页面加载失败'))
+      contents.once('did-finish-load', onDone)
+      contents.once('did-stop-loading', onDone)
+      contents.once('did-fail-load', onFail)
+    }),
+    signal,
+    () => {
+      if (!contents.isDestroyed()) contents.stop()
+    }
+  )
+}
+
+const loadWebContentsUrl = async (
+  contents: WebContents,
+  url: string,
+  signal?: AbortSignal
+): Promise<void> => {
+  await raceAbort(contents.loadURL(url), signal, () => {
+    if (!contents.isDestroyed()) contents.stop()
+  })
+  await waitForWebContentsLoad(contents, signal)
 }
 
 /** User/UI navigation: start load immediately without waiting for did-finish-load. */
@@ -503,9 +554,17 @@ export class BrowserEmbedService implements BrowserUseService {
       const tabId = input.tabId
         ? this.requireTab(input.tabId).persisted.id
         : (await this.createTab(input.ownerId)).id
-      await this.navigate(input.url, tabId)
+      if (input.abortSignal?.aborted) throw createCancelledError()
       const runtime = this.requireTab(tabId)
       const view = await this.ensureReady(runtime)
+      if (input.abortSignal?.aborted) throw createCancelledError()
+      const url = normalizeUrl(input.url)
+      runtime.persisted.url = url
+      runtime.persisted.updatedAt = Date.now()
+      this.stateStore.save(runtime.persisted)
+      this.emitState(runtime)
+      await loadWebContentsUrl(view.webContents, url, input.abortSignal)
+      this.captureRuntimeState(runtime)
       return {
         action: 'navigate',
         tabId,
@@ -792,13 +851,17 @@ export class BrowserEmbedService implements BrowserUseService {
     >,
     runtime: BrowserTabRuntime
   ): Promise<BrowserUseRunResult> {
+    const signal = input.abortSignal
     const view = await this.ensureReady(runtime)
-    await waitForWebContentsLoad(view.webContents)
+    await waitForWebContentsLoad(view.webContents, signal)
     const tabId = runtime.persisted.id
     const stagehandModule = await import('@browserbasehq/stagehand')
     const cdpUrl = await this.getCdpWebSocketUrl()
     const targetId = await this.resolveDevToolsTargetId(view.webContents)
     const runtimeModel = resolveStagehandRuntimeModel(input.llmConfig)
+    if (runtimeModel.mode === 'langchain-client') {
+      runtimeModel.llmClient.setAbortSignal(signal)
+    }
     const stagehand = new stagehandModule.Stagehand({
       env: 'LOCAL',
       disablePino: true,
@@ -811,16 +874,17 @@ export class BrowserEmbedService implements BrowserUseService {
       actTimeoutMs: EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS,
       domSettleTimeout: 1_000
     })
+    const abortStagehand = (): Promise<void> => this.closeStagehand(stagehand)
     try {
-      await stagehand.init()
+      await raceAbort(stagehand.init(), signal, abortStagehand)
       const page = stagehand.context.pages().find((candidate) => candidate.targetId() === targetId)
       if (!page) throw new Error('Stagehand target page not found')
       stagehand.context.setActivePage(page)
-      const title = await page.title()
+      const title = await raceAbort(page.title(), signal, abortStagehand)
       const pageInfo = toBrowserUsePage(page.url(), title)
 
       if (input.action === 'extract') {
-        const result = await stagehand.extract(input.instruction, { page })
+        const result = await raceAbort(stagehand.extract(input.instruction, { page }), signal, abortStagehand)
         return {
           action: 'extract',
           tabId,
@@ -830,7 +894,11 @@ export class BrowserEmbedService implements BrowserUseService {
       }
 
       if (input.action === 'observe') {
-        const actions = await stagehand.observe(input.instruction, { page })
+        const actions = await raceAbort(
+          stagehand.observe(input.instruction, { page }),
+          signal,
+          abortStagehand
+        )
         return {
           action: 'observe',
           tabId,
@@ -841,7 +909,11 @@ export class BrowserEmbedService implements BrowserUseService {
 
       if (input.action === 'screenshot') {
         await fs.mkdir(path.dirname(input.screenshotPath), { recursive: true })
-        await page.screenshot({ fullPage: true, path: input.screenshotPath, type: 'png' })
+        await raceAbort(
+          page.screenshot({ fullPage: true, path: input.screenshotPath, type: 'png' }),
+          signal,
+          abortStagehand
+        )
         return {
           action: 'screenshot',
           tabId,
@@ -860,14 +932,18 @@ export class BrowserEmbedService implements BrowserUseService {
       stagehand.bus.on('*', listener)
       let result: Awaited<ReturnType<StagehandInstance['act']>>
       try {
-        result = await stagehand.act(
-          {
-            selector: input.stagehandAction.selector,
-            description: input.stagehandAction.description,
-            method: input.stagehandAction.method,
-            arguments: input.stagehandAction.arguments
-          },
-          { page }
+        result = await raceAbort(
+          stagehand.act(
+            {
+              selector: input.stagehandAction.selector,
+              description: input.stagehandAction.description,
+              method: input.stagehandAction.method,
+              arguments: input.stagehandAction.arguments
+            },
+            { page }
+          ),
+          signal,
+          abortStagehand
         )
       } finally {
         stagehand.bus.off('*', listener)

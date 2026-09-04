@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   findApprovalReviewForProcessItem,
-  formatApprovalReviewHoverText,
+  formatApprovalReviewRevealText,
   projectApprovalReviews,
   type AssistantApprovalReview
 } from '../../../../src/shared/workbench/approvalReview'
@@ -12,18 +12,21 @@ describe('approval review projection', () => {
       toolCallId: 'call-approve',
       toolName: 'terminal_run',
       command: 'mkdir demo',
+      commandExplanation: '创建演示目录',
       action: 'approve'
     },
     {
       toolCallId: 'call-reject',
       toolName: 'terminal_run',
       command: 'rm -rf /tmp/x',
+      commandExplanation: '删除临时目录',
       action: 'reject'
     },
     {
       toolCallId: 'call-guide',
       toolName: 'terminal_run',
       command: 'npm install',
+      commandExplanation: '安装依赖',
       action: 'guide',
       message: '先检查 package.json'
     },
@@ -35,10 +38,13 @@ describe('approval review projection', () => {
     }
   ]
 
-  it('formats hover text for three decision actions', () => {
-    expect(formatApprovalReviewHoverText(reviews[0])).toBe('已允许执行')
-    expect(formatApprovalReviewHoverText(reviews[1])).toBe('已拒绝执行')
-    expect(formatApprovalReviewHoverText(reviews[2])).toBe('已反馈：先检查 package.json')
+  it('formats reveal text for three decision actions', () => {
+    expect(formatApprovalReviewRevealText(reviews[0])).toBe('创建演示目录')
+    expect(formatApprovalReviewRevealText(reviews[1])).toBe('删除临时目录')
+    expect(formatApprovalReviewRevealText(reviews[2])).toBe(
+      '安装依赖 · 已反馈：先检查 package.json'
+    )
+    expect(formatApprovalReviewRevealText(reviews[3])).toBe('打开网页：https://example.com')
   })
 
   it('matches process items by toolCallId or terminal command', () => {
@@ -86,12 +92,14 @@ describe('approval review projection', () => {
                   toolCallId: 'call-1',
                   toolName: 'terminal_run',
                   command: 'mkdir a',
+                  commandExplanation: '创建目录 a',
                   action: 'approve'
                 },
                 {
                   toolCallId: 'call-2',
                   toolName: 'terminal_run',
                   command: 'mkdir b',
+                  commandExplanation: '创建目录 b',
                   action: 'guide',
                   message: '改到 docs'
                 }
@@ -106,6 +114,7 @@ describe('approval review projection', () => {
         toolCallId: 'call-1',
         toolName: 'terminal_run',
         command: 'mkdir a',
+        commandExplanation: '创建目录 a',
         action: 'approve',
         message: undefined
       },
@@ -113,6 +122,7 @@ describe('approval review projection', () => {
         toolCallId: 'call-2',
         toolName: 'terminal_run',
         command: 'mkdir b',
+        commandExplanation: '创建目录 b',
         action: 'guide',
         message: '改到 docs'
       }

@@ -9,6 +9,7 @@ import { findEffectiveSkillIdByToolName, getEffectiveLearnedSkillIds } from '../
 import type { HumanRuntimeCache, RuntimeSkillId, ToolCallResult } from '../../types'
 import { withToolLifecycle } from '../../tools/utils/lifecycle'
 import { createToolEventEmitter } from '../../tools/utils/toolEvents'
+import { isCancelledError } from '../../../utils/runFailure'
 
 const findTool = (input: {
   toolName: string
@@ -261,6 +262,7 @@ export const executeToolCall = async (input: {
     const result = await tool.invoke(input.args)
     return normalizeToolCallResult(input.toolName, result as JsonValue)
   } catch (error) {
+    if (isCancelledError(error)) throw error
     const message = error instanceof Error ? error.message : String(error)
     return {
       toolName: input.toolName,

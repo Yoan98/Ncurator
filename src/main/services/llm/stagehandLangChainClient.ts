@@ -128,6 +128,7 @@ const createOpenAIShape = (input: {
 export class StagehandLangChainClient extends LLMClient {
   public type = 'openai' as const
   private readonly model: BaseChatModel
+  private abortSignal?: AbortSignal
 
   public constructor(config: LlmRuntimeConfig) {
     super(config.model_name)
@@ -137,6 +138,10 @@ export class StagehandLangChainClient extends LLMClient {
     }) as BaseChatModel
   }
 
+  public setAbortSignal(signal?: AbortSignal): void {
+    this.abortSignal = signal
+  }
+
   public async createChatCompletion<T>(
     input: CreateChatCompletionOptions
   ): Promise<T | LLMParsedResponse<T>> {
@@ -144,7 +149,10 @@ export class StagehandLangChainClient extends LLMClient {
     const messages = toLangChainMessages(input.options.messages)
     if (responseModel) messages.push(createSchemaInstruction(responseModel))
 
-    const response = await this.model.invoke(messages)
+    const response = await this.model.invoke(
+      messages,
+      this.abortSignal ? { signal: this.abortSignal } : undefined
+    )
     const content = extractTextContent(response.content)
     const usage = extractUsage(response)
 

@@ -232,6 +232,7 @@ const buildApprovalBatchResolvedAnnotation = (input: {
     itemId: string
     toolName: string
     command: string
+    commandExplanation: string
   }>
 }): ChatMessageLogEntry => {
   const decisionByItemId = new Map(input.decisions.map((decision) => [decision.itemId, decision]))
@@ -246,6 +247,7 @@ const buildApprovalBatchResolvedAnnotation = (input: {
           toolCallId: item.itemId,
           toolName: item.toolName,
           command: item.command,
+          commandExplanation: item.commandExplanation,
           action: decision?.action || 'reject',
           message:
             typeof decision?.message === 'string' && decision.message.trim()

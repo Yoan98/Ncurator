@@ -101,6 +101,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     }),
     workspace: normalizedWorkspace,
     checkCancelled,
+    abortSignal: deps.abortSignal,
     chatStructured: llmExecutor.chatStructured,
     chatText: llmExecutor.chatText,
     chatMessages: llmExecutor.chatMessages,

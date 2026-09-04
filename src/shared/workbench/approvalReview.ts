@@ -6,17 +6,25 @@ export type AssistantApprovalReview = {
   toolCallId: string
   toolName: string
   command: string
+  commandExplanation?: string
   action: ApprovalReviewAction
   message?: string
 }
 
-export const formatApprovalReviewHoverText = (review: AssistantApprovalReview): string => {
-  if (review.action === 'approve') return '已允许执行'
-  if (review.action === 'reject') return '已拒绝执行'
+const resolveCommandExplanation = (review: AssistantApprovalReview): string => {
+  const explanation = (review.commandExplanation || '').trim()
+  if (explanation) return explanation
+  return (review.command || '').trim()
+}
+
+/** Hover reveal copy shown in place of the tool narrative. */
+export const formatApprovalReviewRevealText = (review: AssistantApprovalReview): string => {
+  const explanation = resolveCommandExplanation(review)
+  if (review.action !== 'guide') return explanation
   const message = (review.message || '').trim()
-  if (!message) return '已反馈'
-  const clipped = message.length > 80 ? `${message.slice(0, 80)}…` : message
-  return `已反馈：${clipped}`
+  if (!message) return explanation
+  if (!explanation) return `已反馈：${message}`
+  return `${explanation} · 已反馈：${message}`
 }
 
 const asJsonObject = (input?: object): JsonObject | undefined => {
@@ -94,6 +102,7 @@ export const projectApprovalReviews = (input: {
         toolCallId: item.toolCallId,
         toolName: item.toolName,
         command: item.command,
+        commandExplanation: item.commandExplanation,
         action: item.action,
         message: item.message
       })

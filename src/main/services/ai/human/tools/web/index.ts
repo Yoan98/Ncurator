@@ -27,6 +27,7 @@ import {
   isLoopbackHttpUrl,
   shouldBypassCrawlerForLoopbackFetch
 } from './httpPageFetch'
+import { isCancelledError } from '../../../utils/runFailure'
 
 const WEB_SEARCH_FETCH_TIMEOUT_MS = 70_000
 const WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS = 200
@@ -451,11 +452,12 @@ export const webToolFamily: ToolFamilyDefinition = {
             try {
               const llmConfig = await ctx.getLlmConfig()
               const ownerId = ctx.sessionId
+              const abortSignal = ctx.abortSignal
               let result: BrowserUseResult
               let observeActions: BrowserActionCandidate[] | undefined
 
               if (args.action === 'list_tabs') {
-                result = await service.run({ action: 'list_tabs', ownerId, llmConfig })
+                result = await service.run({ action: 'list_tabs', ownerId, llmConfig, abortSignal })
               } else if (args.action === 'navigate') {
                 const tabIdArg =
                   typeof args.tabId === 'string' && args.tabId.trim() ? args.tabId.trim() : undefined
@@ -464,7 +466,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                   ownerId,
                   url: String(args.url || '').trim(),
                   ...(tabIdArg ? { tabId: tabIdArg } : {}),
-                  llmConfig
+                  llmConfig,
+                  abortSignal
                 })
                 if (!('error' in result) && result.action === 'navigate') {
                   emitBrowserPanelOpened(result.tabId)
@@ -476,7 +479,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                   action: 'observe',
                   tabId,
                   instruction: String(args.instruction || '').trim(),
-                  llmConfig
+                  llmConfig,
+                  abortSignal
                 })
                 if (!('error' in result) && result.action === 'observe') {
                   observeActions = result.result.actions.map((action) => {
@@ -521,7 +525,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                   tabId,
                   actionId,
                   stagehandAction: cached.action,
-                  llmConfig
+                  llmConfig,
+                  abortSignal
                 })
               } else if (args.action === 'extract') {
                 const tabId = String(args.tabId || '').trim()
@@ -530,7 +535,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                   action: 'extract',
                   tabId,
                   instruction: String(args.instruction || '').trim(),
-                  llmConfig
+                  llmConfig,
+                  abortSignal
                 })
               } else if (args.action === 'screenshot') {
                 const tabId = String(args.tabId || '').trim()
@@ -558,7 +564,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                   action: 'screenshot',
                   tabId,
                   screenshotPath,
-                  llmConfig
+                  llmConfig,
+                  abortSignal
                 })
               } else {
                 const unknownAction =
@@ -576,6 +583,7 @@ export const webToolFamily: ToolFamilyDefinition = {
                 payload: normalizeBrowserUseOutput(result, observeActions)
               })
             } catch (error) {
+              if (isCancelledError(error)) throw error
               const payload = {
                 error: getErrorMessage(error instanceof Error ? error : new Error(String(error)))
               }
