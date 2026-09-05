@@ -14,58 +14,25 @@ export type AssistantThinkingWaitThought = {
 export const isAssistantActivityToolGroup = (group: AssistantThinkingWaitGroup): boolean =>
   group.kind === 'skill' && group.sourceEventType !== 'thinking'
 
-/**
- * 「让俺想想」只在段内尚无工具时展示：
- * - 本 turn 首次（尚无 Thought / Activity），或
- * - 上一段 AI content（Thought）之后、下一组工具出现之前。
- * Activity 运行中、正在重试、run 已结束、或已有可见流式/最终正文时不展示；上一段若以 Activity 收尾则不再插 think 行。
- * Renderer 在规则为 true 时合成占位行，不依赖 Main thinking process group 是否仍存活。
- */
-export const shouldShowAssistantThinkingWait = (input: {
-  processGroups: readonly AssistantThinkingWaitGroup[]
-  processThoughts: readonly AssistantThinkingWaitThought[]
-  hasVisibleBrainOutput?: boolean
+export type AssistantThinkingIndicatorInput = {
+  isBrainThinking?: boolean
+  waitingApproval?: boolean
   runFinished?: boolean
-}): boolean => {
-  if (input.runFinished) return false
-  if (input.hasVisibleBrainOutput) return false
-  if (input.processGroups.some((group) => group.kind === 'retry' && group.status === 'running')) {
-    return false
-  }
-  if (
-    input.processGroups.some(
-      (group) => isAssistantActivityToolGroup(group) && group.status === 'running'
-    )
-  ) {
-    return false
-  }
-
-  const products = [
-    ...input.processThoughts.map((thought) => ({
-      createdAt: thought.createdAt,
-      kind: 'thought' as const
-    })),
-    ...input.processGroups
-      .filter((group) => group.kind !== 'thinking')
-      .map((group) => ({
-        createdAt: group.createdAt,
-        kind: isAssistantActivityToolGroup(group) ? ('activity' as const) : ('other' as const)
-      }))
-  ].sort((left, right) => left.createdAt - right.createdAt)
-
-  if (products.length === 0) return true
-  return products[products.length - 1]?.kind === 'thought'
+  hasFinalAnswer?: boolean
 }
 
-export const visibleAssistantProcessGroups = <T extends AssistantThinkingWaitGroup>(input: {
-  processGroups: readonly T[]
-  processThoughts: readonly AssistantThinkingWaitThought[]
-  hasVisibleBrainOutput?: boolean
-  runFinished?: boolean
-}): T[] => {
-  const groups = [...input.processGroups]
-  if (shouldShowAssistantThinkingWait(input)) return groups
-  return groups.filter((group) => group.kind !== 'thinking')
+/**
+ * “偷偷思考中”展示判断规则：
+ * - 请求时展示（isBrainThinking 为 true）；
+ * - 结束时隐藏（收到输出、出错、run 结束、等待审批或已产出最终交付时隐藏）。
+ */
+export const shouldShowAssistantThinkingIndicator = (
+  input: AssistantThinkingIndicatorInput
+): boolean => {
+  if (input.runFinished) return false
+  if (input.waitingApproval) return false
+  if (input.hasFinalAnswer) return false
+  return Boolean(input.isBrainThinking)
 }
 
 /**

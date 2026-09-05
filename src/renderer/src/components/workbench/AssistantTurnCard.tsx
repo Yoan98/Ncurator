@@ -36,16 +36,14 @@ import {
 import { workbenchSelectors } from '../../testing/selectors'
 import {
   buildAssistantExecutionSummaryText,
-  createAssistantThinkingGroup,
   resolveAssistantExecutionIcon,
   resolveAssistantExecutionStatus,
   shouldShowAssistantApplyTargets,
-  visibleAssistantProcessGroups,
   isAssistantActivityToolGroup
 } from './utils'
 import {
   shouldActivityHeaderShimmer,
-  shouldShowAssistantThinkingWait
+  shouldShowAssistantThinkingIndicator
 } from '../../../../shared/assistantThinkingWait'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
@@ -146,14 +144,46 @@ const renderSegments = (
 
 const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }> = ({
   thought
-}) => (
-  <div
-    className="text-[14px] leading-7 text-[#37352F]"
-    data-testid={workbenchSelectors.assistantThoughts}
-  >
-    <MarkdownRenderer content={thought.text} variant="thought" />
-  </div>
-)
+}) => {
+  const [expanded, setExpanded] = useState(false)
+
+  return (
+    <div
+      className="group/thought relative flex cursor-pointer items-start justify-between gap-2 rounded-[6px] px-2 py-0.5 -mx-2 transition-colors duration-150 hover:bg-[#F7F7F5]"
+      onClick={() => setExpanded((prev) => !prev)}
+      data-testid={workbenchSelectors.assistantThoughts}
+    >
+      <div
+        className={`min-w-0 flex-1 text-[14px] leading-7 text-[#37352F] ${
+          expanded
+            ? 'max-h-[320px] overflow-y-auto pr-1'
+            : 'assistant-thought-collapsed'
+        }`}
+      >
+        <MarkdownRenderer content={thought.text} variant="thought" />
+      </div>
+      <button
+        type="button"
+        className={`mt-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] text-[#9B9A97] transition-all duration-150 hover:text-[#37352F] ${
+          expanded
+            ? 'opacity-100'
+            : 'opacity-0 group-hover/thought:opacity-100'
+        }`}
+        aria-label={expanded ? '收起思考内容' : '展开思考内容'}
+        onClick={(e) => {
+          e.stopPropagation()
+          setExpanded((prev) => !prev)
+        }}
+      >
+        {expanded ? (
+          <HiChevronDown className="h-3.5 w-3.5" />
+        ) : (
+          <HiChevronRight className="h-3.5 w-3.5" />
+        )}
+      </button>
+    </div>
+  )
+}
 
 const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({ group }) => {
   const isRunning = group.status === 'running'
@@ -467,53 +497,21 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     finalAnswerMarkdown || (streamingRole === 'answer' ? streamingMarkdown : '')
   const hasFinalAnswer = visibleAnswerMarkdown.trim().length > 0
   const hasStreamingThought = streamingRole === 'thought' && streamingMarkdown.trim().length > 0
-  // Only treat settled/visible brain text as output — bare streaming buffer before classify
-  // must not suppress the wait placeholder.
-  const hasVisibleBrainOutput = hasFinalAnswer || hasStreamingThought
   const hasNextAiContentForActivity =
     hasFinalAnswer ||
     hasStreamingThought ||
     turn?.status === 'completed' ||
     turn?.status === 'failed'
-  const showThinkingWait =
-    !turn?.waitingApproval &&
-    shouldShowAssistantThinkingWait({
-      processGroups: turn?.processGroups || [],
-      processThoughts,
-      hasVisibleBrainOutput,
-      runFinished: Boolean(turn?.runFinished)
-    })
-  const processGroups = useMemo(() => {
-    const visible = visibleAssistantProcessGroups({
-      processGroups: turn?.processGroups || [],
-      processThoughts,
-      hasVisibleBrainOutput,
-      runFinished: Boolean(turn?.runFinished)
-    })
-    if (!showThinkingWait) return visible
-    if (visible.some((group) => group.kind === 'thinking' && group.status === 'running')) {
-      return visible
-    }
-    const lastCreatedAt = Math.max(
-      0,
-      ...processThoughts.map((thought) => thought.createdAt),
-      ...visible.map((group) => group.createdAt)
-    )
-    return [
-      ...visible.filter((group) => group.kind !== 'thinking'),
-      {
-        ...createAssistantThinkingGroup(messageId),
-        createdAt: lastCreatedAt + 1
-      }
-    ]
-  }, [
-    hasVisibleBrainOutput,
-    messageId,
-    processThoughts,
-    showThinkingWait,
-    turn?.processGroups,
-    turn?.runFinished
-  ])
+  const showThinkingIndicator = shouldShowAssistantThinkingIndicator({
+    isBrainThinking: turn?.isBrainThinking,
+    waitingApproval: Boolean(turn?.waitingApproval),
+    runFinished: Boolean(turn?.runFinished),
+    hasFinalAnswer
+  })
+  const processGroups = useMemo(
+    () => (turn?.processGroups || []).filter((group) => group.kind !== 'thinking'),
+    [turn?.processGroups]
+  )
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({
@@ -539,7 +537,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   return (
     <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
       <div className="space-y-4">
-        {timeline.length > 0 || hasStreamingThought || showThinkingWait ? (
+        {timeline.length > 0 || hasStreamingThought || showThinkingIndicator ? (
           <div
             className={`transition-opacity duration-200 ${
               turn.status === 'completed' && hasFinalAnswer ? 'opacity-75' : ''
@@ -575,6 +573,16 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
               {streamingRole === 'thought' && streamingMarkdown.trim() ? (
                 <div className="text-[14px] leading-7 text-[#37352F]">
                   <MarkdownRenderer content={streamingMarkdown} variant="thought" />
+                </div>
+              ) : null}
+              {showThinkingIndicator ? (
+                <div
+                  className="flex items-center gap-1.5 text-[13px] leading-6 text-[#787774]"
+                  data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${messageId}-thinking`}
+                >
+                  <span className="workbench-thinking-shimmer font-medium text-[#37352F]">
+                    偷偷思考中
+                  </span>
                 </div>
               ) : null}
             </div>

@@ -1517,6 +1517,21 @@ mark {
   margin-bottom: 0.4rem;
 }
 
+.assistant-thought-collapsed {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.assistant-thought-collapsed .markdown-body--thought,
+.assistant-thought-collapsed .markdown-body--thought * {
+  display: inline !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+}
+
 .markdown-body a {
   color: var(--notion-accent-blue);
   text-decoration: none;

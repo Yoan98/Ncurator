@@ -174,6 +174,7 @@ export type AssistantTurnViewModel = {
   runId?: string
   status: 'running' | 'completed' | 'failed'
   runFinished: boolean
+  isBrainThinking?: boolean
   processThoughts: AssistantProcessThought[]
   processGroups: AssistantProcessGroup[]
   finalAnswerMarkdown: string

@@ -249,9 +249,9 @@
 - 验收：
   - `WB-COMPOSER-003-AC1` 智能模式发送后，主区先可见用户消息与 assistant 占位消息。
   - `WB-COMPOSER-003-AC2` AI 运行成功启动后，assistant 过程流通过事件逐步追加更新，而不是一次性静态替换。
-  - `WB-COMPOSER-003-AC3` assistant 占位回复在最终输出前可展示“让俺想想”并带有流动视觉反馈。“让俺想想”由 Renderer 按段规则合成占位行（不依赖 Main thinking process group 是否仍存活）：本 turn 首次（尚无 Thought / Activity / 可见正文），或上一段决策层 Thought / AI content 落地之后、下一组工具出现之前；一旦出现 Activity，不再插入独立 think 行，改由该 Activity header 保持滑动，直到下一段 AI content（Thought 或最终回答）出现（run 失败/取消且无 content 时停滑）。消息日志注解 `thinking_started/completed` 仍覆盖整轮 brain 调用，仅用于 Thought 投影。当出现“正在重试”过程组、已有可见流式 Thought / 最终回答、或 run 已结束（完成 / 失败 / 取消）时，必须隐藏“让俺想想”占位。
+  - `WB-COMPOSER-003-AC3` assistant 在 Brain 思考阶段于过程流最下方展示“偷偷思考中”并带有微光流动视觉反馈。当 Brain 请求发起（底层事件或日志注解 `thinking_started`）时在消息最下方展示；当收到输出、Brain 结束（`thinking_completed`）、出现“正在重试”过程组、已有可见流式 Thought / 最终回答、或 run 已结束（完成 / 失败 / 取消）时，必须隐藏“偷偷思考中”。
   - `WB-COMPOSER-003-AC4` assistant turn 中 brain 最终输出始终位于过程流下方，并按 markdown 渲染；最终回答在内容分片到达后直接流式渲染，不展示独立收尾等待层；内部文件链接打开右侧文件预览，网页链接打开右侧内置浏览器；若当前会话已有浏览器 Tab 正停留在同一 URL，则激活该 Tab，不新开。
-  - `WB-COMPOSER-003-AC5` 决策层（Thought）只展示面向用户的短摘要，不得展示模型原始长篇推理；决策层出现时，当前思考层必须立即隐藏，即使下一步执行正等待审批。
+  - `WB-COMPOSER-003-AC5` 决策层（Thought）只展示面向用户的短摘要，不得展示模型原始长篇推理；决策层出现时，当前“偷偷思考中”必须立即隐藏；已落地的 Thought 默认以单行省略号截断展示，鼠标悬浮显示展开/收起图标，点击展开后展示全部内容并受最大高度限制（超出纵向滚动），流式阶段平铺展开。
   - `WB-COMPOSER-003-AC6` 过程流使用用户可理解的文案，不直接暴露内部 tool 名或底层事件名；两次 Thought 之间的工具调用（含 `learn_skill`）合并为一个 Activity 面板 header，展开后按时间平铺每条工具的自然语言说明；等待审批时 Activity header 临时显示「等待用户审核中」，审完后恢复工具汇总；走过审批的工具行仅前缀结果图标，悬停图标揭示解释文案；压缩与重试过程单独成行，不并入 Activity。
   - `WB-COMPOSER-003-AC7` AI 输出中切到 Settings 或触发 renderer 重新挂载后，回到 Workbench 能通过会话消息记录投影恢复过程流、partial answer、最终回答或等待审批状态。
   - `WB-COMPOSER-003-AC8` brain 在最终交付 markdown 中使用标准 Markdown 链接引用资料（名称 + 绝对路径或 https URL）；最终交付生成后、回传 renderer 前，Main 对链接地址并行去重检查并写入交付 `linkAccess` sidecar（不改写正文）。可访问链接保留文件或内置浏览器交互；不可访问或无法识别的链接不得删除，必须使用强调色降低透明度的灰色弱化文本，悬浮提示「链接无法访问」，且不可点击。renderer 不把裸 URL / `www.…` 自动识别为链接，也不对其套用 `linkAccess` 弱化态；流式阶段尚无 sidecar 时标准链接可先保持可点，交付落库后按 sidecar 更新。renderer 渲染和用户点击时均不再次检查可访问性。
@@ -350,7 +350,7 @@
 
 #### WB-COMPOSER-009 消息流布局
 
-- 系统行为：workbench 消息区不展示用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流没有独立标题或左侧竖线，且与最终 brain 输出共用消息 rail；最终 markdown 输出直接位于内容流中；用户消息使用右对齐紧凑气泡。空会话时输入区位于主工作区中部；存在消息后输入区固定在主区底部，只允许消息区独立滚动，右侧面板展开或折叠不得改变输入区定位。过程流按真实时间展示决策层与过程层：思考层“让俺想想”是段内临时等待层，仅在首次或上一段 AI content 之后且尚未出现工具时显示；Activity（工具面板）header 按工具类型归并后，使用各工具独立维护的 header 短句汇总（不携带 path/command/query/URL 等参数；同类多次带次数；超过三类收敛为「已完成 n 项」），从出现起滑动直到下一段 AI content；压缩层、重试层和决策层累计保留。两次 Thought 之间的全部工具调用（含 `learn_skill`）合并为一个 Activity 面板，header 默认折叠，hover 时显示展开箭头并提升文字颜色，展开后按时间平铺带参数的工具原句。压缩与重试单独成行，不并入 Activity。
+- 系统行为：workbench 消息区不展示用户与 assistant 头像；assistant 回复以左对齐内容流展示，过程流没有独立标题或左侧竖线，且与最终 brain 输出共用消息 rail；最终 markdown 输出直接位于内容流中；用户消息使用右对齐紧凑气泡。空会话时输入区位于主工作区中部；存在消息后输入区固定在主区底部，只允许消息区独立滚动，右侧面板展开或折叠不得改变输入区定位。过程流按真实时间展示决策层与过程层：思考层“偷偷思考中”是 Brain 请求阶段的临时等待状态，位于过程区最下方展示，请求时出现、结束时隐藏；决策层（Thought）单行省略折叠展示，鼠标 hover 显示展开图标，展开后支持内部滚动；Activity（工具面板）header 按工具类型归并后，使用各工具独立维护的 header 短句汇总（不携带 path/command/query/URL 等参数；同类多次带次数；超过三类收敛为「已完成 n 项」），从出现起滑动直到下一段 AI content；压缩层、重试层和决策层累计保留。两次 Thought 之间的全部工具调用（含 `learn_skill`）合并为一个 Activity 面板，header 默认折叠，hover 时显示展开箭头并提升文字颜色，展开后按时间平铺带参数的工具原句。压缩与重试单独成行，不并入 Activity。
 - 验收：
   - `WB-COMPOSER-009-AC1` 用户与 assistant 消息不展示头像或头像占位。
   - `WB-COMPOSER-009-AC2` assistant 过程流和最终输出左边缘与底部 composer 内容 rail 对齐。
@@ -361,7 +361,7 @@
   - `WB-COMPOSER-009-AC7` 文件名、query、命令、URL 和技能名不使用粗体或冒号强调，保持正常字重；可以通过文字颜色表达层级。
   - `WB-COMPOSER-009-AC8` `learn_skill` 作为普通工具行展示，使用技能通用名称，例如 `docx 阅读器`、`docx 编辑器`、`资料查阅器`、`命令执行器`；运行中展示“正在学习 xx”，完成后展示“已学会 xx”，不再作为独立学习层。
   - `WB-COMPOSER-009-AC9` Activity header、压缩层和重试层展示对应图标；浏览器、网页读取、网页搜索、图片识别、知识库、文件、终端和学习使用不同语义图标。展开后的每条工具句子不展示图标，也不渲染前置小圆点或“AI 思路”类图标。
-  - `WB-COMPOSER-009-AC10` 决策层、Activity、压缩层、重试层按事件时间顺序累计展示；决策层不折叠，Activity 默认折叠；不存在独立学习层或最终收尾等待层。
+  - `WB-COMPOSER-009-AC10` 决策层、Activity、压缩层、重试层按事件时间顺序累计展示；决策层默认单行截断省略并支持 hover 展开与最大高度内纵向滚动，Activity 默认折叠；不存在独立学习层或最终收尾等待层；Brain 请求期间在消息流最下方展示“偷偷思考中”。
   - `WB-COMPOSER-009-AC11` 空会话输入区保持居中；存在消息后消息区为唯一纵向滚动容器，输入区固定在主区底部且不被消息内容向下推出窗口。
   - `WB-COMPOSER-009-AC12` “正在 / 已检索知识库”只来自真实搜索提交或 AI 实际调用知识库工具；新建干净智能会话、仅切换模式时不得凭空出现该过程文案。
 

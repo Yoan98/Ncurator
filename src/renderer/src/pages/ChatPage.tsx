@@ -97,7 +97,6 @@ import type {
 import type { OpenableMarkdownReference } from '../components/markdownReference'
 import {
   completeAssistantProcessGroups,
-  createAssistantThinkingGroup,
   createSearchProcessGroup,
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
@@ -233,6 +232,7 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   messageId,
   status: 'running',
   runFinished: false,
+  isBrainThinking: false,
   processThoughts: [],
   processGroups: [],
   finalAnswerMarkdown: '',
@@ -248,7 +248,7 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
 
 const createThinkingAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   ...createAssistantTurn(messageId),
-  processGroups: [createAssistantThinkingGroup(messageId)]
+  isBrainThinking: true
 })
 
 const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
@@ -372,14 +372,34 @@ const reduceAssistantTurnByRunEvent = (
     }
   }
 
+  if (
+    event.type === 'assistant_process_group_started' &&
+    (event.kind === 'thinking' || event.display?.kind === 'thinking')
+  ) {
+    next = { ...next, isBrainThinking: true }
+  }
+
+  if (
+    (event.type === 'assistant_process_group_completed' ||
+      event.type === 'assistant_process_group_failed') &&
+    (event.groupId.endsWith(':thinking') || event.display?.kind === 'thinking')
+  ) {
+    next = { ...next, isBrainThinking: false }
+  }
+
+  if (event.type === 'tool_call_started') {
+    next = { ...next, isBrainThinking: false }
+  }
+
   if (event.type === 'runtime_issue') {
-    next = { ...next, status: 'failed', error: event.message }
+    next = { ...next, isBrainThinking: false, status: 'failed', error: event.message }
   }
 
   if (event.type === 'approval_batch_required') {
     if (!event.internal) {
       next = {
         ...next,
+        isBrainThinking: false,
         waitingApproval: true,
         pendingApprovalItems: event.items
       }
@@ -417,6 +437,7 @@ const reduceAssistantTurnByRunEvent = (
   if (event.type === 'assistant_brain_stream_started') {
     next = {
       ...next,
+      isBrainThinking: true,
       streamingRoundId: event.roundId,
       streamingMarkdown: '',
       streamingRole: 'answer'
@@ -427,7 +448,11 @@ const reduceAssistantTurnByRunEvent = (
     event.type === 'assistant_brain_stream_delta' &&
     next.streamingRoundId === event.roundId
   ) {
-    next = { ...next, streamingMarkdown: `${next.streamingMarkdown}${event.text}` }
+    next = {
+      ...next,
+      isBrainThinking: false,
+      streamingMarkdown: `${next.streamingMarkdown}${event.text}`
+    }
   }
 
   if (
@@ -441,7 +466,7 @@ const reduceAssistantTurnByRunEvent = (
     event.type === 'assistant_brain_stream_classified' &&
     next.streamingRoundId === event.roundId
   ) {
-    next = { ...next, streamingRole: 'thought' }
+    next = { ...next, isBrainThinking: false, streamingRole: 'thought' }
   }
 
   if (
@@ -452,15 +477,21 @@ const reduceAssistantTurnByRunEvent = (
       event.role === 'answer'
         ? {
             ...next,
+            isBrainThinking: false,
             finalAnswerMarkdown: event.text,
             streamingMarkdown: '',
             streamingRole: 'answer'
           }
-        : { ...next, streamingMarkdown: event.text, streamingRole: 'thought' }
+        : {
+            ...next,
+            isBrainThinking: false,
+            streamingMarkdown: event.text,
+            streamingRole: 'thought'
+          }
   }
 
   if (event.type === 'assistant_process_thought') {
-    next = { ...next, streamingMarkdown: '', streamingRole: 'answer' }
+    next = { ...next, isBrainThinking: false, streamingMarkdown: '', streamingRole: 'answer' }
   }
 
   if (event.type === 'assistant_plan_updated') {
@@ -470,6 +501,7 @@ const reduceAssistantTurnByRunEvent = (
   if (event.type === 'answer_token') {
     next = {
       ...next,
+      isBrainThinking: false,
       finalAnswerMarkdown: `${next.finalAnswerMarkdown}${event.token}`,
       processGroups: completeAssistantProcessGroups(next.processGroups)
     }
@@ -478,6 +510,7 @@ const reduceAssistantTurnByRunEvent = (
   if (event.type === 'answer_completed') {
     next = {
       ...next,
+      isBrainThinking: false,
       finalAnswerMarkdown: event.text,
       linkAccess: event.linkAccess || [],
       streamingMarkdown: '',
@@ -488,6 +521,7 @@ const reduceAssistantTurnByRunEvent = (
   if (event.type === 'run_failed') {
     next = {
       ...next,
+      isBrainThinking: false,
       status: 'failed',
       runFinished: true,
       error: formatRunFailureMessage(event)
@@ -495,12 +529,13 @@ const reduceAssistantTurnByRunEvent = (
   }
 
   if (event.type === 'run_cancelled') {
-    next = { ...next, status: 'failed', runFinished: true, error: '已取消' }
+    next = { ...next, isBrainThinking: false, status: 'failed', runFinished: true, error: '已取消' }
   }
 
   if (event.type === 'run_completed') {
     next = {
       ...next,
+      isBrainThinking: false,
       runFinished: true,
       status: next.status === 'failed' ? 'failed' : 'completed',
       plan: []
@@ -515,6 +550,8 @@ const applyRunRecordToTurn = (
   run: AiRunRecord
 ): AssistantTurnViewModel => {
   const artifacts = run.artifacts || []
+  const runFinished =
+    run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled'
   const status =
     run.status === 'completed'
       ? 'completed'
@@ -525,14 +562,11 @@ const applyRunRecordToTurn = (
     ...turn,
     runId: run.id,
     status,
-    runFinished:
-      run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled',
-    processGroups:
-      run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled'
-        ? completeAssistantProcessGroups(turn.processGroups)
-        : run.partialAnswer || run.finalAnswer
-          ? turn.processGroups.filter((group) => group.kind !== 'thinking')
-          : turn.processGroups,
+    runFinished,
+    isBrainThinking: runFinished ? false : turn.isBrainThinking,
+    processGroups: runFinished
+      ? completeAssistantProcessGroups(turn.processGroups)
+      : turn.processGroups,
     finalAnswerMarkdown:
       run.finalAnswer ||
       (run.partialAnswerRole !== 'thought' ? run.partialAnswer : '') ||
@@ -588,6 +622,7 @@ const buildAssistantTurnFromRunSnapshot = (
     runId: snapshot.run.id,
     processThoughts: projected.processThoughts,
     processGroups: projected.processGroups,
+    isBrainThinking: projected.isBrainThinking,
     waitingApproval: Boolean(snapshot.run.pendingApproval),
     pendingApprovalItems: snapshot.run.pendingApproval?.items || [],
     approvalReviews

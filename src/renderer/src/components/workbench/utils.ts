@@ -412,10 +412,8 @@ const getDisplayGroupText = (
   status: AssistantProcessStatus
 ): AssistantRichTextSegment[] => {
   if (display.kind === 'thinking') {
-    if (status === 'running') return sentence(text('让俺想想'))
-    if (status === 'completed') return sentence(text('俺想好了'))
-    if (status === 'partial_failed') return sentence(text('俺有一部分没想明白'))
-    return sentence(text('俺没想明白'))
+    if (status === 'running') return sentence(text('偷偷思考中'))
+    return []
   }
   if (display.kind === 'retry') {
     const progress = `${display.attempt}/${display.maxAttempts}`
@@ -627,10 +625,10 @@ export const createAssistantThinkingGroup = (messageId: string): AssistantProces
     skillKey: 'generic',
     iconKind: 'default',
     status: 'running',
-    runningText: sentence(text('让俺想想')),
-    completedText: sentence(text('俺想好了')),
-    failedText: sentence(text('俺没想明白')),
-    partialFailedText: sentence(text('俺有一部分没想明白')),
+    runningText: sentence(text('偷偷思考中')),
+    completedText: [],
+    failedText: [],
+    partialFailedText: [],
     createdAt: Date.now(),
     sourceEventType: 'thinking'
   })
@@ -841,12 +839,20 @@ export const reduceAssistantProcessGroups = (
   event: AiRunEvent
 ): AssistantProcessGroup[] => {
   if (event.type === 'assistant_process_thought') {
-    return current.filter((group) => group.kind !== 'thinking')
+    return withoutThinkingGroups(current)
   }
 
   if (event.type === 'assistant_process_group_started') {
-    if (event.kind === 'learning' || event.kind === 'finalizing') return current
-    if (event.display.kind === 'learning' || event.display.kind === 'finalizing') return current
+    if (
+      event.kind === 'learning' ||
+      event.kind === 'finalizing' ||
+      event.kind === 'thinking' ||
+      event.display.kind === 'learning' ||
+      event.display.kind === 'finalizing' ||
+      event.display.kind === 'thinking'
+    ) {
+      return withoutThinkingGroups(current)
+    }
     return upsertGroupFromDisplayEvent(current, {
       groupId: event.groupId,
       kind: event.kind,
@@ -925,8 +931,8 @@ export const shouldShowAssistantApplyTargets = (input: {
 
 export {
   isAssistantActivityToolGroup,
-  shouldShowAssistantThinkingWait,
-  visibleAssistantProcessGroups
+  shouldShowAssistantThinkingIndicator,
+  shouldActivityHeaderShimmer
 } from '../../../../shared/assistantThinkingWait'
 
 export const dedupeFileRefs = (items: WorkbenchFileRef[]): WorkbenchFileRef[] => {
