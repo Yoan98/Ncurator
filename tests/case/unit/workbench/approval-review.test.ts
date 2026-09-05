@@ -67,15 +67,15 @@ describe('approval review projection', () => {
     ).toBe('reject')
   })
 
-  it('matches browser_use by reconstructed approval text', () => {
+  it('ignores browser_use operations for approval reviews', () => {
     expect(
       findApprovalReviewForProcessItem({
-        itemId: 'other-id',
+        itemId: 'call-browser',
         toolName: 'browser_use',
         itemInput: { action: 'navigate', url: 'https://example.com' },
         reviews
-      })?.toolCallId
-    ).toBe('call-browser')
+      })
+    ).toBeUndefined()
   })
 
   it('projects approval_batch_resolved annotations from message log', () => {

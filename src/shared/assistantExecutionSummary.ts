@@ -40,6 +40,7 @@ export type AssistantExecutionSkillKey =
   | 'web-search'
   | 'browser'
   | 'image-generation'
+  | 'image-read'
   | 'learning'
   | 'generic'
 
@@ -109,7 +110,7 @@ const TOOL_UI_KINDS = {
   image_generate: 'image-generation',
   learn_skill: 'learning',
   update_plan: 'generic',
-  read_image: 'generic'
+  read_image: 'image-read'
 } as const satisfies Record<RuntimeToolName, AssistantExecutionSkillKey>
 
 export const getAssistantToolUiKind = (
@@ -134,7 +135,7 @@ export const getAssistantToolIconKind = (
   if (skillKey === 'ppt-edit' || skillKey === 'excel-edit') return 'edit'
   if (skillKey === 'kb') return 'knowledge'
   if (skillKey === 'browser') return 'browser'
-  if (skillKey === 'image-generation') return 'image'
+  if (skillKey === 'image-generation' || skillKey === 'image-read') return 'image'
   if (skillKey === 'learning') return 'learning'
   if (skillKey === 'terminal') return 'terminal'
   return 'default'
@@ -474,8 +475,11 @@ export const resolveAssistantExecutionIcon = (
       iconKinds.add(getAssistantToolIconKind(group.skillKey))
     }
   }
-  if (iconKinds.size !== 1) return 'workflow'
-  return [...iconKinds][0] || 'generic'
+  if (iconKinds.size === 1) return [...iconKinds][0] || 'generic'
+  if (iconKinds.size === 2 && iconKinds.has('camera') && iconKinds.has('image')) {
+    return 'image'
+  }
+  return 'workflow'
 }
 
 export const resolveAssistantExecutionStatus = getExecutionStatus

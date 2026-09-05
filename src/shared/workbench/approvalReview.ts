@@ -37,39 +37,17 @@ const readCommandFromInput = (input?: object): string => {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-const readBrowserApprovalTextFromInput = (input?: object): string => {
-  const obj = asJsonObject(input)
-  if (!obj) return ''
-  const action = typeof obj.action === 'string' && obj.action.trim() ? obj.action.trim() : ''
-  const instruction =
-    typeof obj.instruction === 'string' && obj.instruction.trim()
-      ? obj.instruction.trim()
-      : '使用内置浏览器'
-  const url = typeof obj.url === 'string' && obj.url.trim() ? obj.url.trim() : ''
-  const tabId = typeof obj.tabId === 'string' && obj.tabId.trim() ? obj.tabId.trim() : ''
-  const actionId =
-    typeof obj.actionId === 'string' && obj.actionId.trim() ? obj.actionId.trim() : ''
-  if (action === 'navigate') return `打开网页：${url || instruction}`
-  if (action === 'list_tabs') return '列出浏览器标签'
-  if (action === 'observe') return `观察页面：${instruction}`
-  if (action === 'extract') return `提取页面内容：${instruction}`
-  if (action === 'act') return `操作页面：${actionId || instruction}`
-  if (action === 'screenshot') return `截取页面：${tabId || instruction}`
-  if (action === 'scroll') return `滚动页面：${tabId || instruction}`
-  return `操作浏览器：${instruction}`
-}
-
 export const findApprovalReviewForProcessItem = (input: {
   itemId: string
   toolName?: string
   itemInput?: object
   reviews: readonly AssistantApprovalReview[]
 }): AssistantApprovalReview | undefined => {
+  const toolName = input.toolName
+  if (!toolName || toolName === 'browser_use') return undefined
+
   const byId = input.reviews.find((review) => review.toolCallId === input.itemId)
   if (byId) return byId
-
-  const toolName = input.toolName
-  if (!toolName) return undefined
 
   if (toolName === 'terminal_run') {
     const command = readCommandFromInput(input.itemInput)
@@ -77,15 +55,6 @@ export const findApprovalReviewForProcessItem = (input: {
     return input.reviews.find(
       (review) => review.toolName === toolName && review.command === command
     )
-  }
-
-  if (toolName === 'browser_use') {
-    const browserReviews = input.reviews.filter((review) => review.toolName === 'browser_use')
-    if (browserReviews.length === 0) return undefined
-    const displayCommand = readBrowserApprovalTextFromInput(input.itemInput)
-    const byCommand = browserReviews.find((review) => review.command === displayCommand)
-    if (byCommand) return byCommand
-    return browserReviews.length === 1 ? browserReviews[0] : undefined
   }
 
   return input.reviews.find((review) => review.toolName === toolName)

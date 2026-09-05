@@ -361,7 +361,7 @@
   - `WB-COMPOSER-009-AC6` 展开后的工具句子使用“动作 + 对象”的完整自然语言，不重复运行状态，不使用冒号。示例：`docx_read_outline` 展示“查看 Word 文档 xx 的结构”；`docx_read_nodes` 展示“读取 Word 文档 xx 范围”；`learn_skill` 展示“正在学习 / 已学会 xx”；`text_file_read` 展示“读取文件 xx”；`terminal_run` 展示“执行命令 xxxx”；`web_search search / fetch` 分别展示“搜索网页 query”“抓取网页 url”；`browser_use navigate / list_tabs / observe / extract / act / screenshot / scroll` 分别补充“打开网页 / 列出浏览器标签 / 查看页面并 / 从页面中 / 在页面上执行 / 截取页面 / 滚动页面”的动作语义（半截连词仅用于展开行接对象，不用于 header）。
   - `WB-COMPOSER-009-AC7` 文件名、query、命令、URL 和技能名不使用粗体或冒号强调，保持正常字重；可以通过文字颜色表达层级。
   - `WB-COMPOSER-009-AC8` `learn_skill` 作为普通工具行展示，使用技能通用名称，例如 `docx 阅读器`、`docx 编辑器`、`资料查阅器`、`命令执行器`；运行中展示“正在学习 xx”，完成后展示“已学会 xx”，不再作为独立学习层。
-  - `WB-COMPOSER-009-AC9` Activity header、压缩层和重试层展示对应图标；浏览器各动作（打开网页使用地球图标 `HiOutlineGlobeAlt`、查看页面使用眼睛图标 `HiOutlineEye`、操作页面使用指针图标 `HiOutlineCursorArrowRays`、提取内容使用清单图标 `HiOutlineQueueList`、截取页面使用相机图标 `HiOutlineCamera`、滚动页面使用上下箭头图标 `HiOutlineArrowsUpDown`、列出标签使用窗口图标 `HiOutlineWindow`）、网页抓取使用下载图标 `HiOutlineArrowDownTray`、网页搜索使用放大镜图标 `HiOutlineMagnifyingGlass`、图片识别、知识库、文件、终端和学习使用独立语义图标；混合动作或混合工具时使用工作流闪电图标 `HiOutlineBolt`。展开后的每条工具句子不展示图标，也不渲染前置小圆点或“AI 思路”类图标。
+  - `WB-COMPOSER-009-AC9` Activity header、压缩层和重试层展示对应图标；浏览器各动作（打开网页使用地球图标 `HiOutlineGlobeAlt`、查看页面使用眼睛图标 `HiOutlineEye`、操作页面使用指针图标 `HiOutlineCursorArrowRays`、提取内容使用清单图标 `HiOutlineQueueList`、截取页面使用相机图标 `HiOutlineCamera`、滚动页面使用上下箭头图标 `HiOutlineArrowsUpDown`、列出标签使用窗口图标 `HiOutlineWindow`）、网页抓取使用下载图标 `HiOutlineArrowDownTray`、网页搜索使用放大镜图标 `HiOutlineMagnifyingGlass`、读取图片与生成图片使用照片相框图标 `HiOutlinePhoto`（截取页面并读取图片的视觉成对动作统一使用照片图标 `HiOutlinePhoto`，不退化为闪电）、知识库、文件、终端和学习使用独立语义图标；其他混合动作或混合工具时使用工作流闪电图标 `HiOutlineBolt`。展开后的每条工具句子不展示图标，也不渲染前置小圆点或“AI 思路”类图标。
   - `WB-COMPOSER-009-AC10` 决策层、Activity、压缩层、重试层按事件时间顺序累计展示；决策层采用浅灰色文本，未超出单行时不显示折叠图标，超出单行时单行截断省略，折叠状态展开图标在 hover 时显示且垂直居中于单行文本，展开时常驻浅灰卡片背景、折叠按钮居顶对齐第一行文本并在最大高度内纵向滚动，Activity 默认折叠；不存在独立学习层或最终收尾等待层；Brain 请求期间在消息流最下方展示“偷偷思考中”。
   - `WB-COMPOSER-009-AC11` 空会话输入区保持居中；存在消息后消息区为唯一纵向滚动容器，输入区固定在主区底部且不被消息内容向下推出窗口。
   - `WB-COMPOSER-009-AC12` “正在 / 已检索知识库”只来自真实搜索提交或 AI 实际调用知识库工具；新建干净智能会话、仅切换模式时不得凭空出现该过程文案。
@@ -449,6 +449,7 @@
   - `WB-BLOCKER-001-AC5` 完全访问 run 的审批项会自动通过且继续执行，不产生 `waiting_approval`、审批事件或审批卡片。
   - `WB-BLOCKER-001-AC6` 等待审批时 Activity header 为「等待用户审核中」；审完后恢复常规工具汇总；过程流不出现「等待批量审核」只读 blockers，且不弹出开始/通过 toast。
   - `WB-BLOCKER-001-AC7` 审完后走过审批的工具行仅前缀结果图标（同意/拒绝/指导可区分）；悬停图标揭示 `commandExplanation`（指导另附反馈语），无灰底卡片与 toast/tooltip；刷新会话后仍可从消息记录恢复。
+  - `WB-BLOCKER-001-AC8` 浏览器操作（`browser_use`，包括打开、查看、操作、截图、滚动等）属于受控沙箱交互，不触发审批卡片与审批阻塞；审核仅针对终端命令（`terminal_run`）安全策略。展开行中浏览器操作不前缀审批结果图标。
 
 #### WB-BLOCKER-002 搜索模式部分可检索目录 warning
 

@@ -22,7 +22,6 @@ import { returnToBrainAfterTrace, returnToDispatch } from '../utils/stateTransit
 import { createImageReferenceMessage } from '../../memory/multimodal'
 
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
-const isBrowserUseCall = (toolName: string): boolean => toolName === 'browser_use'
 
 const readTerminalCommandArg = (args: JsonObject): string | undefined =>
   typeof args.command === 'string' && args.command.trim().length > 0
@@ -33,26 +32,6 @@ const readCommandExplanationArg = (args: JsonObject): string | undefined =>
   typeof args.commandExplanation === 'string' && args.commandExplanation.trim().length > 0
     ? args.commandExplanation.trim()
     : undefined
-
-const readBrowserUseApprovalText = (args: JsonObject): string => {
-  const action = typeof args.action === 'string' && args.action.trim() ? args.action.trim() : ''
-  const instruction =
-    typeof args.instruction === 'string' && args.instruction.trim()
-      ? args.instruction.trim()
-      : '使用内置浏览器'
-  const url = typeof args.url === 'string' && args.url.trim() ? args.url.trim() : ''
-  const tabId = typeof args.tabId === 'string' && args.tabId.trim() ? args.tabId.trim() : ''
-  const actionId =
-    typeof args.actionId === 'string' && args.actionId.trim() ? args.actionId.trim() : ''
-  if (action === 'navigate') return `打开网页：${url || instruction}`
-  if (action === 'list_tabs') return '列出浏览器标签'
-  if (action === 'observe') return `观察页面：${instruction}`
-  if (action === 'extract') return `提取页面内容：${instruction}`
-  if (action === 'act') return `操作页面：${actionId || instruction}`
-  if (action === 'screenshot') return `截取页面：${tabId || instruction}`
-  if (action === 'scroll') return `滚动页面：${tabId || instruction}`
-  return `操作浏览器：${instruction}`
-}
 
 type ParsedHandCall = {
   toolCallId: string
@@ -75,20 +54,6 @@ const collectApprovalBatchItems = (input: {
   reason: string
 }> => {
   return input.calls.flatMap((call, index) => {
-    if (isBrowserUseCall(call.toolName)) {
-      if (input.cache.approvedBrowserUseTaskIds?.has(input.taskId)) return []
-      return [
-        {
-          itemId: call.toolCallId,
-          order: index,
-          toolName: call.toolName,
-          command: readBrowserUseApprovalText(call.args),
-          commandExplanation: '使用内置浏览器执行网页操作。',
-          reason: '首次使用内置浏览器网页操作能力'
-        }
-      ]
-    }
-
     if (isTerminalRunCall(call.toolName)) {
       const command = readTerminalCommandArg(call.args)
       if (!command) return []
@@ -108,29 +73,6 @@ const collectApprovalBatchItems = (input: {
 
     return []
   })
-}
-
-const markApprovedBrowserUseTask = (input: {
-  cache: HumanRuntimeCache
-  taskId: string
-  decisions: Array<{
-    itemId: string
-    action: 'approve' | 'reject' | 'guide'
-  }>
-  approvalItems: Array<{
-    itemId: string
-    toolName: string
-  }>
-}): void => {
-  const approved = input.decisions.some((decision) => {
-    if (decision.action !== 'approve') return false
-    const item = input.approvalItems.find((approvalItem) => approvalItem.itemId === decision.itemId)
-    return item?.toolName === 'browser_use'
-  })
-  if (!approved) return
-  const approvedTaskIds = input.cache.approvedBrowserUseTaskIds || new Set<string>()
-  approvedTaskIds.add(input.taskId)
-  input.cache.approvedBrowserUseTaskIds = approvedTaskIds
 }
 
 const executeHandCalls = async (input: {
@@ -393,12 +335,6 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         return returnToDispatch(state)
       }
       await input.ctx.appendMessageLog([approvalResolvedAnnotation])
-      markApprovedBrowserUseTask({
-        cache: input.cache,
-        taskId: state.task.taskId,
-        decisions: approvalBatchResult.decisions,
-        approvalItems
-      })
     }
 
     const results = await executeHandCalls({

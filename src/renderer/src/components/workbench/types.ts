@@ -118,6 +118,7 @@ export type AssistantProcessSkillKey =
   | 'web-search'
   | 'browser'
   | 'image-generation'
+  | 'image-read'
   | 'learning'
   | 'generic'
 

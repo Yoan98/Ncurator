@@ -266,4 +266,26 @@ describe('assistant process icons and activity summary', () => {
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页 并 抓取网页')
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
   })
+
+  it('resolves image icon for read_image standalone and screenshot paired with read_image', () => {
+    expect(
+      resolveAssistantExecutionIcon(
+        createToolGroup('read_image', 1, { headerShortText: '读取图片' })
+      )
+    ).toBe('image')
+
+    const screenshotAndRead = [
+      ...createToolGroup('browser_use', 1, {
+        input: { action: 'screenshot' },
+        headerShortText: '截取页面'
+      }),
+      ...createToolGroup('read_image', 2, {
+        headerShortText: '读取图片'
+      })
+    ]
+    expect(toPlainText(buildAssistantExecutionSummaryText(screenshotAndRead))).toBe(
+      '截取页面 并 读取图片'
+    )
+    expect(resolveAssistantExecutionIcon(screenshotAndRead)).toBe('image')
+  })
 })
