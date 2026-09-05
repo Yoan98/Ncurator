@@ -356,7 +356,7 @@ describe('workbench run e2e', () => {
                   logout.textContent = '退出登录';
                   logout.addEventListener('click', () => {
                     const note = (document.querySelector('#feedback-input')?.value || '').trim();
-                    statusEl.textContent = `${LOGOUT_TOKEN} | NOTE:${note}`;
+                    statusEl.textContent = '${LOGOUT_TOKEN} | NOTE:' + note;
                   });
                   accountMenu.appendChild(logout);
                 }

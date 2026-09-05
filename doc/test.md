@@ -3,10 +3,7 @@
 ## 1. 文档定位
 
 - 本文是 NCurator-Desktop 的唯一测试总规范。
-- 本文定义测试分类、回归准入、执行闭环、UI E2E 真实性、真实 AI / live 断言，以及 runner 和 raw logs 契约。
 - 各业务域的 suite、case 和领域规则只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case。
-- 只有当功能代码发生变动、对应 `doc/test-plan/**` 明确要求对齐 `doc/prd/**`，或者 `doc/prd/**` 本身发生变更时，才需要校验实现与 `doc/prd/**` 的一致性。
-- 新增任何测试文件前，必须先与用户确认目标分类：AI、Settings、Workbench 或 Unit。
 - `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑。
 
 测试体系只沉淀一层长期执行产物：
@@ -240,12 +237,6 @@ pnpm test:update:real:win -- \
 - 如果 `timeline.jsonl` 仍不足以解释结果，再继续读取 `runtime-events.jsonl` 与关键附件。
 - 必要时回看 `meta.json` 与 `artifacts.json`，确认 run 摘要、统计值和附件索引。
 - 所有分析结论都必须可回溯到 raw logs 与 artifacts，不得脱离证据做推断。
-
-### 4.5 结论回流
-
-- 如果问题出在 case 定义、验收口径或阶段边界，必须先改 `doc/test-plan/**`，再改测试代码。
-- 如果只是实现缺陷或回归问题，可在保持 case 规格不变的前提下修实现并重跑。
-- 测试结论以目标 run 的 raw logs 和 artifacts 为准，不将单次结论回写为长期文档事实。
 
 ## 5. runner 与原始产物契约
 
