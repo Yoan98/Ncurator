@@ -29,6 +29,7 @@ import {
 
 const CASE_ID = 'approval-batch-flow'
 const DENIED_RUN_SETTLE_TIMEOUT_MS = 120_000
+const DENIED_APPROVAL_WAIT_TIMEOUT_MS = 120_000
 
 const exists = async (filePath: string): Promise<boolean> =>
   await access(filePath)
@@ -174,9 +175,15 @@ describe('workbench run e2e', () => {
           recordWorkbenchAiEvidence(runtime, approveEvidence, 0.8)
           const approvedReviewedItemCount = await countApprovalReviewedItems(page)
 
+          await createWorkbenchNewSession(page)
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
           await sendWorkbenchMessage(
             page,
-            '请使用终端命令在当前工作区创建 approval-denied.txt，内容写 denied-by-workbench-e2e；如果本次操作未获授权，请不要再次申请执行，直接说明未执行。'
+            [
+              '请使用终端命令在当前工作区创建 approval-denied.txt，内容写 denied-by-workbench-e2e。',
+              '必须真正发起会触发审批的终端写入命令，并等待用户审批；不要声称已有授权或跳过审批。',
+              '如果本次操作未获授权，请不要再次申请执行，直接说明未执行。'
+            ].join('')
           )
           const deniedRunStarted = await waitForWorkbenchAiEvent(runtime, {
             name: 'approval_denied_run_started',
@@ -188,6 +195,7 @@ describe('workbench run e2e', () => {
           }
           const firstDeniedApproval = await waitForWorkbenchAiEvent(runtime, {
             name: 'approval_denied_batch_required',
+            timeoutMs: DENIED_APPROVAL_WAIT_TIMEOUT_MS,
             matches: (event) =>
               isApprovalBatchRequiredEvent(event) && event.runId === deniedRunStarted.runId
           })
