@@ -96,8 +96,16 @@ export type BrowserUseScreenshotOutput = {
   path: string
 }
 
+export type BrowserUseScrollOutput = {
+  action: 'scroll'
+  tabId: string
+  page: BrowserUsePage
+  message: string
+  scrolledPixels: number
+}
+
 export type BrowserUseErrorOutput = {
-  action?: 'navigate' | 'list_tabs' | 'extract' | 'observe' | 'act' | 'screenshot'
+  action?: 'navigate' | 'list_tabs' | 'extract' | 'observe' | 'act' | 'screenshot' | 'scroll'
   tabId?: string
   page?: BrowserUsePage
   error: string
@@ -112,4 +120,5 @@ export type BrowserUseOutput =
   | BrowserUseObserveOutput
   | BrowserUseActOutput
   | BrowserUseScreenshotOutput
+  | BrowserUseScrollOutput
   | BrowserUseErrorOutput

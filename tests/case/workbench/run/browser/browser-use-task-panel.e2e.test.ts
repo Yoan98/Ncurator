@@ -76,7 +76,8 @@ const isBrowserUseDataContract = (data: JsonValue | undefined): boolean => {
     action !== 'observe' &&
     action !== 'act' &&
     action !== 'extract' &&
-    action !== 'screenshot'
+    action !== 'screenshot' &&
+    action !== 'scroll'
   ) {
     return false
   }
@@ -89,6 +90,9 @@ const isBrowserUseDataContract = (data: JsonValue | undefined): boolean => {
   if (action === 'navigate') return true
   if (action === 'extract') return typeof data.content === 'string'
   if (action === 'screenshot') return typeof data.path === 'string'
+  if (action === 'scroll') {
+    return typeof data.message === 'string' && typeof data.scrolledPixels === 'number'
+  }
   if (action === 'observe') {
     return Array.isArray(data.actions) && data.actions.every(isBrowserActionCandidate)
   }
@@ -286,47 +290,51 @@ describe('workbench run e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const server = await startLocalWorkbenchHttpServer(`<!doctype html>
-          <title>Workbench Browser Logout Task</title>
-          <style>
-            header { display: flex; gap: 12px; align-items: center; }
-            #account-menu { display: none; border: 1px solid #ccc; padding: 8px; min-width: 120px; }
-          </style>
-          <header>
-            <button id="role" type="button">教师</button>
-            <ul id="role-menu" hidden>
-              <li>教师</li>
-              <li>学生</li>
-            </ul>
-            <button id="msg" type="button" aria-label="消息">消息</button>
-            <div id="account-menu" role="menu"></div>
-          </header>
-          <main id="status">已登录</main>
-          <script>
-            const role = document.querySelector('#role')
-            const roleMenu = document.querySelector('#role-menu')
-            const msg = document.querySelector('#msg')
-            const accountMenu = document.querySelector('#account-menu')
-            const status = document.querySelector('#status')
-            role.addEventListener('click', () => {
-              roleMenu.hidden = !roleMenu.hidden
-            })
-            const showAccountMenu = () => {
-              if (!accountMenu.querySelector('#logout')) {
-                const logout = document.createElement('button')
-                logout.id = 'logout'
-                logout.type = 'button'
-                logout.textContent = '退出登录'
-                logout.addEventListener('click', () => {
-                  status.textContent = '${LOGOUT_TOKEN}'
-                })
-                accountMenu.appendChild(logout)
-              }
-              accountMenu.style.display = 'block'
-            }
-            msg.addEventListener('mouseenter', showAccountMenu)
-            msg.addEventListener('focus', showAccountMenu)
-            accountMenu.addEventListener('mouseenter', showAccountMenu)
-          </script>`)
+          <html>
+          <head>
+            <meta charset="utf-8" />
+            <title>Workbench Account Center</title>
+            <style>
+              * { box-sizing: border-box; }
+              body { font-family: sans-serif; margin: 0; padding: 16px; background: #f7f8fa; }
+              header { display: flex; gap: 12px; align-items: center; padding: 12px; background: #fff; border-radius: 8px; margin-bottom: 16px; }
+              .hero { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 24px; min-height: 800px; }
+              .hero h2 { margin-top: 0; }
+              .card { background: #f0f2f5; padding: 16px; border-radius: 6px; margin-bottom: 12px; }
+              .footer-zone { background: #fff; padding: 24px; border-radius: 8px; border: 1px dashed #d0d7de; margin-top: 40px; }
+              #logout { background: #d93025; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+              #status { font-weight: bold; margin-top: 12px; color: #1a73e8; }
+            </style>
+          </head>
+          <body>
+            <header>
+              <span>用户中心</span>
+              <button id="role" type="button">教师身份</button>
+              <button id="msg" type="button" aria-label="消息通知">消息通知 (3)</button>
+            </header>
+            <section class="hero">
+              <h2>工作台概览与日常事务</h2>
+              <p>欢迎回到工作台。此区域展示近期的教学安排与日常统计数据。</p>
+              <div class="card"><h3>学期进度</h3><p>当前学期教学计划已完成 65%，期末复习大纲已归档。</p></div>
+              <div class="card"><h3>通知公告</h3><p>下周教室资源调整通知已发送至各院系邮箱。</p></div>
+              <div class="card"><h3>教学日志</h3><p>昨日随堂测试成绩已同步录入教务分析系统。</p></div>
+              <div class="card"><h3>系统提示</h3><p>如需管理账号或注销退出，请浏览至页面底部账号设置区。</p></div>
+            </section>
+            <section class="footer-zone">
+              <h3>账号安全与设置</h3>
+              <p>当前登录账号处于活跃状态。如需更换账号，请点击下方退出登录。</p>
+              <button id="logout" type="button">退出登录</button>
+              <main id="status">已登录</main>
+            </section>
+            <script>
+              const logout = document.querySelector('#logout');
+              const status = document.querySelector('#status');
+              logout.addEventListener('click', () => {
+                status.textContent = '${LOGOUT_TOKEN}';
+              });
+            </script>
+          </body>
+          </html>`)
           runtime.registerResource({
             name: 'browser-task-http-server',
             phase: 'before-app-close',
@@ -356,13 +364,7 @@ describe('workbench run e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `Use the right embedded browser to complete this logout task on ${server.url}.
-Rules:
-1) browser_use navigate without tabId to open the URL, then keep using the returned tabId for all later calls.
-2) Use observe to discover actions; act MUST use actionId from observe (never natural-language act instruction).
-3) The "教师" button only opens role switch (教师/学生) — that is NOT logout.
-4) Hover the "消息" button so the account menu appears, observe again, then act on the "退出登录" actionId.
-5) Finally extract the #status text. Tell me the exact status text.`
+            `请在右侧内置浏览器中打开 ${server.url}，浏览并找到底部的退出登录按钮执行退出，然后提取 #status 的最终状态文本告诉我。`
           )
 
           await waitForBrowserPanelOpenedWithApproval(runtime)

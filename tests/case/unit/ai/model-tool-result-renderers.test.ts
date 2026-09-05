@@ -201,4 +201,24 @@ describe('ai unit model tool result renderers', () => {
     expect(rendered).toContain('selector: xpath=//button[1]')
     expect(rendered).toContain('消息图标')
   })
+
+  it('renders browser_use scroll completed', () => {
+    const rendered = renderBrowserUseModelResult({
+      toolName: 'browser_use',
+      args: { action: 'scroll', tabId: 'tab_a1', direction: 'down' },
+      data: {
+        action: 'scroll',
+        tabId: 'tab_a1',
+        page: { url: 'https://example.com', title: 'Home' },
+        message: 'Scrolled 80% down (720px)',
+        scrolledPixels: 720
+      }
+    })
+
+    expect(rendered).toContain('Browser scroll completed.')
+    expect(rendered).toContain('Tab: tab_a1')
+    expect(rendered).toContain('Page: Home — https://example.com')
+    expect(rendered).toContain('Result: Scrolled 80% down (720px)')
+    expect(rendered).not.toContain('Success:')
+  })
 })

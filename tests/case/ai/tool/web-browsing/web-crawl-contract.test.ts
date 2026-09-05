@@ -558,11 +558,19 @@ describe('ai tool web backend', () => {
                   }
                 }
               }
+              if (input.action === 'screenshot') {
+                return {
+                  action: 'screenshot',
+                  tabId: input.tabId,
+                  page: { url: 'https://example.com/task' },
+                  result: { path: input.screenshotPath }
+                }
+              }
               return {
-                action: 'screenshot',
+                action: 'scroll',
                 tabId: input.tabId,
                 page: { url: 'https://example.com/task' },
-                result: { path: input.screenshotPath }
+                result: { message: 'Scrolled 80% down', scrolledPixels: 600 }
               }
             }
           }

@@ -210,6 +210,14 @@ const normalizeBrowserUseOutput = (
         page: toBrowserUsePageJson(result.page),
         path: result.result.path
       }
+    case 'scroll':
+      return {
+        action: 'scroll',
+        tabId: result.tabId,
+        page: toBrowserUsePageJson(result.page),
+        message: result.result.message,
+        scrolledPixels: result.result.scrolledPixels
+      }
   }
 }
 
@@ -564,6 +572,17 @@ export const webToolFamily: ToolFamilyDefinition = {
                   action: 'screenshot',
                   tabId,
                   screenshotPath,
+                  llmConfig,
+                  abortSignal
+                })
+              } else if (args.action === 'scroll') {
+                const tabId = String(args.tabId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                result = await service.run({
+                  action: 'scroll',
+                  tabId,
+                  direction: args.direction,
+                  percentage: args.percentage,
                   llmConfig,
                   abortSignal
                 })

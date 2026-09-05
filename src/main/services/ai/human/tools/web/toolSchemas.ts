@@ -51,8 +51,16 @@ export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
     .strict(),
   z
     .object({
-      action: z.literal('screenshot').describe('截取当前标签页全页截图并保存为工作区资产'),
+      action: z.literal('screenshot').describe('截取当前标签页视口截图并保存为工作区资产'),
       tabId: z.string().min(1).describe('目标浏览器标签 ID')
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('scroll').describe('滚动当前标签页视口内容以浏览更多信息'),
+      tabId: z.string().min(1).describe('目标浏览器标签 ID'),
+      direction: z.enum(['up', 'down']).default('down').describe('滚动方向：down（向下）或 up（向上），默认为 down'),
+      percentage: z.number().min(1).max(200).optional().describe('滚动幅度占视口高度百分比（1-200），默认 80')
     })
     .strict()
 ])
@@ -68,6 +76,7 @@ export type {
   BrowserUseOutput,
   BrowserUsePage,
   BrowserUseScreenshotOutput,
+  BrowserUseScrollOutput,
   BrowserUseTabItem,
   WebSearchFetchFailureOutput,
   WebSearchFetchOutput,

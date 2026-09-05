@@ -847,7 +847,7 @@ export class BrowserEmbedService implements BrowserUseService {
   private async runDom(
     input: Extract<
       BrowserUseRunInput,
-      { action: 'extract' | 'observe' | 'act' | 'screenshot' }
+      { action: 'extract' | 'observe' | 'act' | 'screenshot' | 'scroll' }
     >,
     runtime: BrowserTabRuntime
   ): Promise<BrowserUseRunResult> {
@@ -910,7 +910,14 @@ export class BrowserEmbedService implements BrowserUseService {
       if (input.action === 'screenshot') {
         await fs.mkdir(path.dirname(input.screenshotPath), { recursive: true })
         await raceAbort(
-          page.screenshot({ fullPage: true, path: input.screenshotPath, type: 'png' }),
+          page.screenshot({
+            fullPage: false,
+            animations: 'disabled',
+            caret: 'hide',
+            scale: 'device',
+            path: input.screenshotPath,
+            type: 'png'
+          }),
           signal,
           abortStagehand
         )
@@ -919,6 +926,33 @@ export class BrowserEmbedService implements BrowserUseService {
           tabId,
           page: pageInfo,
           result: { path: input.screenshotPath }
+        }
+      }
+
+      if (input.action === 'scroll') {
+        const percentage = Math.max(1, Math.min(200, input.percentage ?? 80))
+        const direction = input.direction ?? 'down'
+        const { w, h } = (await raceAbort(
+          page.mainFrame().evaluate('({ w: window.innerWidth, h: window.innerHeight })'),
+          signal,
+          abortStagehand
+        )) as { w: number; h: number }
+        const scrollDistance = Math.round((h * percentage) / 100)
+        const cx = Math.floor(w / 2)
+        const cy = Math.floor(h / 2)
+        const deltaY = direction === 'up' ? -scrollDistance : scrollDistance
+
+        await raceAbort(page.scroll(cx, cy, 0, deltaY), signal, abortStagehand)
+        await raceAbort(page.waitForTimeout(300), signal, abortStagehand)
+
+        return {
+          action: 'scroll',
+          tabId,
+          page: toBrowserUsePage(page.url(), await page.title()),
+          result: {
+            message: `Scrolled ${percentage}% ${direction} (${scrollDistance}px)`,
+            scrolledPixels: scrollDistance
+          }
         }
       }
 

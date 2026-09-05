@@ -759,6 +759,14 @@ export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
       readString(obj.path) ? `Path: ${readString(obj.path)}` : ''
     ])
   }
+  if (action === 'scroll') {
+    return renderProse([
+      'Browser scroll completed.',
+      tabLine,
+      pageLabel ? `Page: ${pageLabel}` : '',
+      readString(obj.message) ? `Result: ${readString(obj.message)}` : ''
+    ])
+  }
   return renderProse([
     'Browser action completed.',
     action ? `Action: ${action}` : '',

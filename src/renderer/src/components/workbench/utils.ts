@@ -353,6 +353,12 @@ const TOOL_ITEM_RENDERERS = {
         sentence(text('截取页面 '), param(tabIdLabel || '当前标签'))
       )
     }
+    if (action === 'scroll') {
+      return toolCopy(
+        '滚动页面',
+        sentence(text('滚动页面 '), param(tabIdLabel || '当前标签'))
+      )
+    }
     return toolCopy('操作浏览器', sentence(text('操作浏览器 '), param(instructionLabel)))
   },
   read_image: () => toolCopy('读取图片', sentence(text('读取图片'))),

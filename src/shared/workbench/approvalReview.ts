@@ -55,6 +55,7 @@ const readBrowserApprovalTextFromInput = (input?: object): string => {
   if (action === 'extract') return `提取页面内容：${instruction}`
   if (action === 'act') return `操作页面：${actionId || instruction}`
   if (action === 'screenshot') return `截取页面：${tabId || instruction}`
+  if (action === 'scroll') return `滚动页面：${tabId || instruction}`
   return `操作浏览器：${instruction}`
 }
 

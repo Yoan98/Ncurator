@@ -130,6 +130,7 @@ export type BrowserUseAction =
   | 'observe'
   | 'act'
   | 'screenshot'
+  | 'scroll'
 
 export type BrowserUsePage = {
   url: string
@@ -165,6 +166,11 @@ export type BrowserUseActResult = {
   message: string
   actionDescription: string
   executed: BrowserActionCandidate
+}
+
+export type BrowserUseScrollResult = {
+  message: string
+  scrolledPixels: number
 }
 
 export type BrowserUseResult =
@@ -211,6 +217,12 @@ export type BrowserUseResult =
       }
     }
   | {
+      action: 'scroll'
+      tabId: string
+      page: BrowserUsePage
+      result: BrowserUseScrollResult
+    }
+  | {
       action?: BrowserUseAction
       tabId?: string
       page?: BrowserUsePage
@@ -247,6 +259,13 @@ export type BrowserUseRunRequest = (
       tabId: string
       action: 'screenshot'
       screenshotPath: string
+      llmConfig: LlmRuntimeConfig
+    }
+  | {
+      tabId: string
+      action: 'scroll'
+      direction?: 'down' | 'up'
+      percentage?: number
       llmConfig: LlmRuntimeConfig
     }
 ) & {
