@@ -409,7 +409,9 @@ const resolveDefaultSidecarCommand = (options: WebCrawlerServiceOptions): Sideca
     }
   }
   return {
-    executablePath: process.env.NCURATOR_WEB_CRAWLER_SIDECAR_PYTHON || 'python3',
+    executablePath:
+      process.env.NCURATOR_WEB_CRAWLER_SIDECAR_PYTHON ||
+      (process.platform === 'win32' ? 'python' : 'python3'),
     args: [path.join(appRootPath, DEV_SIDECAR_SCRIPT_PATH)],
     env: options.sidecarEnv
   }
