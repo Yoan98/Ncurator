@@ -368,7 +368,7 @@ tests/case/workbench/
 - What：AI 通过内置浏览器完成网页任务时，文件 / 多浏览器 Tab、独立页面导航、持久站点数据和真实网页操作结果形成闭环；并验证 `observe → act(actionId)`（含 hover 后出现的退出入口）。
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题；Stagehand 需以 observe 规划、actionId 确定性执行为主路径。
 - How：先打开真实 Markdown 文件，再让 AI 使用 `browser_use` 操作本地 hover-退出测试页（诱饵角色切换 + hover 消息图标才出现「退出登录」）；AI Run 仍在进行时，用户通过 `+` 新建另一个浏览器标签并折叠右栏，验证后续 observe / act / extract 在后台继续操作原目标；任务完成后展开右栏并切回 AI 浏览器标签，再切换文件和浏览器检查状态保持。
-- Oracle：`navigate` 结果含 `tabId`；后续 observe/act 必带该 `tabId`；`act` 使用 `actionId` 而非自然语言 instruction；observe actions 含 `actionId/method/description/arguments/selector`；折叠期间原浏览器 `webContents` 不销毁且 AI 能完成 hover/退出，展开后同一个 `webContents.id` 直接显示最新 `LOGOUT_OK_*` 结果；对齐 `WB-PANEL-004`。
+- Oracle：`navigate` 结果含 `tabId`；后续 observe/act 必带该 `tabId`；`act` 使用 `actionId` 而非自然语言 instruction；observe actions 含 `actionId/method/description/arguments/selector`；折叠期间原浏览器 `webContents` 不销毁且 AI 能完成 hover/退出，展开后同一个 `webContents.id` 直接显示最新 `LOGOUT_OK_*` 结果；操作期间光标常驻且仅在 AI Run 结束时释放隐藏；对齐 `WB-PANEL-004`、`WB-PANEL-004-AC13`。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成退出并出现口令即可判定 browser panel 能力有效。
 
 #### `browser-view-lifecycle`

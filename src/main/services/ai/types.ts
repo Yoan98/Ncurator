@@ -270,6 +270,7 @@ export type BrowserUseRunRequest = (
     }
 ) & {
   abortSignal?: AbortSignal
+  runId?: string
 }
 
 export type BrowserUseService = {
@@ -279,6 +280,7 @@ export type BrowserUseService = {
   listTabs: (ownerId: string) => Array<{ id: string; title?: string; url: string }>
   navigate: (url: string, tabId?: string) => Promise<void>
   run: (input: BrowserUseRunRequest) => Promise<BrowserUseResult>
+  releaseRun?: (runId: string) => Promise<void>
 }
 
 export type TerminalCommandChangeTrackingInput = {

@@ -619,7 +619,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 return <AssistantProcessGroupView key={entry.id} group={entry.group} />
               })}
               {streamingRole === 'thought' && streamingMarkdown.trim() ? (
-                <div className="min-w-0 max-h-[320px] overflow-y-auto rounded-[6px] bg-[#F7F7F5] px-2 py-1.5 -mx-2 pr-1 text-[13.5px] leading-[22px] text-[#787774]">
+                <div className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[#787774]">
                   <MarkdownRenderer content={streamingMarkdown} variant="thought" />
                 </div>
               ) : null}

@@ -263,7 +263,8 @@ export function registerHandlers(services: {
   const attachmentService = new AttachmentService()
   const runResourceManager = new AiRunResourceManager([
     { id: 'docx', releaseRun: releaseDocxRunSession },
-    { id: 'pdf', releaseRun: releasePdfRunSession }
+    { id: 'pdf', releaseRun: releasePdfRunSession },
+    { id: 'browser', releaseRun: (runId) => browserEmbedService?.releaseRun(runId) ?? Promise.resolve() }
   ])
   const e2eGraphRecursionLimitOnce = (() => {
     if (process.env.NCURATOR_E2E_OBSERVER !== '1') return undefined

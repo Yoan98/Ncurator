@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   BrowserActionVisualizer,
+  BROWSER_CURSOR_OVERLAY_ID,
+  createHideCursorScript,
   type BrowserActionVisualLocator,
   type BrowserActionVisualPage
 } from '../../../../src/main/services/browser/BrowserActionVisualizer'
@@ -133,5 +135,29 @@ describe('BrowserActionVisualizer', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('keeps cursor visible if already positioned during prepare', async () => {
+    const { page } = createPage()
+    const visualizer = new BrowserActionVisualizer()
+
+    await visualizer.prepare(page)
+
+    expect(page.evaluate).toHaveBeenCalledWith(
+      expect.stringContaining("if (cursor.dataset.ncuratorPositioned !== '1')")
+    )
+  })
+
+  it('provides createHideCursorScript and hide transitions opacity to 0', async () => {
+    const script = createHideCursorScript()
+    expect(script).toContain(BROWSER_CURSOR_OVERLAY_ID)
+    expect(script).toContain("opacity = '0'")
+    expect(script).toContain("dataset.ncuratorPositioned = '0'")
+
+    const { page } = createPage()
+    const visualizer = new BrowserActionVisualizer()
+    await visualizer.hide(page)
+
+    expect(page.evaluate).toHaveBeenCalledWith(script)
   })
 })

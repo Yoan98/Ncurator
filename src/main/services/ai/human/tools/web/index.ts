@@ -461,11 +461,12 @@ export const webToolFamily: ToolFamilyDefinition = {
               const llmConfig = await ctx.getLlmConfig()
               const ownerId = ctx.sessionId
               const abortSignal = ctx.abortSignal
+              const runId = ctx.runId
               let result: BrowserUseResult
               let observeActions: BrowserActionCandidate[] | undefined
 
               if (args.action === 'list_tabs') {
-                result = await service.run({ action: 'list_tabs', ownerId, llmConfig, abortSignal })
+                result = await service.run({ action: 'list_tabs', ownerId, llmConfig, abortSignal, runId })
               } else if (args.action === 'navigate') {
                 const tabIdArg =
                   typeof args.tabId === 'string' && args.tabId.trim() ? args.tabId.trim() : undefined
@@ -475,7 +476,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                   url: String(args.url || '').trim(),
                   ...(tabIdArg ? { tabId: tabIdArg } : {}),
                   llmConfig,
-                  abortSignal
+                  abortSignal,
+                  runId
                 })
                 if (!('error' in result) && result.action === 'navigate') {
                   emitBrowserPanelOpened(result.tabId)
@@ -488,7 +490,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                   tabId,
                   instruction: String(args.instruction || '').trim(),
                   llmConfig,
-                  abortSignal
+                  abortSignal,
+                  runId
                 })
                 if (!('error' in result) && result.action === 'observe') {
                   observeActions = result.result.actions.map((action) => {
@@ -534,7 +537,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                   actionId,
                   stagehandAction: cached.action,
                   llmConfig,
-                  abortSignal
+                  abortSignal,
+                  runId
                 })
               } else if (args.action === 'extract') {
                 const tabId = String(args.tabId || '').trim()
@@ -544,7 +548,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                   tabId,
                   instruction: String(args.instruction || '').trim(),
                   llmConfig,
-                  abortSignal
+                  abortSignal,
+                  runId
                 })
               } else if (args.action === 'screenshot') {
                 const tabId = String(args.tabId || '').trim()
@@ -573,7 +578,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                   tabId,
                   screenshotPath,
                   llmConfig,
-                  abortSignal
+                  abortSignal,
+                  runId
                 })
               } else if (args.action === 'scroll') {
                 const tabId = String(args.tabId || '').trim()
@@ -584,7 +590,8 @@ export const webToolFamily: ToolFamilyDefinition = {
                   direction: args.direction,
                   percentage: args.percentage,
                   llmConfig,
-                  abortSignal
+                  abortSignal,
+                  runId
                 })
               } else {
                 const unknownAction =

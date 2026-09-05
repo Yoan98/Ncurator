@@ -19,7 +19,7 @@ import type { CdpEndpointService } from './CdpEndpointService'
 import type { BrowserPanelBoundsState, BrowserUseRunInput, BrowserUseRunResult } from './types'
 import type { BrowserTabState } from '../../../shared/types'
 import { resolveStagehandRuntimeModel } from '../llm/stagehandModel'
-import { BrowserActionVisualizer } from './BrowserActionVisualizer'
+import { BrowserActionVisualizer, createHideCursorScript } from './BrowserActionVisualizer'
 import { BrowserMenuWindowService } from './BrowserMenuWindowService'
 import type {
   BrowserTabStateStore,
@@ -186,6 +186,7 @@ const clampZoomFactor = (value: number): number =>
 
 export class BrowserEmbedService implements BrowserUseService {
   private readonly tabs = new Map<string, BrowserTabRuntime>()
+  private readonly runTabMap = new Map<string, Set<string>>()
   private readonly hydratedOwnerIds = new Set<string>()
   private activeTabId: string | null = null
   private presentedTabId: string | null = null
@@ -555,6 +556,9 @@ export class BrowserEmbedService implements BrowserUseService {
         ? this.requireTab(input.tabId).persisted.id
         : (await this.createTab(input.ownerId)).id
       if (input.abortSignal?.aborted) throw createCancelledError()
+      if (input.runId) {
+        this.trackRunTab(input.runId, tabId)
+      }
       const runtime = this.requireTab(tabId)
       const view = await this.ensureReady(runtime)
       if (input.abortSignal?.aborted) throw createCancelledError()
@@ -573,8 +577,41 @@ export class BrowserEmbedService implements BrowserUseService {
       }
     }
 
+    if (input.runId && input.tabId) {
+      this.trackRunTab(input.runId, input.tabId)
+    }
+
     const runtime = this.requireTab(input.tabId)
     return await this.runDom(input, runtime)
+  }
+
+  public async releaseRun(runId: string): Promise<void> {
+    const normalizedRunId = String(runId || '').trim()
+    if (!normalizedRunId) return
+    const tabIds = this.runTabMap.get(normalizedRunId)
+    this.runTabMap.delete(normalizedRunId)
+    if (!tabIds || tabIds.size === 0) return
+
+    const hideScript = createHideCursorScript()
+    await Promise.allSettled(
+      [...tabIds].map(async (tabId) => {
+        const runtime = this.tabs.get(tabId)
+        if (!runtime?.view || runtime.view.webContents.isDestroyed()) return
+        await runtime.view.webContents.executeJavaScript(hideScript).catch(() => undefined)
+      })
+    )
+  }
+
+  private trackRunTab(runId: string, tabId: string): void {
+    const normalizedRunId = String(runId || '').trim()
+    const normalizedTabId = String(tabId || '').trim()
+    if (!normalizedRunId || !normalizedTabId) return
+    let tabIds = this.runTabMap.get(normalizedRunId)
+    if (!tabIds) {
+      tabIds = new Set()
+      this.runTabMap.set(normalizedRunId, tabIds)
+    }
+    tabIds.add(normalizedTabId)
   }
 
   public async dispose(): Promise<void> {
@@ -982,7 +1019,6 @@ export class BrowserEmbedService implements BrowserUseService {
       } finally {
         stagehand.bus.off('*', listener)
         await visualizer.flush()
-        await visualizer.hide(page)
       }
       const executed = toBrowserActionCandidate(input.actionId, input.stagehandAction)
       return {
