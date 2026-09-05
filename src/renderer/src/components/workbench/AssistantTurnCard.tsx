@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react'
+﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { FiCheckCircle } from 'react-icons/fi'
 import { MdOutlineSmsFailed } from 'react-icons/md'
 import { RiForbidLine } from 'react-icons/ri'
@@ -146,15 +146,61 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
   thought
 }) => {
   const [expanded, setExpanded] = useState(false)
+  const [isOverflowing, setIsOverflowing] = useState(false)
+  const contentRef = useRef<HTMLDivElement>(null)
+
+  const checkOverflow = useCallback(() => {
+    const text = thought.text || ''
+    if (text.includes('\n')) {
+      setIsOverflowing(true)
+      return
+    }
+
+    const el = contentRef.current
+    if (!el) return
+
+    if (!expanded) {
+      setIsOverflowing(el.scrollWidth > el.clientWidth + 1)
+    }
+  }, [thought.text, expanded])
+
+  useLayoutEffect(() => {
+    checkOverflow()
+  }, [checkOverflow])
+
+  useEffect(() => {
+    const el = contentRef.current
+    if (!el || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => {
+      checkOverflow()
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [checkOverflow])
+
+  const canExpand = isOverflowing
 
   return (
     <div
-      className="group/thought relative flex cursor-pointer items-start justify-between gap-2 rounded-[6px] px-2 py-0.5 -mx-2 transition-colors duration-150 hover:bg-[#F7F7F5]"
-      onClick={() => setExpanded((prev) => !prev)}
+      className={`group/thought relative flex items-start justify-between gap-2 rounded-[6px] transition-colors duration-150 ${
+        expanded
+          ? 'bg-[#F7F7F5] px-2 py-1.5 -mx-2 cursor-pointer'
+          : canExpand
+            ? 'px-2 py-0.5 -mx-2 hover:bg-[#F7F7F5] cursor-pointer'
+            : 'px-2 py-0.5 -mx-2 cursor-default'
+      }`}
+      onClick={(e) => {
+        if (!canExpand) return
+        if ((e.target as HTMLElement).closest('a, button')) return
+        const selection = window.getSelection()
+        if (selection && selection.toString().length > 0) return
+        setExpanded((prev) => !prev)
+      }}
       data-testid={workbenchSelectors.assistantThoughts}
     >
       <div
-        className={`min-w-0 flex-1 text-[14px] leading-7 text-[#37352F] ${
+        ref={contentRef}
+        className={`min-w-0 flex-1 text-[13.5px] leading-[22px] text-[#787774] ${
           expanded
             ? 'max-h-[320px] overflow-y-auto pr-1'
             : 'assistant-thought-collapsed'
@@ -162,25 +208,27 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
       >
         <MarkdownRenderer content={thought.text} variant="thought" />
       </div>
-      <button
-        type="button"
-        className={`mt-1.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] text-[#9B9A97] transition-all duration-150 hover:text-[#37352F] ${
-          expanded
-            ? 'opacity-100'
-            : 'opacity-0 group-hover/thought:opacity-100'
-        }`}
-        aria-label={expanded ? '收起思考内容' : '展开思考内容'}
-        onClick={(e) => {
-          e.stopPropagation()
-          setExpanded((prev) => !prev)
-        }}
-      >
-        {expanded ? (
-          <HiChevronDown className="h-3.5 w-3.5" />
-        ) : (
-          <HiChevronRight className="h-3.5 w-3.5" />
-        )}
-      </button>
+      {canExpand ? (
+        <button
+          type="button"
+          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] text-[#9B9A97] transition-all duration-150 hover:text-[#37352F] ${
+            expanded
+              ? 'opacity-100'
+              : 'opacity-0 group-hover/thought:opacity-100'
+          }`}
+          aria-label={expanded ? '收起思考内容' : '展开思考内容'}
+          onClick={(e) => {
+            e.stopPropagation()
+            setExpanded((prev) => !prev)
+          }}
+        >
+          {expanded ? (
+            <HiChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <HiChevronRight className="h-3.5 w-3.5" />
+          )}
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -571,7 +619,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 return <AssistantProcessGroupView key={entry.id} group={entry.group} />
               })}
               {streamingRole === 'thought' && streamingMarkdown.trim() ? (
-                <div className="text-[14px] leading-7 text-[#37352F]">
+                <div className="min-w-0 max-h-[320px] overflow-y-auto rounded-[6px] bg-[#F7F7F5] px-2 py-1.5 -mx-2 pr-1 text-[13.5px] leading-[22px] text-[#787774]">
                   <MarkdownRenderer content={streamingMarkdown} variant="thought" />
                 </div>
               ) : null}

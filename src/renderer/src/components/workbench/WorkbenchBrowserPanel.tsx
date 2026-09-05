@@ -88,8 +88,13 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
 
     const flushBounds = (): void => {
       if (activePresentationId === null) return
-      // 窗口 live-resize 期间交给 Main follow-layout，避免与系统缩放抢同一帧 IPC。
-      if (document.body.classList.contains('workbench-window-resizing')) return
+      // 窗口 live-resize 期间交给 Main follow-layout，分栏拖拽期间使用快照占位，避免与系统缩放或拖拽抢同一帧 IPC。
+      if (
+        document.body.classList.contains('workbench-window-resizing') ||
+        document.body.classList.contains('workbench-content-panel-resizing')
+      ) {
+        return
+      }
       notifyBounds(tabId, activePresentationId, viewportRef.current)
     }
 
@@ -296,11 +301,11 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         className="relative min-h-0 flex-1 bg-white"
         data-testid={workbenchSelectors.browserViewport}
       >
-        {!presentationEnabled && transitionImage ? (
+        {transitionImage ? (
           <img
             src={transitionImage}
             alt=""
-            className="absolute inset-0 h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-none object-left-top select-none pointer-events-none"
             draggable={false}
           />
         ) : !state.url ? (

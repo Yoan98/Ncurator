@@ -1270,11 +1270,30 @@ export const readWorkbenchAiPreferenceSelection = async (page: Page): Promise<st
 
 export const selectWorkbenchExecutionPermission = async (
   page: Page,
-  permissionLabel: '审核' | '完全访问'
+  permissionLabel: '审核' | '完全访问',
+  options?: { confirmModal?: boolean; cancelModal?: boolean }
 ): Promise<void> => {
   await getWorkbenchLocator(page, workbenchSelectors.executionPermissionSwitch).click()
   const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
   await menu.getByRole('option').filter({ hasText: permissionLabel }).first().click()
+  if (permissionLabel === '完全访问') {
+    if (options?.cancelModal) {
+      const cancelButton = getWorkbenchLocator(page, workbenchSelectors.fullAccessConfirmCancelButton)
+      await cancelButton.waitFor({ state: 'visible', timeout: 3000 })
+      await cancelButton.click()
+      await cancelButton.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined)
+    } else if (options?.confirmModal !== false) {
+      const confirmButton = getWorkbenchLocator(page, workbenchSelectors.fullAccessConfirmOkButton)
+      const appeared = await confirmButton
+        .waitFor({ state: 'visible', timeout: 3000 })
+        .then(() => true)
+        .catch(() => false)
+      if (appeared) {
+        await confirmButton.click()
+        await confirmButton.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined)
+      }
+    }
+  }
 }
 
 export const readWorkbenchExecutionPermissionSelection = async (page: Page): Promise<string> => {

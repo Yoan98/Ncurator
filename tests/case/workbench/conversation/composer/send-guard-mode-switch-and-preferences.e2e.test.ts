@@ -10,8 +10,10 @@ import {
   navigateToWorkbench,
   prepareWorkbenchWorkspaceThroughUi,
   readWorkbenchAiPreferenceSelection,
+  readWorkbenchExecutionPermissionSelection,
   readWorkbenchSelectedControlText,
   selectWorkbenchAiPreference,
+  selectWorkbenchExecutionPermission,
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
   sendWorkbenchMessage,
@@ -111,6 +113,16 @@ describe('workbench conversation e2e', () => {
           const fullAccessPermissionMenuText =
             (await fullAccessPermissionOption.textContent()) || ''
           await page.keyboard.press('Escape')
+
+          await selectWorkbenchExecutionPermission(page, '完全访问', { cancelModal: true })
+          const permissionAfterCancel = await readWorkbenchExecutionPermissionSelection(page)
+
+          await selectWorkbenchExecutionPermission(page, '完全访问', { confirmModal: true })
+          const permissionAfterConfirm = await readWorkbenchExecutionPermissionSelection(page)
+
+          await selectWorkbenchExecutionPermission(page, '审核')
+          const permissionAfterReset = await readWorkbenchExecutionPermissionSelection(page)
+
           await switchWorkbenchMode(page, '搜索')
           const aiPreferenceHiddenInSearch = !(await getWorkbenchLocator(
             page,
@@ -179,6 +191,9 @@ describe('workbench conversation e2e', () => {
             selectedAiPreferenceBeforeReload,
             reviewPermissionMenuText,
             fullAccessPermissionMenuText,
+            permissionAfterCancel,
+            permissionAfterConfirm,
+            permissionAfterReset,
             selectedAiPreferenceAfterModeRoundTrip,
             selectedAiPreferenceAfterReload,
             aiPreferenceHiddenInSearch,
@@ -215,6 +230,9 @@ describe('workbench conversation e2e', () => {
               result.selectedAiPreferenceAfterReload.includes('严谨') &&
               result.reviewPermissionMenuText.includes('涉及到风险操作需要你审核') &&
               result.fullAccessPermissionMenuText.includes('不受限制的操作你的电脑') &&
+              result.permissionAfterCancel.includes('审核') &&
+              result.permissionAfterConfirm.includes('完全访问') &&
+              result.permissionAfterReset.includes('审核') &&
               result.aiPreferenceHiddenInSearch &&
               result.runningButtonLabel.includes('停止') &&
               result.searchOptionAfterAi.disabled &&
@@ -225,7 +243,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-send-guard-mode-preference-real-path',
               message:
-                'Workbench 应在未选工作区时禁用发送，切换“AI/搜索”保留输入，权限菜单展示两条说明，模型、工作区和 AI 推进偏好重进页面后恢复，搜索模式隐藏偏好入口，真实发送后搜索模式禁用并提示，发送时按钮进入停止态并最终完成。',
+                'Workbench 应在未选工作区时禁用发送，切换“AI/搜索”保留输入，权限菜单展示两条说明，完全访问切换具备风险确认弹窗门禁（取消维持审核、确认切换成功、切回审核无需弹窗），模型、工作区和 AI 推进偏好重进页面后恢复，搜索模式隐藏偏好入口，真实发送后搜索模式禁用并提示，发送时按钮进入停止态并最终完成。',
               data: result
             }
           )

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
-import type { ChatMessageLogEntry } from '../../../../src/shared/types'
 import { createLearningNode } from '../../../../src/main/services/ai/human/node/learningNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'

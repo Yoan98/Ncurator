@@ -57,6 +57,7 @@ import { useNavigate } from 'react-router-dom'
 import { normalizeUserFacingError } from '../utils/userFacingError'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
+import { FullAccessConfirmModal } from '../components/workbench/FullAccessConfirmModal'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import ScheduledTasksView from '../components/scheduledTasks/ScheduledTasksView'
@@ -807,6 +808,7 @@ const ChatPage: React.FC = () => {
   const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>('default')
   const [composerExecutionPermission, setComposerExecutionPermission] =
     useState<WorkbenchExecutionPermission>('review')
+  const [fullAccessConfirmOpen, setFullAccessConfirmOpen] = useState(false)
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
   const [aiRunId, setAiRunId] = useState<string | null>(null)
@@ -928,6 +930,8 @@ const ChatPage: React.FC = () => {
     startX: number
     startWidth: number
   } | null>(null)
+  const contentPanelDragRestoreTimerRef = useRef<number | null>(null)
+  const contentPanelDragSettlingFrameRef = useRef<number | null>(null)
   const contentPanelResizeFrameRef = useRef<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const shouldAutoScrollRef = useRef(true)
@@ -1519,18 +1523,17 @@ const ChatPage: React.FC = () => {
     []
   )
 
-  const captureBrowserTransition = useCallback(async (tabId: string): Promise<void> => {
+  const captureBrowserTransition = useCallback(async (tabId: string): Promise<string | null> => {
     const response = await Promise.race([
       window.api.browserPanelCapture({ tabId }),
       new Promise<{ success: false }>((resolve) =>
         window.setTimeout(() => resolve({ success: false }), 180)
       )
     ])
-    setBrowserTransitionImage(
-      response.success && 'dataUrl' in response && response.dataUrl
-        ? { tabId, dataUrl: response.dataUrl }
-        : null
-    )
+    const dataUrl =
+      response.success && 'dataUrl' in response && response.dataUrl ? response.dataUrl : null
+    setBrowserTransitionImage(dataUrl ? { tabId, dataUrl } : null)
+    return dataUrl
   }, [])
 
   const collapseContentPanel = useCallback((): void => {
@@ -2097,6 +2100,13 @@ const ChatPage: React.FC = () => {
 
   const handleExecutionPermissionChange = useCallback(
     (permission: WorkbenchExecutionPermission): void => {
+      if (
+        permission === 'full_access' &&
+        composerExecutionPermissionRef.current !== 'full_access'
+      ) {
+        setFullAccessConfirmOpen(true)
+        return
+      }
       uiStateInteractionVersionRef.current += 1
       composerExecutionPermissionRef.current = permission
       setComposerExecutionPermission(permission)
@@ -2104,6 +2114,18 @@ const ChatPage: React.FC = () => {
     },
     [persistCurrentUiStateNow]
   )
+
+  const handleConfirmFullAccess = useCallback((): void => {
+    setFullAccessConfirmOpen(false)
+    uiStateInteractionVersionRef.current += 1
+    composerExecutionPermissionRef.current = 'full_access'
+    setComposerExecutionPermission('full_access')
+    void persistCurrentUiStateNow({ requireReady: false })
+  }, [persistCurrentUiStateNow])
+
+  const handleCancelFullAccess = useCallback((): void => {
+    setFullAccessConfirmOpen(false)
+  }, [])
 
   const handleWorkspaceChange = useCallback(
     (workspaceId: string | null): void => {
@@ -2650,6 +2672,7 @@ const ChatPage: React.FC = () => {
       exitContentPanelPixelResize()
       setContentPanelResizeGuide(false)
       document.body.classList.remove('workbench-content-panel-resizing')
+      document.body.classList.remove('workbench-content-panel-settling')
     }
 
     const handlePointerMove = (event: PointerEvent): void => {
@@ -2692,11 +2715,48 @@ const ChatPage: React.FC = () => {
       if (!drag || event.pointerId !== drag.pointerId) return
       const available = mainSplitRef.current?.clientWidth ?? 0
       const width = contentPanelWidthPxRef.current
-      endContentPanelDrag()
+
+      if (contentPanelResizeFrameRef.current !== null) {
+        window.cancelAnimationFrame(contentPanelResizeFrameRef.current)
+        contentPanelResizeFrameRef.current = null
+      }
+      contentPanelDragStartRef.current = null
+      setContentPanelResizeGuide(false)
+      document.body.classList.remove('workbench-content-panel-resizing')
+
       if (available > 0 && width > 0) {
         const nextRatio = clampWorkbenchContentPanelRatio(width / available)
+        contentPanelRatioRef.current = nextRatio
+        contentPanelCommittedRatioRef.current = nextRatio
+        window.localStorage.setItem(WORKBENCH_CONTENT_PANEL_RATIO_STORAGE_KEY, String(nextRatio))
+
+        // 通过 settling 保持 transition: none，消除像素切回比例时的 200ms 补间滞后
+        document.body.classList.add('workbench-content-panel-settling')
         applyContentPanelRatioCss(nextRatio)
         setContentPanelRatio(nextRatio)
+        exitContentPanelPixelResize()
+
+        if (contentPanelDragSettlingFrameRef.current !== null) {
+          window.cancelAnimationFrame(contentPanelDragSettlingFrameRef.current)
+        }
+        contentPanelDragSettlingFrameRef.current = window.requestAnimationFrame(() => {
+          contentPanelDragSettlingFrameRef.current = null
+          document.body.classList.remove('workbench-content-panel-settling')
+
+          // 拖拽完成且布局稳定后，恢复原生浏览器渲染
+          if (contentPanelRef.current.kind === 'browser' && !contentPanelCollapsedRef.current) {
+            setBrowserPresentationEnabled(true)
+            if (contentPanelDragRestoreTimerRef.current !== null) {
+              window.clearTimeout(contentPanelDragRestoreTimerRef.current)
+            }
+            contentPanelDragRestoreTimerRef.current = window.setTimeout(() => {
+              contentPanelDragRestoreTimerRef.current = null
+              setBrowserTransitionImage(null)
+            }, 60)
+          }
+        })
+      } else {
+        exitContentPanelPixelResize()
       }
     }
 
@@ -2708,6 +2768,15 @@ const ChatPage: React.FC = () => {
       window.removeEventListener('pointerup', handlePointerUp)
       window.removeEventListener('pointercancel', handlePointerUp)
       endContentPanelDrag()
+      if (contentPanelDragSettlingFrameRef.current !== null) {
+        window.cancelAnimationFrame(contentPanelDragSettlingFrameRef.current)
+        contentPanelDragSettlingFrameRef.current = null
+      }
+      if (contentPanelDragRestoreTimerRef.current !== null) {
+        window.clearTimeout(contentPanelDragRestoreTimerRef.current)
+        contentPanelDragRestoreTimerRef.current = null
+      }
+      document.body.classList.remove('workbench-content-panel-settling')
     }
   }, [
     applyContentPanelRatioCss,
@@ -4830,10 +4899,31 @@ const ChatPage: React.FC = () => {
               <div
                 className="nc-content-panel-resizer workbench-no-drag"
                 data-testid={workbenchSelectors.contentPanelResizer}
+                onPointerEnter={() => {
+                  if (
+                    contentPanel.kind === 'browser' &&
+                    contentPanel.browserTabId &&
+                    browserPresentationEnabled &&
+                    browserTransitionImage?.tabId !== contentPanel.browserTabId
+                  ) {
+                    void captureBrowserTransition(contentPanel.browserTabId)
+                  }
+                }}
                 onPointerDown={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
                   event.currentTarget.setPointerCapture(event.pointerId)
+
+                  if (contentPanelDragRestoreTimerRef.current !== null) {
+                    window.clearTimeout(contentPanelDragRestoreTimerRef.current)
+                    contentPanelDragRestoreTimerRef.current = null
+                  }
+                  if (contentPanelDragSettlingFrameRef.current !== null) {
+                    window.cancelAnimationFrame(contentPanelDragSettlingFrameRef.current)
+                    contentPanelDragSettlingFrameRef.current = null
+                  }
+                  document.body.classList.remove('workbench-content-panel-settling')
+
                   // 用当前真实渲染宽度作为起点，避免从 flex-basis 比例切到像素时跳变。
                   const startWidth = Math.round(
                     contentPanelShellRef.current?.getBoundingClientRect().width ??
@@ -4850,6 +4940,23 @@ const ChatPage: React.FC = () => {
                   const available = mainSplitRef.current?.clientWidth ?? 0
                   setContentPanelResizeGuide(true, splitLeft + available - startWidth)
                   document.body.classList.add('workbench-content-panel-resizing')
+
+                  if (contentPanel.kind === 'browser' && contentPanel.browserTabId) {
+                    const tabId = contentPanel.browserTabId
+                    const switchViewToSnapshot = (): void => {
+                      setBrowserPresentationEnabled(false)
+                      void window.api.browserPanelHide()
+                    }
+                    if (browserTransitionImage?.tabId === tabId) {
+                      switchViewToSnapshot()
+                    } else {
+                      void captureBrowserTransition(tabId).then((dataUrl) => {
+                        if (contentPanelDragStartRef.current && dataUrl) {
+                          switchViewToSnapshot()
+                        }
+                      })
+                    }
+                  }
                 }}
               />
               <div
@@ -4953,6 +5060,11 @@ const ChatPage: React.FC = () => {
             </div>
           ) : null}
         </Modal>
+        <FullAccessConfirmModal
+          open={fullAccessConfirmOpen}
+          onConfirm={handleConfirmFullAccess}
+          onCancel={handleCancelFullAccess}
+        />
           </>
         )}
       </div>

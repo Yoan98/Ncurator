@@ -998,7 +998,9 @@ textarea,
 }
 
 .workbench-content-panel-resizing .nc-content-panel-shell,
-.workbench-content-panel-resizing .nc-content-panel-shell-inner {
+.workbench-content-panel-resizing .nc-content-panel-shell-inner,
+.workbench-content-panel-settling .nc-content-panel-shell,
+.workbench-content-panel-settling .nc-content-panel-shell-inner {
   transition: none !important;
 }
 
@@ -1496,8 +1498,9 @@ mark {
 }
 
 .markdown-body--thought {
-  font-size: 14px;
-  line-height: 1.72;
+  color: #787774;
+  font-size: 13.5px;
+  line-height: 1.6;
 }
 
 .markdown-body--thought h1,
@@ -1506,15 +1509,24 @@ mark {
 .markdown-body--thought h4,
 .markdown-body--thought h5,
 .markdown-body--thought h6 {
-  margin: 0.65rem 0 0.3rem;
-  font-size: 14px;
+  margin: 0.5rem 0 0.25rem;
+  font-size: 13.5px;
   font-weight: 600;
+  color: #5A5A57;
 }
 
 .markdown-body--thought p,
 .markdown-body--thought ul,
-.markdown-body--thought ol {
-  margin-bottom: 0.4rem;
+.markdown-body--thought ol,
+.markdown-body--thought li {
+  margin-bottom: 0.35rem;
+  color: #787774;
+}
+
+.markdown-body--thought .markdown-inline-code,
+.markdown-body--thought :not(pre) > code {
+  color: #5A5A57;
+  background-color: rgba(0, 0, 0, 0.04);
 }
 
 .assistant-thought-collapsed {
@@ -1530,6 +1542,7 @@ mark {
   margin: 0 !important;
   padding: 0 !important;
   white-space: nowrap !important;
+  color: #787774 !important;
 }
 
 .markdown-body a {

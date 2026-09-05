@@ -84,10 +84,13 @@ describe('targeted runtime package pruning', () => {
       'node_modules/node-pty/third_party/conpty/conpty.dll'
     ]) {
       expect(() =>
-        assertRuntimePruningTrace({
-          ...runtimeTrace,
-          trace: { files: [...runtimeTrace.trace.files, unsafePath] }
-        })
+        assertRuntimePruningTrace(
+          {
+            ...runtimeTrace,
+            trace: { files: [...runtimeTrace.trace.files, unsafePath] }
+          },
+          'darwin'
+        )
       ).toThrow('trace reaches')
     }
   })

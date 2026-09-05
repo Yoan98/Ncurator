@@ -167,8 +167,8 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：缺少模型时的模式提示、发送前置条件、模式切换保留输入，以及模型 / 工作区 / AI 推进偏好 / 执行权限的当前会话恢复。
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务、把任务发到错误上下文或使用错误资料边界。
-- How：先在无模型配置状态下切换智能 / 搜索模式检查提示，再通过 UI 配置真实模型和工作区；覆盖无工作区、输入保留、模型 / 工作区选择、AI 推进偏好、执行权限菜单的两条说明、切换会话后的独立恢复和真实发送。
-- Oracle：无模型时智能模式快速显示配置提示；发送禁用态给出原因，工作区可用且输入非空时可发送；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；不要求显式本地参考资料，模式切换保持输入和内部行为；AI 发送完成后搜索模式禁用且悬浮提示原因；模式、模型、工作区、推进偏好和执行权限按会话恢复且不再读取全局偏好，对齐 `WB-CORE-001-AC1`、`WB-CORE-001-AC2`、`WB-MODE-001-AC1`、`WB-MODE-001-AC2`、`WB-MODE-003-AC1`、`WB-MODE-003-AC2`、`WB-COMPOSER-001`、`WB-COMPOSER-005`、`WB-COMPOSER-007`、`WB-SESSION-008`。
+- How：先在无模型配置状态下切换智能 / 搜索模式检查提示，再通过 UI 配置真实模型和工作区；覆盖无工作区、输入保留、模型 / 工作区选择、AI 推进偏好、执行权限菜单的两条说明与完全访问高危风险弹窗确认/取消门禁、切换会话后的独立恢复和真实发送。
+- Oracle：无模型时智能模式快速显示配置提示；发送禁用态给出原因，工作区可用且输入非空时可发送；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；切换“完全访问”触发风险二次确认弹窗（取消维持审核、确认切换成功，切回审核免二次确认），对齐 `WB-COMPOSER-007-AC13`；不要求显式本地参考资料，模式切换保持输入和内部行为；AI 发送完成后搜索模式禁用且悬浮提示原因；模式、模型、工作区、推进偏好和执行权限按会话恢复且不再读取全局偏好，对齐 `WB-CORE-001-AC1`、`WB-CORE-001-AC2`、`WB-MODE-001-AC1`、`WB-MODE-001-AC2`、`WB-MODE-003-AC1`、`WB-MODE-003-AC2`、`WB-COMPOSER-001`、`WB-COMPOSER-005`、`WB-COMPOSER-007`、`WB-SESSION-008`。
 - Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。
 
 #### `session-mode-lock`
@@ -287,7 +287,7 @@ tests/case/workbench/
 - What：智能模式真实发送后，验证 Thought / Activity 过程层渲染与最终 markdown 收口（过程流主 case）。
 - Why：重构后过程层是用户扫进度的主界面；需覆盖 Activity 折叠 header、展开平铺、学习/工具统一渲染，以及最终回答，而不是只断言“有过程块”。
 - How：真实工作区内准备带唯一事实的文件；用户通过 UI 发送自然语言总结请求；等待真实 AI run 完成；展开全部 Activity 面板并采集 header / body 文案。
-- Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；运行中过程流可见，且“正在重试”与“偷偷思考中”不同时出现；“偷偷思考中”在 Brain 请求期间于过程区最下方展示，run 完成 / 失败 / 取消或产出正文后过程区不得仍挂着“偷偷思考中”，对齐 `WB-COMPOSER-003-AC3`。决策层（Thought）短摘要可见且不暴露原始长推理，默认单行省略并支持 hover 展开与内部滚动，对齐 `WB-COMPOSER-003-AC5`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」）；展开行为带对象的工具原句且不含冒号强调；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用「并/但」拼接；>3 类 summary 为「已完成 n 项」。若事件含 `learn_skill`：展开行文案含“正在学习 / 已学会”，且不作为独立学习层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试与截断提示、计划进度环等由相关运行态 case 覆盖并继续对齐 `WB-COMPOSER-014-AC3`、`WB-COMPOSER-014-AC4`。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。
+- Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；运行中过程流可见，且“正在重试”与“偷偷思考中”不同时出现；“偷偷思考中”在 Brain 请求期间于过程区最下方展示，run 完成 / 失败 / 取消或产出正文后过程区不得仍挂着“偷偷思考中”，对齐 `WB-COMPOSER-003-AC3`。决策层（Thought）短摘要可见且不暴露原始长推理，以浅灰文本展示，未超出单行时不展示折叠图标，超出单行时单行省略并支持 hover 展开、常驻浅灰卡片背景与内部滚动，对齐 `WB-COMPOSER-003-AC5`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」）；展开行为带对象的工具原句且不含冒号强调；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用「并/但」拼接；>3 类 summary 为「已完成 n 项」。若事件含 `learn_skill`：展开行文案含“正在学习 / 已学会”，且不作为独立学习层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试与截断提示、计划进度环等由相关运行态 case 覆盖并继续对齐 `WB-COMPOSER-014-AC3`、`WB-COMPOSER-014-AC4`。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。
 - Not：不对最终文案逐字断言；不把真实模型是否调用某工具误归因为 UI bug（工具相关断言均以本轮实际事件为条件）。
 
 #### `terminal-background-service-flow`
@@ -374,8 +374,8 @@ tests/case/workbench/
 #### `browser-view-lifecycle`
 
 - 测试类型：`e2e`
-- What：内置浏览器原生视图在初次显示、面板折叠、原生自绘菜单和会话切换后仍可见、尺寸稳定且持续运行，包括切走的会话面板同样处于展开状态后切回的呈现恢复。
-- Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换会话时误销毁仍在运行的网页。会话切换后浏览器呈现依赖 `contentPanelCollapsed` 值变化触发的恢复，若前后两个会话面板均展开（值不变）会漏掉重新呈现，表现为地址栏正常但网页白屏。`setBounds` 在 bounds 未变时跳过 `applyAllVisibility`、或后台加载完成后挂载未强制重绘，也会出现同样白屏；此时加号 / 三点菜单还可能因 `WebContentsView` 抢焦点被立刻关掉。
+- What：内置浏览器原生视图在初次显示、面板折叠、原生自绘菜单、会话切换以及分栏拖拽调整后仍可见、尺寸稳定且持续运行，包括切走的会话面板同样处于展开状态后切回的呈现恢复。
+- Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换会话时误销毁仍在运行的网页。分栏拖拽期间高频更新 bounds 会导致 Windows DirectComposition 下原生视图原点跑偏且旧画面错位遮挡对话区，松手时的 CSS transition 补间动画会导致半秒滞后。分栏拖拽期间采用静态快照占位并阻断高频 bounds，松手瞬时无补间对齐并恢复原生 View，确保拖拽期间平滑跟手、松手无缝切回。会话切换后浏览器呈现依赖 `contentPanelCollapsed` 值变化触发的恢复，若前后两个会话面板均展开（值不变）会漏掉重新呈现，表现为地址栏正常但网页白屏。`setBounds` 在 bounds 未变时跳过 `applyAllVisibility`、或后台加载完成后挂载未强制重绘，也会出现同样白屏；此时加号 / 三点菜单还可能因 `WebContentsView` 抢焦点被立刻关掉。
 - How：通过 Settings UI 创建工作空间并形成会话；在 Workbench UI 新建浏览器 Tab，导航真实本地网页并调整缩放；折叠、切换会话后验证运行期状态，再正常重启同一用户目录，验证 URL、历史和缩放恢复；最后分别通过关闭 Tab 和删除所属会话销毁浏览器。会话切换分支覆盖两种路径：新建会话（面板默认折叠）后切回，以及切到面板已展开的会话后切回，并直接断言主窗口 `contentView.children` 原生挂载计数恢复到 1 而非仅依赖像素采样。
 - Oracle：运行期折叠或切换会话不销毁 WebContents；无论切走的会话面板是否展开，切回后同一 `webContents.id` 必须重新挂载到主窗口并恢复显示；重启后重新创建 WebContents 并恢复 URL、历史和缩放，但不要求表单、滚动内存或 JS 连续；关闭 Tab 或删除所属会话后状态清理；地址栏右侧“将打开外部浏览器”按钮可见且更多菜单不再含系统浏览器入口，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC8`、`WB-PANEL-004-AC9b`、`WB-PANEL-004-AC12`。
 - Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。
