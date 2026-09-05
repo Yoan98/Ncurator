@@ -5,6 +5,7 @@ import type {
   IpcJsonObject
 } from '../../../../shared/types'
 import { normalizeThoughtText } from '../../../../shared/thoughtText'
+import { isBrainThinkingOpenInLog } from '../../../../shared/assistantThinkingWait'
 import { createDisplayProcessGroup, createDisplayProcessItem } from './utils'
 import type {
   AssistantProcessGroup,
@@ -118,7 +119,7 @@ export const projectProcessGroups = (input: {
     .filter((group): group is AssistantProcessGroup => Boolean(group))
     .sort((left, right) => left.createdAt - right.createdAt)
 
-  const isBrainThinking = Boolean(!input.runFinished && thinkingOpen)
+  const isBrainThinking = isBrainThinkingOpenInLog(input.records, input.runFinished)
 
   return { processGroups, processThoughts, isBrainThinking }
 }

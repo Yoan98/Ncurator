@@ -36,6 +36,27 @@ export const shouldShowAssistantThinkingIndicator = (
 }
 
 /**
+ * 从消息日志记录中判断 Brain 思考状态窗口是否处于打开状态
+ */
+export const isBrainThinkingOpenInLog = (
+  records: readonly { entry: { kind: string; eventType?: string } }[],
+  runFinished?: boolean
+): boolean => {
+  if (runFinished) return false
+  let open = false
+  for (const record of records) {
+    if (record.entry.kind === 'annotation') {
+      if (record.entry.eventType === 'thinking_started') {
+        open = true
+      } else if (record.entry.eventType === 'thinking_completed') {
+        open = false
+      }
+    }
+  }
+  return open
+}
+
+/**
  * Activity header keeps shimmer until the next AI content (Thought or final/streaming answer).
  */
 export const shouldActivityHeaderShimmer = (input: {
