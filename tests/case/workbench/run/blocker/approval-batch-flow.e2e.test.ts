@@ -167,7 +167,9 @@ describe('workbench run e2e', () => {
           const approveEvidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             approveStartedAtMs,
-            setup.env.modelName
+            setup.env.modelName,
+            undefined,
+            { page, blockerPolicy: 'auto_approve' }
           )
           recordWorkbenchAiEvidence(runtime, approveEvidence, 0.8)
           const approvedReviewedItemCount = await countApprovalReviewedItems(page)

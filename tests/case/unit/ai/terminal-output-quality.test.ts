@@ -17,22 +17,29 @@ describe('ai unit terminal output quality', () => {
     expect(report.unusable).toBe(false)
   })
 
-  it('uses ratio thresholds for replacement and C0 control characters', () => {
-    const replacementOutput = `${'�'.repeat(15)}${'a'.repeat(85)}`
-    const controlOutput = `${'\u0001'.repeat(15)}${'b'.repeat(85)}`
+  it('does not reject below the 25% unusable ratio threshold', () => {
+    const replacementOutput = `${'�'.repeat(24)}${'a'.repeat(76)}`
+    const controlOutput = `${'\u0001'.repeat(24)}${'b'.repeat(76)}`
+    expect(inspectTerminalOutputQuality(replacementOutput, '').unusable).toBe(false)
+    expect(inspectTerminalOutputQuality(controlOutput, '').unusable).toBe(false)
+  })
+
+  it('uses 25% ratio thresholds for replacement and C0 control characters', () => {
+    const replacementOutput = `${'�'.repeat(25)}${'a'.repeat(75)}`
+    const controlOutput = `${'\u0001'.repeat(25)}${'b'.repeat(75)}`
     const replacementReport = inspectTerminalOutputQuality(replacementOutput, '')
     const controlReport = inspectTerminalOutputQuality(controlOutput, '')
 
     expect(replacementReport.unusable).toBe(true)
-    expect(replacementReport.replacementCharRatio).toBe(0.15)
+    expect(replacementReport.replacementCharRatio).toBe(0.25)
     expect(formatTerminalUnusableError({ report: replacementReport, output: replacementOutput })).toBe(
-      '终端输出含过多不可读字符：替换符 15/100（15%），控制字符 0/100（0%）；样例：�。'
+      '终端输出含过多不可读字符：替换符 25/100（25%），控制字符 0/100（0%）；样例：�。'
     )
 
     expect(controlReport.unusable).toBe(true)
-    expect(controlReport.controlCharRatio).toBe(0.15)
+    expect(controlReport.controlCharRatio).toBe(0.25)
     expect(formatTerminalUnusableError({ report: controlReport, output: controlOutput })).toBe(
-      '终端输出含过多不可读字符：替换符 0/100（0%），控制字符 15/100（15%）；样例：U+0001。'
+      '终端输出含过多不可读字符：替换符 0/100（0%），控制字符 25/100（25%）；样例：U+0001。'
     )
   })
 })

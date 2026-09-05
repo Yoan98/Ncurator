@@ -454,11 +454,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `terminal-result-unusable-docx-output`
 
 - 测试类型：`backend`
-- What：`terminal_run` 读到高比例不可读字符输出时，会省略原始输出并返回比例事实错误提示。
-- Why：terminal 不能把大量替换符/控制字符灌进后续 brain prompt；提示只需陈述不可读比例与样例，不教命令改法。
-- How：真实创建 docx 后执行 `terminal_run(cat report.docx)`，并对普通文本文件执行 `cat notes.txt` 作为低误伤对照。
-- Oracle：docx 输出返回 `ok=false`，`error` 含「终端输出含过多不可读字符」及计数/占比/样例；stdout 为省略占位且不含原始 `PK` 乱码；普通文本输出保持可读。不按 PK/PDF/OOXML 路径等特征签名拦截。
-- Not：不验证所有二进制格式的 MIME 识别覆盖率，也不要求错误文案教模型改用何种命令。
+- What：`terminal_run` 读到高比例替换符（`U+FFFD`）输出时，会省略原始输出并返回比例事实错误提示；普通文本不被误伤。
+- Why：terminal 不能把大量替换符灌进后续 brain prompt；提示只需陈述不可读比例与样例。不按 ZIP/Office 路径特征拦截（避免误伤仍可能对模型有用的倾倒线索）。
+- How：写入跨平台稳定的高比例 `U+FFFD` 文本文件并 `terminal_run` 读取，再对普通 `notes.txt` 做低误伤对照。
+- Oracle：高比例替换符输出返回省略占位与「终端输出含过多不可读字符」提示（阈值 25%）；普通文本输出保持可读。
+- Not：不验证真实 docx/ZIP 倾倒在各平台上的解码形态，不要求按 PK/OOXML 路径签名拦截。
 
 ##### `terminal-risk-and-boundary-guard`
 

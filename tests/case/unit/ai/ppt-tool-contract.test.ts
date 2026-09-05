@@ -169,12 +169,8 @@ describe('ai unit ppt tool contract', () => {
   it('keeps tool and skill descriptions as capability boundaries', () => {
     const description = PPT_EDIT_TOOL_SPEC.promptSpec.description
     expect(description).toBe('创建或编辑 PPTX 的页面、元素、文字和备注。')
-    expect(SKILL_DEFINITIONS['ppt-read'].description).toBe(
-      '读取 PPTX 的页面提纲、内容、检索结果和页面视觉内容。'
-    )
-    expect(SKILL_DEFINITIONS['ppt-write'].description).toBe(
-      '创建或编辑 PPTX 的页面、元素、文字和备注。'
-    )
+    expect(SKILL_DEFINITIONS['ppt-read'].description).toBe('读取 PPTX 文件内容。')
+    expect(SKILL_DEFINITIONS['ppt-write'].description).toBe('创建或编辑 PPTX 文件。')
     for (const text of [
       description,
       SKILL_DEFINITIONS['ppt-read'].description,

@@ -472,8 +472,11 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
       expect(read.output.length).toBeLessThanOrEqual(20)
       hasMoreValues.push(read.hasMoreOutput)
       parts.push(read.output)
-      if (read.output === '') break
       cursor = read.readEndPosition
+      if (read.output === '' && !read.hasMoreOutput) break
+      if (read.output === '' && read.hasMoreOutput) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 50))
+      }
     }
     expect(hasMoreValues[0]).toBe(true)
     expect(hasMoreValues.at(-1)).toBe(false)

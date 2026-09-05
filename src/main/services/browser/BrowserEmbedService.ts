@@ -710,23 +710,38 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   private async restoreRuntime(runtime: BrowserTabRuntime, view: WebContentsView): Promise<void> {
-    view.webContents.setZoomFactor(clampZoomFactor(runtime.persisted.zoomFactor || 1))
-    const history = runtime.persisted.history
-    if (history?.entries.length) {
-      runtime.restoring = true
-      try {
+    const restoredZoom = clampZoomFactor(runtime.persisted.zoomFactor || 1)
+    const restoredHistory = runtime.persisted.history
+      ? {
+          entries: runtime.persisted.history.entries.map((entry) => ({ ...entry })),
+          index: runtime.persisted.history.index
+        }
+      : undefined
+
+    runtime.restoring = true
+    try {
+      view.webContents.setZoomFactor(restoredZoom)
+      if (restoredHistory?.entries.length) {
         await view.webContents.navigationHistory.restore({
-          entries: history.entries,
-          index: history.index
+          entries: restoredHistory.entries,
+          index: restoredHistory.index
         })
-      } finally {
-        runtime.restoring = false
+        await waitForWebContentsLoad(view.webContents)
+      } else if (runtime.persisted.url) {
+        await loadWebContentsUrl(view.webContents, runtime.persisted.url)
       }
-      this.captureRuntimeState(runtime)
-      this.emitState(runtime)
-      return
+      // Navigation restore often resets zoom to 1; re-apply the persisted factor after load.
+      view.webContents.setZoomFactor(restoredZoom)
+      runtime.persisted.zoomFactor = restoredZoom
+      if (restoredHistory?.entries.length) {
+        runtime.persisted.history = restoredHistory
+      }
+      runtime.persisted.updatedAt = Date.now()
+      this.stateStore.save(runtime.persisted)
+    } finally {
+      runtime.restoring = false
     }
-    if (runtime.persisted.url) await loadWebContentsUrl(view.webContents, runtime.persisted.url)
+    this.emitState(runtime)
   }
 
   private forcePresentedPaint(runtime: BrowserTabRuntime): void {
@@ -793,7 +808,13 @@ export class BrowserEmbedService implements BrowserUseService {
     // Keep the optimistic navigate target until webContents reports a real URL.
     if (nextUrl) runtime.persisted.url = nextUrl
     runtime.persisted.title = contents.getTitle().trim() || undefined
-    runtime.persisted.zoomFactor = contents.getZoomFactor()
+    // Zoom is owned by changeZoom / restoreRuntime. Do not mirror getZoomFactor() here:
+    // navigation restore briefly reports 1.0 and would wipe the persisted zoom.
+    // Navigation also resets Electron's live factor — re-apply the owned value.
+    const ownedZoom = clampZoomFactor(runtime.persisted.zoomFactor || 1)
+    if (Math.abs(contents.getZoomFactor() - ownedZoom) > 0.001) {
+      contents.setZoomFactor(ownedZoom)
+    }
     runtime.persisted.updatedAt = Date.now()
     const entries = contents.navigationHistory.getAllEntries()
     if (entries.length) {
@@ -827,9 +848,8 @@ export class BrowserEmbedService implements BrowserUseService {
       ...(contents?.getTitle().trim() || runtime.persisted.title
         ? { title: contents?.getTitle().trim() || runtime.persisted.title }
         : {}),
-      zoomPercent: Math.round(
-        (contents?.getZoomFactor() || runtime.persisted.zoomFactor || 1) * 100
-      ),
+      // Prefer persisted zoom: live getZoomFactor() is briefly 1.0 across navigations.
+      zoomPercent: Math.round((runtime.persisted.zoomFactor || contents?.getZoomFactor() || 1) * 100),
       canGoBack: history?.canGoBack() || Boolean(persistedHistory && persistedHistory.index > 0),
       canGoForward:
         history?.canGoForward() ||

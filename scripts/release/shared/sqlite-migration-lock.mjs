@@ -24,8 +24,11 @@ const migrationFilePattern = /^(\d{3})_[a-z0-9_]+\.ts$/u
 
 const sha256 = (bytes) => createHash('sha256').update(bytes).digest('hex')
 
+/** Normalize CRLF so Windows checkout with autocrlf still matches published LF hashes. */
+const normalizeMigrationBytes = (bytes) => Buffer.from(bytes.toString('utf8').replace(/\r\n/gu, '\n'))
+
 const readMigration = async (file) => {
-  const bytes = await readFile(path.join(migrationsDirectory, file))
+  const bytes = normalizeMigrationBytes(await readFile(path.join(migrationsDirectory, file)))
   const source = bytes.toString('utf8')
   const version = Number(file.match(migrationFilePattern)?.[1])
   const declaredVersion = Number(source.match(/\bversion:\s*(\d+)/u)?.[1])

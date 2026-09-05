@@ -128,6 +128,34 @@ describe('workbench result e2e', () => {
           const modificationCountsVisibleBeforeClick = /[+-][1-9]\d*/u.test(
             assistantApplyTextBeforeClick
           )
+          const afterApply = await fs.readFile(targetPath, 'utf-8')
+          if (!afterApply.includes('cedar-text-diff-884')) {
+            throw new Error('AI write did not persist cedar-text-diff-884 into workbench-preview.md')
+          }
+          // Silent refresh is validated on the live AI session before panel state is swapped away.
+          const normalPreviewAfterAiWrite = getWorkbenchLocator(
+            page,
+            workbenchSelectors.markdownEditor
+          )
+          const previewVisibleBeforeSwitch = await normalPreviewAfterAiWrite
+            .getByText('cedar-text-diff-884')
+            .waitFor({ state: 'visible', timeout: 30_000 })
+            .then(() => true)
+            .catch(() => false)
+          if (!previewVisibleBeforeSwitch) {
+            await applyEntry.click()
+            await getWorkbenchLocator(page, workbenchSelectors.documentModeToggle).click()
+            await normalPreviewAfterAiWrite
+              .getByText('cedar-text-diff-884')
+              .waitFor({ state: 'visible', timeout: 30_000 })
+          }
+          const aiWritePreviewRefreshedSilently =
+            previewVisibleBeforeSwitch &&
+            (await page.evaluate(
+              () =>
+                (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
+                  .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
+            )) === 0
           const runStartedEvent = evidence.events.find(
             (
               item
@@ -149,21 +177,7 @@ describe('workbench result e2e', () => {
           const modificationCountsVisibleAfterSessionSwitch = /[+-][1-9]\d*/u.test(
             assistantApplyTextAfterSessionSwitch
           )
-          const afterApply = await fs.readFile(targetPath, 'utf-8')
-          const normalPreviewAfterAiWrite = getWorkbenchLocator(
-            page,
-            workbenchSelectors.markdownEditor
-          )
-          await normalPreviewAfterAiWrite
-            .getByText('cedar-text-diff-884')
-            .waitFor({ state: 'visible', timeout: 30_000 })
-          const aiWritePreviewRefreshedSilently =
-            (await page.evaluate(
-              () =>
-                (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
-                  .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
-            )) === 0
-          await applyEntry.click()
+          await restoredApplyEntry.click()
           const diffViewer = getWorkbenchLocator(page, workbenchSelectors.textDiffViewer)
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
           const documentModeToggle = getWorkbenchLocator(

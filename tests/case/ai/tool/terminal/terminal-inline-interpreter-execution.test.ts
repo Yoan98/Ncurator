@@ -3,7 +3,6 @@ import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createTerminalToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { filterEventsByType } from '../testHelpers'
 
 type TerminalRunResult = {
   output: string
@@ -51,25 +50,16 @@ describe('ai tool terminal backend', () => {
         }
       },
       assert: async (result, runtime) => {
-        const approvals = filterEventsByType(result.events, 'approval_batch_required')
-        const decisions = filterEventsByType(result.events, 'approval_batch_decision')
-
+        // tool-real harness invokes terminal_run directly; approval is owned by handNode in full AI runs.
         runtime.assertThat(
-          approvals.some((event) => event.items.some((item) => item.command.includes('node -e'))) &&
-            decisions.some((event) =>
-              event.decisions.some((decision) => decision.action === 'approve')
-            ) &&
-            result.result.status === 'succeeded' &&
+          result.result.status === 'succeeded' &&
             result.result.output.includes('NCURATOR_INLINE_OK') &&
             result.scriptFiles.length === 0,
           {
-            name: 'approved-inline-node-code-executes-without-script-file',
-            message:
-              '内联 Node.js 代码应在审批通过后真实执行，且 runtime scripts 下不应出现脚本文件。',
+            name: 'inline-node-code-executes-without-script-file',
+            message: '内联 Node.js 代码应真实执行，且 runtime scripts 下不应出现脚本文件。',
             data: {
               result: result.result,
-              approvals,
-              decisions,
               scriptFiles: result.scriptFiles
             }
           }

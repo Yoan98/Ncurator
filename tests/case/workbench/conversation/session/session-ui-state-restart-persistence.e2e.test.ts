@@ -51,12 +51,55 @@ describe('workbench conversation e2e', () => {
           })
           const browser = await page.evaluate(
             async ({ session, firstUrl, secondUrl }) => {
+              const waitForBrowserState = async (
+                tabId: string,
+                predicate: (state: NonNullable<
+                  Awaited<ReturnType<typeof window.api.browserPanelStateGet>>['state']
+                >) => boolean,
+                label: string
+              ): Promise<void> => {
+                const deadline = Date.now() + 10_000
+                for (;;) {
+                  const state = await window.api.browserPanelStateGet({ tabId })
+                  if (state.success && state.state && predicate(state.state)) return
+                  if (Date.now() >= deadline) {
+                    throw new Error(
+                      `${label}: ${JSON.stringify(state.state || null)}`
+                    )
+                  }
+                  await new Promise<void>((resolve) => setTimeout(resolve, 100))
+                }
+              }
+
               await window.api.chatSessionSave(session)
               const created = await window.api.browserTabCreate({ ownerId: session.id })
               if (!created.success || !created.state) throw new Error('browser tab create failed')
+              // UI navigate is fire-and-forget; wait each load so history has two entries.
               await window.api.browserTabNavigate({ tabId: created.state.id, url: firstUrl })
+              await waitForBrowserState(
+                created.state.id,
+                (state) => state.url === firstUrl && state.isLoading === false,
+                'first navigate not ready'
+              )
               await window.api.browserTabNavigate({ tabId: created.state.id, url: secondUrl })
-              await window.api.browserPanelZoomIn({ tabId: created.state.id })
+              await waitForBrowserState(
+                created.state.id,
+                (state) =>
+                  state.url === secondUrl &&
+                  state.isLoading === false &&
+                  state.canGoBack === true,
+                'second navigate not ready'
+              )
+              const zoomed = await window.api.browserPanelZoomIn({ tabId: created.state.id })
+              if (!zoomed.success || !zoomed.state) throw new Error('browser zoom in failed')
+              await waitForBrowserState(
+                created.state.id,
+                (state) =>
+                  state.canGoBack === true &&
+                  state.zoomPercent === 110 &&
+                  state.url === secondUrl,
+                'browser state not ready before restart'
+              )
               const state: ChatSessionUiStateV1 = {
                 version: 1,
                 composer: {
@@ -119,12 +162,17 @@ describe('workbench conversation e2e', () => {
             state: 'visible'
           })
           await page.waitForFunction(
-            async (tabId) => {
+            async ({ tabId, expectedUrl }) => {
               const response = await window.api.browserPanelStateGet({ tabId })
-              return response.success && response.state?.canGoBack === true
+              return (
+                response.success &&
+                response.state?.canGoBack === true &&
+                response.state.zoomPercent === 110 &&
+                response.state.url === expectedUrl
+              )
             },
-            browser.id,
-            { timeout: 10_000 }
+            { tabId: browser.id, expectedUrl: `${server.url}?step=2` },
+            { timeout: 15_000 }
           )
           const restoredBrowser = await page.evaluate(async (tabId) => {
             const tabs = await window.api.browserTabList({ ownerId: 'restart-ui-session' })

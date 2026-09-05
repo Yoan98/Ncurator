@@ -164,16 +164,21 @@ describe('ai human mock-llm backend', () => {
           }
         })
 
-        const learningStartedIndex = result.events.findIndex(
-          (event) =>
-            event.type === 'assistant_process_group_started' &&
-            event.groupId.endsWith(':learning:docx-read')
+        const learningItemStarted = processItemStartedEvents.find(
+          (event) => event.display.kind === 'tool' && event.display.toolName === 'learn_skill'
         )
-        const learningCompletedIndex = result.events.findIndex(
-          (event) =>
-            event.type === 'assistant_process_group_completed' &&
-            event.groupId.endsWith(':learning:docx-read')
+        const learningGroupStarted = processGroupStartedEvents.find(
+          (event) => event.groupId === learningItemStarted?.groupId
         )
+        const learningGroupCompleted = processGroupCompletedEvents.find(
+          (event) => event.groupId === learningItemStarted?.groupId
+        )
+        const learningStartedIndex = learningGroupStarted
+          ? result.events.indexOf(learningGroupStarted)
+          : -1
+        const learningCompletedIndex = learningGroupCompleted
+          ? result.events.indexOf(learningGroupCompleted)
+          : -1
         const terminalGroupStarted = processGroupStartedEvents.find(
           (event) =>
             event.kind === 'skill' &&
@@ -230,7 +235,7 @@ describe('ai human mock-llm backend', () => {
           {
             name: 'assistant-process-events-follow-human-lifecycle',
             message:
-              'Assistant process 协议应按 human 生命周期发出公开思路、learning running/completed 与 hand 工具组/工具项事件，最终交付不作为过程项展示。',
+              'Assistant process 协议应按 human 生命周期发出公开思路、learn_skill 与 hand 工具组/工具项事件，最终交付不作为过程项展示。',
             data: {
               processThoughts: processThoughtEvents.map((event) => ({
                 thoughtId: event.thoughtId,
