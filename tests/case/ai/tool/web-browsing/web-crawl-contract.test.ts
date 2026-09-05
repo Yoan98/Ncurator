@@ -610,4 +610,191 @@ describe('ai tool web backend', () => {
       }
     })
   })
+
+  it('browser-use-act-text-and-instruction-contract', async () => {
+    await runBackendCase({
+      caseId: 'browser-use-act-text-and-instruction-contract',
+      harnessMode: 'tool-real',
+      domain: 'ai',
+      suite: 'tool',
+      groups: ['web-browsing'],
+      description: '验证 browser_use act 支持文本注入与输入防爆，并支持 act_instruction 指令驱动。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        await runtime.seedLlmConfig({
+          id: 'ai-live-config',
+          name: 'Browser act test model',
+          providerKind: 'openai-compatible',
+          base_url: 'https://example.com/v1',
+          model_name: 'browser-act-test',
+          api_key: 'test-key'
+        })
+        const capturedRuns: any[] = []
+        const harness = createWebToolHarness(runtime, {
+          sessionId: 'browser-act-session',
+          modelName: 'browser-act-test',
+          browserUseService: {
+            async createTab() {
+              return { id: 'tab-act' }
+            },
+            async ensureAutomationTab() {
+              return { id: 'tab-act' }
+            },
+            getActiveTabId() {
+              return 'tab-act'
+            },
+            listTabs() {
+              return [{ id: 'tab-act', title: 'Act Test', url: 'https://example.com/form' }]
+            },
+            async navigate() {
+              return
+            },
+            async run(input) {
+              capturedRuns.push(input)
+              if (input.action === 'observe') {
+                return {
+                  action: 'observe',
+                  tabId: input.tabId,
+                  page: { url: 'https://example.com/form' },
+                  result: {
+                    actions: [
+                      {
+                        description: 'Input feedback note',
+                        method: 'fill',
+                        arguments: [],
+                        selector: '#note-input'
+                      },
+                      {
+                        description: 'Click submit button',
+                        method: 'click',
+                        arguments: [],
+                        selector: '#submit-btn'
+                      }
+                    ]
+                  }
+                }
+              }
+              if (input.action === 'act') {
+                return {
+                  action: 'act',
+                  tabId: input.tabId,
+                  page: { url: 'https://example.com/form' },
+                  result: {
+                    success: true,
+                    message: 'action performed',
+                    actionDescription: input.stagehandAction.description,
+                    executed: {
+                      actionId: input.actionId,
+                      ...input.stagehandAction
+                    }
+                  }
+                }
+              }
+              if (input.action === 'act_instruction') {
+                return {
+                  action: 'act_instruction',
+                  tabId: input.tabId,
+                  page: { url: 'https://example.com/form' },
+                  result: {
+                    success: true,
+                    message: `Instruction performed: ${input.instruction}`,
+                    actionDescription: input.instruction
+                  }
+                }
+              }
+              throw new Error(`Unhandled action: ${(input as any).action}`)
+            }
+          }
+        })
+
+        // 1. observe 得到 actionId
+        const observeResult = await harness.invoke<{
+          action: string
+          tabId: string
+          actions: Array<{ actionId: string; method: string; description: string }>
+        }>('browser_use', {
+          action: 'observe',
+          tabId: 'tab-act',
+          instruction: '寻找表单'
+        })
+        const fillCandidate = observeResult.actions.find((item) => item.method === 'fill')
+        const clickCandidate = observeResult.actions.find((item) => item.method === 'click')
+        if (!fillCandidate || !clickCandidate) {
+          throw new Error('observe candidates not found')
+        }
+
+        // 2. 对 fill 动作执行 act，传入 text
+        const fillActResult = await harness.invoke<{
+          action: string
+          message: string
+          executed: { arguments: string[] }
+        }>('browser_use', {
+          action: 'act',
+          tabId: 'tab-act',
+          actionId: fillCandidate.actionId,
+          text: '我的长篇输入内容'
+        })
+
+        // 3. 对 click 动作执行 act，误传入 text，验证 arguments 不会被污染
+        const clickActResult = await harness.invoke<{
+          action: string
+          message: string
+          executed: { arguments: string[] }
+        }>('browser_use', {
+          action: 'act',
+          tabId: 'tab-act',
+          actionId: clickCandidate.actionId,
+          text: '不该传给click的内容'
+        })
+
+        // 4. 执行 act_instruction
+        const instructionResult = await harness.invoke<{
+          action: string
+          message: string
+          actionDescription: string
+        }>('browser_use', {
+          action: 'act_instruction',
+          tabId: 'tab-act',
+          instruction: '点击左上角主页'
+        })
+
+        return {
+          observeResult,
+          fillActResult,
+          clickActResult,
+          instructionResult,
+          capturedRuns
+        }
+      },
+      assert: async (result, runtime) => {
+        const fillRun = result.capturedRuns.find(
+          (run) => run.action === 'act' && run.stagehandAction.method === 'fill'
+        )
+        const clickRun = result.capturedRuns.find(
+          (run) => run.action === 'act' && run.stagehandAction.method === 'click'
+        )
+        const instructionRun = result.capturedRuns.find(
+          (run) => run.action === 'act_instruction'
+        )
+
+        runtime.assertThat(
+          fillRun &&
+            fillRun.stagehandAction.arguments.length === 1 &&
+            fillRun.stagehandAction.arguments[0] === '我的长篇输入内容' &&
+            clickRun &&
+            clickRun.stagehandAction.arguments.length === 0 &&
+            instructionRun &&
+            instructionRun.instruction === '点击左上角主页' &&
+            result.fillActResult.executed.arguments[0] === '我的长篇输入内容' &&
+            result.instructionResult.action === 'act_instruction',
+          {
+            name: 'browser-use-act-text-and-instruction-valid',
+            message: 'fill 动作正确覆盖 text，click 动作正确过滤 text，act_instruction 正确按指令派发。',
+            data: { fillRun, clickRun, instructionRun, result }
+          }
+        )
+      }
+    })
+  })
 })

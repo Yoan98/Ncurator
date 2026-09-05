@@ -444,7 +444,7 @@ export const resolveItemIconKind = (
     if (action === 'navigate' || headerShort === '打开网页') return 'web'
     if (action === 'observe' || headerShort === '查看页面') return 'eye'
     if (action === 'extract' || headerShort === '提取内容') return 'extract'
-    if (action === 'act' || headerShort === '操作页面') return 'browser'
+    if (action === 'act' || action === 'act_instruction' || headerShort === '操作页面') return 'browser'
     if (action === 'screenshot' || headerShort === '截取页面') return 'camera'
     if (action === 'scroll' || headerShort === '滚动页面') return 'scroll'
     if (action === 'list_tabs' || headerShort === '列出标签') return 'window'

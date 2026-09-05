@@ -354,6 +354,12 @@ const TOOL_ITEM_RENDERERS = {
         sentence(text('在页面上执行 '), param(actionIdLabel || instructionLabel || '动作'))
       )
     }
+    if (action === 'act_instruction') {
+      return toolCopy(
+        '操作页面',
+        sentence(text('在页面上执行 '), param(instructionLabel || '动作'))
+      )
+    }
     if (action === 'screenshot') {
       return toolCopy(
         '截取页面',

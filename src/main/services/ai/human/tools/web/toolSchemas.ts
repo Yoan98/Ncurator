@@ -46,7 +46,15 @@ export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
     .object({
       action: z.literal('act').describe('执行单个已观察动作'),
       tabId: z.string().min(1).describe('目标浏览器标签 ID'),
-      actionId: z.string().min(1).describe('observe 返回的动作 ID')
+      actionId: z.string().min(1).describe('observe 返回的动作 ID'),
+      text: z.string().optional().describe('若目标动作是输入或填写，传入要填入的文本内容')
+    })
+    .strict(),
+  z
+    .object({
+      action: z.literal('act_instruction').describe('按自然语言指令推导并执行页面操作'),
+      tabId: z.string().min(1).describe('目标浏览器标签 ID'),
+      instruction: z.string().min(1).describe('要执行的操作指令描述')
     })
     .strict(),
   z
@@ -67,6 +75,7 @@ export const BROWSER_USE_SCHEMA = z.discriminatedUnion('action', [
 
 export type {
   BrowserActionCandidate,
+  BrowserUseActInstructionOutput,
   BrowserUseActOutput,
   BrowserUseErrorOutput,
   BrowserUseExtractOutput,

@@ -129,6 +129,7 @@ export type BrowserUseAction =
   | 'extract'
   | 'observe'
   | 'act'
+  | 'act_instruction'
   | 'screenshot'
   | 'scroll'
 
@@ -209,6 +210,16 @@ export type BrowserUseResult =
       result: BrowserUseActResult
     }
   | {
+      action: 'act_instruction'
+      tabId: string
+      page: BrowserUsePage
+      result: {
+        success: boolean
+        message: string
+        actionDescription: string
+      }
+    }
+  | {
       action: 'screenshot'
       tabId: string
       page: BrowserUsePage
@@ -253,6 +264,12 @@ export type BrowserUseRunRequest = (
       action: 'act'
       stagehandAction: BrowserStagehandAction
       actionId: string
+      llmConfig: LlmRuntimeConfig
+    }
+  | {
+      tabId: string
+      action: 'act_instruction'
+      instruction: string
       llmConfig: LlmRuntimeConfig
     }
   | {

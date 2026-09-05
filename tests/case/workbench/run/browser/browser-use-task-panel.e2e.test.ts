@@ -20,6 +20,7 @@ import {
 
 const CASE_ID = 'browser-use-task-panel'
 const LOGOUT_TOKEN = 'LOGOUT_OK_cedar-browser-731'
+const INPUT_NOTE_TOKEN = 'NOTE_PASS_8921'
 const BROWSER_PANEL_WAIT_TIMEOUT_MS = 180_000
 const BROWSER_TASK_COMPLETION_TIMEOUT_MS = 240_000
 const BROWSER_USE_FAILURE_LIMIT = 2
@@ -75,6 +76,7 @@ const isBrowserUseDataContract = (data: JsonValue | undefined): boolean => {
     action !== 'list_tabs' &&
     action !== 'observe' &&
     action !== 'act' &&
+    action !== 'act_instruction' &&
     action !== 'extract' &&
     action !== 'screenshot' &&
     action !== 'scroll'
@@ -95,6 +97,13 @@ const isBrowserUseDataContract = (data: JsonValue | undefined): boolean => {
   }
   if (action === 'observe') {
     return Array.isArray(data.actions) && data.actions.every(isBrowserActionCandidate)
+  }
+  if (action === 'act_instruction') {
+    return (
+      typeof data.message === 'string' &&
+      typeof data.actionDescription === 'string' &&
+      (!('error' in data) || typeof data.error === 'string')
+    )
   }
   return (
     typeof data.message === 'string' &&
@@ -324,6 +333,10 @@ describe('workbench run e2e', () => {
             </section>
             <section class="footer-zone">
               <h3>底部账号与消息中心</h3>
+              <div style="margin-bottom: 12px;">
+                <label for="feedback-input">操作备注：</label>
+                <input id="feedback-input" type="text" placeholder="请输入操作备注..." />
+              </div>
               <p>悬停下方的消息图标可查看详情并展开账号操作菜单：</p>
               <button id="msg-btn" type="button" aria-label="消息图标">消息图标</button>
               <div id="account-menu" role="menu"></div>
@@ -342,7 +355,8 @@ describe('workbench run e2e', () => {
                   logout.type = 'button';
                   logout.textContent = '退出登录';
                   logout.addEventListener('click', () => {
-                    statusEl.textContent = '${LOGOUT_TOKEN}';
+                    const note = (document.querySelector('#feedback-input')?.value || '').trim();
+                    statusEl.textContent = `${LOGOUT_TOKEN} | NOTE:${note}`;
                   });
                   accountMenu.appendChild(logout);
                 }
@@ -387,7 +401,7 @@ describe('workbench run e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请在右侧内置浏览器中打开 ${server.url}，页面内容较长，需要滚动到底部悬停“消息图标”后在弹出的菜单中点击“退出登录”，最后把 #status 的最终状态文本告诉我。`
+            `请在右侧内置浏览器中打开 ${server.url}，页面内容较长，需要滚动到底部，在“操作备注”输入框中输入“${INPUT_NOTE_TOKEN}”，随后悬停“消息图标”后在弹出的菜单中点击“退出登录”，最后把 #status 的最终状态文本告诉我。`
           )
 
           await waitForBrowserPanelOpenedWithApproval(runtime)
@@ -543,9 +557,13 @@ describe('workbench run e2e', () => {
             browserRuntimeAfterBackgroundRun: taskBrowserAfterBackgroundRun,
             browserRuntimeAfterRestore: taskBrowserAfterRestore,
             backgroundBrowserFinishedTask:
-              taskBrowserAfterBackgroundRun.resultText === LOGOUT_TOKEN,
+              typeof taskBrowserAfterBackgroundRun.resultText === 'string' &&
+              taskBrowserAfterBackgroundRun.resultText.includes(LOGOUT_TOKEN) &&
+              taskBrowserAfterBackgroundRun.resultText.includes(INPUT_NOTE_TOKEN),
             restoredLatestBrowserState:
-              taskBrowserAfterRestore.resultText === LOGOUT_TOKEN,
+              typeof taskBrowserAfterRestore.resultText === 'string' &&
+              taskBrowserAfterRestore.resultText.includes(LOGOUT_TOKEN) &&
+              taskBrowserAfterRestore.resultText.includes(INPUT_NOTE_TOKEN),
             browserWebContentsPreserved:
               taskBrowserBeforeBackground.id !== null &&
               taskBrowserBeforeBackground.id === taskBrowserWhileCollapsed.id &&
@@ -616,7 +634,8 @@ describe('workbench run e2e', () => {
                 isObjectRecord(data) &&
                 data.action === 'extract' &&
                 typeof data.content === 'string' &&
-                data.content.includes(LOGOUT_TOKEN)
+                data.content.includes(LOGOUT_TOKEN) &&
+                data.content.includes(INPUT_NOTE_TOKEN)
             )
           }
         },
@@ -661,11 +680,12 @@ describe('workbench run e2e', () => {
               result.fileTabRestored &&
               result.browserUrlPreserved &&
               result.browserBackButtonCount === 1 &&
-              result.finalAnswerText.includes(LOGOUT_TOKEN),
+              result.finalAnswerText.includes(LOGOUT_TOKEN) &&
+              result.finalAnswerText.includes(INPUT_NOTE_TOKEN),
             {
               name: 'workbench-browser-use-panel-real',
               message:
-                '真实 browser_use 应走 observe→actionId act（含 hover 退出），右栏折叠后继续同一实例，并保留文件与多浏览器 Tab。',
+                '真实 browser_use 应走 observe→actionId act（含输入文本与 hover 退出），右栏折叠后继续同一实例，并保留文件与多浏览器 Tab。',
               data: result
             }
           )

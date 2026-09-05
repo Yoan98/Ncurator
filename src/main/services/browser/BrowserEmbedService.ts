@@ -884,7 +884,7 @@ export class BrowserEmbedService implements BrowserUseService {
   private async runDom(
     input: Extract<
       BrowserUseRunInput,
-      { action: 'extract' | 'observe' | 'act' | 'screenshot' | 'scroll' }
+      { action: 'extract' | 'observe' | 'act' | 'act_instruction' | 'screenshot' | 'scroll' }
     >,
     runtime: BrowserTabRuntime
   ): Promise<BrowserUseRunResult> {
@@ -989,6 +989,34 @@ export class BrowserEmbedService implements BrowserUseService {
           result: {
             message: `Scrolled ${percentage}% ${direction} (${scrollDistance}px)`,
             scrolledPixels: scrollDistance
+          }
+        }
+      }
+
+      if (input.action === 'act_instruction') {
+        const visualizer = new BrowserActionVisualizer()
+        await visualizer.prepare(page)
+        const listener = (event: unknown): void => visualizer.handleFlowEvent(page, event)
+        stagehand.bus.on('*', listener)
+        let result: Awaited<ReturnType<StagehandInstance['act']>>
+        try {
+          result = await raceAbort(
+            stagehand.act(input.instruction, { page }),
+            signal,
+            abortStagehand
+          )
+        } finally {
+          stagehand.bus.off('*', listener)
+          await visualizer.flush()
+        }
+        return {
+          action: 'act_instruction',
+          tabId,
+          page: toBrowserUsePage(page.url(), await page.title()),
+          result: {
+            success: result.success,
+            message: result.message,
+            actionDescription: result.actionDescription || input.instruction
           }
         }
       }

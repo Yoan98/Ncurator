@@ -751,6 +751,15 @@ export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
       readString(executed.selector) ? `selector: ${readString(executed.selector)}` : ''
     ])
   }
+  if (action === 'act_instruction') {
+    return renderProse([
+      'Browser act_instruction completed.',
+      tabLine,
+      pageLabel ? `Page: ${pageLabel}` : '',
+      readString(obj.message) ? `Message: ${readString(obj.message)}` : '',
+      readString(obj.actionDescription) ? `Action: ${readString(obj.actionDescription)}` : ''
+    ])
+  }
   if (action === 'screenshot') {
     return renderProse([
       'Browser screenshot completed.',

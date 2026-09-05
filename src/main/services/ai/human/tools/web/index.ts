@@ -203,6 +203,19 @@ const normalizeBrowserUseOutput = (
       }
       return actBase
     }
+    case 'act_instruction': {
+      const actBase = {
+        action: 'act_instruction' as const,
+        tabId: result.tabId,
+        page: toBrowserUsePageJson(result.page),
+        message: result.result.message,
+        actionDescription: result.result.actionDescription
+      }
+      if (!result.result.success) {
+        return { ...actBase, error: result.result.message }
+      }
+      return actBase
+    }
     case 'screenshot':
       return {
         action: 'screenshot',
@@ -531,11 +544,31 @@ export const webToolFamily: ToolFamilyDefinition = {
                     }
                   })
                 }
+                const stagehandAction: BrowserStagehandAction = {
+                  ...cached.action,
+                  arguments: [...cached.action.arguments]
+                }
+                const method = stagehandAction.method.toLowerCase()
+                const isInputMethod = ['fill', 'type', 'press'].includes(method)
+                if (typeof args.text === 'string' && isInputMethod) {
+                  stagehandAction.arguments = [args.text]
+                }
                 result = await service.run({
                   action: 'act',
                   tabId,
                   actionId,
-                  stagehandAction: cached.action,
+                  stagehandAction,
+                  llmConfig,
+                  abortSignal,
+                  runId
+                })
+              } else if (args.action === 'act_instruction') {
+                const tabId = String(args.tabId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                result = await service.run({
+                  action: 'act_instruction',
+                  tabId,
+                  instruction: String(args.instruction || '').trim(),
                   llmConfig,
                   abortSignal,
                   runId

@@ -43,10 +43,13 @@ export const BROWSER_USE_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'browser_use',
     description:
-      '在内置浏览器中操作网页，其中包含导航、观察可交互动作、按 actionId 执行、提取内容或截图。'
+      '在内置浏览器中操作网页，支持页面导航、动作观察、动作执行、指令驱动执行、正文提取、页面滚动与截图。'
   },
   resolveExecutionMeta: (args) => ({
-    mutability: String(args.action || '') === 'act' ? 'mutating' : 'read_only',
+    mutability:
+      String(args.action || '') === 'act' || String(args.action || '') === 'act_instruction'
+        ? 'mutating'
+        : 'read_only',
     resourceKey:
       (typeof args.tabId === 'string' && args.tabId.trim()) ||
       (typeof args.url === 'string' && args.url.trim()) ||

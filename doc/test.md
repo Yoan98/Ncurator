@@ -7,6 +7,7 @@
 - 各业务域的 suite、case 和领域规则只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case。
 - 只有当功能代码发生变动、对应 `doc/test-plan/**` 明确要求对齐 `doc/prd/**`，或者 `doc/prd/**` 本身发生变更时，才需要校验实现与 `doc/prd/**` 的一致性。
 - 新增任何测试文件前，必须先与用户确认目标分类：AI、Settings、Workbench 或 Unit。
+- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑。
 
 测试体系只沉淀一层长期执行产物：
 
@@ -85,19 +86,6 @@ tests/
 - `Not`
   - 明确不验证什么，防止实现时擅自扩张范围。
 
-- `doc/test-plan/**` 只保存稳定的 case 规格、执行规则和 Oracle；`ai-test.md` 顶部“最新 Live 评估”是唯一允许覆盖回写的运行摘要，其余单次结果和环境故障记录不写入计划。
-- 每次运行的模型、耗时、通过情况、失败归因和原始证据统一保存在对应 run 的 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl` 与 artifacts 中；人工完成度评分以最新 Live 评估快照为准。
-- 测试数量和 case 清单以测试源码及 runner 实时发现结果为准，不在文档中维护容易失真的计数副本。
-- `mock-llm` 回归 case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
-- DOCX 回归必须覆盖 story 递归语义树、会话内稳定 `nodeId`、7 个公开工具、每次写入单 operation、统一成功/失败信封、普通写入空结果与创建操作 `createdIds`、写后精准回读、内容/格式/表格/批注修订的职责边界、visual 节点编辑与清理、opaque 保真和 Source→Working 净 Diff。旧协议直接判定为无效，不保留兼容层。
-- `灵感测试.docx` 的固定基线为 18 个 image visual 和 22 个真实空段落；视觉节点不得再被当成空段落。大型 VML fixture 继续验证 599/1034 张图片时的性能与输出体积。
-- Human 工具 Input Schema 回归覆盖全部已注册工具：不得出现匿名重复定义，公共定义只展开一次，长度/数量/正则/数值和跨字段语义约束不得丢失，并记录各工具 schema 长度快照。
-- DOCX 定位回归验证 `nodeId` 与操作自身的 `position`；PPT 继续验证其独立 `location`。DOCX positioned 写保护只由 DOCX 写入路径判断，terminal 继续走独立审批机制，两者不得通过跨工具命令白名单耦合。
-- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑。
-- `scripts/test/validate-test-architecture.mjs` 在 runner 执行前校验域边界、Unit 禁止项、计划必填字段、PRD 引用、case/runner 包装和目录映射。
-- `scripts/test/workflow.mjs` 会自动读取仓库根目录的 `.env.local`、`.env`（已存在的 shell 环境变量优先）；可用 `AI_TEST_DISABLE_DOTENV=1` 禁用自动加载。
-- LangSmith tracing 默认关闭；仅在排查时将 `LANGSMITH_TRACING=true`，结束后恢复为 `false`。
-
 ### 3.3 UI E2E 回归规则
 
 - UI E2E 必须通过真实 UI 和产品链路完成被测行为，不得用 fake、mock、stub、直接写状态或内部 IPC 绕过。
@@ -114,7 +102,6 @@ tests/
 
 ### 3.4 真实 AI / live 断言规则
 
-- Workbench 真实 AI E2E 必须通过应用 UI 选择主模型；图片输入由同一个主模型通过 `read_image` 处理，不配置独立视觉模型。
 - 涉及真实 AI 调用的回归测试，硬断言只验证完成态、关键事实、关键工具或事件、关键 artifact，以及用户诉求是否落地；最终自然语言回答不得作为主要正确性证据。
 - 不对最终文案做逐字断言，不断言固定工具顺序，不断言固定 prompt 原文，不因表达差异判失败。
 - 如果用户诉求已落地但断言过严，应先调整 `Oracle` 和测试代码，再根据 raw logs 记录完成度评分。

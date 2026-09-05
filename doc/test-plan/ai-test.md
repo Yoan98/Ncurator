@@ -610,6 +610,15 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：两次操作使用同一 `tabId`；不再依赖 `ensureAutomationTab` 隐式绑定。
 - Not：不评价浏览器页面视觉质量。
 
+##### `browser-use-act-text-and-instruction-contract`
+
+- 测试类型：`backend`
+- What：`browser_use` 的 `act` 操作支持 `text` 注入并对非输入类动作防爆过滤；支持 `act_instruction` 按自然语言指令执行。
+- Why：支持输入场景直接注入文本避免二次推理，防范误传参数崩溃，并提供直接指令操作能力。
+- How：在 tool harness 中 mock `browserUseService.run`，验证 `fill` 动作的 `arguments` 被 `text` 正确覆盖、`click` 动作过滤 `text`、`act_instruction` 指令正确透传。
+- Oracle：`fill` 动作参数为 `[text]`；`click` 动作参数保持空；`act_instruction` 正确派发。
+- Not：不验证真实底层 Playwright 页面。
+
 ##### `browser-use-service-unavailable-error`
 
 - 测试类型：`backend`

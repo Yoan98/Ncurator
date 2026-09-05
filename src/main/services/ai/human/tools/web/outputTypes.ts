@@ -89,6 +89,14 @@ export type BrowserUseActOutput = {
   executed: BrowserActionCandidate
 }
 
+export type BrowserUseActInstructionOutput = {
+  action: 'act_instruction'
+  tabId: string
+  page: BrowserUsePage
+  message: string
+  actionDescription: string
+}
+
 export type BrowserUseScreenshotOutput = {
   action: 'screenshot'
   tabId: string
@@ -105,7 +113,7 @@ export type BrowserUseScrollOutput = {
 }
 
 export type BrowserUseErrorOutput = {
-  action?: 'navigate' | 'list_tabs' | 'extract' | 'observe' | 'act' | 'screenshot' | 'scroll'
+  action?: 'navigate' | 'list_tabs' | 'extract' | 'observe' | 'act' | 'act_instruction' | 'screenshot' | 'scroll'
   tabId?: string
   page?: BrowserUsePage
   error: string
@@ -119,6 +127,7 @@ export type BrowserUseOutput =
   | BrowserUseExtractOutput
   | BrowserUseObserveOutput
   | BrowserUseActOutput
+  | BrowserUseActInstructionOutput
   | BrowserUseScreenshotOutput
   | BrowserUseScrollOutput
   | BrowserUseErrorOutput
