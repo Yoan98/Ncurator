@@ -334,13 +334,13 @@ describe('workbench run e2e', () => {
             <section class="footer-zone">
               <h3>底部账号与消息中心</h3>
               <div style="margin-bottom: 12px;">
-                <label for="feedback-input">操作备注：</label>
+                <label for="feedback-input">操作备注</label>
                 <input id="feedback-input" type="text" placeholder="请输入操作备注..." />
               </div>
-              <p>悬停下方的消息图标可查看详情并展开账号操作菜单：</p>
+              <p>悬停下方的消息图标可查看详情并展开账号操作菜单</p>
               <button id="msg-btn" type="button" aria-label="消息图标">消息图标</button>
               <div id="account-menu" role="menu"></div>
-              <div style="margin-top: 16px;">当前登录状态：</div>
+              <div style="margin-top: 16px;">当前登录状态</div>
               <main id="status">已登录</main>
             </section>
             <script>

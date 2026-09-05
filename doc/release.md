@@ -179,7 +179,7 @@ release-stage/
 
 安装包不得包含源码、测试、文档、开发配置、`.env`、锁文件、Source Map、测试日志、fixture、私钥或错误平台文件。网页抓取 sidecar 必须保留 Playwright 驱动 JavaScript，不得包含 Playwright Node、`.local-browsers` 或 `chromium_headless_shell-*`，且解包体积不得超过 400 MiB；staging 和正式包审计都会硬校验。被定向裁剪的 Node 目录同样属于审计禁区，未来 trace 如果触达这些目录会在删除前直接使构建失败。`app.asar` 不是加密，所有 `VITE_*` 变量都按公开信息处理。
 
-electron-builder 使用 `maximum` 压缩，以更慢的发布构建换取更小的安装包，不改变安装后的文件和运行逻辑。2026-09-01 的 macOS arm64 实测基线为：`.app` 776.2 MiB、`app.asar` 184.0 MiB、DMG 273.9 MiB、ZIP 289.1 MiB；同一 staging 下，`maximum` 相比默认压缩使 DMG 减少 26.1 MiB，ZIP 减少约 1.0 MiB。
+electron-builder 使用 `maximum` 压缩，以更慢的发布构建换取更小的安装包，不改变安装后的文件和运行逻辑；相比默认压缩，`maximum` 能有效缩减 DMG 与 ZIP 安装包解包与传输体积。
 
 候选 bundle 绑定 Tag、commit、release fragment、安装包、更新文件、大小、sha256 和 sha512。测试和发布前都会重新验证这些内容。
 
@@ -204,11 +204,11 @@ downloads/latest/macos-arm64.dmg
 
 版本化产物使用不可变缓存；latest、manifest 和固定下载使用 `no-store`。fragment 中的 `name` 记录用户可见文件名，`storageName` 记录对象存储的 ASCII 对象名；二者共同进入候选 bundle 校验。Windows 固定下载与 manifest 返回 `馆长-X.Y.Z-Windows-x64.exe`，自动更新 metadata 则指向对应的 ASCII 对象键。
 
-国内默认目标使用：
+国内默认目标（腾讯云 COS）使用以下环境变量：
 
 ```text
-SecretId
-SecretKey
+SecretId（或 TENCENT_SECRET_ID）
+SecretKey（或 TENCENT_SECRET_KEY）
 ```
 
 COS 默认值已经固化为桶 `ncurator-1324873382`、地域 `ap-guangzhou`、公开地址 `https://download.guanzhangai.cn`，无需重复写入 `.env`。只有切换海外发布时才设置 `RELEASE_STORAGE_TARGET=r2`。

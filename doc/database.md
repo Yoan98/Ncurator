@@ -21,7 +21,7 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 
 SQLite 保存以下业务数据：
 
-- 会话与用于中断恢复、压缩投影的 append-only 会话消息日志（`chat_session_message_log`）；不保存独立恢复快照，也不再使用已删除的 `chat_message` / `chat_session_skill_state` 表。
+- 会话与用于中断恢复、压缩投影的 append-only 会话消息日志（`chat_session_message_log`）；不保存独立恢复快照。
 - AI run、审批和文件修改记录。
 - 搜索模式对话轮次（`chat_search_turn`），与 AI log 解耦；Workbench 打开会话时合并投影。
 - 消息中的图片只保存运行时路径或 HTTP(S) 地址，以及 MIME、字节数和尺寸；SQLite 不保存 Base64，也不为临时图片建立独立文件表。运行时文件被清理后允许恢复为不可用占位。
@@ -56,7 +56,6 @@ SQLite 保存以下业务数据：
 - version `1–9` 已随正式版发布，永久保留且不可改写。已知历史例外只有 version 2 的旧名称 `workspace_change_sets`；version 9 继续负责修复通知字段。
 - version `10` 把上次正式版之后尚未发布的变更合并为一次 `upgrade_from_v9`：创建最终版定时任务和消息日志表，删除 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event` 与废弃字段，并为 `ai_run` 增加失败原因及流式 UI 草稿角色字段；同时删除 `chat_session_skill_state` 与 `chat_message`，新增 `chat_search_turn`；并为 `chat_session` 增加 `pinned` / `pinned_at` 置顶字段与索引。
 - 哪些 migration 已正式发布，以 `migrations/released-migrations.json` 为唯一边界。未进入清单的连续迁移可以在发布前合并或重写；进入清单后只能新增更高版本修复。
-- 当前开发机若已经执行过被合并掉的旧 version `10–14`，直接删除开发环境的 `app.sqlite` 和 `lancedb` 后重建，不提供兼容或修复路径。
 
 ### 版本身份与执行规则
 

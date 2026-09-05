@@ -582,7 +582,7 @@ tests/case/workbench/
 
 ### 5.4 `scheduled-task`
 
-定时任务回归单独归类，Oracle 引用 [`scheduled-task.md`](../prd/scheduled-task.md) 的 `ST-*` 编号。调度触发时点由真实程序运行与系统时间决定，case 通过「下一分钟」级别的短周期调度验证端到端触发，不伪造系统时钟；错过的补跑、跳过不可用工作区、空会话清理与 `nextRunAt` 推进等调度边界由 backend 单测覆盖（`tests/case/unit/scheduled-task-*.test.ts`，不进入 Workbench E2E 发现范围）。
+定时任务回归单独归类，Oracle 引用 [`workbench.md`](../prd/workbench.md) 的 `ST-*` 编号。调度触发时点由真实程序运行与系统时间决定，case 通过「下一分钟」级别的短周期调度验证端到端触发，不伪造系统时钟；错过的补跑、跳过不可用工作区、空会话清理与 `nextRunAt` 推进等调度边界由 backend 单测覆盖（`tests/case/unit/scheduled-task-*.test.ts`，不进入 Workbench E2E 发现范围）。
 
 #### `scheduled-task-view-entry-and-isolation`
 

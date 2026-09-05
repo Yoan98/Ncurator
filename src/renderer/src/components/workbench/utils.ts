@@ -159,7 +159,7 @@ const readWebUrlLabel = (input?: IpcJsonObject): string => {
 const readInstructionLabel = (input?: IpcJsonObject): string => {
   if (!input) return '当前页面'
   const instruction = readStringValue(input, 'instruction')
-  return instruction ? truncateMiddle(instruction, 96) : '当前页面'
+  return instruction ? truncateMiddle(instruction.replace(/：/gu, ' '), 96) : '当前页面'
 }
 
 const readDocxRangeLabel = (input?: IpcJsonObject): string => {

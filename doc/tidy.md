@@ -47,7 +47,7 @@
 
 核对产品验收与回归设计是否对得上（本步以 PRD 与 `doc/test-plan/**` 为主；case 文件是否可发现作为计划可执行性检查）。
 
-按产品域勾选（`ST-*` 在 `doc/prd/scheduled-task.md`，并入 Workbench，不单开一域）：
+按产品域勾选（`ST-*` 已并入 `doc/prd/workbench.md`，不单开一域）：
 
 - [ ] Settings（`SET-*`）
 - [ ] Workbench（`WB-*`，含 `ST-*`）
