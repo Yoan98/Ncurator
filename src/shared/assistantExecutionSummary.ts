@@ -16,6 +16,12 @@ export type AssistantExecutionIconKind =
   | 'retry'
   | 'learning'
   | 'compaction'
+  | 'eye'
+  | 'camera'
+  | 'scroll'
+  | 'extract'
+  | 'window'
+  | 'fetch'
   | 'default'
 
 export type AssistantExecutionSkillKey =
@@ -354,9 +360,15 @@ const trimHeaderSegments = (
 /**
  * Activity header from tool copy:
  * - prefer explicit headerShortText; else drop param segments (legacy)
- * - merge same tool UI kind; single = short sentence; count>1 append「N 次」
+ * - merge same tool UI kind / browser action; single = short sentence; count>1 append「N 次」
  * - ≤3 merged kinds join with 并/但; >3 kinds →「已完成 n 项」(n = total tools)
  */
+const readInputProperty = (input: IpcJsonObject | undefined, key: string): string => {
+  if (!input || typeof input !== 'object') return ''
+  const value = (input as Record<string, unknown>)[key]
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 export const buildAssistantExecutionSummaryText = (
   groups: readonly AssistantExecutionGroup[]
 ): AssistantExecutionTextSegment[] => {
@@ -373,10 +385,21 @@ export const buildAssistantExecutionSummaryText = (
     })
   }
 
-  const kindOrder: AssistantExecutionSkillKey[] = []
-  const itemsByKind = new Map<AssistantExecutionSkillKey, typeof list>()
+  const kindOrder: string[] = []
+  const itemsByKind = new Map<string, typeof list>()
   for (const item of list) {
-    const kind = item.toolName ? getAssistantToolUiKind(item.toolName) : 'generic'
+    let kind: string = item.toolName ? getAssistantToolUiKind(item.toolName) : 'generic'
+    if (item.toolName === 'browser_use') {
+      const action = readInputProperty(item.input, 'action')
+      const headerShort = item.headerShortText || ''
+      kind = `browser-${action || headerShort || 'action'}`
+    } else if (item.toolName === 'web_search') {
+      const type = readInputProperty(item.input, 'type')
+      const headerShort = item.headerShortText || ''
+      if (type === 'fetch' || headerShort === '抓取网页') {
+        kind = 'web-fetch'
+      }
+    }
     if (!itemsByKind.has(kind)) {
       kindOrder.push(kind)
       itemsByKind.set(kind, [])
@@ -406,20 +429,53 @@ export const buildAssistantExecutionSummaryText = (
   })
 }
 
+export const resolveItemIconKind = (
+  item: {
+    toolName?: RuntimeToolName | 'unnamed'
+    input?: IpcJsonObject
+    headerShortText?: string
+  },
+  fallbackSkillKey?: AssistantExecutionSkillKey
+): AssistantExecutionIconKind => {
+  if (item.toolName === 'browser_use') {
+    const action = readInputProperty(item.input, 'action')
+    const headerShort = item.headerShortText || ''
+    if (action === 'navigate' || headerShort === '打开网页') return 'web'
+    if (action === 'observe' || headerShort === '查看页面') return 'eye'
+    if (action === 'extract' || headerShort === '提取内容') return 'extract'
+    if (action === 'act' || headerShort === '操作页面') return 'browser'
+    if (action === 'screenshot' || headerShort === '截取页面') return 'camera'
+    if (action === 'scroll' || headerShort === '滚动页面') return 'scroll'
+    if (action === 'list_tabs' || headerShort === '列出标签') return 'window'
+    return 'browser'
+  }
+  if (item.toolName === 'web_search') {
+    const type = readInputProperty(item.input, 'type')
+    const headerShort = item.headerShortText || ''
+    if (type === 'fetch' || headerShort === '抓取网页') return 'fetch'
+    return 'search'
+  }
+  if (item.toolName && item.toolName !== 'unnamed') {
+    return getAssistantToolIconKind(getAssistantToolUiKind(item.toolName))
+  }
+  return getAssistantToolIconKind(fallbackSkillKey || 'generic')
+}
+
 export const resolveAssistantExecutionIcon = (
   groups: readonly AssistantExecutionGroup[]
 ): AssistantExecutionIconKind => {
-  const kinds = new Set(
-    groups.flatMap((group) =>
-      group.items.length > 0
-        ? group.items.map((item) =>
-            item.toolName ? getAssistantToolUiKind(item.toolName) : group.skillKey
-          )
-        : [group.skillKey]
-    )
-  )
-  if (kinds.size !== 1) return 'workflow'
-  return getAssistantToolIconKind([...kinds][0] || 'generic')
+  const iconKinds = new Set<AssistantExecutionIconKind>()
+  for (const group of groups) {
+    if (group.items.length > 0) {
+      for (const item of group.items) {
+        iconKinds.add(resolveItemIconKind(item, group.skillKey))
+      }
+    } else {
+      iconKinds.add(getAssistantToolIconKind(group.skillKey))
+    }
+  }
+  if (iconKinds.size !== 1) return 'workflow'
+  return [...iconKinds][0] || 'generic'
 }
 
 export const resolveAssistantExecutionStatus = getExecutionStatus

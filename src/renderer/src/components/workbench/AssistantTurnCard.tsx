@@ -8,15 +8,21 @@ import {
   HiArrowPath,
   HiOutlineAcademicCap,
   HiOutlineArchiveBox,
+  HiOutlineArrowsUpDown,
+  HiOutlineArrowDownTray,
   HiOutlineBolt,
   HiOutlineBookOpen,
+  HiOutlineCamera,
   HiOutlineCommandLine,
   HiOutlineCursorArrowRays,
   HiOutlineDocumentText,
+  HiOutlineEye,
   HiOutlineGlobeAlt,
   HiOutlineMagnifyingGlass,
   HiOutlinePhoto,
-  HiOutlinePencilSquare
+  HiOutlinePencilSquare,
+  HiOutlineQueueList,
+  HiOutlineWindow
 } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
 import type {
@@ -65,19 +71,8 @@ const getProcessStatusClassName = (status: AssistantProcessGroup['status']): str
 }
 
 const getLayerIconClassName = (iconKind: AssistantProcessIconKind): string => {
-  if (iconKind === 'learning') return 'text-[#787774]'
-  if (iconKind === 'compaction') return 'text-[#787774]'
-  if (iconKind === 'document') return 'text-[#787774]'
-  if (iconKind === 'edit') return 'text-[#787774]'
-  if (iconKind === 'search') return 'text-[#787774]'
-  if (iconKind === 'browser') return 'text-[#787774]'
-  if (iconKind === 'web') return 'text-[#787774]'
-  if (iconKind === 'image') return 'text-[#787774]'
-  if (iconKind === 'knowledge') return 'text-[#787774]'
-  if (iconKind === 'workflow') return 'text-[#787774]'
-  if (iconKind === 'terminal') return 'text-[#787774]'
-  if (iconKind === 'retry') return 'text-[#787774]'
-  return 'text-[#9B9A97]'
+  if (iconKind === 'default') return 'text-[#9B9A97]'
+  return 'text-[#787774]'
 }
 
 const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: string }> = ({
@@ -98,6 +93,12 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   if (iconKind === 'workflow') return <HiOutlineBolt {...iconProps} />
   if (iconKind === 'terminal') return <HiOutlineCommandLine {...iconProps} />
   if (iconKind === 'retry') return <HiArrowPath {...iconProps} />
+  if (iconKind === 'eye') return <HiOutlineEye {...iconProps} />
+  if (iconKind === 'camera') return <HiOutlineCamera {...iconProps} />
+  if (iconKind === 'scroll') return <HiOutlineArrowsUpDown {...iconProps} />
+  if (iconKind === 'extract') return <HiOutlineQueueList {...iconProps} />
+  if (iconKind === 'window') return <HiOutlineWindow {...iconProps} />
+  if (iconKind === 'fetch') return <HiOutlineArrowDownTray {...iconProps} />
   return <HiOutlineDocumentText {...iconProps} />
 }
 
@@ -182,12 +183,12 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
 
   return (
     <div
-      className={`group/thought relative flex items-start justify-between gap-2 rounded-[6px] transition-colors duration-150 ${
+      className={`group/thought relative flex justify-between gap-2 rounded-[6px] transition-colors duration-150 ${
         expanded
-          ? 'bg-[#F7F7F5] px-2 py-1.5 -mx-2 cursor-pointer'
+          ? 'items-start bg-[#F7F7F5] px-2 py-1.5 -mx-2 cursor-pointer'
           : canExpand
-            ? 'px-2 py-0.5 -mx-2 hover:bg-[#F7F7F5] cursor-pointer'
-            : 'px-2 py-0.5 -mx-2 cursor-default'
+            ? 'items-center px-2 py-0.5 -mx-2 hover:bg-[#F7F7F5] cursor-pointer'
+            : 'items-center px-2 py-0.5 -mx-2 cursor-default'
       }`}
       onClick={(e) => {
         if (!canExpand) return
@@ -211,7 +212,7 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
       {canExpand ? (
         <button
           type="button"
-          className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] text-[#9B9A97] transition-all duration-150 hover:text-[#37352F] ${
+          className={`flex h-[22px] w-4 shrink-0 items-center justify-center rounded-[3px] text-[#9B9A97] transition-all duration-150 hover:text-[#37352F] ${
             expanded
               ? 'opacity-100'
               : 'opacity-0 group-hover/thought:opacity-100'

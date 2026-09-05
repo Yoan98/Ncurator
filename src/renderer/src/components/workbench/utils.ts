@@ -16,7 +16,8 @@ import {
   getAssistantMixedStatus as getMixedStatus,
   getAssistantToolIconKind as getToolIconKind,
   getAssistantToolSummaryText as getToolSummaryText,
-  getAssistantToolUiKind as getToolUiKind
+  getAssistantToolUiKind as getToolUiKind,
+  resolveItemIconKind
 } from '../../../../shared/assistantExecutionSummary'
 import type {
   AssistantProcessGroup,
@@ -190,6 +191,12 @@ const getDisplayIconKind = (display: AssistantProcessDisplay): AssistantProcessI
   if (display.kind === 'thinking') return 'default'
   if (display.kind === 'retry') return 'retry'
   if (display.kind === 'compaction') return 'compaction'
+  if (display.kind === 'tool') {
+    return resolveItemIconKind({
+      toolName: normalizeToolName(display.toolName),
+      input: display.input
+    })
+  }
   return getToolIconKind(getDisplaySkillKey(display))
 }
 
@@ -450,7 +457,8 @@ const getDisplayItemText = (
 export {
   buildAssistantExecutionSummaryText,
   resolveAssistantExecutionIcon,
-  resolveAssistantExecutionStatus
+  resolveAssistantExecutionStatus,
+  resolveItemIconKind
 } from '../../../../shared/assistantExecutionSummary'
 
 const createProcessGroup = (input: {

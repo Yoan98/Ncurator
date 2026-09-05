@@ -86,6 +86,12 @@ export type AssistantProcessIconKind =
   | 'retry'
   | 'learning'
   | 'compaction'
+  | 'eye'
+  | 'camera'
+  | 'scroll'
+  | 'extract'
+  | 'window'
+  | 'fetch'
   | 'default'
 
 export type AssistantProcessGroupKind =

@@ -19,6 +19,7 @@ const createToolGroup = (
     runningText?: Array<{ text: string; param?: boolean }>
     failedText?: Array<{ text: string; param?: boolean }>
     headerShortText?: string
+    input?: Record<string, unknown>
   }
 ): AssistantExecutionGroup[] => [
   {
@@ -33,7 +34,8 @@ const createToolGroup = (
         completedText: options?.completedText || [{ text: `已完成 ${toolName}` }],
         runningText: options?.runningText || [{ text: `正在执行 ${toolName}` }],
         failedText: options?.failedText || [{ text: `${toolName} 失败` }],
-        headerShortText: options?.headerShortText
+        headerShortText: options?.headerShortText,
+        input: options?.input as any
       }
     ]
   }
@@ -170,5 +172,98 @@ describe('assistant process icons and activity summary', () => {
         ])
       )
     ).toBe('查看 Word 文档结构')
+  })
+
+  it('resolves semantic icons for browser and web actions', () => {
+    expect(
+      resolveAssistantExecutionIcon(
+        createToolGroup('browser_use', 1, { input: { action: 'navigate' }, headerShortText: '打开网页' })
+      )
+    ).toBe('web')
+    expect(
+      resolveAssistantExecutionIcon(
+        createToolGroup('browser_use', 1, { input: { action: 'observe' }, headerShortText: '查看页面' })
+      )
+    ).toBe('eye')
+    expect(
+      resolveAssistantExecutionIcon(
+        createToolGroup('browser_use', 1, { input: { action: 'act' }, headerShortText: '操作页面' })
+      )
+    ).toBe('browser')
+    expect(
+      resolveAssistantExecutionIcon(
+        createToolGroup('browser_use', 1, { input: { action: 'extract' }, headerShortText: '提取内容' })
+      )
+    ).toBe('extract')
+    expect(
+      resolveAssistantExecutionIcon(
+        createToolGroup('browser_use', 1, { input: { action: 'screenshot' }, headerShortText: '截取页面' })
+      )
+    ).toBe('camera')
+    expect(
+      resolveAssistantExecutionIcon(
+        createToolGroup('browser_use', 1, { input: { action: 'scroll' }, headerShortText: '滚动页面' })
+      )
+    ).toBe('scroll')
+    expect(
+      resolveAssistantExecutionIcon(
+        createToolGroup('browser_use', 1, { input: { action: 'list_tabs' }, headerShortText: '列出标签' })
+      )
+    ).toBe('window')
+    expect(
+      resolveAssistantExecutionIcon(
+        createToolGroup('web_search', 1, { input: { type: 'fetch' }, headerShortText: '抓取网页' })
+      )
+    ).toBe('fetch')
+    expect(
+      resolveAssistantExecutionIcon(
+        createToolGroup('web_search', 1, { input: { type: 'search' }, headerShortText: '搜索网页' })
+      )
+    ).toBe('search')
+  })
+
+  it('merges identical browser actions and keeps their semantic icon', () => {
+    const groups = [
+      ...createToolGroup('browser_use', 1, {
+        input: { action: 'observe' },
+        headerShortText: '查看页面'
+      }),
+      ...createToolGroup('browser_use', 2, {
+        input: { action: 'observe' },
+        headerShortText: '查看页面'
+      })
+    ]
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('查看页面 2 次')
+    expect(resolveAssistantExecutionIcon(groups)).toBe('eye')
+  })
+
+  it('joins heterogeneous browser actions with 并 and resolves to workflow icon', () => {
+    const groups = [
+      ...createToolGroup('browser_use', 1, {
+        input: { action: 'navigate' },
+        headerShortText: '打开网页'
+      }),
+      ...createToolGroup('browser_use', 2, {
+        input: { action: 'observe' },
+        headerShortText: '查看页面'
+      })
+    ]
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('打开网页 并 查看页面')
+    expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
+  })
+
+  it('joins search and fetch actions with 并 and resolves to workflow icon', () => {
+    const groups = [
+      ...createToolGroup('web_search', 1, {
+        input: { type: 'search' },
+        headerShortText: '搜索网页'
+      }),
+      ...createToolGroup('web_search', 2, {
+        input: { type: 'fetch' },
+        headerShortText: '抓取网页'
+      })
+    ]
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页 并 抓取网页')
+    expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
   })
 })
