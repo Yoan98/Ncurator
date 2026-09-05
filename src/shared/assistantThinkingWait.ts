@@ -61,6 +61,7 @@ export const visibleAssistantProcessGroups = <T extends AssistantThinkingWaitGro
   processGroups: readonly T[]
   processThoughts: readonly AssistantThinkingWaitThought[]
   hasVisibleBrainOutput?: boolean
+  runFinished?: boolean
 }): T[] => {
   const groups = [...input.processGroups]
   if (shouldShowAssistantThinkingWait(input)) return groups

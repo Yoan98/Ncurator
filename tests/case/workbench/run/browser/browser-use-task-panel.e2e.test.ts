@@ -298,39 +298,62 @@ describe('workbench run e2e', () => {
               * { box-sizing: border-box; }
               body { font-family: sans-serif; margin: 0; padding: 16px; background: #f7f8fa; }
               header { display: flex; gap: 12px; align-items: center; padding: 12px; background: #fff; border-radius: 8px; margin-bottom: 16px; }
-              .hero { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 24px; min-height: 800px; }
+              .hero { background: #fff; padding: 24px; border-radius: 8px; margin-bottom: 24px; min-height: 1000px; }
               .hero h2 { margin-top: 0; }
               .card { background: #f0f2f5; padding: 16px; border-radius: 6px; margin-bottom: 12px; }
-              .footer-zone { background: #fff; padding: 24px; border-radius: 8px; border: 1px dashed #d0d7de; margin-top: 40px; }
-              #logout { background: #d93025; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; }
-              #status { font-weight: bold; margin-top: 12px; color: #1a73e8; }
+              .footer-zone { position: relative; background: #fff; padding: 24px; border-radius: 8px; border: 1px dashed #d0d7de; margin-top: 40px; min-height: 160px; }
+              #msg-btn { background: #0969da; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+              #account-menu { display: none; margin-top: 12px; padding: 12px; border: 1px solid #d0d7de; border-radius: 6px; background: #fff; width: 180px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+              #logout { background: #cf222e; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; width: 100%; text-align: center; }
+              #status { font-weight: bold; margin-top: 16px; color: #1a73e8; }
             </style>
           </head>
           <body>
             <header>
-              <span>用户中心</span>
+              <span>工作台概览</span>
               <button id="role" type="button">教师身份</button>
-              <button id="msg" type="button" aria-label="消息通知">消息通知 (3)</button>
             </header>
             <section class="hero">
-              <h2>工作台概览与日常事务</h2>
-              <p>欢迎回到工作台。此区域展示近期的教学安排与日常统计数据。</p>
+              <h2>个人中心与工作台概览</h2>
+              <p>欢迎回到工作台。此区域展示教学安排、日常统计与备课日志。</p>
               <div class="card"><h3>学期进度</h3><p>当前学期教学计划已完成 65%，期末复习大纲已归档。</p></div>
-              <div class="card"><h3>通知公告</h3><p>下周教室资源调整通知已发送至各院系邮箱。</p></div>
-              <div class="card"><h3>教学日志</h3><p>昨日随堂测试成绩已同步录入教务分析系统。</p></div>
-              <div class="card"><h3>系统提示</h3><p>如需管理账号或注销退出，请浏览至页面底部账号设置区。</p></div>
+              <div class="card"><h3>教务公告</h3><p>下周教室资源调整通知已发送至各院系邮箱。</p></div>
+              <div class="card"><h3>随堂测验</h3><p>昨日随堂测试成绩已同步录入教务分析系统。</p></div>
+              <div class="card"><h3>备课资源</h3><p>多媒体课件已上传至公共网盘供学生课后查阅。</p></div>
+              <div class="card"><h3>日常提醒</h3><p>若需处理消息通知或切换退出账号，请浏览至页面底部。</p></div>
             </section>
             <section class="footer-zone">
-              <h3>账号安全与设置</h3>
-              <p>当前登录账号处于活跃状态。如需更换账号，请点击下方退出登录。</p>
-              <button id="logout" type="button">退出登录</button>
+              <h3>底部账号与消息中心</h3>
+              <p>悬停下方的消息图标可查看详情并展开账号操作菜单：</p>
+              <button id="msg-btn" type="button" aria-label="消息图标">消息图标</button>
+              <div id="account-menu" role="menu"></div>
+              <div style="margin-top: 16px;">当前登录状态：</div>
               <main id="status">已登录</main>
             </section>
             <script>
-              const logout = document.querySelector('#logout');
-              const status = document.querySelector('#status');
-              logout.addEventListener('click', () => {
-                status.textContent = '${LOGOUT_TOKEN}';
+              const msgBtn = document.querySelector('#msg-btn');
+              const accountMenu = document.querySelector('#account-menu');
+              const statusEl = document.querySelector('#status');
+
+              const showMenu = () => {
+                if (!accountMenu.querySelector('#logout')) {
+                  const logout = document.createElement('button');
+                  logout.id = 'logout';
+                  logout.type = 'button';
+                  logout.textContent = '退出登录';
+                  logout.addEventListener('click', () => {
+                    statusEl.textContent = '${LOGOUT_TOKEN}';
+                  });
+                  accountMenu.appendChild(logout);
+                }
+                accountMenu.style.display = 'block';
+              };
+
+              msgBtn.addEventListener('mouseenter', showMenu);
+              msgBtn.addEventListener('mouseover', showMenu);
+              msgBtn.addEventListener('focus', showMenu);
+              accountMenu.addEventListener('mouseenter', () => {
+                accountMenu.style.display = 'block';
               });
             </script>
           </body>
@@ -364,7 +387,7 @@ describe('workbench run e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请在右侧内置浏览器中打开 ${server.url}，浏览并找到底部的退出登录按钮执行退出，然后提取 #status 的最终状态文本告诉我。`
+            `请在右侧内置浏览器中打开 ${server.url}，页面内容较长，需要滚动到底部悬停“消息图标”后在弹出的菜单中点击“退出登录”，最后把 #status 的最终状态文本告诉我。`
           )
 
           await waitForBrowserPanelOpenedWithApproval(runtime)
