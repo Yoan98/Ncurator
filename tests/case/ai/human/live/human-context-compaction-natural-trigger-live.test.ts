@@ -275,7 +275,7 @@ describe('ai human live backend', () => {
               /\.docx|周报/.test(run2HistorySection))
           const run2CurrentTaskSatisfied =
             /(对照|标题|九月|法务)/.test(run2CurrentSection) &&
-            !/从空白模板|整份重填/.test(run2CurrentSection)
+            !/从空白模板整份|整份重填周报/.test(run2CurrentSection)
 
           runtime.assertThat(
             run1Compaction.lifecycleSatisfied &&

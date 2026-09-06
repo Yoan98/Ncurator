@@ -134,7 +134,8 @@ describe('renderMessagesForCompaction', () => {
     expect(rendered).toBe(
       [
         '[round 1]',
-        '[user] <user_context>\n  <task_goal>\n填周报\n  </task_goal>\n</user_context>',
+        '[user]',
+        '<user_context>\n  <task_goal>\n填周报\n  </task_goal>\n</user_context>',
         '',
         '[round 2]',
         '[ai] 先读',

@@ -112,7 +112,9 @@ export const renderMessagesForCompaction = (messages: BaseMessage[]): string => 
       roundIndex += 1
       const rawContent =
         typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
-      roundLines = [`[round ${roundIndex}]`, `[user] ${normalizeCompactionText(rawContent)}`]
+      const content = normalizeCompactionText(rawContent)
+      roundLines = [`[round ${roundIndex}]`, '[user]']
+      if (content) roundLines.push(content)
     }
   }
   flushRound()
