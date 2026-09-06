@@ -7,7 +7,7 @@ import { projectMessageLogRecords } from './human/memory/transcript'
 import { estimateMessagesForContext } from './human/memory/multimodal'
 
 export const getAiContextUsage = async (input: {
-  sessionId: string
+  partnerId: string
   chatMessageLogStore: ChatMessageLogStore
 }): Promise<{
   contextWindowTokens: number
@@ -15,7 +15,7 @@ export const getAiContextUsage = async (input: {
   ratio: number
   updatedAt: number
 }> => {
-  const records = await input.chatMessageLogStore.list(input.sessionId)
+  const records = await input.chatMessageLogStore.list(input.partnerId)
   const messages = projectMessageLogRecords(records).messages
   const usedContextTokens = estimateMessagesForContext(messages)
   const contextWindowTokens = DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS

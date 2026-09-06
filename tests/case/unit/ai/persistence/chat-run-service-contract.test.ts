@@ -14,7 +14,7 @@ import type {
   AiRunEvent,
   AiRunRecord,
   ChatMessage,
-  ChatSession
+  Partner
 } from '../../../../../src/shared/types'
 
 type TestService = {
@@ -74,9 +74,8 @@ const createTestService = async (options?: {
   } as EmbeddingService
   const events: AiRunEvent[] = []
   const service = new ChatRunService({
-    chatStore: storage.chat,
+    partnerStore: storage.partner,
     chatMessageLogStore: storage.chatMessageLog,
-    chatSearchTurnStore: storage.chatSearchTurn,
     aiRunStore: storage.aiRun,
     documentsStore: storage.documents,
     embeddingService,
@@ -97,28 +96,24 @@ const createTestService = async (options?: {
   return { workspaceRoot, storage, service, events }
 }
 
-const seedSession = async (storage: StorageService): Promise<ChatSession> => {
-  const session: ChatSession = {
-    id: 'session-1',
-    title: '新对话',
+const seedPartner = async (storage: StorageService): Promise<Partner> => {
+  const partner: Partner = {
+    id: 'partner-1',
+    name: '测试伙伴',
+    avatar_shape: 'circle',
+    avatar_color: 'blue',
     created_at: Date.now(),
-    workspace_id: 'workspace-1',
+    updated_at: Date.now(),
+    last_viewed_at: Date.now(),
     pinned: false,
     pinned_at: null
   }
-  await storage.chat.saveChatSession(session)
-  return session
+  await storage.partner.savePartner(partner)
+  return partner
 }
-
-const buildWorkspace = (workspaceRoot: string) => ({
-  workspaceId: 'workspace-1',
-  workspaceName: 'workspace-1',
-  rootPath: workspaceRoot
-})
 
 const seedAiTurn = async (
   storage: StorageService,
-  workspaceRoot: string,
   turn: {
     runId: string
     userMessageId: string
@@ -137,7 +132,7 @@ const seedAiTurn = async (
   const assistantContent = turn.assistantContent ?? turn.finalAnswer ?? turn.partialAnswer ?? ''
   await storage.aiRun.saveRun({
     id: turn.runId,
-    sessionId: 'session-1',
+    partnerId: 'partner-1',
     userMessageId: turn.userMessageId,
     assistantMessageId: turn.assistantMessageId,
     status: turn.status ?? 'completed',
@@ -145,7 +140,6 @@ const seedAiTurn = async (
     partialAnswer: turn.partialAnswer ?? assistantContent,
     finalAnswer: turn.finalAnswer ?? assistantContent,
     artifacts: turn.artifacts,
-    workspace: buildWorkspace(workspaceRoot),
     modelName: 'mock-model',
     mainModel: { configId: 'mock-config', modelName: 'mock-model' },
     preference: 'local_sources_strict',
@@ -158,30 +152,24 @@ const seedAiTurn = async (
   })
 }
 
-const listSessionMessages = async (
+const listPartnerMessages = async (
   service: ChatRunService,
-  sessionId: string
-): Promise<ChatMessage[]> => await service.listSessionMessages(sessionId)
+  partnerId: string
+): Promise<ChatMessage[]> => await service.listPartnerMessages(partnerId)
 
 const submitAiRun = async (
-  { workspaceRoot, storage, service }: TestService,
+  { storage, service }: TestService,
   executionPermission: 'review' | 'full_access' = 'review'
 ) => {
-  await seedSession(storage)
+  await seedPartner(storage)
   const response = await service.submit({
-    mode: 'ai',
     preference: 'local_sources_strict',
     executionPermission,
-    sessionId: 'session-1',
+    partnerId: 'partner-1',
     input: '生成测试回答',
     mainModel: {
       configId: 'mock-config',
       modelName: 'mock-model'
-    },
-    workspace: {
-      workspaceId: 'workspace-1',
-      workspaceName: 'workspace-1',
-      rootPath: workspaceRoot
     }
   })
   expect(response.success).toBe(true)
@@ -199,7 +187,7 @@ describe('unit ai persistence backend', () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)
 
-    const messages = await listSessionMessages(setup.service, 'session-1')
+    const messages = await listPartnerMessages(setup.service, 'partner-1')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
 
     expect(messages.map((message) => message.role)).toEqual(['user', 'assistant'])
@@ -274,7 +262,7 @@ describe('unit ai persistence backend', () => {
       runId: run.id
     })
 
-    const messages = await listSessionMessages(setup.service, 'session-1')
+    const messages = await listPartnerMessages(setup.service, 'partner-1')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
 
     expect(messages[1].content).toBe('Hello world')
@@ -348,7 +336,7 @@ describe('unit ai persistence backend', () => {
     })
     await service.queueRunEvent(run.id, terminalEvent(run.id))
 
-    const messages = await listSessionMessages(setup.service, 'session-1')
+    const messages = await listPartnerMessages(setup.service, 'partner-1')
     const assistantMessage = messages.find((message) => message.role === 'assistant')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
 
@@ -399,7 +387,7 @@ describe('unit ai persistence backend', () => {
         await writeFile(path.join(setup.workspaceRoot, 'uncontrolled-change.txt'), 'external change')
         return createCompletedAiRunState({
           runId: payload.runId,
-          sessionId: payload.sessionId,
+          partnerId: payload.partnerId,
           input: payload.input,
           finalDeliveryMarkdown: '完成，但没有调用文件工具或终端。'
         })
@@ -410,7 +398,7 @@ describe('unit ai persistence backend', () => {
       await waitForCondition(() => setup.events.some((event) => event.type === 'run_completed'))
 
       const records = await setup.storage.aiFileChange.listRecords({
-        sessionId: run.sessionId,
+        partnerId: run.partnerId,
         runId: run.id
       })
       expect(await access(path.join(setup.workspaceRoot, 'uncontrolled-change.txt')).then(() => true)).toBe(true)
@@ -443,7 +431,7 @@ describe('unit ai persistence backend', () => {
       createdAt: Date.now()
     })
 
-    const snapshot = await setup.service.getSessionSnapshot('session-1')
+    const snapshot = await setup.service.getPartnerSnapshot('partner-1')
 
     expect(snapshot.activeRuns[0].run.status).toBe('waiting_approval')
     expect(snapshot.activeRuns[0].pendingApproval?.batchId).toBe('batch-1')
@@ -453,7 +441,7 @@ describe('unit ai persistence backend', () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)
     await setup.storage.chatMessageLog.appendBatch({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       runId: run.id,
       entries: [
         { kind: 'annotation', eventType: 'thinking_started', payload: {} },
@@ -463,7 +451,7 @@ describe('unit ai persistence backend', () => {
     })
     const listRunsByMessageIdsSpy = vi.spyOn(setup.storage.aiRun, 'listRunsByMessageIds')
 
-    const opened = await setup.service.openSession({ sessionId: 'session-1', limit: 50 })
+    const opened = await setup.service.openPartner({ partnerId: 'partner-1', limit: 50 })
 
     expect(opened.messages).toHaveLength(2)
     expect(opened.activeRuns).toHaveLength(1)
@@ -481,7 +469,7 @@ describe('unit ai persistence backend', () => {
     const run = await submitAiRun(setup)
     const service = setup.service as ChatRunServicePrivate
     await setup.storage.chatMessageLog.appendBatch({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       runId: run.id,
       entries: [
         { kind: 'annotation', eventType: 'thinking_started', payload: {} },
@@ -500,7 +488,7 @@ describe('unit ai persistence backend', () => {
       runId: run.id
     })
 
-    const snapshot = await setup.service.getSessionSnapshot('session-1')
+    const snapshot = await setup.service.getPartnerSnapshot('partner-1')
 
     expect(snapshot.activeRuns).toEqual([])
     expect(snapshot.runs).toHaveLength(1)
@@ -517,7 +505,7 @@ describe('unit ai persistence backend', () => {
     const run = await submitAiRun(setup)
     const service = setup.service as ChatRunServicePrivate
     await setup.storage.chatMessageLog.appendBatch({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       runId: run.id,
       entries: [
         { kind: 'annotation', eventType: 'thinking_started', payload: {} },
@@ -536,7 +524,7 @@ describe('unit ai persistence backend', () => {
       runId: run.id
     })
 
-    const summaries = await setup.service.getSessionRunSummaries('session-1')
+    const summaries = await setup.service.getPartnerRunSummaries('partner-1')
 
     expect(summaries.runs).toHaveLength(1)
     expect(summaries.runs[0].run.status).toBe('completed')
@@ -549,17 +537,16 @@ describe('unit ai persistence backend', () => {
 
   it('startup-recovery-marks-interrupted-runs-failed', async () => {
     const setup = await createTestService()
-    await seedSession(setup.storage)
+    await seedPartner(setup.storage)
     const now = Date.now()
     await setup.storage.aiRun.saveRun({
       id: 'run-1',
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       userMessageId: 'user-1',
       assistantMessageId: 'assistant-1',
       status: 'running',
       input: '测试中断',
       partialAnswer: '',
-      workspace: buildWorkspace(setup.workspaceRoot),
       modelName: 'mock-model',
       mainModel: { configId: 'mock-config', modelName: 'mock-model' },
       preference: 'local_sources_strict',
@@ -570,7 +557,7 @@ describe('unit ai persistence backend', () => {
     await setup.service.failInterruptedRuns()
 
     const storedRun = await setup.storage.aiRun.getRun('run-1')
-    const messages = await listSessionMessages(setup.service, 'session-1')
+    const messages = await listPartnerMessages(setup.service, 'partner-1')
     const assistantMessage = messages.find((message) => message.role === 'assistant')
 
     expect(storedRun?.status).toBe('failed')
@@ -583,21 +570,21 @@ describe('unit ai persistence backend', () => {
   it('retract-latest-turn-guards-running-and-non-latest-user-message', async () => {
     const runningSetup = await createTestService()
     const runningRun = await submitAiRun(runningSetup)
-    const runningMessages = await listSessionMessages(runningSetup.service, 'session-1')
+    const runningMessages = await listPartnerMessages(runningSetup.service, 'partner-1')
     const runningResponse = await runningSetup.service.retractLatestTurn({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       userMessageId: runningRun.userMessageId
     })
     expect(runningResponse.success).toBe(false)
     expect(runningResponse.error).toContain('仍在运行')
-    expect(await listSessionMessages(runningSetup.service, 'session-1')).toHaveLength(
+    expect(await listPartnerMessages(runningSetup.service, 'partner-1')).toHaveLength(
       runningMessages.length
     )
 
     const setup = await createTestService()
-    await seedSession(setup.storage)
+    await seedPartner(setup.storage)
     const baseTime = Date.now()
-    await seedAiTurn(setup.storage, setup.workspaceRoot, {
+    await seedAiTurn(setup.storage, {
       runId: 'run-1',
       userMessageId: 'old-user',
       assistantMessageId: 'old-assistant',
@@ -605,7 +592,7 @@ describe('unit ai persistence backend', () => {
       assistantContent: 'old reply',
       createdAt: baseTime
     })
-    await seedAiTurn(setup.storage, setup.workspaceRoot, {
+    await seedAiTurn(setup.storage, {
       runId: 'run-2',
       userMessageId: 'latest-user',
       assistantMessageId: 'latest-assistant',
@@ -615,20 +602,20 @@ describe('unit ai persistence backend', () => {
     })
 
     const response = await setup.service.retractLatestTurn({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       userMessageId: 'old-user'
     })
 
     expect(response.success).toBe(false)
     expect(response.error).toContain('最新')
-    expect(await listSessionMessages(setup.service, 'session-1')).toHaveLength(4)
+    expect(await listPartnerMessages(setup.service, 'partner-1')).toHaveLength(4)
   })
 
   it('retract-latest-turn-removes-user-assistant-run-and-its-message-log', async () => {
     const setup = await createTestService()
-    await seedSession(setup.storage)
+    await seedPartner(setup.storage)
     const baseTime = Date.now()
-    await seedAiTurn(setup.storage, setup.workspaceRoot, {
+    await seedAiTurn(setup.storage, {
       runId: 'kept-run',
       userMessageId: 'kept-user',
       assistantMessageId: 'kept-assistant',
@@ -636,7 +623,7 @@ describe('unit ai persistence backend', () => {
       assistantContent: 'kept reply',
       createdAt: baseTime
     })
-    await seedAiTurn(setup.storage, setup.workspaceRoot, {
+    await seedAiTurn(setup.storage, {
       runId: 'retract-run',
       userMessageId: 'retract-user',
       assistantMessageId: 'retract-assistant',
@@ -645,13 +632,13 @@ describe('unit ai persistence backend', () => {
       createdAt: baseTime + 2
     })
     await setup.storage.chatMessageLog.appendBatch({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       runId: 'retract-run',
       entries: [{ kind: 'annotation', eventType: 'thinking_started', payload: {} }]
     })
 
     const response = await setup.service.retractLatestTurn({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       userMessageId: 'retract-user'
     })
 
@@ -666,9 +653,9 @@ describe('unit ai persistence backend', () => {
 
   it('retract-latest-turn-keeps-message-log-for-a-different-run', async () => {
     const setup = await createTestService()
-    await seedSession(setup.storage)
+    await seedPartner(setup.storage)
     const baseTime = Date.now()
-    await seedAiTurn(setup.storage, setup.workspaceRoot, {
+    await seedAiTurn(setup.storage, {
       runId: 'retract-run',
       userMessageId: 'retract-user',
       assistantMessageId: 'retract-assistant',
@@ -677,13 +664,13 @@ describe('unit ai persistence backend', () => {
       createdAt: baseTime
     })
     await setup.storage.chatMessageLog.appendBatch({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       runId: 'newer-unfinished-run',
       entries: [{ kind: 'annotation', eventType: 'thinking_started', payload: {} }]
     })
 
     const response = await setup.service.retractLatestTurn({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       userMessageId: 'retract-user'
     })
 
@@ -695,60 +682,21 @@ describe('unit ai persistence backend', () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)
     await setup.storage.chatMessageLog.appendBatch({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       runId: run.id,
       entries: [{ kind: 'annotation', eventType: 'thinking_started', payload: {} }]
     })
 
-    await setup.service.deleteSession('session-1')
+    await setup.service.deletePartner('partner-1')
 
-    const sessions = await setup.storage.chat.getChatSessions()
-    const messages = await listSessionMessages(setup.service, 'session-1')
+    const partners = await setup.storage.partner.listPartners()
+    const messages = await listPartnerMessages(setup.service, 'partner-1')
     const storedRun = await setup.storage.aiRun.getRun(run.id)
-    const messageLog = await setup.storage.chatMessageLog.list('session-1')
+    const messageLog = await setup.storage.chatMessageLog.list('partner-1')
 
-    expect(sessions).toEqual([])
+    expect(partners).toEqual([])
     expect(messages).toEqual([])
     expect(storedRun).toBeNull()
     expect(messageLog).toEqual([])
-  })
-
-  it('rejects-submit-when-session-already-used-the-other-mode', async () => {
-    const setup = await createTestService({ autoStartRuns: false })
-    await submitAiRun(setup)
-    const searchAfterAi = await setup.service.submit({
-      mode: 'search',
-      sessionId: 'session-1',
-      input: '查询资料',
-      workspace: buildWorkspace(setup.workspaceRoot)
-    })
-    expect(searchAfterAi.success).toBe(false)
-    expect(searchAfterAi.error).toContain('不能切换到搜索')
-
-    await setup.storage.chat.saveChatSession({
-      id: 'session-search',
-      title: '搜索会话',
-      created_at: Date.now(),
-      workspace_id: 'workspace-1',
-      pinned: false,
-      pinned_at: null
-    })
-    await setup.storage.chatSearchTurn.appendTurn({
-      sessionId: 'session-search',
-      role: 'user',
-      content: '查询资料'
-    })
-    const aiAfterSearch = await setup.service.submit({
-      mode: 'ai',
-      sessionId: 'session-search',
-      input: '继续对话',
-      mainModel: {
-        configId: 'mock-config',
-        modelName: 'mock-model'
-      },
-      workspace: buildWorkspace(setup.workspaceRoot)
-    })
-    expect(aiAfterSearch.success).toBe(false)
-    expect(aiAfterSearch.error).toContain('不能切回 AI')
   })
 })

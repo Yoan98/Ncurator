@@ -1,5 +1,5 @@
 import { describe, it } from 'vitest'
-import type { ChatSessionUiStateV1 } from '../../../../../src/shared/types'
+import type { Partner, PartnerUiStateV1 } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
@@ -9,7 +9,22 @@ import {
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
-const CASE_ID = 'session-ui-state-restart-persistence'
+const CASE_ID = 'partner-ui-state-restart-persistence'
+
+const createPartner = (id: string, name: string): Partner => {
+  const now = Date.now()
+  return {
+    id,
+    name,
+    avatar_shape: 'circle',
+    avatar_color: 'blue',
+    created_at: now,
+    updated_at: now,
+    last_viewed_at: now,
+    pinned: false,
+    pinned_at: null
+  }
+}
 
 describe('workbench conversation e2e', () => {
   it(
@@ -19,8 +34,8 @@ describe('workbench conversation e2e', () => {
         caseId: CASE_ID,
         domain: 'workbench',
         suite: 'conversation',
-        groups: ['session'],
-        description: '验证正常重启后恢复最后会话、输入、右侧浏览器 URL、历史和缩放。',
+        groups: ['partner'],
+        description: '验证正常重启后恢复最后伙伴、输入、右侧浏览器 URL、历史和缩放。',
         fixtures: [],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -30,27 +45,15 @@ describe('workbench conversation e2e', () => {
             '<html><body>restart state</body></html>'
           )
           runtime.registerResource({
-            name: 'session-ui-restart-server',
+            name: 'partner-ui-restart-server',
             phase: 'after-app-close',
             dispose: server.close
           })
           let { page } = runtime
           await navigateToWorkbench(page, { waitForSessionListText: false })
-          const session = {
-            id: 'restart-ui-session',
-            title: '重启恢复会话',
-            created_at: Date.now(),
-            workspace_id: '',
-            pinned: false,
-            pinned_at: null
-          }
-          session.workspace_id = await page.evaluate(async () => {
-            const response = await window.api.workspaceCreate({ name: '会话重启恢复工作区' })
-            if (!response.success || !response.workspace) throw new Error('workspace create failed')
-            return response.workspace.id
-          })
+          const partner = createPartner('restart-ui-partner', '重启恢复伙伴')
           const browser = await page.evaluate(
-            async ({ session, firstUrl, secondUrl }) => {
+            async ({ partner, firstUrl, secondUrl }) => {
               const waitForBrowserState = async (
                 tabId: string,
                 predicate: (state: NonNullable<
@@ -63,18 +66,15 @@ describe('workbench conversation e2e', () => {
                   const state = await window.api.browserPanelStateGet({ tabId })
                   if (state.success && state.state && predicate(state.state)) return
                   if (Date.now() >= deadline) {
-                    throw new Error(
-                      `${label}: ${JSON.stringify(state.state || null)}`
-                    )
+                    throw new Error(`${label}: ${JSON.stringify(state.state || null)}`)
                   }
                   await new Promise<void>((resolve) => setTimeout(resolve, 100))
                 }
               }
 
-              await window.api.chatSessionSave(session)
-              const created = await window.api.browserTabCreate({ ownerId: session.id })
+              await window.api.partnerSave(partner)
+              const created = await window.api.browserTabCreate({ ownerId: partner.id })
               if (!created.success || !created.state) throw new Error('browser tab create failed')
-              // UI navigate is fire-and-forget; wait each load so history has two entries.
               await window.api.browserTabNavigate({ tabId: created.state.id, url: firstUrl })
               await waitForBrowserState(
                 created.state.id,
@@ -85,9 +85,7 @@ describe('workbench conversation e2e', () => {
               await waitForBrowserState(
                 created.state.id,
                 (state) =>
-                  state.url === secondUrl &&
-                  state.isLoading === false &&
-                  state.canGoBack === true,
+                  state.url === secondUrl && state.isLoading === false && state.canGoBack === true,
                 'second navigate not ready'
               )
               const zoomed = await window.api.browserPanelZoomIn({ tabId: created.state.id })
@@ -100,14 +98,12 @@ describe('workbench conversation e2e', () => {
                   state.url === secondUrl,
                 'browser state not ready before restart'
               )
-              const state: ChatSessionUiStateV1 = {
+              const state: PartnerUiStateV1 = {
                 version: 1,
                 composer: {
-                  mode: 'ai',
                   aiPreference: 'local_sources_relaxed',
                   executionPermission: 'full_access',
                   modelSelection: { mainModel: null },
-                  workspaceId: null,
                   draft: {
                     input: '重启后仍在的草稿',
                     contentNodes: [{ kind: 'text', text: '重启后仍在的草稿' }],
@@ -135,12 +131,12 @@ describe('workbench conversation e2e', () => {
                   fallbackState: { kind: 'empty', title: '资源工作台', description: '' }
                 }
               }
-              await window.api.chatSessionUiStateSave({ sessionId: session.id, state })
-              await window.api.workbenchUiStateSave({ activeViewKey: session.id, draftState: null })
+              await window.api.partnerUiStateSave({ partnerId: partner.id, state })
+              await window.api.workbenchUiStateSave({ activeViewKey: partner.id })
               return created.state
             },
             {
-              session,
+              partner,
               firstUrl: `${server.url}?step=1`,
               secondUrl: `${server.url}?step=2`
             }
@@ -175,16 +171,16 @@ describe('workbench conversation e2e', () => {
             { timeout: 15_000 }
           )
           const restoredBrowser = await page.evaluate(async (tabId) => {
-            const tabs = await window.api.browserTabList({ ownerId: 'restart-ui-session' })
+            const tabs = await window.api.browserTabList({ ownerId: 'restart-ui-partner' })
             const state = await window.api.browserPanelStateGet({ tabId })
             return { tabs, state }
           }, browser.id)
           const input = (
             (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
           ).trim()
-          const sessionVisible = await getWorkbenchLocator(
+          const partnerVisible = await getWorkbenchLocator(
             page,
-            `${workbenchSelectors.sessionItemPrefix}-${session.id}`
+            `${workbenchSelectors.partnerItemPrefix}-${partner.id}`
           ).isVisible()
           const executionPermission = (
             (await getWorkbenchLocator(
@@ -194,7 +190,7 @@ describe('workbench conversation e2e', () => {
           ).trim()
           return {
             input,
-            sessionVisible,
+            partnerVisible,
             executionPermission,
             restoredBrowser,
             expectedUrl: `${server.url}?step=2`
@@ -203,7 +199,7 @@ describe('workbench conversation e2e', () => {
         assert: async (result, runtime) => {
           const restored = result.restoredBrowser.tabs.tabs[0]
           await runtime.assertThat(
-            result.sessionVisible &&
+            result.partnerVisible &&
               result.input === '重启后仍在的草稿' &&
               result.executionPermission.includes('完全访问') &&
               result.restoredBrowser.tabs.success &&
@@ -212,8 +208,8 @@ describe('workbench conversation e2e', () => {
               result.restoredBrowser.state.success &&
               result.restoredBrowser.state.state?.canGoBack === true,
             {
-              name: 'workbench-session-ui-state-restart-persistence',
-              message: '正常重启必须恢复最后会话、草稿和浏览器 URL、历史、缩放。',
+              name: 'workbench-partner-ui-state-restart-persistence',
+              message: '正常重启必须恢复最后伙伴、草稿和浏览器 URL、历史、缩放。',
               data: result
             }
           )

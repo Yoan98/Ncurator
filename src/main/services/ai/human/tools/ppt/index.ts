@@ -15,7 +15,7 @@ import {
   PPT_READ_SLIDES_TOOL_SPEC,
   PPT_SEARCH_TOOL_SPEC
 } from './toolSpecs'
-import { ensureWorkspaceAssetBucket } from '../../../../assets/WorkspaceAssetService'
+import { ensurePartnerAssetBucket } from '../../../../assets/WorkspaceAssetService'
 
 type PptToolName = 'ppt_read_outline' | 'ppt_read_slides' | 'ppt_search' | 'ppt_edit'
 
@@ -41,8 +41,8 @@ export const buildPptCapabilityTools = (input: Parameters<typeof createPptToolRu
       runtime.readSlides(args),
       runtime.render(args)
     ])
-    const bucket = await ensureWorkspaceAssetBucket(
-      input.workspaceRootPath,
+    const bucket = await ensurePartnerAssetBucket(
+      input.partnerId,
       `ppt_read_slides-${randomUUID()}`
     )
     const stagedBySlideId = new Map<string, string>()

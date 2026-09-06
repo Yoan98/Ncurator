@@ -165,7 +165,7 @@ describe('settings workspace recovery e2e', () => {
           await page.getByRole('tab', { name: /网页/u }).click()
           const webPrepareJob = readJob(runtime.userDataDir, webPrepareJobId)
           const webSources = await page.evaluate(async (id) => {
-            const response = await window.api.webSourceList({ workspaceId: id })
+            const response = await window.api.webSourceList({})
             return response.items
           }, workspaceId)
           const webProgressHidden = await page

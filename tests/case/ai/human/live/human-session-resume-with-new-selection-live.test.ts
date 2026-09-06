@@ -27,12 +27,6 @@ type LiveFaultInjectionState = {
   brainRoundCount: number
 }
 
-const buildWorkspace = (runtime: BackendTestRuntime) => ({
-  workspaceId: 'test-workspace',
-  workspaceName: 'test-workspace',
-  rootPath: runtime.workspaceRoot
-})
-
 const eventText = (event: AiRunEvent): string => JSON.stringify(event)
 
 const hasOverfittingEvidence = (events: readonly AiRunEvent[]): boolean =>
@@ -185,25 +179,29 @@ describe('ai human live backend', () => {
           }
 
           await runtime.seedLlmConfig(liveConfig)
-          await runtime.chatStore.saveChatSession({
-            id: SESSION_ID,
-            title: 'live session resume test',
-            created_at: Date.now(),
-            workspace_id: 'test-workspace',
+          await runtime.chatStore.savePartner({
+          id: SESSION_ID,
+          name: 'live session resume test',
+          avatar_shape: 'circle',
+          avatar_color: 'blue',
+          created_at: Date.now(),
+          updated_at: Date.now(),
+          last_viewed_at: Date.now(),
           pinned: false,
           pinned_at: null
-          })
+        })
           const interruptedResult = await AiRunService.getInstance().run(
             {
               runId: `${runtime.runId}-run-1-interrupted`,
-              sessionId: SESSION_ID,
+              partnerId: SESSION_ID,
               input: INTERRUPTED_RUN_INPUT,
               selectedReferences: fileAReferences,
               mainModel: {
                 configId: liveConfig.id,
                 modelName: liveConfig.model_name
               },
-              workspace: buildWorkspace(runtime)
+              partnerName: '测试伙伴',
+              workspaceRoots: [runtime.workspaceRoot]
             },
             await buildAiRunDeps({
               runtime,
@@ -229,14 +227,15 @@ describe('ai human live backend', () => {
           const resumedResult = await AiRunService.getInstance().run(
             {
               runId: `${runtime.runId}-run-2-resume`,
-              sessionId: SESSION_ID,
+              partnerId: SESSION_ID,
               input: RESUMED_RUN_INPUT,
               selectedReferences: fileBReferences,
               mainModel: {
                 configId: liveConfig.id,
                 modelName: liveConfig.model_name
               },
-              workspace: buildWorkspace(runtime)
+              partnerName: '测试伙伴',
+              workspaceRoots: [runtime.workspaceRoot]
             },
             await buildAiRunDeps({ runtime, chatToolsWrapper: captureRun2Wrapper })
           )

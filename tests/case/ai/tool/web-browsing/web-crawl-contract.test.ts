@@ -481,7 +481,7 @@ describe('ai tool web backend', () => {
         const runTabIds: string[] = []
         let createTabCount = 0
         const harness = createWebToolHarness(runtime, {
-          sessionId: 'browser-tab-binding-session',
+          partnerId: 'browser-tab-binding-session',
           modelName: 'browser-tab-binding-test',
           browserUseService: {
             async createTab() {
@@ -632,7 +632,7 @@ describe('ai tool web backend', () => {
         })
         const capturedRuns: any[] = []
         const harness = createWebToolHarness(runtime, {
-          sessionId: 'browser-act-session',
+          partnerId: 'browser-act-session',
           modelName: 'browser-act-test',
           browserUseService: {
             async createTab() {

@@ -127,7 +127,7 @@ export const createPptToolHarness = (
     ctx,
     cache,
     runId: runtime.runId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     emitActivity: (activity) => activities.push(activity)
@@ -151,7 +151,7 @@ export const createExcelToolHarness = (
     ctx,
     cache,
     runId: runtime.runId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     emitActivity: (activity) => activities.push(activity)
@@ -183,7 +183,7 @@ export const createTerminalToolHarness = (
     cache,
     runId: runtime.runId,
     taskId: runtime.taskId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     workspaceRootPath: runtime.workspaceRoot,
     workspaceId: ctx.workspace?.workspaceId || 'test-workspace',
     sessionManager,
@@ -215,7 +215,7 @@ export const createTextFileToolHarness = (
     ctx,
     cache,
     runId: runtime.runId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     emitActivity: (activity) => {
@@ -244,7 +244,7 @@ export const createPdfToolHarness = (
     ctx,
     cache,
     runId: runtime.runId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     safePreviewChars: 1400,
@@ -294,7 +294,7 @@ export const createWebToolHarness = (
         ctx,
         cache,
         runId: runtime.runId,
-        sessionId: contextInput.sessionId || 'test-session',
+        partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
         taskId: runtime.taskId
       }) as readonly ToolLike[]
     ),
@@ -313,7 +313,7 @@ export const createImageGenerationToolHarness = (
     ctx,
     cache,
     runId: runtime.runId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     emitActivity: (activity) => activities.push(activity)
@@ -338,7 +338,7 @@ export const createAgentControlToolHarness = (
         ctx,
         cache,
         runId: runtime.runId,
-        sessionId: contextInput.sessionId || 'test-session',
+        partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
         taskId: runtime.taskId
       }) as readonly ToolLike[]
     ),

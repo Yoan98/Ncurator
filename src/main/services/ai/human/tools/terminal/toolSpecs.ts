@@ -31,7 +31,7 @@ export const createTerminalRunToolSpec = (
   inputSchema: TERMINAL_RUN_SCHEMA,
   promptSpec: {
     name: 'terminal_run',
-    description: '在工作区终端执行命令。'
+    description: '在用户本机终端执行命令。默认工作目录为用户主目录。'
   },
   resolveExecutionMeta: (args) => {
     const command = readStringArg(args, 'command') || ''

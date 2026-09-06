@@ -4,8 +4,7 @@ import type {
   AiRunRecord,
   AiRunStatus,
   ChatAttachment,
-  SelectedReference,
-  WorkspaceRuntimeBinding
+  SelectedReference
 } from '../../../../shared/types'
 import type { SqliteCore } from '../sqlite/SqliteCore'
 import {
@@ -21,14 +20,13 @@ import {
 
 type AiRunRow = {
   id?: unknown
-  session_id?: unknown
+  partner_id?: unknown
   user_message_id?: unknown
   assistant_message_id?: unknown
   status?: unknown
   input?: unknown
   selected_references_json?: unknown
   attachments_json?: unknown
-  workspace_json?: unknown
   model_name?: unknown
   main_model_json?: unknown
   execution_permission?: string | null
@@ -63,14 +61,13 @@ const normalizeExecutionPermission = (value: string): AiRunRecord['executionPerm
 
 const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   id: toRequiredString(row.id),
-  sessionId: toRequiredString(row.session_id),
+  partnerId: toRequiredString(row.partner_id),
   userMessageId: toRequiredString(row.user_message_id),
   assistantMessageId: toRequiredString(row.assistant_message_id),
   status: normalizeRunStatus(row.status),
   input: toRequiredString(row.input),
   selectedReferences: parseJsonArray<SelectedReference>(row.selected_references_json),
   attachments: parseJsonArray<ChatAttachment>(row.attachments_json),
-  workspace: parseJsonObject<WorkspaceRuntimeBinding>(row.workspace_json),
   modelName: row.model_name ? String(row.model_name) : undefined,
   mainModel: parseJsonObject<AiRunRecord['mainModel']>(row.main_model_json),
   executionPermission: normalizeExecutionPermission(row.execution_permission || ''),
@@ -96,27 +93,26 @@ export class AiRunStore {
       .prepare(
         `
         INSERT INTO ai_run (
-          id, session_id, user_message_id, assistant_message_id, status, input,
-          selected_references_json, attachments_json, workspace_json, model_name,
+          id, partner_id, user_message_id, assistant_message_id, status, input,
+          selected_references_json, attachments_json, model_name,
           main_model_json, execution_permission,
           partial_answer, partial_answer_role, final_answer, error, failure_code, pending_approval_json,
           artifacts_json, created_at, updated_at, finished_at
         ) VALUES (
-          @id, @session_id, @user_message_id, @assistant_message_id, @status, @input,
-          @selected_references_json, @attachments_json, @workspace_json, @model_name,
+          @id, @partner_id, @user_message_id, @assistant_message_id, @status, @input,
+          @selected_references_json, @attachments_json, @model_name,
           @main_model_json, @execution_permission,
           @partial_answer, @partial_answer_role, @final_answer, @error, @failure_code, @pending_approval_json,
           @artifacts_json, @created_at, @updated_at, @finished_at
         )
         ON CONFLICT(id) DO UPDATE SET
-          session_id = excluded.session_id,
+          partner_id = excluded.partner_id,
           user_message_id = excluded.user_message_id,
           assistant_message_id = excluded.assistant_message_id,
           status = excluded.status,
           input = excluded.input,
           selected_references_json = excluded.selected_references_json,
           attachments_json = excluded.attachments_json,
-          workspace_json = excluded.workspace_json,
           model_name = excluded.model_name,
           main_model_json = excluded.main_model_json,
           execution_permission = excluded.execution_permission,
@@ -133,14 +129,13 @@ export class AiRunStore {
       )
       .run({
         id: record.id,
-        session_id: record.sessionId,
+        partner_id: record.partnerId,
         user_message_id: record.userMessageId,
         assistant_message_id: record.assistantMessageId,
         status: record.status,
         input: record.input,
         selected_references_json: jsonStringify(record.selectedReferences),
         attachments_json: jsonStringify(record.attachments),
-        workspace_json: jsonStringify(record.workspace),
         model_name: record.modelName || null,
         main_model_json: jsonStringify(record.mainModel),
         execution_permission: record.executionPermission || 'review',
@@ -164,13 +159,13 @@ export class AiRunStore {
     return row ? toRunRecord(row) : null
   }
 
-  public async listRunsBySession(
-    sessionId: string,
+  public async listRunsByPartner(
+    partnerId: string,
     statuses?: AiRunStatus[]
   ): Promise<AiRunRecord[]> {
-    const params: Record<string, string | number | null> = { session_id: sessionId }
+    const params: Record<string, string | number | null> = { partner_id: partnerId }
     const where = buildWhere([
-      'session_id = @session_id',
+      'partner_id = @partner_id',
       buildInClause('status', statuses, params, 'status')
     ])
     const rows = this.sqlite
@@ -180,14 +175,14 @@ export class AiRunStore {
   }
 
   public async listRunsPage(input: {
-    sessionId: string
+    partnerId: string
     limit: number
     beforeCreatedAt?: number
   }): Promise<{ runs: AiRunRecord[]; hasMoreBefore: boolean }> {
     const safeLimit = Math.max(1, Math.min(100, Number(input.limit || 50)))
     const beforeCreatedAt = Number(input.beforeCreatedAt)
     const params = {
-      session_id: input.sessionId,
+      partner_id: input.partnerId,
       before: Number.isFinite(beforeCreatedAt) ? Math.floor(beforeCreatedAt) : null,
       limit: safeLimit + 1
     }
@@ -195,7 +190,7 @@ export class AiRunStore {
       .prepare(
         `
         SELECT * FROM ai_run
-        WHERE session_id = @session_id
+        WHERE partner_id = @partner_id
           AND (@before IS NULL OR created_at < @before)
         ORDER BY created_at DESC
         LIMIT @limit
@@ -208,14 +203,14 @@ export class AiRunStore {
   }
 
   public async listRunsByMessageIds(
-    sessionId: string,
+    partnerId: string,
     messageIds: string[]
   ): Promise<AiRunRecord[]> {
     const ids = messageIds.map((id) => String(id || '').trim()).filter(Boolean)
     if (ids.length === 0) return []
-    const params: Record<string, string | number | null> = { session_id: sessionId }
+    const params: Record<string, string | number | null> = { partner_id: partnerId }
     const where = buildWhere([
-      'session_id = @session_id',
+      'partner_id = @partner_id',
       buildInClause('assistant_message_id', ids, params, 'message_id')
     ])
     const rows = this.sqlite
@@ -233,13 +228,13 @@ export class AiRunStore {
     return rows.map(toRunRecord)
   }
 
-  public async listSessionIdsByRunStatuses(statuses: AiRunStatus[]): Promise<string[]> {
+  public async listPartnerIdsByRunStatuses(statuses: AiRunStatus[]): Promise<string[]> {
     const params: Record<string, string | number | null> = {}
     const where = buildWhere([buildInClause('status', statuses, params, 'status')])
     const rows = this.sqlite
-      .prepare(`SELECT DISTINCT session_id FROM ai_run WHERE ${where}`)
-      .all(params) as Array<{ session_id?: unknown }>
-    return rows.map((row) => toRequiredString(row.session_id)).filter(Boolean)
+      .prepare(`SELECT DISTINCT partner_id FROM ai_run WHERE ${where}`)
+      .all(params) as Array<{ partner_id?: unknown }>
+    return rows.map((row) => toRequiredString(row.partner_id)).filter(Boolean)
   }
 
   public async decideApprovalBatchTransaction(input: {
@@ -284,8 +279,8 @@ export class AiRunStore {
     })
   }
 
-  public async deleteRunsBySession(sessionId: string): Promise<void> {
-    this.sqlite.prepare('DELETE FROM ai_run WHERE session_id = ?').run(sessionId)
+  public async deleteRunsByPartner(partnerId: string): Promise<void> {
+    this.sqlite.prepare('DELETE FROM ai_run WHERE partner_id = ?').run(partnerId)
   }
 
   public async deleteRunsByIds(runIds: string[]): Promise<void> {

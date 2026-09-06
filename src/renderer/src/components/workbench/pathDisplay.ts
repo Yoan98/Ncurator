@@ -48,7 +48,7 @@ export const getWorkspacePathParts = (
     const target = trimSlashes(normalizedFilePath)
     const relativePath = trimSlashes(target.slice(root.length))
     return {
-      workspaceName: String(matchingWorkspace.workspace.name || '').trim(),
+      workspaceName: getBaseName(matchingWorkspace.rootPath),
       relativePath: relativePath || fileName,
       fileName
     }

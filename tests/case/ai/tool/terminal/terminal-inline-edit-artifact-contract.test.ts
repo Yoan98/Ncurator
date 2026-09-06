@@ -132,7 +132,7 @@ describe('ai tool terminal backend', () => {
           ctx,
           cache: createHumanRuntimeCache(),
           runId: runtime.runId,
-          sessionId: 'test-session',
+          partnerId: 'test-session',
           taskId: runtime.taskId,
           workspaceRootPath: runtime.workspaceRoot,
           workspaceId: 'test-workspace',

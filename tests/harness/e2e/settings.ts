@@ -463,20 +463,23 @@ export const createPresetModelConfigThroughSettingsUi = async (
 
 export const createWorkspaceThroughSettingsUi = async (
   page: Page,
-  workspaceName: string
+  rootPath: string
 ): Promise<string> => {
   await navigateToSettingsSection(page, 'workspace')
-  await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
-  await getSettingsLocator(page, importSelectors.createWorkspaceNameInput).fill(workspaceName)
-  await getSettingsLocator(page, importSelectors.createWorkspaceConfirmButton).click()
+  const resolvedRootPath = path.resolve(rootPath)
+  const response = await page.evaluate(
+    async (workspaceRootPath) => await window.api.workspaceCreate({ rootPath: workspaceRootPath }),
+    resolvedRootPath
+  )
+  if (!response.success || !response.workspace) {
+    throw new Error(response.error || 'failed to add workspace root')
+  }
+  const displayName = path.basename(resolvedRootPath)
   await getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix)
-    .filter({ hasText: workspaceName })
+    .filter({ hasText: displayName })
     .first()
     .waitFor({ state: 'visible' })
-  await getSettingsLocator(page, importSelectors.workspaceDetail)
-    .getByRole('tab', { name: /文件/u })
-    .waitFor({ state: 'visible' })
-  return await readWorkspaceIdFromSettingsCard(page, workspaceName)
+  return response.workspace.id
 }
 
 export const bindWorkspaceRootThroughSettingsUi = async (
@@ -527,35 +530,25 @@ export const bindWorkspaceRootThroughSettingsUi = async (
 
 export const bindWorkspaceRootDirectly = async (
   page: Page,
-  workspaceId: string,
+  _workspaceId: string,
   rootPath: string
-): Promise<void> => {
-  const response = await page.evaluate(
-    async (input) => await window.api.workspaceSetRootPath(input),
-    { workspaceId, rootPath: path.resolve(rootPath) }
-  )
-  if (!response.success) {
-    throw new Error(
-      `failed to bind workspace root through IPC: ${response.error || 'unknown error'}`
-    )
-  }
+): Promise<string> => {
+  return await createWorkspaceThroughSettingsUi(page, rootPath)
 }
 
 export const createFixtureWorkspace = async (
   page: Page,
   input: { name: string; rootPath?: string }
 ): Promise<WorkspaceCreateUiResponse> => {
-  const workspaceId = await createWorkspaceThroughSettingsUi(page, input.name)
-  if (input.rootPath) {
-    const rootPath = path.resolve(input.rootPath)
-    await mkdir(rootPath, { recursive: true })
-    await bindWorkspaceRootDirectly(page, workspaceId, rootPath)
-    await navigateToSettingsSection(page, 'workspace')
-    if (!(await waitForWorkspaceRootPathVisible(page, rootPath))) {
-      throw new Error(
-        `workspace root was bound through ipc but not reflected in settings ui: ${rootPath}`
-      )
-    }
+  if (!input.rootPath) {
+    throw new Error('workspace rootPath is required')
+  }
+  const rootPath = path.resolve(input.rootPath)
+  await mkdir(rootPath, { recursive: true })
+  const workspaceId = await createWorkspaceThroughSettingsUi(page, rootPath)
+  await navigateToSettingsSection(page, 'workspace')
+  if (!(await waitForWorkspaceRootPathVisible(page, rootPath))) {
+    throw new Error(`workspace root was created but not reflected in settings ui: ${rootPath}`)
   }
   const response = await page.evaluate(async () => await window.api.workspaceList())
   const workspace = response.items.find((item) => item.id === workspaceId)

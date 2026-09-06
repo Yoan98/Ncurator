@@ -9,7 +9,6 @@ import ConversationWorkbenchPage from './pages/ConversationWorkbenchPage'
 import SettingsPage from './pages/SettingsPage'
 import ModelDownloadPage from './pages/ModelDownloadPage'
 import NotificationCenter from './components/NotificationCenter'
-import { WorkbenchModeProvider } from './contexts/WorkbenchModeProvider'
 import { AppUpdateProvider } from './contexts/AppUpdateProvider'
 import AppWindowFrame from './components/app/AppWindowFrame'
 import UpdateRequiredPage from './pages/UpdateRequiredPage'
@@ -18,16 +17,16 @@ import type { AppStartupStatus } from '../../shared/types'
 dayjs.locale('zh-cn')
 
 const { Content } = Layout
-const PENDING_NOTIFICATION_SESSION_KEY = 'ncurator.pending-notification-session'
+const PENDING_NOTIFICATION_PARTNER_KEY = 'ncurator.pending-notification-partner'
 
 const SystemNotificationNavigationBridge: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
 
   useEffect(() => {
-    return window.api.onSystemNotificationOpenSession((sessionId) => {
+    return window.api.onSystemNotificationOpenPartner((partnerId) => {
       if (location.pathname === '/') return
-      window.sessionStorage.setItem(PENDING_NOTIFICATION_SESSION_KEY, sessionId)
+      window.sessionStorage.setItem(PENDING_NOTIFICATION_PARTNER_KEY, partnerId)
       navigate('/')
     })
   }, [location.pathname, navigate])
@@ -135,15 +134,13 @@ function App(): React.JSX.Element {
               <UpdateRequiredPage startupStatus={startupStatus} />
             </AppWindowFrame>
           ) : (
-            <WorkbenchModeProvider>
-              <HashRouter>
-                <SystemNotificationNavigationBridge />
-                <AppWindowFrame>
-                  <MainLayout />
-                  <NotificationCenter />
-                </AppWindowFrame>
-              </HashRouter>
-            </WorkbenchModeProvider>
+            <HashRouter>
+              <SystemNotificationNavigationBridge />
+              <AppWindowFrame>
+                <MainLayout />
+                <NotificationCenter />
+              </AppWindowFrame>
+            </HashRouter>
           )}
         </AppUpdateProvider>
       </AntdApp>

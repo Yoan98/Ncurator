@@ -8,16 +8,13 @@ import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
-  createWorkbenchNewSession,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
   selectWorkbenchAttachmentThroughNativeDialog,
-  selectWorkbenchWorkspace,
   setWorkbenchInput,
   setupWorkbenchWithTempWorkspace,
   submitWorkbenchCurrentDraft,
-  switchWorkbenchMode,
   waitForLatestAssistantProcess,
   waitForAntMessageText,
   waitForWorkbenchAiEvent,
@@ -134,8 +131,7 @@ describe('workbench conversation e2e', () => {
             run: async () => {
               setup = await setupWorkbenchWithTempWorkspace(page, {
                 caseId: CASE_ID,
-                workspaceName: 'Workbench User Message Actions Workspace',
-                createSession: false
+                workspaceName: 'Workbench User Message Actions Workspace'
               })
             }
           })
@@ -145,9 +141,6 @@ describe('workbench conversation e2e', () => {
             run: async () => {
               if (!setup) throw new Error('workspace setup missing')
               await navigateToWorkbench(page)
-              await createWorkbenchNewSession(page)
-              await selectWorkbenchWorkspace(page, setup.workspaceName)
-              await switchWorkbenchMode(page, 'AI')
               await getWorkbenchLocator(page, workbenchSelectors.input).click()
               await page.keyboard.type(RUNNING_MESSAGE)
               await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.markdownPath)

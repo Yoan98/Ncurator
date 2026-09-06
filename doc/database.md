@@ -21,31 +21,31 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 
 SQLite 保存以下业务数据：
 
-- 会话与用于中断恢复、压缩投影的 append-only 会话消息日志（`chat_session_message_log`）；不保存独立恢复快照。
-- AI run、审批和文件修改记录。
-- 搜索模式对话轮次（`chat_search_turn`），与 AI log 解耦；Workbench 打开会话时合并投影。
+- 伙伴（`partner`）以及用于中断恢复、压缩投影的 append-only 伙伴消息记录（`chat_session_message_log`，表名保留，行挂 `partner_id`）；不保存独立恢复快照。
+- AI run、审批和文件修改记录（均挂 `partner_id`）。不存在 `chat_search_turn`，Composer 已删除搜索模式。
 - 消息中的图片只保存运行时路径或 HTTP(S) 地址，以及 MIME、字节数和尺寸；SQLite 不保存 Base64，也不为临时图片建立独立文件表。运行时文件被清理后允许恢复为不可用占位。
-- 工作区、文件索引任务、文档元数据和网页源。
+- 工作地址（`workspace_source`，无 name，`root_path UNIQUE`）、文件索引任务、文档元数据和全局网页源（`web_source`，无 `workspace_id`，`UNIQUE(normalized_url)`）。
 - LLM 配置和 AI runtime 设置。
 - AI runtime 设置中的 `systemNotificationsEnabled`，默认值为 `1`，控制 AI 运行终态系统通知。
-- 文件内容和预览 artifact 的 SHA-256 对象引用；实际对象保存在工作区 `.ncurator/objects/sha256`，相同内容只存一份。
-- Workbench 会话 UI 快照、最后活动会话、未发送草稿和内置浏览器标签状态。
+- 文件内容和预览 artifact 的 SHA-256 对象引用；实际对象保存在 `userData/partners/{id}/objects/sha256`，相同内容只存一份。
+- Workbench 伙伴 UI 快照（`partner_ui_state`）、当前活动伙伴（`workbench_ui_state.active_view_key`）和内置浏览器标签状态（`browser_tab_state.owner_key` = partner_id）。
+- 定时任务（`scheduled_task.partner_id`）。
 
 关键规则：
 
-- `chat_session` 保存会话标题、所属工作空间，以及 `pinned` / `pinned_at` 置顶状态；列表按置顶优先、置顶时间、更新时间排序。
-- `chat_search_turn` 使用会话内 `seq` 保证搜索轮次稳定顺序。
-- `chat_session_message_log` 使用 `session_id + seq` 保证会话内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated`、`brain_user_snapshot` 和 `compaction_checkpoint` 是强类型 annotation。恢复投影读取记录自身的 `seq/run_id`，不会修改历史行；历史 build user 必须来自 `brain_user_snapshot` 冻结原文。
-- `ai_run.partial_answer` 与 `partial_answer_role` 只保存当前流式 UI 草稿；它们不参与下一次模型上下文恢复。`failure_code` 保存 `process_interrupted`、`output_truncated`、`input_too_long` 等终止原因。
+- `partner` 保存名称、头像外形与颜色，以及 `pinned` / `pinned_at` 置顶状态；列表按置顶优先、置顶时间、更新时间排序。标题就是伙伴 `name`，不因消息改名。
+- `chat_session_message_log` 使用 `partner_id + seq` 保证伙伴内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated`、`brain_user_snapshot`、`compaction_checkpoint` 和 `context_cleared` 是强类型 annotation。投影先切最后一次 `context_cleared`，再跑现有 compaction。恢复投影读取记录自身的 `seq/run_id`，不会修改历史行；历史 build user 必须来自 `brain_user_snapshot` 冻结原文。
+- `ai_run` 挂 `partner_id`，不再保存 `workspace_json`。`partial_answer` 与 `partial_answer_role` 只保存当前流式 UI 草稿；它们不参与下一次模型上下文恢复。`failure_code` 保存 `process_interrupted`、`output_truncated`、`input_too_long` 等终止原因。
 - 待审批状态以 SQLite 中的 run 记录为准。
 - `document.active_generation_id` 是当前有效索引版本。
 
-### Workbench 会话 UI 状态
+### Workbench 伙伴 UI 状态
 
-- `chat_session_ui_state` 以 `session_id` 为主键保存版本化 `state_json`，会话删除时通过外键级联删除。
-- `workbench_ui_state` 是 `id = 1` 的单例，保存最后活动会话和未发送的 `__draft__` UI 快照。
-- `browser_tab_state` 以 `owner_key` 隔离真实会话或 `__draft__` 的标签，保存 URL、标题、缩放、导航历史、顺序和更新时间。
-- 首次发送创建真实会话时，创建会话、复制草稿 UI 快照、清空草稿和转移浏览器标签在同一个 SQLite transaction 中完成。
+- `partner_ui_state` 以 `partner_id` 为主键保存版本化 `state_json`，伙伴删除时通过外键级联删除。
+- `workbench_ui_state` 是 `id = 1` 的单例，只保存 `active_view_key`（当前伙伴 id）；不再保存 `draft_state_json` 或 `__draft__`。
+- `browser_tab_state` 以 `owner_key` 隔离伙伴标签（`owner_key` = partner_id），保存 URL、标题、缩放、导航历史、顺序和更新时间。
+- 伙伴在创建弹窗提交时即落库，不存在草稿会话提升事务。
+- 删除伙伴级联删除 message log、`ai_run`、`ai_file_change`、`docx_apply`、`partner_ui_state` 和该伙伴定时任务，并清除 `browser_tab_state`、将 `active_view_key` 置空，同时删除 `userData/partners/{id}`。
 - Renderer 内存只负责当前交互，SQLite 是重启恢复的真相；浏览器 `WebContentsView` 只负责运行期页面实例，不是持久化真相。
 
 ## SQLite Migration
@@ -54,7 +54,7 @@ SQLite 保存以下业务数据：
 
 - 当前代码支持的最终 schema version 是 `10`，由 `CURRENT_SCHEMA_VERSION` 定义。
 - version `1–9` 已随正式版发布，永久保留且不可改写。已知历史例外只有 version 2 的旧名称 `workspace_change_sets`；version 9 继续负责修复通知字段。
-- version `10` 把上次正式版之后尚未发布的变更合并为一次 `upgrade_from_v9`：创建最终版定时任务和消息日志表，删除 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event` 与废弃字段，并为 `ai_run` 增加失败原因及流式 UI 草稿角色字段；同时删除 `chat_session_skill_state` 与 `chat_message`，新增 `chat_search_turn`；并为 `chat_session` 增加 `pinned` / `pinned_at` 置顶字段与索引。
+- version `10` 是破坏性升级，不迁旧数据。`upgrade_from_v9` 从 v9 升级时 DROP 旧表再建最终结构：新增 `partner`；删除 `chat_session`、`chat_session_ui_state`（以及 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event`、`chat_session_skill_state`、`chat_message`）；`chat_session_message_log` / `ai_run` / `ai_file_change` / `docx_apply` 改挂 `partner_id`；新增 `partner_ui_state`；`workbench_ui_state` 只留 `active_view_key`，删除 `draft_state_json`；`scheduled_task` 改挂 `partner_id`；`workspace_source` 去掉 name 且 `root_path UNIQUE`；`web_source` 去掉 `workspace_id` 且 `UNIQUE(normalized_url)`；`ai_run` 不再保存 `workspace_json`。不存在、也不新建 `chat_search_turn`。空库仍执行 version `1–10`，跑完后结构与 v9 升级路径一致。
 - 哪些 migration 已正式发布，以 `migrations/released-migrations.json` 为唯一边界。未进入清单的连续迁移可以在发布前合并或重写；进入清单后只能新增更高版本修复。
 
 ### 版本身份与执行规则
@@ -117,7 +117,7 @@ LanceDB 只创建和使用 `vector_chunk` 表。
 
 - 高频业务 update。
 - 业务状态 mergeInsert。
-- 用 LanceDB 保存会话、消息、run、审批、网页源、工作区状态或配置。
+- 用 LanceDB 保存伙伴、消息记录、run、审批、网页源、工作地址或配置。
 
 ## SQLite 与 LanceDB 的关系
 
@@ -125,7 +125,7 @@ SQLite 决定什么数据有效，LanceDB 只负责在有效范围内检索内�
 
 搜索流程：
 
-1. 从 SQLite 读取当前 workspace 和 document 元数据。
+1. 从 SQLite 读取当前工作地址和 document 元数据。
 2. 确认当前有效的 `active_generation_id`。
 3. 到 LanceDB 搜索 `workspace_id + source_type + generation_id`。
 4. 返回命中的 chunk 和来源信息。
@@ -150,7 +150,7 @@ LanceDB fragment 是一次或多次写入形成的数据片段，不等于一行
 
 ## 性能约束
 
-- 会话首屏只读取必要数据，不回放完整 run/event。
+- 伙伴首屏只读取必要数据，不回放完整 run/event。
 - 完整 run/event replay、context usage、file change detail 不进入切换首屏关键路径。
 - chunk 写入必须批量进行。
 - 慢查询优先检查 generation 过滤、workspace 过滤、source type 过滤和 fragment 数量。

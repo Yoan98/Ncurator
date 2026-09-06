@@ -13,7 +13,7 @@ const isDeliveryAssistant = (record: ChatMessageLogRecord): boolean =>
   record.entry.kind === 'assistant' && record.entry.toolCalls.length === 0
 
 export const projectAiConversationMessages = (input: {
-  sessionId: string
+  partnerId: string
   records: ChatMessageLogRecord[]
   runs: AiRunRecord[]
 }): ChatMessage[] => {
@@ -27,7 +27,6 @@ export const projectAiConversationMessages = (input: {
 
   const messages: ChatMessage[] = []
   for (const run of runs) {
-    if (!run.workspace) continue
     const runRecords = (recordsByRun.get(run.id) || []).sort((left, right) => left.seq - right.seq)
     const userRecord = runRecords.find((record) => record.entry.kind === 'user')
     const userEntry = userRecord?.entry
@@ -36,13 +35,12 @@ export const projectAiConversationMessages = (input: {
         ? userEntry.context
         : {
             selectedReferences: run.selectedReferences || [],
-            attachments: run.attachments || [],
-            workspace: run.workspace
+            attachments: run.attachments || []
           }
 
     messages.push({
       id: run.userMessageId,
-      session_id: input.sessionId,
+      partner_id: input.partnerId,
       role: 'user',
       content: userEntry?.kind === 'user' ? userEntry.content : run.input,
       timestamp: userRecord?.createdAt ?? run.createdAt,
@@ -60,7 +58,7 @@ export const projectAiConversationMessages = (input: {
     if (deliveryContent || isActive || run.error) {
       messages.push({
         id: run.assistantMessageId,
-        session_id: input.sessionId,
+        partner_id: input.partnerId,
         role: 'assistant',
         content: deliveryContent,
         timestamp:

@@ -5,22 +5,18 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
-  appendWorkbenchInputText,
   createWorkbenchNewSession,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   insertWorkbenchReferenceToken,
+  openWorkbenchWorkspaceFile,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
-  selectWorkbenchWorkspace,
   setupWorkbenchWithTempWorkspace,
-  submitWorkbenchCurrentDraft,
-  switchWorkbenchMode,
   waitForApplyEntry,
   waitForWorkbenchAiRunCompletion,
   waitForWorkbenchAiEvent,
   waitForWorkbenchApplyRecordStatus,
-  waitForWorkbenchSearchResults,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
@@ -52,17 +48,7 @@ describe('workbench result e2e', () => {
           const targetPath = path.join(setup.workspace.rootPath, 'workbench-preview.md')
           const beforeBytes = await fs.readFile(targetPath)
 
-          await switchWorkbenchMode(page, '搜索')
-          await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
-          await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
-          await submitWorkbenchCurrentDraft(page)
-          const searchResults = await waitForWorkbenchSearchResults(page)
-          await searchResults
-            .locator('div')
-            .filter({ hasText: 'workbench-preview.md' })
-            .first()
-            .getByRole('button', { name: '预览文件' })
-            .click()
+          await openWorkbenchWorkspaceFile(runtime, 'workbench-preview.md')
           await getWorkbenchLocator(page, workbenchSelectors.markdownEditor).waitFor({
             state: 'visible',
             timeout: 30_000
@@ -97,8 +83,6 @@ describe('workbench result e2e', () => {
           }, '检测到当前文件被外部修改，已自动刷新')
 
           await createWorkbenchNewSession(page)
-          await selectWorkbenchWorkspace(page, setup.workspaceName)
-          await switchWorkbenchMode(page, 'AI')
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(

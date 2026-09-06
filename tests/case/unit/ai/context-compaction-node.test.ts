@@ -8,20 +8,13 @@ const createContext = (): AiRunContext =>
   ({
     platform: 'macos',
     runId: 'run-compaction-shape',
-    sessionId: 'session-compaction-shape',
+    partnerId: 'partner-compaction-shape',
+    partnerName: '测试伙伴',
+    workspaceRoots: ['/tmp/workspace-1'],
     runStartedAt: Date.now(),
     preference: 'default',
-    workspace: {
-      workspaceId: 'workspace-1',
-      workspaceName: 'workspace-1',
-      rootPath: '/tmp/workspace-1'
-    },
+    executionPermission: 'review',
     referenceScope: {
-      workspace: {
-        workspaceId: 'workspace-1',
-        workspaceName: 'workspace-1',
-        rootPath: '/tmp/workspace-1'
-      },
       selectedReferences: [],
       attachments: []
     }

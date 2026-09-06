@@ -77,7 +77,6 @@ export type AppStartupStatus =
     }
 
 export interface WebIngestPayload {
-  workspaceId: string
   url: string
   includeSelectors?: string[]
   excludeSelectors?: string[]
@@ -104,7 +103,6 @@ export interface DocumentRecord {
 
 export interface WebSourceRecord {
   id: string
-  workspace_id: string
   identity_kind: WebSourceIdentityKind
   normalized_url: string
   url: string
@@ -128,8 +126,7 @@ export interface WebSourceRecord {
 
 export interface WorkspaceSource {
   id: string
-  name: string
-  root_path?: string
+  root_path: string
   created_at: number
   updated_at: number
 }
@@ -187,6 +184,7 @@ export interface WorkspaceWebSummary {
 export interface WorkspaceListItem extends WorkspaceSource {
   file_count: number
   web_count: number
+  root_kind: 'file' | 'directory'
 }
 
 export interface WorkspaceRuntimeBinding {
@@ -223,7 +221,6 @@ export interface FileReference {
 
 export interface WebReference {
   kind: 'web'
-  workspaceId: string
   webSourceId: string
   name: string
   url: string
@@ -303,7 +300,7 @@ export interface WebSourceListResponse {
 }
 
 export interface CreateWorkspaceSourceRequest {
-  name: string
+  rootPath: string
 }
 
 export interface WorkspaceMutationResponse {
@@ -380,26 +377,22 @@ export interface WorkspaceIndexJobResponse {
 }
 
 export interface RefreshWebSourceRequest {
-  workspaceId: string
   webSourceId: string
 }
 
 export interface ScanWebSourcesRequest {
-  workspaceId: string
+  sourceKind?: 'web'
 }
 
 export interface PrepareWebSourcesRequest {
-  workspaceId: string
+  sourceKind?: 'web'
 }
 
 export interface DeleteWebSourceRequest {
-  workspaceId: string
   webSourceId: string
 }
 
-export interface ListWebSourcesRequest {
-  workspaceId: string
-}
+export type ListWebSourcesRequest = Record<string, never>
 
 export interface WebSourceMutationResponse {
   success: boolean
@@ -414,8 +407,6 @@ export interface DeleteWebSourceResponse {
 }
 
 export interface ListReferenceItemsRequest {
-  mode: 'chat' | 'search'
-  workspaceId?: string
   referenceKinds?: ReferenceKind[]
 }
 
@@ -555,7 +546,7 @@ export type ChatAttachment = {
 }
 
 export type AttachmentPickRequest = {
-  workspaceRootPath: string
+  partnerId: string
   assetBucketId: string
 }
 
@@ -578,7 +569,7 @@ export type AttachmentCreateFromPathRequest = {
 }
 
 export type AttachmentSaveRequest = {
-  workspaceRootPath: string
+  partnerId: string
   assetBucketId: string
   name: string
   bytes: Uint8Array
@@ -598,7 +589,7 @@ export type MarkdownLinkAccessEntry = {
 
 export interface ChatMessage {
   id: string
-  session_id: string
+  partner_id: string
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: number
@@ -611,28 +602,79 @@ export interface ChatMessage {
   error?: boolean
 }
 
-export interface ChatSession {
+export const PARTNER_AVATAR_SHAPES = [
+  'circle',
+  'blob',
+  'rounded_square',
+  'pill',
+  'triangle',
+  'hexagon',
+  'cloud',
+  'teardrop'
+] as const
+export type PartnerAvatarShape = (typeof PARTNER_AVATAR_SHAPES)[number]
+
+export const PARTNER_AVATAR_COLORS = [
+  'black',
+  'brown',
+  'red',
+  'orange',
+  'yellow',
+  'green',
+  'teal',
+  'blue',
+  'purple',
+  'pink',
+  'light_grey',
+  'dark_grey'
+] as const
+export type PartnerAvatarColor = (typeof PARTNER_AVATAR_COLORS)[number]
+
+export interface Partner {
   id: string
-  title: string
-  created_at: number
-  workspace_id: string
+  name: string
+  avatar_shape: PartnerAvatarShape
+  avatar_color: PartnerAvatarColor
   pinned: boolean
   pinned_at: number | null
+  created_at: number
+  updated_at: number
+  last_viewed_at: number
 }
 
-export interface ChatSessionListItem extends ChatSession {
+export interface PartnerListItem extends Partner {
   isRunning: boolean
   hasUnreadCompletion: boolean
 }
 
-export type ChatSessionSetPinnedRequest = {
+export type PartnerCreateRequest = {
+  name: string
+  avatar_shape: PartnerAvatarShape
+  avatar_color: PartnerAvatarColor
+}
+
+export type PartnerCreateResponse = {
+  success: boolean
+  partner?: Partner
+  error?: string
+}
+
+export type PartnerSetPinnedRequest = {
   id: string
   pinned: boolean
 }
 
-export type ChatSessionUiMode = 'ai' | 'search'
+export type PartnerClearContextRequest = {
+  partnerId: string
+}
 
-export type ChatSessionUiFileRef = {
+export type PartnerClearContextResponse = {
+  success: boolean
+  error?: string
+  clearedAt?: number
+}
+
+export type PartnerUiFileRef = {
   path: string
   fileName: string
   origin: 'search_hit' | 'read' | 'artifact' | 'preview' | 'source'
@@ -643,39 +685,36 @@ export type ChatSessionUiFileRef = {
   isDirectory?: boolean
 }
 
-export type ChatSessionUiPanelState =
+export type PartnerUiPanelState =
   | { kind: 'empty'; title: string; description: string }
-  | { kind: 'search_list'; title: string; query: string; results: SearchResult[]; tokens: string[] }
   | {
       kind: 'file_preview'
       title: string
-      file: ChatSessionUiFileRef
-      backTarget?: ChatSessionUiPanelState
+      file: PartnerUiFileRef
+      backTarget?: PartnerUiPanelState
     }
   | { kind: 'file_launcher'; title: string }
   | { kind: 'apply_workspace'; title: string; applyId: string | null }
   | { kind: 'browser'; title: string; browserTabId: string }
 
-export type ChatSessionUiResourceTab = {
+export type PartnerUiResourceTab = {
   id: string
   kind: 'file' | 'browser'
   title: string
   filePath?: string
   browserTabId?: string
   state: Extract<
-    ChatSessionUiPanelState,
+    PartnerUiPanelState,
     { kind: 'file_preview' | 'file_launcher' | 'apply_workspace' | 'browser' }
   >
 }
 
-export type ChatSessionUiStateV1 = {
+export type PartnerUiStateV1 = {
   version: 1
   composer: {
-    mode: ChatSessionUiMode
     aiPreference: AiPreference
     executionPermission: AiExecutionPermission
     modelSelection: WorkbenchModelSelection
-    workspaceId: string | null
     draft: {
       input: string
       contentNodes: ChatMessageContentNode[]
@@ -685,19 +724,19 @@ export type ChatSessionUiStateV1 = {
     }
   }
   panel: {
-    tabs: ChatSessionUiResourceTab[]
+    tabs: PartnerUiResourceTab[]
     activeTabId: string | null
     collapsed: boolean
-    fallbackState: ChatSessionUiPanelState
+    fallbackState: PartnerUiPanelState
   }
 }
 
-export type ChatSessionUiStateSaveRequest = {
-  sessionId: string
-  state: ChatSessionUiStateV1
+export type PartnerUiStateSaveRequest = {
+  partnerId: string
+  state: PartnerUiStateV1
 }
 
-export type ChatSessionUiStateSaveResponse = {
+export type PartnerUiStateSaveResponse = {
   success: boolean
   updatedAt?: number
   error?: string
@@ -705,13 +744,11 @@ export type ChatSessionUiStateSaveResponse = {
 
 export type WorkbenchUiState = {
   activeViewKey: string | null
-  draftState: ChatSessionUiStateV1 | null
   updatedAt: number
 }
 
 export type WorkbenchUiStateSaveRequest = {
   activeViewKey: string | null
-  draftState: ChatSessionUiStateV1 | null
 }
 
 export type WorkbenchUiStateResponse = {
@@ -805,7 +842,7 @@ export interface TextFileDiffArtifact {
 
 export interface AiFileChangeRecord {
   id: string
-  sessionId: string
+  partnerId: string
   runId: string
   status: AiFileChangeStatus
   capability: AiFileChangeCapability
@@ -834,7 +871,7 @@ export interface AiFileChangeRecord {
 }
 
 export interface ListAiFileChangeRecordsRequest {
-  sessionId?: string
+  partnerId?: string
   runId?: string
   status?: AiFileChangeStatus
 }
@@ -870,7 +907,7 @@ export type DocxApplyStatus = AiFileChangeStatus
 
 export interface DocxApplyRecord {
   id: string
-  session_id: string
+  partner_id: string
   run_id: string
   status: DocxApplyStatus
   source_path: string
@@ -898,7 +935,7 @@ export interface DocxApplyRecord {
 }
 
 export interface ListDocxApplyRecordsRequest {
-  sessionId?: string
+  partnerId?: string
   status?: DocxApplyStatus
 }
 
@@ -1081,9 +1118,19 @@ export type AiDraftSnapshotRef = {
 }
 export type AiArtifactRef = AiFileArtifactRef
 
-export type ChatSubmitMode = 'ai' | 'search'
 export type AiPreference = 'default' | 'local_sources_relaxed' | 'local_sources_strict'
 export type AiExecutionPermission = 'review' | 'full_access'
+
+export type ChatSubmitRequest = {
+  preference?: AiPreference
+  executionPermission?: AiExecutionPermission
+  partnerId: string
+  input: string
+  contentNodes?: ChatMessageContentNode[]
+  selectedReferences?: SelectedReference[]
+  attachments?: ChatAttachment[]
+  mainModel?: WorkbenchSelectedModel
+}
 
 export type ScheduledTaskScheduleType = 'daily' | 'weekly'
 
@@ -1095,7 +1142,7 @@ export type ScheduledTask = {
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday: number | null
-  workspaceId: string
+  partnerId: string
   mainModel: WorkbenchSelectedModel
   aiPreference: AiPreference
   executionPermission: AiExecutionPermission
@@ -1112,7 +1159,7 @@ export type ScheduledTaskSaveRequest = {
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday?: number | null
-  workspaceId: string
+  partnerId: string
   mainModel: WorkbenchSelectedModel
   aiPreference?: AiPreference
   executionPermission?: AiExecutionPermission
@@ -1129,30 +1176,15 @@ export type ScheduledTaskSetEnabledRequest = {
   enabled: boolean
 }
 
-export type ChatSubmitRequest = {
-  mode: ChatSubmitMode
-  preference?: AiPreference
-  executionPermission?: AiExecutionPermission
-  sessionId: string
-  input: string
-  contentNodes?: ChatMessageContentNode[]
-  selectedReferences?: SelectedReference[]
-  attachments?: ChatAttachment[]
-  mainModel?: WorkbenchSelectedModel
-  workspace?: WorkspaceRuntimeBinding
-  searchDocumentIds?: string[]
-}
-
 export type AiRunRecord = {
   id: string
-  sessionId: string
+  partnerId: string
   userMessageId: string
   assistantMessageId: string
   status: AiRunStatus
   input: string
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
-  workspace?: WorkspaceRuntimeBinding
   modelName?: string
   mainModel?: WorkbenchSelectedModel
   preference?: AiPreference
@@ -1169,58 +1201,55 @@ export type AiRunRecord = {
   finishedAt?: number
 }
 
-export type ChatSessionRunSnapshot = {
+export type PartnerRunSnapshot = {
   run: AiRunRecord
   messageLogRecords?: ChatMessageLogRecord[]
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
 }
 
-export type ChatSessionSnapshotRequest = {
-  sessionId: string
+export type PartnerSnapshotRequest = {
+  partnerId: string
 }
 
-export type ChatSessionSnapshotResponse = {
+export type PartnerSnapshotResponse = {
   messages: ChatMessage[]
-  runs?: ChatSessionRunSnapshot[]
-  activeRuns: ChatSessionRunSnapshot[]
+  runs?: PartnerRunSnapshot[]
+  activeRuns: PartnerRunSnapshot[]
 }
 
-export type ChatSessionOpenRequest = {
-  sessionId: string
+export type PartnerOpenRequest = {
+  partnerId: string
   limit?: number
   beforeTimestamp?: number
 }
 
-export type ChatSessionOpenResponse = {
-  session?: ChatSession
+export type PartnerOpenResponse = {
+  partner?: Partner
   messages: ChatMessage[]
   hasMoreBefore: boolean
-  activeRuns: ChatSessionRunSnapshot[]
-  uiState?: ChatSessionUiStateV1
+  lastContextClearedAt?: number | null
+  activeRuns: PartnerRunSnapshot[]
+  uiState?: PartnerUiStateV1
 }
 
-export type ChatSessionRunSummariesRequest = {
-  sessionId: string
+export type PartnerRunSummariesRequest = {
+  partnerId: string
 }
 
-export type ChatSessionRunSummariesResponse = {
-  runs: ChatSessionRunSnapshot[]
+export type PartnerRunSummariesResponse = {
+  runs: PartnerRunSnapshot[]
 }
 
 export type ChatSubmitResponse = {
   success: boolean
-  mode?: ChatSubmitMode
   userMessage?: ChatMessage
   assistantMessage?: ChatMessage
   run?: AiRunRecord
-  results?: SearchResult[]
-  tokens?: string[]
-  content?: string
   error?: string
 }
 
 export type ChatTurnRetractLatestRequest = {
-  sessionId: string
+  partnerId: string
   userMessageId: string
 }
 
@@ -1365,7 +1394,7 @@ export type BrowserTabNavigateRequest = BrowserTabMutationRequest & {
 export type BrowserTabCreateResponse = BrowserPanelStateResponse
 
 export type AiContextUsageRequest = {
-  sessionId: string
+  partnerId: string
 }
 
 export type AiContextUsageResponse = {
@@ -1414,7 +1443,7 @@ type AiRunEventPayload =
   | {
       type: 'run_started'
       runId: string
-      sessionId: string
+      partnerId: string
       createdAt: number
       input: string
     }
@@ -1762,7 +1791,6 @@ export type ChatMessageImageRef = {
 export type ChatMessageLogUserContext = {
   selectedReferences: SelectedReference[]
   attachments: ChatAttachment[]
-  workspace: WorkspaceRuntimeBinding
 }
 
 export type ChatMessageLogPlanItem = {
@@ -1808,6 +1836,11 @@ export type ChatMessageLogAnnotationEntry =
     }
   | {
       kind: 'annotation'
+      eventType: 'context_cleared'
+      payload: JsonObject
+    }
+  | {
+      kind: 'annotation'
       eventType: 'approval_batch_resolved'
       payload: {
         batchId: string
@@ -1847,7 +1880,7 @@ export type ChatMessageLogEntry =
 
 export type ChatMessageLogRecord = {
   id: string
-  sessionId: string
+  partnerId: string
   runId: string
   seq: number
   entry: ChatMessageLogEntry

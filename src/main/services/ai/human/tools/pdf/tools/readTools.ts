@@ -190,7 +190,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                 action: 'materialize_pages',
                 payload: {
                   docId: document.docId,
-                  workspaceRootPath: runtime.workspaceRootPath,
+                  partnerId: runtime.input.partnerId,
                   pageNumbers
                 }
               })

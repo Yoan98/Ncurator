@@ -1,17 +1,12 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { App as AntdApp, Button, Modal, Spin, Tooltip } from 'antd'
+import { App as AntdApp, Button, Input, Modal, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
   HiCheck,
-  HiChevronDown,
   HiChevronLeft,
   HiChevronRight,
-  HiClock,
-  HiFolder,
   HiOutlineClipboardDocument,
   HiOutlineClock,
-  HiOutlineExclamationCircle,
-  HiOutlineFolderPlus,
   HiOutlinePencilSquare,
   HiOutlineQuestionMarkCircle,
   HiPhoto,
@@ -30,17 +25,22 @@ import type {
   ChatAttachment,
   ChatMessage,
   ChatMessageContentNode,
-  ChatSession,
-  ChatSessionListItem,
-  ChatSessionRunSnapshot,
-  ChatSessionUiPanelState,
-  ChatSessionUiStateV1,
+  Partner,
+  PartnerListItem,
+  PartnerRunSnapshot,
+  PartnerUiPanelState,
+  PartnerUiStateV1,
+  PartnerAvatarShape,
+  PartnerAvatarColor,
   LLMConfig,
   LlmRemoteModel,
   SelectedReference,
   WorkbenchModelSelection,
-  WorkspaceSource,
-  WorkspaceRuntimeBinding
+  WorkspaceSource
+} from '../../../shared/types'
+import {
+  PARTNER_AVATAR_SHAPES,
+  PARTNER_AVATAR_COLORS
 } from '../../../shared/types'
 import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE, USER_MANUAL_URL } from '../../../shared/constants'
 import { findBrowserTabByUrl } from '../../../shared/browserUrl'
@@ -48,10 +48,6 @@ import {
   pickFallbackWorkbenchModel,
   resolveSelectedWorkbenchModel
 } from '../../../shared/workbenchModelSelection'
-import {
-  isWorkbenchModeSwitchAllowed,
-  resolveWorkbenchSessionModeLock
-} from '../../../shared/workbenchSessionModeLock'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
 import { normalizeUserFacingError } from '../utils/userFacingError'
@@ -86,24 +82,19 @@ import {
 import type {
   AssistantTurnViewModel,
   WorkbenchContextUsage,
-  SearchWorkbenchTurn,
   WorkbenchContentPanelState,
   WorkbenchFileRef,
   WorkbenchResourceTab,
   WorkbenchTabWorkspaceState,
   WorkbenchAiPreference,
-  WorkbenchExecutionPermission,
-  WorkbenchMode
+  WorkbenchExecutionPermission
 } from '../components/workbench/types'
 import type { OpenableMarkdownReference } from '../components/markdownReference'
 import {
   completeAssistantProcessGroups,
-  createSearchProcessGroup,
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
-  formatRelativeTime,
   getAttachmentTypeLabel,
-  getSearchResultFileRef,
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts
 } from '../components/workbench/utils'
@@ -126,17 +117,11 @@ import {
 import { chatSelectors, workbenchSelectors } from '../testing/selectors'
 import SidebarPanelIcon from '../components/SidebarPanelIcon'
 import brandIcon from '../../../../logo/png/ncurator-logo-24.png'
-import {
-  collectReferenceDocumentIds,
-  getReferenceKey,
-  pruneReferencesByWorkspace
-} from '../utils/reference'
-import { useWorkbenchMode } from '../contexts/WorkbenchModeContext'
+import PartnerAvatar, { PARTNER_AVATAR_COLOR_HEX } from '../components/workbench/PartnerAvatar'
 import SidebarUpdateControl from '../components/update/SidebarUpdateControl'
 
 type ApprovalBatchRequiredEvent = Extract<AiRunEvent, { type: 'approval_batch_required' }>
 type ApprovalBatchDecisionAction = 'approve' | 'reject' | 'guide'
-const COLLAPSED_WORKSPACE_SESSION_LIMIT = 5
 type WorkbenchE2EWindow = Window &
   typeof globalThis & {
     __NCURATOR_E2E_SET_WORKBENCH_DRAFT__?: (draft: ComposerDraftValue) => void
@@ -204,6 +189,29 @@ const formatUserMessageTime = (timestamp: number, now = Date.now()): string => {
   return `${date.getFullYear()}/${padTimePart(date.getMonth() + 1)}/${padTimePart(date.getDate())} ${time}`
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000
+
+const startOfLocalDay = (timestamp: number): number => {
+  const date = new Date(timestamp)
+  date.setHours(0, 0, 0, 0)
+  return date.getTime()
+}
+
+const formatTimelineDayLabel = (dayStart: number, todayStart: number): string => {
+  const offset = Math.round((todayStart - dayStart) / DAY_MS)
+  if (offset === 0) return '今天'
+  if (offset === 1) return '昨天'
+  if (offset === 2) return '前天'
+  return new Date(dayStart).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
+}
+
+const formatTimelineDayDate = (dayStart: number): string =>
+  new Date(dayStart).toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
+
 const clampWorkbenchSidebarWidth = (width: number): number =>
   Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, width))
 
@@ -253,20 +261,9 @@ const createThinkingAssistantTurn = (messageId: string): AssistantTurnViewModel 
 })
 
 const createSearchAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
-  messageId,
-  status: 'running',
-  runFinished: false,
-  processThoughts: [],
-  processGroups: [createSearchProcessGroup(messageId)],
-  finalAnswerMarkdown: '',
-  streamingMarkdown: '',
-  streamingRole: 'answer',
-  plan: [],
-  artifacts: [],
-  applyTargets: [],
-  waitingApproval: false,
-  pendingApprovalItems: [],
-  approvalReviews: []
+  ...createAssistantTurn(messageId),
+  status: 'completed',
+  runFinished: true
 })
 
 const artifactToApplyTarget = (
@@ -605,7 +602,7 @@ const applyRunRecordToTurn = (
 }
 
 const buildAssistantTurnFromRunSnapshot = (
-  snapshot: ChatSessionRunSnapshot
+  snapshot: PartnerRunSnapshot
 ): AssistantTurnViewModel => {
   const projected = projectProcessGroups({
     runId: snapshot.run.id,
@@ -687,25 +684,6 @@ const sortFileChangeRecords = (items: AiFileChangeRecord[]): AiFileChangeRecord[
   })
 }
 
-const createWorkspaceBinding = (
-  workspace: WorkspaceSource | null
-): WorkspaceRuntimeBinding | undefined =>
-  hasWorkspaceRootPath(workspace)
-    ? {
-        workspaceId: workspace.id,
-        workspaceName: workspace.name,
-        rootPath: workspace.root_path
-      }
-    : undefined
-
-const hasWorkspaceRootPath = (
-  workspace: WorkspaceSource | null
-): workspace is WorkspaceSource & { root_path: string } =>
-  typeof workspace?.root_path === 'string' && workspace.root_path.trim().length > 0
-
-const getWorkspaceRequirementHint = (workspace: WorkspaceSource | null): string =>
-  workspace ? '当前工作区未设置文件目录，请前往 设置 > 工作空间 设置工作目录后' : '请先选择工作区'
-
 const delay = (ms: number): Promise<void> =>
   new Promise((resolve) => {
     window.setTimeout(resolve, ms)
@@ -735,7 +713,7 @@ const createEmptyComposerDraft = (): ComposerDraftValue => ({
 
 const toPersistedComposerDraft = (
   draft: ComposerDraftValue
-): ChatSessionUiStateV1['composer']['draft'] => ({
+): PartnerUiStateV1['composer']['draft'] => ({
   input: draft.input,
   contentNodes: draft.contentNodes,
   selectedReferences: draft.selectedReferences,
@@ -743,24 +721,21 @@ const toPersistedComposerDraft = (
   assetBucketId: draft.assetBucketId || null
 })
 
-const createDefaultSessionUiState = (
-  modelSelection: WorkbenchModelSelection = { mainModel: null },
-  workspaceId: string | null = null
-): ChatSessionUiStateV1 => ({
+const createDefaultPartnerUiState = (
+  modelSelection: WorkbenchModelSelection = { mainModel: null }
+): PartnerUiStateV1 => ({
   version: 1,
   composer: {
-    mode: 'ai',
     aiPreference: 'default',
     executionPermission: 'review',
     modelSelection,
-    workspaceId,
     draft: toPersistedComposerDraft(createEmptyComposerDraft())
   },
   panel: {
     tabs: [],
     activeTabId: null,
     collapsed: true,
-    fallbackState: createEmptyPanel() as ChatSessionUiPanelState
+    fallbackState: createEmptyPanel() as PartnerUiPanelState
   }
 })
 
@@ -793,18 +768,22 @@ const getUserAttachmentPaths = (messages: readonly ChatMessage[]): string[] =>
 const ChatPage: React.FC = () => {
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
-  const openWorkspaceSettings = useCallback(() => {
-    navigate('/settings/workspace')
-  }, [navigate])
-  const [sessions, setSessions] = useState<ChatSessionListItem[]>([])
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null)
+  const [partners, setPartners] = useState<PartnerListItem[]>([])
+  const [currentPartnerId, setCurrentPartnerId] = useState<string | null>(null)
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
-  const [switchingSessionId, setSwitchingSessionId] = useState<string | null>(null)
+  const [switchingPartnerId, setSwitchingPartnerId] = useState<string | null>(null)
   const [hasMoreMessagesBefore, setHasMoreMessagesBefore] = useState(false)
   const [loadingOlderMessages, setLoadingOlderMessages] = useState(false)
-  const [deleteConfirmSession, setDeleteConfirmSession] = useState<ChatSession | null>(null)
-  const [deletingSessionIds, setDeletingSessionIds] = useState<Set<string>>(() => new Set())
-  const { mode: composerMode, setMode: setComposerMode } = useWorkbenchMode()
+  const [deleteConfirmPartner, setDeleteConfirmPartner] = useState<Partner | null>(null)
+  const [deletingPartnerIds, setDeletingPartnerIds] = useState<Set<string>>(() => new Set())
+  const [createPartnerOpen, setCreatePartnerOpen] = useState(false)
+  const [createPartnerName, setCreatePartnerName] = useState('')
+  const [createPartnerShape, setCreatePartnerShape] = useState<PartnerAvatarShape>('circle')
+  const [createPartnerColor, setCreatePartnerColor] = useState<PartnerAvatarColor>('blue')
+  const [createPartnerSubmitting, setCreatePartnerSubmitting] = useState(false)
+  const [lastContextClearedAt, setLastContextClearedAt] = useState<number | null>(null)
+  const [hoveredGrayMessageId, setHoveredGrayMessageId] = useState<string | null>(null)
+  const [clearContextVisible, setClearContextVisible] = useState(false)
   const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>('default')
   const [composerExecutionPermission, setComposerExecutionPermission] =
     useState<WorkbenchExecutionPermission>('review')
@@ -818,9 +797,6 @@ const ChatPage: React.FC = () => {
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [assetBucketId, setAssetBucketId] = useState<string | null>(null)
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
-  const [workspacesLoaded, setWorkspacesLoaded] = useState(false)
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null)
-  const [workspaceDocumentIds, setWorkspaceDocumentIds] = useState<string[]>([])
   const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
   const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false)
   const [modelListsByConfigId, setModelListsByConfigId] = useState<
@@ -852,10 +828,6 @@ const ChatPage: React.FC = () => {
       stored ? Number(stored) : WORKBENCH_CONTENT_PANEL_DEFAULT_RATIO
     )
   })
-  const [collapsedWorkspaceIds, setCollapsedWorkspaceIds] = useState<Set<string>>(() => new Set())
-  const [expandedWorkspaceSessionIds, setExpandedWorkspaceSessionIds] = useState<Set<string>>(
-    () => new Set()
-  )
   const [contentPanelCollapsed, setContentPanelCollapsed] = useState(true)
   const [contentPanelShellMounted, setContentPanelShellMounted] = useState(false)
   const [contentPanelShellVisible, setContentPanelShellVisible] = useState(false)
@@ -883,14 +855,14 @@ const ChatPage: React.FC = () => {
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
 
   const activeRunMessageIdsRef = useRef<Record<string, string>>({})
-  const activeRunSessionIdsRef = useRef<Record<string, string>>({})
+  const activeRunPartnerIdsRef = useRef<Record<string, string>>({})
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
-  const currentSessionIdRef = useRef<string | null>(null)
+  const currentPartnerIdRef = useRef<string | null>(null)
   const submitInFlightRef = useRef(false)
   const lastSubmittedInputRef = useRef('')
-  const sessionSwitchRequestRef = useRef(0)
-  const sessionListHydratedRef = useRef(false)
-  const composerDraftBySessionIdRef = useRef<Record<string, ComposerDraftValue>>({})
+  const partnerSwitchRequestRef = useRef(0)
+  const partnerListHydratedRef = useRef(false)
+  const composerDraftByPartnerIdRef = useRef<Record<string, ComposerDraftValue>>({})
   const composerDraftVersionRef = useRef(0)
   const loadApplyRecordRef = useRef<
     (input: {
@@ -899,9 +871,9 @@ const ChatPage: React.FC = () => {
       openWorkspace?: boolean
     }) => Promise<void>
   >(async () => {})
-  const loadFileChangesForSessionRef = useRef<
+  const loadFileChangesForPartnerRef = useRef<
     (
-      sessionId: string,
+      partnerId: string,
       runId: string,
       options?: {
         preferredApplyId?: string | null
@@ -938,7 +910,6 @@ const ChatPage: React.FC = () => {
   const scrollFrameRef = useRef<number | null>(null)
   const messageAttachmentPreviewUrlsRef = useRef<Record<string, string>>({})
   const notifiedNoEffectiveChangeIdsRef = useRef<Set<string>>(new Set())
-  const composerModeRef = useRef<WorkbenchMode>(composerMode)
   const composerAiPreferenceRef = useRef<WorkbenchAiPreference>(composerAiPreference)
   const composerExecutionPermissionRef = useRef<WorkbenchExecutionPermission>(
     composerExecutionPermission
@@ -947,15 +918,14 @@ const ChatPage: React.FC = () => {
   const attachmentDragDepthRef = useRef(0)
   const [isAttachmentDropActive, setIsAttachmentDropActive] = useState(false)
   const modelSelectionRef = useRef<WorkbenchModelSelection>(modelSelection)
-  const selectedWorkspaceIdRef = useRef<string | null>(selectedWorkspaceId)
   const contentPanelRef = useRef<WorkbenchContentPanelState>(contentPanel)
   const tabWorkspacesRef = useRef<Record<string, WorkbenchTabWorkspaceState>>(tabWorkspaces)
   const contentPanelCollapsedRef = useRef(contentPanelCollapsed)
   const panelFallbackByKeyRef = useRef<Record<string, WorkbenchContentPanelState>>({})
   const uiStateReadyKeyRef = useRef<string | null>(null)
   const [uiStateReadyKey, setUiStateReadyKey] = useState<string | null>(null)
-  const persistedDraftStateRef = useRef<ChatSessionUiStateV1 | null>(null)
   const persistTimersRef = useRef<Record<string, number>>({})
+  const pendingTimelineJumpDayRef = useRef<number | null>(null)
   const persistQueuesRef = useRef<Record<string, Promise<void>>>({})
   const persistRevisionsRef = useRef<Record<string, number>>({})
   const persistRetryTimersRef = useRef<Record<string, number>>({})
@@ -963,10 +933,10 @@ const ChatPage: React.FC = () => {
   const missingAttachmentNotifiedRef = useRef<Set<string>>(new Set())
   const uiStateInteractionVersionRef = useRef(0)
 
-  const tabWorkspaceKey = currentSessionId || '__draft__'
+  const tabWorkspaceKey = currentPartnerId || ''
   const tabWorkspace = tabWorkspaces[tabWorkspaceKey] || EMPTY_TAB_WORKSPACE
 
-  const buildUiStateForKey = useCallback((key: string): ChatSessionUiStateV1 => {
+  const buildUiStateForKey = useCallback((key: string): PartnerUiStateV1 => {
     const workspace = tabWorkspacesRef.current[key] || EMPTY_TAB_WORKSPACE
     const activeTab = workspace.tabs.find((tab) => tab.id === workspace.activeTabId)
     const fallback =
@@ -975,25 +945,23 @@ const ChatPage: React.FC = () => {
     return {
       version: 1,
       composer: {
-        mode: composerModeRef.current,
         aiPreference: composerAiPreferenceRef.current,
         executionPermission: composerExecutionPermissionRef.current,
         modelSelection: modelSelectionRef.current,
-        workspaceId: selectedWorkspaceIdRef.current,
         draft: toPersistedComposerDraft(composerDraftValueRef.current)
       },
       panel: {
         tabs: workspace.tabs,
         activeTabId: workspace.activeTabId,
         collapsed: contentPanelCollapsedRef.current,
-        fallbackState: fallback as ChatSessionUiPanelState
+        fallbackState: fallback as PartnerUiPanelState
       }
     }
   }, [])
 
   const persistUiStateForKey = useCallback(
-    (key: string, state: ChatSessionUiStateV1): Promise<void> => {
-      if (key === '__draft__') persistedDraftStateRef.current = state
+    (key: string, state: PartnerUiStateV1): Promise<void> => {
+      if (!key) return Promise.resolve()
       const revision = (persistRevisionsRef.current[key] || 0) + 1
       persistRevisionsRef.current[key] = revision
       const existingRetry = persistRetryTimersRef.current[key]
@@ -1010,13 +978,7 @@ const ChatPage: React.FC = () => {
             let lastError: unknown = null
             for (let attempt = 0; attempt < 3; attempt += 1) {
               try {
-                const response =
-                  key === '__draft__'
-                    ? await window.api.workbenchUiStateSave({
-                        activeViewKey: currentSessionIdRef.current || '__draft__',
-                        draftState: state
-                      })
-                    : await window.api.chatSessionUiStateSave({ sessionId: key, state })
+                const response = await window.api.partnerUiStateSave({ partnerId: key, state })
                 if (!response.success) {
                   throw new Error(response.error || '保存会话状态失败')
                 }
@@ -1051,7 +1013,8 @@ const ChatPage: React.FC = () => {
   )
 
   const scheduleCurrentUiStatePersist = useCallback((): void => {
-    const key = currentSessionIdRef.current || '__draft__'
+    const key = currentPartnerIdRef.current
+    if (!key) return
     if (uiStateReadyKeyRef.current !== key) return
     const existing = persistTimersRef.current[key]
     if (existing !== undefined) window.clearTimeout(existing)
@@ -1063,7 +1026,8 @@ const ChatPage: React.FC = () => {
 
   const persistCurrentUiStateNow = useCallback(
     async (options?: { requireReady?: boolean }): Promise<void> => {
-      const key = currentSessionIdRef.current || '__draft__'
+      const key = currentPartnerIdRef.current
+      if (!key) return
       if (options?.requireReady !== false && uiStateReadyKeyRef.current !== key) return
       const timer = persistTimersRef.current[key]
       if (timer !== undefined) {
@@ -1125,19 +1089,17 @@ const ChatPage: React.FC = () => {
   const composerDraftValueRef = useRef<ComposerDraftValue>(composerDraftValue)
 
   useEffect(() => {
-    currentSessionIdRef.current = currentSessionId
-  }, [currentSessionId])
+    currentPartnerIdRef.current = currentPartnerId
+  }, [currentPartnerId])
 
   useEffect(() => {
     composerDraftValueRef.current = composerDraftValue
   }, [composerDraftValue])
 
   useEffect(() => {
-    composerModeRef.current = composerMode
     composerAiPreferenceRef.current = composerAiPreference
     composerExecutionPermissionRef.current = composerExecutionPermission
     modelSelectionRef.current = modelSelection
-    selectedWorkspaceIdRef.current = selectedWorkspaceId
     contentPanelRef.current = contentPanel
     tabWorkspacesRef.current = tabWorkspaces
     contentPanelCollapsedRef.current = contentPanelCollapsed
@@ -1146,12 +1108,10 @@ const ChatPage: React.FC = () => {
     composerAiPreference,
     composerExecutionPermission,
     composerDraftValue,
-    composerMode,
     contentPanel,
     contentPanelCollapsed,
     modelSelection,
     scheduleCurrentUiStatePersist,
-    selectedWorkspaceId,
     tabWorkspaces
   ])
 
@@ -1219,14 +1179,14 @@ const ChatPage: React.FC = () => {
     }
   }, [])
 
-  const saveComposerDraftForSession = useCallback(
-    (sessionId: string | null, draft: ComposerDraftValue): void => {
-      if (!sessionId) return
+  const saveComposerDraftForPartner = useCallback(
+    (partnerId: string | null, draft: ComposerDraftValue): void => {
+      if (!partnerId) return
       if (isComposerDraftEmpty(draft)) {
-        delete composerDraftBySessionIdRef.current[sessionId]
+        delete composerDraftByPartnerIdRef.current[partnerId]
         return
       }
-      composerDraftBySessionIdRef.current[sessionId] = draft
+      composerDraftByPartnerIdRef.current[partnerId] = draft
     },
     []
   )
@@ -1242,25 +1202,17 @@ const ChatPage: React.FC = () => {
     setComposerDraftKey(`${reason}:${composerDraftVersionRef.current}`)
   }, [])
 
-  const applySessionUiState = useCallback(
-    (key: string, persisted: ChatSessionUiStateV1 | null, workspaceId?: string | null): void => {
-      const state = persisted || createDefaultSessionUiState(modelSelectionRef.current, workspaceId)
+  const applyPartnerUiState = useCallback(
+    (key: string, persisted: PartnerUiStateV1 | null): void => {
+      const state = persisted || createDefaultPartnerUiState(modelSelectionRef.current)
       const draft = state.composer.draft
-      composerModeRef.current = state.composer.mode
       composerAiPreferenceRef.current = state.composer.aiPreference
       composerExecutionPermissionRef.current =
         state.composer.executionPermission === 'full_access' ? 'full_access' : 'review'
       modelSelectionRef.current = state.composer.modelSelection
-      // Session UI snapshots own the workspace selection. The legacy session column is only
-      // a fallback for sessions that do not have a snapshot yet.
-      selectedWorkspaceIdRef.current = persisted
-        ? state.composer.workspaceId
-        : (workspaceId ?? null)
-      setComposerMode(state.composer.mode)
       setComposerAiPreference(state.composer.aiPreference)
       setComposerExecutionPermission(composerExecutionPermissionRef.current)
       setModelSelection(state.composer.modelSelection)
-      setSelectedWorkspaceId(selectedWorkspaceIdRef.current)
       applyComposerDraft(draft, `restore:${key}`)
 
       const workspace: WorkbenchTabWorkspaceState = {
@@ -1289,12 +1241,12 @@ const ChatPage: React.FC = () => {
       uiStateReadyKeyRef.current = key
       setUiStateReadyKey(key)
     },
-    [applyComposerDraft, setComposerMode]
+    [applyComposerDraft]
   )
 
-  const setSessionRunningState = useCallback((sessionId: string, isRunning: boolean): void => {
-    setSessions((items) =>
-      items.map((item) => (item.id === sessionId ? { ...item, isRunning } : item))
+  const setPartnerRunningState = useCallback((partnerId: string, isRunning: boolean): void => {
+    setPartners((items) =>
+      items.map((item) => (item.id === partnerId ? { ...item, isRunning } : item))
     )
   }, [])
 
@@ -1303,69 +1255,37 @@ const ChatPage: React.FC = () => {
     if (!window.api.isE2EMode()) return
 
     targetWindow.__NCURATOR_E2E_SET_WORKBENCH_DRAFT__ = (draft: ComposerDraftValue): void => {
-      saveComposerDraftForSession(currentSessionIdRef.current, draft)
+      saveComposerDraftForPartner(currentPartnerIdRef.current, draft)
       applyComposerDraft(draft, 'e2e')
     }
 
     return () => {
       delete targetWindow.__NCURATOR_E2E_SET_WORKBENCH_DRAFT__
     }
-  }, [applyComposerDraft, saveComposerDraftForSession])
-
-  const kbScopeDocumentIds = useMemo(() => {
-    const explicitIds = collectReferenceDocumentIds(selectedReferences)
-    if (explicitIds.length > 0) return explicitIds
-    if (selectedWorkspaceId) return workspaceDocumentIds
-    return []
-  }, [selectedReferences, selectedWorkspaceId, workspaceDocumentIds])
+  }, [applyComposerDraft, saveComposerDraftForPartner])
 
   const selectedWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
-    [selectedWorkspaceId, workspaces]
+    () =>
+      workspaces.find((workspace) =>
+        contentPanel.kind === 'file_preview'
+          ? contentPanel.file.path
+              .replace(/\\/g, '/')
+              .startsWith(String(workspace.root_path || '').replace(/\\/g, '/'))
+          : false
+      ) ||
+      workspaces[0] ||
+      null,
+    [contentPanel, workspaces]
   )
+  const selectedWorkspaceName = useMemo(() => {
+    if (!selectedWorkspace?.root_path) return null
+    const parts = selectedWorkspace.root_path.replace(/\\/g, '/').split('/').filter(Boolean)
+    return parts[parts.length - 1] || selectedWorkspace.root_path
+  }, [selectedWorkspace])
 
-  useEffect(() => {
-    setSelectedReferences((current) => pruneReferencesByWorkspace(current, selectedWorkspaceId))
-  }, [selectedWorkspaceId])
-
-  useEffect(() => {
-    let cancelled = false
-
-    const loadWorkspaceDocumentIds = async (): Promise<void> => {
-      if (!selectedWorkspaceId) {
-        setWorkspaceDocumentIds([])
-        return
-      }
-
-      const response = await window.api.referenceItemList({
-        mode: 'search',
-        workspaceId: selectedWorkspaceId,
-        referenceKinds: ['directory', 'file', 'web']
-      })
-      if (!cancelled) {
-        setWorkspaceDocumentIds(collectReferenceDocumentIds(response.items))
-        const validReferenceKeys = new Set(response.items.map(getReferenceKey))
-        setSelectedReferences((current) =>
-          current.filter((reference) => validReferenceKeys.has(getReferenceKey(reference)))
-        )
-        setComposerContentNodes((current) =>
-          current.filter(
-            (node) =>
-              node.kind !== 'reference' || validReferenceKeys.has(getReferenceKey(node.reference))
-          )
-        )
-      }
-    }
-
-    void loadWorkspaceDocumentIds()
-    return () => {
-      cancelled = true
-    }
-  }, [selectedWorkspaceId])
-
-  const currentSession = useMemo(
-    () => sessions.find((session) => session.id === currentSessionId) || null,
-    [currentSessionId, sessions]
+  const currentPartner = useMemo(
+    () => partners.find((session) => session.id === currentPartnerId) || null,
+    [currentPartnerId, partners]
   )
   const latestUserMessageId = useMemo(
     () => [...currentMessages].reverse().find((item) => item.role === 'user')?.id || null,
@@ -1376,25 +1296,13 @@ const ChatPage: React.FC = () => {
     if (!pendingApprovalBatch) return null
     return pendingApprovalBatch.items[approvalCurrentIndex] || pendingApprovalBatch.items[0] || null
   }, [approvalCurrentIndex, pendingApprovalBatch])
-  const selectedWorkspaceReady = useMemo(
-    () => hasWorkspaceRootPath(selectedWorkspace),
-    [selectedWorkspace]
-  )
   const composerSubmitDisabledReason = useMemo(() => {
     if (!input.trim()) return null
-    if (switchingSessionId) return '当前会话未就绪'
-    if (!selectedWorkspaceReady)
-      return `${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`
-    if (composerMode === 'ai' && !modelSelection.mainModel) return '请先选择主模型'
+    if (!currentPartnerId) return '请先选择伙伴'
+    if (switchingPartnerId) return '当前伙伴未就绪'
+    if (!modelSelection.mainModel) return '请先选择主模型'
     return null
-  }, [
-    composerMode,
-    input,
-    modelSelection.mainModel,
-    selectedWorkspace,
-    selectedWorkspaceReady,
-    switchingSessionId
-  ])
+  }, [currentPartnerId, input, modelSelection.mainModel, switchingPartnerId])
 
   const approvalSubmitDisabled = useMemo(() => {
     if (!currentApprovalItem || approvalSubmitting) return true
@@ -1416,10 +1324,10 @@ const ChatPage: React.FC = () => {
 
   const loadOlderMessages = useCallback(async (): Promise<void> => {
     if (
-      !currentSessionId ||
+      !currentPartnerId ||
       !hasMoreMessagesBefore ||
       loadingOlderMessages ||
-      switchingSessionId ||
+      switchingPartnerId ||
       currentMessages.length === 0
     ) {
       return
@@ -1427,27 +1335,79 @@ const ChatPage: React.FC = () => {
     const beforeTimestamp = currentMessages[0]?.timestamp
     if (!beforeTimestamp) return
     setLoadingOlderMessages(true)
-    const requestSessionId = currentSessionId
+    const requestPartnerId = currentPartnerId
     try {
-      const opened = await window.api.chatSessionOpen({
-        sessionId: requestSessionId,
+      const opened = await window.api.partnerOpen({
+        partnerId: requestPartnerId,
         limit: 50,
         beforeTimestamp
       })
-      if (currentSessionId !== requestSessionId) return
+      if (currentPartnerId !== requestPartnerId) return
       setHasMoreMessagesBefore(opened.hasMoreBefore)
       setCurrentMessages((previous) => appendMessagesDedupe(opened.messages, previous))
     } catch (error) {
       console.error('Failed to load older messages', error)
     } finally {
-      if (currentSessionId === requestSessionId) setLoadingOlderMessages(false)
+      if (currentPartnerId === requestPartnerId) setLoadingOlderMessages(false)
     }
   }, [
     currentMessages,
-    currentSessionId,
+    currentPartnerId,
     hasMoreMessagesBefore,
     loadingOlderMessages,
-    switchingSessionId
+    switchingPartnerId
+  ])
+
+  const scrollToOldestMessageOfDay = useCallback((dayStart: number, messages: ChatMessage[]): boolean => {
+    const dayEnd = dayStart + DAY_MS
+    const ofDay = messages.filter(
+      (item) => item.timestamp >= dayStart && item.timestamp < dayEnd
+    )
+    if (ofDay.length === 0) return false
+    const oldest = ofDay.reduce((current, item) =>
+      item.timestamp < current.timestamp ? item : current
+    )
+    const element = document.querySelector(`[data-message-id="${oldest.id}"]`)
+    if (!(element instanceof HTMLElement)) return false
+    shouldAutoScrollRef.current = false
+    element.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    return true
+  }, [])
+
+  const jumpToTimelineDay = useCallback(
+    (dayStart: number): void => {
+      if (scrollToOldestMessageOfDay(dayStart, currentMessages)) return
+      if (!hasMoreMessagesBefore || !currentPartnerId) return
+      pendingTimelineJumpDayRef.current = dayStart
+      void loadOlderMessages()
+    },
+    [
+      currentMessages,
+      currentPartnerId,
+      hasMoreMessagesBefore,
+      loadOlderMessages,
+      scrollToOldestMessageOfDay
+    ]
+  )
+
+  useEffect(() => {
+    const dayStart = pendingTimelineJumpDayRef.current
+    if (dayStart == null) return
+    if (scrollToOldestMessageOfDay(dayStart, currentMessages)) {
+      pendingTimelineJumpDayRef.current = null
+      return
+    }
+    if (hasMoreMessagesBefore && !loadingOlderMessages) {
+      void loadOlderMessages()
+      return
+    }
+    pendingTimelineJumpDayRef.current = null
+  }, [
+    currentMessages,
+    hasMoreMessagesBefore,
+    loadOlderMessages,
+    loadingOlderMessages,
+    scrollToOldestMessageOfDay
   ])
 
   const handleMessageScroll = (event: React.UIEvent<HTMLDivElement>): void => {
@@ -1548,7 +1508,7 @@ const ChatPage: React.FC = () => {
         setBrowserTransitionImage(null)
       }
       setPanelCollapsedForSession(sessionKey, true)
-      if ((currentSessionIdRef.current || '__draft__') !== sessionKey) {
+      if ((currentPartnerIdRef.current || '') !== sessionKey) {
         setBrowserTransitionImage(null)
         return
       }
@@ -1615,7 +1575,7 @@ const ChatPage: React.FC = () => {
         void window.api.browserPanelHide()
       }
       setContentPanel(nextState)
-      if (nextState.kind === 'empty' || nextState.kind === 'search_list') {
+      if (nextState.kind === 'empty') {
         panelFallbackByKeyRef.current[tabWorkspaceKey] = nextState
         updateCurrentTabWorkspace((current) => ({ ...current, activeTabId: null }))
       }
@@ -1664,9 +1624,14 @@ const ChatPage: React.FC = () => {
 
   const openBrowserTab = useCallback(
     async (existingTabId?: string): Promise<void> => {
+      const ownerId = currentPartnerIdRef.current
+      if (!ownerId && !existingTabId) {
+        emitErrorMessage('请先选择伙伴')
+        return
+      }
       const response = existingTabId
         ? await window.api.browserPanelStateGet({ tabId: existingTabId })
-        : await window.api.browserTabCreate({ ownerId: currentSessionIdRef.current || '__draft__' })
+        : await window.api.browserTabCreate({ ownerId: ownerId as string })
       if (!response.success || !response.state) {
         emitErrorMessage(response.error || '无法创建浏览器标签')
         return
@@ -1689,15 +1654,15 @@ const ChatPage: React.FC = () => {
 
   const updateBackgroundPanelState = useCallback(
     async (
-      sessionId: string,
-      update: (state: ChatSessionUiStateV1) => ChatSessionUiStateV1
+      partnerId: string,
+      update: (state: PartnerUiStateV1) => PartnerUiStateV1
     ): Promise<void> => {
       try {
-        const opened = await window.api.chatSessionOpen({ sessionId, limit: 1 })
+        const opened = await window.api.partnerOpen({ partnerId, limit: 1 })
         const currentState =
           opened.uiState ||
-          createDefaultSessionUiState({ mainModel: null }, opened.session?.workspace_id || null)
-        await persistUiStateForKey(sessionId, update(currentState))
+          createDefaultPartnerUiState({ mainModel: null })
+        await persistUiStateForKey(partnerId, update(currentState))
       } catch (error) {
         console.error('Failed to update background session UI state', error)
       }
@@ -1706,12 +1671,12 @@ const ChatPage: React.FC = () => {
   )
 
   const persistBackgroundBrowserTab = useCallback(
-    (sessionId: string, browserTabId: string): void => {
+    (partnerId: string, browserTabId: string): void => {
       void window.api.browserPanelStateGet({ tabId: browserTabId }).then((response) => {
         if (!response.success || !response.state) return
         const browser = response.state
         const title = browser.title || browser.url || '新标签页'
-        void updateBackgroundPanelState(sessionId, (state) => {
+        void updateBackgroundPanelState(partnerId, (state) => {
           const resourceId = `browser:${browser.id}`
           const tab: WorkbenchResourceTab = {
             id: resourceId,
@@ -1794,21 +1759,21 @@ const ChatPage: React.FC = () => {
     [emitErrorMessage]
   )
 
-  const loadSessions = useCallback(async (): Promise<ChatSessionListItem[]> => {
+  const loadPartners = useCallback(async (): Promise<PartnerListItem[]> => {
     try {
-      const list = await window.api.chatSessionList()
-      setSessions(list)
+      const list = await window.api.partnerList()
+      setPartners(list)
       return list
     } catch (error) {
-      console.error('Failed to load sessions', error)
+      console.error('Failed to load partners', error)
       return []
     }
   }, [])
 
-  const hydrateSessionView = (
+  const hydratePartnerView = (
     messages: ChatMessage[],
-    runSnapshots: ChatSessionRunSnapshot[],
-    activeRuns: ChatSessionRunSnapshot[]
+    runSnapshots: PartnerRunSnapshot[],
+    activeRuns: PartnerRunSnapshot[]
   ): void => {
     assistantArtifactsRef.current = {}
     activeRunMessageIdsRef.current = {}
@@ -1824,7 +1789,7 @@ const ChatPage: React.FC = () => {
       }
       const activeRunIds = new Set(activeRuns.map((item) => item.run.id))
       for (const runSnapshot of runSnapshots) {
-        activeRunSessionIdsRef.current[runSnapshot.run.id] = runSnapshot.run.sessionId
+        activeRunPartnerIdsRef.current[runSnapshot.run.id] = runSnapshot.run.partnerId
         if (activeRunIds.has(runSnapshot.run.id)) {
           activeRunMessageIdsRef.current[runSnapshot.run.id] = runSnapshot.run.assistantMessageId
         }
@@ -1858,11 +1823,15 @@ const ChatPage: React.FC = () => {
     scrollToBottom(true)
   }
 
-  const loadSessionOpen = async (sessionId: string, requestId: number): Promise<void> => {
+  const loadPartnerOpen = async (partnerId: string, requestId: number): Promise<void> => {
     try {
-      const opened = await window.api.chatSessionOpen({ sessionId, limit: 50 })
-      if (sessionSwitchRequestRef.current !== requestId) return
-      applySessionUiState(sessionId, opened.uiState || null, opened.session?.workspace_id)
+      const opened = await window.api.partnerOpen({ partnerId, limit: 50 })
+      if (partnerSwitchRequestRef.current !== requestId) return
+      applyPartnerUiState(partnerId, opened.uiState || null)
+      setLastContextClearedAt(opened.lastContextClearedAt ?? null)
+      setClearContextVisible(false)
+      setHoveredGrayMessageId(null)
+      pendingTimelineJumpDayRef.current = null
       const restoredActiveTab = opened.uiState?.panel.tabs.find(
         (tab) => tab.id === opened.uiState?.panel.activeTabId
       )
@@ -1875,27 +1844,27 @@ const ChatPage: React.FC = () => {
       }
       setCurrentMessages(opened.messages)
       setHasMoreMessagesBefore(opened.hasMoreBefore)
-      hydrateSessionView(opened.messages, opened.activeRuns, opened.activeRuns)
-      setSwitchingSessionId(null)
+      hydratePartnerView(opened.messages, opened.activeRuns, opened.activeRuns)
+      setSwitchingPartnerId(null)
 
-      void window.api.chatSessionRunSummaries({ sessionId }).then((summary) => {
-        if (sessionSwitchRequestRef.current !== requestId) return
-        hydrateSessionView(opened.messages, summary.runs, opened.activeRuns)
-        void hydrateFileChangeTargetsForSession(sessionId, opened.messages)
+      void window.api.partnerRunSummaries({ partnerId }).then((summary) => {
+        if (partnerSwitchRequestRef.current !== requestId) return
+        hydratePartnerView(opened.messages, summary.runs, opened.activeRuns)
+        void hydrateFileChangeTargetsForPartner(partnerId, opened.messages)
       })
     } catch (error) {
-      if (sessionSwitchRequestRef.current === requestId) setSwitchingSessionId(null)
+      if (partnerSwitchRequestRef.current === requestId) setSwitchingPartnerId(null)
       console.error('Failed to open session', error)
     }
   }
 
-  const refreshContextUsage = useCallback(async (sessionId: string | null): Promise<void> => {
-    if (!sessionId) {
+  const refreshContextUsage = useCallback(async (partnerId: string | null): Promise<void> => {
+    if (!partnerId) {
       setContextUsage(null)
       return
     }
     try {
-      const response = await window.api.aiContextUsageGet({ sessionId })
+      const response = await window.api.aiContextUsageGet({ partnerId })
       if (!response.success) return
       setContextUsage({
         contextWindowTokens: response.contextWindowTokens || 200000,
@@ -1914,8 +1883,6 @@ const ChatPage: React.FC = () => {
       setWorkspaces(response.items)
     } catch (error) {
       console.error('Failed to load workspaces', error)
-    } finally {
-      setWorkspacesLoaded(true)
     }
   }, [])
 
@@ -1989,7 +1956,7 @@ const ChatPage: React.FC = () => {
   }, [modelConfigs])
 
   useEffect(() => {
-    const key = currentSessionIdRef.current || '__draft__'
+    const key = currentPartnerIdRef.current || ''
     if (!modelCatalogLoaded || uiStateReadyKeyRef.current !== key) return
     const resolveModel = (
       selected: WorkbenchModelSelection['mainModel']
@@ -2023,7 +1990,7 @@ const ChatPage: React.FC = () => {
   ])
 
   useEffect(() => {
-    const key = currentSessionIdRef.current || '__draft__'
+    const key = currentPartnerIdRef.current || ''
     if (uiStateReadyKeyRef.current !== key || attachments.length === 0) return
     let cancelled = false
     const snapshot = attachments
@@ -2033,7 +2000,7 @@ const ChatPage: React.FC = () => {
         exists: await window.api.fileExists(attachment.path)
       }))
     ).then((checked) => {
-      if (cancelled || (currentSessionIdRef.current || '__draft__') !== key) return
+      if (cancelled || (currentPartnerIdRef.current || '') !== key) return
       const missingIds = new Set(
         checked.filter((item) => !item.exists).map((item) => item.attachment.id)
       )
@@ -2057,35 +2024,6 @@ const ChatPage: React.FC = () => {
       void persistCurrentUiStateNow({ requireReady: false })
     },
     [persistCurrentUiStateNow]
-  )
-
-  const sessionModeLock = useMemo(() => {
-    const turns = Object.values(assistantTurns)
-    const hasConversation = currentMessages.length > 0 || loading
-    const hasAiHistory =
-      Boolean(aiRunId) ||
-      turns.some((turn) => Boolean(turn.runId)) ||
-      (composerMode === 'ai' && hasConversation)
-    const hasSearchHistory =
-      turns.some(
-        (turn) => !turn.runId && (turn.runFinished || turn.status === 'completed')
-      ) || (composerMode === 'search' && hasConversation)
-    return resolveWorkbenchSessionModeLock({
-      hasAiHistory,
-      hasSearchHistory,
-      fallbackMode: composerMode
-    })
-  }, [aiRunId, assistantTurns, composerMode, currentMessages.length, loading])
-
-  const handleModeChange = useCallback(
-    (mode: WorkbenchMode): void => {
-      if (!isWorkbenchModeSwitchAllowed(sessionModeLock, mode)) return
-      uiStateInteractionVersionRef.current += 1
-      composerModeRef.current = mode
-      setComposerMode(mode)
-      void persistCurrentUiStateNow({ requireReady: false })
-    },
-    [persistCurrentUiStateNow, sessionModeLock, setComposerMode]
   )
 
   const handleAiPreferenceChange = useCallback(
@@ -2127,86 +2065,6 @@ const ChatPage: React.FC = () => {
     setFullAccessConfirmOpen(false)
   }, [])
 
-  const handleWorkspaceChange = useCallback(
-    (workspaceId: string | null): void => {
-      uiStateInteractionVersionRef.current += 1
-      selectedWorkspaceIdRef.current = workspaceId
-      setSelectedWorkspaceId(workspaceId)
-      void persistCurrentUiStateNow({ requireReady: false })
-    },
-    [persistCurrentUiStateNow]
-  )
-
-  const toggleWorkspaceCollapsed = useCallback((workspaceId: string): void => {
-    setCollapsedWorkspaceIds((current) => {
-      const next = new Set(current)
-      if (next.has(workspaceId)) {
-        next.delete(workspaceId)
-      } else {
-        next.add(workspaceId)
-      }
-      return next
-    })
-  }, [])
-
-  const toggleWorkspaceSessionsExpanded = useCallback((workspaceId: string): void => {
-    setExpandedWorkspaceSessionIds((current) => {
-      const next = new Set(current)
-      if (next.has(workspaceId)) {
-        next.delete(workspaceId)
-      } else {
-        next.add(workspaceId)
-      }
-      return next
-    })
-  }, [])
-
-  const createNewSession = useCallback(
-    async (workspaceId?: string): Promise<void> => {
-      // Do this before awaiting the previous draft flush so a late bootstrap response cannot
-      // restore the last-opened view over an explicitly created new conversation.
-      uiStateInteractionVersionRef.current += 1
-      setScheduledTasksActive(false)
-      await flushCurrentUiState()
-      const previousDraftWorkspace = tabWorkspacesRef.current.__draft__
-      for (const tab of previousDraftWorkspace?.tabs || []) {
-        if (tab.kind === 'browser' && tab.browserTabId) {
-          void window.api.browserTabClose({ tabId: tab.browserTabId })
-        }
-      }
-      sessionSwitchRequestRef.current += 1
-      uiStateReadyKeyRef.current = null
-      setUiStateReadyKey(null)
-      currentSessionIdRef.current = null
-      setCurrentSessionId(null)
-      setSwitchingSessionId(null)
-      setCurrentMessages([])
-      setAssistantTurns({})
-      assistantArtifactsRef.current = {}
-      activeRunMessageIdsRef.current = {}
-      setHasMoreMessagesBefore(false)
-      setLoadingOlderMessages(false)
-      setLoading(false)
-      setAiRunId(null)
-      setCancellingRun(false)
-      setPendingApprovalBatch(null)
-      setApprovalCurrentIndex(0)
-      setApprovalDraftDecisions({})
-      setApprovalSubmitting(false)
-      const draftState = createDefaultSessionUiState(modelSelectionRef.current, workspaceId || null)
-      persistedDraftStateRef.current = draftState
-      applySessionUiState('__draft__', draftState, workspaceId || null)
-      setBrowserPresentationEnabled(false)
-      void window.api.browserPanelHide()
-      resetApplyWorkspaceState()
-      setFileChangeRecords([])
-      fileChangeRunScopeRef.current = null
-      void refreshContextUsage(null)
-      await window.api.workbenchUiStateSave({ activeViewKey: '__draft__', draftState })
-    },
-    [applySessionUiState, flushCurrentUiState, refreshContextUsage]
-  )
-
   const loadApplyRecord = async (input: {
     applyId: string
     detail?: AiFileChangeRecord | null
@@ -2232,7 +2090,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (!isCurrentFileChangeRunScope(fileChangeRunScopeRef.current, nextRecord)) {
-        void loadFileChangesForSessionRef.current(nextRecord.sessionId, nextRecord.runId, {
+        void loadFileChangesForPartnerRef.current(nextRecord.partnerId, nextRecord.runId, {
           preferredApplyId: nextRecord.id,
           skipApplyRecordReload: true
         })
@@ -2250,8 +2108,8 @@ const ChatPage: React.FC = () => {
   }
   loadApplyRecordRef.current = loadApplyRecord
 
-  const loadFileChangesForSession = async (
-    sessionId: string,
+  const loadFileChangesForPartner = async (
+    partnerId: string,
     runId: string,
     options?: {
       preferredApplyId?: string | null
@@ -2263,7 +2121,7 @@ const ChatPage: React.FC = () => {
   ): Promise<void> => {
     const requestId = fileChangeLoadRequestRef.current + 1
     fileChangeLoadRequestRef.current = requestId
-    const scope = createFileChangeRunScope({ sessionId, runId })
+    const scope = createFileChangeRunScope({ partnerId, runId })
     fileChangeRunScopeRef.current = scope
     try {
       const shouldWaitForRecords =
@@ -2368,14 +2226,14 @@ const ChatPage: React.FC = () => {
       setFileChangeRecords([])
     }
   }
-  loadFileChangesForSessionRef.current = loadFileChangesForSession
+  loadFileChangesForPartnerRef.current = loadFileChangesForPartner
 
-  const hydrateFileChangeTargetsForSession = async (
-    sessionId: string,
+  const hydrateFileChangeTargetsForPartner = async (
+    partnerId: string,
     messages = currentMessages
   ): Promise<void> => {
     try {
-      const response = await window.api.aiFileChangeList({ sessionId })
+      const response = await window.api.aiFileChangeList({ partnerId })
       const applyTargetsByRunId = groupApplyTargetsByRunId(
         filterVisibleFileChangeRecords(
           sortFileChangeRecords(response.items),
@@ -2398,116 +2256,85 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const openExistingSession = async (
-    session: ChatSession,
+  const openExistingPartner = async (
+    session: Partner,
     options?: { saveCurrentDraft?: boolean }
   ): Promise<void> => {
     setScheduledTasksActive(false)
-    if (session.id === currentSessionIdRef.current && !switchingSessionId) return
+    if (session.id === currentPartnerIdRef.current && !switchingPartnerId) return
 
     uiStateInteractionVersionRef.current += 1
     if (options?.saveCurrentDraft !== false) await flushCurrentUiState()
 
-    const requestId = sessionSwitchRequestRef.current + 1
-    sessionSwitchRequestRef.current = requestId
+    const requestId = partnerSwitchRequestRef.current + 1
+    partnerSwitchRequestRef.current = requestId
     uiStateReadyKeyRef.current = null
     setUiStateReadyKey(null)
-    currentSessionIdRef.current = session.id
+    currentPartnerIdRef.current = session.id
 
-    setCurrentSessionId(session.id)
-    selectedWorkspaceIdRef.current = session.workspace_id
-    setSelectedWorkspaceId(session.workspace_id)
-    setSwitchingSessionId(session.id)
+    setCurrentPartnerId(session.id)
+    setSwitchingPartnerId(session.id)
     setBrowserPresentationEnabled(false)
     void window.api.browserPanelHide()
     restoreContentPanelWithoutAnimationRef.current = false
     resetApplyWorkspaceState()
 
     await window.api.workbenchUiStateSave({
-      activeViewKey: session.id,
-      draftState: persistedDraftStateRef.current
+      activeViewKey: session.id
     })
-    void loadSessionOpen(session.id, requestId)
+    void loadPartnerOpen(session.id, requestId)
     setFileChangeRecords([])
     fileChangeRunScopeRef.current = null
     void refreshContextUsage(session.id)
   }
 
-  const adoptCreatedSession = (session: ChatSession): void => {
-    sessionSwitchRequestRef.current += 1
-    currentSessionIdRef.current = session.id
-    const draftWorkspace = tabWorkspacesRef.current.__draft__ || EMPTY_TAB_WORKSPACE
-    const nextTabWorkspaces = { ...tabWorkspacesRef.current, [session.id]: draftWorkspace }
-    delete nextTabWorkspaces.__draft__
-    tabWorkspacesRef.current = nextTabWorkspaces
-    setTabWorkspaces(nextTabWorkspaces)
-    if (panelFallbackByKeyRef.current.__draft__) {
-      panelFallbackByKeyRef.current[session.id] = panelFallbackByKeyRef.current.__draft__
-      delete panelFallbackByKeyRef.current.__draft__
-    }
-    uiStateReadyKeyRef.current = session.id
-    setUiStateReadyKey(session.id)
-    persistedDraftStateRef.current = null
-    setSessions((items) => [
-      { ...session, isRunning: false, hasUnreadCompletion: false },
-      ...items.filter((item) => item.id !== session.id)
-    ])
-    setCurrentSessionId(session.id)
-    selectedWorkspaceIdRef.current = session.workspace_id
-    setSelectedWorkspaceId(session.workspace_id)
-    setSwitchingSessionId(null)
-    setHasMoreMessagesBefore(false)
-    setLoadingOlderMessages(false)
-    void refreshContextUsage(session.id)
-  }
-
-  const selectSession = (session: ChatSessionListItem): void => {
-    setSessions((items) =>
+  const selectPartner = (session: PartnerListItem): void => {
+    setPartners((items) =>
       items.map((item) => (item.id === session.id ? { ...item, hasUnreadCompletion: false } : item))
     )
-    void window.api.chatSessionMarkViewed(session.id).then((response) => {
-      if (!response.success) void loadSessions()
+    void window.api.partnerMarkViewed(session.id).then((response) => {
+      if (!response.success) void loadPartners()
     })
-    void openExistingSession(session)
+    void openExistingPartner(session)
   }
 
   useEffect(() => {
-    const openNotificationSession = async (sessionId: string): Promise<void> => {
-      const session = sessions.find((item) => item.id === sessionId)
+    const openNotificationPartner = async (partnerId: string): Promise<void> => {
+      const session = partners.find((item) => item.id === partnerId)
       if (session) {
-        selectSession(session)
+        selectPartner(session)
         return
       }
-      const loadedSessions = await loadSessions()
-      const loadedSession = loadedSessions.find((item) => item.id === sessionId)
-      if (loadedSession) selectSession(loadedSession)
+      const loadedPartners = await loadPartners()
+      const loadedSession = loadedPartners.find((item) => item.id === partnerId)
+      if (loadedSession) selectPartner(loadedSession)
     }
-    const pendingSessionId = window.sessionStorage.getItem('ncurator.pending-notification-session')
+    const pendingSessionId = window.sessionStorage.getItem('ncurator.pending-notification-partner')
     if (pendingSessionId) {
-      window.sessionStorage.removeItem('ncurator.pending-notification-session')
-      void openNotificationSession(pendingSessionId)
+      window.sessionStorage.removeItem('ncurator.pending-notification-partner')
+      void openNotificationPartner(pendingSessionId)
     }
-    return window.api.onSystemNotificationOpenSession(openNotificationSession)
+    return window.api.onSystemNotificationOpenPartner(openNotificationPartner)
     // Session selection intentionally uses the current list captured by this effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessions])
+  }, [partners])
 
-  const acknowledgeCurrentSessionCompletion = useCallback((): void => {
-    const sessionId = currentSessionIdRef.current
+  const acknowledgeCurrentPartnerCompletion = useCallback((): void => {
+    const sessionId = currentPartnerIdRef.current
     if (
       !sessionId ||
-      !sessions.some((session) => session.id === sessionId && session.hasUnreadCompletion)
+      !partners.some((session) => session.id === sessionId && session.hasUnreadCompletion)
     ) {
       return
     }
 
-    setSessions((items) =>
+    setPartners((items) =>
       items.map((item) => (item.id === sessionId ? { ...item, hasUnreadCompletion: false } : item))
     )
-    void window.api.chatSessionMarkViewed(sessionId).then((response) => {
-      if (!response.success) void loadSessions()
+    void window.api.partnerMarkViewed(sessionId).then((response) => {
+      if (!response.success) void loadPartners()
     })
-  }, [loadSessions, sessions])
+  }, [loadPartners, partners])
 
   useEffect(() => {
     const bootstrapInteractionVersion = uiStateInteractionVersionRef.current
@@ -2515,34 +2342,29 @@ const ChatPage: React.FC = () => {
       const [, , list, workbenchStateResponse] = await Promise.all([
         loadWorkspaces(),
         loadModelConfigs(),
-        loadSessions(),
+        loadPartners(),
         window.api.workbenchUiStateGet()
       ])
-      if (sessionListHydratedRef.current) return
-      sessionListHydratedRef.current = true
+      if (partnerListHydratedRef.current) return
+      partnerListHydratedRef.current = true
       // A user may create or open a conversation before all startup requests resolve. In that
       // case the in-memory state is newer than the persisted startup snapshot.
       if (uiStateInteractionVersionRef.current !== bootstrapInteractionVersion) return
       const workbenchState = workbenchStateResponse.state
-      persistedDraftStateRef.current = workbenchState.draftState
-      const savedSession = list.find((item) => item.id === workbenchState.activeViewKey)
-      if (savedSession) {
-        await openExistingSession(savedSession, { saveCurrentDraft: false })
+      const savedPartner = list.find((item) => item.id === workbenchState.activeViewKey)
+      if (savedPartner) {
+        await openExistingPartner(savedPartner, { saveCurrentDraft: false })
         return
       }
-      if (workbenchState.activeViewKey === '__draft__' || list.length === 0) {
-        currentSessionIdRef.current = null
-        setCurrentSessionId(null)
-        applySessionUiState(
-          '__draft__',
-          persistedDraftStateRef.current || workbenchState.draftState
-        )
+      if (list.length === 0) {
+        currentPartnerIdRef.current = null
+        setCurrentPartnerId(null)
         return
       }
-      const firstSession = list[0]
-      if (firstSession) await openExistingSession(firstSession, { saveCurrentDraft: false })
+      const firstPartner = list[0]
+      if (firstPartner) await openExistingPartner(firstPartner, { saveCurrentDraft: false })
     })()
-    // Initial bootstrap is intentionally explicit. Later list refreshes must not reopen sessions.
+    // Initial bootstrap is intentionally explicit. Later list refreshes must not reopen partners.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -2837,19 +2659,19 @@ const ChatPage: React.FC = () => {
     []
   )
 
-  const requestDeleteSession = (event: React.MouseEvent, session: ChatSession): void => {
+  const requestDeletePartner = (event: React.MouseEvent, session: Partner): void => {
     event.stopPropagation()
-    setDeleteConfirmSession(session)
+    setDeleteConfirmPartner(session)
   }
 
-  const toggleSessionPinned = (
+  const togglePartnerPinned = (
     event: React.MouseEvent,
-    session: ChatSessionListItem
+    session: PartnerListItem
   ): void => {
     event.stopPropagation()
     const nextPinned = !session.pinned
     const nextPinnedAt = nextPinned ? Date.now() : null
-    setSessions((items) => {
+    setPartners((items) => {
       const next = items.map((item) =>
         item.id === session.id
           ? { ...item, pinned: nextPinned, pinned_at: nextPinnedAt }
@@ -2863,52 +2685,60 @@ const ChatPage: React.FC = () => {
         return 0
       })
     })
-    void window.api.chatSessionSetPinned({ id: session.id, pinned: nextPinned }).then((response) => {
+    void window.api.partnerSetPinned({ id: session.id, pinned: nextPinned }).then((response) => {
       if (!response.success) {
         emitErrorMessage(response.error || (nextPinned ? '置顶失败' : '取消置顶失败'))
-        void loadSessions()
+        void loadPartners()
       }
     })
   }
 
-  const confirmDeleteSession = async (): Promise<void> => {
-    const session = deleteConfirmSession
-    if (!session || deletingSessionIds.has(session.id)) return
+  const confirmDeletePartner = async (): Promise<void> => {
+    const session = deleteConfirmPartner
+    if (!session || deletingPartnerIds.has(session.id)) return
     const id = session.id
-    setDeletingSessionIds((current) => new Set(current).add(id))
+    setDeletingPartnerIds((current) => new Set(current).add(id))
     try {
-      const response = await window.api.chatSessionDelete(id)
+      const response = await window.api.partnerDelete(id)
       if (!response.success) {
         emitErrorMessage(response.error || '删除会话失败')
         return
       }
-      const remainingSessions = sessions.filter((item) => item.id !== id)
+      const remainingPartners = partners.filter((item) => item.id !== id)
       const retryTimer = persistRetryTimersRef.current[id]
       if (retryTimer !== undefined) window.clearTimeout(retryTimer)
       delete persistRetryTimersRef.current[id]
       delete persistRevisionsRef.current[id]
-      delete composerDraftBySessionIdRef.current[id]
+      delete composerDraftByPartnerIdRef.current[id]
       setTabWorkspaces((current) => {
         const next = { ...current }
         delete next[id]
         return next
       })
-      setSessions(remainingSessions)
-      if (currentSessionIdRef.current === id) {
-        const nextSession = remainingSessions[0] || null
-        if (nextSession) {
-          void openExistingSession(nextSession, { saveCurrentDraft: false })
+      setPartners(remainingPartners)
+      if (currentPartnerIdRef.current === id) {
+        const nextPartner = remainingPartners[0] || null
+        if (nextPartner) {
+          void openExistingPartner(nextPartner, { saveCurrentDraft: false })
         } else {
-          createNewSession()
+          currentPartnerIdRef.current = null
+          setCurrentPartnerId(null)
+          setCurrentMessages([])
+          setAssistantTurns({})
+          setAiRunId(null)
+          setLoading(false)
+          setLastContextClearedAt(null)
+          setClearContextVisible(false)
+          void window.api.workbenchUiStateSave({ activeViewKey: null })
         }
       }
-      setDeleteConfirmSession(null)
-      void loadSessions()
+      setDeleteConfirmPartner(null)
+      void loadPartners()
     } catch (error) {
       console.error(error)
       emitErrorMessage('删除会话失败')
     } finally {
-      setDeletingSessionIds((current) => {
+      setDeletingPartnerIds((current) => {
         const next = new Set(current)
         next.delete(id)
         return next
@@ -2938,7 +2768,8 @@ const ChatPage: React.FC = () => {
   const openMarkdownReference = useCallback(
     async (reference: OpenableMarkdownReference): Promise<void> => {
       if (reference.resourceType === 'web') {
-        const ownerId = currentSessionIdRef.current || '__draft__'
+        const ownerId = currentPartnerIdRef.current
+        if (!ownerId) return
         const listResponse = await window.api.browserTabList({ ownerId })
         const existing =
           listResponse.success && listResponse.tabs.length > 0
@@ -3009,44 +2840,11 @@ const ChatPage: React.FC = () => {
     [openMarkdownReference]
   )
 
-  const openSearchResult = async (
-    turn: SearchWorkbenchTurn,
-    resultIndex: number
-  ): Promise<void> => {
-    const result = turn.results[resultIndex]
-    if (!result) return
-    if (result.source_type === 'web') {
-      const url = result.document?.file_path
-      if (!url) {
-        message.warning('未找到网页链接')
-        return
-      }
-      const response = await window.api.openExternal(url)
-      if (!response.success) {
-        emitErrorMessage(response.error || '打开链接失败')
-      }
-      return
-    }
-
-    const fileRef = getSearchResultFileRef(result)
-    if (!fileRef) {
-      message.warning('未找到文件路径')
-      return
-    }
-    await openFile(fileRef, {
-      kind: 'search_list',
-      title: '搜索结果',
-      query: turn.query,
-      results: turn.results,
-      tokens: turn.tokens
-    })
-  }
-
   const openFileChange = useCallback((changeId: string): void => {
     void window.api.aiFileChangeGet({ changeId }).then((response) => {
       if (response.record) {
-        void loadFileChangesForSessionRef.current(
-          response.record.sessionId,
+        void loadFileChangesForPartnerRef.current(
+          response.record.partnerId,
           response.record.runId,
           {
             preferredApplyId: changeId,
@@ -3208,10 +3006,10 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     const unsubscribe = window.api.onAiRunEvent((event) => {
       if (event.type === 'run_started') {
-        activeRunSessionIdsRef.current[event.runId] = event.sessionId
-        setSessionRunningState(event.sessionId, true)
+        activeRunPartnerIdsRef.current[event.runId] = event.partnerId
+        setPartnerRunningState(event.partnerId, true)
       }
-      const eventSessionId = activeRunSessionIdsRef.current[event.runId]
+      const eventPartnerId = activeRunPartnerIdsRef.current[event.runId]
 
       if (
         event.type === 'run_completed' ||
@@ -3219,26 +3017,26 @@ const ChatPage: React.FC = () => {
         event.type === 'run_cancelled' ||
         (!event.internal && event.type === 'runtime_issue')
       ) {
-        if (eventSessionId) {
-          setSessionRunningState(eventSessionId, false)
-          delete activeRunSessionIdsRef.current[event.runId]
+        if (eventPartnerId) {
+          setPartnerRunningState(eventPartnerId, false)
+          delete activeRunPartnerIdsRef.current[event.runId]
         }
-        void loadSessions()
+        void loadPartners()
       }
 
       const messageId = activeRunMessageIdsRef.current[event.runId]
       if (!messageId) {
-        if (event.type === 'run_started' && event.sessionId === currentSessionIdRef.current) {
-          const requestId = sessionSwitchRequestRef.current + 1
-          sessionSwitchRequestRef.current = requestId
-          void loadSessionOpen(event.sessionId, requestId)
+        if (event.type === 'run_started' && event.partnerId === currentPartnerIdRef.current) {
+          const requestId = partnerSwitchRequestRef.current + 1
+          partnerSwitchRequestRef.current = requestId
+          void loadPartnerOpen(event.partnerId, requestId)
         }
         return
       }
 
-      if (eventSessionId !== currentSessionIdRef.current) {
-        if (event.type === 'browser_panel_opened' && eventSessionId) {
-          persistBackgroundBrowserTab(eventSessionId, event.browserTabId)
+      if (eventPartnerId !== currentPartnerIdRef.current) {
+        if (event.type === 'browser_panel_opened' && eventPartnerId) {
+          persistBackgroundBrowserTab(eventPartnerId, event.browserTabId)
         }
         return
       }
@@ -3353,8 +3151,8 @@ const ChatPage: React.FC = () => {
               : item
           )
         )
-        if (eventSessionId && eventSessionId === currentSessionIdRef.current) {
-          void loadFileChangesForSessionRef.current(eventSessionId, event.runId)
+        if (eventPartnerId && eventPartnerId === currentPartnerIdRef.current) {
+          void loadFileChangesForPartnerRef.current(eventPartnerId, event.runId)
         }
         emitErrorMessage(
           event.code === 'runtime_limit'
@@ -3387,8 +3185,8 @@ const ChatPage: React.FC = () => {
               : item
           )
         )
-        if (eventSessionId && eventSessionId === currentSessionIdRef.current) {
-          void loadFileChangesForSessionRef.current(eventSessionId, event.runId)
+        if (eventPartnerId && eventPartnerId === currentPartnerIdRef.current) {
+          void loadFileChangesForPartnerRef.current(eventPartnerId, event.runId)
         }
         message.info('已取消')
         return
@@ -3400,12 +3198,15 @@ const ChatPage: React.FC = () => {
         setCancellingRun(false)
         setPendingApprovalBatch(null)
         setApprovalSubmitting(false)
-        if (eventSessionId && eventSessionId === currentSessionIdRef.current) {
-          void loadFileChangesForSessionRef.current(eventSessionId, event.runId, {
+        if (eventPartnerId && eventPartnerId === currentPartnerIdRef.current) {
+          void loadFileChangesForPartnerRef.current(eventPartnerId, event.runId, {
             notifyNoEffectiveChange: true
           })
         }
-        void refreshContextUsage(eventSessionId || currentSessionIdRef.current)
+        void refreshContextUsage(eventPartnerId || currentPartnerIdRef.current)
+        if (eventPartnerId === currentPartnerIdRef.current) {
+          setClearContextVisible(true)
+        }
       }
     })
     return () => {
@@ -3413,31 +3214,20 @@ const ChatPage: React.FC = () => {
     }
     // AI run listener is intentionally keyed by active run/session identity to avoid resubscribing on UI helper changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentSessionId, loadSessions, message, refreshContextUsage, setSessionRunningState])
+  }, [currentPartnerId, loadPartners, message, refreshContextUsage, setPartnerRunningState])
 
   useEffect(() => {
-    return window.api.onChatSessionListRefresh(() => {
-      void loadSessions()
+    return window.api.onPartnerListRefresh(() => {
+      void loadPartners()
     })
-  }, [loadSessions])
-
-  const createDraftSessionForSubmit = (workspace: WorkspaceSource): ChatSession => {
-    return {
-      id: crypto.randomUUID(),
-      title: '新对话',
-      created_at: Date.now(),
-      workspace_id: workspace.id,
-      pinned: false,
-      pinned_at: null
-    }
-  }
+  }, [loadPartners])
 
   const ensureAttachmentTarget = useCallback(async (): Promise<{
+    partnerId: string
     assetBucketId: string
-    workspaceRootPath: string
   } | null> => {
-    if (!selectedWorkspaceReady || !selectedWorkspace?.root_path) {
-      message.warning(`${getWorkspaceRequirementHint(selectedWorkspace)}后再添加附件`)
+    if (!currentPartnerId) {
+      message.warning('请先选择伙伴后再添加附件')
       return null
     }
 
@@ -3452,23 +3242,19 @@ const ChatPage: React.FC = () => {
     }
 
     return {
-      assetBucketId: nextAssetBucketId,
-      workspaceRootPath: selectedWorkspace.root_path
+      partnerId: currentPartnerId,
+      assetBucketId: nextAssetBucketId
     }
-  }, [assetBucketId, message, selectedWorkspace, selectedWorkspaceReady])
+  }, [assetBucketId, currentPartnerId, message])
 
   const handleSend = async (): Promise<void> => {
-    if (composerMode === 'ai' && aiRunId) {
+    if (aiRunId) {
       await handleCancel()
       return
     }
-    if (composerMode === 'search') {
-      await handleSearchSend()
-      return
-    }
     if (!input.trim() || loading || submitInFlightRef.current) return
-    if (!selectedWorkspaceReady || !selectedWorkspace) {
-      message.warning(`${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`)
+    if (!currentPartnerId) {
+      message.warning('请先选择伙伴后再发送消息')
       return
     }
     if (!modelSelection.mainModel) {
@@ -3476,26 +3262,14 @@ const ChatPage: React.FC = () => {
       return
     }
 
+    const submitPartnerId = currentPartnerId
     const userQuery = input.trim()
     const submittedContentNodes = composerContentNodes
     const submittedReferences = selectedReferences
     const submittedAttachments = attachments
-    let submitSessionId = currentSessionId
-    let createdSession: ChatSession | null = null
-    if (!submitSessionId) {
-      createdSession = {
-        id: crypto.randomUUID(),
-        title: '新对话',
-        created_at: Date.now(),
-        workspace_id: selectedWorkspace.id,
-        pinned: false,
-        pinned_at: null
-      }
-      submitSessionId = createdSession.id
-    }
     const optimisticUserMessage: ChatMessage = {
       id: `local-user-${crypto.randomUUID()}`,
-      session_id: submitSessionId,
+      partner_id: submitPartnerId,
       role: 'user',
       content: userQuery,
       timestamp: Date.now(),
@@ -3506,23 +3280,17 @@ const ChatPage: React.FC = () => {
     }
     const optimisticAssistantMessage: ChatMessage = {
       id: `local-assistant-${crypto.randomUUID()}`,
-      session_id: submitSessionId,
+      partner_id: submitPartnerId,
       role: 'assistant',
       content: '',
       timestamp: optimisticUserMessage.timestamp + 1,
       error: false
     }
-    const likelyExecutable =
-      /\b(cmd|bash|shell|terminal|command|run)\b/i.test(userQuery) ||
-      /终端|命令|脚本|执行|创建文件|删除文件|修改文件/.test(userQuery)
-    if (likelyExecutable && !selectedWorkspaceReady) {
-      message.warning('该请求可能触发本地执行，请先选择当前工作区，必要时再通过 @ 插入文件或目录')
-      return
-    }
     const removeOptimisticMessages = (messages: ChatMessage[]): ChatMessage[] =>
       messages.filter(
-        (message) =>
-          message.id !== optimisticUserMessage.id && message.id !== optimisticAssistantMessage.id
+        (messageItem) =>
+          messageItem.id !== optimisticUserMessage.id &&
+          messageItem.id !== optimisticAssistantMessage.id
       )
     const removeOptimisticAssistantTurn = (
       turns: Record<string, AssistantTurnViewModel>
@@ -3560,13 +3328,14 @@ const ChatPage: React.FC = () => {
       emitErrorMessage(normalized)
     }
 
-    saveComposerDraftForSession(submitSessionId, createEmptyComposerDraft())
-    applyComposerDraft(createEmptyComposerDraft(), `clear:${submitSessionId}`)
+    saveComposerDraftForPartner(submitPartnerId, createEmptyComposerDraft())
+    applyComposerDraft(createEmptyComposerDraft(), `clear:${submitPartnerId}`)
     shouldAutoScrollRef.current = true
     scrollToBottom(true)
     setCancellingRun(false)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
+    setClearContextVisible(false)
     lastSubmittedInputRef.current = userQuery
     setCurrentMessages((previous) =>
       appendMessagesDedupe(previous, [optimisticUserMessage, optimisticAssistantMessage])
@@ -3578,27 +3347,15 @@ const ChatPage: React.FC = () => {
 
     submitInFlightRef.current = true
     try {
-      if (createdSession) {
-        await flushCurrentUiState()
-        const sessionResponse = await window.api.chatSessionSave(createdSession)
-        if (!sessionResponse.success) {
-          failOptimisticSubmit(sessionResponse.error || '创建会话失败')
-          return
-        }
-        adoptCreatedSession(createdSession)
-      }
-
       const response = await window.api.chatSubmit({
-        mode: 'ai',
-        sessionId: submitSessionId,
+        partnerId: submitPartnerId,
         input: userQuery,
         preference: composerAiPreference,
         executionPermission: composerExecutionPermission,
         contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
         selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
         attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
-        mainModel: modelSelection.mainModel,
-        workspace: createWorkspaceBinding(selectedWorkspace)
+        mainModel: modelSelection.mainModel
       })
       if (
         !response.success ||
@@ -3612,7 +3369,7 @@ const ChatPage: React.FC = () => {
       const run = response.run
       const assistantMessageId = response.assistantMessage.id
       activeRunMessageIdsRef.current[run.id] = assistantMessageId
-      activeRunSessionIdsRef.current[run.id] = run.sessionId
+      activeRunPartnerIdsRef.current[run.id] = run.partnerId
       assistantArtifactsRef.current[assistantMessageId] = []
       setCurrentMessages((previous) =>
         appendMessagesDedupe(removeOptimisticMessages(previous), [
@@ -3622,7 +3379,7 @@ const ChatPage: React.FC = () => {
       )
       setAiRunId(run.id)
       setLoading(true)
-      setSessionRunningState(run.sessionId, true)
+      setPartnerRunningState(run.partnerId, true)
       setAssistantTurns((previous) => {
         const next = removeOptimisticAssistantTurn(previous)
         const optimisticTurn = previous[optimisticAssistantMessage.id]
@@ -3637,105 +3394,12 @@ const ChatPage: React.FC = () => {
           }
         }
       })
-      void loadSessions()
+      void loadPartners()
     } catch (error) {
       console.error(error)
       failOptimisticSubmit(error instanceof Error ? error.message : '发送失败')
     } finally {
       submitInFlightRef.current = false
-    }
-  }
-
-  const handleSearchSend = async (): Promise<void> => {
-    if (!input.trim() || loading) return
-    if (!selectedWorkspaceReady || !selectedWorkspace) {
-      message.warning(`${getWorkspaceRequirementHint(selectedWorkspace)}后再发送消息`)
-      return
-    }
-
-    const userQuery = input.trim()
-    const submittedContentNodes = composerContentNodes
-    const submittedReferences = selectedReferences
-    const hasStrictScope = selectedReferences.length > 0 || Boolean(selectedWorkspace)
-    if (hasStrictScope && kbScopeDocumentIds.length === 0) {
-      message.warning('当前搜索范围没有已索引资料，无法执行纯搜索。')
-      return
-    }
-    let submitSessionId = currentSessionId
-    let createdSession: ChatSession | null = null
-    if (!submitSessionId) {
-      createdSession = createDraftSessionForSubmit(selectedWorkspace)
-      submitSessionId = createdSession.id
-    }
-
-    saveComposerDraftForSession(submitSessionId, createEmptyComposerDraft())
-    applyComposerDraft(createEmptyComposerDraft(), `clear:${submitSessionId}`)
-    shouldAutoScrollRef.current = true
-    scrollToBottom(true)
-    setLoading(true)
-    setCancellingRun(false)
-    setAiRunId(null)
-    setPendingApprovalBatch(null)
-    setApprovalSubmitting(false)
-
-    try {
-      if (createdSession) {
-        await flushCurrentUiState()
-        const sessionResponse = await window.api.chatSessionSave(createdSession)
-        if (!sessionResponse.success) {
-          emitErrorMessage(sessionResponse.error || '创建会话失败')
-          return
-        }
-      }
-      const response = await window.api.chatSubmit({
-        mode: 'search',
-        sessionId: submitSessionId,
-        input: userQuery,
-        contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
-        selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
-        workspace: createWorkspaceBinding(selectedWorkspace),
-        searchDocumentIds: hasStrictScope ? kbScopeDocumentIds : undefined
-      })
-      if (!response.success || !response.userMessage || !response.assistantMessage) {
-        if (createdSession) await window.api.chatSessionDelete(createdSession.id).catch(() => null)
-        emitErrorMessage(response.error || '搜索失败')
-        return
-      }
-      const results = response.results || []
-      const assistantContent = response.content || response.assistantMessage.content
-      const completedAssistantMessageId = response.assistantMessage.id
-      setCurrentMessages((previous) =>
-        appendMessagesDedupe(previous, [response.userMessage, response.assistantMessage])
-      )
-      if (createdSession) adoptCreatedSession(createdSession)
-      setAssistantTurns((previous) => ({
-        ...previous,
-        [completedAssistantMessageId]: {
-          ...(previous[completedAssistantMessageId] ||
-            createSearchAssistantTurn(completedAssistantMessageId)),
-          status: 'completed',
-          processGroups: completeAssistantProcessGroups(
-            previous[completedAssistantMessageId]?.processGroups ||
-              createSearchAssistantTurn(completedAssistantMessageId).processGroups
-          ),
-          finalAnswerMarkdown: assistantContent
-        }
-      }))
-
-      showContentPanel({
-        kind: 'search_list',
-        title: '搜索结果',
-        query: userQuery,
-        results,
-        tokens: response.tokens || []
-      })
-      void loadSessions()
-    } catch (error) {
-      console.error(error)
-      if (createdSession) await window.api.chatSessionDelete(createdSession.id).catch(() => null)
-      emitErrorMessage('搜索失败')
-    } finally {
-      setLoading(false)
     }
   }
 
@@ -3753,6 +3417,59 @@ const ChatPage: React.FC = () => {
       emitErrorMessage(error instanceof Error ? error.message : '取消失败')
     }
   }
+
+  const handleClearPartnerContext = useCallback(async (): Promise<void> => {
+    if (!currentPartnerId) return
+    try {
+      const response = await window.api.partnerClearContext({ partnerId: currentPartnerId })
+      if (!response.success) {
+        emitErrorMessage(response.error || '清空临时记忆失败')
+        return
+      }
+      setLastContextClearedAt(response.clearedAt ?? Date.now())
+      setClearContextVisible(false)
+      setHoveredGrayMessageId(null)
+    } catch (error) {
+      emitErrorMessage(error instanceof Error ? error.message : '清空临时记忆失败')
+    }
+  }, [currentPartnerId, emitErrorMessage])
+
+  const submitCreatePartner = useCallback(async (): Promise<void> => {
+    const name = createPartnerName.trim()
+    if (!name) {
+      message.warning('请输入伙伴名称')
+      return
+    }
+    if (createPartnerSubmitting) return
+    setCreatePartnerSubmitting(true)
+    try {
+      const response = await window.api.partnerCreate({
+        name,
+        avatar_shape: createPartnerShape,
+        avatar_color: createPartnerColor
+      })
+      if (!response.success || !response.partner) {
+        emitErrorMessage(response.error || '创建伙伴失败')
+        return
+      }
+      setCreatePartnerOpen(false)
+      setCreatePartnerName('')
+      await openExistingPartner(response.partner, { saveCurrentDraft: false })
+      void loadPartners()
+    } catch (error) {
+      emitErrorMessage(error instanceof Error ? error.message : '创建伙伴失败')
+    } finally {
+      setCreatePartnerSubmitting(false)
+    }
+  }, [
+    createPartnerColor,
+    createPartnerName,
+    createPartnerShape,
+    createPartnerSubmitting,
+    emitErrorMessage,
+    loadPartners,
+    message
+  ])
 
   const setApprovalGuideMessage = (itemId: string, messageText: string): void => {
     setApprovalDraftDecisions((current) => ({
@@ -3855,7 +3572,7 @@ const ChatPage: React.FC = () => {
   }
 
   const handleApplyRevert = async (): Promise<void> => {
-    if (!activeApplyRecord || !currentSessionId || applyReverting) return
+    if (!activeApplyRecord || !currentPartnerId || applyReverting) return
     setApplyRevertConfirm({
       changeId: activeApplyRecord.id,
       stage: 'confirm',
@@ -3864,7 +3581,7 @@ const ChatPage: React.FC = () => {
   }
 
   const handleApplyRevertConfirm = async (): Promise<void> => {
-    if (!applyRevertConfirm || !currentSessionId || applyReverting) return
+    if (!applyRevertConfirm || !currentPartnerId || applyReverting) return
     setApplyReverting(true)
     try {
       const response = await window.api.aiFileChangeRevert({
@@ -3891,7 +3608,7 @@ const ChatPage: React.FC = () => {
       emitSuccessMessage('已回退本次修改')
       const record = response.record || activeApplyRecord
       if (!record) return
-      await loadFileChangesForSession(record.sessionId, record.runId, {
+      await loadFileChangesForPartner(record.partnerId, record.runId, {
         preferredApplyId: response.record?.id || applyRevertConfirm.changeId,
         autoOpen: true,
         forceOpenWorkspace: true,
@@ -3916,7 +3633,7 @@ const ChatPage: React.FC = () => {
   }
 
   const handleEditUserMessage = async (messageItem: ChatMessage): Promise<void> => {
-    if (!currentSessionId || aiRunId || messageItem.id !== latestUserMessageId) return
+    if (!currentPartnerId || aiRunId || messageItem.id !== latestUserMessageId) return
     const targetIndex = currentMessages.findIndex((item) => item.id === messageItem.id)
     if (targetIndex < 0) return
     const previousMessages = currentMessages
@@ -3951,12 +3668,12 @@ const ChatPage: React.FC = () => {
       })
       return next
     })
-    saveComposerDraftForSession(currentSessionId, draft)
+    saveComposerDraftForPartner(currentPartnerId, draft)
     applyComposerDraft(draft, `edit:${messageItem.id}`)
     shouldAutoScrollRef.current = true
     try {
       const response = await window.api.chatTurnRetractLatest({
-        sessionId: currentSessionId,
+        partnerId: currentPartnerId,
         userMessageId: messageItem.id
       })
       if (!response.success || !response.userMessage) {
@@ -3964,7 +3681,7 @@ const ChatPage: React.FC = () => {
         setAssistantTurns(previousAssistantTurns)
         assistantArtifactsRef.current = previousAssistantArtifacts
         if (composerDraftValueRef.current.input === draft.input) {
-          saveComposerDraftForSession(currentSessionId, previousDraft)
+          saveComposerDraftForPartner(currentPartnerId, previousDraft)
           applyComposerDraft(previousDraft, `edit-failed:${messageItem.id}`)
         }
         emitErrorMessage(response.error || '无法编辑这条消息')
@@ -3983,14 +3700,14 @@ const ChatPage: React.FC = () => {
           return next
         })
       }
-      void refreshContextUsage(currentSessionId)
+      void refreshContextUsage(currentPartnerId)
     } catch (error) {
       console.error(error)
       setCurrentMessages(previousMessages)
       setAssistantTurns(previousAssistantTurns)
       assistantArtifactsRef.current = previousAssistantArtifacts
       if (composerDraftValueRef.current.input === draft.input) {
-        saveComposerDraftForSession(currentSessionId, previousDraft)
+        saveComposerDraftForPartner(currentPartnerId, previousDraft)
         applyComposerDraft(previousDraft, `edit-failed:${messageItem.id}`)
       }
       emitErrorMessage('编辑失败')
@@ -3999,12 +3716,21 @@ const ChatPage: React.FC = () => {
 
   const renderUserMessage = (messageItem: ChatMessage): React.ReactNode => {
     const contentNodes = getUserMessageContentNodes(messageItem)
-    const canEdit = Boolean(currentSessionId) && !aiRunId && messageItem.id === latestUserMessageId
+    const canEdit = Boolean(currentPartnerId) && !aiRunId && messageItem.id === latestUserMessageId
+    const contextCleared = lastContextClearedAt != null && messageItem.timestamp < lastContextClearedAt
+    const grayed = contextCleared && !grayRestoredMessageIds.has(messageItem.id)
     return (
       <div
         key={messageItem.id}
-        className="group/user-message flex justify-end"
+        data-message-id={messageItem.id}
+        className={`group/user-message flex justify-end ${grayed ? 'nc-message-context-cleared' : ''}`}
         data-testid={`${workbenchSelectors.userMessagePrefix}-${messageItem.id}`}
+        onMouseEnter={() => {
+          if (contextCleared) setHoveredGrayMessageId(messageItem.id)
+        }}
+        onMouseLeave={() => {
+          setHoveredGrayMessageId((current) => (current === messageItem.id ? null : current))
+        }}
       >
         <div className="flex min-w-0 max-w-[66%] flex-col items-end">
           {messageItem.attachments && messageItem.attachments.length > 0 ? (
@@ -4068,7 +3794,7 @@ const ChatPage: React.FC = () => {
                   <ReferenceInlineToken
                     key={
                       node.reference.kind === 'web'
-                        ? `${index}:web:${node.reference.workspaceId}:${node.reference.webSourceId}`
+                        ? `${index}:web:${node.reference.webSourceId}`
                         : `${index}:${node.reference.kind}:${node.reference.workspaceId}:${node.reference.nodeId}`
                     }
                     reference={node.reference}
@@ -4117,9 +3843,23 @@ const ChatPage: React.FC = () => {
 
   const renderAssistantMessage = (messageItem: ChatMessage): React.ReactNode => {
     const turn = assistantTurns[messageItem.id]
+    const contextCleared = lastContextClearedAt != null && messageItem.timestamp < lastContextClearedAt
+    const grayed = contextCleared && !grayRestoredMessageIds.has(messageItem.id)
+    const hoverProps = {
+      'data-message-id': messageItem.id,
+      className: grayed ? 'nc-message-context-cleared w-full' : 'w-full',
+      onMouseEnter: () => {
+        if (contextCleared) setHoveredGrayMessageId(messageItem.id)
+      },
+      onMouseLeave: () => {
+        setHoveredGrayMessageId((current: string | null) =>
+          current === messageItem.id ? null : current
+        )
+      }
+    }
     if (!turn) {
       return (
-        <div key={messageItem.id} className="w-full">
+        <div key={messageItem.id} {...hoverProps}>
           <div className="min-w-0 text-[15px] leading-7 text-[#37352F]">
             <MarkdownRenderer
               content={messageItem.content}
@@ -4132,16 +3872,17 @@ const ChatPage: React.FC = () => {
     }
 
     return (
+      <div key={messageItem.id} {...hoverProps}>
       <AssistantTurnCard
-        key={messageItem.id}
         messageId={messageItem.id}
         turn={turn}
         isStreaming={loading && Boolean(turn.runId && turn.runId === aiRunId)}
         onOpenApply={openFileChange}
         workspaces={workspaces}
-        fallbackWorkspaceName={selectedWorkspace?.name || null}
+        fallbackWorkspaceName={selectedWorkspaceName}
         onOpenReference={handleOpenMarkdownReference}
       />
+      </div>
     )
   }
 
@@ -4152,31 +3893,40 @@ const ChatPage: React.FC = () => {
       setSelectedReferences(draft.selectedReferences)
       setAttachments(draft.attachments || [])
       setAssetBucketId(draft.assetBucketId || null)
-      saveComposerDraftForSession(currentSessionId, draft)
+      saveComposerDraftForPartner(currentPartnerId, draft)
     },
-    [currentSessionId, saveComposerDraftForSession]
+    [currentPartnerId, saveComposerDraftForPartner]
   )
 
-  const pinnedSessions = useMemo(
-    () => sessions.filter((session) => session.pinned),
-    [sessions]
+  const pinnedPartners = useMemo(
+    () => partners.filter((partner) => partner.pinned),
+    [partners]
   )
-
-  // 按工作空间分组未置顶会话
-  const sessionsByWorkspace = useMemo(() => {
-    const groups = new Map<string, ChatSessionListItem[]>()
-    sessions.forEach((session) => {
-      if (session.pinned) return
-      const wsId = session.workspace_id || ''
-      if (!groups.has(wsId)) {
-        groups.set(wsId, [])
-      }
-      groups.get(wsId)!.push(session)
+  const unpinnedPartners = useMemo(
+    () => partners.filter((partner) => !partner.pinned),
+    [partners]
+  )
+  const grayRestoredMessageIds = useMemo(() => {
+    if (!hoveredGrayMessageId) return new Set<string>()
+    const index = currentMessages.findIndex((item) => item.id === hoveredGrayMessageId)
+    if (index < 0) return new Set([hoveredGrayMessageId])
+    const ids = new Set<string>([hoveredGrayMessageId])
+    const previous = currentMessages[index - 1]
+    const next = currentMessages[index + 1]
+    if (previous) ids.add(previous.id)
+    if (next) ids.add(next.id)
+    return ids
+  }, [currentMessages, hoveredGrayMessageId])
+  const timelineDays = useMemo(() => {
+    const todayStart = startOfLocalDay(Date.now())
+    const days = new Set<number>([todayStart, todayStart - DAY_MS, todayStart - 2 * DAY_MS])
+    currentMessages.forEach((item) => {
+      days.add(startOfLocalDay(item.timestamp))
     })
-    return groups
-  }, [sessions])
+    return [...days].sort((left, right) => left - right)
+  }, [currentMessages])
 
-  const sessionSwitching = Boolean(switchingSessionId)
+  const sessionSwitching = Boolean(switchingPartnerId)
   // 判断是否为新会话（没有消息）
   const isNewSession = useMemo(
     () => !sessionSwitching && currentMessages.length === 0,
@@ -4199,6 +3949,72 @@ const ChatPage: React.FC = () => {
     return []
   }, [aiRunId, assistantTurns, currentMessages])
 
+  const renderPartnerRow = (partner: PartnerListItem): React.JSX.Element => {
+    const PinIcon = partner.pinned ? BsPinAngleFill : BsPinAngle
+    return (
+      <div
+        key={partner.id}
+        role="button"
+        tabIndex={0}
+        data-testid={`${workbenchSelectors.partnerItemPrefix}-${partner.id}`}
+        className={`nc-sidebar-item group relative ${
+          currentPartnerId === partner.id ? 'nc-sidebar-item-active' : 'bg-transparent'
+        } ${deletingPartnerIds.has(partner.id) ? 'pointer-events-none opacity-60' : ''} px-3 py-2`}
+        onClick={() => selectPartner(partner)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            selectPartner(partner)
+          }
+        }}
+      >
+        <div className="flex min-w-0 items-center gap-2">
+          <PartnerAvatar
+            shape={partner.avatar_shape}
+            color={partner.avatar_color}
+            size={28}
+            title={partner.name}
+          />
+          <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+            {partner.name}
+          </div>
+          <div className="flex h-4 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
+            {partner.isRunning ? (
+              <span className="nc-session-running-spinner" aria-label="任务运行中" />
+            ) : partner.hasUnreadCompletion ? (
+              <span className="nc-session-unread-dot" aria-label="任务已完成，未查看" />
+            ) : null}
+          </div>
+          <div className="ml-1 hidden shrink-0 items-center gap-0.5 group-hover:flex">
+            <Tooltip title={partner.pinned ? '取消置顶' : '置顶'} placement="top">
+              <button
+                type="button"
+                className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[#91918E] transition hover:bg-white hover:text-[#37352F]"
+                data-testid={`${workbenchSelectors.partnerPinButtonPrefix}-${partner.id}`}
+                aria-label={partner.pinned ? '取消置顶' : '置顶'}
+                onMouseDown={(event) => event.stopPropagation()}
+                onClick={(event) => togglePartnerPinned(event, partner)}
+              >
+                <PinIcon className="h-3.5 w-3.5" />
+              </button>
+            </Tooltip>
+            <Button
+              type="text"
+              size="small"
+              icon={<HiTrash className="h-3.5 w-3.5" />}
+              className="!h-6 !w-6 !rounded-[6px] !p-0"
+              loading={deletingPartnerIds.has(partner.id)}
+              disabled={deletingPartnerIds.has(partner.id)}
+              data-testid={`${workbenchSelectors.partnerDeleteButtonPrefix}-${partner.id}`}
+              onMouseDown={(event) => event.stopPropagation()}
+              onClick={(event) => requestDeletePartner(event, partner)}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   // 获取平台信息
   const [platform, setPlatform] = useState<string>(() => detectRendererPlatform())
   useEffect(() => {
@@ -4209,8 +4025,8 @@ const ChatPage: React.FC = () => {
     <div
       className="nc-app-shell"
       data-testid={workbenchSelectors.page}
-      data-workbench-mode={composerMode}
-      onClick={acknowledgeCurrentSessionCompletion}
+      data-workbench-mode="ai"
+      onClick={acknowledgeCurrentPartnerCompletion}
     >
       <div
         className="nc-left-titlebar-chrome"
@@ -4232,7 +4048,7 @@ const ChatPage: React.FC = () => {
             event.stopPropagation()
             setSidebarCollapsed((previous) => !previous)
           }}
-          data-testid={workbenchSelectors.sessionsToggle}
+          data-testid={workbenchSelectors.partnersToggle}
           aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
         >
           <SidebarPanelIcon
@@ -4269,12 +4085,17 @@ const ChatPage: React.FC = () => {
           <button
             type="button"
             className="nc-sidebar-nav-row nc-sidebar-new-chat"
-            onClick={() => void createNewSession()}
-            data-testid={workbenchSelectors.newSessionButton}
-            aria-label="新对话"
+            onClick={() => {
+              setCreatePartnerName('')
+              setCreatePartnerShape('circle')
+              setCreatePartnerColor('blue')
+              setCreatePartnerOpen(true)
+            }}
+            data-testid={workbenchSelectors.newPartnerButton}
+            aria-label="创建伙伴"
           >
-            <HiOutlinePencilSquare className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
-            <span>新对话</span>
+            <HiPlus className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
+            <span>创建伙伴</span>
           </button>
           <button
             type="button"
@@ -4290,209 +4111,29 @@ const ChatPage: React.FC = () => {
 
         <div
           className="flex-1 overflow-y-auto px-2 py-2"
-          data-testid={workbenchSelectors.sessionsList}
+          data-testid={workbenchSelectors.partnersList}
         >
-          {(() => {
-            const renderSession = (session: ChatSessionListItem): React.JSX.Element => {
-              const PinIcon = session.pinned ? BsPinAngleFill : BsPinAngle
-              return (
-                <div
-                  key={session.id}
-                  role="button"
-                  tabIndex={0}
-                  data-testid={`${workbenchSelectors.sessionItemPrefix}-${session.id}`}
-                  className={`nc-sidebar-item group relative ${
-                    currentSessionId === session.id ? 'nc-sidebar-item-active' : 'bg-transparent'
-                  } ${
-                    deletingSessionIds.has(session.id) ? 'pointer-events-none opacity-60' : ''
-                  } px-3 py-2`}
-                  onClick={() => selectSession(session)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault()
-                      selectSession(session)
-                    }
-                  }}
-                >
-                  <div className="flex min-w-0 items-center gap-2 pl-4">
-                    <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-                      {session.title}
-                    </div>
-                    <div className="flex h-4 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
-                      {session.isRunning ? (
-                        <span className="nc-session-running-spinner" aria-label="任务运行中" />
-                      ) : session.hasUnreadCompletion ? (
-                        <span className="nc-session-unread-dot" aria-label="任务已完成，未查看" />
-                      ) : (
-                        <>
-                          <HiClock className="h-3 w-3" />
-                          <span>{formatRelativeTime(session.created_at)}</span>
-                        </>
-                      )}
-                    </div>
-                    <div className="ml-2 hidden shrink-0 items-center gap-0.5 group-hover:flex">
-                      <Tooltip title={session.pinned ? '取消置顶' : '置顶'} placement="top">
-                        <button
-                          type="button"
-                          className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[#91918E] transition hover:bg-white hover:text-[#37352F]"
-                          data-testid={`${workbenchSelectors.sessionPinButtonPrefix}-${session.id}`}
-                          aria-label={session.pinned ? '取消置顶' : '置顶'}
-                          onMouseDown={(event) => event.stopPropagation()}
-                          onClick={(event) => toggleSessionPinned(event, session)}
-                        >
-                          <PinIcon className="h-3.5 w-3.5" />
-                        </button>
-                      </Tooltip>
-                      <Button
-                        type="text"
-                        size="small"
-                        icon={<HiTrash className="h-3.5 w-3.5" />}
-                        className="!h-6 !w-6 !rounded-[6px] !p-0"
-                        loading={deletingSessionIds.has(session.id)}
-                        disabled={deletingSessionIds.has(session.id)}
-                        data-testid={`${workbenchSelectors.sessionDeleteButtonPrefix}-${session.id}`}
-                        onMouseDown={(event) => event.stopPropagation()}
-                        onClick={(event) => requestDeleteSession(event, session)}
-                      />
-                    </div>
+          {partners.length === 0 ? (
+            <div className="px-3 py-10 text-center text-[13px] leading-6 text-[#8A8781]">
+              还没有伙伴。创建一个开始对话。
+            </div>
+          ) : (
+            <>
+              {pinnedPartners.length > 0 ? (
+                <div className="mb-2" data-testid={workbenchSelectors.pinnedPartnersSection}>
+                  <div className="px-3 pb-1 pt-2 text-[12px] font-medium text-[#8F8E8B]">
+                    已置顶
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    {pinnedPartners.map((partner) => renderPartnerRow(partner))}
                   </div>
                 </div>
-              )
-            }
-            return (
-              <>
-                {pinnedSessions.length > 0 ? (
-                  <div
-                    className="mb-2"
-                    data-testid={workbenchSelectors.pinnedSessionsSection}
-                  >
-                    <div className="px-3 pb-1 pt-2 text-[12px] font-medium text-[#8F8E8B]">
-                      已置顶
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      {pinnedSessions.map(renderSession)}
-                    </div>
-                  </div>
-                ) : null}
-                {workspacesLoaded ? (
-                  <div className="group flex items-center justify-between gap-2 px-3 pb-1 pt-2 text-[12px] font-medium text-[#8F8E8B]">
-                    <span className="truncate">工作空间</span>
-                    <Tooltip title="添加工作空间" placement="right">
-                      <button
-                        type="button"
-                        className="workbench-no-drag flex h-5 w-5 items-center justify-center rounded-[5px] text-[#91918E] opacity-0 transition hover:bg-white hover:text-[#37352F] group-hover:opacity-100"
-                        onClick={openWorkspaceSettings}
-                        aria-label="添加工作空间"
-                      >
-                        <HiOutlineFolderPlus className="h-3.5 w-3.5" />
-                      </button>
-                    </Tooltip>
-                  </div>
-                ) : null}
-                {workspaces.map((workspace) => {
-            const workspaceSessions = sessionsByWorkspace.get(workspace.id) || []
-            const workspaceCollapsed = collapsedWorkspaceIds.has(workspace.id)
-            const workspaceSessionsExpanded = expandedWorkspaceSessionIds.has(workspace.id)
-            const visibleWorkspaceSessions = workspaceSessions.slice(
-              0,
-              COLLAPSED_WORKSPACE_SESSION_LIMIT
-            )
-            const overflowWorkspaceSessions = workspaceSessions.slice(
-              COLLAPSED_WORKSPACE_SESSION_LIMIT
-            )
-            const hasOverflowSessions = overflowWorkspaceSessions.length > 0
-            return (
-              <div key={workspace.id} className="nc-sidebar-workspace-group">
-                <div className="nc-sidebar-workspace-header group">
-                  <div
-                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-2"
-                    onClick={() => toggleWorkspaceCollapsed(workspace.id)}
-                  >
-                    <HiFolder className="h-4 w-4 shrink-0 text-[#91918E]" />
-                    <span className="truncate">{workspace.name}</span>
-                    <button
-                      type="button"
-                      className="nc-sidebar-workspace-collapse workbench-no-drag relative z-10 cursor-pointer"
-                      onMouseDown={(event) => event.stopPropagation()}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        toggleWorkspaceCollapsed(workspace.id)
-                      }}
-                      aria-label={
-                        workspaceCollapsed
-                          ? `展开 ${workspace.name} 的对话`
-                          : `折叠 ${workspace.name} 的对话`
-                      }
-                    >
-                      <HiChevronDown
-                        className={`h-3.5 w-3.5 transition-transform duration-150 ${
-                          workspaceCollapsed ? '-rotate-90' : ''
-                        }`}
-                      />
-                    </button>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-1">
-                    <button
-                      type="button"
-                      className="flex h-5 w-5 items-center justify-center rounded-[5px] text-[#91918E] opacity-0 transition hover:bg-white hover:text-[#37352F] group-hover:opacity-100"
-                      onClick={() => void createNewSession(workspace.id)}
-                      aria-label={`在 ${workspace.name} 中新建对话`}
-                    >
-                      <HiPlus className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-                {workspaceCollapsed ? null : (
-                  <div className="mt-1 flex flex-col gap-1">
-                    {visibleWorkspaceSessions.map(renderSession)}
-                    {hasOverflowSessions ? (
-                      <div
-                        className={`nc-sidebar-session-overflow ${
-                          workspaceSessionsExpanded ? 'nc-sidebar-session-overflow-expanded' : ''
-                        }`}
-                        aria-hidden={!workspaceSessionsExpanded}
-                        inert={!workspaceSessionsExpanded}
-                      >
-                        <div className="min-h-0 overflow-hidden">
-                          <div className="flex flex-col gap-1">
-                            {overflowWorkspaceSessions.map(renderSession)}
-                          </div>
-                        </div>
-                      </div>
-                    ) : null}
-                    {hasOverflowSessions ? (
-                      <button
-                        type="button"
-                        className="nc-sidebar-session-toggle workbench-no-drag"
-                        onClick={() => toggleWorkspaceSessionsExpanded(workspace.id)}
-                        data-testid={`${workbenchSelectors.workspaceSessionTogglePrefix}-${workspace.id}`}
-                        aria-expanded={workspaceSessionsExpanded}
-                        aria-label={
-                          workspaceSessionsExpanded
-                            ? `收起 ${workspace.name} 的对话`
-                            : `展开 ${workspace.name} 的其余 ${overflowWorkspaceSessions.length} 个对话`
-                        }
-                      >
-                        <span>
-                          {workspaceSessionsExpanded
-                            ? '收起'
-                            : `展开其余 ${overflowWorkspaceSessions.length} 个`}
-                        </span>
-                        <HiChevronDown
-                          className={`h-3.5 w-3.5 transition-transform duration-150 ${
-                            workspaceSessionsExpanded ? 'rotate-180' : ''
-                          }`}
-                        />
-                      </button>
-                    ) : null}
-                  </div>
-                )}
+              ) : null}
+              <div className="flex flex-col gap-1">
+                {unpinnedPartners.map((partner) => renderPartnerRow(partner))}
               </div>
-            )
-          })}
-              </>
-            )
-          })()}
+            </>
+          )}
         </div>
 
         <div className="px-2 py-2">
@@ -4583,10 +4224,10 @@ const ChatPage: React.FC = () => {
                   aria-hidden="true"
                 />
                 <div className="nc-topbar-title-region min-w-0 flex-1 bg-white">
-                  {currentSession ? (
+                  {currentPartner ? (
                     <div className="flex min-w-0 items-center gap-2 leading-none">
                       <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]">
-                        {currentSession.title}
+                        {currentPartner.name}
                       </div>
                     </div>
                   ) : null}
@@ -4646,6 +4287,25 @@ const ChatPage: React.FC = () => {
               }}
             >
               <div className="flex h-full min-h-0 min-w-0 flex-1">
+                {!isNewSession ? (
+                  <div className="nc-message-timeline" data-testid={workbenchSelectors.timeline}>
+                    {timelineDays.map((dayStart) => {
+                      const todayStart = startOfLocalDay(Date.now())
+                      return (
+                        <Tooltip key={dayStart} title={formatTimelineDayDate(dayStart)} placement="right">
+                          <button
+                            type="button"
+                            className="nc-message-timeline-item"
+                            data-testid={`${workbenchSelectors.timelineItemPrefix}-${dayStart}`}
+                            onClick={() => jumpToTimelineDay(dayStart)}
+                          >
+                            {formatTimelineDayLabel(dayStart, todayStart)}
+                          </button>
+                        </Tooltip>
+                      )
+                    })}
+                  </div>
+                ) : null}
                 <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                   <div
                     className={`nc-document-scroll ${isNewSession ? '!hidden' : ''}`}
@@ -4673,14 +4333,18 @@ const ChatPage: React.FC = () => {
                     data-testid={workbenchSelectors.composerShell}
                   >
                     <div className="mx-auto w-full max-w-[760px]">
-                      {isNewSession ? (
+                      {isNewSession && currentPartnerId ? (
                         <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
-                          <span>
-                            {composerMode === 'search' ? '俺只会搜索本地资料！！' : '找俺干啥？'}
-                          </span>
+                          <span>找俺干啥？</span>
                         </div>
                       ) : null}
-                      {composerMode === 'ai' && pendingApprovalBatch ? (
+                      {!currentPartnerId ? (
+                        <div className="px-6 py-16 text-center text-[14px] leading-7 text-[#8A8781]">
+                          {partners.length === 0
+                            ? '还没有伙伴。从左侧创建一个开始对话。'
+                            : '请选择一个伙伴开始对话。'}
+                        </div>
+                      ) : pendingApprovalBatch ? (
                         <div
                           className="min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
                           data-testid={chatSelectors.approvalBatchCard}
@@ -4816,10 +4480,25 @@ const ChatPage: React.FC = () => {
                           ) : null}
                         </div>
                       ) : (
-                        <WorkbenchComposer
-                          mode={composerMode}
-                          modeLock={sessionModeLock}
-                          onModeChange={handleModeChange}
+                        <div className="relative">
+                          {clearContextVisible ? (
+                            <div className="mb-2 flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="nc-clear-context-capsule"
+                                data-testid={workbenchSelectors.clearContextButton}
+                                onClick={() => void handleClearPartnerContext()}
+                              >
+                                清空临时记忆
+                              </button>
+                              <Tooltip title="只清空模型当前用的临时记忆，不会删除对话历史。">
+                                <span className="inline-flex h-5 w-5 items-center justify-center text-[#9B9A97]">
+                                  <HiOutlineQuestionMarkCircle className="h-4 w-4" />
+                                </span>
+                              </Tooltip>
+                            </div>
+                          ) : null}
+                          <WorkbenchComposer
                           aiPreference={composerAiPreference}
                           onAiPreferenceChange={handleAiPreferenceChange}
                           executionPermission={composerExecutionPermission}
@@ -4829,11 +4508,6 @@ const ChatPage: React.FC = () => {
                           modelSelection={modelSelection}
                           onModelSelectionChange={handleModelSelectionChange}
                           onRefreshModelLists={refreshModelLists}
-                          workspaces={workspaces}
-                          selectedWorkspaceId={selectedWorkspaceId}
-                          onWorkspaceChange={handleWorkspaceChange}
-                          onWorkspaceEmptyAction={openWorkspaceSettings}
-                          showWorkspaceSelector={isNewSession}
                           onDraftChange={handleComposerDraftChange}
                           onSubmit={() => void handleSend()}
                           onCancel={() => void handleCancel()}
@@ -4841,12 +4515,10 @@ const ChatPage: React.FC = () => {
                           loading={loading}
                           cancelling={cancellingRun}
                           canSubmit={Boolean(
-                            input.trim() &&
-                            selectedWorkspaceReady &&
-                            (composerMode === 'search' || modelSelection.mainModel)
+                            input.trim() && currentPartnerId && modelSelection.mainModel
                           )}
                           submitDisabledReason={composerSubmitDisabledReason}
-                          showCancel={composerMode === 'ai' && Boolean(aiRunId)}
+                          showCancel={Boolean(aiRunId)}
                           draftValue={composerDraftValue}
                           draftKey={composerDraftKey}
                           contextUsage={contextUsage}
@@ -4856,21 +4528,8 @@ const ChatPage: React.FC = () => {
                             composerFileDropHandlerRef.current = handler
                           }}
                         />
-                      )}
-
-                      {composerMode === 'search' &&
-                      selectedReferences.some(
-                        (reference) =>
-                          reference.kind === 'directory' && reference.kbAvailability === 'partial'
-                      ) ? (
-                        <div
-                          className="nc-notice nc-notice-warning mt-3"
-                          data-testid={workbenchSelectors.referenceSearchWarning}
-                        >
-                          <HiOutlineExclamationCircle className="mt-0.5 h-4 w-4 shrink-0" />
-                          <span>当前搜索范围包含部分可检索目录，搜索只会覆盖其已索引子文件。</span>
                         </div>
-                      ) : null}
+                      )}
                     </div>
                   </div>
                 </div>
@@ -4980,12 +4639,9 @@ const ChatPage: React.FC = () => {
                     applyLoading={applyLoading}
                     applyReverting={applyReverting}
                     workspaces={workspaces}
-                    fallbackWorkspaceName={selectedWorkspace?.name || null}
+                    fallbackWorkspaceName={selectedWorkspaceName}
                     selectedWorkspace={selectedWorkspace || null}
                     fileChangeRecords={fileChangeRecords}
-                    onOpenSearchResult={(turn, resultIndex) =>
-                      void openSearchResult(turn, resultIndex)
-                    }
                     onRevertApply={() => void handleApplyRevert()}
                     onBackToPanelState={showContentPanel}
                     onOpenPath={openPathOrNotify}
@@ -5030,35 +4686,106 @@ const ChatPage: React.FC = () => {
         </Modal>
         <ImageLightbox image={previewImage} onClose={() => setPreviewImage(null)} />
         <Modal
-          open={Boolean(deleteConfirmSession)}
-          title="删除这个会话？"
+          open={Boolean(deleteConfirmPartner)}
+          title="删除这个伙伴？"
           okText="删除"
           cancelText="取消"
           okButtonProps={{
             danger: true,
-            'data-testid': workbenchSelectors.sessionDeleteConfirmButton
+            'data-testid': workbenchSelectors.partnerDeleteConfirmButton
           }}
           cancelButtonProps={{
-            'data-testid': workbenchSelectors.sessionDeleteCancelButton
+            'data-testid': workbenchSelectors.partnerDeleteCancelButton
           }}
           confirmLoading={Boolean(
-            deleteConfirmSession && deletingSessionIds.has(deleteConfirmSession.id)
+            deleteConfirmPartner && deletingPartnerIds.has(deleteConfirmPartner.id)
           )}
-          onOk={() => void confirmDeleteSession()}
+          onOk={() => void confirmDeletePartner()}
           onCancel={() => {
-            if (deleteConfirmSession && deletingSessionIds.has(deleteConfirmSession.id)) return
-            setDeleteConfirmSession(null)
+            if (deleteConfirmPartner && deletingPartnerIds.has(deleteConfirmPartner.id)) return
+            setDeleteConfirmPartner(null)
           }}
-          data-testid={workbenchSelectors.sessionDeleteConfirmModal}
+          data-testid={workbenchSelectors.partnerDeleteConfirmModal}
         >
           <p className="text-sm leading-6 text-[#787774]">
-            删除后会清掉这条会话里的消息、记忆和恢复进度。这个操作不能撤回。
+            删除后会清掉这个伙伴的消息、记忆和恢复进度。这个操作不能撤回。
           </p>
-          {deleteConfirmSession ? (
+          {deleteConfirmPartner ? (
             <div className="mt-3 rounded-[6px] border border-[#EEEEEC] bg-[#F7F7F5] px-3 py-2 text-sm font-medium text-[#37352F]">
-              {deleteConfirmSession.title || '未命名会话'}
+              {deleteConfirmPartner.name || '未命名伙伴'}
             </div>
           ) : null}
+        </Modal>
+        <Modal
+          open={createPartnerOpen}
+          title="创建伙伴"
+          okText="创建"
+          cancelText="取消"
+          confirmLoading={createPartnerSubmitting}
+          onOk={() => void submitCreatePartner()}
+          onCancel={() => {
+            if (createPartnerSubmitting) return
+            setCreatePartnerOpen(false)
+          }}
+          data-testid={workbenchSelectors.createPartnerModal}
+        >
+          <div className="space-y-4">
+            <div>
+              <div className="mb-2 text-[13px] text-[#787774]">名称</div>
+              <Input
+                value={createPartnerName}
+                onChange={(event) => setCreatePartnerName(event.target.value)}
+                placeholder="给伙伴起个名字"
+                maxLength={40}
+                onPressEnter={() => void submitCreatePartner()}
+                data-testid={workbenchSelectors.createPartnerNameInput}
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <PartnerAvatar
+                shape={createPartnerShape}
+                color={createPartnerColor}
+                size={48}
+                title={createPartnerName || '伙伴预览'}
+              />
+              <div className="text-[13px] text-[#787774]">头像预览</div>
+            </div>
+            <div>
+              <div className="mb-2 text-[13px] text-[#787774]">形状</div>
+              <div className="flex flex-wrap gap-2">
+                {PARTNER_AVATAR_SHAPES.map((shape) => (
+                  <button
+                    key={shape}
+                    type="button"
+                    className={`rounded-full p-0.5 ${
+                      createPartnerShape === shape ? 'ring-2 ring-[#37352F]' : ''
+                    }`}
+                    onClick={() => setCreatePartnerShape(shape)}
+                    aria-label={shape}
+                  >
+                    <PartnerAvatar shape={shape} color={createPartnerColor} size={28} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className="mb-2 text-[13px] text-[#787774]">颜色</div>
+              <div className="flex flex-wrap gap-2">
+                {PARTNER_AVATAR_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    className={`h-6 w-6 rounded-full ${
+                      createPartnerColor === color ? 'ring-2 ring-[#37352F] ring-offset-2' : ''
+                    }`}
+                    style={{ backgroundColor: PARTNER_AVATAR_COLOR_HEX[color] }}
+                    onClick={() => setCreatePartnerColor(color)}
+                    aria-label={color}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
         </Modal>
         <FullAccessConfirmModal
           open={fullAccessConfirmOpen}

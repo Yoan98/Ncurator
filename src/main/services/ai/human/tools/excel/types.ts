@@ -12,7 +12,7 @@ export type ExcelCapabilityToolsInput = {
   ctx: AiRunContext
   cache: { excelRuntime?: ExcelToolRuntime }
   runId: string
-  sessionId: string
+  partnerId: string
   taskId: string
   workspaceRootPath: string
   emitActivity: (input: {

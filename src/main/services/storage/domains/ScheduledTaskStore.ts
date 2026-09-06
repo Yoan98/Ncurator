@@ -16,7 +16,7 @@ type ScheduledTaskRow = {
   schedule_type?: unknown
   time_of_day?: unknown
   weekday?: unknown
-  workspace_id?: unknown
+  partner_id?: unknown
   main_model_config_id?: unknown
   main_model_name?: unknown
   ai_preference?: unknown
@@ -56,7 +56,7 @@ const toTask = (row: ScheduledTaskRow): ScheduledTask => {
     scheduleType: toScheduleType(row.schedule_type),
     timeOfDay: String(row.time_of_day || ''),
     weekday: weekday ?? null,
-    workspaceId: String(row.workspace_id || ''),
+    partnerId: String(row.partner_id || ''),
     mainModel,
     aiPreference: toPreference(row.ai_preference),
     executionPermission: toPermission(row.execution_permission),
@@ -97,12 +97,12 @@ export class ScheduledTaskStore {
       .prepare(
         `INSERT INTO scheduled_task (
           id, name, prompt, enabled, schedule_type, time_of_day, weekday,
-          workspace_id, main_model_config_id, main_model_name,
+          partner_id, main_model_config_id, main_model_name,
           ai_preference,
           execution_permission, next_run_at, created_at, updated_at
         ) VALUES (
           @id, @name, @prompt, @enabled, @schedule_type, @time_of_day, @weekday,
-          @workspace_id, @main_model_config_id, @main_model_name,
+          @partner_id, @main_model_config_id, @main_model_name,
           @ai_preference,
           @execution_permission, @next_run_at, @created_at, @updated_at
         )
@@ -113,7 +113,7 @@ export class ScheduledTaskStore {
           schedule_type = excluded.schedule_type,
           time_of_day = excluded.time_of_day,
           weekday = excluded.weekday,
-          workspace_id = excluded.workspace_id,
+          partner_id = excluded.partner_id,
           main_model_config_id = excluded.main_model_config_id,
           main_model_name = excluded.main_model_name,
           ai_preference = excluded.ai_preference,
@@ -129,7 +129,7 @@ export class ScheduledTaskStore {
         schedule_type: task.scheduleType,
         time_of_day: task.timeOfDay,
         weekday: task.weekday,
-        workspace_id: task.workspaceId,
+        partner_id: task.partnerId,
         main_model_config_id: task.mainModel.configId,
         main_model_name: task.mainModel.modelName,
         ai_preference: task.aiPreference,

@@ -5,12 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
   AiRunEvent,
   AiRunRecord,
-  ChatSession,
-  ChatSessionUiStateV1
+  Partner,
+  PartnerUiStateV1
 } from '../../../../src/shared/types'
 import { LanceDbCore } from '../../../../src/main/services/storage/core/LanceDbCore'
-import { ChatStore } from '../../../../src/main/services/storage/domains/ChatStore'
-import { ChatSearchTurnStore } from '../../../../src/main/services/storage/domains/ChatSearchTurnStore'
+import { PartnerStore } from '../../../../src/main/services/storage/domains/PartnerStore'
 import { AiRunStore } from '../../../../src/main/services/storage/domains/AiRunStore'
 import { DocumentsStore } from '../../../../src/main/services/storage/domains/DocumentsStore'
 import { BrowserTabStateStore } from '../../../../src/main/services/storage/domains/BrowserTabStateStore'
@@ -144,18 +143,21 @@ const applyLanceWhere = (rows: VectorRow[], where: string): VectorRow[] => {
   })
 }
 
-const createSession = (id = 'session-1'): ChatSession => ({
+const createPartner = (id = 'partner-1'): Partner => ({
   id,
-  title: 'Test session',
+  name: 'Test partner',
+  avatar_shape: 'circle',
+  avatar_color: 'blue',
   created_at: 1,
-  workspace_id: 'workspace-1',
+  updated_at: 1,
+  last_viewed_at: 1,
   pinned: false,
   pinned_at: null
 })
 
 const createRun = (input: Partial<AiRunRecord> = {}): AiRunRecord => ({
   id: input.id || 'run-1',
-  sessionId: input.sessionId || 'session-1',
+  partnerId: input.partnerId || 'partner-1',
   userMessageId: input.userMessageId || 'user-1',
   assistantMessageId: input.assistantMessageId || 'assistant-1',
   status: input.status || 'running',
@@ -167,16 +169,14 @@ const createRun = (input: Partial<AiRunRecord> = {}): AiRunRecord => ({
   finishedAt: input.finishedAt
 })
 
-const createSessionUiState = (input = 'draft'): ChatSessionUiStateV1 => ({
+const createPartnerUiState = (input = 'draft'): PartnerUiStateV1 => ({
   version: 1,
   composer: {
-    mode: 'ai',
     aiPreference: 'local_sources_strict',
     executionPermission: 'review',
     modelSelection: {
       mainModel: { configId: 'provider-1', modelName: 'model-1' }
     },
-    workspaceId: 'workspace-1',
     draft: {
       input,
       contentNodes: [{ kind: 'text', text: input }],
@@ -190,11 +190,9 @@ const createSessionUiState = (input = 'draft'): ChatSessionUiStateV1 => ({
     activeTabId: null,
     collapsed: false,
     fallbackState: {
-      kind: 'search_list',
-      title: '搜索结果',
-      query: input,
-      results: [],
-      tokens: [input]
+      kind: 'empty',
+      title: '',
+      description: ''
     }
   }
 })
@@ -202,18 +200,16 @@ const createSessionUiState = (input = 'draft'): ChatSessionUiStateV1 => ({
 describe('sqlite storage core and stores', () => {
   let tempDir = ''
   let sqlite: SqliteCore
-  let chatStore: ChatStore
-  let chatSearchTurnStore: ChatSearchTurnStore
+  let partnerStore: PartnerStore
   let aiRunStore: AiRunStore
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-sqlite-storage-'))
     sqlite = new SqliteCore(path.join(tempDir, 'app.sqlite'))
     sqlite.initialize()
-    chatStore = new ChatStore(sqlite)
-    chatSearchTurnStore = new ChatSearchTurnStore(sqlite)
+    partnerStore = new PartnerStore(sqlite)
     aiRunStore = new AiRunStore(sqlite)
-    await chatStore.saveChatSession(createSession())
+    await partnerStore.savePartner(createPartner())
   })
 
   afterEach(async () => {
@@ -274,41 +270,42 @@ describe('sqlite storage core and stores', () => {
     expect(await settingsStore.get()).toMatchObject({ systemNotificationsEnabled: false })
   })
 
-  it('persists versioned session UI state and rejects invalid writes', async () => {
+  it('persists versioned partner UI state and rejects invalid writes', async () => {
     const store = new WorkbenchUiStore(sqlite)
-    const initial = createSessionUiState('first draft')
-    const replacement = createSessionUiState('replacement draft')
+    const initial = createPartnerUiState('first draft')
+    const replacement = createPartnerUiState('replacement draft')
 
-    await store.saveSessionState('session-1', initial)
-    expect(await store.getSessionState('session-1')).toEqual(initial)
+    await store.savePartnerState('partner-1', initial)
+    expect(await store.getPartnerState('partner-1')).toEqual(initial)
 
-    await store.saveSessionState('session-1', replacement)
-    expect(await store.getSessionState('session-1')).toEqual(replacement)
-    await expect(store.saveSessionState('missing-session', initial)).rejects.toThrow(
-      'chat session not found'
+    await store.savePartnerState('partner-1', replacement)
+    expect(await store.getPartnerState('partner-1')).toEqual(replacement)
+    await expect(store.savePartnerState('missing-partner', initial)).rejects.toThrow(
+      'partner not found'
     )
     await expect(
-      store.saveSessionState('session-1', {
+      store.savePartnerState('partner-1', {
         ...initial,
         version: 2
-      } as unknown as ChatSessionUiStateV1)
-    ).rejects.toThrow('invalid session UI state')
+      } as unknown as PartnerUiStateV1)
+    ).rejects.toThrow('invalid partner UI state')
 
     sqlite
-      .prepare('UPDATE chat_session_ui_state SET state_json = ? WHERE session_id = ?')
-      .run('{broken-json', 'session-1')
-    expect(await store.getSessionState('session-1')).toBeNull()
+      .prepare('UPDATE partner_ui_state SET state_json = ? WHERE partner_id = ?')
+      .run('{broken-json', 'partner-1')
+    expect(await store.getPartnerState('partner-1')).toBeNull()
   })
 
-  it('promotes draft UI and browser tabs with the first real session transaction', async () => {
+  it('keeps partner UI and browser tabs on the same partner without draft promotion', async () => {
     const workbenchStore = new WorkbenchUiStore(sqlite)
     const browserStore = new BrowserTabStateStore(sqlite)
-    const draftState = createSessionUiState('unsent draft')
-    await workbenchStore.saveWorkbenchState({ activeViewKey: '__draft__', draftState })
+    const partnerState = createPartnerUiState('unsent draft')
+    await workbenchStore.savePartnerState('partner-1', partnerState)
+    await workbenchStore.saveWorkbenchState({ activeViewKey: 'partner-1' })
     browserStore.save({
-      id: 'browser-draft-1',
-      ownerId: '__draft__',
-      title: 'Draft tab',
+      id: 'browser-partner-1',
+      ownerId: 'partner-1',
+      title: 'Partner tab',
       url: 'https://example.com/second',
       zoomFactor: 1.25,
       history: {
@@ -323,18 +320,13 @@ describe('sqlite storage core and stores', () => {
       updatedAt: 20
     })
 
-    const promotedSession = createSession('session-promoted')
-    await chatStore.saveChatSessionFromWorkbenchDraft(promotedSession)
-
-    expect(await workbenchStore.getSessionState(promotedSession.id)).toEqual(draftState)
+    expect(await workbenchStore.getPartnerState('partner-1')).toEqual(partnerState)
     expect(await workbenchStore.getWorkbenchState()).toMatchObject({
-      activeViewKey: promotedSession.id,
-      draftState: null
+      activeViewKey: 'partner-1'
     })
-    expect(browserStore.listByOwner('__draft__')).toEqual([])
-    expect(browserStore.listByOwner(promotedSession.id)).toMatchObject([
+    expect(browserStore.listByOwner('partner-1')).toMatchObject([
       {
-        id: 'browser-draft-1',
+        id: 'browser-partner-1',
         url: 'https://example.com/second',
         zoomFactor: 1.25,
         history: { index: 1 },
@@ -343,17 +335,16 @@ describe('sqlite storage core and stores', () => {
     ])
   })
 
-  it('deletes session UI and browser state with its session', async () => {
+  it('deletes partner UI and browser state with its partner', async () => {
     const workbenchStore = new WorkbenchUiStore(sqlite)
     const browserStore = new BrowserTabStateStore(sqlite)
-    await workbenchStore.saveSessionState('session-1', createSessionUiState())
+    await workbenchStore.savePartnerState('partner-1', createPartnerUiState())
     await workbenchStore.saveWorkbenchState({
-      activeViewKey: 'session-1',
-      draftState: null
+      activeViewKey: 'partner-1'
     })
     browserStore.save({
-      id: 'browser-session-1',
-      ownerId: 'session-1',
+      id: 'browser-partner-1',
+      ownerId: 'partner-1',
       url: 'https://example.com',
       zoomFactor: 0.9,
       position: 0,
@@ -361,10 +352,10 @@ describe('sqlite storage core and stores', () => {
       updatedAt: 1
     })
 
-    await chatStore.deleteChatSession('session-1')
+    await partnerStore.deletePartner('partner-1')
 
-    expect(await workbenchStore.getSessionState('session-1')).toBeNull()
-    expect(browserStore.listByOwner('session-1')).toEqual([])
+    expect(await workbenchStore.getPartnerState('partner-1')).toBeNull()
+    expect(browserStore.listByOwner('partner-1')).toEqual([])
     expect(await workbenchStore.getWorkbenchState()).toMatchObject({ activeViewKey: null })
   })
 
@@ -372,14 +363,14 @@ describe('sqlite storage core and stores', () => {
     sqlite
       .prepare(
         `INSERT INTO ai_file_change (
-          id, session_id, run_id, status, capability, path, file_name, operation,
+          id, partner_id, run_id, status, capability, path, file_name, operation,
           change_count, insert_count, delete_count, before_checksum, after_checksum,
           created_at, updated_at, last_error
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         'false-failure',
-        'session-1',
+        'partner-1',
         'run-1',
         'failed',
         'docx',
@@ -398,25 +389,30 @@ describe('sqlite storage core and stores', () => {
     sqlite
       .prepare(
         `INSERT INTO docx_apply (
-          id, session_id, run_id, status, source_path, source_name, operation,
-          change_count, insert_count, delete_count, before_exists,
-          before_checksum, after_checksum, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          id, partner_id, run_id, status, source_path, source_name, operation,
+          final_revision_ref, change_count, insert_count, delete_count, before_exists,
+          before_checksum, after_checksum, preview_diff_artifact_path, preview_diff_checksum,
+          preview_diff_byte_size, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         'false-failure',
-        'session-1',
+        'partner-1',
         'run-1',
         'applied',
         '/workspace/input.docx',
         'input.docx',
         'updated',
+        'rev-1',
         1,
         1,
         1,
         1,
         'before',
         'after',
+        '/tmp/preview.diff',
+        'preview-checksum',
+        1,
         1,
         2
       )
@@ -429,29 +425,7 @@ describe('sqlite storage core and stores', () => {
     expect(repaired).toEqual({ status: 'applied', last_error: null })
   })
 
-  it('keeps search turn seq stable in ascending order', async () => {
-    for (let index = 1; index <= 60; index += 1) {
-      await chatSearchTurnStore.appendTurn({
-        sessionId: 'session-1',
-        role: index % 2 === 0 ? 'assistant' : 'user',
-        content: `turn-${index}`,
-        createdAt: index
-      })
-    }
-
-    const turns = await chatSearchTurnStore.list('session-1')
-    const seqRows = sqlite
-      .prepare('SELECT id, seq FROM chat_search_turn WHERE session_id = ? ORDER BY seq ASC')
-      .all('session-1') as Array<{ id: string; seq: number }>
-
-    expect(seqRows[0]?.seq).toBe(1)
-    expect(seqRows[59]?.seq).toBe(60)
-    expect(turns).toHaveLength(60)
-    expect(turns[0]?.content).toBe('turn-1')
-    expect(turns[59]?.content).toBe('turn-60')
-  })
-
-  it('drops legacy chat tables after migration 10', async () => {
+  it('does not create chat_search_turn after migration 10', async () => {
     const chatMessage = sqlite
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get('chat_message')
@@ -461,9 +435,13 @@ describe('sqlite storage core and stores', () => {
     const searchTurn = sqlite
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
       .get('chat_search_turn')
+    const partner = sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
+      .get('partner')
     expect(chatMessage).toBeUndefined()
     expect(skillState).toBeUndefined()
-    expect(searchTurn).toBeDefined()
+    expect(searchTurn).toBeUndefined()
+    expect(partner).toBeDefined()
   })
 
   it('restores active and pending approval runs from sqlite', async () => {
@@ -477,41 +455,41 @@ describe('sqlite storage core and stores', () => {
     }
     await aiRunStore.saveRun(createRun({ status: 'waiting_approval', pendingApproval }))
 
-    const runs = await aiRunStore.listRunsBySession('session-1', ['running', 'waiting_approval'])
+    const runs = await aiRunStore.listRunsByPartner('partner-1', ['running', 'waiting_approval'])
 
     expect(runs).toHaveLength(1)
     expect(runs[0].status).toBe('waiting_approval')
     expect(runs[0].pendingApproval?.batchId).toBe('batch-1')
   })
 
-  it('tracks completed sessions as unread until viewed after completion', async () => {
+  it('tracks completed partners as unread until viewed after completion', async () => {
     await aiRunStore.saveRun(
       createRun({ status: 'completed', createdAt: 10, updatedAt: 20, finishedAt: 20 })
     )
 
-    expect(await chatStore.listUnreadCompletedSessionIds()).toEqual(['session-1'])
+    expect(await partnerStore.listUnreadCompletedPartnerIds()).toEqual(['partner-1'])
 
-    await chatStore.markChatSessionViewed('session-1', 21)
+    await partnerStore.markPartnerViewed('partner-1', 21)
 
-    expect(await chatStore.listUnreadCompletedSessionIds()).toEqual([])
+    expect(await partnerStore.listUnreadCompletedPartnerIds()).toEqual([])
   })
 
-  it('pins sessions to the front of the list and restores them on unpin', async () => {
-    await chatStore.saveChatSession(createSession('session-2'))
-    await chatStore.setChatSessionPinned('session-1', true)
+  it('pins partners to the front of the list and restores them on unpin', async () => {
+    await partnerStore.savePartner(createPartner('partner-2'))
+    await partnerStore.setPartnerPinned('partner-1', true)
 
-    const pinned = await chatStore.getChatSessions()
-    expect(pinned.map((session) => session.id)).toEqual(['session-1', 'session-2'])
+    const pinned = await partnerStore.listPartners()
+    expect(pinned.map((partner) => partner.id)).toEqual(['partner-1', 'partner-2'])
     expect(pinned[0]).toMatchObject({
-      id: 'session-1',
+      id: 'partner-1',
       pinned: true
     })
     expect(pinned[0].pinned_at).toEqual(expect.any(Number))
 
-    await chatStore.setChatSessionPinned('session-1', false)
-    const unpinned = await chatStore.getChatSessions()
-    expect(unpinned.map((session) => session.id)).toEqual(['session-2', 'session-1'])
-    expect(unpinned.find((session) => session.id === 'session-1')).toMatchObject({
+    await partnerStore.setPartnerPinned('partner-1', false)
+    const unpinned = await partnerStore.listPartners()
+    expect(unpinned.map((partner) => partner.id).sort()).toEqual(['partner-1', 'partner-2'])
+    expect(unpinned.find((partner) => partner.id === 'partner-1')).toMatchObject({
       pinned: false,
       pinned_at: null
     })

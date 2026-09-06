@@ -26,33 +26,33 @@ describe('ai human mock-llm backend', () => {
       execute: async (runtime) => {
         const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
         const aiFileChangeService = new AiFileChangeService(runtime.storageService.aiFileChange)
-        await runtime.chatStore.saveChatSession({
+        await runtime.chatStore.savePartner({
           id: 'human-only-session',
-          title: 'human only session',
+          name: 'human only session',
+          avatar_shape: 'circle',
+          avatar_color: 'blue',
           created_at: Date.now(),
-          workspace_id: 'test-workspace',
-        pinned: false,
-        pinned_at: null
+          updated_at: Date.now(),
+          last_viewed_at: Date.now(),
+          pinned: false,
+          pinned_at: null
         })
         const result = await AiRunService.getInstance().run(
           {
             runId: runtime.runId,
-            sessionId: 'human-only-session',
+            partnerId: 'human-only-session',
             input: '请学习一个 skill，调用一次工具，然后直接给出最终答复。',
             mainModel: {
               configId: 'mock-llm-scripted',
               modelName: 'scripted-llm'
             },
-            workspace: {
-              workspaceId: 'test-workspace',
-              workspaceName: 'test-workspace',
-              rootPath: runtime.workspaceRoot
-            }
+            partnerName: '测试伙伴',
+            workspaceRoots: [runtime.workspaceRoot]
           },
           {
             runtimeSettings,
             llmStore: runtime.llmStore,
-            chatStore: runtime.chatStore,
+            partnerStore: runtime.chatStore,
             chatMessageLogStore: runtime.storageService.chatMessageLog,
             documentsStore: runtime.documentsStore,
             embeddingService: runtime.embeddingService,
@@ -61,7 +61,7 @@ describe('ai human mock-llm backend', () => {
             },
             docxApplyService: runtime.docxApplyService,
             saveFileChangeRecord: async (record) => {
-              await aiFileChangeService.saveRecord(record, runtime.workspaceRoot)
+              await aiFileChangeService.saveRecord(record)
             },
             listFileChangeRecords: async (request) =>
               (await aiFileChangeService.listRecords(request)).items,

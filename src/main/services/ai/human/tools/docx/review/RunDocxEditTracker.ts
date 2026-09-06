@@ -10,10 +10,9 @@ import type { RunDocxEditDocument } from './types'
 import { buildDocxChangeSummary, calculateFileStats, sanitizeFileName } from './utils'
 import { buildDocxApplyArtifactPaths } from './viewProjection'
 import { projectReviewView } from './viewProjector'
-import { isPathInsideRoot } from '../../terminal/commandPolicy'
 
 type RunDocxEditState = {
-  sessionId: string
+  partnerId: string
   documentBySourcePath: Map<string, RunDocxEditDocument>
   sourcePathByDocId: Map<string, string>
 }
@@ -28,9 +27,9 @@ export class RunDocxEditTracker {
 
   public constructor(private readonly docxApplyStore: DocxApplyStore) {}
 
-  public beginRun(input: { runId: string; sessionId: string; inputText: string }): void {
+  public beginRun(input: { runId: string; partnerId: string; inputText: string }): void {
     this.runEdits.set(input.runId, {
-      sessionId: input.sessionId,
+      partnerId: input.partnerId,
       documentBySourcePath: new Map(),
       sourcePathByDocId: new Map()
     })
@@ -98,7 +97,7 @@ export class RunDocxEditTracker {
 
   public async applyRunEdits(input: {
     runId: string
-    workspaceRootPath: string
+    partnerId: string
   }): Promise<DocxApplyRecord[]> {
     const state = this.runEdits.get(input.runId)
     if (!state) return []
@@ -117,7 +116,7 @@ export class RunDocxEditTracker {
       ) {
         return false
       }
-      return isPathInsideRoot(document.sourcePath, input.workspaceRootPath)
+      return true
     })
     if (changedDocuments.length === 0) {
       this.runEdits.delete(input.runId)
@@ -129,8 +128,7 @@ export class RunDocxEditTracker {
       for (const document of changedDocuments) {
         const record = await this.applyDocument({
           runId: input.runId,
-          sessionId: state.sessionId,
-          workspaceRootPath: input.workspaceRootPath,
+          partnerId: state.partnerId,
           document
         })
         await this.docxApplyStore.saveRecord(record)
@@ -145,8 +143,7 @@ export class RunDocxEditTracker {
 
   private async applyDocument(input: {
     runId: string
-    sessionId: string
-    workspaceRootPath: string
+    partnerId: string
     document: RunDocxEditDocument
   }): Promise<DocxApplyRecord> {
     const replaySession = input.document.replaySession
@@ -155,7 +152,7 @@ export class RunDocxEditTracker {
     const applyId = randomUUID()
     const now = Date.now()
     const paths = buildDocxApplyArtifactPaths({
-      workspaceRootPath: input.workspaceRootPath,
+      partnerId: input.partnerId,
       runId: input.runId,
       applyId,
       sourceName: input.document.sourceName
@@ -243,7 +240,7 @@ export class RunDocxEditTracker {
 
     return {
       id: applyId,
-      session_id: input.sessionId,
+      partner_id: input.partnerId,
       run_id: input.runId,
       status: 'applied',
       source_path: input.document.sourcePath,

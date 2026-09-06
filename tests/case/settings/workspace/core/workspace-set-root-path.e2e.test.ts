@@ -6,8 +6,7 @@ import { importSelectors } from '../../../../../src/renderer/src/testing/selecto
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
-  bindWorkspaceRootThroughSettingsUi,
-  createFixtureWorkspace,
+  createWorkspaceThroughSettingsUi,
   getSettingsLocator,
   navigateToSettingsSection
 } from '../../../../harness/e2e/settings'
@@ -23,7 +22,7 @@ describe('settings workspace e2e', () => {
         domain: 'settings',
         suite: 'workspace',
         groups: ['core'],
-        description: '文件 tab 内可以为当前工作空间设置工作目录并立即刷新目录树。',
+        description: '添加文件地址后，树顶层展示路径并可以展开查看子文件。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'exclusive',
@@ -44,92 +43,36 @@ describe('settings workspace e2e', () => {
           await writeFile(path.join(targetRootPath, 'docs', 'brief.txt'), 'hello workspace', 'utf8')
 
           await runtime.step({
-            name: 'create-empty-workspace',
-            message: '通过 UI 创建未绑定目录的工作空间。',
+            name: 'add-root-path',
+            message: '添加真实目录作为文件地址，确认目录树展示子文件。',
             run: async () => {
-              await createFixtureWorkspace(page, {
-                name: '待绑定目录工作区'
-              })
+              await createWorkspaceThroughSettingsUi(page, targetRootPath)
               await navigateToSettingsSection(page, 'workspace')
-            }
-          })
-
-          const lazyLoadResult = await runtime.step({
-            name: 'set-root-path',
-            message: '通过原生目录选择器绑定真实目录，确认右侧目录与目录树都同步刷新。',
-            run: async () => {
-              await bindWorkspaceRootThroughSettingsUi(page, targetRootPath)
-              await page.waitForFunction(
-                (input: {
-                  detailTestId: string
-                  cardPrefix: string
-                  rootPathAliases: string[]
-                }) => {
-                  const normalize = (value: string): string => value.replace(/\s+/g, '')
-                  const nodes = [
-                    document.querySelector(`[data-testid="${input.detailTestId}"]`),
-                    ...Array.from(
-                      document.querySelectorAll(`[data-testid^="${input.cardPrefix}-"]`)
-                    )
-                  ].filter((node): node is HTMLElement => node instanceof HTMLElement)
-                  const text = normalize(nodes.map((node) => node.innerText).join('\n'))
-                  return input.rootPathAliases.some((alias) => text.includes(normalize(alias)))
-                },
-                {
-                  detailTestId: importSelectors.workspaceDetail,
-                  cardPrefix: importSelectors.workspaceCardPrefix,
-                  rootPathAliases: [targetRootPath, displayedRootPath]
-                }
-              )
               const tree = getSettingsLocator(page, importSelectors.workspaceTree)
-              const docsNode = tree
-                .locator('.ant-tree-treenode')
-                .filter({ hasText: 'docs' })
-                .first()
+              const docsNode = tree.getByText('docs').first()
               await docsNode.waitFor({ state: 'visible' })
               const briefBeforeExpand = await tree.getByText('brief.txt').count()
-              await docsNode.locator('.ant-tree-switcher').click()
+              await docsNode.click()
               await tree.getByText('brief.txt').waitFor({ state: 'visible' })
-              const hasGlobalTreeControl =
-                (await tree.getByLabel(/全部折叠|恢复默认展开/u).count()) > 0
-              return { briefBeforeExpand, hasGlobalTreeControl }
+              return { briefBeforeExpand }
             }
           })
 
-          const detailText =
-            (await getSettingsLocator(page, importSelectors.workspaceDetail).textContent()) || ''
-          const cardText =
-            (await page
-              .locator(`[data-testid^="${importSelectors.workspaceCardPrefix}-"]`)
-              .first()
-              .textContent()) || ''
           const treeText =
             (await getSettingsLocator(page, importSelectors.workspaceTree).textContent()) || ''
           const rootPathAliases = [targetRootPath, displayedRootPath].map(normalizeVisibleText)
-          const normalizedWorkspaceText = normalizeVisibleText(`${cardText}\n${detailText}`)
+          const normalizedTreeText = normalizeVisibleText(treeText)
 
           return {
-            detailText,
-            cardText,
             treeText,
-            rootPathVisible: rootPathAliases.some((alias) =>
-              normalizedWorkspaceText.includes(alias)
-            ),
-            treeHasFixtureFile: treeText.includes('brief.txt'),
-            briefBeforeExpand: lazyLoadResult.briefBeforeExpand,
-            hasGlobalTreeControl: lazyLoadResult.hasGlobalTreeControl
+            rootPathVisible: rootPathAliases.some((alias) => normalizedTreeText.includes(alias)),
+            treeHasFixtureFile: treeText.includes('brief.txt')
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(
-            result.rootPathVisible &&
-              result.treeHasFixtureFile &&
-              result.briefBeforeExpand === 0 &&
-              !result.hasGlobalTreeControl,
-            {
-            name: 'set-root-path-refreshes-detail',
-            message:
-              '点击“设置工作目录”后，应为当前工作空间绑定目录，并立即刷新当前目录树内容，对齐 SET-WORKSPACE-006-AC1、SET-WORKSPACE-008-AC3。',
+          await runtime.assertThat(result.rootPathVisible && result.treeHasFixtureFile, {
+            name: 'added-root-path-shows-tree',
+            message: '添加文件地址后，树顶层应展示该路径，并能展开看到子文件，对齐 SET-WORKSPACE-002。',
             data: result
           })
         }

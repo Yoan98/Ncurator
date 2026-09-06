@@ -19,7 +19,7 @@ describe('ai human mock-llm backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const run1 = createHumanTestRunner(runtime, {
-          sessionId: SESSION_ID,
+          partnerId: SESSION_ID,
           structuredOutputScript: {
             'human.brain': [
               {
@@ -34,7 +34,7 @@ describe('ai human mock-llm backend', () => {
         await run1.run({ taskId: 'conversation-recall-run-1', userInput: '我们先准备发布清单。' })
 
         const run2 = createHumanTestRunner(runtime, {
-          sessionId: SESSION_ID,
+          partnerId: SESSION_ID,
           structuredOutputScript: {
             'human.brain': [
               {
@@ -53,7 +53,7 @@ describe('ai human mock-llm backend', () => {
 
         let promptSeesPriorFacts = false
         const run3 = createHumanTestRunner(runtime, {
-          sessionId: SESSION_ID,
+          partnerId: SESSION_ID,
           structuredOutputScript: {
             'human.brain': [
               ({ user }) => {

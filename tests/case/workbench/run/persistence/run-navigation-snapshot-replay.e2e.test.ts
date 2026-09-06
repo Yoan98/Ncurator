@@ -6,7 +6,6 @@ import {
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
   recordWorkbenchAiEvidence,
-  selectWorkbenchWorkspace,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
   waitForLatestAssistantFinalAnswerText,
@@ -41,11 +40,9 @@ describe('workbench run persistence e2e', () => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
-            workspaceName: WORKSPACE_NAME,
-            createSession: false
+            workspaceName: WORKSPACE_NAME
           })
           await navigateToWorkbench(page)
-          await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(page, PROMPT)
           const processLocator = await waitForLatestAssistantProcess(page)

@@ -11,7 +11,7 @@ export const getKbAvailabilityLabel = (availability: KbAvailability): string =>
 
 export const getReferenceKey = (reference: SelectedReference): string =>
   reference.kind === 'web'
-    ? `web:${reference.workspaceId}:${reference.webSourceId}`
+    ? `web:${reference.webSourceId}`
     : `${reference.kind}:${reference.workspaceId}:${reference.nodeId}`
 
 export const getReferenceTypeLabel = (reference: SelectedReference): string => {
@@ -45,7 +45,9 @@ export const pruneReferencesByWorkspace = (
   references: SelectedReference[],
   workspaceId: string | null
 ): SelectedReference[] =>
-  references.filter((reference) => reference.workspaceId === workspaceId)
+  references.filter((reference) =>
+    reference.kind === 'web' ? true : reference.workspaceId === workspaceId
+  )
 
 export const hasIncompleteLocalKbCoverage = (reference: SelectedReference): boolean =>
   reference.kind !== 'web' && reference.kbAvailability !== 'indexed'

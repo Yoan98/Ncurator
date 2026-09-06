@@ -1,6 +1,7 @@
 import type { AiFileChangeRecord } from './types'
 
-const RUNTIME_ASSET_PATH_PATTERN = /(?:^|\/)\.ncurator\/runtime\/assets(?:\/|$)/iu
+const RUNTIME_ASSET_PATH_PATTERN =
+  /(?:^|\/)(?:\.ncurator\/runtime\/assets|partners\/[^/]+\/runtime\/assets)(?:\/|$)/iu
 
 export const isRuntimeAssetPath = (filePath: string | undefined): boolean =>
   Boolean(filePath && RUNTIME_ASSET_PATH_PATTERN.test(filePath.replace(/\\/g, '/')))

@@ -4,7 +4,8 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import type { JsonObject } from '../../../../../../shared/types'
-import { isPathInsideRoot, resolveToolPath } from '../terminal/commandPolicy'
+import { resolveToolPath } from '../terminal/commandPolicy'
+import { getPartnerRuntimeDir } from '../../../../assets/WorkspaceAssetService'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { ExcelCapabilityToolsInput, ExcelRuntimeState, ExcelToolRuntime } from './types'
@@ -1032,12 +1033,6 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     )
     if (operationChanges.length === 0) return toJsonObject({})
     await fs.mkdir(path.dirname(sourcePath), { recursive: true })
-    if (!isPathInsideRoot(sourcePath, input.workspaceRootPath)) {
-      await atomicReplace(sourcePath, afterBytes)
-      state.currentBytesByPath.set(sourcePath, afterBytes)
-      state.sheetLineageByPath.set(sourcePath, sheetLineage)
-      return toJsonObject({})
-    }
     const baseline = state.baselineBytesByPath.get(sourcePath)
     const baselineWorkbook = baseline ? await loadWorkbook(baseline) : null
     const diffResult = await buildDiffWorkbook({
@@ -1048,8 +1043,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     const cumulativeChanges = diffResult.changes
     const changeId = state.recordsByPath.get(sourcePath)?.id || randomUUID()
     const snapshotRoot = path.join(
-      input.workspaceRootPath,
-      '.ncurator',
+      getPartnerRuntimeDir(input.partnerId),
       'file-changes',
       input.runId
     )
@@ -1064,7 +1058,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     const now = Date.now()
     const record = {
       id: changeId,
-      sessionId: input.sessionId,
+        partnerId: input.partnerId,
       runId: input.runId,
       status: 'applied' as const,
       capability: 'excel' as const,

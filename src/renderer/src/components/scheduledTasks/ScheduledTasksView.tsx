@@ -14,9 +14,7 @@ import {
 } from 'antd'
 import dayjs from 'dayjs'
 import {
-  HiFolder,
   HiOutlineClock,
-  HiOutlineFolderPlus,
   HiOutlinePlus,
   HiOutlineTrash
 } from 'react-icons/hi2'
@@ -30,8 +28,9 @@ import type {
   ScheduledTaskSaveRequest,
   ScheduledTaskScheduleType,
   WorkbenchModelSelection,
-  WorkspaceListItem
+  PartnerListItem
 } from '../../../../shared/types'
+import PartnerAvatar from '../workbench/PartnerAvatar'
 import WorkbenchModelSelector from '../workbench/WorkbenchModelSelector'
 import WorkbenchSelect from '../workbench/WorkbenchSelect'
 import { AI_PREFERENCE_OPTIONS, EXECUTION_PERMISSION_OPTIONS } from '../workbench/selectOptions'
@@ -64,7 +63,7 @@ type FormState = {
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday: number | null
-  workspaceId: string
+  partnerId: string
   modelSelection: WorkbenchModelSelection
   aiPreference: AiPreference
   executionPermission: AiExecutionPermission
@@ -77,7 +76,7 @@ const emptyForm = (): FormState => ({
   scheduleType: 'daily',
   timeOfDay: '09:00',
   weekday: null,
-  workspaceId: '',
+  partnerId: '',
   modelSelection: { mainModel: null },
   aiPreference: 'default',
   executionPermission: 'full_access'
@@ -106,27 +105,30 @@ const ScheduledTasksView: React.FC = () => {
   const navigate = useNavigate()
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
   const [loading, setLoading] = useState(true)
-  const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([])
+  const [partners, setPartners] = useState<PartnerListItem[]>([])
   const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
   const [modelLists, setModelLists] = useState<Record<string, LlmRemoteModel[]>>({})
   const [formOpen, setFormOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm())
 
-  const availableWorkspaces = useMemo(
-    () => workspaces.filter((workspace) => Boolean(workspace.root_path)),
-    [workspaces]
-  )
-
-  const workspaceOptions = useMemo<WorkbenchSelectOption[]>(
+  const partnerOptions = useMemo<WorkbenchSelectOption[]>(
     () =>
-      availableWorkspaces.map((workspace) => ({
-        value: workspace.id,
-        label: workspace.name,
-        icon: <HiFolder className="h-3.5 w-3.5" />,
-        keywords: [workspace.name, workspace.root_path || '']
+      partners.map((partner) => ({
+        value: partner.id,
+        label: partner.name,
+        icon: (
+          <PartnerAvatar
+            shape={partner.avatar_shape}
+            color={partner.avatar_color}
+            size={16}
+          />
+        ),
+        keywords: [partner.name],
+        disabled: partner.isRunning,
+        disabledReason: partner.isRunning ? '该伙伴正在运行，暂时不能作为定时任务目标' : undefined
       })),
-    [availableWorkspaces]
+    [partners]
   )
 
   const loadTasks = useCallback(async (): Promise<void> => {
@@ -144,10 +146,10 @@ const ScheduledTasksView: React.FC = () => {
     void loadTasks()
     void (async () => {
       try {
-        const list = await window.api.workspaceList()
-        setWorkspaces(list.items)
+        const list = await window.api.partnerList()
+        setPartners(list)
       } catch (error) {
-        console.error('[SCHEDULED-TASKS] workspace list failed:', error)
+        console.error('[SCHEDULED-TASKS] partner list failed:', error)
       }
     })()
     void (async () => {
@@ -202,7 +204,7 @@ const ScheduledTasksView: React.FC = () => {
       scheduleType: task.scheduleType,
       timeOfDay: task.timeOfDay,
       weekday: task.weekday,
-      workspaceId: task.workspaceId,
+      partnerId: task.partnerId,
       modelSelection: { mainModel: task.mainModel },
       aiPreference: task.aiPreference,
       executionPermission: task.executionPermission
@@ -224,8 +226,12 @@ const ScheduledTasksView: React.FC = () => {
       message.warning('请选择执行时间')
       return null
     }
-    if (!form.workspaceId) {
-      message.warning('请选择工作空间')
+    if (!form.partnerId) {
+      message.warning('请选择伙伴')
+      return null
+    }
+    if (partners.some((partner) => partner.id === form.partnerId && partner.isRunning)) {
+      message.warning('该伙伴正在运行，暂时不能保存定时任务')
       return null
     }
     if (!form.modelSelection.mainModel) {
@@ -244,7 +250,7 @@ const ScheduledTasksView: React.FC = () => {
       scheduleType: form.scheduleType,
       timeOfDay,
       weekday: form.scheduleType === 'weekly' ? normalizeWeekday(form.weekday) : null,
-      workspaceId: form.workspaceId,
+      partnerId: form.partnerId,
       mainModel: form.modelSelection.mainModel,
       aiPreference: form.aiPreference,
       executionPermission: form.executionPermission
@@ -462,29 +468,27 @@ const ScheduledTasksView: React.FC = () => {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-[#37352F]">工作空间</span>
+            <span className="text-[13px] text-[#37352F]">伙伴</span>
             <WorkbenchSelect
-              value={form.workspaceId || null}
-              options={workspaceOptions}
+              value={form.partnerId || null}
+              options={partnerOptions}
               onChange={(nextValue) =>
-                setForm((current) => ({ ...current, workspaceId: nextValue }))
+                setForm((current) => ({ ...current, partnerId: nextValue }))
               }
-              placeholder="选择工作空间"
-              triggerIcon={<HiFolder className="h-3.5 w-3.5" />}
-              searchable={availableWorkspaces.length > 6}
-              searchPlaceholder="搜索工作空间"
+              placeholder="选择伙伴"
+              searchable={partners.length > 6}
+              searchPlaceholder="搜索伙伴"
               minMenuWidth={240}
               maxMenuWidth={360}
               emptyAction={
-                availableWorkspaces.length === 0
+                partners.length === 0
                   ? {
-                      label: '去设置页绑定工作空间',
-                      icon: <HiOutlineFolderPlus className="h-3.5 w-3.5" />,
-                      onClick: () => navigate('/settings/workspace')
+                      label: '去工作台创建伙伴',
+                      onClick: () => navigate('/')
                     }
                   : undefined
               }
-              data-testid={scheduledTaskSelectors.workspaceSelect}
+              data-testid={scheduledTaskSelectors.partnerSelect}
             />
           </div>
 

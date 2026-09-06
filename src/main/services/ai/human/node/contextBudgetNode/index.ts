@@ -118,8 +118,7 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
           content: state.task.userInput,
           context: {
             selectedReferences: input.ctx.referenceScope.selectedReferences,
-            attachments: input.ctx.referenceScope.attachments,
-            workspace: input.ctx.referenceScope.workspace
+            attachments: input.ctx.referenceScope.attachments
           }
         }
       ])

@@ -21,7 +21,7 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
     ctx,
     cache,
     runId,
-    sessionId,
+    partnerId,
     taskId,
     workspaceRootPath,
     emitActivity
@@ -30,7 +30,7 @@ export const docxToolFamily = createWorkspaceBoundToolFamily({
       ctx,
       cache,
       runId,
-      sessionId,
+      partnerId,
       taskId,
       workspaceRootPath,
       emitActivity

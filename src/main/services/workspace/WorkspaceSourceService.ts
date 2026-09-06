@@ -9,11 +9,7 @@ import type {
 } from './types'
 import { isSupportedLocalFilePath } from '../ingestion/loader'
 
-const toWorkspaceName = (rootPath: string, preferredName?: string): string => {
-  const trimmed = String(preferredName || '').trim()
-  if (trimmed.length > 0) return trimmed
-  return path.basename(rootPath) || rootPath
-}
+const toWorkspaceName = (rootPath: string): string => path.basename(rootPath) || rootPath
 
 const normalizeComparablePath = (value: string): string => {
   const normalized = path.normalize(value)
@@ -59,10 +55,14 @@ export class WorkspaceSourceService {
     rootPath: string
     relativePath?: string
   }): Promise<WorkspaceTreeEntry[]> {
-    const { normalizedRootPath } = await this.normalizeWorkspaceRoot(input.rootPath)
+    const { normalizedRootPath, kind } = await this.normalizeWorkspaceRoot(input.rootPath)
     const relativePath = String(input.relativePath || '')
       .replace(/\\/g, '/')
       .replace(/^\/+|\/+$/g, '')
+    if (kind === 'file') {
+      if (relativePath) throw new Error('文件地址没有子目录')
+      return []
+    }
     const currentPath = path.resolve(normalizedRootPath, relativePath)
     if (!isSameOrNestedPath(currentPath, normalizedRootPath)) {
       throw new Error('目录不在当前工作区内')
@@ -120,65 +120,116 @@ export class WorkspaceSourceService {
   public async normalizeWorkspaceRoot(inputPath: string): Promise<WorkspaceValidationResult> {
     const requestedPath = String(inputPath || '').trim()
     if (!requestedPath) {
-      throw new Error('工作空间目录不能为空')
+      throw new Error('工作空间地址不能为空')
     }
 
     const resolvedPath = path.resolve(requestedPath)
     const stat = await fs.stat(resolvedPath)
-    if (!stat.isDirectory()) {
-      throw new Error('工作空间必须是目录')
+    if (!stat.isDirectory() && !stat.isFile()) {
+      throw new Error('工作空间必须是目录或文件')
     }
 
     const normalizedRootPath = await fs.realpath(resolvedPath)
     return {
       normalizedRootPath,
-      displayName: toWorkspaceName(normalizedRootPath)
+      displayName: toWorkspaceName(normalizedRootPath),
+      kind: stat.isDirectory() ? 'directory' : 'file'
     }
   }
 
-  public async assertNoNestedWorkspace(
+  public async classifyCandidateRoot(
     candidateRootPath: string,
     existingRootPaths: string[]
-  ): Promise<void> {
-    const candidate = (await this.normalizeWorkspaceRoot(candidateRootPath)).normalizedRootPath
+  ): Promise<{
+    normalizedRootPath: string
+    displayName: string
+    sameAsExisting: boolean
+    nestedUnderExisting: boolean
+    containedExistingRootPaths: string[]
+  }> {
+    const { normalizedRootPath, displayName } = await this.normalizeWorkspaceRoot(candidateRootPath)
+    let sameAsExisting = false
+    let nestedUnderExisting = false
+    const containedExistingRootPaths: string[] = []
     for (const rootPath of existingRootPaths) {
-      const existing = (await this.normalizeWorkspaceRoot(rootPath)).normalizedRootPath
-      if (isSameOrNestedPath(candidate, existing) || isSameOrNestedPath(existing, candidate)) {
-        throw new Error('工作空间之间不能重复或嵌套')
+      const existingRaw = String(rootPath || '').trim()
+      if (!existingRaw) continue
+      let existingNormalized = existingRaw
+      try {
+        existingNormalized = (await this.normalizeWorkspaceRoot(existingRaw)).normalizedRootPath
+      } catch {
+        existingNormalized = path.resolve(existingRaw)
       }
+      if (normalizeComparablePath(normalizedRootPath) === normalizeComparablePath(existingNormalized)) {
+        sameAsExisting = true
+        continue
+      }
+      if (isSameOrNestedPath(normalizedRootPath, existingNormalized)) {
+        nestedUnderExisting = true
+      } else if (isSameOrNestedPath(existingNormalized, normalizedRootPath)) {
+        containedExistingRootPaths.push(existingRaw)
+      }
+    }
+    return {
+      normalizedRootPath,
+      displayName,
+      sameAsExisting,
+      nestedUnderExisting,
+      containedExistingRootPaths
     }
   }
 
   public async scanWorkspaceTree(input: {
     workspaceId: string
     rootPath: string
-    workspaceName?: string
     now?: number
     onProgress?: (progress: {
       scannedEntryCount: number
       supportedFileCount: number
     }) => void | Promise<void>
   }): Promise<WorkspaceTreeScanResult> {
-    const { normalizedRootPath, displayName } = await this.normalizeWorkspaceRoot(input.rootPath)
+    const { normalizedRootPath, kind } = await this.normalizeWorkspaceRoot(input.rootPath)
     const now = Number.isFinite(input.now) ? Number(input.now) : Date.now()
     const entries: WorkspaceTreeEntry[] = []
 
-    await this.walkDirectory({
-      workspaceId: input.workspaceId,
-      rootPath: normalizedRootPath,
-      currentPath: normalizedRootPath,
-      entries,
-      progress: {
-        scannedEntryCount: 0,
-        supportedFileCount: 0
-      },
-      onProgress: input.onProgress
-    })
+    if (kind === 'file') {
+      const name = path.basename(normalizedRootPath)
+      const stat = await fs.stat(normalizedRootPath)
+      const fileExt = path.extname(name).toLowerCase()
+      const supportedForIndex = isSupportedLocalFilePath(normalizedRootPath)
+      entries.push({
+        id: toEntryId(input.workspaceId, 'file', name),
+        workspace_id: input.workspaceId,
+        kind: 'file',
+        name,
+        relative_path: name,
+        absolute_path: normalizedRootPath,
+        file_ext: fileExt.slice(1) || undefined,
+        supported_for_index: supportedForIndex,
+        size: stat.size,
+        mtime_ms: Math.trunc(stat.mtimeMs)
+      })
+      await input.onProgress?.({
+        scannedEntryCount: 1,
+        supportedFileCount: supportedForIndex ? 1 : 0
+      })
+    } else {
+      await this.walkDirectory({
+        workspaceId: input.workspaceId,
+        rootPath: normalizedRootPath,
+        currentPath: normalizedRootPath,
+        entries,
+        progress: {
+          scannedEntryCount: 0,
+          supportedFileCount: 0
+        },
+        onProgress: input.onProgress
+      })
+    }
 
     return {
       workspace: {
         id: input.workspaceId,
-        name: toWorkspaceName(normalizedRootPath, input.workspaceName || displayName),
         root_path: normalizedRootPath,
         created_at: now,
         updated_at: now

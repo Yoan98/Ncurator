@@ -141,7 +141,16 @@ export const projectMessageLogRecords = (
   records: ChatMessageLogRecord[]
 ): MessageLogProjection => {
   const ordered = [...records].sort((a, b) => a.seq - b.seq)
-  const checkpointRecord = [...ordered]
+  const lastCleared = [...ordered]
+    .reverse()
+    .find(
+      (record) =>
+        record.entry.kind === 'annotation' && record.entry.eventType === 'context_cleared'
+    )
+  const afterCleared = lastCleared
+    ? ordered.filter((record) => record.seq > lastCleared.seq)
+    : ordered
+  const checkpointRecord = [...afterCleared]
     .reverse()
     .find(
       (record) =>
@@ -158,8 +167,8 @@ export const projectMessageLogRecords = (
       : undefined
 
   const projectedRecords = checkpoint
-    ? ordered.filter((record) => record.seq > checkpoint.coveredThroughSeq)
-    : ordered
+    ? afterCleared.filter((record) => record.seq > checkpoint.coveredThroughSeq)
+    : afterCleared
   // 历史 user 只属于不可变日志和聊天 UI；brain 侧历史 build user 必须来自
   // brain_user_snapshot 冻结原文。每次新 run 的当前 user 统一由 buildBrainUserMessage 构造。
   const messages = deriveMessageLogMessages({
@@ -169,7 +178,7 @@ export const projectMessageLogRecords = (
   })
   let plan: ChatMessageLogPlanItem[] = []
   let learnedSkillIds: string[] = []
-  for (const record of ordered) {
+  for (const record of afterCleared) {
     const entry = record.entry
     if (entry.kind === 'annotation' && entry.eventType === 'plan_updated') {
       plan = entry.payload.plan.map((item) => ({ ...item }))

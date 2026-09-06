@@ -2,25 +2,17 @@ import { describe, expect, it } from 'vitest'
 import { AIMessage, ToolMessage } from '@langchain/core/messages'
 import type {
   ChatMessageLogEntry,
-  ChatMessageLogRecord,
-  WorkspaceRuntimeBinding
+  ChatMessageLogRecord
 } from '../../../../src/shared/types'
 import {
   projectMessageLogRecords,
   repairInterruptedToolCalls
 } from '../../../../src/main/services/ai/human/memory/transcript'
 
-const workspace = (workspaceId: string): WorkspaceRuntimeBinding => ({
-  workspaceId,
-  workspaceName: workspaceId,
-  rootPath: `/tmp/${workspaceId}`
-})
-
-const user = (content: string, workspaceId: string): ChatMessageLogEntry => ({
+const user = (content: string): ChatMessageLogEntry => ({
   kind: 'user',
   content,
   context: {
-    workspace: workspace(workspaceId),
     selectedReferences: [],
     attachments: []
   }
@@ -30,7 +22,7 @@ const records = (entries: Array<{ runId: string; entry: ChatMessageLogEntry }>) 
   entries.map(
     ({ runId, entry }, index): ChatMessageLogRecord => ({
       id: `log-${index + 1}`,
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       runId,
       seq: index + 1,
       entry,
@@ -42,7 +34,7 @@ describe('ai human message-log recovery', () => {
   it('projects one checkpoint summary plus only records after its covered sequence', () => {
     const projection = projectMessageLogRecords(
       records([
-        { runId: 'run-1', entry: user('old secret that must be compacted', 'workspace-a') },
+        { runId: 'run-1', entry: user('old secret that must be compacted') },
         {
           runId: 'run-1',
           entry: { kind: 'assistant', content: 'old answer', toolCalls: [] }
@@ -60,7 +52,7 @@ describe('ai human message-log recovery', () => {
             }
           }
         },
-        { runId: 'run-2', entry: user('continue from summary', 'workspace-b') },
+        { runId: 'run-2', entry: user('continue from summary') },
         {
           runId: 'run-2',
           entry: { kind: 'assistant', content: 'new answer', toolCalls: [] }
@@ -74,14 +66,13 @@ describe('ai human message-log recovery', () => {
     expect(projection.messages.every((message) => message.getType() !== 'human')).toBe(true)
     expect(text).not.toContain('continue from summary')
     expect(text).not.toContain('<historical_user_turn>')
-    expect(text).not.toContain('workspace-b')
     expect(text).toContain('new answer')
     expect(text).not.toContain('old secret that must be compacted')
   })
 
   it('keeps the latest unfinished plan and clears it after normal finalization', () => {
     const unfinished = records([
-      { runId: 'run-1', entry: user('do work', 'workspace-a') },
+      { runId: 'run-1', entry: user('do work') },
       {
         runId: 'run-1',
         entry: {
@@ -99,7 +90,7 @@ describe('ai human message-log recovery', () => {
       ...unfinished,
       {
         id: 'log-3',
-        sessionId: 'session-1',
+        partnerId: 'partner-1',
         runId: 'run-1',
         seq: 3,
         entry: { kind: 'annotation', eventType: 'finalizing_started', payload: {} },
@@ -107,6 +98,47 @@ describe('ai human message-log recovery', () => {
       }
     ]
     expect(projectMessageLogRecords(finalized).plan).toEqual([])
+  })
+
+  it('drops history before the latest context_cleared cut, including older checkpoints', () => {
+    const projection = projectMessageLogRecords(
+      records([
+        { runId: 'run-1', entry: user('secret before clear') },
+        {
+          runId: 'run-1',
+          entry: { kind: 'assistant', content: 'old answer', toolCalls: [] }
+        },
+        {
+          runId: 'run-1',
+          entry: {
+            kind: 'annotation',
+            eventType: 'compaction_checkpoint',
+            payload: {
+              compactBlockId: 'checkpoint-old',
+              summary: 'must not enter next brain',
+              coveredThroughSeq: 2,
+              sourceMessageCount: 2
+            }
+          }
+        },
+        {
+          runId: 'run-2',
+          entry: { kind: 'annotation', eventType: 'context_cleared', payload: {} }
+        },
+        { runId: 'run-3', entry: user('new request after clear') },
+        {
+          runId: 'run-3',
+          entry: { kind: 'assistant', content: 'fresh answer', toolCalls: [] }
+        }
+      ])
+    )
+
+    const text = projection.messages.map((message) => String(message.content)).join('\n')
+    expect(projection.checkpoint).toBeUndefined()
+    expect(text).not.toContain('secret before clear')
+    expect(text).not.toContain('old answer')
+    expect(text).not.toContain('must not enter next brain')
+    expect(text).toContain('fresh answer')
   })
 
   it('repairs a dangling tool call with the same tool_call_id', () => {

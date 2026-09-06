@@ -1,18 +1,11 @@
+import os from 'node:os'
 import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
 import { buildTerminalCapabilityTools } from './terminalTools'
 import { terminalSessionManager } from './TerminalSessionManager'
 
 export const terminalToolFamily = createWorkspaceBoundToolFamily({
   familyId: 'terminal',
-  buildWorkspaceTools: ({
-    ctx,
-    cache,
-    runId,
-    sessionId,
-    taskId,
-    workspaceRootPath,
-    emitActivity
-  }) =>
+  buildWorkspaceTools: ({ ctx, cache, runId, partnerId, taskId, emitActivity }) =>
     buildTerminalCapabilityTools({
       ctx: {
         runId: ctx.runId,
@@ -27,10 +20,11 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
       },
       cache,
       runId,
-      sessionId,
+      partnerId,
       taskId,
-      workspaceRootPath,
-      workspaceId: ctx.workspace?.workspaceId || '',
+      workspaceRootPath: os.homedir(),
+      workspaceId: '',
+      workspaceRoots: ctx.workspaceRoots,
       sessionManager: terminalSessionManager,
       emitActivity
     }).tools

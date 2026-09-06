@@ -165,8 +165,8 @@ export const buildKbCapabilityTools = (input: {
         execute: async (session) => {
           ctx.checkCancelled()
           const prepared = resolveSearchArgs(args)
-          if (!prepared.workspaceId) {
-            throw new Error('知识库搜索需要绑定工作区。')
+          if (!prepared.queryText) {
+            throw new Error('知识库搜索需要提供查询文本。')
           }
           if (
             Array.isArray(prepared.requestedDocumentIds) &&
@@ -272,9 +272,6 @@ export const buildKbCapabilityTools = (input: {
         execute: async (session) => {
           ctx.checkCancelled()
           const workspaceId = String(ctx.workspace?.workspaceId || '').trim() || undefined
-          if (!workspaceId) {
-            throw new Error('知识库搜索需要绑定工作区。')
-          }
           const sourceNameQuery = String(args.sourceNameQuery || '').trim() || undefined
           const page = Math.max(1, Number(args.page ?? 1))
           const pageSize = Math.max(1, Math.min(MAX_LIST_PAGE_SIZE, Number(args.pageSize ?? 20)))

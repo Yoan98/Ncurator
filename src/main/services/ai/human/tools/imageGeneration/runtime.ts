@@ -7,7 +7,7 @@ import { DOMParser } from '@xmldom/xmldom'
 import type { AiFileChangeOperation, AiFileChangeRecord } from '../../../../../../shared/types'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { WorkspaceCapabilityBuildInput } from '../types'
-import { isPathInsideRoot } from '../terminal/commandPolicy'
+import { getPartnerRuntimeDir } from '../../../../assets/WorkspaceAssetService'
 import { resolveSafeTextFilePath, withTextFileMutationQueue } from '../textFile/textFileUtils'
 import type { ImageGenerateInput, ImageGenerateOutput } from './toolSchemas'
 
@@ -212,26 +212,8 @@ export const generateImage = async (
 
     const operation: AiFileChangeOperation =
       existingRecord?.operation || (beforeBuffer ? 'updated' : 'created')
-    if (!isPathInsideRoot(outputPath, buildInput.workspaceRootPath)) {
-      if (beforeBuffer) {
-        const currentBuffer = await fs.readFile(outputPath)
-        if (!currentBuffer.equals(beforeBuffer)) {
-          throw new Error(`无法写入 ${args.outputPath}：文件在操作期间被其他进程修改。`)
-        }
-        await atomicReplaceFile({
-          outputPath,
-          content: outputBuffer,
-          mode: beforeMode,
-          operationId
-        })
-      } else {
-        await fs.writeFile(outputPath, outputBuffer, { flag: 'wx', mode: 0o644 })
-      }
-      return { outputPath: args.outputPath }
-    }
     const artifactRoot = path.join(
-      buildInput.workspaceRootPath,
-      '.ncurator',
+      getPartnerRuntimeDir(buildInput.partnerId),
       'file-changes',
       buildInput.runId
     )
@@ -275,7 +257,7 @@ export const generateImage = async (
       const now = Date.now()
       const record: AiFileChangeRecord = {
         id: operationId,
-        sessionId: buildInput.sessionId,
+        partnerId: buildInput.partnerId,
         runId: buildInput.runId,
         status: 'applied',
         capability: 'image',

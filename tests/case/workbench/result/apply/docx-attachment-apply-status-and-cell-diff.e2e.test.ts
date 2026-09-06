@@ -93,20 +93,16 @@ describe('workbench result e2e', () => {
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
 
-          const record = await page.evaluate(async (workspaceRootPath) => {
-            const workspace = (await window.api.workspaceList()).items.find(
-              (item) => item.root_path === workspaceRootPath
+          const record = await page.evaluate(async () => {
+            const partners = [...(await window.api.partnerList())].sort(
+              (left, right) => right.created_at - left.created_at
             )
-            if (!workspace) return null
-            const sessions = (await window.api.chatSessionList())
-              .filter((session) => session.workspace_id === workspace.id)
-              .sort((left, right) => right.created_at - left.created_at)
-            if (!sessions[0]) return null
-            const response = await window.api.aiFileChangeList({ sessionId: sessions[0].id })
+            if (!partners[0]) return null
+            const response = await window.api.aiFileChangeList({ partnerId: partners[0].id })
             return response.items.find(
               (item) => item.capability === 'docx' && item.fileName === 'cell-diff.docx'
             )
-          }, setup.workspace.rootPath)
+          })
           if (!record) throw new Error('DOCX attachment change record was not created')
           const diskText = await readDocxPlainText(record.path)
           const applyEntry = await waitForApplyEntry(page)

@@ -8,6 +8,10 @@ import type {
   AiFileChangeOperation,
   AiFileChangeRecord
 } from '../../../../shared/types'
+import {
+  ensurePartnerRuntimeDirs,
+  getPartnerObjectsDir
+} from '../../assets/WorkspaceAssetService'
 
 const IGNORED_DIRECTORY_NAMES = new Set(['.git', '.ncurator', 'node_modules'])
 
@@ -63,10 +67,29 @@ type WorkspaceObject = {
 
 type TrackedTerminalCommand = {
   runId: string
-  sessionId: string
-  workspaceRootPath: string
+  partnerId: string
+  scanRootPath: string
+  objectsRootDir: string
   runSummary: string
   baseline: Map<string, WorkspaceObject>
+}
+
+const isPathInsideRoot = (targetPath: string, rootPath: string): boolean => {
+  const resolvedTarget = path.resolve(targetPath)
+  const resolvedRoot = path.resolve(rootPath)
+  if (resolvedTarget === resolvedRoot) return true
+  const relativePath = path.relative(resolvedRoot, resolvedTarget)
+  return Boolean(relativePath) && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
+}
+
+const findContainingWorkspaceRoot = (cwd: string, workspaceRoots: string[]): string | null => {
+  const resolvedCwd = path.resolve(cwd)
+  for (const root of workspaceRoots) {
+    const resolvedRoot = path.resolve(String(root || '').trim())
+    if (!resolvedRoot) continue
+    if (isPathInsideRoot(resolvedCwd, resolvedRoot)) return resolvedRoot
+  }
+  return null
 }
 
 const hashFile = async (filePath: string): Promise<string> => {
@@ -76,17 +99,10 @@ const hashFile = async (filePath: string): Promise<string> => {
 }
 
 export class WorkspaceObjectStore {
-  public constructor(private readonly workspaceRootPath: string) {}
+  public constructor(private readonly objectsRootDir: string) {}
 
   public getObjectPath(hash: string): string {
-    return path.join(
-      this.workspaceRootPath,
-      '.ncurator',
-      'objects',
-      'sha256',
-      hash.slice(0, 2),
-      hash.slice(2)
-    )
+    return path.join(this.objectsRootDir, 'sha256', hash.slice(0, 2), hash.slice(2))
   }
 
   public async putFile(filePath: string): Promise<{ hash: string; objectPath: string }> {
@@ -130,8 +146,11 @@ export class WorkspaceObjectStore {
   }
 }
 
-const scanWorkspace = async (workspaceRootPath: string): Promise<Map<string, WorkspaceObject>> => {
-  const objectStore = new WorkspaceObjectStore(workspaceRootPath)
+const scanDirectory = async (
+  scanRootPath: string,
+  objectsRootDir: string
+): Promise<Map<string, WorkspaceObject>> => {
+  const objectStore = new WorkspaceObjectStore(objectsRootDir)
   const result = new Map<string, WorkspaceObject>()
 
   const visit = async (directoryPath: string, relativeDirectory: string): Promise<void> => {
@@ -165,7 +184,7 @@ const scanWorkspace = async (workspaceRootPath: string): Promise<Map<string, Wor
     }
   }
 
-  await visit(workspaceRootPath, '')
+  await visit(scanRootPath, '')
   return result
 }
 
@@ -204,16 +223,21 @@ export class TerminalCommandChangeTracker {
   public async beginCommand(input: {
     commandId: string
     runId: string
-    sessionId: string
-    workspaceRootPath: string
+    partnerId: string
+    cwd: string
     command: string
+    workspaceRoots: string[]
   }): Promise<void> {
-    const workspaceRootPath = path.resolve(input.workspaceRootPath)
-    const baseline = await scanWorkspace(workspaceRootPath)
+    const cwd = path.resolve(input.cwd)
+    if (!findContainingWorkspaceRoot(cwd, input.workspaceRoots)) return
+    await ensurePartnerRuntimeDirs(input.partnerId)
+    const objectsRootDir = getPartnerObjectsDir(input.partnerId)
+    const baseline = await scanDirectory(cwd, objectsRootDir)
     this.commands.set(input.commandId, {
       runId: input.runId,
-      sessionId: input.sessionId,
-      workspaceRootPath,
+      partnerId: input.partnerId,
+      scanRootPath: cwd,
+      objectsRootDir,
       runSummary: input.command.trim().slice(0, 160),
       baseline
     })
@@ -228,7 +252,7 @@ export class TerminalCommandChangeTracker {
     if (!tracked) return []
     this.commands.delete(commandId)
 
-    const current = await scanWorkspace(tracked.workspaceRootPath)
+    const current = await scanDirectory(tracked.scanRootPath, tracked.objectsRootDir)
 
     const updated: Array<{ before: WorkspaceObject; after: WorkspaceObject }> = []
     const deleted: WorkspaceObject[] = []
@@ -268,7 +292,7 @@ export class TerminalCommandChangeTracker {
       const capability = inferCapability(change.before, change.after)
       const record: AiFileChangeRecord = {
         id: randomUUID(),
-        sessionId: tracked.sessionId,
+        partnerId: tracked.partnerId,
         runId: tracked.runId,
         status: 'applied',
         capability,

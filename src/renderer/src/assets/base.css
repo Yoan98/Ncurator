@@ -1832,3 +1832,57 @@ mark {
     border-bottom-left-radius: 18px;
   }
 }
+
+.nc-message-timeline {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 10px;
+  width: 52px;
+  flex-shrink: 0;
+  padding: 24px 0 96px;
+}
+
+.nc-message-timeline-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 22px;
+  border: 0;
+  background: transparent;
+  color: #9b9a97;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nc-message-timeline-item:hover {
+  color: #37352f;
+}
+
+.nc-clear-context-capsule {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #e0dfdc;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #37352f;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nc-clear-context-capsule:hover {
+  background: #f7f7f5;
+}
+
+.nc-message-context-cleared {
+  opacity: 0.38;
+  transition: opacity 160ms ease;
+}
+
+.nc-message-context-cleared:hover {
+  opacity: 1;
+}

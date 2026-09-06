@@ -1,18 +1,15 @@
 import { BrowserWindow } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
-import { Jieba } from '@node-rs/jieba'
-import { dict } from '@node-rs/jieba/dict'
 import { AiRunService } from './AiRunService'
 import { toRendererRunFailure } from './errors'
 import { terminalSessionManager } from './human/tools/terminal/TerminalSessionManager'
 import type { AiRunResourceManager } from './run/AiRunResourceManager'
-import { normalizeSelectedReferences, normalizeWorkspaceBinding } from './utils/runContext'
+import { normalizeSelectedReferences } from './utils/runContext'
 import { validateSelectedReferencesForRun } from '../sourceScope/validation'
-import { normalizeForIpc } from '../../utils/serialization'
 import type { AiFileChangeService } from './fileChanges/AiFileChangeService'
 import type { DocxApplyService } from './human/tools/docx/review/DocxApplyService'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
-import type { ChatStore } from '../storage/domains/ChatStore'
+import type { PartnerStore } from '../storage/domains/PartnerStore'
 import type { AiRunStore } from '../storage/domains/AiRunStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { AiRuntimeSettingsStore } from '../storage/domains/AiRuntimeSettingsStore'
@@ -25,12 +22,6 @@ import type { TelemetryService } from '../telemetry/TelemetryService'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 import type { AiRunDeps } from './types'
 import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
-import type { ChatSearchTurnStore } from '../storage/domains/ChatSearchTurnStore'
-import {
-  isWorkbenchModeSwitchAllowed,
-  resolveWorkbenchSessionModeLock,
-  WORKBENCH_MODE_LOCK_HINTS
-} from '../../../shared/workbenchSessionModeLock'
 import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
@@ -44,18 +35,17 @@ import type {
   AiRunEvent,
   AiRunRecord,
   ChatMessage,
-  ChatSessionOpenResponse,
-  ChatSessionRunSummariesResponse,
-  ChatSessionSnapshotResponse,
+  PartnerClearContextResponse,
+  PartnerOpenRequest,
+  PartnerOpenResponse,
+  PartnerRunSummariesResponse,
+  PartnerSnapshotResponse,
   ChatTurnRetractLatestRequest,
   ChatTurnRetractLatestResponse,
   ChatSubmitRequest,
   ChatSubmitResponse
 } from '../../../shared/types'
-import {
-  mergeConversationMessages,
-  projectAiConversationMessages
-} from '../../../shared/workbench/conversationProjection'
+import { projectAiConversationMessages } from '../../../shared/workbench/conversationProjection'
 
 type ActiveApproval = {
   batchId: string
@@ -84,9 +74,8 @@ type ActiveRun = {
 }
 
 type ChatRunServiceDeps = {
-  chatStore: ChatStore
+  partnerStore: PartnerStore
   chatMessageLogStore: ChatMessageLogStore
-  chatSearchTurnStore: ChatSearchTurnStore
   aiRunStore: AiRunStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
@@ -114,7 +103,6 @@ type ChatRunServiceDeps = {
   ) => void | Promise<void>
 }
 
-const jieba = Jieba.withDict(dict)
 const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = ['running', 'waiting_approval']
 const INTERRUPTED_RUN_MESSAGE = '运行已中断，请重新发送消息。'
 const PARTIAL_SAVE_DELAY_MS = 500
@@ -138,27 +126,25 @@ const appendArtifact = (artifacts: AiArtifactRef[] | undefined, artifact: AiArti
 export class ChatRunService {
   private readonly activeRuns = new Map<string, ActiveRun>()
   private readonly activeApprovals = new Map<string, ActiveApproval>()
-  private readonly pendingSessionSubmissions = new Set<string>()
+  private readonly pendingPartnerSubmissions = new Set<string>()
 
   public constructor(private readonly deps: ChatRunServiceDeps) {}
 
-  private async loadProjectedSessionMessages(sessionId: string): Promise<ChatMessage[]> {
-    const [records, runs, searchMessages] = await Promise.all([
-      this.deps.chatMessageLogStore.list(sessionId),
-      this.deps.aiRunStore.listRunsBySession(sessionId),
-      this.deps.chatSearchTurnStore.list(sessionId)
+  private async loadProjectedPartnerMessages(partnerId: string): Promise<ChatMessage[]> {
+    const [records, runs] = await Promise.all([
+      this.deps.chatMessageLogStore.list(partnerId),
+      this.deps.aiRunStore.listRunsByPartner(partnerId)
     ])
-    const aiMessages = projectAiConversationMessages({ sessionId, records, runs })
-    return mergeConversationMessages({ aiMessages, legacyMessages: searchMessages })
+    return projectAiConversationMessages({ partnerId, records, runs })
   }
 
   private async getProjectedMessagesPage(input: {
-    sessionId: string
+    partnerId: string
     limit: number
     beforeTimestamp?: number
   }): Promise<{ messages: ChatMessage[]; hasMoreBefore: boolean }> {
     const safeLimit = Math.max(1, Math.min(100, Number(input.limit || 50)))
-    const sorted = (await this.loadProjectedSessionMessages(input.sessionId)).sort(
+    const sorted = (await this.loadProjectedPartnerMessages(input.partnerId)).sort(
       (left, right) => left.timestamp - right.timestamp
     )
     const beforeTimestamp = Number(input.beforeTimestamp)
@@ -172,8 +158,17 @@ export class ChatRunService {
     }
   }
 
-  public async listSessionMessages(sessionId: string): Promise<ChatMessage[]> {
-    return await this.loadProjectedSessionMessages(sessionId)
+  public async listPartnerMessages(partnerId: string): Promise<ChatMessage[]> {
+    return await this.loadProjectedPartnerMessages(partnerId)
+  }
+
+  public hasActivePartnerRun(partnerId: string): boolean {
+    const id = String(partnerId || '').trim()
+    if (!id) return false
+    return (
+      this.pendingPartnerSubmissions.has(id) ||
+      Array.from(this.activeRuns.values()).some((entry) => entry.run.partnerId === id)
+    )
   }
 
   public async failInterruptedRuns(): Promise<void> {
@@ -200,11 +195,11 @@ export class ChatRunService {
     }
   }
 
-  public async getSessionSnapshot(sessionId: string): Promise<ChatSessionSnapshotResponse> {
-    const normalizedSessionId = String(sessionId || '').trim()
-    if (!normalizedSessionId) return { messages: [], runs: [], activeRuns: [] }
-    const messages = await this.loadProjectedSessionMessages(normalizedSessionId)
-    const runs = await this.deps.aiRunStore.listRunsBySession(normalizedSessionId)
+  public async getPartnerSnapshot(partnerId: string): Promise<PartnerSnapshotResponse> {
+    const normalizedPartnerId = String(partnerId || '').trim()
+    if (!normalizedPartnerId) return { messages: [], runs: [], activeRuns: [] }
+    const messages = await this.loadProjectedPartnerMessages(normalizedPartnerId)
+    const runs = await this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId)
     const runSnapshots = await Promise.all(runs.map((run) => this.buildRunSnapshot(run)))
     const activeRuns = runSnapshots.filter((snapshot) =>
       ACTIVE_RUN_STATUSES.includes(snapshot.run.status)
@@ -212,49 +207,53 @@ export class ChatRunService {
     return { messages, runs: runSnapshots, activeRuns }
   }
 
-  public async openSession(input: {
-    sessionId: string
-    limit?: number
-    beforeTimestamp?: number
-  }): Promise<ChatSessionOpenResponse> {
+  public async openPartner(input: PartnerOpenRequest): Promise<PartnerOpenResponse> {
     const startedAt = Date.now()
-    const normalizedSessionId = String(input.sessionId || '').trim()
-    if (!normalizedSessionId) return { messages: [], hasMoreBefore: false, activeRuns: [] }
-    const [session, page, activeRunRecords] = await Promise.all([
-      this.deps.chatStore.getChatSession(normalizedSessionId),
+    const normalizedPartnerId = String(input.partnerId || '').trim()
+    if (!normalizedPartnerId) return { messages: [], hasMoreBefore: false, activeRuns: [] }
+    const [partner, page, activeRunRecords] = await Promise.all([
+      this.deps.partnerStore.getPartner(normalizedPartnerId),
       this.getProjectedMessagesPage({
-        sessionId: normalizedSessionId,
+        partnerId: normalizedPartnerId,
         limit: input.limit || 50,
         beforeTimestamp: input.beforeTimestamp
       }),
-      this.deps.aiRunStore.listRunsBySession(normalizedSessionId, ACTIVE_RUN_STATUSES)
+      this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId, ACTIVE_RUN_STATUSES)
     ])
     const activeRuns = await Promise.all(activeRunRecords.map((run) => this.buildRunSnapshot(run)))
-    const response = {
-      session: session || undefined,
+    const records = await this.deps.chatMessageLogStore.list(normalizedPartnerId)
+    let lastContextClearedAt: number | null = null
+    for (const record of records) {
+      if (record.entry.kind === 'annotation' && record.entry.eventType === 'context_cleared') {
+        lastContextClearedAt = record.createdAt
+      }
+    }
+    const response: PartnerOpenResponse = {
+      partner: partner || undefined,
       messages: page.messages,
       hasMoreBefore: page.hasMoreBefore,
+      lastContextClearedAt,
       activeRuns
     }
-    this.logSlowChatQuery('chat-session-open', startedAt, {
-      sessionId: normalizedSessionId,
+    this.logSlowChatQuery('partner-open', startedAt, {
+      partnerId: normalizedPartnerId,
       messages: response.messages.length,
       activeRuns: response.activeRuns.length
     })
     return response
   }
 
-  public async getSessionRunSummaries(sessionId: string): Promise<ChatSessionRunSummariesResponse> {
+  public async getPartnerRunSummaries(partnerId: string): Promise<PartnerRunSummariesResponse> {
     const startedAt = Date.now()
-    const normalizedSessionId = String(sessionId || '').trim()
-    if (!normalizedSessionId) return { runs: [] }
-    const runs = await this.deps.aiRunStore.listRunsBySession(normalizedSessionId)
+    const normalizedPartnerId = String(partnerId || '').trim()
+    if (!normalizedPartnerId) return { runs: [] }
+    const runs = await this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId)
     const recentRuns = [...runs].sort((left, right) => right.createdAt - left.createdAt).slice(0, 50)
     const response = {
       runs: await Promise.all(recentRuns.map((run) => this.buildRunSnapshot(run)))
     }
-    this.logSlowChatQuery('chat-session-run-summaries', startedAt, {
-      sessionId: normalizedSessionId,
+    this.logSlowChatQuery('partner-run-summaries', startedAt, {
+      partnerId: normalizedPartnerId,
       runs: response.runs.length
     })
     return response
@@ -263,26 +262,26 @@ export class ChatRunService {
   public async retractLatestTurn(
     payload: ChatTurnRetractLatestRequest
   ): Promise<ChatTurnRetractLatestResponse> {
-    const sessionId = String(payload?.sessionId || '').trim()
+    const partnerId = String(payload?.partnerId || '').trim()
     const userMessageId = String(payload?.userMessageId || '').trim()
-    if (!sessionId || !userMessageId) {
-      return { success: false, messages: [], error: 'sessionId and userMessageId are required' }
+    if (!partnerId || !userMessageId) {
+      return { success: false, messages: [], error: 'partnerId and userMessageId are required' }
     }
     const activeRuns = Array.from(this.activeRuns.values()).filter(
-      (entry) => entry.run.sessionId === sessionId
+      (entry) => entry.run.partnerId === partnerId
     )
     if (activeRuns.length > 0) {
-      return { success: false, messages: [], error: '当前会话仍在运行，不能编辑消息' }
+      return { success: false, messages: [], error: '当前伙伴仍在运行，不能编辑消息' }
     }
 
-    const runs = await this.deps.aiRunStore.listRunsBySession(sessionId)
+    const runs = await this.deps.aiRunStore.listRunsByPartner(partnerId)
     const latestRun = [...runs].sort((left, right) => right.createdAt - left.createdAt)[0]
     if (!latestRun || latestRun.userMessageId !== userMessageId) {
-      const messages = await this.loadProjectedSessionMessages(sessionId)
+      const messages = await this.loadProjectedPartnerMessages(partnerId)
       return { success: false, messages, error: '只能编辑最新一条用户消息' }
     }
 
-    const messages = await this.loadProjectedSessionMessages(sessionId)
+    const messages = await this.loadProjectedPartnerMessages(partnerId)
     const target = messages.find((message) => message.id === userMessageId)
     if (!target || target.role !== 'user') {
       return { success: false, messages, error: '只能撤回用户消息' }
@@ -293,7 +292,7 @@ export class ChatRunService {
 
     await this.deps.aiRunStore.deleteRunsByIds([run.id])
     await this.deps.chatMessageLogStore.deleteByRunIds([run.id])
-    const nextMessages = await this.loadProjectedSessionMessages(sessionId)
+    const nextMessages = await this.loadProjectedPartnerMessages(partnerId)
 
     return {
       success: true,
@@ -304,12 +303,12 @@ export class ChatRunService {
     }
   }
 
-  public async deleteSession(sessionId: string): Promise<void> {
-    const normalizedSessionId = String(sessionId || '').trim()
-    if (!normalizedSessionId) return
+  public async deletePartner(partnerId: string): Promise<void> {
+    const normalizedPartnerId = String(partnerId || '').trim()
+    if (!normalizedPartnerId) return
 
     const affectedRuns = Array.from(this.activeRuns.entries()).filter(
-      ([, entry]) => entry.run.sessionId === normalizedSessionId
+      ([, entry]) => entry.run.partnerId === normalizedPartnerId
     )
     for (const [runId, entry] of affectedRuns) {
       entry.cancelled = true
@@ -317,97 +316,74 @@ export class ChatRunService {
       entry.abortController.abort()
       this.clearProjectionFlush(runId)
       const approval = this.activeApprovals.get(runId)
-      approval?.resolve({ accepted: false, error: '当前会话已删除' })
+      approval?.resolve({ accepted: false, error: '当前伙伴已删除' })
       this.activeApprovals.delete(runId)
     }
 
     await Promise.all(affectedRuns.map(([, entry]) => entry.eventQueue.catch(() => {})))
-    await terminalSessionManager.closeByChatSession(normalizedSessionId)
-    await this.deps.chatStore.deleteChatSession(normalizedSessionId)
-    await this.deps.aiRunStore.deleteRunsBySession(normalizedSessionId)
+    await terminalSessionManager.closeByChatSession(normalizedPartnerId)
+    await this.deps.partnerStore.deletePartner(normalizedPartnerId)
+    await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
+  }
+
+  public async clearPartnerContext(partnerId: string): Promise<PartnerClearContextResponse> {
+    const normalizedPartnerId = String(partnerId || '').trim()
+    if (!normalizedPartnerId) return { success: false, error: 'partnerId is required' }
+    const partner = await this.deps.partnerStore.getPartner(normalizedPartnerId)
+    if (!partner) return { success: false, error: 'partner not found' }
+    if (
+      this.pendingPartnerSubmissions.has(normalizedPartnerId) ||
+      Array.from(this.activeRuns.values()).some((entry) => entry.run.partnerId === normalizedPartnerId)
+    ) {
+      return { success: false, error: '当前伙伴仍在运行，不能清空上下文' }
+    }
+    const appended = await this.deps.chatMessageLogStore.appendBatch({
+      partnerId: normalizedPartnerId,
+      runId: uuidv4(),
+      entries: [{ kind: 'annotation', eventType: 'context_cleared', payload: {} }]
+    })
+    return { success: true, clearedAt: appended[0]?.createdAt }
   }
 
   public async submit(payload: ChatSubmitRequest): Promise<ChatSubmitResponse> {
-    const mode = payload?.mode === 'search' ? 'search' : 'ai'
-    const sessionId = String(payload?.sessionId || '').trim()
+    const partnerId = String(payload?.partnerId || '').trim()
     const input = String(payload?.input || '').trim()
-    if (!sessionId) return { success: false, error: 'sessionId is required' }
+    if (!partnerId) return { success: false, error: 'partnerId is required' }
     if (!input) return { success: false, error: 'input is required' }
-    const [runs, searchTurns] = await Promise.all([
-      this.deps.aiRunStore.listRunsBySession(sessionId),
-      this.deps.chatSearchTurnStore.list(sessionId)
-    ])
-    const modeLock = resolveWorkbenchSessionModeLock({
-      hasAiHistory: runs.length > 0,
-      hasSearchHistory: searchTurns.length > 0,
-      fallbackMode: mode
-    })
-    if (!isWorkbenchModeSwitchAllowed(modeLock, mode)) {
-      this.deps.telemetryService?.track('message_submit_completed', {
-        mode,
-        outcome: 'failed',
-        failureCode: 'REQUEST_FAILED'
-      })
-      return {
-        success: false,
-        error:
-          mode === 'search'
-            ? WORKBENCH_MODE_LOCK_HINTS.disableSearch
-            : WORKBENCH_MODE_LOCK_HINTS.disableAi
-      }
-    }
-    if (mode === 'search') {
-      try {
-        const response = await this.submitSearch({ ...payload, mode, sessionId, input })
-        this.trackSubmitResult(mode, response)
-        return response
-      } catch (error) {
-        this.deps.telemetryService?.track('message_submit_completed', {
-          mode,
-          outcome: 'failed',
-          failureCode: 'UNKNOWN'
-        })
-        throw error
-      }
-    }
     if (
-      this.pendingSessionSubmissions.has(sessionId) ||
-      Array.from(this.activeRuns.values()).some((entry) => entry.run.sessionId === sessionId)
+      this.pendingPartnerSubmissions.has(partnerId) ||
+      Array.from(this.activeRuns.values()).some((entry) => entry.run.partnerId === partnerId)
     ) {
       this.deps.telemetryService?.track('message_submit_completed', {
-        mode,
         outcome: 'failed',
         failureCode: 'REQUEST_FAILED'
       })
-      return { success: false, error: '当前会话已有运行中的任务，请等待完成后再发送。' }
+      return { success: false, error: '当前伙伴已有运行中的任务，请等待完成后再发送。' }
     }
-    this.pendingSessionSubmissions.add(sessionId)
+    this.pendingPartnerSubmissions.add(partnerId)
     try {
-      const response = await this.submitAi({ ...payload, mode, sessionId, input })
-      this.trackSubmitResult(mode, response)
+      const response = await this.submitAi({ ...payload, partnerId, input })
+      this.trackSubmitResult(response)
       return response
     } catch (error) {
       this.deps.telemetryService?.track('message_submit_completed', {
-        mode,
         outcome: 'failed',
         failureCode: 'UNKNOWN'
       })
       throw error
     } finally {
-      this.pendingSessionSubmissions.delete(sessionId)
+      this.pendingPartnerSubmissions.delete(partnerId)
     }
   }
 
-  private trackSubmitResult(mode: 'ai' | 'search', response: ChatSubmitResponse): void {
+  private trackSubmitResult(response: ChatSubmitResponse): void {
     if (response.success) {
       this.deps.telemetryService?.track('message_submit_completed', {
-        mode,
         outcome: 'succeeded'
       })
       return
     }
     this.deps.telemetryService?.track('message_submit_completed', {
-      mode,
       outcome: 'failed',
       failureCode: 'REQUEST_FAILED'
     })
@@ -518,72 +494,19 @@ export class ChatRunService {
     console.debug('[CHAT-PERF]', { label, durationMs, ...metadata })
   }
 
-  private async submitSearch(
-    payload: ChatSubmitRequest & { mode: 'search'; sessionId: string; input: string }
-  ): Promise<ChatSubmitResponse> {
-    const createdAt = Date.now()
-    const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
-    const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
-    const documentIds = Array.isArray(payload.searchDocumentIds)
-      ? payload.searchDocumentIds.map((id) => String(id).trim()).filter(Boolean)
-      : undefined
-    const userMessage = await this.deps.chatSearchTurnStore.appendTurn({
-      sessionId: payload.sessionId,
-      role: 'user',
-      content: payload.input,
-      contentNodes: payload.contentNodes,
-      selectedReferences: normalizedReferences,
-      attachments,
-      searchDocumentIds: documentIds,
-      createdAt
-    })
-    await this.ensureSessionTitle(payload.sessionId, payload.input)
-
-    const { data: queryVector } = await this.deps.embeddingService.embed(payload.input)
-    const results = await this.deps.documentsStore.search(
-      queryVector,
-      payload.input,
-      5,
-      undefined,
-      undefined,
-      documentIds
-    )
-    const tokens = jieba.cutForSearch(payload.input, true)
-    const normalizedResults = results.map(normalizeForIpc)
-    const content =
-      normalizedResults.length > 0
-        ? `已在当前资料范围中找到 ${normalizedResults.length} 条结果，右侧可以直接查看命中详情。`
-        : '未在当前资料范围中找到匹配结果。'
-    const assistantMessage = await this.deps.chatSearchTurnStore.appendTurn({
-      sessionId: payload.sessionId,
-      role: 'assistant',
-      content,
-      resultPayload: normalizedResults
-    })
-
-    return {
-      success: true,
-      mode: 'search',
-      userMessage,
-      assistantMessage,
-      results: normalizedResults,
-      tokens,
-      content
-    }
-  }
-
   private async submitAi(
-    payload: ChatSubmitRequest & { mode: 'ai'; sessionId: string; input: string }
+    payload: ChatSubmitRequest & { partnerId: string; input: string }
   ): Promise<ChatSubmitResponse> {
-    const sessionHasActiveRun = Array.from(this.activeRuns.values()).some(
-      (entry) => entry.run.sessionId === payload.sessionId
+    const partnerHasActiveRun = Array.from(this.activeRuns.values()).some(
+      (entry) => entry.run.partnerId === payload.partnerId
     )
-    if (sessionHasActiveRun) {
-      return { success: false, error: '当前会话已有运行中的任务，请等待完成后再发送。' }
+    if (partnerHasActiveRun) {
+      return { success: false, error: '当前伙伴已有运行中的任务，请等待完成后再发送。' }
     }
+    const partner = await this.deps.partnerStore.getPartner(payload.partnerId)
+    if (!partner) return { success: false, error: 'partner not found' }
     const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
     const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
-    const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
     const mainModel = payload.mainModel || null
     const modelName = String(mainModel?.modelName || '').trim()
     const preference = normalizeAiPreference(payload.preference)
@@ -593,9 +516,6 @@ export class ChatRunService {
         success: false,
         error: '请先在输入框右下角选择主模型'
       }
-    }
-    if (!normalizedWorkspace) {
-      return { success: false, error: 'AI 运行必须绑定工作区，当前请求缺少工作区信息。' }
     }
 
     const runId = uuidv4()
@@ -611,7 +531,7 @@ export class ChatRunService {
     const createdAt = Date.now()
     const userMessage: ChatMessage = {
       id: uuidv4(),
-      session_id: payload.sessionId,
+      partner_id: payload.partnerId,
       role: 'user',
       content: payload.input,
       timestamp: createdAt,
@@ -622,21 +542,20 @@ export class ChatRunService {
     }
     const assistantMessage: ChatMessage = {
       id: uuidv4(),
-      session_id: payload.sessionId,
+      partner_id: payload.partnerId,
       role: 'assistant',
       content: '',
       timestamp: createdAt + 1
     }
     const run: AiRunRecord = {
       id: runId,
-      sessionId: payload.sessionId,
+      partnerId: payload.partnerId,
       userMessageId: userMessage.id,
       assistantMessageId: assistantMessage.id,
       status: 'running',
       input: payload.input,
       selectedReferences: normalizedReferences,
       attachments,
-      workspace: normalizedWorkspace,
       modelName,
       mainModel,
       preference,
@@ -647,7 +566,6 @@ export class ChatRunService {
       updatedAt: createdAt
     }
 
-    await this.ensureSessionTitle(payload.sessionId, payload.input)
     await this.deps.aiRunStore.saveRun(run)
 
     const activeRun: ActiveRun = {
@@ -668,27 +586,10 @@ export class ChatRunService {
 
     return {
       success: true,
-      mode: 'ai',
       userMessage,
       assistantMessage,
       run
     }
-  }
-
-  private async ensureSessionTitle(sessionId: string, titleSource: string): Promise<void> {
-    const [runs, logRecords, searchTurns, sessions] = await Promise.all([
-      this.deps.aiRunStore.listRunsBySession(sessionId),
-      this.deps.chatMessageLogStore.list(sessionId),
-      this.deps.chatSearchTurnStore.list(sessionId),
-      this.deps.chatStore.getChatSessions()
-    ])
-    if (runs.length > 0 || logRecords.length > 0 || searchTurns.length > 1) return
-    const session = sessions.find((item) => item.id === sessionId)
-    if (!session) return
-    await this.deps.chatStore.saveChatSession({
-      ...session,
-      title: titleSource.slice(0, 20)
-    })
   }
 
   private async startAiRun(runId: string): Promise<void> {
@@ -698,16 +599,20 @@ export class ChatRunService {
     const sendEvent = (event: AiRunEvent): void => {
       void this.queueRunEvent(runId, event)
     }
+    const partner = await this.deps.partnerStore.getPartner(run.partnerId)
+    const workspaceRoots = (await this.deps.workspaceStore.listWorkspaces())
+      .map((workspace) => String(workspace.root_path || '').trim())
+      .filter(Boolean)
     await this.queueRunEvent(runId, {
       type: 'run_started',
       runId,
-      sessionId: run.sessionId,
+      partnerId: run.partnerId,
       createdAt: Date.now(),
       input: run.input
     })
     this.deps.docxApplyService.beginRun({
       runId,
-      sessionId: run.sessionId,
+      partnerId: run.partnerId,
       inputText: run.input
     })
 
@@ -716,7 +621,8 @@ export class ChatRunService {
       const result = await AiRunService.getInstance().run(
         {
           runId,
-          sessionId: run.sessionId,
+          partnerId: run.partnerId,
+          partnerName: partner?.name || '馆长',
           userMessageId: run.userMessageId,
           assistantMessageId: run.assistantMessageId,
           input: run.input,
@@ -725,19 +631,19 @@ export class ChatRunService {
           mainModel: run.mainModel,
           preference: run.preference,
           executionPermission: run.executionPermission,
-          workspace: run.workspace
+          workspaceRoots
         },
         {
           runtimeSettings,
           llmStore: this.deps.llmStore,
-          chatStore: this.deps.chatStore,
+          partnerStore: this.deps.partnerStore,
           chatMessageLogStore: this.deps.chatMessageLogStore,
           documentsStore: this.deps.documentsStore,
           embeddingService: this.deps.embeddingService,
           ensureEmbeddingReady: this.deps.ensureEmbeddingReady,
           docxApplyService: this.deps.docxApplyService,
-          saveFileChangeRecord: async (record, workspaceRootPath) => {
-            await this.deps.aiFileChangeService.saveRecord(record, workspaceRootPath)
+          saveFileChangeRecord: async (record) => {
+            await this.deps.aiFileChangeService.saveRecord(record)
           },
           listFileChangeRecords: async (request) =>
             (await this.deps.aiFileChangeService.listRecords(request)).items,

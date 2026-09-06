@@ -5,6 +5,7 @@ import {
   collectWorkbenchAiRunEvents,
   getApprovalCard,
   getWorkbenchLocator,
+  createWorkbenchNewSession,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
   waitForWorkbenchAiEvent,
@@ -105,7 +106,7 @@ describe('workbench run e2e', () => {
             workbenchSelectors.sendButton,
             { timeout: 10_000 }
           )
-          await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
+          await createWorkbenchNewSession(page)
           await sendWorkbenchMessage(page, APPROVAL_PROMPT)
           const approvalRunStarted = await waitForWorkbenchAiEvent(runtime, {
             name: 'approval_run_started',

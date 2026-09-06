@@ -158,20 +158,32 @@ export const createRealAiDepsFactory = async (input: {
       ...contextInput.runtimeSettingsOverride
     }
 
-    const sessionId = contextInput.sessionId || 'test-session'
-    terminalSessionIds.add(sessionId)
-    void storageService.chat.saveChatSession({
-      id: sessionId,
-      title: 'backend test session',
+    const partnerId = contextInput.partnerId || contextInput.sessionId || 'test-partner'
+    terminalSessionIds.add(partnerId)
+    void storageService.partner.savePartner({
+      id: partnerId,
+      name: 'backend test partner',
+      avatar_shape: 'circle',
+      avatar_color: 'blue',
       created_at: Date.now(),
-      workspace_id: 'test-workspace',
+      updated_at: Date.now(),
+      last_viewed_at: Date.now(),
       pinned: false,
       pinned_at: null
     })
+    if (bindWorkspace) {
+      void storageService.workspace.saveWorkspace({
+        id: 'test-workspace',
+        root_path: input.workspaceRoot,
+        created_at: Date.now(),
+        updated_at: Date.now()
+      })
+    }
     const ctx = createAiRunContext(
       {
         runId: input.runId,
-        sessionId,
+        partnerId,
+        partnerName: 'backend test partner',
         userMessageId: `test-user-message-${input.runId}`,
         assistantMessageId: `test-assistant-message-${input.runId}`,
         input: contextInput.userInput || '请处理当前测试任务。',
@@ -185,25 +197,19 @@ export const createRealAiDepsFactory = async (input: {
               defaultModelName: input.runtimeModelName
             }) || ''
         },
-        workspace: bindWorkspace
-          ? {
-              workspaceId: 'test-workspace',
-              workspaceName: 'test-workspace',
-              rootPath: input.workspaceRoot
-            }
-          : undefined
+        workspaceRoots: bindWorkspace ? [input.workspaceRoot] : []
       },
       {
         runtimeSettings,
         llmStore: storageService.llm,
-        chatStore: storageService.chat,
+        partnerStore: storageService.partner,
         chatMessageLogStore: storageService.chatMessageLog,
         documentsStore: storageService.documents,
         embeddingService,
         ensureEmbeddingReady: ensureReady,
         docxApplyService,
         saveFileChangeRecord: async (record) => {
-          await aiFileChangeService.saveRecord(record, input.workspaceRoot)
+          await aiFileChangeService.saveRecord(record)
         },
         listFileChangeRecords: async (request) =>
           (await aiFileChangeService.listRecords(request)).items,

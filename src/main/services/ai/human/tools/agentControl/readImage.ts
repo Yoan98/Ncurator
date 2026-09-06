@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createCanvas, loadImage } from '@napi-rs/canvas'
-import { ensureWorkspaceAssetBucket } from '../../../../assets/WorkspaceAssetService'
+import { ensurePartnerAssetBucket } from '../../../../assets/WorkspaceAssetService'
 import { resolveToolPath } from '../terminal/commandPolicy'
 
 export type ReadImageRef = {
@@ -211,10 +211,10 @@ const materializeCachedImage = async (input: {
 }
 
 export const prepareImagesForMainModel = async (input: {
-  workspaceRootPath: string
+  partnerId: string
   paths: string[]
 }): Promise<ReadImageRef[]> => {
-  const cacheDirectory = await ensureWorkspaceAssetBucket(input.workspaceRootPath, CACHE_BUCKET_ID)
+  const cacheDirectory = await ensurePartnerAssetBucket(input.partnerId, CACHE_BUCKET_ID)
   const images: ReadImageRef[] = []
 
   for (const rawValue of input.paths) {

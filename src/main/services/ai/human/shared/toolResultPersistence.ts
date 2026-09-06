@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import type { AiRunContext } from '../../types'
-import { getWorkspaceToolResultDir } from '../../../assets/WorkspaceAssetService'
+import { getPartnerToolResultDir } from '../../../assets/WorkspaceAssetService'
 
 export const TOOL_RESULT_REJECT_MAX_BYTES = 51_200
 export const TOOL_RESULT_REJECT_MAX_LINES = 2_000
@@ -46,11 +46,8 @@ export const buildTruncatedToolResultMessage = (input: {
 const getResultRef = (toolCallId: string): string =>
   path.basename(String(toolCallId || '').trim()).replace(/\.(?:json|log)$/i, '')
 
-const resolvePersistedDir = (ctx: AiRunContext): string | undefined => {
-  const rootPath = ctx.workspace?.rootPath
-  if (!rootPath) return undefined
-  return path.join(getWorkspaceToolResultDir(rootPath), ctx.runId)
-}
+const resolvePersistedDir = (ctx: AiRunContext): string =>
+  path.join(getPartnerToolResultDir(ctx.partnerId), ctx.runId)
 
 export const persistToolResult = async (input: {
   ctx: AiRunContext
@@ -58,7 +55,6 @@ export const persistToolResult = async (input: {
   content: string
 }): Promise<{ filePath: string; totalChars: number } | undefined> => {
   const directoryPath = resolvePersistedDir(input.ctx)
-  if (!directoryPath) return undefined
   const resultRef = getResultRef(input.toolCallId)
   const filePath = path.join(directoryPath, `${resultRef}.txt`)
   await fs.mkdir(directoryPath, { recursive: true })

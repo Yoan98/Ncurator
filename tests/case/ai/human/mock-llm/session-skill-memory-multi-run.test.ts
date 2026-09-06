@@ -31,7 +31,7 @@ describe('ai human mock-llm backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const run1 = createHumanTestRunner(runtime, {
-          sessionId: SESSION_ID,
+          partnerId: SESSION_ID,
           structuredOutputScript: {
             'human.brain': [
               {
@@ -56,7 +56,7 @@ describe('ai human mock-llm backend', () => {
 
         let run2Prompt = ''
         const run2 = createHumanTestRunner(runtime, {
-          sessionId: SESSION_ID,
+          partnerId: SESSION_ID,
           structuredOutputScript: {
             'human.brain': [
               ({ user }) => {
@@ -78,7 +78,7 @@ describe('ai human mock-llm backend', () => {
         await run2.run({ taskId: 'session-skills-run-2', userInput: '继续使用会话技能。' })
 
         const run3 = createHumanTestRunner(runtime, {
-          sessionId: SESSION_ID,
+          partnerId: SESSION_ID,
           structuredOutputScript: {
             'human.brain': [
               {
@@ -103,7 +103,7 @@ describe('ai human mock-llm backend', () => {
 
         let run4Prompt = ''
         const run4 = createHumanTestRunner(runtime, {
-          sessionId: SESSION_ID,
+          partnerId: SESSION_ID,
           structuredOutputScript: {
             'human.brain': [
               {

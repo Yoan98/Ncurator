@@ -1,4 +1,4 @@
-import type { ChatStore } from '../storage/domains/ChatStore'
+import type { PartnerStore } from '../storage/domains/PartnerStore'
 import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
@@ -70,7 +70,8 @@ export type AiRuntimePlatform = 'macos' | 'windows'
 
 export type AiRunStartPayload = {
   runId: string
-  sessionId: string
+  partnerId: string
+  partnerName: string
   userMessageId: string
   assistantMessageId: string
   input: string
@@ -79,18 +80,17 @@ export type AiRunStartPayload = {
   mainModel?: WorkbenchSelectedModel
   preference?: AiPreference
   executionPermission?: AiExecutionPermission
-  workspace?: {
-    workspaceId: string
-    workspaceName: string
-    rootPath: string
-    policyProfile?: string
-  }
+  workspaceRoots: string[]
 }
 
-export type AiWorkspaceBinding = NonNullable<AiRunStartPayload['workspace']>
+export type AiWorkspaceBinding = {
+  workspaceId: string
+  workspaceName: string
+  rootPath: string
+  policyProfile?: string
+}
 
 export type AiReferenceScope = {
-  workspace: AiWorkspaceBinding
   selectedReferences: SelectedReference[]
   attachments: ChatAttachment[]
 }
@@ -303,21 +303,22 @@ export type BrowserUseService = {
 export type TerminalCommandChangeTrackingInput = {
   commandId: string
   runId: string
-  sessionId: string
-  workspaceRootPath: string
+  partnerId: string
+  cwd: string
   command: string
+  workspaceRoots: string[]
 }
 
 export type AiRunDeps = {
   runtimeSettings: AiRuntimeSettings
   llmStore: LlmConfigStore
-  chatStore: ChatStore
+  partnerStore: PartnerStore
   chatMessageLogStore: ChatMessageLogStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   ensureEmbeddingReady: () => Promise<void>
   docxApplyService: DocxApplyService
-  saveFileChangeRecord: (record: AiFileChangeRecord, workspaceRootPath?: string) => Promise<void>
+  saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
   listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
   beginTerminalCommandTracking: (input: TerminalCommandChangeTrackingInput) => Promise<void>
   finishTerminalCommandTracking: (commandId: string) => Promise<AiFileChangeRecord[]>
@@ -340,7 +341,9 @@ export type AiRunDeps = {
 
 export type AiRunContext = {
   runId: string
-  sessionId: string
+  partnerId: string
+  partnerName: string
+  workspaceRoots: string[]
   runStartedAt: number
   platform: AiRuntimePlatform
   preference: AiPreference
@@ -351,12 +354,7 @@ export type AiRunContext = {
     modelContextWindowTokens?: number
     terminalEnvironment?: Record<string, string>
   }
-  workspace?: {
-    workspaceId: string
-    workspaceName: string
-    rootPath: string
-    policyProfile?: string
-  }
+  workspace?: AiWorkspaceBinding
   checkCancelled: () => void
   abortSignal?: AbortSignal
   chatStructured: <T extends Record<string, unknown>>(input: {

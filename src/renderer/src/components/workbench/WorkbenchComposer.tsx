@@ -2,12 +2,8 @@
 import { App as AntdApp, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
-  HiFolder,
-  HiMagnifyingGlass,
-  HiOutlineFolderPlus,
   HiPhoto,
   HiPlus,
-  HiSparkles,
   HiStop,
   HiXMark
 } from 'react-icons/hi2'
@@ -17,8 +13,7 @@ import type {
   LlmRemoteModel,
   ReferenceKind,
   SelectedReference,
-  WorkbenchModelSelection,
-  WorkspaceSource
+  WorkbenchModelSelection
 } from '../../../../shared/types'
 import type { ChatMessageLogPlanItem } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -26,14 +21,8 @@ import { normalizeUserFacingError } from '../../utils/userFacingError'
 import type {
   WorkbenchAiPreference,
   WorkbenchContextUsage,
-  WorkbenchExecutionPermission,
-  WorkbenchMode,
-  WorkbenchSelectOption
+  WorkbenchExecutionPermission
 } from './types'
-import {
-  WORKBENCH_MODE_LOCK_HINTS,
-  type WorkbenchSessionModeLock
-} from '../../../../shared/workbenchSessionModeLock'
 import { COMPOSER_PLACEHOLDER, COMPOSER_REFERENCE_KINDS } from './composer/constants'
 import AttachmentFileIcon from './composer/AttachmentFileIcon'
 import ReferenceMentionPanel from './composer/ReferenceMentionPanel'
@@ -45,7 +34,6 @@ import {
   getScopeKey,
   moveCaretToEnd,
   moveCaretToTextNode,
-  pruneComposerNodesByWorkspace,
   readComposerNodesFromEditor,
   renderComposerNodesToEditor
 } from './composer/utils'
@@ -64,9 +52,6 @@ type MentionContext = {
 }
 
 type WorkbenchComposerProps = {
-  mode: WorkbenchMode
-  modeLock?: WorkbenchSessionModeLock
-  onModeChange: (mode: WorkbenchMode) => void
   aiPreference: WorkbenchAiPreference
   onAiPreferenceChange: (preference: WorkbenchAiPreference) => void
   executionPermission: WorkbenchExecutionPermission
@@ -76,11 +61,6 @@ type WorkbenchComposerProps = {
   modelSelection: WorkbenchModelSelection
   onModelSelectionChange: (selection: WorkbenchModelSelection) => void
   onRefreshModelLists?: () => void | Promise<void>
-  workspaces: WorkspaceSource[]
-  selectedWorkspaceId: string | null
-  onWorkspaceChange: (workspaceId: string) => void
-  onWorkspaceEmptyAction?: () => void
-  showWorkspaceSelector?: boolean
   onDraftChange: (draft: ComposerDraftValue) => void
   onSubmit: () => void
   onCancel: () => void
@@ -95,8 +75,8 @@ type WorkbenchComposerProps = {
   contextUsage?: WorkbenchContextUsage | null
   plan?: ChatMessageLogPlanItem[]
   requestAttachmentTarget: () => Promise<{
+    partnerId: string
     assetBucketId: string
-    workspaceRootPath: string
   } | null>
   onFileDropHandlerReady?: (handler: ((files: File[]) => void) | null) => void
 }
@@ -126,9 +106,6 @@ const filterMentionReferences = (
 }
 
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
-  mode,
-  modeLock = 'none',
-  onModeChange,
   aiPreference,
   onAiPreferenceChange,
   executionPermission,
@@ -138,11 +115,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   modelSelection,
   onModelSelectionChange,
   onRefreshModelLists,
-  workspaces,
-  selectedWorkspaceId,
-  onWorkspaceChange,
-  onWorkspaceEmptyAction,
-  showWorkspaceSelector = true,
   onDraftChange,
   onSubmit,
   onCancel,
@@ -167,7 +139,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const mentionRefreshFrameRef = useRef<number | null>(null)
   const mentionQueryRef = useRef<string | null>(null)
   const mentionSessionSequenceRef = useRef(0)
-  const modeRef = useRef(mode)
   const controlFocusTimeoutRef = useRef<number | null>(null)
   const compositionGuardTimeoutRef = useRef<number | null>(null)
   const isComposingRef = useRef(false)
@@ -181,13 +152,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0)
   const [hasContent, setHasContent] = useState(false)
   const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<Record<string, string>>({})
-
-  modeRef.current = mode
-
-  const selectedWorkspace = useMemo(
-    () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) || null,
-    [selectedWorkspaceId, workspaces]
-  )
 
   useEffect(() => {
     draftValueRef.current = draftValue
@@ -462,38 +426,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   }, [closeMention, draftKey, renderDraftNodes])
 
   useEffect(() => {
-    const editor = editorRef.current
-    if (!editor) return
-    if (isComposingRef.current) return
-    const currentNodes = readComposerNodesFromEditor(editor, knownScopesRef.current)
-    const nextNodes = pruneComposerNodesByWorkspace(currentNodes, selectedWorkspaceId)
-    if (nextNodes.length === currentNodes.length) return
-    renderDraftNodes(nextNodes, { restoreCaret: true })
-    syncDraftFromEditor()
-    closeMention()
-  }, [closeMention, renderDraftNodes, selectedWorkspaceId, syncDraftFromEditor])
-
-  useEffect(() => {
     if (mentionSessionId === null) return
     let cancelled = false
 
     const loadMentionOptions = async (): Promise<void> => {
-      if (!selectedWorkspaceId || !selectedWorkspaceId.trim()) {
-        if (!cancelled) {
-          setMentionSnapshot([])
-          setMentionOptions([])
-          setMentionActiveIndex(0)
-          setMentionLoading(false)
-        }
-        return
-      }
-
       setMentionLoading(true)
       try {
         const referenceKinds: ReferenceKind[] = COMPOSER_REFERENCE_KINDS
         const response = await window.api.referenceItemList({
-          mode: modeRef.current === 'ai' ? 'chat' : 'search',
-          workspaceId: selectedWorkspaceId,
           referenceKinds
         })
 
@@ -509,7 +449,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     return () => {
       cancelled = true
     }
-  }, [mentionSessionId, selectedWorkspaceId])
+  }, [mentionSessionId])
 
   useEffect(() => {
     if (mentionQuery === null) return
@@ -647,7 +587,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         return null
       }
       const saved = await window.api.attachmentSaveFile({
-        workspaceRootPath: target.workspaceRootPath,
+        partnerId: target.partnerId,
         assetBucketId: target.assetBucketId,
         name: file.name || (file.type.startsWith('image/') ? 'clipboard.png' : 'clipboard-file'),
         bytes: new Uint8Array(await file.arrayBuffer()),
@@ -818,35 +758,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   ) : (
     '暂无上下文用量'
   )
-  const modeOptions = useMemo<WorkbenchSelectOption[]>(
-    () => [
-      {
-        value: 'ai',
-        label: 'AI',
-        icon: <HiSparkles className="h-3.5 w-3.5" />,
-        disabled: modeLock === 'search',
-        disabledReason: modeLock === 'search' ? WORKBENCH_MODE_LOCK_HINTS.disableAi : undefined
-      },
-      {
-        value: 'search',
-        label: '搜索',
-        icon: <HiMagnifyingGlass className="h-3.5 w-3.5" />,
-        disabled: modeLock === 'ai',
-        disabledReason: modeLock === 'ai' ? WORKBENCH_MODE_LOCK_HINTS.disableSearch : undefined
-      }
-    ],
-    [modeLock]
-  )
-  const workspaceOptions = useMemo<WorkbenchSelectOption[]>(
-    () =>
-      workspaces.map((workspace) => ({
-        value: workspace.id,
-        label: workspace.name,
-        icon: <HiFolder className="h-3.5 w-3.5" />,
-        keywords: [workspace.name, workspace.root_path || '']
-      })),
-    [workspaces]
-  )
   const currentAttachments = useMemo(() => draftValue.attachments || [], [draftValue.attachments])
 
   useEffect(() => {
@@ -917,7 +828,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           loading={mentionLoading}
           options={mentionOptions}
           activeIndex={mentionActiveIndex}
-          hasWorkspace={Boolean(selectedWorkspace)}
           onSelect={insertMentionScope}
         />
       ) : null}
@@ -1078,60 +988,38 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             </button>
 
             <WorkbenchSelect
-              value={mode}
-              options={modeOptions}
+              value={aiPreference}
+              options={AI_PREFERENCE_OPTIONS}
               onChange={(nextValue) => {
-                onModeChange(nextValue as WorkbenchMode)
+                onAiPreferenceChange(nextValue as WorkbenchAiPreference)
                 focusEditorAfterControlChange()
               }}
-              placeholder="模式"
+              placeholder="偏好"
               compact
               noDrag
               hideChevron
-              hideTriggerIcon
-              triggerClassName="workbench-composer-pill workbench-composer-mode-pill"
+              triggerClassName="workbench-composer-pill"
               menuClassName="workbench-composer-menu"
-              data-testid={workbenchSelectors.modeSwitch}
+              minMenuWidth={220}
+              data-testid={workbenchSelectors.aiPreferenceSwitch}
             />
-
-            {mode === 'ai' ? (
-              <span className="inline-flex items-center gap-0.5">
-                <span className="mx-1 h-4 w-px shrink-0 bg-[#E5E4E0]" aria-hidden="true" />
-                <WorkbenchSelect
-                  value={aiPreference}
-                  options={AI_PREFERENCE_OPTIONS}
-                  onChange={(nextValue) => {
-                    onAiPreferenceChange(nextValue as WorkbenchAiPreference)
-                    focusEditorAfterControlChange()
-                  }}
-                  placeholder="偏好"
-                  compact
-                  noDrag
-                  hideChevron
-                  triggerClassName="workbench-composer-pill"
-                  menuClassName="workbench-composer-menu"
-                  minMenuWidth={220}
-                  data-testid={workbenchSelectors.aiPreferenceSwitch}
-                />
-                <WorkbenchSelect
-                  value={executionPermission}
-                  options={EXECUTION_PERMISSION_OPTIONS}
-                  onChange={(nextValue) => {
-                    onExecutionPermissionChange(nextValue as WorkbenchExecutionPermission)
-                    focusEditorAfterControlChange()
-                  }}
-                  placeholder="权限"
-                  compact
-                  noDrag
-                  hideChevron
-                  triggerClassName="workbench-composer-pill"
-                  menuClassName="workbench-composer-menu"
-                  minMenuWidth={220}
-                  showDescriptions
-                  data-testid={workbenchSelectors.executionPermissionSwitch}
-                />
-              </span>
-            ) : null}
+            <WorkbenchSelect
+              value={executionPermission}
+              options={EXECUTION_PERMISSION_OPTIONS}
+              onChange={(nextValue) => {
+                onExecutionPermissionChange(nextValue as WorkbenchExecutionPermission)
+                focusEditorAfterControlChange()
+              }}
+              placeholder="权限"
+              compact
+              noDrag
+              hideChevron
+              triggerClassName="workbench-composer-pill"
+              menuClassName="workbench-composer-menu"
+              minMenuWidth={220}
+              showDescriptions
+              data-testid={workbenchSelectors.executionPermissionSwitch}
+            />
           </div>
 
           <div className="flex min-w-0 items-center gap-2">
@@ -1196,9 +1084,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                         : 'border-[#37352F] bg-[#37352F] text-white hover:bg-[#2F3437]'
                   }`}
                   data-testid={workbenchSelectors.sendButton}
-                  aria-label={
-                    showCancel ? '停止本次运行' : mode === 'ai' ? '发送智能请求' : '执行搜索'
-                  }
+                  aria-label={showCancel ? '停止本次运行' : '发送'}
                 >
                   {showCancel ? (
                     cancelling ? (
@@ -1224,42 +1110,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           data-testid={workbenchSelectors.composerHint}
         >
           {composerHint}
-        </div>
-      ) : null}
-
-      {showWorkspaceSelector ? (
-        <div className="mt-2 flex min-w-0 items-center px-1">
-          <WorkbenchSelect
-            value={selectedWorkspaceId}
-            options={workspaceOptions}
-            onChange={(nextValue) => {
-              onWorkspaceChange(nextValue)
-              focusEditorAfterControlChange()
-            }}
-            placeholder="选择工作空间"
-            triggerIcon={<HiFolder className="h-3.5 w-3.5" />}
-            searchable={workspaces.length > 6}
-            searchPlaceholder="搜索工作空间"
-            compact
-            inlineChevron
-            hideChevron
-            selectedWithoutBackground
-            noDrag
-            className="max-w-[220px]"
-            menuAlign="start"
-            minMenuWidth={240}
-            maxMenuWidth={360}
-            emptyAction={
-              workspaces.length === 0 && onWorkspaceEmptyAction
-                ? {
-                    label: '添加工作空间',
-                    icon: <HiOutlineFolderPlus className="h-3.5 w-3.5" />,
-                    onClick: onWorkspaceEmptyAction
-                  }
-                : undefined
-            }
-            data-testid={workbenchSelectors.workspaceSelect}
-          />
         </div>
       ) : null}
     </div>

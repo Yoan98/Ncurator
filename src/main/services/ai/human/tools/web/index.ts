@@ -10,7 +10,7 @@ import type {
 } from '../../../types'
 import type { WebSearchResult } from '../../../../webCrawler/types'
 import { WebSourceService } from '../../../../web/WebSourceService'
-import { ensureWorkspaceAssetBucket } from '../../../../assets/WorkspaceAssetService'
+import { ensurePartnerAssetBucket } from '../../../../assets/WorkspaceAssetService'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import type { ToolFamilyDefinition } from '../types'
@@ -472,7 +472,7 @@ export const webToolFamily: ToolFamilyDefinition = {
 
             try {
               const llmConfig = await ctx.getLlmConfig()
-              const ownerId = ctx.sessionId
+              const ownerId = ctx.partnerId
               const abortSignal = ctx.abortSignal
               const runId = ctx.runId
               let result: BrowserUseResult
@@ -587,19 +587,8 @@ export const webToolFamily: ToolFamilyDefinition = {
               } else if (args.action === 'screenshot') {
                 const tabId = String(args.tabId || '').trim()
                 emitBrowserPanelOpened(tabId)
-                const workspaceRoot = ctx.workspace?.rootPath
-                if (!workspaceRoot) {
-                  return finishBrowserUse({
-                    session,
-                    payload: {
-                      action: 'screenshot',
-                      tabId,
-                      error: 'screenshot 需要已绑定工作区'
-                    }
-                  })
-                }
-                const bucketDir = await ensureWorkspaceAssetBucket(
-                  workspaceRoot,
+                const bucketDir = await ensurePartnerAssetBucket(
+                  ctx.partnerId,
                   BROWSER_SCREENSHOT_BUCKET
                 )
                 const screenshotPath = path.join(

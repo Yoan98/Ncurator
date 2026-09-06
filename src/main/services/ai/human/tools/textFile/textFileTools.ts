@@ -32,7 +32,7 @@ import {
   resolveSafeTextFilePath,
   withTextFileMutationQueue
 } from './textFileUtils'
-import { isPathInsideRoot } from '../terminal/commandPolicy'
+import { getPartnerRuntimeDir } from '../../../../assets/WorkspaceAssetService'
 import { buildTextFileSearchTool } from './textFileSearch'
 
 type TextFileToolFailure = Error & {
@@ -297,36 +297,10 @@ const editTextFile = async (
       throw new Error(`无法写入 ${args.sourcePath}：不支持二进制文本。`)
     }
 
-    const trackedByWorkspace = isPathInsideRoot(sourcePath, buildInput.workspaceRootPath)
-    if (!trackedByWorkspace) {
-      if (args.action === 'create') {
-        await fs.writeFile(sourcePath, afterBuffer, { flag: 'wx', mode: 0o644 })
-      } else {
-        const currentBuffer = await fs.readFile(sourcePath)
-        if (calculateBufferChecksum(currentBuffer) !== beforeChecksum) {
-          throw new Error(`无法写入 ${args.sourcePath}：文件在操作期间被其他进程修改。`)
-        }
-        await atomicReplaceFile({
-          sourcePath,
-          content: afterBuffer,
-          mode: beforeMode,
-          operationId
-        })
-      }
-      return {
-        message: buildEditMessage({
-          action: args.action,
-          sourcePath: args.sourcePath,
-          changeCount
-        })
-      }
-    }
-
     let baselineNormalized = beforeNormalized
     let recordBeforeSnapshotPath = beforeBuffer
       ? path.join(
-          buildInput.workspaceRootPath,
-          '.ncurator',
+          getPartnerRuntimeDir(buildInput.partnerId),
           'file-changes',
           buildInput.runId,
           `${operationId}.before`
@@ -353,8 +327,7 @@ const editTextFile = async (
     })
     const { insertCount, deleteCount } = countTextFileDiffLines(diffArtifact)
     const artifactRoot = path.join(
-      buildInput.workspaceRootPath,
-      '.ncurator',
+      getPartnerRuntimeDir(buildInput.partnerId),
       'file-changes',
       buildInput.runId
     )
@@ -387,7 +360,7 @@ const editTextFile = async (
       const now = Date.now()
       const record: AiFileChangeRecord = {
         id: operationId,
-        sessionId: buildInput.sessionId,
+        partnerId: buildInput.partnerId,
         runId: buildInput.runId,
         status: 'applied',
         capability: 'text_file',

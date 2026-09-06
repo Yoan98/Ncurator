@@ -122,9 +122,7 @@ describe('settings workspace web e2e', () => {
           })
 
           await page.waitForFunction(async (selectedWorkspaceId) => {
-            const response = await window.api.webSourceList({
-              workspaceId: String(selectedWorkspaceId || '')
-            })
+            const response = await window.api.webSourceList({})
             return response.items.every((item) => item.index_status === 'indexed')
           }, workspaceId)
 

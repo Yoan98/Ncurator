@@ -51,7 +51,8 @@ export const createRealAiHarness = async (input: {
     workspaceSourceService: depsFactory.workspaceSourceService,
     workspaceKnowledgePrepareService: depsFactory.workspaceKnowledgePrepareService,
     documentsStore: depsFactory.storageService.documents,
-    chatStore: depsFactory.storageService.chat,
+    chatStore: depsFactory.storageService.partner,
+    partnerStore: depsFactory.storageService.partner,
     docxApplyStore: depsFactory.storageService.docxApply,
     llmStore: depsFactory.storageService.llm,
     embeddingService: depsFactory.embeddingService,
@@ -119,9 +120,12 @@ export const createRealAiHarness = async (input: {
     },
     seedChatHistory: async (payload) => {
       await seedChatHistory({
-        chatStore: depsFactory.storageService.chat,
-        chatSearchTurnStore: depsFactory.storageService.chatSearchTurn,
-        payload
+        partnerStore: depsFactory.storageService.partner,
+        chatMessageLogStore: depsFactory.storageService.chatMessageLog,
+        payload: {
+          ...payload,
+          partnerId: payload.partnerId || payload.sessionId
+        }
       })
     },
     seedLlmConfig: async (config) => {

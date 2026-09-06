@@ -22,10 +22,8 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
 
     const readImage = tool(
       async (args) => {
-        const workspaceRootPath = ctx.workspace?.rootPath
-        if (!workspaceRootPath) throw new Error('read_image 需要绑定工作区')
         const images = await prepareImagesForMainModel({
-          workspaceRootPath,
+          partnerId: ctx.partnerId,
           paths: args.paths
         })
         return { images }

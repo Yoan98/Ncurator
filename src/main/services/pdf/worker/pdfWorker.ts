@@ -4,7 +4,7 @@ import { parentPort } from 'node:worker_threads'
 import { createCanvas } from '@napi-rs/canvas'
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs'
 import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist/types/src/display/api'
-import { ensureWorkspaceAssetBucket } from '../../assets/WorkspaceAssetService'
+import { ensurePartnerAssetBucket } from '../../assets/WorkspaceAssetService'
 import { buildPdfPageText, normalizePdfText } from '../textNormalizer'
 import type {
   PdfDocumentMetadata,
@@ -336,8 +336,8 @@ export const handlePdfWorkerRequest = async (
       const snapshot = getSnapshot(request.runId, request.payload.docId)
       validatePageNumbers(snapshot, request.payload.pageNumbers)
       const assetBucketId = `pdf_read_pages-${randomUUID()}`
-      const directoryPath = await ensureWorkspaceAssetBucket(
-        request.payload.workspaceRootPath,
+      const directoryPath = await ensurePartnerAssetBucket(
+        request.payload.partnerId,
         assetBucketId
       )
       const images: Array<Awaited<ReturnType<typeof renderPage>>> = []

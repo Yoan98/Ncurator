@@ -34,17 +34,21 @@ import type {
   AttachmentCreateFromPathRequest,
   AttachmentProcessResponse,
   AttachmentSaveRequest,
-  ChatSession,
-  ChatSessionListItem,
-  ChatSessionOpenRequest,
-  ChatSessionOpenResponse,
-  ChatSessionSetPinnedRequest,
-  ChatSessionUiStateSaveRequest,
-  ChatSessionUiStateSaveResponse,
-  ChatSessionRunSummariesRequest,
-  ChatSessionRunSummariesResponse,
-  ChatSessionSnapshotRequest,
-  ChatSessionSnapshotResponse,
+  Partner,
+  PartnerListItem,
+  PartnerCreateRequest,
+  PartnerCreateResponse,
+  PartnerClearContextRequest,
+  PartnerClearContextResponse,
+  PartnerOpenRequest,
+  PartnerOpenResponse,
+  PartnerSetPinnedRequest,
+  PartnerUiStateSaveRequest,
+  PartnerUiStateSaveResponse,
+  PartnerRunSummariesRequest,
+  PartnerRunSummariesResponse,
+  PartnerSnapshotRequest,
+  PartnerSnapshotResponse,
   ChatSubmitRequest,
   ChatSubmitResponse,
   ChatTurnRetractLatestRequest,
@@ -198,33 +202,37 @@ export type DesktopApi = {
     payload: AttachmentCreateFromPathRequest
   ) => Promise<AttachmentProcessResponse>
   attachmentSaveFile: (payload: AttachmentSaveRequest) => Promise<AttachmentProcessResponse>
-  chatSessionList: () => Promise<ChatSessionListItem[]>
-  chatSessionSave: (session: ChatSession) => Promise<{ success: boolean; error?: string }>
-  chatSessionMarkViewed: (id: string) => Promise<{ success: boolean; error?: string }>
-  chatSessionSetPinned: (
-    payload: ChatSessionSetPinnedRequest
+  partnerList: () => Promise<PartnerListItem[]>
+  partnerCreate: (payload: PartnerCreateRequest) => Promise<PartnerCreateResponse>
+  partnerSave: (partner: Partner) => Promise<{ success: boolean; error?: string }>
+  partnerMarkViewed: (id: string) => Promise<{ success: boolean; error?: string }>
+  partnerSetPinned: (
+    payload: PartnerSetPinnedRequest
   ) => Promise<{ success: boolean; error?: string }>
-  chatSessionDelete: (id: string) => Promise<{ success: boolean; error?: string }>
-  chatMessageList: (sessionId: string) => Promise<ChatMessage[]>
+  partnerDelete: (id: string) => Promise<{ success: boolean; error?: string }>
+  partnerMessageList: (partnerId: string) => Promise<ChatMessage[]>
   scheduledTaskList: () => Promise<ScheduledTask[]>
   scheduledTaskSave: (payload: ScheduledTaskSaveRequest) => Promise<ScheduledTaskMutationResponse>
   scheduledTaskDelete: (id: string) => Promise<ScheduledTaskMutationResponse>
   scheduledTaskSetEnabled: (
     payload: ScheduledTaskSetEnabledRequest
   ) => Promise<ScheduledTaskMutationResponse>
-  onChatSessionListRefresh: (cb: () => void) => () => void
-  chatSessionOpen: (payload: ChatSessionOpenRequest) => Promise<ChatSessionOpenResponse>
-  chatSessionUiStateSave: (
-    payload: ChatSessionUiStateSaveRequest
-  ) => Promise<ChatSessionUiStateSaveResponse>
+  onPartnerListRefresh: (cb: () => void) => () => void
+  partnerOpen: (payload: PartnerOpenRequest) => Promise<PartnerOpenResponse>
+  partnerUiStateSave: (
+    payload: PartnerUiStateSaveRequest
+  ) => Promise<PartnerUiStateSaveResponse>
   workbenchUiStateGet: () => Promise<WorkbenchUiStateResponse>
   workbenchUiStateSave: (payload: WorkbenchUiStateSaveRequest) => Promise<WorkbenchUiStateResponse>
-  chatSessionRunSummaries: (
-    payload: ChatSessionRunSummariesRequest
-  ) => Promise<ChatSessionRunSummariesResponse>
-  chatSessionSnapshotGet: (
-    payload: ChatSessionSnapshotRequest
-  ) => Promise<ChatSessionSnapshotResponse>
+  partnerRunSummaries: (
+    payload: PartnerRunSummariesRequest
+  ) => Promise<PartnerRunSummariesResponse>
+  partnerSnapshotGet: (
+    payload: PartnerSnapshotRequest
+  ) => Promise<PartnerSnapshotResponse>
+  partnerClearContext: (
+    payload: PartnerClearContextRequest
+  ) => Promise<PartnerClearContextResponse>
   chatSubmit: (payload: ChatSubmitRequest) => Promise<ChatSubmitResponse>
   chatTurnRetractLatest: (
     payload: ChatTurnRetractLatestRequest
@@ -294,6 +302,6 @@ export type DesktopApi = {
     payload: OpenFileWithApplicationRequest
   ) => Promise<OpenFileWithApplicationResponse>
   onAiRunEvent: (cb: (event: AiRunEvent) => void) => () => void
-  onSystemNotificationOpenSession: (cb: (sessionId: string) => void) => () => void
+  onSystemNotificationOpenPartner: (cb: (partnerId: string) => void) => () => void
   onWorkbenchUiFlushRequest: (cb: () => void | Promise<void>) => () => void
 }

@@ -96,7 +96,11 @@ import {
 } from 'pptx-kit'
 import type { AiFileChangeRecord, JsonObject } from '../../../../../../shared/types'
 import { fileExists } from '../docx/review/utils'
-import { isPathInsideRoot, resolveToolPath } from '../terminal/commandPolicy'
+import { resolveToolPath } from '../terminal/commandPolicy'
+import {
+  getPartnerAssetsRootDir,
+  getPartnerRuntimeDir
+} from '../../../../assets/WorkspaceAssetService'
 import { PPT_SEARCH_MAX_MATCHES } from './constants'
 import { normalizePptColor, PPT_CANVAS_HEIGHT, PPT_CANVAS_WIDTH } from './color'
 import { renderLatexToSvg } from './formula'
@@ -251,8 +255,8 @@ const findElement = (
   return shape
 }
 
-const ensureAssetDirectory = async (workspaceRootPath: string, changeId: string) => {
-  const root = path.join(workspaceRootPath, '.ncurator', 'runtime', 'assets', changeId)
+const ensureAssetDirectory = async (partnerId: string, changeId: string) => {
+  const root = path.join(getPartnerAssetsRootDir(partnerId), changeId)
   const media = path.join(root, 'media')
   const render = path.join(root, 'ppt-render')
   const diff = path.join(root, 'ppt-diff')
@@ -999,7 +1003,7 @@ const editOutput = (
 
 export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRuntime => {
   const documents = new Map<string, PptRuntimeDocument>()
-  const workspaceRootPath = path.resolve(input.workspaceRootPath)
+  const workspaceRootPath = input.partnerId
 
   const resolvePptPath = (rawPath: string): string => {
     const resolved = resolveToolPath(rawPath)
@@ -1333,14 +1337,6 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
     const records: AiFileChangeRecord[] = []
     for (const document of documents.values()) {
       if (!document.dirty) continue
-      if (!isPathInsideRoot(document.sourcePath, workspaceRootPath)) {
-        document.dirty = false
-        document.movedSlideIds.clear()
-        document.replacedSlideIds.clear()
-        document.movedElementIds.clear()
-        document.elementLineage.clear()
-        continue
-      }
       const issues = validatePresentation(document.presentation).filter(
         (issue) => issue.severity === 'error'
       )
@@ -1411,8 +1407,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       let beforeChecksum: string | undefined
       if (beforeExists && document.beforeBytes) {
         const snapshotRoot = path.join(
-          workspaceRootPath,
-          '.ncurator',
+          getPartnerRuntimeDir(input.partnerId),
           'file-changes',
           input.runId
         )
@@ -1425,7 +1420,7 @@ export const createPptToolRuntime = (input: PptToolRuntime['input']): PptToolRun
       const now = Date.now()
       const record: AiFileChangeRecord = {
         id: document.changeId,
-        sessionId: input.sessionId,
+        partnerId: input.partnerId,
         runId: input.runId,
         status: 'applied',
         capability: 'ppt',

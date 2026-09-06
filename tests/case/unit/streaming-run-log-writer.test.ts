@@ -79,7 +79,7 @@ describe('streaming run log writer', () => {
       writer.appendRuntimeEvent({
         type: 'run_started',
         runId,
-        sessionId: 'test-session',
+        partnerId: 'test-partner',
         createdAt: Date.now(),
         input: 'test input'
       } satisfies AiRunEvent)
@@ -254,7 +254,7 @@ describe('streaming run log writer', () => {
       collector.add({
         type: 'run_started',
         runId,
-        sessionId: 'disk-session',
+        partnerId: 'disk-partner',
         createdAt: Date.now(),
         input: 'from-disk'
       } satisfies AiRunEvent)

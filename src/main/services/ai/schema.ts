@@ -22,7 +22,7 @@ export const aiRunStatusSchema = z.enum(AI_RUN_STATUSES)
 
 export const aiRunStateFieldSchemas = {
   runId: z.string(),
-  sessionId: z.string(),
+  partnerId: z.string(),
   status: aiRunStatusSchema,
   input: z.string(),
   error: z.string().optional(),

@@ -6,7 +6,7 @@ import type {
 } from '../../../src/main/services/ai/types'
 import type { HumanTaskRunner } from '../../../src/main/services/ai/types'
 import type { DocxApplyService } from '../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
-import type { ChatStore } from '../../../src/main/services/storage/domains/ChatStore'
+import type { PartnerStore } from '../../../src/main/services/storage/domains/PartnerStore'
 import type { DocumentsStore } from '../../../src/main/services/storage/domains/DocumentsStore'
 import type { DocxApplyStore } from '../../../src/main/services/storage/domains/DocxApplyStore'
 import type { LlmConfigStore } from '../../../src/main/services/storage/domains/LlmConfigStore'
@@ -143,7 +143,8 @@ export type BackendSeedManifest = {
 }
 
 export type SeedChatHistoryInput = {
-  sessionId: string
+  partnerId?: string
+  sessionId?: string
   title?: string
   createdAt?: number
   messages: readonly Array<{
@@ -158,6 +159,7 @@ export type SeedChatHistoryInput = {
 
 export type CreateAiRunContextInput = {
   bindWorkspace?: boolean
+  partnerId?: string
   sessionId?: string
   userInput?: string
   selectedReferences?: SelectedReference[]
@@ -188,7 +190,8 @@ export type BackendTestRuntime = {
   workspaceSourceService: WorkspaceSourceService
   workspaceKnowledgePrepareService: WorkspaceKnowledgePrepareService
   documentsStore: DocumentsStore
-  chatStore: ChatStore
+  chatStore: PartnerStore
+  partnerStore: PartnerStore
   docxApplyStore: DocxApplyStore
   llmStore: LlmConfigStore
   embeddingService: EmbeddingService

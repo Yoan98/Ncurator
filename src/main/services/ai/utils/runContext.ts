@@ -1,29 +1,10 @@
 import type { KbAvailability, SelectedReference } from '../../../../shared/types'
-import type { AiRunStartPayload } from '../types'
 
 const toTrimmedStringList = (values: string[] | undefined): string[] =>
   Array.isArray(values) ? values.map((value) => String(value).trim()).filter(Boolean) : []
 
 const normalizeKbAvailability = (value: string | undefined): KbAvailability =>
   value === 'indexed' || value === 'partial' || value === 'not_indexed' ? value : 'not_indexed'
-
-export const normalizeWorkspaceBinding = (
-  workspace: AiRunStartPayload['workspace']
-): AiRunStartPayload['workspace'] | undefined => {
-  if (!workspace) return undefined
-
-  const workspaceId = String(workspace.workspaceId || '').trim()
-  const workspaceName = String(workspace.workspaceName || '').trim()
-  const rootPath = String(workspace.rootPath || '').trim()
-  if (!workspaceId || !workspaceName || !rootPath) return undefined
-
-  return {
-    workspaceId,
-    workspaceName,
-    rootPath,
-    policyProfile: workspace.policyProfile ? String(workspace.policyProfile) : undefined
-  }
-}
 
 export const normalizeSelectedReferences = (
   references: SelectedReference[] | undefined
@@ -35,7 +16,6 @@ export const normalizeSelectedReferences = (
       if (reference.kind === 'web') {
         return {
           kind: 'web' as const,
-          workspaceId: String(reference.workspaceId || '').trim(),
           webSourceId: String(reference.webSourceId || '').trim(),
           name: String(reference.name || '').trim(),
           url: String(reference.url || '').trim(),
@@ -73,9 +53,7 @@ export const normalizeSelectedReferences = (
     })
     .filter((reference) => {
       if (reference.kind === 'web') {
-        return Boolean(
-          reference.workspaceId && reference.webSourceId && reference.name && reference.url
-        )
+        return Boolean(reference.webSourceId && reference.name && reference.url)
       }
 
       return Boolean(

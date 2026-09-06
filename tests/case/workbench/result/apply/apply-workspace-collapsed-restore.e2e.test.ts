@@ -20,19 +20,19 @@ import {
 const CASE_ID = 'apply-workspace-collapsed-restore'
 const TARGET_FILE = 'workbench-preview.md'
 const MARKER = 'cedar-apply-collapsed-restore-771'
-const SESSION_B_ID = 'collapsed-restore-session-b'
-const SESSION_B_TITLE = '折叠恢复会话 B'
+const PARTNER_B_ID = 'collapsed-restore-partner-b'
+const PARTNER_B_NAME = '折叠恢复伙伴 B'
 
-const waitForActiveSession = async (
+const waitForActivePartner = async (
   page: Parameters<typeof getWorkbenchLocator>[0],
-  sessionId: string
+  partnerId: string
 ): Promise<void> => {
   await page.waitForFunction(
     (testId) =>
       document
         .querySelector(`[data-testid="${testId}"]`)
         ?.classList.contains('nc-sidebar-item-active') ?? false,
-    `${workbenchSelectors.sessionItemPrefix}-${sessionId}`,
+    `${workbenchSelectors.partnerItemPrefix}-${partnerId}`,
     { timeout: 15_000 }
   )
 }
@@ -47,7 +47,7 @@ describe('workbench result e2e', () => {
         suite: 'result',
         groups: ['apply'],
         description:
-          '真实 AI 修改文件后，审核模式展开状态下折叠面板，切换会话再切回时面板必须保持折叠，异步记录刷新不得重新展开。',
+          '真实 AI 修改文件后，审核模式展开状态下折叠面板，切换伙伴再切回时面板必须保持折叠，异步记录刷新不得重新展开。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -63,22 +63,25 @@ describe('workbench result e2e', () => {
 
           const workspaceList = await page.evaluate(() => window.api.workspaceList())
           const targetWorkspace =
-            workspaceList.items.find((workspace) => workspace.name === setup.workspaceName) ||
+            workspaceList.items.find((workspace) => workspace.root_path === setup.workspace.rootPath) ||
             workspaceList.items[0]
           if (!targetWorkspace) throw new Error('未找到测试工作区')
           await page.evaluate(
-            async ({ sessionB }) => {
-              const response = await window.api.chatSessionSave(sessionB)
-              if (!response.success) throw new Error(response.error || 'chatSessionSave failed')
+            async ({ partnerB }) => {
+              const response = await window.api.partnerSave(partnerB)
+              if (!response.success) throw new Error(response.error || 'partnerSave failed')
             },
             {
-              sessionB: {
-                id: SESSION_B_ID,
-                title: SESSION_B_TITLE,
-                created_at: Math.floor(Date.now() / 1000) - 60,
-                workspace_id: targetWorkspace.id,
-              pinned: false,
-              pinned_at: null
+              partnerB: {
+                id: PARTNER_B_ID,
+                name: PARTNER_B_NAME,
+                avatar_shape: 'circle' as const,
+                avatar_color: 'blue' as const,
+                created_at: Date.now() - 60_000,
+                updated_at: Date.now() - 60_000,
+                last_viewed_at: Date.now() - 60_000,
+                pinned: false,
+                pinned_at: null
               }
             }
           )
@@ -98,12 +101,12 @@ describe('workbench result e2e', () => {
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
           const afterText = await fs.readFile(targetPath, 'utf-8')
-          const sessionList = await page.evaluate(() => window.api.chatSessionList())
-          const sessionA = [...sessionList].sort((a, b) => b.created_at - a.created_at)[0]
-          if (!sessionA) throw new Error('AI run 未创建真实会话')
+          const partnerList = await page.evaluate(() => window.api.partnerList())
+          const partnerA = partnerList.find((partner) => partner.id !== PARTNER_B_ID)
+          if (!partnerA) throw new Error('AI run 未找到当前伙伴')
           await getWorkbenchLocator(
             page,
-            `${workbenchSelectors.sessionItemPrefix}-${SESSION_B_ID}`
+            `${workbenchSelectors.partnerItemPrefix}-${PARTNER_B_ID}`
           ).waitFor({ state: 'visible', timeout: 15_000 })
 
           await waitForApplyEntry(page)
@@ -134,19 +137,19 @@ describe('workbench result e2e', () => {
 
           await getWorkbenchLocator(
             page,
-            `${workbenchSelectors.sessionItemPrefix}-${SESSION_B_ID}`
+            `${workbenchSelectors.partnerItemPrefix}-${PARTNER_B_ID}`
           ).click()
-          await waitForActiveSession(page, SESSION_B_ID)
-          const shellCountInSessionB = await getWorkbenchLocator(
+          await waitForActivePartner(page, PARTNER_B_ID)
+          const shellCountInPartnerB = await getWorkbenchLocator(
             page,
             workbenchSelectors.contentPanelShell
           ).count()
 
           await getWorkbenchLocator(
             page,
-            `${workbenchSelectors.sessionItemPrefix}-${sessionA.id}`
+            `${workbenchSelectors.partnerItemPrefix}-${partnerA.id}`
           ).click()
-          await waitForActiveSession(page, sessionA.id)
+          await waitForActivePartner(page, partnerA.id)
           await page.waitForTimeout(3000)
           const shellCountAfterRestore = await getWorkbenchLocator(
             page,
@@ -174,7 +177,7 @@ describe('workbench result e2e', () => {
             afterHasMarker: afterText.includes(MARKER),
             reviewModeTagCount,
             shellCountAfterCollapse,
-            shellCountInSessionB,
+            shellCountInPartnerB,
             shellCountAfterRestore,
             expandToggleVisibleAfterRestore,
             panelShowsTargetFile: panelTextAfterRestore.includes(TARGET_FILE),
@@ -190,7 +193,7 @@ describe('workbench result e2e', () => {
               result.fileArtifactCount >= 1 &&
               result.reviewModeTagCount === 1 &&
               result.shellCountAfterCollapse === 0 &&
-              result.shellCountInSessionB === 0 &&
+              result.shellCountInPartnerB === 0 &&
               result.shellCountAfterRestore === 0 &&
               result.expandToggleVisibleAfterRestore &&
               result.panelShowsTargetFile &&
@@ -198,7 +201,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-apply-workspace-collapsed-restore-real',
               message:
-                '审核模式展开态折叠后切换会话再切回，面板必须保持折叠，异步修改记录刷新不得重新展开；展开后应展示最新审核内容且文件 Tab 保留。',
+                '审核模式展开态折叠后切换伙伴再切回，面板必须保持折叠，异步修改记录刷新不得重新展开；展开后应展示最新审核内容且文件 Tab 保留。',
               data: result
             }
           )

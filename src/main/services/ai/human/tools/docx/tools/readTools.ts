@@ -13,7 +13,7 @@ import {
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
 import { projectDocxReadNodes } from '../publicReadTree'
 import { renderDocxVisualToPng } from '../utils/renderVisual'
-import { ensureWorkspaceAssetBucket } from '../../../../../assets/WorkspaceAssetService'
+import { ensurePartnerAssetBucket } from '../../../../../assets/WorkspaceAssetService'
 import {
   countOutlineRootNodes,
   resolveOutlinePercentNodeRange,
@@ -104,8 +104,8 @@ const materializeDocxVisuals = async (input: {
   input.nodes.forEach((node) => readNodes.push(...(node.children as DocxReadNode[])))
   const visuals = collectVisualNodes(readNodes)
   if (visuals.length === 0) return
-  const bucket = await ensureWorkspaceAssetBucket(
-    input.runtime.workspaceRootPath,
+  const bucket = await ensurePartnerAssetBucket(
+    input.runtime.input.partnerId,
     `${input.sourcePrefix}-${randomUUID()}`
   )
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-docx-materialize-'))

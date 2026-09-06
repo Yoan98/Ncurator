@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ScheduledTaskService } from '../../../src/main/services/scheduler/ScheduledTaskService'
-import type { ChatSubmitResponse, ScheduledTask, WorkspaceSource } from '../../../src/shared/types'
+import type { ChatSubmitResponse, ScheduledTask } from '../../../src/shared/types'
 
 const localAt = (
   year: number,
@@ -21,7 +21,7 @@ const makeTask = (overrides: Partial<ScheduledTask> = {}): ScheduledTask => ({
   scheduleType: 'daily',
   timeOfDay: '09:00',
   weekday: null,
-  workspaceId: 'ws-1',
+  partnerId: 'partner-1',
   mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
   aiPreference: 'default',
   executionPermission: 'full_access',
@@ -60,11 +60,8 @@ class FakeTaskStore {
 
 type ServiceHarness = {
   taskStore: FakeTaskStore
-  workspaceStore: { getWorkspaceById: ReturnType<typeof vi.fn> }
-  chatStore: {
-    saveChatSession: ReturnType<typeof vi.fn>
-    deleteChatSession: ReturnType<typeof vi.fn>
-  }
+  partnerStore: { getPartner: ReturnType<typeof vi.fn> }
+  hasActivePartnerRun: ReturnType<typeof vi.fn>
   submitTask: ReturnType<typeof vi.fn>
   emitSessionListRefresh: ReturnType<typeof vi.fn>
   setTimer: ReturnType<typeof vi.fn>
@@ -77,27 +74,33 @@ let nextTimerId = 0
 
 const createService = (): ServiceHarness => {
   const taskStore = new FakeTaskStore()
-  const workspaceStore = {
-    getWorkspaceById: vi.fn(
-      async (id: string): Promise<WorkspaceSource | null> =>
-        id === 'ws-1'
-          ? { id: 'ws-1', name: '工作区', root_path: '/workspace', created_at: 0, updated_at: 0 }
-          : null
+  const partnerStore = {
+    getPartner: vi.fn(async (id: string) =>
+      id === 'partner-1'
+        ? {
+            id: 'partner-1',
+            name: '测试伙伴',
+            avatar_shape: 'circle',
+            avatar_color: 'blue',
+            created_at: 0,
+            updated_at: 0,
+            last_viewed_at: 0,
+            pinned: false,
+            pinned_at: null
+          }
+        : null
     )
   }
-  const chatStore = {
-    saveChatSession: vi.fn(async (): Promise<void> => {}),
-    deleteChatSession: vi.fn(async (): Promise<void> => {})
-  }
-  const submitTask = vi.fn(async (): Promise<ChatSubmitResponse> => ({ success: true, mode: 'ai' }))
+  const hasActivePartnerRun = vi.fn(() => false)
+  const submitTask = vi.fn(async (): Promise<ChatSubmitResponse> => ({ success: true }))
   const emitSessionListRefresh = vi.fn()
   const setTimer = vi.fn(() => ++nextTimerId)
   const clearTimer = vi.fn()
   const now = vi.fn(() => NOW)
   const service = new ScheduledTaskService({
     taskStore,
-    workspaceStore,
-    chatStore,
+    partnerStore,
+    hasActivePartnerRun,
     submitTask,
     emitSessionListRefresh,
     setTimer,
@@ -106,8 +109,8 @@ const createService = (): ServiceHarness => {
   })
   return {
     taskStore,
-    workspaceStore,
-    chatStore,
+    partnerStore,
+    hasActivePartnerRun,
     submitTask,
     emitSessionListRefresh,
     setTimer,
@@ -125,13 +128,13 @@ describe('ScheduledTaskService', () => {
       prompt: 'y',
       scheduleType: 'daily' as const,
       timeOfDay: '09:00',
-      workspaceId: 'ws-1',
+      partnerId: 'partner-1',
       mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
       enabled: false
     }
     expect((await service.save({ ...base, name: '  ' })).success).toBe(false)
     expect((await service.save({ ...base, prompt: '' })).success).toBe(false)
-    expect((await service.save({ ...base, workspaceId: '' })).success).toBe(false)
+    expect((await service.save({ ...base, partnerId: '' })).success).toBe(false)
     expect(
       (await service.save({ ...base, mainModel: { configId: '', modelName: 'gpt-4o' } })).success
     ).toBe(false)
@@ -149,7 +152,7 @@ describe('ScheduledTaskService', () => {
       prompt: '总结',
       scheduleType: 'daily',
       timeOfDay: '09:00',
-      workspaceId: 'ws-1',
+      partnerId: 'partner-1',
       mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
       enabled: true
     })
@@ -166,7 +169,7 @@ describe('ScheduledTaskService', () => {
       prompt: 'y',
       scheduleType: 'daily',
       timeOfDay: '09:00',
-      workspaceId: 'ws-1',
+      partnerId: 'partner-1',
       mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
       enabled: false
     })
@@ -181,33 +184,20 @@ describe('ScheduledTaskService', () => {
     expect(response.error).toBe('定时任务不存在')
   })
 
-  it('fires a due task, creates a session, submits with the configured context and refreshes the list', async () => {
+  it('fires a due task, submits to the partner and refreshes the list', async () => {
     const harness = createService()
     harness.taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
     await harness.service.runDue()
 
-    expect(harness.chatStore.saveChatSession).toHaveBeenCalledTimes(1)
-    expect(harness.chatStore.saveChatSession).toHaveBeenCalledWith({
-      id: expect.any(String),
-      title: '每日晨报',
-      created_at: NOW,
-      workspace_id: 'ws-1',
-      pinned: false,
-      pinned_at: null
-    })
-
     expect(harness.submitTask).toHaveBeenCalledTimes(1)
     expect(harness.submitTask).toHaveBeenCalledWith({
-      mode: 'ai',
-      sessionId: expect.any(String),
+      partnerId: 'partner-1',
       input: '总结今天的新闻',
       mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
       preference: 'default',
-      executionPermission: 'full_access',
-      workspace: { workspaceId: 'ws-1', workspaceName: '工作区', rootPath: '/workspace' }
+      executionPermission: 'full_access'
     })
     expect(harness.emitSessionListRefresh).toHaveBeenCalledTimes(1)
-    expect(harness.chatStore.deleteChatSession).not.toHaveBeenCalled()
   })
 
   it('re-arms the timer to the next run after firing a due task', async () => {
@@ -219,24 +209,32 @@ describe('ScheduledTaskService', () => {
     expect(harness.setTimer).toHaveBeenCalledWith(expect.any(Function), HOUR)
   })
 
-  it('cleans up the empty session and skips refresh when submit fails', async () => {
+  it('skips refresh when submit fails and does not create a new partner', async () => {
     const harness = createService()
     harness.taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
     harness.submitTask.mockResolvedValueOnce({ success: false, error: '模型失效' })
 
     await harness.service.runDue()
 
-    expect(harness.chatStore.saveChatSession).toHaveBeenCalledTimes(1)
-    expect(harness.chatStore.deleteChatSession).toHaveBeenCalledTimes(1)
+    expect(harness.submitTask).toHaveBeenCalledTimes(1)
     expect(harness.emitSessionListRefresh).not.toHaveBeenCalled()
   })
 
-  it('skips without creating a session when the workspace is missing', async () => {
+  it('skips without submitting when the partner is missing', async () => {
     const harness = createService()
-    harness.taskStore.set(makeTask({ workspaceId: 'gone', nextRunAt: NOW - 1 }))
+    harness.taskStore.set(makeTask({ partnerId: 'gone', nextRunAt: NOW - 1 }))
     await harness.service.runDue()
 
-    expect(harness.chatStore.saveChatSession).not.toHaveBeenCalled()
+    expect(harness.submitTask).not.toHaveBeenCalled()
+    expect(harness.emitSessionListRefresh).not.toHaveBeenCalled()
+  })
+
+  it('skips without submitting when the partner is busy', async () => {
+    const harness = createService()
+    harness.hasActivePartnerRun.mockReturnValue(true)
+    harness.taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
+    await harness.service.runDue()
+
     expect(harness.submitTask).not.toHaveBeenCalled()
     expect(harness.emitSessionListRefresh).not.toHaveBeenCalled()
   })
@@ -259,7 +257,6 @@ describe('ScheduledTaskService', () => {
     await harness.service.runDue()
 
     expect(harness.submitTask).not.toHaveBeenCalled()
-    expect(harness.chatStore.saveChatSession).not.toHaveBeenCalled()
     const stored = harness.taskStore.list()
     const saved = (await stored)[0]
     expect(saved.nextRunAt).toBe(localAt(2026, 0, 1, 9, 0))
@@ -274,7 +271,6 @@ describe('ScheduledTaskService', () => {
     await harness.service.runDue()
 
     expect(harness.submitTask).toHaveBeenCalledTimes(2)
-    expect(harness.chatStore.saveChatSession).toHaveBeenCalledTimes(2)
     expect(harness.emitSessionListRefresh).toHaveBeenCalledTimes(2)
   })
 

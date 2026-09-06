@@ -14,20 +14,15 @@ const createFakeCtx = (runStartedAt = 0): AiRunContext =>
   ({
     platform: 'macos',
     runId: 'run-cache-stability',
-    sessionId: 'session-cache-stability',
+    partnerId: 'partner-cache-stability',
+    partnerName: '测试伙伴',
+    workspaceRoots: ['/tmp/workspace'],
     runStartedAt,
     preference: 'default',
-    workspace: {
-      workspaceId: 'ws-1',
-      workspaceName: '测试工作区',
-      rootPath: '/tmp/workspace'
-    },
+    executionPermission: 'review',
     referenceScope: {
-      workspace: {
-        id: 'ws-1',
-        rootPath: '/tmp/workspace'
-      },
-      selectedReferences: []
+      selectedReferences: [],
+      attachments: []
     }
   }) as AiRunContext
 
@@ -93,7 +88,7 @@ const buildResumeBrainMessages = (input: {
 const resumeRecords: ChatMessageLogRecord[] = [
   {
     id: 'log-1',
-    sessionId: 'session-cache-stability',
+    partnerId: 'partner-cache-stability',
     runId: 'run-1',
     seq: 1,
     createdAt: 1,
@@ -102,18 +97,13 @@ const resumeRecords: ChatMessageLogRecord[] = [
       content: '请整理过拟合概念。',
       context: {
         selectedReferences: [],
-        attachments: [],
-        workspace: {
-          workspaceId: 'ws-1',
-          workspaceName: '测试工作区',
-          rootPath: '/tmp/workspace'
-        }
+        attachments: []
       }
     }
   },
   {
     id: 'log-1-snapshot',
-    sessionId: 'session-cache-stability',
+    partnerId: 'partner-cache-stability',
     runId: 'run-1',
     seq: 2,
     createdAt: 2,
@@ -125,7 +115,7 @@ const resumeRecords: ChatMessageLogRecord[] = [
   },
   {
     id: 'log-2',
-    sessionId: 'session-cache-stability',
+    partnerId: 'partner-cache-stability',
     runId: 'run-1',
     seq: 3,
     createdAt: 3,
@@ -137,7 +127,7 @@ const resumeRecords: ChatMessageLogRecord[] = [
   },
   {
     id: 'log-3',
-    sessionId: 'session-cache-stability',
+    partnerId: 'partner-cache-stability',
     runId: 'run-1',
     seq: 4,
     createdAt: 4,
@@ -151,7 +141,7 @@ const resumeRecords: ChatMessageLogRecord[] = [
   },
   {
     id: 'log-4',
-    sessionId: 'session-cache-stability',
+    partnerId: 'partner-cache-stability',
     runId: 'run-1',
     seq: 5,
     createdAt: 5,

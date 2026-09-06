@@ -7,6 +7,7 @@ import type {
 export type WorkspaceValidationResult = {
   normalizedRootPath: string
   displayName: string
+  kind: 'file' | 'directory'
 }
 
 export type WorkspaceKnowledgeChunkSnapshot = {

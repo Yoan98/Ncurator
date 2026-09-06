@@ -2,8 +2,8 @@ import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from './referenceScope'
 import { renderPlanItemStatus } from '../shared/memoryRenderers'
 import {
-  getWorkspaceAssetsRootDir,
-  getWorkspaceScriptsRootDir
+  getPartnerAssetsRootDir,
+  getPartnerScriptsRootDir
 } from '../../../assets/WorkspaceAssetService'
 import type { HumanState } from '../types'
 import type { AiRuntimePlatform } from '../../types'
@@ -11,11 +11,16 @@ import { HUMAN_MAX_ACTIVE_TOOLS } from '../constants'
 import { listBuiltinSkillDefinitions, listExternalSkillDefinitions } from '../skills'
 
 export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
-  const workspace = ctx.workspace
+  const workspaceRoots =
+    ctx.workspaceRoots.length > 0
+      ? ctx.workspaceRoots.map((rootPath) => `- ${rootPath}`).join('\n')
+      : '- 当前没有配置用户默认工作地址'
   return [
     `- platform：${ctx.platform}`,
-    `- runtime_paths.scripts：${workspace ? getWorkspaceScriptsRootDir(workspace.rootPath) : 'none'}（用户工作区内的一次性临时脚本目录）`,
-    `- runtime_paths.assets：${workspace ? getWorkspaceAssetsRootDir(workspace.rootPath) : 'none'}（运行期生成的临时产物目录，如图片、渲染中间结果等）`
+    `- 用户默认工作地址：`,
+    workspaceRoots,
+    `- runtime_paths.scripts：${getPartnerScriptsRootDir(ctx.partnerId)}（一次性临时脚本目录）`,
+    `- runtime_paths.assets：${getPartnerAssetsRootDir(ctx.partnerId)}（运行期生成的临时产物目录，如图片、渲染中间结果等）`
   ].join('\n')
 }
 
@@ -64,11 +69,17 @@ ${external.map((skill) => renderSkillLine(skill.skillId, skill.description, skil
 `.trim()
 }
 
+const REFERENCE_FIELD_GUIDE = `字段说明：
+- 类型：资料来源类型，目前支持本地文件、本地目录、网页资料。
+- 资源地址：这份资料对应的本地路径或网页地址。
+- 文档知识库状态：这份资料本身是否可被知识库检索。
+- 知识库文档ID：这份资料在知识库中的文档标识；没有对应知识库文档时显示为“无”。`
+
 export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
   `
 <system>
   <identity>
-    - 你叫馆长
+    - 你叫${input.ctx.partnerName}
   </identity>
 
   <principles>
@@ -108,6 +119,10 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
   <skill_catalog>
 ${renderSkillCatalog(input.ctx.platform)}
   </skill_catalog>
+
+  <reference_field_guide>
+${REFERENCE_FIELD_GUIDE}
+  </reference_field_guide>
 
   <local_environment>
 ${renderLocalEnvironmentText(input.ctx)}

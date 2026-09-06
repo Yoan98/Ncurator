@@ -115,11 +115,9 @@ describe('workbench browser lifecycle e2e', () => {
 
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
-            workspaceName: WORKSPACE_NAME,
-            createSession: false
+            workspaceName: WORKSPACE_NAME
           })
           const liveEnv = setup.env
-          await page.getByRole('button', { name: `在 ${WORKSPACE_NAME} 中新建对话` }).click()
           const sessionStartedAt = Date.now()
           await sendWorkbenchMessage(page, SESSION_PROMPT)
           await waitForWorkbenchAiRunCompletion(

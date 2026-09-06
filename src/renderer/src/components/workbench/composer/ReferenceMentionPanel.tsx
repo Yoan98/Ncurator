@@ -11,7 +11,6 @@ type ReferenceMentionPanelProps = {
   loading: boolean
   options: SelectedReference[]
   activeIndex: number
-  hasWorkspace: boolean
   onSelect: (reference: SelectedReference) => void
 }
 
@@ -31,7 +30,6 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
   loading,
   options,
   activeIndex,
-  hasWorkspace,
   onSelect
 }) => {
   const groups = [
@@ -59,7 +57,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
         ) : options.length === 0 ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={hasWorkspace ? '当前工作区中没有匹配项' : '请先选择工作区'}
+            description="没有匹配的资料"
           />
         ) : (
           <div className="space-y-2">

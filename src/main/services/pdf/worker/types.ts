@@ -40,7 +40,7 @@ export type PdfWorkerRequest =
       action: 'materialize_pages'
       payload: {
         docId: string
-        workspaceRootPath: string
+        partnerId: string
         pageNumbers: number[]
       }
     }

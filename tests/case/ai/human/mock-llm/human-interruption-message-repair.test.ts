@@ -53,12 +53,6 @@ const buildDeps = async (input: {
   }
 }
 
-const workspacePayload = (runtime: BackendTestRuntime) => ({
-  workspaceId: 'test-workspace',
-  workspaceName: 'test-workspace',
-  rootPath: runtime.workspaceRoot
-})
-
 const lastMessage = (messages: BaseMessage[]): BaseMessage => messages[messages.length - 1]
 
 describe('ai human mock-llm backend', () => {
@@ -77,13 +71,16 @@ describe('ai human mock-llm backend', () => {
         const RUN1_INPUT = '请整理过拟合概念。'
         const RUN2_INPUT = '保留刚才的过拟合信息，再补充反走样。'
 
-        await runtime.chatStore.saveChatSession({
+        await runtime.chatStore.savePartner({
           id: ORDER_SESSION_ID,
-          title: 'order session',
+          name: 'order session',
+          avatar_shape: 'circle',
+          avatar_color: 'blue',
           created_at: Date.now(),
-          workspace_id: 'test-workspace',
-        pinned: false,
-        pinned_at: null
+          updated_at: Date.now(),
+          last_viewed_at: Date.now(),
+          pinned: false,
+          pinned_at: null
         })
         const run1Driver = createScriptedStructuredOutputDriver({
           'human.brain': [
@@ -105,10 +102,11 @@ describe('ai human mock-llm backend', () => {
         const run1Result = await AiRunService.getInstance().run(
           {
             runId: `${runtime.runId}-order-run-1`,
-            sessionId: ORDER_SESSION_ID,
+            partnerId: ORDER_SESSION_ID,
             input: RUN1_INPUT,
             mainModel: { configId: 'mock-llm-scripted', modelName: 'scripted-llm' },
-            workspace: workspacePayload(runtime)
+            partnerName: '测试伙伴',
+            workspaceRoots: [runtime.workspaceRoot]
           },
           await buildDeps({ runtime, driver: run1Driver, controller: run1Controller })
         )
@@ -135,10 +133,11 @@ describe('ai human mock-llm backend', () => {
         const run2Result = await AiRunService.getInstance().run(
           {
             runId: `${runtime.runId}-order-run-2`,
-            sessionId: ORDER_SESSION_ID,
+            partnerId: ORDER_SESSION_ID,
             input: RUN2_INPUT,
             mainModel: { configId: 'mock-llm-scripted', modelName: 'scripted-llm' },
-            workspace: workspacePayload(runtime)
+            partnerName: '测试伙伴',
+            workspaceRoots: [runtime.workspaceRoot]
           },
           await buildDeps({
             runtime,
@@ -148,13 +147,16 @@ describe('ai human mock-llm backend', () => {
           })
         )
 
-        await runtime.chatStore.saveChatSession({
+        await runtime.chatStore.savePartner({
           id: DANGLING_SESSION_ID,
-          title: 'dangling session',
+          name: 'dangling session',
+          avatar_shape: 'circle',
+          avatar_color: 'blue',
           created_at: Date.now(),
-          workspace_id: 'test-workspace',
-        pinned: false,
-        pinned_at: null
+          updated_at: Date.now(),
+          last_viewed_at: Date.now(),
+          pinned: false,
+          pinned_at: null
         })
         let aborted = false
         const danglingController = new AbortController()
@@ -179,10 +181,11 @@ describe('ai human mock-llm backend', () => {
         const danglingRun1Result = await AiRunService.getInstance().run(
           {
             runId: `${runtime.runId}-dangling-run-1`,
-            sessionId: DANGLING_SESSION_ID,
+            partnerId: DANGLING_SESSION_ID,
             input: '先学习技能再继续处理。',
             mainModel: { configId: 'mock-llm-scripted', modelName: 'scripted-llm' },
-            workspace: workspacePayload(runtime)
+            partnerName: '测试伙伴',
+            workspaceRoots: [runtime.workspaceRoot]
           },
           await buildDeps({
             runtime,
@@ -213,10 +216,11 @@ describe('ai human mock-llm backend', () => {
         const danglingRun2Result = await AiRunService.getInstance().run(
           {
             runId: `${runtime.runId}-dangling-run-2`,
-            sessionId: DANGLING_SESSION_ID,
+            partnerId: DANGLING_SESSION_ID,
             input: '继续完成刚才的任务。',
             mainModel: { configId: 'mock-llm-scripted', modelName: 'scripted-llm' },
-            workspace: workspacePayload(runtime)
+            partnerName: '测试伙伴',
+            workspaceRoots: [runtime.workspaceRoot]
           },
           await buildDeps({
             runtime,

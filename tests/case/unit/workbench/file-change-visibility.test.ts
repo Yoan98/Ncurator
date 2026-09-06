@@ -7,7 +7,7 @@ import {
 
 const record = (input: Partial<AiFileChangeRecord>): AiFileChangeRecord => ({
   id: input.id || 'change-1',
-  sessionId: 'session-1',
+  partnerId: 'partner-1',
   runId: 'run-1',
   status: 'applied',
   capability: 'ppt',
@@ -28,28 +28,35 @@ describe('workbench file change visibility', () => {
       record({ id: 'ppt', path: '/workspace/report.pptx', fileName: 'report.pptx' }),
       record({
         id: 'runtime-image',
-        path: '/workspace/.ncurator/runtime/assets/ppt-images/slide1.png',
+        path: '/userData/partners/partner-1/runtime/assets/ppt-images/slide1.png',
         fileName: 'slide1.png'
       }),
       record({
         id: 'runtime-windows',
-        path: 'C:\\workspace\\.ncurator\\runtime\\assets\\ppt-images\\slide2.png',
+        path: 'C:\\userData\\partners\\partner-1\\runtime\\assets\\ppt-images\\slide2.png',
         fileName: 'slide2.png'
+      }),
+      record({
+        id: 'legacy-runtime',
+        path: '/workspace/.ncurator/runtime/assets/preview.png',
+        fileName: 'preview.png'
       })
     ]
 
+    expect(isRuntimeAssetPath('/userData/partners/partner-1/runtime/assets/preview.png')).toBe(true)
     expect(isRuntimeAssetPath('/workspace/.ncurator/runtime/assets/preview.png')).toBe(true)
+    expect(isRuntimeAssetPath('/userData/partners/partner-1/runtime-assets/preview.png')).toBe(false)
     expect(isRuntimeAssetPath('/workspace/.ncurator/runtime-assets/preview.png')).toBe(false)
     expect(filterVisibleFileChangeRecords(records).map((item) => item.id)).toEqual(['ppt'])
   })
 
   it('retains a runtime asset when it is an attachment the user submitted', () => {
-    const attachmentPath = '/workspace/.ncurator/runtime/assets/attachment-bucket/input.docx'
+    const attachmentPath = '/userData/partners/partner-1/runtime/assets/attachment-bucket/input.docx'
     const records = [
       record({ id: 'attachment', path: attachmentPath, fileName: 'input.docx' }),
       record({
         id: 'generated-preview',
-        path: '/workspace/.ncurator/runtime/assets/previews/page-1.png',
+        path: '/userData/partners/partner-1/runtime/assets/previews/page-1.png',
         fileName: 'page-1.png'
       })
     ]

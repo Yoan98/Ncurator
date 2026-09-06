@@ -39,7 +39,7 @@ export class AiRunService {
       )
       return createCompletedAiRunState({
         runId: payload.runId,
-        sessionId: payload.sessionId,
+        partnerId: payload.partnerId,
         input: String(payload.input || ''),
         finalDeliveryMarkdown: output.deliveryMarkdown,
         finalArtifacts: output.artifacts || []
@@ -53,7 +53,7 @@ export class AiRunService {
       if (reason === 'user_cancelled' || isCancelledError(e)) {
         return createCancelledAiRunState({
           runId: payload.runId,
-          sessionId: payload.sessionId,
+          partnerId: payload.partnerId,
           input: payload.input
         })
       }
@@ -81,7 +81,7 @@ export class AiRunService {
       })
       return createFailedAiRunState({
         runId: payload.runId,
-        sessionId: payload.sessionId,
+        partnerId: payload.partnerId,
         input: payload.input,
         error: message,
         failureSource,

@@ -9,12 +9,10 @@ type TelemetryFailureCode = 'REQUEST_FAILED' | 'NETWORK' | 'UNKNOWN'
 
 export type MessageSubmitTelemetryMetadata =
   | {
-      mode: 'ai' | 'search'
       outcome: 'succeeded'
       failureCode?: never
     }
   | {
-      mode: 'ai' | 'search'
       outcome: 'failed'
       failureCode: TelemetryFailureCode
     }
@@ -215,7 +213,6 @@ export class TelemetryService {
     if (!metadata) throw new Error('message_submit_completed requires metadata')
     return {
       ...base,
-      mode: metadata.mode,
       outcome: metadata.outcome,
       ...(metadata.outcome === 'failed' ? { failureCode: metadata.failureCode } : {})
     }

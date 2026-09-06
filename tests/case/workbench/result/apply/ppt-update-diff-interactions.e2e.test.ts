@@ -58,7 +58,7 @@ const createBaselineDeck = async (workspaceRootPath: string, runId: string, task
     ctx: { saveFileChangeRecord: async () => undefined } as never,
     cache: {} as never,
     runId: `${runId}-baseline`,
-    sessionId: 'ppt-update-baseline',
+    partnerId: 'ppt-update-baseline',
     taskId,
     workspaceRootPath,
     emitActivity: () => undefined

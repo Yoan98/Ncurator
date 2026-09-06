@@ -10,9 +10,8 @@ import type {
   ScheduledTaskScheduleType,
   ScheduledTaskSetEnabledRequest
 } from '../../../shared/types'
-import type { ChatStore } from '../storage/domains/ChatStore'
+import type { PartnerStore } from '../storage/domains/PartnerStore'
 import type { ScheduledTaskStore } from '../storage/domains/ScheduledTaskStore'
-import type { WorkspaceStore } from '../storage/domains/WorkspaceStore'
 
 const MISFIRE_GRACE_MS = 60_000
 
@@ -20,8 +19,8 @@ type TimerHandle = ReturnType<typeof setTimeout>
 
 type ScheduledTaskServiceDeps = {
   taskStore: Pick<ScheduledTaskStore, 'list' | 'listEnabled' | 'getById' | 'save' | 'delete'>
-  workspaceStore: Pick<WorkspaceStore, 'getWorkspaceById'>
-  chatStore: Pick<ChatStore, 'saveChatSession' | 'deleteChatSession'>
+  partnerStore: Pick<PartnerStore, 'getPartner'>
+  hasActivePartnerRun: (partnerId: string) => boolean
   submitTask: (payload: ChatSubmitRequest) => Promise<ChatSubmitResponse>
   emitSessionListRefresh: () => void
   setTimer?: (callback: () => void, delayMs: number) => TimerHandle
@@ -219,12 +218,12 @@ export class ScheduledTaskService {
   private buildTask(input: ScheduledTaskSaveRequest): ScheduledTask {
     const name = String(input.name || '').trim()
     const prompt = String(input.prompt || '').trim()
-    const workspaceId = String(input.workspaceId || '').trim()
+    const partnerId = String(input.partnerId || '').trim()
     const mainModel = input.mainModel
     const scheduleType = normalizeScheduleType(input.scheduleType)
     if (!name) throw new Error('请填写任务名称')
     if (!prompt) throw new Error('请填写任务提示词')
-    if (!workspaceId) throw new Error('请选择工作空间')
+    if (!partnerId) throw new Error('请选择伙伴')
     if (!mainModel?.configId || !mainModel?.modelName) throw new Error('请选择主模型')
     if (parseTimeOfDay(input.timeOfDay) === null) throw new Error('执行时间格式不正确')
 
@@ -246,7 +245,7 @@ export class ScheduledTaskService {
       scheduleType,
       timeOfDay: schedule.timeOfDay,
       weekday,
-      workspaceId,
+      partnerId,
       mainModel: { configId: mainModel.configId, modelName: mainModel.modelName },
       aiPreference: normalizeAiPreference(input.aiPreference),
       executionPermission: normalizeExecutionPermission(input.executionPermission),
@@ -271,50 +270,37 @@ export class ScheduledTaskService {
   }
 
   private async fireTask(task: ScheduledTask, now: number): Promise<void> {
-    let sessionId: string | null = null
-    let submitted = false
     try {
-      const workspace = await this.deps.workspaceStore.getWorkspaceById(task.workspaceId)
-      const rootPath = String(workspace?.root_path || '').trim()
-      if (!workspace || !rootPath) return
-      sessionId = uuidv4()
-      await this.deps.chatStore.saveChatSession({
-        id: sessionId,
-        title: task.name || '定时任务',
-        created_at: now,
-        workspace_id: task.workspaceId,
-        pinned: false,
-        pinned_at: null
-      })
+      const partnerId = String(task.partnerId || '').trim()
+      if (!partnerId) return
+      const partner = await this.deps.partnerStore.getPartner(partnerId)
+      if (!partner) {
+        console.log('[SCHEDULED-TASK] skip, partner missing:', partnerId)
+        return
+      }
+      if (this.deps.hasActivePartnerRun(partnerId)) {
+        console.log('[SCHEDULED-TASK] skip, partner busy:', partnerId)
+        return
+      }
       const response = await this.deps.submitTask({
-        mode: 'ai',
-        sessionId,
+        partnerId,
         input: task.prompt,
         mainModel: task.mainModel,
         preference: task.aiPreference,
-        executionPermission: task.executionPermission,
-        workspace: {
-          workspaceId: task.workspaceId,
-          workspaceName: workspace.name,
-          rootPath
-        }
+        executionPermission: task.executionPermission
       })
       if (!response.success) {
         console.error('[SCHEDULED-TASK] submit failed:', response.error)
         return
       }
-      submitted = true
       console.warn(
         '[SCHEDULED-TASK] fired:',
-        JSON.stringify({ id: task.id, sessionId, nextRunAt: task.nextRunAt, now })
+        JSON.stringify({ id: task.id, partnerId, nextRunAt: task.nextRunAt, now })
       )
       this.deps.emitSessionListRefresh()
     } catch (error) {
       console.error('[SCHEDULED-TASK] fire failed:', error)
     } finally {
-      if (sessionId && !submitted) {
-        await this.deps.chatStore.deleteChatSession(sessionId)
-      }
       await this.advanceNextRun(task, now)
     }
   }

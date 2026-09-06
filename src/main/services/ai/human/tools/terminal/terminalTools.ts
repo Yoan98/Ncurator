@@ -21,7 +21,7 @@ type PendingTerminalCommand = {
   terminalId: string
   ctx: TerminalToolContext
   runId: string
-  sessionId: string
+  partnerId: string
   taskId: string
   stepId: string
   stepIndex: number
@@ -257,9 +257,10 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             await input.ctx.beginTerminalCommandTracking({
               commandId: trackingId,
               runId: input.runId,
-              sessionId: input.sessionId,
-              workspaceRootPath: input.workspaceRootPath,
-              command
+              partnerId: input.partnerId,
+              cwd,
+              command,
+              workspaceRoots: input.workspaceRoots
             })
             trackingStarted = true
           } catch (error) {
@@ -283,7 +284,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           let result
           try {
             result = await input.sessionManager.run({
-              chatSessionId: input.sessionId,
+              chatSessionId: input.partnerId,
               workspaceId: input.workspaceId,
               workspaceRootPath: input.workspaceRootPath,
               environment: input.ctx.humanRuntimeOverrides?.terminalEnvironment,
@@ -314,7 +315,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             terminalId: result.terminalId,
             ctx: input.ctx,
             runId: input.runId,
-            sessionId: input.sessionId,
+            partnerId: input.partnerId,
             taskId: input.taskId,
             stepId,
             stepIndex: state.stepIndex,
@@ -340,7 +341,7 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               .waitForCommand({
                 terminalId: result.terminalId,
                 commandId: result.commandId,
-                chatSessionId: input.sessionId,
+                chatSessionId: input.partnerId,
                 workspaceId: input.workspaceId
               })
               .then(async (exitCode) => {
@@ -424,14 +425,14 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
           try {
             const result = await input.sessionManager.read({
               terminalId,
-              chatSessionId: input.sessionId,
+              chatSessionId: input.partnerId,
               workspaceId: input.workspaceId,
               readEndPosition:
                 typeof args.readEndPosition === 'number' ? args.readEndPosition : undefined
             })
             const pending = Array.from(pendingCommands.entries()).find(
               ([, value]) =>
-                value.sessionId === input.sessionId &&
+                value.partnerId === input.partnerId &&
                 value.terminalId === result.terminalId &&
                 result.terminalStatus !== 'running'
             )

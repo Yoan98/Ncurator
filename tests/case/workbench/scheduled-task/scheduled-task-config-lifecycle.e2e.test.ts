@@ -39,8 +39,7 @@ describe('workbench scheduled-task e2e', () => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
-            workspaceName: `Workbench ${CASE_ID}`,
-            createSession: false
+            workspaceName: `Workbench ${CASE_ID}`
           })
 
           await openScheduledTasksView(page)
@@ -69,7 +68,7 @@ describe('workbench scheduled-task e2e', () => {
               !created.enabled &&
               created.scheduleType === 'daily' &&
               created.timeOfDay === '09:05' &&
-              created.workspaceId &&
+              created.partnerId &&
               created.mainModel.configId &&
               created.mainModel.modelName
           )

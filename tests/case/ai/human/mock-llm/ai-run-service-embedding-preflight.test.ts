@@ -27,13 +27,16 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        await runtime.chatStore.saveChatSession({
+        await runtime.chatStore.savePartner({
           id: 'embedding-preflight-session',
-          title: 'embedding preflight',
+          name: 'embedding preflight',
+          avatar_shape: 'circle',
+          avatar_color: 'blue',
           created_at: Date.now(),
-          workspace_id: 'test-workspace',
-        pinned: false,
-        pinned_at: null
+          updated_at: Date.now(),
+          last_viewed_at: Date.now(),
+          pinned: false,
+          pinned_at: null
         })
         await writeTestDocxFile(runtime.workspaceRoot, 'literal-docx.docx', [
           {
@@ -49,22 +52,19 @@ describe('ai human mock-llm backend', () => {
         const result = await AiRunService.getInstance().run(
           {
             runId: runtime.runId,
-            sessionId: 'embedding-preflight-session',
+            partnerId: 'embedding-preflight-session',
             input: '请读取 docx，找到反走样相关内容。',
             mainModel: {
               configId: 'mock-llm-scripted',
               modelName: 'scripted-llm'
             },
-            workspace: {
-              workspaceId: 'test-workspace',
-              workspaceName: 'test-workspace',
-              rootPath: runtime.workspaceRoot
-            }
+            partnerName: '测试伙伴',
+            workspaceRoots: [runtime.workspaceRoot]
           },
           {
             runtimeSettings,
             llmStore: runtime.llmStore,
-            chatStore: runtime.chatStore,
+            partnerStore: runtime.chatStore,
             chatMessageLogStore: runtime.storageService.chatMessageLog,
             documentsStore: runtime.documentsStore,
             embeddingService: runtime.embeddingService,
@@ -74,7 +74,7 @@ describe('ai human mock-llm backend', () => {
             },
             docxApplyService: runtime.docxApplyService,
             saveFileChangeRecord: async (record) => {
-              await aiFileChangeService.saveRecord(record, runtime.workspaceRoot)
+              await aiFileChangeService.saveRecord(record)
             },
             listFileChangeRecords: async (request) =>
               (await aiFileChangeService.listRecords(request)).items,
@@ -171,22 +171,19 @@ describe('ai human mock-llm backend', () => {
         const result = await AiRunService.getInstance().run(
           {
             runId: runtime.runId,
-            sessionId: 'embedding-preflight-failure-session',
+            partnerId: 'embedding-preflight-failure-session',
             input: '这轮不应该进入 human。',
             mainModel: {
               configId: 'mock-llm-scripted',
               modelName: 'scripted-llm'
             },
-            workspace: {
-              workspaceId: 'test-workspace',
-              workspaceName: 'test-workspace',
-              rootPath: runtime.workspaceRoot
-            }
+            partnerName: '测试伙伴',
+            workspaceRoots: [runtime.workspaceRoot]
           },
           {
             runtimeSettings,
             llmStore: runtime.llmStore,
-            chatStore: runtime.chatStore,
+            partnerStore: runtime.chatStore,
             chatMessageLogStore: runtime.storageService.chatMessageLog,
             documentsStore: runtime.documentsStore,
             embeddingService: runtime.embeddingService,
@@ -195,7 +192,7 @@ describe('ai human mock-llm backend', () => {
             },
             docxApplyService: runtime.docxApplyService,
             saveFileChangeRecord: async (record) => {
-              await aiFileChangeService.saveRecord(record, runtime.workspaceRoot)
+              await aiFileChangeService.saveRecord(record)
             },
             listFileChangeRecords: async (request) =>
               (await aiFileChangeService.listRecords(request)).items,

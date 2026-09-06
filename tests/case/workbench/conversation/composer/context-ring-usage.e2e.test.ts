@@ -31,10 +31,8 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
-            caseId: CASE_ID,
-            createSession: false
+            caseId: CASE_ID
           })
-          await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(page, '请只回复 ok，用于上下文用量测试。')
           const evidence = await waitForWorkbenchAiRunCompletion(

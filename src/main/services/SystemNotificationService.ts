@@ -43,7 +43,7 @@ export class SystemNotificationService {
     )
 
     notification.on('click', () => {
-      void this.openSession(run.sessionId)
+      void this.openPartner(run.partnerId)
     })
     notification.show()
 
@@ -51,17 +51,17 @@ export class SystemNotificationService {
       globalThis as typeof globalThis & {
         __NCURATOR_E2E_RECORD_SYSTEM_NOTIFICATION__?: (payload: {
           runId: string
-          sessionId: string
+          partnerId: string
           status: RunTerminalStatus
           title: string
           body: string
         }) => void
       }
     ).__NCURATOR_E2E_RECORD_SYSTEM_NOTIFICATION__
-    observer?.({ runId: run.id, sessionId: run.sessionId, status, ...copy })
+    observer?.({ runId: run.id, partnerId: run.partnerId, status, ...copy })
   }
 
-  private async openSession(sessionId: string): Promise<void> {
+  private async openPartner(partnerId: string): Promise<void> {
     const window = this.deps.getMainWindow() || this.deps.createMainWindow?.()
     if (!window || window.isDestroyed()) return
     if (window.webContents.isLoading()) {
@@ -81,7 +81,7 @@ export class SystemNotificationService {
     window.show()
     window.focus()
     if (!window.webContents.isDestroyed()) {
-      window.webContents.send('system-notification-open-session', sessionId)
+      window.webContents.send('system-notification-open-session', partnerId)
     }
   }
 }

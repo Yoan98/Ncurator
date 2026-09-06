@@ -3,9 +3,8 @@ import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from 
 import { createAiLlmExecutor } from './llmExecutor'
 import { buildReferenceScope } from './human/prompts/referenceScope'
 import { getAiRuntimePlatform } from './utils/platform'
-import { normalizeSelectedReferences, normalizeWorkspaceBinding } from './utils/runContext'
+import { normalizeSelectedReferences } from './utils/runContext'
 import type { AiExecutionPermission, AiPreference } from '../../../shared/types'
-import { isPathInsideRoot } from './human/tools/terminal/commandPolicy'
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
   value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
@@ -23,10 +22,9 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     }
   }
 
-  const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
-  if (!normalizedWorkspace) {
-    throw new Error('AI 运行必须绑定工作区，当前请求缺少工作区信息。')
-  }
+  const workspaceRoots = payload.workspaceRoots
+    .map((rootPath) => String(rootPath || '').trim())
+    .filter(Boolean)
   const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
   const platform = getAiRuntimePlatform()
   const preference = normalizeAiPreference(payload.preference)
@@ -76,30 +74,30 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
 
   const appendMessageLog: AiRunContext['appendMessageLog'] = async (entries) => {
     await deps.chatMessageLogStore.appendBatch({
-      sessionId: payload.sessionId,
+      partnerId: payload.partnerId,
       runId: payload.runId,
       entries
     })
   }
 
   const loadMessageLog: AiRunContext['loadMessageLog'] = async () => {
-    return await deps.chatMessageLogStore.list(payload.sessionId)
+    return await deps.chatMessageLogStore.list(payload.partnerId)
   }
 
   return {
     runId: payload.runId,
-    sessionId: payload.sessionId,
+    partnerId: payload.partnerId,
+    partnerName: payload.partnerName,
+    workspaceRoots,
     runStartedAt: Date.now(),
     platform,
     preference,
     executionPermission,
     humanRuntimeOverrides: deps.humanRuntimeOverrides,
     referenceScope: buildReferenceScope({
-      workspace: normalizedWorkspace,
       selectedReferences: normalizedReferences,
       attachments: payload.attachments
     }),
-    workspace: normalizedWorkspace,
     checkCancelled,
     abortSignal: deps.abortSignal,
     chatStructured: llmExecutor.chatStructured,
@@ -137,28 +135,21 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     beginDocxApplyRun: () => {
       deps.docxApplyService.beginRun({
         runId: payload.runId,
-        sessionId: payload.sessionId,
+        partnerId: payload.partnerId,
         inputText: String(payload.input || '')
       })
     },
     applyDocxRunEdits: async () => {
-      if (!normalizedWorkspace?.rootPath) return []
       return await deps.docxApplyService.applyRunEdits({
         runId: payload.runId,
-        workspaceRootPath: normalizedWorkspace.rootPath
+        partnerId: payload.partnerId
       })
     },
     discardDocxApplyRun: () => {
       deps.docxApplyService.discardRun(payload.runId)
     },
     saveFileChangeRecord: async (record) => {
-      if (
-        normalizedWorkspace?.rootPath &&
-        !isPathInsideRoot(record.path, normalizedWorkspace.rootPath)
-      ) {
-        return
-      }
-      await deps.saveFileChangeRecord(record, normalizedWorkspace.rootPath)
+      await deps.saveFileChangeRecord(record)
     },
     listFileChangeRecords: async (input) => {
       return await deps.listFileChangeRecords(input)

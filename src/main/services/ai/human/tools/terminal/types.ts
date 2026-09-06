@@ -15,6 +15,7 @@ export type TerminalArtifactCandidate = {
 
 export type TerminalCapabilityToolsInput = WorkspaceCapabilityBuildInput<TerminalToolContext> & {
   workspaceId: string
+  workspaceRoots: string[]
   sessionManager: TerminalSessionManager
 }
 

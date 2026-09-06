@@ -1,25 +1,20 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
-import type { Locator, Page } from 'playwright'
+import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
-  appendWorkbenchInputText,
   assertNoWorkbenchFakeSignals,
   createTemporaryWorkbenchWorkspace,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
-  insertWorkbenchReferenceToken,
   navigateToWorkbench,
+  openWorkbenchWorkspaceFile,
   prepareWorkbenchWorkspaceThroughUi,
+  createPartnerThroughWorkbenchUi,
   selectWorkbenchResourceMenuItem,
-  selectWorkbenchWorkspace,
-  setWorkbenchInput,
-  submitWorkbenchCurrentDraft,
-  switchWorkbenchMode,
-  waitForWorkbenchSearchResults,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
@@ -48,21 +43,11 @@ const setupPreviewWorkspace = async (
     workspaceName,
     rootPath: workspace.rootPath
   })
+  await createPartnerThroughWorkbenchUi(page, workspaceName)
   await navigateToWorkbench(page)
-  await selectWorkbenchWorkspace(page, workspaceName)
   return {
     workspaceName
   }
-}
-
-const openSearchPreview = async (page: Page, results: Locator, fileName: string): Promise<void> => {
-  await results
-    .locator('div')
-    .filter({ hasText: fileName })
-    .first()
-    .getByRole('button', { name: '预览文件' })
-    .click()
-  await getWorkbenchLocator(page, workbenchSelectors.documentView).waitFor({ state: 'visible' })
 }
 
 const waitForPdfPreviewPage = async (page: Page): Promise<boolean> => {
@@ -210,7 +195,7 @@ describe('workbench result e2e', () => {
         suite: 'result',
         groups: ['preview'],
         description:
-          '从真实搜索结果打开 pdf/docx/md/txt，验证右侧预览、定位文件、系统打开和 PDF 命中页预览。',
+          '从工作区文件列表打开 pdf/docx/md/txt，验证右侧预览、定位文件、系统打开和 PDF 命中页预览。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'exclusive',
@@ -219,22 +204,12 @@ describe('workbench result e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           await setupPreviewWorkspace(page)
-          await switchWorkbenchMode(page, '搜索')
-          await insertWorkbenchReferenceToken(page, '深度学习.pdf')
-          await appendWorkbenchInputText(page, '反走样')
-          await submitWorkbenchCurrentDraft(page)
-          const pdfResults = await waitForWorkbenchSearchResults(page)
-          await openSearchPreview(page, pdfResults, '深度学习.pdf')
+          await openWorkbenchWorkspaceFile(runtime, '深度学习.pdf')
           const pdfPageVisible = await waitForPdfPreviewPage(page)
           await page.getByRole('button', { name: '选择打开应用' }).last().click()
           await page.getByRole('menuitem', { name: '打开所在文件夹' }).last().click()
 
-          await switchWorkbenchMode(page, '搜索')
-          await insertWorkbenchReferenceToken(page, '深度学习.docx')
-          await appendWorkbenchInputText(page, '过拟合')
-          await submitWorkbenchCurrentDraft(page)
-          const docxResults = await waitForWorkbenchSearchResults(page)
-          await openSearchPreview(page, docxResults, '深度学习.docx')
+          await openWorkbenchWorkspaceFile(runtime, '深度学习.docx')
           const docxViewerVisible = await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
             .waitFor({ state: 'visible', timeout: 30_000 })
             .then(() => true)
@@ -249,20 +224,10 @@ describe('workbench result e2e', () => {
             .last()
             .isVisible()
             .catch(() => false)
-          await switchWorkbenchMode(page, '搜索')
-          await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
-          await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
-          await submitWorkbenchCurrentDraft(page)
-          const markdownResults = await waitForWorkbenchSearchResults(page)
-          await openSearchPreview(page, markdownResults, 'workbench-preview.md')
+          await openWorkbenchWorkspaceFile(runtime, 'workbench-preview.md')
           const markdownPreviewVisible = await waitForMarkdownPreview(page)
 
-          await switchWorkbenchMode(page, '搜索')
-          await insertWorkbenchReferenceToken(page, 'human-input.txt')
-          await appendWorkbenchInputText(page, 'workspace read validation')
-          await submitWorkbenchCurrentDraft(page)
-          const textResults = await waitForWorkbenchSearchResults(page)
-          await openSearchPreview(page, textResults, 'human-input.txt')
+          await openWorkbenchWorkspaceFile(runtime, 'human-input.txt')
           const plainTextPreviewVisible = await waitForPlainTextPreview(page)
           const openWithMenuButton = page.getByRole('button', { name: '选择打开应用' }).last()
           await openWithMenuButton.click()
@@ -363,7 +328,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-file-preview-actions-real',
               message:
-                '右侧普通文件预览应能打开真实 pdf/docx/md/txt/xlsx/xlsm/xltx/xltm，并通过系统关联应用查询提供打开方式下拉和默认标记；PDF 和文本来自真实搜索结果，Excel 从工作区文件列表直接打开；从“打开文件”选择器选中文件后选择器 Tab 被文件 Tab 原位替换，不残留。',
+                '右侧普通文件预览应能打开真实 pdf/docx/md/txt/xlsx/xlsm/xltx/xltm，并通过系统关联应用查询提供打开方式下拉和默认标记；文件从工作区文件列表打开；从“打开文件”选择器选中文件后选择器 Tab 被文件 Tab 原位替换，不残留。',
               data: result
             }
           )

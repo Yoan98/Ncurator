@@ -36,7 +36,7 @@ const ensureFamilyTools = (input: {
     ctx: input.ctx,
     cache: input.cache,
     runId: input.runId,
-    sessionId: input.ctx.sessionId,
+    partnerId: input.ctx.partnerId,
     taskId: input.taskId
   })
   attachProviderToolDefinitions(built)

@@ -21,6 +21,7 @@ import { getAiContextUsage } from '../services/ai/contextUsage'
 import { DocxApplyService } from '../services/ai/human/tools/docx/review/DocxApplyService'
 import { releaseDocxRunSession } from '../services/ai/human/tools/docx/worker/docxWorkerClient'
 import { releasePdfRunSession } from '../services/pdf/worker/pdfWorkerClient'
+import { createEmptyPartnerUiState } from '../services/storage/domains/WorkbenchUiStore'
 import type {
   AiLlmIoRecord,
   FileWatchCheckResponse,
@@ -48,17 +49,21 @@ import type { BrowserEmbedService } from '../services/browser/BrowserEmbedServic
 import type { WebCrawlerService } from '../services/webCrawler/types'
 import { v4 as uuidv4 } from 'uuid'
 import type {
-  ChatSession,
-  ChatSessionListItem,
-  ChatSessionSetPinnedRequest,
-  ChatSessionSnapshotRequest,
-  ChatSessionSnapshotResponse,
-  ChatSessionOpenRequest,
-  ChatSessionOpenResponse,
-  ChatSessionUiStateSaveRequest,
-  ChatSessionUiStateSaveResponse,
-  ChatSessionRunSummariesRequest,
-  ChatSessionRunSummariesResponse,
+  Partner,
+  PartnerListItem,
+  PartnerCreateRequest,
+  PartnerCreateResponse,
+  PartnerClearContextRequest,
+  PartnerClearContextResponse,
+  PartnerSetPinnedRequest,
+  PartnerSnapshotRequest,
+  PartnerSnapshotResponse,
+  PartnerOpenRequest,
+  PartnerOpenResponse,
+  PartnerUiStateSaveRequest,
+  PartnerUiStateSaveResponse,
+  PartnerRunSummariesRequest,
+  PartnerRunSummariesResponse,
   ChatSubmitRequest,
   ChatSubmitResponse,
   ChatTurnRetractLatestRequest,
@@ -144,6 +149,8 @@ import { Jieba } from '@node-rs/jieba'
 import { dict } from '@node-rs/jieba/dict'
 import { normalizeForIpc } from '../utils/serialization'
 import { writeTextFileAtomically } from '../services/files/TextFileWriteService'
+
+const WEB_INDEX_OWNER = '__web__'
 
 type E2ENativeDialogSelection = {
   kind: 'directory' | 'file'
@@ -248,10 +255,9 @@ export function registerHandlers(services: {
   } = services
   const activeWorkspaceIndexJobs = new Set<string>()
   const documentsStore = storageService.documents
-  const chatStore = storageService.chat
+  const partnerStore = storageService.chat
   const workbenchUiStore = storageService.workbenchUi
   const chatMessageLogStore = storageService.chatMessageLog
-  const chatSearchTurnStore = storageService.chatSearchTurn
   const aiRunStore = storageService.aiRun
   const llmStore = storageService.llm
   const aiRuntimeSettingsStore = storageService.aiRuntimeSettings
@@ -273,9 +279,8 @@ export function registerHandlers(services: {
   })()
   let e2eGraphRecursionLimitUsesRemaining = e2eGraphRecursionLimitOnce ? 1 : 0
   const chatRunService = new ChatRunService({
-    chatStore,
+    partnerStore,
     chatMessageLogStore,
-    chatSearchTurnStore,
     aiRunStore,
     documentsStore,
     embeddingService,
@@ -329,8 +334,8 @@ export function registerHandlers(services: {
 
   const scheduledTaskService = new ScheduledTaskService({
     taskStore: storageService.scheduledTask,
-    workspaceStore,
-    chatStore,
+    partnerStore,
+    hasActivePartnerRun: (partnerId) => chatRunService.hasActivePartnerRun(partnerId),
     submitTask: (payload) => chatRunService.submit(payload),
     emitSessionListRefresh: emitSessionListRefreshToAll
   })
@@ -441,15 +446,19 @@ export function registerHandlers(services: {
   const hydrateWorkspaceListItem = async (
     workspace: WorkspaceSource
   ): Promise<WorkspaceListItem> => {
-    await ensureWebSourcesHydrated()
-    const [fileSummary, webSummary] = await Promise.all([
-      workspaceStore.getWorkspaceFileSummary(workspace.id),
-      webSourceStore.getWorkspaceWebSummary(workspace.id)
-    ])
+    const fileSummary = await workspaceStore.getWorkspaceFileSummary(workspace.id)
+    let rootKind: WorkspaceListItem['root_kind'] = 'directory'
+    try {
+      const inspected = await workspaceService.normalizeWorkspaceRoot(workspace.root_path)
+      rootKind = inspected.kind
+    } catch {
+      rootKind = 'directory'
+    }
     return {
       ...workspace,
       file_count: fileSummary.file_count,
-      web_count: webSummary.web_count
+      web_count: 0,
+      root_kind: rootKind
     }
   }
 
@@ -470,7 +479,6 @@ export function registerHandlers(services: {
       const scanResult = await workspaceService.scanWorkspaceTree({
         workspaceId,
         rootPath: currentWorkspace.root_path,
-        workspaceName: currentWorkspace.name,
         now,
         onProgress: async ({ scannedEntryCount, supportedFileCount }) => {
           if (scannedEntryCount - lastReportedScanEntryCount < 20) return
@@ -603,7 +611,6 @@ export function registerHandlers(services: {
     const scanResult = await workspaceService.scanWorkspaceTree({
       workspaceId: input.workspaceId,
       rootPath: input.workspace.root_path || '',
-      workspaceName: input.workspace.name,
       now: input.now
     })
     const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(input.workspaceId)
@@ -821,20 +828,14 @@ export function registerHandlers(services: {
 
     for (const document of webDocuments) {
       if (existingByDocumentId.has(document.id)) continue
-      const workspaceId = String(document.workspace_id || '').trim()
-      if (!workspaceId) continue
       const rawUrl = String(document.source_url || document.file_path || document.name || '').trim()
       if (!rawUrl) continue
       try {
         const { url, normalizedUrl } = webSourceService.normalizeUrl(rawUrl)
-        const existing = await webSourceStore.getWebSourceByNormalizedUrl(
-          normalizedUrl,
-          workspaceId
-        )
+        const existing = await webSourceStore.getWebSourceByNormalizedUrl(normalizedUrl)
         const now = Date.now()
         if (existing) {
           await webSourceStore.updateWebSource(existing.id, {
-            workspace_id: workspaceId,
             url,
             title: document.source_title || document.name,
             document_id: document.id,
@@ -851,7 +852,6 @@ export function registerHandlers(services: {
           continue
         }
         const source = webSourceService.createWebSource({
-          workspaceId,
           url,
           normalizedUrl,
           title: document.source_title || document.name,
@@ -949,7 +949,7 @@ export function registerHandlers(services: {
         name: source.title || source.url,
         file_path: source.url,
         source_type: 'web',
-        workspace_id: source.workspace_id
+        workspace_id: WEB_INDEX_OWNER
       })
       await documentsStore.markDocumentIndexing(existingDocument.id, now)
     } else {
@@ -957,7 +957,7 @@ export function registerHandlers(services: {
         id: nextDocumentId,
         name: source.title || source.url,
         source_type: 'web',
-        workspace_id: source.workspace_id,
+        workspace_id: WEB_INDEX_OWNER,
         file_path: source.url,
         created_at: now,
         import_status: 1,
@@ -1014,7 +1014,7 @@ export function registerHandlers(services: {
       const documentName = inspection.title?.trim() || source.url
       const indexed = await workspaceKnowledgePrepareService.indexWebText({
         sourceType: 'web',
-        workspaceId: source.workspace_id,
+        workspaceId: WEB_INDEX_OWNER,
         documentId: nextDocumentId,
         documentName,
         sourceUrl: source.url,
@@ -1078,7 +1078,7 @@ export function registerHandlers(services: {
         name: source.title || source.url,
         file_path: source.url,
         source_type: 'web',
-        workspace_id: source.workspace_id
+        workspace_id: WEB_INDEX_OWNER
       })
       await documentsStore.markDocumentIndexing(existingDocument.id, now)
     } else {
@@ -1086,7 +1086,7 @@ export function registerHandlers(services: {
         id: nextDocumentId,
         name: source.title || source.url,
         source_type: 'web',
-        workspace_id: source.workspace_id,
+        workspace_id: WEB_INDEX_OWNER,
         file_path: source.url,
         created_at: now,
         import_status: 1,
@@ -1152,7 +1152,7 @@ export function registerHandlers(services: {
       const documentName = input.inspection.title?.trim() || input.source.url
       const indexed = await workspaceKnowledgePrepareService.indexWebText({
         sourceType: 'web',
-        workspaceId: input.source.workspace_id,
+        workspaceId: WEB_INDEX_OWNER,
         documentId: input.documentId,
         documentName,
         sourceUrl: input.source.url,
@@ -1199,7 +1199,7 @@ export function registerHandlers(services: {
     const workspaceId = job.workspace_id
     try {
       await ensureWebSourcesHydrated()
-      const sources = await webSourceStore.listWebSources(workspaceId)
+      const sources = await webSourceStore.listWebSources()
       job = await updateAndEmitWorkspaceIndexJob(job, {
         total_count: sources.length,
         target_ids: sources.map((source) => source.id),
@@ -1254,7 +1254,7 @@ export function registerHandlers(services: {
     const workspaceId = job.workspace_id
     try {
       await ensureWebSourcesHydrated()
-      const sources = await webSourceStore.listWebSources(workspaceId)
+      const sources = await webSourceStore.listWebSources()
       const targets = sources.filter(
         (source) =>
           source.index_status === 'needs_index' ||
@@ -1376,7 +1376,6 @@ export function registerHandlers(services: {
     async (
       event,
       payload: {
-        workspaceId: string
         url: string
         includeSelectors?: string[]
         excludeSelectors?: string[]
@@ -1384,21 +1383,13 @@ export function registerHandlers(services: {
     ) => {
       try {
         await ensureWebSourcesHydrated()
-        const workspaceId = String(payload?.workspaceId || '').trim()
         const rawUrl = String(payload?.url || '').trim()
-        if (!workspaceId) throw new Error('workspaceId 不能为空')
         if (!rawUrl) throw new Error('URL 不能为空')
-        const workspace = await workspaceStore.getWorkspaceById(workspaceId)
-        if (!workspace) throw new Error('工作区不存在')
         const { url, normalizedUrl } = webSourceService.normalizeUrl(rawUrl)
-        const existing = await webSourceStore.getWebSourceByNormalizedUrl(
-          normalizedUrl,
-          workspaceId
-        )
+        const existing = await webSourceStore.getWebSourceByNormalizedUrl(normalizedUrl)
         const source =
           existing ||
           webSourceService.createWebSource({
-            workspaceId,
             url,
             normalizedUrl,
             includeSelectors: payload.includeSelectors,
@@ -1407,7 +1398,6 @@ export function registerHandlers(services: {
           })
         const nextSource: WebSourceRecord = {
           ...source,
-          workspace_id: workspaceId,
           url,
           normalized_url: normalizedUrl,
           include_selectors: payload.includeSelectors,
@@ -1446,7 +1436,6 @@ export function registerHandlers(services: {
     async (
       event,
       payload: Array<{
-        workspaceId: string
         url: string
         includeSelectors?: string[]
         excludeSelectors?: string[]
@@ -1458,20 +1447,13 @@ export function registerHandlers(services: {
         const preparedSources: WebSourceRecord[] = []
 
         for (const item of items) {
-          const workspaceId = String(item?.workspaceId || '').trim()
           const rawUrl = String(item?.url || '').trim()
-          if (!workspaceId || !rawUrl) continue
-          const workspace = await workspaceStore.getWorkspaceById(workspaceId)
-          if (!workspace) continue
+          if (!rawUrl) continue
           const { url, normalizedUrl } = webSourceService.normalizeUrl(rawUrl)
-          const existing = await webSourceStore.getWebSourceByNormalizedUrl(
-            normalizedUrl,
-            workspaceId
-          )
+          const existing = await webSourceStore.getWebSourceByNormalizedUrl(normalizedUrl)
           const source =
             existing ||
             webSourceService.createWebSource({
-              workspaceId,
               url,
               normalizedUrl,
               includeSelectors: item.includeSelectors,
@@ -1480,7 +1462,6 @@ export function registerHandlers(services: {
             })
           const nextSource: WebSourceRecord = {
             ...source,
-            workspace_id: workspaceId,
             url,
             normalized_url: normalizedUrl,
             include_selectors: item.includeSelectors,
@@ -1665,10 +1646,10 @@ export function registerHandlers(services: {
     'attachment-pick',
     async (event, payload: AttachmentPickRequest): Promise<AttachmentPickResponse> => {
       try {
-        const workspaceRootPath = String(payload?.workspaceRootPath || '').trim()
+        const partnerId = String(payload?.partnerId || '').trim()
         const assetBucketId = String(payload?.assetBucketId || '').trim()
-        if (!workspaceRootPath) {
-          return { canceled: true, items: [], error: '请先选择工作区并完成目录绑定' }
+        if (!partnerId) {
+          return { canceled: true, items: [], error: '请先选择伙伴' }
         }
         if (!assetBucketId) {
           return { canceled: true, items: [], error: '附件目录不存在，无法保存附件' }
@@ -1732,7 +1713,7 @@ export function registerHandlers(services: {
             : new Uint8Array(payload?.bytes || [])
         if (!bytes.byteLength) return { success: false, error: '附件内容为空' }
         const attachment = await attachmentService.saveAttachment({
-          workspaceRootPath: payload.workspaceRootPath,
+          partnerId: payload.partnerId,
           assetBucketId: payload.assetBucketId,
           name: payload.name,
           bytes,
@@ -1763,15 +1744,35 @@ export function registerHandlers(services: {
     'workspace-create',
     async (event, payload: CreateWorkspaceSourceRequest): Promise<WorkspaceMutationResponse> => {
       try {
-        const name = String(payload.name || '').trim()
-        if (!name) {
-          return { success: false, error: '工作空间名称不能为空' }
+        const rootPath = String(payload.rootPath || '').trim()
+        if (!rootPath) {
+          return { success: false, error: '工作空间地址不能为空' }
+        }
+        const existingWorkspaces = await workspaceStore.listWorkspaces()
+        const classified = await workspaceService.classifyCandidateRoot(
+          rootPath,
+          existingWorkspaces.map((workspace) => workspace.root_path)
+        )
+        if (classified.sameAsExisting) {
+          return { success: false, error: '该地址已存在' }
+        }
+        if (classified.nestedUnderExisting) {
+          return { success: false, error: '不能添加已包含在现有地址内的路径' }
+        }
+        for (const workspace of existingWorkspaces) {
+          if (
+            classified.containedExistingRootPaths.some(
+              (contained) => path.resolve(contained) === path.resolve(workspace.root_path)
+            )
+          ) {
+            await workspaceStore.deleteWorkspace(workspace.id)
+          }
         }
         const workspaceId = uuidv4()
         const now = Date.now()
         const workspace: WorkspaceSource = {
           id: workspaceId,
-          name,
+          root_path: classified.normalizedRootPath,
           created_at: now,
           updated_at: now
         }
@@ -1816,16 +1817,32 @@ export function registerHandlers(services: {
           return { success: false, error: 'workspace not found' }
         }
         const existingWorkspaces = await workspaceStore.listWorkspaces()
-        await workspaceService.assertNoNestedWorkspace(
+        const classified = await workspaceService.classifyCandidateRoot(
           rootPath,
           existingWorkspaces
-            .filter((workspace) => workspace.id !== workspaceId && workspace.root_path)
-            .map((workspace) => workspace.root_path || '')
+            .filter((workspace) => workspace.id !== workspaceId)
+            .map((workspace) => workspace.root_path)
         )
+        if (classified.sameAsExisting) {
+          return { success: false, error: '该地址已存在' }
+        }
+        if (classified.nestedUnderExisting) {
+          return { success: false, error: '不能把工作空间设置到已包含在现有地址内的路径' }
+        }
+        for (const workspace of existingWorkspaces) {
+          if (workspace.id === workspaceId) continue
+          if (
+            classified.containedExistingRootPaths.some(
+              (contained) => path.resolve(contained) === path.resolve(workspace.root_path)
+            )
+          ) {
+            await workspaceStore.deleteWorkspace(workspace.id)
+          }
+        }
 
         const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
         if (activeJob) return { success: false, error: '当前工作空间正在处理文件索引' }
-        const { normalizedRootPath } = await workspaceService.normalizeWorkspaceRoot(rootPath)
+        const normalizedRootPath = classified.normalizedRootPath
         const now = Date.now()
         const oldRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
         const oldDocumentIds = oldRecords
@@ -2016,20 +2033,12 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'web-source-list',
-    async (_event, payload: ListWebSourcesRequest): Promise<WebSourceListResponse> => {
+    async (_event, _payload: ListWebSourcesRequest): Promise<WebSourceListResponse> => {
       try {
-        const workspaceId = String(payload?.workspaceId || '').trim()
-        if (!workspaceId) {
-          return {
-            items: [],
-            total: 0,
-            summary: { web_count: 0, needs_index_count: 0, failed_count: 0 }
-          }
-        }
         await ensureWebSourcesHydrated()
         const [items, summary] = await Promise.all([
-          webSourceStore.listWebSources(workspaceId),
-          webSourceStore.getWorkspaceWebSummary(workspaceId)
+          webSourceStore.listWebSources(),
+          webSourceStore.getWebSummary()
         ])
         return { items, total: items.length, summary }
       } catch (error) {
@@ -2047,8 +2056,11 @@ export function registerHandlers(services: {
     'workspace-index-job-get',
     async (_event, payload: WorkspaceIndexJobGetRequest): Promise<WorkspaceIndexJobResponse> => {
       try {
-        const workspaceId = String(payload?.workspaceId || '').trim()
         const sourceKind = payload?.sourceKind === 'web' ? 'web' : 'file'
+        const workspaceId =
+          sourceKind === 'web'
+            ? WEB_INDEX_OWNER
+            : String(payload?.workspaceId || '').trim()
         if (!workspaceId) return { success: false, error: 'workspaceId is required' }
         const job = await workspaceIndexJobStore.getActiveJob(workspaceId, sourceKind)
         return { success: true, job: job || undefined }
@@ -2060,9 +2072,8 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'web-sources-scan',
-    async (event, payload: ScanWebSourcesRequest): Promise<WorkspaceJobResponse> => {
-      const workspaceId = String(payload?.workspaceId || '').trim()
-      if (!workspaceId) return { success: false, error: 'workspaceId is required' }
+    async (event, _payload: ScanWebSourcesRequest): Promise<WorkspaceJobResponse> => {
+      const workspaceId = WEB_INDEX_OWNER
       try {
         const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
         if (activeJob) return { success: true, workspaceId, job: activeJob }
@@ -2094,9 +2105,8 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'web-sources-prepare',
-    async (event, payload: PrepareWebSourcesRequest): Promise<WorkspaceJobResponse> => {
-      const workspaceId = String(payload?.workspaceId || '').trim()
-      if (!workspaceId) return { success: false, error: 'workspaceId is required' }
+    async (event, _payload: PrepareWebSourcesRequest): Promise<WorkspaceJobResponse> => {
+      const workspaceId = WEB_INDEX_OWNER
       try {
         const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
         if (activeJob) return { success: true, workspaceId, job: activeJob }
@@ -2130,13 +2140,12 @@ export function registerHandlers(services: {
     'web-source-refresh',
     async (event, payload: RefreshWebSourceRequest): Promise<WebSourceMutationResponse> => {
       try {
-        const workspaceId = String(payload?.workspaceId || '').trim()
         const webSourceId = String(payload?.webSourceId || '').trim()
         await ensureWebSourcesHydrated()
-        if (!workspaceId || !webSourceId) {
-          return { success: false, error: 'workspaceId and webSourceId are required' }
+        if (!webSourceId) {
+          return { success: false, error: 'webSourceId is required' }
         }
-        const source = await webSourceStore.getWebSourceById(webSourceId, workspaceId)
+        const source = await webSourceStore.getWebSourceById(webSourceId)
         if (!source) {
           return { success: false, error: 'web source not found' }
         }
@@ -2153,20 +2162,19 @@ export function registerHandlers(services: {
     'web-source-delete',
     async (event, payload: DeleteWebSourceRequest): Promise<DeleteWebSourceResponse> => {
       try {
-        const workspaceId = String(payload?.workspaceId || '').trim()
         const safeId = String(payload?.webSourceId || '').trim()
         await ensureWebSourcesHydrated()
-        if (!workspaceId || !safeId) {
-          return { success: false, error: 'workspaceId and webSourceId are required' }
+        if (!safeId) {
+          return { success: false, error: 'webSourceId is required' }
         }
-        const source = await webSourceStore.getWebSourceById(safeId, workspaceId)
+        const source = await webSourceStore.getWebSourceById(safeId)
         if (!source) {
           return { success: false, error: 'web source not found' }
         }
         if (source.document_id) {
           await documentsStore.deleteDocumentsByIds([source.document_id])
         }
-        await webSourceStore.deleteWebSource(safeId, workspaceId)
+        await webSourceStore.deleteWebSource(safeId)
         emitSourceListRefresh(event.sender)
         return { success: true, deletedWebSourceId: safeId }
       } catch (error) {
@@ -2181,37 +2189,29 @@ export function registerHandlers(services: {
     async (_event, payload: ListReferenceItemsRequest): Promise<ReferenceItemListResponse> => {
       try {
         await ensureWebSourcesHydrated()
-        const workspaceIdFilter = String(payload.workspaceId || '').trim()
         const referenceKindFilters = normalizeReferenceKindFilters(payload.referenceKinds)
         const localReferences: SelectedReference[] = []
-        let webReferences: SelectedReference[] = []
-
-        if (workspaceIdFilter) {
-          const workspace = await workspaceStore.getWorkspaceById(workspaceIdFilter)
-          if (workspace) {
-            const [scanResult, records, webSources] = await Promise.all([
-              workspace.root_path
-                ? workspaceService.scanWorkspaceTree({
-                    workspaceId: workspace.id,
-                    rootPath: workspace.root_path,
-                    workspaceName: workspace.name
-                  })
-                : Promise.resolve(null),
-              workspaceStore.listWorkspaceFileIndexRecords(workspace.id),
-              webSourceStore.listWebSources(workspace.id)
-            ])
-            if (scanResult) {
-              localReferences.push(
-                ...buildWorkspaceReferenceItemsFromCurrentTree({
-                  workspace: scanResult.workspace,
-                  entries: scanResult.entries,
-                  records
+        const workspaces = await workspaceStore.listWorkspaces()
+        for (const workspace of workspaces) {
+          const [scanResult, records] = await Promise.all([
+            workspace.root_path
+              ? workspaceService.scanWorkspaceTree({
+                  workspaceId: workspace.id,
+                  rootPath: workspace.root_path
                 })
-              )
-            }
-            webReferences = webSources.map(buildWebReferenceItem)
-          }
+              : Promise.resolve(null),
+            workspaceStore.listWorkspaceFileIndexRecords(workspace.id)
+          ])
+          if (!scanResult) continue
+          localReferences.push(
+            ...buildWorkspaceReferenceItemsFromCurrentTree({
+              workspace: scanResult.workspace,
+              entries: scanResult.entries,
+              records
+            })
+          )
         }
+        const webReferences = (await webSourceStore.listWebSources()).map(buildWebReferenceItem)
 
         const allReferences = [...localReferences, ...webReferences].filter((reference) =>
           referenceKindFilters ? referenceKindFilters.has(reference.kind) : true
@@ -2341,11 +2341,11 @@ export function registerHandlers(services: {
     return await chatRunService.cancelRun(runId)
   })
 
-  ipcMain.handle('ai-context-usage-get', async (_event, payload?: { sessionId?: string }) => {
+  ipcMain.handle('ai-context-usage-get', async (_event, payload?: { partnerId?: string }) => {
     try {
-      const sessionId = String(payload?.sessionId || '').trim()
-      if (!sessionId) return { success: false, error: 'sessionId is required' }
-      const usage = await getAiContextUsage({ sessionId, chatMessageLogStore })
+      const partnerId = String(payload?.partnerId || '').trim()
+      if (!partnerId) return { success: false, error: 'partnerId is required' }
+      const usage = await getAiContextUsage({ partnerId, chatMessageLogStore })
       return { success: true, ...usage }
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : String(e) }
@@ -2723,7 +2723,7 @@ export function registerHandlers(services: {
             record: docxResponse.record
               ? {
                   id: docxResponse.record.id,
-                  sessionId: docxResponse.record.session_id,
+                  partnerId: docxResponse.record.partner_id,
                   runId: docxResponse.record.run_id,
                   status: docxResponse.record.status,
                   capability: 'docx',
@@ -2758,19 +2758,19 @@ export function registerHandlers(services: {
 
   // === Chat & LLM Handlers ===
 
-  ipcMain.handle('chat-session-list', async (): Promise<ChatSessionListItem[]> => {
+  ipcMain.handle('chat-session-list', async (): Promise<PartnerListItem[]> => {
     try {
-      const [sessions, activeSessionIds, unreadCompletedSessionIds] = await Promise.all([
-        chatStore.getChatSessions(),
-        aiRunStore.listSessionIdsByRunStatuses(['running', 'waiting_approval']),
-        chatStore.listUnreadCompletedSessionIds()
+      const [partners, activePartnerIds, unreadCompletedPartnerIds] = await Promise.all([
+        partnerStore.listPartners(),
+        aiRunStore.listPartnerIdsByRunStatuses(['running', 'waiting_approval']),
+        partnerStore.listUnreadCompletedPartnerIds()
       ])
-      const activeSessionIdSet = new Set(activeSessionIds)
-      const unreadCompletedSessionIdSet = new Set(unreadCompletedSessionIds)
-      return sessions.map((session) => ({
-        ...session,
-        isRunning: activeSessionIdSet.has(session.id),
-        hasUnreadCompletion: unreadCompletedSessionIdSet.has(session.id)
+      const activePartnerIdSet = new Set(activePartnerIds)
+      const unreadCompletedPartnerIdSet = new Set(unreadCompletedPartnerIds)
+      return partners.map((partner) => ({
+        ...partner,
+        isRunning: activePartnerIdSet.has(partner.id),
+        hasUnreadCompletion: unreadCompletedPartnerIdSet.has(partner.id)
       }))
     } catch (e: unknown) {
       console.error('[CHAT-SESSION-LIST] Error:', e)
@@ -2778,14 +2778,40 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('chat-session-save', async (_event, session: ChatSession) => {
+  ipcMain.handle(
+    'partner-create',
+    async (_event, payload: PartnerCreateRequest): Promise<PartnerCreateResponse> => {
+      try {
+        const name = String(payload?.name || '').trim()
+        if (!name) return { success: false, error: '请填写伙伴名称' }
+        const now = Date.now()
+        const partner: Partner = {
+          id: uuidv4(),
+          name,
+          avatar_shape: payload.avatar_shape,
+          avatar_color: payload.avatar_color,
+          created_at: now,
+          updated_at: now,
+          last_viewed_at: now,
+          pinned: false,
+          pinned_at: null
+        }
+        await partnerStore.savePartner(partner)
+        await workbenchUiStore.savePartnerState(partner.id, createEmptyPartnerUiState())
+        return { success: true, partner }
+      } catch (e: unknown) {
+        console.error('[PARTNER-CREATE] Error:', e)
+        return { success: false, error: getErrorMessage(e) }
+      }
+    }
+  )
+
+  ipcMain.handle('chat-session-save', async (_event, partner: Partner) => {
     try {
-      const existing = await chatStore.getChatSession(session.id)
-      if (existing) {
-        await chatStore.saveChatSession(session)
-      } else {
-        await chatStore.saveChatSessionFromWorkbenchDraft(session)
-        browserEmbedService?.reassignOwner('__draft__', session.id)
+      const existing = await partnerStore.getPartner(partner.id)
+      await partnerStore.savePartner(partner)
+      if (!existing) {
+        await workbenchUiStore.savePartnerState(partner.id, createEmptyPartnerUiState())
       }
       return { success: true }
     } catch (e: unknown) {
@@ -2798,10 +2824,10 @@ export function registerHandlers(services: {
     'chat-session-ui-state-save',
     async (
       _event,
-      payload: ChatSessionUiStateSaveRequest
-    ): Promise<ChatSessionUiStateSaveResponse> => {
+      payload: PartnerUiStateSaveRequest
+    ): Promise<PartnerUiStateSaveResponse> => {
       try {
-        const updatedAt = await workbenchUiStore.saveSessionState(payload.sessionId, payload.state)
+        const updatedAt = await workbenchUiStore.savePartnerState(payload.partnerId, payload.state)
         return { success: true, updatedAt }
       } catch (e: unknown) {
         console.error('[CHAT-SESSION-UI-STATE-SAVE] Error:', e)
@@ -2817,7 +2843,7 @@ export function registerHandlers(services: {
       console.error('[WORKBENCH-UI-STATE-GET] Error:', e)
       return {
         success: false,
-        state: { activeViewKey: null, draftState: null, updatedAt: 0 },
+        state: { activeViewKey: null, updatedAt: 0 },
         error: getErrorMessage(e)
       }
     }
@@ -2832,7 +2858,7 @@ export function registerHandlers(services: {
         console.error('[WORKBENCH-UI-STATE-SAVE] Error:', e)
         return {
           success: false,
-          state: { activeViewKey: null, draftState: null, updatedAt: 0 },
+          state: { activeViewKey: null, updatedAt: 0 },
           error: getErrorMessage(e)
         }
       }
@@ -2841,7 +2867,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle('chat-session-mark-viewed', async (_event, id: string) => {
     try {
-      await chatStore.markChatSessionViewed(id)
+      await partnerStore.markPartnerViewed(id)
       return { success: true }
     } catch (e: unknown) {
       console.error('[CHAT-SESSION-MARK-VIEWED] Error:', e)
@@ -2851,9 +2877,9 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'chat-session-set-pinned',
-    async (_event, payload: ChatSessionSetPinnedRequest) => {
+    async (_event, payload: PartnerSetPinnedRequest) => {
       try {
-        await chatStore.setChatSessionPinned(payload.id, payload.pinned)
+        await partnerStore.setPartnerPinned(payload.id, payload.pinned)
         return { success: true }
       } catch (e: unknown) {
         console.error('[CHAT-SESSION-SET-PINNED] Error:', e)
@@ -2864,7 +2890,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle('chat-session-delete', async (_event, id: string) => {
     try {
-      await chatRunService.deleteSession(id)
+      await chatRunService.deletePartner(id)
       await browserEmbedService?.closeOwnerTabs(id)
       return { success: true }
     } catch (e: unknown) {
@@ -2873,9 +2899,9 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('chat-message-list', async (_event, sessionId: string) => {
+  ipcMain.handle('chat-message-list', async (_event, partnerId: string) => {
     try {
-      return await chatRunService.listSessionMessages(sessionId)
+      return await chatRunService.listPartnerMessages(partnerId)
     } catch (e: unknown) {
       console.error('[CHAT-MESSAGE-LIST] Error:', e)
       return []
@@ -2884,11 +2910,11 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'chat-session-open',
-    async (_event, payload: ChatSessionOpenRequest): Promise<ChatSessionOpenResponse> => {
+    async (_event, payload: PartnerOpenRequest): Promise<PartnerOpenResponse> => {
       try {
         const [opened, uiState] = await Promise.all([
-          chatRunService.openSession(payload),
-          workbenchUiStore.getSessionState(payload.sessionId)
+          chatRunService.openPartner(payload),
+          workbenchUiStore.getPartnerState(payload.partnerId)
         ])
         return { ...opened, ...(uiState ? { uiState } : {}) }
       } catch (e: unknown) {
@@ -2902,10 +2928,10 @@ export function registerHandlers(services: {
     'chat-session-run-summaries',
     async (
       _event,
-      payload: ChatSessionRunSummariesRequest
-    ): Promise<ChatSessionRunSummariesResponse> => {
+      payload: PartnerRunSummariesRequest
+    ): Promise<PartnerRunSummariesResponse> => {
       try {
-        return await chatRunService.getSessionRunSummaries(payload?.sessionId)
+        return await chatRunService.getPartnerRunSummaries(payload?.partnerId)
       } catch (e: unknown) {
         console.error('[CHAT-SESSION-RUN-SUMMARIES] Error:', e)
         return { runs: [] }
@@ -2915,12 +2941,27 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'chat-session-snapshot-get',
-    async (_event, payload: ChatSessionSnapshotRequest): Promise<ChatSessionSnapshotResponse> => {
+    async (_event, payload: PartnerSnapshotRequest): Promise<PartnerSnapshotResponse> => {
       try {
-        return await chatRunService.getSessionSnapshot(payload?.sessionId)
+        return await chatRunService.getPartnerSnapshot(payload?.partnerId)
       } catch (e: unknown) {
         console.error('[CHAT-SESSION-SNAPSHOT-GET] Error:', e)
         return { messages: [], runs: [], activeRuns: [] }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'partner-clear-context',
+    async (
+      _event,
+      payload: PartnerClearContextRequest
+    ): Promise<PartnerClearContextResponse> => {
+      try {
+        return await chatRunService.clearPartnerContext(payload?.partnerId)
+      } catch (e: unknown) {
+        console.error('[PARTNER-CLEAR-CONTEXT] Error:', e)
+        return { success: false, error: getErrorMessage(e) }
       }
     }
   )

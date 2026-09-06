@@ -6,11 +6,11 @@ export const createDefaultFinalArtifacts = (): AiRunState['finalArtifacts'] => [
 
 export const createInitialAiRunState = (input: {
   runId: string
-  sessionId: string
+  partnerId: string
   input: string
 }): AiRunState => ({
   runId: input.runId,
-  sessionId: input.sessionId,
+  partnerId: input.partnerId,
   status: DEFAULT_AI_RUN_STATUS,
   input: input.input,
   finalArtifacts: createDefaultFinalArtifacts()
@@ -18,7 +18,7 @@ export const createInitialAiRunState = (input: {
 
 export const createCompletedAiRunState = (input: {
   runId: string
-  sessionId: string
+  partnerId: string
   input: string
   finalDeliveryMarkdown: string
   finalArtifacts?: AiRunState['finalArtifacts']
@@ -31,7 +31,7 @@ export const createCompletedAiRunState = (input: {
 
 export const createCancelledAiRunState = (input: {
   runId: string
-  sessionId: string
+  partnerId: string
   input: string
 }): AiRunState => ({
   ...createInitialAiRunState(input),
@@ -42,7 +42,7 @@ export const createCancelledAiRunState = (input: {
 
 export const createFailedAiRunState = (input: {
   runId: string
-  sessionId: string
+  partnerId: string
   input: string
   error: string
   failureSource: NonNullable<AiRunState['failureSource']>

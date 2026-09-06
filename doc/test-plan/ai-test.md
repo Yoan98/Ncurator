@@ -44,13 +44,13 @@
 - `tool` 只验证真实生产工具调用，不允许 fake。
 - `tool / docx` 覆盖 7 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 Source→Working 净 Diff。
 - `tool / text-file` 覆盖普通文本按行分页读取、四种写入 action、修改记录、结构化 diff 与回退前置数据，以及按行号定位的文本搜索；unit 侧见 `tests/case/unit/ai/text-file-tool-contract.test.ts`。
-- `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作区内修改记录、Artifact、安全校验和工作区外绝对路径写入不记录回退。
-- `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作区外绝对路径读取、损坏文件和结果大小限制。
+- `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作地址内修改记录、Artifact、安全校验和工作地址外绝对路径写入不记录回退。
+- `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作地址外绝对路径读取、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-search-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。
 - 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。
-- `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再让冻结 sidecar bin 的 Python Playwright 显式复用该测试 Electron 的 Node，通过隔离 context 抓取；host 必须 headless 且不得挂主窗口。另覆盖 `browser_use` 服务不可用诊断。禁止使用 sidecar 内置 Node/浏览器或 Electron 默认 context。`web_search` 结果只回模型，不驱动 Workbench 右侧 `search_list`。
+- `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再让冻结 sidecar bin 的 Python Playwright 显式复用该测试 Electron 的 Node，通过隔离 context 抓取；host 必须 headless 且不得挂主窗口。另覆盖 `browser_use` 服务不可用诊断。禁止使用 sidecar 内置 Node/浏览器或 Electron 默认 context。`web_search` 结果只回模型，不得自动展开右侧搜索列表（该面板已不存在）。
 
 ### 2.2 `human`
 
@@ -69,6 +69,7 @@
 
 ### 3.1 Harness 规则
 
+- fixture 仍可用 `tests/fixtures/workspace`；运行时作为设置页文件地址 + 伙伴，不再「绑定工作区才能跑」。
 - AI backend 回归必须以生产 `createAiRunContext` 作为唯一 runtime 入口，并使用真实 store、apply service 和 embedding service。
 - 每个 AI run 的文档 worker 资源统一通过 `AiRunResourceManager` 在 run 结束时释放；资源释放失败不能覆盖任务结果。
 - `mock-llm` 只固定 LLM 输出，其余全部真实；`live` 通过真实 `LlmConfigStore` 和生产 LLM executor 执行。
@@ -87,7 +88,7 @@
 - 允许：脚本化 LLM 输入输出。
 - 不允许：脚本化 runtime 节点执行结果。
 - 断言重点：节点流转、工具调用、审批事件、artifact、memory、错误收敛、状态收口。
-- artifact 进入会话消息记录（`chat_session_message_log`）与提示词时只允许包含 `kind / path / operation`；内部 `capability / fileName / applyId` 不得进入提示词。
+- artifact 进入伙伴消息记录（`chat_session_message_log`）与提示词时只允许包含 `kind / path / operation`；内部 `capability / fileName / applyId` 不得进入提示词。
 - 已经落地的文件修改不得因 `run_failed` 或 `run_cancelled` 丢失，终态消息与 Workbench 都必须继续显示对应修改记录。
 
 #### live 类别
@@ -126,6 +127,7 @@ AI 回归测试目录：
 AI unit / 辅助测试目录：
 
 - `tests/case/unit/ai/<case>.test.ts`
+- `tests/case/unit/storage/sqlite-migration.test.ts`、`tests/case/unit/storage/sqlite-storage.test.ts`、`tests/case/unit/ai/persistence/chat-run-service-contract.test.ts`
 - 工具 family 轻量契约（schema / outputTypes / skill 归属，不断言 prompt 或 render 文字）：`terminal-tool-contract`、`text-file-tool-contract`，以及既有 `docx-tool-contract`、`ppt-tool-contract`、`pdf-tool-contract`、`excel-contracts` 等。
 
 推荐命令：
@@ -139,7 +141,8 @@ AI unit / 辅助测试目录：
 ### 3.4 覆盖归属与去重规则
 
 - `ai/tool` 负责生产工具 runtime 的完整输入输出、读写链、错误边界、原子性、修改记录与回退契约。
-- `ChatRunService` 合同测试验证 run 结束不会扫描并归属未受控的工作区变化；只有受控文件工具与 terminal 命令窗口能创建 run 级修改记录。
+- `ChatRunService` 合同测试验证 run 结束不会扫描并归属未受控的工作地址变化；只有受控文件工具与 terminal 命令窗口能创建 run 级修改记录。terminal 只在开始 cwd 落在某个 `workspace_source.root_path` 内时才扫描该 cwd 子树。`ChatRunService` 不再校验工作空间绑定与搜索模式。
+- sqlite migration unit 覆盖空库到 v10、v9→v10 破坏性升级后最终 schema 一致：存在 `partner` / `partner_ui_state`；不存在 `chat_session`、`chat_search_turn`、`chat_session_ui_state`；`chat_session_message_log` / `ai_run` / `ai_file_change` 挂 `partner_id`；`workbench_ui_state` 只留 `active_view_key`。UI store 为伙伴。
 - `ai/human/mock-llm` 负责真实 human graph 下的工具学习、工具选择、串联执行、暂停恢复和结果交付；只允许固定 LLM 输出，不允许替换工具执行结果。
 - `ai/human/live` 负责真实模型在自然语言输入下能否自主选择并正确使用能力；用户输入不得包含内部工具名或固定调用顺序。
 - Workbench E2E 负责用户可见的附件、预览、Diff、跨 Sheet 交互与回退闭环，不重复验证工具内部算法。
@@ -287,7 +290,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：指定页面会被渲染为可供其他工具使用的 PNG。
 - Why：PDF 与图像识别需要通过普通图片路径解耦协作。
 - How：读取第 9 页并检查 `pageImagePath`、图片文件头、源文件哈希和事件。
-- Oracle：路径为 `.ncurator/runtime/assets/pdf_read_pages-<uuid>/<hash>.<ext>`；图片真实存在；源 PDF 不变；不产生普通 artifact。
+- Oracle：路径为 `userData/partners/{id}/runtime/assets/pdf_read_pages-<uuid>/<hash>.<ext>`；图片真实存在；源 PDF 不变；不产生普通 artifact。
 - Not：不在 PDF 工具内部做图像识别。
 
 ##### `pdf-result-size-contract`
@@ -416,10 +419,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `kb-list-documents-contract`
 
 - 测试类型：`backend`
-- What：`kb_list_documents` 在当前工作区默认范围内的真实列表、`sourceNameQuery` 文档名过滤与缩圈契约。
+- What：`kb_list_documents` 在全部已索引文件地址 + 全局网页默认范围内的真实列表、`sourceNameQuery` 文档名过滤与缩圈契约。
 - Why：KB 资料发现必须真实调用生产检索存储。
 - How：通过真实 `DocumentsStore.addDocument / addChunks` 导入多工作区 fixture 后执行列表查询。
-- Oracle：结果默认只包含当前工作区文档，`documentIds` 只做进一步缩圈，空结果与非空结果都稳定可断言；文件资料返回 `sourceType=file` 与真实 `filePath`，网页资料返回 `sourceType=web` 与真实 `sourceUrl`。
+- Oracle：结果默认包含当前已添加文件地址与全局网页文档，`documentIds` 只做进一步缩圈，空结果与非空结果都稳定可断言；文件资料返回 `sourceType=file` 与真实 `filePath`，网页资料返回 `sourceType=web` 与真实 `sourceUrl`。
 - Not：不验证问答文案。
 
 ##### `kb-evidence-search-family-contract`
@@ -428,7 +431,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：`kb_search` 在不同 strategy 下的统一真实检索契约。
 - Why：KB tool family 必须显式覆盖每个回归工具。
 - How：对多工作区真实 seed 数据分别执行三种检索，并覆盖 `documentIds` 缩圈。
-- Oracle：三种检索都返回稳定 `items`，默认受当前工作区约束，且遵守 `documentIds` 缩圈语义；文件命中保留 `sourceType=file` 与 `filePath`，网页命中保留 `sourceType=web` 与 `sourceUrl`，供最终引用生成可追溯地址。
+- Oracle：三种检索都返回稳定 `items`，默认受当前文件地址与全局网页约束，且遵守 `documentIds` 缩圈语义；文件命中保留 `sourceType=file` 与 `filePath`，网页命中保留 `sourceType=web` 与 `sourceUrl`，供最终引用生成可追溯地址。
 - Not：不比较召回优劣。
 
 #### terminal 类别
@@ -499,10 +502,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `terminal-execution-contract`
 
 - 测试类型：`backend`
-- What：真实 PTY 终端从工作区根目录执行命令、长命令让出控制权并可增量读取，命令级文件追踪与退出码正确；允许后台分离执行，放行 fd 合并重定向。
+- What：真实 PTY 终端从用户主目录执行命令、长命令让出控制权并可增量读取，命令级文件追踪与退出码正确；允许后台分离执行，放行 fd 合并重定向。
 - Why：后台服务和长任务不能依赖单次 shell 超时；分离执行（`&` / `Start-Process`）由模型自行管理生命周期，框架只关闭 PTY 会话本身；`2>&1` 等 fd 合并重定向只是输出流合并，不能误判为危险重定向。
 - How：通过 `terminal_run` 分别执行 `pwd`、单命令内 `cd + pwd`、写文件后长 sleep、持续输出命令、写文件后非零退出；通过 `terminal_read` 携带返回的 `readEndPosition` 增量读取持续输出命令，验证单次读取有字符上限、`hasMoreOutput` 指示未读完且可用返回位置连续读完。以 `sleep … & wait`（windows `Start-Process … -Wait`）验证分离执行可完成，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。
-- Oracle：命令默认从 workspace 根目录执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出；写文件命令（完成与非零退出）均生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`。分离执行成功完成且输出含 `detached-ok`；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。
+- Oracle：命令默认从用户主目录（`os.homedir()`）执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出；仅当开始 cwd 落在某个工作地址内时，写文件命令（完成与非零退出）才生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`。分离执行成功完成且输出含 `detached-ok`；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。
 - Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖；不在会话结束时强制清理模型拆出去的后台进程。
 
 #### web-browsing 类别
@@ -808,17 +811,17 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `conversation-memory-multi-run-recall`
 
 - 测试类型：`backend`
-- What：同一 `session` 下之前 run 的用户消息与助手最终回答，会通过会话消息记录（`chat_session_message_log`）作为真实消息带入下一次 `brain` prompt。
+- What：同一伙伴下之前 run 的用户消息与助手最终回答，会通过伙伴消息记录（`chat_session_message_log`）作为真实消息带入下一次 `brain` prompt。
 - Why：跨任务连续性依赖 append-only 消息转录（而非 conversation summary / rounds 副本）作为唯一真相源；要证明上一轮沉淀的关键事实在后续 run 仍可被召回。
-- How：同一 session 连续跑三个 run，前两轮分别沉淀「还缺少回滚负责人」「负责人候选改成 Bob、审批未完成、上线窗口冲突待确认」，第三轮追问当前状态并检查 brain prompt 与最终交付。
+- How：同一伙伴连续跑三个 run，前两轮分别沉淀「还缺少回滚负责人」「负责人候选改成 Bob、审批未完成、上线窗口冲突待确认」，第三轮追问当前状态并检查 brain prompt 与最终交付。
 - Oracle：第三轮 `brain` prompt 同时命中 Bob、上线窗口冲突与还缺少回滚负责人；最终交付带出负责人候选、未完成审批与下一步安排。
-- Not：不验证 live 模型总结质量；不验证 session 隔离。
+- Not：不验证 live 模型总结质量；不验证伙伴隔离。
 
 ##### `human-interruption-message-repair`
 
 - 测试类型：`backend / mock-llm`
-- What：续接（跨会话 / 中断恢复）重建消息数组时，顺序为 `system + 冻结历史 build user（brain_user_snapshot）+ interleaved assistant/tool + 当前 run buildBrainUserMessage user`；每条可见 log `user` 对应一条冻结 build user；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
-- Why：模型上下文唯一真相源是会话消息记录，续接必须忠实回放**上次发给模型的**历史并把新诉求追加到末尾；若上一条 assistant 声明了 tool_call 却没有对应结果，接口会直接报错，必须补一条意外中断反馈。
+- What：续接（跨伙伴 / 中断恢复）重建消息数组时，顺序为 `system + 冻结历史 build user（brain_user_snapshot）+ interleaved assistant/tool + 当前 run buildBrainUserMessage user`；每条可见 log `user` 对应一条冻结 build user；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
+- Why：模型上下文唯一真相源是伙伴消息记录，续接必须忠实回放**上次发给模型的**历史并把新诉求追加到末尾；若上一条 assistant 声明了 tool_call 却没有对应结果，接口会直接报错，必须补一条意外中断反馈。
 - How：mock-llm 下跑两个子场景：其一 run-1 正常完成（含 learn_skill 与最终交付），run-2 捕获首次 brain 的 `request.messages`；其二 run-1 的 brain 返回 learn_skill tool_call 后在 brain 调用返回时 abort 控制器，run-2 恢复并捕获消息数组。
 - Oracle：子场景一：消息数组首条为 system（无 `current_time`），历史含 run-1 的冻结 build user、assistant/tool 与 run-2 末尾 build user（共 2 条 human，末条含本 run `current_time` / 最新 active_state）；子场景二：run-1 为 `user_cancelled`，run-2 在悬空 learn_skill tool_call 后补相同 ID 的失败 ToolMessage，且含 run-1 与 run-2 两条 build user。
 - Not：不验证 live provider 真实网络抖动；不恢复 docx 临时运行态。
@@ -826,11 +829,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `session-skill-memory-multi-run`
 
 - 测试类型：`backend / mock-llm`
-- What：同一 AI session 的多轮 human run 能复用已学习技能记忆。
+- What：同一伙伴的多轮 human run 能复用已学习技能记忆。
 - Why：技能记忆是 AI 架构跨轮次协作的核心，不应每轮重复 learning。
 - How：跨四轮逐步学习 DOCX、PDF、Excel、PPT 和图片技能，最后一次加载 `docx-write`。
 - Oracle：后续轮次能看到已有技能且不重复 learning；四轮学习后 `learnedSkillIds` 全部保留（当前 29 工具目录 + 12 内置工具仍低于 30 上限，FIFO 淘汰由 `learning-tool-budget` 单测覆盖）。
-- Not：不覆盖 Workbench UI 会话持久化，该路径由 Workbench E2E 覆盖。
+- Not：不覆盖 Workbench UI 伙伴持久化，该路径由 Workbench E2E 覆盖。
 
 ##### `plan-memory-maintenance`
 
@@ -884,7 +887,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`live`
 - What：周会前审阅检入的复杂经营 xlsx，口头讲清表结构、关键公式和异常数字，不改文件。
 - Why：真实查看场景必须用现成经营表，不能在 live `execute` 里现造表。
-- How：工作区放入 `tests/fixtures/workspace/经营周报.xlsx`（120 行订单明细）；用户只描述审阅诉求，不出现工具名。
+- How：工作区放入 `tests/fixtures/workspace/经营周报.xlsx`（120 行订单明细）；用户只描述审阅诉求，不出现工具名。运行时将该目录添加为文件地址并创建伙伴。
 - Oracle：源文件 hash 不变；发生 `excel_read`；无 `excel_edit`。结论由 raw logs 人工评估。
 - Not：不使用 `销售额统计表.xlsx`；不在 execute 里用 ExcelJS 现造表。
 
@@ -900,9 +903,9 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-excel-create-monthly-budget-live`
 
 - 测试类型：`live`
-- What：空工作区从零做《月度预算.xlsx》（多表、表头、SUM/SUMIF、金额格式）。
+- What：空文件地址从零做《月度预算.xlsx》（多表、表头、SUM/SUMIF、金额格式）。
 - Why：新建场景覆盖工作簿创建、跨表公式和数字格式。
-- How：空工作区，用户描述月度预算交付要求。
+- How：空文件地址 + 伙伴，用户描述月度预算交付要求。
 - Oracle：文件可解析；汇总是公式；1 条 excel 修改记录。
 - Not：不评价表格视觉设计。
 
@@ -929,41 +932,41 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend / live`
 - What：真实模型审阅静态中文品牌提案 PPT（`品牌策略提案.pptx`），口头给出品牌定位、价值、策略、受众与 KPI（含 85%）简报。
 - Why：真实读 PPT 是对话咨询场景；fixture 固定检入，避免测前用工具造稿污染 LangSmith。
-- How：fixture 拷贝进工作区；用户要求先核对 Metrics & KPIs 页且不修改演示文稿；模型自行读取文字和视觉内容。
+- How：fixture 拷贝进文件地址；用户要求先核对 Metrics & KPIs 页且不修改演示文稿；模型自行读取文字和视觉内容。
 - Oracle：源 PPT hash 不变；调用过 `ppt_read_*`/`ppt_search` 且无 `ppt_edit`；结论由 raw logs 人工评估。
 - Not：不写专用 JSON，不匹配最终回答文案，不在 case 内 `tool.invoke` 造稿。
 
 ##### `human-session-resume-with-new-selection-live`
 
 - 测试类型：`backend`
-- What：live 模式下第一诉求已经沉淀局部事实后发生网络中断，同一 session 新诉求可从不可变消息日志恢复旧语义上下文，同时本轮新选择文件只作用于新 user 消息。
+- What：live 模式下第一诉求已经沉淀局部事实后发生网络中断，同一伙伴新诉求可从不可变消息日志恢复旧语义上下文，同时本轮新选择文件只作用于新 user 消息。
 - Why：恢复能力的真实价值是让用户在长任务中断后继续对话；如果中断前已读到的事实丢失，或恢复时忽略最新诉求/最新选中文件，就会把恢复退化成重跑或错误沿用旧入口。
-- How：使用共享 workspace fixture。Run 1 选中文件 A `深度学习.docx`，在读取并沉淀过拟合事实后注入 `network_error`。Run 2 在同 session 追加“继续”类 user 消息并改选文件 B `图形学.docx`，检查历史 user 配置未变、新 user 使用文件 B、计划来自 `plan_updated`、技能来自 session skill state。
+- How：使用共享 workspace fixture（运行时为文件地址 + 伙伴）。Run 1 选中文件 A `深度学习.docx`，在读取并沉淀过拟合事实后注入 `network_error`。Run 2 在同伙伴追加“继续”类 user 消息并改选文件 B `图形学.docx`，检查历史 user 配置未变、新 user 使用文件 B、计划来自 `plan_updated`、技能来自切断点之后的 skill state。
 - Oracle：Run 1 为 `network_error`；中断前事实和计划记录仍在 `chat_session_message_log`。Run 2 消息数组包含 Run 1 的 build user、历史 assistant/tool 投影与 Run 2 末尾 build user；Run 2 使用文件 B 且不会改写 Run 1 的文件 A 配置，最终交付包含过拟合与反走样事实。
 - Not：不验证真实 provider 的随机网络抖动；不要求 live 模型逐字复述 hint 文案；不恢复 docx 临时运行态。
 
 ##### `human-cross-session-continuation-live`
 
 - 测试类型：`backend / live`
-- What：同一 session 先正常完成第一件事，再续接第二件相关联的事，消息数组按“历史 build user + assistant/tool + 当前 run buildBrainUserMessage user”叠加。
-- Why：跨会话续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文。
-- How：使用共享 workspace fixture。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同 session 改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组。
+- What：同一伙伴先正常完成第一件事，再续接第二件相关联的事，消息数组按“历史 build user + assistant/tool + 当前 run buildBrainUserMessage user”叠加。
+- Why：跨轮续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文。
+- How：使用共享 workspace fixture（运行时为文件地址 + 伙伴）。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同伙伴改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组。
 - Oracle：Run 1 与 Run 2 均 `completed`；Run 2 消息数组历史中含 Run 1 的 build user 与最终交付，末尾是 Run 2 当前 build user；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
-- Not：不验证 UI 会话持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。
+- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。
 
 ##### `human-ppt-edit-management-review-live`
 
 - 测试类型：`backend / live`
 - What：真实模型在静态富品牌提案 PPT 上新增 Executive summary、将 Presenter 改为李然、将 Established in 2002 改为 2015，并保持 Agenda/Quote 页不变。
 - Why：编辑必须针对真实富稿与正式文件，而非测前自造简稿；验证读后写与保护页。
-- How：fixture 拷贝进工作区；用户描述上述编辑诉求；模型自行读取、编辑并确认可读。
+- How：fixture 拷贝进文件地址；用户描述上述编辑诉求；模型自行读取、编辑并确认可读。
 - Oracle：读后再写；Agenda/Quote 全文仍在；命中李然与 Established in 2015 与 Executive summary；页数 +1；出画布形状数不超过编辑前基线（富 fixture 自身可能已有越界）、校验 error 0、1 个 ppt artifact。
 - Not：不锁死 operation 类型；不在 case 内造稿；不生成额外 JSON。
 
 ##### `human-ppt-create-executive-deck-live`
 
 - 测试类型：`backend / live`
-- What：真实模型在空工作区从零创建约 5–6 页可开会用的 16:9 管理层汇报（封面、执行摘要、KPI、趋势图、风险与负责人、下一步）。
+- What：真实模型在空文件地址从零创建约 5–6 页可开会用的 16:9 管理层汇报（封面、执行摘要、KPI、趋势图、风险与负责人、下一步）。
 - Why：创建主路径要验收「真人能开会用」的交付，而不只是文件可解析。
 - How：无 fixture；用户指定文件名与页结构诉求；模型自行 `ppt_edit` 创建并自检。
 - Oracle：`ppt_edit` 成功；正式文件可解析；`slideCount` 5–8；正文含执行摘要/风险/下一步（中英均可）；出画布 0、error 0、1 artifact。质量完成度由 raw logs + artifact 人工评分回写顶部快照。
@@ -1001,7 +1004,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：live 模式下 `human` 会基于真实 brain usage 与新增 history 增量在风险周报长任务中自然触发 `context_compaction`，并在压缩后继续完成交付。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩且不影响任务完成”的能力。
-- How：复用风险周报 live 的真实 workspace 与业务输入，通过 `humanRuntimeOverrides.modelContextWindowTokens=45_000` 提供可工作的上下文空间，并让真实任务在多轮资料读取后自然进入 `context_budget -> context_compaction -> context_budget -> brain`。窗口不能太小：固定开销（23 工具 schema ~18k + system/模板 ~2k ≈ 20k）几乎不随压缩减少，若窗口过小则触发线被固定开销顶破，压缩后仍超阈值、每轮压缩死循环；下限为 45k，也不能太大（过大时任务峰值达不到触发线，0 次压缩）。
+- How：复用风险周报 live 的真实文件地址与业务输入，通过 `humanRuntimeOverrides.modelContextWindowTokens=45_000` 提供可工作的上下文空间，并让真实任务在多轮资料读取后自然进入 `context_budget -> context_compaction -> context_budget -> brain`。窗口不能太小：固定开销（23 工具 schema ~18k + system/模板 ~2k ≈ 20k）几乎不随压缩减少，若窗口过小则触发线被固定开销顶破，压缩后仍超阈值、每轮压缩死循环；下限为 45k，也不能太大（过大时任务峰值达不到触发线，0 次压缩）。压缩上下文来自该伙伴 `chat_session_message_log`；若存在 `context_cleared`，只压缩切断之后的行。算法不改。
 - Oracle：至少发生一次完整 compaction；不限制压缩次数。逐次检查固定摘要结构、任务锚点、已确认路径、无编造和无“已完成又未读取”的进度矛盾，并检查全部压缩比；后续 `brain` prompt 保留 compaction 与 task progress；最终周报文件成功交付并产出 docx `applyId` 证据，且至少一次成功的 docx 写入（允许 `document_end` 新建，也允许复制底本后 `replace_text` / `insert_nodes` 改写）。按 10 分制评估压缩生命周期、摘要结构、摘要质量、连续性和文件交付，严格超过 8 分通过。
 - Not：不绑定压缩次数，不要求固定资料读取顺序，也不因合理表达差异判失败。
 
@@ -1027,7 +1030,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 - 测试类型：`backend`
 - What：live 模式下 `human` 会先用 KB 缩圈找出讲“反走样 / 过拟合”的两份源资料，再把内容分别回写到用户明确指定的两份目标 docx。
-- Why：真实用户常常记得主题、不记得文件名，而且希望把资料内容整理回自己的教学文档；这条 case 要长期守住“工作区默认范围 + KB 缩圈 + 多源读取 + 多目标 docx 回写”的能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
+- Why：真实用户常常记得主题、不记得文件名，而且希望把资料内容整理回自己的教学文档；这条 case 要长期守住“文件地址默认范围 + KB 缩圈 + 多源读取 + 多目标 docx 回写”的能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；workspace 使用共享 fixture，只把 `学习笔记/图形学.docx` 与 `学习笔记/深度学习.docx` 建入 KB；用户明确指定根目录的 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 为目标文件。case 只开放完成该任务需要的 terminal、KB search、DOCX 读取和写入工具，避免把目标文件误当成待索引来源反复查询。
 - Oracle：真实 `kb_search` 返回有效命中；两份目标文档分别发生成功 paragraph 写入并产生两组携带 `applyId` 的 file artifact；两份来源课件保持不变。成功的 DOCX 写结果只能是空 `result` 或 `createdIds`，不得返回 `changes`。重复写入次数不做硬性限制；是否冗余、是否 grounded 由人工读 logs/产物评分。按 10 分制评估 KB 证据、两份目标文件、grounded 内容、来源安全和最终交付，严格超过 8 分通过；只完成一个目标文件最多 8 分，不能通过。
 - Not：不强制固定执行路径，也不要求 KB 缩圈后必须再打开所有候选资料。
@@ -1038,7 +1041,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：真实模型会自主组合 PDF 页面读取和主模型多模态输入。
 - Why：PDF 工具不内置图片理解，必须验证工具解耦后 AI 仍能完成图文结合阅读。
 - How：只选择 `深度学习.pdf`，询问第 1 页训练闭环和第 9 页 Proper fit / Overfit 图形差异，仅开放 PDF 读取工具与内置 `read_image`。
-- Oracle：任务完成；`pdf_read_pages` 返回第 9 页 `pageImagePath`，模型调用 `read_image` 并识别成功；路径位于 `.ncurator/runtime/assets/pdf_read_pages-<uuid>/<hash>.<ext>`；不调用 terminal、KB、docx；最终答复同时说明训练闭环和两组曲线差异；源 PDF 不变。
+- Oracle：任务完成；`pdf_read_pages` 返回第 9 页 `pageImagePath`，模型调用 `read_image` 并识别成功；路径位于 `userData/partners/{id}/runtime/assets/pdf_read_pages-<uuid>/<hash>.<ext>`；不调用 terminal、KB、docx；最终答复同时说明训练闭环和两组曲线差异；源 PDF 不变。
 - Not：不固定工具调用顺序和最终措辞，不要求把 PDF 页面图片登记为 artifact。
 
 ##### `human-docx-visual-reading-live`

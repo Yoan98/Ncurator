@@ -1,71 +1,86 @@
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { getUserDataPath } from '../../utils/paths'
 
-const WORKSPACE_NCURATOR_DIR = '.ncurator'
-const WORKSPACE_RUNTIME_DIR = 'runtime'
-const WORKSPACE_ASSETS_DIR = 'assets'
-const WORKSPACE_SCRIPTS_DIR = 'scripts'
-const WORKSPACE_TOOL_RESULT_DIR = 'toolresult'
+const PARTNERS_DIR = 'partners'
+const PARTNER_RUNTIME_DIR = 'runtime'
+const PARTNER_ASSETS_DIR = 'assets'
+const PARTNER_SCRIPTS_DIR = 'scripts'
+const PARTNER_TOOL_RESULT_DIR = 'toolresult'
+const PARTNER_OBJECTS_DIR = 'objects'
 
-const normalizeWorkspaceRoot = (workspaceRootPath: string): string => {
-  const value = String(workspaceRootPath || '').trim()
-  if (!value) throw new Error('缺少工作区根目录')
-  return path.resolve(value)
+const normalizePartnerId = (partnerId: string): string => {
+  const value = String(partnerId || '').trim()
+  if (!value || path.basename(value) !== value) {
+    throw new Error('partnerId 无效')
+  }
+  return value
 }
 
-export const getWorkspaceRuntimeDir = (workspaceRootPath: string): string =>
-  path.join(
-    normalizeWorkspaceRoot(workspaceRootPath),
-    WORKSPACE_NCURATOR_DIR,
-    WORKSPACE_RUNTIME_DIR
-  )
+export const getPartnerRootDir = (partnerId: string): string =>
+  path.join(getUserDataPath(), PARTNERS_DIR, normalizePartnerId(partnerId))
 
-export const getWorkspaceAssetsRootDir = (workspaceRootPath: string): string =>
-  path.join(getWorkspaceRuntimeDir(workspaceRootPath), WORKSPACE_ASSETS_DIR)
+export const getPartnerRuntimeDir = (partnerId: string): string =>
+  path.join(getPartnerRootDir(partnerId), PARTNER_RUNTIME_DIR)
 
-export const getWorkspaceScriptsRootDir = (workspaceRootPath: string): string =>
-  path.join(getWorkspaceRuntimeDir(workspaceRootPath), WORKSPACE_SCRIPTS_DIR)
+export const getPartnerAssetsRootDir = (partnerId: string): string =>
+  path.join(getPartnerRuntimeDir(partnerId), PARTNER_ASSETS_DIR)
 
-export const getWorkspaceToolResultDir = (workspaceRootPath: string): string =>
-  path.join(getWorkspaceRuntimeDir(workspaceRootPath), WORKSPACE_TOOL_RESULT_DIR)
+export const getPartnerScriptsRootDir = (partnerId: string): string =>
+  path.join(getPartnerRuntimeDir(partnerId), PARTNER_SCRIPTS_DIR)
 
-export const getWorkspaceAssetBucketDir = (
-  workspaceRootPath: string,
-  assetBucketId: string
-): string => {
+export const getPartnerToolResultDir = (partnerId: string): string =>
+  path.join(getPartnerRuntimeDir(partnerId), PARTNER_TOOL_RESULT_DIR)
+
+export const getPartnerObjectsDir = (partnerId: string): string =>
+  path.join(getPartnerRootDir(partnerId), PARTNER_OBJECTS_DIR)
+
+export const getPartnerAssetBucketDir = (partnerId: string, assetBucketId: string): string => {
   const normalizedBucketId = String(assetBucketId || '').trim()
   if (!normalizedBucketId || path.basename(normalizedBucketId) !== normalizedBucketId) {
     throw new Error('assetBucketId 无效')
   }
-  return path.join(getWorkspaceAssetsRootDir(workspaceRootPath), normalizedBucketId)
+  return path.join(getPartnerAssetsRootDir(partnerId), normalizedBucketId)
 }
 
-export const ensureWorkspaceRuntimeDirs = async (workspaceRootPath: string): Promise<void> => {
-  const runtimeDir = getWorkspaceRuntimeDir(workspaceRootPath)
+export const ensurePartnerRuntimeDirs = async (partnerId: string): Promise<void> => {
+  const runtimeDir = getPartnerRuntimeDir(partnerId)
   await Promise.all([
-    fs.mkdir(path.join(runtimeDir, WORKSPACE_ASSETS_DIR), { recursive: true }),
-    fs.mkdir(getWorkspaceScriptsRootDir(workspaceRootPath), { recursive: true }),
-    fs.mkdir(getWorkspaceToolResultDir(workspaceRootPath), { recursive: true })
+    fs.mkdir(path.join(runtimeDir, PARTNER_ASSETS_DIR), { recursive: true }),
+    fs.mkdir(getPartnerScriptsRootDir(partnerId), { recursive: true }),
+    fs.mkdir(getPartnerToolResultDir(partnerId), { recursive: true }),
+    fs.mkdir(getPartnerObjectsDir(partnerId), { recursive: true })
   ])
 }
 
-export const ensureWorkspaceAssetBucket = async (
-  workspaceRootPath: string,
+export const ensurePartnerAssetBucket = async (
+  partnerId: string,
   assetBucketId: string
 ): Promise<string> => {
-  await ensureWorkspaceRuntimeDirs(workspaceRootPath)
-  const directoryPath = getWorkspaceAssetBucketDir(workspaceRootPath, assetBucketId)
+  await ensurePartnerRuntimeDirs(partnerId)
+  const directoryPath = getPartnerAssetBucketDir(partnerId, assetBucketId)
   await fs.mkdir(directoryPath, { recursive: true })
   return directoryPath
 }
 
-export const createWorkspaceAssetBucket = async (
-  workspaceRootPath: string
+export const createPartnerAssetBucket = async (
+  partnerId: string
 ): Promise<{ assetBucketId: string; directoryPath: string }> => {
   const assetBucketId = randomUUID()
   return {
     assetBucketId,
-    directoryPath: await ensureWorkspaceAssetBucket(workspaceRootPath, assetBucketId)
+    directoryPath: await ensurePartnerAssetBucket(partnerId, assetBucketId)
   }
 }
+
+/** @deprecated Use partner-scoped helpers. Kept as aliases during the partner refactor. */
+export const getWorkspaceAssetsRootDir = getPartnerAssetsRootDir
+/** @deprecated Use partner-scoped helpers. */
+export const getWorkspaceScriptsRootDir = getPartnerScriptsRootDir
+/** @deprecated Use partner-scoped helpers. */
+export const getWorkspaceToolResultDir = getPartnerToolResultDir
+/** @deprecated Use partner-scoped helpers. */
+export const ensureWorkspaceAssetBucket = ensurePartnerAssetBucket
+/** @deprecated Use partner-scoped helpers. */
+export const createWorkspaceAssetBucket = createPartnerAssetBucket

@@ -9,15 +9,17 @@ import type { AiRunContext } from '../../../../src/main/services/ai/types'
 const createBrainContext = (error: Error): AiRunContext =>
   ({
     runId: 'brain-safety-run',
-    sessionId: 'brain-safety-session',
+    partnerId: 'brain-safety-partner',
+    partnerName: '测试伙伴',
+    workspaceRoots: ['/tmp/workspace'],
     runStartedAt: 0,
     platform: 'macos',
     preference: 'default',
+    executionPermission: 'review',
     referenceScope: {
-      workspace: { workspaceId: 'ws-1', workspaceName: 'Workspace', rootPath: '/tmp/workspace' },
-      selectedReferences: []
+      selectedReferences: [],
+      attachments: []
     },
-    workspace: { workspaceId: 'ws-1', workspaceName: 'Workspace', rootPath: '/tmp/workspace' },
     checkCancelled: () => undefined,
     chatTools: async () => {
       throw error

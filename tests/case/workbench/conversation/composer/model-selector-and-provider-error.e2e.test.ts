@@ -8,13 +8,13 @@ import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   configureLiveModelThroughSettingsUi,
   createTemporaryWorkbenchWorkspace,
+  createPartnerThroughWorkbenchUi,
   getWorkbenchLocator,
   loadWorkbenchLiveModelEnv,
   navigateToWorkbench,
   prepareWorkbenchWorkspaceThroughUi,
   selectWorkbenchModel,
   sendWorkbenchMessage,
-  switchWorkbenchMode,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -160,7 +160,7 @@ describe('workbench conversation e2e', () => {
             modelName: liveEnv.modelName
           })
           await navigateToWorkbench(page, { waitForSessionListText: false })
-
+          await createPartnerThroughWorkbenchUi(page, WORKSPACE_NAME)
           const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
           await modelSelect.click()
           const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
@@ -209,7 +209,6 @@ describe('workbench conversation e2e', () => {
             workspaceName: WORKSPACE_NAME,
             rootPath: workspace.rootPath
           })
-          await switchWorkbenchMode(page, 'AI')
           await selectWorkbenchModel(page, liveEnv.modelName, { preferCustom: true })
           const customSelectedLabel = (
             await getWorkbenchLocator(page, workbenchSelectors.modelSelect).innerText()

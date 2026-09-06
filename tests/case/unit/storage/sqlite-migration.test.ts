@@ -103,16 +103,24 @@ describe('SQLite migration contract', () => {
     const migrationRows = upgraded
       .prepare('SELECT version, name FROM schema_migrations ORDER BY version')
       .all()
-    const retainedSession = upgraded
-      .prepare('SELECT title, workspace_id FROM chat_session WHERE id = ?')
-      .get('session-v9')
+    const partnerTable = upgraded
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'partner'")
+      .get()
+    const sessionTable = upgraded
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chat_session'")
+      .get()
+    const searchTurnTable = upgraded
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'chat_search_turn'")
+      .get()
     const integrity = upgraded.getConnection().pragma('quick_check')
     const foreignKeys = upgraded.getConnection().pragma('foreign_key_check')
     upgraded.close()
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows.at(-1)).toEqual({ version: 10, name: 'upgrade_from_v9' })
-    expect(retainedSession).toEqual({ title: '保留的会话', workspace_id: 'workspace-v9' })
+    expect(partnerTable).toEqual({ name: 'partner' })
+    expect(sessionTable).toBeUndefined()
+    expect(searchTurnTable).toBeUndefined()
     expect(integrity).toEqual([{ quick_check: 'ok' }])
     expect(foreignKeys).toEqual([])
     expect(schemaSignature(upgradedPath)).toEqual(schemaSignature(freshPath))
@@ -174,7 +182,7 @@ describe('SQLite migration contract', () => {
     const inspected = openRawDatabase(databasePath)
     const generatedTables = inspected
       .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('schema_migrations', 'chat_session', 'chat_session_message_log') ORDER BY name"
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('schema_migrations', 'partner', 'chat_session_message_log') ORDER BY name"
       )
       .all()
     const fixtureColumns = inspected.prepare('PRAGMA table_info(scheduled_task)').all()

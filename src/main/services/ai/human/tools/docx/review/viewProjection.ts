@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { getPartnerRuntimeDir } from '../../../../../assets/WorkspaceAssetService'
 import { sanitizeFileNameForPath } from '../../../../utils/fileNamePolicy'
 
 export type DocxApplyArtifactPaths = {
@@ -9,17 +10,12 @@ export type DocxApplyArtifactPaths = {
 }
 
 export const buildDocxApplyArtifactPaths = (input: {
-  workspaceRootPath: string
+  partnerId: string
   runId: string
   applyId: string
   sourceName: string
 }): DocxApplyArtifactPaths => {
-  const workDir = path.join(
-    path.resolve(input.workspaceRootPath),
-    '.ncurator',
-    'file-changes',
-    input.runId
-  )
+  const workDir = path.join(getPartnerRuntimeDir(input.partnerId), 'file-changes', input.runId)
   const baseName = sanitizeFileNameForPath({
     value: input.sourceName,
     fallback: 'document.docx'

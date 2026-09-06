@@ -1,5 +1,5 @@
 import type { ChatAttachment, KbAvailability, SelectedReference } from '../../../../../shared/types'
-import type { AiReferenceScope, AiWorkspaceBinding } from '../../types'
+import type { AiReferenceScope } from '../../types'
 
 const KB_AVAILABILITY_LABEL: Record<KbAvailability, string> = {
   indexed: '已索引',
@@ -28,18 +28,12 @@ const renderSelectedReference = (reference: SelectedReference, index: number): s
 }
 
 export const buildReferenceScope = (input: {
-  workspace: AiWorkspaceBinding
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
-}): AiReferenceScope => {
-  const selectedReferences = input.selectedReferences || []
-
-  return {
-    workspace: input.workspace,
-    selectedReferences,
-    attachments: input.attachments || []
-  }
-}
+}): AiReferenceScope => ({
+  selectedReferences: input.selectedReferences || [],
+  attachments: input.attachments || []
+})
 
 const renderAttachment = (attachment: ChatAttachment, index: number): string => {
   return `第 ${index} 个附件：${attachment.name}
@@ -49,14 +43,6 @@ const renderAttachment = (attachment: ChatAttachment, index: number): string => 
 export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
   const selectedReferences = scope.selectedReferences || []
   const attachments = scope.attachments || []
-  const workspaceText = `用户工作区域：
-- 根目录：${scope.workspace.rootPath}`
-
-  const fieldGuideText = `字段说明：
-- 类型：资料来源类型，目前支持本地文件、本地目录、网页资料。
-- 资源地址：这份资料对应的本地路径或网页地址。
-- 文档知识库状态：这份资料本身是否可被知识库检索。
-- 知识库文档ID：这份资料在知识库中的文档标识；没有对应知识库文档时显示为“无”。`
 
   const selectedReferencesText =
     selectedReferences.length > 0
@@ -72,11 +58,7 @@ ${attachments.map((attachment, index) => renderAttachment(attachment, index + 1)
       : `用户添加的附件：
 - 当前没有用户添加的附件。`
 
-  return `${workspaceText}
-
-${fieldGuideText}
-
-${selectedReferencesText}
+  return `${selectedReferencesText}
 
 ${attachmentsText}`
 }

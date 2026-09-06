@@ -5,12 +5,10 @@ import type {
   AiRunEvent,
   AiFileChangeStatus,
   IpcJsonObject,
-  RuntimeSkillId,
-  SearchResult
+  RuntimeSkillId
 } from '../../../../shared/types'
 import type { RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 
-export type WorkbenchMode = 'ai' | 'search'
 export type WorkbenchAiPreference = AiPreference
 export type WorkbenchExecutionPermission = AiExecutionPermission
 
@@ -37,13 +35,6 @@ export type WorkbenchSelectOption = {
   /** Shown via Tooltip when the option is disabled (hover). */
   disabledReason?: string
   children?: WorkbenchSelectOption[]
-}
-
-export type SearchWorkbenchTurn = {
-  query: string
-  results: SearchResult[]
-  tokens: string[]
-  createdAt: number
 }
 
 export type WorkbenchFileOrigin = 'search_hit' | 'read' | 'artifact' | 'preview' | 'source'
@@ -204,13 +195,6 @@ export type WorkbenchContentPanelState =
       kind: 'empty'
       title: string
       description: string
-    }
-  | {
-      kind: 'search_list'
-      title: string
-      query: string
-      results: SearchResult[]
-      tokens: string[]
     }
   | {
       kind: 'file_preview'

@@ -14,7 +14,6 @@ import {
   selectWorkbenchResourceMenuItem,
   setupWorkbenchWithTempWorkspace,
   startLocalWorkbenchHttpServer,
-  switchWorkbenchMode,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
@@ -379,7 +378,6 @@ describe('workbench run e2e', () => {
             timeout: 30_000
           })
 
-          await switchWorkbenchMode(page, 'AI')
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,

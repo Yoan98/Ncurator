@@ -26,8 +26,8 @@ const isE2EObserverEnabled = isE2EFixtureMode || process.env.NCURATOR_E2E_OBSERV
 const downloadProgressListeners = new Set<(progressData: DownloadProgress) => void>()
 const workspaceIndexJobProgressListeners = new Set<(job: WorkspaceIndexJobRecord) => void>()
 const appUpdateFixtureListeners = new Set<(snapshot: AppUpdateSnapshot) => void>()
-const systemNotificationSessionListeners = new Set<(sessionId: string) => void>()
-let pendingSystemNotificationSessionId: string | null = null
+const systemNotificationPartnerListeners = new Set<(partnerId: string) => void>()
+let pendingSystemNotificationPartnerId: string | null = null
 const APP_UPDATE_E2E_SET_SNAPSHOT_EVENT = 'ncurator-e2e-app-update-set-snapshot'
 
 let appUpdateFixtureSnapshot: AppUpdateSnapshot = {
@@ -76,10 +76,9 @@ const emitDownloadProgress = (payload: DownloadProgress): void => {
   }
 }
 
-ipcRenderer.on('system-notification-open-session', (_event, sessionId: string) => {
-  pendingSystemNotificationSessionId = sessionId
-  for (const listener of systemNotificationSessionListeners) listener(sessionId)
-  if (systemNotificationSessionListeners.size > 0) pendingSystemNotificationSessionId = null
+ipcRenderer.on('system-notification-open-session', (_event, partnerId: string) => {
+  pendingSystemNotificationPartnerId = partnerId
+  for (const listener of systemNotificationPartnerListeners) listener(partnerId)
 })
 
 if (isE2EObserverEnabled) {
@@ -219,7 +218,6 @@ const api: DesktopApi = {
   webSourcesPrepare: (payload) => ipcRenderer.invoke('web-sources-prepare', payload),
   webSourceRefresh: async (payload) => {
     emitE2EIpcCall('webSourceRefresh', {
-      workspaceId: String(payload.workspaceId || '').trim(),
       webSourceId: String(payload.webSourceId || '').trim()
     })
     return ipcRenderer.invoke('web-source-refresh', payload)
@@ -284,12 +282,13 @@ const api: DesktopApi = {
   },
 
   // Chat & LLM
-  chatSessionList: () => ipcRenderer.invoke('chat-session-list'),
-  chatSessionSave: (session) => ipcRenderer.invoke('chat-session-save', session),
-  chatSessionMarkViewed: (id: string) => ipcRenderer.invoke('chat-session-mark-viewed', id),
-  chatSessionSetPinned: (payload) => ipcRenderer.invoke('chat-session-set-pinned', payload),
-  chatSessionDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
-  chatMessageList: (sessionId: string) => ipcRenderer.invoke('chat-message-list', sessionId),
+  partnerList: () => ipcRenderer.invoke('chat-session-list'),
+  partnerCreate: (payload) => ipcRenderer.invoke('partner-create', payload),
+  partnerSave: (partner) => ipcRenderer.invoke('chat-session-save', partner),
+  partnerMarkViewed: (id: string) => ipcRenderer.invoke('chat-session-mark-viewed', id),
+  partnerSetPinned: (payload) => ipcRenderer.invoke('chat-session-set-pinned', payload),
+  partnerDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
+  partnerMessageList: (partnerId: string) => ipcRenderer.invoke('chat-message-list', partnerId),
   scheduledTaskList: () => {
     emitE2EIpcCall('scheduledTaskList')
     return ipcRenderer.invoke('scheduled-task-list')
@@ -313,19 +312,20 @@ const api: DesktopApi = {
     })
     return ipcRenderer.invoke('scheduled-task-set-enabled', payload)
   },
-  onChatSessionListRefresh: (cb: () => void) => {
+  onPartnerListRefresh: (cb: () => void) => {
     const listener = (): void => cb()
     ipcRenderer.on('chat-session-list-refresh', listener)
     return () => {
       ipcRenderer.removeListener('chat-session-list-refresh', listener)
     }
   },
-  chatSessionOpen: (payload) => ipcRenderer.invoke('chat-session-open', payload),
-  chatSessionUiStateSave: (payload) => ipcRenderer.invoke('chat-session-ui-state-save', payload),
+  partnerOpen: (payload) => ipcRenderer.invoke('chat-session-open', payload),
+  partnerUiStateSave: (payload) => ipcRenderer.invoke('chat-session-ui-state-save', payload),
   workbenchUiStateGet: () => ipcRenderer.invoke('workbench-ui-state-get'),
   workbenchUiStateSave: (payload) => ipcRenderer.invoke('workbench-ui-state-save', payload),
-  chatSessionRunSummaries: (payload) => ipcRenderer.invoke('chat-session-run-summaries', payload),
-  chatSessionSnapshotGet: (payload) => ipcRenderer.invoke('chat-session-snapshot-get', payload),
+  partnerRunSummaries: (payload) => ipcRenderer.invoke('chat-session-run-summaries', payload),
+  partnerSnapshotGet: (payload) => ipcRenderer.invoke('chat-session-snapshot-get', payload),
+  partnerClearContext: (payload) => ipcRenderer.invoke('partner-clear-context', payload),
   chatSubmit: (payload) => {
     emitE2EIpcCall('chatSubmit')
     return ipcRenderer.invoke('chat-submit', payload)
@@ -495,15 +495,15 @@ const api: DesktopApi = {
       ipcRenderer.removeListener('ai-run-event', listener)
     }
   },
-  onSystemNotificationOpenSession: (cb: (sessionId: string) => void) => {
-    systemNotificationSessionListeners.add(cb)
-    if (pendingSystemNotificationSessionId) {
-      const sessionId = pendingSystemNotificationSessionId
-      pendingSystemNotificationSessionId = null
-      queueMicrotask(() => cb(sessionId))
+  onSystemNotificationOpenPartner: (cb: (partnerId: string) => void) => {
+    systemNotificationPartnerListeners.add(cb)
+    if (pendingSystemNotificationPartnerId) {
+      const partnerId = pendingSystemNotificationPartnerId
+      pendingSystemNotificationPartnerId = null
+      queueMicrotask(() => cb(partnerId))
     }
     return () => {
-      systemNotificationSessionListeners.delete(cb)
+      systemNotificationPartnerListeners.delete(cb)
     }
   },
   onWorkbenchUiFlushRequest: (cb: () => void | Promise<void>) => {

@@ -8,7 +8,7 @@ import { jsonStringify, parseJsonObject, toRequiredNumber, toRequiredString } fr
 
 type ChatMessageLogRow = {
   id?: unknown
-  session_id?: unknown
+  partner_id?: unknown
   run_id?: unknown
   seq?: unknown
   entry_json?: unknown
@@ -20,7 +20,7 @@ const toMessageLogRecord = (row: ChatMessageLogRow): ChatMessageLogRecord | null
   if (!entry) return null
   return {
     id: toRequiredString(row.id),
-    sessionId: toRequiredString(row.session_id),
+    partnerId: toRequiredString(row.partner_id),
     runId: toRequiredString(row.run_id),
     seq: toRequiredNumber(row.seq),
     entry,
@@ -32,7 +32,7 @@ export class ChatMessageLogStore {
   public constructor(private readonly sqlite: SqliteCore) {}
 
   public async appendBatch(input: {
-    sessionId: string
+    partnerId: string
     runId: string
     entries: ChatMessageLogEntry[]
   }): Promise<ChatMessageLogRecord[]> {
@@ -40,14 +40,14 @@ export class ChatMessageLogStore {
     return this.sqlite.transaction(() => {
       const nextSeqRow = this.sqlite
         .prepare(
-          'SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM chat_session_message_log WHERE session_id = ?'
+          'SELECT COALESCE(MAX(seq), 0) + 1 AS next_seq FROM chat_session_message_log WHERE partner_id = ?'
         )
-        .get(input.sessionId) as { next_seq?: unknown }
+        .get(input.partnerId) as { next_seq?: unknown }
       const startSeq = toRequiredNumber(nextSeqRow.next_seq, 1)
       const insert = this.sqlite.prepare(
         `
-        INSERT INTO chat_session_message_log (id, session_id, run_id, seq, entry_json, created_at)
-        VALUES (@id, @session_id, @run_id, @seq, @entry_json, @created_at)
+        INSERT INTO chat_session_message_log (id, partner_id, run_id, seq, entry_json, created_at)
+        VALUES (@id, @partner_id, @run_id, @seq, @entry_json, @created_at)
       `
       )
       const now = Date.now()
@@ -56,7 +56,7 @@ export class ChatMessageLogStore {
         const seq = startSeq + index
         const record: ChatMessageLogRecord = {
           id: uuidv4(),
-          sessionId: input.sessionId,
+          partnerId: input.partnerId,
           runId: input.runId,
           seq,
           entry,
@@ -64,7 +64,7 @@ export class ChatMessageLogStore {
         }
         insert.run({
           id: record.id,
-          session_id: record.sessionId,
+          partner_id: record.partnerId,
           run_id: record.runId,
           seq: record.seq,
           entry_json: jsonStringify(record.entry),
@@ -76,24 +76,24 @@ export class ChatMessageLogStore {
     })
   }
 
-  public async list(sessionId: string): Promise<ChatMessageLogRecord[]> {
+  public async list(partnerId: string): Promise<ChatMessageLogRecord[]> {
     const rows = this.sqlite
-      .prepare('SELECT * FROM chat_session_message_log WHERE session_id = ? ORDER BY seq ASC')
-      .all(sessionId) as ChatMessageLogRow[]
+      .prepare('SELECT * FROM chat_session_message_log WHERE partner_id = ? ORDER BY seq ASC')
+      .all(partnerId) as ChatMessageLogRow[]
     return rows
       .map(toMessageLogRecord)
       .filter((record): record is ChatMessageLogRecord => record !== null)
   }
 
   public async listPage(input: {
-    sessionId: string
+    partnerId: string
     limit: number
     beforeSeq?: number
   }): Promise<{ records: ChatMessageLogRecord[]; hasMoreBefore: boolean }> {
     const safeLimit = Math.max(1, Math.min(500, Number(input.limit || 50)))
     const beforeSeq = Number(input.beforeSeq)
     const params = {
-      session_id: input.sessionId,
+      partner_id: input.partnerId,
       before: Number.isFinite(beforeSeq) ? Math.floor(beforeSeq) : null,
       limit: safeLimit + 1
     }
@@ -101,7 +101,7 @@ export class ChatMessageLogStore {
       .prepare(
         `
         SELECT * FROM chat_session_message_log
-        WHERE session_id = @session_id
+        WHERE partner_id = @partner_id
           AND (@before IS NULL OR seq < @before)
         ORDER BY seq DESC
         LIMIT @limit

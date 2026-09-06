@@ -3,7 +3,6 @@ import { Card, Button, Typography } from 'antd'
 import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { getActiveConfig } from '../services/llmService'
-import { useWorkbenchMode } from '../contexts/WorkbenchModeContext'
 import { workbenchSelectors } from '../testing/selectors'
 
 const { Text } = Typography
@@ -23,8 +22,6 @@ const NotificationCenter: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [notifications, setNotifications] = useState<NotificationItem[]>([])
-  const { mode: workbenchMode } = useWorkbenchMode()
-
   const isSettingsPage = location.pathname.startsWith('/settings')
   const isWorkbenchPage = location.pathname === '/'
 
@@ -51,7 +48,7 @@ const NotificationCenter: React.FC = () => {
       const config = await getActiveConfig()
       if (disposed) return
       if (!config) {
-        if (isWorkbenchPage && workbenchMode === 'ai') {
+        if (isWorkbenchPage) {
           updateNotification('llm-config-missing', {
             id: 'llm-config-missing',
             title: '未配置大模型 API',
@@ -74,7 +71,7 @@ const NotificationCenter: React.FC = () => {
     return () => {
       disposed = true
     }
-  }, [location.pathname, isSettingsPage, isWorkbenchPage, navigate, workbenchMode])
+  }, [location.pathname, isSettingsPage, isWorkbenchPage, navigate])
 
   if (notifications.length === 0) return null
 

@@ -70,7 +70,7 @@ const seedDeck = async (
     ctx: { saveFileChangeRecord: async () => undefined } as never,
     cache: {} as never,
     runId: `seed-${sourcePath}`,
-    sessionId: 'ppt-diff-seed',
+    partnerId: 'ppt-diff-seed',
     taskId: 'ppt-diff-seed',
     workspaceRootPath,
     emitActivity: () => undefined

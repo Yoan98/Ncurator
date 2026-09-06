@@ -265,7 +265,7 @@ describe('ai tool excel edit backend', () => {
           } as unknown as AiRunContext,
           cache: {},
           runId: `${runtime.runId}-rollback`,
-          sessionId: 'rollback-session',
+          partnerId: 'rollback-session',
           taskId: `${runtime.taskId}-rollback`,
           workspaceRootPath: rollbackRoot,
           emitActivity: () => undefined

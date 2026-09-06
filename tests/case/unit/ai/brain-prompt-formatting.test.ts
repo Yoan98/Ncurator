@@ -10,20 +10,15 @@ const createFakeCtx = (): AiRunContext =>
   ({
     platform: 'windows',
     runId: 'run-prompt-formatting',
-    sessionId: 'session-prompt-formatting',
+    partnerId: 'partner-prompt-formatting',
+    partnerName: '测试伙伴',
+    workspaceRoots: ['D:\\workspace'],
     runStartedAt: 0,
     preference: 'default',
-    workspace: {
-      workspaceId: 'workspace-prompt-formatting',
-      workspaceName: 'prompt formatting workspace',
-      rootPath: 'D:\\workspace'
-    },
+    executionPermission: 'review',
     referenceScope: {
-      workspace: {
-        id: 'workspace-prompt-formatting',
-        rootPath: 'D:\\workspace'
-      },
-      selectedReferences: []
+      selectedReferences: [],
+      attachments: []
     }
   }) as AiRunContext
 

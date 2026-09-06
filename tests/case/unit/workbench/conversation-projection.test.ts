@@ -5,22 +5,15 @@ import {
 } from '../../../../src/shared/workbench/conversationProjection'
 import type { AiRunRecord, ChatMessage, ChatMessageLogRecord } from '../../../../src/shared/types'
 
-const workspace = {
-  workspaceId: 'workspace-1',
-  workspaceName: 'workspace-1',
-  rootPath: '/tmp/workspace'
-}
-
 const buildRun = (input: Partial<AiRunRecord> & { id: string }): AiRunRecord => ({
   id: input.id,
-  sessionId: input.sessionId || 'session-1',
+  partnerId: input.partnerId || 'partner-1',
   userMessageId: input.userMessageId || `${input.id}-user`,
   assistantMessageId: input.assistantMessageId || `${input.id}-assistant`,
   status: input.status || 'completed',
   input: input.input || `input-${input.id}`,
   partialAnswer: input.partialAnswer || input.finalAnswer || 'answer',
   finalAnswer: input.finalAnswer || 'answer',
-  workspace: input.workspace ?? workspace,
   createdAt: input.createdAt || 10,
   updatedAt: input.updatedAt || 11,
   finishedAt: input.finishedAt || 11,
@@ -34,7 +27,7 @@ const buildLogRecord = (input: {
   createdAt?: number
 }): ChatMessageLogRecord => ({
   id: `${input.runId}-${input.seq}`,
-  sessionId: 'session-1',
+  partnerId: 'partner-1',
   runId: input.runId,
   seq: input.seq,
   entry: input.entry,
@@ -71,7 +64,7 @@ describe('conversationProjection', () => {
     ]
 
     const messages = projectAiConversationMessages({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       records,
       runs
     })
@@ -93,7 +86,7 @@ describe('conversationProjection', () => {
     ]
 
     const messages = projectAiConversationMessages({
-      sessionId: 'session-1',
+      partnerId: 'partner-1',
       records: [],
       runs
     })
@@ -106,7 +99,7 @@ describe('conversationProjection', () => {
     const aiMessages: ChatMessage[] = [
       {
         id: 'user-1',
-        session_id: 'session-1',
+        partner_id: 'partner-1',
         role: 'user',
         content: 'ai',
         timestamp: 1
@@ -115,14 +108,14 @@ describe('conversationProjection', () => {
     const searchMessages: ChatMessage[] = [
       {
         id: 'search-1',
-        session_id: 'session-1',
+        partner_id: 'partner-1',
         role: 'user',
         content: 'search query',
         timestamp: 2
       },
       {
         id: 'user-1',
-        session_id: 'session-1',
+        partner_id: 'partner-1',
         role: 'user',
         content: 'duplicate',
         timestamp: 3
