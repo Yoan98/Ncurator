@@ -796,7 +796,6 @@ export function registerHandlers(services: {
         finished_at: Date.now()
       })
       await documentsStore.purgeStaleChunks()
-      emitSourceListRefreshToAll()
     } catch (error) {
       const message = getErrorMessage(error)
       errorLogService?.write({
@@ -812,7 +811,6 @@ export function registerHandlers(services: {
         finished_at: Date.now()
       })
       await documentsStore.purgeStaleChunks()
-      emitSourceListRefreshToAll()
     } finally {
       activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'file'))
     }

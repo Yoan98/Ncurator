@@ -8,6 +8,7 @@ import {
   selectWorkbenchModel,
   setupWorkbenchWithTempWorkspace,
   waitForWorkbenchAiRunCompletion,
+  waitForVisiblePartnerRow,
   workbenchSelectors,
   recordWorkbenchAiEvidence
 } from '../../../../harness/e2e/workbench'
@@ -52,18 +53,14 @@ describe('workbench conversation e2e', () => {
           )
 
           await getWorkbenchLocator(page, workbenchSelectors.newPartnerButton).click()
-          const modal = getWorkbenchLocator(page, workbenchSelectors.createPartnerModal)
-          await modal.waitFor({ state: 'visible' })
-          await getWorkbenchLocator(page, workbenchSelectors.createPartnerNameInput).fill(
-            PARTNER_NAME
-          )
+          const nameInput = getWorkbenchLocator(page, workbenchSelectors.createPartnerNameInput)
+          await nameInput.waitFor({ state: 'visible' })
+          await nameInput.fill(PARTNER_NAME)
+          const modal = nameInput.locator('xpath=ancestor::div[contains(@class,"ant-modal")]')
           await modal.getByRole('button', { name: 'hexagon' }).click()
           await modal.getByRole('button', { name: 'teal' }).click()
           await modal.locator('.ant-modal-footer .ant-btn-primary').click()
-          await getWorkbenchLocator(page, workbenchSelectors.partnersList)
-            .getByText(PARTNER_NAME)
-            .first()
-            .waitFor({ state: 'visible' })
+          await waitForVisiblePartnerRow(page, PARTNER_NAME)
           await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
           await selectWorkbenchModel(page, setup.env.modelName)
 

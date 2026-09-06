@@ -520,9 +520,6 @@ export const configureLiveModelThroughSettingsUi = async (
   await page.locator('tbody tr').filter({ hasText: env.modelName }).waitFor({
     state: 'visible'
   })
-
-  await navigateToWorkbench(page, { waitForSessionListText: false })
-  await selectWorkbenchModel(page, env.modelName, { preferCustom: true })
 }
 
 export const createWorkspaceThroughSettingsUi = async (
@@ -947,22 +944,23 @@ export const prepareWorkbenchWorkspaceThroughUi = async (
   await navigateToWorkbench(page)
 }
 
+export const waitForVisiblePartnerRow = async (page: Page, name: string): Promise<void> => {
+  await getWorkbenchPrefixLocator(page, workbenchSelectors.partnerItemPrefix)
+    .filter({ hasText: name })
+    .first()
+    .waitFor({ state: 'visible' })
+}
+
 export const createPartnerThroughWorkbenchUi = async (
   page: Page,
   name = '测试伙伴'
 ): Promise<void> => {
   await getWorkbenchLocator(page, workbenchSelectors.newPartnerButton).click()
-  await getWorkbenchLocator(page, workbenchSelectors.createPartnerModal).waitFor({
-    state: 'visible'
-  })
-  await getWorkbenchLocator(page, workbenchSelectors.createPartnerNameInput).fill(name)
-  await getWorkbenchLocator(page, workbenchSelectors.createPartnerModal)
-    .locator('.ant-modal-footer .ant-btn-primary')
-    .click()
-  await getWorkbenchLocator(page, workbenchSelectors.partnersList)
-    .getByText(name)
-    .first()
-    .waitFor({ state: 'visible' })
+  const nameInput = getWorkbenchLocator(page, workbenchSelectors.createPartnerNameInput)
+  await nameInput.waitFor({ state: 'visible' })
+  await nameInput.fill(name)
+  await nameInput.press('Enter')
+  await waitForVisiblePartnerRow(page, name)
 }
 
 export const setupWorkbenchWithTempWorkspace = async (

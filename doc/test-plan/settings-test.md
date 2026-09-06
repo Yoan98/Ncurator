@@ -77,18 +77,14 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Oracle：页面打开后文件地址树和网页 tab 自动初始化，对齐 `SET-WORKSPACE-001-AC1`、`SET-WORKSPACE-005-AC3`。废弃的 `SET-WORKSPACE-001-AC2`、`SET-WORKSPACE-005-AC1`、`SET-WORKSPACE-005-AC4` 不测。
 - Not：不验证添加或移除地址的后续树刷新细节。
 
-#### `workspace-add-selection-flow`
-
-- 状态：**废弃**。不再创建具名工作空间、不再校验空名称、不再提示未绑目录才能发送。添加文件地址由 `workspace-set-root-path` 覆盖；空态由同 case 覆盖 `SET-WORKSPACE-007`。
-
 #### `workspace-set-root-path`
 
 - 测试类型：`e2e`
 - What：文件 tab 可以直接添加目录或文件作为工作地址，并立即刷新目录树；顶层节点就是各地址。
 - Why：文件地址已从“具名容器再绑目录”改为直接丢入路径。
 - How：进入无地址页面检查空态，再通过目录选择器添加一条真实目录；再尝试添加已包含的子路径，确认被拒绝；再添加父路径，确认替换子根。
-- Oracle：空态提示还没有文件地址，对齐 `SET-WORKSPACE-007-AC1`；成功添加后写入地址并刷新真实目录树，顶层即该地址，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-008-AC1`；包含关系拒绝与父路径替换对齐 `SET-WORKSPACE-006-AC5`。废弃的 `SET-WORKSPACE-008-AC3`、`SET-WORKSPACE-006-AC3` 不测。添加后扫描进度（`SET-WORKSPACE-006-AC4`）不在本 case 强制断言。
-- Not：不验证不同操作系统的原生目录选择器样式，也不验证真实文件系统权限错误分支。Workbench 发送门禁不由本 case 承担。
+- Oracle：空态提示还没有文件地址，对齐 `SET-WORKSPACE-007-AC1`；成功添加后写入地址并刷新真实目录树，顶层即该地址，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-008-AC1`；包含关系拒绝与父路径替换对齐 `SET-WORKSPACE-006-AC5`。废弃的 `SET-WORKSPACE-002`（具名添加弹窗）、`SET-WORKSPACE-008-AC3`、`SET-WORKSPACE-006-AC3` 不测。添加后扫描进度（`SET-WORKSPACE-006-AC4`）不在本 case 强制断言。
+- Not：不验证不同操作系统的原生目录选择器样式，也不验证真实文件系统权限错误分支。Workbench 发送门禁不由本 case 承担。不再创建具名工作空间、不再校验空名称。`SET-WORKSPACE-007-AC2`（地址内无可显示文件的树空态）不在本 case 强制断言。
 
 #### `workspace-directory-lazy-load`
 
@@ -137,7 +133,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：“索引已经可用”的核心用户反馈链路。
 - How：复制共享 workspace 输入的隔离副本，通过 Settings UI 添加为文件地址；随后点击更新索引，读取刷新后的文件树和全部支持文件状态。共享 fixture 含 `.doc`、`docx`、`pdf`、`md`、`txt`、`xlsx`、`xlsm` 等全部受支持类型，其中 excel 只以元数据方式索引进库。
 - Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮保持可用，对齐 `SET-WORKSPACE-004-AC3`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC7`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
-- Not：不验证向量内容质量和搜索召回结果。
+- Not：不验证向量内容质量和搜索召回结果。更新索引执行中 Workbench `kb_search` / `kb_list_documents` 返回错误、检查更新不拦截，由 unit `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`。
 
 #### `workspace-prepare-failed-retry`
 
@@ -193,7 +189,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：网页索引是“爬取 + 建索引”两阶段链路，失败类型必须可区分。
 - How：预置一条成功网页和一条带失败标记的网页，先执行“检查更新”，再执行“更新索引”。
 - Oracle：网页列表、摘要、失败数量和操作区初始化对齐 `SET-WEB-001-AC1`、`SET-WEB-001-AC2`；检查进度和完成状态对齐 `SET-WEB-003-AC1`、`SET-WEB-003-AC2`；更新时网页进入抓取/索引状态，对齐 `SET-WEB-004-AC1`；成功与失败分别收敛，对齐 `SET-WEB-004-AC2`、`SET-WEB-004-AC3`；分阶段进度对齐 `SET-WEB-004-AC4`。
-- Not：不验证真实网页正文切块、embedding 写入质量和索引失败以外的网络细节；向量模型未安装时「更新索引」禁用与说明（`SET-WEB-004-AC7`，文件侧姊妹 `SET-WORKSPACE-004-AC6`）标为手动 / 暂缓，不进日常自动化回归。
+- Not：不验证真实网页正文切块、embedding 写入质量和索引失败以外的网络细节；向量模型未安装时「更新索引」禁用与说明（`SET-WEB-004-AC7`，文件侧姊妹 `SET-WORKSPACE-004-AC6`）标为手动 / 暂缓，不进日常自动化回归。网页更新索引执行中的 kb 拦截由 unit `kb-indexing-blocks-search` 覆盖 `SET-WEB-004-AC8`。
 
 #### `web-prepare-progress-restore`
 

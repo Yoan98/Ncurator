@@ -168,11 +168,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
       }))
       if (job.status !== 'running') {
         void loadWorkspaceDirectory(job.workspace_id, '')
-        void refreshWorkspaceList()
       }
     }
     return window.api.onWorkspaceIndexJobProgress(handleProgress)
-  }, [loadWorkspaceDirectory, refreshWorkspaceList])
+  }, [loadWorkspaceDirectory])
 
   useEffect(() => {
     workspaces.forEach((workspace) => {

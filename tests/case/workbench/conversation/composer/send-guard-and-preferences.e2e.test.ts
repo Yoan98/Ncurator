@@ -17,13 +17,12 @@ import {
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
   sendWorkbenchMessage,
-  setWorkbenchInput,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors,
   loadWorkbenchLiveModelEnv
 } from '../../../../harness/e2e/workbench'
 
-const CASE_ID = 'send-guard-mode-switch-and-preferences'
+const CASE_ID = 'send-guard-and-preferences'
 const REAL_SEND_PROMPT = '请用一句话确认当前工作区中 human-input.txt 存在。'
 
 describe('workbench conversation e2e', () => {
@@ -58,11 +57,13 @@ describe('workbench conversation e2e', () => {
           await configureLiveModelThroughSettingsUi(page, env)
           await navigateToWorkbench(page)
 
-          await setWorkbenchInput(page, REAL_SEND_PROMPT)
-          const disabledWithoutPartner = await getWorkbenchLocator(
+          const emptyWithoutPartner = await page
+            .getByText('还没有伙伴。从左侧创建一个开始对话。')
+            .isVisible()
+          const sendHiddenWithoutPartner = !(await getWorkbenchLocator(
             page,
             workbenchSelectors.sendButton
-          ).evaluate((element) => element instanceof HTMLButtonElement && element.disabled)
+          ).isVisible())
 
           await prepareWorkbenchWorkspaceThroughUi(page, {
             workspaceName: 'Workbench Guard Workspace',
@@ -134,7 +135,8 @@ describe('workbench conversation e2e', () => {
 
           return {
             missingModelInitialText,
-            disabledWithoutPartner,
+            emptyWithoutPartner,
+            sendHiddenWithoutPartner,
             selectedModelBeforeReload,
             selectedModelAfterReload,
             selectedAiPreferenceBeforeReload,
@@ -157,7 +159,8 @@ describe('workbench conversation e2e', () => {
           })
 
           await runtime.assertThat(
-            result.disabledWithoutPartner &&
+            result.emptyWithoutPartner &&
+              result.sendHiddenWithoutPartner &&
               result.selectedModelBeforeReload.length > 0 &&
               result.selectedModelAfterReload === result.selectedModelBeforeReload &&
               result.selectedAiPreferenceBeforeReload.includes('严谨') &&
@@ -172,7 +175,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-send-guard-preference-real-path',
               message:
-                'Workbench 应在未创建伙伴时禁用发送，权限菜单展示两条说明，完全访问切换具备风险确认弹窗，模型与 AI 推进偏好重进页面后恢复，发送时按钮进入停止态并最终完成。',
+                'Workbench 应在未创建伙伴时展示 Composer 空态，权限菜单展示两条说明，完全访问切换具备风险确认弹窗，模型与 AI 推进偏好重进页面后恢复，发送时按钮进入停止态并最终完成。',
               data: result
             }
           )

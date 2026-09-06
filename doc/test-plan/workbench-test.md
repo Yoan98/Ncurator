@@ -20,7 +20,7 @@
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地内容输入与 hover-退出网页任务（observe→actionId act，支持 text 注入）；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
-- `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 验证 type=fetch 读取网页正文后再回答。两类 case 均不得因 `web_search` 自动展开右侧搜索列表（该列表面板已不存在），对齐 `WB-CORE-007-AC4`。
+- `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 验证 type=fetch 读取网页正文后再回答。两类 case 均不得因 `web_search` 自动展开右侧搜索列表（该列表面板已不存在），对齐 `WB-CORE-007-AC4`。Composer 搜索模式与右侧搜索列表面板已删除，废弃 `WB-COMPOSER-004`、`WB-PANEL-002`。
 - Workbench 附件链路不限文件扩展名，任何可被文件选择器选中的普通文件都可以添加，不因扩展名拒绝；`+` 和拖放保留源文件绝对路径，粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
 - Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 回归承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。其中 Excel 工具侧覆盖 `WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC5`、`WB-EXCEL-002-AC6`、`WB-EXCEL-002-AC7`、`WB-EXCEL-002-AC8`（Workbench e2e 仍覆盖 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1/AC3/AC4` 用户闭环）。
 - DOCX 读取结果和历史结果按递归 children 树展示，Workbench 必须能显示统一的 `nodeId`、visual kind、`imagePath` 和 story；DOCX 写结果复用统一状态展示，普通写入不展示冗余正文，创建操作只展示 `createdIds`。格式操作按 text、paragraph、table、row、cell、section 展示。图片理解统一由 `agent-control` 内置的 `read_image` 把图片加入主模型请求。
@@ -99,14 +99,14 @@ tests/case/workbench/
 - Oracle：说明包含 DOCX、PPTX、XLSX、PNG、JPEG、WebP 和 UTF-8 文本，不包含 GIF、SVG，对齐 `WB-CORE-003-AC1`、`WB-CORE-003-AC2`。
 - Not：不重复验证各格式的工具实现和回退算法，这些由对应 AI tool 与 Workbench apply case 覆盖。
 
-#### `partner-create-and-empty-state`
+#### `partner-create-and-name`
 
 - 测试类型：`e2e`
 - What：无伙伴时空态、创建弹窗提交即落库、标题就是伙伴名称且不因后续消息改名。
 - Why：伙伴是一条一直聊下去的记录；草稿提升或「发第一条才创建」会产生空会话语义。
 - How：打开 Workbench 确认无伙伴空态与「创建伙伴」入口；填写名称并选择外形/颜色后提交；再发送两条真实自然语言请求。
-- Oracle：无伙伴时 Composer 空态且提供 44px 拖动区，对齐 `WB-CORE-008`、`WB-SESSION-001-AC1`；提交即写入 `partner` 并选中，对齐 `WB-SESSION-001`；标题等于伙伴 name 且第二条消息不改名，对齐 `WB-SESSION-003`。不存在 `__draft__`，对齐废弃的 `WB-SESSION-001-AC2`、`WB-SESSION-008-AC4`。
-- Not：不验证标题手动编辑，也不验证侧栏视觉样式。代码侧文件名可能仍为 `session-*`，口径以本 case 为准。
+- Oracle：无伙伴时 Composer 空态且提供 44px 拖动区，对齐 `WB-CORE-008`、`WB-SESSION-001-AC1`、`WB-CORE-001-AC2`；提交即写入 `partner` 并选中，对齐 `WB-SESSION-001`；标题等于伙伴 name 且第二条消息不改名，对齐 `WB-SESSION-003`。不存在 `__draft__`，对齐废弃的 `WB-SESSION-001-AC2`、`WB-SESSION-008-AC4`。
+- Not：不验证标题手动编辑，也不验证侧栏视觉样式。
 
 #### `partner-delete-confirmation`
 
@@ -168,21 +168,17 @@ tests/case/workbench/
 - What：缺少模型时的配置提示、发送前置条件（已有伙伴 + 输入非空），以及模型 / AI 推进偏好 / 执行权限按伙伴恢复。
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务或把任务发到错误伙伴。
 - How：先在无模型配置状态下检查提示，再通过 UI 配置真实模型并创建伙伴；覆盖无伙伴空态、输入保留、模型选择、AI 推进偏好、执行权限菜单的两条说明与完全访问高危风险弹窗确认/取消门禁、切换伙伴后的独立恢复和真实发送。Composer 不再有 AI / 搜索切换，也不再有工作区选择器。
-- Oracle：无模型时快速显示配置提示；无伙伴时 Composer 空态，hover 提示未创建伙伴，对齐 `WB-CORE-001-AC1`、`WB-COMPOSER-001`；有伙伴且输入非空时可发送；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；切换“完全访问”触发风险二次确认弹窗（取消维持审核、确认切换成功，切回审核免二次确认），对齐 `WB-COMPOSER-007-AC13`；模型、推进偏好和执行权限按伙伴恢复，对齐 `WB-MODE-001-AC1`、`WB-COMPOSER-007`、`WB-SESSION-008`。废弃的 `WB-COMPOSER-005`、`WB-MODE-002`、`WB-MODE-003` 不测。
-- Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。
+- Oracle：无模型时快速显示配置提示；无伙伴时 Composer 空态且不出现发送按钮，对齐 `WB-CORE-001-AC1`、`WB-CORE-001-AC2`、`WB-COMPOSER-001`；有伙伴且输入非空时可发送；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；切换“完全访问”触发风险二次确认弹窗（取消维持审核、确认切换成功，切回审核免二次确认），对齐 `WB-COMPOSER-007-AC13`；模型、推进偏好和执行权限按伙伴恢复，对齐 `WB-MODE-001-AC1`、`WB-COMPOSER-007`、`WB-SESSION-008`。废弃的 `WB-COMPOSER-005`、`WB-MODE-001-AC2`、`WB-MODE-002`、`WB-MODE-003` 不测。
+- Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。Composer 已删除搜索模式，不再测智能 / 搜索互斥。
 
 #### `partner-required-to-send`
 
 - 测试类型：`e2e`
 - What：未创建伙伴时 Composer 空态、发送不可用；创建伙伴后输入非空即可发送。
 - Why：发送门禁已从「绑定工作空间目录」改为「已有伙伴」。
-- How：进入无伙伴 Workbench，确认空态与发送不可用；创建伙伴并配置真实模型后发送真实请求。设置页不再承担发送前置。
-- Oracle：未创建伙伴时不可发送，对齐 `WB-CORE-001-AC1`、`WB-COMPOSER-001`；创建后可发送并完成真实 AI 运行，对齐 `WB-CORE-006-AC1`。废弃的 `WB-COMPOSER-005` 不测。
-- Not：不验证设置页文件地址扫描，也不重复断言 Settings 文案。
-
-#### `session-mode-lock`
-
-- 状态：**废弃**。Composer 已删除搜索模式，不再测智能 / 搜索互斥。原 Oracle `WB-MODE-003` 已废弃。
+- How：进入无伙伴 Workbench，确认空态与发送不可用；创建伙伴并配置真实模型后输入非空请求并发送。设置页不再承担发送前置。
+- Oracle：未创建伙伴时不可发送，对齐 `WB-CORE-001-AC1`、`WB-CORE-001-AC2`、`WB-COMPOSER-001`；创建后可发送并完成真实 AI 运行，对齐 `WB-CORE-006-AC1`。废弃的 `WB-COMPOSER-005` 不测。发送走 Composer 提交，对齐 `WB-COMPOSER-002-AC1`。
+- Not：不验证设置页文件地址扫描，也不重复断言 Settings 文案。`WB-COMPOSER-002-AC2`、`WB-COMPOSER-002-AC3`（Shift+Enter 换行、中文输入法组词）不在本 case 强制断言。
 
 #### `partner-ui-state-isolation`
 
@@ -247,10 +243,6 @@ tests/case/workbench/
 - Oracle：候选项数量大于 1；按下方向键后 active 候选项发生变化，并在短暂停留后保持不变，对齐 `WB-SCOPE-002-AC1`。
 - Not：不验证 AI run 或底层检索质量。
 
-#### `workspace-root-path-required`
-
-- 状态：**废弃**。发送不再要求绑定工作空间目录。发送门禁改由 `partner-required-to-send` 覆盖。原 `WB-COMPOSER-005` 已废弃。
-
 #### `reference-token-lifecycle`
 
 - 测试类型：`e2e`
@@ -266,7 +258,7 @@ tests/case/workbench/
 - What：空伙伴输入区布局、右侧默认无占位折叠、标签栏密度与折叠入口、Tab 溢出滚动、伙伴级标签和展开状态恢复、中间|右分隔条拖拽与阈值吸合、窗口缩放时主区比例同步、浏览器缩放菜单、地址栏“前往”与“将打开外部浏览器”按钮。
 - Why：右侧资源工作台和聊天输入区共享窗口高度与标题栏命中区域，普通功能测试无法发现输入框被推出窗口、折叠按钮放错区域、Tab 无法滚动、分隔条拖拽/吸合失效或原生浏览器遮挡浮层等视觉交互回归。
 - How：直接进入真实 Workbench，先确认无伙伴空态右侧 shell 不存在并测量输入区位置；创建伙伴后展开右侧，拖拽中间|右分隔条确认宽度实时变化，拖至阈值以下确认立即吸合折叠；拉宽窗口确认中间与右侧按同一比例同步变宽；在 A/B 伙伴分别创建不同标签并设置不同活动标签和展开状态，来回切换；再连续创建八个浏览器 Tab 验证滚动和菜单。
-- Oracle：各伙伴恢复自己的标签、活动状态和展开状态；右侧宽度比例、分隔条与吸合对齐 `WB-PANEL-001-AC10`（含 macOS 窗口边缘 live-resize 限帧与缩放期关闭面板 transition）；其余布局、动画、滚动和菜单要求不变，对齐 `WB-PANEL-001`、`WB-SESSION-008`。
+- Oracle：各伙伴恢复自己的标签、活动状态和展开状态；右侧宽度比例、分隔条与吸合对齐 `WB-PANEL-001-AC10`（含 macOS 窗口边缘 live-resize 限帧与缩放期关闭面板 transition）；无消息时输入区保持居中，有消息后输入区固定在主区底部，对齐 `WB-COMPOSER-009-AC11`；其余布局、动画、滚动和菜单要求不变，对齐 `WB-PANEL-001`、`WB-SESSION-008`。
 - Not：不验证公网网页、模型回答质量或系统窗口按钮本身；Stagehand targetId、共享持久分区和历史恢复继续由 `browser-use-task-panel` 覆盖。
 
 #### `windows-empty-titlebar-drag-region`
@@ -283,7 +275,7 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：按天时间轴默认展示今 / 昨 / 前天，悬停显示完整日期，点击跳到当天最早一条消息；滚到顶部懒加载更多天。
 - Why：伙伴是一条一直聊下去的记录，用户需要按天定位而不是切会话。
-- How：创建伙伴并发送跨越多天的消息（可用受控时间或预置 log）；打开时间轴，悬停日期，点击昨天跳转；再滚到顶部触发更早一天。若目标天尚未加载，先 `loadOlder` 再跳。e2e 文件可能稍后补齐，口径以本 case 与 `WB-SESSION-010` 为准。
+- How：创建伙伴并发送跨越多天的消息（可用受控时间或预置 log）；打开时间轴，悬停日期，点击昨天跳转；再滚到顶部触发更早一天。若目标天尚未加载，先 `loadOlder` 再跳。
 - Oracle：默认三项为今 / 昨 / 前天；悬停展示完整日期；点击跳到当天最早一条，对齐 `WB-SESSION-010`。
 - Not：不验证压缩算法，也不伪造系统时钟以外的消息内容。
 
@@ -292,7 +284,7 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：run 完成后出现「清空临时记忆」胶囊；点击后同一条 log 写入 `context_cleared`；记录不删；切断前消息置灰；悬浮某条时该条与上下各一条恢复颜色；不换伙伴、不换 UI 状态、浏览器标签保留。
 - Why：清空是切断上下文而非删伙伴或换会话。
-- How：创建伙伴并完成一次真实 AI run；点击清空胶囊；检查 log 出现 `context_cleared` annotation；滚动切断前消息确认置灰；hover 中间一条确认三连恢复颜色；确认仍在同一伙伴且右侧标签未清。运行中不得出现清空入口。e2e 文件可能稍后补齐，口径以本 case 与 `WB-SESSION-011` 为准。
+- How：创建伙伴并完成一次真实 AI run；点击清空胶囊；检查 log 出现 `context_cleared` annotation；滚动切断前消息确认置灰；hover 中间一条确认三连恢复颜色；确认仍在同一伙伴且右侧标签未清。运行中不得出现清空入口。
 - Oracle：清空后记录仍在、切断前置灰、不换伙伴 / UI / 浏览器标签，对齐 `WB-SESSION-011`。下次发送以新 user 开始，对齐 human-harness 切断投影。
 - Not：不验证 compaction 算法本身。
 
@@ -304,7 +296,7 @@ tests/case/workbench/
 - What：智能模式真实发送后，验证 Thought / Activity 过程层渲染与最终 markdown 收口（过程流主 case）。
 - Why：重构后过程层是用户扫进度的主界面；需覆盖 Activity 折叠 header、展开平铺、学习/工具统一渲染，以及最终回答，而不是只断言“有过程块”。
 - How：真实文件地址内准备带唯一事实的文件；先创建伙伴；用户通过 UI 发送自然语言总结请求；等待真实 AI run 完成；展开全部 Activity 面板并采集 header / body 文案。
-- Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；运行中过程流可见，且“正在重试”与“偷偷思考中”不同时出现；“偷偷思考中”在 Brain 请求期间于过程区最下方展示，run 完成 / 失败 / 取消或产出正文后过程区不得仍挂着“偷偷思考中”，对齐 `WB-COMPOSER-003-AC3`。决策层（Thought）短摘要可见且不暴露原始长推理，以浅灰文本展示，未超出单行时不展示折叠图标，超出单行时单行省略，hover 时展示展开图标且垂直居中于单行文本，展开后常驻浅灰卡片背景、折叠按钮居顶对齐第一行并在内部滚动，对齐 `WB-COMPOSER-003-AC5`、`WB-COMPOSER-009-AC10`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」），根据单一动作或混合工具精准呈现对应专属语义图标（浏览器打开/查看/操作/提取/截图/滚动/标签、网页抓取/搜索、图片读取/生成或工作流闪电图标；截取页面并读取图片的成对视觉动作统一呈现为照片图标，不退化为闪电；浏览器操作不产生审批卡片与展开行审核绿勾）；展开行为带对象的工具原句且不含冒号强调；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`、`WB-BLOCKER-001-AC8`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用「并/但」拼接；>3 类 summary 为「已完成 n 项」。若事件含 `learn_skill`：展开行文案含“正在学习 / 已学会”，且不作为独立学习层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试与截断提示、计划进度环等由相关运行态 case 覆盖并继续对齐 `WB-COMPOSER-014-AC3`、`WB-COMPOSER-014-AC4`。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。
+- Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；用户与 assistant 消息不展示头像，用户消息右对齐气泡，assistant 过程流/最终输出与 composer 内容 rail 对齐，最终 markdown 无独立背景卡片，对齐 `WB-COMPOSER-009-AC1`、`WB-COMPOSER-009-AC2`、`WB-COMPOSER-009-AC3`、`WB-COMPOSER-009-AC4`。运行中过程流可见，且“正在重试”与“偷偷思考中”不同时出现；“偷偷思考中”在 Brain 请求期间于过程区最下方展示，run 完成 / 失败 / 取消或产出正文后过程区不得仍挂着“偷偷思考中”，对齐 `WB-COMPOSER-003-AC3`。决策层（Thought）短摘要可见且不暴露原始长推理，以浅灰文本展示，未超出单行时不展示折叠图标，超出单行时单行省略，hover 时展示展开图标且垂直居中于单行文本，展开后常驻浅灰卡片背景、折叠按钮居顶对齐第一行并在内部滚动，对齐 `WB-COMPOSER-003-AC5`、`WB-COMPOSER-009-AC10`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」），根据单一动作或混合工具精准呈现对应专属语义图标（浏览器打开/查看/操作/提取/截图/滚动/标签、网页抓取/搜索、图片读取/生成或工作流闪电图标；截取页面并读取图片的成对视觉动作统一呈现为照片图标，不退化为闪电；浏览器操作不产生审批卡片与展开行审核绿勾）；展开行为带对象的工具原句且不含冒号强调；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`、`WB-BLOCKER-001-AC8`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用「并/但」拼接；>3 类 summary 为「已完成 n 项」。若事件含 `learn_skill`：展开行文案含“正在学习 / 已学会”，且不作为独立学习层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。文件名、query、命令、URL 和技能名不使用粗体或冒号强调，对齐 `WB-COMPOSER-009-AC7`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试与截断提示、计划进度环等由相关运行态 case 覆盖并继续对齐 `WB-COMPOSER-014-AC3`、`WB-COMPOSER-014-AC4`。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。仅切换伙伴或新建干净对话时不得凭空出现“正在 / 已检索知识库”，对齐 `WB-COMPOSER-009-AC12`。
 - Not：不对最终文案逐字断言；不把真实模型是否调用某工具误归因为 UI bug（工具相关断言均以本轮实际事件为条件）。
 
 #### `terminal-background-service-flow`
@@ -434,10 +426,6 @@ tests/case/workbench/
 - How：先在临时文件地址放置有效 PNG，再通过真实 Workbench UI 请求 AI 更新同一路径；检查更新结果和图片预览，执行统一回退后重新读取文件。
 - Oracle：真实调用 `image_generate`，目标图片产生修改 Artifact，最终文件地址只交付目标图片；更新后正式文件变化且仍为 PNG；右侧直接预览且没有 Diff 切换；回退后 bytes 与原图完全一致，对齐 `WB-IMAGE-001-AC2`、`WB-APPLY-002-AC7`、`WB-APPLY-003-AC7`。
 - Not：不评价图片审美，不要求模型生成固定 SVG 结构。
-
-#### `search-results-open-rules`
-
-- 状态：**废弃**。Composer 已删除搜索模式，右侧搜索列表面板已不存在。原 Oracle `WB-COMPOSER-004`、`WB-PANEL-002`、`WB-MODE-002` 已废弃。`web_search` 不得自动展开右侧搜索列表由 `web-read-from-search-result` / `web-read-direct-url` 覆盖 `WB-CORE-007-AC4`。
 
 #### `file-preview-actions`
 
@@ -601,8 +589,8 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：左侧栏「创建伙伴」下方存在「定时任务」入口；点击后整个主区域（除左侧伙伴列表外）切换为定时任务视图，聊天对话与资源面板不再显示；点击「创建伙伴」或点击任意伙伴返回聊天视图。
 - Why：定时任务是一个独立的全主区视图，不与聊天对话或资源面板并存，避免状态交叉。
-- How：通过真实 UI 点击「定时任务」入口确认整块主区切换为定时任务视图且无聊天；随后点击「创建伙伴」返回聊天视图（伙伴点击返回由 `scheduled-task-trigger-and-session-refresh` 覆盖）。
-- Oracle：入口位置与样式对齐 `ST-ENTRY-001-AC1`；点击后主区整块切换且无聊天对齐 `ST-ENTRY-001-AC2`；视图无聊天 / 无资源面板对齐 `ST-VIEW-001-AC1`；返回聊天对齐 `ST-VIEW-001-AC2/AC3`。
+- How：通过真实 UI 点击「定时任务」入口确认整块主区切换为定时任务视图且无聊天；随后点击「创建伙伴」返回聊天视图并打开创建弹窗（伙伴点击返回由 `scheduled-task-trigger-and-session-refresh` 覆盖）。
+- Oracle：入口位置与样式对齐 `ST-ENTRY-001-AC1`；点击后主区整块切换且无聊天对齐 `ST-ENTRY-001-AC2`；视图无聊天 / 无资源面板对齐 `ST-VIEW-001-AC1`；点击「创建伙伴」返回聊天并对齐 `ST-VIEW-001-AC3`。
 - Not：不验证定时任务实际触发调度，只验证入口与视图切换。
 
 #### `scheduled-task-config-lifecycle`

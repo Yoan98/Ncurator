@@ -18,7 +18,7 @@ import {
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
-const CASE_ID = 'workspace-root-path-required'
+const CASE_ID = 'partner-required-to-send'
 const PARTNER_NAME = '发送前置伙伴'
 const PROMPT = '请用一句话确认当前工作区中 human-input.txt 存在。'
 
@@ -44,15 +44,17 @@ describe('workbench conversation e2e', () => {
           await configureLiveModelThroughSettingsUi(page, env)
           await createWorkspaceThroughSettingsUi(page, workspace.rootPath)
           await navigateToWorkbench(page)
-          await selectWorkbenchModel(page, env.modelName)
-          await setWorkbenchInput(page, PROMPT)
 
-          const disabledBeforePartner = await getWorkbenchLocator(
+          const emptyHintVisible = await page
+            .getByText('还没有伙伴。从左侧创建一个开始对话。')
+            .isVisible()
+          const sendHiddenBeforePartner = !(await getWorkbenchLocator(
             page,
             workbenchSelectors.sendButton
-          ).evaluate((element) => element instanceof HTMLButtonElement && element.disabled)
+          ).isVisible())
 
           await createPartnerThroughWorkbenchUi(page, PARTNER_NAME)
+          await selectWorkbenchModel(page, env.modelName)
           await setWorkbenchInput(page, PROMPT)
           const disabledAfterPartner = await getWorkbenchLocator(
             page,
@@ -69,20 +71,25 @@ describe('workbench conversation e2e', () => {
             { page, blockerPolicy: 'auto_approve' }
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.75)
-          await assertNoWorkbenchFakeSignals(page)
+          await assertNoWorkbenchFakeSignals(runtime)
 
           return {
-            disabledBeforePartner,
+            emptyHintVisible,
+            sendHiddenBeforePartner,
             disabledAfterPartner,
             finalAnswerLength: evidence.finalAnswerText.trim().length
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(result.disabledBeforePartner && !result.disabledAfterPartner, {
-            name: 'partner-is-required-before-send',
-            message: '未创建伙伴时发送应被禁用；创建伙伴后可以发送，对齐 WB-COMPOSER 发送前置。',
-            data: result
-          })
+          await runtime.assertThat(
+            result.emptyHintVisible && result.sendHiddenBeforePartner && !result.disabledAfterPartner,
+            {
+              name: 'partner-is-required-before-send',
+              message:
+                '未创建伙伴时 Composer 应为空态且没有发送按钮；创建伙伴后可以发送，对齐 WB-COMPOSER 发送前置。',
+              data: result
+            }
+          )
           await runtime.assertThat(result.finalAnswerLength > 0, {
             name: 'partner-ready-run-completes',
             message: '创建伙伴后真实 AI 运行应完成并给出回答。',

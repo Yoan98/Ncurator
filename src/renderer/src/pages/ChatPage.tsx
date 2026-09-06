@@ -4086,6 +4086,7 @@ const ChatPage: React.FC = () => {
             type="button"
             className="nc-sidebar-nav-row nc-sidebar-new-chat"
             onClick={() => {
+              setScheduledTasksActive(false)
               setCreatePartnerName('')
               setCreatePartnerShape('circle')
               setCreatePartnerColor('blue')
