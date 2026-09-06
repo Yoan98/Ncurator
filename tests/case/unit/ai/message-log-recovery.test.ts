@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { AIMessage, ToolMessage } from '@langchain/core/messages'
 import type {
   ChatMessageLogEntry,
-  ChatMessageLogRecord
+  ChatMessageLogRecord,
+  ChatMessageLogUserOrigin
 } from '../../../../src/shared/types'
 import {
   projectMessageLogRecords,
@@ -13,9 +14,13 @@ import { projectBrainMessagesFromLog } from '../../../../src/main/services/ai/hu
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 
-const user = (content: string): ChatMessageLogEntry => ({
+const user = (
+  content: string,
+  origin: ChatMessageLogUserOrigin = 'human'
+): ChatMessageLogEntry => ({
   kind: 'user',
   content,
+  origin,
   context: {
     selectedReferences: [],
     attachments: []
@@ -35,7 +40,7 @@ const records = (entries: Array<{ runId: string; entry: ChatMessageLogEntry }>) 
   )
 
 describe('ai human message-log recovery', () => {
-  it('projects one checkpoint summary plus only records after its covered sequence', () => {
+  it('projects only records after the checkpoint covered sequence', () => {
     const projection = projectMessageLogRecords(
       records([
         { runId: 'run-1', entry: user('old secret that must be compacted') },
@@ -50,7 +55,6 @@ describe('ai human message-log recovery', () => {
             eventType: 'compaction_checkpoint',
             payload: {
               compactBlockId: 'checkpoint-1',
-              summary: 'compressed history',
               coveredThroughSeq: 2,
               sourceMessageCount: 2
             }
@@ -65,8 +69,8 @@ describe('ai human message-log recovery', () => {
     )
 
     const text = projection.messages.map((message) => String(message.content)).join('\n')
-    expect(projection.checkpoint?.summary).toBe('compressed history')
-    expect(text).not.toContain('compressed history')
+    expect(projection.checkpoint?.coveredThroughSeq).toBe(2)
+    expect(projection.checkpoint?.compactBlockId).toBe('checkpoint-1')
     expect(projection.messages.every((message) => message.getType() !== 'human')).toBe(true)
     expect(text).not.toContain('continue from summary')
     expect(text).not.toContain('<historical_user_turn>')
@@ -119,7 +123,6 @@ describe('ai human message-log recovery', () => {
             eventType: 'compaction_checkpoint',
             payload: {
               compactBlockId: 'checkpoint-old',
-              summary: 'must not enter next brain',
               coveredThroughSeq: 2,
               sourceMessageCount: 2
             }
@@ -172,15 +175,7 @@ describe('ai human message-log recovery', () => {
 
   it('brain projection drops history before context_cleared including older checkpoints', () => {
     const log = records([
-      { runId: 'run-1', entry: user('secret before clear') },
-      {
-        runId: 'run-1',
-        entry: {
-          kind: 'annotation',
-          eventType: 'brain_user_snapshot',
-          payload: { text: '<user_context>secret before clear</user_context>' }
-        }
-      },
+      { runId: 'run-1', entry: user('<user_context>secret before clear</user_context>') },
       {
         runId: 'run-1',
         entry: { kind: 'assistant', content: 'old answer', toolCalls: [] }
@@ -192,11 +187,17 @@ describe('ai human message-log recovery', () => {
           eventType: 'compaction_checkpoint',
           payload: {
             compactBlockId: 'checkpoint-old',
-            summary: 'must not enter next brain',
-            coveredThroughSeq: 3,
+            coveredThroughSeq: 2,
             sourceMessageCount: 2
           }
         }
+      },
+      {
+        runId: 'run-1',
+        entry: user(
+          '<user_context>secret before clear\n<memory>must not enter next brain</memory></user_context>',
+          'compaction'
+        )
       },
       {
         runId: 'run-2',
@@ -221,8 +222,7 @@ describe('ai human message-log recovery', () => {
     const projection = projectBrainMessagesFromLog({
       records: log,
       ctx,
-      state,
-      memoryText: undefined
+      state
     })
     const text = projection.messages.map((message) => String(message.content)).join('\n')
     expect(text).not.toContain('secret before clear')
@@ -230,19 +230,14 @@ describe('ai human message-log recovery', () => {
     expect(text).not.toContain('must not enter next brain')
     expect(text).toContain('new request after clear')
     expect(text).not.toContain('<memory>')
+    expect(text).not.toContain('<active_state>')
   })
 
-  it('does not reinsert historical users after a compaction checkpoint', () => {
+  it('projects the compacted user then a new user without copying memory', () => {
+    const compactedUser =
+      '<user_context>\n填周报\n<memory>\n当前交付：\n- 已写周报\n历史事实：\n- 无\n</memory>\n</user_context>'
     const log = records([
-      { runId: 'run-1', entry: user('fill weekly report') },
-      {
-        runId: 'run-1',
-        entry: {
-          kind: 'annotation',
-          eventType: 'brain_user_snapshot',
-          payload: { text: '<user_context>fill weekly report</user_context>' }
-        }
-      },
+      { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
       {
         runId: 'run-1',
         entry: { kind: 'assistant', content: 'week report written', toolCalls: [] }
@@ -254,12 +249,12 @@ describe('ai human message-log recovery', () => {
           eventType: 'compaction_checkpoint',
           payload: {
             compactBlockId: 'checkpoint-1',
-            summary: '当前交付：\n- 已写周报\n历史事实：\n- 无',
-            coveredThroughSeq: 3,
+            coveredThroughSeq: 2,
             sourceMessageCount: 2
           }
         }
-      }
+      },
+      { runId: 'run-1', entry: user(compactedUser, 'compaction') }
     ])
     const ctx = {
       platform: 'macos',
@@ -279,16 +274,75 @@ describe('ai human message-log recovery', () => {
     const projection = projectBrainMessagesFromLog({
       records: log,
       ctx,
-      state,
-      memoryText: '当前交付：\n- 已写周报\n历史事实：\n- 无'
+      state
     })
     const humans = projection.messages.filter((message) => message.getType() === 'human')
-    const text = projection.messages.map((message) => String(message.content)).join('\n')
-    expect(humans).toHaveLength(1)
+    expect(humans).toHaveLength(2)
     expect(projection.messages.some((message) => message.getType() === 'ai')).toBe(false)
-    expect(text).toContain('<memory>')
-    expect(text).toContain('把标题改为九月第一周')
-    expect(text).not.toContain('fill weekly report')
-    expect(text).not.toContain('week report written')
+    expect(String(humans[0]?.content)).toBe(compactedUser)
+    expect(String(humans[1]?.content)).toContain('把标题改为九月第一周')
+    expect(String(humans[1]?.content)).not.toContain('<memory>')
+    expect(String(humans[1]?.content)).not.toContain('<active_state>')
+    expect(String(humans[1]?.content)).not.toContain('fill weekly report')
+  })
+
+  it('puts the compacted user in front of leftover process after a checkpoint', () => {
+    const compactedUser =
+      '<user_context>\n填周报\n<memory>\n当前交付：\n- 尚未生成文件\n</memory>\n</user_context>'
+    const log = records([
+      { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
+      {
+        runId: 'run-1',
+        entry: { kind: 'assistant', content: 'reading last week report', toolCalls: [] }
+      },
+      {
+        runId: 'run-1',
+        entry: {
+          kind: 'annotation',
+          eventType: 'compaction_checkpoint',
+          payload: {
+            compactBlockId: 'checkpoint-1',
+            coveredThroughSeq: 2,
+            sourceMessageCount: 2
+          }
+        }
+      },
+      { runId: 'run-1', entry: user(compactedUser, 'compaction') },
+      {
+        runId: 'run-1',
+        entry: { kind: 'assistant', content: 'week report generated', toolCalls: [] }
+      }
+    ])
+    const ctx = {
+      platform: 'macos',
+      runId: 'run-2',
+      partnerId: 'partner-1',
+      partnerName: '测试伙伴',
+      workspaceRoots: ['/tmp/workspace'],
+      runStartedAt: 0,
+      preference: 'default',
+      executionPermission: 'review',
+      referenceScope: { selectedReferences: [], attachments: [] }
+    } as AiRunContext
+    const state = createInitialHumanState({
+      taskId: 'task-after-compact-tail',
+      userInput: '对照周报改标题'
+    })
+    const projection = projectBrainMessagesFromLog({
+      records: log,
+      ctx,
+      state
+    })
+    expect(projection.messages.map((message) => message.getType())).toEqual([
+      'human',
+      'ai',
+      'human'
+    ])
+    expect(String(projection.messages[0]?.content)).toBe(compactedUser)
+    expect(String(projection.messages[1]?.content)).toBe('week report generated')
+    expect(String(projection.messages[2]?.content)).toContain('对照周报改标题')
+    expect(String(projection.messages[2]?.content)).not.toContain('<memory>')
+    expect(String(projection.messages[2]?.content)).not.toContain('<active_state>')
+    expect(String(projection.messages[2]?.content)).not.toContain('fill weekly report')
   })
 })

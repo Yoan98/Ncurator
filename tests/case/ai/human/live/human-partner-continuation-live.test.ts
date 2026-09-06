@@ -104,6 +104,7 @@ describe('ai human live backend', () => {
               run1Result: null,
               run2Result: null,
               run2LastMessageIsUser: false,
+              run2LastUserHasNoMemoryOrActiveState: false,
               run2HistoryHasRun1User: false,
               run2HistoryHasRun1Delivery: false,
               run2Delivery: '',
@@ -177,6 +178,10 @@ describe('ai human live backend', () => {
             typeof run2LastMessage.content === 'string' &&
             run2LastMessage.content.includes('<task_goal>') &&
             run2LastMessage.content.includes(RUN2_INPUT)
+          const run2LastUserHasNoMemoryOrActiveState =
+            typeof run2LastMessage?.content === 'string' &&
+            !run2LastMessage.content.includes('<memory>') &&
+            !run2LastMessage.content.includes('<active_state>')
           const historyMessages = (run2BrainMessages || []).slice(0, -1)
           const run2HistoryHasRun1User = historyMessages.some(
             (message) =>
@@ -197,6 +202,7 @@ describe('ai human live backend', () => {
             run1Result,
             run2Result,
             run2LastMessageIsUser,
+            run2LastUserHasNoMemoryOrActiveState,
             run2HistoryHasRun1User,
             run2HistoryHasRun1Delivery,
             run2UsedFileB: runUsedSelectedFile(run2Events, run2Id, fileBReferences[0]?.name || ''),
@@ -218,6 +224,7 @@ describe('ai human live backend', () => {
             result.run1Result?.status === 'completed' &&
               result.run2Result?.status === 'completed' &&
               result.run2LastMessageIsUser &&
+              result.run2LastUserHasNoMemoryOrActiveState &&
               result.run2HistoryHasRun1User &&
               result.run2HistoryHasRun1Delivery &&
               result.run2UsedFileB === true &&
@@ -233,6 +240,7 @@ describe('ai human live backend', () => {
                 run1FailureCode: result.run1Result?.failureCode,
                 run2Status: result.run2Result?.status,
                 run2LastMessageIsUser: result.run2LastMessageIsUser,
+                run2LastUserHasNoMemoryOrActiveState: result.run2LastUserHasNoMemoryOrActiveState,
                 run2HistoryHasRun1User: result.run2HistoryHasRun1User,
                 run2HistoryHasRun1Delivery: result.run2HistoryHasRun1Delivery,
                 run2Delivery: result.run2Delivery

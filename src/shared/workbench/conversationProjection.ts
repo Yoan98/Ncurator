@@ -28,7 +28,9 @@ export const projectAiConversationMessages = (input: {
   const messages: ChatMessage[] = []
   for (const run of runs) {
     const runRecords = (recordsByRun.get(run.id) || []).sort((left, right) => left.seq - right.seq)
-    const userRecord = runRecords.find((record) => record.entry.kind === 'user')
+    const userRecord = runRecords.find(
+      (record) => record.entry.kind === 'user' && record.entry.origin === 'human'
+    )
     const userEntry = userRecord?.entry
     const userContext =
       userEntry?.kind === 'user'
@@ -42,7 +44,7 @@ export const projectAiConversationMessages = (input: {
       id: run.userMessageId,
       partner_id: input.partnerId,
       role: 'user',
-      content: userEntry?.kind === 'user' ? userEntry.content : run.input,
+      content: run.input,
       timestamp: userRecord?.createdAt ?? run.createdAt,
       selectedReferences: userContext.selectedReferences as SelectedReference[],
       attachments: userContext.attachments as ChatAttachment[]

@@ -7,6 +7,7 @@ import {
 } from '../../constants'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateMessagesForContext } from '../../memory/multimodal'
+import { buildBrainUserMessage } from '../../prompts/brain'
 import { isCurrentBrainUserMessage, listFoldableHistoryMessages } from '../utils/messageTail'
 import { LlmInputTooLongError } from '../../../errors'
 
@@ -105,10 +106,21 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
     })
 
     if (!shouldCompact && !input.cache.currentUserLogAppended) {
+      const builtText = String(
+        currentUser?.content ||
+          buildBrainUserMessage({
+            state,
+            ctx: input.ctx
+          })
+      ).trim()
+      if (!builtText) {
+        throw new Error('当前 build user 文本为空，无法写入消息日志。')
+      }
       await input.ctx.appendMessageLog([
         {
           kind: 'user',
-          content: state.task.userInput,
+          content: builtText,
+          origin: 'human',
           context: {
             selectedReferences: input.ctx.referenceScope.selectedReferences,
             attachments: input.ctx.referenceScope.attachments

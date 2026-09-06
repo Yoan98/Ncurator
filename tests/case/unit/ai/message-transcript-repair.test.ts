@@ -9,12 +9,8 @@ import type { ChatMessageLogEntry } from '../../../../src/shared/types'
 const userEntry = (content: string): ChatMessageLogEntry => ({
   kind: 'user',
   content,
+  origin: 'human',
   context: {
-    workspace: {
-      workspaceId: 'workspace-1',
-      workspaceName: 'workspace-1',
-      rootPath: '/tmp/workspace-1'
-    },
     selectedReferences: [],
     attachments: []
   }

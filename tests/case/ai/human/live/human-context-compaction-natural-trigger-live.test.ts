@@ -261,6 +261,18 @@ describe('ai human live backend', () => {
               run1Docx.toolNames.includes('text_file_edit'))
 
           const latestRun2Summary = run2Compaction.summaries.at(-1) || ''
+          const run2FirstBrain = result.run2LlmIo.find((record) => record.caller === 'human.brain')
+          const run2FirstBrainRoles = run2FirstBrain
+            ? parseBrainMessageRoles(run2FirstBrain.user)
+            : []
+          const run2FirstBrainSatisfied =
+            Boolean(run2FirstBrain?.user.includes('<memory>')) &&
+            run2FirstBrainRoles[0] === 'system' &&
+            run2FirstBrainRoles[1] === 'human' &&
+            run2FirstBrainRoles.at(-1) === 'human' &&
+            Boolean(run2FirstBrain?.user.includes(HUMAN_CONTEXT_COMPACTION_RUN2_USER_INPUT)) &&
+            run2FirstBrainRoles[1] !== 'ai' &&
+            run2FirstBrainRoles[1] !== 'tool'
           const run2HistorySection = extractSection(latestRun2Summary, '历史事实：')
           const run2CurrentSection = [
             extractSection(latestRun2Summary, '当前交付：'),
@@ -308,16 +320,18 @@ describe('ai human live backend', () => {
 
           runtime.assertThat(
             run2Compaction.lifecycleSatisfied &&
+              run2FirstBrainSatisfied &&
               run2HistorySatisfied &&
               run2CurrentTaskSatisfied &&
               result.run2Output?.status === 'completed',
             {
               name: 'human-live-context-compaction-run2-writes-history-timeline',
               message:
-                'Run 2 应再压至少一次；该次压缩的历史事实不能是「- 无」，须为能对上 Run 1 产物的时间线；当前交付/未解决应围绕对照、改标题或法务，而不是整段重填周报。',
+                'Run 2 首次 brain 应为 system + 带 <memory> 的压缩 user + 过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。该次压缩的历史事实不能是「- 无」，须为能对上 Run 1 产物的时间线；当前交付/未解决应围绕对照、改标题或法务，而不是整段重填周报。',
               data: {
                 startedEvents: run2Compaction.startedEvents,
                 completedEvents: run2Compaction.completedEvents,
+                run2FirstBrainRoles,
                 compactionSummaries: run2Compaction.summaries,
                 latestRun2Summary,
                 run2HistorySection,

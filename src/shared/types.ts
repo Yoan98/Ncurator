@@ -1788,6 +1788,8 @@ export type ChatMessageImageRef = {
   height: number
 }
 
+export type ChatMessageLogUserOrigin = 'human' | 'compaction'
+
 export type ChatMessageLogUserContext = {
   selectedReferences: SelectedReference[]
   attachments: ChatAttachment[]
@@ -1824,15 +1826,9 @@ export type ChatMessageLogAnnotationEntry =
       eventType: 'compaction_checkpoint'
       payload: {
         compactBlockId: string
-        summary: string
         coveredThroughSeq: number
         sourceMessageCount: number
       }
-    }
-  | {
-      kind: 'annotation'
-      eventType: 'brain_user_snapshot'
-      payload: { text: string }
     }
   | {
       kind: 'annotation'
@@ -1859,6 +1855,7 @@ export type ChatMessageLogEntry =
   | {
       kind: 'user'
       content: string
+      origin: ChatMessageLogUserOrigin
       context: ChatMessageLogUserContext
     }
   | {

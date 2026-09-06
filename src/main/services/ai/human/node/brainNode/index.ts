@@ -33,7 +33,6 @@ import {
   completeDelivery,
   finalizeDelivery
 } from './finalizeDelivery'
-import { persistCurrentBrainUserSnapshot } from '../../memory/brainUserSnapshot'
 import { LlmOutputTruncatedError } from '../../../errors'
 
 const getErrorMessage = (error: unknown): string =>
@@ -55,8 +54,7 @@ export const createBrainNode = (input: {
       const brainProjection = projectBrainMessagesFromLog({
         records: logRecords,
         ctx: input.ctx,
-        state,
-        memoryText: state.memory.compactions.at(-1)?.summary
+        state
       })
       messages = [
         new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
@@ -65,17 +63,6 @@ export const createBrainNode = (input: {
       input.cache.messages = messages
       input.cache.currentUserMessageIndex = brainProjection.currentUserMessageIndex + 1
     }
-
-    const currentUserIndex = input.cache.currentUserMessageIndex
-    const currentUserText =
-      currentUserIndex !== undefined && currentUserIndex >= 0 && currentUserIndex < messages.length
-        ? String(messages[currentUserIndex]?.content || '')
-        : ''
-    await persistCurrentBrainUserSnapshot({
-      ctx: input.ctx,
-      cache: input.cache,
-      text: currentUserText
-    })
 
     const tools = buildAvailableTools({
       cache: input.cache,

@@ -94,8 +94,6 @@ export type HumanRuntimeCache = {
   currentUserLogAppended?: boolean
   messageLogRecords?: import('../../../../shared/types').ChatMessageLogRecord[]
   currentState?: HumanState
-  /** 本 run 已落盘的最后一次当前 build user 原文；相同则跳过重复 snapshot。 */
-  lastPersistedBrainUserText?: string
   lastBrainInputTokens?: number
   lastBrainMessageTokenEstimate?: number
   postCompactionNeedsFreshBrainUsage?: boolean

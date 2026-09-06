@@ -6,10 +6,9 @@ import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/bra
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
-import { persistCurrentBrainUserSnapshot } from '../../memory/brainUserSnapshot'
 import { resolveCompactionCoveredThroughSeq } from '../../memory/transcript'
 import {
-  createCurrentBrainUserMessage,
+  createCompactedBrainUserMessage,
   listFoldableHistoryMessages,
   renderMessagesForCompaction,
   splitMessagesForMemoryCompaction
@@ -95,7 +94,6 @@ export const createContextCompactionNode = (input: {
         eventType: 'compaction_checkpoint',
         payload: {
           compactBlockId,
-          summary: compactBlock.summary,
           coveredThroughSeq,
           sourceMessageCount: current.length + earlier.length
         }
@@ -137,20 +135,26 @@ export const createContextCompactionNode = (input: {
       },
       summary: compactBlock.summary
     })
+    const compactedUserText = String(rebuilt[1]?.content || '').trim()
+    if (!compactedUserText) {
+      throw new Error('压缩重建的 user 文本为空，无法写入消息日志。')
+    }
+    await input.ctx.appendMessageLog([
+      {
+        kind: 'user',
+        content: compactedUserText,
+        origin: 'compaction',
+        context: {
+          selectedReferences: [],
+          attachments: []
+        }
+      }
+    ])
     input.cache.messages = rebuilt
     input.cache.currentUserMessageIndex = rebuilt.findIndex(
       (message) => message.additional_kwargs?.ncurator_current_user === true
     )
-    const compactedUserIndex = input.cache.currentUserMessageIndex
-    const compactedUserText =
-      compactedUserIndex !== undefined && compactedUserIndex >= 0
-        ? String(rebuilt[compactedUserIndex]?.content || '')
-        : ''
-    await persistCurrentBrainUserSnapshot({
-      ctx: input.ctx,
-      cache: input.cache,
-      text: compactedUserText
-    })
+    input.cache.currentUserLogAppended = true
 
     return {
       ...state,
@@ -175,7 +179,7 @@ export const buildCompactedMessages = (input: {
   summary: string
 }): BaseMessage[] => [
   new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
-  createCurrentBrainUserMessage(
+  createCompactedBrainUserMessage(
     buildBrainUserMessage({
       state: input.state,
       ctx: input.ctx,

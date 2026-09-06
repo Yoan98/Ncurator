@@ -19,13 +19,20 @@ const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
   ({
     runId: 'run-1',
     platform: 'macos',
+    partnerId: 'partner-1',
+    partnerName: '测试伙伴',
+    workspaceRoots: ['/tmp/workspace'],
+    runStartedAt: 0,
+    preference: 'default',
+    executionPermission: 'review',
     referenceScope: {
       workspace: {
         workspaceId: 'ws-1',
         workspaceName: 'Workspace',
         rootPath: '/tmp/workspace'
       },
-      selectedReferences: []
+      selectedReferences: [],
+      attachments: []
     },
     workspace: {
       workspaceId: 'ws-1',

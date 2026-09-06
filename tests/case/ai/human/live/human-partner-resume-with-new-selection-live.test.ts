@@ -296,11 +296,11 @@ describe('ai human live backend', () => {
               result.resumedResult?.status === 'completed' &&
               result.logAfterResume.length > result.logAfterNetwork.length &&
               result.run2UsedFileB === true &&
-              result.run2BrainPrompt.includes('<active_state>') &&
+              !result.run2BrainPrompt.includes('<active_state>') &&
               mentionsOverfittingTopic(result.run2BrainPrompt) &&
               /(训练时间过久|记住过多训练数据|不太具有展望性)/.test(result.run2BrainPrompt) &&
               mentionsAntiAliasingTopic(result.run2BrainPrompt) &&
-              result.run2LastMessageIsUser,
+              result.run2LastMessageIsUser &&
               result.run2MessageTypes[0] === 'system' &&
               result.run2MessageTypes[result.run2MessageTypes.length - 1] === 'human' &&
               result.run2HasOnlyCurrentBrainUser,

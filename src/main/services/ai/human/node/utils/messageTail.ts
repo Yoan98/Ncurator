@@ -2,6 +2,7 @@ import { AIMessage, HumanMessage, type BaseMessage } from '@langchain/core/messa
 import { normalizeThoughtText } from '../../../../../../shared/thoughtText'
 
 const CURRENT_USER_MARKER = 'ncurator_current_user'
+const COMPACTION_USER_MARKER = 'ncurator_compaction_user'
 
 export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
   new HumanMessage({
@@ -9,8 +10,20 @@ export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
     additional_kwargs: { [CURRENT_USER_MARKER]: true }
   })
 
+export const createCompactedBrainUserMessage = (content: string): HumanMessage =>
+  new HumanMessage({
+    content,
+    additional_kwargs: {
+      [CURRENT_USER_MARKER]: true,
+      [COMPACTION_USER_MARKER]: true
+    }
+  })
+
 export const isCurrentBrainUserMessage = (message: BaseMessage): boolean =>
   message.getType() === 'human' && message.additional_kwargs?.[CURRENT_USER_MARKER] === true
+
+export const isCompactedBrainUserMessage = (message: BaseMessage): boolean =>
+  message.getType() === 'human' && message.additional_kwargs?.[COMPACTION_USER_MARKER] === true
 
 export const listFoldableHistoryMessages = (messages: BaseMessage[]): BaseMessage[] =>
   messages.filter(

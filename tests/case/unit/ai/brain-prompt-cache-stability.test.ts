@@ -79,8 +79,7 @@ const buildResumeBrainMessages = (input: {
   const brainProjection = projectBrainMessagesFromLog({
     records: input.records,
     ctx,
-    state: input.state,
-    memoryText: input.state.memory.compactions.at(-1)?.summary
+    state: input.state
   })
   return [new SystemMessage(buildBrainSystemPrompt({ ctx })), ...brainProjection.messages]
 }
@@ -94,7 +93,8 @@ const resumeRecords: ChatMessageLogRecord[] = [
     createdAt: 1,
     entry: {
       kind: 'user',
-      content: '请整理过拟合概念。',
+      content: FROZEN_HISTORICAL_USER,
+      origin: 'human',
       context: {
         selectedReferences: [],
         attachments: []
@@ -102,22 +102,10 @@ const resumeRecords: ChatMessageLogRecord[] = [
     }
   },
   {
-    id: 'log-1-snapshot',
-    partnerId: 'partner-cache-stability',
-    runId: 'run-1',
-    seq: 2,
-    createdAt: 2,
-    entry: {
-      kind: 'annotation',
-      eventType: 'brain_user_snapshot',
-      payload: { text: FROZEN_HISTORICAL_USER }
-    }
-  },
-  {
     id: 'log-2',
     partnerId: 'partner-cache-stability',
     runId: 'run-1',
-    seq: 3,
+    seq: 2,
     createdAt: 3,
     entry: {
       kind: 'assistant',
@@ -129,8 +117,8 @@ const resumeRecords: ChatMessageLogRecord[] = [
     id: 'log-3',
     partnerId: 'partner-cache-stability',
     runId: 'run-1',
-    seq: 4,
-    createdAt: 4,
+    seq: 3,
+    createdAt: 3,
     entry: {
       kind: 'tool',
       toolCallId: 'call-1',
@@ -143,7 +131,7 @@ const resumeRecords: ChatMessageLogRecord[] = [
     id: 'log-4',
     partnerId: 'partner-cache-stability',
     runId: 'run-1',
-    seq: 5,
+    seq: 4,
     createdAt: 5,
     entry: {
       kind: 'assistant',
@@ -213,7 +201,8 @@ describe('ai unit brain prompt cache stability', () => {
     expect(String(humanMessages[0]?.content)).toBe(FROZEN_HISTORICAL_USER)
     expect(String(humanMessages[0]?.content)).not.toContain('<active_state>')
     expect(String(humanMessages[1]?.content)).toContain('保留刚才的过拟合信息，再补充反走样。')
-    expect(String(humanMessages[1]?.content)).toContain('<active_state>')
+    expect(String(humanMessages[1]?.content)).not.toContain('<active_state>')
+    expect(String(humanMessages[1]?.content)).not.toContain('<memory>')
     expect(isCurrentBrainUserMessage(humanMessages[1] as BaseMessage)).toBe(true)
   })
 
@@ -254,28 +243,21 @@ describe('ai unit brain prompt cache stability', () => {
     expect(messageSignature(secondPass)).toBe(messageSignature(firstPass))
     expect(prefixBeforeCurrentUser(laterClock)).toBe(prefixBeforeCurrentUser(firstPass))
     expect(prefixBeforeCurrentUser(withPlan)).toBe(prefixBeforeCurrentUser(firstPass))
-    expect(messageSignature(withPlan)).not.toBe(messageSignature(firstPass))
+    expect(messageSignature(withPlan)).toBe(messageSignature(firstPass))
     expect(String(laterClock.find((message) => isCurrentBrainUserMessage(message))?.content)).not.toBe(
       String(firstPass.find((message) => isCurrentBrainUserMessage(message))?.content)
     )
   })
 
-  it('rejects historical users without a frozen brain_user_snapshot', () => {
+  it('projects historical user content as the frozen build user', () => {
     const state = createInitialHumanState({
       taskId: 'run-2',
       userInput: '继续'
     })
-    const recordsWithoutSnapshot = resumeRecords.filter(
-      (record) =>
-        !(
-          record.entry.kind === 'annotation' &&
-          record.entry.eventType === 'brain_user_snapshot'
-        )
-    )
-
-    expect(() =>
-      buildResumeBrainMessages({ records: recordsWithoutSnapshot, state })
-    ).toThrow(/brain_user_snapshot/)
+    const messages = buildResumeBrainMessages({ records: resumeRecords, state })
+    const humanMessages = messages.filter((message) => message.getType() === 'human')
+    expect(String(humanMessages[0]?.content)).toBe(FROZEN_HISTORICAL_USER)
+    expect(String(humanMessages[1]?.content)).toContain('继续')
   })
 
   it('does not inject active_state on the first-run current build user', () => {

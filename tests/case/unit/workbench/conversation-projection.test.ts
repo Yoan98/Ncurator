@@ -49,7 +49,12 @@ describe('conversationProjection', () => {
       buildLogRecord({
         runId: 'run-1',
         seq: 1,
-        entry: { kind: 'user', content: 'hello', context: { selectedReferences: [], attachments: [] } }
+        entry: {
+          kind: 'user',
+          content: 'hello',
+          origin: 'human',
+          context: { selectedReferences: [], attachments: [] }
+        }
       }),
       buildLogRecord({
         runId: 'run-1',
@@ -72,6 +77,56 @@ describe('conversationProjection', () => {
     expect(messages.map((message) => message.id)).toEqual(['user-1', 'assistant-1'])
     expect(messages[0]).toMatchObject({ role: 'user', content: 'hello' })
     expect(messages[1]).toMatchObject({ role: 'assistant', content: 'world' })
+  })
+
+  it('uses run.input for the bubble and skips compaction users', () => {
+    const runs = [
+      buildRun({
+        id: 'run-1',
+        userMessageId: 'user-1',
+        assistantMessageId: 'assistant-1',
+        input: '写周报',
+        finalAnswer: '已写好'
+      })
+    ]
+    const records = [
+      buildLogRecord({
+        runId: 'run-1',
+        seq: 1,
+        entry: {
+          kind: 'user',
+          content: '<user_context>写周报</user_context>',
+          origin: 'human',
+          context: { selectedReferences: [], attachments: [] }
+        }
+      }),
+      buildLogRecord({
+        runId: 'run-1',
+        seq: 2,
+        entry: {
+          kind: 'user',
+          content: '<user_context>写周报\n<memory>当前交付：- 已写周报</memory></user_context>',
+          origin: 'compaction',
+          context: { selectedReferences: [], attachments: [] }
+        }
+      }),
+      buildLogRecord({
+        runId: 'run-1',
+        seq: 3,
+        entry: { kind: 'assistant', content: '已写好', toolCalls: [] }
+      })
+    ]
+
+    const messages = projectAiConversationMessages({
+      partnerId: 'partner-1',
+      records,
+      runs
+    })
+
+    expect(messages.map((message) => message.id)).toEqual(['user-1', 'assistant-1'])
+    expect(messages[0]).toMatchObject({ role: 'user', content: '写周报' })
+    expect(messages[0]?.content).not.toContain('<user_context>')
+    expect(messages[0]?.content).not.toContain('<memory>')
   })
 
   it('shows active assistant bubble while run is still running', () => {

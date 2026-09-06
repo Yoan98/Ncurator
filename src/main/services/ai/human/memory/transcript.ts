@@ -126,7 +126,6 @@ export type MessageLogProjection = {
   learnedSkillIds: string[]
   checkpoint?: {
     compactBlockId: string
-    summary: string
     coveredThroughSeq: number
     sourceMessageCount: number
     createdAt: number
@@ -187,8 +186,8 @@ export const projectMessageLogRecords = (
   const projectedRecords = checkpoint
     ? afterCleared.filter((record) => record.seq > checkpoint.coveredThroughSeq)
     : afterCleared
-  // 历史 user 只属于不可变日志和聊天 UI；brain 侧历史 build user 必须来自
-  // brain_user_snapshot 冻结原文。每次新 run 的当前 user 统一由 buildBrainUserMessage 构造。
+  // 历史 user 由 projectBrainMessagesFromLog 按 content 还原；这里只投影过程 tail。
+  // 每次新 run 的当前 user 统一由 buildBrainUserMessage 构造。
   const messages = deriveMessageLogMessages({
     entries: projectedRecords
       .map((record) => record.entry)

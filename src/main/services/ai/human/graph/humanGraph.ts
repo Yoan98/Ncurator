@@ -118,16 +118,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         task: options.initialState?.task || taskInput,
         memory: {
           plan: logProjection.plan,
-          compactions: logProjection.checkpoint
-            ? [
-                {
-                  id: logProjection.checkpoint.compactBlockId,
-                  kind: 'compacted_history',
-                  summary: logProjection.checkpoint.summary,
-                  createdAt: logProjection.checkpoint.createdAt
-                }
-              ]
-            : []
+          compactions: []
         },
         skills: {
           learnedSkillIds
@@ -139,8 +130,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       const brainProjection = projectBrainMessagesFromLog({
         records: messageLogRecords,
         ctx,
-        state: initialState,
-        memoryText: logProjection.checkpoint?.summary
+        state: initialState
       })
       cache.messages = [
         new SystemMessage(buildBrainSystemPrompt({ ctx })),

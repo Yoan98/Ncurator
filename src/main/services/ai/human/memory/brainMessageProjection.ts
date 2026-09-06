@@ -10,7 +10,6 @@ import { buildBrainUserMessage } from '../prompts/brain'
 import { createImageReferenceMessage } from './multimodal'
 import { createCurrentBrainUserMessage } from '../node/utils/messageTail'
 import { repairInterruptedToolCalls, sliceAfterLastContextCleared } from './transcript'
-import { resolveHistoricalBrainUserTextsByUserSeq } from './brainUserSnapshot'
 
 const toToolCall = (
   call: ChatMessageLogToolCall
@@ -35,7 +34,6 @@ export const projectBrainMessagesFromLog = (input: {
   records: ChatMessageLogRecord[]
   ctx: AiRunContext
   state: HumanState
-  memoryText?: string
 }): BrainMessagesProjection => {
   const afterCleared = sliceAfterLastContextCleared(input.records)
   const checkpointRecord = [...afterCleared]
@@ -55,7 +53,6 @@ export const projectBrainMessagesFromLog = (input: {
     ? afterCleared.filter((record) => record.seq > checkpoint.coveredThroughSeq)
     : afterCleared
 
-  const frozenBrainUserByUserSeq = resolveHistoricalBrainUserTextsByUserSeq(afterCleared)
   const messages: BaseMessage[] = []
   let pendingImages: ChatMessageImageRef[] = []
   const flushImages = (): void => {
@@ -68,13 +65,11 @@ export const projectBrainMessagesFromLog = (input: {
     const entry = record.entry
     if (entry.kind === 'user') {
       flushImages()
-      const frozenText = frozenBrainUserByUserSeq.get(record.seq)
-      if (!frozenText) {
-        throw new Error(
-          `历史 build user 缺少 brain_user_snapshot（user seq=${record.seq}）。resume 必须还原上次发给模型的原文，禁止重算。`
-        )
+      const text = entry.content.trim()
+      if (!text) {
+        throw new Error(`log user（seq=${record.seq}）的 content 不能为空。`)
       }
-      messages.push(new HumanMessage(frozenText))
+      messages.push(new HumanMessage(text))
       continue
     }
     if (entry.kind === 'assistant') {
@@ -99,17 +94,11 @@ export const projectBrainMessagesFromLog = (input: {
   }
   flushImages()
 
-  const injectActiveState =
-    Boolean(input.memoryText?.trim()) ||
-    projectedRecords.some((record) => record.entry.kind === 'user')
-
   messages.push(
     createCurrentBrainUserMessage(
       buildBrainUserMessage({
         state: input.state,
-        ctx: input.ctx,
-        memoryText: input.memoryText,
-        injectActiveState
+        ctx: input.ctx
       })
     )
   )

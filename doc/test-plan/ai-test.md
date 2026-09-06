@@ -820,10 +820,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-interruption-message-repair`
 
 - 测试类型：`backend / mock-llm`
-- What：续接（跨伙伴 / 中断恢复）重建消息数组时，顺序为 `system + 冻结历史 build user（brain_user_snapshot）+ interleaved assistant/tool + 当前 run buildBrainUserMessage user`；每条可见 log `user` 对应一条冻结 build user；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
+- What：续接（跨伙伴 / 中断恢复）重建消息数组时，顺序为 `system + 历史 user.content + interleaved assistant/tool + 当前 run buildBrainUserMessage user`；每条 log `user` 的 `content` 就是当时发给模型的全文；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
 - Why：模型上下文唯一真相源是伙伴消息记录，续接必须忠实回放**上次发给模型的**历史并把新诉求追加到末尾；若上一条 assistant 声明了 tool_call 却没有对应结果，接口会直接报错，必须补一条意外中断反馈。
 - How：mock-llm 下跑两个子场景：其一 run-1 正常完成（含 learn_skill 与最终交付），run-2 捕获首次 brain 的 `request.messages`；其二 run-1 的 brain 返回 learn_skill tool_call 后在 brain 调用返回时 abort 控制器，run-2 恢复并捕获消息数组。
-- Oracle：子场景一：消息数组首条为 system（无 `current_time`），历史含 run-1 的冻结 build user、assistant/tool 与 run-2 末尾 build user（共 2 条 human，末条含本 run `current_time` / 最新 active_state）；子场景二：run-1 为 `user_cancelled`，run-2 在悬空 learn_skill tool_call 后补相同 ID 的失败 ToolMessage，且含 run-1 与 run-2 两条 build user。
+- Oracle：子场景一：消息数组首条为 system（无 `current_time`），历史含 run-1 的 user.content、assistant/tool 与 run-2 末尾 build user（共 2 条 human，末条含本 run `current_time`，不含 `<active_state>` / `<memory>`）；子场景二：run-1 为 `user_cancelled`，run-2 在悬空 learn_skill tool_call 后补相同 ID 的失败 ToolMessage，且含 run-1 与 run-2 两条 User。
 - Not：不验证 live provider 真实网络抖动；不恢复 docx 临时运行态。
 
 ##### `partner-skill-memory-multi-run`
@@ -951,7 +951,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：同一伙伴先正常完成第一件事，再续接第二件相关联的事，消息数组按“历史 build user + assistant/tool + 当前 run buildBrainUserMessage user”叠加。
 - Why：跨轮续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文。
 - How：使用共享 workspace fixture（运行时为文件地址 + 伙伴），默认上下文窗口。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同伙伴改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组。
-- Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 build user 与最终交付，末尾是 Run 2 当前 build user；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
+- Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 user.content 与最终交付，末尾是 Run 2 当前 User；该当前 User 无 `<memory>`、无 `<active_state>`；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
 - Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [User(<memory>)]` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。
 
 ##### `human-ppt-edit-management-review-live`
@@ -1005,7 +1005,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：live 模式下 `human` 会基于真实 brain usage 在风险周报长任务中自然触发伙伴记忆压缩；压完后发给主模型的数组为 `[System] + [当前 User(<memory>)]`，不再保留过程 tail；同伙伴再发一件更重的续做时，必须再压出非空历史时间线。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩、当前工作记忆仍能做完，且下一句用户话能把旧任务折进历史时间线”的能力。
 - How：复用风险周报 live 的真实文件地址。窗口仍为 `humanRuntimeOverrides.modelContextWindowTokens=45_000`。Run 1 用原周报长任务，不限制压缩次数。Run 2 同伙伴、不再 @ 上周周报/已交周报，要求对照刚写的本周周报和上周周报、补风险对照、标题改为「九月第一周」、核法务口径，从而再压至少一次。窗口不能太小：固定开销（工具 schema + system/模板）几乎不随压缩减少，过小会连续压缩死循环；也不能太大（过大时峰值达不到触发线）。continuation / resume live 仍分开，不并入本 case。
-- Oracle：Run 1 至少一次完整 compaction；压完后下一次 brain 消息为 `system + human(<memory>)`、后面无 ai/tool；四段标题（当前交付 / 已确认事实 / 已尝试但未解决 / 历史事实）；含「上周周报」、不编造「上周工作周报.docx」；周报 docx 交付成功。Run 2 再压至少一次且 `completed`；该次压缩「历史事实」不能是 `- 无`，须为带时间的时间线并能对上 Run 1 产物（路径或「上周周报」）；「当前交付 / 未解决」说的是对照、改标题或法务，而不是整段重填周报。按 10 分制评估压缩生命周期、记忆结构、历史时间线和文件交付，严格超过 8 分通过。
+- Oracle：Run 1 至少一次完整 compaction；压完后下一次 brain 消息为 `system + human(<memory>)`、后面无 ai/tool；四段标题（当前交付 / 已确认事实 / 已尝试但未解决 / 历史事实）；含「上周周报」、不编造「上周工作周报.docx」；周报 docx 交付成功。Run 2 首次 brain 为 `system, human(<memory>), …过程…, human(新任务)`，不能 System 后直接 AI；再压至少一次且 `completed`；该次压缩「历史事实」不能是 `- 无`，须为带时间的时间线并能对上 Run 1 产物（路径或「上周周报」）；「当前交付 / 未解决」说的是对照、改标题或法务，而不是整段重填周报。按 10 分制评估压缩生命周期、记忆结构、历史时间线和文件交付，严格超过 8 分通过。
 - Not：不绑定压缩次数，不要求固定资料读取顺序，也不因合理表达差异判失败。不验证未压缩时的历史 user 叠加（由 `human-partner-continuation-live` 覆盖），不验证中断恢复（由 `human-partner-resume-with-new-selection-live` 覆盖）。
 
 ##### `human-risk-report-draft-live`
