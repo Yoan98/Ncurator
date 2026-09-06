@@ -49,6 +49,8 @@ describe('ai unit brain prompt formatting', () => {
     expect(environment).toContain('runtime_paths.assets：')
     expect(environment).not.toContain('current_time')
     expect(system).not.toContain('current_time.local_iso')
+    expect(system).not.toContain('reference_field_guide')
+    expect(system).not.toContain('字段说明')
   })
 
   it('keeps context efficiency and planning rules concise', () => {

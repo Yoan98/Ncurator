@@ -69,12 +69,6 @@ ${external.map((skill) => renderSkillLine(skill.skillId, skill.description, skil
 `.trim()
 }
 
-const REFERENCE_FIELD_GUIDE = `字段说明：
-- 类型：资料来源类型，目前支持本地文件、本地目录、网页资料。
-- 资源地址：这份资料对应的本地路径或网页地址。
-- 文档知识库状态：这份资料本身是否可被知识库检索。
-- 知识库文档ID：这份资料在知识库中的文档标识；没有对应知识库文档时显示为“无”。`
-
 export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
   `
 <system>
@@ -119,10 +113,6 @@ export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
   <skill_catalog>
 ${renderSkillCatalog(input.ctx.platform)}
   </skill_catalog>
-
-  <reference_field_guide>
-${REFERENCE_FIELD_GUIDE}
-  </reference_field_guide>
 
   <local_environment>
 ${renderLocalEnvironmentText(input.ctx)}

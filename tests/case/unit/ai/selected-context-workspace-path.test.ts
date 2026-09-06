@@ -5,35 +5,24 @@ import {
 } from '../../../../src/main/services/ai/human/prompts/referenceScope'
 
 describe('ai unit selected context workspace path', () => {
-  it('renders workspace rootPath without a workspace-only path restriction', () => {
+  it('does not render workspace roots inside reference scope', () => {
     const text = renderReferenceScopeText(
       buildReferenceScope({
-        workspace: {
-          workspaceId: 'workspace-1',
-          workspaceName: 'display-name-only',
-          rootPath: '/tmp/real-workspace-root'
-        },
         selectedReferences: []
       })
     )
 
-    expect(text).toContain('用户工作区域：')
-    expect(text).toContain('- 根目录：/tmp/real-workspace-root')
+    expect(text).toContain('用户指定的参考范围：')
+    expect(text).toContain('- 当前没有用户显式指定的参考范围。')
+    expect(text).not.toContain('用户工作区域：')
+    expect(text).not.toContain('根目录：')
     expect(text).not.toContain('默认应优先在此目录内完成用户任务')
-    expect(text).not.toContain('所有任务文件和新生成的产物都必须位于这个工作区内')
-    expect(text).not.toContain('display-name-only')
     expect(text).not.toContain('cwd')
-    expect(text).not.toContain('显式指定 cwd')
   })
 
   it('renders selected references and direct kb narrowing pairs when user explicitly selected inputs', () => {
     const text = renderReferenceScopeText(
       buildReferenceScope({
-        workspace: {
-          workspaceId: 'workspace-1',
-          workspaceName: 'display-name-only',
-          rootPath: '/tmp/real-workspace-root'
-        },
         selectedReferences: [
           {
             kind: 'file',
@@ -56,11 +45,6 @@ describe('ai unit selected context workspace path', () => {
     expect(
       renderReferenceScopeText(
         buildReferenceScope({
-          workspace: {
-            workspaceId: 'workspace-1',
-            workspaceName: 'display-name-only',
-            rootPath: '/tmp/real-workspace-root'
-          },
           selectedReferences: [
             {
               kind: 'directory',
@@ -90,11 +74,6 @@ describe('ai unit selected context workspace path', () => {
     expect(
       renderReferenceScopeText(
         buildReferenceScope({
-          workspace: {
-            workspaceId: 'workspace-1',
-            workspaceName: 'display-name-only',
-            rootPath: '/tmp/real-workspace-root'
-          },
           selectedReferences: [
             {
               kind: 'web',
@@ -116,11 +95,6 @@ describe('ai unit selected context workspace path', () => {
   it('renders user selected attachments with compact content-info template', () => {
     const text = renderReferenceScopeText(
       buildReferenceScope({
-        workspace: {
-          workspaceId: 'workspace-1',
-          workspaceName: 'display-name-only',
-          rootPath: '/tmp/real-workspace-root'
-        },
         selectedReferences: [],
         attachments: [
           {
