@@ -41,6 +41,10 @@ export class LanceDbCore {
     return this.status === LanceDbCoreStatus.READY
   }
 
+  public getDbPath(): string {
+    return this.dbPath
+  }
+
   public async initialize(): Promise<void> {
     if (this.status === LanceDbCoreStatus.READY) return
     if (this.status === LanceDbCoreStatus.INITIALIZING) return
@@ -143,6 +147,12 @@ export class LanceDbCore {
     const list = (values || []).map((v) => String(v || '').trim()).filter(Boolean)
     if (list.length === 0) return undefined
     return `${column} IN (${list.map((v) => `'${this.escapeSqlString(v)}'`).join(',')})`
+  }
+
+  public buildNotInClause(column: string, values?: string[]): string | undefined {
+    const list = (values || []).map((v) => String(v || '').trim()).filter(Boolean)
+    if (list.length === 0) return undefined
+    return `${column} NOT IN (${list.map((v) => `'${this.escapeSqlString(v)}'`).join(',')})`
   }
 
   public combineWhere(parts: Array<string | undefined>): string | undefined {

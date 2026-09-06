@@ -6,7 +6,7 @@
 
 - SQLite 是业务真相，文件位于 `userData/app.sqlite`。
 - LanceDB 是可重建索引，目录位于 `userData/lancedb`，只保存 `vector_chunk`。
-- SQLite schema 通过 migration 向前演进；LanceDB 索引按 SQLite 中的 document generation 重建。
+- SQLite schema 通过 migration 向前演进；LanceDB 按文档 generation 写入后删除旧 chunk，检索时库内只留最新数据。
 - 同一业务状态不能同时以 SQLite 和 LanceDB 为真相。
 
 ## SQLite
@@ -37,7 +37,7 @@ SQLite 保存以下业务数据：
 - `chat_session_message_log` 使用 `partner_id + seq` 保证伙伴内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated`、`brain_user_snapshot`、`compaction_checkpoint` 和 `context_cleared` 是强类型 annotation。投影先切最后一次 `context_cleared`，再跑现有 compaction。恢复投影读取记录自身的 `seq/run_id`，不会修改历史行；历史 build user 必须来自 `brain_user_snapshot` 冻结原文。
 - `ai_run` 挂 `partner_id`，不再保存 `workspace_json`。`partial_answer` 与 `partial_answer_role` 只保存当前流式 UI 草稿；它们不参与下一次模型上下文恢复。`failure_code` 保存 `process_interrupted`、`output_truncated`、`input_too_long` 等终止原因。
 - 待审批状态以 SQLite 中的 run 记录为准。
-- `document.active_generation_id` 是当前有效索引版本。
+- `document.active_generation_id` 是当前有效索引版本，只用于写入后删除旧 chunk 和启动/任务结束时的孤儿清理，不进入检索 `where`。
 
 ### Workbench 伙伴 UI 状态
 
@@ -54,7 +54,7 @@ SQLite 保存以下业务数据：
 
 - 当前代码支持的最终 schema version 是 `10`，由 `CURRENT_SCHEMA_VERSION` 定义。
 - version `1–9` 已随正式版发布，永久保留且不可改写。已知历史例外只有 version 2 的旧名称 `workspace_change_sets`；version 9 继续负责修复通知字段。
-- version `10` 是破坏性升级，不迁旧数据。`upgrade_from_v9` 从 v9 升级时 DROP 旧表再建最终结构：新增 `partner`；删除 `chat_session`、`chat_session_ui_state`（以及 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event`、`chat_session_skill_state`、`chat_message`）；`chat_session_message_log` / `ai_run` / `ai_file_change` / `docx_apply` 改挂 `partner_id`；新增 `partner_ui_state`；`workbench_ui_state` 只留 `active_view_key`，删除 `draft_state_json`；`scheduled_task` 改挂 `partner_id`；`workspace_source` 去掉 name 且 `root_path UNIQUE`；`web_source` 去掉 `workspace_id` 且 `UNIQUE(normalized_url)`；`ai_run` 不再保存 `workspace_json`。不存在、也不新建 `chat_search_turn`。空库仍执行 version `1–10`，跑完后结构与 v9 升级路径一致。LanceDB 不在 SQLite migration 事务里；v10 清空 `document` 后旧 chunk 会成为孤儿，检索按 SQLite 有效 generation 过滤，不会命中。不在启动路径删除 `userData/lancedb`。
+- version `10` 是破坏性升级，不迁旧数据。`upgrade_from_v9` 从 v9 升级时 DROP 旧表再建最终结构：新增 `partner`；删除 `chat_session`、`chat_session_ui_state`（以及 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event`、`chat_session_skill_state`、`chat_message`）；`chat_session_message_log` / `ai_run` / `ai_file_change` / `docx_apply` 改挂 `partner_id`；新增 `partner_ui_state`；`workbench_ui_state` 只留 `active_view_key`，删除 `draft_state_json`；`scheduled_task` 改挂 `partner_id`；`workspace_source` 去掉 name 且 `root_path UNIQUE`；`web_source` 去掉 `workspace_id` 且 `UNIQUE(normalized_url)`；`ai_run` 不再保存 `workspace_json`。不存在、也不新建 `chat_search_turn`。新增 `schema_migration_hooks`，供版本声明提交后副作用。v10 的 `afterCommit` 在 SQLite 事务提交后、LanceDB 连接前删除 `userData/lancedb`；hook 记 `pending/done`，失败可重试，`done` 后不重跑。空库仍执行 version `1–10`，跑完后结构与 v9 升级路径一致。
 - 哪些 migration 已正式发布，以 `migrations/released-migrations.json` 为唯一边界。未进入清单的连续迁移可以在发布前合并或重写；进入清单后只能新增更高版本修复。
 
 ### 版本身份与执行规则
@@ -63,8 +63,8 @@ SQLite 保存以下业务数据：
 - migration 定义统一放在 `src/main/services/storage/sqlite/migrations/00X_*.ts`。版本必须从 1 开始连续、严格递增且唯一；文件版本、定义版本和执行顺序必须一致。
 - 已执行记录必须是当前 migration 列表的合法连续前缀。除明确登记的历史别名外，缺号、名称冲突或未知记录都视为数据库历史损坏，拒绝启动。
 - 数据库版本高于 `CURRENT_SCHEMA_VERSION` 时，在写 migration、切换 WAL 或初始化业务服务前抛出 `DatabaseVersionTooNewError`，错误同时携带检测版本和支持版本。
-- 一次启动中的全部待执行 migration、对应的 `schema_migrations` 记录、`PRAGMA quick_check` 和 `PRAGMA foreign_key_check` 位于同一个 SQLite transaction。任一步失败，整批升级回滚，数据库不会停留在半升级状态。
-- migration 必须可重复初始化：已经完整执行的版本不会再次执行。不提供 down migration、自动数据库复制、自动备份或自动恢复。
+- 一次启动中的全部待执行 migration、对应的 `schema_migrations` 记录、`PRAGMA quick_check` 和 `PRAGMA foreign_key_check` 位于同一个 SQLite transaction。任一步失败，整批升级回滚，数据库不会停留在半升级状态。声明了 `afterCommit` 的版本在同一事务中写入 `schema_migration_hooks(status=pending)`；事务提交后、LanceDB 连接前执行这些 hook，成功后标 `done`。`afterCommit` 不在 SQLite 事务里，不得回写 schema。
+- migration 必须可重复初始化：已经完整执行的版本不会再次执行。`afterCommit` 只在 hook 仍为 `pending` 时重试。不提供 down migration、自动数据库复制、自动备份或自动恢复。
 
 ### 启动状态机与禁止降级
 
@@ -121,20 +121,19 @@ LanceDB 只创建和使用 `vector_chunk` 表。
 
 ## SQLite 与 LanceDB 的关系
 
-SQLite 决定什么数据有效，LanceDB 只负责在有效范围内检索内容。
+SQLite 决定什么数据有效。检索时 LanceDB 中应只留下最新 chunk；搜索按 `document_id` / `source_type` / `workspace_id` 收窄，不再加 `generation_id`。
 
 搜索流程：
 
-1. 从 SQLite 读取当前工作地址和 document 元数据。
-2. 确认当前有效的 `active_generation_id`。
-3. 到 LanceDB 搜索 `workspace_id + source_type + generation_id`。
-4. 返回命中的 chunk 和来源信息。
+1. 若设置页正在「更新索引」（`workspace_index_job.action = prepare` 且 `running`），`kb_search` / `kb_list_documents` 直接失败。
+2. 否则到 LanceDB 搜索当前表中的 chunk。
+3. 用 SQLite document 元数据补来源路径或 URL。
 
-搜索结果不能返回非 active generation 的 chunks。
+「检查更新」只扫目录或网页变化，不写向量，不拦截检索。
 
 ## Generation 机制
 
-文件和网页索引先写入新 `generation_id`，成功后由 SQLite transaction 切换 `active_generation_id`，再清理旧 chunks；失败时不切换，因此已有检索结果仍可用。
+文件和网页索引先写入新 `generation_id`，成功后切换 SQLite `active_generation_id` 并 **await 删除旧 generation**。失败则删除刚写入的新 generation，保留旧 chunk。启动恢复和索引任务结束后会清理非当前 generation 以及没有对应 document 的孤儿 chunk。generation 只用于这次删除，不用于检索过滤。
 
 ## Fragment 和 Optimize
 
@@ -153,5 +152,5 @@ LanceDB fragment 是一次或多次写入形成的数据片段，不等于一行
 - 伙伴首屏只读取必要数据，不回放完整 run/event。
 - 完整 run/event replay、context usage、file change detail 不进入切换首屏关键路径。
 - chunk 写入必须批量进行。
-- 慢查询优先检查 generation 过滤、workspace 过滤、source type 过滤和 fragment 数量。
+- 慢查询优先检查 workspace 过滤、source type 过滤、documentIds 过滤和 fragment 数量。
 - 不用缓存掩盖错误的数据边界。

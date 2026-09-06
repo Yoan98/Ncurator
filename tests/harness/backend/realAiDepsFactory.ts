@@ -207,6 +207,8 @@ export const createRealAiDepsFactory = async (input: {
         documentsStore: storageService.documents,
         embeddingService,
         ensureEmbeddingReady: ensureReady,
+        hasRunningKnowledgeIndexJob: async () =>
+          await storageService.workspaceIndexJob.hasRunningPrepareJob(),
         docxApplyService,
         saveFileChangeRecord: async (record) => {
           await aiFileChangeService.saveRecord(record)

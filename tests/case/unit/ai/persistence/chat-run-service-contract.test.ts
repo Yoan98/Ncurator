@@ -82,6 +82,7 @@ const createTestService = async (options?: {
     llmStore: storage.llm,
     aiRuntimeSettingsStore: storage.aiRuntimeSettings,
     workspaceStore: storage.workspace,
+    workspaceIndexJobStore: storage.workspaceIndexJob,
     webSourceStore: storage.webSource,
     ensureEmbeddingReady: async () => await new Promise<never>(() => {}),
     docxApplyService,

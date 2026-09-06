@@ -79,8 +79,10 @@ export class StorageService {
 
   public async initialize(): Promise<void> {
     this.sqlite.initialize()
+    await this.sqlite.runPendingAfterCommitHooks({ lanceDbPath: this.vector.getDbPath() })
     await this.vector.initialize()
     await this.failInterruptedWorkspaceIndexJobs()
+    await this.documents.purgeStaleChunks()
   }
 
   public async failInterruptedWorkspaceIndexJobs(

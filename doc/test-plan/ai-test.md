@@ -432,7 +432,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：KB tool family 必须显式覆盖每个回归工具。
 - How：对多工作区真实 seed 数据分别执行三种检索，并覆盖 `documentIds` 缩圈。
 - Oracle：三种检索都返回稳定 `items`，默认受当前文件地址与全局网页约束，且遵守 `documentIds` 缩圈语义；文件命中保留 `sourceType=file` 与 `filePath`，网页命中保留 `sourceType=web` 与 `sourceUrl`，供最终引用生成可追溯地址。
-- Not：不比较召回优劣。
+- Not：不比较召回优劣。设置页更新索引期间的拦截由 `kb-indexing-blocks-search` unit 覆盖。
 
 #### terminal 类别
 

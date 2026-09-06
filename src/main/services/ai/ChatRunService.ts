@@ -14,6 +14,7 @@ import type { AiRunStore } from '../storage/domains/AiRunStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { AiRuntimeSettingsStore } from '../storage/domains/AiRuntimeSettingsStore'
 import type { WorkspaceStore } from '../storage/domains/WorkspaceStore'
+import type { WorkspaceIndexJobStore } from '../storage/domains/WorkspaceIndexJobStore'
 import type { WebSourceStore } from '../storage/domains/WebSourceStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { BrowserEmbedService } from '../browser/BrowserEmbedService'
@@ -82,6 +83,7 @@ type ChatRunServiceDeps = {
   llmStore: LlmConfigStore
   aiRuntimeSettingsStore: AiRuntimeSettingsStore
   workspaceStore: WorkspaceStore
+  workspaceIndexJobStore: WorkspaceIndexJobStore
   webSourceStore: WebSourceStore
   ensureEmbeddingReady: () => Promise<void>
   docxApplyService: DocxApplyService
@@ -641,6 +643,8 @@ export class ChatRunService {
           documentsStore: this.deps.documentsStore,
           embeddingService: this.deps.embeddingService,
           ensureEmbeddingReady: this.deps.ensureEmbeddingReady,
+          hasRunningKnowledgeIndexJob: async () =>
+            await this.deps.workspaceIndexJobStore.hasRunningPrepareJob(),
           docxApplyService: this.deps.docxApplyService,
           saveFileChangeRecord: async (record) => {
             await this.deps.aiFileChangeService.saveRecord(record)

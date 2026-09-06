@@ -116,6 +116,11 @@ const normalizeKbSearchItems = (data: JsonValue | undefined): JsonObject[] => {
   return data.items.filter(isObject)
 }
 
+export const renderKbModelError: ModelResultRenderer = ({ data }) => {
+  const detail = isObject(data) ? readString(data.error) : ''
+  return detail ? `Error: ${detail}` : 'Error: kb tool failed.'
+}
+
 export const renderKbSearchModelResult: ModelResultRenderer = ({ data }) => {
   const items = normalizeKbSearchItems(data)
   const sourceKeys = new Map<string, string>()

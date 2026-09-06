@@ -118,36 +118,12 @@ export class DocumentsStore {
     return this.reranker
   }
 
-  private async getActiveGenerationIds(input: {
-    workspaceId?: string
-    sourceType?: string
-    documentIds?: string[]
-  }): Promise<string[]> {
-    const params: Record<string, string | number | null> = {
-      workspace_id: input.workspaceId || null,
-      source_type: input.sourceType || null
-    }
-    const where = buildWhere([
-      input.workspaceId ? 'workspace_id = @workspace_id' : undefined,
-      input.sourceType ? 'source_type = @source_type' : undefined,
-      buildInClause('id', input.documentIds, params, 'document_id'),
-      'active_generation_id IS NOT NULL'
-    ])
-    const rows = this.sqlite
-      .prepare(`SELECT active_generation_id FROM document WHERE ${where}`)
-      .all(params) as Array<{ active_generation_id?: unknown }>
-    return Array.from(
-      new Set(rows.map((row) => toOptionalString(row.active_generation_id)).filter(Boolean))
-    ) as string[]
-  }
-
   private async buildChunkWhere(input: {
     workspaceId?: string
     sourceType?: string
     documentIds?: string[]
-    activeOnly?: boolean
   }): Promise<string | undefined> {
-    const parts = [
+    return this.vector.combineWhere([
       input.workspaceId
         ? `workspace_id = '${this.vector.escapeSqlString(input.workspaceId)}'`
         : undefined,
@@ -155,13 +131,7 @@ export class DocumentsStore {
         ? `source_type = '${this.vector.escapeSqlString(input.sourceType)}'`
         : undefined,
       this.vector.buildInClause('document_id', input.documentIds)
-    ]
-    if (input.activeOnly !== false) {
-      const generations = await this.getActiveGenerationIds(input)
-      if (generations.length === 0) return 'generation_id = \'__no_active_generation__\''
-      parts.push(this.vector.buildInClause('generation_id', generations))
-    }
-    return this.vector.combineWhere(parts)
+    ])
   }
 
   private buildDocumentWhere(input: {
@@ -320,6 +290,38 @@ export class DocumentsStore {
       `generation_id = '${this.vector.escapeSqlString(input.generationId)}'`
     ])
     if (where) await table.delete(where)
+  }
+
+  public async purgeStaleChunks(): Promise<void> {
+    const table = await this.vector.openTable(LANCE_TABLES.CHUNK)
+    const documents = this.sqlite
+      .prepare('SELECT id, active_generation_id FROM document')
+      .all() as Array<{ id?: unknown; active_generation_id?: unknown }>
+    if (documents.length === 0) {
+      if ((await table.countRows()) > 0) {
+        await table.delete('id IS NOT NULL')
+      }
+      return
+    }
+
+    const documentIds = documents
+      .map((row) => toOptionalString(row.id))
+      .filter((id): id is string => Boolean(id))
+    const orphanDocumentClause = this.vector.buildNotInClause('document_id', documentIds)
+    if (orphanDocumentClause) await table.delete(orphanDocumentClause)
+
+    for (const row of documents) {
+      const documentId = toOptionalString(row.id)
+      if (!documentId) continue
+      const activeGenerationId = toOptionalString(row.active_generation_id)
+      if (!activeGenerationId) {
+        await this.deleteChunksByDocumentIds([documentId])
+        continue
+      }
+      await table.delete(
+        `document_id = '${this.vector.escapeSqlString(documentId)}' AND generation_id != '${this.vector.escapeSqlString(activeGenerationId)}'`
+      )
+    }
   }
 
   public async addChunks(params: {

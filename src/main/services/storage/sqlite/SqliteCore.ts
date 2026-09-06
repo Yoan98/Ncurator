@@ -2,7 +2,7 @@ import Database from 'better-sqlite3'
 import fs from 'fs'
 import path from 'path'
 import { getSqliteDbPath } from '../../../utils/paths'
-import type { Migration } from './migrations/types'
+import type { Migration, MigrationAfterCommitContext } from './migrations/types'
 import { initialSchemaMigration } from './migrations/001_initial_schema'
 import { aiRuntimeSystemNotificationsMigration } from './migrations/002_ai_runtime_system_notifications'
 import { chatSessionSkillStateMigration } from './migrations/003_chat_session_skill_state'
@@ -164,6 +164,42 @@ export class SqliteCore {
     this.db = null
   }
 
+  public async runPendingAfterCommitHooks(ctx: MigrationAfterCommitContext): Promise<void> {
+    const db = this.getConnection()
+    const table = db
+      .prepare(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_migration_hooks'"
+      )
+      .get()
+    if (!table) return
+
+    const pending = db
+      .prepare(
+        `
+        SELECT version, name FROM schema_migration_hooks
+        WHERE status = 'pending'
+        ORDER BY version ASC
+      `
+      )
+      .all() as Array<{ version: number; name: string }>
+
+    const markDone = db.prepare(
+      `
+      UPDATE schema_migration_hooks
+      SET status = 'done', completed_at = ?
+      WHERE version = ? AND status = 'pending'
+    `
+    )
+
+    for (const row of pending) {
+      const migration = MIGRATIONS.find((item) => item.version === Number(row.version))
+      if (migration?.afterCommit) {
+        await migration.afterCommit(ctx)
+      }
+      markDone.run(Date.now(), Number(row.version))
+    }
+  }
+
   private readAppliedMigrations(): AppliedMigration[] {
     const db = this.getConnection()
     const table = db
@@ -221,6 +257,11 @@ export class SqliteCore {
         if (migration.sql) db.exec(migration.sql)
         migration.run?.(db)
         insertMigration.run(migration.version, migration.name, Date.now())
+        if (migration.afterCommit) {
+          db.prepare(
+            'INSERT INTO schema_migration_hooks (version, name, status) VALUES (?, ?, ?)'
+          ).run(migration.version, migration.name, 'pending')
+        }
       }
 
       const quickCheck = db.pragma('quick_check') as Array<{ quick_check: string }>

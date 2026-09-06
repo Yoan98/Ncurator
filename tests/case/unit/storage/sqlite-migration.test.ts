@@ -126,6 +126,33 @@ describe('SQLite migration contract', () => {
     expect(schemaSignature(upgradedPath)).toEqual(schemaSignature(freshPath))
   })
 
+  it('records a pending v10 afterCommit hook and runs it only once', async () => {
+    const databasePath = await createDatabasePath()
+    const sqlite = new SqliteCore(databasePath)
+    sqlite.initialize()
+    const pending = sqlite
+      .prepare('SELECT version, name, status FROM schema_migration_hooks')
+      .all()
+    expect(pending).toEqual([{ version: 10, name: 'upgrade_from_v9', status: 'pending' }])
+
+    const lanceDbPath = path.join(path.dirname(databasePath), 'lancedb')
+    const leftoverPath = path.join(lanceDbPath, 'stale-vector-data')
+    await fs.mkdir(lanceDbPath, { recursive: true })
+    await fs.writeFile(leftoverPath, 'old-chunks')
+
+    await sqlite.runPendingAfterCommitHooks({ lanceDbPath })
+    await expect(fs.access(leftoverPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(
+      sqlite.prepare('SELECT status FROM schema_migration_hooks WHERE version = 10').get()
+    ).toEqual({ status: 'done' })
+
+    await fs.mkdir(lanceDbPath, { recursive: true })
+    await fs.writeFile(leftoverPath, 'new-index')
+    await sqlite.runPendingAfterCommitHooks({ lanceDbPath })
+    await expect(fs.access(leftoverPath)).resolves.toBeUndefined()
+    sqlite.close()
+  })
+
   it('makes repeated initialization a no-op after the database reaches v10', async () => {
     const databasePath = await createDatabasePath()
     const sqlite = new SqliteCore(databasePath)

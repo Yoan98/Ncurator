@@ -4,6 +4,7 @@ import { createAiLlmExecutor } from './llmExecutor'
 import { buildReferenceScope } from './human/prompts/referenceScope'
 import { getAiRuntimePlatform } from './utils/platform'
 import { normalizeSelectedReferences } from './utils/runContext'
+import { KB_INDEXING_IN_PROGRESS_ERROR } from './human/tools/kb/retrievalTools'
 import type { AiExecutionPermission, AiPreference } from '../../../shared/types'
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
@@ -163,6 +164,11 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       deps.discardTerminalCommandTracking(commandId)
     },
     documentsStore: deps.documentsStore,
-    embeddingService: deps.embeddingService
+    embeddingService: deps.embeddingService,
+    assertKbSearchAvailable: async () => {
+      if (await deps.hasRunningKnowledgeIndexJob?.()) {
+        throw new Error(KB_INDEXING_IN_PROGRESS_ERROR)
+      }
+    }
   }
 }

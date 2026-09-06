@@ -113,6 +113,12 @@ class MemoryVectorCore {
     return `${column} IN (${list.map((value) => `'${this.escapeSqlString(value)}'`).join(',')})`
   }
 
+  public buildNotInClause(column: string, values?: string[]): string | undefined {
+    const list = (values || []).map((value) => String(value || '').trim()).filter(Boolean)
+    if (list.length === 0) return undefined
+    return `${column} NOT IN (${list.map((value) => `'${this.escapeSqlString(value)}'`).join(',')})`
+  }
+
   public combineWhere(parts: Array<string | undefined>): string | undefined {
     const clauses = parts.map((part) => String(part || '').trim()).filter(Boolean)
     if (clauses.length === 0) return undefined
@@ -126,11 +132,31 @@ class MemoryVectorCore {
 
 const applyLanceWhere = (rows: VectorRow[], where: string): VectorRow[] => {
   if (!where.trim()) return rows
-  const eqMatches = Array.from(where.matchAll(/(\w+)\s*=\s*'([^']*)'/g))
-  const inMatches = Array.from(where.matchAll(/(\w+)\s+IN\s+\(([^)]*)\)/g))
+  const neqMatches = Array.from(where.matchAll(/(\w+)\s*!=\s*'([^']*)'/g))
+  const eqMatches = Array.from(where.matchAll(/(\w+)\s*=\s*'([^']*)'/g)).filter(
+    (match) => !where.slice(Math.max(0, (match.index || 0) - 1), match.index).includes('!')
+  )
+  const notInMatches = Array.from(where.matchAll(/(\w+)\s+NOT IN\s+\(([^)]*)\)/g))
+  const inMatches = Array.from(where.matchAll(/(\w+)\s+IN\s+\(([^)]*)\)/g)).filter((match) => {
+    if (match[1].toUpperCase() === 'NOT') return false
+    const prefix = where.slice(Math.max(0, (match.index || 0) - 4), match.index || 0)
+    return !/NOT\s*$/i.test(prefix)
+  })
+  const requireId = /id\s+IS NOT NULL/i.test(where)
   return rows.filter((row) => {
+    if (requireId && (row.id == null || String(row.id) === '')) return false
+    for (const match of neqMatches) {
+      if (String(row[match[1]] || '') === match[2]) return false
+    }
     for (const match of eqMatches) {
       if (String(row[match[1]] || '') !== match[2]) return false
+    }
+    for (const match of notInMatches) {
+      const blocked = match[2]
+        .split(',')
+        .map((item) => item.trim().replace(/^'|'$/g, ''))
+        .filter(Boolean)
+      if (blocked.includes(String(row[match[1]] || ''))) return false
     }
     for (const match of inMatches) {
       const allowed = match[2]
@@ -557,7 +583,7 @@ describe('sqlite document metadata with vector chunks', () => {
     expect(vectorCore.table.addBatches.map((batch) => batch.length)).toEqual([128, 128, 4])
   })
 
-  it('lists only active generation chunks', async () => {
+  it('purges stale generation and orphan chunks without using search filters', async () => {
     const vectorCore = new MemoryVectorCore([
       {
         id: 'active-chunk',
@@ -582,6 +608,18 @@ describe('sqlite document metadata with vector chunks', () => {
         metadata: { page: 1 },
         created_at: 1,
         vector: [1, 2, 3]
+      },
+      {
+        id: 'orphan-chunk',
+        text: 'orphan text',
+        document_id: 'missing-document',
+        workspace_id: 'workspace-1',
+        source_type: 'file',
+        generation_id: 'generation-orphan',
+        document_name: 'Missing',
+        metadata: { page: 1 },
+        created_at: 1,
+        vector: [1, 2, 3]
       }
     ])
     const store = new DocumentsStore(sqlite, vectorCore as unknown as LanceDbCore)
@@ -596,14 +634,25 @@ describe('sqlite document metadata with vector chunks', () => {
       active_generation_id: 'generation-active'
     })
 
-    const result = await store.listChunks({
+    const beforePurge = await store.listChunks({
       workspaceId: 'workspace-1',
       page: 1,
       pageSize: 10
     })
+    expect(beforePurge.items.map((item) => item.id).sort()).toEqual([
+      'active-chunk',
+      'old-chunk',
+      'orphan-chunk'
+    ])
 
-    expect(result.total).toBe(1)
-    expect(result.items.map((item) => item.id)).toEqual(['active-chunk'])
+    await store.purgeStaleChunks()
+
+    const afterPurge = await store.listChunks({
+      workspaceId: 'workspace-1',
+      page: 1,
+      pageSize: 10
+    })
+    expect(afterPurge.items.map((item) => item.id)).toEqual(['active-chunk'])
   })
 })
 
@@ -628,6 +677,26 @@ describe('storage service initialization', () => {
       await service.initialize()
 
       expect(service.sqlite.getConnection().open).toBe(true)
+      expect(await service.vector.tableExists('vector_chunk')).toBe(true)
+    } finally {
+      await service.close()
+    }
+  })
+
+  it('purges leftover lancedb files when the v10 afterCommit hook runs', async () => {
+    const vectorPath = path.join(tempDir, 'lancedb')
+    const leftoverPath = path.join(vectorPath, 'stale-vector-data')
+    await fs.mkdir(vectorPath, { recursive: true })
+    await fs.writeFile(leftoverPath, 'old-chunks')
+
+    const service = new StorageService({
+      sqlitePath: path.join(tempDir, 'app.sqlite'),
+      vectorPath
+    })
+
+    try {
+      await service.initialize()
+      await expect(fs.access(leftoverPath)).rejects.toMatchObject({ code: 'ENOENT' })
       expect(await service.vector.tableExists('vector_chunk')).toBe(true)
     } finally {
       await service.close()

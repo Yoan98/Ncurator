@@ -150,6 +150,15 @@ export class WorkspaceIndexJobStore {
     return rows.map(toWorkspaceIndexJobRecord)
   }
 
+  public async hasRunningPrepareJob(): Promise<boolean> {
+    const row = this.sqlite
+      .prepare(
+        "SELECT 1 FROM workspace_index_job WHERE status = 'running' AND action = 'prepare' LIMIT 1"
+      )
+      .get()
+    return Boolean(row)
+  }
+
   public async failRunningJobs(message: string, now = Date.now()): Promise<number> {
     const result = this.sqlite
       .prepare(

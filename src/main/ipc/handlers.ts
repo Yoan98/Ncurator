@@ -287,6 +287,7 @@ export function registerHandlers(services: {
     llmStore,
     aiRuntimeSettingsStore,
     workspaceStore,
+    workspaceIndexJobStore,
     webSourceStore,
     ensureEmbeddingReady: async () => {
       await ensureEmbeddingReady({
@@ -794,6 +795,7 @@ export function registerHandlers(services: {
         updated_at: Date.now(),
         finished_at: Date.now()
       })
+      await documentsStore.purgeStaleChunks()
       emitSourceListRefreshToAll()
     } catch (error) {
       const message = getErrorMessage(error)
@@ -809,6 +811,7 @@ export function registerHandlers(services: {
         updated_at: Date.now(),
         finished_at: Date.now()
       })
+      await documentsStore.purgeStaleChunks()
       emitSourceListRefreshToAll()
     } finally {
       activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'file'))
@@ -1357,6 +1360,7 @@ export function registerHandlers(services: {
         updated_at: Date.now(),
         finished_at: Date.now()
       })
+      await documentsStore.purgeStaleChunks()
     } catch (error) {
       const message = getErrorMessage(error)
       await updateAndEmitWorkspaceIndexJob(job, {
@@ -1366,6 +1370,7 @@ export function registerHandlers(services: {
         updated_at: Date.now(),
         finished_at: Date.now()
       })
+      await documentsStore.purgeStaleChunks()
     } finally {
       activeWorkspaceIndexJobs.delete(getWorkspaceIndexJobKey(workspaceId, 'web'))
     }

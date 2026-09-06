@@ -74,16 +74,21 @@ describe('unit workspace backend', () => {
         const updatedFileJob = await runtime.storageService.workspaceIndexJob.getJobById(
           newerJob.id
         )
+        const hasRunningPrepareJob = await runtime.storageService.workspaceIndexJob.hasRunningPrepareJob()
         const failedCount = await runtime.storageService.workspaceIndexJob.failRunningJobs(
           '程序关闭导致索引中断',
           NOW + 4
         )
         const runningJobs = await runtime.storageService.workspaceIndexJob.listRunningJobs()
         const failedWebJob = await runtime.storageService.workspaceIndexJob.getJobById(webJob.id)
+        const hasRunningPrepareJobAfterFail =
+          await runtime.storageService.workspaceIndexJob.hasRunningPrepareJob()
 
         return {
           activeFileJob,
           updatedFileJob,
+          hasRunningPrepareJob,
+          hasRunningPrepareJobAfterFail,
           failedCount,
           runningJobCount: runningJobs.length,
           failedWebJob
@@ -108,9 +113,16 @@ describe('unit workspace backend', () => {
           }
         )
 
+        runtime.assertThat(result.hasRunningPrepareJob === true, {
+          name: 'prepare-jobs-block-kb-search',
+          message: '存在 running 的 prepare job 时，知识库检索应识别为正在更新索引。',
+          data: result
+        })
+
         runtime.assertThat(
           result.failedCount === 3 &&
             result.runningJobCount === 0 &&
+            result.hasRunningPrepareJobAfterFail === false &&
             result.failedWebJob?.last_error === '程序关闭导致索引中断',
           {
             name: 'running-jobs-fail-together',

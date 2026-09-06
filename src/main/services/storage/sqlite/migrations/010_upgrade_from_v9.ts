@@ -1,8 +1,16 @@
-import type { Migration } from './types'
+import fs from 'node:fs'
+import type { Migration, MigrationAfterCommitContext } from './types'
+
+const purgeLanceDbDirectory = async (ctx: MigrationAfterCommitContext): Promise<void> => {
+  const lanceDbPath = String(ctx.lanceDbPath || '').trim()
+  if (!lanceDbPath) return
+  fs.rmSync(lanceDbPath, { recursive: true, force: true })
+}
 
 export const upgradeFromV9Migration: Migration = {
   version: 10,
   name: 'upgrade_from_v9',
+  afterCommit: purgeLanceDbDirectory,
   sql: `
 DROP TABLE chat_conversation_memory;
 DROP TABLE chat_session_resume_snapshot;
@@ -214,5 +222,12 @@ CREATE TABLE web_source (
 );
 CREATE UNIQUE INDEX idx_web_source_url ON web_source(normalized_url);
 CREATE INDEX idx_web_source_document ON web_source(document_id);
+
+CREATE TABLE schema_migration_hooks (
+  version INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  completed_at INTEGER
+);
 `
 }

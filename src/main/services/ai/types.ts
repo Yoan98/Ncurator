@@ -317,6 +317,7 @@ export type AiRunDeps = {
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   ensureEmbeddingReady: () => Promise<void>
+  hasRunningKnowledgeIndexJob?: () => Promise<boolean>
   docxApplyService: DocxApplyService
   saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
   listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
@@ -414,6 +415,7 @@ export type AiRunContext = {
   discardTerminalCommandTracking: (commandId: string) => void
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
+  assertKbSearchAvailable: () => Promise<void>
 }
 
 export type AiRunFailureMetadata = {
@@ -437,7 +439,13 @@ export type TerminalToolContext = Pick<
 
 export type KnowledgeRetrievalContext = Pick<
   AiRunContext,
-  'runId' | 'checkCancelled' | 'sendEvent' | 'workspace' | 'documentsStore' | 'embeddingService'
+  | 'runId'
+  | 'checkCancelled'
+  | 'sendEvent'
+  | 'workspace'
+  | 'documentsStore'
+  | 'embeddingService'
+  | 'assertKbSearchAvailable'
 >
 
 export type DocxToolContext = AiRunContext

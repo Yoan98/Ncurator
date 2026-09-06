@@ -12,6 +12,7 @@ import { KB_LIST_DOCUMENTS_TOOL_SPEC, KB_SEARCH_TOOL_SPEC } from './toolSpecs'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 
+export const KB_INDEXING_IN_PROGRESS_ERROR = '正在更新知识库索引，请完成后再检索。'
 const MAX_RETRIEVAL_LIMIT = 50
 const MAX_LIST_PAGE_SIZE = 50
 
@@ -164,6 +165,7 @@ export const buildKbCapabilityTools = (input: {
         args: args as JsonObject,
         execute: async (session) => {
           ctx.checkCancelled()
+          await ctx.assertKbSearchAvailable()
           const prepared = resolveSearchArgs(args)
           if (!prepared.queryText) {
             throw new Error('知识库搜索需要提供查询文本。')
@@ -271,6 +273,7 @@ export const buildKbCapabilityTools = (input: {
         args: args as JsonObject,
         execute: async (session) => {
           ctx.checkCancelled()
+          await ctx.assertKbSearchAvailable()
           const workspaceId = String(ctx.workspace?.workspaceId || '').trim() || undefined
           const sourceNameQuery = String(args.sourceNameQuery || '').trim() || undefined
           const page = Math.max(1, Number(args.page ?? 1))

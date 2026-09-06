@@ -3,12 +3,10 @@ import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 import {
   renderKbListDocumentsModelResult,
+  renderKbModelError,
   renderKbSearchModelResult
 } from '../../shared/modelToolResultRenderers'
-import {
-  KB_LIST_DOCUMENTS_SCHEMA,
-  KB_SEARCH_SCHEMA
-} from './toolSchemas'
+import { KB_LIST_DOCUMENTS_SCHEMA, KB_SEARCH_SCHEMA } from './toolSchemas'
 
 const KB_EXECUTION_META = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -30,7 +28,8 @@ export const KB_SEARCH_TOOL_SPEC: HumanToolSpec<
   },
   resolveExecutionMeta: KB_EXECUTION_META,
   modelResult: {
-    renderSuccess: renderKbSearchModelResult
+    renderSuccess: renderKbSearchModelResult,
+    renderError: renderKbModelError
   }
 }
 
@@ -49,7 +48,8 @@ export const KB_LIST_DOCUMENTS_TOOL_SPEC: HumanToolSpec<
   },
   resolveExecutionMeta: KB_EXECUTION_META,
   modelResult: {
-    renderSuccess: renderKbListDocumentsModelResult
+    renderSuccess: renderKbListDocumentsModelResult,
+    renderError: renderKbModelError
   }
 }
 

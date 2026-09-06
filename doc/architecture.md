@@ -23,11 +23,11 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 - SQLite：业务真相（伙伴、伙伴消息记录、AI run、审批、文件修改记录、文档元数据、工作地址、全局网页、配置）。
 - LanceDB：可重建的 `vector_chunk` 向量索引。
-- SQLite 通过 migration 演进；LanceDB 可按文档 generation 重建。
+- SQLite 通过 migration 演进；LanceDB 可按文档 generation 重建，检索时库内只保留最新 chunk。
 
 **检索**
 
-向量搜索（语义）+ LanceDB FTS（关键词）+ RRF 融合。检索前先经 SQLite 确认有效 `document.active_generation_id`，再查 LanceDB。
+向量搜索（语义）+ LanceDB FTS（关键词）+ RRF 融合。设置页「更新索引」进行中时，知识库工具直接失败；检查更新不拦截检索。检索不再按 `generation_id` 过滤。
 
 ### 分层与主链路
 
@@ -139,7 +139,7 @@ flowchart LR
 
 业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引；业务查询先经 SQLite 确认有效范围，再进入 LanceDB。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为唯一持久化真相。详细 schema 见 `doc/database.md`。
 
-文件和网页索引通过 `generation_id` 原子切换当前有效版本；新索引失败时继续使用旧版本。
+文件和网页索引用 `generation_id` 区分新旧写入；成功后删除旧 chunk，失败则删除半成品新 chunk。检索时库中只应留下最新索引。设置页正在「更新索引」时，`kb_search` / `kb_list_documents` 返回错误。
 
 ## 主链路
 
