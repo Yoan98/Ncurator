@@ -16,8 +16,8 @@
 | human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。              |
 | human-runtime-script-system-python-live             | 完成 |            95 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-script-system-python-live/20260814-160300-706             | 本机 Python 在临时脚本目录运行临时脚本，得到确定性结果并核对。                                         |
 | human-runtime-download-python-live                  | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-download-python-live/20260814-160340-415                  | Python 不可用时自主下载便携运行时并运行临时脚本，得到正确结果。                                        |
-| human-session-resume-with-new-selection-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:11 CST | tests/logs/ai/human/live/human-session-resume-with-new-selection-live/20260813-201154-716        | 新选中文件后会话记忆与任务主线延续，完整完成任务。                                                     |
-| human-cross-session-continuation-live               | 完成 |            90 | qwen3.8-flash                    | 2026-09-01 10:52 CST | tests/logs/ai/human/live/human-cross-session-continuation-live/20260901-105227-658                | run1+run2 双主题对比交付（深度学习过拟合 → 图形学反走样），text_file 落盘；2 次失败（terminal_not_found、stale nodeId）自恢复。超时放宽到 30min。 |
+| human-partner-resume-with-new-selection-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:11 CST | tests/logs/ai/human/live/human-session-resume-with-new-selection-live/20260813-201154-716        | 新选中文件后同一伙伴记忆与任务主线延续，完整完成任务。                                                     |
+| human-partner-continuation-live                     | 完成 |            90 | qwen3.8-flash                    | 2026-09-01 10:52 CST | tests/logs/ai/human/live/human-cross-session-continuation-live/20260901-105227-658                | run1+run2 双主题对比交付（深度学习过拟合 → 图形学反走样），text_file 落盘；2 次失败（terminal_not_found、stale nodeId）自恢复。超时放宽到 30min。 |
 | human-docx-positioned-structural-edit-fallback-live | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 20:13 CST | tests/logs/ai/human/live/human-docx-positioned-structural-edit-fallback-live/20260813-201354-419 | 复杂定位区域写入被保护并返回明确诊断，其余区域编辑安全完成。                                           |
 | human-legacy-doc-reading-live                       | 完成 |            94 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-legacy-doc-reading-live/20260813-195642-815                       | 通过 docx 读取工具成功读取旧版 .doc 并准确回答五级风险与区别率，源文件未改。                           |
 | human-text-file-write-checkout-cutover-live         | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:17 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20260813-201727-173         | 两处端点和超时精确更新，重试与 telemetry 不变，写后核对完整。                                          |
@@ -432,7 +432,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：KB tool family 必须显式覆盖每个回归工具。
 - How：对多工作区真实 seed 数据分别执行三种检索，并覆盖 `documentIds` 缩圈。
 - Oracle：三种检索都返回稳定 `items`，默认受当前文件地址与全局网页约束，且遵守 `documentIds` 缩圈语义；文件命中保留 `sourceType=file` 与 `filePath`，网页命中保留 `sourceType=web` 与 `sourceUrl`，供最终引用生成可追溯地址。
-- Not：不比较召回优劣。设置页「更新索引」期间的拦截由 unit `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`；「检查更新」不拦截。
+- Not：不比较召回优劣。设置页「更新索引」期间的拦截由 unit `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`（工具失败，模型侧结果为 `Error: 正在更新知识库索引，请完成后再检索。`）；「检查更新」不拦截。
 
 #### terminal 类别
 
@@ -826,7 +826,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：子场景一：消息数组首条为 system（无 `current_time`），历史含 run-1 的冻结 build user、assistant/tool 与 run-2 末尾 build user（共 2 条 human，末条含本 run `current_time` / 最新 active_state）；子场景二：run-1 为 `user_cancelled`，run-2 在悬空 learn_skill tool_call 后补相同 ID 的失败 ToolMessage，且含 run-1 与 run-2 两条 build user。
 - Not：不验证 live provider 真实网络抖动；不恢复 docx 临时运行态。
 
-##### `session-skill-memory-multi-run`
+##### `partner-skill-memory-multi-run`
 
 - 测试类型：`backend / mock-llm`
 - What：同一伙伴的多轮 human run 能复用已学习技能记忆。
@@ -936,7 +936,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：源 PPT hash 不变；调用过 `ppt_read_*`/`ppt_search` 且无 `ppt_edit`；结论由 raw logs 人工评估。
 - Not：不写专用 JSON，不匹配最终回答文案，不在 case 内 `tool.invoke` 造稿。
 
-##### `human-session-resume-with-new-selection-live`
+##### `human-partner-resume-with-new-selection-live`
 
 - 测试类型：`backend`
 - What：live 模式下第一诉求已经沉淀局部事实后发生网络中断，同一伙伴新诉求可从不可变消息日志恢复旧语义上下文，同时本轮新选择文件只作用于新 user 消息。
@@ -945,7 +945,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：Run 1 为 `network_error`；中断前事实和计划记录仍在 `chat_session_message_log`。Run 2 消息数组包含 Run 1 的 build user、历史 assistant/tool 投影与 Run 2 末尾 build user；Run 2 使用文件 B 且不会改写 Run 1 的文件 A 配置，最终交付包含过拟合与反走样事实。
 - Not：不验证真实 provider 的随机网络抖动；不要求 live 模型逐字复述 hint 文案；不恢复 docx 临时运行态。
 
-##### `human-cross-session-continuation-live`
+##### `human-partner-continuation-live`
 
 - 测试类型：`backend / live`
 - What：同一伙伴先正常完成第一件事，再续接第二件相关联的事，消息数组按“历史 build user + assistant/tool + 当前 run buildBrainUserMessage user”叠加。

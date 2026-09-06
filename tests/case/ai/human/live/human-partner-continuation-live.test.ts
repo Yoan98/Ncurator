@@ -14,7 +14,7 @@ import {
 } from '../../../../harness/backend/aiLiveTestData'
 import { runWithStructuredOutputRetry } from '../testUtils'
 
-const SESSION_ID = 'live-session-cross-session-continuation'
+const PARTNER_ID = 'live-partner-continuation'
 const RUN1_INPUT =
   '我想做一个复习对比小结。请先只看深度学习课件，整理“过拟合/过度拟合”的概念定义、出现原因、处理方式；资料没写某一项就标成未写。'
 const RUN2_INPUT =
@@ -84,16 +84,16 @@ const buildAiRunDeps = async (input: {
 }
 
 describe('ai human live backend', () => {
-  it('human-cross-session-continuation-live', async () => {
+  it('human-partner-continuation-live', async () => {
     await runWithStructuredOutputRetry(async () => {
       await runBackendCase({
-        caseId: 'human-cross-session-continuation-live',
+        caseId: 'human-partner-continuation-live',
         harnessMode: 'live',
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下同一 session 先完成第一件事，再续接关联的第二件事，消息数组按「历史 + 尾部 user 消息」叠加。',
+          '验证 live 模式下同一伙伴先完成第一件事，再续接关联的第二件事，消息数组按「历史 + 尾部 user 消息」叠加。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -122,8 +122,8 @@ describe('ai human live backend', () => {
 
           await runtime.seedLlmConfig(liveConfig)
           await runtime.chatStore.savePartner({
-          id: SESSION_ID,
-          name: 'live cross-session continuation test',
+          id: PARTNER_ID,
+          name: 'live partner continuation test',
           avatar_shape: 'circle',
           avatar_color: 'blue',
           created_at: Date.now(),
@@ -136,7 +136,7 @@ describe('ai human live backend', () => {
           const run1Result = await AiRunService.getInstance().run(
             {
               runId: `${runtime.runId}-run-1`,
-              partnerId: SESSION_ID,
+              partnerId: PARTNER_ID,
               input: RUN1_INPUT,
               selectedReferences: fileAReferences,
               mainModel: { configId: liveConfig.id, modelName: liveConfig.model_name },
@@ -157,7 +157,7 @@ describe('ai human live backend', () => {
           const run2Result = await AiRunService.getInstance().run(
             {
               runId: `${runtime.runId}-run-2`,
-              partnerId: SESSION_ID,
+              partnerId: PARTNER_ID,
               input: RUN2_INPUT,
               selectedReferences: fileBReferences,
               mainModel: { configId: liveConfig.id, modelName: liveConfig.model_name },
@@ -209,7 +209,7 @@ describe('ai human live backend', () => {
           if (result.configurationMissing) {
             runtime.assertThat(false, {
               name: 'live-config-not-provided',
-              message: '未提供 live 模型配置，已跳过 human cross-session continuation live case。'
+              message: '未提供 live 模型配置，已跳过 human partner continuation live case。'
             })
             return
           }
@@ -224,9 +224,9 @@ describe('ai human live backend', () => {
               mentionsOverfittingTopic(result.run2Delivery) &&
               mentionsAntiAliasingTopic(result.run2Delivery),
             {
-              name: 'human-live-cross-session-continuation-stacks-message-array',
+              name: 'human-live-partner-continuation-stacks-message-array',
               message:
-                '同 session 第二件事应在完整历史（含第一件事的 build user 与最终交付）之后尾部追加当前 build user，并完成双主题对比交付。',
+                '同伙伴第二件事应在完整历史（含第一件事的 build user 与最终交付）之后尾部追加当前 build user，并完成双主题对比交付。',
               data: {
                 run1Status: result.run1Result?.status,
                 run1Error: result.run1Result?.error,

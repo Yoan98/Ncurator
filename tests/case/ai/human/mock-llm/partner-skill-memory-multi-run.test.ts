@@ -4,7 +4,7 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { buildCompleteTaskDecision, buildLearnSkillsDecision } from '../testUtils'
 import type { ChatMessageLogRecord } from '../../../../../src/shared/types'
 
-const SESSION_ID = 'session-skill-memory-multi-run'
+const PARTNER_ID = 'partner-skill-memory-multi-run'
 
 const readLatestLearnedSkillIds = (records: ChatMessageLogRecord[]): string[] => {
   let learnedSkillIds: string[] = []
@@ -18,20 +18,20 @@ const readLatestLearnedSkillIds = (records: ChatMessageLogRecord[]): string[] =>
 }
 
 describe('ai human mock-llm backend', () => {
-  it('session-skill-memory-multi-run', async () => {
+  it('partner-skill-memory-multi-run', async () => {
     await runBackendCase({
-      caseId: 'session-skill-memory-multi-run',
+      caseId: 'partner-skill-memory-multi-run',
       harnessMode: 'mock-llm',
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
       description:
-        '验证同一会话跨 run 共享技能；在当前 29 工具目录与 30 上限下，四轮学习后仍应全部保留。',
+        '验证同一伙伴跨 run 共享技能；在当前 29 工具目录与 30 上限下，四轮学习后仍应全部保留。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         const run1 = createHumanTestRunner(runtime, {
-          partnerId: SESSION_ID,
+          partnerId: PARTNER_ID,
           structuredOutputScript: {
             'human.brain': [
               {
@@ -49,14 +49,14 @@ describe('ai human mock-llm backend', () => {
             ]
           }
         })
-        await run1.run({ taskId: 'session-skills-run-1', userInput: '学习文档技能。' })
+        await run1.run({ taskId: 'partner-skills-run-1', userInput: '学习文档技能。' })
         const stateAfterRun1 = readLatestLearnedSkillIds(
-          await runtime.storageService.chatMessageLog.list(SESSION_ID)
+          await runtime.storageService.chatMessageLog.list(PARTNER_ID)
         )
 
         let run2Prompt = ''
         const run2 = createHumanTestRunner(runtime, {
-          partnerId: SESSION_ID,
+          partnerId: PARTNER_ID,
           structuredOutputScript: {
             'human.brain': [
               ({ user }) => {
@@ -75,10 +75,10 @@ describe('ai human mock-llm backend', () => {
             ]
           }
         })
-        await run2.run({ taskId: 'session-skills-run-2', userInput: '继续使用会话技能。' })
+        await run2.run({ taskId: 'partner-skills-run-2', userInput: '继续使用伙伴技能。' })
 
         const run3 = createHumanTestRunner(runtime, {
-          partnerId: SESSION_ID,
+          partnerId: PARTNER_ID,
           structuredOutputScript: {
             'human.brain': [
               {
@@ -96,14 +96,14 @@ describe('ai human mock-llm backend', () => {
             ]
           }
         })
-        await run3.run({ taskId: 'session-skills-run-3', userInput: '继续学习 PPT 技能。' })
+        await run3.run({ taskId: 'partner-skills-run-3', userInput: '继续学习 PPT 技能。' })
         const stateAtLimit = readLatestLearnedSkillIds(
-          await runtime.storageService.chatMessageLog.list(SESSION_ID)
+          await runtime.storageService.chatMessageLog.list(PARTNER_ID)
         )
 
         let run4Prompt = ''
         const run4 = createHumanTestRunner(runtime, {
-          partnerId: SESSION_ID,
+          partnerId: PARTNER_ID,
           structuredOutputScript: {
             'human.brain': [
               {
@@ -122,9 +122,9 @@ describe('ai human mock-llm backend', () => {
             ]
           }
         })
-        await run4.run({ taskId: 'session-skills-run-4', userInput: '检查遗忘结果。' })
+        await run4.run({ taskId: 'partner-skills-run-4', userInput: '检查遗忘结果。' })
         const stateAfterEviction = readLatestLearnedSkillIds(
-          await runtime.storageService.chatMessageLog.list(SESSION_ID)
+          await runtime.storageService.chatMessageLog.list(PARTNER_ID)
         )
 
         return { stateAfterRun1, stateAtLimit, stateAfterEviction, run2Prompt, run4Prompt }
@@ -139,9 +139,9 @@ describe('ai human mock-llm backend', () => {
               'docx-read,pdf-read,excel-write,ppt-read,ppt-write,excel-read,image-generation,docx-write' &&
             result.run4Prompt.includes('已学习技能'),
           {
-            name: 'session-skills-persist-across-runs-within-tool-budget',
+            name: 'partner-skills-persist-across-runs-within-tool-budget',
             message:
-              '同一会话应跨 run 共享技能；后续 brain prompt 应注入 learned_skills，且四轮学习后技能全部保留。',
+              '同一伙伴应跨 run 共享技能；后续 brain prompt 应注入 learned_skills，且四轮学习后技能全部保留。',
             data: result
           }
         )

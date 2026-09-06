@@ -14,7 +14,7 @@ import {
 } from '../../../../harness/backend/aiLiveTestData'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
-const SESSION_ID = 'live-session-resume-with-new-selection'
+const PARTNER_ID = 'live-partner-resume-with-new-selection'
 const MIN_BRAIN_ROUNDS_BEFORE_FAULT = 5
 const INTERRUPTED_RUN_INPUT =
   '我想做一个复习对比小结。请先只看深度学习课件，整理“过拟合/过度拟合”的概念定义、出现原因、处理方式；整理时先在资料里定位相关段落并读取原文，再交叉核对“训练时间”和“测试集”这两个相关知识点是否也提到了过拟合的原因和处理方法；整理完更新你的执行计划，并把结果写入工作区草稿文件 复习草稿.md。资料没写某一项就标成未写。后面我会再选另一份课件补第二个概念。'
@@ -133,16 +133,16 @@ const buildAiRunDeps = async (input: {
 }
 
 describe('ai human live backend', () => {
-  it('human-session-resume-with-new-selection-live', async () => {
+  it('human-partner-resume-with-new-selection-live', async () => {
     await runWithStructuredOutputRetry(async () => {
       await runBackendCase({
-        caseId: 'human-session-resume-with-new-selection-live',
+        caseId: 'human-partner-resume-with-new-selection-live',
         harnessMode: 'live',
         domain: 'ai',
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下第一诉求已沉淀局部事实后发生网络中断，同一 session 新诉求能恢复旧语义上下文并覆盖本轮新选择文件。',
+          '验证 live 模式下第一诉求已沉淀局部事实后发生网络中断，同一伙伴新诉求能恢复旧语义上下文并覆盖本轮新选择文件。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -180,8 +180,8 @@ describe('ai human live backend', () => {
 
           await runtime.seedLlmConfig(liveConfig)
           await runtime.chatStore.savePartner({
-          id: SESSION_ID,
-          name: 'live session resume test',
+          id: PARTNER_ID,
+          name: 'live partner resume test',
           avatar_shape: 'circle',
           avatar_color: 'blue',
           created_at: Date.now(),
@@ -193,7 +193,7 @@ describe('ai human live backend', () => {
           const interruptedResult = await AiRunService.getInstance().run(
             {
               runId: `${runtime.runId}-run-1-interrupted`,
-              partnerId: SESSION_ID,
+              partnerId: PARTNER_ID,
               input: INTERRUPTED_RUN_INPUT,
               selectedReferences: fileAReferences,
               mainModel: {
@@ -214,7 +214,7 @@ describe('ai human live backend', () => {
           const overfittingEvidenceBeforeFailure = hasOverfittingEvidence(
             runtime.eventCollector.snapshot()
           )
-          const logAfterNetwork = await runtime.storageService.chatMessageLog.list(SESSION_ID)
+          const logAfterNetwork = await runtime.storageService.chatMessageLog.list(PARTNER_ID)
 
           let run2BrainMessages: BaseMessage[] | null = null
           const captureRun2Wrapper: NonNullable<AiRunDeps['chatToolsWrapper']> =
@@ -227,7 +227,7 @@ describe('ai human live backend', () => {
           const resumedResult = await AiRunService.getInstance().run(
             {
               runId: `${runtime.runId}-run-2-resume`,
-              partnerId: SESSION_ID,
+              partnerId: PARTNER_ID,
               input: RESUMED_RUN_INPUT,
               selectedReferences: fileBReferences,
               mainModel: {
@@ -239,7 +239,7 @@ describe('ai human live backend', () => {
             },
             await buildAiRunDeps({ runtime, chatToolsWrapper: captureRun2Wrapper })
           )
-          const logAfterResume = await runtime.storageService.chatMessageLog.list(SESSION_ID)
+          const logAfterResume = await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           const run2Events = runtime.eventCollector.snapshot()
           const run2Id = `${runtime.runId}-run-2-resume`
           const run2BrainPrompt = runtime.eventCollector
@@ -281,7 +281,7 @@ describe('ai human live backend', () => {
             runtime.assertThat(false, {
               name: 'live-config-not-provided',
               message:
-                '未提供 live 模型配置，已跳过 human session resume with new selection live case。'
+                '未提供 live 模型配置，已跳过 human partner resume with new selection live case。'
             })
             return
           }
@@ -305,9 +305,9 @@ describe('ai human live backend', () => {
               result.run2MessageTypes[result.run2MessageTypes.length - 1] === 'human' &&
               result.run2HasOnlyCurrentBrainUser,
             {
-              name: 'human-live-session-resume-keeps-interrupted-context-and-uses-new-selection',
+              name: 'human-live-partner-resume-keeps-interrupted-context-and-uses-new-selection',
               message:
-                'live 恢复 run 应在第一诉求已读到过拟合事实后保留不可变消息日志，并在同 session 新诉求中通过日志投影恢复旧过拟合上下文、使用本轮新选图形学课件的反走样事实完成对比小结；run-2 消息数组末尾应为 buildBrainUserMessage 的 user 消息。',
+                'live 恢复 run 应在第一诉求已读到过拟合事实后保留不可变消息日志，并在同伙伴新诉求中通过日志投影恢复旧过拟合上下文、使用本轮新选图形学课件的反走样事实完成对比小结；run-2 消息数组末尾应为 buildBrainUserMessage 的 user 消息。',
               data: {
                 fileAName: result.fileAName,
                 fileBName: result.fileBName,
