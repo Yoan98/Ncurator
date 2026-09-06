@@ -80,7 +80,7 @@ const buildResumeBrainMessages = (input: {
     records: input.records,
     ctx,
     state: input.state,
-    compactedHistoryText: input.state.memory.compactions.at(-1)?.summary
+    memoryText: input.state.memory.compactions.at(-1)?.summary
   })
   return [new SystemMessage(buildBrainSystemPrompt({ ctx })), ...brainProjection.messages]
 }

@@ -1,73 +1,55 @@
 export const buildHistoryCompactionPrompt = (input: {
-  userGoal: string
-  existingCompactSummary?: string
-  historyText: string
-  targetCompressionRatio: number
+  currentText: string
+  earlierText: string
 }) => {
-  const percent = Math.max(1, Math.min(99, Math.round(input.targetCompressionRatio * 100)))
   const system = `
 <system>
 <role>
-你是一个上下文压缩整理器，负责把一段已经发生过的任务历史和已经压缩过的信息，整合压缩成更短的文本。
+你是上下文压缩器。根据 current 写当前工作记忆，根据 earlier 写历史事实时间线。
 </role>
 
 <principles>
-- 第一目标：缩短长度，尽量压缩到原内容的大约 ${String(percent)}% 左右。
-- 第二目标：保留与当前目标仍相关的客观事实，并缩小无效与重复内容。
-- 必须保留：已确认事实、仍有效约束、仍影响任务推进的未解决问题、与当前目标仍相关的失败原因。
-- 必须强力压缩：重复尝试、低价值中间过程、无法直接支撑目标覆盖的搜索噪声、重复参数细节。
-- 可以降级为背景：仅用于解释上下文但已不再影响当前目标推进的信息。
-- 禁止编造过程、结果、资料、用户偏好或未发生的动作。
-- 禁止对客观事实进行多余描述，比如文件名、路径、资料名、工具名、人物职责绑定等已经有明确标识的对象，必须复用原文锚点。
+- 当前工作记忆要让这件事还能接着做：刚发生的 AI/工具结果必须写进「当前交付」或「已确认事实」。
+- 必须保留：路径、文件名、标题、id、结构；还要遵守的限制；未完成点；再试会空转的失败（一句结论）。
+- 必须丢掉：工具入参、检索噪声、Thought、重复试错过程、当前用户诉求原文。
+- 历史事实按时间从旧到新；越早的事越短，越近的事可以更具体。
+- 整份重写，不要把上一份记忆原文粘贴进输出。
+- 禁止编造；路径、文件名、标题、id 复用原文。
 </principles>
 
 <context_block_guide>
-    - user_goal：用户原始诉求。
-    - existing_compact_summary：之前压缩的总结信息；如果之前已经有过压缩总结，则本次压缩需要在它的基础上进行迭代压缩。
-    - history_text：当前任务已发生的历史信息，包含所有细节；它是本次压缩的主要依据。
-  </context_block_guide>
+- current：现在这句用户消息 + 它之后的过程（含最后一步）。只用来写当前交付、已确认事实、已尝试但未解决。
+- earlier：这句用户消息之前的对话，可空。只用来写历史事实。
+- 用户消息还会再发给主模型，不要复述其诉求。其中若已有记忆段落，只作对照，不要整段粘贴。
+</context_block_guide>
 
 <output_contract>
-- 输出纯文本，不要输出 JSON，不要输出解释。
-- 必须严格使用以下固定结构与标题，不要新增或删减段落：
-任务锚点：
-- 目标：...
-- 当前交付：...
+纯文本，不要 JSON，不要解释。严格使用：
 
+当前交付：
+- ...
 已确认事实：
 - ...
-
-仍有效约束：
-- ...
-
 已尝试但未解决：
 - ...
+历史事实：
+- {时间} {做过什么} → {结果或路径}
 
-重复或低价值内容：
-- ...
-
-已失效或仅作背景的信息：
-- ...
+空栏目写「- 无」。
 </output_contract>
-
-
 </system>
 `.trim()
 
   const user = `
-<compaction_task>
-  <user_goal>
-${input.userGoal.trim() || 'none'}
-  </user_goal>
+<memory_task>
+  <current>
+${input.currentText.trim() || '无'}
+  </current>
 
-  <existing_compact_summary>
-  ${input.existingCompactSummary?.trim() || 'none'}
-  </existing_compact_summary>
-
-  <history_text>
-${input.historyText}
-  </history_text>
-</compaction_task>
+  <earlier>
+${input.earlierText.trim() || '无'}
+  </earlier>
+</memory_task>
 `.trim()
 
   return { system, user }

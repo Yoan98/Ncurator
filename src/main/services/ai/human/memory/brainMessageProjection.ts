@@ -8,11 +8,8 @@ import type { AiRunContext } from '../../types'
 import type { HumanState } from '../types'
 import { buildBrainUserMessage } from '../prompts/brain'
 import { createImageReferenceMessage } from './multimodal'
-import {
-  createCurrentBrainUserMessage,
-  isCurrentBrainUserMessage
-} from '../node/utils/messageTail'
-import { repairInterruptedToolCalls } from './transcript'
+import { createCurrentBrainUserMessage } from '../node/utils/messageTail'
+import { repairInterruptedToolCalls, sliceAfterLastContextCleared } from './transcript'
 import { resolveHistoricalBrainUserTextsByUserSeq } from './brainUserSnapshot'
 
 const toToolCall = (
@@ -38,10 +35,10 @@ export const projectBrainMessagesFromLog = (input: {
   records: ChatMessageLogRecord[]
   ctx: AiRunContext
   state: HumanState
-  compactedHistoryText?: string
+  memoryText?: string
 }): BrainMessagesProjection => {
-  const ordered = [...input.records].sort((a, b) => a.seq - b.seq)
-  const checkpointRecord = [...ordered]
+  const afterCleared = sliceAfterLastContextCleared(input.records)
+  const checkpointRecord = [...afterCleared]
     .reverse()
     .find(
       (record) =>
@@ -55,10 +52,10 @@ export const projectBrainMessagesFromLog = (input: {
       : undefined
 
   const projectedRecords = checkpoint
-    ? ordered.filter((record) => record.seq > checkpoint.coveredThroughSeq)
-    : ordered
+    ? afterCleared.filter((record) => record.seq > checkpoint.coveredThroughSeq)
+    : afterCleared
 
-  const frozenBrainUserByUserSeq = resolveHistoricalBrainUserTextsByUserSeq(ordered)
+  const frozenBrainUserByUserSeq = resolveHistoricalBrainUserTextsByUserSeq(afterCleared)
   const messages: BaseMessage[] = []
   let pendingImages: ChatMessageImageRef[] = []
   const flushImages = (): void => {
@@ -102,10 +99,8 @@ export const projectBrainMessagesFromLog = (input: {
   }
   flushImages()
 
-  // 同 run 稳态不写 active_state（技能/计划在 tool 结果与 bindTools）。
-  // compact 后或 log 里已有历史 user（resume / 新 run）才注入。
   const injectActiveState =
-    Boolean(input.compactedHistoryText?.trim()) ||
+    Boolean(input.memoryText?.trim()) ||
     projectedRecords.some((record) => record.entry.kind === 'user')
 
   messages.push(
@@ -113,7 +108,7 @@ export const projectBrainMessagesFromLog = (input: {
       buildBrainUserMessage({
         state: input.state,
         ctx: input.ctx,
-        compactedHistoryText: input.compactedHistoryText,
+        memoryText: input.memoryText,
         injectActiveState
       })
     )
@@ -125,8 +120,3 @@ export const projectBrainMessagesFromLog = (input: {
     currentUserMessageIndex: repaired.length - 1
   }
 }
-
-export const listHistoricalBuildUserMessages = (messages: BaseMessage[]): BaseMessage[] =>
-  messages.filter(
-    (message) => message.getType() === 'human' && !isCurrentBrainUserMessage(message)
-  )

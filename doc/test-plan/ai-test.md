@@ -943,16 +943,16 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：恢复能力的真实价值是让用户在长任务中断后继续对话；如果中断前已读到的事实丢失，或恢复时忽略最新诉求/最新选中文件，就会把恢复退化成重跑或错误沿用旧入口。
 - How：使用共享 workspace fixture（运行时为文件地址 + 伙伴）。Run 1 选中文件 A `深度学习.docx`，在读取并沉淀过拟合事实后注入 `network_error`。Run 2 在同伙伴追加“继续”类 user 消息并改选文件 B `图形学.docx`，检查历史 user 配置未变、新 user 使用文件 B、计划来自 `plan_updated`、技能来自切断点之后的 skill state。
 - Oracle：Run 1 为 `network_error`；中断前事实和计划记录仍在 `chat_session_message_log`。Run 2 消息数组包含 Run 1 的 build user、历史 assistant/tool 投影与 Run 2 末尾 build user；Run 2 使用文件 B 且不会改写 Run 1 的文件 A 配置，最终交付包含过拟合与反走样事实。
-- Not：不验证真实 provider 的随机网络抖动；不要求 live 模型逐字复述 hint 文案；不恢复 docx 临时运行态。
+- Not：不验证真实 provider 的随机网络抖动；不要求 live 模型逐字复述 hint 文案；不恢复 docx 临时运行态。不并入压缩 live，不验证压完后的无 tail 记忆形态。
 
 ##### `human-partner-continuation-live`
 
 - 测试类型：`backend / live`
 - What：同一伙伴先正常完成第一件事，再续接第二件相关联的事，消息数组按“历史 build user + assistant/tool + 当前 run buildBrainUserMessage user”叠加。
 - Why：跨轮续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文。
-- How：使用共享 workspace fixture（运行时为文件地址 + 伙伴）。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同伙伴改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组。
-- Oracle：Run 1 与 Run 2 均 `completed`；Run 2 消息数组历史中含 Run 1 的 build user 与最终交付，末尾是 Run 2 当前 build user；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
-- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。
+- How：使用共享 workspace fixture（运行时为文件地址 + 伙伴），默认上下文窗口。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同伙伴改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组。
+- Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 build user 与最终交付，末尾是 Run 2 当前 build user；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
+- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [User(<memory>)]` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。
 
 ##### `human-ppt-edit-management-review-live`
 
@@ -1002,11 +1002,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-context-compaction-natural-trigger-live`
 
 - 测试类型：`backend`
-- What：live 模式下 `human` 会基于真实 brain usage 与新增 history 增量在风险周报长任务中自然触发 `context_compaction`，并在压缩后继续完成交付。
-- Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩且不影响任务完成”的能力。
-- How：复用风险周报 live 的真实文件地址与业务输入，通过 `humanRuntimeOverrides.modelContextWindowTokens=45_000` 提供可工作的上下文空间，并让真实任务在多轮资料读取后自然进入 `context_budget -> context_compaction -> context_budget -> brain`。窗口不能太小：固定开销（23 工具 schema ~18k + system/模板 ~2k ≈ 20k）几乎不随压缩减少，若窗口过小则触发线被固定开销顶破，压缩后仍超阈值、每轮压缩死循环；下限为 45k，也不能太大（过大时任务峰值达不到触发线，0 次压缩）。压缩上下文来自该伙伴 `chat_session_message_log`；若存在 `context_cleared`，只压缩切断之后的行。算法不改。
-- Oracle：至少发生一次完整 compaction；不限制压缩次数。逐次检查固定摘要结构、任务锚点、已确认路径、无编造和无“已完成又未读取”的进度矛盾，并检查全部压缩比；后续 `brain` prompt 保留 compaction 与 task progress；最终周报文件成功交付并产出 docx `applyId` 证据，且至少一次成功的 docx 写入（允许 `document_end` 新建，也允许复制底本后 `replace_text` / `insert_nodes` 改写）。按 10 分制评估压缩生命周期、摘要结构、摘要质量、连续性和文件交付，严格超过 8 分通过。
-- Not：不绑定压缩次数，不要求固定资料读取顺序，也不因合理表达差异判失败。
+- What：live 模式下 `human` 会基于真实 brain usage 在风险周报长任务中自然触发伙伴记忆压缩；压完后发给主模型的数组为 `[System] + [当前 User(<memory>)]`，不再保留过程 tail；同伙伴再发一件更重的续做时，必须再压出非空历史时间线。
+- Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩、当前工作记忆仍能做完，且下一句用户话能把旧任务折进历史时间线”的能力。
+- How：复用风险周报 live 的真实文件地址。窗口仍为 `humanRuntimeOverrides.modelContextWindowTokens=45_000`。Run 1 用原周报长任务，不限制压缩次数。Run 2 同伙伴、不再 @ 上周周报/已交周报，要求对照刚写的本周周报和上周周报、补风险对照、标题改为「九月第一周」、核法务口径，从而再压至少一次。窗口不能太小：固定开销（工具 schema + system/模板）几乎不随压缩减少，过小会连续压缩死循环；也不能太大（过大时峰值达不到触发线）。continuation / resume live 仍分开，不并入本 case。
+- Oracle：Run 1 至少一次完整 compaction；压完后下一次 brain 消息为 `system + human(<memory>)`、后面无 ai/tool；四段标题（当前交付 / 已确认事实 / 已尝试但未解决 / 历史事实）；含「上周周报」、不编造「上周工作周报.docx」；周报 docx 交付成功。Run 2 再压至少一次且 `completed`；该次压缩「历史事实」不能是 `- 无`，须为带时间的时间线并能对上 Run 1 产物（路径或「上周周报」）；「当前交付 / 未解决」说的是对照、改标题或法务，而不是整段重填周报。按 10 分制评估压缩生命周期、记忆结构、历史时间线和文件交付，严格超过 8 分通过。
+- Not：不绑定压缩次数，不要求固定资料读取顺序，也不因合理表达差异判失败。不验证未压缩时的历史 user 叠加（由 `human-partner-continuation-live` 覆盖），不验证中断恢复（由 `human-partner-resume-with-new-selection-live` 覆盖）。
 
 ##### `human-risk-report-draft-live`
 

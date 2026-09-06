@@ -56,7 +56,7 @@ export const createBrainNode = (input: {
         records: logRecords,
         ctx: input.ctx,
         state,
-        compactedHistoryText: state.memory.compactions.at(-1)?.summary
+        memoryText: state.memory.compactions.at(-1)?.summary
       })
       messages = [
         new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),

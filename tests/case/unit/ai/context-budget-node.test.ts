@@ -171,7 +171,7 @@ describe('ai unit context budget node', () => {
     })
   })
 
-  it('does not compact when the message history is too small to reduce context', async () => {
+  it('does not compact when only the current user is in the message array', async () => {
     const events: AiRunEvent[] = []
     const ctx = createBaseContext(events)
     const cache = createHumanRuntimeCache()
@@ -179,7 +179,12 @@ describe('ai unit context budget node', () => {
       taskId: 'task-small-history',
       userInput: '请继续当前任务。'
     })
-    cache.messages = Array.from({ length: 3 }, (_, index) => new HumanMessage(`short ${index}`))
+    cache.messages = [
+      new HumanMessage({
+        content: '请继续当前任务。',
+        additional_kwargs: { ncurator_current_user: true }
+      })
+    ]
     const node = createContextBudgetNode({
       ctx: {
         ...ctx,
@@ -193,7 +198,8 @@ describe('ai unit context budget node', () => {
 
     expect(nextState.execution.stage).toBe('brain')
     expect(events.find((event) => event.type === 'context_budget_evaluated')).toMatchObject({
-      decision: 'continue'
+      decision: 'continue',
+      snapshot: { hasCompressibleHistory: false }
     })
   })
 

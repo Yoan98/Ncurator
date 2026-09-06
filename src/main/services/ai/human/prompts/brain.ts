@@ -123,13 +123,13 @@ ${renderLocalEnvironmentText(input.ctx)}
 export const buildBrainUserMessage = (input: {
   state: HumanState
   ctx: AiRunContext
-  compactedHistoryText?: string
+  memoryText?: string
   injectActiveState?: boolean
 }): string => {
   const learnedSkillIds = input.state.skills.learnedSkillIds
   const plan = input.state.memory.plan
-  const compactedHistory = input.compactedHistoryText?.trim()
-    ? `  <compacted_history>\n${input.compactedHistoryText.trim()}\n  </compacted_history>`
+  const memory = input.memoryText?.trim()
+    ? `  <memory>\n${input.memoryText.trim()}\n  </memory>`
     : ''
   const activeState = input.injectActiveState
     ? `  <active_state>
@@ -162,7 +162,7 @@ ${renderReferenceScopeText(input.ctx.referenceScope)}
   <current_time>
 ${renderCurrentTimeText(input.ctx)}
   </current_time>
-${compactedHistory}
+${memory}
 ${activeState}
 </user_context>
 `.trim()

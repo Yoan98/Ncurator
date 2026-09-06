@@ -9,6 +9,9 @@ const CONTEXT_COMPACTION_WORK_FIXTURE_DIR =
 export const HUMAN_CONTEXT_COMPACTION_USER_INPUT =
   '帮我写下这周的工作周报文件，基于我工作目录下的所有文件信息，记得参考我上周写的周报风格来哦'
 
+export const HUMAN_CONTEXT_COMPACTION_RUN2_USER_INPUT =
+  '对照刚写好的本周周报和上周周报，补一节与上周风险对照，把标题改为「九月第一周」，并核对法务口径有没有写进周报。不要从空白模板整份重填周报。'
+
 const CONTEXT_COMPACTION_LAST_WEEK_REPORT_FIXTURE_PATH =
   `${CONTEXT_COMPACTION_WORK_FIXTURE_DIR}/上周周报-已发版.docx` as const
 const CONTEXT_COMPACTION_CLIENT_MEETING_FIXTURE_PATH =

@@ -133,7 +133,7 @@ describe('ai unit brain prompt formatting', () => {
     expect(user).not.toContain('计划进度：')
   })
 
-  it('renders compacted history after current time and before active state', () => {
+  it('renders memory after current time and before active state', () => {
     const state = createInitialHumanState({
       taskId: 'task-prompt-compaction',
       userInput: '继续处理任务'
@@ -142,13 +142,13 @@ describe('ai unit brain prompt formatting', () => {
     const user = buildBrainUserMessage({
       state,
       ctx: createFakeCtx(),
-      compactedHistoryText: '任务锚点：继续处理已确认事实',
+      memoryText: '当前交付：\n- 继续处理已确认事实',
       injectActiveState: true
     })
-    expect(user).toContain('<compacted_history>\n任务锚点：继续处理已确认事实\n  </compacted_history>')
+    expect(user).toContain('<memory>\n当前交付：\n- 继续处理已确认事实\n  </memory>')
     expect(user.indexOf('</reference_scope>')).toBeLessThan(user.indexOf('<current_time>'))
-    expect(user.indexOf('</current_time>')).toBeLessThan(user.indexOf('<compacted_history>'))
-    expect(user.indexOf('</compacted_history>')).toBeLessThan(user.indexOf('<active_state>'))
-    expect(user.match(/<active_state>[\s\S]*<compacted_history>/)).toBeNull()
+    expect(user.indexOf('</current_time>')).toBeLessThan(user.indexOf('<memory>'))
+    expect(user.indexOf('</memory>')).toBeLessThan(user.indexOf('<active_state>'))
+    expect(user.match(/<active_state>[\s\S]*<memory>/)).toBeNull()
   })
 })

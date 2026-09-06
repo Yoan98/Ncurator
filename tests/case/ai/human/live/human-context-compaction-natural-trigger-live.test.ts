@@ -1,9 +1,11 @@
 import { describe, it } from 'vitest'
+import type { AiLlmIoRecord, AiRunEvent } from '../../../../../src/shared/types'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH,
+  HUMAN_CONTEXT_COMPACTION_RUN2_USER_INPUT,
   HUMAN_CONTEXT_COMPACTION_USER_INPUT,
   loadContextCompactionWorkspaceSeed
 } from '../../../../harness/backend/liveScenarios/contextCompactionScenario'
@@ -15,36 +17,153 @@ import {
   runWithStructuredOutputRetry
 } from '../testUtils'
 
-// 固定开销（23 工具 schema ~18k + system/模板 ~2k ≈ 20k）几乎不随压缩减少；
-// 48k（触发线 38.4k）在本轮 live 峰值 ~41k 时较易进入压缩；低于 48k 易陷入连续压缩。
+const PARTNER_ID = 'live-context-compaction'
 const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
 
 const REQUIRED_COMPACTION_HEADINGS = [
-  '任务锚点：',
+  '当前交付：',
   '已确认事实：',
-  '仍有效约束：',
   '已尝试但未解决：',
-  '重复或低价值内容：',
-  '已失效或仅作背景的信息：'
+  '历史事实：'
 ] as const
 
-const LOW_QUALITY_COMPACTION_PHRASES = [
-  '结果与已有摘要一致',
-  '已经读过了',
-  '这个问题基本看过了',
-  '应该不用再看了'
-] as const
+const expectedLastWeekDocAnchor = '上周周报'
+const inventedLastWeekDocName = '上周工作周报.docx'
 
-const hasContradictoryProgress = (text: string): boolean =>
-  /(?:已读取所有|信息已收集完毕|具备生成条件)[^。\n]{0,80}(?:尚未读取|未读内容|仍需读取)/.test(
-    text.replace(/\s+/g, '')
+const extractSection = (summary: string, heading: string): string => {
+  const start = summary.indexOf(heading)
+  if (start < 0) return ''
+  const rest = summary.slice(start + heading.length)
+  let end = rest.length
+  for (const other of REQUIRED_COMPACTION_HEADINGS) {
+    if (other === heading) continue
+    const index = rest.indexOf(other)
+    if (index >= 0 && index < end) end = index
+  }
+  return rest.slice(0, end).trim()
+}
+
+const isEmptyHistorySection = (section: string): boolean => {
+  const normalized = section.replace(/\s+/g, '')
+  return normalized === '' || normalized === '-无' || normalized === '无'
+}
+
+const hasTimelineMarker = (section: string): boolean =>
+  /\d{4}[-/年.]|\d{1,2}[:：]\d{2}|current_time|周|月|日/.test(section)
+
+const parseBrainMessageRoles = (user: string): string[] => {
+  try {
+    const parsed = JSON.parse(user) as Array<{ role?: string }>
+    if (!Array.isArray(parsed)) return []
+    return parsed.map((item) => String(item.role || ''))
+  } catch {
+    return []
+  }
+}
+
+const isCompactedBrainShape = (record: AiLlmIoRecord): boolean => {
+  const roles = parseBrainMessageRoles(record.user)
+  return (
+    roles.length === 2 &&
+    roles[0] === 'system' &&
+    roles[1] === 'human' &&
+    record.user.includes('<memory>')
   )
+}
 
-const hasExactEntityText = (text: string | undefined, entityText: string): boolean =>
-  typeof text === 'string' && text.includes(entityText)
+const firstBrainAfterCompaction = (
+  records: readonly AiLlmIoRecord[]
+): AiLlmIoRecord | undefined => {
+  let seenCompaction = false
+  for (const record of records) {
+    if (record.caller === 'human.context_compaction') {
+      seenCompaction = true
+      continue
+    }
+    if (seenCompaction && record.caller === 'human.brain') return record
+  }
+  return undefined
+}
 
-const hasInventedEntityText = (text: string | undefined, inventedEntityText: string): boolean =>
-  typeof text === 'string' && text.includes(inventedEntityText)
+const collectRunCompaction = (input: {
+  events: readonly AiRunEvent[]
+  llmIoRecords: readonly AiLlmIoRecord[]
+}) => {
+  const startedEvents = filterAiRunEventsByType(input.events, 'context_compaction_started')
+  const completedEvents = filterAiRunEventsByType(input.events, 'context_compaction_completed')
+  const budgetEvents = filterAiRunEventsByType(input.events, 'context_budget_evaluated')
+  const compactionRecords = input.llmIoRecords.filter(
+    (record) => record.caller === 'human.context_compaction'
+  )
+  const summaries = compactionRecords.map((record) => String(record.rawText || '').trim())
+  return {
+    startedEvents,
+    completedEvents,
+    budgetEvents,
+    compactionRecords,
+    summaries,
+    lifecycleSatisfied:
+      startedEvents.length >= 1 &&
+      completedEvents.length === startedEvents.length &&
+      compactionRecords.length === completedEvents.length &&
+      budgetEvents.some(
+        (event) =>
+          event.decision === 'compact' &&
+          event.snapshot.basis === 'usage_plus_delta' &&
+          event.snapshot.budgetTokens > event.snapshot.compactionTriggerTokens
+      )
+  }
+}
+
+const collectDocxEvidence = (input: {
+  events: readonly AiRunEvent[]
+  artifacts: readonly { kind?: string; capability?: string; applyId?: string }[] | undefined
+}) => {
+  const successfulToolCallIds = new Set(
+    filterAiRunEventsByType(input.events, 'tool_call_result')
+      .filter((event) => event.result?.ok === true)
+      .map((event) => event.toolCallId)
+  )
+  const createSourcePaths = filterAiRunEventsByType(input.events, 'tool_call_started')
+    .filter(
+      (event) =>
+        event.toolName === 'docx_content_edit' &&
+        successfulToolCallIds.has(event.toolCallId) &&
+        isDocxContentCreateInput(event.input)
+    )
+    .map((event) => event.input.sourcePath)
+    .filter((value): value is string => typeof value === 'string')
+  const docxWriteSourcePaths = collectSuccessfulDocxWriteSourcePaths(
+    input.events,
+    successfulToolCallIds
+  )
+  const textCreateSourcePaths = filterAiRunEventsByType(input.events, 'tool_call_started')
+    .filter(
+      (event) =>
+        event.toolName === 'text_file_edit' &&
+        successfulToolCallIds.has(event.toolCallId) &&
+        event.input.action === 'create'
+    )
+    .map((event) => event.input.sourcePath)
+    .filter((value): value is string => typeof value === 'string')
+  const toolNames = filterAiRunEventsByType(input.events, 'tool_call_result').map(
+    (event) => event.toolName
+  )
+  return {
+    toolNames,
+    createSourcePaths,
+    docxWriteSourcePaths,
+    textCreateSourcePaths,
+    artifactSatisfied:
+      hasDocxDeliveryEvidence({
+        artifacts: input.artifacts,
+        events: input.events
+      }) &&
+      (docxWriteSourcePaths.length >= 1 ||
+        createSourcePaths.length >= 1 ||
+        textCreateSourcePaths.length >= 1)
+  }
+}
 
 describe('ai human live backend', () => {
   it('human-context-compaction-natural-trigger-live', async () => {
@@ -56,27 +175,38 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下 human 在真实风险周报长任务中会自然触发 context compaction，并在压缩后继续完成任务。',
+          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + 带 <memory> 的当前 user 继续完成交付，并在同伙伴复杂续做中压出非空历史时间线。',
         fixtures: [CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         execute: async (runtime) => {
           const workspaceSeed = await loadContextCompactionWorkspaceSeed(runtime)
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
-          const runner = createHumanTestRunner(runtime, {
+          const runnerOptions = {
+            partnerId: PARTNER_ID,
             humanRuntimeOverrides: {
               modelContextWindowTokens: LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS
             }
-          })
-          const output = await runner.run({
-            taskId: runtime.taskId,
+          }
+          const run1Output = await createHumanTestRunner(runtime, runnerOptions).run({
+            taskId: `${runtime.taskId}-run-1`,
             userInput: HUMAN_CONTEXT_COMPACTION_USER_INPUT
           })
-
+          const run1EventCount = runtime.eventCollector.snapshot().length
+          const run1LlmCount = runtime.eventCollector.snapshotLlmIo().length
+          const run2Output = await createHumanTestRunner(runtime, runnerOptions).run({
+            taskId: `${runtime.taskId}-run-2`,
+            userInput: HUMAN_CONTEXT_COMPACTION_RUN2_USER_INPUT
+          })
+          const allEvents = runtime.eventCollector.snapshot()
+          const allLlmIo = runtime.eventCollector.snapshotLlmIo()
           return {
-            output,
             workspaceSeed,
-            events: runtime.eventCollector.snapshot(),
-            llmIoRecords: runtime.eventCollector.snapshotLlmIo()
+            run1Output,
+            run2Output,
+            run1Events: allEvents.slice(0, run1EventCount),
+            run2Events: allEvents.slice(run1EventCount),
+            run1LlmIo: allLlmIo.slice(0, run1LlmCount),
+            run2LlmIo: allLlmIo.slice(run1LlmCount)
           }
         },
         assert: async (result, runtime) => {
@@ -89,136 +219,115 @@ describe('ai human live backend', () => {
             return
           }
 
-          const events = result.events
-          const startedEvents = filterAiRunEventsByType(events, 'context_compaction_started')
-          const completedEvents = filterAiRunEventsByType(events, 'context_compaction_completed')
-          const budgetEvents = filterAiRunEventsByType(events, 'context_budget_evaluated')
-          const toolNames = filterAiRunEventsByType(events, 'tool_call_result').map(
-            (event) => event.toolName
-          )
-          const successfulToolCallIds = new Set(
-            filterAiRunEventsByType(events, 'tool_call_result')
-              .filter((event) => event.result?.ok === true)
-              .map((event) => event.toolCallId)
-          )
-          const createSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
-            .filter(
-              (event) =>
-                event.toolName === 'docx_content_edit' &&
-                successfulToolCallIds.has(event.toolCallId) &&
-                isDocxContentCreateInput(event.input)
-            )
-            .map((event) => event.input.sourcePath)
-            .filter((value): value is string => typeof value === 'string')
-          const docxWriteSourcePaths = collectSuccessfulDocxWriteSourcePaths(
-            events,
-            successfulToolCallIds
-          )
-          const textCreateSourcePaths = filterAiRunEventsByType(events, 'tool_call_started')
-            .filter(
-              (event) =>
-                event.toolName === 'text_file_edit' &&
-                successfulToolCallIds.has(event.toolCallId) &&
-                event.input.action === 'create'
-            )
-            .map((event) => event.input.sourcePath)
-            .filter((value): value is string => typeof value === 'string')
-          const llmIoRecords = result.llmIoRecords
-          const compactionRecords = llmIoRecords.filter(
-            (record) => record.caller === 'human.context_compaction'
-          )
-          const latestBrainRecord = [...llmIoRecords]
+          const run1Compaction = collectRunCompaction({
+            events: result.run1Events,
+            llmIoRecords: result.run1LlmIo
+          })
+          const run2Compaction = collectRunCompaction({
+            events: result.run2Events,
+            llmIoRecords: result.run2LlmIo
+          })
+          const run1Docx = collectDocxEvidence({
+            events: result.run1Events,
+            artifacts: result.run1Output?.artifacts
+          })
+          const run1PostCompactBrain = firstBrainAfterCompaction(result.run1LlmIo)
+          const run1LatestBrain = [...result.run1LlmIo]
             .reverse()
             .find((record) => record.caller === 'human.brain')
-          const ratios = completedEvents.map((event) =>
-            event.sourceHistoryTokenEstimate > 0
-              ? event.tokenEstimateAfter / event.sourceHistoryTokenEstimate
-              : Number.POSITIVE_INFINITY
-          )
-          const expectedLastWeekDocAnchor = '上周周报'
-          const inventedLastWeekDocName = '上周工作周报.docx'
-          const compactionSummaries = compactionRecords.map((record) =>
-            String(record.rawText || '').trim()
-          )
-          const lifecycleSatisfied =
-            startedEvents.length >= 1 &&
-            completedEvents.length === startedEvents.length &&
-            compactionRecords.length === completedEvents.length &&
-            budgetEvents.some(
-              (event) =>
-                event.decision === 'compact' &&
-                event.snapshot.basis === 'usage_plus_delta' &&
-                event.snapshot.budgetTokens > event.snapshot.compactionTriggerTokens
-            )
-          const summaryFormatSatisfied =
-            compactionSummaries.length > 0 &&
-            compactionSummaries.every((summary) =>
+          const run1SummaryFormatSatisfied =
+            run1Compaction.summaries.length > 0 &&
+            run1Compaction.summaries.every((summary) =>
               REQUIRED_COMPACTION_HEADINGS.every((heading) => summary.includes(heading))
             ) &&
-            compactionRecords.every(
-              (record) =>
-                record.user.includes('<user_goal>') && record.user.includes('<history_text>')
+            run1Compaction.compactionRecords.every(
+              (record) => record.user.includes('<current>') && record.user.includes('<earlier>')
             )
-          const summaryQualitySatisfied =
-            compactionSummaries.every(
-              (summary) =>
-                hasExactEntityText(summary, expectedLastWeekDocAnchor) &&
-                !hasInventedEntityText(summary, inventedLastWeekDocName) &&
-                !LOW_QUALITY_COMPACTION_PHRASES.some((phrase) => summary.includes(phrase)) &&
-                !hasContradictoryProgress(summary)
-            ) && ratios.every((ratio) => ratio <= 0.5)
-          const latestUserText = latestBrainRecord?.user ?? ''
-          const continuitySatisfied =
-            hasExactEntityText(latestUserText, expectedLastWeekDocAnchor) &&
-            !hasInventedEntityText(latestUserText, inventedLastWeekDocName) &&
-            compactionSummaries.some((summary) => {
-              const goalLine = summary
-                .split('\n')
-                .map((line) => line.trim())
-                .find((line) => line.startsWith('- 目标'))
-              return Boolean(goalLine && latestUserText.includes(goalLine))
-            })
-          const taskCompletionSatisfied =
-            result.output?.status === 'completed' &&
-            (toolNames.some((toolName) => toolName.startsWith('docx_')) ||
-              toolNames.includes('text_file_edit'))
-          const artifactSatisfied =
-            hasDocxDeliveryEvidence({
-              artifacts: result.output?.artifacts,
-              events
-            }) &&
-            (docxWriteSourcePaths.length >= 1 ||
-              createSourcePaths.length >= 1 ||
-              textCreateSourcePaths.length >= 1)
+          const run1SummaryQualitySatisfied = run1Compaction.summaries.every(
+            (summary) =>
+              summary.includes(expectedLastWeekDocAnchor) &&
+              !summary.includes(inventedLastWeekDocName)
+          )
+          const run1CompactedBrainSatisfied = Boolean(
+            run1PostCompactBrain && isCompactedBrainShape(run1PostCompactBrain)
+          )
+          const run1ContinuitySatisfied =
+            Boolean(run1LatestBrain?.user.includes(expectedLastWeekDocAnchor)) &&
+            Boolean(run1LatestBrain && !run1LatestBrain.user.includes(inventedLastWeekDocName)) &&
+            Boolean(run1LatestBrain?.user.includes('<memory>'))
+          const run1TaskCompletionSatisfied =
+            result.run1Output?.status === 'completed' &&
+            (run1Docx.toolNames.some((toolName) => toolName.startsWith('docx_')) ||
+              run1Docx.toolNames.includes('text_file_edit'))
+
+          const latestRun2Summary = run2Compaction.summaries.at(-1) || ''
+          const run2HistorySection = extractSection(latestRun2Summary, '历史事实：')
+          const run2CurrentSection = [
+            extractSection(latestRun2Summary, '当前交付：'),
+            extractSection(latestRun2Summary, '已尝试但未解决：')
+          ].join('\n')
+          const run2HistorySatisfied =
+            run2Compaction.summaries.length > 0 &&
+            REQUIRED_COMPACTION_HEADINGS.every((heading) => latestRun2Summary.includes(heading)) &&
+            !isEmptyHistorySection(run2HistorySection) &&
+            hasTimelineMarker(run2HistorySection) &&
+            (run2HistorySection.includes(expectedLastWeekDocAnchor) ||
+              /\.docx|周报/.test(run2HistorySection))
+          const run2CurrentTaskSatisfied =
+            /(对照|标题|九月|法务)/.test(run2CurrentSection) &&
+            !/从空白模板|整份重填/.test(run2CurrentSection)
+
           runtime.assertThat(
-            lifecycleSatisfied &&
-              summaryFormatSatisfied &&
-              summaryQualitySatisfied &&
-              continuitySatisfied &&
-              taskCompletionSatisfied &&
-              artifactSatisfied,
+            run1Compaction.lifecycleSatisfied &&
+              run1SummaryFormatSatisfied &&
+              run1SummaryQualitySatisfied &&
+              run1CompactedBrainSatisfied &&
+              run1ContinuitySatisfied &&
+              run1TaskCompletionSatisfied &&
+              run1Docx.artifactSatisfied,
             {
-              name: 'human-live-context-compaction-natural-trigger-completes-task',
+              name: 'human-live-context-compaction-run1-completes-weekly-report',
               message:
-                '真实风险周报长任务应自然触发上下文压缩，压缩后保持连续性并完成周报文件交付；压缩次数不作为失败条件。',
+                'Run 1 应至少压缩一次；压完后发给 brain 的数组为 system + 带 <memory> 的当前 user，四段标题齐全，含「上周周报」、不编造「上周工作周报.docx」，并成功交付周报。',
               data: {
-                startedEvents,
-                completedEvents,
-                budgetEvents,
-                compactionSummaries,
-                compactionPrompts: compactionRecords.map((record) => record.user),
-                latestBrainPrompt: latestBrainRecord?.user,
-                ratios,
-                toolNames,
-                createSourcePaths,
-                docxWriteSourcePaths,
-                textCreateSourcePaths,
-                artifacts: result.output?.artifacts
+                startedEvents: run1Compaction.startedEvents,
+                completedEvents: run1Compaction.completedEvents,
+                compactionSummaries: run1Compaction.summaries,
+                compactionPrompts: run1Compaction.compactionRecords.map((record) => record.user),
+                postCompactBrainRoles: run1PostCompactBrain
+                  ? parseBrainMessageRoles(run1PostCompactBrain.user)
+                  : [],
+                latestBrainPrompt: run1LatestBrain?.user,
+                toolNames: run1Docx.toolNames,
+                createSourcePaths: run1Docx.createSourcePaths,
+                docxWriteSourcePaths: run1Docx.docxWriteSourcePaths,
+                artifacts: result.run1Output?.artifacts
+              }
+            }
+          )
+
+          runtime.assertThat(
+            run2Compaction.lifecycleSatisfied &&
+              run2HistorySatisfied &&
+              run2CurrentTaskSatisfied &&
+              result.run2Output?.status === 'completed',
+            {
+              name: 'human-live-context-compaction-run2-writes-history-timeline',
+              message:
+                'Run 2 应再压至少一次；该次压缩的历史事实不能是「- 无」，须为能对上 Run 1 产物的时间线；当前交付/未解决应围绕对照、改标题或法务，而不是整段重填周报。',
+              data: {
+                startedEvents: run2Compaction.startedEvents,
+                completedEvents: run2Compaction.completedEvents,
+                compactionSummaries: run2Compaction.summaries,
+                latestRun2Summary,
+                run2HistorySection,
+                run2CurrentSection,
+                run2Status: result.run2Output?.status
               }
             }
           )
         }
       })
     })
-  }, 1_800_000)
+  }, 3_600_000)
 })

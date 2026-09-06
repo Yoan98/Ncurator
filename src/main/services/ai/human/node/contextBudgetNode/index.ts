@@ -2,14 +2,12 @@ import { randomUUID } from 'node:crypto'
 import type { BrainContextBudgetSnapshot } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import {
-  CONTEXT_COMPACTION_MIN_SOURCE_RATIO,
   CONTEXT_COMPACTION_TRIGGER_RATIO,
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from '../../constants'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { splitMessagesByLastAi } from '../utils/messageTail'
 import { estimateMessagesForContext } from '../../memory/multimodal'
-import { isCurrentBrainUserMessage } from '../utils/messageTail'
+import { isCurrentBrainUserMessage, listFoldableHistoryMessages } from '../utils/messageTail'
 import { LlmInputTooLongError } from '../../../errors'
 
 const buildBudgetSnapshot = (input: {
@@ -76,17 +74,13 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
       contextWindowTokens * CONTEXT_COMPACTION_TRIGGER_RATIO
     )
     const messages = input.cache.messages || []
-    const { compressible: compressibleMessages } = splitMessagesByLastAi(messages)
-    const hasCompressibleHistory = compressibleMessages.length > 0
-    const compressibleTokenEstimate = estimateMessagesForContext(compressibleMessages)
+    const foldableHistory = listFoldableHistoryMessages(messages)
+    const hasCompressibleHistory = foldableHistory.length > 0
     const currentMessageTokenEstimate = estimateMessagesForContext(messages)
     const currentUser = messages.find(isCurrentBrainUserMessage)
     if (currentUser && estimateMessagesForContext([currentUser]) > contextWindowTokens) {
       throw new LlmInputTooLongError()
     }
-    const minimumCompressibleTokens = Math.floor(
-      contextWindowTokens * CONTEXT_COMPACTION_MIN_SOURCE_RATIO
-    )
     const contextBudgetSnapshot = buildBudgetSnapshot({
       cache: input.cache,
       contextWindowTokens,
@@ -97,8 +91,7 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
     const shouldCompact =
       contextBudgetSnapshot.usageAvailable &&
       contextBudgetSnapshot.budgetTokens > compactionTriggerTokens &&
-      hasCompressibleHistory &&
-      compressibleTokenEstimate >= minimumCompressibleTokens
+      hasCompressibleHistory
     const createdAt = Date.now()
     const decision = shouldCompact ? 'compact' : 'continue'
     input.ctx.sendEvent({

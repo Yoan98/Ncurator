@@ -133,13 +133,9 @@ export type MessageLogProjection = {
   }
 }
 
-/**
- * 把不可变日志投影为下一次模型调用需要的历史。
- * checkpoint 之前的对话由一条摘要替代，绝不同时发送摘要和完整旧历史。
- */
-export const projectMessageLogRecords = (
+export const sliceAfterLastContextCleared = (
   records: ChatMessageLogRecord[]
-): MessageLogProjection => {
+): ChatMessageLogRecord[] => {
   const ordered = [...records].sort((a, b) => a.seq - b.seq)
   const lastCleared = [...ordered]
     .reverse()
@@ -147,9 +143,31 @@ export const projectMessageLogRecords = (
       (record) =>
         record.entry.kind === 'annotation' && record.entry.eventType === 'context_cleared'
     )
-  const afterCleared = lastCleared
-    ? ordered.filter((record) => record.seq > lastCleared.seq)
-    : ordered
+  return lastCleared ? ordered.filter((record) => record.seq > lastCleared.seq) : ordered
+}
+
+export const resolveCompactionCoveredThroughSeq = (
+  records: ChatMessageLogRecord[]
+): number | undefined => {
+  const afterCleared = sliceAfterLastContextCleared(records)
+  const lastProcess = [...afterCleared]
+    .reverse()
+    .find((record) => record.entry.kind === 'assistant' || record.entry.kind === 'tool')
+  if (lastProcess) return lastProcess.seq
+  const lastUser = [...afterCleared]
+    .reverse()
+    .find((record) => record.entry.kind === 'user')
+  return lastUser?.seq
+}
+
+/**
+ * 把不可变日志投影为下一次模型调用需要的历史。
+ * checkpoint 之前的对话由一条摘要替代，绝不同时发送摘要和完整旧历史。
+ */
+export const projectMessageLogRecords = (
+  records: ChatMessageLogRecord[]
+): MessageLogProjection => {
+  const afterCleared = sliceAfterLastContextCleared(records)
   const checkpointRecord = [...afterCleared]
     .reverse()
     .find(

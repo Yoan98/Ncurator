@@ -1,11 +1,6 @@
 import { AIMessage, HumanMessage, type BaseMessage } from '@langchain/core/messages'
 import { normalizeThoughtText } from '../../../../../../shared/thoughtText'
 
-const isProcessMessage = (message: BaseMessage): boolean => {
-  const type = message.getType()
-  return type === 'ai' || type === 'tool'
-}
-
 const CURRENT_USER_MARKER = 'ncurator_current_user'
 
 export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
@@ -17,25 +12,34 @@ export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
 export const isCurrentBrainUserMessage = (message: BaseMessage): boolean =>
   message.getType() === 'human' && message.additional_kwargs?.[CURRENT_USER_MARKER] === true
 
-// 压缩只针对过程历史（AI 消息 + 工具结果），固定模板（system / brain user）不进压缩。
-// 压缩后保留最后一条 AI 消息及其后的工具结果作为 tail，重建时重新生成 system 与 brain user。
-export const splitMessagesByLastAi = (
+export const listFoldableHistoryMessages = (messages: BaseMessage[]): BaseMessage[] =>
+  messages.filter(
+    (message) => message.getType() !== 'system' && !isCurrentBrainUserMessage(message)
+  )
+
+export const splitMessagesForMemoryCompaction = (
   messages: BaseMessage[]
-): { compressible: BaseMessage[]; tail: BaseMessage[] } => {
-  let lastAiIndex = -1
-  for (let index = 0; index < messages.length; index += 1) {
-    if (messages[index].getType() === 'ai') {
-      lastAiIndex = index
+): { current: BaseMessage[]; earlier: BaseMessage[] } => {
+  const current: BaseMessage[] = []
+  const earlier: BaseMessage[] = []
+  let seenCurrentUser = false
+  for (const message of messages) {
+    if (message.getType() === 'system') continue
+    if (isCurrentBrainUserMessage(message)) {
+      seenCurrentUser = true
+      current.push(message)
+      continue
+    }
+    if (seenCurrentUser) {
+      current.push(message)
+    } else {
+      earlier.push(message)
     }
   }
-  if (lastAiIndex < 0) {
-    return { compressible: [], tail: [] }
+  if (!seenCurrentUser) {
+    return { current: earlier, earlier: [] }
   }
-
-  return {
-    compressible: messages.slice(0, lastAiIndex).filter(isProcessMessage),
-    tail: messages.slice(lastAiIndex)
-  }
+  return { current, earlier }
 }
 
 const MAX_TOOL_CALL_ARG_LENGTH = 300

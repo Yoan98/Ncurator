@@ -123,7 +123,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `skill_state_updated` | `{ learnedSkillIds: string[] }` | compact / resume 时写入 `<active_state>` 技能（**取最新一条**）；同 run 只驱动 bindTools |
 | `plan_updated` | `{ plan: [{ title, status }] }` | compact / resume 时写入 `<active_state>` 计划 + UI 计划条 |
 | `brain_user_snapshot` | `{ text: string }` | 当前 build user **最后一次发给模型的原文**；resume 还原历史 build user（取该 `user` 之后、下一条 `user` 之前的**最后一条**） |
-| `compaction_checkpoint` | 见示例 | brain `<compacted_history>` + UI 压缩层 |
+| `compaction_checkpoint` | 见示例 | brain `<memory>` + UI 压缩层 |
 | `context_cleared` | `{}` | 切断点：投影只保留其后的行；切断前 checkpoint / 技能 / 计划不进下一轮 brain |
 | `finalizing_started` | `{}` | 投影时**清空** plan |
 | `approval_batch_resolved` | `{ batchId, items: [{ toolCallId, toolName, command, commandExplanation?, action, message? }] }` | UI Activity：走过审批的工具行图标 / 悬停揭示文案；`hand` 在审批决策后写入 |
@@ -316,9 +316,6 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | 同 run | 首条 build user 的 `<reference_scope>` | 来自发送时 Composer（仅 `@` 与附件） |
 | resume | 每条 log `user` 各存各的 snapshot | **append** 新 build user 在末尾；`<reference_scope>` 用**当前** Composer |
 
-同伙伴续跑：历史 build user 与 tail **不改写**；新诉求在**末尾**新 build user 的 `<task_goal>`（第 6 节）。清空临时记忆后（`context_cleared`）下次发送没有旧 assistant/tool，也没有旧 `compacted_history`。
-
-
 ---
 
 ## 3. 投影设计
@@ -397,7 +394,7 @@ flowchart TD
   <preference>…</preference>
   <reference_scope>…</reference_scope>
   <current_time>…</current_time>
-  <compacted_history>…</compacted_history>   ← 仅 compaction 后
+  <memory>…</memory>                         ← 仅 compaction 后
   <active_state>…</active_state>             ← 仅 compaction / resume（新 run）
 </user_context>
 ```
@@ -422,7 +419,7 @@ flowchart TD
 6. `repairInterruptedToolCalls`：每个 AIMessage 的 `tool_call_id` 若无对应 ToolMessage，插入
    `Error: The run was interrupted before this tool call could be executed.`
 
-**checkpoint 与摘要**：最新 `compaction_checkpoint` 的摘要**只**进 build user 的 `<compacted_history>`，不与 tail 重复（第 5 节写入规则）。
+**checkpoint 与摘要**：最新 `compaction_checkpoint` 的摘要**只**进 build user 的 `<memory>`。
 
 **build user 各块**
 
@@ -432,7 +429,7 @@ flowchart TD
 | `<preference>` | 当前 run Composer |
 | `<reference_scope>` | 当前 run Composer 的 `@` 与附件（第 2.5 节）；工作地址在 System |
 | `<current_time>` | 当前 run `runStartedAt`（**只写当前 build user**；历史冻结文本不再改） |
-| `<compacted_history>` | 最新 `compaction_checkpoint.summary`（无则省略；**仅 compact 后**） |
+| `<memory>` | 最新 `compaction_checkpoint.summary`（无则省略；**仅 compact 后**） |
 | `<active_state>` | **仅 compact / resume**：最新 `skill_state_updated` + 最后 `plan_updated`（`finalizing_started` 清空）。同 run 稳态不写。 |
 
 annotation 扫描只用 `context_cleared` **之后**的 log；切断前 checkpoint / 技能 / 计划不进下一轮 brain。tail 用 checkpoint **截断后**的行。
@@ -442,9 +439,9 @@ annotation 扫描只用 `context_cleared` **之后**的 log；切断前 checkpoi
 
 - **同 run 首次 brain**：`[System] + [User built]`（无 active_state）+ tail（可空）。
 - **同 run 后续 brain**：build user 不变；tail append。
-- **compaction**：重建当前 User built，写入 `<compacted_history>` + `<active_state>`。
-- **resume 新 run**：`[System] + [冻结 User built₁] + …history tail… + [新 User built₂（含 active_state）]`（见第 6 节）。
-- **`context_cleared` 之后下次发送**：`[System] + [新 User built]`，没有旧 assistant/tool，也没有旧 `compacted_history`。
+- **compaction**：重建当前 User built，写入 `<memory>` + `<active_state>`；过程消息不再保留。
+- **resume 新 run**：`[System] + [冻结 User built₁] + …history… + [新 User built₂（含 active_state）]`（见第 6 节）。
+- **`context_cleared` 之后下次发送**：`[System] + [新 User built]`，没有旧 assistant/tool，也没有旧 `<memory>`。
 
 **同 run 刷新**：固定首条 `currentUserMessageIndex`；compaction 整段替换见第 5 节。
 
@@ -552,7 +549,7 @@ human harness 通过 **tail 只 append、resume 只 append 新 build user（历�
 
 ### 4.3 打破前缀缓存的操作
 
-仅 **Compaction**（第 5 节）改写已建立的前缀：摘要写入 `<compacted_history>`，当前 user 写入当时的 `<active_state>`，tail 截断重建。
+仅 **Compaction**（第 5 节）改写已建立的前缀：摘要写入 `<memory>`，当前 user 写入当时的 `<active_state>`，过程消息从数组中移除。
 
 **resume / learn_skill / update_plan 不属于打破**：resume 只在末尾追加；同 run 内技能与计划不改写 user。
 设计约束：除 compaction 外，不得 rewrite 已发送的 build user 与 tail；resume 不得从 log `user` 重拼可变块。
@@ -561,29 +558,32 @@ human harness 通过 **tail 只 append、resume 只 append 新 build user（历�
 
 ## 5. Compaction
 
-同 run 内、进入 brain 前，因上下文预算触发的压缩。遵循第 3.2 节标准顺序；执行后 **整段替换** runtime messages，并 **打破第 4 节前缀缓存**。
+进入 brain 前，因上下文预算触发。执行后 **整段替换** runtime messages 为 `[System, 当前 User built]`，并 **打破第 4 节前缀缓存**。
 
 ### 5.1 触发
 
 `context_budget` 节点判定（默认窗口 200k token）：
 
 - 估计上下文 token > 窗口 × **80%**。
-- 存在可压缩过程历史；可压缩段 ≥ 窗口 × **10%**。
-- 仅 build user 自身超窗 → `input_too_long`，不 compaction、不写 log user。
+- 除 System 和当前 user 外还有消息（历史 user 或任何 assistant/tool）。
+- 仅当前 build user 自身超窗 → `input_too_long`，不 compaction、不写 log user。
 - 无 LLM usage 返回时不触发（`llm_usage_unavailable`）。
 
-### 5.2 压缩范围
+### 5.2 压缩输入
 
-- **纳入**：最后一条 AI **之前**的全部 assistant + tool。
-- **保留 tail**：最后一条 AI **及其后**全部 tool 结果。
-- **不压**：System、build user。
+从当时发给主模型的消息数组去掉 System，按 round 渲染（user 也是一轮；轮内换行紧凑，轮间空一行）。按当前 user（`ncurator_current_user`）切开，不要用文本里最后一条 `[user]`：
+
+- `<current>`：当前 user + 它之后的全部 AI/工具（含最后一步）。
+- `<earlier>`：当前 user 之前的对话；没有则空。
 
 ### 5.3 执行
 
-1. 可压缩段 → compaction 模型 → 摘要。
-2. log append `compaction_checkpoint`。
-3. 整段替换：`[System, User built(compacted_history=摘要, active_state=当时技能/计划), …tail]`。
+1. 压缩模型根据 current 写当前工作记忆，根据 earlier 写历史事实时间线。
+2. log append `compaction_checkpoint`。`coveredThroughSeq` 取切断点之后整条伙伴 log 里最后一条 assistant/tool 的 seq（不按当前 run 过滤）。
+3. 整段替换：`[System, User built(memory=摘要, active_state=当时技能/计划)]`。不再保留过程 tail，也不再塞回历史 user。
 4. 写入 `brain_user_snapshot`；回到 `context_budget` → brain。
+
+输出四段平铺：`当前交付` / `已确认事实` / `已尝试但未解决` / `历史事实`（时间线，越旧越粗）。
 
 ### 5.4 示例
 
@@ -591,10 +591,10 @@ human harness 通过 **tail 只 append、resume 只 append 新 build user（历�
 
 ```text
 [System]
-[User built]
+[User built]   历史或当前诉求
 [Assistant]  …
 [Tool]       …
-[Assistant]  …          ← 最后一条 AI
+[Assistant]  …
 [Tool]       …
 ```
 
@@ -603,13 +603,11 @@ human harness 通过 **tail 只 append、resume 只 append 新 build user（历�
 ```text
 [System]
 [User built]   <current_time>…</current_time>
-               <compacted_history>摘要…</compacted_history>
+               <memory>当前交付 / 已确认事实 / 已尝试但未解决 / 历史事实</memory>
                <active_state>当时技能/计划</active_state>
-[Assistant]    保留的最后一条 AI
-[Tool]         其 tool 结果
 ```
 
-log 行 append-only 保留；被覆盖段不再进入 tail。
+log 行 append-only 保留；`seq <= coveredThroughSeq` 的行不再进入下次 brain 投影。
 
 ---
 
@@ -653,7 +651,7 @@ log 行 append-only 保留；被覆盖段不再进入 tail。
 [Tool]         …
 [Tool]         Error: The run was interrupted…
 [User built]   task_goal=继续把周报写完                  ← append；reference_scope=当前 Composer
-               current_time=本 run；compacted_history=…（若有）；active_state=最新技能/计划
+               current_time=本 run；memory=…（若有）；active_state=最新技能/计划
 ```
 
 log 侧（示意）：

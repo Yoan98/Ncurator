@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import {
   renderMessagesForCompaction,
-  splitMessagesByLastAi,
+  listFoldableHistoryMessages,
+  splitMessagesForMemoryCompaction,
   createCurrentBrainUserMessage
 } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 
@@ -13,37 +14,57 @@ const toolCall = (id: string, name: string, args: Record<string, unknown>) => ({
   type: 'tool_call' as const
 })
 
-describe('splitMessagesByLastAi', () => {
-  it('compresses only earlier AI/tool history and keeps the final AI/tool tail', () => {
+describe('splitMessagesForMemoryCompaction', () => {
+  it('puts the current user and following process into current, earlier users before it', () => {
+    const current = createCurrentBrainUserMessage('<user_context>current task</user_context>')
     const messages = [
       new SystemMessage('<system>fixed template</system>'),
       new HumanMessage('old task'),
       new AIMessage({ content: '', tool_calls: [toolCall('1', 'terminal_run', { command: 'ls' })] }),
       new ToolMessage({ content: 'total 1', tool_call_id: '1' }),
-      createCurrentBrainUserMessage('<user_context>current task</user_context>'),
-      new AIMessage({ content: '', tool_calls: [toolCall('2', 'text_file_read', { sourcePath: 'a.txt' })] })
-    ]
-    const { compressible, tail } = splitMessagesByLastAi(messages)
-    expect(compressible.map((m) => m.getType())).toEqual(['ai', 'tool'])
-    expect(tail.map((m) => m.getType())).toEqual(['ai'])
-  })
-
-  it('keeps the last AI message and everything after it as tail', () => {
-    const messages = [
-      new AIMessage({ content: '', tool_calls: [toolCall('1', 'terminal_run', { command: 'ls' })] }),
-      new ToolMessage({ content: 'r1', tool_call_id: '1' }),
+      current,
       new AIMessage({ content: '', tool_calls: [toolCall('2', 'text_file_read', { sourcePath: 'a.txt' })] }),
-      new ToolMessage({ content: 'r2', tool_call_id: '2' })
+      new ToolMessage({ content: 'file body', tool_call_id: '2' })
     ]
-    const { compressible, tail } = splitMessagesByLastAi(messages)
-    expect(compressible.map((m) => m.getType())).toEqual(['ai', 'tool'])
-    expect(tail.map((m) => m.getType())).toEqual(['ai', 'tool'])
-    expect((tail[1] as ToolMessage).content).toBe('r2')
+    const split = splitMessagesForMemoryCompaction(messages)
+    expect(split.earlier.map((message) => message.getType())).toEqual(['human', 'ai', 'tool'])
+    expect(split.current.map((message) => message.getType())).toEqual(['human', 'ai', 'tool'])
+    expect(split.current[0]).toBe(current)
   })
 
-  it('returns empty compressible when there is no AI message', () => {
-    const messages = [new SystemMessage('sys'), new HumanMessage('user')]
-    expect(splitMessagesByLastAi(messages)).toEqual({ compressible: [], tail: [] })
+  it('keeps same-run process in current when there is no earlier user', () => {
+    const current = createCurrentBrainUserMessage('fill weekly report')
+    const split = splitMessagesForMemoryCompaction([
+      new SystemMessage('sys'),
+      current,
+      new AIMessage({ content: 'reading', tool_calls: [toolCall('1', 'docx_read_nodes', {})] }),
+      new ToolMessage({ content: 'nodes', tool_call_id: '1' })
+    ])
+    expect(split.earlier).toEqual([])
+    expect(split.current).toHaveLength(3)
+  })
+
+  it('treats unmarked history as current when the current user marker is missing', () => {
+    const split = splitMessagesForMemoryCompaction([
+      new SystemMessage('sys'),
+      new HumanMessage('user'),
+      new AIMessage({ content: 'answer' })
+    ])
+    expect(split.earlier).toEqual([])
+    expect(split.current.map((message) => message.getType())).toEqual(['human', 'ai'])
+  })
+})
+
+describe('listFoldableHistoryMessages', () => {
+  it('excludes system and the current user', () => {
+    const current = createCurrentBrainUserMessage('now')
+    const foldable = listFoldableHistoryMessages([
+      new SystemMessage('sys'),
+      new HumanMessage('old'),
+      current,
+      new AIMessage({ content: 'go' })
+    ])
+    expect(foldable.map((message) => message.getType())).toEqual(['human', 'ai'])
   })
 })
 
@@ -97,6 +118,28 @@ describe('renderMessagesForCompaction', () => {
         '[round 2]',
         '[tool_call] terminal_run(command="ls")',
         '[tool] total 1'
+      ].join('\n')
+    )
+  })
+
+  it('renders a user message as its own round without extra blank lines inside the round', () => {
+    const rendered = renderMessagesForCompaction([
+      new HumanMessage('<user_context>\n  <task_goal>\n填周报\n  </task_goal>\n</user_context>'),
+      new AIMessage({
+        content: '先读',
+        tool_calls: [toolCall('1', 'docx_read_nodes', { sourcePath: 'a.docx' })]
+      }),
+      new ToolMessage({ content: 'ok', tool_call_id: '1' })
+    ])
+    expect(rendered).toBe(
+      [
+        '[round 1]',
+        '[user] <user_context>\n  <task_goal>\n填周报\n  </task_goal>\n</user_context>',
+        '',
+        '[round 2]',
+        '[ai] 先读',
+        '[tool_call] docx_read_nodes(sourcePath="a.docx")',
+        '[tool] ok'
       ].join('\n')
     )
   })
