@@ -11,8 +11,7 @@ const plan = {
     'artifacts/<platform>/<tag>/*',
     'release-status/<tag>/<platform>.json',
     'updates/latest/latest*.yml',
-    'releases/latest/<platform>.json',
-    'downloads/latest/*'
+    'releases/latest/<platform>.json'
   ],
   networkRequests: 0,
   note: 'This command never uploads, deletes, tags, commits, or pushes.'

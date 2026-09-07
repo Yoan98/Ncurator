@@ -187,7 +187,7 @@ electron-builder 使用 `maximum` 压缩，以更慢的发布构建换取更小�
 
 ### COS、R2 与公开通道
 
-Windows 和 macOS 使用独立目录、latest metadata 和固定下载地址：
+Windows 和 macOS 使用独立目录、更新 metadata 与官网清单；每平台只保留最新一份安装包（`artifacts`），官网与自动更新共用同一 artifacts URL：
 
 ```text
 artifacts/windows/windows-vX.Y.Z/*
@@ -198,11 +198,9 @@ updates/latest/latest.yml
 updates/latest/latest-mac.yml
 releases/latest/windows.json
 releases/latest/macos.json
-downloads/latest/windows-x64.exe
-downloads/latest/macos-arm64.dmg
 ```
 
-版本化产物使用不可变缓存；latest、manifest 和固定下载使用 `no-store`。fragment 中的 `name` 记录用户可见文件名，`storageName` 记录对象存储的 ASCII 对象名；二者共同进入候选 bundle 校验。Windows 固定下载与 manifest 返回 `馆长-X.Y.Z-Windows-x64.exe`，自动更新 metadata 则指向对应的 ASCII 对象键。
+不再发布 `downloads/latest/*` 安装包拷贝。版本化 `artifacts` 使用不可变长缓存；`updates/latest` 与 `releases/latest` 使用 `no-store`。fragment 中的 `name` 记录用户可见文件名，`storageName` 记录对象存储的 ASCII 对象名；二者共同进入候选 bundle 校验。`latest.yml` / `latest-mac.yml` 仅供 electron-updater；`releases/latest/*.json` 仅供官网（JS `fetch` 清单后由浏览器导航到其中的 artifacts URL）。清单中的 `url` 与更新 metadata 指向同一 artifacts 对象；对象带 `Content-Disposition`，纯导航下载即可得到带版本的文件名（Windows 为 `馆长-X.Y.Z-Windows-x64.exe`）。
 
 国内默认目标（腾讯云 COS）使用以下环境变量：
 
@@ -223,7 +221,7 @@ R2_BUCKET_NAME
 R2_PUBLIC_BASE_URL=https://download.ncurator.com
 ```
 
-腾讯云侧固定配置：COS 桶为 `ncurator-1324873382`、地域为广州；`download.guanzhangai.cn` 经腾讯云 CDN（加速类型「下载大文件」、中国境内）回源该私有桶。DNSPod 上 `download` 的 CNAME 指向 `download.guanzhangai.cn.cdn.dnsv1.com`。节点缓存默认 30 天，`/updates/latest`、`/releases/latest`、`/downloads/latest` 不缓存。AWS CLI 访问 COS 必须使用虚拟主机风格，不能用 path-style。发布子用户使用 [最小 COS 权限模板](../scripts/release/cos/cam-policy.json)，不授予账号管理、域名、DNS 或其他桶权限。CDN 刷新权限后续单独配置，不混入上传密钥。
+腾讯云侧固定配置：COS 桶为 `ncurator-1324873382`、地域为广州；`download.guanzhangai.cn` 经腾讯云 CDN（加速类型「下载大文件」、中国境内）回源该私有桶。DNSPod 上 `download` 的 CNAME 指向 `download.guanzhangai.cn.cdn.dnsv1.com`。节点对 `artifacts/**` 长缓存（默认约 30 天 / immutable）；`/updates/latest`、`/releases/latest` 不缓存。官网从 `www.guanzhangai.cn`（及必要时根域）`fetch` 清单时，CDN 需对 `/releases/latest/*` 允许跨域 `GET`。新版本使用新的 artifacts 路径，热节点首次请求回源一次后主要消耗 CDN 下行；发版一般不必刷新 artifacts 缓存。AWS CLI 访问 COS 必须使用虚拟主机风格，不能用 path-style。发布子用户使用 [最小 COS 权限模板](../scripts/release/cos/cam-policy.json)，不授予账号管理、域名、DNS 或其他桶权限。CDN 刷新权限后续单独配置，不混入上传密钥。
 
 过渡发版：已安装客户端仍从 `download.ncurator.com` 检查更新。第一次切到国内通道的版本必须把同一份候选包先上传 R2（`RELEASE_STORAGE_TARGET=r2` 调用 `upload-fragment` / `finalize-*`），再走默认 COS 的 `--publish-only`。之后默认只发 COS；海外才显式切回 R2。
 
@@ -234,11 +232,11 @@ R2_PUBLIC_BASE_URL=https://download.ncurator.com
 下载：https://download.guanzhangai.cn
 ```
 
-海外官网 `www.ncurator.com` 仍通过 Cloudflare 访问，官网下载 API 会按请求域名选择国内 COS 或海外 R2。桌面端发行包统一使用国内官网与国内更新通道。
+海外官网 `www.ncurator.com` 仍通过 Cloudflare 访问，官网按请求域名选择国内或海外的 `releases/latest/*.json`，再导航到清单中的 artifacts URL。桌面端发行包统一使用国内官网与国内更新通道。
 
-publish 会上传候选产物和 fragment，更新对应平台的自动更新 metadata、官网 manifest 与固定下载地址，然后验证公开文件大小、sha512、文件名和 manifest。公开验证成功后才把候选状态标记为 `published`；随后清理本地 `tests/logs/**`，不在失败、prepare-only 或 test-only 阶段清理。
+publish 会上传候选产物和 fragment，更新对应平台的自动更新 metadata 与官网 manifest（均指向同一 artifacts），验证公开 yml、清单与 artifacts 的大小、sha512、`Content-Disposition` 与 manifest URL。公开验证成功后才把候选状态标记为 `published`；随后清理本地 `tests/logs/**`，不在失败、prepare-only 或 test-only 阶段清理。
 
-公开验证成功后会清理该平台更早版本的 artifacts 与 release-status，当前发布目标只保留最新版本。
+公开验证成功后会清理该平台更早版本的 artifacts 与 release-status，并删除遗留的 `downloads/latest/*`；当前发布目标只保留最新版本安装包。
 
 ### 本地保留与清理
 
@@ -251,11 +249,11 @@ prepare 和 test 的临时代码、依赖与构建目录位于 `.ncurator/releas
 ```text
 Windows 清单：https://download.guanzhangai.cn/releases/latest/windows.json
 macOS 清单：https://download.guanzhangai.cn/releases/latest/macos.json
-Windows 下载：https://download.guanzhangai.cn/downloads/latest/windows-x64.exe
-macOS arm64：https://download.guanzhangai.cn/downloads/latest/macos-arm64.dmg
 Windows 更新：https://download.guanzhangai.cn/updates/latest/latest.yml
 macOS 更新：https://download.guanzhangai.cn/updates/latest/latest-mac.yml
 ```
+
+官网下载页写死上述清单地址，用 JS `fetch` 读取后导航到 `downloads.*.url`（artifacts）；不要用 `fetch` 拉取整包。安装包实际 URL 随版本变化，清单地址保持不变。
 
 应用启动 5 秒后静默检查更新，持续运行时每 4 小时检查一次。发现新版本后由用户主动下载；下载完成后可以立即重启或稍后安装。
 

@@ -14,13 +14,6 @@ export const statusKey = (tag, platform) => {
     : `release-status/macos/${tag}/${platform}.json`
 }
 
-export const fixedDownloadKey = (platform, role = 'installer') => {
-  if (role !== 'installer') throw new Error(`unsupported fixed download role: ${role}`)
-  if (platform === 'windows-x64') return 'downloads/latest/windows-x64.exe'
-  if (platform === 'macos-arm64') return 'downloads/latest/macos-arm64.dmg'
-  throw new Error(`unsupported release platform: ${platform}`)
-}
-
 export const artifactPrefix = (family, tag = '') => `artifacts/${family}/${tag ? `${tag}/` : ''}`
 
 export const statusPrefix = (family, tag = '') =>

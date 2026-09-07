@@ -92,7 +92,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：目录树只读取各地址或被展开目录的直属子项，并以加载反馈承载读取过程。
 - Why：文件地址可能包含 `node_modules` 等超大目录；进入设置页不能递归枚举整个森林。
 - How：添加包含根目录文件、普通子目录、`node_modules` 和点开头文件/目录的真实临时目录；进入文件 tab 后验证顶层首层，展开普通子目录后验证其直属文件，再确认点开头项始终不可见。
-- Oracle：`node_modules` 在顶层可见但其内容不会在首次加载时出现；子目录展开前不读取其子项，展开时显示局部 loading；点开头文件或目录在任意层级均不显示；页面没有全部展开/折叠入口，顶层地址行可单独折叠，对齐 `SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC4`、`SET-WORKSPACE-008-AC5`。
+- Oracle：`node_modules` 在顶层可见但其内容不会在首次加载时出现；子目录展开前不读取其子项，展开时显示局部 loading；点开头文件或目录在任意层级均不显示；页面没有全部展开/折叠入口，顶层地址行可单独折叠，对齐 `SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC4`、`SET-WORKSPACE-008-AC5`。新添加后只展开该地址、其余折叠由产品交互覆盖，本 case 不强制断言。
 - Not：不以该 case 衡量文件系统吞吐或索引模型性能；全量扫描进度由索引 job 用例覆盖。
 
 #### `workspace-remove-from-list`

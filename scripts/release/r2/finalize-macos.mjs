@@ -7,7 +7,7 @@ import { promisify } from 'node:util'
 import { assertReleaseFragment } from './fragment-contract.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import { createReleaseStorageClient } from '../storage/client.mjs'
-import { artifactKey, fixedDownloadKey, statusKey } from './storage-layout.mjs'
+import { artifactKey, statusKey } from './storage-layout.mjs'
 import { parseReleaseTag } from '../tag.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -76,24 +76,26 @@ try {
   ])
 
   const installer = arm64.files.find((file) => file.role === 'installer')
-  const sourceKey = artifactKey(arm64, installer.storageName)
-  const downloadKey = fixedDownloadKey(arm64.platform)
+  const installerKey = artifactKey(arm64, installer.storageName)
+  const installerUrl = `${publicBaseUrl}/${installerKey}`
   const downloadName = `Ncurator-${arm64.version}-macos-arm64.dmg`
+  const downloadDisposition = `attachment; filename="${downloadName}"`
+
   await aws([
     's3api',
     'copy-object',
     '--bucket',
     bucket,
     '--copy-source',
-    `${bucket}/${sourceKey}`,
+    `${bucket}/${installerKey}`,
     '--key',
-    downloadKey,
+    installerKey,
     '--content-type',
     'application/octet-stream',
     '--cache-control',
-    'no-store',
+    'public, max-age=31536000, immutable',
     '--content-disposition',
-    `attachment; filename="${downloadName}"`,
+    downloadDisposition,
     '--metadata-directive',
     'REPLACE',
     '--metadata',
@@ -102,7 +104,7 @@ try {
 
   const download = {
     name: downloadName,
-    url: `${publicBaseUrl}/${downloadKey}`,
+    url: installerUrl,
     size: installer.size,
     sha512: installer.sha512
   }
@@ -139,7 +141,7 @@ try {
   ) {
     throw new Error('public latest-mac.yml does not match the Mac release')
   }
-  const response = await fetchWithRetry(`${publicBaseUrl}/${downloadKey}?check=${Date.now()}`, {
+  const response = await fetchWithRetry(`${installerUrl}?check=${Date.now()}`, {
     method: 'HEAD',
     cache: 'no-store'
   })
@@ -150,7 +152,22 @@ try {
       `filename="${downloadName}"`
     )
   ) {
-    throw new Error(`public fixed macOS download verification failed: ${downloadKey}`)
+    throw new Error(`public macOS artifact download verification failed: ${installerKey}`)
+  }
+
+  const publicManifestResponse = await fetchWithRetry(
+    `${publicBaseUrl}/releases/latest/macos.json?check=${Date.now()}`,
+    { cache: 'no-store' }
+  )
+  const publicManifest = publicManifestResponse.ok
+    ? await publicManifestResponse.json()
+    : undefined
+  if (
+    publicManifest?.version !== arm64.version ||
+    publicManifest?.downloads?.arm64?.name !== downloadName ||
+    publicManifest?.downloads?.arm64?.url !== installerUrl
+  ) {
+    throw new Error('public macOS release manifest verification failed')
   }
 
   const removable = (await listKeys('artifacts/macos/')).filter(
@@ -175,11 +192,7 @@ try {
       (key) => key !== activeStatusKey
     )
   )
-  removable.push(
-    ...(await listKeys('downloads/latest/')).filter(
-      (key) => key.startsWith('downloads/latest/macos-') && key !== downloadKey
-    )
-  )
+  removable.push(...(await listKeys('downloads/latest/')))
   removable.push(
     ...(await listKeys('artifacts/v')).filter((key) => /\/Ncurator-mac-[^/]+$/u.test(key))
   )
@@ -187,7 +200,7 @@ try {
     ...(await listKeys('release-status/v')).filter((key) => /\/macos-arm64\.json$/u.test(key))
   )
   await deleteKeys(removable)
-  process.stdout.write(`[release] macOS arm64 ${releaseTag} is live\n`)
+  process.stdout.write(`[release] macOS arm64 ${releaseTag} is live at ${installerUrl}\n`)
 } finally {
   await rm(workDirectory, { recursive: true, force: true })
 }

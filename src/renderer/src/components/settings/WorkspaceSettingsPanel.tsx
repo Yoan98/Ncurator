@@ -111,7 +111,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
     []
   )
 
-  const loadWorkspaces = useCallback(async (): Promise<void> => {
+  const loadWorkspaces = useCallback(async (options?: { focusRootId?: string }): Promise<void> => {
     setWorkspaceLoading(true)
     try {
       const workspaceResponse = await window.api.workspaceList()
@@ -121,7 +121,13 @@ const WorkspaceSettingsPanel: React.FC = () => {
       setWorkspaceDirectoryErrors({})
       setWorkspaceTreeSummaries({})
       setWorkspaceExpandedKeys({})
-      setCollapsedRootIds([])
+      setCollapsedRootIds(
+        options?.focusRootId
+          ? workspaceResponse.items
+              .map((item) => item.id)
+              .filter((id) => id !== options.focusRootId)
+          : []
+      )
       setWorkspaceDirectoryReloadVersion((value) => value + 1)
     } catch (error) {
       console.error(error)
@@ -380,7 +386,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       return
     }
     message.success('目录已添加')
-    await loadWorkspaces()
+    await loadWorkspaces({ focusRootId: response.workspace.id })
   }
 
   const handleWorkspaceScanAll = async (): Promise<void> => {
