@@ -11,15 +11,10 @@ import {
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
+import { startOfLocalDay } from '../../../../../src/shared/workbench/messageTimeline'
 
 const CASE_ID = 'timeline-day-jump'
 const PROMPT = '请只回复 ok，用于时间轴跳转测试。'
-
-const startOfLocalDay = (timestamp: number): number => {
-  const date = new Date(timestamp)
-  date.setHours(0, 0, 0, 0)
-  return date.getTime()
-}
 
 describe('workbench conversation e2e', () => {
   it(
@@ -30,7 +25,7 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['timeline'],
-        description: '有消息后时间轴默认展示今/昨/前天，点击今天跳到当天最早一条消息。',
+        description: '有消息后时间轴展示今天节点，点击后跳到当天最早一条消息。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -50,11 +45,22 @@ describe('workbench conversation e2e', () => {
 
           const timeline = getWorkbenchLocator(page, workbenchSelectors.timeline)
           await timeline.waitFor({ state: 'visible' })
+          await runtime.captureScreenshot({
+            name: 'timeline-single-today',
+            message: '仅今天节点：实线在节点附近清晰，空段向上渐隐。'
+          })
           const todayStart = startOfLocalDay(Date.now())
           const labels = ((await timeline.textContent()) || '').replace(/\s+/g, '')
+          const timelineScrollable = await timeline.evaluate((element) => {
+            const style = window.getComputedStyle(element)
+            return (
+              (style.overflowY === 'auto' || style.overflowY === 'scroll') &&
+              element.scrollHeight > element.clientHeight + 1
+            )
+          })
           await getWorkbenchLocator(
             page,
-            `${workbenchSelectors.timelineItemPrefix}-${todayStart}`
+            `${workbenchSelectors.timelineItemPrefix}-day-${todayStart}`
           ).click()
           const userMessage = getWorkbenchPrefixLocator(
             page,
@@ -65,9 +71,14 @@ describe('workbench conversation e2e', () => {
             const rect = element.getBoundingClientRect()
             return rect.top >= 0 && rect.bottom <= window.innerHeight + 80
           })
+          await runtime.captureScreenshot({
+            name: 'timeline-after-jump',
+            message: '点击今天后消息区落到当天最早一条。'
+          })
 
           return {
             labels,
+            timelineScrollable,
             userMessageInView,
             finalAnswerText: evidence.finalAnswerText
           }
@@ -75,13 +86,14 @@ describe('workbench conversation e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.labels.includes('今天') &&
-              result.labels.includes('昨天') &&
-              result.labels.includes('前天') &&
+              !result.labels.includes('昨天') &&
+              !result.labels.includes('前天') &&
+              result.timelineScrollable === false &&
               result.userMessageInView &&
               result.finalAnswerText.trim().length > 0,
             {
               name: 'workbench-timeline-day-jump',
-              message: '时间轴应默认展示今/昨/前天，点击今天后应落到当天最早一条消息。',
+              message: '时间轴应仅展示有消息的今天，无独立滚动，点击后应落到当天最早一条消息。',
               data: result
             }
           )

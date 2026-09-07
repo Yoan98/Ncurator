@@ -1960,35 +1960,192 @@ mark {
 }
 
 .nc-message-timeline {
+  --nc-timeline-track: 16px;
+  --nc-timeline-gap: 5px;
+  --nc-timeline-line: #c4c3bf;
+  position: relative;
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  gap: 10px;
-  width: 52px;
+  width: 56px;
   flex-shrink: 0;
+  overflow: hidden;
   padding: 24px 0 96px;
 }
 
-.nc-message-timeline-item {
+.nc-message-timeline-spine {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: calc(var(--nc-timeline-track) / 2 - 0.5px);
+  width: 1px;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    var(--nc-timeline-line) 28px,
+    var(--nc-timeline-line) calc(100% - 72px),
+    transparent 100%
+  );
+}
+
+.nc-message-timeline.is-compact .nc-message-timeline-spine {
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(100% - 280px),
+    rgba(196, 195, 191, 0.35) calc(100% - 180px),
+    var(--nc-timeline-line) calc(100% - 150px),
+    var(--nc-timeline-line) calc(100% - 88px),
+    transparent 100%
+  );
+}
+
+.nc-message-timeline.is-single .nc-message-timeline-spine {
+  background: linear-gradient(
+    to bottom,
+    transparent 0,
+    transparent calc(100% - 168px),
+    rgba(196, 195, 191, 0.4) calc(100% - 128px),
+    var(--nc-timeline-line) calc(100% - 108px),
+    var(--nc-timeline-line) calc(100% - 88px),
+    transparent 100%
+  );
+}
+
+.nc-message-timeline-nodes {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.nc-message-timeline.is-compact .nc-message-timeline-nodes {
+  height: auto;
+  flex: 0 0 auto;
+  margin-top: auto;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.nc-message-timeline-row {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: center;
-  height: 22px;
+  min-height: 16px;
+  transition: opacity 200ms ease;
+}
+
+.nc-message-timeline-item {
+  display: grid;
+  grid-template-columns: var(--nc-timeline-track) minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--nc-timeline-gap);
+  max-width: 100%;
   border: 0;
   background: transparent;
-  color: #9b9a97;
+  padding: 0;
+  color: #787774;
   font-size: 11px;
   line-height: 1;
   cursor: pointer;
 }
 
 .nc-message-timeline-item:hover {
+  color: #5f5e5a;
+}
+
+.nc-message-timeline-track {
+  display: flex;
+  width: var(--nc-timeline-track);
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+}
+
+.nc-message-timeline-dot {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  flex-shrink: 0;
+  background: #ffffff;
+}
+
+.nc-message-timeline-dot-day {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid #9b9a97;
+  border-radius: 999px;
+}
+
+.nc-message-timeline-dot-month {
+  width: 7px;
+  height: 7px;
+  border: 2px solid #787774;
+  border-radius: 999px;
+}
+
+.nc-message-timeline-dot-year {
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid #787774;
+  border-radius: 1px;
+}
+
+.nc-message-timeline-dot.is-segment {
+  width: 2px;
+  height: 10px;
+  border: 0;
+  border-radius: 1px;
+  background: var(--nc-timeline-line);
+}
+
+.nc-message-timeline-row.is-active .nc-message-timeline-dot-day,
+.nc-message-timeline-row.is-active .nc-message-timeline-dot-month,
+.nc-message-timeline-row.is-active .nc-message-timeline-dot-year {
+  background: #5f5e5a;
+  border-color: #5f5e5a;
+}
+
+.nc-message-timeline-row.is-active .nc-message-timeline-label {
+  color: #5f5e5a;
+}
+
+.nc-message-timeline-row.is-segment {
+  opacity: 0.55;
+}
+
+.nc-message-timeline-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+
+.nc-message-timeline-collapse {
+  position: absolute;
+  left: 100%;
+  margin-left: 4px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: #b0afa9;
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.nc-message-timeline-collapse:hover {
   color: #37352f;
 }
 
 .nc-clear-context-capsule {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   height: 28px;
   padding: 0 12px;
   border: 1px solid #e0dfdc;
@@ -2002,6 +2159,13 @@ mark {
 
 .nc-clear-context-capsule:hover {
   background: #f7f7f5;
+}
+
+.nc-clear-context-capsule-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: #787774;
 }
 
 .nc-message-context-cleared {

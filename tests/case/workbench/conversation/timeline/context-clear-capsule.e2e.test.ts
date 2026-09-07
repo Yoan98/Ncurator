@@ -13,7 +13,7 @@ import {
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'context-clear-capsule'
-const PROMPT = '请只回复 ok，用于清空临时记忆测试。'
+const PROMPT = '请只回复 ok，用于清空记忆测试。'
 
 describe('workbench conversation e2e', () => {
   it(
@@ -24,7 +24,7 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['timeline'],
-        description: '清空胶囊写入切断点后历史仍在并置灰，悬浮恢复颜色，且仍停留在同一伙伴。',
+        description: '清空记忆胶囊写入切断点后历史仍在并置灰，悬浮恢复颜色，且仍停留在同一伙伴。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -45,6 +45,13 @@ describe('workbench conversation e2e', () => {
 
           const clearButton = getWorkbenchLocator(page, workbenchSelectors.clearContextButton)
           await clearButton.waitFor({ state: 'visible' })
+          await runtime.captureScreenshot({
+            name: 'clear-memory-capsule',
+            message: '清空记忆胶囊出现在 Composer 上方，含火花图标、无问号。'
+          })
+          const clearLabel = ((await clearButton.textContent()) || '').replace(/\s+/g, '')
+          await clearButton.hover()
+          const tooltipText = await page.locator('.ant-tooltip-inner').first().textContent()
           const inputBeforeClear = (
             (await getWorkbenchLocator(page, workbenchSelectors.input).textContent()) || ''
           ).trim()
@@ -67,6 +74,10 @@ describe('workbench conversation e2e', () => {
           const grayedAfterLeave = await userMessage.evaluate((element) =>
             element.classList.contains('nc-message-context-cleared')
           )
+          await runtime.captureScreenshot({
+            name: 'clear-memory-grayed',
+            message: '清空后切断前消息置灰，历史仍在同一伙伴。'
+          })
           const partnerId = await page.evaluate(async (name) => {
             const partners = await window.api.partnerList()
             return partners.find((partner) => partner.name === name)?.id || null
@@ -81,6 +92,9 @@ describe('workbench conversation e2e', () => {
           ).trim()
 
           return {
+            clearLabel,
+            tooltipText: (tooltipText || '').trim(),
+            partnerName,
             grayedAfterClear,
             restoredOnHover,
             grayedAfterLeave,
@@ -91,7 +105,11 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.grayedAfterClear &&
+            result.clearLabel.includes('清空记忆') &&
+              !result.clearLabel.includes('临时') &&
+              result.tooltipText.includes(`「${result.partnerName}」`) &&
+              result.tooltipText.includes('不会删除对话记录') &&
+              result.grayedAfterClear &&
               result.restoredOnHover &&
               result.grayedAfterLeave &&
               result.partnerStillSelected &&
@@ -99,7 +117,7 @@ describe('workbench conversation e2e', () => {
               result.finalAnswerText.trim().length > 0,
             {
               name: 'workbench-context-clear-capsule',
-              message: '清空后历史应置灰且仍在同一伙伴，悬浮恢复颜色，草稿保持不变。',
+              message: '清空记忆胶囊文案与 tooltip 正确，清空后历史置灰且仍在同一伙伴。',
               data: result
             }
           )

@@ -21,7 +21,8 @@ export const renderWorkspaceRootsText = (ctx: AiRunContext): string => {
   if (ctx.workspaceRoots.length === 0) {
     return '- 当前没有配置用户默认工作地址'
   }
-  return ctx.workspaceRoots.map((rootPath) => `- ${rootPath}`).join('\n')
+  return `用户默认工作区域：
+${ctx.workspaceRoots.map((rootPath) => `- ${rootPath}`).join('\n')}`
 }
 
 export const renderCurrentTimeText = (ctx: AiRunContext): string => {

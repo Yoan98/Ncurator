@@ -35,6 +35,7 @@ export class ChatMessageLogStore {
     partnerId: string
     runId: string
     entries: ChatMessageLogEntry[]
+    createdAt?: number
   }): Promise<ChatMessageLogRecord[]> {
     if (input.entries.length === 0) return []
     return this.sqlite.transaction(() => {
@@ -50,7 +51,7 @@ export class ChatMessageLogStore {
         VALUES (@id, @partner_id, @run_id, @seq, @entry_json, @created_at)
       `
       )
-      const now = Date.now()
+      const baseCreatedAt = input.createdAt != null ? input.createdAt : Date.now()
       const records: ChatMessageLogRecord[] = []
       input.entries.forEach((entry, index) => {
         const seq = startSeq + index
@@ -60,7 +61,7 @@ export class ChatMessageLogStore {
           runId: input.runId,
           seq,
           entry,
-          createdAt: now
+          createdAt: baseCreatedAt + index
         }
         insert.run({
           id: record.id,

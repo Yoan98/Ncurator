@@ -19,6 +19,8 @@ import {
 
 const PARTNER_ID = 'live-context-compaction'
 const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
+/** Run2 首轮 brain 的 cachedInputTokens 相对 Run1 末次 brain inputTokens 的最低比例。 */
+const RUN2_PREFIX_CACHE_MIN_RATIO = 0.5
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '当前交付：',
@@ -115,6 +117,46 @@ const collectRunCompaction = (input: {
   }
 }
 
+const lastBrainRecord = (records: readonly AiLlmIoRecord[]): AiLlmIoRecord | undefined =>
+  [...records].reverse().find((record) => record.caller === 'human.brain')
+
+const firstBrainRecord = (records: readonly AiLlmIoRecord[]): AiLlmIoRecord | undefined =>
+  records.find((record) => record.caller === 'human.brain')
+
+const collectRun2PrefixCacheReuse = (input: {
+  run1LlmIo: readonly AiLlmIoRecord[]
+  run2LlmIo: readonly AiLlmIoRecord[]
+}) => {
+  const run1LastBrain = lastBrainRecord(input.run1LlmIo)
+  const run2FirstBrain = firstBrainRecord(input.run2LlmIo)
+  const run1LastInputTokens = run1LastBrain?.usage?.inputTokens
+  const run2FirstCachedInputTokens = run2FirstBrain?.usage?.cachedInputTokens
+  const run2FirstInputTokens = run2FirstBrain?.usage?.inputTokens
+  const hasUsageSignal =
+    typeof run1LastInputTokens === 'number' &&
+    run1LastInputTokens > 0 &&
+    typeof run2FirstCachedInputTokens === 'number' &&
+    typeof run2FirstInputTokens === 'number' &&
+    run2FirstInputTokens > 0
+  const reuseRatio =
+    hasUsageSignal && run1LastInputTokens
+      ? run2FirstCachedInputTokens! / run1LastInputTokens
+      : undefined
+  return {
+    run1LastBrain,
+    run2FirstBrain,
+    run1LastInputTokens,
+    run2FirstCachedInputTokens,
+    run2FirstInputTokens,
+    run2FirstCacheHitRate: run2FirstBrain?.usage?.cacheHitRate,
+    reuseRatio,
+    satisfied:
+      hasUsageSignal &&
+      typeof reuseRatio === 'number' &&
+      reuseRatio >= RUN2_PREFIX_CACHE_MIN_RATIO
+  }
+}
+
 const collectDocxEvidence = (input: {
   events: readonly AiRunEvent[]
   artifacts: readonly { kind?: string; capability?: string; applyId?: string }[] | undefined
@@ -175,7 +217,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + 带 <memory> 的当前 user 继续完成交付，并在同伙伴复杂续做中压出非空历史时间线。',
+          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + 带 <memory> 的当前 user 继续完成交付，并在同伙伴复杂续做中压出非空历史时间线；Run2 首轮 brain 须明显复用 Run1 末次前缀缓存。',
         fixtures: [CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         execute: async (runtime) => {
@@ -261,7 +303,11 @@ describe('ai human live backend', () => {
               run1Docx.toolNames.includes('text_file_edit'))
 
           const latestRun2Summary = run2Compaction.summaries.at(-1) || ''
-          const run2FirstBrain = result.run2LlmIo.find((record) => record.caller === 'human.brain')
+          const run2PrefixCache = collectRun2PrefixCacheReuse({
+            run1LlmIo: result.run1LlmIo,
+            run2LlmIo: result.run2LlmIo
+          })
+          const run2FirstBrain = run2PrefixCache.run2FirstBrain
           const run2FirstBrainRoles = run2FirstBrain
             ? parseBrainMessageRoles(run2FirstBrain.user)
             : []
@@ -340,6 +386,22 @@ describe('ai human live backend', () => {
               }
             }
           )
+
+          runtime.assertThat(run2PrefixCache.satisfied, {
+            name: 'human-live-context-compaction-run2-reuses-run1-prefix-cache',
+            message:
+              '发第二次 user 续跑时，Run2 首次 brain 的 cachedInputTokens 应明显复用 Run1 末次 brain 的 inputTokens 前缀；低于明显比例说明跨 run 前缀被改写或缓存未命中。',
+            data: {
+              minRatio: RUN2_PREFIX_CACHE_MIN_RATIO,
+              run1LastInputTokens: run2PrefixCache.run1LastInputTokens,
+              run2FirstCachedInputTokens: run2PrefixCache.run2FirstCachedInputTokens,
+              run2FirstInputTokens: run2PrefixCache.run2FirstInputTokens,
+              run2FirstCacheHitRate: run2PrefixCache.run2FirstCacheHitRate,
+              reuseRatio: run2PrefixCache.reuseRatio,
+              run1LastBrainUsage: run2PrefixCache.run1LastBrain?.usage,
+              run2FirstBrainUsage: run2PrefixCache.run2FirstBrain?.usage
+            }
+          })
         }
       })
     })

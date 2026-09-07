@@ -9,6 +9,7 @@ import {
   HiOutlineClock,
   HiOutlinePencilSquare,
   HiOutlineQuestionMarkCircle,
+  HiOutlineSparkles,
   HiPhoto,
   HiPlus,
   HiStop,
@@ -55,6 +56,18 @@ import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import { FullAccessConfirmModal } from '../components/workbench/FullAccessConfirmModal'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
+import { MessageTimeline } from '../components/workbench/MessageTimeline'
+import {
+  buildTimelineNodes,
+  collectMessageDayStarts,
+  resolveActiveTimelineNodeId,
+  startOfLocalDay,
+  startOfLocalMonth,
+  startOfLocalYear,
+  type TimelineExpansion,
+  type TimelineNode,
+  DAY_MS
+} from '../../../shared/workbench/messageTimeline'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import ScheduledTasksView from '../components/scheduledTasks/ScheduledTasksView'
 import ImageLightbox from '../components/workbench/ImageLightbox'
@@ -190,29 +203,6 @@ const formatUserMessageTime = (timestamp: number, now = Date.now()): string => {
   }
   return `${date.getFullYear()}/${padTimePart(date.getMonth() + 1)}/${padTimePart(date.getDate())} ${time}`
 }
-
-const DAY_MS = 24 * 60 * 60 * 1000
-
-const startOfLocalDay = (timestamp: number): number => {
-  const date = new Date(timestamp)
-  date.setHours(0, 0, 0, 0)
-  return date.getTime()
-}
-
-const formatTimelineDayLabel = (dayStart: number, todayStart: number): string => {
-  const offset = Math.round((todayStart - dayStart) / DAY_MS)
-  if (offset === 0) return '今天'
-  if (offset === 1) return '昨天'
-  if (offset === 2) return '前天'
-  return new Date(dayStart).toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
-}
-
-const formatTimelineDayDate = (dayStart: number): string =>
-  new Date(dayStart).toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  })
 
 const PARTNER_ROW_ACTION_CLASS =
   'flex h-6 w-6 items-center justify-center rounded-[6px] text-[#91918E] transition hover:bg-white hover:text-[#37352F]'
@@ -791,6 +781,8 @@ const ChatPage: React.FC = () => {
   const [lastContextClearedAt, setLastContextClearedAt] = useState<number | null>(null)
   const [hoveredGrayMessageId, setHoveredGrayMessageId] = useState<string | null>(null)
   const [clearContextVisible, setClearContextVisible] = useState(false)
+  const [timelineExpansion, setTimelineExpansion] = useState<TimelineExpansion>({ kind: 'none' })
+  const [activeTimelineDayStart, setActiveTimelineDayStart] = useState<number | null>(null)
   const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>('default')
   const [composerExecutionPermission, setComposerExecutionPermission] =
     useState<WorkbenchExecutionPermission>('review')
@@ -1383,6 +1375,7 @@ const ChatPage: React.FC = () => {
 
   const jumpToTimelineDay = useCallback(
     (dayStart: number): void => {
+      setActiveTimelineDayStart(dayStart)
       if (scrollToOldestMessageOfDay(dayStart, currentMessages)) return
       if (!hasMoreMessagesBefore || !currentPartnerId) return
       pendingTimelineJumpDayRef.current = dayStart
@@ -1396,6 +1389,46 @@ const ChatPage: React.FC = () => {
       scrollToOldestMessageOfDay
     ]
   )
+
+  const handleTimelineNodeSelect = useCallback(
+    (node: TimelineNode): void => {
+      if (node.role === 'segment') {
+        jumpToTimelineDay(node.jumpDayStart)
+        return
+      }
+      if (node.level === 'day') {
+        jumpToTimelineDay(node.jumpDayStart)
+        return
+      }
+      if (node.level === 'month') {
+        setTimelineExpansion({ kind: 'month', monthStart: node.rangeStart })
+        jumpToTimelineDay(node.jumpDayStart)
+        return
+      }
+      setTimelineExpansion({ kind: 'year', yearStart: node.rangeStart })
+      jumpToTimelineDay(node.jumpDayStart)
+    },
+    [jumpToTimelineDay]
+  )
+
+  const resolveActiveDayFromScroll = useCallback((): number | null => {
+    const scrollElement = scrollRef.current
+    if (!scrollElement || currentMessages.length === 0) return null
+    const containerTop = scrollElement.getBoundingClientRect().top
+    let active: ChatMessage | null = null
+    for (const messageItem of currentMessages) {
+      const element = document.querySelector(`[data-message-id="${messageItem.id}"]`)
+      if (!(element instanceof HTMLElement)) continue
+      const rect = element.getBoundingClientRect()
+      if (rect.top <= containerTop + 12) {
+        active = messageItem
+        continue
+      }
+      if (!active) active = messageItem
+      break
+    }
+    return active ? startOfLocalDay(active.timestamp) : null
+  }, [currentMessages])
 
   useEffect(() => {
     const dayStart = pendingTimelineJumpDayRef.current
@@ -1425,6 +1458,8 @@ const ChatPage: React.FC = () => {
     if (scrollElement.scrollTop <= 80) {
       void loadOlderMessages()
     }
+    const nextActiveDay = resolveActiveDayFromScroll()
+    if (nextActiveDay != null) setActiveTimelineDayStart(nextActiveDay)
   }
 
   const emitSuccessMessage = useCallback(
@@ -1840,6 +1875,8 @@ const ChatPage: React.FC = () => {
       setLastContextClearedAt(opened.lastContextClearedAt ?? null)
       setClearContextVisible(false)
       setHoveredGrayMessageId(null)
+      setTimelineExpansion({ kind: 'none' })
+      setActiveTimelineDayStart(null)
       pendingTimelineJumpDayRef.current = null
       const restoredActiveTab = opened.uiState?.panel.tabs.find(
         (tab) => tab.id === opened.uiState?.panel.activeTabId
@@ -3443,14 +3480,14 @@ const ChatPage: React.FC = () => {
     try {
       const response = await window.api.partnerClearContext({ partnerId: currentPartnerId })
       if (!response.success) {
-        emitErrorMessage(response.error || '清空临时记忆失败')
+        emitErrorMessage(response.error || '清空记忆失败')
         return
       }
       setLastContextClearedAt(response.clearedAt ?? Date.now())
       setClearContextVisible(false)
       setHoveredGrayMessageId(null)
     } catch (error) {
-      emitErrorMessage(error instanceof Error ? error.message : '清空临时记忆失败')
+      emitErrorMessage(error instanceof Error ? error.message : '清空记忆失败')
     }
   }, [currentPartnerId, emitErrorMessage])
 
@@ -3974,14 +4011,48 @@ const ChatPage: React.FC = () => {
     if (next) ids.add(next.id)
     return ids
   }, [currentMessages, hoveredGrayMessageId])
-  const timelineDays = useMemo(() => {
-    const todayStart = startOfLocalDay(Date.now())
-    const days = new Set<number>([todayStart, todayStart - DAY_MS, todayStart - 2 * DAY_MS])
-    currentMessages.forEach((item) => {
-      days.add(startOfLocalDay(item.timestamp))
+  const timelineNodes = useMemo(() => {
+    const messageDayStarts = collectMessageDayStarts(
+      currentMessages.map((item) => item.timestamp)
+    )
+    return buildTimelineNodes({
+      messageDayStarts,
+      expansion: timelineExpansion
     })
-    return [...days].sort((left, right) => left - right)
-  }, [currentMessages])
+  }, [currentMessages, timelineExpansion])
+
+  const activeTimelineNodeId = useMemo(
+    () =>
+      resolveActiveTimelineNodeId({
+        nodes: timelineNodes,
+        activeDayStart: activeTimelineDayStart
+      }),
+    [activeTimelineDayStart, timelineNodes]
+  )
+
+  useEffect(() => {
+    if (timelineExpansion.kind === 'none') return
+    const messageDayStarts = collectMessageDayStarts(
+      currentMessages.map((item) => item.timestamp)
+    )
+    if (timelineExpansion.kind === 'month') {
+      const stillPresent = messageDayStarts.some(
+        (dayStart) => startOfLocalMonth(dayStart) === timelineExpansion.monthStart
+      )
+      if (!stillPresent) setTimelineExpansion({ kind: 'none' })
+      return
+    }
+    const stillPresent = messageDayStarts.some(
+      (dayStart) => startOfLocalYear(dayStart) === timelineExpansion.yearStart
+    )
+    if (!stillPresent) setTimelineExpansion({ kind: 'none' })
+  }, [currentMessages, timelineExpansion])
+
+  useEffect(() => {
+    if (activeTimelineDayStart != null || currentMessages.length === 0) return
+    const latest = currentMessages[currentMessages.length - 1]
+    if (latest) setActiveTimelineDayStart(startOfLocalDay(latest.timestamp))
+  }, [activeTimelineDayStart, currentMessages])
 
   const sessionSwitching = Boolean(switchingPartnerId)
   // 判断是否为新会话（没有消息）
@@ -4349,23 +4420,13 @@ const ChatPage: React.FC = () => {
             >
               <div className="flex h-full min-h-0 min-w-0 flex-1">
                 {!isNewSession ? (
-                  <div className="nc-message-timeline" data-testid={workbenchSelectors.timeline}>
-                    {timelineDays.map((dayStart) => {
-                      const todayStart = startOfLocalDay(Date.now())
-                      return (
-                        <Tooltip key={dayStart} title={formatTimelineDayDate(dayStart)} placement="right">
-                          <button
-                            type="button"
-                            className="nc-message-timeline-item"
-                            data-testid={`${workbenchSelectors.timelineItemPrefix}-${dayStart}`}
-                            onClick={() => jumpToTimelineDay(dayStart)}
-                          >
-                            {formatTimelineDayLabel(dayStart, todayStart)}
-                          </button>
-                        </Tooltip>
-                      )
-                    })}
-                  </div>
+                  <MessageTimeline
+                    nodes={timelineNodes}
+                    activeNodeId={activeTimelineNodeId}
+                    expansion={timelineExpansion}
+                    onSelectNode={handleTimelineNodeSelect}
+                    onCollapse={() => setTimelineExpansion({ kind: 'none' })}
+                  />
                 ) : null}
                 <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
                   <div
@@ -4543,19 +4604,19 @@ const ChatPage: React.FC = () => {
                       ) : (
                         <div className="relative">
                           {clearContextVisible ? (
-                            <div className="mb-2 flex items-center gap-1">
-                              <button
-                                type="button"
-                                className="nc-clear-context-capsule"
-                                data-testid={workbenchSelectors.clearContextButton}
-                                onClick={() => void handleClearPartnerContext()}
+                            <div className="mb-2 flex items-center">
+                              <Tooltip
+                                title={`「${currentPartner?.name || '伙伴'}」会忘记跟你之前产生的记忆，也会更省token，不会删除对话记录`}
                               >
-                                清空临时记忆
-                              </button>
-                              <Tooltip title="只清空模型当前用的临时记忆，不会删除对话历史。">
-                                <span className="inline-flex h-5 w-5 items-center justify-center text-[#9B9A97]">
-                                  <HiOutlineQuestionMarkCircle className="h-4 w-4" />
-                                </span>
+                                <button
+                                  type="button"
+                                  className="nc-clear-context-capsule"
+                                  data-testid={workbenchSelectors.clearContextButton}
+                                  onClick={() => void handleClearPartnerContext()}
+                                >
+                                  <HiOutlineSparkles className="nc-clear-context-capsule-icon" />
+                                  清空记忆
+                                </button>
                               </Tooltip>
                             </div>
                           ) : null}

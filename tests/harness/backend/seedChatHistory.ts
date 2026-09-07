@@ -31,6 +31,7 @@ export const seedChatHistory = async (input: {
     await input.chatMessageLogStore.appendBatch({
       partnerId,
       runId: uuidv4(),
+      createdAt: message.timestamp || createdAt,
       entries: [
         message.role === 'assistant'
           ? { kind: 'assistant', content: message.content, toolCalls: [] }
