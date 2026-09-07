@@ -145,11 +145,12 @@ export class WorkspaceSourceService {
     displayName: string
     sameAsExisting: boolean
     nestedUnderExisting: boolean
+    nestedUnderExistingRootPaths: string[]
     containedExistingRootPaths: string[]
   }> {
     const { normalizedRootPath, displayName } = await this.normalizeWorkspaceRoot(candidateRootPath)
     let sameAsExisting = false
-    let nestedUnderExisting = false
+    const nestedUnderExistingRootPaths: string[] = []
     const containedExistingRootPaths: string[] = []
     for (const rootPath of existingRootPaths) {
       const existingRaw = String(rootPath || '').trim()
@@ -165,7 +166,7 @@ export class WorkspaceSourceService {
         continue
       }
       if (isSameOrNestedPath(normalizedRootPath, existingNormalized)) {
-        nestedUnderExisting = true
+        nestedUnderExistingRootPaths.push(existingRaw)
       } else if (isSameOrNestedPath(existingNormalized, normalizedRootPath)) {
         containedExistingRootPaths.push(existingRaw)
       }
@@ -174,7 +175,8 @@ export class WorkspaceSourceService {
       normalizedRootPath,
       displayName,
       sameAsExisting,
-      nestedUnderExisting,
+      nestedUnderExisting: nestedUnderExistingRootPaths.length > 0,
+      nestedUnderExistingRootPaths,
       containedExistingRootPaths
     }
   }

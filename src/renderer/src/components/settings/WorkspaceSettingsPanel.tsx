@@ -83,7 +83,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
         if (response.summary) {
           setWorkspaceTreeSummaries((previous) => ({
             ...previous,
-            [workspaceId]: response.summary as NonNullable<WorkspaceDirectoryListResponse['summary']>
+            [workspaceId]: response.summary as NonNullable<
+              WorkspaceDirectoryListResponse['summary']
+            >
           }))
         }
       } catch (error) {
@@ -261,17 +263,20 @@ const WorkspaceSettingsPanel: React.FC = () => {
           const isDirectory = entry.kind === 'directory'
           const isExpanded = expanded.has(entry.relative_path)
           const entryStatus = getTreeEntryStatusMeta(entry)
-          const childLoading = workspaceDirectoryLoading[workspaceId]?.[entry.relative_path] === true
+          const childLoading =
+            workspaceDirectoryLoading[workspaceId]?.[entry.relative_path] === true
           return (
             <React.Fragment key={entry.id}>
               <button
                 type="button"
                 className="ant-tree-treenode flex min-h-8 w-full items-center gap-2 rounded-[4px] px-2 text-left text-[13px] text-[#37352F] hover:bg-[#F4F4F2]"
                 style={{ paddingLeft: 8 + depth * 18 }}
-                onClick={() => (isDirectory ? toggleWorkspaceDirectory(workspaceId, entry) : undefined)}
+                onClick={() =>
+                  isDirectory ? toggleWorkspaceDirectory(workspaceId, entry) : undefined
+                }
               >
                 <span className="ant-tree-switcher flex h-4 w-4 shrink-0 items-center justify-center text-[#91918E]">
-                  {isDirectory ? (isExpanded ? <HiChevronDown /> : <HiChevronRight />) : null}
+                  {isDirectory ? isExpanded ? <HiChevronDown /> : <HiChevronRight /> : null}
                 </span>
                 {isDirectory ? (
                   <HiFolder className="h-4 w-4 shrink-0 text-[#787774]" />
@@ -280,11 +285,15 @@ const WorkspaceSettingsPanel: React.FC = () => {
                 )}
                 <span className="min-w-0 flex-1 truncate">{entry.name}</span>
                 {entryStatus ? (
-                  <span className={`shrink-0 rounded-[4px] border px-1.5 text-[10px] ${entryStatus.className}`}>
+                  <span
+                    className={`shrink-0 rounded-[4px] border px-1.5 text-[10px] ${entryStatus.className}`}
+                  >
                     {entryStatus.label}
                   </span>
                 ) : null}
-                {childLoading ? <HiArrowPath className="h-3.5 w-3.5 shrink-0 animate-spin text-[#91918E]" /> : null}
+                {childLoading ? (
+                  <HiArrowPath className="h-3.5 w-3.5 shrink-0 animate-spin text-[#91918E]" />
+                ) : null}
               </button>
               {isDirectory && isExpanded
                 ? renderWorkspaceEntries(workspaceId, entry.relative_path, depth + 1)
@@ -308,21 +317,66 @@ const WorkspaceSettingsPanel: React.FC = () => {
     )
   }
 
-  const handleAddRoot = async (kind: 'directory' | 'file'): Promise<void> => {
-    const selection =
-      kind === 'directory' ? await window.api.pickDirectory() : await window.api.pickFile()
+  const formatQuotedPaths = (paths: string[]): string =>
+    paths.map((item) => `「${item}」`).join('、')
+
+  const confirmReplaceContained = (existingPaths: string[]): Promise<boolean> =>
+    new Promise((resolve) => {
+      Modal.confirm({
+        title: '将替换已添加的子目录',
+        content: `所选目录包含已添加的 ${formatQuotedPaths(existingPaths)}。添加后会用这个更大的目录替换它们，是否继续？`,
+        okText: '添加并替换',
+        cancelText: '取消',
+        centered: true,
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false)
+      })
+    })
+
+  const handleAddRoot = async (): Promise<void> => {
+    const selection = await window.api.pickDirectory()
     if (selection.error) {
       message.error(selection.error)
       return
     }
     if (selection.canceled || !selection.path) return
-    const response = await window.api.workspaceCreate({ rootPath: selection.path.trim() })
-    if (!response.success || !response.workspace) {
-      message.error(normalizeUserFacingError(response.error, '添加地址失败'))
-      return
+    const rootPath = selection.path.trim()
+
+    const submit = async (replaceContained: boolean): Promise<void> => {
+      const response = await window.api.workspaceCreate({ rootPath, replaceContained })
+      if (response.conflict?.reason === 'exists') {
+        Modal.warning({
+          title: '目录已添加',
+          content: '这个目录已经在文件地址里了，不用重复添加。',
+          okText: '知道了',
+          centered: true
+        })
+        return
+      }
+      if (response.conflict?.reason === 'nested') {
+        Modal.warning({
+          title: '目录已包含',
+          content: `所选目录已经包含在 ${formatQuotedPaths(response.conflict.existingPaths)} 内，不用重复添加。`,
+          okText: '知道了',
+          centered: true
+        })
+        return
+      }
+      if (response.conflict?.reason === 'contains') {
+        const confirmed = await confirmReplaceContained(response.conflict.existingPaths)
+        if (!confirmed) return
+        await submit(true)
+        return
+      }
+      if (!response.success || !response.workspace) {
+        message.error(normalizeUserFacingError(response.error, '添加地址失败'))
+        return
+      }
+      message.success('目录已添加')
+      await loadWorkspaces()
     }
-    message.success(kind === 'directory' ? '目录已添加' : '文件地址已添加')
-    await loadWorkspaces()
+
+    await submit(false)
   }
 
   const handleWorkspaceScanAll = async (): Promise<void> => {
@@ -377,13 +431,17 @@ const WorkspaceSettingsPanel: React.FC = () => {
   }
 
   const vectorModelMissing = hasVectorModel === false
-  const workspacePrepareDisabled = hasVectorModel !== true
+  const hasWorkspaceList = workspaces.length > 0
+  const workspaceScanDisabled = !hasWorkspaceList
+  const workspacePrepareDisabled = hasVectorModel !== true || actionableIndexCount === 0
   const workspacePrepareTooltip =
     hasVectorModel === null
       ? '正在检查向量模型状态'
       : vectorModelMissing
         ? ''
-        : '检查目录变化并更新可索引文件。'
+        : actionableIndexCount === 0
+          ? '当前没有需要更新的索引'
+          : '检查目录变化并更新可索引文件。'
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
       <div className="text-[13px] font-medium text-[#37352F]">先安装向量模型</div>
@@ -406,7 +464,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
       className="flex h-full min-h-0 flex-col overflow-hidden"
       data-testid={settingsSelectors.workspacePanel}
     >
-      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-white" data-testid={importSelectors.page}>
+      <div
+        className="flex h-full min-h-0 flex-col overflow-hidden bg-white"
+        data-testid={importSelectors.page}
+      >
         <div className="min-h-0 flex flex-1 flex-col overflow-hidden px-5 py-5 pr-4">
           <Tabs
             className="flex h-full min-h-0 flex-col [&_.ant-tabs-content]:h-full [&_.ant-tabs-content-holder]:min-h-0 [&_.ant-tabs-content-holder]:flex-1 [&_.ant-tabs-nav]:mb-4 [&_.ant-tabs-tabpane]:h-full [&_.ant-tabs-tabpane]:overflow-hidden"
@@ -423,23 +484,17 @@ const WorkspaceSettingsPanel: React.FC = () => {
                         <section className="nc-settings-side-section pb-4">
                           <div className="text-[14px] font-semibold text-[#37352F]">文件地址</div>
                           <div className="mt-2 text-[12px] leading-5 text-[#787774]">
-                            添加本地目录或文件作为资料根。子路径会被拒绝；父路径会替换已有子路径。
+                            添加你默认工作的目录。
                           </div>
-                          <div className="mt-4 grid grid-cols-2 gap-2">
+                          <div className="mt-4">
                             <Button
                               type="primary"
+                              className="w-full"
                               icon={<HiOutlineFolderPlus className="h-4 w-4" />}
-                              onClick={() => void handleAddRoot('directory')}
+                              onClick={() => void handleAddRoot()}
                               data-testid={importSelectors.createWorkspaceButton}
                             >
                               添加目录
-                            </Button>
-                            <Button
-                              icon={<HiDocumentText className="h-4 w-4" />}
-                              onClick={() => void handleAddRoot('file')}
-                              data-testid={importSelectors.addWorkspaceFileButton}
-                            >
-                              添加文件
                             </Button>
                           </div>
                         </section>
@@ -479,7 +534,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                 icon={<HiArrowPath className="h-4 w-4" />}
                                 onClick={() => void handleWorkspaceScanAll()}
                                 loading={runningFileJob?.action === 'scan'}
-                                disabled={workspaces.length === 0}
+                                disabled={workspaceScanDisabled}
                                 data-testid={importSelectors.workspaceQuickScanButton}
                               >
                                 检查更新
@@ -491,7 +546,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   type="primary"
                                   icon={<HiCircleStack className="h-4 w-4" />}
                                   onClick={() => void handleWorkspacePrepareAll()}
-                                  disabled={workspacePrepareDisabled || workspaces.length === 0}
+                                  disabled={workspacePrepareDisabled}
                                   loading={runningFileJob?.action === 'prepare'}
                                   className={`w-full min-w-0 ${vectorModelMissing ? '!pr-9' : ''}`}
                                   data-testid={importSelectors.workspaceQuickPrepareButton}
@@ -529,7 +584,13 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           <Tooltip title="刷新">
                             <Button
                               size="small"
-                              icon={<HiArrowPath className={workspaceLoading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />}
+                              icon={
+                                <HiArrowPath
+                                  className={
+                                    workspaceLoading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'
+                                  }
+                                />
+                              }
                               onClick={() => void loadWorkspaces()}
                             />
                           </Tooltip>
@@ -549,20 +610,28 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               />
                             </div>
                           ) : (
-                            <div className="workspace-file-tree w-full" data-testid={importSelectors.workspaceList}>
+                            <div
+                              className="workspace-file-tree w-full"
+                              data-testid={importSelectors.workspaceList}
+                            >
                               {workspaces.map((workspace) => (
-                                <div key={workspace.id} data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}>
-                                  <div
-                                    className="group flex min-h-8 w-full items-center gap-2 rounded-[4px] px-2 text-[13px] text-[#37352F] hover:bg-[#F4F4F2]"
-                                  >
+                                <div
+                                  key={workspace.id}
+                                  data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}
+                                >
+                                  <div className="group flex min-h-8 w-full items-center gap-2 rounded-[4px] px-2 text-[13px] text-[#37352F] hover:bg-[#F4F4F2]">
                                     {workspace.root_kind === 'file' ? (
                                       <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
                                     ) : (
                                       <HiFolder className="h-4 w-4 shrink-0 text-[#787774]" />
                                     )}
                                     <div className="min-w-0 flex-1">
-                                      <div className="truncate font-medium">{getRootDisplayName(workspace)}</div>
-                                      <div className="truncate text-[11px] text-[#91918E]">{workspace.root_path}</div>
+                                      <div className="truncate font-medium">
+                                        {getRootDisplayName(workspace)}
+                                      </div>
+                                      <div className="truncate text-[11px] text-[#91918E]">
+                                        {workspace.root_path}
+                                      </div>
                                     </div>
                                     <Tooltip title="移除">
                                       <Button
@@ -621,7 +690,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
         cancelButtonProps={{ 'data-testid': importSelectors.workspaceDeleteCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[8px]"
       >
-        <p className="mb-0 text-[#787774]">移除后，该路径将不再作为资料根。若仍需使用，请重新添加并重新建立索引。</p>
+        <p className="mb-0 text-[#787774]">
+          移除后，该路径将不再作为资料根。若仍需使用，请重新添加并重新建立索引。
+        </p>
       </Modal>
     </div>
   )

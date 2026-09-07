@@ -27,7 +27,6 @@ export const chatSelectors = {
 export const importSelectors = {
   page: 'import-page',
   createWorkspaceButton: 'import-create-workspace-button',
-  addWorkspaceFileButton: 'import-add-workspace-file-button',
   workspaceList: 'import-workspace-list',
   workspaceCardPrefix: 'import-workspace-card',
   workspaceDetail: 'import-workspace-detail',
@@ -142,6 +141,7 @@ export const workbenchSelectors = {
   partnersList: 'workbench-partners-list',
   partnerItemPrefix: 'workbench-partner-item',
   partnerPinButtonPrefix: 'workbench-partner-pin-button',
+  partnerEditButtonPrefix: 'workbench-partner-edit-button',
   partnerDeleteButtonPrefix: 'workbench-partner-delete-button',
   partnerDeleteConfirmModal: 'workbench-partner-delete-confirm-modal',
   partnerDeleteConfirmButton: 'workbench-partner-delete-confirm-button',

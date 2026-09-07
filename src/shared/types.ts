@@ -301,12 +301,21 @@ export interface WebSourceListResponse {
 
 export interface CreateWorkspaceSourceRequest {
   rootPath: string
+  replaceContained?: boolean
+}
+
+export type WorkspaceRootConflictReason = 'exists' | 'nested' | 'contains'
+
+export interface WorkspaceRootConflict {
+  reason: WorkspaceRootConflictReason
+  existingPaths: string[]
 }
 
 export interface WorkspaceMutationResponse {
   success: boolean
   workspace?: WorkspaceSource
   error?: string
+  conflict?: WorkspaceRootConflict
 }
 
 export interface SetWorkspaceRootPathRequest {
@@ -605,6 +614,7 @@ export interface ChatMessage {
 export const PARTNER_AVATAR_SHAPES = [
   'circle',
   'rounded_square',
+  'pill',
   'hexagon',
   'cloud',
   'teardrop'
@@ -657,6 +667,15 @@ export type PartnerCreateResponse = {
   partner?: Partner
   error?: string
 }
+
+export type PartnerUpdateRequest = {
+  id: string
+  name: string
+  avatar_shape: PartnerAvatarShape
+  avatar_color: PartnerAvatarColor
+}
+
+export type PartnerUpdateResponse = PartnerCreateResponse
 
 export type PartnerSetPinnedRequest = {
   id: string

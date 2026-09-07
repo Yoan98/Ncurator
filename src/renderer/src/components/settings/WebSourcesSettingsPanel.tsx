@@ -176,13 +176,17 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   }
 
   const vectorModelMissing = hasVectorModel === false
-  const webPrepareDisabled = hasVectorModel !== true
+  const hasWebList = webSources.length > 0
+  const webScanDisabled = !hasWebList
+  const webPrepareDisabled = hasVectorModel !== true || actionableWebIndexCount === 0
   const webPrepareTooltip =
     hasVectorModel === null
       ? '正在检查向量模型状态'
       : vectorModelMissing
         ? ''
-        : '检查网页变化并更新索引。'
+        : actionableWebIndexCount === 0
+          ? '当前没有需要更新的索引'
+          : '检查网页变化并更新索引。'
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
       <div className="text-[13px] font-medium text-[#37352F]">先安装向量模型</div>
@@ -258,6 +262,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
               icon={<HiArrowPath className="h-4 w-4" />}
               onClick={() => void handleScanWebSources()}
               loading={webIndexJob?.action === 'scan'}
+              disabled={webScanDisabled}
               className="border-[#EEEEEC] bg-white text-[#37352F]"
             >
               检查更新

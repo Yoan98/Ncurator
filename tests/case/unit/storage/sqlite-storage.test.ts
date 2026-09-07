@@ -521,6 +521,26 @@ describe('sqlite storage core and stores', () => {
     })
   })
 
+  it('updates partner name and avatar without resetting pin', async () => {
+    await partnerStore.setPartnerPinned('partner-1', true)
+    const pinned = await partnerStore.getPartner('partner-1')
+    await partnerStore.savePartner({
+      ...(pinned || createPartner()),
+      name: 'Renamed partner',
+      avatar_shape: 'pill',
+      avatar_color: 'orange'
+    })
+
+    const updated = await partnerStore.getPartner('partner-1')
+    expect(updated).toMatchObject({
+      id: 'partner-1',
+      name: 'Renamed partner',
+      avatar_shape: 'pill',
+      avatar_color: 'orange',
+      pinned: true
+    })
+  })
+
   it('returns the latest user input preview for each partner', async () => {
     await partnerStore.savePartner(createPartner('partner-2'))
     await aiRunStore.saveRun(

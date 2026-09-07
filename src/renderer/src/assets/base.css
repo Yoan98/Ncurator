@@ -564,28 +564,57 @@ textarea,
   @apply w-full rounded-[6px] text-left text-[#91918E] transition-colors duration-150 hover:bg-[#EFEFEE] hover:text-[#37352F];
 }
 
-.nc-partner-avatar {
-  overflow: visible;
+.nc-partner-avatar-stage {
+  position: relative;
   flex-shrink: 0;
+  overflow: visible;
+}
+
+.nc-partner-avatar-hop,
+.nc-partner-avatar-tilt {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.nc-partner-avatar-hop {
+  animation: none;
+}
+
+.nc-partner-avatar-tilt {
+  animation: none;
+}
+
+.nc-partner-avatar-animated .nc-partner-avatar-hop {
   animation: nc-partner-avatar-jump var(--nc-avatar-jump-duration, 6.2s) ease-in-out infinite;
   animation-delay: var(--nc-avatar-delay, 0s);
 }
 
-.nc-partner-avatar-turn,
-.nc-partner-avatar-body,
+.nc-partner-avatar-animated .nc-partner-avatar-tilt {
+  animation: nc-partner-avatar-idle 3.2s ease-in-out infinite;
+  animation-delay: var(--nc-avatar-delay, 0s);
+}
+
+.nc-partner-avatar-face {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.nc-partner-avatar-orbit,
 .nc-partner-avatar-eyes {
   transform-box: fill-box;
   transform-origin: center;
 }
 
-.nc-partner-avatar-turn {
-  animation: nc-partner-avatar-turn var(--nc-avatar-turn-duration, 8.8s) ease-in-out infinite;
-  animation-delay: var(--nc-avatar-turn-delay, 0.6s);
+.nc-partner-avatar-orbit {
+  animation: none;
 }
 
-.nc-partner-avatar-body {
-  animation: nc-partner-avatar-idle 3.2s ease-in-out infinite;
-  animation-delay: var(--nc-avatar-delay, 0s);
+.nc-partner-avatar-animated .nc-partner-avatar-orbit {
+  animation: nc-partner-avatar-eye-turn var(--nc-avatar-turn-duration, 8.8s) ease-in-out infinite;
+  animation-delay: var(--nc-avatar-turn-delay, 0.6s);
 }
 
 @keyframes nc-partner-avatar-idle {
@@ -594,10 +623,10 @@ textarea,
     transform: rotate(-2deg) scale(1, 1);
   }
   40% {
-    transform: rotate(2.4deg) scale(1.05, 0.96);
+    transform: rotate(2.4deg) scale(1.04, 0.97);
   }
   72% {
-    transform: rotate(-1.6deg) scale(0.97, 1.04);
+    transform: rotate(-1.6deg) scale(0.98, 1.03);
   }
 }
 
@@ -608,13 +637,13 @@ textarea,
     transform: translateY(0);
   }
   72% {
-    transform: translateY(3px) scale(1.1, 0.84);
+    transform: translateY(3px) scale(1.08, 0.88);
   }
   78% {
-    transform: translateY(-11px) scale(0.92, 1.1);
+    transform: translateY(-10px) scale(0.94, 1.08);
   }
   84% {
-    transform: translateY(1px) scale(1.08, 0.9);
+    transform: translateY(1px) scale(1.06, 0.92);
   }
   90% {
     transform: translateY(-3px) scale(0.98, 1.03);
@@ -624,33 +653,39 @@ textarea,
   }
 }
 
-@keyframes nc-partner-avatar-turn {
+@keyframes nc-partner-avatar-eye-turn {
   0%,
-  38%,
+  32%,
   100% {
-    transform: scaleX(1);
+    transform: translate(0, 0) scaleX(1);
+    opacity: 1;
+  }
+  40% {
+    transform: translate(13px, 0) scaleX(0.5);
+    opacity: 1;
   }
   44% {
-    transform: scaleX(0.12) rotate(-8deg);
+    transform: translate(17px, 0) scaleX(0.18);
+    opacity: 0;
   }
-  50% {
-    transform: scaleX(-1) rotate(4deg);
+  56% {
+    transform: translate(-17px, 0) scaleX(0.18);
+    opacity: 0;
   }
-  58% {
-    transform: scaleX(-1);
+  60% {
+    transform: translate(-13px, 0) scaleX(0.5);
+    opacity: 1;
   }
-  64% {
-    transform: scaleX(0.12) rotate(8deg);
-  }
-  70% {
-    transform: scaleX(1);
+  68% {
+    transform: translate(0, 0) scaleX(1);
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .nc-partner-avatar,
-  .nc-partner-avatar-turn,
-  .nc-partner-avatar-body {
+  .nc-partner-avatar-animated .nc-partner-avatar-hop,
+  .nc-partner-avatar-animated .nc-partner-avatar-tilt,
+  .nc-partner-avatar-animated .nc-partner-avatar-orbit {
     animation: none;
   }
 }

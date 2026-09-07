@@ -53,6 +53,8 @@ import type {
   PartnerListItem,
   PartnerCreateRequest,
   PartnerCreateResponse,
+  PartnerUpdateRequest,
+  PartnerUpdateResponse,
   PartnerClearContextRequest,
   PartnerClearContextResponse,
   PartnerSetPinnedRequest,
@@ -1757,10 +1759,31 @@ export function registerHandlers(services: {
           existingWorkspaces.map((workspace) => workspace.root_path)
         )
         if (classified.sameAsExisting) {
-          return { success: false, error: '该地址已存在' }
+          return {
+            success: false,
+            error: '该地址已存在',
+            conflict: { reason: 'exists', existingPaths: [classified.normalizedRootPath] }
+          }
         }
         if (classified.nestedUnderExisting) {
-          return { success: false, error: '不能添加已包含在现有地址内的路径' }
+          return {
+            success: false,
+            error: '不能添加已包含在现有地址内的路径',
+            conflict: {
+              reason: 'nested',
+              existingPaths: classified.nestedUnderExistingRootPaths
+            }
+          }
+        }
+        if (classified.containedExistingRootPaths.length > 0 && !payload.replaceContained) {
+          return {
+            success: false,
+            error: '该目录包含已添加的子目录',
+            conflict: {
+              reason: 'contains',
+              existingPaths: classified.containedExistingRootPaths
+            }
+          }
         }
         for (const workspace of existingWorkspaces) {
           if (
@@ -2811,6 +2834,31 @@ export function registerHandlers(services: {
         return { success: true, partner }
       } catch (e: unknown) {
         console.error('[PARTNER-CREATE] Error:', e)
+        return { success: false, error: getErrorMessage(e) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'partner-update',
+    async (_event, payload: PartnerUpdateRequest): Promise<PartnerUpdateResponse> => {
+      try {
+        const id = String(payload?.id || '').trim()
+        const name = String(payload?.name || '').trim()
+        if (!id) return { success: false, error: '伙伴不存在' }
+        if (!name) return { success: false, error: '请填写伙伴名称' }
+        const existing = await partnerStore.getPartner(id)
+        if (!existing) return { success: false, error: '伙伴不存在' }
+        const partner: Partner = {
+          ...existing,
+          name,
+          avatar_shape: payload.avatar_shape,
+          avatar_color: payload.avatar_color
+        }
+        await partnerStore.savePartner(partner)
+        return { success: true, partner }
+      } catch (e: unknown) {
+        console.error('[PARTNER-UPDATE] Error:', e)
         return { success: false, error: getErrorMessage(e) }
       }
     }

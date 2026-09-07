@@ -284,6 +284,7 @@ const api: DesktopApi = {
   // Chat & LLM
   partnerList: () => ipcRenderer.invoke('chat-session-list'),
   partnerCreate: (payload) => ipcRenderer.invoke('partner-create', payload),
+  partnerUpdate: (payload) => ipcRenderer.invoke('partner-update', payload),
   partnerSave: (partner) => ipcRenderer.invoke('chat-session-save', partner),
   partnerMarkViewed: (id: string) => ipcRenderer.invoke('chat-session-mark-viewed', id),
   partnerSetPinned: (payload) => ipcRenderer.invoke('chat-session-set-pinned', payload),

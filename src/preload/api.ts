@@ -38,6 +38,8 @@ import type {
   PartnerListItem,
   PartnerCreateRequest,
   PartnerCreateResponse,
+  PartnerUpdateRequest,
+  PartnerUpdateResponse,
   PartnerClearContextRequest,
   PartnerClearContextResponse,
   PartnerOpenRequest,
@@ -204,6 +206,7 @@ export type DesktopApi = {
   attachmentSaveFile: (payload: AttachmentSaveRequest) => Promise<AttachmentProcessResponse>
   partnerList: () => Promise<PartnerListItem[]>
   partnerCreate: (payload: PartnerCreateRequest) => Promise<PartnerCreateResponse>
+  partnerUpdate: (payload: PartnerUpdateRequest) => Promise<PartnerUpdateResponse>
   partnerSave: (partner: Partner) => Promise<{ success: boolean; error?: string }>
   partnerMarkViewed: (id: string) => Promise<{ success: boolean; error?: string }>
   partnerSetPinned: (

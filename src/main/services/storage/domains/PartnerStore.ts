@@ -23,6 +23,7 @@ type PartnerRow = {
 const AVATAR_SHAPES = new Set([
   'circle',
   'rounded_square',
+  'pill',
   'hexagon',
   'cloud',
   'teardrop'

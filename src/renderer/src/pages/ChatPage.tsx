@@ -214,6 +214,9 @@ const formatTimelineDayDate = (dayStart: number): string =>
     day: 'numeric'
   })
 
+const PARTNER_ROW_ACTION_CLASS =
+  'flex h-6 w-6 items-center justify-center rounded-[6px] text-[#91918E] transition hover:bg-white hover:text-[#37352F]'
+
 const clampWorkbenchSidebarWidth = (width: number): number =>
   Math.max(WORKBENCH_SIDEBAR_MIN_WIDTH, Math.min(WORKBENCH_SIDEBAR_MAX_WIDTH, width))
 
@@ -780,6 +783,7 @@ const ChatPage: React.FC = () => {
   const [deleteConfirmPartner, setDeleteConfirmPartner] = useState<Partner | null>(null)
   const [deletingPartnerIds, setDeletingPartnerIds] = useState<Set<string>>(() => new Set())
   const [createPartnerOpen, setCreatePartnerOpen] = useState(false)
+  const [editingPartnerId, setEditingPartnerId] = useState<string | null>(null)
   const [createPartnerName, setCreatePartnerName] = useState('')
   const [createPartnerShape, setCreatePartnerShape] = useState<PartnerAvatarShape>('circle')
   const [createPartnerColor, setCreatePartnerColor] = useState<PartnerAvatarColor>('blue')
@@ -3450,7 +3454,7 @@ const ChatPage: React.FC = () => {
     }
   }, [currentPartnerId, emitErrorMessage])
 
-  const submitCreatePartner = useCallback(async (): Promise<void> => {
+  const submitPartnerForm = useCallback(async (): Promise<void> => {
     const name = createPartnerName.trim()
     if (!name) {
       message.warning('请输入伙伴名称')
@@ -3459,6 +3463,23 @@ const ChatPage: React.FC = () => {
     if (createPartnerSubmitting) return
     setCreatePartnerSubmitting(true)
     try {
+      if (editingPartnerId) {
+        const response = await window.api.partnerUpdate({
+          id: editingPartnerId,
+          name,
+          avatar_shape: createPartnerShape,
+          avatar_color: createPartnerColor
+        })
+        if (!response.success || !response.partner) {
+          emitErrorMessage(response.error || '保存伙伴失败')
+          return
+        }
+        setCreatePartnerOpen(false)
+        setEditingPartnerId(null)
+        setCreatePartnerName('')
+        void loadPartners()
+        return
+      }
       const response = await window.api.partnerCreate({
         name,
         avatar_shape: createPartnerShape,
@@ -3473,7 +3494,13 @@ const ChatPage: React.FC = () => {
       await openExistingPartner(response.partner, { saveCurrentDraft: false })
       void loadPartners()
     } catch (error) {
-      emitErrorMessage(error instanceof Error ? error.message : '创建伙伴失败')
+      emitErrorMessage(
+        error instanceof Error
+          ? error.message
+          : editingPartnerId
+            ? '保存伙伴失败'
+            : '创建伙伴失败'
+      )
     } finally {
       setCreatePartnerSubmitting(false)
     }
@@ -3482,10 +3509,32 @@ const ChatPage: React.FC = () => {
     createPartnerName,
     createPartnerShape,
     createPartnerSubmitting,
+    editingPartnerId,
     emitErrorMessage,
     loadPartners,
     message
   ])
+
+  const openCreatePartnerModal = (): void => {
+    setScheduledTasksActive(false)
+    setEditingPartnerId(null)
+    setCreatePartnerName('')
+    setCreatePartnerShape('circle')
+    setCreatePartnerColor('blue')
+    setCreatePartnerOpen(true)
+  }
+
+  const openEditPartnerModal = (
+    event: React.MouseEvent<HTMLButtonElement>,
+    partner: PartnerListItem
+  ): void => {
+    event.stopPropagation()
+    setEditingPartnerId(partner.id)
+    setCreatePartnerName(partner.name)
+    setCreatePartnerShape(partner.avatar_shape)
+    setCreatePartnerColor(partner.avatar_color)
+    setCreatePartnerOpen(true)
+  }
 
   const setApprovalGuideMessage = (itemId: string, messageText: string): void => {
     setApprovalDraftDecisions((current) => ({
@@ -3914,14 +3963,6 @@ const ChatPage: React.FC = () => {
     [currentPartnerId, saveComposerDraftForPartner]
   )
 
-  const pinnedPartners = useMemo(
-    () => partners.filter((partner) => partner.pinned),
-    [partners]
-  )
-  const unpinnedPartners = useMemo(
-    () => partners.filter((partner) => !partner.pinned),
-    [partners]
-  )
   const grayRestoredMessageIds = useMemo(() => {
     if (!hoveredGrayMessageId) return new Set<string>()
     const index = currentMessages.findIndex((item) => item.id === hoveredGrayMessageId)
@@ -3991,44 +4032,59 @@ const ChatPage: React.FC = () => {
             size={40}
             title={partner.name}
             animationSeed={partner.id}
+            animated={partner.isRunning}
           />
           <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-2">
+            <div className="flex min-w-0 items-center gap-1">
               <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
                 {partner.name}
               </div>
-              <div className="flex h-4 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
+              <Tooltip title={partner.pinned ? '取消置顶' : '置顶'} placement="top">
+                <button
+                  type="button"
+                  className={`${PARTNER_ROW_ACTION_CLASS} ${
+                    partner.pinned ? 'flex' : 'hidden group-hover:flex'
+                  }`}
+                  data-testid={`${workbenchSelectors.partnerPinButtonPrefix}-${partner.id}`}
+                  aria-label={partner.pinned ? '取消置顶' : '置顶'}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => togglePartnerPinned(event, partner)}
+                >
+                  <PinIcon className="h-3.5 w-3.5" />
+                </button>
+              </Tooltip>
+              <Tooltip title="编辑" placement="top">
+                <button
+                  type="button"
+                  className={`${PARTNER_ROW_ACTION_CLASS} hidden group-hover:flex`}
+                  data-testid={`${workbenchSelectors.partnerEditButtonPrefix}-${partner.id}`}
+                  aria-label="编辑伙伴"
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => openEditPartnerModal(event, partner)}
+                >
+                  <HiOutlinePencilSquare className="h-3.5 w-3.5" />
+                </button>
+              </Tooltip>
+              <Tooltip title="删除" placement="top">
+                <button
+                  type="button"
+                  className={`${PARTNER_ROW_ACTION_CLASS} hidden group-hover:flex`}
+                  data-testid={`${workbenchSelectors.partnerDeleteButtonPrefix}-${partner.id}`}
+                  aria-label="删除伙伴"
+                  disabled={deletingPartnerIds.has(partner.id)}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => requestDeletePartner(event, partner)}
+                >
+                  <HiTrash className="h-3.5 w-3.5" />
+                </button>
+              </Tooltip>
+              <div className="flex h-6 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
                 {partner.isRunning ? (
                   <span className="nc-session-running-spinner" aria-label="任务运行中" />
                 ) : partner.hasUnreadCompletion ? (
                   <span className="nc-session-unread-dot" aria-label="任务已完成，未查看" />
                 ) : null}
                 <span>{formatRelativeTime(partner.lastActivityAt)}</span>
-              </div>
-              <div className="ml-1 hidden shrink-0 items-center gap-0.5 group-hover:flex">
-                <Tooltip title={partner.pinned ? '取消置顶' : '置顶'} placement="top">
-                  <button
-                    type="button"
-                    className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[#91918E] transition hover:bg-white hover:text-[#37352F]"
-                    data-testid={`${workbenchSelectors.partnerPinButtonPrefix}-${partner.id}`}
-                    aria-label={partner.pinned ? '取消置顶' : '置顶'}
-                    onMouseDown={(event) => event.stopPropagation()}
-                    onClick={(event) => togglePartnerPinned(event, partner)}
-                  >
-                    <PinIcon className="h-3.5 w-3.5" />
-                  </button>
-                </Tooltip>
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<HiTrash className="h-3.5 w-3.5" />}
-                  className="!h-6 !w-6 !rounded-[6px] !p-0"
-                  loading={deletingPartnerIds.has(partner.id)}
-                  disabled={deletingPartnerIds.has(partner.id)}
-                  data-testid={`${workbenchSelectors.partnerDeleteButtonPrefix}-${partner.id}`}
-                  onMouseDown={(event) => event.stopPropagation()}
-                  onClick={(event) => requestDeletePartner(event, partner)}
-                />
               </div>
             </div>
             <div className="mt-0.5 truncate text-[12px] leading-4 text-[#8A8781]">
@@ -4110,13 +4166,7 @@ const ChatPage: React.FC = () => {
           <button
             type="button"
             className="nc-sidebar-nav-row nc-sidebar-new-chat"
-            onClick={() => {
-              setScheduledTasksActive(false)
-              setCreatePartnerName('')
-              setCreatePartnerShape('circle')
-              setCreatePartnerColor('blue')
-              setCreatePartnerOpen(true)
-            }}
+            onClick={openCreatePartnerModal}
             data-testid={workbenchSelectors.newPartnerButton}
             aria-label="创建伙伴"
           >
@@ -4141,21 +4191,9 @@ const ChatPage: React.FC = () => {
           data-hydrated={partnersListHydrated ? 'true' : 'false'}
         >
           {partners.length === 0 ? null : (
-            <>
-              {pinnedPartners.length > 0 ? (
-                <div className="mb-2" data-testid={workbenchSelectors.pinnedPartnersSection}>
-                  <div className="px-3 pb-1 pt-2 text-[12px] font-medium text-[#8F8E8B]">
-                    已置顶
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    {pinnedPartners.map((partner) => renderPartnerRow(partner))}
-                  </div>
-                </div>
-              ) : null}
-              <div className="flex flex-col gap-1">
-                {unpinnedPartners.map((partner) => renderPartnerRow(partner))}
-              </div>
-            </>
+            <div className="flex flex-col gap-1">
+              {partners.map((partner) => renderPartnerRow(partner))}
+            </div>
           )}
         </div>
 
@@ -4741,14 +4779,15 @@ const ChatPage: React.FC = () => {
         </Modal>
         <Modal
           open={createPartnerOpen}
-          title="创建伙伴"
-          okText="创建"
+          title={editingPartnerId ? '编辑伙伴' : '创建伙伴'}
+          okText={editingPartnerId ? '保存' : '创建'}
           cancelText="取消"
           confirmLoading={createPartnerSubmitting}
-          onOk={() => void submitCreatePartner()}
+          onOk={() => void submitPartnerForm()}
           onCancel={() => {
             if (createPartnerSubmitting) return
             setCreatePartnerOpen(false)
+            setEditingPartnerId(null)
           }}
           data-testid={workbenchSelectors.createPartnerModal}
         >
@@ -4760,7 +4799,7 @@ const ChatPage: React.FC = () => {
                 onChange={(event) => setCreatePartnerName(event.target.value)}
                 placeholder="给伙伴起个名字"
                 maxLength={40}
-                onPressEnter={() => void submitCreatePartner()}
+                onPressEnter={() => void submitPartnerForm()}
                 data-testid={workbenchSelectors.createPartnerNameInput}
               />
             </div>
@@ -4771,6 +4810,7 @@ const ChatPage: React.FC = () => {
                 size={48}
                 title={createPartnerName || '伙伴预览'}
                 animationSeed={`preview-${createPartnerShape}-${createPartnerColor}`}
+                animated
               />
               <div className="text-[13px] text-[#787774]">头像预览</div>
             </div>
@@ -4792,6 +4832,7 @@ const ChatPage: React.FC = () => {
                       color={createPartnerColor}
                       size={28}
                       animationSeed={`picker-${shape}`}
+                      animated
                     />
                   </button>
                 ))}

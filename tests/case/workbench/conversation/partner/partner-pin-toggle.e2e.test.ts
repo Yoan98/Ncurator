@@ -19,7 +19,7 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['partner'],
-        description: '验证伙伴置顶与取消置顶，以及「已置顶」区域显隐。',
+        description: '验证伙伴置顶后排到最上方、图钉常驻，且没有「已置顶」分组文案。',
         fixtures: [],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -27,60 +27,78 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           await navigateToWorkbench(page, { waitForSessionListText: false })
-          const partner = await page.evaluate(async () => {
-            const response = await window.api.partnerCreate({
-              name: '置顶切换测试伙伴',
+          const partners = await page.evaluate(async () => {
+            const first = await window.api.partnerCreate({
+              name: '置顶伙伴 A',
               avatar_shape: 'circle',
               avatar_color: 'blue'
             })
-            if (!response.success || !response.partner) {
-              throw new Error(response.error || 'partnerCreate failed')
+            const second = await window.api.partnerCreate({
+              name: '置顶伙伴 B',
+              avatar_shape: 'circle',
+              avatar_color: 'green'
+            })
+            if (!first.success || !first.partner || !second.success || !second.partner) {
+              throw new Error(first.error || second.error || 'partnerCreate failed')
             }
-            return response.partner
+            return { first: first.partner, second: second.partner }
           })
           await page.reload()
           await navigateToWorkbench(page)
 
-          const partnerItem = getWorkbenchLocator(
+          const partnerA = getWorkbenchLocator(
             page,
-            `${workbenchSelectors.partnerItemPrefix}-${partner.id}`
+            `${workbenchSelectors.partnerItemPrefix}-${partners.first.id}`
           )
-          await partnerItem.waitFor({ state: 'visible' })
+          const partnerB = getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.partnerItemPrefix}-${partners.second.id}`
+          )
+          await partnerA.waitFor({ state: 'visible' })
+          await partnerB.waitFor({ state: 'visible' })
           const pinButton = getWorkbenchLocator(
             page,
-            `${workbenchSelectors.partnerPinButtonPrefix}-${partner.id}`
+            `${workbenchSelectors.partnerPinButtonPrefix}-${partners.first.id}`
           )
-          const pinnedSection = getWorkbenchLocator(page, workbenchSelectors.pinnedPartnersSection)
 
-          await partnerItem.hover()
+          await partnerA.hover()
           await pinButton.click({ force: true })
-          await pinnedSection.waitFor({ state: 'visible' })
-          const pinnedContainsPartner = await pinnedSection
-            .locator(`[data-testid="${workbenchSelectors.partnerItemPrefix}-${partner.id}"]`)
-            .isVisible()
+          await page.mouse.move(0, 0)
+          await pinButton.waitFor({ state: 'visible' })
 
-          await partnerItem.hover()
-          await pinButton.click({ force: true })
-          await page
-            .locator(`[data-testid="${workbenchSelectors.pinnedPartnersSection}"]`)
-            .waitFor({ state: 'detached', timeout: 10_000 })
-          const pinnedHiddenAfterUnpin = !(await pinnedSection.isVisible().catch(() => false))
-          const partnerVisibleAfterUnpin = await partnerItem.isVisible()
+          const list = getWorkbenchLocator(page, workbenchSelectors.partnersList)
+          const firstItemId = await list
+            .locator(`[data-testid^="${workbenchSelectors.partnerItemPrefix}-"]`)
+            .first()
+            .getAttribute('data-testid')
+          const pinnedHeadingVisible = await page.getByText('已置顶', { exact: true }).isVisible()
+          const pinVisibleWithoutHover = await pinButton.isVisible()
+
+          await pinButton.click()
+          await page.mouse.move(0, 0)
+          const partnerVisibleAfterUnpin = await partnerA.isVisible()
+          const pinHiddenAfterUnpin = !(await pinButton.isVisible().catch(() => false))
 
           return {
-            pinnedContainsPartner,
-            pinnedHiddenAfterUnpin,
-            partnerVisibleAfterUnpin
+            firstItemId,
+            expectedFirstTestId: `${workbenchSelectors.partnerItemPrefix}-${partners.first.id}`,
+            pinnedHeadingVisible,
+            pinVisibleWithoutHover,
+            partnerVisibleAfterUnpin,
+            pinHiddenAfterUnpin
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.pinnedContainsPartner &&
-              result.pinnedHiddenAfterUnpin &&
-              result.partnerVisibleAfterUnpin,
+            result.firstItemId === result.expectedFirstTestId &&
+              result.pinnedHeadingVisible === false &&
+              result.pinVisibleWithoutHover &&
+              result.partnerVisibleAfterUnpin &&
+              result.pinHiddenAfterUnpin,
             {
               name: 'workbench-partner-pin-toggle',
-              message: '置顶后应出现在「已置顶」；取消后该区域隐藏且伙伴仍可见。',
+              message:
+                '置顶后应排到最上方且图钉常驻，不出现「已置顶」文案；取消后伙伴仍可见且图钉不再常驻。',
               data: result
             }
           )
