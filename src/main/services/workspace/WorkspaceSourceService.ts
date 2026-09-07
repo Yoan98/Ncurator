@@ -17,11 +17,16 @@ const normalizeComparablePath = (value: string): string => {
   return process.platform === 'win32' ? withoutTrailing.toLowerCase() : withoutTrailing
 }
 
+const isSamePath = (leftPath: string, rightPath: string): boolean =>
+  normalizeComparablePath(leftPath) === normalizeComparablePath(rightPath)
+
+/** True when candidate is the same as target, or a path strictly inside target. */
 const isSameOrNestedPath = (candidatePath: string, targetPath: string): boolean => {
   const candidate = normalizeComparablePath(candidatePath)
   const target = normalizeComparablePath(targetPath)
   if (candidate === target) return true
-  return candidate.startsWith(`${target}${path.sep}`)
+  const relative = path.relative(target, candidate)
+  return relative !== '' && !relative.startsWith('..') && !path.isAbsolute(relative)
 }
 
 const toEntryId = (
@@ -161,14 +166,14 @@ export class WorkspaceSourceService {
       } catch {
         existingNormalized = path.resolve(existingRaw)
       }
-      if (normalizeComparablePath(normalizedRootPath) === normalizeComparablePath(existingNormalized)) {
+      if (isSamePath(normalizedRootPath, existingNormalized)) {
         sameAsExisting = true
         continue
       }
       if (isSameOrNestedPath(normalizedRootPath, existingNormalized)) {
-        nestedUnderExistingRootPaths.push(existingRaw)
+        nestedUnderExistingRootPaths.push(existingNormalized)
       } else if (isSameOrNestedPath(existingNormalized, normalizedRootPath)) {
-        containedExistingRootPaths.push(existingRaw)
+        containedExistingRootPaths.push(existingNormalized)
       }
     }
     return {

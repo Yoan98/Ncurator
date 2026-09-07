@@ -3,6 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
+import { queueE2ENativeDialogSelection } from '../../../../harness/e2e/electronApp'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
@@ -22,7 +23,7 @@ describe('settings workspace e2e', () => {
         domain: 'settings',
         suite: 'workspace',
         groups: ['core'],
-        description: '添加文件地址后，树顶层展示路径并可以展开查看子文件。',
+        description: '添加目录、子路径拒绝提示、父路径自动替换与扫描后可索引数刷新。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'exclusive',
@@ -30,51 +31,170 @@ describe('settings workspace e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const targetRootPath = await mkdtemp(
-            path.join(os.tmpdir(), 'settings-workspace-set-root-')
+          const parentRoot = await mkdtemp(path.join(os.tmpdir(), 'settings-workspace-set-root-'))
+          const childRoot = path.join(parentRoot, 'docs')
+          const grandParent = await mkdtemp(
+            path.join(os.tmpdir(), 'settings-workspace-set-root-grand-')
           )
+          const nestedUnderGrand = path.join(grandParent, 'inner')
+          await mkdir(childRoot, { recursive: true })
+          await mkdir(nestedUnderGrand, { recursive: true })
+          await writeFile(path.join(childRoot, 'brief.txt'), 'hello workspace', 'utf8')
           runtime.registerResource({
-            name: `settings-workspace:${targetRootPath}`,
+            name: `settings-workspace:${parentRoot}`,
             phase: 'after-app-close',
-            dispose: async () => await rm(targetRootPath, { recursive: true, force: true })
+            dispose: async () => {
+              await rm(parentRoot, { recursive: true, force: true })
+              await rm(grandParent, { recursive: true, force: true })
+            }
           })
-          const displayedRootPath = await realpath(targetRootPath)
-          await mkdir(path.join(targetRootPath, 'docs'), { recursive: true })
-          await writeFile(path.join(targetRootPath, 'docs', 'brief.txt'), 'hello workspace', 'utf8')
+
+          await navigateToSettingsSection(page, 'workspace')
+          await getSettingsLocator(page, importSelectors.workspaceEmptyState).waitFor({
+            state: 'visible'
+          })
 
           await runtime.step({
             name: 'add-root-path',
-            message: '添加真实目录作为文件地址，确认目录树展示子文件。',
+            message: '通过添加目录按钮加入真实父目录。',
             run: async () => {
-              await createWorkspaceThroughSettingsUi(page, targetRootPath)
+              await queueE2ENativeDialogSelection(page, {
+                kind: 'directory',
+                path: parentRoot
+              })
+              await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
+              await getSettingsLocator(page, importSelectors.workspaceTree)
+                .getByText(path.basename(parentRoot))
+                .first()
+                .waitFor({ state: 'visible' })
+            }
+          })
+
+          const nestedConflict = await runtime.step({
+            name: 'reject-nested-child',
+            message: '再添加已包含的子目录，应弹出目录已包含并拒绝入库。',
+            run: async () => {
+              const apiConflict = await page.evaluate(
+                async (rootPath) => await window.api.workspaceCreate({ rootPath }),
+                childRoot
+              )
+              await queueE2ENativeDialogSelection(page, {
+                kind: 'directory',
+                path: childRoot
+              })
+              await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
+              const title = page.locator('.ant-modal-confirm-title', { hasText: '目录已包含' })
+              await title.waitFor({ state: 'visible', timeout: 10_000 })
+              await getSettingsLocator(page, importSelectors.workspaceRootConflictNestedOk).click()
+              const list = await page.evaluate(async () => await window.api.workspaceList())
+              return {
+                dialogVisible: true,
+                apiConflict,
+                workspaceCount: list.items.length,
+                roots: list.items.map((item) => item.root_path)
+              }
+            }
+          })
+
+          const parentReplace = await runtime.step({
+            name: 'parent-replaces-child',
+            message: '先加子目录再加父目录，父目录应自动替换子根。',
+            run: async () => {
+              for (const item of (
+                await page.evaluate(async () => await window.api.workspaceList())
+              ).items) {
+                await page.evaluate(
+                  async (workspaceId) => await window.api.workspaceDelete(workspaceId),
+                  item.id
+                )
+              }
+              await createWorkspaceThroughSettingsUi(page, nestedUnderGrand)
+              const replaceResponse = await page.evaluate(
+                async (rootPath) => await window.api.workspaceCreate({ rootPath }),
+                grandParent
+              )
+              const list = await page.evaluate(async () => await window.api.workspaceList())
+              return {
+                replaceResponse,
+                workspaceCount: list.items.length,
+                roots: list.items.map((item) => item.root_path),
+                grandParentReal: await realpath(grandParent)
+              }
+            }
+          })
+
+          await runtime.step({
+            name: 'expand-tree',
+            message: '确认目录树可展开看到子文件。',
+            run: async () => {
+              for (const item of (
+                await page.evaluate(async () => await window.api.workspaceList())
+              ).items) {
+                await page.evaluate(
+                  async (workspaceId) => await window.api.workspaceDelete(workspaceId),
+                  item.id
+                )
+              }
+              await createWorkspaceThroughSettingsUi(page, parentRoot)
               await navigateToSettingsSection(page, 'workspace')
               const tree = getSettingsLocator(page, importSelectors.workspaceTree)
               const docsNode = tree.getByText('docs').first()
               await docsNode.waitFor({ state: 'visible' })
-              const briefBeforeExpand = await tree.getByText('brief.txt').count()
               await docsNode.click()
               await tree.getByText('brief.txt').waitFor({ state: 'visible' })
-              return { briefBeforeExpand }
             }
           })
 
           const treeText =
             (await getSettingsLocator(page, importSelectors.workspaceTree).textContent()) || ''
-          const rootPathAliases = [targetRootPath, displayedRootPath].map(normalizeVisibleText)
+          const displayedRootPath = await realpath(parentRoot)
+          const rootPathAliases = [parentRoot, displayedRootPath].map(normalizeVisibleText)
           const normalizedTreeText = normalizeVisibleText(treeText)
 
           return {
             treeText,
             rootPathVisible: rootPathAliases.some((alias) => normalizedTreeText.includes(alias)),
-            treeHasFixtureFile: treeText.includes('brief.txt')
+            treeHasFixtureFile: treeText.includes('brief.txt'),
+            nestedConflict,
+            parentReplace
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(result.rootPathVisible && result.treeHasFixtureFile, {
             name: 'added-root-path-shows-tree',
-            message: '添加文件地址后，树顶层应展示该路径，并能展开看到子文件，对齐 SET-WORKSPACE-002。',
-            data: result
+            message:
+              '添加文件地址后，树顶层应展示该路径，并能展开看到子文件，对齐 SET-WORKSPACE-006-AC1。',
+            data: {
+              treeText: result.treeText,
+              rootPathVisible: result.rootPathVisible,
+              treeHasFixtureFile: result.treeHasFixtureFile
+            }
           })
+          await runtime.assertThat(
+            result.nestedConflict.dialogVisible &&
+              result.nestedConflict.apiConflict.success === false &&
+              result.nestedConflict.apiConflict.conflict?.reason === 'nested' &&
+              result.nestedConflict.workspaceCount === 1,
+            {
+              name: 'nested-child-rejected-with-dialog',
+              message: '添加已包含子目录应弹窗拒绝且不入库，对齐 SET-WORKSPACE-006-AC5。',
+              data: result.nestedConflict
+            }
+          )
+          await runtime.assertThat(
+            result.parentReplace.replaceResponse.success === true &&
+              result.parentReplace.workspaceCount === 1 &&
+              result.parentReplace.roots.some(
+                (root) =>
+                  normalizeVisibleText(root) ===
+                  normalizeVisibleText(result.parentReplace.grandParentReal)
+              ),
+            {
+              name: 'parent-auto-replaces-child',
+              message: '添加父目录应自动替换已添加子根，对齐 SET-WORKSPACE-006-AC5。',
+              data: result.parentReplace
+            }
+          )
         }
       })
     },

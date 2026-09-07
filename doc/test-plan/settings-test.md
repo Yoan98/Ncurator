@@ -82,8 +82,8 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：文件 tab 可以直接添加目录作为工作地址，并立即刷新目录树；顶层节点就是各地址。
 - Why：文件地址已从“具名容器再绑目录”改为直接丢入路径。
-- How：进入无地址页面检查空态，再通过目录选择器添加一条真实目录；再尝试添加已包含的子路径，确认被拒绝；再添加父路径，确认替换子根。
-- Oracle：空态提示还没有文件地址，对齐 `SET-WORKSPACE-007-AC1`；成功添加后写入地址并刷新真实目录树，顶层即该地址，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-008-AC1`；包含关系拒绝与父路径替换对齐 `SET-WORKSPACE-006-AC5`。废弃的 `SET-WORKSPACE-002`（具名添加弹窗）、`SET-WORKSPACE-008-AC3`、`SET-WORKSPACE-006-AC3` 不测。添加后扫描进度（`SET-WORKSPACE-006-AC4`）不在本 case 强制断言。
+- How：进入无地址页面检查空态，再通过目录选择器添加一条真实目录；再尝试添加已包含的子路径，确认弹出「目录已包含」并拒绝；再验证父路径自动替换子根。包含关系判定另由 unit `workspace-root-containment-contract` 覆盖。
+- Oracle：空态提示还没有文件地址，对齐 `SET-WORKSPACE-007-AC1`；成功添加后写入地址并刷新真实目录树，顶层即该地址，对齐 `SET-WORKSPACE-006-AC1`、`SET-WORKSPACE-008-AC1`；添加子路径弹窗拒绝、添加父路径自动替换对齐 `SET-WORKSPACE-006-AC5`；添加后启动扫描且结束后可索引数更新，对齐 `SET-WORKSPACE-006-AC4`。废弃的 `SET-WORKSPACE-002`（具名添加弹窗）、`SET-WORKSPACE-008-AC3`、`SET-WORKSPACE-006-AC3` 不测。
 - Not：不验证不同操作系统的原生目录选择器样式，也不验证真实文件系统权限错误分支。Workbench 发送门禁不由本 case 承担。不再创建具名工作空间、不再校验空名称。`SET-WORKSPACE-007-AC2`（地址内无可显示文件的树空态）不在本 case 强制断言。
 
 #### `workspace-directory-lazy-load`
@@ -92,7 +92,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：目录树只读取各地址或被展开目录的直属子项，并以加载反馈承载读取过程。
 - Why：文件地址可能包含 `node_modules` 等超大目录；进入设置页不能递归枚举整个森林。
 - How：添加包含根目录文件、普通子目录、`node_modules` 和点开头文件/目录的真实临时目录；进入文件 tab 后验证顶层首层，展开普通子目录后验证其直属文件，再确认点开头项始终不可见。
-- Oracle：`node_modules` 在顶层可见但其内容不会在首次加载时出现；子目录展开前不读取其子项，展开时显示局部 loading；点开头文件或目录在任意层级均不显示；页面没有全部展开/折叠入口，对齐 `SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC4`、`SET-WORKSPACE-008-AC5`。
+- Oracle：`node_modules` 在顶层可见但其内容不会在首次加载时出现；子目录展开前不读取其子项，展开时显示局部 loading；点开头文件或目录在任意层级均不显示；页面没有全部展开/折叠入口，顶层地址行可单独折叠，对齐 `SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC4`、`SET-WORKSPACE-008-AC5`。
 - Not：不以该 case 衡量文件系统吞吐或索引模型性能；全量扫描进度由索引 job 用例覆盖。
 
 #### `workspace-remove-from-list`
@@ -115,7 +115,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 ### 3.3 `workspace / files`
 
-本回归范围新增目录刷新生命周期约束：索引 job 运行期间目录树 IPC 必须为 0；任务成功或失败终态后，目录树只允许刷新一次。测试同时确认旧目录节点不因刷新被清空或折叠，扫描无可计算总数时显示活动状态而不是静态 0%。左侧可索引数字对全部文件地址合计。向量模型未安装时「更新索引」禁用与说明（`SET-WORKSPACE-004-AC6`）标为手动 / 暂缓，不进日常自动化。
+本回归范围新增目录刷新生命周期约束：索引 job 运行期间目录树 IPC 必须为 0；任务成功或失败终态后，目录树只允许刷新一次。测试同时确认旧目录节点不因刷新被清空或折叠，扫描无可计算总数时显示活动状态而不是静态 0%。左侧可索引数字对全部文件地址合计。向量模型未安装时「更新索引」禁用与说明（`SET-WORKSPACE-004-AC6`）标为手动 / 暂缓，不进日常自动化。无文件地址时「检查更新」禁用、可索引为 0 时「更新索引」禁用（`SET-WORKSPACE-004-AC10`）与网页侧同构规则（`SET-WEB-003-AC5`、`SET-WEB-004-AC9`）当前以产品验收为准，暂不单独立自动化 case。
 
 #### `workspace-scan-progress-refresh`
 

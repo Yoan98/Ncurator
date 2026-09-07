@@ -1,5 +1,5 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Empty, Modal, Popover, Tabs, Tooltip, message } from 'antd'
+import { App as AntdApp, Button, Empty, Modal, Popover, Tabs, Tooltip, message } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import type {
   WorkspaceIndexJobRecord,
@@ -34,6 +34,7 @@ const getRootDisplayName = (workspace: WorkspaceListItem): string =>
 
 const WorkspaceSettingsPanel: React.FC = () => {
   const navigate = useNavigate()
+  const { modal } = AntdApp.useApp()
   const [workspaces, setWorkspaces] = useState<WorkspaceListItem[]>([])
   const [workspaceDirectories, setWorkspaceDirectories] = useState<WorkspaceDirectoryMap>({})
   const [workspaceDirectoryLoading, setWorkspaceDirectoryLoading] =
@@ -44,6 +45,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
     Record<string, NonNullable<WorkspaceDirectoryListResponse['summary']>>
   >({})
   const [workspaceExpandedKeys, setWorkspaceExpandedKeys] = useState<Record<string, string[]>>({})
+  const [collapsedRootIds, setCollapsedRootIds] = useState<string[]>([])
   const [workspaceIndexJobs, setWorkspaceIndexJobs] = useState<WorkspaceJobMap>({})
   const [workspaceLoading, setWorkspaceLoading] = useState(false)
   const [workspaceDirectoryReloadVersion, setWorkspaceDirectoryReloadVersion] = useState(0)
@@ -119,6 +121,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       setWorkspaceDirectoryErrors({})
       setWorkspaceTreeSummaries({})
       setWorkspaceExpandedKeys({})
+      setCollapsedRootIds([])
       setWorkspaceDirectoryReloadVersion((value) => value + 1)
     } catch (error) {
       console.error(error)
@@ -320,18 +323,32 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const formatQuotedPaths = (paths: string[]): string =>
     paths.map((item) => `「${item}」`).join('、')
 
-  const confirmReplaceContained = (existingPaths: string[]): Promise<boolean> =>
-    new Promise((resolve) => {
-      Modal.confirm({
-        title: '将替换已添加的子目录',
-        content: `所选目录包含已添加的 ${formatQuotedPaths(existingPaths)}。添加后会用这个更大的目录替换它们，是否继续？`,
-        okText: '添加并替换',
-        cancelText: '取消',
+  const showRootConflictModal = (input: {
+    title: string
+    content: string
+    testId: string
+  }): void => {
+    // Native directory dialog steals focus; defer so the confirm modal actually appears.
+    window.setTimeout(() => {
+      modal.warning({
+        title: input.title,
+        content: input.content,
+        okText: '知道了',
         centered: true,
-        onOk: () => resolve(true),
-        onCancel: () => resolve(false)
+        okButtonProps: {
+          'data-testid': input.testId
+        }
       })
-    })
+    }, 50)
+  }
+
+  const toggleRootCollapsed = (workspaceId: string): void => {
+    setCollapsedRootIds((previous) =>
+      previous.includes(workspaceId)
+        ? previous.filter((id) => id !== workspaceId)
+        : [...previous, workspaceId]
+    )
+  }
 
   const handleAddRoot = async (): Promise<void> => {
     const selection = await window.api.pickDirectory()
@@ -341,42 +358,29 @@ const WorkspaceSettingsPanel: React.FC = () => {
     }
     if (selection.canceled || !selection.path) return
     const rootPath = selection.path.trim()
-
-    const submit = async (replaceContained: boolean): Promise<void> => {
-      const response = await window.api.workspaceCreate({ rootPath, replaceContained })
-      if (response.conflict?.reason === 'exists') {
-        Modal.warning({
-          title: '目录已添加',
-          content: '这个目录已经在文件地址里了，不用重复添加。',
-          okText: '知道了',
-          centered: true
-        })
-        return
-      }
-      if (response.conflict?.reason === 'nested') {
-        Modal.warning({
-          title: '目录已包含',
-          content: `所选目录已经包含在 ${formatQuotedPaths(response.conflict.existingPaths)} 内，不用重复添加。`,
-          okText: '知道了',
-          centered: true
-        })
-        return
-      }
-      if (response.conflict?.reason === 'contains') {
-        const confirmed = await confirmReplaceContained(response.conflict.existingPaths)
-        if (!confirmed) return
-        await submit(true)
-        return
-      }
-      if (!response.success || !response.workspace) {
-        message.error(normalizeUserFacingError(response.error, '添加地址失败'))
-        return
-      }
-      message.success('目录已添加')
-      await loadWorkspaces()
+    const response = await window.api.workspaceCreate({ rootPath })
+    if (response.conflict?.reason === 'exists') {
+      showRootConflictModal({
+        title: '目录已添加',
+        content: '这个目录已经在文件地址里了，不用重复添加。',
+        testId: importSelectors.workspaceRootConflictExistsOk
+      })
+      return
     }
-
-    await submit(false)
+    if (response.conflict?.reason === 'nested') {
+      showRootConflictModal({
+        title: '目录已包含',
+        content: `所选目录已经包含在 ${formatQuotedPaths(response.conflict.existingPaths)} 内，不用重复添加。`,
+        testId: importSelectors.workspaceRootConflictNestedOk
+      })
+      return
+    }
+    if (!response.success || !response.workspace) {
+      message.error(normalizeUserFacingError(response.error, '添加地址失败'))
+      return
+    }
+    message.success('目录已添加')
+    await loadWorkspaces()
   }
 
   const handleWorkspaceScanAll = async (): Promise<void> => {
@@ -614,43 +618,66 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               className="workspace-file-tree w-full"
                               data-testid={importSelectors.workspaceList}
                             >
-                              {workspaces.map((workspace) => (
-                                <div
-                                  key={workspace.id}
-                                  data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}
-                                >
-                                  <div className="group flex min-h-8 w-full items-center gap-2 rounded-[4px] px-2 text-[13px] text-[#37352F] hover:bg-[#F4F4F2]">
-                                    {workspace.root_kind === 'file' ? (
-                                      <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
-                                    ) : (
-                                      <HiFolder className="h-4 w-4 shrink-0 text-[#787774]" />
-                                    )}
-                                    <div className="min-w-0 flex-1">
-                                      <div className="truncate font-medium">
-                                        {getRootDisplayName(workspace)}
-                                      </div>
-                                      <div className="truncate text-[11px] text-[#91918E]">
-                                        {workspace.root_path}
-                                      </div>
+                              {workspaces.map((workspace) => {
+                                const isRootCollapsed = collapsedRootIds.includes(workspace.id)
+                                const isDirectoryRoot = workspace.root_kind !== 'file'
+                                return (
+                                  <div
+                                    key={workspace.id}
+                                    data-testid={`${importSelectors.workspaceCardPrefix}-${workspace.id}`}
+                                  >
+                                    <div className="group flex min-h-8 w-full items-center gap-2 rounded-[4px] px-2 text-[13px] text-[#37352F] hover:bg-[#F4F4F2]">
+                                      <button
+                                        type="button"
+                                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                                        onClick={() =>
+                                          isDirectoryRoot
+                                            ? toggleRootCollapsed(workspace.id)
+                                            : undefined
+                                        }
+                                      >
+                                        <span className="flex h-4 w-4 shrink-0 items-center justify-center text-[#91918E]">
+                                          {isDirectoryRoot ? (
+                                            isRootCollapsed ? (
+                                              <HiChevronRight />
+                                            ) : (
+                                              <HiChevronDown />
+                                            )
+                                          ) : null}
+                                        </span>
+                                        {isDirectoryRoot ? (
+                                          <HiFolder className="h-4 w-4 shrink-0 text-[#787774]" />
+                                        ) : (
+                                          <HiDocumentText className="h-4 w-4 shrink-0 text-[#91918E]" />
+                                        )}
+                                        <div className="min-w-0 flex-1">
+                                          <div className="truncate font-medium">
+                                            {getRootDisplayName(workspace)}
+                                          </div>
+                                          <div className="truncate text-[11px] text-[#91918E]">
+                                            {workspace.root_path}
+                                          </div>
+                                        </div>
+                                      </button>
+                                      <Tooltip title="移除">
+                                        <Button
+                                          danger
+                                          type="text"
+                                          size="small"
+                                          icon={<HiOutlineTrash className="h-4 w-4" />}
+                                          className="!h-6 !w-6 !p-0 opacity-0 group-hover:opacity-100"
+                                          aria-label={`移除 ${getRootDisplayName(workspace)}`}
+                                          onClick={() => setDeleteWorkspaceId(workspace.id)}
+                                          data-testid={importSelectors.workspaceRemoveButton}
+                                        />
+                                      </Tooltip>
                                     </div>
-                                    <Tooltip title="移除">
-                                      <Button
-                                        danger
-                                        type="text"
-                                        size="small"
-                                        icon={<HiOutlineTrash className="h-4 w-4" />}
-                                        className="!h-6 !w-6 !p-0 opacity-0 group-hover:opacity-100"
-                                        aria-label={`移除 ${getRootDisplayName(workspace)}`}
-                                        onClick={() => setDeleteWorkspaceId(workspace.id)}
-                                        data-testid={importSelectors.workspaceRemoveButton}
-                                      />
-                                    </Tooltip>
+                                    {isDirectoryRoot && !isRootCollapsed
+                                      ? renderWorkspaceEntries(workspace.id, '', 1)
+                                      : null}
                                   </div>
-                                  {workspace.root_kind === 'directory'
-                                    ? renderWorkspaceEntries(workspace.id, '', 1)
-                                    : null}
-                                </div>
-                              ))}
+                                )
+                              })}
                             </div>
                           )}
                         </div>

@@ -1775,21 +1775,15 @@ export function registerHandlers(services: {
             }
           }
         }
-        if (classified.containedExistingRootPaths.length > 0 && !payload.replaceContained) {
-          return {
-            success: false,
-            error: '该目录包含已添加的子目录',
-            conflict: {
-              reason: 'contains',
-              existingPaths: classified.containedExistingRootPaths
-            }
-          }
-        }
         for (const workspace of existingWorkspaces) {
           if (
-            classified.containedExistingRootPaths.some(
-              (contained) => path.resolve(contained) === path.resolve(workspace.root_path)
-            )
+            classified.containedExistingRootPaths.some((contained) => {
+              const left = path.resolve(contained)
+              const right = path.resolve(workspace.root_path)
+              return process.platform === 'win32'
+                ? left.toLowerCase() === right.toLowerCase()
+                : left === right
+            })
           ) {
             await workspaceStore.deleteWorkspace(workspace.id)
           }
@@ -1803,6 +1797,20 @@ export function registerHandlers(services: {
           updated_at: now
         }
         await workspaceStore.saveWorkspace(workspace)
+        const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')
+        const job = await saveAndEmitWorkspaceIndexJob(
+          createWorkspaceIndexJob({
+            workspaceId,
+            sourceKind: 'file',
+            action: 'scan',
+            phase: 'scan',
+            stepIndex: 1,
+            stepTotal: 2,
+            message: '正在扫描目录：已扫描 0 项，发现 0 个可索引文件'
+          })
+        )
+        activeWorkspaceIndexJobs.add(jobKey)
+        void runFileScanJob({ sender: event.sender, job })
         emitSourceListRefresh(event.sender)
         return {
           success: true,

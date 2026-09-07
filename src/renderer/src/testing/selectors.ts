@@ -27,6 +27,8 @@ export const chatSelectors = {
 export const importSelectors = {
   page: 'import-page',
   createWorkspaceButton: 'import-create-workspace-button',
+  workspaceRootConflictExistsOk: 'import-workspace-root-conflict-exists-ok',
+  workspaceRootConflictNestedOk: 'import-workspace-root-conflict-nested-ok',
   workspaceList: 'import-workspace-list',
   workspaceCardPrefix: 'import-workspace-card',
   workspaceDetail: 'import-workspace-detail',

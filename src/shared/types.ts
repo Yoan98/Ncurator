@@ -301,7 +301,6 @@ export interface WebSourceListResponse {
 
 export interface CreateWorkspaceSourceRequest {
   rootPath: string
-  replaceContained?: boolean
 }
 
 export type WorkspaceRootConflictReason = 'exists' | 'nested' | 'contains'
