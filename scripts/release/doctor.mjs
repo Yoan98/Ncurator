@@ -3,6 +3,7 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
 import { inspectLocalWindowsRelease } from './shared/windows.mjs'
+import { createAwsCliRuntime } from './storage/client.mjs'
 import { resolveReleaseStorageConfig } from './storage/config.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -24,19 +25,21 @@ if (!inspection.ready) {
   process.stdout.write('- AWS CLI: ready\n')
 
   const storage = resolveReleaseStorageConfig()
+  const runtime = await createAwsCliRuntime(storage)
   await execFileAsync(
     inspection.awsExecutable,
     [
       's3api',
-      'head-bucket',
+      'list-objects-v2',
       '--bucket',
       storage.bucket,
-      '--endpoint-url',
-      storage.endpoint,
-      '--region',
-      storage.region
+      '--max-keys',
+      '1',
+      '--output',
+      'json',
+      ...runtime.extraArgs
     ],
-    { env: { ...process.env, ...storage.credentials }, maxBuffer: 10 * 1024 * 1024 }
+    { env: runtime.env, maxBuffer: 10 * 1024 * 1024 }
   ).catch((error) => {
     throw new Error(
       `${storage.label} access check failed: ${String(error?.stderr || error?.message || error)}`

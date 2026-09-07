@@ -14,6 +14,7 @@ describe('release storage config', () => {
     expect(config.target).toBe('cos')
     expect(config.bucket).toBe('ncurator-1324873382')
     expect(config.endpoint).toBe('https://cos.ap-guangzhou.myqcloud.com')
+    expect(config.addressingStyle).toBe('virtual')
     expect(config.publicBaseUrl).toBe('https://download.guanzhangai.cn')
   })
 
@@ -29,6 +30,7 @@ describe('release storage config', () => {
 
     expect(config.target).toBe('r2')
     expect(config.endpoint).toBe('https://account.r2.cloudflarestorage.com')
+    expect(config.addressingStyle).toBe('path')
   })
 
   it('blocks every real publish unless the explicit confirmation is present', () => {

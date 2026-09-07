@@ -39,6 +39,7 @@ export const resolveReleaseStorageConfig = (environment = process.env) => {
       bucket: normalizedBucket(String(environment.COS_BUCKET || 'ncurator-1324873382').trim()),
       region,
       endpoint: `https://cos.${region}.myqcloud.com`,
+      addressingStyle: 'virtual',
       publicBaseUrl,
       credentials: {
         AWS_ACCESS_KEY_ID: requiredOneOf(environment, ['SecretId', 'TENCENT_SECRET_ID']),
@@ -59,6 +60,7 @@ export const resolveReleaseStorageConfig = (environment = process.env) => {
       bucket: normalizedBucket(required(environment, 'R2_BUCKET_NAME')),
       region: 'auto',
       endpoint: `https://${required(environment, 'R2_ACCOUNT_ID')}.r2.cloudflarestorage.com`,
+      addressingStyle: 'path',
       publicBaseUrl,
       credentials: {
         AWS_ACCESS_KEY_ID: required(environment, 'R2_ACCESS_KEY_ID'),

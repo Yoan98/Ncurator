@@ -223,7 +223,9 @@ R2_BUCKET_NAME
 R2_PUBLIC_BASE_URL=https://download.ncurator.com
 ```
 
-腾讯云侧固定配置：COS 桶为 `ncurator-1324873382`、地域为广州；`download.guanzhangai.cn` 在备案通过后接入腾讯云 CDN，CDN 回源该私有桶。发布子用户使用 [最小 COS 权限模板](../scripts/release/cos/cam-policy.json)，不授予账号管理、域名、DNS 或其他桶权限。CDN 刷新权限后续单独配置，不混入上传密钥。
+腾讯云侧固定配置：COS 桶为 `ncurator-1324873382`、地域为广州；`download.guanzhangai.cn` 经腾讯云 CDN（加速类型「下载大文件」、中国境内）回源该私有桶。DNSPod 上 `download` 的 CNAME 指向 `download.guanzhangai.cn.cdn.dnsv1.com`。节点缓存默认 30 天，`/updates/latest`、`/releases/latest`、`/downloads/latest` 不缓存。AWS CLI 访问 COS 必须使用虚拟主机风格，不能用 path-style。发布子用户使用 [最小 COS 权限模板](../scripts/release/cos/cam-policy.json)，不授予账号管理、域名、DNS 或其他桶权限。CDN 刷新权限后续单独配置，不混入上传密钥。
+
+过渡发版：已安装客户端仍从 `download.ncurator.com` 检查更新。第一次切到国内通道的版本必须把同一份候选包先上传 R2（`RELEASE_STORAGE_TARGET=r2` 调用 `upload-fragment` / `finalize-*`），再走默认 COS 的 `--publish-only`。之后默认只发 COS；海外才显式切回 R2。
 
 官网与桌面端的国内地址固定为：
 

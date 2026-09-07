@@ -199,6 +199,8 @@ export const verifyPublicReleaseFragment = async (
 export const verifyReleaseStorageFragment = async (fragment, awsExecutable) => {
   const config = resolveReleaseStorageConfig()
   if (!awsExecutable) throw new Error(`${config.label} verification configuration is incomplete`)
+  const { createAwsCliRuntime } = await import('../storage/client.mjs')
+  const runtime = await createAwsCliRuntime(config)
   for (const file of fragment.files) {
     const key = artifactKey(fragment, file.storageName)
     const result = await commandResult(
@@ -212,12 +214,9 @@ export const verifyReleaseStorageFragment = async (fragment, awsExecutable) => {
         key,
         '--output',
         'json',
-        '--endpoint-url',
-        config.endpoint,
-        '--region',
-        config.region
+        ...runtime.extraArgs
       ],
-      { env: { ...process.env, ...config.credentials } }
+      { env: runtime.env }
     )
     if (!result.ok) throw new Error(`${config.label} release asset lookup failed: ${key}`)
     const remote = JSON.parse(result.stdout)
