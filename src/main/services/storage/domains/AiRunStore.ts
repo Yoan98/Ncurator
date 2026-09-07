@@ -17,6 +17,7 @@ import {
   toRequiredNumber,
   toRequiredString
 } from '../sqlite/sqliteUtils'
+import { clipPartnerListPreview } from '../../../../shared/workbench/conversationProjection'
 
 type AiRunRow = {
   id?: unknown
@@ -226,6 +227,35 @@ export class AiRunStore {
       .prepare(`SELECT * FROM ai_run WHERE ${where} ORDER BY created_at ASC`)
       .all(params) as AiRunRow[]
     return rows.map(toRunRecord)
+  }
+
+  public async listLatestUserInputs(): Promise<
+    Map<string, { preview: string | null; createdAt: number }>
+  > {
+    const rows = this.sqlite
+      .prepare(
+        `
+        SELECT partner_id, input, created_at
+        FROM (
+          SELECT
+            partner_id,
+            input,
+            created_at,
+            ROW_NUMBER() OVER (PARTITION BY partner_id ORDER BY created_at DESC, rowid DESC) AS rn
+          FROM ai_run
+        )
+        WHERE rn = 1
+      `
+      )
+      .all() as Array<{ partner_id?: unknown; input?: unknown; created_at?: unknown }>
+    const latest = new Map<string, { preview: string | null; createdAt: number }>()
+    for (const row of rows) {
+      latest.set(toRequiredString(row.partner_id), {
+        preview: clipPartnerListPreview(toRequiredString(row.input)),
+        createdAt: toRequiredNumber(row.created_at)
+      })
+    }
+    return latest
   }
 
   public async listPartnerIdsByRunStatuses(statuses: AiRunStatus[]): Promise<string[]> {

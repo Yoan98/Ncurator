@@ -488,11 +488,10 @@ export const navigateToWorkbench = async (
       name: 'workbench partner list ready',
       timeoutMs: WORKBENCH_E2E_TIMEOUT_MS,
       check: async () => {
-        const partnerListText =
-          (await getWorkbenchLocator(page, workbenchSelectors.partnersList)
-            .textContent()
-            .catch(() => '')) || ''
-        return partnerListText.trim().length > 0
+        const hydrated = await getWorkbenchLocator(page, workbenchSelectors.partnersList)
+          .getAttribute('data-hydrated')
+          .catch(() => null)
+        return hydrated === 'true'
       }
     })
   }

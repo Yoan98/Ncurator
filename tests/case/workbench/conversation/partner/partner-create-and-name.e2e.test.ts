@@ -63,6 +63,7 @@ describe('workbench conversation e2e', () => {
           await waitForVisiblePartnerRow(page, PARTNER_NAME)
           await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
           await selectWorkbenchModel(page, setup.env.modelName)
+          const afterCreateListText = await readPartnerListText(page)
 
           const createdPartner = await page.evaluate(async (name) => {
             const partners = await window.api.partnerList()
@@ -98,6 +99,7 @@ describe('workbench conversation e2e', () => {
             emptyHintVisible,
             autoCreatedPartnerCount,
             createdPartner,
+            afterCreateListText,
             afterFirstListText,
             afterSecondListText,
             firstTitlePrefix: FIRST_PROMPT.slice(0, 20),
@@ -109,21 +111,25 @@ describe('workbench conversation e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.emptyHintVisible &&
-              result.emptyListText.includes('还没有伙伴') &&
+              !result.emptyListText.includes('还没有伙伴') &&
               result.autoCreatedPartnerCount === 0 &&
               result.createdPartner?.name === PARTNER_NAME &&
               result.createdPartner.avatar_shape === 'hexagon' &&
               result.createdPartner.avatar_color === 'teal' &&
+              result.afterCreateListText.includes(PARTNER_NAME) &&
+              result.afterCreateListText.includes('做点啥呢？') &&
               result.afterFirstListText.includes(PARTNER_NAME) &&
+              result.afterFirstListText.includes(result.firstTitlePrefix) &&
+              !result.afterFirstListText.includes('做点啥呢？') &&
               result.afterSecondListText.includes(PARTNER_NAME) &&
+              result.afterSecondListText.includes(result.secondTitlePrefix) &&
               !result.afterSecondListText.includes(result.firstTitlePrefix) &&
-              !result.afterSecondListText.includes(result.secondTitlePrefix) &&
               result.firstFinalAnswer.trim().length > 0 &&
               result.secondFinalAnswer.trim().length > 0,
             {
               name: 'workbench-partner-create-and-name',
               message:
-                '无伙伴时应展示空态；通过创建弹窗指定名称和形象后，侧栏标题保持为该名称，发消息不得改名。',
+                '无伙伴时侧栏不展示空态文案、主区为空态；通过创建弹窗指定名称和形象后，侧栏标题保持为该名称，无消息时副文案为「做点啥呢？」，发送后更新为最新用户语句，发消息不得改名。',
               data: result
             }
           )

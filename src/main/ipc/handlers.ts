@@ -2763,18 +2763,25 @@ export function registerHandlers(services: {
 
   ipcMain.handle('chat-session-list', async (): Promise<PartnerListItem[]> => {
     try {
-      const [partners, activePartnerIds, unreadCompletedPartnerIds] = await Promise.all([
-        partnerStore.listPartners(),
-        aiRunStore.listPartnerIdsByRunStatuses(['running', 'waiting_approval']),
-        partnerStore.listUnreadCompletedPartnerIds()
-      ])
+      const [partners, activePartnerIds, unreadCompletedPartnerIds, latestUserInputs] =
+        await Promise.all([
+          partnerStore.listPartners(),
+          aiRunStore.listPartnerIdsByRunStatuses(['running', 'waiting_approval']),
+          partnerStore.listUnreadCompletedPartnerIds(),
+          aiRunStore.listLatestUserInputs()
+        ])
       const activePartnerIdSet = new Set(activePartnerIds)
       const unreadCompletedPartnerIdSet = new Set(unreadCompletedPartnerIds)
-      return partners.map((partner) => ({
-        ...partner,
-        isRunning: activePartnerIdSet.has(partner.id),
-        hasUnreadCompletion: unreadCompletedPartnerIdSet.has(partner.id)
-      }))
+      return partners.map((partner) => {
+        const latest = latestUserInputs.get(partner.id)
+        return {
+          ...partner,
+          isRunning: activePartnerIdSet.has(partner.id),
+          hasUnreadCompletion: unreadCompletedPartnerIdSet.has(partner.id),
+          lastUserMessagePreview: latest?.preview ?? null,
+          lastActivityAt: latest?.createdAt ?? partner.created_at
+        }
+      })
     } catch (e: unknown) {
       console.error('[CHAT-SESSION-LIST] Error:', e)
       return []

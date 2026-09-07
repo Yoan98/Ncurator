@@ -94,10 +94,12 @@ import {
   completeAssistantProcessGroups,
   dedupeFileRefs,
   extractReadableFilesFromToolOutput,
+  formatRelativeTime,
   getAttachmentTypeLabel,
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts
 } from '../components/workbench/utils'
+import { clipPartnerListPreview, PARTNER_LIST_EMPTY_PREVIEW } from '../../../shared/workbench/conversationProjection'
 import { projectApprovalReviews, projectProcessGroups } from '../components/workbench/messageLogProjection'
 import {
   groupApplyTargetsByRunId,
@@ -769,6 +771,7 @@ const ChatPage: React.FC = () => {
   const { message } = AntdApp.useApp()
   const navigate = useNavigate()
   const [partners, setPartners] = useState<PartnerListItem[]>([])
+  const [partnersListHydrated, setPartnersListHydrated] = useState(false)
   const [currentPartnerId, setCurrentPartnerId] = useState<string | null>(null)
   const [currentMessages, setCurrentMessages] = useState<ChatMessage[]>([])
   const [switchingPartnerId, setSwitchingPartnerId] = useState<string | null>(null)
@@ -1767,6 +1770,8 @@ const ChatPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to load partners', error)
       return []
+    } finally {
+      setPartnersListHydrated(true)
     }
   }, [])
 
@@ -3337,6 +3342,17 @@ const ChatPage: React.FC = () => {
     setApprovalSubmitting(false)
     setClearContextVisible(false)
     lastSubmittedInputRef.current = userQuery
+    setPartners((items) =>
+      items.map((item) =>
+        item.id === submitPartnerId
+          ? {
+              ...item,
+              lastUserMessagePreview: clipPartnerListPreview(userQuery),
+              lastActivityAt: optimisticUserMessage.timestamp
+            }
+          : item
+      )
+    )
     setCurrentMessages((previous) =>
       appendMessagesDedupe(previous, [optimisticUserMessage, optimisticAssistantMessage])
     )
@@ -3968,47 +3984,56 @@ const ChatPage: React.FC = () => {
           }
         }}
       >
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 items-start gap-2.5">
           <PartnerAvatar
             shape={partner.avatar_shape}
             color={partner.avatar_color}
-            size={28}
+            size={40}
             title={partner.name}
+            animationSeed={partner.id}
           />
-          <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
-            {partner.name}
-          </div>
-          <div className="flex h-4 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
-            {partner.isRunning ? (
-              <span className="nc-session-running-spinner" aria-label="任务运行中" />
-            ) : partner.hasUnreadCompletion ? (
-              <span className="nc-session-unread-dot" aria-label="任务已完成，未查看" />
-            ) : null}
-          </div>
-          <div className="ml-1 hidden shrink-0 items-center gap-0.5 group-hover:flex">
-            <Tooltip title={partner.pinned ? '取消置顶' : '置顶'} placement="top">
-              <button
-                type="button"
-                className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[#91918E] transition hover:bg-white hover:text-[#37352F]"
-                data-testid={`${workbenchSelectors.partnerPinButtonPrefix}-${partner.id}`}
-                aria-label={partner.pinned ? '取消置顶' : '置顶'}
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={(event) => togglePartnerPinned(event, partner)}
-              >
-                <PinIcon className="h-3.5 w-3.5" />
-              </button>
-            </Tooltip>
-            <Button
-              type="text"
-              size="small"
-              icon={<HiTrash className="h-3.5 w-3.5" />}
-              className="!h-6 !w-6 !rounded-[6px] !p-0"
-              loading={deletingPartnerIds.has(partner.id)}
-              disabled={deletingPartnerIds.has(partner.id)}
-              data-testid={`${workbenchSelectors.partnerDeleteButtonPrefix}-${partner.id}`}
-              onMouseDown={(event) => event.stopPropagation()}
-              onClick={(event) => requestDeletePartner(event, partner)}
-            />
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <div className="min-w-0 flex-1 truncate text-[13px] font-medium text-[#37352F]">
+                {partner.name}
+              </div>
+              <div className="flex h-4 shrink-0 items-center gap-1 text-[11px] text-[#91918E] group-hover:hidden">
+                {partner.isRunning ? (
+                  <span className="nc-session-running-spinner" aria-label="任务运行中" />
+                ) : partner.hasUnreadCompletion ? (
+                  <span className="nc-session-unread-dot" aria-label="任务已完成，未查看" />
+                ) : null}
+                <span>{formatRelativeTime(partner.lastActivityAt)}</span>
+              </div>
+              <div className="ml-1 hidden shrink-0 items-center gap-0.5 group-hover:flex">
+                <Tooltip title={partner.pinned ? '取消置顶' : '置顶'} placement="top">
+                  <button
+                    type="button"
+                    className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[#91918E] transition hover:bg-white hover:text-[#37352F]"
+                    data-testid={`${workbenchSelectors.partnerPinButtonPrefix}-${partner.id}`}
+                    aria-label={partner.pinned ? '取消置顶' : '置顶'}
+                    onMouseDown={(event) => event.stopPropagation()}
+                    onClick={(event) => togglePartnerPinned(event, partner)}
+                  >
+                    <PinIcon className="h-3.5 w-3.5" />
+                  </button>
+                </Tooltip>
+                <Button
+                  type="text"
+                  size="small"
+                  icon={<HiTrash className="h-3.5 w-3.5" />}
+                  className="!h-6 !w-6 !rounded-[6px] !p-0"
+                  loading={deletingPartnerIds.has(partner.id)}
+                  disabled={deletingPartnerIds.has(partner.id)}
+                  data-testid={`${workbenchSelectors.partnerDeleteButtonPrefix}-${partner.id}`}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => requestDeletePartner(event, partner)}
+                />
+              </div>
+            </div>
+            <div className="mt-0.5 truncate text-[12px] leading-4 text-[#8A8781]">
+              {partner.lastUserMessagePreview || PARTNER_LIST_EMPTY_PREVIEW}
+            </div>
           </div>
         </div>
       </div>
@@ -4113,12 +4138,9 @@ const ChatPage: React.FC = () => {
         <div
           className="flex-1 overflow-y-auto px-2 py-2"
           data-testid={workbenchSelectors.partnersList}
+          data-hydrated={partnersListHydrated ? 'true' : 'false'}
         >
-          {partners.length === 0 ? (
-            <div className="px-3 py-10 text-center text-[13px] leading-6 text-[#8A8781]">
-              还没有伙伴。创建一个开始对话。
-            </div>
-          ) : (
+          {partners.length === 0 ? null : (
             <>
               {pinnedPartners.length > 0 ? (
                 <div className="mb-2" data-testid={workbenchSelectors.pinnedPartnersSection}>
@@ -4748,6 +4770,7 @@ const ChatPage: React.FC = () => {
                 color={createPartnerColor}
                 size={48}
                 title={createPartnerName || '伙伴预览'}
+                animationSeed={`preview-${createPartnerShape}-${createPartnerColor}`}
               />
               <div className="text-[13px] text-[#787774]">头像预览</div>
             </div>
@@ -4758,13 +4781,18 @@ const ChatPage: React.FC = () => {
                   <button
                     key={shape}
                     type="button"
-                    className={`rounded-full p-0.5 ${
+                    className={`overflow-visible rounded-full p-0.5 ${
                       createPartnerShape === shape ? 'ring-2 ring-[#37352F]' : ''
                     }`}
                     onClick={() => setCreatePartnerShape(shape)}
                     aria-label={shape}
                   >
-                    <PartnerAvatar shape={shape} color={createPartnerColor} size={28} />
+                    <PartnerAvatar
+                      shape={shape}
+                      color={createPartnerColor}
+                      size={28}
+                      animationSeed={`picker-${shape}`}
+                    />
                   </button>
                 ))}
               </div>

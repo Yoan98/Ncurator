@@ -521,6 +521,49 @@ describe('sqlite storage core and stores', () => {
     })
   })
 
+  it('returns the latest user input preview for each partner', async () => {
+    await partnerStore.savePartner(createPartner('partner-2'))
+    await aiRunStore.saveRun(
+      createRun({
+        id: 'run-1',
+        partnerId: 'partner-1',
+        input: 'first question',
+        createdAt: 10
+      })
+    )
+    await aiRunStore.saveRun(
+      createRun({
+        id: 'run-2',
+        partnerId: 'partner-1',
+        userMessageId: 'user-2',
+        assistantMessageId: 'assistant-2',
+        input: 'latest question',
+        createdAt: 20
+      })
+    )
+    await aiRunStore.saveRun(
+      createRun({
+        id: 'run-3',
+        partnerId: 'partner-2',
+        userMessageId: 'user-3',
+        assistantMessageId: 'assistant-3',
+        input: 'a'.repeat(48),
+        createdAt: 15
+      })
+    )
+
+    const latest = await aiRunStore.listLatestUserInputs()
+
+    expect(latest.get('partner-1')).toEqual({
+      preview: 'latest question',
+      createdAt: 20
+    })
+    expect(latest.get('partner-2')).toEqual({
+      preview: `${'a'.repeat(40)}…`,
+      createdAt: 15
+    })
+  })
+
   it('commits approval decision and clears pending approval', async () => {
     const pendingApproval: Extract<AiRunEvent, { type: 'approval_batch_required' }> = {
       type: 'approval_batch_required',

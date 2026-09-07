@@ -564,6 +564,97 @@ textarea,
   @apply w-full rounded-[6px] text-left text-[#91918E] transition-colors duration-150 hover:bg-[#EFEFEE] hover:text-[#37352F];
 }
 
+.nc-partner-avatar {
+  overflow: visible;
+  flex-shrink: 0;
+  animation: nc-partner-avatar-jump var(--nc-avatar-jump-duration, 6.2s) ease-in-out infinite;
+  animation-delay: var(--nc-avatar-delay, 0s);
+}
+
+.nc-partner-avatar-turn,
+.nc-partner-avatar-body,
+.nc-partner-avatar-eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.nc-partner-avatar-turn {
+  animation: nc-partner-avatar-turn var(--nc-avatar-turn-duration, 8.8s) ease-in-out infinite;
+  animation-delay: var(--nc-avatar-turn-delay, 0.6s);
+}
+
+.nc-partner-avatar-body {
+  animation: nc-partner-avatar-idle 3.2s ease-in-out infinite;
+  animation-delay: var(--nc-avatar-delay, 0s);
+}
+
+@keyframes nc-partner-avatar-idle {
+  0%,
+  100% {
+    transform: rotate(-2deg) scale(1, 1);
+  }
+  40% {
+    transform: rotate(2.4deg) scale(1.05, 0.96);
+  }
+  72% {
+    transform: rotate(-1.6deg) scale(0.97, 1.04);
+  }
+}
+
+@keyframes nc-partner-avatar-jump {
+  0%,
+  68%,
+  100% {
+    transform: translateY(0);
+  }
+  72% {
+    transform: translateY(3px) scale(1.1, 0.84);
+  }
+  78% {
+    transform: translateY(-11px) scale(0.92, 1.1);
+  }
+  84% {
+    transform: translateY(1px) scale(1.08, 0.9);
+  }
+  90% {
+    transform: translateY(-3px) scale(0.98, 1.03);
+  }
+  94% {
+    transform: translateY(0) scale(1, 1);
+  }
+}
+
+@keyframes nc-partner-avatar-turn {
+  0%,
+  38%,
+  100% {
+    transform: scaleX(1);
+  }
+  44% {
+    transform: scaleX(0.12) rotate(-8deg);
+  }
+  50% {
+    transform: scaleX(-1) rotate(4deg);
+  }
+  58% {
+    transform: scaleX(-1);
+  }
+  64% {
+    transform: scaleX(0.12) rotate(8deg);
+  }
+  70% {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nc-partner-avatar,
+  .nc-partner-avatar-turn,
+  .nc-partner-avatar-body {
+    animation: none;
+  }
+}
+
 .nc-sidebar-item-active {
   @apply bg-[#EFEFEE] text-[#37352F];
 }

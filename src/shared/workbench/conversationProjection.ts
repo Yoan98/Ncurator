@@ -85,3 +85,15 @@ export const mergeConversationMessages = (input: {
     (left, right) => left.timestamp - right.timestamp
   )
 }
+
+export const PARTNER_LIST_EMPTY_PREVIEW = '做点啥呢？'
+
+const PARTNER_LIST_PREVIEW_MAX_CHARS = 40
+
+export const clipPartnerListPreview = (text: string): string | null => {
+  const normalized = text.replace(/\s+/g, ' ').trim()
+  if (!normalized) return null
+  return normalized.length > PARTNER_LIST_PREVIEW_MAX_CHARS
+    ? `${normalized.slice(0, PARTNER_LIST_PREVIEW_MAX_CHARS)}…`
+    : normalized
+}

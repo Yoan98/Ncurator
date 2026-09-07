@@ -604,10 +604,7 @@ export interface ChatMessage {
 
 export const PARTNER_AVATAR_SHAPES = [
   'circle',
-  'blob',
   'rounded_square',
-  'pill',
-  'triangle',
   'hexagon',
   'cloud',
   'teardrop'
@@ -645,6 +642,8 @@ export interface Partner {
 export interface PartnerListItem extends Partner {
   isRunning: boolean
   hasUnreadCompletion: boolean
+  lastUserMessagePreview: string | null
+  lastActivityAt: number
 }
 
 export type PartnerCreateRequest = {
