@@ -176,6 +176,21 @@ describe('ai unit brain prompt cache stability', () => {
     expect(bUser).toContain('<current_time>')
   })
 
+  it('keeps system static when workspace roots change and puts roots only in the user message', () => {
+    const state = createInitialHumanState({ taskId: 'task-a', userInput: '任务 A' })
+    const ctxA = createFakeCtx(1_700_000_000_000)
+    const ctxB = {
+      ...createFakeCtx(1_700_000_000_000),
+      workspaceRoots: ['/tmp/another-workspace']
+    }
+
+    expect(buildBrainSystemPrompt({ ctx: ctxA })).toBe(buildBrainSystemPrompt({ ctx: ctxB }))
+    expect(buildBrainSystemPrompt({ ctx: ctxA })).not.toContain('/tmp/workspace')
+    expect(buildBrainUserMessage({ state, ctx: ctxA })).toContain('/tmp/workspace')
+    expect(buildBrainUserMessage({ state, ctx: ctxB })).toContain('/tmp/another-workspace')
+    expect(buildBrainUserMessage({ state, ctx: ctxA })).not.toContain('/tmp/another-workspace')
+  })
+
   it('keeps system static across tasks and embeds platform and runtime paths', () => {
     const ctx = createFakeCtx()
 
@@ -184,6 +199,8 @@ describe('ai unit brain prompt cache stability', () => {
     expect(system).toContain('platform：macos')
     expect(system).toContain('runtime_paths.assets：')
     expect(system).toContain('runtime_paths.scripts：')
+    expect(system).not.toContain('用户默认工作地址')
+    expect(system).not.toContain('/tmp/workspace')
     expect(system).not.toContain('current_time')
   })
 

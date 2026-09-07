@@ -39,16 +39,28 @@ describe('ai unit brain prompt formatting', () => {
     expect(skillCatalog).not.toMatch(/^- [^\n]+\n\n- /m)
   })
 
-  it('renders the local environment inside the system prompt without current time', () => {
-    const system = buildBrainSystemPrompt({ ctx: createFakeCtx() })
+  it('keeps stable local environment in system and puts workspace roots in the user message', () => {
+    const ctx = createFakeCtx()
+    const system = buildBrainSystemPrompt({ ctx })
     const environment =
       system.match(/<local_environment>([\s\S]*?)<\/local_environment>/)?.[1] || ''
+    const state = createInitialHumanState({
+      taskId: 'task-prompt-formatting',
+      userInput: '继续处理任务'
+    })
+    const user = buildBrainUserMessage({ state, ctx })
 
     expect(environment).toContain('platform：windows')
     expect(environment).toContain('runtime_paths.scripts：')
     expect(environment).toContain('runtime_paths.assets：')
+    expect(environment).not.toContain('用户默认工作地址')
+    expect(environment).not.toContain('D:\\workspace')
     expect(environment).not.toContain('current_time')
     expect(system).not.toContain('current_time.local_iso')
+    expect(system).not.toContain('<workspace_roots>')
+    expect(user).toContain('<workspace_roots>')
+    expect(user).toContain('D:\\workspace')
+    expect(user.indexOf('</workspace_roots>')).toBeLessThan(user.indexOf('<reference_scope>'))
     expect(system).not.toContain('reference_field_guide')
     expect(system).not.toContain('字段说明')
   })
@@ -65,7 +77,7 @@ describe('ai unit brain prompt formatting', () => {
     expect(system).not.toContain('<context_efficiency>')
   })
 
-  it('renders the default preference, reference scope and current time in the user message', () => {
+  it('renders the default preference, workspace roots, reference scope and current time in the user message', () => {
     const state = createInitialHumanState({
       taskId: 'task-prompt-formatting',
       userInput: '继续处理任务'
@@ -75,9 +87,13 @@ describe('ai unit brain prompt formatting', () => {
     expect(user).toContain('<task_goal>')
     expect(user).toContain('继续处理任务')
     expect(user.match(/<preference>([\s\S]*?)<\/preference>/)?.[1].trim()).toBe('无')
+    expect(user).toContain('<workspace_roots>')
     expect(user).toContain('<reference_scope>')
     expect(user).toContain('<current_time>')
     expect(user).toContain('current_time.local_iso')
+    expect(user.indexOf('</preference>')).toBeLessThan(user.indexOf('<workspace_roots>'))
+    expect(user.indexOf('</workspace_roots>')).toBeLessThan(user.indexOf('<reference_scope>'))
+    expect(user.indexOf('</reference_scope>')).toBeLessThan(user.indexOf('<current_time>'))
     expect(user).not.toContain('<active_state>')
   })
 
@@ -146,6 +162,7 @@ describe('ai unit brain prompt formatting', () => {
       injectActiveState: true
     })
     expect(user).toContain('<memory>\n当前交付：\n- 继续处理已确认事实\n  </memory>')
+    expect(user.indexOf('</workspace_roots>')).toBeLessThan(user.indexOf('<reference_scope>'))
     expect(user.indexOf('</reference_scope>')).toBeLessThan(user.indexOf('<current_time>'))
     expect(user.indexOf('</current_time>')).toBeLessThan(user.indexOf('<memory>'))
     expect(user.indexOf('</memory>')).toBeLessThan(user.indexOf('<active_state>'))

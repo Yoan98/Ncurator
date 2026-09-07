@@ -39,6 +39,8 @@ describe('ai human context compaction message shape', () => {
     const user = String(messages[1]?.content)
     expect(user).toContain('<memory>')
     expect(user).toContain('当前交付：')
+    expect(user).toContain('<workspace_roots>')
+    expect(user.indexOf('</workspace_roots>')).toBeLessThan(user.indexOf('<reference_scope>'))
     expect(user.indexOf('</reference_scope>')).toBeLessThan(user.indexOf('<current_time>'))
     expect(user.indexOf('</current_time>')).toBeLessThan(user.indexOf('<memory>'))
     expect(user.indexOf('</memory>')).toBeLessThan(user.indexOf('<active_state>'))

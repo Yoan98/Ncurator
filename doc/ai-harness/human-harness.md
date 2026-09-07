@@ -303,7 +303,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 ### 2.5 运行时注入（不进库）
 
-新 run 的 `<reference_scope>` 来自 **Composer 当前 `@` 引用与附件**，由 `buildBrainUserMessage` 渲染进 build user。工作地址列表不进 `reference_scope`，由系统提示词按设置页现表渲染。
+新 run 的 `<reference_scope>` 来自 **Composer 当前 `@` 引用与附件**，由 `buildBrainUserMessage` 渲染进 build user。工作地址列表不进 `reference_scope`，单独渲染为 build user 的 `<workspace_roots>`（位于 `<reference_scope>` 之上），按设置页现表快照，不进 System。
 
 | | log 里的 `user.context` | Composer → build user |
 |--|-------------------------|------------------------|
@@ -388,6 +388,7 @@ flowchart TD
 <user_context>
   <task_goal>…</task_goal>
   <preference>…</preference>
+  <workspace_roots>…</workspace_roots>
   <reference_scope>…</reference_scope>
   <current_time>…</current_time>
   <memory>…</memory>                         ← 仅 compaction User
@@ -422,7 +423,8 @@ flowchart TD
 |----|------|
 | `<task_goal>` | 当时那条 User 对应 run 的 `input` |
 | `<preference>` | 当时 Composer |
-| `<reference_scope>` | 当时 Composer 的 `@` 与附件（第 2.5 节）；工作地址在 System |
+| `<workspace_roots>` | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存） |
+| `<reference_scope>` | 当时 Composer 的 `@` 与附件（第 2.5 节） |
 | `<current_time>` | 当时 run 的 `runStartedAt`（历史行不再改） |
 | `<memory>` | 仅 `origin: compaction` 的 user.content 内嵌块 |
 | `<active_state>` | 仅 `origin: compaction`：当时 `skill_state_updated` + 最后 `plan_updated`（`finalizing_started` 清空） |

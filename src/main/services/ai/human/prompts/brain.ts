@@ -10,18 +10,18 @@ import type { AiRuntimePlatform } from '../../types'
 import { HUMAN_MAX_ACTIVE_TOOLS } from '../constants'
 import { listBuiltinSkillDefinitions, listExternalSkillDefinitions } from '../skills'
 
-export const renderLocalEnvironmentText = (ctx: AiRunContext): string => {
-  const workspaceRoots =
-    ctx.workspaceRoots.length > 0
-      ? ctx.workspaceRoots.map((rootPath) => `- ${rootPath}`).join('\n')
-      : '- 当前没有配置用户默认工作地址'
-  return [
+export const renderLocalEnvironmentText = (ctx: AiRunContext): string =>
+  [
     `- platform：${ctx.platform}`,
-    `- 用户默认工作地址：`,
-    workspaceRoots,
     `- runtime_paths.scripts：${getPartnerScriptsRootDir(ctx.partnerId)}（一次性临时脚本目录）`,
     `- runtime_paths.assets：${getPartnerAssetsRootDir(ctx.partnerId)}（运行期生成的临时产物目录，如图片、渲染中间结果等）`
   ].join('\n')
+
+export const renderWorkspaceRootsText = (ctx: AiRunContext): string => {
+  if (ctx.workspaceRoots.length === 0) {
+    return '- 当前没有配置用户默认工作地址'
+  }
+  return ctx.workspaceRoots.map((rootPath) => `- ${rootPath}`).join('\n')
 }
 
 export const renderCurrentTimeText = (ctx: AiRunContext): string => {
@@ -72,10 +72,6 @@ ${external.map((skill) => renderSkillLine(skill.skillId, skill.description, skil
 export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
   `
 <system>
-  <identity>
-    - 你叫${input.ctx.partnerName}
-  </identity>
-
   <principles>
     - 根据已有信息自主决策下一步工具的使用来推进任务，完成用户诉求。
     - 默认在用户工作区域内完成任务。
@@ -155,6 +151,10 @@ ${input.state.task.userInput}
   <preference>
 ${renderPreferenceText(input.ctx.preference)}
   </preference>
+
+  <workspace_roots>
+${renderWorkspaceRootsText(input.ctx)}
+  </workspace_roots>
 
   <reference_scope>
 ${renderReferenceScopeText(input.ctx.referenceScope)}
