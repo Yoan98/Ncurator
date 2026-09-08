@@ -30,7 +30,9 @@ const isImageReferenceHuman = (message: BaseMessage): boolean =>
   message.getType() === 'human' && typeof message.content !== 'string'
 
 const isBoundaryUser = (message: BaseMessage): boolean =>
-  message.getType() === 'human' && !isImageReferenceHuman(message)
+  message.getType() === 'human' &&
+  !isImageReferenceHuman(message) &&
+  !isCompactedBrainUserMessage(message)
 
 const groupMessagesForCompaction = (messages: BaseMessage[]): BaseMessage[][] => {
   const groups: BaseMessage[][] = []
@@ -100,9 +102,7 @@ export const splitMessagesForCompactionTail = (
   messages: BaseMessage[],
   retainTokens: number
 ): CompactionMessageSplit => {
-  const compactable = messages.filter(
-    (message) => message.getType() !== 'system' && !isCompactedBrainUserMessage(message)
-  )
+  const compactable = messages.filter((message) => message.getType() !== 'system')
   const groups = groupMessagesForCompaction(compactable)
   if (groups.length === 0) {
     return { folded: [], tail: [], history: [], turnPrefix: [], isSplitTurn: false }
@@ -136,7 +136,7 @@ export const hasCompressibleCompactionHistory = (
   retainTokens: number
 ): boolean => {
   const { folded } = splitMessagesForCompactionTail(messages, retainTokens)
-  return folded.length > 0
+  return folded.some((message) => !isCompactedBrainUserMessage(message))
 }
 
 export const countTailBookmarkMessages = (tail: BaseMessage[]): number =>
@@ -205,32 +205,32 @@ const renderHumanBlock = (message: BaseMessage): string => {
 }
 
 export const renderMessagesForCompaction = (messages: BaseMessage[]): string => {
-  const blocks: string[] = []
-  let processLines: string[] = []
-  const flushProcess = (): void => {
-    if (processLines.length === 0) return
-    blocks.push(processLines.join('\n'))
-    processLines = []
+  const turns: string[] = []
+  let currentTurn: string[] = []
+  const flushTurn = (): void => {
+    if (currentTurn.length === 0) return
+    turns.push(currentTurn.join('\n'))
+    currentTurn = []
   }
   for (const message of messages) {
     const role = message.getType()
     if (isBoundaryUser(message)) {
-      flushProcess()
-      blocks.push(renderHumanBlock(message))
+      flushTurn()
+      currentTurn.push(renderHumanBlock(message))
       continue
     }
     if (role === 'ai') {
-      processLines.push(...renderAiMessageLines(message as AIMessage))
+      currentTurn.push(...renderAiMessageLines(message as AIMessage))
       continue
     }
     if (role === 'tool') {
-      processLines.push(renderToolMessageLine(message))
+      currentTurn.push(renderToolMessageLine(message))
       continue
     }
     if (role === 'human') {
-      processLines.push(renderHumanBlock(message))
+      currentTurn.push(renderHumanBlock(message))
     }
   }
-  flushProcess()
-  return blocks.join('\n\n')
+  flushTurn()
+  return turns.join('\n\n')
 }

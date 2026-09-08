@@ -5,6 +5,7 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH,
+  HUMAN_CONTEXT_COMPACTION_RUN1_USER_INPUT,
   HUMAN_CONTEXT_COMPACTION_RUN2_USER_INPUT,
   HUMAN_CONTEXT_COMPACTION_USER_INPUT,
   loadContextCompactionWorkspaceSeed
@@ -19,8 +20,8 @@ import {
 
 const PARTNER_ID = 'live-context-compaction'
 const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
-/** Run2 首轮 brain 的 cachedInputTokens 相对 Run1 末次 brain inputTokens 的最低比例。 */
-const RUN2_PREFIX_CACHE_MIN_RATIO = 0.5
+/** Run3 首轮 brain 的 cachedInputTokens 相对 Run2 末次 brain inputTokens 的最低比例。 */
+const RUN3_PREFIX_CACHE_MIN_RATIO = 0.5
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '## 目标',
@@ -92,7 +93,9 @@ const collectRunCompaction = (input: {
   const compactionRecords = input.llmIoRecords.filter(
     (record) => record.caller === 'human.context_compaction'
   )
-  const summaries = compactionRecords.map((record) => String(record.rawText || '').trim())
+  const summaries = completedEvents
+    .map((event) => String(event.summaryPreview || '').trim())
+    .filter((summary) => summary.length > 0)
   return {
     startedEvents,
     completedEvents,
@@ -102,7 +105,7 @@ const collectRunCompaction = (input: {
     lifecycleSatisfied:
       startedEvents.length >= 1 &&
       completedEvents.length === startedEvents.length &&
-      compactionRecords.length === completedEvents.length &&
+      compactionRecords.length >= completedEvents.length &&
       budgetEvents.some(
         (event) =>
           event.decision === 'compact' &&
@@ -118,37 +121,37 @@ const lastBrainRecord = (records: readonly AiLlmIoRecord[]): AiLlmIoRecord | und
 const firstBrainRecord = (records: readonly AiLlmIoRecord[]): AiLlmIoRecord | undefined =>
   records.find((record) => record.caller === 'human.brain')
 
-const collectRun2PrefixCacheReuse = (input: {
-  run1LlmIo: readonly AiLlmIoRecord[]
-  run2LlmIo: readonly AiLlmIoRecord[]
+const collectContinuationPrefixCacheReuse = (input: {
+  previousLlmIo: readonly AiLlmIoRecord[]
+  nextLlmIo: readonly AiLlmIoRecord[]
 }) => {
-  const run1LastBrain = lastBrainRecord(input.run1LlmIo)
-  const run2FirstBrain = firstBrainRecord(input.run2LlmIo)
-  const run1LastInputTokens = run1LastBrain?.usage?.inputTokens
-  const run2FirstCachedInputTokens = run2FirstBrain?.usage?.cachedInputTokens
-  const run2FirstInputTokens = run2FirstBrain?.usage?.inputTokens
+  const previousLastBrain = lastBrainRecord(input.previousLlmIo)
+  const nextFirstBrain = firstBrainRecord(input.nextLlmIo)
+  const previousLastInputTokens = previousLastBrain?.usage?.inputTokens
+  const nextFirstCachedInputTokens = nextFirstBrain?.usage?.cachedInputTokens
+  const nextFirstInputTokens = nextFirstBrain?.usage?.inputTokens
   const hasUsageSignal =
-    typeof run1LastInputTokens === 'number' &&
-    run1LastInputTokens > 0 &&
-    typeof run2FirstCachedInputTokens === 'number' &&
-    typeof run2FirstInputTokens === 'number' &&
-    run2FirstInputTokens > 0
+    typeof previousLastInputTokens === 'number' &&
+    previousLastInputTokens > 0 &&
+    typeof nextFirstCachedInputTokens === 'number' &&
+    typeof nextFirstInputTokens === 'number' &&
+    nextFirstInputTokens > 0
   const reuseRatio =
-    hasUsageSignal && run1LastInputTokens
-      ? run2FirstCachedInputTokens! / run1LastInputTokens
+    hasUsageSignal && previousLastInputTokens
+      ? nextFirstCachedInputTokens! / previousLastInputTokens
       : undefined
   return {
-    run1LastBrain,
-    run2FirstBrain,
-    run1LastInputTokens,
-    run2FirstCachedInputTokens,
-    run2FirstInputTokens,
-    run2FirstCacheHitRate: run2FirstBrain?.usage?.cacheHitRate,
+    previousLastBrain,
+    nextFirstBrain,
+    previousLastInputTokens,
+    nextFirstCachedInputTokens,
+    nextFirstInputTokens,
+    nextFirstCacheHitRate: nextFirstBrain?.usage?.cacheHitRate,
     reuseRatio,
     satisfied:
       hasUsageSignal &&
       typeof reuseRatio === 'number' &&
-      reuseRatio >= RUN2_PREFIX_CACHE_MIN_RATIO
+      reuseRatio >= RUN3_PREFIX_CACHE_MIN_RATIO
   }
 }
 
@@ -212,7 +215,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + checkpoint User + 原文 tail 继续完成交付；Run 1 未压出 checkpoint 则不发 Run 2；同伙伴续做再压一次；Run2 首轮 brain 须明显复用 Run1 末次前缀缓存。',
+          '验证 live 模式下 human 在普通短问之后的周报长任务中会自然触发压缩；同一次可走历史+半截；压完后以 System + checkpoint User + 原文 tail 交付；Run 2 未压出 checkpoint 则不发 Run 3；续做再压，且 Run3 首轮 brain 须明显复用 Run2 末次前缀缓存。',
         fixtures: [CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         execute: async (runtime) => {
@@ -226,28 +229,39 @@ describe('ai human live backend', () => {
           }
           const run1Output = await createHumanTestRunner(runtime, runnerOptions).run({
             taskId: `${runtime.taskId}-run-1`,
-            userInput: HUMAN_CONTEXT_COMPACTION_USER_INPUT
+            userInput: HUMAN_CONTEXT_COMPACTION_RUN1_USER_INPUT
           })
           const run1Events = runtime.eventCollector.snapshot()
           const run1LlmIo = runtime.eventCollector.snapshotLlmIo()
-          const run1Compacted =
+          const run2Output = await createHumanTestRunner(runtime, runnerOptions).run({
+            taskId: `${runtime.taskId}-run-2`,
+            userInput: HUMAN_CONTEXT_COMPACTION_USER_INPUT
+          })
+          const afterRun2Events = runtime.eventCollector.snapshot()
+          const afterRun2LlmIo = runtime.eventCollector.snapshotLlmIo()
+          const run2Events = afterRun2Events.slice(run1Events.length)
+          const run2LlmIo = afterRun2LlmIo.slice(run1LlmIo.length)
+          const run2Compacted =
             collectRunCompaction({
-              events: run1Events,
-              llmIoRecords: run1LlmIo
+              events: run2Events,
+              llmIoRecords: run2LlmIo
             }).completedEvents.length >= 1
-          if (!run1Compacted) {
+          if (!run2Compacted) {
             return {
               workspaceSeed,
               run1Output,
-              run2Output: undefined,
+              run2Output,
+              run3Output: undefined,
               run1Events,
-              run2Events: [],
+              run2Events,
+              run3Events: [],
               run1LlmIo,
-              run2LlmIo: []
+              run2LlmIo,
+              run3LlmIo: []
             }
           }
-          const run2Output = await createHumanTestRunner(runtime, runnerOptions).run({
-            taskId: `${runtime.taskId}-run-2`,
+          const run3Output = await createHumanTestRunner(runtime, runnerOptions).run({
+            taskId: `${runtime.taskId}-run-3`,
             userInput: HUMAN_CONTEXT_COMPACTION_RUN2_USER_INPUT
           })
           const allEvents = runtime.eventCollector.snapshot()
@@ -256,10 +270,13 @@ describe('ai human live backend', () => {
             workspaceSeed,
             run1Output,
             run2Output,
+            run3Output,
             run1Events,
-            run2Events: allEvents.slice(run1Events.length),
+            run2Events,
+            run3Events: allEvents.slice(afterRun2Events.length),
             run1LlmIo,
-            run2LlmIo: allLlmIo.slice(run1LlmIo.length)
+            run2LlmIo,
+            run3LlmIo: allLlmIo.slice(afterRun2LlmIo.length)
           }
         },
         assert: async (result, runtime) => {
@@ -280,146 +297,155 @@ describe('ai human live backend', () => {
             events: result.run2Events,
             llmIoRecords: result.run2LlmIo
           })
-          const run1Docx = collectDocxEvidence({
-            events: result.run1Events,
-            artifacts: result.run1Output?.artifacts
+          const run3Compaction = collectRunCompaction({
+            events: result.run3Events,
+            llmIoRecords: result.run3LlmIo
           })
-          const run1PostCompactBrain = firstBrainAfterCompaction(result.run1LlmIo)
-          const run1LatestBrain = [...result.run1LlmIo]
-            .reverse()
-            .find((record) => record.caller === 'human.brain')
-          const run1SummaryFormatSatisfied =
-            run1Compaction.summaries.length > 0 &&
-            run1Compaction.summaries.every(
+          const run2Docx = collectDocxEvidence({
+            events: result.run2Events,
+            artifacts: result.run2Output?.artifacts
+          })
+          const compactionPromptOk = (record: AiLlmIoRecord): boolean =>
+            !record.user.includes('<current>') &&
+            !record.user.includes('<earlier>') &&
+            !record.user.includes('<previous-summary>') &&
+            !record.user.includes('[round') &&
+            record.user.includes('<conversation>')
+          const checkpointFormatOk = (summaries: readonly string[]): boolean =>
+            summaries.length > 0 &&
+            summaries.every(
               (summary) =>
                 REQUIRED_COMPACTION_HEADINGS.every((heading) => summary.includes(heading)) ||
                 summary.includes('**Turn Context (split turn):**')
-            ) &&
-            run1Compaction.compactionRecords.every(
-              (record) =>
-                !record.user.includes('<current>') &&
-                !record.user.includes('<earlier>') &&
-                record.user.includes('[user]') &&
-                !record.user.includes('[round')
             )
-          const run1SummaryQualitySatisfied = run1Compaction.summaries.every(
+          const run2PostCompactBrain = firstBrainAfterCompaction(result.run2LlmIo)
+          const run2LatestBrain = lastBrainRecord(result.run2LlmIo)
+          const run2SummaryQualitySatisfied = run2Compaction.summaries.every(
             (summary) =>
               summary.includes(expectedLastWeekDocAnchor) &&
               !summary.includes(inventedLastWeekDocName)
           )
-          const run1CompactedBrainSatisfied = Boolean(
-            run1PostCompactBrain && isCompactedBrainShape(run1PostCompactBrain)
-          )
-          const run1ContinuitySatisfied =
-            Boolean(run1LatestBrain?.user.includes(expectedLastWeekDocAnchor)) &&
-            Boolean(run1LatestBrain && !run1LatestBrain.user.includes(inventedLastWeekDocName)) &&
-            Boolean(run1LatestBrain?.user.includes(COMPACTION_CHECKPOINT_MARKER))
-          const run1TaskCompletionSatisfied =
-            result.run1Output?.status === 'completed' &&
-            (run1Docx.toolNames.some((toolName) => toolName.startsWith('docx_')) ||
-              run1Docx.toolNames.includes('text_file_edit'))
-
-          const latestRun2Summary = run2Compaction.summaries.at(-1) || ''
-          const run2PrefixCache = collectRun2PrefixCacheReuse({
-            run1LlmIo: result.run1LlmIo,
-            run2LlmIo: result.run2LlmIo
+          const run2TaskCompletionSatisfied =
+            result.run2Output?.status === 'completed' &&
+            (run2Docx.toolNames.some((toolName) => toolName.startsWith('docx_')) ||
+              run2Docx.toolNames.includes('text_file_edit'))
+          const run3PrefixCache = collectContinuationPrefixCacheReuse({
+            previousLlmIo: result.run2LlmIo,
+            nextLlmIo: result.run3LlmIo
           })
-          const run2FirstBrain = run2PrefixCache.run2FirstBrain
-          const run2FirstBrainRoles = run2FirstBrain
-            ? parseBrainMessageRoles(run2FirstBrain.user)
+          const run3FirstBrain = run3PrefixCache.nextFirstBrain
+          const run3FirstBrainRoles = run3FirstBrain
+            ? parseBrainMessageRoles(run3FirstBrain.user)
             : []
-          const run2FirstBrainSatisfied =
-            Boolean(run2FirstBrain?.user.includes(COMPACTION_CHECKPOINT_MARKER)) &&
-            Boolean(run2FirstBrain?.user.includes('<summary>')) &&
-            run2FirstBrainRoles[0] === 'system' &&
-            run2FirstBrainRoles[1] === 'human' &&
-            run2FirstBrainRoles.at(-1) === 'human' &&
-            Boolean(run2FirstBrain?.user.includes(HUMAN_CONTEXT_COMPACTION_RUN2_USER_INPUT)) &&
-            run2FirstBrainRoles[1] !== 'ai' &&
-            run2FirstBrainRoles[1] !== 'tool'
-          const run2CurrentSection = [
-            extractSection(latestRun2Summary, '## 目标'),
-            extractSection(latestRun2Summary, '## 进度'),
-            extractSection(latestRun2Summary, '## 下一步'),
-            extractSection(latestRun2Summary, '## 约束与偏好')
-          ].join('\n')
-          const run2HistorySatisfied =
-            run2Compaction.summaries.length > 0 &&
-            (REQUIRED_COMPACTION_HEADINGS.every((heading) =>
-              latestRun2Summary.includes(heading)
-            ) ||
-              latestRun2Summary.includes('**Turn Context (split turn):**')) &&
-            !latestRun2Summary.includes('记忆时间线：') &&
-            (latestRun2Summary.includes(expectedLastWeekDocAnchor) ||
-              /\.docx|周报/.test(latestRun2Summary))
-          const run2CurrentTaskSatisfied =
-            /(对照|标题|九月|法务)/.test(run2CurrentSection) &&
-            !/从空白模板整份|整份重填周报/.test(run2CurrentSection)
 
-          runtime.assertThat(
-            run1Compaction.lifecycleSatisfied &&
-              run1SummaryFormatSatisfied &&
-              run1SummaryQualitySatisfied &&
-              run1CompactedBrainSatisfied &&
-              run1ContinuitySatisfied &&
-              run1TaskCompletionSatisfied &&
-              run1Docx.artifactSatisfied,
-            {
-              name: 'human-live-context-compaction-run1-completes-weekly-report',
-              message:
-                'Run 1 应至少压缩一次；压完后发给 brain 的数组为 system + checkpoint User + 原文 tail，六栏标题齐全（半轮可含 Turn Context），含「上周周报」、不编造「上周工作周报.docx」，并成功交付周报。',
-              data: {
-                startedEvents: run1Compaction.startedEvents,
-                completedEvents: run1Compaction.completedEvents,
-                compactionSummaries: run1Compaction.summaries,
-                compactionPrompts: run1Compaction.compactionRecords.map((record) => record.user),
-                postCompactBrainRoles: run1PostCompactBrain
-                  ? parseBrainMessageRoles(run1PostCompactBrain.user)
-                  : [],
-                latestBrainPrompt: run1LatestBrain?.user,
-                toolNames: run1Docx.toolNames,
-                createSourcePaths: run1Docx.createSourcePaths,
-                docxWriteSourcePaths: run1Docx.docxWriteSourcePaths,
-                artifacts: result.run1Output?.artifacts
-              }
+          const latestRun3Summary = run3Compaction.summaries.at(-1) || ''
+          const run3CurrentSection = [
+            extractSection(latestRun3Summary, '## 目标'),
+            extractSection(latestRun3Summary, '## 进度'),
+            extractSection(latestRun3Summary, '## 下一步'),
+            extractSection(latestRun3Summary, '## 约束与偏好')
+          ].join('\n')
+
+          runtime.assertThat(result.run1Output?.status === 'completed', {
+            name: 'human-live-context-compaction-run1-ordinary-question',
+            message: 'Run 1 应为普通短问并正常完成，用来铺出一条完整历史轮。',
+            data: {
+              run1Status: result.run1Output?.status,
+              run1CompactionCount: run1Compaction.completedEvents.length
             }
-          )
+          })
 
           runtime.assertThat(
             run2Compaction.lifecycleSatisfied &&
-              run2FirstBrainSatisfied &&
-              run2HistorySatisfied &&
-              run2CurrentTaskSatisfied &&
-              result.run2Output?.status === 'completed',
+              checkpointFormatOk(run2Compaction.summaries) &&
+              run2Compaction.compactionRecords.every(compactionPromptOk) &&
+              run2SummaryQualitySatisfied &&
+              Boolean(run2PostCompactBrain && isCompactedBrainShape(run2PostCompactBrain)) &&
+              Boolean(run2LatestBrain?.user.includes(expectedLastWeekDocAnchor)) &&
+              Boolean(run2LatestBrain && !run2LatestBrain.user.includes(inventedLastWeekDocName)) &&
+              Boolean(run2LatestBrain?.user.includes(COMPACTION_CHECKPOINT_MARKER)) &&
+              run2TaskCompletionSatisfied &&
+              run2Docx.artifactSatisfied,
             {
-              name: 'human-live-context-compaction-run2-continues-from-compaction-user',
+              name: 'human-live-context-compaction-run2-completes-weekly-report',
               message:
-                'Run 2 首次 brain 应为 system + checkpoint User + 原文过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。该次压缩只要六栏（半轮可含 Turn Context），目标/进度/下一步/约束与偏好应围绕对照、改标题或法务，而不是整段重填周报。',
+                'Run 2 应至少压缩一次；落库 checkpoint 为六栏或含 Turn Context，含「上周周报」、不编造「上周工作周报.docx」；压完后 brain 为 system + checkpoint User + 原文 tail，并成功交付周报。',
               data: {
                 startedEvents: run2Compaction.startedEvents,
                 completedEvents: run2Compaction.completedEvents,
-                run2FirstBrainRoles,
                 compactionSummaries: run2Compaction.summaries,
-                latestRun2Summary,
-                run2CurrentSection,
-                run2Status: result.run2Output?.status
+                compactionPrompts: run2Compaction.compactionRecords.map((record) => record.user),
+                postCompactBrainRoles: run2PostCompactBrain
+                  ? parseBrainMessageRoles(run2PostCompactBrain.user)
+                  : [],
+                toolNames: run2Docx.toolNames,
+                artifacts: result.run2Output?.artifacts
               }
             }
           )
 
-          runtime.assertThat(run2PrefixCache.satisfied, {
-            name: 'human-live-context-compaction-run2-reuses-run1-prefix-cache',
+          if (!result.run3Output) {
+            return
+          }
+
+          const run3FirstBrainSatisfied =
+            Boolean(run3FirstBrain?.user.includes(COMPACTION_CHECKPOINT_MARKER)) &&
+            Boolean(run3FirstBrain?.user.includes('<summary>')) &&
+            run3FirstBrainRoles[0] === 'system' &&
+            run3FirstBrainRoles[1] === 'human' &&
+            run3FirstBrainRoles.at(-1) === 'human' &&
+            Boolean(run3FirstBrain?.user.includes(HUMAN_CONTEXT_COMPACTION_RUN2_USER_INPUT)) &&
+            run3FirstBrainRoles[1] !== 'ai' &&
+            run3FirstBrainRoles[1] !== 'tool'
+          const run3HistorySatisfied =
+            run3Compaction.summaries.length > 0 &&
+            (REQUIRED_COMPACTION_HEADINGS.every((heading) =>
+              latestRun3Summary.includes(heading)
+            ) ||
+              latestRun3Summary.includes('**Turn Context (split turn):**')) &&
+            !latestRun3Summary.includes('记忆时间线：') &&
+            (latestRun3Summary.includes(expectedLastWeekDocAnchor) ||
+              /\.docx|周报/.test(latestRun3Summary))
+          const run3CurrentTaskSatisfied =
+            /(对照|标题|九月|法务)/.test(run3CurrentSection) &&
+            !/从空白模板整份|整份重填周报/.test(run3CurrentSection)
+
+          runtime.assertThat(
+            run3Compaction.lifecycleSatisfied &&
+              run3FirstBrainSatisfied &&
+              run3HistorySatisfied &&
+              run3CurrentTaskSatisfied &&
+              run3Compaction.compactionRecords.every(compactionPromptOk) &&
+              result.run3Output?.status === 'completed',
+            {
+              name: 'human-live-context-compaction-run3-continues-from-compaction-user',
+              message:
+                'Run 3 首次 brain 应为 system + checkpoint User + 原文过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。落库摘要只要六栏（半轮可含 Turn Context），目标/进度/下一步/约束与偏好应围绕对照、改标题或法务。',
+              data: {
+                startedEvents: run3Compaction.startedEvents,
+                completedEvents: run3Compaction.completedEvents,
+                run3FirstBrainRoles,
+                compactionSummaries: run3Compaction.summaries,
+                latestRun3Summary,
+                run3CurrentSection,
+                run3Status: result.run3Output?.status
+              }
+            }
+          )
+
+          runtime.assertThat(run3PrefixCache.satisfied, {
+            name: 'human-live-context-compaction-run3-reuses-run2-prefix-cache',
             message:
-              '发第二次 user 续跑时，Run2 首次 brain 的 cachedInputTokens 应明显复用 Run1 末次 brain 的 inputTokens 前缀；低于明显比例说明跨 run 前缀被改写或缓存未命中。',
+              '发第三次 user 续跑时，Run3 首次 brain 的 cachedInputTokens 应明显复用 Run2 末次 brain 的 inputTokens 前缀；低于明显比例说明跨 run 前缀被改写或缓存未命中。',
             data: {
-              minRatio: RUN2_PREFIX_CACHE_MIN_RATIO,
-              run1LastInputTokens: run2PrefixCache.run1LastInputTokens,
-              run2FirstCachedInputTokens: run2PrefixCache.run2FirstCachedInputTokens,
-              run2FirstInputTokens: run2PrefixCache.run2FirstInputTokens,
-              run2FirstCacheHitRate: run2PrefixCache.run2FirstCacheHitRate,
-              reuseRatio: run2PrefixCache.reuseRatio,
-              run1LastBrainUsage: run2PrefixCache.run1LastBrain?.usage,
-              run2FirstBrainUsage: run2PrefixCache.run2FirstBrain?.usage
+              minRatio: RUN3_PREFIX_CACHE_MIN_RATIO,
+              previousLastInputTokens: run3PrefixCache.previousLastInputTokens,
+              nextFirstCachedInputTokens: run3PrefixCache.nextFirstCachedInputTokens,
+              nextFirstInputTokens: run3PrefixCache.nextFirstInputTokens,
+              nextFirstCacheHitRate: run3PrefixCache.nextFirstCacheHitRate,
+              reuseRatio: run3PrefixCache.reuseRatio,
+              previousLastBrainUsage: run3PrefixCache.previousLastBrain?.usage,
+              nextFirstBrainUsage: run3PrefixCache.nextFirstBrain?.usage
             }
           })
         }

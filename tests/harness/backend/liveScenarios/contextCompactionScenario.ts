@@ -6,6 +6,9 @@ export const CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH = 'tests/fixtures/
 const CONTEXT_COMPACTION_WORK_FIXTURE_DIR =
   `${CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH}/工作`
 
+export const HUMAN_CONTEXT_COMPACTION_RUN1_USER_INPUT =
+  '上周周报文件叫什么？请直接回答文件名。'
+
 export const HUMAN_CONTEXT_COMPACTION_USER_INPUT =
   '帮我写下这周的工作周报文件，基于我工作目录下的所有文件信息，记得参考我上周写的周报风格来哦'
 

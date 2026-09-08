@@ -117,7 +117,7 @@ describe('splitMessagesForCompactionTail', () => {
     expect(split.tail).not.toContain(current)
   })
 
-  it('excludes synthesized checkpoint users from the fold and tail', () => {
+  it('keeps synthesized checkpoint users in folded history instead of dropping them', () => {
     const checkpoint = createCompactedBrainUserMessage('checkpoint summary')
     const current = createCurrentBrainUserMessage('continue')
     const tail = aiToolPair('2', 'current work', 'current result')
@@ -126,13 +126,40 @@ describe('splitMessagesForCompactionTail', () => {
       [checkpoint, new HumanMessage('old task'), ...earlier, current, ...tail],
       estimateMessagesForContext([current, ...tail])
     )
-    expect(split.folded).not.toContain(checkpoint)
+    expect(split.folded).toContain(checkpoint)
     expect(split.tail).not.toContain(checkpoint)
     expect(split.folded.map((message) => String(message.content))).toContain('old task')
+  })
+
+  it('does not treat a checkpoint user as the start of the leftover process turn', () => {
+    const checkpoint = createCompactedBrainUserMessage('checkpoint summary')
+    const leftover = aiToolPair('1', 'x'.repeat(2000), 'y'.repeat(2000))
+    const lastPair = aiToolPair('2', 'b'.repeat(400), 'c'.repeat(400))
+    const split = splitMessagesForCompactionTail(
+      [new SystemMessage('sys'), checkpoint, ...leftover, ...lastPair],
+      estimateMessagesForContext(lastPair)
+    )
+    expect(split.tail).toEqual(lastPair)
+    expect(split.folded).toContain(checkpoint)
+    expect(split.folded).toEqual([checkpoint, ...leftover])
+    expect(split.isSplitTurn).toBe(false)
+    expect(split.turnPrefix).toEqual([])
   })
 })
 
 describe('hasCompressibleCompactionHistory', () => {
+  it('is false when only a checkpoint user sits outside the keep window', () => {
+    const checkpoint = createCompactedBrainUserMessage('checkpoint summary')
+    const current = createCurrentBrainUserMessage('continue')
+    const tail = aiToolPair('2', 'current work', 'current result')
+    expect(
+      hasCompressibleCompactionHistory(
+        [checkpoint, current, ...tail],
+        estimateMessagesForContext([current, ...tail])
+      )
+    ).toBe(false)
+  })
+
   it('is false when the keep window covers the whole conversation', () => {
     const current = createCurrentBrainUserMessage('fill weekly report')
     const pair = aiToolPair('1', 'reading', 'nodes')
@@ -233,7 +260,7 @@ describe('renderMessagesForCompaction', () => {
     )
   })
 
-  it('renders a user message as its own block followed by a blank line', () => {
+  it('renders a user and the following process in one turn without a blank line', () => {
     const rendered = renderMessagesForCompaction([
       new HumanMessage('<user_context>\n  <task_goal>\n填周报\n  </task_goal>\n</user_context>'),
       new AIMessage({
@@ -246,13 +273,66 @@ describe('renderMessagesForCompaction', () => {
       [
         '[user]',
         '<user_context>\n  <task_goal>\n填周报\n  </task_goal>\n</user_context>',
-        '',
         '[ai] 先读',
         '[tool_call] docx_read_nodes(sourcePath="a.docx")',
         '[tool] ok'
       ].join('\n')
     )
     expect(rendered).not.toContain('[round')
+  })
+
+  it('renders a checkpoint as a conversation user instead of a separate tag', () => {
+    const rendered = renderMessagesForCompaction([
+      createCompactedBrainUserMessage(
+        'The conversation history before this point was compacted into the following summary:\n\n<summary>\n## 目标\n写周报\n</summary>'
+      ),
+      new AIMessage({ content: '继续写' }),
+      new HumanMessage('改标题'),
+      new AIMessage({ content: '好' })
+    ])
+    expect(rendered).toBe(
+      [
+        '[user]',
+        'The conversation history before this point was compacted into the following summary:',
+        '',
+        '<summary>',
+        '## 目标',
+        '写周报',
+        '</summary>',
+        '[ai] 继续写',
+        '',
+        '[user]',
+        '改标题',
+        '[ai] 好'
+      ].join('\n')
+    )
+    expect(rendered).not.toContain('<previous-summary>')
+  })
+
+  it('inserts a blank line only between turns', () => {
+    const rendered = renderMessagesForCompaction([
+      new HumanMessage('上周周报叫什么？'),
+      new AIMessage({ content: '工作/上周周报-已发版.docx' }),
+      new HumanMessage('按上周风格写本周周报'),
+      new AIMessage({
+        content: '先读上周',
+        tool_calls: [toolCall('1', 'docx_read_outline', { sourcePath: '工作/上周周报-已发版.docx' })]
+      }),
+      new ToolMessage({ content: '标题、整体判断', tool_call_id: '1' })
+    ])
+    expect(rendered).toBe(
+      [
+        '[user]',
+        '上周周报叫什么？',
+        '[ai] 工作/上周周报-已发版.docx',
+        '',
+        '[user]',
+        '按上周风格写本周周报',
+        '[ai] 先读上周',
+        '[tool_call] docx_read_outline(sourcePath="工作/上周周报-已发版.docx")',
+        '[tool] 标题、整体判断'
+      ].join('\n')
+    )
   })
 
   it('trims leading and trailing whitespace from AI thoughts and tool results', () => {

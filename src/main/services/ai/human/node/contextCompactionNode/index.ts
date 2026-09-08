@@ -12,10 +12,7 @@ import { buildBrainSystemPrompt } from '../../prompts/brain'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
-import {
-  resolveCompactionCoveredThroughSeq,
-  resolveLatestCompactionSummary
-} from '../../memory/transcript'
+import { resolveCompactionCoveredThroughSeq } from '../../memory/transcript'
 import {
   countTailBookmarkMessages,
   createCompactedBrainUserMessage,
@@ -29,11 +26,9 @@ const compactConversation = async (input: {
   ctx: AiRunContext
   taskId: string
   conversationText: string
-  previousSummary?: string
 }): Promise<string> => {
   const prompt = buildHistoryCompactionPrompt({
-    conversationText: input.conversationText,
-    previousSummary: input.previousSummary
+    conversationText: input.conversationText
   })
   return input.ctx.chatText({
     caller: 'human.context_compaction',
@@ -104,7 +99,6 @@ export const createContextCompactionNode = (input: {
     })
 
     const currentRecords = await input.ctx.loadMessageLog()
-    const previousSummary = resolveLatestCompactionSummary(currentRecords)
     const historyText = renderMessagesForCompaction(isSplitTurn ? history : folded)
     const prefixText = isSplitTurn ? renderMessagesForCompaction(turnPrefix) : ''
     const sourceHistoryTokenEstimate = estimateTextTokens(
@@ -117,8 +111,7 @@ export const createContextCompactionNode = (input: {
         ? await compactConversation({
             ctx: input.ctx,
             taskId: state.task.taskId,
-            conversationText: historyText,
-            previousSummary
+            conversationText: historyText
           })
         : ''
       const prefixSummary = await compactTurnPrefix({
@@ -131,8 +124,7 @@ export const createContextCompactionNode = (input: {
       summary = await compactConversation({
         ctx: input.ctx,
         taskId: state.task.taskId,
-        conversationText: historyText,
-        previousSummary
+        conversationText: historyText
       })
     }
 

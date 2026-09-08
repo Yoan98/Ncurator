@@ -12,7 +12,10 @@ import {
 } from '../../../../src/main/services/ai/human/prompts/compaction'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import type { ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../src/shared/types'
-import { createCurrentBrainUserMessage } from '../../../../src/main/services/ai/human/node/utils/messageTail'
+import {
+  createCompactedBrainUserMessage,
+  createCurrentBrainUserMessage
+} from '../../../../src/main/services/ai/human/node/utils/messageTail'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import {
@@ -110,16 +113,17 @@ describe('ai human history compaction prompt', () => {
     expect(prompt.user).toContain('## 关键上下文')
     expect(prompt.user).not.toContain('[round')
     expect(prompt.user).not.toContain('<previous-summary>')
+    expect(prompt.user).toContain('只保留后续工作仍需要的信息')
+    expect(prompt.user).toContain('不要逐条复述工具过程')
   })
 
-  it('uses the update instruction when a previous summary is present', () => {
+  it('does not use a separate update prompt', () => {
     const prompt = buildHistoryCompactionPrompt({
-      conversationText: '[user]\n改标题',
-      previousSummary: '## 目标\n写周报'
+      conversationText: '[user]\n改标题'
     })
-    expect(prompt.user).toContain('<previous-summary>')
-    expect(prompt.user).toContain('## 目标\n写周报')
-    expect(prompt.user).toContain('保留旧摘要里已有的信息')
+    expect(prompt.user).not.toContain('<previous-summary>')
+    expect(prompt.user).not.toContain('保留旧摘要里已有的信息')
+    expect(prompt.user).toContain('对话里若已有摘要')
   })
 
   it('uses the turn-prefix instruction without a previous summary', () => {
@@ -254,7 +258,10 @@ describe('ai human context compaction node', () => {
     )
   })
 
-  it('calls history then turn-prefix prompts on a mid-turn split and merges previous summary', async () => {
+  it('calls history then turn-prefix prompts on a mid-turn split and keeps checkpoint in conversation', async () => {
+    const checkpoint = createCompactedBrainUserMessage(
+      wrapCompactionCheckpointContent('## 目标\n写周报')
+    )
     const older = new HumanMessage('old task')
     const olderPair = [
       new AIMessage({
@@ -318,7 +325,7 @@ describe('ai human context compaction node', () => {
       sendEvent: () => undefined
     } as AiRunContext
     const cache = createHumanRuntimeCache()
-    cache.messages = [older, ...olderPair, user, ...middle, ...lastPair]
+    cache.messages = [checkpoint, older, ...olderPair, user, ...middle, ...lastPair]
     const node = createContextCompactionNode({ ctx, cache })
     await node(
       createInitialHumanState({
@@ -328,9 +335,10 @@ describe('ai human context compaction node', () => {
     )
 
     expect(prompts).toHaveLength(2)
-    expect(prompts[0]?.user).toContain('<previous-summary>')
+    expect(prompts[0]?.user).not.toContain('<previous-summary>')
+    expect(prompts[0]?.user).toContain('compacted into the following summary')
     expect(prompts[0]?.user).toContain('## 目标\n写周报')
-    expect(prompts[0]?.user).toContain('保留旧摘要里已有的信息')
+    expect(prompts[0]?.user).toContain('只保留后续工作仍需要的信息')
     expect(prompts[1]?.user).toContain('## 原始请求')
     expect(prompts[1]?.user).not.toContain('<previous-summary>')
     expect(appended[0]?.kind).toBe('annotation')

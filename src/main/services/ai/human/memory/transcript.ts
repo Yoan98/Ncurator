@@ -158,26 +158,6 @@ export const resolveCompactionCoveredThroughSeq = (
   return [...ordered].reverse().find((record) => record.seq < firstKept.seq)?.seq
 }
 
-export const resolveLatestCompactionSummary = (
-  records: ChatMessageLogRecord[]
-): string | undefined => {
-  const ordered = orderMessageLogBySeq(records)
-  const record = [...ordered]
-    .reverse()
-    .find(
-      (item) =>
-        item.entry.kind === 'annotation' && item.entry.eventType === 'compaction_checkpoint'
-    )
-  if (
-    record?.entry.kind !== 'annotation' ||
-    record.entry.eventType !== 'compaction_checkpoint'
-  ) {
-    return undefined
-  }
-  const summary = record.entry.payload.summary.trim()
-  return summary || undefined
-}
-
 /**
  * 把不可变日志投影为下一次模型调用需要的历史。
  * `compaction_checkpoint.coveredThroughSeq` 覆盖范围内的对话由 checkpoint 摘要替代，绝不同时发送摘要和完整旧历史。

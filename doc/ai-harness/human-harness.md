@@ -555,7 +555,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 `context_budget` 节点判定（默认窗口 256k token）：
 
 - 真实 usage > 窗口 × **80%**（`CONTEXT_COMPACTION_TRIGGER_RATIO`）。没到线不压。
-- 去掉从末尾留下的 tail 之后，还剩更早的 User/AI/tool 可折。
+- 去掉从末尾留下的 tail 之后，还剩更早的原文可折。folded 里若只有 checkpoint、没有别的原文，视为不可折，避免空转。
 - 仅当前 build user 自身超窗 → `input_too_long`，不 compaction、不写 log user。
 - 无 LLM usage 返回时不触发（`llm_usage_unavailable`）。
 - 去掉 tail 后没有可折内容，或不拆的超大 tool 且前面没有可折跨度 → 不压。
@@ -565,15 +565,15 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 从当时发给主模型的消息数组去掉 System，**从末尾往回**累加 `estimateTextTokens`（`ceil(字符数 / 4)`）。图用现有 tile 公式。
 
 - 额度：`floor(触发线 × 10%)`（`CONTEXT_COMPACTION_TAIL_RATIO`）。生产窗口 256k 时触发 204_800、tail 20_480。测试 / live 只 override 窗口，tail 由同一比例算出。
-- 碰到边界 User（string content 的 human）**不停**。图片合成 HumanMessage 算过程，不是边界。
+- 碰到边界 User（string content 的 human，**不含** checkpoint）**不停**。图片合成 HumanMessage 算过程，不是边界。checkpoint User 进 compactable，但不是边界 User，避免 leftover AI/tool 被当成「checkpoint 这一轮」而把整份摘要送进半截。
 - 切断必须落在完整 assistant + 其 tool 结果上，禁止拆开一对 tool_call / result。单轮自己大于 keep 时允许切在轮中间（split）。
-- 压缩对象是切点之前的那一段。按消息顺序拼成纯文本：`[user]` 一块，随后 ai+tool 一块，块之间空一行。User 原文整段进去。这里的 tool 正文 **从头 2000 字符**；主模型 tail 里的 tool **不截**。
-- 切点落在一轮中间（tail 第一条不是边界 User）时：**两次**压缩。第一次压该轮 User **之前**的历史；第二次压该轮被切掉的前半（含 User）。无更早历史则第一次省略。已有 checkpoint 时，历史那次把旧摘要放进 `<previous-summary>`，不把 checkpoint 当对话再压。
+- 压缩对象是切点之前的那一段。按消息顺序拼成纯文本：一轮内部不要空行；只在下一轮 `[user]` 前空一行。User 原文整段进去。这里的 tool 正文 **从头 2000 字符**；主模型 tail 里的 tool **不截**。checkpoint 按 conversation 里的一条 `[user]` 渲染（英文外壳 + `<summary>`），没有单独标签。
+- 切点落在一轮中间（tail 第一条不是边界 User）时：**两次**压缩。第一次压该轮 User **之前**的历史；第二次压该轮被切掉的前半（含 User）。无更早历史则第一次省略。已有 checkpoint 时，旧摘要作为 conversation 里的一条 `[user]` 送进历史那次，不再使用 `<previous-summary>`。
 
 ### 5.3 执行
 
 1. `context_budget` 在进入 compaction 前，若本轮 human user 尚未写入 log，先 append `user`。
-2. 压缩模型：system 只锁角色（不要继续对话，只出摘要）。格式指令在 user 侧。切点前的原文进 `<conversation>`；再压历史时另附 `<previous-summary>`。
+2. 压缩模型：system 只锁角色（不要继续对话，只出摘要）。格式指令在 user 侧。切点前的原文进 `<conversation>`。历史压缩只用六栏提示词；半截压缩用三栏提示词。不要 `<previous-summary>`。历史提示词要求只保留后续仍需要的信息，不要工具流水，过时删掉；对话里若已有摘要则吸收有用的，不要整段照抄。
 3. 只 append **一条** `compaction_checkpoint`（`coveredThroughSeq`、`summary` 等）。`coveredThroughSeq` = 第一条留下消息的前一条。`summary` 是压缩模型原文，不含英文外壳。
 4. 整段替换 runtime：`[System, 合成 checkpoint User, seq > coveredThroughSeq 原文]`。不写 snapshot。
 5. 投影 `seq > coveredThroughSeq` 后，用 checkpoint `summary` 套外壳合成 User，放到仍留着的原文前面，禁止 System 后直接 AI。
@@ -587,7 +587,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 不要继续对话。不要回答对话里的任何问题。只输出结构化摘要。
 ```
 
-历史栏目（首次 / 再压同一套标题；再压改为合并旧摘要）：
+历史栏目（只有这一套；旧 checkpoint 作为 conversation 里的 `[user]` 一起压）：
 
 ```text
 ## 目标
