@@ -4,13 +4,18 @@ import type { AiRunContext } from '../../../types'
 import { resolveCompactionKeepRecentTokens } from '../../constants'
 import {
   buildHistoryCompactionPrompt,
+  buildTurnPrefixCompactionPrompt,
+  joinSplitCompactionSummary,
   wrapCompactionCheckpointContent
 } from '../../prompts/compaction'
 import { buildBrainSystemPrompt } from '../../prompts/brain'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
-import { resolveCompactionCoveredThroughSeq } from '../../memory/transcript'
+import {
+  resolveCompactionCoveredThroughSeq,
+  resolveLatestCompactionSummary
+} from '../../memory/transcript'
 import {
   countTailBookmarkMessages,
   createCompactedBrainUserMessage,
@@ -19,6 +24,44 @@ import {
   renderMessagesForCompaction,
   splitMessagesForCompactionTail
 } from '../utils/messageTail'
+
+const compactConversation = async (input: {
+  ctx: AiRunContext
+  taskId: string
+  conversationText: string
+  previousSummary?: string
+}): Promise<string> => {
+  const prompt = buildHistoryCompactionPrompt({
+    conversationText: input.conversationText,
+    previousSummary: input.previousSummary
+  })
+  return input.ctx.chatText({
+    caller: 'human.context_compaction',
+    taskId: input.taskId,
+    system: prompt.system,
+    user: prompt.user,
+    schemaName: 'human_history_compaction',
+    temperature: 0.1
+  })
+}
+
+const compactTurnPrefix = async (input: {
+  ctx: AiRunContext
+  taskId: string
+  conversationText: string
+}): Promise<string> => {
+  const prompt = buildTurnPrefixCompactionPrompt({
+    conversationText: input.conversationText
+  })
+  return input.ctx.chatText({
+    caller: 'human.context_compaction',
+    taskId: input.taskId,
+    system: prompt.system,
+    user: prompt.user,
+    schemaName: 'human_history_compaction',
+    temperature: 0.1
+  })
+}
 
 export const createContextCompactionNode = (input: {
   ctx: AiRunContext
@@ -42,7 +85,8 @@ export const createContextCompactionNode = (input: {
       }
     }
 
-    const { folded, tail } = splitMessagesForCompactionTail(messages, retainTokens)
+    const split = splitMessagesForCompactionTail(messages, retainTokens)
+    const { folded, tail, history, turnPrefix, isSplitTurn } = split
     const budgetTokensBefore = state.execution.contextBudget?.budgetTokens || 0
     emitCompactionStarted({
       sendEvent: input.ctx.sendEvent,
@@ -59,18 +103,39 @@ export const createContextCompactionNode = (input: {
       stage: 'human_brain'
     })
 
-    const prompt = buildHistoryCompactionPrompt({
-      conversationText: renderMessagesForCompaction(folded)
-    })
-    const sourceHistoryTokenEstimate = estimateTextTokens(`${prompt.user}`)
-    const summary = await input.ctx.chatText({
-      caller: 'human.context_compaction',
-      taskId: state.task.taskId,
-      system: prompt.system,
-      user: prompt.user,
-      schemaName: 'human_history_compaction',
-      temperature: 0.1
-    })
+    const currentRecords = await input.ctx.loadMessageLog()
+    const previousSummary = resolveLatestCompactionSummary(currentRecords)
+    const historyText = renderMessagesForCompaction(isSplitTurn ? history : folded)
+    const prefixText = isSplitTurn ? renderMessagesForCompaction(turnPrefix) : ''
+    const sourceHistoryTokenEstimate = estimateTextTokens(
+      isSplitTurn ? `${historyText}\n${prefixText}` : historyText
+    )
+
+    let summary: string
+    if (isSplitTurn) {
+      const historySummary = history.length
+        ? await compactConversation({
+            ctx: input.ctx,
+            taskId: state.task.taskId,
+            conversationText: historyText,
+            previousSummary
+          })
+        : ''
+      const prefixSummary = await compactTurnPrefix({
+        ctx: input.ctx,
+        taskId: state.task.taskId,
+        conversationText: prefixText
+      })
+      summary = joinSplitCompactionSummary(historySummary, prefixSummary)
+    } else {
+      summary = await compactConversation({
+        ctx: input.ctx,
+        taskId: state.task.taskId,
+        conversationText: historyText,
+        previousSummary
+      })
+    }
+
     const tokenEstimateAfter = estimateTextTokens(String(summary || ''))
     const compactBlockId = randomUUID()
     const compactBlock = {
@@ -83,7 +148,6 @@ export const createContextCompactionNode = (input: {
       tokenEstimateAfter
     }
 
-    const currentRecords = await input.ctx.loadMessageLog()
     const coveredThroughSeq = resolveCompactionCoveredThroughSeq(
       currentRecords,
       countTailBookmarkMessages(tail)
@@ -105,7 +169,8 @@ export const createContextCompactionNode = (input: {
         payload: {
           compactBlockId,
           coveredThroughSeq,
-          sourceMessageCount: folded.length
+          sourceMessageCount: folded.length,
+          summary: compactBlock.summary
         }
       }
     ])
@@ -131,28 +196,12 @@ export const createContextCompactionNode = (input: {
     input.cache.lastBrainMessageTokenEstimate = undefined
     input.cache.postCompactionNeedsFreshBrainUsage = true
     input.cache.lastBrainUsageUnavailable = false
-    const rebuilt = buildCompactedMessages({
+    input.cache.messages = buildCompactedMessages({
       ctx: input.ctx,
       summary: compactBlock.summary,
       tail
     })
-    const compactedUserText = String(rebuilt[1]?.content || '').trim()
-    if (!compactedUserText) {
-      throw new Error('compaction user 文本为空，无法写入消息日志。')
-    }
-    await input.ctx.appendMessageLog([
-      {
-        kind: 'user',
-        content: compactedUserText,
-        origin: 'compaction',
-        context: {
-          selectedReferences: [],
-          attachments: []
-        }
-      }
-    ])
-    input.cache.messages = rebuilt
-    input.cache.currentUserMessageIndex = rebuilt.findIndex(isCurrentBrainUserMessage)
+    input.cache.currentUserMessageIndex = input.cache.messages.findIndex(isCurrentBrainUserMessage)
     input.cache.currentUserLogAppended = true
 
     return {

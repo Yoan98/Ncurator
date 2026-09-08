@@ -5,7 +5,8 @@ import {
   splitMessagesForCompactionTail,
   hasCompressibleCompactionHistory,
   countTailBookmarkMessages,
-  createCurrentBrainUserMessage
+  createCurrentBrainUserMessage,
+  createCompactedBrainUserMessage
 } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 import { estimateMessagesForContext } from '../../../../src/main/services/ai/human/memory/multimodal'
 
@@ -67,7 +68,7 @@ describe('splitMessagesForCompactionTail', () => {
     expect(split.folded).toEqual([current])
   })
 
-  it('snaps the cut to the nearby user when the turn prefix is within 10%', () => {
+  it('keeps a mid-turn split instead of snapping to the nearby user', () => {
     const older = new HumanMessage('old task')
     const user = new HumanMessage('u'.repeat(80))
     const firstPair = aiToolPair('1', 'a'.repeat(40), 't'.repeat(40))
@@ -77,8 +78,10 @@ describe('splitMessagesForCompactionTail', () => {
       [new SystemMessage('sys'), older, ...aiToolPair('0', 'old', 'old'), user, ...firstPair, ...lastPair],
       keep
     )
-    expect(split.tail[0]).toBe(user)
-    expect(split.tail).toEqual([user, ...firstPair, ...lastPair])
+    expect(split.isSplitTurn).toBe(true)
+    expect(split.tail).toEqual(lastPair)
+    expect(split.history[0]).toBe(older)
+    expect(split.turnPrefix[0]).toBe(user)
     expect(split.folded[0]).toBe(older)
   })
 
@@ -94,6 +97,9 @@ describe('splitMessagesForCompactionTail', () => {
     expect(split.tail).toEqual(lastPair)
     expect(split.folded[0]).toBe(user)
     expect(split.folded).toEqual([user, ...middle])
+    expect(split.isSplitTurn).toBe(true)
+    expect(split.history).toEqual([])
+    expect(split.turnPrefix).toEqual([user, ...middle])
   })
 
   it('does not treat image-reference humans as a user boundary', () => {
@@ -110,6 +116,20 @@ describe('splitMessagesForCompactionTail', () => {
     expect(split.tail.at(-1)).toBe(pair[1])
     expect(split.tail).not.toContain(current)
   })
+
+  it('excludes synthesized checkpoint users from the fold and tail', () => {
+    const checkpoint = createCompactedBrainUserMessage('checkpoint summary')
+    const current = createCurrentBrainUserMessage('continue')
+    const tail = aiToolPair('2', 'current work', 'current result')
+    const earlier = aiToolPair('1', 'old work', 'old result')
+    const split = splitMessagesForCompactionTail(
+      [checkpoint, new HumanMessage('old task'), ...earlier, current, ...tail],
+      estimateMessagesForContext([current, ...tail])
+    )
+    expect(split.folded).not.toContain(checkpoint)
+    expect(split.tail).not.toContain(checkpoint)
+    expect(split.folded.map((message) => String(message.content))).toContain('old task')
+  })
 })
 
 describe('hasCompressibleCompactionHistory', () => {
@@ -124,7 +144,7 @@ describe('hasCompressibleCompactionHistory', () => {
     ).toBe(false)
   })
 
-  it('is false when snapping to the only user leaves nothing to fold', () => {
+  it('is true when a mid-turn split folds the current user', () => {
     const current = createCurrentBrainUserMessage('fill weekly report')
     const huge = aiToolPair('1', 'x'.repeat(4000), 'y'.repeat(4000))
     expect(
@@ -132,7 +152,7 @@ describe('hasCompressibleCompactionHistory', () => {
         [current, ...huge],
         Math.floor(estimateMessagesForContext(huge) * 0.1)
       )
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('is true when earlier users or process remain after taking the tail', () => {

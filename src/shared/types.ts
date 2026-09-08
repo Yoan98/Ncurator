@@ -1813,8 +1813,6 @@ export type ChatMessageImageRef = {
   height: number
 }
 
-export type ChatMessageLogUserOrigin = 'human' | 'compaction'
-
 export type ChatMessageLogUserContext = {
   selectedReferences: SelectedReference[]
   attachments: ChatAttachment[]
@@ -1853,6 +1851,7 @@ export type ChatMessageLogAnnotationEntry =
         compactBlockId: string
         coveredThroughSeq: number
         sourceMessageCount: number
+        summary: string
       }
     }
   | {
@@ -1875,7 +1874,6 @@ export type ChatMessageLogEntry =
   | {
       kind: 'user'
       content: string
-      origin: ChatMessageLogUserOrigin
       context: ChatMessageLogUserContext
     }
   | {

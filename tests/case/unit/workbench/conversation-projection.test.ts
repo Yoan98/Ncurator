@@ -4,7 +4,6 @@ import {
   projectAiConversationMessages
 } from '../../../../src/shared/workbench/conversationProjection'
 import type { AiRunRecord, ChatMessage, ChatMessageLogRecord } from '../../../../src/shared/types'
-import { wrapCompactionCheckpointContent } from '../../../../src/main/services/ai/human/prompts/compaction'
 
 const buildRun = (input: Partial<AiRunRecord> & { id: string }): AiRunRecord => ({
   id: input.id,
@@ -53,7 +52,6 @@ describe('conversationProjection', () => {
         entry: {
           kind: 'user',
           content: 'hello',
-          origin: 'human',
           context: { selectedReferences: [], attachments: [] }
         }
       }),
@@ -80,7 +78,7 @@ describe('conversationProjection', () => {
     expect(messages[1]).toMatchObject({ role: 'assistant', content: 'world' })
   })
 
-  it('uses run.input for the bubble and skips compaction users', () => {
+  it('uses run.input for the bubble and ignores compaction checkpoints', () => {
     const runs = [
       buildRun({
         id: 'run-1',
@@ -97,7 +95,6 @@ describe('conversationProjection', () => {
         entry: {
           kind: 'user',
           content: '<user_context>写周报</user_context>',
-          origin: 'human',
           context: { selectedReferences: [], attachments: [] }
         }
       }),
@@ -105,10 +102,14 @@ describe('conversationProjection', () => {
         runId: 'run-1',
         seq: 2,
         entry: {
-          kind: 'user',
-          content: wrapCompactionCheckpointContent('当前交付：- 已写周报'),
-          origin: 'compaction',
-          context: { selectedReferences: [], attachments: [] }
+          kind: 'annotation',
+          eventType: 'compaction_checkpoint',
+          payload: {
+            compactBlockId: 'checkpoint-1',
+            coveredThroughSeq: 1,
+            sourceMessageCount: 1,
+            summary: '当前交付：- 已写周报'
+          }
         }
       }),
       buildLogRecord({

@@ -8,12 +8,12 @@ import type { AiRunContext } from '../../types'
 import type { HumanState } from '../types'
 import { buildBrainUserMessage } from '../prompts/brain'
 import { createImageReferenceMessage } from './multimodal'
-import { createCurrentBrainUserMessage } from '../node/utils/messageTail'
+import { createCompactedBrainUserMessage, createCurrentBrainUserMessage } from '../node/utils/messageTail'
 import {
   orderMessageLogBySeq,
-  orderProjectedRecordsForBrain,
   repairInterruptedToolCalls
 } from './transcript'
+import { wrapCompactionCheckpointContent } from '../prompts/compaction'
 
 const toToolCall = (
   call: ChatMessageLogToolCall
@@ -53,13 +53,15 @@ export const projectBrainMessagesFromLog = (input: {
       ? compactionCheckpointRecord.entry.payload
       : undefined
 
-  const projectedRecords = orderProjectedRecordsForBrain(
-    compactionCheckpoint
-      ? ordered.filter((record) => record.seq > compactionCheckpoint.coveredThroughSeq)
-      : ordered
-  )
+  const projectedRecords = compactionCheckpoint
+    ? ordered.filter((record) => record.seq > compactionCheckpoint.coveredThroughSeq)
+    : ordered
 
   const messages: BaseMessage[] = []
+  const checkpointSummary = compactionCheckpoint?.summary.trim()
+  if (checkpointSummary) {
+    messages.push(createCompactedBrainUserMessage(wrapCompactionCheckpointContent(checkpointSummary)))
+  }
   let pendingImages: ChatMessageImageRef[] = []
   const flushImages = (): void => {
     if (pendingImages.length === 0) return

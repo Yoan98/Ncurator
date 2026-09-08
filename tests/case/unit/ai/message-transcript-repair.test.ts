@@ -9,7 +9,6 @@ import type { ChatMessageLogEntry } from '../../../../src/shared/types'
 const userEntry = (content: string): ChatMessageLogEntry => ({
   kind: 'user',
   content,
-  origin: 'human',
   context: {
     selectedReferences: [],
     attachments: []

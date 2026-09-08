@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AIMessage, ToolMessage } from '@langchain/core/messages'
 import type {
   ChatMessageLogEntry,
-  ChatMessageLogRecord,
-  ChatMessageLogUserOrigin
+  ChatMessageLogRecord
 } from '../../../../src/shared/types'
 import {
   projectMessageLogRecords,
@@ -15,16 +14,28 @@ import { wrapCompactionCheckpointContent } from '../../../../src/main/services/a
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 
-const user = (
-  content: string,
-  origin: ChatMessageLogUserOrigin = 'human'
-): ChatMessageLogEntry => ({
+const user = (content: string): ChatMessageLogEntry => ({
   kind: 'user',
   content,
-  origin,
   context: {
     selectedReferences: [],
     attachments: []
+  }
+})
+
+const checkpoint = (input: {
+  coveredThroughSeq: number
+  sourceMessageCount?: number
+  summary?: string
+  compactBlockId?: string
+}): ChatMessageLogEntry => ({
+  kind: 'annotation',
+  eventType: 'compaction_checkpoint',
+  payload: {
+    compactBlockId: input.compactBlockId || 'checkpoint-1',
+    coveredThroughSeq: input.coveredThroughSeq,
+    sourceMessageCount: input.sourceMessageCount ?? 2,
+    summary: input.summary || '目标：已写周报'
   }
 })
 
@@ -51,15 +62,12 @@ describe('ai human message-log recovery', () => {
         },
         {
           runId: 'run-2',
-          entry: {
-            kind: 'annotation',
-            eventType: 'compaction_checkpoint',
-            payload: {
-              compactBlockId: 'checkpoint-1',
-              coveredThroughSeq: 2,
-              sourceMessageCount: 2
-            }
-          }
+          entry: checkpoint({
+            compactBlockId: 'checkpoint-1',
+            coveredThroughSeq: 2,
+            sourceMessageCount: 2,
+            summary: '目标：已写周报'
+          })
         },
         { runId: 'run-2', entry: user('continue from summary') },
         {
@@ -209,7 +217,8 @@ describe('ai human message-log recovery', () => {
   })
 
   it('projects retained tail process after the compacted user when coveredThroughSeq sits before the tail', () => {
-    const compactedUser = wrapCompactionCheckpointContent('目标：\n写周报')
+    const summary = '目标：\n写周报'
+    const compactedUser = wrapCompactionCheckpointContent(summary)
     const log = records([
       { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
       {
@@ -242,17 +251,13 @@ describe('ai human message-log recovery', () => {
       },
       {
         runId: 'run-1',
-        entry: {
-          kind: 'annotation',
-          eventType: 'compaction_checkpoint',
-          payload: {
-            compactBlockId: 'checkpoint-1',
-            coveredThroughSeq: 3,
-            sourceMessageCount: 3
-          }
-        }
-      },
-      { runId: 'run-1', entry: user(compactedUser, 'compaction') }
+        entry: checkpoint({
+          compactBlockId: 'checkpoint-1',
+          coveredThroughSeq: 3,
+          sourceMessageCount: 3,
+          summary
+        })
+      }
     ])
     const ctx = {
       platform: 'macos',
@@ -287,7 +292,8 @@ describe('ai human message-log recovery', () => {
   })
 
   it('projects the compacted user then a new user without copying memory', () => {
-    const compactedUser = wrapCompactionCheckpointContent('目标：\n- 已写周报')
+    const summary = '目标：\n- 已写周报'
+    const compactedUser = wrapCompactionCheckpointContent(summary)
     const log = records([
       { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
       {
@@ -296,17 +302,13 @@ describe('ai human message-log recovery', () => {
       },
       {
         runId: 'run-1',
-        entry: {
-          kind: 'annotation',
-          eventType: 'compaction_checkpoint',
-          payload: {
-            compactBlockId: 'checkpoint-1',
-            coveredThroughSeq: 2,
-            sourceMessageCount: 2
-          }
-        }
-      },
-      { runId: 'run-1', entry: user(compactedUser, 'compaction') }
+        entry: checkpoint({
+          compactBlockId: 'checkpoint-1',
+          coveredThroughSeq: 2,
+          sourceMessageCount: 2,
+          summary
+        })
+      }
     ])
     const ctx = {
       platform: 'macos',
@@ -339,7 +341,8 @@ describe('ai human message-log recovery', () => {
   })
 
   it('puts the compacted user in front of leftover process after a compaction_checkpoint', () => {
-    const compactedUser = wrapCompactionCheckpointContent('目标：\n- 尚未生成文件')
+    const summary = '目标：\n- 尚未生成文件'
+    const compactedUser = wrapCompactionCheckpointContent(summary)
     const log = records([
       { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
       {
@@ -348,17 +351,13 @@ describe('ai human message-log recovery', () => {
       },
       {
         runId: 'run-1',
-        entry: {
-          kind: 'annotation',
-          eventType: 'compaction_checkpoint',
-          payload: {
-            compactBlockId: 'checkpoint-1',
-            coveredThroughSeq: 2,
-            sourceMessageCount: 2
-          }
-        }
+        entry: checkpoint({
+          compactBlockId: 'checkpoint-1',
+          coveredThroughSeq: 2,
+          sourceMessageCount: 2,
+          summary
+        })
       },
-      { runId: 'run-1', entry: user(compactedUser, 'compaction') },
       {
         runId: 'run-1',
         entry: { kind: 'assistant', content: 'week report generated', toolCalls: [] }

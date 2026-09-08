@@ -128,6 +128,7 @@ export type MessageLogProjection = {
     compactBlockId: string
     coveredThroughSeq: number
     sourceMessageCount: number
+    summary: string
     createdAt: number
   }
 }
@@ -157,25 +158,29 @@ export const resolveCompactionCoveredThroughSeq = (
   return [...ordered].reverse().find((record) => record.seq < firstKept.seq)?.seq
 }
 
-export const orderProjectedRecordsForBrain = (
+export const resolveLatestCompactionSummary = (
   records: ChatMessageLogRecord[]
-): ChatMessageLogRecord[] => {
-  const compactionUsers: ChatMessageLogRecord[] = []
-  const rest: ChatMessageLogRecord[] = []
-  for (const record of records) {
-    if (record.entry.kind === 'user' && record.entry.origin === 'compaction') {
-      compactionUsers.push(record)
-      continue
-    }
-    rest.push(record)
+): string | undefined => {
+  const ordered = orderMessageLogBySeq(records)
+  const record = [...ordered]
+    .reverse()
+    .find(
+      (item) =>
+        item.entry.kind === 'annotation' && item.entry.eventType === 'compaction_checkpoint'
+    )
+  if (
+    record?.entry.kind !== 'annotation' ||
+    record.entry.eventType !== 'compaction_checkpoint'
+  ) {
+    return undefined
   }
-  if (compactionUsers.length === 0) return records
-  return [...compactionUsers, ...rest]
+  const summary = record.entry.payload.summary.trim()
+  return summary || undefined
 }
 
 /**
  * 把不可变日志投影为下一次模型调用需要的历史。
- * `compaction_checkpoint.coveredThroughSeq` 覆盖范围内的对话由 compaction user 替代，绝不同时发送摘要和完整旧历史。
+ * `compaction_checkpoint.coveredThroughSeq` 覆盖范围内的对话由 checkpoint 摘要替代，绝不同时发送摘要和完整旧历史。
  */
 export const projectMessageLogRecords = (
   records: ChatMessageLogRecord[]

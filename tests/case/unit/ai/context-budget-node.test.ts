@@ -126,12 +126,7 @@ describe('ai unit context budget node', () => {
         keepRecentTokens: 80
       },
       appendMessageLog: async (entries) => {
-        appended.push(
-          ...entries.map((entry) => ({
-            kind: entry.kind,
-            origin: entry.kind === 'user' ? entry.origin : undefined
-          }))
-        )
+        appended.push(...entries.map((entry) => ({ kind: entry.kind })))
       }
     } satisfies AiRunContext
     const smallWindowNode = createContextBudgetNode({
@@ -143,7 +138,7 @@ describe('ai unit context budget node', () => {
     const nextState = await smallWindowNode(state)
 
     expect(nextState.execution.stage).toBe('context_compaction')
-    expect(appended).toEqual([{ kind: 'user', origin: 'human' }])
+    expect(appended).toEqual([{ kind: 'user' }])
     expect(cache.currentUserLogAppended).toBe(true)
     const event = events.find((item) => item.type === 'context_budget_evaluated')
     expect(event).toMatchObject({

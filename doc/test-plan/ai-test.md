@@ -952,7 +952,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：跨轮续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文。
 - How：使用共享 workspace fixture（运行时为文件地址 + 伙伴），默认上下文窗口。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同伙伴改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组。
 - Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 user.content 与最终交付，末尾是 Run 2 当前 User；该当前 User 无 `<memory>`、无 `<active_state>`；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
-- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [compaction user] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。
+- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [checkpoint User] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。
 
 ##### `human-ppt-edit-management-review-live`
 
@@ -1002,10 +1002,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-context-compaction-natural-trigger-live`
 
 - 测试类型：`backend`
-- What：live 模式下 `human` 会基于真实 brain usage 在风险周报长任务中自然触发伙伴记忆压缩；压完后发给主模型的数组为 `[System] + [compaction user] + 原文 tail`；同伙伴再发一件更重的续做时，必须再压一次；续跑首轮 brain 必须明显复用 Run 1 末次前缀缓存。
+- What：live 模式下 `human` 会基于真实 brain usage 在风险周报长任务中自然触发伙伴记忆压缩；压完后发给主模型的数组为 `[System] + [checkpoint User] + 原文 tail`；同伙伴再发一件更重的续做时，必须再压一次；续跑首轮 brain 必须明显复用 Run 1 末次前缀缓存。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩、当前工作仍能做完”的能力；同时守住跨 run 只 append 新 user、历史前缀字节不变时 provider 前缀缓存应命中。
 - How：复用风险周报 live 的真实文件地址。窗口仍为 `humanRuntimeOverrides.modelContextWindowTokens=45_000`，keep 用 `keepRecentTokens=10_000`。Run 1 用原周报长任务，不限制压缩次数。Run 2 同伙伴、不再 @ 上周周报/已交周报，要求对照刚写的本周周报和上周周报、补风险对照、标题改为「九月第一周」、核法务口径，从而再压至少一次。Run 2 首次 brain 用 `cachedInputTokens / Run1 末次 brain inputTokens` 与明显比例门槛对比。窗口不能太小：固定开销（工具 schema + system/模板）几乎不随压缩减少，过小会连续压缩死循环；也不能太大（过大时峰值达不到触发线）。continuation / resume live 仍分开，不并入本 case。
-- Oracle：Run 1 至少一次完整 compaction；压完后下一次 brain 消息为 `system + human(compaction) + 原文 tail`，不能 System 后直接 AI；五栏（目标 / 约束 / 进度 / 下一步 / 文件）；含「上周周报」、不编造「上周工作周报.docx」；周报 docx 交付成功；不对 tail 逐条复述。Run 2 首次 brain 为 `system, human(compaction), …原文…, human(新任务)`，不能 System 后直接 AI；再压至少一次且 `completed`；「目标 / 进度 / 下一步 / 约束」说的是对照、改标题或法务，而不是整段重填周报。Run 2 首次 brain 必须带回 provider 缓存 usage，且 `cachedInputTokens / Run1 末次 brain inputTokens ≥ 0.5`。按 10 分制评估压缩生命周期、摘要结构和文件交付，严格超过 8 分通过。
+- Oracle：Run 1 至少一次完整 compaction；压完后下一次 brain 消息为 `system + human(checkpoint) + 原文 tail`，不能 System 后直接 AI；六栏（目标 / 约束与偏好 / 进度 / 关键决策 / 下一步 / 关键上下文）；半轮可含 Turn Context；含「上周周报」、不编造「上周工作周报.docx」；周报 docx 交付成功；不对 tail 逐条复述。Run 2 首次 brain 为 `system, human(checkpoint), …原文…, human(新任务)`，不能 System 后直接 AI；再压至少一次且 `completed`；「目标 / 进度 / 下一步 / 约束与偏好」说的是对照、改标题或法务，而不是整段重填周报。Run 2 首次 brain 必须带回 provider 缓存 usage，且 `cachedInputTokens / Run1 末次 brain inputTokens ≥ 0.5`。按 10 分制评估压缩生命周期、摘要结构和文件交付，严格超过 8 分通过。
 - Not：不绑定压缩次数，不要求固定资料读取顺序，也不因合理表达差异判失败。不验证未压缩时的历史 user 叠加（由 `human-partner-continuation-live` 覆盖），不验证中断恢复（由 `human-partner-resume-with-new-selection-live` 覆盖）。不要求 Run 2 全程高命中（同 run 内再次 compaction 会按设计打破前缀缓存）。
 
 ##### `human-risk-report-draft-live`

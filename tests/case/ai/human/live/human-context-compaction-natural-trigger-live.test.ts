@@ -23,11 +23,12 @@ const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
 const RUN2_PREFIX_CACHE_MIN_RATIO = 0.5
 
 const REQUIRED_COMPACTION_HEADINGS = [
-  '目标：',
-  '约束：',
-  '进度：',
-  '下一步：',
-  '文件：'
+  '## 目标',
+  '## 约束与偏好',
+  '## 进度',
+  '## 关键决策',
+  '## 下一步',
+  '## 关键上下文'
 ] as const
 
 const expectedLastWeekDocAnchor = '上周周报'
@@ -211,7 +212,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + compaction user + 原文 tail 继续完成交付；同伙伴续做再压一次；Run2 首轮 brain 须明显复用 Run1 末次前缀缓存。',
+          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + checkpoint User + 原文 tail 继续完成交付；同伙伴续做再压一次；Run2 首轮 brain 须明显复用 Run1 末次前缀缓存。',
         fixtures: [CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         execute: async (runtime) => {
@@ -274,8 +275,10 @@ describe('ai human live backend', () => {
             .find((record) => record.caller === 'human.brain')
           const run1SummaryFormatSatisfied =
             run1Compaction.summaries.length > 0 &&
-            run1Compaction.summaries.every((summary) =>
-              REQUIRED_COMPACTION_HEADINGS.every((heading) => summary.includes(heading))
+            run1Compaction.summaries.every(
+              (summary) =>
+                REQUIRED_COMPACTION_HEADINGS.every((heading) => summary.includes(heading)) ||
+                summary.includes('**Turn Context (split turn):**')
             ) &&
             run1Compaction.compactionRecords.every(
               (record) =>
@@ -320,14 +323,17 @@ describe('ai human live backend', () => {
             run2FirstBrainRoles[1] !== 'ai' &&
             run2FirstBrainRoles[1] !== 'tool'
           const run2CurrentSection = [
-            extractSection(latestRun2Summary, '目标：'),
-            extractSection(latestRun2Summary, '进度：'),
-            extractSection(latestRun2Summary, '下一步：'),
-            extractSection(latestRun2Summary, '约束：')
+            extractSection(latestRun2Summary, '## 目标'),
+            extractSection(latestRun2Summary, '## 进度'),
+            extractSection(latestRun2Summary, '## 下一步'),
+            extractSection(latestRun2Summary, '## 约束与偏好')
           ].join('\n')
           const run2HistorySatisfied =
             run2Compaction.summaries.length > 0 &&
-            REQUIRED_COMPACTION_HEADINGS.every((heading) => latestRun2Summary.includes(heading)) &&
+            (REQUIRED_COMPACTION_HEADINGS.every((heading) =>
+              latestRun2Summary.includes(heading)
+            ) ||
+              latestRun2Summary.includes('**Turn Context (split turn):**')) &&
             !latestRun2Summary.includes('记忆时间线：') &&
             (latestRun2Summary.includes(expectedLastWeekDocAnchor) ||
               /\.docx|周报/.test(latestRun2Summary))
@@ -346,7 +352,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-context-compaction-run1-completes-weekly-report',
               message:
-                'Run 1 应至少压缩一次；压完后发给 brain 的数组为 system + compaction user + 原文 tail，五栏标题齐全，含「上周周报」、不编造「上周工作周报.docx」，并成功交付周报。',
+                'Run 1 应至少压缩一次；压完后发给 brain 的数组为 system + checkpoint User + 原文 tail，六栏标题齐全（半轮可含 Turn Context），含「上周周报」、不编造「上周工作周报.docx」，并成功交付周报。',
               data: {
                 startedEvents: run1Compaction.startedEvents,
                 completedEvents: run1Compaction.completedEvents,
@@ -373,7 +379,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-context-compaction-run2-continues-from-compaction-user',
               message:
-                'Run 2 首次 brain 应为 system + compaction user + 原文过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。该次压缩只要五栏，目标/进度/下一步/约束应围绕对照、改标题或法务，而不是整段重填周报。',
+                'Run 2 首次 brain 应为 system + checkpoint User + 原文过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。该次压缩只要六栏（半轮可含 Turn Context），目标/进度/下一步/约束与偏好应围绕对照、改标题或法务，而不是整段重填周报。',
               data: {
                 startedEvents: run2Compaction.startedEvents,
                 completedEvents: run2Compaction.completedEvents,

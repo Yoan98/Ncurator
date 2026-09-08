@@ -94,7 +94,6 @@ const resumeRecords: ChatMessageLogRecord[] = [
     entry: {
       kind: 'user',
       content: FROZEN_HISTORICAL_USER,
-      origin: 'human',
       context: {
         selectedReferences: [],
         attachments: []

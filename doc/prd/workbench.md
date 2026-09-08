@@ -202,10 +202,10 @@
 
 #### WB-SESSION-007 同一伙伴内恢复被中断任务
 
-- 系统行为：智能模式任务因用户主动停止、网络错误、请求超时、应用进程中断、输出截断、达到运行上限或未知异常而没有正常完成时，历史消息日志保持不变。用户之后在同一伙伴发送消息时，系统从该伙伴现有消息日志投影：若有 `compaction_checkpoint`，只保留 `seq > coveredThroughSeq` 的行。历史 User 用 log 里的 `content`（发给模型的原文）；压缩摘要在 `origin: compaction` 的 compaction user 上。`seq > coveredThroughSeq` 的原文照发（compaction user 后可跟这段原文，可含多条 User），补齐悬空工具结果，再把新 User 追加一次继续推进。新 User 不抄 compaction user。若压缩后又产生了尚未折进摘要的过程，这些过程前面必须先放 compaction user，不能直接接在 System 后面。气泡仍是人打的字（`ai_run.input`）；compaction user 不当新气泡。每条历史 human user 保留当轮参考资料和附件配置；新 user 只使用 Composer 当前配置。计划与已学习技能均从该伙伴剩余消息日志恢复。重启只标记中断，不自动重新调用模型。
+- 系统行为：智能模式任务因用户主动停止、网络错误、请求超时、应用进程中断、输出截断、达到运行上限或未知异常而没有正常完成时，历史消息日志保持不变。用户之后在同一伙伴发送消息时，系统从该伙伴现有消息日志投影：若有 `compaction_checkpoint`，只保留 `seq > coveredThroughSeq` 的行。历史 User 用 log 里的 `content`（发给模型的原文）；压缩摘要在 checkpoint 的 `summary` 上，发给主模型时再合成 User。`seq > coveredThroughSeq` 的原文照发（checkpoint User 后可跟这段原文，可含多条 User），补齐悬空工具结果，再把新 User 追加一次继续推进。新 User 不抄 checkpoint。若压缩后又产生了尚未折进摘要的过程，这些过程前面必须先放 checkpoint User，不能直接接在 System 后面。气泡仍是人打的字（`ai_run.input`）；checkpoint 不当新气泡。每条历史 human user 保留当轮参考资料和附件配置；新 user 只使用 Composer 当前配置。计划与已学习技能均从该伙伴剩余消息日志恢复。重启只标记中断，不自动重新调用模型。
 - 验收：
   - `WB-SESSION-007-AC1` 用户停止、网络错误、请求超时、进程中断、输出截断、达到运行上限和未知异常后，下一条消息可只靠消息日志继续（含计划与已学习技能）。
-  - `WB-SESSION-007-AC2` 恢复后的消息数组以日志投影为准：未压缩时为历史过程 + 尾部新 user；已压缩时为 compaction user + `seq > coveredThroughSeq` 原文（可空，可含多条 User）+ 尾部新 user。新语句不会改写历史任务或历史配置。
+  - `WB-SESSION-007-AC2` 恢复后的消息数组以日志投影为准：未压缩时为历史过程 + 尾部新 user；已压缩时为 checkpoint User + `seq > coveredThroughSeq` 原文（可空，可含多条 User）+ 尾部新 user。新语句不会改写历史任务或历史配置。
   - `WB-SESSION-007-AC3` 同一伙伴连续多次中断和恢复后仍保留完整任务主线，原始任务始终保留在记录首条 user，不把历史任务递归嵌套为新的原始任务。
   - `WB-SESSION-007-AC4` 切换伙伴或重启应用后，原伙伴日志仍可投影；其他伙伴不能读取该日志。
   - `WB-SESSION-007-AC5` 编辑并重新发送最后一条用户消息时，只删除该消息、关联 assistant、run 与该 run 的日志记录，其他历史不变。

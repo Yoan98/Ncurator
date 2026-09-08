@@ -718,14 +718,13 @@ describe('unit ai persistence backend', () => {
       entries: [
         {
           kind: 'user',
-          messageId: 'user-clear-1',
           content: 'hello',
-          origin: 'human'
+          context: { selectedReferences: [], attachments: [] }
         },
         {
           kind: 'assistant',
-          messageId: 'assistant-clear-1',
-          content: 'world'
+          content: 'world',
+          toolCalls: []
         }
       ]
     })

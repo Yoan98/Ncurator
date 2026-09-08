@@ -1,6 +1,5 @@
 import { AIMessage, HumanMessage, type BaseMessage } from '@langchain/core/messages'
 import { normalizeThoughtText } from '../../../../../../shared/thoughtText'
-import { CONTEXT_COMPACTION_SNAP_TO_USER_RATIO } from '../../constants'
 import { estimateMessagesForContext } from '../../memory/multimodal'
 
 const CURRENT_USER_MARKER = 'ncurator_current_user'
@@ -78,47 +77,57 @@ const keepGroupsFromEnd = (
   return firstKeptIndex
 }
 
-const snapToNearbyUser = (
+const findTurnStartGroupIndex = (
   groups: BaseMessage[][],
-  firstKeptIndex: number,
-  retainTokens: number
+  beforeIndex: number
 ): number => {
-  const firstKept = groups[firstKeptIndex]
-  if (!firstKept || firstKeptIndex <= 0) return firstKeptIndex
-  if (isBoundaryUser(firstKept[0]!)) return firstKeptIndex
-  let userGroupIndex = -1
-  for (let index = firstKeptIndex - 1; index >= 0; index -= 1) {
+  for (let index = beforeIndex - 1; index >= 0; index -= 1) {
     const group = groups[index]
-    if (group?.[0] && isBoundaryUser(group[0])) {
-      userGroupIndex = index
-      break
-    }
+    if (group?.[0] && isBoundaryUser(group[0])) return index
   }
-  if (userGroupIndex < 0) return firstKeptIndex
-  const extra = estimateMessagesForContext(groups.slice(userGroupIndex, firstKeptIndex).flat())
-  const slack = Math.floor(retainTokens * CONTEXT_COMPACTION_SNAP_TO_USER_RATIO)
-  return extra <= slack ? userGroupIndex : firstKeptIndex
+  return -1
 }
 
 export type CompactionMessageSplit = {
   folded: BaseMessage[]
   tail: BaseMessage[]
+  history: BaseMessage[]
+  turnPrefix: BaseMessage[]
+  isSplitTurn: boolean
 }
 
 export const splitMessagesForCompactionTail = (
   messages: BaseMessage[],
   retainTokens: number
 ): CompactionMessageSplit => {
-  const nonSystem = messages.filter((message) => message.getType() !== 'system')
-  const groups = groupMessagesForCompaction(nonSystem)
+  const compactable = messages.filter(
+    (message) => message.getType() !== 'system' && !isCompactedBrainUserMessage(message)
+  )
+  const groups = groupMessagesForCompaction(compactable)
   if (groups.length === 0) {
-    return { folded: [], tail: [] }
+    return { folded: [], tail: [], history: [], turnPrefix: [], isSplitTurn: false }
   }
-  const firstKeptIndex = keepGroupsFromEnd(groups, retainTokens)
-  const keptIndex = snapToNearbyUser(groups, firstKeptIndex, retainTokens)
+  const keptIndex = keepGroupsFromEnd(groups, retainTokens)
+  const folded = groups.slice(0, keptIndex).flat()
+  const tail = groups.slice(keptIndex).flat()
+  const firstKept = groups[keptIndex]
+  const splitAtProcess = Boolean(firstKept?.[0] && !isBoundaryUser(firstKept[0]))
+  const turnStartIndex = splitAtProcess ? findTurnStartGroupIndex(groups, keptIndex) : -1
+  if (turnStartIndex < 0) {
+    return {
+      folded,
+      tail,
+      history: folded,
+      turnPrefix: [],
+      isSplitTurn: false
+    }
+  }
   return {
-    folded: groups.slice(0, keptIndex).flat(),
-    tail: groups.slice(keptIndex).flat()
+    folded,
+    tail,
+    history: groups.slice(0, turnStartIndex).flat(),
+    turnPrefix: groups.slice(turnStartIndex, keptIndex).flat(),
+    isSplitTurn: true
   }
 }
 
