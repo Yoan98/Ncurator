@@ -291,11 +291,11 @@ tests/case/workbench/
 #### `context-clear-capsule`
 
 - 测试类型：`e2e`
-- What：run 完成后出现「清空记忆」胶囊（含图标、无问号）；hover tooltip 含伙伴名；点击后同一条 log 写入 `context_cleared`；记录不删；切断前消息置灰；悬浮恢复颜色；仍停留在同一伙伴。
-- Why：清空是切断上下文而非删伙伴或换会话。
-- How：创建伙伴并完成一次真实 AI run；检查胶囊文案与 tooltip；对胶囊截图；点击清空胶囊；检查置灰与 hover 恢复并再截图；确认仍在同一伙伴且右侧标签未清。运行中不得出现清空入口。
-- Oracle：清空后记录仍在、切断前置灰、不换伙伴 / UI / 浏览器标签，对齐 `WB-SESSION-011`；文案与 tooltip 对齐 `WB-SESSION-011-AC6`。
-- Not：不验证 compaction 算法本身。
+- What：run 完成后出现「清空消息记录」胶囊；hover tooltip 含伙伴名与无法恢复说明；点击先确认，取消不删；确认后消息列表为空，仍停留在同一伙伴，草稿不变。
+- Why：用户需要可理解的「清空对话」动作，而不是「记忆切断但仍看到旧气泡」。
+- How：创建伙伴并完成一次真实 AI run；检查胶囊文案与 tooltip；点击胶囊后取消确认并断言消息仍在；再点胶囊并确认清空；断言消息为空、仍在同一伙伴、输入草稿不变。运行中不得出现清空入口。
+- Oracle：确认后列表为空对齐 `WB-SESSION-011-AC1`；不换伙伴 / 草稿对齐 `WB-SESSION-011-AC2`；下次发送无旧上下文对齐 `WB-SESSION-011-AC3`（由清空后 message log 为空保证）；运行中不可用对齐 `WB-SESSION-011-AC4`（本 case Not，沿用既有运行态约束）；文案与 tooltip 对齐 `WB-SESSION-011-AC5`；确认框取消/确认对齐 `WB-SESSION-011-AC6`。
+- Not：不验证 compaction；不在本 case 制造文件回退记录（`WB-SESSION-011-AC7` 由 unit `clear-partner-context-deletes-messages-and-runs-keeps-file-changes` 覆盖）；不验证已废弃的置灰交互（`WB-SESSION-011-AC8`）。
 
 ### 5.2 `run`
 

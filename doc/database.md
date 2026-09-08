@@ -34,7 +34,7 @@ SQLite 保存以下业务数据：
 关键规则：
 
 - `partner` 保存名称、头像外形与颜色，以及 `pinned` / `pinned_at` 置顶状态；列表按置顶优先、置顶时间、更新时间排序。标题就是伙伴 `name`，不因消息改名。
-- `chat_session_message_log` 使用 `partner_id + seq` 保证伙伴内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated`、`compaction_checkpoint` 和 `context_cleared` 是强类型 annotation。`compaction_checkpoint` 只存书签字段（`coveredThroughSeq` 等），不存摘要。`user.content` 是发给模型的全文（`origin: human | compaction`）；compaction user 只有 checkpoint 正文。投影先切最后一次 `context_cleared`，再按书签截断。气泡文案用 `ai_run.input`。
+- `chat_session_message_log` 使用 `partner_id + seq` 保证伙伴内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated`、`compaction_checkpoint` 和 `context_cleared` 是强类型 annotation。`compaction_checkpoint` 只存书签字段（`coveredThroughSeq` 等），不存摘要。`user.content` 是发给模型的全文（`origin: human | compaction`）；compaction user 只有 checkpoint 正文。投影先切最后一次 `context_cleared`，再按书签截断。气泡文案用 `ai_run.input`。用户「清空消息记录」会物理删除该伙伴全部 message log 行及对应 `ai_run`，不删除 `ai_file_change`。
 - `ai_run` 挂 `partner_id`，不再保存 `workspace_json`。`partial_answer` 与 `partial_answer_role` 只保存当前流式 UI 草稿；它们不参与下一次模型上下文恢复。`failure_code` 保存 `process_interrupted`、`output_truncated`、`input_too_long` 等终止原因。
 - 待审批状态以 SQLite 中的 run 记录为准。
 - `document.active_generation_id` 是当前有效索引版本，只用于写入后删除旧 chunk 和启动/任务结束时的孤儿清理，不进入检索 `where`。

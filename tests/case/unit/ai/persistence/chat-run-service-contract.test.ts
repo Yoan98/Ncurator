@@ -700,4 +700,64 @@ describe('unit ai persistence backend', () => {
     expect(storedRun).toBeNull()
     expect(messageLog).toEqual([])
   })
+
+  it('clear-partner-context-deletes-messages-and-runs-keeps-file-changes', async () => {
+    const setup = await createTestService()
+    await seedPartner(setup.storage)
+    await seedAiTurn(setup.storage, {
+      runId: 'run-clear-1',
+      userMessageId: 'user-clear-1',
+      assistantMessageId: 'assistant-clear-1',
+      userContent: 'hello',
+      assistantContent: 'world',
+      createdAt: Date.now()
+    })
+    await setup.storage.chatMessageLog.appendBatch({
+      partnerId: 'partner-1',
+      runId: 'run-clear-1',
+      entries: [
+        {
+          kind: 'user',
+          messageId: 'user-clear-1',
+          content: 'hello',
+          origin: 'human'
+        },
+        {
+          kind: 'assistant',
+          messageId: 'assistant-clear-1',
+          content: 'world'
+        }
+      ]
+    })
+    await setup.storage.aiFileChange.saveRecord({
+      id: 'file-change-1',
+      partnerId: 'partner-1',
+      runId: 'run-clear-1',
+      status: 'applied',
+      capability: 'text_file',
+      path: '/tmp/demo.txt',
+      fileName: 'demo.txt',
+      operation: 'updated',
+      source: 'text_tool',
+      changeCount: 1,
+      insertCount: 1,
+      deleteCount: 0,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    })
+
+    const response = await setup.service.clearPartnerContext('partner-1')
+    expect(response.success).toBe(true)
+
+    const partners = await setup.storage.partner.listPartners()
+    const messageLog = await setup.storage.chatMessageLog.list('partner-1')
+    const storedRun = await setup.storage.aiRun.getRun('run-clear-1')
+    const fileChanges = await setup.storage.aiFileChange.listRecords({ partnerId: 'partner-1' })
+
+    expect(partners).toHaveLength(1)
+    expect(messageLog).toEqual([])
+    expect(storedRun).toBeNull()
+    expect(fileChanges.items).toHaveLength(1)
+    expect(fileChanges.items[0]?.id).toBe('file-change-1')
+  })
 })
