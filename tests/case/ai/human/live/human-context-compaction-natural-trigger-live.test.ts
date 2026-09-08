@@ -19,6 +19,7 @@ import {
 
 const PARTNER_ID = 'live-context-compaction'
 const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
+const LIVE_CONTEXT_COMPACTION_KEEP_RECENT_TOKENS = 5_000
 /** Run2 首轮 brain 的 cachedInputTokens 相对 Run1 末次 brain inputTokens 的最低比例。 */
 const RUN2_PREFIX_CACHE_MIN_RATIO = 0.5
 
@@ -212,7 +213,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + checkpoint User + 原文 tail 继续完成交付；同伙伴续做再压一次；Run2 首轮 brain 须明显复用 Run1 末次前缀缓存。',
+          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + checkpoint User + 原文 tail 继续完成交付；Run 1 未压出 checkpoint 则不发 Run 2；同伙伴续做再压一次；Run2 首轮 brain 须明显复用 Run1 末次前缀缓存。',
         fixtures: [CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         execute: async (runtime) => {
@@ -222,15 +223,31 @@ describe('ai human live backend', () => {
             partnerId: PARTNER_ID,
             humanRuntimeOverrides: {
               modelContextWindowTokens: LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS,
-              keepRecentTokens: 10_000
+              keepRecentTokens: LIVE_CONTEXT_COMPACTION_KEEP_RECENT_TOKENS
             }
           }
           const run1Output = await createHumanTestRunner(runtime, runnerOptions).run({
             taskId: `${runtime.taskId}-run-1`,
             userInput: HUMAN_CONTEXT_COMPACTION_USER_INPUT
           })
-          const run1EventCount = runtime.eventCollector.snapshot().length
-          const run1LlmCount = runtime.eventCollector.snapshotLlmIo().length
+          const run1Events = runtime.eventCollector.snapshot()
+          const run1LlmIo = runtime.eventCollector.snapshotLlmIo()
+          const run1Compacted =
+            collectRunCompaction({
+              events: run1Events,
+              llmIoRecords: run1LlmIo
+            }).completedEvents.length >= 1
+          if (!run1Compacted) {
+            return {
+              workspaceSeed,
+              run1Output,
+              run2Output: undefined,
+              run1Events,
+              run2Events: [],
+              run1LlmIo,
+              run2LlmIo: []
+            }
+          }
           const run2Output = await createHumanTestRunner(runtime, runnerOptions).run({
             taskId: `${runtime.taskId}-run-2`,
             userInput: HUMAN_CONTEXT_COMPACTION_RUN2_USER_INPUT
@@ -241,10 +258,10 @@ describe('ai human live backend', () => {
             workspaceSeed,
             run1Output,
             run2Output,
-            run1Events: allEvents.slice(0, run1EventCount),
-            run2Events: allEvents.slice(run1EventCount),
-            run1LlmIo: allLlmIo.slice(0, run1LlmCount),
-            run2LlmIo: allLlmIo.slice(run1LlmCount)
+            run1Events,
+            run2Events: allEvents.slice(run1Events.length),
+            run1LlmIo,
+            run2LlmIo: allLlmIo.slice(run1LlmIo.length)
           }
         },
         assert: async (result, runtime) => {

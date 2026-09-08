@@ -13,7 +13,11 @@ export const COMPACTION_SYSTEM_PROMPT = `你是上下文摘要助手。阅读用
 
 不要继续对话。不要回答对话里的任何问题。只输出结构化摘要。`
 
-const FIRST_HISTORY_INSTRUCTION = `以上消息是需要摘要的对话。请写成一份结构化的上下文检查点摘要，供后续模型继续工作。
+const firstHistoryUserPrompt = (conversationText: string) => `<conversation>
+${conversationText.trim() || '无'}
+</conversation>
+
+以上消息是需要摘要的对话。请写成一份结构化的上下文检查点摘要，供后续模型继续工作。
 
 严格使用以下格式：
 
@@ -46,7 +50,18 @@ const FIRST_HISTORY_INSTRUCTION = `以上消息是需要摘要的对话。请写
 
 各栏保持简短。保留精确的文件路径、函数名和报错原文。`
 
-const UPDATE_HISTORY_INSTRUCTION = `以上消息是需要合并进已有摘要的新对话。旧摘要在 <previous-summary> 中。
+const updateHistoryUserPrompt = (
+  conversationText: string,
+  previousSummary: string
+) => `<conversation>
+${conversationText.trim() || '无'}
+</conversation>
+
+<previous-summary>
+${previousSummary}
+</previous-summary>
+
+以上消息是需要合并进已有摘要的新对话。旧摘要在 <previous-summary> 中。
 
 用新信息更新已有结构化摘要。规则：
 - 保留旧摘要里已有的信息
@@ -85,7 +100,11 @@ const UPDATE_HISTORY_INSTRUCTION = `以上消息是需要合并进已有摘要�
 
 各栏保持简短。保留精确的文件路径、函数名和报错原文。`
 
-const TURN_PREFIX_INSTRUCTION = `这是一轮中因过长而无法整轮保留的前缀。该轮后缀（近期工作）仍会保留。
+const turnPrefixUserPrompt = (conversationText: string) => `<conversation>
+${conversationText.trim() || '无'}
+</conversation>
+
+这是一轮中因过长而无法整轮保留的前缀。该轮后缀（近期工作）仍会保留。
 
 请摘要此前缀，以便理解被留下的后缀：
 
@@ -100,27 +119,6 @@ const TURN_PREFIX_INSTRUCTION = `这是一轮中因过长而无法整轮保留�
 
 保持简短。聚焦于理解留下的后缀所必需的内容。`
 
-const EMPTY_HISTORY_SUMMARY = '无更早历史'
-
-const assembleCompactionUser = (input: {
-  conversationText: string
-  instruction: string
-  previousSummary?: string
-}): string => {
-  const parts = [
-    '<conversation>',
-    input.conversationText.trim() || '无',
-    '</conversation>',
-    ''
-  ]
-  const previous = input.previousSummary?.trim()
-  if (previous) {
-    parts.push('<previous-summary>', previous, '</previous-summary>', '')
-  }
-  parts.push(input.instruction)
-  return parts.join('\n')
-}
-
 export const buildHistoryCompactionPrompt = (input: {
   conversationText: string
   previousSummary?: string
@@ -128,11 +126,9 @@ export const buildHistoryCompactionPrompt = (input: {
   const previous = input.previousSummary?.trim()
   return {
     system: COMPACTION_SYSTEM_PROMPT,
-    user: assembleCompactionUser({
-      conversationText: input.conversationText,
-      instruction: previous ? UPDATE_HISTORY_INSTRUCTION : FIRST_HISTORY_INSTRUCTION,
-      previousSummary: previous
-    })
+    user: previous
+      ? updateHistoryUserPrompt(input.conversationText, previous)
+      : firstHistoryUserPrompt(input.conversationText)
   }
 }
 
@@ -140,14 +136,11 @@ export const buildTurnPrefixCompactionPrompt = (input: {
   conversationText: string
 }): { system: string; user: string } => ({
   system: COMPACTION_SYSTEM_PROMPT,
-  user: assembleCompactionUser({
-    conversationText: input.conversationText,
-    instruction: TURN_PREFIX_INSTRUCTION
-  })
+  user: turnPrefixUserPrompt(input.conversationText)
 })
 
 export const joinSplitCompactionSummary = (
   historySummary: string,
   turnPrefixSummary: string
 ): string =>
-  `${historySummary.trim() || EMPTY_HISTORY_SUMMARY}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixSummary.trim() || '无'}`
+  `${historySummary.trim() || '无更早历史'}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixSummary.trim() || '无'}`
