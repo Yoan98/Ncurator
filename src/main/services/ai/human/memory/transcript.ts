@@ -124,7 +124,7 @@ export type MessageLogProjection = {
   messages: BaseMessage[]
   plan: ChatMessageLogPlanItem[]
   learnedSkillIds: string[]
-  checkpoint?: {
+  compactionCheckpoint?: {
     compactBlockId: string
     coveredThroughSeq: number
     sourceMessageCount: number
@@ -132,25 +132,16 @@ export type MessageLogProjection = {
   }
 }
 
-export const sliceAfterLastContextCleared = (
+export const orderMessageLogBySeq = (
   records: ChatMessageLogRecord[]
-): ChatMessageLogRecord[] => {
-  const ordered = [...records].sort((a, b) => a.seq - b.seq)
-  const lastCleared = [...ordered]
-    .reverse()
-    .find(
-      (record) =>
-        record.entry.kind === 'annotation' && record.entry.eventType === 'context_cleared'
-    )
-  return lastCleared ? ordered.filter((record) => record.seq > lastCleared.seq) : ordered
-}
+): ChatMessageLogRecord[] => [...records].sort((a, b) => a.seq - b.seq)
 
 export const resolveCompactionCoveredThroughSeq = (
   records: ChatMessageLogRecord[],
   keepTailVisibleCount = 0
 ): number | undefined => {
-  const afterCleared = sliceAfterLastContextCleared(records)
-  const visible = afterCleared.filter(
+  const ordered = orderMessageLogBySeq(records)
+  const visible = ordered.filter(
     (record) =>
       record.entry.kind === 'user' ||
       record.entry.kind === 'assistant' ||
@@ -163,7 +154,7 @@ export const resolveCompactionCoveredThroughSeq = (
   }
   const firstKept = visible[visible.length - keepCount]
   if (!firstKept) return visible.at(-1)?.seq
-  return [...afterCleared].reverse().find((record) => record.seq < firstKept.seq)?.seq
+  return [...ordered].reverse().find((record) => record.seq < firstKept.seq)?.seq
 }
 
 export const orderProjectedRecordsForBrain = (
@@ -184,31 +175,31 @@ export const orderProjectedRecordsForBrain = (
 
 /**
  * 把不可变日志投影为下一次模型调用需要的历史。
- * checkpoint 之前的对话由一条摘要替代，绝不同时发送摘要和完整旧历史。
+ * `compaction_checkpoint.coveredThroughSeq` 覆盖范围内的对话由 compaction user 替代，绝不同时发送摘要和完整旧历史。
  */
 export const projectMessageLogRecords = (
   records: ChatMessageLogRecord[]
 ): MessageLogProjection => {
-  const afterCleared = sliceAfterLastContextCleared(records)
-  const checkpointRecord = [...afterCleared]
+  const ordered = orderMessageLogBySeq(records)
+  const compactionCheckpointRecord = [...ordered]
     .reverse()
     .find(
       (record) =>
         record.entry.kind === 'annotation' &&
         record.entry.eventType === 'compaction_checkpoint'
     )
-  const checkpoint =
-    checkpointRecord?.entry.kind === 'annotation' &&
-    checkpointRecord.entry.eventType === 'compaction_checkpoint'
+  const compactionCheckpoint =
+    compactionCheckpointRecord?.entry.kind === 'annotation' &&
+    compactionCheckpointRecord.entry.eventType === 'compaction_checkpoint'
       ? {
-          ...checkpointRecord.entry.payload,
-          createdAt: checkpointRecord.createdAt
+          ...compactionCheckpointRecord.entry.payload,
+          createdAt: compactionCheckpointRecord.createdAt
         }
       : undefined
 
-  const projectedRecords = checkpoint
-    ? afterCleared.filter((record) => record.seq > checkpoint.coveredThroughSeq)
-    : afterCleared
+  const projectedRecords = compactionCheckpoint
+    ? ordered.filter((record) => record.seq > compactionCheckpoint.coveredThroughSeq)
+    : ordered
   // 历史 user 由 projectBrainMessagesFromLog 按 content 还原；这里只投影过程 tail。
   // 每次新 run 的当前 user 统一由 buildBrainUserMessage 构造。
   const messages = deriveMessageLogMessages({
@@ -218,7 +209,7 @@ export const projectMessageLogRecords = (
   })
   let plan: ChatMessageLogPlanItem[] = []
   let learnedSkillIds: string[] = []
-  for (const record of afterCleared) {
+  for (const record of ordered) {
     const entry = record.entry
     if (entry.kind === 'annotation' && entry.eventType === 'plan_updated') {
       plan = entry.payload.plan.map((item) => ({ ...item }))
@@ -233,6 +224,6 @@ export const projectMessageLogRecords = (
     messages: repairInterruptedToolCalls(messages),
     plan,
     learnedSkillIds,
-    checkpoint
+    compactionCheckpoint
   }
 }

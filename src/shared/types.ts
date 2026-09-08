@@ -1253,7 +1253,6 @@ export type PartnerOpenResponse = {
   partner?: Partner
   messages: ChatMessage[]
   hasMoreBefore: boolean
-  lastContextClearedAt?: number | null
   activeRuns: PartnerRunSnapshot[]
   uiState?: PartnerUiStateV1
 }
@@ -1855,11 +1854,6 @@ export type ChatMessageLogAnnotationEntry =
         coveredThroughSeq: number
         sourceMessageCount: number
       }
-    }
-  | {
-      kind: 'annotation'
-      eventType: 'context_cleared'
-      payload: JsonObject
     }
   | {
       kind: 'annotation'

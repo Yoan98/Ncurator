@@ -25,7 +25,7 @@ const createContext = (): AiRunContext =>
   }) as AiRunContext
 
 describe('ai human context compaction message shape', () => {
-  it('rebuilds system, a checkpoint user, and the retained original tail', () => {
+  it('rebuilds system, a compaction user, and the retained original tail', () => {
     const current = createCurrentBrainUserMessage('<user_context>继续完成任务</user_context>')
     const tail = [
       current,
@@ -53,13 +53,13 @@ describe('ai human context compaction message shape', () => {
     expect(messages[2]).toBe(current)
     expect(messages[3]).toBe(tail[1])
     expect(messages[4]).toBe(tail[2])
-    const checkpoint = String(messages[1]?.content)
-    expect(checkpoint).toBe(wrapCompactionCheckpointContent(summary))
-    expect(checkpoint).toContain('<summary>')
-    expect(checkpoint).toContain('目标：')
-    expect(checkpoint).not.toContain('<user_context>')
-    expect(checkpoint).not.toContain('<memory>')
-    expect(checkpoint).not.toContain('<active_state>')
+    const compactionUser = String(messages[1]?.content)
+    expect(compactionUser).toBe(wrapCompactionCheckpointContent(summary))
+    expect(compactionUser).toContain('<summary>')
+    expect(compactionUser).toContain('目标：')
+    expect(compactionUser).not.toContain('<user_context>')
+    expect(compactionUser).not.toContain('<memory>')
+    expect(compactionUser).not.toContain('<active_state>')
   })
 })
 

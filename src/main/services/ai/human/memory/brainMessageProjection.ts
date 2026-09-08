@@ -10,9 +10,9 @@ import { buildBrainUserMessage } from '../prompts/brain'
 import { createImageReferenceMessage } from './multimodal'
 import { createCurrentBrainUserMessage } from '../node/utils/messageTail'
 import {
+  orderMessageLogBySeq,
   orderProjectedRecordsForBrain,
-  repairInterruptedToolCalls,
-  sliceAfterLastContextCleared
+  repairInterruptedToolCalls
 } from './transcript'
 
 const toToolCall = (
@@ -39,24 +39,24 @@ export const projectBrainMessagesFromLog = (input: {
   ctx: AiRunContext
   state: HumanState
 }): BrainMessagesProjection => {
-  const afterCleared = sliceAfterLastContextCleared(input.records)
-  const checkpointRecord = [...afterCleared]
+  const ordered = orderMessageLogBySeq(input.records)
+  const compactionCheckpointRecord = [...ordered]
     .reverse()
     .find(
       (record) =>
         record.entry.kind === 'annotation' &&
         record.entry.eventType === 'compaction_checkpoint'
     )
-  const checkpoint =
-    checkpointRecord?.entry.kind === 'annotation' &&
-    checkpointRecord.entry.eventType === 'compaction_checkpoint'
-      ? checkpointRecord.entry.payload
+  const compactionCheckpoint =
+    compactionCheckpointRecord?.entry.kind === 'annotation' &&
+    compactionCheckpointRecord.entry.eventType === 'compaction_checkpoint'
+      ? compactionCheckpointRecord.entry.payload
       : undefined
 
   const projectedRecords = orderProjectedRecordsForBrain(
-    checkpoint
-      ? afterCleared.filter((record) => record.seq > checkpoint.coveredThroughSeq)
-      : afterCleared
+    compactionCheckpoint
+      ? ordered.filter((record) => record.seq > compactionCheckpoint.coveredThroughSeq)
+      : ordered
   )
 
   const messages: BaseMessage[] = []

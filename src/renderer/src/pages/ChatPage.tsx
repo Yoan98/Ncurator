@@ -781,8 +781,6 @@ const ChatPage: React.FC = () => {
   const [createPartnerShape, setCreatePartnerShape] = useState<PartnerAvatarShape>('circle')
   const [createPartnerColor, setCreatePartnerColor] = useState<PartnerAvatarColor>('blue')
   const [createPartnerSubmitting, setCreatePartnerSubmitting] = useState(false)
-  const [lastContextClearedAt, setLastContextClearedAt] = useState<number | null>(null)
-  const [hoveredGrayMessageId, setHoveredGrayMessageId] = useState<string | null>(null)
   const [clearContextVisible, setClearContextVisible] = useState(false)
   const [busyCancelTask, setBusyCancelTask] = useState<ScheduledTask | null>(null)
   const [timelineExpansion, setTimelineExpansion] = useState<TimelineExpansion>({ kind: 'none' })
@@ -1891,9 +1889,7 @@ const ChatPage: React.FC = () => {
       const opened = await window.api.partnerOpen({ partnerId, limit: 50 })
       if (partnerSwitchRequestRef.current !== requestId) return
       applyPartnerUiState(partnerId, opened.uiState || null)
-      setLastContextClearedAt(opened.lastContextClearedAt ?? null)
       setClearContextVisible(false)
-      setHoveredGrayMessageId(null)
       setTimelineExpansion({ kind: 'none' })
       setActiveTimelineDayStart(null)
       pendingTimelineJumpDayRef.current = null
@@ -2792,7 +2788,6 @@ const ChatPage: React.FC = () => {
           setAssistantTurns({})
           setAiRunId(null)
           setLoading(false)
-          setLastContextClearedAt(null)
           setClearContextVisible(false)
           void window.api.workbenchUiStateSave({ activeViewKey: null })
         }
@@ -3534,9 +3529,7 @@ const ChatPage: React.FC = () => {
           }
           setCurrentMessages([])
           setHasMoreMessagesBefore(false)
-          setLastContextClearedAt(null)
           setClearContextVisible(false)
-          setHoveredGrayMessageId(null)
           setTimelineExpansion({ kind: 'none' })
           setActiveTimelineDayStart(null)
           void loadPartners()
@@ -3916,20 +3909,12 @@ const ChatPage: React.FC = () => {
   const renderUserMessage = (messageItem: ChatMessage): React.ReactNode => {
     const contentNodes = getUserMessageContentNodes(messageItem)
     const canEdit = Boolean(currentPartnerId) && !aiRunId && messageItem.id === latestUserMessageId
-    const contextCleared = lastContextClearedAt != null && messageItem.timestamp < lastContextClearedAt
-    const grayed = contextCleared && !grayRestoredMessageIds.has(messageItem.id)
     return (
       <div
         key={messageItem.id}
         data-message-id={messageItem.id}
-        className={`group/user-message flex justify-end ${grayed ? 'nc-message-context-cleared' : ''}`}
+        className="group/user-message flex justify-end"
         data-testid={`${workbenchSelectors.userMessagePrefix}-${messageItem.id}`}
-        onMouseEnter={() => {
-          if (contextCleared) setHoveredGrayMessageId(messageItem.id)
-        }}
-        onMouseLeave={() => {
-          setHoveredGrayMessageId((current) => (current === messageItem.id ? null : current))
-        }}
       >
         <div className="flex min-w-0 max-w-[66%] flex-col items-end">
           {messageItem.attachments && messageItem.attachments.length > 0 ? (
@@ -4042,19 +4027,9 @@ const ChatPage: React.FC = () => {
 
   const renderAssistantMessage = (messageItem: ChatMessage): React.ReactNode => {
     const turn = assistantTurns[messageItem.id]
-    const contextCleared = lastContextClearedAt != null && messageItem.timestamp < lastContextClearedAt
-    const grayed = contextCleared && !grayRestoredMessageIds.has(messageItem.id)
     const hoverProps = {
       'data-message-id': messageItem.id,
-      className: grayed ? 'nc-message-context-cleared w-full' : 'w-full',
-      onMouseEnter: () => {
-        if (contextCleared) setHoveredGrayMessageId(messageItem.id)
-      },
-      onMouseLeave: () => {
-        setHoveredGrayMessageId((current: string | null) =>
-          current === messageItem.id ? null : current
-        )
-      }
+      className: 'w-full'
     }
     if (!turn) {
       return (
@@ -4097,17 +4072,6 @@ const ChatPage: React.FC = () => {
     [currentPartnerId, saveComposerDraftForPartner]
   )
 
-  const grayRestoredMessageIds = useMemo(() => {
-    if (!hoveredGrayMessageId) return new Set<string>()
-    const index = currentMessages.findIndex((item) => item.id === hoveredGrayMessageId)
-    if (index < 0) return new Set([hoveredGrayMessageId])
-    const ids = new Set<string>([hoveredGrayMessageId])
-    const previous = currentMessages[index - 1]
-    const next = currentMessages[index + 1]
-    if (previous) ids.add(previous.id)
-    if (next) ids.add(next.id)
-    return ids
-  }, [currentMessages, hoveredGrayMessageId])
   const timelineNodes = useMemo(() => {
     const messageDayStarts = collectMessageDayStarts(
       currentMessages.map((item) => item.timestamp)

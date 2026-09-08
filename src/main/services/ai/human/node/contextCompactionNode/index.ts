@@ -138,7 +138,7 @@ export const createContextCompactionNode = (input: {
     })
     const compactedUserText = String(rebuilt[1]?.content || '').trim()
     if (!compactedUserText) {
-      throw new Error('压缩 checkpoint 文本为空，无法写入消息日志。')
+      throw new Error('compaction user 文本为空，无法写入消息日志。')
     }
     await input.ctx.appendMessageLog([
       {

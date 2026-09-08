@@ -95,7 +95,7 @@ AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`c
 
 **稳定结构摘要**
 
-- **Transcript 真相源**：`chat_session_message_log`（append-only，表名保留，行挂 `partner_id`）；投影先切最后一次 `context_cleared`，再跑现有 compaction。`ai_run` 管生命周期与 UI 运行态；`ai_file_change` 管文件域，不进 brain prompt。不存在 `chat_search_turn`。
+- **Transcript 真相源**：`chat_session_message_log`（append-only，表名保留，行挂 `partner_id`）；投影若有 `compaction_checkpoint`，只保留 `seq > coveredThroughSeq`。`ai_run` 管生命周期与 UI 运行态；`ai_file_change` 管文件域，不进 brain prompt。不存在 `chat_search_turn`。清空消息记录物理删除该伙伴 log 与对应 `ai_run`。
 - **Skill / Tool**：builtin skill 默认可 bind；external 需 `learn_skill`；`agent-control` 承载 `learn_skill`、`update_plan`、`read_image`。
 - **伙伴 UI 状态**：`partner_ui_state(partner_id PK)` 保存 Composer 与右侧资源工作台快照；`workbench_ui_state` 只保存 `active_view_key`（当前伙伴 id）。
 

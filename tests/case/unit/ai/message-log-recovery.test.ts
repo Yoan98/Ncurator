@@ -70,8 +70,8 @@ describe('ai human message-log recovery', () => {
     )
 
     const text = projection.messages.map((message) => String(message.content)).join('\n')
-    expect(projection.checkpoint?.coveredThroughSeq).toBe(2)
-    expect(projection.checkpoint?.compactBlockId).toBe('checkpoint-1')
+    expect(projection.compactionCheckpoint?.coveredThroughSeq).toBe(2)
+    expect(projection.compactionCheckpoint?.compactBlockId).toBe('checkpoint-1')
     expect(projection.messages.every((message) => message.getType() !== 'human')).toBe(true)
     expect(text).not.toContain('continue from summary')
     expect(text).not.toContain('<historical_user_turn>')
@@ -109,46 +109,6 @@ describe('ai human message-log recovery', () => {
     expect(projectMessageLogRecords(finalized).plan).toEqual([])
   })
 
-  it('drops history before the latest context_cleared cut, including older checkpoints', () => {
-    const projection = projectMessageLogRecords(
-      records([
-        { runId: 'run-1', entry: user('secret before clear') },
-        {
-          runId: 'run-1',
-          entry: { kind: 'assistant', content: 'old answer', toolCalls: [] }
-        },
-        {
-          runId: 'run-1',
-          entry: {
-            kind: 'annotation',
-            eventType: 'compaction_checkpoint',
-            payload: {
-              compactBlockId: 'checkpoint-old',
-              coveredThroughSeq: 2,
-              sourceMessageCount: 2
-            }
-          }
-        },
-        {
-          runId: 'run-2',
-          entry: { kind: 'annotation', eventType: 'context_cleared', payload: {} }
-        },
-        { runId: 'run-3', entry: user('new request after clear') },
-        {
-          runId: 'run-3',
-          entry: { kind: 'assistant', content: 'fresh answer', toolCalls: [] }
-        }
-      ])
-    )
-
-    const text = projection.messages.map((message) => String(message.content)).join('\n')
-    expect(projection.checkpoint).toBeUndefined()
-    expect(text).not.toContain('secret before clear')
-    expect(text).not.toContain('old answer')
-    expect(text).not.toContain('must not enter next brain')
-    expect(text).toContain('fresh answer')
-  })
-
   it('repairs a dangling tool call with the same tool_call_id', () => {
     const repaired = repairInterruptedToolCalls([
       new AIMessage({
@@ -162,7 +122,7 @@ describe('ai human message-log recovery', () => {
     expect(String(repaired[1].content)).toContain('interrupted')
   })
 
-  it('bookmarks coveredThroughSeq through the last user when no process follows', () => {
+  it('sets coveredThroughSeq through the last user when no process follows', () => {
     const log = records([
       { runId: 'run-1', entry: user('fill weekly report') },
       {
@@ -212,7 +172,7 @@ describe('ai human message-log recovery', () => {
     expect(resolveCompactionCoveredThroughSeq(log, 4)).toBe(1)
   })
 
-  it('bookmarks through the message before a kept user when the tail includes that user', () => {
+  it('sets coveredThroughSeq through the message before a kept user when the tail includes that user', () => {
     const log = records([
       { runId: 'run-1', entry: user('fill weekly report') },
       {
@@ -248,7 +208,7 @@ describe('ai human message-log recovery', () => {
     expect(resolveCompactionCoveredThroughSeq(log, 3)).toBe(3)
   })
 
-  it('projects retained tail process after the compacted user when the bookmark sits before the tail', () => {
+  it('projects retained tail process after the compacted user when coveredThroughSeq sits before the tail', () => {
     const compactedUser = wrapCompactionCheckpointContent('目标：\n写周报')
     const log = records([
       { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
@@ -326,66 +286,6 @@ describe('ai human message-log recovery', () => {
     expect(String(projection.messages[3]?.content)).toContain('对照周报改标题')
   })
 
-  it('brain projection drops history before context_cleared including older checkpoints', () => {
-    const log = records([
-      { runId: 'run-1', entry: user('<user_context>secret before clear</user_context>') },
-      {
-        runId: 'run-1',
-        entry: { kind: 'assistant', content: 'old answer', toolCalls: [] }
-      },
-      {
-        runId: 'run-1',
-        entry: {
-          kind: 'annotation',
-          eventType: 'compaction_checkpoint',
-          payload: {
-            compactBlockId: 'checkpoint-old',
-            coveredThroughSeq: 2,
-            sourceMessageCount: 2
-          }
-        }
-      },
-      {
-        runId: 'run-1',
-        entry: user(
-          '<user_context>secret before clear\n<memory>must not enter next brain</memory></user_context>',
-          'compaction'
-        )
-      },
-      {
-        runId: 'run-2',
-        entry: { kind: 'annotation', eventType: 'context_cleared', payload: {} }
-      }
-    ])
-    const ctx = {
-      platform: 'macos',
-      runId: 'run-3',
-      partnerId: 'partner-1',
-      partnerName: '测试伙伴',
-      workspaceRoots: ['/tmp/workspace'],
-      runStartedAt: 0,
-      preference: 'default',
-      executionPermission: 'review',
-      referenceScope: { selectedReferences: [], attachments: [] }
-    } as AiRunContext
-    const state = createInitialHumanState({
-      taskId: 'task-after-clear',
-      userInput: 'new request after clear'
-    })
-    const projection = projectBrainMessagesFromLog({
-      records: log,
-      ctx,
-      state
-    })
-    const text = projection.messages.map((message) => String(message.content)).join('\n')
-    expect(text).not.toContain('secret before clear')
-    expect(text).not.toContain('old answer')
-    expect(text).not.toContain('must not enter next brain')
-    expect(text).toContain('new request after clear')
-    expect(text).not.toContain('<memory>')
-    expect(text).not.toContain('<active_state>')
-  })
-
   it('projects the compacted user then a new user without copying memory', () => {
     const compactedUser = wrapCompactionCheckpointContent('目标：\n- 已写周报')
     const log = records([
@@ -438,7 +338,7 @@ describe('ai human message-log recovery', () => {
     expect(String(humans[1]?.content)).not.toContain('fill weekly report')
   })
 
-  it('puts the compacted user in front of leftover process after a checkpoint', () => {
+  it('puts the compacted user in front of leftover process after a compaction_checkpoint', () => {
     const compactedUser = wrapCompactionCheckpointContent('目标：\n- 尚未生成文件')
     const log = records([
       { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },

@@ -2237,12 +2237,3 @@ mark {
   padding: 0 12px;
   cursor: pointer;
 }
-
-.nc-message-context-cleared {
-  opacity: 0.38;
-  transition: opacity 160ms ease;
-}
-
-.nc-message-context-cleared:hover {
-  opacity: 1;
-}

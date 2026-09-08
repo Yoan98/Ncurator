@@ -223,18 +223,10 @@ export class ChatRunService {
       this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId, ACTIVE_RUN_STATUSES)
     ])
     const activeRuns = await Promise.all(activeRunRecords.map((run) => this.buildRunSnapshot(run)))
-    const records = await this.deps.chatMessageLogStore.list(normalizedPartnerId)
-    let lastContextClearedAt: number | null = null
-    for (const record of records) {
-      if (record.entry.kind === 'annotation' && record.entry.eventType === 'context_cleared') {
-        lastContextClearedAt = record.createdAt
-      }
-    }
     const response: PartnerOpenResponse = {
       partner: partner || undefined,
       messages: page.messages,
       hasMoreBefore: page.hasMoreBefore,
-      lastContextClearedAt,
       activeRuns
     }
     this.logSlowChatQuery('partner-open', startedAt, {

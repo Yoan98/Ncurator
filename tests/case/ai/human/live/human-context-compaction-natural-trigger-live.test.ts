@@ -211,7 +211,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + checkpoint User + 原文 tail 继续完成交付；同伙伴续做再压一次；Run2 首轮 brain 须明显复用 Run1 末次前缀缓存。',
+          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + compaction user + 原文 tail 继续完成交付；同伙伴续做再压一次；Run2 首轮 brain 须明显复用 Run1 末次前缀缓存。',
         fixtures: [CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         execute: async (runtime) => {
@@ -346,7 +346,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-context-compaction-run1-completes-weekly-report',
               message:
-                'Run 1 应至少压缩一次；压完后发给 brain 的数组为 system + checkpoint user + 原文 tail，五栏标题齐全，含「上周周报」、不编造「上周工作周报.docx」，并成功交付周报。',
+                'Run 1 应至少压缩一次；压完后发给 brain 的数组为 system + compaction user + 原文 tail，五栏标题齐全，含「上周周报」、不编造「上周工作周报.docx」，并成功交付周报。',
               data: {
                 startedEvents: run1Compaction.startedEvents,
                 completedEvents: run1Compaction.completedEvents,
@@ -371,9 +371,9 @@ describe('ai human live backend', () => {
               run2CurrentTaskSatisfied &&
               result.run2Output?.status === 'completed',
             {
-              name: 'human-live-context-compaction-run2-continues-from-checkpoint',
+              name: 'human-live-context-compaction-run2-continues-from-compaction-user',
               message:
-                'Run 2 首次 brain 应为 system + checkpoint user + 原文过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。该次压缩只要五栏，目标/进度/下一步/约束应围绕对照、改标题或法务，而不是整段重填周报。',
+                'Run 2 首次 brain 应为 system + compaction user + 原文过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。该次压缩只要五栏，目标/进度/下一步/约束应围绕对照、改标题或法务，而不是整段重填周报。',
               data: {
                 startedEvents: run2Compaction.startedEvents,
                 completedEvents: run2Compaction.completedEvents,
