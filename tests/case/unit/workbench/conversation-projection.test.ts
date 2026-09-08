@@ -4,6 +4,7 @@ import {
   projectAiConversationMessages
 } from '../../../../src/shared/workbench/conversationProjection'
 import type { AiRunRecord, ChatMessage, ChatMessageLogRecord } from '../../../../src/shared/types'
+import { wrapCompactionCheckpointContent } from '../../../../src/main/services/ai/human/prompts/compaction'
 
 const buildRun = (input: Partial<AiRunRecord> & { id: string }): AiRunRecord => ({
   id: input.id,
@@ -105,7 +106,7 @@ describe('conversationProjection', () => {
         seq: 2,
         entry: {
           kind: 'user',
-          content: '<user_context>写周报\n<memory>当前交付：- 已写周报</memory></user_context>',
+          content: wrapCompactionCheckpointContent('当前交付：- 已写周报'),
           origin: 'compaction',
           context: { selectedReferences: [], attachments: [] }
         }

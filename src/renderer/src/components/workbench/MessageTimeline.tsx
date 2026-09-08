@@ -36,8 +36,8 @@ export const MessageTimeline = ({
       className={`nc-message-timeline${compact ? ' is-compact' : ''}${single ? ' is-single' : ''}`}
       data-testid={workbenchSelectors.timeline}
     >
-      <div className="nc-message-timeline-spine" aria-hidden="true" />
       <div className="nc-message-timeline-nodes">
+        {single ? null : <div className="nc-message-timeline-fade-up" aria-hidden="true" />}
         {nodes.map((node) => {
           const isActive = node.id === activeNodeId
           const isSegment = node.role === 'segment'

@@ -3,12 +3,13 @@ import type { BrainContextBudgetSnapshot } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
-  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
+  resolveCompactionKeepRecentTokens
 } from '../../constants'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateMessagesForContext } from '../../memory/multimodal'
 import { buildBrainUserMessage } from '../../prompts/brain'
-import { isCurrentBrainUserMessage, listFoldableHistoryMessages } from '../utils/messageTail'
+import { hasCompressibleCompactionHistory, isCurrentBrainUserMessage } from '../utils/messageTail'
 import { LlmInputTooLongError } from '../../../errors'
 
 const buildBudgetSnapshot = (input: {
@@ -75,8 +76,10 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
       contextWindowTokens * CONTEXT_COMPACTION_TRIGGER_RATIO
     )
     const messages = input.cache.messages || []
-    const foldableHistory = listFoldableHistoryMessages(messages)
-    const hasCompressibleHistory = foldableHistory.length > 0
+    const retainTokens = resolveCompactionKeepRecentTokens(
+      input.ctx.humanRuntimeOverrides?.keepRecentTokens
+    )
+    const hasCompressibleHistory = hasCompressibleCompactionHistory(messages, retainTokens)
     const currentMessageTokenEstimate = estimateMessagesForContext(messages)
     const currentUser = messages.find(isCurrentBrainUserMessage)
     if (currentUser && estimateMessagesForContext([currentUser]) > contextWindowTokens) {
@@ -105,7 +108,7 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
       createdAt
     })
 
-    if (!shouldCompact && !input.cache.currentUserLogAppended) {
+    if (!input.cache.currentUserLogAppended) {
       const builtText = String(
         currentUser?.content ||
           buildBrainUserMessage({

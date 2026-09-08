@@ -1164,6 +1164,8 @@ export type ScheduledTask = {
   aiPreference: AiPreference
   executionPermission: AiExecutionPermission
   nextRunAt: number | null
+  /** 到点因专属伙伴占用而取消本次时写入；关闭胶囊或立即执行成功后清空 */
+  busyCancelNoticeAt: number | null
   createdAt: number
   updatedAt: number
 }
@@ -1176,7 +1178,6 @@ export type ScheduledTaskSaveRequest = {
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday?: number | null
-  partnerId: string
   mainModel: WorkbenchSelectedModel
   aiPreference?: AiPreference
   executionPermission?: AiExecutionPermission
@@ -1191,6 +1192,14 @@ export type ScheduledTaskMutationResponse = {
 export type ScheduledTaskSetEnabledRequest = {
   id: string
   enabled: boolean
+}
+
+export type ScheduledTaskRunNowRequest = {
+  id: string
+}
+
+export type ScheduledTaskDismissBusyNoticeRequest = {
+  id: string
 }
 
 export type AiRunRecord = {

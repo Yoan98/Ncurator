@@ -1376,17 +1376,10 @@ export const selectScheduledTaskModel = async (page: Page, modelName: string): P
 }
 
 export const selectScheduledTaskWorkspace = async (
-  page: Page,
-  workspaceName: string
+  _page: Page,
+  _workspaceName: string
 ): Promise<void> => {
-  const workspaceSelect = getWorkbenchLocator(page, scheduledTaskSelectors.workspaceSelect)
-  await workspaceSelect.locator('button.workbench-select-trigger').click()
-  const option = page
-    .locator('.workbench-select-menu [role="option"]')
-    .filter({ hasText: workspaceName })
-    .first()
-  await option.waitFor({ state: 'visible' })
-  await option.click()
+  // Scheduled tasks no longer bind a manually selected partner/workspace.
 }
 
 export const fillScheduledTaskTime = async (page: Page, hhmm: string): Promise<void> => {

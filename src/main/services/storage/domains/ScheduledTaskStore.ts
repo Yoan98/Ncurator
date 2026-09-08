@@ -22,6 +22,7 @@ type ScheduledTaskRow = {
   ai_preference?: unknown
   execution_permission?: unknown
   next_run_at?: unknown
+  busy_cancel_notice_at?: unknown
   created_at?: unknown
   updated_at?: unknown
 }
@@ -61,6 +62,7 @@ const toTask = (row: ScheduledTaskRow): ScheduledTask => {
     aiPreference: toPreference(row.ai_preference),
     executionPermission: toPermission(row.execution_permission),
     nextRunAt: toOptionalNumber(row.next_run_at) ?? null,
+    busyCancelNoticeAt: toOptionalNumber(row.busy_cancel_notice_at) ?? null,
     createdAt: Number(row.created_at || 0),
     updatedAt: Number(row.updated_at || 0)
   }
@@ -99,12 +101,12 @@ export class ScheduledTaskStore {
           id, name, prompt, enabled, schedule_type, time_of_day, weekday,
           partner_id, main_model_config_id, main_model_name,
           ai_preference,
-          execution_permission, next_run_at, created_at, updated_at
+          execution_permission, next_run_at, busy_cancel_notice_at, created_at, updated_at
         ) VALUES (
           @id, @name, @prompt, @enabled, @schedule_type, @time_of_day, @weekday,
           @partner_id, @main_model_config_id, @main_model_name,
           @ai_preference,
-          @execution_permission, @next_run_at, @created_at, @updated_at
+          @execution_permission, @next_run_at, @busy_cancel_notice_at, @created_at, @updated_at
         )
         ON CONFLICT(id) DO UPDATE SET
           name = excluded.name,
@@ -119,6 +121,7 @@ export class ScheduledTaskStore {
           ai_preference = excluded.ai_preference,
           execution_permission = excluded.execution_permission,
           next_run_at = excluded.next_run_at,
+          busy_cancel_notice_at = excluded.busy_cancel_notice_at,
           updated_at = excluded.updated_at`
       )
       .run({
@@ -135,6 +138,7 @@ export class ScheduledTaskStore {
         ai_preference: task.aiPreference,
         execution_permission: task.executionPermission,
         next_run_at: task.nextRunAt,
+        busy_cancel_notice_at: task.busyCancelNoticeAt,
         created_at: task.createdAt,
         updated_at: task.updatedAt
       })

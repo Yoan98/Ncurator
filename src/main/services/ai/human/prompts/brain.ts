@@ -1,6 +1,5 @@
 import type { AiRunContext } from '../../types'
 import { renderReferenceScopeText } from './referenceScope'
-import { renderPlanItemStatus } from '../shared/memoryRenderers'
 import {
   getPartnerAssetsRootDir,
   getPartnerScriptsRootDir
@@ -120,29 +119,7 @@ ${renderLocalEnvironmentText(input.ctx)}
 export const buildBrainUserMessage = (input: {
   state: HumanState
   ctx: AiRunContext
-  memoryText?: string
-  injectActiveState?: boolean
 }): string => {
-  const learnedSkillIds = input.state.skills.learnedSkillIds
-  const plan = input.state.memory.plan
-  const memory = input.memoryText?.trim()
-    ? `  <memory>\n${input.memoryText.trim()}\n  </memory>`
-    : ''
-  const activeState = input.injectActiveState
-    ? `  <active_state>
-${[
-  learnedSkillIds.length > 0 ? `已学习技能：${learnedSkillIds.join('、')}` : '已学习技能：无',
-  plan.length > 0
-    ? `计划进度：${plan
-        .map((item) => `${renderPlanItemStatus(item.status)} ${item.title}`)
-        .join('；')}`
-    : ''
-]
-  .filter((line) => line.length > 0)
-  .join('\n')}
-  </active_state>`
-    : ''
-
   return `
 <user_context>
   <task_goal>
@@ -163,8 +140,6 @@ ${renderReferenceScopeText(input.ctx.referenceScope)}
   <current_time>
 ${renderCurrentTimeText(input.ctx)}
   </current_time>
-${memory}
-${activeState}
 </user_context>
 `.trim()
 }

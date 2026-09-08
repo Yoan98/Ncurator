@@ -118,10 +118,20 @@ describe('ai unit context budget node', () => {
         additional_kwargs: { ncurator_current_user: true }
       })
     ]
+    const appended: Array<{ kind: string; origin?: string }> = []
     const ctxWithSmallWindow = {
       ...ctx,
       humanRuntimeOverrides: {
-        modelContextWindowTokens: 600
+        modelContextWindowTokens: 600,
+        keepRecentTokens: 80
+      },
+      appendMessageLog: async (entries) => {
+        appended.push(
+          ...entries.map((entry) => ({
+            kind: entry.kind,
+            origin: entry.kind === 'user' ? entry.origin : undefined
+          }))
+        )
       }
     } satisfies AiRunContext
     const smallWindowNode = createContextBudgetNode({
@@ -133,6 +143,8 @@ describe('ai unit context budget node', () => {
     const nextState = await smallWindowNode(state)
 
     expect(nextState.execution.stage).toBe('context_compaction')
+    expect(appended).toEqual([{ kind: 'user', origin: 'human' }])
+    expect(cache.currentUserLogAppended).toBe(true)
     const event = events.find((item) => item.type === 'context_budget_evaluated')
     expect(event).toMatchObject({
       type: 'context_budget_evaluated',
@@ -175,6 +187,40 @@ describe('ai unit context budget node', () => {
         hasCompressibleHistory: false,
         contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
       }
+    })
+  })
+
+  it('does not compact when post-user process fits in the retain window', async () => {
+    const events: AiRunEvent[] = []
+    const ctx = createBaseContext(events)
+    const cache = createHumanRuntimeCache()
+    const state = createInitialHumanState({
+      taskId: 'task-retain-only',
+      userInput: '请继续当前任务。'
+    })
+    cache.messages = [
+      new HumanMessage({
+        content: '请继续当前任务。',
+        additional_kwargs: { ncurator_current_user: true }
+      }),
+      new AIMessage({ content: 'short step' }),
+      new ToolMessage({ content: 'ok', tool_call_id: 'call-1' })
+    ]
+    const node = createContextBudgetNode({
+      ctx: {
+        ...ctx,
+        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 }
+      },
+      cache
+    })
+    cache.lastBrainInputTokens = 9_000
+
+    const nextState = await node(state)
+
+    expect(nextState.execution.stage).toBe('brain')
+    expect(events.find((event) => event.type === 'context_budget_evaluated')).toMatchObject({
+      decision: 'continue',
+      snapshot: { hasCompressibleHistory: false }
     })
   })
 

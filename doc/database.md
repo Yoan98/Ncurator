@@ -29,12 +29,12 @@ SQLite 保存以下业务数据：
 - AI runtime 设置中的 `systemNotificationsEnabled`，默认值为 `1`，控制 AI 运行终态系统通知。
 - 文件内容和预览 artifact 的 SHA-256 对象引用；实际对象保存在 `userData/partners/{id}/objects/sha256`，相同内容只存一份。
 - Workbench 伙伴 UI 快照（`partner_ui_state`）、当前活动伙伴（`workbench_ui_state.active_view_key`）和内置浏览器标签状态（`browser_tab_state.owner_key` = partner_id）。
-- 定时任务（`scheduled_task.partner_id`）。
+- 定时任务（`scheduled_task.partner_id` 绑定专属伙伴，无外键 CASCADE；`busy_cancel_notice_at` 记录因占用取消的待展示提示）。
 
 关键规则：
 
 - `partner` 保存名称、头像外形与颜色，以及 `pinned` / `pinned_at` 置顶状态；列表按置顶优先、置顶时间、更新时间排序。标题就是伙伴 `name`，不因消息改名。
-- `chat_session_message_log` 使用 `partner_id + seq` 保证伙伴内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated`、`compaction_checkpoint` 和 `context_cleared` 是强类型 annotation。`compaction_checkpoint` 只存书签字段（`coveredThroughSeq` 等），不存摘要。`user.content` 是发给模型的 build 全文（`origin: human | compaction`）；压缩记忆只在 compaction user 的 `<memory>`。投影先切最后一次 `context_cleared`，再按书签截断。气泡文案用 `ai_run.input`。
+- `chat_session_message_log` 使用 `partner_id + seq` 保证伙伴内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated`、`compaction_checkpoint` 和 `context_cleared` 是强类型 annotation。`compaction_checkpoint` 只存书签字段（`coveredThroughSeq` 等），不存摘要。`user.content` 是发给模型的全文（`origin: human | compaction`）；compaction user 只有 checkpoint 正文。投影先切最后一次 `context_cleared`，再按书签截断。气泡文案用 `ai_run.input`。
 - `ai_run` 挂 `partner_id`，不再保存 `workspace_json`。`partial_answer` 与 `partial_answer_role` 只保存当前流式 UI 草稿；它们不参与下一次模型上下文恢复。`failure_code` 保存 `process_interrupted`、`output_truncated`、`input_too_long` 等终止原因。
 - 待审批状态以 SQLite 中的 run 记录为准。
 - `document.active_generation_id` 是当前有效索引版本，只用于写入后删除旧 chunk 和启动/任务结束时的孤儿清理，不进入检索 `where`。
@@ -45,16 +45,17 @@ SQLite 保存以下业务数据：
 - `workbench_ui_state` 是 `id = 1` 的单例，只保存 `active_view_key`（当前伙伴 id）；不再保存 `draft_state_json` 或 `__draft__`。
 - `browser_tab_state` 以 `owner_key` 隔离伙伴标签（`owner_key` = partner_id），保存 URL、标题、缩放、导航历史、顺序和更新时间。
 - 伙伴在创建弹窗提交时即落库，不存在草稿会话提升事务。
-- 删除伙伴级联删除 message log、`ai_run`、`ai_file_change`、`docx_apply`、`partner_ui_state` 和该伙伴定时任务，并清除 `browser_tab_state`、将 `active_view_key` 置空，同时删除 `userData/partners/{id}`。
+- 删除伙伴级联删除 message log、`ai_run`、`ai_file_change`、`docx_apply`、`partner_ui_state`，并清除 `browser_tab_state`、将 `active_view_key` 置空，同时删除 `userData/partners/{id}`。定时任务不级联删除：专属伙伴被删后任务仍保留，到点或立即执行时由服务自动重建伙伴。
 - Renderer 内存只负责当前交互，SQLite 是重启恢复的真相；浏览器 `WebContentsView` 只负责运行期页面实例，不是持久化真相。
 
 ## SQLite Migration
 
 ### 当前边界
 
-- 当前代码支持的最终 schema version 是 `10`，由 `CURRENT_SCHEMA_VERSION` 定义。
+- 当前代码支持的最终 schema version 是 `11`，由 `CURRENT_SCHEMA_VERSION` 定义。
 - version `1–9` 已随正式版发布，永久保留且不可改写。已知历史例外只有 version 2 的旧名称 `workspace_change_sets`；version 9 继续负责修复通知字段。
 - version `10` 是破坏性升级，不迁旧数据。`upgrade_from_v9` 从 v9 升级时 DROP 旧表再建最终结构：新增 `partner`；删除 `chat_session`、`chat_session_ui_state`（以及 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event`、`chat_session_skill_state`、`chat_message`）；`chat_session_message_log` / `ai_run` / `ai_file_change` / `docx_apply` 改挂 `partner_id`；新增 `partner_ui_state`；`workbench_ui_state` 只留 `active_view_key`，删除 `draft_state_json`；`scheduled_task` 改挂 `partner_id`；`workspace_source` 去掉 name 且 `root_path UNIQUE`；`web_source` 去掉 `workspace_id` 且 `UNIQUE(normalized_url)`；`ai_run` 不再保存 `workspace_json`。不存在、也不新建 `chat_search_turn`。新增 `schema_migration_hooks`，供版本声明提交后副作用。v10 的 `afterCommit` 在 SQLite 事务提交后、LanceDB 连接前删除 `userData/lancedb`；hook 记 `pending/done`，失败可重试，`done` 后不重跑。空库仍执行 version `1–10`，跑完后结构与 v9 升级路径一致。
+- version `11`（`scheduled_task_bound_partner`）重建 `scheduled_task`：增加 `busy_cancel_notice_at`；去掉 `partner_id` 对外键 CASCADE，专属伙伴删除后任务可保留并由服务重建。
 - 哪些 migration 已正式发布，以 `migrations/released-migrations.json` 为唯一边界。未进入清单的连续迁移可以在发布前合并或重写；进入清单后只能新增更高版本修复。
 
 ### 版本身份与执行规则

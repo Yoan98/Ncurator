@@ -40,7 +40,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - `conversation` 验证伙伴、composer、时间轴与清空、模型偏好和 `@` 参考资料 token。发送门禁是已有伙伴 + 输入非空。
 - `run` 验证智能模式运行中的过程流、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
 - `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退和多文件修改入口。不再覆盖 Composer 搜索结果面板。
-- `scheduled-task` 验证定时任务的入口、配置、启用开关与到点往指定伙伴追加任务。
+- `scheduled-task` 验证定时任务的入口、自动专属伙伴配置、启用开关、立即执行与到点往专属伙伴追加任务。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
@@ -368,7 +368,7 @@ tests/case/workbench/
 - What：同一伙伴中的任务因达到 Graph 运行上限等原因中断后，从不可变消息日志恢复，并在用户后续消息中继续原任务。
 - Why：恢复能力必须经过真实 Workbench、真实模型、Main 进程、持久化和 Renderer 的完整链路验证，不能只依赖 Mock LLM。
 - How：真实模型 E2E 把首轮 Graph 上限降为 2，验证上限错误后发送继续语句；第二轮恢复正式上限并完成。Backend 覆盖日志投影、相同 `tool_call_id` 修复、计划投影、checkpoint 边界、重启标记、跨伙伴隔离、编辑和删除。
-- Oracle：全部中断原因均可只靠日志继续；恢复语句只追加一次，历史 user 配置不变；未压缩时为历史过程 + 尾部新 user，已压缩时为压缩 User（含 `<memory>`）+ 书签后过程（可空）+ 尾部新 user；连续多次恢复不递归嵌套原始任务；切换伙伴或重启后只投影所属日志；编辑只撤回目标 user、关联 assistant/run 和该 run 日志；正常完成清空计划但保留日志；真实模型首轮显示“已达到运行上限，可继续对话推进”且第二轮恢复完成，对齐 `WB-SESSION-007-AC1`、`WB-SESSION-007-AC2`、`WB-SESSION-007-AC3`、`WB-SESSION-007-AC4`、`WB-SESSION-007-AC5`、`WB-SESSION-007-AC6`、`WB-SESSION-007-AC7`。
+- Oracle：全部中断原因均可只靠日志继续；恢复语句只追加一次，历史 user 配置不变；未压缩时为历史过程 + 尾部新 user，已压缩时为 checkpoint User + 书签后原文（可空）+ 尾部新 user；连续多次恢复不递归嵌套原始任务；切换伙伴或重启后只投影所属日志；编辑只撤回目标 user、关联 assistant/run 和该 run 日志；正常完成清空计划但保留日志；真实模型首轮显示“已达到运行上限，可继续对话推进”且第二轮恢复完成，对齐 `WB-SESSION-007-AC1`、`WB-SESSION-007-AC2`、`WB-SESSION-007-AC3`、`WB-SESSION-007-AC4`、`WB-SESSION-007-AC5`、`WB-SESSION-007-AC6`、`WB-SESSION-007-AC7`。
 - Not：不使用真实模型执行 200 个 Graph 步骤或调用 120 次真实工具；测试覆盖参数不能通过产品正常请求传入，也不改变工具软上限语义。
 
 #### `cancelled-run-keeps-artifact`
@@ -600,30 +600,30 @@ tests/case/workbench/
 - Why：定时任务是一个独立的全主区视图，不与聊天对话或资源面板并存，避免状态交叉。
 - How：通过真实 UI 点击「定时任务」入口确认整块主区切换为定时任务视图且无聊天；随后点击「创建伙伴」返回聊天视图并打开创建弹窗（伙伴点击返回由 `scheduled-task-trigger-and-session-refresh` 覆盖）。
 - Oracle：入口位置与样式对齐 `ST-ENTRY-001-AC1`；点击后主区整块切换且无聊天对齐 `ST-ENTRY-001-AC2`；视图无聊天 / 无资源面板对齐 `ST-VIEW-001-AC1`；点击「创建伙伴」返回聊天并对齐 `ST-VIEW-001-AC3`。
-- Not：不验证定时任务实际触发调度，只验证入口与视图切换。
+- Not：不验证定时任务实际触发调度，只验证入口与视图切换。已启用数量 chip（`ST-ENTRY-001-AC3` / `ST-VIEW-001-AC4`）由 `scheduled-task-config-lifecycle` 在启用开关后覆盖。
 
 #### `scheduled-task-config-lifecycle`
 
 - 测试类型：`e2e`
-- What：新增、必填拦截、编辑、启用开关与删除完整闭环；每周模式必须选择星期几；执行权限位于偏好下方；目标伙伴已有 running / waiting_approval 时选项 disable。
-- Why：配置是定时任务可执行的前提，字段校验与开关语义决定任务是否按预期触发。
-- How：通过真实 UI 打开视图新增任务并填写名称、提示词、执行时间（TimePicker）、伙伴、主模型（复用模型选择器）、偏好与执行权限，保存后确认出现在列表；编辑并保存；切换启用开关；删除并二次确认。
-- Oracle：新增与编辑预填对齐 `ST-FORM-001-AC1`；必填缺失拦截对齐 `ST-FORM-001-AC2`；每周必选星期对齐 `ST-FORM-001-AC3`；忙碌伙伴禁用对齐 `ST-FORM-001-AC5`；默认关闭对齐 `ST-SWITCH-001-AC1`；删除二次确认对齐 `ST-DELETE-001-AC1/AC2`；列表展示对齐 `ST-LIST-001-AC2`。
-- Not：不验证到点后的真实 AI 执行，只验证配置与开关生命周期。`ST-FORM-001-AC4`（遮罩点击不关弹窗）、`ST-SWITCH-001-AC2`（关闭后到点不触发）标为不测。
+- What：新增、必填拦截、编辑、启用开关、立即执行确认与删除完整闭环；每周模式必须选择星期几；执行权限位于偏好下方；保存自动创建专属伙伴；启用后侧栏与标题栏出现已启用数量 chip，关闭或删除后消失。
+- Why：配置是定时任务可执行的前提；专属伙伴与立即执行是占用兜底的入口。
+- How：通过真实 UI 打开视图新增任务并填写名称、提示词、执行时间（TimePicker）、主模型、偏好与执行权限（不选伙伴），保存后确认出现在列表且产生 `定时 ·` 专属伙伴；编辑并保存；切换启用开关并确认数量 chip；点立即执行弹出确认后取消；删除并二次确认。
+- Oracle：新增与编辑预填对齐 `ST-FORM-001-AC1`；必填缺失拦截对齐 `ST-FORM-001-AC2`；每周必选星期对齐 `ST-FORM-001-AC3`；自动建专属伙伴对齐 `ST-FORM-001-AC6`；默认关闭对齐 `ST-SWITCH-001-AC1`；删除二次确认对齐 `ST-DELETE-001-AC1/AC2`；列表展示对齐 `ST-LIST-001-AC2/AC4`；启用后数量 chip 对齐 `ST-ENTRY-001-AC3` / `ST-VIEW-001-AC4`；立即执行确认对齐 `ST-RUN-004-AC1`。
+- Not：不验证到点后的真实 AI 执行；忙碌取消胶囊主路径由 unit 覆盖（`ST-RUN-001-AC3` / `ST-RUN-005`）。`ST-FORM-001-AC4`、`ST-SWITCH-001-AC2` 标为不测。
 
 #### `scheduled-task-trigger-and-session-refresh`
 
 - 测试类型：`e2e / live`
-- What：启用一个下一分钟触发的定时任务，到点后往指定伙伴同一条消息记录追加任务消息，不新建伙伴；伙伴列表无需手动刷新即展示运行状态；当前查看的伙伴不被切换。
+- What：启用一个下一分钟触发的定时任务，到点后往其专属伙伴追加任务消息；伙伴列表无需手动刷新即展示运行状态；当前查看的非专属伙伴不被切换。
 - Why：这是定时任务的核心闭环，验证真实调度、真实 AI run 与前端伙伴列表刷新联动。
-- How：在真实 UI 创建伙伴后，配置并启用一个每天 + 当前系统时间下一分钟、指向该伙伴的任务（提示词触发一次轻量真实 AI 请求）；等待到点，轮询该伙伴出现运行状态并完成，同时确认当前选中伙伴不变。
-- Oracle：到点往指定伙伴追加对齐 `ST-RUN-001-AC1`；不改变当前查看伙伴对齐 `ST-RUN-001-AC2`；伙伴列表刷新对齐 `ST-RUN-002-AC1/AC2`。
-- Not：不验证跨天 / 跨周边界调度，不验证程序关闭 / 休眠期间错过补跑（该行为由 backend 单测覆盖）。
+- How：在真实 UI 配置并启用一个每天 + 当前系统时间下一分钟的任务（保存时自动创建专属伙伴）；等待到点，轮询专属伙伴出现运行状态并完成，同时确认当前选中伙伴不变。
+- Oracle：到点往专属伙伴追加对齐 `ST-RUN-001-AC1`；不改变当前查看伙伴对齐 `ST-RUN-001-AC2`；伙伴列表刷新对齐 `ST-RUN-002-AC1/AC2`。
+- Not：不验证跨天 / 跨周边界调度，不验证程序关闭 / 休眠期间错过补跑；不验证忙碌取消胶囊（unit 覆盖）。
 
 #### `scheduled-task` backend 单测
 
 - 测试类型：`backend`
-- What：`computeNextRunAt` 的每天 / 每周 / 时间格式 / 星期边界；`ScheduledTaskService.save/setEnabled` 必填校验与 `nextRunAt` 计算；`fireTask` 成功往指定伙伴提交载荷、目标伙伴不存在或 running / waiting_approval 时跳过；`start` 对错过档位只前移不补跑；`runDue` 对休眠错过（超过 60 秒宽限）只前移不补跑；自排 `setTimeout` 到最近 `nextRunAt` 与变更后重排。
-- Why：调度边界与副作用清理不适合用 UI E2E 稳定复现，下沉到单测保证确定性。
-- How：注入 fake task/partner store、submitTask、clock 与 timer，驱动 `runDue` / `start` / `save` / `setEnabled`。
-- Oracle：跳过缺失或忙碌伙伴不新建伙伴对齐 `ST-RUN-001-AC3`；程序关闭错过不补跑对齐 `ST-RUN-003-AC1`；休眠错过不补跑对齐 `ST-RUN-003-AC2`。
+- What：`computeNextRunAt`；`save` 自动创建专属伙伴且不再要求 partnerId；`fireTask` 空闲执行、忙碌取消写 notice 并推进下一周期、伙伴缺失自动重建；`runNow` / `dismissBusyNotice`；休眠错过不补跑。
+- Why：忙碌取消、重建与立即执行边界不适合用 UI E2E 稳定复现。
+- How：注入 fake task/partner store、submitTask、clock 与 timer。
+- Oracle：忙碌取消对齐 `ST-RUN-001-AC3` / `ST-RUN-005`；重建对齐 `ST-PARTNER-001-AC2` / `ST-RUN-001-AC4`；立即执行忙提示对齐 `ST-RUN-004-AC3`；错过不补跑对齐 `ST-RUN-003`。

@@ -97,7 +97,7 @@ describe('ai unit brain prompt formatting', () => {
     expect(user).not.toContain('<active_state>')
   })
 
-  it('omits active_state on the normal first-run user even if skills and plan exist', () => {
+  it('omits memory and active_state even if skills and plan exist', () => {
     const state = createInitialHumanState({
       taskId: 'task-prompt-formatting',
       userInput: '继续处理任务'
@@ -106,66 +106,8 @@ describe('ai unit brain prompt formatting', () => {
     state.skills.learnedSkillIds = ['docx-read']
     const user = buildBrainUserMessage({ state, ctx: createFakeCtx() })
     expect(user).not.toContain('<active_state>')
+    expect(user).not.toContain('<memory>')
     expect(user).not.toContain('已学习技能')
     expect(user).not.toContain('计划进度')
-  })
-
-  it('renders plan and learned skills inside active_state only when injected', () => {
-    const state = createInitialHumanState({
-      taskId: 'task-prompt-formatting',
-      userInput: '继续处理任务'
-    })
-    state.memory.plan = [
-      { title: '整理资料', status: 'done' },
-      { title: '检查是否满足诉求', status: 'todo' }
-    ]
-    state.skills.learnedSkillIds = ['docx-read']
-
-    const user = buildBrainUserMessage({
-      state,
-      ctx: createFakeCtx(),
-      injectActiveState: true
-    })
-
-    const currentState = user.match(/<active_state>([\s\S]*?)<\/active_state>/)?.[1] || ''
-    expect(currentState).toContain('计划进度：')
-    expect(currentState).toContain('[done] 整理资料')
-    expect(currentState).toContain('[todo] 检查是否满足诉求')
-    expect(currentState).toContain('已学习技能：docx-read')
-  })
-
-  it('renders learned_skills as none when injected with no learned skill', () => {
-    const state = createInitialHumanState({
-      taskId: 'task-prompt-formatting',
-      userInput: '继续处理任务'
-    })
-
-    const user = buildBrainUserMessage({
-      state,
-      ctx: createFakeCtx(),
-      injectActiveState: true
-    })
-    expect(user).toContain('已学习技能：无')
-    expect(user).not.toContain('计划进度：')
-  })
-
-  it('renders memory after current time and before active state', () => {
-    const state = createInitialHumanState({
-      taskId: 'task-prompt-compaction',
-      userInput: '继续处理任务'
-    })
-    state.skills.learnedSkillIds = ['docx-read']
-    const user = buildBrainUserMessage({
-      state,
-      ctx: createFakeCtx(),
-      memoryText: '当前交付：\n- 继续处理已确认事实',
-      injectActiveState: true
-    })
-    expect(user).toContain('<memory>\n当前交付：\n- 继续处理已确认事实\n  </memory>')
-    expect(user.indexOf('</workspace_roots>')).toBeLessThan(user.indexOf('<reference_scope>'))
-    expect(user.indexOf('</reference_scope>')).toBeLessThan(user.indexOf('<current_time>'))
-    expect(user.indexOf('</current_time>')).toBeLessThan(user.indexOf('<memory>'))
-    expect(user.indexOf('</memory>')).toBeLessThan(user.indexOf('<active_state>'))
-    expect(user.match(/<active_state>[\s\S]*<memory>/)).toBeNull()
   })
 })

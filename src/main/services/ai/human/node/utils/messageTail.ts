@@ -1,8 +1,11 @@
 import { AIMessage, HumanMessage, type BaseMessage } from '@langchain/core/messages'
 import { normalizeThoughtText } from '../../../../../../shared/thoughtText'
+import { CONTEXT_COMPACTION_SNAP_TO_USER_RATIO } from '../../constants'
+import { estimateMessagesForContext } from '../../memory/multimodal'
 
 const CURRENT_USER_MARKER = 'ncurator_current_user'
 const COMPACTION_USER_MARKER = 'ncurator_compaction_user'
+const COMPACTION_TOOL_RESULT_MAX_CHARS = 2000
 
 export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
   new HumanMessage({
@@ -14,7 +17,6 @@ export const createCompactedBrainUserMessage = (content: string): HumanMessage =
   new HumanMessage({
     content,
     additional_kwargs: {
-      [CURRENT_USER_MARKER]: true,
       [COMPACTION_USER_MARKER]: true
     }
   })
@@ -25,35 +27,114 @@ export const isCurrentBrainUserMessage = (message: BaseMessage): boolean =>
 export const isCompactedBrainUserMessage = (message: BaseMessage): boolean =>
   message.getType() === 'human' && message.additional_kwargs?.[COMPACTION_USER_MARKER] === true
 
-export const listFoldableHistoryMessages = (messages: BaseMessage[]): BaseMessage[] =>
-  messages.filter(
-    (message) => message.getType() !== 'system' && !isCurrentBrainUserMessage(message)
-  )
+const isImageReferenceHuman = (message: BaseMessage): boolean =>
+  message.getType() === 'human' && typeof message.content !== 'string'
 
-export const splitMessagesForMemoryCompaction = (
-  messages: BaseMessage[]
-): { current: BaseMessage[]; earlier: BaseMessage[] } => {
-  const current: BaseMessage[] = []
-  const earlier: BaseMessage[] = []
-  let seenCurrentUser = false
+const isBoundaryUser = (message: BaseMessage): boolean =>
+  message.getType() === 'human' && !isImageReferenceHuman(message)
+
+const groupMessagesForCompaction = (messages: BaseMessage[]): BaseMessage[][] => {
+  const groups: BaseMessage[][] = []
+  let current: BaseMessage[] = []
+  const flush = (): void => {
+    if (current.length === 0) return
+    groups.push(current)
+    current = []
+  }
   for (const message of messages) {
-    if (message.getType() === 'system') continue
-    if (isCurrentBrainUserMessage(message)) {
-      seenCurrentUser = true
-      current.push(message)
+    if (isBoundaryUser(message) || message.getType() === 'ai') {
+      flush()
+      current = [message]
       continue
     }
-    if (seenCurrentUser) {
-      current.push(message)
-    } else {
-      earlier.push(message)
+    if (current.length === 0) {
+      current = [message]
+      continue
+    }
+    current.push(message)
+  }
+  flush()
+  return groups
+}
+
+const keepGroupsFromEnd = (
+  groups: BaseMessage[][],
+  retainTokens: number
+): number => {
+  if (groups.length === 0) return 0
+  let used = 0
+  let firstKeptIndex = groups.length
+  for (let index = groups.length - 1; index >= 0; index -= 1) {
+    const group = groups[index]
+    if (!group) continue
+    const cost = estimateMessagesForContext(group)
+    if (firstKeptIndex === groups.length || used + cost <= retainTokens) {
+      firstKeptIndex = index
+      used += cost
+      continue
+    }
+    break
+  }
+  return firstKeptIndex
+}
+
+const snapToNearbyUser = (
+  groups: BaseMessage[][],
+  firstKeptIndex: number,
+  retainTokens: number
+): number => {
+  const firstKept = groups[firstKeptIndex]
+  if (!firstKept || firstKeptIndex <= 0) return firstKeptIndex
+  if (isBoundaryUser(firstKept[0]!)) return firstKeptIndex
+  let userGroupIndex = -1
+  for (let index = firstKeptIndex - 1; index >= 0; index -= 1) {
+    const group = groups[index]
+    if (group?.[0] && isBoundaryUser(group[0])) {
+      userGroupIndex = index
+      break
     }
   }
-  if (!seenCurrentUser) {
-    return { current: earlier, earlier: [] }
-  }
-  return { current, earlier }
+  if (userGroupIndex < 0) return firstKeptIndex
+  const extra = estimateMessagesForContext(groups.slice(userGroupIndex, firstKeptIndex).flat())
+  const slack = Math.floor(retainTokens * CONTEXT_COMPACTION_SNAP_TO_USER_RATIO)
+  return extra <= slack ? userGroupIndex : firstKeptIndex
 }
+
+export type CompactionMessageSplit = {
+  folded: BaseMessage[]
+  tail: BaseMessage[]
+}
+
+export const splitMessagesForCompactionTail = (
+  messages: BaseMessage[],
+  retainTokens: number
+): CompactionMessageSplit => {
+  const nonSystem = messages.filter((message) => message.getType() !== 'system')
+  const groups = groupMessagesForCompaction(nonSystem)
+  if (groups.length === 0) {
+    return { folded: [], tail: [] }
+  }
+  const firstKeptIndex = keepGroupsFromEnd(groups, retainTokens)
+  const keptIndex = snapToNearbyUser(groups, firstKeptIndex, retainTokens)
+  return {
+    folded: groups.slice(0, keptIndex).flat(),
+    tail: groups.slice(keptIndex).flat()
+  }
+}
+
+export const hasCompressibleCompactionHistory = (
+  messages: BaseMessage[],
+  retainTokens: number
+): boolean => {
+  const { folded } = splitMessagesForCompactionTail(messages, retainTokens)
+  return folded.length > 0
+}
+
+export const countTailBookmarkMessages = (tail: BaseMessage[]): number =>
+  tail.filter(
+    (message) =>
+      message.getType() === 'ai' || message.getType() === 'tool' || isBoundaryUser(message)
+  ).length
 
 const MAX_TOOL_CALL_ARG_LENGTH = 300
 
@@ -73,6 +154,13 @@ const formatToolCallArgs = (args: Record<string, unknown>): string =>
     .join(', ')
 
 const normalizeCompactionText = (content: string): string => content.trim()
+
+const truncateCompactionToolBody = (content: string): string => {
+  const characters = Array.from(content)
+  if (characters.length <= COMPACTION_TOOL_RESULT_MAX_CHARS) return content
+  const omitted = characters.length - COMPACTION_TOOL_RESULT_MAX_CHARS
+  return `${characters.slice(0, COMPACTION_TOOL_RESULT_MAX_CHARS).join('')}\n\n... [${omitted} characters omitted]`
+}
 
 const renderAiMessageLines = (message: AIMessage): string[] => {
   const lines: string[] = []
@@ -97,39 +185,43 @@ const renderAiMessageLines = (message: AIMessage): string[] => {
 const renderToolMessageLine = (message: BaseMessage): string => {
   const rawContent =
     typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
-  return `[tool] ${normalizeCompactionText(rawContent)}`
+  return `[tool] ${truncateCompactionToolBody(normalizeCompactionText(rawContent))}`
 }
 
-// 每个 AI 消息及其触发的工具调用、紧随的工具结果为一轮，轮首加 [round N]。
-// 轮内 \n 紧凑，轮间 \n\n 分隔。
+const renderHumanBlock = (message: BaseMessage): string => {
+  const rawContent =
+    typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
+  const content = normalizeCompactionText(rawContent)
+  return content ? `[user]\n${content}` : '[user]'
+}
+
 export const renderMessagesForCompaction = (messages: BaseMessage[]): string => {
-  const rounds: string[] = []
-  let roundLines: string[] = []
-  let roundIndex = 0
-  const flushRound = (): void => {
-    if (roundLines.length > 0) {
-      rounds.push(roundLines.join('\n'))
-      roundLines = []
-    }
+  const blocks: string[] = []
+  let processLines: string[] = []
+  const flushProcess = (): void => {
+    if (processLines.length === 0) return
+    blocks.push(processLines.join('\n'))
+    processLines = []
   }
   for (const message of messages) {
     const role = message.getType()
+    if (isBoundaryUser(message)) {
+      flushProcess()
+      blocks.push(renderHumanBlock(message))
+      continue
+    }
     if (role === 'ai') {
-      flushRound()
-      roundIndex += 1
-      roundLines = [`[round ${roundIndex}]`, ...renderAiMessageLines(message as AIMessage)]
-    } else if (role === 'tool') {
-      roundLines.push(renderToolMessageLine(message))
-    } else if (role === 'human') {
-      flushRound()
-      roundIndex += 1
-      const rawContent =
-        typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
-      const content = normalizeCompactionText(rawContent)
-      roundLines = [`[round ${roundIndex}]`, '[user]']
-      if (content) roundLines.push(content)
+      processLines.push(...renderAiMessageLines(message as AIMessage))
+      continue
+    }
+    if (role === 'tool') {
+      processLines.push(renderToolMessageLine(message))
+      continue
+    }
+    if (role === 'human') {
+      processLines.push(renderHumanBlock(message))
     }
   }
-  flushRound()
-  return rounds.join('\n\n')
+  flushProcess()
+  return blocks.join('\n\n')
 }

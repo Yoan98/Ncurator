@@ -23,14 +23,16 @@ const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
 const RUN2_PREFIX_CACHE_MIN_RATIO = 0.5
 
 const REQUIRED_COMPACTION_HEADINGS = [
-  '当前交付：',
-  '已确认事实：',
-  '已尝试但未解决：',
-  '历史事实：'
+  '目标：',
+  '约束：',
+  '进度：',
+  '下一步：',
+  '文件：'
 ] as const
 
 const expectedLastWeekDocAnchor = '上周周报'
 const inventedLastWeekDocName = '上周工作周报.docx'
+const COMPACTION_CHECKPOINT_MARKER = 'compacted into the following summary'
 
 const extractSection = (summary: string, heading: string): string => {
   const start = summary.indexOf(heading)
@@ -45,14 +47,6 @@ const extractSection = (summary: string, heading: string): string => {
   return rest.slice(0, end).trim()
 }
 
-const isEmptyHistorySection = (section: string): boolean => {
-  const normalized = section.replace(/\s+/g, '')
-  return normalized === '' || normalized === '-无' || normalized === '无'
-}
-
-const hasTimelineMarker = (section: string): boolean =>
-  /\d{4}[-/年.]|\d{1,2}[:：]\d{2}|current_time|周|月|日/.test(section)
-
 const parseBrainMessageRoles = (user: string): string[] => {
   try {
     const parsed = JSON.parse(user) as Array<{ role?: string }>
@@ -65,12 +59,12 @@ const parseBrainMessageRoles = (user: string): string[] => {
 
 const isCompactedBrainShape = (record: AiLlmIoRecord): boolean => {
   const roles = parseBrainMessageRoles(record.user)
-  return (
-    roles.length === 2 &&
-    roles[0] === 'system' &&
-    roles[1] === 'human' &&
-    record.user.includes('<memory>')
-  )
+  if (roles.length < 2) return false
+  if (roles[0] !== 'system' || roles[1] !== 'human') return false
+  if (!record.user.includes('<summary>') || !record.user.includes(COMPACTION_CHECKPOINT_MARKER)) {
+    return false
+  }
+  return roles.slice(2).every((role) => role === 'ai' || role === 'tool' || role === 'human')
 }
 
 const firstBrainAfterCompaction = (
@@ -217,7 +211,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + 带 <memory> 的当前 user 继续完成交付，并在同伙伴复杂续做中压出非空历史时间线；Run2 首轮 brain 须明显复用 Run1 末次前缀缓存。',
+          '验证 live 模式下 human 在真实风险周报长任务中会自然触发伙伴记忆压缩，压完后以 System + checkpoint User + 原文 tail 继续完成交付；同伙伴续做再压一次；Run2 首轮 brain 须明显复用 Run1 末次前缀缓存。',
         fixtures: [CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         execute: async (runtime) => {
@@ -226,7 +220,8 @@ describe('ai human live backend', () => {
           const runnerOptions = {
             partnerId: PARTNER_ID,
             humanRuntimeOverrides: {
-              modelContextWindowTokens: LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS
+              modelContextWindowTokens: LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS,
+              keepRecentTokens: 10_000
             }
           }
           const run1Output = await createHumanTestRunner(runtime, runnerOptions).run({
@@ -283,7 +278,11 @@ describe('ai human live backend', () => {
               REQUIRED_COMPACTION_HEADINGS.every((heading) => summary.includes(heading))
             ) &&
             run1Compaction.compactionRecords.every(
-              (record) => record.user.includes('<current>') && record.user.includes('<earlier>')
+              (record) =>
+                !record.user.includes('<current>') &&
+                !record.user.includes('<earlier>') &&
+                record.user.includes('[user]') &&
+                !record.user.includes('[round')
             )
           const run1SummaryQualitySatisfied = run1Compaction.summaries.every(
             (summary) =>
@@ -296,7 +295,7 @@ describe('ai human live backend', () => {
           const run1ContinuitySatisfied =
             Boolean(run1LatestBrain?.user.includes(expectedLastWeekDocAnchor)) &&
             Boolean(run1LatestBrain && !run1LatestBrain.user.includes(inventedLastWeekDocName)) &&
-            Boolean(run1LatestBrain?.user.includes('<memory>'))
+            Boolean(run1LatestBrain?.user.includes(COMPACTION_CHECKPOINT_MARKER))
           const run1TaskCompletionSatisfied =
             result.run1Output?.status === 'completed' &&
             (run1Docx.toolNames.some((toolName) => toolName.startsWith('docx_')) ||
@@ -312,25 +311,26 @@ describe('ai human live backend', () => {
             ? parseBrainMessageRoles(run2FirstBrain.user)
             : []
           const run2FirstBrainSatisfied =
-            Boolean(run2FirstBrain?.user.includes('<memory>')) &&
+            Boolean(run2FirstBrain?.user.includes(COMPACTION_CHECKPOINT_MARKER)) &&
+            Boolean(run2FirstBrain?.user.includes('<summary>')) &&
             run2FirstBrainRoles[0] === 'system' &&
             run2FirstBrainRoles[1] === 'human' &&
             run2FirstBrainRoles.at(-1) === 'human' &&
             Boolean(run2FirstBrain?.user.includes(HUMAN_CONTEXT_COMPACTION_RUN2_USER_INPUT)) &&
             run2FirstBrainRoles[1] !== 'ai' &&
             run2FirstBrainRoles[1] !== 'tool'
-          const run2HistorySection = extractSection(latestRun2Summary, '历史事实：')
           const run2CurrentSection = [
-            extractSection(latestRun2Summary, '当前交付：'),
-            extractSection(latestRun2Summary, '已尝试但未解决：')
+            extractSection(latestRun2Summary, '目标：'),
+            extractSection(latestRun2Summary, '进度：'),
+            extractSection(latestRun2Summary, '下一步：'),
+            extractSection(latestRun2Summary, '约束：')
           ].join('\n')
           const run2HistorySatisfied =
             run2Compaction.summaries.length > 0 &&
             REQUIRED_COMPACTION_HEADINGS.every((heading) => latestRun2Summary.includes(heading)) &&
-            !isEmptyHistorySection(run2HistorySection) &&
-            hasTimelineMarker(run2HistorySection) &&
-            (run2HistorySection.includes(expectedLastWeekDocAnchor) ||
-              /\.docx|周报/.test(run2HistorySection))
+            !latestRun2Summary.includes('记忆时间线：') &&
+            (latestRun2Summary.includes(expectedLastWeekDocAnchor) ||
+              /\.docx|周报/.test(latestRun2Summary))
           const run2CurrentTaskSatisfied =
             /(对照|标题|九月|法务)/.test(run2CurrentSection) &&
             !/从空白模板整份|整份重填周报/.test(run2CurrentSection)
@@ -346,7 +346,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-context-compaction-run1-completes-weekly-report',
               message:
-                'Run 1 应至少压缩一次；压完后发给 brain 的数组为 system + 带 <memory> 的当前 user，四段标题齐全，含「上周周报」、不编造「上周工作周报.docx」，并成功交付周报。',
+                'Run 1 应至少压缩一次；压完后发给 brain 的数组为 system + checkpoint user + 原文 tail，五栏标题齐全，含「上周周报」、不编造「上周工作周报.docx」，并成功交付周报。',
               data: {
                 startedEvents: run1Compaction.startedEvents,
                 completedEvents: run1Compaction.completedEvents,
@@ -371,16 +371,15 @@ describe('ai human live backend', () => {
               run2CurrentTaskSatisfied &&
               result.run2Output?.status === 'completed',
             {
-              name: 'human-live-context-compaction-run2-writes-history-timeline',
+              name: 'human-live-context-compaction-run2-continues-from-checkpoint',
               message:
-                'Run 2 首次 brain 应为 system + 带 <memory> 的压缩 user + 过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。该次压缩的历史事实不能是「- 无」，须为能对上 Run 1 产物的时间线；当前交付/未解决应围绕对照、改标题或法务，而不是整段重填周报。',
+                'Run 2 首次 brain 应为 system + checkpoint user + 原文过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。该次压缩只要五栏，目标/进度/下一步/约束应围绕对照、改标题或法务，而不是整段重填周报。',
               data: {
                 startedEvents: run2Compaction.startedEvents,
                 completedEvents: run2Compaction.completedEvents,
                 run2FirstBrainRoles,
                 compactionSummaries: run2Compaction.summaries,
                 latestRun2Summary,
-                run2HistorySection,
                 run2CurrentSection,
                 run2Status: result.run2Output?.status
               }

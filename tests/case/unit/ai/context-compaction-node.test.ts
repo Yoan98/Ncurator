@@ -1,8 +1,12 @@
+import { AIMessage, ToolMessage } from '@langchain/core/messages'
 import { describe, expect, it } from 'vitest'
 import { buildCompactedMessages } from '../../../../src/main/services/ai/human/node/contextCompactionNode'
-import { buildHistoryCompactionPrompt } from '../../../../src/main/services/ai/human/prompts/compaction'
-import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
+import {
+  buildHistoryCompactionPrompt,
+  wrapCompactionCheckpointContent
+} from '../../../../src/main/services/ai/human/prompts/compaction'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
+import { createCurrentBrainUserMessage } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 
 const createContext = (): AiRunContext =>
   ({
@@ -21,49 +25,62 @@ const createContext = (): AiRunContext =>
   }) as AiRunContext
 
 describe('ai human context compaction message shape', () => {
-  it('rebuilds only system and one current user with memory, without a process tail', () => {
-    const state = createInitialHumanState({
-      taskId: 'task-compaction-shape',
-      userInput: '继续完成任务'
-    })
-    state.memory.plan = [{ title: '交付结果', status: 'todo' }]
+  it('rebuilds system, a checkpoint user, and the retained original tail', () => {
+    const current = createCurrentBrainUserMessage('<user_context>继续完成任务</user_context>')
+    const tail = [
+      current,
+      new AIMessage({
+        content: '正在写初稿',
+        tool_calls: [{ id: '1', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
+      }),
+      new ToolMessage({ content: 'draft nodes', tool_call_id: '1' })
+    ]
+    const summary = '目标：\n准备交付\n约束：\n无\n进度：\n无\n下一步：\n无\n文件：\n无'
 
     const messages = buildCompactedMessages({
       ctx: createContext(),
-      state,
-      summary: '当前交付：\n- 准备交付\n已确认事实：\n- 无\n已尝试但未解决：\n- 无\n历史事实：\n- 无'
+      summary,
+      tail
     })
 
-    expect(messages.map((message) => message.getType())).toEqual(['system', 'human'])
-    expect(messages.filter((message) => message.getType() === 'human')).toHaveLength(1)
-    const user = String(messages[1]?.content)
-    expect(user).toContain('<memory>')
-    expect(user).toContain('当前交付：')
-    expect(user).toContain('<workspace_roots>')
-    expect(user.indexOf('</workspace_roots>')).toBeLessThan(user.indexOf('<reference_scope>'))
-    expect(user.indexOf('</reference_scope>')).toBeLessThan(user.indexOf('<current_time>'))
-    expect(user.indexOf('</current_time>')).toBeLessThan(user.indexOf('<memory>'))
-    expect(user.indexOf('</memory>')).toBeLessThan(user.indexOf('<active_state>'))
-    expect(user).toContain('计划进度：[todo] 交付结果')
+    expect(messages.map((message) => message.getType())).toEqual([
+      'system',
+      'human',
+      'human',
+      'ai',
+      'tool'
+    ])
+    expect(messages[2]).toBe(current)
+    expect(messages[3]).toBe(tail[1])
+    expect(messages[4]).toBe(tail[2])
+    const checkpoint = String(messages[1]?.content)
+    expect(checkpoint).toBe(wrapCompactionCheckpointContent(summary))
+    expect(checkpoint).toContain('<summary>')
+    expect(checkpoint).toContain('目标：')
+    expect(checkpoint).not.toContain('<user_context>')
+    expect(checkpoint).not.toContain('<memory>')
+    expect(checkpoint).not.toContain('<active_state>')
   })
 })
 
 describe('ai human history compaction prompt', () => {
-  it('splits input into current/earlier and asks for four memory headings', () => {
+  it('uses folded conversation text and the five memory headings', () => {
     const prompt = buildHistoryCompactionPrompt({
-      currentText: '[round 1]\n[user] 补风险并改标题',
-      earlierText: '[round 1]\n[user] 填周报'
+      conversationText: '[user]\n填周报\n\n[ai] 已读上周'
     })
-    expect(prompt.user).toContain('<current>')
-    expect(prompt.user).toContain('<earlier>')
-    expect(prompt.user).toContain('补风险并改标题')
+    expect(prompt.user).toContain('[user]')
     expect(prompt.user).toContain('填周报')
-    expect(prompt.user).not.toContain('<user_goal>')
-    expect(prompt.user).not.toContain('<history_text>')
-    expect(prompt.system).toContain('当前交付：')
-    expect(prompt.system).toContain('已确认事实：')
-    expect(prompt.system).toContain('已尝试但未解决：')
-    expect(prompt.system).toContain('历史事实：')
+    expect(prompt.user).toContain('已读上周')
+    expect(prompt.user).not.toContain('[round')
+    expect(prompt.user).not.toContain('<current>')
+    expect(prompt.user).not.toContain('<earlier>')
+    expect(prompt.system).toContain('目标：')
+    expect(prompt.system).toContain('约束：')
+    expect(prompt.system).toContain('进度：')
+    expect(prompt.system).toContain('下一步：')
+    expect(prompt.system).toContain('文件：')
+    expect(prompt.system).not.toContain('记忆时间线：')
+    expect(prompt.system).not.toContain('历史事实：')
     expect(prompt.system).toContain('整份重写')
   })
 })

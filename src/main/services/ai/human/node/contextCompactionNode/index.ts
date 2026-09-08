@@ -1,17 +1,23 @@
 import { randomUUID } from 'node:crypto'
 import { SystemMessage, type BaseMessage } from '@langchain/core/messages'
 import type { AiRunContext } from '../../../types'
-import { buildHistoryCompactionPrompt } from '../../prompts/compaction'
-import { buildBrainSystemPrompt, buildBrainUserMessage } from '../../prompts/brain'
+import { resolveCompactionKeepRecentTokens } from '../../constants'
+import {
+  buildHistoryCompactionPrompt,
+  wrapCompactionCheckpointContent
+} from '../../prompts/compaction'
+import { buildBrainSystemPrompt } from '../../prompts/brain'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
 import { resolveCompactionCoveredThroughSeq } from '../../memory/transcript'
 import {
+  countTailBookmarkMessages,
   createCompactedBrainUserMessage,
-  listFoldableHistoryMessages,
+  hasCompressibleCompactionHistory,
+  isCurrentBrainUserMessage,
   renderMessagesForCompaction,
-  splitMessagesForMemoryCompaction
+  splitMessagesForCompactionTail
 } from '../utils/messageTail'
 
 export const createContextCompactionNode = (input: {
@@ -23,8 +29,10 @@ export const createContextCompactionNode = (input: {
     input.cache.currentState = state
 
     const messages = input.cache.messages || []
-    const foldable = listFoldableHistoryMessages(messages)
-    if (foldable.length === 0) {
+    const retainTokens = resolveCompactionKeepRecentTokens(
+      input.ctx.humanRuntimeOverrides?.keepRecentTokens
+    )
+    if (!hasCompressibleCompactionHistory(messages, retainTokens)) {
       return {
         ...state,
         execution: {
@@ -34,7 +42,7 @@ export const createContextCompactionNode = (input: {
       }
     }
 
-    const { current, earlier } = splitMessagesForMemoryCompaction(messages)
+    const { folded, tail } = splitMessagesForCompactionTail(messages, retainTokens)
     const budgetTokensBefore = state.execution.contextBudget?.budgetTokens || 0
     emitCompactionStarted({
       sendEvent: input.ctx.sendEvent,
@@ -44,7 +52,7 @@ export const createContextCompactionNode = (input: {
       type: 'context_compaction_started',
       runId: input.ctx.runId,
       taskId: state.task.taskId,
-      targetMessageCount: current.length + earlier.length,
+      targetMessageCount: folded.length,
       budgetTokensBefore,
       thresholdTokens: state.execution.contextBudget?.compactionTriggerTokens || 0,
       createdAt: Date.now(),
@@ -52,8 +60,7 @@ export const createContextCompactionNode = (input: {
     })
 
     const prompt = buildHistoryCompactionPrompt({
-      currentText: renderMessagesForCompaction(current),
-      earlierText: renderMessagesForCompaction(earlier)
+      conversationText: renderMessagesForCompaction(folded)
     })
     const sourceHistoryTokenEstimate = estimateTextTokens(`${prompt.user}`)
     const summary = await input.ctx.chatText({
@@ -77,7 +84,10 @@ export const createContextCompactionNode = (input: {
     }
 
     const currentRecords = await input.ctx.loadMessageLog()
-    const coveredThroughSeq = resolveCompactionCoveredThroughSeq(currentRecords)
+    const coveredThroughSeq = resolveCompactionCoveredThroughSeq(
+      currentRecords,
+      countTailBookmarkMessages(tail)
+    )
     if (coveredThroughSeq === undefined) {
       return {
         ...state,
@@ -95,7 +105,7 @@ export const createContextCompactionNode = (input: {
         payload: {
           compactBlockId,
           coveredThroughSeq,
-          sourceMessageCount: current.length + earlier.length
+          sourceMessageCount: folded.length
         }
       }
     ])
@@ -109,7 +119,7 @@ export const createContextCompactionNode = (input: {
       runId: input.ctx.runId,
       taskId: state.task.taskId,
       compactBlockId,
-      sourceMessageCount: current.length + earlier.length,
+      sourceMessageCount: folded.length,
       tokenEstimateBefore: budgetTokensBefore,
       sourceHistoryTokenEstimate,
       tokenEstimateAfter,
@@ -123,21 +133,12 @@ export const createContextCompactionNode = (input: {
     input.cache.lastBrainUsageUnavailable = false
     const rebuilt = buildCompactedMessages({
       ctx: input.ctx,
-      state: {
-        ...state,
-        memory: {
-          ...state.memory,
-          compactions: [
-            ...state.memory.compactions.filter((block) => block.kind !== 'compacted_history'),
-            compactBlock
-          ]
-        }
-      },
-      summary: compactBlock.summary
+      summary: compactBlock.summary,
+      tail
     })
     const compactedUserText = String(rebuilt[1]?.content || '').trim()
     if (!compactedUserText) {
-      throw new Error('压缩重建的 user 文本为空，无法写入消息日志。')
+      throw new Error('压缩 checkpoint 文本为空，无法写入消息日志。')
     }
     await input.ctx.appendMessageLog([
       {
@@ -151,9 +152,7 @@ export const createContextCompactionNode = (input: {
       }
     ])
     input.cache.messages = rebuilt
-    input.cache.currentUserMessageIndex = rebuilt.findIndex(
-      (message) => message.additional_kwargs?.ncurator_current_user === true
-    )
+    input.cache.currentUserMessageIndex = rebuilt.findIndex(isCurrentBrainUserMessage)
     input.cache.currentUserLogAppended = true
 
     return {
@@ -175,16 +174,10 @@ export const createContextCompactionNode = (input: {
 
 export const buildCompactedMessages = (input: {
   ctx: AiRunContext
-  state: HumanState
   summary: string
+  tail?: readonly BaseMessage[]
 }): BaseMessage[] => [
   new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
-  createCompactedBrainUserMessage(
-    buildBrainUserMessage({
-      state: input.state,
-      ctx: input.ctx,
-      memoryText: input.summary,
-      injectActiveState: true
-    })
-  )
+  createCompactedBrainUserMessage(wrapCompactionCheckpointContent(input.summary)),
+  ...(input.tail || [])
 ]

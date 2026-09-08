@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { AIMessage, HumanMessage, SystemMessage, ToolMessage } from '@langchain/core/messages'
 import {
   renderMessagesForCompaction,
-  listFoldableHistoryMessages,
-  splitMessagesForMemoryCompaction,
+  splitMessagesForCompactionTail,
+  hasCompressibleCompactionHistory,
+  countTailBookmarkMessages,
   createCurrentBrainUserMessage
 } from '../../../../src/main/services/ai/human/node/utils/messageTail'
+import { estimateMessagesForContext } from '../../../../src/main/services/ai/human/memory/multimodal'
 
 const toolCall = (id: string, name: string, args: Record<string, unknown>) => ({
   id,
@@ -14,69 +16,161 @@ const toolCall = (id: string, name: string, args: Record<string, unknown>) => ({
   type: 'tool_call' as const
 })
 
-describe('splitMessagesForMemoryCompaction', () => {
-  it('puts the current user and following process into current, earlier users before it', () => {
+const aiToolPair = (id: string, aiText: string, toolText: string) => [
+  new AIMessage({
+    content: aiText,
+    tool_calls: [toolCall(id, 'docx_read_nodes', { sourcePath: `${id}.docx` })]
+  }),
+  new ToolMessage({ content: toolText, tool_call_id: id })
+]
+
+describe('splitMessagesForCompactionTail', () => {
+  it('keeps recent users in the tail instead of stopping at the last user', () => {
     const current = createCurrentBrainUserMessage('<user_context>current task</user_context>')
+    const lastPair = aiToolPair('2', 'writing draft', 'draft body')
+    const earlier = aiToolPair('1', 'x'.repeat(2000), 'y'.repeat(2000))
+    const legal = aiToolPair('early', 'reading legal', 'legal body')
     const messages = [
       new SystemMessage('<system>fixed template</system>'),
       new HumanMessage('old task'),
-      new AIMessage({ content: '', tool_calls: [toolCall('1', 'terminal_run', { command: 'ls' })] }),
-      new ToolMessage({ content: 'total 1', tool_call_id: '1' }),
+      ...earlier,
       current,
-      new AIMessage({ content: '', tool_calls: [toolCall('2', 'text_file_read', { sourcePath: 'a.txt' })] }),
-      new ToolMessage({ content: 'file body', tool_call_id: '2' })
+      ...legal,
+      ...lastPair
     ]
-    const split = splitMessagesForMemoryCompaction(messages)
-    expect(split.earlier.map((message) => message.getType())).toEqual(['human', 'ai', 'tool'])
-    expect(split.current.map((message) => message.getType())).toEqual(['human', 'ai', 'tool'])
-    expect(split.current[0]).toBe(current)
+    const keep = estimateMessagesForContext([current, ...legal, ...lastPair]) + 32
+    const split = splitMessagesForCompactionTail(messages, keep)
+    expect(split.tail[0]).toBe(current)
+    expect(split.tail.at(-1)).toBe(lastPair[1])
+    expect(split.folded.map((message) => String(message.content))).toContain('old task')
+    expect(split.folded).toContain(earlier[0])
   })
 
-  it('keeps same-run process in current when there is no earlier user', () => {
+  it('does not split an assistant and its tool results', () => {
     const current = createCurrentBrainUserMessage('fill weekly report')
-    const split = splitMessagesForMemoryCompaction([
-      new SystemMessage('sys'),
-      current,
-      new AIMessage({ content: 'reading', tool_calls: [toolCall('1', 'docx_read_nodes', {})] }),
-      new ToolMessage({ content: 'nodes', tool_call_id: '1' })
-    ])
-    expect(split.earlier).toEqual([])
-    expect(split.current).toHaveLength(3)
+    const pair = [
+      new AIMessage({
+        content: 'read both',
+        tool_calls: [
+          toolCall('1', 'text_file_read', { sourcePath: 'a.txt' }),
+          toolCall('2', 'text_file_read', { sourcePath: 'b.txt' })
+        ]
+      }),
+      new ToolMessage({ content: 'aaa', tool_call_id: '1' }),
+      new ToolMessage({ content: 'bbb', tool_call_id: '2' })
+    ]
+    const split = splitMessagesForCompactionTail(
+      [new SystemMessage('sys'), current, ...pair],
+      estimateMessagesForContext(pair) - 1
+    )
+    expect(split.tail).toEqual(pair)
+    expect(split.folded).toEqual([current])
   })
 
-  it('treats unmarked history as current when the current user marker is missing', () => {
-    const split = splitMessagesForMemoryCompaction([
-      new SystemMessage('sys'),
-      new HumanMessage('user'),
-      new AIMessage({ content: 'answer' })
-    ])
-    expect(split.earlier).toEqual([])
-    expect(split.current.map((message) => message.getType())).toEqual(['human', 'ai'])
+  it('snaps the cut to the nearby user when the turn prefix is within 10%', () => {
+    const older = new HumanMessage('old task')
+    const user = new HumanMessage('u'.repeat(80))
+    const firstPair = aiToolPair('1', 'a'.repeat(40), 't'.repeat(40))
+    const lastPair = aiToolPair('2', 'b'.repeat(4000), 'c'.repeat(4000))
+    const keep = estimateMessagesForContext([...firstPair, ...lastPair]) - 1
+    const split = splitMessagesForCompactionTail(
+      [new SystemMessage('sys'), older, ...aiToolPair('0', 'old', 'old'), user, ...firstPair, ...lastPair],
+      keep
+    )
+    expect(split.tail[0]).toBe(user)
+    expect(split.tail).toEqual([user, ...firstPair, ...lastPair])
+    expect(split.folded[0]).toBe(older)
+  })
+
+  it('keeps a mid-turn split when the nearby user is farther than 10%', () => {
+    const user = new HumanMessage('u'.repeat(80))
+    const middle = aiToolPair('1', 'm'.repeat(8000), 'n'.repeat(8000))
+    const lastPair = aiToolPair('2', 'b'.repeat(400), 'c'.repeat(400))
+    const keep = estimateMessagesForContext(lastPair)
+    const split = splitMessagesForCompactionTail(
+      [new SystemMessage('sys'), user, ...middle, ...lastPair],
+      keep
+    )
+    expect(split.tail).toEqual(lastPair)
+    expect(split.folded[0]).toBe(user)
+    expect(split.folded).toEqual([user, ...middle])
+  })
+
+  it('does not treat image-reference humans as a user boundary', () => {
+    const current = createCurrentBrainUserMessage('look at the screenshot')
+    const imageHuman = new HumanMessage({
+      content: [{ type: 'text', text: 'image' }]
+    })
+    const pair = aiToolPair('1', 'reading image', 'ok')
+    const split = splitMessagesForCompactionTail(
+      [current, imageHuman, ...pair],
+      estimateMessagesForContext(pair)
+    )
+    expect(split.folded[0]).toBe(current)
+    expect(split.tail.at(-1)).toBe(pair[1])
+    expect(split.tail).not.toContain(current)
   })
 })
 
-describe('listFoldableHistoryMessages', () => {
-  it('excludes system and the current user', () => {
-    const current = createCurrentBrainUserMessage('now')
-    const foldable = listFoldableHistoryMessages([
-      new SystemMessage('sys'),
-      new HumanMessage('old'),
-      current,
-      new AIMessage({ content: 'go' })
-    ])
-    expect(foldable.map((message) => message.getType())).toEqual(['human', 'ai'])
+describe('hasCompressibleCompactionHistory', () => {
+  it('is false when the keep window covers the whole conversation', () => {
+    const current = createCurrentBrainUserMessage('fill weekly report')
+    const pair = aiToolPair('1', 'reading', 'nodes')
+    expect(
+      hasCompressibleCompactionHistory(
+        [new SystemMessage('sys'), current, ...pair],
+        estimateMessagesForContext([current, ...pair]) + 32
+      )
+    ).toBe(false)
+  })
+
+  it('is false when snapping to the only user leaves nothing to fold', () => {
+    const current = createCurrentBrainUserMessage('fill weekly report')
+    const huge = aiToolPair('1', 'x'.repeat(4000), 'y'.repeat(4000))
+    expect(
+      hasCompressibleCompactionHistory(
+        [current, ...huge],
+        Math.floor(estimateMessagesForContext(huge) * 0.1)
+      )
+    ).toBe(false)
+  })
+
+  it('is true when earlier users or process remain after taking the tail', () => {
+    const current = createCurrentBrainUserMessage('continue')
+    const earlier = aiToolPair('1', 'old work', 'old result')
+    const tail = aiToolPair('2', 'current work', 'current result')
+    expect(
+      hasCompressibleCompactionHistory(
+        [new HumanMessage('old task'), ...earlier, current, ...tail],
+        estimateMessagesForContext([current, ...tail])
+      )
+    ).toBe(true)
+  })
+})
+
+describe('countTailBookmarkMessages', () => {
+  it('counts users, ai and tool messages and ignores image humans', () => {
+    expect(
+      countTailBookmarkMessages([
+        new HumanMessage('keep me'),
+        new AIMessage({ content: 'go' }),
+        new ToolMessage({ content: 'ok', tool_call_id: '1' }),
+        new HumanMessage({ content: [{ type: 'text', text: 'image' }] })
+      ])
+    ).toBe(3)
   })
 })
 
 describe('renderMessagesForCompaction', () => {
-  it('renders thought and tool calls as separate lines within a round', () => {
+  it('renders thought and tool calls without round markers', () => {
     const rendered = renderMessagesForCompaction([
       new AIMessage({
         content: '先看目录',
         tool_calls: [toolCall('1', 'terminal_run', { command: 'cd /tmp && ls' })]
       })
     ])
-    expect(rendered).toBe('[round 1]\n[ai] 先看目录\n[tool_call] terminal_run(command="cd /tmp && ls")')
+    expect(rendered).toBe('[ai] 先看目录\n[tool_call] terminal_run(command="cd /tmp && ls")')
+    expect(rendered).not.toContain('[round')
   })
 
   it('renders only tool_call lines when the AI message has no content', () => {
@@ -86,10 +180,10 @@ describe('renderMessagesForCompaction', () => {
         tool_calls: [toolCall('1', 'docx_read_outline', { sourcePath: '工作/上周周报.docx' })]
       })
     ])
-    expect(rendered).toBe('[round 1]\n[tool_call] docx_read_outline(sourcePath="工作/上周周报.docx")')
+    expect(rendered).toBe('[tool_call] docx_read_outline(sourcePath="工作/上周周报.docx")')
   })
 
-  it('groups each AI message with its tool results and numbers rounds', () => {
+  it('groups each AI message with its tool results and blanks between user and process blocks', () => {
     const rendered = renderMessagesForCompaction([
       new AIMessage({
         content: '读取并写入',
@@ -108,21 +202,18 @@ describe('renderMessagesForCompaction', () => {
     ])
     expect(rendered).toBe(
       [
-        '[round 1]',
         '[ai] 读取并写入',
         '[tool_call] text_file_read(sourcePath="a.txt")',
         '[tool_call] text_file_edit(action="create", sourcePath="b.txt")',
         '[tool] hello',
         '[tool] created',
-        '',
-        '[round 2]',
         '[tool_call] terminal_run(command="ls")',
         '[tool] total 1'
       ].join('\n')
     )
   })
 
-  it('renders a user message as its own round without extra blank lines inside the round', () => {
+  it('renders a user message as its own block followed by a blank line', () => {
     const rendered = renderMessagesForCompaction([
       new HumanMessage('<user_context>\n  <task_goal>\n填周报\n  </task_goal>\n</user_context>'),
       new AIMessage({
@@ -133,16 +224,15 @@ describe('renderMessagesForCompaction', () => {
     ])
     expect(rendered).toBe(
       [
-        '[round 1]',
         '[user]',
         '<user_context>\n  <task_goal>\n填周报\n  </task_goal>\n</user_context>',
         '',
-        '[round 2]',
         '[ai] 先读',
         '[tool_call] docx_read_nodes(sourcePath="a.docx")',
         '[tool] ok'
       ].join('\n')
     )
+    expect(rendered).not.toContain('[round')
   })
 
   it('trims leading and trailing whitespace from AI thoughts and tool results', () => {
@@ -153,22 +243,34 @@ describe('renderMessagesForCompaction', () => {
       }),
       new ToolMessage({ content: '\n\ntotal 1\n', tool_call_id: '1' })
     ])
-    expect(rendered).toBe(
-      '[round 1]\n[ai] 材料齐了。\n[tool_call] terminal_run(command="ls")\n[tool] total 1'
-    )
+    expect(rendered).toBe('[ai] 材料齐了。\n[tool_call] terminal_run(command="ls")\n[tool] total 1')
   })
 
-  it('preserves internal blank lines in tool output', () => {
+  it('truncates compaction-input tool bodies to 2000 characters from the start', () => {
+    const longBody = `${'line\n'.repeat(80)}end`
     const rendered = renderMessagesForCompaction([
       new AIMessage({
         content: '',
         tool_calls: [toolCall('1', 'terminal_run', { command: 'ls' })]
       }),
-      new ToolMessage({ content: '\nline 1\n\nline 3\n', tool_call_id: '1' })
+      new ToolMessage({ content: `\n${longBody}\n`, tool_call_id: '1' })
     ])
-    expect(rendered).toBe(
-      '[round 1]\n[tool_call] terminal_run(command="ls")\n[tool] line 1\n\nline 3'
-    )
+    expect(rendered).toContain('[tool] line')
+    expect(rendered).toContain(longBody)
+  })
+
+  it('marks omitted characters when a tool body exceeds 2000 characters', () => {
+    const longBody = 'x'.repeat(2500)
+    const rendered = renderMessagesForCompaction([
+      new AIMessage({
+        content: '',
+        tool_calls: [toolCall('1', 'terminal_run', { command: 'ls' })]
+      }),
+      new ToolMessage({ content: longBody, tool_call_id: '1' })
+    ])
+    expect(rendered).toContain('[tool] ' + 'x'.repeat(2000))
+    expect(rendered).toContain('... [500 characters omitted]')
+    expect(rendered).not.toContain('x'.repeat(2001))
   })
 
   it('json-stringifies nested args and truncates long values', () => {
@@ -179,7 +281,7 @@ describe('renderMessagesForCompaction', () => {
         tool_calls: [toolCall('1', 'terminal_run', { command: long, options: { a: 1 } })]
       })
     ])
-    expect(rendered).toContain('[round 1]')
+    expect(rendered).not.toContain('[round')
     expect(rendered).toContain('[tool_call] terminal_run(')
     expect(rendered).toContain('options={"a":1}')
     expect(rendered).toContain('…')

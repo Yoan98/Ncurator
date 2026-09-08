@@ -1,56 +1,37 @@
-export const buildHistoryCompactionPrompt = (input: {
-  currentText: string
-  earlierText: string
-}) => {
+export const wrapCompactionCheckpointContent = (summary: string): string => {
+  const body = summary.trim() || '无'
+  return [
+    'The conversation history before this point was compacted into the following summary:',
+    '',
+    '<summary>',
+    body,
+    '</summary>'
+  ].join('\n')
+}
+
+export const buildHistoryCompactionPrompt = (input: { conversationText: string }) => {
   const system = `
-<system>
-<role>
-你是上下文压缩器。根据 current 写当前工作记忆，根据 earlier 写历史事实时间线。
-</role>
+把下面的对话压成后续主模型接着干所需要的记忆。只根据这段对话写，没有出现的过程不要补。
 
-<principles>
-- 当前工作记忆要让这件事还能接着做：刚发生的 AI/工具结果必须写进「当前交付」或「已确认事实」。
-- 必须保留：路径、文件名、标题、id、结构；还要遵守的限制；未完成点；再试会空转的失败（一句结论）。
-- 必须丢掉：工具入参、检索噪声、Thought、重复试错过程、当前用户诉求原文。
-- 历史事实按时间从旧到新；越早的事越短，越近的事可以更具体。
-- 整份重写，不要把上一份记忆原文粘贴进输出。
-- 禁止编造；路径、文件名、标题、id 复用原文。
-</principles>
+纯文本，按栏目输出：
 
-<context_block_guide>
-- current：现在这句用户消息 + 它之后的过程（含最后一步）。只用来写当前交付、已确认事实、已尝试但未解决。
-- earlier：这句用户消息之前的对话，可空。只用来写历史事实。
-- 用户消息还会再发给主模型，不要复述其诉求。其中若已有记忆段落，只作对照，不要整段粘贴。
-</context_block_guide>
+目标：
+约束：
+进度：
+下一步：
+文件：
 
-<output_contract>
-纯文本，不要 JSON，不要解释。严格使用：
+目标：用户现在要什么。
+约束：必须遵守的限制。
+进度：现在做到哪、卡在哪。写结论，不写逐步工具调用，不抄 tool 原文、nodes dump、入参。
+下一步：紧接着该干什么。
+文件：还要用的路径，各一句角色。不要 nodeId。
 
-当前交付：
-- ...
-已确认事实：
-- ...
-已尝试但未解决：
-- ...
-历史事实：
-- {时间} {做过什么} → {结果或路径}
-
-空栏目写「- 无」。
-</output_contract>
-</system>
+整份重写。已有摘要只对照，不要粘贴。禁止编造。空栏目写「无」。
 `.trim()
 
-  const user = `
-<memory_task>
-  <current>
-${input.currentText.trim() || '无'}
-  </current>
-
-  <earlier>
-${input.earlierText.trim() || '无'}
-  </earlier>
-</memory_task>
-`.trim()
-
-  return { system, user }
+  return {
+    system,
+    user: input.conversationText.trim() || '无'
+  }
 }

@@ -4,22 +4,32 @@ import type {
   AiPreference,
   ChatSubmitRequest,
   ChatSubmitResponse,
+  Partner,
+  PartnerAvatarColor,
+  PartnerAvatarShape,
+  PartnerUiStateV1,
   ScheduledTask,
+  ScheduledTaskDismissBusyNoticeRequest,
   ScheduledTaskMutationResponse,
+  ScheduledTaskRunNowRequest,
   ScheduledTaskSaveRequest,
   ScheduledTaskScheduleType,
   ScheduledTaskSetEnabledRequest
 } from '../../../shared/types'
+import { PARTNER_AVATAR_COLORS, PARTNER_AVATAR_SHAPES } from '../../../shared/types'
 import type { PartnerStore } from '../storage/domains/PartnerStore'
 import type { ScheduledTaskStore } from '../storage/domains/ScheduledTaskStore'
 
 const MISFIRE_GRACE_MS = 60_000
+const PARTNER_BUSY_ERROR = '请等待当前任务结束，或先停止后再执行'
 
 type TimerHandle = ReturnType<typeof setTimeout>
 
 type ScheduledTaskServiceDeps = {
   taskStore: Pick<ScheduledTaskStore, 'list' | 'listEnabled' | 'getById' | 'save' | 'delete'>
-  partnerStore: Pick<PartnerStore, 'getPartner'>
+  partnerStore: Pick<PartnerStore, 'getPartner' | 'savePartner'>
+  savePartnerUiState: (partnerId: string, state: PartnerUiStateV1) => Promise<void>
+  createEmptyPartnerUiState: () => PartnerUiStateV1
   hasActivePartnerRun: (partnerId: string) => boolean
   submitTask: (payload: ChatSubmitRequest) => Promise<ChatSubmitResponse>
   emitSessionListRefresh: () => void
@@ -88,6 +98,26 @@ export const computeNextRunAt = (
     return nextWeeklySlot(after, minutesOfDay, input.weekday)
   }
   return nextDailySlot(after, minutesOfDay)
+}
+
+export const boundPartnerName = (taskName: string): string => `定时 · ${taskName.trim()}`
+
+const hashSeed = (value: string): number => {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0
+  }
+  return hash
+}
+
+const avatarForTaskId = (
+  taskId: string
+): { avatar_shape: PartnerAvatarShape; avatar_color: PartnerAvatarColor } => {
+  const seed = hashSeed(taskId)
+  return {
+    avatar_shape: PARTNER_AVATAR_SHAPES[seed % PARTNER_AVATAR_SHAPES.length],
+    avatar_color: PARTNER_AVATAR_COLORS[(seed >>> 8) % PARTNER_AVATAR_COLORS.length]
+  }
 }
 
 export class ScheduledTaskService {
@@ -174,9 +204,10 @@ export class ScheduledTaskService {
 
   public async save(input: ScheduledTaskSaveRequest): Promise<ScheduledTaskMutationResponse> {
     try {
-      const task = this.buildTask(input)
+      const task = await this.buildTask(input)
       await this.deps.taskStore.save(task)
       await this.scheduleNext()
+      this.deps.emitSessionListRefresh()
       return { success: true, task }
     } catch (error) {
       return { success: false, error: error instanceof Error ? error.message : String(error) }
@@ -215,15 +246,65 @@ export class ScheduledTaskService {
     }
   }
 
-  private buildTask(input: ScheduledTaskSaveRequest): ScheduledTask {
+  public async runNow(input: ScheduledTaskRunNowRequest): Promise<ScheduledTaskMutationResponse> {
+    try {
+      const existing = await this.deps.taskStore.getById(String(input.id || '').trim())
+      if (!existing) return { success: false, error: '定时任务不存在' }
+      const ensured = await this.ensureBoundPartner(existing)
+      if (this.deps.hasActivePartnerRun(ensured.partnerId)) {
+        return { success: false, error: PARTNER_BUSY_ERROR }
+      }
+      const response = await this.deps.submitTask({
+        partnerId: ensured.partnerId,
+        input: ensured.prompt,
+        mainModel: ensured.mainModel,
+        preference: ensured.aiPreference,
+        executionPermission: ensured.executionPermission
+      })
+      if (!response.success) {
+        return { success: false, error: response.error || '立即执行失败' }
+      }
+      const now = this.deps.now()
+      const cleared: ScheduledTask = {
+        ...ensured,
+        busyCancelNoticeAt: null,
+        updatedAt: now
+      }
+      await this.deps.taskStore.save(cleared)
+      this.deps.emitSessionListRefresh()
+      return { success: true, task: cleared }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  public async dismissBusyNotice(
+    input: ScheduledTaskDismissBusyNoticeRequest
+  ): Promise<ScheduledTaskMutationResponse> {
+    try {
+      const existing = await this.deps.taskStore.getById(String(input.id || '').trim())
+      if (!existing) return { success: false, error: '定时任务不存在' }
+      const now = this.deps.now()
+      const task: ScheduledTask = {
+        ...existing,
+        busyCancelNoticeAt: null,
+        updatedAt: now
+      }
+      await this.deps.taskStore.save(task)
+      this.deps.emitSessionListRefresh()
+      return { success: true, task }
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  private async buildTask(input: ScheduledTaskSaveRequest): Promise<ScheduledTask> {
     const name = String(input.name || '').trim()
     const prompt = String(input.prompt || '').trim()
-    const partnerId = String(input.partnerId || '').trim()
     const mainModel = input.mainModel
     const scheduleType = normalizeScheduleType(input.scheduleType)
     if (!name) throw new Error('请填写任务名称')
     if (!prompt) throw new Error('请填写任务提示词')
-    if (!partnerId) throw new Error('请选择伙伴')
     if (!mainModel?.configId || !mainModel?.modelName) throw new Error('请选择主模型')
     if (parseTimeOfDay(input.timeOfDay) === null) throw new Error('执行时间格式不正确')
 
@@ -237,6 +318,21 @@ export class ScheduledTaskService {
       timeOfDay: String(input.timeOfDay || '').trim(),
       weekday
     }
+
+    let partnerId = ''
+    let busyCancelNoticeAt: number | null = null
+    let createdAt = now
+    if (existingId) {
+      const existing = await this.deps.taskStore.getById(existingId)
+      if (!existing) throw new Error('定时任务不存在')
+      partnerId = existing.partnerId
+      busyCancelNoticeAt = existing.busyCancelNoticeAt
+      createdAt = existing.createdAt
+      await this.syncBoundPartnerName(partnerId, name)
+    } else {
+      partnerId = await this.createBoundPartner(id, name, now)
+    }
+
     return {
       id,
       name,
@@ -250,9 +346,58 @@ export class ScheduledTaskService {
       aiPreference: normalizeAiPreference(input.aiPreference),
       executionPermission: normalizeExecutionPermission(input.executionPermission),
       nextRunAt: input.enabled ? computeNextRunAt(schedule, now) : null,
-      createdAt: now,
+      busyCancelNoticeAt,
+      createdAt,
       updatedAt: now
     }
+  }
+
+  private async createBoundPartner(taskId: string, taskName: string, now: number): Promise<string> {
+    const avatar = avatarForTaskId(taskId)
+    const partner: Partner = {
+      id: uuidv4(),
+      name: boundPartnerName(taskName),
+      avatar_shape: avatar.avatar_shape,
+      avatar_color: avatar.avatar_color,
+      created_at: now,
+      updated_at: now,
+      last_viewed_at: now,
+      pinned: false,
+      pinned_at: null
+    }
+    await this.deps.partnerStore.savePartner(partner)
+    await this.deps.savePartnerUiState(partner.id, this.deps.createEmptyPartnerUiState())
+    return partner.id
+  }
+
+  private async syncBoundPartnerName(partnerId: string, taskName: string): Promise<void> {
+    const partner = await this.deps.partnerStore.getPartner(partnerId)
+    if (!partner) return
+    const nextName = boundPartnerName(taskName)
+    if (partner.name === nextName) return
+    await this.deps.partnerStore.savePartner({
+      ...partner,
+      name: nextName,
+      updated_at: this.deps.now()
+    })
+  }
+
+  private async ensureBoundPartner(task: ScheduledTask): Promise<ScheduledTask> {
+    const partnerId = String(task.partnerId || '').trim()
+    if (partnerId) {
+      const existing = await this.deps.partnerStore.getPartner(partnerId)
+      if (existing) return task
+    }
+    const now = this.deps.now()
+    const createdId = await this.createBoundPartner(task.id, task.name, now)
+    const updated: ScheduledTask = {
+      ...task,
+      partnerId: createdId,
+      updatedAt: now
+    }
+    await this.deps.taskStore.save(updated)
+    this.deps.emitSessionListRefresh()
+    return updated
   }
 
   private async reconcileMissed(): Promise<void> {
@@ -270,38 +415,49 @@ export class ScheduledTaskService {
   }
 
   private async fireTask(task: ScheduledTask, now: number): Promise<void> {
+    let working = task
     try {
-      const partnerId = String(task.partnerId || '').trim()
-      if (!partnerId) return
-      const partner = await this.deps.partnerStore.getPartner(partnerId)
-      if (!partner) {
-        console.log('[SCHEDULED-TASK] skip, partner missing:', partnerId)
-        return
-      }
-      if (this.deps.hasActivePartnerRun(partnerId)) {
-        console.log('[SCHEDULED-TASK] skip, partner busy:', partnerId)
+      working = await this.ensureBoundPartner(task)
+      if (this.deps.hasActivePartnerRun(working.partnerId)) {
+        console.log('[SCHEDULED-TASK] busy cancel:', working.partnerId)
+        working = {
+          ...working,
+          busyCancelNoticeAt: now,
+          updatedAt: now
+        }
+        await this.deps.taskStore.save({
+          ...working,
+          nextRunAt: computeNextRunAt(working, now)
+        })
+        this.deps.emitSessionListRefresh()
         return
       }
       const response = await this.deps.submitTask({
-        partnerId,
-        input: task.prompt,
-        mainModel: task.mainModel,
-        preference: task.aiPreference,
-        executionPermission: task.executionPermission
+        partnerId: working.partnerId,
+        input: working.prompt,
+        mainModel: working.mainModel,
+        preference: working.aiPreference,
+        executionPermission: working.executionPermission
       })
       if (!response.success) {
         console.error('[SCHEDULED-TASK] submit failed:', response.error)
+        await this.advanceNextRun(working, now)
         return
       }
       console.warn(
         '[SCHEDULED-TASK] fired:',
-        JSON.stringify({ id: task.id, partnerId, nextRunAt: task.nextRunAt, now })
+        JSON.stringify({ id: working.id, partnerId: working.partnerId, nextRunAt: working.nextRunAt, now })
       )
+      working = {
+        ...working,
+        busyCancelNoticeAt: null,
+        updatedAt: now
+      }
+      await this.advanceNextRun(working, now)
       this.deps.emitSessionListRefresh()
     } catch (error) {
       console.error('[SCHEDULED-TASK] fire failed:', error)
-    } finally {
-      await this.advanceNextRun(task, now)
+      await this.advanceNextRun(working, now)
     }
   }
 
@@ -321,3 +477,5 @@ const normalizeWeekday = (value: unknown): number | null => {
   if (!Number.isInteger(number) || number < 0 || number > 6) return null
   return number
 }
+
+export const SCHEDULED_TASK_PARTNER_BUSY_ERROR = PARTNER_BUSY_ERROR

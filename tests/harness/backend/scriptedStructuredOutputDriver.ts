@@ -116,8 +116,8 @@ const estimateScriptedUsage = (input: {
   user: string
   rawText: string
 }): AiLlmUsage => ({
-  inputTokens: Math.ceil(`${input.system}\n${input.user}`.length / 3),
-  outputTokens: Math.ceil(input.rawText.length / 3),
+  inputTokens: Math.ceil(`${input.system}\n${input.user}`.length / 4),
+  outputTokens: Math.ceil(input.rawText.length / 4),
   source: 'usage_metadata'
 })
 

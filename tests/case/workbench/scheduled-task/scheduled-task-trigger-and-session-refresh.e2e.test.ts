@@ -2,21 +2,19 @@ import { describe, it } from 'vitest'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+  createPartnerThroughWorkbenchUi,
   fillScheduledTaskTime,
   getWorkbenchLocator,
   openScheduledTasksView,
   scheduledTaskSelectors,
   selectScheduledTaskModel,
-  selectScheduledTaskWorkspace,
-  sendWorkbenchMessage,
+  selectWorkbenchModel,
   setupWorkbenchWithTempWorkspace,
-  waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
 import type { ChatMessage, PartnerListItem, ScheduledTask } from '../../../../src/shared/types'
 
 const CASE_ID = 'scheduled-task-trigger-and-session-refresh'
-const FIRST_PROMPT = '请只回复 ok，用于建立当前会话。'
 const TASK_PROMPT = '定时任务触发验证，请只回复 ok。'
 
 const padTimePart = (value: number): string => String(value).padStart(2, '0')
@@ -51,7 +49,7 @@ describe('workbench scheduled-task e2e', () => {
         suite: 'scheduled-task',
         groups: [],
         description:
-          '启用下一分钟触发的定时任务后，向指定伙伴的当前对话追加消息并发送，不新建伙伴。',
+          '启用下一分钟触发的定时任务后，向专属伙伴追加消息并发送，不切换当前查看伙伴。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -61,29 +59,20 @@ describe('workbench scheduled-task e2e', () => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
-            workspaceName: `Workbench ${CASE_ID}`
+            workspaceName: `Workbench ${CASE_ID}`,
+            createPartner: false
           })
+          await createPartnerThroughWorkbenchUi(page, '触发查看伙伴')
+          await selectWorkbenchModel(page, setup.env.modelName)
 
-          const firstStartedAtMs = Date.now()
-          await sendWorkbenchMessage(page, FIRST_PROMPT)
-          await waitForWorkbenchAiRunCompletion(
-            runtime,
-            firstStartedAtMs,
-            setup.env.modelName,
-            undefined,
-            { page, blockerPolicy: 'auto_approve' }
-          )
-
-          const partners = await listPartners(page)
-          const partner = partners[0]
-          if (!partner) throw new Error('failed to locate the partner')
-          const messagesAfterFirst = await listPartnerMessages(page, partner.id)
+          const partnersBefore = await listPartners(page)
+          const viewingPartner = partnersBefore[0]
+          if (!viewingPartner) throw new Error('failed to locate the viewing partner')
 
           await openScheduledTasksView(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('触发验证任务')
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPrompt).fill(TASK_PROMPT)
-          await selectScheduledTaskWorkspace(page, setup.workspaceName)
           await selectScheduledTaskModel(page, setup.env.modelName)
           const scheduledHhmm = nextMinuteHhmm()
           await fillScheduledTaskTime(page, scheduledHhmm)
@@ -97,10 +86,22 @@ describe('workbench scheduled-task e2e', () => {
             `${scheduledTaskSelectors.itemTogglePrefix}-${createdTask.id}`
           ).click()
 
+          const partnersAfterConfig = await listPartners(page)
+          const boundPartner = partnersAfterConfig.find(
+            (partner) => partner.id === createdTask.partnerId
+          )
+          if (!boundPartner) throw new Error('failed to locate bound partner')
+
+          // 回到原查看伙伴，确认触发不抢焦点。
+          await getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.partnerItemPrefix}-${viewingPartner.id}`
+          ).click()
+
           const deadline = Date.now() + 150_000
           let triggeredMessage = false
           while (Date.now() < deadline) {
-            const messages = await listPartnerMessages(page, partner.id)
+            const messages = await listPartnerMessages(page, boundPartner.id)
             triggeredMessage = messages.some(
               (message) => message.role === 'user' && message.content.includes(TASK_PROMPT)
             )
@@ -108,12 +109,11 @@ describe('workbench scheduled-task e2e', () => {
             await page.waitForTimeout(5_000)
           }
 
-          const partnersAfterTrigger = await listPartners(page)
           let triggeredRunCompleted = false
           if (triggeredMessage) {
             const runDeadline = Date.now() + 120_000
             while (Date.now() < runDeadline) {
-              const current = (await listPartners(page)).find((item) => item.id === partner.id)
+              const current = (await listPartners(page)).find((item) => item.id === boundPartner.id)
               if (current && !current.isRunning) {
                 triggeredRunCompleted = true
                 break
@@ -122,21 +122,31 @@ describe('workbench scheduled-task e2e', () => {
             }
           }
 
+          const selectedStillViewing = await page.evaluate((id) => {
+            const active = document.querySelector(
+              `[data-testid="workbench-partner-item-${id}"].nc-sidebar-item-active`
+            )
+            return Boolean(active)
+          }, viewingPartner.id)
+
           return {
             scheduledHhmm,
-            samePartner: partnersAfterTrigger.length === 1,
-            firstMessageCount: messagesAfterFirst.length,
+            boundPartnerCreated: partnersAfterConfig.length === partnersBefore.length + 1,
+            sameViewingPartner: selectedStillViewing,
             triggeredMessage,
             triggeredRunCompleted
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.samePartner && result.triggeredMessage && result.triggeredRunCompleted,
+            result.boundPartnerCreated &&
+              result.sameViewingPartner &&
+              result.triggeredMessage &&
+              result.triggeredRunCompleted,
             {
-              name: 'scheduled-task-trigger-appends-to-partner',
+              name: 'scheduled-task-trigger-appends-to-bound-partner',
               message:
-                '定时任务到点后应向指定伙伴追加消息并完成运行，不新建伙伴，对齐 ST-RUN-001 / ST-RUN-002。',
+                '定时任务到点后应向专属伙伴追加消息并完成运行，且不切换当前查看伙伴，对齐 ST-RUN-001 / ST-RUN-002。',
               data: result
             }
           )

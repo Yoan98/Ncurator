@@ -313,6 +313,18 @@ const api: DesktopApi = {
     })
     return ipcRenderer.invoke('scheduled-task-set-enabled', payload)
   },
+  scheduledTaskRunNow: (payload) => {
+    emitE2EIpcCall('scheduledTaskRunNow', {
+      id: String(payload?.id || '').trim()
+    })
+    return ipcRenderer.invoke('scheduled-task-run-now', payload)
+  },
+  scheduledTaskDismissBusyNotice: (payload) => {
+    emitE2EIpcCall('scheduledTaskDismissBusyNotice', {
+      id: String(payload?.id || '').trim()
+    })
+    return ipcRenderer.invoke('scheduled-task-dismiss-busy-notice', payload)
+  },
   onPartnerListRefresh: (cb: () => void) => {
     const listener = (): void => cb()
     ipcRenderer.on('chat-session-list-refresh', listener)

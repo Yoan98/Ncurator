@@ -136,4 +136,10 @@ export class ChatMessageLogStore {
       .prepare(`DELETE FROM chat_session_message_log WHERE run_id IN (${placeholders})`)
       .run(...normalized)
   }
+
+  public async deleteByPartner(partnerId: string): Promise<void> {
+    const safeId = String(partnerId || '').trim()
+    if (!safeId) return
+    this.sqlite.prepare('DELETE FROM chat_session_message_log WHERE partner_id = ?').run(safeId)
+  }
 }

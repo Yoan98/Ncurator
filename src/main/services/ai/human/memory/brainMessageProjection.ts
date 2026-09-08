@@ -9,7 +9,11 @@ import type { HumanState } from '../types'
 import { buildBrainUserMessage } from '../prompts/brain'
 import { createImageReferenceMessage } from './multimodal'
 import { createCurrentBrainUserMessage } from '../node/utils/messageTail'
-import { repairInterruptedToolCalls, sliceAfterLastContextCleared } from './transcript'
+import {
+  orderProjectedRecordsForBrain,
+  repairInterruptedToolCalls,
+  sliceAfterLastContextCleared
+} from './transcript'
 
 const toToolCall = (
   call: ChatMessageLogToolCall
@@ -49,9 +53,11 @@ export const projectBrainMessagesFromLog = (input: {
       ? checkpointRecord.entry.payload
       : undefined
 
-  const projectedRecords = checkpoint
-    ? afterCleared.filter((record) => record.seq > checkpoint.coveredThroughSeq)
-    : afterCleared
+  const projectedRecords = orderProjectedRecordsForBrain(
+    checkpoint
+      ? afterCleared.filter((record) => record.seq > checkpoint.coveredThroughSeq)
+      : afterCleared
+  )
 
   const messages: BaseMessage[] = []
   let pendingImages: ChatMessageImageRef[] = []

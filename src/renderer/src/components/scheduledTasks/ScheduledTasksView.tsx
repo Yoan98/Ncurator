@@ -13,12 +13,7 @@ import {
   TimePicker
 } from 'antd'
 import dayjs from 'dayjs'
-import {
-  HiOutlineClock,
-  HiOutlinePlus,
-  HiOutlineTrash
-} from 'react-icons/hi2'
-import { useNavigate } from 'react-router-dom'
+import { HiOutlineClock, HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi2'
 import type {
   AiExecutionPermission,
   AiPreference,
@@ -27,19 +22,17 @@ import type {
   ScheduledTask,
   ScheduledTaskSaveRequest,
   ScheduledTaskScheduleType,
-  WorkbenchModelSelection,
-  PartnerListItem
+  WorkbenchModelSelection
 } from '../../../../shared/types'
-import PartnerAvatar from '../workbench/PartnerAvatar'
 import WorkbenchModelSelector from '../workbench/WorkbenchModelSelector'
 import WorkbenchSelect from '../workbench/WorkbenchSelect'
 import { AI_PREFERENCE_OPTIONS, EXECUTION_PERMISSION_OPTIONS } from '../workbench/selectOptions'
 import type {
   WorkbenchAiPreference,
-  WorkbenchExecutionPermission,
-  WorkbenchSelectOption
+  WorkbenchExecutionPermission
 } from '../workbench/types'
 import { scheduledTaskSelectors } from '../../testing/selectors'
+import ScheduledTaskCountChip from './ScheduledTaskCountChip'
 
 const WEEKDAY_OPTIONS = [
   { value: 0, label: '周日' },
@@ -63,7 +56,6 @@ type FormState = {
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday: number | null
-  partnerId: string
   modelSelection: WorkbenchModelSelection
   aiPreference: AiPreference
   executionPermission: AiExecutionPermission
@@ -76,7 +68,6 @@ const emptyForm = (): FormState => ({
   scheduleType: 'daily',
   timeOfDay: '09:00',
   weekday: null,
-  partnerId: '',
   modelSelection: { mainModel: null },
   aiPreference: 'default',
   executionPermission: 'full_access'
@@ -100,36 +91,23 @@ const scheduleLabel = (task: ScheduledTask): string => {
   return `每天 ${task.timeOfDay}`
 }
 
-const ScheduledTasksView: React.FC = () => {
+const countEnabledTasks = (tasks: ScheduledTask[]): number =>
+  tasks.reduce((count, task) => count + (task.enabled ? 1 : 0), 0)
+
+type ScheduledTasksViewProps = {
+  onEnabledCountChange?: (enabledCount: number) => void
+}
+
+const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountChange }) => {
   const { message, modal } = AntdApp.useApp()
-  const navigate = useNavigate()
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
   const [loading, setLoading] = useState(true)
-  const [partners, setPartners] = useState<PartnerListItem[]>([])
   const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
   const [modelLists, setModelLists] = useState<Record<string, LlmRemoteModel[]>>({})
   const [formOpen, setFormOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm())
-
-  const partnerOptions = useMemo<WorkbenchSelectOption[]>(
-    () =>
-      partners.map((partner) => ({
-        value: partner.id,
-        label: partner.name,
-        icon: (
-          <PartnerAvatar
-            shape={partner.avatar_shape}
-            color={partner.avatar_color}
-            size={16}
-          />
-        ),
-        keywords: [partner.name],
-        disabled: partner.isRunning,
-        disabledReason: partner.isRunning ? '该伙伴正在运行，暂时不能作为定时任务目标' : undefined
-      })),
-    [partners]
-  )
+  const enabledCount = useMemo(() => countEnabledTasks(tasks), [tasks])
 
   const loadTasks = useCallback(async (): Promise<void> => {
     try {
@@ -144,14 +122,6 @@ const ScheduledTasksView: React.FC = () => {
 
   useEffect(() => {
     void loadTasks()
-    void (async () => {
-      try {
-        const list = await window.api.partnerList()
-        setPartners(list)
-      } catch (error) {
-        console.error('[SCHEDULED-TASKS] partner list failed:', error)
-      }
-    })()
     void (async () => {
       try {
         const configs = await window.api.llmConfigList()
@@ -172,6 +142,11 @@ const ScheduledTasksView: React.FC = () => {
       }
     })()
   }, [loadTasks])
+
+  useEffect(() => {
+    if (loading) return
+    onEnabledCountChange?.(enabledCount)
+  }, [enabledCount, loading, onEnabledCountChange])
 
   const refreshModelLists = useCallback(async (): Promise<void> => {
     try {
@@ -204,7 +179,6 @@ const ScheduledTasksView: React.FC = () => {
       scheduleType: task.scheduleType,
       timeOfDay: task.timeOfDay,
       weekday: task.weekday,
-      partnerId: task.partnerId,
       modelSelection: { mainModel: task.mainModel },
       aiPreference: task.aiPreference,
       executionPermission: task.executionPermission
@@ -226,14 +200,6 @@ const ScheduledTasksView: React.FC = () => {
       message.warning('请选择执行时间')
       return null
     }
-    if (!form.partnerId) {
-      message.warning('请选择伙伴')
-      return null
-    }
-    if (partners.some((partner) => partner.id === form.partnerId && partner.isRunning)) {
-      message.warning('该伙伴正在运行，暂时不能保存定时任务')
-      return null
-    }
     if (!form.modelSelection.mainModel) {
       message.warning('请选择主模型')
       return null
@@ -250,7 +216,6 @@ const ScheduledTasksView: React.FC = () => {
       scheduleType: form.scheduleType,
       timeOfDay,
       weekday: form.scheduleType === 'weekly' ? normalizeWeekday(form.weekday) : null,
-      partnerId: form.partnerId,
       mainModel: form.modelSelection.mainModel,
       aiPreference: form.aiPreference,
       executionPermission: form.executionPermission
@@ -294,6 +259,24 @@ const ScheduledTasksView: React.FC = () => {
     }
   }
 
+  const handleRunNow = (task: ScheduledTask): void => {
+    modal.confirm({
+      title: '立即执行定时任务？',
+      content: `将按「${task.name}」的配置在专属伙伴执行。`,
+      okText: '立即执行',
+      cancelText: '取消',
+      onOk: async () => {
+        const response = await window.api.scheduledTaskRunNow({ id: task.id })
+        if (!response.success) {
+          message.warning(response.error || '立即执行失败')
+          return
+        }
+        message.success('已开始执行')
+        await loadTasks()
+      }
+    })
+  }
+
   const handleDelete = (task: ScheduledTask): void => {
     modal.confirm({
       title: '删除定时任务',
@@ -320,8 +303,14 @@ const ScheduledTasksView: React.FC = () => {
         style={{ WebkitAppRegion: 'drag' } as CSSProperties}
       >
         <div className="flex items-center gap-2">
-          <HiOutlineClock className="h-4 w-4 text-[#787774]" />
+          <HiOutlineClock
+            className={`h-4 w-4 ${enabledCount > 0 ? 'text-[#2F5F8F]' : 'text-[#787774]'}`}
+          />
           <span className="text-[13px] font-medium text-[#37352F]">定时任务</span>
+          <ScheduledTaskCountChip
+            enabledCount={enabledCount}
+            dataTestId={scheduledTaskSelectors.countChip}
+          />
         </div>
         <Button
           type="primary"
@@ -369,6 +358,14 @@ const ScheduledTasksView: React.FC = () => {
                     onChange={(checked) => void handleToggle(task, checked)}
                     data-testid={`${scheduledTaskSelectors.itemTogglePrefix}-${task.id}`}
                   />
+                  <Button
+                    type="text"
+                    size="small"
+                    onClick={() => handleRunNow(task)}
+                    data-testid={`${scheduledTaskSelectors.itemRunNowPrefix}-${task.id}`}
+                  >
+                    立即执行
+                  </Button>
                   <Button type="text" size="small" onClick={() => openEdit(task)}>
                     编辑
                   </Button>
@@ -465,31 +462,6 @@ const ScheduledTasksView: React.FC = () => {
                 />
               </span>
             </div>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-[#37352F]">伙伴</span>
-            <WorkbenchSelect
-              value={form.partnerId || null}
-              options={partnerOptions}
-              onChange={(nextValue) =>
-                setForm((current) => ({ ...current, partnerId: nextValue }))
-              }
-              placeholder="选择伙伴"
-              searchable={partners.length > 6}
-              searchPlaceholder="搜索伙伴"
-              minMenuWidth={240}
-              maxMenuWidth={360}
-              emptyAction={
-                partners.length === 0
-                  ? {
-                      label: '去工作台创建伙伴',
-                      onClick: () => navigate('/')
-                    }
-                  : undefined
-              }
-              data-testid={scheduledTaskSelectors.partnerSelect}
-            />
           </div>
 
           <div className="flex flex-col gap-1.5">

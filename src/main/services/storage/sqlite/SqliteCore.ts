@@ -13,6 +13,7 @@ import { aiRunExecutionPermissionMigration } from './migrations/007_ai_run_execu
 import { dropLlmStrategyPreferenceMigration } from './migrations/008_drop_llm_strategy_preference'
 import { repairAiRuntimeSystemNotificationsColumnMigration } from './migrations/009_repair_ai_runtime_system_notifications_column'
 import { upgradeFromV9Migration } from './migrations/010_upgrade_from_v9'
+import { scheduledTaskBoundPartnerMigration } from './migrations/011_scheduled_task_bound_partner'
 
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
@@ -27,10 +28,11 @@ const MIGRATIONS: readonly Migration[] = [
   aiRunExecutionPermissionMigration,
   dropLlmStrategyPreferenceMigration,
   repairAiRuntimeSystemNotificationsColumnMigration,
-  upgradeFromV9Migration
+  upgradeFromV9Migration,
+  scheduledTaskBoundPartnerMigration
 ]
 
-export const CURRENT_SCHEMA_VERSION = 10
+export const CURRENT_SCHEMA_VERSION = 11
 
 const MIGRATION_NAME_ALIASES = new Map<number, ReadonlySet<string>>([
   [2, new Set(['workspace_change_sets'])]

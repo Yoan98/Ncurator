@@ -100,6 +100,8 @@ import type {
   ScheduledTaskMutationResponse,
   ScheduledTaskSaveRequest,
   ScheduledTaskSetEnabledRequest,
+  ScheduledTaskRunNowRequest,
+  ScheduledTaskDismissBusyNoticeRequest,
   WorkspaceIndexJobGetRequest,
   WorkspaceIndexJobRecord,
   WorkspaceIndexJobResponse,
@@ -219,6 +221,10 @@ export type DesktopApi = {
   scheduledTaskDelete: (id: string) => Promise<ScheduledTaskMutationResponse>
   scheduledTaskSetEnabled: (
     payload: ScheduledTaskSetEnabledRequest
+  ) => Promise<ScheduledTaskMutationResponse>
+  scheduledTaskRunNow: (payload: ScheduledTaskRunNowRequest) => Promise<ScheduledTaskMutationResponse>
+  scheduledTaskDismissBusyNotice: (
+    payload: ScheduledTaskDismissBusyNoticeRequest
   ) => Promise<ScheduledTaskMutationResponse>
   onPartnerListRefresh: (cb: () => void) => () => void
   partnerOpen: (payload: PartnerOpenRequest) => Promise<PartnerOpenResponse>

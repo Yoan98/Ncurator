@@ -337,14 +337,13 @@ export class ChatRunService {
       this.pendingPartnerSubmissions.has(normalizedPartnerId) ||
       Array.from(this.activeRuns.values()).some((entry) => entry.run.partnerId === normalizedPartnerId)
     ) {
-      return { success: false, error: '当前伙伴仍在运行，不能清空上下文' }
+      return { success: false, error: '当前伙伴仍在运行，不能清空消息记录' }
     }
-    const appended = await this.deps.chatMessageLogStore.appendBatch({
-      partnerId: normalizedPartnerId,
-      runId: uuidv4(),
-      entries: [{ kind: 'annotation', eventType: 'context_cleared', payload: {} }]
-    })
-    return { success: true, clearedAt: appended[0]?.createdAt }
+    const clearedAt = Date.now()
+    // 物理删除消息 log 与 ai_run；保留 ai_file_change（回退入口）与伙伴 / UI 状态。
+    await this.deps.chatMessageLogStore.deleteByPartner(normalizedPartnerId)
+    await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
+    return { success: true, clearedAt }
   }
 
   public async submit(payload: ChatSubmitRequest): Promise<ChatSubmitResponse> {

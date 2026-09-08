@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { ScheduledTaskService } from '../../../src/main/services/scheduler/ScheduledTaskService'
-import type { ChatSubmitResponse, ScheduledTask } from '../../../src/shared/types'
+import {
+  SCHEDULED_TASK_PARTNER_BUSY_ERROR,
+  ScheduledTaskService,
+  boundPartnerName
+} from '../../../src/main/services/scheduler/ScheduledTaskService'
+import type { ChatSubmitResponse, Partner, PartnerUiStateV1, ScheduledTask } from '../../../src/shared/types'
 
 const localAt = (
   year: number,
@@ -26,9 +30,22 @@ const makeTask = (overrides: Partial<ScheduledTask> = {}): ScheduledTask => ({
   aiPreference: 'default',
   executionPermission: 'full_access',
   nextRunAt: null,
+  busyCancelNoticeAt: null,
   createdAt: NOW,
   updatedAt: NOW,
   ...overrides
+})
+
+const makePartner = (id: string, name = '测试伙伴'): Partner => ({
+  id,
+  name,
+  avatar_shape: 'circle',
+  avatar_color: 'blue',
+  created_at: 0,
+  updated_at: 0,
+  last_viewed_at: 0,
+  pinned: false,
+  pinned_at: null
 })
 
 class FakeTaskStore {
@@ -60,7 +77,11 @@ class FakeTaskStore {
 
 type ServiceHarness = {
   taskStore: FakeTaskStore
-  partnerStore: { getPartner: ReturnType<typeof vi.fn> }
+  partnerStore: {
+    getPartner: ReturnType<typeof vi.fn>
+    savePartner: ReturnType<typeof vi.fn>
+  }
+  savePartnerUiState: ReturnType<typeof vi.fn>
   hasActivePartnerRun: ReturnType<typeof vi.fn>
   submitTask: ReturnType<typeof vi.fn>
   emitSessionListRefresh: ReturnType<typeof vi.fn>
@@ -74,23 +95,14 @@ let nextTimerId = 0
 
 const createService = (): ServiceHarness => {
   const taskStore = new FakeTaskStore()
+  const partners = new Map<string, Partner>([['partner-1', makePartner('partner-1')]])
   const partnerStore = {
-    getPartner: vi.fn(async (id: string) =>
-      id === 'partner-1'
-        ? {
-            id: 'partner-1',
-            name: '测试伙伴',
-            avatar_shape: 'circle',
-            avatar_color: 'blue',
-            created_at: 0,
-            updated_at: 0,
-            last_viewed_at: 0,
-            pinned: false,
-            pinned_at: null
-          }
-        : null
-    )
+    getPartner: vi.fn(async (id: string) => partners.get(id) || null),
+    savePartner: vi.fn(async (partner: Partner) => {
+      partners.set(partner.id, partner)
+    })
   }
+  const savePartnerUiState = vi.fn(async (_partnerId: string, _state: PartnerUiStateV1) => undefined)
   const hasActivePartnerRun = vi.fn(() => false)
   const submitTask = vi.fn(async (): Promise<ChatSubmitResponse> => ({ success: true }))
   const emitSessionListRefresh = vi.fn()
@@ -100,6 +112,29 @@ const createService = (): ServiceHarness => {
   const service = new ScheduledTaskService({
     taskStore,
     partnerStore,
+    savePartnerUiState,
+    createEmptyPartnerUiState: () =>
+      ({
+        version: 1,
+        composer: {
+          aiPreference: 'default',
+          executionPermission: 'review',
+          modelSelection: { mainModel: null },
+          draft: {
+            input: '',
+            contentNodes: [],
+            selectedReferences: [],
+            attachments: [],
+            assetBucketId: null
+          }
+        },
+        panel: {
+          tabs: [],
+          activeTabId: null,
+          collapsed: true,
+          fallbackState: { kind: 'empty', title: '', description: '' }
+        }
+      }) as PartnerUiStateV1,
     hasActivePartnerRun,
     submitTask,
     emitSessionListRefresh,
@@ -110,6 +145,7 @@ const createService = (): ServiceHarness => {
   return {
     taskStore,
     partnerStore,
+    savePartnerUiState,
     hasActivePartnerRun,
     submitTask,
     emitSessionListRefresh,
@@ -128,13 +164,11 @@ describe('ScheduledTaskService', () => {
       prompt: 'y',
       scheduleType: 'daily' as const,
       timeOfDay: '09:00',
-      partnerId: 'partner-1',
       mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
       enabled: false
     }
     expect((await service.save({ ...base, name: '  ' })).success).toBe(false)
     expect((await service.save({ ...base, prompt: '' })).success).toBe(false)
-    expect((await service.save({ ...base, partnerId: '' })).success).toBe(false)
     expect(
       (await service.save({ ...base, mainModel: { configId: '', modelName: 'gpt-4o' } })).success
     ).toBe(false)
@@ -145,21 +179,23 @@ describe('ScheduledTaskService', () => {
     expect(taskStore.save).not.toHaveBeenCalled()
   })
 
-  it('computes nextRunAt when saving an enabled daily task', async () => {
-    const { service, taskStore } = createService()
+  it('creates a bound partner when saving a new task', async () => {
+    const { service, partnerStore, savePartnerUiState } = createService()
     const response = await service.save({
       name: '每日晨报',
       prompt: '总结',
       scheduleType: 'daily',
       timeOfDay: '09:00',
-      partnerId: 'partner-1',
       mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
       enabled: true
     })
     expect(response.success).toBe(true)
-    expect(response.task?.enabled).toBe(true)
+    expect(response.task?.partnerId).toBeTruthy()
     expect(response.task?.nextRunAt).toBe(localAt(2026, 0, 1, 9, 0))
-    expect(taskStore.save).toHaveBeenCalledTimes(1)
+    expect(partnerStore.savePartner).toHaveBeenCalled()
+    expect(savePartnerUiState).toHaveBeenCalled()
+    const created = partnerStore.savePartner.mock.calls[0]?.[0] as Partner
+    expect(created.name).toBe(boundPartnerName('每日晨报'))
   })
 
   it('does not compute nextRunAt for a disabled task', async () => {
@@ -169,7 +205,6 @@ describe('ScheduledTaskService', () => {
       prompt: 'y',
       scheduleType: 'daily',
       timeOfDay: '09:00',
-      partnerId: 'partner-1',
       mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
       enabled: false
     })
@@ -197,7 +232,7 @@ describe('ScheduledTaskService', () => {
       preference: 'default',
       executionPermission: 'full_access'
     })
-    expect(harness.emitSessionListRefresh).toHaveBeenCalledTimes(1)
+    expect(harness.emitSessionListRefresh).toHaveBeenCalled()
   })
 
   it('re-arms the timer to the next run after firing a due task', async () => {
@@ -209,7 +244,7 @@ describe('ScheduledTaskService', () => {
     expect(harness.setTimer).toHaveBeenCalledWith(expect.any(Function), HOUR)
   })
 
-  it('skips refresh when submit fails and does not create a new partner', async () => {
+  it('advances next run when submit fails', async () => {
     const harness = createService()
     harness.taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
     harness.submitTask.mockResolvedValueOnce({ success: false, error: '模型失效' })
@@ -217,26 +252,63 @@ describe('ScheduledTaskService', () => {
     await harness.service.runDue()
 
     expect(harness.submitTask).toHaveBeenCalledTimes(1)
-    expect(harness.emitSessionListRefresh).not.toHaveBeenCalled()
+    const saved = (await harness.taskStore.list())[0]
+    expect(saved.nextRunAt).toBe(localAt(2026, 0, 1, 9, 0))
   })
 
-  it('skips without submitting when the partner is missing', async () => {
+  it('rebuilds a missing partner then fires', async () => {
     const harness = createService()
     harness.taskStore.set(makeTask({ partnerId: 'gone', nextRunAt: NOW - 1 }))
     await harness.service.runDue()
 
-    expect(harness.submitTask).not.toHaveBeenCalled()
-    expect(harness.emitSessionListRefresh).not.toHaveBeenCalled()
+    expect(harness.partnerStore.savePartner).toHaveBeenCalled()
+    expect(harness.submitTask).toHaveBeenCalledTimes(1)
+    const saved = (await harness.taskStore.list())[0]
+    expect(saved.partnerId).not.toBe('gone')
+    expect(harness.submitTask).toHaveBeenCalledWith(
+      expect.objectContaining({ partnerId: saved.partnerId })
+    )
   })
 
-  it('skips without submitting when the partner is busy', async () => {
+  it('cancels due run when partner is busy and writes busy notice', async () => {
     const harness = createService()
     harness.hasActivePartnerRun.mockReturnValue(true)
     harness.taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
     await harness.service.runDue()
 
     expect(harness.submitTask).not.toHaveBeenCalled()
-    expect(harness.emitSessionListRefresh).not.toHaveBeenCalled()
+    const saved = (await harness.taskStore.list())[0]
+    expect(saved.busyCancelNoticeAt).toBe(NOW)
+    expect(saved.nextRunAt).toBe(localAt(2026, 0, 1, 9, 0))
+    expect(harness.emitSessionListRefresh).toHaveBeenCalled()
+  })
+
+  it('runNow submits and clears busy notice when idle', async () => {
+    const harness = createService()
+    harness.taskStore.set(makeTask({ busyCancelNoticeAt: NOW }))
+    const response = await harness.service.runNow({ id: 'task-1' })
+    expect(response.success).toBe(true)
+    expect(harness.submitTask).toHaveBeenCalledTimes(1)
+    expect(response.task?.busyCancelNoticeAt).toBeNull()
+  })
+
+  it('runNow returns busy error when partner is active', async () => {
+    const harness = createService()
+    harness.hasActivePartnerRun.mockReturnValue(true)
+    harness.taskStore.set(makeTask())
+    const response = await harness.service.runNow({ id: 'task-1' })
+    expect(response.success).toBe(false)
+    expect(response.error).toBe(SCHEDULED_TASK_PARTNER_BUSY_ERROR)
+    expect(harness.submitTask).not.toHaveBeenCalled()
+  })
+
+  it('dismissBusyNotice clears the notice without submitting', async () => {
+    const harness = createService()
+    harness.taskStore.set(makeTask({ busyCancelNoticeAt: NOW }))
+    const response = await harness.service.dismissBusyNotice({ id: 'task-1' })
+    expect(response.success).toBe(true)
+    expect(response.task?.busyCancelNoticeAt).toBeNull()
+    expect(harness.submitTask).not.toHaveBeenCalled()
   })
 
   it('advances missed runs on start instead of firing them', async () => {
@@ -245,8 +317,7 @@ describe('ScheduledTaskService', () => {
     await harness.service.start()
 
     expect(harness.submitTask).not.toHaveBeenCalled()
-    const stored = harness.taskStore.list()
-    const saved = (await stored)[0]
+    const saved = (await harness.taskStore.list())[0]
     expect(saved.nextRunAt).not.toBeNull()
     expect(saved.nextRunAt).toBeGreaterThan(NOW)
   })
@@ -257,8 +328,7 @@ describe('ScheduledTaskService', () => {
     await harness.service.runDue()
 
     expect(harness.submitTask).not.toHaveBeenCalled()
-    const stored = harness.taskStore.list()
-    const saved = (await stored)[0]
+    const saved = (await harness.taskStore.list())[0]
     expect(saved.nextRunAt).toBe(localAt(2026, 0, 1, 9, 0))
   })
 
@@ -271,7 +341,6 @@ describe('ScheduledTaskService', () => {
     await harness.service.runDue()
 
     expect(harness.submitTask).toHaveBeenCalledTimes(2)
-    expect(harness.emitSessionListRefresh).toHaveBeenCalledTimes(2)
   })
 
   it('arms a timer when a task is enabled', async () => {

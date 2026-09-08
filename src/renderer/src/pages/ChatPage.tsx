@@ -35,6 +35,7 @@ import type {
   PartnerAvatarColor,
   LLMConfig,
   LlmRemoteModel,
+  ScheduledTask,
   SelectedReference,
   WorkbenchModelSelection,
   WorkspaceSource
@@ -70,6 +71,8 @@ import {
 } from '../../../shared/workbench/messageTimeline'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import ScheduledTasksView from '../components/scheduledTasks/ScheduledTasksView'
+import ScheduledTaskCountChip from '../components/scheduledTasks/ScheduledTaskCountChip'
+import MessageActionCapsule from '../components/workbench/MessageActionCapsule'
 import ImageLightbox from '../components/workbench/ImageLightbox'
 import AttachmentFileIcon from '../components/workbench/composer/AttachmentFileIcon'
 import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
@@ -761,7 +764,7 @@ const getUserAttachmentPaths = (messages: readonly ChatMessage[]): string[] =>
   )
 
 const ChatPage: React.FC = () => {
-  const { message } = AntdApp.useApp()
+  const { message, modal } = AntdApp.useApp()
   const navigate = useNavigate()
   const [partners, setPartners] = useState<PartnerListItem[]>([])
   const [partnersListHydrated, setPartnersListHydrated] = useState(false)
@@ -781,6 +784,7 @@ const ChatPage: React.FC = () => {
   const [lastContextClearedAt, setLastContextClearedAt] = useState<number | null>(null)
   const [hoveredGrayMessageId, setHoveredGrayMessageId] = useState<string | null>(null)
   const [clearContextVisible, setClearContextVisible] = useState(false)
+  const [busyCancelTask, setBusyCancelTask] = useState<ScheduledTask | null>(null)
   const [timelineExpansion, setTimelineExpansion] = useState<TimelineExpansion>({ kind: 'none' })
   const [activeTimelineDayStart, setActiveTimelineDayStart] = useState<number | null>(null)
   const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>('default')
@@ -831,6 +835,7 @@ const ChatPage: React.FC = () => {
   const [contentPanelShellMounted, setContentPanelShellMounted] = useState(false)
   const [contentPanelShellVisible, setContentPanelShellVisible] = useState(false)
   const [scheduledTasksActive, setScheduledTasksActive] = useState(false)
+  const [scheduledTaskEnabledCount, setScheduledTaskEnabledCount] = useState(0)
   const [browserPresentationEnabled, setBrowserPresentationEnabled] = useState(false)
   const [browserTransitionImage, setBrowserTransitionImage] = useState<{
     tabId: string
@@ -1629,6 +1634,20 @@ const ChatPage: React.FC = () => {
   const openScheduledTasks = useCallback((): void => {
     setScheduledTasksActive(true)
   }, [])
+
+  const refreshScheduledTaskEnabledCount = useCallback(async (): Promise<void> => {
+    try {
+      const tasks = await window.api.scheduledTaskList()
+      setScheduledTaskEnabledCount(tasks.reduce((count, task) => count + (task.enabled ? 1 : 0), 0))
+    } catch (error) {
+      console.error('[WORKBENCH] scheduled task count failed:', error)
+      setScheduledTaskEnabledCount(0)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refreshScheduledTaskEnabledCount()
+  }, [refreshScheduledTaskEnabledCount])
 
   const openResourceTab = useCallback(
     (tab: WorkbenchResourceTab): void => {
@@ -3262,11 +3281,33 @@ const ChatPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPartnerId, loadPartners, message, refreshContextUsage, setPartnerRunningState])
 
+  const refreshBusyCancelNotice = useCallback(async (): Promise<void> => {
+    if (!currentPartnerId) {
+      setBusyCancelTask(null)
+      return
+    }
+    try {
+      const tasks = await window.api.scheduledTaskList()
+      const matched = tasks.find(
+        (task) => task.partnerId === currentPartnerId && task.busyCancelNoticeAt !== null
+      )
+      setBusyCancelTask(matched || null)
+    } catch (error) {
+      console.error('[WORKBENCH] busy cancel notice refresh failed:', error)
+      setBusyCancelTask(null)
+    }
+  }, [currentPartnerId])
+
+  useEffect(() => {
+    void refreshBusyCancelNotice()
+  }, [refreshBusyCancelNotice])
+
   useEffect(() => {
     return window.api.onPartnerListRefresh(() => {
       void loadPartners()
+      void refreshBusyCancelNotice()
     })
-  }, [loadPartners])
+  }, [loadPartners, refreshBusyCancelNotice])
 
   const ensureAttachmentTarget = useCallback(async (): Promise<{
     partnerId: string
@@ -3475,21 +3516,77 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const handleClearPartnerContext = useCallback(async (): Promise<void> => {
+  const handleClearPartnerContext = useCallback((): void => {
     if (!currentPartnerId) return
+    const partnerName = currentPartner?.name || '伙伴'
+    modal.confirm({
+      title: '清空消息记录？',
+      content: `将删除「${partnerName}」的全部对话消息，此操作无法恢复。伙伴本身会保留。`,
+      okText: '清空',
+      okButtonProps: { danger: true },
+      cancelText: '取消',
+      onOk: async () => {
+        try {
+          const response = await window.api.partnerClearContext({ partnerId: currentPartnerId })
+          if (!response.success) {
+            emitErrorMessage(response.error || '清空消息记录失败')
+            return
+          }
+          setCurrentMessages([])
+          setHasMoreMessagesBefore(false)
+          setLastContextClearedAt(null)
+          setClearContextVisible(false)
+          setHoveredGrayMessageId(null)
+          setTimelineExpansion({ kind: 'none' })
+          setActiveTimelineDayStart(null)
+          void loadPartners()
+        } catch (error) {
+          emitErrorMessage(error instanceof Error ? error.message : '清空消息记录失败')
+        }
+      }
+    })
+  }, [
+    currentPartner?.name,
+    currentPartnerId,
+    emitErrorMessage,
+    loadPartners,
+    modal
+  ])
+
+  const handleScheduledTaskBusyCancelAction = useCallback((): void => {
+    if (!busyCancelTask) return
+    const task = busyCancelTask
+    modal.confirm({
+      title: '立即执行定时任务？',
+      content: `将按「${task.name}」的配置在专属伙伴执行。`,
+      okText: '立即执行',
+      cancelText: '取消',
+      onOk: async () => {
+        const response = await window.api.scheduledTaskRunNow({ id: task.id })
+        if (!response.success) {
+          message.warning(response.error || '立即执行失败')
+          return
+        }
+        message.success('已开始执行')
+        setBusyCancelTask(null)
+        void loadPartners()
+      }
+    })
+  }, [busyCancelTask, loadPartners, message, modal])
+
+  const handleDismissScheduledTaskBusyCancel = useCallback(async (): Promise<void> => {
+    if (!busyCancelTask) return
     try {
-      const response = await window.api.partnerClearContext({ partnerId: currentPartnerId })
+      const response = await window.api.scheduledTaskDismissBusyNotice({ id: busyCancelTask.id })
       if (!response.success) {
-        emitErrorMessage(response.error || '清空记忆失败')
+        message.warning(response.error || '关闭失败')
         return
       }
-      setLastContextClearedAt(response.clearedAt ?? Date.now())
-      setClearContextVisible(false)
-      setHoveredGrayMessageId(null)
+      setBusyCancelTask(null)
     } catch (error) {
-      emitErrorMessage(error instanceof Error ? error.message : '清空记忆失败')
+      message.warning(error instanceof Error ? error.message : '关闭失败')
     }
-  }, [currentPartnerId, emitErrorMessage])
+  }, [busyCancelTask, message])
 
   const submitPartnerForm = useCallback(async (): Promise<void> => {
     const name = createPartnerName.trim()
@@ -4249,10 +4346,22 @@ const ChatPage: React.FC = () => {
             className={`nc-sidebar-nav-row ${scheduledTasksActive ? 'nc-sidebar-item-active' : ''}`}
             onClick={() => void openScheduledTasks()}
             data-testid={workbenchSelectors.scheduledTasksButton}
-            aria-label="定时任务"
+            aria-label={
+              scheduledTaskEnabledCount > 0
+                ? `定时任务，${scheduledTaskEnabledCount} 个已启用`
+                : '定时任务'
+            }
           >
-            <HiOutlineClock className="h-[18px] w-[18px] shrink-0 text-[#787774]" />
-            <span>定时任务</span>
+            <HiOutlineClock
+              className={`h-[18px] w-[18px] shrink-0 ${
+                scheduledTaskEnabledCount > 0 ? 'text-[#2F5F8F]' : 'text-[#787774]'
+              }`}
+            />
+            <span className="min-w-0 flex-1 truncate text-left">定时任务</span>
+            <ScheduledTaskCountChip
+              enabledCount={scheduledTaskEnabledCount}
+              dataTestId={workbenchSelectors.scheduledTasksCountChip}
+            />
           </button>
         </div>
 
@@ -4312,7 +4421,7 @@ const ChatPage: React.FC = () => {
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
         {scheduledTasksActive ? (
-          <ScheduledTasksView />
+          <ScheduledTasksView onEnabledCountChange={setScheduledTaskEnabledCount} />
         ) : (
           <>
             <div className="nc-main-split flex h-full min-h-0 overflow-hidden" ref={mainSplitRef}>
@@ -4418,7 +4527,7 @@ const ChatPage: React.FC = () => {
                 if (files.length > 0) composerFileDropHandlerRef.current?.(files)
               }}
             >
-              <div className="flex h-full min-h-0 min-w-0 flex-1">
+              <div className="relative flex h-full min-h-0 min-w-0 flex-1">
                 {!isNewSession ? (
                   <MessageTimeline
                     nodes={timelineNodes}
@@ -4603,21 +4712,29 @@ const ChatPage: React.FC = () => {
                         </div>
                       ) : (
                         <div className="relative">
-                          {clearContextVisible ? (
-                            <div className="mb-2 flex items-center">
-                              <Tooltip
-                                title={`「${currentPartner?.name || '伙伴'}」会忘记跟你之前产生的记忆，也会更省token，不会删除对话记录`}
-                              >
-                                <button
-                                  type="button"
-                                  className="nc-clear-context-capsule"
-                                  data-testid={workbenchSelectors.clearContextButton}
-                                  onClick={() => void handleClearPartnerContext()}
-                                >
-                                  <HiOutlineSparkles className="nc-clear-context-capsule-icon" />
-                                  清空记忆
-                                </button>
-                              </Tooltip>
+                          {busyCancelTask || clearContextVisible ? (
+                            <div className="mb-2 flex flex-col items-start gap-2">
+                              {busyCancelTask ? (
+                                <MessageActionCapsule
+                                  icon={<HiOutlineClock className="h-3.5 w-3.5" />}
+                                  label={`立即执行「${busyCancelTask.name}」`}
+                                  tooltip={`「${busyCancelTask.name}」到点时伙伴正忙，本次已取消。点击可立即按该定时任务执行。`}
+                                  onAction={handleScheduledTaskBusyCancelAction}
+                                  dismissible
+                                  onDismiss={() => void handleDismissScheduledTaskBusyCancel()}
+                                  actionTestId={workbenchSelectors.scheduledTaskBusyCancelCapsule}
+                                  dismissTestId={workbenchSelectors.scheduledTaskBusyCancelDismiss}
+                                />
+                              ) : null}
+                              {clearContextVisible ? (
+                                <MessageActionCapsule
+                                  icon={<HiOutlineSparkles className="h-3.5 w-3.5" />}
+                                  label="清空消息记录"
+                                  tooltip={`清空「${currentPartner?.name || '伙伴'}」的全部消息记录，无法恢复。`}
+                                  onAction={handleClearPartnerContext}
+                                  actionTestId={workbenchSelectors.clearContextButton}
+                                />
+                              ) : null}
                             </div>
                           ) : null}
                           <WorkbenchComposer

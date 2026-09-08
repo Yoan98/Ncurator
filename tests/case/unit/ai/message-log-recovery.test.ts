@@ -11,6 +11,7 @@ import {
   resolveCompactionCoveredThroughSeq
 } from '../../../../src/main/services/ai/human/memory/transcript'
 import { projectBrainMessagesFromLog } from '../../../../src/main/services/ai/human/memory/brainMessageProjection'
+import { wrapCompactionCheckpointContent } from '../../../../src/main/services/ai/human/prompts/compaction'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 
@@ -161,7 +162,7 @@ describe('ai human message-log recovery', () => {
     expect(String(repaired[1].content)).toContain('interrupted')
   })
 
-  it('bookmarks coveredThroughSeq from the whole partner log, not only the current run', () => {
+  it('bookmarks coveredThroughSeq through the last user when no process follows', () => {
     const log = records([
       { runId: 'run-1', entry: user('fill weekly report') },
       {
@@ -170,7 +171,159 @@ describe('ai human message-log recovery', () => {
       },
       { runId: 'run-2', entry: user('change the title') }
     ])
-    expect(resolveCompactionCoveredThroughSeq(log)).toBe(2)
+    expect(resolveCompactionCoveredThroughSeq(log)).toBe(3)
+    expect(resolveCompactionCoveredThroughSeq(log, 0)).toBe(3)
+  })
+
+  it('covers the current user and dropped process while leaving the kept tail', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('fill weekly report') },
+      {
+        runId: 'run-1',
+        entry: { kind: 'assistant', content: 'reading last week', toolCalls: [] }
+      },
+      {
+        runId: 'run-1',
+        entry: {
+          kind: 'tool',
+          toolCallId: '1',
+          toolName: 'docx_read_nodes',
+          ok: true,
+          content: 'last week'
+        }
+      },
+      {
+        runId: 'run-1',
+        entry: { kind: 'assistant', content: 'writing draft', toolCalls: [] }
+      },
+      {
+        runId: 'run-1',
+        entry: {
+          kind: 'tool',
+          toolCallId: '2',
+          toolName: 'docx_content_edit',
+          ok: true,
+          content: 'draft'
+        }
+      }
+    ])
+    expect(resolveCompactionCoveredThroughSeq(log, 0)).toBe(5)
+    expect(resolveCompactionCoveredThroughSeq(log, 2)).toBe(3)
+    expect(resolveCompactionCoveredThroughSeq(log, 4)).toBe(1)
+  })
+
+  it('bookmarks through the message before a kept user when the tail includes that user', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('fill weekly report') },
+      {
+        runId: 'run-1',
+        entry: { kind: 'assistant', content: 'reading last week', toolCalls: [] }
+      },
+      {
+        runId: 'run-1',
+        entry: {
+          kind: 'tool',
+          toolCallId: '1',
+          toolName: 'docx_read_nodes',
+          ok: true,
+          content: 'last week'
+        }
+      },
+      { runId: 'run-1', entry: user('change the title') },
+      {
+        runId: 'run-1',
+        entry: { kind: 'assistant', content: 'writing draft', toolCalls: [] }
+      },
+      {
+        runId: 'run-1',
+        entry: {
+          kind: 'tool',
+          toolCallId: '2',
+          toolName: 'docx_content_edit',
+          ok: true,
+          content: 'draft'
+        }
+      }
+    ])
+    expect(resolveCompactionCoveredThroughSeq(log, 3)).toBe(3)
+  })
+
+  it('projects retained tail process after the compacted user when the bookmark sits before the tail', () => {
+    const compactedUser = wrapCompactionCheckpointContent('目标：\n写周报')
+    const log = records([
+      { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
+      {
+        runId: 'run-1',
+        entry: { kind: 'assistant', content: 'reading last week', toolCalls: [] }
+      },
+      {
+        runId: 'run-1',
+        entry: {
+          kind: 'tool',
+          toolCallId: '1',
+          toolName: 'docx_read_nodes',
+          ok: true,
+          content: 'last week'
+        }
+      },
+      {
+        runId: 'run-1',
+        entry: { kind: 'assistant', content: 'writing draft', toolCalls: [] }
+      },
+      {
+        runId: 'run-1',
+        entry: {
+          kind: 'tool',
+          toolCallId: '2',
+          toolName: 'docx_content_edit',
+          ok: true,
+          content: 'draft'
+        }
+      },
+      {
+        runId: 'run-1',
+        entry: {
+          kind: 'annotation',
+          eventType: 'compaction_checkpoint',
+          payload: {
+            compactBlockId: 'checkpoint-1',
+            coveredThroughSeq: 3,
+            sourceMessageCount: 3
+          }
+        }
+      },
+      { runId: 'run-1', entry: user(compactedUser, 'compaction') }
+    ])
+    const ctx = {
+      platform: 'macos',
+      runId: 'run-2',
+      partnerId: 'partner-1',
+      partnerName: '测试伙伴',
+      workspaceRoots: ['/tmp/workspace'],
+      runStartedAt: 0,
+      preference: 'default',
+      executionPermission: 'review',
+      referenceScope: { selectedReferences: [], attachments: [] }
+    } as AiRunContext
+    const state = createInitialHumanState({
+      taskId: 'task-after-compact-retained-tail',
+      userInput: '对照周报改标题'
+    })
+    const projection = projectBrainMessagesFromLog({
+      records: log,
+      ctx,
+      state
+    })
+    expect(projection.messages.map((message) => message.getType())).toEqual([
+      'human',
+      'ai',
+      'tool',
+      'human'
+    ])
+    expect(String(projection.messages[0]?.content)).toBe(compactedUser)
+    expect(String(projection.messages[1]?.content)).toBe('writing draft')
+    expect(String(projection.messages[2]?.content)).toBe('draft')
+    expect(String(projection.messages[3]?.content)).toContain('对照周报改标题')
   })
 
   it('brain projection drops history before context_cleared including older checkpoints', () => {
@@ -234,8 +387,7 @@ describe('ai human message-log recovery', () => {
   })
 
   it('projects the compacted user then a new user without copying memory', () => {
-    const compactedUser =
-      '<user_context>\n填周报\n<memory>\n当前交付：\n- 已写周报\n历史事实：\n- 无\n</memory>\n</user_context>'
+    const compactedUser = wrapCompactionCheckpointContent('目标：\n- 已写周报')
     const log = records([
       { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
       {
@@ -287,8 +439,7 @@ describe('ai human message-log recovery', () => {
   })
 
   it('puts the compacted user in front of leftover process after a checkpoint', () => {
-    const compactedUser =
-      '<user_context>\n填周报\n<memory>\n当前交付：\n- 尚未生成文件\n</memory>\n</user_context>'
+    const compactedUser = wrapCompactionCheckpointContent('目标：\n- 尚未生成文件')
     const log = records([
       { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
       {

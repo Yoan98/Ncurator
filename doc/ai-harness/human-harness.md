@@ -35,7 +35,7 @@ flowchart TD
 | 节点 | 调模型 | 写 log | 改 runtime cache |
 |------|--------|--------|------------------|
 | `context_budget` | 否 | 首次进 brain 时写 `user` | 判定 compaction；不拼消息 |
-| `context_compaction` | 是（压缩模型） | `compaction_checkpoint` + compaction `user` | **整段替换** messages（第 5 节） |
+| `context_compaction` | 是（压缩模型） | `compaction_checkpoint` + compaction `user` | **整段替换** messages 为 System + 重建 User + tail（第 5 节） |
 | `brain` | 是（主模型） | `thinking_*`；**仅当有 `toolCalls`（或截断 / 内容安全）时写 `assistant`** | 有 tool 时 append assistant；**不** refresh build user |
 | `dispatch` | 否 | 否 | 消费 `tool_calls` 队列，路由下一 stage |
 | `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`** | 加载 skill 工具；**不**改 build user |
@@ -120,16 +120,16 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 |-------------|-----------|----------|
 | `thinking_started` / `thinking_completed` | `{}` | UI 过程层 |
 | `learning_started` / `learning_completed` | `{ skillId }` | UI 过程层 |
-| `skill_state_updated` | `{ learnedSkillIds: string[] }` | compact 时写入压缩 User 的 `<active_state>` 技能（**取最新一条**）；同 run 只驱动 bindTools |
-| `plan_updated` | `{ plan: [{ title, status }] }` | compact 时写入压缩 User 的 `<active_state>` 计划 + UI 计划条 |
-| `compaction_checkpoint` | 见示例 | 书签：`seq <= coveredThroughSeq` 不再进 brain；记忆只在压缩 User 的 `<memory>` |
+| `skill_state_updated` | `{ learnedSkillIds: string[] }` | 同 run 只驱动 bindTools；新 run 从图启动扫描切断点之后最新一条 |
+| `plan_updated` | `{ plan: [{ title, status }] }` | UI 计划条；新 run 从图启动扫描切断点之后最新一条 |
+| `compaction_checkpoint` | 见示例 | 书签：`seq <= coveredThroughSeq` 不再进 brain；摘要只在 compaction user 的 checkpoint 正文 |
 | `context_cleared` | `{}` | 切断点：投影只保留其后的行；切断前 checkpoint / 技能 / 计划不进下一轮 brain |
 | `finalizing_started` | `{}` | 投影时**清空** plan |
 | `approval_batch_resolved` | `{ batchId, items: [{ toolCallId, toolName, command, commandExplanation?, action, message? }] }` | UI Activity：走过审批的工具行图标 / 悬停揭示文案；`hand` 在审批决策后写入 |
 
 #### `entry_json` 示例
 
-**`user`** — `content` 就是发给模型的全文。`origin: human` 为人说的当次 build；`origin: compaction` 为压完重建的 build。气泡文案用 `ai_run.input`，不读 `content`。
+**`user`** — `content` 就是发给模型的全文。`origin: human` 为人说的当次 build；`origin: compaction` 为 Pi 外壳的 checkpoint 正文。气泡文案用 `ai_run.input`，不读 `content`。
 
 ```json
 {
@@ -317,7 +317,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 只投影 **`chat_session_message_log`**。log 里的 `user` **不直接**作为 HumanMessage 发给 model；brain 永远消费 **build 后的 user**。
 
-投影入口：`projectMessageLogRecords(records)` → `{ messages, plan, checkpoint }`。先找到最后一次 `context_cleared`，只投影其后的行，再跑现有 compaction（算法不改）。graph 再拼 System、build user 与 runtime cache。
+投影入口：`projectMessageLogRecords(records)` → `{ messages, plan, checkpoint }`。先找到最后一次 `context_cleared`，只投影其后的行，再按 compaction 书签截断（第 5 节：压缩 User + 未折进记忆的过程）。graph 再拼 System、build user 与 runtime cache。
 Compaction / Resume / 前缀缓存 → 见第 4–6 节。
 
 ```mermaid
@@ -378,7 +378,7 @@ flowchart TD
 |----|------|
 | System | 系统提示 |
 | User（人说的） | `origin: human`；无 `<memory>`，无 `<active_state>` |
-| User（压缩重建） | `origin: compaction`；含 `<memory>` 和当时的 `<active_state>` |
+| User（压缩 checkpoint） | `origin: compaction`；Pi 外壳 + `<summary>` 五栏，不是 `buildBrainUserMessage` |
 | 过程 | assistant / tool / 多模态合成 HumanMessage |
 | User（续发） | 仅新 run 时 append 在末尾；无 `<memory>`，无 `<active_state>` |
 
@@ -391,14 +391,12 @@ flowchart TD
   <workspace_roots>…</workspace_roots>
   <reference_scope>…</reference_scope>
   <current_time>…</current_time>
-  <memory>…</memory>                         ← 仅 compaction User
-  <active_state>…</active_state>             ← 仅 compaction User
 </user_context>
 ```
 
 **稳态行为**（同 run、未触发 第 5–6 节）：
 
-- 首次 brain：`[System, User]`（无 `<active_state>`），过程为空；log 写入这条 `origin: human` 的 content。
+- 首次 brain：`[System, User]`，过程为空；log 写入这条 `origin: human` 的 content。
 - brain → 工具 → 再 brain：过程末尾 append；**当前 User 一字不改**（技能/计划只在 tool 结果与 `bindTools` 中可见）。
 - 前缀 `[System, User, …已发送过程]` 字节序不变 → 第 4 节缓存命中。System **跨 run 稳定**（无 `current_time`）。
 
@@ -413,7 +411,7 @@ flowchart TD
 3. `user` → `HumanMessage(content)`（人说的和压缩的都走这一条）。
 4. `assistant` → AIMessage；`tool` → ToolMessage。
 5. `tool.images[]` 非空 → 在该 tool 后合成多模态 HumanMessage（第 3.5 节）。
-6. 末尾 append 当前这次 `buildBrainUserMessage`（无 `<memory>`，无 `<active_state>`）。
+6. 末尾 append 当前这次 `buildBrainUserMessage`。
 7. `repairInterruptedToolCalls`：每个 AIMessage 的 `tool_call_id` 若无对应 ToolMessage，插入
    `Error: The run was interrupted before this tool call could be executed.`
 
@@ -426,23 +424,21 @@ flowchart TD
 | `<workspace_roots>` | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存） |
 | `<reference_scope>` | 当时 Composer 的 `@` 与附件（第 2.5 节） |
 | `<current_time>` | 当时 run 的 `runStartedAt`（历史行不再改） |
-| `<memory>` | 仅 `origin: compaction` 的 user.content 内嵌块 |
-| `<active_state>` | 仅 `origin: compaction`：当时 `skill_state_updated` + 最后 `plan_updated`（`finalizing_started` 清空） |
 
 annotation 扫描只用 `context_cleared` **之后**的 log；切断前 checkpoint / 技能 / 计划不进下一轮 brain。
 
 **组装**
 
-- **同 run 首次 brain**：`[System] + [User]`（无 active_state）+ 过程（可空）。
+- **同 run 首次 brain**：`[System] + [User]` + 过程（可空）。
 - **同 run 后续 brain**：当前 User 不变；过程 append。
-- **compaction**：append 压缩 User（`<memory>` + `<active_state>`）；过程不再保留。
+- **compaction**：append checkpoint User（Pi 外壳 + `<summary>`）；runtime 变为 `[System, checkpoint, 切点之后原文]`，允许 `[checkpoint][原始 User]` 并排。
 - **resume 新 run（未压缩）**：`[System] + [历史 User content] + …过程… + [新 User]`（见第 6 节）。
-- **resume 新 run（已压缩）**：`[System] + [压缩 User] + 书签后过程（可空） + [新 User]`。禁止 System 后面直接接 AI/tool。
-- **`context_cleared` 之后下次发送**：`[System] + [新 User]`，没有旧过程，也没有旧 `<memory>`。
+- **resume 新 run（已压缩）**：`[System] + [checkpoint User] + 书签后原文（可含多条 User） + [新 User]`。禁止 System 后面直接接 AI/tool。
+- **`context_cleared` 之后下次发送**：`[System] + [新 User]`，没有旧过程，也没有旧 checkpoint。
 
 **同 run 刷新**：固定 `currentUserMessageIndex`；compaction 整段替换见第 5 节。
 
-**投影不做的事**：`ai_run.partial_answer`、`ai_file_change` 不进 brain。新 User 不抄 `<memory>`，不写 `<active_state>`。
+**投影不做的事**：`ai_run.partial_answer`、`ai_file_change` 不进 brain。新 User 不抄 checkpoint，不写 `<memory>` / `<active_state>`。
 
 ### 3.4 UI 投影
 
@@ -546,7 +542,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 ### 4.3 打破前缀缓存的操作
 
-仅 **Compaction**（第 5 节）改写已建立的前缀：append 压缩 User（含 `<memory>` 与当时的 `<active_state>`），过程从 runtime 数组中移除。
+仅 **Compaction**（第 5 节）改写已建立的前缀：append checkpoint User，被折掉的过程从 runtime 去掉，切点之后的原文留下（可含多条 User）。压完当次 brain 前缀 miss；之后只 append 可再命中。
 
 **resume / learn_skill / update_plan 不属于打破**：resume 只在末尾追加；同 run 内技能与计划不改写 user。
 设计约束：除 compaction 外，不得 rewrite 已发送的 User 与过程。
@@ -555,33 +551,59 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 ## 5. Compaction
 
-进入 brain 前，因上下文预算触发。执行后 **整段替换** runtime messages 为 `[System, 当前 User built]`，并 **打破第 4 节前缀缓存**。
+进入 brain 前，因上下文预算触发。执行后 **整段替换** runtime messages 为 `[System, checkpoint User, 切点之后原文]`，并 **打破第 4 节前缀缓存**。允许 `[checkpoint User][原始 User]` 并排。新 User 只在末尾 append。
 
 ### 5.1 触发
 
 `context_budget` 节点判定（默认窗口 200k token）：
 
-- 估计上下文 token > 窗口 × **80%**。
-- 除 System 和当前 user 外还有消息（历史 user 或任何 assistant/tool）。
+- 真实 usage > 窗口 × **80%**（`CONTEXT_COMPACTION_TRIGGER_RATIO`）。没到线不压。
+- 去掉从末尾留下的 tail 之后，还剩更早的 User/AI/tool 可折。
 - 仅当前 build user 自身超窗 → `input_too_long`，不 compaction、不写 log user。
 - 无 LLM usage 返回时不触发（`llm_usage_unavailable`）。
+- 去掉 tail 后没有可折内容，或不拆的超大 tool 且前面没有可折跨度 → 不压。
 
-### 5.2 压缩输入
+### 5.2 Tail 切点
 
-从当时发给主模型的消息数组去掉 System，按 round 渲染（user 也是一轮；轮内换行紧凑，轮间空一行）。按当前 user（`ncurator_current_user`）切开，不要用文本里最后一条 `[user]`：
+从当时发给主模型的消息数组去掉 System，**从末尾往回**累加 `estimateTextTokens`（`ceil(字符数 / 4)`）。图仍用现有 tile，不再 ÷4。
 
-- `<current>`：当前 user + 它之后的全部 AI/工具（含最后一步）。
-- `<earlier>`：当前 user 之前的对话；没有则空。
+- 额度：生产 **20_000 token**（`CONTEXT_COMPACTION_KEEP_RECENT_TOKENS`）；测试 / live 可 override `keepRecentTokens`（默认 live 用 10_000）。
+- 碰到边界 User（string content 的 human）**不停**。图片合成 HumanMessage 算过程，不是边界。
+- 切断必须落在完整 assistant + 其 tool 结果上，禁止拆开一对 tool_call / result。单轮自己大于 keep 时允许切在轮中间（split）。
+- **靠近 User 则整轮留下：** split 之后，若本轮 User 到切点之前的 token ≤ keep 的 **10%**，把切点挪到这条 User 之前。只往回挪、不往前丢。
+- 压缩对象是切点之前的那一段。渲染成纯文本：不要 `[round N]`；`[user]` 一块，随后 ai+tool 一块，块之间空一行。User 原文整段进去。这里的 tool 正文 **从头 2000 字符**；主模型 tail 里的 tool **不截**。
 
 ### 5.3 执行
 
-1. 压缩模型根据 current 写当前工作记忆，根据 earlier 写历史事实时间线。
-2. log append `compaction_checkpoint`（`coveredThroughSeq` 等书签字段，**不存**摘要）。`coveredThroughSeq` 取切断点之后整条伙伴 log 里最后一条 assistant/tool 的 seq（不按当前 run 过滤）。
-3. log append 一条 `origin: compaction` 的 user：`content` = 重建后发给模型的全文（含 `<memory>` 与当时的 `<active_state>`）。
-4. 整段替换 runtime：`[System, 这条压缩 User]`。不再保留过程，也不再塞回历史 user。不写 snapshot。
-5. 回到 `context_budget` → brain。
+1. `context_budget` 在进入 compaction 前，若本轮 human user 尚未写入 log，先 append `origin: human`。
+2. 压缩模型只根据这段被折对话写五栏；tail 里的过程不要补进产出。旧 checkpoint 只对照，不要粘贴。
+3. log append `compaction_checkpoint`（`coveredThroughSeq` 等书签字段，**不存**摘要）。`coveredThroughSeq` = 第一条留下消息的前一条。
+4. log append 一条 `origin: compaction` 的 user：`content` 只有 checkpoint 正文（Pi 外壳 + `<summary>`），不是 `buildBrainUserMessage`。
+5. 整段替换 runtime：`[System, checkpoint User, 切点之后原文]`。不写 snapshot。
+6. 投影 `seq > coveredThroughSeq` 后，把 compaction User 放到仍留着的原文前面，禁止 System 后直接 AI。
+7. 回到 `context_budget` → brain。
 
-输出四段平铺：`当前交付` / `已确认事实` / `已尝试但未解决` / `历史事实`（时间线，越旧越粗）。
+记忆栏目（整份重写；已有摘要只对照，不要粘贴）：
+
+```text
+目标：
+约束：
+进度：
+下一步：
+文件：
+```
+
+空栏目写「无」。不要写时间线。不要 nodeId，不要抄 tool 原文 / nodes dump。
+
+Checkpoint 外壳：
+
+```text
+The conversation history before this point was compacted into the following summary:
+
+<summary>
+…
+</summary>
+```
 
 ### 5.4 示例
 
@@ -589,24 +611,19 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 ```text
 [System]
-[User built]   历史或当前诉求
-[Assistant]  …
-[Tool]       …
-[Assistant]  …
-[Tool]       …
+[User1][AI][Tool]
+[User2][AI][Tool]…   从末尾累加到 keep；靠近 User2 则从 User2 留下
 ```
 
 压缩后：
 
 ```text
 [System]
-[User built]   <current_time>…</current_time>
-               <memory>当前交付 / 已确认事实 / 已尝试但未解决 / 历史事实</memory>
-               <active_state>当时技能/计划</active_state>
+[User checkpoint]   Pi 外壳 + 五栏
+[User2][AI][Tool]…  切点之后原文
 ```
 
 log 行 append-only 保留；`seq <= coveredThroughSeq` 的行不再进入下次 brain 投影。
-
 ---
 
 ## 6. Resume 机制
@@ -623,7 +640,7 @@ log 行 append-only 保留；`seq <= coveredThroughSeq` 的行不再进入下次
 1. **log**：进 brain 前 append 新 `origin: human` 行（`content` = 当次 build 全文；含 Composer `context`）。
 2. **brain**：在已有历史末尾 append 新 User（新 run 的 input + Composer + 本 run `current_time`）；**不替换**前面的 User，**不改写**中间过程。
 3. 历史 User = 对应 log 行的 `content`。
-4. 新诉求只出现在 **末尾** 那条 User 的 `<task_goal>`。新 User **不抄** `<memory>`，**不写** `<active_state>`。
+4. 新诉求只出现在 **末尾** 那条 User 的 `<task_goal>`。新 User 不抄 checkpoint。
 5. 符合 第 4 节：历史前缀不变 → 缓存可命中；打破仅 compaction。
 6. **tools**：`bindTools` 按该伙伴切断点之后最新 `learnedSkillIds` 重绑，不是冻住进程内 tool 对象。
 
@@ -633,7 +650,7 @@ log 行 append-only 保留；`seq <= coveredThroughSeq` 的行不再进入下次
 
 ```text
 [System]                 ← 无 current_time
-[User]         origin=human，content=当时 build 全文（无 active_state）
+[User]         origin=human，content=当时 build 全文
 [Assistant]    …（含未闭合 tool_calls 时由 repair 补 ToolMessage）
 [Tool]         …
 [Tool]         Error: The run was interrupted…
@@ -648,7 +665,7 @@ log 行 append-only 保留；`seq <= coveredThroughSeq` 的行不再进入下次
 [Tool]         …
 [Tool]         Error: The run was interrupted…
 [User]         task_goal=继续把周报写完                  ← append
-               current_time=本 run；无 memory；无 active_state
+               current_time=本 run
 ```
 
 log 侧（示意）：
@@ -663,17 +680,17 @@ seq N  user      origin=human  content=<user_context>继续把周报写完…</u
 
 ```text
 [System]
-[User]         origin=compaction  含 <memory> / <active_state>
-[Assistant / Tool …]              书签后过程（可空）
-[User]         origin=human       新任务；无 memory；无 active_state
+[User]         origin=compaction  Pi 外壳 + <summary>
+[Assistant / Tool / User …]      书签后原文（可空）
+[User]         origin=human       新任务
 ```
 
 ### 6.4 构建步骤
 
 1. 从 log 投影：切断点之后、书签之后的 `user / assistant / tool`，`user` 一律用 `content`。
 2. System 重渲染但内容跨 run 稳定。
-3. append 新 User = `buildBrainUserMessage`（新 `input`、当前 Composer、本 run `current_time`；无 memory / active_state）。
-4. `context_budget` 将本轮 human user 写入 log（若尚未写入）→ brain。
+3. append 新 User = `buildBrainUserMessage`（新 `input`、当前 Composer、本 run `current_time`）。
+4. `context_budget` 将本轮 human user 写入 log（若尚未写入；压缩前也会写）→ brain 或 compaction。
 5. `buildAvailableTools(learnedSkillIds)`：从最新 `skill_state_updated` 恢复技能后绑定工具。
 
 ### 6.5 边界

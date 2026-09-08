@@ -159,6 +159,7 @@ export const workbenchSelectors = {
   pinnedSessionsSection: 'workbench-pinned-partners',
   newSessionButton: 'workbench-new-partner-button',
   scheduledTasksButton: 'workbench-scheduled-tasks-button',
+  scheduledTasksCountChip: 'workbench-scheduled-tasks-count-chip',
   sessionsToggle: 'workbench-sessions-toggle',
   partnersToggle: 'workbench-sessions-toggle',
   sidebarResizer: 'workbench-sidebar-resizer',
@@ -251,6 +252,8 @@ export const workbenchSelectors = {
   timeline: 'workbench-timeline',
   timelineItemPrefix: 'workbench-timeline-item',
   clearContextButton: 'workbench-clear-context-button',
+  scheduledTaskBusyCancelCapsule: 'scheduled-task-busy-cancel-capsule',
+  scheduledTaskBusyCancelDismiss: 'scheduled-task-busy-cancel-dismiss',
   inspector: 'workbench-inspector',
   inspectorTitle: 'workbench-inspector-title',
   applyRevertButton: 'workbench-apply-revert-button',
@@ -274,9 +277,11 @@ export const workbenchSelectors = {
 
 export const scheduledTaskSelectors = {
   view: 'scheduled-task-view',
+  countChip: 'scheduled-task-count-chip',
   addButton: 'scheduled-task-add-button',
   itemPrefix: 'scheduled-task-item',
   itemTogglePrefix: 'scheduled-task-item-toggle',
+  itemRunNowPrefix: 'scheduled-task-item-run-now',
   formName: 'scheduled-task-form-name',
   formPrompt: 'scheduled-task-form-prompt',
   formScheduleType: 'scheduled-task-form-schedule-type',
@@ -284,9 +289,9 @@ export const scheduledTaskSelectors = {
   formTime: 'scheduled-task-form-time',
   formSave: 'scheduled-task-form-save',
   formCancel: 'scheduled-task-form-cancel',
-  partnerSelect: 'scheduled-task-partner-select',
-  workspaceSelect: 'scheduled-task-partner-select',
   modelSelect: 'scheduled-task-model-select',
   preferenceSelect: 'scheduled-task-preference-select',
-  permissionSelect: 'scheduled-task-permission-select'
+  permissionSelect: 'scheduled-task-permission-select',
+  busyCancelCapsule: 'scheduled-task-busy-cancel-capsule',
+  busyCancelDismiss: 'scheduled-task-busy-cancel-dismiss'
 } as const

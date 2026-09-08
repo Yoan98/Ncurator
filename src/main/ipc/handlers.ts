@@ -32,6 +32,8 @@ import type {
   ScheduledTaskMutationResponse,
   ScheduledTaskSaveRequest,
   ScheduledTaskSetEnabledRequest,
+  ScheduledTaskRunNowRequest,
+  ScheduledTaskDismissBusyNoticeRequest,
   WriteTextFileRequest,
   WriteTextFileResponse
 } from '../../shared/types'
@@ -338,6 +340,8 @@ export function registerHandlers(services: {
   const scheduledTaskService = new ScheduledTaskService({
     taskStore: storageService.scheduledTask,
     partnerStore,
+    savePartnerUiState: (partnerId, state) => workbenchUiStore.savePartnerState(partnerId, state),
+    createEmptyPartnerUiState,
     hasActivePartnerRun: (partnerId) => chatRunService.hasActivePartnerRun(partnerId),
     submitTask: (payload) => chatRunService.submit(payload),
     emitSessionListRefresh: emitSessionListRefreshToAll
@@ -3184,6 +3188,26 @@ export function registerHandlers(services: {
       payload: ScheduledTaskSetEnabledRequest
     ): Promise<ScheduledTaskMutationResponse> => {
       return scheduledTaskService.setEnabled(payload)
+    }
+  )
+
+  ipcMain.handle(
+    'scheduled-task-run-now',
+    async (
+      _event,
+      payload: ScheduledTaskRunNowRequest
+    ): Promise<ScheduledTaskMutationResponse> => {
+      return scheduledTaskService.runNow(payload)
+    }
+  )
+
+  ipcMain.handle(
+    'scheduled-task-dismiss-busy-notice',
+    async (
+      _event,
+      payload: ScheduledTaskDismissBusyNoticeRequest
+    ): Promise<ScheduledTaskMutationResponse> => {
+      return scheduledTaskService.dismissBusyNotice(payload)
     }
   )
 }

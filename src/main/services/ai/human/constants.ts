@@ -24,7 +24,16 @@ export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error'] as const
 
 export const HUMAN_MAX_ACTIVE_TOOLS = 30
 export const HUMAN_GRAPH_RECURSION_LIMIT = 400
-// 默认按 200k 上下文窗口估算，压缩阈值由 CONTEXT_COMPACTION_TRIGGER_RATIO 控制。
+// 默认按 200k 上下文窗口估算；触发线 80%；tail 留最近 20k token。
 export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 200_000
 export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8
+export const CONTEXT_COMPACTION_KEEP_RECENT_TOKENS = 20_000
+export const CONTEXT_COMPACTION_SNAP_TO_USER_RATIO = 0.1
 export const HUMAN_ROUND_EXECUTION_KINDS = ['learning', 'hand'] as const
+
+export const resolveCompactionKeepRecentTokens = (override?: number): number => {
+  if (typeof override === 'number' && Number.isFinite(override) && override > 0) {
+    return Math.floor(override)
+  }
+  return CONTEXT_COMPACTION_KEEP_RECENT_TOKENS
+}

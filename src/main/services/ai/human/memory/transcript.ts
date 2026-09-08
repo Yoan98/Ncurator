@@ -146,17 +146,40 @@ export const sliceAfterLastContextCleared = (
 }
 
 export const resolveCompactionCoveredThroughSeq = (
-  records: ChatMessageLogRecord[]
+  records: ChatMessageLogRecord[],
+  keepTailVisibleCount = 0
 ): number | undefined => {
   const afterCleared = sliceAfterLastContextCleared(records)
-  const lastProcess = [...afterCleared]
-    .reverse()
-    .find((record) => record.entry.kind === 'assistant' || record.entry.kind === 'tool')
-  if (lastProcess) return lastProcess.seq
-  const lastUser = [...afterCleared]
-    .reverse()
-    .find((record) => record.entry.kind === 'user')
-  return lastUser?.seq
+  const visible = afterCleared.filter(
+    (record) =>
+      record.entry.kind === 'user' ||
+      record.entry.kind === 'assistant' ||
+      record.entry.kind === 'tool'
+  )
+  if (visible.length === 0) return undefined
+  const keepCount = Math.min(Math.max(0, keepTailVisibleCount), visible.length)
+  if (keepCount === 0) {
+    return visible.at(-1)?.seq
+  }
+  const firstKept = visible[visible.length - keepCount]
+  if (!firstKept) return visible.at(-1)?.seq
+  return [...afterCleared].reverse().find((record) => record.seq < firstKept.seq)?.seq
+}
+
+export const orderProjectedRecordsForBrain = (
+  records: ChatMessageLogRecord[]
+): ChatMessageLogRecord[] => {
+  const compactionUsers: ChatMessageLogRecord[] = []
+  const rest: ChatMessageLogRecord[] = []
+  for (const record of records) {
+    if (record.entry.kind === 'user' && record.entry.origin === 'compaction') {
+      compactionUsers.push(record)
+      continue
+    }
+    rest.push(record)
+  }
+  if (compactionUsers.length === 0) return records
+  return [...compactionUsers, ...rest]
 }
 
 /**
