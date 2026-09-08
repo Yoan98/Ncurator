@@ -1968,8 +1968,9 @@ mark {
   --nc-timeline-gap: 5px;
   --nc-timeline-node-gap: 20px;
   --nc-timeline-top-gap: 20px;
-  /* 与白色输入框顶部大致平齐（composer 高度 + shell pb-6） */
-  --nc-timeline-composer-clearance: 168px;
+  /* 未量到前的占位；量到后由内联 --nc-timeline-composer-clearance / --nc-timeline-line-end 覆盖 */
+  --nc-timeline-composer-clearance: 0px;
+  --nc-timeline-line-end: 8px;
   --nc-timeline-line: #c4c3bf;
   --nc-timeline-composer-max: 760px;
   position: absolute;
@@ -1986,14 +1987,15 @@ mark {
   padding: var(--nc-timeline-top-gap) 0 var(--nc-timeline-composer-clearance);
 }
 
-/* 轴线：底端与输入框顶部平齐，顶端与标题横线留空，由近到远向上渐隐 */
+/* 轴线：底端停在最新节点圆心，顶端与标题横线留空，由近到远向上渐隐 */
 .nc-message-timeline::before {
   content: '';
   position: absolute;
   top: var(--nc-timeline-top-gap);
-  bottom: var(--nc-timeline-composer-clearance);
+  bottom: var(--nc-timeline-line-end);
   left: calc(var(--nc-timeline-track) / 2 - 0.5px);
   width: 1px;
+  opacity: 0;
   background: linear-gradient(
     to top,
     var(--nc-timeline-line) 0,
@@ -2003,6 +2005,10 @@ mark {
     transparent 100%
   );
   pointer-events: none;
+}
+
+.nc-message-timeline.is-aligned::before {
+  opacity: 1;
 }
 
 .nc-message-timeline-nodes {
