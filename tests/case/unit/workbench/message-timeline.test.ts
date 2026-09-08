@@ -3,10 +3,10 @@ import {
   DAY_MS,
   buildTimelineNodes,
   collectMessageDayStarts,
+  collectSelectableDaysForNode,
   resolveActiveTimelineNodeId,
   startOfLocalDay,
-  startOfLocalMonth,
-  startOfLocalYear
+  startOfLocalMonth
 } from '../../../../src/shared/workbench/messageTimeline'
 
 const atLocalDay = (year: number, monthIndex: number, day: number, hour = 12): number => {
@@ -53,42 +53,17 @@ describe('messageTimeline', () => {
     ])
   })
 
-  it('expands one month into day nodes and keeps sibling months folded', () => {
+  it('keeps month folded and exposes selectable days for picker', () => {
     const now = atLocalDay(2026, 8, 7)
     const august13 = startOfLocalDay(atLocalDay(2026, 7, 13))
     const august14 = startOfLocalDay(atLocalDay(2026, 7, 14))
     const april13 = startOfLocalDay(atLocalDay(2026, 3, 13))
-    const monthStart = startOfLocalMonth(august13)
-    const nodes = buildTimelineNodes({
-      messageDayStarts: [april13, august13, august14, startOfLocalDay(now)],
-      now,
-      expansion: { kind: 'month', monthStart }
-    })
-    expect(nodes.map((node) => ({ level: node.level, role: node.role, label: node.label }))).toEqual([
-      { level: 'month', role: 'node', label: '4月' },
-      { level: 'month', role: 'segment', label: '8' },
-      { level: 'day', role: 'node', label: '8/13' },
-      { level: 'day', role: 'node', label: '8/14' },
-      { level: 'month', role: 'node', label: '9月' }
-    ])
-  })
-
-  it('expands one year into months and collapses other ranges', () => {
-    const now = atLocalDay(2026, 8, 7)
-    const march = startOfLocalDay(atLocalDay(2025, 2, 10))
-    const august = startOfLocalDay(atLocalDay(2025, 7, 13))
-    const yearStart = startOfLocalYear(march)
-    const nodes = buildTimelineNodes({
-      messageDayStarts: [march, august, startOfLocalDay(now)],
-      now,
-      expansion: { kind: 'year', yearStart }
-    })
-    expect(nodes.map((node) => ({ level: node.level, role: node.role, label: node.label }))).toEqual([
-      { level: 'year', role: 'segment', label: '2025' },
-      { level: 'month', role: 'node', label: '25/3' },
-      { level: 'month', role: 'node', label: '25/8' },
-      { level: 'month', role: 'node', label: '9月' }
-    ])
+    const days = [april13, august13, august14, startOfLocalDay(now)]
+    const nodes = buildTimelineNodes({ messageDayStarts: days, now })
+    const august = nodes.find((node) => node.id === `month-${startOfLocalMonth(august13)}`)
+    expect(august).toBeTruthy()
+    expect(collectSelectableDaysForNode(august!, days)).toEqual([august13, august14])
+    expect(nodes.map((node) => node.level)).toEqual(['month', 'month', 'day'])
   })
 
   it('resolves active node preferring day over containing month', () => {
@@ -96,15 +71,20 @@ describe('messageTimeline', () => {
     const august13 = startOfLocalDay(atLocalDay(2026, 7, 13))
     const nodes = buildTimelineNodes({
       messageDayStarts: [august13, startOfLocalDay(now)],
-      now,
-      expansion: { kind: 'month', monthStart: startOfLocalMonth(august13) }
+      now
     })
     expect(
       resolveActiveTimelineNodeId({
         nodes,
         activeDayStart: august13
       })
-    ).toBe(`day-${august13}`)
+    ).toBe(`month-${startOfLocalMonth(august13)}`)
+    expect(
+      resolveActiveTimelineNodeId({
+        nodes,
+        activeDayStart: startOfLocalDay(now)
+      })
+    ).toBe(`day-${startOfLocalDay(now)}`)
   })
 
   it('collectMessageDayStarts dedupes and sorts', () => {

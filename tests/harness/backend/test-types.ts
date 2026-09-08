@@ -170,7 +170,6 @@ export type CreateAiRunContextInput = {
   humanRuntimeOverrides?: {
     graphRecursionLimit?: number
     modelContextWindowTokens?: number
-    keepRecentTokens?: number
     terminalEnvironment?: Record<string, string>
   }
   llmScript?: LlmScript

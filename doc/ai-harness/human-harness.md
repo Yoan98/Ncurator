@@ -552,7 +552,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 ### 5.1 触发
 
-`context_budget` 节点判定（默认窗口 200k token）：
+`context_budget` 节点判定（默认窗口 256k token）：
 
 - 真实 usage > 窗口 × **80%**（`CONTEXT_COMPACTION_TRIGGER_RATIO`）。没到线不压。
 - 去掉从末尾留下的 tail 之后，还剩更早的 User/AI/tool 可折。
@@ -564,7 +564,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 从当时发给主模型的消息数组去掉 System，**从末尾往回**累加 `estimateTextTokens`（`ceil(字符数 / 4)`）。图用现有 tile 公式。
 
-- 额度：生产 **20_000 token**（`CONTEXT_COMPACTION_KEEP_RECENT_TOKENS`）；测试 / live 可 override `keepRecentTokens`（`human-context-compaction-natural-trigger-live` 用 5_000）。
+- 额度：`floor(触发线 × 10%)`（`CONTEXT_COMPACTION_TAIL_RATIO`）。生产窗口 256k 时触发 204_800、tail 20_480。测试 / live 只 override 窗口，tail 由同一比例算出。
 - 碰到边界 User（string content 的 human）**不停**。图片合成 HumanMessage 算过程，不是边界。
 - 切断必须落在完整 assistant + 其 tool 结果上，禁止拆开一对 tool_call / result。单轮自己大于 keep 时允许切在轮中间（split）。
 - 压缩对象是切点之前的那一段。按消息顺序拼成纯文本：`[user]` 一块，随后 ai+tool 一块，块之间空一行。User 原文整段进去。这里的 tool 正文 **从头 2000 字符**；主模型 tail 里的 tool **不截**。

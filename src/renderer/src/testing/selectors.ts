@@ -199,6 +199,7 @@ export const workbenchSelectors = {
   mentionPanel: 'workbench-mention-panel',
   messageList: 'workbench-message-list',
   userMessagePrefix: 'workbench-user-message',
+  userMessageTimePrefix: 'workbench-user-message-time',
   userMessageActionsPrefix: 'workbench-user-message-actions',
   userMessageCopyButtonPrefix: 'workbench-user-message-copy-button',
   userMessageEditButtonPrefix: 'workbench-user-message-edit-button',

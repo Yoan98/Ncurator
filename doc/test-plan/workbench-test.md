@@ -230,9 +230,9 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：用户消息 hover 操作、latest turn 编辑撤回、running 态编辑入口隐藏，以及用户消息附件展示。
 - Why：用户编辑上一条消息依赖撤回最新 turn、回填 composer 和附件 UI 协同；任一状态错误都会导致重复发送、误编辑运行中消息或附件被正文挤压遮挡。
-- How：使用真实 Workbench UI 创建伙伴，必要时通过设置页添加文件地址；真实粘贴图片和 `md` 附件并发送 AI 请求；hover 用户消息并触发复制与编辑；在 running 状态检查用户消息气泡和附件布局。
-- Oracle：hover 后显示时间、复制和编辑；复制给出成功反馈；编辑会撤回最新 turn 并回填原草稿，running 状态不显示编辑，对齐 `WB-SESSION-006`；附件显示在消息气泡上方，输入框附件关闭按钮可点击且不被遮挡。
-- Not：不验证模型回答质量；附件输入通过真实保存与传递链路进入产品。
+- How：使用真实 Workbench UI 创建伙伴，必要时通过设置页添加文件地址；真实粘贴图片和 `md` 附件并发送 AI 请求；hover 用户消息并触发复制与编辑；在 running 状态检查用户消息气泡和附件布局。首条用户消息应可见居中时间条。
+- Oracle：hover 后显示复制和编辑、不含时间；复制给出成功反馈；编辑会撤回最新 turn 并回填原草稿，running 状态不显示编辑，对齐 `WB-SESSION-006`；首条用户消息上方居中时间条对齐 `WB-SESSION-013-AC1`、`WB-SESSION-013-AC5`；附件显示在消息气泡上方，输入框附件关闭按钮可点击且不被遮挡。
+- Not：不验证模型回答质量；附件输入通过真实保存与传递链路进入产品。不在本 case 制造跨日或 30 分钟间隔（`WB-SESSION-013-AC2`、`WB-SESSION-013-AC3`、`WB-SESSION-013-AC4` 由 unit `message-time-label` 覆盖）。
 
 #### `composer-attachments-context`
 
@@ -282,10 +282,10 @@ tests/case/workbench/
 #### `timeline-day-jump`
 
 - 测试类型：`e2e`
-- What：有消息后时间轴出现「今天」日节点；点击跳到当天最早一条消息；时间轴无独立滚动。
-- Why：伙伴是一条一直聊下去的记录，用户需要按日定位。
-- How：创建伙伴并完成一次真实 AI run（当天消息）；打开时间轴，点击今天日节点；对「仅今天」时间轴截图，核对实线在节点附近清晰、空段向上渐隐。年/月展开、近 7 日外折叠、同时只展开一个（`WB-SESSION-010-AC2`、`WB-SESSION-010-AC5`）由 unit `message-timeline` 覆盖；滚顶懒加载与轴不独立滚动（`WB-SESSION-010-AC4`）沿用消息区既有懒加载，本 case 断言轴容器无独立滚动条。跨月假数据本机用 `scripts/dev/seed-partner-timeline.mjs` 灌入后真机截图核对。
-- Oracle：时间轴可见且含「今天」、无空的昨/前天；点击今天后落到当天最早一条消息；轴自身无独立滚动，对齐 `WB-SESSION-010-AC1`、`WB-SESSION-010-AC2`、`WB-SESSION-010-AC3`、`WB-SESSION-010-AC4`、`WB-SESSION-010-AC5`。
+- What：有消息后时间轴出现「今天」日节点；点击跳到当天最早一条消息；时间轴无独立滚动；已在可视区时点击不带动侧栏/Composer；节点固定间距贴底。
+- Why：伙伴是一条一直聊下去的记录，用户需要按日定位；月/年用 DatePicker 选天，不再展开子节点。
+- How：创建伙伴并完成一次真实 AI run（当天消息）；打开时间轴，记录侧栏/Composer/消息列表位置后点击今天日节点；对「仅今天」时间轴截图，核对轴线底端靠近输入框顶部、顶端与顶栏留空、由下向上渐隐。月/年聚合与可选日集合（`WB-SESSION-010-AC2`、`WB-SESSION-010-AC5`）由 unit `message-timeline` 覆盖；滚顶懒加载与轴不独立滚动（`WB-SESSION-010-AC4`）沿用消息区既有懒加载，本 case 断言轴容器无独立滚动条。跨月假数据本机用 `scripts/dev/seed-partner-timeline.mjs` 灌入后真机截图核对固定间距与搜索图标。
+- Oracle：时间轴可见且含「今天」、无空的昨/前天；点击今天后落到当天最早一条消息；轴自身无独立滚动；目标已在消息列表可视区内时侧栏与 Composer 位置不变，对齐 `WB-SESSION-010-AC1`、`WB-SESSION-010-AC2`、`WB-SESSION-010-AC3`、`WB-SESSION-010-AC4`、`WB-SESSION-010-AC5`、`WB-SESSION-010-AC6`、`WB-SESSION-010-AC7`。
 - Not：不在 E2E 里直接写 SQLite / 伪造系统时钟灌跨月数据；不验证压缩算法。
 
 #### `context-clear-capsule`

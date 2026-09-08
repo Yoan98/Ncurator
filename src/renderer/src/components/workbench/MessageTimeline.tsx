@@ -1,65 +1,46 @@
-import React, { useState } from 'react'
-import type { TimelineExpansion, TimelineNode } from '../../../../shared/workbench/messageTimeline'
+import React, { useMemo, useState } from 'react'
+import { DatePicker } from 'antd'
+import type { Dayjs } from 'dayjs'
+import dayjs from 'dayjs'
+import { HiMagnifyingGlass } from 'react-icons/hi2'
+import {
+  collectSelectableDaysForNode,
+  startOfLocalDay,
+  type TimelineNode
+} from '../../../../shared/workbench/messageTimeline'
 import { workbenchSelectors } from '../../testing/selectors'
 
 type MessageTimelineProps = {
   nodes: TimelineNode[]
+  messageDayStarts: number[]
   activeNodeId: string | null
-  expansion: TimelineExpansion
   onSelectNode: (node: TimelineNode) => void
-  onCollapse: () => void
+  onPickDay: (dayStart: number) => void
 }
 
 export const MessageTimeline = ({
   nodes,
+  messageDayStarts,
   activeNodeId,
-  expansion,
   onSelectNode,
-  onCollapse
+  onPickDay
 }: MessageTimelineProps): React.JSX.Element | null => {
-  const [hoveredSegmentId, setHoveredSegmentId] = useState<string | null>(null)
+  const [openPickerNodeId, setOpenPickerNodeId] = useState<string | null>(null)
 
   if (nodes.length === 0) return null
 
-  const expanded =
-    expansion.kind === 'month'
-      ? { level: 'month' as const, rangeStart: expansion.monthStart }
-      : expansion.kind === 'year'
-        ? { level: 'year' as const, rangeStart: expansion.yearStart }
-        : null
-
-  const compact = nodes.length <= 3
-  const single = nodes.length === 1
-
   return (
-    <div
-      className={`nc-message-timeline${compact ? ' is-compact' : ''}${single ? ' is-single' : ''}`}
-      data-testid={workbenchSelectors.timeline}
-    >
+    <div className="nc-message-timeline" data-testid={workbenchSelectors.timeline}>
       <div className="nc-message-timeline-nodes">
-        {single ? null : <div className="nc-message-timeline-fade-up" aria-hidden="true" />}
         {nodes.map((node) => {
           const isActive = node.id === activeNodeId
-          const isSegment = node.role === 'segment'
-          const showCollapse =
-            isSegment &&
-            expanded != null &&
-            node.level === expanded.level &&
-            node.rangeStart === expanded.rangeStart &&
-            hoveredSegmentId === node.id
-
+          const showDayPicker = node.level === 'month' || node.level === 'year'
           return (
             <div
               key={node.id}
               className={`nc-message-timeline-row nc-message-timeline-row-${node.level}${
-                isSegment ? ' is-segment' : ''
-              }${isActive ? ' is-active' : ''}`}
-              onMouseEnter={() => {
-                if (isSegment) setHoveredSegmentId(node.id)
-              }}
-              onMouseLeave={() => {
-                if (hoveredSegmentId === node.id) setHoveredSegmentId(null)
-              }}
+                isActive ? ' is-active' : ''
+              }`}
             >
               <button
                 type="button"
@@ -68,31 +49,91 @@ export const MessageTimeline = ({
                 onClick={() => onSelectNode(node)}
               >
                 <span className="nc-message-timeline-track" aria-hidden="true">
-                  <span
-                    className={`nc-message-timeline-dot nc-message-timeline-dot-${node.level}${
-                      isSegment ? ' is-segment' : ''
-                    }`}
-                  />
+                  <span className={`nc-message-timeline-dot nc-message-timeline-dot-${node.level}`} />
                 </span>
                 <span className="nc-message-timeline-label">{node.label}</span>
               </button>
-              {showCollapse ? (
-                <button
-                  type="button"
-                  className="nc-message-timeline-collapse"
-                  data-testid={`${workbenchSelectors.timelineItemPrefix}-collapse`}
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onCollapse()
+              {showDayPicker ? (
+                <TimelineDayPicker
+                  node={node}
+                  messageDayStarts={messageDayStarts}
+                  open={openPickerNodeId === node.id}
+                  onOpenChange={(open) => setOpenPickerNodeId(open ? node.id : null)}
+                  onPickDay={(dayStart) => {
+                    setOpenPickerNodeId(null)
+                    onPickDay(dayStart)
                   }}
-                >
-                  收起
-                </button>
+                />
               ) : null}
             </div>
           )
         })}
       </div>
+    </div>
+  )
+}
+
+type TimelineDayPickerProps = {
+  node: TimelineNode
+  messageDayStarts: number[]
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  onPickDay: (dayStart: number) => void
+}
+
+const TimelineDayPicker = ({
+  node,
+  messageDayStarts,
+  open,
+  onOpenChange,
+  onPickDay
+}: TimelineDayPickerProps): React.JSX.Element => {
+  const selectableDays = useMemo(
+    () => collectSelectableDaysForNode(node, messageDayStarts),
+    [messageDayStarts, node]
+  )
+  const selectableSet = useMemo(() => new Set(selectableDays), [selectableDays])
+  const defaultPickerValue = useMemo(() => {
+    const latest = selectableDays[selectableDays.length - 1]
+    return dayjs(latest ?? node.jumpDayStart)
+  }, [node.jumpDayStart, selectableDays])
+
+  return (
+    <div className="nc-message-timeline-picker">
+      <button
+        type="button"
+        className="nc-message-timeline-search"
+        data-testid={`${workbenchSelectors.timelineItemPrefix}-search-${node.id}`}
+        aria-label={`选择${node.label}内的日期`}
+        onClick={(event) => {
+          event.stopPropagation()
+          onOpenChange(true)
+        }}
+      >
+        <HiMagnifyingGlass className="h-3 w-3" />
+      </button>
+      <DatePicker
+        open={open}
+        onOpenChange={onOpenChange}
+        value={undefined}
+        allowClear={false}
+        showToday={false}
+        inputReadOnly
+        defaultPickerValue={defaultPickerValue}
+        disabledDate={(current) => {
+          if (!current) return true
+          const dayStart = startOfLocalDay(current.valueOf())
+          if (dayStart < node.rangeStart || dayStart >= node.rangeEnd) return true
+          return !selectableSet.has(dayStart)
+        }}
+        onChange={(value: Dayjs | null) => {
+          if (!value) return
+          onPickDay(startOfLocalDay(value.valueOf()))
+        }}
+        getPopupContainer={(trigger) => trigger.parentElement || document.body}
+        className="nc-message-timeline-datepicker"
+        popupClassName="nc-message-timeline-datepicker-popup"
+      />
     </div>
   )
 }

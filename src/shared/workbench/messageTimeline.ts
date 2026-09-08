@@ -33,21 +33,15 @@ export const endOfLocalYear = (yearStart: number): number => {
   return date.getTime()
 }
 
-export type TimelineExpansion =
-  | { kind: 'none' }
-  | { kind: 'month'; monthStart: number }
-  | { kind: 'year'; yearStart: number }
-
 export type TimelineNodeLevel = 'day' | 'month' | 'year'
 
 export type TimelineNode = {
   id: string
   level: TimelineNodeLevel
-  /** Expanded parent rendered as a faint segment marker */
-  role: 'node' | 'segment'
   label: string
   rangeStart: number
   rangeEnd: number
+  /** Earliest local day with messages in this node range */
   jumpDayStart: number
 }
 
@@ -72,16 +66,9 @@ export const formatTimelineMonthLabel = (monthStart: number, currentYear: number
 export const formatTimelineYearLabel = (yearStart: number): string =>
   String(new Date(yearStart).getFullYear())
 
-export const formatTimelineSegmentLabel = (node: Pick<TimelineNode, 'level' | 'rangeStart'>): string => {
-  if (node.level === 'year') return formatTimelineYearLabel(node.rangeStart)
-  if (node.level === 'month') return String(new Date(node.rangeStart).getMonth() + 1)
-  return formatTimelineDayLabel(node.rangeStart, startOfLocalDay(Date.now()))
-}
-
 const dayNode = (dayStart: number, todayStart: number): TimelineNode => ({
   id: `day-${dayStart}`,
   level: 'day',
-  role: 'node',
   label: formatTimelineDayLabel(dayStart, todayStart),
   rangeStart: dayStart,
   rangeEnd: dayStart + DAY_MS,
@@ -93,7 +80,6 @@ const monthNode = (monthStart: number, days: readonly number[], currentYear: num
   return {
     id: `month-${monthStart}`,
     level: 'month',
-    role: 'node',
     label: formatTimelineMonthLabel(monthStart, currentYear),
     rangeStart: monthStart,
     rangeEnd: endOfLocalMonth(monthStart),
@@ -106,7 +92,6 @@ const yearNode = (yearStart: number, days: readonly number[]): TimelineNode => {
   return {
     id: `year-${yearStart}`,
     level: 'year',
-    role: 'node',
     label: formatTimelineYearLabel(yearStart),
     rangeStart: yearStart,
     rangeEnd: endOfLocalYear(yearStart),
@@ -114,50 +99,39 @@ const yearNode = (yearStart: number, days: readonly number[]): TimelineNode => {
   }
 }
 
-const monthSegment = (monthStart: number, days: readonly number[]): TimelineNode => {
-  const sorted = [...days].sort((left, right) => left - right)
-  return {
-    id: `segment-month-${monthStart}`,
-    level: 'month',
-    role: 'segment',
-    label: String(new Date(monthStart).getMonth() + 1),
-    rangeStart: monthStart,
-    rangeEnd: endOfLocalMonth(monthStart),
-    jumpDayStart: sorted[0] ?? monthStart
-  }
+/** Days with messages that fall inside a month/year node (for DatePicker). */
+export const collectSelectableDaysForNode = (
+  node: Pick<TimelineNode, 'level' | 'rangeStart' | 'rangeEnd'>,
+  messageDayStarts: readonly number[]
+): number[] => {
+  if (node.level === 'day') return [node.rangeStart]
+  return messageDayStarts.filter(
+    (dayStart) => dayStart >= node.rangeStart && dayStart < node.rangeEnd
+  )
 }
 
-const yearSegment = (yearStart: number, days: readonly number[]): TimelineNode => {
-  const sorted = [...days].sort((left, right) => left - right)
-  return {
-    id: `segment-year-${yearStart}`,
-    level: 'year',
-    role: 'segment',
-    label: formatTimelineYearLabel(yearStart),
-    rangeStart: yearStart,
-    rangeEnd: endOfLocalYear(yearStart),
-    jumpDayStart: sorted[0] ?? yearStart
-  }
-}
-
-const foldDays = (input: {
-  days: readonly number[]
-  todayStart: number
-  currentYear: number
-  allowRecentDays: boolean
+export const buildTimelineNodes = (input: {
+  messageDayStarts: readonly number[]
+  now?: number
 }): TimelineNode[] => {
-  const recentStart = input.todayStart - (TIMELINE_RECENT_DAY_COUNT - 1) * DAY_MS
+  const now = input.now ?? Date.now()
+  const todayStart = startOfLocalDay(now)
+  const currentYear = new Date(todayStart).getFullYear()
+  const days = collectMessageDayStarts(input.messageDayStarts)
+  if (days.length === 0) return []
+
+  const recentStart = todayStart - (TIMELINE_RECENT_DAY_COUNT - 1) * DAY_MS
   const monthBuckets = new Map<number, number[]>()
   const yearBuckets = new Map<number, number[]>()
   const recentDays: number[] = []
 
-  for (const dayStart of input.days) {
-    if (input.allowRecentDays && dayStart >= recentStart) {
+  for (const dayStart of days) {
+    if (dayStart >= recentStart) {
       recentDays.push(dayStart)
       continue
     }
     const year = new Date(dayStart).getFullYear()
-    if (year === input.currentYear) {
+    if (year === currentYear) {
       const monthStart = startOfLocalMonth(dayStart)
       const bucket = monthBuckets.get(monthStart) || []
       bucket.push(dayStart)
@@ -173,96 +147,15 @@ const foldDays = (input: {
   const nodes: TimelineNode[] = [
     ...[...yearBuckets.entries()]
       .sort((left, right) => left[0] - right[0])
-      .map(([yearStart, days]) => yearNode(yearStart, days)),
+      .map(([yearStart, yearDays]) => yearNode(yearStart, yearDays)),
     ...[...monthBuckets.entries()]
       .sort((left, right) => left[0] - right[0])
-      .map(([monthStart, days]) => monthNode(monthStart, days, input.currentYear)),
-    ...recentDays.sort((left, right) => left - right).map((dayStart) => dayNode(dayStart, input.todayStart))
+      .map(([monthStart, monthDays]) => monthNode(monthStart, monthDays, currentYear)),
+    ...recentDays.sort((left, right) => left - right).map((dayStart) => dayNode(dayStart, todayStart))
   ]
-  return nodes.sort((left, right) => left.rangeStart - right.rangeStart || left.jumpDayStart - right.jumpDayStart)
-}
-
-const monthsFromDays = (
-  days: readonly number[],
-  currentYear: number
-): TimelineNode[] => {
-  const monthBuckets = new Map<number, number[]>()
-  for (const dayStart of days) {
-    const monthStart = startOfLocalMonth(dayStart)
-    const bucket = monthBuckets.get(monthStart) || []
-    bucket.push(dayStart)
-    monthBuckets.set(monthStart, bucket)
-  }
-  return [...monthBuckets.entries()]
-    .sort((left, right) => left[0] - right[0])
-    .map(([monthStart, monthDays]) => monthNode(monthStart, monthDays, currentYear))
-}
-
-export const buildTimelineNodes = (input: {
-  messageDayStarts: readonly number[]
-  now?: number
-  expansion?: TimelineExpansion
-}): TimelineNode[] => {
-  const now = input.now ?? Date.now()
-  const todayStart = startOfLocalDay(now)
-  const currentYear = new Date(todayStart).getFullYear()
-  const days = collectMessageDayStarts(input.messageDayStarts)
-  if (days.length === 0) return []
-
-  const expansion = input.expansion ?? { kind: 'none' }
-
-  if (expansion.kind === 'month') {
-    const inMonth = days.filter((dayStart) => startOfLocalMonth(dayStart) === expansion.monthStart)
-    const outMonth = days.filter((dayStart) => startOfLocalMonth(dayStart) !== expansion.monthStart)
-    const before = outMonth.filter((dayStart) => dayStart < expansion.monthStart)
-    const after = outMonth.filter((dayStart) => dayStart >= endOfLocalMonth(expansion.monthStart))
-    return [
-      ...foldDays({
-        days: before,
-        todayStart,
-        currentYear,
-        allowRecentDays: false
-      }),
-      monthSegment(expansion.monthStart, inMonth),
-      ...inMonth.map((dayStart) => dayNode(dayStart, todayStart)),
-      ...foldDays({
-        days: after,
-        todayStart,
-        currentYear,
-        allowRecentDays: false
-      })
-    ]
-  }
-
-  if (expansion.kind === 'year') {
-    const inYear = days.filter((dayStart) => startOfLocalYear(dayStart) === expansion.yearStart)
-    const outYear = days.filter((dayStart) => startOfLocalYear(dayStart) !== expansion.yearStart)
-    const before = outYear.filter((dayStart) => dayStart < expansion.yearStart)
-    const after = outYear.filter((dayStart) => dayStart >= endOfLocalYear(expansion.yearStart))
-    return [
-      ...foldDays({
-        days: before,
-        todayStart,
-        currentYear,
-        allowRecentDays: false
-      }),
-      yearSegment(expansion.yearStart, inYear),
-      ...monthsFromDays(inYear, currentYear),
-      ...foldDays({
-        days: after,
-        todayStart,
-        currentYear,
-        allowRecentDays: false
-      })
-    ]
-  }
-
-  return foldDays({
-    days,
-    todayStart,
-    currentYear,
-    allowRecentDays: true
-  })
+  return nodes.sort(
+    (left, right) => left.rangeStart - right.rangeStart || left.jumpDayStart - right.jumpDayStart
+  )
 }
 
 export const resolveActiveTimelineNodeId = (input: {
@@ -271,7 +164,7 @@ export const resolveActiveTimelineNodeId = (input: {
 }): string | null => {
   if (input.activeDayStart == null || input.nodes.length === 0) return null
   const dayHit = input.nodes.find(
-    (node) => node.level === 'day' && node.role === 'node' && node.rangeStart === input.activeDayStart
+    (node) => node.level === 'day' && node.rangeStart === input.activeDayStart
   )
   if (dayHit) return dayHit.id
   const containing = [...input.nodes]

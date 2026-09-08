@@ -122,8 +122,7 @@ describe('ai unit context budget node', () => {
     const ctxWithSmallWindow = {
       ...ctx,
       humanRuntimeOverrides: {
-        modelContextWindowTokens: 600,
-        keepRecentTokens: 80
+        modelContextWindowTokens: 600
       },
       appendMessageLog: async (entries) => {
         appended.push(...entries.map((entry) => ({ kind: entry.kind })))

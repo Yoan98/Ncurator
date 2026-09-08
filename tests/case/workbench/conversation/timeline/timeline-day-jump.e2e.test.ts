@@ -47,7 +47,7 @@ describe('workbench conversation e2e', () => {
           await timeline.waitFor({ state: 'visible' })
           await runtime.captureScreenshot({
             name: 'timeline-single-today',
-            message: '仅今天节点：实线在节点附近清晰，空段向上渐隐。'
+            message: '仅今天节点：实线从最新节点向上渐隐，节点下方无线。'
           })
           const todayStart = startOfLocalDay(Date.now())
           const labels = ((await timeline.textContent()) || '').replace(/\s+/g, '')
@@ -58,28 +58,63 @@ describe('workbench conversation e2e', () => {
               element.scrollHeight > element.clientHeight + 1
             )
           })
+          const layoutBefore = await page.evaluate(() => {
+            const sidebar = document.querySelector('[data-testid="workbench-sidebar"]')
+            const composer = document.querySelector('[data-testid="workbench-composer-shell"]')
+            const scroller = document.querySelector('.nc-document-scroll')
+            return {
+              sidebarTop: sidebar?.getBoundingClientRect().top ?? null,
+              composerTop: composer?.getBoundingClientRect().top ?? null,
+              scrollTop: scroller instanceof HTMLElement ? scroller.scrollTop : null
+            }
+          })
           await getWorkbenchLocator(
             page,
             `${workbenchSelectors.timelineItemPrefix}-day-${todayStart}`
           ).click()
+          await page.waitForTimeout(400)
+          const layoutAfter = await page.evaluate(() => {
+            const sidebar = document.querySelector('[data-testid="workbench-sidebar"]')
+            const composer = document.querySelector('[data-testid="workbench-composer-shell"]')
+            const scroller = document.querySelector('.nc-document-scroll')
+            return {
+              sidebarTop: sidebar?.getBoundingClientRect().top ?? null,
+              composerTop: composer?.getBoundingClientRect().top ?? null,
+              scrollTop: scroller instanceof HTMLElement ? scroller.scrollTop : null
+            }
+          })
           const userMessage = getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.userMessagePrefix
           ).first()
           await userMessage.waitFor({ state: 'visible' })
           const userMessageInView = await userMessage.evaluate((element) => {
+            const scroller = document.querySelector('.nc-document-scroll')
+            if (!(scroller instanceof HTMLElement)) return false
+            const scrollerRect = scroller.getBoundingClientRect()
             const rect = element.getBoundingClientRect()
-            return rect.top >= 0 && rect.bottom <= window.innerHeight + 80
+            return rect.top >= scrollerRect.top && rect.bottom <= scrollerRect.bottom + 80
           })
+          const layoutUnchanged =
+            layoutBefore.sidebarTop != null &&
+            layoutAfter.sidebarTop != null &&
+            layoutBefore.composerTop != null &&
+            layoutAfter.composerTop != null &&
+            layoutBefore.scrollTop != null &&
+            layoutAfter.scrollTop != null &&
+            Math.abs(layoutBefore.sidebarTop - layoutAfter.sidebarTop) < 1 &&
+            Math.abs(layoutBefore.composerTop - layoutAfter.composerTop) < 1 &&
+            Math.abs(layoutBefore.scrollTop - layoutAfter.scrollTop) < 1
           await runtime.captureScreenshot({
             name: 'timeline-after-jump',
-            message: '点击今天后消息区落到当天最早一条。'
+            message: '点击今天后消息区落到当天最早一条，侧栏与 Composer 不跟着抖。'
           })
 
           return {
             labels,
             timelineScrollable,
             userMessageInView,
+            layoutUnchanged,
             finalAnswerText: evidence.finalAnswerText
           }
         },
@@ -90,10 +125,12 @@ describe('workbench conversation e2e', () => {
               !result.labels.includes('前天') &&
               result.timelineScrollable === false &&
               result.userMessageInView &&
+              result.layoutUnchanged &&
               result.finalAnswerText.trim().length > 0,
             {
               name: 'workbench-timeline-day-jump',
-              message: '时间轴应仅展示有消息的今天，无独立滚动，点击后应落到当天最早一条消息。',
+              message:
+                '时间轴应仅展示有消息的今天，无独立滚动，点击已在视口内的今天不带动侧栏/Composer。',
               data: result
             }
           )

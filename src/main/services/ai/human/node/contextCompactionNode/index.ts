@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { SystemMessage, type BaseMessage } from '@langchain/core/messages'
 import type { AiRunContext } from '../../../types'
-import { resolveCompactionKeepRecentTokens } from '../../constants'
+import { resolveCompactionTailTokens, resolveContextWindowTokens } from '../../constants'
 import {
   buildHistoryCompactionPrompt,
   buildTurnPrefixCompactionPrompt,
@@ -72,8 +72,8 @@ export const createContextCompactionNode = (input: {
     input.cache.currentState = state
 
     const messages = input.cache.messages || []
-    const retainTokens = resolveCompactionKeepRecentTokens(
-      input.ctx.humanRuntimeOverrides?.keepRecentTokens
+    const retainTokens = resolveCompactionTailTokens(
+      resolveContextWindowTokens(input.ctx.humanRuntimeOverrides?.modelContextWindowTokens)
     )
     if (!hasCompressibleCompactionHistory(messages, retainTokens)) {
       return {

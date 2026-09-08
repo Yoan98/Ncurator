@@ -9,7 +9,6 @@ import {
   HiOutlineClock,
   HiOutlinePencilSquare,
   HiOutlineQuestionMarkCircle,
-  HiOutlineSparkles,
   HiPhoto,
   HiPlus,
   HiStop,
@@ -17,6 +16,7 @@ import {
   HiXMark
 } from 'react-icons/hi2'
 import { BsPinAngle, BsPinAngleFill } from 'react-icons/bs'
+import { PiEraser } from 'react-icons/pi'
 import type {
   AiArtifactRef,
   AiFileChangeRecord,
@@ -63,12 +63,13 @@ import {
   collectMessageDayStarts,
   resolveActiveTimelineNodeId,
   startOfLocalDay,
-  startOfLocalMonth,
-  startOfLocalYear,
-  type TimelineExpansion,
   type TimelineNode,
   DAY_MS
 } from '../../../shared/workbench/messageTimeline'
+import {
+  collectUserMessageTimeIds,
+  formatUserMessageTimeLabel
+} from '../../../shared/workbench/messageTimeLabel'
 import WorkbenchContentPanel from '../components/workbench/WorkbenchContentPanel'
 import ScheduledTasksView from '../components/scheduledTasks/ScheduledTasksView'
 import ScheduledTaskCountChip from '../components/scheduledTasks/ScheduledTaskCountChip'
@@ -186,26 +187,6 @@ const getDroppedFiles = (transfer: DataTransfer): File[] =>
 
 const detectRendererPlatform = (): string =>
   navigator.platform.toLowerCase().includes('win') ? 'win32' : 'darwin'
-
-const padTimePart = (value: number): string => String(value).padStart(2, '0')
-
-const formatUserMessageTime = (timestamp: number, now = Date.now()): string => {
-  const date = new Date(timestamp)
-  const time = `${padTimePart(date.getHours())}:${padTimePart(date.getMinutes())}`
-  const ageMs = now - timestamp
-  if (ageMs >= 0 && ageMs < 24 * 60 * 60 * 1000) return time
-
-  const today = new Date(now)
-  today.setHours(0, 0, 0, 0)
-  const messageDay = new Date(timestamp)
-  messageDay.setHours(0, 0, 0, 0)
-  const dayGap = Math.round((today.getTime() - messageDay.getTime()) / (24 * 60 * 60 * 1000))
-  if (dayGap === 1) return `昨天 ${time}`
-  if (dayGap > 1 && dayGap < 7) {
-    return `${['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'][date.getDay()]} ${time}`
-  }
-  return `${date.getFullYear()}/${padTimePart(date.getMonth() + 1)}/${padTimePart(date.getDate())} ${time}`
-}
 
 const PARTNER_ROW_ACTION_CLASS =
   'flex h-6 w-6 items-center justify-center rounded-[6px] text-[#91918E] transition hover:bg-white hover:text-[#37352F]'
@@ -783,7 +764,6 @@ const ChatPage: React.FC = () => {
   const [createPartnerSubmitting, setCreatePartnerSubmitting] = useState(false)
   const [clearContextVisible, setClearContextVisible] = useState(false)
   const [busyCancelTask, setBusyCancelTask] = useState<ScheduledTask | null>(null)
-  const [timelineExpansion, setTimelineExpansion] = useState<TimelineExpansion>({ kind: 'none' })
   const [activeTimelineDayStart, setActiveTimelineDayStart] = useState<number | null>(null)
   const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>('default')
   const [composerExecutionPermission, setComposerExecutionPermission] =
@@ -1293,6 +1273,10 @@ const ChatPage: React.FC = () => {
     () => [...currentMessages].reverse().find((item) => item.role === 'user')?.id || null,
     [currentMessages]
   )
+  const userMessageTimeIds = useMemo(
+    () => collectUserMessageTimeIds(currentMessages),
+    [currentMessages]
+  )
 
   const currentApprovalItem = useMemo(() => {
     if (!pendingApprovalBatch) return null
@@ -1360,6 +1344,18 @@ const ChatPage: React.FC = () => {
     switchingPartnerId
   ])
 
+  const scrollMessageIntoDocumentView = useCallback((element: HTMLElement): void => {
+    const scroller = scrollRef.current
+    if (!scroller) return
+    const scrollerRect = scroller.getBoundingClientRect()
+    const targetRect = element.getBoundingClientRect()
+    const fullyVisible =
+      targetRect.top >= scrollerRect.top && targetRect.bottom <= scrollerRect.bottom
+    if (fullyVisible) return
+    const nextTop = scroller.scrollTop + (targetRect.top - scrollerRect.top)
+    scroller.scrollTo({ top: Math.max(0, nextTop), behavior: 'smooth' })
+  }, [])
+
   const scrollToOldestMessageOfDay = useCallback((dayStart: number, messages: ChatMessage[]): boolean => {
     const dayEnd = dayStart + DAY_MS
     const ofDay = messages.filter(
@@ -1372,9 +1368,9 @@ const ChatPage: React.FC = () => {
     const element = document.querySelector(`[data-message-id="${oldest.id}"]`)
     if (!(element instanceof HTMLElement)) return false
     shouldAutoScrollRef.current = false
-    element.scrollIntoView({ block: 'start', behavior: 'smooth' })
+    scrollMessageIntoDocumentView(element)
     return true
-  }, [])
+  }, [scrollMessageIntoDocumentView])
 
   const jumpToTimelineDay = useCallback(
     (dayStart: number): void => {
@@ -1395,20 +1391,6 @@ const ChatPage: React.FC = () => {
 
   const handleTimelineNodeSelect = useCallback(
     (node: TimelineNode): void => {
-      if (node.role === 'segment') {
-        jumpToTimelineDay(node.jumpDayStart)
-        return
-      }
-      if (node.level === 'day') {
-        jumpToTimelineDay(node.jumpDayStart)
-        return
-      }
-      if (node.level === 'month') {
-        setTimelineExpansion({ kind: 'month', monthStart: node.rangeStart })
-        jumpToTimelineDay(node.jumpDayStart)
-        return
-      }
-      setTimelineExpansion({ kind: 'year', yearStart: node.rangeStart })
       jumpToTimelineDay(node.jumpDayStart)
     },
     [jumpToTimelineDay]
@@ -1890,7 +1872,6 @@ const ChatPage: React.FC = () => {
       if (partnerSwitchRequestRef.current !== requestId) return
       applyPartnerUiState(partnerId, opened.uiState || null)
       setClearContextVisible(false)
-      setTimelineExpansion({ kind: 'none' })
       setActiveTimelineDayStart(null)
       pendingTimelineJumpDayRef.current = null
       const restoredActiveTab = opened.uiState?.panel.tabs.find(
@@ -3530,7 +3511,6 @@ const ChatPage: React.FC = () => {
           setCurrentMessages([])
           setHasMoreMessagesBefore(false)
           setClearContextVisible(false)
-          setTimelineExpansion({ kind: 'none' })
           setActiveTimelineDayStart(null)
           void loadPartners()
         } catch (error) {
@@ -3909,14 +3889,23 @@ const ChatPage: React.FC = () => {
   const renderUserMessage = (messageItem: ChatMessage): React.ReactNode => {
     const contentNodes = getUserMessageContentNodes(messageItem)
     const canEdit = Boolean(currentPartnerId) && !aiRunId && messageItem.id === latestUserMessageId
+    const showTime = userMessageTimeIds.has(messageItem.id)
     return (
       <div
         key={messageItem.id}
         data-message-id={messageItem.id}
-        className="group/user-message flex justify-end"
         data-testid={`${workbenchSelectors.userMessagePrefix}-${messageItem.id}`}
       >
-        <div className="flex min-w-0 max-w-[66%] flex-col items-end">
+        {showTime ? (
+          <div
+            className="nc-message-time"
+            data-testid={`${workbenchSelectors.userMessageTimePrefix}-${messageItem.id}`}
+          >
+            {formatUserMessageTimeLabel(messageItem.timestamp)}
+          </div>
+        ) : null}
+        <div className="group/user-message flex justify-end">
+          <div className="flex min-w-0 max-w-[66%] flex-col items-end">
           {messageItem.attachments && messageItem.attachments.length > 0 ? (
             <div className="mb-2 flex max-w-full flex-nowrap justify-end gap-2 overflow-x-auto pb-1">
               {messageItem.attachments.map((attachment) => (
@@ -3994,7 +3983,6 @@ const ChatPage: React.FC = () => {
             className="mt-1 flex h-6 items-center justify-end gap-1.5 text-[12px] leading-none text-[#9B9A97] opacity-0 transition-opacity duration-150 group-hover/user-message:opacity-100"
             data-testid={`${workbenchSelectors.userMessageActionsPrefix}-${messageItem.id}`}
           >
-            <span>{formatUserMessageTime(messageItem.timestamp)}</span>
             <Tooltip title="复制">
               <button
                 type="button"
@@ -4019,6 +4007,7 @@ const ChatPage: React.FC = () => {
                 </button>
               </Tooltip>
             ) : null}
+          </div>
           </div>
         </div>
       </div>
@@ -4072,15 +4061,18 @@ const ChatPage: React.FC = () => {
     [currentPartnerId, saveComposerDraftForPartner]
   )
 
-  const timelineNodes = useMemo(() => {
-    const messageDayStarts = collectMessageDayStarts(
-      currentMessages.map((item) => item.timestamp)
-    )
-    return buildTimelineNodes({
-      messageDayStarts,
-      expansion: timelineExpansion
-    })
-  }, [currentMessages, timelineExpansion])
+  const timelineMessageDayStarts = useMemo(
+    () => collectMessageDayStarts(currentMessages.map((item) => item.timestamp)),
+    [currentMessages]
+  )
+
+  const timelineNodes = useMemo(
+    () =>
+      buildTimelineNodes({
+        messageDayStarts: timelineMessageDayStarts
+      }),
+    [timelineMessageDayStarts]
+  )
 
   const activeTimelineNodeId = useMemo(
     () =>
@@ -4090,24 +4082,6 @@ const ChatPage: React.FC = () => {
       }),
     [activeTimelineDayStart, timelineNodes]
   )
-
-  useEffect(() => {
-    if (timelineExpansion.kind === 'none') return
-    const messageDayStarts = collectMessageDayStarts(
-      currentMessages.map((item) => item.timestamp)
-    )
-    if (timelineExpansion.kind === 'month') {
-      const stillPresent = messageDayStarts.some(
-        (dayStart) => startOfLocalMonth(dayStart) === timelineExpansion.monthStart
-      )
-      if (!stillPresent) setTimelineExpansion({ kind: 'none' })
-      return
-    }
-    const stillPresent = messageDayStarts.some(
-      (dayStart) => startOfLocalYear(dayStart) === timelineExpansion.yearStart
-    )
-    if (!stillPresent) setTimelineExpansion({ kind: 'none' })
-  }, [currentMessages, timelineExpansion])
 
   useEffect(() => {
     if (activeTimelineDayStart != null || currentMessages.length === 0) return
@@ -4495,10 +4469,10 @@ const ChatPage: React.FC = () => {
                 {!isNewSession ? (
                   <MessageTimeline
                     nodes={timelineNodes}
+                    messageDayStarts={timelineMessageDayStarts}
                     activeNodeId={activeTimelineNodeId}
-                    expansion={timelineExpansion}
                     onSelectNode={handleTimelineNodeSelect}
-                    onCollapse={() => setTimelineExpansion({ kind: 'none' })}
+                    onPickDay={jumpToTimelineDay}
                   />
                 ) : null}
                 <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
@@ -4692,7 +4666,7 @@ const ChatPage: React.FC = () => {
                               ) : null}
                               {clearContextVisible ? (
                                 <MessageActionCapsule
-                                  icon={<HiOutlineSparkles className="h-3.5 w-3.5" />}
+                                  icon={<PiEraser className="h-3.5 w-3.5" />}
                                   label="清空消息记录"
                                   tooltip={`清空「${currentPartner?.name || '伙伴'}」的全部消息记录，无法恢复。`}
                                   onAction={handleClearPartnerContext}

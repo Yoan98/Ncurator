@@ -19,7 +19,6 @@ import {
 
 const PARTNER_ID = 'live-context-compaction'
 const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
-const LIVE_CONTEXT_COMPACTION_KEEP_RECENT_TOKENS = 5_000
 /** Run2 首轮 brain 的 cachedInputTokens 相对 Run1 末次 brain inputTokens 的最低比例。 */
 const RUN2_PREFIX_CACHE_MIN_RATIO = 0.5
 
@@ -222,8 +221,7 @@ describe('ai human live backend', () => {
           const runnerOptions = {
             partnerId: PARTNER_ID,
             humanRuntimeOverrides: {
-              modelContextWindowTokens: LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS,
-              keepRecentTokens: LIVE_CONTEXT_COMPACTION_KEEP_RECENT_TOKENS
+              modelContextWindowTokens: LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS
             }
           }
           const run1Output = await createHumanTestRunner(runtime, runnerOptions).run({

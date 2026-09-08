@@ -15,7 +15,23 @@ import type { ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../src/
 import { createCurrentBrainUserMessage } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
+import {
+  CONTEXT_COMPACTION_TAIL_RATIO,
+  CONTEXT_COMPACTION_TRIGGER_RATIO,
+  resolveCompactionTailTokens
+} from '../../../../src/main/services/ai/human/constants'
 import { estimateMessagesForContext } from '../../../../src/main/services/ai/human/memory/multimodal'
+
+const contextWindowForTail = (retainTokens: number): number => {
+  let windowTokens = Math.max(
+    1,
+    Math.ceil(retainTokens / (CONTEXT_COMPACTION_TRIGGER_RATIO * CONTEXT_COMPACTION_TAIL_RATIO))
+  )
+  while (resolveCompactionTailTokens(windowTokens) < retainTokens) {
+    windowTokens += 1
+  }
+  return windowTokens
+}
 
 const createContext = (): AiRunContext =>
   ({
@@ -161,7 +177,9 @@ describe('ai human context compaction node', () => {
     const ctx = {
       ...createContext(),
       humanRuntimeOverrides: {
-        keepRecentTokens: estimateMessagesForContext([current, ...tailPair])
+        modelContextWindowTokens: contextWindowForTail(
+          estimateMessagesForContext([current, ...tailPair])
+        )
       },
       loadMessageLog: async () => [
         logRecord(1, {
@@ -265,7 +283,7 @@ describe('ai human context compaction node', () => {
     const ctx = {
       ...createContext(),
       humanRuntimeOverrides: {
-        keepRecentTokens: estimateMessagesForContext(lastPair)
+        modelContextWindowTokens: contextWindowForTail(estimateMessagesForContext(lastPair))
       },
       loadMessageLog: async () => [
         logRecord(1, {

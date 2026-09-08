@@ -336,7 +336,6 @@ export type AiRunDeps = {
   humanRuntimeOverrides?: {
     graphRecursionLimit?: number
     modelContextWindowTokens?: number
-    keepRecentTokens?: number
     terminalEnvironment?: Record<string, string>
   }
 }
@@ -354,7 +353,6 @@ export type AiRunContext = {
   humanRuntimeOverrides?: {
     graphRecursionLimit?: number
     modelContextWindowTokens?: number
-    keepRecentTokens?: number
     terminalEnvironment?: Record<string, string>
   }
   workspace?: AiWorkspaceBinding

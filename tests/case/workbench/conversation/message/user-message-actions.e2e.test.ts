@@ -238,6 +238,13 @@ describe('workbench conversation e2e', () => {
           await editButton.waitFor({ state: 'visible' })
           const actionButtonsVisible =
             (await copyButton.isVisible()) && (await editButton.isVisible())
+          const actionsText = ((await latestUserMessageActions(page).textContent()) || '').trim()
+          const timeLabel = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.userMessageTimePrefix
+          ).first()
+          const timeLabelVisible = await timeLabel.isVisible().catch(() => false)
+          const timeLabelText = ((await timeLabel.textContent().catch(() => '')) || '').trim()
           await copyButton.click()
           await waitForAntMessageText(page, '已复制')
           await editButton.click()
@@ -273,6 +280,9 @@ describe('workbench conversation e2e', () => {
           )
           return {
             actionButtonsVisible,
+            actionsHasHoverTime: /\d{1,2}:\d{2}/.test(actionsText),
+            timeLabelVisible,
+            timeLabelText,
             messageCountAfterEdit,
             removeButtonReachable: Boolean(
               removeButtonVisible &&
@@ -296,6 +306,9 @@ describe('workbench conversation e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.actionButtonsVisible &&
+              result.actionsHasHoverTime === false &&
+              result.timeLabelVisible &&
+              /\d{1,2}:\d{2}/.test(result.timeLabelText) &&
               result.messageCountAfterEdit === 0 &&
               result.removeButtonReachable &&
               result.runningEditButtons === 0 &&
@@ -309,7 +322,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-user-message-actions-and-attachments',
               message:
-                '用户消息 hover 后应显示时间/复制/编辑；编辑会撤回 latest turn 及其消息日志并以新 run 重发；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示，文件副标题显示扩展名，输入框附件关闭按钮无遮挡。',
+                '用户消息气泡上方应居中展示时间条；hover 后应显示复制/编辑且不含时间；编辑会撤回 latest turn 及其消息日志并以新 run 重发；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示，文件副标题显示扩展名，输入框附件关闭按钮无遮挡。',
               data: result
             }
           )

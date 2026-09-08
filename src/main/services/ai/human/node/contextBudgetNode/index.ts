@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto'
 import type { BrainContextBudgetSnapshot } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import {
-  CONTEXT_COMPACTION_TRIGGER_RATIO,
-  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
-  resolveCompactionKeepRecentTokens
+  resolveCompactionTailTokens,
+  resolveCompactionTriggerTokens,
+  resolveContextWindowTokens
 } from '../../constants'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateMessagesForContext } from '../../memory/multimodal'
@@ -69,16 +69,12 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
     input.ctx.checkCancelled()
     input.cache.currentState = state
 
-    const contextWindowTokens =
-      input.ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-      DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
-    const compactionTriggerTokens = Math.floor(
-      contextWindowTokens * CONTEXT_COMPACTION_TRIGGER_RATIO
+    const contextWindowTokens = resolveContextWindowTokens(
+      input.ctx.humanRuntimeOverrides?.modelContextWindowTokens
     )
+    const compactionTriggerTokens = resolveCompactionTriggerTokens(contextWindowTokens)
     const messages = input.cache.messages || []
-    const retainTokens = resolveCompactionKeepRecentTokens(
-      input.ctx.humanRuntimeOverrides?.keepRecentTokens
-    )
+    const retainTokens = resolveCompactionTailTokens(contextWindowTokens)
     const hasCompressibleHistory = hasCompressibleCompactionHistory(messages, retainTokens)
     const currentMessageTokenEstimate = estimateMessagesForContext(messages)
     const currentUser = messages.find(isCurrentBrainUserMessage)
