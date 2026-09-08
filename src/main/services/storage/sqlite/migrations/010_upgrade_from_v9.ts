@@ -159,9 +159,9 @@ CREATE TABLE scheduled_task (
   ai_preference TEXT NOT NULL DEFAULT 'default',
   execution_permission TEXT NOT NULL DEFAULT 'full_access',
   next_run_at INTEGER,
+  busy_cancel_notice_at INTEGER,
   created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  FOREIGN KEY (partner_id) REFERENCES partner(id) ON DELETE CASCADE
+  updated_at INTEGER NOT NULL
 );
 CREATE INDEX idx_scheduled_task_enabled
   ON scheduled_task(enabled, next_run_at);
