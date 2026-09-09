@@ -1226,6 +1226,8 @@ textarea,
 
 .nc-document-scroll {
   @apply min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-6 pt-5;
+  /* 预留滚动条槽位，避免「思考中」显隐时宽度跳动 */
+  scrollbar-gutter: stable;
   /* 把消息列表的重排/重绘限制在滚动区内，窗口缩放时不向外扩散布局代价，帮助 Chromium 更快出帧。 */
   contain: layout paint;
 }

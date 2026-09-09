@@ -358,7 +358,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：Excel 专用工具创建工作簿、用 `set_range` 写入数据和公式，并继续执行 workbook / search / range 读取和修改。
 - Why：Excel 的值与公式必须由程序真实读写，不能用模型推算或用伪造工具结果代替。
 - How：真实调用 `excel_edit` 一次一个 type 创建 xlsx，再调用 `excel_read` 的 workbook/search/range，并继续修改同一路径；另对已有 xlsx 执行修改和清空单元格，最后直接解析正式文件与 diff xlsx 文件。修改记录从 `listFileChangeRecords` 读取，不依赖工具写回。
-- Oracle：新文件只包含显式新增的 Sheet，没有默认 `Sheet1`；正式文件包含准确值和公式且不带 diff 边框；diff 文件对新增、修改显示绿色中等粗细边框，对删除显示红色中等粗细边框并保留修改前值；同一路径只保留一条修改记录，对齐 `WB-EXCEL-001`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`。
+- Oracle：新文件只包含显式新增的 Sheet，没有默认 `Sheet1`；正式文件包含准确值和公式且不带 diff 边框；diff 文件对新增、修改显示绿色中等粗细边框，对删除显示红色中等粗细边框并保留修改前值；同一路径只保留一条修改记录且差异相对首次写入前 baseline，对齐 `WB-EXCEL-001`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`（AC3 记录/baseline **只在本侧硬断言**，Workbench e2e 不重复）。
 - Not：不验证 human 是否会选择 Excel 技能，也不评价表格视觉设计。
 
 ##### `excel-read-search-and-format-boundaries`

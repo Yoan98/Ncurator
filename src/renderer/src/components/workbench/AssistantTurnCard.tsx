@@ -630,7 +630,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${messageId}-thinking`}
                 >
                   <span className="workbench-thinking-shimmer font-medium text-[#37352F]">
-                    偷偷思考中
+                    思考中
                   </span>
                 </div>
               ) : null}

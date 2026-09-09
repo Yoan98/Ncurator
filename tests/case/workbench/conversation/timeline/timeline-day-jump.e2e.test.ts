@@ -93,28 +93,25 @@ describe('workbench conversation e2e', () => {
             if (!(scroller instanceof HTMLElement)) return false
             const scrollerRect = scroller.getBoundingClientRect()
             const rect = element.getBoundingClientRect()
-            return rect.top >= scrollerRect.top && rect.bottom <= scrollerRect.bottom + 80
+            return rect.top >= scrollerRect.top - 2 && rect.top <= scrollerRect.top + 80
           })
-          const layoutUnchanged =
+          const chromeUnchanged =
             layoutBefore.sidebarTop != null &&
             layoutAfter.sidebarTop != null &&
             layoutBefore.composerTop != null &&
             layoutAfter.composerTop != null &&
-            layoutBefore.scrollTop != null &&
-            layoutAfter.scrollTop != null &&
             Math.abs(layoutBefore.sidebarTop - layoutAfter.sidebarTop) < 1 &&
-            Math.abs(layoutBefore.composerTop - layoutAfter.composerTop) < 1 &&
-            Math.abs(layoutBefore.scrollTop - layoutAfter.scrollTop) < 1
+            Math.abs(layoutBefore.composerTop - layoutAfter.composerTop) < 1
           await runtime.captureScreenshot({
             name: 'timeline-after-jump',
-            message: '点击今天后消息区落到当天最早一条，侧栏与 Composer 不跟着抖。'
+            message: '点击今天后最早消息贴顶，侧栏与 Composer 不跟着抖。'
           })
 
           return {
             labels,
             timelineScrollable,
             userMessageInView,
-            layoutUnchanged,
+            chromeUnchanged,
             finalAnswerText: evidence.finalAnswerText
           }
         },
@@ -125,12 +122,12 @@ describe('workbench conversation e2e', () => {
               !result.labels.includes('前天') &&
               result.timelineScrollable === false &&
               result.userMessageInView &&
-              result.layoutUnchanged &&
+              result.chromeUnchanged &&
               result.finalAnswerText.trim().length > 0,
             {
               name: 'workbench-timeline-day-jump',
               message:
-                '时间轴应仅展示有消息的今天，无独立滚动，点击已在视口内的今天不带动侧栏/Composer。',
+                '时间轴应仅展示有消息的今天，无独立滚动，点击今天应将最早消息贴顶且不带动侧栏/Composer。',
               data: result
             }
           )

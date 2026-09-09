@@ -314,8 +314,8 @@ describe('workbench conversation e2e', () => {
               result.runningEditButtons === 0 &&
               result.messageAttachmentTexts.some((text) => text.includes('message-note.md')) &&
               result.messageAttachmentTexts.some((text) => text.includes('MD')) &&
-              result.assistantProcessTextAfterSend.includes('偷偷思考中') &&
-              (result.assistantProcessTextAfterWait.includes('偷偷思考中') ||
+              result.assistantProcessTextAfterSend.includes('思考中') &&
+              (result.assistantProcessTextAfterWait.includes('思考中') ||
                 result.assistantProcessTextAfterWait.includes('处理中')) &&
               result.interruptedRunCancelled &&
               result.attachmentsAboveBubble,

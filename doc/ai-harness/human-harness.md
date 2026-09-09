@@ -21,12 +21,13 @@ flowchart TD
   DP -->|learn_skill| LN[learning]
   DP -->|update_plan| PN[plan]
   DP -->|其余工具| HN[hand]
-  LN --> CB
-  PN --> CB
-  HN --> CB
+  LN --> DP
+  PN --> DP
+  HN --> DP
+  DP -->|队列空| CB
 ```
 
-**循环主干**：`context_budget → brain → dispatch → (learning | plan | hand) → context_budget`。
+**循环主干**：`context_budget → brain → dispatch → (learning | plan | hand) → dispatch →（队列空）context_budget`。
 
 ### 1.2 节点职责
 
@@ -35,7 +36,7 @@ flowchart TD
 | 节点 | 调模型 | 写 log | 改 runtime cache |
 |------|--------|--------|------------------|
 | `context_budget` | 否 | 本轮首次进循环时写 `user`（压缩前也会写） | 判定 compaction；不拼消息 |
-| `context_compaction` | 是（压缩模型） | `compaction_checkpoint`（含摘要） | **整段替换** messages 为 System + 合成 checkpoint User + `seq > coveredThroughSeq` 原文（第 5 节） |
+| `context_compaction` | 是（压缩模型） | `compaction_checkpoint`（含摘要） | **整段替换** messages 为 System + 合成 checkpoint User + tail 原文（第 5 节） |
 | `brain` | 是（主模型） | `thinking_*`；**仅当有 `toolCalls`（或截断 / 内容安全）时写 `assistant`** | 有 tool 时 append assistant；**不** refresh build user |
 | `dispatch` | 否 | 否 | 消费 `tool_calls` 队列，路由下一 stage |
 | `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`** | 加载 skill 工具；**不**改 build user |
@@ -55,7 +56,7 @@ flowchart TD
 | `update_plan` | `plan` | 连续同类 call 合并一批 |
 | 其余 | `hand` | 连续同类 call 合并一批 |
 
-`learning` / `plan` / `hand` 执行完后：`stage → context_budget`（不是直接回 brain）。
+`learning` / `plan` / `hand` 执行完后先回 `dispatch` 继续消费队列；**队列空**才 `stage → context_budget`（不是直接回 brain）。
 `brain` 在 schema 校验前对全部 call 做 `normalizeToolCallArgs`；`learn_skill` / `update_plan` 的参数校验由各节点负责。
 
 ### 1.4 启动与 cache 初始化
@@ -73,7 +74,7 @@ flowchart TD
 | `messages` | brain 请求的 LangChain 消息序 |
 | `currentUserMessageIndex` | 当前 run 的 build user 下标（同 run refresh；resume 时为末尾） |
 | `currentUserLogAppended` | 本 run 是否已写 log `user` |
-| `messageLogRecords` | 启动时快照；compaction 后刷新 |
+| `messageLogRecords` | 启动时 log 快照（仅初始化用；compaction 后不刷新，书签以 log 为准） |
 | `lastBrainInputTokens` | 预算估算；compaction 后需 fresh usage |
 
 Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `messagesFromLogEntries`，与新 run 投影同一入口。System、checkpoint User、当前 build User 除外。禁止 push 流式 AIMessage；`context_budget` 已写入的 log `user` 不得再投影一遍。
@@ -320,6 +321,13 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 投影分两路：`projectMessageLogRecords` 产出 plan / skill / checkpoint / 过程 tail（**过滤掉 user**）；`projectBrainMessagesFromLog` 再拼 checkpoint User、历史 build user 与本轮 build user。若有 `compaction_checkpoint`，只保留 `seq > coveredThroughSeq`。graph 再拼 System。Compaction / Resume / 前缀缓存见第 4–6 节。
 
+**两条组装路径**（勿混）：
+
+| 时机 | 谁拼 messages | 形态 |
+|------|---------------|------|
+| **新 run / resume 启动** | `projectBrainMessagesFromLog` + graph 包 System | `[System] + [checkpoint?] + [seq > covered 原文] + [本轮新 build User]` |
+| **同 run 刚压完** | `buildCompactedMessages`（runtime 整段替换） | `[System] + [checkpoint] + [当时留下的 tail 原文]`；当前 build User 若在 tail 里则保留，不再末尾重投影一条 |
+
 ```mermaid
 flowchart TD
   Log[(chat_session_message_log)]
@@ -400,7 +408,7 @@ flowchart TD
 
 ### 3.3 稳态投影规则
 
-从 log 投影发给模型的数组（compaction / resume 见第 5–6 节）。
+从 log 投影发给模型的数组（**新 run / resume 启动**路径；同 run 压完见第 5 节 runtime 替换）。
 
 **算法**
 
@@ -428,12 +436,13 @@ annotation 扫描该伙伴剩余 log；清空消息记录会物理删除 log，�
 
 - **同 run 首次 brain**：`[System] + [User]` + 过程（可空）。
 - **同 run 后续 brain**：当前 User 不变；过程 append。
-- **compaction / resume**：数组形态见第 5、6 节。禁止 System 后面直接接 AI/tool。
+- **compaction**：同 run 走 runtime 替换；新 run 走 log 投影（第 3 节两条路径、第 5 节）。禁止 System 后面直接接 AI/tool。
+- **resume**：新 run 启动投影后再 append 本轮 User（第 6 节）。
 - **清空消息记录之后下次发送**：log 为空，`[System] + [新 User]`。
 
 **同 run 刷新**：固定 `currentUserMessageIndex`；compaction 整段替换见第 5 节。
 
-**投影不做的事**：`ai_run.partial_answer`、`ai_file_change` 不进 brain。新 User 不抄 checkpoint。
+**投影不做的事**：`ai_run.partial_answer`、`ai_file_change` 不进 brain。新 User 不抄 checkpoint。`seq <= coveredThroughSeq` 的原文与摘要不同时发送（可与 **retained** 原文 User 并排，见第 5 节）。
 
 ### 3.4 UI 投影
 
@@ -537,7 +546,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 ### 4.3 打破前缀缓存的操作
 
-仅 **Compaction**（第 5 节）改写已建立的前缀：合成 checkpoint User，被折掉的消息从 runtime 去掉，`seq > coveredThroughSeq` 的原文留下（可含多条 User）。压完当次 brain 前缀 miss；之后只 append 可再命中。
+仅 **Compaction**（第 5 节）改写已建立的前缀：合成 checkpoint User，被折掉的消息从 runtime 去掉，tail（`seq > coveredThroughSeq` 原文）留下——**可含多条边界 User，因而可与 checkpoint 并排**。压完当次 brain 前缀 miss；之后只 append 可再命中。
 
 **resume / learn_skill / update_plan 不属于打破**：resume 只在末尾追加；同 run 内技能与计划不改写 user。
 设计约束：除 compaction 外，不得 rewrite 已发送的 User 与过程。
@@ -546,25 +555,27 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 ## 5. Compaction
 
-进入 brain 前，因上下文预算触发。执行后 **整段替换** runtime messages 为 `[System, checkpoint User, seq > coveredThroughSeq 原文]`，并 **打破第 4 节前缀缓存**。允许 `[checkpoint User][原始 User]` 并排。新 User 只在末尾 append。 checkpoint User 只在发给主模型时合成，不是 log `user`。
+进入 brain 前，因上下文预算触发。执行后 **整段替换** runtime messages 为 `[System, checkpoint User, …tail]`，并 **打破第 4 节前缀缓存**。
+
+**并排是正式规则**（DeepSeek / Pi 式：摘要占位 + 切点后原文保留）。tail 含边界 User 时出现 `[checkpoint User][原始 User]`；半轮切点把该轮 User 折进摘要时则是 `[checkpoint][AI/Tool…]`。禁止的是「摘要与 **已被 covered** 的全文」同时发送，不是禁止与 retained User 相邻。checkpoint User 只在发给主模型时合成，不是 log `user`。新 run 续发时新 User 只在末尾 append。
 
 ### 5.1 触发
 
 `context_budget` 节点判定（默认窗口 256k token）：
 
-- 预算 > 窗口 × **80%**（`CONTEXT_COMPACTION_TRIGGER_RATIO`）。没到线不压。有真实 brain usage 时用 `usage + delta`；compaction 后需等下一轮真实 usage。
+- 预算 > 窗口 × **80%**（`CONTEXT_COMPACTION_TRIGGER_RATIO`）。没到线不压。有真实 brain usage 时用 `usage + delta`；compaction 后需等下一轮真实 usage（`post_compaction`）。
 - 去掉从末尾留下的 tail 之后，还剩更早的原文可折。folded 里若只有 checkpoint、没有别的原文，视为不可折，避免空转。
 - 仅当前 build user 自身超窗 → `input_too_long`，不 compaction、不写 log user。
-- 无 LLM usage 时发 `llm_usage_unavailable` 告警，预算改用消息 token estimate；estimate 超触发线且有可折历史时仍可 compaction。
-- 去掉 tail 后没有可折内容，或不拆的超大 tool 且前面没有可折跨度 → 不压。
+- 无 LLM usage 时 brain 发 `runtime_issue`（`code: llm_usage_unavailable`），预算改用消息 token estimate；estimate 超触发线且有可折历史时仍可 compaction。
+- 去掉 tail 后没有可折内容，或单组已大于 keep 且前面没有可折跨度 → 不压。
 
 ### 5.2 Tail 切点
 
-从当时发给主模型的消息数组去掉 System，**从末尾往回**累加 `estimateMessagesForContext`（文本 `ceil(字符数 / 4)` + 图 tile）。
+从当时发给主模型的消息数组去掉 System，按 **组**（边界 User 起一组，或 AI 起一组并吞其后 tool / 图片 Human）从末尾往回累加 `estimateMessagesForContext`（文本 `ceil(字符数 / 4)` + 图 tile）。
 
 - 额度：`floor(触发线 × 10%)`（`CONTEXT_COMPACTION_TAIL_RATIO`）。生产窗口 256k 时触发 204_800、tail 20_480。测试 / live 只 override 窗口，tail 由同一比例算出。
-- 碰到边界 User（string content 的 human，**不含** checkpoint）**不停**。图片合成 HumanMessage 算过程，不是边界。checkpoint User 进 compactable，但不是边界 User，避免 leftover AI/tool 被当成「checkpoint 这一轮」而把整份摘要送进半截。
-- 切断必须落在完整 assistant + 其 tool 结果上，禁止拆开一对 tool_call / result。单轮自己大于 keep 时允许切在轮中间（split）。
+- 碰到边界 User（string content 的 human，**不含** checkpoint）**不停**（整组可留在 tail）。图片合成 HumanMessage 算过程，不是边界。checkpoint User 进 compactable，但不是边界 User，避免 leftover AI/tool 被当成「checkpoint 这一轮」而把整份摘要送进半截。
+- 切断必须落在完整组上，禁止拆开一对 tool_call / result。单轮自己大于 keep 时允许切在轮中间（split）。
 - 压缩对象是切点之前的那一段。按消息顺序拼成纯文本：一轮内部不要空行；只在下一轮 `[user]` 前空一行。User 原文整段进去。这里的 tool 正文 **从头 2000 字符**；主模型 tail 里的 tool **不截**。checkpoint 按 conversation 里的一条 `[user]` 渲染（英文外壳 + `<summary>`），没有单独标签。
 - 切点落在一轮中间（tail 第一条不是边界 User）时：**两次**压缩。第一次压该轮 User **之前**的历史；第二次压该轮被切掉的前半（含 User）。无更早历史则第一次省略。已有 checkpoint 时，旧摘要作为 conversation 里的一条 `[user]` 送进历史那次，不再使用 `<previous-summary>`。
 
@@ -572,10 +583,10 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 1. `context_budget` 在进入 compaction 前，若本轮 human user 尚未写入 log，先 append `user`。
 2. 压缩模型：system 只锁角色（不要继续对话，只出摘要）。格式指令在 user 侧。切点前的原文进 `<conversation>`。历史压缩只用六栏提示词；半截压缩用三栏提示词。不要 `<previous-summary>`。各栏保持简短，保留精确路径、函数名和报错原文。
-3. 只 append **一条** `compaction_checkpoint`（`coveredThroughSeq`、`summary` 等）。`coveredThroughSeq` = 第一条留下消息的前一条。`summary` 是压缩模型原文，不含英文外壳。
-4. 整段替换 runtime：`[System, 合成 checkpoint User, seq > coveredThroughSeq 原文]`。不写 snapshot。
-5. 投影 `seq > coveredThroughSeq` 后，用 checkpoint `summary` 套外壳合成 User，放到仍留着的原文前面，禁止 System 后直接 AI。
-6. 回到 `context_budget` → brain。
+3. 算 `coveredThroughSeq`：对全伙伴 log 中 `user|assistant|tool` 可见行，取与 `countTailBookmarkMessages(tail)`（ai / tool / 边界 User 条数）对齐的 keep 窗口；`coveredThroughSeq` = 第一条 kept 可见行之前、log 中最大的 `seq`（可为 annotation）。算不出则丢弃摘要、**不写** checkpoint，runtime 不变。
+4. 只 append **一条** `compaction_checkpoint`（`coveredThroughSeq`、`summary` 等）。`summary` 是压缩模型原文，不含英文外壳。
+5. 整段替换 runtime：`[System, 合成 checkpoint User, …tail]`（`buildCompactedMessages`）。不写 snapshot；不刷新 `messageLogRecords`。
+6. 图边强制 `context_compaction → context_budget`（节点 return stage 可写 `brain`，以边为准），再进 brain。
 
 压缩 system：
 
@@ -585,7 +596,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 不要继续对话。不要回答对话里的任何问题。只输出结构化摘要。
 ```
 
-历史栏目（只有这一套；旧 checkpoint 作为 conversation 里的 `[user]` 一起压）：
+历史栏目（示意；实现侧每栏有更细填充说明。旧 checkpoint 作为 conversation 里的 `[user]` 一起压）：
 
 ```text
 ## 目标
@@ -607,7 +618,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 ## 后缀所需上下文
 ```
 
-空栏目写「无」。各栏简短；保留精确路径、函数名和报错原文。
+空栏目写「无」（部分栏提示词写明「若没有则写无」）。各栏简短；保留精确路径、函数名和报错原文。
 
 半轮落库的 `summary`：
 
@@ -633,23 +644,30 @@ The conversation history before this point was compacted into the following summ
 
 ### 5.4 示例
 
-压缩前：
+**整轮保留在 tail**（常见；允许并排）：
 
 ```text
+压缩前：
 [System]
 [User1][AI][Tool]
-[User2][AI][Tool]…   从末尾累加到 keep
-```
+[User2][AI][Tool]…   从末尾按组累加到 keep
 
 压缩后：
-
-```text
 [System]
 [User checkpoint]   外壳 + 摘要
-[User2][AI][Tool]…  seq > coveredThroughSeq 的原文
+[User2][AI][Tool]…  tail（可含边界 User）
 ```
 
-log 行 append-only 保留；`seq <= coveredThroughSeq` 的行不再进入下次 brain 投影。
+**半轮切点**（该轮 User 进摘要；checkpoint 后直接过程）：
+
+```text
+压缩后：
+[System]
+[User checkpoint]   含历史六栏 + Turn Context
+[AI][Tool]…         该轮后缀（无该轮原始 User）
+```
+
+log 行 append-only 保留；`seq <= coveredThroughSeq` 的行不再进入下次 brain 投影。新 run 再发时走第 3 节「新 run」路径：checkpoint + retained 原文 + 末尾新 User。
 ---
 
 ## 6. Resume 机制
@@ -707,8 +725,8 @@ seq N  user      content=<user_context>继续把周报写完…</user_context>
 ```text
 [System]
 [User]         checkpoint（由 summary 合成外壳 + <summary>）
-[Assistant / Tool / User …]      seq > coveredThroughSeq 原文（可空）
-[User]         新任务
+[User / Assistant / Tool …]   seq > coveredThroughSeq 原文（可空；可与 checkpoint 并排）
+[User]         新任务                                 ← append
 ```
 
 ### 6.4 构建步骤
