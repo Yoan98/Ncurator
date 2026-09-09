@@ -113,17 +113,8 @@ describe('ai human history compaction prompt', () => {
     expect(prompt.user).toContain('## 关键上下文')
     expect(prompt.user).not.toContain('[round')
     expect(prompt.user).not.toContain('<previous-summary>')
-    expect(prompt.user).toContain('只保留后续工作仍需要的信息')
-    expect(prompt.user).toContain('不要逐条复述工具过程')
-  })
-
-  it('does not use a separate update prompt', () => {
-    const prompt = buildHistoryCompactionPrompt({
-      conversationText: '[user]\n改标题'
-    })
-    expect(prompt.user).not.toContain('<previous-summary>')
     expect(prompt.user).not.toContain('保留旧摘要里已有的信息')
-    expect(prompt.user).toContain('对话里若已有摘要')
+    expect(prompt.user).toContain('各栏保持简短')
   })
 
   it('uses the turn-prefix instruction without a previous summary', () => {
@@ -338,7 +329,6 @@ describe('ai human context compaction node', () => {
     expect(prompts[0]?.user).not.toContain('<previous-summary>')
     expect(prompts[0]?.user).toContain('compacted into the following summary')
     expect(prompts[0]?.user).toContain('## 目标\n写周报')
-    expect(prompts[0]?.user).toContain('只保留后续工作仍需要的信息')
     expect(prompts[1]?.user).toContain('## 原始请求')
     expect(prompts[1]?.user).not.toContain('<previous-summary>')
     expect(appended[0]?.kind).toBe('annotation')

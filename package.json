@@ -98,7 +98,6 @@
     "jszip": "^3.10.1",
     "katex": "^0.16.28",
     "mammoth": "^1.11.0",
-    "mark.js": "^8.11.1",
     "mathjax-full": "^3.2.2",
     "mdast-util-from-markdown": "^2.0.2",
     "mdast-util-gfm-footnote": "^2.1.0",

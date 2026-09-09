@@ -25,7 +25,6 @@ export class StorageService {
   public readonly core: LanceDbCore
   public readonly documents: DocumentsStore
   public readonly webSource: WebSourceStore
-  public readonly chat: PartnerStore
   public readonly partner: PartnerStore
   public readonly aiFileChange: AiFileChangeStore
   public readonly aiRun: AiRunStore
@@ -55,8 +54,7 @@ export class StorageService {
     this.core = this.vector
     this.documents = new DocumentsStore(this.sqlite, this.vector)
     this.webSource = new WebSourceStore(this.sqlite)
-    this.chat = new PartnerStore(this.sqlite)
-    this.partner = this.chat
+    this.partner = new PartnerStore(this.sqlite)
     this.aiFileChange = new AiFileChangeStore(this.sqlite)
     this.aiRun = new AiRunStore(this.sqlite)
     this.docxApply = new DocxApplyStore(this.sqlite)

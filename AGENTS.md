@@ -25,7 +25,7 @@
 ### 1.4 prd产品文档相关
 
 - `doc/prd/workbench.md`：涉及 Workbench 产品需求、发送前置条件、消息流/过程层交互、定时任务或 composer 偏好验收标准时阅读。
-- `doc/prd/settings.md`：涉及 Settings 产品需求、工作区目录绑定提示、具名工作空间资料/索引交互或验收标准时阅读。
+- `doc/prd/settings.md`：涉及 Settings 产品需求、文件地址森林、全局网页资料、索引/模型/通知或验收标准时阅读。
 - `doc/ai-tool-prompt-audit.md`：Skill / Tool 契约活例子，**按需生成、不入库**（`pnpm doc:ai-tool-prompt-audit`）；改工具契约时本地生成对照，不替代 `tool-design.md`。
 
 ## 2. 项目目录结构
@@ -67,30 +67,35 @@
 │   │   ├── unit/                     # backend 单元测试
 │   │   └── workbench/                # Workbench 测试用例
 │   ├── fixtures/                     # 长期复用测试输入
-│   │   └── workspace/                # 工作区语义测试共享输入目录
+│   │   ├── workspace/                # 工作区语义测试共享输入目录
+│   │   └── sqlite/                   # SQLite 升级与版本门禁 fixture
 │   ├── harness/                      # 测试基础设施
 │   │   ├── backend/                  # 后端测试基础设施
 │   │   ├── core/                     # 通用测试基础设施
 │   │   └── e2e/                      # UI E2E 测试基础设施
 │   └── logs/                         # 测试日志
 ├── resources/                        # 运行期资源
+│   ├── native/                       # 原生模块预编译产物
+│   ├── open-with/                    # 系统打开方式相关资源
 │   └── web_crawler_sidecar/          # 网页抓取 sidecar 资源
 ├── scripts/                          # 工程脚本
 │   ├── postinstall.mjs               # 安装后的唯一根级入口
 │   ├── doc/                          # 文档生成（如 ai-tool-prompt-audit）
+│   ├── dev/                          # 本地开发辅助脚本
 │   ├── build/                        # 构建、运行时追踪、原生模块和打包审计
 │   │   ├── native/                   # Node/Electron 原生模块准备
 │   │   ├── package/                  # staging、main 混淆和安装包审计
 │   │   ├── runtime/                  # bundle 边界、递归依赖追踪和暂存验证
 │   │   └── sidecar/                  # 网页抓取 sidecar 构建
-│   ├── release/                      # 本地发布、R2 和发布共享能力
-│   │   ├── r2/                       # R2 上传、元数据和发布收尾
+│   ├── release/                      # 本地发布、对象存储和发布共享能力
+│   │   ├── storage/                  # 发布存储抽象（默认 COS，可切 R2）
+│   │   ├── cos/                      # 腾讯云 COS 上传与策略
+│   │   ├── r2/                       # Cloudflare R2 上传
 │   │   └── shared/                   # 发布流程共享能力
 │   └── test/                         # 源码/正式包 E2E 编排和真实更新测试
 ├── build/                            # 构建相关资源
 ├── logo/                             # logo 资源
 │   └── png/                          # png 格式 logo
-├── .agents/                          # Agent 协作配置
 ├── .vscode/                          # VS Code 配置
 ├── .codex-tmp/                       # Codex 临时产物，不承载长期代码和文档
 ├── .pip-cache/                       # Python 依赖缓存，不承载长期代码和文档
@@ -113,7 +118,7 @@
 - `src/main/services/storage/**` 放 SQLite、LanceDB 和领域 Store。
 - AI 运行入口与基础设施放在 `src/main/services/ai/**`。
 - `src/main/utils/**` 只放 Main 侧通用工具，不放强业务流程。
-- `src/main/types/**` 只放 Main 侧通用类型。
+- `src/main/types/**` 只放 Main 侧 ambient / 适配声明；跨进程类型放 `src/shared/**`。
 
 ### 3.3 Renderer 目录
 
@@ -122,6 +127,7 @@
 - 前端服务与请求封装放 `services/**`。
 - 仅 Renderer 使用的展示态类型放 Renderer 内部 `types/**`。
 - 通用前端工具放 `utils/**`。
+- 跨页状态放 `contexts/**`；测试 selector 放 `testing/**`。
 
 ### 3.4 Shared 目录
 

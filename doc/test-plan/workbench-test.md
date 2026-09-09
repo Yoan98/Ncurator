@@ -105,7 +105,7 @@ tests/case/workbench/
 - What：无伙伴时空态、创建弹窗提交即落库、标题就是伙伴名称且不因后续消息改名。
 - Why：伙伴是一条一直聊下去的记录；草稿提升或「发第一条才创建」会产生空会话语义。
 - How：打开 Workbench 确认无伙伴空态与「创建伙伴」入口；填写名称并选择外形/颜色后提交；再发送两条真实自然语言请求。
-- Oracle：无伙伴时 Composer 空态且提供 44px 拖动区，侧栏列表区不展示空态文案，对齐 `WB-CORE-008`、`WB-SESSION-001-AC1`、`WB-CORE-001-AC2`；提交即写入 `partner` 并选中，对齐 `WB-SESSION-001`；标题等于伙伴 name 且第二条消息不改名，对齐 `WB-SESSION-003`；创建后尚无消息时侧栏副文案为「做点啥呢？」，发送后更新为最新用户语句预览，对齐 `WB-SESSION-001-AC5`。不存在 `__draft__`，对齐废弃的 `WB-SESSION-001-AC2`、`WB-SESSION-008-AC4`。
+- Oracle：无伙伴时 Composer 空态且提供 44px 拖动区，侧栏列表区不展示空态文案，对齐 `WB-CORE-008`、`WB-SESSION-001-AC1`、`WB-CORE-001-AC2`；提交即写入 `partner` 并选中，对齐 `WB-SESSION-001`；创建时选择外形与颜色并对齐 `WB-SESSION-001-AC4`；标题等于伙伴 name 且第二条消息不改名，对齐 `WB-SESSION-003`；创建后尚无消息时侧栏副文案为「做点啥呢？」，发送后更新为最新用户语句预览，对齐 `WB-SESSION-001-AC5`。不存在 `__draft__`，对齐废弃的 `WB-SESSION-001-AC2`、`WB-SESSION-008-AC4`。
 - Not：不验证标题手动编辑，也不验证侧栏视觉样式。
 
 #### `partner-delete-confirmation`
@@ -124,7 +124,7 @@ tests/case/workbench/
 - Why：置顶是侧边栏高频整理能力，错误排序或丢失状态会打断工作流。
 - How：通过真实 Workbench UI 创建两个伙伴；悬停后点击置顶，确认该项排到最上方且图钉常驻；再取消置顶。
 - Oracle：置顶后排到列表最上方、图钉无需悬停也可见、不出现「已置顶」文案，对齐 `WB-SESSION-009`。不再按工作空间分组。
-- Not：不验证拖拽排序，也不验证跨设备同步。
+- Not：不验证拖拽排序，也不验证跨设备同步。`WB-SESSION-009-AC4`（置顶重启持久化）标为不测。
 
 #### `partner-edit`
 
@@ -177,8 +177,8 @@ tests/case/workbench/
 - What：缺少模型时的配置提示、发送前置条件（已有伙伴 + 输入非空），以及模型 / AI 推进偏好 / 执行权限按伙伴恢复。
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务或把任务发到错误伙伴。
 - How：先在无模型配置状态下检查提示，再通过 UI 配置真实模型并创建伙伴；覆盖无伙伴空态、输入保留、模型选择、AI 推进偏好、执行权限菜单的两条说明与完全访问高危风险弹窗确认/取消门禁、切换伙伴后的独立恢复和真实发送。Composer 不再有 AI / 搜索切换，也不再有工作区选择器。
-- Oracle：无模型时快速显示配置提示；无伙伴时 Composer 空态且不出现发送按钮，对齐 `WB-CORE-001-AC1`、`WB-CORE-001-AC2`、`WB-COMPOSER-001`；有伙伴且输入非空时可发送；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；切换“完全访问”触发风险二次确认弹窗（取消维持审核、确认切换成功，切回审核免二次确认），对齐 `WB-COMPOSER-007-AC13`；模型、推进偏好和执行权限按伙伴恢复，对齐 `WB-MODE-001-AC1`、`WB-COMPOSER-007`、`WB-SESSION-008`。废弃的 `WB-COMPOSER-005`、`WB-MODE-001-AC2`、`WB-MODE-002`、`WB-MODE-003` 不测。
-- Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。Composer 已删除搜索模式，不再测智能 / 搜索互斥。
+- Oracle：无模型时快速显示配置提示；无伙伴时 Composer 空态且不出现发送按钮，对齐 `WB-CORE-001-AC2`、`WB-COMPOSER-001`；有伙伴、未插 `@` 且输入非空时可发送，对齐 `WB-CORE-001-AC1`；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；切换“完全访问”触发风险二次确认弹窗（取消维持审核、确认切换成功，切回审核免二次确认），对齐 `WB-COMPOSER-007-AC13`；模型、推进偏好和执行权限按伙伴恢复，对齐 `WB-MODE-001-AC1`、`WB-COMPOSER-007-AC5`、`WB-COMPOSER-007-AC9`、`WB-COMPOSER-007-AC12`、`WB-SESSION-008`。废弃的 `WB-COMPOSER-005`、`WB-MODE-001-AC2`、`WB-MODE-002`、`WB-MODE-003` 不测。
+- Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。Composer 已删除搜索模式，不再测智能 / 搜索互斥。`WB-COMPOSER-001-AC3`（hover 禁用原因）、`WB-COMPOSER-007-AC6`（失效模型回退）、`WB-COMPOSER-007-AC11`（偏好写入 run 上下文）标为不测。
 
 #### `partner-required-to-send`
 
@@ -186,8 +186,8 @@ tests/case/workbench/
 - What：未创建伙伴时 Composer 空态、发送不可用；创建伙伴后输入非空即可发送。
 - Why：发送门禁已从「绑定工作空间目录」改为「已有伙伴」。
 - How：进入无伙伴 Workbench，确认空态与发送不可用；创建伙伴并配置真实模型后输入非空请求并发送。设置页不再承担发送前置。
-- Oracle：未创建伙伴时不可发送，对齐 `WB-CORE-001-AC1`、`WB-CORE-001-AC2`、`WB-COMPOSER-001`；创建后可发送并完成真实 AI 运行，对齐 `WB-CORE-006-AC1`。废弃的 `WB-COMPOSER-005` 不测。发送走 Composer 提交，对齐 `WB-COMPOSER-002-AC1`。
-- Not：不验证设置页文件地址扫描，也不重复断言 Settings 文案。`WB-COMPOSER-002-AC2`、`WB-COMPOSER-002-AC3`（Shift+Enter 换行、中文输入法组词）不在本 case 强制断言。
+- Oracle：未创建伙伴时不可发送，对齐 `WB-CORE-001-AC2`、`WB-COMPOSER-001`；创建后可发送并完成真实 AI 运行，对齐 `WB-CORE-006-AC1`。废弃的 `WB-COMPOSER-005` 不测。发送走 Composer 提交，对齐 `WB-COMPOSER-002-AC1`。
+- Not：不验证设置页文件地址扫描，也不重复断言 Settings 文案。`WB-COMPOSER-002-AC2`、`WB-COMPOSER-002-AC3`（Shift+Enter 换行、中文输入法组词）标为不测。`WB-CORE-006-AC2/AC3/AC4` 由 AI live 承担。
 
 #### `partner-ui-state-isolation`
 
@@ -258,8 +258,8 @@ tests/case/workbench/
 - What：`@` 参考资料候选覆盖全部文件地址的当前真实本地目录 / 文件与全局网页资料、目录 / 文件 / 网页 token 插入、多 token 共存、键盘删除、去重和空候选提示。
 - Why：显式参考资料是用户控制 AI 上下文的核心入口；未 `@` 时知识库默认全部已索引文件地址 + 全局网页。
 - How：创建伙伴；通过设置页添加 `tests/fixtures/workspace` 为文件地址，等待真实文件扫描并准备索引状态；添加真实 web source 并等待真实网页索引完成；随后直接在该目录磁盘中新建文件，不触发“检查更新”或“更新索引”；输入 `@` 触发候选，选择文件、目录、网页；选中即追加，同一资料才去重；通过 Backspace 删除 token。对话里不再切换工作空间，因此不测跨工作区清理。
-- Oracle：候选来源和发送范围对齐 `WB-SCOPE-001`、`WB-CORE-002`、`WB-CORE-004`；真实目录快照和新增未索引文件对齐 `WB-SCOPE-001-AC3`；token 插入、共存、发送参数、键盘删除和图标对齐 `WB-SCOPE-002`；去重和空候选对齐 `WB-SCOPE-003`、`WB-SCOPE-004`。废弃的 `WB-BLOCKER-002` 不测。
-- Not：不验证底层 KB 检索排序质量，也不验证 Settings 文件地址配置细节。
+- Oracle：候选来源和发送范围对齐 `WB-SCOPE-001`、`WB-CORE-002`、`WB-CORE-004-AC1`；真实目录快照和新增未索引文件对齐 `WB-SCOPE-001-AC3`；token 插入、共存、发送参数、键盘删除和图标对齐 `WB-SCOPE-002`；去重和空候选对齐 `WB-SCOPE-003`、`WB-SCOPE-004`。废弃的 `WB-BLOCKER-002` 不测。
+- Not：不验证底层 KB 检索排序质量，也不验证 Settings 文件地址配置细节。`WB-CORE-004-AC2`、`WB-CORE-004-AC3`（宽松补充 vs 严谨缺口）由 AI live 承担。
 
 #### `right-panel-layout-and-tabs`
 
@@ -591,7 +591,7 @@ tests/case/workbench/
 
 ### 5.4 `scheduled-task`
 
-定时任务回归单独归类，Oracle 引用 [`workbench.md`](../prd/workbench.md) 的 `ST-*` 编号。调度触发时点由真实程序运行与系统时间决定，case 通过「下一分钟」级别的短周期调度验证端到端触发，不伪造系统时钟；错过的补跑、目标伙伴忙碌跳过、伙伴缺失跳过与 `nextRunAt` 推进等调度边界由 backend 单测覆盖（`tests/case/unit/scheduled-task-*.test.ts`，不进入 Workbench E2E 发现范围）。
+定时任务回归单独归类，Oracle 引用 [`workbench.md`](../prd/workbench.md) 的 `ST-*` 编号。调度触发时点由真实程序运行与系统时间决定，case 通过「下一分钟」级别的短周期调度验证端到端触发，不伪造系统时钟。下列 AC 由 unit `tests/case/unit/scheduled-task-*.test.ts` 承担，不进入 Workbench E2E 发现范围：`ST-PARTNER-001-AC2`、`ST-RUN-001-AC3`、`ST-RUN-001-AC4`、`ST-RUN-003-AC1/AC2`、`ST-RUN-004-AC2/AC3`、`ST-RUN-005-AC1/AC2/AC3`。`ST-PARTNER-001-AC1`（删除专属伙伴后任务仍在）标为不测。
 
 #### `scheduled-task-view-entry-and-isolation`
 
@@ -600,7 +600,7 @@ tests/case/workbench/
 - Why：定时任务是一个独立的全主区视图，不与聊天对话或资源面板并存，避免状态交叉。
 - How：通过真实 UI 点击「定时任务」入口确认整块主区切换为定时任务视图且无聊天；随后点击「创建伙伴」返回聊天视图并打开创建弹窗（伙伴点击返回由 `scheduled-task-trigger-and-session-refresh` 覆盖）。
 - Oracle：入口位置与样式对齐 `ST-ENTRY-001-AC1`；点击后主区整块切换且无聊天对齐 `ST-ENTRY-001-AC2`；视图无聊天 / 无资源面板对齐 `ST-VIEW-001-AC1`；点击「创建伙伴」返回聊天并对齐 `ST-VIEW-001-AC3`。
-- Not：不验证定时任务实际触发调度，只验证入口与视图切换。已启用数量 chip（`ST-ENTRY-001-AC3` / `ST-VIEW-001-AC4`）由 `scheduled-task-config-lifecycle` 在启用开关后覆盖。
+- Not：不验证定时任务实际触发调度，只验证入口与视图切换。已启用数量 chip（`ST-ENTRY-001-AC3` / `ST-VIEW-001-AC4`）由 `scheduled-task-config-lifecycle` 在启用开关后覆盖。点击伙伴返回聊天对齐 `ST-VIEW-001-AC2`，由 `scheduled-task-trigger-and-session-refresh` 承担。
 
 #### `scheduled-task-config-lifecycle`
 
@@ -609,7 +609,7 @@ tests/case/workbench/
 - Why：配置是定时任务可执行的前提；专属伙伴与立即执行是占用兜底的入口。
 - How：通过真实 UI 打开视图新增任务并填写名称、提示词、执行时间（TimePicker）、主模型、偏好与执行权限（不选伙伴），保存后确认出现在列表且产生 `定时 ·` 专属伙伴；先打开启用开关，再编辑并保存，确认仍为启用且数量 chip 仍在；点立即执行弹出确认后取消；删除并二次确认。
 - Oracle：新增与编辑预填对齐 `ST-FORM-001-AC1`；必填缺失拦截对齐 `ST-FORM-001-AC2`；每周必选星期对齐 `ST-FORM-001-AC3`；自动建专属伙伴对齐 `ST-FORM-001-AC6`；编辑保存不改启用对齐 `ST-FORM-001-AC7` / `ST-SWITCH-001-AC3`（只在本 case 断言）；默认关闭对齐 `ST-SWITCH-001-AC1`；删除二次确认对齐 `ST-DELETE-001-AC1/AC2`；列表展示对齐 `ST-LIST-001-AC2/AC4`；启用后数量 chip 对齐 `ST-ENTRY-001-AC3` / `ST-VIEW-001-AC4`；立即执行确认对齐 `ST-RUN-004-AC1`。
-- Not：不验证到点后的真实 AI 执行；忙碌取消胶囊主路径由 unit 覆盖（`ST-RUN-001-AC3` / `ST-RUN-005`）。`ST-FORM-001-AC4`、`ST-SWITCH-001-AC2` 标为不测。
+- Not：不验证到点后的真实 AI 执行。`ST-FORM-001-AC4`、`ST-SWITCH-001-AC2`、`ST-LIST-001-AC1`、`ST-LIST-001-AC3`（空列表文案）标为不测。忙碌取消、重建伙伴、错过补跑与立即执行忙提示由 unit 承担，见本节引言。
 
 #### `scheduled-task-trigger-and-session-refresh`
 
@@ -617,13 +617,5 @@ tests/case/workbench/
 - What：启用一个下一分钟触发的定时任务，到点后往其专属伙伴追加任务消息；伙伴列表无需手动刷新即展示运行状态；当前查看的非专属伙伴不被切换。
 - Why：这是定时任务的核心闭环，验证真实调度、真实 AI run 与前端伙伴列表刷新联动。
 - How：在真实 UI 配置并启用一个每天 + 当前系统时间下一分钟的任务（保存时自动创建专属伙伴）；等待到点，轮询专属伙伴出现运行状态并完成，同时确认当前选中伙伴不变。
-- Oracle：到点往专属伙伴追加对齐 `ST-RUN-001-AC1`；不改变当前查看伙伴对齐 `ST-RUN-001-AC2`；伙伴列表刷新对齐 `ST-RUN-002-AC1/AC2`。
-- Not：不验证跨天 / 跨周边界调度，不验证程序关闭 / 休眠期间错过补跑；不验证忙碌取消胶囊（unit 覆盖）。
-
-#### `scheduled-task` backend 单测
-
-- 测试类型：`backend`
-- What：`computeNextRunAt`；`save` 自动创建专属伙伴且不再要求 partnerId；编辑保存保留原启用状态；`fireTask` 空闲执行、忙碌取消写 notice 并推进下一周期、伙伴缺失自动重建；`runNow` / `dismissBusyNotice`；休眠错过不补跑。
-- Why：忙碌取消、重建与立即执行边界不适合用 UI E2E 稳定复现。
-- How：注入 fake task/partner store、submitTask、clock 与 timer。
-- Oracle：忙碌取消对齐 `ST-RUN-001-AC3` / `ST-RUN-005`；重建对齐 `ST-PARTNER-001-AC2` / `ST-RUN-001-AC4`；立即执行忙提示对齐 `ST-RUN-004-AC3`；错过不补跑对齐 `ST-RUN-003`。
+- Oracle：到点往专属伙伴追加对齐 `ST-RUN-001-AC1`；不改变当前查看伙伴对齐 `ST-RUN-001-AC2`；从定时任务视图点伙伴返回聊天对齐 `ST-VIEW-001-AC2`；伙伴列表刷新对齐 `ST-RUN-002-AC1/AC2`。
+- Not：不验证跨天 / 跨周边界调度，不验证程序关闭 / 休眠期间错过补跑（`ST-RUN-003` 由 unit 承担）；不验证忙碌取消胶囊（unit 覆盖）。

@@ -21,7 +21,7 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 **存储层**
 
-- SQLite：业务真相（伙伴、伙伴消息记录、AI run、审批、文件修改记录、文档元数据、工作地址、全局网页、配置）。
+- SQLite：业务真相（伙伴、伙伴消息记录、AI run、审批、文件修改记录、文档元数据、工作地址、全局网页、定时任务、浏览器 Tab、配置）。
 - LanceDB：可重建的 `vector_chunk` 向量索引。
 - SQLite 通过 migration 演进；LanceDB 可按文档 generation 重建，检索时库内只保留最新 chunk。
 
@@ -78,13 +78,13 @@ flowchart TB
 
 工作地址是默认执行范围而非硬边界：模型默认在设置页现有文件地址内操作，系统级需求可访问地址外绝对路径。文件工具的 `sourcePath` / `outputPath` 必须为本机绝对路径。内置浏览器由 Electron `WebContentsView` 承载，Stagehand 通过本机回环 CDP endpoint 精确连接对应 Tab。对象存储在 `userData/partners/{id}/objects/sha256`。
 
-网页搜索继续由冻结的 Python sidecar 提供 DDG 搜索和 Crawl4AI 抓取。sidecar 保留 Python Playwright 和 Playwright 驱动 JavaScript，但不再携带 Playwright Chromium 或 Node；驱动通过 `PLAYWRIGHT_NODEJS_PATH` 和 `ELECTRON_RUN_AS_NODE=1` 复用当前 Electron 可执行文件中的 Node。`web_search` 的 fetch 首次使用时，Electron 在**专用隐藏 host 窗口**中创建非持久化 `WebContentsView` partition（`show: false`、`skipTaskbar`、`frame: false`、屏外坐标），sidecar 通过本机回环 CDP 连接该隔离 Chromium context，并按唯一 marker 选择页面。该 host 不得挂到主窗口，也不得进入任务栏或显示窗框。找不到唯一 context 时直接失败，禁止退回用户内置浏览器 context。`web_search` fetch 默认优先走 Crawl4AI；若抓取超时或失败，可降级为 Node 侧 HTTP 正文提取；E2E 对本机 loopback URL 可通过 `NCURATOR_WEB_SEARCH_LOOPBACK_FETCH=1` 跳过 CDP 直接 HTTP 读取。`web_search` 只向 AI 返回结构化结果，不得自动展开右侧搜索列表（该列表面板已不存在）；右侧 `browser` 仅由 `browser_use` 或用户手动开标签触发。
+网页搜索由冻结的 Python sidecar 提供搜索与抓取；内置浏览器由 `WebContentsView` + Stagehand 本机 CDP 连接对应 Tab。`web_search` 只向 AI 返回结构化结果，不得自动展开右侧面板；右侧浏览器仅由 `browser_use` 或用户手动开标签触发。抓取细节见代码与 `tool-design.md`。
 
 开发版使用独立 `*-dev` user-data 目录；E2E 可通过 `NCURATOR_USER_DATA_PATH` 提供隔离目录。
 
 ## AI 运行时
 
-AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`context_budget → brain → dispatch → (learning | plan | hand) → …`，无工具调用时 `finalizeDelivery` 结束 run。
+AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`context_budget ⇄ context_compaction → brain → dispatch → (learning | plan | hand) → …`，无工具调用时 `finalizeDelivery` 结束 run。节点细节见 `human-harness.md`。
 
 **设计文档（修改 AI 行为前必读）**
 
@@ -131,20 +131,22 @@ flowchart LR
 | PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；`ppt_read_slides` 支持 `detail=full` 或 `detail=images` |
 | Excel                 | 工作表地图 + A1 范围；`excel_read` 四种 type（workbook / range / style / search）；`excel_edit` 一次一个 type；写回成功时结构化 `data` 多为 `{}`，模型侧另有 prose 确认 |
 | KB                    | 混合召回检索全部已索引文件地址与全局网页                                                                                                                        |
+| Image                 | 外部 skill；需 `learn_skill`；按绝对路径生成或更新 PNG / JPEG / WebP                                                                                          |
 | Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                            |
+| 定时任务              | 独立主区配置与启用开关；到点向专属伙伴追加提示词                                                                                                                |
 
 各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准；工具契约见 `tool-design.md`，活例子按需生成（`pnpm doc:ai-tool-prompt-audit`，不入库）。
 
 ## 存储与索引
 
-业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引；业务查询先经 SQLite 确认有效范围，再进入 LanceDB。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为唯一持久化真相。详细 schema 见 `doc/database.md`。
+业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL；`generation_id` 只用于写后清理，不进检索 `where`。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为唯一持久化真相。详细 schema 见 `doc/database.md`。
 
 文件和网页索引用 `generation_id` 区分新旧写入；成功后删除旧 chunk，失败则删除半成品新 chunk。检索时库中只应留下最新索引。设置页正在「更新索引」时，`kb_search` / `kb_list_documents` 返回错误。
 
 ## 主链路
 
 1. Renderer 发起用户请求 → Main 创建 run，读取该伙伴消息记录与设置页文件地址。
-2. AI Runtime 通过 human graph 推进 brain、learning、hand，brain 输出最终交付。
+2. AI Runtime 通过 human graph 推进 `context_budget`、brain、learning、plan、hand；需要压缩时走 `context_compaction`。brain 输出最终交付。
 3. 需要资料时 → Retrieval（SQLite 元数据 + LanceDB 检索）。
 4. 需要本地能力时 → Tool Runtime 调用领域服务。
 5. 工作地址内写回 → 记录修改与预览，供 UI 展示和回退。

@@ -259,7 +259,7 @@ export function registerHandlers(services: {
   } = services
   const activeWorkspaceIndexJobs = new Set<string>()
   const documentsStore = storageService.documents
-  const partnerStore = storageService.chat
+  const partnerStore = storageService.partner
   const workbenchUiStore = storageService.workbenchUi
   const chatMessageLogStore = storageService.chatMessageLog
   const aiRunStore = storageService.aiRun

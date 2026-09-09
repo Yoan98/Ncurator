@@ -156,7 +156,7 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 ```text
 hand 收到 call batch
   → resolveExecutionMeta（mutability / resourceKey）
-  → 审批门禁（mutating + 策略）
+  → 审批门禁（仅 `terminal_run` + risk policy）
   → 执行 tool runtime
   → buildModelToolResultDelivery
   → append ToolMessage + log tool
@@ -164,7 +164,7 @@ hand 收到 call batch
   → context_budget
 ```
 
-- **mutating** 工具可触发批量审批；拒绝写失败 `tool`，不执行。
+- 批量审批只覆盖 `terminal_run` 的风险策略；拒绝写失败 `tool`，不执行。其它 mutating 工具不走这道门禁。
 - 工具失败：`renderError` 或通用错误 → `ok: false` ToolMessage。
 - 图片 ref 写入 log `tool.images[]`，不进 ToolMessage 正文。
 

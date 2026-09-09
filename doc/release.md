@@ -240,9 +240,9 @@ publish 会上传候选产物和 fragment，更新对应平台的自动更新 me
 
 ### 本地保留与清理
 
-prepare 和 test 的临时代码、依赖与构建目录位于 `.ncurator/release-work`，阶段结束后自动删除。候选包位于 `.ncurator/release-candidates`；发布并完成公开验证后，本地只保留本平台最新候选及其 E2E 结果。
+prepare 和 test 的临时代码、依赖与构建目录位于 `~/.ncurator/release-work`，阶段结束后自动删除。候选包位于 `~/.ncurator/release-candidates`；发布并完成公开验证后，本地只保留本平台最新候选及其 E2E 结果。
 
-`.ncurator/release-tools` 保存 Python 环境和构建缓存，`.ncurator/runtime` 保存运行资源；它们可复用且不属于历史安装包，不随发布自动删除。
+`~/.ncurator/release-tools` 保存 Python 环境和构建缓存，可复用且不属于历史安装包，不随发布自动删除。工作区侧的 `.ncurator/runtime` 是运行资源目录，发布脚本不管理它。
 
 ### 自动更新与下载
 
