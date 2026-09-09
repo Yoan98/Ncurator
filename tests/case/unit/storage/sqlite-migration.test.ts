@@ -117,7 +117,7 @@ describe('SQLite migration contract', () => {
     upgraded.close()
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
-    expect(migrationRows.at(-1)).toEqual({ version: 11, name: 'ai_run_failure_raw_message' })
+    expect(migrationRows.at(-1)).toEqual({ version: 10, name: 'upgrade_from_v9' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -225,7 +225,7 @@ describe('SQLite migration contract', () => {
     current.initialize()
     current
       .prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)')
-      .run(12, 'future_schema', 1)
+      .run(11, 'future_schema', 1)
     current.close()
 
     const sqlite = new SqliteCore(databasePath)
@@ -236,15 +236,15 @@ describe('SQLite migration contract', () => {
       thrown = error
     }
     expect(thrown).toBeInstanceOf(DatabaseVersionTooNewError)
-    expect(thrown).toMatchObject({ databaseVersion: 12, supportedDatabaseVersion: 11 })
+    expect(thrown).toMatchObject({ databaseVersion: 11, supportedDatabaseVersion: 10 })
 
     const inspected = openRawDatabase(databasePath)
     const rows = inspected
       .prepare('SELECT version, name FROM schema_migrations ORDER BY version')
       .all()
     inspected.close()
-    expect(rows.at(-1)).toEqual({ version: 12, name: 'future_schema' })
-    expect(rows).toHaveLength(12)
+    expect(rows.at(-1)).toEqual({ version: 11, name: 'future_schema' })
+    expect(rows).toHaveLength(11)
   })
 
   it('accepts the known version 2 alias and rejects unknown names or gaps', async () => {

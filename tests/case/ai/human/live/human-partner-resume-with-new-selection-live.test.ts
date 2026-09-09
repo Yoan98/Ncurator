@@ -259,9 +259,16 @@ describe('ai human live backend', () => {
             typeof run2LastMessage.content === 'string' &&
             run2LastMessage.content.includes('<task_goal>')
           const run2MessageTypes = run2BrainMessages?.map((message) => message.getType()) || []
-          const run2HasOnlyCurrentBrainUser =
-            run2BrainMessages?.filter((message) => message.getType() === 'human').length === 1 &&
-            run2BrainMessages?.[run2BrainMessages.length - 1]?.getType() === 'human'
+          const run2HumanMessages =
+            run2BrainMessages?.filter((message) => message.getType() === 'human') || []
+          const run2HasHistoricalAndCurrentBrainUser =
+            run2HumanMessages.length >= 2 &&
+            run2MessageTypes[0] === 'system' &&
+            run2MessageTypes[run2MessageTypes.length - 1] === 'human' &&
+            typeof run2HumanMessages[0]?.content === 'string' &&
+            run2HumanMessages[0].content.includes(INTERRUPTED_RUN_INPUT.slice(0, 20)) &&
+            typeof run2HumanMessages[run2HumanMessages.length - 1]?.content === 'string' &&
+            run2HumanMessages[run2HumanMessages.length - 1].content.includes('<task_goal>')
 
           return {
             configurationMissing: false,
@@ -275,7 +282,7 @@ describe('ai human live backend', () => {
             run2BrainPrompt,
             run2LastMessageIsUser,
             run2MessageTypes,
-            run2HasOnlyCurrentBrainUser,
+            run2HasHistoricalAndCurrentBrainUser,
             fileAName: fileAReferences[0]?.name || '',
             fileBName: fileBReferences[0]?.name || ''
           }
@@ -307,18 +314,22 @@ describe('ai human live backend', () => {
               result.run2LastMessageIsUser &&
               result.run2MessageTypes[0] === 'system' &&
               result.run2MessageTypes[result.run2MessageTypes.length - 1] === 'human' &&
-              result.run2HasOnlyCurrentBrainUser,
+              result.run2HasHistoricalAndCurrentBrainUser,
             {
               name: 'human-live-partner-resume-keeps-interrupted-context-and-uses-new-selection',
               message:
-                'live 恢复 run 应在第一诉求已读到过拟合事实后保留不可变消息日志，并在同伙伴新诉求中通过日志投影恢复旧过拟合上下文、使用本轮新选图形学课件的反走样事实完成对比小结；run-2 消息数组末尾应为 buildBrainUserMessage 的 user 消息。',
+                'live 恢复 run 应在第一诉求已读到过拟合事实后保留不可变消息日志，并在同伙伴新诉求中通过日志投影恢复旧过拟合上下文、使用本轮新选图形学课件的反走样事实完成对比小结；未压缩时消息数组应含历史 build user 与末尾新 user。',
               data: {
                 fileAName: result.fileAName,
                 fileBName: result.fileBName,
                 interruptedResult: result.interruptedResult,
+                resumedResult: result.resumedResult,
                 logAfterNetwork: result.logAfterNetwork,
                 run2BrainPrompt: result.run2BrainPrompt,
-                run2LastMessageIsUser: result.run2LastMessageIsUser
+                run2LastMessageIsUser: result.run2LastMessageIsUser,
+                run2MessageTypes: result.run2MessageTypes,
+                run2HasHistoricalAndCurrentBrainUser: result.run2HasHistoricalAndCurrentBrainUser,
+                run2UsedFileB: result.run2UsedFileB
               }
             }
           )

@@ -230,18 +230,18 @@ describe('workbench conversation e2e', () => {
             const signals = await runtime.collectSignals()
             return signals.aiRunEventEntries.map((entry) => entry.event)
           })
-          const failureCard = page.getByTestId(
-            new RegExp(`^${workbenchSelectors.assistantRunFailurePrefix}-`, 'u')
-          )
+          const failureCard = page
+            .getByTestId(new RegExp(`^${workbenchSelectors.assistantRunFailurePrefix}-`, 'u'))
+            .last()
           await failureCard.waitFor({ state: 'visible' })
           await failureCard.getByText(`失败：${runFailed.message}`, { exact: false }).waitFor({
             state: 'visible'
           })
-          const detailToggle = page.getByTestId(
+          const detailToggle = failureCard.getByTestId(
             new RegExp(`^${workbenchSelectors.assistantRunFailureDetailTogglePrefix}-`, 'u')
           )
           await detailToggle.click()
-          const detail = page.getByTestId(
+          const detail = failureCard.getByTestId(
             new RegExp(`^${workbenchSelectors.assistantRunFailureDetailPrefix}-`, 'u')
           )
           await detail.waitFor({ state: 'visible' })

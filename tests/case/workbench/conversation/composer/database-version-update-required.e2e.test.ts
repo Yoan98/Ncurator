@@ -25,7 +25,7 @@ const markDatabaseAsNewerThanApplication = async (userDataDir: string): Promise<
   try {
     database.exec(`
       INSERT INTO schema_migrations (version, name, applied_at)
-      VALUES (12, 'future_schema', ${String(Date.now())});
+      VALUES (11, 'future_schema', ${String(Date.now())});
     `)
   } finally {
     database.close()
@@ -134,8 +134,8 @@ describe('database version update required e2e', () => {
             title: (await recoveryPage.getByRole('heading', { level: 1 }).textContent()) || '',
             bodyText: (await recoveryPage.textContent()) || '',
             versionsVisible:
-              (await recoveryPage.getByText('v12', { exact: true }).isVisible()) &&
-              (await recoveryPage.getByText('v11', { exact: true }).isVisible()),
+              (await recoveryPage.getByText('v11', { exact: true }).isVisible()) &&
+              (await recoveryPage.getByText('v10', { exact: true }).isVisible()),
             workbenchUnavailable: (await page.getByTestId(rendererSelectors.page).count()) === 0,
             quitVisible: await page
               .getByTestId(rendererSelectors.updateRequiredQuitButton)

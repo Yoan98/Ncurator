@@ -263,8 +263,7 @@ describe('sqlite storage core and stores', () => {
       { version: 7, name: 'ai_run_execution_permission' },
       { version: 8, name: 'drop_llm_strategy_preference' },
       { version: 9, name: 'repair_ai_runtime_system_notifications_column' },
-      { version: 10, name: 'upgrade_from_v9' },
-      { version: 11, name: 'ai_run_failure_raw_message' }
+      { version: 10, name: 'upgrade_from_v9' }
     ])
 
     const legacyTables = sqlite
