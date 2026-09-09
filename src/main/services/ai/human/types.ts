@@ -92,7 +92,6 @@ export type HumanRuntimeCache = {
   messages?: BaseMessage[]
   currentUserMessageIndex?: number
   currentUserLogAppended?: boolean
-  messageLogRecords?: import('../../../../shared/types').ChatMessageLogRecord[]
   currentState?: HumanState
   lastBrainInputTokens?: number
   lastBrainMessageTokenEstimate?: number

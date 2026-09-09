@@ -22,6 +22,14 @@ import {
   splitMessagesForCompactionTail
 } from '../utils/messageTail'
 
+const returnToContextBudget = (state: HumanState): HumanState => ({
+  ...state,
+  execution: {
+    ...state.execution,
+    stage: 'context_budget'
+  }
+})
+
 const compactConversation = async (input: {
   ctx: AiRunContext
   taskId: string
@@ -71,17 +79,21 @@ export const createContextCompactionNode = (input: {
       resolveContextWindowTokens(input.ctx.humanRuntimeOverrides?.modelContextWindowTokens)
     )
     if (!hasCompressibleCompactionHistory(messages, retainTokens)) {
-      return {
-        ...state,
-        execution: {
-          ...state.execution,
-          stage: 'brain'
-        }
-      }
+      return returnToContextBudget(state)
     }
 
     const split = splitMessagesForCompactionTail(messages, retainTokens)
     const { folded, tail, history, turnPrefix, isSplitTurn } = split
+    const currentRecords = await input.ctx.loadMessageLog()
+    const coveredThroughSeq = resolveCompactionCoveredThroughSeq(
+      currentRecords,
+      countTailBookmarkMessages(tail)
+    )
+    // Bookmark 对齐失败时不要调压缩模型，也不发 started（避免半截 UI / 空转费用）。
+    if (coveredThroughSeq === undefined) {
+      return returnToContextBudget(state)
+    }
+
     const budgetTokensBefore = state.execution.contextBudget?.budgetTokens || 0
     emitCompactionStarted({
       sendEvent: input.ctx.sendEvent,
@@ -98,7 +110,6 @@ export const createContextCompactionNode = (input: {
       stage: 'human_brain'
     })
 
-    const currentRecords = await input.ctx.loadMessageLog()
     const historyText = renderMessagesForCompaction(isSplitTurn ? history : folded)
     const prefixText = isSplitTurn ? renderMessagesForCompaction(turnPrefix) : ''
     const sourceHistoryTokenEstimate = estimateTextTokens(
@@ -138,20 +149,6 @@ export const createContextCompactionNode = (input: {
       tokenEstimateBefore: budgetTokensBefore,
       sourceHistoryTokenEstimate,
       tokenEstimateAfter
-    }
-
-    const coveredThroughSeq = resolveCompactionCoveredThroughSeq(
-      currentRecords,
-      countTailBookmarkMessages(tail)
-    )
-    if (coveredThroughSeq === undefined) {
-      return {
-        ...state,
-        execution: {
-          ...state.execution,
-          stage: 'brain'
-        }
-      }
     }
 
     await input.ctx.appendMessageLog([
@@ -197,11 +194,7 @@ export const createContextCompactionNode = (input: {
     input.cache.currentUserLogAppended = true
 
     return {
-      ...state,
-      execution: {
-        ...state.execution,
-        stage: 'brain'
-      },
+      ...returnToContextBudget(state),
       memory: {
         ...state.memory,
         compactions: [

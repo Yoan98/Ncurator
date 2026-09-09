@@ -136,10 +136,10 @@ const sampleThinkingWaitEarly = async (
 ): Promise<{ sawThinkingWait: boolean; processTextDuringRun: string }> => {
   const deadline = Date.now() + timeoutMs
   let processTextDuringRun = ((await processLocator.textContent()) || '').trim()
-  let sawThinkingWait = /思考中/u.test(processTextDuringRun)
+  let sawThinkingWait = /俺想想/u.test(processTextDuringRun)
   while (Date.now() < deadline && !sawThinkingWait) {
     processTextDuringRun = ((await processLocator.textContent()) || '').trim()
-    if (/思考中/u.test(processTextDuringRun)) {
+    if (/俺想想/u.test(processTextDuringRun)) {
       sawThinkingWait = true
       break
     }
@@ -149,7 +149,7 @@ const sampleThinkingWaitEarly = async (
   }
   if (!sawThinkingWait) {
     processTextDuringRun = ((await processLocator.textContent()) || '').trim()
-    sawThinkingWait = /思考中/u.test(processTextDuringRun)
+    sawThinkingWait = /俺想想/u.test(processTextDuringRun)
   }
   return { sawThinkingWait, processTextDuringRun }
 }
@@ -179,7 +179,7 @@ describe('workbench run e2e', () => {
           const earlySample = await sampleThinkingWaitEarly(page, processLocator)
           const retryAndThinkingCoexist =
             /正在重试/u.test(earlySample.processTextDuringRun) &&
-            /思考中/u.test(earlySample.processTextDuringRun)
+            /俺想想/u.test(earlySample.processTextDuringRun)
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
@@ -195,7 +195,7 @@ describe('workbench run e2e', () => {
             sawThinkingWait: earlySample.sawThinkingWait,
             processTextDuringRun: earlySample.processTextDuringRun,
             retryAndThinkingCoexist,
-            thinkingStuckAfterComplete: /思考中/u.test(processRender.processRootText),
+            thinkingStuckAfterComplete: /俺想想/u.test(processRender.processRootText),
             processRender,
             visibleToolNames,
             finalAnswerText,
@@ -260,7 +260,7 @@ describe('workbench run e2e', () => {
             {
               name: 'workbench-ai-process-activity-render-real',
               message:
-                '真实 AI run 应渲染 Thought/Activity 过程层（header 同类归并/并但/>3 类已完成 n 项、展开平铺、无收尾等待层、思考中不卡在完成后），并产出围绕工作区事实的最终 markdown，对齐 WB-COMPOSER-003、WB-COMPOSER-009、WB-COMPOSER-014、WB-CORE-005、WB-CORE-006。',
+                '真实 AI run 应渲染 Thought/Activity 过程层（header 同类归并/并但/>3 类已完成 n 项、展开平铺、无收尾等待层、俺想想不卡在完成后），并产出围绕工作区事实的最终 markdown，对齐 WB-COMPOSER-003、WB-COMPOSER-009、WB-COMPOSER-014、WB-CORE-005、WB-CORE-006。',
               data: result
             }
           )

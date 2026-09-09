@@ -226,7 +226,7 @@ describe('ai human context compaction node', () => {
     cache.messages = [earlierUser, ...earlierPair, current, ...tailPair]
     cache.currentUserLogAppended = true
     const node = createContextCompactionNode({ ctx, cache })
-    await node(
+    const next = await node(
       createInitialHumanState({
         taskId: 'task-compact',
         userInput: 'continue the task'
@@ -247,6 +247,66 @@ describe('ai human context compaction node', () => {
     expect(cache.messages?.[1] && String(cache.messages[1].content)).toBe(
       wrapCompactionCheckpointContent('## 目标\n继续交付')
     )
+    expect(next.execution.stage).toBe('context_budget')
+  })
+
+  it('skips the compaction LLM when coveredThroughSeq cannot be resolved', async () => {
+    const current = createCurrentBrainUserMessage('continue the task')
+    const earlierUser = new HumanMessage('old task')
+    const earlierPair = [
+      new AIMessage({
+        content: 'old work',
+        tool_calls: [{ id: '1', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
+      }),
+      new ToolMessage({ content: 'old result', tool_call_id: '1' })
+    ]
+    const tailPair = [
+      new AIMessage({
+        content: 'current work',
+        tool_calls: [{ id: '2', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
+      }),
+      new ToolMessage({ content: 'current result', tool_call_id: '2' })
+    ]
+    const prompts: Array<{ system: string; user: string }> = []
+    const appended: ChatMessageLogEntry[] = []
+    const events: Array<{ type: string }> = []
+    const ctx = {
+      ...createContext(),
+      humanRuntimeOverrides: {
+        modelContextWindowTokens: contextWindowForTail(
+          estimateMessagesForContext([current, ...tailPair])
+        )
+      },
+      loadMessageLog: async () => [],
+      appendMessageLog: async (entries: ChatMessageLogEntry[]) => {
+        appended.push(...entries)
+      },
+      chatText: async (request: { system: string; user: string }) => {
+        prompts.push({ system: request.system, user: request.user })
+        return '## 目标\n不应调用'
+      },
+      checkCancelled: () => undefined,
+      sendEvent: (event: { type: string }) => {
+        events.push(event)
+      }
+    } as AiRunContext
+    const cache = createHumanRuntimeCache()
+    const beforeMessages = [earlierUser, ...earlierPair, current, ...tailPair]
+    cache.messages = beforeMessages
+    cache.currentUserLogAppended = true
+    const node = createContextCompactionNode({ ctx, cache })
+    const next = await node(
+      createInitialHumanState({
+        taskId: 'task-no-bookmark',
+        userInput: 'continue the task'
+      })
+    )
+
+    expect(prompts).toHaveLength(0)
+    expect(appended).toHaveLength(0)
+    expect(events.some((event) => event.type === 'context_compaction_started')).toBe(false)
+    expect(cache.messages).toEqual(beforeMessages)
+    expect(next.execution.stage).toBe('context_budget')
   })
 
   it('calls history then turn-prefix prompts on a mid-turn split and keeps checkpoint in conversation', async () => {

@@ -35,7 +35,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['composer'],
         description:
-          '真实 UI 覆盖发送前置（需先创建伙伴）、模型/偏好恢复，并用真实模型完成一次发送。',
+          '真实 UI 覆盖发送前置（无伙伴空态；需先创建伙伴）、模型/偏好/权限恢复，并用真实模型完成一次发送（含 Composer 提交路径）。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -175,7 +175,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-send-guard-preference-real-path',
               message:
-                'Workbench 应在未创建伙伴时展示 Composer 空态，权限菜单展示两条说明，完全访问切换具备风险确认弹窗，模型与 AI 推进偏好重进页面后恢复，发送时按钮进入停止态并最终完成。',
+                'Workbench 应在未创建伙伴时展示 Composer 空态且无发送按钮；权限菜单展示两条说明，完全访问切换具备风险确认弹窗；模型与 AI 推进偏好重进页面后恢复；发送时按钮进入停止态并最终完成真实 AI 运行（对齐 WB-CORE-001 / COMPOSER-001 / COMPOSER-002-AC1 / CORE-006-AC1）。',
               data: result
             }
           )

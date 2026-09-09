@@ -425,7 +425,7 @@ const getDisplayGroupText = (
   status: AssistantProcessStatus
 ): AssistantRichTextSegment[] => {
   if (display.kind === 'thinking') {
-    if (status === 'running') return sentence(text('思考中'))
+    if (status === 'running') return sentence(text('俺想想'))
     return []
   }
   if (display.kind === 'retry') {
@@ -639,7 +639,7 @@ export const createAssistantThinkingGroup = (messageId: string): AssistantProces
     skillKey: 'generic',
     iconKind: 'default',
     status: 'running',
-    runningText: sentence(text('思考中')),
+    runningText: sentence(text('俺想想')),
     completedText: [],
     failedText: [],
     partialFailedText: [],

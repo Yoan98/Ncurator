@@ -125,7 +125,6 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         }
       }
       cache.currentState = initialState
-      cache.messageLogRecords = messageLogRecords
       cache.currentUserLogAppended = false
       const brainProjection = projectBrainMessagesFromLog({
         records: messageLogRecords,

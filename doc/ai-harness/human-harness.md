@@ -74,7 +74,6 @@ flowchart TD
 | `messages` | brain 请求的 LangChain 消息序 |
 | `currentUserMessageIndex` | 当前 run 的 build user 下标（同 run refresh；resume 时为末尾） |
 | `currentUserLogAppended` | 本 run 是否已写 log `user` |
-| `messageLogRecords` | 启动时 log 快照（仅初始化用；compaction 后不刷新，书签以 log 为准） |
 | `lastBrainInputTokens` | 预算估算；compaction 后需 fresh usage |
 
 Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `messagesFromLogEntries`，与新 run 投影同一入口。System、checkpoint User、当前 build User 除外。禁止 push 流式 AIMessage；`context_budget` 已写入的 log `user` 不得再投影一遍。
@@ -557,7 +556,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 进入 brain 前，因上下文预算触发。执行后 **整段替换** runtime messages 为 `[System, checkpoint User, …tail]`，并 **打破第 4 节前缀缓存**。
 
-**并排是正式规则**（DeepSeek / Pi 式：摘要占位 + 切点后原文保留）。tail 含边界 User 时出现 `[checkpoint User][原始 User]`；半轮切点把该轮 User 折进摘要时则是 `[checkpoint][AI/Tool…]`。禁止的是「摘要与 **已被 covered** 的全文」同时发送，不是禁止与 retained User 相邻。checkpoint User 只在发给主模型时合成，不是 log `user`。新 run 续发时新 User 只在末尾 append。
+**并排是正式规则**（摘要占位 + 切点后原文保留）。tail 含边界 User 时出现 `[checkpoint User][原始 User]`；半轮切点把该轮 User 折进摘要时则是 `[checkpoint][AI/Tool…]`。禁止的是「摘要与 **已被 covered** 的全文」同时发送，不是禁止与 retained User 相邻。checkpoint User 只在发给主模型时合成，不是 log `user`。新 run 续发时新 User 只在末尾 append。
 
 ### 5.1 触发
 
@@ -583,10 +582,10 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 1. `context_budget` 在进入 compaction 前，若本轮 human user 尚未写入 log，先 append `user`。
 2. 压缩模型：system 只锁角色（不要继续对话，只出摘要）。格式指令在 user 侧。切点前的原文进 `<conversation>`。历史压缩只用六栏提示词；半截压缩用三栏提示词。不要 `<previous-summary>`。各栏保持简短，保留精确路径、函数名和报错原文。
-3. 算 `coveredThroughSeq`：对全伙伴 log 中 `user|assistant|tool` 可见行，取与 `countTailBookmarkMessages(tail)`（ai / tool / 边界 User 条数）对齐的 keep 窗口；`coveredThroughSeq` = 第一条 kept 可见行之前、log 中最大的 `seq`（可为 annotation）。算不出则丢弃摘要、**不写** checkpoint，runtime 不变。
-4. 只 append **一条** `compaction_checkpoint`（`coveredThroughSeq`、`summary` 等）。`summary` 是压缩模型原文，不含英文外壳。
-5. 整段替换 runtime：`[System, 合成 checkpoint User, …tail]`（`buildCompactedMessages`）。不写 snapshot；不刷新 `messageLogRecords`。
-6. 图边强制 `context_compaction → context_budget`（节点 return stage 可写 `brain`，以边为准），再进 brain。
+3. **先**算 `coveredThroughSeq`（对全伙伴 log 中 `user|assistant|tool` 可见行，取与 `countTailBookmarkMessages(tail)` 对齐的 keep 窗口；值为第一条 kept 可见行之前、log 中最大的 `seq`，可为 annotation）。算不出则 **不调** 压缩模型、不发 started、不写 checkpoint，`stage → context_budget`。
+4. 再调压缩模型；只 append **一条** `compaction_checkpoint`（`coveredThroughSeq`、`summary` 等）。`summary` 是压缩模型原文，不含英文外壳。
+5. 整段替换 runtime：`[System, 合成 checkpoint User, …tail]`（`buildCompactedMessages`）。不写 snapshot。
+6. `stage → context_budget`（与图边 `context_compaction → context_budget` 一致），再由 budget 进 brain。
 
 压缩 system：
 

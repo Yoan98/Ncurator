@@ -135,7 +135,7 @@ export const createBrainNode = (input: {
       const classifyStreamAsThought = (): void => {
         if (streamClassifiedAsThought) return
         streamClassifiedAsThought = true
-        // Process-layer "思考中" closes as soon as brain produces visible output.
+        // Process-layer "俺想想" closes as soon as brain produces visible output.
         // Log annotation thinking_completed stays until the round finishes (thought projection).
         completeThinking()
         input.ctx.sendEvent({
