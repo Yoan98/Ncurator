@@ -97,7 +97,7 @@
 - 目的：验证真实业务场景在真实生产调用下可以完成。
 - case 设计必须使用真实用户风格输入，不得把内部固定工具顺序写进用户输入。
 - 断言口径统一遵循 `doc/test.md` 的真实 AI / live 断言规则。
-- 涉及数据计算 / 对账 / 统计的真实 AI 场景，brain 系统提示词已要求计算必须通过 terminal 工具真实执行；live case 硬断言只校验完成态、关键产物与 terminal 计算是否真实发生（如产物修改记录 `source=terminal_tool`）。
+- 涉及数据计算 / 对账 / 统计的真实 AI 场景，brain 系统提示词已要求计算必须通过 terminal 工具真实执行；live case 硬断言校验完成态、关键产物与 terminal 计算是否真实发生。修改记录 `source=terminal_tool` 仅在有效 cwd 进入工作地址的可追踪写入路径上断言（见 `human-terminal-data-reconciliation-live`）。
 - `human / live` 的完整证据写入测试运行产物；顶部“最新 Live 评估”仅由人工在复核 raw logs 与 artifact 后覆盖更新。
 
 ### 3.3 目录与命令
@@ -988,8 +988,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：真实模型将发票与回款数据对账，并为财务交付异常清单 CSV。
 - Why：这是独立的真实终端智能性场景，不与 Excel 读写 case 混合。
 - How：用户只描述对账和财务异常清单需求，不出现终端或命令概念。
-- Oracle：输入文件不变；对账计算与 `reconciliation-exceptions.csv` 产出必须经过 terminal 脚本（`python/awk/join` 等真实计算命令），对应修改记录 `source` 必须为 `terminal_tool`；异常行和金额正确。
-- Not：不生成测试专用 JSON，不混入终端协议、runtime 下载或临时目录契约。
+- Oracle：输入文件不变；对账计算与 `reconciliation-exceptions.csv` 产出必须经过 terminal 脚本（`python/awk/join` 等真实计算命令）；异常行和金额正确。修改记录 `source=terminal_tool` **仅当**存在有效 cwd 落在工作地址内、且非纯核验（`cat`/`md5`/`ls` 等）的 terminal 命令时才硬断言——家目录起用绝对路径写入、仅 cd 进去核验时不要求修改记录（对齐当前追踪边界）。
+- Not：不生成测试专用 JSON，不混入终端协议、runtime 下载或临时目录契约；不强制模型必须先 `cd` 再写。
 
 ##### `human-runtime-script-system-python-live`
 

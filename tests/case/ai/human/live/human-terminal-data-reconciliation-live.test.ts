@@ -19,6 +19,29 @@ const readCsvRows = async (filePath: string): Promise<Array<{ type: string; reco
       return { type: type.trim(), recordId: recordId.trim(), amount: amount.trim() }
     })
 
+const isPathInsideRoot = (targetPath: string, rootPath: string): boolean => {
+  const resolvedTarget = path.resolve(targetPath)
+  const resolvedRoot = path.resolve(rootPath)
+  if (resolvedTarget === resolvedRoot) return true
+  const relativePath = path.relative(resolvedRoot, resolvedTarget)
+  return Boolean(relativePath) && !relativePath.startsWith('..') && !path.isAbsolute(relativePath)
+}
+
+const stripLeadingCd = (command: string): string =>
+  command.replace(/^\s*(?:cd|Set-Location)\s+(?:"[^"]+"|'[^']+'|[^\s;|&]+)\s*(?:&&|;)\s*/iu, '')
+
+const VERIFY_COMMAND_HEAD =
+  /^(?:echo|cat|ls|dir|md5|md5sum|sha256sum|shasum|pwd|head|tail|wc|stat|file|type|Get-Content|Get-ChildItem)\b/iu
+
+/** Read/list/hash oriented command after an optional leading cd — not expected to create file-change records. */
+const isVerifyOrientedTerminalCommand = (command: string): boolean => {
+  const parts = stripLeadingCd(command)
+    .split(/\s*(?:&&|;)\s*/u)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  return parts.length > 0 && parts.every((part) => VERIFY_COMMAND_HEAD.test(part))
+}
+
 describe('ai human live terminal backend', () => {
   it('human-terminal-data-reconciliation-live', async () => {
     await runWithStructuredOutputRetry(async () => {
@@ -69,23 +92,39 @@ describe('ai human live terminal backend', () => {
           const starts = filterAiRunEventsByType(result.events, 'tool_call_started')
           const toolNames = starts.map((event) => event.toolName)
           const results = filterAiRunEventsByType(result.events, 'tool_call_result')
+          const terminalSteps = filterAiRunEventsByType(result.events, 'terminal_step_started')
           const rowAmountKeys = result.rows
             .map((row) => `${row.recordId}:${row.amount}`)
             .sort()
           const hasMeaningfulTypes = result.rows.every((row) => row.type.trim().length > 0)
+          // Only expect terminal_tool routing when a command's effective cwd is inside the
+          // workspace and the command is not a verify-only follow-up (cat/md5/ls after abs-path write).
+          const expectTerminalToolRecord = terminalSteps.some(
+            (event) =>
+              isPathInsideRoot(event.cwd, runtime.workspaceRoot) &&
+              !isVerifyOrientedTerminalCommand(event.command)
+          )
+          const routingOk =
+            !expectTerminalToolRecord ||
+            (result.csvRecord?.status === 'applied' && result.csvRecord?.source === 'terminal_tool')
           runtime.assertThat(
             result.output.status === 'completed' &&
               JSON.stringify(result.beforeHashes) === JSON.stringify(result.afterHashes) &&
               results.some((event) => event.toolName === 'terminal_run' && event.result?.ok === true) &&
-              result.csvRecord?.status === 'applied' &&
-              result.csvRecord?.source === 'terminal_tool' &&
+              routingOk &&
               rowAmountKeys.join(',') === 'INV-003:60000,INV-005:30000' &&
               hasMeaningfulTypes,
             {
               name: 'human-live-terminal-data-reconciliation-delivers-finance-exceptions',
               message:
                 'The live model must compute the reconciliation via terminal and deliver the correct finance exception file.',
-              data: { toolNames, rows: result.rows, csvSource: result.csvRecord?.source }
+              data: {
+                toolNames,
+                rows: result.rows,
+                csvSource: result.csvRecord?.source,
+                expectTerminalToolRecord,
+                terminalCwds: terminalSteps.map((event) => event.cwd)
+              }
             }
           )
         }
