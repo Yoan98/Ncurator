@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  mergeConversationMessages,
-  projectAiConversationMessages
-} from '../../../../src/shared/workbench/conversationProjection'
-import type { AiRunRecord, ChatMessage, ChatMessageLogRecord } from '../../../../src/shared/types'
+import { projectAiConversationMessages } from '../../../../src/shared/workbench/conversationProjection'
+import type { AiRunRecord, ChatMessageLogRecord } from '../../../../src/shared/types'
 
 const buildRun = (input: Partial<AiRunRecord> & { id: string }): AiRunRecord => ({
   id: input.id,
@@ -150,40 +147,5 @@ describe('conversationProjection', () => {
 
     expect(messages).toHaveLength(2)
     expect(messages[1]).toMatchObject({ role: 'assistant', content: '' })
-  })
-
-  it('merges search turns without duplicating ai message ids', () => {
-    const aiMessages: ChatMessage[] = [
-      {
-        id: 'user-1',
-        partner_id: 'partner-1',
-        role: 'user',
-        content: 'ai',
-        timestamp: 1
-      }
-    ]
-    const searchMessages: ChatMessage[] = [
-      {
-        id: 'search-1',
-        partner_id: 'partner-1',
-        role: 'user',
-        content: 'search query',
-        timestamp: 2
-      },
-      {
-        id: 'user-1',
-        partner_id: 'partner-1',
-        role: 'user',
-        content: 'duplicate',
-        timestamp: 3
-      }
-    ]
-
-    const merged = mergeConversationMessages({
-      aiMessages,
-      legacyMessages: searchMessages
-    })
-
-    expect(merged.map((message) => message.id)).toEqual(['user-1', 'search-1'])
   })
 })

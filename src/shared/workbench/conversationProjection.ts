@@ -73,17 +73,6 @@ export const projectAiConversationMessages = (input: {
   return messages
 }
 
-export const mergeConversationMessages = (input: {
-  aiMessages: ChatMessage[]
-  legacyMessages: ChatMessage[]
-}): ChatMessage[] => {
-  const aiMessageIds = new Set(input.aiMessages.map((message) => message.id))
-  const supplemental = input.legacyMessages.filter((message) => !aiMessageIds.has(message.id))
-  return [...input.aiMessages, ...supplemental].sort(
-    (left, right) => left.timestamp - right.timestamp
-  )
-}
-
 export const PARTNER_LIST_EMPTY_PREVIEW = '做点啥呢？'
 
 const PARTNER_LIST_PREVIEW_MAX_CHARS = 40
