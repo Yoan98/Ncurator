@@ -1,7 +1,7 @@
-import { ToolMessage } from '@langchain/core/messages'
 import type { ChatMessageLogEntry } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import type { HumanRuntimeCache } from '../types'
+import { appendLogEntriesToCache } from '../memory/conversationLogMessages'
 
 export type ToolFeedbackInput = {
   toolCallId: string
@@ -20,25 +20,14 @@ const buildContent = (input: ToolFeedbackInput): string => {
     : 'Error: The tool call failed. Check the tool arguments and try again.'
 }
 
-export const buildToolFeedback = (
-  input: ToolFeedbackInput
-): {
-  message: ToolMessage
-  transcript: ChatMessageLogEntry
-} => {
+export const buildToolFeedback = (input: ToolFeedbackInput): ChatMessageLogEntry => {
   const content = buildContent(input)
   return {
-    message: new ToolMessage({
-      content,
-      tool_call_id: input.toolCallId
-    }),
-    transcript: {
-      kind: 'tool',
-      toolCallId: input.toolCallId,
-      toolName: input.toolName,
-      ok: input.ok,
-      content
-    }
+    kind: 'tool',
+    toolCallId: input.toolCallId,
+    toolName: input.toolName,
+    ok: input.ok,
+    content
   }
 }
 
@@ -52,12 +41,10 @@ export const appendToolFeedback = async (input: {
   content?: string
   additionalTranscriptEntries?: ChatMessageLogEntry[]
 }): Promise<void> => {
-  const feedback = buildToolFeedback(input)
-  const messages = input.cache.messages || []
-  messages.push(feedback.message)
-  input.cache.messages = messages
+  const transcript = buildToolFeedback(input)
+  appendLogEntriesToCache(input.cache, [transcript])
   await input.ctx.appendMessageLog([
-    feedback.transcript,
+    transcript,
     ...(input.additionalTranscriptEntries || [])
   ])
 }

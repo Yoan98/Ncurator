@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { ToolMessage } from '@langchain/core/messages'
 import type {
   ChatMessageImageRef,
   ChatMessageLogEntry,
@@ -19,7 +18,7 @@ import { analyzeTerminalCommandPolicy } from '../../tools/terminal/commandPolicy
 import type { HumanRuntimeCache, HumanState, ToolCallResult } from '../../types'
 import { executeToolCall } from './toolExecutor'
 import { returnToBrainAfterTrace, returnToDispatch } from '../utils/stateTransitions'
-import { createImageReferenceMessage } from '../../memory/multimodal'
+import { appendLogEntriesToCache } from '../../memory/conversationLogMessages'
 
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 
@@ -112,7 +111,6 @@ const appendToolMessages = async (input: {
     images?: ChatMessageImageRef[]
   }>
 > => {
-  const messages = input.cache.messages || []
   const transcriptEntries: Array<{
     toolCallId: string
     toolName: string
@@ -120,7 +118,6 @@ const appendToolMessages = async (input: {
     content: string
     images?: ChatMessageImageRef[]
   }> = []
-  const imageRefs: ChatMessageImageRef[] = []
   for (let index = 0; index < input.calls.length; index += 1) {
     const call = input.calls[index]
     const result = input.results[index]
@@ -131,15 +128,6 @@ const appendToolMessages = async (input: {
       args: call.args,
       result
     })
-    messages.push(
-      new ToolMessage({
-        content: delivery.content,
-        tool_call_id: call.toolCallId
-      })
-    )
-    if (result.ok && result.imageRefs?.length) {
-      imageRefs.push(...result.imageRefs)
-    }
     transcriptEntries.push({
       toolCallId: call.toolCallId,
       toolName: call.toolName,
@@ -148,8 +136,17 @@ const appendToolMessages = async (input: {
       images: result.ok ? result.imageRefs : undefined
     })
   }
-  if (imageRefs.length > 0) messages.push(createImageReferenceMessage(imageRefs))
-  input.cache.messages = messages
+  appendLogEntriesToCache(
+    input.cache,
+    transcriptEntries.map((entry) => ({
+      kind: 'tool' as const,
+      toolCallId: entry.toolCallId,
+      toolName: entry.toolName,
+      ok: entry.ok,
+      content: entry.content,
+      images: entry.images
+    }))
+  )
   return transcriptEntries
 }
 
@@ -209,7 +206,6 @@ const appendBlockedApprovalToolMessages = (input: {
   decisions: Array<{ itemId: string; action: 'approve' | 'reject' | 'guide'; message?: string }>
   approvalItems: Array<{ itemId: string; order: number; toolName: string; command: string }>
 }): ChatMessageLogEntry[] => {
-  const messages = input.cache.messages || []
   const decisionByItemId = new Map(input.decisions.map((decision) => [decision.itemId, decision]))
   const transcriptEntries: ChatMessageLogEntry[] = []
 
@@ -237,17 +233,17 @@ const appendBlockedApprovalToolMessages = (input: {
       ok: false,
       error: message
     })
-    const feedback = buildToolFeedback({
-      toolCallId: call.toolCallId,
-      toolName: call.toolName,
-      ok: false,
-      content: `Error: ${message}`
-    })
-    messages.push(feedback.message)
-    transcriptEntries.push(feedback.transcript)
+    transcriptEntries.push(
+      buildToolFeedback({
+        toolCallId: call.toolCallId,
+        toolName: call.toolName,
+        ok: false,
+        content: `Error: ${message}`
+      })
+    )
   })
 
-  input.cache.messages = messages
+  appendLogEntriesToCache(input.cache, transcriptEntries)
   return transcriptEntries
 }
 

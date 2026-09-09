@@ -1,26 +1,10 @@
-import { AIMessage, HumanMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
+import { AIMessage, ToolMessage, type BaseMessage } from '@langchain/core/messages'
 import type {
-  ChatMessageImageRef,
   ChatMessageLogEntry,
   ChatMessageLogPlanItem,
-  ChatMessageLogRecord,
-  ChatMessageLogToolCall
+  ChatMessageLogRecord
 } from '../../../../../shared/types'
-import { createImageReferenceMessage } from './multimodal'
-
-const toToolCall = (
-  call: ChatMessageLogToolCall
-): {
-  id: string
-  name: string
-  args: Record<string, unknown>
-  type: 'tool_call'
-} => ({
-  id: call.id,
-  name: call.name,
-  args: { ...call.args },
-  type: 'tool_call'
-})
+import { messagesFromLogEntries } from './conversationLogMessages'
 
 const INTERRUPTED_TOOL_CONTENT =
   'Error: The run was interrupted before this tool call could be executed.'
@@ -77,47 +61,13 @@ export const deriveMessageLogMessages = (input: {
       if (input.entries[index].kind === 'user') lastUserIndex = index
     }
   }
-
-  const messages: BaseMessage[] = []
-  let pendingImages: ChatMessageImageRef[] = []
-  const flushImages = (): void => {
-    if (pendingImages.length === 0) return
-    messages.push(createImageReferenceMessage(pendingImages))
-    pendingImages = []
-  }
-  for (let index = 0; index < input.entries.length; index += 1) {
-    const entry = input.entries[index]
-    if (input.skipLastUserEntry && entry.kind === 'user' && index === lastUserIndex) {
-      continue
-    }
-    if (entry.kind === 'user') {
-      flushImages()
-      messages.push(new HumanMessage(entry.content))
-      continue
-    }
-    if (entry.kind === 'assistant') {
-      flushImages()
-      messages.push(
-        new AIMessage({
-          content: entry.content,
-          tool_calls: entry.toolCalls.map(toToolCall)
-        })
-      )
-      continue
-    }
-    if (entry.kind === 'tool') {
-      messages.push(
-        new ToolMessage({
-          content: entry.content,
-          tool_call_id: entry.toolCallId
-        })
-      )
-      if (entry.images?.length) pendingImages.push(...entry.images)
-      continue
-    }
-  }
-  flushImages()
-  return messages
+  const entries =
+    lastUserIndex >= 0
+      ? input.entries.filter(
+          (entry, index) => !(entry.kind === 'user' && index === lastUserIndex)
+        )
+      : input.entries
+  return messagesFromLogEntries(entries)
 }
 
 export type MessageLogProjection = {

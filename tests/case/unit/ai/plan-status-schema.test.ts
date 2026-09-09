@@ -5,6 +5,7 @@ import {
 } from '../../../../src/main/services/ai/human/schema'
 import { getToolSpec } from '../../../../src/main/services/ai/human/tools/registry'
 import { buildToolFeedback } from '../../../../src/main/services/ai/human/shared/toolFeedback'
+import { messagesFromLogEntries } from '../../../../src/main/services/ai/human/memory/conversationLogMessages'
 
 describe('ai unit plan status schema', () => {
   it('allows todo / done as plan item status', () => {
@@ -49,34 +50,36 @@ describe('ai unit plan status schema', () => {
 
 describe('ai unit tool feedback text', () => {
   it('preserves explicit success text in the model message and transcript', () => {
-    const feedback = buildToolFeedback({
+    const transcript = buildToolFeedback({
       toolCallId: 'call-1',
       toolName: 'update_plan',
       ok: true,
       content: 'Plan updated successfully.'
     })
+    const message = messagesFromLogEntries([transcript])[0]
 
-    expect(String(feedback.message.content)).toBe('Plan updated successfully.')
-    expect(feedback.transcript).toEqual({
+    expect(String(message?.content)).toBe('Plan updated successfully.')
+    expect(transcript).toEqual({
       kind: 'tool',
       toolCallId: 'call-1',
       toolName: 'update_plan',
       ok: true,
-      content: String(feedback.message.content)
+      content: String(message?.content)
     })
   })
 
   it('builds an English error message without exposing non-English internals', () => {
-    const feedback = buildToolFeedback({
+    const transcript = buildToolFeedback({
       toolCallId: 'call-2',
       toolName: 'update_plan',
       ok: false,
       errorMessage: 'status 仅允许 todo/done'
     })
+    const message = messagesFromLogEntries([transcript])[0]
 
-    expect(String(feedback.message.content)).toBe(
+    expect(String(message?.content)).toBe(
       'Error: The tool call failed. Check the tool arguments and try again.'
     )
-    expect(feedback.transcript.content).toBe(String(feedback.message.content))
+    expect(transcript.content).toBe(String(message?.content))
   })
 })

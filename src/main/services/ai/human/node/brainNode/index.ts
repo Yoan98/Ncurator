@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { SystemMessage } from '@langchain/core/messages'
 import { getToolCalls } from '../../../../../utils/aiCapabilityUtils'
 import { extractTextContent, tryRepairJsonObject } from '../../../structuredOutput'
-import type { JsonObject } from '../../../../../../shared/types'
+import type { ChatMessageLogToolCall, JsonObject } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { isContentSafetyError } from '../../../utils/runFailure'
 import { normalizeRoundThought } from '../../memory/thoughtMemory'
@@ -18,6 +18,7 @@ import {
 } from '../../shared/deliveryGuidance'
 import { buildDispatchQueue } from '../dispatch'
 import { appendToolFeedback } from '../../shared/toolFeedback'
+import { appendLogEntriesToCache } from '../../memory/conversationLogMessages'
 import { formatZodErrorForTool, type ZodIssueLike } from '../../shared/schemaError'
 import { normalizeToolCallArgs } from '../../shared/toolArgsNormalize'
 import { estimateMessagesForContext, projectMessagesForMainModel } from '../../memory/multimodal'
@@ -233,38 +234,60 @@ export const createBrainNode = (input: {
       ) {
         throw new Error('模型声明了工具调用，但没有返回任何工具调用内容。')
       }
+      const toLogArgs = (value: unknown): JsonObject => {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          return { ...(value as JsonObject) }
+        }
+        return {}
+      }
+      const logToolCalls: ChatMessageLogToolCall[] = []
       const dispatchableCalls: Parameters<typeof buildDispatchQueue>[0] = []
-      const unrecoverableCalls: Array<{ id?: string; name: string; errorMessage: string }> = []
+      const unrecoverableCalls: Array<{ id: string; name: string; errorMessage: string }> = []
+      const allocateId = (id: unknown): string => {
+        const trimmed = typeof id === 'string' ? id.trim() : ''
+        if (trimmed) return trimmed
+        return `invalid-${input.cache.toolCallCount}-${logToolCalls.length}`
+      }
 
       for (const call of validToolCalls) {
-        const id = typeof call.id === 'string' && call.id.trim() ? call.id : undefined
         const name = typeof call.name === 'string' ? call.name : ''
-        if (id) {
-          dispatchableCalls.push({
-            id,
-            name,
-            args: (call.args || {}) as Record<string, unknown>
-          })
-        } else {
+        const id = allocateId(call.id)
+        const args = toLogArgs(call.args)
+        logToolCalls.push({ id, name, args })
+        if (!String(call.id || '').trim()) {
           unrecoverableCalls.push({
+            id,
             name,
             errorMessage: 'The tool call is missing tool_call_id and was not executed.'
           })
+          continue
         }
+        dispatchableCalls.push({
+          id,
+          name,
+          args: (call.args || {}) as Record<string, unknown>
+        })
       }
       for (const invalidCall of invalidToolCalls) {
         const repaired = tryRepairJsonObject(invalidCall.args)
-        const id =
-          typeof invalidCall.id === 'string' && invalidCall.id.trim() ? invalidCall.id : undefined
+        const id = allocateId(invalidCall.id)
         const name = typeof invalidCall.name === 'string' ? invalidCall.name : ''
-        if (!id) {
+        if (!String(invalidCall.id || '').trim()) {
+          logToolCalls.push({
+            id,
+            name,
+            args: repaired.ok ? toLogArgs(repaired.value) : {}
+          })
           unrecoverableCalls.push({
+            id,
             name,
             errorMessage: 'The tool call is missing tool_call_id and was not executed.'
           })
         } else if (repaired.ok) {
+          logToolCalls.push({ id, name, args: toLogArgs(repaired.value) })
           dispatchableCalls.push({ id, name, args: repaired.value })
         } else {
+          logToolCalls.push({ id, name, args: {} })
           unrecoverableCalls.push({
             id,
             name,
@@ -277,7 +300,7 @@ export const createBrainNode = (input: {
       // 抛出只有路径、没有字段与期望值的 terse 错误。learn_skill/update_plan 由各自
       // 节点负责校验，这里跳过 schema，但仍统一做嵌套 JSON 字符串展开。
       const NODE_OWNED_TOOL_NAMES = new Set(['learn_skill', 'update_plan'])
-      const schemaInvalidCalls: Array<{ id?: string; name: string; errorMessage: string }> = []
+      const schemaInvalidCalls: Array<{ id: string; name: string; errorMessage: string }> = []
       const executableCalls: Parameters<typeof buildDispatchQueue>[0] = []
       for (const call of dispatchableCalls) {
         const args = normalizeToolCallArgs(call.args ?? {})
@@ -319,33 +342,13 @@ export const createBrainNode = (input: {
 
       // 过程决策（含无效 tool_calls）才写 log/cache assistant；正常交付仅由 finalizeDelivery 写。
       if (hasAnyToolCall) {
-        messages.push(assistantMessage)
-        input.cache.messages = messages
-        await input.ctx.appendMessageLog([
-          {
-            kind: 'assistant',
-            content: extractTextContent(assistantMessage.content),
-            toolCalls: [
-              ...executableCalls.map((call) => ({
-                id: call.id,
-                name: call.name,
-                args: call.args as JsonObject
-              })),
-              ...unrecoverableCalls.map((call, index) => ({
-                id: call.id || `invalid-${input.cache.toolCallCount}-0-${index}`,
-                name: call.name,
-                args: {} as JsonObject
-              })),
-              ...schemaInvalidCalls.map((call, index) => ({
-                id:
-                  call.id ||
-                  `invalid-${input.cache.toolCallCount}-${unrecoverableCalls.length}-${index}`,
-                name: call.name,
-                args: {} as JsonObject
-              }))
-            ]
-          }
-        ])
+        const assistantEntry = {
+          kind: 'assistant' as const,
+          content: assembledText,
+          toolCalls: logToolCalls
+        }
+        appendLogEntriesToCache(input.cache, [assistantEntry])
+        await input.ctx.appendMessageLog([assistantEntry])
       }
 
       const thoughtText = assembledText
@@ -363,14 +366,13 @@ export const createBrainNode = (input: {
       }
 
       const appendInvalidFeedback = async (
-        calls: Array<{ id?: string; name: string; errorMessage: string }>,
-        offset: number
+        calls: Array<{ id: string; name: string; errorMessage: string }>
       ): Promise<void> => {
-        for (const [index, call] of calls.entries()) {
+        for (const call of calls) {
           await appendToolFeedback({
             cache: input.cache,
             ctx: input.ctx,
-            toolCallId: call.id || `invalid-${input.cache.toolCallCount}-${offset}-${index}`,
+            toolCallId: call.id,
             toolName: call.name || 'unknown',
             ok: false,
             errorMessage: call.errorMessage
@@ -379,8 +381,8 @@ export const createBrainNode = (input: {
       }
 
       if (unrecoverableCalls.length > 0 || schemaInvalidCalls.length > 0) {
-        await appendInvalidFeedback(unrecoverableCalls, 0)
-        await appendInvalidFeedback(schemaInvalidCalls, unrecoverableCalls.length)
+        await appendInvalidFeedback(unrecoverableCalls)
+        await appendInvalidFeedback(schemaInvalidCalls)
 
         if (executableCalls.length === 0) {
           completeThinking()
