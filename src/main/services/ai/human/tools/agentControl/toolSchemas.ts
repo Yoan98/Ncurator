@@ -6,8 +6,7 @@ export const LEARN_SKILL_SCHEMA = z.object({
 })
 
 export const UPDATE_PLAN_SCHEMA = z.object({
-  plan: z.array(humanPlanItemSchema).min(1).describe('任务计划条目'),
-  progress: z.string().optional().describe('当前进度摘要')
+  plan: z.array(humanPlanItemSchema).min(1).describe('任务计划条目')
 })
 
 export const READ_IMAGE_SCHEMA = z.object({
