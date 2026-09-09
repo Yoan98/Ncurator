@@ -76,7 +76,7 @@ flowchart TD
 | `messageLogRecords` | 启动时快照；compaction 后刷新 |
 | `lastBrainInputTokens` | 预算估算；compaction 后需 fresh usage |
 
-**同 run 追加 conversation 消息**：`user` / `assistant` / `tool`（含 `tool.images[]` 合成的多模态 HumanMessage）必须经 `messagesFromLogEntries` 再写入 `cache.messages`，与新 run 投影同一套构造。禁止把流式 `AIMessage` 直接 `push` 进 cache。合成的 System、checkpoint User、当前 build User 不走这条。`context_budget` 写入的 log `user` 已在 cache 里，不得再投影一遍。
+Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `messagesFromLogEntries`，与新 run 投影同一入口。System、checkpoint User、当前 build User 除外。禁止 push 流式 AIMessage；`context_budget` 已写入的 log `user` 不得再投影一遍。
 
 ---
 
@@ -151,7 +151,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 }
 ```
 
-**`assistant`（过程）** — brain 在有 `toolCalls` 时写入；`toolCalls` 非空。条目必须按模型返回顺序记下 **JSON 对象形态的原始 `args`**（含 schema 校验失败的 call）；不得把可执行 call 排到失败 call 前面，也不得因 schema 失败把 args 改写成 `{}`。参数根本不是合法 JSON 时，log 的 `args` 只能是对象，无法保存原始字符串。同 run 用这条 log 经 `messagesFromLogEntries` 进 cache，新 run 也用它投影。
+**`assistant`（过程）** — brain 在有 `toolCalls` 时写入；`toolCalls` 非空。按模型顺序写原始 `args`（schema 失败也不得写成 `{}`）。
 
 ```json
 {
@@ -407,7 +407,7 @@ flowchart TD
 1. 取该伙伴 log，按 `seq` 排序。
 2. 若有 `compaction_checkpoint`，只保留 `seq > coveredThroughSeq` 的行。
 3. 若有 checkpoint：先用 `payload.summary` 套外壳合成 HumanMessage。
-4. 其余 `user` / `assistant` / `tool` 以及 `tool.images[]` 一律走 `messagesFromLogEntries`（同 run append 共用）：`user` → HumanMessage；`assistant` → AIMessage（`tool_calls` 来自 log 原始 args）；`tool` → ToolMessage；图片在对应 ToolMessage 之后 flush 为多模态 HumanMessage（第 3.5 节）。
+4. 其余 conversation 行走 `messagesFromLogEntries`（第 1.5 节；图片 flush 见第 3.5 节）。
 5. 末尾 append 当前这次 `buildBrainUserMessage`。
 6. `repairInterruptedToolCalls`：每个 AIMessage 的 `tool_call_id` 若无对应 ToolMessage，插入
    `Error: The run was interrupted before this tool call could be executed.`
@@ -480,7 +480,7 @@ Live 运行中的 Thought 由 `assistant_process_thought` 事件写入 `processT
 #### 写入（hand / read_image）
 
 1. 工具执行成功 → `buildModelToolResultDelivery` 得文本 → 写 log `tool`（`content` + 可选 `images[]`）。
-2. runtime cache：同一批 log `tool` 经 `messagesFromLogEntries` 得到 ToolMessage；若有 `images[]`，在这批 ToolMessage **之后** flush 为多模态 HumanMessage（`createImageReferenceMessage`）。
+2. runtime cache：同一批 log `tool` append 进 `cache.messages`（第 1.5 节；有图则紧随 ToolMessage 之后）。
 3. `read_image`：本地源按 SHA-256 缓存为 `userData/partners/{id}/runtime/assets/read_image-cache/<hash>-v1.webp`；log 存缓存路径 ref。
 
 #### 读路径（发给主模型）
@@ -523,7 +523,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 ```
 
 - System 跨 run **字节稳定**（platform / paths / 技能目录；**不含** `current_time`）。
-- tail 只许 **末尾 append** assistant/tool。过程 assistant 的 `toolCalls` 按模型顺序写入原始 JSON 对象 args（schema 失败也不得改成 `{}`），同 run 与新 run 都经 `messagesFromLogEntries` 还原。
+- tail 只许 **末尾 append** assistant/tool（过程 `toolCalls.args` 见第 2.2 节）。
 - 同 run 内：**不改** 当前 build user；`<current_time>` 取本 run `runStartedAt`。
 - resume：**append** 新 User 在整段末尾；历史 User / 过程 **一字不改**（来自 log `content`）。
 
@@ -868,7 +868,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 |---------|------|
 | Graph | `src/main/services/ai/human/graph/humanGraph.ts` |
 | Log 投影 | `src/main/services/ai/human/memory/brainMessageProjection.ts` |
-| conversation log → 请求消息 | `src/main/services/ai/human/memory/conversationLogMessages.ts` |
+| Log → 消息 | `src/main/services/ai/human/memory/conversationLogMessages.ts` |
 | 过程 tail 投影 | `src/main/services/ai/human/memory/transcript.ts` |
 | 多模态 | `src/main/services/ai/human/memory/multimodal.ts` |
 | Build user | `src/main/services/ai/human/prompts/brain.ts` |
