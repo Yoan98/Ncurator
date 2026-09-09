@@ -375,7 +375,7 @@ const reduceAssistantTurnByRunEvent = (
   }
 
   if (event.type === 'run_warning') {
-    // 告警不停跑：仅结束「俺想想」，不把 turn 标 failed。
+    // 告警不停跑：仅结束「让俺想想」，不把 turn 标 failed。
     next = { ...next, isBrainThinking: false }
   }
 
@@ -771,7 +771,6 @@ const ChatPage: React.FC = () => {
   const [createPartnerShape, setCreatePartnerShape] = useState<PartnerAvatarShape>('circle')
   const [createPartnerColor, setCreatePartnerColor] = useState<PartnerAvatarColor>('blue')
   const [createPartnerSubmitting, setCreatePartnerSubmitting] = useState(false)
-  const [clearContextVisible, setClearContextVisible] = useState(false)
   const [busyCancelTask, setBusyCancelTask] = useState<ScheduledTask | null>(null)
   const [activeTimelineDayStart, setActiveTimelineDayStart] = useState<number | null>(null)
   const [composerAiPreference, setComposerAiPreference] = useState<WorkbenchAiPreference>('default')
@@ -1281,6 +1280,14 @@ const ChatPage: React.FC = () => {
   const latestUserMessageId = useMemo(
     () => [...currentMessages].reverse().find((item) => item.role === 'user')?.id || null,
     [currentMessages]
+  )
+  const clearContextVisible = useMemo(
+    () =>
+      Boolean(currentPartnerId) &&
+      currentMessages.length > 0 &&
+      !aiRunId &&
+      !pendingApprovalBatch,
+    [aiRunId, currentMessages.length, currentPartnerId, pendingApprovalBatch]
   )
   const userMessageTimeIds = useMemo(
     () => collectUserMessageTimeIds(currentMessages),
@@ -1878,7 +1885,6 @@ const ChatPage: React.FC = () => {
       const opened = await window.api.partnerOpen({ partnerId, limit: 50 })
       if (partnerSwitchRequestRef.current !== requestId) return
       applyPartnerUiState(partnerId, opened.uiState || null)
-      setClearContextVisible(false)
       setActiveTimelineDayStart(null)
       pendingTimelineJumpDayRef.current = null
       const restoredActiveTab = opened.uiState?.panel.tabs.find(
@@ -2776,7 +2782,6 @@ const ChatPage: React.FC = () => {
           setAssistantTurns({})
           setAiRunId(null)
           setLoading(false)
-          setClearContextVisible(false)
           void window.api.workbenchUiStateSave({ activeViewKey: null })
         }
       }
@@ -3241,9 +3246,6 @@ const ChatPage: React.FC = () => {
           })
         }
         void refreshContextUsage(eventPartnerId || currentPartnerIdRef.current)
-        if (eventPartnerId === currentPartnerIdRef.current) {
-          setClearContextVisible(true)
-        }
       }
     })
     return () => {
@@ -3394,7 +3396,6 @@ const ChatPage: React.FC = () => {
     setCancellingRun(false)
     setPendingApprovalBatch(null)
     setApprovalSubmitting(false)
-    setClearContextVisible(false)
     lastSubmittedInputRef.current = userQuery
     setPartners((items) =>
       items.map((item) =>
@@ -3506,7 +3507,6 @@ const ChatPage: React.FC = () => {
           }
           setCurrentMessages([])
           setHasMoreMessagesBefore(false)
-          setClearContextVisible(false)
           setActiveTimelineDayStart(null)
           void loadPartners()
         } catch (error) {

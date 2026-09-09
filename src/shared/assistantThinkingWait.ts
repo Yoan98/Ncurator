@@ -22,7 +22,7 @@ export type AssistantThinkingIndicatorInput = {
 }
 
 /**
- * “俺想想”展示判断规则：
+ * “让俺想想”展示判断规则：
  * - 请求时展示（isBrainThinking 为 true）；
  * - 结束时隐藏（收到输出、出错、run 结束、等待审批或已产出最终交付时隐藏）。
  */

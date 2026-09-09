@@ -557,6 +557,10 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     runFinished: Boolean(turn?.runFinished),
     hasFinalAnswer
   })
+  /** 运行未结束且尚无最终回答时预留固定行高，避免「让俺想想」显隐把页面顶抖 */
+  const reserveThinkingSlot =
+    showThinkingIndicator ||
+    (!Boolean(turn?.runFinished) && !Boolean(turn?.waitingApproval) && !hasFinalAnswer)
   const processGroups = useMemo(
     () => (turn?.processGroups || []).filter((group) => group.kind !== 'thinking'),
     [turn?.processGroups]
@@ -586,7 +590,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   return (
     <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
       <div className="space-y-4">
-        {timeline.length > 0 || hasStreamingThought || showThinkingIndicator ? (
+        {timeline.length > 0 || hasStreamingThought || reserveThinkingSlot ? (
           <div
             className={`transition-opacity duration-200 ${
               turn.status === 'completed' && hasFinalAnswer ? 'opacity-75' : ''
@@ -624,14 +628,17 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   <MarkdownRenderer content={streamingMarkdown} variant="thought" />
                 </div>
               ) : null}
-              {showThinkingIndicator ? (
+              {reserveThinkingSlot ? (
                 <div
-                  className="flex items-center gap-1.5 text-[13px] leading-6 text-[#787774]"
+                  className="flex h-6 items-center gap-1.5 text-[13px] leading-6 text-[#787774]"
                   data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${messageId}-thinking`}
+                  aria-hidden={!showThinkingIndicator}
                 >
-                  <span className="workbench-thinking-shimmer font-medium text-[#37352F]">
-                    俺想想
-                  </span>
+                  {showThinkingIndicator ? (
+                    <span className="workbench-thinking-shimmer font-medium text-[#37352F]">
+                      让俺想想
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
             </div>
