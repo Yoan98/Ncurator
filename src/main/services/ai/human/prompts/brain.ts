@@ -39,22 +39,34 @@ export const renderCurrentTimeText = (ctx: AiRunContext): string => {
   )
 }
 
-const renderPreferenceText = (preference: AiRunContext['preference']): string => {
+const renderPreferenceBlock = (preference: AiRunContext['preference']): string => {
   if (preference === 'local_sources_relaxed') {
-    return '优先使用知识库内容和用户工作区域文件内容作为依据来推进任务'
+    return [
+      '  <preference>',
+      '优先使用知识库内容和用户工作区域文件内容作为依据来推进任务',
+      '  </preference>'
+    ].join('\n')
   }
   if (preference === 'local_sources_strict') {
-    return '必须只能使用知识库内容和用户工作区域文件内容作为依据来推进任务，禁止使用其他信息与模型能力本身的信息'
+    return [
+      '  <preference>',
+      '必须只能使用知识库内容和用户工作区域文件内容作为依据来推进任务，禁止使用其他信息与模型能力本身的信息',
+      '  </preference>'
+    ].join('\n')
   }
   return ''
 }
 
-const renderOptionalUserContextBlock = (tag: string, body: string): string => {
-  const content = body.trim()
-  if (!content) return ''
-  return `  <${tag}>
-${content}
-  </${tag}>`
+const renderWorkspaceRootsBlock = (ctx: AiRunContext): string => {
+  const body = renderWorkspaceRootsText(ctx)
+  if (!body) return ''
+  return ['  <workspace_roots>', body, '  </workspace_roots>'].join('\n')
+}
+
+const renderReferenceScopeBlock = (scope: AiRunContext['referenceScope']): string => {
+  const body = renderReferenceScopeText(scope).trim()
+  if (!body) return ''
+  return ['  <reference_scope>', body, '  </reference_scope>'].join('\n')
 }
 
 const renderSkillLine = (skillId: string, description: string, toolCount: number): string =>
@@ -126,24 +138,26 @@ export const buildBrainUserMessage = (input: {
   state: HumanState
   ctx: AiRunContext
 }): string => {
-  const blocks = [
-    `  <task_goal>
-${input.state.task.userInput}
-  </task_goal>`,
-    renderOptionalUserContextBlock('preference', renderPreferenceText(input.ctx.preference)),
-    renderOptionalUserContextBlock('workspace_roots', renderWorkspaceRootsText(input.ctx)),
-    renderOptionalUserContextBlock(
-      'reference_scope',
-      renderReferenceScopeText(input.ctx.referenceScope)
-    ),
-    `  <current_time>
-${renderCurrentTimeText(input.ctx)}
-  </current_time>`
-  ].filter((block) => block.length > 0)
+  const taskGoal = input.state.task.userInput
+  const preference = renderPreferenceBlock(input.ctx.preference)
+  const workspaceRoots = renderWorkspaceRootsBlock(input.ctx)
+  const referenceScope = renderReferenceScopeBlock(input.ctx.referenceScope)
+  const currentTime = renderCurrentTimeText(input.ctx)
 
-  return `
-<user_context>
-${blocks.join('\n\n')}
-</user_context>
-`.trim()
+  return [
+    '<user_context>',
+    '  <task_goal>',
+    taskGoal,
+    '  </task_goal>',
+    preference,
+    workspaceRoots,
+    referenceScope,
+    '  <current_time>',
+    currentTime,
+    '  </current_time>',
+    '</user_context>'
+  ]
+    .filter((part) => part.length > 0)
+    .join('\n')
 }
+
