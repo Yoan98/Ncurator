@@ -43,22 +43,17 @@ const renderAttachment = (attachment: ChatAttachment, index: number): string => 
 export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
   const selectedReferences = scope.selectedReferences || []
   const attachments = scope.attachments || []
+  const parts: string[] = []
 
-  const selectedReferencesText =
-    selectedReferences.length > 0
-      ? `用户指定的参考范围：
-${selectedReferences.map((reference, index) => renderSelectedReference(reference, index + 1)).join('\n')}`
-      : `用户指定的参考范围：
-- 当前没有用户显式指定的参考范围。`
+  if (selectedReferences.length > 0) {
+    parts.push(`用户指定的参考范围：
+${selectedReferences.map((reference, index) => renderSelectedReference(reference, index + 1)).join('\n')}`)
+  }
 
-  const attachmentsText =
-    attachments.length > 0
-      ? `用户添加的附件：
-${attachments.map((attachment, index) => renderAttachment(attachment, index + 1)).join('\n\n')}`
-      : `用户添加的附件：
-- 当前没有用户添加的附件。`
+  if (attachments.length > 0) {
+    parts.push(`用户添加的附件：
+${attachments.map((attachment, index) => renderAttachment(attachment, index + 1)).join('\n\n')}`)
+  }
 
-  return `${selectedReferencesText}
-
-${attachmentsText}`
+  return parts.join('\n\n')
 }

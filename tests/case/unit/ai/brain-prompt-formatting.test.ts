@@ -60,7 +60,9 @@ describe('ai unit brain prompt formatting', () => {
     expect(system).not.toContain('<workspace_roots>')
     expect(user).toContain('<workspace_roots>')
     expect(user).toContain('D:\\workspace')
-    expect(user.indexOf('</workspace_roots>')).toBeLessThan(user.indexOf('<reference_scope>'))
+    expect(user).not.toContain('<preference>')
+    expect(user).not.toContain('<reference_scope>')
+    expect(user.indexOf('</workspace_roots>')).toBeLessThan(user.indexOf('<current_time>'))
     expect(system).not.toContain('reference_field_guide')
     expect(system).not.toContain('字段说明')
   })
@@ -77,24 +79,64 @@ describe('ai unit brain prompt formatting', () => {
     expect(system).not.toContain('<context_efficiency>')
   })
 
-  it('renders the default preference, workspace roots, reference scope and current time in the user message', () => {
+  it('omits empty preference, workspace roots and reference scope from the user message', () => {
     const state = createInitialHumanState({
       taskId: 'task-prompt-formatting',
       userInput: '继续处理任务'
     })
-    const user = buildBrainUserMessage({ state, ctx: createFakeCtx() })
+    const emptyCtx = {
+      ...createFakeCtx(),
+      workspaceRoots: []
+    } as AiRunContext
+    const emptyUser = buildBrainUserMessage({ state, ctx: emptyCtx })
 
-    expect(user).toContain('<task_goal>')
-    expect(user).toContain('继续处理任务')
-    expect(user.match(/<preference>([\s\S]*?)<\/preference>/)?.[1].trim()).toBe('无')
+    expect(emptyUser).toContain('<task_goal>')
+    expect(emptyUser).toContain('继续处理任务')
+    expect(emptyUser).not.toContain('<preference>')
+    expect(emptyUser).not.toContain('<workspace_roots>')
+    expect(emptyUser).not.toContain('<reference_scope>')
+    expect(emptyUser).toContain('<current_time>')
+    expect(emptyUser).toContain('current_time.local_iso')
+    expect(emptyUser).not.toContain('<active_state>')
+  })
+
+  it('renders non-default preference, workspace roots and reference scope when present', () => {
+    const state = createInitialHumanState({
+      taskId: 'task-prompt-formatting',
+      userInput: '继续处理任务'
+    })
+    const ctx = {
+      ...createFakeCtx(),
+      preference: 'local_sources_relaxed',
+      referenceScope: {
+        selectedReferences: [
+          {
+            kind: 'file',
+            workspaceId: 'workspace-1',
+            nodeId: 'node-1',
+            name: 'note.md',
+            relativePath: 'note.md',
+            absolutePath: 'D:\\workspace\\note.md',
+            kbAvailability: 'indexed',
+            kbDocumentIds: ['doc-1']
+          }
+        ],
+        attachments: []
+      }
+    } as AiRunContext
+    const user = buildBrainUserMessage({ state, ctx })
+
+    expect(user.match(/<preference>([\s\S]*?)<\/preference>/)?.[1].trim()).toBe(
+      '优先使用知识库内容和用户工作区域文件内容作为依据来推进任务'
+    )
     expect(user).toContain('<workspace_roots>')
     expect(user).toContain('<reference_scope>')
-    expect(user).toContain('<current_time>')
-    expect(user).toContain('current_time.local_iso')
+    expect(user).toContain('1. note.md')
+    expect(user).not.toContain('当前没有用户显式指定的参考范围')
+    expect(user).not.toContain('当前没有用户添加的附件')
     expect(user.indexOf('</preference>')).toBeLessThan(user.indexOf('<workspace_roots>'))
     expect(user.indexOf('</workspace_roots>')).toBeLessThan(user.indexOf('<reference_scope>'))
     expect(user.indexOf('</reference_scope>')).toBeLessThan(user.indexOf('<current_time>'))
-    expect(user).not.toContain('<active_state>')
   })
 
   it('omits memory and active_state even if skills and plan exist', () => {

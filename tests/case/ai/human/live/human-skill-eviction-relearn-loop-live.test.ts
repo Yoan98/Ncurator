@@ -10,6 +10,11 @@ import {
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+import {
+  collectContinuationPrefixCacheReuse,
+  continuationPrefixCacheAssertionData,
+  type ContinuationPrefixCacheReuse
+} from '../../../../harness/core/continuation-prefix-cache'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
 const PARTNER_ID = 'live-skill-eviction-relearn'
@@ -115,7 +120,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 下同一伙伴学满 active tool 上限后 FIFO 淘汰，续做仍能推进，需要时再自动学习被淘汰 skill。',
+          '验证 live 下同一伙伴学满 active tool 上限后 FIFO 淘汰，续做仍能推进，需要时再自动学习被淘汰 skill；跨 run 首轮 brain 应明显复用上一 run 末次前缀缓存。',
         fixtures: [
           DOCX_READING_FIXTURE_PATHS[0],
           PDF_READING_FIXTURE_PATH,
@@ -133,6 +138,7 @@ describe('ai human live backend', () => {
             userInput: RUN1_USER_INPUT
           })
           const run1Events = runtime.eventCollector.snapshot()
+          const run1LlmIo = runtime.eventCollector.snapshotLlmIo()
           const skillsAfterRun1 = readLatestLearnedSkillIds(
             await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           )
@@ -142,14 +148,22 @@ describe('ai human live backend', () => {
             userInput: RUN2_USER_INPUT
           })
           const afterRun2Events = runtime.eventCollector.snapshot()
+          const afterRun2LlmIo = runtime.eventCollector.snapshotLlmIo()
           const run2Events = afterRun2Events.slice(run1Events.length)
+          const run2LlmIo = afterRun2LlmIo.slice(run1LlmIo.length)
           const skillsAfterRun2 = readLatestLearnedSkillIds(
             await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           )
           const run2Eviction = collectLearningEvictionEvidence(run2Events)
+          const run2PrefixCache = collectContinuationPrefixCacheReuse({
+            previousLlmIo: run1LlmIo,
+            nextLlmIo: run2LlmIo
+          })
           // 若 Run2 已在同轮淘汰后又自动再学 docx-read，闭环已在 Run2 内完成，不必再开 Run3。
           const needRun3 =
             run2Eviction.evictedDocxRead && !run2Eviction.relearnedDocxReadAfterEviction
+
+          const emptyRun3PrefixCache = null as ContinuationPrefixCacheReuse | null
 
           if (!run2Eviction.hasEviction || !run2Eviction.evictedDocxRead) {
             return {
@@ -162,6 +176,8 @@ describe('ai human live backend', () => {
               run1Events,
               run2Events,
               run3Events: [] as AiRunEvent[],
+              run2PrefixCache,
+              run3PrefixCache: emptyRun3PrefixCache,
               memoExists: await fs
                 .access(path.join(runtime.workspaceRoot, MEMO_NAME))
                 .then(() => true)
@@ -182,6 +198,8 @@ describe('ai human live backend', () => {
               run1Events,
               run2Events,
               run3Events: [] as AiRunEvent[],
+              run2PrefixCache,
+              run3PrefixCache: emptyRun3PrefixCache,
               memoExists: await fs
                 .access(path.join(runtime.workspaceRoot, MEMO_NAME))
                 .then(() => true)
@@ -196,7 +214,9 @@ describe('ai human live backend', () => {
             userInput: RUN3_USER_INPUT
           })
           const allEvents = runtime.eventCollector.snapshot()
+          const allLlmIo = runtime.eventCollector.snapshotLlmIo()
           const run3Events = allEvents.slice(afterRun2Events.length)
+          const run3LlmIo = allLlmIo.slice(afterRun2LlmIo.length)
           const skillsAfterRun3 = readLatestLearnedSkillIds(
             await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           )
@@ -211,6 +231,11 @@ describe('ai human live backend', () => {
             run1Events,
             run2Events,
             run3Events,
+            run2PrefixCache,
+            run3PrefixCache: collectContinuationPrefixCacheReuse({
+              previousLlmIo: run2LlmIo,
+              nextLlmIo: run3LlmIo
+            }),
             memoExists: await fs
               .access(path.join(runtime.workspaceRoot, MEMO_NAME))
               .then(() => true)
@@ -283,6 +308,15 @@ describe('ai human live backend', () => {
             }
           )
 
+          runtime.assertThat(Boolean(result.run2PrefixCache?.satisfied), {
+            name: 'run2-reuses-run1-prefix-cache',
+            message:
+              'Run2 首次 brain 的 cachedInputTokens 应明显复用 Run1 末次 brain 的 inputTokens 前缀；低于公用跨 run 比例门槛说明前缀被改写或缓存未命中。',
+            data: result.run2PrefixCache
+              ? continuationPrefixCacheAssertionData(result.run2PrefixCache)
+              : { run2PrefixCache: null }
+          })
+
           if (result.closedLoopInRun2) {
             runtime.assertThat(
               run2Eviction.relearnedDocxReadAfterEviction && hasDocxReadEvidence(run2Tools),
@@ -319,6 +353,15 @@ describe('ai human live backend', () => {
               }
             }
           )
+
+          runtime.assertThat(Boolean(result.run3PrefixCache?.satisfied), {
+            name: 'run3-reuses-run2-prefix-cache',
+            message:
+              'Run3 首次 brain 的 cachedInputTokens 应明显复用 Run2 末次 brain 的 inputTokens 前缀；低于公用跨 run 比例门槛说明前缀被改写或缓存未命中。',
+            data: result.run3PrefixCache
+              ? continuationPrefixCacheAssertionData(result.run3PrefixCache)
+              : { run3PrefixCache: null }
+          })
         }
       })
     })

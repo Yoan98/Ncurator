@@ -13,7 +13,7 @@ import {
   TimePicker
 } from 'antd'
 import dayjs from 'dayjs'
-import { HiOutlineClock, HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi2'
+import { HiOutlineClock, HiOutlinePencilSquare, HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi2'
 import type {
   AiExecutionPermission,
   AiPreference,
@@ -93,6 +93,15 @@ const scheduleLabel = (task: ScheduledTask): string => {
 
 const countEnabledTasks = (tasks: ScheduledTask[]): number =>
   tasks.reduce((count, task) => count + (task.enabled ? 1 : 0), 0)
+
+const RequiredFieldLabel = ({ children }: { children: string }) => (
+  <span className="text-[13px] text-[#37352F]">
+    <span className="mr-1 text-[#ff4d4f]" aria-hidden>
+      *
+    </span>
+    {children}
+  </span>
+)
 
 type ScheduledTasksViewProps = {
   onEnabledCountChange?: (enabledCount: number) => void
@@ -358,16 +367,21 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
                     data-testid={`${scheduledTaskSelectors.itemTogglePrefix}-${task.id}`}
                   />
                   <Button
-                    type="text"
+                    type="default"
                     size="small"
                     onClick={() => handleRunNow(task)}
                     data-testid={`${scheduledTaskSelectors.itemRunNowPrefix}-${task.id}`}
                   >
                     立即执行
                   </Button>
-                  <Button type="text" size="small" onClick={() => openEdit(task)}>
-                    编辑
-                  </Button>
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<HiOutlinePencilSquare />}
+                    onClick={() => openEdit(task)}
+                    aria-label={`编辑 ${task.name}`}
+                    data-testid={`${scheduledTaskSelectors.itemEditPrefix}-${task.id}`}
+                  />
                   <Button
                     type="text"
                     size="small"
@@ -398,7 +412,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
       >
         <div className="flex flex-col gap-4 pt-2">
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-[#37352F]">名称</span>
+            <RequiredFieldLabel>名称</RequiredFieldLabel>
             <Input
               value={form.name}
               placeholder="例如：每日晨报"
@@ -408,7 +422,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-[#37352F]">任务提示词</span>
+            <RequiredFieldLabel>任务提示词</RequiredFieldLabel>
             <Input.TextArea
               value={form.prompt}
               rows={3}
@@ -421,7 +435,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
           </label>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-[#37352F]">执行时间</span>
+            <RequiredFieldLabel>执行时间</RequiredFieldLabel>
             <div className="flex items-center gap-3">
               <Segmented
                 value={form.scheduleType}
@@ -464,7 +478,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-[#37352F]">模型</span>
+            <RequiredFieldLabel>模型</RequiredFieldLabel>
             <WorkbenchModelSelector
               configs={modelConfigs}
               modelListsByConfigId={modelLists}

@@ -286,6 +286,7 @@ export const scheduledTaskSelectors = {
   itemPrefix: 'scheduled-task-item',
   itemTogglePrefix: 'scheduled-task-item-toggle',
   itemRunNowPrefix: 'scheduled-task-item-run-now',
+  itemEditPrefix: 'scheduled-task-item-edit',
   formName: 'scheduled-task-form-name',
   formPrompt: 'scheduled-task-form-prompt',
   formScheduleType: 'scheduled-task-form-schedule-type',

@@ -4837,7 +4837,9 @@ const ChatPage: React.FC = () => {
               </div>
             </>
           ) : null}
-        </div>
+            </div>
+          </>
+        )}
         <Modal
           open={Boolean(applyRevertConfirm)}
           title={applyRevertConfirm?.stage === 'force' ? '仍然回退这次修改？' : '回退这次修改？'}
@@ -4974,8 +4976,6 @@ const ChatPage: React.FC = () => {
           onConfirm={handleConfirmFullAccess}
           onCancel={handleCancelFullAccess}
         />
-          </>
-        )}
       </div>
     </div>
   )

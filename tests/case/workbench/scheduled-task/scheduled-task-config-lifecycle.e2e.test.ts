@@ -37,7 +37,7 @@ describe('workbench scheduled-task e2e', () => {
         suite: 'scheduled-task',
         groups: [],
         description:
-          '验证定时任务新增、必填校验、自动专属伙伴、编辑保存不改启用、启用开关、立即执行确认与删除闭环。',
+          '验证定时任务新增、必填校验、保存不建专属伙伴、编辑保存不改启用、启用开关、立即执行确认与删除闭环。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         runMode: 'single',
@@ -71,19 +71,16 @@ describe('workbench scheduled-task e2e', () => {
           const createdTasks = await listTasks(page)
           const created = createdTasks.find((task) => task.name === TASK_NAME)
           const partnersAfterCreate = await listPartners(page)
-          const boundPartner = partnersAfterCreate.find(
-            (partner) => partner.id === created?.partnerId
-          )
           const createdCorrectly = Boolean(
             created &&
               !created.enabled &&
               created.scheduleType === 'daily' &&
               created.timeOfDay === '09:05' &&
-              created.partnerId &&
+              !created.partnerId &&
               created.mainModel.configId &&
               created.mainModel.modelName &&
-              boundPartner?.name === `定时 · ${TASK_NAME}` &&
-              partnersAfterCreate.length === partnersBefore.length + 1
+              partnersAfterCreate.length === partnersBefore.length &&
+              !partnersAfterCreate.some((partner) => partner.name === `定时 · ${TASK_NAME}`)
           )
           const item = created
             ? getWorkbenchLocator(page, `${scheduledTaskSelectors.itemPrefix}-${created.id}`)
@@ -99,10 +96,10 @@ describe('workbench scheduled-task e2e', () => {
           const confirmOk = page.locator('.ant-modal-confirm-btns .ant-btn-primary')
           await confirmOk.waitFor({ state: 'visible' })
           await page.locator('.ant-modal-confirm-btns .ant-btn-default').click()
-          const runNowConfirmCancelKeptIdle = created
-            ? !(await listPartners(page)).find((partner) => partner.id === created.partnerId)
-                ?.isRunning
-            : false
+          const partnersAfterRunNowCancel = await listPartners(page)
+          const runNowConfirmCancelKeptIdle =
+            partnersAfterRunNowCancel.length === partnersBefore.length &&
+            !partnersAfterRunNowCancel.some((partner) => partner.isRunning)
 
           const toggle = created
             ? getWorkbenchLocator(page, `${scheduledTaskSelectors.itemTogglePrefix}-${created.id}`)
@@ -129,8 +126,11 @@ describe('workbench scheduled-task e2e', () => {
             (await sidebarCountChip.textContent())?.trim() === '1' &&
             (await titleCountChip.textContent())?.trim() === '1'
 
-          if (item) {
-            await item.getByRole('button', { name: '编辑' }).click()
+          if (item && created) {
+            await getWorkbenchLocator(
+              page,
+              `${scheduledTaskSelectors.itemEditPrefix}-${created.id}`
+            ).click()
             const nameInput = getWorkbenchLocator(page, scheduledTaskSelectors.formName)
             await nameInput.waitFor({ state: 'visible' })
             await nameInput.fill(TASK_NAME_EDITED)
@@ -206,7 +206,7 @@ describe('workbench scheduled-task e2e', () => {
             {
               name: 'scheduled-task-config-lifecycle',
               message:
-                '定时任务新增、专属伙伴、必填拦截、编辑、启用、立即执行确认、数量 chip 与删除应完整闭环。',
+                '定时任务新增、保存不建伙伴、必填拦截、编辑、启用、立即执行确认、数量 chip 与删除应完整闭环。',
               data: result
             }
           )

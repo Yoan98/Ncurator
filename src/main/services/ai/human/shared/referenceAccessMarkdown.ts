@@ -6,7 +6,8 @@ import {
 } from './evidenceReferenceAccess'
 
 /**
- * Scan delivery markdown for standard links, dedupe, resolve access once.
+ * Scan delivery markdown for standard file links, dedupe, resolve access once.
+ * Web links are not probed — renderer treats http(s) as always openable.
  * Does not modify markdown text — returns a sidecar for renderer matching.
  */
 export const resolveDeliveryLinkAccess = async (
@@ -18,12 +19,12 @@ export const resolveDeliveryLinkAccess = async (
 
   for (const href of extractMarkdownLinkHrefs(markdown)) {
     const classified = classifyMarkdownHref(href)
-    if (classified.type === 'unknown') continue
+    if (classified.type !== 'file') continue
 
-    const request: ReferenceAccessRequest =
-      classified.type === 'file'
-        ? { resourceType: 'file', path: classified.path }
-        : { resourceType: 'web', path: classified.url }
+    const request: ReferenceAccessRequest = {
+      resourceType: 'file',
+      path: classified.path
+    }
     const key = `${request.resourceType}\u0000${request.path}`
     if (hrefByRequestKey.has(key)) continue
     hrefByRequestKey.set(key, href)

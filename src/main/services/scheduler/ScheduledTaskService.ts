@@ -331,8 +331,6 @@ export class ScheduledTaskService {
       createdAt = existing.createdAt
       enabled = existing.enabled
       await this.syncBoundPartnerName(partnerId, name)
-    } else {
-      partnerId = await this.createBoundPartner(id, name, now)
     }
 
     return {

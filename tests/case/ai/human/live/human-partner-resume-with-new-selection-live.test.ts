@@ -13,6 +13,11 @@ import {
   DOCX_READING_FIXTURE_PATHS,
   SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../../harness/backend/aiLiveTestData'
+import {
+  collectContinuationPrefixCacheReuse,
+  continuationPrefixCacheAssertionData,
+  type ContinuationPrefixCacheReuse
+} from '../../../../harness/core/continuation-prefix-cache'
 import { filterAiRunEventsByType, runWithStructuredOutputRetry } from '../testUtils'
 
 const PARTNER_ID = 'live-partner-resume-with-new-selection'
@@ -146,7 +151,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下第一诉求已沉淀局部事实后发生网络中断，同一伙伴新诉求能恢复旧语义上下文并覆盖本轮新选择文件。',
+          '验证 live 模式下第一诉求已沉淀局部事实后发生网络中断，同一伙伴新诉求能恢复旧语义上下文并覆盖本轮新选择文件，且恢复 run 首轮 brain 明显复用中断前末次前缀缓存。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -164,6 +169,7 @@ describe('ai human live backend', () => {
               run2BrainPrompt: '',
               run2Delivery: '',
               run2LastMessageIsUser: false,
+              run2PrefixCache: null as ContinuationPrefixCacheReuse | null,
               fileAName: '',
               fileBName: ''
             }
@@ -219,6 +225,7 @@ describe('ai human live backend', () => {
             runtime.eventCollector.snapshot()
           )
           const logAfterNetwork = await runtime.storageService.chatMessageLog.list(PARTNER_ID)
+          const run1LlmIo = runtime.eventCollector.snapshotLlmIo()
 
           let run2BrainMessages: BaseMessage[] | null = null
           const captureRun2Wrapper: NonNullable<AiRunDeps['chatToolsWrapper']> =
@@ -246,8 +253,9 @@ describe('ai human live backend', () => {
           const logAfterResume = await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           const run2Events = runtime.eventCollector.snapshot()
           const run2Id = `${runtime.runId}-run-2-resume`
-          const run2BrainPrompt = runtime.eventCollector
-            .snapshotLlmIo()
+          const allLlmIo = runtime.eventCollector.snapshotLlmIo()
+          const run2LlmIo = allLlmIo.slice(run1LlmIo.length)
+          const run2BrainPrompt = allLlmIo
             .filter((record) => record.runId === run2Id && record.caller === 'human.brain')
             .map((record) => record.user)
             .join('\n')
@@ -283,6 +291,10 @@ describe('ai human live backend', () => {
             run2LastMessageIsUser,
             run2MessageTypes,
             run2HasHistoricalAndCurrentBrainUser,
+            run2PrefixCache: collectContinuationPrefixCacheReuse({
+              previousLlmIo: run1LlmIo,
+              nextLlmIo: run2LlmIo
+            }),
             fileAName: fileAReferences[0]?.name || '',
             fileBName: fileBReferences[0]?.name || ''
           }
@@ -333,6 +345,15 @@ describe('ai human live backend', () => {
               }
             }
           )
+
+          runtime.assertThat(Boolean(result.run2PrefixCache?.satisfied), {
+            name: 'human-live-partner-resume-reuses-interrupted-prefix-cache',
+            message:
+              '恢复 run 首次 brain 的 cachedInputTokens 应明显复用中断前末次有效 brain 的 inputTokens 前缀；低于公用跨 run 比例门槛说明前缀被改写或缓存未命中。',
+            data: result.run2PrefixCache
+              ? continuationPrefixCacheAssertionData(result.run2PrefixCache)
+              : { run2PrefixCache: null }
+          })
         }
       })
     })

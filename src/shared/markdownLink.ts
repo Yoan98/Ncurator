@@ -3,8 +3,8 @@
  *
  * AI emits CommonMark / GFM links: `[label](destination)` or `[label](<destination>)`.
  * Bare URLs / `www.…` are not treated as links (renderer disables GFM autolink literals).
- * Access status is stored as a sidecar (`MarkdownLinkAccessEntry[]`), never rewritten
- * into the markdown body.
+ * File reachability is stored as a sidecar (`MarkdownLinkAccessEntry[]`), never rewritten
+ * into the markdown body. http(s) links are not probed and stay openable by default.
  */
 
 import type { MarkdownLinkAccessEntry } from './types'
@@ -65,19 +65,30 @@ export const unwrapMarkdownLinkDestination = (destination: string): string => {
 }
 
 /**
+ * Decode percent-encoding from react-markdown hrefs so sidecar keys match
+ * the raw destinations extracted from markdown source.
+ */
+export const decodeMarkdownHref = (value: string): string => {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return value
+  }
+}
+
+/**
  * Normalize a filesystem path for access checks and open actions.
  * Does not mutate markdown; only used for classification / sidecar keys matching.
  */
 export const normalizeLocalPath = (pathValue: string): string =>
-  pathValue
-    .trim()
+  decodeMarkdownHref(pathValue.trim())
     .replace(/^file:\/\//i, '')
     .replace(/^\/([a-zA-Z]:[\\/])/, '$1')
     .replace(/^([a-zA-Z]:)(?![\\/])/, '$1/')
     .replace(/\\/g, '/')
 
 export const classifyMarkdownHref = (rawHref: string): ClassifiedMarkdownHref => {
-  const href = unwrapMarkdownLinkDestination(rawHref)
+  const href = decodeMarkdownHref(unwrapMarkdownLinkDestination(rawHref))
   if (!href) return { type: 'unknown', href }
 
   const lower = href.toLowerCase()

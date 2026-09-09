@@ -5,15 +5,18 @@ import {
 } from '../../../../src/main/services/ai/human/prompts/referenceScope'
 
 describe('ai unit selected context workspace path', () => {
-  it('does not render workspace roots inside reference scope', () => {
+  it('does not render empty reference scope placeholders', () => {
     const text = renderReferenceScopeText(
       buildReferenceScope({
         selectedReferences: []
       })
     )
 
-    expect(text).toContain('用户指定的参考范围：')
-    expect(text).toContain('- 当前没有用户显式指定的参考范围。')
+    expect(text).toBe('')
+    expect(text).not.toContain('用户指定的参考范围：')
+    expect(text).not.toContain('当前没有用户显式指定的参考范围')
+    expect(text).not.toContain('用户添加的附件：')
+    expect(text).not.toContain('当前没有用户添加的附件')
     expect(text).not.toContain('用户工作区域：')
     expect(text).not.toContain('根目录：')
     expect(text).not.toContain('默认应优先在此目录内完成用户任务')
@@ -90,6 +93,8 @@ describe('ai unit selected context workspace path', () => {
     ).toContain('资源地址：https://example.com/policy')
     expect(text).toContain('文档知识库状态：已索引')
     expect(text).toContain('知识库文档ID：doc-1')
+    expect(text).not.toContain('用户添加的附件：')
+    expect(text).not.toContain('当前没有用户添加的附件')
   })
 
   it('renders user selected attachments with compact content-info template', () => {
@@ -120,6 +125,7 @@ describe('ai unit selected context workspace path', () => {
     expect(text).toContain('- 路径：/tmp/screen.png')
     expect(text).toContain('第 2 个附件：README.md')
     expect(text).toContain('- 路径：/tmp/README.md')
+    expect(text).not.toContain('用户指定的参考范围：')
     expect(text).not.toContain('来源：')
     expect(text).not.toContain('类型：图片')
     expect(text).not.toContain('格式：')

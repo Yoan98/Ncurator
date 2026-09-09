@@ -178,7 +178,7 @@ describe('ScheduledTaskService', () => {
     expect(taskStore.save).not.toHaveBeenCalled()
   })
 
-  it('creates a bound partner when saving a new task', async () => {
+  it('does not create a bound partner when saving a new task', async () => {
     const { service, partnerStore, savePartnerUiState } = createService()
     const response = await service.save({
       name: '每日晨报',
@@ -188,12 +188,26 @@ describe('ScheduledTaskService', () => {
       mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' }
     })
     expect(response.success).toBe(true)
-    expect(response.task?.partnerId).toBeTruthy()
+    expect(response.task?.partnerId).toBe('')
     expect(response.task?.enabled).toBe(false)
     expect(response.task?.nextRunAt).toBeNull()
-    expect(partnerStore.savePartner).toHaveBeenCalled()
-    expect(savePartnerUiState).toHaveBeenCalled()
-    const created = partnerStore.savePartner.mock.calls[0]?.[0] as Partner
+    expect(partnerStore.savePartner).not.toHaveBeenCalled()
+    expect(savePartnerUiState).not.toHaveBeenCalled()
+  })
+
+  it('creates a bound partner when firing a task without partnerId', async () => {
+    const harness = createService()
+    harness.taskStore.set(makeTask({ partnerId: '', nextRunAt: NOW - 1 }))
+    await harness.service.runDue()
+
+    expect(harness.partnerStore.savePartner).toHaveBeenCalled()
+    expect(harness.submitTask).toHaveBeenCalledTimes(1)
+    const saved = (await harness.taskStore.list())[0]
+    expect(saved.partnerId).toBeTruthy()
+    expect(harness.submitTask).toHaveBeenCalledWith(
+      expect.objectContaining({ partnerId: saved.partnerId })
+    )
+    const created = harness.partnerStore.savePartner.mock.calls[0]?.[0] as Partner
     expect(created.name).toBe(boundPartnerName('每日晨报'))
   })
 

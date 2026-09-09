@@ -1,6 +1,5 @@
 import { describe, it } from 'vitest'
 import type { AiLlmIoRecord, AiRunEvent } from '../../../../../src/shared/types'
-import { diffChatToolsRequestWire } from '../../../../../src/main/services/ai/utils/llmRequestWire'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -12,6 +11,10 @@ import {
   loadContextCompactionWorkspaceSeed
 } from '../../../../harness/backend/liveScenarios/contextCompactionScenario'
 import {
+  collectContinuationPrefixCacheReuse,
+  continuationPrefixCacheAssertionData
+} from '../../../../harness/core/continuation-prefix-cache'
+import {
   collectSuccessfulDocxWriteSourcePaths,
   filterAiRunEventsByType,
   hasDocxDeliveryEvidence,
@@ -21,8 +24,6 @@ import {
 
 const PARTNER_ID = 'live-context-compaction'
 const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
-/** Run3 首轮 brain 的 cachedInputTokens 相对 Run2 末次 brain inputTokens 的最低比例。 */
-const RUN3_PREFIX_CACHE_MIN_RATIO = 0.5
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '## 目标',
@@ -118,48 +119,6 @@ const collectRunCompaction = (input: {
 
 const lastBrainRecord = (records: readonly AiLlmIoRecord[]): AiLlmIoRecord | undefined =>
   [...records].reverse().find((record) => record.caller === 'human.brain')
-
-const firstBrainRecord = (records: readonly AiLlmIoRecord[]): AiLlmIoRecord | undefined =>
-  records.find((record) => record.caller === 'human.brain')
-
-const collectContinuationPrefixCacheReuse = (input: {
-  previousLlmIo: readonly AiLlmIoRecord[]
-  nextLlmIo: readonly AiLlmIoRecord[]
-}) => {
-  const previousLastBrain = lastBrainRecord(input.previousLlmIo)
-  const nextFirstBrain = firstBrainRecord(input.nextLlmIo)
-  const previousLastInputTokens = previousLastBrain?.usage?.inputTokens
-  const nextFirstCachedInputTokens = nextFirstBrain?.usage?.cachedInputTokens
-  const nextFirstInputTokens = nextFirstBrain?.usage?.inputTokens
-  const hasUsageSignal =
-    typeof previousLastInputTokens === 'number' &&
-    previousLastInputTokens > 0 &&
-    typeof nextFirstCachedInputTokens === 'number' &&
-    typeof nextFirstInputTokens === 'number' &&
-    nextFirstInputTokens > 0
-  const reuseRatio =
-    hasUsageSignal && previousLastInputTokens
-      ? nextFirstCachedInputTokens! / previousLastInputTokens
-      : undefined
-  const requestWireDiff = diffChatToolsRequestWire(
-    previousLastBrain?.requestWire,
-    nextFirstBrain?.requestWire
-  )
-  return {
-    previousLastBrain,
-    nextFirstBrain,
-    previousLastInputTokens,
-    nextFirstCachedInputTokens,
-    nextFirstInputTokens,
-    nextFirstCacheHitRate: nextFirstBrain?.usage?.cacheHitRate,
-    reuseRatio,
-    requestWireDiff,
-    satisfied:
-      hasUsageSignal &&
-      typeof reuseRatio === 'number' &&
-      reuseRatio >= RUN3_PREFIX_CACHE_MIN_RATIO
-  }
-}
 
 const collectDocxEvidence = (input: {
   events: readonly AiRunEvent[]
@@ -442,22 +401,8 @@ describe('ai human live backend', () => {
           runtime.assertThat(run3PrefixCache.satisfied, {
             name: 'human-live-context-compaction-run3-reuses-run2-prefix-cache',
             message:
-              '发第三次 user 续跑时，Run3 首次 brain 的 cachedInputTokens 应明显复用 Run2 末次 brain 的 inputTokens 前缀；低于明显比例说明跨 run 前缀被改写或缓存未命中。',
-            data: {
-              minRatio: RUN3_PREFIX_CACHE_MIN_RATIO,
-              previousLastInputTokens: run3PrefixCache.previousLastInputTokens,
-              nextFirstCachedInputTokens: run3PrefixCache.nextFirstCachedInputTokens,
-              nextFirstInputTokens: run3PrefixCache.nextFirstInputTokens,
-              nextFirstCacheHitRate: run3PrefixCache.nextFirstCacheHitRate,
-              reuseRatio: run3PrefixCache.reuseRatio,
-              previousLastBrainUsage: run3PrefixCache.previousLastBrain?.usage,
-              nextFirstBrainUsage: run3PrefixCache.nextFirstBrain?.usage,
-              requestWireDiff: run3PrefixCache.requestWireDiff,
-              previousToolsHash: run3PrefixCache.previousLastBrain?.requestWire?.toolsHash,
-              nextToolsHash: run3PrefixCache.nextFirstBrain?.requestWire?.toolsHash,
-              previousMessagesHash: run3PrefixCache.previousLastBrain?.requestWire?.messagesHash,
-              nextMessagesHash: run3PrefixCache.nextFirstBrain?.requestWire?.messagesHash
-            }
+              '发第三次 user 续跑时，Run3 首次 brain 的 cachedInputTokens 应明显复用 Run2 末次 brain 的 inputTokens 前缀；低于公用跨 run 比例门槛说明前缀被改写或缓存未命中。',
+            data: continuationPrefixCacheAssertionData(run3PrefixCache)
           })
         }
       })

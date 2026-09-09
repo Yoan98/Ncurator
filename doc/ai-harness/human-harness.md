@@ -167,7 +167,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 }
 ```
 
-**`assistant`（交付）** — 仅 `finalizeDelivery`（或内容安全 fallback）写入；`toolCalls` 为空数组；正常交付含 `linkAccess` sidecar（不改写 `content`）。
+**`assistant`（交付）** — 仅 `finalizeDelivery`（或内容安全 fallback）写入；`toolCalls` 为空数组；正常交付含 `linkAccess` sidecar（**仅本地文件**可达性；不改写 `content`；`http(s)` 不探测、渲染侧默认可点）。
 
 ```json
 {
@@ -387,14 +387,14 @@ flowchart TD
 | 过程 | assistant / tool / 多模态合成 HumanMessage |
 | User（续发） | 新 run 末尾 append 的 build 全文 |
 
-**build user 块**（各字段来源见第 3.3 节）：
+**build user 块**（各字段来源见第 3.3 节；`preference` / `workspace_roots` / `reference_scope` 无内容时整块省略）：
 
 ```text
 <user_context>
   <task_goal>…</task_goal>
-  <preference>…</preference>
-  <workspace_roots>…</workspace_roots>
-  <reference_scope>…</reference_scope>
+  <preference>…</preference>          ← 仅非 default
+  <workspace_roots>…</workspace_roots> ← 仅有工作地址时
+  <reference_scope>…</reference_scope> ← 仅有 @ 或附件时
   <current_time>…</current_time>
 </user_context>
 ```
@@ -424,9 +424,9 @@ flowchart TD
 | 块 | 来源 |
 |----|------|
 | `<task_goal>` | 当时那条 User 对应 run 的 `input` |
-| `<preference>` | 当时 Composer |
-| `<workspace_roots>` | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存） |
-| `<reference_scope>` | 当时 Composer 的 `@` 与附件（第 2.5 节） |
+| `<preference>` | 当时 Composer；`default` 时整块省略 |
+| `<workspace_roots>` | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
+| `<reference_scope>` | 当时 Composer 的 `@` 与附件（第 2.5 节）；两者皆空时整块省略，有一侧为空时只渲染有内容的一侧 |
 | `<current_time>` | 当时 run 的 `runStartedAt`（历史行不再改） |
 
 annotation 扫描该伙伴剩余 log；清空消息记录会物理删除 log，因此技能 / 计划不会从已删除的历史恢复。
@@ -839,7 +839,7 @@ Main **不**强制计划全部 `done` 才允许交付。
 applyDeliverySideEffects
   → docx/ppt 落盘、汇总 ai_file_change
   → finalizing_started（annotation，清空 plan 投影）
-  → 扫描交付 markdown 链接、去重检查访问，写入 `linkAccess` sidecar（不改写正文）
+  → 扫描交付 markdown 中的本地文件链接、去重检查可达性，写入 `linkAccess` sidecar（不改写正文；`http(s)` 不进 sidecar）
   → append 交付 assistant（toolCalls: []，含 linkAccess）
   → ai_run.status = completed
 ```

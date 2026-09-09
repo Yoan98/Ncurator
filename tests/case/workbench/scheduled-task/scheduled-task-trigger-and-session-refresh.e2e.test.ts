@@ -81,16 +81,18 @@ describe('workbench scheduled-task e2e', () => {
           const createdTasks = await listTasks(page)
           const createdTask = createdTasks.find((task) => task.name === '触发验证任务')
           if (!createdTask) throw new Error('failed to create the scheduled task')
+          if (createdTask.partnerId) {
+            throw new Error('scheduled task should not create a partner on save')
+          }
           await getWorkbenchLocator(
             page,
             `${scheduledTaskSelectors.itemTogglePrefix}-${createdTask.id}`
           ).click()
 
           const partnersAfterConfig = await listPartners(page)
-          const boundPartner = partnersAfterConfig.find(
-            (partner) => partner.id === createdTask.partnerId
-          )
-          if (!boundPartner) throw new Error('failed to locate bound partner')
+          if (partnersAfterConfig.length !== partnersBefore.length) {
+            throw new Error('enabling a scheduled task should not create a partner')
+          }
 
           // 回到原查看伙伴，确认触发不抢焦点。
           await getWorkbenchLocator(
@@ -99,21 +101,27 @@ describe('workbench scheduled-task e2e', () => {
           ).click()
 
           const deadline = Date.now() + 150_000
+          let boundPartnerId = ''
           let triggeredMessage = false
           while (Date.now() < deadline) {
-            const messages = await listPartnerMessages(page, boundPartner.id)
-            triggeredMessage = messages.some(
-              (message) => message.role === 'user' && message.content.includes(TASK_PROMPT)
-            )
-            if (triggeredMessage) break
+            const tasks = await listTasks(page)
+            const task = tasks.find((item) => item.id === createdTask.id)
+            boundPartnerId = String(task?.partnerId || '').trim()
+            if (boundPartnerId) {
+              const messages = await listPartnerMessages(page, boundPartnerId)
+              triggeredMessage = messages.some(
+                (message) => message.role === 'user' && message.content.includes(TASK_PROMPT)
+              )
+              if (triggeredMessage) break
+            }
             await page.waitForTimeout(5_000)
           }
 
           let triggeredRunCompleted = false
-          if (triggeredMessage) {
+          if (triggeredMessage && boundPartnerId) {
             const runDeadline = Date.now() + 120_000
             while (Date.now() < runDeadline) {
-              const current = (await listPartners(page)).find((item) => item.id === boundPartner.id)
+              const current = (await listPartners(page)).find((item) => item.id === boundPartnerId)
               if (current && !current.isRunning) {
                 triggeredRunCompleted = true
                 break
@@ -121,6 +129,9 @@ describe('workbench scheduled-task e2e', () => {
               await page.waitForTimeout(3_000)
             }
           }
+
+          const partnersAfterTrigger = await listPartners(page)
+          const boundPartner = partnersAfterTrigger.find((item) => item.id === boundPartnerId)
 
           const selectedStillViewing = await page.evaluate((id) => {
             const active = document.querySelector(
@@ -131,7 +142,10 @@ describe('workbench scheduled-task e2e', () => {
 
           return {
             scheduledHhmm,
-            boundPartnerCreated: partnersAfterConfig.length === partnersBefore.length + 1,
+            boundPartnerCreated:
+              Boolean(boundPartner) &&
+              boundPartner?.name === '定时 · 触发验证任务' &&
+              partnersAfterTrigger.length === partnersBefore.length + 1,
             sameViewingPartner: selectedStillViewing,
             triggeredMessage,
             triggeredRunCompleted

@@ -46,8 +46,9 @@ export type ResolvedMarkdownLink =
 /**
  * Resolve a rendered href for UI.
  * - Legacy `ncurator://ref` uses embedded accessStatus.
- * - When `linkAccess` is defined (delivery finished), match sidecar; missing → unavailable.
- * - When `linkAccess` is undefined (streaming), classified links stay openable.
+ * - http(s) links are always openable (no reachability sidecar).
+ * - Local files: when `linkAccess` is defined (delivery finished), match sidecar;
+ *   missing / unavailable → unavailable. When undefined (streaming), stay openable.
  */
 export const resolveMarkdownLinkForRender = (input: {
   href?: string
@@ -81,6 +82,17 @@ export const resolveMarkdownLinkForRender = (input: {
     return href ? { mode: 'external', href } : { mode: 'unavailable', reason: 'unknown' }
   }
 
+  if (classified.type === 'web') {
+    return {
+      mode: 'openable',
+      reference: {
+        resourceType: 'web',
+        label: input.label,
+        path: classified.url
+      }
+    }
+  }
+
   if (input.linkAccess !== undefined) {
     const access = findMarkdownLinkAccess(input.linkAccess, href)
     if (!access || access.accessStatus === 'unavailable') {
@@ -91,9 +103,9 @@ export const resolveMarkdownLinkForRender = (input: {
   return {
     mode: 'openable',
     reference: {
-      resourceType: classified.type === 'web' ? 'web' : 'file',
+      resourceType: 'file',
       label: input.label,
-      path: classified.type === 'web' ? classified.url : classified.path
+      path: classified.path
     }
   }
 }

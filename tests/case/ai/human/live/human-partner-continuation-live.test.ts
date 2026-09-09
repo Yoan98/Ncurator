@@ -12,6 +12,11 @@ import {
   DOCX_READING_FIXTURE_PATHS,
   SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../../harness/backend/aiLiveTestData'
+import {
+  collectContinuationPrefixCacheReuse,
+  continuationPrefixCacheAssertionData,
+  type ContinuationPrefixCacheReuse
+} from '../../../../harness/core/continuation-prefix-cache'
 import { runWithStructuredOutputRetry } from '../testUtils'
 
 const PARTNER_ID = 'live-partner-continuation'
@@ -93,7 +98,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下同一伙伴先完成第一件事，再续接关联的第二件事，消息数组按「历史 + 尾部 user 消息」叠加。',
+          '验证 live 模式下同一伙伴先完成第一件事，再续接关联的第二件事，消息数组按「历史 + 尾部 user 消息」叠加，且 Run2 首轮 brain 明显复用 Run1 末次前缀缓存。',
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -108,6 +113,7 @@ describe('ai human live backend', () => {
               run2HistoryHasRun1User: false,
               run2HistoryHasRun1Delivery: false,
               run2Delivery: '',
+              run2PrefixCache: null as ContinuationPrefixCacheReuse | null,
               fileAName: '',
               fileBName: ''
             }
@@ -146,6 +152,7 @@ describe('ai human live backend', () => {
             },
             await buildAiRunDeps({ runtime })
           )
+          const run1LlmIo = runtime.eventCollector.snapshotLlmIo()
 
           let run2BrainMessages: BaseMessage[] | null = null
           const captureRun2Wrapper: NonNullable<AiRunDeps['chatToolsWrapper']> =
@@ -170,6 +177,7 @@ describe('ai human live backend', () => {
 
           const run2Id = `${runtime.runId}-run-2`
           const run2Events = runtime.eventCollector.snapshot()
+          const run2LlmIo = runtime.eventCollector.snapshotLlmIo().slice(run1LlmIo.length)
           const run2LastMessage = run2BrainMessages
             ? run2BrainMessages[run2BrainMessages.length - 1]
             : null
@@ -207,6 +215,10 @@ describe('ai human live backend', () => {
             run2HistoryHasRun1Delivery,
             run2UsedFileB: runUsedSelectedFile(run2Events, run2Id, fileBReferences[0]?.name || ''),
             run2Delivery: run2Result.finalDeliveryMarkdown || '',
+            run2PrefixCache: collectContinuationPrefixCacheReuse({
+              previousLlmIo: run1LlmIo,
+              nextLlmIo: run2LlmIo
+            }),
             fileAName: fileAReferences[0]?.name || '',
             fileBName: fileBReferences[0]?.name || ''
           }
@@ -247,6 +259,15 @@ describe('ai human live backend', () => {
               }
             }
           )
+
+          runtime.assertThat(Boolean(result.run2PrefixCache?.satisfied), {
+            name: 'human-live-partner-continuation-reuses-run1-prefix-cache',
+            message:
+              'Run2 首次 brain 的 cachedInputTokens 应明显复用 Run1 末次 brain 的 inputTokens 前缀；低于公用跨 run 比例门槛说明前缀被改写或缓存未命中。',
+            data: result.run2PrefixCache
+              ? continuationPrefixCacheAssertionData(result.run2PrefixCache)
+              : { run2PrefixCache: null }
+          })
         }
       })
     })
