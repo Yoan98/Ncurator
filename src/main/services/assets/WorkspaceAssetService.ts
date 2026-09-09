@@ -73,14 +73,3 @@ export const createPartnerAssetBucket = async (
     directoryPath: await ensurePartnerAssetBucket(partnerId, assetBucketId)
   }
 }
-
-/** @deprecated Use partner-scoped helpers. Kept as aliases during the partner refactor. */
-export const getWorkspaceAssetsRootDir = getPartnerAssetsRootDir
-/** @deprecated Use partner-scoped helpers. */
-export const getWorkspaceScriptsRootDir = getPartnerScriptsRootDir
-/** @deprecated Use partner-scoped helpers. */
-export const getWorkspaceToolResultDir = getPartnerToolResultDir
-/** @deprecated Use partner-scoped helpers. */
-export const ensureWorkspaceAssetBucket = ensurePartnerAssetBucket
-/** @deprecated Use partner-scoped helpers. */
-export const createWorkspaceAssetBucket = createPartnerAssetBucket

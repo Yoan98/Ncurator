@@ -2,7 +2,7 @@ import path from 'node:path'
 import { AiFileChangeStore } from './domains/AiFileChangeStore'
 import { AiRunStore } from './domains/AiRunStore'
 import { AiRuntimeSettingsStore } from './domains/AiRuntimeSettingsStore'
-import { LanceDbCore, LANCE_TABLES } from './core/LanceDbCore'
+import { LanceDbCore } from './core/LanceDbCore'
 import { SqliteCore } from './sqlite/SqliteCore'
 import { PartnerStore } from './domains/PartnerStore'
 import { DocxApplyStore } from './domains/DocxApplyStore'
@@ -22,7 +22,6 @@ export class StorageService {
 
   public readonly sqlite: SqliteCore
   public readonly vector: LanceDbCore
-  public readonly core: LanceDbCore
   public readonly documents: DocumentsStore
   public readonly webSource: WebSourceStore
   public readonly partner: PartnerStore
@@ -51,7 +50,6 @@ export class StorageService {
       (input.dbPath ? path.join(path.dirname(input.dbPath), 'app.sqlite') : undefined)
     this.sqlite = new SqliteCore(sqlitePath)
     this.vector = new LanceDbCore(input.vectorPath || input.dbPath, input.errorLogService)
-    this.core = this.vector
     this.documents = new DocumentsStore(this.sqlite, this.vector)
     this.webSource = new WebSourceStore(this.sqlite)
     this.partner = new PartnerStore(this.sqlite)
@@ -92,10 +90,6 @@ export class StorageService {
       this.workspace.failIndexingFileRecords(message, now),
       this.webSource.failRunningSources(message, now)
     ])
-  }
-
-  public async optimizeChatStorage(): Promise<void> {
-    await this.vector.optimizeTables([LANCE_TABLES.CHUNK])
   }
 
   public async close(): Promise<void> {
