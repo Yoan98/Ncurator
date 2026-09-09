@@ -70,6 +70,33 @@ afterEach(async () => {
 })
 
 describe.skipIf(process.platform === 'win32')('terminal session manager', () => {
+  it('updates cwd from a leading cd before yielding a long-running command', async () => {
+    const manager = createManager(undefined, 250)
+    const root = await createRoot()
+    const nested = path.join(root, 'nested')
+    await fs.mkdir(nested)
+
+    const running = await manager.run({
+      chatSessionId: 'chat-cwd-mac',
+      workspaceId: 'workspace-cwd-mac',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-cwd-mac',
+      command: `cd "${nested}"; while true; do sleep 0.05; done`
+    })
+
+    expect(running.returnReason).toBe('command_still_running')
+    expect(running.currentTerminalPath).toBe(nested)
+
+    const stopped = await manager.stop({
+      terminalId: running.terminalId,
+      chatSessionId: 'chat-cwd-mac',
+      workspaceId: 'workspace-cwd-mac',
+      closeTerminal: true
+    })
+    expect(stopped.terminalStatus).toBe('closed')
+  })
+
   it('uses deterministic UTF-8 for Chinese files even when the parent locale is invalid', async () => {
     const manager = createManager({ LANG: 'C', LC_ALL: 'C', LC_CTYPE: 'C' }, 1000)
     const root = await createRoot()

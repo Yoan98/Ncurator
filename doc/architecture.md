@@ -74,7 +74,7 @@ flowchart TB
 | Storage                   | `SqliteCore` + `LanceDbCore` + 各领域 Store                                                |
 | Retrieval                 | 文档索引、混合召回、结果融合                                                               |
 | Tool Runtime              | 文件、终端、浏览器等本地能力；审批、命令安全、工作区变更追踪                               |
-| Workspace Change Tracking | terminal 只在开始 cwd 落在某个 `workspace_source.root_path` 内时才扫描该 cwd 子树；工作地址外路径可读写但不纳入变更记录 |
+| Workspace Change Tracking | terminal 仅当**有效 cwd**（会话起始路径 + 命令前导 `cd`/`Set-Location`）落在某个 `workspace_source.root_path` 内时才扫描该 cwd 子树；默认起始为主目录；工作地址外路径可读写但不纳入变更记录 |
 
 工作地址是默认执行范围而非硬边界：模型默认在设置页现有文件地址内操作，系统级需求可访问地址外绝对路径。文件工具的 `sourcePath` / `outputPath` 必须为本机绝对路径。内置浏览器由 Electron `WebContentsView` 承载，Stagehand 通过本机回环 CDP endpoint 精确连接对应 Tab。对象存储在 `userData/partners/{id}/objects/sha256`。
 

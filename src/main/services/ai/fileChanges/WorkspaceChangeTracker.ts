@@ -224,11 +224,13 @@ export class TerminalCommandChangeTracker {
     commandId: string
     runId: string
     partnerId: string
+    /** Effective cwd: session start path after resolving a leading cd / Set-Location. */
     cwd: string
     command: string
     workspaceRoots: string[]
   }): Promise<void> {
     const cwd = path.resolve(input.cwd)
+    // Only track when the effective cwd sits inside a configured workspace root; scan that cwd subtree.
     if (!findContainingWorkspaceRoot(cwd, input.workspaceRoots)) return
     await ensurePartnerRuntimeDirs(input.partnerId)
     const objectsRootDir = getPartnerObjectsDir(input.partnerId)

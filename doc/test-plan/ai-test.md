@@ -142,7 +142,7 @@ AI unit / 辅助测试目录：
 ### 3.4 覆盖归属与去重规则
 
 - `ai/tool` 负责生产工具 runtime 的完整输入输出、读写链、错误边界、原子性、修改记录与回退契约。
-- `ChatRunService` 合同测试验证 run 结束不会扫描并归属未受控的工作地址变化；只有受控文件工具与 terminal 命令窗口能创建 run 级修改记录。terminal 只在开始 cwd 落在某个 `workspace_source.root_path` 内时才扫描该 cwd 子树。`ChatRunService` 不再校验工作空间绑定与搜索模式。
+- `ChatRunService` 合同测试验证 run 结束不会扫描并归属未受控的工作地址变化；只有受控文件工具与 terminal 命令窗口能创建 run 级修改记录。terminal 仅当**有效 cwd**（会话起始路径 + 前导 `cd`/`Set-Location`）落在某个 `workspace_source.root_path` 内时才扫描该 cwd 子树。`ChatRunService` 不再校验工作空间绑定与搜索模式。
 - sqlite migration unit 覆盖空库到 v10、v9→v10 破坏性升级后最终 schema 一致：存在 `partner` / `partner_ui_state`；不存在 `chat_session`、`chat_search_turn`、`chat_session_ui_state`；`chat_session_message_log` / `ai_run` / `ai_file_change` 挂 `partner_id`；`workbench_ui_state` 只留 `active_view_key`。UI store 为伙伴。
 - `ai/human/mock-llm` 负责真实 human graph 下的工具学习、工具选择、串联执行、暂停恢复和结果交付；只允许固定 LLM 输出，不允许替换工具执行结果。
 - `ai/human/live` 负责真实模型在自然语言输入下能否自主选择并正确使用能力；用户输入不得包含内部工具名或固定调用顺序。
@@ -506,7 +506,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：真实 PTY 终端从用户主目录执行命令、长命令让出控制权并可增量读取，命令级文件追踪与退出码正确；允许后台分离执行，放行 fd 合并重定向。
 - Why：后台服务和长任务不能依赖单次 shell 超时；分离执行（`&` / `Start-Process`）由模型自行管理生命周期，框架只关闭 PTY 会话本身；`2>&1` 等 fd 合并重定向只是输出流合并，不能误判为危险重定向。
 - How：通过 `terminal_run` 分别执行 `pwd`、单命令内 `cd + pwd`、写文件后长 sleep、持续输出命令、写文件后非零退出；通过 `terminal_read` 携带返回的 `readEndPosition` 增量读取持续输出命令，验证单次读取有字符上限、`hasMoreOutput` 指示未读完且可用返回位置连续读完。以 `sleep … & wait`（windows `Start-Process … -Wait`）验证分离执行可完成，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。
-- Oracle：命令默认从用户主目录（`os.homedir()`）执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出；仅当开始 cwd 落在某个工作地址内时，写文件命令（完成与非零退出）才生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`。分离执行成功完成且输出含 `detached-ok`；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。
+- Oracle：命令默认从用户主目录（`os.homedir()`）执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出；仅当**有效 cwd**（主目录起始 + 前导 `cd`/`Set-Location` 落入工作地址）时，写文件命令（完成与非零退出）才生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`；有效 cwd 仍在主目录时用绝对路径写入工作地址不记修改。分离执行成功完成且输出含 `detached-ok`；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。
 - Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖；不在会话结束时强制清理模型拆出去的后台进程。
 
 #### web-browsing 类别
@@ -906,9 +906,9 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`live`
 - What：空文件地址从零做《月度预算.xlsx》（多表、表头、SUM/SUMIF、金额格式）。
 - Why：新建场景覆盖工作簿创建、跨表公式和数字格式。
-- How：空文件地址 + 伙伴，用户描述月度预算交付要求。
+- How：空文件地址 + 伙伴，用户描述月度预算交付要求，并约束「内容与公式正确、金额格式到位后立即交付，不要反复微调样式/列宽，也不要用终端解析/核验 xlsx」。
 - Oracle：文件可解析；汇总是公式；1 条 excel 修改记录。
-- Not：不评价表格视觉设计。
+- Not：不评价表格视觉设计；不要求模型用终端自检 OOXML。
 
 ##### `human-legacy-doc-reading-live`
 

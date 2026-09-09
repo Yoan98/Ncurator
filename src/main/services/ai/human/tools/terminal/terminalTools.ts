@@ -12,6 +12,7 @@ import {
   TERMINAL_UNUSABLE_OUTPUT_PLACEHOLDER
 } from './terminalExec'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
+import { resolveTerminalTrackingCwd } from './resolveLeadingCommandCwd'
 import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
 import { createTerminalRunToolSpec, TERMINAL_READ_TOOL_SPEC } from './toolSpecs'
 import { mapTerminalReadStatus, mapTerminalRunStatus } from './terminalToolStatus'
@@ -248,7 +249,11 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             return failure
           }
 
-          const cwd = input.workspaceRootPath
+          // Default session start is homedir; tracking uses effective cwd (start + leading cd).
+          const cwd = await resolveTerminalTrackingCwd({
+            command,
+            sessionStartPath: input.workspaceRootPath
+          })
           state.stepIndex += 1
           const stepId = randomUUID()
           const trackingId = randomUUID()
