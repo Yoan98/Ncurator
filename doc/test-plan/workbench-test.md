@@ -605,10 +605,10 @@ tests/case/workbench/
 #### `scheduled-task-config-lifecycle`
 
 - 测试类型：`e2e`
-- What：新增、必填拦截、编辑、启用开关、立即执行确认与删除完整闭环；每周模式必须选择星期几；执行权限位于偏好下方；保存自动创建专属伙伴；启用后侧栏与标题栏出现已启用数量 chip，关闭或删除后消失。
+- What：新增、必填拦截、编辑、启用开关、立即执行确认与删除完整闭环；每周模式必须选择星期几；执行权限位于偏好下方；保存自动创建专属伙伴；启用后侧栏与标题栏出现已启用数量 chip，关闭或删除后消失；编辑保存不改变启用状态。
 - Why：配置是定时任务可执行的前提；专属伙伴与立即执行是占用兜底的入口。
-- How：通过真实 UI 打开视图新增任务并填写名称、提示词、执行时间（TimePicker）、主模型、偏好与执行权限（不选伙伴），保存后确认出现在列表且产生 `定时 ·` 专属伙伴；编辑并保存；切换启用开关并确认数量 chip；点立即执行弹出确认后取消；删除并二次确认。
-- Oracle：新增与编辑预填对齐 `ST-FORM-001-AC1`；必填缺失拦截对齐 `ST-FORM-001-AC2`；每周必选星期对齐 `ST-FORM-001-AC3`；自动建专属伙伴对齐 `ST-FORM-001-AC6`；默认关闭对齐 `ST-SWITCH-001-AC1`；删除二次确认对齐 `ST-DELETE-001-AC1/AC2`；列表展示对齐 `ST-LIST-001-AC2/AC4`；启用后数量 chip 对齐 `ST-ENTRY-001-AC3` / `ST-VIEW-001-AC4`；立即执行确认对齐 `ST-RUN-004-AC1`。
+- How：通过真实 UI 打开视图新增任务并填写名称、提示词、执行时间（TimePicker）、主模型、偏好与执行权限（不选伙伴），保存后确认出现在列表且产生 `定时 ·` 专属伙伴；先打开启用开关，再编辑并保存，确认仍为启用且数量 chip 仍在；点立即执行弹出确认后取消；删除并二次确认。
+- Oracle：新增与编辑预填对齐 `ST-FORM-001-AC1`；必填缺失拦截对齐 `ST-FORM-001-AC2`；每周必选星期对齐 `ST-FORM-001-AC3`；自动建专属伙伴对齐 `ST-FORM-001-AC6`；编辑保存不改启用对齐 `ST-FORM-001-AC7` / `ST-SWITCH-001-AC3`（只在本 case 断言）；默认关闭对齐 `ST-SWITCH-001-AC1`；删除二次确认对齐 `ST-DELETE-001-AC1/AC2`；列表展示对齐 `ST-LIST-001-AC2/AC4`；启用后数量 chip 对齐 `ST-ENTRY-001-AC3` / `ST-VIEW-001-AC4`；立即执行确认对齐 `ST-RUN-004-AC1`。
 - Not：不验证到点后的真实 AI 执行；忙碌取消胶囊主路径由 unit 覆盖（`ST-RUN-001-AC3` / `ST-RUN-005`）。`ST-FORM-001-AC4`、`ST-SWITCH-001-AC2` 标为不测。
 
 #### `scheduled-task-trigger-and-session-refresh`
@@ -623,7 +623,7 @@ tests/case/workbench/
 #### `scheduled-task` backend 单测
 
 - 测试类型：`backend`
-- What：`computeNextRunAt`；`save` 自动创建专属伙伴且不再要求 partnerId；`fireTask` 空闲执行、忙碌取消写 notice 并推进下一周期、伙伴缺失自动重建；`runNow` / `dismissBusyNotice`；休眠错过不补跑。
+- What：`computeNextRunAt`；`save` 自动创建专属伙伴且不再要求 partnerId；编辑保存保留原启用状态；`fireTask` 空闲执行、忙碌取消写 notice 并推进下一周期、伙伴缺失自动重建；`runNow` / `dismissBusyNotice`；休眠错过不补跑。
 - Why：忙碌取消、重建与立即执行边界不适合用 UI E2E 稳定复现。
 - How：注入 fake task/partner store、submitTask、clock 与 timer。
 - Oracle：忙碌取消对齐 `ST-RUN-001-AC3` / `ST-RUN-005`；重建对齐 `ST-PARTNER-001-AC2` / `ST-RUN-001-AC4`；立即执行忙提示对齐 `ST-RUN-004-AC3`；错过不补跑对齐 `ST-RUN-003`。

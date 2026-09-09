@@ -322,12 +322,14 @@ export class ScheduledTaskService {
     let partnerId = ''
     let busyCancelNoticeAt: number | null = null
     let createdAt = now
+    let enabled = false
     if (existingId) {
       const existing = await this.deps.taskStore.getById(existingId)
       if (!existing) throw new Error('定时任务不存在')
       partnerId = existing.partnerId
       busyCancelNoticeAt = existing.busyCancelNoticeAt
       createdAt = existing.createdAt
+      enabled = existing.enabled
       await this.syncBoundPartnerName(partnerId, name)
     } else {
       partnerId = await this.createBoundPartner(id, name, now)
@@ -337,7 +339,7 @@ export class ScheduledTaskService {
       id,
       name,
       prompt,
-      enabled: Boolean(input.enabled),
+      enabled,
       scheduleType,
       timeOfDay: schedule.timeOfDay,
       weekday,
@@ -345,7 +347,7 @@ export class ScheduledTaskService {
       mainModel: { configId: mainModel.configId, modelName: mainModel.modelName },
       aiPreference: normalizeAiPreference(input.aiPreference),
       executionPermission: normalizeExecutionPermission(input.executionPermission),
-      nextRunAt: input.enabled ? computeNextRunAt(schedule, now) : null,
+      nextRunAt: enabled ? computeNextRunAt(schedule, now) : null,
       busyCancelNoticeAt,
       createdAt,
       updatedAt: now

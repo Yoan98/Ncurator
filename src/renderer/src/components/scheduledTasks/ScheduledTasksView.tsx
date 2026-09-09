@@ -212,7 +212,6 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
       id: form.id || undefined,
       name: form.name.trim(),
       prompt: form.prompt.trim(),
-      enabled: false,
       scheduleType: form.scheduleType,
       timeOfDay,
       weekday: form.scheduleType === 'weekly' ? normalizeWeekday(form.weekday) : null,

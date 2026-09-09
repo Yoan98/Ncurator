@@ -164,8 +164,7 @@ describe('ScheduledTaskService', () => {
       prompt: 'y',
       scheduleType: 'daily' as const,
       timeOfDay: '09:00',
-      mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
-      enabled: false
+      mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' }
     }
     expect((await service.save({ ...base, name: '  ' })).success).toBe(false)
     expect((await service.save({ ...base, prompt: '' })).success).toBe(false)
@@ -186,29 +185,55 @@ describe('ScheduledTaskService', () => {
       prompt: '总结',
       scheduleType: 'daily',
       timeOfDay: '09:00',
-      mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
-      enabled: true
+      mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' }
     })
     expect(response.success).toBe(true)
     expect(response.task?.partnerId).toBeTruthy()
-    expect(response.task?.nextRunAt).toBe(localAt(2026, 0, 1, 9, 0))
+    expect(response.task?.enabled).toBe(false)
+    expect(response.task?.nextRunAt).toBeNull()
     expect(partnerStore.savePartner).toHaveBeenCalled()
     expect(savePartnerUiState).toHaveBeenCalled()
     const created = partnerStore.savePartner.mock.calls[0]?.[0] as Partner
     expect(created.name).toBe(boundPartnerName('每日晨报'))
   })
 
-  it('does not compute nextRunAt for a disabled task', async () => {
-    const { service } = createService()
+  it('keeps enabled state when editing an enabled task', async () => {
+    const { service, taskStore } = createService()
+    taskStore.set(
+      makeTask({
+        enabled: true,
+        timeOfDay: '09:00',
+        nextRunAt: localAt(2026, 0, 1, 9, 0)
+      })
+    )
     const response = await service.save({
-      name: 'x',
-      prompt: 'y',
+      id: 'task-1',
+      name: '每日晨报改名',
+      prompt: '总结今天的新闻',
       scheduleType: 'daily',
-      timeOfDay: '09:00',
-      mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' },
-      enabled: false
+      timeOfDay: '10:00',
+      mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' }
     })
     expect(response.success).toBe(true)
+    expect(response.task?.enabled).toBe(true)
+    expect(response.task?.name).toBe('每日晨报改名')
+    expect(response.task?.timeOfDay).toBe('10:00')
+    expect(response.task?.nextRunAt).toBe(localAt(2026, 0, 1, 10, 0))
+  })
+
+  it('keeps a disabled task disabled when editing', async () => {
+    const { service, taskStore } = createService()
+    taskStore.set(makeTask({ enabled: false, nextRunAt: null }))
+    const response = await service.save({
+      id: 'task-1',
+      name: '每日晨报改名',
+      prompt: '总结今天的新闻',
+      scheduleType: 'daily',
+      timeOfDay: '10:00',
+      mainModel: { configId: 'cfg-1', modelName: 'gpt-4o' }
+    })
+    expect(response.success).toBe(true)
+    expect(response.task?.enabled).toBe(false)
     expect(response.task?.nextRunAt).toBeNull()
   })
 

@@ -37,7 +37,7 @@ describe('workbench scheduled-task e2e', () => {
         suite: 'scheduled-task',
         groups: [],
         description:
-          '验证定时任务新增、必填校验、自动专属伙伴、编辑、启用开关、立即执行确认与删除闭环。',
+          '验证定时任务新增、必填校验、自动专属伙伴、编辑保存不改启用、启用开关、立即执行确认与删除闭环。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         runMode: 'single',
@@ -135,11 +135,24 @@ describe('workbench scheduled-task e2e', () => {
             await nameInput.waitFor({ state: 'visible' })
             await nameInput.fill(TASK_NAME_EDITED)
             await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
+            await nameInput.waitFor({ state: 'hidden' })
           }
           const editedTasks = await listTasks(page)
-          const editedCorrectly = editedTasks.some((task) => task.name === TASK_NAME_EDITED)
-
           const edited = editedTasks.find((task) => task.name === TASK_NAME_EDITED)
+          const editedCorrectly = Boolean(edited?.enabled)
+          const countChipVisibleAfterEdit =
+            Boolean(edited?.enabled) &&
+            (await sidebarCountChip
+              .waitFor({ state: 'visible' })
+              .then(() => true)
+              .catch(() => false)) &&
+            (await titleCountChip
+              .waitFor({ state: 'visible' })
+              .then(() => true)
+              .catch(() => false)) &&
+            (await sidebarCountChip.textContent())?.trim() === '1' &&
+            (await titleCountChip.textContent())?.trim() === '1'
+
           if (edited) {
             const editedItem = getWorkbenchLocator(
               page,
@@ -172,6 +185,7 @@ describe('workbench scheduled-task e2e', () => {
             enabledAfterToggle,
             countChipVisibleAfterEnable,
             editedCorrectly,
+            countChipVisibleAfterEdit,
             deletedCorrectly,
             countChipHiddenAfterDelete
           }
@@ -186,6 +200,7 @@ describe('workbench scheduled-task e2e', () => {
               result.enabledAfterToggle &&
               result.countChipVisibleAfterEnable &&
               result.editedCorrectly &&
+              result.countChipVisibleAfterEdit &&
               result.deletedCorrectly &&
               result.countChipHiddenAfterDelete,
             {

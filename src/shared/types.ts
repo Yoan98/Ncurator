@@ -1174,7 +1174,6 @@ export type ScheduledTaskSaveRequest = {
   id?: string
   name: string
   prompt: string
-  enabled: boolean
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday?: number | null
