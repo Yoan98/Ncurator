@@ -3,6 +3,7 @@ import { normalizeOpenAIBaseUrl } from '../../../../shared/llmBaseUrl'
 import { emitActivity } from '../../../utils/aiCapabilityUtils'
 import type { AiEventDispatchContext } from '../types'
 import type {
+  AiLlmRequestWire,
   AiLlmStreamingMode,
   AiLlmUsage,
   BrainContextBudgetSnapshot,
@@ -122,6 +123,7 @@ export const runLlmCallWithActivity = async <T>(input: {
   taskId?: string
   system: string
   user: string
+  requestWire?: AiLlmRequestWire
   telemetry: LlmCallTelemetry
   onTextDelta?: (text: string) => void
   onTextReset?: () => void
@@ -300,6 +302,7 @@ export const runLlmCallWithActivity = async <T>(input: {
       baseUrlHost,
       system: input.system,
       user: input.user,
+      requestWire: input.requestWire,
       output: normalizeOutput(result.output),
       rawText,
       usage: result.usage,
@@ -359,6 +362,7 @@ export const runLlmCallWithActivity = async <T>(input: {
       baseUrlHost,
       system: input.system,
       user: input.user,
+      requestWire: input.requestWire,
       rawText: failedRawText,
       stablePrefixHash,
       dynamicContextHash,

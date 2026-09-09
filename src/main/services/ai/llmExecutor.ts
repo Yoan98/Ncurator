@@ -39,6 +39,7 @@ import {
   type LlmCallExecutionResult,
   type LlmCallStreamObserver
 } from './utils/structuredChatActivity'
+import { serializeChatToolsRequestWire } from './utils/llmRequestWire'
 
 type TextMessage = {
   content: unknown
@@ -965,12 +966,17 @@ export const createAiLlmExecutor = (input: {
           content: serializeMessageContentForTelemetry(message.content)
         }))
       )
+      const requestWire = serializeChatToolsRequestWire({
+        messages: request.messages,
+        tools: request.tools
+      })
       const result = await runLlmCallWithActivity<AIMessage>({
         ctx: input.eventCtx,
         runId: input.eventCtx.runId,
         taskId: request.taskId,
         system: systemHash,
         user: userHash,
+        requestWire,
         telemetry: {
           actionType: 'llm_tool_calls',
           caller: request.caller,

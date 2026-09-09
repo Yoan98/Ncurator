@@ -1075,6 +1075,43 @@ export type BrainContextBudgetSnapshot = {
   lastBrainInputTokens?: number
   deltaTokenEstimate?: number
 }
+export type AiLlmRequestWireToolCall = {
+  id: string
+  name: string
+  arguments: string
+}
+
+export type AiLlmRequestWireMessage = {
+  role: string
+  content: string
+  toolCalls?: AiLlmRequestWireToolCall[]
+  toolCallId?: string
+}
+
+export type AiLlmRequestWireTool = {
+  name: string
+  description: string
+  parameters: JsonValue
+}
+
+export type AiLlmRequestWire = {
+  messages: AiLlmRequestWireMessage[]
+  tools: AiLlmRequestWireTool[]
+  messagesHash: string
+  toolsHash: string
+}
+
+export type AiLlmRequestWireDiff = {
+  equal: boolean
+  firstPath: string
+  leftPreview: string
+  rightPreview: string
+  toolsHashEqual: boolean
+  messagesHashEqual: boolean
+  firstDifferingToolIndex?: number
+  firstDifferingMessageIndex?: number
+}
+
 export type AiLlmIoRecord = {
   callId: string
   runId: string
@@ -1086,6 +1123,7 @@ export type AiLlmIoRecord = {
   baseUrlHost: string
   system: string
   user: string
+  requestWire?: AiLlmRequestWire
   output?: JsonValue
   rawText?: string
   usage?: AiLlmUsage

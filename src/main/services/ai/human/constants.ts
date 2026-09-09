@@ -22,7 +22,7 @@ export const HUMAN_STEP_ACTIONS = [
 
 export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error'] as const
 
-export const HUMAN_MAX_ACTIVE_TOOLS = 30
+export const HUMAN_MAX_ACTIVE_TOOLS = 25
 export const HUMAN_GRAPH_RECURSION_LIMIT = 400
 // 默认 256k 窗口；触发线为窗口的 80%；tail 为触发线的 10%。
 export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 256_000

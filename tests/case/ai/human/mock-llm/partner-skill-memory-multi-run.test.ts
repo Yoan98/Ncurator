@@ -1,7 +1,7 @@
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { buildCompleteTaskDecision, buildLearnSkillsDecision } from '../testUtils'
+import { buildCompleteTaskDecision, buildLearnSkillsDecision, filterAiRunEventsByType } from '../testUtils'
 import type { ChatMessageLogRecord } from '../../../../../src/shared/types'
 
 const PARTNER_ID = 'partner-skill-memory-multi-run'
@@ -26,7 +26,7 @@ describe('ai human mock-llm backend', () => {
       suite: 'human',
       groups: ['mock-llm'],
       description:
-        '验证同一伙伴跨 run 共享技能；在当前 29 工具目录与 30 上限下，四轮学习后仍应全部保留。',
+        '验证同一伙伴跨 run 共享技能；在 25 上限下学满后 FIFO 淘汰，且被淘汰 skill 可再学回来。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -54,14 +54,12 @@ describe('ai human mock-llm backend', () => {
           await runtime.storageService.chatMessageLog.list(PARTNER_ID)
         )
 
-        let run2Prompt = ''
         const run2 = createHumanTestRunner(runtime, {
           partnerId: PARTNER_ID,
           structuredOutputScript: {
             'human.brain': [
-              ({ user }) => {
-                run2Prompt = user
-                return buildLearnSkillsDecision({
+              {
+                output: buildLearnSkillsDecision({
                   skillIds: ['excel-write'],
                   summary: '补充 Excel 编辑技能。'
                 })
@@ -101,7 +99,7 @@ describe('ai human mock-llm backend', () => {
           await runtime.storageService.chatMessageLog.list(PARTNER_ID)
         )
 
-        let run4Prompt = ''
+        const eventOffsetBeforeRun4 = runtime.eventCollector.snapshot().length
         const run4 = createHumanTestRunner(runtime, {
           partnerId: PARTNER_ID,
           structuredOutputScript: {
@@ -109,12 +107,11 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['excel-read', 'image-generation', 'docx-write'],
-                  summary: '补充 Excel 阅读与图片、Word 编辑技能并检查 FIFO 遗忘结果。'
+                  summary: '补充 Excel 阅读与图片、Word 编辑技能并触发 FIFO 淘汰。'
                 })
               },
-              ({ user }) => {
-                run4Prompt = user
-                return buildCompleteTaskDecision({
+              {
+                output: buildCompleteTaskDecision({
                   summary: '第四轮完成。',
                   deliveryMarkdown: '第四轮完成。'
                 })
@@ -126,22 +123,73 @@ describe('ai human mock-llm backend', () => {
         const stateAfterEviction = readLatestLearnedSkillIds(
           await runtime.storageService.chatMessageLog.list(PARTNER_ID)
         )
+        const run4LearningSteps = filterAiRunEventsByType(
+          runtime.eventCollector.snapshot().slice(eventOffsetBeforeRun4),
+          'human_step'
+        ).filter((event) => event.stage === 'human_learning')
+        const run4EvictionSummary = run4LearningSteps.find((event) =>
+          event.summary.includes('已淘汰最早学习的 skill=')
+        )?.summary
 
-        return { stateAfterRun1, stateAtLimit, stateAfterEviction, run2Prompt, run4Prompt }
+        const eventOffsetBeforeRun5 = runtime.eventCollector.snapshot().length
+        const run5 = createHumanTestRunner(runtime, {
+          partnerId: PARTNER_ID,
+          structuredOutputScript: {
+            'human.brain': [
+              {
+                output: buildLearnSkillsDecision({
+                  skillIds: ['docx-read'],
+                  summary: '被淘汰后重新学习 Word 阅读技能。'
+                })
+              },
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '第五轮完成。',
+                  deliveryMarkdown: '第五轮完成。'
+                })
+              }
+            ]
+          }
+        })
+        await run5.run({ taskId: 'partner-skills-run-5', userInput: '重新学习被淘汰的 Word 阅读技能。' })
+        const stateAfterRelearn = readLatestLearnedSkillIds(
+          await runtime.storageService.chatMessageLog.list(PARTNER_ID)
+        )
+        const run5LearningSteps = filterAiRunEventsByType(
+          runtime.eventCollector.snapshot().slice(eventOffsetBeforeRun5),
+          'human_step'
+        ).filter((event) => event.stage === 'human_learning')
+
+        return {
+          stateAfterRun1,
+          stateAtLimit,
+          stateAfterEviction,
+          stateAfterRelearn,
+          run4EvictionSummary,
+          run5LoadedDocxRead: run5LearningSteps.some(
+            (event) =>
+              event.learnedSkillIds.includes('docx-read') &&
+              event.summary.includes('learning 已加载 docx-read')
+          )
+        }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.stateAfterRun1.join(',') === 'docx-read,pdf-read' &&
-            result.run2Prompt.includes('已学习技能') &&
             result.stateAtLimit.join(',') ===
               'docx-read,pdf-read,excel-write,ppt-read,ppt-write' &&
+            Boolean(result.run4EvictionSummary?.includes('docx-read')) &&
+            Boolean(result.run4EvictionSummary?.includes('pdf-read')) &&
             result.stateAfterEviction.join(',') ===
-              'docx-read,pdf-read,excel-write,ppt-read,ppt-write,excel-read,image-generation,docx-write' &&
-            result.run4Prompt.includes('已学习技能'),
+              'excel-write,ppt-read,ppt-write,excel-read,image-generation,docx-write' &&
+            !result.stateAfterEviction.includes('docx-read') &&
+            !result.stateAfterEviction.includes('pdf-read') &&
+            result.run5LoadedDocxRead &&
+            result.stateAfterRelearn.includes('docx-read'),
           {
-            name: 'partner-skills-persist-across-runs-within-tool-budget',
+            name: 'partner-skills-persist-evict-and-relearn-under-tool-budget',
             message:
-              '同一伙伴应跨 run 共享技能；后续 brain prompt 应注入 learned_skills，且四轮学习后技能全部保留。',
+              '同一伙伴应跨 run 共享技能；学满 25 上限后 FIFO 淘汰最早 skill，被淘汰 skill 应可再学回来。',
             data: result
           }
         )

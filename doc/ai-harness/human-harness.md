@@ -758,7 +758,7 @@ brain 返回 learn_skill
   → context_budget → brain   （bindTools 用最新 learnedSkillIds；不改 build user）
 ```
 
-**active tool 上限**：`HUMAN_MAX_ACTIVE_TOOLS = 30`（含 builtin / agent-control 工具）。新 skill 超限时 **FIFO 淘汰**最早学习的 external skill，写 tool 反馈说明 `evicted=…`。
+**active tool 上限**：`HUMAN_MAX_ACTIVE_TOOLS = 25`（含 builtin / agent-control 工具）。新 skill 超限时 **FIFO 淘汰**最早学习的 external skill，写 tool 反馈说明 `evicted=…`。
 
 | 结果 | log | brain |
 |------|-----|-------|

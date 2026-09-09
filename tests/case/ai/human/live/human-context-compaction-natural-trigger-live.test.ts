@@ -1,5 +1,6 @@
 import { describe, it } from 'vitest'
 import type { AiLlmIoRecord, AiRunEvent } from '../../../../../src/shared/types'
+import { diffChatToolsRequestWire } from '../../../../../src/main/services/ai/utils/llmRequestWire'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -140,6 +141,10 @@ const collectContinuationPrefixCacheReuse = (input: {
     hasUsageSignal && previousLastInputTokens
       ? nextFirstCachedInputTokens! / previousLastInputTokens
       : undefined
+  const requestWireDiff = diffChatToolsRequestWire(
+    previousLastBrain?.requestWire,
+    nextFirstBrain?.requestWire
+  )
   return {
     previousLastBrain,
     nextFirstBrain,
@@ -148,6 +153,7 @@ const collectContinuationPrefixCacheReuse = (input: {
     nextFirstInputTokens,
     nextFirstCacheHitRate: nextFirstBrain?.usage?.cacheHitRate,
     reuseRatio,
+    requestWireDiff,
     satisfied:
       hasUsageSignal &&
       typeof reuseRatio === 'number' &&
@@ -445,7 +451,12 @@ describe('ai human live backend', () => {
               nextFirstCacheHitRate: run3PrefixCache.nextFirstCacheHitRate,
               reuseRatio: run3PrefixCache.reuseRatio,
               previousLastBrainUsage: run3PrefixCache.previousLastBrain?.usage,
-              nextFirstBrainUsage: run3PrefixCache.nextFirstBrain?.usage
+              nextFirstBrainUsage: run3PrefixCache.nextFirstBrain?.usage,
+              requestWireDiff: run3PrefixCache.requestWireDiff,
+              previousToolsHash: run3PrefixCache.previousLastBrain?.requestWire?.toolsHash,
+              nextToolsHash: run3PrefixCache.nextFirstBrain?.requestWire?.toolsHash,
+              previousMessagesHash: run3PrefixCache.previousLastBrain?.requestWire?.messagesHash,
+              nextMessagesHash: run3PrefixCache.nextFirstBrain?.requestWire?.messagesHash
             }
           })
         }

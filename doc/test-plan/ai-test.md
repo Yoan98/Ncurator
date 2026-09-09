@@ -760,8 +760,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：真实 `learning` 会持续记录当前 active tool 数，并在预算未超限时保留当前已学习 skill 集。
 - Why：`learning` 的 active tool 预算是后续扩展 `excel / ppt` 等新能力时的重要长期边界，回归 case 需要先守住基础统计与状态可见性。
 - How：通过 scripted structured output 先学习 `docx-read`，再学习 `docx-write`，最后故意请求 builtin skill（如 `terminal + kb-retrieval`）；检查最后一轮真实 `human_learning` 事件中的 `learnedSkillIds`、`availableToolNames` 与 summary，并确认 builtin skill 请求被过滤（learning 返回「学习失败，学习请求中没有可加载的技能。」工具结果）。
-- Oracle：任务最终完成；最后一轮真实 `human_learning` 事件中只保留 external skill，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 skill 淘汰文案；builtin skill 不占 active tool budget，但后续真实执行时仍计入工具调用次数限制。
-- Not：不验证超过 `20` 个 active tools 后的淘汰算法细节。
+- Oracle：任务最终完成；最后一轮真实 `human_learning` 事件中只保留 external skill，`availableToolNames` 同时包含 builtin 与 learned external 的工具集合，summary 包含 `当前 active tools=` 且不包含 skill 淘汰文案；builtin skill 始终计入 active tool 上限统计，但请求 builtin skill id 不会进入 `learnedSkillIds`。
+- Not：不验证超限后的 FIFO 淘汰与再学闭环（由 `partner-skill-memory-multi-run` 与 live `human-skill-eviction-relearn-loop-live` 覆盖）。
 
 ##### `tool-failure-recovery`
 
@@ -829,11 +829,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `partner-skill-memory-multi-run`
 
 - 测试类型：`backend / mock-llm`
-- What：同一伙伴的多轮 human run 能复用已学习技能记忆。
-- Why：技能记忆是 AI 架构跨轮次协作的核心，不应每轮重复 learning。
-- How：跨四轮逐步学习 DOCX、PDF、Excel、PPT 和图片技能，最后一次加载 `docx-write`。
-- Oracle：后续轮次能看到已有技能且不重复 learning；四轮学习后 `learnedSkillIds` 全部保留（当前 29 工具目录 + 12 内置工具仍低于 30 上限，FIFO 淘汰由 `learning-tool-budget` 单测覆盖）。
-- Not：不覆盖 Workbench UI 伙伴持久化，该路径由 Workbench E2E 覆盖。
+- What：同一伙伴的多轮 human run 能复用已学习技能记忆；在 `HUMAN_MAX_ACTIVE_TOOLS=25` 下学满后会 FIFO 淘汰，被淘汰 skill 可再学回来。
+- Why：技能记忆是 AI 架构跨轮次协作的核心；active tool 上限下的遗忘与再学必须由真实 learning 链路守住，不能只靠 unit 算法。
+- How：跨五轮逐步学习 DOCX、PDF、Excel、PPT 和图片技能；第四轮加载 `excel-read + image-generation + docx-write` 挤爆预算；第五轮再学被淘汰的 `docx-read`。
+- Oracle：前三轮技能跨 run 保留；第四轮 learning summary 含淘汰 `docx-read` 与 `pdf-read`，最新 `learnedSkillIds` 为 `excel-write,ppt-read,ppt-write,excel-read,image-generation,docx-write`；第五轮重新加载 `docx-read` 且最终 skill 快照包含它。
+- Not：不覆盖 Workbench UI 伙伴持久化，该路径由 Workbench E2E 覆盖；不验证 live 模型是否会自然触发同一学习顺序（由 `human-skill-eviction-relearn-loop-live` 覆盖）。
 
 ##### `plan-memory-maintenance`
 
@@ -954,6 +954,15 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 user.content 与最终交付，末尾是 Run 2 当前 User；该当前 User 无 `<memory>`、无 `<active_state>`；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。
 - Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [checkpoint User] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。
 
+##### `human-skill-eviction-relearn-loop-live`
+
+- 测试类型：`backend / live`
+- What：同一伙伴在生产 `HUMAN_MAX_ACTIVE_TOOLS=25` 下先学满多项阅读技能，再学写入技能触发 FIFO 淘汰；淘汰后续做仍能完成，随后在再次需要被淘汰 skill 时自动再学并完成核对。
+- Why：技能遗忘若只靠 unit/mock，无法证明真实模型在自然语言任务下会触发淘汰、淘汰后不卡死、需要时再学；这是学习预算闭环的生产风险。
+- How：共用伙伴，测值与生产一致（无 maxActiveTools override）。fixture 含 `学习笔记/深度学习.docx`、`学习笔记/深度学习.pdf`、`品牌策略提案.pptx`、`经营周报.xlsx`。Run 1 按顺序只读四类资料并口头汇总（期望学会含 `docx-read` 在内的多项阅读技能，不淘汰）。Run 2 新建 Word 备忘并给 PPT 加附录页，挤爆预算并淘汰最早的 `docx-read`；若未出现该淘汰则不启动 Run 3。Run 3 再读课件核对备忘中的过拟合表述，迫使再学 `docx-read`。
+- Oracle：Run 1 `completed`，`learnedSkillIds` 含 `docx-read` 且至少另一项 external，无淘汰证据，并有 docx 读工具证据。Run 2 `completed`，出现淘汰证据，最新 skill 快照不再含 `docx-read`，且 Word/PPT 写入或备忘文件落地。Run 3 `completed`，再次学习 `docx-read` 并出现 docx 读工具证据。人工依据 raw logs 回写顶部评分。
+- Not：不降低测试上限；不固定 learn 次数/文案；不钉死除 `docx-read` 外被挤掉的其他 skill；不测 UI Activity、compaction、resume；最终自然语言不作主证据。
+
 ##### `human-ppt-edit-management-review-live`
 
 - 测试类型：`backend / live`
@@ -1004,7 +1013,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：live 模式下 `human` 会先用普通短问铺出一条完整历史轮，再在风险周报长任务中自然触发压缩；压完后发给主模型的数组为 `[System] + [checkpoint User] + 原文 tail`。同一次可走历史 + 半截。Run 2 未压出 checkpoint 则不发 Run 3。续做再压，且 Run 3 首轮 brain 必须明显复用 Run 2 末次前缀缓存。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩、当前工作仍能做完”的能力；同时守住跨 run 只 append 新 user、历史前缀字节不变时 provider 前缀缓存应命中。
-- How：复用风险周报 live 的真实文件地址。窗口仍为 `humanRuntimeOverrides.modelContextWindowTokens=45_000`，tail 由触发线 × `CONTEXT_COMPACTION_TAIL_RATIO`（0.1）算出，不再单独 override keep。Run 1 发普通短问（上周周报文件名），不要求自己压到。Run 2 用原周报长任务，应压到，覆盖历史 + 半截。Run 2 若未压出 checkpoint，不发 Run 3，直接按 Run 2 断言失败。Run 3 同伙伴、不再 @ 上周周报/已交周报，要求对照刚写的本周周报和上周周报、补风险对照、标题改为「九月第一周」、核法务口径，从而再压至少一次。Run 3 首次 brain 用 `cachedInputTokens / Run2 末次 brain inputTokens` 与明显比例门槛对比。窗口不能太小：固定开销（工具 schema + system/模板）几乎不随压缩减少，过小会连续压缩死循环；也不能太大（过大时峰值达不到触发线）。continuation / resume live 仍分开，不并入本 case。
+- How：复用风险周报 live 的真实文件地址。窗口仍为 `humanRuntimeOverrides.modelContextWindowTokens=45_000`，tail 由触发线 × `CONTEXT_COMPACTION_TAIL_RATIO`（0.1）算出，不再单独 override keep。Run 1 发普通短问（上周周报文件名），不要求自己压到。Run 2 用原周报长任务，应压到，覆盖历史 + 半截。Run 2 若未压出 checkpoint，不发 Run 3，直接按 Run 2 断言失败。Run 3 同伙伴、不再 @ 上周周报/已交周报，要求对照刚写的本周周报和上周周报、补风险对照、标题改为「九月第一周」、核法务口径，从而再压至少一次。Run 3 首次 brain 用 `cachedInputTokens / Run2 末次 brain inputTokens` 与明显比例门槛对比。brain 的 `llm-io` 另记 `requestWire`（发给 LangChain 的 messages 含 assistant `toolCalls.arguments` 字符串，以及每个工具的完整 `parameters` schema），跨 run 缓存断言会把 Run2 末次 vs Run3 首次的第一处 diff 写进 timeline。窗口不能太小：固定开销（工具 schema + system/模板）几乎不随压缩减少，过小会连续压缩死循环；也不能太大（过大时峰值达不到触发线）。continuation / resume live 仍分开，不并入本 case。
 - Oracle：Run 1 `completed`，不要求压缩。Run 2 至少一次完整 compaction；压完后下一次 brain 消息为 `system + human(checkpoint) + 原文 tail`，不能 System 后直接 AI；落库 checkpoint 为六栏（半轮可含 Turn Context）；提示词无 `<previous-summary>` / `[round]` / `<current>` / `<earlier>`；含「上周周报」、不编造「上周工作周报.docx」；周报 docx 交付成功；不对 tail 逐条复述。Run 3 首次 brain 为 `system, human(checkpoint), …原文…, human(新任务)`，不能 System 后直接 AI；再压至少一次且 `completed`；「目标 / 进度 / 下一步 / 约束与偏好」说的是对照、改标题或法务，而不是整段重填周报。Run 3 首次 brain 必须带回 provider 缓存 usage，且 `cachedInputTokens / Run2 末次 brain inputTokens ≥ 0.5`。按 10 分制评估压缩生命周期、摘要结构和文件交付，严格超过 8 分通过。
 - Not：不绑定压缩次数，不要求固定资料读取顺序，也不因合理表达差异判失败。不拿半截 `rawText` 去要六栏，不要求每条压缩 user 都有 `[user]`。不验证未压缩时的历史 user 叠加（由 `human-partner-continuation-live` 覆盖），不验证中断恢复（由 `human-partner-resume-with-new-selection-live` 覆盖）。不要求 Run 3 全程高命中（同 run 内再次 compaction 会按设计打破前缀缓存）。Run 2 未压出 checkpoint 时不启动 Run 3。
 
