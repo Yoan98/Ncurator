@@ -2,6 +2,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, it } from 'vitest'
+import { getPartnerScriptsRootDir } from '../../../../../src/main/services/assets/WorkspaceAssetService'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { terminalSessionManager } from '../../../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
@@ -24,9 +25,6 @@ const listFiles = async (rootPath: string): Promise<string[]> => {
   )
   return nested.flat()
 }
-
-const getScriptsRootDir = (workspaceRoot: string): string =>
-  path.join(workspaceRoot, '.ncurator', 'runtime', 'scripts')
 
 const collectTerminalCommands = (events: readonly AiRunEvent[]): string[] =>
   filterAiRunEventsByType(events, 'tool_call_started')
@@ -99,7 +97,8 @@ describe.skipIf(!SUPPORTED_PLATFORMS.has(process.platform))('ai human live runti
             return {
               output,
               events: runtime.eventCollector.snapshot(),
-              scriptFiles: await listFiles(getScriptsRootDir(runtime.workspaceRoot))
+              scriptsRoot: getPartnerScriptsRootDir(sessionId),
+              scriptFiles: await listFiles(getPartnerScriptsRootDir(sessionId))
             }
           } finally {
             await terminalSessionManager.closeByChatSession(sessionId)
@@ -116,12 +115,13 @@ describe.skipIf(!SUPPORTED_PLATFORMS.has(process.platform))('ai human live runti
             {
               name: 'human-live-runs-temp-script-with-system-python',
               message:
-                'live human 应用本机 Python 在临时脚本目录运行临时脚本，得到正确计算结果且不污染工作区普通目录。',
+                'live human 应用本机 Python 在临时脚本目录（runtime_paths.scripts）运行临时脚本，得到正确计算结果且不污染工作区普通目录。',
               data: {
                 commands,
                 resultText,
+                scriptsRoot: result.scriptsRoot,
                 scriptFiles: result.scriptFiles.map((filePath) =>
-                  path.relative(runtime.workspaceRoot, filePath)
+                  path.relative(result.scriptsRoot, filePath)
                 )
               }
             }
@@ -161,7 +161,8 @@ describe.skipIf(!SUPPORTED_PLATFORMS.has(process.platform))('ai human live runti
             return {
               output,
               events: runtime.eventCollector.snapshot(),
-              scriptFiles: await listFiles(getScriptsRootDir(runtime.workspaceRoot))
+              scriptsRoot: getPartnerScriptsRootDir(sessionId),
+              scriptFiles: await listFiles(getPartnerScriptsRootDir(sessionId))
             }
           } finally {
             await terminalSessionManager.closeByChatSession(sessionId)
@@ -181,12 +182,13 @@ describe.skipIf(!SUPPORTED_PLATFORMS.has(process.platform))('ai human live runti
             {
               name: 'human-live-downloads-python-and-runs-temp-script',
               message:
-                'live human 应在 Python 不可用时自行下载可运行环境，用它执行临时脚本并得到正确结果。',
+                'live human 应在 Python 不可用时自行下载可运行环境，用它在临时脚本目录（runtime_paths.scripts）执行临时脚本并得到正确结果。',
               data: {
                 commands,
                 resultText,
+                scriptsRoot: result.scriptsRoot,
                 scriptFiles: result.scriptFiles.map((filePath) =>
-                  path.relative(runtime.workspaceRoot, filePath)
+                  path.relative(result.scriptsRoot, filePath)
                 ),
                 usesDownloadedPython
               }

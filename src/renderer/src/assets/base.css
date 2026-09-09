@@ -1989,6 +1989,16 @@ mark {
   padding: var(--nc-timeline-top-gap) 0 var(--nc-timeline-composer-clearance);
 }
 
+/* 中间栏变窄（如右侧面板展开）时仅保留圆点，文案改由 Tooltip 展示 */
+.nc-message-timeline.is-compact {
+  left: 6px;
+  width: var(--nc-timeline-track);
+}
+
+.nc-message-timeline.is-compact .nc-message-timeline-item {
+  grid-template-columns: var(--nc-timeline-track);
+}
+
 /* 轴线：底端停在最新节点圆心，顶端与标题横线留空，由近到远向上渐隐 */
 .nc-message-timeline::before {
   content: '';

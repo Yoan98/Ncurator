@@ -27,6 +27,8 @@ const RUN2_INPUT =
 
 const eventText = (event: AiRunEvent): string => JSON.stringify(event)
 
+const DOCX_READ_TOOL_NAMES = ['docx_read_outline', 'docx_search', 'docx_read_nodes'] as const
+
 const runUsedSelectedFile = (
   events: readonly AiRunEvent[],
   runId: string,
@@ -36,7 +38,7 @@ const runUsedSelectedFile = (
     (event) =>
       event.runId === runId &&
       ['tool_call_started', 'tool_call_result'].includes(event.type) &&
-      ['docx_search', 'docx_read_nodes'].includes(String(event.toolName || '')) &&
+      DOCX_READ_TOOL_NAMES.includes(String(event.toolName || '') as (typeof DOCX_READ_TOOL_NAMES)[number]) &&
       eventText(event).includes(fileName)
   )
 

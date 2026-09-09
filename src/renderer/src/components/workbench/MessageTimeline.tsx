@@ -1,5 +1,5 @@
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { DatePicker } from 'antd'
+import { DatePicker, Tooltip } from 'antd'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
 import { HiMagnifyingGlass } from 'react-icons/hi2'
@@ -9,6 +9,13 @@ import {
   type TimelineNode
 } from '../../../../shared/workbench/messageTimeline'
 import { workbenchSelectors } from '../../testing/selectors'
+
+/**
+ * Composer 左缘相对消息主区左缘的可用 gutter 低于此值时收起文案。
+ * 与总栏宽无关：右侧展开后总宽仍可能很大，但左侧留给轴文案的空间已不够。
+ * 约等于完整态时间轴宽（56px）+ 少量余量。
+ */
+const TIMELINE_LABEL_MIN_GUTTER_PX = 72
 
 type MessageTimelineProps = {
   nodes: TimelineNode[]
@@ -20,7 +27,7 @@ type MessageTimelineProps = {
 
 const measureTimelineLayout = (
   timelineRoot: HTMLElement
-): { composerClearancePx: number; lineEndPx: number } | null => {
+): { composerClearancePx: number; lineEndPx: number; leftGutterPx: number } | null => {
   const host = timelineRoot.parentElement
   if (!host) return null
   const composer = host.querySelector('.nc-floating-composer')
@@ -28,6 +35,7 @@ const measureTimelineLayout = (
   const hostRect = host.getBoundingClientRect()
   const composerRect = composer.getBoundingClientRect()
   const composerClearancePx = Math.max(0, Math.round(hostRect.bottom - composerRect.top))
+  const leftGutterPx = Math.max(0, Math.round(composerRect.left - hostRect.left))
   timelineRoot.style.setProperty('--nc-timeline-composer-clearance', `${composerClearancePx}px`)
 
   const lastTrack = timelineRoot.querySelector(
@@ -43,7 +51,7 @@ const measureTimelineLayout = (
     )
   }
   timelineRoot.style.setProperty('--nc-timeline-line-end', `${lineEndPx}px`)
-  return { composerClearancePx, lineEndPx }
+  return { composerClearancePx, lineEndPx, leftGutterPx }
 }
 
 export const MessageTimeline = ({
@@ -56,10 +64,12 @@ export const MessageTimeline = ({
   const rootRef = useRef<HTMLDivElement>(null)
   const [openPickerNodeId, setOpenPickerNodeId] = useState<string | null>(null)
   const [aligned, setAligned] = useState(false)
+  const [compact, setCompact] = useState(false)
 
   useLayoutEffect(() => {
     if (nodes.length === 0) {
       setAligned(false)
+      setCompact(false)
       return
     }
     const root = rootRef.current
@@ -70,6 +80,10 @@ export const MessageTimeline = ({
     const sync = (): void => {
       const layout = measureTimelineLayout(root)
       setAligned(layout != null)
+      const nextCompact =
+        layout == null ? false : layout.leftGutterPx < TIMELINE_LABEL_MIN_GUTTER_PX
+      setCompact(nextCompact)
+      if (nextCompact) setOpenPickerNodeId(null)
     }
 
     sync()
@@ -92,13 +106,28 @@ export const MessageTimeline = ({
   return (
     <div
       ref={rootRef}
-      className={`nc-message-timeline${aligned ? ' is-aligned' : ''}`}
+      className={`nc-message-timeline${aligned ? ' is-aligned' : ''}${compact ? ' is-compact' : ''}`}
       data-testid={workbenchSelectors.timeline}
+      data-compact={compact ? 'true' : 'false'}
     >
       <div className="nc-message-timeline-nodes">
         {nodes.map((node) => {
           const isActive = node.id === activeNodeId
-          const showDayPicker = node.level === 'month' || node.level === 'year'
+          const showDayPicker = !compact && (node.level === 'month' || node.level === 'year')
+          const itemButton = (
+            <button
+              type="button"
+              className="nc-message-timeline-item"
+              data-testid={`${workbenchSelectors.timelineItemPrefix}-${node.id}`}
+              aria-label={node.label}
+              onClick={() => onSelectNode(node)}
+            >
+              <span className="nc-message-timeline-track" aria-hidden="true">
+                <span className={`nc-message-timeline-dot nc-message-timeline-dot-${node.level}`} />
+              </span>
+              {!compact ? <span className="nc-message-timeline-label">{node.label}</span> : null}
+            </button>
+          )
           return (
             <div
               key={node.id}
@@ -106,17 +135,13 @@ export const MessageTimeline = ({
                 isActive ? ' is-active' : ''
               }`}
             >
-              <button
-                type="button"
-                className="nc-message-timeline-item"
-                data-testid={`${workbenchSelectors.timelineItemPrefix}-${node.id}`}
-                onClick={() => onSelectNode(node)}
-              >
-                <span className="nc-message-timeline-track" aria-hidden="true">
-                  <span className={`nc-message-timeline-dot nc-message-timeline-dot-${node.level}`} />
-                </span>
-                <span className="nc-message-timeline-label">{node.label}</span>
-              </button>
+              {compact ? (
+                <Tooltip title={node.label} placement="right" mouseEnterDelay={0.15}>
+                  {itemButton}
+                </Tooltip>
+              ) : (
+                itemButton
+              )}
               {showDayPicker ? (
                 <TimelineDayPicker
                   node={node}

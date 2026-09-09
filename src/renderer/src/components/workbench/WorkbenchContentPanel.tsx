@@ -616,7 +616,12 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   const activeEditableFile =
     state.kind === 'file_preview' && !state.file.isDirectory
       ? { path: state.file.path, fileName: state.file.fileName }
-      : null
+      : state.kind === 'apply_workspace' &&
+          documentDisplayMode === 'preview' &&
+          activeApplyRecord &&
+          canSwitchDocumentDisplayMode(activeApplyRecord)
+        ? { path: activeApplyRecord.path, fileName: activeApplyRecord.fileName }
+        : null
   useEffect(() => {
     const path = activeEditableFile?.path
     const fileName = activeEditableFile?.fileName
@@ -632,15 +637,9 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       cancelled = true
     }
   }, [activeEditableFile?.path, activeEditableFile?.fileName])
+  // 可编辑文本由编辑器自行处理外部变更；面板级 watch 仅覆盖不可编辑预览（docx/ppt/excel 等）
   const previewWatchPath =
-    state.kind === 'file_preview' && !state.file.isDirectory && editableKind === null
-      ? state.file.path
-      : state.kind === 'apply_workspace' &&
-          documentDisplayMode === 'preview' &&
-          activeApplyRecord &&
-          canSwitchDocumentDisplayMode(activeApplyRecord)
-        ? activeApplyRecord.path
-        : null
+    activeEditableFile && editableKind === null ? activeEditableFile.path : null
   useEffect(() => {
     if (state.kind === 'file_launcher') {
       setExplorerOpen(true)
@@ -752,14 +751,17 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       ]
     }
     const filePath = getApplyDocumentPath(activeApplyRecord, documentDisplayMode)
+    const editable =
+      documentDisplayMode === 'preview' && editableKind !== null && filePath === activeApplyRecord.path
     return [
       {
         filePath,
         fileName: activeApplyRecord.fileName,
-        contentRevision: documentDisplayMode === 'preview' ? previewRevision : undefined
+        contentRevision: documentDisplayMode === 'preview' ? previewRevision : undefined,
+        editable
       }
     ]
-  }, [activeApplyRecord, documentDisplayMode, previewRevision])
+  }, [activeApplyRecord, documentDisplayMode, editableKind, previewRevision])
   const applyContent = useMemo(
     () =>
       activeApplyRecord?.capability === 'ppt' &&
