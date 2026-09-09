@@ -54,7 +54,7 @@ const mentionsOverfittingTopic = (text: string): boolean =>
 const mentionsAntiAliasingTopic = (text: string): boolean =>
   /(反走样|抗锯齿|anti-?aliasing)/i.test(normalizeText(text))
 
-const DOCX_READ_TOOL_NAMES = ['docx_read_outline', 'docx_search', 'docx_read_nodes'] as const
+const DOCX_READ_TOOL_NAMES = new Set(['docx_read_outline', 'docx_search', 'docx_read_nodes'])
 
 const runUsedSelectedFile = (
   events: readonly AiRunEvent[],
@@ -65,7 +65,7 @@ const runUsedSelectedFile = (
     (event) =>
       event.runId === runId &&
       ['tool_call_started', 'tool_call_result'].includes(event.type) &&
-      DOCX_READ_TOOL_NAMES.includes(String(event.toolName || '') as (typeof DOCX_READ_TOOL_NAMES)[number]) &&
+      DOCX_READ_TOOL_NAMES.has(String(event.toolName || '')) &&
       eventText(event).includes(fileName)
   )
 

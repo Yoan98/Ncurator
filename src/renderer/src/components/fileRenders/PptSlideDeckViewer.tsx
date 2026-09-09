@@ -13,8 +13,6 @@ export type PptViewerSlide = {
 
 type Viewport = { scale: number; x: number; y: number }
 
-const ZOOM_HINT_STORAGE_KEY = 'ppt.viewer.zoomHintDismissed'
-
 const MouseScrollIcon: React.FC = () => (
   <svg
     viewBox="0 0 24 24"
@@ -72,13 +70,6 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
     originX: number
     originY: number
   } | null>(null)
-  const [hintDismissed, setHintDismissed] = useState<boolean>(
-    () => window.localStorage.getItem(ZOOM_HINT_STORAGE_KEY) === '1'
-  )
-  const dismissHint = (): void => {
-    setHintDismissed(true)
-    window.localStorage.setItem(ZOOM_HINT_STORAGE_KEY, '1')
-  }
   const visibleSlides = useMemo(
     () => (filter?.changedOnly ? slides.filter((slide) => slide.marker) : slides),
     [filter, slides]
@@ -99,11 +90,9 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
     setViewport({ scale: 1, x: 0, y: 0 })
   }
   const resetViewport = (): void => {
-    dismissHint()
     setViewport({ scale: 1, x: 0, y: 0 })
   }
   const changeZoom = (factor: number): void => {
-    dismissHint()
     setViewport((current) => {
       const scale = Math.min(4, Math.max(0.25, current.scale * factor))
       return scale <= 1 ? { scale, x: 0, y: 0 } : { ...current, scale }
@@ -111,7 +100,6 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
   }
   const onWheel = (event: React.WheelEvent<HTMLDivElement>): void => {
     event.preventDefault()
-    dismissHint()
     const rect = event.currentTarget.getBoundingClientRect()
     const pointerX = event.clientX - rect.left - rect.width / 2
     const pointerY = event.clientY - rect.top - rect.height / 2
@@ -129,7 +117,6 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
   }
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>): void => {
     if (viewport.scale <= 1) return
-    dismissHint()
     event.currentTarget.setPointerCapture(event.pointerId)
     dragRef.current = {
       pointerId: event.pointerId,
@@ -260,22 +247,20 @@ const PptSlideDeckViewer: React.FC<PptSlideDeckViewerProps> = ({
           ) : (
             surface(activeSlide?.primaryUrl || activeSlide?.secondaryUrl, undefined, afterTestId)
           )}
-          {!hintDismissed ? (
-            <div
-              className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#E7E5E1] bg-white/90 px-3 py-1.5 text-[11px] text-[#787774] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
-              data-testid={hintTestId}
-            >
-              <span className="flex items-center gap-1.5">
-                <MouseScrollIcon />
-                <span>滚轮缩放</span>
-              </span>
-              <span className="h-3 w-px bg-[#E7E5E1]" />
-              <span className="flex items-center gap-1.5">
-                <HiHandRaised className="h-4 w-4" />
-                <span>拖拽平移</span>
-              </span>
-            </div>
-          ) : null}
+          <div
+            className="pointer-events-none absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-3 rounded-full border border-[#E7E5E1] bg-white/90 px-3 py-1.5 text-[11px] text-[#787774] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
+            data-testid={hintTestId}
+          >
+            <span className="flex items-center gap-1.5">
+              <MouseScrollIcon />
+              <span>滚轮缩放</span>
+            </span>
+            <span className="h-3 w-px bg-[#E7E5E1]" />
+            <span className="flex items-center gap-1.5">
+              <HiHandRaised className="h-4 w-4" />
+              <span>拖拽平移</span>
+            </span>
+          </div>
         </div>
       </div>
       <div className="flex w-[136px] shrink-0 flex-col border-l border-[#E7E5E1] bg-[#FAFAF9]">

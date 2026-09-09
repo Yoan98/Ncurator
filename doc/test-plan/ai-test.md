@@ -943,7 +943,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：live 模式下第一诉求已经沉淀局部事实后发生网络中断，同一伙伴新诉求可从不可变消息日志恢复旧语义上下文，同时本轮新选择文件只作用于新 user 消息；恢复 run 首轮 brain 须明显复用中断前末次前缀缓存。
 - Why：恢复能力的真实价值是让用户在长任务中断后继续对话；如果中断前已读到的事实丢失，或恢复时忽略最新诉求/最新选中文件，就会把恢复退化成重跑或错误沿用旧入口；跨 run 前缀被改写也会丢失 provider 缓存。
 - How：使用共享 workspace fixture（运行时为文件地址 + 伙伴）。Run 1 选中文件 A `深度学习.docx`，在读取并沉淀过拟合事实后注入 `llm_request_failed`（如 provider `fetch failed`）。Run 2 在同伙伴追加“继续”类 user 消息并改选文件 B `图形学.docx`，检查历史 user 配置未变、新 user 使用文件 B、计划来自 `plan_updated`、技能来自该伙伴剩余 log 的 skill state。跨 run 缓存断言用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.6）。
-- Oracle：Run 1 为 `llm_request_failed`；中断前事实和计划记录仍在 `chat_session_message_log`。Run 2 消息数组包含 Run 1 的 build user、历史 assistant/tool 投影与 Run 2 末尾 build user；Run 2 使用文件 B 且不会改写 Run 1 的文件 A 配置，最终交付包含过拟合与反走样事实。Run 2 首次 brain 的 `cachedInputTokens / Run1 末次有效 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
+- Oracle：Run 1 为 `llm_request_failed`；中断前事实和计划记录仍在 `chat_session_message_log`。Run 2 消息数组包含 Run 1 的 build user、历史 assistant/tool 投影与 Run 2 末尾 build user；Run 2 通过任一 DOCX 读工具（`docx_read_outline` / `docx_search` / `docx_read_nodes`）使用文件 B，且不会改写 Run 1 的文件 A 配置，最终交付包含过拟合与反走样事实。Run 2 首次 brain 的 `cachedInputTokens / Run1 末次有效 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
 - Not：不验证真实 provider 的随机网络抖动；不要求 live 模型逐字复述 hint 文案；不恢复 docx 临时运行态。不并入压缩 live，不验证压完后的 User + tail 记忆形态。
 
 ##### `human-partner-continuation-live`
@@ -952,7 +952,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：同一伙伴先正常完成第一件事，再续接第二件相关联的事，消息数组按“历史 build user + assistant/tool + 当前 run buildBrainUserMessage user”叠加；Run 2 首轮 brain 须明显复用 Run 1 末次前缀缓存。
 - Why：跨轮续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文；历史前缀字节不变时 provider 前缀缓存应命中。
 - How：使用共享 workspace fixture（运行时为文件地址 + 伙伴），默认上下文窗口。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同伙伴改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组与跨 run 前缀缓存（公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，当前 0.6）。
-- Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 user.content 与最终交付，末尾是 Run 2 当前 User；该当前 User 无 `<memory>`、无 `<active_state>`；Run 2 使用文件 B；最终交付同时包含过拟合与反走样关键事实。Run 2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
+- Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 user.content 与最终交付，末尾是 Run 2 当前 User；该当前 User 无 `<memory>`、无 `<active_state>`；Run 2 通过任一 DOCX 读工具（`docx_read_outline` / `docx_search` / `docx_read_nodes`）使用文件 B；最终交付同时包含过拟合与反走样关键事实。Run 2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
 - Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [checkpoint User] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。
 
 ##### `human-skill-eviction-relearn-loop-live`
