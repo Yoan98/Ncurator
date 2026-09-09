@@ -12,9 +12,11 @@ import type {
   LLMConfig,
   LlmRemoteModel,
   ReferenceKind,
+  ReferenceListParent,
   SelectedReference,
   WorkbenchModelSelection
 } from '../../../../shared/types'
+import { REFERENCE_ITEM_PAGE_SIZE } from '../../../../shared/types'
 import type { ChatMessageLogPlanItem } from '../../../../shared/types'
 import { workbenchSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
@@ -85,26 +87,6 @@ const isTextNode = (value: Node | null): value is Text => value instanceof Text
 const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
 const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024
 
-const filterMentionReferences = (
-  references: SelectedReference[],
-  rawQuery: string
-): SelectedReference[] => {
-  const query = rawQuery.trim().toLowerCase()
-  if (!query) return references
-
-  return references.filter((reference) => {
-    const values =
-      reference.kind === 'web'
-        ? [reference.name, reference.url]
-        : [reference.name, reference.relativePath, reference.absolutePath]
-    return values.some((value) =>
-      String(value || '')
-        .toLowerCase()
-        .includes(query)
-    )
-  })
-}
-
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   aiPreference,
   onAiPreferenceChange,
@@ -139,6 +121,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const mentionRefreshFrameRef = useRef<number | null>(null)
   const mentionQueryRef = useRef<string | null>(null)
   const mentionSessionSequenceRef = useRef(0)
+  const mentionRequestSeqRef = useRef(0)
+  const mentionHasMoreRef = useRef(false)
+  const mentionLoadingMoreRef = useRef(false)
+  const mentionNextOffsetRef = useRef(0)
   const controlFocusTimeoutRef = useRef<number | null>(null)
   const compositionGuardTimeoutRef = useRef<number | null>(null)
   const isComposingRef = useRef(false)
@@ -146,9 +132,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const attachmentPreviewUrlsRef = useRef<Record<string, string>>({})
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionSessionId, setMentionSessionId] = useState<number | null>(null)
-  const [mentionSnapshot, setMentionSnapshot] = useState<SelectedReference[]>([])
+  const [mentionParent, setMentionParent] = useState<ReferenceListParent>({ type: 'roots' })
+  const [mentionBreadcrumbs, setMentionBreadcrumbs] = useState<
+    { label: string; parent: ReferenceListParent }[]
+  >([{ label: '资料', parent: { type: 'roots' } }])
   const [mentionOptions, setMentionOptions] = useState<SelectedReference[]>([])
   const [mentionLoading, setMentionLoading] = useState(false)
+  const [mentionLoadingMore, setMentionLoadingMore] = useState(false)
+  const [mentionHasMore, setMentionHasMore] = useState(false)
   const [mentionActiveIndex, setMentionActiveIndex] = useState(0)
   const [hasContent, setHasContent] = useState(false)
   const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<Record<string, string>>({})
@@ -166,10 +157,72 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     mentionQueryRef.current = null
     setMentionQuery(null)
     setMentionSessionId(null)
-    setMentionSnapshot([])
+    setMentionParent({ type: 'roots' })
+    setMentionBreadcrumbs([{ label: '资料', parent: { type: 'roots' } }])
     setMentionOptions([])
+    setMentionHasMore(false)
+    mentionHasMoreRef.current = false
+    mentionNextOffsetRef.current = 0
+    setMentionLoadingMore(false)
+    mentionLoadingMoreRef.current = false
     setMentionActiveIndex(0)
   }, [])
+
+  const getInsertedScopeKeys = useCallback((): Set<string> => {
+    const editor = editorRef.current
+    const currentKeys = new Set<string>()
+    if (!editor) return currentKeys
+    const draft = extractComposerDraftValue(
+      readComposerNodesFromEditor(editor, knownScopesRef.current)
+    )
+    draft.selectedReferences.forEach((scope) => currentKeys.add(getScopeKey(scope)))
+    return currentKeys
+  }, [])
+
+  const fetchMentionPage = useCallback(
+    async (input: {
+      parent: ReferenceListParent
+      query: string
+      offset: number
+      append: boolean
+    }): Promise<void> => {
+      const requestSeq = ++mentionRequestSeqRef.current
+      if (input.append) {
+        setMentionLoadingMore(true)
+        mentionLoadingMoreRef.current = true
+      } else {
+        setMentionLoading(true)
+      }
+      try {
+        const referenceKinds: ReferenceKind[] = COMPOSER_REFERENCE_KINDS
+        const response = await window.api.referenceItemList({
+          referenceKinds,
+          parent: input.query ? undefined : input.parent,
+          query: input.query || undefined,
+          offset: input.offset,
+          limit: REFERENCE_ITEM_PAGE_SIZE
+        })
+        if (requestSeq !== mentionRequestSeqRef.current) return
+        const inserted = getInsertedScopeKeys()
+        const pageItems = response.items.filter((scope) => !inserted.has(getScopeKey(scope)))
+        pageItems.forEach((scope) => {
+          knownScopesRef.current.set(getScopeKey(scope), scope)
+        })
+        setMentionOptions((current) => (input.append ? [...current, ...pageItems] : pageItems))
+        setMentionHasMore(Boolean(response.hasMore))
+        mentionHasMoreRef.current = Boolean(response.hasMore)
+        mentionNextOffsetRef.current = response.offset + response.items.length
+        if (!input.append) setMentionActiveIndex(0)
+      } finally {
+        if (requestSeq === mentionRequestSeqRef.current) {
+          setMentionLoading(false)
+          setMentionLoadingMore(false)
+          mentionLoadingMoreRef.current = false
+        }
+      }
+    },
+    [getInsertedScopeKeys]
+  )
 
   const rememberScopes = useCallback((nodes: ComposerNode[]): void => {
     nodes.forEach((node) => {
@@ -331,7 +384,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     setMentionQuery(context.query)
     if (isNewMentionSession) {
       mentionSessionSequenceRef.current += 1
-      setMentionSnapshot([])
+      setMentionParent({ type: 'roots' })
+      setMentionBreadcrumbs([{ label: '资料', parent: { type: 'roots' } }])
+      setMentionOptions([])
       setMentionSessionId(mentionSessionSequenceRef.current)
     }
     setMentionActiveIndex(0)
@@ -426,51 +481,59 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   }, [closeMention, draftKey, renderDraftNodes])
 
   useEffect(() => {
-    if (mentionSessionId === null) return
-    let cancelled = false
-
-    const loadMentionOptions = async (): Promise<void> => {
-      setMentionLoading(true)
-      try {
-        const referenceKinds: ReferenceKind[] = COMPOSER_REFERENCE_KINDS
-        const response = await window.api.referenceItemList({
-          referenceKinds
-        })
-
-        if (!cancelled) {
-          setMentionSnapshot(response.items)
-        }
-      } finally {
-        if (!cancelled) setMentionLoading(false)
-      }
-    }
-
-    void loadMentionOptions()
-    return () => {
-      cancelled = true
-    }
-  }, [mentionSessionId])
-
-  useEffect(() => {
-    if (mentionQuery === null) return
-
-    const editor = editorRef.current
-    const currentKeys = new Set<string>()
-    if (editor) {
-      const draft = extractComposerDraftValue(
-        readComposerNodesFromEditor(editor, knownScopesRef.current)
-      )
-      draft.selectedReferences.forEach((scope) => currentKeys.add(getScopeKey(scope)))
-    }
-
-    const nextOptions = filterMentionReferences(mentionSnapshot, mentionQuery).filter(
-      (scope) => !currentKeys.has(getScopeKey(scope))
-    )
-    nextOptions.forEach((scope) => {
-      knownScopesRef.current.set(getScopeKey(scope), scope)
+    if (mentionSessionId === null || mentionQuery === null) return
+    void fetchMentionPage({
+      parent: mentionParent,
+      query: mentionQuery,
+      offset: 0,
+      append: false
     })
-    setMentionOptions(nextOptions)
-  }, [mentionQuery, mentionSnapshot])
+  }, [fetchMentionPage, mentionParent, mentionQuery, mentionSessionId])
+
+  const navigateMentionParent = useCallback(
+    (parent: ReferenceListParent, breadcrumbs: { label: string; parent: ReferenceListParent }[]) => {
+      setMentionParent(parent)
+      setMentionBreadcrumbs(breadcrumbs)
+      setMentionOptions([])
+      setMentionActiveIndex(0)
+    },
+    []
+  )
+
+  const enterMentionDirectory = useCallback(
+    (reference: SelectedReference & { kind: 'directory' }) => {
+      navigateMentionParent(
+        {
+          type: 'workspace',
+          workspaceId: reference.workspaceId,
+          relativePath: reference.relativePath
+        },
+        [
+          ...mentionBreadcrumbs,
+          {
+            label: reference.name,
+            parent: {
+              type: 'workspace',
+              workspaceId: reference.workspaceId,
+              relativePath: reference.relativePath
+            }
+          }
+        ]
+      )
+    },
+    [mentionBreadcrumbs, navigateMentionParent]
+  )
+
+  const loadMoreMentionOptions = useCallback(() => {
+    if (mentionQuery === null) return
+    if (!mentionHasMoreRef.current || mentionLoadingMoreRef.current || mentionLoading) return
+    void fetchMentionPage({
+      parent: mentionParent,
+      query: mentionQuery,
+      offset: mentionNextOffsetRef.current,
+      append: true
+    })
+  }, [fetchMentionPage, mentionLoading, mentionParent, mentionQuery])
 
   useEffect(() => {
     const handleSelectionChange = (): void => {
@@ -685,9 +748,12 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       if (event.key === 'Enter') {
         event.preventDefault()
         const nextOption = mentionOptions[mentionActiveIndex]
-        if (nextOption) {
-          insertMentionScope(nextOption)
+        if (!nextOption) return
+        if (nextOption.kind === 'directory' && !(mentionQuery || '').trim()) {
+          enterMentionDirectory(nextOption)
+          return
         }
+        insertMentionScope(nextOption)
         return
       }
       if (event.key === 'Escape') {
@@ -826,9 +892,29 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       {mentionQuery !== null ? (
         <ReferenceMentionPanel
           loading={mentionLoading}
+          loadingMore={mentionLoadingMore}
           options={mentionOptions}
           activeIndex={mentionActiveIndex}
+          hasMore={mentionHasMore}
+          breadcrumbs={mentionBreadcrumbs}
+          searching={Boolean(mentionQuery.trim())}
           onSelect={insertMentionScope}
+          onEnterDirectory={enterMentionDirectory}
+          onNavigate={(parent) => {
+            const index = mentionBreadcrumbs.findIndex(
+              (crumb) =>
+                crumb.parent.type === parent.type &&
+                (parent.type !== 'workspace' ||
+                  (crumb.parent.type === 'workspace' &&
+                    crumb.parent.workspaceId === parent.workspaceId &&
+                    crumb.parent.relativePath === parent.relativePath))
+            )
+            navigateMentionParent(
+              parent,
+              index >= 0 ? mentionBreadcrumbs.slice(0, index + 1) : mentionBreadcrumbs
+            )
+          }}
+          onLoadMore={loadMoreMentionOptions}
         />
       ) : null}
 

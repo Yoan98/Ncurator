@@ -37,10 +37,7 @@ import type {
   WriteTextFileRequest,
   WriteTextFileResponse
 } from '../../shared/types'
-import {
-  buildWebReferenceItem,
-  buildWorkspaceReferenceItemsFromCurrentTree
-} from '../services/sourceScope/selection'
+import { listReferenceItemsPage } from '../services/sourceScope/referenceList'
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
 import { WorkspaceKnowledgePrepareService } from '../services/workspace/WorkspaceKnowledgePrepareService'
 import { createWorkspaceKnowledgeCache } from '../services/workspace/WorkspaceKnowledgeCache'
@@ -2228,37 +2225,25 @@ export function registerHandlers(services: {
       try {
         await ensureWebSourcesHydrated()
         const referenceKindFilters = normalizeReferenceKindFilters(payload.referenceKinds)
-        const localReferences: SelectedReference[] = []
-        const workspaces = await workspaceStore.listWorkspaces()
-        for (const workspace of workspaces) {
-          const [scanResult, records] = await Promise.all([
-            workspace.root_path
-              ? workspaceService.scanWorkspaceTree({
-                  workspaceId: workspace.id,
-                  rootPath: workspace.root_path
-                })
-              : Promise.resolve(null),
-            workspaceStore.listWorkspaceFileIndexRecords(workspace.id)
-          ])
-          if (!scanResult) continue
-          localReferences.push(
-            ...buildWorkspaceReferenceItemsFromCurrentTree({
-              workspace: scanResult.workspace,
-              entries: scanResult.entries,
-              records
-            })
-          )
-        }
-        const webReferences = (await webSourceStore.listWebSources()).map(buildWebReferenceItem)
-
-        const allReferences = [...localReferences, ...webReferences].filter((reference) =>
-          referenceKindFilters ? referenceKindFilters.has(reference.kind) : true
+        return await listReferenceItemsPage(
+          {
+            listWorkspaces: () => workspaceStore.listWorkspaces(),
+            listWorkspaceFileIndexRecords: (workspaceId) =>
+              workspaceStore.listWorkspaceFileIndexRecords(workspaceId),
+            listDirectory: (input) => workspaceService.listDirectory(input),
+            scanWorkspaceTree: async (input) => {
+              const scanResult = await workspaceService.scanWorkspaceTree(input)
+              return { workspace: scanResult.workspace, entries: scanResult.entries }
+            },
+            listWebSources: () => webSourceStore.listWebSources(),
+            normalizeWorkspaceRoot: (rootPath) => workspaceService.normalizeWorkspaceRoot(rootPath)
+          },
+          payload || {},
+          referenceKindFilters
         )
-
-        return { items: allReferences, total: allReferences.length }
       } catch (error) {
         console.error('❌ [REFERENCE-ITEM-LIST] ERROR:', error)
-        return { items: [], total: 0 }
+        return { items: [], total: 0, hasMore: false, offset: 0, limit: 50 }
       }
     }
   )

@@ -362,7 +362,7 @@ const trimHeaderSegments = (
  * Activity header from tool copy:
  * - prefer explicit headerShortText; else drop param segments (legacy)
  * - merge same tool UI kind / browser action; single = short sentence; count>1 append「N 次」
- * - ≤3 merged kinds join with 并/但; >3 kinds →「已完成 n 项」(n = total tools)
+ * - ≤3 merged kinds join with `,`（无空格）；>3 kinds →「已完成 n 项」(n = total tools)
  */
 const readInputProperty = (input: IpcJsonObject | undefined, key: string): string => {
   if (!input || typeof input !== 'object') return ''
@@ -422,8 +422,7 @@ export const buildAssistantExecutionSummaryText = (
     const shortSegments = trimHeaderSegments(
       getItemHeaderShortSegments(representative, kindStatus)
     )
-    const prefix =
-      index === 0 ? '' : kindStatus === 'failed' || kindStatus === 'partial_failed' ? ' 但 ' : ' 并 '
+    const prefix = index === 0 ? '' : ','
     const countSuffix =
       kindItems.length > 1 ? [text(` ${kindItems.length} 次`)] : ([] as AssistantExecutionTextSegment[])
     return sentence(text(prefix), ...shortSegments, ...countSuffix)

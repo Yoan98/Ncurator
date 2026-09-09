@@ -56,7 +56,7 @@ describe('assistant process icons and activity summary', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('learn_skill'))).toBe('learning')
   })
 
-  it('joins up to three tool short texts with 并/但 and drops param segments', () => {
+  it('joins up to three tool short texts with commas and drops param segments', () => {
     const groups = [
       ...createToolGroup('learn_skill', 1, {
         completedText: [{ text: '已学会 ' }, { text: 'docx 阅读器' }],
@@ -70,11 +70,11 @@ describe('assistant process icons and activity summary', () => {
 
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe(
-      '已学会 docx 阅读器 并 执行命令'
+      '已学会 docx 阅读器,执行命令'
     )
   })
 
-  it('uses but connector when a later item failed', () => {
+  it('joins failed later items with commas like other kinds', () => {
     const groups = [
       ...createToolGroup('web_search', 1, {
         completedText: [{ text: '搜索网页 ' }, { text: 'React', param: true }],
@@ -88,7 +88,7 @@ describe('assistant process icons and activity summary', () => {
     ]
     groups[1] = { ...groups[1], status: 'failed' }
 
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页 但 读取文件')
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页,读取文件')
   })
 
   it('merges same tool kind with count instead of repeating short text', () => {
@@ -237,7 +237,7 @@ describe('assistant process icons and activity summary', () => {
     expect(resolveAssistantExecutionIcon(groups)).toBe('eye')
   })
 
-  it('joins heterogeneous browser actions with 并 and resolves to workflow icon', () => {
+  it('joins heterogeneous browser actions with commas and resolves to workflow icon', () => {
     const groups = [
       ...createToolGroup('browser_use', 1, {
         input: { action: 'navigate' },
@@ -248,11 +248,11 @@ describe('assistant process icons and activity summary', () => {
         headerShortText: '查看页面'
       })
     ]
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('打开网页 并 查看页面')
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('打开网页,查看页面')
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
   })
 
-  it('joins search and fetch actions with 并 and resolves to workflow icon', () => {
+  it('joins search and fetch actions with commas and resolves to workflow icon', () => {
     const groups = [
       ...createToolGroup('web_search', 1, {
         input: { type: 'search' },
@@ -263,7 +263,7 @@ describe('assistant process icons and activity summary', () => {
         headerShortText: '抓取网页'
       })
     ]
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页 并 抓取网页')
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页,抓取网页')
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
   })
 
@@ -284,7 +284,7 @@ describe('assistant process icons and activity summary', () => {
       })
     ]
     expect(toPlainText(buildAssistantExecutionSummaryText(screenshotAndRead))).toBe(
-      '截取页面 并 读取图片'
+      '截取页面,读取图片'
     )
     expect(resolveAssistantExecutionIcon(screenshotAndRead)).toBe('image')
   })

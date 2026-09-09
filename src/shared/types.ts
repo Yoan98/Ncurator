@@ -291,6 +291,27 @@ export interface WorkspaceTreeNodeView {
 export interface ReferenceItemListResponse {
   items: SelectedReference[]
   total: number
+  hasMore: boolean
+  offset: number
+  limit: number
+}
+
+/** @ 候选单次拉取上限 */
+export const REFERENCE_ITEM_PAGE_SIZE = 50
+
+/** 浏览父级：根（工作地址 + 网页）/ 某工作地址目录 / 仅网页 */
+export type ReferenceListParent =
+  | { type: 'roots' }
+  | { type: 'workspace'; workspaceId: string; relativePath: string }
+  | { type: 'web' }
+
+export interface ListReferenceItemsRequest {
+  referenceKinds?: ReferenceKind[]
+  parent?: ReferenceListParent
+  /** 非空时全局搜索，忽略 parent 浏览位置 */
+  query?: string
+  offset?: number
+  limit?: number
 }
 
 export interface WebSourceListResponse {
@@ -412,10 +433,6 @@ export interface DeleteWebSourceResponse {
   success: boolean
   deletedWebSourceId?: string
   error?: string
-}
-
-export interface ListReferenceItemsRequest {
-  referenceKinds?: ReferenceKind[]
 }
 
 export interface SearchResult {

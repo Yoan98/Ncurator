@@ -103,7 +103,7 @@ const listVisibleToolNames = (events: AiRunEvent[]): string[] =>
     )
   )
 
-/** Activity header: merge by tool kind; ≤3 kinds → short text /「N 次」/并但; >3 kinds → 已完成 n 项. */
+/** Activity header: merge by tool kind; ≤3 kinds → short text /「N 次」/comma; >3 kinds → 已完成 n 项. */
 const isCountOnlyActivityHeader = (summaryText: string): boolean =>
   /^已完成\s+\d+\s*项$/u.test(summaryText) ||
   /^\d+\s*项操作中有部分失败$/u.test(summaryText) ||
@@ -260,7 +260,7 @@ describe('workbench run e2e', () => {
             {
               name: 'workbench-ai-process-activity-render-real',
               message:
-                '真实 AI run 应渲染 Thought/Activity 过程层（header 同类归并/并但/>3 类已完成 n 项、展开平铺、无收尾等待层、让俺想想不卡在完成后），并产出围绕工作区事实的最终 markdown，对齐 WB-COMPOSER-003、WB-COMPOSER-009、WB-COMPOSER-014、WB-CORE-005、WB-CORE-006。',
+                '真实 AI run 应渲染 Thought/Activity 过程层（header 同类归并/逗号拼接/>3 类已完成 n 项、展开平铺、无收尾等待层、让俺想想不卡在完成后），并产出围绕工作区事实的最终 markdown，对齐 WB-COMPOSER-003、WB-COMPOSER-009、WB-COMPOSER-014、WB-CORE-005、WB-CORE-006。',
               data: result
             }
           )
