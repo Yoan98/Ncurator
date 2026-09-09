@@ -1,7 +1,12 @@
 import type { AiRunFailureCode } from '../../../../shared/types'
 import type { HumanState } from '../human/types'
-import type { RecoverableHumanRunError, RecoverableRunErrorCode } from '../types'
-import { isLlmOutputTruncatedError } from '../errors'
+import {
+  findLlmProviderError,
+  isLlmInputTooLongError,
+  isLlmOutputTruncatedError
+} from '../errors'
+import { normalizeStructuredOutputError } from '../structuredOutput'
+import { resolveAiRunFailurePresentation } from '../runFailureCatalog'
 
 const getErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error || 'unknown')
@@ -37,94 +42,126 @@ export const isGraphRuntimeLimitError = (error: unknown): boolean =>
       ('name' in error && error.name === 'GraphRecursionError'))
   )
 
-export const classifyLlmFailureCode = (error: unknown): AiRunFailureCode => {
-  const message = getErrorMessage(error).toLowerCase()
-  const code =
-    error && typeof error === 'object' && 'code' in error
-      ? String(error.code || '').toLowerCase()
-      : ''
-  const name =
-    error && typeof error === 'object' && 'name' in error
-      ? String(error.name || '').toLowerCase()
-      : ''
-
-  if (
-    code === 'timeout' ||
-    code === 'aborterror' ||
-    name === 'aborterror' ||
-    message.includes('abort') ||
-    message.includes('timeout') ||
-    message.includes('timed out')
-  ) {
-    return 'timeout'
-  }
-
-  if (
-    code === 'econnreset' ||
-    code === 'econnrefused' ||
-    code === 'enotfound' ||
-    code === 'eai_again' ||
-    code === 'etimedout' ||
-    code === 'fetch_error' ||
-    message.includes('fetch failed') ||
-    message.includes('network') ||
-    message.includes('socket') ||
-    message.includes('econn') ||
-    message.includes('dns')
-  ) {
-    return 'network_error'
-  }
-
-  return 'error'
-}
-
-export const isRecoverableRunErrorCode = (
-  code: AiRunFailureCode
-): code is RecoverableRunErrorCode =>
-  code === 'timeout' ||
-  code === 'network_error' ||
-  code === 'output_truncated' ||
-  code === 'user_cancelled' ||
-  code === 'process_interrupted' ||
-  code === 'runtime_limit' ||
-  code === 'unexpected_error'
-
-export const classifyInterruptionReason = (error: unknown): RecoverableRunErrorCode => {
-  if (isLlmOutputTruncatedError(error)) return 'output_truncated'
-  if (isCancelledError(error)) return 'user_cancelled'
-  if (isGraphRuntimeLimitError(error)) return 'runtime_limit'
-  const code = classifyLlmFailureCode(error)
-  return code === 'timeout' || code === 'network_error' ? code : 'unexpected_error'
-}
-
-export const createRecoverableHumanRunError = (input: {
-  reason: RecoverableRunErrorCode
-  error: unknown
+export type AiRunFailure = Error & {
+  name: 'AiRunFailure'
+  code: 'AI_RUN_FAILURE'
+  failureCode: AiRunFailureCode
+  rawMessage?: string
+  httpStatus?: number
+  providerCode?: string
   lastHumanState?: HumanState
-}): RecoverableHumanRunError => {
-  const baseError =
-    input.error instanceof Error ? input.error : new Error(String(input.error || input.reason))
-  const error = new Error(baseError.message) as RecoverableHumanRunError
-  error.name = 'RecoverableHumanRunError'
-  error.code = 'RECOVERABLE_HUMAN_RUN'
-  error.reason = input.reason
-  error.lastHumanState = input.lastHumanState
-  error.cause = baseError
-  return error
 }
 
-export const isRecoverableHumanRunError = (error: unknown): error is RecoverableHumanRunError =>
+export const isAiRunFailure = (error: unknown): error is AiRunFailure =>
   Boolean(
     error &&
     typeof error === 'object' &&
+    'name' in error &&
+    error.name === 'AiRunFailure' &&
     'code' in error &&
-    error.code === 'RECOVERABLE_HUMAN_RUN' &&
-    'reason' in error &&
-    (error.reason === 'timeout' ||
-      error.reason === 'network_error' ||
-      error.reason === 'output_truncated' ||
-      error.reason === 'user_cancelled' ||
-      error.reason === 'process_interrupted' ||
-      error.reason === 'runtime_limit' ||
-      error.reason === 'unexpected_error')
+    error.code === 'AI_RUN_FAILURE' &&
+    'failureCode' in error
   )
+
+export const createAiRunFailure = (input: {
+  failureCode: AiRunFailureCode
+  cause?: unknown
+  rawMessage?: string
+  httpStatus?: number
+  providerCode?: string
+  lastHumanState?: HumanState
+}): AiRunFailure => {
+  const presentation = resolveAiRunFailurePresentation(input.failureCode, input.rawMessage)
+  const causeError =
+    input.cause instanceof Error
+      ? input.cause
+      : input.cause !== undefined
+        ? new Error(String(input.cause))
+        : undefined
+  const error = new Error(presentation.message, {
+    cause: causeError
+  }) as AiRunFailure
+  error.name = 'AiRunFailure'
+  error.code = 'AI_RUN_FAILURE'
+  error.failureCode = input.failureCode
+  error.rawMessage = presentation.rawMessage
+  error.httpStatus = input.httpStatus
+  error.providerCode = input.providerCode
+  error.lastHumanState = input.lastHumanState
+  return error
+}
+
+const resolveProviderRawMessage = (error: unknown): string | undefined => {
+  const providerError = findLlmProviderError(error)
+  if (providerError?.message.trim()) return providerError.message.trim()
+  const info = normalizeStructuredOutputError(error)
+  if (info.hasProviderSignal && info.message.trim()) return info.message.trim()
+  const message = getErrorMessage(error).trim()
+  return message || undefined
+}
+
+export const classifyThrownErrorToAiRunFailure = (
+  error: unknown,
+  lastHumanState?: HumanState
+): AiRunFailure => {
+  if (isAiRunFailure(error)) {
+    if (lastHumanState && !error.lastHumanState) {
+      error.lastHumanState = lastHumanState
+    }
+    return error
+  }
+
+  if (isCancelledError(error)) {
+    return createAiRunFailure({
+      failureCode: 'user_cancelled',
+      cause: error,
+      lastHumanState
+    })
+  }
+
+  if (isGraphRuntimeLimitError(error)) {
+    return createAiRunFailure({
+      failureCode: 'runtime_limit',
+      cause: error,
+      rawMessage: getErrorMessage(error),
+      lastHumanState
+    })
+  }
+
+  if (isLlmOutputTruncatedError(error)) {
+    return createAiRunFailure({
+      failureCode: 'output_truncated',
+      cause: error,
+      rawMessage: error.message,
+      lastHumanState
+    })
+  }
+
+  if (isLlmInputTooLongError(error)) {
+    return createAiRunFailure({
+      failureCode: 'input_too_long',
+      cause: error,
+      lastHumanState
+    })
+  }
+
+  const providerError = findLlmProviderError(error)
+  const info = normalizeStructuredOutputError(error)
+  if (providerError || info.hasProviderSignal) {
+    return createAiRunFailure({
+      failureCode: 'llm_request_failed',
+      cause: error,
+      rawMessage: resolveProviderRawMessage(error),
+      httpStatus: providerError?.httpStatus ?? info.status,
+      providerCode: providerError?.providerCode ?? info.code,
+      lastHumanState
+    })
+  }
+
+  return createAiRunFailure({
+    failureCode: 'unexpected_error',
+    cause: error,
+    rawMessage: getErrorMessage(error),
+    lastHumanState
+  })
+}

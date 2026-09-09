@@ -45,6 +45,7 @@ export const createFailedAiRunState = (input: {
   partnerId: string
   input: string
   error: string
+  failureRawMessage?: string
   failureSource: NonNullable<AiRunState['failureSource']>
   failureHttpStatus?: number
   failureProviderCode?: string
@@ -53,6 +54,7 @@ export const createFailedAiRunState = (input: {
   ...createInitialAiRunState(input),
   status: 'failed',
   error: input.error,
+  failureRawMessage: input.failureRawMessage,
   failureSource: input.failureSource,
   failureHttpStatus: input.failureHttpStatus,
   failureProviderCode: input.failureProviderCode,

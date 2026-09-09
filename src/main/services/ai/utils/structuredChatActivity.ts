@@ -16,8 +16,9 @@ import {
   emitLlmRetryProcessFailed,
   emitLlmRetryProcessStarted
 } from '../events/processEvents'
-import { classifyLlmFailureCode } from './runFailure'
+import { classifyThrownErrorToAiRunFailure } from './runFailure'
 import { LlmProviderError, isLlmOutputError, isLlmProviderError } from '../errors'
+import { classifyLlmRetry } from '../llmRetry'
 import { normalizeStructuredOutputError } from '../structuredOutput'
 
 export type LlmCallStreamObserver = {
@@ -65,16 +66,26 @@ const sleep = async (ms: number): Promise<void> =>
 const reasonFromError = (error: unknown): string =>
   error instanceof Error && error.message.trim() ? error.message.trim() : String(error || 'unknown')
 
-export const toProviderFailure = (error: unknown, retryable: boolean): unknown => {
+export const toProviderFailure = (error: unknown, retryable?: boolean): unknown => {
   if (isLlmProviderError(error) || isLlmOutputError(error)) return error
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'CANCELLED'
+  ) {
+    return error
+  }
   const info = normalizeStructuredOutputError(error)
   if (!info.hasProviderSignal) return error
+  // Stamp retryable from the classify result at throw time; later classifyLlmRetry re-parses signals.
+  const decision = retryable === undefined ? classifyLlmRetry(error) : undefined
   return new LlmProviderError({
     message: info.message || '模型服务请求失败。',
     httpStatus: info.status,
     providerCode: info.code,
     providerType: info.type,
-    retryable,
+    retryable: retryable ?? decision?.retryable ?? false,
     cause: error
   })
 }
@@ -324,7 +335,7 @@ export const runLlmCallWithActivity = async <T>(input: {
   } catch (error) {
     const durationMs = Date.now() - startedAt
     const reason = reasonFromError(error)
-    const reasonCode = classifyLlmFailureCode(error)
+    const reasonCode = classifyThrownErrorToAiRunFailure(error).failureCode
     const normalizedError = error instanceof Error ? error : new Error(reason)
     const failedRawText = readRawTextFromError(error) || latestRawText || undefined
     observer.onError?.(normalizedError)

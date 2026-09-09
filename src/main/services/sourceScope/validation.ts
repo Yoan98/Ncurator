@@ -41,7 +41,7 @@ export const validateSelectedReferencesForRun = async (params: {
       const workspaceId = String(reference.workspaceId || '').trim()
       if (!workspaceId) {
         params.sendEvent({
-          type: 'runtime_issue',
+          type: 'run_warning',
           runId: params.runId,
           code: 'workspace_binding_missing',
           message: '当前参考资料缺少可用的工作空间上下文，请重新选择本地目录或文件。',
@@ -53,7 +53,7 @@ export const validateSelectedReferencesForRun = async (params: {
       const workspace = await params.workspaceStore.getWorkspaceById(workspaceId)
       if (!workspace) {
         params.sendEvent({
-          type: 'runtime_issue',
+          type: 'run_warning',
           runId: params.runId,
           code: 'workspace_missing',
           message: '所选工作空间已不存在，请重新选择或重新配置工作空间。',
@@ -65,7 +65,7 @@ export const validateSelectedReferencesForRun = async (params: {
 
       if (!workspace.root_path) {
         params.sendEvent({
-          type: 'runtime_issue',
+          type: 'run_warning',
           runId: params.runId,
           code: 'workspace_path_unavailable',
           message: '当前工作空间尚未设置工作目录。',
@@ -77,7 +77,7 @@ export const validateSelectedReferencesForRun = async (params: {
 
       if (!pathExists(workspace.root_path)) {
         params.sendEvent({
-          type: 'runtime_issue',
+          type: 'run_warning',
           runId: params.runId,
           code: 'workspace_path_unavailable',
           message: `工作空间路径不可用：${workspace.root_path}`,
@@ -89,7 +89,7 @@ export const validateSelectedReferencesForRun = async (params: {
 
       if (!pathExists(reference.absolutePath)) {
         params.sendEvent({
-          type: 'runtime_issue',
+          type: 'run_warning',
           runId: params.runId,
           code: 'scope_unavailable',
           message: `所选参考资料已失效：${reference.absolutePath}`,
@@ -101,7 +101,7 @@ export const validateSelectedReferencesForRun = async (params: {
 
       if (!isPathWithinWorkspace(workspace.root_path, reference.absolutePath)) {
         params.sendEvent({
-          type: 'runtime_issue',
+          type: 'run_warning',
           runId: params.runId,
           code: 'scope_unavailable',
           message: `所选参考资料不属于当前工作空间：${reference.absolutePath}`,
@@ -117,7 +117,7 @@ export const validateSelectedReferencesForRun = async (params: {
     const source = await params.webSourceStore.getWebSourceById(reference.webSourceId)
     if (!source || source.index_status !== 'indexed' || !source.document_id) {
       params.sendEvent({
-        type: 'runtime_issue',
+        type: 'run_warning',
         runId: params.runId,
         code: 'scope_unavailable',
         message: '所选网页资料当前不可用，请刷新或重新选择。',

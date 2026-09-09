@@ -929,7 +929,6 @@ export const reduceAssistantProcessGroups = (
 
   if (
     event.type === 'run_failed' ||
-    event.type === 'runtime_issue' ||
     event.type === 'run_cancelled'
   ) {
     return completeAssistantProcessGroups(current, 'failed')

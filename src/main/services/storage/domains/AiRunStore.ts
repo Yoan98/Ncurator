@@ -36,6 +36,7 @@ type AiRunRow = {
   final_answer?: unknown
   error?: unknown
   failure_code?: unknown
+  failure_raw_message?: unknown
   pending_approval_json?: unknown
   artifacts_json?: unknown
   created_at?: unknown
@@ -79,6 +80,7 @@ const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   failureCode: row.failure_code
     ? (String(row.failure_code) as AiRunRecord['failureCode'])
     : undefined,
+  failureRawMessage: row.failure_raw_message ? String(row.failure_raw_message) : undefined,
   pendingApproval: parseJsonObject<AiRunRecord['pendingApproval']>(row.pending_approval_json),
   artifacts: parseJsonArray<AiArtifactRef>(row.artifacts_json),
   createdAt: toRequiredNumber(row.created_at),
@@ -97,14 +99,14 @@ export class AiRunStore {
           id, partner_id, user_message_id, assistant_message_id, status, input,
           selected_references_json, attachments_json, model_name,
           main_model_json, execution_permission,
-          partial_answer, partial_answer_role, final_answer, error, failure_code, pending_approval_json,
-          artifacts_json, created_at, updated_at, finished_at
+          partial_answer, partial_answer_role, final_answer, error, failure_code, failure_raw_message,
+          pending_approval_json, artifacts_json, created_at, updated_at, finished_at
         ) VALUES (
           @id, @partner_id, @user_message_id, @assistant_message_id, @status, @input,
           @selected_references_json, @attachments_json, @model_name,
           @main_model_json, @execution_permission,
-          @partial_answer, @partial_answer_role, @final_answer, @error, @failure_code, @pending_approval_json,
-          @artifacts_json, @created_at, @updated_at, @finished_at
+          @partial_answer, @partial_answer_role, @final_answer, @error, @failure_code, @failure_raw_message,
+          @pending_approval_json, @artifacts_json, @created_at, @updated_at, @finished_at
         )
         ON CONFLICT(id) DO UPDATE SET
           partner_id = excluded.partner_id,
@@ -122,6 +124,7 @@ export class AiRunStore {
           final_answer = excluded.final_answer,
           error = excluded.error,
           failure_code = excluded.failure_code,
+          failure_raw_message = excluded.failure_raw_message,
           pending_approval_json = excluded.pending_approval_json,
           artifacts_json = excluded.artifacts_json,
           updated_at = excluded.updated_at,
@@ -145,6 +148,7 @@ export class AiRunStore {
         final_answer: record.finalAnswer || null,
         error: record.error || null,
         failure_code: record.failureCode || null,
+        failure_raw_message: record.failureRawMessage || null,
         pending_approval_json: jsonStringify(record.pendingApproval),
         artifacts_json: jsonStringify(record.artifacts),
         created_at: record.createdAt,

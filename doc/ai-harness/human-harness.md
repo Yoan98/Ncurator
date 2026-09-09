@@ -277,7 +277,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `status` | `running` / `waiting_approval` / `completed` / `failed` / `cancelled` |
 | `input` | 本轮用户输入原文 |
 | `partial_answer` / `partial_answer_role` | 流式 UI 草稿；**不参与** resume 与下次 brain |
-| `final_answer` / `error` / `failure_code` | 终态展示（`process_interrupted` / `output_truncated` / `input_too_long` 等） |
+| `final_answer` / `error` / `failure_code` / `failure_raw_message` | 终态展示（短标题 + 原文详情） |
 | `pending_approval` | 等待批量审批 |
 | `artifacts` | run 级产物引用（Workbench 展示） |
 | `selectedReferences` / `attachments` | run 创建时 Composer 快照（与 log `user.context` 对应） |
@@ -453,7 +453,7 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 |---------|----------|------|
 | 用户气泡 | `ai_run.input`；该 run 的 `user` 行只提供时间与 `context` | 不展示 `user.content`（那是模型稿）；checkpoint 不当气泡 |
 | 助手气泡 | 该 run 最后一条交付 `assistant`（`toolCalls: []`） | 经 `finalizeDelivery` 写入；展示 Markdown 正文 |
-| 运行态 / 错误 | `ai_run` | `status`、`error`、`failure_code`、审批、流式草稿 |
+| 运行态 / 错误 | `ai_run` | `status`、`error`、`failure_code`、`failure_raw_message`、审批、流式草稿 |
 | 文件改动 | `ai_file_change` | Workbench diff / 回退；不进对话正文 |
 
 同一伙伴多 run：按 `run_id` + `seq` 排序；resume 产生新 run，用户可见**多条** user 气泡，对应 brain 侧多条 build user（第 6 节）。
@@ -565,7 +565,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 - 预算 > 窗口 × **80%**（`CONTEXT_COMPACTION_TRIGGER_RATIO`）。没到线不压。有真实 brain usage 时用 `usage + delta`；compaction 后需等下一轮真实 usage（`post_compaction`）。
 - 去掉从末尾留下的 tail 之后，还剩更早的原文可折。folded 里若只有 checkpoint、没有别的原文，视为不可折，避免空转。
 - 仅当前 build user 自身超窗 → `input_too_long`，不 compaction、不写 log user。
-- 无 LLM usage 时 brain 发 `runtime_issue`（`code: llm_usage_unavailable`），预算改用消息 token estimate；estimate 超触发线且有可折历史时仍可 compaction。
+- 无 LLM usage 时 brain 发 `run_warning`（`code: llm_usage_unavailable`），预算改用消息 token estimate；estimate 超触发线且有可折历史时仍可 compaction。
 - 去掉 tail 后没有可折内容，或单组已大于 keep 且前面没有可折跨度 → 不压。
 
 ### 5.2 Tail 切点
@@ -854,19 +854,59 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 - 写 fallback 交付 `assistant`（说明限制 + 已保存文件列表 + 重试提示）；
 - run 仍尽量 `completed`，已 `applied` 的文件变更保留。
 
-### 8.4 失败与可恢复
+### 8.4 失败、告警与重试
+
+统一出口：`throw` → `createAiRunFailure` / `classifyThrownErrorToAiRunFailure` → **唯一** `run_failed`（`AiRunService`；`ChatRunService` 外层 catch 仅兜底未进入图的异常）。用户停止走 `cancelled`，不并入 `failed`。
+
+#### 失败码（互斥）
+
+| `failure_code` | 短标题（气泡 / toast） | `rawMessage` | 说明 |
+|----------------|------------------------|--------------|------|
+| `user_cancelled` | 已取消 | 可空 | 用户停止；事件为 `run_cancelled` |
+| `process_interrupted` | 任务已中断，可继续对话推进 | 可空 | 进程/重启打断 |
+| `llm_request_failed` | 模型请求失败 | **必留原文** | 超时/断网/余额/鉴权/5xx 等，重试耗尽或不可重试后定案 |
+| `output_truncated` | 模型输出达到长度限制，可发送「继续」接着完成 | 可选 | `finish_reason=length` |
+| `input_too_long` | 当前输入超过模型上下文限制，请缩短后重试 | 可空 | 当前 user alone 超窗；**不写** log user，不调 brain |
+| `runtime_limit` | 已达到运行上限，可继续对话推进 | 可空 | 图递归上限 |
+| `internal_error` | 运行遇到内部错误 | **必留 detail** | 主动断言（如 compaction bookmark `undefined`） |
+| `unexpected_error` | 运行失败，请重试 | **必留**异常原文 | 未知兜底 |
+
+落库：`ai_run.error` = 短标题；`ai_run.failure_raw_message` = 原文；UI：气泡「失败：{title}」+「查看详情」展开 `rawMessage`（及 HTTP / providerCode）。
+
+`run_failed` 后：**零自动重试**。Resume（第 6 节）：新建 run；log append `user`；不自动重试 failed run。
+
+#### LLM 调用层重试（定案前）
+
+仅 `classifyLlmRetry`（`llmRetry.ts`）驱动 `runLlmCallWithActivity`；**不再**盲信 `LlmProviderError.retryable` 旧戳。
+
+| 优先级 | 信号 | 判定 |
+|--------|------|------|
+| 1 | HTTP status | 401/402/403 → 不重试；408/429/5xx 等 → 可重试（有上限） |
+| 2 | providerCode / type | `insufficient_balance`、`quota_exceeded`、`invalid_api_key`… → 不重试；`rate_limit_exceeded`、`timeout`、`server_error`… → 可重试 |
+| 3 | 短文案白名单 | 弱补充 |
+| 4 | unknown | **不重试** |
+
+上限：`AI_LLM_CALL_MAX_RETRY_ATTEMPTS`（当前 5）。
+
+#### 告警（不停跑）
+
+| 场景 | 行为 |
+|------|------|
+| brain 无 usage、资料校验等 | `run_warning`（原 `runtime_issue`）；**不改** `ai_run.status`，不结束 run |
+| 审批拒绝 | hand 写失败 `tool`；可发 `run_warning`（`approval_denied`）；继续 dispatch / brain |
+
+#### 场景对照
 
 | 场景 | `failure_code` / 行为 | log / brain |
 |------|------------------------|-------------|
-| 用户停止 | `user_cancelled` | 已写段保留；repair 悬空 tool_calls |
+| 用户停止 | `user_cancelled` / `cancelled` | 已写段保留；repair 悬空 tool_calls |
 | 应用重启 | `process_interrupted` | 活动 run 标记 failed；不自动调模型 |
 | 输出截断 | `output_truncated` | 写半截 `assistant` 后失败；可 resume |
 | 图递归上限 | `runtime_limit` | 可 resume |
 | 当前 user 超窗 | `input_too_long` | **不写** log user，不调 brain |
-| 网络 / provider | `recoverable` 类 | 可 resume |
+| 模型请求失败 | `llm_request_failed` | 可 resume；详情保留原文 |
+| compaction bookmark 丢失 | `internal_error` | **硬停**，禁止回 budget 空转 |
 | 审批拒绝 | hand 写失败 `tool` | 继续 dispatch / brain |
-
-**Resume**（第 6 节）：新建 run；log append `user`；brain append 新 build user；不自动重试 failed run。
 
 ### 8.5 与存储的关系
 

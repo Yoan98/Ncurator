@@ -404,7 +404,7 @@ describe('ai unit llm executor text path', () => {
       details: {
         streamed: true,
         chunkCount: 513,
-        reason: 'error'
+        reason: 'unexpected_error'
       }
     })
     expect(llmIoRecords[0]).toMatchObject({

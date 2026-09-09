@@ -250,7 +250,7 @@ describe('ai human context compaction node', () => {
     expect(next.execution.stage).toBe('context_budget')
   })
 
-  it('skips the compaction LLM when coveredThroughSeq cannot be resolved', async () => {
+  it('throws internal_error when coveredThroughSeq cannot be resolved', async () => {
     const current = createCurrentBrainUserMessage('continue the task')
     const earlierUser = new HumanMessage('old task')
     const earlierPair = [
@@ -295,18 +295,24 @@ describe('ai human context compaction node', () => {
     cache.messages = beforeMessages
     cache.currentUserLogAppended = true
     const node = createContextCompactionNode({ ctx, cache })
-    const next = await node(
-      createInitialHumanState({
-        taskId: 'task-no-bookmark',
-        userInput: 'continue the task'
-      })
-    )
+
+    await expect(
+      node(
+        createInitialHumanState({
+          taskId: 'task-no-bookmark',
+          userInput: 'continue the task'
+        })
+      )
+    ).rejects.toMatchObject({
+      name: 'AiRunFailure',
+      failureCode: 'internal_error',
+      rawMessage: 'compaction_bookmark_unresolved'
+    })
 
     expect(prompts).toHaveLength(0)
     expect(appended).toHaveLength(0)
     expect(events.some((event) => event.type === 'context_compaction_started')).toBe(false)
     expect(cache.messages).toEqual(beforeMessages)
-    expect(next.execution.stage).toBe('context_budget')
   })
 
   it('calls history then turn-prefix prompts on a mid-turn split and keeps checkpoint in conversation', async () => {

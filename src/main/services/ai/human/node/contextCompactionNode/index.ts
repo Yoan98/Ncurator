@@ -21,6 +21,7 @@ import {
   renderMessagesForCompaction,
   splitMessagesForCompactionTail
 } from '../utils/messageTail'
+import { createAiRunFailure } from '../../../utils/runFailure'
 
 const returnToContextBudget = (state: HumanState): HumanState => ({
   ...state,
@@ -89,9 +90,12 @@ export const createContextCompactionNode = (input: {
       currentRecords,
       countTailBookmarkMessages(tail)
     )
-    // Bookmark 对齐失败时不要调压缩模型，也不发 started（避免半截 UI / 空转费用）。
+    // Bookmark 对齐失败是实现不变量破坏：硬停，禁止回 budget 空转烧 key。
     if (coveredThroughSeq === undefined) {
-      return returnToContextBudget(state)
+      throw createAiRunFailure({
+        failureCode: 'internal_error',
+        rawMessage: 'compaction_bookmark_unresolved'
+      })
     }
 
     const budgetTokensBefore = state.execution.contextBudget?.budgetTokens || 0

@@ -35,7 +35,7 @@ SQLite 保存以下业务数据：
 
 - `partner` 保存名称、头像外形与颜色，以及 `pinned` / `pinned_at` 置顶状态；列表按置顶优先、置顶时间、更新时间、创建时间排序。标题就是伙伴 `name`，不因消息改名。
 - `chat_session_message_log` 使用 `partner_id + seq` 保证伙伴内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated` 和 `compaction_checkpoint` 是强类型 annotation。`compaction_checkpoint` 存书签字段（`coveredThroughSeq` 等）和摘要正文。`user.content` 是发给模型的 build 全文。投影若有 `compaction_checkpoint`，只保留 `seq > coveredThroughSeq`，再用摘要套外壳合成 checkpoint User。气泡文案用 `ai_run.input`。用户「清空消息记录」会物理删除该伙伴全部 message log 行及对应 `ai_run`，不删除 `ai_file_change`。
-- `ai_run` 挂 `partner_id`，不再保存 `workspace_json`。`partial_answer` 与 `partial_answer_role` 只保存当前流式 UI 草稿；它们不参与下一次模型上下文恢复。`failure_code` 保存 `process_interrupted`、`output_truncated`、`input_too_long` 等终止原因。
+- `ai_run` 挂 `partner_id`，不再保存 `workspace_json`。`partial_answer` 与 `partial_answer_role` 只保存当前流式 UI 草稿；它们不参与下一次模型上下文恢复。`failure_code` 保存互斥终止原因（`llm_request_failed` / `process_interrupted` / `output_truncated` / `input_too_long` / `runtime_limit` / `internal_error` / `unexpected_error` 等）；`failure_raw_message` 保存失败原文供 UI「查看详情」。
 - 待审批状态以 SQLite 中的 run 记录为准。
 - `document.active_generation_id` 是当前有效索引版本，只用于写入后删除旧 chunk 和启动/任务结束时的孤儿清理，不进入检索 `where`。
 
@@ -52,9 +52,10 @@ SQLite 保存以下业务数据：
 
 ### 当前边界
 
-- 当前代码支持的最终 schema version 是 `10`，由 `CURRENT_SCHEMA_VERSION` 定义。
+- 当前代码支持的最终 schema version 是 `11`，由 `CURRENT_SCHEMA_VERSION` 定义。
 - version `1–9` 已随正式版发布，永久保留且不可改写。已知历史例外只有 version 2 的旧名称 `workspace_change_sets`；version 9 继续负责修复通知字段。
-- version `10` 是破坏性升级，不迁旧数据。`upgrade_from_v9` 从 v9 升级时 DROP 旧表再建最终结构：新增 `partner`；删除 `chat_session`、`chat_session_ui_state`（以及 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event`、`chat_session_skill_state`、`chat_message`）；`chat_session_message_log` / `ai_run` / `ai_file_change` / `docx_apply` 改挂 `partner_id`；新增 `partner_ui_state`；`workbench_ui_state` 只留 `active_view_key`，删除 `draft_state_json`；`scheduled_task` 改挂 `partner_id`（无外键 CASCADE，专属伙伴删除后任务可保留并由服务重建），并含 `busy_cancel_notice_at`；`workspace_source` 去掉 name 且 `root_path UNIQUE`；`web_source` 去掉 `workspace_id` 且 `UNIQUE(normalized_url)`；`ai_run` 不再保存 `workspace_json`。不存在、也不新建 `chat_search_turn`。新增 `schema_migration_hooks`，供版本声明提交后副作用。v10 的 `afterCommit` 在 SQLite 事务提交后、LanceDB 连接前删除 `userData/lancedb`；hook 记 `pending/done`，失败可重试，`done` 后不重跑。空库仍执行 version `1–10`，跑完后结构与 v9 升级路径一致。
+- version `10` 是破坏性升级，不迁旧数据。`upgrade_from_v9` 从 v9 升级时 DROP 旧表再建最终结构：新增 `partner`；删除 `chat_session`、`chat_session_ui_state`（以及 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event`、`chat_session_skill_state`、`chat_message`）；`chat_session_message_log` / `ai_run` / `ai_file_change` / `docx_apply` 改挂 `partner_id`；新增 `partner_ui_state`；`workbench_ui_state` 只留 `active_view_key`，删除 `draft_state_json`；`scheduled_task` 改挂 `partner_id`（无外键 CASCADE，专属伙伴删除后任务可保留并由服务重建），并含 `busy_cancel_notice_at`；`workspace_source` 去掉 name 且 `root_path UNIQUE`；`web_source` 去掉 `workspace_id` 且 `UNIQUE(normalized_url)`；`ai_run` 不再保存 `workspace_json`。不存在、也不新建 `chat_search_turn`。新增 `schema_migration_hooks`，供版本声明提交后副作用。v10 的 `afterCommit` 在 SQLite 事务提交后、LanceDB 连接前删除 `userData/lancedb`；hook 记 `pending/done`，失败可重试，`done` 后不重跑。空库仍执行 version `1–11`，跑完后结构与 v9→v10→v11 升级路径一致。
+- version `11` 为 `ai_run` 增加 `failure_raw_message`，保存失败原文（与短标题 `error` / `failure_code` 分离）。
 - 哪些 migration 已正式发布，以 `migrations/released-migrations.json` 为唯一边界。未进入清单的连续迁移可以在发布前合并或重写；进入清单后只能新增更高版本修复。
 
 ### 版本身份与执行规则

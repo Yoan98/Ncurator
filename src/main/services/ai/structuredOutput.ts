@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { jsonrepair } from 'jsonrepair'
 
 type ErrorObject = Record<string, unknown>
+type ErrorResponseData = string | number | boolean | null | object
 
 export type StructuredOutputErrorInfo = {
   status?: number
@@ -12,8 +13,6 @@ export type StructuredOutputErrorInfo = {
   rawText: string
   hasProviderSignal: boolean
 }
-
-export type LlmErrorClassification = 'fatal' | 'retryable' | 'unknown'
 
 const getObject = (value: unknown): ErrorObject | undefined =>
   value && typeof value === 'object' ? (value as ErrorObject) : undefined
@@ -41,12 +40,6 @@ const stringifyValue = (value: unknown): string | undefined => {
   }
 }
 
-const normalizeSignal = (value: string | undefined): string | undefined => {
-  if (!value) return undefined
-  const normalized = value.trim()
-  return normalized ? normalized.toLowerCase() : undefined
-}
-
 const stripSdkErrorDecoration = (message: string): string =>
   message.replace(/\n\s*Troubleshooting URL:\s*https?:\/\/\S+[\s\S]*$/iu, '').trim()
 
@@ -69,17 +62,20 @@ export const normalizeStructuredOutputError = (error: unknown): StructuredOutput
   const status =
     readNumber(response?.status) ||
     readNumber(root?.status) ||
+    readNumber(root?.httpStatus) ||
     readNumber(responseDataObject?.status) ||
     readNumber(providerError?.status)
 
   const code =
     readString(providerError?.code) ||
     readString(responseDataObject?.code) ||
-    readString(root?.code)
+    readString(root?.providerCode) ||
+    (readString(root?.code) === 'CANCELLED' ? undefined : readString(root?.code))
 
   const type =
     readString(providerError?.type) ||
     readString(responseDataObject?.type) ||
+    readString(root?.providerType) ||
     readString(root?.type)
 
   const param =
@@ -89,7 +85,14 @@ export const normalizeStructuredOutputError = (error: unknown): StructuredOutput
 
   const hasProviderSignal =
     status !== undefined ||
-    Boolean(readString(providerError?.message) || readString(responseDataObject?.message))
+    Boolean(
+      code ||
+        type ||
+        readString(providerError?.message) ||
+        readString(responseDataObject?.message) ||
+        readString(root?.providerCode) ||
+        readNumber(root?.httpStatus) !== undefined
+    )
 
   const rawParts = [
     status !== undefined ? `status=${status}` : undefined,
@@ -113,61 +116,6 @@ export const normalizeStructuredOutputError = (error: unknown): StructuredOutput
 
 export const getErrorText = (error: unknown): string =>
   normalizeStructuredOutputError(error).message
-
-type ErrorResponseData = string | number | boolean | null | object
-
-const FATAL_STATUS_CODES = new Set([401, 402, 403])
-const RETRYABLE_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504])
-const FATAL_ERROR_CODES = new Set([
-  'invalid_api_key',
-  'insufficient_balance',
-  'quota_exceeded',
-  'invalid_authentication',
-  'authentication_error'
-])
-const RETRYABLE_ERROR_CODES = new Set([
-  'rate_limit_exceeded',
-  'timeout',
-  'request_timeout',
-  'server_error',
-  'service_unavailable'
-])
-
-export const classifyLlmError = (error: unknown): LlmErrorClassification => {
-  const info = normalizeStructuredOutputError(error)
-  const normalizedCode = normalizeSignal(info.code)
-  const normalizedType = normalizeSignal(info.type)
-  const body = info.rawText.toLowerCase()
-
-  if (
-    (info.status !== undefined && FATAL_STATUS_CODES.has(info.status)) ||
-    (normalizedCode && FATAL_ERROR_CODES.has(normalizedCode)) ||
-    body.includes('insufficient balance') ||
-    body.includes('invalid api key') ||
-    body.includes('authentication failed') ||
-    normalizedType === 'authentication_error'
-  ) {
-    return 'fatal'
-  }
-
-  if (
-    (info.status !== undefined && RETRYABLE_STATUS_CODES.has(info.status)) ||
-    (normalizedCode && RETRYABLE_ERROR_CODES.has(normalizedCode)) ||
-    body.includes('rate limit') ||
-    body.includes('temporarily unavailable') ||
-    body.includes('service unavailable') ||
-    body.includes('timed out') ||
-    body.includes('timeout')
-  ) {
-    return 'retryable'
-  }
-
-  return 'unknown'
-}
-
-export const isFatalLlmError = (error: unknown): boolean => classifyLlmError(error) === 'fatal'
-export const isRetryableLlmError = (error: unknown): boolean =>
-  classifyLlmError(error) === 'retryable'
 
 export const extractTextContent = (content: unknown): string => {
   if (typeof content === 'string') {

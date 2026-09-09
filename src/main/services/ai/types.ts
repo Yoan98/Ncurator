@@ -58,14 +58,6 @@ export type HumanTaskRunner = (
 
 export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 
-export type RecoverableRunErrorCode = Exclude<AiRunFailureCode, 'error' | 'input_too_long'>
-
-export type RecoverableHumanRunError = Error & {
-  code: 'RECOVERABLE_HUMAN_RUN'
-  reason: RecoverableRunErrorCode
-  lastHumanState?: HumanState
-}
-
 export type AiRuntimePlatform = 'macos' | 'windows'
 
 export type AiRunStartPayload = {

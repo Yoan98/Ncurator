@@ -1028,13 +1028,14 @@ export interface OpenFileWithApplicationResponse {
 }
 
 export type AiRunStatus = 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
-export type RuntimeIssueCode =
+export type AiRunWarningCode =
   | 'workspace_binding_missing'
   | 'workspace_missing'
   | 'workspace_path_unavailable'
   | 'scope_unavailable'
   | 'approval_denied'
   | 'llm_usage_unavailable'
+export type RuntimeIssueCode = AiRunWarningCode
 export type RuntimeSkillId = RegisteredRuntimeSkillId
 export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_plan' | 'human_hand'
 export type AssistantProcessDisplay =
@@ -1257,6 +1258,7 @@ export type AiRunRecord = {
   finalAnswer?: string
   error?: string
   failureCode?: AiRunFailureCode
+  failureRawMessage?: string
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
   artifacts?: AiArtifactRef[]
   createdAt: number
@@ -1490,15 +1492,14 @@ export interface AiActivityDetails {
 }
 
 export type AiRunFailureCode =
-  | 'timeout'
-  | 'network_error'
   | 'user_cancelled'
   | 'process_interrupted'
-  | 'runtime_limit'
+  | 'llm_request_failed'
   | 'output_truncated'
   | 'input_too_long'
+  | 'runtime_limit'
+  | 'internal_error'
   | 'unexpected_error'
-  | 'error'
 export type AiRunFailureSource = 'provider' | 'internal'
 
 type AiRunEventPayload =
@@ -1804,9 +1805,9 @@ type AiRunEventPayload =
       completedAt: number
     }
   | {
-      type: 'runtime_issue'
+      type: 'run_warning'
       runId: string
-      code: RuntimeIssueCode
+      code: AiRunWarningCode
       message: string
       taskId?: string
       workspaceId?: string
@@ -1822,6 +1823,7 @@ type AiRunEventPayload =
       runId: string
       source: AiRunFailureSource
       message: string
+      rawMessage?: string
       httpStatus?: number
       providerCode?: string
       code?: AiRunFailureCode

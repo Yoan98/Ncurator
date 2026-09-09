@@ -187,7 +187,7 @@ export const createBrainNode = (input: {
       } else {
         input.cache.lastBrainUsageUnavailable = true
         input.ctx.sendEvent({
-          type: 'runtime_issue',
+          type: 'run_warning',
           runId: input.ctx.runId,
           taskId: state.task.taskId,
           code: 'llm_usage_unavailable',

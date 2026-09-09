@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { classifyLlmError } from '../../../../src/main/services/ai/structuredOutput'
+import { LlmProviderError } from '../../../../src/main/services/ai/errors'
+import { classifyLlmError, classifyLlmRetry } from '../../../../src/main/services/ai/llmRetry'
 
 describe('ai unit llm error classification', () => {
   it('classifies response_format unavailable errors as unknown (no capability fallback)', () => {
@@ -112,5 +113,53 @@ describe('ai unit llm error classification', () => {
 
   it('does not treat network socket errors as retryable without signals', () => {
     expect(classifyLlmError(new Error('network socket disconnected unexpectedly'))).toBe('unknown')
+  })
+
+  it('does not retry unknown or fatal errors via classifyLlmRetry', () => {
+    expect(
+      classifyLlmRetry({
+        status: 402,
+        response: {
+          status: 402,
+          data: { error: { code: 'insufficient_balance', message: 'Insufficient Balance' } }
+        }
+      }).retryable
+    ).toBe(false)
+    expect(classifyLlmRetry(new Error('weird opaque failure')).retryable).toBe(false)
+  })
+
+  it('retries 429/503 via classifyLlmRetry', () => {
+    expect(
+      classifyLlmRetry({
+        status: 429,
+        response: {
+          status: 429,
+          data: { error: { code: 'rate_limit_exceeded', message: 'Rate limit exceeded' } }
+        }
+      }).retryable
+    ).toBe(true)
+    expect(
+      classifyLlmRetry({
+        status: 503,
+        response: { status: 503, data: { error: { message: 'service unavailable' } } }
+      }).retryable
+    ).toBe(true)
+  })
+
+  it('reclassifies LlmProviderError instead of trusting its retryable stamp', () => {
+    const stampedRetryable = new LlmProviderError({
+      message: 'Insufficient Balance',
+      httpStatus: 402,
+      providerCode: 'insufficient_balance',
+      retryable: true
+    })
+    expect(classifyLlmRetry(stampedRetryable).retryable).toBe(false)
+
+    const stampedFatalButRetryableStatus = new LlmProviderError({
+      message: 'temporarily unavailable',
+      httpStatus: 503,
+      retryable: false
+    })
+    expect(classifyLlmRetry(stampedFatalButRetryableStatus).retryable).toBe(true)
   })
 })

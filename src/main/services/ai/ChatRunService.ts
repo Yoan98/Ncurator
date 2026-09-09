@@ -1,7 +1,8 @@
 import { BrowserWindow } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { AiRunService } from './AiRunService'
-import { toRendererRunFailure } from './errors'
+import { classifyThrownErrorToAiRunFailure } from './utils/runFailure'
+import { resolveAiRunFailurePresentation } from './runFailureCatalog'
 import { terminalSessionManager } from './human/tools/terminal/TerminalSessionManager'
 import type { AiRunResourceManager } from './run/AiRunResourceManager'
 import { normalizeSelectedReferences } from './utils/runContext'
@@ -676,17 +677,13 @@ export class ChatRunService {
         this.deps.errorLogService?.write({
           module: 'ai-run',
           error: result.error || 'AI run failed',
-          context: { source: result.failureSource, code: result.failureCode }
+          context: {
+            source: result.failureSource,
+            code: result.failureCode,
+            rawMessage: result.failureRawMessage
+          }
         })
-        await this.queueRunEvent(runId, {
-          type: 'run_failed',
-          runId,
-          source: result.failureSource || 'internal',
-          message: result.error || '运行失败，请重试。',
-          httpStatus: result.failureHttpStatus,
-          providerCode: result.failureProviderCode,
-          code: result.failureCode
-        })
+        // run_failed 已由 AiRunService 唯一发送，这里不再补发。
         return
       }
 
@@ -717,15 +714,21 @@ export class ChatRunService {
         error: error instanceof Error ? error : String(error),
         context: { source: 'unexpected' }
       })
-      const failure = toRendererRunFailure(error)
+      const failure = classifyThrownErrorToAiRunFailure(error)
+      const presentation = resolveAiRunFailurePresentation(
+        failure.failureCode,
+        failure.rawMessage
+      )
+      const failureSource = presentation.source === 'user' ? 'internal' : presentation.source
       await this.queueRunEvent(runId, {
         type: 'run_failed',
         runId,
-        source: failure.source,
-        message: failure.message,
+        source: failureSource,
+        message: presentation.message,
+        rawMessage: presentation.rawMessage,
         httpStatus: failure.httpStatus,
         providerCode: failure.providerCode,
-        code: 'error'
+        code: failure.failureCode
       })
     } finally {
       await this.deps.runResourceManager.releaseRun(runId)
@@ -923,6 +926,7 @@ export class ChatRunService {
       run.failureCode = event.code
       run.pendingApproval = undefined
       run.error = event.message
+      run.failureRawMessage = event.rawMessage
       run.updatedAt = now
       run.finishedAt = now
       const content = run.partialAnswer
@@ -940,12 +944,8 @@ export class ChatRunService {
       const content = run.partialAnswer ? `${run.partialAnswer}\n\n已取消` : '已取消'
       run.partialAnswer = content
       run.finalAnswer = content
-    } else if (!event.internal && event.type === 'runtime_issue') {
-      run.status = 'failed'
-      run.pendingApproval = undefined
-      run.error = event.message
+    } else if (event.type === 'run_warning') {
       run.updatedAt = now
-      saveImmediately = true
     } else {
       run.updatedAt = now
     }

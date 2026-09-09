@@ -1,6 +1,7 @@
 import { describe, it } from 'vitest'
 import type { BaseMessage } from '@langchain/core/messages'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
+import { LlmProviderError } from '../../../../../src/main/services/ai/errors'
 import type { AiRunDeps } from '../../../../../src/main/services/ai/types'
 import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import type { AiRunEvent } from '../../../../../src/shared/types'
@@ -75,7 +76,10 @@ const createFaultAfterOverfittingWrapper =
     if (request.caller === 'human.brain' && input.state.shouldFailNextBrain) {
       input.state.shouldFailNextBrain = false
       input.state.injected = true
-      throw new Error('fetch failed')
+      throw new LlmProviderError({
+        message: 'fetch failed',
+        retryable: false
+      })
     }
 
     const result = await realChatTools(request)
@@ -291,7 +295,7 @@ describe('ai human live backend', () => {
             result.injected === true &&
               result.overfittingEvidenceBeforeFailure === true &&
               result.interruptedResult?.status === 'failed' &&
-              result.interruptedResult.failureCode === 'network_error' &&
+              result.interruptedResult.failureCode === 'llm_request_failed' &&
               /docx-read/.test(logText) &&
               result.resumedResult?.status === 'completed' &&
               result.logAfterResume.length > result.logAfterNetwork.length &&

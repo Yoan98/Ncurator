@@ -652,8 +652,27 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
         ) : null}
 
         {turn.status === 'failed' && turn.error ? (
-          <div className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-sm leading-6 text-[#B3261E]">
-            {turn.error}
+          <div
+            className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-4 py-3 text-sm leading-6 text-[#B3261E]"
+            data-testid={`${workbenchSelectors.assistantRunFailurePrefix}-${messageId}`}
+          >
+            <div>失败：{turn.error}</div>
+            {turn.errorDetail ? (
+              <details className="mt-2">
+                <summary
+                  className="cursor-pointer select-none text-xs text-[#8A4F48] underline-offset-2 hover:underline"
+                  data-testid={`${workbenchSelectors.assistantRunFailureDetailTogglePrefix}-${messageId}`}
+                >
+                  查看详情
+                </summary>
+                <pre
+                  className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-[6px] bg-[#F3DDD9] px-3 py-2 text-xs leading-5 text-[#7A3B34]"
+                  data-testid={`${workbenchSelectors.assistantRunFailureDetailPrefix}-${messageId}`}
+                >
+                  {turn.errorDetail}
+                </pre>
+              </details>
+            ) : null}
           </div>
         ) : null}
 

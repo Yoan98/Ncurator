@@ -188,6 +188,8 @@ export type AssistantTurnViewModel = {
   pendingApprovalItems: import('../../../../shared/types').AiApprovalBatchItem[]
   approvalReviews: import('../../../../shared/workbench/approvalReview').AssistantApprovalReview[]
   error?: string
+  /** Provider/internal raw detail for “查看详情”; keep bubble on `error` title only. */
+  errorDetail?: string
 }
 
 export type WorkbenchContentPanelState =

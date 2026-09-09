@@ -17,13 +17,8 @@ import { projectMessageLogRecords } from '../memory/transcript'
 import { projectBrainMessagesFromLog } from '../memory/brainMessageProjection'
 import { isLearnableSkillId } from '../skills'
 import {
-  classifyLlmFailureCode,
-  createRecoverableHumanRunError,
-  isCancelledError,
-  isRecoverableRunErrorCode,
-  isGraphRuntimeLimitError
+  classifyThrownErrorToAiRunFailure
 } from '../../utils/runFailure'
-import { isLlmInputTooLongError, isLlmOutputTruncatedError } from '../../errors'
 
 export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
@@ -149,43 +144,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       }
     } catch (error) {
       ctx.discardDocxApplyRun()
-      if (isCancelledError(error)) {
-        throw createRecoverableHumanRunError({
-          reason: 'user_cancelled',
-          error,
-          lastHumanState: cache.currentState
-        })
-      }
-      if (isGraphRuntimeLimitError(error)) {
-        throw createRecoverableHumanRunError({
-          reason: 'runtime_limit',
-          error,
-          lastHumanState: cache.currentState
-        })
-      }
-      if (isLlmOutputTruncatedError(error)) {
-        throw createRecoverableHumanRunError({
-          reason: 'output_truncated',
-          error,
-          lastHumanState: cache.currentState
-        })
-      }
-      if (isLlmInputTooLongError(error)) throw error
-      {
-        const code = classifyLlmFailureCode(error)
-        if (isRecoverableRunErrorCode(code)) {
-          throw createRecoverableHumanRunError({
-            reason: code,
-            error,
-            lastHumanState: cache.currentState
-          })
-        }
-      }
-      throw createRecoverableHumanRunError({
-        reason: 'unexpected_error',
-        error,
-        lastHumanState: cache.currentState
-      })
+      throw classifyThrownErrorToAiRunFailure(error, cache.currentState)
     }
   }
 }

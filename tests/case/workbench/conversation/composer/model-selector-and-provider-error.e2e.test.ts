@@ -230,14 +230,26 @@ describe('workbench conversation e2e', () => {
             const signals = await runtime.collectSignals()
             return signals.aiRunEventEntries.map((entry) => entry.event)
           })
-          await page
-            .getByText(new RegExp(`HTTP ${String(runFailed.httpStatus || '')}`, 'u'))
-            .waitFor({ state: 'visible' })
-          await page.getByText(runFailed.message, { exact: false }).waitFor({ state: 'visible' })
+          const failureCard = page.getByTestId(
+            new RegExp(`^${workbenchSelectors.assistantRunFailurePrefix}-`, 'u')
+          )
+          await failureCard.waitFor({ state: 'visible' })
+          await failureCard.getByText(`失败：${runFailed.message}`, { exact: false }).waitFor({
+            state: 'visible'
+          })
+          const detailToggle = page.getByTestId(
+            new RegExp(`^${workbenchSelectors.assistantRunFailureDetailTogglePrefix}-`, 'u')
+          )
+          await detailToggle.click()
+          const detail = page.getByTestId(
+            new RegExp(`^${workbenchSelectors.assistantRunFailureDetailPrefix}-`, 'u')
+          )
+          await detail.waitFor({ state: 'visible' })
+          const detailText = (await detail.innerText()).trim()
           const pageText = (await page.locator('body').innerText()).trim()
           await runtime.captureScreenshot({
             name: 'provider-error-visible',
-            message: '模型服务错误在页面中显示，内部实现信息不对用户暴露。'
+            message: '模型服务错误以短标题展示，详情中保留原文，内部实现信息不对用户暴露。'
           })
 
           return {
@@ -252,6 +264,7 @@ describe('workbench conversation e2e', () => {
             chatRequestCount: provider.getChatRequestCount(),
             modelName: liveEnv.modelName,
             runFailed,
+            detailText,
             pageText
           }
         },
@@ -298,19 +311,24 @@ describe('workbench conversation e2e', () => {
           await runtime.assertThat(
             result.chatRequestCount === 1 &&
               result.runFailed.source === 'provider' &&
+              result.runFailed.code === 'llm_request_failed' &&
               Number(result.runFailed.httpStatus || 0) >= 400 &&
-              result.runFailed.message.trim().length > 0 &&
-              result.pageText.includes(`HTTP ${String(result.runFailed.httpStatus || '')}`) &&
-              result.pageText.includes(result.runFailed.message) &&
+              result.runFailed.message.trim() === '模型请求失败' &&
+              Boolean(result.runFailed.rawMessage?.trim()) &&
+              result.pageText.includes(`失败：${result.runFailed.message}`) &&
+              result.detailText.includes(`HTTP ${String(result.runFailed.httpStatus || '')}`) &&
+              result.detailText.includes(String(result.runFailed.rawMessage || '')) &&
               !/LangGraph|LangChain|Troubleshooting URL|structured_output_|recursionLimit/iu.test(
                 result.pageText
               ),
             {
               name: 'provider-error-is-not-reentered-into-graph',
-              message: '模型服务错误应只请求一次并原样展示，不得泄露内部实现信息。',
+              message:
+                '模型服务错误应只请求一次；气泡短标题为「模型请求失败」，详情保留 HTTP/原文，不得泄露内部实现信息。',
               data: {
                 chatRequestCount: result.chatRequestCount,
                 runFailed: result.runFailed,
+                detailText: result.detailText,
                 leaksInternalDetails:
                   /LangGraph|LangChain|Troubleshooting URL|structured_output_|recursionLimit/iu.test(
                     result.pageText

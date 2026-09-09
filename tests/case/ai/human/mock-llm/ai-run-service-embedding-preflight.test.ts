@@ -222,15 +222,19 @@ describe('ai human mock-llm backend', () => {
 
         runtime.assertThat(
             result.result.status === 'failed' &&
-            result.result.error === '运行失败，请重试。如果问题持续出现，请查看应用日志。' &&
+            result.result.failureCode === 'unexpected_error' &&
+            result.result.error === '运行失败，请重试' &&
+            result.result.failureRawMessage === 'embedding preflight failed for test' &&
             humanSteps.length === 0,
           {
             name: 'ai-run-service-aborts-before-human-on-preflight-failure',
             message:
-              'embedding preflight 失败时，run 应直接失败、不进入 human stage，并隐藏底层错误。',
+              'embedding preflight 失败时，run 应直接失败、不进入 human stage，并保留短标题与原文。',
             data: {
               status: result.result.status,
+              failureCode: result.result.failureCode,
               error: result.result.error,
+              failureRawMessage: result.result.failureRawMessage,
               humanStepCount: humanSteps.length
             }
           }

@@ -1,7 +1,5 @@
 import { ZodError } from 'zod/v4'
 
-export const INTERNAL_RUN_FAILURE_MESSAGE = '运行失败，请重试。如果问题持续出现，请查看应用日志。'
-
 export type LlmProviderErrorInput = {
   message: string
   httpStatus?: number
@@ -94,24 +92,6 @@ export const findLlmProviderError = (error: unknown): LlmProviderError | undefin
   return undefined
 }
 
-const findErrorChainText = (error: unknown): string => {
-  const parts: string[] = []
-  const visited = new Set<unknown>()
-  let current: unknown = error
-  while (current && !visited.has(current)) {
-    visited.add(current)
-    if (current instanceof Error) {
-      parts.push(current.name, current.message)
-    }
-    if (typeof current === 'object') {
-      const code = 'code' in current ? String(current.code || '') : ''
-      if (code) parts.push(code)
-    }
-    current = readCause(current)
-  }
-  return parts.join(' ').toLowerCase()
-}
-
 export const toLlmOutputError = (error: unknown, rawText?: string): LlmOutputError => {
   if (isLlmOutputError(error)) return error
   if (error instanceof ZodError) {
@@ -136,40 +116,4 @@ export const toLlmOutputError = (error: unknown, rawText?: string): LlmOutputErr
     rawText,
     cause: error
   })
-}
-
-export type RendererRunFailure = {
-  source: 'provider' | 'internal'
-  message: string
-  httpStatus?: number
-  providerCode?: string
-}
-
-export const toRendererRunFailure = (error: unknown): RendererRunFailure => {
-  const providerError = findLlmProviderError(error)
-  if (providerError) {
-    return {
-      source: 'provider',
-      message: providerError.message || '模型服务请求失败。',
-      httpStatus: providerError.httpStatus,
-      providerCode: providerError.providerCode
-    }
-  }
-  const chainText = findErrorChainText(error)
-  if (/(?:timeout|timed out|etimedout)/u.test(chainText)) {
-    return {
-      source: 'provider',
-      message: '模型服务请求超时，请稍后重试。'
-    }
-  }
-  if (/(?:network|fetch failed|socket|econn|enotfound|eai_again|dns)/u.test(chainText)) {
-    return {
-      source: 'provider',
-      message: '无法连接模型服务，请检查网络后重试。'
-    }
-  }
-  return {
-    source: 'internal',
-    message: INTERNAL_RUN_FAILURE_MESSAGE
-  }
 }

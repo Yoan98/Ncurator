@@ -25,12 +25,10 @@ import type {
 } from '../../../shared/types'
 import type { AiEventDispatchContext } from './types'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS, AI_LLM_CALL_TIMEOUT_MS } from './constants'
-import { LlmProviderError, isLlmProviderError, toLlmOutputError } from './errors'
-import { classifyLlmFailureCode } from './utils/runFailure'
+import { LlmProviderError, toLlmOutputError } from './errors'
+import { classifyLlmRetry } from './llmRetry'
 import {
   extractTextContent,
-  getErrorText,
-  normalizeStructuredOutputError,
   parsePromptJsonOutput,
   serializeMessageContentForTelemetry
 } from './structuredOutput'
@@ -399,75 +397,8 @@ const createTextRunnable = (input: {
     timeout: AI_LLM_CALL_TIMEOUT_MS
   }) as TextRunnable
 
-const isCancellationError = (error: unknown): boolean => {
-  const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined
-  const message =
-    error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase()
-  return code === 'CANCELLED' || message.includes('cancel')
-}
-
-export const classifyLlmCallRetry = (
-  error: unknown,
-  attempt = 1
-): { retryable: boolean; message: string; delayMs?: number } => {
-  if (isLlmProviderError(error)) {
-    return {
-      retryable: error.retryable,
-      message: error.message,
-      ...(isResourceExhaustedError(error)
-        ? { delayMs: resolveResourceExhaustedDelay(attempt) }
-        : {})
-    }
-  }
-  const info = normalizeStructuredOutputError(error)
-  const message = info.message || getErrorText(error)
-  const body = `${info.rawText} ${error instanceof Error ? error.message : ''}`.toLowerCase()
-  if (isCancellationError(error)) return { retryable: false, message }
-  if (body.includes('structured_output_retryable') || body.includes('text_output_retryable')) {
-    return { retryable: true, message }
-  }
-  const retryableStatus = new Set([408, 409, 425, 429, 500, 502, 503, 504])
-  if (info.status !== undefined && retryableStatus.has(info.status)) {
-    return {
-      retryable: true,
-      message,
-      ...(isResourceExhaustedError(error, `${info.rawText} ${info.code} ${info.message}`)
-        ? { delayMs: resolveResourceExhaustedDelay(attempt) }
-        : {})
-    }
-  }
-  const code = String(info.code || '').toLowerCase()
-  if (
-    code === 'timeout' ||
-    code === 'request_timeout' ||
-    code === 'rate_limit_exceeded' ||
-    code === 'server_error' ||
-    code === 'service_unavailable'
-  ) {
-    return { retryable: true, message }
-  }
-  if (
-    body.includes('network') ||
-    body.includes('econnreset') ||
-    body.includes('etimedout') ||
-    body.includes('timed out') ||
-    body.includes('timeout') ||
-    body.includes('rate limit') ||
-    body.includes('temporarily unavailable') ||
-    body.includes('service unavailable')
-  ) {
-    return { retryable: true, message }
-  }
-  return { retryable: false, message }
-}
-
-const isResourceExhaustedError = (error: unknown, extraText = ''): boolean => {
-  const message = `${error instanceof Error ? error.message : String(error || '')} ${extraText}`
-  return /resourceexhausted|worker local total request limit/i.test(message)
-}
-
-const resolveResourceExhaustedDelay = (attempt: number): number =>
-  Math.min(15_000, 2_000 * 2 ** Math.max(0, attempt - 1))
+/** @deprecated Prefer classifyLlmRetry from llmRetry.ts */
+export const classifyLlmCallRetry = classifyLlmRetry
 
 const invokeTextChat = async (input: {
   driver?: AiLlmDriver
@@ -805,7 +736,7 @@ export const createAiLlmExecutor = (input: {
           contextBudgetSnapshot: request.contextBudgetSnapshot
         },
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
-        classifyRetry: classifyLlmCallRetry,
+        classifyRetry: classifyLlmRetry,
         execute: async (observer) =>
           await withAbortTimeout({
             timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
@@ -867,7 +798,7 @@ export const createAiLlmExecutor = (input: {
         },
         onTextDelta: request.onTextDelta,
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
-        classifyRetry: classifyLlmCallRetry,
+        classifyRetry: classifyLlmRetry,
         execute: async (observer) =>
           await withAbortTimeout({
             timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
@@ -922,7 +853,7 @@ export const createAiLlmExecutor = (input: {
         },
         onTextDelta: request.onTextDelta,
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
-        classifyRetry: classifyLlmCallRetry,
+        classifyRetry: classifyLlmRetry,
         execute: async (observer) =>
           await withAbortTimeout({
             timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
@@ -992,7 +923,7 @@ export const createAiLlmExecutor = (input: {
         onTextReset: request.onTextReset,
         onToolCallDelta: request.onToolCallDelta,
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
-        classifyRetry: classifyLlmCallRetry,
+        classifyRetry: classifyLlmRetry,
         execute: async (observer) =>
           await withAbortTimeout({
             timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
@@ -1075,4 +1006,4 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(in
   }
 }
 
-export { classifyLlmFailureCode }
+export { classifyLlmRetry }

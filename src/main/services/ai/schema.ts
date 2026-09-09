@@ -26,6 +26,7 @@ export const aiRunStateFieldSchemas = {
   status: aiRunStatusSchema,
   input: z.string(),
   error: z.string().optional(),
+  failureRawMessage: z.string().optional(),
   failureSource: z.custom<AiRunFailureSource>().optional(),
   failureHttpStatus: z.number().int().optional(),
   failureProviderCode: z.string().optional(),

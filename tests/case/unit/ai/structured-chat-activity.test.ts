@@ -301,7 +301,7 @@ describe('ai unit structured chat activity', () => {
       actionType: 'llm_structured_output',
       status: 'failed',
       details: {
-        reason: 'error'
+        reason: 'unexpected_error'
       }
     })
   })

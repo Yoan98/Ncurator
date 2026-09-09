@@ -284,15 +284,21 @@ const buildSearchTurnFromProjectedMessage = (message: ChatMessage): AssistantTur
     .filter((target): target is AssistantTurnViewModel['applyTargets'][number] => Boolean(target))
 })
 
-const formatRunFailureMessage = (event: Extract<AiRunEvent, { type: 'run_failed' }>): string => {
-  if (event.source !== 'provider') return event.message || '运行失败，请重试。'
+const formatRunFailureTitle = (event: Extract<AiRunEvent, { type: 'run_failed' }>): string =>
+  event.message?.trim() || '运行失败，请重试'
+
+const formatRunFailureDetail = (
+  event: Extract<AiRunEvent, { type: 'run_failed' }>
+): string | undefined => {
   const metadata = [
     event.httpStatus ? `HTTP ${event.httpStatus}` : '',
     event.providerCode || ''
   ].filter(Boolean)
-  return metadata.length > 0
-    ? `${metadata.join(' · ')}\n${event.message || '模型服务请求失败。'}`
-    : event.message || '模型服务请求失败。'
+  const raw = event.rawMessage?.trim() || ''
+  if (metadata.length === 0 && !raw) return undefined
+  if (metadata.length === 0) return raw
+  if (!raw) return metadata.join(' · ')
+  return `${metadata.join(' · ')}\n${raw}`
 }
 
 const reduceAssistantTurnByRunEvent = (
@@ -368,8 +374,9 @@ const reduceAssistantTurnByRunEvent = (
     next = { ...next, isBrainThinking: false }
   }
 
-  if (event.type === 'runtime_issue') {
-    next = { ...next, isBrainThinking: false, status: 'failed', error: event.message }
+  if (event.type === 'run_warning') {
+    // 告警不停跑：仅结束「俺想想」，不把 turn 标 failed。
+    next = { ...next, isBrainThinking: false }
   }
 
   if (event.type === 'approval_batch_required') {
@@ -501,7 +508,8 @@ const reduceAssistantTurnByRunEvent = (
       isBrainThinking: false,
       status: 'failed',
       runFinished: true,
-      error: formatRunFailureMessage(event)
+      error: formatRunFailureTitle(event),
+      errorDetail: formatRunFailureDetail(event)
     }
   }
 
@@ -576,7 +584,8 @@ const applyRunRecordToTurn = (
     ),
     waitingApproval: Boolean(run.pendingApproval),
     pendingApprovalItems: run.pendingApproval?.items ?? turn.pendingApprovalItems,
-    error: run.error || turn.error
+    error: run.error || turn.error,
+    errorDetail: run.failureRawMessage || turn.errorDetail
   }
 }
 
@@ -3053,8 +3062,7 @@ const ChatPage: React.FC = () => {
       if (
         event.type === 'run_completed' ||
         event.type === 'run_failed' ||
-        event.type === 'run_cancelled' ||
-        (!event.internal && event.type === 'runtime_issue')
+        event.type === 'run_cancelled'
       ) {
         if (eventPartnerId) {
           setPartnerRunningState(eventPartnerId, false)
@@ -3111,16 +3119,16 @@ const ChatPage: React.FC = () => {
         return
       }
 
-      if (event.type === 'runtime_issue') {
+      if (event.type === 'run_warning') {
         if (!event.internal) {
-          setLoading(false)
           if (event.code === 'approval_denied') {
+            setLoading(false)
             setPendingApprovalBatch(null)
             setApprovalCurrentIndex(0)
             setApprovalDraftDecisions({})
             setApprovalSubmitting(false)
           }
-          message.warning(event.message || '当前运行被阻塞')
+          message.warning(event.message || '当前运行出现告警')
         }
         return
       }
@@ -3171,7 +3179,7 @@ const ChatPage: React.FC = () => {
       }
 
       if (event.type === 'run_failed') {
-        const errorText = formatRunFailureMessage(event)
+        const errorText = formatRunFailureTitle(event)
         setLoading(false)
         setAiRunId(null)
         setCancellingRun(false)
@@ -3193,17 +3201,7 @@ const ChatPage: React.FC = () => {
         if (eventPartnerId && eventPartnerId === currentPartnerIdRef.current) {
           void loadFileChangesForPartnerRef.current(eventPartnerId, event.runId)
         }
-        emitErrorMessage(
-          event.code === 'runtime_limit'
-            ? '已达到运行上限，可继续对话推进'
-            : event.code === 'output_truncated'
-              ? '模型输出达到长度限制，可发送“继续”接着完成'
-              : event.code === 'input_too_long'
-                ? '当前输入超过模型上下文限制，请缩短后重试'
-              : event.source === 'provider'
-                ? '模型请求失败'
-                : '运行失败'
-        )
+        emitErrorMessage(errorText)
         return
       }
 
