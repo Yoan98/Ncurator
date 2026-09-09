@@ -2231,10 +2231,6 @@ export function registerHandlers(services: {
             listWorkspaceFileIndexRecords: (workspaceId) =>
               workspaceStore.listWorkspaceFileIndexRecords(workspaceId),
             listDirectory: (input) => workspaceService.listDirectory(input),
-            scanWorkspaceTree: async (input) => {
-              const scanResult = await workspaceService.scanWorkspaceTree(input)
-              return { workspace: scanResult.workspace, entries: scanResult.entries }
-            },
             listWebSources: () => webSourceStore.listWebSources(),
             normalizeWorkspaceRoot: (rootPath) => workspaceService.normalizeWorkspaceRoot(rootPath)
           },

@@ -299,16 +299,11 @@ export interface ReferenceItemListResponse {
 /** @ 候选单次拉取上限 */
 export const REFERENCE_ITEM_PAGE_SIZE = 50
 
-/** 浏览父级：根（工作地址 + 网页）/ 某工作地址目录 / 仅网页 */
-export type ReferenceListParent =
-  | { type: 'roots' }
-  | { type: 'workspace'; workspaceId: string; relativePath: string }
-  | { type: 'web' }
+/** 相对工作地址根最多收录的路径深度（根=0，其下两级=2） */
+export const REFERENCE_ITEM_MAX_PATH_DEPTH = 2
 
 export interface ListReferenceItemsRequest {
   referenceKinds?: ReferenceKind[]
-  parent?: ReferenceListParent
-  /** 非空时全局搜索，忽略 parent 浏览位置 */
   query?: string
   offset?: number
   limit?: number

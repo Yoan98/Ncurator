@@ -1,16 +1,11 @@
 import React, { useEffect, useRef } from 'react'
 import { Empty, Spin } from 'antd'
-import type { ReferenceListParent, SelectedReference } from '../../../../../shared/types'
+import type { SelectedReference } from '../../../../../shared/types'
 import { workbenchSelectors } from '../../../testing/selectors'
 import { getKbAvailabilityLabel } from '../../../utils/reference'
 import ReferenceIcon from './ReferenceIcon'
 import { getReferenceVisualSpec } from './referenceVisuals'
 import { getScopeKey } from './utils'
-
-type BreadcrumbItem = {
-  label: string
-  parent: ReferenceListParent
-}
 
 type ReferenceMentionPanelProps = {
   loading: boolean
@@ -18,11 +13,7 @@ type ReferenceMentionPanelProps = {
   options: SelectedReference[]
   activeIndex: number
   hasMore: boolean
-  breadcrumbs: BreadcrumbItem[]
-  searching: boolean
   onSelect: (reference: SelectedReference) => void
-  onEnterDirectory: (reference: SelectedReference & { kind: 'directory' }) => void
-  onNavigate: (parent: ReferenceListParent) => void
   onLoadMore: () => void
 }
 
@@ -33,6 +24,7 @@ type ReferenceMentionGroup = {
 
 const getReferenceParentDisplayPath = (reference: SelectedReference): string => {
   if (reference.kind === 'web') return reference.url
+  if (!reference.relativePath) return ''
   const pathParts = reference.relativePath.split('/').filter(Boolean)
   pathParts.pop()
   return pathParts.join('/')
@@ -44,11 +36,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
   options,
   activeIndex,
   hasMore,
-  breadcrumbs,
-  searching,
   onSelect,
-  onEnterDirectory,
-  onNavigate,
   onLoadMore
 }) => {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -83,27 +71,6 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
       className="absolute inset-x-0 bottom-full mb-2 overflow-hidden rounded-[14px] border border-[#E5E4E0] bg-white px-2 py-2 shadow-[0_16px_36px_rgba(15,15,15,0.1)]"
       data-testid={workbenchSelectors.mentionPanel}
     >
-      {!searching && breadcrumbs.length > 0 ? (
-        <div className="mb-1 flex min-w-0 items-center gap-1 overflow-x-auto px-2.5 pb-1 text-[11px] text-[#9B9A97]">
-          {breadcrumbs.map((crumb, index) => (
-            <React.Fragment key={`${crumb.parent.type}-${index}`}>
-              {index > 0 ? <span className="text-[#D0CFCB]">/</span> : null}
-              <button
-                type="button"
-                className={`shrink-0 rounded px-0.5 hover:bg-[#F4F4F2] hover:text-[#57554F] ${
-                  index === breadcrumbs.length - 1 ? 'font-medium text-[#787774]' : ''
-                }`}
-                onMouseDown={(event) => {
-                  event.preventDefault()
-                  onNavigate(crumb.parent)
-                }}
-              >
-                {crumb.label}
-              </button>
-            </React.Fragment>
-          ))}
-        </div>
-      ) : null}
       <div
         ref={scrollRef}
         className="max-h-[180px] overflow-y-auto pr-1"
@@ -130,59 +97,37 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                     const active = activeIndex === optionIndex
                     const parentPath = getReferenceParentDisplayPath(reference)
                     const visualSpec = getReferenceVisualSpec(reference)
-                    const isDirectory = reference.kind === 'directory'
                     return (
-                      <div
+                      <button
                         key={getScopeKey(reference)}
-                        className={`flex h-8 w-full items-center gap-0.5 rounded-[8px] px-1.5 transition-colors ${
+                        type="button"
+                        className={`flex h-8 w-full items-center gap-[2px] rounded-[8px] px-2.5 text-left transition-colors ${
                           active ? 'bg-[#F1F1F0]' : 'hover:bg-[#F7F7F5]'
                         }`}
                         data-reference-kind={reference.kind}
                         data-mention-active={active ? 'true' : undefined}
+                        onMouseDown={(event) => {
+                          event.preventDefault()
+                          onSelect(reference)
+                        }}
                       >
-                        <button
-                          type="button"
-                          className="flex min-w-0 flex-1 items-center gap-[2px] rounded-[6px] px-1 text-left"
-                          onMouseDown={(event) => {
-                            event.preventDefault()
-                            if (isDirectory && !searching) {
-                              onEnterDirectory(reference)
-                              return
-                            }
-                            onSelect(reference)
-                          }}
-                        >
-                          <ReferenceIcon reference={reference} size="sm" />
-                          <span className="flex min-w-0 flex-1 items-center gap-2">
-                            <span
-                              className={`truncate text-[13px] font-normal leading-5 ${visualSpec.labelClassName}`}
-                            >
-                              {reference.name}
-                            </span>
-                            {parentPath ? (
-                              <span className="truncate text-[11px] font-normal leading-4 text-[#B1B0AD]">
-                                {parentPath}
-                              </span>
-                            ) : null}
-                          </span>
-                          <span className="shrink-0 text-[10px] text-[#B1B0AD]">
-                            {getKbAvailabilityLabel(reference.kbAvailability)}
-                          </span>
-                        </button>
-                        {isDirectory && !searching ? (
-                          <button
-                            type="button"
-                            className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-[#787774] hover:bg-[#EBEBEA] hover:text-[#37352F]"
-                            onMouseDown={(event) => {
-                              event.preventDefault()
-                              event.stopPropagation()
-                              onSelect(reference)
-                            }}
+                        <ReferenceIcon reference={reference} size="sm" />
+                        <span className="flex min-w-0 flex-1 items-center gap-2">
+                          <span
+                            className={`truncate text-[13px] font-normal leading-5 ${visualSpec.labelClassName}`}
                           >
-                            引用
-                          </button>
-                        ) : null}
-                      </div>
+                            {reference.name}
+                          </span>
+                          {parentPath ? (
+                            <span className="truncate text-[11px] font-normal leading-4 text-[#B1B0AD]">
+                              {parentPath}
+                            </span>
+                          ) : null}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-[#B1B0AD]">
+                          {getKbAvailabilityLabel(reference.kbAvailability)}
+                        </span>
+                      </button>
                     )
                   })}
                 </div>
@@ -201,4 +146,3 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
 }
 
 export default ReferenceMentionPanel
-export type { BreadcrumbItem }

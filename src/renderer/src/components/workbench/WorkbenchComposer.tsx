@@ -12,7 +12,6 @@ import type {
   LLMConfig,
   LlmRemoteModel,
   ReferenceKind,
-  ReferenceListParent,
   SelectedReference,
   WorkbenchModelSelection
 } from '../../../../shared/types'
@@ -132,10 +131,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const attachmentPreviewUrlsRef = useRef<Record<string, string>>({})
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [mentionSessionId, setMentionSessionId] = useState<number | null>(null)
-  const [mentionParent, setMentionParent] = useState<ReferenceListParent>({ type: 'roots' })
-  const [mentionBreadcrumbs, setMentionBreadcrumbs] = useState<
-    { label: string; parent: ReferenceListParent }[]
-  >([{ label: '资料', parent: { type: 'roots' } }])
   const [mentionOptions, setMentionOptions] = useState<SelectedReference[]>([])
   const [mentionLoading, setMentionLoading] = useState(false)
   const [mentionLoadingMore, setMentionLoadingMore] = useState(false)
@@ -157,8 +152,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     mentionQueryRef.current = null
     setMentionQuery(null)
     setMentionSessionId(null)
-    setMentionParent({ type: 'roots' })
-    setMentionBreadcrumbs([{ label: '资料', parent: { type: 'roots' } }])
     setMentionOptions([])
     setMentionHasMore(false)
     mentionHasMoreRef.current = false
@@ -180,12 +173,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   }, [])
 
   const fetchMentionPage = useCallback(
-    async (input: {
-      parent: ReferenceListParent
-      query: string
-      offset: number
-      append: boolean
-    }): Promise<void> => {
+    async (input: { query: string; offset: number; append: boolean }): Promise<void> => {
       const requestSeq = ++mentionRequestSeqRef.current
       if (input.append) {
         setMentionLoadingMore(true)
@@ -197,7 +185,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         const referenceKinds: ReferenceKind[] = COMPOSER_REFERENCE_KINDS
         const response = await window.api.referenceItemList({
           referenceKinds,
-          parent: input.query ? undefined : input.parent,
           query: input.query || undefined,
           offset: input.offset,
           limit: REFERENCE_ITEM_PAGE_SIZE
@@ -384,8 +371,6 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     setMentionQuery(context.query)
     if (isNewMentionSession) {
       mentionSessionSequenceRef.current += 1
-      setMentionParent({ type: 'roots' })
-      setMentionBreadcrumbs([{ label: '资料', parent: { type: 'roots' } }])
       setMentionOptions([])
       setMentionSessionId(mentionSessionSequenceRef.current)
     }
@@ -483,57 +468,21 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   useEffect(() => {
     if (mentionSessionId === null || mentionQuery === null) return
     void fetchMentionPage({
-      parent: mentionParent,
       query: mentionQuery,
       offset: 0,
       append: false
     })
-  }, [fetchMentionPage, mentionParent, mentionQuery, mentionSessionId])
-
-  const navigateMentionParent = useCallback(
-    (parent: ReferenceListParent, breadcrumbs: { label: string; parent: ReferenceListParent }[]) => {
-      setMentionParent(parent)
-      setMentionBreadcrumbs(breadcrumbs)
-      setMentionOptions([])
-      setMentionActiveIndex(0)
-    },
-    []
-  )
-
-  const enterMentionDirectory = useCallback(
-    (reference: SelectedReference & { kind: 'directory' }) => {
-      navigateMentionParent(
-        {
-          type: 'workspace',
-          workspaceId: reference.workspaceId,
-          relativePath: reference.relativePath
-        },
-        [
-          ...mentionBreadcrumbs,
-          {
-            label: reference.name,
-            parent: {
-              type: 'workspace',
-              workspaceId: reference.workspaceId,
-              relativePath: reference.relativePath
-            }
-          }
-        ]
-      )
-    },
-    [mentionBreadcrumbs, navigateMentionParent]
-  )
+  }, [fetchMentionPage, mentionQuery, mentionSessionId])
 
   const loadMoreMentionOptions = useCallback(() => {
     if (mentionQuery === null) return
     if (!mentionHasMoreRef.current || mentionLoadingMoreRef.current || mentionLoading) return
     void fetchMentionPage({
-      parent: mentionParent,
       query: mentionQuery,
       offset: mentionNextOffsetRef.current,
       append: true
     })
-  }, [fetchMentionPage, mentionLoading, mentionParent, mentionQuery])
+  }, [fetchMentionPage, mentionLoading, mentionQuery])
 
   useEffect(() => {
     const handleSelectionChange = (): void => {
@@ -748,12 +697,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       if (event.key === 'Enter') {
         event.preventDefault()
         const nextOption = mentionOptions[mentionActiveIndex]
-        if (!nextOption) return
-        if (nextOption.kind === 'directory' && !(mentionQuery || '').trim()) {
-          enterMentionDirectory(nextOption)
-          return
-        }
-        insertMentionScope(nextOption)
+        if (nextOption) insertMentionScope(nextOption)
         return
       }
       if (event.key === 'Escape') {
@@ -896,24 +840,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
           options={mentionOptions}
           activeIndex={mentionActiveIndex}
           hasMore={mentionHasMore}
-          breadcrumbs={mentionBreadcrumbs}
-          searching={Boolean(mentionQuery.trim())}
           onSelect={insertMentionScope}
-          onEnterDirectory={enterMentionDirectory}
-          onNavigate={(parent) => {
-            const index = mentionBreadcrumbs.findIndex(
-              (crumb) =>
-                crumb.parent.type === parent.type &&
-                (parent.type !== 'workspace' ||
-                  (crumb.parent.type === 'workspace' &&
-                    crumb.parent.workspaceId === parent.workspaceId &&
-                    crumb.parent.relativePath === parent.relativePath))
-            )
-            navigateMentionParent(
-              parent,
-              index >= 0 ? mentionBreadcrumbs.slice(0, index + 1) : mentionBreadcrumbs
-            )
-          }}
           onLoadMore={loadMoreMentionOptions}
         />
       ) : null}

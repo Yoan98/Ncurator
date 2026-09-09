@@ -121,21 +121,6 @@ describe('workbench conversation e2e', () => {
             .first()
             .isVisible()
             .catch(() => false)
-          await mentionPanel
-            .getByRole('button')
-            .filter({ hasText: 'Workbench Web Fixture' })
-            .click()
-          const afterWeb = await getWorkbenchReferenceTokenTexts(page)
-
-          await appendWorkbenchInputText(page, '@')
-          await waitForWorkbenchMentionPanelText(page)
-          await mentionPanel
-            .locator('[data-reference-kind="directory"]')
-            .getByRole('button')
-            .filter({ hasText: setup.workspaceName })
-            .first()
-            .click()
-          await waitForWorkbenchMentionPanelText(page)
           const docxIconPresent =
             (await mentionPanel.locator('[data-reference-icon-kind="docx"]').count()) > 0
           const pdfIconPresent =
@@ -144,13 +129,13 @@ describe('workbench conversation e2e', () => {
             (await mentionPanel.locator('[data-reference-icon-kind="markdown"]').count()) > 0
           const genericFileIconPresent =
             (await mentionPanel
-              .locator('[data-reference-kind="file"]')
+              .getByRole('button')
               .filter({ hasText: 'human-input.txt' })
               .locator('[data-reference-icon-kind="file"]')
               .count()) > 0
           const markdownUsesGenericFileIcon =
             (await mentionPanel
-              .locator('[data-reference-kind="file"]')
+              .getByRole('button')
               .filter({ hasText: 'workbench-preview.md' })
               .locator('[data-reference-icon-kind="file"]')
               .count()) > 0
@@ -159,42 +144,44 @@ describe('workbench conversation e2e', () => {
             .isVisible()
             .catch(() => false)
           const textFileIndexedVisible = await mentionPanel
-            .locator('[data-reference-kind="file"]')
+            .getByRole('button')
             .filter({ hasText: 'human-input.txt' })
             .filter({ hasText: '已索引' })
             .first()
             .isVisible()
             .catch(() => false)
           const markdownFileIndexedVisible = await mentionPanel
-            .locator('[data-reference-kind="file"]')
+            .getByRole('button')
             .filter({ hasText: 'workbench-preview.md' })
             .filter({ hasText: '已索引' })
             .first()
             .isVisible()
             .catch(() => false)
-          // 点进「工作」子目录查看索引后新增文件
-          await mentionPanel
-            .locator('[data-reference-kind="directory"]')
-            .filter({ hasText: '工作' })
-            .getByRole('button')
-            .filter({ hasText: '工作' })
-            .first()
-            .click()
-          await waitForWorkbenchMentionPanelText(page)
           const addedAfterIndexVisible = await mentionPanel
-            .locator('[data-reference-kind="file"]')
+            .getByRole('button')
             .filter({ hasText: 'added-after-index.md' })
             .first()
             .isVisible()
             .catch(() => false)
           const addedAfterIndexUnindexedVisible = await mentionPanel
-            .locator('[data-reference-kind="file"]')
+            .getByRole('button')
             .filter({ hasText: 'added-after-index.md' })
             .filter({ hasText: '未索引' })
             .first()
             .isVisible()
             .catch(() => false)
-          const localTextFileStillUnindexed = false
+          const localTextFileStillUnindexed = await mentionPanel
+            .getByRole('button')
+            .filter({ hasText: 'human-input.txt' })
+            .filter({ hasText: '未索引' })
+            .first()
+            .isVisible()
+            .catch(() => false)
+          await mentionPanel
+            .getByRole('button')
+            .filter({ hasText: 'Workbench Web Fixture' })
+            .click()
+          const afterWeb = await getWorkbenchReferenceTokenTexts(page)
           const tokensBeforeSubmit = await getWorkbenchReferenceTokenTexts(page)
           const composerReferenceIconKinds = await getWorkbenchLocator(
             page,
