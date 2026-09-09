@@ -167,7 +167,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 }
 ```
 
-**`assistant`（交付）** — 仅 `finalizeDelivery`（或内容安全 fallback）写入；`toolCalls` 为空数组；正常交付含 `linkAccess` sidecar（**仅本地文件**可达性；不改写 `content`；`http(s)` 不探测、渲染侧默认可点）。
+**`assistant`（交付）** — 仅 `finalizeDelivery`（或内容安全 fallback）写入；`toolCalls` 为空数组；正常交付含 `linkAccess` sidecar（不改写 `content`）。
 
 ```json
 {
@@ -839,7 +839,7 @@ Main **不**强制计划全部 `done` 才允许交付。
 applyDeliverySideEffects
   → docx/ppt 落盘、汇总 ai_file_change
   → finalizing_started（annotation，清空 plan 投影）
-  → 扫描交付 markdown 中的本地文件链接、去重检查可达性，写入 `linkAccess` sidecar（不改写正文；`http(s)` 不进 sidecar）
+  → 扫描交付 markdown 链接、去重检查访问，写入 `linkAccess` sidecar（不改写正文）
   → append 交付 assistant（toolCalls: []，含 linkAccess）
   → ai_run.status = completed
 ```
