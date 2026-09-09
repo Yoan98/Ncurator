@@ -4,6 +4,7 @@
 
 | caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                         | 简短依据                                                                                               |
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| human-skill-eviction-relearn-loop-live              | 完成 |            95 | qwen3.8-flash                    | 2026-09-09 10:54 CST | tests/logs/ai/human/live/human-skill-eviction-relearn-loop-live/20260909-105140-775             | 三断言通过。Run1 按序学会 docx/pdf/ppt/excel-read（22 tools）无淘汰；Run2 学 write 时 FIFO 淘汰 docx-read，写备忘+PPT 附录成功；同轮再需阅读时自动再学 docx-read 并挤掉 pdf-read，闭环在 Run2 内完成。缓存 76.8%。 |
 | human-risk-report-draft-live                        | 完成 |            97 | qwen3.8-flash                    | 2026-08-31 18:42 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260831-183231-689                        | 读取模板/上周周报/工作文档后 cp 模板建新周报并用 docx 写入，applyId 落盘，原文件未改（Oracle 已按结果口径放宽）。 |
 | human-context-compaction-natural-trigger-live       | 完成 |            91 | deepseek-v4-flash               | 2026-09-08 18:19 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260908-181531-336       | 四断言通过。Run1 短问未压；Run2 半截（历史六栏+三栏 Turn Context）后交本周周报；Run3 把旧摘要当 `[user]` 再压，改标题「九月第一周」、插入「与上周风险对照」、核法务。无 previous-summary。跨 run 缓存 reuse 0.502（门槛 0.5）。 |
 | human-excel-read-weekly-review-live                | 完成 |            91 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-134623-663                   | Oracle 通过；四表结构/公式/退货异常/口径不对等讲清；6×excel_read。过程仍 6×terminal 验算略多。缓存 83.6%。 |
@@ -957,11 +958,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-skill-eviction-relearn-loop-live`
 
 - 测试类型：`backend / live`
-- What：同一伙伴在生产 `HUMAN_MAX_ACTIVE_TOOLS=25` 下先学满多项阅读技能，再学写入技能触发 FIFO 淘汰；淘汰后续做仍能完成，随后在再次需要被淘汰 skill 时自动再学并完成核对。
+- What：同一伙伴在生产 `HUMAN_MAX_ACTIVE_TOOLS=25` 下先学满多项阅读技能，再学写入技能触发 FIFO 淘汰；淘汰后续做仍能完成，随后在再次需要被淘汰 skill 时自动再学（可在同一 Run 内闭环，也可跨 Run3）。
 - Why：技能遗忘若只靠 unit/mock，无法证明真实模型在自然语言任务下会触发淘汰、淘汰后不卡死、需要时再学；这是学习预算闭环的生产风险。
-- How：共用伙伴，测值与生产一致（无 maxActiveTools override）。fixture 含 `学习笔记/深度学习.docx`、`学习笔记/深度学习.pdf`、`品牌策略提案.pptx`、`经营周报.xlsx`。Run 1 按顺序只读四类资料并口头汇总（期望学会含 `docx-read` 在内的多项阅读技能，不淘汰）。Run 2 新建 Word 备忘并给 PPT 加附录页，挤爆预算并淘汰最早的 `docx-read`；若未出现该淘汰则不启动 Run 3。Run 3 再读课件核对备忘中的过拟合表述，迫使再学 `docx-read`。
-- Oracle：Run 1 `completed`，`learnedSkillIds` 含 `docx-read` 且至少另一项 external，无淘汰证据，并有 docx 读工具证据。Run 2 `completed`，出现淘汰证据，最新 skill 快照不再含 `docx-read`，且 Word/PPT 写入或备忘文件落地。Run 3 `completed`，再次学习 `docx-read` 并出现 docx 读工具证据。人工依据 raw logs 回写顶部评分。
-- Not：不降低测试上限；不固定 learn 次数/文案；不钉死除 `docx-read` 外被挤掉的其他 skill；不测 UI Activity、compaction、resume；最终自然语言不作主证据。
+- How：共用伙伴，测值与生产一致（无 maxActiveTools override）。fixture 含 `学习笔记/深度学习.docx`、`学习笔记/深度学习.pdf`、`品牌策略提案.pptx`、`经营周报.xlsx`。Run 1 按顺序只读四类资料并口头汇总（期望学会含 `docx-read` 在内的多项阅读技能，不淘汰）。Run 2 新建 Word 备忘并给 PPT 加附录页，挤爆预算并淘汰最早的 `docx-read`；若 Run2 同轮已再学回 `docx-read`，则闭环完成且不启 Run3；否则 Run 3 再读课件核对备忘，迫使再学。
+- Oracle：Run 1 `completed`，`learnedSkillIds` 含 `docx-read` 且至少另一项 external，无淘汰证据，并有 docx 读工具证据。Run 2 `completed`，learning summary 出现淘汰 `docx-read`，且 Word/PPT 写入或备忘文件落地。再学闭环二选一成立：Run2 同轮再学 `docx-read` 并有读工具证据，或 Run3 `completed` 再学并有读工具证据。人工依据 raw logs 回写顶部评分。
+- Not：不降低测试上限；不固定 learn 次数/文案；不要求 Run2 结束时 skill 快照仍不含 `docx-read`（同轮再学是合法且更优路径）；不钉死除 `docx-read` 外被挤掉的其他 skill；不测 UI Activity、compaction、resume；最终自然语言不作主证据。
 
 ##### `human-ppt-edit-management-review-live`
 

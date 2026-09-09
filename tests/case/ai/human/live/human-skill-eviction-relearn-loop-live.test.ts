@@ -63,13 +63,26 @@ const collectLearningEvictionEvidence = (events: readonly AiRunEvent[]) => {
     (event) => event.toolName === 'learn_skill'
   )
   const resultText = JSON.stringify(learnSkillResults)
+  const docxReadEvictionIndex = learningSteps.findIndex((event) =>
+    /已淘汰最早学习的 skill=\[[^\]]*docx-read/.test(event.summary)
+  )
+  const docxReadRelearnAfterEviction =
+    docxReadEvictionIndex >= 0 &&
+    learningSteps.slice(docxReadEvictionIndex + 1).some(
+      (event) =>
+        event.skillId === 'docx-read' &&
+        (event.summary.includes('learning 已加载 docx-read') ||
+          event.publicNarrative.includes('已学习 docx-read'))
+    )
   return {
     learningSteps,
     evictionSummaries,
     hasEviction:
       evictionSummaries.length > 0 ||
       resultText.includes('evicted=') ||
-      resultText.includes('已淘汰最早学习的 skill=')
+      resultText.includes('已淘汰最早学习的 skill='),
+    evictedDocxRead: docxReadEvictionIndex >= 0,
+    relearnedDocxReadAfterEviction: docxReadRelearnAfterEviction
   }
 }
 
@@ -134,10 +147,11 @@ describe('ai human live backend', () => {
             await runtime.storageService.chatMessageLog.list(PARTNER_ID)
           )
           const run2Eviction = collectLearningEvictionEvidence(run2Events)
-          const docxReadEvicted =
-            skillsAfterRun1.includes('docx-read') && !skillsAfterRun2.includes('docx-read')
+          // 若 Run2 已在同轮淘汰后又自动再学 docx-read，闭环已在 Run2 内完成，不必再开 Run3。
+          const needRun3 =
+            run2Eviction.evictedDocxRead && !run2Eviction.relearnedDocxReadAfterEviction
 
-          if (!run2Eviction.hasEviction || !docxReadEvicted) {
+          if (!run2Eviction.hasEviction || !run2Eviction.evictedDocxRead) {
             return {
               run1Output,
               run2Output,
@@ -152,7 +166,28 @@ describe('ai human live backend', () => {
                 .access(path.join(runtime.workspaceRoot, MEMO_NAME))
                 .then(() => true)
                 .catch(() => false),
-              skippedRun3: true
+              skippedRun3: true,
+              closedLoopInRun2: false
+            }
+          }
+
+          if (!needRun3) {
+            return {
+              run1Output,
+              run2Output,
+              run3Output: undefined,
+              skillsAfterRun1,
+              skillsAfterRun2,
+              skillsAfterRun3: skillsAfterRun2,
+              run1Events,
+              run2Events,
+              run3Events: [] as AiRunEvent[],
+              memoExists: await fs
+                .access(path.join(runtime.workspaceRoot, MEMO_NAME))
+                .then(() => true)
+                .catch(() => false),
+              skippedRun3: true,
+              closedLoopInRun2: true
             }
           }
 
@@ -180,7 +215,8 @@ describe('ai human live backend', () => {
               .access(path.join(runtime.workspaceRoot, MEMO_NAME))
               .then(() => true)
               .catch(() => false),
-            skippedRun3: false
+            skippedRun3: false,
+            closedLoopInRun2: false
           }
         },
         assert: async (result, runtime) => {
@@ -227,26 +263,42 @@ describe('ai human live backend', () => {
 
           runtime.assertThat(
             result.run2Output?.status === 'completed' &&
-              run2Eviction.hasEviction &&
-              result.skillsAfterRun1.includes('docx-read') &&
-              !result.skillsAfterRun2.includes('docx-read') &&
+              run2Eviction.evictedDocxRead &&
               (run2Tools.includes('docx_content_edit') ||
                 run2Tools.includes('ppt_edit') ||
                 result.memoExists),
             {
               name: 'run2-evicts-oldest-skill-and-continues',
               message:
-                'Run2 学新技能时应 FIFO 淘汰最早的 docx-read，并在无该 skill 时仍能完成写入续做；未淘汰则不进入 Run3。',
+                'Run2 学新技能时应 FIFO 淘汰最早的 docx-read，并在淘汰后仍能完成写入续做。',
               data: {
                 status: result.run2Output?.status,
                 skillsAfterRun2: result.skillsAfterRun2,
                 run2Tools,
                 run2Eviction,
                 memoExists: result.memoExists,
-                skippedRun3: result.skippedRun3
+                skippedRun3: result.skippedRun3,
+                closedLoopInRun2: result.closedLoopInRun2
               }
             }
           )
+
+          if (result.closedLoopInRun2) {
+            runtime.assertThat(
+              run2Eviction.relearnedDocxReadAfterEviction && hasDocxReadEvidence(run2Tools),
+              {
+                name: 'run2-relearns-evicted-skill-in-same-run',
+                message:
+                  '若 Run2 同轮再次需要 Word 阅读，应在淘汰后自动再学 docx-read 并产生读工具证据。',
+                data: {
+                  skillsAfterRun2: result.skillsAfterRun2,
+                  run2Tools,
+                  run2Eviction
+                }
+              }
+            )
+            return
+          }
 
           if (result.skippedRun3) {
             return
