@@ -41,7 +41,7 @@ describe('ai unit read_image multimodal projection', () => {
     const sourcePath = path.join(workspace, 'source.png')
     await fs.writeFile(sourcePath, ONE_PIXEL_PNG)
     const [first] = await prepareImagesForMainModel({
-      workspaceRootPath: workspace,
+      partnerId: 'partner-read-image',
       paths: [sourcePath]
     })
 
@@ -50,14 +50,14 @@ describe('ai unit read_image multimodal projection', () => {
     canvas.getContext('2d').fillRect(0, 0, 2, 1)
     await fs.writeFile(sourcePath, await canvas.encode('png'))
     const [changed] = await prepareImagesForMainModel({
-      workspaceRootPath: workspace,
+      partnerId: 'partner-read-image',
       paths: [sourcePath]
     })
 
     expect(changed?.path).not.toBe(first?.path)
     await fs.writeFile(changed!.path, 'broken cache', 'utf8')
     const [repaired] = await prepareImagesForMainModel({
-      workspaceRootPath: workspace,
+      partnerId: 'partner-read-image',
       paths: [sourcePath]
     })
     expect(repaired).toMatchObject({ path: changed?.path, width: 2, height: 1 })
@@ -79,7 +79,7 @@ describe('ai unit read_image multimodal projection', () => {
     const url = `http://127.0.0.1:${String(address.port)}/image.png`
     try {
       const [image] = await prepareImagesForMainModel({
-        workspaceRootPath: workspace,
+        partnerId: 'partner-read-image',
         paths: [url]
       })
       expect(image).toEqual({
@@ -108,7 +108,7 @@ describe('ai unit read_image multimodal projection', () => {
     ])
 
     const [small, large] = await prepareImagesForMainModel({
-      workspaceRootPath: workspace,
+      partnerId: 'partner-read-image',
       paths: [smallPath, largePath]
     })
 

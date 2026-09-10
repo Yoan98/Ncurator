@@ -7,13 +7,34 @@
  * into the markdown body. http(s) links are not probed and stay openable by default.
  */
 
-import type { MarkdownLinkAccessEntry } from './types'
+import type { MarkdownLinkAccessEntry, MarkdownLinkResourceType } from './types'
+import { parseNcuratorRefHref } from './ncuratorRef'
 
 export type {
   MarkdownLinkAccessEntry,
   MarkdownLinkAccessStatus,
   MarkdownLinkResourceType
 } from './types'
+
+export type OpenableMarkdownReference = {
+  resourceType: MarkdownLinkResourceType
+  label: string
+  path: string
+}
+
+export type ResolvedMarkdownLink =
+  | {
+      mode: 'unavailable'
+      reason: 'access' | 'unknown' | 'legacy_invalid'
+    }
+  | {
+      mode: 'openable'
+      reference: OpenableMarkdownReference
+    }
+  | {
+      mode: 'external'
+      href: string
+    }
 
 export type ClassifiedMarkdownHref =
   | { type: 'file'; href: string; path: string }
@@ -155,6 +176,73 @@ export const findMarkdownLinkAccess = (
   if (!linkAccess || linkAccess.length === 0) return undefined
   const key = markdownLinkAccessKey(href)
   return linkAccess.find((entry) => markdownLinkAccessKey(entry.href) === key)
+}
+
+/**
+ * Resolve a rendered href for UI.
+ * - Legacy `ncurator://ref` uses embedded accessStatus.
+ * - http(s) links are always openable (no reachability sidecar).
+ * - Local files: when `linkAccess` is defined (delivery finished), match sidecar;
+ *   missing / unavailable → unavailable. When undefined (streaming), stay openable.
+ */
+export const resolveMarkdownLinkForRender = (input: {
+  href?: string
+  linkAccess?: MarkdownLinkAccessEntry[]
+  label: string
+}): ResolvedMarkdownLink => {
+  const href = input.href || ''
+  const legacy = parseNcuratorRefHref(href)
+  if (legacy.type === 'invalid') {
+    return { mode: 'unavailable', reason: 'legacy_invalid' }
+  }
+  if (legacy.type === 'reference') {
+    if (legacy.kind === 'reference' && legacy.accessStatus === 'unavailable') {
+      return { mode: 'unavailable', reason: 'access' }
+    }
+    return {
+      mode: 'openable',
+      reference: {
+        resourceType: legacy.resourceType,
+        label: legacy.label || input.label,
+        path: legacy.path
+      }
+    }
+  }
+
+  const classified = classifyMarkdownHref(href)
+  if (classified.type === 'unknown') {
+    if (input.linkAccess !== undefined) {
+      return { mode: 'unavailable', reason: 'unknown' }
+    }
+    return href ? { mode: 'external', href } : { mode: 'unavailable', reason: 'unknown' }
+  }
+
+  if (classified.type === 'web') {
+    return {
+      mode: 'openable',
+      reference: {
+        resourceType: 'web',
+        label: input.label,
+        path: classified.url
+      }
+    }
+  }
+
+  if (input.linkAccess !== undefined) {
+    const access = findMarkdownLinkAccess(input.linkAccess, href)
+    if (!access || access.accessStatus === 'unavailable') {
+      return { mode: 'unavailable', reason: 'access' }
+    }
+  }
+
+  return {
+    mode: 'openable',
+    reference: {
+      resourceType: 'file',
+      label: input.label,
+      path: classified.path
+    }
+  }
 }
 
 /**

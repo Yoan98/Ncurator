@@ -2,15 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { resolveReferencePathsAccess } from '../../../../src/main/services/ai/human/shared/evidenceReferenceAccess'
+import { resolveDeliveryLinkAccess } from '../../../../src/main/services/ai/human/shared/referenceAccessMarkdown'
 import {
   classifyMarkdownHref,
   extractMarkdownLinkHrefs,
   findMarkdownLinkAccess,
-  markdownLinkAccessKey
+  markdownLinkAccessKey,
+  resolveMarkdownLinkForRender
 } from '../../../../src/shared/markdownLink'
-import { resolveReferencePathsAccess } from '../../../../src/main/services/ai/human/shared/evidenceReferenceAccess'
-import { resolveDeliveryLinkAccess } from '../../../../src/main/services/ai/human/shared/referenceAccessMarkdown'
-import { resolveMarkdownLinkForRender } from '../../../../src/renderer/src/components/markdownReference'
 
 describe('ai unit markdown link access', () => {
   it('classifies absolute file paths and https urls', () => {

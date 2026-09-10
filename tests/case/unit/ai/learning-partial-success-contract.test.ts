@@ -4,59 +4,56 @@ import { createLearningNode } from '../../../../src/main/services/ai/human/node/
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 
-const createStubAiRunContext = (): AiRunContext => ({
-  runId: 'run-learning-unit',
-  referenceScope: {
-    workspace: {
-      workspaceId: 'workspace-1',
-      workspaceName: 'workspace',
-      rootPath: '/tmp/workspace-root'
+const createStubAiRunContext = (): AiRunContext =>
+  ({
+    runId: 'run-learning-unit',
+    partnerId: 'partner-learning-unit',
+    partnerName: '测试伙伴',
+    workspaceRoots: ['/tmp/workspace-root'],
+    runStartedAt: 0,
+    platform: 'macos',
+    preference: 'default',
+    executionPermission: 'review',
+    referenceScope: {
+      selectedReferences: [],
+      attachments: []
     },
-    selectedReferences: [],
-    hasExplicitSelectedReferences: false,
-    hasDirectDocumentNarrowing: false,
-    defaultKnowledgeScope: 'current_workspace'
-  },
-  workspace: {
-    workspaceId: 'workspace-1',
-    workspaceName: 'workspace',
-    rootPath: '/tmp/workspace-root'
-  },
-  checkCancelled: () => {},
-  chatStructured: async () => {
-    throw new Error('chatStructured should not be called in learning unit tests')
-  },
-  chatText: async () => {
-    throw new Error('chatText should not be called in learning unit tests')
-  },
-  sendEvent: () => {},
-  requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
-  loadMessageLog: async () => [],
-  appendMessageLog: async () => undefined,
-  trackDocxOpen: () => {},
-  trackDocxChanges: () => {},
-  resolveDocxOpenTarget: async () => {
-    throw new Error('resolveDocxOpenTarget should not be called in learning unit tests')
-  },
-  beginDocxApplyRun: () => {},
-  applyDocxRunEdits: async () => [],
-  discardDocxApplyRun: () => {},
-  documentsStore: undefined as never,
-  embeddingService: undefined as never
-})
+    checkCancelled: () => {},
+    chatStructured: async () => {
+      throw new Error('chatStructured should not be called in learning unit tests')
+    },
+    chatText: async () => {
+      throw new Error('chatText should not be called in learning unit tests')
+    },
+    sendEvent: () => {},
+    requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
+    loadMessageLog: async () => [],
+    appendMessageLog: async () => undefined,
+    trackDocxOpen: () => {},
+    trackDocxChanges: () => {},
+    resolveDocxOpenTarget: async () => {
+      throw new Error('resolveDocxOpenTarget should not be called in learning unit tests')
+    },
+    beginDocxApplyRun: () => {},
+    applyDocxRunEdits: async () => [],
+    discardDocxApplyRun: () => {},
+    documentsStore: undefined as never,
+    embeddingService: undefined as never
+  }) as AiRunContext
 
 const buildLearningDecision = (
   skillIds: string[]
 ): {
   thought: { text: string }
-  nextAction: { action: 'learning'; wantLearnSkillIds: string[] }
+  nextAction: { action: 'learning'; wantLearnSkillIds: string[]; toolCallId: string }
 } => ({
   thought: {
     text: '测试 learning partial success'
   },
   nextAction: {
     action: 'learning' as const,
-    wantLearnSkillIds: skillIds
+    wantLearnSkillIds: skillIds,
+    toolCallId: 'learn-call-1'
   }
 })
 
