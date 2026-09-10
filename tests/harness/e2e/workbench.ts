@@ -48,6 +48,11 @@ export const WORKBENCH_RESULT_E2E_TIMEOUT_MS = WORKBENCH_LONG_E2E_TIMEOUT_MS + 1
 export const WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS = 900_000
 export const WORKBENCH_MODEL_LIST_TIMEOUT_MS = 60_000
 export const WORKBENCH_FIXTURE_ROOT = E2E_WORKSPACE_FIXTURE_ROOT
+/** Matches ChatPage create/edit partner Input maxLength. */
+export const WORKBENCH_PARTNER_NAME_MAX_LENGTH = 40
+
+export const clampWorkbenchPartnerName = (name: string): string =>
+  name.trim().slice(0, WORKBENCH_PARTNER_NAME_MAX_LENGTH)
 
 export type WorkbenchLiveModelEnv = {
   baseUrl: string
@@ -944,8 +949,9 @@ export const prepareWorkbenchWorkspaceThroughUi = async (
 }
 
 export const waitForVisiblePartnerRow = async (page: Page, name: string): Promise<void> => {
+  const partnerName = clampWorkbenchPartnerName(name)
   await getWorkbenchPrefixLocator(page, workbenchSelectors.partnerItemPrefix)
-    .filter({ hasText: name })
+    .filter({ hasText: partnerName })
     .first()
     .waitFor({ state: 'visible' })
 }
@@ -953,13 +959,18 @@ export const waitForVisiblePartnerRow = async (page: Page, name: string): Promis
 export const createPartnerThroughWorkbenchUi = async (
   page: Page,
   name = '测试伙伴'
-): Promise<void> => {
+): Promise<string> => {
+  const partnerName = clampWorkbenchPartnerName(name)
+  if (!partnerName) {
+    throw new Error('partner name is required')
+  }
   await getWorkbenchLocator(page, workbenchSelectors.newPartnerButton).click()
   const nameInput = getWorkbenchLocator(page, workbenchSelectors.createPartnerNameInput)
   await nameInput.waitFor({ state: 'visible' })
-  await nameInput.fill(name)
+  await nameInput.fill(partnerName)
   await nameInput.press('Enter')
-  await waitForVisiblePartnerRow(page, name)
+  await waitForVisiblePartnerRow(page, partnerName)
+  return partnerName
 }
 
 export const setupWorkbenchWithTempWorkspace = async (
@@ -975,7 +986,13 @@ export const setupWorkbenchWithTempWorkspace = async (
 ): Promise<WorkbenchSetupResult> => {
   const env = loadWorkbenchLiveModelEnv()
   const workspace = await createTemporaryWorkbenchWorkspace(input.caseId)
-  const workspaceName = input.workspaceName || `Workbench ${input.caseId}`
+  // Default name doubles as partner title; keep it within the partner Input maxLength.
+  const workspaceName = clampWorkbenchPartnerName(
+    input.workspaceName || `Workbench ${input.caseId}`
+  )
+  if (!workspaceName) {
+    throw new Error('workspace/partner name is required')
+  }
   if (input.configureModel !== false) {
     await configureLiveModelThroughSettingsUi(page, env)
   }
@@ -1007,7 +1024,12 @@ export const setupWorkbenchWorkspaceOnly = async (
   }
 ): Promise<WorkbenchWorkspaceOnlySetupResult> => {
   const workspace = await createTemporaryWorkbenchWorkspace(input.caseId)
-  const workspaceName = input.workspaceName || `Workbench ${input.caseId}`
+  const workspaceName = clampWorkbenchPartnerName(
+    input.workspaceName || `Workbench ${input.caseId}`
+  )
+  if (!workspaceName) {
+    throw new Error('workspace/partner name is required')
+  }
   await prepareWorkbenchWorkspaceThroughUi(page, {
     workspaceName,
     rootPath: workspace.rootPath,
