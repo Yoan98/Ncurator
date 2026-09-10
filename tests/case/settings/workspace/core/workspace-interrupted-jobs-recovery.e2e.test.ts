@@ -12,8 +12,7 @@ import {
   getSettingsLocator,
   navigateToSettingsSection,
   seedWebSources,
-  startLocalSettingsHttpServer,
-  workspaceCardLocator
+  startLocalSettingsHttpServer
 } from '../../../../harness/e2e/settings'
 
 const CASE_ID = 'workspace-interrupted-jobs-recovery'
@@ -104,7 +103,6 @@ describe('settings workspace recovery e2e', () => {
 
           ;({ page } = await runtime.restartApp())
           await navigateToSettingsSection(page, 'workspace')
-          await workspaceCardLocator(page, workspaceId).click()
           const fileProgressHidden = await getSettingsLocator(
             page,
             importSelectors.workspaceIndexJobProgress
@@ -122,7 +120,6 @@ describe('settings workspace recovery e2e', () => {
 
           await seedWebSources(page, workspaceId, [server.url('/interrupted')])
           await navigateToSettingsSection(page, 'workspace')
-          await workspaceCardLocator(page, workspaceId).click()
           await page.getByRole('tab', { name: /网页/u }).click()
           await page.getByRole('button', { name: '检查更新', exact: true }).click()
           await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
@@ -139,7 +136,6 @@ describe('settings workspace recovery e2e', () => {
 
           ;({ page } = await runtime.restartApp())
           await navigateToSettingsSection(page, 'workspace')
-          await workspaceCardLocator(page, workspaceId).click()
           await page.getByRole('tab', { name: /网页/u }).click()
           const webScanJob = readJob(runtime.userDataDir, webScanJobId)
           const webScanProgressHidden = await page
@@ -161,7 +157,6 @@ describe('settings workspace recovery e2e', () => {
 
           ;({ page } = await runtime.restartApp())
           await navigateToSettingsSection(page, 'workspace')
-          await workspaceCardLocator(page, workspaceId).click()
           await page.getByRole('tab', { name: /网页/u }).click()
           const webPrepareJob = readJob(runtime.userDataDir, webPrepareJobId)
           const webSources = await page.evaluate(async (id) => {

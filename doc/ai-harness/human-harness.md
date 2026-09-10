@@ -616,7 +616,7 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 
 不要旧对话时，主模型收到：`[System] + [Discard User] + [Current User]`。Discard User 不是 log 里的假 user 行，是投影时现合成的。
 
-召回正文这样拼：按 `seq` 扫整份伙伴 log，每条 `run_digest` 对应一段。窗口是 `(上一条 digest 的 seq, 本条 digest 的 seq]`，取窗口里**最后一条**带 `input` 的 `user`、**最后一条**交付 `assistant`（`toolCalls: []`）、本条 digest 的 `fileChangePaths`（没有改动就不写「改动文件」行）。没有 digest 的轮自己不成段；夹在两轮完成之间时，也不得用它的原话去配下一轮的交付。
+召回正文这样拼：按 `seq` 扫整份伙伴 log，每条 `run_digest` 对应一段。窗口是 `(上一条 digest 的 seq, 本条 digest 的 seq]`，取窗口里**最后一条**带 `input` 的 `user`、**最后一条**交付 `assistant`（`toolCalls: []`）、本条 digest 的 `fileChangePaths`（没有改动就不写「改动文件」行）。没有 digest 的轮自己不成段；夹在两轮完成之间时，也不得用它的原话去配下一轮的交付。失败轮前面已经正常交付过的轮仍各自成段，丢掉时要进召回。
 
 从新到旧往里加，整段 token ≤ 窗口 × **10%**（`CONTEXT_SCOPE_DISCARD_HISTORY_RATIO`）。只有最新那一段就超了，才只裁这一段的交付。冻进 `discard_checkpoint.conversationHistory`（不含外壳）。之后 `needsHistory=true` 只读这份，不再重扫 log。
 

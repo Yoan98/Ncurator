@@ -1,3 +1,6 @@
+import { mkdtemp, rm } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -24,13 +27,20 @@ describe('settings workspace e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          const rootPath = await mkdtemp(path.join(os.tmpdir(), 'settings-workspace-remove-'))
+          runtime.registerResource({
+            name: `settings-workspace:${rootPath}`,
+            phase: 'after-app-close',
+            dispose: async () => await rm(rootPath, { recursive: true, force: true })
+          })
 
           await runtime.step({
             name: 'seed-workspace',
             message: '创建一条待移除工作空间并进入工作空间页。',
             run: async () => {
               const created = await createFixtureWorkspace(page, {
-                name: '待移除工作区'
+                name: '待移除工作区',
+                rootPath
               })
               if (!created.success || !created.workspace) {
                 throw new Error(created.error || 'failed to create workspace for removal')
@@ -56,7 +66,7 @@ describe('settings workspace e2e', () => {
               page,
               importSelectors.workspaceEmptyState
             ).isVisible(),
-            detailPromptVisible: await page.getByText('选择一个工作空间').isVisible(),
+            emptyDescriptionVisible: await page.getByText('还没有文件地址').isVisible(),
             remainingCards: await getSettingsPrefixLocator(
               page,
               importSelectors.workspaceCardPrefix
@@ -64,17 +74,16 @@ describe('settings workspace e2e', () => {
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(result.listEmptyVisible && result.remainingCards === 0, {
-            name: 'removed-workspace-disappears-from-list',
-            message: '移除成功后，该工作空间应从列表中消失，对齐 SET-WORKSPACE-006-AC2。',
-            data: result
-          })
-
-          await runtime.assertThat(result.detailPromptVisible, {
-            name: 'detail-does-not-keep-stale-workspace',
-            message: '工作空间被移除后，详情区不应继续显示已删除工作空间的陈旧数据。',
-            data: result
-          })
+          await runtime.assertThat(
+            result.listEmptyVisible &&
+              result.emptyDescriptionVisible &&
+              result.remainingCards === 0,
+            {
+              name: 'removed-workspace-disappears-from-list',
+              message: '移除成功后，该文件地址应从目录树中消失，对齐 SET-WORKSPACE-006-AC2。',
+              data: result
+            }
+          )
         }
       })
     },

@@ -26,7 +26,7 @@ describe('ai tool kb backend', () => {
       suite: 'tool',
       groups: ['kb'],
       description:
-        '验证 kb_search 在 auto/semantic/keyword 三种 strategy 下的统一返回结构和范围约束。',
+        '验证 kb_search 在 auto/semantic/keyword 三种 strategy 下的统一返回结构和缩圈契约。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -76,23 +76,12 @@ describe('ai tool kb backend', () => {
                 text: '文件名：季度销售数据.xlsx\n标题：2026年度销售汇总\n工作表：季度销售、客户明细'
               }
             ]
-          },
-          {
-            id: 'doc-3',
-            name: 'Archive Notes.md',
-            workspaceId: 'other-workspace',
-            chunks: [
-              {
-                id: 'chunk-3',
-                text: 'Out of scope notes should never be returned.'
-              }
-            ]
           }
         ])
 
         const harness = createRetrievalToolHarness(runtime)
 
-        const hybridInScope = await harness.invoke<KbSearchResult>('kb_search', {
+        const hybridSearch = await harness.invoke<KbSearchResult>('kb_search', {
           queryText: 'approval denied unchanged files',
           strategy: 'auto',
           limit: 5
@@ -101,13 +90,13 @@ describe('ai tool kb backend', () => {
           queryText: 'terminal artifacts recorded',
           strategy: 'semantic',
           limit: 5,
-          documentIds: ['doc-2', 'doc-3']
+          documentIds: ['doc-2', 'doc-missing']
         })
-        const ftsOutOfScope = await harness.invoke<KbSearchResult>('kb_search', {
-          queryText: 'out of scope notes',
+        const emptySubset = await harness.invoke<KbSearchResult>('kb_search', {
+          queryText: 'terminal artifacts recorded',
           strategy: 'keyword',
           limit: 5,
-          documentIds: ['doc-3']
+          documentIds: ['doc-missing']
         })
         const fileHit = await harness.invoke<KbSearchResult>('kb_search', {
           queryText: 'approval denied unchanged files',
@@ -133,9 +122,9 @@ describe('ai tool kb backend', () => {
         })
 
         return {
-          hybridInScope,
+          hybridSearch,
           vectorSubset,
-          ftsOutOfScope,
+          emptySubset,
           fileHit,
           webHit,
           filenameHit,
@@ -144,8 +133,8 @@ describe('ai tool kb backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.hybridInScope.total >= 1 &&
-            result.hybridInScope.items.every(
+          result.hybridSearch.total >= 1 &&
+            result.hybridSearch.items.every(
               (row) =>
                 (row.documentId === 'doc-1' ||
                   row.documentId === 'doc-2' ||
@@ -154,11 +143,11 @@ describe('ai tool kb backend', () => {
                 typeof row.documentName === 'string' &&
                 typeof row.text === 'string'
             ) &&
-            result.hybridInScope.items.some((row) => row.documentId === 'doc-1'),
+            result.hybridSearch.items.some((row) => row.documentId === 'doc-1'),
           {
             name: 'hybrid-search-returns-stable-rows',
-            message: 'kb_search(auto) 应返回稳定 rows 结构，并默认限制在当前工作区范围内。',
-            data: result.hybridInScope
+            message: 'kb_search(auto) 应返回稳定 rows 结构。',
+            data: result.hybridSearch
           }
         )
 
@@ -167,18 +156,17 @@ describe('ai tool kb backend', () => {
             result.vectorSubset.items.every((row) => row.documentId === 'doc-2'),
           {
             name: 'vector-search-honors-explicit-document-scope',
-            message: 'kb_search(semantic) 应继续遵守 documentIds 在当前工作区内的收窄范围。',
+            message: 'kb_search(semantic) 应遵守 documentIds 缩圈，忽略不存在的 id。',
             data: result.vectorSubset
           }
         )
 
         runtime.assertThat(
-          result.ftsOutOfScope.total === 0 && result.ftsOutOfScope.items.length === 0,
+          result.emptySubset.total === 0 && result.emptySubset.items.length === 0,
           {
-            name: 'fts-search-rejects-out-of-scope-document-ids',
-            message:
-              'kb_search(keyword) 在 requested documentIds 完全超出当前工作区时应返回空结果。',
-            data: result.ftsOutOfScope
+            name: 'fts-search-returns-empty-for-missing-document-ids',
+            message: 'kb_search(keyword) 在 documentIds 全部不存在时应返回空结果。',
+            data: result.emptySubset
           }
         )
 

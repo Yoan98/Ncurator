@@ -432,6 +432,28 @@ describe('brain message projection with context scope', () => {
     expect(history).not.toContain('做到一半')
   })
 
+  it('keeps a completed run that sits before an incomplete run', () => {
+    const log = records([
+      { runId: 'run-0', entry: user('更早完成的任务', '更早完成的任务') },
+      { runId: 'run-0', entry: assistant('更早那件已完成') },
+      { runId: 'run-0', entry: digest('完成更早任务') },
+      { runId: 'run-a', entry: user('失败的任务 A', '失败的任务 A') },
+      { runId: 'run-a', entry: assistant('做到一半') },
+      { runId: 'run-b', entry: user('成功的任务 B', '成功的任务 B') },
+      { runId: 'run-b', entry: assistant('B 已完成') },
+      { runId: 'run-b', entry: digest('完成任务 B') }
+    ])
+    const history = assembleConversationHistory(log, 10_000)
+    const users = history
+      .split('\n')
+      .filter((line) => line.startsWith('用户：'))
+      .map((line) => line.slice('用户：'.length))
+    expect(users).toEqual(['更早完成的任务', '成功的任务 B'])
+    expect(history).toContain('交付：更早那件已完成')
+    expect(history).not.toContain('失败的任务 A')
+    expect(history).not.toContain('做到一半')
+  })
+
   it('uses the delivery assistant in a digest slice that also has tool calls', () => {
     const log = records([
       { runId: 'shared', entry: user('查一下周报', '查一下周报') },

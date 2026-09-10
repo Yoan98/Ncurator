@@ -225,7 +225,7 @@ describe('ai tool ppt backend', () => {
             result.search.matches.length === 1 &&
             result.search.truncated === false &&
             readSlideImageExists &&
-            /[\\/]\.ncurator[\\/]runtime[\\/]assets[\\/]ppt_read_slides-[^\\/]+[\\/][a-f0-9]{64}\.png$/u.test(
+            /[\\/]partners[\\/][^\\/]+[\\/]runtime[\\/]assets[\\/]ppt_read_slides-[^\\/]+[\\/][a-f0-9]{64}\.png$/u.test(
               readSlideImagePath.replace(/\\/g, '/')
             ),
           {

@@ -1,10 +1,16 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { execFileSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
 import { createExcelToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+
+const OPENPYXL_TARGET = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  '../../../../../../.pip-cache/test-openpyxl'
+)
 
 const resolvePythonBin = (): string => {
   const candidates = process.platform === 'win32' ? ['python', 'python3'] : ['python3', 'python']
@@ -19,7 +25,28 @@ const resolvePythonBin = (): string => {
   throw new Error('python executable not found (tried python3/python)')
 }
 
+const ensureOpenpyxlTarget = (pythonBin: string): void => {
+  try {
+    execFileSync(
+      pythonBin,
+      ['-c', 'import openpyxl'],
+      {
+        env: { ...process.env, PYTHONPATH: OPENPYXL_TARGET },
+        stdio: 'ignore'
+      }
+    )
+    return
+  } catch {
+    // install into project pip-cache target
+  }
+  execFileSync(pythonBin, ['-m', 'pip', 'install', '--target', OPENPYXL_TARGET, 'openpyxl'], {
+    stdio: 'ignore'
+  })
+}
+
 const readOpenpyxlFormats = (filePath: string, sheetName: string, addresses: string[]): string[] => {
+  const pythonBin = resolvePythonBin()
+  ensureOpenpyxlTarget(pythonBin)
   const script = [
     'import json, openpyxl, sys',
     'wb = openpyxl.load_workbook(sys.argv[1])',
@@ -28,9 +55,12 @@ const readOpenpyxlFormats = (filePath: string, sheetName: string, addresses: str
     'print(json.dumps([sheet[addr].number_format for addr in addrs]))'
   ].join('\n')
   const output = execFileSync(
-    resolvePythonBin(),
+    pythonBin,
     ['-c', script, filePath, sheetName, JSON.stringify(addresses)],
-    { encoding: 'utf8' }
+    {
+      encoding: 'utf8',
+      env: { ...process.env, PYTHONPATH: OPENPYXL_TARGET }
+    }
   ).trim()
   return JSON.parse(output) as string[]
 }

@@ -95,6 +95,7 @@ export const createDocxToolHarness = (
     ctx,
     cache,
     runId: runtime.runId,
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     safePreviewChars: 1400,
@@ -185,6 +186,7 @@ export const createTerminalToolHarness = (
     taskId: runtime.taskId,
     partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     workspaceRootPath: runtime.workspaceRoot,
+    workspaceRoots: ctx.workspaceRoots,
     workspaceId: ctx.workspace?.workspaceId || 'test-workspace',
     sessionManager,
     emitActivity: (activity) => {

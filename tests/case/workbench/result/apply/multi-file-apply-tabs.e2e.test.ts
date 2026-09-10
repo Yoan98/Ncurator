@@ -6,7 +6,9 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
+  clampWorkbenchPartnerName,
   configureLiveModelThroughSettingsUi,
+  createPartnerThroughWorkbenchUi,
   createTemporaryWorkbenchWorkspace,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
@@ -17,7 +19,6 @@ import {
   readDocxPlainText,
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
-  selectWorkbenchWorkspace,
   sendWorkbenchMessage,
   waitForWorkbenchApplyPanelReady,
   waitForWorkbenchAiRunCompletion,
@@ -62,7 +63,7 @@ const setupMultiFileApplyWorkspace = async (
 }> => {
   const env = loadWorkbenchLiveModelEnv()
   const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
-  const workspaceName = `Workbench ${CASE_ID}`
+  const workspaceName = clampWorkbenchPartnerName(`Workbench ${CASE_ID}`)
   const sourcePath = path.join(workspace.rootPath, SOURCE_FILE)
   await Promise.all([
     copyFile(sourcePath, path.join(workspace.rootPath, FIRST_FILE)),
@@ -77,7 +78,7 @@ const setupMultiFileApplyWorkspace = async (
     rootPath: workspace.rootPath
   })
   await navigateToWorkbench(page)
-  await selectWorkbenchWorkspace(page, workspaceName)
+  await createPartnerThroughWorkbenchUi(page, workspaceName)
   await selectWorkbenchModel(page, env.modelName)
 
   return {

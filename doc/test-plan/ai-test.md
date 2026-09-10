@@ -377,7 +377,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：`set_range` 写值后 `set_style` 设 `#,##0`，并在 merge/auto_fit 后仍能被 ExcelJS、openpyxl 与 `excel_read type=style` 读回。
 - Why：Create live 曾出现 openpyxl 验算报 D3–D19 为 General 而 D20 有千分位；需守住 standalone `set_style` 的 numberFormat 落盘路径。
-- How：模拟部门明细表写入、合计行 inline style、`set_style D3:D20`、表头样式、merge 标题、auto_fit；分别用 ExcelJS、openpyxl 和 `excel_read style` 断言。
+- How：模拟部门明细表写入、合计行 inline style、`set_style D3:D20`、表头样式、merge 标题、auto_fit；分别用 ExcelJS、openpyxl（经 `.pip-cache/test-openpyxl`，缺失时自动 pip install --target）和 `excel_read style` 断言。
 - Oracle：`D3`/`D19`/`D20` 的 number format 均为 `#,##0`。
 - Not：不验证模型是否会走两段式排版 workflow。
 
@@ -422,20 +422,20 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `kb-list-documents-contract`
 
 - 测试类型：`backend`
-- What：`kb_list_documents` 在全部已索引文件地址 + 全局网页默认范围内的真实列表、`sourceNameQuery` 文档名过滤与缩圈契约。
+- What：`kb_list_documents` 对已索引文件与全局网页的真实列表、`sourceNameQuery` 文档名过滤与 `documentIds` 缩圈契约。
 - Why：KB 资料发现必须真实调用生产检索存储。
-- How：通过真实 `DocumentsStore.addDocument / addChunks` 导入多工作区 fixture 后执行列表查询。
-- Oracle：结果默认包含当前已添加文件地址与全局网页文档，`documentIds` 只做进一步缩圈，空结果与非空结果都稳定可断言；文件资料返回 `sourceType=file` 与真实 `filePath`，网页资料返回 `sourceType=web` 与真实 `sourceUrl`。
-- Not：不验证问答文案。
+- How：通过真实 `DocumentsStore.addDocument / addChunks` 导入文件与网页 fixture 后执行列表查询。
+- Oracle：默认返回已 seed 的文件与网页文档；`documentIds` 只做进一步缩圈（不存在的 id 被忽略）；文件资料返回 `sourceType=file` 与真实 `filePath`，网页资料返回 `sourceType=web` 与真实 `sourceUrl`。
+- Not：不验证问答文案；不伪造「未添加地址却已入库」的跨 workspace 隔离场景（移除地址时由存储层清理 document）。
 
 ##### `kb-evidence-search-family-contract`
 
 - 测试类型：`backend`
 - What：`kb_search` 在不同 strategy 下的统一真实检索契约。
 - Why：KB tool family 必须显式覆盖每个回归工具。
-- How：对多工作区真实 seed 数据分别执行三种检索，并覆盖 `documentIds` 缩圈。
-- Oracle：三种检索都返回稳定 `items`，默认受当前文件地址与全局网页约束，且遵守 `documentIds` 缩圈语义；文件命中保留 `sourceType=file` 与 `filePath`，网页命中保留 `sourceType=web` 与 `sourceUrl`，供最终引用生成可追溯地址。
-- Not：不比较召回优劣。设置页「更新索引」期间的拦截由 unit `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`（工具失败，模型侧结果为 `Error: 正在更新知识库索引，请完成后再检索。`）；「检查更新」不拦截。
+- How：对已 seed 的文件与网页数据分别执行三种检索，并覆盖 `documentIds` 缩圈。
+- Oracle：三种检索都返回稳定 `items`；`documentIds` 缩圈语义成立（含全部不存在时返回空）；文件命中保留 `sourceType=file` 与 `filePath`，网页命中保留 `sourceType=web` 与 `sourceUrl`，供最终引用生成可追溯地址。
+- Not：不比较召回优劣；不测人造跨 workspace 脏数据隔离。设置页「更新索引」期间的拦截由 unit `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`（工具失败，模型侧结果为 `Error: 正在更新知识库索引，请完成后再检索。`）；「检查更新」不拦截。
 
 #### terminal 类别
 
@@ -978,10 +978,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-context-scope-decision-live`
 
 - 测试类型：`backend / live`
-- What：同一伙伴连续五轮验证范围判定：相关追问保留原文、不合成 Discard User 且跨 run 前缀缓存命中；无关新任务写入 `conversationHistory` 并合成 Discard User；丢掉后再续做复用同一份 Discard User 且命中前缀缓存；再丢一次时判定只看到新话题 digest，交付仍能带出旧关键词。Run 1 前有一轮无 `run_digest` 的中断对话，丢掉时不得把失败轮原话配进召回。
-- Why：用户不管理会话，真实模型必须在同一窗口里把续做、换题、丢掉后再续做和再提旧任务四条路径走对；`conversationHistory` 必须冻字节，否则下一轮 true 会打穿前缀缓存。失败后下一轮已正常交付再丢掉时，召回不得把失败轮原话和成功轮交付捆在一起。
-- How：把 `modelContextWindowTokens` 收到 2000，使判定阈值约 400 token，短问答交付后即可触发判定模型。Run 1 前向该伙伴 log 写入一轮无 digest 的中断对话（独特标记 `INTERRUPTED-TASK-77`）。Run 1 留下关键词并交付；Run 2 相关缩短；Run 3 完全无关的法国首都；Run 4 追问巴黎；Run 5 再问 Run 1 的关键词。检查各轮 `context_scope_decided`（模型判定须带 `reason`）/ `discard_checkpoint.conversationHistory`、首次 `human.brain` 的 `requestWire` 消息结构、Run 2 / Run 4 跨 run 前缀缓存，以及 Run 5 交付。不把 compaction 塞进这条 live。
-- Oracle：五轮均 `completed`。Run 2 `needsHistory=true`，首次 brain 含 Run 1 原文、末尾为新 user、**无** Discard User，且 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。Run 3 `needsHistory=false` 且 `conversationHistory` 按轮配对（`用户：` 行依次为 Run 1、Run 2 原话，**不含**中断标记），首次 brain 含「以下是最近的会话内容」、不含 `<task_catalog>`。Run 4 `needsHistory=true`，Discard User 字节与 Run 3 相同，且对 Run 3 首次 brain 前缀缓存命中。Run 5 `needsHistory=false`（判定只看到法国 digest），新 `conversationHistory` 的 `用户：` 行依次为 Run 1～4 原话（不得把 Run 1 原话和 Run 4 交付捆成一段，亦不得含中断标记），交付含 Run 1 关键词。`basis=model_decision` 的 `context_scope_decided` 须有非空 `reason`；不钉死 `reason` 文案。
+- What：同一伙伴连续五轮验证范围判定：相关追问保留原文、不合成 Discard User 且跨 run 前缀缓存命中；无关新任务写入 `conversationHistory` 并合成 Discard User；丢掉后再续做复用同一份 Discard User 且命中前缀缓存；再丢一次时判定只看到新话题 digest，交付仍能带出旧关键词。Run 1 前先写入一轮已完成对话和一轮无 `run_digest` 的中断对话；丢掉时失败轮原话不得配进召回，失败轮之前已完成的那轮必须在召回里。
+- Why：用户不管理会话，真实模型必须在同一窗口里把续做、换题、丢掉后再续做和再提旧任务四条路径走对；`conversationHistory` 必须冻字节，否则下一轮 true 会打穿前缀缓存。失败后下一轮已正常交付再丢掉时，召回不得把失败轮原话和成功轮交付捆在一起，也不得把失败轮前面已经完成的一轮一起丢掉。
+- How：把 `modelContextWindowTokens` 收到 2000，使判定阈值约 400 token，短问答交付后即可触发判定模型。Run 1 前向该伙伴 log 先写入一轮带 digest 的已完成对话（独特标记 `PRIOR-DONE-91`），再写入一轮无 digest 的中断对话（独特标记 `INTERRUPTED-TASK-77`，只写 log，不向模型发「停」）。Run 1 留下关键词并交付；Run 2 相关缩短；Run 3 完全无关的法国首都；Run 4 追问巴黎；Run 5 再问 Run 1 的关键词。检查各轮 `context_scope_decided`（模型判定须带 `reason`）/ `discard_checkpoint.conversationHistory` 的 `用户：` 行、首次 `human.brain` 的 `requestWire` 消息结构、Run 2 / Run 4 跨 run 前缀缓存，以及 Run 5 交付。不把 compaction 塞进这条 live。不断言交付全文不得出现中断标记（下一轮主模型看见失败轮后，交付里提一句这个词不算配段错误）。
+- Oracle：五轮均 `completed`。Run 2 `needsHistory=true`，首次 brain 含 Run 1 原文、末尾为新 user、**无** Discard User，且 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。Run 3 `needsHistory=false` 且 `conversationHistory` 的 `用户：` 行依次为已完成轮、Run 1、Run 2 原话（**不含**中断轮用户原话），首次 brain 含「以下是最近的会话内容」、不含 `<task_catalog>`。Run 4 `needsHistory=true`，Discard User 字节与 Run 3 相同，且对 Run 3 首次 brain 前缀缓存命中。Run 5 `needsHistory=false`（判定只看到法国 digest），新 `conversationHistory` 的 `用户：` 行依次为已完成轮、Run 1～4 原话（不得把 Run 1 原话和 Run 4 交付捆成一段，亦不得含中断轮用户原话），交付含 Run 1 关键词。`basis=model_decision` 的 `context_scope_decided` 须有非空 `reason`；不钉死 `reason` 文案。
 - Not：不验证 UI；不要求固定工具；不验证 compaction（Discard User 进压缩由 unit 锁死）；中断门控由 `context-scope-incomplete-run` mock-llm 覆盖。
 
 ##### `human-skill-eviction-relearn-loop-live`

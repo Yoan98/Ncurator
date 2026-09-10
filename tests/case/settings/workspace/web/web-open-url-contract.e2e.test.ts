@@ -5,8 +5,7 @@ import {
   SETTINGS_WEB_E2E_TIMEOUT_MS,
   createFixtureWorkspace,
   navigateToSettingsSection,
-  seedWebSources,
-  workspaceCardLocator
+  seedWebSources
 } from '../../../../harness/e2e/settings'
 
 describe('settings workspace web e2e', () => {
@@ -32,8 +31,7 @@ describe('settings workspace web e2e', () => {
           await seedWebSources(page, workspace.workspace!.id, [targetUrl])
 
           await navigateToSettingsSection(page, 'workspace')
-          await workspaceCardLocator(page, workspace.workspace!.id).click()
-          await page.getByRole('tab', { name: '网页 1' }).click()
+          await page.getByRole('tab', { name: /网页/u }).click()
           await page
             .locator(`[data-testid^="${importSelectors.webSourceUrlLinkButtonPrefix}-"]`)
             .click()

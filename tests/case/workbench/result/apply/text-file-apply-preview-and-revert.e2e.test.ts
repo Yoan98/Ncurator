@@ -164,7 +164,7 @@ describe('workbench result e2e', () => {
           await createWorkbenchNewSession(page)
           await getWorkbenchLocator(
             page,
-            `${workbenchSelectors.sessionItemPrefix}-${runStartedEvent.sessionId}`
+            `${workbenchSelectors.partnerItemPrefix}-${runStartedEvent.partnerId}`
           ).click()
           const restoredApplyEntry = await waitForApplyEntry(page)
           const assistantApplyTextAfterSessionSwitch = (
