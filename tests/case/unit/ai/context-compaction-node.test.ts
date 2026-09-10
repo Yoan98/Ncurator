@@ -250,7 +250,7 @@ describe('ai human context compaction node', () => {
     expect(next.execution.stage).toBe('context_budget')
   })
 
-  it('throws internal_error when coveredThroughSeq cannot be resolved', async () => {
+  it('throws internal_error when throughSeq cannot be resolved', async () => {
     const current = createCurrentBrainUserMessage('continue the task')
     const earlierUser = new HumanMessage('old task')
     const earlierPair = [
@@ -355,7 +355,7 @@ describe('ai human context compaction node', () => {
           eventType: 'compaction_checkpoint',
           payload: {
             compactBlockId: 'old',
-            coveredThroughSeq: 1,
+            throughSeq: 1,
             sourceMessageCount: 2,
             summary: '## 目标\n写周报'
           }

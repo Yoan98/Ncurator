@@ -14,6 +14,7 @@ import {
   renderRunDigestCatalog
 } from '../../memory/runDigestCatalog'
 import {
+  resolveHistoryFloor,
   resolveLastConversationRunId,
   resolveMaxMessageLogSeq,
   runHasDigest
@@ -47,7 +48,9 @@ const decideByModel = async (input: {
   records: ChatMessageLogRecord[]
   budgetTokens: number
 }): Promise<ContextScopeDecision> => {
-  const catalogText = renderRunDigestCatalog(collectRunDigestCatalogEntries(input.records))
+  const floor = resolveHistoryFloor(input.records)
+  const liveRecords = input.records.filter((record) => record.seq > floor.historyFloorSeq)
+  const catalogText = renderRunDigestCatalog(collectRunDigestCatalogEntries(liveRecords))
   const prompt = buildContextScopeDecisionPrompt({
     catalogText,
     taskGoal: input.state.task.userInput
@@ -120,22 +123,38 @@ export const decideContextScope = async (input: {
   })
 }
 
-export const buildContextScopeSelectedEntry = (input: {
+export const buildContextScopeDecidedEntry = (
   decision: ContextScopeDecision
+): ChatMessageLogEntry => ({
+  kind: 'annotation',
+  eventType: 'context_scope_decided',
+  payload: {
+    needsHistory: decision.needsHistory,
+    basis: decision.basis,
+    budgetTokens: decision.budgetTokens
+  }
+})
+
+export const buildDiscardCheckpointEntry = (
   records: readonly ChatMessageLogRecord[]
-}): ChatMessageLogEntry => {
-  const discardThroughSeq =
-    !input.decision.needsHistory ? resolveMaxMessageLogSeq(input.records) : undefined
+): ChatMessageLogEntry | undefined => {
+  const throughSeq = resolveMaxMessageLogSeq(records)
+  if (throughSeq < 0) return undefined
   return {
     kind: 'annotation',
-    eventType: 'context_scope_selected',
-    payload: {
-      needsHistory: input.decision.needsHistory,
-      basis: input.decision.basis,
-      budgetTokens: input.decision.budgetTokens,
-      ...(typeof discardThroughSeq === 'number' && discardThroughSeq >= 0
-        ? { discardThroughSeq }
-        : {})
-    }
+    eventType: 'discard_checkpoint',
+    payload: { throughSeq }
   }
+}
+
+export const buildContextScopeLogEntries = (input: {
+  decision: ContextScopeDecision
+  records: readonly ChatMessageLogRecord[]
+}): ChatMessageLogEntry[] => {
+  const entries: ChatMessageLogEntry[] = [buildContextScopeDecidedEntry(input.decision)]
+  if (!input.decision.needsHistory) {
+    const discard = buildDiscardCheckpointEntry(input.records)
+    if (discard) entries.push(discard)
+  }
+  return entries
 }

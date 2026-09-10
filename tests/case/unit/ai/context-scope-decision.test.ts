@@ -19,7 +19,7 @@ import {
   isCurrentBrainUserMessage
 } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 import {
-  buildContextScopeSelectedEntry,
+  buildContextScopeLogEntries,
   decideContextScope
 } from '../../../../src/main/services/ai/human/node/contextScopeDecision'
 import {
@@ -65,28 +65,18 @@ const digest = (summary: string, filePaths: string[] = []): ChatMessageLogEntry 
   payload: { summary, filePaths }
 })
 
-const scopeSelected = (input: {
-  needsHistory: boolean
-  discardThroughSeq?: number
-}): ChatMessageLogEntry => ({
+const discardCheckpoint = (throughSeq: number): ChatMessageLogEntry => ({
   kind: 'annotation',
-  eventType: 'context_scope_selected',
-  payload: {
-    needsHistory: input.needsHistory,
-    basis: input.needsHistory ? 'gate_below_threshold' : 'model_decision',
-    budgetTokens: 80_000,
-    ...(typeof input.discardThroughSeq === 'number'
-      ? { discardThroughSeq: input.discardThroughSeq }
-      : {})
-  }
+  eventType: 'discard_checkpoint',
+  payload: { throughSeq }
 })
 
-const checkpoint = (coveredThroughSeq: number): ChatMessageLogEntry => ({
+const checkpoint = (throughSeq: number): ChatMessageLogEntry => ({
   kind: 'annotation',
   eventType: 'compaction_checkpoint',
   payload: {
     compactBlockId: 'checkpoint-1',
-    coveredThroughSeq,
+    throughSeq,
     sourceMessageCount: 2,
     summary: '目标：已写周报'
   }
@@ -160,7 +150,7 @@ describe('run digest catalog', () => {
         runId: 'run-1',
         entry: digest('旧周报', ['/Users/me/workspace/周报.docx'])
       },
-      { runId: 'run-2', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 3 }) },
+      { runId: 'run-2', entry: discardCheckpoint(3) },
       { runId: 'run-2', entry: user('new excel') },
       { runId: 'run-2', entry: assistant('excel done') },
       { runId: 'run-2', entry: digest('分析销售表', ['/Users/me/workspace/销售.xlsx']) }
@@ -181,21 +171,21 @@ describe('history floor', () => {
       { runId: 'run-2', entry: user('task-b') },
       { runId: 'run-2', entry: assistant('b-done') },
       { runId: 'run-2', entry: digest('任务B') },
-      { runId: 'run-3', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 6 }) },
+      { runId: 'run-3', entry: discardCheckpoint(6) },
       { runId: 'run-3', entry: user('task-c') }
     ])
     const floor = resolveHistoryFloor(log)
     expect(floor.historyFloorSeq).toBe(6)
     expect(floor.includeCheckpoint).toBe(false)
     expect(floor.compactionCheckpoint).toBeUndefined()
-    expect(floor.discardThroughSeq).toBe(6)
+    expect(floor.discardCheckpoint?.throughSeq).toBe(6)
   })
 
   it('keeps checkpoint when it is the later bookmark', () => {
     const log = records([
       { runId: 'run-1', entry: user('old') },
       { runId: 'run-1', entry: assistant('old-done') },
-      { runId: 'run-2', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 2 }) },
+      { runId: 'run-2', entry: discardCheckpoint(2) },
       { runId: 'run-2', entry: user('kept') },
       { runId: 'run-2', entry: assistant('kept-done') },
       { runId: 'run-2', entry: checkpoint(5) }
@@ -203,18 +193,18 @@ describe('history floor', () => {
     const floor = resolveHistoryFloor(log)
     expect(floor.historyFloorSeq).toBe(5)
     expect(floor.includeCheckpoint).toBe(true)
-    expect(floor.compactionCheckpoint?.coveredThroughSeq).toBe(5)
+    expect(floor.compactionCheckpoint?.throughSeq).toBe(5)
   })
 
   it('ignores discard bookmarks from runs that never wrote conversation', () => {
     const log = records([
       { runId: 'run-1', entry: user('keep-me') },
       { runId: 'run-1', entry: assistant('kept') },
-      { runId: 'run-2', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 2 }) }
+      { runId: 'run-2', entry: discardCheckpoint(2) }
     ])
     const floor = resolveHistoryFloor(log)
     expect(floor.historyFloorSeq).toBe(-1)
-    expect(floor.discardThroughSeq).toBeUndefined()
+    expect(floor.discardCheckpoint).toBeUndefined()
   })
 })
 
@@ -248,7 +238,19 @@ describe('brain message projection with context scope', () => {
     expect(String(projection.messages[1]?.content)).toContain('分析这个 Excel')
   })
 
-  it('keeps the current history shape and puts the catalog before the new user', () => {
+  it('omits the catalog when nothing has been dropped from context', () => {
+    const projection = projectBrainMessagesFromLog({
+      records: bulkyHistory,
+      ctx,
+      state: createInitialHumanState({ taskId: 'task-continue', userInput: '把标题改一下' }),
+      needsHistory: true
+    })
+    // 原文全在上下文里，目录只会重复同一段对话。
+    expect(projection.messages.some((message) => isCatalogBrainUserMessage(message))).toBe(false)
+    expect(isCurrentBrainUserMessage(projection.messages.at(-1)!)).toBe(true)
+  })
+
+  it('keeps the current history shape and omits the catalog for still-active digests', () => {
     const log = records([
       { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
       { runId: 'run-1', entry: assistant('week report written') },
@@ -262,7 +264,8 @@ describe('brain message projection with context scope', () => {
       needsHistory: true
     })
     expect(isCompactedBrainUserMessage(projection.messages[0]!)).toBe(true)
-    expect(isCatalogBrainUserMessage(projection.messages.at(-2)!)).toBe(true)
+    // digest 的 seq 高于 checkpoint 下界，该任务仍在上下文里，不进目录。
+    expect(projection.messages.some((message) => isCatalogBrainUserMessage(message))).toBe(false)
     expect(isCurrentBrainUserMessage(projection.messages.at(-1)!)).toBe(true)
     expect(String(projection.messages.map((message) => message.content).join('\n'))).not.toContain(
       'fill weekly report'
@@ -274,7 +277,7 @@ describe('brain message projection with context scope', () => {
       { runId: 'run-1', entry: user('secret-a') },
       { runId: 'run-1', entry: assistant('a-done') },
       { runId: 'run-1', entry: digest('任务A') },
-      { runId: 'run-2', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 3 }) },
+      { runId: 'run-2', entry: discardCheckpoint(3) },
       { runId: 'run-2', entry: user('<user_context>excel task</user_context>') },
       { runId: 'run-2', entry: assistant('excel done') },
       { runId: 'run-2', entry: digest('任务B', ['/tmp/sales.xlsx']) }
@@ -288,9 +291,10 @@ describe('brain message projection with context scope', () => {
     const text = projection.messages.map((message) => String(message.content)).join('\n')
     expect(text).not.toContain('secret-a')
     expect(text).toContain('excel task')
-    // 目录扫描不受 floor 限制，被丢弃的任务 A 仍能按路径找回。
+    // 已丢弃的任务 A 进目录（可按路径找回）；仍在上下文里的任务 B 不重复进目录。
     expect(isCatalogBrainUserMessage(projection.messages.at(-2)!)).toBe(true)
     expect(text).toContain('任务A')
+    expect(text).not.toContain('任务B')
   })
 })
 
@@ -332,7 +336,7 @@ describe('message log projection scan boundaries', () => {
       },
       { runId: 'run-1', entry: assistant('done') },
       { runId: 'run-1', entry: digest('学会了 docx') },
-      { runId: 'run-2', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 4 }) },
+      { runId: 'run-2', entry: discardCheckpoint(4) },
       { runId: 'run-2', entry: user('new') }
     ])
     const projection = projectMessageLogRecords(log)
@@ -436,24 +440,64 @@ describe('context scope decision gates', () => {
     expect(decision).toMatchObject({ needsHistory: true, basis: 'fallback' })
   })
 
-  it('writes discardThroughSeq only when history is not needed', () => {
+  it('writes discard_checkpoint only when history is not needed', () => {
     const log = bulkyHistory
-    const keep = buildContextScopeSelectedEntry({
+    const keep = buildContextScopeLogEntries({
       decision: { needsHistory: true, basis: 'model_decision', budgetTokens: 90 },
       records: log
     })
-    const fresh = buildContextScopeSelectedEntry({
+    const fresh = buildContextScopeLogEntries({
       decision: { needsHistory: false, basis: 'model_decision', budgetTokens: 90 },
       records: log
     })
-    expect(keep.kind).toBe('annotation')
-    if (keep.kind === 'annotation' && keep.eventType === 'context_scope_selected') {
-      expect(keep.payload.discardThroughSeq).toBeUndefined()
-    }
-    expect(fresh.kind).toBe('annotation')
-    if (fresh.kind === 'annotation' && fresh.eventType === 'context_scope_selected') {
-      expect(fresh.payload.discardThroughSeq).toBe(log[log.length - 1]?.seq)
-    }
+    expect(keep).toHaveLength(1)
+    expect(keep[0]).toMatchObject({
+      kind: 'annotation',
+      eventType: 'context_scope_decided',
+      payload: { needsHistory: true, basis: 'model_decision', budgetTokens: 90 }
+    })
+    expect(fresh).toHaveLength(2)
+    expect(fresh[0]).toMatchObject({
+      kind: 'annotation',
+      eventType: 'context_scope_decided',
+      payload: { needsHistory: false, basis: 'model_decision' }
+    })
+    expect(fresh[1]).toMatchObject({
+      kind: 'annotation',
+      eventType: 'discard_checkpoint',
+      payload: { throughSeq: log[log.length - 1]?.seq }
+    })
+  })
+
+  it('shows the judge only digests still above the history floor', async () => {
+    let judgeUser = ''
+    const ctx = createCtx({
+      windowTokens: 200,
+      chatStructured: async (request) => {
+        judgeUser = request.user
+        return { output: { needsHistory: false } }
+      }
+    })
+    const log = records([
+      { runId: 'run-1', entry: user('secret-weekly-report') },
+      { runId: 'run-1', entry: assistant('week report written') },
+      { runId: 'run-1', entry: digest('旧周报', ['/Users/me/workspace/周报.docx']) },
+      { runId: 'run-2', entry: discardCheckpoint(3) },
+      {
+        runId: 'run-2',
+        entry: user(`<user_context>${'法国首都问答。'.repeat(80)}</user_context>`)
+      },
+      { runId: 'run-2', entry: assistant(`巴黎。${'完成。'.repeat(80)}`) },
+      { runId: 'run-2', entry: digest('回答法国首都') }
+    ])
+    const decision = await decideContextScope({
+      ctx,
+      state: createInitialHumanState({ taskId: 't', userInput: '刚才那个周报编号是多少？' }),
+      records: log
+    })
+    expect(decision.basis).toBe('model_decision')
+    expect(judgeUser).toContain('回答法国首都')
+    expect(judgeUser).not.toContain('旧周报')
   })
 })
 

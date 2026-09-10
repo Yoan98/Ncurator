@@ -103,7 +103,7 @@ describe('conversationProjection', () => {
           eventType: 'compaction_checkpoint',
           payload: {
             compactBlockId: 'checkpoint-1',
-            coveredThroughSeq: 1,
+            throughSeq: 1,
             sourceMessageCount: 1,
             summary: '当前交付：- 已写周报'
           }

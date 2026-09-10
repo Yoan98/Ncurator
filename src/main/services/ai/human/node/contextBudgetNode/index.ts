@@ -11,7 +11,7 @@ import { estimateMessagesForContext } from '../../memory/multimodal'
 import { buildBrainUserMessage } from '../../prompts/brain'
 import { hasCompressibleCompactionHistory, isCurrentBrainUserMessage } from '../utils/messageTail'
 import { LlmInputTooLongError } from '../../../errors'
-import { buildContextScopeSelectedEntry } from '../contextScopeDecision'
+import { buildContextScopeLogEntries } from '../contextScopeDecision'
 
 const buildBudgetSnapshot = (input: {
   cache: HumanRuntimeCache
@@ -120,7 +120,7 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
       if (input.cache.contextScopeDecision) {
         const records = await input.ctx.loadMessageLog()
         entries.push(
-          buildContextScopeSelectedEntry({
+          ...buildContextScopeLogEntries({
             decision: input.cache.contextScopeDecision,
             records
           })

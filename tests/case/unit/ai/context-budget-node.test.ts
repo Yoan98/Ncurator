@@ -302,11 +302,25 @@ describe('ai unit context budget node', () => {
     ).rejects.toBeInstanceOf(LlmInputTooLongError)
   })
 
-  it('writes context_scope_selected with the user in one batch', async () => {
+  it('writes context_scope_decided and discard_checkpoint with the user in one batch', async () => {
     const events: AiRunEvent[] = []
     const appended: ChatMessageLogEntry[] = []
     const ctx = {
       ...createBaseContext(events),
+      loadMessageLog: async () => [
+        {
+          id: 'log-1',
+          partnerId: 'partner-1',
+          runId: 'run-0',
+          seq: 3,
+          entry: {
+            kind: 'user' as const,
+            content: 'prev',
+            context: { selectedReferences: [], attachments: [] }
+          },
+          createdAt: 1
+        }
+      ],
       appendMessageLog: async (entries: ChatMessageLogEntry[]) => {
         appended.push(...entries)
       }
@@ -330,16 +344,21 @@ describe('ai unit context budget node', () => {
         userInput: '分析 Excel'
       })
     )
-    expect(appended).toHaveLength(2)
+    expect(appended).toHaveLength(3)
     expect(appended[0]).toMatchObject({
       kind: 'annotation',
-      eventType: 'context_scope_selected',
+      eventType: 'context_scope_decided',
       payload: {
         needsHistory: false,
         basis: 'model_decision'
       }
     })
     expect(appended[1]).toMatchObject({
+      kind: 'annotation',
+      eventType: 'discard_checkpoint',
+      payload: { throughSeq: 3 }
+    })
+    expect(appended[2]).toMatchObject({
       kind: 'user',
       content: '<user_context>分析 Excel</user_context>'
     })

@@ -17,7 +17,7 @@ const RUN2_INPUT = '把刚才那个确认再缩短成十个字。'
 const RUN3_INPUT = '法国的首都是哪里？不要提刚才的关键词或机器学习。'
 const RUN4_INPUT = `刚才那个 ${TOKEN} 的关键词是什么？如果目录里有就直接说。`
 
-const lastScopePayload = async (
+const lastScopeDecision = async (
   runtime: {
     storageService: {
       chatMessageLog: {
@@ -29,7 +29,7 @@ const lastScopePayload = async (
               payload?: {
                 needsHistory?: boolean
                 basis?: string
-                discardThroughSeq?: number
+                throughSeq?: number
               }
             }
           }>
@@ -40,15 +40,28 @@ const lastScopePayload = async (
   partnerId: string
 ) => {
   const log = await runtime.storageService.chatMessageLog.list(partnerId)
-  const record = [...log]
+  const decided = [...log]
     .reverse()
     .find(
       (item) =>
-        item.entry.kind === 'annotation' && item.entry.eventType === 'context_scope_selected'
+        item.entry.kind === 'annotation' && item.entry.eventType === 'context_scope_decided'
     )
-  return record?.entry.kind === 'annotation' && record.entry.eventType === 'context_scope_selected'
-    ? record.entry.payload
-    : undefined
+  const discard = [...log]
+    .reverse()
+    .find(
+      (item) =>
+        item.entry.kind === 'annotation' && item.entry.eventType === 'discard_checkpoint'
+    )
+  return {
+    decided:
+      decided?.entry.kind === 'annotation' && decided.entry.eventType === 'context_scope_decided'
+        ? decided.entry.payload
+        : undefined,
+    discard:
+      discard?.entry.kind === 'annotation' && discard.entry.eventType === 'discard_checkpoint'
+        ? discard.entry.payload
+        : undefined
+  }
 }
 
 const firstBrain = (records: readonly AiLlmIoRecord[]): AiLlmIoRecord | undefined =>
@@ -72,7 +85,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '同一伙伴连续四轮：相关追问保留原文且命中前缀缓存；无关新任务丢弃原文；目录每轮都在，再问旧关键词能找回。',
+          '同一伙伴连续四轮：相关追问保留原文、无目录且命中前缀缓存；无关新任务丢弃原文；已丢弃任务进目录，再问旧关键词能找回。',
         fixtures: [],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -93,20 +106,20 @@ describe('ai human live backend', () => {
           const run2Io = afterRun2.slice(afterRun1.length)
           const run2Brain = firstBrain(run2Io)
           const run2Humans = humanContents(run2Brain)
-          const run2Scope = await lastScopePayload(runtime, partnerId)
+          const run2Scope = await lastScopeDecision(runtime, partnerId)
 
           const run3 = await run(`${runtime.taskId}-c`, RUN3_INPUT)
           const afterRun3 = runtime.eventCollector.snapshotLlmIo()
           const run3Io = afterRun3.slice(afterRun2.length)
           const run3Brain = firstBrain(run3Io)
           const run3Humans = humanContents(run3Brain)
-          const run3Scope = await lastScopePayload(runtime, partnerId)
+          const run3Scope = await lastScopeDecision(runtime, partnerId)
 
           const run4 = await run(`${runtime.taskId}-d`, RUN4_INPUT)
           const run4Humans = humanContents(
             firstBrain(runtime.eventCollector.snapshotLlmIo().slice(afterRun3.length))
           )
-          const run4Scope = await lastScopePayload(runtime, partnerId)
+          const run4Scope = await lastScopeDecision(runtime, partnerId)
 
           return {
             run1,
@@ -135,14 +148,14 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.run1.status === 'completed' &&
               result.run2.status === 'completed' &&
-              result.run2Scope?.needsHistory === true &&
+              result.run2Scope.decided?.needsHistory === true &&
               result.run2HasRun1User &&
               result.run2LastIsCurrent &&
-              result.run2HasCatalog &&
+              result.run2HasCatalog === false &&
               result.run2Roles[0] === 'system',
             {
-              name: 'continuation-keeps-history',
-              message: '相关追问应带上上一轮原文，目录在历史之后、新 user 之前。',
+              name: 'continuation-keeps-history-without-catalog',
+              message: '相关追问应带上上一轮原文；没丢过历史时不注入目录，避免重复同一段对话。',
               data: {
                 run1: result.run1.status,
                 run2: result.run2.status,
@@ -161,8 +174,8 @@ describe('ai human live backend', () => {
           })
           runtime.assertThat(
             result.run3.status === 'completed' &&
-              result.run3Scope?.needsHistory === false &&
-              typeof result.run3Scope.discardThroughSeq === 'number' &&
+              result.run3Scope.decided?.needsHistory === false &&
+              typeof result.run3Scope.discard?.throughSeq === 'number' &&
               result.run3HasCatalog &&
               result.run3LastIsCurrent &&
               result.run3HasRun1User === false,
@@ -180,12 +193,13 @@ describe('ai human live backend', () => {
           )
           runtime.assertThat(
             result.run4.status === 'completed' &&
+              result.run4Scope.decided?.needsHistory === false &&
               result.run4HasCatalog &&
               new RegExp(TOKEN, 'i').test(result.run4Delivery),
             {
               name: 'catalog-recalls-old-task-token',
               message:
-                '提到已丢弃的旧任务时，无论判定走哪条路径都能从目录拿到线索，交付含原关键词。',
+                '提到已丢弃的旧任务时，判定模型只看到仍在上下文里的任务，应判不需要历史；主模型从目录拿到线索，交付含原关键词。',
               data: {
                 run4: result.run4.status,
                 run4Scope: result.run4Scope,

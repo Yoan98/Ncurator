@@ -7,7 +7,7 @@ import type {
 import {
   projectMessageLogRecords,
   repairInterruptedToolCalls,
-  resolveCompactionCoveredThroughSeq
+  resolveCompactionThroughSeq
 } from '../../../../src/main/services/ai/human/memory/transcript'
 import { projectBrainMessagesFromLog } from '../../../../src/main/services/ai/human/memory/brainMessageProjection'
 import { wrapCompactionCheckpointContent } from '../../../../src/main/services/ai/human/prompts/compaction'
@@ -24,7 +24,7 @@ const user = (content: string): ChatMessageLogEntry => ({
 })
 
 const checkpoint = (input: {
-  coveredThroughSeq: number
+  throughSeq: number
   sourceMessageCount?: number
   summary?: string
   compactBlockId?: string
@@ -33,7 +33,7 @@ const checkpoint = (input: {
   eventType: 'compaction_checkpoint',
   payload: {
     compactBlockId: input.compactBlockId || 'checkpoint-1',
-    coveredThroughSeq: input.coveredThroughSeq,
+    throughSeq: input.throughSeq,
     sourceMessageCount: input.sourceMessageCount ?? 2,
     summary: input.summary || '目标：已写周报'
   }
@@ -64,7 +64,7 @@ describe('ai human message-log recovery', () => {
           runId: 'run-2',
           entry: checkpoint({
             compactBlockId: 'checkpoint-1',
-            coveredThroughSeq: 2,
+            throughSeq: 2,
             sourceMessageCount: 2,
             summary: '目标：已写周报'
           })
@@ -78,7 +78,7 @@ describe('ai human message-log recovery', () => {
     )
 
     const text = projection.messages.map((message) => String(message.content)).join('\n')
-    expect(projection.compactionCheckpoint?.coveredThroughSeq).toBe(2)
+    expect(projection.compactionCheckpoint?.throughSeq).toBe(2)
     expect(projection.compactionCheckpoint?.compactBlockId).toBe('checkpoint-1')
     expect(projection.messages.every((message) => message.getType() !== 'human')).toBe(true)
     expect(text).not.toContain('continue from summary')
@@ -130,7 +130,7 @@ describe('ai human message-log recovery', () => {
     expect(String(repaired[1].content)).toContain('interrupted')
   })
 
-  it('sets coveredThroughSeq through the last user when no process follows', () => {
+  it('sets throughSeq through the last user when no process follows', () => {
     const log = records([
       { runId: 'run-1', entry: user('fill weekly report') },
       {
@@ -139,8 +139,8 @@ describe('ai human message-log recovery', () => {
       },
       { runId: 'run-2', entry: user('change the title') }
     ])
-    expect(resolveCompactionCoveredThroughSeq(log)).toBe(3)
-    expect(resolveCompactionCoveredThroughSeq(log, 0)).toBe(3)
+    expect(resolveCompactionThroughSeq(log)).toBe(3)
+    expect(resolveCompactionThroughSeq(log, 0)).toBe(3)
   })
 
   it('covers the current user and dropped process while leaving the kept tail', () => {
@@ -175,12 +175,12 @@ describe('ai human message-log recovery', () => {
         }
       }
     ])
-    expect(resolveCompactionCoveredThroughSeq(log, 0)).toBe(5)
-    expect(resolveCompactionCoveredThroughSeq(log, 2)).toBe(3)
-    expect(resolveCompactionCoveredThroughSeq(log, 4)).toBe(1)
+    expect(resolveCompactionThroughSeq(log, 0)).toBe(5)
+    expect(resolveCompactionThroughSeq(log, 2)).toBe(3)
+    expect(resolveCompactionThroughSeq(log, 4)).toBe(1)
   })
 
-  it('sets coveredThroughSeq through the message before a kept user when the tail includes that user', () => {
+  it('sets throughSeq through the message before a kept user when the tail includes that user', () => {
     const log = records([
       { runId: 'run-1', entry: user('fill weekly report') },
       {
@@ -213,10 +213,10 @@ describe('ai human message-log recovery', () => {
         }
       }
     ])
-    expect(resolveCompactionCoveredThroughSeq(log, 3)).toBe(3)
+    expect(resolveCompactionThroughSeq(log, 3)).toBe(3)
   })
 
-  it('projects retained tail process after the compacted user when coveredThroughSeq sits before the tail', () => {
+  it('projects retained tail process after the compacted user when throughSeq sits before the tail', () => {
     const summary = '目标：\n写周报'
     const compactedUser = wrapCompactionCheckpointContent(summary)
     const log = records([
@@ -253,7 +253,7 @@ describe('ai human message-log recovery', () => {
         runId: 'run-1',
         entry: checkpoint({
           compactBlockId: 'checkpoint-1',
-          coveredThroughSeq: 3,
+          throughSeq: 3,
           sourceMessageCount: 3,
           summary
         })
@@ -304,7 +304,7 @@ describe('ai human message-log recovery', () => {
         runId: 'run-1',
         entry: checkpoint({
           compactBlockId: 'checkpoint-1',
-          coveredThroughSeq: 2,
+          throughSeq: 2,
           sourceMessageCount: 2,
           summary
         })
@@ -353,7 +353,7 @@ describe('ai human message-log recovery', () => {
         runId: 'run-1',
         entry: checkpoint({
           compactBlockId: 'checkpoint-1',
-          coveredThroughSeq: 2,
+          throughSeq: 2,
           sourceMessageCount: 2,
           summary
         })

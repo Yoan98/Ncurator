@@ -76,12 +76,14 @@ export type MessageLogProjection = {
   learnedSkillIds: string[]
   compactionCheckpoint?: {
     compactBlockId: string
-    coveredThroughSeq: number
+    throughSeq: number
     sourceMessageCount: number
     summary: string
     createdAt: number
   }
-  discardThroughSeq?: number
+  discardCheckpoint?: {
+    throughSeq: number
+  }
   historyFloorSeq: number
 }
 
@@ -97,7 +99,7 @@ const isConversationLogRecord = (record: ChatMessageLogRecord): boolean =>
 export type HistoryFloor = {
   historyFloorSeq: number
   compactionCheckpoint?: MessageLogProjection['compactionCheckpoint']
-  discardThroughSeq?: number
+  discardCheckpoint?: MessageLogProjection['discardCheckpoint']
   includeCheckpoint: boolean
 }
 
@@ -123,8 +125,7 @@ export const resolveHistoryFloor = (records: readonly ChatMessageLogRecord[]): H
     .find((record) => {
       if (
         record.entry.kind !== 'annotation' ||
-        record.entry.eventType !== 'context_scope_selected' ||
-        typeof record.entry.payload.discardThroughSeq !== 'number'
+        record.entry.eventType !== 'discard_checkpoint'
       ) {
         return false
       }
@@ -132,22 +133,23 @@ export const resolveHistoryFloor = (records: readonly ChatMessageLogRecord[]): H
         (candidate) => candidate.runId === record.runId && isConversationLogRecord(candidate)
       )
     })
-  const discardThroughSeq =
+  const discardCheckpoint =
     discardRecord?.entry.kind === 'annotation' &&
-    discardRecord.entry.eventType === 'context_scope_selected'
-      ? discardRecord.entry.payload.discardThroughSeq
+    discardRecord.entry.eventType === 'discard_checkpoint'
+      ? { throughSeq: discardRecord.entry.payload.throughSeq }
       : undefined
   const historyFloorSeq = Math.max(
-    compactionCheckpoint?.coveredThroughSeq ?? -1,
-    discardThroughSeq ?? -1
+    compactionCheckpoint?.throughSeq ?? -1,
+    discardCheckpoint?.throughSeq ?? -1
   )
   const includeCheckpoint = Boolean(
-    compactionCheckpoint && compactionCheckpoint.coveredThroughSeq >= (discardThroughSeq ?? -1)
+    compactionCheckpoint &&
+      compactionCheckpoint.throughSeq >= (discardCheckpoint?.throughSeq ?? -1)
   )
   return {
     historyFloorSeq,
     compactionCheckpoint: includeCheckpoint ? compactionCheckpoint : undefined,
-    discardThroughSeq,
+    discardCheckpoint,
     includeCheckpoint
   }
 }
@@ -171,7 +173,7 @@ export const runHasDigest = (
 export const resolveMaxMessageLogSeq = (records: readonly ChatMessageLogRecord[]): number =>
   records.reduce((maxSeq, record) => Math.max(maxSeq, record.seq), -1)
 
-export const resolveCompactionCoveredThroughSeq = (
+export const resolveCompactionThroughSeq = (
   records: ChatMessageLogRecord[],
   keepTailVisibleCount = 0
 ): number | undefined => {
@@ -194,7 +196,7 @@ export const resolveCompactionCoveredThroughSeq = (
 
 /**
  * 把不可变日志投影为下一次模型调用需要的历史。
- * `compaction_checkpoint.coveredThroughSeq` 覆盖范围内的对话由 checkpoint 摘要替代，绝不同时发送摘要和完整旧历史。
+ * `compaction_checkpoint.throughSeq` 覆盖范围内的对话由 checkpoint 摘要替代，绝不同时发送摘要和完整旧历史。
  */
 export const projectMessageLogRecords = (
   records: ChatMessageLogRecord[]
@@ -227,7 +229,7 @@ export const projectMessageLogRecords = (
     plan,
     learnedSkillIds,
     compactionCheckpoint: floor.compactionCheckpoint,
-    discardThroughSeq: floor.discardThroughSeq,
+    discardCheckpoint: floor.discardCheckpoint,
     historyFloorSeq: floor.historyFloorSeq
   }
 }

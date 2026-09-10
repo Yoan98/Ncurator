@@ -12,7 +12,7 @@ import { buildBrainSystemPrompt } from '../../prompts/brain'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
-import { resolveCompactionCoveredThroughSeq } from '../../memory/transcript'
+import { resolveCompactionThroughSeq } from '../../memory/transcript'
 import {
   countTailBookmarkMessages,
   createCompactedBrainUserMessage,
@@ -86,12 +86,12 @@ export const createContextCompactionNode = (input: {
     const split = splitMessagesForCompactionTail(messages, retainTokens)
     const { folded, tail, history, turnPrefix, isSplitTurn } = split
     const currentRecords = await input.ctx.loadMessageLog()
-    const coveredThroughSeq = resolveCompactionCoveredThroughSeq(
+    const throughSeq = resolveCompactionThroughSeq(
       currentRecords,
       countTailBookmarkMessages(tail)
     )
     // Bookmark 对齐失败是实现不变量破坏：硬停，禁止回 budget 空转烧 key。
-    if (coveredThroughSeq === undefined) {
+    if (throughSeq === undefined) {
       throw createAiRunFailure({
         failureCode: 'internal_error',
         rawMessage: 'compaction_bookmark_unresolved'
@@ -161,7 +161,7 @@ export const createContextCompactionNode = (input: {
         eventType: 'compaction_checkpoint',
         payload: {
           compactBlockId,
-          coveredThroughSeq,
+          throughSeq,
           sourceMessageCount: folded.length,
           summary: compactBlock.summary
         }

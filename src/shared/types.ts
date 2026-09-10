@@ -1905,7 +1905,7 @@ export type ChatMessageLogAnnotationEntry =
       eventType: 'compaction_checkpoint'
       payload: {
         compactBlockId: string
-        coveredThroughSeq: number
+        throughSeq: number
         sourceMessageCount: number
         summary: string
       }
@@ -1920,12 +1920,18 @@ export type ChatMessageLogAnnotationEntry =
     }
   | {
       kind: 'annotation'
-      eventType: 'context_scope_selected'
+      eventType: 'context_scope_decided'
       payload: {
         needsHistory: boolean
         basis: ContextScopeDecisionBasis
         budgetTokens: number
-        discardThroughSeq?: number
+      }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'discard_checkpoint'
+      payload: {
+        throughSeq: number
       }
     }
   | {

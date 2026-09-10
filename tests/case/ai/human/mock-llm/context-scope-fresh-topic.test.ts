@@ -66,26 +66,38 @@ describe('ai human mock-llm backend', () => {
           userInput: '请分析这份销售 Excel 并给出汇总。'
         })
         const log = await runtime.storageService.chatMessageLog.list(PARTNER_ID)
-        const scope = [...log]
+        const decided = [...log]
           .reverse()
           .find(
             (record) =>
               record.entry.kind === 'annotation' &&
-              record.entry.eventType === 'context_scope_selected'
+              record.entry.eventType === 'context_scope_decided'
           )
-        return { output, run2Prompt, scope }
+        const discard = [...log]
+          .reverse()
+          .find(
+            (record) =>
+              record.entry.kind === 'annotation' &&
+              record.entry.eventType === 'discard_checkpoint'
+          )
+        return { output, run2Prompt, decided, discard }
       },
       assert: async (result, runtime) => {
-        const payload =
-          result.scope?.entry.kind === 'annotation' &&
-          result.scope.entry.eventType === 'context_scope_selected'
-            ? result.scope.entry.payload
+        const decidedPayload =
+          result.decided?.entry.kind === 'annotation' &&
+          result.decided.entry.eventType === 'context_scope_decided'
+            ? result.decided.entry.payload
+            : undefined
+        const discardPayload =
+          result.discard?.entry.kind === 'annotation' &&
+          result.discard.entry.eventType === 'discard_checkpoint'
+            ? result.discard.entry.payload
             : undefined
         runtime.assertThat(
           result.output.status === 'completed' &&
-            payload?.needsHistory === false &&
-            payload.basis === 'model_decision' &&
-            typeof payload.discardThroughSeq === 'number' &&
+            decidedPayload?.needsHistory === false &&
+            decidedPayload.basis === 'model_decision' &&
+            typeof discardPayload?.throughSeq === 'number' &&
             result.run2Prompt.includes('<task_catalog>') &&
             result.run2Prompt.includes('按模板写本周周报') &&
             !result.run2Prompt.includes('SECRET_WEEKLY_REPORT') &&
@@ -96,7 +108,8 @@ describe('ai human mock-llm backend', () => {
               '无关新任务应判定不需要历史，主模型看到任务目录和新 user，看不到上一轮交付原文。',
             data: {
               status: result.output.status,
-              payload,
+              decidedPayload,
+              discardPayload,
               promptPreview: result.run2Prompt.slice(0, 2000)
             }
           }
@@ -159,24 +172,24 @@ describe('ai human mock-llm backend', () => {
           userInput: '继续刚才的解释。'
         })
         const log = await runtime.storageService.chatMessageLog.list(partnerId)
-        const scope = [...log]
+        const decided = [...log]
           .reverse()
           .find(
             (record) =>
               record.entry.kind === 'annotation' &&
-              record.entry.eventType === 'context_scope_selected'
+              record.entry.eventType === 'context_scope_decided'
           )
         const run2ScopeCalls = runtime.eventCollector
           .snapshotLlmIo()
           .slice(beforeRun2)
           .filter((record) => record.caller === 'human.context_scope').length
-        return { output, scope, run2ScopeCalls }
+        return { output, decided, run2ScopeCalls }
       },
       assert: async (result, runtime) => {
         const payload =
-          result.scope?.entry.kind === 'annotation' &&
-          result.scope.entry.eventType === 'context_scope_selected'
-            ? result.scope.entry.payload
+          result.decided?.entry.kind === 'annotation' &&
+          result.decided.entry.eventType === 'context_scope_decided'
+            ? result.decided.entry.payload
             : undefined
         runtime.assertThat(
           result.output.status === 'completed' &&
