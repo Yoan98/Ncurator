@@ -10,21 +10,9 @@ export const FREE_MODEL_NOTICE = '不保证稳定和隐私性'
 
 export type FreeModelCapability = 'text' | 'vision'
 
-/**
- * Free-catalog brand slug from official API.
- * Not the same as desktop settings `LlmProviderId` (presets / URL inference).
- */
-export type FreeModelProviderId = string
-
-const FREE_MODEL_PROVIDER_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/
-
-export const isFreeModelProviderId = (value: string): boolean =>
-  FREE_MODEL_PROVIDER_ID_PATTERN.test(value)
-
 /** Full catalog entry from official API (includes secrets). Main-only. */
 export type FreeModelCatalogEntry = {
   id: string
-  providerId: FreeModelProviderId
   providerKind: LlmProviderKind
   modelName: string
   label: string
@@ -44,7 +32,6 @@ export type FreeModelsCatalogResponse = {
 export type FreeModelPublicEntry = {
   id: string
   configId: string
-  providerId: FreeModelCatalogEntry['providerId']
   providerKind: LlmProviderKind
   modelName: string
   label: string
@@ -74,7 +61,6 @@ export const freeModelEntryIdFromConfigId = (configId: string): string | null =>
 export const toFreeModelPublicEntry = (entry: FreeModelCatalogEntry): FreeModelPublicEntry => ({
   id: entry.id,
   configId: toFreeModelConfigId(entry.id),
-  providerId: entry.providerId,
   providerKind: entry.providerKind,
   modelName: entry.modelName,
   label: entry.label,

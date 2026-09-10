@@ -80,6 +80,18 @@ const messageRoles = (record: AiLlmIoRecord | undefined): string[] =>
 const discardHuman = (humans: readonly string[]): string | undefined =>
   humans.find((text) => text.includes('以下是最近的会话内容'))
 
+const conversationUserInputs = (history: string | undefined): string[] =>
+  String(history || '')
+    .split('\n')
+    .filter((line) => line.startsWith('用户：'))
+    .map((line) => line.slice('用户：'.length))
+
+const conversationBlocks = (history: string | undefined): string[] =>
+  String(history || '')
+    .split('\n\n')
+    .map((block) => block.trim())
+    .filter(Boolean)
+
 const scopeJudgeUser = (records: readonly AiLlmIoRecord[]): string => {
   const call = records.find((record) => record.caller === 'human.context_scope')
   return String(call?.user || '')
@@ -169,6 +181,9 @@ describe('ai human live backend', () => {
             run5Scope,
             run5JudgeUser: scopeJudgeUser(run5Io),
             run5HasCatalog: run5Humans.some((text) => text.includes('<task_catalog>')),
+            run5HistoryUsers: conversationUserInputs(run5Scope.discard?.conversationHistory),
+            run5HistoryBlocks: conversationBlocks(run5Scope.discard?.conversationHistory),
+            run3HistoryUsers: conversationUserInputs(run3Scope.discard?.conversationHistory),
             run5Delivery: run5.deliveryMarkdown || ''
           }
         },
@@ -205,7 +220,8 @@ describe('ai human live backend', () => {
               result.run3Scope.decided?.needsHistory === false &&
               typeof result.run3Scope.discard?.throughSeq === 'number' &&
               typeof result.run3Scope.discard.conversationHistory === 'string' &&
-              result.run3Scope.discard.conversationHistory.includes(RUN1_INPUT) &&
+              result.run3HistoryUsers[0] === RUN1_INPUT &&
+              result.run3HistoryUsers[1] === RUN2_INPUT &&
               result.run3HasCatalog === false &&
               Boolean(result.run3DiscardHuman) &&
               result.run3HasRun1User &&
@@ -220,6 +236,7 @@ describe('ai human live backend', () => {
                 run3HasCatalog: result.run3HasCatalog,
                 run3HasRun1User: result.run3HasRun1User,
                 run3LastIsCurrent: result.run3LastIsCurrent,
+                run3HistoryUsers: result.run3HistoryUsers,
                 run3DiscardPreview: result.run3DiscardHuman?.slice(0, 500)
               }
             }
@@ -252,6 +269,12 @@ describe('ai human live backend', () => {
               typeof result.run5Scope.discard?.conversationHistory === 'string' &&
               result.run5Scope.discard.conversationHistory !==
                 result.run3Scope.discard?.conversationHistory &&
+              result.run5HistoryUsers[0] === RUN1_INPUT &&
+              result.run5HistoryUsers[1] === RUN2_INPUT &&
+              result.run5HistoryUsers[2] === RUN3_INPUT &&
+              result.run5HistoryUsers[3] === RUN4_INPUT &&
+              result.run5HistoryBlocks[0]?.includes(`用户：${RUN1_INPUT}`) === true &&
+              result.run5HistoryBlocks[0]?.includes(`用户：${RUN4_INPUT}`) !== true &&
               result.run5JudgeUser.includes('法国') &&
               !result.run5JudgeUser.split('<new_task_goal>')[0]?.includes(TOKEN) &&
               result.run5HasCatalog === false &&
@@ -259,11 +282,13 @@ describe('ai human live backend', () => {
             {
               name: 'second-discard-recalls-token-from-history',
               message:
-                '再问旧关键词时，判定只看到法国 digest；新 conversationHistory 与上一份不同；交付含 TOKEN。',
+                '再问旧关键词时，判定只看到法国 digest；新 conversationHistory 应按轮配对 Run1～4 用户原话；交付含 TOKEN。',
               data: {
                 run5: result.run5.status,
                 run5Scope: result.run5Scope,
                 run5HasCatalog: result.run5HasCatalog,
+                run5HistoryUsers: result.run5HistoryUsers,
+                run5HistoryBlocks: result.run5HistoryBlocks,
                 run5JudgeUser: result.run5JudgeUser.slice(0, 1000),
                 delivery: result.run5Delivery
               }

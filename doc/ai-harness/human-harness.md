@@ -605,7 +605,7 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 
 ### 4.4 Discard User 与 conversationHistory
 
-`needsHistory=false` 时，从有 `run_digest` 的 completed run 拼召回正文：该 run 的 `user.input`、交付 `assistant`（`toolCalls: []`）、`fileChangePaths`（没有改动就不写「改动文件」行）。从新到旧加，整段 token ≤ 窗口 × **10%**（`CONTEXT_SCOPE_DISCARD_HISTORY_RATIO`）；单段交付超预算则只裁这一段。冻进 `discard_checkpoint.conversationHistory`（不含外壳）。之后带历史只读这份，不再重扫。
+`needsHistory=false` 时，按 `seq` 扫描整份伙伴 log，**每条 `run_digest` 关闭一轮**（切片是上一条 digest 之后到本条 digest，不按 `runId` 整袋打包）：该轮第一条带 `input` 的 `user`、切片内最后一条交付 `assistant`（`toolCalls: []`）、本条 digest 的 `fileChangePaths`（没有改动就不写「改动文件」行）。从新到旧加，整段 token ≤ 窗口 × **10%**（`CONTEXT_SCOPE_DISCARD_HISTORY_RATIO`）；单段交付超预算则只裁这一段。冻进 `discard_checkpoint.conversationHistory`（不含外壳）。之后带历史只读这份，不再重扫。
 
 外壳在投影时套上：
 

@@ -385,6 +385,68 @@ describe('brain message projection with context scope', () => {
     expect(discardText).toContain('NEW-SESSION')
     expect(discardText).not.toContain('OLD-RESEARCH-TOKEN')
   })
+
+  it('pairs each digest interval even when all sessions share one runId', () => {
+    const log = records([
+      { runId: 'shared', entry: user('记住 ALPHA', '记住 ALPHA') },
+      { runId: 'shared', entry: assistant('已收到 ALPHA') },
+      { runId: 'shared', entry: digest('记下关键词') },
+      { runId: 'shared', entry: user('缩短确认', '缩短确认') },
+      { runId: 'shared', entry: assistant('已记下') },
+      { runId: 'shared', entry: digest('缩短确认') },
+      { runId: 'shared', entry: user('法国首都', '法国首都') },
+      { runId: 'shared', entry: assistant('巴黎') },
+      { runId: 'shared', entry: digest('法国首都') },
+      { runId: 'shared', entry: user('巴黎大区', '巴黎大区') },
+      { runId: 'shared', entry: assistant('法兰西岛大区') },
+      { runId: 'shared', entry: digest('巴黎大区') },
+      { runId: 'shared', entry: user('未完成的一轮', '未完成的一轮') }
+    ])
+    const history = assembleConversationHistory(log, 10_000)
+    const blocks = history.split('\n\n')
+    expect(blocks).toHaveLength(4)
+    expect(blocks[0]).toContain('用户：记住 ALPHA')
+    expect(blocks[0]).toContain('交付：已收到 ALPHA')
+    expect(blocks[0]).not.toContain('法兰西岛大区')
+    expect(blocks[1]).toContain('用户：缩短确认')
+    expect(blocks[1]).toContain('交付：已记下')
+    expect(blocks[2]).toContain('用户：法国首都')
+    expect(blocks[2]).toContain('交付：巴黎')
+    expect(blocks[3]).toContain('用户：巴黎大区')
+    expect(blocks[3]).toContain('交付：法兰西岛大区')
+    expect(history).not.toContain('未完成的一轮')
+  })
+
+  it('uses the delivery assistant in a digest slice that also has tool calls', () => {
+    const log = records([
+      { runId: 'shared', entry: user('查一下周报', '查一下周报') },
+      {
+        runId: 'shared',
+        entry: {
+          kind: 'assistant',
+          content: '',
+          toolCalls: [{ id: 'call-1', name: 'docx_read_outline', args: { path: '/tmp/a.docx' } }]
+        }
+      },
+      {
+        runId: 'shared',
+        entry: {
+          kind: 'tool',
+          toolCallId: 'call-1',
+          toolName: 'docx_read_outline',
+          ok: true,
+          content: 'outline'
+        }
+      },
+      { runId: 'shared', entry: assistant('周报已读完') },
+      { runId: 'shared', entry: digest('读周报', ['/tmp/a.docx']) }
+    ])
+    const history = assembleConversationHistory(log, 10_000)
+    expect(history).toContain('用户：查一下周报')
+    expect(history).toContain('交付：周报已读完')
+    expect(history).toContain('改动文件：/tmp/a.docx')
+    expect(history).not.toContain('outline')
+  })
 })
 
 describe('context scope decision prompt', () => {

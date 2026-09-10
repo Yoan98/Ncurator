@@ -51,33 +51,28 @@ export const renderRunDigestCatalog = (entries: readonly RunDigestCatalogEntry[]
 const isDeliveryAssistant = (record: ChatMessageLogRecord): boolean =>
   record.entry.kind === 'assistant' && record.entry.toolCalls.length === 0
 
+const isRunDigestRecord = (
+  record: ChatMessageLogRecord
+): record is ChatMessageLogRecord & {
+  entry: Extract<ChatMessageLogRecord['entry'], { eventType: 'run_digest' }>
+} => record.entry.kind === 'annotation' && record.entry.eventType === 'run_digest'
+
 export const collectCompletedSessionBlocks = (
   records: readonly ChatMessageLogRecord[]
 ): CompletedSessionBlock[] => {
   const ordered = orderMessageLogBySeq([...records])
-  const byRun = new Map<string, ChatMessageLogRecord[]>()
-  for (const record of ordered) {
-    const list = byRun.get(record.runId) || []
-    list.push(record)
-    byRun.set(record.runId, list)
-  }
   const blocks: CompletedSessionBlock[] = []
-  for (const runRecords of byRun.values()) {
-    const digestRecord = runRecords.find(
-      (record) => record.entry.kind === 'annotation' && record.entry.eventType === 'run_digest'
-    )
-    if (
-      !digestRecord ||
-      digestRecord.entry.kind !== 'annotation' ||
-      digestRecord.entry.eventType !== 'run_digest'
-    ) {
-      continue
-    }
-    const userRecord = runRecords.find(
+  let sliceStart = 0
+  for (let index = 0; index < ordered.length; index += 1) {
+    const digestRecord = ordered[index]
+    if (!digestRecord || !isRunDigestRecord(digestRecord)) continue
+    const slice = ordered.slice(sliceStart, index + 1)
+    sliceStart = index + 1
+    const userRecord = slice.find(
       (record) => record.entry.kind === 'user' && record.entry.input.trim()
     )
     if (!userRecord || userRecord.entry.kind !== 'user') continue
-    const deliveryRecord = [...runRecords].reverse().find(isDeliveryAssistant)
+    const deliveryRecord = [...slice].reverse().find(isDeliveryAssistant)
     const delivery =
       deliveryRecord?.entry.kind === 'assistant' ? deliveryRecord.entry.content.trim() : ''
     const userInput = userRecord.entry.input.trim()
@@ -91,7 +86,7 @@ export const collectCompletedSessionBlocks = (
         .filter(Boolean)
     })
   }
-  return blocks.sort((left, right) => left.createdAt - right.createdAt)
+  return blocks
 }
 
 export const renderSessionBlock = (block: CompletedSessionBlock): string => {

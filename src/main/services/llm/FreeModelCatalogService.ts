@@ -7,7 +7,6 @@ import {
   type FreeModelsCatalogResponse,
   type FreeModelsSnapshot,
   freeModelEntryIdFromConfigId,
-  isFreeModelProviderId,
   toFreeModelPublicEntry,
   toFreeModelRuntimeConfig,
   type FreeModelPublicEntry
@@ -47,7 +46,6 @@ const parseEntry = (value: unknown): FreeModelCatalogEntry | null => {
   if (!value || typeof value !== 'object') return null
   const row = value as Record<string, unknown>
   const id = String(row.id || '').trim()
-  const providerId = String(row.providerId || '').trim()
   const providerKind = String(row.providerKind || '').trim()
   const modelName = String(row.modelName || '').trim()
   const label = String(row.label || '').trim()
@@ -58,7 +56,6 @@ const parseEntry = (value: unknown): FreeModelCatalogEntry | null => {
   const capabilities = parseCapabilities(row.capabilities)
   if (
     !id ||
-    !isFreeModelProviderId(providerId) ||
     !PROVIDER_KINDS.has(providerKind) ||
     !modelName ||
     !label ||
@@ -71,7 +68,6 @@ const parseEntry = (value: unknown): FreeModelCatalogEntry | null => {
   }
   return {
     id,
-    providerId,
     providerKind: providerKind as FreeModelCatalogEntry['providerKind'],
     modelName,
     label,

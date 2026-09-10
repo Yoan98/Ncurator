@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   isFreeModelConfigId,
-  isFreeModelProviderId,
   toFreeModelConfigId,
   toFreeModelPublicEntry,
   type FreeModelCatalogEntry
@@ -13,7 +12,6 @@ import {
 
 const sampleEntry = (overrides?: Partial<FreeModelCatalogEntry>): FreeModelCatalogEntry => ({
   id: 'free-deepseek-v4-flash',
-  providerId: 'deepseek',
   providerKind: 'openai-compatible',
   modelName: 'deepseek-ai/deepseek-v4-flash-0731',
   label: 'DeepSeek V4 Flash',
@@ -35,17 +33,8 @@ describe('free model catalog helpers', () => {
     const publicEntry = toFreeModelPublicEntry(entry)
     expect(publicEntry.configId).toBe('free:free-deepseek-v4-flash')
     expect(publicEntry).not.toHaveProperty('apiKey')
+    expect(publicEntry).not.toHaveProperty('providerId')
     expect(publicEntry.iconUrl).toBe(entry.iconUrl)
-  })
-
-  it('treats providerId as free brand slug unrelated to desktop presets', () => {
-    expect(isFreeModelProviderId('grok')).toBe(true)
-    expect(isFreeModelProviderId('my-brand.v2')).toBe(true)
-    expect(isFreeModelProviderId('')).toBe(false)
-    expect(isFreeModelProviderId('bad slug')).toBe(false)
-
-    const publicEntry = toFreeModelPublicEntry(sampleEntry({ providerId: 'acme-llm' }))
-    expect(publicEntry.providerId).toBe('acme-llm')
   })
 
   it('keeps free model selections and falls back to free catalog when no user configs', () => {
