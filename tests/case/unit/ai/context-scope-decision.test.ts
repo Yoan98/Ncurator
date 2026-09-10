@@ -7,8 +7,8 @@ import type {
 import { projectBrainMessagesFromLog } from '../../../../src/main/services/ai/human/memory/brainMessageProjection'
 import {
   assembleConversationHistory,
-  collectRunDigestCatalogEntries,
-  renderRunDigestCatalog
+  collectRunDigests,
+  renderRunDigests
 } from '../../../../src/main/services/ai/human/memory/runDigestCatalog'
 import {
   projectMessageLogRecords,
@@ -131,7 +131,7 @@ const bulkyHistory = records([
   }
 ])
 
-describe('run digest catalog', () => {
+describe('run digest list', () => {
   it('renders all digests as timestamped lines with changed files and no entry cap', () => {
     const many = records(
       Array.from({ length: 32 }, (_, index) => ({
@@ -140,10 +140,10 @@ describe('run digest catalog', () => {
         createdAt: Date.UTC(2026, 2, 14, 8, 20) + index * 60_000
       }))
     )
-    const entries = collectRunDigestCatalogEntries(many)
+    const entries = collectRunDigests(many)
     expect(entries).toHaveLength(32)
     expect(entries[0]?.summary).toBe('任务 1')
-    const rendered = renderRunDigestCatalog(entries)
+    const rendered = renderRunDigests(entries)
     expect(rendered.split('\n')).toHaveLength(32)
     expect(rendered).toContain('任务 1')
     expect(rendered).toContain('任务 32')
@@ -151,7 +151,7 @@ describe('run digest catalog', () => {
     expect(rendered).not.toMatch(/任务 2 \| .*改动文件/)
   })
 
-  it('does not apply history floor when collecting catalog entries', () => {
+  it('collects every digest in the given records', () => {
     const log = records([
       { runId: 'run-1', entry: user('old', '旧周报原文') },
       { runId: 'run-1', entry: assistant('old answer') },
@@ -164,10 +164,10 @@ describe('run digest catalog', () => {
       { runId: 'run-2', entry: assistant('excel done') },
       { runId: 'run-2', entry: digest('分析销售表', ['/Users/me/workspace/销售.xlsx']) }
     ])
-    const catalog = renderRunDigestCatalog(collectRunDigestCatalogEntries(log))
-    expect(catalog).toContain('旧周报')
-    expect(catalog).toContain('改动文件：/Users/me/workspace/周报.docx')
-    expect(catalog).toContain('分析销售表')
+    const digests = renderRunDigests(collectRunDigests(log))
+    expect(digests).toContain('旧周报')
+    expect(digests).toContain('改动文件：/Users/me/workspace/周报.docx')
+    expect(digests).toContain('分析销售表')
   })
 })
 
@@ -417,6 +417,21 @@ describe('brain message projection with context scope', () => {
     expect(history).not.toContain('未完成的一轮')
   })
 
+  it('does not pair an incomplete user with the next completed delivery', () => {
+    const log = records([
+      { runId: 'run-a', entry: user('失败的任务 A', '失败的任务 A') },
+      { runId: 'run-a', entry: assistant('做到一半') },
+      { runId: 'run-b', entry: user('成功的任务 B', '成功的任务 B') },
+      { runId: 'run-b', entry: assistant('B 已完成') },
+      { runId: 'run-b', entry: digest('完成任务 B') }
+    ])
+    const history = assembleConversationHistory(log, 10_000)
+    expect(history).toContain('用户：成功的任务 B')
+    expect(history).toContain('交付：B 已完成')
+    expect(history).not.toContain('失败的任务 A')
+    expect(history).not.toContain('做到一半')
+  })
+
   it('uses the delivery assistant in a digest slice that also has tool calls', () => {
     const log = records([
       { runId: 'shared', entry: user('查一下周报', '查一下周报') },
@@ -452,17 +467,19 @@ describe('brain message projection with context scope', () => {
 describe('context scope decision prompt', () => {
   it('asks about the current history and keeps the user message data-only', () => {
     const prompt = buildContextScopeDecisionPrompt({
-      catalogText: '2026-03-14 08:20 | 写周报 | 改动文件：/tmp/周报.docx',
+      digestText: '2026-03-14 08:20 | 写周报 | 改动文件：/tmp/周报.docx',
       taskGoal: '把标题改一下'
     })
     expect(prompt.system).toContain('needsHistory')
+    expect(prompt.system).toContain('digest')
+    expect(prompt.system).not.toContain('目录')
     expect(prompt.system).not.toContain('上一轮')
     expect(prompt.system).not.toContain('最新')
     expect(prompt.user).toBe(
       [
-        '<completed_task_catalog>',
+        '<completed_run_digests>',
         '2026-03-14 08:20 | 写周报 | 改动文件：/tmp/周报.docx',
-        '</completed_task_catalog>',
+        '</completed_run_digests>',
         '',
         '<new_task_goal>',
         '把标题改一下',

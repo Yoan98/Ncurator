@@ -4,22 +4,22 @@ export const wrapDiscardConversationHistory = (historyText: string): string => {
   return ['以下是最近的会话内容', '', body].join('\n')
 }
 
-export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。根据近期任务目录和新诉求，判断这一轮还需不需要当前这段对话历史原文。
+export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。根据近期已完成任务的 digest 和新诉求，判断这一轮还需不需要当前这段对话历史原文。
 
-needsHistory=true：新诉求在延续、追问、修改或纠正目录里近期任何一件事。
-needsHistory=false：新诉求是全新话题，和目录里的事都无关。
+needsHistory=true：新诉求在延续、追问、修改或纠正这些 digest 里近期任何一件事。
+needsHistory=false：新诉求是全新话题，和这些 digest 里的事都无关。
 
 不要继续对话，不要回答用户的问题。只输出 JSON，形如 {"needsHistory": true}。`
 
 export const buildContextScopeDecisionPrompt = (input: {
-  catalogText: string
+  digestText: string
   taskGoal: string
 }): { system: string; user: string } => ({
   system: CONTEXT_SCOPE_SYSTEM_PROMPT,
   user: [
-    '<completed_task_catalog>',
-    input.catalogText.trim() || '无',
-    '</completed_task_catalog>',
+    '<completed_run_digests>',
+    input.digestText.trim() || '无',
+    '</completed_run_digests>',
     '',
     '<new_task_goal>',
     input.taskGoal.trim() || '无',

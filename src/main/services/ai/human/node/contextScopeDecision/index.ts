@@ -11,9 +11,9 @@ import {
 import { estimateMessagesForContext } from '../../memory/multimodal'
 import { projectBrainMessagesFromLog } from '../../memory/brainMessageProjection'
 import {
-  collectRunDigestCatalogEntries,
+  collectRunDigests,
   assembleConversationHistory,
-  renderRunDigestCatalog
+  renderRunDigests
 } from '../../memory/runDigestCatalog'
 import {
   resolveHistoryFloor,
@@ -52,9 +52,9 @@ const decideByModel = async (input: {
 }): Promise<ContextScopeDecision> => {
   const floor = resolveHistoryFloor(input.records)
   const liveRecords = input.records.filter((record) => record.seq > floor.historyFloorSeq)
-  const catalogText = renderRunDigestCatalog(collectRunDigestCatalogEntries(liveRecords))
+  const digestText = renderRunDigests(collectRunDigests(liveRecords))
   const prompt = buildContextScopeDecisionPrompt({
-    catalogText,
+    digestText,
     taskGoal: input.state.task.userInput
   })
   try {

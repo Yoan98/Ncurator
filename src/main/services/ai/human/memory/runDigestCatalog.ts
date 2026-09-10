@@ -22,7 +22,7 @@ export const formatCatalogTimestamp = (createdAt: number): string => {
   return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`
 }
 
-export const collectRunDigestCatalogEntries = (
+export const collectRunDigests = (
   records: readonly ChatMessageLogRecord[]
 ): RunDigestCatalogEntry[] => {
   const entries: RunDigestCatalogEntry[] = []
@@ -39,7 +39,7 @@ export const collectRunDigestCatalogEntries = (
   return entries
 }
 
-export const renderRunDigestCatalog = (entries: readonly RunDigestCatalogEntry[]): string =>
+export const renderRunDigests = (entries: readonly RunDigestCatalogEntry[]): string =>
   entries
     .map((entry) => {
       const time = formatCatalogTimestamp(entry.createdAt)
@@ -68,11 +68,12 @@ export const collectCompletedSessionBlocks = (
     if (!digestRecord || !isRunDigestRecord(digestRecord)) continue
     const slice = ordered.slice(sliceStart, index + 1)
     sliceStart = index + 1
-    const userRecord = slice.find(
+    const fromEnd = [...slice].reverse()
+    const userRecord = fromEnd.find(
       (record) => record.entry.kind === 'user' && record.entry.input.trim()
     )
     if (!userRecord || userRecord.entry.kind !== 'user') continue
-    const deliveryRecord = [...slice].reverse().find(isDeliveryAssistant)
+    const deliveryRecord = fromEnd.find(isDeliveryAssistant)
     const delivery =
       deliveryRecord?.entry.kind === 'assistant' ? deliveryRecord.entry.content.trim() : ''
     const userInput = userRecord.entry.input.trim()
