@@ -7,6 +7,7 @@ import {
   type FreeModelsCatalogResponse,
   type FreeModelsSnapshot,
   freeModelEntryIdFromConfigId,
+  isFreeModelProviderId,
   toFreeModelPublicEntry,
   toFreeModelRuntimeConfig,
   type FreeModelPublicEntry
@@ -24,7 +25,6 @@ type CachePayload = {
   models: FreeModelCatalogEntry[]
 }
 
-const PROVIDER_IDS = new Set(['deepseek', 'dashscope', 'mimo', 'moonshot', 'zhipu', 'grok'])
 const PROVIDER_KINDS = new Set(['openai', 'deepseek', 'openai-compatible'])
 const CAPABILITIES = new Set(['text', 'vision'])
 
@@ -51,18 +51,17 @@ const parseEntry = (value: unknown): FreeModelCatalogEntry | null => {
   const providerKind = String(row.providerKind || '').trim()
   const modelName = String(row.modelName || '').trim()
   const label = String(row.label || '').trim()
-  const description = String(row.description || '').trim()
+  const description = typeof row.description === 'string' ? row.description.trim() : ''
   const iconUrl = String(row.iconUrl || '').trim()
   const baseUrl = String(row.baseUrl || '').trim()
   const apiKey = String(row.apiKey || '').trim()
   const capabilities = parseCapabilities(row.capabilities)
   if (
     !id ||
-    !PROVIDER_IDS.has(providerId) ||
+    !isFreeModelProviderId(providerId) ||
     !PROVIDER_KINDS.has(providerKind) ||
     !modelName ||
     !label ||
-    !description ||
     !iconUrl ||
     !baseUrl ||
     !apiKey ||
@@ -72,7 +71,7 @@ const parseEntry = (value: unknown): FreeModelCatalogEntry | null => {
   }
   return {
     id,
-    providerId: providerId as FreeModelCatalogEntry['providerId'],
+    providerId,
     providerKind: providerKind as FreeModelCatalogEntry['providerKind'],
     modelName,
     label,

@@ -10,13 +10,16 @@ export const FREE_MODEL_NOTICE = '不保证稳定和隐私性'
 
 export type FreeModelCapability = 'text' | 'vision'
 
-export type FreeModelProviderId =
-  | 'deepseek'
-  | 'dashscope'
-  | 'mimo'
-  | 'moonshot'
-  | 'zhipu'
-  | 'grok'
+/**
+ * Free-catalog brand slug from official API.
+ * Not the same as desktop settings `LlmProviderId` (presets / URL inference).
+ */
+export type FreeModelProviderId = string
+
+const FREE_MODEL_PROVIDER_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/
+
+export const isFreeModelProviderId = (value: string): boolean =>
+  FREE_MODEL_PROVIDER_ID_PATTERN.test(value)
 
 /** Full catalog entry from official API (includes secrets). Main-only. */
 export type FreeModelCatalogEntry = {

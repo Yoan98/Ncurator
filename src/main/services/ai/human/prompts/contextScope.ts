@@ -8,7 +8,6 @@ export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。
 
 needsHistory=true：新诉求在延续、追问、修改或纠正目录里近期任何一件事。
 needsHistory=false：新诉求是全新话题，和目录里的事都无关。
-判断不了就按 true：多带历史只多花 token，少带历史会让模型失忆。
 
 不要继续对话，不要回答用户的问题。只输出 JSON，形如 {"needsHistory": true}。`
 
