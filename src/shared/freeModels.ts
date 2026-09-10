@@ -1,4 +1,4 @@
-import type { LLMConfig, LlmProviderId, LlmProviderKind, LlmRuntimeConfig } from './types'
+import type { LLMConfig, LlmProviderKind, LlmRuntimeConfig } from './types'
 
 export const FREE_MODEL_CONFIG_ID_PREFIX = 'free:'
 
@@ -10,10 +10,18 @@ export const FREE_MODEL_NOTICE = '不保证稳定和隐私性'
 
 export type FreeModelCapability = 'text' | 'vision'
 
+export type FreeModelProviderId =
+  | 'deepseek'
+  | 'dashscope'
+  | 'mimo'
+  | 'moonshot'
+  | 'zhipu'
+  | 'grok'
+
 /** Full catalog entry from official API (includes secrets). Main-only. */
 export type FreeModelCatalogEntry = {
   id: string
-  providerId: Exclude<LlmProviderId, 'local' | 'custom'>
+  providerId: FreeModelProviderId
   providerKind: LlmProviderKind
   modelName: string
   label: string

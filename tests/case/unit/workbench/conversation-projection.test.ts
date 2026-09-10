@@ -49,6 +49,7 @@ describe('conversationProjection', () => {
         entry: {
           kind: 'user',
           content: 'hello',
+          input: 'hello',
           context: { selectedReferences: [], attachments: [] }
         }
       }),
@@ -92,6 +93,7 @@ describe('conversationProjection', () => {
         entry: {
           kind: 'user',
           content: '<user_context>写周报</user_context>',
+          input: '写周报',
           context: { selectedReferences: [], attachments: [] }
         }
       }),

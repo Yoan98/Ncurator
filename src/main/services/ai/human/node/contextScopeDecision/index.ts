@@ -5,12 +5,14 @@ import type { AiRunContext } from '../../../types'
 import type { HumanContextScopeDecision, HumanState } from '../../types'
 import {
   resolveContextScopeDecisionTokens,
-  resolveContextWindowTokens
+  resolveContextWindowTokens,
+  resolveDiscardHistoryTokens
 } from '../../constants'
 import { estimateMessagesForContext } from '../../memory/multimodal'
 import { projectBrainMessagesFromLog } from '../../memory/brainMessageProjection'
 import {
   collectRunDigestCatalogEntries,
+  assembleConversationHistory,
   renderRunDigestCatalog
 } from '../../memory/runDigestCatalog'
 import {
@@ -135,25 +137,36 @@ export const buildContextScopeDecidedEntry = (
   }
 })
 
-export const buildDiscardCheckpointEntry = (
+export const buildDiscardCheckpointEntry = (input: {
   records: readonly ChatMessageLogRecord[]
-): ChatMessageLogEntry | undefined => {
-  const throughSeq = resolveMaxMessageLogSeq(records)
+  contextWindowTokens: number
+}): ChatMessageLogEntry | undefined => {
+  const throughSeq = resolveMaxMessageLogSeq(input.records)
   if (throughSeq < 0) return undefined
   return {
     kind: 'annotation',
     eventType: 'discard_checkpoint',
-    payload: { throughSeq }
+    payload: {
+      throughSeq,
+      conversationHistory: assembleConversationHistory(
+        input.records,
+        resolveDiscardHistoryTokens(input.contextWindowTokens)
+      )
+    }
   }
 }
 
 export const buildContextScopeLogEntries = (input: {
   decision: ContextScopeDecision
   records: readonly ChatMessageLogRecord[]
+  contextWindowTokens: number
 }): ChatMessageLogEntry[] => {
   const entries: ChatMessageLogEntry[] = [buildContextScopeDecidedEntry(input.decision)]
   if (!input.decision.needsHistory) {
-    const discard = buildDiscardCheckpointEntry(input.records)
+    const discard = buildDiscardCheckpointEntry({
+      records: input.records,
+      contextWindowTokens: input.contextWindowTokens
+    })
     if (discard) entries.push(discard)
   }
   return entries

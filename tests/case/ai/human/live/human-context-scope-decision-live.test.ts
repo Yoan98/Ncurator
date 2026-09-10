@@ -15,7 +15,8 @@ const TOKEN = 'ALPHA-REPORT-42'
 const RUN1_INPUT = `记住关键词 ${TOKEN}，用一句话确认你收到了，不要读文件。`
 const RUN2_INPUT = '把刚才那个确认再缩短成十个字。'
 const RUN3_INPUT = '法国的首都是哪里？不要提刚才的关键词或机器学习。'
-const RUN4_INPUT = `刚才那个 ${TOKEN} 的关键词是什么？如果目录里有就直接说。`
+const RUN4_INPUT = '巴黎属于哪个大区？只回答大区名。'
+const RUN5_INPUT = `刚才那个 ${TOKEN} 的关键词是什么？`
 
 const lastScopeDecision = async (
   runtime: {
@@ -30,6 +31,7 @@ const lastScopeDecision = async (
                 needsHistory?: boolean
                 basis?: string
                 throughSeq?: number
+                conversationHistory?: string
               }
             }
           }>
@@ -75,6 +77,14 @@ const humanContents = (record: AiLlmIoRecord | undefined): string[] =>
 const messageRoles = (record: AiLlmIoRecord | undefined): string[] =>
   (record?.requestWire?.messages || []).map((message) => message.role)
 
+const discardHuman = (humans: readonly string[]): string | undefined =>
+  humans.find((text) => text.includes('以下是最近的会话内容'))
+
+const scopeJudgeUser = (records: readonly AiLlmIoRecord[]): string => {
+  const call = records.find((record) => record.caller === 'human.context_scope')
+  return String(call?.user || '')
+}
+
 describe('ai human live backend', () => {
   it('human-context-scope-decision-live', async () => {
     await runWithStructuredOutputRetry(async () => {
@@ -85,7 +95,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '同一伙伴连续四轮：相关追问保留原文、无目录且命中前缀缓存；无关新任务丢弃原文；已丢弃任务进目录，再问旧关键词能找回。',
+          '同一伙伴连续五轮：相关追问保留原文并命中前缀缓存；无关新任务写入 conversationHistory；丢掉后再续做复用同一份 Discard User；再丢一次时判定只看到新话题 digest。',
         fixtures: [],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -114,21 +124,30 @@ describe('ai human live backend', () => {
           const run3Brain = firstBrain(run3Io)
           const run3Humans = humanContents(run3Brain)
           const run3Scope = await lastScopeDecision(runtime, partnerId)
+          const run3DiscardHuman = discardHuman(run3Humans)
 
           const run4 = await run(`${runtime.taskId}-d`, RUN4_INPUT)
-          const run4Humans = humanContents(
-            firstBrain(runtime.eventCollector.snapshotLlmIo().slice(afterRun3.length))
-          )
+          const afterRun4 = runtime.eventCollector.snapshotLlmIo()
+          const run4Io = afterRun4.slice(afterRun3.length)
+          const run4Brain = firstBrain(run4Io)
+          const run4Humans = humanContents(run4Brain)
           const run4Scope = await lastScopeDecision(runtime, partnerId)
+          const run4DiscardHuman = discardHuman(run4Humans)
+
+          const run5 = await run(`${runtime.taskId}-e`, RUN5_INPUT)
+          const run5Io = runtime.eventCollector.snapshotLlmIo().slice(afterRun4.length)
+          const run5Humans = humanContents(firstBrain(run5Io))
+          const run5Scope = await lastScopeDecision(runtime, partnerId)
 
           return {
             run1,
             run2,
             run3,
             run4,
+            run5,
             run2Scope,
             run2Roles: messageRoles(run2Brain),
-            run2HasCatalog: run2Humans.some((text) => text.includes('<task_catalog>')),
+            run2HasDiscardUser: Boolean(discardHuman(run2Humans)),
             run2HasRun1User: run2Humans.some((text) => text.includes(RUN1_INPUT)),
             run2LastIsCurrent: run2Humans.at(-1)?.includes(RUN2_INPUT) === true,
             run2PrefixCache: collectContinuationPrefixCacheReuse({
@@ -139,9 +158,18 @@ describe('ai human live backend', () => {
             run3HasCatalog: run3Humans.some((text) => text.includes('<task_catalog>')),
             run3HasRun1User: run3Humans.some((text) => text.includes(RUN1_INPUT)),
             run3LastIsCurrent: run3Humans.at(-1)?.includes(RUN3_INPUT) === true,
+            run3DiscardHuman,
             run4Scope,
-            run4HasCatalog: run4Humans.some((text) => text.includes('<task_catalog>')),
-            run4Delivery: run4.deliveryMarkdown || ''
+            run4DiscardHuman,
+            run4LastIsCurrent: run4Humans.at(-1)?.includes(RUN4_INPUT) === true,
+            run4PrefixCache: collectContinuationPrefixCacheReuse({
+              previousLlmIo: run3Io,
+              nextLlmIo: run4Io
+            }),
+            run5Scope,
+            run5JudgeUser: scopeJudgeUser(run5Io),
+            run5HasCatalog: run5Humans.some((text) => text.includes('<task_catalog>')),
+            run5Delivery: run5.deliveryMarkdown || ''
           }
         },
         assert: async (result, runtime) => {
@@ -151,18 +179,18 @@ describe('ai human live backend', () => {
               result.run2Scope.decided?.needsHistory === true &&
               result.run2HasRun1User &&
               result.run2LastIsCurrent &&
-              result.run2HasCatalog === false &&
+              result.run2HasDiscardUser === false &&
               result.run2Roles[0] === 'system',
             {
-              name: 'continuation-keeps-history-without-catalog',
-              message: '相关追问应带上上一轮原文；没丢过历史时不注入目录，避免重复同一段对话。',
+              name: 'continuation-keeps-history-without-discard-user',
+              message: '相关追问应带上上一轮原文；没丢过历史时不合成 Discard User。',
               data: {
                 run1: result.run1.status,
                 run2: result.run2.status,
                 run2Scope: result.run2Scope,
                 run2HasRun1User: result.run2HasRun1User,
                 run2LastIsCurrent: result.run2LastIsCurrent,
-                run2HasCatalog: result.run2HasCatalog,
+                run2HasDiscardUser: result.run2HasDiscardUser,
                 run2Roles: result.run2Roles
               }
             }
@@ -176,35 +204,68 @@ describe('ai human live backend', () => {
             result.run3.status === 'completed' &&
               result.run3Scope.decided?.needsHistory === false &&
               typeof result.run3Scope.discard?.throughSeq === 'number' &&
-              result.run3HasCatalog &&
-              result.run3LastIsCurrent &&
-              result.run3HasRun1User === false,
+              typeof result.run3Scope.discard.conversationHistory === 'string' &&
+              result.run3Scope.discard.conversationHistory.includes(RUN1_INPUT) &&
+              result.run3HasCatalog === false &&
+              Boolean(result.run3DiscardHuman) &&
+              result.run3HasRun1User &&
+              result.run3LastIsCurrent,
             {
-              name: 'fresh-topic-omits-unrelated-history',
-              message: '无关新任务应丢弃旧原文、注入任务目录，并写下 discard 书签。',
+              name: 'fresh-topic-writes-conversation-history',
+              message:
+                '无关新任务应丢弃旧原文、写下 conversationHistory，brain 含 Discard User 与 Run 1 用户原句，不含 task_catalog。',
               data: {
                 run3: result.run3.status,
                 run3Scope: result.run3Scope,
                 run3HasCatalog: result.run3HasCatalog,
                 run3HasRun1User: result.run3HasRun1User,
-                run3LastIsCurrent: result.run3LastIsCurrent
+                run3LastIsCurrent: result.run3LastIsCurrent,
+                run3DiscardPreview: result.run3DiscardHuman?.slice(0, 500)
               }
             }
           )
           runtime.assertThat(
             result.run4.status === 'completed' &&
-              result.run4Scope.decided?.needsHistory === false &&
-              result.run4HasCatalog &&
-              new RegExp(TOKEN, 'i').test(result.run4Delivery),
+              result.run4Scope.decided?.needsHistory === true &&
+              result.run4DiscardHuman === result.run3DiscardHuman &&
+              result.run4LastIsCurrent,
             {
-              name: 'catalog-recalls-old-task-token',
-              message:
-                '提到已丢弃的旧任务时，判定模型只看到仍在上下文里的任务，应判不需要历史；主模型从目录拿到线索，交付含原关键词。',
+              name: 'follow-up-reuses-same-discard-user',
+              message: '丢掉后再续做应判定需要历史，且 Discard User 字节与丢掉当轮相同。',
               data: {
                 run4: result.run4.status,
                 run4Scope: result.run4Scope,
-                run4HasCatalog: result.run4HasCatalog,
-                delivery: result.run4Delivery
+                run4LastIsCurrent: result.run4LastIsCurrent,
+                run3DiscardPreview: result.run3DiscardHuman?.slice(0, 300),
+                run4DiscardPreview: result.run4DiscardHuman?.slice(0, 300)
+              }
+            }
+          )
+          runtime.assertThat(result.run4PrefixCache.satisfied === true, {
+            name: 'follow-up-reuses-discard-prefix-cache',
+            message: `丢掉后再续做的首次 brain 应复用丢掉当轮前缀缓存（≥ ${CROSS_RUN_PREFIX_CACHE_MIN_RATIO}）。`,
+            data: continuationPrefixCacheAssertionData(result.run4PrefixCache)
+          })
+          runtime.assertThat(
+            result.run5.status === 'completed' &&
+              result.run5Scope.decided?.needsHistory === false &&
+              typeof result.run5Scope.discard?.conversationHistory === 'string' &&
+              result.run5Scope.discard.conversationHistory !==
+                result.run3Scope.discard?.conversationHistory &&
+              result.run5JudgeUser.includes('法国') &&
+              !result.run5JudgeUser.split('<new_task_goal>')[0]?.includes(TOKEN) &&
+              result.run5HasCatalog === false &&
+              new RegExp(TOKEN, 'i').test(result.run5Delivery),
+            {
+              name: 'second-discard-recalls-token-from-history',
+              message:
+                '再问旧关键词时，判定只看到法国 digest；新 conversationHistory 与上一份不同；交付含 TOKEN。',
+              data: {
+                run5: result.run5.status,
+                run5Scope: result.run5Scope,
+                run5HasCatalog: result.run5HasCatalog,
+                run5JudgeUser: result.run5JudgeUser.slice(0, 1000),
+                delivery: result.run5Delivery
               }
             }
           )

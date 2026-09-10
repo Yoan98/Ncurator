@@ -719,6 +719,7 @@ describe('unit ai persistence backend', () => {
         {
           kind: 'user',
           content: 'hello',
+          input: 'hello',
           context: { selectedReferences: [], attachments: [] }
         },
         {

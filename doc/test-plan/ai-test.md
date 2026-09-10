@@ -4,7 +4,7 @@
 
 | caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                         | 简短依据                                                                                               |
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| human-context-scope-decision-live                   | 完成 |            97 | qwen3.8-flash                    | 2026-09-10 13:23 CST | tests/logs/ai/human/live/human-context-scope-decision-live/20260910-132302-090                   | 四断言通过（75s）。判定目录对齐 floor 后三次调用全对：Run2 续做 `true`、Run3 换题 `false`+discard_checkpoint、Run4 提旧任务 `false`（判定只看到法国首都 digest）。Run2 无目录、跨 run 缓存 98.3%（5120/5206）。Run4 主模型从归档目录找回 ALPHA-REPORT-42。 |
+| human-context-scope-decision-live                   | 待重跑 |            — | qwen3.8-flash                    | 2026-09-10 16:05 CST | tests/logs/ai/human/live/human-context-scope-decision-live/20260910-160213-654                   | 上次 97 分是在误改判定提示词（拿不准改判 false）下跑的，提示词已恢复为「判断不了就按 true」，该分作废，需用原提示词重跑。 |
 | human-risk-report-draft-live                        | 完成 |            97 | qwen3.8-flash                    | 2026-08-31 18:42 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260831-183231-689                        | 读取模板/上周周报/工作文档后 cp 模板建新周报并用 docx 写入，applyId 落盘，原文件未改（Oracle 已按结果口径放宽）。 |
 | human-context-compaction-natural-trigger-live       | 完成 |            91 | deepseek-v4-flash               | 2026-09-08 18:19 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260908-181531-336       | 四断言通过。Run1 短问未压；Run2 半截（历史六栏+三栏 Turn Context）后交本周周报；Run3 把旧摘要当 `[user]` 再压，改标题「九月第一周」、插入「与上周风险对照」、核法务。无 previous-summary。跨 run 缓存 reuse 0.502（门槛 0.5）。 |
 | human-excel-read-weekly-review-live                | 完成 |            91 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-134623-663                   | Oracle 通过；四表结构/公式/退货异常/口径不对等讲清；6×excel_read。过程仍 6×terminal 验算略多。缓存 83.6%。 |
@@ -823,10 +823,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `context-scope-fresh-topic`
 
 - 测试类型：`backend / mock-llm`
-- What：上一轮正常交付并写入 `run_digest` 后，发无关新任务且上下文超过判定阈值时，主模型只收到任务目录和新 user。
-- Why：长期伙伴若把无关历史整段带进下一轮会浪费 token；范围判定必须在真实 graph 启动路径上生效。
+- What：上一轮正常交付并写入 `run_digest` 后，发无关新任务且上下文超过判定阈值时，主模型收到 Discard User（含上一轮用户原句）和新 user，不含历史 build。
+- Why：长期伙伴若把无关历史整段带进下一轮会浪费 token；范围判定必须在真实 graph 启动路径上生效，丢掉的召回要冻成 `conversationHistory`。
 - How：Run 1 脚本化交付周报并写 digest。Run 2 把窗口降到 200 token，脚本化 `human.context_scope` 返回 `needsHistory=false`，捕获首次 brain 的拼接 user。
-- Oracle：Run 2 的 `context_scope_decided.needsHistory=false` 且同批写有 `discard_checkpoint`；brain user 含 `<task_catalog>` 与新任务，不含 Run 1 交付原文。
+- Oracle：Run 2 的 `context_scope_decided.needsHistory=false` 且同批写有 `discard_checkpoint.conversationHistory`；brain user 含「以下是最近的会话内容」和 Run 1 用户原句，不含 `<task_catalog>`、不含历史 `<user_context>` build。
 - Not：不验证真实模型的判定质量（由 `human-context-scope-decision-live` 覆盖）；不验证 compaction。
 
 ##### `context-scope-incomplete-run`
@@ -973,16 +973,16 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：跨轮续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文；历史前缀字节不变时 provider 前缀缓存应命中。
 - How：使用共享 workspace fixture（运行时为文件地址 + 伙伴），默认上下文窗口。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同伙伴改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组与跨 run 前缀缓存（公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，当前 0.6）。
 - Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 user.content 与最终交付，末尾是 Run 2 当前 User；该当前 User 无 `<memory>`、无 `<active_state>`；Run 2 通过任一 DOCX 读工具（`docx_read_outline` / `docx_search` / `docx_read_nodes`）使用文件 B；最终交付同时包含过拟合与反走样关键事实。Run 2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
-- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [checkpoint User] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。不验证无关新任务丢弃历史（由 `human-context-scope-decision-live` 覆盖）。
+- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [Compact User] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。不验证无关新任务丢弃历史（由 `human-context-scope-decision-live` 覆盖）。
 
 ##### `human-context-scope-decision-live`
 
 - 测试类型：`backend / live`
-- What：同一伙伴连续四轮验证范围判定：相关追问保留原文、不注入目录且跨 run 前缀缓存命中；无关新任务丢弃原文并写下 discard 书签；已丢弃任务进目录，再问其关键词仍能找回。
-- Why：用户不管理会话，真实模型必须在同一窗口里把续做、换题和提旧任务三条路径走对；消息数组与前缀缓存要对齐 harness 投影规则。
-- How：把 `modelContextWindowTokens` 收到 2000，使判定阈值约 400 token，短问答交付后即可触发判定模型。Run 1 留下关键词并交付；Run 2 相关追问；Run 3 完全无关的新问题；Run 4 再问 Run 1 的关键词。检查各轮 `context_scope_decided` / `discard_checkpoint`、首次 `human.brain` 的 `requestWire` 消息结构、Run 2 跨 run 前缀缓存，以及 Run 4 交付。
-- Oracle：四轮均 `completed`。Run 2 `needsHistory=true`，首次 brain 含 Run 1 原文、末尾为新 user、**无** `<task_catalog>`（尚未丢弃或压缩过历史），且 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。Run 3 `needsHistory=false` 且写有 `discard_checkpoint`，首次 brain 含 `<task_catalog>`、不含 Run 1 原文。Run 4 `needsHistory=false`（判定模型只看到 Run 3 仍在上下文里的任务），brain 含目录，交付含 Run 1 关键词。
-- Not：不验证 UI；不要求固定工具；不验证 compaction；中断门控由 `context-scope-incomplete-run` mock-llm 覆盖。
+- What：同一伙伴连续五轮验证范围判定：相关追问保留原文、不合成 Discard User 且跨 run 前缀缓存命中；无关新任务写入 `conversationHistory` 并合成 Discard User；丢掉后再续做复用同一份 Discard User 且命中前缀缓存；再丢一次时判定只看到新话题 digest，交付仍能带出旧关键词。
+- Why：用户不管理会话，真实模型必须在同一窗口里把续做、换题、丢掉后再续做和再提旧任务四条路径走对；`conversationHistory` 必须冻字节，否则下一轮 true 会打穿前缀缓存。
+- How：把 `modelContextWindowTokens` 收到 2000，使判定阈值约 400 token，短问答交付后即可触发判定模型。Run 1 留下关键词并交付；Run 2 相关缩短；Run 3 完全无关的法国首都；Run 4 追问巴黎；Run 5 再问 Run 1 的关键词。检查各轮 `context_scope_decided` / `discard_checkpoint.conversationHistory`、首次 `human.brain` 的 `requestWire` 消息结构、Run 2 / Run 4 跨 run 前缀缓存，以及 Run 5 交付。不把 compaction 塞进这条 live。
+- Oracle：五轮均 `completed`。Run 2 `needsHistory=true`，首次 brain 含 Run 1 原文、末尾为新 user、**无** Discard User，且 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。Run 3 `needsHistory=false` 且写有 `conversationHistory`（含 Run 1 用户原句），首次 brain 含「以下是最近的会话内容」、不含 `<task_catalog>`。Run 4 `needsHistory=true`，Discard User 字节与 Run 3 相同，且对 Run 3 首次 brain 前缀缓存命中。Run 5 `needsHistory=false`（判定只看到法国 digest），新 `conversationHistory` 与 Run 3 不同，交付含 Run 1 关键词。
+- Not：不验证 UI；不要求固定工具；不验证 compaction（Discard User 进压缩由 unit 锁死）；中断门控由 `context-scope-incomplete-run` mock-llm 覆盖。
 
 ##### `human-skill-eviction-relearn-loop-live`
 
@@ -1041,7 +1041,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-context-compaction-natural-trigger-live`
 
 - 测试类型：`backend`
-- What：live 模式下 `human` 会先用普通短问铺出一条完整历史轮，再在风险周报长任务中自然触发压缩；压完后发给主模型的数组为 `[System] + [checkpoint User] + 原文 tail`。同一次可走历史 + 半截。Run 2 未压出 checkpoint 则不发 Run 3。续做再压，且 Run 3 首轮 brain 必须明显复用 Run 2 末次前缀缓存。
+- What：live 模式下 `human` 会先用普通短问铺出一条完整历史轮，再在风险周报长任务中自然触发压缩；压完后发给主模型的数组为 `[System] + [Compact User] + 原文 tail`。同一次可走历史 + 半截。Run 2 未压出 checkpoint 则不发 Run 3。续做再压，且 Run 3 首轮 brain 必须明显复用 Run 2 末次前缀缓存。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩、当前工作仍能做完”的能力；同时守住跨 run 只 append 新 user、历史前缀字节不变时 provider 前缀缓存应命中。
 - How：复用风险周报 live 的真实文件地址。窗口仍为 `humanRuntimeOverrides.modelContextWindowTokens=45_000`，tail 由触发线 × `CONTEXT_COMPACTION_TAIL_RATIO`（0.1）算出，不再单独 override keep。Run 1 发普通短问（上周周报文件名），不要求自己压到。Run 2 用原周报长任务，应压到，覆盖历史 + 半截。Run 2 若未压出 checkpoint，不发 Run 3，直接按 Run 2 断言失败。Run 3 同伙伴、不再 @ 上周周报/已交周报，要求对照刚写的本周周报和上周周报、补风险对照、标题改为「九月第一周」、核法务口径，从而再压至少一次。Run 3 首次 brain 用 `cachedInputTokens / Run2 末次 brain inputTokens` 与公用跨 run 门槛 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.6，定义于 `tests/harness/core/continuation-prefix-cache.ts`）对比。brain 的 `llm-io` 另记 `requestWire`（发给 LangChain 的 messages 含 assistant `toolCalls.arguments` 字符串，以及每个工具的完整 `parameters` schema），跨 run 缓存断言会把 Run2 末次 vs Run3 首次的第一处 diff 写进 timeline。窗口不能太小：固定开销（工具 schema + system/模板）几乎不随压缩减少，过小会连续压缩死循环；也不能太大（过大时峰值达不到触发线）。continuation / resume live 仍分开，不并入本 case。
 - Oracle：Run 1 `completed`，不要求压缩。Run 2 至少一次完整 compaction；压完后下一次 brain 消息为 `system + human(checkpoint) + 原文 tail`，不能 System 后直接 AI；落库 checkpoint 为六栏（半轮可含 Turn Context）；提示词无 `<previous-summary>` / `[round]` / `<current>` / `<earlier>`；含「上周周报」、不编造「上周工作周报.docx」；周报 docx 交付成功；不对 tail 逐条复述。Run 3 首次 brain 为 `system, human(checkpoint), …原文…, human(新任务)`，不能 System 后直接 AI；再压至少一次且 `completed`；「目标 / 进度 / 下一步 / 约束与偏好」说的是对照、改标题或法务，而不是整段重填周报。Run 3 首次 brain 必须带回 provider 缓存 usage，且 `cachedInputTokens / Run2 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。按 10 分制评估压缩生命周期、摘要结构和文件交付，严格超过 8 分通过。

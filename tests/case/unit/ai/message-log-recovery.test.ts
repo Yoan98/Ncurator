@@ -17,6 +17,7 @@ import type { AiRunContext } from '../../../../src/main/services/ai/types'
 const user = (content: string): ChatMessageLogEntry => ({
   kind: 'user',
   content,
+  input: content,
   context: {
     selectedReferences: [],
     attachments: []

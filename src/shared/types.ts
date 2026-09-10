@@ -1915,7 +1915,7 @@ export type ChatMessageLogAnnotationEntry =
       eventType: 'run_digest'
       payload: {
         summary: string
-        filePaths: string[]
+        fileChangePaths: string[]
       }
     }
   | {
@@ -1932,6 +1932,7 @@ export type ChatMessageLogAnnotationEntry =
       eventType: 'discard_checkpoint'
       payload: {
         throughSeq: number
+        conversationHistory: string
       }
     }
   | {
@@ -1954,6 +1955,7 @@ export type ChatMessageLogEntry =
   | {
       kind: 'user'
       content: string
+      input: string
       context: ChatMessageLogUserContext
     }
   | {

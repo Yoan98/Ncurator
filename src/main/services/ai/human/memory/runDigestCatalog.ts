@@ -1,11 +1,18 @@
 import type { ChatMessageLogRecord } from '../../../../../shared/types'
-import { RUN_DIGEST_MAX_ENTRIES, RUN_DIGEST_MAX_FILE_PATHS } from '../constants'
+import { estimateTextTokens } from '../utils/tokenEstimate'
 import { orderMessageLogBySeq } from './transcript'
 
 export type RunDigestCatalogEntry = {
   createdAt: number
   summary: string
-  filePaths: string[]
+  fileChangePaths: string[]
+}
+
+export type CompletedSessionBlock = {
+  createdAt: number
+  userInput: string
+  delivery: string
+  fileChangePaths: string[]
 }
 
 const pad2 = (value: number): string => String(value).padStart(2, '0')
@@ -16,8 +23,7 @@ export const formatCatalogTimestamp = (createdAt: number): string => {
 }
 
 export const collectRunDigestCatalogEntries = (
-  records: readonly ChatMessageLogRecord[],
-  maxEntries = RUN_DIGEST_MAX_ENTRIES
+  records: readonly ChatMessageLogRecord[]
 ): RunDigestCatalogEntry[] => {
   const entries: RunDigestCatalogEntry[] = []
   for (const record of orderMessageLogBySeq([...records])) {
@@ -27,21 +33,118 @@ export const collectRunDigestCatalogEntries = (
     entries.push({
       createdAt: record.createdAt,
       summary,
-      filePaths: record.entry.payload.filePaths
-        .map((path) => path.trim())
-        .filter(Boolean)
-        .slice(0, RUN_DIGEST_MAX_FILE_PATHS)
+      fileChangePaths: record.entry.payload.fileChangePaths.map((path) => path.trim()).filter(Boolean)
     })
   }
-  if (maxEntries < 1) return []
-  return entries.slice(-maxEntries)
+  return entries
 }
 
 export const renderRunDigestCatalog = (entries: readonly RunDigestCatalogEntry[]): string =>
   entries
     .map((entry) => {
       const time = formatCatalogTimestamp(entry.createdAt)
-      const paths = entry.filePaths.join(', ')
-      return paths ? `${time} | ${entry.summary} | ${paths}` : `${time} | ${entry.summary}`
+      const paths = entry.fileChangePaths.join(', ')
+      return paths ? `${time} | ${entry.summary} | 改动文件：${paths}` : `${time} | ${entry.summary}`
     })
     .join('\n')
+
+const isDeliveryAssistant = (record: ChatMessageLogRecord): boolean =>
+  record.entry.kind === 'assistant' && record.entry.toolCalls.length === 0
+
+export const collectCompletedSessionBlocks = (
+  records: readonly ChatMessageLogRecord[]
+): CompletedSessionBlock[] => {
+  const ordered = orderMessageLogBySeq([...records])
+  const byRun = new Map<string, ChatMessageLogRecord[]>()
+  for (const record of ordered) {
+    const list = byRun.get(record.runId) || []
+    list.push(record)
+    byRun.set(record.runId, list)
+  }
+  const blocks: CompletedSessionBlock[] = []
+  for (const runRecords of byRun.values()) {
+    const digestRecord = runRecords.find(
+      (record) => record.entry.kind === 'annotation' && record.entry.eventType === 'run_digest'
+    )
+    if (
+      !digestRecord ||
+      digestRecord.entry.kind !== 'annotation' ||
+      digestRecord.entry.eventType !== 'run_digest'
+    ) {
+      continue
+    }
+    const userRecord = runRecords.find(
+      (record) => record.entry.kind === 'user' && record.entry.input.trim()
+    )
+    if (!userRecord || userRecord.entry.kind !== 'user') continue
+    const deliveryRecord = [...runRecords].reverse().find(isDeliveryAssistant)
+    const delivery =
+      deliveryRecord?.entry.kind === 'assistant' ? deliveryRecord.entry.content.trim() : ''
+    const userInput = userRecord.entry.input.trim()
+    if (!userInput && !delivery) continue
+    blocks.push({
+      createdAt: userRecord.createdAt,
+      userInput,
+      delivery,
+      fileChangePaths: digestRecord.entry.payload.fileChangePaths
+        .map((path) => path.trim())
+        .filter(Boolean)
+    })
+  }
+  return blocks.sort((left, right) => left.createdAt - right.createdAt)
+}
+
+export const renderSessionBlock = (block: CompletedSessionBlock): string => {
+  const lines = [
+    formatCatalogTimestamp(block.createdAt),
+    `用户：${block.userInput || '无'}`,
+    `交付：${block.delivery || '无'}`
+  ]
+  if (block.fileChangePaths.length > 0) {
+    lines.push(`改动文件：${block.fileChangePaths.join(', ')}`)
+  }
+  return lines.join('\n')
+}
+
+const clipSessionBlockToTokens = (block: CompletedSessionBlock, maxTokens: number): string => {
+  if (maxTokens < 1) return ''
+  const withoutDelivery: CompletedSessionBlock = { ...block, delivery: '' }
+  const prefix = renderSessionBlock(withoutDelivery)
+  const prefixTokens = estimateTextTokens(prefix)
+  if (prefixTokens >= maxTokens) {
+    const prefixChars = Math.max(0, maxTokens * 4)
+    return prefix.slice(0, prefixChars)
+  }
+  const deliveryBudgetChars = Math.max(0, (maxTokens - prefixTokens) * 4)
+  const clippedDelivery =
+    block.delivery.length <= deliveryBudgetChars
+      ? block.delivery
+      : `${block.delivery.slice(0, Math.max(0, deliveryBudgetChars - 1))}…`
+  return renderSessionBlock({ ...block, delivery: clippedDelivery })
+}
+
+export const assembleConversationHistory = (
+  records: readonly ChatMessageLogRecord[],
+  maxTokens: number
+): string => {
+  if (maxTokens < 1) return ''
+  const blocks = collectCompletedSessionBlocks(records)
+  if (blocks.length === 0) return ''
+  const kept: string[] = []
+  let used = 0
+  for (let index = blocks.length - 1; index >= 0; index -= 1) {
+    const block = blocks[index]
+    if (!block) continue
+    const rendered = renderSessionBlock(block)
+    const cost = estimateTextTokens(rendered)
+    if (kept.length === 0 && cost > maxTokens) {
+      const clipped = clipSessionBlockToTokens(block, maxTokens)
+      if (clipped) kept.push(clipped)
+      break
+    }
+    if (used + cost > maxTokens) break
+    kept.push(rendered)
+    used += cost
+  }
+  return kept.reverse().join('\n\n')
+}

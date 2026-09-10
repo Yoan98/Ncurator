@@ -1,6 +1,5 @@
 import type { AiRunContext } from '../../../types'
 import type { HumanState } from '../../types'
-import { RUN_DIGEST_MAX_FILE_PATHS } from '../../constants'
 import { buildRunDigestPrompt } from '../../prompts/contextScope'
 
 const RUN_DIGEST_USER_MAX_CHARS = 500
@@ -23,7 +22,7 @@ export const normalizeRunDigestSummary = (raw: string): string => {
   return clipText(collapsed, RUN_DIGEST_SUMMARY_MAX_CHARS)
 }
 
-export const collectRunDigestFilePaths = (state: HumanState): string[] => {
+export const collectRunDigestFileChangePaths = (state: HumanState): string[] => {
   const paths: string[] = []
   const seen = new Set<string>()
   for (const file of state.execution.fileChanges?.changed_files || []) {
@@ -31,7 +30,6 @@ export const collectRunDigestFilePaths = (state: HumanState): string[] => {
     if (!path || seen.has(path)) continue
     seen.add(path)
     paths.push(path)
-    if (paths.length >= RUN_DIGEST_MAX_FILE_PATHS) break
   }
   return paths
 }
@@ -62,7 +60,7 @@ export const appendRunDigestIfPossible = async (input: {
         eventType: 'run_digest',
         payload: {
           summary,
-          filePaths: collectRunDigestFilePaths(input.state)
+          fileChangePaths: collectRunDigestFileChangePaths(input.state)
         }
       }
     ])

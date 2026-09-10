@@ -6,7 +6,8 @@ import {
   hasCompressibleCompactionHistory,
   countTailBookmarkMessages,
   createCurrentBrainUserMessage,
-  createCompactedBrainUserMessage
+  createCompactedBrainUserMessage,
+  createDiscardBrainUserMessage
 } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 import { estimateMessagesForContext } from '../../../../src/main/services/ai/human/memory/multimodal'
 
@@ -145,6 +146,21 @@ describe('splitMessagesForCompactionTail', () => {
     expect(split.isSplitTurn).toBe(false)
     expect(split.turnPrefix).toEqual([])
   })
+
+  it('does not treat a Discard User as the start of the leftover process turn', () => {
+    const discard = createDiscardBrainUserMessage('以下是最近的会话内容\n\n用户：调研SECRET')
+    const leftover = aiToolPair('1', 'x'.repeat(2000), 'y'.repeat(2000))
+    const lastPair = aiToolPair('2', 'b'.repeat(400), 'c'.repeat(400))
+    const split = splitMessagesForCompactionTail(
+      [new SystemMessage('sys'), discard, ...leftover, ...lastPair],
+      estimateMessagesForContext(lastPair)
+    )
+    expect(split.tail).toEqual(lastPair)
+    expect(split.folded).toContain(discard)
+    expect(split.folded).toEqual([discard, ...leftover])
+    expect(split.isSplitTurn).toBe(false)
+    expect(split.turnPrefix).toEqual([])
+  })
 })
 
 describe('hasCompressibleCompactionHistory', () => {
@@ -155,6 +171,18 @@ describe('hasCompressibleCompactionHistory', () => {
     expect(
       hasCompressibleCompactionHistory(
         [checkpoint, current, ...tail],
+        estimateMessagesForContext([current, ...tail])
+      )
+    ).toBe(false)
+  })
+
+  it('is false when only a Discard User sits outside the keep window', () => {
+    const discard = createDiscardBrainUserMessage('以下是最近的会话内容\n\n用户：调研SECRET')
+    const current = createCurrentBrainUserMessage('continue')
+    const tail = aiToolPair('2', 'current work', 'current result')
+    expect(
+      hasCompressibleCompactionHistory(
+        [discard, current, ...tail],
         estimateMessagesForContext([current, ...tail])
       )
     ).toBe(false)
@@ -307,6 +335,17 @@ describe('renderMessagesForCompaction', () => {
       ].join('\n')
     )
     expect(rendered).not.toContain('<previous-summary>')
+  })
+
+  it('renders a Discard User as a conversation user block', () => {
+    const rendered = renderMessagesForCompaction([
+      createDiscardBrainUserMessage('以下是最近的会话内容\n\n用户：调研SECRET\n交付：已记下'),
+      new AIMessage({ content: '巴黎' }),
+      new HumanMessage('再问一句')
+    ])
+    expect(rendered).toContain('[user]\n以下是最近的会话内容\n\n用户：调研SECRET\n交付：已记下')
+    expect(rendered).toContain('[ai] 巴黎')
+    expect(rendered).toContain('[user]\n再问一句')
   })
 
   it('inserts a blank line only between turns', () => {

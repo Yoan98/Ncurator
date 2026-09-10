@@ -2,6 +2,10 @@ import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages'
 import { describe, expect, it } from 'vitest'
 import { createContextBudgetNode } from '../../../../src/main/services/ai/human/node/contextBudgetNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
+import {
+  createCurrentBrainUserMessage,
+  createDiscardBrainUserMessage
+} from '../../../../src/main/services/ai/human/node/utils/messageTail'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
@@ -250,6 +254,35 @@ describe('ai unit context budget node', () => {
     })
   })
 
+  it('does not compact when folded history is only a Discard User', async () => {
+    const events: AiRunEvent[] = []
+    const ctx = createBaseContext(events)
+    const cache = createHumanRuntimeCache()
+    const state = createInitialHumanState({
+      taskId: 'task-discard-only',
+      userInput: '法国首都是哪里？'
+    })
+    const current = createCurrentBrainUserMessage('法国首都是哪里？')
+    const discard = createDiscardBrainUserMessage('以下是最近的会话内容\n\n用户：调研SECRET')
+    cache.messages = [discard, current]
+    const node = createContextBudgetNode({
+      ctx: {
+        ...ctx,
+        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 }
+      },
+      cache
+    })
+    cache.lastBrainInputTokens = 9_000
+
+    const nextState = await node(state)
+
+    expect(nextState.execution.stage).toBe('brain')
+    expect(events.find((event) => event.type === 'context_budget_evaluated')).toMatchObject({
+      decision: 'continue',
+      snapshot: { hasCompressibleHistory: false }
+    })
+  })
+
   it('records continue decision with post_compaction basis after compaction clears usage baseline', async () => {
     const events: AiRunEvent[] = []
     const ctx = createBaseContext(events)
@@ -316,6 +349,7 @@ describe('ai unit context budget node', () => {
           entry: {
             kind: 'user' as const,
             content: 'prev',
+            input: 'prev',
             context: { selectedReferences: [], attachments: [] }
           },
           createdAt: 1
@@ -360,7 +394,8 @@ describe('ai unit context budget node', () => {
     })
     expect(appended[2]).toMatchObject({
       kind: 'user',
-      content: '<user_context>分析 Excel</user_context>'
+      content: '<user_context>分析 Excel</user_context>',
+      input: '分析 Excel'
     })
   })
 })

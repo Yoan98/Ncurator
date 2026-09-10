@@ -38,6 +38,7 @@ export const seedChatHistory = async (input: {
           : {
               kind: 'user',
               content: message.content,
+              input: message.content,
               context: { selectedReferences: [], attachments: [] }
             }
       ]

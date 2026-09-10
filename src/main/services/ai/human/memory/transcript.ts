@@ -83,6 +83,7 @@ export type MessageLogProjection = {
   }
   discardCheckpoint?: {
     throughSeq: number
+    conversationHistory: string
   }
   historyFloorSeq: number
 }
@@ -101,6 +102,7 @@ export type HistoryFloor = {
   compactionCheckpoint?: MessageLogProjection['compactionCheckpoint']
   discardCheckpoint?: MessageLogProjection['discardCheckpoint']
   includeCheckpoint: boolean
+  includeDiscard: boolean
 }
 
 export const resolveHistoryFloor = (records: readonly ChatMessageLogRecord[]): HistoryFloor => {
@@ -136,7 +138,10 @@ export const resolveHistoryFloor = (records: readonly ChatMessageLogRecord[]): H
   const discardCheckpoint =
     discardRecord?.entry.kind === 'annotation' &&
     discardRecord.entry.eventType === 'discard_checkpoint'
-      ? { throughSeq: discardRecord.entry.payload.throughSeq }
+      ? {
+          throughSeq: discardRecord.entry.payload.throughSeq,
+          conversationHistory: discardRecord.entry.payload.conversationHistory
+        }
       : undefined
   const historyFloorSeq = Math.max(
     compactionCheckpoint?.throughSeq ?? -1,
@@ -146,11 +151,15 @@ export const resolveHistoryFloor = (records: readonly ChatMessageLogRecord[]): H
     compactionCheckpoint &&
       compactionCheckpoint.throughSeq >= (discardCheckpoint?.throughSeq ?? -1)
   )
+  const includeDiscard = Boolean(
+    discardCheckpoint && discardCheckpoint.throughSeq > (compactionCheckpoint?.throughSeq ?? -1)
+  )
   return {
     historyFloorSeq,
     compactionCheckpoint: includeCheckpoint ? compactionCheckpoint : undefined,
-    discardCheckpoint,
-    includeCheckpoint
+    discardCheckpoint: includeDiscard ? discardCheckpoint : undefined,
+    includeCheckpoint,
+    includeDiscard
   }
 }
 

@@ -14,7 +14,8 @@ import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import type { ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../src/shared/types'
 import {
   createCompactedBrainUserMessage,
-  createCurrentBrainUserMessage
+  createCurrentBrainUserMessage,
+  createDiscardBrainUserMessage
 } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
@@ -180,6 +181,7 @@ describe('ai human context compaction node', () => {
         logRecord(1, {
           kind: 'user',
           content: 'old task',
+          input: 'old task',
           context: { selectedReferences: [], attachments: [] }
         }),
         logRecord(2, {
@@ -197,6 +199,7 @@ describe('ai human context compaction node', () => {
         logRecord(4, {
           kind: 'user',
           content: 'continue the task',
+          input: 'continue the task',
           context: { selectedReferences: [], attachments: [] }
         }),
         logRecord(5, {
@@ -248,6 +251,109 @@ describe('ai human context compaction node', () => {
       wrapCompactionCheckpointContent('## 目标\n继续交付')
     )
     expect(next.execution.stage).toBe('context_budget')
+  })
+
+  it('sends Discard User into the compaction conversation as a user block', async () => {
+    const current = createCurrentBrainUserMessage('continue the task')
+    const discard = createDiscardBrainUserMessage(
+      '以下是最近的会话内容\n\n用户：调研SECRET\n交付：已记下调研'
+    )
+    const earlierUser = new HumanMessage('old task')
+    const earlierPair = [
+      new AIMessage({
+        content: 'old work',
+        tool_calls: [{ id: '1', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
+      }),
+      new ToolMessage({ content: 'old result', tool_call_id: '1' })
+    ]
+    const tailPair = [
+      new AIMessage({
+        content: 'current work',
+        tool_calls: [{ id: '2', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
+      }),
+      new ToolMessage({ content: 'current result', tool_call_id: '2' })
+    ]
+    const appended: ChatMessageLogEntry[] = []
+    const prompts: Array<{ system: string; user: string }> = []
+    const ctx = {
+      ...createContext(),
+      humanRuntimeOverrides: {
+        modelContextWindowTokens: contextWindowForTail(
+          estimateMessagesForContext([current, ...tailPair])
+        )
+      },
+      loadMessageLog: async () => [
+        logRecord(1, {
+          kind: 'user',
+          content: 'old task',
+          input: 'old task',
+          context: { selectedReferences: [], attachments: [] }
+        }),
+        logRecord(2, {
+          kind: 'assistant',
+          content: 'old work',
+          toolCalls: [{ id: '1', name: 'docx_read_nodes', args: {} }]
+        }),
+        logRecord(3, {
+          kind: 'tool',
+          toolCallId: '1',
+          toolName: 'docx_read_nodes',
+          ok: true,
+          content: 'old result'
+        }),
+        logRecord(4, {
+          kind: 'user',
+          content: 'continue the task',
+          input: 'continue the task',
+          context: { selectedReferences: [], attachments: [] }
+        }),
+        logRecord(5, {
+          kind: 'assistant',
+          content: 'current work',
+          toolCalls: [{ id: '2', name: 'docx_read_nodes', args: {} }]
+        }),
+        logRecord(6, {
+          kind: 'tool',
+          toolCallId: '2',
+          toolName: 'docx_read_nodes',
+          ok: true,
+          content: 'current result'
+        })
+      ],
+      appendMessageLog: async (entries) => {
+        appended.push(...entries)
+      },
+      chatText: async (request) => {
+        prompts.push({ system: request.system, user: request.user })
+        return '## 关键上下文\n调研SECRET'
+      },
+      checkCancelled: () => undefined,
+      sendEvent: () => undefined
+    } as AiRunContext
+    const cache = createHumanRuntimeCache()
+    cache.messages = [discard, earlierUser, ...earlierPair, current, ...tailPair]
+    cache.currentUserLogAppended = true
+    const node = createContextCompactionNode({ ctx, cache })
+    await node(
+      createInitialHumanState({
+        taskId: 'task-compact-discard',
+        userInput: 'continue the task'
+      })
+    )
+
+    expect(prompts).toHaveLength(1)
+    expect(prompts[0]?.user).toContain('<conversation>')
+    expect(prompts[0]?.user).toContain('[user]')
+    expect(prompts[0]?.user).toContain('以下是最近的会话内容')
+    expect(prompts[0]?.user).toContain('调研SECRET')
+    expect(appended[0]).toMatchObject({
+      kind: 'annotation',
+      eventType: 'compaction_checkpoint'
+    })
+    expect(cache.messages?.[1] && String(cache.messages[1].content)).toContain('调研SECRET')
+    expect(cache.messages?.some((message) => String(message.content).includes('以下是最近的会话内容'))).toBe(
+      false
+    )
   })
 
   it('throws internal_error when throughSeq cannot be resolved', async () => {
@@ -363,11 +469,13 @@ describe('ai human context compaction node', () => {
         logRecord(2, {
           kind: 'user',
           content: 'old task',
+          input: 'old task',
           context: { selectedReferences: [], attachments: [] }
         }),
         logRecord(3, {
           kind: 'user',
           content: 'u'.repeat(80),
+          input: 'u'.repeat(80),
           context: { selectedReferences: [], attachments: [] }
         })
       ],

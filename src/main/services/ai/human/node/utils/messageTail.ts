@@ -4,7 +4,7 @@ import { estimateMessagesForContext } from '../../memory/multimodal'
 
 const CURRENT_USER_MARKER = 'ncurator_current_user'
 const COMPACTION_USER_MARKER = 'ncurator_compaction_user'
-const CATALOG_USER_MARKER = 'ncurator_catalog_user'
+const DISCARD_USER_MARKER = 'ncurator_discard_user'
 const COMPACTION_TOOL_RESULT_MAX_CHARS = 2000
 
 export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
@@ -21,11 +21,11 @@ export const createCompactedBrainUserMessage = (content: string): HumanMessage =
     }
   })
 
-export const createCatalogBrainUserMessage = (content: string): HumanMessage =>
+export const createDiscardBrainUserMessage = (content: string): HumanMessage =>
   new HumanMessage({
     content,
     additional_kwargs: {
-      [CATALOG_USER_MARKER]: true
+      [DISCARD_USER_MARKER]: true
     }
   })
 
@@ -35,11 +35,11 @@ export const isCurrentBrainUserMessage = (message: BaseMessage): boolean =>
 export const isCompactedBrainUserMessage = (message: BaseMessage): boolean =>
   message.getType() === 'human' && message.additional_kwargs?.[COMPACTION_USER_MARKER] === true
 
-export const isCatalogBrainUserMessage = (message: BaseMessage): boolean =>
-  message.getType() === 'human' && message.additional_kwargs?.[CATALOG_USER_MARKER] === true
+export const isDiscardBrainUserMessage = (message: BaseMessage): boolean =>
+  message.getType() === 'human' && message.additional_kwargs?.[DISCARD_USER_MARKER] === true
 
 const isSyntheticHistoryUserMessage = (message: BaseMessage): boolean =>
-  isCompactedBrainUserMessage(message) || isCatalogBrainUserMessage(message)
+  isCompactedBrainUserMessage(message) || isDiscardBrainUserMessage(message)
 
 const isImageReferenceHuman = (message: BaseMessage): boolean =>
   message.getType() === 'human' && typeof message.content !== 'string'

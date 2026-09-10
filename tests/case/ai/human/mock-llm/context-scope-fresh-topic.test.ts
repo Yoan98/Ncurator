@@ -14,7 +14,7 @@ describe('ai human mock-llm backend', () => {
       suite: 'human',
       groups: ['mock-llm'],
       description:
-        '上一轮正常交付后发无关新任务时，主模型只收到任务目录和新 user，不含上一轮原文。',
+        '上一轮正常交付后发无关新任务时，主模型收到 Discard User（含用户原句）和新 user，不含历史 build。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -98,14 +98,17 @@ describe('ai human mock-llm backend', () => {
             decidedPayload?.needsHistory === false &&
             decidedPayload.basis === 'model_decision' &&
             typeof discardPayload?.throughSeq === 'number' &&
-            result.run2Prompt.includes('<task_catalog>') &&
-            result.run2Prompt.includes('按模板写本周周报') &&
-            !result.run2Prompt.includes('SECRET_WEEKLY_REPORT') &&
+            typeof discardPayload.conversationHistory === 'string' &&
+            discardPayload.conversationHistory.includes('用户：按模板写本周周报，不要封面页。') &&
+            !discardPayload.conversationHistory.includes('<user_context>') &&
+            result.run2Prompt.includes('以下是最近的会话内容') &&
+            result.run2Prompt.includes('按模板写本周周报，不要封面页。') &&
+            !result.run2Prompt.includes('<task_catalog>') &&
             result.run2Prompt.includes('请分析这份销售 Excel'),
           {
-            name: 'fresh-topic-drops-unrelated-history-and-keeps-catalog',
+            name: 'fresh-topic-drops-unrelated-history-and-keeps-discard-user',
             message:
-              '无关新任务应判定不需要历史，主模型看到任务目录和新 user，看不到上一轮交付原文。',
+              '无关新任务应判定不需要历史，主模型看到 Discard User（用户原句）和新 user，看不到历史 build。',
             data: {
               status: result.output.status,
               decidedPayload,

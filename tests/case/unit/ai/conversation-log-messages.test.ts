@@ -10,6 +10,7 @@ import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/
 const userEntry = (content: string): ChatMessageLogEntry => ({
   kind: 'user',
   content,
+  input: content,
   context: {
     selectedReferences: [],
     attachments: []

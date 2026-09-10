@@ -24,7 +24,7 @@ type CachePayload = {
   models: FreeModelCatalogEntry[]
 }
 
-const PROVIDER_IDS = new Set(['deepseek', 'dashscope', 'mimo', 'moonshot', 'zhipu'])
+const PROVIDER_IDS = new Set(['deepseek', 'dashscope', 'mimo', 'moonshot', 'zhipu', 'grok'])
 const PROVIDER_KINDS = new Set(['openai', 'deepseek', 'openai-compatible'])
 const CAPABILITIES = new Set(['text', 'vision'])
 

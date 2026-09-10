@@ -180,7 +180,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '验证 live 模式下 human 在普通短问之后的周报长任务中会自然触发压缩；同一次可走历史+半截；压完后以 System + checkpoint User + 原文 tail 交付；Run 2 未压出 checkpoint 则不发 Run 3；续做再压，且 Run3 首轮 brain 须明显复用 Run2 末次前缀缓存。',
+          '验证 live 模式下 human 在普通短问之后的周报长任务中会自然触发压缩；同一次可走历史+半截；压完后以 System + Compact User + 原文 tail 交付；Run 2 未压出 checkpoint 则不发 Run 3；续做再压，且 Run3 首轮 brain 须明显复用 Run2 末次前缀缓存。',
         fixtures: [CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         execute: async (runtime) => {
@@ -334,7 +334,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-context-compaction-run2-completes-weekly-report',
               message:
-                'Run 2 应至少压缩一次；落库 checkpoint 为六栏或含 Turn Context，含「上周周报」、不编造「上周工作周报.docx」；压完后 brain 为 system + checkpoint User + 原文 tail，并成功交付周报。',
+                'Run 2 应至少压缩一次；落库 checkpoint 为六栏或含 Turn Context，含「上周周报」、不编造「上周工作周报.docx」；压完后 brain 为 system + Compact User + 原文 tail，并成功交付周报。',
               data: {
                 startedEvents: run2Compaction.startedEvents,
                 completedEvents: run2Compaction.completedEvents,
@@ -385,7 +385,7 @@ describe('ai human live backend', () => {
             {
               name: 'human-live-context-compaction-run3-continues-from-compaction-user',
               message:
-                'Run 3 首次 brain 应为 system + checkpoint User + 原文过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。落库摘要只要六栏（半轮可含 Turn Context），目标/进度/下一步/约束与偏好应围绕对照、改标题或法务。',
+                'Run 3 首次 brain 应为 system + Compact User + 原文过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。落库摘要只要六栏（半轮可含 Turn Context），目标/进度/下一步/约束与偏好应围绕对照、改标题或法务。',
               data: {
                 startedEvents: run3Compaction.startedEvents,
                 completedEvents: run3Compaction.completedEvents,

@@ -122,13 +122,15 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
         entries.push(
           ...buildContextScopeLogEntries({
             decision: input.cache.contextScopeDecision,
-            records
+            records,
+            contextWindowTokens
           })
         )
       }
       entries.push({
         kind: 'user',
         content: builtText,
+        input: state.task.userInput,
         context: {
           selectedReferences: input.ctx.referenceScope.selectedReferences,
           attachments: input.ctx.referenceScope.attachments

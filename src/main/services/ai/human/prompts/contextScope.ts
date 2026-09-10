@@ -1,14 +1,7 @@
-export const wrapTaskCatalogContent = (catalogText: string): string => {
-  const body = catalogText.trim()
+export const wrapDiscardConversationHistory = (historyText: string): string => {
+  const body = historyText.trim()
   if (!body) return ''
-  return [
-    'The following catalog lists recently completed tasks in this partner. It is not the current conversation.',
-    'If you need details from one of these tasks, read the listed file paths with tools rather than assuming prior dialogue.',
-    '',
-    '<task_catalog>',
-    body,
-    '</task_catalog>'
-  ].join('\n')
+  return ['以下是最近的会话内容', '', body].join('\n')
 }
 
 export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。根据近期任务目录和新诉求，判断这一轮还需不需要当前这段对话历史原文。
