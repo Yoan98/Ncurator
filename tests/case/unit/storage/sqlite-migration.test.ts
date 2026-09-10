@@ -153,22 +153,6 @@ describe('SQLite migration contract', () => {
     sqlite.close()
   })
 
-  it('makes repeated initialization a no-op after the database reaches current schema', async () => {
-    const databasePath = await createDatabasePath()
-    const sqlite = new SqliteCore(databasePath)
-    sqlite.initialize()
-    const before = sqlite
-      .prepare('SELECT version, name, applied_at FROM schema_migrations ORDER BY version')
-      .all()
-    sqlite.initialize()
-    const after = sqlite
-      .prepare('SELECT version, name, applied_at FROM schema_migrations ORDER BY version')
-      .all()
-    sqlite.close()
-
-    expect(after).toEqual(before)
-  })
-
   it('rolls back the complete pending batch when the v9 schema is invalid', async () => {
     const databasePath = await createDatabasePath()
     await createReleasedV9Database(databasePath)

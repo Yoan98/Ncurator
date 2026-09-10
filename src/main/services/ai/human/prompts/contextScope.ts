@@ -9,7 +9,7 @@ export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。
 needsHistory=true：新诉求在延续、追问、修改或纠正这些 digest 里近期任何一件事。
 needsHistory=false：新诉求是全新话题，和这些 digest 里的事都无关。
 
-不要继续对话，不要回答用户的问题。只输出 JSON，形如 {"needsHistory": true}。`
+不要继续对话，不要回答用户的问题。只输出 JSON，形如 {"needsHistory": true, "reason": "一句话原因"}。`
 
 export const buildContextScopeDecisionPrompt = (input: {
   digestText: string

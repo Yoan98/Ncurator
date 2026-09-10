@@ -322,7 +322,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-user-message-actions-and-attachments',
               message:
-                '用户消息气泡上方应居中展示时间条；hover 后应显示复制/编辑且不含时间；编辑会撤回 latest turn 及其消息日志并以新 run 重发；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示，文件副标题显示扩展名，输入框附件关闭按钮无遮挡。',
+                '用户消息气泡上方应居中展示时间条；hover 后应显示复制/编辑且不含时间；编辑会撤回 latest turn 及其消息日志并以新 run 重发；running 中不显示编辑；发送后 assistant thinking 过程不能闪断；文件附件应在用户消息气泡上方独立展示且顶边不被横滑裁切，文件副标题显示扩展名，输入框附件关闭按钮无遮挡。',
               data: result
             }
           )

@@ -129,10 +129,10 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `learning_started` / `learning_completed` | `{ skillId }` | UI 过程层 |
 | `skill_state_updated` | `{ learnedSkillIds: string[] }` | 同 run 只驱动 bindTools；新 run 从图启动扫描该伙伴剩余 log 最新一条 |
 | `plan_updated` | `{ plan: [{ title, status }] }` | UI 计划条；新 run 从图启动扫描该伙伴剩余 log 最新一条 |
-| `compaction_checkpoint` | `{ compactBlockId, throughSeq, sourceMessageCount, summary }` | 压缩书签 + 摘要正文；到 `throughSeq` 为止的原文不再发给主模型；发给主模型时再合成 Compact User |
+| `compaction_checkpoint` | `{ compactBlockId, throughSeq, sourceMessageCount, summary }` | 压缩书签 + 摘要正文；`seq <= historyFloorSeq` 的原文不再进 brain；发给主模型时再合成 Compact User |
 | `run_digest` | `{ summary, fileChangePaths }` | 正常交付后的一句话摘要 + 改动文件路径；只给判定模型看；不进 UI 气泡、不随带历史路径注入主模型 |
-| `context_scope_decided` | `{ needsHistory, basis, budgetTokens }` | 本 run 是否带历史的判定记录；投影不读 |
-| `discard_checkpoint` | `{ throughSeq, conversationHistory }` | 不要旧对话时写入；`throughSeq` 记下到哪一条为止的原文不再发给主模型；`conversationHistory` 是当时拼好的召回正文（不含外壳），之后带历史只读这份 |
+| `context_scope_decided` | `{ needsHistory, basis, budgetTokens, reason? }` | 本 run 是否带历史的判定记录；`reason` 只在 `basis=model_decision` 时有；投影不读 |
+| `discard_checkpoint` | `{ throughSeq, conversationHistory }` | `needsHistory=false` 时写入；`throughSeq` 计入 `historyFloorSeq`；`conversationHistory` 是当时拼好的召回正文（不含外壳），之后带历史只读这份 |
 | `finalizing_started` | `{}` | 投影时**清空** plan |
 | `approval_batch_resolved` | `{ batchId, items: [{ toolCallId, toolName, command, commandExplanation?, action, message? }] }` | UI Activity：走过审批的工具行图标 / 悬停揭示文案；`hand` 在审批决策后写入 |
 
@@ -264,7 +264,8 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
   "payload": {
     "needsHistory": false,
     "basis": "model_decision",
-    "budgetTokens": 62000
+    "budgetTokens": 62000,
+    "reason": "新诉求是法国首都，和近期周报无关"
   }
 }
 ```
@@ -327,7 +328,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 **写入**：`ChatRunService` 创建/更新 run。
 **读取**：Renderer 伙伴 snapshot、`activeRuns`、审批 UI。
-**与 log 关系**：同一 `run_id` 关联 log 行；resume 时新建 run，读**该伙伴** log 投影。已经丢掉或已经压进摘要的原文不再发给主模型。未正常交付的上一 run 一律带历史（第 4 节门控 1）。
+**与 log 关系**：同一 `run_id` 关联 log 行；resume 时新建 run，读**该伙伴** log 投影（`historyFloorSeq = max(两个 throughSeq)`，只保留 `seq > historyFloorSeq`）。未正常交付的上一 run 一律带历史（第 4 节门控 1）。
 
 ### 2.4 文件域：`ai_file_change`
 
@@ -361,13 +362,15 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 只投影 **`chat_session_message_log`**。已经丢掉或已经压进摘要的旧对话，主模型不再看到原文；还没处理掉的 `user.content` 原样发给模型。本轮新 User 由 `buildBrainUserMessage` 构造后 append。
 
-投影分两路：`projectMessageLogRecords` 产出 plan / skill / checkpoint / 过程 tail（**过滤掉 user**）；`projectBrainMessagesFromLog` 再拼 Compact User 或 Discard User、历史 build user 与本轮 build user。丢掉书签和压缩书签都在时，以更靠后的那条为准。graph 再拼 System。要不要带旧对话由第 4 节判定；两种组装形态见下表。前缀缓存 / Compaction / Resume 见第 5–7 节。
+投影分两路：`projectMessageLogRecords` 产出 plan / skill / checkpoint / 过程 tail（**过滤掉 user**）；`projectBrainMessagesFromLog` 再拼 Compact User 或 Discard User、历史 build user 与本轮 build user。
+
+`historyFloorSeq = max(compaction_checkpoint.throughSeq ?? -1, discard_checkpoint.throughSeq ?? -1)`，只投影 `seq > historyFloorSeq`。丢掉书签只取「该 `runId` 已有 user/assistant/tool」的最新一条。graph 再拼 System。要不要带旧对话由第 4 节判定；两种组装形态见下表。前缀缓存 / Compaction / Resume 见第 5–7 节。
 
 **两条组装路径**（勿混）：
 
 | 时机 | 谁拼 messages | 形态 |
 |------|---------------|------|
-| **新 run / resume 启动** | `projectBrainMessagesFromLog` + graph 包 System | 需要历史：`[System] + [Compact User \| Discard User]? + [还没丢掉、还没压进摘要的原文] + [Current User]`；不需要历史：`[System] + [Discard User] + [Current User]` |
+| **新 run / resume 启动** | `projectBrainMessagesFromLog` + graph 包 System | 需要历史：`[System] + [Compact User \| Discard User]? + [seq > historyFloorSeq 原文] + [Current User]`；不需要历史：`[System] + [Discard User] + [Current User]` |
 | **同 run 刚压完** | `buildCompactedMessages`（runtime 整段替换） | `[System] + [Compact User] + [当时留下的 tail 原文]`；当前 build User 若在 tail 里则保留，不再末尾重投影一条 |
 
 ```mermaid
@@ -455,10 +458,10 @@ flowchart TD
 
 **怎么拼发给主模型的数组**（新 run / resume 启动；同 run 压完见第 6 节）
 
-1. 取出这个伙伴的消息 log，按时间排好。
-2. 看有没有丢掉书签或压缩书签。两者都有时，以更靠后的那条为准。丢掉书签只认「同一轮里已经有过对话」的那条。
-3. 如果还需要旧对话：已经丢掉或压进摘要的原文不再发给主模型，改成 Compact User 或 Discard User。压缩不早于丢掉时用 Compact User；丢掉更靠后时用 Discard User（只读书签里冻好的正文，不再重扫 log）。如果不需要旧对话：原文整段不发，当场按窗口的 10% 拼召回，合成 Discard User。
-4. 还需要旧对话时，把仍然有效的 user / assistant / tool 转成消息（第 1.5 节；图片见第 3.5 节）。**不要**附上 digest。
+1. 取出这个伙伴的消息 log，按 `seq` 排序。
+2. `historyFloorSeq = max(compaction_checkpoint.throughSeq ?? -1, discard_checkpoint.throughSeq ?? -1)`。丢掉书签只取「该 `runId` 已有 user/assistant/tool」的最新一条。
+3. `needsHistory=true`：只保留 `seq > historyFloorSeq`。`compact.throughSeq >= discard.throughSeq` → 只合成 Compact User（`includeCheckpoint`）；`discard.throughSeq > compact.throughSeq` → 只合成 Discard User（`includeDiscard`，只读 `conversationHistory`，不再重扫 log）。`needsHistory=false`：这些原文整段不投影，当场按窗口 × 10% 拼 `conversationHistory`，合成 Discard User。
+4. `needsHistory=true` 时，其余 conversation 行走 `messagesFromLogEntries`（第 1.5 节；图片见第 3.5 节）。**不要**附上 digest。
 5. 末尾加上这一次的 `buildBrainUserMessage`。
 6. `repairInterruptedToolCalls`：每个 AIMessage 的 `tool_call_id` 若无对应 ToolMessage，插入
    `Error: The run was interrupted before this tool call could be executed.`
@@ -473,7 +476,7 @@ flowchart TD
 | `<reference_scope>` | 当时 Composer 的 `@` 与附件（第 2.5 节）；两者皆空时整块省略，有一侧为空时只渲染有内容的一侧 |
 | `<current_time>` | 当时 run 的 `runStartedAt`（历史行不再改） |
 
-annotation 扫描该伙伴**全部**剩余 log（技能、计划不受「已经丢掉 / 已经压缩」影响）：技能从最新 `skill_state_updated` 恢复。计划仍按 `plan_updated` / `finalizing_started` 扫描。清空消息记录会物理删除 log，因此技能 / 计划不会从已删除的历史恢复。
+annotation 扫描该伙伴**全部**剩余 log（不受 `historyFloorSeq` 限制）：技能从最新 `skill_state_updated` 恢复。计划仍按 `plan_updated` / `finalizing_started` 扫描。清空消息记录会物理删除 log，因此技能 / 计划不会从已删除的历史恢复。
 
 **组装**
 
@@ -486,7 +489,7 @@ annotation 扫描该伙伴**全部**剩余 log（技能、计划不受「已经�
 
 **同 run 刷新**：固定 `currentUserMessageIndex`；compaction 整段替换见第 6 节。
 
-**投影不做的事**：`ai_run.partial_answer`、`ai_file_change` 不进 brain。新 User 不抄 Compact / Discard User。已经丢掉或压进摘要的原文，不会和 Compact/Discard User 一起再发一遍（可与 **还没压掉** 的原文 User 并排，见第 6 节）。带历史不附 digest。
+**投影不做的事**：`ai_run.partial_answer`、`ai_file_change` 不进 brain。新 User 不抄 Compact / Discard User。`seq <= historyFloorSeq` 的原文不会和 Compact/Discard User 一起再发一遍（可与 **retained** 原文 User 并排，见第 6 节）。带历史不附 digest。
 
 ### 3.4 UI 投影
 
@@ -579,11 +582,11 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 
 ### 4.1 几个名字
 
-- **`run_digest`（digest）**：一轮**正常交付完**之后写的一句话（20–40 字）+ 这轮改过的文件。不是用户原话，不是交付全文，也不是压缩摘要。中断或失败的轮没有 digest，不算完成，也不要补写。
-- **判定模型看到的 digest**：把「主模型现在还能看到原文」的那些轮的 digest，排成 `时间 | 一句话`，有改动文件时再加 `| 改动文件：…`。只给判定模型看，不给主模型，条数不封顶。
-- `context_scope_decided`：记下这一轮要不要旧对话。投影不读它。
-- `discard_checkpoint`：不要旧对话时写入。`throughSeq` 记下「到哪一条为止的对话原文不再发给主模型」；`conversationHistory` 是当时拼好的召回正文（还没有外壳）。
-- `needsHistory`：`true` 就带上还没丢掉、还没压进摘要的原文，必要时再合成 Compact User 或 Discard User；`false` 就丢掉这些原文，当场拼召回。
+- **`run_digest`（digest）**：一轮**正常交付完**之后由 `finalizeDelivery` 写入的 annotation；`summary` 是 20–40 字一句话 + `fileChangePaths`。不是用户原话，不是交付全文，也不是压缩摘要。中断或失败的轮没有 digest，不算完成，也不要补写。
+- **判定模型看到的 digest**：`seq > historyFloorSeq` 的 `run_digest` 排成 `时间 | 一句话`，有改动文件时再加 `| 改动文件：…`。只给判定模型看，不给主模型，条数不封顶。
+- `context_scope_decided`：记下本 run 的 `needsHistory` / `basis` / `budgetTokens`；判定模型给出的一句话 `reason` 只在 `basis=model_decision` 时写入。投影不读它。
+- `discard_checkpoint`：`needsHistory=false` 时写入。`throughSeq` 是当时伙伴 log 的最大 `seq`；`conversationHistory` 是当时拼好的召回正文（还没有外壳）。
+- `needsHistory`：`true` 带 `seq > historyFloorSeq` 的对话原文，必要时再合成 Compact User 或 Discard User；`false` 丢掉这些原文，当场拼并写入 `conversationHistory`。
 
 ### 4.2 什么情况根本不问判定模型
 
@@ -600,22 +603,22 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 
 ### 4.3 判定模型看什么
 
-`caller: human.context_scope`。它只看到两样：上面那些 digest，以及本轮 `<new_task_goal>`。问的是「还要不要当前这段对话原文」。
+`caller: human.context_scope`。它只看到两样：`seq > historyFloorSeq` 的 digest 列表，以及本轮 `<new_task_goal>`。问的是「还要不要当前这段对话原文」。
 
 - 新诉求在延续、追问、修改或纠正这些 digest 里近期**任何**一件事 → `true`。
 - 新诉求是全新话题，和这些 digest 里的事都无关 → `false`。
 
 **不得**把问题收成「要不要上一轮」，也不得只看最新那一句 digest。丢掉的是现在还在上下文里的整段历史，可能有很多轮；只看最新一句，会把还在推进的事永久丢掉。
 
-输出契约在 system 里只声明一次：只输出 `{"needsHistory": true}` 形状的 JSON，不带 `reason`。user 消息只放数据，不重复指令。解析侧 `normalizePromptJsonText` 会剥 markdown 围栏、`jsonrepair` 兜底，因此提示词不必再叮嘱格式。JSON / 字段校验失败走 `chatStructured`（`retryOutputErrors: true`）最多 5 次（`AI_LLM_CALL_MAX_RETRY_ATTEMPTS`）；仍失败则 `basis=fallback`，`needsHistory=true`。用户消息与本轮 run 不因判定失败而中断。
+输出契约在 system 里只声明一次：只输出 `{"needsHistory": true, "reason": "一句话原因"}` 形状的 JSON。`reason` 只解释判定，不改变 `true` / `false` 规则。user 消息只放数据，不重复指令。解析侧 `normalizePromptJsonText` 会剥 markdown 围栏、`jsonrepair` 兜底，因此提示词不必再叮嘱格式。JSON / 字段校验失败走 `chatStructured`（`retryOutputErrors: true`）最多 5 次（`AI_LLM_CALL_MAX_RETRY_ATTEMPTS`）；仍失败则 `basis=fallback`，`needsHistory=true`，不写 `reason`。用户消息与本轮 run 不因判定失败而中断。模型判定成功后把 `reason` 写入 `context_scope_decided`；门控（`gate_*`）不写 `reason`。
 
 ### 4.4 丢掉之后主模型看到什么
 
 不要旧对话时，主模型收到：`[System] + [Discard User] + [Current User]`。Discard User 不是 log 里的假 user 行，是投影时现合成的。
 
-召回正文这样拼：log 里每有一条 digest，就对应一段。从上一条 digest 之后到本条 digest，取这段里**最后一句**用户原话、**最后一条**交付（`toolCalls: []` 的 assistant）、本条 digest 记下的改动文件（没有改动就不写「改动文件」行）。没有 digest 的轮自己不成段；如果夹在两轮完成之间，也不要用它的原话去配下一轮的交付。
+召回正文这样拼：按 `seq` 扫整份伙伴 log，每条 `run_digest` 对应一段。窗口是 `(上一条 digest 的 seq, 本条 digest 的 seq]`，取窗口里**最后一条**带 `input` 的 `user`、**最后一条**交付 `assistant`（`toolCalls: []`）、本条 digest 的 `fileChangePaths`（没有改动就不写「改动文件」行）。没有 digest 的轮自己不成段；夹在两轮完成之间时，也不得用它的原话去配下一轮的交付。
 
-从新到旧往里加，整段不超过窗口的 **10%**。只有最新那一段就超了，才只裁这一段的交付。冻进 `conversationHistory` 时不要外壳。之后如果又要带历史，只读这份冻好的正文，不再重扫 log。
+从新到旧往里加，整段 token ≤ 窗口 × **10%**（`CONTEXT_SCOPE_DISCARD_HISTORY_RATIO`）。只有最新那一段就超了，才只裁这一段的交付。冻进 `discard_checkpoint.conversationHistory`（不含外壳）。之后 `needsHistory=true` 只读这份，不再重扫 log。
 
 发给主模型时再套外壳：
 
@@ -627,27 +630,33 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 
 还要带历史时：
 
-- 压缩比丢掉更靠后（或一样靠后）→ 只放 Compact User
-- 丢掉比压缩更靠后 → 只放 Discard User
-- 然后接上还没丢掉、还没压进摘要的对话原文，最后是本轮 Current User
+```text
+historyFloorSeq = max(两个 throughSeq)
+compact.throughSeq >= discard.throughSeq → includeCheckpoint，只合成 Compact User
+discard.throughSeq > compact.throughSeq  → includeDiscard，只合成 Discard User
+
+带历史：[System] + [Compact|Discard User]? + [seq > historyFloorSeq 原文] + [Current User]
+不带历史：[System] + [Discard User] + [Current User]
+```
+
 - **不要**再附 digest
 
 不要旧对话时：`[System] + [Discard User] + [Current User]`
 
 ### 4.5 丢掉之后，哪些原文不再发给主模型
 
-不要旧对话时必须写 `discard_checkpoint`：`throughSeq` 取当时伙伴 log 的最后一条，并带上 `conversationHistory`。不写的话，下一轮追问会把刚丢掉的原文又捞回来，而且 Discard User 也对不上前缀缓存。
+`historyFloorSeq = max(compaction_checkpoint.throughSeq, discard_checkpoint.throughSeq)`。`needsHistory=false` 时必须写 `discard_checkpoint`：`throughSeq` 取当时伙伴 log 的最大 `seq`，并带上 `conversationHistory`。不写的话，下一轮追问会把刚丢掉的原文又捞回来，而且 Discard User 也对不上前缀缓存。
 
-这条书签和本轮 `user` 同一批写入，避免书签已经进库、user 还没写上，历史被永久丢掉。只认「同一轮里已经有过对话」的最新一条丢掉书签。
+这条书签和本轮 `user` 同一批 `appendBatch`，避免书签已经进库、user 还没写上，历史被永久丢掉。只认「该 `runId` 已有 user/assistant/tool」的最新一条 `discard_checkpoint`。
 
-压缩书签和丢掉书签都在时：谁更靠后听谁的。丢掉更靠后，就不再放 Compact User，只放 Discard User。
+`discard_checkpoint.throughSeq > compaction_checkpoint.throughSeq` 时，旧压缩摘要作废：`includeDiscard=true`，`includeCheckpoint=false`。
 
 分别看什么：
 
-- **主模型看到的对话原文**：已经丢掉或已经压进摘要的，不再发原文。
-- **判定模型看到的 digest**：同样只看主模型现在还能看到原文的那些轮。
-- **技能、计划**：仍扫这个伙伴剩下的全部 log。
-- **拼召回正文**：扫全部 log 里已经有 digest 的轮。
+- **主模型看到的对话原文**：只发 `seq > historyFloorSeq`。
+- **判定模型看到的 digest**：`collectRunDigests(seq > historyFloorSeq)`。
+- **技能、计划**：扫该伙伴全部剩余 log，不受 `historyFloorSeq` 限制。
+- **拼 `conversationHistory`**：扫整份 log 里已有 `run_digest` 的轮，不受 `historyFloorSeq` 限制。
 
 ---
 
@@ -679,7 +688,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 ### 5.3 打破前缀缓存的操作
 
-仅 **Compaction**（第 6 节）和 **判定不需要历史**（第 4 节）改写已建立的前缀。Compaction：合成 Compact User，被折掉的消息从 runtime 去掉，还没压掉的原文留下——**可含多条边界 User，因而可与 Compact User 并排**。压完当次 brain 前缀 miss；之后只 append 可再命中。判定不需要历史：该 run 重建为 `[System] + [Discard User] + [Current User]`，该路径总量小。
+仅 **Compaction**（第 6 节）和 **判定不需要历史**（第 4 节）改写已建立的前缀。Compaction：合成 Compact User，被折掉的消息从 runtime 去掉，`seq > historyFloorSeq` 的原文留下——**可含多条边界 User，因而可与 Compact User 并排**。压完当次 brain 前缀 miss；之后只 append 可再命中。判定不需要历史：该 run 重建为 `[System] + [Discard User] + [Current User]`，该路径总量小。
 
 **Discard User 在丢掉当轮之后的 true 路径上属于前缀**：书签冻了 `conversationHistory`，下一轮带历史时按字节原样再合成，才能命中丢掉当轮 `System + Discard User` 这一段。
 
@@ -692,9 +701,9 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 进入 brain 前，因上下文预算触发。执行后 **整段替换** runtime messages 为 `[System, Compact User, …tail]`，并 **打破第 5 节前缀缓存**。
 
-丢掉书签和压缩书签都在时，以更靠后的那条为准。压缩更靠后（或一样靠后）只放 Compact User；丢掉更靠后只放 Discard User（第 4.5 节）。范围判定本身不触发压缩。
+`discard_checkpoint` 与 `compaction_checkpoint` 共用 `historyFloorSeq = max(两个 throughSeq)`。`compact.throughSeq >= discard.throughSeq` 时只合成 Compact User；`discard.throughSeq > compact.throughSeq` 时只合成 Discard User（第 4.5 节）。范围判定本身不触发压缩。
 
-**Discard User 必须进压缩输入。** Discard User 不在 log 里，压缩只看见发给主模型的消息。压缩一旦比丢掉更靠后，下次就不再合成 Discard User；若这次压缩又把它排除，那份召回既不进摘要也不再被合成，已经丢掉的原文也不再发给主模型——召回彻底蒸发。进压缩只是把它作为 `[user]` 降级成摘要，这正是压缩的职责，也与 Compact User 已有的闭环一致。
+**Discard User 必须进压缩输入。** Discard User 不在 log 里，压缩只看见发给主模型的消息。`throughSeq` 归 compact 之后不再合成 Discard User；若这次压缩又把它排除，那份 `conversationHistory` 既不进 summary 也不再被合成，`seq <= historyFloorSeq` 的原文也不投影——召回彻底蒸发。进压缩只是把它作为 `[user]` 降级成摘要，这正是压缩的职责，也与 Compact User 已有的闭环一致。
 
 三个判定分开：
 
@@ -871,13 +880,13 @@ seq N  user      content=<user_context>继续把周报写完…</user_context>
 ```text
 [System]
 [Compact User]         由 summary 合成外壳 + <summary>
-[User / Assistant / Tool …]   还没丢掉、还没压进摘要的原文（可空；可与 Compact User 并排）
+[User / Assistant / Tool …]   seq > historyFloorSeq 原文（可空；可与 Compact User 并排）
 [Current User]         新任务                                 ← append
 ```
 
 ### 7.4 构建步骤
 
-1. 从 log 投影：还没丢掉、还没压进摘要的 `user / assistant / tool`；压缩更靠后则先合成 Compact User，丢掉更靠后则先合成 Discard User。未完成的上一 run 一律带历史（第 4 节门控 1）。
+1. 从 log 投影：`seq > historyFloorSeq` 的 `user / assistant / tool`；`includeCheckpoint` 则先合成 Compact User，`includeDiscard` 则先合成 Discard User。未完成的上一 run 一律带历史（第 4 节门控 1）。
 2. System 重渲染但内容跨 run 稳定。
 3. append 新 User = `buildBrainUserMessage`（新 `input`、当前 Composer、本 run `current_time`）。
 4. `context_budget` 将 `context_scope_decided`（若有；`needsHistory=false` 时再写 `discard_checkpoint`）与本轮 human user 同批写入 log（若尚未写入；压缩前也会写）→ brain 或 compaction。

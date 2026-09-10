@@ -6,6 +6,7 @@ import {
   analyzeTerminalCommand,
   analyzeTerminalCommandPolicy,
   isPathInsideRoot,
+  isTerminalExcelMutationCommand,
   isTerminalTerminationCommand,
   resolveToolPath
 } from '../../../../src/main/services/ai/human/tools/terminal/commandPolicy'
@@ -279,5 +280,28 @@ describe('ai unit terminal dangerous-command policy', () => {
     const candidate = 'c:\\users\\foo\\workspace\\a.docx'
     expect(isPathInsideRoot(candidate, root)).toBe(true)
     expect(isPathInsideRoot('c:\\users\\foo\\other\\a.docx', root)).toBe(false)
+  })
+
+  it('blocks terminal Excel mutations but allows inspection', () => {
+    ;[
+      'echo data > report.xlsx',
+      'touch REPORT.XLSX',
+      'rm report.xlsx',
+      'mv old.xlsx new.xlsx',
+      'rsync source.xlsx report.xlsx',
+      'node update.js report.xlsx',
+      'Set-Content -Path report.xlsx -Value data',
+      'Copy-Item source.xlsx report.xlsx',
+      'python3 -c "import openpyxl; wb=openpyxl.Workbook(); wb.save(\'report.xlsx\')"',
+      'python3 -c "import pandas as pd; pd.to_excel(\'report.xlsx\')"'
+    ].forEach((command) => expect(isTerminalExcelMutationCommand(command)).toBe(true))
+    ;[
+      'ls -la report.xlsx',
+      'stat report.xlsx',
+      'Get-Item report.xlsx',
+      'unzip -l report.xlsx',
+      'python3 -c "import openpyxl; wb=openpyxl.load_workbook(\'report.xlsx\'); print(wb.sheetnames)"',
+      "python3 <<'EOF'\nimport openpyxl\nwb = openpyxl.load_workbook('report.xlsx')\nprint(wb.sheetnames)\nEOF"
+    ].forEach((command) => expect(isTerminalExcelMutationCommand(command)).toBe(false))
   })
 })

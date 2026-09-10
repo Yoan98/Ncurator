@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import { createLearningNode } from '../../../../src/main/services/ai/human/node/learningNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
+import { humanNextActionSchema } from '../../../../src/main/services/ai/human/schema'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 
 const createStubAiRunContext = (): AiRunContext =>
@@ -167,5 +168,18 @@ describe('ai unit learning partial success', () => {
         }
       })
     ).rejects.toThrow('learnedSkillIds 只允许 external skill')
+  })
+
+  it('allows learning decisions to request three or more skills', () => {
+    expect(
+      humanNextActionSchema.parse({
+        action: 'learning',
+        toolCallId: 'call-learning-budget',
+        wantLearnSkillIds: ['docx-read', 'docx-write', 'pdf-read', 'excel-write']
+      })
+    ).toMatchObject({
+      action: 'learning',
+      wantLearnSkillIds: ['docx-read', 'docx-write', 'pdf-read', 'excel-write']
+    })
   })
 })

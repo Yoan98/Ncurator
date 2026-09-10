@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { humanNextActionSchema } from '../../../../src/main/services/ai/human/schema'
 import {
   countActiveToolNamesForSkillIds,
   fitSkillIdsToToolBudget
@@ -100,19 +99,6 @@ describe('ai unit learning tool budget', () => {
       ok: false,
       activeToolCount: 24,
       requestedSkillIds: ['epsilon', 'zeta']
-    })
-  })
-
-  it('allows learning decisions to request three or more skills', () => {
-    expect(
-      humanNextActionSchema.parse({
-        action: 'learning',
-        toolCallId: 'call-learning-budget',
-        wantLearnSkillIds: ['docx-read', 'docx-write', 'pdf-read', 'excel-write']
-      })
-    ).toMatchObject({
-      action: 'learning',
-      wantLearnSkillIds: ['docx-read', 'docx-write', 'pdf-read', 'excel-write']
     })
   })
 })

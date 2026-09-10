@@ -86,7 +86,7 @@ describe('TelemetryService', () => {
       isPackaged: true,
       endpoint: 'https://example.test/telemetry'
     })
-    secondService.track('message_submit_completed', { mode: 'ai', outcome: 'succeeded' })
+    secondService.track('message_submit_completed', { outcome: 'succeeded' })
     await secondService.flush()
     const secondPayload = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body)) as Record<
       string,
@@ -107,9 +107,9 @@ describe('TelemetryService', () => {
     expect(secondPayload).toMatchObject({
       eventName: 'message_submit_completed',
       environment: 'production',
-      mode: 'ai',
       outcome: 'succeeded'
     })
+    expect(secondPayload).not.toHaveProperty('mode')
     expect(secondPayload.installationId).toBe(firstPayload.installationId)
     expect(state).toMatchObject({
       schemaVersion: 2,
@@ -200,7 +200,6 @@ describe('TelemetryService', () => {
     })
 
     firstService.track('message_submit_completed', {
-      mode: 'search',
       outcome: 'failed',
       failureCode: 'NETWORK'
     })

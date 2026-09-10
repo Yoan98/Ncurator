@@ -86,6 +86,7 @@ export type HumanContextScopeDecision = {
   needsHistory: boolean
   basis: ContextScopeDecisionBasis
   budgetTokens: number
+  reason?: string
 }
 
 export type HumanRuntimeCache = {

@@ -3929,109 +3929,113 @@ const ChatPage: React.FC = () => {
           </div>
         ) : null}
         <div className="group/user-message flex justify-end">
-          <div className="flex min-w-0 max-w-[66%] flex-col items-end">
-          {messageItem.attachments && messageItem.attachments.length > 0 ? (
-            <div className="mb-2 flex max-w-full flex-nowrap justify-end gap-2 overflow-x-auto pb-1">
-              {messageItem.attachments.map((attachment) => (
-                <button
-                  key={attachment.id}
-                  type="button"
-                  className={`shrink-0 border border-[#E0DFDC] bg-white text-left shadow-none transition hover:border-[#CFCFCC] ${
-                    attachment.kind === 'image'
-                      ? 'h-[74px] w-[74px] overflow-hidden rounded-[12px] p-0'
-                      : 'flex max-w-[260px] items-center gap-2 rounded-[10px] px-2 py-1.5'
-                  }`}
-                  title={attachment.name}
-                  data-testid={`${workbenchSelectors.userMessageAttachmentPrefix}-${attachment.id}`}
-                  onClick={() => {
-                    if (attachment.kind === 'image') {
-                      const src = messageAttachmentPreviewUrls[attachment.id]
-                      if (src) setPreviewImage({ name: attachment.name, src })
-                      return
-                    }
-                    void window.api.openPath(attachment.path)
-                  }}
+          <div className="flex w-full min-w-0 flex-col items-end">
+            {messageItem.attachments && messageItem.attachments.length > 0 ? (
+              <div className="mb-2 w-full max-w-full pt-1">
+                <div className="flex max-w-full flex-nowrap justify-end gap-2 overflow-x-auto overflow-y-hidden pb-1">
+                  {messageItem.attachments.map((attachment) => (
+                    <button
+                      key={attachment.id}
+                      type="button"
+                      className={`h-[54px] shrink-0 rounded-[8px] border border-[#E5E4E0] bg-white text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3] ${
+                        attachment.kind === 'image'
+                          ? 'w-[54px] overflow-hidden p-0'
+                          : 'flex w-[220px] items-center gap-2 px-2 py-1.5'
+                      }`}
+                      title={attachment.name}
+                      data-testid={`${workbenchSelectors.userMessageAttachmentPrefix}-${attachment.id}`}
+                      onClick={() => {
+                        if (attachment.kind === 'image') {
+                          const src = messageAttachmentPreviewUrls[attachment.id]
+                          if (src) setPreviewImage({ name: attachment.name, src })
+                          return
+                        }
+                        void window.api.openPath(attachment.path)
+                      }}
+                    >
+                      {attachment.kind === 'image' ? (
+                        messageAttachmentPreviewUrls[attachment.id] ? (
+                          <img
+                            src={messageAttachmentPreviewUrls[attachment.id]}
+                            alt={attachment.name}
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          <span className="flex h-full w-full items-center justify-center bg-[#F4F4F2] text-[#787774]">
+                            <HiPhoto className="h-5 w-5" />
+                          </span>
+                        )
+                      ) : (
+                        <>
+                          <AttachmentFileIcon fileName={attachment.name} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
+                              {attachment.name}
+                            </span>
+                            <span className="block text-[12px] font-medium leading-4 text-[#787774]">
+                              {getAttachmentTypeLabel(attachment.name)}
+                            </span>
+                          </span>
+                        </>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            <div className="flex min-w-0 max-w-[66%] flex-col items-end">
+              <div className="min-w-0 rounded-[22px] bg-[#F4F4F2] px-4 py-2.5 text-[14px] leading-6 text-[#37352F] [overflow-wrap:anywhere]">
+                <div
+                  className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
+                  data-testid={workbenchSelectors.userMessageReferences}
                 >
-                  {attachment.kind === 'image' ? (
-                    messageAttachmentPreviewUrls[attachment.id] ? (
-                      <img
-                        src={messageAttachmentPreviewUrls[attachment.id]}
-                        alt={attachment.name}
-                        className="h-full w-full object-cover"
+                  {contentNodes.map((node, index) =>
+                    node.kind === 'reference' ? (
+                      <ReferenceInlineToken
+                        key={
+                          node.reference.kind === 'web'
+                            ? `${index}:web:${node.reference.webSourceId}`
+                            : `${index}:${node.reference.kind}:${node.reference.workspaceId}:${node.reference.nodeId}`
+                        }
+                        reference={node.reference}
+                        className="mx-[1px]"
                       />
                     ) : (
-                      <span className="flex h-full w-full items-center justify-center bg-[#F4F4F2] text-[#787774]">
-                        <HiPhoto className="h-5 w-5" />
-                      </span>
+                      <span key={`${index}:text`}>{node.text}</span>
                     )
-                  ) : (
-                    <>
-                      <AttachmentFileIcon fileName={attachment.name} className="h-9 w-9" />
-                      <span className="min-w-0">
-                        <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
-                          {attachment.name}
-                        </span>
-                        <span className="block text-[12px] leading-4 text-[#787774]">
-                          {getAttachmentTypeLabel(attachment.name)}
-                        </span>
-                      </span>
-                    </>
                   )}
-                </button>
-              ))}
-            </div>
-          ) : null}
-          <div className="min-w-0 rounded-[22px] bg-[#F4F4F2] px-4 py-2.5 text-[14px] leading-6 text-[#37352F] [overflow-wrap:anywhere]">
-            <div
-              className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]"
-              data-testid={workbenchSelectors.userMessageReferences}
-            >
-              {contentNodes.map((node, index) =>
-                node.kind === 'reference' ? (
-                  <ReferenceInlineToken
-                    key={
-                      node.reference.kind === 'web'
-                        ? `${index}:web:${node.reference.webSourceId}`
-                        : `${index}:${node.reference.kind}:${node.reference.workspaceId}:${node.reference.nodeId}`
-                    }
-                    reference={node.reference}
-                    className="mx-[1px]"
-                  />
-                ) : (
-                  <span key={`${index}:text`}>{node.text}</span>
-                )
-              )}
-            </div>
-          </div>
-          <div
-            className="mt-1 flex h-6 items-center justify-end gap-1.5 text-[12px] leading-none text-[#9B9A97] opacity-0 transition-opacity duration-150 group-hover/user-message:opacity-100"
-            data-testid={`${workbenchSelectors.userMessageActionsPrefix}-${messageItem.id}`}
-          >
-            <Tooltip title="复制">
-              <button
-                type="button"
-                className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
-                aria-label="复制消息"
-                data-testid={`${workbenchSelectors.userMessageCopyButtonPrefix}-${messageItem.id}`}
-                onClick={() => void handleCopyUserMessage(messageItem)}
+                </div>
+              </div>
+              <div
+                className="mt-1 flex h-6 items-center justify-end gap-1.5 text-[12px] leading-none text-[#9B9A97] opacity-0 transition-opacity duration-150 group-hover/user-message:opacity-100"
+                data-testid={`${workbenchSelectors.userMessageActionsPrefix}-${messageItem.id}`}
               >
-                <HiOutlineClipboardDocument className="h-4 w-4" />
-              </button>
-            </Tooltip>
-            {canEdit ? (
-              <Tooltip title="编辑">
-                <button
-                  type="button"
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
-                  aria-label="编辑消息"
-                  data-testid={`${workbenchSelectors.userMessageEditButtonPrefix}-${messageItem.id}`}
-                  onClick={() => void handleEditUserMessage(messageItem)}
-                >
-                  <HiOutlinePencilSquare className="h-4 w-4" />
-                </button>
-              </Tooltip>
-            ) : null}
-          </div>
+                <Tooltip title="复制">
+                  <button
+                    type="button"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+                    aria-label="复制消息"
+                    data-testid={`${workbenchSelectors.userMessageCopyButtonPrefix}-${messageItem.id}`}
+                    onClick={() => void handleCopyUserMessage(messageItem)}
+                  >
+                    <HiOutlineClipboardDocument className="h-4 w-4" />
+                  </button>
+                </Tooltip>
+                {canEdit ? (
+                  <Tooltip title="编辑">
+                    <button
+                      type="button"
+                      className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
+                      aria-label="编辑消息"
+                      data-testid={`${workbenchSelectors.userMessageEditButtonPrefix}-${messageItem.id}`}
+                      onClick={() => void handleEditUserMessage(messageItem)}
+                    >
+                      <HiOutlinePencilSquare className="h-4 w-4" />
+                    </button>
+                  </Tooltip>
+                ) : null}
+              </div>
+            </div>
           </div>
         </div>
       </div>

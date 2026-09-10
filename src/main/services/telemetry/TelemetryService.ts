@@ -35,7 +35,6 @@ type TelemetryEventPayload = {
   platform: 'win32' | 'darwin' | 'linux' | 'other'
   arch: 'x64' | 'arm64' | 'ia32' | 'other'
   appVersion: string
-  mode?: 'ai' | 'search'
   outcome?: 'succeeded' | 'failed'
   failureCode?: TelemetryFailureCode
 }
@@ -118,14 +117,9 @@ const isPendingEvent = (value: unknown): value is TelemetryEventPayload => {
     APP_VERSION_PATTERN.test(event.appVersion)
   if (!hasValidBase) return false
   if (event.eventName === 'app_started') {
-    return (
-      event.mode === undefined && event.outcome === undefined && event.failureCode === undefined
-    )
+    return event.outcome === undefined && event.failureCode === undefined
   }
-  if (
-    (event.mode !== 'ai' && event.mode !== 'search') ||
-    (event.outcome !== 'succeeded' && event.outcome !== 'failed')
-  ) {
+  if (event.outcome !== 'succeeded' && event.outcome !== 'failed') {
     return false
   }
   if (event.outcome === 'failed') {

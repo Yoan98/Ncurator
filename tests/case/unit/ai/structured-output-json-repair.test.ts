@@ -66,11 +66,4 @@ describe('ai unit structured output json repair', () => {
     expect(diagnosis).toMatch(/出错位置附近/)
     expect(diagnosis).not.toContain('Troubleshooting URL')
   })
-
-  it('includes context around error position', () => {
-    const raw = '{"title": "abc", "list": [1, 2,, 3]}'
-    const diagnosis = buildJsonErrorDiagnosis(raw, "Unexpected token ',' at position 26")
-    expect(diagnosis).toMatch(/at position \d+/)
-    expect(diagnosis).toMatch(/出错位置附近/)
-  })
 })

@@ -5,6 +5,7 @@ import {
   isPresetModelAvailableInRemoteList
 } from '../../../../src/shared/workbenchModelSelection'
 import type { LLMConfig, LlmRemoteModel } from '../../../../src/shared/types'
+import { toFreeModelPublicEntry, type FreeModelCatalogEntry } from '../../../../src/shared/freeModels'
 
 const presetConfig = (id: string): LLMConfig => ({
   id,
@@ -120,5 +121,45 @@ describe('workbench model selection', () => {
         modelListsByConfigId: lists
       })
     ).toEqual({ configId: 'cfg-custom', modelName: 'qwen3.8-max-0902' })
+  })
+
+  it('keeps free model selections and falls back to free catalog when no user configs', () => {
+    const freeEntry: FreeModelCatalogEntry = {
+      id: 'free-deepseek-v4-flash',
+      providerKind: 'openai-compatible',
+      modelName: 'deepseek-ai/deepseek-v4-flash-0731',
+      label: 'DeepSeek V4 Flash',
+      description: '更快更省，适合日常问答与轻量任务。',
+      capabilities: ['text'],
+      iconUrl: 'https://www.guanzhangai.cn/llm/deepseek.png',
+      baseUrl: 'https://integrate.api.nvidia.com/v1',
+      apiKey: 'nvapi-test'
+    }
+    const freeModels = [toFreeModelPublicEntry(freeEntry)]
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs: [],
+        modelListsByConfigId: {},
+        selected: {
+          configId: freeModels[0].configId,
+          modelName: freeModels[0].modelName
+        },
+        freeModels
+      })
+    ).toEqual({
+      configId: freeModels[0].configId,
+      modelName: freeModels[0].modelName
+    })
+
+    expect(
+      pickFallbackWorkbenchModel({
+        configs: [],
+        modelListsByConfigId: {},
+        freeModels
+      })
+    ).toEqual({
+      configId: freeModels[0].configId,
+      modelName: freeModels[0].modelName
+    })
   })
 })

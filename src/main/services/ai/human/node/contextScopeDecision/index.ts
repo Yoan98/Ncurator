@@ -27,7 +27,8 @@ import { buildContextScopeDecisionPrompt } from '../../prompts/contextScope'
 export type ContextScopeDecision = HumanContextScopeDecision
 
 const contextScopeDecisionSchema = z.object({
-  needsHistory: z.boolean()
+  needsHistory: z.boolean(),
+  reason: z.string().trim().min(1)
 })
 
 const buildFullHistoryMessages = (input: {
@@ -71,7 +72,8 @@ const decideByModel = async (input: {
     return {
       needsHistory: result.output.needsHistory,
       basis: 'model_decision',
-      budgetTokens: input.budgetTokens
+      budgetTokens: input.budgetTokens,
+      reason: result.output.reason
     }
   } catch {
     return {
@@ -133,7 +135,8 @@ export const buildContextScopeDecidedEntry = (
   payload: {
     needsHistory: decision.needsHistory,
     basis: decision.basis,
-    budgetTokens: decision.budgetTokens
+    budgetTokens: decision.budgetTokens,
+    ...(decision.reason ? { reason: decision.reason } : {})
   }
 })
 

@@ -131,7 +131,7 @@ AI unit / 辅助测试目录：
 
 - `tests/case/unit/ai/<case>.test.ts`
 - `tests/case/unit/storage/sqlite-migration.test.ts`、`tests/case/unit/storage/sqlite-storage.test.ts`、`tests/case/unit/ai/persistence/chat-run-service-contract.test.ts`
-- 工具 family 轻量契约（schema / outputTypes / skill 归属，不断言 prompt 或 render 文字）：`terminal-tool-contract`、`text-file-tool-contract`，以及既有 `docx-tool-contract`、`ppt-tool-contract`、`pdf-tool-contract`、`excel-contracts` 等。
+- 工具 family 轻量契约（schema / outputTypes / skill 归属，不断言 prompt 或 render 文字）：`terminal-tool-contract`、`text-file-tool-contract`，以及既有 `docx-tool-contract`、`ppt-tool-contract`、`pdf-tool-contract`、`runtime-skill-contract` 等。
 
 推荐命令：
 
@@ -825,8 +825,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend / mock-llm`
 - What：上一轮正常交付并写入 `run_digest` 后，发无关新任务且上下文超过判定阈值时，主模型收到 Discard User（含上一轮用户原句）和新 user，不含历史 build。
 - Why：长期伙伴若把无关历史整段带进下一轮会浪费 token；范围判定必须在真实 graph 启动路径上生效，丢掉的召回要冻成 `conversationHistory`。
-- How：Run 1 脚本化交付周报并写 digest。Run 2 把窗口降到 200 token，脚本化 `human.context_scope` 返回 `needsHistory=false`，捕获首次 brain 的拼接 user。
-- Oracle：Run 2 的 `context_scope_decided.needsHistory=false` 且同批写有 `discard_checkpoint.conversationHistory`；brain user 含「以下是最近的会话内容」和 Run 1 用户原句，不含 `<task_catalog>`、不含历史 `<user_context>` build。
+- How：Run 1 脚本化交付周报并写 digest。Run 2 把窗口降到 200 token，脚本化 `human.context_scope` 返回 `needsHistory=false` 与 `reason`，捕获首次 brain 的拼接 user。
+- Oracle：Run 2 的 `context_scope_decided.needsHistory=false` 且带非空 `reason`，同批写有 `discard_checkpoint.conversationHistory`；brain user 含「以下是最近的会话内容」和 Run 1 用户原句，不含 `<task_catalog>`、不含历史 `<user_context>` build。
 - Not：不验证真实模型的判定质量（由 `human-context-scope-decision-live` 覆盖）；不验证 compaction。
 
 ##### `context-scope-incomplete-run`
@@ -978,10 +978,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-context-scope-decision-live`
 
 - 测试类型：`backend / live`
-- What：同一伙伴连续五轮验证范围判定：相关追问保留原文、不合成 Discard User 且跨 run 前缀缓存命中；无关新任务写入 `conversationHistory` 并合成 Discard User；丢掉后再续做复用同一份 Discard User 且命中前缀缓存；再丢一次时判定只看到新话题 digest，交付仍能带出旧关键词。
-- Why：用户不管理会话，真实模型必须在同一窗口里把续做、换题、丢掉后再续做和再提旧任务四条路径走对；`conversationHistory` 必须冻字节，否则下一轮 true 会打穿前缀缓存。
-- How：把 `modelContextWindowTokens` 收到 2000，使判定阈值约 400 token，短问答交付后即可触发判定模型。Run 1 留下关键词并交付；Run 2 相关缩短；Run 3 完全无关的法国首都；Run 4 追问巴黎；Run 5 再问 Run 1 的关键词。检查各轮 `context_scope_decided` / `discard_checkpoint.conversationHistory`、首次 `human.brain` 的 `requestWire` 消息结构、Run 2 / Run 4 跨 run 前缀缓存，以及 Run 5 交付。不把 compaction 塞进这条 live。
-- Oracle：五轮均 `completed`。Run 2 `needsHistory=true`，首次 brain 含 Run 1 原文、末尾为新 user、**无** Discard User，且 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。Run 3 `needsHistory=false` 且 `conversationHistory` 按轮配对（`用户：` 行依次为 Run 1、Run 2 原话），首次 brain 含「以下是最近的会话内容」、不含 `<task_catalog>`。Run 4 `needsHistory=true`，Discard User 字节与 Run 3 相同，且对 Run 3 首次 brain 前缀缓存命中。Run 5 `needsHistory=false`（判定只看到法国 digest），新 `conversationHistory` 的 `用户：` 行依次为 Run 1～4 原话（不得把 Run 1 原话和 Run 4 交付捆成一段），交付含 Run 1 关键词。
+- What：同一伙伴连续五轮验证范围判定：相关追问保留原文、不合成 Discard User 且跨 run 前缀缓存命中；无关新任务写入 `conversationHistory` 并合成 Discard User；丢掉后再续做复用同一份 Discard User 且命中前缀缓存；再丢一次时判定只看到新话题 digest，交付仍能带出旧关键词。Run 1 前有一轮无 `run_digest` 的中断对话，丢掉时不得把失败轮原话配进召回。
+- Why：用户不管理会话，真实模型必须在同一窗口里把续做、换题、丢掉后再续做和再提旧任务四条路径走对；`conversationHistory` 必须冻字节，否则下一轮 true 会打穿前缀缓存。失败后下一轮已正常交付再丢掉时，召回不得把失败轮原话和成功轮交付捆在一起。
+- How：把 `modelContextWindowTokens` 收到 2000，使判定阈值约 400 token，短问答交付后即可触发判定模型。Run 1 前向该伙伴 log 写入一轮无 digest 的中断对话（独特标记 `INTERRUPTED-TASK-77`）。Run 1 留下关键词并交付；Run 2 相关缩短；Run 3 完全无关的法国首都；Run 4 追问巴黎；Run 5 再问 Run 1 的关键词。检查各轮 `context_scope_decided`（模型判定须带 `reason`）/ `discard_checkpoint.conversationHistory`、首次 `human.brain` 的 `requestWire` 消息结构、Run 2 / Run 4 跨 run 前缀缓存，以及 Run 5 交付。不把 compaction 塞进这条 live。
+- Oracle：五轮均 `completed`。Run 2 `needsHistory=true`，首次 brain 含 Run 1 原文、末尾为新 user、**无** Discard User，且 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。Run 3 `needsHistory=false` 且 `conversationHistory` 按轮配对（`用户：` 行依次为 Run 1、Run 2 原话，**不含**中断标记），首次 brain 含「以下是最近的会话内容」、不含 `<task_catalog>`。Run 4 `needsHistory=true`，Discard User 字节与 Run 3 相同，且对 Run 3 首次 brain 前缀缓存命中。Run 5 `needsHistory=false`（判定只看到法国 digest），新 `conversationHistory` 的 `用户：` 行依次为 Run 1～4 原话（不得把 Run 1 原话和 Run 4 交付捆成一段，亦不得含中断标记），交付含 Run 1 关键词。`basis=model_decision` 的 `context_scope_decided` 须有非空 `reason`；不钉死 `reason` 文案。
 - Not：不验证 UI；不要求固定工具；不验证 compaction（Discard User 进压缩由 unit 锁死）；中断门控由 `context-scope-incomplete-run` mock-llm 覆盖。
 
 ##### `human-skill-eviction-relearn-loop-live`

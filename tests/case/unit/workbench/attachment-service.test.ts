@@ -3,21 +3,34 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { AttachmentService } from '../../../../src/main/services/attachments/AttachmentService'
+import {
+  getPartnerAssetBucketDir,
+  getPartnerScriptsRootDir
+} from '../../../../src/main/services/assets/WorkspaceAssetService'
 
 describe('attachment service runtime directories', () => {
-  let workspaceRootPath = ''
+  let userDataPath = ''
   let sourceRootPath = ''
+  let originalUserDataPath = ''
   let service: AttachmentService
+  const partnerId = 'partner-attachment-1'
 
   beforeEach(async () => {
-    workspaceRootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-attachment-workspace-'))
+    originalUserDataPath = process.env.NCURATOR_USER_DATA_PATH || ''
+    userDataPath = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-attachment-userdata-'))
     sourceRootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-attachment-source-'))
+    process.env.NCURATOR_USER_DATA_PATH = userDataPath
     service = new AttachmentService()
   })
 
   afterEach(async () => {
+    if (originalUserDataPath) {
+      process.env.NCURATOR_USER_DATA_PATH = originalUserDataPath
+    } else {
+      delete process.env.NCURATOR_USER_DATA_PATH
+    }
     await Promise.all(
-      [workspaceRootPath, sourceRootPath]
+      [userDataPath, sourceRootPath]
         .filter(Boolean)
         .map((directoryPath) => fs.rm(directoryPath, { recursive: true, force: true }))
     )
@@ -29,29 +42,19 @@ describe('attachment service runtime directories', () => {
     ).rejects.toThrow('附件必须是文件')
   })
 
-  it('saves attachments under .ncurator/runtime and creates the scripts directory', async () => {
+  it('saves attachments under partner runtime and creates the scripts directory', async () => {
     const attachment = await service.saveAttachment({
-      workspaceRootPath,
+      partnerId,
       assetBucketId: 'bucket-1',
       name: 'notes.md',
       bytes: Buffer.from('# runtime attachment')
     })
 
-    const expectedPath = path.join(
-      workspaceRootPath,
-      '.ncurator',
-      'runtime',
-      'assets',
-      'bucket-1',
-      'notes.md'
-    )
-    expect(attachment.path).toBe(expectedPath)
-    await expect(fs.readFile(expectedPath, 'utf8')).resolves.toBe('# runtime attachment')
-    expect(
-      (await fs.stat(path.join(workspaceRootPath, '.ncurator', 'runtime', 'scripts'))).isDirectory()
-    ).toBe(true)
-    await expect(fs.stat(path.join(workspaceRootPath, '.ncurator', 'assets'))).rejects.toThrow()
-    await expect(fs.stat(path.join(workspaceRootPath, '.ncurator', 'scripts'))).rejects.toThrow()
+    const expectedPath = getPartnerAssetBucketDir(partnerId, 'bucket-1')
+    const filePath = path.join(expectedPath, 'notes.md')
+    expect(attachment.path).toBe(filePath)
+    await expect(fs.readFile(filePath, 'utf8')).resolves.toBe('# runtime attachment')
+    expect((await fs.stat(getPartnerScriptsRootDir(partnerId))).isDirectory()).toBe(true)
   })
 
   it('creates source attachments without copying them into the runtime bucket', async () => {
@@ -62,15 +65,7 @@ describe('attachment service runtime directories', () => {
 
     expect(attachment.path).toBe(sourcePath)
     expect(attachment.name).toBe('reference.json')
-    await expect(
-      fs.stat(path.join(workspaceRootPath, '.ncurator', 'runtime', 'assets'))
-    ).rejects.toThrow()
-  })
-
-  it('rejects source attachment directories', async () => {
-    await expect(
-      service.createSourceAttachmentFromPath({ sourcePath: sourceRootPath })
-    ).rejects.toThrow('附件必须是文件')
+    await expect(fs.stat(getPartnerAssetBucketDir(partnerId, 'bucket-1'))).rejects.toThrow()
   })
 
   it('accepts source attachments with any extension and falls back to octet-stream', async () => {
@@ -87,7 +82,7 @@ describe('attachment service runtime directories', () => {
 
   it('accepts PDF attachments and assigns application/pdf', async () => {
     const attachment = await service.saveAttachment({
-      workspaceRootPath,
+      partnerId,
       assetBucketId: 'bucket-pdf',
       name: 'lecture.pdf',
       bytes: Buffer.from('%PDF-1.7\n')
@@ -96,7 +91,7 @@ describe('attachment service runtime directories', () => {
     expect(attachment.kind).toBe('file')
     expect(attachment.mimeType).toBe('application/pdf')
     expect(attachment.path).toBe(
-      path.join(workspaceRootPath, '.ncurator', 'runtime', 'assets', 'bucket-pdf', 'lecture.pdf')
+      path.join(getPartnerAssetBucketDir(partnerId, 'bucket-pdf'), 'lecture.pdf')
     )
   })
 
@@ -105,7 +100,7 @@ describe('attachment service runtime directories', () => {
     ['slides.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation']
   ])('accepts %s attachments and assigns the expected MIME type', async (name, mimeType) => {
     const attachment = await service.saveAttachment({
-      workspaceRootPath,
+      partnerId,
       assetBucketId: 'bucket-office',
       name,
       bytes: Buffer.from('office-attachment')
@@ -123,7 +118,7 @@ describe('attachment service runtime directories', () => {
     ['macro-template.xltm', 'application/vnd.ms-excel.template.macroEnabled.12']
   ])('accepts spreadsheet attachment %s with the expected MIME type', async (name, mimeType) => {
     const attachment = await service.saveAttachment({
-      workspaceRootPath,
+      partnerId,
       assetBucketId: 'bucket-spreadsheet',
       name,
       bytes: Buffer.from('spreadsheet-bytes')
@@ -136,7 +131,7 @@ describe('attachment service runtime directories', () => {
 
   it('accepts attachments with unknown extensions without failing', async () => {
     const attachment = await service.saveAttachment({
-      workspaceRootPath,
+      partnerId,
       assetBucketId: 'bucket-unknown',
       name: 'archive.zip',
       bytes: Buffer.from('unknown-extension-bytes')
@@ -145,14 +140,7 @@ describe('attachment service runtime directories', () => {
     expect(attachment.kind).toBe('file')
     expect(attachment.mimeType).toBe('application/octet-stream')
     expect(attachment.path).toBe(
-      path.join(
-        workspaceRootPath,
-        '.ncurator',
-        'runtime',
-        'assets',
-        'bucket-unknown',
-        'archive.zip'
-      )
+      path.join(getPartnerAssetBucketDir(partnerId, 'bucket-unknown'), 'archive.zip')
     )
   })
 })

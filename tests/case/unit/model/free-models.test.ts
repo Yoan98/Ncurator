@@ -5,10 +5,6 @@ import {
   toFreeModelPublicEntry,
   type FreeModelCatalogEntry
 } from '../../../../src/shared/freeModels'
-import {
-  pickFallbackWorkbenchModel,
-  resolveSelectedWorkbenchModel
-} from '../../../../src/shared/workbenchModelSelection'
 
 const sampleEntry = (overrides?: Partial<FreeModelCatalogEntry>): FreeModelCatalogEntry => ({
   id: 'free-deepseek-v4-flash',
@@ -35,34 +31,5 @@ describe('free model catalog helpers', () => {
     expect(publicEntry).not.toHaveProperty('apiKey')
     expect(publicEntry).not.toHaveProperty('providerId')
     expect(publicEntry.iconUrl).toBe(entry.iconUrl)
-  })
-
-  it('keeps free model selections and falls back to free catalog when no user configs', () => {
-    const freeModels = [toFreeModelPublicEntry(sampleEntry())]
-    expect(
-      resolveSelectedWorkbenchModel({
-        configs: [],
-        modelListsByConfigId: {},
-        selected: {
-          configId: freeModels[0].configId,
-          modelName: freeModels[0].modelName
-        },
-        freeModels
-      })
-    ).toEqual({
-      configId: freeModels[0].configId,
-      modelName: freeModels[0].modelName
-    })
-
-    expect(
-      pickFallbackWorkbenchModel({
-        configs: [],
-        modelListsByConfigId: {},
-        freeModels
-      })
-    ).toEqual({
-      configId: freeModels[0].configId,
-      modelName: freeModels[0].modelName
-    })
   })
 })

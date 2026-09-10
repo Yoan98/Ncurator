@@ -451,25 +451,6 @@ describe('sqlite storage core and stores', () => {
     expect(repaired).toEqual({ status: 'applied', last_error: null })
   })
 
-  it('does not create chat_search_turn after migration 10', async () => {
-    const chatMessage = sqlite
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-      .get('chat_message')
-    const skillState = sqlite
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-      .get('chat_session_skill_state')
-    const searchTurn = sqlite
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-      .get('chat_search_turn')
-    const partner = sqlite
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?")
-      .get('partner')
-    expect(chatMessage).toBeUndefined()
-    expect(skillState).toBeUndefined()
-    expect(searchTurn).toBeUndefined()
-    expect(partner).toBeDefined()
-  })
-
   it('restores active and pending approval runs from sqlite', async () => {
     const pendingApproval: Extract<AiRunEvent, { type: 'approval_batch_required' }> = {
       type: 'approval_batch_required',

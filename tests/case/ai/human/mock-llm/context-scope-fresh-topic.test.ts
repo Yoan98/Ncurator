@@ -45,7 +45,8 @@ describe('ai human mock-llm backend', () => {
             'human.context_scope': [
               {
                 output: {
-                  needsHistory: false
+                  needsHistory: false,
+                  reason: '新任务是分析销售表，和周报无关'
                 }
               }
             ],
@@ -97,6 +98,7 @@ describe('ai human mock-llm backend', () => {
           result.output.status === 'completed' &&
             decidedPayload?.needsHistory === false &&
             decidedPayload.basis === 'model_decision' &&
+            Boolean(decidedPayload.reason?.trim()) &&
             typeof discardPayload?.throughSeq === 'number' &&
             typeof discardPayload.conversationHistory === 'string' &&
             discardPayload.conversationHistory.includes('用户：按模板写本周周报，不要封面页。') &&
@@ -157,7 +159,7 @@ describe('ai human mock-llm backend', () => {
           structuredOutputScript: {
             'human.context_scope': [
               {
-                output: { needsHistory: false }
+                output: { needsHistory: false, reason: '脚本占位，本 case 不应调用判定模型' }
               }
             ],
             'human.brain': [

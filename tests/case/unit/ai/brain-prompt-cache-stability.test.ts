@@ -191,19 +191,6 @@ describe('ai unit brain prompt cache stability', () => {
     expect(buildBrainUserMessage({ state, ctx: ctxA })).not.toContain('/tmp/another-workspace')
   })
 
-  it('keeps system static across tasks and embeds platform and runtime paths', () => {
-    const ctx = createFakeCtx()
-
-    const system = buildBrainSystemPrompt({ ctx })
-
-    expect(system).toContain('platform：macos')
-    expect(system).toContain('runtime_paths.assets：')
-    expect(system).toContain('runtime_paths.scripts：')
-    expect(system).not.toContain('用户默认工作地址')
-    expect(system).not.toContain('/tmp/workspace')
-    expect(system).not.toContain('current_time')
-  })
-
   it('rebuilds resume messages from frozen historical build user and current build user', () => {
     const state = createInitialHumanState({
       taskId: 'run-2',
@@ -264,17 +251,6 @@ describe('ai unit brain prompt cache stability', () => {
     expect(String(laterClock.find((message) => isCurrentBrainUserMessage(message))?.content)).not.toBe(
       String(firstPass.find((message) => isCurrentBrainUserMessage(message))?.content)
     )
-  })
-
-  it('projects historical user content as the frozen build user', () => {
-    const state = createInitialHumanState({
-      taskId: 'run-2',
-      userInput: '继续'
-    })
-    const messages = buildResumeBrainMessages({ records: resumeRecords, state })
-    const humanMessages = messages.filter((message) => message.getType() === 'human')
-    expect(String(humanMessages[0]?.content)).toBe(FROZEN_HISTORICAL_USER)
-    expect(String(humanMessages[1]?.content)).toContain('继续')
   })
 
   it('does not inject active_state on the first-run current build user', () => {

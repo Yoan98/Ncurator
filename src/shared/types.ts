@@ -1925,6 +1925,7 @@ export type ChatMessageLogAnnotationEntry =
         needsHistory: boolean
         basis: ContextScopeDecisionBasis
         budgetTokens: number
+        reason?: string
       }
     }
   | {

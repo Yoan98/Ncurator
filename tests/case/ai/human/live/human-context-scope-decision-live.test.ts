@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import { v4 as uuidv4 } from 'uuid'
 import type { AiLlmIoRecord } from '../../../../../src/shared/types'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
@@ -12,6 +13,8 @@ import { runWithStructuredOutputRetry } from '../testUtils'
 
 const WINDOW_TOKENS = 2_000
 const TOKEN = 'ALPHA-REPORT-42'
+const INTERRUPTED_TOKEN = 'INTERRUPTED-TASK-77'
+const INTERRUPTED_INPUT = `先做 ${INTERRUPTED_TOKEN}，做到一半就停，不要读文件。`
 const RUN1_INPUT = `记住关键词 ${TOKEN}，用一句话确认你收到了，不要读文件。`
 const RUN2_INPUT = '把刚才那个确认再缩短成十个字。'
 const RUN3_INPUT = '法国的首都是哪里？不要提刚才的关键词或机器学习。'
@@ -30,6 +33,7 @@ const lastScopeDecision = async (
               payload?: {
                 needsHistory?: boolean
                 basis?: string
+                reason?: string
                 throughSeq?: number
                 conversationHistory?: string
               }
@@ -92,6 +96,9 @@ const conversationBlocks = (history: string | undefined): string[] =>
     .map((block) => block.trim())
     .filter(Boolean)
 
+const hasModelReason = (decided?: { basis?: string; reason?: string }): boolean =>
+  decided?.basis !== 'model_decision' || Boolean(decided.reason?.trim())
+
 const scopeJudgeUser = (records: readonly AiLlmIoRecord[]): string => {
   const call = records.find((record) => record.caller === 'human.context_scope')
   return String(call?.user || '')
@@ -107,7 +114,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '同一伙伴连续五轮：相关追问保留原文并命中前缀缓存；无关新任务写入 conversationHistory；丢掉后再续做复用同一份 Discard User；再丢一次时判定只看到新话题 digest。',
+          '同一伙伴连续五轮：相关追问保留原文并命中前缀缓存；无关新任务写入 conversationHistory；丢掉后再续做复用同一份 Discard User；再丢一次时判定只看到新话题 digest。Run1 前有一轮无 digest 的中断对话，丢掉时不得配进召回。',
         fixtures: [],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -119,6 +126,24 @@ describe('ai human live backend', () => {
               partnerId,
               humanRuntimeOverrides: overrides
             }).run({ taskId, userInput })
+
+          createHumanTestRunner(runtime, {
+            partnerId,
+            humanRuntimeOverrides: overrides
+          })
+          await runtime.storageService.chatMessageLog.appendBatch({
+            partnerId,
+            runId: uuidv4(),
+            entries: [
+              {
+                kind: 'user',
+                content: INTERRUPTED_INPUT,
+                input: INTERRUPTED_INPUT,
+                context: { selectedReferences: [], attachments: [] }
+              },
+              { kind: 'assistant', content: '做到一半。', toolCalls: [] }
+            ]
+          })
 
           const run1 = await run(`${runtime.taskId}-a`, RUN1_INPUT)
           const afterRun1 = runtime.eventCollector.snapshotLlmIo()
@@ -192,6 +217,7 @@ describe('ai human live backend', () => {
             result.run1.status === 'completed' &&
               result.run2.status === 'completed' &&
               result.run2Scope.decided?.needsHistory === true &&
+              hasModelReason(result.run2Scope.decided) &&
               result.run2HasRun1User &&
               result.run2LastIsCurrent &&
               result.run2HasDiscardUser === false &&
@@ -218,10 +244,15 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.run3.status === 'completed' &&
               result.run3Scope.decided?.needsHistory === false &&
+              Boolean(result.run3Scope.decided.reason?.trim()) &&
               typeof result.run3Scope.discard?.throughSeq === 'number' &&
               typeof result.run3Scope.discard.conversationHistory === 'string' &&
               result.run3HistoryUsers[0] === RUN1_INPUT &&
               result.run3HistoryUsers[1] === RUN2_INPUT &&
+              !result.run3HistoryUsers.includes(INTERRUPTED_INPUT) &&
+              result.run3Scope.discard.conversationHistory.includes(`用户：${RUN1_INPUT}`) &&
+              !result.run3Scope.discard.conversationHistory.includes(INTERRUPTED_TOKEN) &&
+              result.run3DiscardHuman?.includes(INTERRUPTED_TOKEN) !== true &&
               result.run3HasCatalog === false &&
               Boolean(result.run3DiscardHuman) &&
               result.run3HasRun1User &&
@@ -229,7 +260,7 @@ describe('ai human live backend', () => {
             {
               name: 'fresh-topic-writes-conversation-history',
               message:
-                '无关新任务应丢弃旧原文、写下 conversationHistory，brain 含 Discard User 与 Run 1 用户原句，不含 task_catalog。',
+                '无关新任务应丢弃旧原文、写下 conversationHistory；失败轮无 digest 不得配进召回；brain 含 Discard User 与 Run 1 用户原句，不含 task_catalog。',
               data: {
                 run3: result.run3.status,
                 run3Scope: result.run3Scope,
@@ -244,6 +275,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.run4.status === 'completed' &&
               result.run4Scope.decided?.needsHistory === true &&
+              hasModelReason(result.run4Scope.decided) &&
               result.run4DiscardHuman === result.run3DiscardHuman &&
               result.run4LastIsCurrent,
             {
@@ -266,6 +298,7 @@ describe('ai human live backend', () => {
           runtime.assertThat(
             result.run5.status === 'completed' &&
               result.run5Scope.decided?.needsHistory === false &&
+              Boolean(result.run5Scope.decided.reason?.trim()) &&
               typeof result.run5Scope.discard?.conversationHistory === 'string' &&
               result.run5Scope.discard.conversationHistory !==
                 result.run3Scope.discard?.conversationHistory &&
@@ -273,6 +306,8 @@ describe('ai human live backend', () => {
               result.run5HistoryUsers[1] === RUN2_INPUT &&
               result.run5HistoryUsers[2] === RUN3_INPUT &&
               result.run5HistoryUsers[3] === RUN4_INPUT &&
+              result.run5HistoryUsers.includes(INTERRUPTED_INPUT) === false &&
+              result.run5Scope.discard.conversationHistory.includes(INTERRUPTED_TOKEN) === false &&
               result.run5HistoryBlocks[0]?.includes(`用户：${RUN1_INPUT}`) === true &&
               result.run5HistoryBlocks[0]?.includes(`用户：${RUN4_INPUT}`) !== true &&
               result.run5JudgeUser.includes('法国') &&
@@ -282,7 +317,7 @@ describe('ai human live backend', () => {
             {
               name: 'second-discard-recalls-token-from-history',
               message:
-                '再问旧关键词时，判定只看到法国 digest；新 conversationHistory 应按轮配对 Run1～4 用户原话；交付含 TOKEN。',
+                '再问旧关键词时，判定只看到法国 digest；新 conversationHistory 应按轮配对 Run1～4 用户原话，且不含失败轮标记；交付含 TOKEN。',
               data: {
                 run5: result.run5.status,
                 run5Scope: result.run5Scope,

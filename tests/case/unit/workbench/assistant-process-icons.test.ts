@@ -237,34 +237,42 @@ describe('assistant process icons and activity summary', () => {
     expect(resolveAssistantExecutionIcon(groups)).toBe('eye')
   })
 
-  it('joins heterogeneous browser actions with commas and resolves to workflow icon', () => {
-    const groups = [
-      ...createToolGroup('browser_use', 1, {
-        input: { action: 'navigate' },
-        headerShortText: '打开网页'
-      }),
-      ...createToolGroup('browser_use', 2, {
-        input: { action: 'observe' },
-        headerShortText: '查看页面'
-      })
+  it('joins heterogeneous tool actions with commas and resolves to workflow icon', () => {
+    const cases = [
+      {
+        groups: [
+          ...createToolGroup('browser_use', 1, {
+            input: { action: 'navigate' },
+            headerShortText: '打开网页'
+          }),
+          ...createToolGroup('browser_use', 2, {
+            input: { action: 'observe' },
+            headerShortText: '查看页面'
+          })
+        ],
+        expectedText: '打开网页,查看页面'
+      },
+      {
+        groups: [
+          ...createToolGroup('web_search', 1, {
+            input: { type: 'search' },
+            headerShortText: '搜索网页'
+          }),
+          ...createToolGroup('web_search', 2, {
+            input: { type: 'fetch' },
+            headerShortText: '抓取网页'
+          })
+        ],
+        expectedText: '搜索网页,抓取网页'
+      }
     ]
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('打开网页,查看页面')
-    expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
-  })
 
-  it('joins search and fetch actions with commas and resolves to workflow icon', () => {
-    const groups = [
-      ...createToolGroup('web_search', 1, {
-        input: { type: 'search' },
-        headerShortText: '搜索网页'
-      }),
-      ...createToolGroup('web_search', 2, {
-        input: { type: 'fetch' },
-        headerShortText: '抓取网页'
-      })
-    ]
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页,抓取网页')
-    expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
+    for (const testCase of cases) {
+      expect(toPlainText(buildAssistantExecutionSummaryText(testCase.groups))).toBe(
+        testCase.expectedText
+      )
+      expect(resolveAssistantExecutionIcon(testCase.groups)).toBe('workflow')
+    }
   })
 
   it('resolves image icon for read_image standalone and screenshot paired with read_image', () => {

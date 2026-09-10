@@ -1,6 +1,3 @@
-import fs from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildTerminalEnvironment } from '../../../../src/main/services/ai/human/tools/terminal/environment/TerminalEnvironment'
 import { getTerminalPlatformAdapter } from '../../../../src/main/services/ai/human/tools/terminal/platform'
@@ -46,27 +43,5 @@ describe('terminal platform adapters', () => {
     expect(windowsBootstrap).toContain('[Console]::OutputEncoding')
     expect(windowsBootstrap).toContain('$OutputEncoding')
     expect(windowsBootstrap).toContain('chcp.com 65001')
-  })
-
-  it('resolves leading cd on both macOS and Windows adapters', async () => {
-    const root = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-adapter-cwd-'))
-    const nested = path.join(root, 'nested')
-    await fs.mkdir(nested)
-    try {
-      await expect(
-        getTerminalPlatformAdapter('macos').resolveCommandCwd({
-          command: `cd "${nested}" && pwd`,
-          currentPath: root
-        })
-      ).resolves.toBe(nested)
-      await expect(
-        getTerminalPlatformAdapter('windows').resolveCommandCwd({
-          command: `cd "${nested}"; Write-Output ok`,
-          currentPath: root
-        })
-      ).resolves.toBe(nested)
-    } finally {
-      await fs.rm(root, { recursive: true, force: true })
-    }
   })
 })

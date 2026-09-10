@@ -4,8 +4,7 @@ import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills
 import {
   DOCX_WRITE_TOOL_SPECS,
   DOCX_READ_TOOL_SPECS,
-  DOCX_TOOL_SPECS,
-  DOCX_WRITE_TOOL_SPECS
+  DOCX_TOOL_SPECS
 } from '../../../../src/main/services/ai/human/tools/docx/toolSpecs'
 import {
   docxFormatSchema,
@@ -26,20 +25,11 @@ describe('ai unit docx tool contract', () => {
   it('exposes independent 3/4 docx skill toolsets', () => {
     expect(DOCX_READ_TOOL_SPECS.map((spec) => spec.name)).toEqual(READ_TOOLS)
     expect(DOCX_WRITE_TOOL_SPECS.map((spec) => spec.name)).toEqual(WRITE_TOOLS)
-    expect(DOCX_WRITE_TOOL_SPECS.map((spec) => spec.name)).toEqual(WRITE_TOOLS)
     expect(DOCX_TOOL_SPECS.map((spec) => spec.name)).toEqual([...READ_TOOLS, ...WRITE_TOOLS])
     expect(SKILL_DEFINITIONS['docx-read'].toolNames).toEqual(READ_TOOLS)
     expect(SKILL_DEFINITIONS['docx-write'].toolNames).toEqual(WRITE_TOOLS)
     expect(DOCX_TOOL_SPECS).toHaveLength(7)
     expect(DOCX_TOOL_SPECS.length).toBeLessThan(HUMAN_MAX_ACTIVE_TOOLS)
-  })
-
-  it('combines docx skills without hidden tools', () => {
-    const toolNames = ['docx-read', 'docx-write'].flatMap(
-      (skillId) => SKILL_DEFINITIONS[skillId as 'docx-read' | 'docx-write'].toolNames
-    )
-
-    expect(toolNames).toEqual([...READ_TOOLS, ...WRITE_TOOLS])
   })
 
   it('keeps every public call to one discriminated operation', () => {

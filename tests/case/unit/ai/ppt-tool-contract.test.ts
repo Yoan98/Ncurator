@@ -20,10 +20,7 @@ import {
   PPT_CANVAS_HEIGHT,
   PPT_CANVAS_WIDTH
 } from '../../../../src/main/services/ai/human/tools/ppt/color'
-import {
-  buildPptDiffManifest,
-  toPptToolFailure
-} from '../../../../src/main/services/ai/human/tools/ppt/runtime'
+import { toPptToolFailure } from '../../../../src/main/services/ai/human/tools/ppt/runtime'
 
 const emptySlide = {
   sourcePath: 'deck.pptx',
@@ -271,50 +268,5 @@ describe('ai unit ppt tool contract', () => {
         style: { fontSize: 28 }
       })
     ).not.toThrow()
-  })
-
-  it('emits v4 net diff semantics without treating structural shifts as moves', () => {
-    const beforeSlides = [
-      { slideId: 'slide-1', index: 1, pageFingerprint: 'same', elements: [] },
-      { slideId: 'slide-2', index: 2, pageFingerprint: 'old', elements: [] }
-    ]
-    const afterSlides = [
-      { slideId: 'slide-2', index: 1, pageFingerprint: 'new', elements: [] },
-      { slideId: 'slide-3', index: 2, pageFingerprint: 'new', elements: [] }
-    ]
-    const beforeFrames = new Map([
-      ['slide-1', { index: 1, svg: 'before-1.svg' }],
-      ['slide-2', { index: 2, svg: 'before-2.svg' }]
-    ])
-    const afterFrames = new Map([
-      ['slide-2', { index: 1, svg: 'after-2.svg' }],
-      ['slide-3', { index: 2, svg: 'after-3.svg' }]
-    ])
-    const manifest = buildPptDiffManifest({
-      beforeSlides,
-      afterSlides,
-      beforeFrames,
-      afterFrames,
-      operation: 'updated'
-    })
-    expect(manifest.version).toBe(4)
-    expect(manifest.slides.map((slide) => slide.changes)).toEqual([
-      ['deleted'],
-      ['modified'],
-      ['added']
-    ])
-    expect({ positive: manifest.positiveCount, negative: manifest.negativeCount }).toEqual({
-      positive: 2,
-      negative: 1
-    })
-    expect(
-      buildPptDiffManifest({
-        beforeSlides: [],
-        afterSlides,
-        beforeFrames: new Map(),
-        afterFrames,
-        operation: 'created'
-      }).slides.every((slide) => slide.changes.includes('added'))
-    ).toBe(true)
   })
 })

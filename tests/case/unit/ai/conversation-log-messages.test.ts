@@ -6,6 +6,7 @@ import {
   messagesFromLogEntries
 } from '../../../../src/main/services/ai/human/memory/conversationLogMessages'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
+import { buildToolFeedback } from '../../../../src/main/services/ai/human/shared/toolFeedback'
 
 const userEntry = (content: string): ChatMessageLogEntry => ({
   kind: 'user',
@@ -116,5 +117,41 @@ describe('ai unit conversation log messages', () => {
     ])
     expect(messages.map((message) => message.getType())).toEqual(['ai'])
     expect(String(messages[0]?.content)).toBe('开始')
+  })
+})
+
+describe('ai unit tool feedback text', () => {
+  it('preserves explicit success text in the model message and transcript', () => {
+    const transcript = buildToolFeedback({
+      toolCallId: 'call-1',
+      toolName: 'update_plan',
+      ok: true,
+      content: 'Plan updated successfully.'
+    })
+    const message = messagesFromLogEntries([transcript])[0]
+
+    expect(String(message?.content)).toBe('Plan updated successfully.')
+    expect(transcript).toEqual({
+      kind: 'tool',
+      toolCallId: 'call-1',
+      toolName: 'update_plan',
+      ok: true,
+      content: String(message?.content)
+    })
+  })
+
+  it('builds an English error message without exposing non-English internals', () => {
+    const transcript = buildToolFeedback({
+      toolCallId: 'call-2',
+      toolName: 'update_plan',
+      ok: false,
+      errorMessage: 'status 仅允许 todo/done'
+    })
+    const message = messagesFromLogEntries([transcript])[0]
+
+    expect(String(message?.content)).toBe(
+      'Error: The tool call failed. Check the tool arguments and try again.'
+    )
+    expect(transcript.content).toBe(String(message?.content))
   })
 })

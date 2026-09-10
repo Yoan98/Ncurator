@@ -471,6 +471,7 @@ describe('context scope decision prompt', () => {
       taskGoal: '把标题改一下'
     })
     expect(prompt.system).toContain('needsHistory')
+    expect(prompt.system).toContain('reason')
     expect(prompt.system).toContain('digest')
     expect(prompt.system).not.toContain('目录')
     expect(prompt.system).not.toContain('上一轮')
@@ -577,7 +578,7 @@ describe('context scope decision gates', () => {
     const ctx = createCtx({
       windowTokens: 200,
       chatStructured: async () => ({
-        output: { needsHistory: false }
+        output: { needsHistory: false, reason: '新诉求和近期周报无关' }
       })
     })
     const decision = await decideContextScope({
@@ -587,7 +588,8 @@ describe('context scope decision gates', () => {
     })
     expect(decision).toMatchObject({
       needsHistory: false,
-      basis: 'model_decision'
+      basis: 'model_decision',
+      reason: '新诉求和近期周报无关'
     })
     expect(decision.budgetTokens).toBeGreaterThan(40)
   })
@@ -615,7 +617,12 @@ describe('context scope decision gates', () => {
       contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
     })
     const fresh = buildContextScopeLogEntries({
-      decision: { needsHistory: false, basis: 'model_decision', budgetTokens: 90 },
+      decision: {
+        needsHistory: false,
+        basis: 'model_decision',
+        budgetTokens: 90,
+        reason: '新诉求和近期周报无关'
+      },
       records: log,
       contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
     })
@@ -625,11 +632,18 @@ describe('context scope decision gates', () => {
       eventType: 'context_scope_decided',
       payload: { needsHistory: true, basis: 'model_decision', budgetTokens: 90 }
     })
+    expect(keep[0]?.kind === 'annotation' ? keep[0].payload : undefined).not.toHaveProperty(
+      'reason'
+    )
     expect(fresh).toHaveLength(2)
     expect(fresh[0]).toMatchObject({
       kind: 'annotation',
       eventType: 'context_scope_decided',
-      payload: { needsHistory: false, basis: 'model_decision' }
+      payload: {
+        needsHistory: false,
+        basis: 'model_decision',
+        reason: '新诉求和近期周报无关'
+      }
     })
     expect(fresh[1]).toMatchObject({
       kind: 'annotation',
@@ -653,7 +667,7 @@ describe('context scope decision gates', () => {
       windowTokens: 200,
       chatStructured: async (request) => {
         judgeUser = request.user
-        return { output: { needsHistory: false } }
+        return { output: { needsHistory: false, reason: '只看到法国首都 digest' } }
       }
     })
     const log = records([

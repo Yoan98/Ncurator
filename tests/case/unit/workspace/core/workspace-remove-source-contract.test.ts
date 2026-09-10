@@ -1,16 +1,11 @@
 import { describe, it } from 'vitest'
-import type {
-  WebSourceRecord,
-  WorkspaceFileIndexRecord,
-  WorkspaceSource
-} from '../../../../../src/shared/types'
+import type { WorkspaceFileIndexRecord, WorkspaceSource } from '../../../../../src/shared/types'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 const NOW = 1_716_000_000_000
 
 const WORKSPACE: WorkspaceSource = {
   id: 'settings-workspace-remove-contract',
-  name: '待移除工作区',
   root_path: '/tmp/settings-workspace-remove-contract',
   created_at: NOW,
   updated_at: NOW
@@ -34,22 +29,6 @@ const FILE_RECORD: WorkspaceFileIndexRecord = {
   updated_at: NOW
 }
 
-const WEB_SOURCE: WebSourceRecord = {
-  id: 'settings-workspace-remove-contract-web',
-  workspace_id: WORKSPACE.id,
-  identity_kind: 'normalized_url',
-  normalized_url: 'https://example.com/remove-contract',
-  url: 'https://example.com/remove-contract',
-  title: '待移除网页资料',
-  document_id: 'settings-workspace-remove-contract-web-doc',
-  index_status: 'indexed',
-  fetched_at: NOW,
-  last_crawled_at: NOW,
-  last_indexed_at: NOW,
-  created_at: NOW,
-  updated_at: NOW
-}
-
 describe('unit workspace backend', () => {
   it('workspace-remove-source-contract', async () => {
     await runBackendCase({
@@ -58,7 +37,7 @@ describe('unit workspace backend', () => {
       domain: 'unit',
       suite: 'workspace',
       groups: ['core'],
-      description: '移除工作空间后，文件索引记录与网页资料记录都应一并清理。',
+      description: '移除文件地址后，该地址及其文件索引记录应一并清理；全局网页资料不受影响。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -66,7 +45,6 @@ describe('unit workspace backend', () => {
         await runtime.storageService.workspace.replaceWorkspaceFileIndexRecords(WORKSPACE.id, [
           FILE_RECORD
         ])
-        await runtime.storageService.webSource.saveWebSource(WEB_SOURCE)
 
         await runtime.storageService.workspace.deleteWorkspace(WORKSPACE.id)
 
@@ -74,12 +52,10 @@ describe('unit workspace backend', () => {
         const fileRecords = await runtime.storageService.workspace.listWorkspaceFileIndexRecords(
           WORKSPACE.id
         )
-        const webSources = await runtime.storageService.webSource.listWebSources(WORKSPACE.id)
 
         return {
           remainingWorkspaceIds: workspaces.map((item) => item.id),
-          remainingFileRecordIds: fileRecords.map((item) => item.id),
-          remainingWebSourceIds: webSources.map((item) => item.id)
+          remainingFileRecordIds: fileRecords.map((item) => item.id)
         }
       },
       assert: async (result, runtime) => {
@@ -90,15 +66,12 @@ describe('unit workspace backend', () => {
           data: result
         })
 
-        runtime.assertThat(
-          result.remainingFileRecordIds.length === 0 && result.remainingWebSourceIds.length === 0,
-          {
-            name: 'removed-workspace-clears-file-and-web-sources',
-            message:
-              '移除成功后，该工作空间的文件索引记录与网页资料记录都应同时消失，对齐 SET-WORKSPACE-006-AC2。',
-            data: result
-          }
-        )
+        runtime.assertThat(result.remainingFileRecordIds.length === 0, {
+          name: 'removed-workspace-clears-file-index-records',
+          message:
+            '移除成功后，该文件地址下的索引记录应一并消失，避免残留资料继续进入资料范围，对齐 SET-WORKSPACE-006-AC2。',
+          data: result
+        })
       }
     })
   })

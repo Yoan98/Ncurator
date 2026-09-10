@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getEffectiveLearnedSkillIds,
+  getSkillDefinition,
   listBuiltinSkillDefinitions,
   listExternalSkillDefinitions
 } from '../../../../src/main/services/ai/human/skills'
@@ -24,6 +25,11 @@ describe('ai unit runtime skill contract', () => {
       'excel-write',
       'image-generation'
     ])
+  })
+
+  it('binds excel skills to their tool names', () => {
+    expect(getSkillDefinition('excel-read').toolNames).toEqual(['excel_read'])
+    expect(getSkillDefinition('excel-write').toolNames).toEqual(['excel_edit'])
   })
 
   it('includes builtin skills in effective skills before any external learning', () => {

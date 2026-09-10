@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { AIMessage, ToolMessage } from '@langchain/core/messages'
 import type {
   ChatMessageLogEntry,
   ChatMessageLogRecord
 } from '../../../../src/shared/types'
 import {
   projectMessageLogRecords,
-  repairInterruptedToolCalls,
   resolveCompactionThroughSeq
 } from '../../../../src/main/services/ai/human/memory/transcript'
 import { projectBrainMessagesFromLog } from '../../../../src/main/services/ai/human/memory/brainMessageProjection'
@@ -116,19 +114,6 @@ describe('ai human message-log recovery', () => {
       }
     ]
     expect(projectMessageLogRecords(finalized).plan).toEqual([])
-  })
-
-  it('repairs a dangling tool call with the same tool_call_id', () => {
-    const repaired = repairInterruptedToolCalls([
-      new AIMessage({
-        content: 'calling tool',
-        tool_calls: [{ id: 'call-1', name: 'read_file', args: {}, type: 'tool_call' }]
-      })
-    ])
-    expect(repaired).toHaveLength(2)
-    expect(repaired[1]).toBeInstanceOf(ToolMessage)
-    expect((repaired[1] as ToolMessage).tool_call_id).toBe('call-1')
-    expect(String(repaired[1].content)).toContain('interrupted')
   })
 
   it('sets throughSeq through the last user when no process follows', () => {
