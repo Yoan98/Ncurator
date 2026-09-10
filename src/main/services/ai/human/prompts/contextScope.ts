@@ -15,14 +15,11 @@ export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。
 
 不要继续对话。不要回答用户的问题。只输出结构化判定。
 
-判定问的是「需不需要紧邻的正在进行的历史」，不是「是不是新话题」。话题不同不等于不需要历史。
-
 代价不对称：
 - 误判为需要历史：只是多花 token。
 - 误判为不需要历史：模型会失忆，无法继续刚做完的工作。
 不确定时必须判定为需要历史。
-
-用户提到目录里某个已完成的旧任务时，判定为不需要历史：那是开启一段关于旧对象的新工作，当前对话历史对它是噪音；主模型会从目录拿到文件路径去读当前内容。`
+`
 
 export const buildContextScopeDecisionPrompt = (input: {
   catalogText: string
@@ -46,7 +43,7 @@ export const buildContextScopeDecisionPrompt = (input: {
 
 export const RUN_DIGEST_SYSTEM_PROMPT = `你是任务摘要助手。把这一轮用户诉求和最终交付压成一句 20 到 40 字的中文摘要，供后续判断是否需要这段历史。
 
-不要继续对话。不要复述全文。只输出这一句话。保留关键对象、文件名或结论。`
+不要继续对话。不要复述全文。只输出这一句话。保留关键对象、文件名或结论。禁止编造不存在事项`
 
 export const buildRunDigestPrompt = (input: {
   userInput: string
