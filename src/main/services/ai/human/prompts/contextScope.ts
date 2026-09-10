@@ -19,7 +19,8 @@ export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。
 - 误判为需要历史：只是多花 token。
 - 误判为不需要历史：模型会失忆，无法继续刚做完的工作。
 不确定时必须判定为需要历史。
-`
+
+用户提到某个已完成的旧任务时，判定为不需要历史：那是开启一段关于旧对象的新工作，当前对话历史对它是噪音；主模型会从目录拿到文件路径去读当前内容。`
 
 export const buildContextScopeDecisionPrompt = (input: {
   catalogText: string
