@@ -11,23 +11,13 @@ export const wrapTaskCatalogContent = (catalogText: string): string => {
   ].join('\n')
 }
 
-export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。判断这一轮是否需要紧邻的、上一轮刚做完的那段对话历史。
+export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。根据近期任务目录和新诉求，判断这一轮还需不需要当前这段对话历史原文。
 
-不要继续对话。不要回答用户的问题。不要输出 markdown 围栏、解释或任何其它文字。
+needsHistory=true：新诉求在延续、追问、修改或纠正目录里近期任何一件事。
+needsHistory=false：新诉求是全新话题，和目录里的事都无关。
+判断不了就按 true：多带历史只多花 token，少带历史会让模型失忆。
 
-只输出一个 JSON 对象，且只能是下面两种之一：
-{"needsHistory":true}
-{"needsHistory":false}
-
-代价不对称：
-- 误判为需要历史：只是多花 token。
-- 误判为不需要历史：模型会失忆，无法继续刚做完的工作。
-不确定时必须输出 {"needsHistory":true}。
-
-目录只是已完成任务的线索，里面有上一轮摘要并不等于本轮可以丢掉历史。
-
-{"needsHistory":true}：本轮仍在做最新一条目录对应的那件事（改、续、缩短、补充、纠正刚刚的交付）。
-{"needsHistory":false}：换题；或点名的对象属于更早的目录条目。即使话里有「刚才」，只要指的不是最新那条，也是 false。`
+不要继续对话，不要回答用户的问题。只输出 JSON，形如 {"needsHistory": true}。`
 
 export const buildContextScopeDecisionPrompt = (input: {
   catalogText: string
@@ -41,12 +31,7 @@ export const buildContextScopeDecisionPrompt = (input: {
     '',
     '<new_task_goal>',
     input.taskGoal.trim() || '无',
-    '</new_task_goal>',
-    '',
-    '判断这一轮是否需要紧邻的、上一轮刚做完的那段对话历史。',
-    '{"needsHistory":true}：续做上一轮，把当前历史原文带给主模型。',
-    '{"needsHistory":false}：换题或重开更早的旧任务，只带任务目录和新消息。',
-    '只输出 JSON。'
+    '</new_task_goal>'
   ].join('\n')
 })
 

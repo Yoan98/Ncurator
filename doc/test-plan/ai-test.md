@@ -4,7 +4,7 @@
 
 | caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                         | 简短依据                                                                                               |
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| human-context-scope-decision-live                   | 完成 |            93 | qwen3.8-flash                    | 2026-09-10 11:11 CST | tests/logs/ai/human/live/human-context-scope-decision-live/20260910-111022-545                   | 四断言通过。Run2 续做 `needsHistory=true`，消息 `system+human+ai+human`，无目录，跨 run 缓存 98.4%。Run3 换题 `false`+discard+目录、不含 Run1 原文。Run4 点名旧关键词 `false`+目录，交付含 ALPHA-REPORT-42。 |
+| human-context-scope-decision-live                   | 完成 |            95 | qwen3.8-flash                    | 2026-09-10 11:53 CST | tests/logs/ai/human/live/human-context-scope-decision-live/20260910-115332-889                   | 四断言通过（63s）。判定回归「要不要历史」后三次调用全对：Run2 续做 `true`、Run3 换题 `false`+discard、Run4 提旧任务 `true`。消息 `system+human+ai+human(目录)+human`，目录固定在历史后，Run2 跨 run 缓存 98.4%（5120/5204）。Run4 在带历史路径上直接引用目录条目答出 ALPHA-REPORT-42。 |
 | human-risk-report-draft-live                        | 完成 |            97 | qwen3.8-flash                    | 2026-08-31 18:42 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260831-183231-689                        | 读取模板/上周周报/工作文档后 cp 模板建新周报并用 docx 写入，applyId 落盘，原文件未改（Oracle 已按结果口径放宽）。 |
 | human-context-compaction-natural-trigger-live       | 完成 |            91 | deepseek-v4-flash               | 2026-09-08 18:19 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260908-181531-336       | 四断言通过。Run1 短问未压；Run2 半截（历史六栏+三栏 Turn Context）后交本周周报；Run3 把旧摘要当 `[user]` 再压，改标题「九月第一周」、插入「与上周风险对照」、核法务。无 previous-summary。跨 run 缓存 reuse 0.502（门槛 0.5）。 |
 | human-excel-read-weekly-review-live                | 完成 |            91 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-134623-663                   | Oracle 通过；四表结构/公式/退货异常/口径不对等讲清；6×excel_read。过程仍 6×terminal 验算略多。缓存 83.6%。 |
@@ -978,10 +978,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-context-scope-decision-live`
 
 - 测试类型：`backend / live`
-- What：同一伙伴连续四轮验证范围判定：相关追问保留原文且不注入目录、跨 run 前缀缓存命中；无关新任务只带目录并写下 discard 书签；再问已完成旧任务的关键词能从目录找回。
+- What：同一伙伴连续四轮验证范围判定：相关追问保留原文且跨 run 前缀缓存命中；无关新任务丢弃原文并写下 discard 书签；目录每轮都在，再问已丢弃旧任务的关键词仍能找回。
 - Why：用户不管理会话，真实模型必须在同一窗口里把续做、换题和提旧任务三条路径走对；消息数组与前缀缓存要对齐 harness 投影规则。
 - How：把 `modelContextWindowTokens` 收到 2000，使判定阈值约 400 token，短问答交付后即可触发判定模型。Run 1 留下关键词并交付；Run 2 相关追问；Run 3 完全无关的新问题；Run 4 再问 Run 1 的关键词。检查各轮 `context_scope_selected`、首次 `human.brain` 的 `requestWire` 消息结构、Run 2 跨 run 前缀缓存，以及 Run 4 交付。
-- Oracle：四轮均 `completed`。Run 2 `needsHistory=true`，首次 brain 含 Run 1 原文、末尾为新 user、无 `<task_catalog>`，且 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。Run 3 `needsHistory=false` 且带 `discardThroughSeq`，首次 brain 含 `<task_catalog>`、不含 Run 1 原文。Run 4 `needsHistory=false`，brain 含目录，交付含 Run 1 关键词。
+- Oracle：四轮均 `completed`。Run 2 `needsHistory=true`，首次 brain 含 Run 1 原文、目录在历史之后、末尾为新 user，且 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。Run 3 `needsHistory=false` 且带 `discardThroughSeq`，首次 brain 含 `<task_catalog>`、不含 Run 1 原文。Run 4 brain 含目录、交付含 Run 1 关键词（不约束判定走哪条路径，两条路径都有目录）。
 - Not：不验证 UI；不要求固定工具；不验证 compaction；中断门控由 `context-scope-incomplete-run` mock-llm 覆盖。
 
 ##### `human-skill-eviction-relearn-loop-live`

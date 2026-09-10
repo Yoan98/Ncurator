@@ -72,7 +72,7 @@ describe('ai human live backend', () => {
         suite: 'human',
         groups: ['live'],
         description:
-          '同一伙伴连续四轮：相关追问保留原文且命中前缀缓存；无关新任务只带目录；再问旧关键词能从目录找回。',
+          '同一伙伴连续四轮：相关追问保留原文且命中前缀缓存；无关新任务丢弃原文；目录每轮都在，再问旧关键词能找回。',
         fixtures: [],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -138,11 +138,11 @@ describe('ai human live backend', () => {
               result.run2Scope?.needsHistory === true &&
               result.run2HasRun1User &&
               result.run2LastIsCurrent &&
-              result.run2HasCatalog === false &&
+              result.run2HasCatalog &&
               result.run2Roles[0] === 'system',
             {
-              name: 'continuation-keeps-history-without-catalog',
-              message: '相关追问应带上上一轮原文、末尾为新 user，且不注入任务目录。',
+              name: 'continuation-keeps-history',
+              message: '相关追问应带上上一轮原文，目录在历史之后、新 user 之前。',
               data: {
                 run1: result.run1.status,
                 run2: result.run2.status,
@@ -180,12 +180,12 @@ describe('ai human live backend', () => {
           )
           runtime.assertThat(
             result.run4.status === 'completed' &&
-              result.run4Scope?.needsHistory === false &&
               result.run4HasCatalog &&
               new RegExp(TOKEN, 'i').test(result.run4Delivery),
             {
               name: 'catalog-recalls-old-task-token',
-              message: '提到已完成旧任务时应判定不需要历史，从目录拿到线索，交付含原关键词。',
+              message:
+                '提到已丢弃的旧任务时，无论判定走哪条路径都能从目录拿到线索，交付含原关键词。',
               data: {
                 run4: result.run4.status,
                 run4Scope: result.run4Scope,

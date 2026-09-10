@@ -57,29 +57,27 @@ export const projectBrainMessagesFromLog = (input: {
   const needsHistory = input.needsHistory !== false
   const messages: BaseMessage[] = []
 
-  if (!needsHistory) {
-    appendCatalogUserIfPresent(messages, ordered)
-    messages.push(buildCurrentUserMessage(input))
-    return {
-      messages: repairInterruptedToolCalls(messages),
-      currentUserMessageIndex: messages.length - 1
+  if (needsHistory) {
+    const floor = resolveHistoryFloor(ordered)
+    const projectedRecords = ordered.filter((record) => record.seq > floor.historyFloorSeq)
+
+    for (const record of projectedRecords) {
+      if (record.entry.kind === 'user' && !record.entry.content.trim()) {
+        throw new Error(`log user（seq=${record.seq}）的 content 不能为空。`)
+      }
     }
-  }
 
-  const floor = resolveHistoryFloor(ordered)
-  const projectedRecords = ordered.filter((record) => record.seq > floor.historyFloorSeq)
-
-  for (const record of projectedRecords) {
-    if (record.entry.kind === 'user' && !record.entry.content.trim()) {
-      throw new Error(`log user（seq=${record.seq}）的 content 不能为空。`)
+    const checkpointSummary = floor.compactionCheckpoint?.summary.trim()
+    if (floor.includeCheckpoint && checkpointSummary) {
+      messages.push(
+        createCompactedBrainUserMessage(wrapCompactionCheckpointContent(checkpointSummary))
+      )
     }
+    messages.push(...messagesFromLogEntries(projectedRecords.map((record) => record.entry)))
   }
 
-  const checkpointSummary = floor.compactionCheckpoint?.summary.trim()
-  if (floor.includeCheckpoint && checkpointSummary) {
-    messages.push(createCompactedBrainUserMessage(wrapCompactionCheckpointContent(checkpointSummary)))
-  }
-  messages.push(...messagesFromLogEntries(projectedRecords.map((record) => record.entry)))
+  // 目录固定落在历史之后、本轮 User 之前：两条路径都能按路径找回旧任务，且不动已缓存前缀。
+  appendCatalogUserIfPresent(messages, ordered)
   messages.push(buildCurrentUserMessage(input))
 
   const repaired = repairInterruptedToolCalls(messages)

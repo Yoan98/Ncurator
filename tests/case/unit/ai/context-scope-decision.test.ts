@@ -28,6 +28,7 @@ import {
 } from '../../../../src/main/services/ai/human/node/brainNode/runDigest'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import { buildBrainSystemPrompt } from '../../../../src/main/services/ai/human/prompts/brain'
+import { buildContextScopeDecisionPrompt } from '../../../../src/main/services/ai/human/prompts/contextScope'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import { RUN_DIGEST_MAX_ENTRIES } from '../../../../src/main/services/ai/human/constants'
 
@@ -247,7 +248,7 @@ describe('brain message projection with context scope', () => {
     expect(String(projection.messages[1]?.content)).toContain('分析这个 Excel')
   })
 
-  it('keeps the current history shape and omits catalog when needsHistory is true', () => {
+  it('keeps the current history shape and puts the catalog before the new user', () => {
     const log = records([
       { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
       { runId: 'run-1', entry: assistant('week report written') },
@@ -260,8 +261,8 @@ describe('brain message projection with context scope', () => {
       state: createInitialHumanState({ taskId: 'task-continue', userInput: '把标题改一下' }),
       needsHistory: true
     })
-    expect(projection.messages.some((message) => isCatalogBrainUserMessage(message))).toBe(false)
     expect(isCompactedBrainUserMessage(projection.messages[0]!)).toBe(true)
+    expect(isCatalogBrainUserMessage(projection.messages.at(-2)!)).toBe(true)
     expect(isCurrentBrainUserMessage(projection.messages.at(-1)!)).toBe(true)
     expect(String(projection.messages.map((message) => message.content).join('\n'))).not.toContain(
       'fill weekly report'
@@ -287,7 +288,33 @@ describe('brain message projection with context scope', () => {
     const text = projection.messages.map((message) => String(message.content)).join('\n')
     expect(text).not.toContain('secret-a')
     expect(text).toContain('excel task')
-    expect(projection.messages.some((message) => isCatalogBrainUserMessage(message))).toBe(false)
+    // 目录扫描不受 floor 限制，被丢弃的任务 A 仍能按路径找回。
+    expect(isCatalogBrainUserMessage(projection.messages.at(-2)!)).toBe(true)
+    expect(text).toContain('任务A')
+  })
+})
+
+describe('context scope decision prompt', () => {
+  it('asks about the current history and keeps the user message data-only', () => {
+    const prompt = buildContextScopeDecisionPrompt({
+      catalogText: '2026-03-14 08:20 | 写周报 | /tmp/周报.docx',
+      taskGoal: '把标题改一下'
+    })
+    expect(prompt.system).toContain('needsHistory')
+    // 判定的对象是「当前这段历史」，不是「上一轮」或「最新那条目录」。
+    expect(prompt.system).not.toContain('上一轮')
+    expect(prompt.system).not.toContain('最新')
+    expect(prompt.user).toBe(
+      [
+        '<completed_task_catalog>',
+        '2026-03-14 08:20 | 写周报 | /tmp/周报.docx',
+        '</completed_task_catalog>',
+        '',
+        '<new_task_goal>',
+        '把标题改一下',
+        '</new_task_goal>'
+      ].join('\n')
+    )
   })
 })
 

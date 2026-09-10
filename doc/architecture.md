@@ -90,7 +90,7 @@ AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`c
 
 | 文档 | 范围 |
 |------|------|
-| [`doc/ai-harness/human-harness.md`](ai-harness/human-harness.md) | Graph 流转、log 数据源、brain 投影、前缀缓存、compaction、resume、skill/plan、交付与失败 |
+| [`doc/ai-harness/human-harness.md`](ai-harness/human-harness.md) | Graph 流转、log 数据源、brain 投影、上下文范围判定、前缀缓存、compaction、resume、skill/plan、交付与失败 |
 | [`doc/ai-harness/tool-design.md`](ai-harness/tool-design.md) | 工具九条原则、HumanToolSpec、参数规范化、统一投递、渲染格式族 |
 
 **稳定结构摘要**
@@ -120,7 +120,7 @@ flowchart LR
   end
 ```
 
-细节（消息形态、resume append、compaction 范围、多模态配额、failure_code 等）一律以 human-harness 为准，本文不再重复。
+细节（消息形态、范围判定、resume append、compaction 范围、多模态配额、failure_code 等）一律以 human-harness 为准，本文不再重复。
 
 ## 领域能力（概要）
 
