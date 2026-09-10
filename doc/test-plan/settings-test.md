@@ -48,15 +48,6 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Oracle：新增弹框存在「类型（推荐 / 自定义）」且默认推荐，推荐类型无名称输入框、只要求下拉选择服务商并填写 API Key，对齐 `SET-MODEL-002-AC1`；推荐配置保存后名称等于服务商名、地址为目录默认地址、同服务商仅一条，已配置服务商在下拉中禁用并标注「已配置」，对齐 `SET-MODEL-002-AC2`；自定义类型名称重复时保存被拦截，对齐 `SET-MODEL-002-AC3`；编辑推荐配置服务商下拉可改、改为其他服务商仍为推荐类型且未新增记录，编辑自定义配置带出完整值，对齐 `SET-MODEL-002-AC4`；必填字段不完整时保存被拦截，对齐 `SET-MODEL-002-AC5`；弹窗点击遮罩后保持打开且输入不丢失，对齐 `SET-MODEL-002-AC6`。
 - Not：不验证 workbench 模型选择。
 
-#### `model-free-key-entry`
-
-- 测试类型：`e2e`
-- What：大模型配置页展示免费 AI Key 官网入口，并保持与配置操作区的正确位置关系。
-- Why：用户需要在新增配置前快速获得可体验的 Key，同时外链操作不能破坏当前设置页状态。
-- How：进入大模型配置页，检查入口位于配置数量与“新增配置”之间，点击后收集真实 Renderer → Preload 外链调用信号。
-- Oracle：入口位置和可访问名称符合 `SET-MODEL-004-AC1`；外链目标为 `https://www.guanzhangai.cn/zh/free-keys` 且当前路由不变，对齐 `SET-MODEL-004-AC2`。
-- Not：不访问外部网页内容，也不验证免费 Key 的实时可用性。
-
 #### `model-delete-config-feedback`
 
 - 测试类型：`e2e`

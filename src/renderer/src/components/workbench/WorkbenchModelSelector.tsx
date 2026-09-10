@@ -32,6 +32,11 @@ import {
   type LlmPresetProvider,
   type LlmPriceTier
 } from '../../../../shared/llmPresets'
+import {
+  FREE_MODEL_NOTICE,
+  FREE_MODEL_PRICE_LABEL,
+  type FreeModelPublicEntry
+} from '../../../../shared/freeModels'
 import { resolveLlmProvider } from '../../../../shared/llmProvider'
 import { isPresetModelAvailableInRemoteList } from '../../../../shared/workbenchModelSelection'
 import { resolveFloatingPlacement } from './floatingPlacement'
@@ -69,11 +74,20 @@ type WorkbenchModelSelectorProps = {
 type PanelView = 'preset' | 'custom'
 
 type PresetInspector = {
+  kind: 'preset'
   provider: LlmPresetProvider
   model: LlmPresetModel
   available: boolean
   top: number
 }
+
+type FreeInspector = {
+  kind: 'free'
+  model: FreeModelPublicEntry
+  top: number
+}
+
+type ModelInspector = PresetInspector | FreeInspector
 
 type MenuPosition = {
   top?: number
@@ -180,7 +194,40 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     () => new Set()
   )
   const [position, setPosition] = useState<MenuPosition>(DEFAULT_POSITION)
-  const [inspectedPreset, setInspectedPreset] = useState<PresetInspector | null>(null)
+  const [inspectedModel, setInspectedModel] = useState<ModelInspector | null>(null)
+  const [freeModels, setFreeModels] = useState<FreeModelPublicEntry[]>([])
+  const [freeModelsRefreshing, setFreeModelsRefreshing] = useState(false)
+
+  const loadFreeModels = useCallback(async (refreshIfStale: boolean): Promise<void> => {
+    try {
+      const snapshot = await window.api.freeModelsGet({ refreshIfStale })
+      setFreeModels(snapshot.models)
+    } catch (error) {
+      console.error('Failed to load free models', error)
+    }
+  }, [])
+
+  const refreshFreeModels = useCallback(async (): Promise<void> => {
+    if (freeModelsRefreshing) return
+    setFreeModelsRefreshing(true)
+    try {
+      const result = await window.api.freeModelsRefresh()
+      setFreeModels(result.snapshot.models)
+    } catch (error) {
+      console.error('Failed to refresh free models', error)
+    } finally {
+      setFreeModelsRefreshing(false)
+    }
+  }, [freeModelsRefreshing])
+
+  useEffect(() => {
+    void loadFreeModels(false)
+  }, [loadFreeModels])
+
+  useEffect(() => {
+    if (!open || view !== 'preset') return
+    void loadFreeModels(true)
+  }, [open, view, loadFreeModels])
 
   const mainLabel = value.mainModel?.modelName || '选择模型'
 
@@ -241,7 +288,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     let nextLeft = placement.left
     // Keep the inspector fixed to the menu's right. If the pair would overflow,
     // shift the menu left so both stay in viewport.
-    if (view === 'preset' && inspectedPreset) {
+    if (view === 'preset' && inspectedModel) {
       const pairWidth = nextWidth + INSPECTOR_GAP + INSPECTOR_WIDTH
       const maxLeft = Math.max(
         VIEWPORT_PADDING,
@@ -264,7 +311,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       width: nextWidth,
       maxHeight: placement.maxHeight
     })
-  }, [open, view, position, inspectedPreset, query, configs, modelListsByConfigId])
+  }, [open, view, position, inspectedModel, query, configs, modelListsByConfigId, freeModels])
 
   useEffect(() => {
     if (!open) return
@@ -299,7 +346,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (!open) {
       setView('preset')
       setQuery('')
-      setInspectedPreset(null)
+      setInspectedModel(null)
       return
     }
     if (view === 'preset') return
@@ -338,6 +385,18 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (!model) return null
     return { provider: preset, modelLabel: model.label }
   }, [value.mainModel, configs])
+
+  const selectedFree = useMemo(() => {
+    if (!value.mainModel) return null
+    return (
+      freeModels.find(
+        (item) =>
+          item.configId === value.mainModel?.configId &&
+          item.modelName === value.mainModel?.modelName
+      ) || null
+    )
+  }, [value.mainModel, freeModels])
+
 
   const groupedModels = useMemo(() => {
     return configs
@@ -378,7 +437,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           selectModel(matchedConfig.id, model.id)
         }}
         onMouseEnter={(event) =>
-          setInspectedPreset({
+          setInspectedModel({
+            kind: 'preset',
             provider,
             model,
             available,
@@ -386,7 +446,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           })
         }
         onFocus={(event) =>
-          setInspectedPreset({
+          setInspectedModel({
+            kind: 'preset',
             provider,
             model,
             available,
@@ -414,17 +475,98 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     )
   }
 
+  const renderFreeModelOption = (model: FreeModelPublicEntry): React.ReactNode => {
+    const selected = isSameSelection(value.mainModel, {
+      configId: model.configId,
+      modelName: model.modelName
+    })
+    return (
+      <button
+        type="button"
+        role="option"
+        aria-selected={selected}
+        data-testid={`${workbenchSelectors.modelSelectFreeOptionPrefix}-${model.id}`}
+        className={joinClassNames(
+          'workbench-select-option',
+          selected ? 'workbench-select-option-selected' : ''
+        )}
+        onClick={() => selectModel(model.configId, model.modelName)}
+        onMouseEnter={(event) =>
+          setInspectedModel({
+            kind: 'free',
+            model,
+            top: event.currentTarget.getBoundingClientRect().top
+          })
+        }
+        onFocus={(event) =>
+          setInspectedModel({
+            kind: 'free',
+            model,
+            top: event.currentTarget.getBoundingClientRect().top
+          })
+        }
+      >
+        <span className="flex min-w-0 flex-1 items-center gap-2">
+          <img
+            src={model.iconUrl}
+            alt={model.label}
+            className="h-4 w-4 shrink-0 rounded-[3px] object-contain"
+          />
+          <span
+            className="inline-flex items-end gap-1.5"
+            style={{ lineHeight: `${PRICE_TIER_TEXT_LINE_PX}px` }}
+          >
+            <span className="whitespace-nowrap text-[13px] font-medium text-[#37352F]">
+              {model.label}
+            </span>
+            <span className="relative top-[1px] text-[11px] font-medium leading-none text-[#9B9A97]">
+              {FREE_MODEL_PRICE_LABEL}
+            </span>
+          </span>
+        </span>
+        {selected ? <HiCheck className="h-3.5 w-3.5 shrink-0 text-[#37352F]" /> : null}
+      </button>
+    )
+  }
+
   const renderPresetView = (): React.ReactNode => (
     <>
       <div className="overflow-y-auto py-1.5" style={{ flex: 1, minHeight: 0 }}>
-        {presetGroups.length === 0 ? (
+        {presetGroups.length === 0 && freeModels.length === 0 ? (
           <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
             暂无已配置的预设模型
           </div>
         ) : (
-          presetGroups.map(({ provider, matchedConfig }) =>
-            provider.models.map((model) => renderPresetModelOption(provider, model, matchedConfig))
-          )
+          <>
+            {presetGroups.map(({ provider, matchedConfig }) =>
+              provider.models.map((model) => renderPresetModelOption(provider, model, matchedConfig))
+            )}
+            {freeModels.length > 0 ? (
+              <div className={presetGroups.length > 0 ? 'mt-1 border-t border-[#EEEEEC] pt-1' : ''}>
+                <div className="flex items-center justify-between gap-2 px-3 py-1">
+                  <span className="text-[11px] font-medium text-[#9B9A97]">免费模型</span>
+                  <button
+                    type="button"
+                    aria-label="刷新免费模型"
+                    data-testid={workbenchSelectors.modelSelectFreeRefresh}
+                    className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] hover:bg-[#F4F4F2] hover:text-[#37352F]"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void refreshFreeModels()
+                    }}
+                  >
+                    <HiArrowPath
+                      className={joinClassNames(
+                        'h-3.5 w-3.5',
+                        freeModelsRefreshing ? 'animate-spin' : ''
+                      )}
+                    />
+                  </button>
+                </div>
+                {freeModels.map((model) => renderFreeModelOption(model))}
+              </div>
+            ) : null}
+          </>
         )}
       </div>
       <div className="border-t border-[#EEEEEC] py-1.5">
@@ -433,10 +575,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           className="workbench-select-option min-h-[44px]"
           data-testid={workbenchSelectors.modelSelectCustomEntry}
           onClick={() => {
-            setInspectedPreset(null)
+            setInspectedModel(null)
             setView('custom')
           }}
-          onMouseEnter={() => setInspectedPreset(null)}
+          onMouseEnter={() => setInspectedModel(null)}
         >
           <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
             <HiAdjustmentsHorizontal className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
@@ -556,12 +698,47 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     </>
   )
 
-  const inspectorTop = inspectedPreset?.top ?? 0
+  const inspectorTop = inspectedModel?.top ?? 0
   const inspectorLeft = position.left + position.width + INSPECTOR_GAP
 
   const renderInspector = (): React.ReactNode => {
-    if (view !== 'preset' || !inspectedPreset) return null
-    const supportsVision = inspectedPreset.model.capabilities.includes('vision')
+    if (view !== 'preset' || !inspectedModel) return null
+    if (inspectedModel.kind === 'free') {
+      const supportsVision = inspectedModel.model.capabilities.includes('vision')
+      return (
+        <div
+          ref={inspectorRef}
+          className="rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3"
+          style={{
+            position: 'fixed',
+            top: inspectorTop,
+            left: inspectorLeft,
+            width: INSPECTOR_WIDTH,
+            zIndex: 1001
+          }}
+        >
+          <div className="text-[14px] font-semibold text-[#252521]">{inspectedModel.model.label}</div>
+          <p className="mt-1.5 text-[12px] leading-[18px] text-[#5F5E5A]">
+            {inspectedModel.model.description}
+          </p>
+          <p className="mt-1.5 text-[12px] leading-[18px] text-[#9B9A97]">{FREE_MODEL_NOTICE}</p>
+          <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px]">
+            <div className="flex items-center justify-between gap-3 py-0.5">
+              <span className="shrink-0 text-[#9B9A97]">价格档位</span>
+              <span className="font-medium text-[#37352F]">{FREE_MODEL_PRICE_LABEL}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 py-0.5">
+              <span className="shrink-0 text-[#9B9A97]">视觉理解</span>
+              <span className="font-medium text-[#37352F]">
+                {supportsVision ? '支持' : '不支持'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    const supportsVision = inspectedModel.model.capabilities.includes('vision')
     return (
       <div
         ref={inspectorRef}
@@ -574,17 +751,17 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           zIndex: 1001
         }}
       >
-        <div className="text-[14px] font-semibold text-[#252521]">{inspectedPreset.model.label}</div>
-        {inspectedPreset.available ? (
+        <div className="text-[14px] font-semibold text-[#252521]">{inspectedModel.model.label}</div>
+        {inspectedModel.available ? (
           <>
             <p className="mt-1.5 text-[12px] leading-[18px] text-[#5F5E5A]">
-              {inspectedPreset.model.description}
+              {inspectedModel.model.description}
             </p>
             <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px]">
               <div className="flex items-center justify-between gap-3 py-0.5">
                 <span className="shrink-0 text-[#9B9A97]">价格档位</span>
                 <span className="font-medium text-[#37352F]">
-                  {PRICE_TIER_LABELS[inspectedPreset.model.priceTier]}
+                  {PRICE_TIER_LABELS[inspectedModel.model.priceTier]}
                 </span>
               </div>
               <div className="flex items-center justify-between gap-3 py-0.5">
@@ -599,7 +776,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px] leading-[18px] text-[#5F5E5A]">
             <div>该模型不存在</div>
             <div className="mt-1.5 break-all text-[#9B9A97]">
-              模型名：{inspectedPreset.model.id}
+              模型名：{inspectedModel.model.id}
             </div>
           </div>
         )}
@@ -639,6 +816,18 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
             <>
               {getProviderLogo(selectedPreset.provider.providerId)}
               <span className="truncate">{selectedPreset.modelLabel}</span>
+            </>
+          ) : selectedFree ? (
+            <>
+              <img
+                src={selectedFree.iconUrl}
+                alt={selectedFree.label}
+                className="h-4 w-4 shrink-0 rounded-[3px] object-contain"
+              />
+              <span className="truncate">{selectedFree.label}</span>
+              <span className="shrink-0 text-[11px] font-medium text-[#9B9A97]">
+                {FREE_MODEL_PRICE_LABEL}
+              </span>
             </>
           ) : (
             <>

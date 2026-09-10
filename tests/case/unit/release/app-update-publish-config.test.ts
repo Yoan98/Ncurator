@@ -3,7 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
 import {
-  FREE_AI_KEYS_URL,
+  FREE_MODELS_CATALOG_URL,
   OFFICIAL_DOWNLOAD_PAGE_URL,
   OFFICIAL_WEBSITE_URL,
   USER_MANUAL_URL
@@ -31,7 +31,7 @@ describe('app update publish config', () => {
 
     expect(OFFICIAL_WEBSITE_URL).toBe('https://www.guanzhangai.cn')
     expect(USER_MANUAL_URL).toBe(`${OFFICIAL_WEBSITE_URL}/zh/manual`)
-    expect(FREE_AI_KEYS_URL).toBe(`${OFFICIAL_WEBSITE_URL}/zh/free-keys`)
+    expect(FREE_MODELS_CATALOG_URL).toBe(`${OFFICIAL_WEBSITE_URL}/api/v1/free-models`)
     expect(OFFICIAL_DOWNLOAD_PAGE_URL).toBe(`${OFFICIAL_WEBSITE_URL}/zh`)
     expect(packageJson.homepage).toBe(OFFICIAL_WEBSITE_URL)
     expect(telemetryService).toContain('`${OFFICIAL_WEBSITE_URL}/api/telemetry/events`')

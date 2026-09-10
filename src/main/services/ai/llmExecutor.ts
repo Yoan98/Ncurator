@@ -74,6 +74,7 @@ export type AiLlmTextInvocationInput = BaseLlmInvocationInput
 
 type AiLlmStructuredDriverInput = BaseLlmInvocationInput & {
   schema: z.ZodType<Record<string, unknown>>
+  retryOutputErrors?: boolean
 }
 
 export type AiLlmTextDriverResult = {
@@ -145,6 +146,7 @@ export type AiLlmStructuredRequest<T extends Record<string, unknown>> = {
   temperature?: number
   streamingMode?: AiLlmStreamingMode
   contextBudgetSnapshot?: BrainContextBudgetSnapshot
+  retryOutputErrors?: boolean
 }
 
 export type AiLlmToolCallDriverInput = {
@@ -560,7 +562,7 @@ const invokeStructuredChatCore = async (input: {
   try {
     output = parsePromptJsonOutput(response.text)
   } catch (error) {
-    throw toLlmOutputError(error, response.text)
+    throw toLlmOutputError(error, response.text, request.retryOutputErrors)
   }
   return {
     output,
@@ -755,7 +757,8 @@ export const createAiLlmExecutor = (input: {
                   streamingMode,
                   observer,
                   checkCancelled: input.checkCancelled,
-                  signal
+                  signal,
+                  retryOutputErrors: request.retryOutputErrors
                 }
               })
               try {
@@ -764,7 +767,7 @@ export const createAiLlmExecutor = (input: {
                   output: request.schema.parse(invocation.output)
                 }
               } catch (error) {
-                throw toLlmOutputError(error, invocation.rawText || '')
+                throw toLlmOutputError(error, invocation.rawText || '', request.retryOutputErrors)
               }
             }
           })

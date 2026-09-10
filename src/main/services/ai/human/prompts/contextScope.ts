@@ -11,16 +11,23 @@ export const wrapTaskCatalogContent = (catalogText: string): string => {
   ].join('\n')
 }
 
-export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。判断这一轮是否需要紧邻的、正在进行的那段对话历史。
+export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。判断这一轮是否需要紧邻的、上一轮刚做完的那段对话历史。
 
-不要继续对话。不要回答用户的问题。只输出结构化判定。
+不要继续对话。不要回答用户的问题。不要输出 markdown 围栏、解释或任何其它文字。
+
+只输出一个 JSON 对象，且只能是下面两种之一：
+{"needsHistory":true}
+{"needsHistory":false}
 
 代价不对称：
 - 误判为需要历史：只是多花 token。
 - 误判为不需要历史：模型会失忆，无法继续刚做完的工作。
-不确定时必须判定为需要历史。
+不确定时必须输出 {"needsHistory":true}。
 
-用户提到某个已完成的旧任务时，判定为不需要历史：那是开启一段关于旧对象的新工作，当前对话历史对它是噪音；主模型会从目录拿到文件路径去读当前内容。`
+目录只是已完成任务的线索，里面有上一轮摘要并不等于本轮可以丢掉历史。
+
+{"needsHistory":true}：本轮仍在做最新一条目录对应的那件事（改、续、缩短、补充、纠正刚刚的交付）。
+{"needsHistory":false}：换题；或点名的对象属于更早的目录条目。即使话里有「刚才」，只要指的不是最新那条，也是 false。`
 
 export const buildContextScopeDecisionPrompt = (input: {
   catalogText: string
@@ -36,9 +43,10 @@ export const buildContextScopeDecisionPrompt = (input: {
     input.taskGoal.trim() || '无',
     '</new_task_goal>',
     '',
-    '判断这一轮是否需要紧邻的、正在进行的那段对话历史。',
-    'needsHistory=true 表示需要把当前历史原文带给主模型。',
-    'needsHistory=false 表示只带任务目录和新消息。'
+    '判断这一轮是否需要紧邻的、上一轮刚做完的那段对话历史。',
+    '{"needsHistory":true}：续做上一轮，把当前历史原文带给主模型。',
+    '{"needsHistory":false}：换题或重开更早的旧任务，只带任务目录和新消息。',
+    '只输出 JSON。'
   ].join('\n')
 })
 

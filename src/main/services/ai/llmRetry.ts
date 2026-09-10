@@ -1,3 +1,4 @@
+import { isLlmOutputError } from './errors'
 import { normalizeStructuredOutputError } from './structuredOutput'
 
 export type LlmErrorClassification = 'fatal' | 'retryable' | 'unknown'
@@ -90,6 +91,10 @@ export const classifyLlmRetry = (
   // Do not trust LlmProviderError.retryable; always reclassify from signals.
   if (isCancellationError(error)) {
     return { retryable: false, message }
+  }
+
+  if (isLlmOutputError(error) && error.retryable) {
+    return { retryable: true, message }
   }
 
   if (body.includes('structured_output_retryable') || body.includes('text_output_retryable')) {

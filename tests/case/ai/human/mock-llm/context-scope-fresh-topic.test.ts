@@ -45,8 +45,7 @@ describe('ai human mock-llm backend', () => {
             'human.context_scope': [
               {
                 output: {
-                  needsHistory: false,
-                  reason: '新的 Excel 分析与周报无关'
+                  needsHistory: false
                 }
               }
             ],
@@ -99,6 +98,98 @@ describe('ai human mock-llm backend', () => {
               status: result.output.status,
               payload,
               promptPreview: result.run2Prompt.slice(0, 2000)
+            }
+          }
+        )
+      }
+    })
+  })
+
+  it('context-scope-incomplete-run', async () => {
+    await runBackendCase({
+      caseId: 'context-scope-incomplete-run',
+      harnessMode: 'mock-llm',
+      domain: 'ai',
+      suite: 'human',
+      groups: ['mock-llm'],
+      description: '上一轮交付后未写出 run_digest 时，下一轮直接带历史且不调判定模型。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const partnerId = 'context-scope-incomplete-partner'
+        await createHumanTestRunner(runtime, {
+          partnerId,
+          structuredOutputScript: {
+            'human.brain': [
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '半截说明。',
+                  deliveryMarkdown: '过拟合是模型把训练噪声也记住了。'
+                })
+              }
+            ],
+            'human.run_digest': [{ error: 'digest failed' }]
+          }
+        }).run({
+          taskId: 'context-scope-incomplete-run-1',
+          userInput: '用一句话解释什么是过拟合。'
+        })
+
+        const beforeRun2 = runtime.eventCollector.snapshotLlmIo().length
+        const output = await createHumanTestRunner(runtime, {
+          partnerId,
+          structuredOutputScript: {
+            'human.context_scope': [
+              {
+                output: { needsHistory: false }
+              }
+            ],
+            'human.brain': [
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '已继续。',
+                  deliveryMarkdown: '过拟合就是把噪声当规律。'
+                })
+              }
+            ],
+            'human.run_digest': [{ text: '继续解释过拟合' }]
+          }
+        }).run({
+          taskId: 'context-scope-incomplete-run-2',
+          userInput: '继续刚才的解释。'
+        })
+        const log = await runtime.storageService.chatMessageLog.list(partnerId)
+        const scope = [...log]
+          .reverse()
+          .find(
+            (record) =>
+              record.entry.kind === 'annotation' &&
+              record.entry.eventType === 'context_scope_selected'
+          )
+        const run2ScopeCalls = runtime.eventCollector
+          .snapshotLlmIo()
+          .slice(beforeRun2)
+          .filter((record) => record.caller === 'human.context_scope').length
+        return { output, scope, run2ScopeCalls }
+      },
+      assert: async (result, runtime) => {
+        const payload =
+          result.scope?.entry.kind === 'annotation' &&
+          result.scope.entry.eventType === 'context_scope_selected'
+            ? result.scope.entry.payload
+            : undefined
+        runtime.assertThat(
+          result.output.status === 'completed' &&
+            payload?.needsHistory === true &&
+            payload.basis === 'gate_incomplete_run' &&
+            result.run2ScopeCalls === 0,
+          {
+            name: 'incomplete-run-skips-scope-model',
+            message: '没有 run_digest 的上一轮之后必须直接带历史，且不得调用判定模型。',
+            data: {
+              status: result.output.status,
+              payload,
+              run2ScopeCalls: result.run2ScopeCalls
             }
           }
         )

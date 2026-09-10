@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { LlmProviderError } from '../../../../src/main/services/ai/errors'
+import { LlmOutputError, LlmProviderError } from '../../../../src/main/services/ai/errors'
 import { classifyLlmError, classifyLlmRetry } from '../../../../src/main/services/ai/llmRetry'
 
 describe('ai unit llm error classification', () => {
@@ -161,5 +161,25 @@ describe('ai unit llm error classification', () => {
       retryable: false
     })
     expect(classifyLlmRetry(stampedFatalButRetryableStatus).retryable).toBe(true)
+  })
+
+  it('retries LlmOutputError only when it is marked retryable', () => {
+    expect(
+      classifyLlmRetry(
+        new LlmOutputError({
+          message: '模型返回内容无法解析。',
+          rawText: 'not json'
+        })
+      ).retryable
+    ).toBe(false)
+    expect(
+      classifyLlmRetry(
+        new LlmOutputError({
+          message: '模型返回内容无法解析。',
+          rawText: 'not json',
+          retryable: true
+        })
+      ).retryable
+    ).toBe(true)
   })
 })

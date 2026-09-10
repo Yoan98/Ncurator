@@ -317,13 +317,31 @@ describe('message log projection scan boundaries', () => {
 })
 
 describe('context scope decision gates', () => {
+  it('skips the judge on an empty partner log', async () => {
+    let structuredCalls = 0
+    const ctx = createCtx({
+      windowTokens: 200,
+      chatStructured: async () => {
+        structuredCalls += 1
+        return { output: { needsHistory: false } }
+      }
+    })
+    const decision = await decideContextScope({
+      ctx,
+      state: createInitialHumanState({ taskId: 't', userInput: '你好' }),
+      records: []
+    })
+    expect(decision).toMatchObject({ needsHistory: true, basis: 'gate_below_threshold' })
+    expect(structuredCalls).toBe(0)
+  })
+
   it('keeps history when the previous run has no digest', async () => {
     let structuredCalls = 0
     const ctx = createCtx({
       windowTokens: 200,
       chatStructured: async () => {
         structuredCalls += 1
-        return { output: { needsHistory: false, reason: 'should not run' } }
+        return { output: { needsHistory: false } }
       }
     })
     const decision = await decideContextScope({
@@ -344,7 +362,7 @@ describe('context scope decision gates', () => {
       windowTokens: 256_000,
       chatStructured: async () => {
         structuredCalls += 1
-        return { output: { needsHistory: false, reason: 'should not run' } }
+        return { output: { needsHistory: false } }
       }
     })
     const decision = await decideContextScope({
@@ -361,7 +379,7 @@ describe('context scope decision gates', () => {
     const ctx = createCtx({
       windowTokens: 200,
       chatStructured: async () => ({
-        output: { needsHistory: false, reason: '新的分析任务' }
+        output: { needsHistory: false }
       })
     })
     const decision = await decideContextScope({

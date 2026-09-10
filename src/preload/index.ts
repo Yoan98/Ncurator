@@ -354,6 +354,8 @@ const api: DesktopApi = {
     emitE2EIpcCall('llmConfigModelList', id)
     return ipcRenderer.invoke('llm-config-model-list', id)
   },
+  freeModelsGet: (options) => ipcRenderer.invoke('free-models-get', options),
+  freeModelsRefresh: () => ipcRenderer.invoke('free-models-refresh'),
   isE2EMode: () => isE2EObserverEnabled,
   aiRuntimeSettingsGet: () => ipcRenderer.invoke('ai-runtime-settings-get'),
   aiRuntimeSettingsSave: (settings) => ipcRenderer.invoke('ai-runtime-settings-save', settings),

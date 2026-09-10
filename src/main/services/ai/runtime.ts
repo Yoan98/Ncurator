@@ -6,6 +6,8 @@ import { getAiRuntimePlatform } from './utils/platform'
 import { normalizeSelectedReferences } from './utils/runContext'
 import { KB_INDEXING_IN_PROGRESS_ERROR } from './human/tools/kb/retrievalTools'
 import type { AiExecutionPermission, AiPreference } from '../../../shared/types'
+import { isFreeModelConfigId } from '../../../shared/freeModels'
+import { FreeModelCatalogService } from '../llm/FreeModelCatalogService'
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
   value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
@@ -39,6 +41,14 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     const modelName = String(selection?.modelName || '').trim()
     if (!configId || !modelName) {
       throw new Error(`请先选择${label}`)
+    }
+    if (isFreeModelConfigId(configId)) {
+      const freeCfg = await FreeModelCatalogService.getInstance().resolveRuntimeConfig(
+        configId,
+        modelName
+      )
+      if (!freeCfg) throw new Error(`${label}对应的免费模型不可用，请重新选择`)
+      return freeCfg
     }
     const cfg = await deps.llmStore.getById(configId)
     if (!cfg) throw new Error(`${label}对应的大模型配置不存在，请重新选择`)

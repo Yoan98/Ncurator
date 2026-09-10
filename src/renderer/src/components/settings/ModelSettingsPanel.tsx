@@ -13,9 +13,8 @@ import {
   message
 } from 'antd'
 import type { TableColumnsType } from 'antd'
-import { HiArrowTopRightOnSquare, HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
+import { HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
 import type { LLMConfig, LlmProviderId } from '../../../../shared/types'
-import { FREE_AI_KEYS_URL } from '../../../../shared/constants'
 import { inferLlmProviderKind } from '../../../../shared/llmProvider'
 import {
   LLM_PRESET_PROVIDERS,
@@ -280,15 +279,6 @@ const ModelSettingsPanel: React.FC = () => {
           >
             共 {configs.length} 个配置
           </span>
-          <Button
-            icon={<HiArrowTopRightOnSquare className="h-4 w-4" />}
-            onClick={() => void window.api.openExternal(FREE_AI_KEYS_URL)}
-            aria-label="免费获取 AI Key"
-            className="!border-[#E0DFDC] !bg-white !text-[#37352F] shadow-none hover:!border-[#D3D1CC] hover:!bg-[#F7F7F5]"
-            data-testid={settingsSelectors.modelFreeKeyButton}
-          >
-            免费获取 AI Key
-          </Button>
           <Button
             type="primary"
             icon={<HiPlus className="h-4 w-4" />}

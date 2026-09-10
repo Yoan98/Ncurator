@@ -213,7 +213,7 @@ tests/case/workbench/
 - What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示并在无已配置预设服务商时显示空态；推荐配置默认选中预设稳定调用名；预设行含竖向不重叠价格档位图标；不可用预设禁用；自定义入口可选中 remote id 且不被强制改回预设；自定义视图无信息侧栏，并正确展示 provider 错误反馈。
 - Why：主模型配置是智能任务能否启动的直接前提，预设区是用户首选的模型入口。
 - How：通过真实设置页配置 live 推荐/自定义模型；回到 Workbench 展开选择器，检查未配置预设隐藏与空态、默认展示名为预设 label 而非 remote 带日期 id、预设行档位图标与侧栏字段、不可用预设禁用文案；进入自定义模型视图确认无侧栏、按名称搜索并选中后 pill 保持该模型名，随后完成一次真实请求并触发受控 provider 错误。
-- Oracle：未配置预设模型不展示且无已配置预设服务商时显示空态，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC3`；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中、自定义选中不被强制改回预设与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且视觉能力仅在侧栏说明，对齐 `WB-COMPOSER-013-AC1`；伙伴保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次，气泡短标题为「模型请求失败」，「查看详情」可见 HTTP/原文，对齐 `WB-COMPOSER-007`、`WB-CORE-006`、`WB-SESSION-007-AC8`。
+- Oracle：未配置预设模型不展示且无已配置预设服务商时显示空态，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC3`；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中、自定义选中不被强制改回预设与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且视觉能力仅在侧栏说明，对齐 `WB-COMPOSER-013-AC1`；伙伴保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次，气泡短标题为「模型请求失败」，「查看详情」可见 HTTP/原文，对齐 `WB-COMPOSER-007`、`WB-CORE-006`、`WB-SESSION-007-AC8`。`WB-COMPOSER-007-AC14`（免费模型目录拼装与刷新）标为不测。
 - Not：不评价模型回答质量。
 
 #### `user-message-actions`
@@ -333,7 +333,7 @@ tests/case/workbench/
 - Why：续做不能丢失已有上下文，也不能每轮重复学习同一技能。
 - How：通过真实 Workbench UI 完成两轮请求，检查两轮 human steps、工具选择和最终结果。
 - Oracle：第一轮学习 `docx-read` 技能；第二轮不重复 learning 且能使用该技能继续读取文档；两轮结果均完成，对齐 `WB-SESSION-005-AC1`、`WB-SESSION-005-AC2`。
-- Not：不替代 AI backend 对技能图和 memory store 的契约测试。
+- Not：不替代 AI backend 对技能图和 memory store 的契约测试。无关新诉求丢弃旧对话原文、相关追问续做、未完成上一轮仍带历史，由 AI `human-context-scope-decision-live` / `context-scope-incomplete-run` 覆盖，对齐 `WB-SESSION-005-AC3`、`WB-SESSION-014-AC1`、`WB-SESSION-014-AC2`、`WB-SESSION-014-AC3`、`WB-SESSION-014-AC4`；用户侧无新的记忆指示或会话切换控件。
 
 #### `approval-batch-flow`
 

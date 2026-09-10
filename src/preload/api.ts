@@ -1,4 +1,5 @@
 import type { ModelSource } from '../shared/modelSources'
+import type { FreeModelsSnapshot } from '../shared/freeModels'
 import type {
   AiRuntimeSettings,
   BrowserPanelBoundsRequest,
@@ -250,6 +251,14 @@ export type DesktopApi = {
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigModelList: (id: string) => Promise<LlmModelListResponse>
+  freeModelsGet: (options?: {
+    refreshIfStale?: boolean
+  }) => Promise<FreeModelsSnapshot>
+  freeModelsRefresh: () => Promise<{
+    success: boolean
+    snapshot: FreeModelsSnapshot
+    error?: string
+  }>
   isE2EMode: () => boolean
   aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>
   aiRuntimeSettingsSave: (

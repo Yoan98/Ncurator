@@ -280,6 +280,57 @@ describe('ai unit llm executor text path', () => {
     }
   })
 
+  it('retries schema-invalid structured output when retryOutputErrors is set', async () => {
+    vi.useFakeTimers()
+    try {
+      let callCount = 0
+      const driver: AiLlmDriver = {
+        chatStructured: async () => {
+          callCount += 1
+          if (callCount < 3) {
+            return {
+              output: { wrong: true },
+              rawText: '{"wrong":true}'
+            }
+          }
+          return {
+            output: { needsHistory: false },
+            rawText: '{"needsHistory":false}'
+          }
+        }
+      }
+
+      const executor = createAiLlmExecutor({
+        eventCtx: {
+          runId: 'run-output-retry',
+          sendEvent: () => undefined
+        },
+        runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+        getConfig: async () => baseConfig,
+        saveConfig: async () => undefined,
+        checkCancelled: () => undefined,
+        driver
+      })
+
+      const resultPromise = executor.chatStructured({
+        caller: 'human.context_scope',
+        schemaName: 'human_context_scope',
+        schema: z.object({ needsHistory: z.boolean() }),
+        system: 'Return JSON only.',
+        user: 'Decide.',
+        retryOutputErrors: true
+      })
+
+      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(750)
+      const result = await resultPromise
+      expect(result.output).toEqual({ needsHistory: false })
+      expect(callCount).toBe(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('forwards streamed text deltas through the observer and records stream metadata', async () => {
     const events: AiRunEvent[] = []
     const llmIoRecords: AiLlmIoRecord[] = []

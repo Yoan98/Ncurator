@@ -1943,11 +1943,37 @@ const ChatPage: React.FC = () => {
 
   const loadModelConfigs = useCallback(async (): Promise<void> => {
     try {
-      const list = await window.api.llmConfigList()
+      const [list, freeSnapshot] = await Promise.all([
+        window.api.llmConfigList(),
+        window.api.freeModelsGet().catch(() => ({
+          updatedAt: null,
+          fetchedAt: null,
+          models: []
+        }))
+      ])
+      const freeModels = freeSnapshot.models
       setModelConfigs(list)
       if (list.length === 0) {
         setModelListsByConfigId({})
-        setModelSelection({ mainModel: null })
+        const resolveModel = (
+          model: WorkbenchModelSelection['mainModel']
+        ): WorkbenchModelSelection['mainModel'] =>
+          resolveSelectedWorkbenchModel({
+            configs: [],
+            modelListsByConfigId: {},
+            selected: model,
+            freeModels
+          })
+        const firstModel = pickFallbackWorkbenchModel({
+          configs: [],
+          modelListsByConfigId: {},
+          freeModels
+        })
+        const nextSelection: WorkbenchModelSelection = {
+          mainModel: resolveModel(modelSelectionRef.current.mainModel) || firstModel
+        }
+        modelSelectionRef.current = nextSelection
+        setModelSelection(nextSelection)
         return
       }
 
@@ -1971,11 +1997,13 @@ const ChatPage: React.FC = () => {
         resolveSelectedWorkbenchModel({
           configs: list,
           modelListsByConfigId: nextLists,
-          selected: model
+          selected: model,
+          freeModels
         })
       const firstModel = pickFallbackWorkbenchModel({
         configs: list,
-        modelListsByConfigId: nextLists
+        modelListsByConfigId: nextLists,
+        freeModels
       })
       const nextSelection: WorkbenchModelSelection = {
         mainModel: resolveModel(modelSelectionRef.current.mainModel) || firstModel

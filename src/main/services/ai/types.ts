@@ -360,6 +360,7 @@ export type AiRunContext = {
     temperature?: number
     streamingMode?: AiLlmStreamingMode
     contextBudgetSnapshot?: BrainContextBudgetSnapshot
+    retryOutputErrors?: boolean
   }) => Promise<{
     output: T
     usage?: AiLlmUsage

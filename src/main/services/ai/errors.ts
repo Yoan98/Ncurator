@@ -33,17 +33,20 @@ export type LlmOutputIssue = {
 export class LlmOutputError extends Error {
   public readonly issues?: LlmOutputIssue[]
   public readonly rawText?: string
+  public readonly retryable: boolean
 
   public constructor(input: {
     message: string
     issues?: LlmOutputIssue[]
     rawText?: string
+    retryable?: boolean
     cause?: unknown
   }) {
     super(input.message, { cause: input.cause })
     this.name = 'LlmOutputError'
     this.issues = input.issues
     this.rawText = input.rawText
+    this.retryable = Boolean(input.retryable)
   }
 }
 
@@ -92,8 +95,22 @@ export const findLlmProviderError = (error: unknown): LlmProviderError | undefin
   return undefined
 }
 
-export const toLlmOutputError = (error: unknown, rawText?: string): LlmOutputError => {
-  if (isLlmOutputError(error)) return error
+export const toLlmOutputError = (
+  error: unknown,
+  rawText?: string,
+  retryable?: boolean
+): LlmOutputError => {
+  const shouldRetry = Boolean(retryable)
+  if (isLlmOutputError(error)) {
+    if (!shouldRetry || error.retryable) return error
+    return new LlmOutputError({
+      message: error.message,
+      issues: error.issues,
+      rawText: rawText || error.rawText,
+      retryable: true,
+      cause: error
+    })
+  }
   if (error instanceof ZodError) {
     return new LlmOutputError({
       message: '模型返回内容不符合要求的结构。',
@@ -102,6 +119,7 @@ export const toLlmOutputError = (error: unknown, rawText?: string): LlmOutputErr
         message: issue.message
       })),
       rawText,
+      retryable: shouldRetry,
       cause: error
     })
   }
@@ -114,6 +132,7 @@ export const toLlmOutputError = (error: unknown, rawText?: string): LlmOutputErr
       }
     ],
     rawText,
+    retryable: shouldRetry,
     cause: error
   })
 }

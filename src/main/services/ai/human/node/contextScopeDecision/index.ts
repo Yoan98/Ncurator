@@ -24,8 +24,7 @@ import { buildContextScopeDecisionPrompt } from '../../prompts/contextScope'
 export type ContextScopeDecision = HumanContextScopeDecision
 
 const contextScopeDecisionSchema = z.object({
-  needsHistory: z.boolean(),
-  reason: z.string()
+  needsHistory: z.boolean()
 })
 
 const buildFullHistoryMessages = (input: {
@@ -61,7 +60,8 @@ const decideByModel = async (input: {
       user: prompt.user,
       schema: contextScopeDecisionSchema,
       schemaName: 'human_context_scope',
-      temperature: 0.1
+      temperature: 0.1,
+      retryOutputErrors: true
     })
     return {
       needsHistory: result.output.needsHistory,
@@ -83,7 +83,14 @@ export const decideContextScope = async (input: {
   records: ChatMessageLogRecord[]
 }): Promise<ContextScopeDecision> => {
   const lastRunId = resolveLastConversationRunId(input.records)
-  if (lastRunId && !runHasDigest(input.records, lastRunId)) {
+  if (!lastRunId) {
+    return {
+      needsHistory: true,
+      basis: 'gate_below_threshold',
+      budgetTokens: 0
+    }
+  }
+  if (!runHasDigest(input.records, lastRunId)) {
     return {
       needsHistory: true,
       basis: 'gate_incomplete_run',

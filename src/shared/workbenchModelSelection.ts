@@ -5,6 +5,8 @@ import {
   type LlmPresetModel,
   type LlmPresetProvider
 } from './llmPresets'
+import { isFreeModelConfigId } from './freeModels'
+import type { FreeModelPublicEntry } from './freeModels'
 
 const isChatModelId = (modelId: string): boolean =>
   !/(image|audio|video|tts|asr|realtime|embedding|rerank|ocr|transcri|whisper|search|speech)/u.test(
@@ -46,9 +48,14 @@ export const resolveSelectedWorkbenchModel = (input: {
   configs: readonly LLMConfig[]
   modelListsByConfigId: Record<string, readonly LlmRemoteModel[]>
   selected: WorkbenchSelectedModel | null | undefined
+  freeModels?: readonly FreeModelPublicEntry[]
 }): WorkbenchSelectedModel | null => {
   const selected = input.selected
   if (!selected?.configId || !selected.modelName) return null
+  if (isFreeModelConfigId(selected.configId)) {
+    // Free catalog is unstable; keep the snapshot while the config id is free-scoped.
+    return { configId: selected.configId, modelName: selected.modelName }
+  }
   const config = input.configs.find((item) => item.id === selected.configId)
   if (!config) return null
 
@@ -75,6 +82,7 @@ export const resolveSelectedWorkbenchModel = (input: {
 export const pickFallbackWorkbenchModel = (input: {
   configs: readonly LLMConfig[]
   modelListsByConfigId: Record<string, readonly LlmRemoteModel[]>
+  freeModels?: readonly FreeModelPublicEntry[]
 }): WorkbenchSelectedModel | null => {
   for (const config of input.configs) {
     const preset = resolvePresetModeProvider(config)
@@ -89,6 +97,11 @@ export const pickFallbackWorkbenchModel = (input: {
     const remoteModels = input.modelListsByConfigId[config.id] || []
     const model = pickFirstChatRemoteModel(remoteModels)
     if (model) return { configId: config.id, modelName: model.id }
+  }
+
+  const firstFree = input.freeModels?.[0]
+  if (firstFree) {
+    return { configId: firstFree.configId, modelName: firstFree.modelName }
   }
 
   return null

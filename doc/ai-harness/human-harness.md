@@ -560,7 +560,7 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 
 1. 上一 conversation run 没有 `run_digest` → `needsHistory=true`，`basis=gate_incomplete_run`（resume / 失败 / 内容安全 fallback 都走这里）。
 2. 按「需要历史」投影后的 token 估算 ≤ 窗口 × **20%**（`CONTEXT_SCOPE_DECISION_RATIO`）→ `true`，`basis=gate_below_threshold`。
-3. 否则调判定模型（`caller: human.context_scope`）。问法是「需不需要紧邻的正在进行的历史」。不确定时 `true`。提到目录里已完成的旧任务时 `false`。失败则 `basis=fallback`，`true`。
+3. 否则调判定模型（`caller: human.context_scope`）。问法是「需不需要紧邻上一轮刚做完的历史」。续做最新一条目录对应的事 → `true`。换题，或点名更早目录条目（即使说「刚才」）→ `false`。不确定时 `true`。只输出 `{"needsHistory":true}` 或 `{"needsHistory":false}`，不写 `reason`。JSON / 字段校验失败走 `chatStructured` 最多 5 次重试；仍失败则 `basis=fallback`，`true`。用户消息与本轮 run 不因判定失败而中断。空伙伴首轮不调判定模型。
 
 **投影**
 
