@@ -3,41 +3,71 @@ import type { ChatMessageLogRecord } from '../../../../../shared/types'
 import type { AiRunContext } from '../../types'
 import type { HumanState } from '../types'
 import { buildBrainUserMessage } from '../prompts/brain'
-import { createCompactedBrainUserMessage, createCurrentBrainUserMessage } from '../node/utils/messageTail'
+import { wrapCompactionCheckpointContent } from '../prompts/compaction'
+import { wrapTaskCatalogContent } from '../prompts/contextScope'
+import {
+  createCatalogBrainUserMessage,
+  createCompactedBrainUserMessage,
+  createCurrentBrainUserMessage
+} from '../node/utils/messageTail'
 import {
   orderMessageLogBySeq,
-  repairInterruptedToolCalls
+  repairInterruptedToolCalls,
+  resolveHistoryFloor
 } from './transcript'
 import { messagesFromLogEntries } from './conversationLogMessages'
-import { wrapCompactionCheckpointContent } from '../prompts/compaction'
+import {
+  collectRunDigestCatalogEntries,
+  renderRunDigestCatalog
+} from './runDigestCatalog'
 
 export type BrainMessagesProjection = {
   messages: BaseMessage[]
   currentUserMessageIndex: number
 }
 
+const buildCurrentUserMessage = (input: {
+  ctx: AiRunContext
+  state: HumanState
+}): BaseMessage =>
+  createCurrentBrainUserMessage(
+    buildBrainUserMessage({
+      state: input.state,
+      ctx: input.ctx
+    })
+  )
+
+const appendCatalogUserIfPresent = (
+  messages: BaseMessage[],
+  records: readonly ChatMessageLogRecord[]
+): void => {
+  const catalogText = renderRunDigestCatalog(collectRunDigestCatalogEntries(records))
+  const wrapped = wrapTaskCatalogContent(catalogText)
+  if (!wrapped) return
+  messages.push(createCatalogBrainUserMessage(wrapped))
+}
+
 export const projectBrainMessagesFromLog = (input: {
   records: ChatMessageLogRecord[]
   ctx: AiRunContext
   state: HumanState
+  needsHistory?: boolean
 }): BrainMessagesProjection => {
   const ordered = orderMessageLogBySeq(input.records)
-  const compactionCheckpointRecord = [...ordered]
-    .reverse()
-    .find(
-      (record) =>
-        record.entry.kind === 'annotation' &&
-        record.entry.eventType === 'compaction_checkpoint'
-    )
-  const compactionCheckpoint =
-    compactionCheckpointRecord?.entry.kind === 'annotation' &&
-    compactionCheckpointRecord.entry.eventType === 'compaction_checkpoint'
-      ? compactionCheckpointRecord.entry.payload
-      : undefined
+  const needsHistory = input.needsHistory !== false
+  const messages: BaseMessage[] = []
 
-  const projectedRecords = compactionCheckpoint
-    ? ordered.filter((record) => record.seq > compactionCheckpoint.coveredThroughSeq)
-    : ordered
+  if (!needsHistory) {
+    appendCatalogUserIfPresent(messages, ordered)
+    messages.push(buildCurrentUserMessage(input))
+    return {
+      messages: repairInterruptedToolCalls(messages),
+      currentUserMessageIndex: messages.length - 1
+    }
+  }
+
+  const floor = resolveHistoryFloor(ordered)
+  const projectedRecords = ordered.filter((record) => record.seq > floor.historyFloorSeq)
 
   for (const record of projectedRecords) {
     if (record.entry.kind === 'user' && !record.entry.content.trim()) {
@@ -45,20 +75,12 @@ export const projectBrainMessagesFromLog = (input: {
     }
   }
 
-  const messages: BaseMessage[] = []
-  const checkpointSummary = compactionCheckpoint?.summary.trim()
-  if (checkpointSummary) {
+  const checkpointSummary = floor.compactionCheckpoint?.summary.trim()
+  if (floor.includeCheckpoint && checkpointSummary) {
     messages.push(createCompactedBrainUserMessage(wrapCompactionCheckpointContent(checkpointSummary)))
   }
   messages.push(...messagesFromLogEntries(projectedRecords.map((record) => record.entry)))
-  messages.push(
-    createCurrentBrainUserMessage(
-      buildBrainUserMessage({
-        state: input.state,
-        ctx: input.ctx
-      })
-    )
-  )
+  messages.push(buildCurrentUserMessage(input))
 
   const repaired = repairInterruptedToolCalls(messages)
   return {

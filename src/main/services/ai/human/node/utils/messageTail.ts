@@ -4,6 +4,7 @@ import { estimateMessagesForContext } from '../../memory/multimodal'
 
 const CURRENT_USER_MARKER = 'ncurator_current_user'
 const COMPACTION_USER_MARKER = 'ncurator_compaction_user'
+const CATALOG_USER_MARKER = 'ncurator_catalog_user'
 const COMPACTION_TOOL_RESULT_MAX_CHARS = 2000
 
 export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
@@ -20,11 +21,25 @@ export const createCompactedBrainUserMessage = (content: string): HumanMessage =
     }
   })
 
+export const createCatalogBrainUserMessage = (content: string): HumanMessage =>
+  new HumanMessage({
+    content,
+    additional_kwargs: {
+      [CATALOG_USER_MARKER]: true
+    }
+  })
+
 export const isCurrentBrainUserMessage = (message: BaseMessage): boolean =>
   message.getType() === 'human' && message.additional_kwargs?.[CURRENT_USER_MARKER] === true
 
 export const isCompactedBrainUserMessage = (message: BaseMessage): boolean =>
   message.getType() === 'human' && message.additional_kwargs?.[COMPACTION_USER_MARKER] === true
+
+export const isCatalogBrainUserMessage = (message: BaseMessage): boolean =>
+  message.getType() === 'human' && message.additional_kwargs?.[CATALOG_USER_MARKER] === true
+
+const isSyntheticHistoryUserMessage = (message: BaseMessage): boolean =>
+  isCompactedBrainUserMessage(message) || isCatalogBrainUserMessage(message)
 
 const isImageReferenceHuman = (message: BaseMessage): boolean =>
   message.getType() === 'human' && typeof message.content !== 'string'
@@ -32,7 +47,7 @@ const isImageReferenceHuman = (message: BaseMessage): boolean =>
 const isBoundaryUser = (message: BaseMessage): boolean =>
   message.getType() === 'human' &&
   !isImageReferenceHuman(message) &&
-  !isCompactedBrainUserMessage(message)
+  !isSyntheticHistoryUserMessage(message)
 
 const groupMessagesForCompaction = (messages: BaseMessage[]): BaseMessage[][] => {
   const groups: BaseMessage[][] = []
@@ -136,7 +151,7 @@ export const hasCompressibleCompactionHistory = (
   retainTokens: number
 ): boolean => {
   const { folded } = splitMessagesForCompactionTail(messages, retainTokens)
-  return folded.some((message) => !isCompactedBrainUserMessage(message))
+  return folded.some((message) => !isSyntheticHistoryUserMessage(message))
 }
 
 export const countTailBookmarkMessages = (tail: BaseMessage[]): number =>

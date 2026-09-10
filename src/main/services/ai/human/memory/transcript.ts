@@ -81,11 +81,95 @@ export type MessageLogProjection = {
     summary: string
     createdAt: number
   }
+  discardThroughSeq?: number
+  historyFloorSeq: number
 }
 
 export const orderMessageLogBySeq = (
   records: ChatMessageLogRecord[]
 ): ChatMessageLogRecord[] => [...records].sort((a, b) => a.seq - b.seq)
+
+const isConversationLogRecord = (record: ChatMessageLogRecord): boolean =>
+  record.entry.kind === 'user' ||
+  record.entry.kind === 'assistant' ||
+  record.entry.kind === 'tool'
+
+export type HistoryFloor = {
+  historyFloorSeq: number
+  compactionCheckpoint?: MessageLogProjection['compactionCheckpoint']
+  discardThroughSeq?: number
+  includeCheckpoint: boolean
+}
+
+export const resolveHistoryFloor = (records: readonly ChatMessageLogRecord[]): HistoryFloor => {
+  const ordered = orderMessageLogBySeq([...records])
+  const compactionCheckpointRecord = [...ordered]
+    .reverse()
+    .find(
+      (record) =>
+        record.entry.kind === 'annotation' &&
+        record.entry.eventType === 'compaction_checkpoint'
+    )
+  const compactionCheckpoint =
+    compactionCheckpointRecord?.entry.kind === 'annotation' &&
+    compactionCheckpointRecord.entry.eventType === 'compaction_checkpoint'
+      ? {
+          ...compactionCheckpointRecord.entry.payload,
+          createdAt: compactionCheckpointRecord.createdAt
+        }
+      : undefined
+  const discardRecord = [...ordered]
+    .reverse()
+    .find((record) => {
+      if (
+        record.entry.kind !== 'annotation' ||
+        record.entry.eventType !== 'context_scope_selected' ||
+        typeof record.entry.payload.discardThroughSeq !== 'number'
+      ) {
+        return false
+      }
+      return ordered.some(
+        (candidate) => candidate.runId === record.runId && isConversationLogRecord(candidate)
+      )
+    })
+  const discardThroughSeq =
+    discardRecord?.entry.kind === 'annotation' &&
+    discardRecord.entry.eventType === 'context_scope_selected'
+      ? discardRecord.entry.payload.discardThroughSeq
+      : undefined
+  const historyFloorSeq = Math.max(
+    compactionCheckpoint?.coveredThroughSeq ?? -1,
+    discardThroughSeq ?? -1
+  )
+  const includeCheckpoint = Boolean(
+    compactionCheckpoint && compactionCheckpoint.coveredThroughSeq >= (discardThroughSeq ?? -1)
+  )
+  return {
+    historyFloorSeq,
+    compactionCheckpoint: includeCheckpoint ? compactionCheckpoint : undefined,
+    discardThroughSeq,
+    includeCheckpoint
+  }
+}
+
+export const resolveLastConversationRunId = (
+  records: readonly ChatMessageLogRecord[]
+): string | undefined =>
+  [...orderMessageLogBySeq([...records])].reverse().find(isConversationLogRecord)?.runId
+
+export const runHasDigest = (
+  records: readonly ChatMessageLogRecord[],
+  runId: string
+): boolean =>
+  records.some(
+    (record) =>
+      record.runId === runId &&
+      record.entry.kind === 'annotation' &&
+      record.entry.eventType === 'run_digest'
+  )
+
+export const resolveMaxMessageLogSeq = (records: readonly ChatMessageLogRecord[]): number =>
+  records.reduce((maxSeq, record) => Math.max(maxSeq, record.seq), -1)
 
 export const resolveCompactionCoveredThroughSeq = (
   records: ChatMessageLogRecord[],
@@ -116,25 +200,8 @@ export const projectMessageLogRecords = (
   records: ChatMessageLogRecord[]
 ): MessageLogProjection => {
   const ordered = orderMessageLogBySeq(records)
-  const compactionCheckpointRecord = [...ordered]
-    .reverse()
-    .find(
-      (record) =>
-        record.entry.kind === 'annotation' &&
-        record.entry.eventType === 'compaction_checkpoint'
-    )
-  const compactionCheckpoint =
-    compactionCheckpointRecord?.entry.kind === 'annotation' &&
-    compactionCheckpointRecord.entry.eventType === 'compaction_checkpoint'
-      ? {
-          ...compactionCheckpointRecord.entry.payload,
-          createdAt: compactionCheckpointRecord.createdAt
-        }
-      : undefined
-
-  const projectedRecords = compactionCheckpoint
-    ? ordered.filter((record) => record.seq > compactionCheckpoint.coveredThroughSeq)
-    : ordered
+  const floor = resolveHistoryFloor(ordered)
+  const projectedRecords = ordered.filter((record) => record.seq > floor.historyFloorSeq)
   // 历史 user 由 projectBrainMessagesFromLog 按 content 还原；这里只投影过程 tail。
   // 每次新 run 的当前 user 统一由 buildBrainUserMessage 构造。
   const messages = deriveMessageLogMessages({
@@ -159,6 +226,8 @@ export const projectMessageLogRecords = (
     messages: repairInterruptedToolCalls(messages),
     plan,
     learnedSkillIds,
-    compactionCheckpoint
+    compactionCheckpoint: floor.compactionCheckpoint,
+    discardThroughSeq: floor.discardThroughSeq,
+    historyFloorSeq: floor.historyFloorSeq
   }
 }

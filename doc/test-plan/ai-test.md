@@ -124,6 +124,8 @@ AI 回归测试目录：
 | `human/live/human-text-file-read-write-live.test.ts` | `human-text-file-*-live` |
 | `human/live/human-runtime-script-execution-live.test.ts` | `human-runtime-*-python-live` |
 | `human/live/human-legacy-doc-reading-live.test.ts` | `human-legacy-doc-*-live` |
+| `human/live/human-context-scope-decision-live.test.ts` | `human-context-scope-*-live` |
+| `human/mock-llm/context-scope-fresh-topic.test.ts` | `context-scope-fresh-topic` |
 
 AI unit / 辅助测试目录：
 
@@ -818,6 +820,15 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：第三轮 `brain` prompt 同时命中 Bob、上线窗口冲突与还缺少回滚负责人；最终交付带出负责人候选、未完成审批与下一步安排。
 - Not：不验证 live 模型总结质量；不验证伙伴隔离。
 
+##### `context-scope-fresh-topic`
+
+- 测试类型：`backend / mock-llm`
+- What：上一轮正常交付并写入 `run_digest` 后，发无关新任务且上下文超过判定阈值时，主模型只收到任务目录和新 user。
+- Why：长期伙伴若把无关历史整段带进下一轮会浪费 token；范围判定必须在真实 graph 启动路径上生效。
+- How：Run 1 脚本化交付周报并写 digest。Run 2 把窗口降到 200 token，脚本化 `human.context_scope` 返回 `needsHistory=false`，捕获首次 brain 的拼接 user。
+- Oracle：Run 2 的 `context_scope_selected.needsHistory=false` 且带 `discardThroughSeq`；brain user 含 `<task_catalog>` 与新任务，不含 Run 1 交付原文。
+- Not：不验证真实模型的判定质量（由 live 覆盖）；不验证 compaction。
+
 ##### `human-interruption-message-repair`
 
 - 测试类型：`backend / mock-llm`
@@ -953,7 +964,43 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：跨轮续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文；历史前缀字节不变时 provider 前缀缓存应命中。
 - How：使用共享 workspace fixture（运行时为文件地址 + 伙伴），默认上下文窗口。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同伙伴改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组与跨 run 前缀缓存（公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，当前 0.6）。
 - Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 user.content 与最终交付，末尾是 Run 2 当前 User；该当前 User 无 `<memory>`、无 `<active_state>`；Run 2 通过任一 DOCX 读工具（`docx_read_outline` / `docx_search` / `docx_read_nodes`）使用文件 B；最终交付同时包含过拟合与反走样关键事实。Run 2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
-- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [checkpoint User] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。
+- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [checkpoint User] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。不验证无关新任务丢弃历史（由 `human-context-scope-fresh-topic-live` 覆盖）。
+
+##### `human-context-scope-fresh-topic-live`
+
+- 测试类型：`backend / live`
+- What：任务 A 交付后发无关任务 B，判定不需要历史；B 首轮不含 A 原文且含任务目录。
+- Why：用户不管理会话，系统必须在真实模型下把无关新任务从当前历史里拆开。
+- How：缩小上下文窗口使判定阈值可触发。Run 1 短问答交付；Run 2 发完全无关的新问题。检查 `context_scope_selected` 与 Run 2 首次 `human.brain` 输入。
+- Oracle：Run 2 `completed`；`needsHistory=false`；brain 输入含 `<task_catalog>`，不含 Run 1 主题原文。
+- Not：不验证 UI；不要求固定工具。
+
+##### `human-context-scope-continuation-live`
+
+- 测试类型：`backend / live`
+- What：任务 A 交付后发相关追问，判定需要历史且不注入目录。
+- Why：续做必须保住任务主线，不能因为阈值触发就把当前工作丢掉。
+- How：同样缩小窗口。Run 1 短问答；Run 2 要求基于刚才的解释继续。
+- Oracle：Run 2 `completed`；`needsHistory=true`；brain 输入不含 `<task_catalog>`。
+- Not：不验证前缀缓存命中率（由 continuation live 覆盖）。
+
+##### `human-context-scope-incomplete-run-live`
+
+- 测试类型：`backend / live`
+- What：上一轮在交付前中断，随后发送消息走 `gate_incomplete_run`，不调判定模型。
+- Why：中断恢复不能被范围判定误当成新话题。
+- How：Run 1 在运行中取消；Run 2 继续。检查 annotation `basis` 与 `human.context_scope` 调用次数。
+- Oracle：Run 2 `completed`；`basis=gate_incomplete_run`；`needsHistory=true`；Run 2 没有 `human.context_scope` LLM 调用。
+- Not：不验证具体中断码文案（由 resume live 覆盖）。
+
+##### `human-context-scope-old-task-via-catalog-live`
+
+- 测试类型：`backend / live`
+- What：A/B/C 依次交付后用户提到 A，模型能从目录拿到 A 的线索而不是声称不记得。
+- Why：丢弃书签会折掉旧原文，目录必须能补上「提到旧任务」的缺口。
+- How：三个短任务依次完成，第四轮询问第一轮留下的关键词。
+- Oracle：Run 4 `completed`，交付含第一轮关键词。
+- Not：不要求模型复述第一轮全文；不验证文件读取（本 case 无文件产出）。
 
 ##### `human-skill-eviction-relearn-loop-live`
 

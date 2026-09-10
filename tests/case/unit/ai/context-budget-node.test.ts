@@ -8,7 +8,7 @@ import {
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from '../../../../src/main/services/ai/human/constants'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
-import type { AiRunEvent } from '../../../../src/shared/types'
+import type { AiRunEvent, ChatMessageLogEntry } from '../../../../src/shared/types'
 import { LlmInputTooLongError } from '../../../../src/main/services/ai/errors'
 
 const DEFAULT_COMPACTION_TRIGGER_TOKENS = Math.floor(
@@ -300,5 +300,48 @@ describe('ai unit context budget node', () => {
         })
       )
     ).rejects.toBeInstanceOf(LlmInputTooLongError)
+  })
+
+  it('writes context_scope_selected with the user in one batch', async () => {
+    const events: AiRunEvent[] = []
+    const appended: ChatMessageLogEntry[] = []
+    const ctx = {
+      ...createBaseContext(events),
+      appendMessageLog: async (entries: ChatMessageLogEntry[]) => {
+        appended.push(...entries)
+      }
+    }
+    const cache = createHumanRuntimeCache()
+    cache.contextScopeDecision = {
+      needsHistory: false,
+      basis: 'model_decision',
+      budgetTokens: 90
+    }
+    cache.messages = [
+      new HumanMessage({
+        content: '<user_context>分析 Excel</user_context>',
+        additional_kwargs: { ncurator_current_user: true }
+      })
+    ]
+    const node = createContextBudgetNode({ ctx, cache })
+    await node(
+      createInitialHumanState({
+        taskId: 'task-scope',
+        userInput: '分析 Excel'
+      })
+    )
+    expect(appended).toHaveLength(2)
+    expect(appended[0]).toMatchObject({
+      kind: 'annotation',
+      eventType: 'context_scope_selected',
+      payload: {
+        needsHistory: false,
+        basis: 'model_decision'
+      }
+    })
+    expect(appended[1]).toMatchObject({
+      kind: 'user',
+      content: '<user_context>分析 Excel</user_context>'
+    })
   })
 })

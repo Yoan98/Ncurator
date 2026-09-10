@@ -1,0 +1,484 @@
+import { describe, expect, it } from 'vitest'
+import { SystemMessage } from '@langchain/core/messages'
+import type {
+  ChatMessageLogEntry,
+  ChatMessageLogRecord
+} from '../../../../src/shared/types'
+import { projectBrainMessagesFromLog } from '../../../../src/main/services/ai/human/memory/brainMessageProjection'
+import {
+  collectRunDigestCatalogEntries,
+  renderRunDigestCatalog
+} from '../../../../src/main/services/ai/human/memory/runDigestCatalog'
+import {
+  projectMessageLogRecords,
+  resolveHistoryFloor
+} from '../../../../src/main/services/ai/human/memory/transcript'
+import {
+  isCatalogBrainUserMessage,
+  isCompactedBrainUserMessage,
+  isCurrentBrainUserMessage
+} from '../../../../src/main/services/ai/human/node/utils/messageTail'
+import {
+  buildContextScopeSelectedEntry,
+  decideContextScope
+} from '../../../../src/main/services/ai/human/node/contextScopeDecision'
+import {
+  collectRunDigestFilePaths,
+  normalizeRunDigestSummary
+} from '../../../../src/main/services/ai/human/node/brainNode/runDigest'
+import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
+import { buildBrainSystemPrompt } from '../../../../src/main/services/ai/human/prompts/brain'
+import type { AiRunContext } from '../../../../src/main/services/ai/types'
+import { RUN_DIGEST_MAX_ENTRIES } from '../../../../src/main/services/ai/human/constants'
+
+const user = (content: string): ChatMessageLogEntry => ({
+  kind: 'user',
+  content,
+  context: {
+    selectedReferences: [],
+    attachments: []
+  }
+})
+
+const assistant = (content: string): ChatMessageLogEntry => ({
+  kind: 'assistant',
+  content,
+  toolCalls: []
+})
+
+const records = (entries: Array<{ runId: string; entry: ChatMessageLogEntry; createdAt?: number }>) =>
+  entries.map(
+    ({ runId, entry, createdAt }, index): ChatMessageLogRecord => ({
+      id: `log-${index + 1}`,
+      partnerId: 'partner-1',
+      runId,
+      seq: index + 1,
+      entry,
+      createdAt: createdAt ?? Date.UTC(2026, 2, 14, 8, 20) + index
+    })
+  )
+
+const digest = (summary: string, filePaths: string[] = []): ChatMessageLogEntry => ({
+  kind: 'annotation',
+  eventType: 'run_digest',
+  payload: { summary, filePaths }
+})
+
+const scopeSelected = (input: {
+  needsHistory: boolean
+  discardThroughSeq?: number
+}): ChatMessageLogEntry => ({
+  kind: 'annotation',
+  eventType: 'context_scope_selected',
+  payload: {
+    needsHistory: input.needsHistory,
+    basis: input.needsHistory ? 'gate_below_threshold' : 'model_decision',
+    budgetTokens: 80_000,
+    ...(typeof input.discardThroughSeq === 'number'
+      ? { discardThroughSeq: input.discardThroughSeq }
+      : {})
+  }
+})
+
+const checkpoint = (coveredThroughSeq: number): ChatMessageLogEntry => ({
+  kind: 'annotation',
+  eventType: 'compaction_checkpoint',
+  payload: {
+    compactBlockId: 'checkpoint-1',
+    coveredThroughSeq,
+    sourceMessageCount: 2,
+    summary: '目标：已写周报'
+  }
+})
+
+const createCtx = (input?: {
+  windowTokens?: number
+  chatStructured?: AiRunContext['chatStructured']
+}): AiRunContext =>
+  ({
+    platform: 'macos',
+    runId: 'run-new',
+    partnerId: 'partner-1',
+    partnerName: '测试伙伴',
+    workspaceRoots: ['/tmp/workspace'],
+    runStartedAt: 0,
+    preference: 'default',
+    executionPermission: 'review',
+    referenceScope: { selectedReferences: [], attachments: [] },
+    humanRuntimeOverrides:
+      typeof input?.windowTokens === 'number'
+        ? { modelContextWindowTokens: input.windowTokens }
+        : undefined,
+    checkCancelled: () => undefined,
+    chatStructured:
+      input?.chatStructured ||
+      (async () => {
+        throw new Error('chatStructured should not be called')
+      }),
+    chatText: async () => {
+      throw new Error('chatText should not be called')
+    },
+    loadMessageLog: async () => [],
+    appendMessageLog: async () => undefined,
+    sendEvent: () => undefined
+  }) as AiRunContext
+
+const bulkyHistory = records([
+  { runId: 'run-1', entry: user(`<user_context>${'周报草稿。'.repeat(80)}</user_context>`) },
+  { runId: 'run-1', entry: assistant(`已写入周报。${'完成。'.repeat(80)}`) },
+  {
+    runId: 'run-1',
+    entry: digest('按模板写本周周报，去掉了封面页', ['/Users/me/workspace/周报.docx'])
+  }
+])
+
+describe('run digest catalog', () => {
+  it('renders recent digests as compact timestamped lines and caps at 30', () => {
+    const many = records(
+      Array.from({ length: RUN_DIGEST_MAX_ENTRIES + 2 }, (_, index) => ({
+        runId: `run-${index + 1}`,
+        entry: digest(`任务 ${index + 1}`, index % 2 === 0 ? [`/tmp/file-${index + 1}.docx`] : []),
+        createdAt: Date.UTC(2026, 2, 14, 8, 20) + index * 60_000
+      }))
+    )
+    const entries = collectRunDigestCatalogEntries(many)
+    expect(entries).toHaveLength(RUN_DIGEST_MAX_ENTRIES)
+    expect(entries[0]?.summary).toBe('任务 3')
+    const rendered = renderRunDigestCatalog(entries)
+    expect(rendered.split('\n')).toHaveLength(RUN_DIGEST_MAX_ENTRIES)
+    expect(rendered).toContain('任务 32')
+    expect(rendered).not.toContain('任务 1 |')
+    expect(rendered).toContain('/tmp/file-31.docx')
+  })
+
+  it('does not apply history floor when collecting catalog entries', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('old') },
+      { runId: 'run-1', entry: assistant('old answer') },
+      {
+        runId: 'run-1',
+        entry: digest('旧周报', ['/Users/me/workspace/周报.docx'])
+      },
+      { runId: 'run-2', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 3 }) },
+      { runId: 'run-2', entry: user('new excel') },
+      { runId: 'run-2', entry: assistant('excel done') },
+      { runId: 'run-2', entry: digest('分析销售表', ['/Users/me/workspace/销售.xlsx']) }
+    ])
+    const catalog = renderRunDigestCatalog(collectRunDigestCatalogEntries(log))
+    expect(catalog).toContain('旧周报')
+    expect(catalog).toContain('/Users/me/workspace/周报.docx')
+    expect(catalog).toContain('分析销售表')
+  })
+})
+
+describe('history floor', () => {
+  it('takes the larger of compaction and discard bookmarks and drops stale checkpoint', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('secret-a') },
+      { runId: 'run-1', entry: assistant('a-done') },
+      { runId: 'run-1', entry: checkpoint(2) },
+      { runId: 'run-2', entry: user('task-b') },
+      { runId: 'run-2', entry: assistant('b-done') },
+      { runId: 'run-2', entry: digest('任务B') },
+      { runId: 'run-3', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 6 }) },
+      { runId: 'run-3', entry: user('task-c') }
+    ])
+    const floor = resolveHistoryFloor(log)
+    expect(floor.historyFloorSeq).toBe(6)
+    expect(floor.includeCheckpoint).toBe(false)
+    expect(floor.compactionCheckpoint).toBeUndefined()
+    expect(floor.discardThroughSeq).toBe(6)
+  })
+
+  it('keeps checkpoint when it is the later bookmark', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('old') },
+      { runId: 'run-1', entry: assistant('old-done') },
+      { runId: 'run-2', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 2 }) },
+      { runId: 'run-2', entry: user('kept') },
+      { runId: 'run-2', entry: assistant('kept-done') },
+      { runId: 'run-2', entry: checkpoint(5) }
+    ])
+    const floor = resolveHistoryFloor(log)
+    expect(floor.historyFloorSeq).toBe(5)
+    expect(floor.includeCheckpoint).toBe(true)
+    expect(floor.compactionCheckpoint?.coveredThroughSeq).toBe(5)
+  })
+
+  it('ignores discard bookmarks from runs that never wrote conversation', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('keep-me') },
+      { runId: 'run-1', entry: assistant('kept') },
+      { runId: 'run-2', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 2 }) }
+    ])
+    const floor = resolveHistoryFloor(log)
+    expect(floor.historyFloorSeq).toBe(-1)
+    expect(floor.discardThroughSeq).toBeUndefined()
+  })
+})
+
+describe('brain message projection with context scope', () => {
+  const ctx = createCtx()
+  const state = createInitialHumanState({ taskId: 'task-new', userInput: '分析这个 Excel' })
+
+  it('projects only catalog and current user when needsHistory is false', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('secret-weekly-report') },
+      { runId: 'run-1', entry: assistant('week report written') },
+      {
+        runId: 'run-1',
+        entry: digest('按模板写本周周报，去掉了封面页', ['/Users/me/workspace/周报.docx'])
+      }
+    ])
+    const projection = projectBrainMessagesFromLog({
+      records: log,
+      ctx,
+      state,
+      needsHistory: false
+    })
+    expect(projection.messages).toHaveLength(2)
+    expect(isCatalogBrainUserMessage(projection.messages[0]!)).toBe(true)
+    expect(isCurrentBrainUserMessage(projection.messages[1]!)).toBe(true)
+    expect(String(projection.messages[0]?.content)).toContain('<task_catalog>')
+    expect(String(projection.messages[0]?.content)).toContain('/Users/me/workspace/周报.docx')
+    expect(String(projection.messages.map((message) => message.content).join('\n'))).not.toContain(
+      'secret-weekly-report'
+    )
+    expect(String(projection.messages[1]?.content)).toContain('分析这个 Excel')
+  })
+
+  it('keeps the current history shape and omits catalog when needsHistory is true', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('<user_context>fill weekly report</user_context>') },
+      { runId: 'run-1', entry: assistant('week report written') },
+      { runId: 'run-1', entry: digest('写周报') },
+      { runId: 'run-1', entry: checkpoint(2) }
+    ])
+    const projection = projectBrainMessagesFromLog({
+      records: log,
+      ctx,
+      state: createInitialHumanState({ taskId: 'task-continue', userInput: '把标题改一下' }),
+      needsHistory: true
+    })
+    expect(projection.messages.some((message) => isCatalogBrainUserMessage(message))).toBe(false)
+    expect(isCompactedBrainUserMessage(projection.messages[0]!)).toBe(true)
+    expect(isCurrentBrainUserMessage(projection.messages.at(-1)!)).toBe(true)
+    expect(String(projection.messages.map((message) => message.content).join('\n'))).not.toContain(
+      'fill weekly report'
+    )
+  })
+
+  it('applies discard floor when continuing after a fresh topic', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('secret-a') },
+      { runId: 'run-1', entry: assistant('a-done') },
+      { runId: 'run-1', entry: digest('任务A') },
+      { runId: 'run-2', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 3 }) },
+      { runId: 'run-2', entry: user('<user_context>excel task</user_context>') },
+      { runId: 'run-2', entry: assistant('excel done') },
+      { runId: 'run-2', entry: digest('任务B', ['/tmp/sales.xlsx']) }
+    ])
+    const projection = projectBrainMessagesFromLog({
+      records: log,
+      ctx,
+      state: createInitialHumanState({ taskId: 'task-b2', userInput: '这个表再加一列' }),
+      needsHistory: true
+    })
+    const text = projection.messages.map((message) => String(message.content)).join('\n')
+    expect(text).not.toContain('secret-a')
+    expect(text).toContain('excel task')
+    expect(projection.messages.some((message) => isCatalogBrainUserMessage(message))).toBe(false)
+  })
+})
+
+describe('message log projection scan boundaries', () => {
+  it('keeps learned skills even when conversation is below the floor', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('learn docx') },
+      {
+        runId: 'run-1',
+        entry: {
+          kind: 'annotation',
+          eventType: 'skill_state_updated',
+          payload: { learnedSkillIds: ['docx-read'] }
+        }
+      },
+      { runId: 'run-1', entry: assistant('done') },
+      { runId: 'run-1', entry: digest('学会了 docx') },
+      { runId: 'run-2', entry: scopeSelected({ needsHistory: false, discardThroughSeq: 4 }) },
+      { runId: 'run-2', entry: user('new') }
+    ])
+    const projection = projectMessageLogRecords(log)
+    expect(projection.learnedSkillIds).toEqual(['docx-read'])
+    expect(projection.historyFloorSeq).toBe(4)
+    const text = projection.messages.map((message) => String(message.content)).join('\n')
+    expect(text).not.toContain('learn docx')
+  })
+})
+
+describe('context scope decision gates', () => {
+  it('keeps history when the previous run has no digest', async () => {
+    let structuredCalls = 0
+    const ctx = createCtx({
+      windowTokens: 200,
+      chatStructured: async () => {
+        structuredCalls += 1
+        return { output: { needsHistory: false, reason: 'should not run' } }
+      }
+    })
+    const decision = await decideContextScope({
+      ctx,
+      state: createInitialHumanState({ taskId: 't', userInput: '继续' }),
+      records: records([
+        { runId: 'run-1', entry: user('interrupted') },
+        { runId: 'run-1', entry: assistant('half') }
+      ])
+    })
+    expect(decision).toMatchObject({ needsHistory: true, basis: 'gate_incomplete_run' })
+    expect(structuredCalls).toBe(0)
+  })
+
+  it('keeps history when the full projection is under the token threshold', async () => {
+    let structuredCalls = 0
+    const ctx = createCtx({
+      windowTokens: 256_000,
+      chatStructured: async () => {
+        structuredCalls += 1
+        return { output: { needsHistory: false, reason: 'should not run' } }
+      }
+    })
+    const decision = await decideContextScope({
+      ctx,
+      state: createInitialHumanState({ taskId: 't', userInput: '下一个小问题' }),
+      records: bulkyHistory
+    })
+    expect(decision.needsHistory).toBe(true)
+    expect(decision.basis).toBe('gate_below_threshold')
+    expect(structuredCalls).toBe(0)
+  })
+
+  it('asks the model when previous run completed and budget exceeds the threshold', async () => {
+    const ctx = createCtx({
+      windowTokens: 200,
+      chatStructured: async () => ({
+        output: { needsHistory: false, reason: '新的分析任务' }
+      })
+    })
+    const decision = await decideContextScope({
+      ctx,
+      state: createInitialHumanState({ taskId: 't', userInput: '分析这个 Excel' }),
+      records: bulkyHistory
+    })
+    expect(decision).toMatchObject({
+      needsHistory: false,
+      basis: 'model_decision'
+    })
+    expect(decision.budgetTokens).toBeGreaterThan(40)
+  })
+
+  it('falls back to keeping history when the decision model fails', async () => {
+    const ctx = createCtx({
+      windowTokens: 200,
+      chatStructured: async () => {
+        throw new Error('model down')
+      }
+    })
+    const decision = await decideContextScope({
+      ctx,
+      state: createInitialHumanState({ taskId: 't', userInput: '分析这个 Excel' }),
+      records: bulkyHistory
+    })
+    expect(decision).toMatchObject({ needsHistory: true, basis: 'fallback' })
+  })
+
+  it('writes discardThroughSeq only when history is not needed', () => {
+    const log = bulkyHistory
+    const keep = buildContextScopeSelectedEntry({
+      decision: { needsHistory: true, basis: 'model_decision', budgetTokens: 90 },
+      records: log
+    })
+    const fresh = buildContextScopeSelectedEntry({
+      decision: { needsHistory: false, basis: 'model_decision', budgetTokens: 90 },
+      records: log
+    })
+    expect(keep.kind).toBe('annotation')
+    if (keep.kind === 'annotation' && keep.eventType === 'context_scope_selected') {
+      expect(keep.payload.discardThroughSeq).toBeUndefined()
+    }
+    expect(fresh.kind).toBe('annotation')
+    if (fresh.kind === 'annotation' && fresh.eventType === 'context_scope_selected') {
+      expect(fresh.payload.discardThroughSeq).toBe(log[log.length - 1]?.seq)
+    }
+  })
+})
+
+describe('run digest helpers', () => {
+  it('normalizes summary to a single clipped line', () => {
+    expect(normalizeRunDigestSummary('  \n按模板写本周周报，去掉了封面页\n更多')).toBe(
+      '按模板写本周周报，去掉了封面页'
+    )
+    expect(normalizeRunDigestSummary('')).toBe('')
+  })
+
+  it('collects unique file paths from delivery file changes', () => {
+    const state = createInitialHumanState({ taskId: 't', userInput: '写周报' })
+    state.execution.fileChanges = {
+      changed_files: [
+        {
+          id: '1',
+          fileName: '周报.docx',
+          path: '/Users/me/workspace/周报.docx',
+          capability: 'docx',
+          operation: 'updated',
+          changeCount: 1,
+          insertCount: 1,
+          deleteCount: 0,
+          status: 'applied'
+        },
+        {
+          id: '2',
+          fileName: '周报.docx',
+          path: '/Users/me/workspace/周报.docx',
+          capability: 'docx',
+          operation: 'updated',
+          changeCount: 1,
+          insertCount: 0,
+          deleteCount: 0,
+          status: 'applied'
+        },
+        {
+          id: '3',
+          fileName: '备注.txt',
+          path: '/Users/me/workspace/备注.txt',
+          capability: 'text_file',
+          operation: 'created',
+          changeCount: 1,
+          insertCount: 1,
+          deleteCount: 0,
+          status: 'applied'
+        }
+      ]
+    }
+    expect(collectRunDigestFilePaths(state)).toEqual([
+      '/Users/me/workspace/周报.docx',
+      '/Users/me/workspace/备注.txt'
+    ])
+  })
+})
+
+describe('assembled fresh-topic messages', () => {
+  it('is system plus catalog plus current user', () => {
+    const ctx = createCtx()
+    const state = createInitialHumanState({ taskId: 't', userInput: '分析 Excel' })
+    const projection = projectBrainMessagesFromLog({
+      records: bulkyHistory,
+      ctx,
+      state,
+      needsHistory: false
+    })
+    const messages = [new SystemMessage(buildBrainSystemPrompt({ ctx })), ...projection.messages]
+    expect(messages.map((message) => message.getType())).toEqual(['system', 'human', 'human'])
+    expect(isCatalogBrainUserMessage(messages[1]!)).toBe(true)
+    expect(isCurrentBrainUserMessage(messages[2]!)).toBe(true)
+  })
+})

@@ -15,6 +15,7 @@ import { createHumanRunStateSchema, createInitialHumanState } from '../state/sch
 import { buildBrainSystemPrompt } from '../prompts/brain'
 import { projectMessageLogRecords } from '../memory/transcript'
 import { projectBrainMessagesFromLog } from '../memory/brainMessageProjection'
+import { decideContextScope } from '../node/contextScopeDecision'
 import { isLearnableSkillId } from '../skills'
 import {
   classifyThrownErrorToAiRunFailure
@@ -121,10 +122,17 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       }
       cache.currentState = initialState
       cache.currentUserLogAppended = false
+      const contextScope = await decideContextScope({
+        ctx,
+        state: initialState,
+        records: messageLogRecords
+      })
+      cache.contextScopeDecision = contextScope
       const brainProjection = projectBrainMessagesFromLog({
         records: messageLogRecords,
         ctx,
-        state: initialState
+        state: initialState,
+        needsHistory: contextScope.needsHistory
       })
       cache.messages = [
         new SystemMessage(buildBrainSystemPrompt({ ctx })),

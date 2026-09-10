@@ -1050,6 +1050,11 @@ export type AiRunWarningCode =
 export type RuntimeIssueCode = AiRunWarningCode
 export type RuntimeSkillId = RegisteredRuntimeSkillId
 export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_plan' | 'human_hand'
+export type ContextScopeDecisionBasis =
+  | 'gate_incomplete_run'
+  | 'gate_below_threshold'
+  | 'model_decision'
+  | 'fallback'
 export type AssistantProcessDisplay =
   | { kind: 'thinking' }
   | { kind: 'learning'; skillId: RuntimeSkillId }
@@ -1903,6 +1908,24 @@ export type ChatMessageLogAnnotationEntry =
         coveredThroughSeq: number
         sourceMessageCount: number
         summary: string
+      }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'run_digest'
+      payload: {
+        summary: string
+        filePaths: string[]
+      }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'context_scope_selected'
+      payload: {
+        needsHistory: boolean
+        basis: ContextScopeDecisionBasis
+        budgetTokens: number
+        discardThroughSeq?: number
       }
     }
   | {

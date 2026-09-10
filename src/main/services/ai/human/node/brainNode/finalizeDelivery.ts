@@ -11,6 +11,7 @@ import { emitFinalizingStarted } from '../../../events/processEvents'
 import { renderHumanFileChangeLines } from '../../shared/runtimeRenderers'
 import { resolveDeliveryLinkAccess } from '../../shared/referenceAccessMarkdown'
 import { completeHumanTask } from '../utils/stateTransitions'
+import { appendRunDigestIfPossible } from './runDigest'
 
 export const buildContentSafetyFallbackMarkdown = (state: HumanState): string =>
   [
@@ -116,6 +117,11 @@ export const finalizeDelivery = async (input: {
       linkAccess
     }
   ])
+  await appendRunDigestIfPossible({
+    ctx: input.ctx,
+    state: readyState,
+    deliveryMarkdown: input.deliveryMarkdown
+  })
   return completeDelivery({
     ctx: input.ctx,
     cache: input.cache,

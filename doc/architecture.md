@@ -95,7 +95,7 @@ AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`c
 
 **稳定结构摘要**
 
-- **Transcript 真相源**：`chat_session_message_log`（append-only，表名保留，行挂 `partner_id`）；投影若有 `compaction_checkpoint`，只保留 `seq > coveredThroughSeq`。`ai_run` 管生命周期与 UI 运行态；`ai_file_change` 管文件域，不进 brain prompt。不存在 `chat_search_turn`。清空消息记录物理删除该伙伴 log 与对应 `ai_run`。
+- **Transcript 真相源**：`chat_session_message_log`（append-only，表名保留，行挂 `partner_id`）；投影统一下界 `historyFloorSeq`（`compaction_checkpoint.coveredThroughSeq` 与 `context_scope_selected.discardThroughSeq` 取较大者），只保留 `seq > historyFloorSeq`。正常交付写 `run_digest`（一句话 + 文件路径）供任务目录。`ai_run` 管生命周期与 UI 运行态；`ai_file_change` 管文件域，不进 brain prompt。不存在 `chat_search_turn`。清空消息记录物理删除该伙伴 log 与对应 `ai_run`。
 - **Skill / Tool**：builtin skill 默认可 bind；external 需 `learn_skill`；`agent-control` 承载 `learn_skill`、`update_plan`、`read_image`。
 - **伙伴 UI 状态**：`partner_ui_state(partner_id PK)` 保存 Composer 与右侧资源工作台快照；`workbench_ui_state` 只保存 `active_view_key`（当前伙伴 id）。
 
@@ -146,7 +146,7 @@ flowchart LR
 ## 主链路
 
 1. Renderer 发起用户请求 → Main 创建 run，读取该伙伴消息记录与设置页文件地址。
-2. AI Runtime 通过 human graph 推进 `context_budget`、brain、learning、plan、hand；需要压缩时走 `context_compaction`。brain 输出最终交付。
+2. AI Runtime 判定本轮是否需要历史，再通过 human graph 推进 `context_budget`、brain、learning、plan、hand；需要压缩时走 `context_compaction`。brain 输出最终交付，并写入 `run_digest`。
 3. 需要资料时 → Retrieval（SQLite 元数据 + LanceDB 检索）。
 4. 需要本地能力时 → Tool Runtime 调用领域服务。
 5. 工作地址内写回 → 记录修改与预览，供 UI 展示和回退。

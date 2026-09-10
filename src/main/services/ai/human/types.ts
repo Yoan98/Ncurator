@@ -7,6 +7,7 @@ import type { PdfToolRuntime } from './tools/pdf/runtime'
 import type { PptToolRuntime } from './tools/ppt/types'
 import type { ExcelToolRuntime } from './tools/excel/types'
 import type { RuntimeSkillId as RegisteredRuntimeSkillId } from '../../../../shared/runtimeCapabilities'
+import type { ContextScopeDecisionBasis } from '../../../../shared/types'
 import {
   HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_SOURCES,
@@ -81,6 +82,12 @@ export type HumanState = z.infer<typeof humanStateContractSchema>
 export type FileChangeSummaryItem = z.infer<typeof fileChangeSummaryItemSchema>
 export type FileChangesSummary = z.infer<typeof fileChangesSummarySchema>
 
+export type HumanContextScopeDecision = {
+  needsHistory: boolean
+  basis: ContextScopeDecisionBasis
+  budgetTokens: number
+}
+
 export type HumanRuntimeCache = {
   familyToolsets: Partial<Record<AiToolFamilyId, StructuredToolInterface[]>>
   skillToolsets: Partial<Record<RuntimeSkillId, StructuredToolInterface[]>>
@@ -97,4 +104,5 @@ export type HumanRuntimeCache = {
   lastBrainMessageTokenEstimate?: number
   postCompactionNeedsFreshBrainUsage?: boolean
   lastBrainUsageUnavailable?: boolean
+  contextScopeDecision?: HumanContextScopeDecision
 }

@@ -28,6 +28,9 @@ export const HUMAN_GRAPH_RECURSION_LIMIT = 400
 export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 256_000
 export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8
 export const CONTEXT_COMPACTION_TAIL_RATIO = 0.1
+export const CONTEXT_SCOPE_DECISION_RATIO = 0.2
+export const RUN_DIGEST_MAX_ENTRIES = 30
+export const RUN_DIGEST_MAX_FILE_PATHS = 3
 export const HUMAN_ROUND_EXECUTION_KINDS = ['learning', 'hand'] as const
 
 export const resolveContextWindowTokens = (override?: number): number => {
@@ -42,3 +45,6 @@ export const resolveCompactionTriggerTokens = (windowTokens: number): number =>
 
 export const resolveCompactionTailTokens = (windowTokens: number): number =>
   Math.floor(resolveCompactionTriggerTokens(windowTokens) * CONTEXT_COMPACTION_TAIL_RATIO)
+
+export const resolveContextScopeDecisionTokens = (windowTokens: number): number =>
+  Math.floor(windowTokens * CONTEXT_SCOPE_DECISION_RATIO)

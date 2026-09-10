@@ -38,7 +38,7 @@ const createToolMessage = (entry: Extract<ChatMessageLogEntry, { kind: 'tool' }>
 /**
  * 把 conversation log 转成 brain 请求里的 LangChain 消息。
  * 同 run append 和新 run 投影必须走这里，避免各自 `new AIMessage` / `new ToolMessage`。
- * annotation 不进请求；合成 System / checkpoint User / 当前 build User 不走这条。
+ * annotation 不进请求；合成 System / checkpoint User / 目录 User / 当前 build User 不走这条。
  */
 export const messagesFromLogEntries = (entries: ChatMessageLogEntry[]): BaseMessage[] => {
   const messages: BaseMessage[] = []
