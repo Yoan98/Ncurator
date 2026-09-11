@@ -123,16 +123,74 @@ export {
   workbenchSelectors
 }
 
+export const dismissWorkbenchLlmConfigMissingNotification = async (page: Page): Promise<void> => {
+  const card = getWorkbenchLocator(page, workbenchSelectors.llmConfigMissingNotification)
+  if (!(await card.isVisible().catch(() => false))) return
+  await card.getByRole('button', { name: '稍后', exact: true }).click()
+  await card.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => undefined)
+}
+
+export const ensureWorkbenchContentPanelExpanded = async (page: Page): Promise<void> => {
+  const panelReady = async (): Promise<boolean> =>
+    page.evaluate((testId) => {
+      const shell = document.querySelector(`[data-testid="${testId}"]`)
+      return (
+        shell instanceof HTMLElement &&
+        shell.dataset.panelVisible === 'true' &&
+        shell.getBoundingClientRect().width > 100
+      )
+    }, workbenchSelectors.contentPanelShell)
+
+  if (await panelReady()) return
+
+  // Partner switch collapses with a short unmount delay; wait so the expand toggle reappears.
+  await page
+    .waitForFunction(
+      (testId) => {
+        const shell = document.querySelector(`[data-testid="${testId}"]`)
+        if (!(shell instanceof HTMLElement)) return true
+        return shell.dataset.panelVisible !== 'true'
+      },
+      workbenchSelectors.contentPanelShell,
+      { timeout: 5_000 }
+    )
+    .catch(() => undefined)
+
+  if (await panelReady()) return
+
+  const toggle = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
+  await toggle.waitFor({ state: 'visible', timeout: 10_000 })
+  if ((await toggle.getAttribute('aria-label')) === '展开右侧栏') {
+    await toggle.click()
+  }
+  await page.waitForFunction(
+    (testId) => {
+      const shell = document.querySelector(`[data-testid="${testId}"]`)
+      return (
+        shell instanceof HTMLElement &&
+        shell.dataset.panelVisible === 'true' &&
+        shell.getBoundingClientRect().width > 100
+      )
+    },
+    workbenchSelectors.contentPanelShell,
+    { timeout: 10_000 }
+  )
+}
+
 export const selectWorkbenchResourceMenuItem = async (
   runtime: E2ETestRuntime,
   kind: 'file' | 'browser'
 ): Promise<{ fileVisible: boolean; browserVisible: boolean }> => {
+  await dismissWorkbenchLlmConfigMissingNotification(runtime.page)
+  await ensureWorkbenchContentPanelExpanded(runtime.page)
   const initialTabCount = await getWorkbenchPrefixLocator(
     runtime.page,
     workbenchSelectors.resourceTabPrefix
   ).count()
+  const addButton = getWorkbenchLocator(runtime.page, workbenchSelectors.resourceTabAddButton)
+  await addButton.waitFor({ state: 'visible' })
   const menuWindowPromise = runtime.electronApp.waitForEvent('window')
-  await getWorkbenchLocator(runtime.page, workbenchSelectors.resourceTabAddButton).click()
+  await addButton.click()
   const menuPage = await menuWindowPromise
   await menuPage.waitForLoadState('domcontentloaded')
   const fileItem = menuPage.getByRole('menuitem', { name: '文件', exact: true })
@@ -164,10 +222,8 @@ export const openWorkbenchWorkspaceFile = async (
   fileName: string
 ): Promise<void> => {
   const { page } = runtime
-  const panelToggle = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
-  if ((await panelToggle.getAttribute('aria-label')) === '展开右侧栏') {
-    await panelToggle.click()
-  }
+  await dismissWorkbenchLlmConfigMissingNotification(page)
+  await ensureWorkbenchContentPanelExpanded(page)
   const filter = page.getByPlaceholder('筛选文件…')
   if (!(await filter.isVisible().catch(() => false))) {
     const explorerToggle = getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle)
@@ -177,9 +233,39 @@ export const openWorkbenchWorkspaceFile = async (
       await selectWorkbenchResourceMenuItem(runtime, 'file')
     }
   }
-  await page.getByPlaceholder('筛选文件…').waitFor({ state: 'visible' })
-  await page.getByPlaceholder('筛选文件…').fill(fileName)
-  await page.getByTitle(fileName, { exact: true }).click()
+  await filter.waitFor({ state: 'visible' })
+  // Clear filter so lazy-loaded parents stay visible for nested fixture paths.
+  await filter.evaluate((element) => {
+    if (!(element instanceof HTMLInputElement)) {
+      throw new Error('workspace file filter is not an input')
+    }
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(element, '')
+    element.dispatchEvent(new Event('input', { bubbles: true }))
+    element.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+
+  const exactTitle = page.getByTitle(fileName, { exact: true })
+  if (await exactTitle.isVisible().catch(() => false)) {
+    await exactTitle.click()
+    return
+  }
+
+  const segments = fileName.split(/[\\/]/u).filter(Boolean)
+  const basename = segments.at(-1) || fileName
+  let prefix = ''
+  for (const segment of segments.slice(0, -1)) {
+    prefix = prefix ? `${prefix}/${segment}` : segment
+    const folder = page.getByTitle(prefix, { exact: true }).first()
+    await folder.waitFor({ state: 'visible', timeout: 30_000 })
+    await folder.click({ force: true })
+    await page.waitForTimeout(200)
+  }
+
+  const nestedTitle = prefix ? `${prefix}/${basename}` : basename
+  const nested = page.getByTitle(nestedTitle, { exact: true })
+  await nested.waitFor({ state: 'visible', timeout: 30_000 })
+  await nested.click({ force: true })
 }
 
 const byTestId = (testId: string): string => `[data-testid="${testId}"]`
@@ -970,6 +1056,7 @@ export const createPartnerThroughWorkbenchUi = async (
   await nameInput.fill(partnerName)
   await nameInput.press('Enter')
   await waitForVisiblePartnerRow(page, partnerName)
+  await dismissWorkbenchLlmConfigMissingNotification(page)
   return partnerName
 }
 
@@ -1418,7 +1505,7 @@ export const waitForWorkbenchSearchScopeEmptyThroughUi = async (page: Page): Pro
   await page.waitForFunction(
     (testId: string) => {
       const text = document.querySelector(`[data-testid="${testId}"]`)?.textContent || ''
-      return /没有匹配项|No data/u.test(text)
+      return /没有匹配的资料|没有匹配项|No data/u.test(text)
     },
     workbenchSelectors.mentionPanel,
     { timeout: WORKBENCH_E2E_TIMEOUT_MS }

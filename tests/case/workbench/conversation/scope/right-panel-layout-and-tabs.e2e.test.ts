@@ -3,6 +3,8 @@ import { windowSelectors } from '../../../../../src/renderer/src/testing/selecto
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
+  createPartnerThroughWorkbenchUi,
+  ensureWorkbenchContentPanelExpanded,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
@@ -30,6 +32,15 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           await navigateToWorkbench(page, { waitForSessionListText: false })
+          await createPartnerThroughWorkbenchUi(page, '右侧栏布局伙伴')
+
+          // Empty-composer geometry must be measured with a partner selected and the
+          // right panel collapsed (full main-pane height). Partner create collapses it.
+          await page.waitForFunction((testId) => {
+            const shell = document.querySelector(`[data-testid="${testId}"]`)
+            return shell === null
+          }, workbenchSelectors.contentPanelShell)
+          await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
 
           const emptyLayout = await page.evaluate((selectors) => {
             const shell = document.querySelector(`[data-testid="${selectors.composerShell}"]`)
@@ -50,22 +61,13 @@ describe('workbench conversation e2e', () => {
             }
           }, workbenchSelectors)
 
-          const initialPanelToggle = getWorkbenchLocator(
-            page,
-            workbenchSelectors.contentPanelToggle
-          )
           const initialShellCount = await getWorkbenchLocator(
             page,
             workbenchSelectors.contentPanelShell
           ).count()
-          if ((await initialPanelToggle.getAttribute('aria-label')) === '展开右侧栏') {
-            await initialPanelToggle.click()
-            await page.waitForFunction((testId) => {
-              const shell = document.querySelector(`[data-testid="${testId}"]`)
-              return shell instanceof HTMLElement && shell.getBoundingClientRect().width > 100
-            }, workbenchSelectors.contentPanelShell)
-          }
 
+          await ensureWorkbenchContentPanelExpanded(page)
+          await page.waitForTimeout(300)
           const resourceMenu = await selectWorkbenchResourceMenuItem(runtime, 'browser')
           const fileMenuLabelVisible = resourceMenu.fileVisible
           const legacyFileMenuLabelCount = await page

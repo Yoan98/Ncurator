@@ -4,6 +4,7 @@ import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   appendWorkbenchInputText,
   assertNoWorkbenchFakeSignals,
+  createPartnerThroughWorkbenchUi,
   getWorkbenchLocator,
   setupWorkbenchWorkspaceOnly,
   waitForWorkbenchMentionPanelText,
@@ -32,6 +33,7 @@ describe('workbench conversation e2e', () => {
             caseId: CASE_ID,
             workspaceName: 'Workbench Mention Keyboard Workspace'
           })
+          await createPartnerThroughWorkbenchUi(page, 'Workbench Mention Keyboard Workspace')
           await appendWorkbenchInputText(page, '@')
           const mentionPanel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
           await waitForWorkbenchMentionPanelText(page)

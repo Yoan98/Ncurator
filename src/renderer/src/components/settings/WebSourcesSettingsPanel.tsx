@@ -23,11 +23,13 @@ type WebSourcesSettingsPanelProps = {
   embedded?: boolean
   hasVectorModel: boolean | null
   onVectorModelSettingsOpen: () => void
+  onSummaryChange?: (summary: WebSourceListResponse['summary']) => void
 }
 
 const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   hasVectorModel,
-  onVectorModelSettingsOpen
+  onVectorModelSettingsOpen,
+  onSummaryChange
 }) => {
   const [webSources, setWebSources] = useState<WebSourceRecord[]>([])
   const [webLoading, setWebLoading] = useState(false)
@@ -50,13 +52,14 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       const response = await window.api.webSourceList({})
       setWebSources(response.items)
       setWebSummary(response.summary)
+      onSummaryChange?.(response.summary)
     } catch (error) {
       console.error(error)
       message.error('加载网页资料失败')
     } finally {
       setWebLoading(false)
     }
-  }, [])
+  }, [onSummaryChange])
 
   useEffect(() => {
     void loadWebSources()

@@ -478,7 +478,7 @@ export function registerHandlers(services: {
     try {
       const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
       if (!currentWorkspace) throw new Error('workspace not found')
-      if (!currentWorkspace.root_path) throw new Error('????????')
+      if (!currentWorkspace.root_path) throw new Error('workspace rootPath is required')
 
       const existingRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
       const now = Date.now()
@@ -497,7 +497,7 @@ export function registerHandlers(services: {
             total_count: 0,
             processed_count: scannedEntryCount,
             failed_count: 0,
-            message: `?????????? ${scannedEntryCount} ???? ${supportedFileCount} ??????`,
+            message: `已扫描 ${scannedEntryCount} 项，发现 ${supportedFileCount} 个可索引文件`,
             updated_at: Date.now()
           })
         }
@@ -512,7 +512,7 @@ export function registerHandlers(services: {
         total_count: supportedFileCount,
         processed_count: 0,
         failed_count: 0,
-        message: `???????0/${supportedFileCount}`,
+        message: `正在比对索引 0/${supportedFileCount}`,
         updated_at: Date.now()
       })
       let lastReportedDiffCount = 0
@@ -529,7 +529,7 @@ export function registerHandlers(services: {
             total_count: totalCount,
             processed_count: processedCount,
             failed_count: 0,
-            message: `???????${processedCount}/${totalCount}`,
+            message: `正在比对索引 ${processedCount}/${totalCount}`,
             updated_at: Date.now()
           })
         }

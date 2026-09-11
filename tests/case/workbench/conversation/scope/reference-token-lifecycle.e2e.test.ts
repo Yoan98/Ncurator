@@ -280,7 +280,7 @@ describe('workbench conversation e2e', () => {
               result.tokensBeforeDelete.length === 3 &&
               result.afterDelete.length === 2 &&
               result.afterNewPartner.length === 0 &&
-              /没有匹配项|No data/u.test(result.emptyPanelText),
+              /没有匹配的资料|没有匹配项|No data/u.test(result.emptyPanelText),
             {
               name: 'workbench-reference-token-real-lifecycle',
               message:

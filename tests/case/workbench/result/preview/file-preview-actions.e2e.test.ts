@@ -15,6 +15,7 @@ import {
   prepareWorkbenchWorkspaceThroughUi,
   createPartnerThroughWorkbenchUi,
   selectWorkbenchResourceMenuItem,
+  setWorkbenchInput,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
@@ -204,12 +205,12 @@ describe('workbench result e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           await setupPreviewWorkspace(page)
-          await openWorkbenchWorkspaceFile(runtime, '深度学习.pdf')
+          await openWorkbenchWorkspaceFile(runtime, '学习笔记/深度学习.pdf')
           const pdfPageVisible = await waitForPdfPreviewPage(page)
           await page.getByRole('button', { name: '选择打开应用' }).last().click()
           await page.getByRole('menuitem', { name: '打开所在文件夹' }).last().click()
 
-          await openWorkbenchWorkspaceFile(runtime, '深度学习.docx')
+          await openWorkbenchWorkspaceFile(runtime, '学习笔记/深度学习.docx')
           const docxViewerVisible = await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
             .waitFor({ state: 'visible', timeout: 30_000 })
             .then(() => true)

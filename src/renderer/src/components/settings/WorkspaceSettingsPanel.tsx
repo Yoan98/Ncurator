@@ -52,6 +52,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const [selectedTabKey, setSelectedTabKey] = useState<'files' | 'web'>('files')
   const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null)
   const [hasVectorModel, setHasVectorModel] = useState<boolean | null>(null)
+  const [webSourceCount, setWebSourceCount] = useState(0)
   const workspaceDirectoryRequestIds = useRef<Record<string, Record<string, number>>>({})
 
   const loadWorkspaceDirectory = useCallback(
@@ -467,7 +468,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
     </div>
   )
 
-  const webCount = workspaces.reduce((sum, workspace) => sum + workspace.web_count, 0)
+  const webCount = webSourceCount
 
   return (
     <div
@@ -700,6 +701,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                     embedded
                     hasVectorModel={hasVectorModel}
                     onVectorModelSettingsOpen={() => navigate('/settings/vector')}
+                    onSummaryChange={(summary) => setWebSourceCount(summary.web_count)}
                   />
                 )
               }

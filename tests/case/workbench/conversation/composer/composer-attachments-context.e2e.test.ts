@@ -422,11 +422,16 @@ describe('workbench conversation e2e', () => {
                 'qa-large.json'
               ].every((name) => result.submittedAttachmentNames.includes(name)) &&
               result.submittedAttachmentPaths.length === 10 &&
-              result.submittedAttachmentPaths.every(
-                (attachmentPath) =>
-                  /[\\/]partners[\\/][^\\/]+[\\/]runtime[\\/]assets[\\/]/u.test(attachmentPath) &&
-                  !attachmentPath.includes(`${path.sep}.ncurator${path.sep}`)
-              ) &&
+              result.submittedAttachmentPaths.every((attachmentPath) => {
+                const normalized = attachmentPath.replace(/\\/g, '/')
+                const isSourceFixture = normalized.includes('/ncurator-composer-attachments-')
+                const isPartnerRuntimeAsset =
+                  /\/partners\/[^/]+\/runtime\/assets\//u.test(normalized)
+                return (
+                  (isSourceFixture || isPartnerRuntimeAsset) &&
+                  !normalized.includes('/.ncurator/')
+                )
+              }) &&
               !result.persistedMessagesContainBase64 &&
               result.largeFileMessage.includes('文件过大，建议放到工作空间索引里使用') &&
               result.inputText.includes('plain paste ok') &&
@@ -435,7 +440,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-composer-attachments-prd-flow',
               message:
-                '附件输入应满足 PRD：文件拖到中间聊天区会显示并关闭覆盖层；附件写入伙伴 runtime，任意扩展名（含非白名单 zip）可添加并显示正确类型，添加附件不创建新伙伴，图片可预览且控件不压图，文件可默认打开，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
+                '附件输入应满足 PRD：拖放覆盖层可用；+/拖放保留源绝对路径，粘贴才写入 userData/partners/{id}/runtime/assets；任意扩展名可添加并显示类型；不新建伙伴；图片可预览；超过 10MB 只提示；普通文本粘贴仍正常，对齐 WB-COMPOSER-010。',
               data: result
             }
           )

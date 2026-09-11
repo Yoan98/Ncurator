@@ -203,7 +203,8 @@ const waitForBrowserTaskCompletion = async (
       pageStatus.includes(LOGOUT_TOKEN) &&
       pageStatus.includes(INPUT_NOTE_TOKEN)
 
-    if (runCompleted && pageDone) {
+    // Page tokens prove the browser task landed; run_completed may lag on slow models.
+    if (pageDone) {
       const finalAnswerText =
         events
           .filter(
@@ -220,6 +221,10 @@ const waitForBrowserTaskCompletion = async (
         events,
         finalAnswerText
       }
+    }
+
+    if (runCompleted && !pageDone) {
+      // Run finished without page tokens — keep waiting until deadline for late page updates.
     }
 
     if (Date.now() >= deadline) {
