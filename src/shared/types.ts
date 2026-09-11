@@ -1052,9 +1052,11 @@ export type RuntimeSkillId = RegisteredRuntimeSkillId
 export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_plan' | 'human_hand'
 export type ContextScopeDecisionBasis =
   | 'gate_incomplete_run'
+  | 'gate_digest_unavailable'
   | 'gate_below_threshold'
   | 'model_decision'
   | 'fallback'
+export type RunDigestStatus = 'pending' | 'completed' | 'failed'
 export type AssistantProcessDisplay =
   | { kind: 'thinking' }
   | { kind: 'learning'; skillId: RuntimeSkillId }
@@ -1910,10 +1912,11 @@ export type ChatMessageLogAnnotationEntry =
         summary: string
       }
     }
-  | {
+    | {
       kind: 'annotation'
       eventType: 'run_digest'
       payload: {
+        status: RunDigestStatus
         summary: string
         fileChangePaths: string[]
       }

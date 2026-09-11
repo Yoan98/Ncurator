@@ -125,7 +125,7 @@ AI 回归测试目录：
 | `human/live/human-runtime-script-execution-live.test.ts` | `human-runtime-*-python-live` |
 | `human/live/human-legacy-doc-reading-live.test.ts` | `human-legacy-doc-*-live` |
 | `human/live/human-context-scope-decision-live.test.ts` | `human-context-scope-decision-live` |
-| `human/mock-llm/context-scope-fresh-topic.test.ts` | `context-scope-fresh-topic`、`context-scope-incomplete-run` |
+| `human/mock-llm/context-scope-fresh-topic.test.ts` | `context-scope-fresh-topic`、`context-scope-incomplete-run`、`context-scope-digest-unavailable` |
 
 AI unit / 辅助测试目录：
 
@@ -826,17 +826,26 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：上一轮正常交付并写入 `run_digest` 后，发无关新任务且上下文超过判定阈值时，主模型收到 Discard User（含上一轮用户原句）和新 user，不含历史 build。
 - Why：长期伙伴若把无关历史整段带进下一轮会浪费 token；范围判定必须在真实 graph 启动路径上生效，丢掉的召回要冻成 `conversationHistory`。
 - How：Run 1 脚本化交付周报并写 digest。Run 2 把窗口降到 200 token，脚本化 `human.context_scope` 返回 `needsHistory=false` 与 `reason`，捕获首次 brain 的拼接 user。
-- Oracle：Run 2 的 `context_scope_decided.needsHistory=false` 且带非空 `reason`，同批写有 `discard_checkpoint.conversationHistory`；brain user 含「以下是最近的会话内容」和 Run 1 用户原句，不含 `<task_catalog>`、不含历史 `<user_context>` build。
+- Oracle：Run 2 的 `context_scope_decided.needsHistory=false` 且带非空 `reason`，同批写有 `discard_checkpoint.conversationHistory`；brain user 含「以下是最近的会话内容」和 Run 1 用户原句，不含历史 build 的任务原文外壳。
 - Not：不验证真实模型的判定质量（由 `human-context-scope-decision-live` 覆盖）；不验证 compaction。
 
 ##### `context-scope-incomplete-run`
 
 - 测试类型：`backend / mock-llm`
-- What：上一轮正常交付但未写出 `run_digest` 时，下一轮走 `gate_incomplete_run`，不调判定模型。
-- Why：resume / digest 失败不能被范围判定误当成新话题。
-- How：Run 1 脚本化交付，但 `human.run_digest` 抛错；Run 2 续发。检查 annotation `basis` 与 `human.context_scope` 调用次数。
+- What：上一轮没有交付时，下一轮走 `gate_incomplete_run`，不调判定模型。
+- Why：resume / 中断不能被范围判定误当成新话题。
+- How：Run 1 在首次 brain 请求路径注入失败，不写交付；Run 2 续发。检查 annotation `basis` 与 `human.context_scope` 调用次数。
 - Oracle：Run 2 `completed`；`basis=gate_incomplete_run`；`needsHistory=true`；Run 2 没有 `human.context_scope` LLM 调用。
-- Not：不验证真实中断码文案（由 resume live 覆盖）。
+- Not：不验证真实中断码文案（由 resume live / context-scope live 覆盖）。
+
+##### `context-scope-digest-unavailable`
+
+- 测试类型：`backend / mock-llm`
+- What：上一轮正常交付但 digest 最终失败时，下一轮走 `gate_digest_unavailable`，不调判定模型，并带上历史。
+- Why：摘要失败不能丢掉已有交付，也不能被误判成全新话题。
+- How：Run 1 脚本化交付，但 `human.run_digest` 抛错并落 `failed`；Run 2 续发。检查 annotation `basis` 与 `human.context_scope` 调用次数。
+- Oracle：Run 2 `completed`；`basis=gate_digest_unavailable`；`needsHistory=true`；Run 2 没有 `human.context_scope` LLM 调用。
+- Not：不验证真实中断码文案。
 
 ##### `human-interruption-message-repair`
 
@@ -978,11 +987,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-context-scope-decision-live`
 
 - 测试类型：`backend / live`
-- What：同一伙伴连续五轮验证范围判定：相关追问保留原文、不合成 Discard User 且跨 run 前缀缓存命中；无关新任务写入 `conversationHistory` 并合成 Discard User；丢掉后再续做复用同一份 Discard User 且命中前缀缓存；再丢一次时判定只看到新话题 digest，交付仍能带出旧关键词。Run 1 前先写入一轮已完成对话和一轮无 `run_digest` 的中断对话；丢掉时失败轮原话不得配进召回，失败轮之前已完成的那轮必须在召回里。
-- Why：用户不管理会话，真实模型必须在同一窗口里把续做、换题、丢掉后再续做和再提旧任务四条路径走对；`conversationHistory` 必须冻字节，否则下一轮 true 会打穿前缀缓存。失败后下一轮已正常交付再丢掉时，召回不得把失败轮原话和成功轮交付捆在一起，也不得把失败轮前面已经完成的一轮一起丢掉。
-- How：把 `modelContextWindowTokens` 收到 2000，使判定阈值约 400 token，短问答交付后即可触发判定模型。Run 1 前向该伙伴 log 先写入一轮带 digest 的已完成对话（独特标记 `PRIOR-DONE-91`），再写入一轮无 digest 的中断对话（独特标记 `INTERRUPTED-TASK-77`，只写 log，不向模型发「停」）。Run 1 留下关键词并交付；Run 2 相关缩短；Run 3 完全无关的法国首都；Run 4 追问巴黎；Run 5 再问 Run 1 的关键词。检查各轮 `context_scope_decided`（模型判定须带 `reason`）/ `discard_checkpoint.conversationHistory` 的 `用户：` 行、首次 `human.brain` 的 `requestWire` 消息结构、Run 2 / Run 4 跨 run 前缀缓存，以及 Run 5 交付。不把 compaction 塞进这条 live。不断言交付全文不得出现中断标记（下一轮主模型看见失败轮后，交付里提一句这个词不算配段错误）。
-- Oracle：五轮均 `completed`。Run 2 `needsHistory=true`，首次 brain 含 Run 1 原文、末尾为新 user、**无** Discard User，且 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。Run 3 `needsHistory=false` 且 `conversationHistory` 的 `用户：` 行依次为已完成轮、Run 1、Run 2 原话（**不含**中断轮用户原话），首次 brain 含「以下是最近的会话内容」、不含 `<task_catalog>`。Run 4 `needsHistory=true`，Discard User 字节与 Run 3 相同，且对 Run 3 首次 brain 前缀缓存命中。Run 5 `needsHistory=false`（判定只看到法国 digest），新 `conversationHistory` 的 `用户：` 行依次为已完成轮、Run 1～4 原话（不得把 Run 1 原话和 Run 4 交付捆成一段，亦不得含中断轮用户原话），交付含 Run 1 关键词。`basis=model_decision` 的 `context_scope_decided` 须有非空 `reason`；不钉死 `reason` 文案。
-- Not：不验证 UI；不要求固定工具；不验证 compaction（Discard User 进压缩由 unit 锁死）；中断门控由 `context-scope-incomplete-run` mock-llm 覆盖。
+- What：同一伙伴连续七轮走真实发送路径，验证 Discard / digest / 参考召回闭环。1 带参考资料的短任务完成；2 真实 provider 故障中断、无交付无 digest；3 恢复后正常交付；4 相关缩短且跨 run 前缀缓存命中；5 无关新题 discard，召回含失败前完成轮、失败轮固定文案、恢复后轮和相关追问，失败轮不得配下一轮交付；6 includeDiscard 只读冻结正文并命中前缀缓存；7 再提更早轮，判定只看 floor 以上近期任务，再次 discard 后完整召回仍正确。
+- Why：用户不管理会话，真实模型必须把续做、中断恢复、换题丢掉、丢掉后再续做和再提旧任务走对；`conversationHistory` 必须按真实 `runId` 分段并冻字节。失败轮只在 discard 时收成「用户原句 + 参考 + 运行失败，没有交付」。
+- How：把 `modelContextWindowTokens` 收到 3500，使范围判定仍会过阈值，同时 discard 10% 窗口够装下失败前完成轮到相关追问。每次发送使用独立生产式 `runId`。不得 `appendBatch` 伪造 user/assistant/digest/失败或完成状态，不得脚本化 `human.context_scope` / `human.run_digest` / `human.brain` 输出。唯一测试 override 是已批准的真实 provider 请求故障注入（对齐 `human-partner-resume-with-new-selection-live`）。硬断言只验证 run 状态、`context_scope_decided`/`reason`、真实 LLM I/O、`conversationHistory` 结构、参考资料、失败提示与前缀缓存；不按最终回答的额外措辞判失败。
+- Oracle：七轮除中断轮外均 `completed`；中断轮为 `llm_request_failed` 且无交付/digest。Run 4 `needsHistory=true`，首次 brain 含上一轮原文、末尾为新 user、**无** Discard User，且跨 run 前缀缓存命中。Run 5 `needsHistory=false`，`conversationHistory` 依次包含失败前完成轮、失败轮（交付固定为「运行失败，没有交付」）、恢复后完成轮和相关追问；失败轮不得配下一轮交付；首次 brain 含「以下是最近的会话内容」。Run 6 `needsHistory=true`，Discard User 字节与 Run 5 相同且前缀缓存命中。Run 7 判定只看到 floor 以上近期任务（不含更早轮关键词）；再次 discard 按窗口 10% 从新到旧装入，完整召回仍含失败轮与 discard 之后的完成轮。`basis=model_decision` 须有非空 `reason`。
+- Not：不验证 UI；不要求固定工具；不验证 compaction；不因模型交付多说一句失败。
 
 ##### `human-skill-eviction-relearn-loop-live`
 

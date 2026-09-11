@@ -101,7 +101,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：真实文件检查、网页检查和网页更新索引在程序关闭时被中断，重启后任务退出执行中状态并收敛为失败。
 - Why：后台任务若在进程退出后永久保持 running，会残留执行中状态并给用户错误进度。
 - How：通过 Settings UI 对 25,000 个真实文件启动检查；再对延迟响应的本地真实网页分别启动检查和更新索引；每次在进度可见时关闭并复用同一用户目录重启应用。
-- Oracle：文件检查退出执行中状态、按钮恢复且 job 为失败，对齐 `SET-WORKSPACE-003-AC4`；网页检查 job 为失败，对齐 `SET-WEB-003-AC4`；网页索引 job 与执行中的网页均收敛为失败，对齐 `SET-WEB-004-AC6`。
+- Oracle：文件检查退出执行中状态、「检查更新」按钮恢复可点且 job 为失败，对齐 `SET-WORKSPACE-003-AC4`（「更新索引」可因无向量模型或无可索引文件保持禁用，不纳入本断言）；网页检查 job 为失败，对齐 `SET-WEB-003-AC4`；网页索引 job 与执行中的网页均收敛为失败，对齐 `SET-WEB-004-AC6`。
 - Not：只读 SQLite 查询用于确认已触发任务的最终状态，不写数据库、不伪造 running job；文件「更新索引」进程中断后 job 与文件收敛为失败（`SET-WORKSPACE-004-AC5`）由 unit `workspace-interrupted-job-recovery-contract` / `workspace-index-job-store-contract` 覆盖，本 E2E 不跑文件更新索引中断。
 
 ### 3.3 `workspace / files`

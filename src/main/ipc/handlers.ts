@@ -11,9 +11,11 @@ import { ModelService } from '../services/model/ModelService'
 import { VectorModelDownloadService } from '../services/model/VectorModelDownloadService'
 import { fetchLlmRemoteModels } from '../services/llm/modelCatalog'
 import { FreeModelCatalogService } from '../services/llm/FreeModelCatalogService'
+import { PresetModelCatalogService } from '../services/llm/PresetModelCatalogService'
 import { validateLlmConfigForSave } from '../services/llm/configGuard'
 import { AttachmentService } from '../services/attachments/AttachmentService'
 import { isModelSource } from '../../shared/modelSources'
+import { emptyPresetModelsSnapshot } from '../../shared/llmPresets'
 import { ChatRunService } from '../services/ai/ChatRunService'
 import { ScheduledTaskService } from '../services/scheduler/ScheduledTaskService'
 import { AiRunResourceManager } from '../services/ai/run/AiRunResourceManager'
@@ -211,7 +213,7 @@ export function registerOpenExternalHandler(): void {
     try {
       const parsed = new URL(String(url))
       if (!['http:', 'https:'].includes(parsed.protocol)) {
-        return { success: false, error: '??? http/https URL' }
+        return { success: false, error: '仅支持 http/https URL' }
       }
       await shell.openExternal(parsed.toString())
       return { success: true }
@@ -584,7 +586,7 @@ export function registerHandlers(services: {
         phase: 'complete',
         total_count: nextRecords.length,
         processed_count: nextRecords.length,
-        message: `??????? ${diff.added.length}??? ${diff.changed.length}??? ${diff.removed.length}`,
+        message: `检查完成，新增 ${diff.added.length}，变更 ${diff.changed.length}，移除 ${diff.removed.length}`,
         updated_at: Date.now(),
         finished_at: Date.now()
       })
@@ -687,7 +689,7 @@ export function registerHandlers(services: {
     try {
       const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
       if (!currentWorkspace) throw new Error('workspace not found')
-      if (!currentWorkspace.root_path) throw new Error('????????')
+      if (!currentWorkspace.root_path) throw new Error('请先设置工作目录')
 
       const prepareStartedAt = Date.now()
       const { targets, recordMap, added, updated, removed } = await collectFilePrepareTargets({
@@ -698,7 +700,7 @@ export function registerHandlers(services: {
       job = await updateAndEmitWorkspaceIndexJob(job, {
         total_count: targets.length,
         target_ids: targets.map((record) => record.id),
-        message: `???? ${targets.length} ???`,
+        message: `准备更新 ${targets.length} 个文件`,
         updated_at: Date.now()
       })
 
@@ -720,7 +722,7 @@ export function registerHandlers(services: {
         const currentRecord = recordMap.get(target.relative_path) || target
         const documentId = currentRecord.document_id || uuidv4()
         job = await updateAndEmitWorkspaceIndexJob(job, {
-          message: `???? ${processed + 1}/${targets.length}?${currentRecord.relative_path}`,
+          message: `正在处理 ${processed + 1}/${targets.length}：${currentRecord.relative_path}`,
           updated_at: Date.now()
         })
         try {
@@ -786,7 +788,7 @@ export function registerHandlers(services: {
         job = await updateAndEmitWorkspaceIndexJob(job, {
           processed_count: processed,
           failed_count: failed,
-          message: `??? ${processed}/${targets.length}`,
+          message: `已处理 ${processed}/${targets.length}`,
           updated_at: Date.now()
         })
       }
@@ -796,8 +798,8 @@ export function registerHandlers(services: {
         phase: 'complete',
         message:
           failed > 0
-            ? `??????? ${failed} ???? ${added}??? ${updated}??? ${removed}`
-            : `??????? ${added}??? ${updated}??? ${removed}`,
+            ? `索引完成，失败 ${failed} 个；新增 ${added}，变更 ${updated}，移除 ${removed}`
+            : `索引完成；新增 ${added}，变更 ${updated}，移除 ${removed}`,
         updated_at: Date.now(),
         finished_at: Date.now()
       })
@@ -1210,7 +1212,7 @@ export function registerHandlers(services: {
       job = await updateAndEmitWorkspaceIndexJob(job, {
         total_count: sources.length,
         target_ids: sources.map((source) => source.id),
-        message: `???? ${sources.length} ???`,
+        message: `准备检查 ${sources.length} 个网页`,
         updated_at: Date.now()
       })
       let processed = 0
@@ -1226,7 +1228,7 @@ export function registerHandlers(services: {
         job = await updateAndEmitWorkspaceIndexJob(job, {
           processed_count: processed,
           failed_count: failed,
-          message: `??? ${processed}/${sources.length}`,
+          message: `已检查 ${processed}/${sources.length}`,
           updated_at: Date.now()
         })
         emitSourceListRefresh(input.sender)
@@ -1235,7 +1237,7 @@ export function registerHandlers(services: {
       await updateAndEmitWorkspaceIndexJob(job, {
         status: failed > 0 ? 'failed' : 'succeeded',
         phase: 'complete',
-        message: failed > 0 ? `??????? ${failed} ?` : '????',
+        message: failed > 0 ? `检查完成，失败 ${failed} 个` : '检查完成',
         updated_at: Date.now(),
         finished_at: Date.now()
       })
@@ -1276,8 +1278,8 @@ export function registerHandlers(services: {
         target_ids: targets.map((source) => source.id),
         message:
           targets.length > 0
-            ? `?? 1/2 ?????0/${targets.length}`
-            : '?? 2/2 ?????????',
+            ? `步骤 1/2 抓取网页：0/${targets.length}`
+            : '步骤 2/2 建立索引：无需处理',
         updated_at: Date.now()
       })
 
@@ -1305,7 +1307,7 @@ export function registerHandlers(services: {
           job = await updateAndEmitWorkspaceIndexJob(job, {
             processed_count: crawlProcessed,
             failed_count: crawlFailed,
-            message: `?? 1/2 ?????${crawlProcessed}/${targets.length}`,
+            message: `步骤 1/2 抓取网页：${crawlProcessed}/${targets.length}`,
             updated_at: Date.now()
           })
         }
@@ -1320,7 +1322,7 @@ export function registerHandlers(services: {
         processed_count: 0,
         failed_count: 0,
         target_ids: crawledSources.map((item) => item.source.id),
-        message: `?? 2/2 ?????0/${crawledSources.length}`,
+        message: `步骤 2/2 建立索引：0/${crawledSources.length}`,
         updated_at: Date.now()
       })
 
@@ -1346,7 +1348,7 @@ export function registerHandlers(services: {
           job = await updateAndEmitWorkspaceIndexJob(job, {
             processed_count: indexProcessed,
             failed_count: indexFailed,
-            message: `?? 2/2 ?????${indexProcessed}/${crawledSources.length}`,
+            message: `步骤 2/2 建立索引：${indexProcessed}/${crawledSources.length}`,
             updated_at: Date.now()
           })
         }
@@ -1360,7 +1362,7 @@ export function registerHandlers(services: {
         total_count: targets.length,
         processed_count: targets.length,
         failed_count: totalFailed,
-        message: totalFailed > 0 ? `????????? ${totalFailed} ?` : '??????',
+        message: totalFailed > 0 ? `网页索引完成，失败 ${totalFailed} 个` : '网页索引完成',
         updated_at: Date.now(),
         finished_at: Date.now()
       })
@@ -1393,7 +1395,7 @@ export function registerHandlers(services: {
       try {
         await ensureWebSourcesHydrated()
         const rawUrl = String(payload?.url || '').trim()
-        if (!rawUrl) throw new Error('URL ????')
+        if (!rawUrl) throw new Error('URL 不能为空')
         const { url, normalizedUrl } = webSourceService.normalizeUrl(rawUrl)
         const existing = await webSourceStore.getWebSourceByNormalizedUrl(normalizedUrl)
         const source =
@@ -1608,8 +1610,8 @@ export function registerHandlers(services: {
       const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id, 'directory')
       if (e2eSelectedPath) return { canceled: false, path: e2eSelectedPath }
       const dialogOptions: OpenDialogOptions = {
-        title: '????????',
-        buttonLabel: '?????',
+        title: '选择工作空间目录',
+        buttonLabel: '选择此目录',
         properties: ['openDirectory', 'createDirectory', 'dontAddToRecent']
       }
       let result
@@ -1635,8 +1637,8 @@ export function registerHandlers(services: {
       const e2eSelectedPath = takeE2ENativeDialogSelection(event.sender.id, 'file')
       if (e2eSelectedPath) return { canceled: false, path: e2eSelectedPath }
       const dialogOptions: OpenDialogOptions = {
-        title: '????',
-        buttonLabel: '??',
+        title: '打开文件',
+        buttonLabel: '打开',
         defaultPath: String(defaultPath || '').trim() || undefined,
         properties: ['openFile', 'dontAddToRecent']
       }
@@ -1658,14 +1660,14 @@ export function registerHandlers(services: {
         const partnerId = String(payload?.partnerId || '').trim()
         const assetBucketId = String(payload?.assetBucketId || '').trim()
         if (!partnerId) {
-          return { canceled: true, items: [], error: '??????' }
+          return { canceled: true, items: [], error: '请先选择伙伴' }
         }
         if (!assetBucketId) {
-          return { canceled: true, items: [], error: '??????????????' }
+          return { canceled: true, items: [], error: '附件目录不存在，无法保存附件' }
         }
         const dialogOptions: OpenDialogOptions = {
-          title: '????',
-          buttonLabel: '????',
+          title: '选择附件',
+          buttonLabel: '选择附件',
           properties: ['openFile', 'multiSelections', 'dontAddToRecent']
         }
         const ownerWindow = BrowserWindow.fromWebContents(event.sender)
@@ -1720,7 +1722,7 @@ export function registerHandlers(services: {
           payload?.bytes instanceof Uint8Array
             ? payload.bytes
             : new Uint8Array(payload?.bytes || [])
-        if (!bytes.byteLength) return { success: false, error: '??????' }
+        if (!bytes.byteLength) return { success: false, error: '附件内容为空' }
         const attachment = await attachmentService.saveAttachment({
           partnerId: payload.partnerId,
           assetBucketId: payload.assetBucketId,
@@ -1755,7 +1757,7 @@ export function registerHandlers(services: {
       try {
         const rootPath = String(payload.rootPath || '').trim()
         if (!rootPath) {
-          return { success: false, error: '??????????' }
+          return { success: false, error: '工作空间地址不能为空' }
         }
         const existingWorkspaces = await workspaceStore.listWorkspaces()
         const classified = await workspaceService.classifyCandidateRoot(
@@ -1765,14 +1767,14 @@ export function registerHandlers(services: {
         if (classified.sameAsExisting) {
           return {
             success: false,
-            error: '??????',
+            error: '该地址已存在',
             conflict: { reason: 'exists', existingPaths: [classified.normalizedRootPath] }
           }
         }
         if (classified.nestedUnderExisting) {
           return {
             success: false,
-            error: '????????????????',
+            error: '不能添加已包含在现有地址内的路径',
             conflict: {
               reason: 'nested',
               existingPaths: classified.nestedUnderExistingRootPaths
@@ -1810,7 +1812,7 @@ export function registerHandlers(services: {
             phase: 'scan',
             stepIndex: 1,
             stepTotal: 2,
-            message: '?????????? 0 ???? 0 ??????'
+            message: '正在扫描目录：已扫描 0 项，发现 0 个可索引文件'
           })
         )
         activeWorkspaceIndexJobs.add(jobKey)
@@ -1848,7 +1850,7 @@ export function registerHandlers(services: {
         const workspaceId = String(payload?.workspaceId || '').trim()
         const rootPath = String(payload?.rootPath || '').trim()
         if (!workspaceId) return { success: false, error: 'workspaceId is required' }
-        if (!rootPath) return { success: false, error: '????????' }
+        if (!rootPath) return { success: false, error: '文件目录不能为空' }
 
         const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
         if (!currentWorkspace) {
@@ -1862,10 +1864,10 @@ export function registerHandlers(services: {
             .map((workspace) => workspace.root_path)
         )
         if (classified.sameAsExisting) {
-          return { success: false, error: '??????' }
+          return { success: false, error: '该地址已存在' }
         }
         if (classified.nestedUnderExisting) {
-          return { success: false, error: '??????????????????????' }
+          return { success: false, error: '不能把工作空间设置到已包含在现有地址内的路径' }
         }
         for (const workspace of existingWorkspaces) {
           if (workspace.id === workspaceId) continue
@@ -1879,7 +1881,7 @@ export function registerHandlers(services: {
         }
 
         const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
-        if (activeJob) return { success: false, error: '??????????????' }
+        if (activeJob) return { success: false, error: '当前工作空间正在处理文件索引' }
         const normalizedRootPath = classified.normalizedRootPath
         const now = Date.now()
         const oldRecords = await workspaceStore.listWorkspaceFileIndexRecords(workspaceId)
@@ -1903,7 +1905,7 @@ export function registerHandlers(services: {
             phase: 'scan',
             stepIndex: 1,
             stepTotal: 1,
-            message: '????????'
+            message: '正在扫描工作目录'
           })
         )
         activeWorkspaceIndexJobs.add(jobKey)
@@ -1960,7 +1962,7 @@ export function registerHandlers(services: {
       try {
         const workspaceId = String(payload?.workspaceId || '').trim()
         const workspace = await workspaceStore.getWorkspaceById(workspaceId)
-        if (!workspace?.root_path) return { items: [], total: 0, error: '???????????' }
+        if (!workspace?.root_path) return { items: [], total: 0, error: '当前工作区没有文件目录' }
         const items = await workspaceService.listDirectory({
           workspaceId,
           rootPath: workspace.root_path,
@@ -1996,7 +1998,7 @@ export function registerHandlers(services: {
           return { success: false, error: 'workspace not found' }
         }
         if (!currentWorkspace.root_path) {
-          return { success: false, error: '????????' }
+          return { success: false, error: '请先设置工作目录' }
         }
 
         const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')
@@ -2013,7 +2015,7 @@ export function registerHandlers(services: {
             phase: 'scan',
             stepIndex: 1,
             stepTotal: 2,
-            message: '?????????? 0 ???? 0 ??????'
+            message: '正在扫描目录：已扫描 0 项，发现 0 个可索引文件'
           })
         )
         activeWorkspaceIndexJobs.add(jobKey)
@@ -2040,7 +2042,7 @@ export function registerHandlers(services: {
           return { success: false, error: 'workspace not found' }
         }
         if (!currentWorkspace.root_path) {
-          return { success: false, error: '????????' }
+          return { success: false, error: '请先设置工作目录' }
         }
 
         const jobKey = getWorkspaceIndexJobKey(workspaceId, 'file')
@@ -2057,7 +2059,7 @@ export function registerHandlers(services: {
             phase: 'index',
             stepIndex: 1,
             stepTotal: 1,
-            message: '????????'
+            message: '正在准备文件索引'
           })
         )
         activeWorkspaceIndexJobs.add(jobKey)
@@ -2129,7 +2131,7 @@ export function registerHandlers(services: {
             phase: 'scan',
             stepIndex: 1,
             stepTotal: 1,
-            message: '????????'
+            message: '正在检查网页更新'
           })
         )
         activeWorkspaceIndexJobs.add(jobKey)
@@ -2162,7 +2164,7 @@ export function registerHandlers(services: {
             phase: 'crawl',
             stepIndex: 1,
             stepTotal: 2,
-            message: '????????'
+            message: '正在准备网页索引'
           })
         )
         activeWorkspaceIndexJobs.add(jobKey)
@@ -2310,7 +2312,7 @@ export function registerHandlers(services: {
           return {
             success: false,
             conflict: result.conflict,
-            error: result.error || '????'
+            error: result.error || '写入失败'
           }
         }
         return { success: true, hash: result.hash }
@@ -2812,7 +2814,7 @@ export function registerHandlers(services: {
     async (_event, payload: PartnerCreateRequest): Promise<PartnerCreateResponse> => {
       try {
         const name = String(payload?.name || '').trim()
-        if (!name) return { success: false, error: '???????' }
+        if (!name) return { success: false, error: '请填写伙伴名称' }
         const now = Date.now()
         const partner: Partner = {
           id: uuidv4(),
@@ -2841,10 +2843,10 @@ export function registerHandlers(services: {
       try {
         const id = String(payload?.id || '').trim()
         const name = String(payload?.name || '').trim()
-        if (!id) return { success: false, error: '?????' }
-        if (!name) return { success: false, error: '???????' }
+        if (!id) return { success: false, error: '伙伴不存在' }
+        if (!name) return { success: false, error: '请填写伙伴名称' }
         const existing = await partnerStore.getPartner(id)
-        if (!existing) return { success: false, error: '?????' }
+        if (!existing) return { success: false, error: '伙伴不存在' }
         const partner: Partner = {
           ...existing,
           name,
@@ -3085,7 +3087,7 @@ export function registerHandlers(services: {
     async (_event, id: string): Promise<LlmModelListResponse> => {
       try {
         const config = await llmStore.getById(String(id || '').trim())
-        if (!config) return { success: false, items: [], error: '?????' }
+        if (!config) return { success: false, items: [], error: '配置不存在' }
         return await fetchLlmRemoteModels(config)
       } catch (e: unknown) {
         console.error('[LLM-CONFIG-MODEL-LIST] Error:', e)
@@ -3122,6 +3124,34 @@ export function registerHandlers(services: {
     }
   })
 
+  ipcMain.handle('preset-models-get', async (_event, options?: { refreshIfStale?: boolean }) => {
+    try {
+      return await PresetModelCatalogService.getInstance().getSnapshot({
+        refreshIfStale: options?.refreshIfStale === true
+      })
+    } catch (e: unknown) {
+      console.error('[PRESET-MODELS-GET] Error:', e)
+      return emptyPresetModelsSnapshot()
+    }
+  })
+
+  ipcMain.handle('preset-models-refresh', async () => {
+    try {
+      return {
+        success: true as const,
+        snapshot: await PresetModelCatalogService.getInstance().refresh()
+      }
+    } catch (e: unknown) {
+      console.error('[PRESET-MODELS-REFRESH] Error:', e)
+      const snapshot = await PresetModelCatalogService.getInstance().getSnapshot()
+      return {
+        success: false as const,
+        snapshot,
+        error: getErrorMessage(e)
+      }
+    }
+  })
+
   ipcMain.handle('ai-runtime-settings-get', async () => {
     try {
       return await aiRuntimeSettingsStore.get()
@@ -3145,7 +3175,7 @@ export function registerHandlers(services: {
   })
 
   ipcMain.handle('error-log-open-directory', async () => {
-    if (!errorLogService) return { success: false, error: '??????????' }
+    if (!errorLogService) return { success: false, error: '错误日志服务未初始化' }
     try {
       errorLogService.ensureDirectory()
       const error = await shell.openPath(errorLogService.getDirectoryPath())

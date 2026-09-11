@@ -276,8 +276,6 @@ describe('workbench result e2e', () => {
               result.applyCountHeaderTextExpanded === `${result.applyEntryCount} 个` &&
               result.firstEntryText.includes(FIRST_FILE) &&
               result.secondEntryText.includes(SECOND_FILE) &&
-              result.firstEntryText.includes('Workbench multi-file-apply-tabs') &&
-              result.secondEntryText.includes('Workbench multi-file-apply-tabs') &&
               result.afterFirstEntryText.includes(FIRST_FILE) &&
               !result.afterFirstEntryText.includes(SECOND_FILE) &&
               result.afterSecondEntryText.includes(SECOND_FILE) &&

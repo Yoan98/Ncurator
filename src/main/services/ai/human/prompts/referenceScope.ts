@@ -40,6 +40,25 @@ const renderAttachment = (attachment: ChatAttachment, index: number): string => 
 - 路径：${attachment.path}`
 }
 
+export const renderCompactReferenceItem = (name: string, address: string): string => {
+  const trimmedName = name.trim() || '未命名'
+  const trimmedAddress = address.trim()
+  return trimmedAddress ? `${trimmedName}（${trimmedAddress}）` : trimmedName
+}
+
+export const renderCompactReferenceScope = (scope: AiReferenceScope): string => {
+  const items: string[] = []
+  for (const reference of scope.selectedReferences || []) {
+    items.push(
+      renderCompactReferenceItem(reference.name, getReferenceResourceAddress(reference))
+    )
+  }
+  for (const attachment of scope.attachments || []) {
+    items.push(renderCompactReferenceItem(attachment.name, attachment.path))
+  }
+  return items.join('、')
+}
+
 export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
   const selectedReferences = scope.selectedReferences || []
   const attachments = scope.attachments || []

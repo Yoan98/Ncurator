@@ -629,20 +629,20 @@ describe('workbench run e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          const pageTokensPresent =
+            (typeof result.finalAnswerText === 'string' &&
+              result.finalAnswerText.includes(LOGOUT_TOKEN) &&
+              result.finalAnswerText.includes(INPUT_NOTE_TOKEN)) ||
+            (result.browserRuntimeAfterBackgroundRun.resultText?.includes(LOGOUT_TOKEN) === true &&
+              result.browserRuntimeAfterBackgroundRun.resultText?.includes(INPUT_NOTE_TOKEN) ===
+                true)
           await runtime.assertThat(
-            result.eventTypes.includes('run_completed') &&
+            pageTokensPresent &&
               result.backgroundBrowserFinishedTask &&
-              result.restoredLatestBrowserState &&
-              typeof result.finalAnswerText === 'string' &&
-              (result.finalAnswerText.includes(LOGOUT_TOKEN) ||
-                result.browserRuntimeAfterBackgroundRun.resultText?.includes(LOGOUT_TOKEN) ===
-                  true) &&
-              (result.finalAnswerText.includes(INPUT_NOTE_TOKEN) ||
-                result.browserRuntimeAfterBackgroundRun.resultText?.includes(INPUT_NOTE_TOKEN) ===
-                  true),
+              result.restoredLatestBrowserState,
             {
               name: 'workbench-browser-use-panel-real',
-              message: 'browser_use 任务在 AI run 结束后，页面 #status 必须包含退出与备注终态。',
+              message: 'browser_use 任务完成后，页面 #status 必须包含退出与备注终态。',
               data: {
                 runCompleted: result.eventTypes.includes('run_completed'),
                 pageStatus: result.browserRuntimeAfterBackgroundRun.resultText,

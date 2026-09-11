@@ -17,13 +17,11 @@ export const buildContextScopeDecisionPrompt = (input: {
 }): { system: string; user: string } => ({
   system: CONTEXT_SCOPE_SYSTEM_PROMPT,
   user: [
-    '<completed_run_digests>',
+    '近期任务：',
     input.digestText.trim() || '无',
-    '</completed_run_digests>',
     '',
-    '<new_task_goal>',
-    input.taskGoal.trim() || '无',
-    '</new_task_goal>'
+    '新诉求：',
+    input.taskGoal.trim() || '无'
   ].join('\n')
 })
 
@@ -34,17 +32,14 @@ export const RUN_DIGEST_SYSTEM_PROMPT = `你是任务摘要助手。把这一轮
 export const buildRunDigestPrompt = (input: {
   userInput: string
   deliveryMarkdown: string
-}): { system: string; user: string } => ({
-  system: RUN_DIGEST_SYSTEM_PROMPT,
-  user: [
-    '<user_input>',
-    input.userInput.trim() || '无',
-    '</user_input>',
-    '',
-    '<delivery>',
-    input.deliveryMarkdown.trim() || '无',
-    '</delivery>',
-    '',
-    '用一句话概括这一轮完成了什么。'
-  ].join('\n')
-})
+  compactReferences?: string
+}): { system: string; user: string } => {
+  const lines = [`用户：${input.userInput.trim() || '无'}`]
+  const compactReferences = input.compactReferences?.trim()
+  if (compactReferences) lines.push(`参考：${compactReferences}`)
+  lines.push(`交付：${input.deliveryMarkdown.trim() || '无'}`)
+  return {
+    system: RUN_DIGEST_SYSTEM_PROMPT,
+    user: lines.join('\n')
+  }
+}

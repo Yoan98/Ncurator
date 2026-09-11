@@ -50,6 +50,7 @@ import {
   pickFallbackWorkbenchModel,
   resolveSelectedWorkbenchModel
 } from '../../../shared/workbenchModelSelection'
+import type { LlmPresetProvider } from '../../../shared/llmPresets'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
 import { normalizeUserFacingError } from '../utils/userFacingError'
@@ -787,6 +788,7 @@ const ChatPage: React.FC = () => {
   const [assetBucketId, setAssetBucketId] = useState<string | null>(null)
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
   const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
+  const [presetProviders, setPresetProviders] = useState<LlmPresetProvider[]>([])
   const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false)
   const [modelListsByConfigId, setModelListsByConfigId] = useState<
     Record<string, LlmRemoteModel[]>
@@ -1943,15 +1945,22 @@ const ChatPage: React.FC = () => {
 
   const loadModelConfigs = useCallback(async (): Promise<void> => {
     try {
-      const [list, freeSnapshot] = await Promise.all([
+      const [list, freeSnapshot, presetSnapshot] = await Promise.all([
         window.api.llmConfigList(),
         window.api.freeModelsGet().catch(() => ({
           updatedAt: null,
           fetchedAt: null,
           models: []
+        })),
+        window.api.presetModelsGet().catch(() => ({
+          updatedAt: null,
+          fetchedAt: null,
+          providers: [] as LlmPresetProvider[]
         }))
       ])
       const freeModels = freeSnapshot.models
+      const nextPresetProviders = presetSnapshot.providers
+      setPresetProviders(nextPresetProviders)
       setModelConfigs(list)
       if (list.length === 0) {
         setModelListsByConfigId({})
@@ -1962,12 +1971,14 @@ const ChatPage: React.FC = () => {
             configs: [],
             modelListsByConfigId: {},
             selected: model,
-            freeModels
+            freeModels,
+            presetProviders: nextPresetProviders
           })
         const firstModel = pickFallbackWorkbenchModel({
           configs: [],
           modelListsByConfigId: {},
-          freeModels
+          freeModels,
+          presetProviders: nextPresetProviders
         })
         const nextSelection: WorkbenchModelSelection = {
           mainModel: resolveModel(modelSelectionRef.current.mainModel) || firstModel
@@ -1998,12 +2009,14 @@ const ChatPage: React.FC = () => {
           configs: list,
           modelListsByConfigId: nextLists,
           selected: model,
-          freeModels
+          freeModels,
+          presetProviders: nextPresetProviders
         })
       const firstModel = pickFallbackWorkbenchModel({
         configs: list,
         modelListsByConfigId: nextLists,
-        freeModels
+        freeModels,
+        presetProviders: nextPresetProviders
       })
       const nextSelection: WorkbenchModelSelection = {
         mainModel: resolveModel(modelSelectionRef.current.mainModel) || firstModel
@@ -2013,6 +2026,7 @@ const ChatPage: React.FC = () => {
     } catch (error) {
       console.error('Failed to load llm configs', error)
       setModelConfigs([])
+      setPresetProviders([])
       setModelListsByConfigId({})
       setModelSelection({ mainModel: null })
     } finally {
@@ -2047,11 +2061,13 @@ const ChatPage: React.FC = () => {
       resolveSelectedWorkbenchModel({
         configs: modelConfigs,
         modelListsByConfigId,
-        selected
+        selected,
+        presetProviders
       })
     const fallback = pickFallbackWorkbenchModel({
       configs: modelConfigs,
-      modelListsByConfigId
+      modelListsByConfigId,
+      presetProviders
     })
     const nextSelection: WorkbenchModelSelection = {
       mainModel: resolveModel(modelSelection.mainModel) || fallback
@@ -2069,7 +2085,8 @@ const ChatPage: React.FC = () => {
     modelConfigs,
     modelListsByConfigId,
     modelSelection,
-    persistUiStateForKey
+    persistUiStateForKey,
+    presetProviders
   ])
 
   useEffect(() => {

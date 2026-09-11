@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest'
 import { SystemMessage } from '@langchain/core/messages'
 import type {
   ChatMessageLogEntry,
-  ChatMessageLogRecord
+  ChatMessageLogRecord,
+  ChatMessageLogUserContext,
+  RunDigestStatus
 } from '../../../../src/shared/types'
 import { projectBrainMessagesFromLog } from '../../../../src/main/services/ai/human/memory/brainMessageProjection'
 import {
   assembleConversationHistory,
   collectRunDigests,
+  FAILED_RUN_DELIVERY_TEXT,
   renderRunDigests
 } from '../../../../src/main/services/ai/human/memory/runDigestCatalog'
 import {
@@ -29,24 +32,31 @@ import {
 } from '../../../../src/main/services/ai/human/node/brainNode/runDigest'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import { buildBrainSystemPrompt } from '../../../../src/main/services/ai/human/prompts/brain'
-import { buildContextScopeDecisionPrompt } from '../../../../src/main/services/ai/human/prompts/contextScope'
+import { buildContextScopeDecisionPrompt, buildRunDigestPrompt } from '../../../../src/main/services/ai/human/prompts/contextScope'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../../../src/main/services/ai/human/constants'
 
-const user = (content: string, input = content): ChatMessageLogEntry => ({
+const user = (
+  content: string,
+  input = content,
+  context: ChatMessageLogUserContext = { selectedReferences: [], attachments: [] }
+): ChatMessageLogEntry => ({
   kind: 'user',
   content,
   input,
-  context: {
-    selectedReferences: [],
-    attachments: []
-  }
+  context
 })
 
 const assistant = (content: string): ChatMessageLogEntry => ({
   kind: 'assistant',
   content,
   toolCalls: []
+})
+
+const processAssistant = (content: string): ChatMessageLogEntry => ({
+  kind: 'assistant',
+  content,
+  toolCalls: [{ id: 'call-interrupt', name: 'terminal_run', args: { command: 'sleep 1' } }]
 })
 
 const records = (entries: Array<{ runId: string; entry: ChatMessageLogEntry; createdAt?: number }>) =>
@@ -61,10 +71,14 @@ const records = (entries: Array<{ runId: string; entry: ChatMessageLogEntry; cre
     })
   )
 
-const digest = (summary: string, fileChangePaths: string[] = []): ChatMessageLogEntry => ({
+const digest = (
+  summary: string,
+  fileChangePaths: string[] = [],
+  status: RunDigestStatus = 'completed'
+): ChatMessageLogEntry => ({
   kind: 'annotation',
   eventType: 'run_digest',
-  payload: { summary, fileChangePaths }
+  payload: { status, summary, fileChangePaths }
 })
 
 const discardCheckpoint = (
@@ -132,13 +146,25 @@ const bulkyHistory = records([
 ])
 
 describe('run digest list', () => {
-  it('renders all digests as timestamped lines with changed files and no entry cap', () => {
+  it('renders all completed run slices as timestamped lines with changed files and no entry cap', () => {
     const many = records(
-      Array.from({ length: 32 }, (_, index) => ({
-        runId: `run-${index + 1}`,
-        entry: digest(`任务 ${index + 1}`, index % 2 === 0 ? [`/tmp/file-${index + 1}.docx`] : []),
-        createdAt: Date.UTC(2026, 2, 14, 8, 20) + index * 60_000
-      }))
+      Array.from({ length: 32 }, (_, index) => [
+        {
+          runId: `run-${index + 1}`,
+          entry: user(`任务 ${index + 1}`, `任务 ${index + 1}`),
+          createdAt: Date.UTC(2026, 2, 14, 8, 20) + index * 60_000
+        },
+        {
+          runId: `run-${index + 1}`,
+          entry: assistant(`交付 ${index + 1}`),
+          createdAt: Date.UTC(2026, 2, 14, 8, 20) + index * 60_000 + 1
+        },
+        {
+          runId: `run-${index + 1}`,
+          entry: digest(`任务 ${index + 1}`, index % 2 === 0 ? [`/tmp/file-${index + 1}.docx`] : []),
+          createdAt: Date.UTC(2026, 2, 14, 8, 20) + index * 60_000 + 2
+        }
+      ]).flat()
     )
     const entries = collectRunDigests(many)
     expect(entries).toHaveLength(32)
@@ -168,6 +194,67 @@ describe('run digest list', () => {
     expect(digests).toContain('旧周报')
     expect(digests).toContain('改动文件：/Users/me/workspace/周报.docx')
     expect(digests).toContain('分析销售表')
+  })
+
+  it('keeps digest-unavailable completed runs in the judge catalog', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('写周报', '写周报') },
+      { runId: 'run-1', entry: assistant('周报已写入') },
+      { runId: 'run-1', entry: digest('', ['/tmp/周报.docx'], 'failed') }
+    ])
+    const rendered = renderRunDigests(collectRunDigests(log))
+    expect(rendered).toContain('写周报')
+    expect(rendered).toContain('已有交付，但摘要未生成')
+    expect(rendered).toContain('改动文件：/tmp/周报.docx')
+  })
+
+  it('uses the digest-unavailable fallback while a digest is still pending', () => {
+    const log = records([
+      { runId: 'run-1', entry: user('写周报', '写周报') },
+      { runId: 'run-1', entry: assistant('周报已写入') },
+      { runId: 'run-1', entry: digest('', ['/tmp/周报.docx'], 'pending') }
+    ])
+    expect(renderRunDigests(collectRunDigests(log))).toContain('已有交付，但摘要未生成')
+  })
+
+  it('renders compact references in recall and the judge catalog', () => {
+    const log = records([
+      {
+        runId: 'run-1',
+        entry: user('按模板写周报', '按模板写周报', {
+          selectedReferences: [
+            {
+              kind: 'file',
+              workspaceId: 'ws',
+              nodeId: 'n1',
+              name: '周报模板.docx',
+              relativePath: '周报模板.docx',
+              absolutePath: '/Users/me/workspace/周报模板.docx',
+              kbAvailability: 'indexed',
+              kbDocumentIds: ['doc-1']
+            }
+          ],
+          attachments: [
+            {
+              id: 'att-1',
+              kind: 'file',
+              name: '备注.txt',
+              path: '/tmp/备注.txt',
+              mimeType: 'text/plain',
+              size: 12,
+              status: 'ready'
+            }
+          ]
+        })
+      },
+      { runId: 'run-1', entry: assistant('周报已写入') },
+      { runId: 'run-1', entry: digest('按模板写周报', ['/Users/me/workspace/周报.docx']) }
+    ])
+    const history = assembleConversationHistory(log, 10_000)
+    expect(history).toContain('参考：周报模板.docx（/Users/me/workspace/周报模板.docx）、备注.txt（/tmp/备注.txt）')
+    expect(renderRunDigests(collectRunDigests(log))).toContain(
+      '参考：周报模板.docx（/Users/me/workspace/周报模板.docx）、备注.txt（/tmp/备注.txt）'
+    )
   })
 })
 
@@ -386,21 +473,21 @@ describe('brain message projection with context scope', () => {
     expect(discardText).not.toContain('OLD-RESEARCH-TOKEN')
   })
 
-  it('pairs each digest interval even when all sessions share one runId', () => {
+  it('pairs each completed run by runId and keeps the open tail out of recall', () => {
     const log = records([
-      { runId: 'shared', entry: user('记住 ALPHA', '记住 ALPHA') },
-      { runId: 'shared', entry: assistant('已收到 ALPHA') },
-      { runId: 'shared', entry: digest('记下关键词') },
-      { runId: 'shared', entry: user('缩短确认', '缩短确认') },
-      { runId: 'shared', entry: assistant('已记下') },
-      { runId: 'shared', entry: digest('缩短确认') },
-      { runId: 'shared', entry: user('法国首都', '法国首都') },
-      { runId: 'shared', entry: assistant('巴黎') },
-      { runId: 'shared', entry: digest('法国首都') },
-      { runId: 'shared', entry: user('巴黎大区', '巴黎大区') },
-      { runId: 'shared', entry: assistant('法兰西岛大区') },
-      { runId: 'shared', entry: digest('巴黎大区') },
-      { runId: 'shared', entry: user('未完成的一轮', '未完成的一轮') }
+      { runId: 'run-1', entry: user('记住 ALPHA', '记住 ALPHA') },
+      { runId: 'run-1', entry: assistant('已收到 ALPHA') },
+      { runId: 'run-1', entry: digest('记下关键词') },
+      { runId: 'run-2', entry: user('缩短确认', '缩短确认') },
+      { runId: 'run-2', entry: assistant('已记下') },
+      { runId: 'run-2', entry: digest('缩短确认') },
+      { runId: 'run-3', entry: user('法国首都', '法国首都') },
+      { runId: 'run-3', entry: assistant('巴黎') },
+      { runId: 'run-3', entry: digest('法国首都') },
+      { runId: 'run-4', entry: user('巴黎大区', '巴黎大区') },
+      { runId: 'run-4', entry: assistant('法兰西岛大区') },
+      { runId: 'run-4', entry: digest('巴黎大区') },
+      { runId: 'run-5', entry: user('未完成的一轮', '未完成的一轮') }
     ])
     const history = assembleConversationHistory(log, 10_000)
     const blocks = history.split('\n\n')
@@ -417,28 +504,63 @@ describe('brain message projection with context scope', () => {
     expect(history).not.toContain('未完成的一轮')
   })
 
-  it('does not pair an incomplete user with the next completed delivery', () => {
+  it('records a failed run as a closed segment without pairing the next delivery', () => {
     const log = records([
       { runId: 'run-a', entry: user('失败的任务 A', '失败的任务 A') },
-      { runId: 'run-a', entry: assistant('做到一半') },
+      { runId: 'run-a', entry: processAssistant('做到一半') },
       { runId: 'run-b', entry: user('成功的任务 B', '成功的任务 B') },
       { runId: 'run-b', entry: assistant('B 已完成') },
       { runId: 'run-b', entry: digest('完成任务 B') }
     ])
     const history = assembleConversationHistory(log, 10_000)
+    expect(history).toContain('用户：失败的任务 A')
+    expect(history).toContain(`交付：${FAILED_RUN_DELIVERY_TEXT}`)
     expect(history).toContain('用户：成功的任务 B')
     expect(history).toContain('交付：B 已完成')
-    expect(history).not.toContain('失败的任务 A')
     expect(history).not.toContain('做到一半')
+    const failedBlock = history.split('\n\n').find((block) => block.includes('失败的任务 A'))
+    expect(failedBlock).not.toContain('B 已完成')
   })
 
-  it('keeps a completed run that sits before an incomplete run', () => {
+  it('keeps a post-discard failed run out of recall until a later run closes it', () => {
+    const frozen = ['用户：旧任务', '交付：旧交付'].join('\n')
+    const openTail = records([
+      { runId: 'run-1', entry: user('旧任务', '旧任务') },
+      { runId: 'run-1', entry: assistant('旧交付') },
+      { runId: 'run-1', entry: digest('旧任务') },
+      { runId: 'run-2', entry: discardCheckpoint(3, frozen) },
+      { runId: 'run-2', entry: user('discard 后失败', 'discard 后失败') },
+      { runId: 'run-2', entry: processAssistant('做到一半') }
+    ])
+    const openHistory = assembleConversationHistory(openTail, 10_000)
+    expect(openHistory).toContain('用户：旧任务')
+    expect(openHistory).not.toContain('discard 后失败')
+
+    const closed = records([
+      { runId: 'run-1', entry: user('旧任务', '旧任务') },
+      { runId: 'run-1', entry: assistant('旧交付') },
+      { runId: 'run-1', entry: digest('旧任务') },
+      { runId: 'run-2', entry: discardCheckpoint(3, frozen) },
+      { runId: 'run-2', entry: user('discard 后失败', 'discard 后失败') },
+      { runId: 'run-2', entry: processAssistant('做到一半') },
+      { runId: 'run-3', entry: user('新完成', '新完成') },
+      { runId: 'run-3', entry: assistant('新交付') },
+      { runId: 'run-3', entry: digest('新完成') }
+    ])
+    const closedHistory = assembleConversationHistory(closed, 10_000)
+    const failedBlock = closedHistory.split('\n\n').find((block) => block.includes('discard 后失败'))
+    expect(failedBlock).toContain(`交付：${FAILED_RUN_DELIVERY_TEXT}`)
+    expect(failedBlock).not.toContain('新交付')
+    expect(closedHistory).toContain('用户：新完成')
+  })
+
+  it('keeps a completed run that sits before a failed run', () => {
     const log = records([
       { runId: 'run-0', entry: user('更早完成的任务', '更早完成的任务') },
       { runId: 'run-0', entry: assistant('更早那件已完成') },
       { runId: 'run-0', entry: digest('完成更早任务') },
       { runId: 'run-a', entry: user('失败的任务 A', '失败的任务 A') },
-      { runId: 'run-a', entry: assistant('做到一半') },
+      { runId: 'run-a', entry: processAssistant('做到一半') },
       { runId: 'run-b', entry: user('成功的任务 B', '成功的任务 B') },
       { runId: 'run-b', entry: assistant('B 已完成') },
       { runId: 'run-b', entry: digest('完成任务 B') }
@@ -448,9 +570,9 @@ describe('brain message projection with context scope', () => {
       .split('\n')
       .filter((line) => line.startsWith('用户：'))
       .map((line) => line.slice('用户：'.length))
-    expect(users).toEqual(['更早完成的任务', '成功的任务 B'])
+    expect(users).toEqual(['更早完成的任务', '失败的任务 A', '成功的任务 B'])
     expect(history).toContain('交付：更早那件已完成')
-    expect(history).not.toContain('失败的任务 A')
+    expect(history).toContain(`交付：${FAILED_RUN_DELIVERY_TEXT}`)
     expect(history).not.toContain('做到一半')
   })
 
@@ -500,15 +622,29 @@ describe('context scope decision prompt', () => {
     expect(prompt.system).not.toContain('最新')
     expect(prompt.user).toBe(
       [
-        '<completed_run_digests>',
+        '近期任务：',
         '2026-03-14 08:20 | 写周报 | 改动文件：/tmp/周报.docx',
-        '</completed_run_digests>',
         '',
-        '<new_task_goal>',
-        '把标题改一下',
-        '</new_task_goal>'
+        '新诉求：',
+        '把标题改一下'
       ].join('\n')
     )
+  })
+
+  it('keeps the run digest user data-only and omits empty references', () => {
+    expect(
+      buildRunDigestPrompt({
+        userInput: '写周报',
+        deliveryMarkdown: '已写完',
+        compactReferences: '周报.docx（/tmp/周报.docx）'
+      }).user
+    ).toBe(['用户：写周报', '参考：周报.docx（/tmp/周报.docx）', '交付：已写完'].join('\n'))
+    expect(
+      buildRunDigestPrompt({
+        userInput: '写周报',
+        deliveryMarkdown: '已写完'
+      }).user
+    ).toBe(['用户：写周报', '交付：已写完'].join('\n'))
   })
 })
 
@@ -556,7 +692,7 @@ describe('context scope decision gates', () => {
     expect(structuredCalls).toBe(0)
   })
 
-  it('keeps history when the previous run has no digest', async () => {
+  it('keeps history when the previous run has no delivery', async () => {
     let structuredCalls = 0
     const ctx = createCtx({
       windowTokens: 200,
@@ -570,10 +706,54 @@ describe('context scope decision gates', () => {
       state: createInitialHumanState({ taskId: 't', userInput: '继续' }),
       records: records([
         { runId: 'run-1', entry: user('interrupted') },
-        { runId: 'run-1', entry: assistant('half') }
+        { runId: 'run-1', entry: processAssistant('half') }
       ])
     })
     expect(decision).toMatchObject({ needsHistory: true, basis: 'gate_incomplete_run' })
+    expect(structuredCalls).toBe(0)
+  })
+
+  it('keeps history when the previous run delivered but digest is unavailable', async () => {
+    let structuredCalls = 0
+    const ctx = createCtx({
+      windowTokens: 200,
+      chatStructured: async () => {
+        structuredCalls += 1
+        return { output: { needsHistory: false } }
+      }
+    })
+    const decision = await decideContextScope({
+      ctx,
+      state: createInitialHumanState({ taskId: 't', userInput: '继续' }),
+      records: records([
+        { runId: 'run-1', entry: user('写完了') },
+        { runId: 'run-1', entry: assistant('交付正文') },
+        { runId: 'run-1', entry: digest('', [], 'failed') }
+      ])
+    })
+    expect(decision).toMatchObject({ needsHistory: true, basis: 'gate_digest_unavailable' })
+    expect(structuredCalls).toBe(0)
+  })
+
+  it('keeps history when the previous digest is still pending', async () => {
+    let structuredCalls = 0
+    const ctx = createCtx({
+      windowTokens: 200,
+      chatStructured: async () => {
+        structuredCalls += 1
+        return { output: { needsHistory: false } }
+      }
+    })
+    const decision = await decideContextScope({
+      ctx,
+      state: createInitialHumanState({ taskId: 't', userInput: '继续' }),
+      records: records([
+        { runId: 'run-1', entry: user('写完了') },
+        { runId: 'run-1', entry: assistant('交付正文') },
+        { runId: 'run-1', entry: digest('', [], 'pending') }
+      ])
+    })
+    expect(decision).toMatchObject({ needsHistory: true, basis: 'gate_digest_unavailable' })
     expect(structuredCalls).toBe(0)
   })
 

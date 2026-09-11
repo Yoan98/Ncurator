@@ -22,28 +22,34 @@ const createFakeCtx = (): AiRunContext =>
     }
   }) as AiRunContext
 
+const titledSection = (text: string, title: string): string => {
+  const marker = `${title}：\n`
+  const start = text.indexOf(marker)
+  if (start < 0) return ''
+  const after = text.slice(start + marker.length)
+  const next = after.search(/\n\n[^\n]+：\n/)
+  return (next < 0 ? after : after.slice(0, next)).trim()
+}
+
 describe('ai unit brain prompt formatting', () => {
   it('renders skill entries without learning hints or blank lines between adjacent entries', () => {
     const ctx = createFakeCtx()
     const system = buildBrainSystemPrompt({ ctx })
-    const skillCatalog =
-      system.match(/<skill_catalog>([\s\S]*?)<\/skill_catalog>/)?.[1].trim() || ''
 
-    expect(skillCatalog).toContain('始终可用的内置技能：')
-    expect(skillCatalog).toContain('需要先学习才能使用的外部技能：')
-    expect(skillCatalog).toContain('最多同时激活')
-    expect(skillCatalog).toContain('个工具')
-    expect(skillCatalog).toContain('- terminal（')
-    expect(skillCatalog).toContain('- docx-read（')
-    expect(skillCatalog).not.toContain('learning 时填写')
-    expect(skillCatalog).not.toMatch(/^- [^\n]+\n\n- /m)
+    expect(system).toContain('始终可用的内置技能：')
+    expect(system).toContain('需要先学习才能使用的外部技能：')
+    expect(system).toContain('最多同时激活')
+    expect(system).toContain('个工具')
+    expect(system).toContain('- terminal（')
+    expect(system).toContain('- docx-read（')
+    expect(system).not.toContain('learning 时填写')
+    expect(system).not.toMatch(/^- [^\n]+\n\n- /m)
   })
 
   it('keeps stable local environment in system and puts workspace roots in the user message', () => {
     const ctx = createFakeCtx()
     const system = buildBrainSystemPrompt({ ctx })
-    const environment =
-      system.match(/<local_environment>([\s\S]*?)<\/local_environment>/)?.[1] || ''
+    const environment = titledSection(system, '运行环境')
     const state = createInitialHumanState({
       taskId: 'task-prompt-formatting',
       userInput: '继续处理任务'
@@ -57,20 +63,26 @@ describe('ai unit brain prompt formatting', () => {
     expect(environment).not.toContain('D:\\workspace')
     expect(environment).not.toContain('current_time')
     expect(system).not.toContain('current_time.local_iso')
-    expect(system).not.toContain('<workspace_roots>')
-    expect(user).toContain('<workspace_roots>')
+    expect(system).not.toContain('工作区：')
+    expect(user).toContain('工作区：')
     expect(user).toContain('D:\\workspace')
-    expect(user).not.toContain('<preference>')
-    expect(user).not.toContain('<reference_scope>')
-    expect(user.indexOf('</workspace_roots>')).toBeLessThan(user.indexOf('<current_time>'))
+    expect(user).not.toContain('偏好：')
+    expect(user).not.toContain('参考：')
+    expect(user.indexOf('工作区：')).toBeLessThan(user.indexOf('时间：'))
     expect(system).not.toContain('reference_field_guide')
     expect(system).not.toContain('字段说明')
+    expect(system.indexOf('原则：')).toBeLessThan(system.indexOf('终端等待：'))
+    expect(system.indexOf('终端等待：')).toBeLessThan(system.indexOf('计算：'))
+    expect(system.indexOf('计算：')).toBeLessThan(system.indexOf('计划：'))
+    expect(system.indexOf('计划：')).toBeLessThan(system.indexOf('交付：'))
+    expect(system.indexOf('交付：')).toBeLessThan(system.indexOf('特别说明：'))
+    expect(system.indexOf('特别说明：')).toBeLessThan(system.indexOf('技能目录：'))
+    expect(system.indexOf('技能目录：')).toBeLessThan(system.indexOf('运行环境：'))
   })
 
   it('keeps context efficiency and planning rules concise', () => {
     const system = buildBrainSystemPrompt({ ctx: createFakeCtx() })
-    const planContract =
-      system.match(/<plan_contract>([\s\S]*?)<\/plan_contract>/)?.[1].trim() || ''
+    const planContract = titledSection(system, '计划')
 
     expect(planContract).toBe(
       '- 只在复杂任务时使用计划，并只在关键阶段完成、方案需要变化时才更新。'
@@ -90,12 +102,12 @@ describe('ai unit brain prompt formatting', () => {
     } as AiRunContext
     const emptyUser = buildBrainUserMessage({ state, ctx: emptyCtx })
 
-    expect(emptyUser).toContain('<task_goal>')
+    expect(emptyUser).toContain('任务：')
     expect(emptyUser).toContain('继续处理任务')
-    expect(emptyUser).not.toContain('<preference>')
-    expect(emptyUser).not.toContain('<workspace_roots>')
-    expect(emptyUser).not.toContain('<reference_scope>')
-    expect(emptyUser).toContain('<current_time>')
+    expect(emptyUser).not.toContain('偏好：')
+    expect(emptyUser).not.toContain('工作区：')
+    expect(emptyUser).not.toContain('参考：')
+    expect(emptyUser).toContain('时间：')
     expect(emptyUser).toContain('current_time.local_iso')
     expect(emptyUser).not.toContain('<active_state>')
   })
@@ -126,17 +138,18 @@ describe('ai unit brain prompt formatting', () => {
     } as AiRunContext
     const user = buildBrainUserMessage({ state, ctx })
 
-    expect(user.match(/<preference>([\s\S]*?)<\/preference>/)?.[1].trim()).toBe(
+    expect(titledSection(user, '偏好')).toBe(
       '优先使用知识库内容和用户工作区域文件内容作为依据来推进任务'
     )
-    expect(user).toContain('<workspace_roots>')
-    expect(user).toContain('<reference_scope>')
+    expect(user).toContain('工作区：')
+    expect(user).toContain('参考：')
     expect(user).toContain('1. note.md')
     expect(user).not.toContain('当前没有用户显式指定的参考范围')
     expect(user).not.toContain('当前没有用户添加的附件')
-    expect(user.indexOf('</preference>')).toBeLessThan(user.indexOf('<workspace_roots>'))
-    expect(user.indexOf('</workspace_roots>')).toBeLessThan(user.indexOf('<reference_scope>'))
-    expect(user.indexOf('</reference_scope>')).toBeLessThan(user.indexOf('<current_time>'))
+    expect(user.indexOf('任务：')).toBeLessThan(user.indexOf('偏好：'))
+    expect(user.indexOf('偏好：')).toBeLessThan(user.indexOf('工作区：'))
+    expect(user.indexOf('工作区：')).toBeLessThan(user.indexOf('参考：'))
+    expect(user.indexOf('参考：')).toBeLessThan(user.indexOf('时间：'))
   })
 
   it('omits memory and active_state even if skills and plan exist', () => {

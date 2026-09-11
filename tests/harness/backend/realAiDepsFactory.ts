@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { v4 as uuidv4 } from 'uuid'
 import { createHumanGraphRunner } from '../../../src/main/services/ai/human/graph/humanGraph'
 import { AiFileChangeService } from '../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { DocxApplyService } from '../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
@@ -179,13 +180,14 @@ export const createRealAiDepsFactory = async (input: {
         updated_at: Date.now()
       })
     }
+    const runId = contextInput.runId || uuidv4()
     const ctx = createAiRunContext(
       {
-        runId: input.runId,
+        runId,
         partnerId,
         partnerName: 'backend test partner',
-        userMessageId: `test-user-message-${input.runId}`,
-        assistantMessageId: `test-assistant-message-${input.runId}`,
+        userMessageId: `test-user-message-${runId}`,
+        assistantMessageId: `test-assistant-message-${runId}`,
         input: contextInput.userInput || '请处理当前测试任务。',
         selectedReferences: contextInput.selectedReferences,
         mainModel: {
@@ -229,7 +231,7 @@ export const createRealAiDepsFactory = async (input: {
         requestApprovalBatch: async (request) => {
           input.eventCollector.add({
             type: 'approval_batch_required',
-            runId: input.runId,
+            runId,
             taskId: request.taskId,
             batchId: request.batchId,
             items: request.items,
@@ -240,7 +242,7 @@ export const createRealAiDepsFactory = async (input: {
           const decision = approvalResolver(request)
           input.eventCollector.add({
             type: 'approval_batch_decision',
-            runId: input.runId,
+            runId,
             taskId: request.taskId,
             batchId: request.batchId,
             decisions: decision.accepted
@@ -257,6 +259,7 @@ export const createRealAiDepsFactory = async (input: {
           return decision
         },
         llmDriver: llmScript ? createScriptedStructuredOutputDriver(llmScript) : undefined,
+        chatToolsWrapper: contextInput.chatToolsWrapper,
         browserUseService: contextInput.browserUseService,
         webCrawlerService: contextInput.webCrawlerService
       }

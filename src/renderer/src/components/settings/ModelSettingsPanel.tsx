@@ -17,7 +17,7 @@ import { HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
 import type { LLMConfig, LlmProviderId } from '../../../../shared/types'
 import { inferLlmProviderKind } from '../../../../shared/llmProvider'
 import {
-  LLM_PRESET_PROVIDERS,
+  LLM_PRESET_PROVIDER_OPTIONS,
   getPresetProvider,
   getProviderRegistryEntry,
   resolvePresetModeProvider
@@ -351,7 +351,7 @@ const ModelSettingsPanel: React.FC = () => {
                 value={selectedProviderId || undefined}
                 onChange={(value: LlmProviderId) => handleSelectProvider(value)}
                 data-testid={settingsSelectors.modelPresetProviderSelect}
-                options={LLM_PRESET_PROVIDERS.map((provider) => {
+                options={LLM_PRESET_PROVIDER_OPTIONS.map((provider) => {
                   const configured = configuredPresetProviderIds.has(provider.providerId)
                   const disabled = configured && editingPresetProviderId !== provider.providerId
                   return {

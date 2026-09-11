@@ -184,10 +184,15 @@ describe('workbench result e2e', () => {
           const initialToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const initialModeTag = (await documentModeTag.textContent())?.trim()
           await documentModeToggle.click()
-          await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
-            state: 'visible',
-            timeout: 30_000
-          })
+          await page
+            .locator(
+              `[data-testid="${workbenchSelectors.markdownEditor}"], [data-testid="${workbenchSelectors.markdownViewer}"]`
+            )
+            .first()
+            .waitFor({
+              state: 'visible',
+              timeout: 30_000
+            })
           const fileModeToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const previewModeTag = (await documentModeTag.textContent())?.trim()
           await documentModeToggle.click()
@@ -362,10 +367,15 @@ describe('workbench result e2e', () => {
           await currentSessionChanges.first().waitFor({ state: 'visible', timeout: 10_000 })
           const currentSessionChangeMarkerCount = await currentSessionChanges.count()
           await documentModeToggle.click()
-          await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
-            state: 'visible',
-            timeout: 30_000
-          })
+          await page
+            .locator(
+              `[data-testid="${workbenchSelectors.markdownEditor}"], [data-testid="${workbenchSelectors.markdownViewer}"]`
+            )
+            .first()
+            .waitFor({
+              state: 'visible',
+              timeout: 30_000
+            })
           const modeBeforeLatestGroupClick = (await documentModeTag.textContent())?.trim()
           await currentSessionChanges.first().click()
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
@@ -381,10 +391,11 @@ describe('workbench result e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const afterRevertBytes = await fs.readFile(targetPath)
-          const fileStillVisible = await getWorkbenchLocator(
-            page,
-            workbenchSelectors.markdownViewer
-          )
+          const fileStillVisible = await page
+            .locator(
+              `[data-testid="${workbenchSelectors.markdownEditor}"], [data-testid="${workbenchSelectors.markdownViewer}"]`
+            )
+            .first()
             .isVisible()
             .catch(() => false)
 

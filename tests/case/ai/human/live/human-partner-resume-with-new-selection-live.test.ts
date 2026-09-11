@@ -267,7 +267,7 @@ describe('ai human live backend', () => {
           const run2LastMessageIsUser =
             run2LastMessage?.getType() === 'human' &&
             typeof run2LastMessage.content === 'string' &&
-            run2LastMessage.content.includes('<task_goal>')
+            run2LastMessage.content.includes('任务：')
           const run2MessageTypes = run2BrainMessages?.map((message) => message.getType()) || []
           const run2HumanMessages =
             run2BrainMessages?.filter((message) => message.getType() === 'human') || []
@@ -278,7 +278,7 @@ describe('ai human live backend', () => {
             typeof run2HumanMessages[0]?.content === 'string' &&
             run2HumanMessages[0].content.includes(INTERRUPTED_RUN_INPUT.slice(0, 20)) &&
             typeof run2HumanMessages[run2HumanMessages.length - 1]?.content === 'string' &&
-            run2HumanMessages[run2HumanMessages.length - 1].content.includes('<task_goal>')
+            run2HumanMessages[run2HumanMessages.length - 1].content.includes('任务：')
 
           return {
             configurationMissing: false,

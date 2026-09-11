@@ -46,7 +46,7 @@ flowchart TD
 | `plan` | 否 | `tool` + `plan_updated` | 更新 state.plan；**不**改 build user |
 | `hand` | 否 | `tool`（+ 可选 `images[]`）+ 审批后 `approval_batch_resolved` | append ToolMessage；`read_image` 后 append 多模态 HumanMessage |
 
-交付收尾由 brain 内的 `finalizeDelivery` 完成（**不是**独立图节点）：docx/ppt 落盘 side effect → `finalizing_started` → **写交付 `assistant`（`toolCalls: []`）** → 写 `run_digest`（失败则跳过）→ completed。
+交付收尾由 brain 内的 `finalizeDelivery` 完成（**不是**独立图节点）：docx/ppt 落盘 side effect → `finalizing_started` → **写交付 `assistant`（`toolCalls: []`）与 `run_digest: pending` 同批** → 立即 `answer_completed` / `run_completed`。摘要模型在后台生成；成功或失败再追加一条 `run_digest`。下一轮同伙伴发送可立刻创建，但在读 log、范围判定、写新 user 之前等待该伙伴 pending digest，避免 seq 交错。
 无 `tool_calls` 的正常交付路径上，**brain 不向 log 写 `assistant`**（流式 Answer 只走事件 / `partial_answer`）。
 
 ### 1.3 dispatch 路由
@@ -66,7 +66,7 @@ flowchart TD
 
 新 run 启动时：
 
-1. 读该伙伴 `chat_session_message_log` → `projectMessageLogRecords` 得 tail + plan + `compaction_checkpoint` / `historyFloorSeq`。
+1. 等待该伙伴 pending digest 结束后读 `chat_session_message_log` → `projectMessageLogRecords` 得 tail + plan + `compaction_checkpoint` / `historyFloorSeq`。进程退出遗留的 pending 收敛为 failed。
 2. 做一次上下文范围判定（第 4 节）：是否需要带历史。判定结果放进 runtime cache，**不在此处写 log**。
 3. 拼 runtime messages：`[System] + projectBrainMessagesFromLog(..., needsHistory)`。
 4. `graph.invoke` 从 `context_budget` 进入循环；首次进循环时把 `context_scope_decided`（`needsHistory=false` 时再写 `discard_checkpoint`）与本轮 `user` 同批写入。
@@ -130,7 +130,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `skill_state_updated` | `{ learnedSkillIds: string[] }` | 同 run 只驱动 bindTools；新 run 从图启动扫描该伙伴剩余 log 最新一条 |
 | `plan_updated` | `{ plan: [{ title, status }] }` | UI 计划条；新 run 从图启动扫描该伙伴剩余 log 最新一条 |
 | `compaction_checkpoint` | `{ compactBlockId, throughSeq, sourceMessageCount, summary }` | 压缩书签 + 摘要正文；`seq <= historyFloorSeq` 的原文不再进 brain；发给主模型时再合成 Compact User |
-| `run_digest` | `{ summary, fileChangePaths }` | 正常交付后的一句话摘要 + 改动文件路径；只给判定模型看；不进 UI 气泡、不随带历史路径注入主模型 |
+| `run_digest` | `{ status, summary, fileChangePaths }` | 正常交付后先写 `pending`，后台完成再追加 `completed` 或 `failed`。`summary` 是 20–40 字一句话。只给判定模型看；不进 UI 气泡、不随带历史路径注入主模型 |
 | `context_scope_decided` | `{ needsHistory, basis, budgetTokens, reason? }` | 本 run 是否带历史的判定记录；`reason` 只在 `basis=model_decision` 时有；投影不读 |
 | `discard_checkpoint` | `{ throughSeq, conversationHistory }` | `needsHistory=false` 时写入；`throughSeq` 计入 `historyFloorSeq`；`conversationHistory` 是当时拼好的召回正文（不含外壳），之后带历史只读这份 |
 | `finalizing_started` | `{}` | 投影时**清空** plan |
@@ -143,7 +143,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 ```json
 {
   "kind": "user",
-  "content": "<user_context>…</user_context>",
+  "content": "任务：\n按模板写本周周报，不要封面页。",
   "input": "按模板写本周周报，不要封面页。",
   "context": {
     "selectedReferences": [
@@ -251,6 +251,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
   "kind": "annotation",
   "eventType": "run_digest",
   "payload": {
+    "status": "completed",
     "summary": "按模板写本周周报，去掉了封面页",
     "fileChangePaths": ["/Users/me/workspace/周报.docx"]
   }
@@ -276,7 +277,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
   "eventType": "discard_checkpoint",
   "payload": {
     "throughSeq": 20,
-    "conversationHistory": "2026-03-14 16:20\n用户：按模板写本周周报，不要封面页。\n交付：本周周报已写入，去掉了封面页。\n改动文件：/Users/me/workspace/周报.docx"
+    "conversationHistory": "2026-03-14 16:20\n用户：按模板写本周周报，不要封面页。\n参考：周报模板.docx（/Users/me/workspace/周报模板.docx）\n交付：本周周报已写入，去掉了封面页。\n改动文件：/Users/me/workspace/周报.docx"
   }
 }
 ```
@@ -296,7 +297,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `dispatch` → `plan` | `tool`（`update_plan`）+ `plan_updated` | 参数合法时同批写；**不**写 assistant |
 | `dispatch` → `hand` | `tool`（+ 可选 `images[]`） | 每个 call 一条；审批拒绝写失败 `tool`；**不**写 assistant |
 | `context_compaction` | `compaction_checkpoint` | 书签 + 摘要正文；发给主模型时再合成 User |
-| `finalizeDelivery` | `finalizing_started` → `assistant`（`toolCalls: []` + `linkAccess`）→ **`run_digest`** | 正常交付正文的**唯一** writer（落盘与链接访问检查之后）；`run_digest` 失败则跳过，不影响交付；清空 plan 投影 |
+| `finalizeDelivery` | `finalizing_started` → `assistant`（`toolCalls: []` + `linkAccess`）+ **`run_digest: pending`** 同批；后台再追加 `completed` / `failed` | 正常交付正文的**唯一** writer（落盘与链接访问检查之后）；摘要不阻塞气泡完成；清空 plan 投影 |
 
 ```text
 用户发送
@@ -348,13 +349,13 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 ### 2.5 运行时注入（不进库）
 
-新 run 的 `<reference_scope>` 来自 **Composer 当前 `@` 引用与附件**，由 `buildBrainUserMessage` 渲染进 build user。工作地址列表不进 `reference_scope`，单独渲染为 build user 的 `<workspace_roots>`（位于 `<reference_scope>` 之上），按设置页现表快照，不进 System。
+新 run 的参考范围来自 **Composer 当前 `@` 引用与附件**，由 `buildBrainUserMessage` 渲染进 build user 的「参考」段。工作地址列表不进参考段，单独渲染为 build user 的「工作区」（位于「参考」之上），按设置页现表快照，不进 System。
 
 | | log 里的 `user.context` | Composer → build user |
 |--|-------------------------|------------------------|
 | 作用 | 审计「当时用户说了什么、配了什么」 | 驱动**当前 run** brain 输入 |
-| 同 run | 首条 build user 的 `<reference_scope>` | 来自发送时 Composer（仅 `@` 与附件） |
-| resume | 每条 log `user` 各存各的 snapshot | **append** 新 build user 在末尾；`<reference_scope>` 用**当前** Composer |
+| 同 run | 首条 build user 的「参考」段 | 来自发送时 Composer（仅 `@` 与附件） |
+| resume | 每条 log `user` 各存各的 snapshot | **append** 新 build user 在末尾；「参考」用**当前** Composer |
 
 ---
 
@@ -434,16 +435,23 @@ flowchart TD
 | 过程 | assistant / tool / 多模态合成 HumanMessage |
 | User（续发） | 新 run 末尾 append 的 build 全文 |
 
-**build user 块**（各字段来源见第 3.3 节；`preference` / `workspace_roots` / `reference_scope` 无内容时整块省略）：
+**build user 块**（各字段来源见第 3.3 节；`偏好` / `工作区` / `参考` 无内容时整块省略）：
 
 ```text
-<user_context>
-  <task_goal>…</task_goal>
-  <preference>…</preference>          ← 仅非 default
-  <workspace_roots>…</workspace_roots> ← 仅有工作地址时
-  <reference_scope>…</reference_scope> ← 仅有 @ 或附件时
-  <current_time>…</current_time>
-</user_context>
+任务：
+…
+
+偏好：
+…          ← 仅非 default
+
+工作区：
+…          ← 仅有工作地址时
+
+参考：
+…          ← 仅有 @ 或附件时
+
+时间：
+…
 ```
 
 **稳态行为**（同 run、未触发 第 6–7 节）：
@@ -470,11 +478,11 @@ flowchart TD
 
 | 块 | 来源 |
 |----|------|
-| `<task_goal>` | 当时那条 User 对应 run 的 `input` |
-| `<preference>` | 当时 Composer；`default` 时整块省略 |
-| `<workspace_roots>` | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
-| `<reference_scope>` | 当时 Composer 的 `@` 与附件（第 2.5 节）；两者皆空时整块省略，有一侧为空时只渲染有内容的一侧 |
-| `<current_time>` | 当时 run 的 `runStartedAt`（历史行不再改） |
+| `任务` | 当时那条 User 对应 run 的 `input` |
+| `偏好` | 当时 Composer；`default` 时整块省略 |
+| `工作区` | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
+| `参考` | 当时 Composer 的 `@` 与附件（第 2.5 节）；两者皆空时整块省略，有一侧为空时只渲染有内容的一侧 |
+| `时间` | 当时 run 的 `runStartedAt`（历史行不再改） |
 
 annotation 扫描该伙伴**全部**剩余 log（不受 `historyFloorSeq` 限制）：技能从最新 `skill_state_updated` 恢复。计划仍按 `plan_updated` / `finalizing_started` 扫描。清空消息记录会物理删除 log，因此技能 / 计划不会从已删除的历史恢复。
 
@@ -572,7 +580,7 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 结果只有两种：
 
 - **要**（`needsHistory=true`）：主模型继续看到还没丢掉、还没压进摘要的那些对话原文。
-- **不要**（`needsHistory=false`）：那些原文不再发给主模型，改成一份「最近会话」召回（人打的字、交付、改过的文件）。
+- **不要**（`needsHistory=false`）：那些原文不再发给主模型，改成一份「最近会话」召回（人打的字、参考、交付或失败说明、改过的文件）。
 
 判定本身不把 digest 塞给主模型。丢掉时把召回正文冻进 `discard_checkpoint.conversationHistory`；之后如果又要带历史，只读这份冻好的正文去合成 Discard User。
 
@@ -582,8 +590,8 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 
 ### 4.1 几个名字
 
-- **`run_digest`（digest）**：一轮**正常交付完**之后由 `finalizeDelivery` 写入的 annotation；`summary` 是 20–40 字一句话 + `fileChangePaths`。不是用户原话，不是交付全文，也不是压缩摘要。中断或失败的轮没有 digest，不算完成，也不要补写。
-- **判定模型看到的 digest**：`seq > historyFloorSeq` 的 `run_digest` 排成 `时间 | 一句话`，有改动文件时再加 `| 改动文件：…`。只给判定模型看，不给主模型，条数不封顶。
+- **`run_digest`（digest）**：一轮**正常交付**后由 `finalizeDelivery` 写入的 annotation。先写 `status=pending` 并立即完成气泡；后台生成 20–40 字 `summary` 后追加 `completed`，失败追加 `failed`。不是用户原话，不是交付全文，也不是压缩摘要。只给判定模型看，**绝不**塞进 `conversationHistory` 或主模型。
+- **判定模型看到的近期任务**：`seq > historyFloorSeq` 的轮次，按 `runId` 分段。正常完成轮用一句话 digest，并追加紧凑参考与改动文件；有交付但摘要失败则用「用户原句 + 参考 + 已有交付，但摘要未生成」，不得丢轮。条数不封顶。
 - `context_scope_decided`：记下本 run 的 `needsHistory` / `basis` / `budgetTokens`；判定模型给出的一句话 `reason` 只在 `basis=model_decision` 时写入。投影不读它。
 - `discard_checkpoint`：`needsHistory=false` 时写入。`throughSeq` 是当时伙伴 log 的最大 `seq`；`conversationHistory` 是当时拼好的召回正文（还没有外壳）。
 - `needsHistory`：`true` 带 `seq > historyFloorSeq` 的对话原文，必要时再合成 Compact User 或 Discard User；`false` 丢掉这些原文，当场拼并写入 `conversationHistory`。
@@ -595,18 +603,29 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 | 顺序 | 条件 | `needsHistory` | `basis` |
 |------|------|----------------|---------|
 | 0 | 这个伙伴还没有过对话（空的，或刚清空） | `true` | `gate_below_threshold`（`budgetTokens=0`） |
-| 1 | 上一轮对话还没有 `run_digest`（没交付完） | `true` | `gate_incomplete_run` |
-| 2 | 按「要带历史」拼出来的内容还不大（≤ 窗口 × **20%**） | `true` | `gate_below_threshold` |
-| 3 | 上面都不命中 | 问判定模型 | `model_decision`；失败则 `fallback` |
+| 1 | 上一轮还没有交付（中断 / 失败，无 `toolCalls: []` 的 assistant） | `true` | `gate_incomplete_run` |
+| 2 | 上一轮已有交付，但 digest 不是 `completed`（pending 最终失败、内容安全 fallback、进程退出遗留 pending 已收敛为 failed） | `true` | `gate_digest_unavailable` |
+| 3 | 按「要带历史」拼出来的内容还不大（≤ 窗口 × **20%**） | `true` | `gate_below_threshold` |
+| 4 | 上面都不命中 | 问判定模型 | `model_decision`；失败则 `fallback` |
 
-门控 1 覆盖 resume / 失败 / 内容安全 fallback：上一轮没正常交付完，下一轮必须带上这段历史。
+门控 1 覆盖 resume / 失败：上一轮没交付，下一轮必须带上这段历史（失败尾部仍是原始 `user.content/assistant/tool`）。门控 2 覆盖「有交付但摘要不可用」：召回仍用真实交付，判定目录用确定性 fallback，不得当成没这轮。
 
 ### 4.3 判定模型看什么
 
-`caller: human.context_scope`。它只看到两样：`seq > historyFloorSeq` 的 digest 列表，以及本轮 `<new_task_goal>`。问的是「还要不要当前这段对话原文」。
+`caller: human.context_scope`。它只看到两样：`seq > historyFloorSeq` 的近期任务列表，以及本轮新诉求。问的是「还要不要当前这段对话原文」。
 
-- 新诉求在延续、追问、修改或纠正这些 digest 里近期**任何**一件事 → `true`。
-- 新诉求是全新话题，和这些 digest 里的事都无关 → `false`。
+```text
+近期任务：
+{digest 与失败/缺摘要 fallback 行}
+
+新诉求：
+{userInput}
+```
+
+- 新诉求在延续、追问、修改或纠正这些近期任务里**任何**一件事 → `true`。
+- 新诉求是全新话题，和这些近期任务都无关 → `false`。
+
+**不得**把问题收成「要不要上一轮」，也不得只看最新那一句 digest。丢掉的是现在还在上下文里的整段历史，可能有很多轮；只看最新一句，会把还在推进的事永久丢掉。
 
 **不得**把问题收成「要不要上一轮」，也不得只看最新那一句 digest。丢掉的是现在还在上下文里的整段历史，可能有很多轮；只看最新一句，会把还在推进的事永久丢掉。
 
@@ -616,9 +635,15 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 
 不要旧对话时，主模型收到：`[System] + [Discard User] + [Current User]`。Discard User 不是 log 里的假 user 行，是投影时现合成的。
 
-召回正文这样拼：按 `seq` 扫整份伙伴 log，每条 `run_digest` 对应一段。窗口是 `(上一条 digest 的 seq, 本条 digest 的 seq]`，取窗口里**最后一条**带 `input` 的 `user`、**最后一条**交付 `assistant`（`toolCalls: []`）、本条 digest 的 `fileChangePaths`（没有改动就不写「改动文件」行）。没有 digest 的轮自己不成段；夹在两轮完成之间时，也不得用它的原话去配下一轮的交付。失败轮前面已经正常交付过的轮仍各自成段，丢掉时要进召回。
+召回正文按 **`runId` + 伙伴内 `seq`** 分段，生产和 live 每次发送都必须使用独立 `runId`。同一轮只提供事实来源，再按用途生成两种投影，**绝不把 digest 塞进 `conversationHistory`**：
 
-从新到旧往里加，整段 token ≤ 窗口 × **10%**（`CONTEXT_SCOPE_DISCARD_HISTORY_RATIO`）。只有最新那一段就超了，才只裁这一段的交付。冻进 `discard_checkpoint.conversationHistory`（不含外壳）。之后 `needsHistory=true` 只读这份，不再重扫 log。
+- 给主模型的 `conversationHistory`：正常完成轮为 `用户原句 + 参考 + 真实交付 + 改动文件`；中断/失败且没有交付的轮为 `用户原句 + 参考 + 运行失败，没有交付`。有交付但 digest 失败时召回仍用真实交付。
+- 失败段只在发生 discard、生成 `conversationHistory` 时收成。尚未 discard 的失败尾部继续保留 `seq > historyFloorSeq` 原始 `user.content/assistant/tool`。
+- 夹在两轮完成之间的失败轮不得用下一轮交付配段。失败轮前面已经正常交付过的轮仍各自成段。
+
+`referenceScope` 统一从 log `user.context` 读取：主模型原文继续携带完整参考与附件；digest 输入和判定目录用紧凑的名称 + 地址；`conversationHistory` 每段可有 `参考：…`，失败段同样保留。
+
+从新到旧往里加，整段 token ≤ 窗口 × **10%**（`CONTEXT_SCOPE_DISCARD_HISTORY_RATIO`）。只有最新那一段就超了，才只裁这一段的交付。冻进 `discard_checkpoint.conversationHistory`（不含外壳）。之后 `needsHistory=true` 且 `includeDiscard` 只读这份冻结正文，不再重扫 log；再次 discard 才按当前完整 log 重拼。
 
 发给主模型时再套外壳：
 
@@ -654,9 +679,9 @@ discard.throughSeq > compact.throughSeq  → includeDiscard，只合成 Discard 
 分别看什么：
 
 - **主模型看到的对话原文**：只发 `seq > historyFloorSeq`。
-- **判定模型看到的 digest**：`collectRunDigests(seq > historyFloorSeq)`。
+- **判定模型看到的近期任务**：`collectRunDigests(seq > historyFloorSeq)`（含缺摘要 fallback，不含无交付的失败轮）。
 - **技能、计划**：扫该伙伴全部剩余 log，不受 `historyFloorSeq` 限制。
-- **拼 `conversationHistory`**：扫整份 log 里已有 `run_digest` 的轮，不受 `historyFloorSeq` 限制。
+- **拼 `conversationHistory`**：按 `runId` 扫整份 log 的完成轮与已关闭的失败轮，不受 `historyFloorSeq` 限制。
 
 ---
 
@@ -675,7 +700,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 - System 跨 run **字节稳定**（platform / paths / 技能目录；**不含** `current_time`）。
 - tail 只许 **末尾 append** assistant/tool（过程 `toolCalls.args` 见第 2.2 节）。
-- 同 run 内：**不改** 当前 build user；`<current_time>` 取本 run `runStartedAt`。
+- 同 run 内：**不改** 当前 build user；「时间」取本 run `runStartedAt`。
 - resume：**append** 新 User 在整段末尾；历史 User / 过程 **一字不改**（来自 log `content`）。
 
 ### 5.2 稳态下如何保持命中
@@ -839,8 +864,8 @@ log 行 append-only 保留；`seq <= compaction_checkpoint.throughSeq` 的行不
 1. **log**：进 brain 前 append 新 `user` 行（`content` = 当次 build 全文；`input` = 人打的字；含 Composer `context`）。
 2. **brain**：在已有历史末尾 append 新 User（新 run 的 input + Composer + 本 run `current_time`）；**不替换**前面的 User，**不改写**中间过程。
 3. 历史 User = 对应 log 行的 `content`。
-4. 新诉求只出现在 **末尾** 那条 User 的 `<task_goal>`。新 User 不抄 Compact / Discard User。
-5. 符合 第 5 节：历史前缀不变 → 缓存可命中；打破前缀的是 compaction 与「不需要历史」。未完成的上一 run 不会走「不需要历史」（第 4 节门控 1）。
+4. 新诉求只出现在 **末尾** 那条 User 的「任务」段。新 User 不抄 Compact / Discard User。
+5. 符合 第 5 节：历史前缀不变 → 缓存可命中；打破前缀的是 compaction 与「不需要历史」。未完成的上一 run 不会走「不需要历史」（第 4 节门控 1）。有交付但 digest 不可用走门控 2，同样带历史。
 6. **tools**：`bindTools` 按该伙伴剩余 log 最新 `learnedSkillIds` 重绑，不是冻住进程内 tool 对象。
 
 ### 7.3 示例
@@ -863,16 +888,16 @@ log 行 append-only 保留；`seq <= compaction_checkpoint.throughSeq` 的行不
 [Assistant]    …
 [Tool]         …
 [Tool]         Error: The run was interrupted…
-[User]         task_goal=继续把周报写完                  ← append
-               current_time=本 run
+[User]         任务=继续把周报写完                  ← append
+               时间=本 run
 ```
 
 log 侧（示意）：
 
 ```text
-seq …  user      content=<user_context>…</user_context>
+seq …  user      content=任务：…
 seq …  assistant / tool / …
-seq N  user      content=<user_context>继续把周报写完…</user_context>
+seq N  user      content=任务：继续把周报写完…
 ```
 
 压过后再说话：
@@ -899,7 +924,7 @@ seq N  user      content=<user_context>继续把周报写完…</user_context>
 | 多次 resume | 每次 append 新 build user 在末尾；首条 `User built₁` 保留原始 task_goal |
 | `output_truncated` / `runtime_limit` | 可继续；半截 assistant 已在 log/tail |
 | `input_too_long` | 不写 log user，不调 brain |
-| 编辑重发 | 删该 user + assistant + run + 该 run 的 log 行 |
+| 编辑重发 | 先取消并等待该 run 的 digest job，再删除该 `runId` 的 `ai_run` 与全部 message log（user/assistant/tool/digest/`context_scope_decided`/`discard_checkpoint`）。若该轮写过 discard 书签，删后回到此前 floor；已写入文件与 `ai_file_change` 不回滚 |
 | 伙伴隔离 | 只读本伙伴 log |
 | `partial_answer` | 仅 UI 草稿，不参与 resume |
 | 已落盘文件 | `ai_file_change` 不因 run 失败丢失 |
@@ -1090,6 +1115,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | Resume | `src/main/services/ai/ChatRunService.ts` |
 | 上下文范围判定 | `src/main/services/ai/human/node/contextScopeDecision/` |
 | digest 列表 / conversationHistory | `src/main/services/ai/human/memory/runDigestCatalog.ts` |
+| digest 后台协调 | `src/main/services/ai/human/memory/partnerDigestCoordinator.ts` |
 | 交付 | `src/main/services/ai/human/node/brainNode/finalizeDelivery.ts` |
 | UI 过程投影 | `src/renderer/src/components/workbench/messageLogProjection.ts` |
 | 工具 registry | `src/main/services/ai/human/tools/registry.ts` |

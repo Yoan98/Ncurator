@@ -83,10 +83,10 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   const resolveChatTools = (): AiRunContext['chatTools'] =>
     deps.chatToolsWrapper ? deps.chatToolsWrapper(llmExecutor.chatTools) : llmExecutor.chatTools
 
-  const appendMessageLog: AiRunContext['appendMessageLog'] = async (entries) => {
+  const appendMessageLog: AiRunContext['appendMessageLog'] = async (entries, options) => {
     await deps.chatMessageLogStore.appendBatch({
       partnerId: payload.partnerId,
-      runId: payload.runId,
+      runId: options?.runId || payload.runId,
       entries
     })
   }

@@ -33,7 +33,7 @@ export const createHumanTestRunner = (
       try {
         return (await run(taskInput, dispatchOptions)) as HumanTaskOutput
       } finally {
-        await resourceManager.releaseRun(runtime.runId)
+        await resourceManager.releaseRun(ctx.runId)
       }
     }
   }

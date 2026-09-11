@@ -1,6 +1,13 @@
+import type { ChatMessageLogEntry } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import type { HumanState } from '../../types'
 import { buildRunDigestPrompt } from '../../prompts/contextScope'
+import { renderCompactReferenceScope } from '../../prompts/referenceScope'
+import {
+  collectSessionRunSlices
+} from '../../memory/runDigestCatalog'
+import { getPartnerDigestCoordinator } from '../../memory/partnerDigestCoordinator'
+import { isConversationLogRecord } from '../../memory/transcript'
 
 const RUN_DIGEST_USER_MAX_CHARS = 500
 const RUN_DIGEST_DELIVERY_MAX_CHARS = 2000
@@ -34,15 +41,53 @@ export const collectRunDigestFileChangePaths = (state: HumanState): string[] => 
   return paths
 }
 
-export const appendRunDigestIfPossible = async (input: {
+const buildRunDigestEntry = (input: {
+  status: 'pending' | 'completed' | 'failed'
+  summary: string
+  fileChangePaths: string[]
+}): ChatMessageLogEntry => ({
+  kind: 'annotation',
+  eventType: 'run_digest',
+  payload: {
+    status: input.status,
+    summary: input.summary,
+    fileChangePaths: input.fileChangePaths
+  }
+})
+
+const runStillHasConversation = async (input: {
+  ctx: AiRunContext
+  runId: string
+}): Promise<boolean> => {
+  const records = await input.ctx.loadMessageLog()
+  return records.some((record) => record.runId === input.runId && isConversationLogRecord(record))
+}
+
+const generateAndAppendRunDigest = async (input: {
   ctx: AiRunContext
   state: HumanState
   deliveryMarkdown: string
+  fileChangePaths: string[]
+  signal: AbortSignal
 }): Promise<void> => {
+  const appendTerminal = async (status: 'completed' | 'failed', summary: string): Promise<void> => {
+    if (input.signal.aborted) return
+    if (!(await runStillHasConversation({ ctx: input.ctx, runId: input.ctx.runId }))) return
+    await input.ctx.appendMessageLog([
+      buildRunDigestEntry({
+        status,
+        summary,
+        fileChangePaths: input.fileChangePaths
+      })
+    ])
+  }
+
   try {
+    if (input.signal.aborted) return
     const prompt = buildRunDigestPrompt({
       userInput: clipText(input.state.task.userInput, RUN_DIGEST_USER_MAX_CHARS),
-      deliveryMarkdown: clipText(input.deliveryMarkdown, RUN_DIGEST_DELIVERY_MAX_CHARS)
+      deliveryMarkdown: clipText(input.deliveryMarkdown, RUN_DIGEST_DELIVERY_MAX_CHARS),
+      compactReferences: renderCompactReferenceScope(input.ctx.referenceScope)
     })
     const raw = await input.ctx.chatText({
       caller: 'human.run_digest',
@@ -53,18 +98,57 @@ export const appendRunDigestIfPossible = async (input: {
       temperature: 0.1
     })
     const summary = normalizeRunDigestSummary(raw)
-    if (!summary) return
-    await input.ctx.appendMessageLog([
-      {
-        kind: 'annotation',
-        eventType: 'run_digest',
-        payload: {
-          summary,
-          fileChangePaths: collectRunDigestFileChangePaths(input.state)
-        }
-      }
-    ])
+    await appendTerminal(summary ? 'completed' : 'failed', summary)
   } catch {
-    // 摘要失败不阻断交付；该 run 不进目录，后续判定更倾向带历史。
+    await appendTerminal('failed', '')
+  }
+}
+
+export const enqueueRunDigest = (input: {
+  ctx: AiRunContext
+  state: HumanState
+  deliveryMarkdown: string
+  fileChangePaths: string[]
+}): void => {
+  getPartnerDigestCoordinator().enqueue({
+    partnerId: input.ctx.partnerId,
+    runId: input.ctx.runId,
+    work: (signal) =>
+      generateAndAppendRunDigest({
+        ctx: input.ctx,
+        state: input.state,
+        deliveryMarkdown: input.deliveryMarkdown,
+        fileChangePaths: input.fileChangePaths,
+        signal
+      })
+  })
+}
+
+export const buildPendingRunDigestEntry = (fileChangePaths: string[]): ChatMessageLogEntry =>
+  buildRunDigestEntry({
+    status: 'pending',
+    summary: '',
+    fileChangePaths
+  })
+
+export const settleStalePendingDigests = async (input: {
+  loadMessageLog: AiRunContext['loadMessageLog']
+  appendMessageLog: AiRunContext['appendMessageLog']
+}): Promise<void> => {
+  const records = await input.loadMessageLog()
+  const coordinator = getPartnerDigestCoordinator()
+  for (const slice of collectSessionRunSlices(records)) {
+    if (slice.digestStatus !== 'pending') continue
+    if (coordinator.hasRun(slice.runId)) continue
+    await input.appendMessageLog(
+      [
+        buildRunDigestEntry({
+          status: 'failed',
+          summary: '',
+          fileChangePaths: slice.fileChangePaths
+        })
+      ],
+      { runId: slice.runId }
+    )
   }
 }

@@ -92,7 +92,7 @@ export const orderMessageLogBySeq = (
   records: ChatMessageLogRecord[]
 ): ChatMessageLogRecord[] => [...records].sort((a, b) => a.seq - b.seq)
 
-const isConversationLogRecord = (record: ChatMessageLogRecord): boolean =>
+export const isConversationLogRecord = (record: ChatMessageLogRecord): boolean =>
   record.entry.kind === 'user' ||
   record.entry.kind === 'assistant' ||
   record.entry.kind === 'tool'
@@ -168,16 +168,35 @@ export const resolveLastConversationRunId = (
 ): string | undefined =>
   [...orderMessageLogBySeq([...records])].reverse().find(isConversationLogRecord)?.runId
 
-export const runHasDigest = (
+export const runHasDelivery = (
   records: readonly ChatMessageLogRecord[],
   runId: string
 ): boolean =>
   records.some(
     (record) =>
       record.runId === runId &&
-      record.entry.kind === 'annotation' &&
-      record.entry.eventType === 'run_digest'
+      record.entry.kind === 'assistant' &&
+      record.entry.toolCalls.length === 0
   )
+
+export const runHasCompletedDigest = (
+  records: readonly ChatMessageLogRecord[],
+  runId: string
+): boolean =>
+  records.some((record) => {
+    if (
+      record.runId !== runId ||
+      record.entry.kind !== 'annotation' ||
+      record.entry.eventType !== 'run_digest'
+    ) {
+      return false
+    }
+    const { status, summary } = record.entry.payload
+    if (status === 'completed') return true
+    return !status && Boolean(summary.trim())
+  })
+
+export const runHasDigest = runHasCompletedDigest
 
 export const resolveMaxMessageLogSeq = (records: readonly ChatMessageLogRecord[]): number =>
   records.reduce((maxSeq, record) => Math.max(maxSeq, record.seq), -1)

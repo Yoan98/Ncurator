@@ -26,7 +26,6 @@ import type {
   WorkbenchSelectedModel
 } from '../../../../shared/types'
 import {
-  LLM_PRESET_PROVIDERS,
   resolvePresetModeProvider,
   type LlmPresetModel,
   type LlmPresetProvider,
@@ -197,6 +196,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const [inspectedModel, setInspectedModel] = useState<ModelInspector | null>(null)
   const [freeModels, setFreeModels] = useState<FreeModelPublicEntry[]>([])
   const [freeModelsRefreshing, setFreeModelsRefreshing] = useState(false)
+  const [presetProviders, setPresetProviders] = useState<LlmPresetProvider[]>([])
 
   const loadFreeModels = useCallback(async (refreshIfStale: boolean): Promise<void> => {
     try {
@@ -204,6 +204,17 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       setFreeModels(snapshot.models)
     } catch (error) {
       console.error('Failed to load free models', error)
+    }
+  }, [])
+
+  const loadPresetModels = useCallback(async (refreshIfStale: boolean): Promise<void> => {
+    try {
+      const snapshot = await window.api.presetModelsGet({ refreshIfStale })
+      if (snapshot.providers.length > 0) {
+        setPresetProviders(snapshot.providers)
+      }
+    } catch (error) {
+      console.error('Failed to load preset models', error)
     }
   }, [])
 
@@ -222,12 +233,14 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
 
   useEffect(() => {
     void loadFreeModels(false)
-  }, [loadFreeModels])
+    void loadPresetModels(false)
+  }, [loadFreeModels, loadPresetModels])
 
   useEffect(() => {
     if (!open || view !== 'preset') return
     void loadFreeModels(true)
-  }, [open, view, loadFreeModels])
+    void loadPresetModels(true)
+  }, [open, view, loadFreeModels, loadPresetModels])
 
   const mainLabel = value.mainModel?.modelName || '选择模型'
 
@@ -365,13 +378,13 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
 
   const presetGroups = useMemo(
     () =>
-      LLM_PRESET_PROVIDERS.flatMap((provider) => {
+      presetProviders.flatMap((provider) => {
         const matchedConfig = configs.find(
           (config) => resolvePresetModeProvider(config)?.providerId === provider.providerId
         )
         return matchedConfig ? [{ provider, matchedConfig }] : []
       }),
-    [configs]
+    [configs, presetProviders]
   )
 
   const selectedPreset = useMemo(() => {
@@ -379,12 +392,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     const config = configs.find((item) => item.id === value.mainModel?.configId)
     const preset = config ? resolvePresetModeProvider(config) : null
     if (!preset) return null
-    const model = LLM_PRESET_PROVIDERS.find(
-      (provider) => provider.providerId === preset.providerId
-    )?.models.find((item) => item.id === value.mainModel?.modelName)
+    const model = presetProviders
+      .find((provider) => provider.providerId === preset.providerId)
+      ?.models.find((item) => item.id === value.mainModel?.modelName)
     if (!model) return null
     return { provider: preset, modelLabel: model.label }
-  }, [value.mainModel, configs])
+  }, [value.mainModel, configs, presetProviders])
 
   const selectedFree = useMemo(() => {
     if (!value.mainModel) return null

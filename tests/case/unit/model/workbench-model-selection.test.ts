@@ -6,6 +6,7 @@ import {
 } from '../../../../src/shared/workbenchModelSelection'
 import type { LLMConfig, LlmRemoteModel } from '../../../../src/shared/types'
 import { toFreeModelPublicEntry, type FreeModelCatalogEntry } from '../../../../src/shared/freeModels'
+import type { LlmPresetProvider } from '../../../../src/shared/llmPresets'
 
 const presetConfig = (id: string): LLMConfig => ({
   id,
@@ -25,6 +26,29 @@ const customConfig = (id: string): LLMConfig => ({
 
 const remote = (...ids: string[]): LlmRemoteModel[] =>
   ids.map((id) => ({ id, label: id }))
+
+const dashscopeCatalog: LlmPresetProvider[] = [
+  {
+    providerId: 'dashscope',
+    label: '通义千问',
+    models: [
+      {
+        id: 'qwen3.8-max',
+        label: 'Qwen3.8 Max',
+        priceTier: 'high',
+        description: '',
+        capabilities: ['text', 'vision']
+      },
+      {
+        id: 'qwen3.8-flash',
+        label: 'Qwen3.8 Flash',
+        priceTier: 'low',
+        description: '',
+        capabilities: ['text', 'vision']
+      }
+    ]
+  }
+]
 
 describe('workbench model selection', () => {
   it('requires exact remote id for preset availability when list is non-empty', () => {
@@ -66,20 +90,33 @@ describe('workbench model selection', () => {
     ).toBeNull()
   })
 
-  it('keeps preset ids when the remote list is empty', () => {
+  it('keeps preset selection when remote list is empty and catalog is not loaded', () => {
     const configs = [presetConfig('cfg-1')]
     expect(
       resolveSelectedWorkbenchModel({
         configs,
         modelListsByConfigId: { 'cfg-1': [] },
-        selected: { configId: 'cfg-1', modelName: 'qwen3.8-max' }
+        selected: { configId: 'cfg-1', modelName: 'qwen3.8-max-0902' }
+      })
+    ).toEqual({ configId: 'cfg-1', modelName: 'qwen3.8-max-0902' })
+  })
+
+  it('when catalog is loaded, empty remote only keeps ids present in catalog', () => {
+    const configs = [presetConfig('cfg-1')]
+    expect(
+      resolveSelectedWorkbenchModel({
+        configs,
+        modelListsByConfigId: { 'cfg-1': [] },
+        selected: { configId: 'cfg-1', modelName: 'qwen3.8-max' },
+        presetProviders: dashscopeCatalog
       })
     ).toEqual({ configId: 'cfg-1', modelName: 'qwen3.8-max' })
     expect(
       resolveSelectedWorkbenchModel({
         configs,
         modelListsByConfigId: { 'cfg-1': [] },
-        selected: { configId: 'cfg-1', modelName: 'qwen3.8-max-0902' }
+        selected: { configId: 'cfg-1', modelName: 'qwen3.8-max-0902' },
+        presetProviders: dashscopeCatalog
       })
     ).toBeNull()
   })
@@ -92,7 +129,8 @@ describe('workbench model selection', () => {
     expect(
       pickFallbackWorkbenchModel({
         configs,
-        modelListsByConfigId: lists
+        modelListsByConfigId: lists,
+        presetProviders: dashscopeCatalog
       })
     ).toEqual({ configId: 'cfg-1', modelName: 'qwen3.8-max' })
   })
@@ -105,7 +143,8 @@ describe('workbench model selection', () => {
     expect(
       pickFallbackWorkbenchModel({
         configs,
-        modelListsByConfigId: lists
+        modelListsByConfigId: lists,
+        presetProviders: dashscopeCatalog
       })
     ).toEqual({ configId: 'cfg-1', modelName: 'qwen3.8-flash' })
   })
@@ -118,7 +157,8 @@ describe('workbench model selection', () => {
     expect(
       pickFallbackWorkbenchModel({
         configs,
-        modelListsByConfigId: lists
+        modelListsByConfigId: lists,
+        presetProviders: dashscopeCatalog
       })
     ).toEqual({ configId: 'cfg-custom', modelName: 'qwen3.8-max-0902' })
   })

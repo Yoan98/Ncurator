@@ -1,5 +1,6 @@
 import type { ModelSource } from '../shared/modelSources'
 import type { FreeModelsSnapshot } from '../shared/freeModels'
+import type { PresetModelsSnapshot } from '../shared/llmPresets'
 import type {
   AiRuntimeSettings,
   BrowserPanelBoundsRequest,
@@ -257,6 +258,14 @@ export type DesktopApi = {
   freeModelsRefresh: () => Promise<{
     success: boolean
     snapshot: FreeModelsSnapshot
+    error?: string
+  }>
+  presetModelsGet: (options?: {
+    refreshIfStale?: boolean
+  }) => Promise<PresetModelsSnapshot>
+  presetModelsRefresh: () => Promise<{
+    success: boolean
+    snapshot: PresetModelsSnapshot
     error?: string
   }>
   isE2EMode: () => boolean

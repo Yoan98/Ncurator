@@ -356,6 +356,8 @@ const api: DesktopApi = {
   },
   freeModelsGet: (options) => ipcRenderer.invoke('free-models-get', options),
   freeModelsRefresh: () => ipcRenderer.invoke('free-models-refresh'),
+  presetModelsGet: (options) => ipcRenderer.invoke('preset-models-get', options),
+  presetModelsRefresh: () => ipcRenderer.invoke('preset-models-refresh'),
   isE2EMode: () => isE2EObserverEnabled,
   aiRuntimeSettingsGet: () => ipcRenderer.invoke('ai-runtime-settings-get'),
   aiRuntimeSettingsSave: (settings) => ipcRenderer.invoke('ai-runtime-settings-save', settings),

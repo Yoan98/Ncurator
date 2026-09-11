@@ -19,7 +19,8 @@ import {
   resolveHistoryFloor,
   resolveLastConversationRunId,
   resolveMaxMessageLogSeq,
-  runHasDigest
+  runHasCompletedDigest,
+  runHasDelivery
 } from '../../memory/transcript'
 import { buildBrainSystemPrompt } from '../../prompts/brain'
 import { buildContextScopeDecisionPrompt } from '../../prompts/contextScope'
@@ -97,10 +98,17 @@ export const decideContextScope = async (input: {
       budgetTokens: 0
     }
   }
-  if (!runHasDigest(input.records, lastRunId)) {
+  if (!runHasDelivery(input.records, lastRunId)) {
     return {
       needsHistory: true,
       basis: 'gate_incomplete_run',
+      budgetTokens: 0
+    }
+  }
+  if (!runHasCompletedDigest(input.records, lastRunId)) {
+    return {
+      needsHistory: true,
+      basis: 'gate_digest_unavailable',
       budgetTokens: 0
     }
   }

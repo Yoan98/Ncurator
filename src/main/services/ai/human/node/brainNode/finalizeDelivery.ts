@@ -11,7 +11,7 @@ import { emitFinalizingStarted } from '../../../events/processEvents'
 import { renderHumanFileChangeLines } from '../../shared/runtimeRenderers'
 import { resolveDeliveryLinkAccess } from '../../shared/referenceAccessMarkdown'
 import { completeHumanTask } from '../utils/stateTransitions'
-import { appendRunDigestIfPossible } from './runDigest'
+import { buildPendingRunDigestEntry, collectRunDigestFileChangePaths, enqueueRunDigest } from './runDigest'
 
 export const buildContentSafetyFallbackMarkdown = (state: HumanState): string =>
   [
@@ -109,18 +109,21 @@ export const finalizeDelivery = async (input: {
     state: input.state
   })
   const linkAccess = await resolveDeliveryLinkAccess(input.deliveryMarkdown)
+  const fileChangePaths = collectRunDigestFileChangePaths(readyState)
   await input.ctx.appendMessageLog([
     {
       kind: 'assistant',
       content: input.deliveryMarkdown,
       toolCalls: [],
       linkAccess
-    }
+    },
+    buildPendingRunDigestEntry(fileChangePaths)
   ])
-  await appendRunDigestIfPossible({
+  enqueueRunDigest({
     ctx: input.ctx,
     state: readyState,
-    deliveryMarkdown: input.deliveryMarkdown
+    deliveryMarkdown: input.deliveryMarkdown,
+    fileChangePaths
   })
   return completeDelivery({
     ctx: input.ctx,

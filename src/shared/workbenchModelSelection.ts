@@ -44,11 +44,18 @@ const pickAvailablePresetModel = (
   return null
 }
 
+const findCatalogProvider = (
+  presetProviders: readonly LlmPresetProvider[] | undefined,
+  providerId: string
+): LlmPresetProvider | null =>
+  presetProviders?.find((provider) => provider.providerId === providerId) || null
+
 export const resolveSelectedWorkbenchModel = (input: {
   configs: readonly LLMConfig[]
   modelListsByConfigId: Record<string, readonly LlmRemoteModel[]>
   selected: WorkbenchSelectedModel | null | undefined
   freeModels?: readonly FreeModelPublicEntry[]
+  presetProviders?: readonly LlmPresetProvider[]
 }): WorkbenchSelectedModel | null => {
   const selected = input.selected
   if (!selected?.configId || !selected.modelName) return null
@@ -67,11 +74,17 @@ export const resolveSelectedWorkbenchModel = (input: {
     return { configId: config.id, modelName: selected.modelName }
   }
 
-  // Empty remote list (fetch failed): keep known preset ids so recommend configs
-  // remain usable; never invent or keep unmatched custom ids.
+  // Empty remote list (fetch failed): keep selection if it is still a preset config
+  // and (when catalog is loaded) the id exists in the paid preset catalog.
   if (remoteModels.length === 0) {
     const preset = resolvePresetModeProvider(config)
-    if (preset && getPresetModel(preset, selected.modelName)) {
+    if (!preset) return null
+    const catalog = findCatalogProvider(input.presetProviders, preset.providerId)
+    if (!catalog) {
+      // Catalog not loaded yet — keep selection on preset configs.
+      return { configId: config.id, modelName: selected.modelName }
+    }
+    if (getPresetModel(catalog, selected.modelName)) {
       return { configId: config.id, modelName: selected.modelName }
     }
   }
@@ -83,12 +96,15 @@ export const pickFallbackWorkbenchModel = (input: {
   configs: readonly LLMConfig[]
   modelListsByConfigId: Record<string, readonly LlmRemoteModel[]>
   freeModels?: readonly FreeModelPublicEntry[]
+  presetProviders?: readonly LlmPresetProvider[]
 }): WorkbenchSelectedModel | null => {
   for (const config of input.configs) {
     const preset = resolvePresetModeProvider(config)
     if (!preset) continue
+    const catalog = findCatalogProvider(input.presetProviders, preset.providerId)
+    if (!catalog) continue
     const remoteModels = input.modelListsByConfigId[config.id] || []
-    const model = pickAvailablePresetModel(preset, remoteModels)
+    const model = pickAvailablePresetModel(catalog, remoteModels)
     if (model) return { configId: config.id, modelName: model.id }
   }
 

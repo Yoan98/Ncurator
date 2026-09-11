@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  LLM_PRESET_PROVIDERS,
+  LLM_PRESET_PROVIDER_OPTIONS,
+  emptyPresetModelsSnapshot,
   getPresetModel,
   getPresetProvider,
   getPresetProviderByBaseUrl,
+  mergePresetCatalogProviders,
   resolvePresetModeProvider
 } from '../../../../src/shared/llmPresets'
 import { LLM_PROVIDER_REGISTRY } from '../../../../src/shared/llmProvider'
@@ -22,27 +24,15 @@ const buildConfig = (input: {
 })
 
 describe('shared llm presets catalog', () => {
-  it('keeps every preset provider registered with models and price tiers', () => {
-    for (const provider of LLM_PRESET_PROVIDERS) {
+  it('exposes preset provider options from local registry without model seeds', () => {
+    expect(LLM_PRESET_PROVIDER_OPTIONS.length).toBeGreaterThan(0)
+    for (const provider of LLM_PRESET_PROVIDER_OPTIONS) {
       const registry = LLM_PROVIDER_REGISTRY.find((item) => item.id === provider.providerId)
       expect(registry, `${provider.providerId} 应存在于服务商注册表`).toBeDefined()
       expect(provider.label, `${provider.providerId} 应有展示名`).not.toBe('')
-      expect(provider.models.length, `${provider.providerId} 应有推荐模型`).toBeGreaterThan(0)
-      expect(provider.checkedAt, `${provider.providerId} 应有核对日期`).toMatch(
-        /^\d{4}-\d{2}-\d{2}$/
-      )
-      expect(provider.sourceUrl, `${provider.providerId} 应有官方来源链接`).toMatch(/^https?:\/\//)
-
-      const modelIds = new Set<string>()
-      for (const model of provider.models) {
-        expect(model.id.trim(), '模型 ID 不能为空').not.toBe('')
-        expect(modelIds.has(model.id), `${provider.providerId} 模型 ID 重复: ${model.id}`).toBe(
-          false
-        )
-        modelIds.add(model.id)
-        expect(['low', 'mid', 'high']).toContain(model.priceTier)
-      }
+      expect(provider).not.toHaveProperty('models')
     }
+    expect(emptyPresetModelsSnapshot().providers).toEqual([])
   })
 
   it('resolves preset providers from official base urls', () => {
@@ -57,12 +47,45 @@ describe('shared llm presets catalog', () => {
     )
   })
 
-  it('looks up preset models by id', () => {
+  it('looks up preset provider meta without hardcoded models', () => {
     const deepseek = getPresetProvider('deepseek')
-    expect(deepseek).not.toBeNull()
-    expect(getPresetModel(deepseek!, 'deepseek-v4-flash')?.priceTier).toBe('low')
-    expect(getPresetModel(deepseek!, 'deepseek-v4-pro')?.priceTier).toBe('mid')
-    expect(getPresetModel(deepseek!, 'unknown-model')).toBeNull()
+    expect(deepseek).toEqual({ providerId: 'deepseek', label: 'DeepSeek' })
+    expect(
+      getPresetModel(
+        {
+          models: [
+            {
+              id: 'deepseek-flash',
+              label: 'DeepSeek V4.1 Flash',
+              priceTier: 'low',
+              description: '',
+              capabilities: ['text', 'vision']
+            }
+          ]
+        },
+        'deepseek-flash'
+      )?.priceTier
+    ).toBe('low')
+  })
+
+  it('merges remote catalog models with local provider labels', () => {
+    const merged = mergePresetCatalogProviders([
+      {
+        providerId: 'deepseek',
+        models: [
+          {
+            id: 'deepseek-flash',
+            label: 'DeepSeek V4.1 Flash',
+            priceTier: 'low',
+            description: 'native multimodal',
+            capabilities: ['text', 'vision']
+          }
+        ]
+      }
+    ])
+    expect(merged).toHaveLength(1)
+    expect(merged[0].label).toBe('DeepSeek')
+    expect(merged[0].models[0].id).toBe('deepseek-flash')
   })
 })
 

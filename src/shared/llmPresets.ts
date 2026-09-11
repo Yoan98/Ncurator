@@ -11,143 +11,71 @@ export type LlmPresetModel = {
   capabilities: Array<'text' | 'vision'>
 }
 
-export type LlmPresetProvider = {
-  providerId: LlmProviderId
+export type LlmPresetProviderId = Exclude<LlmProviderId, 'local' | 'custom'>
+
+/** Local provider meta only (no recommended models — those come from remote catalog). */
+export type LlmPresetProviderMeta = {
+  providerId: LlmPresetProviderId
   label: string
-  models: LlmPresetModel[]
-  sourceUrl: string
-  checkedAt: string
 }
 
-export const LLM_PRESET_PROVIDERS: LlmPresetProvider[] = [
-  {
-    providerId: 'deepseek',
-    label: 'DeepSeek',
-    sourceUrl: 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing',
-    checkedAt: '2026-08-28',
-    models: [
-      {
-        id: 'deepseek-v4-pro',
-        label: 'DeepSeek V4 Pro',
-        priceTier: 'mid',
-        description: '面向复杂推理、代码与长任务的主力模型。',
-        capabilities: ['text']
-      },
-      {
-        id: 'deepseek-v4-flash',
-        label: 'DeepSeek V4 Flash',
-        priceTier: 'low',
-        description: '更快更省，适合日常问答与轻量任务。',
-        capabilities: ['text']
-      },
-      {
-        id: 'deepseek-v4-flash-vision-exp',
-        label: 'DeepSeek V4 Flash Vision',
-        priceTier: 'low',
-        description: '在 Flash 速度之上增加图片理解。',
-        capabilities: ['text', 'vision']
-      }
-    ]
-  },
-  {
-    providerId: 'dashscope',
-    label: '通义千问',
-    sourceUrl: 'https://www.qianwenai.com/models',
-    checkedAt: '2026-08-28',
-    models: [
-      {
-        id: 'qwen3.8-max',
-        label: 'Qwen3.8 Max',
-        priceTier: 'high',
-        description: '通义旗舰，擅长复杂知识、编程与长程任务，支持视觉。',
-        capabilities: ['text', 'vision']
-      },
-      {
-        id: 'qwen3.8-flash',
-        label: 'Qwen3.8 Flash',
-        priceTier: 'low',
-        description: '更偏速度与成本，覆盖常用多模态场景。',
-        capabilities: ['text', 'vision']
-      }
-    ]
-  },
-  {
-    providerId: 'mimo',
-    label: '小米 MiMo',
-    sourceUrl: 'https://mimo.mi.com/docs/zh-CN/quick-start/summary/model',
-    checkedAt: '2026-08-28',
-    models: [
-      {
-        id: 'mimo-v2.5-pro',
-        label: 'MiMo V2.5 Pro',
-        priceTier: 'mid',
-        description: '适合较复杂的推理、代码与知识工作。',
-        capabilities: ['text']
-      },
-      {
-        id: 'mimo-v2.5',
-        label: 'MiMo V2.5',
-        priceTier: 'low',
-        description: '面向高频日常任务，并支持图片理解。',
-        capabilities: ['text', 'vision']
-      }
-    ]
-  },
-  {
-    providerId: 'zhipu',
-    label: '智谱 GLM',
-    sourceUrl: 'https://docs.bigmodel.cn/cn/guide/start/model-overview',
-    checkedAt: '2026-08-28',
-    models: [
-      {
-        id: 'glm-5.3',
-        label: 'GLM 5.3',
-        priceTier: 'high',
-        description: '面向高难度推理、代码与专业任务。',
-        capabilities: ['text']
-      },
-      {
-        id: 'glm-5.3-flash',
-        label: 'GLM 5.3 Flash',
-        priceTier: 'low',
-        description: '更快更经济，支持图片理解。',
-        capabilities: ['text', 'vision']
-      }
-    ]
-  },
-  {
-    providerId: 'moonshot',
-    label: 'Kimi',
-    sourceUrl: 'https://platform.kimi.com/docs/pricing/chat-k3',
-    checkedAt: '2026-08-28',
-    models: [
-      {
-        id: 'kimi-k3',
-        label: 'Kimi K3',
-        priceTier: 'high',
-        description: '适合长上下文、复杂推理与多模态工作。',
-        capabilities: ['text', 'vision']
-      },
-      {
-        id: 'kimi-k2.6',
-        label: 'Kimi K2.6',
-        priceTier: 'mid',
-        description: '质量与速度均衡，支持图片理解。',
-        capabilities: ['text', 'vision']
-      }
-    ]
-  }
-]
+/** Remote catalog provider row merged with local label. */
+export type LlmPresetProvider = LlmPresetProviderMeta & {
+  models: LlmPresetModel[]
+}
 
-export const getPresetProvider = (providerId: LlmProviderId): LlmPresetProvider | null =>
-  LLM_PRESET_PROVIDERS.find((provider) => provider.providerId === providerId) || null
+export const PRESET_MODEL_CATALOG_TTL_MS = 6 * 60 * 60 * 1000
+
+export type PresetCatalogModelPayload = LlmPresetModel
+
+export type PresetCatalogProviderPayload = {
+  providerId: LlmPresetProviderId
+  models: PresetCatalogModelPayload[]
+}
+
+export type PresetModelsCatalogResponse = {
+  updatedAt: string
+  providers: PresetCatalogProviderPayload[]
+}
+
+export type PresetModelsSnapshot = {
+  updatedAt: string | null
+  fetchedAt: number | null
+  providers: LlmPresetProvider[]
+}
+
+const PRESET_PROVIDER_IDS = new Set<LlmPresetProviderId>([
+  'deepseek',
+  'dashscope',
+  'mimo',
+  'moonshot',
+  'zhipu'
+])
+
+export const isLlmPresetProviderId = (value: string): value is LlmPresetProviderId =>
+  PRESET_PROVIDER_IDS.has(value as LlmPresetProviderId)
+
+/** Settings dropdown: preset vendors from local registry (no model list). */
+export const LLM_PRESET_PROVIDER_OPTIONS: LlmPresetProviderMeta[] = LLM_PROVIDER_REGISTRY.filter(
+  (entry): entry is (typeof LLM_PROVIDER_REGISTRY)[number] & { id: LlmPresetProviderId } =>
+    isLlmPresetProviderId(entry.id)
+).map((entry) => ({
+  providerId: entry.id,
+  label: entry.label
+}))
+
+export const getPresetProvider = (providerId: LlmProviderId): LlmPresetProviderMeta | null => {
+  if (!isLlmPresetProviderId(providerId)) return null
+  const entry = LLM_PROVIDER_REGISTRY.find((item) => item.id === providerId)
+  return entry ? { providerId, label: entry.label } : null
+}
 
 export const getPresetModel = (
-  provider: LlmPresetProvider,
+  provider: Pick<LlmPresetProvider, 'models'>,
   modelId: string
 ): LlmPresetModel | null => provider.models.find((model) => model.id === modelId) || null
 
-export const getPresetProviderByBaseUrl = (baseUrl: string): LlmPresetProvider | null => {
+export const getPresetProviderByBaseUrl = (baseUrl: string): LlmPresetProviderMeta | null => {
   const resolved = resolveLlmProvider(baseUrl)
   return getPresetProvider(resolved.providerId)
 }
@@ -163,9 +91,56 @@ export const getPresetProviderLabel = (providerId: LlmProviderId): string =>
 
 export const resolvePresetModeProvider = (
   config: Pick<LLMConfig, 'providerKind' | 'name' | 'base_url'>
-): LlmPresetProvider | null => {
+): LlmPresetProviderMeta | null => {
   const provider = getPresetProviderByBaseUrl(config.base_url)
   if (!provider) return null
   if (config.name.trim() !== provider.label) return null
   return provider
+}
+
+export const emptyPresetModelsSnapshot = (): PresetModelsSnapshot => ({
+  updatedAt: null,
+  fetchedAt: null,
+  providers: []
+})
+
+/** Merge remote catalog rows with local provider labels from registry. */
+export const mergePresetCatalogProviders = (
+  remote: readonly PresetCatalogProviderPayload[]
+): LlmPresetProvider[] => {
+  const result: LlmPresetProvider[] = []
+  for (const entry of remote) {
+    if (!isLlmPresetProviderId(entry.providerId)) continue
+    if (!Array.isArray(entry.models) || entry.models.length === 0) continue
+    const meta = getPresetProvider(entry.providerId)
+    if (!meta) continue
+    const models: LlmPresetModel[] = []
+    for (const model of entry.models) {
+      const id = String(model.id || '').trim()
+      const label = String(model.label || '').trim()
+      const priceTier = model.priceTier
+      if (!id || !label) continue
+      if (priceTier !== 'low' && priceTier !== 'mid' && priceTier !== 'high') continue
+      const capabilities = Array.isArray(model.capabilities)
+        ? model.capabilities.filter(
+            (item): item is 'text' | 'vision' => item === 'text' || item === 'vision'
+          )
+        : []
+      if (capabilities.length === 0) continue
+      models.push({
+        id,
+        label,
+        priceTier,
+        description: typeof model.description === 'string' ? model.description.trim() : '',
+        capabilities
+      })
+    }
+    if (models.length === 0) continue
+    result.push({
+      providerId: entry.providerId,
+      label: meta.label,
+      models
+    })
+  }
+  return result
 }

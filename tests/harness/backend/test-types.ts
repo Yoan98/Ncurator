@@ -2,6 +2,7 @@ import type {
   AiApprovalBatchRequest,
   AiApprovalBatchResult,
   AiRunContext,
+  AiRunDeps,
   BrowserUseService
 } from '../../../src/main/services/ai/types'
 import type { HumanTaskRunner } from '../../../src/main/services/ai/types'
@@ -161,6 +162,7 @@ export type CreateAiRunContextInput = {
   bindWorkspace?: boolean
   partnerId?: string
   sessionId?: string
+  runId?: string
   userInput?: string
   selectedReferences?: SelectedReference[]
   runtimeSettingsOverride?: Partial<AiRuntimeSettings>
@@ -174,6 +176,7 @@ export type CreateAiRunContextInput = {
   }
   llmScript?: LlmScript
   structuredOutputScript?: StructuredOutputScript
+  chatToolsWrapper?: AiRunDeps['chatToolsWrapper']
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
 }

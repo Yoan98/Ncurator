@@ -1,4 +1,6 @@
 import { describe, it } from 'vitest'
+import { LlmProviderError } from '../../../../../src/main/services/ai/errors'
+import { isAiRunFailure } from '../../../../../src/main/services/ai/utils/runFailure'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { buildCompleteTaskDecision } from '../testUtils'
@@ -123,18 +125,18 @@ describe('ai human mock-llm backend', () => {
     })
   })
 
-  it('context-scope-incomplete-run', async () => {
+  it('context-scope-digest-unavailable', async () => {
     await runBackendCase({
-      caseId: 'context-scope-incomplete-run',
+      caseId: 'context-scope-digest-unavailable',
       harnessMode: 'mock-llm',
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '上一轮交付后未写出 run_digest 时，下一轮直接带历史且不调判定模型。',
+      description: '上一轮交付后 digest 最终失败时，下一轮直接带历史且不调判定模型。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const partnerId = 'context-scope-incomplete-partner'
+        const partnerId = 'context-scope-digest-unavailable-partner'
         await createHumanTestRunner(runtime, {
           partnerId,
           structuredOutputScript: {
@@ -149,9 +151,106 @@ describe('ai human mock-llm backend', () => {
             'human.run_digest': [{ error: 'digest failed' }]
           }
         }).run({
-          taskId: 'context-scope-incomplete-run-1',
+          taskId: 'context-scope-digest-unavailable-run-1',
           userInput: '用一句话解释什么是过拟合。'
         })
+
+        const beforeRun2 = runtime.eventCollector.snapshotLlmIo().length
+        const output = await createHumanTestRunner(runtime, {
+          partnerId,
+          structuredOutputScript: {
+            'human.context_scope': [
+              {
+                output: { needsHistory: false, reason: '脚本占位，本 case 不应调用判定模型' }
+              }
+            ],
+            'human.brain': [
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '已继续。',
+                  deliveryMarkdown: '过拟合就是把噪声当规律。'
+                })
+              }
+            ],
+            'human.run_digest': [{ text: '继续解释过拟合' }]
+          }
+        }).run({
+          taskId: 'context-scope-digest-unavailable-run-2',
+          userInput: '继续刚才的解释。'
+        })
+        const log = await runtime.storageService.chatMessageLog.list(partnerId)
+        const decided = [...log]
+          .reverse()
+          .find(
+            (record) =>
+              record.entry.kind === 'annotation' &&
+              record.entry.eventType === 'context_scope_decided'
+          )
+        const run2ScopeCalls = runtime.eventCollector
+          .snapshotLlmIo()
+          .slice(beforeRun2)
+          .filter((record) => record.caller === 'human.context_scope').length
+        return { output, decided, run2ScopeCalls }
+      },
+      assert: async (result, runtime) => {
+        const payload =
+          result.decided?.entry.kind === 'annotation' &&
+          result.decided.entry.eventType === 'context_scope_decided'
+            ? result.decided.entry.payload
+            : undefined
+        runtime.assertThat(
+          result.output.status === 'completed' &&
+            payload?.needsHistory === true &&
+            payload.basis === 'gate_digest_unavailable' &&
+            result.run2ScopeCalls === 0,
+          {
+            name: 'digest-unavailable-skips-scope-model',
+            message: '有交付但 digest 失败的上一轮之后必须直接带历史，且不得调用判定模型。',
+            data: {
+              status: result.output.status,
+              payload,
+              run2ScopeCalls: result.run2ScopeCalls
+            }
+          }
+        )
+      }
+    })
+  })
+
+  it('context-scope-incomplete-run', async () => {
+    await runBackendCase({
+      caseId: 'context-scope-incomplete-run',
+      harnessMode: 'mock-llm',
+      domain: 'ai',
+      suite: 'human',
+      groups: ['mock-llm'],
+      description: '上一轮没有交付时，下一轮直接带历史且不调判定模型。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const partnerId = 'context-scope-incomplete-partner'
+        const interruptedRunner = createHumanTestRunner(runtime, {
+          partnerId,
+          chatToolsWrapper: () => async (request) => {
+            if (request.caller === 'human.brain') {
+              throw new LlmProviderError({
+                message: 'fetch failed',
+                retryable: false
+              })
+            }
+            throw new Error(`unexpected caller ${request.caller}`)
+          }
+        })
+        let interrupted: { status: string }
+        try {
+          interrupted = await interruptedRunner.run({
+            taskId: 'context-scope-incomplete-run-1',
+            userInput: '用一句话解释什么是过拟合。'
+          })
+        } catch (error) {
+          if (!isAiRunFailure(error)) throw error
+          interrupted = { status: 'failed' }
+        }
 
         const beforeRun2 = runtime.eventCollector.snapshotLlmIo().length
         const output = await createHumanTestRunner(runtime, {
@@ -188,7 +287,7 @@ describe('ai human mock-llm backend', () => {
           .snapshotLlmIo()
           .slice(beforeRun2)
           .filter((record) => record.caller === 'human.context_scope').length
-        return { output, decided, run2ScopeCalls }
+        return { interrupted, output, decided, run2ScopeCalls }
       },
       assert: async (result, runtime) => {
         const payload =
@@ -197,14 +296,16 @@ describe('ai human mock-llm backend', () => {
             ? result.decided.entry.payload
             : undefined
         runtime.assertThat(
-          result.output.status === 'completed' &&
+          result.interrupted.status === 'failed' &&
+            result.output.status === 'completed' &&
             payload?.needsHistory === true &&
             payload.basis === 'gate_incomplete_run' &&
             result.run2ScopeCalls === 0,
           {
             name: 'incomplete-run-skips-scope-model',
-            message: '没有 run_digest 的上一轮之后必须直接带历史，且不得调用判定模型。',
+            message: '没有交付的上一轮之后必须直接带历史，且不得调用判定模型。',
             data: {
+              interrupted: result.interrupted.status,
               status: result.output.status,
               payload,
               run2ScopeCalls: result.run2ScopeCalls

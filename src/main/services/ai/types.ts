@@ -383,7 +383,10 @@ export type AiRunContext = {
   getLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
-  appendMessageLog: (entries: ChatMessageLogEntry[]) => Promise<void>
+  appendMessageLog: (
+    entries: ChatMessageLogEntry[],
+    options?: { runId?: string }
+  ) => Promise<void>
   loadMessageLog: () => Promise<ChatMessageLogRecord[]>
   trackDocxOpen: (input: {
     docId: string
