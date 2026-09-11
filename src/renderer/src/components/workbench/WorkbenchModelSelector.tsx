@@ -16,7 +16,8 @@ import {
   HiChevronLeft,
   HiChevronRight,
   HiCpuChip,
-  HiMagnifyingGlass
+  HiMagnifyingGlass,
+  HiXMark
 } from 'react-icons/hi2'
 import { PiCoinBold } from 'react-icons/pi'
 import type {
@@ -26,13 +27,13 @@ import type {
   WorkbenchSelectedModel
 } from '../../../../shared/types'
 import {
+  PRESET_MODEL_CATALOG_TTL_MS,
   resolvePresetModeProvider,
   type LlmPresetModel,
   type LlmPresetProvider,
   type LlmPriceTier
 } from '../../../../shared/llmPresets'
 import {
-  FREE_MODEL_NOTICE,
   FREE_MODEL_PRICE_LABEL,
   type FreeModelPublicEntry
 } from '../../../../shared/freeModels'
@@ -72,21 +73,8 @@ type WorkbenchModelSelectorProps = {
 
 type PanelView = 'preset' | 'custom'
 
-type PresetInspector = {
-  kind: 'preset'
-  provider: LlmPresetProvider
-  model: LlmPresetModel
-  available: boolean
-  top: number
-}
-
-type FreeInspector = {
-  kind: 'free'
-  model: FreeModelPublicEntry
-  top: number
-}
-
-type ModelInspector = PresetInspector | FreeInspector
+type CatalogLoadStatus = 'loading' | 'ready' | 'error'
+type CatalogRefreshStatus = 'idle' | 'loading' | 'success' | 'error'
 
 type MenuPosition = {
   top?: number
@@ -100,9 +88,8 @@ const PRESET_MENU_MIN_WIDTH = 200
 const PRESET_MENU_MAX_WIDTH = 300
 const CUSTOM_MENU_MIN_WIDTH = 280
 const CUSTOM_MENU_MAX_WIDTH = 360
-const INSPECTOR_WIDTH = 200
-const INSPECTOR_GAP = 1
-const VIEWPORT_PADDING = 12
+const PRESET_LIST_MAX_HEIGHT = 300
+const CATALOG_REFRESH_FEEDBACK_MS = 1400
 const DEFAULT_POSITION: MenuPosition = {
   left: 0,
   width: PRESET_MENU_MIN_WIDTH,
@@ -136,6 +123,9 @@ const isSameSelection = (
   right: WorkbenchSelectedModel | null
 ): boolean => left?.configId === right?.configId && left?.modelName === right?.modelName
 
+const isCatalogFetchedAtStale = (fetchedAt: number | null | undefined, now = Date.now()): boolean =>
+  typeof fetchedAt !== 'number' || now - fetchedAt >= PRESET_MODEL_CATALOG_TTL_MS
+
 const PRICE_TIER_COIN_SIZE = 12
 const PRICE_TIER_COIN_STEP = 4
 const PRICE_TIER_COIN_GAP_PX = 2
@@ -165,6 +155,10 @@ const PriceTierCoins: React.FC<{ tier: LlmPriceTier }> = ({ tier }) => {
   )
 }
 
+const CatalogModelIcon: React.FC<{ src: string; alt: string }> = ({ src, alt }) => (
+  <img src={src} alt={alt} className="h-4 w-4 shrink-0 rounded-[3px] object-contain" />
+)
+
 const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   configs,
   modelListsByConfigId,
@@ -182,8 +176,8 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
-  const inspectorRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const refreshFeedbackTimerRef = useRef<number | null>(null)
   const listboxId = useId()
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<PanelView>('preset')
@@ -193,54 +187,166 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     () => new Set()
   )
   const [position, setPosition] = useState<MenuPosition>(DEFAULT_POSITION)
-  const [inspectedModel, setInspectedModel] = useState<ModelInspector | null>(null)
   const [freeModels, setFreeModels] = useState<FreeModelPublicEntry[]>([])
-  const [freeModelsRefreshing, setFreeModelsRefreshing] = useState(false)
   const [presetProviders, setPresetProviders] = useState<LlmPresetProvider[]>([])
+  const [freeFetchedAt, setFreeFetchedAt] = useState<number | null>(null)
+  const [presetFetchedAt, setPresetFetchedAt] = useState<number | null>(null)
+  const [catalogLoadStatus, setCatalogLoadStatus] = useState<CatalogLoadStatus>('loading')
+  const [catalogRefreshStatus, setCatalogRefreshStatus] = useState<CatalogRefreshStatus>('idle')
 
-  const loadFreeModels = useCallback(async (refreshIfStale: boolean): Promise<void> => {
-    try {
-      const snapshot = await window.api.freeModelsGet({ refreshIfStale })
-      setFreeModels(snapshot.models)
-    } catch (error) {
-      console.error('Failed to load free models', error)
+  const clearRefreshFeedbackTimer = useCallback((): void => {
+    if (refreshFeedbackTimerRef.current !== null) {
+      window.clearTimeout(refreshFeedbackTimerRef.current)
+      refreshFeedbackTimerRef.current = null
     }
   }, [])
 
-  const loadPresetModels = useCallback(async (refreshIfStale: boolean): Promise<void> => {
-    try {
-      const snapshot = await window.api.presetModelsGet({ refreshIfStale })
-      if (snapshot.providers.length > 0) {
-        setPresetProviders(snapshot.providers)
+  const scheduleRefreshIdle = useCallback((): void => {
+    clearRefreshFeedbackTimer()
+    refreshFeedbackTimerRef.current = window.setTimeout(() => {
+      setCatalogRefreshStatus('idle')
+      refreshFeedbackTimerRef.current = null
+    }, CATALOG_REFRESH_FEEDBACK_MS)
+  }, [clearRefreshFeedbackTimer])
+
+  const applyCatalogSnapshots = useCallback(
+    (input: {
+      freeModels: FreeModelPublicEntry[]
+      freeFetchedAt: number | null
+      presetProviders: LlmPresetProvider[]
+      presetFetchedAt: number | null
+    }): boolean => {
+      setFreeModels(input.freeModels)
+      setFreeFetchedAt(input.freeFetchedAt)
+      if (input.presetProviders.length > 0) {
+        setPresetProviders(input.presetProviders)
       }
-    } catch (error) {
-      console.error('Failed to load preset models', error)
-    }
-  }, [])
+      setPresetFetchedAt(input.presetFetchedAt)
+      return input.freeModels.length > 0 || input.presetProviders.length > 0
+    },
+    []
+  )
 
-  const refreshFreeModels = useCallback(async (): Promise<void> => {
-    if (freeModelsRefreshing) return
-    setFreeModelsRefreshing(true)
-    try {
-      const result = await window.api.freeModelsRefresh()
-      setFreeModels(result.snapshot.models)
-    } catch (error) {
-      console.error('Failed to refresh free models', error)
-    } finally {
-      setFreeModelsRefreshing(false)
-    }
-  }, [freeModelsRefreshing])
+  const loadCatalogFromCache = useCallback(
+    async (refreshIfStale: boolean): Promise<boolean> => {
+      const [freeSnapshot, presetSnapshot] = await Promise.all([
+        window.api.freeModelsGet({ refreshIfStale }),
+        window.api.presetModelsGet({ refreshIfStale })
+      ])
+      return applyCatalogSnapshots({
+        freeModels: freeSnapshot.models,
+        freeFetchedAt: freeSnapshot.fetchedAt,
+        presetProviders: presetSnapshot.providers,
+        presetFetchedAt: presetSnapshot.fetchedAt
+      })
+    },
+    [applyCatalogSnapshots]
+  )
+
+  const refreshCatalog = useCallback(
+    async (options?: { showOutcome?: boolean }): Promise<boolean> => {
+      const showOutcome = options?.showOutcome ?? true
+      clearRefreshFeedbackTimer()
+      setCatalogRefreshStatus('loading')
+      try {
+        const [freeResult, presetResult] = await Promise.all([
+          window.api.freeModelsRefresh(),
+          window.api.presetModelsRefresh()
+        ])
+        const hasData = applyCatalogSnapshots({
+          freeModels: freeResult.snapshot.models,
+          freeFetchedAt: freeResult.snapshot.fetchedAt,
+          presetProviders: presetResult.snapshot.providers,
+          presetFetchedAt: presetResult.snapshot.fetchedAt
+        })
+        const ok = freeResult.success && presetResult.success
+        if (showOutcome) {
+          setCatalogRefreshStatus(ok ? 'success' : 'error')
+          scheduleRefreshIdle()
+        } else {
+          setCatalogRefreshStatus('idle')
+        }
+        if (hasData) {
+          setCatalogLoadStatus('ready')
+        } else if (!ok) {
+          setCatalogLoadStatus('error')
+        } else {
+          setCatalogLoadStatus('ready')
+        }
+        return ok
+      } catch (error) {
+        console.error('Failed to refresh model catalogs', error)
+        if (showOutcome) {
+          setCatalogRefreshStatus('error')
+          scheduleRefreshIdle()
+        } else {
+          setCatalogRefreshStatus('idle')
+        }
+        setCatalogLoadStatus((current) => {
+          if (current === 'ready') return current
+          return freeModels.length > 0 || presetProviders.length > 0 ? 'ready' : 'error'
+        })
+        return false
+      }
+    },
+    [
+      applyCatalogSnapshots,
+      clearRefreshFeedbackTimer,
+      freeModels.length,
+      presetProviders.length,
+      scheduleRefreshIdle
+    ]
+  )
 
   useEffect(() => {
-    void loadFreeModels(false)
-    void loadPresetModels(false)
-  }, [loadFreeModels, loadPresetModels])
+    let cancelled = false
+    const bootstrap = async (): Promise<void> => {
+      try {
+        const hasCache = await loadCatalogFromCache(false)
+        if (cancelled) return
+        if (hasCache) {
+          setCatalogLoadStatus('ready')
+          return
+        }
+        setCatalogLoadStatus('loading')
+        await refreshCatalog({ showOutcome: false })
+      } catch (error) {
+        console.error('Failed to load model catalogs', error)
+        if (!cancelled) setCatalogLoadStatus('error')
+      }
+    }
+    void bootstrap()
+    return () => {
+      cancelled = true
+      clearRefreshFeedbackTimer()
+    }
+    // Intentionally mount-once bootstrap.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     if (!open || view !== 'preset') return
-    void loadFreeModels(true)
-    void loadPresetModels(true)
-  }, [open, view, loadFreeModels, loadPresetModels])
+    let cancelled = false
+    const syncOnOpen = async (): Promise<void> => {
+      const hasData = freeModels.length > 0 || presetProviders.length > 0
+      if (!hasData) {
+        setCatalogLoadStatus('loading')
+        await refreshCatalog({ showOutcome: false })
+        return
+      }
+      const stale =
+        isCatalogFetchedAtStale(freeFetchedAt) || isCatalogFetchedAtStale(presetFetchedAt)
+      if (!stale) return
+      if (cancelled) return
+      await refreshCatalog({ showOutcome: false })
+    }
+    void syncOnOpen()
+    return () => {
+      cancelled = true
+    }
+    // Only re-run when the menu opens on the preset view.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, view])
 
   const mainLabel = value.mainModel?.modelName || '选择模型'
 
@@ -298,33 +404,22 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       align: 'end',
       topInset: WORKBENCH_TITLEBAR_HEIGHT + 12
     })
-    let nextLeft = placement.left
-    // Keep the inspector fixed to the menu's right. If the pair would overflow,
-    // shift the menu left so both stay in viewport.
-    if (view === 'preset' && inspectedModel) {
-      const pairWidth = nextWidth + INSPECTOR_GAP + INSPECTOR_WIDTH
-      const maxLeft = Math.max(
-        VIEWPORT_PADDING,
-        window.innerWidth - VIEWPORT_PADDING - pairWidth
-      )
-      nextLeft = Math.min(nextLeft, maxLeft)
-    }
     if (
       Math.abs(nextWidth - position.width) < 1 &&
-      Math.abs(nextLeft - position.left) < 1 &&
+      Math.abs(placement.left - position.left) < 1 &&
       placement.top === position.top &&
       placement.bottom === position.bottom
     ) {
       return
     }
     setPosition({
-      left: nextLeft,
+      left: placement.left,
       top: placement.top,
       bottom: placement.bottom,
       width: nextWidth,
       maxHeight: placement.maxHeight
     })
-  }, [open, view, position, inspectedModel, query, configs, modelListsByConfigId, freeModels])
+  }, [open, view, position, query, configs, modelListsByConfigId, freeModels, presetProviders])
 
   useEffect(() => {
     if (!open) return
@@ -333,7 +428,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       if (!(target instanceof Node)) return
       if (rootRef.current?.contains(target)) return
       if (menuRef.current?.contains(target)) return
-      if (inspectorRef.current?.contains(target)) return
       setOpen(false)
     }
     const handleResize = (): void => updatePosition()
@@ -359,7 +453,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (!open) {
       setView('preset')
       setQuery('')
-      setInspectedModel(null)
       return
     }
     if (view === 'preset') return
@@ -396,7 +489,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       .find((provider) => provider.providerId === preset.providerId)
       ?.models.find((item) => item.id === value.mainModel?.modelName)
     if (!model) return null
-    return { provider: preset, modelLabel: model.label }
+    return { provider: preset, modelLabel: model.label, iconUrl: model.iconUrl }
   }, [value.mainModel, configs, presetProviders])
 
   const selectedFree = useMemo(() => {
@@ -409,7 +502,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       ) || null
     )
   }, [value.mainModel, freeModels])
-
 
   const groupedModels = useMemo(() => {
     return configs
@@ -435,6 +527,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     })
     return (
       <button
+        key={`${provider.providerId}:${model.id}`}
         type="button"
         role="option"
         aria-selected={selected}
@@ -449,31 +542,10 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           if (!available) return
           selectModel(matchedConfig.id, model.id)
         }}
-        onMouseEnter={(event) =>
-          setInspectedModel({
-            kind: 'preset',
-            provider,
-            model,
-            available,
-            top: event.currentTarget.getBoundingClientRect().top
-          })
-        }
-        onFocus={(event) =>
-          setInspectedModel({
-            kind: 'preset',
-            provider,
-            model,
-            available,
-            top: event.currentTarget.getBoundingClientRect().top
-          })
-        }
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
-          {getProviderLogo(provider.providerId)}
-          <span
-            className="inline-flex items-end"
-            style={{ gap: PRICE_TIER_COIN_GAP_PX }}
-          >
+          <CatalogModelIcon src={model.iconUrl} alt={model.label} />
+          <span className="inline-flex items-end" style={{ gap: PRICE_TIER_COIN_GAP_PX }}>
             <span
               className="whitespace-nowrap text-[13px] font-medium text-[#37352F]"
               style={{ lineHeight: `${PRICE_TIER_TEXT_LINE_PX}px` }}
@@ -495,6 +567,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     })
     return (
       <button
+        key={model.id}
         type="button"
         role="option"
         aria-selected={selected}
@@ -504,27 +577,9 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           selected ? 'workbench-select-option-selected' : ''
         )}
         onClick={() => selectModel(model.configId, model.modelName)}
-        onMouseEnter={(event) =>
-          setInspectedModel({
-            kind: 'free',
-            model,
-            top: event.currentTarget.getBoundingClientRect().top
-          })
-        }
-        onFocus={(event) =>
-          setInspectedModel({
-            kind: 'free',
-            model,
-            top: event.currentTarget.getBoundingClientRect().top
-          })
-        }
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
-          <img
-            src={model.iconUrl}
-            alt={model.label}
-            className="h-4 w-4 shrink-0 rounded-[3px] object-contain"
-          />
+          <CatalogModelIcon src={model.iconUrl} alt={model.label} />
           <span
             className="inline-flex items-end gap-1.5"
             style={{ lineHeight: `${PRICE_TIER_TEXT_LINE_PX}px` }}
@@ -542,67 +597,116 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     )
   }
 
-  const renderPresetView = (): React.ReactNode => (
-    <>
-      <div className="overflow-y-auto py-1.5" style={{ flex: 1, minHeight: 0 }}>
-        {presetGroups.length === 0 && freeModels.length === 0 ? (
-          <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
-            暂无已配置的预设模型
-          </div>
+  const renderCatalogRefreshButton = (): React.ReactNode => {
+    const busy = catalogRefreshStatus === 'loading'
+    const iconClass = joinClassNames(
+      'h-3.5 w-3.5 transition-opacity duration-150',
+      catalogRefreshStatus === 'loading' ? 'animate-spin' : ''
+    )
+    return (
+      <button
+        type="button"
+        aria-label="刷新模型目录"
+        data-testid={workbenchSelectors.modelSelectCatalogRefresh}
+        disabled={busy}
+        className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] hover:bg-[#F4F4F2] hover:text-[#37352F] disabled:pointer-events-none"
+        onClick={(event) => {
+          event.stopPropagation()
+          void refreshCatalog({ showOutcome: true })
+        }}
+      >
+        {catalogRefreshStatus === 'success' ? (
+          <HiCheck className={joinClassNames(iconClass, 'text-[#356b5a]')} />
+        ) : catalogRefreshStatus === 'error' ? (
+          <HiXMark className={joinClassNames(iconClass, 'text-[#B3261E]')} />
         ) : (
-          <>
-            {presetGroups.map(({ provider, matchedConfig }) =>
-              provider.models.map((model) => renderPresetModelOption(provider, model, matchedConfig))
-            )}
-            {freeModels.length > 0 ? (
-              <div className={presetGroups.length > 0 ? 'mt-1 border-t border-[#EEEEEC] pt-1' : ''}>
-                <div className="flex items-center justify-between gap-2 px-3 py-1">
-                  <span className="text-[11px] font-medium text-[#9B9A97]">免费模型</span>
-                  <button
-                    type="button"
-                    aria-label="刷新免费模型"
-                    data-testid={workbenchSelectors.modelSelectFreeRefresh}
-                    className="flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] hover:bg-[#F4F4F2] hover:text-[#37352F]"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      void refreshFreeModels()
-                    }}
-                  >
-                    <HiArrowPath
-                      className={joinClassNames(
-                        'h-3.5 w-3.5',
-                        freeModelsRefreshing ? 'animate-spin' : ''
-                      )}
-                    />
-                  </button>
-                </div>
-                {freeModels.map((model) => renderFreeModelOption(model))}
-              </div>
-            ) : null}
-          </>
+          <HiArrowPath className={iconClass} />
         )}
-      </div>
-      <div className="border-t border-[#EEEEEC] py-1.5">
-        <button
-          type="button"
-          className="workbench-select-option min-h-[44px]"
-          data-testid={workbenchSelectors.modelSelectCustomEntry}
-          onClick={() => {
-            setInspectedModel(null)
-            setView('custom')
-          }}
-          onMouseEnter={() => setInspectedModel(null)}
+      </button>
+    )
+  }
+
+  const renderPresetView = (): React.ReactNode => {
+    const showLoading = catalogLoadStatus === 'loading'
+    const showError =
+      catalogLoadStatus === 'error' &&
+      presetGroups.length === 0 &&
+      freeModels.length === 0
+    const showEmpty =
+      catalogLoadStatus === 'ready' &&
+      presetGroups.length === 0 &&
+      freeModels.length === 0
+
+    return (
+      <>
+        <div className="flex items-center justify-end px-2.5 pt-1.5">
+          {renderCatalogRefreshButton()}
+        </div>
+        <div
+          className="overflow-y-auto py-1.5"
+          style={{ maxHeight: PRESET_LIST_MAX_HEIGHT, minHeight: 0 }}
         >
-          <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-            <HiAdjustmentsHorizontal className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
-            <span className="text-[13px] font-semibold text-[#37352F]">自定义模型</span>
-          </span>
-          <span className="min-w-0 flex-1" />
-          <HiChevronRight className="h-3.5 w-3.5 shrink-0 text-[#9B9A97]" />
-        </button>
-      </div>
-    </>
-  )
+          {showLoading ? (
+            <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
+              正在加载模型目录…
+            </div>
+          ) : showError ? (
+            <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
+              <div className="text-[12px] text-[#91918E]">模型目录加载失败</div>
+              <button
+                type="button"
+                className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5E4E0] px-3 text-[12px] font-medium text-[#37352F] hover:bg-[#F4F4F2]"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  void refreshCatalog({ showOutcome: true })
+                }}
+              >
+                <HiArrowPath
+                  className={joinClassNames(
+                    'h-3.5 w-3.5',
+                    catalogRefreshStatus === 'loading' ? 'animate-spin' : ''
+                  )}
+                />
+                刷新
+              </button>
+            </div>
+          ) : showEmpty ? (
+            <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
+              暂无已配置的预设模型
+            </div>
+          ) : (
+            <>
+              {presetGroups.map(({ provider, matchedConfig }) =>
+                provider.models.map((model) =>
+                  renderPresetModelOption(provider, model, matchedConfig)
+                )
+              )}
+              {freeModels.length > 0 ? (
+                <div className={presetGroups.length > 0 ? 'mt-1 border-t border-[#EEEEEC] pt-1' : ''}>
+                  {freeModels.map((model) => renderFreeModelOption(model))}
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+        <div className="border-t border-[#EEEEEC] py-1.5">
+          <button
+            type="button"
+            className="workbench-select-option min-h-[44px]"
+            data-testid={workbenchSelectors.modelSelectCustomEntry}
+            onClick={() => setView('custom')}
+          >
+            <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+              <HiAdjustmentsHorizontal className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
+              <span className="text-[13px] font-semibold text-[#37352F]">自定义模型</span>
+            </span>
+            <span className="min-w-0 flex-1" />
+            <HiChevronRight className="h-3.5 w-3.5 shrink-0 text-[#9B9A97]" />
+          </button>
+        </div>
+      </>
+    )
+  }
 
   const renderCustomView = (): React.ReactNode => (
     <>
@@ -711,92 +815,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     </>
   )
 
-  const inspectorTop = inspectedModel?.top ?? 0
-  const inspectorLeft = position.left + position.width + INSPECTOR_GAP
-
-  const renderInspector = (): React.ReactNode => {
-    if (view !== 'preset' || !inspectedModel) return null
-    if (inspectedModel.kind === 'free') {
-      const supportsVision = inspectedModel.model.capabilities.includes('vision')
-      return (
-        <div
-          ref={inspectorRef}
-          className="rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3"
-          style={{
-            position: 'fixed',
-            top: inspectorTop,
-            left: inspectorLeft,
-            width: INSPECTOR_WIDTH,
-            zIndex: 1001
-          }}
-        >
-          <div className="text-[14px] font-semibold text-[#252521]">{inspectedModel.model.label}</div>
-          <p className="mt-1.5 text-[12px] leading-[18px] text-[#5F5E5A]">
-            {inspectedModel.model.description}
-          </p>
-          <p className="mt-1.5 text-[12px] leading-[18px] text-[#9B9A97]">{FREE_MODEL_NOTICE}</p>
-          <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px]">
-            <div className="flex items-center justify-between gap-3 py-0.5">
-              <span className="shrink-0 text-[#9B9A97]">价格档位</span>
-              <span className="font-medium text-[#37352F]">{FREE_MODEL_PRICE_LABEL}</span>
-            </div>
-            <div className="flex items-center justify-between gap-3 py-0.5">
-              <span className="shrink-0 text-[#9B9A97]">视觉理解</span>
-              <span className="font-medium text-[#37352F]">
-                {supportsVision ? '支持' : '不支持'}
-              </span>
-            </div>
-          </div>
-        </div>
-      )
-    }
-
-    const supportsVision = inspectedModel.model.capabilities.includes('vision')
-    return (
-      <div
-        ref={inspectorRef}
-        className="rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3"
-        style={{
-          position: 'fixed',
-          top: inspectorTop,
-          left: inspectorLeft,
-          width: INSPECTOR_WIDTH,
-          zIndex: 1001
-        }}
-      >
-        <div className="text-[14px] font-semibold text-[#252521]">{inspectedModel.model.label}</div>
-        {inspectedModel.available ? (
-          <>
-            <p className="mt-1.5 text-[12px] leading-[18px] text-[#5F5E5A]">
-              {inspectedModel.model.description}
-            </p>
-            <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px]">
-              <div className="flex items-center justify-between gap-3 py-0.5">
-                <span className="shrink-0 text-[#9B9A97]">价格档位</span>
-                <span className="font-medium text-[#37352F]">
-                  {PRICE_TIER_LABELS[inspectedModel.model.priceTier]}
-                </span>
-              </div>
-              <div className="flex items-center justify-between gap-3 py-0.5">
-                <span className="shrink-0 text-[#9B9A97]">视觉理解</span>
-                <span className="font-medium text-[#37352F]">
-                  {supportsVision ? '支持' : '不支持'}
-                </span>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px] leading-[18px] text-[#5F5E5A]">
-            <div>该模型不存在</div>
-            <div className="mt-1.5 break-all text-[#9B9A97]">
-              模型名：{inspectedModel.model.id}
-            </div>
-          </div>
-        )}
-      </div>
-    )
-  }
-
   return (
     <div
       ref={rootRef}
@@ -827,16 +845,12 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
         <span className="flex min-w-0 flex-1 items-center gap-2">
           {selectedPreset ? (
             <>
-              {getProviderLogo(selectedPreset.provider.providerId)}
+              <CatalogModelIcon src={selectedPreset.iconUrl} alt={selectedPreset.modelLabel} />
               <span className="truncate">{selectedPreset.modelLabel}</span>
             </>
           ) : selectedFree ? (
             <>
-              <img
-                src={selectedFree.iconUrl}
-                alt={selectedFree.label}
-                className="h-4 w-4 shrink-0 rounded-[3px] object-contain"
-              />
+              <CatalogModelIcon src={selectedFree.iconUrl} alt={selectedFree.label} />
               <span className="truncate">{selectedFree.label}</span>
               <span className="shrink-0 text-[11px] font-medium text-[#9B9A97]">
                 {FREE_MODEL_PRICE_LABEL}
@@ -860,29 +874,26 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       </button>
       {open
         ? createPortal(
-            <>
-              <div
-                ref={menuRef}
-                id={listboxId}
-                role="listbox"
-                className="workbench-select-menu workbench-composer-menu"
-                data-workbench-select-root="true"
-                style={{
-                  position: 'fixed',
-                  top: position.top,
-                  bottom: position.bottom,
-                  left: position.left,
-                  width: position.width,
-                  maxHeight: position.maxHeight,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  zIndex: 1000
-                }}
-              >
-                {view === 'preset' ? renderPresetView() : renderCustomView()}
-              </div>
-              {renderInspector()}
-            </>,
+            <div
+              ref={menuRef}
+              id={listboxId}
+              role="listbox"
+              className="workbench-select-menu workbench-composer-menu"
+              data-workbench-select-root="true"
+              style={{
+                position: 'fixed',
+                top: position.top,
+                bottom: position.bottom,
+                left: position.left,
+                width: position.width,
+                maxHeight: position.maxHeight,
+                display: 'flex',
+                flexDirection: 'column',
+                zIndex: 1000
+              }}
+            >
+              {view === 'preset' ? renderPresetView() : renderCustomView()}
+            </div>,
             document.body
           )
         : null}

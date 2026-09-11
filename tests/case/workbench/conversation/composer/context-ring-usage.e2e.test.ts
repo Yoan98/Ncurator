@@ -22,7 +22,7 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['composer'],
-        description: '验证智能模式上下文圆圈会刷新并展示已用与剩余比例。',
+        description: '验证智能模式上下文圆圈会刷新并展示已用比例与 tokens。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -59,25 +59,28 @@ describe('workbench conversation e2e', () => {
           const usedPercent = page.getByText(/^已用 \d+%$/).first()
           await tooltipTitle.waitFor({ state: 'visible', timeout: 3000 })
           await usedPercent.waitFor({ state: 'visible', timeout: 3000 })
+          const remainingVisible = await page.getByText(/^剩余 \d+%$/).first().isVisible().catch(() => false)
 
           return {
             label,
             tooltipVisible: await tooltipTitle.isVisible(),
             percentVisible: await usedPercent.isVisible(),
+            remainingVisible,
             finalAnswerText: evidence.finalAnswerText
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.label.includes('已用') &&
-              result.label.includes('剩余') &&
+              !result.label.includes('剩余') &&
               result.tooltipVisible &&
               result.percentVisible &&
+              !result.remainingVisible &&
               result.finalAnswerText.trim().length > 0,
             {
               name: 'workbench-context-ring-usage',
               message:
-                '上下文圆圈应在任务后刷新，hover 后展示已用与剩余比例，对齐 WB-COMPOSER-008。',
+                '上下文圆圈应在任务后刷新，hover 后展示已用比例与 tokens、不展示剩余，对齐 WB-COMPOSER-008。',
               data: result
             }
           )

@@ -57,6 +57,7 @@ describe('shared llm presets catalog', () => {
             {
               id: 'deepseek-flash',
               label: 'DeepSeek V4.1 Flash',
+              iconUrl: 'https://www.guanzhangai.cn/llm/deepseek.png',
               priceTier: 'low',
               description: '',
               capabilities: ['text', 'vision']
@@ -76,6 +77,7 @@ describe('shared llm presets catalog', () => {
           {
             id: 'deepseek-flash',
             label: 'DeepSeek V4.1 Flash',
+            iconUrl: 'https://www.guanzhangai.cn/llm/deepseek.png',
             priceTier: 'low',
             description: 'native multimodal',
             capabilities: ['text', 'vision']
@@ -86,6 +88,26 @@ describe('shared llm presets catalog', () => {
     expect(merged).toHaveLength(1)
     expect(merged[0].label).toBe('DeepSeek')
     expect(merged[0].models[0].id).toBe('deepseek-flash')
+    expect(merged[0].models[0].iconUrl).toBe('https://www.guanzhangai.cn/llm/deepseek.png')
+  })
+
+  it('skips remote catalog models without iconUrl', () => {
+    const merged = mergePresetCatalogProviders([
+      {
+        providerId: 'deepseek',
+        models: [
+          {
+            id: 'missing-icon',
+            label: 'Missing Icon',
+            iconUrl: '   ',
+            priceTier: 'low',
+            description: '',
+            capabilities: ['text']
+          }
+        ]
+      }
+    ])
+    expect(merged).toEqual([])
   })
 })
 

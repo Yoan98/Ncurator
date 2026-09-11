@@ -6,6 +6,7 @@ import {
   emptyPresetModelsSnapshot,
   mergePresetCatalogProviders,
   type LlmPresetProvider,
+  type PresetCatalogModelPayload,
   type PresetCatalogProviderPayload,
   type PresetModelsCatalogResponse,
   type PresetModelsSnapshot,
@@ -25,14 +26,45 @@ type CachePayload = {
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.trim().length > 0
 
+const parseRemoteModel = (value: unknown): PresetCatalogModelPayload | null => {
+  if (!value || typeof value !== 'object') return null
+  const row = value as Record<string, unknown>
+  const id = String(row.id || '').trim()
+  const label = String(row.label || '').trim()
+  const iconUrl = String(row.iconUrl || '').trim()
+  const priceTier = row.priceTier
+  if (!id || !label || !iconUrl) return null
+  if (priceTier !== 'low' && priceTier !== 'mid' && priceTier !== 'high') return null
+  const capabilities = Array.isArray(row.capabilities)
+    ? row.capabilities.filter(
+        (item): item is 'text' | 'vision' => item === 'text' || item === 'vision'
+      )
+    : []
+  if (capabilities.length === 0) return null
+  return {
+    id,
+    label,
+    iconUrl,
+    priceTier,
+    description: typeof row.description === 'string' ? row.description.trim() : '',
+    capabilities
+  }
+}
+
 const parseRemoteProvider = (value: unknown): PresetCatalogProviderPayload | null => {
   if (!value || typeof value !== 'object') return null
   const row = value as Record<string, unknown>
   const providerId = String(row.providerId || '').trim()
   if (!isLlmPresetProviderId(providerId) || !Array.isArray(row.models)) return null
+  const models: PresetCatalogModelPayload[] = []
+  for (const item of row.models) {
+    const model = parseRemoteModel(item)
+    if (!model) continue
+    models.push(model)
+  }
   return {
     providerId,
-    models: row.models as PresetCatalogProviderPayload['models']
+    models
   }
 }
 

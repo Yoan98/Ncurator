@@ -193,7 +193,7 @@ export const workbenchSelectors = {
   modelSelect: 'workbench-model-select',
   modelSelectPresetOptionPrefix: 'workbench-model-preset-option',
   modelSelectFreeOptionPrefix: 'workbench-model-free-option',
-  modelSelectFreeRefresh: 'workbench-model-free-refresh',
+  modelSelectCatalogRefresh: 'workbench-model-catalog-refresh',
   modelSelectCustomEntry: 'workbench-model-custom-entry',
   contextRing: 'workbench-context-ring',
   workspaceSelect: 'workbench-workspace-select',

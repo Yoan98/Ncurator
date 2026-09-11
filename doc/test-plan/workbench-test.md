@@ -165,10 +165,10 @@ tests/case/workbench/
 #### `context-ring-usage`
 
 - 测试类型：`e2e`
-- What：智能模式上下文用量在 run 后刷新，并可查看已用与剩余比例。
+- What：智能模式上下文用量在 run 后刷新，并可查看已用比例与 tokens。
 - Why：用量提示错误会误导用户对后续可用上下文的判断。
 - How：完成一次真实 AI run，读取圆圈可访问名称和 hover 提示。
-- Oracle：圆圈展示已用与剩余信息，hover 展示百分比，对齐 `WB-COMPOSER-008`。
+- Oracle：圆圈展示已用信息，hover 展示已用百分比与 tokens、不展示剩余，对齐 `WB-COMPOSER-008`。
 - Not：不验证 token 估算器的逐 token 精度。
 
 #### `send-guard-and-preferences`
@@ -210,10 +210,10 @@ tests/case/workbench/
 #### `model-selector-and-provider-error`
 
 - 测试类型：`e2e`
-- What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示并在无已配置预设服务商时显示空态；推荐配置默认选中预设稳定调用名；预设行含竖向不重叠价格档位图标；不可用预设禁用；自定义入口可选中 remote id 且不被强制改回预设；自定义视图无信息侧栏，并正确展示 provider 错误反馈。
+- What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示并在无已配置预设服务商时显示空态；推荐配置默认选中预设稳定调用名；预设统一列表（付费在上、免费在下、无分区标题与信息侧栏）；预设行含接口 iconUrl 与竖向不重叠价格档位图标；不可用预设禁用；自定义入口可选中 remote id 且不被强制改回预设，并正确展示 provider 错误反馈。
 - Why：主模型配置是智能任务能否启动的直接前提，预设区是用户首选的模型入口。
-- How：通过真实设置页配置 live 推荐/自定义模型；回到 Workbench 展开选择器，检查未配置预设隐藏与空态、默认展示名为预设 label 而非 remote 带日期 id、预设行档位图标与侧栏字段、不可用预设禁用文案；进入自定义模型视图确认无侧栏、按名称搜索并选中后 pill 保持该模型名，随后完成一次真实请求并触发受控 provider 错误。
-- Oracle：未配置预设模型不展示且无已配置预设服务商时显示空态，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC3`；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中、自定义选中不被强制改回预设与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且视觉能力仅在侧栏说明，对齐 `WB-COMPOSER-013-AC1`；伙伴保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次，气泡短标题为「模型请求失败」，「查看详情」可见 HTTP/原文，对齐 `WB-COMPOSER-007`、`WB-CORE-006`、`WB-SESSION-007-AC8`。`WB-COMPOSER-007-AC14`（免费模型目录拼装与刷新）标为不测。
+- How：通过真实设置页配置 live 推荐/自定义模型；回到 Workbench 展开选择器，检查未配置预设隐藏与空态、默认展示名为预设 label 而非 remote 带日期 id、预设行 iconUrl 与档位图标、不可用预设禁用；进入自定义模型视图按名称搜索并选中后 pill 保持该模型名，随后完成一次真实请求并触发受控 provider 错误。
+- Oracle：未配置预设模型不展示且无已配置预设服务商时显示空态，对齐 `WB-COMPOSER-007-AC2`、`WB-COMPOSER-007-AC3`；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中、自定义选中不被强制改回预设与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且不另加视觉图标，对齐 `WB-COMPOSER-013-AC1`；伙伴保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次，气泡短标题为「模型请求失败」，「查看详情」可见 HTTP/原文，对齐 `WB-COMPOSER-007`、`WB-CORE-006`、`WB-SESSION-007-AC8`。`WB-COMPOSER-007-AC14`（免费模型目录拼装与刷新）标为不测。
 - Not：不评价模型回答质量。
 
 #### `user-message-actions`

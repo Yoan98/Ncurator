@@ -6,6 +6,7 @@ export type LlmPriceTier = 'low' | 'mid' | 'high'
 export type LlmPresetModel = {
   id: string
   label: string
+  iconUrl: string
   priceTier: LlmPriceTier
   description: string
   capabilities: Array<'text' | 'vision'>
@@ -118,8 +119,9 @@ export const mergePresetCatalogProviders = (
     for (const model of entry.models) {
       const id = String(model.id || '').trim()
       const label = String(model.label || '').trim()
+      const iconUrl = String(model.iconUrl || '').trim()
       const priceTier = model.priceTier
-      if (!id || !label) continue
+      if (!id || !label || !iconUrl) continue
       if (priceTier !== 'low' && priceTier !== 'mid' && priceTier !== 'high') continue
       const capabilities = Array.isArray(model.capabilities)
         ? model.capabilities.filter(
@@ -130,6 +132,7 @@ export const mergePresetCatalogProviders = (
       models.push({
         id,
         label,
+        iconUrl,
         priceTier,
         description: typeof model.description === 'string' ? model.description.trim() : '',
         capabilities

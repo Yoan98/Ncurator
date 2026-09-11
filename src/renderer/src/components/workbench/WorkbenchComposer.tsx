@@ -746,20 +746,16 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     0,
     Math.min(100, Math.round((contextUsage?.ratio || 0) * 100))
   )
-  const contextUsageRemainingPercent = Math.max(0, 100 - contextUsagePercent)
   const contextUsageVisiblePercent = contextUsage
     ? Math.max(contextUsage.usedContextTokens > 0 ? 1 : 0, contextUsagePercent)
     : 0
   const contextUsageStroke =
     contextUsagePercent >= 90 ? '#B3261E' : contextUsagePercent >= 70 ? '#B26A00' : '#787774'
-  const contextUsageTitle = contextUsage
-    ? `已用 ${contextUsagePercent}% · 剩余 ${contextUsageRemainingPercent}%`
-    : '暂无上下文用量'
+  const contextUsageTitle = contextUsage ? `已用 ${contextUsagePercent}%` : '暂无上下文用量'
   const contextUsageTooltip = contextUsage ? (
     <div className="space-y-1 text-xs leading-5">
       <div className="font-medium text-[#37352F]">上下文用量</div>
       <div>已用 {contextUsagePercent}%</div>
-      <div>剩余 {contextUsageRemainingPercent}%</div>
       <div className="text-[#787774]">
         {contextUsage.usedContextTokens.toLocaleString()} /{' '}
         {contextUsage.contextWindowTokens.toLocaleString()} tokens

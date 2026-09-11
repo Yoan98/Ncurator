@@ -35,6 +35,7 @@ const dashscopeCatalog: LlmPresetProvider[] = [
       {
         id: 'qwen3.8-max',
         label: 'Qwen3.8 Max',
+        iconUrl: 'https://www.guanzhangai.cn/llm/qwen.png',
         priceTier: 'high',
         description: '',
         capabilities: ['text', 'vision']
@@ -42,6 +43,7 @@ const dashscopeCatalog: LlmPresetProvider[] = [
       {
         id: 'qwen3.8-flash',
         label: 'Qwen3.8 Flash',
+        iconUrl: 'https://www.guanzhangai.cn/llm/qwen.png',
         priceTier: 'low',
         description: '',
         capabilities: ['text', 'vision']

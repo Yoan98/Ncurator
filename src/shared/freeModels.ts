@@ -6,8 +6,6 @@ export const FREE_MODEL_CATALOG_TTL_MS = 6 * 60 * 60 * 1000
 
 export const FREE_MODEL_PRICE_LABEL = '免费'
 
-export const FREE_MODEL_NOTICE = '不保证稳定和隐私性'
-
 export type FreeModelCapability = 'text' | 'vision'
 
 /** Full catalog entry from official API (includes secrets). Main-only. */
