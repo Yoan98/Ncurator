@@ -9,7 +9,8 @@
  *   node scripts/dev/seed-partner-timeline.mjs --force   # 已有种子数据时仍清空重灌
  *
  * 默认数据库：~/Library/Application Support/ncurator-dev/app.sqlite（dev）
- * 专用伙伴：固定名「时间轴 · 预览」——有则复用，无则新建；已有种子则跳过，避免重复堆积。
+ * 专用伙伴：固定名「时间轴 · 预览」——有则复用，无则新建；已有完整种子则跳过。
+ * 同时写入 ai_run + chat_session_message_log（UI 消息投影依赖 ai_run）。
  * 灌完后请在应用内切换到该伙伴或重启，以重新打开消息列表。
  */
 
@@ -51,11 +52,11 @@ const atDaysAgo = (daysAgo, hour = 10) => {
 const defaultDbPath = () =>
   path.join(os.homedir(), 'Library', 'Application Support', 'ncurator-dev', 'app.sqlite')
 
-const userEntry = (content) =>
+const userEntry = (text) =>
   JSON.stringify({
     kind: 'user',
-    content,
-    origin: 'human',
+    content: text,
+    input: text,
     context: { selectedReferences: [], attachments: [] }
   })
 
@@ -99,19 +100,38 @@ const ensureTimelinePartner = (db) => {
   return { partner: { id: partner.id, name: partner.name }, created: true }
 }
 
-const hasSeedMessages = (db, partnerId) => {
-  const row = db
-    .prepare(
+const countSeededRuns = (db, partnerId) =>
+  Number(
+    db
+      .prepare(
+        `
+        SELECT COUNT(*) AS count
+        FROM ai_run
+        WHERE partner_id = ?
+          AND input LIKE ?
       `
-      SELECT 1 AS ok
-      FROM chat_session_message_log
-      WHERE partner_id = ?
-        AND entry_json LIKE ?
-      LIMIT 1
-    `
-    )
-    .get(partnerId, `%${TIMELINE_SEED_MARKER}%`)
-  return Boolean(row)
+      )
+      .get(partnerId, `${TIMELINE_SEED_MARKER}%`)?.count || 0
+  )
+
+const countSeededLogPairs = (db, partnerId) =>
+  Number(
+    db
+      .prepare(
+        `
+        SELECT COUNT(*) AS count
+        FROM chat_session_message_log
+        WHERE partner_id = ?
+          AND entry_json LIKE ?
+      `
+      )
+      .get(partnerId, `%${TIMELINE_SEED_MARKER}%`)?.count || 0
+  )
+
+const hasCompleteSeed = (db, partnerId, expectedGroups) => {
+  const runs = countSeededRuns(db, partnerId)
+  const logEntries = countSeededLogPairs(db, partnerId)
+  return runs >= expectedGroups && logEntries >= expectedGroups * 2
 }
 
 const main = () => {
@@ -137,16 +157,6 @@ const main = () => {
 
   const { partner, created } = ensureTimelinePartner(db)
 
-  if (!args.force && hasSeedMessages(db, partner.id)) {
-    console.log(
-      `伙伴「${partner.name}」(${partner.id}) 已有时间轴种子数据，跳过（需要重灌请加 --force）。`
-    )
-    console.log(`数据库: ${dbPath}`)
-    console.log('请在应用内切换到该伙伴后再看左侧时间轴。')
-    db.close()
-    return
-  }
-
   const now = Date.now()
   const seeds = [
     { at: atDaysAgo(400), text: `${TIMELINE_SEED_MARKER} 两年前左右的一条记录` },
@@ -161,19 +171,76 @@ const main = () => {
     { at: now - 60_000, text: `${TIMELINE_SEED_MARKER} 今天刚刚说的话` }
   ]
 
-  const insert = db.prepare(`
+  if (!args.force && hasCompleteSeed(db, partner.id, seeds.length)) {
+    console.log(
+      `伙伴「${partner.name}」(${partner.id}) 已有完整时间轴种子（${seeds.length} 组），跳过（需要重灌请加 --force）。`
+    )
+    console.log(`数据库: ${dbPath}`)
+    console.log('请在应用内切换到该伙伴后再看左侧时间轴。')
+    db.close()
+    return
+  }
+
+  const insertLog = db.prepare(`
     INSERT INTO chat_session_message_log (id, partner_id, run_id, seq, entry_json, created_at)
     VALUES (@id, @partner_id, @run_id, @seq, @entry_json, @created_at)
   `)
 
+  const insertRun = db.prepare(`
+    INSERT INTO ai_run (
+      id, partner_id, user_message_id, assistant_message_id, status, input,
+      selected_references_json, attachments_json, model_name, main_model_json,
+      execution_permission, partial_answer, partial_answer_role, final_answer,
+      error, failure_code, failure_raw_message, pending_approval_json, artifacts_json,
+      created_at, updated_at, finished_at
+    ) VALUES (
+      @id, @partner_id, @user_message_id, @assistant_message_id, @status, @input,
+      @selected_references_json, @attachments_json, @model_name, @main_model_json,
+      @execution_permission, @partial_answer, @partial_answer_role, @final_answer,
+      @error, @failure_code, @failure_raw_message, @pending_approval_json, @artifacts_json,
+      @created_at, @updated_at, @finished_at
+    )
+  `)
+
   const seedPartner = db.transaction(() => {
     db.prepare('DELETE FROM chat_session_message_log WHERE partner_id = ?').run(partner.id)
+    db.prepare('DELETE FROM ai_run WHERE partner_id = ?').run(partner.id)
 
     let seq = 1
     for (const seed of seeds) {
       const runId = randomUUID()
-      insert.run({
-        id: randomUUID(),
+      const userMessageId = randomUUID()
+      const assistantMessageId = randomUUID()
+      const assistantText = `收到：${seed.text}`
+      const finishedAt = seed.at + 1000
+
+      insertRun.run({
+        id: runId,
+        partner_id: partner.id,
+        user_message_id: userMessageId,
+        assistant_message_id: assistantMessageId,
+        status: 'completed',
+        input: seed.text,
+        selected_references_json: null,
+        attachments_json: '[]',
+        model_name: 'timeline-seed',
+        main_model_json: null,
+        execution_permission: 'review',
+        partial_answer: assistantText,
+        partial_answer_role: 'answer',
+        final_answer: assistantText,
+        error: null,
+        failure_code: null,
+        failure_raw_message: null,
+        pending_approval_json: null,
+        artifacts_json: '[]',
+        created_at: seed.at,
+        updated_at: finishedAt,
+        finished_at: finishedAt
+      })
+
+      insertLog.run({
+        id: userMessageId,
         partner_id: partner.id,
         run_id: runId,
         seq,
@@ -181,13 +248,13 @@ const main = () => {
         created_at: seed.at
       })
       seq += 1
-      insert.run({
-        id: randomUUID(),
+      insertLog.run({
+        id: assistantMessageId,
         partner_id: partner.id,
         run_id: runId,
         seq,
-        entry_json: assistantEntry(`收到：${seed.text}`),
-        created_at: seed.at + 1000
+        entry_json: assistantEntry(assistantText),
+        created_at: finishedAt
       })
       seq += 1
     }
@@ -201,9 +268,9 @@ const main = () => {
   seedPartner()
   db.close()
 
-  const action = created ? '新建并写入' : args.force ? '清空后重灌' : '写入'
+  const action = created ? '新建并写入' : '清空后重灌'
   console.log(
-    `已${action}伙伴「${partner.name}」(${partner.id})：${seeds.length} 组跨时间消息。`
+    `已${action}伙伴「${partner.name}」(${partner.id})：${seeds.length} 组跨时间消息（含 ai_run）。`
   )
   console.log(`数据库: ${dbPath}`)
   console.log('请在应用内切换到该伙伴或重启后再看左侧时间轴。')

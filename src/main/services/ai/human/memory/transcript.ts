@@ -193,7 +193,7 @@ export const runHasCompletedDigest = (
     }
     const { status, summary } = record.entry.payload
     if (status === 'completed') return true
-    return !status && Boolean(summary.trim())
+    return !status && Boolean(String(summary || '').trim())
   })
 
 export const runHasDigest = runHasCompletedDigest

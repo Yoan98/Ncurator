@@ -89,25 +89,36 @@ export const collectSessionRunSlices = (
 
   return runOrder.map((runId) => {
     const group = groups.get(runId) || []
-    const userRecord = group.find(
-      (record) => record.entry.kind === 'user' && record.entry.input.trim()
-    )
+    const userRecord = group.find((record) => {
+      if (record.entry.kind !== 'user') return false
+      const text = String(record.entry.input || record.entry.content || '').trim()
+      return Boolean(text)
+    })
     const deliveryRecord = [...group].reverse().find(isDeliveryAssistant)
     const digestRecord = [...group].reverse().find(isRunDigestRecord)
     const digestPayload = digestRecord?.entry.payload
-    const userInput = userRecord?.entry.kind === 'user' ? userRecord.entry.input.trim() : ''
+    const userInput =
+      userRecord?.entry.kind === 'user'
+        ? String(userRecord.entry.input || userRecord.entry.content || '').trim()
+        : ''
     const delivery =
-      deliveryRecord?.entry.kind === 'assistant' ? deliveryRecord.entry.content.trim() : ''
+      deliveryRecord?.entry.kind === 'assistant'
+        ? String(deliveryRecord.entry.content || '').trim()
+        : ''
     return {
       runId,
       createdAt: userRecord?.createdAt ?? group[0]?.createdAt ?? 0,
       userInput,
       referenceScopeText:
-        userRecord?.entry.kind === 'user' ? referenceScopeTextFromContext(userRecord.entry.context) : '',
+        userRecord?.entry.kind === 'user'
+          ? referenceScopeTextFromContext(userRecord.entry.context)
+          : '',
       delivery,
-      fileChangePaths: (digestPayload?.fileChangePaths || []).map((path) => path.trim()).filter(Boolean),
+      fileChangePaths: (digestPayload?.fileChangePaths || [])
+        .map((path) => String(path || '').trim())
+        .filter(Boolean),
       digestStatus: resolveRunDigestStatus(digestPayload),
-      digestSummary: digestPayload?.summary.trim() || ''
+      digestSummary: String(digestPayload?.summary || '').trim()
     }
   })
 }
