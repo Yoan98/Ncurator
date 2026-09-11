@@ -24,7 +24,7 @@ import {
   OFFICIAL_DOWNLOAD_PAGE_URL
 } from '../shared/constants'
 import type { AppStartupStatus } from '../shared/types'
-import { getModelsPath } from './utils/paths'
+import { getModelsPath, syncUserDataPathFromElectron } from './utils/paths'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
 import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
 import { SystemNotificationService } from './services/SystemNotificationService'
@@ -42,6 +42,7 @@ if (e2eUserDataPath) {
 } else if (!app.isPackaged) {
   app.setPath('userData', `${app.getPath('userData')}-dev`)
 }
+syncUserDataPathFromElectron()
 
 app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1')
 app.commandLine.appendSwitch('remote-debugging-port', '0')

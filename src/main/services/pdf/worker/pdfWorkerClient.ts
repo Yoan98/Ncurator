@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto'
 import fs from 'node:fs'
 import { Worker } from 'node:worker_threads'
 import { fileURLToPath } from 'node:url'
+import { getUserDataPath } from '../../../utils/userDataPath'
 import { handlePdfWorkerRequest } from './pdfWorker'
 import type {
   PdfWorkerAction,
@@ -26,7 +27,13 @@ class PdfWorkerClient {
       this.inProcessMode = true
       throw new Error(`pdf worker entry not found: ${workerPath}`)
     }
-    const worker = new Worker(this.workerUrl, { name: 'pdf-worker' })
+    const worker = new Worker(this.workerUrl, {
+      name: 'pdf-worker',
+      env: {
+        ...process.env,
+        NCURATOR_USER_DATA_PATH: getUserDataPath()
+      }
+    })
     worker.on('message', (response: PdfWorkerResponse) => {
       const pending = this.pending.get(response.requestId)
       if (!pending) return

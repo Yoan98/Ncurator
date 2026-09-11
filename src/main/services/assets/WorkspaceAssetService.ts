@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { getUserDataPath } from '../../utils/paths'
+import { getUserDataPath } from '../../utils/userDataPath'
 
 const PARTNERS_DIR = 'partners'
 const PARTNER_RUNTIME_DIR = 'runtime'
