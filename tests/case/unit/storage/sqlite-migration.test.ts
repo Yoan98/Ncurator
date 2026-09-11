@@ -267,7 +267,7 @@ describe('SQLite migration contract', () => {
   it('keeps the published migration lock valid and rejects a changed locked migration', async () => {
     const script = path.resolve('scripts/release/shared/sqlite-migration-lock.mjs')
     const { stdout } = await execFileAsync(process.execPath, [script], { cwd: process.cwd() })
-    expect(stdout).toContain('verified SQLite migrations through published version 9')
+    expect(stdout).toContain('verified SQLite migrations through published version 10')
 
     const tamperedLockPath = await createDatabasePath()
     const lock = JSON.parse(
