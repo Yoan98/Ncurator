@@ -6,7 +6,6 @@ import {
   getWorkbenchPrefixLocator,
   navigateToWorkbench,
   recordWorkbenchAiEvidence,
-  selectWorkbenchWorkspace,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
   waitForLatestAssistantFinalAnswerText,
@@ -41,11 +40,9 @@ describe('workbench run persistence e2e', () => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
-            workspaceName: WORKSPACE_NAME,
-            createSession: false
+            workspaceName: WORKSPACE_NAME
           })
           await navigateToWorkbench(page)
-          await selectWorkbenchWorkspace(page, WORKSPACE_NAME)
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(page, PROMPT)
           const processLocator = await waitForLatestAssistantProcess(page)
@@ -78,6 +75,7 @@ describe('workbench run persistence e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.processTextBeforeNavigation.length > 0 &&
+              result.processItemCount > 0 &&
               result.eventTypes.includes('answer_completed') &&
               result.eventTypes.includes('run_completed') &&
               /Alice|合规负责人/u.test(result.finalAnswerText) &&
@@ -85,7 +83,7 @@ describe('workbench run persistence e2e', () => {
             {
               name: 'workbench-run-navigation-snapshot-replay',
               message:
-                'AI 输出中离开 Workbench 再返回时，应通过持久化 snapshot replay 恢复过程流和最终回答，对齐 WB-SESSION-002-AC3、WB-COMPOSER-003-AC7。',
+                'AI 输出中离开 Workbench 再返回时，应通过消息记录投影恢复过程流和最终回答，对齐 WB-SESSION-002-AC3、WB-COMPOSER-003-AC7。',
               data: result
             }
           )

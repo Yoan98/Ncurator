@@ -1,0 +1,1 @@
+export const PDF_SEARCH_MAX_MATCHES = 10

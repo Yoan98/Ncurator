@@ -1,32 +1,13 @@
 import asyncio
 import json
 import os
-import platform
 import random
 import sys
 from typing import Any
 
-
-def playwright_macos_x64_host_platform() -> str:
-    darwin_major = int(platform.release().split(".", 1)[0])
-    if darwin_major < 18:
-        return "mac10.13"
-    if darwin_major <= 19:
-        return f"mac10.{darwin_major - 4}"
-    if darwin_major < 25:
-        return f"mac{darwin_major - 9}"
-    return f"mac{min(darwin_major + 1, 26)}"
-
-
-os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
-if sys.platform == "darwin" and platform.machine().lower() in {"x86_64", "amd64"}:
-    # Playwright otherwise detects the Apple Silicon host CPU through Rosetta
-    # and looks for an arm64 browser beside this x64 sidecar.
-    os.environ.setdefault(
-        "PLAYWRIGHT_HOST_PLATFORM_OVERRIDE", playwright_macos_x64_host_platform()
-    )
-
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, LinkPreviewConfig
+from crawl4ai.async_crawler_strategy import AsyncPlaywrightCrawlerStrategy
+from crawl4ai.browser_manager import BrowserManager
 from crawl4ai.content_filter_strategy import PruningContentFilter
 from crawl4ai.markdown_generation_strategy import DefaultMarkdownGenerator
 from ddgs import DDGS
@@ -37,15 +18,67 @@ MAX_SEARCH_ATTEMPTS = 3
 SEARCH_RETRY_BASE_DELAY_SECONDS = 0.4
 SEARCH_RETRY_MAX_DELAY_SECONDS = 1.5
 SEARCH_RETRY_JITTER_SECONDS = 0.2
+SIDECAR_REQUEST_TIMEOUT_SECONDS = 50
 FIT_MARKDOWN_THRESHOLD = 0.48
 LINK_PREVIEW_MAX_LINKS = 120
 LINK_PREVIEW_TIMEOUT_SECONDS = 5
+CDP_URL_ENV = "NCURATOR_WEB_CRAWLER_CDP_URL"
+CDP_CONTEXT_MARKER_ENV = "NCURATOR_WEB_CRAWLER_CDP_CONTEXT_MARKER_URL"
+CRAWLER_SESSION_ID = "ncurator-electron-cdp"
 
 
 class CrawlFailure(Exception):
     def __init__(self, message: str, data: dict[str, Any] | None = None) -> None:
         super().__init__(message)
         self.data = data or {}
+
+
+class ElectronCdpBrowserManager(BrowserManager):
+    def __init__(self, context_marker_url: str, **kwargs: Any) -> None:
+        super().__init__(**kwargs)
+        self.context_marker_url = context_marker_url
+        self.suppress_default_context_setup = False
+
+    async def setup_context(
+        self,
+        context: Any,
+        crawlerRunConfig: CrawlerRunConfig | None = None,
+        is_default: bool = False,
+    ) -> None:
+        if self.suppress_default_context_setup:
+            return
+        await super().setup_context(context, crawlerRunConfig, is_default)
+
+    async def start(self) -> None:
+        self.suppress_default_context_setup = True
+        try:
+            await super().start()
+        finally:
+            self.suppress_default_context_setup = False
+
+        matching_targets = []
+        for context in self.browser.contexts:
+            for page in context.pages:
+                if page.url == self.context_marker_url:
+                    matching_targets.append((context, page))
+        if len(matching_targets) != 1:
+            raise RuntimeError(
+                "isolated Electron web crawler context was not found over CDP"
+            )
+        self.default_context, marker_page = matching_targets[0]
+        self._mark_page_in_use(marker_page)
+        await super().setup_context(self.default_context)
+
+
+class ElectronCdpCrawlerStrategy(AsyncPlaywrightCrawlerStrategy):
+    def __init__(self, context_marker_url: str, browser_config: BrowserConfig) -> None:
+        super().__init__(browser_config=browser_config)
+        self.browser_manager = ElectronCdpBrowserManager(
+            context_marker_url=context_marker_url,
+            browser_config=self.browser_config,
+            logger=self.logger,
+            use_undetected=False,
+        )
 
 
 def to_jsonable(value: Any) -> Any:
@@ -56,7 +89,9 @@ def to_jsonable(value: Any) -> Any:
     if isinstance(value, (list, tuple, set)):
         return [to_jsonable(item) for item in value]
     if hasattr(value, "model_dump"):
-        return to_jsonable(value.model_dump(mode="json"))
+        # Crawl4AI can retain Python descriptors in reused result models. JSON
+        # mode rejects those descriptors before our recursive fallback can run.
+        return to_jsonable(value.model_dump(mode="python"))
     if hasattr(value, "dict"):
         return to_jsonable(value.dict())
     if hasattr(value, "__dict__"):
@@ -165,6 +200,10 @@ def build_failure_data(
 
 def build_crawler_run_config(topic: str) -> CrawlerRunConfig:
     return CrawlerRunConfig(
+        # Electron's CDP context does not support creating a fresh target for
+        # every crawl. The sidecar processes requests serially, so one stable
+        # Crawl4AI session safely reuses the page across fetches.
+        session_id=CRAWLER_SESSION_ID,
         markdown_generator=DefaultMarkdownGenerator(
             content_filter=PruningContentFilter(
                 user_query="",
@@ -338,10 +377,30 @@ async def handle_search(query: str) -> dict[str, Any]:
     )
 
 
+def build_browser_config() -> BrowserConfig:
+    cdp_url = read_string(os.environ.get(CDP_URL_ENV))
+    if not cdp_url:
+        raise RuntimeError(f"missing required environment variable: {CDP_URL_ENV}")
+    context_marker_url = read_string(os.environ.get(CDP_CONTEXT_MARKER_ENV))
+    if not context_marker_url:
+        raise RuntimeError(
+            f"missing required environment variable: {CDP_CONTEXT_MARKER_ENV}"
+        )
+    return BrowserConfig(
+        browser_mode="cdp",
+        cdp_url=cdp_url,
+        cache_cdp_connection=True,
+        create_isolated_context=False,
+        cdp_cleanup_on_close=True,
+        cdp_close_delay=0,
+        headless=True,
+        verbose=False,
+    )
+
+
 async def process_requests() -> None:
-    browser_config = BrowserConfig(headless=True, verbose=False)
-    browser_config.chrome_channel = ""
-    browser_config.channel = ""
+    browser_config = build_browser_config()
+    context_marker_url = os.environ[CDP_CONTEXT_MARKER_ENV].strip()
     crawler: AsyncWebCrawler | None = None
     try:
         for line in sys.stdin:
@@ -371,14 +430,27 @@ async def process_requests() -> None:
                     if not topic:
                         raise ValueError("missing crawl topic")
                     if crawler is None:
-                        crawler = AsyncWebCrawler(config=browser_config)
-                        await crawler.start()
-                    data = await handle_crawl(crawler, url, topic)
+                        crawler = AsyncWebCrawler(
+                            crawler_strategy=ElectronCdpCrawlerStrategy(
+                                context_marker_url=context_marker_url,
+                                browser_config=browser_config,
+                            ),
+                            config=browser_config,
+                        )
+                        await asyncio.wait_for(
+                            crawler.start(), timeout=SIDECAR_REQUEST_TIMEOUT_SECONDS
+                        )
+                    data = await asyncio.wait_for(
+                        handle_crawl(crawler, url, topic),
+                        timeout=SIDECAR_REQUEST_TIMEOUT_SECONDS,
+                    )
                 else:
                     query = read_string(input_payload.get("query"))
                     if not query:
                         raise ValueError("missing search query")
-                    data = await handle_search(query)
+                    data = await asyncio.wait_for(
+                        handle_search(query), timeout=SIDECAR_REQUEST_TIMEOUT_SECONDS
+                    )
                 response = {"id": request_id, "ok": True, "data": data}
             except CrawlFailure as error:
                 response = {

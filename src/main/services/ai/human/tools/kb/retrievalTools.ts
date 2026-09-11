@@ -12,8 +12,38 @@ import { KB_LIST_DOCUMENTS_TOOL_SPEC, KB_SEARCH_TOOL_SPEC } from './toolSpecs'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
 
+export const KB_INDEXING_IN_PROGRESS_ERROR = '正在更新知识库索引，请完成后再检索。'
 const MAX_RETRIEVAL_LIMIT = 50
 const MAX_LIST_PAGE_SIZE = 50
+
+const mapKbSearchItem = (row: SearchResult) => ({
+  id: row.id,
+  text: row.text,
+  documentName: row.document_name,
+  documentId: row.document_id,
+  sourceType: row.source_type,
+  filePath: row.file_path,
+  sourceUrl: row.source_url,
+  metadata: row.metadata,
+  createdAt: row.created_at
+})
+
+const mapKbDocumentItem = (document: DocumentRecord) => ({
+  id: document.id,
+  name: document.name,
+  sourceType: document.source_type,
+  workspaceId: document.workspace_id,
+  filePath: document.file_path,
+  createdAt: document.created_at,
+  importStatus: document.import_status,
+  sourceId: document.source_id,
+  sourceUrl: document.source_url,
+  sourceTitle: document.source_title,
+  normalizedSourceUrl: document.normalized_source_url,
+  fetchedAt: document.fetched_at,
+  updatedAt: document.updated_at,
+  lastError: document.last_error
+})
 
 const toStringIdList = (value: string[] | undefined): string[] => {
   if (!Array.isArray(value)) return []
@@ -36,10 +66,7 @@ const buildKbResult = (input: {
 
   const normalizedData =
     input.ok === false && input.error
-      ? {
-          ...(data && typeof data === 'object' && !Array.isArray(data) ? data : {}),
-          error: input.error
-        }
+      ? ({ error: input.error } satisfies JsonObject)
       : data
 
   return {
@@ -56,10 +83,10 @@ const resolveRequestedDocumentIds = (requestedIds: string[] | undefined): string
 
 const assertDocumentHasSourceLocation = (document: DocumentRecord): void => {
   if (document.source_type === 'file' && !document.file_path?.trim()) {
-    throw new Error(`KB document is missing file_path: ${document.name} (${document.id})`)
+    throw new Error(`知识库文档缺少本地文件路径：${document.name} (${document.id})`)
   }
   if (document.source_type === 'web' && !document.source_url?.trim()) {
-    throw new Error(`KB web document is missing source_url: ${document.name} (${document.id})`)
+    throw new Error(`知识库网页文档缺少来源地址：${document.name} (${document.id})`)
   }
 }
 
@@ -83,7 +110,7 @@ const enrichSearchRowsWithSourceLocation = async (
   return rows.map((row) => {
     const document = row.document_id ? documentMap.get(row.document_id) : undefined
     if (!document) {
-      throw new Error(`KB search result is missing source document metadata: ${row.document_id}`)
+      throw new Error(`知识库搜索结果缺少来源文档元数据：${row.document_id}`)
     }
     assertDocumentHasSourceLocation(document)
 
@@ -138,9 +165,10 @@ export const buildKbCapabilityTools = (input: {
         args: args as JsonObject,
         execute: async (session) => {
           ctx.checkCancelled()
+          await ctx.assertKbSearchAvailable()
           const prepared = resolveSearchArgs(args)
-          if (!prepared.workspaceId) {
-            throw new Error('workspace is required for kb search')
+          if (!prepared.queryText) {
+            throw new Error('知识库搜索需要提供查询文本。')
           }
           if (
             Array.isArray(prepared.requestedDocumentIds) &&
@@ -200,7 +228,7 @@ export const buildKbCapabilityTools = (input: {
             )
           })()
           const enrichedRows = await enrichSearchRowsWithSourceLocation(ctx, rows)
-          const normalized = enrichedRows.map(normalizeForIpc)
+          const normalized = enrichedRows.map((row) => normalizeForIpc(mapKbSearchItem(row)))
           const payload = {
             items: normalized,
             total: normalized.length
@@ -245,10 +273,8 @@ export const buildKbCapabilityTools = (input: {
         args: args as JsonObject,
         execute: async (session) => {
           ctx.checkCancelled()
+          await ctx.assertKbSearchAvailable()
           const workspaceId = String(ctx.workspace?.workspaceId || '').trim() || undefined
-          if (!workspaceId) {
-            throw new Error('workspace is required for kb search')
-          }
           const sourceNameQuery = String(args.sourceNameQuery || '').trim() || undefined
           const page = Math.max(1, Number(args.page ?? 1))
           const pageSize = Math.max(1, Math.min(MAX_LIST_PAGE_SIZE, Number(args.pageSize ?? 20)))
@@ -275,14 +301,18 @@ export const buildKbCapabilityTools = (input: {
               documentIds: requestedDocumentIds || undefined
             })
           )
+          const payload = {
+            items: normalized.items.map((document) => mapKbDocumentItem(document)),
+            total: normalized.total
+          }
           session.succeed(
             undefined,
             buildKbResult({
               toolName: KB_LIST_DOCUMENTS_TOOL_SPEC.name,
-              data: normalized
+              data: payload
             })
           )
-          return normalized
+          return payload
         },
         onError: (error, session) => {
           session.fail(

@@ -121,7 +121,7 @@ describe('settings workspace e2e', () => {
             {
               name: 'prepare-refreshes-directory-once-at-terminal-state',
               message:
-                '更新索引执行期间不应反复读取目录，任务结束后当前目录树只应刷新一次，避免 loading 与空态闪烁。',
+                '更新索引执行期间不应反复读取目录，任务结束后当前目录树只应刷新一次，避免 loading 与空态闪烁，对齐 SET-WORKSPACE-004-AC7。',
               data: result
             }
           )

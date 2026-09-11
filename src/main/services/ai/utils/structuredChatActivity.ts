@@ -3,6 +3,7 @@ import { normalizeOpenAIBaseUrl } from '../../../../shared/llmBaseUrl'
 import { emitActivity } from '../../../utils/aiCapabilityUtils'
 import type { AiEventDispatchContext } from '../types'
 import type {
+  AiLlmRequestWire,
   AiLlmStreamingMode,
   AiLlmUsage,
   BrainContextBudgetSnapshot,
@@ -15,18 +16,21 @@ import {
   emitLlmRetryProcessFailed,
   emitLlmRetryProcessStarted
 } from '../events/processEvents'
-import { classifyLlmFailureCode } from './runFailure'
+import { classifyThrownErrorToAiRunFailure } from './runFailure'
 import { LlmProviderError, isLlmOutputError, isLlmProviderError } from '../errors'
+import { classifyLlmRetry } from '../llmRetry'
 import { normalizeStructuredOutputError } from '../structuredOutput'
 
 export type LlmCallStreamObserver = {
   onStart?: () => void
   onDelta?: (text: string) => void
+  onReset?: () => void
+  onToolCallDelta?: () => void
   onComplete?: (input: { rawText?: string }) => void
   onError?: (error: Error) => void
 }
 
-type LlmActionType = 'llm_structured_output' | 'llm_text_output'
+type LlmActionType = 'llm_structured_output' | 'llm_text_output' | 'llm_tool_calls'
 
 type LlmCallTelemetry = {
   actionType: LlmActionType
@@ -47,6 +51,7 @@ export type LlmCallExecutionResult<T> = {
   usage?: AiLlmUsage
   responseMetadata?: JsonObject
   usageMetadata?: JsonObject
+  finishReason?: string
 }
 
 type LlmCallRetryDecision = {
@@ -61,16 +66,26 @@ const sleep = async (ms: number): Promise<void> =>
 const reasonFromError = (error: unknown): string =>
   error instanceof Error && error.message.trim() ? error.message.trim() : String(error || 'unknown')
 
-const toProviderFailure = (error: unknown, retryable: boolean): unknown => {
+export const toProviderFailure = (error: unknown, retryable?: boolean): unknown => {
   if (isLlmProviderError(error) || isLlmOutputError(error)) return error
+  if (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'CANCELLED'
+  ) {
+    return error
+  }
   const info = normalizeStructuredOutputError(error)
-  if (info.status === undefined) return error
+  if (!info.hasProviderSignal) return error
+  // Stamp retryable from the classify result at throw time; later classifyLlmRetry re-parses signals.
+  const decision = retryable === undefined ? classifyLlmRetry(error) : undefined
   return new LlmProviderError({
     message: info.message || '模型服务请求失败。',
     httpStatus: info.status,
     providerCode: info.code,
     providerType: info.type,
-    retryable,
+    retryable: retryable ?? decision?.retryable ?? false,
     cause: error
   })
 }
@@ -119,8 +134,11 @@ export const runLlmCallWithActivity = async <T>(input: {
   taskId?: string
   system: string
   user: string
+  requestWire?: AiLlmRequestWire
   telemetry: LlmCallTelemetry
   onTextDelta?: (text: string) => void
+  onTextReset?: () => void
+  onToolCallDelta?: () => void
   execute: (observer: LlmCallStreamObserver, callId: string) => Promise<LlmCallExecutionResult<T>>
   maxAttempts?: number
   classifyRetry?: (error: unknown, attempt: number) => LlmCallRetryDecision
@@ -182,6 +200,8 @@ export const runLlmCallWithActivity = async <T>(input: {
       })
       input.onTextDelta?.(text)
     },
+    onReset: () => input.onTextReset?.(),
+    onToolCallDelta: () => input.onToolCallDelta?.(),
     onComplete: (payload) => {
       latestRawText = payload.rawText || latestRawText
     },
@@ -235,6 +255,10 @@ export const runLlmCallWithActivity = async <T>(input: {
           throw toProviderFailure(error, retry.retryable)
         }
         attempt += 1
+        latestRawText = ''
+        chunkCount = 0
+        firstTokenAt = undefined
+        observer.onReset?.()
         retryGroupStarted = true
         emitLlmRetryProcessStarted({
           sendEvent: input.ctx.sendEvent,
@@ -289,6 +313,7 @@ export const runLlmCallWithActivity = async <T>(input: {
       baseUrlHost,
       system: input.system,
       user: input.user,
+      requestWire: input.requestWire,
       output: normalizeOutput(result.output),
       rawText,
       usage: result.usage,
@@ -310,7 +335,7 @@ export const runLlmCallWithActivity = async <T>(input: {
   } catch (error) {
     const durationMs = Date.now() - startedAt
     const reason = reasonFromError(error)
-    const reasonCode = classifyLlmFailureCode(error)
+    const reasonCode = classifyThrownErrorToAiRunFailure(error).failureCode
     const normalizedError = error instanceof Error ? error : new Error(reason)
     const failedRawText = readRawTextFromError(error) || latestRawText || undefined
     observer.onError?.(normalizedError)
@@ -348,6 +373,7 @@ export const runLlmCallWithActivity = async <T>(input: {
       baseUrlHost,
       system: input.system,
       user: input.user,
+      requestWire: input.requestWire,
       rawText: failedRawText,
       stablePrefixHash,
       dynamicContextHash,

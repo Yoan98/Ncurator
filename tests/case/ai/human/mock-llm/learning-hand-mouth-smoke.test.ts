@@ -18,11 +18,10 @@ describe('ai human mock-llm backend', () => {
       suite: 'human',
       groups: ['mock-llm'],
       description:
-        '验证真实 human graph 在 mock-llm 模式下能稳定走通 brain -> learning -> hand -> mouth 主链路。',
+        '验证真实 human graph 在 mock-llm 模式下能稳定走通 brain -> learning -> hand -> 最终交付主链路。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        let mouthPrompt = ''
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
@@ -43,17 +42,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '已完成基础链路验证。'
-                })
-              }
-            ],
-            'human.mouth': [
-              ({ user }) => {
-                mouthPrompt = user
-                return {
                   summary: '已完成基础链路验证。',
                   deliveryMarkdown: '# Smoke Delivery\n\n已完成基础 human 主链路验证。'
-                }
+                })
               }
             ]
           }
@@ -66,7 +57,6 @@ describe('ai human mock-llm backend', () => {
 
         return {
           output,
-          mouthPrompt,
           events: runtime.eventCollector.snapshot()
         }
       },
@@ -79,11 +69,10 @@ describe('ai human mock-llm backend', () => {
           result.output.status === 'completed' &&
             stageSet.has('human_brain') &&
             stageSet.has('human_learning') &&
-            stageSet.has('human_hand') &&
-            stageSet.has('human_mouth'),
+            stageSet.has('human_hand'),
           {
-            name: 'human-mainline-visits-all-four-parts',
-            message: 'mock-llm smoke case 应显式走过 brain、learning、hand、mouth 四个部位。',
+            name: 'human-mainline-visits-all-three-parts',
+            message: 'mock-llm smoke case 应显式走过 brain、learning、hand 三个部位。',
             data: {
               stages: Array.from(stageSet),
               steps: summarizeHumanSteps(result.events)
@@ -95,23 +84,11 @@ describe('ai human mock-llm backend', () => {
           toolResults.some((event) => event.toolName === 'terminal_run') &&
             result.output.deliveryMarkdown.includes('human 主链路验证'),
           {
-            name: 'human-mainline-completes-with-real-tool-and-real-mouth',
-            message: 'mock-llm smoke case 应完成真实工具调用，并通过真实 mouth 收束为最终交付。',
+            name: 'human-mainline-completes-with-real-tool-and-final-delivery',
+            message: 'mock-llm smoke case 应完成真实工具调用，并通过 brain 交付收束为最终交付。',
             data: {
               toolResults: toolResults.map((event) => event.toolName),
               deliveryMarkdown: result.output.deliveryMarkdown
-            }
-          }
-        )
-
-        runtime.assertThat(
-          result.mouthPrompt.includes('<delivery_guidance>') && result.mouthPrompt.includes('none'),
-          {
-            name: 'human-mainline-keeps-empty-delivery-guidance-when-no-hand-guidance',
-            message:
-              '当 hand 未产出 guidance 时，mouth prompt 的 delivery_guidance 区块应保持 none。',
-            data: {
-              mouthPrompt: result.mouthPrompt
             }
           }
         )

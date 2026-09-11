@@ -84,10 +84,7 @@ export const collectText = (node: Element): string => {
   return text
 }
 
-export const findFirstElementByLocalName = (
-  doc: Document,
-  localName: string
-): Element | null => {
+export const findFirstElementByLocalName = (doc: Document, localName: string): Element | null => {
   const stack: Node[] = [doc.documentElement]
   while (stack.length > 0) {
     const current = stack.pop()

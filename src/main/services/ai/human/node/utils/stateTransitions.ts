@@ -1,16 +1,14 @@
 import type { AiRunContext } from '../../../types'
-import type { DecisionHintSource } from '../../../../../../shared/types'
 import type {
-  HumanThoughtDecision,
+  HumanRoundThought,
   HumanRuntimeCache,
   HumanState,
-  HumanTodoItem,
-  HumanDecisionHint,
+  HumanDispatchItem
 } from '../../types'
+import type { MarkdownLinkAccessEntry } from '../../../../../../shared/types'
 import {
   emitLatestHumanStepForState,
-  emitTailHumanStepsForState,
-  emitDecisionHint
+  emitTailHumanStepsForState
 } from './stateTransitionEvents'
 import {
   applyBrainDecisionState,
@@ -21,64 +19,41 @@ import {
   type HumanStateOverrides,
   type HumanTraceItemInput
 } from './stateTransitionState'
-import { emitAssistantProcessThought } from '../../../events/processEvents'
+import { peekDispatchGroup } from '../dispatch'
 
 export type { HumanTraceItemInput } from './stateTransitionState'
-
-export { appendHumanTraceStep } from './stateTransitionState'
 
 export const returnToBrain = (
   state: HumanState,
   overrides: HumanStateOverrides = {}
 ): HumanState => returnToBrainState(state, overrides)
 
-export const returnToBrainWithDecisionHint = (input: {
-  ctx: AiRunContext
-  state: HumanState
-  source: DecisionHintSource
-  decisionHint: HumanDecisionHint
-  overrides?: HumanStateOverrides
-}): HumanState => {
-  emitDecisionHint({
-    ctx: input.ctx,
-    taskId: input.state.task.taskId,
-    source: input.source,
-    decisionHint: input.decisionHint
-  })
-  return returnToBrainState(input.state, {
-    ...input.overrides,
+export const returnToDispatch = (
+  state: HumanState,
+  overrides: HumanStateOverrides = {}
+): HumanState =>
+  returnToBrainState(state, {
+    ...overrides,
     execution: {
-      ...input.overrides?.execution,
-      pendingDecisionHint: input.decisionHint
+      ...overrides.execution,
+      stage: 'dispatch',
+      pendingRound: undefined
     }
   })
-}
 
 export const returnToBrainAfterTrace = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   state: HumanState
-  source: DecisionHintSource
   traceItems: HumanTraceItemInput[]
   stage: 'human_learning' | 'human_hand'
-  decisionHint?: HumanDecisionHint
   overrides?: HumanStateOverrides<'trace'>
 }): HumanState => {
   const nextState = returnToBrainAfterTraceState({
     state: input.state,
     traceItems: input.traceItems,
-    decisionHint: input.decisionHint,
     overrides: input.overrides
   })
-
-  if (input.decisionHint) {
-    emitDecisionHint({
-      ctx: input.ctx,
-      taskId: input.state.task.taskId,
-      source: input.source,
-      decisionHint: input.decisionHint
-    })
-  }
 
   emitTailHumanStepsForState({
     ctx: input.ctx,
@@ -91,21 +66,32 @@ export const returnToBrainAfterTrace = (input: {
   return nextState
 }
 
-export const applyBrainDecisionTransition = (input: {
+export const applyBrainDispatchTransition = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   state: HumanState
-  thought: HumanThoughtDecision
-  todolist: HumanTodoItem[]
-  overrides?: HumanStateOverrides
+  thought: HumanRoundThought
+  dispatchQueue: HumanDispatchItem[]
 }): HumanState => {
-  const nextState = applyBrainDecisionState({
+  const peeked = peekDispatchGroup(input.dispatchQueue)
+  if (peeked.empty) {
+    throw new Error('brain 交付不应通过空 dispatch 队列处理。')
+  }
+
+  const base = applyBrainDecisionState({
     state: input.state,
     thought: input.thought,
-    todolist: input.todolist,
-    createdAt: Date.now(),
-    overrides: input.overrides
+    nextAction: peeked.nextAction,
+    createdAt: Date.now()
   })
+  const nextState: HumanState = {
+    ...base,
+    execution: {
+      ...base.execution,
+      stage: 'dispatch',
+      pendingDispatch: input.dispatchQueue
+    }
+  }
 
   emitLatestHumanStepForState({
     ctx: input.ctx,
@@ -113,11 +99,6 @@ export const applyBrainDecisionTransition = (input: {
     taskId: input.state.task.taskId,
     state: nextState,
     stage: 'human_brain'
-  })
-  emitAssistantProcessThought({
-    sendEvent: input.ctx.sendEvent,
-    runId: input.ctx.runId,
-    text: input.thought.thought.next
   })
 
   return nextState
@@ -129,6 +110,7 @@ export const completeHumanTask = (input: {
   state: HumanState
   deliveryMarkdown: string
   emitAnswerEvents: boolean
+  linkAccess?: MarkdownLinkAccessEntry[]
 }): HumanState => {
   const finalResult = buildHumanResult({
     state: input.state,
@@ -141,7 +123,7 @@ export const completeHumanTask = (input: {
       runId: input.ctx.runId,
       taskId: input.state.task.taskId,
       text: input.deliveryMarkdown,
-      stage: 'human_mouth'
+      linkAccess: input.linkAccess || []
     })
   }
 
@@ -155,7 +137,7 @@ export const completeHumanTask = (input: {
     cache: input.cache,
     taskId: input.state.task.taskId,
     state: nextState,
-    stage: 'human_mouth'
+    stage: 'human_brain'
   })
 
   return nextState

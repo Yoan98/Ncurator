@@ -7,9 +7,9 @@ import { DOMParser } from '@xmldom/xmldom'
 import type { AiFileChangeOperation, AiFileChangeRecord } from '../../../../../../shared/types'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { WorkspaceCapabilityBuildInput } from '../types'
-import { isPathInsideRoot } from '../terminal/commandPolicy'
+import { getPartnerRuntimeDir } from '../../../../assets/WorkspaceAssetService'
 import { resolveSafeTextFilePath, withTextFileMutationQueue } from '../textFile/textFileUtils'
-import type { ImageGenerateInput, ImageGenerateOutput } from './schemas'
+import type { ImageGenerateInput, ImageGenerateOutput } from './toolSchemas'
 
 const MAX_SVG_BYTES = 1_048_576
 const MAX_IMAGE_EDGE = 8_192
@@ -42,25 +42,30 @@ const parseNumericLength = (value: string): number | undefined => {
 const assertSafeReference = (value: string): void => {
   const normalized = value.trim()
   if (!normalized || normalized.startsWith('#') || /^data:image\//iu.test(normalized)) return
-  throw new Error('SVG contains an external resource reference.')
+  throw new Error('SVG 包含外部资源引用，禁止加载外部内容。')
 }
 
 const validateSvg = (svg: string): void => {
-  if (Buffer.byteLength(svg, 'utf8') > MAX_SVG_BYTES) throw new Error('SVG content is too large.')
+  if (Buffer.byteLength(svg, 'utf8') > MAX_SVG_BYTES) throw new Error('SVG 内容过大，超出大小上限。')
   if (/<!DOCTYPE|<!ENTITY/iu.test(svg)) {
-    throw new Error('SVG contains a forbidden document declaration.')
+    throw new Error('SVG 包含被禁止的文档声明（如 DOCTYPE/ENTITY）。')
   }
 
   const parseErrors: string[] = []
-  const document = new DOMParser({
-    errorHandler: {
-      warning: () => undefined,
-      error: (message) => parseErrors.push(String(message)),
-      fatalError: (message) => parseErrors.push(String(message))
-    }
-  }).parseFromString(svg, 'image/svg+xml')
+  let document: Document
+  try {
+    document = new DOMParser({
+      errorHandler: {
+        warning: () => undefined,
+        error: (message) => parseErrors.push(String(message)),
+        fatalError: (message) => parseErrors.push(String(message))
+      }
+    }).parseFromString(svg, 'image/svg+xml')
+  } catch {
+    throw new Error('SVG 内容无效。')
+  }
   if (parseErrors.length > 0 || document.documentElement?.localName?.toLowerCase() !== 'svg') {
-    throw new Error('SVG content is invalid.')
+    throw new Error('SVG 内容无效。')
   }
 
   const root = document.documentElement
@@ -79,18 +84,18 @@ const validateSvg = (svg: string): void => {
     height &&
     (width > MAX_IMAGE_EDGE || height > MAX_IMAGE_EDGE || width * height > MAX_IMAGE_PIXELS)
   ) {
-    throw new Error('SVG output dimensions are too large.')
+    throw new Error('SVG 输出尺寸过大，超出限制。')
   }
 
   const visit = (node: Node): void => {
     if (node.nodeType === 1) {
       const element = node as Element
       if (FORBIDDEN_ELEMENTS.has(element.localName.toLowerCase())) {
-        throw new Error(`SVG contains a forbidden element: ${element.localName}.`)
+        throw new Error(`SVG 包含被禁止的元素：${element.localName}。`)
       }
       if (element.localName.toLowerCase() === 'style') {
         const css = element.textContent || ''
-        if (/@import\b/iu.test(css)) throw new Error('SVG contains a forbidden CSS import.')
+        if (/@import\b/iu.test(css)) throw new Error('SVG 包含被禁止的 CSS @import。')
         for (const match of css.matchAll(/url\(([^)]+)\)/giu)) {
           assertSafeReference(match[1].replace(/^['"]|['"]$/gu, ''))
         }
@@ -100,7 +105,7 @@ const validateSvg = (svg: string): void => {
         if (!attribute) continue
         const name = attribute.name.toLowerCase()
         const value = attribute.value
-        if (name.startsWith('on')) throw new Error(`SVG contains a forbidden attribute: ${name}.`)
+        if (name.startsWith('on')) throw new Error(`SVG 包含被禁止的属性：${name}。`)
         if (name === 'href' || name === 'xlink:href') assertSafeReference(value)
         for (const match of value.matchAll(/url\(([^)]+)\)/giu)) {
           assertSafeReference(match[1].replace(/^['"]|['"]$/gu, ''))
@@ -114,7 +119,12 @@ const validateSvg = (svg: string): void => {
 
 const renderImage = async (input: ImageGenerateInput): Promise<Buffer> => {
   validateSvg(input.svg)
-  const rendered = new Resvg(input.svg).render()
+  let rendered: ReturnType<Resvg['render']>
+  try {
+    rendered = new Resvg(input.svg).render()
+  } catch {
+    throw new Error('SVG 内容无效。')
+  }
   if (
     rendered.width <= 0 ||
     rendered.height <= 0 ||
@@ -122,7 +132,7 @@ const renderImage = async (input: ImageGenerateInput): Promise<Buffer> => {
     rendered.height > MAX_IMAGE_EDGE ||
     rendered.width * rendered.height > MAX_IMAGE_PIXELS
   ) {
-    throw new Error('SVG output dimensions are too large.')
+    throw new Error('SVG 输出尺寸过大，超出限制。')
   }
   const png = Buffer.from(rendered.asPng())
   const extension = path.extname(input.outputPath).toLowerCase()
@@ -190,7 +200,7 @@ export const generateImage = async (
     try {
       const stats = await fs.lstat(outputPath)
       if (stats.isSymbolicLink() || !stats.isFile()) {
-        throw new Error(`Cannot write ${args.outputPath}: target is not a regular file.`)
+        throw new Error(`无法写入 ${args.outputPath}：目标不是普通文件。`)
       }
       beforeMode = stats.mode
       beforeBuffer = await fs.readFile(outputPath)
@@ -202,26 +212,8 @@ export const generateImage = async (
 
     const operation: AiFileChangeOperation =
       existingRecord?.operation || (beforeBuffer ? 'updated' : 'created')
-    if (!isPathInsideRoot(outputPath, buildInput.workspaceRootPath)) {
-      if (beforeBuffer) {
-        const currentBuffer = await fs.readFile(outputPath)
-        if (!currentBuffer.equals(beforeBuffer)) {
-          throw new Error(`Cannot write ${args.outputPath}: the file changed during the operation.`)
-        }
-        await atomicReplaceFile({
-          outputPath,
-          content: outputBuffer,
-          mode: beforeMode,
-          operationId
-        })
-      } else {
-        await fs.writeFile(outputPath, outputBuffer, { flag: 'wx', mode: 0o644 })
-      }
-      return { outputPath: args.outputPath }
-    }
     const artifactRoot = path.join(
-      buildInput.workspaceRootPath,
-      '.ncurator',
+      getPartnerRuntimeDir(buildInput.partnerId),
       'file-changes',
       buildInput.runId
     )
@@ -234,7 +226,7 @@ export const generateImage = async (
       beforeChecksum = undefined
     } else if (existingRecord) {
       if (!existingRecord.beforeSnapshotPath) {
-        throw new Error(`Cannot update ${args.outputPath}: the original snapshot is missing.`)
+        throw new Error(`无法更新 ${args.outputPath}：原始快照缺失。`)
       }
       beforeSnapshotPath = existingRecord.beforeSnapshotPath
       beforeChecksum = existingRecord.beforeChecksum
@@ -249,7 +241,7 @@ export const generateImage = async (
       if (beforeBuffer) {
         const currentBuffer = await fs.readFile(outputPath)
         if (!currentBuffer.equals(beforeBuffer)) {
-          throw new Error(`Cannot write ${args.outputPath}: the file changed during the operation.`)
+          throw new Error(`无法写入 ${args.outputPath}：文件在操作期间被其他进程修改。`)
         }
         await atomicReplaceFile({
           outputPath,
@@ -265,7 +257,7 @@ export const generateImage = async (
       const now = Date.now()
       const record: AiFileChangeRecord = {
         id: operationId,
-        sessionId: buildInput.sessionId,
+        partnerId: buildInput.partnerId,
         runId: buildInput.runId,
         status: 'applied',
         capability: 'image',

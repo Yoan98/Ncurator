@@ -2,38 +2,16 @@ import { describe, expect, it } from 'vitest'
 import { renderToolResultDataText } from '../../../../src/main/services/ai/human/shared/toolResultRenderers'
 
 describe('ai unit human tool result renderers', () => {
-  it('renders generic terminal-like object fields with stdout', () => {
+  it('renders nested docx_read_nodes table, cell and runs details', () => {
     const rendered = renderToolResultDataText({
-      toolName: 'terminal_run',
-      data: {
-        command: 'pwd',
-        cwd: '/tmp/workspace',
-        stdout: '/tmp/workspace',
-        exitCode: 0,
-        timedOut: false
-      }
-    })
-
-    expect(rendered).toContain('command=pwd')
-    expect(rendered).toContain('cwd=/tmp/workspace')
-    expect(rendered).toContain('stdout=/tmp/workspace')
-    expect(rendered).toContain('exitCode=0')
-    expect(rendered).toContain('timedOut=false')
-  })
-
-  it('renders nested docx_read_blocks table, cell and runs details', () => {
-    const rendered = renderToolResultDataText({
-      toolName: 'docx_read_blocks',
+      toolName: 'docx_read_nodes',
       data: {
         sourcePath: 'graphics.docx',
-        currentRevisionRef: 'v7',
-        fromBlockIndex: 10,
-        toBlockIndex: 12,
-        blocks: [
+        nodes: [
           {
-            blockId: 'b:10',
+            nodeId: 'node_10',
             type: 'paragraph',
-            blockIndex: 10,
+            story: { storyId: 'body', type: 'body' },
             children: [
               {
                 type: 'run',
@@ -44,10 +22,9 @@ describe('ai unit human tool result renderers', () => {
             ]
           },
           {
-            blockId: 'b:11',
+            nodeId: 'node_11',
             type: 'table',
-            blockIndex: 11,
-            preview: '处理方法表',
+            story: { storyId: 'body', type: 'body' },
             children: [
               {
                 type: 'table_row',
@@ -111,80 +88,73 @@ describe('ai unit human tool result renderers', () => {
     const rendered = renderToolResultDataText({
       toolName: 'docx_read_outline',
       data: {
-        sourcePath: 'graphics.docx',
-        totalBlockCount: 12,
-        blocks: [
+        fromPercent: 0,
+        toPercent: 50,
+        fromNodeIndex: 4,
+        toNodeIndex: 4,
+        totalRootCount: 12,
+        segments: [
           {
-            blockId: 'b:4',
-            type: 'table',
-            blockIndex: 4,
-            rows: 2,
-            cols: 3,
-            text: '视觉方法表',
-            visuals: { count: 2, kinds: ['image', 'chart'] }
-          },
-          {
-            blockId: 'c:4:1:2',
-            type: 'table_cell',
-            blockIndex: 4,
-            tableBlockId: 'b:4',
-            row: 1,
-            col: 2,
-            text: '图表单元格'
+            story: 'body',
+            fromNodeIndex: 4,
+            toNodeIndex: 4,
+            textMap: '结构：表格 2x3 视觉方法表\n关键词：视觉方法\n代表句：[4] 视觉方法表'
           }
         ]
       }
     })
 
-    expect(rendered).toContain('totalBlockCount=12')
-    expect(rendered).toContain('rows=2')
-    expect(rendered).toContain('cols=3')
-    expect(rendered).toContain('visualCount=2')
-    expect(rendered).toContain('visualKinds=image,chart')
-    expect(rendered).toContain('tableBlockId=b:4')
-    expect(rendered).toContain('row=1')
-    expect(rendered).toContain('col=2')
+    expect(rendered).toContain('fromPercent=0')
+    expect(rendered).toContain('toPercent=50')
+    expect(rendered).toContain('totalRootCount=12')
+    expect(rendered).toContain('fromNodeIndex=4')
+    expect(rendered).toContain('toNodeIndex=4')
+    expect(rendered).toContain('视觉方法表')
+    expect(rendered).not.toContain('nodeId')
   })
 
-  it('renders docx_edit post-write readback instead of internal revision fields', () => {
+  it('renders DOCX match-centered and neighboring context', () => {
     const rendered = renderToolResultDataText({
-      toolName: 'docx_edit',
+      toolName: 'docx_search',
       data: {
-        sourcePath: 'graphics.docx',
-        previousRevisionRef: 'v1',
-        currentRevisionRef: 'v2',
-        createdBlocks: [{ blockId: 'b:2', type: 'paragraph' }],
-        postWriteReadback: {
-          regions: [
-            {
-              fromBlockIndex: 1,
-              toBlockIndex: 2,
-              blocks: [
-                {
-                  blockId: 'b:2',
-                  type: 'paragraph',
-                  blockIndex: 2,
-                  children: [
-                    {
-                      type: 'run',
-                      nodeId: 'n:readback',
-                      children: [{ type: 'text', text: '补充说明' }]
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
-        }
+        totalMatchCount: 1,
+        matches: [
+          {
+            nodeId: 'node_3',
+            nodeIndex: 3,
+            type: 'paragraph',
+            story: 'body',
+            matchText: '过度拟合',
+            textContext: '训练过久时可能出现过度拟合。',
+            before: [
+              { nodeId: 'node_2', nodeIndex: 2, type: 'paragraph', textPreview: '训练背景' }
+            ],
+            after: [{ nodeId: 'node_4', nodeIndex: 4, type: 'table', textPreview: '缓解方法' }]
+          }
+        ]
       }
     })
 
-    expect(rendered).toContain('postWriteReadback:')
-    expect(rendered).toContain('b:2')
-    expect(rendered).toContain('补充说明')
-    expect(rendered).not.toContain('previousRevisionRef')
-    expect(rendered).not.toContain('currentRevisionRef')
-    expect(rendered).not.toContain('createdBlocks')
+    expect(rendered).toContain('matchText=过度拟合')
+    expect(rendered).toContain('训练过久时可能出现过度拟合')
+    expect(rendered).toContain('node_2')
+    expect(rendered).toContain('训练背景')
+    expect(rendered).toContain('node_4')
+    expect(rendered).toContain('缓解方法')
+  })
+
+  it('renders only created ids for DOCX mutations', () => {
+    const rendered = renderToolResultDataText({
+      toolName: 'docx_content_edit',
+      data: {
+        createdIds: ['node_2']
+      }
+    })
+
+    expect(rendered).toContain('createdIds')
+    expect(rendered).toContain('node_2')
+    expect(rendered).not.toContain('changes')
+    expect(renderToolResultDataText({ toolName: 'docx_format', data: {} })).toBeUndefined()
   })
 
   it('renders PDF page text, search snippets and rendered image paths', () => {
@@ -217,10 +187,16 @@ describe('ai unit human tool result renderers', () => {
       }
     })
     const visualRendered = renderToolResultDataText({
-      toolName: 'pdf_read_visuals',
+      toolName: 'pdf_read_pages',
       data: {
         sourcePath: '/workspace/深度学习.pdf',
-        results: [{ index: 9, text: '第9页右侧 Overfit 曲线显示验证表现变差。' }]
+        pages: [
+          {
+            pageNumber: 9,
+            pageImagePath: '/runtime/page-9.png',
+            text: '第9页右侧 Overfit 曲线显示验证表现变差。'
+          }
+        ]
       }
     })
 
@@ -228,25 +204,27 @@ describe('ai unit human tool result renderers', () => {
     expect(readRendered).toContain('architecture')
     expect(searchRendered).toContain('pageNumber=9')
     expect(searchRendered).toContain('右图属于过度拟合')
-    expect(visualRendered).toContain('index=9')
+    expect(visualRendered).toContain('page 9')
     expect(visualRendered).toContain('Overfit 曲线')
   })
 
-  it('renders DOCX visual results with visualId', () => {
+  it('renders DOCX read nodes with nodeId', () => {
     const rendered = renderToolResultDataText({
-      toolName: 'docx_read_visuals',
+      toolName: 'docx_read_nodes',
       data: {
         sourcePath: '/workspace/灵感测试.docx',
-        results: [
-          { visualId: 'visual-18', text: '截图展示了文档中的参考界面。' },
-          { visualId: 'visual-19', error: '无法唯一定位渲染元素' }
+        nodes: [
+          {
+            type: 'paragraph',
+            nodeId: 'node-18',
+            text: '截图展示了文档中的参考界面。',
+            children: []
+          }
         ]
       }
     })
 
-    expect(rendered).toContain('visualId=visual-18')
+    expect(rendered).toContain('node-18')
     expect(rendered).toContain('截图展示了文档中的参考界面')
-    expect(rendered).toContain('visualId=visual-19')
-    expect(rendered).toContain('无法唯一定位渲染元素')
   })
 })

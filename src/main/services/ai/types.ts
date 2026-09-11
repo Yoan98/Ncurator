@@ -1,15 +1,16 @@
-import type { ChatStore } from '../storage/domains/ChatStore'
+import type { PartnerStore } from '../storage/domains/PartnerStore'
+import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
-import type { AiLlmDriver } from './llmExecutor'
-import type { WebCrawlerService } from '../webCrawler/types'
 import type {
-  DocxChangedBlock,
-  DocxCreatedBlock,
-  DocxOp,
-  DocxReplaySession
-} from './human/tools/docx/types'
+  AiLlmDriver,
+  AiLlmTextMessagesRequest,
+  AiLlmToolCallRequest,
+  AiLlmToolCallResult
+} from './llmExecutor'
+import type { WebCrawlerService } from '../webCrawler/types'
+import type { DocxChangedNode, DocxCreatedNode, DocxReplaySession } from './human/tools/docx/types'
 import type { DocxApplyService } from './human/tools/docx/review/DocxApplyService'
 import type { ResolvedDocxOpenTarget } from './human/tools/docx/review/types'
 import type { z } from 'zod/v4'
@@ -22,7 +23,6 @@ import type {
   AiExecutionPermission,
   AiPreference,
   AiRunFailureCode,
-  AiRunResumeSnapshotReason,
   AiRuntimeSettings,
   AiRunEvent,
   AiRunEventStage,
@@ -30,15 +30,14 @@ import type {
   AiFileChangeRecord,
   ChatAttachment,
   BrainContextBudgetSnapshot,
-  ChatConversationMemory,
-  ChatSessionResumeSnapshot,
-  ChatSessionSkillState,
+  ChatMessageLogEntry,
+  ChatMessageLogRecord,
   DocxApplyRecord,
   SelectedReference,
   WorkbenchSelectedModel
 } from '../../../shared/types'
 import type { LlmRuntimeConfig } from '../../../shared/types'
-import type { HumanState, HumanTaskContext, HumanTaskInput, HumanTaskOutput } from './human/types'
+import type { HumanState, HumanTaskInput, HumanTaskOutput } from './human/types'
 import { aiRunStateContractSchema, aiRunStatusSchema } from './schema'
 
 export type { AiRunStatus, HumanTaskInput, HumanTaskOutput }
@@ -59,49 +58,31 @@ export type HumanTaskRunner = (
 
 export type AiRunState = z.infer<typeof aiRunStateContractSchema>
 
-export type HumanResumeSnapshot = Pick<HumanState, 'memory' | 'skills'> & {
-  schemaVersion: 3
-  taskContext: HumanTaskContext
-  execution: Pick<
-    HumanState['execution'],
-    'pendingDecisionHint' | 'deliveryGuidanceItems' | 'artifacts' | 'finalizationReason'
-  >
-}
-
-export type RecoverableRunErrorCode = AiRunResumeSnapshotReason
-
-export type RecoverableHumanRunError = Error & {
-  code: 'RECOVERABLE_HUMAN_RUN'
-  reason: RecoverableRunErrorCode
-  lastHumanState?: HumanState
-}
-
 export type AiRuntimePlatform = 'macos' | 'windows'
 
 export type AiRunStartPayload = {
   runId: string
-  sessionId: string
+  partnerId: string
+  partnerName: string
   userMessageId: string
   assistantMessageId: string
   input: string
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
   mainModel?: WorkbenchSelectedModel
-  visionModel?: WorkbenchSelectedModel
   preference?: AiPreference
   executionPermission?: AiExecutionPermission
-  workspace?: {
-    workspaceId: string
-    workspaceName: string
-    rootPath: string
-    policyProfile?: string
-  }
+  workspaceRoots: string[]
 }
 
-export type AiWorkspaceBinding = NonNullable<AiRunStartPayload['workspace']>
+export type AiWorkspaceBinding = {
+  workspaceId: string
+  workspaceName: string
+  rootPath: string
+  policyProfile?: string
+}
 
 export type AiReferenceScope = {
-  workspace: AiWorkspaceBinding
   selectedReferences: SelectedReference[]
   attachments: ChatAttachment[]
 }
@@ -125,20 +106,6 @@ export type AiApprovalBatchResult =
       error: string
     }
 
-export type AiUserTakeoverRequest = {
-  runId: string
-  taskId: string
-  requestId: string
-  message: string
-}
-
-export type AiUserTakeoverResult =
-  | { confirmed: true }
-  | {
-      confirmed: false
-      error: string
-    }
-
 export type AiTerminalApprovalFallback = {
   runId: string
   taskId: string
@@ -148,34 +115,72 @@ export type AiTerminalApprovalFallback = {
   stage?: AiRunEventStage
 }
 
-export type BrowserUseAction = 'navigate' | 'extract' | 'observe' | 'act'
+export type BrowserUseAction =
+  | 'navigate'
+  | 'list_tabs'
+  | 'extract'
+  | 'observe'
+  | 'act'
+  | 'act_instruction'
+  | 'screenshot'
+  | 'scroll'
 
 export type BrowserUsePage = {
   url: string
   title?: string
 }
 
+/** Stagehand Action 原样字段 + 工具层分配的 actionId */
 export type BrowserActionCandidate = {
+  actionId: string
   description: string
-  method?: string
-  arguments?: string[]
+  method: string
+  arguments: string[]
+  selector: string
+}
+
+export type BrowserUseTabItem = {
+  tabId: string
+  title: string
+  url: string
+  active: boolean
+}
+
+/** 供确定性 act 回放的 Stagehand Action（不含 actionId） */
+export type BrowserStagehandAction = {
+  description: string
+  method: string
+  arguments: string[]
+  selector: string
 }
 
 export type BrowserUseActResult = {
   success: boolean
   message: string
   actionDescription: string
-  actions: BrowserActionCandidate[]
+  executed: BrowserActionCandidate
+}
+
+export type BrowserUseScrollResult = {
+  message: string
+  scrolledPixels: number
 }
 
 export type BrowserUseResult =
   | {
       action: 'navigate'
+      tabId: string
       page: BrowserUsePage
       result: null
     }
   | {
+      action: 'list_tabs'
+      tabs: BrowserUseTabItem[]
+      result: null
+    }
+  | {
       action: 'extract'
+      tabId: string
       page: BrowserUsePage
       result: {
         extracted: string
@@ -183,60 +188,130 @@ export type BrowserUseResult =
     }
   | {
       action: 'observe'
+      tabId: string
       page: BrowserUsePage
       result: {
-        actions: BrowserActionCandidate[]
+        /** 尚未分配 actionId 的 Stagehand 候选，由工具层补齐 */
+        actions: BrowserStagehandAction[]
       }
     }
   | {
       action: 'act'
+      tabId: string
       page: BrowserUsePage
       result: BrowserUseActResult
     }
   | {
+      action: 'act_instruction'
+      tabId: string
+      page: BrowserUsePage
+      result: {
+        success: boolean
+        message: string
+        actionDescription: string
+      }
+    }
+  | {
+      action: 'screenshot'
+      tabId: string
+      page: BrowserUsePage
+      result: {
+        path: string
+      }
+    }
+  | {
+      action: 'scroll'
+      tabId: string
+      page: BrowserUsePage
+      result: BrowserUseScrollResult
+    }
+  | {
       action?: BrowserUseAction
+      tabId?: string
       page?: BrowserUsePage
       error: string
     }
 
-export type BrowserUseRunRequest =
+export type BrowserUseRunRequest = (
   | {
-      tabId: string
+      tabId?: string
+      ownerId: string
       action: 'navigate'
       url: string
-      instruction?: string
+      llmConfig: LlmRuntimeConfig
+    }
+  | {
+      ownerId: string
+      action: 'list_tabs'
       llmConfig: LlmRuntimeConfig
     }
   | {
       tabId: string
-      action: 'extract' | 'observe' | 'act'
+      action: 'extract' | 'observe'
       instruction: string
       llmConfig: LlmRuntimeConfig
     }
+  | {
+      tabId: string
+      action: 'act'
+      stagehandAction: BrowserStagehandAction
+      actionId: string
+      llmConfig: LlmRuntimeConfig
+    }
+  | {
+      tabId: string
+      action: 'act_instruction'
+      instruction: string
+      llmConfig: LlmRuntimeConfig
+    }
+  | {
+      tabId: string
+      action: 'screenshot'
+      screenshotPath: string
+      llmConfig: LlmRuntimeConfig
+    }
+  | {
+      tabId: string
+      action: 'scroll'
+      direction?: 'down' | 'up'
+      percentage?: number
+      llmConfig: LlmRuntimeConfig
+    }
+) & {
+  abortSignal?: AbortSignal
+  runId?: string
+}
 
 export type BrowserUseService = {
+  createTab: (ownerId: string) => Promise<{ id: string }>
   ensureAutomationTab: (ownerId: string) => Promise<{ id: string }>
+  getActiveTabId: () => string | null
+  listTabs: (ownerId: string) => Array<{ id: string; title?: string; url: string }>
   navigate: (url: string, tabId?: string) => Promise<void>
   run: (input: BrowserUseRunRequest) => Promise<BrowserUseResult>
+  releaseRun?: (runId: string) => Promise<void>
 }
 
 export type TerminalCommandChangeTrackingInput = {
   commandId: string
   runId: string
-  sessionId: string
-  workspaceRootPath: string
+  partnerId: string
+  cwd: string
   command: string
+  workspaceRoots: string[]
 }
 
 export type AiRunDeps = {
   runtimeSettings: AiRuntimeSettings
   llmStore: LlmConfigStore
-  chatStore: ChatStore
+  partnerStore: PartnerStore
+  chatMessageLogStore: ChatMessageLogStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   ensureEmbeddingReady: () => Promise<void>
+  hasRunningKnowledgeIndexJob?: () => Promise<boolean>
   docxApplyService: DocxApplyService
-  saveFileChangeRecord: (record: AiFileChangeRecord, workspaceRootPath?: string) => Promise<void>
+  saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
   listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
   beginTerminalCommandTracking: (input: TerminalCommandChangeTrackingInput) => Promise<void>
   finishTerminalCommandTracking: (commandId: string) => Promise<AiFileChangeRecord[]>
@@ -246,14 +321,12 @@ export type AiRunDeps = {
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
-  requestUserTakeover: (request: AiUserTakeoverRequest) => Promise<AiUserTakeoverResult>
   llmDriver?: AiLlmDriver
+  chatToolsWrapper?: (real: AiRunContext['chatTools']) => AiRunContext['chatTools']
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
   humanRuntimeOverrides?: {
-    hardActionLimit?: number
     graphRecursionLimit?: number
-    toolLimitWarningRatio?: number
     modelContextWindowTokens?: number
     terminalEnvironment?: Record<string, string>
   }
@@ -261,31 +334,22 @@ export type AiRunDeps = {
 
 export type AiRunContext = {
   runId: string
-  sessionId: string
+  partnerId: string
+  partnerName: string
+  workspaceRoots: string[]
   runStartedAt: number
   platform: AiRuntimePlatform
   preference: AiPreference
   executionPermission: AiExecutionPermission
   referenceScope: AiReferenceScope
   humanRuntimeOverrides?: {
-    hardActionLimit?: number
     graphRecursionLimit?: number
-    toolLimitWarningRatio?: number
     modelContextWindowTokens?: number
     terminalEnvironment?: Record<string, string>
   }
-  workspace?: {
-    workspaceId: string
-    workspaceName: string
-    rootPath: string
-    policyProfile?: string
-  }
+  workspace?: AiWorkspaceBinding
   checkCancelled: () => void
-  saveResumeSnapshot: (input: {
-    reason: AiRunResumeSnapshotReason
-    humanState: HumanState
-    errorMessage?: string
-  }) => Promise<void>
+  abortSignal?: AbortSignal
   chatStructured: <T extends Record<string, unknown>>(input: {
     caller: string
     taskId?: string
@@ -296,6 +360,7 @@ export type AiRunContext = {
     temperature?: number
     streamingMode?: AiLlmStreamingMode
     contextBudgetSnapshot?: BrainContextBudgetSnapshot
+    retryOutputErrors?: boolean
   }) => Promise<{
     output: T
     usage?: AiLlmUsage
@@ -310,24 +375,19 @@ export type AiRunContext = {
     streamingMode?: AiLlmStreamingMode
     onTextDelta?: (text: string) => void
   }) => Promise<string>
+  chatMessages: (input: AiLlmTextMessagesRequest) => Promise<string>
+  chatTools: (input: AiLlmToolCallRequest) => Promise<AiLlmToolCallResult>
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
-  requestUserTakeover: (request: AiUserTakeoverRequest) => Promise<AiUserTakeoverResult>
   getLlmConfig: () => Promise<LlmRuntimeConfig>
-  getVisionLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
-  loadConversationContext: () => Promise<{
-    recentTurnsText: string
-    conversationSummaryText: string
-  }>
-  loadConversationMemory: () => Promise<ChatConversationMemory | null>
-  loadSessionSkillState: () => Promise<ChatSessionSkillState>
-  saveSessionSkillState: (input: {
-    expectedRevision: number
-    learnedSkillIds: string[]
-  }) => Promise<ChatSessionSkillState>
+  appendMessageLog: (
+    entries: ChatMessageLogEntry[],
+    options?: { runId?: string }
+  ) => Promise<void>
+  loadMessageLog: () => Promise<ChatMessageLogRecord[]>
   trackDocxOpen: (input: {
     docId: string
     sourcePath: string
@@ -336,17 +396,8 @@ export type AiRunContext = {
   trackDocxChanges: (input: {
     previousDocId: string
     nextDocId: string
-    op: DocxOp
-    changedBlocks: DocxChangedBlock[]
-    createdBlocks: DocxCreatedBlock[]
-    replaySession?: DocxReplaySession
-  }) => void
-  trackDocxBatchChanges: (input: {
-    previousDocId: string
-    nextDocId: string
-    ops: DocxOp[]
-    changedBlocks: DocxChangedBlock[]
-    createdBlocks: DocxCreatedBlock[]
+    changedNodes: DocxChangedNode[]
+    createdNodes: DocxCreatedNode[]
     replaySession?: DocxReplaySession
   }) => void
   resolveDocxOpenTarget: (sourcePath: string) => Promise<ResolvedDocxOpenTarget>
@@ -360,15 +411,12 @@ export type AiRunContext = {
   discardTerminalCommandTracking: (commandId: string) => void
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
+  assertKbSearchAvailable: () => Promise<void>
 }
 
 export type AiRunFailureMetadata = {
   failureCode?: AiRunFailureCode
-  resumeHumanState?: HumanState
-  resumeSnapshotSaved?: boolean
 }
-
-export type ChatSessionResumeSnapshotRecord = ChatSessionResumeSnapshot
 
 export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent' | 'recordLlmIo'>
 
@@ -378,7 +426,6 @@ export type TerminalToolContext = Pick<
   | 'platform'
   | 'checkCancelled'
   | 'sendEvent'
-  | 'requestApprovalBatch'
   | 'humanRuntimeOverrides'
   | 'saveFileChangeRecord'
   | 'beginTerminalCommandTracking'
@@ -388,7 +435,13 @@ export type TerminalToolContext = Pick<
 
 export type KnowledgeRetrievalContext = Pick<
   AiRunContext,
-  'runId' | 'checkCancelled' | 'sendEvent' | 'workspace' | 'documentsStore' | 'embeddingService'
+  | 'runId'
+  | 'checkCancelled'
+  | 'sendEvent'
+  | 'workspace'
+  | 'documentsStore'
+  | 'embeddingService'
+  | 'assertKbSearchAvailable'
 >
 
 export type DocxToolContext = AiRunContext

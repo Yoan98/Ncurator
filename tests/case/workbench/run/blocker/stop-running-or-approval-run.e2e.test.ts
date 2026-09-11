@@ -5,6 +5,7 @@ import {
   collectWorkbenchAiRunEvents,
   getApprovalCard,
   getWorkbenchLocator,
+  createWorkbenchNewSession,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
   waitForWorkbenchAiEvent,
@@ -14,7 +15,6 @@ import {
 const CASE_ID = 'stop-running-or-approval-run'
 const LONG_RUN_PROMPT =
   '请读取当前工作区所有工作目录资料，写一份至少 2000 字的详细分析，逐项说明证据来源。'
-const RESUME_PROMPT = '这次补一个简短摘要，沿用刚才已恢复的任务上下文。'
 const APPROVAL_PROMPT =
   '请使用终端命令在当前工作区创建 stop-approval-waiting.txt，内容写 should-not-execute-before-stop。'
 
@@ -106,7 +106,7 @@ describe('workbench run e2e', () => {
             workbenchSelectors.sendButton,
             { timeout: 10_000 }
           )
-          await page.getByRole('button', { name: `在 ${setup.workspaceName} 中新建对话` }).click()
+          await createWorkbenchNewSession(page)
           await sendWorkbenchMessage(page, APPROVAL_PROMPT)
           const approvalRunStarted = await waitForWorkbenchAiEvent(runtime, {
             name: 'approval_run_started',
@@ -139,31 +139,10 @@ describe('workbench run e2e', () => {
               matches: (event) =>
                 event.type === 'run_cancelled' && event.runId === approvalRunStarted.runId
             })
-            if (
-              approvalCancelled.type !== 'run_cancelled' ||
-              !approvalCancelled.resumeSnapshotSaved
-            ) {
-              throw new Error('approval cancellation did not persist a resume snapshot')
+            if (approvalCancelled.type !== 'run_cancelled') {
+              throw new Error('approval cancellation did not reach the cancelled state')
             }
           }
-
-          const approvalCancelledRunId = approvalRunStarted.runId
-          await sendWorkbenchMessage(page, RESUME_PROMPT)
-          const resumedRunStarted = await waitForWorkbenchAiEvent(runtime, {
-            name: 'resumed_run_started_after_cancel',
-            matches: (event) => event.type === 'run_started' && event.input === RESUME_PROMPT
-          })
-          const resumedHint = await waitForWorkbenchAiEvent(runtime, {
-            name: 'user_cancelled_resume_hint',
-            matches: (event) =>
-              event.type === 'decision_hint' &&
-              event.runId === resumedRunStarted.runId &&
-              event.code === 'run_resumed_after_interruption' &&
-              event.detail?.reason === 'user_cancelled'
-          })
-          await getWorkbenchLocator(page, workbenchSelectors.sendButton)
-            .click()
-            .catch(() => undefined)
 
           return {
             normalRunState,
@@ -171,8 +150,6 @@ describe('workbench run e2e', () => {
             labelAfterCancel,
             sessionRunningIndicatorVisible,
             sessionRunningIndicatorHiddenAfterCancel,
-            approvalCancelledRunId,
-            resumedHintReason: resumedHint.detail?.reason,
             stopButtonVisibleDuringApproval,
             stopLabelDuringApproval
           }
@@ -186,7 +163,6 @@ describe('workbench run e2e', () => {
                 (!result.labelAfterCancel.includes('停止') &&
                   result.sessionRunningIndicatorVisible &&
                   result.sessionRunningIndicatorHiddenAfterCancel)) &&
-              result.resumedHintReason === 'user_cancelled' &&
               result.stopButtonVisibleDuringApproval &&
               result.stopLabelDuringApproval.includes('停止'),
             {

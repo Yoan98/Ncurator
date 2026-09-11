@@ -2,11 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  ModelDownloadError,
-  ModelService,
-  type ModelDownloadProgress
-} from '../../../../src/main/services/model/ModelService'
+import { ModelService, type ModelDownloadProgress } from '../../../../src/main/services/model/ModelService'
 import { DEFAULT_MODEL_SOURCE } from '../../../../src/shared/modelSources'
 
 const REPO_ID = 'jinaai/jina-embeddings-v2-base-zh'

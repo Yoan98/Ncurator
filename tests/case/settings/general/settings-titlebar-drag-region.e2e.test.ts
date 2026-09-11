@@ -188,7 +188,8 @@ describe('settings general e2e', () => {
             message: '点击新增配置，确认顶部拖动层没有遮挡页面操作按钮。',
             run: async () => {
               await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
-              await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
+              // Ant Design 会把 data-testid 挂在 modal root 上，关闭时 root 仍在 DOM 但为 hidden。
+              await getSettingsLocator(page, settingsSelectors.modelPresetProviderSelect).waitFor({
                 state: 'visible'
               })
             }
@@ -199,7 +200,7 @@ describe('settings general e2e', () => {
             sidebarCollapseRoundTrip,
             addModalVisible: await getSettingsLocator(
               page,
-              settingsSelectors.modelBaseUrlInput
+              settingsSelectors.modelPresetProviderSelect
             ).isVisible()
           }
         },

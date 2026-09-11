@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod/v4'
+import { HumanMessage } from '@langchain/core/messages'
 
 const { createChatModelMock } = vi.hoisted(() => ({
   createChatModelMock: vi.fn()
@@ -87,6 +88,84 @@ describe('ai unit llm executor text path', () => {
       rawText: 'Hello from the model',
       status: 'completed'
     })
+  })
+
+  it('forwards image blocks to the main model and preserves an unsupported-image error', async () => {
+    const invoke = vi.fn(async (messages: HumanMessage[]) => {
+      expect(JSON.stringify(messages[0]?.content)).toContain('data:image/png;base64,AA==')
+      throw new LlmProviderError({
+        message: 'image input is not supported by this model',
+        httpStatus: 400,
+        providerCode: 'unsupported_image',
+        retryable: false
+      })
+    })
+    createChatModelMock.mockImplementation(() => ({ invoke }))
+    const executor = createAiLlmExecutor({
+      eventCtx: { runId: 'run-image-unsupported', sendEvent: () => undefined },
+      runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
+      checkCancelled: () => undefined
+    })
+
+    await expect(
+      executor.chatMessages({
+        caller: 'human.brain',
+        taskId: 'task-image-unsupported',
+        schemaName: 'human_brain_messages',
+        messages: [
+          new HumanMessage({
+            content: [
+              { type: 'text', text: '读取图片' },
+              { type: 'image_url', image_url: { url: 'data:image/png;base64,AA==' } }
+            ]
+          })
+        ]
+      })
+    ).rejects.toMatchObject({
+      message: 'image input is not supported by this model',
+      httpStatus: 400,
+      providerCode: 'unsupported_image'
+    })
+    expect(invoke).toHaveBeenCalledTimes(1)
+  })
+
+  it('includes image identity in context hashes without recording base64 payloads', async () => {
+    const llmIoRecords: AiLlmIoRecord[] = []
+    createChatModelMock.mockImplementation(() => ({
+      invoke: async () => ({ content: 'ok' })
+    }))
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-image-hash',
+        sendEvent: () => undefined,
+        recordLlmIo: (record) => llmIoRecords.push(record)
+      },
+      runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
+      checkCancelled: () => undefined
+    })
+    for (const payload of ['AA==', 'AQ==']) {
+      await executor.chatMessages({
+        caller: 'human.brain',
+        schemaName: 'human_brain_messages',
+        messages: [
+          new HumanMessage({
+            content: [
+              { type: 'text', text: '读取图片' },
+              { type: 'image_url', image_url: { url: `data:image/png;base64,${payload}` } }
+            ]
+          })
+        ]
+      })
+    }
+
+    expect(llmIoRecords).toHaveLength(2)
+    expect(llmIoRecords[0]?.dynamicContextHash).not.toBe(llmIoRecords[1]?.dynamicContextHash)
+    expect(JSON.stringify(llmIoRecords)).not.toContain('data:image/png;base64,AA==')
+    expect(JSON.stringify(llmIoRecords)).not.toContain('data:image/png;base64,AQ==')
   })
 
   it('forwards driver structured output and text output without persisting preferences', async () => {
@@ -196,6 +275,57 @@ describe('ai unit llm executor text path', () => {
       expect(
         events.some((event) => event.type === 'assistant_process_group_failed')
       ).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('retries schema-invalid structured output when retryOutputErrors is set', async () => {
+    vi.useFakeTimers()
+    try {
+      let callCount = 0
+      const driver: AiLlmDriver = {
+        chatStructured: async () => {
+          callCount += 1
+          if (callCount < 3) {
+            return {
+              output: { wrong: true },
+              rawText: '{"wrong":true}'
+            }
+          }
+          return {
+            output: { needsHistory: false },
+            rawText: '{"needsHistory":false}'
+          }
+        }
+      }
+
+      const executor = createAiLlmExecutor({
+        eventCtx: {
+          runId: 'run-output-retry',
+          sendEvent: () => undefined
+        },
+        runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+        getConfig: async () => baseConfig,
+        saveConfig: async () => undefined,
+        checkCancelled: () => undefined,
+        driver
+      })
+
+      const resultPromise = executor.chatStructured({
+        caller: 'human.context_scope',
+        schemaName: 'human_context_scope',
+        schema: z.object({ needsHistory: z.boolean() }),
+        system: 'Return JSON only.',
+        user: 'Decide.',
+        retryOutputErrors: true
+      })
+
+      await vi.advanceTimersByTimeAsync(500)
+      await vi.advanceTimersByTimeAsync(750)
+      const result = await resultPromise
+      expect(result.output).toEqual({ needsHistory: false })
+      expect(callCount).toBe(3)
     } finally {
       vi.useRealTimers()
     }
@@ -325,7 +455,7 @@ describe('ai unit llm executor text path', () => {
       details: {
         streamed: true,
         chunkCount: 513,
-        reason: 'error'
+        reason: 'unexpected_error'
       }
     })
     expect(llmIoRecords[0]).toMatchObject({

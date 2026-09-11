@@ -47,7 +47,7 @@ const renderGenericArrayItem = (value: JsonValue, index: number): string => {
 
   if (isJsonObject(value)) {
     const name =
-      readStringField(value, 'blockId') ||
+      readStringField(value, 'nodeId') ||
       readStringField(value, 'document_name') ||
       readStringField(value, 'name') ||
       readStringField(value, 'id') ||
@@ -96,22 +96,19 @@ const renderGenericObject = (obj: JsonObject): string => {
     .join('\n')
 }
 
-const renderDocxBlockLine = (value: JsonValue, index: number, depth = 0): string => {
+const renderDocxNodeLine = (value: JsonValue, index: number, depth = 0): string => {
   if (!isJsonObject(value)) return renderGenericArrayItem(value, index)
 
-  const nodeId =
-    readStringField(value, 'blockId') ||
-    readStringField(value, 'nodeId') ||
-    readStringField(value, 'visualId') ||
-    `item-${index + 1}`
+  const nodeId = readStringField(value, 'nodeId') || `item-${index + 1}`
   const type = readStringField(value, 'type')
-  const blockIndex = readNumberField(value, 'blockIndex')
+  const nodeIndex = readNumberField(value, 'nodeIndex')
   const visuals = isJsonObject(value.visuals) ? value.visuals : undefined
   const visualKinds =
     visuals && Array.isArray(visuals.kinds)
       ? visuals.kinds.filter((kind): kind is string => typeof kind === 'string').join(',')
       : undefined
   const text =
+    readStringField(value, 'textPreview') ||
     readStringField(value, 'text') ||
     readStringField(value, 'summary') ||
     readStringField(value, 'message') ||
@@ -119,12 +116,15 @@ const renderDocxBlockLine = (value: JsonValue, index: number, depth = 0): string
   const extra =
     renderKeyValuePairs([
       ['type', type],
-      ['blockIndex', typeof blockIndex === 'number' ? String(blockIndex) : undefined],
-      ['tableBlockId', readStringField(value, 'tableBlockId')],
+      ['nodeIndex', typeof nodeIndex === 'number' ? String(nodeIndex) : undefined],
+      ['tableNodeId', readStringField(value, 'tableNodeId')],
       ['row', readNumberTextField(value, 'row')],
       ['col', readNumberTextField(value, 'col')],
       ['rows', readNumberTextField(value, 'rows')],
-      ['cols', readNumberTextField(value, 'cols')],
+      ['columns', readNumberTextField(value, 'columns') || readNumberTextField(value, 'cols')],
+      ['story', readStringField(value, 'story')],
+      ['styleId', readStringField(value, 'styleId')],
+      ['revisionKind', readStringField(value, 'revisionKind')],
       ['visualCount', visuals ? readNumberTextField(visuals, 'count') : undefined],
       ['visualKinds', visualKinds]
     ]) || undefined
@@ -132,12 +132,12 @@ const renderDocxBlockLine = (value: JsonValue, index: number, depth = 0): string
   const indent = '  '.repeat(depth)
   const baseLine = `${indent}- ${nodeId}${extra ? `（${extra}）` : ''}：${text || readStringField(value, 'kind') || ''}`
   if (!Array.isArray(value.children) || value.children.length === 0) return baseLine
-  return `${baseLine}\n${value.children.map((child, childIndex) => renderDocxBlockLine(child, childIndex, depth + 1)).join('\n')}`
+  return `${baseLine}\n${value.children.map((child, childIndex) => renderDocxNodeLine(child, childIndex, depth + 1)).join('\n')}`
 }
 
-const renderDocxBlocks = (value: JsonValue | undefined): string =>
+const renderDocxNodes = (value: JsonValue | undefined): string =>
   Array.isArray(value) && value.length > 0
-    ? value.map((block, index) => renderDocxBlockLine(block, index)).join('\n')
+    ? value.map((node, index) => renderDocxNodeLine(node, index)).join('\n')
     : 'none'
 
 const renderDocxSearchMatches = (value: JsonValue | undefined): string => {
@@ -146,16 +146,25 @@ const renderDocxSearchMatches = (value: JsonValue | undefined): string => {
   return value
     .map((item, index) => {
       if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
-      const blockId = readStringField(item, 'blockId') || `item-${index + 1}`
-      const blockType = readStringField(item, 'type')
-      const blockIndex = readNumberField(item, 'blockIndex')
-      const text = readStringField(item, 'text') || JSON.stringify(item)
+      const nodeId = readStringField(item, 'nodeId') || `item-${index + 1}`
+      const nodeType = readStringField(item, 'type')
+      const nodeIndex = readNumberField(item, 'nodeIndex')
+      const text = readStringField(item, 'textContext') || JSON.stringify(item)
       const meta =
         renderKeyValuePairs([
-          ['type', blockType],
-          ['blockIndex', typeof blockIndex === 'number' ? String(blockIndex) : undefined]
+          ['type', nodeType],
+          ['nodeIndex', typeof nodeIndex === 'number' ? String(nodeIndex) : undefined],
+          ['story', readStringField(item, 'story')],
+          ['matchText', readStringField(item, 'matchText')],
+          ['tableNodeId', readStringField(item, 'tableNodeId')]
         ]) || undefined
-      return `- ${blockId}${meta ? `（${meta}）` : ''}：${text}`
+      const neighbors = [
+        Array.isArray(item.before) ? `  before:\n${renderDocxNodes(item.before)}` : '',
+        Array.isArray(item.after) ? `  after:\n${renderDocxNodes(item.after)}` : ''
+      ]
+        .filter(Boolean)
+        .join('\n')
+      return `- ${nodeId}${meta ? `（${meta}）` : ''}：${text}${neighbors ? `\n${neighbors}` : ''}`
     })
     .join('\n')
 }
@@ -163,22 +172,15 @@ const renderDocxSearchMatches = (value: JsonValue | undefined): string => {
 const renderDocxReadResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([['sourcePath', readStringField(obj, 'sourcePath')]]),
-    'blocks:',
-    renderDocxBlocks(obj.blocks)
+    'nodes:',
+    renderDocxNodes(obj.nodes)
   ]
     .filter(Boolean)
     .join('\n')
 
 const renderDocxSearchResult = (obj: JsonObject): string =>
   [
-    renderKeyValuePairs([
-      ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['currentRevisionRef', readStringField(obj, 'currentRevisionRef')],
-      ['mode', readStringField(obj, 'mode')],
-      ['effectiveQuery', readStringField(obj, 'effectiveQuery')],
-      ['returnedMatchCount', readNumberTextField(obj, 'returnedMatchCount')],
-      ['totalMatchCount', readNumberTextField(obj, 'totalMatchCount')]
-    ]),
+    renderKeyValuePairs([['totalMatchCount', readNumberTextField(obj, 'totalMatchCount')]]),
     'matches:',
     renderDocxSearchMatches(obj.matches)
   ]
@@ -188,11 +190,25 @@ const renderDocxSearchResult = (obj: JsonObject): string =>
 const renderDocxOutlineResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
-      ['sourcePath', readStringField(obj, 'sourcePath')],
-      ['totalBlockCount', readNumberTextField(obj, 'totalBlockCount')]
+      ['fromPercent', readNumberTextField(obj, 'fromPercent')],
+      ['toPercent', readNumberTextField(obj, 'toPercent')],
+      ['fromNodeIndex', readNumberTextField(obj, 'fromNodeIndex')],
+      ['toNodeIndex', readNumberTextField(obj, 'toNodeIndex')],
+      ['totalRootCount', readNumberTextField(obj, 'totalRootCount')]
     ]),
-    'blocks:',
-    renderDocxBlocks(obj.blocks)
+    'segments:',
+    Array.isArray(obj.segments) && obj.segments.length > 0
+      ? obj.segments
+          .map((segment, index) => {
+            if (!isJsonObject(segment)) return renderGenericArrayItem(segment, index)
+            return `- ${renderKeyValuePairs([
+              ['story', readStringField(segment, 'story')],
+              ['fromNodeIndex', readNumberTextField(segment, 'fromNodeIndex')],
+              ['toNodeIndex', readNumberTextField(segment, 'toNodeIndex')]
+            ])}：${readStringField(segment, 'textMap') || ''}`
+          })
+          .join('\n')
+      : 'none'
   ]
     .filter(Boolean)
     .join('\n')
@@ -225,21 +241,6 @@ const renderPdfSearchMatches = (value: JsonValue | undefined): string => {
         ['pageNumber', readNumberTextField(item, 'pageNumber')],
         ['matchedText', readStringField(item, 'matchedText')],
         ['snippet', readStringField(item, 'snippet')]
-      ])}`
-    })
-    .join('\n')
-}
-
-const renderVisualResults = (value: JsonValue | undefined): string => {
-  if (!Array.isArray(value) || value.length === 0) return 'none'
-  return value
-    .map((item, index) => {
-      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
-      return `${index + 1}. ${renderKeyValuePairs([
-        ['visualId', readStringField(item, 'visualId')],
-        ['index', readNumberTextField(item, 'index')],
-        ['text', readStringField(item, 'text')],
-        ['error', readStringField(item, 'error')]
       ])}`
     })
     .join('\n')
@@ -282,14 +283,7 @@ const renderPdfReadPagesResult = (obj: JsonObject): string =>
     renderPdfPageList(obj.pages)
   ].join('\n')
 
-const renderVisualReadResult = (obj: JsonObject): string =>
-  [
-    renderKeyValuePairs([['sourcePath', readStringField(obj, 'sourcePath')]]),
-    'results:',
-    renderVisualResults(obj.results)
-  ].join('\n')
-
-const renderWebCrawlLinkList = (value: JsonValue | undefined): string => {
+const renderWebSearchLinkList = (value: JsonValue | undefined): string => {
   if (!Array.isArray(value) || value.length === 0) return 'none'
 
   return value
@@ -307,18 +301,18 @@ const renderWebCrawlLinkList = (value: JsonValue | undefined): string => {
     .join('\n')
 }
 
-const renderWebCrawlLinks = (value: JsonValue | undefined): string => {
+const renderWebSearchLinks = (value: JsonValue | undefined): string => {
   if (!isJsonObject(value)) return 'none'
 
   return [
     'internal:',
-    renderWebCrawlLinkList(value.internal),
+    renderWebSearchLinkList(value.internal),
     'external:',
-    renderWebCrawlLinkList(value.external)
+    renderWebSearchLinkList(value.external)
   ].join('\n')
 }
 
-const renderWebCrawlResult = (obj: JsonObject): string =>
+const renderWebSearchFetchResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([
       ['requestedUrl', readStringField(obj, 'requestedUrl')],
@@ -330,63 +324,38 @@ const renderWebCrawlResult = (obj: JsonObject): string =>
     'markdown:',
     readStringField(obj, 'markdown') || 'none',
     'links:',
-    renderWebCrawlLinks(obj.links)
+    renderWebSearchLinks(obj.links)
   ]
     .filter(Boolean)
     .join('\n')
 
-const renderWebSearchResults = (value: JsonValue | undefined): string => {
-  if (!Array.isArray(value) || value.length === 0) return 'none'
-
-  return value
-    .map((item, index) => {
-      if (!isJsonObject(item)) return renderGenericArrayItem(item, index)
-      return `${index + 1}. ${renderKeyValuePairs([
-        ['rank', readNumberTextField(item, 'rank')],
-        ['title', readStringField(item, 'title')],
-        ['url', readStringField(item, 'url')],
-        ['snippet', readStringField(item, 'snippet')]
-      ])}`
-    })
-    .join('\n')
-}
-
-const renderWebSearchResult = (obj: JsonObject): string =>
+const renderWebSearchSearchResult = (obj: JsonObject): string =>
   [
     renderKeyValuePairs([['query', readStringField(obj, 'query')]]),
     'results:',
-    renderWebSearchResults(obj.results)
-  ]
-    .filter(Boolean)
-    .join('\n')
+    ...(Array.isArray(obj.results)
+      ? obj.results.map((item, index) => {
+          if (!isJsonObject(item)) return `${index + 1}. ${renderGenericArrayItem(item, index)}`
+          return `${index + 1}. ${renderKeyValuePairs([
+            ['rank', readNumberTextField(item, 'rank')],
+            ['title', readStringField(item, 'title')],
+            ['url', readStringField(item, 'url')],
+            ['snippet', readStringField(item, 'snippet')]
+          ])}`
+        })
+      : ['none'])
+  ].join('\n')
 
-const renderDocxCreateResult = (obj: JsonObject): string =>
-  [
-    renderKeyValuePairs([['sourcePath', readStringField(obj, 'sourcePath')]]),
-    'postWriteReadback:',
-    renderDocxPostWriteReadback(obj.postWriteReadback)
-  ]
-    .filter(Boolean)
-    .join('\n')
-
-const renderDocxPostWriteReadback = (value: JsonValue | undefined): string => {
-  if (!isJsonObject(value) || !Array.isArray(value.regions) || value.regions.length === 0) {
-    return 'none'
+const renderWebSearchResult = (obj: JsonObject): string => {
+  if (Array.isArray(obj.results)) return renderWebSearchSearchResult(obj)
+  if (typeof obj.markdown === 'string' || readStringField(obj, 'requestedUrl')) {
+    return renderWebSearchFetchResult(obj)
   }
-
-  return value.regions
-    .map((region, index) => {
-      if (!isJsonObject(region)) return renderGenericArrayItem(region, index)
-      const header = `region ${index + 1}：${renderKeyValuePairs([
-        ['fromBlockId', readStringField(region, 'fromBlockId')],
-        ['fromBlockIndex', readNumberTextField(region, 'fromBlockIndex')],
-        ['toBlockId', readStringField(region, 'toBlockId')],
-        ['toBlockIndex', readNumberTextField(region, 'toBlockIndex')]
-      ])}`
-      return `${header}\nblocks:\n${renderDocxBlocks(region.blocks)}`
-    })
-    .join('\n')
+  return renderGenericObject(obj)
 }
+
+const renderDocxMutationResult = (obj: JsonObject): string | undefined =>
+  Array.isArray(obj.createdIds) ? `createdIds:\n${renderGenericArray(obj.createdIds)}` : undefined
 
 export const renderToolResourceContextText = (
   resourceContext: ToolResourceContext | undefined
@@ -413,28 +382,25 @@ export const renderToolResultDataText = (
   if (!isJsonObject(value)) return undefined
 
   switch (result.toolName) {
-    case 'docx_edit':
-      return renderDocxCreateResult(value)
-    case 'docx_read_blocks':
+    case 'docx_content_edit':
+    case 'docx_format':
+    case 'docx_table_edit':
+    case 'docx_comments_revisions':
+      return renderDocxMutationResult(value)
+    case 'docx_read_nodes':
       return renderDocxReadResult(value)
     case 'docx_search':
       return renderDocxSearchResult(value)
     case 'docx_read_outline':
       return renderDocxOutlineResult(value)
-    case 'pdf_inspect':
+    case 'pdf_outline':
       return renderPdfInspectResult(value)
     case 'pdf_search':
       return renderPdfSearchResult(value)
     case 'pdf_read_pages':
       return renderPdfReadPagesResult(value)
-    case 'pdf_read_visuals':
-    case 'ppt_read_visuals':
-    case 'docx_read_visuals':
-      return renderVisualReadResult(value)
     case 'web_search':
       return renderWebSearchResult(value)
-    case 'web_crawl':
-      return renderWebCrawlResult(value)
     default:
       return renderGenericObject(value)
   }

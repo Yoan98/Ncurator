@@ -3,22 +3,18 @@ import type { AiRunContext, AiRunDeps, AiRunStartPayload, CancelledError } from 
 import { createAiLlmExecutor } from './llmExecutor'
 import { buildReferenceScope } from './human/prompts/referenceScope'
 import { getAiRuntimePlatform } from './utils/platform'
-import {
-  formatPreviousTurns,
-  normalizeSelectedReferences,
-  normalizeWorkspaceBinding
-} from './utils/runContext'
+import { normalizeSelectedReferences } from './utils/runContext'
+import { KB_INDEXING_IN_PROGRESS_ERROR } from './human/tools/kb/retrievalTools'
 import type { AiExecutionPermission, AiPreference } from '../../../shared/types'
-import { saveHumanResumeSnapshot } from './utils/resumeSnapshot'
-import { isPathInsideRoot } from './human/tools/terminal/commandPolicy'
+import { isFreeModelConfigId } from '../../../shared/freeModels'
+import { FreeModelCatalogService } from '../llm/FreeModelCatalogService'
 
 const normalizeAiPreference = (value: unknown): AiPreference =>
   value === 'local_sources_relaxed' || value === 'local_sources_strict' ? value : 'default'
 
 const normalizeExecutionPermission = (
   value: AiExecutionPermission | undefined
-): AiExecutionPermission =>
-  value === 'full_access' ? 'full_access' : 'review'
+): AiExecutionPermission => (value === 'full_access' ? 'full_access' : 'review')
 
 export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps): AiRunContext => {
   const checkCancelled = () => {
@@ -29,28 +25,13 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     }
   }
 
-  const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
-  if (!normalizedWorkspace) {
-    throw new Error('AI 运行必须绑定工作区，当前请求缺少工作区信息。')
-  }
+  const workspaceRoots = payload.workspaceRoots
+    .map((rootPath) => String(rootPath || '').trim())
+    .filter(Boolean)
   const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
   const platform = getAiRuntimePlatform()
   const preference = normalizeAiPreference(payload.preference)
   const executionPermission = normalizeExecutionPermission(payload.executionPermission)
-
-  const saveResumeSnapshot: AiRunContext['saveResumeSnapshot'] = async (input) => {
-    await saveHumanResumeSnapshot({
-      chatStore: deps.chatStore,
-      sessionId: payload.sessionId,
-      runId: payload.runId,
-      userInput: payload.input,
-      reason: input.reason,
-      selectedReferences: normalizedReferences,
-      workspace: normalizedWorkspace,
-      humanState: input.humanState,
-      errorMessage: input.errorMessage
-    })
-  }
 
   const getModelConfig = async (
     selection: typeof payload.mainModel,
@@ -60,6 +41,14 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     const modelName = String(selection?.modelName || '').trim()
     if (!configId || !modelName) {
       throw new Error(`请先选择${label}`)
+    }
+    if (isFreeModelConfigId(configId)) {
+      const freeCfg = await FreeModelCatalogService.getInstance().resolveRuntimeConfig(
+        configId,
+        modelName
+      )
+      if (!freeCfg) throw new Error(`${label}对应的免费模型不可用，请重新选择`)
+      return freeCfg
     }
     const cfg = await deps.llmStore.getById(configId)
     if (!cfg) throw new Error(`${label}对应的大模型配置不存在，请重新选择`)
@@ -77,16 +66,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     return await requestedConfigPromise
   }
 
-  let requestedVisionConfigPromise: ReturnType<typeof getRequestedConfig> | undefined
-
-  const loadRequestedVisionConfig = async () => {
-    requestedVisionConfigPromise ||= getModelConfig(
-      payload.visionModel || payload.mainModel,
-      payload.visionModel ? '视觉模型' : '主模型'
-    )
-    return await requestedVisionConfigPromise
-  }
-
   const llmExecutor = createAiLlmExecutor({
     eventCtx: {
       runId: payload.runId,
@@ -101,80 +80,49 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     driver: deps.llmDriver
   })
 
-  const loadConversationContext: AiRunContext['loadConversationContext'] = async () => {
-    checkCancelled()
-    const { memory, recentMessages: messages } = await deps.chatStore.getConversationMemoryContext(
-      payload.sessionId
-    )
-    const recentTurnsText = formatPreviousTurns({
-      messages,
-      currentUserMessageId: payload.userMessageId,
-      currentAssistantMessageId: payload.assistantMessageId
+  const resolveChatTools = (): AiRunContext['chatTools'] =>
+    deps.chatToolsWrapper ? deps.chatToolsWrapper(llmExecutor.chatTools) : llmExecutor.chatTools
+
+  const appendMessageLog: AiRunContext['appendMessageLog'] = async (entries, options) => {
+    await deps.chatMessageLogStore.appendBatch({
+      partnerId: payload.partnerId,
+      runId: options?.runId || payload.runId,
+      entries
     })
-    const conversationSummaryText = String(memory?.summary || '')
-
-    return { recentTurnsText, conversationSummaryText }
   }
 
-  const loadConversationMemory: AiRunContext['loadConversationMemory'] = async () => {
-    checkCancelled()
-    return await deps.chatStore.getConversationMemory(payload.sessionId)
-  }
-
-  let sessionSkillStatePromise: ReturnType<typeof deps.chatStore.getSessionSkillState> | undefined
-  const loadSessionSkillState: AiRunContext['loadSessionSkillState'] = async () => {
-    checkCancelled()
-    sessionSkillStatePromise ||= deps.chatStore.getSessionSkillState(payload.sessionId)
-    return await sessionSkillStatePromise
-  }
-
-  const saveSessionSkillState: AiRunContext['saveSessionSkillState'] = async (input) => {
-    checkCancelled()
-    const current = await loadSessionSkillState()
-    if (current.revision !== input.expectedRevision) {
-      throw new Error('会话技能状态已被其他运行更新，请重试当前操作。')
-    }
-    const next = await deps.chatStore.saveSessionSkillStateIfCurrent({
-      sessionId: payload.sessionId,
-      expectedRevision: input.expectedRevision,
-      learnedSkillIds: input.learnedSkillIds,
-      runId: payload.runId
-    })
-    if (!next) throw new Error('会话技能状态更新冲突，请重试当前操作。')
-    sessionSkillStatePromise = Promise.resolve(next)
-    return next
+  const loadMessageLog: AiRunContext['loadMessageLog'] = async () => {
+    return await deps.chatMessageLogStore.list(payload.partnerId)
   }
 
   return {
     runId: payload.runId,
-    sessionId: payload.sessionId,
+    partnerId: payload.partnerId,
+    partnerName: payload.partnerName,
+    workspaceRoots,
     runStartedAt: Date.now(),
     platform,
     preference,
     executionPermission,
     humanRuntimeOverrides: deps.humanRuntimeOverrides,
     referenceScope: buildReferenceScope({
-      workspace: normalizedWorkspace,
       selectedReferences: normalizedReferences,
       attachments: payload.attachments
     }),
-    workspace: normalizedWorkspace,
     checkCancelled,
-    saveResumeSnapshot,
+    abortSignal: deps.abortSignal,
     chatStructured: llmExecutor.chatStructured,
     chatText: llmExecutor.chatText,
+    chatMessages: llmExecutor.chatMessages,
+    chatTools: resolveChatTools(),
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
     requestApprovalBatch: deps.requestApprovalBatch,
-    requestUserTakeover: deps.requestUserTakeover,
     getLlmConfig: loadRequestedConfig,
-    getVisionLlmConfig: loadRequestedVisionConfig,
     browserUseService: deps.browserUseService,
     webCrawlerService: deps.webCrawlerService,
-    loadConversationContext,
-    loadConversationMemory,
-    loadSessionSkillState,
-    saveSessionSkillState,
+    appendMessageLog,
+    loadMessageLog,
     trackDocxOpen: ({ docId, sourcePath, replaySession }) => {
       deps.docxApplyService.registerDocxOpen({
         runId: payload.runId,
@@ -183,41 +131,13 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
         replaySession
       })
     },
-    trackDocxChanges: ({
-      previousDocId,
-      nextDocId,
-      op,
-      changedBlocks,
-      createdBlocks,
-      replaySession
-    }) => {
+    trackDocxChanges: ({ previousDocId, nextDocId, changedNodes, createdNodes, replaySession }) => {
       deps.docxApplyService.registerDocxChanges({
         runId: payload.runId,
         previousDocId,
         nextDocId,
-        op,
-        changedBlocks,
-        createdBlocks,
-        replaySession
-      })
-    },
-    trackDocxBatchChanges: ({
-      previousDocId,
-      nextDocId,
-      ops,
-      changedBlocks,
-      createdBlocks,
-      replaySession
-    }) => {
-      const op = ops[0]
-      if (!op) return
-      deps.docxApplyService.registerDocxChanges({
-        runId: payload.runId,
-        previousDocId,
-        nextDocId,
-        op,
-        changedBlocks,
-        createdBlocks,
+        changedNodes,
+        createdNodes,
         replaySession
       })
     },
@@ -226,28 +146,21 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     beginDocxApplyRun: () => {
       deps.docxApplyService.beginRun({
         runId: payload.runId,
-        sessionId: payload.sessionId,
+        partnerId: payload.partnerId,
         inputText: String(payload.input || '')
       })
     },
     applyDocxRunEdits: async () => {
-      if (!normalizedWorkspace?.rootPath) return []
       return await deps.docxApplyService.applyRunEdits({
         runId: payload.runId,
-        workspaceRootPath: normalizedWorkspace.rootPath
+        partnerId: payload.partnerId
       })
     },
     discardDocxApplyRun: () => {
       deps.docxApplyService.discardRun(payload.runId)
     },
     saveFileChangeRecord: async (record) => {
-      if (
-        normalizedWorkspace?.rootPath &&
-        !isPathInsideRoot(record.path, normalizedWorkspace.rootPath)
-      ) {
-        return
-      }
-      await deps.saveFileChangeRecord(record, normalizedWorkspace.rootPath)
+      await deps.saveFileChangeRecord(record)
     },
     listFileChangeRecords: async (input) => {
       return await deps.listFileChangeRecords(input)
@@ -261,6 +174,11 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       deps.discardTerminalCommandTracking(commandId)
     },
     documentsStore: deps.documentsStore,
-    embeddingService: deps.embeddingService
+    embeddingService: deps.embeddingService,
+    assertKbSearchAvailable: async () => {
+      if (await deps.hasRunningKnowledgeIndexJob?.()) {
+        throw new Error(KB_INDEXING_IN_PROGRESS_ERROR)
+      }
+    }
   }
 }

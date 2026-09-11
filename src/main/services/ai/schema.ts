@@ -22,15 +22,15 @@ export const aiRunStatusSchema = z.enum(AI_RUN_STATUSES)
 
 export const aiRunStateFieldSchemas = {
   runId: z.string(),
-  sessionId: z.string(),
+  partnerId: z.string(),
   status: aiRunStatusSchema,
   input: z.string(),
   error: z.string().optional(),
+  failureRawMessage: z.string().optional(),
   failureSource: z.custom<AiRunFailureSource>().optional(),
   failureHttpStatus: z.number().int().optional(),
   failureProviderCode: z.string().optional(),
   failureCode: z.custom<AiRunFailureCode>().optional(),
-  resumeSnapshotSaved: z.boolean().optional(),
   finalDeliveryMarkdown: z.string().optional(),
   finalArtifacts: z.array(aiArtifactRefSchema)
 }

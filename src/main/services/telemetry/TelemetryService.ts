@@ -1,6 +1,7 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { OFFICIAL_WEBSITE_URL } from '../../../shared/constants'
 
 export type TelemetryEventName = 'app_started' | 'message_submit_completed'
 
@@ -8,12 +9,10 @@ type TelemetryFailureCode = 'REQUEST_FAILED' | 'NETWORK' | 'UNKNOWN'
 
 export type MessageSubmitTelemetryMetadata =
   | {
-      mode: 'ai' | 'search'
       outcome: 'succeeded'
       failureCode?: never
     }
   | {
-      mode: 'ai' | 'search'
       outcome: 'failed'
       failureCode: TelemetryFailureCode
     }
@@ -36,7 +35,6 @@ type TelemetryEventPayload = {
   platform: 'win32' | 'darwin' | 'linux' | 'other'
   arch: 'x64' | 'arm64' | 'ia32' | 'other'
   appVersion: string
-  mode?: 'ai' | 'search'
   outcome?: 'succeeded' | 'failed'
   failureCode?: TelemetryFailureCode
 }
@@ -49,7 +47,7 @@ type PersistedTelemetryState = {
 
 type DeliveryResult = 'accepted' | 'discard' | 'retry'
 
-const DEFAULT_ENDPOINT = 'https://www.ncurator.com/api/telemetry/events'
+const DEFAULT_ENDPOINT = `${OFFICIAL_WEBSITE_URL}/api/telemetry/events`
 const MAX_PENDING_EVENTS = 500
 const RETRY_BACKOFF_MS = 30_000
 const DELIVERY_TIMEOUT_MS = 20_000
@@ -119,14 +117,9 @@ const isPendingEvent = (value: unknown): value is TelemetryEventPayload => {
     APP_VERSION_PATTERN.test(event.appVersion)
   if (!hasValidBase) return false
   if (event.eventName === 'app_started') {
-    return (
-      event.mode === undefined && event.outcome === undefined && event.failureCode === undefined
-    )
+    return event.outcome === undefined && event.failureCode === undefined
   }
-  if (
-    (event.mode !== 'ai' && event.mode !== 'search') ||
-    (event.outcome !== 'succeeded' && event.outcome !== 'failed')
-  ) {
+  if (event.outcome !== 'succeeded' && event.outcome !== 'failed') {
     return false
   }
   if (event.outcome === 'failed') {
@@ -214,7 +207,6 @@ export class TelemetryService {
     if (!metadata) throw new Error('message_submit_completed requires metadata')
     return {
       ...base,
-      mode: metadata.mode,
       outcome: metadata.outcome,
       ...(metadata.outcome === 'failed' ? { failureCode: metadata.failureCode } : {})
     }

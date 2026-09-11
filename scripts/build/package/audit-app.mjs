@@ -5,6 +5,7 @@ import { listPackage, extractFile, getRawHeader } from '@electron/asar'
 import {
   assertMinimalPackageJson,
   assertSafePackagePaths,
+  assertWebCrawlerSidecarPackage,
   auditPackageDirectory,
   normalizeRelativePath,
   scanTextForSecrets
@@ -141,6 +142,7 @@ for (const archivePath of archives) {
   assertVcRuntimeDllsPackaged(appRoot)
   const directoryAudit = auditPackageDirectory(appRoot)
   const totalBytes = directoryAudit.files.reduce((sum, item) => sum + item.size, 0)
+  const webCrawlerSidecarBytes = assertWebCrawlerSidecarPackage(directoryAudit.files, appRoot)
   const topFiles = [...directoryAudit.files]
     .sort((left, right) => right.size - left.size)
     .slice(0, 30)
@@ -149,6 +151,7 @@ for (const archivePath of archives) {
     root: path.relative(inputDirectory, appRoot) || '.',
     archive: path.relative(inputDirectory, archivePath),
     totalBytes,
+    webCrawlerSidecarBytes,
     archiveBytes: fs.statSync(archivePath).size,
     archiveFileCount: archiveFiles.length,
     unpackedPayloadBytes: archiveFiles
@@ -157,7 +160,9 @@ for (const archivePath of archives) {
     topFiles
   })
   process.stdout.write(
-    `[package] audit passed: ${path.basename(appRoot)} ${formatBytes(totalBytes)}, app.asar ${formatBytes(fs.statSync(archivePath).size)}\n`
+    `[package] audit passed: ${path.basename(appRoot)} ${formatBytes(totalBytes)}, ` +
+      `web crawler sidecar ${formatBytes(webCrawlerSidecarBytes)}, ` +
+      `app.asar ${formatBytes(fs.statSync(archivePath).size)}\n`
   )
 }
 

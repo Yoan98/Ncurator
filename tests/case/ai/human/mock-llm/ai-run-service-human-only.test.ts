@@ -1,5 +1,6 @@
 import { describe, it } from 'vitest'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
+import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { terminalSessionManager } from '../../../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { createScriptedStructuredOutputDriver } from '../../../../harness/backend/scriptedStructuredOutputDriver'
@@ -24,31 +25,35 @@ describe('ai human mock-llm backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
-        await runtime.chatStore.saveChatSession({
+        const aiFileChangeService = new AiFileChangeService(runtime.storageService.aiFileChange)
+        await runtime.chatStore.savePartner({
           id: 'human-only-session',
-          title: 'human only session',
+          name: 'human only session',
+          avatar_shape: 'circle',
+          avatar_color: 'blue',
           created_at: Date.now(),
-          workspace_id: 'test-workspace'
+          updated_at: Date.now(),
+          last_viewed_at: Date.now(),
+          pinned: false,
+          pinned_at: null
         })
         const result = await AiRunService.getInstance().run(
           {
             runId: runtime.runId,
-            sessionId: 'human-only-session',
+            partnerId: 'human-only-session',
             input: '请学习一个 skill，调用一次工具，然后直接给出最终答复。',
             mainModel: {
               configId: 'mock-llm-scripted',
               modelName: 'scripted-llm'
             },
-            workspace: {
-              workspaceId: 'test-workspace',
-              workspaceName: 'test-workspace',
-              rootPath: runtime.workspaceRoot
-            }
+            partnerName: '测试伙伴',
+            workspaceRoots: [runtime.workspaceRoot]
           },
           {
             runtimeSettings,
             llmStore: runtime.llmStore,
-            chatStore: runtime.chatStore,
+            partnerStore: runtime.chatStore,
+            chatMessageLogStore: runtime.storageService.chatMessageLog,
             documentsStore: runtime.documentsStore,
             embeddingService: runtime.embeddingService,
             ensureEmbeddingReady: async () => {
@@ -56,10 +61,18 @@ describe('ai human mock-llm backend', () => {
             },
             docxApplyService: runtime.docxApplyService,
             saveFileChangeRecord: async (record) => {
-              await runtime.storageService.aiFileChange.saveRecord(record)
+              await aiFileChangeService.saveRecord(record)
             },
             listFileChangeRecords: async (request) =>
-              (await runtime.storageService.aiFileChange.listRecords(request)).items,
+              (await aiFileChangeService.listRecords(request)).items,
+            beginTerminalCommandTracking: async (tracking) => {
+              await aiFileChangeService.beginTerminalCommandTracking(tracking)
+            },
+            finishTerminalCommandTracking: async (commandId) =>
+              await aiFileChangeService.finishTerminalCommandTracking(commandId),
+            discardTerminalCommandTracking: (commandId) => {
+              aiFileChangeService.discardTerminalCommandTracking(commandId)
+            },
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
@@ -83,13 +96,9 @@ describe('ai human mock-llm backend', () => {
                 },
                 {
                   output: buildCompleteTaskDecision({
-                    summary: '已验证 run 入口直接进入 human。'
+                    summary: '已验证 run 入口直接进入 human。',
+                    deliveryMarkdown: '# Human Only\n\nAiRunService 已直接进入 human 并完成最终交付。'
                   })
-                }
-              ],
-              'human.mouth': [
-                {
-                  text: '# Human Only\n\nAiRunService 已直接进入 human 并完成最终交付。'
                 }
               ]
             })
@@ -134,8 +143,7 @@ describe('ai human mock-llm backend', () => {
             result.result.finalDeliveryMarkdown?.includes('Human Only') === true &&
             stages.has('human_brain') &&
             stages.has('human_learning') &&
-            stages.has('human_hand') &&
-            stages.has('human_mouth'),
+            stages.has('human_hand'),
           {
             name: 'ai-run-service-goes-directly-through-human',
             message: 'AiRunService 应直接通过 human 完成 run，而不是依赖旧编排层。',
@@ -156,16 +164,21 @@ describe('ai human mock-llm backend', () => {
           }
         })
 
-        const learningStartedIndex = result.events.findIndex(
-          (event) =>
-            event.type === 'assistant_process_group_started' &&
-            event.groupId.endsWith(':learning:docx-read')
+        const learningItemStarted = processItemStartedEvents.find(
+          (event) => event.display.kind === 'tool' && event.display.toolName === 'learn_skill'
         )
-        const learningCompletedIndex = result.events.findIndex(
-          (event) =>
-            event.type === 'assistant_process_group_completed' &&
-            event.groupId.endsWith(':learning:docx-read')
+        const learningGroupStarted = processGroupStartedEvents.find(
+          (event) => event.groupId === learningItemStarted?.groupId
         )
+        const learningGroupCompleted = processGroupCompletedEvents.find(
+          (event) => event.groupId === learningItemStarted?.groupId
+        )
+        const learningStartedIndex = learningGroupStarted
+          ? result.events.indexOf(learningGroupStarted)
+          : -1
+        const learningCompletedIndex = learningGroupCompleted
+          ? result.events.indexOf(learningGroupCompleted)
+          : -1
         const terminalGroupStarted = processGroupStartedEvents.find(
           (event) =>
             event.kind === 'skill' &&
@@ -214,15 +227,15 @@ describe('ai human mock-llm backend', () => {
             Boolean(terminalGroupStarted) &&
             Boolean(terminalItemStarted) &&
             Boolean(terminalItemCompleted) &&
-            thinkingStartedEvents.length === processThoughtEvents.length &&
-            thinkingCompletedEvents.length === processThoughtEvents.length &&
+            thinkingStartedEvents.length === thinkingCompletedEvents.length &&
+            thinkingCompletedEvents.length >= processThoughtEvents.length &&
             thoughtsHaveClosedThinking &&
             processThoughtEvents.some((event) => event.text.includes('先学习 docx-read')) &&
             processItemStartedEvents.every((event) => event.display.kind === 'tool'),
           {
             name: 'assistant-process-events-follow-human-lifecycle',
             message:
-              'Assistant process 协议应按 human 生命周期发出公开思路、learning running/completed 与 hand 工具组/工具项事件，mouth 不作为过程项展示。',
+              'Assistant process 协议应按 human 生命周期发出公开思路、learn_skill 与 hand 工具组/工具项事件，最终交付不作为过程项展示。',
             data: {
               processThoughts: processThoughtEvents.map((event) => ({
                 thoughtId: event.thoughtId,

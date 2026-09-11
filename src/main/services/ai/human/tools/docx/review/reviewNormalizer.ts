@@ -1,5 +1,5 @@
 import type {
-  DocxBlockSpec,
+  DocxNodeSpec,
   DocxReplayNode,
   DocxReplaySession,
   DocxTableCellReviewChange,
@@ -9,16 +9,16 @@ import type {
 const isOldNode = (node: DocxReplayNode): boolean =>
   node.reviewState === 'deleted' || node.reviewState === 'replaced-old'
 
-const specKey = (spec: DocxBlockSpec): string => JSON.stringify(spec)
+const specKey = (spec: DocxNodeSpec): string => JSON.stringify(spec)
 
-const visualIdsEqual = (
-  expected: Array<{ visualId: string }>,
+const visualNodeIdsEqual = (
+  expected: Array<{ nodeId: string }>,
   actual: readonly string[]
 ): boolean =>
   expected.length === actual.length &&
-  expected.every((visual, index) => visual.visualId === actual[index])
+  expected.every((visual, index) => visual.nodeId === actual[index])
 
-const textKey = (spec: DocxBlockSpec): string => {
+const textKey = (spec: DocxNodeSpec): string => {
   if (spec.kind === 'paragraph') return spec.runs.map((run) => run.text).join('')
   return spec.rows
     .map((row) =>
@@ -69,19 +69,20 @@ const normalizeGeneratedNode = (node: DocxReplayNode): DocxReplayNode | null => 
   if (isOldNode(node)) return null
   return {
     ...node,
-    nodeId: `net-inserted:${node.nodeId}`,
+    reviewId: `net-inserted:${node.nodeId}`,
     reviewState: 'inserted',
-    reviewQuery: undefined,
+    reviewQueries: undefined,
     tableCellChanges: undefined
   }
 }
 
 const normalizeSourceLineage = (input: {
   session: DocxReplaySession
-  sourceBlockId: string
+  sourceNodeId: string
   nodes: DocxReplayNode[]
+  moved: boolean
 }): DocxReplayNode[] => {
-  const baseline = input.session.sourceSnapshot.blockById.get(input.sourceBlockId)
+  const baseline = input.session.sourceSnapshot.nodeById.get(input.sourceNodeId)
   if (!baseline) return input.nodes
   const visible = input.nodes.filter((node) => !isOldNode(node)).at(-1)
 
@@ -90,22 +91,23 @@ const normalizeSourceLineage = (input: {
     return [
       {
         ...representative,
-        nodeId: `net-deleted:${input.sourceBlockId}`,
-        blockId: input.sourceBlockId,
-        currentBlockId: undefined,
-        sourceBlockId: input.sourceBlockId,
+        reviewId: `net-deleted:${input.sourceNodeId}`,
+        nodeId: input.sourceNodeId,
+        currentNodeId: undefined,
+        sourceNodeId: input.sourceNodeId,
         spec: baseline.spec,
         structureFingerprint: baseline.structureFingerprint,
-        visualIds: baseline.visuals.map((visual) => visual.visualId),
+        visualNodeIds: baseline.visuals.map((visual) => visual.nodeId),
         reviewState: 'deleted',
-        reviewQuery: undefined,
+        reviewQueries: undefined,
         tableCellChanges: undefined
       }
     ]
   }
 
-  const visualsUnchanged = visualIdsEqual(baseline.visuals, visible.visualIds)
+  const visualsUnchanged = visualNodeIdsEqual(baseline.visuals, visible.visualNodeIds)
   if (
+    !input.moved &&
     visualsUnchanged &&
     baseline.structureFingerprint === visible.structureFingerprint &&
     specKey(baseline.spec) === specKey(visible.spec)
@@ -113,39 +115,44 @@ const normalizeSourceLineage = (input: {
     return [
       {
         ...visible,
-        nodeId: `net-normal:${input.sourceBlockId}`,
-        sourceBlockId: input.sourceBlockId,
+        reviewId: `net-normal:${input.sourceNodeId}`,
+        sourceNodeId: input.sourceNodeId,
         reviewState: 'normal',
-        reviewQuery: undefined,
+        reviewQueries: undefined,
         tableCellChanges: undefined
       }
     ]
   }
 
-  if (visualsUnchanged && baseline.spec.kind === 'table' && visible.spec.kind === 'table') {
+  if (
+    !input.moved &&
+    visualsUnchanged &&
+    baseline.spec.kind === 'table' &&
+    visible.spec.kind === 'table'
+  ) {
     const tableCellChanges = buildTableCellChanges(baseline.spec, visible.spec)
     if (tableCellChanges && tableCellChanges.length > 0) {
       return [
         {
           ...visible,
-          nodeId: `net-table-cells:${input.sourceBlockId}`,
-          sourceBlockId: input.sourceBlockId,
+          reviewId: `net-table-cells:${input.sourceNodeId}`,
+          sourceNodeId: input.sourceNodeId,
           reviewState: 'formatted',
-          reviewQuery: undefined,
+          reviewQueries: undefined,
           tableCellChanges
         }
       ]
     }
   }
 
-  if (visualsUnchanged && textKey(baseline.spec) === textKey(visible.spec)) {
+  if (!input.moved && visualsUnchanged && textKey(baseline.spec) === textKey(visible.spec)) {
     return [
       {
         ...visible,
-        nodeId: `net-formatted:${input.sourceBlockId}`,
-        sourceBlockId: input.sourceBlockId,
+        reviewId: `net-formatted:${input.sourceNodeId}`,
+        sourceNodeId: input.sourceNodeId,
         reviewState: 'formatted',
-        reviewQuery: undefined,
+        reviewQueries: undefined,
         tableCellChanges: undefined
       }
     ]
@@ -154,42 +161,78 @@ const normalizeSourceLineage = (input: {
   const representative = input.nodes[0]
   const oldNode: DocxReplayNode = {
     ...representative,
-    nodeId: `net-replaced-old:${input.sourceBlockId}`,
-    blockId: input.sourceBlockId,
-    currentBlockId: undefined,
-    sourceBlockId: input.sourceBlockId,
+    reviewId: `net-replaced-old:${input.sourceNodeId}`,
+    nodeId: input.sourceNodeId,
+    currentNodeId: undefined,
+    sourceNodeId: input.sourceNodeId,
     spec: baseline.spec,
     structureFingerprint: baseline.structureFingerprint,
-    visualIds: baseline.visuals.map((visual) => visual.visualId),
+    visualNodeIds: baseline.visuals.map((visual) => visual.nodeId),
     reviewState: 'replaced-old',
-    reviewQuery: undefined,
+    reviewQueries: undefined,
     tableCellChanges: undefined
   }
   const newNode: DocxReplayNode = {
     ...visible,
-    nodeId: `net-replaced-new:${input.sourceBlockId}`,
-    sourceBlockId: input.sourceBlockId,
+    reviewId: `net-replaced-new:${input.sourceNodeId}`,
+    sourceNodeId: input.sourceNodeId,
     reviewState: 'replaced-new',
-    reviewQuery: undefined,
+    reviewQueries: undefined,
     tableCellChanges: undefined,
-    replacedFromNodeId: oldNode.nodeId,
-    predecessorNodeId: oldNode.nodeId
+    replacedFromNodeId: oldNode.reviewId,
+    predecessorNodeId: oldNode.reviewId
   }
-  oldNode.successorNodeId = newNode.nodeId
+  oldNode.successorNodeId = newNode.reviewId
   return [oldNode, newNode]
+}
+
+const movedSourceNodeIds = (nodes: DocxReplayNode[], session: DocxReplaySession): Set<string> => {
+  const sourceIndex = new Map(
+    session.sourceSnapshot.nodes.map((node, index) => [node.nodeId, index] as const)
+  )
+  const visible = nodes.filter((node) => node.sourceOrigin === 'source' && !isOldNode(node))
+  const sequence = visible.map((node) => sourceIndex.get(node.sourceNodeId || node.nodeId) ?? -1)
+  const tails: number[] = []
+  const tailPositions: number[] = []
+  const previous = sequence.map(() => -1)
+  sequence.forEach((value, position) => {
+    if (value < 0) return
+    let low = 0
+    let high = tails.length
+    while (low < high) {
+      const middle = Math.floor((low + high) / 2)
+      if (tails[middle]! < value) low = middle + 1
+      else high = middle
+    }
+    tails[low] = value
+    previous[position] = low > 0 ? tailPositions[low - 1]! : -1
+    tailPositions[low] = position
+  })
+  const stablePositions = new Set<number>()
+  let cursor = tailPositions[tails.length - 1] ?? -1
+  while (cursor >= 0) {
+    stablePositions.add(cursor)
+    cursor = previous[cursor] ?? -1
+  }
+  return new Set(
+    visible
+      .filter((_, index) => !stablePositions.has(index))
+      .map((node) => node.sourceNodeId || node.nodeId)
+  )
 }
 
 export const normalizeReviewNodes = (
   nodes: DocxReplayNode[],
   session: DocxReplaySession
 ): DocxReplayNode[] => {
+  const movedNodeIds = movedSourceNodeIds(nodes, session)
   const sourceGroups = new Map<string, { firstIndex: number; nodes: DocxReplayNode[] }>()
   nodes.forEach((node, index) => {
     if (node.sourceOrigin !== 'source') return
-    const sourceBlockId = node.sourceBlockId || node.blockId
-    const group = sourceGroups.get(sourceBlockId)
+    const sourceNodeId = node.sourceNodeId || node.nodeId
+    const group = sourceGroups.get(sourceNodeId)
     if (group) group.nodes.push(node)
-    else sourceGroups.set(sourceBlockId, { firstIndex: index, nodes: [node] })
+    else sourceGroups.set(sourceNodeId, { firstIndex: index, nodes: [node] })
   })
 
   const output: DocxReplayNode[] = []
@@ -199,14 +242,15 @@ export const normalizeReviewNodes = (
       if (normalized) output.push(normalized)
       return
     }
-    const sourceBlockId = node.sourceBlockId || node.blockId
-    const group = sourceGroups.get(sourceBlockId)
+    const sourceNodeId = node.sourceNodeId || node.nodeId
+    const group = sourceGroups.get(sourceNodeId)
     if (!group || group.firstIndex !== index) return
     output.push(
       ...normalizeSourceLineage({
         session,
-        sourceBlockId,
-        nodes: group.nodes
+        sourceNodeId,
+        nodes: group.nodes,
+        moved: movedNodeIds.has(sourceNodeId)
       })
     )
   })

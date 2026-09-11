@@ -4,25 +4,17 @@ import type { RuntimeToolName } from '../../../../../../shared/runtimeCapabiliti
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
+import { excelEditSchema, excelReadSchema } from './toolSchemas'
 import {
-  excelEditSchema,
-  excelReadCellsSchema,
-  excelReadOutlineSchema,
-  excelSearchSchema
-} from './schemas'
-import {
-  excelEditOutputSchema,
-  excelReadCellsOutputSchema,
-  excelReadOutlineOutputSchema,
-  excelSearchOutputSchema
-} from './outputSchemas'
+  renderExcelEditModelResult,
+  renderExcelReadModelResult
+} from '../../shared/modelToolResultRenderers'
 
 type ExcelSpec<
   TArgs extends JsonObject,
-  TOutput extends JsonObject,
   TName extends RuntimeToolName,
   TSkill extends RuntimeSkillId
-> = HumanToolSpec<TArgs, TOutput, TName, TSkill>
+> = HumanToolSpec<TArgs, TName, TSkill>
 
 const readMeta = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -35,82 +27,30 @@ const writeMeta = createStaticExecutionMetaResolver({
   defaultResourceKey: 'excel'
 })
 
-export const EXCEL_READ_OUTLINE_TOOL_SPEC = {
-  name: 'excel_read_outline',
+export const EXCEL_READ_TOOL_SPEC = {
+  name: 'excel_read',
   familyId: 'excel',
   skillIds: ['excel-read'],
-  inputSchema: excelReadOutlineSchema,
-  outputSchema: excelReadOutlineOutputSchema,
+  inputSchema: excelReadSchema,
   promptSpec: {
-    name: 'excel_read_outline',
-    description: '读取 Excel 工作簿、工作表、使用范围、表格和公式数量概览。'
+    name: 'excel_read',
+    description: '读取 Excel 工作簿结构、单元格内容、格式，或按格子搜索。'
   },
-  resolveExecutionMeta: readMeta
-} satisfies ExcelSpec<
-  z.infer<typeof excelReadOutlineSchema>,
-  z.infer<typeof excelReadOutlineOutputSchema>,
-  'excel_read_outline',
-  'excel-read'
->
-
-export const EXCEL_SEARCH_TOOL_SPEC = {
-  name: 'excel_search',
-  familyId: 'excel',
-  skillIds: ['excel-read'],
-  inputSchema: excelSearchSchema,
-  outputSchema: excelSearchOutputSchema,
-  promptSpec: {
-    name: 'excel_search',
-    description: '搜索 Excel 单元格值、显示值、公式、工作表名和表格列名。'
-  },
-  resolveExecutionMeta: readMeta
-} satisfies ExcelSpec<
-  z.infer<typeof excelSearchSchema>,
-  z.infer<typeof excelSearchOutputSchema>,
-  'excel_search',
-  'excel-read'
->
-
-export const EXCEL_READ_CELLS_TOOL_SPEC = {
-  name: 'excel_read_cells',
-  familyId: 'excel',
-  skillIds: ['excel-read'],
-  inputSchema: excelReadCellsSchema,
-  outputSchema: excelReadCellsOutputSchema,
-  promptSpec: {
-    name: 'excel_read_cells',
-    description: '按工作表和 A1 范围读取 Excel 单元格地址、值、显示值、公式、类型和数字格式。'
-  },
-  resolveExecutionMeta: readMeta
-} satisfies ExcelSpec<
-  z.infer<typeof excelReadCellsSchema>,
-  z.infer<typeof excelReadCellsOutputSchema>,
-  'excel_read_cells',
-  'excel-read'
->
+  resolveExecutionMeta: readMeta,
+  modelResult: { renderSuccess: renderExcelReadModelResult }
+} satisfies ExcelSpec<z.infer<typeof excelReadSchema>, 'excel_read', 'excel-read'>
 
 export const EXCEL_EDIT_TOOL_SPEC = {
   name: 'excel_edit',
   familyId: 'excel',
   skillIds: ['excel-write'],
   inputSchema: excelEditSchema,
-  outputSchema: excelEditOutputSchema,
   promptSpec: {
     name: 'excel_edit',
-    description:
-      '创建或编辑 Excel 工作簿中的工作表、单元格、公式、格式和结构，并返回写入后的回读信息。'
+    description: '创建或编辑 Excel 的工作表、单元格、公式、格式和结构。'
   },
-  resolveExecutionMeta: writeMeta
-} satisfies ExcelSpec<
-  z.infer<typeof excelEditSchema>,
-  z.infer<typeof excelEditOutputSchema>,
-  'excel_edit',
-  'excel-write'
->
+  resolveExecutionMeta: writeMeta,
+  modelResult: { renderSuccess: renderExcelEditModelResult }
+} satisfies ExcelSpec<z.infer<typeof excelEditSchema>, 'excel_edit', 'excel-write'>
 
-export const EXCEL_TOOL_SPECS = [
-  EXCEL_READ_OUTLINE_TOOL_SPEC,
-  EXCEL_SEARCH_TOOL_SPEC,
-  EXCEL_READ_CELLS_TOOL_SPEC,
-  EXCEL_EDIT_TOOL_SPEC
-] as const
+export const EXCEL_TOOL_SPECS = [EXCEL_READ_TOOL_SPEC, EXCEL_EDIT_TOOL_SPEC] as const

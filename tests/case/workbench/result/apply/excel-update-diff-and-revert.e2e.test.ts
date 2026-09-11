@@ -232,7 +232,7 @@ describe('workbench result e2e', () => {
               result.fileModeNotesVisible &&
               result.pptBeforeAfterVisible === false &&
               result.revertedToBaseline &&
-              result.toolNames.includes('excel_read_outline') &&
+              result.toolNames.includes('excel_read') &&
               result.toolNames.filter((name) => name === 'excel_edit').length >= 2,
             {
               name: 'workbench-excel-update-diff-and-revert-real',

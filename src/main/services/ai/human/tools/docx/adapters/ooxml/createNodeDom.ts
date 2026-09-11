@@ -1,9 +1,10 @@
 import type JSZip from 'jszip'
+import path from 'node:path'
 import { DOMParser, XMLSerializer } from '@xmldom/xmldom'
 import type {
   DocxBorder,
   DocxBorders,
-  DocxCreateBlockNode,
+  DocxCreateContainerChildNode,
   DocxCreateHyperlinkNode,
   DocxCreateParagraphNode,
   DocxCreateRunNode,
@@ -12,6 +13,7 @@ import type {
   DocxCreateTableRowNode,
   DocxLength
 } from '../../types'
+import { normalizeDocxHexColor } from '../../utils/color'
 import { childElements } from './dom'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
@@ -70,7 +72,7 @@ const appendBorders = (parent: Element, containerName: string, borders: DocxBord
       if (!border) return
       const node = wordElement(parent.ownerDocument, borderName(side))
       setWordAttr(node, 'val', border.style)
-      if (border.color) setWordAttr(node, 'color', border.color)
+      if (border.color) setWordAttr(node, 'color', normalizeDocxHexColor(border.color))
       if (border.size !== undefined) setWordAttr(node, 'sz', String(Math.round(border.size * 8)))
       container.appendChild(node)
     }
@@ -86,10 +88,10 @@ const createRunProperties = (doc: Document, node: DocxCreateRunNode): Element | 
   appendToggle(rPr, 'i', style.italic)
   appendToggle(rPr, 'strike', style.strike)
   if (style.underline !== undefined) appendVal(rPr, 'u', style.underline ? 'single' : 'none')
-  if (style.color) appendVal(rPr, 'color', style.color)
+  if (style.color) appendVal(rPr, 'color', normalizeDocxHexColor(style.color))
   if (style.highlight) {
     const shading = wordElement(doc, 'shd')
-    setWordAttr(shading, 'fill', style.highlight)
+    setWordAttr(shading, 'fill', normalizeDocxHexColor(style.highlight))
     rPr.appendChild(shading)
   }
   if (style.fontFamily) {
@@ -130,8 +132,15 @@ export type DocxRelationshipWriter = {
   persist: () => Promise<void>
 }
 
-export const createRelationshipWriter = async (zip: JSZip): Promise<DocxRelationshipWriter> => {
-  const entry = 'word/_rels/document.xml.rels'
+export const createRelationshipWriter = async (
+  zip: JSZip,
+  partName = 'word/document.xml'
+): Promise<DocxRelationshipWriter> => {
+  const entry = path.posix.join(
+    path.posix.dirname(partName),
+    '_rels',
+    `${path.posix.basename(partName)}.rels`
+  )
   const existing = await zip.file(entry)?.async('text')
   const doc = existing
     ? new DOMParser().parseFromString(existing, 'application/xml')
@@ -181,7 +190,7 @@ const createParagraphProperties = (
   const style = node.style
   if (!style) return null
   const pPr = wordElement(doc, 'pPr')
-  if (style.styleName) appendVal(pPr, 'pStyle', style.styleName)
+  if (style.styleId) appendVal(pPr, 'pStyle', style.styleId)
   if (style.alignment) appendVal(pPr, 'jc', style.alignment)
   if (style.indent) {
     const indent = wordElement(doc, 'ind')
@@ -241,7 +250,7 @@ const createCell = (
     if (node.style.verticalAlignment) appendVal(tcPr, 'vAlign', node.style.verticalAlignment)
     if (node.style.shading) {
       const shading = wordElement(doc, 'shd')
-      setWordAttr(shading, 'fill', node.style.shading)
+      setWordAttr(shading, 'fill', normalizeDocxHexColor(node.style.shading))
       tcPr.appendChild(shading)
     }
     if (node.style.margins) {
@@ -260,7 +269,7 @@ const createCell = (
     if (node.style.borders) appendBorders(tcPr, 'tcBorders', node.style.borders)
     if (tcPr.childNodes.length > 0) cell.appendChild(tcPr)
   }
-  node.children.forEach((child) => cell.appendChild(createBlockFromNode(doc, child, relationships)))
+  node.children.forEach((child) => cell.appendChild(createNodeFromNode(doc, child, relationships)))
   const last = cell.lastChild
   if (!last || !('localName' in last) || (last as Element).localName !== 'p') {
     cell.appendChild(
@@ -315,9 +324,9 @@ const createTable = (
   return table
 }
 
-export const createBlockFromNode = (
+export const createNodeFromNode = (
   doc: Document,
-  node: DocxCreateBlockNode,
+  node: DocxCreateContainerChildNode,
   relationships: DocxRelationshipWriter
 ): Element =>
   node.type === 'paragraph'
@@ -326,14 +335,14 @@ export const createBlockFromNode = (
 
 export const replaceCellContentFromNodes = (
   cell: Element,
-  children: readonly DocxCreateBlockNode[],
+  children: readonly DocxCreateContainerChildNode[],
   relationships: DocxRelationshipWriter
 ): void => {
   childElements(cell)
     .filter((child) => child.localName !== 'tcPr')
     .forEach((child) => cell.removeChild(child))
   children.forEach((child) =>
-    cell.appendChild(createBlockFromNode(cell.ownerDocument, child, relationships))
+    cell.appendChild(createNodeFromNode(cell.ownerDocument, child, relationships))
   )
   const last = cell.lastChild
   if (!last || !('localName' in last) || (last as Element).localName !== 'p') {
@@ -347,7 +356,7 @@ export const replaceCellContentFromNodes = (
   }
 }
 
-export const createNodeText = (node: DocxCreateBlockNode): string => {
+export const createNodeText = (node: DocxCreateContainerChildNode): string => {
   if (node.type === 'paragraph') {
     return node.children
       .flatMap((child) => (child.type === 'run' ? [child] : child.children))

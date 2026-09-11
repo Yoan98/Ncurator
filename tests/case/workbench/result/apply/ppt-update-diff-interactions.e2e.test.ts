@@ -21,45 +21,57 @@ const CASE_ID = 'ppt-update-diff-interactions'
 const FILE_NAME = 'existing-quarterly-review.pptx'
 const EXTERNAL_APPLICATION_NOTICE = '如果外部应用仍显示旧内容，请关闭该文档后重新打开。'
 
-const slideHtml = (title: string, body: string, accent: string): string => `
-  <section data-ppt-slide style="position:relative;width:1920px;height:1080px;overflow:hidden;background:#F7F8FA">
-    <div data-ppt-element="shape" style="position:absolute;left:100px;top:78px;width:24px;height:170px;background:${accent}"></div>
-    <h1 data-ppt-element="text" style="position:absolute;left:170px;top:96px;width:1500px;height:100px;color:#17324D;font-family:Microsoft YaHei;font-size:72px;font-weight:700">${title}</h1>
-    <p data-ppt-element="text" style="position:absolute;left:170px;top:330px;width:1450px;height:150px;color:#334155;font-family:Microsoft YaHei;font-size:34px">${body}</p>
-    <div data-ppt-element="line" style="position:absolute;left:170px;top:820px;width:1450px;height:1px;border-top:2px solid ${accent}"></div>
-  </section>`
+const slideSpec = (title: string, body: string, accent: string) => ({
+  type: 'insert_slide' as const,
+  background: '#F7F8FA',
+  elements: [
+    {
+      type: 'shape' as const,
+      shape: 'rect' as const,
+      bounds: { x: 72, y: 64, width: 20, height: 120 },
+      style: { fill: accent }
+    },
+    {
+      type: 'text' as const,
+      text: title,
+      bounds: { x: 112, y: 72, width: 760, height: 72 },
+      style: { color: '#17324D', fontFamily: 'Microsoft YaHei', fontSize: 36, bold: true }
+    },
+    {
+      type: 'text' as const,
+      text: body,
+      bounds: { x: 112, y: 180, width: 760, height: 120 },
+      style: { color: '#334155', fontFamily: 'Microsoft YaHei', fontSize: 18 }
+    },
+    {
+      type: 'line' as const,
+      from: { x: 112, y: 468 },
+      to: { x: 872, y: 468 },
+      color: accent,
+      width: 2
+    }
+  ]
+})
 
 const createBaselineDeck = async (workspaceRootPath: string, runId: string, taskId: string) => {
   const runtime = createPptToolRuntime({
     ctx: { saveFileChangeRecord: async () => undefined } as never,
     cache: {} as never,
     runId: `${runId}-baseline`,
-    sessionId: 'ppt-update-baseline',
+    partnerId: 'ppt-update-baseline',
     taskId,
     workspaceRootPath,
     emitActivity: () => undefined
   })
-  await runtime.edit({
-    sourcePath: path.join(workspaceRootPath, FILE_NAME),
-    actions: [
-      {
-        type: 'insert_slide',
-        html: slideHtml('市场信号', '核心客户需求持续增加，市场窗口已经明确。', '#2563EB')
-      },
-      {
-        type: 'insert_slide',
-        html: slideHtml('产品进展', '关键能力已经进入稳定交付阶段。', '#7C3AED')
-      },
-      {
-        type: 'insert_slide',
-        html: slideHtml('交付质量', '本季度交付准时率保持在目标区间。', '#16A34A')
-      },
-      {
-        type: 'insert_slide',
-        html: slideHtml('附录数据', '本页必须保持完全不变，用于验证未修改页面。', '#64748B')
-      }
-    ]
-  })
+  const sourcePath = path.join(workspaceRootPath, FILE_NAME)
+  for (const spec of [
+    slideSpec('市场信号', '核心客户需求持续增加，市场窗口已经明确。', '#2563EB'),
+    slideSpec('产品进展', '关键能力已经进入稳定交付阶段。', '#7C3AED'),
+    slideSpec('交付质量', '本季度交付准时率保持在目标区间。', '#16A34A'),
+    slideSpec('附录数据', '本页必须保持完全不变，用于验证未修改页面。', '#64748B')
+  ]) {
+    await runtime.edit({ sourcePath, ...spec })
+  }
 }
 
 describe('workbench result e2e', () => {
@@ -92,7 +104,7 @@ describe('workbench result e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请直接修改工作区已有的“${FILE_NAME}”。必须先读取页面提纲，再完成这些操作：把“交付质量”页移动到第一页；把“市场信号”页标题改成“市场信号已确认”；删除“产品进展”页；在“附录数据”页之前新增一页“风险与应对”；“附录数据”页必须保持完全不变。只使用 PPT 工具，完成后用 ppt_read_visuals 读取全部变化页面视觉内容并检查，确认文件已经写回。`
+            `请直接修改工作区已有的“${FILE_NAME}”。必须先读取页面提纲，再完成这些操作：把“交付质量”页移动到第一页；把“市场信号”页标题改成“市场信号已确认”；删除“产品进展”页；在“附录数据”页之前新增一页“风险与应对”；“附录数据”页必须保持完全不变。只使用 PPT 工具，完成后用 ppt_read_slides 读取全部变化页面并检查，确认文件已经写回。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
@@ -264,7 +276,7 @@ describe('workbench result e2e', () => {
               result.revertedText.includes('产品进展') &&
               !result.revertedText.includes('风险与应对') &&
               result.toolNames.includes('ppt_edit') &&
-              result.toolNames.includes('ppt_read_visuals'),
+              result.toolNames.includes('ppt_read_slides'),
             {
               name: 'workbench-ppt-update-diff-interactions-real',
               message: '真实 AI 更新 PPT 后应正确展示页面增删改移动、同步缩放拖拽、筛选和回撤。',

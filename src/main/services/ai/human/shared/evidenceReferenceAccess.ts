@@ -7,6 +7,15 @@ const DEFAULT_WEB_TIMEOUT_MS = 2500
 
 type FetchLike = typeof fetch
 
+export type ReferenceAccessRequest = {
+  resourceType: 'file' | 'web'
+  path: string
+}
+
+export type ReferenceAccessResolution = ReferenceAccessRequest & {
+  accessStatus: 'accessible' | 'unavailable'
+}
+
 const resolveDefaultFetch = async (): Promise<FetchLike> => {
   if (!process.versions.electron) return fetch
 
@@ -15,22 +24,22 @@ const resolveDefaultFetch = async (): Promise<FetchLike> => {
 }
 
 const resolveFileReference = async (
-  reference: BrainEvidenceReference
-): Promise<HumanReference> => {
+  reference: ReferenceAccessRequest
+): Promise<ReferenceAccessResolution> => {
   const resolvedPath = path.isAbsolute(reference.path) ? path.normalize(reference.path) : null
   if (!resolvedPath) {
-    return { ...reference, path: reference.path, accessStatus: 'unavailable' }
+    return { resourceType: 'file', path: reference.path, accessStatus: 'unavailable' }
   }
 
   try {
     const fileStat = await stat(resolvedPath)
     if (!fileStat.isFile()) {
-      return { ...reference, path: resolvedPath, accessStatus: 'unavailable' }
+      return { resourceType: 'file', path: resolvedPath, accessStatus: 'unavailable' }
     }
     await access(resolvedPath, fsConstants.R_OK)
-    return { ...reference, path: resolvedPath, accessStatus: 'accessible' }
+    return { resourceType: 'file', path: resolvedPath, accessStatus: 'accessible' }
   } catch {
-    return { ...reference, path: resolvedPath, accessStatus: 'unavailable' }
+    return { resourceType: 'file', path: resolvedPath, accessStatus: 'unavailable' }
   }
 }
 
@@ -50,18 +59,18 @@ const requestWebReference = async (
   })
 
 const resolveWebReference = async (
-  reference: BrainEvidenceReference,
+  reference: ReferenceAccessRequest,
   fetchImpl: FetchLike,
   timeoutMs: number
-): Promise<HumanReference> => {
+): Promise<ReferenceAccessResolution> => {
   let url: URL
   try {
     url = new URL(reference.path)
   } catch {
-    return { ...reference, accessStatus: 'unavailable' }
+    return { resourceType: 'web', path: reference.path, accessStatus: 'unavailable' }
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    return { ...reference, accessStatus: 'unavailable' }
+    return { resourceType: 'web', path: reference.path, accessStatus: 'unavailable' }
   }
 
   const controller = new AbortController()
@@ -77,27 +86,54 @@ const resolveWebReference = async (
       const headAccessible = headResponse.ok
       await headResponse.body?.cancel()
       if (headAccessible) {
-        return { ...reference, path: url.toString(), accessStatus: 'accessible' }
+        return { resourceType: 'web', path: url.toString(), accessStatus: 'accessible' }
       }
     } catch (error) {
       if (isAbortError(error)) {
-        return { ...reference, path: url.toString(), accessStatus: 'accessible' }
+        return { resourceType: 'web', path: url.toString(), accessStatus: 'accessible' }
       }
     }
 
     const response = await requestWebReference(url.toString(), fetchImpl, controller.signal, 'GET')
     const accessStatus = response.ok ? 'accessible' : 'unavailable'
     await response.body?.cancel()
-    return { ...reference, path: url.toString(), accessStatus }
+    return { resourceType: 'web', path: url.toString(), accessStatus }
   } catch (error) {
     return {
-      ...reference,
+      resourceType: 'web',
       path: url.toString(),
       accessStatus: isAbortError(error) ? 'accessible' : 'unavailable'
     }
   } finally {
     clearTimeout(timeout)
   }
+}
+
+export const resolveReferencePathsAccess = async (input: {
+  references: ReferenceAccessRequest[]
+  fetchImpl?: FetchLike
+  webTimeoutMs?: number
+}): Promise<ReferenceAccessResolution[]> => {
+  if (input.references.length === 0) return []
+
+  const fetchImpl = input.fetchImpl || (await resolveDefaultFetch())
+  const webTimeoutMs = input.webTimeoutMs ?? DEFAULT_WEB_TIMEOUT_MS
+  const resolutions = new Map<string, Promise<ReferenceAccessResolution>>()
+
+  return Promise.all(
+    input.references.map((reference) => {
+      const key = `${reference.resourceType}\u0000${reference.path}`
+      let resolution = resolutions.get(key)
+      if (!resolution) {
+        resolution =
+          reference.resourceType === 'file'
+            ? resolveFileReference(reference)
+            : resolveWebReference(reference, fetchImpl, webTimeoutMs)
+        resolutions.set(key, resolution)
+      }
+      return resolution
+    })
+  )
 }
 
 export const resolveEvidenceReferenceAccess = async (input: {
@@ -109,7 +145,7 @@ export const resolveEvidenceReferenceAccess = async (input: {
 
   const fetchImpl = input.fetchImpl || (await resolveDefaultFetch())
   const webTimeoutMs = input.webTimeoutMs ?? DEFAULT_WEB_TIMEOUT_MS
-  const resolutions = new Map<string, Promise<HumanReference>>()
+  const resolutions = new Map<string, Promise<ReferenceAccessResolution>>()
 
   return Promise.all(
     input.references.map((reference) => {

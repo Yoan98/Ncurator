@@ -54,7 +54,7 @@ describe('workbench result e2e', () => {
         suite: 'result',
         groups: ['apply'],
         description:
-          '真实 UI 在不同会话的两个 run 分别写入文件后，右侧本次运行改动不得串入另一个 run 的记录。',
+          '真实 UI 在不同伙伴的两个 run 分别写入文件后，右侧本次运行改动不得串入另一个 run 的记录。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -106,7 +106,7 @@ describe('workbench result e2e', () => {
 
           await getWorkbenchLocator(
             page,
-            `${workbenchSelectors.sessionItemPrefix}-${firstRun.sessionId}`
+            `${workbenchSelectors.partnerItemPrefix}-${firstRun.partnerId}`
           ).click()
           const restoredFirstEntry = await getApplyEntryForFile(page, FIRST_FILE)
           await restoredFirstEntry.click()
@@ -115,8 +115,8 @@ describe('workbench result e2e', () => {
           return {
             firstRunId: firstRun.runId,
             secondRunId: secondRun.runId,
-            firstSessionId: firstRun.sessionId,
-            secondSessionId: secondRun.sessionId,
+            firstPartnerId: firstRun.partnerId,
+            secondPartnerId: secondRun.partnerId,
             firstCardText,
             secondCardText,
             firstChangedFileList,
@@ -146,7 +146,7 @@ describe('workbench result e2e', () => {
 
           await runtime.assertThat(
             result.firstRunId !== result.secondRunId &&
-              result.firstSessionId !== result.secondSessionId &&
+              result.firstPartnerId !== result.secondPartnerId &&
               result.firstCardText.includes(FIRST_FILE) &&
               !result.firstCardText.includes(SECOND_FILE) &&
               result.secondCardText.includes(SECOND_FILE) &&
@@ -159,7 +159,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-file-change-run-scope',
               message:
-                '每条 assistant 修改入口和右侧本次运行改动必须只显示自身 sessionId 与 runId 的文件记录。',
+                '每条 assistant 修改入口和右侧本次运行改动必须只显示自身 partnerId 与 runId 的文件记录。',
               data: result
             }
           )

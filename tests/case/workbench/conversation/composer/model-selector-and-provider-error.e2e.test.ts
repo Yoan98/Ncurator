@@ -3,17 +3,18 @@ import type { AddressInfo } from 'node:net'
 import { describe, it } from 'vitest'
 import type { AiRunEvent } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { createModelConfigThroughSettingsUi } from '../../../../harness/e2e/settings'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-  configureLiveModelThroughSettingsUi,
   createTemporaryWorkbenchWorkspace,
+  createPartnerThroughWorkbenchUi,
   getWorkbenchLocator,
   loadWorkbenchLiveModelEnv,
   navigateToWorkbench,
   prepareWorkbenchWorkspaceThroughUi,
+  selectWorkbenchModel,
   sendWorkbenchMessage,
-  switchWorkbenchMode,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -137,7 +138,8 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['composer'],
-        description: '验证模型搜索空状态、配置分组折叠，以及模型服务 404 的统一错误处理。',
+        description:
+          '验证未配置预设隐藏、统一目录 UI（右上角刷新/无分区标题/悬浮信息侧栏）、免费行或空态、搜索空状态，以及模型服务错误处理。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -146,61 +148,96 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const liveEnv = loadWorkbenchLiveModelEnv()
-          const provider = await startProviderServer(liveEnv)
+          const provider = await startProviderServer({
+            baseUrl: liveEnv.baseUrl,
+            apiKey: liveEnv.apiKey
+          })
           runtime.registerResource({
             name: 'model-provider-server',
             phase: 'before-app-close',
             dispose: provider.close
           })
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
-          await configureLiveModelThroughSettingsUi(page, {
+          await createModelConfigThroughSettingsUi(page, {
+            name: liveEnv.modelName,
             baseUrl: provider.baseUrl,
-            apiKey: liveEnv.apiKey,
-            modelName: liveEnv.modelName,
-            visualModelName: liveEnv.modelName
+            apiKey: liveEnv.apiKey
           })
           await navigateToWorkbench(page, { waitForSessionListText: false })
-
+          await createPartnerThroughWorkbenchUi(page, WORKSPACE_NAME)
           const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
           await modelSelect.click()
-          await page
-            .locator('.workbench-select-menu.workbench-composer-menu')
-            .last()
-            .getByRole('button', { name: /^主模型/u })
-            .click()
-          const dropdown = page.locator('.workbench-select-menu.workbench-composer-menu').last()
-          const searchInput = dropdown.locator('input[placeholder="搜索模型"]')
+          const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+          await menu.waitFor({ state: 'visible' })
+          await menu
+            .getByText('正在加载模型目录…', { exact: true })
+            .waitFor({ state: 'hidden', timeout: 20_000 })
+            .catch(() => undefined)
+          const customEntry = menu.locator(
+            `[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`
+          )
+          await customEntry.waitFor({ state: 'visible' })
+          const catalogRefresh = menu.getByTestId(workbenchSelectors.modelSelectCatalogRefresh)
+          const catalogRefreshVisible = await catalogRefresh.isVisible()
+          const freeSectionTitleAbsent = !(await menu
+            .getByText('免费模型', { exact: true })
+            .isVisible()
+            .catch(() => false))
+          const presetOptions = menu.locator(
+            `[data-testid^="${workbenchSelectors.modelSelectPresetOptionPrefix}-"]`
+          )
+          const freeOptions = menu.locator(
+            `[data-testid^="${workbenchSelectors.modelSelectFreeOptionPrefix}-"]`
+          )
+          const presetOptionCount = await presetOptions.count()
+          const freeOptionCount = await freeOptions.count()
+          let inspectorVisibleOnHover = false
+          let inspectorHasFreeNotice = false
+          if (freeOptionCount > 0) {
+            await freeOptions.first().hover()
+            const inspector = page.getByTestId(workbenchSelectors.inspector)
+            await inspector.waitFor({ state: 'visible' })
+            inspectorVisibleOnHover = true
+            inspectorHasFreeNotice = ((await inspector.innerText()) || '').includes(
+              '不保证稳定和隐私性'
+            )
+          }
+          const presetEmptyStateVisible = await menu
+            .getByText('暂无已配置的预设模型', { exact: true })
+            .isVisible()
+            .catch(() => false)
+          const catalogErrorVisible = await menu
+            .getByText('模型目录加载失败', { exact: true })
+            .isVisible()
+            .catch(() => false)
+          const freeRowHasBadge =
+            freeOptionCount === 0
+              ? true
+              : ((await freeOptions.first().innerText()) || '').includes('免费')
+          const freeRowHasIcon =
+            freeOptionCount === 0
+              ? true
+              : (await freeOptions.first().locator('img').count()) > 0
+          const visionUiTextAbsent = !/(视觉模型|跟随主模型|图片能力)/u.test(
+            (await menu.textContent()) || ''
+          )
+          await customEntry.click()
+          const inspectorHiddenInCustom = !(await page
+            .getByTestId(workbenchSelectors.inspector)
+            .isVisible()
+            .catch(() => false))
+          const searchInput = menu.locator('input[placeholder="搜索模型"]')
           await searchInput.waitFor({ state: 'visible' })
 
-          const configButton = dropdown
-            .getByRole('button', { name: /Live Model/u })
-            .filter({ has: page.locator('svg') })
+          const providerGroupVisible = await menu
+            .locator('button[aria-expanded]')
+            .filter({ hasText: liveEnv.modelName })
             .first()
-          await configButton.waitFor({ state: 'visible' })
-          const iconIsRightOfText = await configButton.evaluate((button) => {
-            const content = button.firstElementChild
-            return (
-              content?.children.item(0)?.tagName.toLowerCase() === 'span' &&
-              content?.children.item(1)?.tagName.toLowerCase() === 'svg'
-            )
-          })
-          await configButton.click()
-          const collapsed =
-            (await configButton.getAttribute('aria-expanded')) === 'false' &&
-            !(await dropdown
-              .getByRole('option', { name: liveEnv.modelName, exact: true })
-              .isVisible()
-              .catch(() => false))
-          await configButton.click()
-          const expanded =
-            (await configButton.getAttribute('aria-expanded')) === 'true' &&
-            (await dropdown
-              .getByRole('option', { name: liveEnv.modelName, exact: true })
-              .isVisible())
+            .isVisible()
 
           await searchInput.fill(MISSING_MODEL_NAME)
-          await dropdown.getByText('暂无匹配模型', { exact: true }).waitFor({ state: 'visible' })
-          const missingOptionCount = await dropdown
+          await menu.getByText('暂无匹配模型', { exact: true }).waitFor({ state: 'visible' })
+          const missingOptionCount = await menu
             .getByRole('option')
             .filter({
               hasText: MISSING_MODEL_NAME
@@ -212,13 +249,16 @@ describe('workbench conversation e2e', () => {
           })
 
           await searchInput.fill('')
-          await dropdown.getByRole('option', { name: liveEnv.modelName, exact: true }).click()
+          await menu.getByRole('option', { name: liveEnv.modelName, exact: true }).click()
 
           await prepareWorkbenchWorkspaceThroughUi(page, {
             workspaceName: WORKSPACE_NAME,
             rootPath: workspace.rootPath
           })
-          await switchWorkbenchMode(page, '大聪明')
+          await selectWorkbenchModel(page, liveEnv.modelName, { preferCustom: true })
+          const customSelectedLabel = (
+            await getWorkbenchLocator(page, workbenchSelectors.modelSelect).innerText()
+          ).trim()
           const successStartedAt = Date.now()
           await sendWorkbenchMessage(page, '不要调用任何工具，只回复“测试成功”。')
           const successEvidence = await waitForWorkbenchAiRunCompletion(
@@ -236,46 +276,105 @@ describe('workbench conversation e2e', () => {
             const signals = await runtime.collectSignals()
             return signals.aiRunEventEntries.map((entry) => entry.event)
           })
-          await page
-            .getByText(new RegExp(`HTTP ${String(runFailed.httpStatus || '')}`, 'u'))
-            .waitFor({ state: 'visible' })
-          await page.getByText(runFailed.message, { exact: false }).waitFor({ state: 'visible' })
+          const failureCard = page
+            .getByTestId(new RegExp(`^${workbenchSelectors.assistantRunFailurePrefix}-`, 'u'))
+            .last()
+          await failureCard.waitFor({ state: 'visible' })
+          await failureCard.getByText(`失败：${runFailed.message}`, { exact: false }).waitFor({
+            state: 'visible'
+          })
+          const detailToggle = failureCard.getByTestId(
+            new RegExp(`^${workbenchSelectors.assistantRunFailureDetailTogglePrefix}-`, 'u')
+          )
+          await detailToggle.click()
+          const detail = failureCard.getByTestId(
+            new RegExp(`^${workbenchSelectors.assistantRunFailureDetailPrefix}-`, 'u')
+          )
+          await detail.waitFor({ state: 'visible' })
+          const detailText = (await detail.innerText()).trim()
           const pageText = (await page.locator('body').innerText()).trim()
           await runtime.captureScreenshot({
             name: 'provider-error-visible',
-            message: '模型服务错误在页面中显示，内部实现信息不对用户暴露。'
+            message: '模型服务错误以短标题展示，详情中保留原文，内部实现信息不对用户暴露。'
           })
 
           return {
-            iconIsRightOfText,
-            collapsed,
-            expanded,
+            presetOptionCount,
+            freeOptionCount,
+            presetEmptyStateVisible,
+            catalogErrorVisible,
+            catalogRefreshVisible,
+            freeSectionTitleAbsent,
+            inspectorVisibleOnHover,
+            inspectorHasFreeNotice,
+            inspectorHiddenInCustom,
+            freeRowHasBadge,
+            freeRowHasIcon,
+            visionUiTextAbsent,
+            providerGroupVisible,
             missingOptionCount,
+            customSelectedLabel,
             successfulChatRequestCount: provider.getSuccessfulChatRequestCount(),
             successFinalAnswer: successEvidence.finalAnswerText,
             chatRequestCount: provider.getChatRequestCount(),
             modelName: liveEnv.modelName,
             runFailed,
+            detailText,
             pageText
           }
         },
         assert: async (result, runtime) => {
+          const catalogSettled =
+            result.freeOptionCount > 0 ||
+            result.presetEmptyStateVisible ||
+            result.catalogErrorVisible
+          const inspectorOk =
+            result.freeOptionCount === 0
+              ? result.inspectorHiddenInCustom
+              : result.inspectorVisibleOnHover &&
+                result.inspectorHasFreeNotice &&
+                result.inspectorHiddenInCustom
           await runtime.assertThat(
-            result.iconIsRightOfText &&
-              result.collapsed &&
-              result.expanded &&
+            result.presetOptionCount === 0 &&
+              catalogSettled &&
+              result.catalogRefreshVisible &&
+              result.freeSectionTitleAbsent &&
+              inspectorOk &&
+              result.freeRowHasBadge &&
+              result.freeRowHasIcon &&
+              result.visionUiTextAbsent &&
+              result.providerGroupVisible &&
               result.missingOptionCount === 0,
             {
-              name: 'model-selector-search-and-collapse',
-              message: '模型选择器应支持配置分组折叠，图标在文字右侧，搜索无结果时只显示空状态。',
+              name: 'main-model-selector-search',
+              message:
+                '未配置预设服务商时不展示付费预设行；统一列表无「免费模型」标题；右上角刷新可见；有免费行时悬浮显示信息侧栏（含稳定性提示），自定义视图侧栏关闭；免费目录或空/失败态之一成立；自定义搜索无结果只显示空状态。',
               data: {
-                iconIsRightOfText: result.iconIsRightOfText,
-                collapsed: result.collapsed,
-                expanded: result.expanded,
+                presetOptionCount: result.presetOptionCount,
+                freeOptionCount: result.freeOptionCount,
+                presetEmptyStateVisible: result.presetEmptyStateVisible,
+                catalogErrorVisible: result.catalogErrorVisible,
+                catalogRefreshVisible: result.catalogRefreshVisible,
+                freeSectionTitleAbsent: result.freeSectionTitleAbsent,
+                inspectorVisibleOnHover: result.inspectorVisibleOnHover,
+                inspectorHasFreeNotice: result.inspectorHasFreeNotice,
+                inspectorHiddenInCustom: result.inspectorHiddenInCustom,
+                freeRowHasBadge: result.freeRowHasBadge,
+                freeRowHasIcon: result.freeRowHasIcon,
+                visionUiTextAbsent: result.visionUiTextAbsent,
+                providerGroupVisible: result.providerGroupVisible,
                 missingOptionCount: result.missingOptionCount
               }
             }
           )
+          await runtime.assertThat(result.customSelectedLabel.includes(result.modelName), {
+            name: 'custom-model-selection-retained',
+            message: '从自定义视图选中的模型名应保留在 Composer pill 上，不得被强制改回预设。',
+            data: {
+              customSelectedLabel: result.customSelectedLabel,
+              modelName: result.modelName
+            }
+          })
           await runtime.assertThat(
             result.successfulChatRequestCount > 0 && result.successFinalAnswer.includes('测试成功'),
             {
@@ -291,19 +390,24 @@ describe('workbench conversation e2e', () => {
           await runtime.assertThat(
             result.chatRequestCount === 1 &&
               result.runFailed.source === 'provider' &&
+              result.runFailed.code === 'llm_request_failed' &&
               Number(result.runFailed.httpStatus || 0) >= 400 &&
-              result.runFailed.message.trim().length > 0 &&
-              result.pageText.includes(`HTTP ${String(result.runFailed.httpStatus || '')}`) &&
-              result.pageText.includes(result.runFailed.message) &&
+              result.runFailed.message.trim() === '模型请求失败' &&
+              Boolean(result.runFailed.rawMessage?.trim()) &&
+              result.pageText.includes(`失败：${result.runFailed.message}`) &&
+              result.detailText.includes(`HTTP ${String(result.runFailed.httpStatus || '')}`) &&
+              result.detailText.includes(String(result.runFailed.rawMessage || '')) &&
               !/LangGraph|LangChain|Troubleshooting URL|structured_output_|recursionLimit/iu.test(
                 result.pageText
               ),
             {
               name: 'provider-error-is-not-reentered-into-graph',
-              message: '模型服务错误应只请求一次并原样展示，不得泄露内部实现信息。',
+              message:
+                '模型服务错误应只请求一次；气泡短标题为「模型请求失败」，详情保留 HTTP/原文，不得泄露内部实现信息。',
               data: {
                 chatRequestCount: result.chatRequestCount,
                 runFailed: result.runFailed,
+                detailText: result.detailText,
                 leaksInternalDetails:
                   /LangGraph|LangChain|Troubleshooting URL|structured_output_|recursionLimit/iu.test(
                     result.pageText

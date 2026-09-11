@@ -1,3 +1,4 @@
+import os from 'node:os'
 import { emitActivity } from '../../../../../utils/aiCapabilityUtils'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { AiEventDispatchContext, AiRunContext } from '../../../types'
@@ -34,17 +35,14 @@ export const createWorkspaceBoundToolFamily = (input: {
 }): ToolFamilyDefinition => ({
   familyId: input.familyId,
   buildTools: ({ ctx, cache, runId, taskId }) => {
-    const workspaceRootPath = ctx.workspace?.rootPath
-    if (!workspaceRootPath) {
-      throw new Error('AI 运行必须绑定工作区，当前请求缺少工作区根目录。')
-    }
+    const workspaceRootPath = ctx.workspaceRoots[0] || os.homedir()
     const toolNameSet = new Set(listToolNamesByFamily(input.familyId))
     return input
       .buildWorkspaceTools({
         ctx,
         cache,
         runId,
-        sessionId: ctx.sessionId,
+        partnerId: ctx.partnerId,
         taskId,
         workspaceRootPath,
         emitActivity: createWorkspaceCapabilityActivityEmitter({

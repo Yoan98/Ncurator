@@ -1,7 +1,10 @@
 import type { ModelSource } from '../shared/modelSources'
+import type { FreeModelsSnapshot } from '../shared/freeModels'
+import type { PresetModelsSnapshot } from '../shared/llmPresets'
 import type {
   AiRuntimeSettings,
   BrowserPanelBoundsRequest,
+  BrowserPanelFollowRequest,
   BrowserPanelHideRequest,
   BrowserPanelMenuRequest,
   BrowserPanelMutationResponse,
@@ -10,7 +13,6 @@ import type {
   BrowserResourceMenuRequest,
   BrowserPanelPresentationResponse,
   BrowserPanelShowRequest,
-  BrowserPanelState,
   BrowserPanelStateResponse,
   BrowserTabCreateRequest,
   BrowserTabCreateResponse,
@@ -18,36 +20,39 @@ import type {
   BrowserTabListResponse,
   BrowserTabMutationRequest,
   BrowserTabNavigateRequest,
+  BrowserTabState,
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
-  AiRunUserTakeoverConfirmRequest,
-  AiRunUserTakeoverConfirmResponse,
-  AiVisionModelAnalysisRequest,
-  AiVisionModelAnalysisResponse,
   AiRunCancelResponse,
   AiContextUsageRequest,
   AiContextUsageResponse,
   AiRunEvent,
   AppUpdateActionResponse,
   AppUpdateSnapshot,
+  AppStartupStatus,
   ChatMessage,
   AttachmentPickRequest,
   AttachmentPickResponse,
   AttachmentCreateFromPathRequest,
   AttachmentProcessResponse,
   AttachmentSaveRequest,
-  ChatRunEventsRequest,
-  ChatRunEventsResponse,
-  ChatSession,
-  ChatSessionListItem,
-  ChatSessionOpenRequest,
-  ChatSessionOpenResponse,
-  ChatSessionUiStateSaveRequest,
-  ChatSessionUiStateSaveResponse,
-  ChatSessionRunSummariesRequest,
-  ChatSessionRunSummariesResponse,
-  ChatSessionSnapshotRequest,
-  ChatSessionSnapshotResponse,
+  Partner,
+  PartnerListItem,
+  PartnerCreateRequest,
+  PartnerCreateResponse,
+  PartnerUpdateRequest,
+  PartnerUpdateResponse,
+  PartnerClearContextRequest,
+  PartnerClearContextResponse,
+  PartnerOpenRequest,
+  PartnerOpenResponse,
+  PartnerSetPinnedRequest,
+  PartnerUiStateSaveRequest,
+  PartnerUiStateSaveResponse,
+  PartnerRunSummariesRequest,
+  PartnerRunSummariesResponse,
+  PartnerSnapshotRequest,
+  PartnerSnapshotResponse,
   ChatSubmitRequest,
   ChatSubmitResponse,
   ChatTurnRetractLatestRequest,
@@ -62,7 +67,6 @@ import type {
   FileWatchStartRequest,
   FileWatchStartResponse,
   FileWatchStopResponse,
-  LegacyLocalImportMigrationStatus,
   ListReferenceItemsRequest,
   ListWebSourcesRequest,
   ListWorkspaceTreeRequest,
@@ -98,6 +102,8 @@ import type {
   ScheduledTaskMutationResponse,
   ScheduledTaskSaveRequest,
   ScheduledTaskSetEnabledRequest,
+  ScheduledTaskRunNowRequest,
+  ScheduledTaskDismissBusyNoticeRequest,
   WorkspaceIndexJobGetRequest,
   WorkspaceIndexJobRecord,
   WorkspaceIndexJobResponse,
@@ -182,7 +188,6 @@ export type DesktopApi = {
   webSourcesPrepare: (payload: PrepareWebSourcesRequest) => Promise<WorkspaceJobResponse>
   webSourceRefresh: (payload: RefreshWebSourceRequest) => Promise<WebSourceMutationResponse>
   webSourceDelete: (payload: DeleteWebSourceRequest) => Promise<DeleteWebSourceResponse>
-  legacyLocalImportMigrationStatus: () => Promise<LegacyLocalImportMigrationStatus | null>
   sourceListRefresh: (cb: () => void) => () => void
   downloadModel: (
     repoId: string,
@@ -203,31 +208,42 @@ export type DesktopApi = {
     payload: AttachmentCreateFromPathRequest
   ) => Promise<AttachmentProcessResponse>
   attachmentSaveFile: (payload: AttachmentSaveRequest) => Promise<AttachmentProcessResponse>
-  chatSessionList: () => Promise<ChatSessionListItem[]>
-  chatSessionSave: (session: ChatSession) => Promise<{ success: boolean; error?: string }>
-  chatSessionMarkViewed: (id: string) => Promise<{ success: boolean; error?: string }>
-  chatSessionDelete: (id: string) => Promise<{ success: boolean; error?: string }>
-  chatMessageList: (sessionId: string) => Promise<ChatMessage[]>
+  partnerList: () => Promise<PartnerListItem[]>
+  partnerCreate: (payload: PartnerCreateRequest) => Promise<PartnerCreateResponse>
+  partnerUpdate: (payload: PartnerUpdateRequest) => Promise<PartnerUpdateResponse>
+  partnerSave: (partner: Partner) => Promise<{ success: boolean; error?: string }>
+  partnerMarkViewed: (id: string) => Promise<{ success: boolean; error?: string }>
+  partnerSetPinned: (
+    payload: PartnerSetPinnedRequest
+  ) => Promise<{ success: boolean; error?: string }>
+  partnerDelete: (id: string) => Promise<{ success: boolean; error?: string }>
+  partnerMessageList: (partnerId: string) => Promise<ChatMessage[]>
   scheduledTaskList: () => Promise<ScheduledTask[]>
   scheduledTaskSave: (payload: ScheduledTaskSaveRequest) => Promise<ScheduledTaskMutationResponse>
   scheduledTaskDelete: (id: string) => Promise<ScheduledTaskMutationResponse>
   scheduledTaskSetEnabled: (
     payload: ScheduledTaskSetEnabledRequest
   ) => Promise<ScheduledTaskMutationResponse>
-  onChatSessionListRefresh: (cb: () => void) => () => void
-  chatSessionOpen: (payload: ChatSessionOpenRequest) => Promise<ChatSessionOpenResponse>
-  chatSessionUiStateSave: (
-    payload: ChatSessionUiStateSaveRequest
-  ) => Promise<ChatSessionUiStateSaveResponse>
+  scheduledTaskRunNow: (payload: ScheduledTaskRunNowRequest) => Promise<ScheduledTaskMutationResponse>
+  scheduledTaskDismissBusyNotice: (
+    payload: ScheduledTaskDismissBusyNoticeRequest
+  ) => Promise<ScheduledTaskMutationResponse>
+  onPartnerListRefresh: (cb: () => void) => () => void
+  partnerOpen: (payload: PartnerOpenRequest) => Promise<PartnerOpenResponse>
+  partnerUiStateSave: (
+    payload: PartnerUiStateSaveRequest
+  ) => Promise<PartnerUiStateSaveResponse>
   workbenchUiStateGet: () => Promise<WorkbenchUiStateResponse>
   workbenchUiStateSave: (payload: WorkbenchUiStateSaveRequest) => Promise<WorkbenchUiStateResponse>
-  chatSessionRunSummaries: (
-    payload: ChatSessionRunSummariesRequest
-  ) => Promise<ChatSessionRunSummariesResponse>
-  chatRunEventsGet: (payload: ChatRunEventsRequest) => Promise<ChatRunEventsResponse>
-  chatSessionSnapshotGet: (
-    payload: ChatSessionSnapshotRequest
-  ) => Promise<ChatSessionSnapshotResponse>
+  partnerRunSummaries: (
+    payload: PartnerRunSummariesRequest
+  ) => Promise<PartnerRunSummariesResponse>
+  partnerSnapshotGet: (
+    payload: PartnerSnapshotRequest
+  ) => Promise<PartnerSnapshotResponse>
+  partnerClearContext: (
+    payload: PartnerClearContextRequest
+  ) => Promise<PartnerClearContextResponse>
   chatSubmit: (payload: ChatSubmitRequest) => Promise<ChatSubmitResponse>
   chatTurnRetractLatest: (
     payload: ChatTurnRetractLatestRequest
@@ -236,9 +252,22 @@ export type DesktopApi = {
   llmConfigSave: (config: LLMConfig) => Promise<{ success: boolean; error?: string }>
   llmConfigDelete: (id: string) => Promise<{ success: boolean; error?: string }>
   llmConfigModelList: (id: string) => Promise<LlmModelListResponse>
-  analyzeVisionModels: (
-    payload: AiVisionModelAnalysisRequest
-  ) => Promise<AiVisionModelAnalysisResponse>
+  freeModelsGet: (options?: {
+    refreshIfStale?: boolean
+  }) => Promise<FreeModelsSnapshot>
+  freeModelsRefresh: () => Promise<{
+    success: boolean
+    snapshot: FreeModelsSnapshot
+    error?: string
+  }>
+  presetModelsGet: (options?: {
+    refreshIfStale?: boolean
+  }) => Promise<PresetModelsSnapshot>
+  presetModelsRefresh: () => Promise<{
+    success: boolean
+    snapshot: PresetModelsSnapshot
+    error?: string
+  }>
   isE2EMode: () => boolean
   aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>
   aiRuntimeSettingsSave: (
@@ -249,13 +278,11 @@ export type DesktopApi = {
   aiRunApprovalBatchDecide: (
     payload: AiRunApprovalBatchDecisionRequest
   ) => Promise<AiRunApprovalBatchDecisionResponse>
-  aiRunUserTakeoverConfirm: (
-    payload: AiRunUserTakeoverConfirmRequest
-  ) => Promise<AiRunUserTakeoverConfirmResponse>
   aiContextUsageGet: (payload: AiContextUsageRequest) => Promise<AiContextUsageResponse>
   browserPanelSetBounds: (
     payload: BrowserPanelBoundsRequest
   ) => Promise<BrowserPanelMutationResponse>
+  browserPanelSetFollow: (payload: BrowserPanelFollowRequest) => void
   browserTabList: (payload: BrowserTabListRequest) => Promise<BrowserTabListResponse>
   browserTabCreate: (payload: BrowserTabCreateRequest) => Promise<BrowserTabCreateResponse>
   browserTabActivate: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
@@ -280,7 +307,7 @@ export type DesktopApi = {
   browserPanelZoomIn: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
   browserPanelZoomOut: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
   browserPanelZoomReset: (payload: BrowserTabMutationRequest) => Promise<BrowserPanelStateResponse>
-  onBrowserPanelStateChange: (cb: (state: BrowserPanelState) => void) => () => void
+  onBrowserPanelStateChange: (cb: (state: BrowserTabState) => void) => () => void
   onBrowserResourceMenuAction: (cb: (action: BrowserResourceMenuAction) => void) => () => void
   docxApplyGet: (payload: GetDocxApplyRecordRequest) => Promise<GetDocxApplyRecordResponse>
   aiFileChangeList: (
@@ -293,6 +320,8 @@ export type DesktopApi = {
   appUpdateDownload: () => Promise<AppUpdateActionResponse>
   appUpdateInstall: () => Promise<AppUpdateActionResponse>
   onAppUpdateStatus: (cb: (snapshot: AppUpdateSnapshot) => void) => () => void
+  appStartupGetStatus: () => Promise<AppStartupStatus>
+  appQuit: () => Promise<void>
   listOpenWithApplications: (
     payload: ListOpenWithApplicationsRequest
   ) => Promise<ListOpenWithApplicationsResponse>
@@ -300,6 +329,6 @@ export type DesktopApi = {
     payload: OpenFileWithApplicationRequest
   ) => Promise<OpenFileWithApplicationResponse>
   onAiRunEvent: (cb: (event: AiRunEvent) => void) => () => void
-  onSystemNotificationOpenSession: (cb: (sessionId: string) => void) => () => void
+  onSystemNotificationOpenPartner: (cb: (partnerId: string) => void) => () => void
   onWorkbenchUiFlushRequest: (cb: () => void | Promise<void>) => () => void
 }

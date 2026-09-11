@@ -6,8 +6,7 @@ import {
   createFixtureWorkspace,
   getSettingsLocator,
   getSettingsPrefixLocator,
-  navigateToSettingsSection,
-  workspaceCardLocator
+  navigateToSettingsSection
 } from '../../../../harness/e2e/settings'
 
 describe('settings workspace web e2e', () => {
@@ -36,15 +35,13 @@ describe('settings workspace web e2e', () => {
             name: 'open-add-dialog',
             message: '创建工作区，进入网页 tab 并打开添加网页弹窗。',
             run: async () => {
-              const workspace = await createFixtureWorkspace(page, {
+              await createFixtureWorkspace(page, {
                 rootPath: '/tmp/settings-web-add-dialog-workspace',
                 name: '网页资料工作区'
               })
               await navigateToSettingsSection(page, 'workspace')
-              await workspaceCardLocator(page, workspace.workspace!.id).click()
-              await page.getByRole('tab', { name: '网页 0' }).click()
+              await page.getByRole('tab', { name: /网页/u }).click()
               webManagementEmbedded =
-                (await getSettingsLocator(page, importSelectors.workspaceDetail).isVisible()) &&
                 (await getSettingsLocator(page, importSelectors.webSourceSection).isVisible()) &&
                 (await getSettingsLocator(page, importSelectors.webSourceList).isVisible()) &&
                 (await getSettingsLocator(

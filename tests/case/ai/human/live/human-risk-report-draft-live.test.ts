@@ -2,9 +2,9 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import {
-  buildBlockIndex,
+  buildDocumentNodeIndex,
   loadDocxBundle
-} from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
+} from '../../../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
@@ -14,13 +14,13 @@ import {
   RISK_REPORT_DRAFT_SHARED_WORKSPACE_FIXTURE_PATH
 } from '../../../../harness/backend/liveScenarios/riskReportDraftScenario'
 import {
-  collectStartedDocxEditSourcePaths,
+  collectStartedDocxWriteSourcePaths,
   collectStartedToolStringArgs,
   filterAiRunEventsByType,
   hasDocxApplyArtifact,
   hasDocxFileArtifact,
-  isDocxEditCreateInput,
-  isDocxEditWriteInput
+  isDocxContentCreateInput,
+  isDocxWriteInput
 } from '../testUtils'
 
 const openedExpectedDoc = (
@@ -47,14 +47,11 @@ const toWorkspaceRelativePath = (workspaceRoot: string, sourcePath: string): str
 
 const readDocxPlainText = async (filePath: string): Promise<string> => {
   const bundle = await loadDocxBundle(await fs.readFile(filePath))
-  return buildBlockIndex(bundle.documentDom)
-    .outline.filter((block) => block.type !== 'table_cell')
-    .map((block) => block.text)
+  return buildDocumentNodeIndex(bundle)
+    .outline.filter((node) => node.type !== 'table_cell')
+    .map((node) => node.text)
     .join('\n')
 }
-
-
-
 
 describe('ai human live backend', () => {
   it('human-risk-report-draft-live', async () => {
@@ -117,15 +114,21 @@ describe('ai human live backend', () => {
           'docx_read_outline',
           'sourcePath'
         )
-          .concat(collectStartedToolStringArgs(events, 'docx_read_blocks', 'sourcePath'))
+          .concat(collectStartedToolStringArgs(events, 'docx_read_nodes', 'sourcePath'))
           .concat(collectStartedToolStringArgs(events, 'docx_search', 'sourcePath'))
-        const createSourcePaths = collectStartedDocxEditSourcePaths(events, isDocxEditCreateInput)
+        const createSourcePaths = collectStartedDocxWriteSourcePaths(
+          events,
+          isDocxContentCreateInput
+        )
         const createdRelativePaths = createSourcePaths.map((sourcePath) =>
           toWorkspaceRelativePath(runtime.workspaceRoot, sourcePath)
         )
-        const writeSourcePaths = collectStartedDocxEditSourcePaths(events, isDocxEditWriteInput)
+        const writeSourcePaths = collectStartedDocxWriteSourcePaths(events, isDocxWriteInput)
         const writeRelativePaths = writeSourcePaths.map((sourcePath) =>
           toWorkspaceRelativePath(runtime.workspaceRoot, sourcePath)
+        )
+        const deliveredRelativePaths = writeRelativePaths.filter(
+          (sourcePath) => !result.workspaceSeed.preexistingDocxRelativePaths.includes(sourcePath)
         )
         const lastWeekOpened = openedExpectedDoc(
           openedSourcePaths,
@@ -145,35 +148,29 @@ describe('ai human live backend', () => {
           )
         )
         const createdTargetInAllowedLocation =
-          createdRelativePaths.length >= 1 &&
-          createdRelativePaths.every(
+          deliveredRelativePaths.length >= 1 &&
+          deliveredRelativePaths.every(
             (sourcePath) =>
               sourcePath.startsWith('工作/') || sourcePath === path.basename(sourcePath)
           )
-        const writesStayOnCreatedDoc =
-          writeRelativePaths.length === 0 ||
-          writeRelativePaths.every((sourcePath) => createdRelativePaths.includes(sourcePath))
-        const createdDocNotPreexisting =
-          createdRelativePaths.length >= 1 &&
-          createdRelativePaths.every(
-            (sourcePath) => !result.workspaceSeed.preexistingDocxRelativePaths.includes(sourcePath)
-          )
-        const writeResultEvents = filterAiRunEventsByType(events, 'tool_call_result').filter(
-          (event) => event.toolName === 'docx_edit'
+        const writesStayOnCreatedDoc = writeRelativePaths.every((sourcePath) =>
+          deliveredRelativePaths.includes(sourcePath)
         )
-        const hasPostWriteReadback =
-          writeResultEvents.length === 0 ||
-          writeResultEvents.some((event) => {
-            const data = event.result?.data
-            return (
-              data !== null &&
-              typeof data === 'object' &&
-              Array.isArray(
-                (data as { postWriteReadback?: { regions?: Array<object> } }).postWriteReadback
-                  ?.regions
-              )
-            )
-          })
+        const createdDocNotPreexisting = deliveredRelativePaths.length >= 1
+        const writeResultEvents = filterAiRunEventsByType(events, 'tool_call_result').filter(
+          (event) => event.toolName === 'docx_content_edit'
+        )
+        const writeResultsAreMinimal = writeResultEvents.every((event) => {
+          if (event.result?.ok !== true) return true
+          const data = event.result.data
+          return (
+            data !== null &&
+            typeof data === 'object' &&
+            !Array.isArray(data) &&
+            !('changes' in data) &&
+            Object.keys(data).every((key) => key === 'createdIds')
+          )
+        })
         const docxFileArtifact = result.output?.artifacts?.find(
           (artifact) => artifact.kind === 'file' && artifact.capability === 'docx'
         )
@@ -203,17 +200,13 @@ describe('ai human live backend', () => {
           ) ||
           (txtReads.length >= 1 &&
             /工作文档|所有工作|材料|排期更新|对外口径确认|财务跟进/.test(evidenceText))
-        
-        
-        
-        
-        
+
         const mentionsAppliedDelivery =
           /已生成|已创建|已修改|文件/.test(deliveryText) || hasDocxArtifact
         const hasResearchReadStep = toolNames.some((toolName) =>
           [
             'docx_read_outline',
-            'docx_read_blocks',
+            'docx_read_nodes',
             'docx_search',
             'kb_list_documents',
             'kb_search'
@@ -223,7 +216,7 @@ describe('ai human live backend', () => {
           result.output?.status === 'completed' &&
             toolNames.includes('terminal_run') &&
             hasResearchReadStep &&
-            toolNames.includes('docx_edit') &&
+            toolNames.includes('docx_content_edit') &&
             createdTargetInAllowedLocation &&
             createdDocNotPreexisting &&
             writesStayOnCreatedDoc &&
@@ -231,20 +224,21 @@ describe('ai human live backend', () => {
           {
             name: 'human-live-risk-report-runs-required-tool-chain',
             message:
-              'live human complex case 应通过真实 workspace/检索读取/docx_edit(insert_blocks) 工具链完成本周周报文件创建任务。',
+              'live human complex case 应通过真实 workspace、DOCX 读取和 docx_content_edit 工具链完成本周周报文件创建任务。',
             data: {
               toolNames,
               hasResearchReadStep,
               openedSourcePaths,
               createSourcePaths,
               createdRelativePaths,
+              deliveredRelativePaths,
               writeSourcePaths,
               writeRelativePaths,
               txtReads,
               relevantDocxOpened,
               referencesDocxEvidence,
-               referencesTxtEvidence,
-               artifacts: result.output?.artifacts
+              referencesTxtEvidence,
+              artifacts: result.output?.artifacts
             }
           }
         )
@@ -260,26 +254,26 @@ describe('ai human live backend', () => {
 
         runtime.assertThat(
           result.output?.status === 'completed' &&
-            createSourcePaths.length >= 1 &&
+            deliveredRelativePaths.length >= 1 &&
             createdTargetInAllowedLocation &&
             createdDocNotPreexisting &&
             hasDocxArtifact &&
             trackedDocsUnchanged.every(Boolean) &&
             writesStayOnCreatedDoc,
           {
-          name: 'human-live-risk-report-creates-new-draft-without-overwriting-source-docs',
-          message:
-            'live risk report 应完成文件交付、保护原文件并真实落盘新周报草稿。',
-          data: {
-            createSourcePaths,
-            createdRelativePaths,
-            writeSourcePaths,
-            writeRelativePaths,
-            trackedDocsUnchanged,
-            appliedDocPath,
-            generatedDraftTextSnippet: generatedDraftText.slice(0, 2000),
-            appliedTextSnippet: appliedTextOnly.slice(0, 2000)
-          }
+            name: 'human-live-risk-report-creates-new-draft-without-overwriting-source-docs',
+            message: 'live risk report 应完成文件交付、保护原文件并真实落盘新周报草稿。',
+            data: {
+              createSourcePaths,
+              createdRelativePaths,
+              deliveredRelativePaths,
+              writeSourcePaths,
+              writeRelativePaths,
+              trackedDocsUnchanged,
+              appliedDocPath,
+              generatedDraftTextSnippet: generatedDraftText.slice(0, 2000),
+              appliedTextSnippet: appliedTextOnly.slice(0, 2000)
+            }
           }
         )
 
@@ -296,16 +290,16 @@ describe('ai human live backend', () => {
               'live human complex case 应给出最终交付，并产出已修改文件 artifact 与 applyId。',
             data: {
               toolNames,
-            createSourcePaths,
-            artifacts: result.output?.artifacts
+              createSourcePaths,
+              artifacts: result.output?.artifacts
             }
           }
         )
 
-        runtime.assertThat(hasPostWriteReadback, {
-          name: 'human-live-risk-report-write-results-include-post-write-readback',
+        runtime.assertThat(writeResultsAreMinimal, {
+          name: 'human-live-risk-report-write-results-stay-minimal',
           message:
-            '同文件 docx 写后，写工具结果应包含 postWriteReadback，用于 brain 判断写入效果。',
+            'DOCX 写结果应保持最小（允许空对象；若有字段则只能是 createdIds）。不要求本次必有 createdIds。',
           data: {
             writeResultEvents,
             createdRelativePaths,

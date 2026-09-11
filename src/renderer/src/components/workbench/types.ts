@@ -5,13 +5,10 @@ import type {
   AiRunEvent,
   AiFileChangeStatus,
   IpcJsonObject,
-  RuntimeSkillId,
-  SearchResult,
-  WorkspaceSource
+  RuntimeSkillId
 } from '../../../../shared/types'
 import type { RuntimeToolName } from '../../../../shared/runtimeCapabilities'
 
-export type WorkbenchMode = 'ai' | 'search'
 export type WorkbenchAiPreference = AiPreference
 export type WorkbenchExecutionPermission = AiExecutionPermission
 
@@ -35,34 +32,9 @@ export type WorkbenchSelectOption = {
   keywords?: string[]
   trailing?: ReactNode
   disabled?: boolean
+  /** Shown via Tooltip when the option is disabled (hover). */
+  disabledReason?: string
   children?: WorkbenchSelectOption[]
-}
-
-export type WorkspaceQuickSelectProps = {
-  workspaces: WorkspaceSource[]
-  selectedWorkspaceId: string | null
-  onWorkspaceChange: (workspaceId: string) => void
-  onEmptyAction?: () => void
-  placeholder?: string
-  className?: string
-  noDrag?: boolean
-  'data-testid'?: string
-}
-
-export type WorkspaceQuickSelectPopupPosition = {
-  top?: number
-  bottom?: number
-  left: number
-  width: number
-  maxHeight: number
-  placement: 'top' | 'bottom'
-}
-
-export type SearchWorkbenchTurn = {
-  query: string
-  results: SearchResult[]
-  tokens: string[]
-  createdAt: number
 }
 
 export type WorkbenchFileOrigin = 'search_hit' | 'read' | 'artifact' | 'preview' | 'source'
@@ -86,6 +58,8 @@ export type AssistantRichTextSegment = {
   text: string
   emphasis?: boolean
   iconKind?: AssistantProcessIconKind
+  /** Dynamic tool argument (path/command/query/url). Omitted from Activity header short text. */
+  param?: boolean
 }
 
 export type AssistantToolName = RuntimeToolName | 'unnamed'
@@ -93,7 +67,6 @@ export type AssistantToolName = RuntimeToolName | 'unnamed'
 export type AssistantProcessIconKind =
   | 'search'
   | 'browser'
-  | 'wait'
   | 'web'
   | 'image'
   | 'knowledge'
@@ -104,15 +77,20 @@ export type AssistantProcessIconKind =
   | 'retry'
   | 'learning'
   | 'compaction'
-  | 'finalizing'
+  | 'eye'
+  | 'camera'
+  | 'scroll'
+  | 'extract'
+  | 'window'
+  | 'fetch'
   | 'default'
 
 export type AssistantProcessGroupKind =
   | 'thinking'
   | 'skill'
   | 'retry'
-  | 'learning'
   | 'compaction'
+  | 'learning'
   | 'finalizing'
 
 export type AssistantProcessSkillKey =
@@ -129,12 +107,10 @@ export type AssistantProcessSkillKey =
   | 'kb'
   | 'terminal'
   | 'web-search'
-  | 'web-crawl'
   | 'browser'
-  | 'image-recognition'
   | 'image-generation'
-  | 'wait'
-  | 'user-takeover'
+  | 'image-read'
+  | 'learning'
   | 'generic'
 
 export type AssistantProcessGroupItem = {
@@ -144,6 +120,8 @@ export type AssistantProcessGroupItem = {
   completedText: AssistantRichTextSegment[]
   failedText: AssistantRichTextSegment[]
   partialFailedText: AssistantRichTextSegment[]
+  /** Standalone Activity header verb phrase; not derived by stripping expand-row params. */
+  headerShortText?: string
   createdAt: number
   sourceEventType: AssistantProcessSourceEventType
   toolName?: AssistantToolName
@@ -185,12 +163,6 @@ export type AssistantTurnApplyTarget = {
   status?: AiFileChangeStatus
 }
 
-export type AssistantTurnBlocker = {
-  kind: 'approval' | 'workspace' | 'user_takeover'
-  title: string
-  description: string
-}
-
 export type AssistantArtifactItem = WorkbenchFileRef & {
   operation?: 'created' | 'updated' | 'deleted' | 'renamed'
 }
@@ -200,13 +172,24 @@ export type AssistantTurnViewModel = {
   runId?: string
   status: 'running' | 'completed' | 'failed'
   runFinished: boolean
+  isBrainThinking?: boolean
   processThoughts: AssistantProcessThought[]
   processGroups: AssistantProcessGroup[]
   finalAnswerMarkdown: string
+  /** Present after delivery access checks; undefined while streaming. */
+  linkAccess?: import('../../../../shared/types').MarkdownLinkAccessEntry[]
+  streamingRoundId?: string
+  streamingMarkdown: string
+  streamingRole: 'answer' | 'thought'
+  plan: import('../../../../shared/types').ChatMessageLogPlanItem[]
   artifacts: AssistantArtifactItem[]
   applyTargets: AssistantTurnApplyTarget[]
-  blockers: AssistantTurnBlocker[]
+  waitingApproval: boolean
+  pendingApprovalItems: import('../../../../shared/types').AiApprovalBatchItem[]
+  approvalReviews: import('../../../../shared/workbench/approvalReview').AssistantApprovalReview[]
   error?: string
+  /** Provider/internal raw detail for “查看详情”; keep bubble on `error` title only. */
+  errorDetail?: string
 }
 
 export type WorkbenchContentPanelState =
@@ -214,13 +197,6 @@ export type WorkbenchContentPanelState =
       kind: 'empty'
       title: string
       description: string
-    }
-  | {
-      kind: 'search_list'
-      title: string
-      query: string
-      results: SearchResult[]
-      tokens: string[]
     }
   | {
       kind: 'file_preview'

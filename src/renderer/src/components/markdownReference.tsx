@@ -1,6 +1,12 @@
 import React from 'react'
 import { FileTextOutlined, GlobalOutlined } from '@ant-design/icons'
 import {
+  transformAssistantMarkdownUrl,
+  resolveMarkdownLinkForRender,
+  type OpenableMarkdownReference,
+  type ResolvedMarkdownLink
+} from '../../../shared/markdownLink'
+import {
   parseNcuratorRefHref,
   normalizeNcuratorRefMarkdownLinks,
   repairInlineCodeWrappedNcuratorLinks,
@@ -8,6 +14,10 @@ import {
   type NcuratorRefResourceType,
   type ParsedNcuratorRef
 } from '../../../shared/ncuratorRef'
+import type { MarkdownLinkResourceType } from '../../../shared/types'
+
+export type { OpenableMarkdownReference, ResolvedMarkdownLink }
+export { resolveMarkdownLinkForRender, transformAssistantMarkdownUrl }
 
 export type ParsedNcuratorRefKind = NcuratorRefKind
 export type ParsedNcuratorRefResourceType = NcuratorRefResourceType
@@ -17,12 +27,5 @@ export const parseRefHref = parseNcuratorRefHref
 export const normalizeRefMarkdownLinks = normalizeNcuratorRefMarkdownLinks
 export { repairInlineCodeWrappedNcuratorLinks }
 
-export const renderReferenceIcon = (input: {
-  kind: ParsedNcuratorRefKind
-  resourceType: ParsedNcuratorRefResourceType
-}): React.ReactNode =>
-  input.resourceType === 'web' ? (
-    <GlobalOutlined />
-  ) : input.resourceType === 'file' ? (
-    <FileTextOutlined />
-  ) : null
+export const renderReferenceIcon = (resourceType: MarkdownLinkResourceType): React.ReactNode =>
+  resourceType === 'web' ? <GlobalOutlined /> : <FileTextOutlined />

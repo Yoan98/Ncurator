@@ -218,7 +218,6 @@ describe('workbench result e2e', () => {
               result.afterApplyText.includes(MARKER) &&
               result.afterRevertText === result.beforeText &&
               result.applyEntryText.includes('sample-edit.docx') &&
-              result.applyEntryText.includes('Workbench docx-apply-panel-preview-and-revert') &&
               result.modificationCountsVisibleBeforeClick &&
               result.applyEntryLines.filter((line) => line.includes('sample-edit.docx')).length ===
                 1 &&

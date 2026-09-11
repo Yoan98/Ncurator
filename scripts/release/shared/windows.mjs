@@ -8,10 +8,11 @@ import { loadReleaseEnvironment } from './environment.mjs'
 import { assertReleaseFragment } from '../r2/fragment-contract.mjs'
 import { fetchWithRetry } from './http.mjs'
 import { artifactKey, statusKey } from '../r2/storage-layout.mjs'
+import { DOMESTIC_DOWNLOAD_BASE_URL, resolveReleaseStorageConfig } from '../storage/config.mjs'
 
 const execFileAsync = promisify(execFile)
 const WINDOWS_PLATFORM = 'windows-x64'
-const PUBLIC_RELEASE_BASE_URL = 'https://download.ncurator.com'
+const PUBLIC_RELEASE_BASE_URL = DOMESTIC_DOWNLOAD_BASE_URL
 
 const commandResult = async (command, args, options = {}) => {
   try {
@@ -139,20 +140,10 @@ export const inspectLocalWindowsRelease = async (root, { requirePublish = true }
   }
 
   if (requirePublish) {
-    for (const name of [
-      'AWS_ACCESS_KEY_ID',
-      'AWS_SECRET_ACCESS_KEY',
-      'R2_ACCOUNT_ID',
-      'R2_BUCKET_NAME',
-      'R2_PUBLIC_BASE_URL'
-    ]) {
-      if (!String(process.env[name] || '').trim()) {
-        issues.push(`missing environment variable: ${name}`)
-      }
-    }
-    const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL || '').replace(/\/$/u, '')
-    if (publicBaseUrl && publicBaseUrl !== PUBLIC_RELEASE_BASE_URL) {
-      issues.push(`R2_PUBLIC_BASE_URL must be ${PUBLIC_RELEASE_BASE_URL}`)
+    try {
+      resolveReleaseStorageConfig()
+    } catch (error) {
+      issues.push(error instanceof Error ? error.message : String(error))
     }
   }
 
@@ -192,42 +183,45 @@ export const verifyPublicReleaseFragment = async (
   publicBaseUrl = PUBLIC_RELEASE_BASE_URL
 ) => {
   for (const file of fragment.files) {
-    const response = await fetchWithRetry(`${publicBaseUrl}/${artifactKey(fragment, file.storageName)}`, {
-      method: 'HEAD',
-      cache: 'no-store'
-    })
+    const response = await fetchWithRetry(
+      `${publicBaseUrl}/${artifactKey(fragment, file.storageName)}`,
+      {
+        method: 'HEAD',
+        cache: 'no-store'
+      }
+    )
     if (!response.ok || Number(response.headers.get('content-length')) !== file.size) {
       throw new Error(`remote release asset verification failed: ${file.name}`)
     }
   }
 }
 
-export const verifyR2ReleaseFragment = async (fragment, awsExecutable) => {
-  const endpoint = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-  const bucket = String(process.env.R2_BUCKET_NAME || '').replace(/^\/+|\/+$/gu, '')
-  if (!awsExecutable || !bucket || !process.env.R2_ACCOUNT_ID) {
-    throw new Error('R2 verification configuration is incomplete')
-  }
+export const verifyReleaseStorageFragment = async (fragment, awsExecutable) => {
+  const config = resolveReleaseStorageConfig()
+  if (!awsExecutable) throw new Error(`${config.label} verification configuration is incomplete`)
+  const { createAwsCliRuntime } = await import('../storage/client.mjs')
+  const runtime = await createAwsCliRuntime(config)
   for (const file of fragment.files) {
     const key = artifactKey(fragment, file.storageName)
-    const result = await commandResult(awsExecutable, [
-      's3api',
-      'head-object',
-      '--bucket',
-      bucket,
-      '--key',
-      key,
-      '--output',
-      'json',
-      '--endpoint-url',
-      endpoint,
-      '--region',
-      'auto'
-    ])
-    if (!result.ok) throw new Error(`R2 release asset lookup failed: ${key}`)
+    const result = await commandResult(
+      awsExecutable,
+      [
+        's3api',
+        'head-object',
+        '--bucket',
+        config.bucket,
+        '--key',
+        key,
+        '--output',
+        'json',
+        ...runtime.extraArgs
+      ],
+      { env: runtime.env }
+    )
+    if (!result.ok) throw new Error(`${config.label} release asset lookup failed: ${key}`)
     const remote = JSON.parse(result.stdout)
     if (Number(remote.ContentLength) !== file.size || remote.Metadata?.sha512 !== file.sha512) {
-      throw new Error(`R2 release asset does not match fragment: ${key}`)
+      throw new Error(`${config.label} release asset does not match fragment: ${key}`)
     }
   }
 }

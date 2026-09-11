@@ -2,11 +2,12 @@ import type {
   AiApprovalBatchRequest,
   AiApprovalBatchResult,
   AiRunContext,
+  AiRunDeps,
   BrowserUseService
 } from '../../../src/main/services/ai/types'
 import type { HumanTaskRunner } from '../../../src/main/services/ai/types'
 import type { DocxApplyService } from '../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
-import type { ChatStore } from '../../../src/main/services/storage/domains/ChatStore'
+import type { PartnerStore } from '../../../src/main/services/storage/domains/PartnerStore'
 import type { DocumentsStore } from '../../../src/main/services/storage/domains/DocumentsStore'
 import type { DocxApplyStore } from '../../../src/main/services/storage/domains/DocxApplyStore'
 import type { LlmConfigStore } from '../../../src/main/services/storage/domains/LlmConfigStore'
@@ -17,7 +18,6 @@ import type { WorkspaceKnowledgePrepareService } from '../../../src/main/service
 import type { WebCrawlerService } from '../../../src/main/services/webCrawler/types'
 import type {
   ChatMessage,
-  ChatConversationMemory,
   AiLlmUsage,
   JsonObject,
   JsonValue,
@@ -144,7 +144,8 @@ export type BackendSeedManifest = {
 }
 
 export type SeedChatHistoryInput = {
-  sessionId: string
+  partnerId?: string
+  sessionId?: string
   title?: string
   createdAt?: number
   messages: readonly Array<{
@@ -155,31 +156,27 @@ export type SeedChatHistoryInput = {
     artifacts?: ChatMessage['artifacts']
     error?: boolean
   }>
-  memory?: ChatConversationMemory
 }
 
 export type CreateAiRunContextInput = {
   bindWorkspace?: boolean
+  partnerId?: string
   sessionId?: string
+  runId?: string
   userInput?: string
   selectedReferences?: SelectedReference[]
   runtimeSettingsOverride?: Partial<AiRuntimeSettings>
   modelName?: string
-  visionModel?: {
-    configId: string
-    modelName: string
-  }
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   checkCancelledOverride?: () => void
   humanRuntimeOverrides?: {
-    hardActionLimit?: number
     graphRecursionLimit?: number
-    toolLimitWarningRatio?: number
     modelContextWindowTokens?: number
     terminalEnvironment?: Record<string, string>
   }
   llmScript?: LlmScript
   structuredOutputScript?: StructuredOutputScript
+  chatToolsWrapper?: AiRunDeps['chatToolsWrapper']
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
 }
@@ -196,7 +193,8 @@ export type BackendTestRuntime = {
   workspaceSourceService: WorkspaceSourceService
   workspaceKnowledgePrepareService: WorkspaceKnowledgePrepareService
   documentsStore: DocumentsStore
-  chatStore: ChatStore
+  chatStore: PartnerStore
+  partnerStore: PartnerStore
   docxApplyStore: DocxApplyStore
   llmStore: LlmConfigStore
   embeddingService: EmbeddingService
@@ -229,7 +227,7 @@ export type TestCaseDefinition<TResult> = {
   fixtures: readonly string[]
   runMode: TestRunMode
   runtimeModelName?: string | null
-  requiresVisionModel?: boolean
   execute: (runtime: BackendTestRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: BackendTestRuntime) => Promise<void>
+  messageLogAnnotationPartnerIds?: (runtime: BackendTestRuntime) => readonly string[]
 }

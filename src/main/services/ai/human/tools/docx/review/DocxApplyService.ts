@@ -29,7 +29,7 @@ export class DocxApplyService {
     this.editTracker = new RunDocxEditTracker(docxApplyStore)
   }
 
-  public beginRun(input: { runId: string; sessionId: string; inputText: string }): void {
+  public beginRun(input: { runId: string; partnerId: string; inputText: string }): void {
     this.editTracker.beginRun(input)
   }
 
@@ -49,7 +49,7 @@ export class DocxApplyService {
 
   public async applyRunEdits(input: {
     runId: string
-    workspaceRootPath: string
+    partnerId: string
   }): Promise<DocxApplyRecord[]> {
     const records = await this.editTracker.applyRunEdits(input)
     await Promise.all(records.map((record) => this.saveAiFileChangeRecord(record)))

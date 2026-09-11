@@ -84,20 +84,16 @@ describe('settings workspace e2e', () => {
           await runtime.assertThat(
             result.failedItems.length === 1 &&
               result.failedItems[0]?.name === 'broken.docx' &&
-              result.failedItems[0]?.lastError.length > 0,
+              result.failedItems[0]?.lastError.length > 0 &&
+              result.failedItems[0]?.relativePath === 'docs/broken.docx' &&
+              !result.treeText.includes('docs/broken.docx'),
             {
               name: 'file-level-failure-state-is-preserved',
               message:
-                '文件索引失败后，应在文件级状态里保留失败标记和错误信息，对齐 SET-WORKSPACE-008-AC2。',
+                '文件索引失败后，失败状态和错误信息保留在文件级记录中；目录树不展示文件相对路径副标题，对齐 SET-WORKSPACE-008-AC2 与文件项展示规则。',
               data: result
             }
           )
-
-          await runtime.assertThat(!result.treeText.includes('/'), {
-            name: 'workspace-tree-removes-file-subtitle-path',
-            message: '目录树文件项不应再展示文件名下方的路径辅助字项，对齐 SET-WORKSPACE-008-AC2。',
-            data: result
-          })
         }
       })
     },

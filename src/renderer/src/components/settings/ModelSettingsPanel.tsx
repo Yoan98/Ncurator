@@ -1,21 +1,33 @@
 ﻿import React, { useEffect, useMemo, useState } from 'react'
-import { AutoComplete, Button, Form, Input, Modal, Popconfirm, Space, Table, message } from 'antd'
+import {
+  Button,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Radio,
+  Select,
+  Space,
+  Table,
+  Tag,
+  message
+} from 'antd'
 import type { TableColumnsType } from 'antd'
-import { HiArrowPath, HiArrowTopRightOnSquare, HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
-import type { LLMConfig, LlmRemoteModel } from '../../../../shared/types'
-import { FREE_AI_KEYS_URL } from '../../../../shared/constants'
+import { HiPencil, HiPlus, HiTrash } from 'react-icons/hi2'
+import type { LLMConfig, LlmProviderId } from '../../../../shared/types'
 import { inferLlmProviderKind } from '../../../../shared/llmProvider'
-import { PROVIDER_OPTIONS } from './constants'
+import {
+  LLM_PRESET_PROVIDER_OPTIONS,
+  getPresetProvider,
+  getProviderRegistryEntry,
+  resolvePresetModeProvider
+} from '../../../../shared/llmPresets'
+import { getProviderLogo } from './constants'
 import type { LlmConfigFormValues } from './types'
 import { settingsSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 
-type ModelListState = {
-  loading: boolean
-  items: LlmRemoteModel[]
-  error?: string
-  loadedAt?: number
-}
+type ModelMode = 'preset' | 'custom'
 
 const maskApiKey = (apiKey: string): string => {
   const normalized = apiKey.trim()
@@ -24,24 +36,14 @@ const maskApiKey = (apiKey: string): string => {
   return `****${tail}`
 }
 
-const getProviderLabel = (config: Pick<LLMConfig, 'providerKind' | 'base_url'>): string => {
-  const preset = PROVIDER_OPTIONS.find((item) => item.value === config.base_url)
-  if (preset) return preset.label
-  if (config.providerKind === 'openai') return 'OpenAI'
-  if (config.providerKind === 'deepseek') return 'DeepSeek'
-  return 'OpenAI Compatible'
-}
-
-const getConfigName = (config: LLMConfig): string => config.name?.trim() || getProviderLabel(config)
-
 const ModelSettingsPanel: React.FC = () => {
   const [configs, setConfigs] = useState<LLMConfig[]>([])
-  const [modelListByConfigId, setModelListByConfigId] = useState<Record<string, ModelListState>>({})
   const [loading, setLoading] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [modelListConfigId, setModelListConfigId] = useState<string | null>(null)
   const [editingConfig, setEditingConfig] = useState<LLMConfig | null>(null)
+  const [mode, setMode] = useState<ModelMode>('preset')
+  const [selectedProviderId, setSelectedProviderId] = useState<LlmProviderId | null>(null)
   const [form] = Form.useForm<LlmConfigFormValues>()
 
   const loadConfigs = async (): Promise<void> => {
@@ -63,9 +65,18 @@ const ModelSettingsPanel: React.FC = () => {
     void loadConfigs()
   }, [])
 
-  const modelListConfig = useMemo(
-    () => configs.find((config) => config.id === modelListConfigId) || null,
-    [configs, modelListConfigId]
+  const configuredPresetProviderIds = useMemo(() => {
+    const ids = new Set<LlmProviderId>()
+    for (const config of configs) {
+      const preset = resolvePresetModeProvider(config)
+      if (preset) ids.add(preset.providerId)
+    }
+    return ids
+  }, [configs])
+
+  const editingPresetProviderId = useMemo(
+    () => (editingConfig ? resolvePresetModeProvider(editingConfig)?.providerId || null : null),
+    [editingConfig]
   )
 
   const applyProviderFromBaseUrl = (baseUrl: string): void => {
@@ -74,6 +85,8 @@ const ModelSettingsPanel: React.FC = () => {
 
   const handleAdd = (): void => {
     setEditingConfig(null)
+    setMode('preset')
+    setSelectedProviderId(null)
     form.resetFields()
     form.setFieldValue('providerKind', 'openai-compatible')
     setIsModalOpen(true)
@@ -81,42 +94,30 @@ const ModelSettingsPanel: React.FC = () => {
 
   const handleEdit = (record: LLMConfig): void => {
     setEditingConfig(record)
-    form.setFieldsValue(record)
+    const preset = resolvePresetModeProvider(record)
+    if (preset) {
+      setMode('preset')
+      setSelectedProviderId(preset.providerId)
+      form.resetFields()
+      const registry = getProviderRegistryEntry(preset.providerId)
+      form.setFieldsValue({
+        api_key: record.api_key,
+        providerKind: registry?.providerKind || 'openai-compatible'
+      })
+    } else {
+      setMode('custom')
+      setSelectedProviderId(null)
+      form.setFieldsValue(record)
+    }
     setIsModalOpen(true)
   }
 
-  const fetchModels = async (config: LLMConfig): Promise<void> => {
-    setModelListByConfigId((previous) => ({
-      ...previous,
-      [config.id]: {
-        items: previous[config.id]?.items || [],
-        loading: true
-      }
-    }))
-    const response = await window.api.llmConfigModelList(config.id)
-    setModelListByConfigId((previous) => ({
-      ...previous,
-      [config.id]: {
-        loading: false,
-        items: response.success ? response.items : [],
-        error: response.success
-          ? undefined
-          : normalizeUserFacingError(response.error, '获取模型列表失败'),
-        loadedAt: Date.now()
-      }
-    }))
-    if (!response.success) {
-      message.error(normalizeUserFacingError(response.error, '获取模型列表失败'))
-      return
-    }
+  const handleModeChange = (value: string | number): void => {
+    setMode(value === 'custom' ? 'custom' : 'preset')
   }
 
-  const handleOpenModelList = (config: LLMConfig): void => {
-    setModelListConfigId(config.id)
-    const state = modelListByConfigId[config.id]
-    if (!state?.loadedAt && !state?.loading) {
-      void fetchModels(config)
-    }
+  const handleSelectProvider = (providerId: LlmProviderId): void => {
+    setSelectedProviderId(providerId)
   }
 
   const handleDelete = async (id: string): Promise<void> => {
@@ -129,11 +130,6 @@ const ModelSettingsPanel: React.FC = () => {
         return
       }
       setActionError(null)
-      setModelListByConfigId((previous) => {
-        const next = { ...previous }
-        delete next[id]
-        return next
-      })
       message.success('配置已删除')
       await loadConfigs()
     } catch (error) {
@@ -145,13 +141,36 @@ const ModelSettingsPanel: React.FC = () => {
 
   const handleSave = async (): Promise<void> => {
     try {
+      if (mode === 'preset' && !selectedProviderId) {
+        message.warning('请选择服务商')
+        return
+      }
       const values = await form.validateFields()
-      const nextConfig: LLMConfig = {
-        id: editingConfig ? editingConfig.id : crypto.randomUUID(),
-        name: values.name.trim(),
-        providerKind: values.providerKind || inferLlmProviderKind(values.base_url),
-        base_url: values.base_url,
-        api_key: values.api_key
+      const id = editingConfig ? editingConfig.id : crypto.randomUUID()
+
+      let nextConfig: LLMConfig
+      if (mode === 'preset') {
+        const preset = getPresetProvider(selectedProviderId!)
+        const registry = getProviderRegistryEntry(selectedProviderId!)
+        if (!preset || !registry) {
+          message.error('服务商配置不完整')
+          return
+        }
+        nextConfig = {
+          id,
+          name: preset.label,
+          providerKind: registry.providerKind,
+          base_url: registry.defaultBaseUrl,
+          api_key: values.api_key
+        }
+      } else {
+        nextConfig = {
+          id,
+          name: values.name.trim(),
+          providerKind: values.providerKind || inferLlmProviderKind(values.base_url),
+          base_url: values.base_url,
+          api_key: values.api_key
+        }
       }
 
       const response = await window.api.llmConfigSave(nextConfig)
@@ -165,11 +184,6 @@ const ModelSettingsPanel: React.FC = () => {
         return
       }
       setActionError(null)
-      setModelListByConfigId((previous) => {
-        const next = { ...previous }
-        delete next[nextConfig.id]
-        return next
-      })
       message.success(editingConfig ? '配置已更新' : '配置已添加')
       setIsModalOpen(false)
       await loadConfigs()
@@ -180,22 +194,39 @@ const ModelSettingsPanel: React.FC = () => {
 
   const columns: TableColumnsType<LLMConfig> = [
     {
-      title: '模型服务',
-      key: 'model_service',
+      title: '服务商',
+      key: 'provider',
       width: 360,
-      render: (_value, record) => (
-        <div className="min-w-0">
-          <div className="font-medium text-[#37352F]">{getConfigName(record)}</div>
-          <div className="text-[12px] text-[#9B9A97]">{getProviderLabel(record)}</div>
-          <div className="truncate text-[12px] text-[#787774]">{record.base_url}</div>
-        </div>
-      )
+      render: (_value, record) => {
+        const preset = resolvePresetModeProvider(record)
+        return (
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center">
+              {preset ? getProviderLogo(preset.providerId) : getProviderLogo('custom')}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="truncate font-medium text-[#37352F]">{record.name}</span>
+                {!preset ? (
+                  <Tag
+                    className="!m-0 !border-[#EEEEEC] !bg-[#F4F4F2] !text-[11px] !text-[#787774]"
+                    data-testid={settingsSelectors.modelCustomTag}
+                  >
+                    自定义
+                  </Tag>
+                ) : null}
+              </div>
+              <div className="truncate text-[12px] text-[#9B9A97]">{record.base_url}</div>
+            </div>
+          </div>
+        )
+      }
     },
     {
       title: 'API Key',
       dataIndex: 'api_key',
       key: 'api_key',
-      width: 120,
+      width: 140,
       render: (text: string) => (
         <span className="rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-2 py-1 text-[12px] text-[#37352F]">
           {maskApiKey(text)}
@@ -203,36 +234,9 @@ const ModelSettingsPanel: React.FC = () => {
       )
     },
     {
-      title: '模型列表',
-      key: 'models',
-      width: 180,
-      render: (_value, record) => {
-        const state = modelListByConfigId[record.id]
-        const label = state?.loading
-          ? '获取中'
-          : state?.error
-            ? '获取失败'
-            : state?.loadedAt !== undefined
-              ? `${state.items.length} 个模型`
-              : '查看'
-        return (
-          <Button
-            type="link"
-            size="small"
-            loading={state?.loading}
-            onClick={() => handleOpenModelList(record)}
-            className="!h-auto !px-0 !text-[#37352F]"
-            data-testid={`${settingsSelectors.modelListButtonPrefix}-${record.id}`}
-          >
-            {label}
-          </Button>
-        )
-      }
-    },
-    {
       title: '操作',
       key: 'action',
-      width: 160,
+      width: 140,
       render: (_value, record) => (
         <Space size="small">
           <Button
@@ -276,15 +280,6 @@ const ModelSettingsPanel: React.FC = () => {
             共 {configs.length} 个配置
           </span>
           <Button
-            icon={<HiArrowTopRightOnSquare className="h-4 w-4" />}
-            onClick={() => void window.api.openExternal(FREE_AI_KEYS_URL)}
-            aria-label="免费获取 AI Key"
-            className="!border-[#E0DFDC] !bg-white !text-[#37352F] shadow-none hover:!border-[#D3D1CC] hover:!bg-[#F7F7F5]"
-            data-testid={settingsSelectors.modelFreeKeyButton}
-          >
-            免费获取 AI Key
-          </Button>
-          <Button
             type="primary"
             icon={<HiPlus className="h-4 w-4" />}
             onClick={handleAdd}
@@ -319,21 +314,13 @@ const ModelSettingsPanel: React.FC = () => {
         maskClosable={false}
         onOk={() => void handleSave()}
         onCancel={() => setIsModalOpen(false)}
-        width={520}
+        width={560}
         data-testid={settingsSelectors.modelModal}
         okButtonProps={{ 'data-testid': settingsSelectors.modelSaveButton }}
         cancelButtonProps={{ 'data-testid': settingsSelectors.modelCancelButton }}
         className="[&_.ant-modal-content]:!rounded-[8px]"
       >
-        <Form form={form} layout="vertical" className="pt-4">
-          <Form.Item
-            name="name"
-            label="配置名称"
-            rules={[{ required: true, message: '请输入配置名称' }]}
-          >
-            <Input placeholder="例如：公司 OpenAI" data-testid={settingsSelectors.modelNameInput} />
-          </Form.Item>
-
+        <Form form={form} layout="vertical">
           <Form.Item
             name="providerKind"
             hidden
@@ -342,108 +329,90 @@ const ModelSettingsPanel: React.FC = () => {
             <Input data-testid={settingsSelectors.modelProviderInput} />
           </Form.Item>
 
-          <Form.Item
-            name="base_url"
-            label="模型服务地址"
-            rules={[{ required: true, message: '请输入模型服务地址' }]}
-          >
-            <AutoComplete
-              defaultActiveFirstOption
-              placeholder="填写模型服务提供的 API Base URL"
-              allowClear
-              data-testid={settingsSelectors.modelBaseUrlInput}
-              options={PROVIDER_OPTIONS.map((provider) => ({
-                value: provider.value,
-                label: (
-                  <div className="flex items-center gap-2">
-                    <div className="flex h-5 w-5 items-center justify-center">{provider.icon}</div>
-                    <span className="font-medium text-[#37352F]">{provider.label}</span>
-                  </div>
-                )
-              }))}
-              onSelect={(value) => applyProviderFromBaseUrl(String(value || ''))}
-              onBlur={() => {
-                const baseUrl = String(form.getFieldValue('base_url') || '')
-                if (baseUrl) applyProviderFromBaseUrl(baseUrl)
-              }}
-              filterOption={(inputValue, option) => {
-                const provider = PROVIDER_OPTIONS.find((item) => item.value === option?.value)
-                const normalizedInput = inputValue.toUpperCase()
-                const matchValue = option?.value?.toString().toUpperCase().includes(normalizedInput)
-                const matchLabel = provider?.label.toUpperCase().includes(normalizedInput) || false
-                return matchValue || matchLabel
-              }}
-            />
+          <Form.Item label="类型:" className="!mb-0">
+            <Radio.Group
+              value={mode}
+              onChange={(event) => handleModeChange(event.target.value)}
+              data-testid={settingsSelectors.modelTypeRadio}
+            >
+              <Radio value="preset" data-testid={settingsSelectors.modelTypeRecommend}>
+                推荐
+              </Radio>
+              <Radio value="custom" data-testid={settingsSelectors.modelTypeCustom}>
+                自定义
+              </Radio>
+            </Radio.Group>
           </Form.Item>
+
+          {mode === 'preset' ? (
+            <Form.Item label="选择服务商:" className="!mb-0 !mt-4">
+              <Select
+                placeholder="选择服务商"
+                value={selectedProviderId || undefined}
+                onChange={(value: LlmProviderId) => handleSelectProvider(value)}
+                data-testid={settingsSelectors.modelPresetProviderSelect}
+                options={LLM_PRESET_PROVIDER_OPTIONS.map((provider) => {
+                  const configured = configuredPresetProviderIds.has(provider.providerId)
+                  const disabled = configured && editingPresetProviderId !== provider.providerId
+                  return {
+                    value: provider.providerId,
+                    disabled,
+                    label: (
+                      <span className="inline-flex items-center gap-2">
+                        <span className="flex h-4 w-4 shrink-0 items-center justify-center">
+                          {getProviderLogo(provider.providerId)}
+                        </span>
+                        <span>{provider.label}</span>
+                        {configured ? (
+                          <span className="text-[11px] text-[#9B9A97]">已配置</span>
+                        ) : null}
+                      </span>
+                    )
+                  }
+                })}
+              />
+            </Form.Item>
+          ) : (
+            <>
+              <Form.Item
+                name="name"
+                label="名称:"
+                rules={[{ required: true, message: '请输入名称' }]}
+                className="!mb-0 !mt-4"
+              >
+                <Input
+                  placeholder="例如：公司 OpenAI"
+                  data-testid={settingsSelectors.modelNameInput}
+                />
+              </Form.Item>
+              <Form.Item
+                name="base_url"
+                label="模型服务地址:"
+                rules={[{ required: true, message: '请输入模型服务地址' }]}
+                className="!mb-0 !mt-4"
+              >
+                <Input
+                  placeholder="填写模型服务提供的 API Base URL"
+                  allowClear
+                  data-testid={settingsSelectors.modelBaseUrlInput}
+                  onBlur={() => {
+                    const baseUrl = String(form.getFieldValue('base_url') || '')
+                    if (baseUrl) applyProviderFromBaseUrl(baseUrl)
+                  }}
+                />
+              </Form.Item>
+            </>
+          )}
 
           <Form.Item
             name="api_key"
-            label="API Key"
+            label="API Key:"
             rules={[{ required: true, message: '请输入 API Key' }]}
+            className="!mb-0 !mt-4"
           >
             <Input.Password placeholder="sk-..." data-testid={settingsSelectors.modelApiKeyInput} />
           </Form.Item>
         </Form>
-      </Modal>
-
-      <Modal
-        title={modelListConfig ? `${getConfigName(modelListConfig)} 可用模型` : '可用模型'}
-        open={Boolean(modelListConfig)}
-        maskClosable={false}
-        footer={
-          modelListConfig ? (
-            <Button
-              icon={<HiArrowPath />}
-              loading={modelListByConfigId[modelListConfig.id]?.loading}
-              onClick={() => void fetchModels(modelListConfig)}
-              data-testid={settingsSelectors.modelListRetryButton}
-            >
-              重新获取
-            </Button>
-          ) : null
-        }
-        onCancel={() => setModelListConfigId(null)}
-        width={560}
-        className="[&_.ant-modal-content]:!rounded-[8px]"
-        data-testid={settingsSelectors.modelListModal}
-      >
-        {modelListConfig ? (
-          <div className="flex flex-col gap-3 pt-2">
-            <div className="rounded-[8px] border border-[#EFEFED] bg-[#F7F7F5] px-3 py-2 text-[12px] text-[#787774]">
-              <div className="font-medium text-[#37352F]">{getConfigName(modelListConfig)}</div>
-              <div className="mt-1">{modelListConfig.base_url}</div>
-            </div>
-            {modelListByConfigId[modelListConfig.id]?.error ? (
-              <div className="rounded-[8px] border border-[#E7CAC6] bg-[#F8EBE9] px-3 py-2 text-[12px] text-[#B3261E]">
-                {modelListByConfigId[modelListConfig.id]?.error}
-              </div>
-            ) : null}
-            <div className="text-[12px] text-[#787774]">
-              共 {modelListByConfigId[modelListConfig.id]?.items.length || 0} 个模型
-            </div>
-            <div className="max-h-[320px] overflow-auto rounded-[8px] border border-[#EEEEEC]">
-              {(modelListByConfigId[modelListConfig.id]?.items || []).map((model) => (
-                <div
-                  key={model.id}
-                  className="flex items-center justify-between gap-3 border-b border-[#EEEEEC] px-3 py-2 last:border-b-0"
-                >
-                  <span className="min-w-0 truncate text-[13px] text-[#37352F]">
-                    {model.label || model.id}
-                  </span>
-                </div>
-              ))}
-              {modelListByConfigId[modelListConfig.id]?.loading ? (
-                <div className="px-3 py-8 text-center text-[12px] text-[#9B9A97]">获取中...</div>
-              ) : null}
-              {!modelListByConfigId[modelListConfig.id]?.loading &&
-              (modelListByConfigId[modelListConfig.id]?.items.length || 0) === 0 ? (
-                <div className="px-3 py-8 text-center text-[12px] text-[#9B9A97]">
-                  暂无可展示模型
-                </div>
-              ) : null}
-            </div>
-          </div>
-        ) : null}
       </Modal>
     </div>
   )

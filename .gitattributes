@@ -1,0 +1,3 @@
+# Keep published SQLite migration hashes stable across platforms.
+src/main/services/storage/sqlite/migrations/*.ts text eol=lf
+src/main/services/storage/sqlite/migrations/released-migrations.json text eol=lf

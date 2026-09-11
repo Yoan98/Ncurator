@@ -27,7 +27,7 @@ class MemoryAiFileChangeStore {
   ): Promise<ListAiFileChangeRecordsResponse> {
     const items = Array.from(this.records.values()).filter(
       (record) =>
-        (!filters?.sessionId || record.sessionId === filters.sessionId) &&
+        (!filters?.partnerId || record.partnerId === filters.partnerId) &&
         (!filters?.runId || record.runId === filters.runId) &&
         (!filters?.status || record.status === filters.status)
     )
@@ -44,7 +44,7 @@ class MemoryAiFileChangeStore {
 
 const createRecord = (input: Partial<AiFileChangeRecord>): AiFileChangeRecord => ({
   id: input.id || 'change-1',
-  sessionId: input.sessionId || 'session-1',
+  partnerId: input.partnerId || 'partner-1',
   runId: input.runId || 'run-1',
   status: input.status || 'applied',
   capability: input.capability || 'terminal_exec',
@@ -89,14 +89,57 @@ describe('ai file change service', () => {
     }
   })
 
+  it('skips terminal tracking when effective cwd is outside workspace roots', async () => {
+    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-outside-'))
+    const workspace = tempDir
+    const targetPath = path.join(workspace, 'ignored.txt')
+    try {
+      await service.beginTerminalCommandTracking({
+        commandId: 'outside-command',
+        runId: 'outside-run',
+        partnerId: 'partner-1',
+        cwd: outside,
+        workspaceRoots: [workspace],
+        command: `printf x > "${targetPath}"`
+      })
+      await fs.writeFile(targetPath, 'should not be tracked from outside cwd')
+
+      const completed = await service.finishTerminalCommandTracking('outside-command')
+      expect(completed).toEqual([])
+      expect((await service.listRecords({ runId: 'outside-run' })).items).toEqual([])
+    } finally {
+      await fs.rm(outside, { recursive: true, force: true })
+    }
+  })
+
+  it('tracks changes when effective cwd is inside a workspace root after leading cd', async () => {
+    const targetPath = path.join(tempDir, 'from-cd.txt')
+    await service.beginTerminalCommandTracking({
+      commandId: 'cd-command',
+      runId: 'cd-run',
+      partnerId: 'partner-1',
+      cwd: tempDir,
+      workspaceRoots: [tempDir],
+      command: `cd "${tempDir}" && printf 'ok\\n' > from-cd.txt`
+    })
+    await fs.writeFile(targetPath, 'ok\n')
+
+    const completed = await service.finishTerminalCommandTracking('cd-command')
+    expect(completed).toHaveLength(1)
+    expect(completed[0]?.operation).toBe('created')
+    expect(completed[0]?.source).toBe('terminal_tool')
+    expect(completed[0]?.path).toBe(targetPath)
+  })
+
   it('captures terminal command changes and materializes text diff before the run result is shown', async () => {
     const targetPath = path.join(tempDir, 'notes.txt')
     await fs.writeFile(targetPath, 'line 1\nline 2\nline 3\n')
     await service.beginTerminalCommandTracking({
       commandId: 'scan-command',
       runId: 'scan-run',
-      sessionId: 'session-1',
-      workspaceRootPath: tempDir,
+      partnerId: 'partner-1',
+      cwd: tempDir,
+      workspaceRoots: [tempDir],
       command: 'replace notes.txt'
     })
     await fs.writeFile(targetPath, 'line 1\nchanged\nline 3\n')
@@ -213,8 +256,9 @@ describe('ai file change service', () => {
     await service.beginTerminalCommandTracking({
       commandId: 'operations-command',
       runId: 'operations-run',
-      sessionId: 'session-1',
-      workspaceRootPath: tempDir,
+      partnerId: 'partner-1',
+      cwd: tempDir,
+      workspaceRoots: [tempDir],
       command: 'organize files'
     })
     await fs.rm(deletedPath)
@@ -241,15 +285,17 @@ describe('ai file change service', () => {
       service.beginTerminalCommandTracking({
         commandId: 'command-a',
         runId: 'run-a',
-        sessionId: 'session-a',
-        workspaceRootPath: tempDir,
+        partnerId: 'partner-a',
+        cwd: tempDir,
+        workspaceRoots: [tempDir],
         command: 'write overlap.txt'
       }),
       service.beginTerminalCommandTracking({
         commandId: 'command-b',
         runId: 'run-b',
-        sessionId: 'session-b',
-        workspaceRootPath: tempDir,
+        partnerId: 'partner-b',
+        cwd: tempDir,
+        workspaceRoots: [tempDir],
         command: 'write overlap.txt'
       })
     ])
@@ -265,10 +311,10 @@ describe('ai file change service', () => {
     expect(changesA[0]?.runId).toBe('run-a')
     expect(changesB[0]?.runId).toBe('run-b')
     expect(
-      (await service.listRecords({ sessionId: 'session-a', runId: 'run-a' })).items
+      (await service.listRecords({ partnerId: 'partner-a', runId: 'run-a' })).items
     ).toHaveLength(1)
     expect(
-      (await service.listRecords({ sessionId: 'session-b', runId: 'run-b' })).items
+      (await service.listRecords({ partnerId: 'partner-b', runId: 'run-b' })).items
     ).toHaveLength(1)
   })
 

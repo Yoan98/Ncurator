@@ -16,7 +16,8 @@ import {
   getAssistantMixedStatus as getMixedStatus,
   getAssistantToolIconKind as getToolIconKind,
   getAssistantToolSummaryText as getToolSummaryText,
-  getAssistantToolUiKind as getToolUiKind
+  getAssistantToolUiKind as getToolUiKind,
+  resolveItemIconKind
 } from '../../../../shared/assistantExecutionSummary'
 import type {
   AssistantProcessGroup,
@@ -75,6 +76,11 @@ const text = (
   text: value,
   emphasis,
   iconKind
+})
+
+const param = (value: string): AssistantRichTextSegment => ({
+  text: value,
+  param: true
 })
 
 const sentence = (...segments: AssistantRichTextSegment[]): AssistantRichTextSegment[] => segments
@@ -153,15 +159,7 @@ const readWebUrlLabel = (input?: IpcJsonObject): string => {
 const readInstructionLabel = (input?: IpcJsonObject): string => {
   if (!input) return '当前页面'
   const instruction = readStringValue(input, 'instruction')
-  return instruction ? truncateMiddle(instruction, 96) : '当前页面'
-}
-
-const readWaitDurationLabel = (input?: IpcJsonObject): string => {
-  if (!input) return '一段时间'
-  const seconds = (input as Record<string, IpcJsonValue>).seconds
-  if (typeof seconds === 'number' && Number.isFinite(seconds)) return `${String(seconds)} 秒`
-  if (typeof seconds === 'string' && seconds.trim()) return `${seconds.trim()} 秒`
-  return '一段时间'
+  return instruction ? truncateMiddle(instruction.replace(/：/gu, ' '), 96) : '当前页面'
 }
 
 const readDocxRangeLabel = (input?: IpcJsonObject): string => {
@@ -170,13 +168,13 @@ const readDocxRangeLabel = (input?: IpcJsonObject): string => {
   if (!candidate || typeof candidate !== 'object' || Array.isArray(candidate)) return '内容'
   const range = candidate as Record<string, IpcJsonValue>
   if (
-    range.type === 'block_index' &&
-    typeof range.fromBlockIndex === 'number' &&
-    typeof range.toBlockIndex === 'number'
+    range.type === 'node_index' &&
+    typeof range.fromNodeIndex === 'number' &&
+    typeof range.toNodeIndex === 'number'
   ) {
-    return `${String(range.fromBlockIndex)}-${String(range.toBlockIndex)} 区间`
+    return `${String(range.fromNodeIndex)}-${String(range.toNodeIndex)} 区间`
   }
-  if (range.type === 'block_ids') return '指定区间'
+  if (range.type === 'node_ids') return '指定节点'
   return '内容'
 }
 
@@ -191,79 +189,236 @@ const getDisplaySkillKey = (display: AssistantProcessDisplay): AssistantProcessS
 
 const getDisplayIconKind = (display: AssistantProcessDisplay): AssistantProcessIconKind => {
   if (display.kind === 'thinking') return 'default'
-  if (display.kind === 'learning') return 'learning'
   if (display.kind === 'retry') return 'retry'
   if (display.kind === 'compaction') return 'compaction'
-  if (display.kind === 'finalizing') return 'finalizing'
+  if (display.kind === 'tool') {
+    return resolveItemIconKind({
+      toolName: normalizeToolName(display.toolName),
+      input: display.input
+    })
+  }
   return getToolIconKind(getDisplaySkillKey(display))
 }
 
-type ToolItemRenderer = (input?: IpcJsonObject) => AssistantRichTextSegment[]
+const readLearnSkillNames = (input?: IpcJsonObject): string => {
+  if (!input) return '新能力'
+  const raw = (input as Record<string, IpcJsonValue>).skillIds
+  if (!Array.isArray(raw)) return '新能力'
+  const names = raw
+    .filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+    .map((skillId) => getSkillDisplayName(skillId as RuntimeSkillId))
+  return names.length > 0 ? names.join('、') : '新能力'
+}
+
+type ToolItemCopy = {
+  headerShort: string
+  detail: AssistantRichTextSegment[]
+}
+
+type ToolItemRenderer = (
+  input: IpcJsonObject | undefined,
+  status: AssistantProcessStatus
+) => ToolItemCopy
+
+const toolCopy = (headerShort: string, detail: AssistantRichTextSegment[]): ToolItemCopy => ({
+  headerShort,
+  detail
+})
 
 const TOOL_ITEM_RENDERERS = {
-  terminal_run: (input) => sentence(text('执行命令 '), text(readCommandLabel(input))),
+  terminal_run: (input) =>
+    toolCopy('执行命令', sentence(text('执行命令 '), param(readCommandLabel(input)))),
   terminal_read: (input) =>
-    sentence(text('读取终端 '), text(readStringValue(input || {}, 'terminalId') || '运行结果')),
-  terminal_stop: (input) =>
-    sentence(text('停止终端 '), text(readStringValue(input || {}, 'terminalId') || '任务')),
-  text_file_read: (input) => sentence(text('读取文件 '), text(readToolFileLabel(input))),
-  text_file_edit: (input) => sentence(text('编辑文件 '), text(readToolFileLabel(input))),
-  kb_search: (input) => sentence(text('在知识库中搜索 '), text(readToolQueryLabel(input))),
-  kb_list_documents: () => sentence(text('查看工作空间文档列表')),
-  docx_read_outline: (input) =>
-    sentence(text('查看文档 '), text(readToolFileLabel(input)), text(' 的结构')),
-  docx_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
-  docx_read_blocks: (input) =>
-    sentence(
-      text('读取文档 '),
-      text(readToolFileLabel(input)),
-      text(` ${readDocxRangeLabel(input)}`)
+    toolCopy(
+      '读取终端',
+      sentence(text('读取终端 '), param(readStringValue(input || {}, 'terminalId') || '运行结果'))
     ),
-  docx_read_visuals: (input) => sentence(text('读取文档视觉内容 '), text(readToolFileLabel(input))),
-  docx_edit: (input) => sentence(text('编辑文档 '), text(readToolFileLabel(input))),
-  pdf_inspect: (input) => sentence(text('查看 PDF 信息 '), text(readToolFileLabel(input))),
-  pdf_search: (input) => sentence(text('在文档中搜索 '), text(readToolQueryLabel(input))),
-  pdf_read_pages: (input) => sentence(text('读取 PDF 页面 '), text(readToolFileLabel(input))),
-  pdf_read_visuals: (input) =>
-    sentence(text('读取 PDF 页面视觉内容 '), text(readToolFileLabel(input))),
-  ppt_read_outline: (input) => sentence(text('阅读 PPT 结构 '), text(readToolFileLabel(input))),
-  ppt_read_slides: (input) => sentence(text('读取 PPT 页面 '), text(readToolFileLabel(input))),
-  ppt_search: (input) => sentence(text('搜索 PPT '), text(readToolQueryLabel(input))),
-  ppt_read_visuals: (input) =>
-    sentence(text('读取 PPT 页面视觉内容 '), text(readToolFileLabel(input))),
-  ppt_edit: (input) => sentence(text('编辑 PPT '), text(readToolFileLabel(input))),
-  excel_read_outline: (input) => sentence(text('查看 Excel 结构 '), text(readToolFileLabel(input))),
-  excel_search: (input) => sentence(text('搜索 Excel '), text(readToolQueryLabel(input))),
-  excel_read_cells: (input) => sentence(text('读取 Excel 单元格 '), text(readToolFileLabel(input))),
-  excel_edit: (input) => sentence(text('编辑 Excel '), text(readToolFileLabel(input))),
-  web_search: (input) => sentence(text('搜索网页 '), text(readToolQueryLabel(input))),
-  web_crawl: (input) => sentence(text('读取网页 '), text(readWebUrlLabel(input))),
+  text_file_read: (input) =>
+    toolCopy('读取文件', sentence(text('读取文件 '), param(readToolFileLabel(input)))),
+  text_file_search: (input) =>
+    toolCopy('搜索文件', sentence(text('搜索文件 '), param(readToolQueryLabel(input)))),
+  text_file_edit: (input) =>
+    toolCopy('编辑文件', sentence(text('编辑文件 '), param(readToolFileLabel(input)))),
+  kb_search: (input) =>
+    toolCopy('在知识库中搜索', sentence(text('在知识库中搜索 '), param(readToolQueryLabel(input)))),
+  kb_list_documents: () =>
+    toolCopy('查看工作空间文档列表', sentence(text('查看工作空间文档列表'))),
+  docx_read_outline: (input) =>
+    toolCopy(
+      '查看 Word 文档结构',
+      sentence(text('查看 Word 文档 '), param(readToolFileLabel(input)), text(' 的结构'))
+    ),
+  docx_search: (input) =>
+    toolCopy(
+      '在 Word 文档中搜索',
+      sentence(text('在 Word 文档中搜索 '), param(readToolQueryLabel(input)))
+    ),
+  docx_read_nodes: (input) =>
+    toolCopy(
+      '读取 Word 文档',
+      sentence(
+        text('读取 Word 文档 '),
+        param(readToolFileLabel(input)),
+        param(` ${readDocxRangeLabel(input)}`)
+      )
+    ),
+  docx_content_edit: (input) =>
+    toolCopy(
+      '编辑 Word 文档内容',
+      sentence(text('编辑 Word 文档内容 '), param(readToolFileLabel(input)))
+    ),
+  docx_format: (input) =>
+    toolCopy(
+      '设置 Word 文档格式',
+      sentence(text('设置 Word 文档格式 '), param(readToolFileLabel(input)))
+    ),
+  docx_table_edit: (input) =>
+    toolCopy(
+      '编辑 Word 文档表格',
+      sentence(text('编辑 Word 文档表格 '), param(readToolFileLabel(input)))
+    ),
+  docx_comments_revisions: (input) =>
+    toolCopy(
+      '处理 Word 文档批注或修订',
+      sentence(text('处理 Word 文档批注或修订 '), param(readToolFileLabel(input)))
+    ),
+  pdf_outline: (input) =>
+    toolCopy('查看 PDF 提纲', sentence(text('查看 PDF 提纲 '), param(readToolFileLabel(input)))),
+  pdf_search: (input) =>
+    toolCopy('在文档中搜索', sentence(text('在文档中搜索 '), param(readToolQueryLabel(input)))),
+  pdf_read_pages: (input) =>
+    toolCopy('读取 PDF 页面', sentence(text('读取 PDF 页面 '), param(readToolFileLabel(input)))),
+  ppt_read_outline: (input) =>
+    toolCopy('阅读 PPT 结构', sentence(text('阅读 PPT 结构 '), param(readToolFileLabel(input)))),
+  ppt_read_slides: (input) =>
+    toolCopy('读取 PPT 页面', sentence(text('读取 PPT 页面 '), param(readToolFileLabel(input)))),
+  ppt_search: (input) =>
+    toolCopy('搜索 PPT', sentence(text('搜索 PPT '), param(readToolQueryLabel(input)))),
+  ppt_edit: (input) =>
+    toolCopy('编辑 PPT', sentence(text('编辑 PPT '), param(readToolFileLabel(input)))),
+  excel_read: (input) => {
+    const type = readStringValue(input || {}, 'type') || ''
+    if (type === 'search') {
+      return toolCopy('搜索 Excel', sentence(text('搜索 Excel '), param(readToolQueryLabel(input))))
+    }
+    if (type === 'style') {
+      return toolCopy(
+        '读取 Excel 样式',
+        sentence(text('读取 Excel 样式 '), param(readToolFileLabel(input)))
+      )
+    }
+    if (type === 'range') {
+      return toolCopy(
+        '读取 Excel 范围',
+        sentence(text('读取 Excel 范围 '), param(readToolFileLabel(input)))
+      )
+    }
+    return toolCopy(
+      '查看 Excel 结构',
+      sentence(text('查看 Excel 结构 '), param(readToolFileLabel(input)))
+    )
+  },
+  excel_edit: (input) =>
+    toolCopy('编辑 Excel', sentence(text('编辑 Excel '), param(readToolFileLabel(input)))),
+  web_search: (input) => {
+    const type = readStringValue(input || {}, 'type')
+    if (type === 'fetch') {
+      const url = readStringValue(input || {}, 'url')
+      return url
+        ? toolCopy('抓取网页', sentence(text('抓取网页 '), param(truncateMiddle(url, 96))))
+        : toolCopy('抓取网页', sentence(text('抓取网页')))
+    }
+    return toolCopy('搜索网页', sentence(text('搜索网页 '), param(readToolQueryLabel(input))))
+  },
   browser_use: (input) => {
     const action = input ? readStringValue(input, 'action') || '' : ''
     const urlLabel = readWebUrlLabel(input)
     const instructionLabel = readInstructionLabel(input)
-    if (action === 'navigate') return sentence(text('打开网页 '), text(urlLabel))
-    if (action === 'observe') return sentence(text('查看页面并'), text(instructionLabel))
-    if (action === 'extract') return sentence(text('从页面中'), text(instructionLabel))
-    if (action === 'act') return sentence(text('在页面上'), text(instructionLabel))
-    return sentence(text('操作浏览器 '), text(instructionLabel))
+    const actionIdLabel = input ? readStringValue(input, 'actionId') || '' : ''
+    const tabIdLabel = input ? readStringValue(input, 'tabId') || '' : ''
+    if (action === 'navigate') {
+      return toolCopy('打开网页', sentence(text('打开网页 '), param(urlLabel)))
+    }
+    if (action === 'list_tabs') {
+      return toolCopy('列出标签', sentence(text('列出浏览器标签')))
+    }
+    if (action === 'observe') {
+      return toolCopy('查看页面', sentence(text('查看页面并'), param(instructionLabel)))
+    }
+    if (action === 'extract') {
+      return toolCopy('提取内容', sentence(text('从页面中'), param(instructionLabel)))
+    }
+    if (action === 'act') {
+      return toolCopy(
+        '操作页面',
+        sentence(text('在页面上执行 '), param(actionIdLabel || instructionLabel || '动作'))
+      )
+    }
+    if (action === 'act_instruction') {
+      return toolCopy(
+        '操作页面',
+        sentence(text('在页面上执行 '), param(instructionLabel || '动作'))
+      )
+    }
+    if (action === 'screenshot') {
+      return toolCopy(
+        '截取页面',
+        sentence(text('截取页面 '), param(tabIdLabel || '当前标签'))
+      )
+    }
+    if (action === 'scroll') {
+      return toolCopy(
+        '滚动页面',
+        sentence(text('滚动页面 '), param(tabIdLabel || '当前标签'))
+      )
+    }
+    return toolCopy('操作浏览器', sentence(text('操作浏览器 '), param(instructionLabel)))
   },
-  wait_time: (input) => sentence(text('等待 '), text(readWaitDurationLabel(input))),
-  wait_for_user_takeover: (input) =>
-    sentence(
-      text('等待用户接管浏览器 '),
-      text(readStringValue(input || {}, 'message') || '完成操作')
-    ),
-  image_analyze: (input) => sentence(text('识别图片 '), text(readToolFileLabel(input))),
-  image_generate: (input) => sentence(text('生成图片 '), text(readToolFileLabel(input)))
+  read_image: () => toolCopy('读取图片', sentence(text('读取图片'))),
+  image_generate: (input) =>
+    toolCopy('生成图片', sentence(text('生成图片 '), param(readToolFileLabel(input)))),
+  learn_skill: (input, status) => {
+    const skillName = readLearnSkillNames(input)
+    if (status === 'running') {
+      return toolCopy(`正在学习 ${skillName}`, sentence(text('正在学习 '), text(skillName)))
+    }
+    if (status === 'completed') {
+      return toolCopy(`已学会 ${skillName}`, sentence(text('已学会 '), text(skillName)))
+    }
+    if (status === 'partial_failed') {
+      return toolCopy(
+        `学习 ${skillName} 有部分失败`,
+        sentence(text('学习 '), text(skillName), text(' 有部分失败'))
+      )
+    }
+    return toolCopy(
+      `学习 ${skillName} 失败了`,
+      sentence(text('学习 '), text(skillName), text(' 失败了'))
+    )
+  },
+  update_plan: () => toolCopy('更新任务计划', sentence(text('更新任务计划')))
 } satisfies Record<RuntimeToolName, ToolItemRenderer>
+
+const getToolItemCopy = (
+  toolName: AssistantToolName,
+  status: AssistantProcessStatus,
+  input?: IpcJsonObject
+): ToolItemCopy =>
+  toolName === 'unnamed'
+    ? toolCopy('处理任务中的一步', sentence(text('处理任务中的一步')))
+    : TOOL_ITEM_RENDERERS[toolName](input, status)
 
 const getToolItemText = (
   toolName: AssistantToolName,
-  _status: AssistantProcessStatus,
+  status: AssistantProcessStatus,
   input?: IpcJsonObject
-): AssistantRichTextSegment[] =>
-  toolName === 'unnamed' ? sentence(text('处理任务中的一步')) : TOOL_ITEM_RENDERERS[toolName](input)
+): AssistantRichTextSegment[] => getToolItemCopy(toolName, status, input).detail
+
+const getToolItemHeaderShort = (
+  toolName: AssistantToolName,
+  status: AssistantProcessStatus,
+  input?: IpcJsonObject
+): string => getToolItemCopy(toolName, status, input).headerShort
 
 const getDisplayGroupText = (
   display: AssistantProcessDisplay,
@@ -271,17 +426,7 @@ const getDisplayGroupText = (
 ): AssistantRichTextSegment[] => {
   if (display.kind === 'thinking') {
     if (status === 'running') return sentence(text('让俺想想'))
-    if (status === 'completed') return sentence(text('俺想好了'))
-    if (status === 'partial_failed') return sentence(text('俺有一部分没想明白'))
-    return sentence(text('俺没想明白'))
-  }
-  if (display.kind === 'learning') {
-    const skillName = getSkillDisplayName(display.skillId)
-    if (status === 'running') return sentence(text('正在学习 '), text(skillName, true))
-    if (status === 'completed') return sentence(text('已学会 '), text(skillName, true))
-    if (status === 'partial_failed')
-      return sentence(text('学习 '), text(skillName, true), text(' 有部分失败'))
-    return sentence(text('学习 '), text(skillName, true), text(' 失败了'))
+    return []
   }
   if (display.kind === 'retry') {
     const progress = `${display.attempt}/${display.maxAttempts}`
@@ -296,11 +441,8 @@ const getDisplayGroupText = (
     if (status === 'partial_failed') return sentence(text('上下文整理有部分失败'))
     return sentence(text('上下文整理失败了'))
   }
-  if (display.kind === 'finalizing') {
-    if (status === 'running') return sentence(text('让俺想想'))
-    if (status === 'completed') return sentence(text('俺想好了'))
-    if (status === 'partial_failed') return sentence(text('俺还有一部分没想明白'))
-    return sentence(text('俺没想明白'))
+  if (display.kind === 'tool') {
+    return getToolItemText(normalizeToolName(display.toolName), status, display.input)
   }
   return getToolSummaryText(getDisplaySkillKey(display), status)
 }
@@ -321,7 +463,8 @@ const getDisplayItemText = (
 export {
   buildAssistantExecutionSummaryText,
   resolveAssistantExecutionIcon,
-  resolveAssistantExecutionStatus
+  resolveAssistantExecutionStatus,
+  resolveItemIconKind
 } from '../../../../shared/assistantExecutionSummary'
 
 const createProcessGroup = (input: {
@@ -372,7 +515,7 @@ const mergeProcessGroup = (
   mapper: (group: AssistantProcessGroup) => AssistantProcessGroup
 ): AssistantProcessGroup[] => groups.map((group) => (group.id === groupId ? mapper(group) : group))
 
-const createDisplayProcessGroup = (input: {
+export const createDisplayProcessGroup = (input: {
   groupId: string
   kind: AssistantProcessGroup['kind']
   display: AssistantProcessDisplay
@@ -392,12 +535,11 @@ const createDisplayProcessGroup = (input: {
     failedText: getDisplayGroupText(input.display, 'failed'),
     partialFailedText: getDisplayGroupText(input.display, 'partial_failed'),
     createdAt: input.createdAt,
-    sourceEventType: input.sourceEventType,
-    skillId: input.display.kind === 'learning' ? input.display.skillId : undefined
+    sourceEventType: input.sourceEventType
   })
 }
 
-const createDisplayProcessItem = (input: {
+export const createDisplayProcessItem = (input: {
   itemId: string
   display: AssistantProcessDisplay
   status: AssistantProcessStatus
@@ -407,6 +549,13 @@ const createDisplayProcessItem = (input: {
 }): AssistantProcessGroupItem => {
   const toolName =
     input.display.kind === 'tool' ? normalizeToolName(input.display.toolName) : undefined
+  const headerShortText = toolName
+    ? getToolItemHeaderShort(
+        toolName,
+        input.status,
+        input.display.kind === 'tool' ? input.display.input : undefined
+      )
+    : input.existing?.headerShortText
   return {
     id: input.itemId,
     status: input.status,
@@ -415,6 +564,7 @@ const createDisplayProcessItem = (input: {
     failedText: input.existing?.failedText || getDisplayItemText(input.display, 'failed'),
     partialFailedText:
       input.existing?.partialFailedText || getDisplayItemText(input.display, 'partial_failed'),
+    headerShortText,
     createdAt: input.existing?.createdAt || input.createdAt,
     sourceEventType: input.sourceEventType,
     toolName,
@@ -490,9 +640,9 @@ export const createAssistantThinkingGroup = (messageId: string): AssistantProces
     iconKind: 'default',
     status: 'running',
     runningText: sentence(text('让俺想想')),
-    completedText: sentence(text('俺想好了')),
-    failedText: sentence(text('俺没想明白')),
-    partialFailedText: sentence(text('俺有一部分没想明白')),
+    completedText: [],
+    failedText: [],
+    partialFailedText: [],
     createdAt: Date.now(),
     sourceEventType: 'thinking'
   })
@@ -517,7 +667,10 @@ export const completeAssistantProcessGroups = (
   status: AssistantProcessStatus = 'completed'
 ): AssistantProcessGroup[] =>
   groups
-    .filter((group) => !(status === 'completed' && group.kind === 'finalizing'))
+    .filter(
+      (group) =>
+        group.kind !== 'finalizing' && group.kind !== 'learning' && group.kind !== 'thinking'
+    )
     .map((group) => {
       if (group.status !== 'running') return group
       const nextItems = group.items.map((item) =>
@@ -548,6 +701,9 @@ export const reduceAssistantProcessThoughts = (
   )
 }
 
+const withoutThinkingGroups = (groups: AssistantProcessGroup[]): AssistantProcessGroup[] =>
+  groups.filter((group) => group.kind !== 'thinking')
+
 const upsertGroupFromDisplayEvent = (
   current: AssistantProcessGroup[],
   input: {
@@ -559,11 +715,12 @@ const upsertGroupFromDisplayEvent = (
     sourceEventType: AssistantProcessGroup['sourceEventType']
   }
 ): AssistantProcessGroup[] => {
-  const currentWithoutLocalThinking = current.filter(
-    (group) =>
-      group.kind !== 'thinking' || (input.kind !== 'retry' && group.sourceEventType !== 'thinking')
-  )
-  const existing = currentWithoutLocalThinking.find((group) => group.id === input.groupId)
+  // Thinking UI is driven by thinking started/completed process events.
+  // A new thinking started replaces any previous thinking row (incl. optimistic placeholder).
+  // Retry is a competing wait state and must replace thinking immediately.
+  const baseGroups =
+    input.kind === 'thinking' || input.kind === 'retry' ? withoutThinkingGroups(current) : current
+  const existing = baseGroups.find((group) => group.id === input.groupId)
   const next = createDisplayProcessGroup({
     groupId: input.groupId,
     kind: input.kind,
@@ -572,7 +729,7 @@ const upsertGroupFromDisplayEvent = (
     createdAt: existing?.createdAt || input.createdAt,
     sourceEventType: input.sourceEventType
   })
-  return upsertProcessGroup(currentWithoutLocalThinking, {
+  return upsertProcessGroup(baseGroups, {
     ...next,
     items: existing?.items || []
   })
@@ -614,15 +771,10 @@ const upsertProcessItem = (
     sourceEventType: AssistantProcessGroupItem['sourceEventType']
   }
 ): AssistantProcessGroup[] => {
-  const currentWithoutLocalThinking = current.filter(
-    (group) =>
-      group.kind !== 'thinking' ||
-      (input.display.kind !== 'retry' && group.sourceEventType !== 'thinking')
-  )
-  const existingGroup = currentWithoutLocalThinking.find((group) => group.id === input.groupId)
+  const existingGroup = current.find((group) => group.id === input.groupId)
   const groupsWithParent = existingGroup
-    ? currentWithoutLocalThinking
-    : upsertGroupFromDisplayEvent(currentWithoutLocalThinking, {
+    ? current
+    : upsertGroupFromDisplayEvent(current, {
         groupId: input.groupId,
         kind: input.display.kind === 'tool' ? 'skill' : input.display.kind,
         display: input.display,
@@ -664,6 +816,10 @@ const completeProcessItem = (
   mergeProcessGroup(current, input.groupId, (group) => {
     const nextItems = group.items.map((item) => {
       if (item.id !== input.itemId) return item
+      const toolName =
+        input.display?.kind === 'tool'
+          ? normalizeToolName(input.display.toolName)
+          : item.toolName
       return {
         ...item,
         status: input.status,
@@ -674,6 +830,14 @@ const completeProcessItem = (
         partialFailedText: input.display
           ? getDisplayItemText(input.display, 'partial_failed')
           : item.partialFailedText,
+        headerShortText:
+          input.display && toolName
+            ? getToolItemHeaderShort(
+                toolName,
+                input.status,
+                input.display.kind === 'tool' ? input.display.input : item.input
+              )
+            : item.headerShortText,
         sourceEventType: input.sourceEventType
       }
     })
@@ -689,10 +853,20 @@ export const reduceAssistantProcessGroups = (
   event: AiRunEvent
 ): AssistantProcessGroup[] => {
   if (event.type === 'assistant_process_thought') {
-    return current.filter((group) => group.kind !== 'thinking')
+    return withoutThinkingGroups(current)
   }
 
   if (event.type === 'assistant_process_group_started') {
+    if (
+      event.kind === 'learning' ||
+      event.kind === 'finalizing' ||
+      event.kind === 'thinking' ||
+      event.display.kind === 'learning' ||
+      event.display.kind === 'finalizing' ||
+      event.display.kind === 'thinking'
+    ) {
+      return withoutThinkingGroups(current)
+    }
     return upsertGroupFromDisplayEvent(current, {
       groupId: event.groupId,
       kind: event.kind,
@@ -704,13 +878,21 @@ export const reduceAssistantProcessGroups = (
   }
 
   if (event.type === 'assistant_process_group_completed') {
-    if (event.groupId.endsWith(':thinking') || event.groupId.endsWith(':finalizing')) {
+    if (event.groupId.endsWith(':thinking') || event.display?.kind === 'thinking') {
+      return withoutThinkingGroups(current)
+    }
+    if (event.groupId.endsWith(':finalizing')) {
       return current.filter((group) => group.id !== event.groupId)
     }
+    if (event.display?.kind === 'learning' || event.display?.kind === 'finalizing') return current
     return completeProcessGroupById(current, event.groupId, 'completed', event.display)
   }
 
   if (event.type === 'assistant_process_group_failed') {
+    if (event.groupId.endsWith(':thinking') || event.display?.kind === 'thinking') {
+      return withoutThinkingGroups(current)
+    }
+    if (event.display?.kind === 'learning' || event.display?.kind === 'finalizing') return current
     return completeProcessGroupById(current, event.groupId, 'failed', event.display)
   }
 
@@ -747,7 +929,6 @@ export const reduceAssistantProcessGroups = (
 
   if (
     event.type === 'run_failed' ||
-    event.type === 'runtime_issue' ||
     event.type === 'run_cancelled'
   ) {
     return completeAssistantProcessGroups(current, 'failed')
@@ -760,6 +941,12 @@ export const shouldShowAssistantApplyTargets = (input: {
   runFinished: boolean
   applyTargetCount: number
 }): boolean => input.runFinished && input.applyTargetCount > 0
+
+export {
+  isAssistantActivityToolGroup,
+  shouldShowAssistantThinkingIndicator,
+  shouldActivityHeaderShimmer
+} from '../../../../shared/assistantThinkingWait'
 
 export const dedupeFileRefs = (items: WorkbenchFileRef[]): WorkbenchFileRef[] => {
   const seen = new Set<string>()
@@ -797,36 +984,6 @@ export const extractReadableFilesFromToolOutput = (
     return single ? [single] : []
   }
   return []
-}
-
-export const extractSearchResultsFromToolOutput = (output: IpcJsonValue): SearchResult[] => {
-  if (!Array.isArray(output)) return []
-  return output
-    .filter((item): item is IpcJsonObject => isIpcJsonObject(item))
-    .map((item) => {
-      const nestedDocument = readNestedObject(item, 'document')
-      const result: SearchResult = {
-        id: readStringField(item, 'id') || crypto.randomUUID(),
-        text: readStringField(item, 'text') || '',
-        document_name:
-          readStringField(item, 'document_name') || readStringField(item, 'name') || '未命名文档',
-        document_id: readStringField(item, 'document_id'),
-        source_type: readStringField(item, 'source_type'),
-        document: nestedDocument
-          ? {
-              id: readStringField(nestedDocument, 'id') || '',
-              name: readStringField(nestedDocument, 'name') || '',
-              source_type:
-                readStringField(nestedDocument, 'source_type') === 'web' ? 'web' : 'file',
-              file_path: readStringField(nestedDocument, 'file_path'),
-              created_at: 0,
-              import_status: 2
-            }
-          : undefined
-      }
-      return result
-    })
-    .filter((item) => item.text || item.document_name)
 }
 
 export const formatSessionDate = (timestamp: number): string => {

@@ -2,9 +2,9 @@ import path from 'node:path'
 import { AiFileChangeStore } from './domains/AiFileChangeStore'
 import { AiRunStore } from './domains/AiRunStore'
 import { AiRuntimeSettingsStore } from './domains/AiRuntimeSettingsStore'
-import { LanceDbCore, LANCE_TABLES } from './core/LanceDbCore'
+import { LanceDbCore } from './core/LanceDbCore'
 import { SqliteCore } from './sqlite/SqliteCore'
-import { ChatStore } from './domains/ChatStore'
+import { PartnerStore } from './domains/PartnerStore'
 import { DocxApplyStore } from './domains/DocxApplyStore'
 import { DocumentsStore } from './domains/DocumentsStore'
 import { LlmConfigStore } from './domains/LlmConfigStore'
@@ -14,7 +14,7 @@ import { WorkspaceStore } from './domains/WorkspaceStore'
 import { WorkbenchUiStore } from './domains/WorkbenchUiStore'
 import { BrowserTabStateStore } from './domains/BrowserTabStateStore'
 import { ScheduledTaskStore } from './domains/ScheduledTaskStore'
-import type { LegacyLocalImportMigrationStatus } from '../../../shared/types'
+import { ChatMessageLogStore } from './domains/ChatMessageLogStore'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 
 export class StorageService {
@@ -22,10 +22,9 @@ export class StorageService {
 
   public readonly sqlite: SqliteCore
   public readonly vector: LanceDbCore
-  public readonly core: LanceDbCore
   public readonly documents: DocumentsStore
   public readonly webSource: WebSourceStore
-  public readonly chat: ChatStore
+  public readonly partner: PartnerStore
   public readonly aiFileChange: AiFileChangeStore
   public readonly aiRun: AiRunStore
   public readonly docxApply: DocxApplyStore
@@ -36,7 +35,7 @@ export class StorageService {
   public readonly workbenchUi: WorkbenchUiStore
   public readonly browserTabs: BrowserTabStateStore
   public readonly scheduledTask: ScheduledTaskStore
-  private legacyLocalImportMigrationStatus: LegacyLocalImportMigrationStatus | null = null
+  public readonly chatMessageLog: ChatMessageLogStore
 
   public constructor(
     input: {
@@ -51,10 +50,9 @@ export class StorageService {
       (input.dbPath ? path.join(path.dirname(input.dbPath), 'app.sqlite') : undefined)
     this.sqlite = new SqliteCore(sqlitePath)
     this.vector = new LanceDbCore(input.vectorPath || input.dbPath, input.errorLogService)
-    this.core = this.vector
     this.documents = new DocumentsStore(this.sqlite, this.vector)
     this.webSource = new WebSourceStore(this.sqlite)
-    this.chat = new ChatStore(this.sqlite)
+    this.partner = new PartnerStore(this.sqlite)
     this.aiFileChange = new AiFileChangeStore(this.sqlite)
     this.aiRun = new AiRunStore(this.sqlite)
     this.docxApply = new DocxApplyStore(this.sqlite)
@@ -65,6 +63,7 @@ export class StorageService {
     this.workbenchUi = new WorkbenchUiStore(this.sqlite)
     this.browserTabs = new BrowserTabStateStore(this.sqlite)
     this.scheduledTask = new ScheduledTaskStore(this.sqlite)
+    this.chatMessageLog = new ChatMessageLogStore(this.sqlite)
   }
 
   public static getInstance(input: { errorLogService?: AppErrorLogService } = {}): StorageService {
@@ -76,13 +75,10 @@ export class StorageService {
 
   public async initialize(): Promise<void> {
     this.sqlite.initialize()
+    await this.sqlite.runPendingAfterCommitHooks({ lanceDbPath: this.vector.getDbPath() })
     await this.vector.initialize()
     await this.failInterruptedWorkspaceIndexJobs()
-    this.legacyLocalImportMigrationStatus = {
-      hasLegacyLocalImports: false,
-      removedDocumentCount: 0,
-      removedChunkCount: 0
-    }
+    await this.documents.purgeStaleChunks()
   }
 
   public async failInterruptedWorkspaceIndexJobs(
@@ -94,14 +90,6 @@ export class StorageService {
       this.workspace.failIndexingFileRecords(message, now),
       this.webSource.failRunningSources(message, now)
     ])
-  }
-
-  public getLegacyLocalImportMigrationStatus(): LegacyLocalImportMigrationStatus | null {
-    return this.legacyLocalImportMigrationStatus
-  }
-
-  public async optimizeChatStorage(): Promise<void> {
-    await this.vector.optimizeTables([LANCE_TABLES.CHUNK])
   }
 
   public async close(): Promise<void> {

@@ -1,5 +1,6 @@
 import { childElements, firstChildElement } from '../adapters/ooxml/dom'
-import type { DocxBlockSpec, DocxParagraphSpec } from '../types'
+import type { DocxNodeSpec, DocxParagraphSpec } from '../types'
+import { normalizeDocxHexColor } from './color'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
@@ -43,7 +44,7 @@ const createTextRun = (
   }
   if (formatting?.color) {
     const color = doc.createElementNS(WORD_NS, 'w:color')
-    setWordAttribute(color, 'val', formatting.color)
+    setWordAttribute(color, 'val', normalizeDocxHexColor(formatting.color))
     effectiveRPr.appendChild(color)
   }
   if (effectiveRPr.childNodes.length > 0 && !effectiveRPr.parentNode) {
@@ -94,7 +95,7 @@ export const createParagraphElementFromSpec = (
 
 export const createTableElementFromSpec = (
   doc: Document,
-  spec: Extract<DocxBlockSpec, { kind: 'table' }>,
+  spec: Extract<DocxNodeSpec, { kind: 'table' }>,
   prototypeTable?: Element | null
 ): Element => {
   if (prototypeTable) {
@@ -194,9 +195,9 @@ export const createTableElementFromSpec = (
   return table
 }
 
-export const createBlockElementFromSpec = (
+export const createNodeElementFromSpec = (
   doc: Document,
-  spec: DocxBlockSpec,
+  spec: DocxNodeSpec,
   prototypeElement?: Element | null
 ): Element =>
   spec.kind === 'paragraph'

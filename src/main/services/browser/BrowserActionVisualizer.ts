@@ -18,12 +18,25 @@ interface FlowEventLike {
   data: Record<string, unknown>
 }
 
-const CURSOR_ID = '__v3_cursor_overlay__'
+export const BROWSER_CURSOR_OVERLAY_ID = '__v3_cursor_overlay__'
 const PREPARE_TIMEOUT_MS = 500
 const FLUSH_TIMEOUT_MS = 500
-const HIDE_TIMEOUT_MS = 200
+const HIDE_TIMEOUT_MS = 250
 const CURSOR_TRANSITION =
   'left 180ms cubic-bezier(0.22, 1, 0.36, 1), top 180ms cubic-bezier(0.22, 1, 0.36, 1), opacity 100ms ease, transform 90ms ease'
+
+export const createHideCursorScript = (): string => `(() => {
+  const cursor = document.getElementById('${BROWSER_CURSOR_OVERLAY_ID}')
+  if (!cursor) return
+  cursor.style.transition = 'opacity 200ms ease'
+  cursor.style.opacity = '0'
+  cursor.dataset.ncuratorPositioned = '0'
+  setTimeout(() => {
+    if (cursor.style.opacity === '0') {
+      cursor.style.display = 'none'
+    }
+  }, 220)
+})()`
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -65,14 +78,16 @@ export class BrowserActionVisualizer {
       (async () => {
         await page.enableCursorOverlay()
         await page.evaluate(`(() => {
-        const cursor = document.getElementById('${CURSOR_ID}')
+        const cursor = document.getElementById('${BROWSER_CURSOR_OVERLAY_ID}')
         if (!cursor) return
         cursor.style.pointerEvents = 'none'
-        cursor.style.opacity = '0'
         cursor.style.transform = 'scale(1)'
         cursor.style.transformOrigin = '2px 2px'
         cursor.style.filter = 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.35))'
         cursor.style.transition = '${CURSOR_TRANSITION}'
+        if (cursor.dataset.ncuratorPositioned !== '1') {
+          cursor.style.opacity = '0'
+        }
       })()`)
       })(),
       PREPARE_TIMEOUT_MS
@@ -111,13 +126,7 @@ export class BrowserActionVisualizer {
   }
 
   public async hide(page: BrowserActionVisualPage): Promise<void> {
-    await settleWithin(
-      page.evaluate(`(() => {
-          const cursor = document.getElementById('${CURSOR_ID}')
-          if (cursor) cursor.style.opacity = '0'
-        })()`),
-      HIDE_TIMEOUT_MS
-    )
+    await settleWithin(page.evaluate(createHideCursorScript()), HIDE_TIMEOUT_MS)
   }
 
   private handleCdpCall(page: BrowserActionVisualPage, data: Record<string, unknown>): void {
@@ -153,7 +162,7 @@ export class BrowserActionVisualizer {
     this.lastMove = { x, y, at: now }
 
     await page.evaluate(`(() => {
-      const cursor = document.getElementById('${CURSOR_ID}')
+      const cursor = document.getElementById('${BROWSER_CURSOR_OVERLAY_ID}')
       const api = window.__v3Cursor
       if (!cursor || !api) return
       const firstMove = cursor.dataset.ncuratorPositioned !== '1'
@@ -170,7 +179,7 @@ export class BrowserActionVisualizer {
 
   private async pulseCursor(page: BrowserActionVisualPage): Promise<void> {
     await page.evaluate(`(() => {
-      const cursor = document.getElementById('${CURSOR_ID}')
+      const cursor = document.getElementById('${BROWSER_CURSOR_OVERLAY_ID}')
       if (!cursor) return
       cursor.style.transform = 'scale(0.78)'
       setTimeout(() => { cursor.style.transform = 'scale(1)' }, 90)

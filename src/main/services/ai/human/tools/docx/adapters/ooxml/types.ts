@@ -1,88 +1,153 @@
 import type JSZip from 'jszip'
 import type {
-  DocxChangedBlock,
-  DocxBlockWrapper,
-  DocxDetailedBlock,
+  DocxChangedNode,
+  DocxDetailedNode,
   DocxLayoutMode,
-  DocxOpenMeta,
-  DocxOutlineBlock,
+  DocxStoryRef,
+  DocxOutlineNode,
   DocxVisualKind
 } from '../../types'
 
 export type IndexedNode =
   | {
+      category: 'root'
       kind: 'paragraph'
-      blockId: string
-      blockIndex: number
+      nodeId: string
+      nodeIndex: number
       layoutMode: DocxLayoutMode
-      wrapperPath: DocxBlockWrapper[]
+      story: DocxStoryRef
+      partName: string
       node: Element
     }
   | {
+      category: 'root'
       kind: 'table'
-      blockId: string
-      blockIndex: number
+      nodeId: string
+      nodeIndex: number
       layoutMode: DocxLayoutMode
-      wrapperPath: DocxBlockWrapper[]
+      story: DocxStoryRef
+      partName: string
       node: Element
     }
   | {
-      kind: 'table_cell'
-      blockId: string
-      tableBlockId: string
-      blockIndex: number
+      category: 'root'
+      kind: 'content_control' | 'revision'
+      nodeId: string
+      nodeIndex: number
       layoutMode: DocxLayoutMode
-      wrapperPath: DocxBlockWrapper[]
+      story: DocxStoryRef
+      partName: string
+      node: Element
+    }
+  | {
+      category: 'root'
+      kind: 'table_cell'
+      nodeId: string
+      tableNodeId: string
+      nodeIndex: number
+      layoutMode: DocxLayoutMode
+      story: DocxStoryRef
+      partName: string
       row: number
       col: number
       node: Element
       firstParagraph: Element | null
     }
 
-export type NodeMapById = Map<string, IndexedNode>
+export type NodeMapById = Map<string, IndexedNode | DocxEditableNode | DocxVisualDescriptor>
 
-export type BlockIndex = {
-  outline: DocxOutlineBlock[]
+export type NodeIndex = {
+  outline: DocxOutlineNode[]
   nodesById: NodeMapById
-  bodyBlockIds: string[]
+  rootNodeIds: string[]
   paragraphCount: number
   tableCount: number
   charCount: number
-  bodyBlockCount: number
-  cellBlockCount: number
-  detailByBlockId: Map<string, DocxDetailedBlock>
-  editableNodesById: Map<string, DocxEditableNode>
-  visualsById: Map<string, DocxVisualDescriptor>
+  rootNodeCount: number
+  cellNodeCount: number
+  detailByNodeId: Map<string, DocxDetailedNode>
 }
 
 export type DocxEditableNode = {
+  category: 'editable'
   nodeId: string
-  blockId: string
-  kind: 'paragraph' | 'run' | 'table' | 'table_row' | 'table_cell'
+  ownerNodeId: string
+  story: DocxStoryRef
+  partName: string
+  kind:
+    | 'paragraph'
+    | 'run'
+    | 'table'
+    | 'table_row'
+    | 'table_cell'
+    | 'hyperlink'
+    | 'field'
+    | 'content_control'
+    | 'revision'
   node: Element
 }
 
 export type DocxVisualDescriptor = {
-  visualId: string
-  blockId: string
+  category: 'visual'
+  nodeId: string
+  ownerNodeId: string
   kind: DocxVisualKind
+  node: Element
   relationshipId?: string
   target?: string
   contentType?: string
+  widthCm?: number
+  heightCm?: number
+  story: DocxStoryRef
+  partName: string
 }
 
-export type ParsedDocxBundle = {
-  zip: JSZip
-  documentXml: string
-  documentDom: Document
-  meta: DocxOpenMeta
+export const isRootNode = (
+  node: IndexedNode | DocxEditableNode | DocxVisualDescriptor
+): node is IndexedNode => node.category === 'root'
+
+export const isEditableNode = (
+  node: IndexedNode | DocxEditableNode | DocxVisualDescriptor
+): node is DocxEditableNode => node.category === 'editable'
+
+export const isVisualNode = (
+  node: IndexedNode | DocxEditableNode | DocxVisualDescriptor
+): node is DocxVisualDescriptor => node.category === 'visual'
+
+export const collectVisualNodeEntries = (index: NodeIndex): Array<[string, DocxVisualDescriptor]> =>
+  [...index.nodesById.entries()].filter((entry): entry is [string, DocxVisualDescriptor] =>
+    isVisualNode(entry[1])
+  )
+
+export const collectEditableNodeEntries = (index: NodeIndex): Array<[string, DocxEditableNode]> =>
+  [...index.nodesById.entries()].filter((entry): entry is [string, DocxEditableNode] =>
+    isEditableNode(entry[1])
+  )
+
+export type DocxStoryPart = {
+  story: DocxStoryRef
+  partName: string
+  dom: Document
+  root: Element
   relationshipTargets: Map<string, string>
   relationshipTypes: Map<string, string>
   relationshipTargetModes: Map<string, string>
   availableRelationshipTargetIds: Set<string>
 }
 
+export type ParsedDocxBundle = {
+  zip: JSZip
+  documentXml: string
+  documentDom: Document
+  stylesDom?: Document
+  relationshipTargets: Map<string, string>
+  relationshipTypes: Map<string, string>
+  relationshipTargetModes: Map<string, string>
+  availableRelationshipTargetIds: Set<string>
+  stories: DocxStoryPart[]
+}
+
 export type ApplyOpsResult = {
   buffer: Buffer
-  changedBlocks: DocxChangedBlock[]
+  changedNodes: DocxChangedNode[]
 }

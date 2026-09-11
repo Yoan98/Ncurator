@@ -6,8 +6,7 @@ import {
   createFixtureWorkspace,
   navigateToSettingsSection,
   seedWebSources,
-  startLocalSettingsHttpServer,
-  workspaceCardLocator
+  startLocalSettingsHttpServer
 } from '../../../../harness/e2e/settings'
 
 describe('settings workspace web e2e', () => {
@@ -56,16 +55,14 @@ describe('settings workspace web e2e', () => {
               workspaceId = workspace.workspace!.id
               await seedWebSources(page, workspaceId, [httpServer.url('/web-restore')])
               await navigateToSettingsSection(page, 'workspace')
-              await workspaceCardLocator(page, workspaceId).click()
-              await page.getByRole('tab', { name: '网页 1' }).click()
+              await page.getByRole('tab', { name: /网页/u }).click()
               await page.getByRole('button', { name: '检查更新', exact: true }).click()
               await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
                 state: 'visible'
               })
               await navigateToSettingsSection(page, 'model')
               await navigateToSettingsSection(page, 'workspace')
-              await workspaceCardLocator(page, workspaceId).click()
-              await page.getByRole('tab', { name: '网页 1' }).click()
+              await page.getByRole('tab', { name: /网页/u }).click()
               await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
                 state: 'visible'
               })
@@ -96,8 +93,7 @@ describe('settings workspace web e2e', () => {
             run: async () => {
               await navigateToSettingsSection(page, 'model')
               await navigateToSettingsSection(page, 'workspace')
-              await workspaceCardLocator(page, workspaceId).click()
-              await page.getByRole('tab', { name: '网页 1' }).click()
+              await page.getByRole('tab', { name: /网页/u }).click()
               await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
                 state: 'visible'
               })
@@ -122,9 +118,7 @@ describe('settings workspace web e2e', () => {
           })
 
           await page.waitForFunction(async (selectedWorkspaceId) => {
-            const response = await window.api.webSourceList({
-              workspaceId: String(selectedWorkspaceId || '')
-            })
+            const response = await window.api.webSourceList({})
             return response.items.every((item) => item.index_status === 'indexed')
           }, workspaceId)
 

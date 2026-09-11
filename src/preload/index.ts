@@ -2,13 +2,16 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
   AiRunEvent,
+  AppStartupStatus,
   AppUpdateSnapshot,
-  BrowserPanelState,
+  BrowserTabState,
   JsonValue,
   SearchSourceFilter,
   WorkspaceIndexJobRecord
 } from '../shared/types'
 import {
+  APP_QUIT_CHANNEL,
+  APP_STARTUP_GET_STATUS_CHANNEL,
   APP_UPDATE_CHECK_CHANNEL,
   APP_UPDATE_DOWNLOAD_CHANNEL,
   APP_UPDATE_GET_SNAPSHOT_CHANNEL,
@@ -23,8 +26,8 @@ const isE2EObserverEnabled = isE2EFixtureMode || process.env.NCURATOR_E2E_OBSERV
 const downloadProgressListeners = new Set<(progressData: DownloadProgress) => void>()
 const workspaceIndexJobProgressListeners = new Set<(job: WorkspaceIndexJobRecord) => void>()
 const appUpdateFixtureListeners = new Set<(snapshot: AppUpdateSnapshot) => void>()
-const systemNotificationSessionListeners = new Set<(sessionId: string) => void>()
-let pendingSystemNotificationSessionId: string | null = null
+const systemNotificationPartnerListeners = new Set<(partnerId: string) => void>()
+let pendingSystemNotificationPartnerId: string | null = null
 const APP_UPDATE_E2E_SET_SNAPSHOT_EVENT = 'ncurator-e2e-app-update-set-snapshot'
 
 let appUpdateFixtureSnapshot: AppUpdateSnapshot = {
@@ -73,10 +76,9 @@ const emitDownloadProgress = (payload: DownloadProgress): void => {
   }
 }
 
-ipcRenderer.on('system-notification-open-session', (_event, sessionId: string) => {
-  pendingSystemNotificationSessionId = sessionId
-  for (const listener of systemNotificationSessionListeners) listener(sessionId)
-  if (systemNotificationSessionListeners.size > 0) pendingSystemNotificationSessionId = null
+ipcRenderer.on('system-notification-open-session', (_event, partnerId: string) => {
+  pendingSystemNotificationPartnerId = partnerId
+  for (const listener of systemNotificationPartnerListeners) listener(partnerId)
 })
 
 if (isE2EObserverEnabled) {
@@ -99,13 +101,30 @@ if (isE2EFixtureMode) {
 
 // Custom APIs for renderer
 const api: DesktopApi = {
+  appStartupGetStatus: () =>
+    ipcRenderer.invoke(APP_STARTUP_GET_STATUS_CHANNEL) as Promise<AppStartupStatus>,
+  appQuit: () => ipcRenderer.invoke(APP_QUIT_CHANNEL),
   ingestWeb: (payload): Promise<{ success: boolean; count?: number; error?: string }> =>
     ipcRenderer.invoke('ingest-web', payload),
   ingestWebs: (payload): Promise<{ success: boolean; created?: number; error?: string }> =>
     ipcRenderer.invoke('ingest-webs', payload),
-  openExternal: (url: string): Promise<{ success: boolean; error?: string }> => {
+  openExternal: async (url: string): Promise<{ success: boolean; error?: string }> => {
     emitE2EIpcCall('openExternal', String(url || '').trim())
-    return ipcRenderer.invoke('open-external', url)
+    try {
+      const response = (await ipcRenderer.invoke('open-external', url)) as {
+        success: boolean
+        error?: string
+      }
+      emitE2EIpcCall('openExternalResult', response)
+      return response
+    } catch (error) {
+      const response = {
+        success: false,
+        error: error instanceof Error ? error.message : String(error)
+      }
+      emitE2EIpcCall('openExternalResult', response)
+      return response
+    }
   },
   openPath: (filePath: string): Promise<{ success: boolean; error?: string }> => {
     const safePath = String(filePath || '').trim()
@@ -199,14 +218,11 @@ const api: DesktopApi = {
   webSourcesPrepare: (payload) => ipcRenderer.invoke('web-sources-prepare', payload),
   webSourceRefresh: async (payload) => {
     emitE2EIpcCall('webSourceRefresh', {
-      workspaceId: String(payload.workspaceId || '').trim(),
       webSourceId: String(payload.webSourceId || '').trim()
     })
     return ipcRenderer.invoke('web-source-refresh', payload)
   },
   webSourceDelete: (payload) => ipcRenderer.invoke('web-source-delete', payload),
-  legacyLocalImportMigrationStatus: () =>
-    ipcRenderer.invoke('legacy-local-import-migration-status'),
   sourceListRefresh: (cb: () => void) => {
     const listener = (): void => cb()
     ipcRenderer.on('source-list-refresh', listener)
@@ -266,11 +282,14 @@ const api: DesktopApi = {
   },
 
   // Chat & LLM
-  chatSessionList: () => ipcRenderer.invoke('chat-session-list'),
-  chatSessionSave: (session) => ipcRenderer.invoke('chat-session-save', session),
-  chatSessionMarkViewed: (id: string) => ipcRenderer.invoke('chat-session-mark-viewed', id),
-  chatSessionDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
-  chatMessageList: (sessionId: string) => ipcRenderer.invoke('chat-message-list', sessionId),
+  partnerList: () => ipcRenderer.invoke('chat-session-list'),
+  partnerCreate: (payload) => ipcRenderer.invoke('partner-create', payload),
+  partnerUpdate: (payload) => ipcRenderer.invoke('partner-update', payload),
+  partnerSave: (partner) => ipcRenderer.invoke('chat-session-save', partner),
+  partnerMarkViewed: (id: string) => ipcRenderer.invoke('chat-session-mark-viewed', id),
+  partnerSetPinned: (payload) => ipcRenderer.invoke('chat-session-set-pinned', payload),
+  partnerDelete: (id: string) => ipcRenderer.invoke('chat-session-delete', id),
+  partnerMessageList: (partnerId: string) => ipcRenderer.invoke('chat-message-list', partnerId),
   scheduledTaskList: () => {
     emitE2EIpcCall('scheduledTaskList')
     return ipcRenderer.invoke('scheduled-task-list')
@@ -294,20 +313,32 @@ const api: DesktopApi = {
     })
     return ipcRenderer.invoke('scheduled-task-set-enabled', payload)
   },
-  onChatSessionListRefresh: (cb: () => void) => {
+  scheduledTaskRunNow: (payload) => {
+    emitE2EIpcCall('scheduledTaskRunNow', {
+      id: String(payload?.id || '').trim()
+    })
+    return ipcRenderer.invoke('scheduled-task-run-now', payload)
+  },
+  scheduledTaskDismissBusyNotice: (payload) => {
+    emitE2EIpcCall('scheduledTaskDismissBusyNotice', {
+      id: String(payload?.id || '').trim()
+    })
+    return ipcRenderer.invoke('scheduled-task-dismiss-busy-notice', payload)
+  },
+  onPartnerListRefresh: (cb: () => void) => {
     const listener = (): void => cb()
     ipcRenderer.on('chat-session-list-refresh', listener)
     return () => {
       ipcRenderer.removeListener('chat-session-list-refresh', listener)
     }
   },
-  chatSessionOpen: (payload) => ipcRenderer.invoke('chat-session-open', payload),
-  chatSessionUiStateSave: (payload) => ipcRenderer.invoke('chat-session-ui-state-save', payload),
+  partnerOpen: (payload) => ipcRenderer.invoke('chat-session-open', payload),
+  partnerUiStateSave: (payload) => ipcRenderer.invoke('chat-session-ui-state-save', payload),
   workbenchUiStateGet: () => ipcRenderer.invoke('workbench-ui-state-get'),
   workbenchUiStateSave: (payload) => ipcRenderer.invoke('workbench-ui-state-save', payload),
-  chatSessionRunSummaries: (payload) => ipcRenderer.invoke('chat-session-run-summaries', payload),
-  chatRunEventsGet: (payload) => ipcRenderer.invoke('chat-run-events-get', payload),
-  chatSessionSnapshotGet: (payload) => ipcRenderer.invoke('chat-session-snapshot-get', payload),
+  partnerRunSummaries: (payload) => ipcRenderer.invoke('chat-session-run-summaries', payload),
+  partnerSnapshotGet: (payload) => ipcRenderer.invoke('chat-session-snapshot-get', payload),
+  partnerClearContext: (payload) => ipcRenderer.invoke('partner-clear-context', payload),
   chatSubmit: (payload) => {
     emitE2EIpcCall('chatSubmit')
     return ipcRenderer.invoke('chat-submit', payload)
@@ -323,10 +354,10 @@ const api: DesktopApi = {
     emitE2EIpcCall('llmConfigModelList', id)
     return ipcRenderer.invoke('llm-config-model-list', id)
   },
-  analyzeVisionModels: (payload) => {
-    emitE2EIpcCall('analyzeVisionModels')
-    return ipcRenderer.invoke('llm-analyze-vision-models', payload)
-  },
+  freeModelsGet: (options) => ipcRenderer.invoke('free-models-get', options),
+  freeModelsRefresh: () => ipcRenderer.invoke('free-models-refresh'),
+  presetModelsGet: (options) => ipcRenderer.invoke('preset-models-get', options),
+  presetModelsRefresh: () => ipcRenderer.invoke('preset-models-refresh'),
   isE2EMode: () => isE2EObserverEnabled,
   aiRuntimeSettingsGet: () => ipcRenderer.invoke('ai-runtime-settings-get'),
   aiRuntimeSettingsSave: (settings) => ipcRenderer.invoke('ai-runtime-settings-save', settings),
@@ -340,12 +371,9 @@ const api: DesktopApi = {
     emitE2EIpcCall('aiRunApprovalBatchDecide')
     return ipcRenderer.invoke('ai-run-approval-batch-decide', payload)
   },
-  aiRunUserTakeoverConfirm: (payload) => {
-    emitE2EIpcCall('aiRunUserTakeoverConfirm')
-    return ipcRenderer.invoke('ai-run-user-takeover-confirm', payload)
-  },
   aiContextUsageGet: (payload) => ipcRenderer.invoke('ai-context-usage-get', payload),
   browserPanelSetBounds: (payload) => ipcRenderer.invoke('browser-panel-set-bounds', payload),
+  browserPanelSetFollow: (payload) => ipcRenderer.send('browser-panel-set-follow', payload),
   browserTabList: (payload) => ipcRenderer.invoke('browser-tab-list', payload),
   browserTabCreate: (payload) => ipcRenderer.invoke('browser-tab-create', payload),
   browserTabActivate: (payload) => ipcRenderer.invoke('browser-tab-activate', payload),
@@ -484,15 +512,15 @@ const api: DesktopApi = {
       ipcRenderer.removeListener('ai-run-event', listener)
     }
   },
-  onSystemNotificationOpenSession: (cb: (sessionId: string) => void) => {
-    systemNotificationSessionListeners.add(cb)
-    if (pendingSystemNotificationSessionId) {
-      const sessionId = pendingSystemNotificationSessionId
-      pendingSystemNotificationSessionId = null
-      queueMicrotask(() => cb(sessionId))
+  onSystemNotificationOpenPartner: (cb: (partnerId: string) => void) => {
+    systemNotificationPartnerListeners.add(cb)
+    if (pendingSystemNotificationPartnerId) {
+      const partnerId = pendingSystemNotificationPartnerId
+      pendingSystemNotificationPartnerId = null
+      queueMicrotask(() => cb(partnerId))
     }
     return () => {
-      systemNotificationSessionListeners.delete(cb)
+      systemNotificationPartnerListeners.delete(cb)
     }
   },
   onWorkbenchUiFlushRequest: (cb: () => void | Promise<void>) => {
@@ -506,8 +534,8 @@ const api: DesktopApi = {
       ipcRenderer.removeListener('workbench-ui-flush-request', listener)
     }
   },
-  onBrowserPanelStateChange: (cb: (state: BrowserPanelState) => void) => {
-    const listener = (_event: Electron.IpcRendererEvent, state: BrowserPanelState): void => {
+  onBrowserPanelStateChange: (cb: (state: BrowserTabState) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, state: BrowserTabState): void => {
       cb(state)
     }
     ipcRenderer.on('browser-panel-state-change', listener)

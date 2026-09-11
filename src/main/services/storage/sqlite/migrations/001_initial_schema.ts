@@ -1,4 +1,9 @@
-export const initialSchemaSql = `
+import type { Migration } from './types'
+
+export const initialSchemaMigration: Migration = {
+  version: 1,
+  name: 'initial_schema',
+  sql: `
 CREATE TABLE IF NOT EXISTS chat_session (
   id TEXT PRIMARY KEY,
   title TEXT NOT NULL,
@@ -272,3 +277,4 @@ CREATE TABLE IF NOT EXISTS ai_runtime_settings (
   updated_at INTEGER NOT NULL
 );
 `
+}

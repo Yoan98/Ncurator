@@ -9,14 +9,15 @@ import type {
   IpcJsonObject,
   JsonObject
 } from '../../../../../../shared/types'
-import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { WorkspaceCapabilityBuildInput } from '../types'
 import { withToolLifecycle } from '../utils/lifecycle'
-import { checkToolResultSize } from '../utils/resultSizeGuard'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import {
   TEXT_FILE_EDIT_TOOL_SPEC,
+  TEXT_FILE_READ_MAX_BYTES,
+  TEXT_FILE_READ_MAX_LINE_CHARS,
+  TEXT_FILE_READ_MAX_LINES,
   TEXT_FILE_READ_TOOL_SPEC,
   type FileEditInput,
   type FileReadInput,
@@ -31,7 +32,8 @@ import {
   resolveSafeTextFilePath,
   withTextFileMutationQueue
 } from './textFileUtils'
-import { isPathInsideRoot } from '../terminal/commandPolicy'
+import { getPartnerRuntimeDir } from '../../../../assets/WorkspaceAssetService'
+import { buildTextFileSearchTool } from './textFileSearch'
 
 type TextFileToolFailure = Error & {
   resultData?: JsonObject
@@ -113,12 +115,12 @@ const applyUniqueEdits = (
     const occurrences = countOccurrences(content, oldText)
     if (occurrences === 0) {
       throw new Error(
-        `Could not find edits[${editIndex}].oldText in ${sourcePath}. The text must match exactly.`
+        `在 ${sourcePath} 中找不到 edits[${editIndex}].oldText 对应的文本，必须精确匹配。`
       )
     }
     if (occurrences > 1) {
       throw new Error(
-        `Found ${occurrences} matches for edits[${editIndex}].oldText in ${sourcePath}. Each oldText must match exactly one block.`
+        `在 ${sourcePath} 中 edits[${editIndex}].oldText 匹配到 ${occurrences} 处，每个 oldText 必须恰好匹配一处。`
       )
     }
     const start = content.indexOf(oldText)
@@ -136,13 +138,13 @@ const applyUniqueEdits = (
     const current = ordered[index]
     if (previous && current && previous.end > current.start) {
       throw new Error(
-        `edits[${previous.editIndex}] and edits[${current.editIndex}] overlap in ${sourcePath}.`
+        `在 ${sourcePath} 中 edits[${previous.editIndex}] 与 edits[${current.editIndex}] 的修改范围重叠。`
       )
     }
   }
 
   const nextContent = applyReplacements(content, replacements)
-  if (nextContent === content) throw new Error(`No changes were produced in ${sourcePath}.`)
+  if (nextContent === content) throw new Error(`在 ${sourcePath} 中未产生任何修改。`)
   return { content: nextContent, changeCount: edits.length }
 }
 
@@ -154,10 +156,10 @@ const applyReplaceAll = (input: {
 }): { content: string; changeCount: number } => {
   const oldText = normalizeToLf(input.oldText)
   const newText = normalizeToLf(input.newText)
-  if (oldText === newText) throw new Error(`No changes were produced in ${input.sourcePath}.`)
+  if (oldText === newText) throw new Error(`在 ${input.sourcePath} 中未产生任何修改。`)
   const matches = findAllOccurrences(input.content, oldText)
   if (matches.length === 0) {
-    throw new Error(`No matches found for oldText in ${input.sourcePath}.`)
+    throw new Error(`在 ${input.sourcePath} 中找不到 oldText 对应的文本。`)
   }
   const replacements = matches.map((start) => ({
     start,
@@ -173,7 +175,7 @@ const applyReplaceAll = (input: {
 const ensureCreateTargetAvailable = async (sourcePath: string): Promise<void> => {
   try {
     await fs.lstat(sourcePath)
-    throw new Error(`Cannot create ${sourcePath}: file already exists.`)
+    throw new Error(`无法创建 ${sourcePath}：文件已存在。`)
   } catch (error) {
     if (error instanceof Error && 'code' in error && error.code === 'ENOENT') return
     throw error
@@ -205,12 +207,12 @@ const buildEditMessage = (input: {
   sourcePath: string
   changeCount: number
 }): string => {
-  if (input.action === 'create') return `Created file: ${input.sourcePath}.`
-  if (input.action === 'rewrite') return `Rewrote file: ${input.sourcePath}.`
+  if (input.action === 'create') return `已创建文件：${input.sourcePath}。`
+  if (input.action === 'rewrite') return `已完整改写文件：${input.sourcePath}。`
   if (input.action === 'edit') {
-    return `Applied ${input.changeCount} edits to ${input.sourcePath}.`
+    return `已在 ${input.sourcePath} 中应用 ${input.changeCount} 处修改。`
   }
-  return `Replaced ${input.changeCount} occurrences in ${input.sourcePath}.`
+  return `已在 ${input.sourcePath} 中替换 ${input.changeCount} 处内容。`
 }
 
 const editTextFile = async (
@@ -288,43 +290,17 @@ const editTextFile = async (
         bom: decoded.bom
       })
       if (beforeBuffer.equals(afterBuffer))
-        throw new Error(`No changes were produced in ${args.sourcePath}.`)
+        throw new Error(`在 ${args.sourcePath} 中未产生任何修改。`)
     }
 
     if (afterNormalized.includes('\0')) {
-      throw new Error(`Cannot write ${args.sourcePath}: binary text is not supported.`)
-    }
-
-    const trackedByWorkspace = isPathInsideRoot(sourcePath, buildInput.workspaceRootPath)
-    if (!trackedByWorkspace) {
-      if (args.action === 'create') {
-        await fs.writeFile(sourcePath, afterBuffer, { flag: 'wx', mode: 0o644 })
-      } else {
-        const currentBuffer = await fs.readFile(sourcePath)
-        if (calculateBufferChecksum(currentBuffer) !== beforeChecksum) {
-          throw new Error(`Cannot write ${args.sourcePath}: the file changed during the operation.`)
-        }
-        await atomicReplaceFile({
-          sourcePath,
-          content: afterBuffer,
-          mode: beforeMode,
-          operationId
-        })
-      }
-      return {
-        message: buildEditMessage({
-          action: args.action,
-          sourcePath: args.sourcePath,
-          changeCount
-        })
-      }
+      throw new Error(`无法写入 ${args.sourcePath}：不支持二进制文本。`)
     }
 
     let baselineNormalized = beforeNormalized
     let recordBeforeSnapshotPath = beforeBuffer
       ? path.join(
-          buildInput.workspaceRootPath,
-          '.ncurator',
+          getPartnerRuntimeDir(buildInput.partnerId),
           'file-changes',
           buildInput.runId,
           `${operationId}.before`
@@ -337,7 +313,7 @@ const editTextFile = async (
       recordBeforeChecksum = undefined
     } else if (existingRecord) {
       if (!existingRecord.beforeSnapshotPath) {
-        throw new Error(`Cannot update ${args.sourcePath}: the original snapshot is missing.`)
+        throw new Error(`无法更新 ${args.sourcePath}：原始快照缺失。`)
       }
       const baselineBuffer = await fs.readFile(existingRecord.beforeSnapshotPath)
       baselineNormalized = decodeTextFile(baselineBuffer, args.sourcePath).normalizedContent
@@ -351,8 +327,7 @@ const editTextFile = async (
     })
     const { insertCount, deleteCount } = countTextFileDiffLines(diffArtifact)
     const artifactRoot = path.join(
-      buildInput.workspaceRootPath,
-      '.ncurator',
+      getPartnerRuntimeDir(buildInput.partnerId),
       'file-changes',
       buildInput.runId
     )
@@ -371,7 +346,7 @@ const editTextFile = async (
       } else {
         const currentBuffer = await fs.readFile(sourcePath)
         if (calculateBufferChecksum(currentBuffer) !== beforeChecksum) {
-          throw new Error(`Cannot write ${args.sourcePath}: the file changed during the operation.`)
+          throw new Error(`无法写入 ${args.sourcePath}：文件在操作期间被其他进程修改。`)
         }
         await atomicReplaceFile({
           sourcePath,
@@ -385,7 +360,7 @@ const editTextFile = async (
       const now = Date.now()
       const record: AiFileChangeRecord = {
         id: operationId,
-        sessionId: buildInput.sessionId,
+        partnerId: buildInput.partnerId,
         runId: buildInput.runId,
         status: 'applied',
         capability: 'text_file',
@@ -447,54 +422,54 @@ const editTextFile = async (
   })
 }
 
-const readTextFile = async (
-  buildInput: WorkspaceCapabilityBuildInput,
-  args: FileReadInput
-): Promise<FileReadOutput> => {
+const truncateTextFileLine = (value: string): string => {
+  const characters = Array.from(value)
+  if (characters.length <= TEXT_FILE_READ_MAX_LINE_CHARS) return value
+  return `${characters.slice(0, TEXT_FILE_READ_MAX_LINE_CHARS).join('')}... (line truncated to ${TEXT_FILE_READ_MAX_LINE_CHARS} characters)`
+}
+
+const TEXT_FILE_READ_CONTENT_MAX_BYTES = TEXT_FILE_READ_MAX_BYTES - 3_200
+
+const readTextFile = async (args: FileReadInput): Promise<FileReadOutput> => {
   const sourcePath = await resolveSafeTextFilePath({
     sourcePath: args.sourcePath,
     allowMissing: false
   })
   const decoded = decodeTextFile(await fs.readFile(sourcePath), args.sourcePath)
+
   const lines = decoded.normalizedContent.split('\n')
   const totalLines = lines.length
   const startLine = args.startLine || 1
   if (startLine > totalLines) {
     throw new Error(
-      `Cannot read ${args.sourcePath}: startLine ${startLine} is beyond totalLines ${totalLines}.`
+      `startLine ${startLine} is out of range for ${args.sourcePath} (${totalLines} lines)`
     )
   }
-  const endLine = Math.min(
+  const requestedEndLine = Math.min(
     totalLines,
-    args.lineCount === undefined ? totalLines : startLine + args.lineCount - 1
+    startLine + (args.lineCount || TEXT_FILE_READ_MAX_LINES) - 1
   )
-  const payload: FileReadOutput = {
-    sourcePath: args.sourcePath,
-    content: lines.slice(startLine - 1, endLine).join('\n'),
+  const selected: string[] = []
+  let selectedBytes = 0
+  let endLine = startLine - 1
+  for (let lineNumber = startLine; lineNumber <= requestedEndLine; lineNumber += 1) {
+    const line = truncateTextFileLine(lines[lineNumber - 1] || '')
+    const displayedBytes = Buffer.byteLength(`${lineNumber}: ${line}\n`, 'utf8')
+    if (selected.length > 0 && selectedBytes + displayedBytes > TEXT_FILE_READ_CONTENT_MAX_BYTES)
+      break
+    selected.push(line)
+    selectedBytes += displayedBytes
+    endLine = lineNumber
+  }
+  const content = selected.join('\n')
+  const nextStartLine = endLine < totalLines ? endLine + 1 : undefined
+  return {
+    content,
     startLine,
     endLine,
-    totalLines
+    totalLines,
+    ...(nextStartLine ? { nextStartLine } : {})
   }
-  const sizeCheck = checkToolResultSize({
-    toolName: TEXT_FILE_READ_TOOL_SPEC.name,
-    value: payload,
-    modelContextWindowTokens:
-      buildInput.ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-      DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
-  })
-  if (sizeCheck.tooLarge) {
-    const error = new Error(
-      `text_file_read result is too large (${sizeCheck.estimatedTokens} estimated tokens, limit ${sizeCheck.limit}).`
-    ) as TextFileToolFailure
-    error.resultData = {
-      error: error.message,
-      estimatedTokens: sizeCheck.estimatedTokens,
-      limit: sizeCheck.limit,
-      ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
-    }
-    throw error
-  }
-  return payload
 }
 
 export const buildTextFileCapabilityTools = (
@@ -519,7 +494,7 @@ export const buildTextFileCapabilityTools = (
         toolName: TEXT_FILE_READ_TOOL_SPEC.name,
         args: args as IpcJsonObject,
         execute: async (session) => {
-          const payload = await readTextFile(buildInput, args)
+          const payload = await readTextFile(args)
           session.succeed(
             undefined,
             toToolResult({ toolName: TEXT_FILE_READ_TOOL_SPEC.name, ok: true, data: payload })
@@ -571,12 +546,13 @@ export const buildTextFileCapabilityTools = (
         args: args as IpcJsonObject,
         execute: async (session) => {
           const applied = await editTextFile(buildInput, args)
+          const payload = {}
           session.succeed(
             undefined,
             toToolResult({
               toolName: TEXT_FILE_EDIT_TOOL_SPEC.name,
               ok: true,
-              data: applied.message
+              data: payload
             })
           )
           safeEmitActivity(buildInput, {
@@ -611,5 +587,5 @@ export const buildTextFileCapabilityTools = (
     }
   )
 
-  return { tools: [fileRead, fileEdit] }
+  return { tools: [fileRead, buildTextFileSearchTool(buildInput), fileEdit] }
 }

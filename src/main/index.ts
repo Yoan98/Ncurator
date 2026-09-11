@@ -3,7 +3,7 @@ import { join } from 'path'
 import { fileURLToPath } from 'node:url'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
-import { registerHandlers } from './ipc/handlers'
+import { registerHandlers, registerOpenExternalHandler } from './ipc/handlers'
 import { IngestionService } from './services/ingestion/loader'
 import { DEFAULT_EMBEDDING_MODEL_NAME, EmbeddingService } from './services/vector/EmbeddingService'
 import { EmbeddingRuntimeClient } from './services/vector/runtime/EmbeddingRuntimeClient'
@@ -15,14 +15,22 @@ import { loadRootEnvOnce } from './utils/rootEnv'
 import { BrowserEmbedService } from './services/browser/BrowserEmbedService'
 import { CdpEndpointService } from './services/browser/CdpEndpointService'
 import { createWebCrawlerService } from './services/webCrawler/createWebCrawlerService'
+import { ElectronWebCrawlerBrowserHost } from './services/webCrawler/ElectronWebCrawlerBrowserHost'
 import { AppUpdateService } from './services/update/AppUpdateService'
-import { APP_ID } from '../shared/constants'
+import {
+  APP_ID,
+  APP_QUIT_CHANNEL,
+  APP_STARTUP_GET_STATUS_CHANNEL,
+  OFFICIAL_DOWNLOAD_PAGE_URL
+} from '../shared/constants'
+import type { AppStartupStatus } from '../shared/types'
 import { getModelsPath } from './utils/paths'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
 import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
 import { SystemNotificationService } from './services/SystemNotificationService'
 import { TelemetryService } from './services/telemetry/TelemetryService'
 import { AppErrorLogService } from './services/logging/AppErrorLogService'
+import { DatabaseVersionTooNewError, SqliteCore } from './services/storage/sqlite/SqliteCore'
 
 if (!app.isPackaged) {
   loadRootEnvOnce()
@@ -42,6 +50,7 @@ const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
   : app.requestSingleInstanceLock()
 const shutdownCoordinator = new AppShutdownCoordinator()
+let appStartupStatus: AppStartupStatus = { mode: 'normal' }
 let quitAfterShutdown = false
 let shutdownRequested = false
 let rendererFlushSequence = 0
@@ -68,7 +77,9 @@ const requestRendererWorkbenchFlush = async (window: BrowserWindow): Promise<voi
 const prepareAppShutdown = async (): Promise<void> => {
   if (quitAfterShutdown) return
   shutdownRequested = true
-  await Promise.all(BrowserWindow.getAllWindows().map(requestRendererWorkbenchFlush))
+  if (appStartupStatus.mode === 'normal') {
+    await Promise.all(BrowserWindow.getAllWindows().map(requestRendererWorkbenchFlush))
+  }
   const failures = await shutdownCoordinator.shutdown()
   for (const failure of failures) {
     console.error(`[APP-SHUTDOWN] ${failure.name} failed:`, failure.error)
@@ -113,6 +124,26 @@ function getInitialWindowBounds(): { width: number; height: number; x: number; y
   }
 }
 
+function attachDarwinLiveResizeThrottle(mainWindow: BrowserWindow): void {
+  // macOS live-resize 时系统改窗口快于 Chromium 出帧，会露出底色空白。
+  // 拦截 will-resize 并限到 ~60fps 自行 setBounds，减轻 Electron 29+ 的排队丢帧（Windows 无效，不启用）。
+  let lastAppliedAt = 0
+  let applying = false
+  mainWindow.on('will-resize', (event, newBounds) => {
+    event.preventDefault()
+    if (applying || mainWindow.isDestroyed()) return
+    const now = performance.now()
+    if (now - lastAppliedAt < 1000 / 60) return
+    lastAppliedAt = now
+    applying = true
+    try {
+      mainWindow.setBounds(newBounds)
+    } finally {
+      applying = false
+    }
+  })
+}
+
 function createWindow(): BrowserWindow {
   const initialWindowBounds = getInitialWindowBounds()
 
@@ -123,7 +154,9 @@ function createWindow(): BrowserWindow {
     minHeight: MIN_WINDOW_HEIGHT,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#FBFBFA',
+    // 主内容区（右侧/底部边缘）为白色；窗口底色对齐为白，
+    // 使 macOS live-resize 时 OS 先填充的一帧与内容同色，消除拖动露白（对齐主流应用做法）。
+    backgroundColor: '#ffffff',
     ...(process.platform === 'darwin'
       ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 16 } }
       : {}),
@@ -143,9 +176,18 @@ function createWindow(): BrowserWindow {
       sandbox: false
     }
   })
+  if (process.platform === 'darwin') {
+    attachDarwinLiveResizeThrottle(mainWindow)
+  }
   let closeAfterRendererFlush = false
   mainWindow.on('close', (event) => {
-    if (quitAfterShutdown || shutdownRequested || closeAfterRendererFlush) return
+    if (
+      appStartupStatus.mode === 'update_required' ||
+      quitAfterShutdown ||
+      shutdownRequested ||
+      closeAfterRendererFlush
+    )
+      return
     event.preventDefault()
     void requestRendererWorkbenchFlush(mainWindow).finally(() => {
       closeAfterRendererFlush = true
@@ -234,7 +276,11 @@ if (!singleInstanceLock) {
       appVersion: app.getVersion()
     })
     process.on('uncaughtException', (error) => {
-      errorLogService.write({ module: 'main-process', error, context: { event: 'uncaughtException' } })
+      errorLogService.write({
+        module: 'main-process',
+        error,
+        context: { event: 'uncaughtException' }
+      })
     })
     process.on('unhandledRejection', (reason) => {
       errorLogService.write({
@@ -243,6 +289,39 @@ if (!singleInstanceLock) {
         context: { event: 'unhandledRejection' }
       })
     })
+    const appUpdateService = new AppUpdateService({ shutdownApp: prepareAppShutdown })
+    appUpdateService.initialize()
+    ipcMain.handle(APP_STARTUP_GET_STATUS_CHANNEL, () => appStartupStatus)
+    ipcMain.handle(APP_QUIT_CHANNEL, async () => {
+      await prepareAppShutdown()
+      app.quit()
+    })
+    const startupSqlite = new SqliteCore()
+    try {
+      startupSqlite.initialize()
+      startupSqlite.close()
+    } catch (error) {
+      if (!(error instanceof DatabaseVersionTooNewError)) throw error
+      appStartupStatus = {
+        mode: 'update_required',
+        databaseVersion: error.databaseVersion,
+        supportedDatabaseVersion: error.supportedDatabaseVersion,
+        downloadPageUrl: OFFICIAL_DOWNLOAD_PAGE_URL
+      }
+      errorLogService.write({
+        module: 'sqlite-migration',
+        error,
+        context: { event: 'database-version-too-new' }
+      })
+      registerOpenExternalHandler()
+      createWindow()
+      appUpdateService.checkForUpdatesOnLaunch()
+      app.on('activate', () => {
+        if (BrowserWindow.getAllWindows().length === 0) createWindow()
+      })
+      return
+    }
+
     const ingestionService = IngestionService.getInstance()
     const embeddingRuntimeClient = new EmbeddingRuntimeClient({
       entryPath: fileURLToPath(new URL('./embeddingRuntimeProcess.js', import.meta.url)),
@@ -262,13 +341,15 @@ if (!singleInstanceLock) {
     })
 
     console.log('Starting background initialization of services...')
-    embeddingService
-      .initialize()
-      .catch((err) => {
-        console.error('Failed to initialize EmbeddingService:', err)
-        errorLogService.write({ module: 'embedding-runtime', error: err, context: { event: 'startup' } })
-      })
     await storageService.initialize()
+    embeddingService.initialize().catch((err) => {
+      console.error('Failed to initialize EmbeddingService:', err)
+      errorLogService.write({
+        module: 'embedding-runtime',
+        error: err,
+        context: { event: 'startup' }
+      })
+    })
 
     const mainWindow = createWindow()
     mainWindow.webContents.on('render-process-gone', (_event, details) => {
@@ -284,7 +365,6 @@ if (!singleInstanceLock) {
       createMainWindow: () => createWindow(),
       notificationIcon: icon
     })
-    const appUpdateService = new AppUpdateService({ shutdownApp: prepareAppShutdown })
     const cdpEndpointService = new CdpEndpointService({
       userDataPath: app.getPath('userData')
     })
@@ -299,13 +379,15 @@ if (!singleInstanceLock) {
       isPackaged: app.isPackaged
     })
     const webCrawlerBaseDirectory = join(app.getPath('userData'), 'web-crawler')
+    const webCrawlerBrowserHost = new ElectronWebCrawlerBrowserHost(cdpEndpointService)
     const webCrawlerService = createWebCrawlerService({
       appRootPath: app.getAppPath(),
       isPackaged: app.isPackaged,
       resourcesPath: process.resourcesPath,
       sidecarEnv: {
         CRAWL4_AI_BASE_DIRECTORY: webCrawlerBaseDirectory
-      }
+      },
+      resolveCdpConnection: () => webCrawlerBrowserHost.getConnection()
     })
 
     registerHandlers({
@@ -321,7 +403,6 @@ if (!singleInstanceLock) {
       errorLogService
     })
     telemetryService.track('app_started')
-    appUpdateService.initialize()
     appUpdateService.checkForUpdatesOnLaunch()
 
     shutdownCoordinator.register({
@@ -334,7 +415,10 @@ if (!singleInstanceLock) {
     })
     shutdownCoordinator.register({
       name: 'web-crawler',
-      dispose: () => webCrawlerService.close()
+      dispose: async () => {
+        await webCrawlerService.close()
+        await webCrawlerBrowserHost.close()
+      }
     })
     shutdownCoordinator.register({
       name: 'browser-embed-service',

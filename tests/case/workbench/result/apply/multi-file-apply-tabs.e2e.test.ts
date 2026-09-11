@@ -6,7 +6,9 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
+  clampWorkbenchPartnerName,
   configureLiveModelThroughSettingsUi,
+  createPartnerThroughWorkbenchUi,
   createTemporaryWorkbenchWorkspace,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
@@ -17,8 +19,6 @@ import {
   readDocxPlainText,
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
-  selectWorkbenchVisualModel,
-  selectWorkbenchWorkspace,
   sendWorkbenchMessage,
   waitForWorkbenchApplyPanelReady,
   waitForWorkbenchAiRunCompletion,
@@ -63,7 +63,7 @@ const setupMultiFileApplyWorkspace = async (
 }> => {
   const env = loadWorkbenchLiveModelEnv()
   const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
-  const workspaceName = `Workbench ${CASE_ID}`
+  const workspaceName = clampWorkbenchPartnerName(`Workbench ${CASE_ID}`)
   const sourcePath = path.join(workspace.rootPath, SOURCE_FILE)
   await Promise.all([
     copyFile(sourcePath, path.join(workspace.rootPath, FIRST_FILE)),
@@ -78,9 +78,8 @@ const setupMultiFileApplyWorkspace = async (
     rootPath: workspace.rootPath
   })
   await navigateToWorkbench(page)
-  await selectWorkbenchWorkspace(page, workspaceName)
+  await createPartnerThroughWorkbenchUi(page, workspaceName)
   await selectWorkbenchModel(page, env.modelName)
-  await selectWorkbenchVisualModel(page, env.visualModelName)
 
   return {
     env,
@@ -140,15 +139,12 @@ describe('workbench result e2e', () => {
           await getWorkbenchPrefixLocator(page, workbenchSelectors.assistantTurnApplyPrefix)
             .first()
             .waitFor({ state: 'visible' })
-          await page.waitForFunction(
-            (countPrefix) => {
-              const header = document.querySelector(`[data-testid^="${countPrefix}"]`)
-              if (!(header instanceof HTMLElement)) return false
-              const match = header.innerText.trim().match(/^(\d+) 个$/u)
-              return Boolean(match && Number.parseInt(match[1], 10) >= 4)
-            },
-            workbenchSelectors.assistantTurnApplyCountPrefix
-          )
+          await page.waitForFunction((countPrefix) => {
+            const header = document.querySelector(`[data-testid^="${countPrefix}"]`)
+            if (!(header instanceof HTMLElement)) return false
+            const match = header.innerText.trim().match(/^(\d+) 个$/u)
+            return Boolean(match && Number.parseInt(match[1], 10) >= 4)
+          }, workbenchSelectors.assistantTurnApplyCountPrefix)
           const applyCountHeader = getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.assistantTurnApplyCountPrefix
@@ -280,8 +276,6 @@ describe('workbench result e2e', () => {
               result.applyCountHeaderTextExpanded === `${result.applyEntryCount} 个` &&
               result.firstEntryText.includes(FIRST_FILE) &&
               result.secondEntryText.includes(SECOND_FILE) &&
-              result.firstEntryText.includes('Workbench multi-file-apply-tabs') &&
-              result.secondEntryText.includes('Workbench multi-file-apply-tabs') &&
               result.afterFirstEntryText.includes(FIRST_FILE) &&
               !result.afterFirstEntryText.includes(SECOND_FILE) &&
               result.afterSecondEntryText.includes(SECOND_FILE) &&

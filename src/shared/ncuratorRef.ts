@@ -93,7 +93,7 @@ type NcuratorRefBuildInput = {
   | { kind: 'normal'; accessStatus?: never }
 )
 
-export const buildNcuratorRefMarkdown = (input: NcuratorRefBuildInput): string => {
+export const buildNcuratorRefHref = (input: NcuratorRefBuildInput): string => {
   const query = [
     `kind=${input.kind}`,
     `resourceType=${input.resourceType}`,
@@ -103,16 +103,11 @@ export const buildNcuratorRefMarkdown = (input: NcuratorRefBuildInput): string =
   ]
     .filter((part): part is string => Boolean(part))
     .join('&')
-  return `[${escapeMarkdownLinkText(input.label)}](${REF_PREFIX}${query})`
+  return `${REF_PREFIX}${query}`
 }
 
-export const NCURATOR_REF_MARKDOWN_FORMAT_EXAMPLE = buildNcuratorRefMarkdown({
-  label: '资料名称',
-  path: '/workspace/资料.docx',
-  resourceType: 'file',
-  accessStatus: 'accessible',
-  kind: 'reference'
-})
+export const buildNcuratorRefMarkdown = (input: NcuratorRefBuildInput): string =>
+  `[${escapeMarkdownLinkText(input.label)}](${buildNcuratorRefHref(input)})`
 
 const decodeRefValue = (value: string): string => {
   const plusSafeValue = value.replace(/\+/g, '%2B')

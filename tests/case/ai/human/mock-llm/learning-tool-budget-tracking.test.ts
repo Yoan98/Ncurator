@@ -32,7 +32,7 @@ describe('ai human mock-llm backend', () => {
               {
                 output: buildLearnSkillsDecision({
                   skillIds: ['docx-write'],
-                  summary: '再学习 docx 写入'
+                  summary: '再学习 DOCX 写入技能'
                 })
               },
               {
@@ -43,16 +43,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '已观察到 learning 的 active tool 预算统计。'
-                })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
                   summary: '已观察到 learning 的 active tool 预算统计。',
                   deliveryMarkdown: '# Learning Budget\n\n已验证 learning 的 active tool 预算统计。'
-                }
+                })
               }
             ]
           }
@@ -84,10 +77,13 @@ describe('ai human mock-llm backend', () => {
             latestLearningStep.availableToolNames.includes('kb_search') &&
             latestLearningStep.availableToolNames.includes('docx_read_outline') &&
             latestLearningStep.availableToolNames.includes('docx_search') &&
-            latestLearningStep.availableToolNames.includes('docx_read_blocks') &&
-            latestLearningStep.availableToolNames.includes('docx_read_visuals') &&
-            latestLearningStep.availableToolNames.includes('docx_edit') &&
-            latestLearningStep.summary.includes('当前 active tools=19') &&
+            latestLearningStep.availableToolNames.includes('docx_read_nodes') &&
+            latestLearningStep.availableToolNames.includes('read_image') &&
+            latestLearningStep.availableToolNames.includes('docx_content_edit') &&
+            latestLearningStep.availableToolNames.includes('docx_format') &&
+            latestLearningStep.availableToolNames.includes('docx_table_edit') &&
+            latestLearningStep.availableToolNames.includes('docx_comments_revisions') &&
+            latestLearningStep.summary.includes('当前 active tools=') &&
             !latestLearningStep.summary.includes('已淘汰最早学习的 skill='),
           {
             name: 'learning-tracks-active-tool-count-under-budget',

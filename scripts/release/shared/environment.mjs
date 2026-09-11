@@ -25,13 +25,6 @@ export const loadReleaseEnvironment = async (root) => {
     if (!process.env[name]) process.env[name] = value
   }
 
-  if (!process.env.AWS_ACCESS_KEY_ID && process.env.R2_ACCESS_KEY_ID) {
-    process.env.AWS_ACCESS_KEY_ID = process.env.R2_ACCESS_KEY_ID
-  }
-  if (!process.env.AWS_SECRET_ACCESS_KEY && process.env.R2_SECRET_ACCESS_KEY) {
-    process.env.AWS_SECRET_ACCESS_KEY = process.env.R2_SECRET_ACCESS_KEY
-  }
-
   if (process.platform === 'win32' && !process.env.NCURATOR_AWS_CLI) {
     const candidates = [
       process.env.ProgramFiles

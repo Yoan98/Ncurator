@@ -1,191 +1,153 @@
 # NCurator-Desktop 架构
 
-本文是项目唯一架构入口，只描述长期稳定的系统结构、模块职责和主流程。具体字段、工具 schema、底层实现细节以代码和测试为准。应用只支持 macOS 和 Windows。
+本文是项目唯一架构入口，只描述长期稳定的系统结构、模块职责和设计思路。Human harness 消息/投影/compaction/resume、工具契约与投递管道的详细约束见 `doc/ai-harness/`。具体字段、schema、阈值与实现细节以代码和测试为准。应用只支持 macOS 和 Windows。
 
 ## 技术栈
 
-### 核心环境
+- Runtime: Electron v39 · Language: TypeScript v5 · Build: Electron-Vite v5 · Package Manager: pnpm
+- Renderer: React v19 · React Router DOM v7 · Ant Design v5 · Tailwind CSS v4 + Less
+- Main: LangChain JS · LangGraph JS · @huggingface/transformers v3 · SQLite + better-sqlite3 · LanceDB · pdf-parse · mammoth · @node-rs/jieba
 
-- Runtime: Electron v39
-- Language: TypeScript v5
-- Build: Electron-Vite v5
-- Package Manager: pnpm
-
-### Renderer
-
-- React v19
-- React Router DOM v7
-- Ant Design v5
-- Tailwind CSS v4 + Less
-
-### Main
-
-- LangChain JS
-- LangGraph JS
-- @huggingface/transformers v3
-- SQLite + better-sqlite3
-- LanceDB v0.22.3
-- pdf-parse
-- mammoth
-- @node-rs/jieba
-
-## 整体架构
+## 系统分层
 
 NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌入、索引、检索、AI 编排和持久化都优先在本地完成。
 
-系统按进程和能力分层：
+**进程层**
 
-- Renderer 负责 UI 展示、用户交互和状态呈现。
-- Main 负责 AI 编排、数据库访问、文档处理、资料索引和写回流程。
-- Main 负责 AI 运行终态的系统通知；通知由 `SystemNotificationService` 统一适配 macOS 和 Windows，Renderer 只负责接收通知点击后的会话打开事件。
-- Preload 负责 Renderer 与 Main 之间的安全桥接。
-- Shared 负责 IPC 契约、事件类型和跨进程共享类型。
+- Renderer：UI 展示、用户交互、状态呈现。
+- Main：AI 编排、数据库、文档处理、资料索引、写回流程、系统通知。
+- Preload：Renderer 与 Main 之间的安全桥接。
+- Shared：IPC 契约、事件类型、跨进程共享类型。
 
-存储按职责分层：
+**存储层**
 
-- SQLite 是业务真相，保存会话、消息、AI run、审批、文件修改记录、文档元数据、网页源、工作区状态和配置。
-- LanceDB 只保存可重建的 `vector_chunk` 向量索引。
-- SQLite schema 通过 migration 向前演进，LanceDB 索引可按文档 generation 重建。
+- SQLite：业务真相（伙伴、伙伴消息记录、AI run、审批、文件修改记录、文档元数据、工作地址、全局网页、定时任务、浏览器 Tab、配置）。
+- LanceDB：可重建的 `vector_chunk` 向量索引。
+- SQLite 通过 migration 演进；LanceDB 可按文档 generation 重建，检索时库内只保留最新 chunk。
 
-检索采用混合召回：
+**检索**
 
-- 向量搜索负责语义召回。
-- LanceDB FTS 负责关键词召回。
-- RRF 负责融合结果。
+向量搜索（语义）+ LanceDB FTS（关键词）+ RRF 融合。设置页「更新索引」进行中时，知识库工具直接失败；检查更新不拦截检索。检索不再按 `generation_id` 过滤。
+
+### 分层与主链路
+
+```mermaid
+flowchart TB
+  subgraph renderer [Renderer]
+    WB[Workbench UI]
+    Composer[Composer]
+  end
+
+  subgraph bridge [Preload]
+    IPC[IPC 契约]
+  end
+
+  subgraph main [Main]
+    Run[ChatRunService / ai_run]
+    Graph[human graph]
+    Retrieval[Retrieval]
+    Tools[Tool Runtime]
+  end
+
+  subgraph storage [存储层]
+    SQLite[(SQLite 业务真相)]
+    Lance[(LanceDB 可重建索引)]
+  end
+
+  Composer --> WB
+  WB --> IPC --> Run --> Graph
+  Graph --> Retrieval
+  Retrieval --> SQLite
+  Retrieval --> Lance
+  Graph --> Tools
+  Tools --> SQLite
+  Graph --> IPC --> WB
+  Run --> SQLite
+```
 
 ## 核心模块
 
-### Application Shell
+| 模块                      | 职责                                                                                       |
+| ------------------------- | ------------------------------------------------------------------------------------------ |
+| Application Shell         | Renderer / Main / Preload / Shared 协作；伙伴 UI 快照与浏览器 Tab 状态持久化到 SQLite |
+| AI Runtime                | 一次用户请求的 run 生命周期：事件流、审批、工具调用、最终答复                              |
+| Storage                   | `SqliteCore` + `LanceDbCore` + 各领域 Store                                                |
+| Retrieval                 | 文档索引、混合召回、结果融合                                                               |
+| Tool Runtime              | 文件、终端、浏览器等本地能力；审批、命令安全、工作区变更追踪                               |
+| Workspace Change Tracking | terminal 仅当**有效 cwd**（会话起始路径 + 命令前导 `cd`/`Set-Location`）落在某个 `workspace_source.root_path` 内时才扫描该 cwd 子树；默认起始为主目录；工作地址外路径可读写但不纳入变更记录 |
 
-Application Shell 由 Renderer、Main、Preload 和 Shared 组成：Renderer 负责界面与交互，Main 负责本地能力和任务编排，Preload 提供安全桥接，Shared 维护 IPC 契约和共享类型。
+工作地址是默认执行范围而非硬边界：模型默认在设置页现有文件地址内操作，系统级需求可访问地址外绝对路径。文件工具的 `sourcePath` / `outputPath` 必须为本机绝对路径。内置浏览器由 Electron `WebContentsView` 承载，Stagehand 通过本机回环 CDP endpoint 精确连接对应 Tab。对象存储在 `userData/partners/{id}/objects/sha256`。
 
-### AI Runtime
+网页搜索由冻结的 Python sidecar 提供搜索与抓取；内置浏览器由 `WebContentsView` + Stagehand 本机 CDP 连接对应 Tab。`web_search` 只向 AI 返回结构化结果，不得自动展开右侧面板；右侧浏览器仅由 `browser_use` 或用户手动开标签触发。抓取细节见代码与 `tool-design.md`。
 
-AI Runtime 负责一次用户请求的 run 生命周期、事件流、审批、工具调用和最终答复。它不直接承担所有任务逻辑，而是把具体能力交给 human graph、工具和领域服务。
+开发版使用独立 `*-dev` user-data 目录；E2E 可通过 `NCURATOR_USER_DATA_PATH` 提供隔离目录。
 
-### Storage
+## AI 运行时
 
-Storage 负责本地持久化：
+AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`context_budget ⇄ context_compaction → brain → dispatch → (learning | plan | hand) → …`，无工具调用时 `finalizeDelivery` 结束 run。节点细节见 `human-harness.md`。
 
-- `SqliteCore` 负责 SQLite 连接、PRAGMA 和 migration。
-- `LanceDbCore` 只负责 `vector_chunk` 表初始化、搜索和维护。
-- 各领域 Store 负责对应业务数据读写。
-- `WorkbenchUiStore` 保存会话 Composer、右侧面板、最后活动会话和未发送草稿；`BrowserTabStateStore` 保存浏览器标签的可恢复状态。
+**设计文档（修改 AI 行为前必读）**
 
-### Retrieval
+| 文档 | 范围 |
+|------|------|
+| [`doc/ai-harness/human-harness.md`](ai-harness/human-harness.md) | Graph 流转、log 数据源、brain 投影、上下文范围判定、前缀缓存、compaction、resume、skill/plan、交付与失败 |
+| [`doc/ai-harness/tool-design.md`](ai-harness/tool-design.md) | 工具九条原则、HumanToolSpec、参数规范化、统一投递、渲染格式族 |
 
-Retrieval 负责文档索引、向量检索、全文检索和结果融合。检索前会先从 SQLite 读取当前有效的 `document.active_generation_id`，再到 LanceDB 搜索有效 generation。
+**稳定结构摘要**
 
-### Tool Runtime
+- **Transcript 真相源**：`chat_session_message_log`（append-only，表名保留，行挂 `partner_id`）。已经丢掉或已经压进摘要的旧对话原文不再发给主模型。正常交付先写 `run_digest: pending` 并立即完成气泡，后台再追加 completed/failed 供范围判定；丢掉历史时按 `runId` 把召回正文冻进 `discard_checkpoint.conversationHistory`。`ai_run` 管生命周期与 UI 运行态；`ai_file_change` 管文件域，不进 brain prompt。不存在 `chat_search_turn`。清空消息记录物理删除该伙伴 log 与对应 `ai_run`。
+- **Skill / Tool**：builtin skill 默认可 bind；external 需 `learn_skill`；`agent-control` 承载 `learn_skill`、`update_plan`、`read_image`。
+- **伙伴 UI 状态**：`partner_ui_state(partner_id PK)` 保存 Composer 与右侧资源工作台快照；`workbench_ui_state` 只保存 `active_view_key`（当前伙伴 id）。
 
-Tool Runtime 为 AI 提供文件、终端、浏览器等本地能力。工具实现位于 Main，由各领域服务负责具体操作；审批、命令安全策略和工作区变化追踪由运行时统一处理。工作区是默认路径、资料索引与变更追踪范围，不限制工具访问工作区外绝对路径。对 AI 的提示词中，工作区表述为「用户工作区域」：它是默认执行范围而非硬边界，模型默认在工作区域内完成任务，但安装编译器/运行时、全局工具链或系统级终端操作等场景可直接读写工作区域外绝对路径；文件工具的 `sourcePath`/`outputPath` 必须为本机绝对路径，系统不做任何路径拼接，相对路径直接返回错误。
-
-内置浏览器由 Electron `WebContentsView` 承载，Stagehand 通过仅绑定本机回环地址的随机 CDP endpoint 精确连接对应 Tab，不依赖固定端口或 URL 猜测页面。
-
-Workbench 的当前交互状态由 Renderer 管理，并按会话串行写入 SQLite。切换会话时，Main 一次返回消息、运行快照和 UI 快照；Renderer 完成加载后原子替换画面。浏览器服务按 `ownerId` 管理运行期 `WebContentsView`，同时把 URL、历史、缩放和顺序写入 SQLite。正常退出前 Main 会请求 Renderer 强制 flush，再释放浏览器和其他服务。
-
-开发版默认使用独立的 `*-dev` user-data 目录，避免和安装版共享数据库、实例锁或 `DevToolsActivePort`；E2E
-可以通过 `NCURATOR_USER_DATA_PATH` 显式提供隔离目录。
-
-### Workspace Change Tracking
-
-每个 Run 前后只扫描工作区，统一确认新增、修改、删除和重命名，并保存可回退的修改前对象。工作区外绝对路径允许由工具读写，但不进入当前修改记录、预览或回退能力。不同文件格式只负责提供对应的预览方式。
-
-## AI 架构
-
-AI 架构围绕一次 `run` 展开。每次用户请求都会创建一个 run，run 内由 `human` 推进任务。
+### AI 数据源与消费方
 
 ```mermaid
-flowchart TD
-    U["用户输入"]
-    S["会话上下文\nrecent messages + conversation summary"]
-    R["AI Run"]
-    B["context_budget\n检查上下文预算"]
-    C["brain\n决定下一步"]
-    L["learning\n加载 external skill"]
-    H["hand\n执行工具"]
-    M["mouth\n组织最终答复"]
-    P["context_compaction\n压缩 run 内较早历史"]
-    O["最终答复"]
-    N["更新 conversation summary"]
+flowchart LR
+  subgraph write [写入]
+    User[用户发送] --> Graph[human graph 节点]
+    Graph --> Log[(chat_session_message_log)]
+    Tools[Tool Runtime 写文件] --> FC[(ai_file_change)]
+    Graph --> Run[(ai_run)]
+  end
 
-    U --> R
-    S --> R
-    R --> B
-    B -->|预算正常| C
-    B -->|需要压缩| P
-    P --> B
-    C -->|需要能力| L
-    C -->|需要工具| H
-    C -->|可以答复| M
-    L --> B
-    H --> B
-    M --> O
-    O --> N
-    N --> S
+  subgraph read [读取 / 投影]
+    Log --> Brain[brain 上下文]
+    Log --> Conv[UI 对话轮次]
+    Log --> Proc[UI 过程层]
+    Run --> RunUI[运行态 / 审批 / 流式草稿]
+    FC --> WB[Workbench 改动 / 回退]
+    Composer[Composer 配置] -.运行时注入.-> Brain
+  end
 ```
 
-### 主要职责
+细节（消息形态、范围判定、resume append、compaction 范围、多模态配额、failure_code 等）一律以 human-harness 为准，本文不再重复。
 
-- `human` 是当前 AI run 的执行核心。
-- `brain` 负责判断下一步，不直接执行工具。
-- `learning` 负责按需加载 external skill。
-- `hand` 负责执行工具，并把结果交回 run。
-- `mouth` 负责组织最终答复和交付内容。
-- `context_budget` 负责在每一步前检查上下文预算。
-- `context_compaction` 只压缩当前 run 内较早过程，服务本次 run 继续推进。
+## 领域能力（概要）
 
-### Skill 与 Tool
+| 领域                  | 思路                                                                                                                                                            |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DOCX                  | 文档聚合模型 + story 内容树；root、可编辑子节点和 visual 共用一个 `nodesById`，visual 只使用 `nodeId`；读写拆成两个 skill；Source / Working 双态 + 净 Diff 审核 |
+| PDF                   | `pdf_outline` 元数据与书签；页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                                 |
+| PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；`ppt_read_slides` 支持 `detail=full` 或 `detail=images` |
+| Excel                 | 工作表地图 + A1 范围；`excel_read` 四种 type（workbook / range / style / search）；`excel_edit` 一次一个 type；写回成功时结构化 `data` 多为 `{}`，模型侧另有 prose 确认 |
+| KB                    | 混合召回检索全部已索引文件地址与全局网页                                                                                                                        |
+| Image                 | 外部 skill；需 `learn_skill`；按绝对路径生成或更新 PNG / JPEG / WebP                                                                                          |
+| Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                            |
+| 定时任务              | 独立主区配置与启用开关；到点向专属伙伴追加提示词                                                                                                                |
 
-AI 能力通过 skill 和 tool 两层表达：
+各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准；工具契约见 `tool-design.md`，活例子按需生成（`pnpm doc:ai-tool-prompt-audit`，不入库）。
 
-- builtin skill 默认可用，不需要 learning 加载。
-- external skill 需要 learning 显式加载后才进入当前有效能力集合。
-- skill 描述能力边界和适用场景。
-- tool 是具体执行入口，输入输出和限制以代码中的 schema 为准。
+## 存储与索引
 
-skill 不按目录强行拆分，也不等同于工具数量。一个 skill 可以对应多个 tool，多个 skill 也可以共享同一实现域。
+业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL；`generation_id` 只用于写后清理，不进检索 `where`。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为唯一持久化真相。详细 schema 见 `doc/database.md`。
 
-### 结构化输出与服务重试
-
-结构化输出统一使用 `prompt_json`：所有结构化调用都是纯文本请求，不发送 `response_format`，模型按提示词中的 schema 描述输出 JSON，本地通过代码块剥离（`normalizePromptJsonText`）、`jsonrepair` 修复和 Schema 校验兜底。供应商对 `json_schema` / `json_object` 的能力支持无法可靠探测（`/v1/models` 大多不返回能力声明且分模型差异），因此不维护任何运行期策略降级链、策略偏好存储或 transport 切换。
-
-LLM 调用失败严格分两层处理：
-
-- 重试域只负责临时故障重连：HTTP 408/409/425/429/5xx、超时和 `ResourceExhausted` 触发重试，`ResourceExhausted` 使用指数退避（2/4/8/15 秒）避免放大服务端容量压力。
-- 致命错误（401/402/403、鉴权、余额）直接失败，不重试；其余错误按失败信息透传，不触发任何降级。
-
-官方 OpenAI（`api.openai.com`）固定使用 Responses API，其余服务商固定使用 Chat Completions，协议端点由服务商身份静态决定，不做运行期切换；用户地址配置错误通过请求错误信息反馈。
-
-### 会话连续性
-
-跨轮上下文由 conversation summary 和未被摘要覆盖的 recent messages 组成。摘要只覆盖完整轮次，并在后台生成；失败或陈旧结果不会推进覆盖边界。run 内压缩和跨 run 的会话记忆是两套独立机制。
-
-未正常完成的智能模式任务另有一套按会话持久化的恢复快照。快照保存原始任务、历次中断与恢复记录、当前中断原因和 HumanState 进度；同一会话的下一条用户消息会消费当前中断原因、追加恢复记录并启动新的 run。网络错误、超时、用户停止、进程中断、运行上限和未知异常都保留快照，只有任务正常完成或会话被删除时才清理。不同会话的恢复状态严格隔离。
-
-文件 artifact 是预览、差异与回退所需的内部业务数据；传入模型时只投影必要语义，不暴露内部记录标识。运行失败或取消不会撤销已落地的工作区内修改，所有终态都保留可查看、可回退的工作区内修改记录。
-
-## 存储架构
-
-存储架构遵循一个原则：业务状态只有一个真相。
-
-- SQLite 保存业务状态和元数据。
-- Workbench 会话 UI 快照和浏览器可恢复状态也以 SQLite 为唯一持久化真相；`localStorage` 只保留侧栏宽度等全局界面设置。
-- LanceDB 保存可重建索引。
-- 业务查询先经过 SQLite 确认有效范围，再进入 LanceDB 检索。
-- 详细数据库设计见 `doc/database.md`。
-
-## 索引一致性
-
-文件和网页索引通过 `generation_id` 原子切换当前有效版本；新索引失败时继续使用旧版本，检索只读取 active generation。详细规则见 `doc/database.md`。
+文件和网页索引用 `generation_id` 区分新旧写入；成功后删除旧 chunk，失败则删除半成品新 chunk。检索时库中只应留下最新索引。设置页正在「更新索引」时，`kb_search` / `kb_list_documents` 返回错误。
 
 ## 主链路
 
-1. Renderer 发起用户请求。
-2. Main 创建 run，并读取会话上下文和工作区状态。
-3. AI Runtime 通过 human graph 推进 brain、learning、hand、mouth。
-4. 需要资料时进入 Retrieval，读取 SQLite 元数据并检索 LanceDB。
-5. 需要本地能力时由 Tool Runtime 调用对应领域服务。
-6. 工作区内文件写回后记录统一修改记录和对应预览，供 UI 展示和回退；工作区外写入不记录回退。
-7. 最终答复和事件流通过 IPC 回到 Renderer 展示。
-8. Run 持久化为 `completed`、`failed` 或 `cancelled` 后，Main 触发一次系统通知；通知点击通过 Preload IPC 打开对应会话。
+1. Renderer 发起用户请求 → Main 创建 run，读取该伙伴消息记录与设置页文件地址。
+2. AI Runtime 判定本轮是否需要历史，再通过 human graph 推进 `context_budget`、brain、learning、plan、hand；需要压缩时走 `context_compaction`。brain 输出最终交付后立即完成 run，`run_digest` 在后台生成。
+3. 需要资料时 → Retrieval（SQLite 元数据 + LanceDB 检索）。
+4. 需要本地能力时 → Tool Runtime 调用领域服务。
+5. 工作地址内写回 → 记录修改与预览，供 UI 展示和回退。
+6. 最终答复与事件流经 IPC 回到 Renderer；run 终态后 Main 触发系统通知。

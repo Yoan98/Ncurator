@@ -1,10 +1,87 @@
+import { AIMessage, type BaseMessage } from '@langchain/core/messages'
 import type {
   AiLlmDriver,
   AiLlmStructuredDriverResult,
-  AiLlmTextDriverResult
+  AiLlmTextDriverResult,
+  AiLlmToolCallDriverResult
 } from '../../../src/main/services/ai/llmExecutor'
 import type { AiLlmUsage, JsonObject } from '../../../src/shared/types'
 import type { LlmScript, ScriptedLlmCall, ScriptedLlmStep } from './test-types'
+
+type ScriptedToolCall = {
+  id: string
+  name: string
+  args: Record<string, unknown>
+  type: 'tool_call'
+}
+
+const resolveDecisionToToolCalls = (output: JsonObject, callIndex: number): ScriptedToolCall[] => {
+  if (Array.isArray(output.toolCalls)) {
+    return output.toolCalls.flatMap((call, index) => {
+      if (!call || typeof call !== 'object' || Array.isArray(call)) return []
+      const record = call as JsonObject
+      const name = typeof record.name === 'string' ? record.name : ''
+      if (!name) return []
+      const args =
+        record.args && typeof record.args === 'object' && !Array.isArray(record.args)
+          ? (record.args as JsonObject)
+          : {}
+      return [
+        {
+          id: `mock-${callIndex}-${index}`,
+          name,
+          args,
+          type: 'tool_call' as const
+        }
+      ]
+    })
+  }
+  const nextAction = (output.nextAction || {}) as Record<string, unknown>
+  const action = String(nextAction.action || '')
+  if (action === 'learning') {
+    const skillIds = Array.isArray(nextAction.wantLearnSkillIds)
+      ? nextAction.wantLearnSkillIds.filter((item): item is string => typeof item === 'string')
+      : []
+    return [
+      {
+        id: `mock-${callIndex}-learn`,
+        name: 'learn_skill',
+        args: { skillIds },
+        type: 'tool_call'
+      }
+    ]
+  }
+  if (action === 'hand' || action === 'plan') {
+    const calls = Array.isArray(nextAction.calls) ? nextAction.calls : []
+    return calls.map((call, index) => {
+      const record = (call || {}) as Record<string, unknown>
+      return {
+        id: `mock-${callIndex}-${index}`,
+        name: String(record.toolName || ''),
+        args: (record.args && typeof record.args === 'object' ? record.args : {}) as Record<
+          string,
+          unknown
+        >,
+        type: 'tool_call'
+      }
+    })
+  }
+  return []
+}
+
+const resolveDecisionContent = (output: JsonObject): string => {
+  const thought = (output.thought || {}) as Record<string, unknown>
+  if (typeof thought.next === 'string') return thought.next
+  if (typeof thought.text === 'string') return thought.text
+  return ''
+}
+
+const buildUserTextFromMessages = (messages: BaseMessage[]): string =>
+  messages
+    .map((message) =>
+      typeof message.content === 'string' ? message.content : JSON.stringify(message.content)
+    )
+    .join('\n')
 
 const isErrorStep = (
   step: ScriptedLlmStep
@@ -39,8 +116,8 @@ const estimateScriptedUsage = (input: {
   user: string
   rawText: string
 }): AiLlmUsage => ({
-  inputTokens: Math.ceil(`${input.system}\n${input.user}`.length / 3),
-  outputTokens: Math.ceil(input.rawText.length / 3),
+  inputTokens: Math.ceil(`${input.system}\n${input.user}`.length / 4),
+  outputTokens: Math.ceil(input.rawText.length / 4),
   source: 'usage_metadata'
 })
 
@@ -303,6 +380,140 @@ export const createScriptedStructuredOutputDriver = (script: LlmScript): AiLlmDr
       }
 
       throw new Error(`invalid scripted text step: caller=${payload.caller}; callIndex=${payload.callIndex}`)
+    },
+
+    chatMessages: async (input): Promise<AiLlmTextDriverResult> => {
+      const user = buildUserTextFromMessages(input.messages)
+      const { payload, step } = nextCall({
+        caller: input.caller,
+        schemaName: input.schemaName,
+        system: '',
+        user,
+        mode: 'text'
+      })
+
+      if (typeof step === 'function') {
+        const resolved = await step(payload)
+        const output = typeof resolved === 'string' ? resolved : resolveTextFromObjectOutput(resolved)
+        emitChunks(
+          toChunkList({
+            rawText: output,
+            streamingMode: input.streamingMode
+          }),
+          input.observer?.onDelta
+        )
+        return {
+          output,
+          rawText: output,
+          streamed: input.streamingMode === 'force_stream'
+        }
+      }
+
+      if (isErrorStep(step)) {
+        throw new Error(step.error)
+      }
+
+      if (isWaitForAbortStep(step)) {
+        return await waitForAbort({
+          signal: input.signal,
+          onAbortError: step.onAbortError
+        })
+      }
+
+      if (isDelayedErrorStep(step)) {
+        await new Promise((resolve) => setTimeout(resolve, step.waitMs))
+        throw new Error(step.thenError)
+      }
+
+      if (isTextOutputStep(step)) {
+        emitChunks(
+          toChunkList({
+            rawText: step.text,
+            explicitChunks: step.chunks,
+            streamingMode: input.streamingMode
+          }),
+          input.observer?.onDelta
+        )
+        return {
+          output: step.text,
+          rawText: step.text,
+          streamed: input.streamingMode === 'force_stream'
+        }
+      }
+
+      if (isObjectOutputStep(step)) {
+        const output = resolveTextFromObjectOutput(step.output)
+        emitChunks(
+          toChunkList({
+            rawText: output,
+            explicitChunks: step.chunks,
+            streamingMode: input.streamingMode
+          }),
+          input.observer?.onDelta
+        )
+        return {
+          output,
+          rawText: output,
+          streamed: input.streamingMode === 'force_stream'
+        }
+      }
+
+      throw new Error(`invalid scripted messages step: caller=${payload.caller}; callIndex=${payload.callIndex}`)
+    },
+
+    chatTools: async (input): Promise<AiLlmToolCallDriverResult> => {
+      const user = buildUserTextFromMessages(input.messages)
+      const { payload, step } = nextCall({
+        caller: input.caller,
+        schemaName: input.schemaName,
+        system: '',
+        user,
+        mode: 'structured'
+      })
+
+      const resolveMessage = (output: JsonObject): AiLlmToolCallDriverResult => {
+        const content = resolveDecisionContent(output)
+        const toolCalls = resolveDecisionToToolCalls(output, payload.callIndex)
+        const rawText = JSON.stringify(output)
+        emitChunks(
+          toChunkList({ rawText: content, streamingMode: input.streamingMode }),
+          input.observer?.onDelta
+        )
+        if (toolCalls.length > 0) input.observer?.onToolCallDelta?.()
+        return {
+          message: new AIMessage({ content, tool_calls: toolCalls }),
+          rawText,
+          usage: estimateScriptedUsage({ system: '', user, rawText }),
+          streamed: input.streamingMode === 'force_stream',
+          finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop'
+        }
+      }
+
+      if (typeof step === 'function') {
+        const resolved = resolveStructuredOutput(await step(payload))
+        return resolveMessage(resolved)
+      }
+      if (isErrorStep(step)) {
+        throw new Error(step.error)
+      }
+      if (isWaitForAbortStep(step)) {
+        return await waitForAbort({
+          signal: input.signal,
+          onAbortError: step.onAbortError
+        })
+      }
+      if (isDelayedErrorStep(step)) {
+        await new Promise((resolve) => setTimeout(resolve, step.waitMs))
+        throw new Error(step.thenError)
+      }
+      if (isObjectOutputStep(step)) {
+        return resolveMessage(step.output)
+      }
+      if (isTextOutputStep(step)) {
+        const resolved = resolveStructuredOutput(step.text)
+        return resolveMessage(resolved)
+      }
+      throw new Error(`invalid scripted tools step: caller=${payload.caller}; callIndex=${payload.callIndex}`)
     }
   }
 }

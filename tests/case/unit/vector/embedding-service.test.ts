@@ -46,19 +46,6 @@ describe('EmbeddingService', () => {
     expect(service.getStatus()).toBe('error')
   })
 
-  it('maps VC++ runtime load failures to the runtime library message', async () => {
-    const executor: EmbeddingExecutor = {
-      initialize: vi.fn(async () => {
-        throw new Error('A dynamic link library (DLL) initialization routine failed')
-      }),
-      embed: vi.fn(async () => result)
-    }
-    const service = new EmbeddingService({ executor })
-
-    await expect(service.initialize()).rejects.toThrow('向量模型运行库加载失败')
-    expect(service.getStatus()).toBe('error')
-  })
-
   it('retries initialization after a failure', async () => {
     const initialize = vi
       .fn<EmbeddingExecutor['initialize']>()

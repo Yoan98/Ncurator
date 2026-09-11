@@ -100,8 +100,14 @@ export const prepareFileRenderDocument = async (
       : document.fileData instanceof Blob
         ? document.fileData.type
         : undefined
-  const registeredType = resolveRegisteredPreviewType(fileName, document.fileType, sourceMimeType)
-  const originalFileType = document.fileType || getFileExtension(fileName)
+  const registeredType = resolveRegisteredPreviewType(
+    fileName,
+    document.fileType,
+    sourceMimeType,
+    document.filePath
+  )
+  const originalFileType =
+    document.fileType || getFileExtension(fileName) || getFileExtension(document.filePath || '')
   const fileData = getSerializableFileData(document.fileData)
   const sourceBlob =
     document.file instanceof Blob
@@ -112,7 +118,7 @@ export const prepareFileRenderDocument = async (
 
   if (
     !registeredType &&
-    isKnownUnsupportedBinaryType(fileName, document.fileType, sourceMimeType)
+    isKnownUnsupportedBinaryType(fileName, document.fileType, sourceMimeType, document.filePath)
   ) {
     return { status: 'unsupported', fileName, fileType: originalFileType }
   }

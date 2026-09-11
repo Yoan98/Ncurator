@@ -6,7 +6,6 @@ import { importSelectors } from '../../../../../src/renderer/src/testing/selecto
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
-  bindWorkspaceRootThroughSettingsUi,
   createFixtureWorkspace,
   getSettingsLocator,
   navigateToSettingsSection
@@ -44,9 +43,8 @@ describe('settings workspace e2e', () => {
           await writeFile(path.join(rootPath, 'docs', '.draft.txt'), 'draft', 'utf8')
           await writeFile(path.join(rootPath, 'node_modules', 'package.txt'), 'module', 'utf8')
 
-          await createFixtureWorkspace(page, { name: '懒加载工作空间' })
+          await createFixtureWorkspace(page, { name: '懒加载工作空间', rootPath })
           await navigateToSettingsSection(page, 'workspace')
-          await bindWorkspaceRootThroughSettingsUi(page, rootPath)
 
           const tree = getSettingsLocator(page, importSelectors.workspaceTree)
           await tree.getByText('docs').waitFor({ state: 'visible' })

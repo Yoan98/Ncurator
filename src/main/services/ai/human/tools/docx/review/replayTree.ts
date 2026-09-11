@@ -1,32 +1,30 @@
 import type {
-  DocxBlockSpec,
-  DocxCreatedBlock,
-  DocxDetailedBlock,
-  DocxDetailedParagraphBlock,
-  DocxDetailedTableBlock,
-  DocxOp,
-  DocxOutlineBlock,
+  DocxNodeSpec,
+  DocxCreatedNode,
+  DocxDetailedNode,
+  DocxDetailedParagraphNode,
+  DocxDetailedTableNode,
+  DocxOperation,
+  DocxOutlineNode,
   DocxReplayNode,
   DocxReplaySession,
   DocxReplaySnapshot,
-  DocxReplaySnapshotBlock,
+  DocxReplaySnapshotNode,
+  DocxReadNode,
   DocxReviewState
 } from '../types'
 
-const readParagraphRuns = (block: DocxDetailedParagraphBlock) => {
-  const runs: Extract<DocxBlockSpec, { kind: 'paragraph' }>['runs'] = []
-  const visit = (node: unknown): void => {
-    if (!node || typeof node !== 'object') return
-    const value = node as { type?: string; style?: Record<string, unknown>; children?: unknown[] }
-    if (value.type === 'run') {
-      const text = (value.children || [])
+const readParagraphRuns = (node: DocxDetailedParagraphNode) => {
+  const runs: Extract<DocxNodeSpec, { kind: 'paragraph' }>['runs'] = []
+  const visit = (childNode: DocxReadNode): void => {
+    if (childNode.type === 'run') {
+      const text = childNode.children
         .map((child) => {
-          const item = child as { type?: string; text?: string }
-          return item.type === 'text'
-            ? item.text || ''
-            : item.type === 'tab'
+          return child.type === 'text'
+            ? child.text
+            : child.type === 'tab'
               ? '\t'
-              : item.type === 'break'
+              : child.type === 'break'
                 ? '\n'
                 : ''
         })
@@ -34,35 +32,43 @@ const readParagraphRuns = (block: DocxDetailedParagraphBlock) => {
       if (text)
         runs.push({
           text,
-          bold: value.style?.bold as boolean | undefined,
-          italic: value.style?.italic as boolean | undefined,
-          underline: value.style?.underline as boolean | undefined,
-          color: value.style?.color as string | undefined
+          bold: childNode.style?.bold,
+          italic: childNode.style?.italic,
+          underline: childNode.style?.underline,
+          color: childNode.style?.color
         })
       return
     }
-    ;(value.children || []).forEach(visit)
+    if (
+      childNode.type === 'text' ||
+      childNode.type === 'tab' ||
+      childNode.type === 'break' ||
+      childNode.type === 'bookmark' ||
+      childNode.type === 'math'
+    ) {
+      return
+    }
+    childNode.children?.forEach(visit)
   }
-  block.children.forEach(visit)
+  node.children.forEach(visit)
   return runs
 }
 
 const normalizeParagraphSpec = (
-  block: DocxDetailedParagraphBlock
-): Extract<DocxBlockSpec, { kind: 'paragraph' }> => ({
+  node: DocxDetailedParagraphNode
+): Extract<DocxNodeSpec, { kind: 'paragraph' }> => ({
   kind: 'paragraph',
-  style: block.style?.styleName || 'Normal',
-  runs:
-    readParagraphRuns(block).length > 0 ? readParagraphRuns(block) : [{ text: block.text || '' }]
+  style: node.style?.styleId || 'Normal',
+  runs: readParagraphRuns(node).length > 0 ? readParagraphRuns(node) : [{ text: node.text || '' }]
 })
 
 const normalizeTableSpec = (
-  block: DocxDetailedTableBlock
-): Extract<DocxBlockSpec, { kind: 'table' }> => ({
+  node: DocxDetailedTableNode
+): Extract<DocxNodeSpec, { kind: 'table' }> => ({
   kind: 'table',
-  rows: Array.from({ length: block.rows }, (_, rowIndex) =>
-    Array.from({ length: block.cols }, (_, colIndex) => {
-      const cell = block.children[rowIndex]?.children[colIndex]
+  rows: Array.from({ length: node.rows }, (_, rowIndex) =>
+    Array.from({ length: node.cols }, (_, colIndex) => {
+      const cell = node.children[rowIndex]?.children[colIndex]
       return {
         paragraphs:
           cell && cell.children.length > 0
@@ -74,9 +80,10 @@ const normalizeTableSpec = (
                 .map((paragraph) =>
                   normalizeParagraphSpec({
                     ...paragraph,
-                    blockId: '',
-                    blockIndex: block.blockIndex,
-                    layoutMode: block.layoutMode
+                    nodeId: '',
+                    nodeIndex: node.nodeIndex,
+                    layoutMode: node.layoutMode,
+                    story: node.story
                   })
                 )
             : [{ kind: 'paragraph' as const, style: 'Normal', runs: [{ text: '' }] }]
@@ -85,159 +92,159 @@ const normalizeTableSpec = (
   )
 })
 
-export const detailedBlockToSpec = (block: DocxDetailedBlock): DocxBlockSpec => {
-  if (block.type === 'paragraph') return normalizeParagraphSpec(block)
-  if (block.type === 'table') return normalizeTableSpec(block)
+export const detailedNodeToSpec = (node: DocxDetailedNode): DocxNodeSpec => {
+  if (node.type === 'paragraph') return normalizeParagraphSpec(node)
+  if (node.type === 'table') return normalizeTableSpec(node)
   return {
     kind: 'paragraph',
     style: 'Normal',
-    runs: [{ text: block.text || '' }]
+    runs: [{ text: node.text || '' }]
   }
 }
 
-const snapshotStructure = (value: unknown): unknown => {
-  if (Array.isArray(value)) return value.map(snapshotStructure)
-  if (!value || typeof value !== 'object') return value
-  const node = value as Record<string, unknown>
-  return Object.fromEntries(
-    Object.entries(node)
-      .filter(
-        ([key]) =>
-          ![
-            'blockId',
-            'nodeId',
-            'visualId',
-            'blockIndex',
-            'previousBlockId',
-            'nextBlockId'
-          ].includes(key)
-      )
-      .map(([key, child]) => [key, snapshotStructure(child)])
-  )
-}
+const STRUCTURE_OMITTED_FIELDS = new Set([
+  'nodeId',
+  'nodeId',
+  'nodeIndex',
+  'previousNodeId',
+  'nextNodeId'
+])
+
+const structureFingerprint = (value: DocxDetailedNode | undefined): string =>
+  JSON.stringify(value, (key, child) => (STRUCTURE_OMITTED_FIELDS.has(key) ? undefined : child))
 
 const collectSnapshotVisuals = (
-  value: unknown
-): Array<{ visualId: string; kind: import('../types').DocxVisualKind }> => {
-  const out: Array<{ visualId: string; kind: import('../types').DocxVisualKind }> = []
-  const visit = (node: unknown): void => {
-    if (!node || typeof node !== 'object') return
-    if (Array.isArray(node)) return node.forEach(visit)
-    const value = node as {
-      type?: string
-      visualId?: string
-      kind?: import('../types').DocxVisualKind
-      children?: unknown[]
+  value: DocxDetailedNode | undefined
+): Array<{ nodeId: string; kind: import('../types').DocxVisualKind }> => {
+  const out: Array<{ nodeId: string; kind: import('../types').DocxVisualKind }> = []
+  const visit = (node: DocxReadNode | DocxDetailedNode): void => {
+    if (node.type === 'visual') {
+      out.push({ nodeId: node.nodeId, kind: node.kind })
+      node.children?.forEach(visit)
+      return
     }
-    if (value.type === 'visual' && value.visualId && value.kind)
-      out.push({ visualId: value.visualId, kind: value.kind })
-    ;(value.children || []).forEach(visit)
+    if (
+      node.type === 'text' ||
+      node.type === 'tab' ||
+      node.type === 'break' ||
+      node.type === 'bookmark' ||
+      node.type === 'math'
+    ) {
+      return
+    }
+    node.children.forEach(visit)
   }
-  visit(value)
+  if (value) visit(value)
   return out
 }
 
 export const createReplaySnapshot = (input: {
-  outlineBlocks: DocxOutlineBlock[]
-  detailedBlocksById: Map<string, DocxDetailedBlock>
-  rawXmlByBlockId: Map<string, string>
+  packageFingerprint: string
+  outlineNodes: DocxOutlineNode[]
+  detailedNodesById: Map<string, DocxDetailedNode>
+  rawXmlByNodeId: Map<string, string>
 }): DocxReplaySnapshot => {
-  const blocks: DocxReplaySnapshotBlock[] = []
-  const blockById = new Map<string, DocxReplaySnapshotBlock>()
-  const tableBlockIdByCellBlockId = new Map<string, string>()
+  const nodes: DocxReplaySnapshotNode[] = []
+  const nodeById = new Map<string, DocxReplaySnapshotNode>()
+  const tableNodeIdByCellNodeId = new Map<string, string>()
 
-  input.outlineBlocks.forEach((block) => {
-    if (block.type === 'table_cell') {
-      tableBlockIdByCellBlockId.set(block.blockId, block.tableBlockId)
+  input.outlineNodes.forEach((node) => {
+    if (node.type === 'table_cell') {
+      tableNodeIdByCellNodeId.set(node.nodeId, node.tableNodeId)
       return
     }
 
-    const detail = input.detailedBlocksById.get(block.blockId)
+    const detail = input.detailedNodesById.get(node.nodeId)
     if (!detail || detail.type === 'table_cell') return
 
-    const snapshotBlock: DocxReplaySnapshotBlock = {
-      blockId: block.blockId,
-      blockIndex: block.blockIndex,
+    const snapshotNode: DocxReplaySnapshotNode = {
+      nodeId: node.nodeId,
+      nodeIndex: node.nodeIndex,
       kind: detail.type,
-      rawXml: input.rawXmlByBlockId.get(block.blockId) || '',
-      spec: detailedBlockToSpec(detail),
-      structureFingerprint: JSON.stringify(snapshotStructure(detail)),
+      story: detail.story,
+      rawXml: input.rawXmlByNodeId.get(node.nodeId) || '',
+      spec: detailedNodeToSpec(detail),
+      structureFingerprint: structureFingerprint(detail),
       visuals: collectSnapshotVisuals(detail),
-      tableCellBlockIds:
+      tableCellNodeIds:
         detail.type === 'table'
-          ? input.outlineBlocks
+          ? input.outlineNodes
               .filter(
                 (candidate) =>
-                  candidate.type === 'table_cell' && candidate.tableBlockId === detail.blockId
+                  candidate.type === 'table_cell' && candidate.tableNodeId === detail.nodeId
               )
-              .map((cell) => cell.blockId)
+              .map((cell) => cell.nodeId)
           : [],
       tableCells:
         detail.type === 'table'
-          ? input.outlineBlocks
+          ? input.outlineNodes
               .filter(
-                (candidate): candidate is Extract<DocxOutlineBlock, { type: 'table_cell' }> =>
-                  candidate.type === 'table_cell' && candidate.tableBlockId === detail.blockId
+                (candidate): candidate is Extract<DocxOutlineNode, { type: 'table_cell' }> =>
+                  candidate.type === 'table_cell' && candidate.tableNodeId === detail.nodeId
               )
               .map((cell) => ({
-                blockId: cell.blockId,
+                nodeId: cell.nodeId,
                 row: cell.row,
                 col: cell.col,
                 text: cell.text,
-                rawXml: input.rawXmlByBlockId.get(cell.blockId) || '',
-                structureFingerprint: JSON.stringify(
-                  snapshotStructure(input.detailedBlocksById.get(cell.blockId))
+                rawXml: input.rawXmlByNodeId.get(cell.nodeId) || '',
+                structureFingerprint: structureFingerprint(
+                  input.detailedNodesById.get(cell.nodeId)
                 ),
-                visuals: collectSnapshotVisuals(input.detailedBlocksById.get(cell.blockId))
+                visuals: collectSnapshotVisuals(input.detailedNodesById.get(cell.nodeId))
               }))
           : undefined
     }
 
-    blocks.push(snapshotBlock)
-    blockById.set(snapshotBlock.blockId, snapshotBlock)
-    snapshotBlock.tableCellBlockIds.forEach((cellBlockId) => {
-      tableBlockIdByCellBlockId.set(cellBlockId, snapshotBlock.blockId)
+    nodes.push(snapshotNode)
+    nodeById.set(snapshotNode.nodeId, snapshotNode)
+    snapshotNode.tableCellNodeIds.forEach((cellNodeId) => {
+      tableNodeIdByCellNodeId.set(cellNodeId, snapshotNode.nodeId)
     })
   })
 
   return {
-    blocks,
-    blockById,
-    tableBlockIdByCellBlockId
+    packageFingerprint: input.packageFingerprint,
+    nodes,
+    nodeById,
+    tableNodeIdByCellNodeId
   }
 }
 
 export const createEmptyReplaySnapshot = (): DocxReplaySnapshot => ({
-  blocks: [],
-  blockById: new Map(),
-  tableBlockIdByCellBlockId: new Map()
+  packageFingerprint: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+  nodes: [],
+  nodeById: new Map(),
+  tableNodeIdByCellNodeId: new Map()
 })
 
 const buildNode = (input: {
-  blockId: string
-  blockIndex: number
-  kind: 'paragraph' | 'table'
+  nodeId: string
+  nodeIndex: number
+  kind: 'paragraph' | 'table' | 'content_control' | 'revision'
+  story: DocxReplayNode['story']
   sourceOrigin: 'source' | 'generated'
   reviewState: DocxReviewState
   parentNodeId?: string
-  sourceBlockId?: string
-  currentBlockId?: string
-  spec: DocxBlockSpec
+  sourceNodeId?: string
+  currentNodeId?: string
+  spec: DocxNodeSpec
   structureFingerprint: string
-  visualIds: string[]
+  visualNodeIds: string[]
   createdRevisionRef: string
   changedRevisionRef?: string
-  reviewQuery?: string
+  reviewQueries?: string[]
 }): DocxReplayNode => ({
-  nodeId: `${input.reviewState}:${input.blockId}:${input.createdRevisionRef}:${input.changedRevisionRef || 'active'}`,
-  blockId: input.blockId,
-  blockIndex: input.blockIndex,
+  reviewId: `${input.reviewState}:${input.nodeId}:${input.createdRevisionRef}:${input.changedRevisionRef || 'active'}`,
+  nodeId: input.nodeId,
+  nodeIndex: input.nodeIndex,
   kind: input.kind,
+  story: input.story,
   sourceOrigin: input.sourceOrigin,
   reviewState: input.reviewState,
   parentNodeId: input.parentNodeId,
-  sourceBlockId: input.sourceBlockId,
-  currentBlockId: input.currentBlockId,
+  sourceNodeId: input.sourceNodeId,
+  currentNodeId: input.currentNodeId,
   predecessorNodeId: undefined,
   successorNodeId: undefined,
   replacedFromNodeId: undefined,
@@ -245,17 +252,17 @@ const buildNode = (input: {
   anchorSide: undefined,
   spec: input.spec,
   structureFingerprint: input.structureFingerprint,
-  visualIds: input.visualIds,
+  visualNodeIds: input.visualNodeIds,
   createdRevisionRef: input.createdRevisionRef,
   changedRevisionRef: input.changedRevisionRef,
-  reviewQuery: input.reviewQuery,
+  reviewQueries: input.reviewQueries,
   tableCellChanges: undefined
 })
 
 const reindexBodyNodes = (session: DocxReplaySession): void => {
-  session.bodyNodeIds.forEach((nodeId, index) => {
+  session.rootNodeIds.forEach((nodeId, index) => {
     const node = session.nodeById.get(nodeId)
-    if (node) node.blockIndex = index
+    if (node) node.nodeIndex = index
   })
 }
 
@@ -266,42 +273,42 @@ const findSnapshotMatchIndex = (input: {
   cursor: number
   nextSnapshot: DocxReplaySnapshot
   node: DocxReplayNode
-  usedBlockIds: Set<string>
-  reservedBlockIds?: ReadonlySet<string>
+  usedNodeIds: Set<string>
+  reservedNodeIds?: ReadonlySet<string>
 }): number => {
-  for (let index = input.cursor; index < input.nextSnapshot.blocks.length; index += 1) {
-    const block = input.nextSnapshot.blocks[index]
+  for (let index = input.cursor; index < input.nextSnapshot.nodes.length; index += 1) {
+    const node = input.nextSnapshot.nodes[index]
     if (
-      input.usedBlockIds.has(block.blockId) ||
-      input.reservedBlockIds?.has(block.blockId) ||
-      block.kind !== input.node.kind
+      input.usedNodeIds.has(node.nodeId) ||
+      input.reservedNodeIds?.has(node.nodeId) ||
+      node.kind !== input.node.kind
     ) {
       continue
     }
     if (
-      block.blockId === input.node.currentBlockId ||
-      block.blockId === input.node.blockId ||
-      (input.node.sourceBlockId && block.blockId === input.node.sourceBlockId)
+      node.nodeId === input.node.currentNodeId ||
+      node.nodeId === input.node.nodeId ||
+      (input.node.sourceNodeId && node.nodeId === input.node.sourceNodeId)
     ) {
       return index
     }
   }
 
-  for (let index = input.cursor; index < input.nextSnapshot.blocks.length; index += 1) {
-    const block = input.nextSnapshot.blocks[index]
+  for (let index = input.cursor; index < input.nextSnapshot.nodes.length; index += 1) {
+    const node = input.nextSnapshot.nodes[index]
     if (
-      input.usedBlockIds.has(block.blockId) ||
-      input.reservedBlockIds?.has(block.blockId) ||
-      block.kind !== input.node.kind
+      input.usedNodeIds.has(node.nodeId) ||
+      input.reservedNodeIds?.has(node.nodeId) ||
+      node.kind !== input.node.kind
     ) {
       continue
     }
-    const visualIdsMatch =
-      input.node.visualIds.length === block.visuals.length &&
-      input.node.visualIds.every(
-        (visualId, visualIndex) => visualId === block.visuals[visualIndex]?.visualId
+    const visualNodeIdsMatch =
+      input.node.visualNodeIds.length === node.visuals.length &&
+      input.node.visualNodeIds.every(
+        (nodeId, visualIndex) => nodeId === node.visuals[visualIndex]?.nodeId
       )
-    if (block.structureFingerprint === input.node.structureFingerprint && visualIdsMatch) {
+    if (node.structureFingerprint === input.node.structureFingerprint && visualNodeIdsMatch) {
       return index
     }
   }
@@ -313,15 +320,15 @@ const rebindVisibleNodesToSnapshot = (input: {
   session: DocxReplaySession
   nextSnapshot: DocxReplaySnapshot
   skipNodeIds?: ReadonlySet<string>
-  reservedBlockIds?: ReadonlySet<string>
+  reservedNodeIds?: ReadonlySet<string>
 }): void => {
-  const { nextSnapshot, session, skipNodeIds, reservedBlockIds } = input
-  const visibleNodes = session.bodyNodeIds
+  const { nextSnapshot, session, skipNodeIds, reservedNodeIds } = input
+  const visibleNodes = session.rootNodeIds
     .map((nodeId) => session.nodeById.get(nodeId))
     .filter((node): node is DocxReplayNode =>
       Boolean(node && isVisibleReviewState(node.reviewState))
     )
-  const usedBlockIds = new Set<string>()
+  const usedNodeIds = new Set<string>()
   let cursor = 0
 
   visibleNodes.forEach((node) => {
@@ -329,20 +336,20 @@ const rebindVisibleNodesToSnapshot = (input: {
       cursor,
       nextSnapshot,
       node,
-      usedBlockIds,
-      reservedBlockIds
+      usedNodeIds,
+      reservedNodeIds
     })
     if (matchIndex < 0) return
 
-    const matchedBlock = nextSnapshot.blocks[matchIndex]
-    usedBlockIds.add(matchedBlock.blockId)
+    const matchedNode = nextSnapshot.nodes[matchIndex]
+    usedNodeIds.add(matchedNode.nodeId)
     cursor = matchIndex + 1
     if (skipNodeIds?.has(node.nodeId)) return
-    node.currentBlockId = matchedBlock.blockId
-    node.blockIndex = matchedBlock.blockIndex
-    node.spec = matchedBlock.spec
-    node.structureFingerprint = matchedBlock.structureFingerprint
-    node.visualIds = matchedBlock.visuals.map((visual) => visual.visualId)
+    node.currentNodeId = matchedNode.nodeId
+    node.nodeIndex = matchedNode.nodeIndex
+    node.spec = matchedNode.spec
+    node.structureFingerprint = matchedNode.structureFingerprint
+    node.visualNodeIds = matchedNode.visuals.map((visual) => visual.nodeId)
   })
 }
 
@@ -351,14 +358,14 @@ const resolveInsertIndex = (
   anchorNodeId: string | undefined,
   position: 'before' | 'after'
 ): number => {
-  if (!anchorNodeId) return position === 'before' ? 0 : session.bodyNodeIds.length
-  const anchorIndex = session.bodyNodeIds.findIndex((nodeId) => nodeId === anchorNodeId)
-  if (anchorIndex < 0) return session.bodyNodeIds.length
+  if (!anchorNodeId) return position === 'before' ? 0 : session.rootNodeIds.length
+  const anchorIndex = session.rootNodeIds.findIndex((nodeId) => nodeId === anchorNodeId)
+  if (anchorIndex < 0) return session.rootNodeIds.length
   if (position === 'before') return anchorIndex
 
   let insertIndex = anchorIndex + 1
-  while (insertIndex < session.bodyNodeIds.length) {
-    const candidate = session.nodeById.get(session.bodyNodeIds[insertIndex])
+  while (insertIndex < session.rootNodeIds.length) {
+    const candidate = session.nodeById.get(session.rootNodeIds[insertIndex])
     if (
       !candidate ||
       candidate.parentNodeId !== anchorNodeId ||
@@ -378,34 +385,32 @@ const insertNodeIds = (
   position: 'before' | 'after'
 ): void => {
   const insertIndex = resolveInsertIndex(session, anchorNodeId, position)
-  session.bodyNodeIds.splice(insertIndex, 0, ...nodeIds)
+  session.rootNodeIds.splice(insertIndex, 0, ...nodeIds)
   reindexBodyNodes(session)
 }
 
-const findVisibleNodeIdByBlockId = (
+const findVisibleNodeIdByNodeId = (
   session: DocxReplaySession,
-  blockId: string
+  nodeId: string
 ): string | undefined =>
-  session.bodyNodeIds.find((nodeId) => {
-    const node = session.nodeById.get(nodeId)
+  session.rootNodeIds.find((reviewId) => {
+    const node = session.nodeById.get(reviewId)
     return Boolean(
       node &&
-      (node.currentBlockId === blockId ||
-        node.blockId === blockId ||
-        node.sourceBlockId === blockId) &&
+      (node.currentNodeId === nodeId || node.nodeId === nodeId || node.sourceNodeId === nodeId) &&
       node.reviewState !== 'deleted' &&
       node.reviewState !== 'replaced-old'
     )
   })
 
-const resolveBodyBlocksFromCreated = (
+const resolveBodyNodesFromCreated = (
   snapshot: DocxReplaySnapshot,
-  createdBlocks: DocxCreatedBlock[]
-): DocxReplaySnapshotBlock[] => {
+  createdNodes: DocxCreatedNode[]
+): DocxReplaySnapshotNode[] => {
   const createdBodyIds = new Set(
-    createdBlocks.filter((block) => block.type !== 'table_cell').map((block) => block.blockId)
+    createdNodes.filter((node) => node.type !== 'table_cell').map((node) => node.nodeId)
   )
-  return snapshot.blocks.filter((block) => createdBodyIds.has(block.blockId))
+  return snapshot.nodes.filter((node) => createdBodyIds.has(node.nodeId))
 }
 
 const cloneNodeAsOldRevision = (
@@ -415,33 +420,34 @@ const cloneNodeAsOldRevision = (
 ): DocxReplayNode => ({
   ...node,
   nodeId: `${node.nodeId}:${reviewState}:${revisionRef}`,
-  currentBlockId: undefined,
+  currentNodeId: undefined,
   reviewState,
   successorNodeId: undefined,
   changedRevisionRef: revisionRef,
-  reviewQuery: undefined
+  reviewQueries: undefined
 })
 
 const buildCurrentNodeFromSnapshot = (
-  snapshotBlock: DocxReplaySnapshotBlock,
+  snapshotNode: DocxReplaySnapshotNode,
   revisionRef: string,
   reviewState: 'inserted' | 'replaced-new',
   sourceOrigin: 'source' | 'generated',
-  sourceBlockId?: string,
+  sourceNodeId?: string,
   parentNodeId?: string
 ): DocxReplayNode =>
   buildNode({
-    blockId: snapshotBlock.blockId,
-    blockIndex: snapshotBlock.blockIndex,
-    kind: snapshotBlock.kind,
+    nodeId: snapshotNode.nodeId,
+    nodeIndex: snapshotNode.nodeIndex,
+    kind: snapshotNode.kind,
+    story: snapshotNode.story,
     sourceOrigin,
     reviewState,
     parentNodeId,
-    sourceBlockId,
-    currentBlockId: snapshotBlock.blockId,
-    spec: snapshotBlock.spec,
-    structureFingerprint: snapshotBlock.structureFingerprint,
-    visualIds: snapshotBlock.visuals.map((visual) => visual.visualId),
+    sourceNodeId,
+    currentNodeId: snapshotNode.nodeId,
+    spec: snapshotNode.spec,
+    structureFingerprint: snapshotNode.structureFingerprint,
+    visualNodeIds: snapshotNode.visuals.map((visual) => visual.nodeId),
     createdRevisionRef: revisionRef
   })
 
@@ -465,29 +471,29 @@ const replaceNodeWithReviewPair = (input: {
   oldNode: DocxReplayNode
   newNode: DocxReplayNode
 }): void => {
-  const index = input.session.bodyNodeIds.findIndex((nodeId) => nodeId === input.targetNodeId)
+  const index = input.session.rootNodeIds.findIndex((nodeId) => nodeId === input.targetNodeId)
   if (index < 0) return
   input.session.nodeById.set(input.oldNode.nodeId, input.oldNode)
   input.session.nodeById.set(input.newNode.nodeId, input.newNode)
-  input.session.bodyNodeIds.splice(index, 1, input.oldNode.nodeId, input.newNode.nodeId)
+  input.session.rootNodeIds.splice(index, 1, input.oldNode.nodeId, input.newNode.nodeId)
   reindexBodyNodes(input.session)
 }
 
-const resolveSnapshotBlockForMutation = (input: {
+const resolveSnapshotNodeForMutation = (input: {
   session: DocxReplaySession
   nextSnapshot: DocxReplaySnapshot
-  createdBlocks: DocxCreatedBlock[]
-  targetBlockId: string
+  createdNodes: DocxCreatedNode[]
+  targetNodeId: string
   targetNode?: DocxReplayNode
-}): DocxReplaySnapshotBlock | undefined => {
-  const createdBodyBlocks = resolveBodyBlocksFromCreated(input.nextSnapshot, input.createdBlocks)
-  if (createdBodyBlocks.length > 0) return createdBodyBlocks[0]
-  const direct = input.nextSnapshot.blockById.get(input.targetBlockId)
+}): DocxReplaySnapshotNode | undefined => {
+  const createdBodyNodes = resolveBodyNodesFromCreated(input.nextSnapshot, input.createdNodes)
+  if (createdBodyNodes.length > 0) return createdBodyNodes[0]
+  const direct = input.nextSnapshot.nodeById.get(input.targetNodeId)
   if (direct) return direct
-  const tableBlockId = input.nextSnapshot.tableBlockIdByCellBlockId.get(input.targetBlockId)
-  if (tableBlockId) return input.nextSnapshot.blockById.get(tableBlockId)
+  const tableNodeId = input.nextSnapshot.tableNodeIdByCellNodeId.get(input.targetNodeId)
+  if (tableNodeId) return input.nextSnapshot.nodeById.get(tableNodeId)
   const positional = input.targetNode
-    ? input.nextSnapshot.blocks[input.targetNode.blockIndex]
+    ? input.nextSnapshot.nodes[input.targetNode.nodeIndex]
     : undefined
   return positional?.kind === input.targetNode?.kind ? positional : undefined
 }
@@ -496,30 +502,30 @@ export const createReplaySessionFromSnapshot = (input: {
   sourcePath: string
   targetMode?: DocxReplaySession['targetMode']
   sourceDocId: string
-  meta: DocxReplaySession['meta']
   stats: DocxReplaySession['stats']
   diskFingerprint: DocxReplaySession['diskFingerprint']
   snapshot: DocxReplaySnapshot
 }): DocxReplaySession => {
   const nodeById = new Map<string, DocxReplayNode>()
-  const bodyNodeIds: string[] = []
+  const rootNodeIds: string[] = []
 
-  input.snapshot.blocks.forEach((block) => {
-    const node = buildNode({
-      blockId: block.blockId,
-      blockIndex: block.blockIndex,
-      kind: block.kind,
+  input.snapshot.nodes.forEach((snapshotNode) => {
+    const reviewNode = buildNode({
+      nodeId: snapshotNode.nodeId,
+      nodeIndex: snapshotNode.nodeIndex,
+      kind: snapshotNode.kind,
+      story: snapshotNode.story,
       sourceOrigin: 'source',
       reviewState: 'normal',
-      sourceBlockId: block.blockId,
-      currentBlockId: block.blockId,
-      spec: block.spec,
-      structureFingerprint: block.structureFingerprint,
-      visualIds: block.visuals.map((visual) => visual.visualId),
+      sourceNodeId: snapshotNode.nodeId,
+      currentNodeId: snapshotNode.nodeId,
+      spec: snapshotNode.spec,
+      structureFingerprint: snapshotNode.structureFingerprint,
+      visualNodeIds: snapshotNode.visuals.map((visual) => visual.nodeId),
       createdRevisionRef: 'v1'
     })
-    nodeById.set(node.nodeId, node)
-    bodyNodeIds.push(node.nodeId)
+    nodeById.set(reviewNode.reviewId, reviewNode)
+    rootNodeIds.push(reviewNode.reviewId)
   })
 
   return {
@@ -529,7 +535,6 @@ export const createReplaySessionFromSnapshot = (input: {
     activeDocId: input.sourceDocId,
     activeRevisionRef: 'v1',
     nextRevisionNumber: 2,
-    meta: input.meta,
     stats: input.stats,
     diskFingerprint: input.diskFingerprint,
     sourceSnapshot: input.snapshot,
@@ -538,102 +543,114 @@ export const createReplaySessionFromSnapshot = (input: {
     revisionRefByDocId: new Map([[input.sourceDocId, 'v1']]),
     revisionByDocId: new Map(),
     nodeById,
-    bodyNodeIds
+    rootNodeIds
   }
 }
 
 export const applyRevisionToReplaySession = (input: {
   session: DocxReplaySession
   revisionRef: string
-  op: DocxOp
-  createdBlocks: DocxCreatedBlock[]
+  op: DocxOperation
+  createdNodes: DocxCreatedNode[]
   nextSnapshot: DocxReplaySnapshot
 }): void => {
-  const { session, revisionRef, op, createdBlocks, nextSnapshot } = input
+  const { session, revisionRef, op, createdNodes, nextSnapshot } = input
   if (op.type === 'create_document') {
-    const createdBodyBlocks = resolveBodyBlocksFromCreated(nextSnapshot, createdBlocks)
-    const insertedNodeIds = createdBodyBlocks.map((block) => {
-      const node = buildCurrentNodeFromSnapshot(block, revisionRef, 'inserted', 'generated')
-      session.nodeById.set(node.nodeId, node)
-      return node.nodeId
+    const createdBodyNodes = resolveBodyNodesFromCreated(nextSnapshot, createdNodes)
+    const insertedNodeIds = createdBodyNodes.map((snapshotNode) => {
+      const reviewNode = buildCurrentNodeFromSnapshot(
+        snapshotNode,
+        revisionRef,
+        'inserted',
+        'generated'
+      )
+      session.nodeById.set(reviewNode.reviewId, reviewNode)
+      return reviewNode.reviewId
     })
     insertNodeIds(session, undefined, insertedNodeIds, 'after')
     session.activeSnapshot = nextSnapshot
     return
   }
 
-  const requestedTargetBlockId =
-    op.type === 'update_table_cell' ||
-    (op.type === 'replace_text' && Array.isArray(op.blockIds) && op.blockIds[0])
-      ? op.type === 'update_table_cell'
-        ? op.blockId
-        : String(op.blockIds?.[0] || '')
-      : 'blockId' in op
-        ? String(op.blockId || '')
-        : ''
-  const targetBlockId =
-    session.activeSnapshot.tableBlockIdByCellBlockId.get(requestedTargetBlockId) ||
-    requestedTargetBlockId
-  const targetNodeId = targetBlockId
-    ? findVisibleNodeIdByBlockId(session, targetBlockId)
+  if (op.type === 'move_node' && (op.position === 'before' || op.position === 'after')) {
+    const movingNodeId = findVisibleNodeIdByNodeId(session, op.nodeId)
+    const anchorNodeId = findVisibleNodeIdByNodeId(session, op.anchorNodeId)
+    if (movingNodeId && anchorNodeId && movingNodeId !== anchorNodeId) {
+      const movingIndex = session.rootNodeIds.indexOf(movingNodeId)
+      if (movingIndex >= 0) session.rootNodeIds.splice(movingIndex, 1)
+      const anchorIndex = session.rootNodeIds.indexOf(anchorNodeId)
+      if (anchorIndex >= 0) {
+        session.rootNodeIds.splice(anchorIndex + (op.position === 'after' ? 1 : 0), 0, movingNodeId)
+        reindexBodyNodes(session)
+      }
+    }
+  }
+
+  const requestedTargetNodeId =
+    'nodeId' in op && op.nodeId ? op.nodeId : 'tableNodeId' in op ? op.tableNodeId : ''
+  const targetDocumentNodeId =
+    session.activeSnapshot.tableNodeIdByCellNodeId.get(requestedTargetNodeId) ||
+    requestedTargetNodeId
+  const targetNodeId = targetDocumentNodeId
+    ? findVisibleNodeIdByNodeId(session, targetDocumentNodeId)
     : undefined
   const targetNodeIdsToSkip =
     targetNodeId &&
-    (op.type === 'delete_block' ||
-      op.type === 'replace_block' ||
+    (op.type === 'delete_node' ||
+      op.type === 'delete_table' ||
+      op.type === 'replace_node' ||
       op.type === 'replace_text' ||
-      op.type === 'style' ||
-      op.type === 'update_table_cell')
+      op.type.startsWith('format_') ||
+      op.type === 'apply_named_style' ||
+      op.type === 'reset_format')
       ? new Set([targetNodeId])
       : undefined
-  const reservedBlockIds =
-    op.type === 'insert_before' || op.type === 'insert_after'
-      ? new Set(
-          resolveBodyBlocksFromCreated(nextSnapshot, createdBlocks).map((block) => block.blockId)
-        )
+  const reservedNodeIds =
+    op.type === 'insert_nodes' || op.type === 'create_table' || op.type === 'insert_image'
+      ? new Set(resolveBodyNodesFromCreated(nextSnapshot, createdNodes).map((node) => node.nodeId))
       : undefined
 
   rebindVisibleNodesToSnapshot({
     session,
     nextSnapshot,
     skipNodeIds: targetNodeIdsToSkip,
-    reservedBlockIds
+    reservedNodeIds
   })
 
-  if (op.type === 'insert_before' || op.type === 'insert_after') {
-    const anchorNodeId = findVisibleNodeIdByBlockId(session, op.anchorBlockId)
-    const createdBodyBlocks = resolveBodyBlocksFromCreated(nextSnapshot, createdBlocks)
-    const insertedNodeIds = createdBodyBlocks.map((block) => {
-      const node = buildCurrentNodeFromSnapshot(
-        block,
+  if (op.type === 'insert_nodes' || op.type === 'create_table' || op.type === 'insert_image') {
+    const documentAnchorId = 'nodeId' in op ? op.nodeId : undefined
+    const anchorNodeId = documentAnchorId
+      ? findVisibleNodeIdByNodeId(session, documentAnchorId)
+      : undefined
+    const position = op.position === 'before' ? 'before' : 'after'
+    const createdBodyNodes = resolveBodyNodesFromCreated(nextSnapshot, createdNodes)
+    const insertedNodeIds = createdBodyNodes.map((snapshotNode) => {
+      const reviewNode = buildCurrentNodeFromSnapshot(
+        snapshotNode,
         revisionRef,
         'inserted',
         'generated',
         undefined,
         anchorNodeId
       )
-      node.anchorFromNodeId = anchorNodeId
-      node.anchorSide = op.type === 'insert_before' ? 'before' : 'after'
-      session.nodeById.set(node.nodeId, node)
-      return node.nodeId
+      reviewNode.anchorFromNodeId = anchorNodeId
+      reviewNode.anchorSide = position
+      session.nodeById.set(reviewNode.reviewId, reviewNode)
+      return reviewNode.reviewId
     })
-    insertNodeIds(
-      session,
-      anchorNodeId,
-      insertedNodeIds,
-      op.type === 'insert_before' ? 'before' : 'after'
-    )
+    insertNodeIds(session, anchorNodeId, insertedNodeIds, position)
     session.activeSnapshot = nextSnapshot
     return
   }
 
-  if (op.type === 'delete_block') {
-    const targetNodeId = findVisibleNodeIdByBlockId(session, op.blockId)
+  if (op.type === 'delete_node' || op.type === 'delete_table') {
+    const documentNodeId = op.type === 'delete_table' ? op.tableNodeId : op.nodeId
+    const targetNodeId = findVisibleNodeIdByNodeId(session, documentNodeId)
     if (targetNodeId) {
       const targetNode = session.nodeById.get(targetNodeId)
       if (targetNode) {
         targetNode.reviewState = 'deleted'
-        targetNode.currentBlockId = undefined
+        targetNode.currentNodeId = undefined
         targetNode.changedRevisionRef = revisionRef
       }
     }
@@ -648,67 +665,81 @@ export const applyRevisionToReplaySession = (input: {
     return
   }
 
-  if (op.type === 'style') {
-    const snapshotBlock = resolveSnapshotBlockForMutation({
+  if (
+    op.type === 'format_text' ||
+    op.type === 'format_paragraph' ||
+    op.type === 'format_table' ||
+    op.type === 'format_row' ||
+    op.type === 'format_cell' ||
+    op.type === 'format_section' ||
+    op.type === 'reset_format' ||
+    op.type === 'apply_named_style' ||
+    op.type === 'set_numbering'
+  ) {
+    const snapshotNode = resolveSnapshotNodeForMutation({
       session,
       nextSnapshot,
-      createdBlocks,
-      targetBlockId,
+      createdNodes,
+      targetNodeId,
       targetNode
     })
-    if (!snapshotBlock) {
+    if (!snapshotNode) {
       targetNode.reviewState = 'formatted'
       targetNode.changedRevisionRef = revisionRef
-      targetNode.reviewQuery = op.target.type === 'text_match' ? op.target.query : undefined
+      targetNode.reviewQueries =
+        op.type === 'format_text' && op.text
+          ? [...new Set([...(targetNode.reviewQueries || []), op.text])]
+          : undefined
       session.activeSnapshot = nextSnapshot
       return
     }
 
     targetNode.reviewState = 'formatted'
-    targetNode.currentBlockId = snapshotBlock.blockId
-    targetNode.blockIndex = snapshotBlock.blockIndex
-    targetNode.spec = snapshotBlock.spec
-    targetNode.structureFingerprint = snapshotBlock.structureFingerprint
-    targetNode.visualIds = snapshotBlock.visuals.map((visual) => visual.visualId)
+    targetNode.currentNodeId = snapshotNode.nodeId
+    targetNode.nodeIndex = snapshotNode.nodeIndex
+    targetNode.spec = snapshotNode.spec
+    targetNode.structureFingerprint = snapshotNode.structureFingerprint
+    targetNode.visualNodeIds = snapshotNode.visuals.map((visual) => visual.nodeId)
     targetNode.changedRevisionRef = revisionRef
-    targetNode.reviewQuery = op.target.type === 'text_match' ? op.target.query : undefined
+    targetNode.reviewQueries =
+      op.type === 'format_text' && op.text
+        ? [...new Set([...(targetNode.reviewQueries || []), op.text])]
+        : undefined
     session.activeSnapshot = nextSnapshot
     return
   }
 
   const oldState =
-    op.type === 'replace_block' || op.type === 'replace_text' || op.type === 'update_table_cell'
-      ? 'replaced-old'
-      : 'deleted'
+    op.type === 'replace_node' || op.type === 'replace_text' ? 'replaced-old' : 'deleted'
 
   const oldNode = cloneNodeAsOldRevision(targetNode, revisionRef, oldState)
-  const snapshotBlock = resolveSnapshotBlockForMutation({
+  const snapshotNode = resolveSnapshotNodeForMutation({
     session,
     nextSnapshot,
-    createdBlocks,
-    targetBlockId,
+    createdNodes,
+    targetNodeId,
     targetNode
   })
 
-  if (!snapshotBlock) {
+  if (!snapshotNode) {
     targetNode.reviewState = oldState
-    targetNode.currentBlockId = undefined
+    targetNode.currentNodeId = undefined
     targetNode.changedRevisionRef = revisionRef
     session.activeSnapshot = nextSnapshot
     return
   }
 
   const newNode = buildCurrentNodeFromSnapshot(
-    snapshotBlock,
+    snapshotNode,
     revisionRef,
     'replaced-new',
     targetNode.sourceOrigin,
-    targetNode.sourceBlockId
+    targetNode.sourceNodeId
   )
-  oldNode.nodeId = resolveUniqueNodeId(session, oldNode.nodeId)
-  newNode.nodeId = resolveUniqueNodeId(session, newNode.nodeId, new Set([oldNode.nodeId]))
-  oldNode.successorNodeId = newNode.nodeId
-  newNode.predecessorNodeId = oldNode.nodeId
+  oldNode.reviewId = resolveUniqueNodeId(session, oldNode.reviewId)
+  newNode.reviewId = resolveUniqueNodeId(session, newNode.reviewId, new Set([oldNode.reviewId]))
+  oldNode.successorNodeId = newNode.reviewId
+  newNode.predecessorNodeId = oldNode.reviewId
   newNode.replacedFromNodeId = targetNode.nodeId
   replaceNodeWithReviewPair({
     session,
@@ -723,7 +754,7 @@ export const projectReplayNodes = (
   session: DocxReplaySession,
   kind: 'review' | 'committed'
 ): DocxReplayNode[] =>
-  session.bodyNodeIds
+  session.rootNodeIds
     .map((nodeId) => session.nodeById.get(nodeId))
     .filter((node): node is DocxReplayNode => Boolean(node))
     .filter((node) => {

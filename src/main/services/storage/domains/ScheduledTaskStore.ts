@@ -16,14 +16,13 @@ type ScheduledTaskRow = {
   schedule_type?: unknown
   time_of_day?: unknown
   weekday?: unknown
-  workspace_id?: unknown
+  partner_id?: unknown
   main_model_config_id?: unknown
   main_model_name?: unknown
-  vision_model_config_id?: unknown
-  vision_model_name?: unknown
   ai_preference?: unknown
   execution_permission?: unknown
   next_run_at?: unknown
+  busy_cancel_notice_at?: unknown
   created_at?: unknown
   updated_at?: unknown
 }
@@ -37,10 +36,7 @@ const toPreference = (value: unknown): AiPreference =>
 const toPermission = (value: unknown): AiExecutionPermission =>
   value === 'full_access' ? 'full_access' : 'review'
 
-const toModel = (
-  configId: unknown,
-  modelName: unknown
-): WorkbenchSelectedModel | null => {
+const toModel = (configId: unknown, modelName: unknown): WorkbenchSelectedModel | null => {
   const id = String(configId || '').trim()
   const name = String(modelName || '').trim()
   if (!id || !name) return null
@@ -49,7 +45,6 @@ const toModel = (
 
 const toTask = (row: ScheduledTaskRow): ScheduledTask => {
   const mainModel = toModel(row.main_model_config_id, row.main_model_name)
-  const visionModel = toModel(row.vision_model_config_id, row.vision_model_name)
   const weekday = toOptionalNumber(row.weekday)
   if (!mainModel) {
     throw new Error(`scheduled_task_missing_main_model:${String(row.id || '')}`)
@@ -62,12 +57,12 @@ const toTask = (row: ScheduledTaskRow): ScheduledTask => {
     scheduleType: toScheduleType(row.schedule_type),
     timeOfDay: String(row.time_of_day || ''),
     weekday: weekday ?? null,
-    workspaceId: String(row.workspace_id || ''),
+    partnerId: String(row.partner_id || ''),
     mainModel,
-    visionModel,
     aiPreference: toPreference(row.ai_preference),
     executionPermission: toPermission(row.execution_permission),
     nextRunAt: toOptionalNumber(row.next_run_at) ?? null,
+    busyCancelNoticeAt: toOptionalNumber(row.busy_cancel_notice_at) ?? null,
     createdAt: Number(row.created_at || 0),
     updatedAt: Number(row.updated_at || 0)
   }
@@ -93,9 +88,9 @@ export class ScheduledTaskStore {
   public async getById(id: string): Promise<ScheduledTask | null> {
     const safeId = String(id || '').trim()
     if (!safeId) return null
-    const row = this.sqlite
-      .prepare('SELECT * FROM scheduled_task WHERE id = ?')
-      .get(safeId) as ScheduledTaskRow | undefined
+    const row = this.sqlite.prepare('SELECT * FROM scheduled_task WHERE id = ?').get(safeId) as
+      | ScheduledTaskRow
+      | undefined
     return row ? toTask(row) : null
   }
 
@@ -104,14 +99,14 @@ export class ScheduledTaskStore {
       .prepare(
         `INSERT INTO scheduled_task (
           id, name, prompt, enabled, schedule_type, time_of_day, weekday,
-          workspace_id, main_model_config_id, main_model_name,
-          vision_model_config_id, vision_model_name, ai_preference,
-          execution_permission, next_run_at, created_at, updated_at
+          partner_id, main_model_config_id, main_model_name,
+          ai_preference,
+          execution_permission, next_run_at, busy_cancel_notice_at, created_at, updated_at
         ) VALUES (
           @id, @name, @prompt, @enabled, @schedule_type, @time_of_day, @weekday,
-          @workspace_id, @main_model_config_id, @main_model_name,
-          @vision_model_config_id, @vision_model_name, @ai_preference,
-          @execution_permission, @next_run_at, @created_at, @updated_at
+          @partner_id, @main_model_config_id, @main_model_name,
+          @ai_preference,
+          @execution_permission, @next_run_at, @busy_cancel_notice_at, @created_at, @updated_at
         )
         ON CONFLICT(id) DO UPDATE SET
           name = excluded.name,
@@ -120,14 +115,13 @@ export class ScheduledTaskStore {
           schedule_type = excluded.schedule_type,
           time_of_day = excluded.time_of_day,
           weekday = excluded.weekday,
-          workspace_id = excluded.workspace_id,
+          partner_id = excluded.partner_id,
           main_model_config_id = excluded.main_model_config_id,
           main_model_name = excluded.main_model_name,
-          vision_model_config_id = excluded.vision_model_config_id,
-          vision_model_name = excluded.vision_model_name,
           ai_preference = excluded.ai_preference,
           execution_permission = excluded.execution_permission,
           next_run_at = excluded.next_run_at,
+          busy_cancel_notice_at = excluded.busy_cancel_notice_at,
           updated_at = excluded.updated_at`
       )
       .run({
@@ -138,14 +132,13 @@ export class ScheduledTaskStore {
         schedule_type: task.scheduleType,
         time_of_day: task.timeOfDay,
         weekday: task.weekday,
-        workspace_id: task.workspaceId,
+        partner_id: task.partnerId,
         main_model_config_id: task.mainModel.configId,
         main_model_name: task.mainModel.modelName,
-        vision_model_config_id: task.visionModel?.configId ?? null,
-        vision_model_name: task.visionModel?.modelName ?? null,
         ai_preference: task.aiPreference,
         execution_permission: task.executionPermission,
         next_run_at: task.nextRunAt,
+        busy_cancel_notice_at: task.busyCancelNoticeAt,
         created_at: task.createdAt,
         updated_at: task.updatedAt
       })

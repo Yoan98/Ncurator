@@ -5,7 +5,6 @@ import {
   SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
   createRealWorkspaceWithRoot,
   getSettingsLocator,
-  getWorkspaceIndexCounts,
   navigateToSettingsSection,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
@@ -20,8 +19,7 @@ describe('settings workspace e2e', () => {
         domain: 'settings',
         suite: 'workspace',
         groups: ['files'],
-        description:
-          '已有失败文件再次点击更新索引时，应被纳入本次处理范围，且可索引数量包含失败数量。',
+        description: '已有失败文件再次点击更新索引时，应被纳入本次处理范围。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
@@ -46,31 +44,16 @@ describe('settings workspace e2e', () => {
           })
           await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
           await waitForFileIndexJobIdle(page, workspaceId)
-          const firstCounts = await getWorkspaceIndexCounts(page)
 
           await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
           const retry = await waitForFileIndexJobIdle(page, workspaceId)
-          const retryCounts = await getWorkspaceIndexCounts(page)
 
           return {
-            firstCounts,
-            retryCounts,
             lastRunningJob: retry.lastRunningJob,
             statuses: toSupportedFileStatuses(retry.tree)
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(
-            result.firstCounts.actionableCount === 1 &&
-              result.firstCounts.failedHint.includes('含失败 1 个'),
-            {
-              name: 'failed-count-is-actionable',
-              message:
-                '文件失败后，可索引数量应包含失败数量，并以小号文案提示含失败数量，对齐 SET-WORKSPACE-005-AC2。',
-              data: result
-            }
-          )
-
           await runtime.assertThat(
             result.statuses.length === 1 && result.statuses[0]?.status === 'failed',
             {

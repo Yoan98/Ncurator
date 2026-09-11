@@ -1,24 +1,17 @@
-export {
-  AI_TOOL_FAMILY_IDS,
-  BUILTIN_RUNTIME_SKILL_IDS,
-  EXTERNAL_RUNTIME_SKILL_IDS,
-  LEARNABLE_RUNTIME_SKILL_IDS,
-  RUNTIME_SKILL_IDS
-} from '../../../../shared/runtimeCapabilities'
+export { AI_TOOL_FAMILY_IDS, RUNTIME_SKILL_IDS } from '../../../../shared/runtimeCapabilities'
 
 export const HUMAN_SKILL_SOURCES = ['builtin', 'external'] as const
 
 export const HUMAN_STAGES = [
   'brain',
+  'dispatch',
   'learning',
+  'plan',
   'hand',
-  'mouth',
-  'fault',
   'context_budget',
   'context_compaction'
 ] as const
 export const HUMAN_STATUSES = ['running', 'completed'] as const
-export const HUMAN_FINALIZATION_REASONS = ['brain_content_safety'] as const
 
 export const HUMAN_STEP_ACTIONS = [
   'brain_decision',
@@ -29,35 +22,31 @@ export const HUMAN_STEP_ACTIONS = [
 
 export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error'] as const
 
-export const HUMAN_DECISION_HINT_CODES = [
-  'run_resumed_after_interruption',
-  'learning_no_effect',
-  'terminal_approval_blocked',
-  'hand_call_limit_exceeded',
-  'legacy_doc_edit_unsupported',
-  'hand_docx_positioned_write_blocked',
-  'hand_docx_edit_failed',
-  'hand_tool_limit_near_exhausted',
-  'hand_tool_limit_exceeded',
-  'hand_tool_result_too_large',
-  'hand_tool_result_unusable',
-  'brain_output_schema_invalid',
-  'brain_todolist_incomplete',
-  'brain_content_safety',
-  'hand_call_invalid'
-] as const
-
 export const HUMAN_MAX_ACTIVE_TOOLS = 25
-export const HUMAN_DEFAULT_TOOL_CALL_LIMIT = 120
-export const HUMAN_HAND_CALL_LIMIT = 5
-export const HUMAN_GRAPH_RECURSION_LIMIT = 200
-export const HUMAN_TOOL_LIMIT_NEAR_EXHAUSTED_RATIO = 0.8
-export const HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO = 0.6
-// 默认按 200k 上下文窗口估算，压缩阈值由 CONTEXT_COMPACTION_TRIGGER_RATIO 控制。
-export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 200_000
+export const HUMAN_GRAPH_RECURSION_LIMIT = 400
+// 默认 256k 窗口；触发线为窗口的 80%；tail 为触发线的 10%。
+export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 256_000
 export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8
-export const CONTEXT_COMPACTION_TARGET_RATIO = 0.25
-export const CONTEXT_COMPACTION_MIN_SOURCE_RATIO = 0.1
-export const HUMAN_ROUND_EXECUTION_KINDS = ['learning', 'hand', 'mouth', 'fault'] as const
-export const HUMAN_MAX_ROUND_HISTORY = 100
-export const HUMAN_MAX_RECENT_HISTORY_ROUNDS = 20
+export const CONTEXT_COMPACTION_TAIL_RATIO = 0.1
+export const CONTEXT_SCOPE_DECISION_RATIO = 0.2
+export const CONTEXT_SCOPE_DISCARD_HISTORY_RATIO = 0.1
+export const HUMAN_ROUND_EXECUTION_KINDS = ['learning', 'hand'] as const
+
+export const resolveContextWindowTokens = (override?: number): number => {
+  if (typeof override === 'number' && Number.isFinite(override) && override > 0) {
+    return Math.floor(override)
+  }
+  return DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+}
+
+export const resolveCompactionTriggerTokens = (windowTokens: number): number =>
+  Math.floor(windowTokens * CONTEXT_COMPACTION_TRIGGER_RATIO)
+
+export const resolveCompactionTailTokens = (windowTokens: number): number =>
+  Math.floor(resolveCompactionTriggerTokens(windowTokens) * CONTEXT_COMPACTION_TAIL_RATIO)
+
+export const resolveContextScopeDecisionTokens = (windowTokens: number): number =>
+  Math.floor(windowTokens * CONTEXT_SCOPE_DECISION_RATIO)
+
+export const resolveDiscardHistoryTokens = (windowTokens: number): number =>
+  Math.floor(windowTokens * CONTEXT_SCOPE_DISCARD_HISTORY_RATIO)

@@ -1,0 +1,949 @@
+import path from 'node:path'
+import type {
+  DocxDetailedNode,
+  DocxDetailedCellNode,
+  DocxDetailedContainerNode,
+  DocxDetailedParagraphNode,
+  DocxDetailedTableNode,
+  DocxBorders,
+  DocxParagraphStyle,
+  DocxReadContentNode,
+  DocxReadContentControlNode,
+  DocxReadFieldNode,
+  DocxReadHyperlinkNode,
+  DocxReadInlineNode,
+  DocxReadNode,
+  DocxReadParagraphNode,
+  DocxReadRevisionNode,
+  DocxReadRunChildNode,
+  DocxReadRunNode,
+  DocxReadTableCellNode,
+  DocxReadTableNode,
+  DocxReadTableRowNode,
+  DocxReadVisualNode,
+  DocxRunStyle,
+  DocxStoryRef,
+  DocxTableCellStyle,
+  DocxTableRowStyle,
+  DocxTableStyle,
+  DocxVisualSummary
+} from '../../types'
+import type { DocxEditableNode, DocxVisualDescriptor, NodeMapById } from './types'
+import { childElements, descendantElements, firstChildElement, getAttr } from './dom'
+
+type ContentTreeContext = {
+  rootNodeId: string
+  story: DocxStoryRef
+  partName: string
+  relationshipTargets: ReadonlyMap<string, string>
+  relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
+  nodesById: NodeMapById
+}
+
+const nodeId = (context: ContentTreeContext, nodePath: string): string =>
+  `node:${context.rootNodeId}:${nodePath}`
+
+const bindEditableNode = (
+  context: ContentTreeContext,
+  currentPath: string,
+  kind: DocxEditableNode['kind'],
+  node: Element
+): string => {
+  const id = nodeId(context, currentPath)
+  context.nodesById.set(id, {
+    category: 'editable',
+    nodeId: id,
+    ownerNodeId: context.rootNodeId,
+    story: context.story,
+    partName: context.partName,
+    kind,
+    node
+  })
+  return id
+}
+
+const visualNodeId = (context: ContentTreeContext, nodePath: string): string =>
+  `visual:${context.rootNodeId}:${nodePath}`
+
+const attrByLocalName = (node: Element, names: readonly string[]): string => {
+  for (let index = 0; index < node.attributes.length; index += 1) {
+    const attr = node.attributes.item(index)
+    if (attr && names.includes(attr.localName || attr.name)) return attr.value
+  }
+  return ''
+}
+
+export const collectVisualAltTexts = (node: Element): string[] => {
+  const descriptors = ['docPr', 'cNvPr', 'shape', 'imagedata'].flatMap((localName) =>
+    descendantElements(node, localName)
+  )
+  const values = descriptors.flatMap((descriptor) =>
+    ['descr', 'title', 'alt', 'name']
+      .map((attribute) => attrByLocalName(descriptor, [attribute]).trim())
+      .filter(Boolean)
+  )
+  return [...new Set(values)]
+}
+
+const boolProperty = (parent: Element | null, name: string): boolean | undefined => {
+  if (!parent) return undefined
+  const node = firstChildElement(parent, name)
+  if (!node) return undefined
+  const value = getAttr(node, 'val').toLowerCase()
+  return value === '0' || value === 'false' || value === 'off' ? false : true
+}
+
+const numberAttr = (node: Element | null, name: string): number | undefined => {
+  if (!node) return undefined
+  const raw = getAttr(node, name).trim()
+  if (!raw) return undefined
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+const twipsToPt = (value: number | undefined): number | undefined =>
+  value === undefined ? undefined : value / 20
+
+const halfPointsToPt = (value: number | undefined): number | undefined =>
+  value === undefined ? undefined : value / 2
+
+const compact = <T extends object>(value: T): T | undefined => {
+  const entries = Object.entries(value).filter(([, entry]) => entry !== undefined)
+  return entries.length > 0 ? (Object.fromEntries(entries) as T) : undefined
+}
+
+const hexColor = (value: string): string | undefined =>
+  /^[0-9a-f]{6}$/i.test(value) ? value.toUpperCase() : undefined
+
+const readBorders = (properties: Element, containerName: string): DocxBorders | undefined => {
+  const container = firstChildElement(properties, containerName)
+  if (!container) return undefined
+  const names: Record<string, keyof DocxBorders> = {
+    top: 'top',
+    right: 'right',
+    bottom: 'bottom',
+    left: 'left',
+    insideH: 'insideHorizontal',
+    insideV: 'insideVertical'
+  }
+  const borders: DocxBorders = {}
+  childElements(container).forEach((node) => {
+    const side = names[node.localName]
+    if (!side) return
+    const value = getAttr(node, 'val')
+    const allowed = ['none', 'single', 'dashed', 'dotted', 'double'] as const
+    borders[side] = {
+      style: allowed.includes(value as (typeof allowed)[number])
+        ? (value as (typeof allowed)[number])
+        : 'single',
+      color: hexColor(getAttr(node, 'color')),
+      size: numberAttr(node, 'sz') === undefined ? undefined : numberAttr(node, 'sz')! / 8
+    }
+  })
+  return Object.keys(borders).length > 0 ? borders : undefined
+}
+
+export const readRunStyle = (run: Element): DocxRunStyle | undefined => {
+  const rPr = firstChildElement(run, 'rPr')
+  if (!rPr) return undefined
+  const color = firstChildElement(rPr, 'color')
+  const highlight = firstChildElement(rPr, 'shd')
+  const fonts = firstChildElement(rPr, 'rFonts')
+  const size = firstChildElement(rPr, 'sz')
+  return compact({
+    bold: boolProperty(rPr, 'b'),
+    italic: boolProperty(rPr, 'i'),
+    underline: firstChildElement(rPr, 'u') ? boolProperty(rPr, 'u') : undefined,
+    strike: boolProperty(rPr, 'strike'),
+    color: color ? hexColor(getAttr(color, 'val')) : undefined,
+    highlight: highlight ? hexColor(getAttr(highlight, 'fill')) : undefined,
+    fontFamily: fonts
+      ? getAttr(fonts, 'ascii') || getAttr(fonts, 'eastAsia') || undefined
+      : undefined,
+    fontSize: halfPointsToPt(numberAttr(size, 'val'))
+  })
+}
+
+export const readParagraphStyle = (paragraph: Element): DocxParagraphStyle | undefined => {
+  const pPr = firstChildElement(paragraph, 'pPr')
+  if (!pPr) return undefined
+  const style = firstChildElement(pPr, 'pStyle')
+  const alignment = firstChildElement(pPr, 'jc')
+  const indent = firstChildElement(pPr, 'ind')
+  const spacing = firstChildElement(pPr, 'spacing')
+  return compact({
+    styleId: style ? getAttr(style, 'val') || undefined : undefined,
+    alignment: alignment
+      ? (getAttr(alignment, 'val') as DocxParagraphStyle['alignment']) || undefined
+      : undefined,
+    indent: indent
+      ? compact({
+          left: twipsToPt(numberAttr(indent, 'left')),
+          right: twipsToPt(numberAttr(indent, 'right')),
+          firstLine: twipsToPt(numberAttr(indent, 'firstLine')),
+          hanging: twipsToPt(numberAttr(indent, 'hanging'))
+        })
+      : undefined,
+    spacing: spacing
+      ? compact({
+          before: twipsToPt(numberAttr(spacing, 'before')),
+          after: twipsToPt(numberAttr(spacing, 'after')),
+          line: twipsToPt(numberAttr(spacing, 'line'))
+        })
+      : undefined,
+    keepWithNext: boolProperty(pPr, 'keepNext'),
+    pageBreakBefore: boolProperty(pPr, 'pageBreakBefore')
+  })
+}
+
+const readTableStyle = (table: Element): DocxTableStyle | undefined => {
+  const tblPr = firstChildElement(table, 'tblPr')
+  if (!tblPr) return undefined
+  const alignment = firstChildElement(tblPr, 'jc')
+  const width = firstChildElement(tblPr, 'tblW')
+  const layout = firstChildElement(tblPr, 'tblLayout')
+  const widthType = width ? getAttr(width, 'type') : ''
+  const widthValue = width ? numberAttr(width, 'w') : undefined
+  return compact({
+    alignment: alignment
+      ? (getAttr(alignment, 'val') as DocxTableStyle['alignment']) || undefined
+      : undefined,
+    width:
+      widthValue === undefined
+        ? undefined
+        : widthType === 'pct'
+          ? { value: widthValue / 50, unit: 'percent' as const }
+          : { value: widthValue / 20, unit: 'pt' as const },
+    layout: layout ? (getAttr(layout, 'type') === 'autofit' ? 'autofit' : 'fixed') : undefined,
+    borders: readBorders(tblPr, 'tblBorders')
+  })
+}
+
+const readRowStyle = (row: Element): DocxTableRowStyle | undefined => {
+  const trPr = firstChildElement(row, 'trPr')
+  if (!trPr) return undefined
+  const height = firstChildElement(trPr, 'trHeight')
+  return compact({
+    height: twipsToPt(numberAttr(height, 'val')),
+    repeatHeader: boolProperty(trPr, 'tblHeader'),
+    cantSplit: boolProperty(trPr, 'cantSplit')
+  })
+}
+
+const readCellStyle = (cell: Element): DocxTableCellStyle | undefined => {
+  const tcPr = firstChildElement(cell, 'tcPr')
+  if (!tcPr) return undefined
+  const width = firstChildElement(tcPr, 'tcW')
+  const vertical = firstChildElement(tcPr, 'vAlign')
+  const shading = firstChildElement(tcPr, 'shd')
+  const margins = firstChildElement(tcPr, 'tcMar')
+  const widthType = width ? getAttr(width, 'type') : ''
+  const widthValue = width ? numberAttr(width, 'w') : undefined
+  return compact({
+    width:
+      widthValue === undefined
+        ? undefined
+        : widthType === 'pct'
+          ? { value: widthValue / 50, unit: 'percent' as const }
+          : { value: widthValue / 20, unit: 'pt' as const },
+    verticalAlignment: vertical
+      ? (getAttr(vertical, 'val') as DocxTableCellStyle['verticalAlignment']) || undefined
+      : undefined,
+    shading: shading ? hexColor(getAttr(shading, 'fill')) : undefined,
+    margins: margins
+      ? compact({
+          top: twipsToPt(numberAttr(firstChildElement(margins, 'top'), 'w')),
+          right: twipsToPt(numberAttr(firstChildElement(margins, 'right'), 'w')),
+          bottom: twipsToPt(numberAttr(firstChildElement(margins, 'bottom'), 'w')),
+          left: twipsToPt(numberAttr(firstChildElement(margins, 'left'), 'w'))
+        })
+      : undefined,
+    borders: readBorders(tcPr, 'tcBorders')
+  })
+}
+
+const firstDescendant = (node: Element, localName: string): Element | undefined =>
+  descendantElements(node, localName)[0]
+
+const classifyVisual = (node: Element): DocxVisualDescriptor['kind'] => {
+  if (firstDescendant(node, 'OLEObject') || firstDescendant(node, 'oleObject')) {
+    return 'embedded_object'
+  }
+  if (firstDescendant(node, 'chart')) return 'chart'
+  if (firstDescendant(node, 'relIds')) return 'diagram'
+  if (
+    firstDescendant(node, 'pic') ||
+    firstDescendant(node, 'blip') ||
+    firstDescendant(node, 'imagedata')
+  ) {
+    return 'image'
+  }
+  return 'shape'
+}
+
+const visualRelationshipId = (node: Element, kind: DocxVisualDescriptor['kind']): string => {
+  if (kind === 'embedded_object') {
+    const preview = firstDescendant(node, 'imagedata')
+    if (preview) return attrByLocalName(preview, ['id', 'embed'])
+  }
+  const candidate =
+    firstDescendant(node, 'blip') ||
+    firstDescendant(node, 'imagedata') ||
+    firstDescendant(node, 'chart') ||
+    firstDescendant(node, 'relIds') ||
+    firstDescendant(node, 'OLEObject')
+  return candidate ? attrByLocalName(candidate, ['embed', 'link', 'id', 'dm']) : ''
+}
+
+const visualAltText = (node: Element): string | undefined => collectVisualAltTexts(node)[0]
+
+const visualDimensions = (node: Element): { widthCm?: number; heightCm?: number } => {
+  const extent = firstDescendant(node, 'extent') || firstDescendant(node, 'ext')
+  const width = Number(extent?.getAttribute('cx') || '')
+  const height = Number(extent?.getAttribute('cy') || '')
+  return {
+    widthCm: Number.isFinite(width) && width > 0 ? width / 360000 : undefined,
+    heightCm: Number.isFinite(height) && height > 0 ? height / 360000 : undefined
+  }
+}
+
+const selectAlternateContent = (node: Element): Element[] => {
+  if (node.localName !== 'AlternateContent') return [node]
+  const supportedNamespaces = new Set([
+    'w',
+    'w14',
+    'w15',
+    'wp',
+    'wp14',
+    'a',
+    'pic',
+    'c',
+    'dgm',
+    'wps',
+    'wpg',
+    'v',
+    'o'
+  ])
+  const choice = childElements(node).find((child) => {
+    if (child.localName !== 'Choice') return false
+    const requirements = attrByLocalName(child, ['Requires']).split(/\s+/).filter(Boolean)
+    return requirements.length > 0 && requirements.every((item) => supportedNamespaces.has(item))
+  })
+  const fallback = childElements(node).find((child) => child.localName === 'Fallback')
+  return choice ? childElements(choice) : fallback ? childElements(fallback) : []
+}
+
+const parseVisual = (
+  node: Element,
+  context: ContentTreeContext,
+  currentPath: string
+): DocxReadVisualNode | null => {
+  const kind = classifyVisual(node)
+  const relationshipId = visualRelationshipId(node, kind) || undefined
+  const targetMode = relationshipId ? context.relationshipTargetModes.get(relationshipId) || '' : ''
+  if (
+    kind === 'image' &&
+    relationshipId &&
+    targetMode.toLowerCase() !== 'external' &&
+    context.availableRelationshipTargetIds &&
+    !context.availableRelationshipTargetIds.has(relationshipId)
+  ) {
+    return null
+  }
+  const id = visualNodeId(context, currentPath)
+  const target = relationshipId ? context.relationshipTargets.get(relationshipId) : undefined
+  const dimensions = visualDimensions(node)
+  const descriptor: DocxVisualDescriptor = {
+    category: 'visual',
+    nodeId: id,
+    ownerNodeId: context.rootNodeId,
+    kind,
+    node,
+    relationshipId,
+    target,
+    contentType: relationshipId ? context.relationshipTypes.get(relationshipId) : undefined,
+    ...dimensions,
+    story: context.story,
+    partName: context.partName
+  }
+  context.nodesById.set(id, descriptor)
+
+  const textBox = firstDescendant(node, 'txbxContent')
+  const children = textBox
+    ? childElements(textBox)
+        .map((child, index) => parseContentNode(child, context, `${currentPath}.textbox.${index}`))
+        .filter((child): child is DocxReadContentNode => Boolean(child))
+    : []
+  return {
+    type: 'visual',
+    nodeId: id,
+    kind,
+    altText: visualAltText(node),
+    ...dimensions,
+    children: children.length > 0 ? children : undefined
+  }
+}
+
+const parseRun = (
+  run: Element,
+  context: ContentTreeContext,
+  currentPath: string
+): DocxReadRunNode => {
+  const id = bindEditableNode(context, currentPath, 'run', run)
+  const children: DocxReadRunChildNode[] = []
+  childElements(run).forEach((child, index) => {
+    const childPath = `${currentPath}.${index}`
+    if (child.localName === 't' || child.localName === 'delText') {
+      children.push({ type: 'text', text: child.textContent || '' })
+      return
+    }
+    if (child.localName === 'tab') {
+      children.push({ type: 'tab' })
+      return
+    }
+    if (child.localName === 'br' || child.localName === 'cr') {
+      const kind = getAttr(child, 'type')
+      children.push({
+        type: 'break',
+        kind: kind === 'page' || kind === 'column' ? kind : 'line'
+      })
+      return
+    }
+    if (
+      child.localName === 'drawing' ||
+      child.localName === 'pict' ||
+      child.localName === 'object'
+    ) {
+      const visual = parseVisual(child, context, childPath)
+      if (visual) children.push(visual)
+      return
+    }
+    if (child.localName === 'AlternateContent') {
+      selectAlternateContent(child).forEach((selected, selectedIndex) => {
+        if (
+          selected.localName === 'drawing' ||
+          selected.localName === 'pict' ||
+          selected.localName === 'object'
+        ) {
+          const visual = parseVisual(selected, context, `${childPath}.${selectedIndex}`)
+          if (visual) children.push(visual)
+        }
+      })
+    }
+  })
+  return {
+    type: 'run',
+    nodeId: id,
+    style: readRunStyle(run),
+    children
+  }
+}
+
+const parseHyperlink = (
+  node: Element,
+  context: ContentTreeContext,
+  currentPath: string
+): DocxReadHyperlinkNode => {
+  const relationshipId = attrByLocalName(node, ['id'])
+  return {
+    type: 'hyperlink',
+    nodeId: bindEditableNode(context, currentPath, 'hyperlink', node),
+    target: relationshipId ? context.relationshipTargets.get(relationshipId) : undefined,
+    anchor: getAttr(node, 'anchor') || undefined,
+    children: childElements(node, 'r').map((run, index) =>
+      parseRun(run, context, `${currentPath}.${index}`)
+    )
+  }
+}
+
+const revisionKind = (name: string): DocxReadRevisionNode['kind'] => {
+  if (name === 'del') return 'delete'
+  if (name === 'moveFrom') return 'move_from'
+  if (name === 'moveTo') return 'move_to'
+  return 'insert'
+}
+
+const parseContainerChildren = (
+  node: Element,
+  context: ContentTreeContext,
+  currentPath: string
+): DocxReadNode[] =>
+  childElements(node).flatMap((child, index) =>
+    parseContentElement(child, context, `${currentPath}.${index}`)
+  )
+
+const parseContentControl = (
+  node: Element,
+  context: ContentTreeContext,
+  currentPath: string
+): DocxReadContentControlNode => {
+  const properties = firstChildElement(node, 'sdtPr')
+  const tag = properties ? firstChildElement(properties, 'tag') : null
+  const content = firstChildElement(node, 'sdtContent')
+  return {
+    type: 'content_control',
+    nodeId: bindEditableNode(context, currentPath, 'content_control', node),
+    tag: tag ? getAttr(tag, 'val') || undefined : undefined,
+    children: content ? parseContainerChildren(content, context, currentPath) : []
+  }
+}
+
+const parseSimpleField = (
+  node: Element,
+  context: ContentTreeContext,
+  currentPath: string
+): DocxReadFieldNode => ({
+  type: 'field',
+  nodeId: bindEditableNode(context, currentPath, 'field', node),
+  instruction: getAttr(node, 'instr'),
+  children: parseContainerChildren(node, context, currentPath)
+})
+
+const parseContentElement = (
+  child: Element,
+  context: ContentTreeContext,
+  currentPath: string
+): DocxReadNode[] => {
+  if (child.localName === 'r') return [parseRun(child, context, currentPath)]
+  if (child.localName === 'hyperlink') return [parseHyperlink(child, context, currentPath)]
+  if (child.localName === 'sdt') return [parseContentControl(child, context, currentPath)]
+  if (['ins', 'del', 'moveFrom', 'moveTo'].includes(child.localName)) {
+    return [
+      {
+        type: 'revision',
+        nodeId: bindEditableNode(context, currentPath, 'revision', child),
+        revisionId: getAttr(child, 'id'),
+        kind: revisionKind(child.localName),
+        children: parseContainerChildren(child, context, currentPath)
+      }
+    ]
+  }
+  if (child.localName === 'fldSimple') return [parseSimpleField(child, context, currentPath)]
+  if (child.localName === 'bookmarkStart' || child.localName === 'bookmarkEnd') {
+    return [
+      {
+        type: 'bookmark',
+        bookmarkId: getAttr(child, 'id'),
+        kind: child.localName === 'bookmarkStart' ? 'start' : 'end',
+        ...(getAttr(child, 'name') ? { name: getAttr(child, 'name') } : {})
+      }
+    ]
+  }
+  if (child.localName === 'oMath' || child.localName === 'oMathPara') {
+    return [
+      {
+        type: 'math',
+        text: descendantElements(child, 't')
+          .map((node) => node.textContent || '')
+          .join('')
+      }
+    ]
+  }
+  if (child.localName === 'p' || child.localName === 'tbl') {
+    const node = parseContentNode(child, context, currentPath)
+    return node ? [node] : []
+  }
+  if (child.localName === 'AlternateContent') {
+    return selectAlternateContent(child).flatMap((selected, index) =>
+      parseContentElement(selected, context, `${currentPath}.${index}`)
+    )
+  }
+  return [
+    {
+      type: 'opaque',
+      name: child.nodeName,
+      children: parseContainerChildren(child, context, currentPath)
+    }
+  ]
+}
+
+const containsFieldChar = (run: Element, kind: string): boolean =>
+  childElements(run, 'fldChar').some((node) => getAttr(node, 'fldCharType') === kind)
+
+const parseParagraphChildren = (
+  paragraph: Element,
+  context: ContentTreeContext,
+  currentPath: string
+): DocxReadInlineNode[] => {
+  const result: DocxReadInlineNode[] = []
+  let field: {
+    nodeId: string
+    instruction: string
+    children: DocxReadNode[]
+    readingResult: boolean
+  } | null = null
+  childElements(paragraph).forEach((child, index) => {
+    if (child.localName === 'pPr') return
+    const childPath = `${currentPath}.${index}`
+    if (child.localName === 'r' && containsFieldChar(child, 'begin')) {
+      field = {
+        nodeId: bindEditableNode(context, childPath, 'field', child),
+        instruction: '',
+        children: [],
+        readingResult: false
+      }
+      return
+    }
+    if (field && child.localName === 'r') {
+      const activeField = field as {
+        nodeId: string
+        instruction: string
+        children: DocxReadNode[]
+        readingResult: boolean
+      }
+      childElements(child, 'instrText').forEach((instruction) => {
+        activeField.instruction += instruction.textContent || ''
+      })
+      if (containsFieldChar(child, 'separate')) activeField.readingResult = true
+      if (
+        activeField.readingResult &&
+        !containsFieldChar(child, 'separate') &&
+        !containsFieldChar(child, 'end')
+      ) {
+        activeField.children.push(parseRun(child, context, childPath))
+      }
+      if (containsFieldChar(child, 'end')) {
+        result.push({
+          type: 'field',
+          nodeId: activeField.nodeId,
+          instruction: activeField.instruction.trim(),
+          children: activeField.children
+        })
+        field = null
+      }
+      return
+    }
+    result.push(...(parseContentElement(child, context, childPath) as DocxReadInlineNode[]))
+  })
+  return result
+}
+
+export const readNodeText = (node: DocxReadNode): string => {
+  if (node.type === 'text') return node.text
+  if (node.type === 'tab') return '\t'
+  if (node.type === 'break') return '\n'
+  if (node.type === 'math') return node.text
+  if (node.type === 'revision' && (node.kind === 'delete' || node.kind === 'move_from')) return ''
+  if (!('children' in node) || !node.children) return ''
+  return node.children.map((child) => readNodeText(child)).join('')
+}
+
+const parseParagraph = (
+  paragraph: Element,
+  context: ContentTreeContext,
+  currentPath: string
+): DocxReadParagraphNode => {
+  const id = nodeId(context, currentPath)
+  context.nodesById.set(id, {
+    category: 'editable',
+    nodeId: id,
+    ownerNodeId: context.rootNodeId,
+    story: context.story,
+    partName: context.partName,
+    kind: 'paragraph',
+    node: paragraph
+  })
+  const children = parseParagraphChildren(paragraph, context, currentPath)
+  const node: DocxReadParagraphNode = {
+    type: 'paragraph',
+    nodeId: id,
+    style: readParagraphStyle(paragraph),
+    text: '',
+    children
+  }
+  node.text = children.map((child) => readNodeText(child)).join('')
+  return node
+}
+
+const parseCell = (
+  cell: Element,
+  context: ContentTreeContext,
+  currentPath: string,
+  row: number,
+  col: number,
+  cellNodeId?: string
+): DocxReadTableCellNode => {
+  const cellContext = cellNodeId ? { ...context, rootNodeId: cellNodeId } : context
+  const id = cellNodeId || nodeId(context, currentPath)
+  if (!cellNodeId) {
+    context.nodesById.set(id, {
+      category: 'editable',
+      nodeId: id,
+      ownerNodeId: context.rootNodeId,
+      story: context.story,
+      partName: context.partName,
+      kind: 'table_cell',
+      node: cell
+    })
+  }
+  const children = childElements(cell)
+    .map((child, index) => parseContentNode(child, cellContext, `${currentPath}.${index}`))
+    .filter((child): child is DocxReadContentNode => Boolean(child))
+  return {
+    type: 'table_cell',
+    nodeId: id,
+    row,
+    col,
+    style: readCellStyle(cell),
+    text: children.map((child) => readNodeText(child)).join('\n'),
+    children
+  }
+}
+
+const parseTable = (
+  table: Element,
+  context: ContentTreeContext,
+  currentPath: string
+): DocxReadTableNode => {
+  const id = nodeId(context, currentPath)
+  context.nodesById.set(id, {
+    category: 'editable',
+    nodeId: id,
+    ownerNodeId: context.rootNodeId,
+    story: context.story,
+    partName: context.partName,
+    kind: 'table',
+    node: table
+  })
+  const rows = childElements(table, 'tr').map((row, rowIndex): DocxReadTableRowNode => {
+    const rowPath = `${currentPath}.row.${rowIndex}`
+    const rowId = nodeId(context, rowPath)
+    context.nodesById.set(rowId, {
+      category: 'editable',
+      nodeId: rowId,
+      ownerNodeId: context.rootNodeId,
+      story: context.story,
+      partName: context.partName,
+      kind: 'table_row',
+      node: row
+    })
+    return {
+      type: 'table_row',
+      nodeId: rowId,
+      row: rowIndex + 1,
+      style: readRowStyle(row),
+      children: childElements(row, 'tc').map((cell, colIndex) =>
+        parseCell(
+          cell,
+          context,
+          `${rowPath}.cell.${colIndex}`,
+          rowIndex + 1,
+          colIndex + 1,
+          currentPath === 'root'
+            ? `${context.rootNodeId}.r:${String(rowIndex + 1)}.c:${String(colIndex + 1)}`
+            : undefined
+        )
+      )
+    }
+  })
+  const cols = rows.reduce((max, row) => Math.max(max, row.children.length), 0)
+  return {
+    type: 'table',
+    nodeId: id,
+    style: readTableStyle(table),
+    rows: rows.length,
+    cols,
+    text: rows
+      .flatMap((row) => row.children)
+      .map((cell) => cell.text)
+      .filter(Boolean)
+      .join(' | '),
+    children: rows
+  }
+}
+
+const parseContentNode = (
+  node: Element,
+  context: ContentTreeContext,
+  currentPath: string
+): DocxReadContentNode | null => {
+  if (node.localName === 'p') return parseParagraph(node, context, currentPath)
+  if (node.localName === 'tbl') return parseTable(node, context, currentPath)
+  if (node.localName === 'sdt') return parseContentControl(node, context, currentPath)
+  if (['ins', 'del', 'moveFrom', 'moveTo'].includes(node.localName)) {
+    return {
+      type: 'revision',
+      nodeId: bindEditableNode(context, currentPath, 'revision', node),
+      revisionId: getAttr(node, 'id'),
+      kind: revisionKind(node.localName),
+      children: parseContainerChildren(node, context, currentPath)
+    }
+  }
+  return null
+}
+
+const createContext = (input: {
+  nodeId: string
+  story: DocxStoryRef
+  partName: string
+  relationshipTargets: ReadonlyMap<string, string>
+  relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
+  nodesById: NodeMapById
+}): ContentTreeContext => {
+  const { nodeId: rootNodeId, ...rest } = input
+  return { ...rest, rootNodeId }
+}
+
+export const buildParagraphDetail = (input: {
+  nodeId: string
+  story: DocxStoryRef
+  partName: string
+  nodeIndex: number
+  layoutMode: DocxDetailedParagraphNode['layoutMode']
+  paragraph: Element
+  previousNodeId?: string
+  nextNodeId?: string
+  relationshipTargets: ReadonlyMap<string, string>
+  relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
+  nodesById: NodeMapById
+}): DocxDetailedParagraphNode => {
+  const parsed = parseParagraph(input.paragraph, createContext(input), 'root')
+  return {
+    ...parsed,
+    nodeId: input.nodeId,
+    nodeIndex: input.nodeIndex,
+    layoutMode: input.layoutMode,
+    previousNodeId: input.previousNodeId,
+    nextNodeId: input.nextNodeId,
+    story: input.story
+  }
+}
+
+export const buildTableDetail = (input: {
+  nodeId: string
+  story: DocxStoryRef
+  partName: string
+  nodeIndex: number
+  layoutMode: DocxDetailedTableNode['layoutMode']
+  table: Element
+  previousNodeId?: string
+  nextNodeId?: string
+  relationshipTargets: ReadonlyMap<string, string>
+  relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
+  nodesById: NodeMapById
+}): DocxDetailedTableNode => {
+  const parsed = parseTable(input.table, createContext(input), 'root')
+  return {
+    ...parsed,
+    nodeId: input.nodeId,
+    nodeIndex: input.nodeIndex,
+    layoutMode: input.layoutMode,
+    previousNodeId: input.previousNodeId,
+    nextNodeId: input.nextNodeId,
+    story: input.story
+  }
+}
+
+export const buildContainerDetail = (input: {
+  nodeId: string
+  story: DocxStoryRef
+  partName: string
+  nodeIndex: number
+  layoutMode: DocxDetailedContainerNode['layoutMode']
+  container: Element
+  previousNodeId?: string
+  nextNodeId?: string
+  relationshipTargets: ReadonlyMap<string, string>
+  relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
+  nodesById: NodeMapById
+}): DocxDetailedContainerNode => {
+  const parsed = parseContentNode(input.container, createContext(input), 'root')
+  if (!parsed || (parsed.type !== 'content_control' && parsed.type !== 'revision')) {
+    throw new Error(`unsupported DOCX root container: ${input.container.localName}`)
+  }
+  const children = parsed.children.filter(
+    (child): child is DocxReadContentNode =>
+      child.type === 'paragraph' ||
+      child.type === 'table' ||
+      child.type === 'content_control' ||
+      child.type === 'revision' ||
+      child.type === 'opaque'
+  )
+  const shared = {
+    nodeId: input.nodeId,
+    nodeIndex: input.nodeIndex,
+    layoutMode: input.layoutMode,
+    previousNodeId: input.previousNodeId,
+    nextNodeId: input.nextNodeId,
+    story: input.story,
+    type: parsed.type,
+    text: children.map(readNodeText).join('\n'),
+    children
+  }
+  return parsed.type === 'content_control'
+    ? { ...shared, type: 'content_control', tag: parsed.tag }
+    : {
+        ...shared,
+        type: 'revision',
+        revisionId: parsed.revisionId,
+        revisionKind: parsed.kind
+      }
+}
+
+export const buildCellDetail = (input: {
+  nodeId: string
+  story: DocxStoryRef
+  partName: string
+  tableNodeId: string
+  nodeIndex: number
+  layoutMode: DocxDetailedCellNode['layoutMode']
+  row: number
+  col: number
+  cell: Element
+  previousNodeId?: string
+  nextNodeId?: string
+  relationshipTargets: ReadonlyMap<string, string>
+  relationshipTypes: ReadonlyMap<string, string>
+  relationshipTargetModes: ReadonlyMap<string, string>
+  availableRelationshipTargetIds?: ReadonlySet<string>
+  nodesById: NodeMapById
+}): DocxDetailedCellNode => {
+  const parsed = parseCell(input.cell, createContext(input), 'root', input.row, input.col)
+  return {
+    nodeId: input.nodeId,
+    tableNodeId: input.tableNodeId,
+    nodeIndex: input.nodeIndex,
+    layoutMode: input.layoutMode,
+    previousNodeId: input.previousNodeId,
+    nextNodeId: input.nextNodeId,
+    type: 'table_cell',
+    row: input.row,
+    col: input.col,
+    style: parsed.style,
+    text: parsed.text,
+    children: parsed.children,
+    story: input.story
+  }
+}
+
+const collectVisualKinds = (node: DocxReadNode, out: DocxReadVisualNode[]): void => {
+  if (node.type === 'visual') out.push(node)
+  if ('children' in node && node.children) {
+    node.children.forEach((child) => collectVisualKinds(child, out))
+  }
+}
+
+export const visualSummaryForNode = (node: DocxDetailedNode): DocxVisualSummary | undefined => {
+  const visuals: DocxReadVisualNode[] = []
+  node.children.forEach((child) => collectVisualKinds(child, visuals))
+  if (visuals.length === 0) return undefined
+  return {
+    count: visuals.length,
+    kinds: [...new Set(visuals.map((visual) => visual.kind))]
+  }
+}
+
+export const resolveRelationshipTarget = (target: string): string => {
+  const normalized = path.posix.normalize(path.posix.join('word', target))
+  return normalized.startsWith('../') ? normalized.slice(3) : normalized
+}

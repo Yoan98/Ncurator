@@ -59,10 +59,12 @@ describe('ai human mock-llm text backend', () => {
                   summary: '复读确认'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: '文本已更新。' }) }
-            ],
-            'human.mouth': [
-              { output: { summary: '文本已更新。', deliveryMarkdown: '负责人已更新为 Alice。' } }
+              {
+                output: buildCompleteTaskDecision({
+                  summary: '文本已更新。',
+                  deliveryMarkdown: '负责人已更新为 Alice。'
+                })
+              }
             ]
           }
         })

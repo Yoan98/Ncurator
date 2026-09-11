@@ -6,11 +6,11 @@ export const createDefaultFinalArtifacts = (): AiRunState['finalArtifacts'] => [
 
 export const createInitialAiRunState = (input: {
   runId: string
-  sessionId: string
+  partnerId: string
   input: string
 }): AiRunState => ({
   runId: input.runId,
-  sessionId: input.sessionId,
+  partnerId: input.partnerId,
   status: DEFAULT_AI_RUN_STATUS,
   input: input.input,
   finalArtifacts: createDefaultFinalArtifacts()
@@ -18,7 +18,7 @@ export const createInitialAiRunState = (input: {
 
 export const createCompletedAiRunState = (input: {
   runId: string
-  sessionId: string
+  partnerId: string
   input: string
   finalDeliveryMarkdown: string
   finalArtifacts?: AiRunState['finalArtifacts']
@@ -31,34 +31,32 @@ export const createCompletedAiRunState = (input: {
 
 export const createCancelledAiRunState = (input: {
   runId: string
-  sessionId: string
+  partnerId: string
   input: string
-  resumeSnapshotSaved?: boolean
 }): AiRunState => ({
   ...createInitialAiRunState(input),
   status: 'cancelled',
   error: '已取消',
-  failureCode: 'user_cancelled',
-  resumeSnapshotSaved: input.resumeSnapshotSaved
+  failureCode: 'user_cancelled'
 })
 
 export const createFailedAiRunState = (input: {
   runId: string
-  sessionId: string
+  partnerId: string
   input: string
   error: string
+  failureRawMessage?: string
   failureSource: NonNullable<AiRunState['failureSource']>
   failureHttpStatus?: number
   failureProviderCode?: string
   failureCode?: AiRunState['failureCode']
-  resumeSnapshotSaved?: boolean
 }): AiRunState => ({
   ...createInitialAiRunState(input),
   status: 'failed',
   error: input.error,
+  failureRawMessage: input.failureRawMessage,
   failureSource: input.failureSource,
   failureHttpStatus: input.failureHttpStatus,
   failureProviderCode: input.failureProviderCode,
-  failureCode: input.failureCode,
-  resumeSnapshotSaved: input.resumeSnapshotSaved
+  failureCode: input.failureCode
 })

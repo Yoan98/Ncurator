@@ -63,7 +63,7 @@ describe('selected-reference-validation', () => {
     expect(result).toEqual({ ok: false, error: 'scope unavailable' })
     expect(events).toHaveLength(1)
     expect(events[0]).toMatchObject({
-      type: 'runtime_issue',
+      type: 'run_warning',
       runId: 'run-2',
       code: 'scope_unavailable',
       workspaceId: WORKSPACE_ID

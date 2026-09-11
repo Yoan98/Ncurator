@@ -9,9 +9,9 @@ import JSZip from 'jszip'
 import type { Locator, Page } from 'playwright'
 import type { AiRunEvent, JsonValue, WorkspaceIndexJobAction } from '../../../src/shared/types'
 import {
-  buildBlockIndex,
+  buildDocumentNodeIndex,
   loadDocxBundle
-} from '../../../src/main/services/ai/human/tools/docx/adapters/ooxml/blockIndex'
+} from '../../../src/main/services/ai/human/tools/docx/adapters/ooxml/nodeIndex'
 import {
   chatSelectors,
   importSelectors,
@@ -19,11 +19,15 @@ import {
   settingsSelectors,
   workbenchSelectors
 } from '../../../src/renderer/src/testing/selectors'
-import { loadRootEnvOnce } from '../core/rootEnv'
+import {
+  resolveLiveLlmTarget,
+  type LiveLlmTarget
+} from '../core/liveProviders'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
   bindWorkspaceRootDirectly,
+  createPresetModelConfigThroughSettingsUi,
   getWorkspaceIndexCounts,
   getSettingsLocator,
   getSettingsPrefixLocator,
@@ -48,13 +52,13 @@ export const WORKBENCH_RESULT_E2E_TIMEOUT_MS = WORKBENCH_LONG_E2E_TIMEOUT_MS + 1
 export const WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS = 900_000
 export const WORKBENCH_MODEL_LIST_TIMEOUT_MS = 60_000
 export const WORKBENCH_FIXTURE_ROOT = E2E_WORKSPACE_FIXTURE_ROOT
+/** Matches ChatPage create/edit partner Input maxLength. */
+export const WORKBENCH_PARTNER_NAME_MAX_LENGTH = 40
 
-export type WorkbenchLiveModelEnv = {
-  baseUrl: string
-  apiKey: string
-  modelName: string
-  visualModelName: string
-}
+export const clampWorkbenchPartnerName = (name: string): string =>
+  name.trim().slice(0, WORKBENCH_PARTNER_NAME_MAX_LENGTH)
+
+export type WorkbenchLiveModelEnv = LiveLlmTarget
 
 export type TemporaryWorkbenchWorkspace = TemporaryE2EWorkspace
 
@@ -111,18 +115,82 @@ type WorkbenchDraftSubmitState = {
   sendButtonText: string
 }
 
-export { chatSelectors, importSelectors, scheduledTaskSelectors, settingsSelectors, workbenchSelectors }
+export {
+  chatSelectors,
+  importSelectors,
+  scheduledTaskSelectors,
+  settingsSelectors,
+  workbenchSelectors
+}
+
+export const dismissWorkbenchLlmConfigMissingNotification = async (page: Page): Promise<void> => {
+  const card = getWorkbenchLocator(page, workbenchSelectors.llmConfigMissingNotification)
+  if (!(await card.isVisible().catch(() => false))) return
+  await card.getByRole('button', { name: '稍后', exact: true }).click()
+  await card.waitFor({ state: 'hidden', timeout: 5_000 }).catch(() => undefined)
+}
+
+export const ensureWorkbenchContentPanelExpanded = async (page: Page): Promise<void> => {
+  const panelReady = async (): Promise<boolean> =>
+    page.evaluate((testId) => {
+      const shell = document.querySelector(`[data-testid="${testId}"]`)
+      return (
+        shell instanceof HTMLElement &&
+        shell.dataset.panelVisible === 'true' &&
+        shell.getBoundingClientRect().width > 100
+      )
+    }, workbenchSelectors.contentPanelShell)
+
+  if (await panelReady()) return
+
+  // Partner switch collapses with a short unmount delay; wait so the expand toggle reappears.
+  await page
+    .waitForFunction(
+      (testId) => {
+        const shell = document.querySelector(`[data-testid="${testId}"]`)
+        if (!(shell instanceof HTMLElement)) return true
+        return shell.dataset.panelVisible !== 'true'
+      },
+      workbenchSelectors.contentPanelShell,
+      { timeout: 5_000 }
+    )
+    .catch(() => undefined)
+
+  if (await panelReady()) return
+
+  const toggle = getWorkbenchLocator(page, workbenchSelectors.contentPanelToggle)
+  await toggle.waitFor({ state: 'visible', timeout: 10_000 })
+  if ((await toggle.getAttribute('aria-label')) === '展开右侧栏') {
+    await toggle.click()
+  }
+  await page.waitForFunction(
+    (testId) => {
+      const shell = document.querySelector(`[data-testid="${testId}"]`)
+      return (
+        shell instanceof HTMLElement &&
+        shell.dataset.panelVisible === 'true' &&
+        shell.getBoundingClientRect().width > 100
+      )
+    },
+    workbenchSelectors.contentPanelShell,
+    { timeout: 10_000 }
+  )
+}
 
 export const selectWorkbenchResourceMenuItem = async (
   runtime: E2ETestRuntime,
   kind: 'file' | 'browser'
 ): Promise<{ fileVisible: boolean; browserVisible: boolean }> => {
+  await dismissWorkbenchLlmConfigMissingNotification(runtime.page)
+  await ensureWorkbenchContentPanelExpanded(runtime.page)
   const initialTabCount = await getWorkbenchPrefixLocator(
     runtime.page,
     workbenchSelectors.resourceTabPrefix
   ).count()
+  const addButton = getWorkbenchLocator(runtime.page, workbenchSelectors.resourceTabAddButton)
+  await addButton.waitFor({ state: 'visible' })
   const menuWindowPromise = runtime.electronApp.waitForEvent('window')
-  await getWorkbenchLocator(runtime.page, workbenchSelectors.resourceTabAddButton).click()
+  await addButton.click()
   const menuPage = await menuWindowPromise
   await menuPage.waitForLoadState('domcontentloaded')
   const fileItem = menuPage.getByRole('menuitem', { name: '文件', exact: true })
@@ -147,6 +215,57 @@ export const selectWorkbenchResourceMenuItem = async (
     { timeout: 10_000 }
   )
   return result
+}
+
+export const openWorkbenchWorkspaceFile = async (
+  runtime: E2ETestRuntime,
+  fileName: string
+): Promise<void> => {
+  const { page } = runtime
+  await dismissWorkbenchLlmConfigMissingNotification(page)
+  await ensureWorkbenchContentPanelExpanded(page)
+  const filter = page.getByPlaceholder('筛选文件…')
+  if (!(await filter.isVisible().catch(() => false))) {
+    const explorerToggle = getWorkbenchLocator(page, workbenchSelectors.workspaceExplorerToggle)
+    if (await explorerToggle.isVisible().catch(() => false)) {
+      await explorerToggle.click()
+    } else {
+      await selectWorkbenchResourceMenuItem(runtime, 'file')
+    }
+  }
+  await filter.waitFor({ state: 'visible' })
+  // Clear filter so lazy-loaded parents stay visible for nested fixture paths.
+  await filter.evaluate((element) => {
+    if (!(element instanceof HTMLInputElement)) {
+      throw new Error('workspace file filter is not an input')
+    }
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setter?.call(element, '')
+    element.dispatchEvent(new Event('input', { bubbles: true }))
+    element.dispatchEvent(new Event('change', { bubbles: true }))
+  })
+
+  const exactTitle = page.getByTitle(fileName, { exact: true })
+  if (await exactTitle.isVisible().catch(() => false)) {
+    await exactTitle.click()
+    return
+  }
+
+  const segments = fileName.split(/[\\/]/u).filter(Boolean)
+  const basename = segments.at(-1) || fileName
+  let prefix = ''
+  for (const segment of segments.slice(0, -1)) {
+    prefix = prefix ? `${prefix}/${segment}` : segment
+    const folder = page.getByTitle(prefix, { exact: true }).first()
+    await folder.waitFor({ state: 'visible', timeout: 30_000 })
+    await folder.click({ force: true })
+    await page.waitForTimeout(200)
+  }
+
+  const nestedTitle = prefix ? `${prefix}/${basename}` : basename
+  const nested = page.getByTitle(nestedTitle, { exact: true })
+  await nested.waitFor({ state: 'visible', timeout: 30_000 })
+  await nested.click({ force: true })
 }
 
 const byTestId = (testId: string): string => `[data-testid="${testId}"]`
@@ -321,11 +440,6 @@ type NativeDirectoryDialogDiagnostics = {
 const MACOS_ELECTRON_BUNDLE_ID = 'com.github.Electron'
 const MACOS_ELECTRON_PROCESS_NAME = 'Electron'
 
-const readEnv = (name: string): string => {
-  loadRootEnvOnce()
-  return String(process.env[name] || '').trim()
-}
-
 const closeServer = async (server: Server): Promise<void> => {
   const forceCloseTimer = setTimeout(() => {
     const closeableServer = server as Server & {
@@ -373,28 +487,18 @@ export const getWorkbenchPrefixLocator = (page: Page, testIdPrefix: string): Loc
   page.locator(byTestIdPrefix(testIdPrefix))
 
 export const loadWorkbenchLiveModelEnv = (): WorkbenchLiveModelEnv => {
-  const baseUrl = readEnv('AI_LIVE_BASE_URL')
-  const apiKey = readEnv('AI_LIVE_API_KEY')
-  const modelName = readEnv('AI_LIVE_PRIMARY_MODEL_NAME')
-  const visualModelName = readEnv('AI_LIVE_VISUAL_MODEL_NAME')
-
-  if (!baseUrl || !apiKey || !modelName || !visualModelName) {
+  try {
+    return resolveLiveLlmTarget()
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
     throw new Error(
       [
-        'Workbench formal AI e2e 缺少真实模型配置，必须设置：',
-        '- AI_LIVE_BASE_URL',
-        '- AI_LIVE_API_KEY',
-        '- AI_LIVE_PRIMARY_MODEL_NAME',
-        '- AI_LIVE_VISUAL_MODEL_NAME'
+        'Workbench formal AI e2e 缺少内置服务商 live 配置。',
+        '请设置 AI_LIVE_KEY_<PROVIDER>（如 AI_LIVE_KEY_DASHSCOPE），',
+        '可选 AI_LIVE_PROVIDER / AI_LIVE_MODEL（默认 dashscope + qwen3.8-flash）。',
+        detail
       ].join('\n')
     )
-  }
-
-  return {
-    baseUrl,
-    apiKey,
-    modelName,
-    visualModelName
   }
 }
 
@@ -457,63 +561,54 @@ export const navigateToWorkbench = async (
     window.location.hash = '#/'
   })
   await getWorkbenchLocator(page, workbenchSelectors.page).waitFor({ state: 'visible' })
-  await getWorkbenchLocator(page, workbenchSelectors.sessionsList).waitFor({ state: 'visible' })
+  await getWorkbenchLocator(page, workbenchSelectors.partnersList).waitFor({ state: 'visible' })
   if (options?.waitForSessionListText !== false) {
     await waitForCondition({
-      name: 'workbench session list ready',
+      name: 'workbench partner list ready',
       timeoutMs: WORKBENCH_E2E_TIMEOUT_MS,
       check: async () => {
-        const sessionListText =
-          (await getWorkbenchLocator(page, workbenchSelectors.sessionsList)
-            .textContent()
-            .catch(() => '')) || ''
-        return sessionListText.trim().length > 0
+        const hydrated = await getWorkbenchLocator(page, workbenchSelectors.partnersList)
+          .getAttribute('data-hydrated')
+          .catch(() => null)
+        return hydrated === 'true'
       }
     })
   }
-  await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
+  await getWorkbenchLocator(page, workbenchSelectors.input)
+    .or(page.getByText('还没有伙伴。从左侧创建一个开始对话。'))
+    .or(page.getByText('请选择一个伙伴开始对话。'))
+    .waitFor({ state: 'visible' })
 }
 
 export const configureLiveModelThroughSettingsUi = async (
   page: Page,
   env: WorkbenchLiveModelEnv = loadWorkbenchLiveModelEnv()
 ): Promise<void> => {
-  await navigateToSettingsSection(page, 'model')
-  await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
-  await getSettingsLocator(page, settingsSelectors.modelNameInput).fill('Live Model')
-  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
-    state: 'visible'
+  await createPresetModelConfigThroughSettingsUi(page, {
+    providerId: env.providerId,
+    apiKey: env.apiKey
   })
-  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
-    .locator('input')
-    .fill(env.baseUrl)
-  await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(env.apiKey)
-  await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
-  await page.locator('tbody tr').filter({ hasText: 'Live Model' }).waitFor({
-    state: 'visible'
-  })
-
-  await navigateToWorkbench(page, { waitForSessionListText: false })
-  await selectWorkbenchModel(page, env.modelName)
-  await selectWorkbenchVisualModel(page, env.visualModelName)
 }
 
 export const createWorkspaceThroughSettingsUi = async (
   page: Page,
-  workspaceName: string
+  rootPath: string
 ): Promise<string> => {
   await navigateToSettingsSection(page, 'workspace')
-  await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
-  await getSettingsLocator(page, importSelectors.createWorkspaceNameInput).fill(workspaceName)
-  await getSettingsLocator(page, importSelectors.createWorkspaceConfirmButton).click()
+  const resolvedRootPath = path.resolve(rootPath)
+  const response = await page.evaluate(
+    async (workspaceRootPath) => await window.api.workspaceCreate({ rootPath: workspaceRootPath }),
+    resolvedRootPath
+  )
+  if (!response.success || !response.workspace) {
+    throw new Error(response.error || 'failed to add workspace root')
+  }
+  const displayName = path.basename(resolvedRootPath)
   await getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix)
-    .filter({ hasText: workspaceName })
+    .filter({ hasText: displayName })
     .first()
     .waitFor({ state: 'visible' })
-  await getSettingsLocator(page, importSelectors.workspaceDetail)
-    .getByRole('tab', { name: /文件/u })
-    .waitFor({ state: 'visible' })
-  return await readWorkspaceIdFromSettingsCard(page, workspaceName)
+  return response.workspace.id
 }
 
 type WorkbenchE2EWindow = Window & {
@@ -645,9 +740,7 @@ export const bindWorkspaceRootThroughSettingsUi = async (
     const strategy = strategies[Math.min(attempt, strategies.length - 1)]
     if (attempt > 0 && (await waitForSelectedRootPath(1_000))) return
     const electronProcessId = await readElectronProcessId(page)
-    if (process.platform === 'win32') {
-      await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
-    }
+    await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
     await rootPathButton.click()
     try {
       const output =
@@ -910,15 +1003,39 @@ export const prepareWorkbenchWorkspaceThroughUi = async (
     webSourceUrl?: string
   }
 ): Promise<void> => {
-  const workspaceId = await createWorkspaceThroughSettingsUi(page, input.workspaceName)
-  await bindWorkspaceRootDirectly(page, workspaceId, input.rootPath)
+  const workspaceId = await createWorkspaceThroughSettingsUi(page, input.rootPath)
   await prepareSelectedWorkspaceFilesThroughSettingsUi(page, workspaceId)
   if (input.webSourceUrl) {
     await addWebSourceThroughSettingsUi(page, input.webSourceUrl)
     await prepareSelectedWorkspaceWebSourcesThroughSettingsUi(page)
   }
   await navigateToWorkbench(page)
-  await selectWorkbenchWorkspace(page, input.workspaceName)
+}
+
+export const waitForVisiblePartnerRow = async (page: Page, name: string): Promise<void> => {
+  const partnerName = clampWorkbenchPartnerName(name)
+  await getWorkbenchPrefixLocator(page, workbenchSelectors.partnerItemPrefix)
+    .filter({ hasText: partnerName })
+    .first()
+    .waitFor({ state: 'visible' })
+}
+
+export const createPartnerThroughWorkbenchUi = async (
+  page: Page,
+  name = '测试伙伴'
+): Promise<string> => {
+  const partnerName = clampWorkbenchPartnerName(name)
+  if (!partnerName) {
+    throw new Error('partner name is required')
+  }
+  await getWorkbenchLocator(page, workbenchSelectors.newPartnerButton).click()
+  const nameInput = getWorkbenchLocator(page, workbenchSelectors.createPartnerNameInput)
+  await nameInput.waitFor({ state: 'visible' })
+  await nameInput.fill(partnerName)
+  await nameInput.press('Enter')
+  await waitForVisiblePartnerRow(page, partnerName)
+  await dismissWorkbenchLlmConfigMissingNotification(page)
+  return partnerName
 }
 
 export const setupWorkbenchWithTempWorkspace = async (
@@ -929,11 +1046,18 @@ export const setupWorkbenchWithTempWorkspace = async (
     webSourceUrl?: string
     configureModel?: boolean
     createSession?: boolean
+    createPartner?: boolean
   }
 ): Promise<WorkbenchSetupResult> => {
   const env = loadWorkbenchLiveModelEnv()
   const workspace = await createTemporaryWorkbenchWorkspace(input.caseId)
-  const workspaceName = input.workspaceName || `Workbench ${input.caseId}`
+  // Default name doubles as partner title; keep it within the partner Input maxLength.
+  const workspaceName = clampWorkbenchPartnerName(
+    input.workspaceName || `Workbench ${input.caseId}`
+  )
+  if (!workspaceName) {
+    throw new Error('workspace/partner name is required')
+  }
   if (input.configureModel !== false) {
     await configureLiveModelThroughSettingsUi(page, env)
   }
@@ -942,13 +1066,12 @@ export const setupWorkbenchWithTempWorkspace = async (
     rootPath: workspace.rootPath,
     webSourceUrl: input.webSourceUrl
   })
-  if (input.configureModel !== false) {
-    await selectWorkbenchModel(page, env.modelName)
-    await selectWorkbenchVisualModel(page, env.visualModelName)
+  const shouldCreatePartner = input.createPartner !== false && input.createSession !== false
+  if (shouldCreatePartner) {
+    await createPartnerThroughWorkbenchUi(page, workspaceName)
   }
-  if (input.createSession !== false) {
-    await page.getByRole('button', { name: `在 ${workspaceName} 中新建对话` }).click()
-    await selectWorkbenchWorkspace(page, workspaceName)
+  if (input.configureModel !== false && shouldCreatePartner) {
+    await selectWorkbenchModel(page, env.modelName)
   }
   return {
     env,
@@ -966,7 +1089,12 @@ export const setupWorkbenchWorkspaceOnly = async (
   }
 ): Promise<WorkbenchWorkspaceOnlySetupResult> => {
   const workspace = await createTemporaryWorkbenchWorkspace(input.caseId)
-  const workspaceName = input.workspaceName || `Workbench ${input.caseId}`
+  const workspaceName = clampWorkbenchPartnerName(
+    input.workspaceName || `Workbench ${input.caseId}`
+  )
+  if (!workspaceName) {
+    throw new Error('workspace/partner name is required')
+  }
   await prepareWorkbenchWorkspaceThroughUi(page, {
     workspaceName,
     rootPath: workspace.rootPath,
@@ -1171,37 +1299,14 @@ export const sendWorkbenchMessage = async (page: Page, value: string): Promise<v
   await submitWorkbenchCurrentDraft(page)
 }
 
-export const createWorkbenchNewSession = async (page: Page): Promise<void> => {
-  await getWorkbenchLocator(page, workbenchSelectors.newSessionButton).click()
-  await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
-  await page.waitForFunction(
-    (input: { assistantTurnPrefix: string; approvalBatchCard: string }) => {
-      const assistantTurns = document.querySelectorAll(
-        `[data-testid^="${input.assistantTurnPrefix}-"]`
-      )
-      const approvalCard = document.querySelector(`[data-testid="${input.approvalBatchCard}"]`)
-      return assistantTurns.length === 0 && !approvalCard
-    },
-    {
-      assistantTurnPrefix: workbenchSelectors.assistantTurnPrefix,
-      approvalBatchCard: chatSelectors.approvalBatchCard
-    },
-    { timeout: WORKBENCH_E2E_TIMEOUT_MS }
-  )
-}
-
-export const switchWorkbenchMode = async (
+export const createWorkbenchNewSession = async (
   page: Page,
-  modeLabel: '大聪明' | '没头脑'
+  options?: { modelName?: string }
 ): Promise<void> => {
-  const optionLabel = modeLabel === '大聪明' ? 'AI' : '搜索'
-  await getWorkbenchLocator(page, workbenchSelectors.modeSwitch).click()
-  const option = page
-    .locator('.workbench-composer-menu [role="option"]')
-    .filter({ hasText: optionLabel })
-    .first()
-  await option.waitFor({ state: 'visible' })
-  await option.click()
+  await createPartnerThroughWorkbenchUi(page, `伙伴 ${Date.now()}`)
+  await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
+  // New partners persist empty UI state (mainModel: null). Re-select so send stays enabled.
+  await selectWorkbenchModel(page, options?.modelName || loadWorkbenchLiveModelEnv().modelName)
 }
 
 export const selectWorkbenchAiPreference = async (
@@ -1245,11 +1350,30 @@ export const readWorkbenchAiPreferenceSelection = async (page: Page): Promise<st
 
 export const selectWorkbenchExecutionPermission = async (
   page: Page,
-  permissionLabel: '审核' | '完全访问'
+  permissionLabel: '审核' | '完全访问',
+  options?: { confirmModal?: boolean; cancelModal?: boolean }
 ): Promise<void> => {
   await getWorkbenchLocator(page, workbenchSelectors.executionPermissionSwitch).click()
   const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
   await menu.getByRole('option').filter({ hasText: permissionLabel }).first().click()
+  if (permissionLabel === '完全访问') {
+    if (options?.cancelModal) {
+      const cancelButton = getWorkbenchLocator(page, workbenchSelectors.fullAccessConfirmCancelButton)
+      await cancelButton.waitFor({ state: 'visible', timeout: 3000 })
+      await cancelButton.click()
+      await cancelButton.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined)
+    } else if (options?.confirmModal !== false) {
+      const confirmButton = getWorkbenchLocator(page, workbenchSelectors.fullAccessConfirmOkButton)
+      const appeared = await confirmButton
+        .waitFor({ state: 'visible', timeout: 3000 })
+        .then(() => true)
+        .catch(() => false)
+      if (appeared) {
+        await confirmButton.click()
+        await confirmButton.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined)
+      }
+    }
+  }
 }
 
 export const readWorkbenchExecutionPermissionSelection = async (page: Page): Promise<string> => {
@@ -1261,38 +1385,56 @@ export const readWorkbenchExecutionPermissionSelection = async (page: Page): Pro
   return label
 }
 
-const selectWorkbenchModelByRole = async (
+export const selectWorkbenchModel = async (
   page: Page,
   modelName: string,
-  role: '主模型' | '视觉模型',
-  envName: 'AI_LIVE_PRIMARY_MODEL_NAME' | 'AI_LIVE_VISUAL_MODEL_NAME'
+  selection?: { preferCustom?: boolean }
 ): Promise<void> => {
   const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
   await modelSelect.click()
-  await page
-    .locator('.workbench-select-menu.workbench-composer-menu')
-    .last()
-    .getByRole('button', { name: new RegExp(`^${role}`, 'u') })
-    .click()
-  const searchInput = page
-    .locator('.workbench-select-menu.workbench-composer-menu input[placeholder="搜索模型"]')
-    .last()
+  const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  await menu.waitFor({ state: 'visible' })
+
+  if (!selection?.preferCustom) {
+    const byPresetId = menu.getByTestId(
+      `${workbenchSelectors.modelSelectPresetOptionPrefix}-${modelName}`
+    )
+    if (await byPresetId.isVisible().catch(() => false)) {
+      await byPresetId.click()
+      return
+    }
+    const byFreeId = menu.getByTestId(
+      `${workbenchSelectors.modelSelectFreeOptionPrefix}-${modelName}`
+    )
+    if (await byFreeId.isVisible().catch(() => false)) {
+      await byFreeId.click()
+      return
+    }
+    const presetOption = menu.getByRole('option').filter({ hasText: modelName }).first()
+    if (await presetOption.isVisible().catch(() => false)) {
+      await presetOption.click()
+      return
+    }
+  }
+
+  const customEntry = menu.locator(
+    `[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`
+  )
+  await customEntry.waitFor({ state: 'visible' })
+  await customEntry.click()
+
+  const searchInput = menu.locator('input[placeholder="搜索模型"]')
   await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
   await searchInput.fill(modelName)
-  const dropdown = page.locator('.workbench-select-menu.workbench-composer-menu').last()
-  const options = dropdown.getByRole('option')
-  const modelOption = options.filter({ hasText: modelName }).first()
-  await dropdown.waitFor({ state: 'visible' })
+  const modelOptions = menu.getByRole('option')
+  const modelOption = modelOptions.filter({ hasText: modelName }).first()
   try {
-    await modelOption.waitFor({
-      state: 'visible',
-      timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS
-    })
+    await modelOption.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
   } catch {
-    const optionTexts = (await options.allTextContents()).map((item) => item.trim()).filter(Boolean)
+    const optionTexts = (await modelOptions.allTextContents()).map((item) => item.trim()).filter(Boolean)
     throw new Error(
       [
-        `${envName}="${modelName}" was not found in the Workbench ${role} dropdown.`,
+        `AI_LIVE_MODEL="${modelName}" was not found in the Workbench model menu.`,
         `Available models: ${optionTexts.join(', ') || '(none)'}`,
         'Workbench formal AI e2e cannot continue without a real UI-selectable live model.'
       ].join('\n')
@@ -1301,50 +1443,11 @@ const selectWorkbenchModelByRole = async (
   await modelOption.click()
 }
 
-export const selectWorkbenchModel = async (page: Page, modelName: string): Promise<void> =>
-  await selectWorkbenchModelByRole(page, modelName, '主模型', 'AI_LIVE_PRIMARY_MODEL_NAME')
-
-export const selectWorkbenchVisualModel = async (page: Page, modelName: string): Promise<void> =>
-  await selectWorkbenchModelByRole(page, modelName, '视觉模型', 'AI_LIVE_VISUAL_MODEL_NAME')
-
 export const selectWorkbenchWorkspace = async (
-  page: Page,
-  workspaceName: string
+  _page: Page,
+  _workspaceName: string
 ): Promise<void> => {
-  const workspaceSelect = getWorkbenchLocator(page, workbenchSelectors.workspaceSelect)
-  const workspaceTrigger = workspaceSelect.locator('button.workbench-select-trigger')
-  const isSelected = async (): Promise<boolean> =>
-    await workspaceTrigger
-      .getAttribute('title')
-      .then((title) => title === workspaceName)
-      .catch(() => false)
-
-  // The selector root contains menu text while it is mounted, so only the trigger title can
-  // reliably identify the workspace currently selected by the composer.
-  for (let attempt = 0; attempt < 2 && !(await isSelected()); attempt += 1) {
-    await workspaceTrigger.click()
-    const workspaceOption = page
-      .locator(
-        '.workbench-select-menu [role="option"], .workspace-quick-select-popup [role="option"]'
-      )
-      .filter({ hasText: workspaceName })
-      .first()
-    await workspaceOption.waitFor({ state: 'visible' })
-    await workspaceOption.click()
-  }
-  await page.waitForFunction(
-    (input: { testId: string; workspaceName: string }) => {
-      const trigger = document.querySelector(
-        `[data-testid="${input.testId}"] button.workbench-select-trigger`
-      )
-      return trigger instanceof HTMLButtonElement && trigger.title === input.workspaceName
-    },
-    {
-      testId: workbenchSelectors.workspaceSelect,
-      workspaceName
-    },
-    { timeout: WORKBENCH_E2E_TIMEOUT_MS }
-  )
+  // Composer no longer binds a named workspace.
 }
 
 export const openScheduledTasksView = async (page: Page): Promise<void> => {
@@ -1354,35 +1457,43 @@ export const openScheduledTasksView = async (page: Page): Promise<void> => {
 
 export const selectScheduledTaskModel = async (page: Page, modelName: string): Promise<void> => {
   const modelSelect = getWorkbenchLocator(page, scheduledTaskSelectors.modelSelect)
-  await modelSelect.locator('button.workbench-select-trigger').click()
-  await page
-    .locator('.workbench-select-menu.workbench-composer-menu')
-    .last()
-    .getByRole('button', { name: /^主模型/u })
-    .click()
-  const searchInput = page
-    .locator('.workbench-select-menu.workbench-composer-menu input[placeholder="搜索模型"]')
-    .last()
+  await modelSelect.click()
+  const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  await menu.waitFor({ state: 'visible' })
+
+  const byPresetId = menu.getByTestId(
+    `${workbenchSelectors.modelSelectPresetOptionPrefix}-${modelName}`
+  )
+  if (await byPresetId.isVisible().catch(() => false)) {
+    await byPresetId.click()
+    return
+  }
+
+  const presetOption = menu.getByRole('option').filter({ hasText: modelName }).first()
+  if (await presetOption.isVisible().catch(() => false)) {
+    await presetOption.click()
+    return
+  }
+
+  const customEntry = menu.locator(
+    `[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`
+  )
+  await customEntry.waitFor({ state: 'visible' })
+  await customEntry.click()
+
+  const searchInput = menu.locator('input[placeholder="搜索模型"]')
   await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
   await searchInput.fill(modelName)
-  const dropdown = page.locator('.workbench-select-menu.workbench-composer-menu').last()
-  const option = dropdown.getByRole('option').filter({ hasText: modelName }).first()
-  await option.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
-  await option.click()
+  const modelOption = menu.getByRole('option').filter({ hasText: modelName }).first()
+  await modelOption.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
+  await modelOption.click()
 }
 
 export const selectScheduledTaskWorkspace = async (
-  page: Page,
-  workspaceName: string
+  _page: Page,
+  _workspaceName: string
 ): Promise<void> => {
-  const workspaceSelect = getWorkbenchLocator(page, scheduledTaskSelectors.workspaceSelect)
-  await workspaceSelect.locator('button.workbench-select-trigger').click()
-  const option = page
-    .locator('.workbench-select-menu [role="option"]')
-    .filter({ hasText: workspaceName })
-    .first()
-  await option.waitFor({ state: 'visible' })
-  await option.click()
+  // Scheduled tasks no longer bind a manually selected partner/workspace.
 }
 
 export const fillScheduledTaskTime = async (page: Page, hhmm: string): Promise<void> => {
@@ -1399,7 +1510,7 @@ export const waitForWorkbenchSearchScopeEmptyThroughUi = async (page: Page): Pro
   await page.waitForFunction(
     (testId: string) => {
       const text = document.querySelector(`[data-testid="${testId}"]`)?.textContent || ''
-      return /没有匹配项|No data/u.test(text)
+      return /没有匹配的资料|没有匹配项|No data/u.test(text)
     },
     workbenchSelectors.mentionPanel,
     { timeout: WORKBENCH_E2E_TIMEOUT_MS }
@@ -1672,6 +1783,9 @@ const autoApproveWorkbenchApprovalBatch = async (
   event: Extract<AiRunEvent, { type: 'approval_batch_required' }>
 ): Promise<void> => {
   const card = getApprovalCard(page)
+  if (!(await card.isVisible().catch(() => false))) {
+    await navigateToWorkbench(page)
+  }
   await card.waitFor({ state: 'visible', timeout: WORKBENCH_E2E_TIMEOUT_MS })
   const totalItems = event.items.length
   for (let index = 0; index < totalItems; index += 1) {
@@ -2019,18 +2133,13 @@ export const waitForLatestAssistantFinalAnswerText = async (
   }
 }
 
-export const waitForWorkbenchSearchResults = async (page: Page): Promise<Locator> => {
+export const assertWorkbenchLocalSearchResultsPanelHidden = async (page: Page): Promise<void> => {
   const results = getWorkbenchLocator(page, workbenchSelectors.searchResults)
-  await results.waitFor({ state: 'visible', timeout: WORKBENCH_LONG_E2E_TIMEOUT_MS })
-  await page.waitForFunction(
-    (testId: string) => {
-      const host = document.querySelector(`[data-testid="${testId}"]`)
-      return Boolean(host?.textContent?.trim())
-    },
-    workbenchSelectors.searchResults,
-    { timeout: WORKBENCH_E2E_TIMEOUT_MS }
-  )
-  return results
+  const count = await results.count()
+  if (count === 0) return
+  const visible = await results.isVisible().catch(() => false)
+  if (!visible) return
+  throw new Error('Composer search results panel should stay hidden during web_search AI runs')
 }
 
 export const assertNoWorkbenchFakeSignals = async (
@@ -2078,8 +2187,8 @@ export const mutateDocxExternally = async (filePath: string, marker: string): Pr
 
 export const readDocxPlainText = async (filePath: string): Promise<string> => {
   const bundle = await loadDocxBundle(await readFile(filePath))
-  return buildBlockIndex(bundle.documentDom)
-    .outline.filter((block) => block.type !== 'table_cell')
-    .map((block) => block.text)
+  return buildDocumentNodeIndex(bundle)
+    .outline.filter((node) => node.type !== 'table_cell')
+    .map((node) => node.text)
     .join('\n')
 }

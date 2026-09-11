@@ -20,13 +20,12 @@ import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tool
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
 import { TerminalSessionManager } from '../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
 import { buildTextFileCapabilityTools } from '../../../src/main/services/ai/human/tools/textFile'
-import { imageRecognitionToolFamily } from '../../../src/main/services/ai/human/tools/imageRecognition'
 import { buildImageGenerationCapabilityTools } from '../../../src/main/services/ai/human/tools/imageGeneration'
+import { agentControlToolFamily } from '../../../src/main/services/ai/human/tools/agentControl'
 import { buildPdfCapabilityTools } from '../../../src/main/services/ai/human/tools/pdf'
 import { buildPptCapabilityTools } from '../../../src/main/services/ai/human/tools/ppt'
 import { buildExcelCapabilityTools } from '../../../src/main/services/ai/human/tools/excel'
 import { releasePdfRunSession } from '../../../src/main/services/pdf/worker/pdfWorkerClient'
-import { utilityToolFamily } from '../../../src/main/services/ai/human/tools/utility'
 import { webToolFamily } from '../../../src/main/services/ai/human/tools/web'
 import { createHumanRuntimeCache } from '../../../src/main/services/ai/human/node/utils/runtimeCache'
 import type { JsonObject, JsonValue } from '../../../src/shared/types'
@@ -39,27 +38,14 @@ type ToolLike = {
   invoke: (input: ToolArgs) => Promise<ToolOutput>
 }
 
-export const docxParagraphNode = (text: string): JsonObject => ({
-  type: 'paragraph',
-  children: [{ type: 'run', children: [{ type: 'text', text }] }]
-})
+export const docxParagraphNode = (text: string): JsonObject => ({ text })
 
 export const docxHeadingNode = (level: number, text: string): JsonObject => ({
-  type: 'paragraph',
-  style: { styleName: `Heading${level}` },
-  children: [{ type: 'run', children: [{ type: 'text', text }] }]
+  text,
+  style: { styleName: `Heading${level}` }
 })
 
-export const docxTableNode = (rows: string[][]): JsonObject => ({
-  type: 'table',
-  children: rows.map((row) => ({
-    type: 'table_row',
-    children: row.map((text) => ({
-      type: 'table_cell',
-      children: [docxParagraphNode(text)]
-    }))
-  }))
-})
+export const docxTableNode = (rows: string[][]): JsonObject => ({ rows })
 
 export type CapturedToolActivity = {
   actionType: string
@@ -69,7 +55,9 @@ export type CapturedToolActivity = {
 
 type TerminalToolHarnessOptions = {
   yieldMs?: number
-  maxOutputChars?: number
+  retainedScrollbackChars?: number
+  readMaxChars?: number
+  maxConcurrentSessions?: number
 }
 
 const createToolInvoker = (tools: readonly ToolLike[]) => {
@@ -82,29 +70,32 @@ const createToolInvoker = (tools: readonly ToolLike[]) => {
         throw new Error(`tool not found: ${name}`)
       }
       const normalizedArgs =
-        name === 'docx_read_outline' && !('ranges' in args)
+        name === 'terminal_run' && !('commandExplanation' in args)
           ? {
               ...args,
-              ranges: [
-                { type: 'block_index', fromBlockIndex: 0, toBlockIndex: Number.MAX_SAFE_INTEGER }
-              ]
+              commandExplanation: '执行当前测试用例声明的终端命令。'
             }
-          : name === 'terminal_run' && !('commandExplanation' in args)
-            ? {
-                ...args,
-                commandExplanation: '执行当前测试用例声明的终端命令。'
-              }
-            : args
+          : args
       return (await tool.invoke(normalizedArgs)) as TResult
     }
   }
 }
 
+/** Keep AiRunContext.runId aligned with the harness/worker session key. */
+const createAlignedAiRunContext = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput = {}
+) =>
+  runtime.createAiRunContext({
+    ...contextInput,
+    runId: contextInput.runId || runtime.runId
+  })
+
 export const createDocxToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const resourceManager = new AiRunResourceManager([
@@ -114,6 +105,7 @@ export const createDocxToolHarness = (
     ctx,
     cache,
     runId: runtime.runId,
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     safePreviewChars: 1400,
@@ -139,14 +131,14 @@ export const createPptToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const built = buildPptCapabilityTools({
     ctx,
     cache,
     runId: runtime.runId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     emitActivity: (activity) => activities.push(activity)
@@ -163,14 +155,14 @@ export const createExcelToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const built = buildExcelCapabilityTools({
     ctx,
     cache,
     runId: runtime.runId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     emitActivity: (activity) => activities.push(activity)
@@ -188,23 +180,25 @@ export const createTerminalToolHarness = (
   contextInput: CreateAiRunContextInput = {},
   options: TerminalToolHarnessOptions = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const sessionManager = new TerminalSessionManager({
     yieldMs: Math.max(50, Number(options.yieldMs || 3000)),
-    maxOutputChars: Math.max(1024, Number(options.maxOutputChars || 120_000))
+    retainedScrollbackChars: Math.max(1024, Number(options.retainedScrollbackChars || 120_000)),
+    readMaxChars: options.readMaxChars,
+    maxConcurrentSessions: options.maxConcurrentSessions
   })
   const built = buildTerminalCapabilityTools({
     ctx,
     cache,
     runId: runtime.runId,
     taskId: runtime.taskId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     workspaceRootPath: runtime.workspaceRoot,
+    workspaceRoots: ctx.workspaceRoots,
     workspaceId: ctx.workspace?.workspaceId || 'test-workspace',
     sessionManager,
-    aiResultTokenLimitRatio: 0.25,
     emitActivity: (activity) => {
       activities.push(activity)
     }
@@ -226,14 +220,14 @@ export const createTextFileToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const built = buildTextFileCapabilityTools({
     ctx,
     cache,
     runId: runtime.runId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     emitActivity: (activity) => {
@@ -252,7 +246,7 @@ export const createPdfToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const resourceManager = new AiRunResourceManager([
@@ -262,7 +256,7 @@ export const createPdfToolHarness = (
     ctx,
     cache,
     runId: runtime.runId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     safePreviewChars: 1400,
@@ -285,7 +279,7 @@ export const createRetrievalToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
 
   return {
     ...createToolInvoker(
@@ -303,7 +297,7 @@ export const createWebToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
 
   return {
@@ -312,49 +306,7 @@ export const createWebToolHarness = (
         ctx,
         cache,
         runId: runtime.runId,
-        sessionId: contextInput.sessionId || 'test-session',
-        taskId: runtime.taskId
-      }) as readonly ToolLike[]
-    ),
-    ctx
-  }
-}
-
-export const createUtilityToolHarness = (
-  runtime: BackendTestRuntime,
-  contextInput: CreateAiRunContextInput = {}
-) => {
-  const ctx = runtime.createAiRunContext(contextInput)
-  const cache = createHumanRuntimeCache()
-
-  return {
-    ...createToolInvoker(
-      utilityToolFamily.buildTools({
-        ctx,
-        cache,
-        runId: runtime.runId,
-        sessionId: contextInput.sessionId || 'test-session',
-        taskId: runtime.taskId
-      }) as readonly ToolLike[]
-    ),
-    ctx
-  }
-}
-
-export const createImageRecognitionToolHarness = (
-  runtime: BackendTestRuntime,
-  contextInput: CreateAiRunContextInput = {}
-) => {
-  const ctx = runtime.createAiRunContext(contextInput)
-  const cache = createHumanRuntimeCache()
-
-  return {
-    ...createToolInvoker(
-      imageRecognitionToolFamily.buildTools({
-        ctx,
-        cache,
-        runId: runtime.runId,
-        sessionId: contextInput.sessionId || 'test-session',
+        partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
         taskId: runtime.taskId
       }) as readonly ToolLike[]
     ),
@@ -366,14 +318,14 @@ export const createImageGenerationToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const built = buildImageGenerationCapabilityTools({
     ctx,
     cache,
     runId: runtime.runId,
-    sessionId: contextInput.sessionId || 'test-session',
+    partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
     emitActivity: (activity) => activities.push(activity)
@@ -383,6 +335,26 @@ export const createImageGenerationToolHarness = (
     ...createToolInvoker(built.tools as readonly ToolLike[]),
     ctx,
     activities
+  }
+}
+
+export const createAgentControlToolHarness = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput = {}
+) => {
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
+  const cache = createHumanRuntimeCache()
+  return {
+    ...createToolInvoker(
+      agentControlToolFamily.buildTools({
+        ctx,
+        cache,
+        runId: runtime.runId,
+        partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
+        taskId: runtime.taskId
+      }) as readonly ToolLike[]
+    ),
+    ctx
   }
 }
 

@@ -24,19 +24,11 @@ const resolveSidecarPython = (): string => {
 }
 
 describe('web crawler sidecar search retry', () => {
-  it.each([
-    { systemPlatform: 'darwin', machine: 'x86_64', release: '24.1.0', expected: 'mac15' },
-    { systemPlatform: 'darwin', machine: 'arm64', release: '24.1.0', expected: null },
-    { systemPlatform: 'win32', machine: 'AMD64', release: '10', expected: null }
-  ])(
-    'sets the Playwright platform override only for macOS x64 ($systemPlatform/$machine)',
-    async ({ systemPlatform, machine, release, expected }) => {
-      const script = String.raw`
-import asyncio
+  it('connects Crawl4AI to Electron CDP with an isolated browser context', async () => {
+    const script = String.raw`
 import importlib.util
 import json
 import os
-import platform
 import sys
 import types
 from pathlib import Path
@@ -44,41 +36,57 @@ from pathlib import Path
 class DependencyStub:
     pass
 
+class BrowserConfigStub:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
 crawl4ai = types.ModuleType("crawl4ai")
 crawl4ai.AsyncWebCrawler = DependencyStub
-crawl4ai.BrowserConfig = DependencyStub
+crawl4ai.BrowserConfig = BrowserConfigStub
 crawl4ai.CrawlerRunConfig = DependencyStub
 crawl4ai.LinkPreviewConfig = DependencyStub
 content_filter_strategy = types.ModuleType("crawl4ai.content_filter_strategy")
 content_filter_strategy.PruningContentFilter = DependencyStub
 markdown_generation_strategy = types.ModuleType("crawl4ai.markdown_generation_strategy")
 markdown_generation_strategy.DefaultMarkdownGenerator = DependencyStub
+async_crawler_strategy = types.ModuleType("crawl4ai.async_crawler_strategy")
+async_crawler_strategy.AsyncPlaywrightCrawlerStrategy = DependencyStub
+browser_manager = types.ModuleType("crawl4ai.browser_manager")
+browser_manager.BrowserManager = DependencyStub
 ddgs = types.ModuleType("ddgs")
 ddgs.DDGS = DependencyStub
 sys.modules["crawl4ai"] = crawl4ai
 sys.modules["crawl4ai.content_filter_strategy"] = content_filter_strategy
 sys.modules["crawl4ai.markdown_generation_strategy"] = markdown_generation_strategy
+sys.modules["crawl4ai.async_crawler_strategy"] = async_crawler_strategy
+sys.modules["crawl4ai.browser_manager"] = browser_manager
 sys.modules["ddgs"] = ddgs
 
-os.environ.pop("PLAYWRIGHT_HOST_PLATFORM_OVERRIDE", None)
-sys.platform = ${JSON.stringify(systemPlatform)}
-platform.machine = lambda: ${JSON.stringify(machine)}
-platform.release = lambda: ${JSON.stringify(release)}
+os.environ["NCURATOR_WEB_CRAWLER_CDP_URL"] = "ws://127.0.0.1:9222/devtools/browser/test"
+os.environ["NCURATOR_WEB_CRAWLER_CDP_CONTEXT_MARKER_URL"] = "about:blank#ncurator-web-crawler-test"
 
 sidecar_path = Path("resources/web_crawler_sidecar/web_crawler_sidecar.py").resolve()
-spec = importlib.util.spec_from_file_location("web_crawler_sidecar_platform_test", sidecar_path)
+spec = importlib.util.spec_from_file_location("web_crawler_sidecar_cdp_test", sidecar_path)
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
-print(json.dumps(os.environ.get("PLAYWRIGHT_HOST_PLATFORM_OVERRIDE")))
+print(json.dumps(module.build_browser_config().kwargs))
 `
-      const { stdout } = await execFileAsync(resolveSidecarPython(), ['-c', script], {
-        cwd: process.cwd(),
-        timeout: 30_000
-      })
+    const { stdout } = await execFileAsync(resolveSidecarPython(), ['-c', script], {
+      cwd: process.cwd(),
+      timeout: 30_000
+    })
 
-      expect(JSON.parse(stdout.trim())).toBe(expected)
-    }
-  )
+    expect(JSON.parse(stdout.trim())).toEqual({
+      browser_mode: 'cdp',
+      cdp_url: 'ws://127.0.0.1:9222/devtools/browser/test',
+      cache_cdp_connection: true,
+      create_isolated_context: false,
+      cdp_cleanup_on_close: true,
+      cdp_close_delay: 0,
+      headless: true,
+      verbose: false
+    })
+  })
 
   it('retries transient ddgs failures without exposing attempts in the result', async () => {
     const script = String.raw`
@@ -101,11 +109,17 @@ content_filter_strategy = types.ModuleType("crawl4ai.content_filter_strategy")
 content_filter_strategy.PruningContentFilter = DependencyStub
 markdown_generation_strategy = types.ModuleType("crawl4ai.markdown_generation_strategy")
 markdown_generation_strategy.DefaultMarkdownGenerator = DependencyStub
+async_crawler_strategy = types.ModuleType("crawl4ai.async_crawler_strategy")
+async_crawler_strategy.AsyncPlaywrightCrawlerStrategy = DependencyStub
+browser_manager = types.ModuleType("crawl4ai.browser_manager")
+browser_manager.BrowserManager = DependencyStub
 ddgs = types.ModuleType("ddgs")
 ddgs.DDGS = DependencyStub
 sys.modules["crawl4ai"] = crawl4ai
 sys.modules["crawl4ai.content_filter_strategy"] = content_filter_strategy
 sys.modules["crawl4ai.markdown_generation_strategy"] = markdown_generation_strategy
+sys.modules["crawl4ai.async_crawler_strategy"] = async_crawler_strategy
+sys.modules["crawl4ai.browser_manager"] = browser_manager
 sys.modules["ddgs"] = ddgs
 
 sidecar_path = Path("resources/web_crawler_sidecar/web_crawler_sidecar.py").resolve()
@@ -189,11 +203,17 @@ content_filter_strategy = types.ModuleType("crawl4ai.content_filter_strategy")
 content_filter_strategy.PruningContentFilter = DependencyStub
 markdown_generation_strategy = types.ModuleType("crawl4ai.markdown_generation_strategy")
 markdown_generation_strategy.DefaultMarkdownGenerator = DependencyStub
+async_crawler_strategy = types.ModuleType("crawl4ai.async_crawler_strategy")
+async_crawler_strategy.AsyncPlaywrightCrawlerStrategy = DependencyStub
+browser_manager = types.ModuleType("crawl4ai.browser_manager")
+browser_manager.BrowserManager = DependencyStub
 ddgs = types.ModuleType("ddgs")
 ddgs.DDGS = DependencyStub
 sys.modules["crawl4ai"] = crawl4ai
 sys.modules["crawl4ai.content_filter_strategy"] = content_filter_strategy
 sys.modules["crawl4ai.markdown_generation_strategy"] = markdown_generation_strategy
+sys.modules["crawl4ai.async_crawler_strategy"] = async_crawler_strategy
+sys.modules["crawl4ai.browser_manager"] = browser_manager
 sys.modules["ddgs"] = ddgs
 
 sidecar_path = Path("resources/web_crawler_sidecar/web_crawler_sidecar.py").resolve()

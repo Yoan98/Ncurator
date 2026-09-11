@@ -1,32 +1,41 @@
 import type {
-  DocxChangedBlock,
-  DocxDetailedBlock,
-  DocxOpenMeta,
+  DocxChangedNode,
+  DocxDetailedNode,
   DocxOpenStats,
-  DocxOp,
-  DocxOutlineBlock,
+  DocxOperation,
+  DocxOutlineNode,
+  DocxOutlineSegment,
   DocxSearchMatch,
   DocxSearchMode,
   DocxValidationProblem
 } from '../types'
-import type { BlockIndex, ParsedDocxBundle } from '../adapters/ooxml/types'
+import type { NodeIndex, ParsedDocxBundle } from '../adapters/ooxml/types'
 import type { DocxIdentityIndex } from './identity'
 
 export type DocxWorkerAction =
   | 'open'
   | 'outline'
-  | 'get_block'
-  | 'get_blocks_by_ids'
-  | 'get_blocks_by_range'
-  | 'get_blocks_by_block_index_range'
+  | 'segment_map'
+  | 'get_node'
+  | 'get_node_layout'
+  | 'get_nodes_by_ids'
+  | 'get_nodes_by_range'
+  | 'get_nodes_by_index_range'
   | 'get_replay_snapshot_xml'
+  | 'get_annotations'
   | 'search'
   | 'get_visual'
-  | 'apply_ops'
+  | 'apply_operations'
   | 'materialize_draft'
   | 'release_run'
 
 export type DocxWorkerRequest =
+  | {
+      requestId: string
+      runId: string
+      action: 'get_annotations'
+      payload: { docId: string }
+    }
   | {
       requestId: string
       runId: string
@@ -37,7 +46,7 @@ export type DocxWorkerRequest =
       requestId: string
       runId: string
       action: 'get_visual'
-      payload: { docId: string; visualId: string }
+      payload: { docId: string; nodeId: string }
     }
   | {
       requestId: string
@@ -50,43 +59,55 @@ export type DocxWorkerRequest =
   | {
       requestId: string
       runId: string
+      action: 'segment_map'
+      payload: { docId: string }
+    }
+  | {
+      requestId: string
+      runId: string
       action: 'outline'
       payload: {
         docId: string
-        ranges: Array<{
-          fromBlockIndex: number
-          toBlockIndex: number
-        }>
-        includeTables: boolean
+        fromNodeIndex: number
+        toNodeIndex: number
         includeCells: boolean
       }
     }
   | {
       requestId: string
       runId: string
-      action: 'get_block'
+      action: 'get_node'
       payload: {
         docId: string
-        blockId: string
+        nodeId: string
       }
     }
   | {
       requestId: string
       runId: string
-      action: 'get_blocks_by_ids'
+      action: 'get_node_layout'
       payload: {
         docId: string
-        blockIds: string[]
+        nodeId: string
       }
     }
   | {
       requestId: string
       runId: string
-      action: 'get_blocks_by_block_index_range'
+      action: 'get_nodes_by_ids'
       payload: {
         docId: string
-        fromBlockIndex: number
-        toBlockIndex: number
+        nodeIds: string[]
+      }
+    }
+  | {
+      requestId: string
+      runId: string
+      action: 'get_nodes_by_index_range'
+      payload: {
+        docId: string
+        fromNodeIndex: number
+        toNodeIndex: number
       }
     }
   | {
@@ -97,16 +118,17 @@ export type DocxWorkerRequest =
         docId: string
         query: string
         mode: DocxSearchMode
-        scopeBlockIds: string[]
+        scopeNodeIds: string[]
+        includeContext: boolean
       }
     }
   | {
       requestId: string
       runId: string
-      action: 'apply_ops'
+      action: 'apply_operations'
       payload: {
         docId: string
-        ops: DocxOp[]
+        operations: DocxOperation[]
       }
     }
   | {
@@ -127,55 +149,80 @@ export type DocxWorkerRequest =
 
 export type DocxWorkerSuccessPayload =
   | {
+      action: 'get_annotations'
+      trackChanges: boolean
+      comments: Array<{
+        commentId: string
+        text: string
+        author: string
+        parentCommentId?: string
+      }>
+      revisions: Array<{
+        revisionId: string
+        kind: 'insert' | 'delete' | 'move_from' | 'move_to'
+      }>
+    }
+  | {
       action: 'get_replay_snapshot_xml'
-      blocks: Array<{ blockId: string; rawXml: string }>
+      packageFingerprint: string
+      nodes: Array<{ nodeId: string; rawXml: string }>
     }
   | {
       action: 'get_visual'
-      visualId: string
+      nodeId: string
       kind: 'image' | 'chart' | 'diagram' | 'shape' | 'embedded_object'
       data?: Buffer
       mimeType?: string
       error?: string
       render?: {
-        blockIndex: number
-        visualIndexInBlock: number
-        visualCountInBlock: number
+        nodeIndex: number
+        visualIndexInNode: number
+        visualCountInNode: number
       }
     }
   | {
       action: 'open'
       docId: string
-      meta: DocxOpenMeta
       stats: DocxOpenStats
       checksum: string
       byteSize: number
     }
   | {
       action: 'outline'
-      blocks: DocxOutlineBlock[]
+      nodes: DocxOutlineNode[]
     }
   | {
-      action: 'get_block'
-      block: DocxDetailedBlock
+      action: 'segment_map'
+      segments: DocxOutlineSegment[]
     }
   | {
-      action: 'get_blocks_by_ids'
-      blocks: DocxDetailedBlock[]
+      action: 'get_node'
+      node: DocxDetailedNode
     }
   | {
-      action: 'get_blocks_by_block_index_range'
-      blocks: DocxDetailedBlock[]
+      action: 'get_node_layout'
+      ownerNodeId: string
+      layoutMode: 'normal' | 'positioned'
+      text: string
+    }
+  | {
+      action: 'get_nodes_by_ids'
+      nodes: DocxDetailedNode[]
+    }
+  | {
+      action: 'get_nodes_by_index_range'
+      nodes: DocxDetailedNode[]
     }
   | {
       action: 'search'
+      totalMatchCount: number
       matches: DocxSearchMatch[]
     }
   | {
-      action: 'apply_ops'
+      action: 'apply_operations'
       newDocId: string
       stats: DocxOpenStats
-      changedBlocks: DocxChangedBlock[]
+      changedNodes: DocxChangedNode[]
     }
   | {
       action: 'materialize_draft'
@@ -208,10 +255,9 @@ type DocSnapshotBase = {
   parentDocId?: string
   buffer: Buffer
   checksum: string
-  meta: DocxOpenMeta
-  index: BlockIndex
+  index: NodeIndex
   identity: DocxIdentityIndex
-  detailByBlockId: Map<string, DocxDetailedBlock>
+  detailByNodeId: Map<string, DocxDetailedNode>
 }
 
 export type DocSnapshot = DocSnapshotBase &

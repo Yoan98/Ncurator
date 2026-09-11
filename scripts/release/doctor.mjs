@@ -3,6 +3,8 @@ import process from 'node:process'
 import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
 import { inspectLocalWindowsRelease } from './shared/windows.mjs'
+import { createAwsCliRuntime } from './storage/client.mjs'
+import { resolveReleaseStorageConfig } from './storage/config.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -22,14 +24,26 @@ if (!inspection.ready) {
   process.stdout.write('- pnpm configured version: ready\n')
   process.stdout.write('- AWS CLI: ready\n')
 
-  const endpoint = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-  const bucket = String(process.env.R2_BUCKET_NAME).replace(/^\/+|\/+$/gu, '')
+  const storage = resolveReleaseStorageConfig()
+  const runtime = await createAwsCliRuntime(storage)
   await execFileAsync(
     inspection.awsExecutable,
-    ['s3api', 'head-bucket', '--bucket', bucket, '--endpoint-url', endpoint, '--region', 'auto'],
-    { maxBuffer: 10 * 1024 * 1024 }
+    [
+      's3api',
+      'list-objects-v2',
+      '--bucket',
+      storage.bucket,
+      '--max-keys',
+      '1',
+      '--output',
+      'json',
+      ...runtime.extraArgs
+    ],
+    { env: runtime.env, maxBuffer: 10 * 1024 * 1024 }
   ).catch((error) => {
-    throw new Error(`R2 access check failed: ${String(error?.stderr || error?.message || error)}`)
+    throw new Error(
+      `${storage.label} access check failed: ${String(error?.stderr || error?.message || error)}`
+    )
   })
-  process.stdout.write('- Cloudflare R2 access: ready\n')
+  process.stdout.write(`- ${storage.label} access: ready\n`)
 }

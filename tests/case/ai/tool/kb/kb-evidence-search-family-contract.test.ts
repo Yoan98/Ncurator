@@ -5,12 +5,11 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 type KbSearchRow = {
   id: string
   text: string
-  document_id?: string
-  document_name: string
-  source_type?: string
-  file_path?: string
-  source_url?: string
-  _score?: number
+  documentId?: string
+  documentName: string
+  sourceType?: string
+  filePath?: string
+  sourceUrl?: string
 }
 
 type KbSearchResult = {
@@ -27,7 +26,7 @@ describe('ai tool kb backend', () => {
       suite: 'tool',
       groups: ['kb'],
       description:
-        '验证 kb_search 在 auto/semantic/keyword 三种 strategy 下的统一返回结构和范围约束。',
+        '验证 kb_search 在 auto/semantic/keyword 三种 strategy 下的统一返回结构和缩圈契约。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -68,13 +67,13 @@ describe('ai tool kb backend', () => {
             ]
           },
           {
-            id: 'doc-3',
-            name: 'Archive Notes.md',
-            workspaceId: 'other-workspace',
+            id: 'doc-filename-anchor',
+            name: '季度销售数据.xlsx',
+            filePath: '/workspace/季度销售数据.xlsx',
             chunks: [
               {
-                id: 'chunk-3',
-                text: 'Out of scope notes should never be returned.'
+                id: 'chunk-filename-anchor',
+                text: '文件名：季度销售数据.xlsx\n标题：2026年度销售汇总\n工作表：季度销售、客户明细'
               }
             ]
           }
@@ -82,7 +81,7 @@ describe('ai tool kb backend', () => {
 
         const harness = createRetrievalToolHarness(runtime)
 
-        const hybridInScope = await harness.invoke<KbSearchResult>('kb_search', {
+        const hybridSearch = await harness.invoke<KbSearchResult>('kb_search', {
           queryText: 'approval denied unchanged files',
           strategy: 'auto',
           limit: 5
@@ -91,13 +90,13 @@ describe('ai tool kb backend', () => {
           queryText: 'terminal artifacts recorded',
           strategy: 'semantic',
           limit: 5,
-          documentIds: ['doc-2', 'doc-3']
+          documentIds: ['doc-2', 'doc-missing']
         })
-        const ftsOutOfScope = await harness.invoke<KbSearchResult>('kb_search', {
-          queryText: 'out of scope notes',
+        const emptySubset = await harness.invoke<KbSearchResult>('kb_search', {
+          queryText: 'terminal artifacts recorded',
           strategy: 'keyword',
           limit: 5,
-          documentIds: ['doc-3']
+          documentIds: ['doc-missing']
         })
         const fileHit = await harness.invoke<KbSearchResult>('kb_search', {
           queryText: 'approval denied unchanged files',
@@ -111,51 +110,63 @@ describe('ai tool kb backend', () => {
           limit: 5,
           documentIds: ['doc-web']
         })
+        const filenameHit = await harness.invoke<KbSearchResult>('kb_search', {
+          queryText: '季度销售数据',
+          strategy: 'keyword',
+          limit: 5
+        })
+        const sheetNameHit = await harness.invoke<KbSearchResult>('kb_search', {
+          queryText: '客户明细',
+          strategy: 'keyword',
+          limit: 5
+        })
 
         return {
-          hybridInScope,
+          hybridSearch,
           vectorSubset,
-          ftsOutOfScope,
+          emptySubset,
           fileHit,
-          webHit
+          webHit,
+          filenameHit,
+          sheetNameHit
         }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.hybridInScope.total >= 1 &&
-            result.hybridInScope.items.every(
+          result.hybridSearch.total >= 1 &&
+            result.hybridSearch.items.every(
               (row) =>
-                (row.document_id === 'doc-1' ||
-                  row.document_id === 'doc-2' ||
-                  row.document_id === 'doc-web') &&
-                typeof row.document_name === 'string' &&
+                (row.documentId === 'doc-1' ||
+                  row.documentId === 'doc-2' ||
+                  row.documentId === 'doc-web' ||
+                  row.documentId === 'doc-filename-anchor') &&
+                typeof row.documentName === 'string' &&
                 typeof row.text === 'string'
             ) &&
-            result.hybridInScope.items.some((row) => row.document_id === 'doc-1'),
+            result.hybridSearch.items.some((row) => row.documentId === 'doc-1'),
           {
             name: 'hybrid-search-returns-stable-rows',
-            message: 'kb_search(auto) 应返回稳定 rows 结构，并默认限制在当前工作区范围内。',
-            data: result.hybridInScope
+            message: 'kb_search(auto) 应返回稳定 rows 结构。',
+            data: result.hybridSearch
           }
         )
 
         runtime.assertThat(
           result.vectorSubset.total >= 1 &&
-            result.vectorSubset.items.every((row) => row.document_id === 'doc-2'),
+            result.vectorSubset.items.every((row) => row.documentId === 'doc-2'),
           {
             name: 'vector-search-honors-explicit-document-scope',
-            message: 'kb_search(semantic) 应继续遵守 documentIds 在当前工作区内的收窄范围。',
+            message: 'kb_search(semantic) 应遵守 documentIds 缩圈，忽略不存在的 id。',
             data: result.vectorSubset
           }
         )
 
         runtime.assertThat(
-          result.ftsOutOfScope.total === 0 && result.ftsOutOfScope.items.length === 0,
+          result.emptySubset.total === 0 && result.emptySubset.items.length === 0,
           {
-            name: 'fts-search-rejects-out-of-scope-document-ids',
-            message:
-              'kb_search(keyword) 在 requested documentIds 完全超出当前工作区时应返回空结果。',
-            data: result.ftsOutOfScope
+            name: 'fts-search-returns-empty-for-missing-document-ids',
+            message: 'kb_search(keyword) 在 documentIds 全部不存在时应返回空结果。',
+            data: result.emptySubset
           }
         )
 
@@ -163,15 +174,15 @@ describe('ai tool kb backend', () => {
           result.fileHit.total >= 1 &&
             result.fileHit.items.some(
               (row) =>
-                row.document_id === 'doc-1' &&
-                row.source_type === 'file' &&
-                row.file_path === '/workspace/AI Tool Guide.md' &&
-                !row.source_url
+                row.documentId === 'doc-1' &&
+                row.sourceType === 'file' &&
+                row.filePath === '/workspace/AI Tool Guide.md' &&
+                !row.sourceUrl
             ),
           {
             name: 'knowledge-search-preserves-file-source-path',
             message:
-              'kb_search should expose source_type and file_path so AI can cite file knowledge as a local path.',
+              'kb_search should expose sourceType and filePath so AI can cite file knowledge as a local path.',
             data: result.fileHit
           }
         )
@@ -180,15 +191,44 @@ describe('ai tool kb backend', () => {
           result.webHit.total >= 1 &&
             result.webHit.items.some(
               (row) =>
-                row.document_id === 'doc-web' &&
-                row.source_type === 'web' &&
-                row.source_url === 'https://docs.langchain.com/oss/javascript/langchain/overview'
+                row.documentId === 'doc-web' &&
+                row.sourceType === 'web' &&
+                row.sourceUrl === 'https://docs.langchain.com/oss/javascript/langchain/overview'
             ),
           {
             name: 'knowledge-search-preserves-web-source-url',
             message:
-              'kb_search should expose source_type and source_url so AI can cite web knowledge as a URL.',
+              'kb_search should expose sourceType and sourceUrl so AI can cite web knowledge as a URL.',
             data: result.webHit
+          }
+        )
+
+        runtime.assertThat(
+          result.filenameHit.total >= 1 &&
+            result.filenameHit.items.some(
+              (row) =>
+                row.documentId === 'doc-filename-anchor' &&
+                row.filePath === '/workspace/季度销售数据.xlsx' &&
+                row.text.includes('季度销售数据.xlsx')
+            ),
+          {
+            name: 'knowledge-search-hits-filename-anchor-chunk',
+            message:
+              'kb_search(keyword) 应能按文件名命中文档元数据锚点 chunk，让 excel 等仅元数据索引的文档可被查找到。',
+            data: result.filenameHit
+          }
+        )
+
+        runtime.assertThat(
+          result.sheetNameHit.total >= 1 &&
+            result.sheetNameHit.items.some(
+              (row) => row.documentId === 'doc-filename-anchor' && row.text.includes('客户明细')
+            ),
+          {
+            name: 'knowledge-search-hits-spreadsheet-sheet-name',
+            message:
+              'kb_search(keyword) 应能命中 excel 元数据中的工作表名，支持按 sheet 名称查找工作簿。',
+            data: result.sheetNameHit
           }
         )
       }

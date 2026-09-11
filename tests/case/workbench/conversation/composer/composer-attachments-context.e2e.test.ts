@@ -10,10 +10,8 @@ import {
   getAntMessageText,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
-  navigateToWorkbench,
   pasteWorkbenchText,
   selectWorkbenchAttachmentThroughNativeDialog,
-  selectWorkbenchWorkspace,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
   waitForWorkbenchAiRunCompletion,
@@ -104,35 +102,8 @@ const waitForAttachmentCardByName = async (
 const getImageAttachmentCardByName = (page: import('playwright').Page, name: string) =>
   page.locator(`[data-testid^="${workbenchSelectors.attachmentCardPrefix}-"][title="${name}"]`)
 
-const resolveWorkspaceBinding = async (
-  page: import('playwright').Page
-): Promise<{
-  workspaceId: string
-  workspaceRootPath: string
-}> =>
-  await page.evaluate(async (workspaceName) => {
-    const workspaces = await window.api.workspaceList()
-    const workspace = workspaces.items.find((item) => item.name === workspaceName)
-    if (!workspace?.id || !workspace.root_path) {
-      throw new Error('workspace root path unavailable')
-    }
-    return {
-      workspaceId: workspace.id,
-      workspaceRootPath: workspace.root_path
-    }
-  }, 'Workbench Composer Attachments Workspace')
-
-const countWorkspaceSessions = async (
-  page: import('playwright').Page,
-  workspaceId: string
-): Promise<number> =>
-  await page.evaluate(
-    async (input) => {
-      const sessions = await window.api.chatSessionList()
-      return sessions.filter((item) => item.workspace_id === input.workspaceId).length
-    },
-    { workspaceId }
-  )
+const countPartners = async (page: import('playwright').Page): Promise<number> =>
+  await page.evaluate(async () => (await window.api.partnerList()).length)
 
 describe('workbench conversation e2e', () => {
   it(
@@ -158,27 +129,11 @@ describe('workbench conversation e2e', () => {
             phase: 'after-app-close',
             dispose: attachments.cleanup
           })
-          await navigateToWorkbench(page)
-          await getWorkbenchLocator(page, workbenchSelectors.attachmentAddButton).click()
-          const missingWorkspaceMessage = await waitForAntMessageText(
-            page,
-            '请先选择工作区后再添加附件'
-          )
-          const attachmentCountWithoutWorkspace = await getWorkbenchPrefixLocator(
-            page,
-            workbenchSelectors.attachmentCardPrefix
-          ).count()
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
             workspaceName: 'Workbench Composer Attachments Workspace'
           })
-          const workspaceBinding = await resolveWorkspaceBinding(page)
-          await navigateToWorkbench(page)
-          await selectWorkbenchWorkspace(page, setup.workspaceName)
-          const sessionCountBeforePaste = await countWorkspaceSessions(
-            page,
-            workspaceBinding.workspaceId
-          )
+          const partnerCountBeforeAttachments = await countPartners(page)
           await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.imagePath)
           await getImageAttachmentCardByName(page, 'qa-image.png')
             .first()
@@ -249,10 +204,7 @@ describe('workbench conversation e2e', () => {
           )
           await attachmentDropOverlay.waitFor({ state: 'hidden' })
           const attachmentDropOverlayHidden = (await attachmentDropOverlay.count()) === 0
-          const sessionCountAfterPaste = await countWorkspaceSessions(
-            page,
-            workspaceBinding.workspaceId
-          )
+          const partnerCountAfterAttachments = await countPartners(page)
           const imageCard = getImageAttachmentCardByName(page, 'qa-image.png')
           await imageCard.first().waitFor({ state: 'visible' })
           await page.waitForFunction(
@@ -314,6 +266,10 @@ describe('workbench conversation e2e', () => {
           await imageRemoveButton.click()
           const imageRemoved =
             (await getImageAttachmentCardByName(page, 'qa-image.png').count()) === 0
+          await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.imagePath)
+          await getImageAttachmentCardByName(page, 'qa-image.png')
+            .first()
+            .waitFor({ state: 'visible' })
 
           const fileCard = getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
             .filter({ hasText: 'workbench-preview.md' })
@@ -376,16 +332,17 @@ describe('workbench conversation e2e', () => {
             WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
             { page }
           )
-          const submittedMessages = await page.evaluate(async (workspaceId) => {
-            const sessions = (await window.api.chatSessionList())
-              .filter((item) => item.workspace_id === workspaceId)
-              .sort((left, right) => right.created_at - left.created_at)
-            return sessions[0] ? await window.api.chatMessageList(sessions[0].id) : []
-          }, workspaceBinding.workspaceId)
+          const submittedMessages = await page.evaluate(async () => {
+            const partners = [...(await window.api.partnerList())].sort(
+              (left, right) => right.last_viewed_at - left.last_viewed_at
+            )
+            return partners[0] ? await window.api.partnerMessageList(partners[0].id) : []
+          })
           const submittedUserMessage = [...submittedMessages]
             .reverse()
             .find((message) => message.role === 'user')
           const submittedAttachments = submittedUserMessage?.attachments || []
+          const persistedMessagesJson = JSON.stringify(submittedMessages)
 
           const signals = await runtime.collectSignals()
           const openPathCalls = signals.ipcInvokeEntries.filter(
@@ -393,10 +350,8 @@ describe('workbench conversation e2e', () => {
           )
 
           return {
-            missingWorkspaceMessage,
-            attachmentCountWithoutWorkspace,
-            sessionCountBeforePaste,
-            sessionCountAfterPaste,
+            partnerCountBeforeAttachments,
+            partnerCountAfterAttachments,
             previewVisible,
             attachmentDropOverlayVisible,
             attachmentDropOverlayHidden,
@@ -422,6 +377,7 @@ describe('workbench conversation e2e', () => {
             zipCardText,
             submittedAttachmentNames: submittedAttachments.map((attachment) => attachment.name),
             submittedAttachmentPaths: submittedAttachments.map((attachment) => attachment.path),
+            persistedMessagesContainBase64: persistedMessagesJson.includes(';base64,'),
             largeFileMessage,
             inputText,
             openPathCallCount: openPathCalls.length,
@@ -436,15 +392,13 @@ describe('workbench conversation e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.missingWorkspaceMessage.includes('请先选择工作区后再添加附件') &&
-              result.attachmentCountWithoutWorkspace === 0 &&
-              result.previewVisible &&
+            result.previewVisible &&
               result.attachmentDropOverlayVisible &&
               result.attachmentDropOverlayHidden &&
               result.imageRemoved &&
               result.downloadButtonVisible &&
               result.closeButtonVisible &&
-              result.sessionCountAfterPaste === result.sessionCountBeforePaste &&
+              result.partnerCountAfterAttachments === result.partnerCountBeforeAttachments &&
               result.attachmentPickCallCount >= 2 &&
               result.zoomControlBelowImage &&
               result.topActionsAboveImage &&
@@ -457,6 +411,7 @@ describe('workbench conversation e2e', () => {
               result.zipCardText.includes('ZIP') &&
               [
                 'workbench-preview.md',
+                'qa-image.png',
                 'legacy-reference.doc',
                 'slides-reference.pptx',
                 'sheet-reference.xlsx',
@@ -466,22 +421,26 @@ describe('workbench conversation e2e', () => {
                 'unknown-bundle.zip',
                 'qa-large.json'
               ].every((name) => result.submittedAttachmentNames.includes(name)) &&
-              result.submittedAttachmentPaths.length === 9 &&
-              result.submittedAttachmentPaths.every(
-                (attachmentPath) =>
-                  attachmentPath.includes(`${path.sep}ncurator-composer-attachments-`) &&
-                  !attachmentPath.includes(
-                    `${path.sep}.ncurator${path.sep}runtime${path.sep}assets${path.sep}`
-                  )
-              ) &&
+              result.submittedAttachmentPaths.length === 10 &&
+              result.submittedAttachmentPaths.every((attachmentPath) => {
+                const normalized = attachmentPath.replace(/\\/g, '/')
+                const isSourceFixture = normalized.includes('/ncurator-composer-attachments-')
+                const isPartnerRuntimeAsset =
+                  /\/partners\/[^/]+\/runtime\/assets\//u.test(normalized)
+                return (
+                  (isSourceFixture || isPartnerRuntimeAsset) &&
+                  !normalized.includes('/.ncurator/')
+                )
+              }) &&
+              !result.persistedMessagesContainBase64 &&
               result.largeFileMessage.includes('文件过大，建议放到工作空间索引里使用') &&
               result.inputText.includes('plain paste ok') &&
-              result.openPathCallCount >= 1,
+              result.openPathCallCount >= 1 &&
               result.attachmentSaveFileCallCount === 0,
             {
               name: 'workbench-composer-attachments-prd-flow',
               message:
-                '附件输入应满足 PRD：文件拖到中间聊天区会显示并关闭覆盖层；真实选择附件保留源文件路径，任意扩展名（含非白名单 zip）可添加并显示正确类型，添加附件不创建新会话，图片可预览且控件不压图，文件可默认打开，超过 10MB 只提示不拦截，普通文本粘贴仍正常。',
+                '附件输入应满足 PRD：拖放覆盖层可用；+/拖放保留源绝对路径，粘贴才写入 userData/partners/{id}/runtime/assets；任意扩展名可添加并显示类型；不新建伙伴；图片可预览；超过 10MB 只提示；普通文本粘贴仍正常，对齐 WB-COMPOSER-010。',
               data: result
             }
           )

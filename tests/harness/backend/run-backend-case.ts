@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { readdir } from 'node:fs/promises'
 import { collectBackendRunArtifacts } from './artifactCollector'
+import { collectMessageLogAnnotationArtifact } from './messageLogAnnotations'
 import { assertRequiredFixtures } from './fixtureGuard'
 import type {
   BackendSeedManifest,
@@ -9,10 +10,14 @@ import type {
   TestCaseDefinition
 } from './test-types'
 import { createRealAiHarness } from './realAiHarness'
-import { loadLiveLlmConfigFromEnv, loadLiveVisionLlmConfigFromEnv } from './llmConfig'
+import { loadLiveLlmConfigFromEnv } from './llmConfig'
 import { collectBackendSeedArtifacts } from './seedManifest'
 import { createStreamingRunLogWriter, createRunId } from './write-run-log'
-import { cleanupWorkspace, copyFixturesIntoWorkspace, createIsolatedWorkspace } from './workspaceManager'
+import {
+  cleanupWorkspace,
+  copyFixturesIntoWorkspace,
+  createIsolatedWorkspace
+} from './workspaceManager'
 import { EventCollector } from '../core/eventCollector'
 import {
   TEST_LOG_SCHEMA_VERSION,
@@ -92,11 +97,8 @@ const buildRunScope = (input: {
   return parts.join('/')
 }
 
-const buildTaskId = (input: {
-  suite: string
-  groups: readonly string[]
-  caseId: string
-}): string => [input.suite, ...input.groups, input.caseId].join('-')
+const buildTaskId = (input: { suite: string; groups: readonly string[]; caseId: string }): string =>
+  [input.suite, ...input.groups, input.caseId].join('-')
 
 const buildStats = (
   startedAtMs: number,
@@ -115,12 +117,10 @@ const buildStats = (
   artifacts: artifactCount
 })
 
-export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TResult>): Promise<void> => {
+export const runBackendCase = async <TResult>(
+  definition: TestCaseDefinition<TResult>
+): Promise<void> => {
   const liveConfig = definition.harnessMode === 'live' ? loadLiveLlmConfigFromEnv() : null
-  const liveVisionConfig =
-    definition.harnessMode === 'live' && definition.requiresVisionModel
-      ? loadLiveVisionLlmConfigFromEnv()
-      : null
   const runtimeModelName = liveConfig?.model_name || definition.runtimeModelName || null
   const startedAtMs = Date.now()
   const runId = createRunId(startedAtMs)
@@ -155,6 +155,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
   let fixtureBindings: FixtureBinding[] = []
   let status: TestRunStatus = 'failed'
   let runtime: BackendTestRuntime | undefined
+  let annotationArtifacts: Awaited<ReturnType<typeof collectMessageLogAnnotationArtifact>> = []
   const counters = {
     steps: 0,
     assertions: 0,
@@ -217,16 +218,13 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       fixtureBindings.map((binding) => ({
         from: binding.sourcePath,
         to: toRelativeWorkspaceTarget(workspaceRoot, binding.workspacePath)
-        }))
+      }))
     )
 
     const harness = await createRealAiHarness({
       definition: {
         ...definition,
-        runtimeModelName,
-        visionModel: liveVisionConfig
-          ? { configId: liveVisionConfig.id, modelName: liveVisionConfig.model_name }
-          : undefined
+        runtimeModelName
       },
       runId,
       taskId,
@@ -237,16 +235,6 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
     })
     runtime = harness.runtime
     if (liveConfig) await runtime.seedLlmConfig(liveConfig)
-    if (liveVisionConfig) {
-      await runtime.seedLlmConfig(liveVisionConfig)
-      recordEvent({
-        type: 'signal',
-        name: 'live-vision-config-selected',
-        status: 'info',
-        message: 'live vision model selected',
-        data: { configId: liveVisionConfig.id, modelName: liveVisionConfig.model_name }
-      })
-    }
 
     try {
       const result = await definition.execute(runtime)
@@ -254,7 +242,19 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
       await definition.assert(result, runtime)
       status = 'passed'
     } finally {
-      await harness.dispose()
+      try {
+        if (definition.messageLogAnnotationPartnerIds) {
+          annotationArtifacts = await collectMessageLogAnnotationArtifact({
+            scope,
+            caseId: definition.caseId,
+            runId,
+            storageService: runtime.storageService,
+            partnerIds: definition.messageLogAnnotationPartnerIds(runtime)
+          })
+        }
+      } finally {
+        await harness.dispose()
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -292,7 +292,7 @@ export const runBackendCase = async <TResult>(definition: TestCaseDefinition<TRe
           artifacts: [],
           persistedManifest: emptySeedManifest
         }
-    const artifacts = [...runArtifacts, ...seedArtifacts.artifacts]
+    const artifacts = [...runArtifacts, ...seedArtifacts.artifacts, ...annotationArtifacts]
     recordEvent({
       type: 'run',
       name: 'end',

@@ -75,7 +75,7 @@ describe('settings workspace e2e', () => {
           await runtime.assertThat(Boolean(result.pingTotal >= 2), {
             name: 'app-remains-responsive-after-file-failure',
             message:
-              '单文件失败后，Settings 页面仍应能通过 IPC 读取目录树，不能导致应用退出，对齐 SET-WORKSPACE-004-AC5。',
+              '单文件失败后，Settings 页面仍应能通过 IPC 读取目录树，不能导致应用退出，对齐 SET-WORKSPACE-004-AC8。',
             data: result
           })
 

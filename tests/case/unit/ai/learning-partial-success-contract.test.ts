@@ -1,77 +1,60 @@
 import { describe, expect, it } from 'vitest'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
-import type { ChatSessionSkillState } from '../../../../src/shared/types'
 import { createLearningNode } from '../../../../src/main/services/ai/human/node/learningNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
+import { humanNextActionSchema } from '../../../../src/main/services/ai/human/schema'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
-import type { HumanThoughtDecision } from '../../../../src/main/services/ai/human/types'
 
-const createStubAiRunContext = (): AiRunContext => ({
-  runId: 'run-learning-unit',
-  referenceScope: {
-    workspace: {
-      workspaceId: 'workspace-1',
-      workspaceName: 'workspace',
-      rootPath: '/tmp/workspace-root'
+const createStubAiRunContext = (): AiRunContext =>
+  ({
+    runId: 'run-learning-unit',
+    partnerId: 'partner-learning-unit',
+    partnerName: '测试伙伴',
+    workspaceRoots: ['/tmp/workspace-root'],
+    runStartedAt: 0,
+    platform: 'macos',
+    preference: 'default',
+    executionPermission: 'review',
+    referenceScope: {
+      selectedReferences: [],
+      attachments: []
     },
-    selectedReferences: [],
-    hasExplicitSelectedReferences: false,
-    hasDirectDocumentNarrowing: false,
-    defaultKnowledgeScope: 'current_workspace'
-  },
-  workspace: {
-    workspaceId: 'workspace-1',
-    workspaceName: 'workspace',
-    rootPath: '/tmp/workspace-root'
-  },
-  checkCancelled: () => {},
-  chatStructured: async () => {
-    throw new Error('chatStructured should not be called in learning unit tests')
-  },
-  chatText: async () => {
-    throw new Error('chatText should not be called in learning unit tests')
-  },
-  sendEvent: () => {},
-  requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
-  loadConversationContext: async () => ({
-    recentTurnsText: '',
-    conversationSummaryText: ''
-  }),
-  loadConversationMemory: async () => null,
-  loadSessionSkillState: async (): Promise<ChatSessionSkillState> => ({
-    schemaVersion: 1,
-    learnedSkillIds: [],
-    revision: 0,
-    updatedAt: 0,
-    lastUpdatedRunId: ''
-  }),
-  saveSessionSkillState: async (input): Promise<ChatSessionSkillState> => ({
-    schemaVersion: 1,
-    learnedSkillIds: input.learnedSkillIds,
-    revision: input.expectedRevision + 1,
-    updatedAt: 1,
-    lastUpdatedRunId: 'run-learning-unit'
-  }),
-  trackDocxOpen: () => {},
-  trackDocxChanges: () => {},
-  trackDocxBatchChanges: () => {},
-  resolveDocxOpenTarget: async () => {
-    throw new Error('resolveDocxOpenTarget should not be called in learning unit tests')
-  },
-  beginDocxApplyRun: () => {},
-  applyDocxRunEdits: async () => [],
-  discardDocxApplyRun: () => {},
-  documentsStore: undefined as never,
-  embeddingService: undefined as never
-})
+    checkCancelled: () => {},
+    chatStructured: async () => {
+      throw new Error('chatStructured should not be called in learning unit tests')
+    },
+    chatText: async () => {
+      throw new Error('chatText should not be called in learning unit tests')
+    },
+    sendEvent: () => {},
+    requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
+    loadMessageLog: async () => [],
+    appendMessageLog: async () => undefined,
+    trackDocxOpen: () => {},
+    trackDocxChanges: () => {},
+    resolveDocxOpenTarget: async () => {
+      throw new Error('resolveDocxOpenTarget should not be called in learning unit tests')
+    },
+    beginDocxApplyRun: () => {},
+    applyDocxRunEdits: async () => [],
+    discardDocxApplyRun: () => {},
+    documentsStore: undefined as never,
+    embeddingService: undefined as never
+  }) as AiRunContext
 
-const buildLearningDecision = (skillIds: string[]): HumanThoughtDecision => ({
+const buildLearningDecision = (
+  skillIds: string[]
+): {
+  thought: { text: string }
+  nextAction: { action: 'learning'; wantLearnSkillIds: string[]; toolCallId: string }
+} => ({
   thought: {
-    next: '测试 learning partial success'
+    text: '测试 learning partial success'
   },
   nextAction: {
     action: 'learning' as const,
-    wantLearnSkillIds: skillIds
+    wantLearnSkillIds: skillIds,
+    toolCallId: 'learn-call-1'
   }
 })
 
@@ -92,18 +75,20 @@ describe('ai unit learning partial success', () => {
       },
       execution: {
         ...baseState.execution,
-        currentThought: buildLearningDecision(['docx-read', 'docx-write'])
+        pendingRound: buildLearningDecision(['docx-read', 'docx-write'])
       }
     })
 
-    expect(nextState.execution.pendingDecisionHint).toBeUndefined()
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
       loadedSkillIds: ['docx-write'],
       skippedDuplicateSkillIds: ['docx-read'],
       skippedUnknownSkillIds: []
     })
     expect(nextState.skills.learnedSkillIds).toEqual(['docx-read', 'docx-write'])
-    expect(nextState.memory.taskRun.rounds.at(-1)?.execution.kind).toBe('learning')
+    expect(nextState.trace.steps.at(-1)).toMatchObject({
+      action: 'learn_skill',
+      skillId: 'docx-write'
+    })
     expect(cache.skillToolsets['docx-write']).toBeTruthy()
   })
 
@@ -120,17 +105,19 @@ describe('ai unit learning partial success', () => {
       ...baseState,
       execution: {
         ...baseState.execution,
-        currentThought: buildLearningDecision(['unknown-skill', 'docx-read'])
+        pendingRound: buildLearningDecision(['unknown-skill', 'docx-read'])
       }
     })
 
-    expect(nextState.execution.pendingDecisionHint).toBeUndefined()
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
       loadedSkillIds: ['docx-read'],
       skippedUnknownSkillIds: ['unknown-skill']
     })
     expect(nextState.skills.learnedSkillIds).toEqual(['docx-read'])
-    expect(nextState.memory.taskRun.rounds.at(-1)?.execution.kind).toBe('learning')
+    expect(nextState.trace.steps.at(-1)).toMatchObject({
+      action: 'learn_skill',
+      skillId: 'docx-read'
+    })
   })
 
   it('treats builtin-only requests as invalid learning', async () => {
@@ -146,24 +133,18 @@ describe('ai unit learning partial success', () => {
       ...baseState,
       execution: {
         ...baseState.execution,
-        currentThought: buildLearningDecision(['terminal'])
+        pendingRound: buildLearningDecision(['terminal'])
       }
     })
 
-    expect(nextState.execution.pendingDecisionHint).toMatchObject({
-      code: 'learning_no_effect',
-      detail: {
-        requestedSkillIds: ['terminal'],
-        duplicateSkillIds: [],
-        unknownSkillIds: []
-      }
-    })
+    expect(nextState.execution.stage).toBe('dispatch')
     expect(nextState.execution.lastLearningOutcome).toMatchObject({
+      requestedSkillIds: ['terminal'],
       loadedSkillIds: [],
-      skippedDuplicateSkillIds: []
+      skippedDuplicateSkillIds: [],
+      skippedUnknownSkillIds: []
     })
     expect(nextState.skills.learnedSkillIds).toEqual([])
-    expect(nextState.memory.taskRun.rounds.at(-1)?.execution.kind).toBe('learning')
   })
 
   it('rejects states whose learnedSkillIds still contain builtin skills', async () => {
@@ -183,9 +164,22 @@ describe('ai unit learning partial success', () => {
         },
         execution: {
           ...baseState.execution,
-          currentThought: buildLearningDecision(['docx-read'])
+          pendingRound: buildLearningDecision(['docx-read'])
         }
       })
     ).rejects.toThrow('learnedSkillIds 只允许 external skill')
+  })
+
+  it('allows learning decisions to request three or more skills', () => {
+    expect(
+      humanNextActionSchema.parse({
+        action: 'learning',
+        toolCallId: 'call-learning-budget',
+        wantLearnSkillIds: ['docx-read', 'docx-write', 'pdf-read', 'excel-write']
+      })
+    ).toMatchObject({
+      action: 'learning',
+      wantLearnSkillIds: ['docx-read', 'docx-write', 'pdf-read', 'excel-write']
+    })
   })
 })

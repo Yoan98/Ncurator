@@ -20,17 +20,16 @@ import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import { formatDateTime, getWebStatusBadge } from './utils/workspace'
 
 type WebSourcesSettingsPanelProps = {
-  workspaceId: string | null
-  workspaceName?: string
   embedded?: boolean
   hasVectorModel: boolean | null
   onVectorModelSettingsOpen: () => void
+  onSummaryChange?: (summary: WebSourceListResponse['summary']) => void
 }
 
 const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
-  workspaceId,
   hasVectorModel,
-  onVectorModelSettingsOpen
+  onVectorModelSettingsOpen,
+  onSummaryChange
 }) => {
   const [webSources, setWebSources] = useState<WebSourceRecord[]>([])
   const [webLoading, setWebLoading] = useState(false)
@@ -48,27 +47,19 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   const actionableWebIndexCount = webSummary.needs_index_count + webSummary.failed_count
 
   const loadWebSources = useCallback(async (): Promise<void> => {
-    if (!workspaceId) {
-      setWebSources([])
-      setWebSummary({
-        web_count: 0,
-        needs_index_count: 0,
-        failed_count: 0
-      })
-      return
-    }
     setWebLoading(true)
     try {
-      const response = await window.api.webSourceList({ workspaceId })
+      const response = await window.api.webSourceList({})
       setWebSources(response.items)
       setWebSummary(response.summary)
+      onSummaryChange?.(response.summary)
     } catch (error) {
       console.error(error)
       message.error('加载网页资料失败')
     } finally {
       setWebLoading(false)
     }
-  }, [workspaceId])
+  }, [onSummaryChange])
 
   useEffect(() => {
     void loadWebSources()
@@ -84,27 +75,23 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   }, [loadWebSources])
 
   useEffect(() => {
-    if (!workspaceId) {
-      setWebIndexJob(undefined)
-      return
-    }
     void window.api
-      .workspaceIndexJobGet({ workspaceId, sourceKind: 'web' })
+      .workspaceIndexJobGet({ workspaceId: '', sourceKind: 'web' })
       .then((response) => {
         if (!response.success) return
         setWebIndexJob(response.job?.status === 'running' ? response.job : undefined)
       })
       .catch(console.error)
-  }, [workspaceId])
+  }, [])
 
   useEffect(() => {
     const handleProgress = (job: WorkspaceIndexJobRecord): void => {
-      if (job.source_kind !== 'web' || job.workspace_id !== workspaceId) return
+      if (job.source_kind !== 'web') return
       setWebIndexJob(job.status === 'running' ? job : undefined)
       void loadWebSources()
     }
     return window.api.onWorkspaceIndexJobProgress(handleProgress)
-  }, [loadWebSources, workspaceId])
+  }, [loadWebSources])
 
   const handleWebImport = async (): Promise<void> => {
     const urls = webUrlsText
@@ -120,11 +107,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     setWebUrlsError('')
     setWebSubmitting(true)
     try {
-      if (!workspaceId) {
-        message.warning('请先选择工作空间')
-        return
-      }
-      const response = await window.api.ingestWebs(urls.map((url) => ({ workspaceId, url })))
+      const response = await window.api.ingestWebs(urls.map((url) => ({ url })))
       if (!response.success) {
         message.error(normalizeUserFacingError(response.error, '添加网页失败'))
         return
@@ -142,9 +125,8 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   }
 
   const handleScanWebSources = async (): Promise<void> => {
-    if (!workspaceId) return
     try {
-      const response = await window.api.webSourcesScan({ workspaceId })
+      const response = await window.api.webSourcesScan({})
       if (!response.success) {
         message.error(normalizeUserFacingError(response.error, '检查网页更新失败'))
         return
@@ -158,14 +140,13 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   }
 
   const handlePrepareWebSources = async (): Promise<void> => {
-    if (!workspaceId) return
     if (hasVectorModel !== true) {
       message.warning('请先安装向量模型后再更新索引')
       return
     }
 
     try {
-      const response = await window.api.webSourcesPrepare({ workspaceId })
+      const response = await window.api.webSourcesPrepare({})
       if (!response.success) {
         message.error(normalizeUserFacingError(response.error, '更新网页索引失败'))
         return
@@ -179,10 +160,9 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   }
 
   const handleDeleteWebSource = async (): Promise<void> => {
-    if (!deleteWebSource || !workspaceId) return
+    if (!deleteWebSource) return
     try {
       const response = await window.api.webSourceDelete({
-        workspaceId,
         webSourceId: deleteWebSource.id
       })
       if (!response.success) {
@@ -199,13 +179,17 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   }
 
   const vectorModelMissing = hasVectorModel === false
-  const webPrepareDisabled = hasVectorModel !== true
+  const hasWebList = webSources.length > 0
+  const webScanDisabled = !hasWebList
+  const webPrepareDisabled = hasVectorModel !== true || actionableWebIndexCount === 0
   const webPrepareTooltip =
     hasVectorModel === null
       ? '正在检查向量模型状态'
       : vectorModelMissing
         ? ''
-        : '检查网页变化并更新索引。'
+        : actionableWebIndexCount === 0
+          ? '当前没有需要更新的索引'
+          : '检查网页变化并更新索引。'
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
       <div className="text-[13px] font-medium text-[#37352F]">先安装向量模型</div>
@@ -281,6 +265,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
               icon={<HiArrowPath className="h-4 w-4" />}
               onClick={() => void handleScanWebSources()}
               loading={webIndexJob?.action === 'scan'}
+              disabled={webScanDisabled}
               className="border-[#EEEEEC] bg-white text-[#37352F]"
             >
               检查更新

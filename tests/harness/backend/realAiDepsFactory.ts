@@ -1,4 +1,5 @@
 import path from 'node:path'
+import { v4 as uuidv4 } from 'uuid'
 import { createHumanGraphRunner } from '../../../src/main/services/ai/human/graph/humanGraph'
 import { AiFileChangeService } from '../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { DocxApplyService } from '../../../src/main/services/ai/human/tools/docx/review/DocxApplyService'
@@ -21,6 +22,7 @@ import { getModelsPath } from '../../../src/main/utils/paths'
 import type { AiRuntimeSettings } from '../../../src/shared/types'
 import type { BackendHarnessMode, CreateAiRunContextInput, LiveLlmConfig } from './test-types'
 import type { EventCollector } from '../core/eventCollector'
+import { loadLiveLlmConfigFromEnv } from './llmConfig'
 import { createScriptedStructuredOutputDriver } from './scriptedStructuredOutputDriver'
 
 const SCRIPTED_LLM_CONFIG: LiveLlmConfig = {
@@ -51,7 +53,7 @@ const resolveRuntimeModelName = (input: {
 }
 
 const resolveRuntimeConfigId = (mode: BackendHarnessMode): string =>
-  mode === 'mock-llm' ? SCRIPTED_LLM_CONFIG.id : 'ai-live-config'
+  mode === 'mock-llm' ? SCRIPTED_LLM_CONFIG.id : loadLiveLlmConfigFromEnv().id
 
 const buildApprovalResolver = (
   policy: CreateAiRunContextInput['approvalPolicy']
@@ -158,20 +160,35 @@ export const createRealAiDepsFactory = async (input: {
       ...contextInput.runtimeSettingsOverride
     }
 
-    const sessionId = contextInput.sessionId || 'test-session'
-    terminalSessionIds.add(sessionId)
-    void storageService.chat.saveChatSession({
-      id: sessionId,
-      title: 'backend test session',
+    const partnerId = contextInput.partnerId || contextInput.sessionId || 'test-partner'
+    terminalSessionIds.add(partnerId)
+    void storageService.partner.savePartner({
+      id: partnerId,
+      name: 'backend test partner',
+      avatar_shape: 'circle',
+      avatar_color: 'blue',
       created_at: Date.now(),
-      workspace_id: 'test-workspace'
+      updated_at: Date.now(),
+      last_viewed_at: Date.now(),
+      pinned: false,
+      pinned_at: null
     })
+    if (bindWorkspace) {
+      void storageService.workspace.saveWorkspace({
+        id: 'test-workspace',
+        root_path: input.workspaceRoot,
+        created_at: Date.now(),
+        updated_at: Date.now()
+      })
+    }
+    const runId = contextInput.runId || uuidv4()
     const ctx = createAiRunContext(
       {
-        runId: input.runId,
-        sessionId,
-        userMessageId: `test-user-message-${input.runId}`,
-        assistantMessageId: `test-assistant-message-${input.runId}`,
+        runId,
+        partnerId,
+        partnerName: 'backend test partner',
+        userMessageId: `test-user-message-${runId}`,
+        assistantMessageId: `test-assistant-message-${runId}`,
         input: contextInput.userInput || '请处理当前测试任务。',
         selectedReferences: contextInput.selectedReferences,
         mainModel: {
@@ -183,25 +200,21 @@ export const createRealAiDepsFactory = async (input: {
               defaultModelName: input.runtimeModelName
             }) || ''
         },
-        visionModel: contextInput.visionModel,
-        workspace: bindWorkspace
-          ? {
-              workspaceId: 'test-workspace',
-              workspaceName: 'test-workspace',
-              rootPath: input.workspaceRoot
-            }
-          : undefined
+        workspaceRoots: bindWorkspace ? [input.workspaceRoot] : []
       },
       {
         runtimeSettings,
         llmStore: storageService.llm,
-        chatStore: storageService.chat,
+        partnerStore: storageService.partner,
+        chatMessageLogStore: storageService.chatMessageLog,
         documentsStore: storageService.documents,
         embeddingService,
         ensureEmbeddingReady: ensureReady,
+        hasRunningKnowledgeIndexJob: async () =>
+          await storageService.workspaceIndexJob.hasRunningPrepareJob(),
         docxApplyService,
         saveFileChangeRecord: async (record) => {
-          await aiFileChangeService.saveRecord(record, input.workspaceRoot)
+          await aiFileChangeService.saveRecord(record)
         },
         listFileChangeRecords: async (request) =>
           (await aiFileChangeService.listRecords(request)).items,
@@ -219,7 +232,7 @@ export const createRealAiDepsFactory = async (input: {
         requestApprovalBatch: async (request) => {
           input.eventCollector.add({
             type: 'approval_batch_required',
-            runId: input.runId,
+            runId,
             taskId: request.taskId,
             batchId: request.batchId,
             items: request.items,
@@ -230,7 +243,7 @@ export const createRealAiDepsFactory = async (input: {
           const decision = approvalResolver(request)
           input.eventCollector.add({
             type: 'approval_batch_decision',
-            runId: input.runId,
+            runId,
             taskId: request.taskId,
             batchId: request.batchId,
             decisions: decision.accepted
@@ -246,25 +259,8 @@ export const createRealAiDepsFactory = async (input: {
           })
           return decision
         },
-        requestUserTakeover: async (request) => {
-          input.eventCollector.add({
-            type: 'user_takeover_required',
-            runId: input.runId,
-            taskId: request.taskId,
-            requestId: request.requestId,
-            message: request.message,
-            createdAt: Date.now()
-          })
-          input.eventCollector.add({
-            type: 'user_takeover_confirmed',
-            runId: input.runId,
-            taskId: request.taskId,
-            requestId: request.requestId,
-            confirmedAt: Date.now()
-          })
-          return { confirmed: true }
-        },
         llmDriver: llmScript ? createScriptedStructuredOutputDriver(llmScript) : undefined,
+        chatToolsWrapper: contextInput.chatToolsWrapper,
         browserUseService: contextInput.browserUseService,
         webCrawlerService: contextInput.webCrawlerService
       }

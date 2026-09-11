@@ -11,7 +11,6 @@ SIDECAR_SCRIPT = ROOT / "resources" / "web_crawler_sidecar" / "web_crawler_sidec
 OUTPUT_DIR = ROOT / "resources" / "web_crawler_sidecar" / "bin"
 SIDECAR_NAME = "web_crawler_sidecar"
 PYINSTALLER_CONFIG_DIR = ROOT / ".pyinstaller" / "web_crawler_sidecar"
-BUNDLED_PLAYWRIGHT_BROWSER_PREFIXES = ("chromium_headless_shell-", "ffmpeg-")
 
 
 def platform_name() -> str:
@@ -31,44 +30,52 @@ def long_path(path: Path) -> str:
     return text
 
 
-def resolve_playwright_local_browsers_path() -> Path:
-    import playwright
-
-    return Path(playwright.__file__).resolve().parent / "driver" / "package" / ".local-browsers"
-
-
 def resolve_playwright_driver_path() -> Path:
     import playwright
 
     return Path(playwright.__file__).resolve().parent / "driver"
 
 
-def assert_playwright_browser_bundle(local_browsers_path: Path) -> None:
-    existing_names = {item.name for item in local_browsers_path.iterdir()} if local_browsers_path.exists() else set()
-    if any(name.startswith("chromium-") for name in existing_names):
-        raise RuntimeError("Full Chromium must not be bundled; install Chromium with --only-shell")
-    missing = [
-        prefix
-        for prefix in BUNDLED_PLAYWRIGHT_BROWSER_PREFIXES
-        if not any(name.startswith(prefix) for name in existing_names)
-    ]
-    if missing:
-        missing_text = ", ".join(missing)
-        raise RuntimeError(
-            f"Missing Playwright browser bundle entries: {missing_text}. "
-            "Run `pnpm run build:sidecar` after the browser download completes."
-        )
-
-
 def copy_playwright_driver_bundle(sidecar_dist_dir: Path) -> None:
     source = resolve_playwright_driver_path()
-    assert_playwright_browser_bundle(source / "package" / ".local-browsers")
 
     target = sidecar_dist_dir / "_internal" / "playwright" / "driver"
     if target.exists():
         shutil.rmtree(long_path(target))
     target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copytree(long_path(source), long_path(target), symlinks=True)
+    shutil.copytree(
+        long_path(source),
+        long_path(target),
+        symlinks=True,
+        ignore=shutil.ignore_patterns(".local-browsers"),
+    )
+
+    bundled_node = target / (
+        "node.exe" if platform.system().lower().startswith("windows") else "node"
+    )
+    if bundled_node.exists():
+        bundled_node.unlink()
+
+
+def assert_no_playwright_bundled_node(sidecar_dist_dir: Path) -> None:
+    driver_dir = sidecar_dist_dir / "_internal" / "playwright" / "driver"
+    bundled_nodes = [driver_dir / "node", driver_dir / "node.exe"]
+    forbidden = [candidate for candidate in bundled_nodes if candidate.exists()]
+    if forbidden:
+        paths = ", ".join(str(item.relative_to(sidecar_dist_dir)) for item in forbidden)
+        raise RuntimeError(f"Playwright must reuse the Electron Node runtime: {paths}")
+
+
+def assert_no_playwright_browser_bundle(sidecar_dist_dir: Path) -> None:
+    forbidden = []
+    for candidate in sidecar_dist_dir.rglob("*"):
+        if candidate.name == ".local-browsers" or candidate.name.startswith(
+            "chromium_headless_shell-"
+        ):
+            forbidden.append(candidate)
+    if forbidden:
+        paths = ", ".join(str(item.relative_to(sidecar_dist_dir)) for item in forbidden[:5])
+        raise RuntimeError(f"Playwright browser files must not be bundled: {paths}")
 
 
 def prune_non_runtime_files(sidecar_dist_dir: Path) -> None:
@@ -94,37 +101,6 @@ def prune_non_runtime_files(sidecar_dist_dir: Path) -> None:
                 candidate.unlink()
 
 
-def stash_playwright_browser_bundle(build_path: Path) -> tuple[Path, Path]:
-    source = resolve_playwright_local_browsers_path()
-    assert_playwright_browser_bundle(source)
-
-    stash = build_path / "playwright-local-browsers-stash"
-    if stash.exists():
-        shutil.rmtree(long_path(stash))
-    stash.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(long_path(source), long_path(stash))
-    return source, stash
-
-
-def restore_playwright_browser_bundle(stashed_bundle: tuple[Path, Path]) -> None:
-    source, stash = stashed_bundle
-    if not stash.exists():
-        return
-    if source.exists():
-        shutil.rmtree(long_path(source))
-    source.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(long_path(stash), long_path(source))
-
-
-def recover_stranded_playwright_browser_bundle(build_path: Path) -> None:
-    # An interrupted build can leave the only copy of the browsers in the stash;
-    # move it back before the build dir (and the stash with it) gets wiped.
-    stash = build_path / "playwright-local-browsers-stash"
-    if not stash.exists():
-        return
-    restore_playwright_browser_bundle((resolve_playwright_local_browsers_path(), stash))
-
-
 def main() -> int:
     if not SIDECAR_SCRIPT.exists():
         print(f"Missing sidecar script: {SIDECAR_SCRIPT}", file=sys.stderr)
@@ -145,7 +121,6 @@ def main() -> int:
     sidecar_dist_dir = OUTPUT_DIR / SIDECAR_NAME
     if sidecar_dist_dir.exists():
         shutil.rmtree(long_path(sidecar_dist_dir))
-    recover_stranded_playwright_browser_bundle(build_path)
     if build_path.exists():
         shutil.rmtree(long_path(build_path))
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -180,17 +155,15 @@ def main() -> int:
         **dict(os.environ),
         "PYINSTALLER_CONFIG_DIR": str(PYINSTALLER_CONFIG_DIR),
     }
-    stashed_browsers = stash_playwright_browser_bundle(build_path)
-    try:
-        subprocess.run(command, check=True, cwd=str(ROOT), env=env)
-    finally:
-        restore_playwright_browser_bundle(stashed_browsers)
+    subprocess.run(command, check=True, cwd=str(ROOT), env=env)
     executable_path = sidecar_dist_dir / platform_name()
     if not executable_path.exists():
         print(f"Missing built sidecar executable: {executable_path}", file=sys.stderr)
         return 1
     copy_playwright_driver_bundle(sidecar_dist_dir)
     prune_non_runtime_files(sidecar_dist_dir)
+    assert_no_playwright_browser_bundle(sidecar_dist_dir)
+    assert_no_playwright_bundled_node(sidecar_dist_dir)
     return 0
 
 

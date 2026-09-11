@@ -6,9 +6,10 @@ import {
   readPublicReleaseFragment,
   resolveAwsExecutable,
   verifyPublicReleaseFragment,
-  verifyR2ReleaseFragment
+  verifyReleaseStorageFragment
 } from './shared/windows.mjs'
 import { parseReleaseTag } from './tag.mjs'
+import { resolveReleaseStorageConfig } from './storage/config.mjs'
 
 const ROOT = process.cwd()
 await loadReleaseEnvironment(ROOT)
@@ -22,11 +23,13 @@ try {
   throw new Error('usage: node scripts/release/status.mjs --tag <mac-v1.2.3|windows-v1.2.3>')
 }
 
-const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL || PUBLIC_RELEASE_BASE_URL).replace(
-  /\/$/u,
-  ''
-)
-const platforms = releaseFamily === 'mac' ? ['macos-arm64', 'macos-x64'] : ['windows-x64']
+let publicBaseUrl = PUBLIC_RELEASE_BASE_URL
+try {
+  publicBaseUrl = resolveReleaseStorageConfig().publicBaseUrl
+} catch {
+  // Public status checks can still run against the domestic channel without local credentials.
+}
+const platforms = releaseFamily === 'mac' ? ['macos-arm64'] : ['windows-x64']
 const awsExecutable = await resolveAwsExecutable()
 if (!awsExecutable) throw new Error('AWS CLI is required to verify release sha512 metadata')
 for (const platform of platforms) {
@@ -36,7 +39,7 @@ for (const platform of platforms) {
     continue
   }
   await verifyPublicReleaseFragment(fragment, publicBaseUrl)
-  await verifyR2ReleaseFragment(fragment, awsExecutable)
+  await verifyReleaseStorageFragment(fragment, awsExecutable)
   const application = fragment.audit.applications[0]
   const installedMiB = (Number(application.totalBytes || 0) / 1024 / 1024).toFixed(1)
   process.stdout.write(`${platform.padEnd(14)} ready, audited, installed ${installedMiB} MiB\n`)

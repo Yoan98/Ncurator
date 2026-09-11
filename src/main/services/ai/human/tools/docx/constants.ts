@@ -1,5 +1,19 @@
-export const DOCX_POSITIONED_LAYOUT_PROTECTION_MESSAGE =
-  '当前命中复杂定位排版区域，暂不支持自动编辑，以避免预览修订和版式叠加导致错位；你可以手动按建议内容调整该处。'
+export const DOCX_OUTLINE_SEGMENT_TARGET_NODES = 20
+export const DOCX_OUTLINE_SEGMENT_BOUNDARY_LOOKAHEAD = 10
+export const DOCX_OUTLINE_SEGMENT_MAX_NODES = 30
+export const DOCX_OUTLINE_SEGMENT_MAX_VISIBLE_CHARS = 8_000
 
-export const isDocxPositionedLayoutProtectionMessage = (message: string | undefined): boolean =>
-  typeof message === 'string' && message.includes('当前命中复杂定位排版区域')
+export const DOCX_OUTLINE_SEGMENT_MAP_MAX_CHARS = 360
+export const DOCX_OUTLINE_ANCHOR_MAX_CHARS = 120
+export const DOCX_OUTLINE_KEYWORD_MAX_CHARS = 96
+export const DOCX_OUTLINE_KEYWORD_MIN_SCORE_RATIO = 0.3
+export const DOCX_OUTLINE_KEYWORD_JACCARD_THRESHOLD = 0.8
+export const DOCX_OUTLINE_KEYWORD_EDIT_SIMILARITY_THRESHOLD = 0.85
+export const DOCX_OUTLINE_MMR_RELEVANCE_WEIGHT = 0.7
+export const DOCX_OUTLINE_MMR_DIVERSITY_WEIGHT = 0.3
+
+export const DOCX_SEARCH_CONTEXT_NODE_COUNT = 2
+export const DOCX_SEARCH_MAX_MATCHES = 10
+export const DOCX_SEARCH_SURROUNDING_CONTEXT_CHARS = 320
+export const DOCX_SEARCH_NEIGHBOR_PREVIEW_CHARS = 160
+export const DOCX_FORMAT_MAX_TARGETS = 20

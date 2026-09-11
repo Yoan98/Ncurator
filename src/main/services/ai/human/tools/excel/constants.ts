@@ -1,0 +1,1 @@
+export const EXCEL_SEARCH_MAX_MATCHES = 10

@@ -4,6 +4,7 @@ out
 .env
 .DS_Store
 .eslintcache
+*.tsbuildinfo
 *.log*
 tests/logs
 tests/.cache
@@ -18,5 +19,8 @@ resources/web_crawler_sidecar/bin
 resources/native
 release-stage
 design/
+
+# 按需生成，不入库（`pnpm doc:ai-tool-prompt-audit`）
+doc/ai-tool-prompt-audit.md
 
 .venv

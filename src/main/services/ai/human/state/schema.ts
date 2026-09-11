@@ -25,22 +25,11 @@ export const createEmptyHumanTaskInput = (): HumanTaskInput => ({
   userInput: ''
 })
 
-export const createDefaultHumanTodolist = (): HumanState['memory']['todolist'] => []
-
-export const createDefaultHumanConversation = (): HumanState['memory']['conversation'] => ({
-  summary: null,
-  recentTurns: []
-})
-
-export const createDefaultHumanTaskRun = (): HumanState['memory']['taskRun'] => ({
-  rounds: [],
-  compactions: []
-})
+export const createDefaultHumanPlan = (): HumanState['memory']['plan'] => []
 
 export const createDefaultHumanMemory = (): HumanState['memory'] => ({
-  todolist: createDefaultHumanTodolist(),
-  conversation: createDefaultHumanConversation(),
-  taskRun: createDefaultHumanTaskRun()
+  plan: createDefaultHumanPlan(),
+  compactions: []
 })
 
 export const createDefaultHumanSkills = (): HumanState['skills'] => ({

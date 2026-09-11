@@ -1,12 +1,55 @@
 import { tool } from '@langchain/core/tools'
-import type { AiToolCallResult, IpcJsonObject, JsonValue } from '../../../../../../shared/types'
-import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
+import { randomUUID } from 'node:crypto'
+import path from 'node:path'
+import type { AiToolCallResult, IpcJsonObject, JsonObject, JsonValue } from '../../../../../../shared/types'
+import type {
+  BrowserActionCandidate,
+  BrowserStagehandAction,
+  BrowserUsePage,
+  BrowserUseResult
+} from '../../../types'
+import type { WebSearchResult } from '../../../../webCrawler/types'
 import { WebSourceService } from '../../../../web/WebSourceService'
+import { ensurePartnerAssetBucket } from '../../../../assets/WorkspaceAssetService'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
-import { checkToolResultSize } from '../utils/resultSizeGuard'
 import type { ToolFamilyDefinition } from '../types'
-import { BROWSER_USE_TOOL_SPEC, WEB_CRAWL_TOOL_SPEC, WEB_SEARCH_TOOL_SPEC } from './toolSpecs'
+import { BROWSER_USE_TOOL_SPEC, WEB_SEARCH_TOOL_SPEC } from './toolSpecs'
+import type {
+  WebSearchFetchFailureOutput,
+  WebSearchFetchOutput,
+  WebSearchLinkItem,
+  WebSearchSearchOutput
+} from './outputTypes'
+import {
+  fetchHttpPage,
+  isHttpPageFetchError,
+  isLoopbackHttpUrl,
+  shouldBypassCrawlerForLoopbackFetch
+} from './httpPageFetch'
+import { isCancelledError } from '../../../utils/runFailure'
+
+const WEB_SEARCH_FETCH_TIMEOUT_MS = 70_000
+const WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS = 200
+const BROWSER_SCREENSHOT_BUCKET = 'browser-screenshots'
+
+const withTimeout = async <T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string
+): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+      })
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
 
 const webSourceService = new WebSourceService()
 
@@ -18,20 +61,10 @@ type WebCrawlerFailureDetails = Error & {
   statusCode?: number
 }
 
-const renderLinkForAi = (link: {
-  href: string
-  text?: string
-  title?: string
-  intrinsicScore?: number
-  contextualScore?: number
-  totalScore?: number
-}) => ({
+const renderLinkForAi = (link: WebSearchLinkItem): WebSearchLinkItem => ({
   href: link.href,
   ...(link.text ? { text: link.text } : {}),
-  ...(link.title ? { title: link.title } : {}),
-  ...(typeof link.intrinsicScore === 'number' ? { intrinsicScore: link.intrinsicScore } : {}),
-  ...(typeof link.contextualScore === 'number' ? { contextualScore: link.contextualScore } : {}),
-  ...(typeof link.totalScore === 'number' ? { totalScore: link.totalScore } : {})
+  ...(link.title ? { title: link.title } : {})
 })
 
 const buildToolResult = (input: {
@@ -44,6 +77,168 @@ const buildToolResult = (input: {
   data: input.data
 })
 
+const buildFetchOutput = (input: {
+  result: {
+    requestedUrl: string
+    finalUrl: string
+    title?: string
+    markdown: string
+    links: { internal: WebSearchLinkItem[]; external: WebSearchLinkItem[] }
+    publishedAt?: string
+  }
+}): WebSearchFetchOutput => ({
+  requestedUrl: input.result.requestedUrl,
+  finalUrl: input.result.finalUrl,
+  ...(input.result.title ? { title: input.result.title } : {}),
+  markdown: input.result.markdown,
+  links: {
+    internal: input.result.links.internal.map(renderLinkForAi),
+    external: input.result.links.external.map(renderLinkForAi)
+  },
+  ...(input.result.publishedAt ? { publishedAt: input.result.publishedAt } : {})
+})
+
+const buildFetchFailureOutput = (input: {
+  error: Error
+  fallbackUrl: string
+}): WebSearchFetchFailureOutput => {
+  const details = input.error as WebCrawlerFailureDetails
+  const statusCode =
+    typeof details.statusCode === 'number'
+      ? details.statusCode
+      : isHttpPageFetchError(input.error)
+        ? input.error.statusCode
+        : undefined
+  const requestedUrl =
+    details.requestedUrl
+    || (isHttpPageFetchError(input.error) ? input.error.requestedUrl : undefined)
+    || input.fallbackUrl
+  const finalUrl =
+    details.finalUrl || (isHttpPageFetchError(input.error) ? input.error.finalUrl : undefined)
+  return {
+    error: getErrorMessage(input.error),
+    requestedUrl,
+    ...(finalUrl ? { finalUrl } : {}),
+    ...(statusCode !== undefined ? { statusCode } : {})
+  }
+}
+
+const buildSearchOutput = (searchResult: WebSearchResult): WebSearchSearchOutput => ({
+  query: searchResult.query,
+  results: searchResult.results.map((item) => ({
+    rank: item.rank,
+    title: item.title,
+    url: item.url,
+    ...(item.snippet ? { snippet: item.snippet } : {})
+  }))
+})
+
+const toBrowserUsePageJson = (page: BrowserUsePage): JsonObject => ({
+  url: page.url,
+  ...(page.title ? { title: page.title } : {})
+})
+
+const toBrowserActionCandidateJson = (candidate: BrowserActionCandidate): JsonObject => ({
+  actionId: candidate.actionId,
+  method: candidate.method,
+  description: candidate.description,
+  arguments: candidate.arguments,
+  selector: candidate.selector
+})
+
+const normalizeBrowserUseOutput = (
+  result: BrowserUseResult,
+  observeActions?: BrowserActionCandidate[]
+): JsonObject => {
+  if ('error' in result) {
+    return {
+      ...(result.action ? { action: result.action } : {}),
+      ...(result.tabId ? { tabId: result.tabId } : {}),
+      ...(result.page ? { page: toBrowserUsePageJson(result.page) } : {}),
+      error: result.error
+    }
+  }
+  switch (result.action) {
+    case 'navigate':
+      return {
+        action: 'navigate',
+        tabId: result.tabId,
+        page: toBrowserUsePageJson(result.page)
+      }
+    case 'list_tabs':
+      return {
+        action: 'list_tabs',
+        tabs: result.tabs.map((tab) => ({
+          tabId: tab.tabId,
+          title: tab.title,
+          url: tab.url,
+          active: tab.active
+        }))
+      }
+    case 'extract':
+      return {
+        action: 'extract',
+        tabId: result.tabId,
+        page: toBrowserUsePageJson(result.page),
+        content: result.result.extracted
+      }
+    case 'observe':
+      return {
+        action: 'observe',
+        tabId: result.tabId,
+        page: toBrowserUsePageJson(result.page),
+        actions: (observeActions || []).map(toBrowserActionCandidateJson)
+      }
+    case 'act': {
+      const actBase = {
+        action: 'act' as const,
+        tabId: result.tabId,
+        page: toBrowserUsePageJson(result.page),
+        message: result.result.message,
+        actionDescription: result.result.actionDescription,
+        executed: toBrowserActionCandidateJson(result.result.executed)
+      }
+      if (!result.result.success) {
+        return { ...actBase, error: result.result.message }
+      }
+      return actBase
+    }
+    case 'act_instruction': {
+      const actBase = {
+        action: 'act_instruction' as const,
+        tabId: result.tabId,
+        page: toBrowserUsePageJson(result.page),
+        message: result.result.message,
+        actionDescription: result.result.actionDescription
+      }
+      if (!result.result.success) {
+        return { ...actBase, error: result.result.message }
+      }
+      return actBase
+    }
+    case 'screenshot':
+      return {
+        action: 'screenshot',
+        tabId: result.tabId,
+        page: toBrowserUsePageJson(result.page),
+        path: result.result.path
+      }
+    case 'scroll':
+      return {
+        action: 'scroll',
+        tabId: result.tabId,
+        page: toBrowserUsePageJson(result.page),
+        message: result.result.message,
+        scrolledPixels: result.result.scrolledPixels
+      }
+  }
+}
+
+type CachedObserveAction = {
+  tabId: string
+  action: BrowserStagehandAction
+}
+
 export const webToolFamily: ToolFamilyDefinition = {
   familyId: 'web',
   buildTools: ({ ctx, runId, taskId }) => {
@@ -52,7 +247,47 @@ export const webToolFamily: ToolFamilyDefinition = {
       runId,
       taskId
     })
-    let automationBrowserTabPromise: Promise<{ id: string }> | null = null
+    const observeActionCache = new Map<string, CachedObserveAction>()
+
+    const emitBrowserPanelOpened = (browserTabId: string): void => {
+      ctx.sendEvent({
+        type: 'browser_panel_opened',
+        runId,
+        taskId,
+        browserTabId,
+        createdAt: Date.now()
+      })
+    }
+
+    const finishBrowserUse = (input: {
+      session: {
+        succeed: (message: undefined, result: AiToolCallResult) => void
+        fail: (error: string, message: undefined, result: AiToolCallResult) => void
+      }
+      payload: JsonObject
+    }): JsonObject => {
+      const errorText =
+        typeof input.payload.error === 'string' && input.payload.error.trim()
+          ? input.payload.error.trim()
+          : undefined
+      if (errorText) {
+        input.session.fail(
+          errorText,
+          undefined,
+          buildToolResult({
+            toolName: BROWSER_USE_TOOL_SPEC.name,
+            ok: false,
+            data: input.payload
+          })
+        )
+        return input.payload
+      }
+      input.session.succeed(
+        undefined,
+        buildToolResult({ toolName: BROWSER_USE_TOOL_SPEC.name, ok: true, data: input.payload })
+      )
+      return input.payload
+    }
 
     const webSearch = tool(
       async (args) =>
@@ -77,40 +312,112 @@ export const webToolFamily: ToolFamilyDefinition = {
               return payload
             }
 
-            const query = String(args.query || '').trim()
-            try {
-              const result = await service.search({ query })
-              const payload = {
-                query: result.query,
-                results: result.results
-              }
-              const sizeCheck = checkToolResultSize({
-                toolName: WEB_SEARCH_TOOL_SPEC.name,
-                value: payload,
-                modelContextWindowTokens:
-                  ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-                  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
-              })
-              if (sizeCheck.tooLarge) {
-                const tooLargePayload = {
-                  error: 'web_search result too large',
-                  query: result.query,
-                  estimatedTokens: sizeCheck.estimatedTokens,
-                  limit: sizeCheck.limit,
-                  ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
+            if (args.type === 'fetch') {
+              const rawUrl = String(args.url || '').trim()
+              let crawlUrl: string
+              try {
+                crawlUrl = webSourceService.normalizeUrl(rawUrl).url
+              } catch (error) {
+                const payload = {
+                  requestedUrl: rawUrl,
+                  error: getErrorMessage(error instanceof Error ? error : new Error(String(error)))
                 }
                 session.fail(
-                  tooLargePayload.error,
+                  payload.error,
                   undefined,
                   buildToolResult({
                     toolName: WEB_SEARCH_TOOL_SPEC.name,
                     ok: false,
-                    data: tooLargePayload
+                    data: payload
                   })
                 )
-                return tooLargePayload
+                return payload
               }
+              try {
+                const crawlPage = async (): Promise<WebSearchFetchOutput> =>
+                  buildFetchOutput({
+                    result: await service.crawl({ url: crawlUrl, topic: crawlUrl })
+                  })
 
+                const tryHttpPage = async (): Promise<WebSearchFetchOutput | null> => {
+                  try {
+                    const httpResult = await fetchHttpPage(crawlUrl)
+                    return httpResult.markdown.length > 0 ? httpResult : null
+                  } catch (error) {
+                    if (isHttpPageFetchError(error)) {
+                      throw error
+                    }
+                    return null
+                  }
+                }
+
+                let payload: WebSearchFetchOutput
+                if (shouldBypassCrawlerForLoopbackFetch() && isLoopbackHttpUrl(crawlUrl)) {
+                  const httpOnly = await tryHttpPage()
+                  if (!httpOnly) {
+                    throw new Error('网页正文为空')
+                  }
+                  payload = httpOnly
+                } else {
+                  const httpResult = await tryHttpPage()
+                  if (httpResult && httpResult.markdown.length >= WEB_SEARCH_HTTP_MARKDOWN_MIN_CHARS) {
+                    payload = httpResult
+                  } else {
+                    try {
+                      payload = await withTimeout(
+                        crawlPage(),
+                        WEB_SEARCH_FETCH_TIMEOUT_MS,
+                        'web_search fetch timed out'
+                      )
+                    } catch (crawlError) {
+                      if (httpResult) {
+                        payload = httpResult
+                      } else {
+                        throw crawlError
+                      }
+                    }
+                  }
+                }
+                session.succeed(
+                  undefined,
+                  buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: true, data: payload })
+                )
+                return payload
+              } catch (error) {
+                const payload = buildFetchFailureOutput({
+                  error: error instanceof Error ? error : new Error(String(error)),
+                  fallbackUrl: crawlUrl
+                })
+                session.fail(
+                  payload.error,
+                  undefined,
+                  buildToolResult({
+                    toolName: WEB_SEARCH_TOOL_SPEC.name,
+                    ok: false,
+                    data: payload
+                })
+                )
+                return payload
+              }
+            }
+
+            const rawQuery = String(args.query || '').trim()
+            try {
+              const searchResult = await service.search({ query: rawQuery })
+              if (searchResult.results.length === 0) {
+                const payload = { error: 'web_search 没有找到相关结果' }
+                session.fail(
+                  payload.error,
+                  undefined,
+                  buildToolResult({
+                    toolName: WEB_SEARCH_TOOL_SPEC.name,
+                    ok: false,
+                    data: payload
+                  })
+                )
+                return payload
+              }
+              const payload = buildSearchOutput(searchResult)
               session.succeed(
                 undefined,
                 buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: true, data: payload })
@@ -118,13 +425,16 @@ export const webToolFamily: ToolFamilyDefinition = {
               return payload
             } catch (error) {
               const payload = {
-                error: getErrorMessage(error instanceof Error ? error : new Error(String(error))),
-                query
+                error: getErrorMessage(error instanceof Error ? error : new Error(String(error)))
               }
               session.fail(
                 payload.error,
                 undefined,
-                buildToolResult({ toolName: WEB_SEARCH_TOOL_SPEC.name, ok: false, data: payload })
+                buildToolResult({
+                  toolName: WEB_SEARCH_TOOL_SPEC.name,
+                  ok: false,
+                  data: payload
+                })
               )
               return payload
             }
@@ -134,136 +444,6 @@ export const webToolFamily: ToolFamilyDefinition = {
         name: WEB_SEARCH_TOOL_SPEC.name,
         description: WEB_SEARCH_TOOL_SPEC.promptSpec.description,
         schema: WEB_SEARCH_TOOL_SPEC.inputSchema
-      }
-    )
-
-    const webCrawl = tool(
-      async (args) =>
-        await withToolLifecycle({
-          emitter: toolEvents,
-          toolName: WEB_CRAWL_TOOL_SPEC.name,
-          args: args as IpcJsonObject,
-          execute: async (session) => {
-            ctx.checkCancelled()
-            const service = ctx.webCrawlerService
-            if (!service) {
-              const payload = { error: 'web_crawl service unavailable' }
-              session.fail(
-                payload.error,
-                undefined,
-                buildToolResult({
-                  toolName: WEB_CRAWL_TOOL_SPEC.name,
-                  ok: false,
-                  data: payload
-                })
-              )
-              return payload
-            }
-            const rawUrl = String(args.url || '').trim()
-            let normalizedUrl = rawUrl
-            try {
-              normalizedUrl = webSourceService.normalizeUrl(rawUrl).url
-            } catch (error) {
-              const payload = {
-                error: getErrorMessage(error instanceof Error ? error : new Error(String(error))),
-                url: rawUrl
-              }
-              session.fail(
-                payload.error,
-                undefined,
-                buildToolResult({ toolName: WEB_CRAWL_TOOL_SPEC.name, ok: false, data: payload })
-              )
-              return payload
-            }
-
-            try {
-              const result = await service.crawl({
-                url: normalizedUrl,
-                topic: String(args.topic || '').trim()
-              })
-              const payload = {
-                requestedUrl: result.requestedUrl,
-                finalUrl: result.finalUrl,
-                ...(result.title ? { title: result.title } : {}),
-                markdown: result.markdown,
-                links: {
-                  internal: result.links.internal.map(renderLinkForAi),
-                  external: result.links.external.map(renderLinkForAi)
-                },
-                ...(result.publishedAt ? { publishedAt: result.publishedAt } : {})
-              }
-              const sizeCheck = checkToolResultSize({
-                toolName: WEB_CRAWL_TOOL_SPEC.name,
-                value: payload,
-                modelContextWindowTokens:
-                  ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-                  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
-              })
-              if (sizeCheck.tooLarge) {
-                const tooLargePayload = {
-                  error: 'web_crawl result too large',
-                  requestedUrl: result.requestedUrl,
-                  finalUrl: result.finalUrl,
-                  estimatedTokens: sizeCheck.estimatedTokens,
-                  limit: sizeCheck.limit,
-                  ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
-                }
-                session.fail(
-                  tooLargePayload.error,
-                  undefined,
-                  buildToolResult({
-                    toolName: WEB_CRAWL_TOOL_SPEC.name,
-                    ok: false,
-                    data: tooLargePayload
-                  })
-                )
-                return tooLargePayload
-              }
-
-              session.succeed(
-                undefined,
-                buildToolResult({ toolName: WEB_CRAWL_TOOL_SPEC.name, ok: true, data: payload })
-              )
-              return payload
-            } catch (error) {
-              const resolvedError: WebCrawlerFailureDetails =
-                error instanceof Error
-                  ? Object.assign(error, {
-                      requestedUrl:
-                        typeof (error as WebCrawlerFailureDetails).requestedUrl === 'string'
-                          ? (error as WebCrawlerFailureDetails).requestedUrl
-                          : undefined,
-                      finalUrl:
-                        typeof (error as WebCrawlerFailureDetails).finalUrl === 'string'
-                          ? (error as WebCrawlerFailureDetails).finalUrl
-                          : undefined,
-                      statusCode:
-                        typeof (error as WebCrawlerFailureDetails).statusCode === 'number'
-                          ? (error as WebCrawlerFailureDetails).statusCode
-                          : undefined
-                    })
-                  : new Error(String(error))
-              const payload = {
-                error: getErrorMessage(resolvedError),
-                requestedUrl: resolvedError.requestedUrl || normalizedUrl,
-                finalUrl: resolvedError.finalUrl || normalizedUrl,
-                ...(typeof resolvedError.statusCode === 'number'
-                  ? { statusCode: resolvedError.statusCode }
-                  : {})
-              }
-              session.fail(
-                payload.error,
-                undefined,
-                buildToolResult({ toolName: WEB_CRAWL_TOOL_SPEC.name, ok: false, data: payload })
-              )
-              return payload
-            }
-          }
-        }),
-      {
-        name: WEB_CRAWL_TOOL_SPEC.name,
-        description: WEB_CRAWL_TOOL_SPEC.promptSpec.description,
-        schema: WEB_CRAWL_TOOL_SPEC.inputSchema
       }
     )
 
@@ -290,98 +470,168 @@ export const webToolFamily: ToolFamilyDefinition = {
               return payload
             }
 
-            const instruction = String(args.instruction || '').trim()
             try {
-              automationBrowserTabPromise ||= service.ensureAutomationTab(ctx.sessionId)
-              let browserTab: { id: string }
-              try {
-                browserTab = await automationBrowserTabPromise
-              } catch (error) {
-                automationBrowserTabPromise = null
-                throw error
-              }
-              ctx.sendEvent({
-                type: 'browser_panel_opened',
-                runId,
-                taskId,
-                browserTabId: browserTab.id,
-                createdAt: Date.now()
-              })
               const llmConfig = await ctx.getLlmConfig()
-              const result =
-                args.action === 'navigate'
-                  ? await service.run({
-                      tabId: browserTab.id,
-                      action: 'navigate',
-                      url: args.url,
-                      instruction: instruction || undefined,
-                      llmConfig
-                    })
-                  : await service.run({
-                      tabId: browserTab.id,
-                      action: args.action,
-                      instruction,
-                      llmConfig
-                    })
-              const payload = { ...result }
-              const sizeCheck = checkToolResultSize({
-                toolName: BROWSER_USE_TOOL_SPEC.name,
-                value: payload,
-                modelContextWindowTokens:
-                  ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-                  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
-              })
-              if (sizeCheck.tooLarge) {
-                const tooLargePayload = {
-                  error: 'browser_use result too large',
-                  estimatedTokens: sizeCheck.estimatedTokens,
-                  limit: sizeCheck.limit,
-                  ...(sizeCheck.decisionHint ? { decisionHint: sizeCheck.decisionHint } : {})
+              const ownerId = ctx.partnerId
+              const abortSignal = ctx.abortSignal
+              const runId = ctx.runId
+              let result: BrowserUseResult
+              let observeActions: BrowserActionCandidate[] | undefined
+
+              if (args.action === 'list_tabs') {
+                result = await service.run({ action: 'list_tabs', ownerId, llmConfig, abortSignal, runId })
+              } else if (args.action === 'navigate') {
+                const tabIdArg =
+                  typeof args.tabId === 'string' && args.tabId.trim() ? args.tabId.trim() : undefined
+                result = await service.run({
+                  action: 'navigate',
+                  ownerId,
+                  url: String(args.url || '').trim(),
+                  ...(tabIdArg ? { tabId: tabIdArg } : {}),
+                  llmConfig,
+                  abortSignal,
+                  runId
+                })
+                if (!('error' in result) && result.action === 'navigate') {
+                  emitBrowserPanelOpened(result.tabId)
                 }
-                session.fail(
-                  tooLargePayload.error,
-                  undefined,
-                  buildToolResult({
-                    toolName: BROWSER_USE_TOOL_SPEC.name,
-                    ok: false,
-                    data: tooLargePayload
+              } else if (args.action === 'observe') {
+                const tabId = String(args.tabId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                result = await service.run({
+                  action: 'observe',
+                  tabId,
+                  instruction: String(args.instruction || '').trim(),
+                  llmConfig,
+                  abortSignal,
+                  runId
+                })
+                if (!('error' in result) && result.action === 'observe') {
+                  observeActions = result.result.actions.map((action) => {
+                    const actionId = `obs_${randomUUID().replaceAll('-', '').slice(0, 12)}`
+                    observeActionCache.set(actionId, { tabId, action })
+                    return {
+                      actionId,
+                      description: action.description,
+                      method: action.method,
+                      arguments: action.arguments,
+                      selector: action.selector
+                    }
                   })
-                )
-                return tooLargePayload
-              }
-
-              if ('error' in result) {
-                session.fail(
-                  result.error,
-                  undefined,
-                  buildToolResult({
-                    toolName: BROWSER_USE_TOOL_SPEC.name,
-                    ok: false,
-                    data: payload
+                }
+              } else if (args.action === 'act') {
+                const tabId = String(args.tabId || '').trim()
+                const actionId = String(args.actionId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                const cached = observeActionCache.get(actionId)
+                if (!cached) {
+                  return finishBrowserUse({
+                    session,
+                    payload: {
+                      action: 'act',
+                      tabId,
+                      error: `未知 actionId：${actionId}。请先 observe 获取候选动作后再 act。`
+                    }
                   })
+                }
+                if (cached.tabId !== tabId) {
+                  return finishBrowserUse({
+                    session,
+                    payload: {
+                      action: 'act',
+                      tabId,
+                      error: `actionId ${actionId} 属于 tab ${cached.tabId}，与请求的 tabId ${tabId} 不一致。`
+                    }
+                  })
+                }
+                const stagehandAction: BrowserStagehandAction = {
+                  ...cached.action,
+                  arguments: [...cached.action.arguments]
+                }
+                const method = stagehandAction.method.toLowerCase()
+                const isInputMethod = ['fill', 'type', 'press'].includes(method)
+                if (typeof args.text === 'string' && isInputMethod) {
+                  stagehandAction.arguments = [args.text]
+                }
+                result = await service.run({
+                  action: 'act',
+                  tabId,
+                  actionId,
+                  stagehandAction,
+                  llmConfig,
+                  abortSignal,
+                  runId
+                })
+              } else if (args.action === 'act_instruction') {
+                const tabId = String(args.tabId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                result = await service.run({
+                  action: 'act_instruction',
+                  tabId,
+                  instruction: String(args.instruction || '').trim(),
+                  llmConfig,
+                  abortSignal,
+                  runId
+                })
+              } else if (args.action === 'extract') {
+                const tabId = String(args.tabId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                result = await service.run({
+                  action: 'extract',
+                  tabId,
+                  instruction: String(args.instruction || '').trim(),
+                  llmConfig,
+                  abortSignal,
+                  runId
+                })
+              } else if (args.action === 'screenshot') {
+                const tabId = String(args.tabId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                const bucketDir = await ensurePartnerAssetBucket(
+                  ctx.partnerId,
+                  BROWSER_SCREENSHOT_BUCKET
                 )
-                return payload
-              }
-
-              const ok = result.action !== 'act' || result.result.success
-              if (ok) {
-                session.succeed(
-                  undefined,
-                  buildToolResult({ toolName: BROWSER_USE_TOOL_SPEC.name, ok: true, data: payload })
+                const screenshotPath = path.join(
+                  bucketDir,
+                  `browser-screenshot-${randomUUID()}.png`
                 )
+                result = await service.run({
+                  action: 'screenshot',
+                  tabId,
+                  screenshotPath,
+                  llmConfig,
+                  abortSignal,
+                  runId
+                })
+              } else if (args.action === 'scroll') {
+                const tabId = String(args.tabId || '').trim()
+                emitBrowserPanelOpened(tabId)
+                result = await service.run({
+                  action: 'scroll',
+                  tabId,
+                  direction: args.direction,
+                  percentage: args.percentage,
+                  llmConfig,
+                  abortSignal,
+                  runId
+                })
               } else {
-                session.fail(
-                  result.result.message,
-                  undefined,
-                  buildToolResult({
-                    toolName: BROWSER_USE_TOOL_SPEC.name,
-                    ok: false,
-                    data: payload
-                  })
-                )
+                const unknownAction =
+                  typeof args === 'object' && args && 'action' in args
+                    ? String((args as { action?: unknown }).action)
+                    : 'unknown'
+                return finishBrowserUse({
+                  session,
+                  payload: { error: `unsupported browser_use action: ${unknownAction}` }
+                })
               }
-              return payload
+
+              return finishBrowserUse({
+                session,
+                payload: normalizeBrowserUseOutput(result, observeActions)
+              })
             } catch (error) {
+              if (isCancelledError(error)) throw error
               const payload = {
                 error: getErrorMessage(error instanceof Error ? error : new Error(String(error)))
               }
@@ -405,6 +655,6 @@ export const webToolFamily: ToolFamilyDefinition = {
       }
     )
 
-    return [webSearch, webCrawl, browserUse]
+    return [webSearch, browserUse]
   }
 }

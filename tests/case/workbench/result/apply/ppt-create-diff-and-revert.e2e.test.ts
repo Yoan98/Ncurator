@@ -44,7 +44,7 @@ describe('workbench result e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            `请直接在工作区创建“${FILE_NAME}”。做两页简洁专业的 16:9 PPT：第一页标题包含“季度复盘”，第二页标题包含“下一步”，两页正文都要出现唯一标记“${MARKER}”。必须使用 PPT 工具一次提交两张完整页面 HTML。工具读回的 PPT 字号是 CSS px 换算后的点值，这属于正常结果；首次 ppt_edit 成功后不要删除、重建、复制或再次修改文件，直接告诉我已写回。`
+            `请直接在工作区创建“${FILE_NAME}”。做两页简洁专业的 16:9 PPT：第一页标题包含“季度复盘”，第二页标题包含“下一步”，两页正文都要出现唯一标记“${MARKER}”。必须使用 PPT 工具，每页一次 insert_slide，用元素规格而不是 HTML。字号单位是磅；首次 ppt_edit 成功后不要删除、重建、复制或再次修改文件，直接告诉我已写回。`
           )
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,

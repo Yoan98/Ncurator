@@ -1,9 +1,12 @@
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
-  createFixtureWorkspace,
+  createWorkspaceThroughSettingsUi,
   getSettingsLocator,
   getSettingsPrefixLocator,
   navigateToSettingsSection
@@ -18,25 +21,40 @@ describe('settings workspace e2e', () => {
         domain: 'settings',
         suite: 'workspace',
         groups: ['core'],
-        description: '工作空间页首屏初始化后，真实数据默认选中第一条工作空间并展示文件/网页 tab。',
+        description: '工作空间页加载后展示全部文件地址和文件/网页 tab。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          const firstRoot = await mkdtemp(path.join(os.tmpdir(), 'settings-workspace-first-'))
+          const secondRoot = await mkdtemp(path.join(os.tmpdir(), 'settings-workspace-second-'))
+          runtime.registerResource({
+            name: `settings-workspace:${firstRoot}`,
+            phase: 'after-app-close',
+            dispose: async () => {
+              const { rm } = await import('node:fs/promises')
+              await rm(firstRoot, { recursive: true, force: true })
+              await rm(secondRoot, { recursive: true, force: true })
+            }
+          })
+          await mkdir(path.join(firstRoot, 'docs'), { recursive: true })
+          await writeFile(path.join(firstRoot, 'docs', 'a.txt'), 'a', 'utf8')
+          await mkdir(path.join(secondRoot, 'docs'), { recursive: true })
+          await writeFile(path.join(secondRoot, 'docs', 'b.txt'), 'b', 'utf8')
 
           await runtime.step({
-            name: 'create-workspaces-through-ui',
-            message: '通过 UI 创建两个工作空间，模拟真实首屏列表数据。',
+            name: 'create-workspace-roots',
+            message: '添加两个文件地址。',
             run: async () => {
-              await createFixtureWorkspace(page, { name: '第一个工作空间' })
-              await createFixtureWorkspace(page, { name: '第二个工作空间' })
+              await createWorkspaceThroughSettingsUi(page, firstRoot)
+              await createWorkspaceThroughSettingsUi(page, secondRoot)
             }
           })
 
           await runtime.step({
             name: 'open-workspace-page',
-            message: '重新进入工作空间页并等待详情区完成渲染。',
+            message: '重新进入工作空间页并等待文件树完成渲染。',
             run: async () => {
               await navigateToSettingsSection(page, 'model')
               await navigateToSettingsSection(page, 'workspace')
@@ -44,53 +62,41 @@ describe('settings workspace e2e', () => {
                 state: 'visible'
               })
               await getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix)
-                .filter({ hasText: '第一个工作空间' })
+                .filter({ hasText: path.basename(firstRoot) })
                 .first()
-                .waitFor({ state: 'visible' })
-              await getSettingsLocator(page, importSelectors.workspaceDetail)
-                .getByRole('tab', { name: /文件/u })
                 .waitFor({ state: 'visible' })
             }
           })
 
-          const firstWorkspaceCard = getSettingsPrefixLocator(
-            page,
-            importSelectors.workspaceCardPrefix
-          )
-            .filter({ hasText: '第一个工作空间' })
-            .first()
-          const firstWorkspaceCardText = (await firstWorkspaceCard.textContent()) || ''
-          const firstWorkspaceCardClass = (await firstWorkspaceCard.getAttribute('class')) || ''
-          const detailText =
-            (await getSettingsLocator(page, importSelectors.workspaceDetail).textContent()) || ''
-
           return {
-            firstWorkspaceCardText,
-            firstWorkspaceCardClass,
-            detailText,
-            firstWorkspaceSelected: firstWorkspaceCardClass.includes('nc-sidebar-item-active'),
+            firstRootVisible: await getSettingsPrefixLocator(
+              page,
+              importSelectors.workspaceCardPrefix
+            )
+              .filter({ hasText: path.basename(firstRoot) })
+              .first()
+              .isVisible(),
+            secondRootVisible: await getSettingsPrefixLocator(
+              page,
+              importSelectors.workspaceCardPrefix
+            )
+              .filter({ hasText: path.basename(secondRoot) })
+              .first()
+              .isVisible(),
             fileTabVisible: await page.getByRole('tab', { name: /文件/u }).isVisible(),
             webTabVisible: await page.getByRole('tab', { name: /网页/u }).isVisible()
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.firstWorkspaceSelected && result.fileTabVisible && result.webTabVisible,
+            result.firstRootVisible &&
+              result.secondRootVisible &&
+              result.fileTabVisible &&
+              result.webTabVisible,
             {
-              name: 'workspace-page-loads-list-and-detail',
+              name: 'workspace-page-loads-file-roots-and-tabs',
               message:
-                '页面打开后应完成工作空间列表和详情区初始化，并直接呈现文件 / 网页 tab，对齐 SET-WORKSPACE-001-AC1。',
-              data: result
-            }
-          )
-
-          await runtime.assertThat(
-            result.firstWorkspaceCardText.includes('第一个工作空间') &&
-              result.firstWorkspaceCardText.includes('0'),
-            {
-              name: 'workspace-defaults-to-first-item',
-              message:
-                '未显式选中时应默认落到第一条工作空间，并能在左侧展示当前工作空间，对齐 SET-WORKSPACE-001-AC2。',
+                '页面打开后应展示全部文件地址，并直接呈现文件 / 网页 tab，对齐 SET-WORKSPACE-001。',
               data: result
             }
           )

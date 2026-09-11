@@ -21,6 +21,12 @@ const loadStageExport = async (stageRequire, stageNodeModules, specifier, export
   return value
 }
 
+const loadStageModule = (stageRequire, stageNodeModules, specifier) => {
+  const resolved = stageRequire.resolve(specifier)
+  assertInside(stageNodeModules, resolved, specifier)
+  return stageRequire(resolved)
+}
+
 export const verifyStagedRuntime = async ({ stageDirectory, reportPath, rootDirectory }) => {
   const stageRoot = path.resolve(stageDirectory)
   const root = path.resolve(rootDirectory)
@@ -116,11 +122,59 @@ export const verifyStagedRuntime = async ({ stageDirectory, reportPath, rootDire
   assertDocuments(docxDocuments, 'DOCX')
   assertDocuments(pdfDocuments, 'PDF')
 
+  const { mathjax } = loadStageModule(stageRequire, stageNodeModules, 'mathjax-full/js/mathjax.js')
+  const { TeX } = loadStageModule(stageRequire, stageNodeModules, 'mathjax-full/js/input/tex.js')
+  const { AllPackages } = loadStageModule(
+    stageRequire,
+    stageNodeModules,
+    'mathjax-full/js/input/tex/AllPackages.js'
+  )
+  const { SVG } = loadStageModule(stageRequire, stageNodeModules, 'mathjax-full/js/output/svg.js')
+  const { liteAdaptor } = loadStageModule(
+    stageRequire,
+    stageNodeModules,
+    'mathjax-full/js/adaptors/liteAdaptor.js'
+  )
+  const { RegisterHTMLHandler } = loadStageModule(
+    stageRequire,
+    stageNodeModules,
+    'mathjax-full/js/handlers/html.js'
+  )
+  const adaptor = liteAdaptor()
+  RegisterHTMLHandler(adaptor)
+  const mathDocument = mathjax.document('', {
+    InputJax: new TeX({ packages: AllPackages }),
+    OutputJax: new SVG({ fontCache: 'none' })
+  })
+  const formulaMarkup = adaptor.outerHTML(
+    mathDocument.convert('x^2 + y^2 = z^2', {
+      display: true,
+      em: 16,
+      ex: 8,
+      containerWidth: 1200
+    })
+  )
+  if (!formulaMarkup.includes('<svg') || !formulaMarkup.includes('</svg>')) {
+    throw new Error('MathJax staged runtime returned no SVG')
+  }
+
+  const ExcelJS = loadStageModule(stageRequire, stageNodeModules, 'exceljs')
+  const workbook = new ExcelJS.Workbook()
+  workbook.addWorksheet('Smoke').getCell('A1').value = 'NCurator'
+  const workbookBytes = await workbook.xlsx.writeBuffer()
+  const loadedWorkbook = new ExcelJS.Workbook()
+  await loadedWorkbook.xlsx.load(workbookBytes)
+  if (loadedWorkbook.getWorksheet('Smoke')?.getCell('A1').value !== 'NCurator') {
+    throw new Error('ExcelJS staged runtime round trip failed')
+  }
+
   return {
     packages: report.packages.length,
     requiredFiles: report.requiredFiles.length,
     docxDocuments: docxDocuments.length,
     pdfDocuments: pdfDocuments.length,
+    formulaSvgBytes: Buffer.byteLength(formulaMarkup),
+    excelWorkbookBytes: workbookBytes.byteLength,
     suppressedPdfWarnings
   }
 }

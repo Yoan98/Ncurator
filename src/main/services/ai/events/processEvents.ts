@@ -1,53 +1,29 @@
 import type {
   AiRunEvent,
   AssistantProcessDisplay,
-  IpcJsonObject,
-  RuntimeSkillId
+  IpcJsonObject
 } from '../../../../shared/types'
 
 type SendEvent = (event: AiRunEvent) => void
 
-export const getThinkingProcessGroupId = (runId: string): string => `${runId}:thinking`
+const getThinkingProcessGroupId = (runId: string): string => `${runId}:thinking`
 
-export const getLearningProcessGroupId = (runId: string, skillId: RuntimeSkillId): string =>
-  `${runId}:learning:${skillId}`
+const getCompactionProcessGroupId = (runId: string): string => `${runId}:compaction`
 
-export const getCompactionProcessGroupId = (runId: string): string => `${runId}:compaction`
+const getFinalizingProcessGroupId = (runId: string): string => `${runId}:finalizing`
 
-export const getFinalizingProcessGroupId = (runId: string): string => `${runId}:finalizing`
-
-export const getSkillKeyFromToolName = (toolName: string): string => {
-  if (
-    toolName === 'docx_read_outline' ||
-    toolName === 'docx_read_blocks' ||
-    toolName === 'docx_read_visuals' ||
-    toolName === 'docx_search'
-  ) {
-    return 'docx-reader'
-  }
-  if (toolName === 'docx_edit') return 'docx-writer'
-  if (toolName === 'kb_search' || toolName === 'kb_list_documents') return 'reference-reader'
-  if (
-    toolName === 'terminal_run' ||
-    toolName === 'terminal_read' ||
-    toolName === 'terminal_stop' ||
-    toolName === 'terminal'
-  ) {
-    return 'terminal-runner'
-  }
-  return 'generic-task'
-}
-
-export const getToolProcessGroupId = (runId: string, toolCallId: string): string =>
+const getToolProcessGroupId = (runId: string, toolCallId: string): string =>
   `${runId}:tool:${toolCallId}`
 
-export const getLlmRetryProcessGroupId = (runId: string, callId: string): string =>
+const getLlmRetryProcessGroupId = (runId: string, callId: string): string =>
   `${runId}:llm-retry:${callId}`
 
 export const emitAssistantProcessThought = (input: {
   sendEvent: SendEvent
   runId: string
   text: string
+  /** Stable id for this brain round; preferred over createdAt to avoid same-ms collisions. */
+  thoughtId?: string
   createdAt?: number
 }): void => {
   const text = input.text.trim()
@@ -56,7 +32,7 @@ export const emitAssistantProcessThought = (input: {
   input.sendEvent({
     type: 'assistant_process_thought',
     runId: input.runId,
-    thoughtId: `${input.runId}:thought:${createdAt}`,
+    thoughtId: input.thoughtId || `${input.runId}:thought:${createdAt}`,
     text,
     createdAt
   })
@@ -104,37 +80,6 @@ export const emitThinkingFailed = (input: {
     display: { kind: 'thinking' },
     error: input.error,
     failedAt: input.failedAt || Date.now()
-  })
-}
-
-export const emitLearningStarted = (input: {
-  sendEvent: SendEvent
-  runId: string
-  skillId: RuntimeSkillId
-  createdAt?: number
-}): void => {
-  input.sendEvent({
-    type: 'assistant_process_group_started',
-    runId: input.runId,
-    groupId: getLearningProcessGroupId(input.runId, input.skillId),
-    kind: 'learning',
-    display: { kind: 'learning', skillId: input.skillId },
-    createdAt: input.createdAt || Date.now()
-  })
-}
-
-export const emitLearningCompleted = (input: {
-  sendEvent: SendEvent
-  runId: string
-  skillId: RuntimeSkillId
-  completedAt?: number
-}): void => {
-  input.sendEvent({
-    type: 'assistant_process_group_completed',
-    runId: input.runId,
-    groupId: getLearningProcessGroupId(input.runId, input.skillId),
-    display: { kind: 'learning', skillId: input.skillId },
-    completedAt: input.completedAt || Date.now()
   })
 }
 

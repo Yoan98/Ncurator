@@ -27,6 +27,7 @@ describe('release fragment', () => {
     expect(createReleaseTag('mac', '0.1.30')).toBe('mac-v0.1.30')
     expect(createReleaseTag('windows', '0.1.32')).toBe('windows-v0.1.32')
     expect(parseReleaseTag('mac-v0.1.30', 'macos-arm64').version).toBe('0.1.30')
+    expect(() => parseReleaseTag('mac-v0.1.30', 'macos-x64')).toThrow(/unsupported/u)
     expect(() => parseReleaseTag('windows-v0.1.32', 'macos-arm64')).toThrow(/does not match/u)
     expect(compareReleaseVersions('0.1.30', '0.1.29')).toBeGreaterThan(0)
     expect(compareReleaseVersions('0.1.30', '0.1.31')).toBeLessThan(0)

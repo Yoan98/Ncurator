@@ -17,8 +17,9 @@ import {
 
 const CASE_ID = 'image-generation-update-preview-and-revert'
 const FILE_NAME = 'workbench-existing-image.png'
+// 64x64 solid PNG — providers reject sub-10px images when read_image feeds vision LLMs.
 const ORIGINAL_PNG_BASE64 =
-  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+  'iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAl0lEQVR4nO3QMREAIAzAwPpX1hlDIOMHMvyey+ye+7PRAVoDdIDWAB2gNUAHaA3QAVoDdIDWAB2gNUAHaA3QAVoDdIDWAB2gNUAHaA3QAVoDdIDWAB2gNUAHaA3QAVoDdIDWAB2gNUAHaA3QAVoDdIDWAB2gNUAHaA3QAVoDdIDWAB2gNUAHaA3QAVoDdIDWAB2gNUAHaA+RPhMrsUmhwAAAAABJRU5ErkJggg=='
 
 describe('workbench result e2e', () => {
   it(

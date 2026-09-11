@@ -1,17 +1,14 @@
 import type { AiRunContext } from '../../../types'
-import type { DecisionHintSource } from '../../../../../../shared/types'
 import type {
   HumanRuntimeCache,
   HumanState,
   HumanTraceStep,
-  HumanDecisionHint,
   RuntimeSkillId
 } from '../../types'
-import { renderDecisionHintDetail } from '../../prompts/decisionHints'
 import { getEffectiveLearnedSkillIds } from '../../skills'
 import { getAvailableToolNames } from './runtimeCache'
 
-export type HumanEventStage = 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
+export type HumanEventStage = 'human_brain' | 'human_learning' | 'human_hand'
 
 const emitHumanStep = (input: {
   ctx: AiRunContext
@@ -52,31 +49,6 @@ const buildStepToolContext = (input: {
     learnedSkillIds: input.state.skills.learnedSkillIds
   })
 })
-
-export const emitDecisionHint = (input: {
-  ctx: AiRunContext
-  taskId?: string
-  source: DecisionHintSource
-  decisionHint: HumanDecisionHint
-}) => {
-  input.ctx.sendEvent({
-    type: 'decision_hint',
-    runId: input.ctx.runId,
-    taskId: input.taskId,
-    source: input.source,
-    code: input.decisionHint.code,
-    detail: renderDecisionHintDetail(input.decisionHint),
-    createdAt: Date.now(),
-    stage:
-      input.source === 'brain'
-        ? 'human_brain'
-        : input.source === 'learning'
-        ? 'human_learning'
-        : input.source === 'hand'
-          ? 'human_hand'
-          : 'human_brain'
-  })
-}
 
 export const emitLatestHumanStepForState = (input: {
   ctx: AiRunContext

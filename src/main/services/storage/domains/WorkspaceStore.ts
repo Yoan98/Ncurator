@@ -35,8 +35,7 @@ const normalizeIndexStatus = (value: unknown): WorkspaceFileIndexStatus => {
 
 const toWorkspaceSource = (row: WorkspaceSourceRow): WorkspaceSource => ({
   id: toRequiredString(row.id),
-  name: toRequiredString(row.name),
-  root_path: toOptionalString(row.root_path),
+  root_path: toRequiredString(row.root_path),
   created_at: toRequiredNumber(row.created_at),
   updated_at: toRequiredNumber(row.updated_at)
 })
@@ -85,7 +84,6 @@ export class WorkspaceStore {
   public async saveWorkspace(workspace: WorkspaceSource): Promise<void> {
     insertOrReplace(this.sqlite, 'workspace_source', {
       id: workspace.id,
-      name: workspace.name,
       root_path: workspace.root_path,
       created_at: workspace.created_at,
       updated_at: workspace.updated_at
@@ -116,7 +114,7 @@ export class WorkspaceStore {
 
   public async updateWorkspace(
     id: string,
-    values: Partial<Pick<WorkspaceSource, 'name' | 'root_path' | 'updated_at'>>
+    values: Partial<Pick<WorkspaceSource, 'root_path' | 'updated_at'>>
   ): Promise<void> {
     updateById(this.sqlite, 'workspace_source', id, values)
   }
@@ -125,7 +123,6 @@ export class WorkspaceStore {
     this.sqlite.transaction(() => {
       this.sqlite.prepare('DELETE FROM workspace_source WHERE id = ?').run(id)
       this.sqlite.prepare('DELETE FROM workspace_file_index WHERE workspace_id = ?').run(id)
-      this.sqlite.prepare('DELETE FROM web_source WHERE workspace_id = ?').run(id)
       this.sqlite.prepare('DELETE FROM document WHERE workspace_id = ?').run(id)
     })
   }
@@ -248,6 +245,28 @@ export class WorkspaceStore {
       `
       )
       .all(workspaceId) as Array<{ index_status?: unknown; count?: unknown }>
+    const summary = { ...EMPTY_SUMMARY }
+    for (const row of rows) {
+      const count = toRequiredNumber(row.count)
+      summary.file_count += count
+      const status = normalizeIndexStatus(row.index_status)
+      if (status === 'indexed') summary.indexed_file_count += count
+      else if (status === 'failed') summary.failed_file_count += count
+      else summary.needs_index_count += count
+    }
+    return summary
+  }
+
+  public async getAggregatedFileSummary(): Promise<WorkspaceFileSummary> {
+    const rows = this.sqlite
+      .prepare(
+        `
+        SELECT index_status, COUNT(*) AS count
+        FROM workspace_file_index
+        GROUP BY index_status
+      `
+      )
+      .all() as Array<{ index_status?: unknown; count?: unknown }>
     const summary = { ...EMPTY_SUMMARY }
     for (const row of rows) {
       const count = toRequiredNumber(row.count)

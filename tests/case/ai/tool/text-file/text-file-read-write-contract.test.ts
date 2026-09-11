@@ -12,7 +12,8 @@ describe('ai tool text-file backend', () => {
       domain: 'ai',
       suite: 'tool',
       groups: ['text-file'],
-      description: '验证普通文本文件创建、范围读取、批量精确编辑、replaceAll、diff、修改记录和保存时生成的 diff 预览。',
+      description:
+        '验证普通文本文件创建、范围读取、批量精确编辑、replaceAll、diff、修改记录和保存时生成的 diff 预览。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -90,15 +91,15 @@ describe('ai tool text-file backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.createResult ===
-            `Created file: ${path.join(runtime.workspaceRoot, 'notes', 'generated.txt')}.` &&
+            `已创建文件：${path.join(runtime.workspaceRoot, 'notes', 'generated.txt')}。` &&
             result.readResult.content === 'const timeout = 1000\nconst filler0 = 0' &&
             result.readResult.startLine === 2 &&
             result.readResult.endLine === 3 &&
             result.readResult.totalLines === 12 &&
             result.editResult ===
-              `Applied 2 edits to ${path.join(runtime.workspaceRoot, 'src', 'config.ts')}.` &&
+              `已在 ${path.join(runtime.workspaceRoot, 'src', 'config.ts')} 中应用 2 处修改。` &&
             result.replaceAllResult ===
-              `Replaced 2 occurrences in ${path.join(runtime.workspaceRoot, 'src', 'config.ts')}.` &&
+              `已在 ${path.join(runtime.workspaceRoot, 'src', 'config.ts')} 中替换 2 处内容。` &&
             result.finalContent.includes('const API_BASE_URL') &&
             result.finalContent.includes('fallback = API_BASE_URL') &&
             result.finalContent.includes('timeout = 3000') &&
@@ -193,16 +194,16 @@ describe('ai tool text-file backend', () => {
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.duplicateError.includes('Found 2 matches') &&
+          result.duplicateError.includes('匹配到 2 处') &&
             result.unchangedAfterFailedEdit &&
             result.replaceResult ===
-              `Replaced 2 occurrences in ${path.join(runtime.workspaceRoot, 'keywords.txt')}.` &&
+              `已在 ${path.join(runtime.workspaceRoot, 'keywords.txt')} 中替换 2 处内容。` &&
             result.hasBom &&
             result.preservedCrlf &&
-            result.noMatchError.includes('No matches found') &&
+            result.noMatchError.includes('找不到 oldText') &&
             result.unchangedAfterNoMatch &&
             result.rewriteResult ===
-              `Rewrote file: ${path.join(runtime.workspaceRoot, 'keywords.txt')}.` &&
+              `已完整改写文件：${path.join(runtime.workspaceRoot, 'keywords.txt')}。` &&
             result.rewritePreservedFormat,
           {
             name: 'text-file-atomic-guard-and-format-preservation',

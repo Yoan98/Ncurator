@@ -1,5 +1,6 @@
 import { access } from 'node:fs/promises'
 import path from 'node:path'
+import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
 import type { AiRunEvent } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -10,20 +11,25 @@ import {
   collectWorkbenchAiRunEvents,
   createWorkbenchNewSession,
   decideWorkbenchApprovalBatch,
+  getAntMessageText,
   getApprovalCard,
   getWorkbenchLocator,
+  getWorkbenchPrefixLocator,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   selectWorkbenchExecutionPermission,
   readWorkbenchExecutionPermissionSelection,
   selectWorkbenchWorkspace,
   setupWorkbenchWithTempWorkspace,
+  waitForLatestAssistantProcess,
   waitForWorkbenchAiEvent,
-  waitForWorkbenchAiRunCompletion
+  waitForWorkbenchAiRunCompletion,
+  workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'approval-batch-flow'
 const DENIED_RUN_SETTLE_TIMEOUT_MS = 120_000
+const DENIED_APPROVAL_WAIT_TIMEOUT_MS = 120_000
 
 const exists = async (filePath: string): Promise<boolean> =>
   await access(filePath)
@@ -38,6 +44,45 @@ const isApprovalBatchRequiredEvent = (
   event: AiRunEvent
 ): event is Extract<AiRunEvent, { type: 'approval_batch_required' }> =>
   event.type === 'approval_batch_required'
+
+const readApprovalWaitingSnapshot = async (
+  page: Page
+): Promise<{
+  waitingVisible: boolean
+  waitingText: string
+  processText: string
+  hasBlockerNotice: boolean
+  antMessageText: string
+}> => {
+  await getApprovalCard(page).waitFor({ state: 'visible', timeout: 30_000 })
+  const processRoot = await waitForLatestAssistantProcess(page)
+  const waiting = page.getByTestId(workbenchSelectors.assistantApprovalWaiting)
+  const waitingVisible = await waiting.isVisible().catch(() => false)
+  const waitingText = waitingVisible ? ((await waiting.textContent()) || '').trim() : ''
+  const processText = ((await processRoot.textContent()) || '').trim()
+  return {
+    waitingVisible,
+    waitingText,
+    processText,
+    hasBlockerNotice: processText.includes('等待批量审核'),
+    antMessageText: await getAntMessageText(page)
+  }
+}
+
+const countApprovalReviewedItems = async (page: Page): Promise<number> => {
+  const processRoot = await waitForLatestAssistantProcess(page)
+  const panels = getWorkbenchPrefixLocator(page, workbenchSelectors.assistantProcessItemPrefix)
+  const panelCount = await panels.count()
+  for (let index = 0; index < panelCount; index += 1) {
+    const panel = panels.nth(index)
+    const className = (await panel.getAttribute('class')) || ''
+    if (!className.includes('group/execution')) continue
+    await panel.evaluate((element) => {
+      element.setAttribute('open', '')
+    })
+  }
+  return await processRoot.getByTestId(workbenchSelectors.assistantApprovalReviewedItem).count()
+}
 
 const waitForDeniedRunToSettle = async (
   runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0],
@@ -114,20 +159,31 @@ describe('workbench run e2e', () => {
           if (!isApprovalBatchRequiredEvent(approvedApproval)) {
             throw new Error('approval approved batch was not required')
           }
+          const approveWaiting = await readApprovalWaitingSnapshot(page)
           await decideWorkbenchApprovalBatch(runtime, page, {
             event: approvedApproval,
             action: 'approve'
           })
+          const antMessageAfterApprove = await getAntMessageText(page)
           const approveEvidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             approveStartedAtMs,
-            setup.env.modelName
+            setup.env.modelName,
+            undefined,
+            { page, blockerPolicy: 'auto_approve' }
           )
           recordWorkbenchAiEvidence(runtime, approveEvidence, 0.8)
+          const approvedReviewedItemCount = await countApprovalReviewedItems(page)
 
+          await createWorkbenchNewSession(page)
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
           await sendWorkbenchMessage(
             page,
-            '请使用终端命令在当前工作区创建 approval-denied.txt，内容写 denied-by-workbench-e2e；如果本次操作未获授权，请不要再次申请执行，直接说明未执行。'
+            [
+              '请使用终端命令在当前工作区创建 approval-denied.txt，内容写 denied-by-workbench-e2e。',
+              '必须真正发起会触发审批的终端写入命令，并等待用户审批；不要声称已有授权或跳过审批。',
+              '如果本次操作未获授权，请不要再次申请执行，直接说明未执行。'
+            ].join('')
           )
           const deniedRunStarted = await waitForWorkbenchAiEvent(runtime, {
             name: 'approval_denied_run_started',
@@ -139,18 +195,21 @@ describe('workbench run e2e', () => {
           }
           const firstDeniedApproval = await waitForWorkbenchAiEvent(runtime, {
             name: 'approval_denied_batch_required',
+            timeoutMs: DENIED_APPROVAL_WAIT_TIMEOUT_MS,
             matches: (event) =>
               isApprovalBatchRequiredEvent(event) && event.runId === deniedRunStarted.runId
           })
           if (!isApprovalBatchRequiredEvent(firstDeniedApproval)) {
             throw new Error('approval denied batch was not required')
           }
+          const deniedWaiting = await readApprovalWaitingSnapshot(page)
           const rejectedBatchIds = new Set([firstDeniedApproval.batchId])
           await decideWorkbenchApprovalBatch(runtime, page, {
             event: firstDeniedApproval,
             action: 'reject'
           })
           await waitForDeniedRunToSettle(runtime, page, deniedRunStarted.runId, rejectedBatchIds)
+          const deniedReviewedItemCount = await countApprovalReviewedItems(page)
 
           await createWorkbenchNewSession(page)
           await selectWorkbenchWorkspace(page, setup.workspaceName)
@@ -209,6 +268,11 @@ describe('workbench run e2e', () => {
             fullAccessHasApprovalEvent: fullAccessEvents.some(isApprovalBatchRequiredEvent),
             fullAccessApprovalCardVisible,
             composerPermissionAfterFullAccessSend,
+            approveWaiting,
+            deniedWaiting,
+            antMessageAfterApprove,
+            approvedReviewedItemCount,
+            deniedReviewedItemCount,
             eventTypes: (await runtime.collectSignals()).aiRunEventEntries.map(
               (entry) => entry.event.type
             )
@@ -230,6 +294,39 @@ describe('workbench run e2e', () => {
               message:
                 '审核模式应保留审批卡片、同意和拒绝行为；完全访问执行同类终端命令时不应产生审批事件或审批卡片，且文件应实际创建，对齐 WB-BLOCKER-001。',
               data: result
+            }
+          )
+          await runtime.assertThat(
+            result.approveWaiting.waitingVisible &&
+              result.approveWaiting.waitingText.includes('等待用户审核中') &&
+              !result.approveWaiting.hasBlockerNotice &&
+              !result.approveWaiting.antMessageText.includes('需要审核') &&
+              result.deniedWaiting.waitingVisible &&
+              result.deniedWaiting.waitingText.includes('等待用户审核中') &&
+              !result.deniedWaiting.hasBlockerNotice &&
+              !result.deniedWaiting.antMessageText.includes('需要审核') &&
+              !result.antMessageAfterApprove.includes('审核已通过'),
+            {
+              name: 'workbench-approval-activity-waiting-and-no-toast',
+              message:
+                '等待审批时 Activity header 应为「等待用户审核中」，且过程流无 blockers、无开始/通过 toast，对齐 WB-BLOCKER-001-AC6。',
+              data: {
+                approveWaiting: result.approveWaiting,
+                deniedWaiting: result.deniedWaiting,
+                antMessageAfterApprove: result.antMessageAfterApprove
+              }
+            }
+          )
+          await runtime.assertThat(
+            result.approvedReviewedItemCount >= 1 && result.deniedReviewedItemCount >= 1,
+            {
+              name: 'workbench-approval-reviewed-activity-items',
+              message:
+                '审完后走过审批的工具行应带审核标记，对齐 WB-BLOCKER-001-AC7。',
+              data: {
+                approvedReviewedItemCount: result.approvedReviewedItemCount,
+                deniedReviewedItemCount: result.deniedReviewedItemCount
+              }
             }
           )
           await assertNoWorkbenchFakeSignals(runtime)

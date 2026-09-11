@@ -8,6 +8,7 @@ import { collectRuntimePackageNames } from '../runtime/bundle-graph.mjs'
 import { traceRuntimeDependencies, writeRuntimeTraceReport } from '../runtime/trace.mjs'
 import { verifyStagedRuntime } from '../runtime/verify-stage.mjs'
 import { obfuscatePackageMain, verifyPackageMainObfuscation } from './obfuscation.mjs'
+import { pruneRuntimePackages } from './prune-runtime.mjs'
 import { installWindowsVcRuntime } from './vc-runtime.mjs'
 import {
   assertNodePtyNativeReleaseReady,
@@ -299,7 +300,7 @@ const stripSourceMapReferences = () => {
   walk(STAGE_DIR)
 }
 
-const pruneNodeModules = () => {
+const pruneNodeModules = (runtimeTrace) => {
   const nodeModules = path.join(STAGE_DIR, 'node_modules')
   const targetPrebuildDirectory = `${process.platform}-${process.arch}`
   const isRequiredRuntimeDirectory = (directory) =>
@@ -399,6 +400,8 @@ const pruneNodeModules = () => {
       }
     }
   }
+
+  return pruneRuntimePackages({ nodeModulesDirectory: nodeModules, runtimeTrace })
 }
 
 const pruneStagedResources = () => {
@@ -512,7 +515,7 @@ const main = async () => {
   if (runtimePackageNames.includes('node-pty')) installPreparedNodePtyNative()
   fs.rmSync(path.join(STAGE_DIR, 'pnpm-lock.yaml'), { force: true })
   pruneCompiledOutput()
-  pruneNodeModules()
+  const runtimePruning = pruneNodeModules(runtimeTrace)
   installWindowsVcRuntime({ stageDir: STAGE_DIR, vcRedistDir: VC_REDIST_DIR })
   pruneStagedResources()
   const packagedDependencies = collectInstalledTopLevelDependencies()
@@ -545,7 +548,7 @@ const main = async () => {
   if (audit.status !== 0) throw new Error('staging package security audit failed')
 
   process.stdout.write(
-    `[package] staging ready for ${process.platform}-${process.arch}; runtime roots: ${runtimePackageNames.join(', ')}; packaged dependencies: ${String(Object.keys(packagedDependencies).length)}; loader smoke: ${String(runtimeVerification.docxDocuments)} DOCX / ${String(runtimeVerification.pdfDocuments)} PDF document(s); obfuscated main: ${String(obfuscation.totals.files)} file(s)\n`
+    `[package] staging ready for ${process.platform}-${process.arch}; runtime roots: ${runtimePackageNames.join(', ')}; packaged dependencies: ${String(Object.keys(packagedDependencies).length)}; targeted pruning: ${(runtimePruning.totalBytes / 1024 / 1024).toFixed(1)} MiB; runtime smoke: ${String(runtimeVerification.docxDocuments)} DOCX / ${String(runtimeVerification.pdfDocuments)} PDF document(s), MathJax SVG, ExcelJS round trip; obfuscated main: ${String(obfuscation.totals.files)} file(s)\n`
   )
 }
 

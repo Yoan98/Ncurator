@@ -3,8 +3,8 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { assertReleaseFragment } from './fragment-contract.mjs'
-import { artifactKey, fixedDownloadKey, statusKey } from './storage-layout.mjs'
-import { createR2Client } from './client.mjs'
+import { artifactKey, statusKey } from './storage-layout.mjs'
+import { createReleaseStorageClient } from '../storage/client.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import { parseReleaseTag } from '../tag.mjs'
 
@@ -18,7 +18,8 @@ try {
   throw new Error('usage: node scripts/release/r2/finalize-windows.mjs --tag <windows-v1.2.3>')
 }
 
-const { aws, bucket, publicBaseUrl, listKeys, deleteKeys } = await createR2Client(ROOT)
+const { aws, bucket, publicBaseUrl, listKeys, deleteKeys, label } =
+  await createReleaseStorageClient(ROOT)
 const workDirectory = await mkdtemp(path.join(os.tmpdir(), `ncurator-windows-${releaseTag}-`))
 
 try {
@@ -39,7 +40,7 @@ try {
         .stdout
     )
     if (Number(remote.ContentLength) !== file.size || remote.Metadata?.sha512 !== file.sha512) {
-      throw new Error(`R2 object does not match release fragment: ${key}`)
+      throw new Error(`${label} object does not match release fragment: ${key}`)
     }
   }
 
@@ -74,31 +75,9 @@ try {
   ])
 
   const installer = fragment.files.find((file) => file.role === 'installer')
-  const sourceKey = artifactKey(fragment, installer.storageName)
-  const downloadKey = fixedDownloadKey(fragment.platform)
-  const downloadName = installer.name
-  const fallbackDownloadName = `Ncurator-${fragment.version}-Windows-x64.exe`
-  const downloadDisposition = `attachment; filename="${fallbackDownloadName}"; filename*=UTF-8''${encodeURIComponent(downloadName)}`
-  await aws([
-    's3api',
-    'copy-object',
-    '--bucket',
-    bucket,
-    '--copy-source',
-    `${bucket}/${sourceKey}`,
-    '--key',
-    downloadKey,
-    '--content-type',
-    'application/octet-stream',
-    '--cache-control',
-    'no-store',
-    '--content-disposition',
-    downloadDisposition,
-    '--metadata-directive',
-    'REPLACE',
-    '--metadata',
-    `sha512=${installer.sha512}`
-  ])
+  const installerKey = artifactKey(fragment, installer.storageName)
+  const installerUrl = `${publicBaseUrl}/${installerKey}`
+  const downloadDisposition = `attachment; filename="${installer.storageName}"; filename*=UTF-8''${encodeURIComponent(installer.name)}`
 
   const manifest = {
     schemaVersion: 2,
@@ -108,8 +87,8 @@ try {
     publishedAt: new Date().toISOString(),
     downloads: {
       x64: {
-        name: downloadName,
-        url: `${publicBaseUrl}/${downloadKey}`,
+        name: installer.name,
+        url: installerUrl,
         size: installer.size,
         sha512: installer.sha512
       }
@@ -129,11 +108,11 @@ try {
     '--no-progress'
   ])
 
-  const [metadataResponse, downloadResponse, manifestResponse] = await Promise.all([
+  const [metadataResponse, installerResponse, manifestResponse] = await Promise.all([
     fetchWithRetry(`${publicBaseUrl}/updates/latest/latest.yml?check=${Date.now()}`, {
       cache: 'no-store'
     }),
-    fetchWithRetry(`${publicBaseUrl}/${downloadKey}?check=${Date.now()}`, {
+    fetchWithRetry(`${installerUrl}?check=${Date.now()}`, {
       method: 'HEAD',
       cache: 'no-store'
     }),
@@ -148,17 +127,17 @@ try {
     throw new Error('public Windows update metadata verification failed')
   }
   if (
-    !downloadResponse.ok ||
-    Number(downloadResponse.headers.get('content-length')) !== installer.size ||
-    String(downloadResponse.headers.get('content-disposition') || '') !== downloadDisposition
+    !installerResponse.ok ||
+    Number(installerResponse.headers.get('content-length')) !== installer.size ||
+    String(installerResponse.headers.get('content-disposition') || '') !== downloadDisposition
   ) {
-    throw new Error('public fixed Windows download verification failed')
+    throw new Error('public Windows artifact download verification failed')
   }
   const publicManifest = manifestResponse.ok ? await manifestResponse.json() : undefined
   if (
     publicManifest?.version !== fragment.version ||
-    publicManifest?.downloads?.x64?.name !== downloadName ||
-    publicManifest?.downloads?.x64?.url !== `${publicBaseUrl}/${downloadKey}`
+    publicManifest?.downloads?.x64?.name !== installer.name ||
+    publicManifest?.downloads?.x64?.url !== installerUrl
   ) {
     throw new Error('public Windows release manifest verification failed')
   }
@@ -171,6 +150,7 @@ try {
       (key) => key !== statusKey(releaseTag, 'windows-x64')
     )
   )
+  removable.push(...(await listKeys('downloads/latest/')))
   removable.push(
     ...(await listKeys('artifacts/v')).filter((key) => /\/Ncurator-windows-[^/]+$/u.test(key))
   )
@@ -179,7 +159,7 @@ try {
   )
   await deleteKeys(removable)
   process.stdout.write(
-    `[release] Windows ${releaseTag} is live at ${publicBaseUrl}/${downloadKey}\n`
+    `[release] Windows ${releaseTag} is live at ${installerUrl}\n`
   )
 } finally {
   await rm(workDirectory, { recursive: true, force: true })

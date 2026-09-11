@@ -60,7 +60,7 @@ const normalizeSource = (value: unknown): AiFileChangeSource | undefined => {
 
 const toRecord = (row: AiFileChangeRow): AiFileChangeRecord => ({
   id: toRequiredString(row.id),
-  sessionId: toRequiredString(row.session_id),
+  partnerId: toRequiredString(row.partner_id),
   runId: toRequiredString(row.run_id),
   status: normalizeStatus(row.status),
   capability: normalizeCapability(row.capability),
@@ -90,7 +90,7 @@ const toRecord = (row: AiFileChangeRow): AiFileChangeRecord => ({
 
 const toWriteRow = (record: AiFileChangeRecord) => ({
   id: record.id,
-  session_id: record.sessionId,
+  partner_id: record.partnerId,
   run_id: record.runId,
   status: record.status,
   capability: record.capability,
@@ -129,12 +129,12 @@ export class AiFileChangeStore {
     filters?: ListAiFileChangeRecordsRequest
   ): Promise<ListAiFileChangeRecordsResponse> {
     const params = {
-      session_id: filters?.sessionId || null,
+      partner_id: filters?.partnerId || null,
       run_id: filters?.runId || null,
       status: filters?.status || null
     }
     const where = buildWhere([
-      filters?.sessionId ? 'session_id = @session_id' : undefined,
+      filters?.partnerId ? 'partner_id = @partner_id' : undefined,
       filters?.runId ? 'run_id = @run_id' : undefined,
       filters?.status ? 'status = @status' : undefined
     ])

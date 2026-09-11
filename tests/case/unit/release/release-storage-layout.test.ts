@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  artifactKey,
-  fixedDownloadKey,
-  statusKey
-} from '../../../../scripts/release/r2/storage-layout.mjs'
+import { artifactKey, statusKey } from '../../../../scripts/release/r2/storage-layout.mjs'
 
 describe('release storage layout', () => {
   it('separates immutable assets and status by platform family', () => {
@@ -16,14 +12,8 @@ describe('release storage layout', () => {
     expect(statusKey('windows-v0.2.0', 'windows-x64')).toBe(
       'release-status/windows/windows-v0.2.0.json'
     )
-    expect(statusKey('mac-v0.1.6', 'macos-x64')).toBe(
-      'release-status/macos/mac-v0.1.6/macos-x64.json'
+    expect(statusKey('mac-v0.1.6', 'macos-arm64')).toBe(
+      'release-status/macos/mac-v0.1.6/macos-arm64.json'
     )
-  })
-
-  it('uses stable direct-download object keys', () => {
-    expect(fixedDownloadKey('windows-x64')).toBe('downloads/latest/windows-x64.exe')
-    expect(fixedDownloadKey('macos-arm64')).toBe('downloads/latest/macos-arm64.dmg')
-    expect(fixedDownloadKey('macos-x64')).toBe('downloads/latest/macos-x64.dmg')
   })
 })

@@ -1,32 +1,35 @@
 import { randomUUID } from 'node:crypto'
-import type { BrainContextBudgetSnapshot } from '../../../../../../shared/types'
+import type { BrainContextBudgetSnapshot, ChatMessageLogEntry } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import {
-  CONTEXT_COMPACTION_MIN_SOURCE_RATIO,
-  CONTEXT_COMPACTION_TRIGGER_RATIO,
-  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+  resolveCompactionTailTokens,
+  resolveCompactionTriggerTokens,
+  resolveContextWindowTokens
 } from '../../constants'
-import { getCompressibleHistoryRounds } from '../../memory/rounds'
-import { renderBrainRoundSection } from '../../shared/historyRenderers'
 import type { HumanRuntimeCache, HumanState } from '../../types'
-import { estimateTextTokens } from '../../utils/tokenEstimate'
+import { hasCompressibleCompactionHistory } from '../../memory/compactionSplit'
+import { estimateMessagesForContext } from '../../memory/multimodal'
+import { buildBrainUserMessage } from '../../prompts/brain'
+import { isCurrentBrainUserMessage } from '../utils/messageTail'
+import { LlmInputTooLongError } from '../../../errors'
+import { buildContextScopeLogEntries } from '../contextScopeDecision'
 
 const buildBudgetSnapshot = (input: {
   cache: HumanRuntimeCache
-  state: HumanState
   contextWindowTokens: number
   compactionTriggerTokens: number
   hasCompressibleHistory: boolean
+  currentMessageTokenEstimate: number
 }): BrainContextBudgetSnapshot => {
   if (input.cache.postCompactionNeedsFreshBrainUsage) {
     return {
       evaluationId: randomUUID(),
       basis: 'post_compaction' as const,
-      budgetTokens: 0,
+      budgetTokens: input.currentMessageTokenEstimate,
       contextWindowTokens: input.contextWindowTokens,
       compactionTriggerTokens: input.compactionTriggerTokens,
       hasCompressibleHistory: input.hasCompressibleHistory,
-      usageAvailable: false
+      usageAvailable: true
     }
   }
 
@@ -38,18 +41,18 @@ const buildBudgetSnapshot = (input: {
     return {
       evaluationId: randomUUID(),
       basis,
-      budgetTokens: 0,
+      budgetTokens: input.currentMessageTokenEstimate,
       contextWindowTokens: input.contextWindowTokens,
       compactionTriggerTokens: input.compactionTriggerTokens,
       hasCompressibleHistory: input.hasCompressibleHistory,
-      usageAvailable: false
+      usageAvailable: true
     }
   }
 
-  const lastBrainRoundCount =
-    input.cache.lastBrainRoundCount ?? input.state.memory.taskRun.rounds.length
-  const newRounds = input.state.memory.taskRun.rounds.slice(lastBrainRoundCount)
-  const deltaTokenEstimate = estimateTextTokens(renderBrainRoundSection(newRounds))
+  const deltaTokenEstimate = Math.max(
+    0,
+    input.currentMessageTokenEstimate - (input.cache.lastBrainMessageTokenEstimate || 0)
+  )
   return {
     evaluationId: randomUUID(),
     basis: 'usage_plus_delta' as const,
@@ -68,30 +71,66 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
     input.ctx.checkCancelled()
     input.cache.currentState = state
 
-    const contextWindowTokens =
-      input.ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-      DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
-    const compactionTriggerTokens = Math.floor(
-      contextWindowTokens * CONTEXT_COMPACTION_TRIGGER_RATIO
+    const contextWindowTokens = resolveContextWindowTokens(
+      input.ctx.humanRuntimeOverrides?.modelContextWindowTokens
     )
-    const targetRounds = getCompressibleHistoryRounds(state)
-    const hasCompressibleHistory = targetRounds.length > 0
-    const compressibleTokenEstimate = estimateTextTokens(renderBrainRoundSection(targetRounds))
-    const minimumCompressibleTokens = Math.floor(
-      contextWindowTokens * CONTEXT_COMPACTION_MIN_SOURCE_RATIO
-    )
+    const compactionTriggerTokens = resolveCompactionTriggerTokens(contextWindowTokens)
+    const messages = input.cache.messages || []
+    const retainTokens = resolveCompactionTailTokens(contextWindowTokens)
+    const currentMessageTokenEstimate = estimateMessagesForContext(messages)
+    const currentUser = messages.find(isCurrentBrainUserMessage)
+    if (currentUser && estimateMessagesForContext([currentUser]) > contextWindowTokens) {
+      throw new LlmInputTooLongError()
+    }
+
+    if (!input.cache.currentUserLogAppended) {
+      const builtText = String(
+        currentUser?.content ||
+          buildBrainUserMessage({
+            state,
+            ctx: input.ctx
+          })
+      ).trim()
+      if (!builtText) {
+        throw new Error('当前 build user 文本为空，无法写入消息日志。')
+      }
+      const entries: ChatMessageLogEntry[] = []
+      if (input.cache.contextScopeDecision) {
+        const records = await input.ctx.loadMessageLog()
+        entries.push(
+          ...buildContextScopeLogEntries({
+            decision: input.cache.contextScopeDecision,
+            records,
+            contextWindowTokens
+          })
+        )
+      }
+      entries.push({
+        kind: 'user',
+        content: builtText,
+        input: state.task.userInput,
+        context: {
+          selectedReferences: input.ctx.referenceScope.selectedReferences,
+          attachments: input.ctx.referenceScope.attachments
+        }
+      })
+      await input.ctx.appendMessageLog(entries)
+      input.cache.currentUserLogAppended = true
+    }
+
+    const records = await input.ctx.loadMessageLog()
+    const hasCompressibleHistory = hasCompressibleCompactionHistory(records, retainTokens)
     const contextBudgetSnapshot = buildBudgetSnapshot({
       cache: input.cache,
-      state,
       contextWindowTokens,
       compactionTriggerTokens,
-      hasCompressibleHistory
+      hasCompressibleHistory,
+      currentMessageTokenEstimate
     })
     const shouldCompact =
       contextBudgetSnapshot.usageAvailable &&
       contextBudgetSnapshot.budgetTokens > compactionTriggerTokens &&
-      hasCompressibleHistory &&
-      compressibleTokenEstimate >= minimumCompressibleTokens
+      hasCompressibleHistory
     const createdAt = Date.now()
     const decision = shouldCompact ? 'compact' : 'continue'
     input.ctx.sendEvent({

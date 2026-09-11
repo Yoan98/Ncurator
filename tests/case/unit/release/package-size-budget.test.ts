@@ -45,20 +45,15 @@ describe('package size budget', () => {
     expect(result).toEqual({ status: 'not-configured', platform: 'win32-x64', metrics: [] })
   })
 
-  it('loads the approved macOS arm64 and x64 baselines', () => {
+  it('loads only the approved macOS arm64 baseline', () => {
     const config = loadPackageSizeBudgetConfig(path.resolve('build/package-size-budgets.json'))
 
     expect(config.platforms['darwin-arm64']).toMatchObject({
-      installedApp: { baselineMiB: 1113.3, hardLimitMiB: 1200 },
-      appAsar: { baselineMiB: 230.9, hardLimitMiB: 252 },
-      dmg: { baselineMiB: 432.9, hardLimitMiB: 480 },
-      zip: { baselineMiB: 418.5, hardLimitMiB: 465 }
+      installedApp: { baselineMiB: 776.2, hardLimitMiB: 870 },
+      appAsar: { baselineMiB: 184.0, hardLimitMiB: 205 },
+      dmg: { baselineMiB: 273.9, hardLimitMiB: 310 },
+      zip: { baselineMiB: 289.1, hardLimitMiB: 325 }
     })
-    expect(config.platforms['darwin-x64']).toMatchObject({
-      installedApp: { baselineMiB: 1145.6, hardLimitMiB: 1230 },
-      appAsar: { baselineMiB: 230.9, hardLimitMiB: 252 },
-      dmg: { baselineMiB: 447.9, hardLimitMiB: 495 },
-      zip: { baselineMiB: 433.3, hardLimitMiB: 480 }
-    })
+    expect(config.platforms['darwin-x64']).toBeUndefined()
   })
 })

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": ["scripts/**/*.{mjs,mts,js}"],
+  "project": [
+    "src/**/*.{ts,tsx}",
+    "src/**/*.d.ts",
+    "scripts/**/*.{mjs,mts,js}",
+    "tests/**/*.{ts,tsx}"
+  ],
+  "ignoreDependencies": ["tailwindcss", "prebuild-install", "node-abi", "7zip-bin"],
+  "ignoreBinaries": ["taskkill.exe"]
+}

@@ -17,6 +17,10 @@ import {
 import { decodeTextFile } from '../human/tools/textFile/textFileUtils'
 import { TerminalCommandChangeTracker, WorkspaceObjectStore } from './WorkspaceChangeTracker'
 import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE } from '../../../../shared/constants'
+import {
+  ensurePartnerRuntimeDirs,
+  getPartnerObjectsDir
+} from '../../assets/WorkspaceAssetService'
 
 const FORCE_REVERT_WARNING =
   '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。'
@@ -35,9 +39,10 @@ export class AiFileChangeService {
   public async beginTerminalCommandTracking(input: {
     commandId: string
     runId: string
-    sessionId: string
-    workspaceRootPath: string
+    partnerId: string
+    cwd: string
     command: string
+    workspaceRoots: string[]
   }): Promise<void> {
     await this.terminalCommandChangeTracker.beginCommand(input)
   }
@@ -57,9 +62,9 @@ export class AiFileChangeService {
     )
   }
 
-  public async saveRecord(record: AiFileChangeRecord, workspaceRootPath?: string): Promise<void> {
+  public async saveRecord(record: AiFileChangeRecord): Promise<void> {
     const existing = (await this.store.getRecord({ changeId: record.id })).record
-    const next = await this.finalizeRecord(record, existing, workspaceRootPath)
+    const next = await this.finalizeRecord(record, existing)
     await this.store.saveRecord(next)
     if (
       next.status === 'applied' &&
@@ -106,8 +111,7 @@ export class AiFileChangeService {
 
   private async finalizeRecord(
     record: AiFileChangeRecord,
-    existing: AiFileChangeRecord | undefined,
-    workspaceRootPath?: string
+    existing: AiFileChangeRecord | undefined
   ): Promise<AiFileChangeRecord> {
     const now = Date.now()
     const next: AiFileChangeRecord = {
@@ -122,13 +126,11 @@ export class AiFileChangeService {
     }
 
     const outputPath = next.afterPath || next.path
-    if (
-      workspaceRootPath &&
-      next.operation !== 'deleted' &&
-      !next.afterSnapshotPath &&
-      (await fileExists(outputPath))
-    ) {
-      const output = await new WorkspaceObjectStore(workspaceRootPath).putFile(outputPath)
+    if (next.operation !== 'deleted' && !next.afterSnapshotPath && (await fileExists(outputPath))) {
+      await ensurePartnerRuntimeDirs(next.partnerId)
+      const output = await new WorkspaceObjectStore(getPartnerObjectsDir(next.partnerId)).putFile(
+        outputPath
+      )
       next.afterSnapshotPath = output.objectPath
       next.afterObjectHash = output.hash
       next.afterChecksum = output.hash
@@ -172,15 +174,10 @@ export class AiFileChangeService {
       : ''
     const artifact = createTextFileDiffArtifact({ before, after })
     const counts = countTextFileDiffLines(artifact)
-    const objectReference = record.afterSnapshotPath || record.beforeSnapshotPath
-    if (!objectReference) throw new Error('文件修改对象不存在')
-    const marker = `${path.sep}.ncurator${path.sep}objects${path.sep}`
-    const markerIndex = objectReference.indexOf(marker)
-    if (markerIndex < 0) throw new Error('文件修改对象路径无效')
-    const workspaceRootPath = objectReference.slice(0, markerIndex)
-    const previewObject = await new WorkspaceObjectStore(workspaceRootPath).putBuffer(
-      Buffer.from(`${JSON.stringify(artifact)}\n`, 'utf-8')
-    )
+    await ensurePartnerRuntimeDirs(record.partnerId)
+    const previewObject = await new WorkspaceObjectStore(
+      getPartnerObjectsDir(record.partnerId)
+    ).putBuffer(Buffer.from(`${JSON.stringify(artifact)}\n`, 'utf-8'))
     const updated: AiFileChangeRecord = {
       ...record,
       insertCount: counts.insertCount,

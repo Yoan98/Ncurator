@@ -4,11 +4,13 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
 import type { JsonObject } from '../../../../../../shared/types'
-import { isPathInsideRoot, resolveToolPath } from '../terminal/commandPolicy'
+import { resolveToolPath } from '../terminal/commandPolicy'
+import { getPartnerRuntimeDir } from '../../../../assets/WorkspaceAssetService'
 import { createToolEventEmitter } from '../utils/toolEvents'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { ExcelCapabilityToolsInput, ExcelRuntimeState, ExcelToolRuntime } from './types'
-import type { ExcelEditInput } from './schemas'
+import type { ExcelEditInput, ExcelReadInput, ExcelStyle } from './toolSchemas'
+import { EXCEL_SEARCH_MAX_MATCHES } from './constants'
 
 const EXCEL_READ_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xltx', '.xltm'])
 const EXCEL_WRITE_EXTENSIONS = new Set(['.xlsx'])
@@ -36,53 +38,22 @@ const getStyleId = (cell: ExcelJS.Cell): number => {
   return typeof value === 'number' ? value : 0
 }
 
-const getTableNames = (sheet: ExcelJS.Worksheet): string[] => {
-  const candidate: unknown = sheet
-  if (!candidate || typeof candidate !== 'object' || !('tables' in candidate)) return []
-  const tables = (candidate as { tables?: unknown }).tables
-  return tables && typeof tables === 'object' ? Object.keys(tables) : []
+const getFormula = (value: unknown): string | undefined => {
+  if (!value || typeof value !== 'object') return undefined
+  if ('formula' in value) {
+    const formula = String((value as { formula?: unknown }).formula || '')
+    return formula || undefined
+  }
+  if ('sharedFormula' in value) {
+    const formula = String((value as { sharedFormula?: unknown }).sharedFormula || '')
+    return formula || undefined
+  }
+  return undefined
 }
 
-const getTableColumns = (table: ExcelJS.Table): Array<{ name: string }> => {
-  const candidate: unknown = table
-  if (!candidate || typeof candidate !== 'object' || !('table' in candidate)) return []
-  const model = (candidate as { table?: { columns?: unknown } }).table
-  if (!model || !Array.isArray(model.columns)) return []
-  return model.columns.filter((column): column is { name: string } =>
-    Boolean(
-      column &&
-      typeof column === 'object' &&
-      typeof (column as { name?: unknown }).name === 'string'
-    )
-  )
-}
-
-const getFormula = (value: unknown): string | undefined =>
-  value && typeof value === 'object' && 'formula' in value
-    ? String((value as { formula?: unknown }).formula || '') || undefined
-    : undefined
-
-const getCellType = (cell: ExcelJS.Cell): string => {
-  if (getFormula(cell.value)) return 'formula'
-  if (cell.value === null || cell.value === undefined || cell.value === '') return 'blank'
-  if (typeof cell.value === 'number') return 'number'
-  if (typeof cell.value === 'boolean') return 'boolean'
-  if (cell.value instanceof Date) return 'date'
-  return 'text'
-}
-
-const getCellSnapshot = (cell: ExcelJS.Cell) => ({
-  address: cell.address,
-  value: cell.value,
-  displayValue: cell.text,
-  formula: getFormula(cell.value),
-  type: getCellType(cell),
-  numberFormat: cell.numFmt || undefined
-})
-
-const usedRange = (sheet: ExcelJS.Worksheet): string | null => {
-  if (sheet.actualRowCount === 0 || sheet.actualColumnCount === 0) return null
-  return `A1:${sheet.getCell(sheet.rowCount, sheet.columnCount).address}`
+const getFormulaResult = (value: unknown): unknown => {
+  if (!value || typeof value !== 'object' || !('result' in value)) return undefined
+  return (value as { result?: unknown }).result
 }
 
 const columnNumber = (letters: string): number =>
@@ -100,6 +71,12 @@ const columnLetters = (column: number): string => {
     value = Math.floor((value - 1) / 26)
   }
   return result
+}
+
+const usedRange = (sheet: ExcelJS.Worksheet): string | null => {
+  if (sheet.actualRowCount === 0 || sheet.actualColumnCount === 0) return null
+  const dimensions = sheet.dimensions
+  return `${columnLetters(dimensions.left)}${dimensions.top}:${sheet.getCell(dimensions.bottom, dimensions.right).address}`
 }
 
 const parseRange = (
@@ -665,14 +642,17 @@ const buildDiffWorkbook = async (input: {
   return { bytes: Buffer.from(bytes), changes }
 }
 
-const applyStyle = (cell: ExcelJS.Cell, style: Record<string, unknown> | undefined): void => {
+const applyStyle = (cell: ExcelJS.Cell, style: ExcelStyle | undefined): void => {
   if (!style) return
+  const currentFont = cell.font || {}
   if (typeof style.bold === 'boolean' || typeof style.italic === 'boolean' || style.fontColor) {
     cell.font = {
-      ...cell.font,
-      bold: typeof style.bold === 'boolean' ? style.bold : cell.font.bold,
-      italic: typeof style.italic === 'boolean' ? style.italic : cell.font.italic,
-      color: style.fontColor ? { argb: String(style.fontColor).replace(/^#/, '') } : cell.font.color
+      ...currentFont,
+      bold: typeof style.bold === 'boolean' ? style.bold : currentFont.bold,
+      italic: typeof style.italic === 'boolean' ? style.italic : currentFont.italic,
+      color: style.fontColor
+        ? { argb: String(style.fontColor).replace(/^#/, '') }
+        : currentFont.color
     }
   }
   if (style.fillColor)
@@ -683,10 +663,239 @@ const applyStyle = (cell: ExcelJS.Cell, style: Record<string, unknown> | undefin
     }
   if (style.numberFormat) cell.numFmt = String(style.numberFormat)
   if (style.horizontalAlignment || style.verticalAlignment) {
+    const currentAlignment = cell.alignment || {}
     cell.alignment = {
-      ...cell.alignment,
+      ...currentAlignment,
       horizontal: style.horizontalAlignment as ExcelJS.Alignment['horizontal'],
       vertical: style.verticalAlignment as ExcelJS.Alignment['vertical']
+    }
+  }
+}
+
+const toColumnNumber = (column: string | number): number =>
+  typeof column === 'number' ? column : columnNumber(String(column))
+
+const requireSheet = (workbook: ExcelJS.Workbook, sheetName: string): ExcelJS.Worksheet => {
+  const sheet = workbook.getWorksheet(sheetName)
+  if (!sheet) throw new Error(`工作表不存在: ${sheetName}`)
+  return sheet
+}
+
+const serializeLiteral = (value: unknown, fallbackText: string): string | number | boolean | null => {
+  if (value === null || value === undefined || value === '') return null
+  if (typeof value === 'number' || typeof value === 'boolean') return value
+  if (typeof value === 'string') return value
+  if (value instanceof Date) return value.toISOString()
+  if (typeof value === 'object' && 'text' in value) {
+    const text = (value as { text?: unknown }).text
+    if (typeof text === 'string') return text
+  }
+  if (typeof value === 'object' && 'richText' in value) {
+    const richText = (value as { richText?: Array<{ text?: string }> }).richText
+    if (Array.isArray(richText)) return richText.map((part) => part.text || '').join('')
+  }
+  return fallbackText || null
+}
+
+const projectRangeCell = (cell: ExcelJS.Cell): string | number | boolean | null | { formula: string; value?: string | number | boolean | null } => {
+  const formula = getFormula(cell.value)
+  if (formula) {
+    const result = getFormulaResult(cell.value)
+    const serialized = result === undefined ? undefined : serializeLiteral(result, cell.text)
+    return serialized === undefined || serialized === null
+      ? { formula }
+      : { formula, value: serialized }
+  }
+  return serializeLiteral(cell.value, cell.text)
+}
+
+const projectStyleCell = (
+  cell: ExcelJS.Cell
+): { bold?: boolean; fontColor?: string; fillColor?: string; numberFormat?: string } | null => {
+  const style: { bold?: boolean; fontColor?: string; fillColor?: string; numberFormat?: string } = {}
+  if (cell.font?.bold) style.bold = true
+  const fontColor = cell.font?.color?.argb
+  if (fontColor) style.fontColor = fontColor
+  const fill = cell.fill
+  if (fill && fill.type === 'pattern' && fill.fgColor?.argb) style.fillColor = fill.fgColor.argb
+  if (cell.numFmt) style.numberFormat = cell.numFmt
+  return Object.keys(style).length > 0 ? style : null
+}
+
+const readGrid = <T>(
+  sheet: ExcelJS.Worksheet,
+  range: { top: number; left: number; bottom: number; right: number },
+  project: (cell: ExcelJS.Cell) => T
+): T[][] => {
+  const rows: T[][] = []
+  for (let row = range.top; row <= range.bottom; row += 1) {
+    const cells: T[] = []
+    for (let column = range.left; column <= range.right; column += 1) {
+      cells.push(project(sheet.getCell(row, column)))
+    }
+    rows.push(cells)
+  }
+  return rows
+}
+
+const toCellValue = (value: unknown): ExcelJS.CellValue => {
+  if (value && typeof value === 'object' && 'formula' in value) {
+    const formula = String((value as { formula: string }).formula).replace(/^=/, '')
+    return { formula }
+  }
+  return value as ExcelJS.CellValue
+}
+
+const applyOperation = (input: {
+  workbook: ExcelJS.Workbook
+  operation: ExcelEditInput
+  sheetLineage: Map<string, string | null>
+  forcedChanges: CellChange[]
+}): void => {
+  const { workbook, operation, sheetLineage, forcedChanges } = input
+  if (operation.type === 'add_sheet') {
+    if (workbook.getWorksheet(operation.sheetName))
+      throw new Error(`工作表已存在: ${operation.sheetName}`)
+    workbook.addWorksheet(operation.sheetName)
+    sheetLineage.set(operation.sheetName, null)
+    forcedChanges.push({ sheetName: operation.sheetName, address: 'A1', kind: 'added' })
+    return
+  }
+  if (operation.type === 'delete_sheet') {
+    const sheet = requireSheet(workbook, operation.sheetName)
+    if (workbook.worksheets.length === 1) throw new Error('Excel 最终必须至少保留一个工作表')
+    workbook.removeWorksheet(sheet.id)
+    sheetLineage.delete(sheet.name)
+    forcedChanges.push({ sheetName: sheet.name, address: 'A1', kind: 'deleted' })
+    return
+  }
+  if (operation.type === 'rename_sheet') {
+    const sheet = requireSheet(workbook, operation.sheetName)
+    if (workbook.getWorksheet(operation.newName))
+      throw new Error(`工作表已存在: ${operation.newName}`)
+    const previousName = sheet.name
+    sheet.name = operation.newName
+    const baselineName = sheetLineage.get(previousName) ?? null
+    sheetLineage.delete(previousName)
+    sheetLineage.set(sheet.name, baselineName)
+    forcedChanges.push(
+      { sheetName: previousName, address: 'A1', kind: 'deleted' },
+      { sheetName: sheet.name, address: 'A1', kind: 'added' }
+    )
+    return
+  }
+
+  const sheet = requireSheet(workbook, operation.sheetName)
+  if (operation.type === 'set_range') {
+    const range = parseRange(operation.range)
+    const expectedRows = range.bottom - range.top + 1
+    const expectedColumns = range.right - range.left + 1
+    const rowCount = operation.values.length
+    if (rowCount !== expectedRows || operation.values.some((row) => row.length !== expectedColumns)) {
+      throw new Error(
+        `set_range 的 values 行列必须与 range ${operation.range} 一致（${String(expectedRows)}x${String(expectedColumns)}）`
+      )
+    }
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex += 1) {
+      const values = operation.values[rowIndex]
+      for (let columnIndex = 0; columnIndex < values.length; columnIndex += 1) {
+        const cell = sheet.getCell(range.top + rowIndex, range.left + columnIndex)
+        cell.value = toCellValue(values[columnIndex])
+        applyStyle(cell, operation.style)
+      }
+    }
+    return
+  }
+  if (operation.type === 'clear_range') {
+    const range = parseRange(operation.range)
+    for (let row = range.top; row <= range.bottom; row += 1) {
+      for (let column = range.left; column <= range.right; column += 1) {
+        sheet.getCell(row, column).value = null
+      }
+    }
+    return
+  }
+  if (operation.type === 'merge_cells') {
+    const firstCell = sheet.getCell(operation.range.split(':')[0])
+    const wasMerged = firstCell.isMerged
+    sheet.mergeCells(operation.range)
+    if (!wasMerged)
+      forcedChanges.push({ sheetName: sheet.name, address: firstCell.address, kind: 'modified' })
+    return
+  }
+  if (operation.type === 'unmerge_cells') {
+    const firstCell = sheet.getCell(operation.range.split(':')[0])
+    if (!firstCell.isMerged) return
+    sheet.unMergeCells(operation.range)
+    forcedChanges.push({ sheetName: sheet.name, address: firstCell.address, kind: 'modified' })
+    return
+  }
+  if (operation.type === 'insert_rows') {
+    sheet.spliceRows(operation.startRow, 0, ...Array.from({ length: operation.count }, () => []))
+    return
+  }
+  if (operation.type === 'delete_rows') {
+    sheet.spliceRows(operation.startRow, operation.count)
+    return
+  }
+  if (operation.type === 'insert_columns') {
+    const startColumn = toColumnNumber(operation.startColumn)
+    sheet.spliceColumns(startColumn, 0, ...Array.from({ length: operation.count }, () => []))
+    return
+  }
+  if (operation.type === 'delete_columns') {
+    sheet.spliceColumns(toColumnNumber(operation.startColumn), operation.count)
+    return
+  }
+  if (operation.type === 'set_style') {
+    const range = parseRange(operation.range)
+    for (let row = range.top; row <= range.bottom; row += 1) {
+      for (let column = range.left; column <= range.right; column += 1) {
+        applyStyle(sheet.getCell(row, column), operation.style)
+      }
+    }
+    return
+  }
+  if (operation.type === 'set_column_width') {
+    const targetColumn = sheet.getColumn(operation.column)
+    const previousWidth = targetColumn.width
+    targetColumn.width = operation.width
+    const column =
+      typeof operation.column === 'number'
+        ? columnLetters(operation.column)
+        : String(operation.column).toUpperCase()
+    if (previousWidth !== targetColumn.width)
+      forcedChanges.push({ sheetName: sheet.name, address: `${column}1`, kind: 'modified' })
+    return
+  }
+  if (operation.type === 'set_row_height') {
+    const row = sheet.getRow(operation.row)
+    const previousHeight = row.height
+    row.height = operation.height
+    if (previousHeight !== row.height)
+      forcedChanges.push({
+        sheetName: sheet.name,
+        address: `A${String(operation.row)}`,
+        kind: 'modified'
+      })
+    return
+  }
+  const range = parseRange(operation.range)
+  for (let column = range.left; column <= range.right; column += 1) {
+    let maxLength = 8
+    for (let row = range.top; row <= range.bottom; row += 1) {
+      const text = sheet.getCell(row, column).text || ''
+      maxLength = Math.max(maxLength, Array.from(text).length + 2)
+    }
+    const targetColumn = sheet.getColumn(column)
+    const previousWidth = targetColumn.width
+    targetColumn.width = Math.min(maxLength, 60)
+    if (previousWidth !== targetColumn.width) {
+      forcedChanges.push({
+        sheetName: sheet.name,
+        address: `${columnLetters(column)}1`,
+        kind: 'modified'
+      })
     }
   }
 }
@@ -718,97 +927,76 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     return { workbook: await loadWorkbook(bytes), bytes }
   }
 
-  const outline = async (args: { sourcePath: string }): Promise<JsonObject> => {
+  const read = async (args: ExcelReadInput): Promise<JsonObject> => {
     const sourcePath = resolvePath(args.sourcePath)
     const { workbook } = await getWorkbook(sourcePath)
-    const sheets = workbook.worksheets.map((sheet) => ({
-      name: sheet.name,
-      index: workbook.worksheets.indexOf(sheet),
-      range: usedRange(sheet),
-      rowCount: sheet.actualRowCount,
-      columnCount: sheet.actualColumnCount,
-      formulaCount: collectCellMap(workbook).size
-        ? Array.from(collectCellMap(workbook).values()).filter(
-            (cell) => cell.worksheet.name === sheet.name && Boolean(getFormula(cell.value))
-          ).length
-        : 0,
-      tables: getTableNames(sheet)
-    }))
-    return toJsonObject({ sourcePath, sheetCount: sheets.length, sheets })
-  }
-
-  const search = async (args: {
-    sourcePath: string
-    query: string
-    mode?: 'literal' | 'regex'
-    scope?: { sheetNames?: string[] }
-  }): Promise<JsonObject> => {
-    const sourcePath = resolvePath(args.sourcePath)
-    const { workbook } = await getWorkbook(sourcePath)
-    const matcher = args.mode === 'regex' ? new RegExp(args.query, 'i') : null
-    const isMatch = (value: string): boolean =>
-      matcher ? matcher.test(value) : value.toLowerCase().includes(args.query.toLowerCase())
-    const names = args.scope?.sheetNames ? new Set(args.scope.sheetNames) : null
-    const matches: JsonObject[] = []
-    for (const sheet of workbook.worksheets) {
-      if (names && !names.has(sheet.name)) continue
-      if (isMatch(sheet.name)) {
-        matches.push(toJsonObject({ matchType: 'sheet_name', sheetName: sheet.name }))
-      }
-      for (const tableName of getTableNames(sheet)) {
-        const table = sheet.getTable(tableName)
-        if (isMatch(tableName)) {
-          matches.push(toJsonObject({ matchType: 'table_name', sheetName: sheet.name, tableName }))
-        }
-        for (const column of getTableColumns(table)) {
-          if (isMatch(column.name)) {
-            matches.push(
-              toJsonObject({
-                matchType: 'table_column',
-                sheetName: sheet.name,
-                tableName,
-                columnName: column.name
-              })
-            )
+    if (args.type === 'workbook') {
+      return toJsonObject({
+        sheets: workbook.worksheets.map((sheet) => ({
+          name: sheet.name,
+          range: usedRange(sheet),
+          rowCount: sheet.actualRowCount,
+          columnCount: sheet.actualColumnCount
+        }))
+      })
+    }
+    if (args.type === 'search') {
+      const matcher = args.mode === 'regex' ? new RegExp(args.query, 'i') : null
+      const isMatch = (value: string): boolean =>
+        matcher ? matcher.test(value) : value.toLowerCase().includes(args.query.toLowerCase())
+      const matches: Array<{
+        sheetName: string
+        address: string
+        value?: string | number | boolean | null
+        formula?: string
+      }> = []
+      let totalMatchCount = 0
+      for (const sheet of workbook.worksheets) {
+        if (args.sheetName && sheet.name !== args.sheetName) continue
+        const maxRow = Math.max(sheet.rowCount, 1)
+        const maxColumn = Math.max(sheet.columnCount, 1)
+        for (let row = 1; row <= maxRow; row += 1) {
+          for (let column = 1; column <= maxColumn; column += 1) {
+            const cell = sheet.getCell(row, column)
+            const formula = getFormula(cell.value)
+            const matched = isMatch(cell.text) || isMatch(formula || '')
+            if (!matched) continue
+            totalMatchCount += 1
+            if (matches.length < EXCEL_SEARCH_MAX_MATCHES) {
+              matches.push(
+                formula
+                  ? { sheetName: sheet.name, address: cell.address, formula }
+                  : {
+                      sheetName: sheet.name,
+                      address: cell.address,
+                      value: serializeLiteral(cell.value, cell.text)
+                    }
+              )
+            }
           }
         }
       }
-      const maxRow = Math.max(sheet.rowCount, 1)
-      const maxColumn = Math.max(sheet.columnCount, 1)
-      for (let row = 1; row <= maxRow; row += 1) {
-        for (let column = 1; column <= maxColumn; column += 1) {
-          const cell = sheet.getCell(row, column)
-          const matched = isMatch(cell.text) || isMatch(getFormula(cell.value) || '')
-          if (!matched) continue
-          matches.push(toJsonObject({ sheetName: sheet.name, ...getCellSnapshot(cell) }))
-          if (matches.length >= 500)
-            return toJsonObject({ sourcePath, query: args.query, matches, truncated: true })
-        }
-      }
+      return toJsonObject({
+        totalMatchCount,
+        returnedMatchCount: matches.length,
+        matches
+      })
     }
-    return toJsonObject({ sourcePath, query: args.query, matches, truncated: false })
-  }
 
-  const readCells = async (args: {
-    sourcePath: string
-    ranges: Array<{ sheetName: string; range: string }>
-  }): Promise<JsonObject> => {
-    const sourcePath = resolvePath(args.sourcePath)
-    const { workbook } = await getWorkbook(sourcePath)
-    const results: JsonObject[] = []
-    for (const request of args.ranges) {
-      const sheet = workbook.getWorksheet(request.sheetName)
-      if (!sheet) throw new Error(`工作表不存在: ${request.sheetName}`)
-      const range = parseRange(request.range)
-      for (let row = range.top; row <= range.bottom; row += 1) {
-        for (let column = range.left; column <= range.right; column += 1) {
-          results.push(
-            toJsonObject({ sheetName: sheet.name, ...getCellSnapshot(sheet.getCell(row, column)) })
-          )
-        }
-      }
+    const sheet = requireSheet(workbook, args.sheetName)
+    const range = parseRange(args.range)
+    if (args.type === 'style') {
+      return toJsonObject({
+        sheetName: sheet.name,
+        range: args.range,
+        rows: readGrid(sheet, range, projectStyleCell)
+      })
     }
-    return toJsonObject({ sourcePath, cells: results })
+    return toJsonObject({
+      sheetName: sheet.name,
+      range: args.range,
+      rows: readGrid(sheet, range, projectRangeCell)
+    })
   }
 
   const edit = async (args: ExcelEditInput): Promise<JsonObject> => {
@@ -833,109 +1021,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
         workbook.worksheets.map((sheet) => [sheet.name, sheet.name] as const)
     )
     const forcedChanges: CellChange[] = []
-    for (const operation of args.actions) {
-      if (operation.type === 'add_sheet') {
-        if (workbook.getWorksheet(String(operation.sheetName)))
-          throw new Error(`工作表已存在: ${String(operation.sheetName)}`)
-        workbook.addWorksheet(String(operation.sheetName))
-        sheetLineage.set(String(operation.sheetName), null)
-        forcedChanges.push({
-          sheetName: String(operation.sheetName),
-          address: 'A1',
-          kind: 'added'
-        })
-      } else if (operation.type === 'delete_sheet') {
-        const sheet = workbook.getWorksheet(String(operation.sheetName))
-        if (!sheet) throw new Error(`工作表不存在: ${String(operation.sheetName)}`)
-        if (workbook.worksheets.length === 1) throw new Error('Excel 最终必须至少保留一个工作表')
-        workbook.removeWorksheet(sheet.id)
-        sheetLineage.delete(sheet.name)
-        forcedChanges.push({ sheetName: sheet.name, address: 'A1', kind: 'deleted' })
-      } else if (operation.type === 'rename_sheet') {
-        const sheet = workbook.getWorksheet(String(operation.sheetName))
-        if (!sheet) throw new Error(`工作表不存在: ${String(operation.sheetName)}`)
-        if (workbook.getWorksheet(String(operation.newName)))
-          throw new Error(`工作表已存在: ${String(operation.newName)}`)
-        const previousName = sheet.name
-        sheet.name = String(operation.newName)
-        const baselineName = sheetLineage.get(previousName) ?? null
-        sheetLineage.delete(previousName)
-        sheetLineage.set(sheet.name, baselineName)
-        forcedChanges.push(
-          { sheetName: previousName, address: 'A1', kind: 'deleted' },
-          { sheetName: sheet.name, address: 'A1', kind: 'added' }
-        )
-      } else if (operation.type === 'merge_cells') {
-        const sheet = workbook.getWorksheet(String(operation.sheetName))
-        if (!sheet) throw new Error(`工作表不存在: ${String(operation.sheetName)}`)
-        const firstCell = sheet.getCell(String(operation.range).split(':')[0])
-        const wasMerged = firstCell.isMerged
-        sheet.mergeCells(String(operation.range))
-        if (!wasMerged)
-          forcedChanges.push({
-            sheetName: sheet.name,
-            address: firstCell.address,
-            kind: 'modified'
-          })
-      } else if (operation.type === 'set_range') {
-        const sheet = workbook.getWorksheet(String(operation.sheetName))
-        if (!sheet) throw new Error(`工作表不存在: ${String(operation.sheetName)}`)
-        const start = parseRange(String(operation.startCell))
-        for (let rowIndex = 0; rowIndex < operation.values.length; rowIndex += 1) {
-          const values = operation.values[rowIndex]
-          for (let columnIndex = 0; columnIndex < values.length; columnIndex += 1) {
-            const cell = sheet.getCell(start.top + rowIndex, start.left + columnIndex)
-            const value = values[columnIndex]
-            cell.value =
-              value && typeof value === 'object' && 'formula' in value
-                ? { formula: String(value.formula) }
-                : (value as ExcelJS.CellValue)
-            applyStyle(cell, operation.style as Record<string, unknown> | undefined)
-          }
-        }
-      } else if (operation.type === 'clear_range') {
-        const sheet = workbook.getWorksheet(String(operation.sheetName))
-        if (!sheet) throw new Error(`工作表不存在: ${String(operation.sheetName)}`)
-        const range = parseRange(String(operation.range))
-        for (let row = range.top; row <= range.bottom; row += 1) {
-          for (let column = range.left; column <= range.right; column += 1) {
-            sheet.getCell(row, column).value = null
-          }
-        }
-      } else if (operation.type === 'insert_rows' || operation.type === 'delete_rows') {
-        const sheet = workbook.getWorksheet(String(operation.sheetName))
-        if (!sheet) throw new Error(`工作表不存在: ${String(operation.sheetName)}`)
-        const count = Number(operation.count)
-        sheet.spliceRows(
-          Number(operation.startRow),
-          operation.type === 'delete_rows' ? count : 0,
-          ...Array.from({ length: operation.type === 'insert_rows' ? count : 0 }, () => [])
-        )
-      } else if (operation.type === 'set_column_width') {
-        const sheet = workbook.getWorksheet(String(operation.sheetName))
-        if (!sheet) throw new Error(`工作表不存在: ${String(operation.sheetName)}`)
-        const targetColumn = sheet.getColumn(operation.column as string | number)
-        const previousWidth = targetColumn.width
-        targetColumn.width = Number(operation.width)
-        const column =
-          typeof operation.column === 'number'
-            ? columnLetters(operation.column)
-            : String(operation.column).toUpperCase()
-        if (previousWidth !== targetColumn.width)
-          forcedChanges.push({ sheetName: sheet.name, address: `${column}1`, kind: 'modified' })
-      } else {
-        const sheet = workbook.getWorksheet(String(operation.sheetName))
-        if (!sheet) throw new Error(`工作表不存在: ${String(operation.sheetName)}`)
-        const cell = sheet.getCell(String(operation.address))
-        if (operation.type === 'delete_cell') {
-          cell.value = null
-        } else {
-          if (operation.formula !== undefined) cell.value = { formula: String(operation.formula) }
-          else cell.value = operation.value as ExcelJS.CellValue
-          applyStyle(cell, operation.style as Record<string, unknown> | undefined)
-        }
-      }
-    }
+    applyOperation({ workbook, operation: args, sheetLineage, forcedChanges })
     if (workbook.worksheets.length === 0) throw new Error('Excel 最终必须至少保留一个工作表')
     workbook.calcProperties.fullCalcOnLoad = true
     const afterBytes = Buffer.from(await workbook.xlsx.writeBuffer())
@@ -945,31 +1031,8 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       compareWorkbooks(beforeWorkbook, afterWorkbook),
       forcedChanges
     )
-    if (operationChanges.length === 0)
-      return toJsonObject({ sourcePath, changed: false, changes: [], postWriteReadback: [] })
-    const postWriteReadback = operationChanges.map((change) => {
-      const cell = afterWorkbook.getWorksheet(change.sheetName)?.getCell(change.address)
-      return cell
-        ? { sheetName: change.sheetName, ...getCellSnapshot(cell) }
-        : {
-            sheetName: change.sheetName,
-            address: change.address,
-            value: null,
-            displayValue: '',
-            type: 'blank'
-          }
-    })
-    if (!isPathInsideRoot(sourcePath, input.workspaceRootPath)) {
-      await atomicReplace(sourcePath, afterBytes)
-      state.currentBytesByPath.set(sourcePath, afterBytes)
-      state.sheetLineageByPath.set(sourcePath, sheetLineage)
-      return toJsonObject({
-        sourcePath,
-        changed: true,
-        changes: operationChanges,
-        postWriteReadback
-      })
-    }
+    if (operationChanges.length === 0) return toJsonObject({})
+    await fs.mkdir(path.dirname(sourcePath), { recursive: true })
     const baseline = state.baselineBytesByPath.get(sourcePath)
     const baselineWorkbook = baseline ? await loadWorkbook(baseline) : null
     const diffResult = await buildDiffWorkbook({
@@ -980,8 +1043,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     const cumulativeChanges = diffResult.changes
     const changeId = state.recordsByPath.get(sourcePath)?.id || randomUUID()
     const snapshotRoot = path.join(
-      input.workspaceRootPath,
-      '.ncurator',
+      getPartnerRuntimeDir(input.partnerId),
       'file-changes',
       input.runId
     )
@@ -996,7 +1058,7 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
     const now = Date.now()
     const record = {
       id: changeId,
-      sessionId: input.sessionId,
+        partnerId: input.partnerId,
       runId: input.runId,
       status: 'applied' as const,
       capability: 'excel' as const,
@@ -1043,21 +1105,13 @@ export const createExcelToolRuntime = (input: ExcelCapabilityToolsInput): ExcelT
       insertCount: record.insertCount,
       deleteCount: record.deleteCount
     })
-    return toJsonObject({
-      sourcePath,
-      changed: true,
-      changes: operationChanges,
-      postWriteReadback,
-      diffPath: previewPath,
-      record
-    })
+    return toJsonObject({})
   }
 
-  return { outline, search, readCells, edit }
+  return { read, edit }
 }
 
 export const toExcelToolFailure = (sourcePath: string, error: unknown): JsonObject => ({
-  ok: false,
   sourcePath,
   error: error instanceof Error ? error.message : String(error)
 })

@@ -3,10 +3,8 @@
 ## 1. 文档定位
 
 - 本文是 NCurator-Desktop 的唯一测试总规范。
-- 本文定义测试分类、回归准入、执行闭环、UI E2E 真实性、真实 AI / live 断言，以及 runner 和 raw logs 契约。
 - 各业务域的 suite、case 和领域规则只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case。
-- 只有当功能代码发生变动、对应 `doc/test-plan/**` 明确要求对齐 `doc/prd/**`，或者 `doc/prd/**` 本身发生变更时，才需要校验实现与 `doc/prd/**` 的一致性。
-- 新增任何测试文件前，必须先与用户确认目标分类：AI、Settings、Workbench 或 Unit。
+- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑。
 
 测试体系只沉淀一层长期执行产物：
 
@@ -50,7 +48,9 @@ tests/
 - 各 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义。
 - 当某个 `suite` 不需要继续细分时，回归 case 可以直接放在该 `suite` 目录下。
 - `tests/case/**` 中除 `unit/**` 外，只允许放已在 `doc/test-plan/**` 登记的回归 case。
-- `tests/fixtures/workspace/` 是共享工作区 fixture 根目录；凡是依赖“工作区里有什么文件”的测试，优先复用该目录。
+- `tests/fixtures/workspace/` 是共享工作区 fixture 根目录；凡是依赖“工作区里有什么文件”的测试，以及 backend/unit 直接引用的固定文件输入，统一复用该目录。
+- `tests/fixtures/sqlite/` 放数据库迁移 fixture。
+- `tests/fixtures/**` 全部是只读测试输入：测试禁止对其中任何文件原地写入、覆盖或修改；需要写入时，必须通过 `fixtures: []` 声明由 runner/harness 复制到隔离临时 workspace（或按 E2E 规则复制到临时目录），测完删除。fixture 需要更新时直接提交新二进制，禁止引入任何 fixture 生成器脚本（生成器不得以 `.test.ts` 形态进入 `tests/case/**` 自动发现）。
 - 当 case 直接传入 `tests/fixtures/workspace` 目录时，runner 应把该目录下的子内容原样复制到临时 workspace 根目录，而不是保留 `tests/fixtures/**` 中间层路径。
 
 ### 2.3 稳定映射模型
@@ -83,37 +83,24 @@ tests/
 - `Not`
   - 明确不验证什么，防止实现时擅自扩张范围。
 
-- `doc/test-plan/**` 只保存稳定的 case 规格、执行规则和 Oracle；`ai-test.md` 顶部“最新 Live 评估”是唯一允许覆盖回写的运行摘要，其余单次结果和环境故障记录不写入计划。
-- 每次运行的模型、耗时、通过情况、失败归因和原始证据统一保存在对应 run 的 `meta.json`、`timeline.jsonl`、`runtime-events.jsonl` 与 artifacts 中；人工完成度评分以最新 Live 评估快照为准。
-- 测试数量和 case 清单以测试源码及 runner 实时发现结果为准，不在文档中维护容易失真的计数副本。
-- `mock-llm` 回归 case 只允许替换 LLM 输出；不得 fake tool、store、docx apply service、runner 或节点执行结果。
-- DOCX 回归必须覆盖递归语义树、递归创建树、统一 `style`、全文/限定范围 `replace_text`、visual 防误删和 `docx_read_visuals`。旧简化 block payload、旧 history shape 与 `style_text` 应直接判定为无效，不保留兼容层。
-- `灵感测试.docx` 的固定基线为 18 个 image visual 和 22 个真实空段落；视觉节点不得再被当成空段落。大型 VML fixture 继续验证 599/1034 张图片时的性能与输出体积。
-- Human 工具 Input Schema 回归覆盖全部已注册工具：不得出现匿名重复定义，公共定义只展开一次，长度/数量/正则/数值和跨字段语义约束不得丢失，并记录各工具 schema 长度快照。
-- DOCX/PPT 定位回归统一验证可选 `location`；DOCX positioned 写保护只由 DOCX 写入路径判断，terminal 继续走独立审批机制，两者不得通过跨工具命令白名单耦合。
-- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑。
-- `scripts/test/validate-test-architecture.mjs` 在 runner 执行前校验域边界、Unit 禁止项、计划必填字段、PRD 引用、case/runner 包装和目录映射。
-- `scripts/test/workflow.mjs` 会自动读取仓库根目录的 `.env.local`、`.env`（已存在的 shell 环境变量优先）；可用 `AI_TEST_DISABLE_DOTENV=1` 禁用自动加载。
-- LangSmith tracing 默认关闭；仅在排查时将 `LANGSMITH_TRACING=true`，结束后恢复为 `false`。
-
 ### 3.3 UI E2E 回归规则
 
 - UI E2E 必须通过真实 UI 和产品链路完成被测行为，不得用 fake、mock、stub、直接写状态或内部 IPC 绕过。
 - fixture 和 helper 只能准备真实输入、执行用户可见操作、等待结果和收集证据，不能替代产品输出。
-- Settings / Workbench E2E 固定使用 `serviceMode: real`；自动更新模拟是当前唯一已批准例外。
+- Settings / Workbench E2E 固定使用 `serviceMode: real`；已批准例外仅限：自动更新模拟；以及时间轴月/年选天 case 在隔离 `userData` 上用 `scripts/dev/seed-partner-timeline.mjs` 写入跨日消息（墙钟下一次 live 发送无法产生月/年节点，后续点击仍走真实 UI）。
 - Workbench 和需要真实文件的 Settings case 将 `tests/fixtures/workspace` 复制到临时目录，case 结束并关闭应用后删除临时副本。
 - fixture 只能准备用户实际可拥有的文件、目录和配置输入；不得直接写应用状态、调用内部写 IPC 或替换产品服务。
 - observer、只读 IPC 和截图只能收集证据，不能触发被测行为或改变运行结果。
 - `ai/human/live` 必须使用 env 真实模型且不得跳过、模拟或替换模型决策、工具结果或业务产物，允许仅为触发真实机制的可测性 override，case 不设评分门槛，运行后由人工依据 raw logs 与 artifact 将最新 0-100 评估回写至 ai-test 顶部快照。
 - 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。
-- 除自动更新外，任何假数据或模拟路径都必须先说明必要性、取得用户确认，并在本文简短记录例外及边界。
+- 除自动更新、以及时间轴月/年选天 case 用 seed 脚本向隔离 userData 写入跨日消息外，任何假数据或模拟路径都必须先说明必要性、取得用户确认，并在本文简短记录例外及边界。
 - 不得为了 E2E 增加生产环境变量、故障开关、全局探针或其他生产代码入口；确需修改生产代码时，必须先取得用户确认。
 - 向量模型下载 E2E 使用产品现有模型清单和下载逻辑，不替换下载源；执行前必须关闭代理软件的 TUN 模式。网络异常按测试失败处理，并通过 raw logs 定位原因。
 
 ### 3.4 真实 AI / live 断言规则
 
-- Workbench 真实 AI E2E 必须通过应用 UI 同时选择主模型和视觉模型；视觉模型不得静默跟随主模型。
-- backend 视觉模型测试统一读取 `AI_LIVE_VISUAL_MODEL_NAME`；视觉模型专用地址、密钥和 provider 仍可通过 `AI_LIVE_VISION_BASE_URL`、`AI_LIVE_VISION_API_KEY`、`AI_LIVE_VISION_PROVIDER_KIND` 覆盖。
+- live 模型配置（backend `ai/human/live` 与 Workbench AI E2E 共用）：`.env` 只填内置服务商 Key（`AI_LIVE_KEY_DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`），可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）与 `AI_LIVE_MODEL`（默认该服务商测试默认模型；通义为 `qwen3.8-flash`）。不再使用 `AI_LIVE_BASE_URL` / `AI_LIVE_API_KEY` / `AI_LIVE_PRIMARY_MODEL_NAME`。
+- 全内置服务商「你好」冒烟（`live-preset-provider-smoke`）为 opt-in：默认 `test:e2e:*` / `test:workbench*` 排除 `provider-matrix`；需要时 `pnpm test:workbench:provider-matrix`。
 - 涉及真实 AI 调用的回归测试，硬断言只验证完成态、关键事实、关键工具或事件、关键 artifact，以及用户诉求是否落地；最终自然语言回答不得作为主要正确性证据。
 - 不对最终文案做逐字断言，不断言固定工具顺序，不断言固定 prompt 原文，不因表达差异判失败。
 - 如果用户诉求已落地但断言过严，应先调整 `Oracle` 和测试代码，再根据 raw logs 记录完成度评分。
@@ -185,20 +172,21 @@ runner 支持的过滤参数：
 - `--bundle`，正式包 E2E 必填，指向已构建候选包的 `release-bundle-*.json`。
 - `--fresh-knowledge-cache`，删除本次构建对应的知识库缓存，强制从零验证完整索引。
 - `--reuse-knowledge-cache`，人工调试时跨构建复用同一类缓存；不能和 `--fresh-knowledge-cache` 同时使用。
+- `--help`（或 `-h`），打印 runner 用法后直接退出；传入未识别的参数会立即报错并退出（退出码 2），防止未知参数被静默忽略而误触发全量执行。
 
 补充规则：
 
-- runner 强制执行固定 domain/type 边界。backend 普通测试并发为 6；Source E2E 的所有 case 直接共享按构建指纹保存的 split/vector 内容缓存，各 case 只隔离统计文件，`warmup` 用例按普通并发用例执行。正式包 E2E 才先串行执行全仓唯一的 `warmup` 用例，并把缓存种子复制到后续 case 的隔离缓存目录。随后开放总并发 3、live 并发 2，`exclusive` 用例串行独占；普通失败继续收集剩余 case，正式包 warm-up 失败则不启动后续并发。
-- 正式包 E2E 即使通过 `--domain`/`--suite`/`--case` 过滤范围，只要本次实际执行的 case 数超过 1，runner 也会自动把全仓唯一的 `warmup` 用例纳入执行并先串行预热，避免过滤后漏掉 warmup 导致全部 case 冷启动重复索引；`--case` 过滤时 `warmup` 用例不受 `--testNamePattern` 影响。
+- runner 强制执行固定 domain/type 边界。backend 普通测试并发为 6；Source E2E 与正式包 E2E 在多 case 时都先串行执行全仓唯一的 `warmup` 用例（先冷启动索引共享 fixture，后续 case 复用缓存）。Source 的所有 case 直接共享按构建指纹保存的 split/vector 内容缓存，各 case 只隔离统计文件；正式包 E2E 则把缓存种子复制到后续 case 的隔离缓存目录。随后开放总并发 3、live 并发 2，`exclusive` 用例串行独占；普通失败继续收集剩余 case，warm-up 失败则不启动后续并发。
+- E2E（source 与正式包）即使通过 `--domain`/`--suite`/`--case` 过滤范围，只要本次实际执行的 case 数超过 1，runner 也会自动把全仓唯一的 `warmup` 用例纳入执行并先串行预热，避免过滤后漏掉 warmup 导致全部 case 冷启动重复索引；`--case` 过滤时 `warmup` 用例不受 `--testNamePattern` 影响。
 - 真实模型 backend live 用例失败后最多重试 1 次，避免模型异常时重复等待过久。
 - E2E 默认执行类型为 `normal`；真实 AI/服务调用声明 `execution: 'live'`，原生对话框、鼠标和桌面焦点用例声明 `execution: 'exclusive'`，唯一的向量冷启动用例声明 `execution: 'warmup'`。
-- `source` 是日常目标，直接复用内容缓存，不额外预热；`package` 只接受既有 release bundle，安装后通过 warm-up 验证冷启动并运行同一批 E2E，不负责构建。
+- `source` 是日常目标，直接复用内容缓存（多 case 时同样先跑 warm-up 预热共享缓存）；`package` 只接受既有 release bundle，安装后通过 warm-up 验证冷启动并运行同一批 E2E，不负责构建。
 - native binding、知识库缓存和临时 Electron app 由 runner 自动准备；普通回归不手工修改 `node_modules` 或复用正式包缓存。
 - 正式包测试、发布门禁、Tag 前 Unit/非 live AI 以及发布后日志清理只在 `doc/release.md` 定义，本文不重复发布流程。
 
 ### 4.3 自动更新模拟测试
 
-自动更新是当前唯一允许在测试侧注入受控状态的 E2E 特例：可提供更新可用、下载进度、完成和失败快照，但不得修改生产代码来支持模拟。
+自动更新是允许在测试侧注入受控状态的 E2E 特例之一：可提供更新可用、下载进度、完成和失败快照，但不得修改生产代码来支持模拟。该用例还允许测试框架在 Electron 启动前向隔离 `userData/app.sqlite` 写入未来 migration 记录，用于真实触发仅更新模式；只能准备数据库输入，不能伪造主进程启动状态或绕过版本检查。
 
 自动更新测试运行后端契约测试和模拟页面 E2E：
 
@@ -213,7 +201,7 @@ pnpm test:update:backend
 pnpm test:update:e2e
 ```
 
-后端测试验证主进程更新状态、发布配置、R2 元数据和 release fragment。模拟 E2E 验证页面按钮、进度、错误提示和 IPC。自动化测试不下载或安装真实更新包。
+后端测试验证主进程更新状态、发布配置、R2 元数据和 release fragment。模拟 E2E 分为两个独立 case：`sidebar-app-update` 验证普通更新入口，`database-version-update-required` 验证高版本数据库恢复页的按钮、进度、中文错误提示、官网下载入口和 IPC，并验证恢复模式不加载 Workbench。自动化测试不下载或安装真实更新包。
 
 #### 4.3.1 自动更新真实升级专项（按需，不进回归/发布门禁）
 
@@ -223,7 +211,8 @@ pnpm test:update:e2e
 pnpm test:update:real:win -- \
   --source-installer <已发布旧版安装包.exe> \
   --source-version 0.1.68 \
-  --expected-version 0.1.69
+  --expected-version 0.1.69 \
+  --downgrade-installer <包含禁止降级逻辑的较低版本候选包.exe>
 ```
 
 该专项是独立、按需的工具，与回归测试和发布门禁完全隔离：
@@ -240,21 +229,22 @@ pnpm test:update:real:win -- \
 3. 启动旧版，检查更新、下载、触发重启安装；
 4. 安装器以静默方式完成覆盖升级，不再出现 "Failed to uninstall old application files"；
 5. 已安装版本变成 `--expected-version`，测试用户数据（`update-smoke-marker.txt`）保留。
+6. 传入 `--downgrade-installer` 时，升级完成后静默运行该较低版本候选包，断言安装被拒绝、已安装版本仍为 `--expected-version` 且 marker 不变。该参数只能使用已经包含本方案 NSIS 检查的候选包；历史旧安装包不具备保护，不能用于此断言。
 
 报告写入 `tests/logs/settings/update/real-windows/<运行时间>/report.json`，附截图与 `process.log`。卸载失败会表现为版本无法升级，脚本会明确报错并关联该失败模式。
 
-### 4.4 读取与分析 raw logs
+### 4.4 时间轴跨日种子
+
+墙钟下一次真实发送只能产生「今天」节点，无法覆盖月/年选天。已批准例外：E2E 可在应用重启前用 `scripts/dev/seed-partner-timeline.mjs` 向隔离 `userData/app.sqlite` 写入跨日消息。种子只负责造出墙钟一次发送得不到的日期分布；此后交互仍走真实 UI，不得用 IPC 或内部状态跳转。
+
+### 4.5 读取与分析 raw logs
+
 
 - 默认先读取目标 run 的 `timeline.jsonl`，理解语义步骤、断言事实和失败位置。
 - 如果 `timeline.jsonl` 仍不足以解释结果，再继续读取 `runtime-events.jsonl` 与关键附件。
+- 压缩切点先看 `runtime-events.jsonl` 的 `context_compaction_*` 字段；prompt 原文看 `llm-io.jsonl`；伙伴 bookmark 看可选 `artifacts/message-log-annotations.json`。
 - 必要时回看 `meta.json` 与 `artifacts.json`，确认 run 摘要、统计值和附件索引。
 - 所有分析结论都必须可回溯到 raw logs 与 artifacts，不得脱离证据做推断。
-
-### 4.5 结论回流
-
-- 如果问题出在 case 定义、验收口径或阶段边界，必须先改 `doc/test-plan/**`，再改测试代码。
-- 如果只是实现缺陷或回归问题，可在保持 case 规格不变的前提下修实现并重跑。
-- 测试结论以目标 run 的 raw logs 和 artifacts 为准，不将单次结论回写为长期文档事实。
 
 ## 5. runner 与原始产物契约
 
@@ -267,6 +257,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   meta.json
   timeline.jsonl
   runtime-events.jsonl
+  llm-io.jsonl            # backend
   artifacts.json
   artifacts/
 ```
@@ -279,15 +270,20 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - `timeline.jsonl`
   - 单次 run 的事实事件流。
   - 用来回答“本次 run 按顺序发生了什么”。
+  - `data` 只放按需原始观测值；压缩等长文本回看 `llm-io.jsonl`，不要把整段 prompt 再拷进 assertion `data`。
 - `runtime-events.jsonl`
   - 单次 run 的完整运行时原始事件流。
   - 用来回答“底层 runtime 真实发出了哪些事件”。
+  - 压缩切点以 `context_compaction_started` / `completed` 上的 `throughSeq`、`firstKeptSeq`、`historyFloorSeq`、`historyFloorKind`、`isSplitTurn`、`foldedCount`、`tailCount` 为准。
+- `llm-io.jsonl`
+  - backend 额外文件，e2e 不要求。
+  - 用来回答“发给模型的 conversation / system 实际是什么”。
 - `artifacts.json`
   - 单次 run 的附件索引。
   - 用来回答“本次 run 产生了哪些可回看的附件”。
 - `artifacts/`
   - 可选目录。
-  - 只有确实生成 trace、截图、HTML 诊断页等实体附件时才创建。
+  - 只有确实生成 trace、截图、HTML 诊断页、可选 human bookmark 快照等实体附件时才创建。
 
 目录与命名规则：
 
@@ -319,7 +315,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 
 关键约束：
 
-- `schemaVersion` 固定值为 `4`。
+- `schemaVersion` 固定值为 `5`。
 - `scope` 格式为 `<domain>/<suite>/<groups...>`，不包含 `caseId`。
 - `status` 当前值域是 `passed` / `failed`。
 - backend run 在执行中允许临时写出 `running`；正式结束后必须收口为 `passed` 或 `failed`。
@@ -398,7 +394,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 
 关键约束：
 
-- `schemaVersion` 固定值为 `4`。
+- `schemaVersion` 固定值为 `5`。
 - `kind` 当前值域：
   - `trace`
   - `screenshot`
@@ -412,6 +408,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   - `assertionId`
 - `artifacts.json` 必须始终写出，即使 `items` 为空数组。
 - `artifacts/` 目录只有在确实存在实体附件文件时才创建。
+- human live 可按 case 选择写出 `artifacts/message-log-annotations.json`（`kind=other`）：只含 `compaction_checkpoint` / `discard_checkpoint` 的 seq、`throughSeq`、`compactBlockId` 与正文长度，不含摘要或召回全文。默认关闭。
 
 ### 5.6 不同测试类型的统一约束
 

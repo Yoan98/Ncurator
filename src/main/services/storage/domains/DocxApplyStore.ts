@@ -28,7 +28,7 @@ const normalizeOperation = (value: unknown): DocxApplyRecord['operation'] =>
 
 const toDocxApplyRecord = (row: DocxApplyRow): DocxApplyRecord => ({
   id: toRequiredString(row.id),
-  session_id: toRequiredString(row.session_id),
+  partner_id: toRequiredString(row.partner_id),
   run_id: toRequiredString(row.run_id),
   status: normalizeStatus(row.status),
   source_path: toRequiredString(row.source_path),
@@ -57,7 +57,7 @@ const toDocxApplyRecord = (row: DocxApplyRow): DocxApplyRecord => ({
 
 const toDocxApplyWriteRow = (record: DocxApplyRecord) => ({
   id: record.id,
-  session_id: record.session_id,
+  partner_id: record.partner_id,
   run_id: record.run_id,
   status: record.status,
   source_path: record.source_path,
@@ -107,11 +107,11 @@ export class DocxApplyStore {
     filters?: ListDocxApplyRecordsRequest
   ): Promise<ListDocxApplyRecordsResponse> {
     const params = {
-      session_id: filters?.sessionId || null,
+      partner_id: filters?.partnerId || null,
       status: filters?.status || null
     }
     const where = buildWhere([
-      filters?.sessionId ? 'session_id = @session_id' : undefined,
+      filters?.partnerId ? 'partner_id = @partner_id' : undefined,
       filters?.status ? 'status = @status' : undefined
     ])
     const rows = this.sqlite

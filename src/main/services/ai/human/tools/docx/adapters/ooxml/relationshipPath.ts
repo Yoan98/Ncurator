@@ -6,7 +6,9 @@ export const resolveDocxRelationshipTarget = (
   target: string,
   sourcePart: string = DOCUMENT_PART
 ): string | undefined => {
-  const normalizedTarget = String(target || '').trim().replace(/\\/g, '/')
+  const normalizedTarget = String(target || '')
+    .trim()
+    .replace(/\\/g, '/')
   if (!normalizedTarget) return undefined
 
   const baseDir = path.posix.dirname(sourcePart)

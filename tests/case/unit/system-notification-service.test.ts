@@ -4,16 +4,13 @@ import type { AiRunRecord, AiRuntimeSettings } from '../../../src/shared/types'
 
 const run = (status: AiRunRecord['status'] = 'completed'): AiRunRecord => ({
   id: 'run-1',
-  sessionId: 'session-1',
+  partnerId: 'partner-1',
   userMessageId: 'user-1',
   assistantMessageId: 'assistant-1',
   status,
   input: '测试输入',
   partialAnswer: '',
   artifacts: [],
-  processEvents: [],
-  eventCount: 0,
-  visibleEventCount: 0,
   createdAt: 1,
   updatedAt: 1
 })
@@ -83,7 +80,7 @@ describe('SystemNotificationService', () => {
     expect(createNotification).not.toHaveBeenCalled()
   })
 
-  it('opens the matching session when the notification is clicked', async () => {
+  it('opens the matching partner when the notification is clicked', async () => {
     let clickHandler: (() => void) | undefined
     const window = {
       isDestroyed: () => false,
@@ -120,11 +117,11 @@ describe('SystemNotificationService', () => {
     expect(window.focus).toHaveBeenCalledOnce()
     expect(window.webContents.send).toHaveBeenCalledWith(
       'system-notification-open-session',
-      'session-1'
+      'partner-1'
     )
   })
 
-  it('creates a window before opening the session when all windows are closed', async () => {
+  it('creates a window before opening the partner when all windows are closed', async () => {
     let clickHandler: (() => void) | undefined
     const window = {
       isDestroyed: () => false,
@@ -162,7 +159,7 @@ describe('SystemNotificationService', () => {
     expect(window.focus).toHaveBeenCalledOnce()
     expect(window.webContents.send).toHaveBeenCalledWith(
       'system-notification-open-session',
-      'session-1'
+      'partner-1'
     )
   })
 })

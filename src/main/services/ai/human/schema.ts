@@ -3,53 +3,26 @@ import { aiArtifactRefSchema } from '../schema'
 import { jsonObjectSchema, jsonValueSchema, toolResourceContextSchema } from './toolSchemas'
 import {
   AI_TOOL_FAMILY_IDS,
-  BUILTIN_RUNTIME_SKILL_IDS,
   HUMAN_ROUND_EXECUTION_KINDS,
   HUMAN_SKILL_SOURCES,
   HUMAN_STAGES,
   HUMAN_STATUSES,
   HUMAN_STEP_ACTIONS,
   HUMAN_STEP_RESULT_STATUSES,
-  HUMAN_DECISION_HINT_CODES,
   RUNTIME_SKILL_IDS
 } from './constants'
+import { BUILTIN_RUNTIME_SKILL_IDS } from './skills'
 
 export const runtimeSkillIdSchema = z.enum(RUNTIME_SKILL_IDS)
 export const toolFamilyIdSchema = z.enum(AI_TOOL_FAMILY_IDS)
 export const humanStageSchema = z.enum(HUMAN_STAGES)
 export const humanStatusSchema = z.enum(HUMAN_STATUSES)
-export const humanDecisionHintCodeSchema = z.enum(HUMAN_DECISION_HINT_CODES)
 export const humanSkillSourceSchema = z.enum(HUMAN_SKILL_SOURCES)
 export const humanRoundExecutionKindSchema = z.enum(HUMAN_ROUND_EXECUTION_KINDS)
 
-export const humanTaskInterruptionReasonSchema = z.enum([
-  'timeout',
-  'network_error',
-  'user_cancelled',
-  'process_interrupted',
-  'runtime_limit',
-  'unexpected_error'
-])
-
-export const humanTaskContextSchema = z.object({
-  originalGoal: z.string(),
-  recoveryHistory: z.array(
-    z.object({
-      interruptionReason: humanTaskInterruptionReasonSchema,
-      userInput: z.string()
-    })
-  ),
-  currentInterruption: z
-    .object({
-      reason: humanTaskInterruptionReasonSchema
-    })
-    .optional()
-})
-
 export const humanTaskInputSchema = z.object({
   taskId: z.string(),
-  userInput: z.string(),
-  taskContext: humanTaskContextSchema.optional()
+  userInput: z.string()
 })
 
 export const skillDefinitionBaseSchema = z.object({
@@ -63,6 +36,7 @@ export const skillDefinitionBaseSchema = z.object({
 })
 
 export const toolCallParamSchema = z.object({
+  toolCallId: z.string().min(1),
   toolName: z.string().min(1),
   args: jsonObjectSchema
 })
@@ -78,6 +52,17 @@ export const toolCallResultSchema = z.discriminatedUnion('ok', [
     toolName: z.string().min(1),
     ok: z.literal(true),
     data: jsonValueSchema.optional(),
+    imageRefs: z
+      .array(
+        z.object({
+          path: z.string().min(1),
+          mimeType: z.string().min(1),
+          sizeBytes: z.number().int().positive(),
+          width: z.number().int().positive(),
+          height: z.number().int().positive()
+        })
+      )
+      .optional(),
     resourceContext: toolResourceContextSchema.optional()
   }),
   z.object({
@@ -99,160 +84,15 @@ export const humanLearningOutcomeSchema = z.object({
   activeToolCount: z.number().int().min(0)
 })
 
-export const humanDecisionHintSchema = z.discriminatedUnion('code', [
-  z.object({
-    code: z.literal('run_resumed_after_interruption'),
-    detail: z.object({
-      reason: humanTaskInterruptionReasonSchema
-    })
-  }),
-  z.object({
-    code: z.literal('learning_no_effect'),
-    detail: z.object({
-      requestedSkillIds: z.array(z.string().min(1)),
-      duplicateSkillIds: z.array(runtimeSkillIdSchema),
-      unknownSkillIds: z.array(z.string().min(1))
-    })
-  }),
-  z.object({
-    code: z.literal('terminal_approval_blocked'),
-    detail: z.object({
-      allowedCommands: z.array(z.string().min(1)),
-      blockedCommands: z.array(z.string().min(1)),
-      notes: z.array(
-        z.object({
-          command: z.string().min(1),
-          message: z.string().min(1)
-        })
-      )
-    })
-  }),
-  z.object({
-    code: z.literal('hand_call_limit_exceeded'),
-    detail: z.object({
-      offendingToolNames: z.array(z.string().min(1)),
-      callCount: z.number().int().min(1),
-      limit: z.number().int().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('legacy_doc_edit_unsupported'),
-    detail: z.object({
-      instruction: z.string().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_docx_edit_failed'),
-    detail: z.object({
-      toolName: z.literal('docx_edit'),
-      sourcePath: z.string().min(1).optional(),
-      action: z.string().min(1).optional(),
-      error: z.string().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_docx_positioned_write_blocked'),
-    detail: z.object({
-      toolName: z.literal('docx_edit'),
-      sourcePath: z.string().min(1).optional(),
-      action: z.string().min(1).optional(),
-      error: z.string().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_tool_limit_near_exhausted'),
-    detail: z.object({
-      toolCallCount: z.number().int().min(0),
-      limit: z.number().int().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_tool_limit_exceeded'),
-    detail: z.object({
-      toolCallCount: z.number().int().min(0),
-      limit: z.number().int().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_tool_result_too_large'),
-    detail: z.object({
-      toolName: z.string().min(1),
-      estimatedTokens: z.number().int().min(1),
-      limit: z.number().int().min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('hand_tool_result_unusable'),
-    detail: z.object({
-      toolName: z.string().min(1),
-      totalChars: z.number().int().min(0),
-      nulCount: z.number().int().min(0),
-      replacementCharCount: z.number().int().min(0),
-      replacementCharRatio: z.number().min(0).max(1),
-      controlCharCount: z.number().int().min(0),
-      controlCharRatio: z.number().min(0).max(1),
-      matchedSignatures: z.array(z.string().min(1))
-    })
-  }),
-  z.object({
-    code: z.literal('brain_output_schema_invalid'),
-    detail: z.object({
-      issues: z
-        .array(
-          z.object({
-            path: z.string().min(1),
-            message: z.string().min(1)
-          })
-        )
-        .min(1)
-        .max(3)
-    })
-  }),
-  z.object({
-    code: z.literal('brain_todolist_incomplete'),
-    detail: z.object({
-      pendingItems: z.array(z.string().min(1)).min(1)
-    })
-  }),
-  z.object({
-    code: z.literal('brain_content_safety'),
-    detail: z.object({ message: z.string().min(1) })
-  }),
-  z.object({
-    code: z.literal('hand_call_invalid'),
-    detail: z.object({
-      invalidCalls: z
-        .array(
-          z.object({
-            callIndex: z.number().int().min(0),
-            toolName: z.string().min(1),
-            message: z.string().min(1)
-          })
-        )
-        .min(1)
-    })
-  })
-])
+export const humanPlanItemStatusSchema = z.enum(['todo', 'done'])
 
-export const humanHistoryToolResultSchema = z.object({
-  toolName: z.string().min(1),
-  ok: z.boolean(),
-  data: jsonValueSchema.optional(),
-  artifactRefs: z.array(aiArtifactRefSchema).optional(),
-  resourceContext: toolResourceContextSchema.optional()
+export const humanPlanItemSchema = z.object({
+  title: z.string().min(1),
+  status: humanPlanItemStatusSchema
 })
 
-export const humanTodoItemStatusSchema = z.enum(['todo', 'done'])
-
-export const humanTodoItemSchema = z.object({
-  item: z.string().min(1),
-  status: humanTodoItemStatusSchema,
-  evidence: z.string().min(1).optional()
-})
-
-export const humanThoughtSchema = z.object({
-  next: z.string().min(1),
-  todolist: z.array(humanTodoItemSchema).optional()
+export const humanRoundThoughtSchema = z.object({
+  text: z.string()
 })
 
 export const brainEvidenceReferenceSchema = z.object({
@@ -266,52 +106,25 @@ export const humanReferenceSchema = brainEvidenceReferenceSchema.extend({
   accessStatus: z.enum(['accessible', 'unavailable'])
 })
 
-export const learningNextActionSchema = z.object({
-  action: z.literal('learning'),
-  wantLearnSkillIds: z.array(z.string().min(1)).min(1)
-})
-
-export const handNextActionSchema = z.object({
-  action: z.literal('hand'),
-  calls: handCallsSchema
-})
-
-export const mouthNextActionSchema = z.object({
-  action: z.literal('mouth'),
-  evidenceReferences: z.array(brainEvidenceReferenceSchema).optional()
-})
-
-export const brainNextActionSchema = z
-  .object({
-    action: z.string().min(1)
+export const humanNextActionSchema = z.discriminatedUnion('action', [
+  z.object({
+    action: z.literal('learning'),
+    wantLearnSkillIds: z.array(z.string().min(1)).min(1),
+    toolCallId: z.string().min(1)
+  }),
+  z.object({
+    action: z.literal('hand'),
+    calls: handCallsSchema
+  }),
+  z.object({
+    action: z.literal('plan'),
+    calls: handCallsSchema
   })
-  .catchall(jsonValueSchema)
-
-export const brainPromptNextActionSchema = z.discriminatedUnion('action', [
-  learningNextActionSchema,
-  handNextActionSchema,
-  mouthNextActionSchema
 ])
-
-export const humanThoughtDecisionPromptSchema = z.object({
-  thought: humanThoughtSchema,
-  nextAction: brainPromptNextActionSchema
-})
-
-export const createBrainNextActionSchema = () => brainNextActionSchema
-
-export const createHumanThoughtDecisionSchema = () => humanThoughtDecisionSchema
-
-export const humanThoughtDecisionSchema = z.object({
-  thought: humanThoughtSchema,
-  nextAction: brainNextActionSchema
-})
 
 export const humanDeliveryPayloadSchema = z.object({
   deliveryMarkdown: z.string().default('')
 })
-
-export const mouthOutputSchema = humanDeliveryPayloadSchema
 
 export const fileChangeSummaryItemSchema = z.object({
   id: z.string().min(1),
@@ -345,18 +158,23 @@ export const humanTaskOutputSchema = humanDeliveryPayloadSchema.extend({
   artifacts: z.array(aiArtifactRefSchema).optional()
 })
 
+export const humanDispatchItemSchema = z.object({
+  toolCallId: z.string().min(1),
+  toolName: z.string().min(1),
+  args: jsonObjectSchema,
+  target: z.enum(['learning', 'plan', 'hand'])
+})
+
 export const humanExecutionSchema = z.object({
   stage: humanStageSchema,
   status: humanStatusSchema,
-  finalizationReason: z.enum(['brain_content_safety']).optional(),
-  currentThought: humanThoughtDecisionSchema.optional(),
-  pendingFault: z
+  pendingRound: z
     .object({
-      result: z.string().min(1),
-      issues: z.array(z.object({ path: z.string().min(1), message: z.string().min(1) })).optional()
+      thought: humanRoundThoughtSchema,
+      nextAction: humanNextActionSchema
     })
     .optional(),
-  pendingDecisionHint: humanDecisionHintSchema.optional(),
+  pendingDispatch: z.array(humanDispatchItemSchema).optional(),
   deliveryGuidanceItems: z.array(deliveryGuidanceItemSchema).optional(),
   lastToolResults: z.array(toolCallResultSchema).optional(),
   lastLearningOutcome: humanLearningOutcomeSchema.optional(),
@@ -378,72 +196,19 @@ export const humanExecutionSchema = z.object({
     .optional()
 })
 
-export const humanRoundExecutionSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('learning'),
-    learningOutcome: humanLearningOutcomeSchema,
-    result: z.string().min(1),
-    decisionHint: humanDecisionHintSchema.optional()
-  }),
-  z.object({
-    kind: z.literal('hand'),
-    calls: handCallsSchema,
-    toolResults: z.array(humanHistoryToolResultSchema),
-    decisionHint: humanDecisionHintSchema.optional(),
-    artifactRefs: z.array(aiArtifactRefSchema).optional()
-  }),
-  z.object({
-    kind: z.literal('mouth'),
-    result: z.string().min(1),
-    decisionHint: humanDecisionHintSchema.optional()
-  }),
-  z.object({
-    kind: z.literal('fault'),
-    result: z.string().min(1),
-    decisionHint: humanDecisionHintSchema.optional()
-  })
-])
-
-export const humanRoundRecordSchema = z.object({
-  roundId: z.number().int().min(1),
-  createdAt: z.number(),
-  thought: humanThoughtSchema,
-  nextAction: brainNextActionSchema,
-  execution: humanRoundExecutionSchema
-})
-
-export const humanCompactBlockSchema = z.object({
+export const humanCompactionBlockSchema = z.object({
   id: z.string().min(1),
-  kind: z.literal('rounds'),
+  kind: z.literal('compacted_history'),
   summary: z.string().min(1),
-  source: z.object({
-    roundIds: z.array(z.number().int().min(1)).min(1)
-  }),
   createdAt: z.number(),
   tokenEstimateBefore: z.number().int().min(0).optional(),
   sourceHistoryTokenEstimate: z.number().int().min(0).optional(),
   tokenEstimateAfter: z.number().int().min(0).optional()
 })
 
-export const humanConversationTurnSchema = z.object({
-  role: z.enum(['user', 'assistant', 'system']),
-  text: z.string()
-})
-
-export const humanConversationMemorySchema = z.object({
-  summary: z.string().nullable(),
-  recentTurns: z.array(humanConversationTurnSchema)
-})
-
-export const humanTaskRunMemorySchema = z.object({
-  rounds: z.array(humanRoundRecordSchema),
-  compactions: z.array(humanCompactBlockSchema)
-})
-
 export const humanMemorySchema = z.object({
-  todolist: z.array(humanTodoItemSchema),
-  conversation: humanConversationMemorySchema,
-  taskRun: humanTaskRunMemorySchema
+  plan: z.array(humanPlanItemSchema),
+  compactions: z.array(humanCompactionBlockSchema)
 })
 
 export const humanSkillsSchema = z.object({

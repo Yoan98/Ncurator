@@ -67,8 +67,16 @@ export interface AppUpdateActionResponse {
   error?: string
 }
 
+export type AppStartupStatus =
+  | { mode: 'normal' }
+  | {
+      mode: 'update_required'
+      databaseVersion: number
+      supportedDatabaseVersion: number
+      downloadPageUrl: string
+    }
+
 export interface WebIngestPayload {
-  workspaceId: string
   url: string
   includeSelectors?: string[]
   excludeSelectors?: string[]
@@ -95,7 +103,6 @@ export interface DocumentRecord {
 
 export interface WebSourceRecord {
   id: string
-  workspace_id: string
   identity_kind: WebSourceIdentityKind
   normalized_url: string
   url: string
@@ -119,8 +126,7 @@ export interface WebSourceRecord {
 
 export interface WorkspaceSource {
   id: string
-  name: string
-  root_path?: string
+  root_path: string
   created_at: number
   updated_at: number
 }
@@ -178,6 +184,7 @@ export interface WorkspaceWebSummary {
 export interface WorkspaceListItem extends WorkspaceSource {
   file_count: number
   web_count: number
+  root_kind: 'file' | 'directory'
 }
 
 export interface WorkspaceRuntimeBinding {
@@ -214,7 +221,6 @@ export interface FileReference {
 
 export interface WebReference {
   kind: 'web'
-  workspaceId: string
   webSourceId: string
   name: string
   url: string
@@ -285,6 +291,22 @@ export interface WorkspaceTreeNodeView {
 export interface ReferenceItemListResponse {
   items: SelectedReference[]
   total: number
+  hasMore: boolean
+  offset: number
+  limit: number
+}
+
+/** @ 候选单次拉取上限 */
+export const REFERENCE_ITEM_PAGE_SIZE = 50
+
+/** 相对工作地址根最多收录的路径深度（根=0，其下两级=2） */
+export const REFERENCE_ITEM_MAX_PATH_DEPTH = 2
+
+export interface ListReferenceItemsRequest {
+  referenceKinds?: ReferenceKind[]
+  query?: string
+  offset?: number
+  limit?: number
 }
 
 export interface WebSourceListResponse {
@@ -293,21 +315,22 @@ export interface WebSourceListResponse {
   summary: WorkspaceWebSummary
 }
 
-export interface LegacyLocalImportMigrationStatus {
-  hasLegacyLocalImports: boolean
-  removedDocumentCount: number
-  removedChunkCount: number
-  migratedAt?: number
+export interface CreateWorkspaceSourceRequest {
+  rootPath: string
 }
 
-export interface CreateWorkspaceSourceRequest {
-  name: string
+export type WorkspaceRootConflictReason = 'exists' | 'nested' | 'contains'
+
+export interface WorkspaceRootConflict {
+  reason: WorkspaceRootConflictReason
+  existingPaths: string[]
 }
 
 export interface WorkspaceMutationResponse {
   success: boolean
   workspace?: WorkspaceSource
   error?: string
+  conflict?: WorkspaceRootConflict
 }
 
 export interface SetWorkspaceRootPathRequest {
@@ -378,26 +401,22 @@ export interface WorkspaceIndexJobResponse {
 }
 
 export interface RefreshWebSourceRequest {
-  workspaceId: string
   webSourceId: string
 }
 
 export interface ScanWebSourcesRequest {
-  workspaceId: string
+  sourceKind?: 'web'
 }
 
 export interface PrepareWebSourcesRequest {
-  workspaceId: string
+  sourceKind?: 'web'
 }
 
 export interface DeleteWebSourceRequest {
-  workspaceId: string
   webSourceId: string
 }
 
-export interface ListWebSourcesRequest {
-  workspaceId: string
-}
+export type ListWebSourcesRequest = Record<string, never>
 
 export interface WebSourceMutationResponse {
   success: boolean
@@ -409,12 +428,6 @@ export interface DeleteWebSourceResponse {
   success: boolean
   deletedWebSourceId?: string
   error?: string
-}
-
-export interface ListReferenceItemsRequest {
-  mode: 'chat' | 'search'
-  workspaceId?: string
-  referenceKinds?: ReferenceKind[]
 }
 
 export interface SearchResult {
@@ -464,9 +477,6 @@ export interface ChunkListResponse {
   total: number
 }
 
-// Deprecated: kept for backward compatibility if needed, but should be removed eventually
-export interface DocumentListItem extends ChunkListItem {}
-
 export interface DocumentListResponse {
   items: DocumentRecord[]
   total: number
@@ -477,19 +487,10 @@ export interface DocumentListResponse {
 export type AiLlmStreamingMode = 'force_stream' | 'force_non_stream'
 export type LlmProviderKind = 'openai' | 'deepseek' | 'openai-compatible'
 export type LlmProviderId =
-  | 'openai'
   | 'deepseek'
   | 'dashscope'
-  | 'volcengine'
-  | 'moonshot'
-  | 'siliconflow'
-  | 'openrouter'
+  | 'mimo'
   | 'zhipu'
-  | 'baidu-qianfan'
-  | 'tencent-hunyuan'
-  | 'minimax'
-  | 'yi'
-  | 'nvidia-nim'
   | 'local'
   | 'custom'
 export interface LLMConfig {
@@ -507,7 +508,6 @@ export type WorkbenchSelectedModel = {
 
 export type WorkbenchModelSelection = {
   mainModel: WorkbenchSelectedModel | null
-  visionModel: WorkbenchSelectedModel | null
 }
 
 export type LlmRuntimeConfig = LLMConfig & {
@@ -525,17 +525,6 @@ export type LlmRemoteModel = {
 export type LlmModelListResponse = {
   success: boolean
   items: LlmRemoteModel[]
-  error?: string
-}
-
-export type AiVisionModelAnalysisRequest = {
-  mainModel: WorkbenchSelectedModel
-  modelNames: string[]
-}
-
-export type AiVisionModelAnalysisResponse = {
-  success: boolean
-  modelNames: string[]
   error?: string
 }
 
@@ -576,7 +565,7 @@ export type ChatAttachment = {
 }
 
 export type AttachmentPickRequest = {
-  workspaceRootPath: string
+  partnerId: string
   assetBucketId: string
 }
 
@@ -599,7 +588,7 @@ export type AttachmentCreateFromPathRequest = {
 }
 
 export type AttachmentSaveRequest = {
-  workspaceRootPath: string
+  partnerId: string
   assetBucketId: string
   name: string
   bytes: Uint8Array
@@ -607,9 +596,19 @@ export type AttachmentSaveRequest = {
   kind?: ChatAttachmentKind
 }
 
+export type MarkdownLinkAccessStatus = 'accessible' | 'unavailable'
+export type MarkdownLinkResourceType = 'file' | 'web'
+
+/** Sidecar for assistant delivery links; body markdown is never rewritten. */
+export type MarkdownLinkAccessEntry = {
+  href: string
+  resourceType: MarkdownLinkResourceType
+  accessStatus: MarkdownLinkAccessStatus
+}
+
 export interface ChatMessage {
   id: string
-  session_id: string
+  partner_id: string
   role: 'user' | 'assistant' | 'system'
   content: string
   timestamp: number
@@ -617,24 +616,93 @@ export interface ChatMessage {
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
   artifacts?: AiArtifactRef[]
+  /** Present on delivery assistant messages after finalizeDelivery access checks. */
+  linkAccess?: MarkdownLinkAccessEntry[]
   error?: boolean
 }
 
-export interface ChatSession {
+export const PARTNER_AVATAR_SHAPES = [
+  'circle',
+  'rounded_square',
+  'pill',
+  'hexagon',
+  'cloud',
+  'teardrop'
+] as const
+export type PartnerAvatarShape = (typeof PARTNER_AVATAR_SHAPES)[number]
+
+export const PARTNER_AVATAR_COLORS = [
+  'black',
+  'brown',
+  'red',
+  'orange',
+  'yellow',
+  'green',
+  'teal',
+  'blue',
+  'purple',
+  'pink',
+  'light_grey',
+  'dark_grey'
+] as const
+export type PartnerAvatarColor = (typeof PARTNER_AVATAR_COLORS)[number]
+
+export interface Partner {
   id: string
-  title: string
+  name: string
+  avatar_shape: PartnerAvatarShape
+  avatar_color: PartnerAvatarColor
+  pinned: boolean
+  pinned_at: number | null
   created_at: number
-  workspace_id: string
+  updated_at: number
+  last_viewed_at: number
 }
 
-export interface ChatSessionListItem extends ChatSession {
+export interface PartnerListItem extends Partner {
   isRunning: boolean
   hasUnreadCompletion: boolean
+  lastUserMessagePreview: string | null
+  lastActivityAt: number
 }
 
-export type ChatSessionUiMode = 'ai' | 'search'
+export type PartnerCreateRequest = {
+  name: string
+  avatar_shape: PartnerAvatarShape
+  avatar_color: PartnerAvatarColor
+}
 
-export type ChatSessionUiFileRef = {
+export type PartnerCreateResponse = {
+  success: boolean
+  partner?: Partner
+  error?: string
+}
+
+export type PartnerUpdateRequest = {
+  id: string
+  name: string
+  avatar_shape: PartnerAvatarShape
+  avatar_color: PartnerAvatarColor
+}
+
+export type PartnerUpdateResponse = PartnerCreateResponse
+
+export type PartnerSetPinnedRequest = {
+  id: string
+  pinned: boolean
+}
+
+export type PartnerClearContextRequest = {
+  partnerId: string
+}
+
+export type PartnerClearContextResponse = {
+  success: boolean
+  error?: string
+  clearedAt?: number
+}
+
+export type PartnerUiFileRef = {
   path: string
   fileName: string
   origin: 'search_hit' | 'read' | 'artifact' | 'preview' | 'source'
@@ -645,39 +713,36 @@ export type ChatSessionUiFileRef = {
   isDirectory?: boolean
 }
 
-export type ChatSessionUiPanelState =
+export type PartnerUiPanelState =
   | { kind: 'empty'; title: string; description: string }
-  | { kind: 'search_list'; title: string; query: string; results: SearchResult[]; tokens: string[] }
   | {
       kind: 'file_preview'
       title: string
-      file: ChatSessionUiFileRef
-      backTarget?: ChatSessionUiPanelState
+      file: PartnerUiFileRef
+      backTarget?: PartnerUiPanelState
     }
   | { kind: 'file_launcher'; title: string }
   | { kind: 'apply_workspace'; title: string; applyId: string | null }
   | { kind: 'browser'; title: string; browserTabId: string }
 
-export type ChatSessionUiResourceTab = {
+export type PartnerUiResourceTab = {
   id: string
   kind: 'file' | 'browser'
   title: string
   filePath?: string
   browserTabId?: string
   state: Extract<
-    ChatSessionUiPanelState,
+    PartnerUiPanelState,
     { kind: 'file_preview' | 'file_launcher' | 'apply_workspace' | 'browser' }
   >
 }
 
-export type ChatSessionUiStateV1 = {
+export type PartnerUiStateV1 = {
   version: 1
   composer: {
-    mode: ChatSessionUiMode
     aiPreference: AiPreference
     executionPermission: AiExecutionPermission
     modelSelection: WorkbenchModelSelection
-    workspaceId: string | null
     draft: {
       input: string
       contentNodes: ChatMessageContentNode[]
@@ -687,19 +752,19 @@ export type ChatSessionUiStateV1 = {
     }
   }
   panel: {
-    tabs: ChatSessionUiResourceTab[]
+    tabs: PartnerUiResourceTab[]
     activeTabId: string | null
     collapsed: boolean
-    fallbackState: ChatSessionUiPanelState
+    fallbackState: PartnerUiPanelState
   }
 }
 
-export type ChatSessionUiStateSaveRequest = {
-  sessionId: string
-  state: ChatSessionUiStateV1
+export type PartnerUiStateSaveRequest = {
+  partnerId: string
+  state: PartnerUiStateV1
 }
 
-export type ChatSessionUiStateSaveResponse = {
+export type PartnerUiStateSaveResponse = {
   success: boolean
   updatedAt?: number
   error?: string
@@ -707,13 +772,11 @@ export type ChatSessionUiStateSaveResponse = {
 
 export type WorkbenchUiState = {
   activeViewKey: string | null
-  draftState: ChatSessionUiStateV1 | null
   updatedAt: number
 }
 
 export type WorkbenchUiStateSaveRequest = {
   activeViewKey: string | null
-  draftState: ChatSessionUiStateV1 | null
 }
 
 export type WorkbenchUiStateResponse = {
@@ -807,7 +870,7 @@ export interface TextFileDiffArtifact {
 
 export interface AiFileChangeRecord {
   id: string
-  sessionId: string
+  partnerId: string
   runId: string
   status: AiFileChangeStatus
   capability: AiFileChangeCapability
@@ -836,7 +899,7 @@ export interface AiFileChangeRecord {
 }
 
 export interface ListAiFileChangeRecordsRequest {
-  sessionId?: string
+  partnerId?: string
   runId?: string
   status?: AiFileChangeStatus
 }
@@ -872,7 +935,7 @@ export type DocxApplyStatus = AiFileChangeStatus
 
 export interface DocxApplyRecord {
   id: string
-  session_id: string
+  partner_id: string
   run_id: string
   status: DocxApplyStatus
   source_path: string
@@ -900,7 +963,7 @@ export interface DocxApplyRecord {
 }
 
 export interface ListDocxApplyRecordsRequest {
-  sessionId?: string
+  partnerId?: string
   status?: DocxApplyStatus
 }
 
@@ -975,22 +1038,24 @@ export interface OpenFileWithApplicationResponse {
   error?: string
 }
 
-export type AiRunStatus =
-  | 'running'
-  | 'waiting_approval'
-  | 'waiting_user_takeover'
-  | 'completed'
-  | 'failed'
-  | 'cancelled'
-export type RuntimeIssueCode =
+export type AiRunStatus = 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
+export type AiRunWarningCode =
   | 'workspace_binding_missing'
   | 'workspace_missing'
   | 'workspace_path_unavailable'
   | 'scope_unavailable'
   | 'approval_denied'
   | 'llm_usage_unavailable'
+export type RuntimeIssueCode = AiRunWarningCode
 export type RuntimeSkillId = RegisteredRuntimeSkillId
-export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_hand' | 'human_mouth'
+export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_plan' | 'human_hand'
+export type ContextScopeDecisionBasis =
+  | 'gate_incomplete_run'
+  | 'gate_digest_unavailable'
+  | 'gate_below_threshold'
+  | 'model_decision'
+  | 'fallback'
+export type RunDigestStatus = 'pending' | 'completed' | 'failed'
 export type AssistantProcessDisplay =
   | { kind: 'thinking' }
   | { kind: 'learning'; skillId: RuntimeSkillId }
@@ -1029,6 +1094,55 @@ export type BrainContextBudgetSnapshot = {
   lastBrainInputTokens?: number
   deltaTokenEstimate?: number
 }
+
+export type ContextCompactionHistoryFloorKind = 'compaction' | 'discard' | 'none'
+
+export type ContextCompactionCut = {
+  throughSeq: number
+  firstKeptSeq?: number
+  historyFloorSeq: number
+  historyFloorKind: ContextCompactionHistoryFloorKind
+  isSplitTurn: boolean
+  foldedCount: number
+  tailCount: number
+}
+export type AiLlmRequestWireToolCall = {
+  id: string
+  name: string
+  arguments: string
+}
+
+export type AiLlmRequestWireMessage = {
+  role: string
+  content: string
+  toolCalls?: AiLlmRequestWireToolCall[]
+  toolCallId?: string
+}
+
+export type AiLlmRequestWireTool = {
+  name: string
+  description: string
+  parameters: JsonValue
+}
+
+export type AiLlmRequestWire = {
+  messages: AiLlmRequestWireMessage[]
+  tools: AiLlmRequestWireTool[]
+  messagesHash: string
+  toolsHash: string
+}
+
+export type AiLlmRequestWireDiff = {
+  equal: boolean
+  firstPath: string
+  leftPreview: string
+  rightPreview: string
+  toolsHashEqual: boolean
+  messagesHashEqual: boolean
+  firstDifferingToolIndex?: number
+  firstDifferingMessageIndex?: number
+}
+
 export type AiLlmIoRecord = {
   callId: string
   runId: string
@@ -1040,6 +1154,7 @@ export type AiLlmIoRecord = {
   baseUrlHost: string
   system: string
   user: string
+  requestWire?: AiLlmRequestWire
   output?: JsonValue
   rawText?: string
   usage?: AiLlmUsage
@@ -1060,7 +1175,6 @@ export type AiLlmIoRecord = {
 }
 export type HumanStepAction = 'brain_decision' | 'learn_skill' | 'call_tool' | 'deliver_result'
 export type HumanStepResultStatus = 'ok' | 'error'
-export type DecisionHintSource = 'brain' | 'learning' | 'hand' | 'memory_reducer'
 
 export type AiRuntimeSettings = {
   llmStreamingMode: AiLlmStreamingMode
@@ -1090,9 +1204,19 @@ export type AiDraftSnapshotRef = {
 }
 export type AiArtifactRef = AiFileArtifactRef
 
-export type ChatSubmitMode = 'ai' | 'search'
 export type AiPreference = 'default' | 'local_sources_relaxed' | 'local_sources_strict'
 export type AiExecutionPermission = 'review' | 'full_access'
+
+export type ChatSubmitRequest = {
+  preference?: AiPreference
+  executionPermission?: AiExecutionPermission
+  partnerId: string
+  input: string
+  contentNodes?: ChatMessageContentNode[]
+  selectedReferences?: SelectedReference[]
+  attachments?: ChatAttachment[]
+  mainModel?: WorkbenchSelectedModel
+}
 
 export type ScheduledTaskScheduleType = 'daily' | 'weekly'
 
@@ -1104,12 +1228,13 @@ export type ScheduledTask = {
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday: number | null
-  workspaceId: string
+  partnerId: string
   mainModel: WorkbenchSelectedModel
-  visionModel: WorkbenchSelectedModel | null
   aiPreference: AiPreference
   executionPermission: AiExecutionPermission
   nextRunAt: number | null
+  /** 到点因专属伙伴占用而取消本次时写入；关闭胶囊或立即执行成功后清空 */
+  busyCancelNoticeAt: number | null
   createdAt: number
   updatedAt: number
 }
@@ -1118,13 +1243,10 @@ export type ScheduledTaskSaveRequest = {
   id?: string
   name: string
   prompt: string
-  enabled: boolean
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday?: number | null
-  workspaceId: string
   mainModel: WorkbenchSelectedModel
-  visionModel?: WorkbenchSelectedModel | null
   aiPreference?: AiPreference
   executionPermission?: AiExecutionPermission
 }
@@ -1140,122 +1262,88 @@ export type ScheduledTaskSetEnabledRequest = {
   enabled: boolean
 }
 
-export type ChatSubmitRequest = {
-  mode: ChatSubmitMode
-  preference?: AiPreference
-  executionPermission?: AiExecutionPermission
-  sessionId: string
-  input: string
-  contentNodes?: ChatMessageContentNode[]
-  selectedReferences?: SelectedReference[]
-  attachments?: ChatAttachment[]
-  mainModel?: WorkbenchSelectedModel
-  visionModel?: WorkbenchSelectedModel
-  workspace?: WorkspaceRuntimeBinding
-  searchDocumentIds?: string[]
+export type ScheduledTaskRunNowRequest = {
+  id: string
+}
+
+export type ScheduledTaskDismissBusyNoticeRequest = {
+  id: string
 }
 
 export type AiRunRecord = {
   id: string
-  sessionId: string
+  partnerId: string
   userMessageId: string
   assistantMessageId: string
   status: AiRunStatus
   input: string
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
-  workspace?: WorkspaceRuntimeBinding
   modelName?: string
   mainModel?: WorkbenchSelectedModel
-  visionModel?: WorkbenchSelectedModel
   preference?: AiPreference
   executionPermission?: AiExecutionPermission
   partialAnswer: string
+  partialAnswerRole?: 'answer' | 'thought'
   finalAnswer?: string
   error?: string
+  failureCode?: AiRunFailureCode
+  failureRawMessage?: string
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
-  pendingUserTakeover?: Extract<AiRunEvent, { type: 'user_takeover_required' }>
   artifacts?: AiArtifactRef[]
-  processEvents?: AiRunEvent[]
-  eventCount?: number
-  visibleEventCount?: number
-  lastEventAt?: number
   createdAt: number
   updatedAt: number
   finishedAt?: number
 }
 
-export type AiRunEventRecord = {
-  id: string
-  runId: string
-  sessionId: string
-  seq: number
-  type: AiRunEvent['type']
-  event: AiRunEvent
-  createdAt: number
-}
-
-export type ChatSessionRunSnapshot = {
+export type PartnerRunSnapshot = {
   run: AiRunRecord
-  events: AiRunEvent[]
+  messageLogRecords?: ChatMessageLogRecord[]
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
-  pendingUserTakeover?: Extract<AiRunEvent, { type: 'user_takeover_required' }>
 }
 
-export type ChatSessionSnapshotRequest = {
-  sessionId: string
+export type PartnerSnapshotRequest = {
+  partnerId: string
 }
 
-export type ChatSessionSnapshotResponse = {
+export type PartnerSnapshotResponse = {
   messages: ChatMessage[]
-  runs?: ChatSessionRunSnapshot[]
-  activeRuns: ChatSessionRunSnapshot[]
+  runs?: PartnerRunSnapshot[]
+  activeRuns: PartnerRunSnapshot[]
 }
 
-export type ChatSessionOpenRequest = {
-  sessionId: string
+export type PartnerOpenRequest = {
+  partnerId: string
   limit?: number
   beforeTimestamp?: number
 }
 
-export type ChatSessionOpenResponse = {
-  session?: ChatSession
+export type PartnerOpenResponse = {
+  partner?: Partner
   messages: ChatMessage[]
   hasMoreBefore: boolean
-  activeRuns: ChatSessionRunSnapshot[]
-  uiState?: ChatSessionUiStateV1
+  activeRuns: PartnerRunSnapshot[]
+  uiState?: PartnerUiStateV1
 }
 
-export type ChatSessionRunSummariesRequest = {
-  sessionId: string
+export type PartnerRunSummariesRequest = {
+  partnerId: string
 }
 
-export type ChatSessionRunSummariesResponse = {
-  runs: ChatSessionRunSnapshot[]
-}
-
-export type ChatRunEventsRequest = {
-  runId: string
-}
-
-export type ChatRunEventsResponse = {
-  events: AiRunEvent[]
+export type PartnerRunSummariesResponse = {
+  runs: PartnerRunSnapshot[]
 }
 
 export type ChatSubmitResponse = {
   success: boolean
-  mode?: ChatSubmitMode
   userMessage?: ChatMessage
   assistantMessage?: ChatMessage
   run?: AiRunRecord
-  results?: SearchResult[]
-  tokens?: string[]
-  content?: string
   error?: string
 }
 
 export type ChatTurnRetractLatestRequest = {
-  sessionId: string
+  partnerId: string
   userMessageId: string
 }
 
@@ -1300,16 +1388,6 @@ export type AiRunApprovalBatchDecisionResponse = {
   error?: string
 }
 
-export type AiRunUserTakeoverConfirmRequest = {
-  runId: string
-  requestId: string
-}
-
-export type AiRunUserTakeoverConfirmResponse = {
-  success: boolean
-  error?: string
-}
-
 export type BrowserPanelBounds = {
   x: number
   y: number
@@ -1320,6 +1398,22 @@ export type BrowserPanelBounds = {
 export type BrowserPanelBoundsRequest = BrowserPanelBounds & {
   tabId: string
   presentationId: number
+}
+
+/**
+ * 右侧面板水平布局锚点：让主进程在窗口 resize 时同步（同进程、无 IPC 往返）重算原生浏览器 view 的 bounds，
+ * 实现与窗口一起实时缩放，而不是等 renderer→IPC→main 的一拍延迟。仅在布局模型（比例/侧栏宽/挂载）变化时注册一次。
+ */
+export type BrowserPanelFollowRequest = {
+  /** 主分栏容器左边界（= 侧栏宽度，窗口横向缩放时稳定） */
+  splitLeft: number
+  /** 主分栏右边界到窗口内容右缘的固定间距 */
+  rightMargin: number
+  /** 右侧面板占「中间+右侧」可分配宽度的比例 */
+  ratio: number
+  minWidth: number
+  middleMin: number
+  maxRatio: number
 }
 
 export type BrowserPanelShowRequest = {
@@ -1393,11 +1487,8 @@ export type BrowserTabNavigateRequest = BrowserTabMutationRequest & {
 
 export type BrowserTabCreateResponse = BrowserPanelStateResponse
 
-/** @deprecated Use BrowserTabState. */
-export type BrowserPanelState = BrowserTabState
-
 export type AiContextUsageRequest = {
-  sessionId: string
+  partnerId: string
 }
 
 export type AiContextUsageResponse = {
@@ -1431,21 +1522,21 @@ export interface AiActivityDetails {
 }
 
 export type AiRunFailureCode =
-  | 'timeout'
-  | 'network_error'
   | 'user_cancelled'
   | 'process_interrupted'
+  | 'llm_request_failed'
+  | 'output_truncated'
+  | 'input_too_long'
   | 'runtime_limit'
+  | 'internal_error'
   | 'unexpected_error'
-  | 'error'
-export type AiRunResumeSnapshotReason = Exclude<AiRunFailureCode, 'error'>
 export type AiRunFailureSource = 'provider' | 'internal'
 
 type AiRunEventPayload =
   | {
       type: 'run_started'
       runId: string
-      sessionId: string
+      partnerId: string
       createdAt: number
       input: string
     }
@@ -1572,7 +1663,7 @@ type AiRunEventPayload =
       terminalId: string
       commandId: string
       currentTerminalPath: string
-      outputCursor: number
+      readEndPosition: number
       createdAt: number
     }
   | {
@@ -1619,15 +1710,6 @@ type AiRunEventPayload =
       createdAt: number
     }
   | {
-      type: 'decision_hint'
-      runId: string
-      taskId?: string
-      source: DecisionHintSource
-      code: string
-      detail?: JsonObject
-      createdAt: number
-    }
-  | {
       type: 'file_artifact'
       runId: string
       taskId: string
@@ -1660,21 +1742,6 @@ type AiRunEventPayload =
       decidedAt: number
     }
   | {
-      type: 'user_takeover_required'
-      runId: string
-      taskId: string
-      requestId: string
-      message: string
-      createdAt: number
-    }
-  | {
-      type: 'user_takeover_confirmed'
-      runId: string
-      taskId: string
-      requestId: string
-      confirmedAt: number
-    }
-  | {
       type: 'llm_stream_delta'
       runId: string
       taskId?: string
@@ -1682,6 +1749,46 @@ type AiRunEventPayload =
       caller: string
       chunkIndex: number
       text: string
+      createdAt: number
+    }
+  | {
+      type: 'assistant_brain_stream_started'
+      runId: string
+      roundId: string
+      createdAt: number
+    }
+  | {
+      type: 'assistant_brain_stream_delta'
+      runId: string
+      roundId: string
+      text: string
+      createdAt: number
+    }
+  | {
+      type: 'assistant_brain_stream_reset'
+      runId: string
+      roundId: string
+      createdAt: number
+    }
+  | {
+      type: 'assistant_brain_stream_classified'
+      runId: string
+      roundId: string
+      role: 'thought'
+      createdAt: number
+    }
+  | {
+      type: 'assistant_brain_stream_completed'
+      runId: string
+      roundId: string
+      role: 'thought' | 'answer'
+      text: string
+      completedAt: number
+    }
+  | {
+      type: 'assistant_plan_updated'
+      runId: string
+      plan: ChatMessageLogPlanItem[]
       createdAt: number
     }
   | {
@@ -1695,6 +1802,7 @@ type AiRunEventPayload =
       runId: string
       taskId?: string
       text: string
+      linkAccess?: MarkdownLinkAccessEntry[]
     }
   | {
       type: 'context_budget_evaluated'
@@ -1709,27 +1817,29 @@ type AiRunEventPayload =
       type: 'context_compaction_started'
       runId: string
       taskId?: string
-      targetRoundIds: number[]
+      targetMessageCount: number
       budgetTokensBefore: number
       thresholdTokens: number
       createdAt: number
-    }
+      stage?: 'human_brain'
+    } & ContextCompactionCut
   | {
       type: 'context_compaction_completed'
       runId: string
       taskId?: string
       compactBlockId: string
-      sourceRoundIds: number[]
+      sourceMessageCount: number
       tokenEstimateBefore: number
       sourceHistoryTokenEstimate: number
       tokenEstimateAfter: number
       summaryPreview: string
       completedAt: number
-    }
+      stage?: 'human_brain'
+    } & ContextCompactionCut
   | {
-      type: 'runtime_issue'
+      type: 'run_warning'
       runId: string
-      code: RuntimeIssueCode
+      code: AiRunWarningCode
       message: string
       taskId?: string
       workspaceId?: string
@@ -1745,15 +1855,14 @@ type AiRunEventPayload =
       runId: string
       source: AiRunFailureSource
       message: string
+      rawMessage?: string
       httpStatus?: number
       providerCode?: string
       code?: AiRunFailureCode
-      resumeSnapshotSaved?: boolean
     }
   | {
       type: 'run_cancelled'
       runId: string
-      resumeSnapshotSaved?: boolean
     }
 
 export type AiRunEvent = AiRunEventPayload & {
@@ -1761,49 +1870,135 @@ export type AiRunEvent = AiRunEventPayload & {
   stage?: AiRunEventStage
 }
 
-export type ChatConversationMemory = {
-  summary: string
-  coveredMessageId: string | null
-  coveredTimestamp: number | null
-  coveredMessageCount: number
-  revision: number
-  updatedAt: number
+export type ChatMessageLogToolCall = {
+  id: string
+  name: string
+  args: IpcJsonObject
 }
 
-export type ChatConversationMemoryRow = {
-  session_id: string
-  memory_json: string
-  updated_at: number
+export type ChatMessageImageRef = {
+  path: string
+  mimeType: string
+  sizeBytes: number
+  width: number
+  height: number
 }
 
-export type ChatSessionResumeSnapshot = {
-  reason: AiRunResumeSnapshotReason
-  runId: string
-  userInput: string
+export type ChatMessageLogUserContext = {
   selectedReferences: SelectedReference[]
-  workspace?: WorkspaceRuntimeBinding
-  humanState: JsonObject
-  errorMessage: string
-  updatedAt: number
+  attachments: ChatAttachment[]
 }
 
-export type ChatSessionResumeSnapshotRow = {
-  session_id: string
-  run_id: string
-  reason: string
-  user_input: string
-  selected_references_json: string
-  workspace_json?: string
-  human_state_json: string
-  error_message: string
-  updated_at: number
+export type ChatMessageLogPlanItem = {
+  title: string
+  status: 'todo' | 'done'
 }
 
-export type ChatSessionSkillState = {
-  schemaVersion: 1
-  learnedSkillIds: string[]
-  revision: number
-  updatedAt: number
-  lastUpdatedRunId: string
+export type ChatMessageLogAnnotationEntry =
+  | {
+      kind: 'annotation'
+      eventType: 'thinking_started' | 'thinking_completed' | 'finalizing_started'
+      payload: JsonObject
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'learning_started' | 'learning_completed'
+      payload: { skillId: string }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'skill_state_updated'
+      payload: { learnedSkillIds: string[] }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'plan_updated'
+      payload: { plan: ChatMessageLogPlanItem[] }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'compaction_checkpoint'
+      payload: {
+        compactBlockId: string
+        throughSeq: number
+        sourceMessageCount: number
+        summary: string
+      }
+    }
+    | {
+      kind: 'annotation'
+      eventType: 'run_digest'
+      payload: {
+        status: RunDigestStatus
+        summary: string
+        fileChangePaths: string[]
+      }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'context_scope_decided'
+      payload: {
+        needsHistory: boolean
+        basis: ContextScopeDecisionBasis
+        budgetTokens: number
+        reason?: string
+      }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'discard_checkpoint'
+      payload: {
+        throughSeq: number
+        conversationHistory: string
+      }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'approval_batch_resolved'
+      payload: {
+        batchId: string
+        items: Array<{
+          toolCallId: string
+          toolName: string
+          command: string
+          commandExplanation?: string
+          action: 'approve' | 'reject' | 'guide'
+          message?: string
+        }>
+      }
+    }
+
+export type ChatMessageLogEntry =
+  | {
+      kind: 'user'
+      content: string
+      input: string
+      context: ChatMessageLogUserContext
+    }
+  | {
+      kind: 'assistant'
+      content: string
+      toolCalls: ChatMessageLogToolCall[]
+      /** Delivery-only sidecar; process assistants omit this. */
+      linkAccess?: MarkdownLinkAccessEntry[]
+    }
+  | {
+      kind: 'tool'
+      toolCallId: string
+      toolName: string
+      ok: boolean
+      content: string
+      images?: ChatMessageImageRef[]
+    }
+  | ChatMessageLogAnnotationEntry
+
+export type ChatMessageLogRecord = {
+  id: string
+  partnerId: string
+  runId: string
+  seq: number
+  entry: ChatMessageLogEntry
+  createdAt: number
 }
+
 import type { RuntimeSkillId as RegisteredRuntimeSkillId } from './runtimeCapabilities'

@@ -17,7 +17,7 @@ import {
   countDocxFileArtifacts,
   collectToolErrorMessages,
   filterAiRunEventsByType,
-  isDocxEditWriteInput,
+  isDocxWriteInput,
   runWithStructuredOutputRetry
 } from '../testUtils'
 
@@ -118,8 +118,8 @@ describe('ai human live backend', () => {
             .filter((value): value is string => typeof value === 'string')
           const structuralStarted = filterAiRunEventsByType(events, 'tool_call_started').filter(
             (event) =>
-              event.toolName === 'docx_edit' &&
-              isDocxEditWriteInput(event.input) &&
+              ['docx_content_edit', 'docx_format', 'docx_table_edit'].includes(event.toolName) &&
+              isDocxWriteInput(event.input) &&
               typeof event.input.sourcePath === 'string'
           )
           const positionedWriteToolCallIds = new Set(
@@ -168,7 +168,6 @@ describe('ai human live backend', () => {
                   : ''
               ).includes('当前命中复杂定位排版区域')
           )
-          const decisionHints = filterAiRunEventsByType(events, 'decision_hint')
           const errorMessages = collectToolErrorMessages(events)
           const safeEditCompleted =
             safeWriteResults.some((event) => event.result?.ok === true) &&
@@ -183,9 +182,8 @@ describe('ai human live backend', () => {
               positionedFailedWriteResults.length >= 1 &&
               positionedWriteResults.every((event) => event.result?.ok !== true) &&
               result.positionedSourceUnchanged &&
-              decisionHints.some((event) => event.code === 'hand_docx_positioned_write_blocked') &&
               errorMessages.some((message) => message.includes('当前命中复杂定位排版区域')) &&
-               safeEditCompleted,
+              safeEditCompleted,
             {
               name: 'human-live-positioned-docx-skips-protected-area-and-reports-manual-fallback',
               message:
@@ -213,8 +211,7 @@ describe('ai human live backend', () => {
                     !Array.isArray(event.result.data)
                       ? event.result.data.error
                       : undefined
-                })),
-                decisionHints
+                }))
               }
             }
           )

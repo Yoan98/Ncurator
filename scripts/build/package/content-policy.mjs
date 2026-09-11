@@ -153,11 +153,41 @@ export const assertSafePackagePaths = (paths) => {
     }
 
     if (
+      lowerSegments.includes('.local-browsers') ||
       lowerSegments.some(
-        (segment) => segment.startsWith('chromium-') && !segment.startsWith('chromium-bidi')
+        (segment) =>
+          segment.startsWith('chromium-') || segment.startsWith('chromium_headless_shell-')
       )
     ) {
-      violations.push(`${relativePath}: full Chromium is forbidden; only headless shell is allowed`)
+      violations.push(`${relativePath}: Playwright Chromium must not be bundled`)
+      continue
+    }
+
+    if (
+      /(?:^|\/)node_modules\/mathjax-full\/(?:components|es5|ts)(?:\/|$)/u.test(
+        relativePath.toLowerCase()
+      )
+    ) {
+      violations.push(`${relativePath}: removable MathJax distribution`)
+      continue
+    }
+    if (
+      /(?:^|\/)node_modules\/pdf-parse\/lib\/pdf\.js\/(?:v1\.9\.426|v1\.10\.88|v2\.0\.550)(?:\/|$)/u.test(
+        relativePath.toLowerCase()
+      )
+    ) {
+      violations.push(`${relativePath}: unused PDF.js version`)
+      continue
+    }
+    if (/(?:^|\/)node_modules\/exceljs\/dist(?:\/|$)/u.test(relativePath.toLowerCase())) {
+      violations.push(`${relativePath}: bundled ExcelJS browser distribution`)
+      continue
+    }
+    if (
+      process.platform !== 'win32' &&
+      /(?:^|\/)node_modules\/node-pty\/third_party(?:\/|$)/u.test(relativePath.toLowerCase())
+    ) {
+      violations.push(`${relativePath}: Windows ConPTY sources on a non-Windows target`)
       continue
     }
 
@@ -202,6 +232,43 @@ export const assertSafePackagePaths = (paths) => {
   if (violations.length > 0) {
     throw new Error(`package content policy failed:\n${violations.slice(0, 100).join('\n')}`)
   }
+}
+
+// Windows' frozen Python runtime is larger than macOS' runtime. Keep one
+// cross-platform ceiling that still rejects the old bundled-browser layout.
+const WEB_CRAWLER_SIDECAR_HARD_LIMIT_BYTES = 400 * 1024 * 1024
+
+export const assertWebCrawlerSidecarPackage = (files, sourceLabel) => {
+  const sidecarFiles = files.filter((item) =>
+    normalizeRelativePath(item.relativePath).split('/').includes('web_crawler_sidecar')
+  )
+  if (sidecarFiles.length === 0) {
+    throw new Error(`${sourceLabel} is missing the web crawler sidecar`)
+  }
+  const bundledNode = sidecarFiles.find((item) => {
+    const relativePath = normalizeRelativePath(item.relativePath).toLowerCase()
+    return /\/playwright\/driver\/node(?:\.exe)?$/u.test(relativePath)
+  })
+  if (bundledNode) {
+    throw new Error(
+      `${sourceLabel} includes a bundled Playwright Node runtime: ${bundledNode.relativePath}`
+    )
+  }
+  const playwrightDriver = sidecarFiles.find((item) => {
+    const relativePath = normalizeRelativePath(item.relativePath).toLowerCase()
+    return /\/playwright\/driver\/package\/cli\.js$/u.test(relativePath)
+  })
+  if (!playwrightDriver) {
+    throw new Error(`${sourceLabel} is missing the Python Playwright driver JavaScript`)
+  }
+  const bytes = sidecarFiles.reduce((sum, item) => sum + item.size, 0)
+  if (bytes > WEB_CRAWLER_SIDECAR_HARD_LIMIT_BYTES) {
+    throw new Error(
+      `${sourceLabel} web crawler sidecar is ${(bytes / 1024 / 1024).toFixed(1)} MiB; ` +
+        `hard limit is ${String(WEB_CRAWLER_SIDECAR_HARD_LIMIT_BYTES / 1024 / 1024)} MiB`
+    )
+  }
+  return bytes
 }
 
 export const listDirectoryFiles = (rootDirectory) => {

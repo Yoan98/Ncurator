@@ -1,42 +1,34 @@
 ﻿import React from 'react'
-import { message } from 'antd'
-import ReactMarkdown, { defaultUrlTransform } from 'react-markdown'
-import remarkGfm from 'remark-gfm'
+import ReactMarkdown from 'react-markdown'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
 import 'katex/dist/katex.min.css'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism'
+import type { MarkdownLinkAccessEntry } from '../../../shared/types'
 import {
-  parseRefHref,
   normalizeRefMarkdownLinks,
   repairInlineCodeWrappedNcuratorLinks,
   renderReferenceIcon,
-  type ParsedNcuratorRefKind,
-  type ParsedNcuratorRefResourceType
+  resolveMarkdownLinkForRender,
+  transformAssistantMarkdownUrl,
+  type OpenableMarkdownReference
 } from './markdownReference'
+import remarkGfmNoAutolink from './remarkGfmNoAutolink'
 
 interface MarkdownRendererProps {
   content: string
   className?: string
-  onOpenReference?: (reference: {
-    kind: ParsedNcuratorRefKind
-    resourceType: ParsedNcuratorRefResourceType
-    label: string
-    path: string
-  }) => void
-}
-
-const transformMarkdownUrl = (url: string): string => {
-  if (url.startsWith('ncurator://ref?')) {
-    return url
-  }
-  return defaultUrlTransform(url)
+  variant?: 'default' | 'thought'
+  linkAccess?: MarkdownLinkAccessEntry[]
+  onOpenReference?: (reference: OpenableMarkdownReference) => void
 }
 
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   content,
   className,
+  variant = 'default',
+  linkAccess,
   onOpenReference
 }) => {
   const normalizedContent = React.useMemo(
@@ -45,11 +37,13 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   )
 
   return (
-    <div className={`markdown-body ${className || ''}`}>
+    <div
+      className={`markdown-body ${variant === 'thought' ? 'markdown-body--thought' : ''} ${className || ''}`}
+    >
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
+        remarkPlugins={[remarkGfmNoAutolink, remarkMath]}
         rehypePlugins={[rehypeKatex]}
-        urlTransform={transformMarkdownUrl}
+        urlTransform={transformAssistantMarkdownUrl}
         components={{
           code({
             inline,
@@ -86,66 +80,38 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
           ol: ({ children }) => <ol>{children}</ol>,
           li: ({ children }) => <li>{children}</li>,
           a: ({ href, children }) => {
-            const parsed = parseRefHref(href)
-            if (parsed.type === 'reference') {
-              const label = parsed.label || String(children)
-              if (parsed.kind === 'reference' && parsed.accessStatus === 'unavailable') {
-                return (
-                  <span
-                    className="markdown-reference-unavailable"
-                    data-ref-path={parsed.path}
-                    data-ref-kind={parsed.kind}
-                    data-ref-resource-type={parsed.resourceType}
-                    data-ref-access-status={parsed.accessStatus}
-                  >
-                    <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
-                  </span>
-                )
-              }
+            const label = String(children)
+            const resolved = resolveMarkdownLinkForRender({ href, linkAccess, label })
+
+            if (resolved.mode === 'unavailable') {
+              return (
+                <span
+                  className="markdown-reference-unavailable"
+                  title="链接无法访问"
+                  data-ref-access-status="unavailable"
+                >
+                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
+                </span>
+              )
+            }
+
+            if (resolved.mode === 'openable') {
+              const { reference } = resolved
               return (
                 <a
                   href={href}
                   className="markdown-reference-link"
-                  data-ref-path={parsed.path}
-                  data-ref-kind={parsed.kind}
-                  data-ref-resource-type={parsed.resourceType}
-                  data-ref-access-status={
-                    parsed.kind === 'reference' ? parsed.accessStatus : undefined
-                  }
+                  data-ref-path={reference.path}
+                  data-ref-resource-type={reference.resourceType}
                   onClick={(event) => {
                     if (!onOpenReference) return
                     event.preventDefault()
-                    onOpenReference({
-                      kind: parsed.kind,
-                      resourceType: parsed.resourceType,
-                      label,
-                      path: parsed.path
-                    })
+                    onOpenReference(reference)
                   }}
                 >
                   <span className="markdown-reference-icon">
-                    {renderReferenceIcon({
-                      kind: parsed.kind,
-                      resourceType: parsed.resourceType
-                    })}
+                    {renderReferenceIcon(reference.resourceType)}
                   </span>
-                  <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
-                </a>
-              )
-            }
-
-            if (parsed.type === 'invalid') {
-              return (
-                <a
-                  href={href}
-                  className="markdown-reference-link markdown-reference-link-invalid"
-                  title="引用链接格式无效，无法打开"
-                  data-ref-invalid-reason={parsed.reason}
-                  onClick={(event) => {
-                    event.preventDefault()
-                    void message.warning('引用链接格式无效，无法打开')
-                  }}
-                >
                   <span className="min-w-0 break-words [overflow-wrap:anywhere]">{children}</span>
                 </a>
               )
@@ -153,7 +119,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
 
             return (
               <a
-                href={href}
+                href={resolved.href}
                 className="markdown-normal-link"
                 target="_blank"
                 rel="noopener noreferrer"

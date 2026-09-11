@@ -23,8 +23,8 @@ const fixtureSource = `
 const path = require('node:path')
 const buildPrompt = (input) => [
   '<system>',
-  '像一个判断稳定的人类执行者一样工作',
-  '你的职责是基于已经提供的信息，面向用户交付最终结果',
+  '根据已有信息自主决策下一步工具的使用来推进任务',
+  '停止调用工具，直接输出最终交付的 markdown 正文',
   JSON.stringify({ input, schema: { type: 'object', required: ['answer'] } }, null, 2),
   '</system>',
   path.sep

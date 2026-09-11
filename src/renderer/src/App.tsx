@@ -1,6 +1,6 @@
 ﻿import React from 'react'
 import { HashRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { App as AntdApp, Layout, ConfigProvider, theme } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
 import dayjs from 'dayjs'
@@ -9,23 +9,24 @@ import ConversationWorkbenchPage from './pages/ConversationWorkbenchPage'
 import SettingsPage from './pages/SettingsPage'
 import ModelDownloadPage from './pages/ModelDownloadPage'
 import NotificationCenter from './components/NotificationCenter'
-import { WorkbenchModeProvider } from './contexts/WorkbenchModeProvider'
 import { AppUpdateProvider } from './contexts/AppUpdateProvider'
 import AppWindowFrame from './components/app/AppWindowFrame'
+import UpdateRequiredPage from './pages/UpdateRequiredPage'
+import type { AppStartupStatus } from '../../shared/types'
 
 dayjs.locale('zh-cn')
 
 const { Content } = Layout
-const PENDING_NOTIFICATION_SESSION_KEY = 'ncurator.pending-notification-session'
+const PENDING_NOTIFICATION_PARTNER_KEY = 'ncurator.pending-notification-partner'
 
 const SystemNotificationNavigationBridge: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
 
   useEffect(() => {
-    return window.api.onSystemNotificationOpenSession((sessionId) => {
+    return window.api.onSystemNotificationOpenPartner((partnerId) => {
       if (location.pathname === '/') return
-      window.sessionStorage.setItem(PENDING_NOTIFICATION_SESSION_KEY, sessionId)
+      window.sessionStorage.setItem(PENDING_NOTIFICATION_PARTNER_KEY, partnerId)
       navigate('/')
     })
   }, [location.pathname, navigate])
@@ -34,6 +35,21 @@ const SystemNotificationNavigationBridge: React.FC = () => {
 }
 
 function App(): React.JSX.Element {
+  const [startupStatus, setStartupStatus] = useState<AppStartupStatus | null>(null)
+
+  useEffect(() => {
+    let mounted = true
+    window.api
+      .appStartupGetStatus()
+      .then((status) => {
+        if (mounted) setStartupStatus(status)
+      })
+      .catch((error) => console.error('Failed to read app startup status', error))
+    return () => {
+      mounted = false
+    }
+  }, [])
+
   return (
     <ConfigProvider
       locale={zhCN}
@@ -109,7 +125,15 @@ function App(): React.JSX.Element {
     >
       <AntdApp>
         <AppUpdateProvider>
-          <WorkbenchModeProvider>
+          {!startupStatus ? (
+            <AppWindowFrame>
+              <div className="h-full bg-white" aria-label="正在启动" />
+            </AppWindowFrame>
+          ) : startupStatus.mode === 'update_required' ? (
+            <AppWindowFrame>
+              <UpdateRequiredPage startupStatus={startupStatus} />
+            </AppWindowFrame>
+          ) : (
             <HashRouter>
               <SystemNotificationNavigationBridge />
               <AppWindowFrame>
@@ -117,7 +141,7 @@ function App(): React.JSX.Element {
                 <NotificationCenter />
               </AppWindowFrame>
             </HashRouter>
-          </WorkbenchModeProvider>
+          )}
         </AppUpdateProvider>
       </AntdApp>
     </ConfigProvider>

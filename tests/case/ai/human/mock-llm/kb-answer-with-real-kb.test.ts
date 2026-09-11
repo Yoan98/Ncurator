@@ -44,7 +44,6 @@ describe('ai human mock-llm backend', () => {
           }
         ])
 
-        let mouthPrompt = ''
         const runner = createHumanTestRunner(runtime, {
           structuredOutputScript: {
             'human.brain': [
@@ -61,17 +60,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '已拿到 KB 证据。'
-                })
-              }
-            ],
-            'human.mouth': [
-              ({ user }) => {
-                mouthPrompt = user
-                return {
                   summary: '已拿到 KB 证据。',
                   deliveryMarkdown: '# KB Answer\n\n审批被拒绝时应保留现有文件不变。'
-                }
+                })
               }
             ]
           }
@@ -84,29 +75,27 @@ describe('ai human mock-llm backend', () => {
 
         return {
           output,
-          mouthPrompt,
           events: runtime.eventCollector.snapshot()
         }
       },
       assert: async (result, runtime) => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
         const kbResult = readLatestToolResultDataFromEvents<{
-          items: Array<{ document_id?: string; text: string }>
+          items: Array<{ documentId?: string; text: string }>
           total: number
         }>(toolResults, 'kb_search')
 
         runtime.assertThat(
           result.output.status === 'completed' &&
-            kbResult.items.some((row) => row.document_id === 'doc-1') &&
+            kbResult.items.some((row) => row.documentId === 'doc-1') &&
             filterAiRunEventsByType(result.events, 'tool_call_result').some(
               (event) => event.toolName === 'kb_search'
             ),
           {
             name: 'human-kb-answer-uses-real-kb-runtime',
-            message: 'KB 回答 case 应通过真实 KB 检索拿到证据，并完成后续真实 mouth 收口。',
+            message: 'KB 回答 case 应通过真实 KB 检索拿到证据，并完成后续最终交付。',
             data: {
-              kbResult,
-              mouthPrompt: result.mouthPrompt
+              kbResult
             }
           }
         )

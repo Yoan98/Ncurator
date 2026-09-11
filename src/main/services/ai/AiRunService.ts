@@ -1,5 +1,4 @@
 import { createHumanGraphRunner } from './human/graph/humanGraph'
-import { toRendererRunFailure } from './errors'
 import { createAiRunContext } from './runtime'
 import { runAiRuntimePreflight } from './runtimePreflight'
 import {
@@ -8,17 +7,8 @@ import {
   createFailedAiRunState
 } from './run/state'
 import type { AiRunDeps, AiRunStartPayload, AiRunState } from './types'
-import {
-  resolveResumeSelectedReferences,
-  resolveResumeWorkspace,
-  restoreHumanStateFromResumeSnapshot,
-  saveHumanResumeSnapshot
-} from './utils/resumeSnapshot'
-import { isCancelledError, isRecoverableHumanRunError } from './utils/runFailure'
-import { classifyInterruptionReason } from './utils/runFailure'
-import { createInitialHumanState } from './human/state/schema'
-import type { HumanState } from './human/types'
-import { createHumanTaskContext } from './utils/resumeSnapshot'
+import { classifyThrownErrorToAiRunFailure, isCancelledError } from './utils/runFailure'
+import { resolveAiRunFailurePresentation } from './runFailureCatalog'
 
 export class AiRunService {
   private static instance: AiRunService
@@ -33,39 +23,9 @@ export class AiRunService {
   }
 
   public async run(payload: AiRunStartPayload, deps: AiRunDeps): Promise<AiRunState> {
-    const userInput = String(payload.input || '')
-    let mergedSelectedReferences = payload.selectedReferences
-    let mergedWorkspace = payload.workspace
-    let initialState: HumanState = createInitialHumanState({
-      taskId: payload.runId,
-      userInput,
-      taskContext: createHumanTaskContext(userInput)
-    })
     try {
-      const resumeSnapshot = await deps.chatStore.getSessionResumeSnapshot(payload.sessionId)
-      mergedSelectedReferences = resolveResumeSelectedReferences({
-        payloadSelectedReferences: payload.selectedReferences,
-        snapshotSelectedReferences: resumeSnapshot?.selectedReferences
-      })
-      mergedWorkspace = resolveResumeWorkspace({
-        payloadWorkspace: payload.workspace,
-        snapshotWorkspace: resumeSnapshot?.workspace
-      })
-      const effectivePayload: AiRunStartPayload = {
-        ...payload,
-        selectedReferences: mergedSelectedReferences,
-        workspace: mergedWorkspace
-      }
-      initialState = resumeSnapshot
-        ? restoreHumanStateFromResumeSnapshot({
-            runId: payload.runId,
-            userInput,
-            reason: resumeSnapshot.reason,
-            snapshot: resumeSnapshot.humanState
-          })
-        : initialState
       await runAiRuntimePreflight(deps)
-      const ctx = createAiRunContext(effectivePayload, deps)
+      const ctx = createAiRunContext(payload, deps)
       const runHumanTask = createHumanGraphRunner({ ctx })
       const output = await runHumanTask(
         {
@@ -73,64 +33,57 @@ export class AiRunService {
           userInput: String(payload.input || '')
         },
         {
-          emitAnswerEvents: true,
-          initialState
+          emitAnswerEvents: true
         }
       )
-      await deps.chatStore.clearSessionResumeSnapshot(payload.sessionId)
       return createCompletedAiRunState({
         runId: payload.runId,
-        sessionId: payload.sessionId,
+        partnerId: payload.partnerId,
         input: String(payload.input || ''),
         finalDeliveryMarkdown: output.deliveryMarkdown,
         finalArtifacts: output.artifacts || []
       })
     } catch (e) {
-      const reason = isRecoverableHumanRunError(e) ? e.reason : classifyInterruptionReason(e)
-      const humanState =
-        isRecoverableHumanRunError(e) && e.lastHumanState ? e.lastHumanState : initialState
-      let resumeSnapshotSaved = false
-      try {
-        const session = await deps.chatStore.getChatSession(payload.sessionId)
-        if (session) {
-          await saveHumanResumeSnapshot({
-            chatStore: deps.chatStore,
-            sessionId: payload.sessionId,
-            reason,
-            runId: payload.runId,
-            userInput,
-            selectedReferences: mergedSelectedReferences || [],
-            workspace: mergedWorkspace,
-            humanState,
-            errorMessage: e instanceof Error ? e.message : String(e || ''),
-            updatedAt: Date.now()
-          })
-          resumeSnapshotSaved = true
-        }
-      } catch (snapshotError) {
-        console.error('[AI-RUN] failed to save resume snapshot:', snapshotError)
-      }
-      if (reason === 'user_cancelled' || isCancelledError(e)) {
+      if (isCancelledError(e)) {
         return createCancelledAiRunState({
           runId: payload.runId,
-          sessionId: payload.sessionId,
-          input: payload.input,
-          resumeSnapshotSaved
+          partnerId: payload.partnerId,
+          input: payload.input
         })
       }
-      const failure = toRendererRunFailure(e)
-      const message =
-        reason === 'runtime_limit' ? '已达到运行上限，可继续对话推进' : failure.message
+      const failure = classifyThrownErrorToAiRunFailure(e)
+      if (failure.failureCode === 'user_cancelled') {
+        return createCancelledAiRunState({
+          runId: payload.runId,
+          partnerId: payload.partnerId,
+          input: payload.input
+        })
+      }
+      const presentation = resolveAiRunFailurePresentation(
+        failure.failureCode,
+        failure.rawMessage
+      )
+      const failureSource = presentation.source === 'user' ? 'internal' : presentation.source
+      deps.sendEvent({
+        type: 'run_failed',
+        runId: payload.runId,
+        source: failureSource,
+        message: presentation.message,
+        rawMessage: presentation.rawMessage,
+        httpStatus: failure.httpStatus,
+        providerCode: failure.providerCode,
+        code: failure.failureCode
+      })
       return createFailedAiRunState({
         runId: payload.runId,
-        sessionId: payload.sessionId,
+        partnerId: payload.partnerId,
         input: payload.input,
-        error: message,
-        failureSource: reason === 'runtime_limit' ? 'internal' : failure.source,
+        error: presentation.message,
+        failureRawMessage: presentation.rawMessage,
+        failureSource,
         failureHttpStatus: failure.httpStatus,
         failureProviderCode: failure.providerCode,
-        failureCode: reason,
-        resumeSnapshotSaved
+        failureCode: failure.failureCode
       })
     }
   }

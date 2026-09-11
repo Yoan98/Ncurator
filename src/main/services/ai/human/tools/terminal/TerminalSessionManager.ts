@@ -8,6 +8,12 @@ import type { AiRuntimePlatform } from '../../../types'
 import { buildTerminalEnvironment } from './environment/TerminalEnvironment'
 import { getTerminalPlatformAdapter, type TerminalPlatformAdapter } from './platform'
 import { TerminalProtocol, type TerminalProtocolEvent } from './protocol/TerminalProtocol'
+import { isTerminalTerminationCommand } from './commandPolicy'
+import {
+  TERMINAL_MAX_CONCURRENT_SESSIONS,
+  TERMINAL_READ_MAX_CHARS,
+  TERMINAL_RETAINED_SCROLLBACK_CHARS
+} from './terminalConstants'
 
 export type TerminalSessionStatus = 'idle' | 'running' | 'stopping' | 'closed'
 export type TerminalCommandReturnReason =
@@ -31,7 +37,8 @@ export type TerminalCommandResult = {
   returnReason: TerminalCommandReturnReason
   currentTerminalPath: string
   output: string
-  outputCursor: number
+  readEndPosition: number
+  hasMoreOutput: boolean
   exitCode: number | null
 }
 
@@ -40,7 +47,8 @@ export type TerminalReadResult = {
   terminalStatus: TerminalSessionStatus
   currentTerminalPath: string
   output: string
-  outputCursor: number
+  readEndPosition: number
+  hasMoreOutput: boolean
   exitCode: number | null
 }
 
@@ -85,16 +93,14 @@ type ManagedTerminalSession = {
   exited: Promise<void>
   markExited: () => void
   createdAt: number
-  lastActiveAt: number
 }
 
 export type TerminalSessionManagerOptions = {
   yieldMs?: number
   stopGraceMs?: number
-  maxOutputChars?: number
-  maxSessionsPerChat?: number
-  idleTtlMs?: number
-  runningTtlMs?: number
+  retainedScrollbackChars?: number
+  readMaxChars?: number
+  maxConcurrentSessions?: number
   environment?: Record<string, string>
 }
 
@@ -102,8 +108,19 @@ const ANSI_PATTERN =
   // eslint-disable-next-line no-control-regex
   /[\u001B\u009B][[\]()#;?]*(?:(?:(?:[a-zA-Z\d]*(?:;[-a-zA-Z\d/#&.:=?%@~_]+)*)?\u0007)|(?:(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]))/g
 
-const stripTerminalControlText = (value: string): string =>
-  value.replace(ANSI_PATTERN, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+export const stripTerminalControlText = (value: string): string =>
+  value
+    .replace(ANSI_PATTERN, '')
+    .replace(/\r\n/g, '\n')
+    .split('\n')
+    .map((line) => {
+      const parts = line.split('\r')
+      for (let index = parts.length - 1; index >= 0; index -= 1) {
+        if (parts[index]!.length > 0) return parts[index]!
+      }
+      return ''
+    })
+    .join('\n')
 
 const createDeferred = () => {
   let resolve: () => void = () => undefined
@@ -129,23 +146,24 @@ export class TerminalSessionManager {
   private readonly completedCommandExitCodes = new Map<string, number>()
   private readonly yieldMs: number
   private readonly stopGraceMs: number
-  private readonly maxOutputChars: number
-  private readonly maxSessionsPerChat: number
-  private readonly idleTtlMs: number
-  private readonly runningTtlMs: number
+  private readonly retainedScrollbackChars: number
+  private readonly readMaxChars: number
+  private readonly maxConcurrentSessions: number
   private readonly environment?: Record<string, string>
-  private readonly cleanupTimer: ReturnType<typeof setInterval>
 
   public constructor(options: TerminalSessionManagerOptions = {}) {
     this.yieldMs = Math.max(50, Number(options.yieldMs || 8000))
     this.stopGraceMs = Math.max(50, Number(options.stopGraceMs || 2000))
-    this.maxOutputChars = Math.max(1024, Number(options.maxOutputChars || 1_000_000))
-    this.maxSessionsPerChat = Math.max(1, Number(options.maxSessionsPerChat || 3))
-    this.idleTtlMs = Math.max(1000, Number(options.idleTtlMs || 30 * 60 * 1000))
-    this.runningTtlMs = Math.max(1000, Number(options.runningTtlMs || 2 * 60 * 60 * 1000))
+    this.retainedScrollbackChars = Math.max(
+      1024,
+      Number(options.retainedScrollbackChars || TERMINAL_RETAINED_SCROLLBACK_CHARS)
+    )
+    this.readMaxChars = Math.max(1, Number(options.readMaxChars || TERMINAL_READ_MAX_CHARS))
+    this.maxConcurrentSessions = Math.max(
+      1,
+      Number(options.maxConcurrentSessions || TERMINAL_MAX_CONCURRENT_SESSIONS)
+    )
     this.environment = options.environment
-    this.cleanupTimer = setInterval(() => this.pruneExpiredSessions(), 60_000)
-    this.cleanupTimer.unref?.()
   }
 
   public list(input: { chatSessionId: string; workspaceId?: string }): TerminalSessionSnapshot[] {
@@ -174,21 +192,15 @@ export class TerminalSessionManager {
     platform: AiRuntimePlatform
     runId: string
     command: string
-    terminalId?: string
   }): Promise<TerminalCommandResult> {
-    const session = input.terminalId
-      ? this.requireSession({
-          terminalId: input.terminalId,
-          chatSessionId: input.chatSessionId,
-          workspaceId: input.workspaceId
-        })
-      : await this.createSession(input)
-
-    await session.ready
-    if (session.status === 'running' || session.status === 'stopping') {
-      throw new Error('terminal_busy')
-    }
-    if (session.status === 'closed') throw new Error('terminal_closed')
+    const session = await this.createSession({
+      chatSessionId: input.chatSessionId,
+      workspaceId: input.workspaceId,
+      workspaceRootPath: input.workspaceRootPath,
+      environment: input.environment,
+      platform: input.platform,
+      allowConcurrentOverLimit: isTerminalTerminationCommand(input.command)
+    })
 
     const leadingCwd = await session.adapter.resolveCommandCwd({
       command: input.command,
@@ -213,7 +225,6 @@ export class TerminalSessionManager {
     }
     session.currentCommand = commandState
     session.status = 'running'
-    session.lastActiveAt = Date.now()
     try {
       session.process.write(
         `${session.adapter.buildCommandEnvelope(
@@ -234,7 +245,8 @@ export class TerminalSessionManager {
     ])
 
     const completed = commandState.returnReason !== undefined
-    return {
+    const commandOutput = this.readOutput(session, commandState.outputStartCursor)
+    const result: TerminalCommandResult = {
       terminalId: session.terminalId,
       commandId,
       terminalStatus: session.status,
@@ -242,29 +254,38 @@ export class TerminalSessionManager {
         ? commandState.returnReason || 'command_completed'
         : 'command_still_running',
       currentTerminalPath: session.currentTerminalPath,
-      output: this.readOutput(session, commandState.outputStartCursor).output,
-      outputCursor: session.outputCursor,
+      output: commandOutput.output,
+      readEndPosition: commandOutput.readEndPosition,
+      hasMoreOutput: commandOutput.hasMoreOutput,
       exitCode: completed ? commandState.exitCode : null
     }
+    if (completed && !commandOutput.hasMoreOutput) {
+      await this.closeSession(session)
+    }
+    return result
   }
 
-  public read(input: {
+  public async read(input: {
     terminalId: string
     chatSessionId: string
     workspaceId: string
-    outputCursor?: number
-  }): TerminalReadResult {
+    readEndPosition?: number
+  }): Promise<TerminalReadResult> {
     const session = this.requireSession(input)
-    const result = this.readOutput(session, input.outputCursor)
-    session.lastActiveAt = Date.now()
-    return {
+    const result = this.readOutput(session, input.readEndPosition)
+    const output: TerminalReadResult = {
       terminalId: session.terminalId,
       terminalStatus: session.status,
       currentTerminalPath: session.currentTerminalPath,
       output: result.output,
-      outputCursor: result.outputCursor,
+      readEndPosition: result.readEndPosition,
+      hasMoreOutput: result.hasMoreOutput,
       exitCode: session.status === 'running' ? null : session.lastExitCode
     }
+    if (session.status === 'idle' && !result.hasMoreOutput) {
+      await this.closeSession(session)
+    }
+    return output
   }
 
   public async waitForCommand(input: {
@@ -281,7 +302,8 @@ export class TerminalSessionManager {
       return session.lastExitCode ?? 1
     }
     await command.completion
-    return command.exitCode ?? session.lastExitCode ?? 1
+    const exitCode = command.exitCode ?? session.lastExitCode ?? 1
+    return exitCode
   }
 
   public async stop(input: {
@@ -363,22 +385,10 @@ export class TerminalSessionManager {
   }
 
   public async dispose(): Promise<void> {
-    clearInterval(this.cleanupTimer)
     await Promise.all(
       Array.from(this.sessions.values()).map(async (session) => await this.closeSession(session))
     )
     this.completedCommandExitCodes.clear()
-  }
-
-  private pruneExpiredSessions(): void {
-    const now = Date.now()
-    for (const session of this.sessions.values()) {
-      const expired = session.currentCommand
-        ? now - session.currentCommand.startedAt >= this.runningTtlMs
-        : now - session.lastActiveAt >= this.idleTtlMs
-      if (!expired) continue
-      void this.closeSession(session)
-    }
   }
 
   private async createSession(input: {
@@ -387,10 +397,18 @@ export class TerminalSessionManager {
     workspaceRootPath: string
     environment?: Record<string, string>
     platform: AiRuntimePlatform
+    allowConcurrentOverLimit?: boolean
   }): Promise<ManagedTerminalSession> {
-    const activeCount = this.list({ chatSessionId: input.chatSessionId }).length
-    if (activeCount >= this.maxSessionsPerChat) throw new Error('terminal_session_limit_reached')
-
+    if (!input.allowConcurrentOverLimit) {
+      const activeCount = Array.from(this.sessions.values()).filter(
+        (session) =>
+          session.chatSessionId === input.chatSessionId &&
+          (session.status === 'running' || session.status === 'stopping')
+      ).length
+      if (activeCount >= this.maxConcurrentSessions) {
+        throw new Error('terminal_session_limit_reached')
+      }
+    }
     const rootPath = path.resolve(input.workspaceRootPath)
     const ready = createDeferred()
     const exited = createDeferred()
@@ -435,8 +453,7 @@ export class TerminalSessionManager {
       markReady: ready.resolve,
       exited: exited.promise,
       markExited: exited.resolve,
-      createdAt: Date.now(),
-      lastActiveAt: Date.now()
+      createdAt: Date.now()
     }
     this.sessions.set(session.terminalId, session)
     terminalProcess.onData((data) => this.consumeProtocolData(session, data))
@@ -540,7 +557,7 @@ export class TerminalSessionManager {
     event: TerminalProtocolEvent
   ): void {
     if (event.type === 'output') {
-      this.appendOutput(session, event.data)
+      if (session.currentCommand) this.appendOutput(session, event.data)
       return
     }
     if (event.type === 'ready') {
@@ -587,8 +604,8 @@ export class TerminalSessionManager {
     if (!value) return
     session.output += value
     session.outputCursor += value.length
-    if (session.output.length > this.maxOutputChars) {
-      const trimCount = session.output.length - this.maxOutputChars
+    if (session.output.length > this.retainedScrollbackChars) {
+      const trimCount = session.output.length - this.retainedScrollbackChars
       session.output = session.output.slice(trimCount)
       session.outputBaseCursor += trimCount
     }
@@ -601,18 +618,24 @@ export class TerminalSessionManager {
     if (oldest) this.completedCommandExitCodes.delete(oldest)
   }
 
+  // 从请求游标读到当前末尾，但单次最多返回 readMaxChars 个字符；
+  // readEndPosition 是本次返回内容之后的下一个位置，模型原样传回即可续读；
+  // hasMoreOutput 表示缓冲里是否还有更新的输出未读完。
   private readOutput(
     session: ManagedTerminalSession,
     requestedCursor?: number
-  ): { output: string; outputCursor: number } {
-    const cursor = Math.max(
+  ): { output: string; readEndPosition: number; hasMoreOutput: boolean } {
+    const watermark = session.outputCursor
+    const start = Math.max(
       session.outputBaseCursor,
-      Math.min(session.outputCursor, Number(requestedCursor ?? session.outputBaseCursor))
+      Math.min(watermark, Number(requestedCursor ?? session.outputBaseCursor))
     )
-    const offset = cursor - session.outputBaseCursor
+    const end = Math.min(start + this.readMaxChars, watermark)
+    const offset = start - session.outputBaseCursor
     return {
-      output: session.output.slice(offset),
-      outputCursor: session.outputCursor
+      output: session.output.slice(offset, offset + (end - start)),
+      readEndPosition: end,
+      hasMoreOutput: end < watermark
     }
   }
 }

@@ -1,9 +1,9 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { Document, Packer, Paragraph, TextRun } from 'docx'
-import type { DocxCreateBlock } from '../types'
-import { loadDocxBundle } from '../adapters/ooxml/blockIndex'
-import { createBlockFromNode, createRelationshipWriter } from '../adapters/ooxml/createNodeDom'
+import type { DocxCreateRootNode } from '../types'
+import { loadDocxBundle } from '../adapters/ooxml/nodeIndex'
+import { createNodeFromNode, createRelationshipWriter } from '../adapters/ooxml/createNodeDom'
 import { childElements } from '../adapters/ooxml/dom'
 import { XMLSerializer } from '@xmldom/xmldom'
 
@@ -11,7 +11,7 @@ const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
 export const createDocxFile = async (input: {
   filePath: string
-  blocks: readonly DocxCreateBlock[]
+  nodes: readonly DocxCreateRootNode[]
 }): Promise<void> => {
   const skeleton = new Document({
     sections: [{ children: [new Paragraph({ children: [new TextRun('')] })] }]
@@ -23,9 +23,9 @@ export const createDocxFile = async (input: {
     .filter((node) => node.localName !== 'sectPr')
     .forEach((node) => body.removeChild(node))
   const relationships = await createRelationshipWriter(bundle.zip)
-  const blocks =
-    input.blocks.length > 0
-      ? input.blocks
+  const nodes =
+    input.nodes.length > 0
+      ? input.nodes
       : [
           {
             type: 'paragraph',
@@ -33,9 +33,9 @@ export const createDocxFile = async (input: {
           } as const
         ]
   const sectionProperties = childElements(body, 'sectPr')[0] || null
-  blocks.forEach((block) =>
+  nodes.forEach((node) =>
     body.insertBefore(
-      createBlockFromNode(bundle.documentDom, block, relationships),
+      createNodeFromNode(bundle.documentDom, node, relationships),
       sectionProperties
     )
   )

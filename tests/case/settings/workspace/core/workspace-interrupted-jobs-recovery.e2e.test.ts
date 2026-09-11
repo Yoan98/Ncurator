@@ -12,8 +12,7 @@ import {
   getSettingsLocator,
   navigateToSettingsSection,
   seedWebSources,
-  startLocalSettingsHttpServer,
-  workspaceCardLocator
+  startLocalSettingsHttpServer
 } from '../../../../harness/e2e/settings'
 
 const CASE_ID = 'workspace-interrupted-jobs-recovery'
@@ -104,25 +103,27 @@ describe('settings workspace recovery e2e', () => {
 
           ;({ page } = await runtime.restartApp())
           await navigateToSettingsSection(page, 'workspace')
-          await workspaceCardLocator(page, workspaceId).click()
+          await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).waitFor({
+            state: 'visible'
+          })
+          // Scan must leave the running/disabled-by-job state; prepare may stay disabled
+          // without a vector model or actionable files (not part of AC4).
+          await page.waitForFunction((testId) => {
+            const button = document.querySelector(`[data-testid="${testId}"]`)
+            return button instanceof HTMLButtonElement && !button.disabled
+          }, importSelectors.workspaceQuickScanButton)
           const fileProgressHidden = await getSettingsLocator(
             page,
             importSelectors.workspaceIndexJobProgress
           ).isHidden()
-          const fileButtonsEnabled =
-            !(await getSettingsLocator(
-              page,
-              importSelectors.workspaceQuickScanButton
-            ).isDisabled()) &&
-            !(await getSettingsLocator(
-              page,
-              importSelectors.workspaceQuickPrepareButton
-            ).isDisabled())
+          const fileScanButtonEnabled = !(await getSettingsLocator(
+            page,
+            importSelectors.workspaceQuickScanButton
+          ).isDisabled())
           const fileJob = readJob(runtime.userDataDir, fileJobId)
 
           await seedWebSources(page, workspaceId, [server.url('/interrupted')])
           await navigateToSettingsSection(page, 'workspace')
-          await workspaceCardLocator(page, workspaceId).click()
           await page.getByRole('tab', { name: /网页/u }).click()
           await page.getByRole('button', { name: '检查更新', exact: true }).click()
           await page.getByTestId(importSelectors.webSourceIndexJobProgress).waitFor({
@@ -139,7 +140,6 @@ describe('settings workspace recovery e2e', () => {
 
           ;({ page } = await runtime.restartApp())
           await navigateToSettingsSection(page, 'workspace')
-          await workspaceCardLocator(page, workspaceId).click()
           await page.getByRole('tab', { name: /网页/u }).click()
           const webScanJob = readJob(runtime.userDataDir, webScanJobId)
           const webScanProgressHidden = await page
@@ -161,11 +161,10 @@ describe('settings workspace recovery e2e', () => {
 
           ;({ page } = await runtime.restartApp())
           await navigateToSettingsSection(page, 'workspace')
-          await workspaceCardLocator(page, workspaceId).click()
           await page.getByRole('tab', { name: /网页/u }).click()
           const webPrepareJob = readJob(runtime.userDataDir, webPrepareJobId)
           const webSources = await page.evaluate(async (id) => {
-            const response = await window.api.webSourceList({ workspaceId: id })
+            const response = await window.api.webSourceList({})
             return response.items
           }, workspaceId)
           const webProgressHidden = await page
@@ -174,7 +173,7 @@ describe('settings workspace recovery e2e', () => {
 
           return {
             fileProgressHidden,
-            fileButtonsEnabled,
+            fileScanButtonEnabled,
             fileJobStatus: fileJob?.status,
             fileJobError: fileJob?.last_error,
             webScanProgressHidden,
@@ -189,13 +188,13 @@ describe('settings workspace recovery e2e', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.fileProgressHidden &&
-              result.fileButtonsEnabled &&
+              result.fileScanButtonEnabled &&
               result.fileJobStatus === 'failed' &&
               Boolean(result.fileJobError),
             {
               name: 'interrupted-file-scan-fails-after-restart',
               message:
-                '文件检查被关闭中断后，重启必须退出执行中状态、恢复按钮并将任务标记为失败，对齐 SET-WORKSPACE-003-AC4。',
+                '文件检查被关闭中断后，重启必须退出执行中状态、恢复检查按钮并将任务标记为失败，对齐 SET-WORKSPACE-003-AC4。',
               data: result
             }
           )

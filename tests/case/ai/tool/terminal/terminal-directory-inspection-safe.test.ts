@@ -8,8 +8,7 @@ import { filterEventsByType } from '../testHelpers'
 type TerminalRunCommandResult = {
   output: string
   reason?: string
-  executionStatus?: 'running' | 'completed' | 'cancelled' | 'not_executed'
-  exitCode?: number | null
+  status?: 'running' | 'succeeded' | 'failed' | 'cancelled' | 'not_executed'
 }
 
 const isWindows = process.platform === 'win32'
@@ -104,8 +103,7 @@ describe('ai tool terminal backend', () => {
         )
 
         runtime.assertThat(
-          result.noMatch.executionStatus === 'completed' &&
-            result.noMatch.exitCode === 1 &&
+          result.noMatch.status === 'failed' &&
             stepResults.some(
               (event) => event.executionStatus === 'completed' && event.exitCode === 1
             ) &&
@@ -116,11 +114,11 @@ describe('ai tool terminal backend', () => {
                 event.result.data &&
                 typeof event.result.data === 'object' &&
                 !Array.isArray(event.result.data) &&
-                event.result.data.exitCode === 1
+                event.result.data.status === 'failed'
             ),
           {
-            name: 'nonzero-exit-is-a-completed-command-result',
-            message: '命令自然退出时即使退出码非零，也应记录为执行完成并把退出码交给 brain 判断。',
+            name: 'nonzero-exit-is-a-failed-command-result',
+            message: '命令自然退出时即使退出码非零，也应记录为 failed 并把结果交给 brain 判断。',
             data: {
               noMatch: result.noMatch,
               stepResults,

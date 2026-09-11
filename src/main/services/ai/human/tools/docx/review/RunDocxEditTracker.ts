@@ -3,17 +3,16 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import type { DocxApplyRecord } from '../../../../../../../shared/types'
 import type { DocxApplyStore } from '../../../../../storage/domains/DocxApplyStore'
-import type { DocxChangedBlock, DocxCreatedBlock, DocxOp, DocxReplaySession } from '../types'
+import type { DocxChangedNode, DocxCreatedNode, DocxReplaySession } from '../types'
 import { getDocxWorkerClient } from '../worker/docxWorkerClient'
 import { materializeDocxProjectedArtifact } from './reviewSerializer'
 import type { RunDocxEditDocument } from './types'
 import { buildDocxChangeSummary, calculateFileStats, sanitizeFileName } from './utils'
 import { buildDocxApplyArtifactPaths } from './viewProjection'
 import { projectReviewView } from './viewProjector'
-import { isPathInsideRoot } from '../../terminal/commandPolicy'
 
 type RunDocxEditState = {
-  sessionId: string
+  partnerId: string
   documentBySourcePath: Map<string, RunDocxEditDocument>
   sourcePathByDocId: Map<string, string>
 }
@@ -28,9 +27,9 @@ export class RunDocxEditTracker {
 
   public constructor(private readonly docxApplyStore: DocxApplyStore) {}
 
-  public beginRun(input: { runId: string; sessionId: string; inputText: string }): void {
+  public beginRun(input: { runId: string; partnerId: string; inputText: string }): void {
     this.runEdits.set(input.runId, {
-      sessionId: input.sessionId,
+      partnerId: input.partnerId,
       documentBySourcePath: new Map(),
       sourcePathByDocId: new Map()
     })
@@ -72,41 +71,52 @@ export class RunDocxEditTracker {
     runId: string
     previousDocId: string
     nextDocId: string
-    op: DocxOp
-    changedBlocks: DocxChangedBlock[]
-    createdBlocks: DocxCreatedBlock[]
+    changedNodes: DocxChangedNode[]
+    createdNodes: DocxCreatedNode[]
     replaySession?: DocxReplaySession
   }): void {
     const state = this.runEdits.get(input.runId)
-    if (!state || input.changedBlocks.length === 0) return
+    if (!state) return
 
     const sourcePath = state.sourcePathByDocId.get(input.previousDocId)
     if (!sourcePath) return
     const document = state.documentBySourcePath.get(sourcePath)
     if (!document) return
+    const packageChanged = Boolean(
+      input.replaySession &&
+      input.replaySession.sourceSnapshot.packageFingerprint !==
+        input.replaySession.activeSnapshot.packageFingerprint
+    )
+    if (input.changedNodes.length === 0 && !packageChanged) return
 
     state.sourcePathByDocId.set(input.nextDocId, sourcePath)
     document.latestDocId = input.nextDocId
-    document.dirtyChangeCount += input.changedBlocks.length
+    document.dirtyChangeCount += Math.max(1, input.changedNodes.length)
     document.replaySession = input.replaySession || document.replaySession
   }
 
   public async applyRunEdits(input: {
     runId: string
-    workspaceRootPath: string
+    partnerId: string
   }): Promise<DocxApplyRecord[]> {
     const state = this.runEdits.get(input.runId)
     if (!state) return []
 
     const changedDocuments = [...state.documentBySourcePath.values()].filter((document) => {
+      const packageChanged = Boolean(
+        document.replaySession &&
+        document.replaySession.sourceSnapshot.packageFingerprint !==
+          document.replaySession.activeSnapshot.packageFingerprint
+      )
       if (
         document.dirtyChangeCount <= 0 ||
         !document.replaySession ||
-        !projectReviewView(document.replaySession).some((node) => node.reviewState !== 'normal')
+        (!packageChanged &&
+          !projectReviewView(document.replaySession).some((node) => node.reviewState !== 'normal'))
       ) {
         return false
       }
-      return isPathInsideRoot(document.sourcePath, input.workspaceRootPath)
+      return true
     })
     if (changedDocuments.length === 0) {
       this.runEdits.delete(input.runId)
@@ -118,8 +128,7 @@ export class RunDocxEditTracker {
       for (const document of changedDocuments) {
         const record = await this.applyDocument({
           runId: input.runId,
-          sessionId: state.sessionId,
-          workspaceRootPath: input.workspaceRootPath,
+          partnerId: state.partnerId,
           document
         })
         await this.docxApplyStore.saveRecord(record)
@@ -134,8 +143,7 @@ export class RunDocxEditTracker {
 
   private async applyDocument(input: {
     runId: string
-    sessionId: string
-    workspaceRootPath: string
+    partnerId: string
     document: RunDocxEditDocument
   }): Promise<DocxApplyRecord> {
     const replaySession = input.document.replaySession
@@ -144,7 +152,7 @@ export class RunDocxEditTracker {
     const applyId = randomUUID()
     const now = Date.now()
     const paths = buildDocxApplyArtifactPaths({
-      workspaceRootPath: input.workspaceRootPath,
+      partnerId: input.partnerId,
       runId: input.runId,
       applyId,
       sourceName: input.document.sourceName
@@ -232,7 +240,7 @@ export class RunDocxEditTracker {
 
     return {
       id: applyId,
-      session_id: input.sessionId,
+      partner_id: input.partnerId,
       run_id: input.runId,
       status: 'applied',
       source_path: input.document.sourcePath,
@@ -269,16 +277,18 @@ export class RunDocxEditTracker {
         return
       }
       if (node.sourceOrigin === 'source') {
-        sourceChanges.add(node.sourceBlockId || node.blockId)
+        sourceChanges.add(node.sourceNodeId || node.nodeId)
       } else if (node.reviewState === 'inserted' || node.reviewState === 'replaced-new') {
         generatedChanges += 1
       }
     })
-    return sourceChanges.size + generatedChanges
+    const packageChanged =
+      session.sourceSnapshot.packageFingerprint !== session.activeSnapshot.packageFingerprint
+    return sourceChanges.size + generatedChanges + (packageChanged ? 1 : 0)
   }
 
   private countReviewChanges(session: DocxReplaySession): DocxChangeStats {
-    return projectReviewView(session).reduce<DocxChangeStats>(
+    const stats = projectReviewView(session).reduce<DocxChangeStats>(
       (stats, node) => {
         if (node.tableCellChanges?.length) {
           node.tableCellChanges.forEach((change) => {
@@ -298,13 +308,17 @@ export class RunDocxEditTracker {
       },
       { insertCount: 0, deleteCount: 0 }
     )
+    if (session.sourceSnapshot.packageFingerprint !== session.activeSnapshot.packageFingerprint) {
+      stats.insertCount += 1
+    }
+    return stats
   }
 
   public buildChangeHighlights(session: DocxReplaySession): string[] {
     return [...session.revisionByDocId.values()]
       .filter((revision) => revision.revisionRef !== 'v1' && (revision.ops?.length || 0) > 0)
       .flatMap((revision) =>
-        (revision.changedBlocks || []).map((change, changeIndex) => {
+        (revision.changedNodes || []).map((change, changeIndex) => {
           const op = revision.ops?.[changeIndex] || revision.ops?.[0]
           return op ? buildDocxChangeSummary(op, change) : revision.summary || '文档修改'
         })

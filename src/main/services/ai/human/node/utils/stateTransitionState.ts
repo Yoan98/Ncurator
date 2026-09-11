@@ -1,10 +1,9 @@
 import type {
-  HumanThoughtDecision,
+  HumanNextAction,
   HumanResult,
-  HumanTodoItem,
+  HumanRoundThought,
   HumanState,
-  HumanTraceStep,
-  HumanDecisionHint
+  HumanTraceStep
 } from '../../types'
 
 export type HumanTraceItemInput = {
@@ -57,20 +56,22 @@ export const appendHumanTraceStep = (input: {
 export const returnToBrainState = (
   state: HumanState,
   overrides: HumanStateOverrides = {}
-): HumanState => ({
-  ...state,
-  ...overrides,
-  execution: {
-    ...state.execution,
-    ...overrides.execution,
-    stage: 'brain'
+): HumanState => {
+  const targetStage = overrides.execution?.stage ?? 'brain'
+  return {
+    ...state,
+    ...overrides,
+    execution: {
+      ...state.execution,
+      ...overrides.execution,
+      stage: targetStage
+    }
   }
-})
+}
 
 export const returnToBrainAfterTraceState = (input: {
   state: HumanState
   traceItems: HumanTraceItemInput[]
-  decisionHint?: HumanDecisionHint
   overrides?: HumanStateOverrides<'trace'>
 }): HumanState => {
   const traceSteps = appendHumanTraceSteps({
@@ -82,7 +83,8 @@ export const returnToBrainAfterTraceState = (input: {
     ...input.overrides,
     execution: {
       ...input.overrides?.execution,
-      pendingDecisionHint: input.decisionHint
+      stage: 'dispatch',
+      pendingRound: undefined
     },
     trace: {
       steps: traceSteps
@@ -90,22 +92,13 @@ export const returnToBrainAfterTraceState = (input: {
   })
 }
 
-const resolveBrainNextStage = (input: {
-  thought: HumanThoughtDecision
-}): HumanState['execution']['stage'] => {
-  return input.thought.nextAction.action === 'learning'
-    ? 'learning'
-    : input.thought.nextAction.action === 'hand'
-      ? 'hand'
-      : input.thought.nextAction.action === 'mouth'
-        ? 'mouth'
-        : 'fault'
-}
+const resolveBrainNextStage = (action: HumanNextAction['action']): HumanState['execution']['stage'] =>
+  action === 'learning' ? 'learning' : action === 'hand' ? 'hand' : 'plan'
 
 export const applyBrainDecisionState = (input: {
   state: HumanState
-  thought: HumanThoughtDecision
-  todolist: HumanTodoItem[]
+  thought: HumanRoundThought
+  nextAction: HumanNextAction
   createdAt: number
   overrides?: HumanStateOverrides
 }): HumanState => {
@@ -115,38 +108,22 @@ export const applyBrainDecisionState = (input: {
     execution: {
       ...input.state.execution,
       ...input.overrides?.execution,
-      stage: resolveBrainNextStage({
-        thought: input.thought
-      }),
+      stage: resolveBrainNextStage(input.nextAction.action),
       status: 'running',
-      finalizationReason: undefined,
-      currentThought: input.thought,
-      pendingDecisionHint: undefined,
-      pendingFault:
-        input.thought.nextAction.action === 'learning' ||
-        input.thought.nextAction.action === 'hand' ||
-        input.thought.nextAction.action === 'mouth'
-          ? undefined
-          : {
-              result: `决策失败，无法识别 \`nextAction.action\` 的值 \`${input.thought.nextAction.action}\`。`
-            },
+      pendingRound: {
+        thought: input.thought,
+        nextAction: input.nextAction
+      },
       evidenceReferences: undefined
-    },
-    memory: {
-      ...input.state.memory,
-      todolist: input.todolist,
-      taskRun: {
-        ...input.state.memory.taskRun
-      }
     },
     trace: {
       steps: appendHumanTraceStep({
         steps: input.state.trace.steps,
         item: {
           action: 'brain_decision',
-          publicNarrative: input.thought.thought.next,
+          publicNarrative: input.thought.text,
           resultStatus: 'ok',
-          summary: input.thought.thought.next
+          summary: input.thought.text
         }
       })
     }
@@ -170,7 +147,7 @@ export const completeHumanTaskState = (input: {
   ...input.state,
   execution: {
     ...input.state.execution,
-    stage: 'mouth',
+    stage: 'brain',
     status: 'completed'
   },
   result: input.result,

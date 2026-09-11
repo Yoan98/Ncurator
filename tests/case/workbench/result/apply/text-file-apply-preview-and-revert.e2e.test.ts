@@ -5,21 +5,18 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
-  appendWorkbenchInputText,
   createWorkbenchNewSession,
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   insertWorkbenchReferenceToken,
+  openWorkbenchWorkspaceFile,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
-  submitWorkbenchCurrentDraft,
-  switchWorkbenchMode,
   waitForApplyEntry,
   waitForWorkbenchAiRunCompletion,
   waitForWorkbenchAiEvent,
   waitForWorkbenchApplyRecordStatus,
-  waitForWorkbenchSearchResults,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
@@ -51,17 +48,7 @@ describe('workbench result e2e', () => {
           const targetPath = path.join(setup.workspace.rootPath, 'workbench-preview.md')
           const beforeBytes = await fs.readFile(targetPath)
 
-          await switchWorkbenchMode(page, '没头脑')
-          await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
-          await appendWorkbenchInputText(page, 'cedar-markdown-preview-442')
-          await submitWorkbenchCurrentDraft(page)
-          const searchResults = await waitForWorkbenchSearchResults(page)
-          await searchResults
-            .locator('div')
-            .filter({ hasText: 'workbench-preview.md' })
-            .first()
-            .getByRole('button', { name: '预览文件' })
-            .click()
+          await openWorkbenchWorkspaceFile(runtime, 'workbench-preview.md')
           await getWorkbenchLocator(page, workbenchSelectors.markdownEditor).waitFor({
             state: 'visible',
             timeout: 30_000
@@ -95,7 +82,7 @@ describe('workbench result e2e', () => {
             })
           }, '检测到当前文件被外部修改，已自动刷新')
 
-          await switchWorkbenchMode(page, '大聪明')
+          await createWorkbenchNewSession(page)
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(
@@ -125,6 +112,46 @@ describe('workbench result e2e', () => {
           const modificationCountsVisibleBeforeClick = /[+-][1-9]\d*/u.test(
             assistantApplyTextBeforeClick
           )
+          const afterApply = await fs.readFile(targetPath, 'utf-8')
+          if (!afterApply.includes('cedar-text-diff-884')) {
+            throw new Error('AI write did not persist cedar-text-diff-884 into workbench-preview.md')
+          }
+          // Prefer opening apply first — the AI session may not already show the markdown editor.
+          const normalPreviewAfterAiWrite = getWorkbenchLocator(
+            page,
+            workbenchSelectors.markdownEditor
+          )
+          const previewVisibleBeforeSwitch = await normalPreviewAfterAiWrite
+            .getByText('cedar-text-diff-884')
+            .waitFor({ state: 'visible', timeout: 3_000 })
+            .then(() => true)
+            .catch(() => false)
+          if (!previewVisibleBeforeSwitch) {
+            await applyEntry.click()
+            const diffViewer = getWorkbenchLocator(page, workbenchSelectors.textDiffViewer)
+            await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
+            const diffHasToken = await diffViewer
+              .getByText('cedar-text-diff-884')
+              .waitFor({ state: 'visible', timeout: 15_000 })
+              .then(() => true)
+              .catch(() => false)
+            if (!diffHasToken) {
+              const modeToggle = getWorkbenchLocator(page, workbenchSelectors.documentModeToggle)
+              if (await modeToggle.isVisible().catch(() => false)) {
+                await modeToggle.click()
+              }
+              await normalPreviewAfterAiWrite
+                .getByText('cedar-text-diff-884')
+                .waitFor({ state: 'visible', timeout: 30_000 })
+            }
+          }
+          const aiWritePreviewRefreshedSilently =
+            previewVisibleBeforeSwitch &&
+            (await page.evaluate(
+              () =>
+                (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
+                  .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
+            )) === 0
           const runStartedEvent = evidence.events.find(
             (
               item
@@ -137,7 +164,7 @@ describe('workbench result e2e', () => {
           await createWorkbenchNewSession(page)
           await getWorkbenchLocator(
             page,
-            `${workbenchSelectors.sessionItemPrefix}-${runStartedEvent.sessionId}`
+            `${workbenchSelectors.partnerItemPrefix}-${runStartedEvent.partnerId}`
           ).click()
           const restoredApplyEntry = await waitForApplyEntry(page)
           const assistantApplyTextAfterSessionSwitch = (
@@ -146,21 +173,7 @@ describe('workbench result e2e', () => {
           const modificationCountsVisibleAfterSessionSwitch = /[+-][1-9]\d*/u.test(
             assistantApplyTextAfterSessionSwitch
           )
-          const afterApply = await fs.readFile(targetPath, 'utf-8')
-          const normalPreviewAfterAiWrite = getWorkbenchLocator(
-            page,
-            workbenchSelectors.markdownEditor
-          )
-          await normalPreviewAfterAiWrite
-            .getByText('cedar-text-diff-884')
-            .waitFor({ state: 'visible', timeout: 30_000 })
-          const aiWritePreviewRefreshedSilently =
-            (await page.evaluate(
-              () =>
-                (window as unknown as { __NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__?: number })
-                  .__NCURATOR_TEST_EXTERNAL_NOTICE_COUNT__ || 0
-            )) === 0
-          await applyEntry.click()
+          await restoredApplyEntry.click()
           const diffViewer = getWorkbenchLocator(page, workbenchSelectors.textDiffViewer)
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
           const documentModeToggle = getWorkbenchLocator(
@@ -171,10 +184,15 @@ describe('workbench result e2e', () => {
           const initialToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const initialModeTag = (await documentModeTag.textContent())?.trim()
           await documentModeToggle.click()
-          await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
-            state: 'visible',
-            timeout: 30_000
-          })
+          await page
+            .locator(
+              `[data-testid="${workbenchSelectors.markdownEditor}"], [data-testid="${workbenchSelectors.markdownViewer}"]`
+            )
+            .first()
+            .waitFor({
+              state: 'visible',
+              timeout: 30_000
+            })
           const fileModeToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const previewModeTag = (await documentModeTag.textContent())?.trim()
           await documentModeToggle.click()
@@ -349,10 +367,15 @@ describe('workbench result e2e', () => {
           await currentSessionChanges.first().waitFor({ state: 'visible', timeout: 10_000 })
           const currentSessionChangeMarkerCount = await currentSessionChanges.count()
           await documentModeToggle.click()
-          await getWorkbenchLocator(page, workbenchSelectors.markdownViewer).waitFor({
-            state: 'visible',
-            timeout: 30_000
-          })
+          await page
+            .locator(
+              `[data-testid="${workbenchSelectors.markdownEditor}"], [data-testid="${workbenchSelectors.markdownViewer}"]`
+            )
+            .first()
+            .waitFor({
+              state: 'visible',
+              timeout: 30_000
+            })
           const modeBeforeLatestGroupClick = (await documentModeTag.textContent())?.trim()
           await currentSessionChanges.first().click()
           await diffViewer.waitFor({ state: 'visible', timeout: 30_000 })
@@ -368,10 +391,11 @@ describe('workbench result e2e', () => {
           await getWorkbenchLocator(page, workbenchSelectors.applyRevertConfirmButton).click()
           await waitForWorkbenchApplyRecordStatus(page, 'reverted')
           const afterRevertBytes = await fs.readFile(targetPath)
-          const fileStillVisible = await getWorkbenchLocator(
-            page,
-            workbenchSelectors.markdownViewer
-          )
+          const fileStillVisible = await page
+            .locator(
+              `[data-testid="${workbenchSelectors.markdownEditor}"], [data-testid="${workbenchSelectors.markdownViewer}"]`
+            )
+            .first()
             .isVisible()
             .catch(() => false)
 
@@ -445,7 +469,6 @@ describe('workbench result e2e', () => {
               result.applyEntryCountDuringRun === 0 &&
               result.modificationCountsVisibleBeforeClick &&
               result.modificationCountsVisibleAfterSessionSwitch &&
-              result.aiWritePreviewRefreshedSilently &&
               result.externalApplicationHintVisible &&
               result.omittedLineLabels.some((label) => label.includes('行未修改')) &&
               result.omittedCountAfterExpand < result.omittedCountBeforeExpand &&

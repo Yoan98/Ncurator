@@ -7,100 +7,37 @@ import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
 type TerminalRunResult = {
   terminalId: string
-  terminalStatus: 'idle' | 'running' | 'stopping' | 'closed'
-  executionStatus: 'running' | 'completed' | 'cancelled'
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled'
   output: string
-  outputCursor: number
-  exitCode: number | null
+  readEndPosition: number
+  hasMoreOutput: boolean
 }
 
 type TerminalReadResult = {
-  terminalId: string
-  terminalStatus: 'idle' | 'running' | 'stopping' | 'closed'
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled'
   output: string
-  outputCursor: number
-  exitCode: number | null
+  readEndPosition: number
+  hasMoreOutput: boolean
 }
-
-type TerminalStopResult = {
-  terminalId: string
-  terminalStatus: 'idle' | 'running' | 'stopping' | 'closed'
-  stopped: boolean
-  forced: boolean
-}
-
-type TerminalFailureResult = { error: string }
 
 const isWindows = process.platform === 'win32'
 
 describe('ai tool terminal backend', () => {
-  it('terminal-persistent-session-contract', async () => {
+  it('terminal-execution-contract', async () => {
     await runBackendCase({
-      caseId: 'terminal-persistent-session-contract',
+      caseId: 'terminal-execution-contract',
       harnessMode: 'tool-real',
       domain: 'ai',
       suite: 'tool',
       groups: ['terminal'],
-      description: '验证真实持久终端保留当前路径、命令级文件追踪、长命令让出控制权和停止。',
+      description:
+        '验证终端在工作区根目录执行命令、长命令让出控制权并可增量读取、文件追踪与退出码；允许后台分离执行。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         await fs.mkdir(path.join(runtime.workspaceRoot, 'nested'))
-        const harness = createTerminalToolHarness(runtime, {}, { yieldMs: 150 })
-        const waitForIdle = async (initial: TerminalRunResult): Promise<TerminalRunResult> => {
-          if (initial.terminalStatus !== 'running') return initial
-          let output = initial.output
-          let outputCursor = initial.outputCursor
-          for (let attempt = 0; attempt < 60; attempt += 1) {
-            await new Promise<void>((resolve) => setTimeout(resolve, 50))
-            const read = await harness.invoke<TerminalReadResult>('terminal_read', {
-              terminalId: initial.terminalId,
-              outputCursor
-            })
-            output += read.output
-            outputCursor = read.outputCursor
-            if (read.terminalStatus !== 'running') {
-              return {
-                ...initial,
-                terminalStatus: read.terminalStatus,
-                executionStatus: 'completed',
-                output,
-                outputCursor,
-                exitCode: read.exitCode
-              }
-            }
-          }
-          throw new Error('terminal did not become idle')
-        }
-        const readUntilOutput = async (
-          initial: TerminalRunResult,
-          expected: string
-        ): Promise<TerminalReadResult> => {
-          let output = initial.output
-          let outputCursor = initial.outputCursor
-          for (let attempt = 0; attempt < 60; attempt += 1) {
-            if (output.includes(expected)) {
-              return {
-                terminalId: initial.terminalId,
-                terminalStatus: initial.terminalStatus,
-                output,
-                outputCursor,
-                exitCode: initial.exitCode
-              }
-            }
-            await new Promise<void>((resolve) => setTimeout(resolve, 50))
-            const read = await harness.invoke<TerminalReadResult>('terminal_read', {
-              terminalId: initial.terminalId,
-              outputCursor
-            })
-            output += read.output
-            outputCursor = read.outputCursor
-            if (read.terminalStatus !== 'running' || output.includes(expected)) {
-              return { ...read, output, outputCursor }
-            }
-          }
-          throw new Error(`terminal output did not include ${expected}`)
-        }
+        const harness = createTerminalToolHarness(runtime, {}, { yieldMs: 2000 })
+
         const waitForTrackedRecords = async (
           fileNames: readonly string[]
         ): Promise<AiFileChangeRecord[]> => {
@@ -129,156 +66,119 @@ describe('ai tool terminal backend', () => {
           }
           throw new Error(`terminal artifact events were not emitted: ${fileNames.join(', ')}`)
         }
-        const changed = await waitForIdle(
-          await harness.invoke<TerminalRunResult>('terminal_run', {
-            command: isWindows ? 'Set-Location nested' : 'cd nested'
-          })
-        )
-        const continued = await waitForIdle(
-          await harness.invoke<TerminalRunResult>('terminal_run', {
-            terminalId: changed.terminalId,
-            command: isWindows ? 'Get-Location' : 'pwd'
-          })
-        )
-        const fresh = await waitForIdle(
-          await harness.invoke<TerminalRunResult>('terminal_run', {
-            command: isWindows ? 'Get-Location' : 'pwd'
-          })
-        )
-        const completedLongCommand = await waitForIdle(
-          await harness.invoke<TerminalRunResult>('terminal_run', {
-            terminalId: changed.terminalId,
-            command: isWindows
-              ? 'Set-Content -LiteralPath ..\\completed-from-nested.txt -Value completed; Start-Sleep -Milliseconds 500'
-              : 'printf "completed\\n" > ../completed-from-nested.txt; sleep 0.5'
-          })
-        )
-        const snapshotsBeforeStop = harness.sessionManager.list({ chatSessionId: 'test-session' })
-        const running = await harness.invoke<TerminalRunResult>('terminal_run', {
-          terminalId: changed.terminalId,
+
+        const pwdAtRoot = await harness.invoke<TerminalRunResult>('terminal_run', {
+          command: isWindows ? 'Get-Location' : 'pwd'
+        })
+        const cdNested = await harness.invoke<TerminalRunResult>('terminal_run', {
+          command: isWindows ? 'Set-Location nested; Get-Location' : 'cd nested; pwd'
+        })
+        const completedFile = await harness.invoke<TerminalRunResult>('terminal_run', {
           command: isWindows
-            ? 'Set-Content -LiteralPath ..\\stopped-from-nested.txt -Value stopped; while ($true) { Write-Output "terminal-tick"; Start-Sleep -Milliseconds 50 }'
-            : 'printf "stopped\\n" > ../stopped-from-nested.txt; while true; do echo terminal-tick; sleep 0.05; done'
+            ? 'Set-Content -LiteralPath terminal-completed.txt -Value completed; Start-Sleep -Milliseconds 400'
+            : 'printf "completed\\n" > terminal-completed.txt; sleep 0.4'
         })
-        const read = await readUntilOutput(running, 'terminal-tick')
-        const stopped = await harness.invoke<TerminalStopResult>('terminal_stop', {
-          terminalId: changed.terminalId
+        const running = await harness.invoke<TerminalRunResult>('terminal_run', {
+          command: isWindows
+            ? 'Set-Content -LiteralPath terminal-running.txt -Value running; for ($i=0; $i -lt 5; $i++) { Write-Output "terminal-tick"; Start-Sleep -Milliseconds 500 }'
+            : 'printf "running\\n" > terminal-running.txt; for i in 1 2 3 4 5; do echo terminal-tick; sleep 0.5; done'
         })
-        const nonZero = await waitForIdle(
-          await harness.invoke<TerminalRunResult>('terminal_run', {
-            terminalId: changed.terminalId,
-            command: isWindows
-              ? 'Set-Content -LiteralPath ..\\nonzero-from-nested.txt -Value nonzero; cmd /c exit 1'
-              : 'printf "nonzero\\n" > ../nonzero-from-nested.txt; false'
+        const read = await harness.invoke<TerminalReadResult>('terminal_read', {
+          terminalId: running.terminalId,
+          readEndPosition: running.readEndPosition
+        })
+        let completedRead = read
+        for (let attempt = 0; attempt < 60 && completedRead.status === 'running'; attempt += 1) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 50))
+          completedRead = await harness.invoke<TerminalReadResult>('terminal_read', {
+            terminalId: running.terminalId,
+            readEndPosition: completedRead.readEndPosition
           })
-        )
+        }
+        const nonZero = await harness.invoke<TerminalRunResult>('terminal_run', {
+          command: isWindows
+            ? 'Set-Content -LiteralPath terminal-nonzero.txt -Value nonzero; cmd /c exit 1'
+            : 'printf "nonzero\\n" > terminal-nonzero.txt; false'
+        })
+        const detachedAllowed = await harness.invoke<TerminalRunResult>('terminal_run', {
+          command: isWindows
+            ? 'Start-Process -FilePath cmd.exe -ArgumentList "/c","echo detached-ok" -Wait -NoNewWindow; Write-Output detached-ok'
+            : 'sleep 0.2 & wait; echo detached-ok'
+        })
+        const redirectAllowed = await harness.invoke<TerminalRunResult>('terminal_run', {
+          command: 'echo redirect-ok 2>&1'
+        })
         const trackedFileNames = [
-          'completed-from-nested.txt',
-          'stopped-from-nested.txt',
-          'nonzero-from-nested.txt'
+          'terminal-completed.txt',
+          'terminal-running.txt',
+          'terminal-nonzero.txt'
         ] as const
         const records = await waitForTrackedRecords(trackedFileNames)
         const artifactEvents = await waitForArtifactEvents(trackedFileNames)
-        const detachedRejected = await harness.invoke<TerminalFailureResult>('terminal_run', {
-          command: isWindows ? 'Start-Process powershell' : 'sleep 1 &'
-        })
-        const redirectAllowed = await waitForIdle(
-          await harness.invoke<TerminalRunResult>('terminal_run', {
-            command: 'echo redirect-ok 2>&1'
-          })
-        )
-        const snapshotsAfterStop = harness.sessionManager.list({ chatSessionId: 'test-session' })
         await harness.release()
         return {
-          changed,
-          continued,
-          fresh,
-          completedLongCommand,
+          pwdAtRoot,
+          cdNested,
+          completedFile,
           running,
           read,
-          stopped,
+          completedRead,
           nonZero,
-          records,
-          artifactEvents,
-          detachedRejected,
+          detachedAllowed,
           redirectAllowed,
-          snapshotsBeforeStop,
-          snapshotsAfterStop
+          records,
+          artifactEvents
         }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.continued.output.includes('nested') &&
-            result.fresh.terminalId !== result.changed.terminalId &&
-            result.snapshotsBeforeStop.some(
-              (terminal) =>
-                terminal.terminalId === result.changed.terminalId &&
-                terminal.currentTerminalPath.endsWith(`${path.sep}nested`)
-            ) &&
-            result.snapshotsBeforeStop.some(
-              (terminal) =>
-                terminal.terminalId === result.fresh.terminalId &&
-                terminal.currentTerminalPath === runtime.workspaceRoot
-            ),
+          result.pwdAtRoot.status === 'succeeded' &&
+            result.pwdAtRoot.output.length > 0 &&
+            result.cdNested.status === 'succeeded' &&
+            result.cdNested.output.includes('nested'),
           {
-            name: 'persistent-terminal-keeps-cwd-and-isolates-new-session',
-            message: '同一终端应保留 cd 后路径，新终端应从 workspace 根目录启动。',
+            name: 'terminal-runs-from-workspace-root',
+            message: '终端应从工作区根目录执行命令，并可在单条命令内 cd 切换目录。',
             data: result
           }
         )
         runtime.assertThat(
-          result.running.executionStatus === 'running' &&
-            result.running.terminalStatus === 'running' &&
+          result.running.status === 'running' &&
+            result.completedRead.status === 'succeeded' &&
             (result.running.output.includes('terminal-tick') ||
               result.read.output.includes('terminal-tick')) &&
-            result.stopped.stopped &&
-            result.detachedRejected.error.includes('detached shell execution') &&
-            (result.stopped.forced
-              ? result.stopped.terminalStatus === 'closed' &&
-                !result.snapshotsAfterStop.some(
-                  (terminal) => terminal.terminalId === result.changed.terminalId
-                )
-              : result.stopped.terminalStatus === 'idle' &&
-                result.snapshotsAfterStop.some(
-                  (terminal) =>
-                    terminal.terminalId === result.changed.terminalId && terminal.status === 'idle'
-                )),
+            result.detachedAllowed.status === 'succeeded' &&
+            result.detachedAllowed.output.includes('detached-ok'),
           {
-            name: 'persistent-terminal-yields-reads-and-stops',
-            message: '长命令应固定让出控制权，允许读取增量输出并停止后返回空闲终端。',
+            name: 'terminal-yields-reads-and-allows-detached',
+            message:
+              '长命令应固定让出控制权并允许增量读取；后台分离执行（& / Start-Process）应可正常完成。',
             data: result
           }
         )
         runtime.assertThat(
-          result.redirectAllowed.executionStatus === 'completed' &&
-            result.redirectAllowed.exitCode === 0 &&
-            result.redirectAllowed.output.includes('redirect-ok'),
+          result.redirectAllowed.status === 'succeeded' &&
+            result.redirectAllowed.output.includes('redirect-ok') &&
+            result.nonZero.status === 'failed',
           {
-            name: 'persistent-terminal-allows-fd-merge-redirection',
-            message: '带 2>&1 fd 合并重定向的验证命令应正常执行，不被误判为后台执行或危险重定向。',
-            data: result.redirectAllowed
+            name: 'terminal-returns-status-and-allows-fd-merge-redirection',
+            message: '命令应返回 succeeded/failed 状态，带 2>&1 fd 合并重定向的验证命令应正常执行。',
+            data: result
           }
         )
         const trackedFileNames = new Set(result.records.map((record) => record.fileName))
         const artifactFileNames = new Set(result.artifactEvents.map((event) => event.fileName))
         runtime.assertThat(
-          result.completedLongCommand.executionStatus === 'completed' &&
-            result.nonZero.executionStatus === 'completed' &&
-            result.nonZero.exitCode === 1 &&
-            ['completed-from-nested.txt', 'stopped-from-nested.txt', 'nonzero-from-nested.txt'].every(
-              (fileName) => trackedFileNames.has(fileName) && artifactFileNames.has(fileName)
-            ) &&
+          ['terminal-completed.txt', 'terminal-running.txt', 'terminal-nonzero.txt'].every(
+            (fileName) => trackedFileNames.has(fileName) && artifactFileNames.has(fileName)
+          ) &&
             result.records
               .filter((record) => trackedFileNames.has(record.fileName))
               .every((record) => record.source === 'terminal_tool' && record.runId === runtime.runId),
           {
-            name: 'persistent-terminal-finalizes-command-scoped-file-changes',
-            message:
-              '长命令完成、停止和非零退出都必须按命令窗口保存文件变化并发出当前 run 的 artifact。',
+            name: 'terminal-finalizes-command-scoped-file-changes',
+            message: '命令完成和非零退出都必须按命令窗口保存文件变化并发出当前 run 的 artifact。',
             data: {
-              completedLongCommand: result.completedLongCommand,
-              stopped: result.stopped,
-              nonZero: result.nonZero,
               records: result.records,
               artifactEvents: result.artifactEvents
             }

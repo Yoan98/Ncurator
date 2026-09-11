@@ -14,6 +14,7 @@ import type {
   WebSearchResult,
   WebSearchResultItem
 } from './types'
+import type { WebCrawlerCdpConnection } from './ElectronWebCrawlerBrowserHost'
 
 type SidecarCommand = {
   executablePath: string
@@ -31,6 +32,8 @@ type PendingRequest = {
 export type WebCrawlerServiceOptions = {
   sidecarCommand?: SidecarCommand
   sidecarEnv?: NodeJS.ProcessEnv
+  playwrightNodeExecutablePath?: string
+  resolveCdpConnection?: () => Promise<WebCrawlerCdpConnection>
   appRootPath?: string
   isPackaged?: boolean
   resourcesPath?: string
@@ -41,6 +44,11 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 60_000
 const PACKAGED_SIDECAR_DIR = 'web_crawler_sidecar'
 const PACKAGED_SIDECAR_BIN_DIR = 'bin'
 const PYTHON_SIDECAR_DEBUG_ENV = 'NCURATOR_WEB_CRAWLER_USE_PYTHON_SIDECAR'
+const SIDECAR_CDP_URL_ENV = 'NCURATOR_WEB_CRAWLER_CDP_URL'
+const SIDECAR_CDP_CONTEXT_MARKER_ENV = 'NCURATOR_WEB_CRAWLER_CDP_CONTEXT_MARKER_URL'
+const PLAYWRIGHT_NODEJS_PATH_ENV = 'PLAYWRIGHT_NODEJS_PATH'
+const ELECTRON_RUN_AS_NODE_ENV = 'ELECTRON_RUN_AS_NODE'
+const LOOPBACK_HOSTNAMES = new Set(['127.0.0.1', 'localhost', '::1', '[::1]'])
 const DEV_SIDECAR_SCRIPT_PATH = path.join(
   'resources',
   'web_crawler_sidecar',
@@ -401,10 +409,20 @@ const resolveDefaultSidecarCommand = (options: WebCrawlerServiceOptions): Sideca
     }
   }
   return {
-    executablePath: process.env.NCURATOR_WEB_CRAWLER_SIDECAR_PYTHON || 'python3',
+    executablePath:
+      process.env.NCURATOR_WEB_CRAWLER_SIDECAR_PYTHON ||
+      (process.platform === 'win32' ? 'python' : 'python3'),
     args: [path.join(appRootPath, DEV_SIDECAR_SCRIPT_PATH)],
     env: options.sidecarEnv
   }
+}
+
+const validateCdpUrl = (rawUrl: string): string => {
+  const parsed = new URL(rawUrl)
+  if (parsed.protocol !== 'ws:' || !LOOPBACK_HOSTNAMES.has(parsed.hostname) || !parsed.port) {
+    throw new Error('web crawler CDP endpoint must be a loopback WebSocket URL')
+  }
+  return parsed.toString()
 }
 
 const buildSidecarError = (response: WebCrawlerSidecarResponse): Error => {
@@ -424,14 +442,26 @@ const buildSidecarError = (response: WebCrawlerSidecarResponse): Error => {
 
 export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
   private readonly sidecarCommand: SidecarCommand
+  private readonly playwrightNodeExecutablePath: string
+  private readonly resolveCdpConnection?: () => Promise<WebCrawlerCdpConnection>
   private readonly requestTimeoutMs: number
   private child?: ChildProcessWithoutNullStreams
+  private childStartupPromise?: Promise<ChildProcessWithoutNullStreams>
+  private closed = false
   private pending = new Map<string, PendingRequest>()
   private stdoutInterface?: readline.Interface
   private stderrBuffer = ''
 
   public constructor(options: WebCrawlerServiceOptions = {}) {
     this.sidecarCommand = options.sidecarCommand || resolveDefaultSidecarCommand(options)
+    this.playwrightNodeExecutablePath = path.resolve(
+      options.playwrightNodeExecutablePath || process.execPath
+    )
+    assertExecutableExists(
+      this.playwrightNodeExecutablePath,
+      'missing Node runtime for Python Playwright'
+    )
+    this.resolveCdpConnection = options.resolveCdpConnection
     this.requestTimeoutMs = Math.max(
       1_000,
       Number(options.requestTimeoutMs || DEFAULT_REQUEST_TIMEOUT_MS)
@@ -462,20 +492,62 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
   }
 
   public async close(): Promise<void> {
+    this.closed = true
     this.rejectAllPending(new Error('web crawler sidecar closed'))
+    await this.childStartupPromise?.catch(() => undefined)
     await this.stopChild()
   }
 
-  private ensureChild(): ChildProcessWithoutNullStreams {
+  private async ensureChild(): Promise<ChildProcessWithoutNullStreams> {
+    if (this.closed) {
+      throw new Error('web crawler sidecar is closed')
+    }
     if (this.child && !this.child.killed) {
       return this.child
+    }
+
+    if (!this.resolveCdpConnection) {
+      throw new Error('missing isolated Electron CDP connection resolver for web crawler sidecar')
+    }
+
+    this.childStartupPromise ||= this.startChild().finally(() => {
+      this.childStartupPromise = undefined
+    })
+    return await this.childStartupPromise
+  }
+
+  private async startChild(): Promise<ChildProcessWithoutNullStreams> {
+    const resolveCdpConnection = this.resolveCdpConnection
+    if (!resolveCdpConnection) {
+      throw new Error('missing isolated Electron CDP connection resolver for web crawler sidecar')
+    }
+    const connection = await Promise.race([
+      resolveCdpConnection(),
+      new Promise<WebCrawlerCdpConnection>((_, reject) => {
+        setTimeout(
+          () => reject(new Error('web crawler CDP connection timed out')),
+          20_000
+        )
+      })
+    ])
+    if (this.closed) {
+      throw new Error('web crawler sidecar is closed')
+    }
+    const cdpUrl = validateCdpUrl(connection.browserWebSocketUrl)
+    const contextMarkerUrl = String(connection.contextMarkerUrl || '').trim()
+    if (!contextMarkerUrl.startsWith('about:blank#ncurator-web-crawler-')) {
+      throw new Error('invalid Electron CDP context marker for web crawler sidecar')
     }
 
     const child = spawn(this.sidecarCommand.executablePath, this.sidecarCommand.args, {
       cwd: this.sidecarCommand.cwd,
       env: {
         ...process.env,
-        ...this.sidecarCommand.env
+        ...this.sidecarCommand.env,
+        [PLAYWRIGHT_NODEJS_PATH_ENV]: this.playwrightNodeExecutablePath,
+        [ELECTRON_RUN_AS_NODE_ENV]: '1',
+        [SIDECAR_CDP_URL_ENV]: cdpUrl,
+        [SIDECAR_CDP_CONTEXT_MARKER_ENV]: contextMarkerUrl
       },
       stdio: ['pipe', 'pipe', 'pipe'],
       detached: process.platform !== 'win32'
@@ -496,9 +568,11 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     })
 
     child.on('exit', (code, signal) => {
-      this.stdoutInterface?.close()
-      this.stdoutInterface = undefined
-      this.child = undefined
+      if (this.child === child) {
+        this.stdoutInterface?.close()
+        this.stdoutInterface = undefined
+        this.child = undefined
+      }
       if (this.pending.size > 0) {
         const suffix = this.stderrBuffer.trim()
         this.rejectAllPending(
@@ -536,10 +610,11 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
   }
 
   private async sendRequest(request: WebCrawlerSidecarRequest): Promise<JsonObject> {
-    const child = this.ensureChild()
+    const child = await this.ensureChild()
     return await new Promise<JsonObject>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(request.id)
+        this.childStartupPromise = undefined
         void this.stopChild()
         reject(new Error('web crawler sidecar request timeout'))
       }, this.requestTimeoutMs)
@@ -569,9 +644,7 @@ export class ManagedWebCrawlerService implements WebCrawlerServiceContract {
     try {
       parsed = JSON.parse(text) as WebCrawlerSidecarResponse
     } catch {
-      this.rejectAllPending(
-        new Error(`invalid web crawler sidecar JSON: ${text}`)
-      )
+      this.rejectAllPending(new Error(`invalid web crawler sidecar JSON: ${text}`))
       return
     }
 

@@ -4,18 +4,12 @@ import type { RuntimeToolName } from '../../../../../../shared/runtimeCapabiliti
 import type { RuntimeSkillId } from '../../types'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver, readStringArg } from '../utils/toolSpecUtils'
+import { pdfOutlineSchema, pdfReadPagesSchema, pdfSearchSchema } from './toolSchemas'
 import {
-  pdfInspectOutputSchema,
-  pdfReadPagesOutputSchema,
-  pdfReadVisualsOutputSchema,
-  pdfSearchOutputSchema
-} from './outputSchemas'
-import {
-  pdfInspectSchema,
-  pdfReadPagesSchema,
-  pdfReadVisualsSchema,
-  pdfSearchSchema
-} from './schemas'
+  renderPdfOutlineModelResult,
+  renderPdfReadPagesModelResult,
+  renderPdfSearchModelResult
+} from '../../shared/modelToolResultRenderers'
 
 const PDF_READ_EXECUTION_META = createStaticExecutionMetaResolver({
   mutability: 'read_only',
@@ -25,32 +19,29 @@ const PDF_READ_EXECUTION_META = createStaticExecutionMetaResolver({
 
 type PdfToolSpec<
   TArgs extends JsonObject = JsonObject,
-  TOutput extends JsonObject = JsonObject,
   TName extends RuntimeToolName = RuntimeToolName,
   TSkillId extends RuntimeSkillId = 'pdf-read'
-> = HumanToolSpec<TArgs, TOutput, TName, TSkillId>
+> = HumanToolSpec<TArgs, TName, TSkillId>
 
-export const PDF_INSPECT_TOOL_SPEC: PdfToolSpec<
-  z.infer<typeof pdfInspectSchema>,
-  z.infer<typeof pdfInspectOutputSchema>,
-  'pdf_inspect',
+export const PDF_OUTLINE_TOOL_SPEC: PdfToolSpec<
+  z.infer<typeof pdfOutlineSchema>,
+  'pdf_outline',
   'pdf-read'
 > = {
-  name: 'pdf_inspect',
+  name: 'pdf_outline',
   familyId: 'pdf',
   skillIds: ['pdf-read'],
   promptSpec: {
-    name: 'pdf_inspect',
-    description: '读取 PDF 的基础信息，并返回页数、元数据、书签提纲和警告。'
+    name: 'pdf_outline',
+    description: '返回 PDF 页数、文档元数据与书签提纲。'
   },
-  inputSchema: pdfInspectSchema,
-  outputSchema: pdfInspectOutputSchema,
-  resolveExecutionMeta: PDF_READ_EXECUTION_META
+  inputSchema: pdfOutlineSchema,
+  resolveExecutionMeta: PDF_READ_EXECUTION_META,
+  modelResult: { renderSuccess: renderPdfOutlineModelResult }
 }
 
 export const PDF_SEARCH_TOOL_SPEC: PdfToolSpec<
   z.infer<typeof pdfSearchSchema>,
-  z.infer<typeof pdfSearchOutputSchema>,
   'pdf_search',
   'pdf-read'
 > = {
@@ -59,17 +50,15 @@ export const PDF_SEARCH_TOOL_SPEC: PdfToolSpec<
   skillIds: ['pdf-read'],
   promptSpec: {
     name: 'pdf_search',
-    description:
-      '在 PDF 文本层中按 literal 或 regex 搜索并支持限制页码和数量，并返回页码、匹配文本、上下文、位置和文本层统计。'
+    description: '在 PDF 文本层中按文字或正则搜索。'
   },
   inputSchema: pdfSearchSchema,
-  outputSchema: pdfSearchOutputSchema,
-  resolveExecutionMeta: PDF_READ_EXECUTION_META
+  resolveExecutionMeta: PDF_READ_EXECUTION_META,
+  modelResult: { renderSuccess: renderPdfSearchModelResult }
 }
 
 export const PDF_READ_PAGES_TOOL_SPEC: PdfToolSpec<
   z.infer<typeof pdfReadPagesSchema>,
-  z.infer<typeof pdfReadPagesOutputSchema>,
   'pdf_read_pages',
   'pdf-read'
 > = {
@@ -78,36 +67,15 @@ export const PDF_READ_PAGES_TOOL_SPEC: PdfToolSpec<
   skillIds: ['pdf-read'],
   promptSpec: {
     name: 'pdf_read_pages',
-    description:
-      '按连续页码范围或指定页码集合读取 PDF 文本层，并逐页返回正文、页码、文本状态、图片数量、尺寸和警告。'
+    description: '按页码读取 PDF 文本层与页面信息。'
   },
   inputSchema: pdfReadPagesSchema,
-  outputSchema: pdfReadPagesOutputSchema,
-  resolveExecutionMeta: PDF_READ_EXECUTION_META
-}
-
-export const PDF_READ_VISUALS_TOOL_SPEC: PdfToolSpec<
-  z.infer<typeof pdfReadVisualsSchema>,
-  z.infer<typeof pdfReadVisualsOutputSchema>,
-  'pdf_read_visuals',
-  'pdf-read'
-> = {
-  name: 'pdf_read_visuals',
-  familyId: 'pdf',
-  skillIds: ['pdf-read'],
-  promptSpec: {
-    name: 'pdf_read_visuals',
-    description:
-      '读取 PDF 指定页的视觉内容，按 requests 一次性返回每个页面的识别结果；每条 request 包含 index 和 instruction，最多 10 条。'
-  },
-  inputSchema: pdfReadVisualsSchema,
-  outputSchema: pdfReadVisualsOutputSchema,
-  resolveExecutionMeta: PDF_READ_EXECUTION_META
+  resolveExecutionMeta: PDF_READ_EXECUTION_META,
+  modelResult: { renderSuccess: renderPdfReadPagesModelResult }
 }
 
 export const PDF_TOOL_SPECS = [
-  PDF_INSPECT_TOOL_SPEC,
+  PDF_OUTLINE_TOOL_SPEC,
   PDF_SEARCH_TOOL_SPEC,
-  PDF_READ_PAGES_TOOL_SPEC,
-  PDF_READ_VISUALS_TOOL_SPEC
+  PDF_READ_PAGES_TOOL_SPEC
 ] as const

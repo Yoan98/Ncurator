@@ -1,0 +1,1 @@
+export const PPT_SEARCH_MAX_MATCHES = 10

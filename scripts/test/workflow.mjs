@@ -28,14 +28,11 @@ const BETTER_SQLITE_NATIVE_BINDING_ENV = 'NCURATOR_BETTER_SQLITE3_NATIVE_BINDING
 const LIVE_BACKEND_NODE_OLD_SPACE_MB = 8192
 const BACKEND_WORKERS = 6
 const E2E_WORKERS = 3
-const E2E_WORKERS_BY_TARGET = new Map([['macos-x64', 1]])
 const LIVE_WORKERS = 3
-const LIVE_BACKEND_RETRIES = 1
-const RUNNER_DEADLINE_MS = 55 * 60 * 1000
+const RUNNER_DEADLINE_MS = 60 * 60 * 1000
 const DEADLINE_EXIT_CODE = 124
 const STALE_E2E_TEMP_MAX_AGE_MS = 24 * 60 * 60 * 1000
 const E2E_EXECUTION_CLASSES = new Set(['normal', 'live', 'exclusive', 'warmup'])
-const CROSS_ARCH_WARMUP_SOURCE_TARGET = new Map([['macos-x64', 'macos-arm64']])
 const USE_WINDOWS_SHELL = process.platform === 'win32'
 const activeAsyncChildren = new Set()
 let stoppingActiveChildren = false
@@ -107,7 +104,9 @@ const parseArgs = (argv) => {
     bundles: [],
     results: [],
     freshKnowledgeCache: false,
-    reuseKnowledgeCache: false
+    reuseKnowledgeCache: false,
+    help: false,
+    unknownArgs: []
   }
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -163,8 +162,19 @@ const parseArgs = (argv) => {
       index += 1
       continue
     }
-    if (current === '--fresh-knowledge-cache') parsed.freshKnowledgeCache = true
-    if (current === '--reuse-knowledge-cache') parsed.reuseKnowledgeCache = true
+    if (current === '--fresh-knowledge-cache') {
+      parsed.freshKnowledgeCache = true
+      continue
+    }
+    if (current === '--reuse-knowledge-cache') {
+      parsed.reuseKnowledgeCache = true
+      continue
+    }
+    if (current === '--help' || current === '-h') {
+      parsed.help = true
+      continue
+    }
+    parsed.unknownArgs.push(current)
   }
 
   return parsed
@@ -316,17 +326,6 @@ const seedCaseKnowledgeCache = async (caseEnv, seedPath) => {
     errorOnExist: false,
     filter: (source) => path.basename(source) !== 'stats.json'
   })
-}
-
-const resolveWarmupSeedPath = (task, warmupCacheByTarget) => {
-  const explicitSeedPath = String(
-    task.env.NCURATOR_E2E_CROSS_ARCH_WARMUP_SEED_PATH ||
-      process.env.NCURATOR_E2E_CROSS_ARCH_WARMUP_SEED_PATH ||
-      ''
-  ).trim()
-  if (explicitSeedPath) return explicitSeedPath
-  const sourceTargetId = CROSS_ARCH_WARMUP_SOURCE_TARGET.get(task.targetId)
-  return sourceTargetId ? String(warmupCacheByTarget.get(sourceTargetId) || '').trim() : ''
 }
 
 const fileContainsCaseId = async (filePath, caseId) => {
@@ -584,16 +583,19 @@ const resolveBetterSqliteNativeBinding = (target) => {
 
 const runVitest = async (input) => {
   const extraArgs = ['--maxWorkers', String(input.workers)]
-  if (input.retries > 0) extraArgs.push('--retry', String(input.retries))
-  const env = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
-    ? {
-        NODE_OPTIONS: appendNodeOption(
-          process.env.NODE_OPTIONS,
-          `--max-old-space-size=${String(LIVE_BACKEND_NODE_OLD_SPACE_MB)}`
-        ),
-        ...input.env
-      }
-    : input.env
+  const isLiveGroup = input.testFiles.some((filePath) => isLiveBackendFile(filePath))
+  const env = {
+    ...(isLiveGroup
+      ? {
+          NODE_OPTIONS: appendNodeOption(
+            process.env.NODE_OPTIONS,
+            `--max-old-space-size=${String(LIVE_BACKEND_NODE_OLD_SPACE_MB)}`
+          )
+        }
+      : {}),
+    ...input.env,
+    LANGSMITH_TRACING: isLiveGroup ? 'true' : 'false'
+  }
   const caseArgs = input.testNamePattern ? ['--testNamePattern', input.testNamePattern] : []
   const commandArgs = [
     'run',
@@ -656,12 +658,7 @@ const formatScope = (input) =>
     .join(' ')
 
 const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, deadlineAt) => {
-  const warmupTargets = targets.filter((target) => target.cacheMode === 'warmup')
-  if (
-    warmupTargets.length > 0 &&
-    !testFiles.includes(VECTOR_WARMUP_TEST_FILE) &&
-    testFiles.length > 1
-  ) {
+  if (!testFiles.includes(VECTOR_WARMUP_TEST_FILE) && testFiles.length > 1) {
     testFiles = [...testFiles, VECTOR_WARMUP_TEST_FILE]
   }
   const fileTasks = await Promise.all(
@@ -681,13 +678,9 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     )
     .map((task, index) => ({ ...task, index }))
   const runnableTasks = tasks
-  const warmupTasks = runnableTasks.filter(
-    (task) => task.cacheMode === 'warmup' && task.execution === 'warmup'
-  )
+  const warmupTasks = runnableTasks.filter((task) => task.execution === 'warmup')
   const concurrentTasks = runnableTasks.filter(
-    (task) =>
-      task.execution !== 'exclusive' &&
-      !(task.cacheMode === 'warmup' && task.execution === 'warmup')
+    (task) => task.execution !== 'exclusive' && task.execution !== 'warmup'
   )
   const exclusiveTasks = runnableTasks.filter((task) => task.execution === 'exclusive')
   const results = []
@@ -772,21 +765,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     process.stdout.write(
       `[test-workflow] vector warm-up ${String(index + 1)}/${String(warmupTasks.length)} must pass before parallel E2E starts\n`
     )
-    const sourceTargetId = CROSS_ARCH_WARMUP_SOURCE_TARGET.get(task.targetId)
-    const warmupSeedPath = resolveWarmupSeedPath(task, warmupCacheByTarget)
-    if (sourceTargetId && !warmupSeedPath) {
-      throw new Error(
-        `${task.targetId} vector warm-up requires a passed ${sourceTargetId} cache seed; ` +
-          'run both package targets in release order or set ' +
-          'NCURATOR_E2E_CROSS_ARCH_WARMUP_SEED_PATH'
-      )
-    }
-    if (warmupSeedPath) {
-      process.stdout.write(
-        `[test-workflow] ${task.targetId} vector warm-up uses verified cross-architecture cache seed\n`
-      )
-    }
-    const outcome = await runTask(task, warmupSeedPath)
+    const outcome = await runTask(task)
     if (outcome.code !== 0) {
       exitCode = outcome.code
       process.stderr.write(
@@ -812,7 +791,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     while (pending.length > 0 && active.size < E2E_WORKERS && Date.now() < deadlineAt) {
       const nextIndex = pending.findIndex((task) => {
         if (task.execution === 'live' && liveActive >= LIVE_WORKERS) return false
-        const targetLimit = E2E_WORKERS_BY_TARGET.get(task.targetId) || E2E_WORKERS
+        const targetLimit = E2E_WORKERS
         return Number(activeByTarget.get(task.targetId) || 0) < targetLimit
       })
       if (nextIndex < 0) break
@@ -1000,7 +979,6 @@ const runTypeWorkflow = async (input) => {
           env: runtimeEnv,
           testNamePattern,
           workers: BACKEND_WORKERS,
-          retries: 0,
           deadlineAt: input.deadlineAt
         },
         {
@@ -1009,7 +987,6 @@ const runTypeWorkflow = async (input) => {
           env: runtimeEnv,
           testNamePattern,
           workers: 1,
-          retries: 0,
           deadlineAt: input.deadlineAt
         },
         {
@@ -1018,7 +995,6 @@ const runTypeWorkflow = async (input) => {
           env: runtimeEnv,
           testNamePattern,
           workers: LIVE_WORKERS,
-          retries: LIVE_BACKEND_RETRIES,
           deadlineAt: input.deadlineAt
         }
       ].filter((group) => group.testFiles.length > 0)
@@ -1046,9 +1022,43 @@ const runTypeWorkflow = async (input) => {
   return { exitCode, e2eResults }
 }
 
+const USAGE = `NCurator 测试 runner
+
+用法:
+  node scripts/test/workflow.mjs [选项]
+
+选项:
+  --domain <ai|unit|settings|workbench>  测试域；默认全量
+  --type <backend|e2e>                  执行类型；不带时按 backend -> e2e 顺序
+  --suite <suite>                        过滤 suite
+  --group <group>                        过滤 group，可重复传入
+  --exclude-group <group>                排除 group，可重复传入
+  --case <caseId>                        只执行指定 case，可重复传入
+  --runs <n>                             重复执行次数，默认 1
+  --target <source|package>              目标，默认 source
+  --bundle <release-bundle.json>         正式包 bundle，可重复传入
+  --result <path>                        bundle 结果路径，可重复传入
+  --fresh-knowledge-cache                删除知识库缓存强制重建
+  --reuse-knowledge-cache                复用知识库缓存（调试用）
+  -h, --help                             显示本帮助并退出
+
+注意:
+  不带任何过滤参数会执行全量测试（含 live 真实模型调用），会消耗真实 API 额度。
+  请使用 --domain/--suite/--case 缩小范围；未知参数会导致立即报错退出。
+`
+
 const main = async () => {
   removeNpmLifecycleEnv()
   const args = parseArgs(process.argv.slice(2))
+  if (args.help) {
+    process.stdout.write(USAGE)
+    process.exit(0)
+  }
+  if (args.unknownArgs.length > 0) {
+    process.stderr.write(`unknown arguments: ${args.unknownArgs.join(' ')}\n\n`)
+    process.stderr.write(USAGE)
+    process.exit(2)
+  }
   const configuredDeadlineMs = Number(process.env.NCURATOR_TEST_RUNNER_DEADLINE_MS || 0)
   const deadlineAt =
     Date.now() +

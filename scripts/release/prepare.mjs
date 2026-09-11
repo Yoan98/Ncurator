@@ -102,6 +102,15 @@ if (platform === 'windows') {
   }
 }
 
+const sqliteMigrationLockScript = path.join(
+  ROOT,
+  'scripts',
+  'release',
+  'shared',
+  'sqlite-migration-lock.mjs'
+)
+await run(process.execPath, [sqliteMigrationLockScript])
+
 await Promise.all([
   run(pnpmExecutable, ['typecheck:node']),
   run(pnpmExecutable, ['typecheck:web']),
@@ -115,9 +124,16 @@ await run(process.execPath, [
   'live'
 ])
 
+await run(process.execPath, [sqliteMigrationLockScript, '--promote-current'])
+
 packageJson.version = version
 await writeFile(packagePath, `${JSON.stringify(packageJson, null, 2)}\n`, 'utf8')
-await run('git', ['add', '--', 'package.json'])
+await run('git', [
+  'add',
+  '--',
+  'package.json',
+  'src/main/services/storage/sqlite/migrations/released-migrations.json'
+])
 await run('git', ['commit', '--allow-empty', '-m', `release: prepare ${releaseTag}`])
 await run('git', ['tag', '-a', releaseTag, '-m', notes])
 await run('git', ['push', '--atomic', 'origin', 'main', releaseTag])

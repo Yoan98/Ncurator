@@ -115,11 +115,9 @@ describe('workbench browser lifecycle e2e', () => {
 
           const setup = await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
-            workspaceName: WORKSPACE_NAME,
-            createSession: false
+            workspaceName: WORKSPACE_NAME
           })
           const liveEnv = setup.env
-          await page.getByRole('button', { name: `在 ${WORKSPACE_NAME} 中新建对话` }).click()
           const sessionStartedAt = Date.now()
           await sendWorkbenchMessage(page, SESSION_PROMPT)
           await waitForWorkbenchAiRunCompletion(
@@ -393,17 +391,15 @@ describe('workbench browser lifecycle e2e', () => {
             async (tabId) => window.api.browserPanelStateGet({ tabId }),
             browserTabId
           )
-          const zoomControlsBox = await escapeMenuPage
-            .locator('[data-testid="workbench-browser-zoom-controls"]')
-            .boundingBox()
-          const externalMenuItemBox = await escapeMenuPage
-            .getByRole('menuitem', { name: '在系统浏览器中打开' })
-            .boundingBox()
+          const openExternalButton = getWorkbenchLocator(page, workbenchSelectors.browserOpenExternal)
+          const openExternalVisible = await openExternalButton.isVisible()
+          const openExternalLabel = (await openExternalButton.getAttribute('aria-label')) || ''
           const escapeMenuClosePromise = escapeMenuPage.waitForEvent('close', { timeout: 10_000 })
-          await escapeMenuPage.bringToFront()
           await runtime.electronApp.evaluate(({ BrowserWindow }) => {
-            const menuWindow = BrowserWindow.getFocusedWindow()
-            if (!menuWindow) throw new Error('browser menu window is not focused')
+            const menuWindow = BrowserWindow.getAllWindows().find(
+              (candidate) => candidate.getParentWindow() !== null && !candidate.isDestroyed()
+            )
+            if (!menuWindow) throw new Error('browser menu window is unavailable')
             menuWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'ESCAPE' })
           })
           await escapeMenuClosePromise
@@ -626,10 +622,8 @@ describe('workbench browser lifecycle e2e', () => {
             menuZoom: menuState.state?.zoomPercent,
             restoreSamples,
             emptyGoDisabled,
-            externalMenuItemBelowZoom:
-              zoomControlsBox !== null &&
-              externalMenuItemBox !== null &&
-              externalMenuItemBox.y > zoomControlsBox.y + zoomControlsBox.height,
+            openExternalButton:
+              openExternalVisible && openExternalLabel === '将打开外部浏览器',
             closedTabDestroyed,
             deletedOwnerDestroyed
           }
@@ -666,7 +660,7 @@ describe('workbench browser lifecycle e2e', () => {
               result.restoredZoom === 100 &&
               result.menuZoom === 100 &&
               result.emptyGoDisabled &&
-              result.externalMenuItemBelowZoom,
+              result.openExternalButton,
             {
               name: 'embedded-browser-native-pixels-remain-visible',
               message:

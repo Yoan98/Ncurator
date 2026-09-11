@@ -44,7 +44,9 @@ describe('ai tool docx backend', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.valid.matches.length === 1 &&
-            result.valid.matches[0]?.offsets?.length === 1 &&
+            result.valid.matches[0]?.matchText.startsWith('反走样') === true &&
+            result.valid.matches[0]?.matchText.includes('多个采样') === true &&
+            result.valid.matches[0]?.textContext.includes('边缘锯齿') === true &&
             result.invalid.error.length > 0 &&
             result.invalid.error.includes('invalid regex pattern'),
           {

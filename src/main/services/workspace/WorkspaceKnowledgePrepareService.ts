@@ -271,6 +271,8 @@ export class WorkspaceKnowledgePrepareService {
     const now = Date.now()
     const newGenerationId = uuidv4()
     let oldGenerationId: string | undefined
+    let wroteChunks = false
+    let activated = false
     try {
       const existingDocument = await this.deps.documentsStore.getDocumentById(input.documentId)
       oldGenerationId = existingDocument?.active_generation_id
@@ -303,6 +305,7 @@ export class WorkspaceKnowledgePrepareService {
           vectors: indexedDocument.vectorSnapshot.vectors,
           generationId: newGenerationId
         })
+        wroteChunks = true
       }
       await this.deps.documentsStore.activateDocumentGeneration({
         documentId: input.documentId,
@@ -311,16 +314,13 @@ export class WorkspaceKnowledgePrepareService {
         importStatus: 2,
         updatedAt: Date.now()
       })
+      activated = true
       if (oldGenerationId && oldGenerationId !== newGenerationId) {
-        void this.deps.documentsStore
-          .deleteChunksByGeneration({
-            documentId: input.documentId,
-            workspaceId: input.workspaceId,
-            generationId: oldGenerationId
-          })
-          .catch((error) => {
-            console.warn('[WORKSPACE-INDEX] failed to cleanup old generation:', error)
-          })
+        await this.deps.documentsStore.deleteChunksByGeneration({
+          documentId: input.documentId,
+          workspaceId: input.workspaceId,
+          generationId: oldGenerationId
+        })
       }
 
       return {
@@ -346,6 +346,15 @@ export class WorkspaceKnowledgePrepareService {
           error instanceof Error ? error.message : String(error)
         )
         .catch(() => {})
+      if (wroteChunks && !activated) {
+        await this.deps.documentsStore
+          .deleteChunksByGeneration({
+            documentId: input.documentId,
+            workspaceId: input.workspaceId,
+            generationId: newGenerationId
+          })
+          .catch(() => {})
+      }
       throw new Error(error instanceof Error ? error.message : String(error))
     }
   }

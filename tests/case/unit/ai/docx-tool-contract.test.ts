@@ -1,63 +1,133 @@
 import { describe, expect, it } from 'vitest'
+import { HUMAN_MAX_ACTIVE_TOOLS } from '../../../../src/main/services/ai/human/constants'
 import { SKILL_DEFINITIONS } from '../../../../src/main/services/ai/human/skills'
 import {
-  DOCX_EDIT_TOOL_SPEC,
+  DOCX_WRITE_TOOL_SPECS,
   DOCX_READ_TOOL_SPECS,
-  DOCX_TOOL_SPECS,
-  DOCX_WRITE_TOOL_SPECS
+  DOCX_TOOL_SPECS
 } from '../../../../src/main/services/ai/human/tools/docx/toolSpecs'
+import {
+  docxFormatSchema,
+  docxOutlineSchema,
+  docxReadNodesSchema
+} from '../../../../src/main/services/ai/human/tools/docx/toolSchemas'
+import type { DocxMutationOutput } from '../../../../src/main/services/ai/human/tools/docx/outputTypes'
 
-const OLD_DOCX_WRITE_TOOL_NAMES = [
-  'docx_create',
-  'docx_paragraph_edit',
-  'docx_heading_edit',
+const READ_TOOLS = ['docx_read_outline', 'docx_search', 'docx_read_nodes']
+const WRITE_TOOLS = [
+  'docx_content_edit',
+  'docx_format',
   'docx_table_edit',
-  'docx_text_edit',
-  'docx_text_style_edit',
-  'docx_delete'
+  'docx_comments_revisions'
 ]
 
 describe('ai unit docx tool contract', () => {
-  it('only exposes content reading tools and docx_edit', () => {
-    expect(DOCX_READ_TOOL_SPECS.map((spec) => spec.name)).toEqual([
-      'docx_read_outline',
-      'docx_search',
-      'docx_read_blocks',
-      'docx_read_visuals'
-    ])
-    expect(DOCX_WRITE_TOOL_SPECS.map((spec) => spec.name)).toEqual(['docx_edit'])
-    expect(SKILL_DEFINITIONS['docx-read'].toolNames).toEqual([
-      'docx_read_outline',
-      'docx_search',
-      'docx_read_blocks',
-      'docx_read_visuals'
-    ])
-    expect(SKILL_DEFINITIONS['docx-write'].toolNames).toEqual(['docx_edit'])
-    expect(DOCX_TOOL_SPECS.map((spec) => spec.name)).not.toEqual(
-      expect.arrayContaining(OLD_DOCX_WRITE_TOOL_NAMES)
-    )
-    expect(DOCX_TOOL_SPECS.map((spec) => spec.name)).not.toEqual(
-      expect.arrayContaining(['docx_history', 'docx_rollback'])
-    )
+  it('exposes independent 3/4 docx skill toolsets', () => {
+    expect(DOCX_READ_TOOL_SPECS.map((spec) => spec.name)).toEqual(READ_TOOLS)
+    expect(DOCX_WRITE_TOOL_SPECS.map((spec) => spec.name)).toEqual(WRITE_TOOLS)
+    expect(DOCX_TOOL_SPECS.map((spec) => spec.name)).toEqual([...READ_TOOLS, ...WRITE_TOOLS])
+    expect(SKILL_DEFINITIONS['docx-read'].toolNames).toEqual(READ_TOOLS)
+    expect(SKILL_DEFINITIONS['docx-write'].toolNames).toEqual(WRITE_TOOLS)
+    expect(DOCX_TOOL_SPECS).toHaveLength(7)
+    expect(DOCX_TOOL_SPECS.length).toBeLessThan(HUMAN_MAX_ACTIVE_TOOLS)
   })
 
-  it('keeps the edit prompt as one capability sentence without implementation details', () => {
-    const description = DOCX_EDIT_TOOL_SPEC.promptSpec.description
-    expect(description).toContain('递归内容树')
-    expect(description).toContain('visual loss')
-    expect(description).not.toContain('\n')
-    for (const internalTerm of [
-      'revision',
-      'replay',
-      'checksum',
-      'UUID',
-      'blk_',
-      'blockIndex',
-      'postWriteReadback',
-      '原子',
-      'action type='
-    ]) {
-      expect(description).not.toContain(internalTerm)
+  it('keeps every public call to one discriminated operation', () => {
+    for (const spec of DOCX_WRITE_TOOL_SPECS) {
+      expect(spec.promptSpec.description).not.toContain('actions[]')
+      expect(spec.promptSpec.description).not.toContain('nodeId')
+      expect(spec.promptSpec.description).not.toContain('\n')
     }
+  })
+
+  it('bounds detailed node reads', () => {
+    expect(
+      docxReadNodesSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        range: { type: 'node_index', fromNodeIndex: 10, toNodeIndex: 59 }
+      }).success
+    ).toBe(true)
+    expect(
+      docxReadNodesSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        range: { type: 'node_index', fromNodeIndex: 10, toNodeIndex: 60 }
+      }).success
+    ).toBe(false)
+    expect(
+      docxReadNodesSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        range: {
+          type: 'node_ids',
+          nodeIds: Array.from({ length: 21 }, (_, index) => `node-${String(index)}`)
+        }
+      }).success
+    ).toBe(false)
+  })
+
+  it('uses percent outline ranges', () => {
+    expect(
+      docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx', fromPercent: 0, toPercent: 50 })
+        .success
+    ).toBe(true)
+    expect(docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx' }).success).toBe(false)
+    expect(
+      docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx', fromPercent: 0, toPercent: 100 })
+        .success
+    ).toBe(true)
+    expect(
+      docxOutlineSchema.safeParse({ sourcePath: '/tmp/a.docx', fromPercent: 80, toPercent: 20 })
+        .success
+    ).toBe(false)
+  })
+
+  it('bounds format batches and rejects duplicate or removed single-target input', () => {
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        type: 'format_paragraph',
+        nodeIds: ['p1', 'p2'],
+        format: { alignment: 'center' }
+      }).success
+    ).toBe(true)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        type: 'format_paragraph',
+        nodeIds: ['p1', 'p1'],
+        format: { alignment: 'center' }
+      }).success
+    ).toBe(false)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        type: 'format_paragraph',
+        nodeIds: Array.from({ length: 21 }, (_, index) => `p${String(index)}`),
+        format: { alignment: 'center' }
+      }).success
+    ).toBe(false)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        type: 'format_text',
+        targets: [{ nodeId: 'p1' }, { nodeId: 'p1', text: 'title' }],
+        format: { bold: true }
+      }).success
+    ).toBe(false)
+    expect(
+      docxFormatSchema.safeParse({
+        sourcePath: '/tmp/a.docx',
+        type: 'format_paragraph',
+        nodeId: 'p1',
+        format: { alignment: 'center' }
+      }).success
+    ).toBe(false)
+  })
+
+  it('keeps docx mutation output minimal', () => {
+    const empty = {} satisfies DocxMutationOutput
+    const withIds = { createdIds: ['node_1'] } satisfies DocxMutationOutput
+    expect(empty).toEqual({})
+    expect(withIds.createdIds).toEqual(['node_1'])
+    expect('createdIds' in empty).toBe(false)
   })
 })

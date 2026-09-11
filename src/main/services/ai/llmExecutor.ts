@@ -1,5 +1,14 @@
-import { HumanMessage, SystemMessage } from '@langchain/core/messages'
+import {
+  AIMessage,
+  AIMessageChunk,
+  HumanMessage,
+  SystemMessage,
+  collapseToolCallChunks,
+  type BaseMessage,
+  type ToolCallChunk
+} from '@langchain/core/messages'
 import type { RunnableConfig } from '@langchain/core/runnables'
+import type { StructuredToolInterface } from '@langchain/core/tools'
 import { z } from 'zod/v4'
 import { createChatModel } from '../llm/chatModel'
 import { normalizeJsonObject, normalizeLlmUsage } from '../llm/usage'
@@ -16,19 +25,19 @@ import type {
 } from '../../../shared/types'
 import type { AiEventDispatchContext } from './types'
 import { AI_LLM_CALL_MAX_RETRY_ATTEMPTS, AI_LLM_CALL_TIMEOUT_MS } from './constants'
-import { isLlmProviderError, toLlmOutputError } from './errors'
-import { classifyLlmFailureCode } from './utils/runFailure'
+import { LlmProviderError, toLlmOutputError } from './errors'
+import { classifyLlmRetry } from './llmRetry'
 import {
   extractTextContent,
-  getErrorText,
-  normalizeStructuredOutputError,
-  parsePromptJsonOutput
+  parsePromptJsonOutput,
+  serializeMessageContentForTelemetry
 } from './structuredOutput'
 import {
   runLlmCallWithActivity,
   type LlmCallExecutionResult,
   type LlmCallStreamObserver
 } from './utils/structuredChatActivity'
+import { serializeChatToolsRequestWire } from './utils/llmRequestWire'
 
 type TextMessage = {
   content: unknown
@@ -46,6 +55,7 @@ type TextRunnable = {
     config?: Partial<RunnableConfig>
   ) => Promise<AsyncIterable<TextMessage>>
   withConfig: (config: Record<string, unknown>) => TextRunnable
+  bindTools?: (tools: StructuredToolInterface[]) => TextRunnable
 }
 
 type BaseLlmInvocationInput = {
@@ -64,6 +74,7 @@ export type AiLlmTextInvocationInput = BaseLlmInvocationInput
 
 type AiLlmStructuredDriverInput = BaseLlmInvocationInput & {
   schema: z.ZodType<Record<string, unknown>>
+  retryOutputErrors?: boolean
 }
 
 export type AiLlmTextDriverResult = {
@@ -73,6 +84,18 @@ export type AiLlmTextDriverResult = {
   usage?: AiLlmUsage
   responseMetadata?: JsonObject
   usageMetadata?: JsonObject
+}
+
+export type AiLlmTextMessagesDriverInput = {
+  caller: string
+  cfg: LlmRuntimeConfig
+  schemaName: string
+  messages: BaseMessage[]
+  tools?: StructuredToolInterface[]
+  temperature?: number
+  streamingMode: AiLlmStreamingMode
+  observer?: LlmCallStreamObserver
+  signal?: AbortSignal
 }
 
 export type AiLlmStructuredDriverResult = {
@@ -87,6 +110,8 @@ export type AiLlmStructuredDriverResult = {
 export type AiLlmDriver = {
   chatStructured?: (input: AiLlmStructuredDriverInput) => Promise<AiLlmStructuredDriverResult>
   chatText?: (input: AiLlmTextInvocationInput) => Promise<AiLlmTextDriverResult>
+  chatTools?: (input: AiLlmToolCallDriverInput) => Promise<AiLlmToolCallDriverResult>
+  chatMessages?: (input: AiLlmTextMessagesDriverInput) => Promise<AiLlmTextDriverResult>
 }
 
 export type AiLlmTextRequest = {
@@ -95,6 +120,17 @@ export type AiLlmTextRequest = {
   schemaName: string
   system: string
   user: string
+  temperature?: number
+  streamingMode?: AiLlmStreamingMode
+  onTextDelta?: (text: string) => void
+}
+
+export type AiLlmTextMessagesRequest = {
+  caller: string
+  taskId?: string
+  schemaName: string
+  messages: BaseMessage[]
+  tools?: StructuredToolInterface[]
   temperature?: number
   streamingMode?: AiLlmStreamingMode
   onTextDelta?: (text: string) => void
@@ -110,6 +146,56 @@ export type AiLlmStructuredRequest<T extends Record<string, unknown>> = {
   temperature?: number
   streamingMode?: AiLlmStreamingMode
   contextBudgetSnapshot?: BrainContextBudgetSnapshot
+  retryOutputErrors?: boolean
+}
+
+export type AiLlmToolCallDriverInput = {
+  caller: string
+  cfg: LlmRuntimeConfig
+  schemaName: string
+  messages: BaseMessage[]
+  tools: StructuredToolInterface[]
+  temperature?: number
+  streamingMode: AiLlmStreamingMode
+  observer?: LlmCallStreamObserver
+  signal?: AbortSignal
+}
+
+export type AiLlmToolCallDriverResult = {
+  message: AIMessage
+  rawText?: string
+  streamed?: boolean
+  usage?: AiLlmUsage
+  responseMetadata?: JsonObject
+  usageMetadata?: JsonObject
+  finishReason?: AiLlmFinishReason
+}
+
+export type AiLlmFinishReason =
+  | 'stop'
+  | 'tool_calls'
+  | 'length'
+  | 'content_filter'
+  | 'resource_exhausted'
+  | 'unknown'
+
+export type AiLlmToolCallRequest = {
+  caller: string
+  taskId?: string
+  messages: BaseMessage[]
+  tools: StructuredToolInterface[]
+  temperature?: number
+  streamingMode?: AiLlmStreamingMode
+  onTextDelta?: (text: string) => void
+  onTextReset?: () => void
+  onToolCallDelta?: () => void
+  contextBudgetSnapshot?: BrainContextBudgetSnapshot
+}
+
+export type AiLlmToolCallResult = {
+  message: AIMessage
+  usage?: AiLlmUsage
+  finishReason: AiLlmFinishReason
 }
 
 export type AiLlmExecutor = {
@@ -120,6 +206,8 @@ export type AiLlmExecutor = {
     usage?: AiLlmUsage
   }>
   chatText: (input: AiLlmTextRequest) => Promise<string>
+  chatMessages: (input: AiLlmTextMessagesRequest) => Promise<string>
+  chatTools: (input: AiLlmToolCallRequest) => Promise<AiLlmToolCallResult>
 }
 
 const resolveStreamingMode = (settings: AiRuntimeSettings): AiLlmStreamingMode =>
@@ -207,6 +295,43 @@ const toInvocationMetadata = (input: {
   usageMetadata: normalizeJsonObject(input.message?.usage_metadata)
 })
 
+const normalizeFinishReason = (value: unknown): AiLlmFinishReason => {
+  const reason = String(value || '').trim().toLowerCase()
+  if (reason === 'stop' || reason === 'end_turn' || reason === 'completed') return 'stop'
+  if (reason === 'tool_calls' || reason === 'tool_call' || reason === 'tool_use') {
+    return 'tool_calls'
+  }
+  if (reason === 'length' || reason === 'max_tokens') return 'length'
+  if (reason === 'content_filter' || reason === 'filtered') return 'content_filter'
+  if (reason === 'resource_exhausted' || reason === 'resourceexhausted') {
+    return 'resource_exhausted'
+  }
+  return 'unknown'
+}
+
+const resolveFinishReason = (input: {
+  explicit?: unknown
+  responseMetadata?: JsonObject
+  hasToolCalls: boolean
+}): AiLlmFinishReason => {
+  const metadata = input.responseMetadata
+  const fromProvider = normalizeFinishReason(
+    input.explicit ?? metadata?.finish_reason ?? metadata?.stop_reason
+  )
+  if (fromProvider !== 'unknown') return fromProvider
+  // 没有 finish_reason 时，只有在完整 stream/invoke 已正常关闭后才会走到这里。
+  return input.hasToolCalls ? 'tool_calls' : 'stop'
+}
+
+const assertFinishReasonIsUsable = (finishReason: AiLlmFinishReason): void => {
+  if (finishReason !== 'resource_exhausted') return
+  throw new LlmProviderError({
+    message: '模型服务资源暂时不可用，请稍后重试。',
+    providerCode: 'resource_exhausted',
+    retryable: true
+  })
+}
+
 const streamTextFromRunnable = async (input: {
   runnable: TextRunnable
   messages: Array<SystemMessage | HumanMessage>
@@ -274,75 +399,8 @@ const createTextRunnable = (input: {
     timeout: AI_LLM_CALL_TIMEOUT_MS
   }) as TextRunnable
 
-const isCancellationError = (error: unknown): boolean => {
-  const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined
-  const message =
-    error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase()
-  return code === 'CANCELLED' || message.includes('cancel')
-}
-
-export const classifyLlmCallRetry = (
-  error: unknown,
-  attempt = 1
-): { retryable: boolean; message: string; delayMs?: number } => {
-  if (isLlmProviderError(error)) {
-    return {
-      retryable: error.retryable,
-      message: error.message,
-      ...(isResourceExhaustedError(error)
-        ? { delayMs: resolveResourceExhaustedDelay(attempt) }
-        : {})
-    }
-  }
-  const info = normalizeStructuredOutputError(error)
-  const message = info.message || getErrorText(error)
-  const body = `${info.rawText} ${error instanceof Error ? error.message : ''}`.toLowerCase()
-  if (isCancellationError(error)) return { retryable: false, message }
-  if (body.includes('structured_output_retryable') || body.includes('text_output_retryable')) {
-    return { retryable: true, message }
-  }
-  const retryableStatus = new Set([408, 409, 425, 429, 500, 502, 503, 504])
-  if (info.status !== undefined && retryableStatus.has(info.status)) {
-    return {
-      retryable: true,
-      message,
-      ...(isResourceExhaustedError(error, `${info.rawText} ${info.code} ${info.message}`)
-        ? { delayMs: resolveResourceExhaustedDelay(attempt) }
-        : {})
-    }
-  }
-  const code = String(info.code || '').toLowerCase()
-  if (
-    code === 'timeout' ||
-    code === 'request_timeout' ||
-    code === 'rate_limit_exceeded' ||
-    code === 'server_error' ||
-    code === 'service_unavailable'
-  ) {
-    return { retryable: true, message }
-  }
-  if (
-    body.includes('network') ||
-    body.includes('econnreset') ||
-    body.includes('etimedout') ||
-    body.includes('timed out') ||
-    body.includes('timeout') ||
-    body.includes('rate limit') ||
-    body.includes('temporarily unavailable') ||
-    body.includes('service unavailable')
-  ) {
-    return { retryable: true, message }
-  }
-  return { retryable: false, message }
-}
-
-const isResourceExhaustedError = (error: unknown, extraText = ''): boolean => {
-  const message = `${error instanceof Error ? error.message : String(error || '')} ${extraText}`
-  return /resourceexhausted|worker local total request limit/i.test(message)
-}
-
-const resolveResourceExhaustedDelay = (attempt: number): number =>
-  Math.min(15_000, 2_000 * 2 ** Math.max(0, attempt - 1))
+/** @deprecated Prefer classifyLlmRetry from llmRetry.ts */
+export const classifyLlmCallRetry = classifyLlmRetry
 
 const invokeTextChat = async (input: {
   driver?: AiLlmDriver
@@ -382,6 +440,64 @@ const invokeTextChat = async (input: {
     : await invokeTextFromRunnable({
         runnable,
         messages,
+        checkCancelled: request.checkCancelled,
+        signal: request.signal
+      })
+  const metadata = toInvocationMetadata({
+    message: response.message,
+    providerKind
+  })
+  return {
+    output: response.text,
+    rawText: response.text,
+    streamed: streaming,
+    ...metadata
+  }
+}
+
+const invokeTextMessagesChat = async (input: {
+  driver?: AiLlmDriver
+  request: AiLlmTextMessagesDriverInput & {
+    checkCancelled: () => void
+  }
+}): Promise<LlmCallExecutionResult<string>> => {
+  if (input.driver?.chatMessages) {
+    const result = await input.driver.chatMessages(input.request)
+    return {
+      output: result.output,
+      rawText: result.rawText ?? result.output,
+      streamed: result.streamed,
+      usage: result.usage,
+      responseMetadata: result.responseMetadata,
+      usageMetadata: result.usageMetadata
+    }
+  }
+
+  const request = input.request
+  const streaming = request.streamingMode === 'force_stream'
+  const providerKind = resolveConfigProviderKind(request.cfg)
+  const baseRunnable = createTextRunnable({
+    cfg: request.cfg,
+    temperature: request.temperature,
+    streaming
+  })
+  // 需要共享 prompt 缓存的调用会传入与 brain 相同的 tools，
+  // 使工具描述被渲染进 prompt 从而命中 DeepSeek 的 KV 缓存前缀，同时保持流式输出。
+  const runnable =
+    request.tools && request.tools.length > 0 && baseRunnable.bindTools
+      ? baseRunnable.bindTools(request.tools)
+      : baseRunnable
+  const response = streaming
+    ? await streamTextFromRunnable({
+        runnable,
+        messages: request.messages as Array<SystemMessage | HumanMessage>,
+        observer: request.observer,
+        checkCancelled: request.checkCancelled,
+        signal: request.signal
+      })
+    : await invokeTextFromRunnable({
+        runnable,
+        messages: request.messages as Array<SystemMessage | HumanMessage>,
         checkCancelled: request.checkCancelled,
         signal: request.signal
       })
@@ -446,12 +562,139 @@ const invokeStructuredChatCore = async (input: {
   try {
     output = parsePromptJsonOutput(response.text)
   } catch (error) {
-    throw toLlmOutputError(error, response.text)
+    throw toLlmOutputError(error, response.text, request.retryOutputErrors)
   }
   return {
     output,
     rawText: response.text,
     streamed: streaming,
+    ...metadata
+  }
+}
+
+type ToolCallingModel = {
+  bindTools: (tools: StructuredToolInterface[]) => {
+    invoke: (input: BaseMessage[], config?: Partial<RunnableConfig>) => Promise<AIMessage>
+    stream: (
+      input: BaseMessage[],
+      config?: Partial<RunnableConfig>
+    ) => Promise<AsyncIterable<AIMessageChunk>>
+  }
+}
+
+const streamToolCallingCore = async (input: {
+  request: AiLlmToolCallDriverInput
+  checkCancelled: () => void
+}): Promise<LlmCallExecutionResult<AIMessage>> => {
+  const request = input.request
+  const providerKind = resolveConfigProviderKind(request.cfg)
+  const runnable = createChatModel(request.cfg, {
+    temperature: request.temperature ?? 0.2,
+    streaming: true,
+    timeout: AI_LLM_CALL_TIMEOUT_MS
+  }) as ToolCallingModel
+  const bound = runnable.bindTools(request.tools)
+  const stream = await bound.stream(request.messages, createRunnableConfig(request.signal))
+  const textChunks: string[] = []
+  const toolCallChunks: ToolCallChunk[] = []
+  let lastChunk: AIMessageChunk | undefined
+  for await (const chunk of stream) {
+    input.checkCancelled()
+    lastChunk = chunk
+    const text = extractTextContent(chunk.content)
+    if (text) {
+      textChunks.push(text)
+      request.observer?.onDelta?.(text)
+    }
+    if (chunk.tool_call_chunks && chunk.tool_call_chunks.length > 0) {
+      request.observer?.onToolCallDelta?.()
+      toolCallChunks.push(...chunk.tool_call_chunks)
+    }
+  }
+  const collapsed = collapseToolCallChunks(toolCallChunks)
+  const rawText = textChunks.join('')
+  const message = new AIMessage({
+    content: rawText,
+    tool_calls: collapsed.tool_calls,
+    invalid_tool_calls: collapsed.invalid_tool_calls
+  })
+  const metadata = toInvocationMetadata({
+    message: lastChunk,
+    providerKind
+  })
+  const finishReason = resolveFinishReason({
+    responseMetadata: metadata.responseMetadata,
+    hasToolCalls:
+      collapsed.tool_calls.length > 0 || collapsed.invalid_tool_calls.length > 0
+  })
+  assertFinishReasonIsUsable(finishReason)
+  return {
+    output: message,
+    rawText,
+    streamed: true,
+    finishReason,
+    ...metadata
+  }
+}
+
+const invokeToolCallingCore = async (input: {
+  driver?: AiLlmDriver
+  request: AiLlmToolCallDriverInput
+  checkCancelled: () => void
+}): Promise<LlmCallExecutionResult<AIMessage>> => {
+  if (input.driver?.chatTools) {
+    const result = await input.driver.chatTools(input.request)
+    const finishReason = resolveFinishReason({
+      explicit: result.finishReason,
+      responseMetadata: result.responseMetadata,
+      hasToolCalls:
+        Boolean(result.message.tool_calls?.length) ||
+        Boolean(result.message.invalid_tool_calls?.length)
+    })
+    assertFinishReasonIsUsable(finishReason)
+    return {
+      output: result.message,
+      rawText: result.rawText,
+      streamed: result.streamed,
+      usage: result.usage,
+      responseMetadata: result.responseMetadata,
+      usageMetadata: result.usageMetadata,
+      finishReason
+    }
+  }
+
+  if (input.request.streamingMode === 'force_stream') {
+    return await streamToolCallingCore({
+      request: input.request,
+      checkCancelled: input.checkCancelled
+    })
+  }
+
+  const request = input.request
+  const providerKind = resolveConfigProviderKind(request.cfg)
+  const runnable = createChatModel(request.cfg, {
+    temperature: request.temperature ?? 0.2,
+    streaming: false,
+    timeout: AI_LLM_CALL_TIMEOUT_MS
+  }) as ToolCallingModel
+  const bound = runnable.bindTools(request.tools)
+  const response = await bound.invoke(request.messages, createRunnableConfig(request.signal))
+  const text = extractTextContent(response.content)
+  const metadata = toInvocationMetadata({
+    message: response,
+    providerKind
+  })
+  const finishReason = resolveFinishReason({
+    responseMetadata: metadata.responseMetadata,
+    hasToolCalls:
+      Boolean(response.tool_calls?.length) || Boolean(response.invalid_tool_calls?.length)
+  })
+  assertFinishReasonIsUsable(finishReason)
+  return {
+    output: response,
+    rawText: text,
+    streamed: false,
+    finishReason,
     ...metadata
   }
 }
@@ -495,7 +738,7 @@ export const createAiLlmExecutor = (input: {
           contextBudgetSnapshot: request.contextBudgetSnapshot
         },
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
-        classifyRetry: classifyLlmCallRetry,
+        classifyRetry: classifyLlmRetry,
         execute: async (observer) =>
           await withAbortTimeout({
             timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
@@ -514,7 +757,8 @@ export const createAiLlmExecutor = (input: {
                   streamingMode,
                   observer,
                   checkCancelled: input.checkCancelled,
-                  signal
+                  signal,
+                  retryOutputErrors: request.retryOutputErrors
                 }
               })
               try {
@@ -523,7 +767,7 @@ export const createAiLlmExecutor = (input: {
                   output: request.schema.parse(invocation.output)
                 }
               } catch (error) {
-                throw toLlmOutputError(error, invocation.rawText || '')
+                throw toLlmOutputError(error, invocation.rawText || '', request.retryOutputErrors)
               }
             }
           })
@@ -557,7 +801,7 @@ export const createAiLlmExecutor = (input: {
         },
         onTextDelta: request.onTextDelta,
         maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
-        classifyRetry: classifyLlmCallRetry,
+        classifyRetry: classifyLlmRetry,
         execute: async (observer) =>
           await withAbortTimeout({
             timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
@@ -582,6 +826,135 @@ export const createAiLlmExecutor = (input: {
       })
 
       return String(result.output || '')
+    },
+
+    chatMessages: async (request: AiLlmTextMessagesRequest): Promise<string> => {
+      input.checkCancelled()
+      const streamingMode = request.streamingMode || defaultStreamingMode
+      const cfg = await input.getConfig()
+      const userHash = JSON.stringify(
+        request.messages.map((message) => ({
+          role: message.getType(),
+          content: serializeMessageContentForTelemetry(message.content)
+        }))
+      )
+      const result = await runLlmCallWithActivity<string>({
+        ctx: input.eventCtx,
+        runId: input.eventCtx.runId,
+        taskId: request.taskId,
+        system: '',
+        user: userHash,
+        telemetry: {
+          actionType: 'llm_text_output',
+          caller: request.caller,
+          schemaName: request.schemaName,
+          modelName: cfg.model_name,
+          baseUrl: cfg.base_url,
+          providerKind: resolveConfigProviderKind(cfg),
+          streamingMode,
+          attempt: 1
+        },
+        onTextDelta: request.onTextDelta,
+        maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
+        classifyRetry: classifyLlmRetry,
+        execute: async (observer) =>
+          await withAbortTimeout({
+            timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
+            externalSignal: input.abortSignal,
+            execute: async (signal) =>
+              await invokeTextMessagesChat({
+                driver: input.driver,
+                request: {
+                  caller: request.caller,
+                  cfg,
+                  schemaName: request.schemaName,
+                  messages: request.messages,
+                  tools: request.tools,
+                  temperature: request.temperature,
+                  streamingMode,
+                  observer,
+                  checkCancelled: input.checkCancelled,
+                  signal
+                }
+              })
+          })
+      })
+
+      return String(result.output || '')
+    },
+
+    chatTools: async (request: AiLlmToolCallRequest): Promise<AiLlmToolCallResult> => {
+      input.checkCancelled()
+      const cfg = await input.getConfig()
+      const providerKind = resolveConfigProviderKind(cfg)
+      const streamingMode = request.streamingMode || defaultStreamingMode
+      const systemHash = JSON.stringify(
+        request.tools.map((tool) => ({
+          name: String(tool.name || '').trim(),
+          description: String(tool.description || '').trim()
+        }))
+      )
+      const userHash = JSON.stringify(
+        request.messages.map((message) => ({
+          role: message.getType(),
+          content: serializeMessageContentForTelemetry(message.content)
+        }))
+      )
+      const requestWire = serializeChatToolsRequestWire({
+        messages: request.messages,
+        tools: request.tools
+      })
+      const result = await runLlmCallWithActivity<AIMessage>({
+        ctx: input.eventCtx,
+        runId: input.eventCtx.runId,
+        taskId: request.taskId,
+        system: systemHash,
+        user: userHash,
+        requestWire,
+        telemetry: {
+          actionType: 'llm_tool_calls',
+          caller: request.caller,
+          schemaName: 'human_brain_tool_calls',
+          modelName: cfg.model_name,
+          baseUrl: cfg.base_url,
+          providerKind,
+          streamingMode,
+          attempt: 1,
+          contextBudgetSnapshot: request.contextBudgetSnapshot
+        },
+        onTextDelta: request.onTextDelta,
+        onTextReset: request.onTextReset,
+        onToolCallDelta: request.onToolCallDelta,
+        maxAttempts: AI_LLM_CALL_MAX_RETRY_ATTEMPTS,
+        classifyRetry: classifyLlmRetry,
+        execute: async (observer) =>
+          await withAbortTimeout({
+            timeoutMs: AI_LLM_CALL_TIMEOUT_MS,
+            externalSignal: input.abortSignal,
+            execute: async (signal) =>
+              await invokeToolCallingCore({
+                driver: input.driver,
+                checkCancelled: input.checkCancelled,
+                request: {
+                  caller: request.caller,
+                  cfg,
+                  schemaName: 'human_brain_tool_calls',
+                  messages: request.messages,
+                  tools: request.tools,
+                  temperature: request.temperature,
+                  streamingMode,
+                  observer,
+                  signal
+                }
+              })
+          })
+      })
+
+      return {
+        message: result.output,
+        usage: result.usage,
+        finishReason: (result.finishReason as AiLlmFinishReason) || 'unknown'
+      }
     }
   }
 }
@@ -636,4 +1009,4 @@ export const invokeStructuredChat = async <T extends Record<string, unknown>>(in
   }
 }
 
-export { classifyLlmFailureCode }
+export { classifyLlmRetry }

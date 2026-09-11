@@ -1,6 +1,8 @@
+import { createHash } from 'node:crypto'
 import { jsonrepair } from 'jsonrepair'
 
 type ErrorObject = Record<string, unknown>
+type ErrorResponseData = string | number | boolean | null | object
 
 export type StructuredOutputErrorInfo = {
   status?: number
@@ -9,9 +11,8 @@ export type StructuredOutputErrorInfo = {
   param?: string
   message: string
   rawText: string
+  hasProviderSignal: boolean
 }
-
-export type LlmErrorClassification = 'fatal' | 'retryable' | 'unknown'
 
 const getObject = (value: unknown): ErrorObject | undefined =>
   value && typeof value === 'object' ? (value as ErrorObject) : undefined
@@ -39,12 +40,6 @@ const stringifyValue = (value: unknown): string | undefined => {
   }
 }
 
-const normalizeSignal = (value: string | undefined): string | undefined => {
-  if (!value) return undefined
-  const normalized = value.trim()
-  return normalized ? normalized.toLowerCase() : undefined
-}
-
 const stripSdkErrorDecoration = (message: string): string =>
   message.replace(/\n\s*Troubleshooting URL:\s*https?:\/\/\S+[\s\S]*$/iu, '').trim()
 
@@ -67,23 +62,37 @@ export const normalizeStructuredOutputError = (error: unknown): StructuredOutput
   const status =
     readNumber(response?.status) ||
     readNumber(root?.status) ||
+    readNumber(root?.httpStatus) ||
     readNumber(responseDataObject?.status) ||
     readNumber(providerError?.status)
 
   const code =
     readString(providerError?.code) ||
     readString(responseDataObject?.code) ||
-    readString(root?.code)
+    readString(root?.providerCode) ||
+    (readString(root?.code) === 'CANCELLED' ? undefined : readString(root?.code))
 
   const type =
     readString(providerError?.type) ||
     readString(responseDataObject?.type) ||
+    readString(root?.providerType) ||
     readString(root?.type)
 
   const param =
     readString(providerError?.param) ||
     readString(responseDataObject?.param) ||
     readString(root?.param)
+
+  const hasProviderSignal =
+    status !== undefined ||
+    Boolean(
+      code ||
+        type ||
+        readString(providerError?.message) ||
+        readString(responseDataObject?.message) ||
+        readString(root?.providerCode) ||
+        readNumber(root?.httpStatus) !== undefined
+    )
 
   const rawParts = [
     status !== undefined ? `status=${status}` : undefined,
@@ -100,67 +109,13 @@ export const normalizeStructuredOutputError = (error: unknown): StructuredOutput
     type,
     param,
     message,
-    rawText: rawParts.join(' ')
+    rawText: rawParts.join(' '),
+    hasProviderSignal
   }
 }
 
 export const getErrorText = (error: unknown): string =>
   normalizeStructuredOutputError(error).message
-
-type ErrorResponseData = string | number | boolean | null | object
-
-const FATAL_STATUS_CODES = new Set([401, 402, 403])
-const RETRYABLE_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504])
-const FATAL_ERROR_CODES = new Set([
-  'invalid_api_key',
-  'insufficient_balance',
-  'quota_exceeded',
-  'invalid_authentication',
-  'authentication_error'
-])
-const RETRYABLE_ERROR_CODES = new Set([
-  'rate_limit_exceeded',
-  'timeout',
-  'request_timeout',
-  'server_error',
-  'service_unavailable'
-])
-
-export const classifyLlmError = (error: unknown): LlmErrorClassification => {
-  const info = normalizeStructuredOutputError(error)
-  const normalizedCode = normalizeSignal(info.code)
-  const normalizedType = normalizeSignal(info.type)
-  const body = info.rawText.toLowerCase()
-
-  if (
-    (info.status !== undefined && FATAL_STATUS_CODES.has(info.status)) ||
-    (normalizedCode && FATAL_ERROR_CODES.has(normalizedCode)) ||
-    body.includes('insufficient balance') ||
-    body.includes('invalid api key') ||
-    body.includes('authentication failed') ||
-    normalizedType === 'authentication_error'
-  ) {
-    return 'fatal'
-  }
-
-  if (
-    (info.status !== undefined && RETRYABLE_STATUS_CODES.has(info.status)) ||
-    (normalizedCode && RETRYABLE_ERROR_CODES.has(normalizedCode)) ||
-    body.includes('rate limit') ||
-    body.includes('temporarily unavailable') ||
-    body.includes('service unavailable') ||
-    body.includes('timed out') ||
-    body.includes('timeout')
-  ) {
-    return 'retryable'
-  }
-
-  return 'unknown'
-}
-
-export const isFatalLlmError = (error: unknown): boolean => classifyLlmError(error) === 'fatal'
-export const isRetryableLlmError = (error: unknown): boolean =>
-  classifyLlmError(error) === 'retryable'
 
 export const extractTextContent = (content: unknown): string => {
   if (typeof content === 'string') {
@@ -190,6 +145,40 @@ export const extractTextContent = (content: unknown): string => {
   }
 
   return ''
+}
+
+const summarizeImageUrl = (url: string): string => {
+  if (!url.startsWith('data:')) return url
+  const separator = url.indexOf(',')
+  const header = separator >= 0 ? url.slice(0, separator) : 'data:'
+  return `${header};sha256=${createHash('sha256').update(url).digest('hex')};length=${url.length}`
+}
+
+export const serializeMessageContentForTelemetry = (content: unknown): string => {
+  const summarize = (value: unknown): unknown => {
+    if (Array.isArray(value)) return value.map(summarize)
+    if (!value || typeof value !== 'object') return value
+    const record = value as Record<string, unknown>
+    const imageUrl = record.image_url
+    if (typeof imageUrl === 'string') {
+      return { ...record, image_url: summarizeImageUrl(imageUrl) }
+    }
+    if (imageUrl && typeof imageUrl === 'object') {
+      const imageRecord = imageUrl as Record<string, unknown>
+      return {
+        ...record,
+        image_url: {
+          ...imageRecord,
+          ...(typeof imageRecord.url === 'string'
+            ? { url: summarizeImageUrl(imageRecord.url) }
+            : {})
+        }
+      }
+    }
+    return Object.fromEntries(Object.entries(record).map(([key, item]) => [key, summarize(item)]))
+  }
+  if (typeof content === 'string') return content
+  return JSON.stringify(summarize(content))
 }
 
 export const normalizePromptJsonText = (raw: string): string => {
@@ -235,4 +224,63 @@ export const parsePromptJsonOutput = (raw: string): Record<string, unknown> => {
 
 export const parseJsonObjectText = (raw: string): Record<string, unknown> => {
   return parseRepairableJsonObjectText(raw, 'structured_output_empty_response')
+}
+
+export type JsonRepairResult =
+  | { ok: true; value: Record<string, unknown> }
+  | { ok: false; error: string }
+
+const resolveJsonParseErrorMessage = (error: unknown): string => {
+  const message = error instanceof Error && error.message.trim() ? error.message : ''
+  if (message === 'structured_output_non_object_response') {
+    return 'arguments 解析成功但不是 JSON 对象。'
+  }
+  return message || '无法解析 JSON。'
+}
+
+const JSON_PARSE_POSITION_PATTERN = /at position (\d+)(?: \(line \d+ column \d+\))?/i
+
+export const extractJsonErrorPosition = (errorMessage: string): number | undefined => {
+  const match = JSON_PARSE_POSITION_PATTERN.exec(errorMessage)
+  if (!match) return undefined
+  const position = Number(match[1])
+  return Number.isFinite(position) ? position : undefined
+}
+
+const extractContextAroundPosition = (raw: string, position: number, windowSize = 30): string => {
+  if (!raw) return ''
+  const from = Math.max(0, position - windowSize)
+  const to = Math.min(raw.length, position + windowSize)
+  if (from >= to) return raw
+  const prefix = from > 0 ? '…' : ''
+  const suffix = to < raw.length ? '…' : ''
+  return `${prefix}${raw.slice(from, to)}${suffix}`
+}
+
+// 生成增强后的 JSON 解析失败诊断：错误消息 + 出错位置上下文。
+export const buildJsonErrorDiagnosis = (raw: string, errorMessage: string): string => {
+  const position = extractJsonErrorPosition(errorMessage)
+  if (position === undefined) return errorMessage
+
+  const context = extractContextAroundPosition(raw, position)
+  return `${errorMessage}；出错位置附近：${context}`
+}
+
+// LangChain 在解析模型 tool call 的 `arguments` 时只做一次 `JSON.parse`：
+// 成功 → 放进 `message.tool_calls`；失败 → 放进 `message.invalid_tool_calls`，
+// 并在 `invalidCall.error` 里塞入一段面向 SDK 开发者的错误文案（含原始 args 回显、
+// `are not valid JSON.` 以及 `Troubleshooting URL: https://docs.langchain.com/...`）。
+// 那段 `error` 对模型毫无价值，还会把文档链接泄漏进工具反馈，因此这里不读取它：
+// 只取 `invalidCall.args` 原始字符串，先用 jsonrepair 修复再解析；失败时由我们自己
+// 生成干净的错误信息（附带出错位置上下文），避免任何 LangChain SDK 噪音进入模型上下文。
+export const tryRepairJsonObject = (raw: string | undefined): JsonRepairResult => {
+  if (typeof raw !== 'string' || raw.trim().length === 0) {
+    return { ok: false, error: 'arguments 为空，无法解析。' }
+  }
+  try {
+    return { ok: true, value: parseRepairableJsonObjectText(raw, 'repair_empty_response') }
+  } catch (error) {
+    const baseError = resolveJsonParseErrorMessage(error)
+    return { ok: false, error: buildJsonErrorDiagnosis(raw, baseError) }
+  }
 }

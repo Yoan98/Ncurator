@@ -9,7 +9,6 @@ import {
   insertWorkbenchReferenceToken,
   setupWorkbenchWithTempWorkspace,
   submitWorkbenchCurrentDraft,
-  switchWorkbenchMode,
   waitForApplyEntry,
   waitForWorkbenchAiEvent,
   workbenchSelectors
@@ -41,11 +40,10 @@ describe('workbench run e2e', () => {
           })
           const targetPath = path.join(setup.workspace.rootPath, 'workbench-preview.md')
 
-          await switchWorkbenchMode(page, '大聪明')
           await insertWorkbenchReferenceToken(page, 'workbench-preview.md')
           await appendWorkbenchInputText(
             page,
-            `请直接修改这个文件，使用 replaceAll 把唯一的 ${BEFORE_TEXT} 改成 ${AFTER_TEXT}。修改成功后必须调用 wait_time 等待 20 秒，再继续回复。`
+            `请直接修改这个文件，使用 replaceAll 把唯一的 ${BEFORE_TEXT} 改成 ${AFTER_TEXT}。修改成功后不要立即结束，继续在文件中做几次无意义的占位替换以延长任务运行时间，再进行回复。`
           )
           await submitWorkbenchCurrentDraft(page)
 

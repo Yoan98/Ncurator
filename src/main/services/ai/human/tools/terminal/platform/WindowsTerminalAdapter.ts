@@ -1,11 +1,8 @@
-import path from 'node:path'
-import { stat } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import type { IPty } from 'node-pty'
+import { resolveLeadingCommandCwd } from '../resolveLeadingCommandCwd'
 import type { TerminalProtocol } from '../protocol/TerminalProtocol'
 import type { ResolveCommandCwdInput, TerminalPlatformAdapter } from './TerminalPlatformAdapter'
-
-const LEADING_CWD_PATTERN = /^\s*(?:cd|Set-Location)\s+(?:"([^"]+)"|'([^']+)'|([^\s;]+))\s*;/iu
 
 const encodeProtocolLiteral = (value: string): string =>
   Buffer.from(value, 'utf8').toString('base64')
@@ -67,16 +64,7 @@ export class WindowsTerminalAdapter implements TerminalPlatformAdapter {
   }
 
   public async resolveCommandCwd(input: ResolveCommandCwdInput): Promise<string | undefined> {
-    const match = input.command.match(LEADING_CWD_PATTERN)
-    if (!match) return undefined
-    const requestedPath = match[1] || match[2] || match[3]
-    if (!requestedPath) return undefined
-    const nextPath = path.resolve(input.currentPath, requestedPath)
-    try {
-      return (await stat(nextPath)).isDirectory() ? nextPath : undefined
-    } catch {
-      return undefined
-    }
+    return resolveLeadingCommandCwd(input)
   }
 
   public async forceTerminate(process: IPty): Promise<void> {

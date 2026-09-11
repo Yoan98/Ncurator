@@ -5,12 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type {
   AiRunEvent,
   AiRunRecord,
-  ChatMessage,
-  ChatSession,
-  ChatSessionUiStateV1
+  Partner,
+  PartnerUiStateV1
 } from '../../../../src/shared/types'
 import { LanceDbCore } from '../../../../src/main/services/storage/core/LanceDbCore'
-import { ChatStore } from '../../../../src/main/services/storage/domains/ChatStore'
+import { PartnerStore } from '../../../../src/main/services/storage/domains/PartnerStore'
 import { AiRunStore } from '../../../../src/main/services/storage/domains/AiRunStore'
 import { DocumentsStore } from '../../../../src/main/services/storage/domains/DocumentsStore'
 import { BrowserTabStateStore } from '../../../../src/main/services/storage/domains/BrowserTabStateStore'
@@ -18,6 +17,8 @@ import { WorkbenchUiStore } from '../../../../src/main/services/storage/domains/
 import { StorageService } from '../../../../src/main/services/storage/StorageService'
 import { SqliteCore } from '../../../../src/main/services/storage/sqlite/SqliteCore'
 import { AiRuntimeSettingsStore } from '../../../../src/main/services/storage/domains/AiRuntimeSettingsStore'
+import { repairFalseDocxChangeFailuresMigration } from '../../../../src/main/services/storage/sqlite/migrations/005_repair_false_docx_change_failures'
+import { repairAiRuntimeSystemNotificationsColumnMigration } from '../../../../src/main/services/storage/sqlite/migrations/009_repair_ai_runtime_system_notifications_column'
 
 type VectorRow = Record<string, unknown>
 
@@ -112,6 +113,12 @@ class MemoryVectorCore {
     return `${column} IN (${list.map((value) => `'${this.escapeSqlString(value)}'`).join(',')})`
   }
 
+  public buildNotInClause(column: string, values?: string[]): string | undefined {
+    const list = (values || []).map((value) => String(value || '').trim()).filter(Boolean)
+    if (list.length === 0) return undefined
+    return `${column} NOT IN (${list.map((value) => `'${this.escapeSqlString(value)}'`).join(',')})`
+  }
+
   public combineWhere(parts: Array<string | undefined>): string | undefined {
     const clauses = parts.map((part) => String(part || '').trim()).filter(Boolean)
     if (clauses.length === 0) return undefined
@@ -125,11 +132,31 @@ class MemoryVectorCore {
 
 const applyLanceWhere = (rows: VectorRow[], where: string): VectorRow[] => {
   if (!where.trim()) return rows
-  const eqMatches = Array.from(where.matchAll(/(\w+)\s*=\s*'([^']*)'/g))
-  const inMatches = Array.from(where.matchAll(/(\w+)\s+IN\s+\(([^)]*)\)/g))
+  const neqMatches = Array.from(where.matchAll(/(\w+)\s*!=\s*'([^']*)'/g))
+  const eqMatches = Array.from(where.matchAll(/(\w+)\s*=\s*'([^']*)'/g)).filter(
+    (match) => !where.slice(Math.max(0, (match.index || 0) - 1), match.index).includes('!')
+  )
+  const notInMatches = Array.from(where.matchAll(/(\w+)\s+NOT IN\s+\(([^)]*)\)/g))
+  const inMatches = Array.from(where.matchAll(/(\w+)\s+IN\s+\(([^)]*)\)/g)).filter((match) => {
+    if (match[1].toUpperCase() === 'NOT') return false
+    const prefix = where.slice(Math.max(0, (match.index || 0) - 4), match.index || 0)
+    return !/NOT\s*$/i.test(prefix)
+  })
+  const requireId = /id\s+IS NOT NULL/i.test(where)
   return rows.filter((row) => {
+    if (requireId && (row.id == null || String(row.id) === '')) return false
+    for (const match of neqMatches) {
+      if (String(row[match[1]] || '') === match[2]) return false
+    }
     for (const match of eqMatches) {
       if (String(row[match[1]] || '') !== match[2]) return false
+    }
+    for (const match of notInMatches) {
+      const blocked = match[2]
+        .split(',')
+        .map((item) => item.trim().replace(/^'|'$/g, ''))
+        .filter(Boolean)
+      if (blocked.includes(String(row[match[1]] || ''))) return false
     }
     for (const match of inMatches) {
       const allowed = match[2]
@@ -142,52 +169,40 @@ const applyLanceWhere = (rows: VectorRow[], where: string): VectorRow[] => {
   })
 }
 
-const createSession = (id = 'session-1'): ChatSession => ({
+const createPartner = (id = 'partner-1'): Partner => ({
   id,
-  title: 'Test session',
+  name: 'Test partner',
+  avatar_shape: 'circle',
+  avatar_color: 'blue',
   created_at: 1,
-  workspace_id: 'workspace-1'
-})
-
-const createMessage = (
-  input: Partial<ChatMessage> & { id: string; timestamp: number }
-): ChatMessage => ({
-  id: input.id,
-  session_id: input.session_id || 'session-1',
-  role: input.role || 'user',
-  content: input.content || input.id,
-  timestamp: input.timestamp
+  updated_at: 1,
+  last_viewed_at: 1,
+  pinned: false,
+  pinned_at: null
 })
 
 const createRun = (input: Partial<AiRunRecord> = {}): AiRunRecord => ({
   id: input.id || 'run-1',
-  sessionId: input.sessionId || 'session-1',
+  partnerId: input.partnerId || 'partner-1',
   userMessageId: input.userMessageId || 'user-1',
   assistantMessageId: input.assistantMessageId || 'assistant-1',
   status: input.status || 'running',
   input: input.input || 'hello',
   partialAnswer: input.partialAnswer || '',
   pendingApproval: input.pendingApproval,
-  pendingUserTakeover: input.pendingUserTakeover,
-  eventCount: input.eventCount,
-  visibleEventCount: input.visibleEventCount,
-  lastEventAt: input.lastEventAt,
   createdAt: input.createdAt || 10,
   updatedAt: input.updatedAt || 10,
   finishedAt: input.finishedAt
 })
 
-const createSessionUiState = (input = 'draft'): ChatSessionUiStateV1 => ({
+const createPartnerUiState = (input = 'draft'): PartnerUiStateV1 => ({
   version: 1,
   composer: {
-    mode: 'ai',
     aiPreference: 'local_sources_strict',
     executionPermission: 'review',
     modelSelection: {
-      mainModel: { configId: 'provider-1', modelName: 'model-1' },
-      visionModel: null
+      mainModel: { configId: 'provider-1', modelName: 'model-1' }
     },
-    workspaceId: 'workspace-1',
     draft: {
       input,
       contentNodes: [{ kind: 'text', text: input }],
@@ -201,11 +216,9 @@ const createSessionUiState = (input = 'draft'): ChatSessionUiStateV1 => ({
     activeTabId: null,
     collapsed: false,
     fallbackState: {
-      kind: 'search_list',
-      title: '搜索结果',
-      query: input,
-      results: [],
-      tokens: [input]
+      kind: 'empty',
+      title: '',
+      description: ''
     }
   }
 })
@@ -213,16 +226,16 @@ const createSessionUiState = (input = 'draft'): ChatSessionUiStateV1 => ({
 describe('sqlite storage core and stores', () => {
   let tempDir = ''
   let sqlite: SqliteCore
-  let chatStore: ChatStore
+  let partnerStore: PartnerStore
   let aiRunStore: AiRunStore
 
   beforeEach(async () => {
     tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-sqlite-storage-'))
     sqlite = new SqliteCore(path.join(tempDir, 'app.sqlite'))
     sqlite.initialize()
-    chatStore = new ChatStore(sqlite)
+    partnerStore = new PartnerStore(sqlite)
     aiRunStore = new AiRunStore(sqlite)
-    await chatStore.saveChatSession(createSession())
+    await partnerStore.savePartner(createPartner())
   })
 
   afterEach(async () => {
@@ -249,16 +262,23 @@ describe('sqlite storage core and stores', () => {
       { version: 6, name: 'workbench_session_ui_state' },
       { version: 7, name: 'ai_run_execution_permission' },
       { version: 8, name: 'drop_llm_strategy_preference' },
-      { version: 9, name: 'repair_ai_runtime_system_notifications_column' }
+      { version: 9, name: 'repair_ai_runtime_system_notifications_column' },
+      { version: 10, name: 'upgrade_from_v9' }
     ])
+
+    const legacyTables = sqlite
+      .prepare(
+        `SELECT name FROM sqlite_master
+         WHERE type = 'table' AND name IN ('chat_session_resume_snapshot', 'chat_conversation_memory', 'ai_run_event')`
+      )
+      .all() as Array<{ name: string }>
+    expect(legacyTables).toEqual([])
   })
 
   it('repairs notification settings after a historical migration version collision', async () => {
-    sqlite.exec('DELETE FROM schema_migrations WHERE version = 9')
-    sqlite.exec(
-      "UPDATE schema_migrations SET name = 'workspace_change_sets' WHERE version = 2"
-    )
+    sqlite.exec("UPDATE schema_migrations SET name = 'workspace_change_sets' WHERE version = 2")
     sqlite.exec('ALTER TABLE ai_runtime_settings DROP COLUMN systemNotificationsEnabled')
+    repairAiRuntimeSystemNotificationsColumnMigration.run?.(sqlite.getConnection())
     sqlite.close()
     sqlite.initialize()
 
@@ -276,41 +296,42 @@ describe('sqlite storage core and stores', () => {
     expect(await settingsStore.get()).toMatchObject({ systemNotificationsEnabled: false })
   })
 
-  it('persists versioned session UI state and rejects invalid writes', async () => {
+  it('persists versioned partner UI state and rejects invalid writes', async () => {
     const store = new WorkbenchUiStore(sqlite)
-    const initial = createSessionUiState('first draft')
-    const replacement = createSessionUiState('replacement draft')
+    const initial = createPartnerUiState('first draft')
+    const replacement = createPartnerUiState('replacement draft')
 
-    await store.saveSessionState('session-1', initial)
-    expect(await store.getSessionState('session-1')).toEqual(initial)
+    await store.savePartnerState('partner-1', initial)
+    expect(await store.getPartnerState('partner-1')).toEqual(initial)
 
-    await store.saveSessionState('session-1', replacement)
-    expect(await store.getSessionState('session-1')).toEqual(replacement)
-    await expect(store.saveSessionState('missing-session', initial)).rejects.toThrow(
-      'chat session not found'
+    await store.savePartnerState('partner-1', replacement)
+    expect(await store.getPartnerState('partner-1')).toEqual(replacement)
+    await expect(store.savePartnerState('missing-partner', initial)).rejects.toThrow(
+      'partner not found'
     )
     await expect(
-      store.saveSessionState('session-1', {
+      store.savePartnerState('partner-1', {
         ...initial,
         version: 2
-      } as unknown as ChatSessionUiStateV1)
-    ).rejects.toThrow('invalid session UI state')
+      } as unknown as PartnerUiStateV1)
+    ).rejects.toThrow('invalid partner UI state')
 
     sqlite
-      .prepare('UPDATE chat_session_ui_state SET state_json = ? WHERE session_id = ?')
-      .run('{broken-json', 'session-1')
-    expect(await store.getSessionState('session-1')).toBeNull()
+      .prepare('UPDATE partner_ui_state SET state_json = ? WHERE partner_id = ?')
+      .run('{broken-json', 'partner-1')
+    expect(await store.getPartnerState('partner-1')).toBeNull()
   })
 
-  it('promotes draft UI and browser tabs with the first real session transaction', async () => {
+  it('keeps partner UI and browser tabs on the same partner without draft promotion', async () => {
     const workbenchStore = new WorkbenchUiStore(sqlite)
     const browserStore = new BrowserTabStateStore(sqlite)
-    const draftState = createSessionUiState('unsent draft')
-    await workbenchStore.saveWorkbenchState({ activeViewKey: '__draft__', draftState })
+    const partnerState = createPartnerUiState('unsent draft')
+    await workbenchStore.savePartnerState('partner-1', partnerState)
+    await workbenchStore.saveWorkbenchState({ activeViewKey: 'partner-1' })
     browserStore.save({
-      id: 'browser-draft-1',
-      ownerId: '__draft__',
-      title: 'Draft tab',
+      id: 'browser-partner-1',
+      ownerId: 'partner-1',
+      title: 'Partner tab',
       url: 'https://example.com/second',
       zoomFactor: 1.25,
       history: {
@@ -325,18 +346,13 @@ describe('sqlite storage core and stores', () => {
       updatedAt: 20
     })
 
-    const promotedSession = createSession('session-promoted')
-    await chatStore.saveChatSessionFromWorkbenchDraft(promotedSession)
-
-    expect(await workbenchStore.getSessionState(promotedSession.id)).toEqual(draftState)
+    expect(await workbenchStore.getPartnerState('partner-1')).toEqual(partnerState)
     expect(await workbenchStore.getWorkbenchState()).toMatchObject({
-      activeViewKey: promotedSession.id,
-      draftState: null
+      activeViewKey: 'partner-1'
     })
-    expect(browserStore.listByOwner('__draft__')).toEqual([])
-    expect(browserStore.listByOwner(promotedSession.id)).toMatchObject([
+    expect(browserStore.listByOwner('partner-1')).toMatchObject([
       {
-        id: 'browser-draft-1',
+        id: 'browser-partner-1',
         url: 'https://example.com/second',
         zoomFactor: 1.25,
         history: { index: 1 },
@@ -345,17 +361,16 @@ describe('sqlite storage core and stores', () => {
     ])
   })
 
-  it('deletes session UI and browser state with its session', async () => {
+  it('deletes partner UI and browser state with its partner', async () => {
     const workbenchStore = new WorkbenchUiStore(sqlite)
     const browserStore = new BrowserTabStateStore(sqlite)
-    await workbenchStore.saveSessionState('session-1', createSessionUiState())
+    await workbenchStore.savePartnerState('partner-1', createPartnerUiState())
     await workbenchStore.saveWorkbenchState({
-      activeViewKey: 'session-1',
-      draftState: null
+      activeViewKey: 'partner-1'
     })
     browserStore.save({
-      id: 'browser-session-1',
-      ownerId: 'session-1',
+      id: 'browser-partner-1',
+      ownerId: 'partner-1',
       url: 'https://example.com',
       zoomFactor: 0.9,
       position: 0,
@@ -363,26 +378,25 @@ describe('sqlite storage core and stores', () => {
       updatedAt: 1
     })
 
-    await chatStore.deleteChatSession('session-1')
+    await partnerStore.deletePartner('partner-1')
 
-    expect(await workbenchStore.getSessionState('session-1')).toBeNull()
-    expect(browserStore.listByOwner('session-1')).toEqual([])
+    expect(await workbenchStore.getPartnerState('partner-1')).toBeNull()
+    expect(browserStore.listByOwner('partner-1')).toEqual([])
     expect(await workbenchStore.getWorkbenchState()).toMatchObject({ activeViewKey: null })
   })
 
   it('repairs historical DOCX changes that were falsely marked as failed', () => {
-    sqlite.prepare('DELETE FROM schema_migrations WHERE version = 5').run()
     sqlite
       .prepare(
         `INSERT INTO ai_file_change (
-          id, session_id, run_id, status, capability, path, file_name, operation,
+          id, partner_id, run_id, status, capability, path, file_name, operation,
           change_count, insert_count, delete_count, before_checksum, after_checksum,
           created_at, updated_at, last_error
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         'false-failure',
-        'session-1',
+        'partner-1',
         'run-1',
         'failed',
         'docx',
@@ -401,82 +415,40 @@ describe('sqlite storage core and stores', () => {
     sqlite
       .prepare(
         `INSERT INTO docx_apply (
-          id, session_id, run_id, status, source_path, source_name, operation,
-          change_count, insert_count, delete_count, before_exists,
-          before_checksum, after_checksum, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          id, partner_id, run_id, status, source_path, source_name, operation,
+          final_revision_ref, change_count, insert_count, delete_count, before_exists,
+          before_checksum, after_checksum, preview_diff_artifact_path, preview_diff_checksum,
+          preview_diff_byte_size, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         'false-failure',
-        'session-1',
+        'partner-1',
         'run-1',
         'applied',
         '/workspace/input.docx',
         'input.docx',
         'updated',
+        'rev-1',
         1,
         1,
         1,
         1,
         'before',
         'after',
+        '/tmp/preview.diff',
+        'preview-checksum',
+        1,
         1,
         2
       )
 
-    sqlite.close()
-    sqlite.initialize()
+    sqlite.exec(repairFalseDocxChangeFailuresMigration.sql || '')
 
     const repaired = sqlite
       .prepare('SELECT status, last_error FROM ai_file_change WHERE id = ?')
       .get('false-failure') as { status: string; last_error: string | null }
     expect(repaired).toEqual({ status: 'applied', last_error: null })
-  })
-
-  it('keeps chat message seq stable and returns the latest 50 in ascending order', async () => {
-    for (let index = 1; index <= 60; index += 1) {
-      await chatStore.saveChatMessage(createMessage({ id: `message-${index}`, timestamp: index }))
-    }
-
-    const page = await chatStore.getChatMessagesPage({ sessionId: 'session-1', limit: 50 })
-    const seqRows = sqlite
-      .prepare('SELECT id, seq FROM chat_message WHERE session_id = ? ORDER BY seq ASC')
-      .all('session-1') as Array<{ id: string; seq: number }>
-
-    expect(seqRows[0]).toEqual({ id: 'message-1', seq: 1 })
-    expect(seqRows[59]).toEqual({ id: 'message-60', seq: 60 })
-    expect(page.hasMoreBefore).toBe(true)
-    expect(page.messages.map((message) => message.id)).toEqual(
-      Array.from({ length: 50 }, (_, index) => `message-${index + 11}`)
-    )
-  })
-
-  it('persists session skills with revision checks and deletes them with the session', async () => {
-    const initial = await chatStore.getSessionSkillState('session-1')
-    const saved = await chatStore.saveSessionSkillStateIfCurrent({
-      sessionId: 'session-1',
-      expectedRevision: initial.revision,
-      learnedSkillIds: ['docx-read'],
-      runId: 'run-skill-1'
-    })
-    const staleWrite = await chatStore.saveSessionSkillStateIfCurrent({
-      sessionId: 'session-1',
-      expectedRevision: initial.revision,
-      learnedSkillIds: ['pdf-read'],
-      runId: 'run-skill-stale'
-    })
-    const reloaded = await new ChatStore(sqlite).getSessionSkillState('session-1')
-
-    expect(initial).toMatchObject({ learnedSkillIds: [], revision: 0 })
-    expect(saved).toMatchObject({ learnedSkillIds: ['docx-read'], revision: 1 })
-    expect(staleWrite).toBeNull()
-    expect(reloaded).toMatchObject({ learnedSkillIds: ['docx-read'], revision: 1 })
-
-    await chatStore.deleteChatSession('session-1')
-    expect(await chatStore.getSessionSkillState('session-1')).toMatchObject({
-      learnedSkillIds: [],
-      revision: 0
-    })
   })
 
   it('restores active and pending approval runs from sqlite', async () => {
@@ -490,45 +462,110 @@ describe('sqlite storage core and stores', () => {
     }
     await aiRunStore.saveRun(createRun({ status: 'waiting_approval', pendingApproval }))
 
-    const runs = await aiRunStore.listRunsBySession('session-1', ['running', 'waiting_approval'])
+    const runs = await aiRunStore.listRunsByPartner('partner-1', ['running', 'waiting_approval'])
 
     expect(runs).toHaveLength(1)
     expect(runs[0].status).toBe('waiting_approval')
     expect(runs[0].pendingApproval?.batchId).toBe('batch-1')
   })
 
-  it('restores pending user takeover runs from sqlite', async () => {
-    const pendingUserTakeover: Extract<AiRunEvent, { type: 'user_takeover_required' }> = {
-      type: 'user_takeover_required',
-      runId: 'run-1',
-      taskId: 'task-1',
-      requestId: 'takeover-1',
-      message: '请在右侧浏览器完成登录',
-      createdAt: 11
-    }
-    await aiRunStore.saveRun(createRun({ status: 'waiting_user_takeover', pendingUserTakeover }))
-
-    const runs = await aiRunStore.listRunsBySession('session-1', ['waiting_user_takeover'])
-
-    expect(runs).toHaveLength(1)
-    expect(runs[0].status).toBe('waiting_user_takeover')
-    expect(runs[0].pendingUserTakeover?.requestId).toBe('takeover-1')
-    expect(runs[0].pendingUserTakeover?.message).toBe('请在右侧浏览器完成登录')
-  })
-
-  it('tracks completed sessions as unread until viewed after completion', async () => {
+  it('tracks completed partners as unread until viewed after completion', async () => {
     await aiRunStore.saveRun(
       createRun({ status: 'completed', createdAt: 10, updatedAt: 20, finishedAt: 20 })
     )
 
-    expect(await chatStore.listUnreadCompletedSessionIds()).toEqual(['session-1'])
+    expect(await partnerStore.listUnreadCompletedPartnerIds()).toEqual(['partner-1'])
 
-    await chatStore.markChatSessionViewed('session-1', 21)
+    await partnerStore.markPartnerViewed('partner-1', 21)
 
-    expect(await chatStore.listUnreadCompletedSessionIds()).toEqual([])
+    expect(await partnerStore.listUnreadCompletedPartnerIds()).toEqual([])
   })
 
-  it('commits approval decision, clears pending approval, and keeps event seq unique', async () => {
+  it('pins partners to the front of the list and restores them on unpin', async () => {
+    await partnerStore.savePartner(createPartner('partner-2'))
+    await partnerStore.setPartnerPinned('partner-1', true)
+
+    const pinned = await partnerStore.listPartners()
+    expect(pinned.map((partner) => partner.id)).toEqual(['partner-1', 'partner-2'])
+    expect(pinned[0]).toMatchObject({
+      id: 'partner-1',
+      pinned: true
+    })
+    expect(pinned[0].pinned_at).toEqual(expect.any(Number))
+
+    await partnerStore.setPartnerPinned('partner-1', false)
+    const unpinned = await partnerStore.listPartners()
+    expect(unpinned.map((partner) => partner.id).sort()).toEqual(['partner-1', 'partner-2'])
+    expect(unpinned.find((partner) => partner.id === 'partner-1')).toMatchObject({
+      pinned: false,
+      pinned_at: null
+    })
+  })
+
+  it('updates partner name and avatar without resetting pin', async () => {
+    await partnerStore.setPartnerPinned('partner-1', true)
+    const pinned = await partnerStore.getPartner('partner-1')
+    await partnerStore.savePartner({
+      ...(pinned || createPartner()),
+      name: 'Renamed partner',
+      avatar_shape: 'pill',
+      avatar_color: 'orange'
+    })
+
+    const updated = await partnerStore.getPartner('partner-1')
+    expect(updated).toMatchObject({
+      id: 'partner-1',
+      name: 'Renamed partner',
+      avatar_shape: 'pill',
+      avatar_color: 'orange',
+      pinned: true
+    })
+  })
+
+  it('returns the latest user input preview for each partner', async () => {
+    await partnerStore.savePartner(createPartner('partner-2'))
+    await aiRunStore.saveRun(
+      createRun({
+        id: 'run-1',
+        partnerId: 'partner-1',
+        input: 'first question',
+        createdAt: 10
+      })
+    )
+    await aiRunStore.saveRun(
+      createRun({
+        id: 'run-2',
+        partnerId: 'partner-1',
+        userMessageId: 'user-2',
+        assistantMessageId: 'assistant-2',
+        input: 'latest question',
+        createdAt: 20
+      })
+    )
+    await aiRunStore.saveRun(
+      createRun({
+        id: 'run-3',
+        partnerId: 'partner-2',
+        userMessageId: 'user-3',
+        assistantMessageId: 'assistant-3',
+        input: 'a'.repeat(48),
+        createdAt: 15
+      })
+    )
+
+    const latest = await aiRunStore.listLatestUserInputs()
+
+    expect(latest.get('partner-1')).toEqual({
+      preview: 'latest question',
+      createdAt: 20
+    })
+    expect(latest.get('partner-2')).toEqual({
+      preview: `${'a'.repeat(40)}…`,
+      createdAt: 15
+    })
+  })
+
+  it('commits approval decision and clears pending approval', async () => {
     const pendingApproval: Extract<AiRunEvent, { type: 'approval_batch_required' }> = {
       type: 'approval_batch_required',
       runId: 'run-1',
@@ -538,11 +575,6 @@ describe('sqlite storage core and stores', () => {
       createdAt: 11
     }
     await aiRunStore.saveRun(createRun({ status: 'waiting_approval', pendingApproval }))
-    await aiRunStore.appendEvent({
-      runId: 'run-1',
-      sessionId: 'session-1',
-      event: pendingApproval
-    })
 
     const result = await aiRunStore.decideApprovalBatchTransaction({
       runId: 'run-1',
@@ -550,25 +582,14 @@ describe('sqlite storage core and stores', () => {
         runId: 'run-1',
         batchId: 'batch-1',
         decisions: [{ itemId: 'item-1', action: 'approve' }]
-      },
-      event: {
-        type: 'approval_batch_decision',
-        runId: 'run-1',
-        taskId: 'task-1',
-        batchId: 'batch-1',
-        decisions: [{ itemId: 'item-1', action: 'approve' }],
-        decidedAt: 12
       }
     })
 
     const run = await aiRunStore.getRun('run-1')
-    const events = await aiRunStore.listEvents('run-1')
 
     expect(result.ok).toBe(true)
     expect(run?.status).toBe('running')
     expect(run?.pendingApproval).toBeUndefined()
-    expect(events.map((event) => event.seq)).toEqual([1, 2])
-    expect(new Set(events.map((event) => event.seq)).size).toBe(events.length)
   })
 })
 
@@ -606,7 +627,7 @@ describe('sqlite document metadata with vector chunks', () => {
     expect(vectorCore.table.addBatches.map((batch) => batch.length)).toEqual([128, 128, 4])
   })
 
-  it('lists only active generation chunks', async () => {
+  it('purges stale generation and orphan chunks without using search filters', async () => {
     const vectorCore = new MemoryVectorCore([
       {
         id: 'active-chunk',
@@ -631,6 +652,18 @@ describe('sqlite document metadata with vector chunks', () => {
         metadata: { page: 1 },
         created_at: 1,
         vector: [1, 2, 3]
+      },
+      {
+        id: 'orphan-chunk',
+        text: 'orphan text',
+        document_id: 'missing-document',
+        workspace_id: 'workspace-1',
+        source_type: 'file',
+        generation_id: 'generation-orphan',
+        document_name: 'Missing',
+        metadata: { page: 1 },
+        created_at: 1,
+        vector: [1, 2, 3]
       }
     ])
     const store = new DocumentsStore(sqlite, vectorCore as unknown as LanceDbCore)
@@ -645,14 +678,25 @@ describe('sqlite document metadata with vector chunks', () => {
       active_generation_id: 'generation-active'
     })
 
-    const result = await store.listChunks({
+    const beforePurge = await store.listChunks({
       workspaceId: 'workspace-1',
       page: 1,
       pageSize: 10
     })
+    expect(beforePurge.items.map((item) => item.id).sort()).toEqual([
+      'active-chunk',
+      'old-chunk',
+      'orphan-chunk'
+    ])
 
-    expect(result.total).toBe(1)
-    expect(result.items.map((item) => item.id)).toEqual(['active-chunk'])
+    await store.purgeStaleChunks()
+
+    const afterPurge = await store.listChunks({
+      workspaceId: 'workspace-1',
+      page: 1,
+      pageSize: 10
+    })
+    expect(afterPurge.items.map((item) => item.id)).toEqual(['active-chunk'])
   })
 })
 
@@ -677,6 +721,26 @@ describe('storage service initialization', () => {
       await service.initialize()
 
       expect(service.sqlite.getConnection().open).toBe(true)
+      expect(await service.vector.tableExists('vector_chunk')).toBe(true)
+    } finally {
+      await service.close()
+    }
+  })
+
+  it('purges leftover lancedb files when the v10 afterCommit hook runs', async () => {
+    const vectorPath = path.join(tempDir, 'lancedb')
+    const leftoverPath = path.join(vectorPath, 'stale-vector-data')
+    await fs.mkdir(vectorPath, { recursive: true })
+    await fs.writeFile(leftoverPath, 'old-chunks')
+
+    const service = new StorageService({
+      sqlitePath: path.join(tempDir, 'app.sqlite'),
+      vectorPath
+    })
+
+    try {
+      await service.initialize()
+      await expect(fs.access(leftoverPath)).rejects.toMatchObject({ code: 'ENOENT' })
       expect(await service.vector.tableExists('vector_chunk')).toBe(true)
     } finally {
       await service.close()

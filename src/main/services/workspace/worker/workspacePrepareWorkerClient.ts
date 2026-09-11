@@ -39,7 +39,9 @@ export class WorkspacePrepareWorkerClient {
     })
     worker.on('error', (error) => {
       this.logError(error, 'error')
-      this.failAllPending(new Error(`workspace prepare worker error: ${error.message}`))
+      this.failAllPending(
+        new Error(`workspace prepare worker error: ${error.stack || error.message}`)
+      )
       this.worker = null
     })
     worker.on('exit', (code) => {

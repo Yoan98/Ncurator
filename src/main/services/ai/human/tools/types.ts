@@ -12,7 +12,7 @@ export type ToolFamilyBuildInput = {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   runId: string
-  sessionId: string
+  partnerId: string
   taskId: string
 }
 
@@ -30,6 +30,19 @@ export type ToolExecutionMeta = {
 
 export type ToolExecutionMetaResolver = (args: JsonObject) => ToolExecutionMeta
 
+export type ModelResultRendererInput = {
+  toolName: string
+  args: JsonObject
+  data: JsonValue | undefined
+}
+
+export type ModelResultRenderer = (input: ModelResultRendererInput) => string
+
+export type ModelResultSpec = {
+  renderSuccess: ModelResultRenderer
+  renderError?: ModelResultRenderer
+}
+
 export type CapabilityActivityStatus = 'started' | 'completed' | 'failed'
 
 export type CapabilityActivityInput = {
@@ -42,7 +55,7 @@ export type WorkspaceCapabilityBuildInput<TContext = AiRunContext> = {
   ctx: TContext
   cache: HumanRuntimeCache
   runId: string
-  sessionId: string
+  partnerId: string
   taskId: string
   workspaceRootPath: string
   emitActivity: (input: CapabilityActivityInput) => void
@@ -50,7 +63,6 @@ export type WorkspaceCapabilityBuildInput<TContext = AiRunContext> = {
 
 export type HumanToolSpec<
   TInput extends JsonObject = JsonObject,
-  TOutput extends JsonValue = JsonValue,
   TName extends RuntimeToolName = RuntimeToolName,
   TSkillId extends RuntimeSkillId = RuntimeSkillId
 > = {
@@ -58,7 +70,7 @@ export type HumanToolSpec<
   familyId: AiToolFamilyId
   skillIds: TSkillId[]
   inputSchema: z.ZodType<TInput>
-  outputSchema: z.ZodType<TOutput>
   promptSpec: ToolPromptSpec
   resolveExecutionMeta: ToolExecutionMetaResolver
+  modelResult: ModelResultSpec
 }

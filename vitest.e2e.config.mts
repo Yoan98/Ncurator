@@ -9,6 +9,8 @@ export default defineConfig({
     fileParallelism: true,
     testTimeout: 900_000,
     hookTimeout: 900_000,
-    passWithNoTests: false
+    passWithNoTests: false,
+    // Node 22 keeps node:sqlite behind this flag; database-version e2e imports DatabaseSync.
+    execArgv: ['--experimental-sqlite']
   }
 })

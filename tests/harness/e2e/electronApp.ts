@@ -277,10 +277,15 @@ const buildElectronLaunchEnv = (
   }
   env.NCURATOR_E2E_WINDOW_MODE = windowMode || process.env.NCURATOR_E2E_WINDOW_MODE || 'background'
   env.NCURATOR_USER_DATA_PATH = userDataDir
+  env.NCURATOR_WEB_SEARCH_LOOPBACK_FETCH = '1'
 
   for (const [key, value] of Object.entries(extraEnv || {})) {
     env[key] = value
   }
+
+  // Cursor/agent shells may inject ELECTRON_RUN_AS_NODE=1, which makes the Electron
+  // binary behave like Node and reject Chromium launch flags from Playwright.
+  delete env.ELECTRON_RUN_AS_NODE
 
   return env
 }
@@ -365,6 +370,7 @@ export const launchElectronApp = async (input: {
   extraEnv?: Readonly<Record<string, string>>
   signalSink?: ElectronSignalSink
   userDataDir?: string
+  prepareUserData?: (userDataDir: string) => Promise<void>
 }): Promise<LaunchedElectronApp> => {
   const launch = await resolveElectronLaunch()
 
@@ -387,6 +393,14 @@ export const launchElectronApp = async (input: {
     ? path.resolve(input.userDataDir)
     : await mkdtemp(path.join(e2eTempRoot, 'ncurator-e2e-user-data-'))
   await mkdir(userDataDir, { recursive: true })
+  try {
+    await input.prepareUserData?.(userDataDir)
+  } catch (error) {
+    if (!input.userDataDir) {
+      await rm(userDataDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 })
+    }
+    throw error
+  }
   const launchEnv = buildElectronLaunchEnv(
     userDataDir,
     input.serviceMode,

@@ -1,6 +1,7 @@
 import type { IPty } from 'node-pty'
+import { resolveLeadingCommandCwd } from '../resolveLeadingCommandCwd'
 import type { TerminalProtocol } from '../protocol/TerminalProtocol'
-import type { TerminalPlatformAdapter } from './TerminalPlatformAdapter'
+import type { ResolveCommandCwdInput, TerminalPlatformAdapter } from './TerminalPlatformAdapter'
 
 const encodeProtocolLiteral = (value: string): string =>
   Buffer.from(value, 'utf8').toString('base64')
@@ -20,6 +21,7 @@ export class MacTerminalAdapter implements TerminalPlatformAdapter {
     return (
       [
         'stty -echo',
+        "PROMPT=''; RPROMPT=''",
         `__ncurator_cwd_prefix="${decodeProtocolLiteral(protocol.cwdPrefix)}"`,
         `__ncurator_start_prefix="${decodeProtocolLiteral(protocol.startPrefix)}"`,
         `__ncurator_done_prefix="${decodeProtocolLiteral(protocol.donePrefix)}"`,
@@ -52,8 +54,8 @@ export class MacTerminalAdapter implements TerminalPlatformAdapter {
     return `exit${this.shell.lineEnding}`
   }
 
-  public async resolveCommandCwd(): Promise<undefined> {
-    return undefined
+  public async resolveCommandCwd(input: ResolveCommandCwdInput): Promise<string | undefined> {
+    return resolveLeadingCommandCwd(input)
   }
 
   public async forceTerminate(process: IPty): Promise<void> {

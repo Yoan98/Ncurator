@@ -19,6 +19,7 @@ const parseArgs = (argv) => {
     sourceVersion: '',
     expectedVersion: '',
     targetInstaller: '',
+    downgradeInstaller: '',
     timeoutMs: DEFAULT_TIMEOUT_MS,
     keepWork: false,
     reuseUpdateCache: false
@@ -31,7 +32,9 @@ const parseArgs = (argv) => {
     else if (key === '--source-version' && value) result.sourceVersion = value
     else if (key === '--expected-version' && value) result.expectedVersion = value
     else if (key === '--target-installer' && value) result.targetInstaller = path.resolve(value)
-    else if (key === '--timeout-ms' && value) result.timeoutMs = Number(value)
+    else if (key === '--downgrade-installer' && value) {
+      result.downgradeInstaller = path.resolve(value)
+    } else if (key === '--timeout-ms' && value) result.timeoutMs = Number(value)
     else if (key === '--keep-work') {
       result.keepWork = true
       continue
@@ -157,11 +160,42 @@ const installSourceVersion = async (installerPath, installDirectory, logs) => {
     if (result.stdout.trim()) logs.push(`[installer:stdout] ${result.stdout.trim()}`)
     if (result.stderr.trim()) logs.push(`[installer:stderr] ${result.stderr.trim()}`)
   } catch (error) {
-    const detail = error instanceof Error ? `${error.message} (code=${String(error.code)})` : String(error)
+    const detail =
+      error instanceof Error ? `${error.message} (code=${String(error.code)})` : String(error)
     throw new Error(`Source installer failed: ${detail}`)
   }
   const executablePath = await findExecutable(installDirectory)
   return executablePath
+}
+
+const verifyGuardedDowngradeIsRejected = async ({
+  installerPath,
+  installDirectory,
+  expectedVersion,
+  markerPath,
+  logs
+}) => {
+  process.stdout.write(`[update-real-win] Verifying downgrade rejection with ${installerPath}\n`)
+  const result = await execFileAsync(
+    installerPath,
+    ['/S', '/currentuser', `/D=${installDirectory}`],
+    {
+      timeout: 5 * 60 * 1000,
+      windowsHide: true,
+      maxBuffer: 10 * 1024 * 1024
+    }
+  )
+  if (result.stdout.trim()) logs.push(`[downgrade:stdout] ${result.stdout.trim()}`)
+  if (result.stderr.trim()) logs.push(`[downgrade:stderr] ${result.stderr.trim()}`)
+
+  const installedVersion = await readInstalledVersion(installDirectory)
+  const markerPreserved = await pathExists(markerPath)
+  if (installedVersion !== expectedVersion || !markerPreserved) {
+    throw new Error(
+      `Downgrade protection failed: installed=${installedVersion}, expected=${expectedVersion}, markerPreserved=${String(markerPreserved)}`
+    )
+  }
+  return { checked: true, rejected: true, installedVersion, markerPreserved }
 }
 
 const stopInstalledProcesses = async (installDirectory) => {
@@ -194,7 +228,7 @@ const waitForInstalledVersion = async (installDirectory, expectedVersion, timeou
 
 const isUpdaterInstallerRunning = async () => {
   const command =
-    '@(Get-CimInstance Win32_Process -Filter "Name LIKE \'%Windows-x64.exe\' -or Name LIKE \'%windows-x64.exe\'" -ErrorAction SilentlyContinue).Count'
+    "@(Get-CimInstance Win32_Process -Filter \"Name LIKE '%Windows-x64.exe' -or Name LIKE '%windows-x64.exe'\" -ErrorAction SilentlyContinue).Count"
   const { stdout } = await execFileAsync('powershell.exe', ['-NoProfile', '-Command', command], {
     windowsHide: true
   })
@@ -413,7 +447,9 @@ const main = async () => {
     if (await pathExists(installDirectory)) {
       const entries = await readdir(installDirectory).catch(() => [])
       if (entries.some((name) => /\.exe$/iu.test(name))) {
-        throw new Error(`Refusing to replace an existing Ncurator installation: ${installDirectory}`)
+        throw new Error(
+          `Refusing to replace an existing Ncurator installation: ${installDirectory}`
+        )
       }
     }
     testInstallationOwned = true
@@ -537,8 +573,24 @@ const main = async () => {
       fullPage: true
     })
 
+    let downgradeCheck = { checked: false, rejected: false }
+    if (options.downgradeInstaller) {
+      await finalLaunch.electronApp.close()
+      finalLaunch = undefined
+      downgradeCheck = await verifyGuardedDowngradeIsRejected({
+        installerPath: options.downgradeInstaller,
+        installDirectory,
+        expectedVersion: options.expectedVersion,
+        markerPath,
+        logs
+      })
+    }
+
     report = {
-      success: finalSnapshot.currentVersion === options.expectedVersion && markerPreserved,
+      success:
+        finalSnapshot.currentVersion === options.expectedVersion &&
+        markerPreserved &&
+        (!options.downgradeInstaller || downgradeCheck.rejected),
       startedAt,
       finishedAt: new Date().toISOString(),
       platform: process.platform,
@@ -548,6 +600,8 @@ const main = async () => {
       finalInstalledVersion,
       finalReportedVersion: finalSnapshot.currentVersion,
       markerPreserved,
+      downgradeInstaller: options.downgradeInstaller || null,
+      downgradeCheck,
       statusHistory,
       sourceInstaller: options.sourceInstaller,
       targetInstaller: options.targetInstaller,

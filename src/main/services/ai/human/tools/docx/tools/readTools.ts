@@ -1,122 +1,165 @@
+import { createHash, randomUUID } from 'node:crypto'
+import fs from 'node:fs/promises'
+import os from 'node:os'
+import path from 'node:path'
 import type { StructuredToolInterface } from '@langchain/core/tools'
-import type { JsonObject } from '../../../../../../../shared/types'
-import { buildSemanticMatches, splitEmbeddingRows } from '../semanticSearch'
 import type { DocxToolRuntime } from '../runtime'
-import type {
-  DocxDetailedBlock,
-  DocxOutlineBlock,
-  DocxReadSession,
-  DocxSearchMatch
-} from '../types'
+import type { DocxDetailedNode, DocxReadNode, DocxReadSession, DocxSearchMatch } from '../types'
 import {
   DOCX_READ_OUTLINE_TOOL_SPEC,
-  DOCX_READ_TOOL_SPEC,
-  DOCX_READ_VISUALS_TOOL_SPEC,
+  DOCX_READ_NODES_TOOL_SPEC,
   DOCX_SEARCH_TOOL_SPEC
 } from '../toolSpecs'
 import { createDocxTool, finalizeDocxToolFailure, finalizeDocxToolSuccess } from './workerTool'
-import { HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO } from '../../../constants'
-import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
+import { projectDocxReadNodes } from '../publicReadTree'
 import { renderDocxVisualToPng } from '../utils/renderVisual'
-import { projectDocxReadBlocks } from '../publicReadTree'
+import { ensurePartnerAssetBucket } from '../../../../../assets/WorkspaceAssetService'
+import {
+  countOutlineRootNodes,
+  resolveOutlinePercentNodeRange,
+  selectOutlineSegmentsForNodeRange
+} from '../outlineRange'
 
-const MAX_SEARCH_MATCHES = 20
-const SEMANTIC_TOP_K = 8
-const SEMANTIC_MIN_SCORE = 0.35
-
-const DOCX_LITERAL_ALIAS_FALLBACKS: Record<string, string[]> = {
-  过拟合: ['过度拟合']
-}
-
-type AppliedAlias = {
-  from: string
-  to: string
-}
-
-const buildOutlineBlock = (block: DocxOutlineBlock) => {
-  if (block.type === 'paragraph') {
-    return {
-      blockId: block.blockId,
-      type: block.type,
-      blockIndex: block.blockIndex,
-      text: block.text,
-      visuals: block.visuals
-    }
-  }
-  if (block.type === 'table') {
-    return {
-      blockId: block.blockId,
-      type: block.type,
-      blockIndex: block.blockIndex,
-      rows: block.rows,
-      cols: block.cols,
-      text: block.text,
-      visuals: block.visuals
-    }
-  }
-  return {
-    blockId: block.blockId,
-    type: block.type,
-    blockIndex: block.blockIndex,
-    tableBlockId: block.tableBlockId,
-    row: block.row,
-    col: block.col,
-    text: block.text,
-    visuals: block.visuals
-  }
-}
-
-const fetchBlocksByBlockIds = async (input: {
+const fetchNodesByNodeIds = async (input: {
   runtime: DocxToolRuntime
   session?: DocxReadSession
   docId: string
-  blockIds: string[]
+  nodeIds: string[]
 }) => {
-  const uniqueBlockIds = [...new Set(input.blockIds)]
-  if (uniqueBlockIds.length === 1) {
-    const cached = input.session?.cache.detailByBlockId.get(uniqueBlockIds[0]!)
+  const uniqueNodeIds = [...new Set(input.nodeIds)]
+  if (uniqueNodeIds.length === 1) {
+    const cached = input.session?.cache.detailByNodeId.get(uniqueNodeIds[0]!)
     if (cached) return [cached]
   }
-  const blockResponse = await input.runtime.callWorker({
-    action: 'get_blocks_by_ids',
+  const nodeResponse = await input.runtime.callWorker({
+    action: 'get_nodes_by_ids',
     payload: {
       docId: input.docId,
-      blockIds: uniqueBlockIds
+      nodeIds: uniqueNodeIds
     }
   })
-  if (!blockResponse.ok) {
-    throw new Error(blockResponse.error)
+  if (!nodeResponse.ok) {
+    throw new Error(nodeResponse.error)
   }
-  if (blockResponse.payload.action !== 'get_blocks_by_ids') {
-    throw new Error('worker protocol mismatch (get_blocks_by_ids)')
+  if (nodeResponse.payload.action !== 'get_nodes_by_ids') {
+    throw new Error('worker protocol mismatch (get_nodes_by_ids)')
   }
-  blockResponse.payload.blocks.forEach((block) => {
-    input.session?.cache.detailByBlockId.set(block.blockId, block)
+  nodeResponse.payload.nodes.forEach((node) => {
+    input.session?.cache.detailByNodeId.set(node.nodeId, node)
   })
-  return blockResponse.payload.blocks
+  return nodeResponse.payload.nodes
 }
 
-const fetchBlocksByBlockIndexRange = async (input: {
+const fetchNodesByNodeIndexRange = async (input: {
   runtime: DocxToolRuntime
   docId: string
-  fromBlockIndex: number
-  toBlockIndex: number
+  fromNodeIndex: number
+  toNodeIndex: number
 }) => {
-  const blockResponse = await input.runtime.callWorker({
-    action: 'get_blocks_by_block_index_range',
+  const nodeResponse = await input.runtime.callWorker({
+    action: 'get_nodes_by_index_range',
     payload: {
       docId: input.docId,
-      fromBlockIndex: input.fromBlockIndex,
-      toBlockIndex: input.toBlockIndex
+      fromNodeIndex: input.fromNodeIndex,
+      toNodeIndex: input.toNodeIndex
     }
   })
-  if (!blockResponse.ok) {
-    throw new Error(blockResponse.error)
+  if (!nodeResponse.ok) {
+    throw new Error(nodeResponse.error)
   }
-  if (blockResponse.payload.action !== 'get_blocks_by_block_index_range') {
-    throw new Error('worker protocol mismatch (get_blocks_by_block_index_range)')
+  if (nodeResponse.payload.action !== 'get_nodes_by_index_range') {
+    throw new Error('worker protocol mismatch (get_nodes_by_index_range)')
   }
-  return blockResponse.payload.blocks
+  return nodeResponse.payload.nodes
+}
+
+const extensionForMime = (mimeType: string): string => {
+  if (mimeType === 'image/png') return 'png'
+  if (mimeType === 'image/webp') return 'webp'
+  if (mimeType === 'image/gif') return 'gif'
+  return 'jpg'
+}
+
+const collectVisualNodes = (
+  nodes: DocxReadNode[]
+): Array<Extract<DocxReadNode, { type: 'visual' }>> => {
+  const visuals: Array<Extract<DocxReadNode, { type: 'visual' }>> = []
+  const visit = (node: DocxReadNode): void => {
+    if (node.type === 'visual') visuals.push(node)
+    if ('children' in node && Array.isArray(node.children)) {
+      ;(node.children as DocxReadNode[]).forEach(visit)
+    }
+  }
+  nodes.forEach(visit)
+  return visuals
+}
+
+const materializeDocxVisuals = async (input: {
+  runtime: DocxToolRuntime
+  docId: string
+  nodes: DocxDetailedNode[]
+  sourcePrefix: 'docx_read_nodes' | 'docx_search'
+}): Promise<void> => {
+  const readNodes: DocxReadNode[] = []
+  input.nodes.forEach((node) => readNodes.push(...(node.children as DocxReadNode[])))
+  const visuals = collectVisualNodes(readNodes)
+  if (visuals.length === 0) return
+  const bucket = await ensurePartnerAssetBucket(
+    input.runtime.input.partnerId,
+    `${input.sourcePrefix}-${randomUUID()}`
+  )
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-docx-materialize-'))
+  let renderSourcePath: string | undefined
+  try {
+    for (const visual of visuals) {
+      const response = await input.runtime.callWorker({
+        action: 'get_visual',
+        payload: { docId: input.docId, nodeId: visual.nodeId }
+      })
+      if (!response.ok) throw new Error(response.error)
+      if (response.payload.action !== 'get_visual') {
+        throw new Error('worker protocol mismatch (get_visual)')
+      }
+      if (response.payload.error) throw new Error(response.payload.error)
+      let bytes = response.payload.data ? Buffer.from(response.payload.data) : undefined
+      let mimeType = response.payload.mimeType
+      if ((!bytes || !mimeType) && response.payload.render) {
+        if (!renderSourcePath) {
+          renderSourcePath = path.join(tempDir, 'active-revision.docx')
+          const materialized = await input.runtime.callWorker({
+            action: 'materialize_draft',
+            payload: { docId: input.docId, outPath: renderSourcePath }
+          })
+          if (!materialized.ok) throw new Error(materialized.error)
+          if (materialized.payload.action !== 'materialize_draft') {
+            throw new Error('worker protocol mismatch (materialize_draft)')
+          }
+        }
+        const rendered = await renderDocxVisualToPng({
+          sourcePath: renderSourcePath,
+          kind: response.payload.kind,
+          nodeIndex: response.payload.render.nodeIndex,
+          visualIndexInNode: response.payload.render.visualIndexInNode,
+          visualCountInNode: response.payload.render.visualCountInNode
+        })
+        if (rendered.data) {
+          bytes = Buffer.from(rendered.data)
+          mimeType = 'image/png'
+        }
+      }
+      if (!bytes || !mimeType) throw new Error(`visual node ${visual.nodeId} 无法生成图片`)
+      const hash = createHash('sha256').update(bytes).digest('hex')
+      const imagePath = path.join(bucket, `${hash}.${extensionForMime(mimeType)}`)
+      try {
+        await fs.writeFile(imagePath, bytes, { flag: 'wx' })
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      }
+      visual.imagePath = imagePath
+    }
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true })
+  }
 }
 
 const executeWorkerSearch = async (input: {
@@ -126,14 +169,16 @@ const executeWorkerSearch = async (input: {
   docId: string
   query: string
   mode: 'literal' | 'regex'
-  scopeBlockIds: string[]
+  scopeNodeIds: string[]
   sourcePath: string
   currentRevisionRef: string
+  includeContext: boolean
 }): Promise<
   | {
       failure: ReturnType<DocxToolRuntime['emitFailure']>
     }
   | {
+      totalMatchCount: number
       matches: DocxSearchMatch[]
     }
 > => {
@@ -143,7 +188,8 @@ const executeWorkerSearch = async (input: {
       docId: input.docId,
       query: input.query,
       mode: input.mode,
-      scopeBlockIds: input.scopeBlockIds
+      scopeNodeIds: input.scopeNodeIds,
+      includeContext: input.includeContext
     }
   })
   if (!workerResponse.ok) {
@@ -178,142 +224,45 @@ const executeWorkerSearch = async (input: {
     }
   }
   return {
+    totalMatchCount: workerResponse.payload.totalMatchCount,
     matches: workerResponse.payload.matches
   }
 }
 
-const buildLiteralSearchAttempts = (
-  query: string
-): Array<{ query: string; appliedAliases: AppliedAlias[] }> => {
-  const normalizedQuery = query.trim()
-  const aliases = DOCX_LITERAL_ALIAS_FALLBACKS[normalizedQuery] || []
-  return [
-    {
-      query: normalizedQuery,
-      appliedAliases: []
-    },
-    ...aliases.map((alias) => ({
-      query: alias,
-      appliedAliases: [{ from: normalizedQuery, to: alias }]
-    }))
-  ]
-}
-
 const buildSearchResult = (input: {
-  sourcePath: string
-  mode: 'literal' | 'regex' | 'semantic'
-  effectiveQuery: string
-  appliedAliases: AppliedAlias[]
   totalMatchCount: number
   matches: DocxSearchMatch[]
-  runtime: DocxToolRuntime
+  nodesById: Map<string, ReturnType<typeof projectDocxReadNodes>[number]>
 }) => ({
-  sourcePath: input.sourcePath,
-  mode: input.mode,
-  effectiveQuery: input.effectiveQuery,
-  appliedAliases: input.appliedAliases,
   totalMatchCount: input.totalMatchCount,
   returnedMatchCount: input.matches.length,
-  matches: input.matches
+  matches: input.matches.map((match) => ({
+    nodeId: match.nodeId,
+    nodeIndex: match.nodeIndex,
+    type: match.type,
+    story: match.story.type,
+    matchText: match.matchText,
+    textContext: match.textContext,
+    tableNodeId: match.tableNodeId,
+    node: input.nodesById.get(match.nodeId),
+    beforeNodes: match.before?.flatMap((neighbor) => {
+      const node = input.nodesById.get(neighbor.nodeId)
+      return node ? [node] : []
+    }),
+    afterNodes: match.after?.flatMap((neighbor) => {
+      const node = input.nodesById.get(neighbor.nodeId)
+      return node ? [node] : []
+    })
+  }))
 })
 
 const buildSearchOutputPreview = (result: ReturnType<typeof buildSearchResult>) => ({
-  sourcePath: result.sourcePath,
-  mode: result.mode,
-  effectiveQuery: result.effectiveQuery,
+  totalMatchCount: result.totalMatchCount,
   returnedMatchCount: result.returnedMatchCount,
-  totalMatchCount: result.totalMatchCount
+  matches: result.matches
 })
 
-const estimateDocxResultTokens = (value: unknown): number =>
-  Math.ceil(JSON.stringify(value).length / 4)
-
-const getDocxAiResultTokenLimit = (runtime: DocxToolRuntime): number => {
-  const contextWindowTokens = runtime.input.modelContextWindowTokens
-  return Math.max(1, Math.floor(contextWindowTokens * HUMAN_TOOL_RESULT_TOKEN_LIMIT_RATIO))
-}
-
-const buildResultTooLargeFailure = (input: {
-  runtime: DocxToolRuntime
-  toolName: string
-  toolCallId: string
-  sourcePath: string
-  currentRevisionRef: string
-  estimatedTokens: number
-}) =>
-  input.runtime.emitFailure({
-    toolName: input.toolName,
-    toolCallId: input.toolCallId,
-    reason: 'result_too_large',
-    error: 'docx result too large',
-    decisionHint: {
-      code: 'hand_tool_result_too_large',
-      detail: {
-        toolName: input.toolName,
-        estimatedTokens: input.estimatedTokens,
-        limit: getDocxAiResultTokenLimit(input.runtime)
-      }
-    } as JsonObject,
-    resourceContext: input.runtime.buildResourceContext({
-      sourcePath: input.sourcePath,
-      effectKind: 'read',
-      currentRevisionRef: input.currentRevisionRef
-    })
-  })
-
-const toOutlineRange = (
-  range:
-    | { type: 'percent'; fromPercent: number; toPercent: number }
-    | { type: 'block_index'; fromBlockIndex: number; toBlockIndex: number },
-  totalBlockCount: number
-): { fromBlockIndex: number; toBlockIndex: number } => {
-  if (range.type === 'block_index') {
-    return {
-      fromBlockIndex: Math.max(0, Math.min(range.fromBlockIndex, range.toBlockIndex)),
-      toBlockIndex: Math.max(0, Math.max(range.fromBlockIndex, range.toBlockIndex))
-    }
-  }
-  const fromPercent = Math.max(0, Math.min(100, range.fromPercent))
-  const toPercent = Math.max(0, Math.min(100, range.toPercent))
-  const fromBlockIndex = Math.max(
-    0,
-    Math.floor((Math.min(fromPercent, toPercent) / 100) * totalBlockCount)
-  )
-  const toBlockIndex = Math.max(
-    0,
-    Math.ceil((Math.max(fromPercent, toPercent) / 100) * totalBlockCount) - 1
-  )
-  return {
-    fromBlockIndex,
-    toBlockIndex
-  }
-}
-
-const mergeOutlineRanges = (
-  ranges: Array<{ fromBlockIndex: number; toBlockIndex: number }>
-): Array<{ fromBlockIndex: number; toBlockIndex: number }> => {
-  const normalized = ranges
-    .map((range) => ({
-      fromBlockIndex: Math.max(0, Math.min(range.fromBlockIndex, range.toBlockIndex)),
-      toBlockIndex: Math.max(0, Math.max(range.fromBlockIndex, range.toBlockIndex))
-    }))
-    .filter((range) => range.toBlockIndex >= range.fromBlockIndex)
-    .sort((left, right) => left.fromBlockIndex - right.fromBlockIndex)
-
-  const merged: Array<{ fromBlockIndex: number; toBlockIndex: number }> = []
-  for (const range of normalized) {
-    const last = merged[merged.length - 1]
-    if (!last || range.fromBlockIndex > last.toBlockIndex + 1) {
-      merged.push(range)
-      continue
-    }
-    last.toBlockIndex = Math.max(last.toBlockIndex, range.toBlockIndex)
-  }
-  return merged
-}
-
 export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInterface[] => {
-  const visualRecognitionService = createVisualRecognitionService(runtime.input.ctx)
   const docxOutlineTool = createDocxTool({
     runtime,
     name: DOCX_READ_OUTLINE_TOOL_SPEC.name,
@@ -336,47 +285,39 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       if ('failure' in sessionResult) return sessionResult.failure
 
       try {
-        const ranges = args.ranges.map((range) =>
-          toOutlineRange(range, sessionResult.stats.bodyBlockCount)
-        )
-        const mergedRanges = mergeOutlineRanges(ranges)
-        const outlineBlocks = await runtime.callWorker({
-          action: 'outline',
-          payload: {
-            docId: sessionResult.docId,
-            ranges: mergedRanges,
-            includeTables: true,
-            includeCells: true
-          }
+        const segmentResponse = await runtime.callWorker({
+          action: 'segment_map',
+          payload: { docId: sessionResult.docId }
         })
-        if (!outlineBlocks.ok) {
-          throw new Error(outlineBlocks.error)
+        if (!segmentResponse.ok) throw new Error(segmentResponse.error)
+        if (segmentResponse.payload.action !== 'segment_map') {
+          throw new Error('worker protocol mismatch (segment_map)')
         }
-        if (outlineBlocks.payload.action !== 'outline') {
-          throw new Error('worker protocol mismatch (outline)')
-        }
-        const resultBlocks = outlineBlocks.payload.blocks.map(buildOutlineBlock)
-        const estimatedTokens = estimateDocxResultTokens(resultBlocks)
-        if (estimatedTokens > getDocxAiResultTokenLimit(runtime)) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: buildResultTooLargeFailure({
-              runtime,
-              toolName,
-              toolCallId,
-              sourcePath: sessionResult.sourcePath,
-              currentRevisionRef: sessionResult.currentRevisionRef,
-              estimatedTokens
-            }),
-            activity: {
-              actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
+        const allSegments = segmentResponse.payload.segments
+        const totalRootCount = countOutlineRootNodes(allSegments)
+        const nodeRange = resolveOutlinePercentNodeRange({
+          fromPercent: args.fromPercent,
+          toPercent: args.toPercent,
+          totalRootCount
+        })
+        const selectedSegments = nodeRange
+          ? selectOutlineSegmentsForNodeRange(allSegments, nodeRange)
+          : []
+        const coveredFromNodeIndex =
+          selectedSegments.length > 0
+            ? Math.min(...selectedSegments.map((segment) => segment.fromNodeIndex))
+            : 0
+        const coveredToNodeIndex =
+          selectedSegments.length > 0
+            ? Math.max(...selectedSegments.map((segment) => segment.toNodeIndex))
+            : 0
         const result = {
-          sourcePath: sessionResult.sourcePath,
-          totalBlockCount: sessionResult.stats.bodyBlockCount,
-          blocks: resultBlocks
+          fromPercent: args.fromPercent,
+          toPercent: args.toPercent,
+          fromNodeIndex: coveredFromNodeIndex,
+          toNodeIndex: coveredToNodeIndex,
+          totalRootCount,
+          segments: selectedSegments
         }
         return finalizeDocxToolSuccess({
           runtime,
@@ -384,14 +325,19 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           toolCallId,
           result,
           outputPreview: {
-            sourcePath: result.sourcePath,
-            blocks: result.blocks
+            fromPercent: result.fromPercent,
+            toPercent: result.toPercent,
+            fromNodeIndex: result.fromNodeIndex,
+            toNodeIndex: result.toNodeIndex,
+            totalRootCount: result.totalRootCount,
+            segments: result.segments
           },
           draftDocId: sessionResult.docId,
           activity: {
             actionType: DOCX_READ_OUTLINE_TOOL_SPEC.activityActionType!,
             startedSummary: `提取结构: ${sessionResult.sourcePath}`,
-            buildCompletedSummary: (output) => `结构提取完成：${String(output.blocks.length)} 个块`
+            buildCompletedSummary: (output) =>
+              `结构提取完成：${String(output.segments.length)} 个分段`
           }
         })
       } catch (error) {
@@ -439,138 +385,55 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       if ('failure' in sessionResult) return sessionResult.failure
 
       const mode = args.mode || 'literal'
-      const scopeBlockIds = args.scope?.blockIds || []
-
-      if (mode === 'semantic') {
-        if (runtime.input.ctx.embeddingService.getStatus() !== 'ready') {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: runtime.emitFailure({
-              toolName,
-              toolCallId,
-              reason: 'failed',
-              error: 'semantic search requires embedding runtime to be ready before entering human',
-              draftDocId: sessionResult.docId,
-              resourceContext: runtime.buildResourceContext({
-                sourcePath: sessionResult.sourcePath,
-                effectKind: 'searched',
-                currentRevisionRef: sessionResult.currentRevisionRef
-              })
-            }),
-            activity: {
-              actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-
-        const semanticIndex = await runtime.buildSemanticDocIndex(sessionResult.docId)
-        const queryEmbeddingResponse = await runtime.input.ctx.embeddingService.embed(args.query)
-        const queryEmbeddingRows = splitEmbeddingRows(
-          queryEmbeddingResponse.data,
-          queryEmbeddingResponse.dims
-        )
-        const queryEmbedding = queryEmbeddingRows[0]
-        if (!queryEmbedding || queryEmbedding.length === 0) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: runtime.emitFailure({
-              toolName,
-              toolCallId,
-              reason: 'failed',
-              error: 'semantic query embedding is empty',
-              draftDocId: sessionResult.docId,
-              resourceContext: runtime.buildResourceContext({
-                sourcePath: sessionResult.sourcePath,
-                effectKind: 'searched',
-                currentRevisionRef: sessionResult.currentRevisionRef
-              })
-            }),
-            activity: {
-              actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-
-        const allMatches = buildSemanticMatches({
-          entries: semanticIndex.entries,
-          queryEmbedding,
-          scopeBlockIds,
-          queryText: args.query,
-          topK: SEMANTIC_TOP_K,
-          minScore: SEMANTIC_MIN_SCORE
-        })
-        const matches = allMatches.slice(0, MAX_SEARCH_MATCHES)
-        const result = buildSearchResult({
-          sourcePath: sessionResult.sourcePath,
-          mode,
-          effectiveQuery: args.query,
-          appliedAliases: [],
-          totalMatchCount: allMatches.length,
-          matches,
-          runtime
-        })
-        return finalizeDocxToolSuccess({
-          runtime,
-          toolName,
-          toolCallId,
-          result,
-          outputPreview: buildSearchOutputPreview(result),
-          draftDocId: sessionResult.docId,
-          activity: {
-            actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!,
-            startedSummary: `搜索文档: ${sessionResult.sourcePath}`,
-            buildCompletedSummary: (output) =>
-              `文档搜索完成：${String(output.returnedMatchCount)} 个命中`
-          }
-        })
-      }
-
-      const attempts =
-        mode === 'literal'
-          ? buildLiteralSearchAttempts(args.query)
-          : [{ query: args.query, appliedAliases: [] }]
-      let effectiveQuery = args.query
-      let appliedAliases: AppliedAlias[] = []
-      let allMatches: DocxSearchMatch[] = []
-
-      for (const attempt of attempts) {
-        const searchResult = await executeWorkerSearch({
-          runtime,
-          toolName,
-          toolCallId,
-          docId: sessionResult.docId,
-          query: attempt.query,
-          mode,
-          scopeBlockIds,
-          sourcePath: sessionResult.sourcePath,
-          currentRevisionRef: sessionResult.currentRevisionRef
-        })
-        if ('failure' in searchResult) {
-          return finalizeDocxToolFailure({
-            runtime,
-            failure: searchResult.failure,
-            activity: {
-              actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!
-            }
-          })
-        }
-        allMatches = searchResult.matches
-        effectiveQuery = attempt.query
-        appliedAliases = attempt.appliedAliases
-        if (allMatches.length > 0 || mode !== 'literal') {
-          break
-        }
-      }
-
-      const matches = allMatches.slice(0, MAX_SEARCH_MATCHES)
-      const result = buildSearchResult({
-        sourcePath: sessionResult.sourcePath,
+      const scopeNodeIds = args.nodeIds || []
+      const searchResult = await executeWorkerSearch({
+        runtime,
+        toolName,
+        toolCallId,
+        docId: sessionResult.docId,
+        query: args.query,
         mode,
-        effectiveQuery,
-        appliedAliases,
-        totalMatchCount: allMatches.length,
-        matches,
-        runtime
+        scopeNodeIds,
+        includeContext: args.includeContext || false,
+        sourcePath: sessionResult.sourcePath,
+        currentRevisionRef: sessionResult.currentRevisionRef
+      })
+      if ('failure' in searchResult) {
+        return finalizeDocxToolFailure({
+          runtime,
+          failure: searchResult.failure,
+          activity: { actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType! }
+        })
+      }
+      const relatedNodeIds = [
+        ...new Set(
+          searchResult.matches.flatMap((match) => [
+            match.nodeId,
+            ...(match.before || []).map((neighbor) => neighbor.nodeId),
+            ...(match.after || []).map((neighbor) => neighbor.nodeId)
+          ])
+        )
+      ]
+      const relatedNodes = relatedNodeIds.length
+        ? await fetchNodesByNodeIds({
+            runtime,
+            session: sessionResult.readSession,
+            docId: sessionResult.docId,
+            nodeIds: relatedNodeIds
+          })
+        : []
+      await materializeDocxVisuals({
+        runtime,
+        docId: sessionResult.docId,
+        nodes: relatedNodes,
+        sourcePrefix: 'docx_search'
+      })
+      const publicNodes = projectDocxReadNodes(relatedNodes)
+      const nodesById = new Map(publicNodes.map((node) => [node.nodeId, node]))
+      const result = buildSearchResult({
+        totalMatchCount: searchResult.totalMatchCount,
+        matches: searchResult.matches,
+        nodesById
       })
       return finalizeDocxToolSuccess({
         runtime,
@@ -582,21 +445,20 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
         activity: {
           actionType: DOCX_SEARCH_TOOL_SPEC.activityActionType!,
           startedSummary: `搜索文档: ${sessionResult.sourcePath}`,
-          buildCompletedSummary: (output) =>
-            `文档搜索完成：${String(output.returnedMatchCount)} 个命中`
+          buildCompletedSummary: (output) => `文档搜索完成：${String(output.matches.length)} 个命中`
         }
       })
     }
   })
 
-  const docxReadTool = createDocxTool({
+  const docxReadNodesTool = createDocxTool({
     runtime,
-    name: DOCX_READ_TOOL_SPEC.name,
-    description: DOCX_READ_TOOL_SPEC.promptSpec.description,
-    schema: DOCX_READ_TOOL_SPEC.inputSchema,
+    name: DOCX_READ_NODES_TOOL_SPEC.name,
+    description: DOCX_READ_NODES_TOOL_SPEC.promptSpec.description,
+    schema: DOCX_READ_NODES_TOOL_SPEC.inputSchema,
     onError: ({ message }) => {
       runtime.input.emitActivity({
-        actionType: DOCX_READ_TOOL_SPEC.activityActionType!,
+        actionType: DOCX_READ_NODES_TOOL_SPEC.activityActionType!,
         status: 'failed',
         summary: message
       })
@@ -611,25 +473,30 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
       if ('failure' in sessionResult) return sessionResult.failure
 
       try {
-        let blocks: DocxDetailedBlock[]
-        if (args.range.type === 'block_ids') {
-          blocks = await fetchBlocksByBlockIds({
+        let nodes: DocxDetailedNode[]
+        if (args.range.type === 'node_ids') {
+          nodes = await fetchNodesByNodeIds({
             runtime,
             session: sessionResult.readSession,
             docId: sessionResult.docId,
-            blockIds: args.range.blockIds
+            nodeIds: args.range.nodeIds
           })
         } else {
-          blocks = await fetchBlocksByBlockIndexRange({
+          nodes = await fetchNodesByNodeIndexRange({
             runtime,
             docId: sessionResult.docId,
-            fromBlockIndex: args.range.fromBlockIndex,
-            toBlockIndex: args.range.toBlockIndex
+            fromNodeIndex: args.range.fromNodeIndex,
+            toNodeIndex: args.range.toNodeIndex
           })
         }
+        await materializeDocxVisuals({
+          runtime,
+          docId: sessionResult.docId,
+          nodes,
+          sourcePrefix: 'docx_read_nodes'
+        })
         const result = {
-          sourcePath: sessionResult.sourcePath,
-          blocks: projectDocxReadBlocks(blocks)
+          nodes: projectDocxReadNodes(nodes)
         }
         return finalizeDocxToolSuccess({
           runtime,
@@ -637,14 +504,13 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
           toolCallId,
           result,
           outputPreview: {
-            sourcePath: result.sourcePath,
-            blocks: result.blocks
+            nodes: result.nodes
           },
           draftDocId: sessionResult.docId,
           activity: {
-            actionType: DOCX_READ_TOOL_SPEC.activityActionType!,
+            actionType: DOCX_READ_NODES_TOOL_SPEC.activityActionType!,
             startedSummary: `精读文档区间: ${sessionResult.sourcePath}`,
-            buildCompletedSummary: (output) => `文档精读完成：${String(output.blocks.length)} 个块`
+            buildCompletedSummary: (output) => `文档精读完成：${String(output.nodes.length)} 个节点`
           }
         })
       } catch (error) {
@@ -663,169 +529,12 @@ export const buildDocxReadTools = (runtime: DocxToolRuntime): StructuredToolInte
             })
           }),
           activity: {
-            actionType: DOCX_READ_TOOL_SPEC.activityActionType!
+            actionType: DOCX_READ_NODES_TOOL_SPEC.activityActionType!
           }
         })
       }
     }
   })
 
-  const docxReadVisualsTool = createDocxTool({
-    runtime,
-    name: DOCX_READ_VISUALS_TOOL_SPEC.name,
-    description: DOCX_READ_VISUALS_TOOL_SPEC.promptSpec.description,
-    schema: DOCX_READ_VISUALS_TOOL_SPEC.inputSchema,
-    execute: async ({ args, toolName, toolCallId }) => {
-      runtime.input.ctx.checkCancelled()
-      const sessionResult = await runtime.ensureReadSession({
-        toolName,
-        toolCallId,
-        sourcePath: args.sourcePath
-      })
-      if ('failure' in sessionResult) return sessionResult.failure
-      const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-docx-visual-'))
-      try {
-        let renderSourcePath: string | undefined
-        const results = new Array<
-          { visualId: string; text: string } | { visualId: string; error: string } | undefined
-        >(args.requests.length)
-        const stagedImages: Array<{ index: number; path: string; mimeType: string }> = []
-        const stagedRequests: Array<{ index: number; instruction: string }> = []
-
-        for (const [index, request] of args.requests.entries()) {
-          const tempPath = path.join(tempDir, `${String(index)}.visual`)
-          try {
-            const response = await runtime.callWorker({
-              action: 'get_visual',
-              payload: { docId: sessionResult.docId, visualId: request.visualId }
-            })
-            if (!response.ok) {
-              results[index] = { visualId: request.visualId, error: response.error }
-              continue
-            }
-            if (response.payload.action !== 'get_visual') {
-              results[index] = {
-                visualId: request.visualId,
-                error: 'worker protocol mismatch (get_visual)'
-              }
-              continue
-            }
-            if (response.payload.error) {
-              results[index] = {
-                visualId: request.visualId,
-                error: response.payload.error || 'visual media is missing'
-              }
-              continue
-            }
-            let visualData = response.payload.data
-            let mimeType = response.payload.mimeType
-            if ((!visualData || !mimeType) && response.payload.render) {
-              if (!renderSourcePath) {
-                const draftPath = path.join(tempDir, 'active-revision.docx')
-                const materialized = await runtime.callWorker({
-                  action: 'materialize_draft',
-                  payload: { docId: sessionResult.docId, outPath: draftPath }
-                })
-                if (!materialized.ok) {
-                  results[index] = { visualId: request.visualId, error: materialized.error }
-                  continue
-                }
-                if (materialized.payload.action !== 'materialize_draft') {
-                  results[index] = {
-                    visualId: request.visualId,
-                    error: 'worker protocol mismatch (materialize_draft)'
-                  }
-                  continue
-                }
-                renderSourcePath = materialized.payload.outPath
-              }
-              const rendered = await renderDocxVisualToPng({
-                sourcePath: renderSourcePath,
-                kind: response.payload.kind,
-                blockIndex: response.payload.render.blockIndex,
-                visualIndexInBlock: response.payload.render.visualIndexInBlock,
-                visualCountInBlock: response.payload.render.visualCountInBlock
-              })
-              if (!rendered.data) {
-                results[index] = {
-                  visualId: request.visualId,
-                  error: rendered.error || 'visual rendering failed'
-                }
-                continue
-              }
-              visualData = rendered.data
-              mimeType = 'image/png'
-            }
-            if (!visualData || !mimeType) {
-              results[index] = { visualId: request.visualId, error: 'visual media is missing' }
-              continue
-            }
-            await fs.writeFile(tempPath, visualData)
-            stagedImages.push({ index, path: tempPath, mimeType })
-            stagedRequests.push({ index, instruction: request.instruction })
-          } catch (error) {
-            results[index] = {
-              visualId: request.visualId,
-              error: error instanceof Error ? error.message : String(error)
-            }
-          }
-        }
-
-        if (stagedImages.length > 0) {
-          const recognition = await visualRecognitionService.recognizeImages({
-            images: stagedImages,
-            requests: stagedRequests
-          })
-          for (const item of recognition) {
-            const request = args.requests[item.index]
-            if (!request) continue
-            results[item.index] =
-              'text' in item
-                ? { visualId: request.visualId, text: item.text }
-                : { visualId: request.visualId, error: item.error }
-          }
-        }
-
-        const result = {
-          sourcePath: sessionResult.sourcePath,
-          results: results.filter(
-            (item): item is { visualId: string; text: string } | { visualId: string; error: string } =>
-              item !== undefined
-          )
-        }
-        return finalizeDocxToolSuccess({
-          runtime,
-          toolName,
-          toolCallId,
-          result,
-          draftDocId: sessionResult.docId,
-          activity: {
-            actionType: DOCX_READ_VISUALS_TOOL_SPEC.activityActionType!,
-            startedSummary: `读取文档视觉内容: ${sessionResult.sourcePath}`,
-            buildCompletedSummary: (output) =>
-              `文档视觉读取完成：${String(output.results.length)} 项`
-          }
-        })
-      } catch (error) {
-        return finalizeDocxToolFailure({
-          runtime,
-          failure: runtime.emitFailure({
-            toolName,
-            toolCallId,
-            reason: 'failed',
-            error: error instanceof Error ? error.message : String(error),
-            draftDocId: sessionResult.docId
-          }),
-          activity: { actionType: DOCX_READ_VISUALS_TOOL_SPEC.activityActionType! }
-        })
-      } finally {
-        await fs.rm(tempDir, { recursive: true, force: true })
-      }
-    }
-  })
-
-  return [docxOutlineTool, docxSearchTool, docxReadTool, docxReadVisualsTool]
+  return [docxOutlineTool, docxSearchTool, docxReadNodesTool]
 }
-import fs from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'

@@ -9,7 +9,7 @@ import type {
   WorkspaceKnowledgeVectorSnapshot
 } from './types'
 
-const WORKSPACE_KNOWLEDGE_CACHE_SCHEMA_VERSION = 1
+const WORKSPACE_KNOWLEDGE_CACHE_SCHEMA_VERSION = 2
 
 type WorkspaceKnowledgeCacheStats = {
   splitCacheHits: number

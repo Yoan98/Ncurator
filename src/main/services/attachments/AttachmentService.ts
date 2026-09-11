@@ -2,7 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 import type { ChatAttachment } from '../../../shared/types'
-import { ensureWorkspaceAssetBucket } from '../assets/WorkspaceAssetService'
+import { ensurePartnerAssetBucket } from '../assets/WorkspaceAssetService'
 
 const SUPPORTED_IMAGE_EXTENSIONS = new Set<string>([
   'png',
@@ -135,7 +135,7 @@ export class AttachmentService {
   }
 
   public async saveAttachment(input: {
-    workspaceRootPath: string
+    partnerId: string
     assetBucketId: string
     name: string
     bytes: Uint8Array
@@ -146,7 +146,7 @@ export class AttachmentService {
       throw new Error('附件内容为空')
     }
 
-    const dirPath = await ensureWorkspaceAssetBucket(input.workspaceRootPath, input.assetBucketId)
+    const dirPath = await ensurePartnerAssetBucket(input.partnerId, input.assetBucketId)
     const targetPath = await resolveUniqueTargetPath(dirPath, input.name)
     await fs.promises.writeFile(targetPath, Buffer.from(input.bytes))
     return this.createAttachmentFromPath({

@@ -18,13 +18,11 @@ import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
 import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
+import { assertLivePublishAllowed, resolveReleaseStorageConfig } from './storage/config.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
-const MACOS_PLATFORMS = ['macos-arm64', 'macos-x64']
-const DEFAULT_E2E_PLATFORMS = ['macos-arm64']
-const X64_E2E_DISABLED_REASON =
-  'macOS x64 package E2E is disabled by default because Rosetta execution is too slow; artifacts are still built, verified, signed, and published.'
+const MACOS_PLATFORM = 'macos-arm64'
 const stageDeadline = createReleaseStageDeadline('macOS release stage')
 await loadReleaseEnvironment(ROOT)
 const args = process.argv.slice(2)
@@ -33,7 +31,6 @@ const valueAfter = (name) => {
   return index >= 0 ? args[index + 1] : undefined
 }
 const releaseTag = valueAfter('--tag') || ''
-const includeX64E2E = args.includes('--include-x64-e2e')
 const regression = readRegressionSelection(args)
 const modes = [
   ['prepare', args.includes('--prepare-only')],
@@ -52,13 +49,11 @@ try {
 }
 if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--include-x64-e2e] [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId> ...] [--fresh-knowledge-cache]'
+    'usage: node scripts/release/macos.mjs --tag <mac-v1.2.3> (--prepare-only|--test-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId> ...] [--fresh-knowledge-cache]'
   )
 }
 const mode = modes[0][0]
-if (includeX64E2E && mode !== 'test') {
-  throw new Error('--include-x64-e2e is only valid with --test-only')
-}
+if (mode === 'publish') assertLivePublishAllowed()
 if (mode !== 'test' && hasRegressionSelectionArgs(args)) {
   throw new Error('regression selection options are only valid with --test-only')
 }
@@ -79,13 +74,6 @@ const run = (command, commandArgs, options = {}) =>
       else reject(new Error(`${command} exited with ${code ?? signal}`))
     })
   })
-
-const assertExecutable = async (filePath, label) => {
-  if (!filePath) throw new Error(`${label} is not configured`)
-  await access(filePath).catch(() => {
-    throw new Error(`${label} does not exist: ${filePath}`)
-  })
-}
 
 const validateTag = async () => {
   const { stdout: tagType } = await execFileAsync('git', ['cat-file', '-t', releaseTag], {
@@ -108,27 +96,11 @@ const validateEnvironment = async () => {
   const result = {
     pnpmPath: pnpmPathOutput.trim(),
     sidecarVenvRoot: path.join(defaultToolRoot, 'sidecar-venv'),
-    sidecarBrowserCacheRoot: path.join(defaultToolRoot, 'sidecar-browser-cache'),
     sidecarPipCacheRoot: path.join(defaultToolRoot, 'sidecar-pip-cache')
   }
 
   if (mode === 'publish') {
-    for (const name of [
-      'AWS_ACCESS_KEY_ID',
-      'AWS_SECRET_ACCESS_KEY',
-      'R2_ACCOUNT_ID',
-      'R2_BUCKET_NAME',
-      'R2_PUBLIC_BASE_URL'
-    ]) {
-      if (!String(process.env[name] || '').trim()) {
-        throw new Error(`missing environment variable: ${name}`)
-      }
-    }
-    if (
-      String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '') !== 'https://download.ncurator.com'
-    ) {
-      throw new Error('R2_PUBLIC_BASE_URL must be https://download.ncurator.com')
-    }
+    resolveReleaseStorageConfig()
     const awsExecutable =
       String(process.env.NCURATOR_AWS_CLI || '').trim() ||
       path.join(defaultToolRoot, 'awscli', 'bin', 'aws')
@@ -151,28 +123,6 @@ const validateEnvironment = async () => {
     if (!identities.includes('Ncurator Update Signing')) {
       throw new Error('Ncurator Update Signing is not installed in the macOS login keychain')
     }
-    result.x64Node =
-      String(process.env.NCURATOR_X64_NODE || '').trim() ||
-      path.join(defaultToolRoot, 'node-x64', 'bin', 'node')
-    result.x64Python =
-      String(process.env.NCURATOR_X64_PYTHON || '').trim() ||
-      path.join(defaultToolRoot, 'python-x64', 'bin', 'python3')
-    await assertExecutable(result.x64Node, 'NCURATOR_X64_NODE')
-    await assertExecutable(result.x64Python, 'NCURATOR_X64_PYTHON')
-    const { stdout: nodeArch } = await execFileAsync('/usr/bin/arch', [
-      '-x86_64',
-      result.x64Node,
-      '-p',
-      'process.arch'
-    ])
-    if (nodeArch.trim() !== 'x64') throw new Error('NCURATOR_X64_NODE is not x64')
-    const { stdout: pythonArch } = await execFileAsync('/usr/bin/arch', [
-      '-x86_64',
-      result.x64Python,
-      '-c',
-      'import platform; print(platform.machine())'
-    ])
-    if (pythonArch.trim() !== 'x86_64') throw new Error('NCURATOR_X64_PYTHON is not x64')
   }
   return result
 }
@@ -227,7 +177,15 @@ const sanitizedTestEnvironment = () => {
     'AWS_SECRET_ACCESS_KEY',
     'R2_ACCOUNT_ID',
     'R2_BUCKET_NAME',
-    'R2_PUBLIC_BASE_URL'
+    'R2_PUBLIC_BASE_URL',
+    'TENCENT_SECRET_ID',
+    'TENCENT_SECRET_KEY',
+    'COS_BUCKET',
+    'COS_REGION',
+    'COS_PUBLIC_BASE_URL',
+    'SecretId',
+    'SecretKey',
+    'NCURATOR_ALLOW_LIVE_PUBLISH'
   ]) {
     delete environment[name]
   }
@@ -299,70 +257,27 @@ if (mode === 'prepare') {
     keepWork: false
   })
   const archivePath = path.join(workspace.workDirectory, 'source.tar')
-  const armSource = path.join(workspace.workDirectory, 'arm64')
-  const x64Source = path.join(workspace.workDirectory, 'x64')
+  const sourceDirectory = path.join(workspace.workDirectory, 'arm64')
   try {
     await run('git', ['archive', '--format=tar', '--output', archivePath, releaseTag])
-    await extractTag(archivePath, armSource)
-    await extractTag(archivePath, x64Source)
-    const armEnvironment = {
+    await extractTag(archivePath, sourceDirectory)
+    const buildEnvironment = {
       ...process.env,
       NCURATOR_SIDECAR_VENV_ROOT: tools.sidecarVenvRoot,
-      NCURATOR_SIDECAR_BROWSER_CACHE: path.join(tools.sidecarBrowserCacheRoot, 'darwin-arm64'),
       NCURATOR_SIDECAR_PIP_CACHE: path.join(tools.sidecarPipCacheRoot, 'darwin-arm64')
     }
-    const x64Environment = {
-      ...process.env,
-      PATH: `${path.dirname(tools.x64Node)}:${process.env.PATH || ''}`,
-      PIP_CERT: String(process.env.PIP_CERT || '').trim() || '/private/etc/ssl/cert.pem',
-      NCURATOR_SIDECAR_VENV_ROOT: tools.sidecarVenvRoot,
-      NCURATOR_SIDECAR_BUILD_PYTHON: tools.x64Python,
-      NCURATOR_SIDECAR_BROWSER_CACHE: path.join(tools.sidecarBrowserCacheRoot, 'darwin-x64'),
-      NCURATOR_SIDECAR_PIP_CACHE: path.join(tools.sidecarPipCacheRoot, 'darwin-x64')
-    }
-    await Promise.all([
-      (async () => {
-        await run(tools.pnpmPath, ['install', '--frozen-lockfile'], {
-          cwd: armSource,
-          env: armEnvironment
-        })
-        await seedNativeCache(armSource)
-      })(),
-      (async () => {
-        await run(
-          '/usr/bin/arch',
-          ['-x86_64', tools.x64Node, tools.pnpmPath, 'install', '--frozen-lockfile'],
-          { cwd: x64Source, env: x64Environment }
-        )
-        await seedNativeCache(x64Source)
-      })()
-    ])
-    const [armCandidate, x64Candidate] = await Promise.all([
-      (async () => {
-        await run(tools.pnpmPath, ['run', 'build:mac:release:arm64'], {
-          cwd: armSource,
-          env: armEnvironment
-        })
-        return await createCandidate(armSource, 'macos-arm64', taggedCommit)
-      })(),
-      (async () => {
-        await run(
-          '/usr/bin/arch',
-          ['-x86_64', tools.x64Node, tools.pnpmPath, 'run', 'build:mac:release:x64'],
-          { cwd: x64Source, env: x64Environment }
-        )
-        return await createCandidate(x64Source, 'macos-x64', taggedCommit)
-      })()
-    ])
-    await recordCandidateE2E({
-      tag: releaseTag,
-      platform: 'macos-x64',
-      status: 'skipped',
-      reason: X64_E2E_DISABLED_REASON,
-      selection: { mode: 'disabled-by-default' }
+    await run(tools.pnpmPath, ['install', '--frozen-lockfile'], {
+      cwd: sourceDirectory,
+      env: buildEnvironment
     })
+    await seedNativeCache(sourceDirectory)
+    await run(tools.pnpmPath, ['run', 'build:mac:release:arm64'], {
+      cwd: sourceDirectory,
+      env: buildEnvironment
+    })
+    const candidate = await createCandidate(sourceDirectory, MACOS_PLATFORM, taggedCommit)
     process.stdout.write(
-      `[release] macOS candidates prepared; arm64 package E2E is required before publish and x64 package E2E is disabled by default\n${armCandidate.bundlePath}\n${x64Candidate.bundlePath}\n`
+      `[release] macOS arm64 candidate prepared; package E2E is required before publish\n${candidate.bundlePath}\n`
     )
   } finally {
     await workspace.dispose()
@@ -383,70 +298,34 @@ if (mode === 'test') {
     await extractTag(archivePath, sourceDirectory)
     await run(tools.pnpmPath, ['install', '--frozen-lockfile'], { cwd: sourceDirectory })
     await seedNativeCache(sourceDirectory)
-    const e2ePlatforms = includeX64E2E ? MACOS_PLATFORMS : DEFAULT_E2E_PLATFORMS
-    if (!includeX64E2E) {
-      await recordCandidateE2E({
-        tag: releaseTag,
-        platform: 'macos-x64',
-        status: 'skipped',
-        reason: X64_E2E_DISABLED_REASON,
-        selection: { mode: 'disabled-by-default' }
-      })
+    const candidate = await readReleaseCandidate({ tag: releaseTag, platform: MACOS_PLATFORM })
+    if (candidate.state.commit !== taggedCommit) {
+      throw new Error(`${MACOS_PLATFORM} candidate commit does not match release tag`)
     }
-    const candidates = await Promise.all(
-      e2ePlatforms.map(async (platform) => {
-        const candidate = await readReleaseCandidate({ tag: releaseTag, platform })
-        if (candidate.state.commit !== taggedCommit) {
-          throw new Error(`${platform} candidate commit does not match release tag`)
-        }
-        return candidate
-      })
-    )
-    await runCandidateE2E({ candidates, sourceDirectory, pnpmPath: tools.pnpmPath })
+    await runCandidateE2E({ candidates: [candidate], sourceDirectory, pnpmPath: tools.pnpmPath })
   } finally {
     await workspace.dispose()
   }
-  process.stdout.write(
-    includeX64E2E
-      ? `[release] macOS candidate E2E passed for both architectures\n`
-      : `[release] macOS arm64 candidate E2E passed; x64 package E2E is disabled by default\n`
-  )
+  process.stdout.write(`[release] macOS arm64 candidate E2E passed\n`)
   process.exit(0)
 }
 
-await recordCandidateE2E({
+const candidate = await assertCandidatePublishable({
   tag: releaseTag,
-  platform: 'macos-x64',
-  status: 'skipped',
-  reason: X64_E2E_DISABLED_REASON,
-  selection: { mode: 'disabled-by-default' }
+  platform: MACOS_PLATFORM,
+  commit: taggedCommit
 })
-const candidates = await Promise.all(
-  MACOS_PLATFORMS.map(async (platform) =>
-    assertCandidatePublishable({ tag: releaseTag, platform, commit: taggedCommit })
-  )
-)
-if (
-  !candidates[0].verified.fragment.signature ||
-  candidates[0].verified.fragment.signature !== candidates[1].verified.fragment.signature
-) {
-  throw new Error('macOS candidate signatures do not match')
-}
-for (const candidate of candidates) {
-  await run(process.execPath, [
-    path.join(ROOT, 'scripts', 'release', 'r2', 'upload-fragment.mjs'),
-    candidate.verified.directory,
-    candidate.verified.fragmentPath
-  ])
-}
+await run(process.execPath, [
+  path.join(ROOT, 'scripts', 'release', 'r2', 'upload-fragment.mjs'),
+  candidate.verified.directory,
+  candidate.verified.fragmentPath
+])
 await run(process.execPath, [
   path.join(ROOT, 'scripts', 'release', 'r2', 'finalize-macos.mjs'),
   '--tag',
   releaseTag
 ])
-for (const platform of MACOS_PLATFORMS) {
-  await markCandidatePublished({ tag: releaseTag, platform })
-}
+await markCandidatePublished({ tag: releaseTag, platform: MACOS_PLATFORM })
 try {
   await cleanupLocalTestLogs(ROOT)
 } catch (error) {
@@ -456,7 +335,7 @@ try {
 try {
   const removed = await cleanupSupersededReleaseCandidates({
     tag: releaseTag,
-    platforms: ['macos-arm64', 'macos-x64']
+    platforms: [MACOS_PLATFORM]
   })
   if (removed.length > 0) {
     process.stdout.write(`[release] removed ${removed.length} superseded local candidate(s)\n`)

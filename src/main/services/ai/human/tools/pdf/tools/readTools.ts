@@ -2,22 +2,23 @@ import { tool } from '@langchain/core/tools'
 import type { StructuredToolInterface } from '@langchain/core/tools'
 import type { JsonObject } from '../../../../../../../shared/types'
 import { withToolLifecycle } from '../../utils/lifecycle'
-import { checkToolResultSize } from '../../utils/resultSizeGuard'
 import {
   PdfToolRuntimeError,
   type PdfToolFailure,
   type PdfToolResourceContext,
   type PdfToolRuntime
 } from '../runtime'
+import { PDF_SEARCH_MAX_MATCHES } from '../constants'
 import {
-  PDF_INSPECT_TOOL_SPEC,
+  PDF_OUTLINE_TOOL_SPEC,
   PDF_READ_PAGES_TOOL_SPEC,
-  PDF_READ_VISUALS_TOOL_SPEC,
   PDF_SEARCH_TOOL_SPEC
 } from '../toolSpecs'
-import { createVisualRecognitionService } from '../../../../../visualRecognition/service'
 
 const uniquePageNumbers = (pageNumbers: number[]): number[] => [...new Set(pageNumbers)]
+
+const isPdfToolFailure = (value: JsonObject | PdfToolFailure): value is PdfToolFailure =>
+  'error' in value && typeof value.error === 'string'
 
 const runTool = async (input: {
   runtime: PdfToolRuntime
@@ -37,22 +38,7 @@ const runTool = async (input: {
       input.effectKind
     )
     const result = await input.execute(document)
-    if ('ok' in result && result.ok === false) return result
-    const size = checkToolResultSize({
-      toolName: input.toolName,
-      value: result,
-      modelContextWindowTokens: input.runtime.input.modelContextWindowTokens
-    })
-    if (size.tooLarge) {
-      return input.runtime.emitFailure({
-        toolName: input.toolName,
-        toolCallId: input.toolCallId,
-        reason: 'result_too_large',
-        error: `PDF 工具结果过大：预计 ${String(size.estimatedTokens)} tokens，限制 ${String(size.limit)} tokens`,
-        decisionHint: size.decisionHint,
-        resourceContext
-      })
-    }
+    if (isPdfToolFailure(result)) return result
     input.runtime.emitSuccess({
       toolName: input.toolName,
       toolCallId: input.toolCallId,
@@ -65,39 +51,36 @@ const runTool = async (input: {
       toolName: input.toolName,
       toolCallId: input.toolCallId,
       reason: error instanceof PdfToolRuntimeError ? error.reason : 'invalid_input',
-      error: error instanceof Error ? error.message : String(error),
+      error: error instanceof Error ? error.message : String(error)
     })
   }
 }
 
 export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterface[] => {
-  const visualRecognitionService = createVisualRecognitionService(runtime.input.ctx)
-  const inspectTool = tool(
+  const outlineTool = tool(
     async (args) =>
       await withToolLifecycle({
         emitter: runtime.toolEvents,
-        toolName: PDF_INSPECT_TOOL_SPEC.name,
+        toolName: PDF_OUTLINE_TOOL_SPEC.name,
         args: args as JsonObject,
         execute: async ({ toolCallId }) =>
           await runTool({
             runtime,
-            toolName: PDF_INSPECT_TOOL_SPEC.name,
+            toolName: PDF_OUTLINE_TOOL_SPEC.name,
             toolCallId,
             sourcePath: args.sourcePath,
             effectKind: 'inspected',
             execute: async (document) => ({
-              sourcePath: document.sourcePath,
               pageCount: document.pageCount,
               metadata: document.metadata,
-              outline: document.outline,
-              encrypted: document.encrypted,
+              outline: document.outline
             })
           })
       }),
     {
-      name: PDF_INSPECT_TOOL_SPEC.name,
-      description: PDF_INSPECT_TOOL_SPEC.promptSpec.description,
-      schema: PDF_INSPECT_TOOL_SPEC.inputSchema
+      name: PDF_OUTLINE_TOOL_SPEC.name,
+      description: PDF_OUTLINE_TOOL_SPEC.promptSpec.description,
+      schema: PDF_OUTLINE_TOOL_SPEC.inputSchema
     }
   )
 
@@ -125,7 +108,7 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
                   mode: args.mode || 'literal',
                   fromPage,
                   toPage,
-                  maxMatches: args.maxMatches || 20
+                  maxMatches: PDF_SEARCH_MAX_MATCHES
                 }
               })
               const resourceContext = runtime.buildResourceContext(document.sourcePath, 'searched')
@@ -140,16 +123,11 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
               if (response.payload.action !== 'search')
                 throw new Error('PDF worker 协议错误（search）')
               return {
-                sourcePath: document.sourcePath,
-                pageCount: document.pageCount,
-                query: args.query,
-                mode: args.mode || 'literal',
-                pageRange: { fromPage, toPage },
                 totalMatchCount: response.payload.totalMatchCount,
                 returnedMatchCount: response.payload.matches.length,
                 matches: response.payload.matches,
                 pagesWithNoTextCount: response.payload.pagesWithNoTextCount,
-                pagesWithSuspiciousTextCount: response.payload.pagesWithSuspiciousTextCount,
+                pagesWithSuspiciousTextCount: response.payload.pagesWithSuspiciousTextCount
               }
             }
           })
@@ -208,10 +186,40 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
               }
               if (response.payload.action !== 'read_pages')
                 throw new Error('PDF worker 协议错误（read_pages）')
+              const rendered = await runtime.callWorker({
+                action: 'materialize_pages',
+                payload: {
+                  docId: document.docId,
+                  partnerId: runtime.input.partnerId,
+                  pageNumbers
+                }
+              })
+              if (!rendered.ok) {
+                return runtime.emitWorkerFailure({
+                  toolName: PDF_READ_PAGES_TOOL_SPEC.name,
+                  toolCallId,
+                  response: rendered,
+                  resourceContext
+                })
+              }
+              if (rendered.payload.action !== 'materialize_pages')
+                throw new Error('PDF worker 协议错误（materialize_pages）')
+              const imageByPage = new Map(
+                rendered.payload.images.map((image) => [image.pageNumber, image.path])
+              )
               return {
-                sourcePath: document.sourcePath,
-                pageCount: document.pageCount,
-                pages: response.payload.pages,
+                pages: response.payload.pages.map((page) => {
+                  const pageImagePath = imageByPage.get(page.pageNumber)
+                  if (!pageImagePath)
+                    throw new Error(`PDF 第 ${String(page.pageNumber)} 页渲染缺失`)
+                  return {
+                    pageNumber: page.pageNumber,
+                    text: page.text,
+                    textStatus: page.textStatus,
+                    imageCount: page.imageCount,
+                    pageImagePath
+                  }
+                })
               }
             }
           })
@@ -223,85 +231,5 @@ export const buildPdfReadTools = (runtime: PdfToolRuntime): StructuredToolInterf
     }
   )
 
-  const readVisualsTool = tool(
-    async (args) =>
-      await withToolLifecycle({
-        emitter: runtime.toolEvents,
-        toolName: PDF_READ_VISUALS_TOOL_SPEC.name,
-        args: args as JsonObject,
-        execute: async ({ toolCallId }) =>
-          await runTool({
-            runtime,
-            toolName: PDF_READ_VISUALS_TOOL_SPEC.name,
-            toolCallId,
-            sourcePath: args.sourcePath,
-            effectKind: 'read',
-            execute: async (document) => {
-              const validRequests = args.requests.filter(
-                (request) => request.index <= document.pageCount
-              )
-              const invalidResults = args.requests
-                .filter((request) => request.index > document.pageCount)
-                .map((request) => ({
-                  index: request.index,
-                  error: `页码超出范围：PDF 共 ${String(document.pageCount)} 页`
-                }))
-
-              let recognitionResults: Awaited<
-                ReturnType<typeof visualRecognitionService.recognizeImages>
-              > = []
-              if (validRequests.length > 0) {
-                const response = await runtime.callWorker({
-                  action: 'render_pages',
-                  payload: {
-                    docId: document.docId,
-                    workspaceRootPath: runtime.workspaceRootPath,
-                    pageNumbers: uniquePageNumbers(validRequests.map((request) => request.index))
-                  }
-                })
-                const resourceContext = runtime.buildResourceContext(document.sourcePath, 'read')
-                if (!response.ok) {
-                  return runtime.emitWorkerFailure({
-                    toolName: PDF_READ_VISUALS_TOOL_SPEC.name,
-                    toolCallId,
-                    response,
-                    resourceContext
-                  })
-                }
-                if (response.payload.action !== 'render_pages')
-                  throw new Error('PDF worker 协议错误（render_pages）')
-                recognitionResults = await visualRecognitionService.recognizeImages({
-                  images: response.payload.images.map((image) => ({
-                    index: image.pageNumber,
-                    path: image.path,
-                    mimeType: image.mimeType
-                  })),
-                  requests: validRequests
-                })
-              }
-
-              let recognitionIndex = 0
-              const results = args.requests.map((request) => {
-                if (request.index > document.pageCount) {
-                  return invalidResults.shift()!
-                }
-                const result = recognitionResults[recognitionIndex]
-                recognitionIndex += 1
-                return result || { index: request.index, error: '页面识别结果缺失' }
-              })
-              return {
-                sourcePath: document.sourcePath,
-                results
-              }
-            }
-          })
-      }),
-    {
-      name: PDF_READ_VISUALS_TOOL_SPEC.name,
-      description: PDF_READ_VISUALS_TOOL_SPEC.promptSpec.description,
-      schema: PDF_READ_VISUALS_TOOL_SPEC.inputSchema
-    }
-  )
-
-  return [inspectTool, searchTool, readPagesTool, readVisualsTool]
+  return [outlineTool, searchTool, readPagesTool]
 }

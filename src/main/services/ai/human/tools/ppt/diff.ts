@@ -188,6 +188,20 @@ export const resolveMovedPptSlideIds = (input: {
     movedCandidates: input.movedCandidates
   })
 
+const replacedElementChanges = (input: {
+  before: readonly PptDiffElementSnapshot[]
+  after: readonly PptDiffElementSnapshot[]
+}): PptDiffElementChange[] => [
+  ...[...input.before].sort(compareIds).map((element) => ({
+    kind: 'deleted' as const,
+    beforeElementId: element.elementId
+  })),
+  ...[...input.after].sort(compareIds).map((element) => ({
+    kind: 'added' as const,
+    afterElementId: element.elementId
+  }))
+]
+
 export const buildPptDiffManifest = (input: {
   beforeSlides: readonly PptDiffSlideSnapshot[]
   afterSlides: readonly PptDiffSlideSnapshot[]
@@ -195,6 +209,7 @@ export const buildPptDiffManifest = (input: {
   afterFrames: ReadonlyMap<string, PptDiffFrame>
   operation: 'created' | 'updated'
   movedCandidates?: ReadonlySet<string>
+  replacedSlideIds?: ReadonlySet<string>
   elementLineage?: ReadonlyMap<string, string>
   movedElementCandidates?: ReadonlySet<string>
 }): PptDiffManifest => {
@@ -222,13 +237,17 @@ export const buildPptDiffManifest = (input: {
     }
 
     const beforeFrame = input.beforeFrames.get(afterSlide.slideId)
-    const elementChanges = diffPptElements({
-      before: beforeSlide.elements,
-      after: afterSlide.elements,
-      lineage: input.elementLineage,
-      movedCandidates: input.movedElementCandidates
-    })
-    const pageModified = beforeSlide.pageFingerprint !== afterSlide.pageFingerprint
+    const replaced = Boolean(input.replacedSlideIds?.has(afterSlide.slideId))
+    const elementChanges = replaced
+      ? replacedElementChanges({ before: beforeSlide.elements, after: afterSlide.elements })
+      : diffPptElements({
+          before: beforeSlide.elements,
+          after: afterSlide.elements,
+          lineage: input.elementLineage,
+          movedCandidates: input.movedElementCandidates
+        })
+    const pageModified =
+      replaced || beforeSlide.pageFingerprint !== afterSlide.pageFingerprint
     const contentModified = pageModified || elementChanges.length > 0
     const moved = movedSlideIds.has(afterSlide.slideId)
     const changes: PptDiffSlide['changes'] = []
@@ -239,10 +258,11 @@ export const buildPptDiffManifest = (input: {
       changed: changes.length > 0,
       changes,
       elementChanges,
-      positiveCount:
-        elementChanges.filter((change) => change.kind !== 'deleted').length +
-        (pageModified ? 1 : 0) +
-        (moved ? 1 : 0),
+      positiveCount: replaced
+        ? elementChanges.filter((change) => change.kind === 'added').length + (moved ? 1 : 0)
+        : elementChanges.filter((change) => change.kind !== 'deleted').length +
+          (pageModified ? 1 : 0) +
+          (moved ? 1 : 0),
       negativeCount: elementChanges.filter((change) => change.kind === 'deleted').length,
       before: beforeFrame,
       after: afterFrame

@@ -4,6 +4,7 @@ import {
   HiArrowLeft,
   HiArrowPath,
   HiArrowRight,
+  HiArrowTopRightOnSquare,
   HiEllipsisVertical,
   HiGlobeAlt,
   HiXMark
@@ -52,6 +53,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
   onStateChange
 }) => {
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const boundsFrameRef = useRef<number | null>(null)
   const [state, setState] = useState<BrowserTabState>(() => createEmptyState(tabId))
   const [address, setAddress] = useState('')
   const [error, setError] = useState('')
@@ -80,14 +82,30 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
 
   useEffect(() => {
     if (!presentationEnabled) return
-    const element = viewportRef.current
     let cancelled = false
     let activePresentationId: number | null = null
     let observer: ResizeObserver | null = null
-    const handleWindowChange = (): void => {
-      if (activePresentationId !== null) {
-        notifyBounds(tabId, activePresentationId, element)
+
+    const flushBounds = (): void => {
+      if (activePresentationId === null) return
+      // 窗口 live-resize 期间交给 Main follow-layout，分栏拖拽期间使用快照占位，避免与系统缩放或拖拽抢同一帧 IPC。
+      if (
+        document.body.classList.contains('workbench-window-resizing') ||
+        document.body.classList.contains('workbench-content-panel-resizing')
+      ) {
+        return
       }
+      notifyBounds(tabId, activePresentationId, viewportRef.current)
+    }
+
+    // 每帧实时跟随：resize/scroll 触发时用 rAF 合并成一次 setBounds，
+    // 保证原生 view 与 DOM 布局同步移动，不冻结、不整段延迟。
+    const scheduleBounds = (): void => {
+      if (boundsFrameRef.current !== null) return
+      boundsFrameRef.current = window.requestAnimationFrame(() => {
+        boundsFrameRef.current = null
+        flushBounds()
+      })
     }
 
     void window.api.browserPanelShow({ tabId }).then((response) => {
@@ -97,18 +115,38 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         void window.api.browserPanelHide({ presentationId: activePresentationId })
         return
       }
-      notifyBounds(tabId, activePresentationId, element)
-      observer = new ResizeObserver(handleWindowChange)
-      if (element) observer.observe(element)
-      window.addEventListener('resize', handleWindowChange)
-      window.addEventListener('scroll', handleWindowChange, true)
+      flushBounds()
+      // 布局可能在 show 当帧尚未稳定（右侧面板 ratio/动画），下一帧再对齐一次。
+      window.requestAnimationFrame(() => {
+        if (cancelled) return
+        flushBounds()
+        window.requestAnimationFrame(() => {
+          if (!cancelled) flushBounds()
+        })
+      })
+      observer = new ResizeObserver(scheduleBounds)
+      if (viewportRef.current) observer.observe(viewportRef.current)
+      window.addEventListener('resize', scheduleBounds)
+      window.addEventListener('scroll', scheduleBounds, true)
+      window.addEventListener(
+        'ncurator:workbench-window-resize-settled',
+        flushBounds as EventListener
+      )
     })
 
     return () => {
       cancelled = true
       observer?.disconnect()
-      window.removeEventListener('resize', handleWindowChange)
-      window.removeEventListener('scroll', handleWindowChange, true)
+      window.removeEventListener('resize', scheduleBounds)
+      window.removeEventListener('scroll', scheduleBounds, true)
+      window.removeEventListener(
+        'ncurator:workbench-window-resize-settled',
+        flushBounds as EventListener
+      )
+      if (boundsFrameRef.current !== null) {
+        window.cancelAnimationFrame(boundsFrameRef.current)
+        boundsFrameRef.current = null
+      }
       if (activePresentationId !== null) {
         void window.api.browserPanelHide({ presentationId: activePresentationId })
       }
@@ -202,7 +240,6 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
             onFocus={(event) => event.currentTarget.select()}
             placeholder="输入 URL"
             aria-label="浏览器地址"
-            autoFocus={!state.url}
             className="h-7 w-full rounded-[7px] border border-transparent bg-[#F7F7F5] pr-8 pl-3 text-left text-[13px] text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#E0DFDC] focus:bg-white"
           />
           <Tooltip title="前往">
@@ -216,6 +253,33 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
             </button>
           </Tooltip>
         </form>
+        <Tooltip title="将打开外部浏览器">
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2] disabled:text-[#C9C7C2]"
+            aria-label="将打开外部浏览器"
+            data-testid={workbenchSelectors.browserOpenExternal}
+            disabled={!state.url && !address.trim()}
+            onClick={() => {
+              setError('')
+              const open = async (): Promise<void> => {
+                if (state.url) {
+                  const response = await window.api.browserPanelOpenExternal({ tabId })
+                  if (!response.success) setError(response.error || '打开外部浏览器失败')
+                  return
+                }
+                const raw = address.trim()
+                if (!raw) return
+                const withProtocol = /^[a-z][a-z\d+.-]*:/iu.test(raw) ? raw : `https://${raw}`
+                const response = await window.api.openExternal(withProtocol)
+                if (!response.success) setError(response.error || '打开外部浏览器失败')
+              }
+              void open()
+            }}
+          >
+            <HiArrowTopRightOnSquare className="h-4 w-4" />
+          </button>
+        </Tooltip>
         <button
           type="button"
           className="flex h-7 w-7 items-center justify-center rounded-[6px] text-[#787774] hover:bg-[#F4F4F2]"
@@ -237,11 +301,11 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         className="relative min-h-0 flex-1 bg-white"
         data-testid={workbenchSelectors.browserViewport}
       >
-        {!presentationEnabled && transitionImage ? (
+        {transitionImage ? (
           <img
             src={transitionImage}
             alt=""
-            className="absolute inset-0 h-full w-full object-cover"
+            className="absolute inset-0 h-full w-full object-none object-left-top select-none pointer-events-none"
             draggable={false}
           />
         ) : !state.url ? (

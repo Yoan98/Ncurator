@@ -1,30 +1,12 @@
-import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
-import { promisify } from 'node:util'
-import { loadReleaseEnvironment } from '../shared/environment.mjs'
 import { assertReleaseFragment } from './fragment-contract.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import { artifactKey, statusKey } from './storage-layout.mjs'
+import { createReleaseStorageClient } from '../storage/client.mjs'
 
-const execFileAsync = promisify(execFile)
-await loadReleaseEnvironment(process.cwd())
 const [inputDirectory = '', fragmentPath = ''] = process.argv.slice(2)
-
-const requiredEnvironment = [
-  'AWS_ACCESS_KEY_ID',
-  'AWS_SECRET_ACCESS_KEY',
-  'R2_ACCOUNT_ID',
-  'R2_BUCKET_NAME',
-  'R2_PUBLIC_BASE_URL'
-]
-for (const name of requiredEnvironment) {
-  if (!String(process.env[name] || '').trim())
-    throw new Error(`missing environment variable: ${name}`)
-}
 
 if (!inputDirectory || !fragmentPath) {
   throw new Error('usage: node scripts/release/r2/upload-fragment.mjs <input-dir> <fragment-json>')
@@ -33,17 +15,7 @@ if (!inputDirectory || !fragmentPath) {
 const fragment = JSON.parse(await readFile(fragmentPath, 'utf8'))
 assertReleaseFragment(fragment)
 
-const endpoint = `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`
-const bucket = String(process.env.R2_BUCKET_NAME).replace(/^\/+|\/+$/gu, '')
-const publicBaseUrl = String(process.env.R2_PUBLIC_BASE_URL).replace(/\/$/u, '')
-const localAws = path.join(os.homedir(), '.ncurator', 'release-tools', 'awscli', 'bin', 'aws')
-const awsExecutable =
-  String(process.env.NCURATOR_AWS_CLI || '').trim() || (existsSync(localAws) ? localAws : 'aws')
-
-const aws = async (args) =>
-  execFileAsync(awsExecutable, [...args, '--endpoint-url', endpoint, '--region', 'auto'], {
-    maxBuffer: 10 * 1024 * 1024
-  })
+const { aws, bucket, publicBaseUrl, label } = await createReleaseStorageClient()
 
 const contentType = (name) => {
   if (name.endsWith('.json')) return 'application/json'
@@ -99,9 +71,9 @@ for (const file of fragment.files) {
   }
 
   const remote = await readRemoteObject(key)
-  if (!remote) throw new Error(`R2 object disappeared after upload: ${key}`)
+  if (!remote) throw new Error(`${label} object disappeared after upload: ${key}`)
   if (Number(remote.ContentLength) !== file.size || remote.Metadata?.sha512 !== file.sha512) {
-    throw new Error(`R2 verification failed: ${key}`)
+    throw new Error(`${label} verification failed: ${key}`)
   }
 
   const publicResponse = await fetchWithRetry(`${publicBaseUrl}/${key}`, {
@@ -109,7 +81,7 @@ for (const file of fragment.files) {
     cache: 'no-store'
   })
   if (!publicResponse.ok || Number(publicResponse.headers.get('content-length')) !== file.size) {
-    throw new Error(`public R2 verification failed: ${key}`)
+    throw new Error(`public ${label} verification failed: ${key}`)
   }
 }
 

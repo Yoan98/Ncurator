@@ -38,15 +38,27 @@ export const buildWorkspaceKnowledgeSplitSnapshot = async (input: {
   contentHash: string
   fileExt?: string
 }): Promise<WorkspaceKnowledgeSplitSnapshot> => {
-  const splitDocs = await input.ingestionService.processFile(input.filePath)
-  const allSplitDocs = [...splitDocs.bigSplitDocs, ...splitDocs.miniSplitDocs]
+  const processed = await input.ingestionService.processFile(input.filePath)
+  const chunks: { text: string; page: number }[] = []
+  if (processed.anchorText) {
+    chunks.push({ text: processed.anchorText, page: 1 })
+  }
+  if (!processed.metadataOnly) {
+    chunks.push(
+      ...processed.bigSplitDocs.map((doc) => ({
+        text: doc.pageContent,
+        page: Number(doc.metadata.loc?.pageNumber || 1)
+      })),
+      ...processed.miniSplitDocs.map((doc) => ({
+        text: doc.pageContent,
+        page: Number(doc.metadata.loc?.pageNumber || 1)
+      }))
+    )
+  }
   return {
     contentHash: input.contentHash,
     fileExt: input.fileExt || path.extname(input.filePath).toLowerCase(),
-    chunks: allSplitDocs.map((doc) => ({
-      text: doc.pageContent,
-      page: Number(doc.metadata.loc?.pageNumber || 1)
-    }))
+    chunks
   }
 }
 
@@ -129,8 +141,7 @@ export const createWorkspaceEmbeddingBatches = (
 
     const exceedsChunkCount = currentBatch.length >= WORKSPACE_EMBEDDING_BATCH_CHUNK_COUNT
     const exceedsCharBudget =
-      currentBatch.length > 0 &&
-      currentChars + textLength > WORKSPACE_EMBEDDING_BATCH_MAX_CHARS
+      currentBatch.length > 0 && currentChars + textLength > WORKSPACE_EMBEDDING_BATCH_MAX_CHARS
     if (exceedsChunkCount || exceedsCharBudget) {
       flush()
     }

@@ -1,5 +1,12 @@
 export type DocxVisualKind = 'image' | 'chart' | 'diagram' | 'shape' | 'embedded_object'
 
+export type DocxStoryType = 'body' | 'header' | 'footer' | 'footnote' | 'endnote' | 'textbox'
+
+export type DocxStoryRef = {
+  storyId: string
+  type: DocxStoryType
+}
+
 export type DocxLength = {
   value: number
   unit: 'pt' | 'percent'
@@ -27,7 +34,7 @@ export type DocxRunStyle = {
 }
 
 export type DocxParagraphStyle = {
-  styleName?: string
+  styleId?: string
   alignment?: 'left' | 'center' | 'right' | 'justify'
   indent?: {
     left?: number
@@ -96,7 +103,7 @@ export type DocxCreateParagraphNode = {
 export type DocxCreateTableCellNode = {
   type: 'table_cell'
   style?: DocxTableCellStyle
-  children: DocxCreateBlockNode[]
+  children: DocxCreateContainerChildNode[]
 }
 
 export type DocxCreateTableRowNode = {
@@ -111,9 +118,9 @@ export type DocxCreateTableNode = {
   children: DocxCreateTableRowNode[]
 }
 
-export type DocxCreateBlockNode = DocxCreateParagraphNode | DocxCreateTableNode
+export type DocxCreateContainerChildNode = DocxCreateParagraphNode | DocxCreateTableNode
 export type DocxCreateNode =
-  | DocxCreateBlockNode
+  | DocxCreateContainerChildNode
   | DocxCreateTableRowNode
   | DocxCreateTableCellNode
   | DocxCreateRunNode
@@ -135,6 +142,7 @@ export type DocxReadRunNode = {
 
 export type DocxReadHyperlinkNode = {
   type: 'hyperlink'
+  nodeId: string
   target?: string
   anchor?: string
   children: DocxReadRunNode[]
@@ -142,28 +150,53 @@ export type DocxReadHyperlinkNode = {
 
 export type DocxReadContentControlNode = {
   type: 'content_control'
+  nodeId: string
   tag?: string
   children: DocxReadNode[]
 }
 
 export type DocxReadRevisionNode = {
   type: 'revision'
+  nodeId: string
+  revisionId: string
   kind: 'insert' | 'delete' | 'move_from' | 'move_to'
   children: DocxReadNode[]
 }
 
 export type DocxReadFieldNode = {
   type: 'field'
+  nodeId: string
   instruction: string
+  children: DocxReadNode[]
+}
+
+export type DocxReadBookmarkNode = {
+  type: 'bookmark'
+  bookmarkId: string
+  kind: 'start' | 'end'
+  name?: string
+}
+
+export type DocxReadMathNode = {
+  type: 'math'
+  text: string
+}
+
+export type DocxReadOpaqueNode = {
+  type: 'opaque'
+  name: string
   children: DocxReadNode[]
 }
 
 export type DocxReadVisualNode = {
   type: 'visual'
-  visualId: string
+  nodeId: string
   kind: DocxVisualKind
   altText?: string
-  children?: DocxReadBlockNode[]
+  imagePath?: string
+  widthCm?: number
+  heightCm?: number
+  children?: DocxReadContentNode[]
 }
 
 export type DocxReadRunChildNode =
@@ -182,13 +215,12 @@ export type DocxReadParagraphNode = {
 
 export type DocxReadTableCellNode = {
   type: 'table_cell'
-  blockId?: string
-  nodeId?: string
+  nodeId: string
   row: number
   col: number
   style?: DocxTableCellStyle
   text: string
-  children: DocxReadBlockNode[]
+  children: DocxReadContentNode[]
 }
 
 export type DocxReadTableRowNode = {
@@ -215,15 +247,19 @@ export type DocxReadInlineNode =
   | DocxReadContentControlNode
   | DocxReadRevisionNode
   | DocxReadFieldNode
+  | DocxReadBookmarkNode
+  | DocxReadMathNode
+  | DocxReadOpaqueNode
 
-export type DocxReadBlockNode =
+export type DocxReadContentNode =
   | DocxReadParagraphNode
   | DocxReadTableNode
   | DocxReadContentControlNode
   | DocxReadRevisionNode
+  | DocxReadOpaqueNode
 
 export type DocxReadNode =
-  | DocxReadBlockNode
+  | DocxReadContentNode
   | DocxReadTableRowNode
   | DocxReadTableCellNode
   | DocxReadInlineNode
@@ -239,10 +275,13 @@ export type DocxPublicReadBreakNode = {
 }
 export type DocxPublicReadVisualNode = {
   type: 'visual'
-  visualId: string
+  nodeId: string
   kind: DocxVisualKind
   altText?: string
-  children?: DocxPublicReadVisualBlockNode[]
+  imagePath: string
+  widthCm?: number
+  heightCm?: number
+  children?: DocxPublicReadVisualContentNode[]
 }
 export type DocxPublicReadRunChildNode =
   | DocxPublicReadTextNode
@@ -257,23 +296,40 @@ export type DocxPublicReadRunNode = {
 }
 export type DocxPublicReadHyperlinkNode = {
   type: 'hyperlink'
+  nodeId: string
   target?: string
   anchor?: string
   children: DocxPublicReadRunNode[]
 }
 export type DocxPublicReadInlineContentControlNode = {
   type: 'content_control'
+  nodeId: string
   tag?: string
   children: DocxPublicReadInlineNode[]
 }
 export type DocxPublicReadInlineRevisionNode = {
   type: 'revision'
+  nodeId: string
+  revisionId: string
   kind: 'insert' | 'delete' | 'move_from' | 'move_to'
   children: DocxPublicReadInlineNode[]
 }
 export type DocxPublicReadFieldNode = {
   type: 'field'
+  nodeId: string
   instruction: string
+  children: DocxPublicReadInlineNode[]
+}
+export type DocxPublicReadBookmarkNode = {
+  type: 'bookmark'
+  bookmarkId: string
+  kind: 'start' | 'end'
+  name?: string
+}
+export type DocxPublicReadMathNode = { type: 'math'; text: string }
+export type DocxPublicReadInlineOpaqueNode = {
+  type: 'opaque'
+  name: string
   children: DocxPublicReadInlineNode[]
 }
 export type DocxPublicReadInlineNode =
@@ -282,6 +338,9 @@ export type DocxPublicReadInlineNode =
   | DocxPublicReadInlineContentControlNode
   | DocxPublicReadInlineRevisionNode
   | DocxPublicReadFieldNode
+  | DocxPublicReadBookmarkNode
+  | DocxPublicReadMathNode
+  | DocxPublicReadInlineOpaqueNode
 export type DocxPublicReadNestedParagraphNode = {
   type: 'paragraph'
   nodeId: string
@@ -294,22 +353,22 @@ export type DocxPublicReadNestedTableCellNode = {
   row: number
   col: number
   style?: DocxTableCellStyle
-  children: DocxPublicReadNestedBlockNode[]
+  children: DocxPublicReadNestedNode[]
 }
-export type DocxPublicReadTableCellBlockNode = {
+export type DocxPublicReadTableCellNode = {
   type: 'table_cell'
-  blockId: string
+  nodeId: string
   row: number
   col: number
   style?: DocxTableCellStyle
-  children: DocxPublicReadNestedBlockNode[]
+  children: DocxPublicReadNestedNode[]
 }
 export type DocxPublicReadTableRowNode = {
   type: 'table_row'
   nodeId: string
   row: number
   style?: DocxTableRowStyle
-  children: Array<DocxPublicReadNestedTableCellNode | DocxPublicReadTableCellBlockNode>
+  children: Array<DocxPublicReadNestedTableCellNode | DocxPublicReadTableCellNode>
 }
 export type DocxPublicReadNestedTableNode = {
   type: 'table'
@@ -317,54 +376,68 @@ export type DocxPublicReadNestedTableNode = {
   style?: DocxTableStyle
   children: DocxPublicReadTableRowNode[]
 }
-export type DocxPublicReadBlockContentControlNode = {
+export type DocxPublicReadContentControlNode = {
   type: 'content_control'
+  nodeId: string
   tag?: string
-  children: DocxPublicReadNestedBlockNode[]
+  children: DocxPublicReadNestedNode[]
 }
-export type DocxPublicReadBlockRevisionNode = {
+export type DocxPublicReadRevisionNode = {
   type: 'revision'
+  nodeId: string
+  revisionId: string
   kind: 'insert' | 'delete' | 'move_from' | 'move_to'
-  children: DocxPublicReadNestedBlockNode[]
+  children: DocxPublicReadNestedNode[]
 }
-export type DocxPublicReadNestedBlockNode =
+export type DocxPublicReadOpaqueNode = {
+  type: 'opaque'
+  name: string
+  children: DocxPublicReadNestedNode[]
+}
+export type DocxPublicReadNestedNode =
   | DocxPublicReadNestedParagraphNode
   | DocxPublicReadNestedTableNode
-  | DocxPublicReadBlockContentControlNode
-  | DocxPublicReadBlockRevisionNode
-export type DocxPublicReadVisualBlockNode =
+  | DocxPublicReadContentControlNode
+  | DocxPublicReadRevisionNode
+  | DocxPublicReadOpaqueNode
+export type DocxPublicReadVisualContentNode =
   | DocxPublicReadNestedParagraphNode
   | DocxPublicReadNestedTableNode
 export type DocxPublicReadRootParagraphNode = Omit<DocxPublicReadNestedParagraphNode, 'nodeId'> & {
-  blockId: string
-  blockIndex: number
+  nodeId: string
+  story: DocxStoryRef
 }
 export type DocxPublicReadRootTableNode = Omit<DocxPublicReadNestedTableNode, 'nodeId'> & {
-  blockId: string
-  blockIndex: number
+  nodeId: string
+  story: DocxStoryRef
 }
-export type DocxPublicReadRootCellNode = Omit<DocxPublicReadTableCellBlockNode, 'row' | 'col'> & {
-  blockIndex: number
-  tableBlockId: string
+export type DocxPublicReadRootCellNode = Omit<DocxPublicReadTableCellNode, 'row' | 'col'> & {
+  tableNodeId: string
   row: number
   col: number
+  story: DocxStoryRef
 }
-export type DocxPublicReadRootWrapperNode =
+export type DocxPublicReadRootContainerNode =
   | {
       type: 'content_control'
+      nodeId: string
+      story: DocxStoryRef
       tag?: string
-      children: DocxPublicReadRootNode[]
+      children: DocxPublicReadNestedNode[]
     }
   | {
       type: 'revision'
-      kind: 'insert' | 'move_to'
-      children: DocxPublicReadRootNode[]
+      nodeId: string
+      story: DocxStoryRef
+      revisionId: string
+      kind: 'insert' | 'delete' | 'move_from' | 'move_to'
+      children: DocxPublicReadNestedNode[]
     }
 export type DocxPublicReadRootNode =
   | DocxPublicReadRootParagraphNode
   | DocxPublicReadRootTableNode
   | DocxPublicReadRootCellNode
-  | DocxPublicReadRootWrapperNode
+  | DocxPublicReadRootContainerNode
 
 export type DocxStylePatch =
   | ({ kind: 'run' } & { [K in keyof DocxRunStyle]?: DocxRunStyle[K] | null })

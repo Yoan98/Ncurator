@@ -132,7 +132,9 @@ export type E2ETestRuntime = {
     refs?: TestArtifactRefs
   }) => Promise<TestArtifact>
   collectSignals: () => Promise<E2ERuntimeSignals>
-  restartApp: () => Promise<{ page: Page; electronApp: ElectronApplication }>
+  restartApp: (input?: {
+    prepareUserData?: (userDataDir: string) => Promise<void>
+  }) => Promise<{ page: Page; electronApp: ElectronApplication }>
   registerResource: (resource: {
     name: string
     phase: 'before-app-close' | 'after-app-close'
@@ -160,6 +162,7 @@ export type E2ETestCaseDefinition<TResult> = E2EServiceConfiguration & {
   execution?: E2EExecutionClass
   windowMode?: ElectronWindowMode
   extraEnv?: Readonly<Record<string, string>>
+  prepareUserData?: (userDataDir: string) => Promise<void>
   runMode: E2ETestRunMode
   execute: (runtime: E2ETestRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: E2ETestRuntime) => Promise<void>
@@ -556,7 +559,7 @@ export const runE2ECase = async <TResult>(
           lifecycleEntries: allSignals.flatMap((signals) => signals.lifecycleEntries)
         }
       },
-      restartApp: async () => {
+      restartApp: async (input) => {
         restartCounter += 1
         archivedSignals.push(await currentApp.collectSignals())
         const traceRelativePath = path.posix.join(
@@ -575,6 +578,7 @@ export const runE2ECase = async <TResult>(
           serviceMode: definition.serviceMode,
           windowMode: definition.windowMode,
           extraEnv: resolvedExtraEnv,
+          prepareUserData: input?.prepareUserData,
           signalSink,
           userDataDir: app.userDataDir
         })
@@ -678,6 +682,7 @@ export const runE2ECase = async <TResult>(
       serviceMode: definition.serviceMode,
       windowMode: definition.windowMode,
       extraEnv: resolvedExtraEnv,
+      prepareUserData: definition.prepareUserData,
       signalSink
     })
     recordEvent({

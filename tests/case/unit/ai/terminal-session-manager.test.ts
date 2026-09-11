@@ -10,11 +10,16 @@ import {
 const managers: TerminalSessionManager[] = []
 const tempRoots: string[] = []
 
-const createManager = (environment?: Record<string, string>, yieldMs = 120) => {
+const createManager = (
+  environment?: Record<string, string>,
+  yieldMs = 120,
+  readMaxChars?: number
+) => {
   const manager = new TerminalSessionManager({
     yieldMs,
     stopGraceMs: 1000,
-    environment
+    environment,
+    readMaxChars
   })
   managers.push(manager)
   return manager
@@ -54,13 +59,7 @@ const finishCommand = async (
       chatSessionId,
       workspaceId
     }))
-  const read = manager.read({
-    terminalId: result.terminalId,
-    chatSessionId,
-    workspaceId,
-    outputCursor: 0
-  })
-  return { exitCode, output: read.output }
+  return { exitCode, output: result.output }
 }
 
 afterEach(async () => {
@@ -71,6 +70,33 @@ afterEach(async () => {
 })
 
 describe.skipIf(process.platform === 'win32')('terminal session manager', () => {
+  it('updates cwd from a leading cd before yielding a long-running command', async () => {
+    const manager = createManager(undefined, 250)
+    const root = await createRoot()
+    const nested = path.join(root, 'nested')
+    await fs.mkdir(nested)
+
+    const running = await manager.run({
+      chatSessionId: 'chat-cwd-mac',
+      workspaceId: 'workspace-cwd-mac',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-cwd-mac',
+      command: `cd "${nested}"; while true; do sleep 0.05; done`
+    })
+
+    expect(running.returnReason).toBe('command_still_running')
+    expect(running.currentTerminalPath).toBe(nested)
+
+    const stopped = await manager.stop({
+      terminalId: running.terminalId,
+      chatSessionId: 'chat-cwd-mac',
+      workspaceId: 'workspace-cwd-mac',
+      closeTerminal: true
+    })
+    expect(stopped.terminalStatus).toBe('closed')
+  })
+
   it('uses deterministic UTF-8 for Chinese files even when the parent locale is invalid', async () => {
     const manager = createManager({ LANG: 'C', LC_ALL: 'C', LC_CTYPE: 'C' }, 1000)
     const root = await createRoot()
@@ -98,22 +124,10 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
       workspaceRootPath: root,
       platform: 'macos',
       runId: 'run-unicode',
-      terminalId: listed.terminalId,
-      command: 'cd "中文目录"'
+      command: `cd "中文目录"; printf '中文输出😀\\n'; pwd`
     })
-    expect(changed.currentTerminalPath).toBe(chineseDirectory)
-
-    const continued = await manager.run({
-      chatSessionId: 'chat-unicode',
-      workspaceId: 'workspace-unicode',
-      workspaceRootPath: root,
-      platform: 'macos',
-      runId: 'run-unicode',
-      terminalId: listed.terminalId,
-      command: `printf '中文输出😀\\n'; pwd`
-    })
-    expect(continued.output).toContain('中文输出😀')
-    expect(continued.output).toContain(chineseDirectory)
+    expect(changed.output).toContain('中文输出😀')
+    expect(changed.output).toContain(chineseDirectory)
   })
 
   it('runs commands larger than the PTY input line limit', async () => {
@@ -131,6 +145,56 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
 
     expect(result.exitCode).toBe(0)
     expect(result.output).toContain('超长命令正常')
+  })
+
+  it('keeps completed output readable until every chunk has been consumed', async () => {
+    const manager = createManager(undefined, 2_000, 1_000)
+    const root = await createRoot()
+    const expected = Array.from({ length: 4_000 }, (_, index) => `output-${index + 1}`).join('\n')
+    const sourcePath = path.join(root, 'expected.txt')
+    await fs.writeFile(sourcePath, expected, 'utf8')
+
+    const result = await manager.run({
+      chatSessionId: 'chat-output',
+      workspaceId: 'workspace-output',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-output',
+      command: `sed -n '1,4000p' "${sourcePath}"`
+    })
+    if (result.exitCode === null) {
+      await manager.waitForCommand({
+        terminalId: result.terminalId,
+        commandId: result.commandId,
+        chatSessionId: 'chat-output',
+        workspaceId: 'workspace-output'
+      })
+    }
+
+    let combined = result.output
+    let cursor = result.readEndPosition
+    let hasMore = result.hasMoreOutput || result.exitCode === null
+    while (hasMore) {
+      const next = await manager.read({
+        terminalId: result.terminalId,
+        chatSessionId: 'chat-output',
+        workspaceId: 'workspace-output',
+        readEndPosition: cursor
+      })
+      combined += next.output
+      cursor = next.readEndPosition
+      hasMore = next.hasMoreOutput
+    }
+
+    expect(combined.replace(/^\n/u, '').trimEnd()).toBe(expected)
+    await expect(
+      manager.read({
+        terminalId: result.terminalId,
+        chatSessionId: 'chat-output',
+        workspaceId: 'workspace-output',
+        readEndPosition: cursor
+      })
+    ).rejects.toThrow()
   })
 
   it('can isolate Node and Python availability without changing the app process', async () => {
@@ -241,6 +305,57 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
     expect(nodeCompleted.exitCode).toBe(127)
     expect(pythonCompleted.exitCode).toBe(127)
   })
+
+  it('rejects a new session beyond the per-chat concurrent limit but allows termination commands', async () => {
+    const manager = new TerminalSessionManager({
+      yieldMs: 100,
+      stopGraceMs: 1000,
+      maxConcurrentSessions: 2
+    })
+    managers.push(manager)
+    const root = await createRoot()
+    const longCommand = 'sleep 30'
+    const first = await manager.run({
+      chatSessionId: 'chat-limit',
+      workspaceId: 'workspace-limit',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-1',
+      command: longCommand
+    })
+    const second = await manager.run({
+      chatSessionId: 'chat-limit',
+      workspaceId: 'workspace-limit',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-2',
+      command: longCommand
+    })
+    expect(first.returnReason).toBe('command_still_running')
+    expect(second.returnReason).toBe('command_still_running')
+
+    await expect(
+      manager.run({
+        chatSessionId: 'chat-limit',
+        workspaceId: 'workspace-limit',
+        workspaceRootPath: root,
+        platform: 'macos',
+        runId: 'run-3',
+        command: 'echo blocked'
+      })
+    ).rejects.toThrow('terminal_session_limit_reached')
+
+    const kill = await manager.run({
+      chatSessionId: 'chat-limit',
+      workspaceId: 'workspace-limit',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-4',
+      command: "pkill -f 'sleep 30'"
+    })
+    const completedKill = await finishCommand(manager, kill, 'chat-limit', 'workspace-limit')
+    expect(completedKill.exitCode).toBe(0)
+  })
 })
 
 describe.skipIf(process.platform !== 'win32')('terminal session manager on Windows', () => {
@@ -276,7 +391,6 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
       workspaceRootPath: root,
       platform: 'windows',
       runId: 'run-windows-unicode',
-      terminalId: powershell.terminalId,
       command: 'cmd.exe /d /c dir /b'
     })
     expect(native.output).toContain('中文目录')
@@ -288,10 +402,8 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
       workspaceRootPath: root,
       platform: 'windows',
       runId: 'run-windows-unicode',
-      terminalId: powershell.terminalId,
       command: `Set-Location "${chineseDirectory}"; Write-Output '持续中文'`
     })
-    expect(changed.currentTerminalPath).toBe(chineseDirectory)
     expect(changed.output).toContain('持续中文')
   })
 
@@ -313,11 +425,13 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
     expect(running.returnReason).toBe('command_still_running')
     expect(running.currentTerminalPath).toBe(nested)
     expect(
-      manager.read({
-        terminalId: running.terminalId,
-        chatSessionId: 'chat-cwd',
-        workspaceId: 'workspace-cwd'
-      }).currentTerminalPath
+      (
+        await manager.read({
+          terminalId: running.terminalId,
+          chatSessionId: 'chat-cwd',
+          workspaceId: 'workspace-cwd'
+        })
+      ).currentTerminalPath
     ).toBe(nested)
 
     const stopped = await manager.stop({
@@ -352,5 +466,94 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
       })
       expect(stopped.terminalStatus).toBe('closed')
     }
+  })
+
+  it('reads output in bounded chunks while advancing the cursor for continuous reading', async () => {
+    const manager = createManager(undefined, 100, 20)
+    const root = await createRoot()
+    const running = await manager.run({
+      chatSessionId: 'chat-chunk',
+      workspaceId: 'workspace-chunk',
+      workspaceRootPath: root,
+      platform: 'windows',
+      runId: 'run-chunk',
+      command: "Write-Output ('a' * 100); Start-Sleep -Seconds 5"
+    })
+
+    expect(running.returnReason).toBe('command_still_running')
+    expect(running.output.length).toBeLessThanOrEqual(20)
+
+    await new Promise<void>((resolve) => setTimeout(resolve, 1500))
+
+    const parts = [running.output]
+    const hasMoreValues: boolean[] = []
+    let cursor = running.readEndPosition
+    for (let index = 0; index < 200; index += 1) {
+      const read = await manager.read({
+        terminalId: running.terminalId,
+        chatSessionId: 'chat-chunk',
+        workspaceId: 'workspace-chunk',
+        readEndPosition: cursor
+      })
+      expect(read.readEndPosition - cursor).toBe(read.output.length)
+      expect(read.output.length).toBeLessThanOrEqual(20)
+      hasMoreValues.push(read.hasMoreOutput)
+      parts.push(read.output)
+      cursor = read.readEndPosition
+      if (read.output === '' && !read.hasMoreOutput) break
+      if (read.output === '' && read.hasMoreOutput) {
+        await new Promise<void>((resolve) => setTimeout(resolve, 50))
+      }
+    }
+    expect(hasMoreValues[0]).toBe(true)
+    expect(hasMoreValues.at(-1)).toBe(false)
+    expect(parts.join('')).toContain('a'.repeat(100))
+
+    await manager.stop({
+      terminalId: running.terminalId,
+      chatSessionId: 'chat-chunk',
+      workspaceId: 'workspace-chunk',
+      closeTerminal: true
+    })
+  })
+
+  it('rejects a new session beyond the per-chat concurrent limit', async () => {
+    const manager = new TerminalSessionManager({
+      yieldMs: 100,
+      stopGraceMs: 1000,
+      maxConcurrentSessions: 2
+    })
+    managers.push(manager)
+    const root = await createRoot()
+    const longCommand = 'while ($true) { Start-Sleep -Milliseconds 50 }'
+    const first = await manager.run({
+      chatSessionId: 'chat-limit',
+      workspaceId: 'workspace-limit',
+      workspaceRootPath: root,
+      platform: 'windows',
+      runId: 'run-1',
+      command: longCommand
+    })
+    const second = await manager.run({
+      chatSessionId: 'chat-limit',
+      workspaceId: 'workspace-limit',
+      workspaceRootPath: root,
+      platform: 'windows',
+      runId: 'run-2',
+      command: longCommand
+    })
+    expect(first.returnReason).toBe('command_still_running')
+    expect(second.returnReason).toBe('command_still_running')
+
+    await expect(
+      manager.run({
+        chatSessionId: 'chat-limit',
+        workspaceId: 'workspace-limit',
+        workspaceRootPath: root,
+        platform: 'windows',
+        runId: 'run-3',
+        command: 'Write-Output blocked'
+      })
+    ).rejects.toThrow('terminal_session_limit_reached')
   })
 })

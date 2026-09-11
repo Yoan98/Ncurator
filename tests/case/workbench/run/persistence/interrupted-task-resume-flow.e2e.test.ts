@@ -7,7 +7,8 @@ import {
   collectWorkbenchAiRunEvents,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
-  waitForLatestAssistantFinalAnswerText
+  waitForLatestAssistantFinalAnswerText,
+  waitForWorkbenchAiRunCompletion
 } from '../../../../harness/e2e/workbench'
 
 const CASE_ID = 'interrupted-task-resume-flow'
@@ -54,7 +55,7 @@ describe('workbench run e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
 
           await sendWorkbenchMessage(page, INITIAL_PROMPT)
           const firstRunStarted = await waitForRunEvent({
@@ -76,7 +77,7 @@ describe('workbench run e2e', () => {
             runId: firstRunStarted.runId,
             matches: (event): event is Extract<AiRunEvent, { type: 'activity' }> =>
               event.type === 'activity' &&
-              event.actionType === 'llm_structured_output' &&
+              event.actionType === 'llm_tool_calls' &&
               event.status === 'completed'
           })
           await page
@@ -91,37 +92,26 @@ describe('workbench run e2e', () => {
             matches: (event): event is Extract<AiRunEvent, { type: 'run_started' }> =>
               event.type === 'run_started' && event.input === RESUME_PROMPT
           })
-          const resumedHint = await waitForRunEvent({
+          await waitForWorkbenchAiRunCompletion(
             runtime,
-            name: 'runtime_limit_resume_hint',
-            runId: resumedRunStarted.runId,
-            matches: (event): event is Extract<AiRunEvent, { type: 'decision_hint' }> =>
-              event.type === 'decision_hint' &&
-              event.code === 'run_resumed_after_interruption' &&
-              event.detail?.reason === 'runtime_limit'
-          })
-          await waitForRunEvent({
-            runtime,
-            name: 'resumed_run_completed',
-            runId: resumedRunStarted.runId,
-            matches: (event): event is Extract<AiRunEvent, { type: 'run_completed' }> =>
-              event.type === 'run_completed'
-          })
+            resumedRunStarted.createdAt,
+            setup.env.modelName,
+            WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
+            { page, blockerPolicy: 'auto_approve' }
+          )
           const finalAnswerText = await waitForLatestAssistantFinalAnswerText(page)
 
           return {
             runtimeLimitFailure,
             firstRunLlmCompleted,
-            resumedHint,
             finalAnswerText
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.runtimeLimitFailure.message === RUNTIME_LIMIT_MESSAGE &&
-              result.runtimeLimitFailure.resumeSnapshotSaved === true &&
+              result.runtimeLimitFailure.code === 'runtime_limit' &&
               result.firstRunLlmCompleted.status === 'completed' &&
-              result.resumedHint.detail?.reason === 'runtime_limit' &&
               result.finalAnswerText.includes('恢复任务成功') &&
               result.finalAnswerText.includes('42'),
             {

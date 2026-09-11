@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { describe, it } from 'vitest'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
+import { AiFileChangeService } from '../../../../../src/main/services/ai/fileChanges/AiFileChangeService'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import { createScriptedStructuredOutputDriver } from '../../../../harness/backend/scriptedStructuredOutputDriver'
 import { writeTestDocxFile } from '../../../../harness/backend/aiToolHarness'
@@ -26,13 +27,18 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        await runtime.chatStore.saveChatSession({
+        await runtime.chatStore.savePartner({
           id: 'embedding-preflight-session',
-          title: 'embedding preflight',
+          name: 'embedding preflight',
+          avatar_shape: 'circle',
+          avatar_color: 'blue',
           created_at: Date.now(),
-          workspace_id: 'test-workspace'
+          updated_at: Date.now(),
+          last_viewed_at: Date.now(),
+          pinned: false,
+          pinned_at: null
         })
-        await writeTestDocxFile(runtime.workspaceRoot, 'semantic-docx.docx', [
+        await writeTestDocxFile(runtime.workspaceRoot, 'literal-docx.docx', [
           {
             type: 'paragraph',
             text: '反走样是在采样不足时出现的锯齿现象。'
@@ -42,25 +48,24 @@ describe('ai human mock-llm backend', () => {
         let ensureReadyCalls = 0
         const initialEmbeddingStatus = runtime.embeddingService.getStatus()
         const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
+        const aiFileChangeService = new AiFileChangeService(runtime.storageService.aiFileChange)
         const result = await AiRunService.getInstance().run(
           {
             runId: runtime.runId,
-            sessionId: 'embedding-preflight-session',
+            partnerId: 'embedding-preflight-session',
             input: '请读取 docx，找到反走样相关内容。',
             mainModel: {
               configId: 'mock-llm-scripted',
               modelName: 'scripted-llm'
             },
-            workspace: {
-              workspaceId: 'test-workspace',
-              workspaceName: 'test-workspace',
-              rootPath: runtime.workspaceRoot
-            }
+            partnerName: '测试伙伴',
+            workspaceRoots: [runtime.workspaceRoot]
           },
           {
             runtimeSettings,
             llmStore: runtime.llmStore,
-            chatStore: runtime.chatStore,
+            partnerStore: runtime.chatStore,
+            chatMessageLogStore: runtime.storageService.chatMessageLog,
             documentsStore: runtime.documentsStore,
             embeddingService: runtime.embeddingService,
             ensureEmbeddingReady: async () => {
@@ -69,10 +74,18 @@ describe('ai human mock-llm backend', () => {
             },
             docxApplyService: runtime.docxApplyService,
             saveFileChangeRecord: async (record) => {
-              await runtime.storageService.aiFileChange.saveRecord(record)
+              await aiFileChangeService.saveRecord(record)
             },
             listFileChangeRecords: async (request) =>
-              (await runtime.storageService.aiFileChange.listRecords(request)).items,
+              (await aiFileChangeService.listRecords(request)).items,
+            beginTerminalCommandTracking: async (tracking) => {
+              await aiFileChangeService.beginTerminalCommandTracking(tracking)
+            },
+            finishTerminalCommandTracking: async (commandId) =>
+              await aiFileChangeService.finishTerminalCommandTracking(commandId),
+            discardTerminalCommandTracking: (commandId) => {
+              aiFileChangeService.discardTerminalCommandTracking(commandId)
+            },
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
@@ -89,25 +102,18 @@ describe('ai human mock-llm backend', () => {
                   output: buildToolDecision({
                     toolName: 'docx_search',
                     args: {
-                      sourcePath: path.join(runtime.workspaceRoot, 'semantic-docx.docx'),
-                      query: '边缘锯齿怎么处理',
-                      mode: 'semantic'
+                      sourcePath: path.join(runtime.workspaceRoot, 'literal-docx.docx'),
+                      query: '锯齿现象',
+                      mode: 'literal'
                     },
-                    summary: '做语义搜索'
+                    summary: '搜索完整原文'
                   })
                 },
                 {
                   output: buildCompleteTaskDecision({
-                    summary: 'embedding preflight 已验证。'
-                  })
-                }
-              ],
-              'human.mouth': [
-                {
-                  output: {
                     summary: 'embedding preflight 已验证。',
                     deliveryMarkdown: '# Embedding Preflight\n\ndocx 读取链路已可用。'
-                  }
+                  })
                 }
               ]
             })
@@ -131,13 +137,12 @@ describe('ai human mock-llm backend', () => {
           result.initialEmbeddingStatus === 'uninitialized' &&
             result.ensureReadyCalls === 1 &&
             result.result.status === 'completed' &&
-            docxSearchResult.mode === 'semantic' &&
-            docxSearchResult.matches.length >= 1 &&
-            typeof docxSearchResult.matches[0]?.score === 'number',
+            docxSearchResult.matches.length === 1 &&
+            docxSearchResult.matches[0]?.matchText === '锯齿现象',
           {
             name: 'ai-run-service-preflights-embedding-before-human',
             message:
-              'AiRunService 应在进入 human 前完成 embedding preflight，并让后续 docx semantic 搜索直接可用。',
+              'AiRunService 应在进入 human 前完成 embedding preflight，DOCX literal 搜索不依赖 embedding。',
             data: {
               initialEmbeddingStatus: result.initialEmbeddingStatus,
               ensureReadyCalls: result.ensureReadyCalls,
@@ -162,25 +167,24 @@ describe('ai human mock-llm backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
+        const aiFileChangeService = new AiFileChangeService(runtime.storageService.aiFileChange)
         const result = await AiRunService.getInstance().run(
           {
             runId: runtime.runId,
-            sessionId: 'embedding-preflight-failure-session',
+            partnerId: 'embedding-preflight-failure-session',
             input: '这轮不应该进入 human。',
             mainModel: {
               configId: 'mock-llm-scripted',
               modelName: 'scripted-llm'
             },
-            workspace: {
-              workspaceId: 'test-workspace',
-              workspaceName: 'test-workspace',
-              rootPath: runtime.workspaceRoot
-            }
+            partnerName: '测试伙伴',
+            workspaceRoots: [runtime.workspaceRoot]
           },
           {
             runtimeSettings,
             llmStore: runtime.llmStore,
-            chatStore: runtime.chatStore,
+            partnerStore: runtime.chatStore,
+            chatMessageLogStore: runtime.storageService.chatMessageLog,
             documentsStore: runtime.documentsStore,
             embeddingService: runtime.embeddingService,
             ensureEmbeddingReady: async () => {
@@ -188,10 +192,18 @@ describe('ai human mock-llm backend', () => {
             },
             docxApplyService: runtime.docxApplyService,
             saveFileChangeRecord: async (record) => {
-              await runtime.storageService.aiFileChange.saveRecord(record)
+              await aiFileChangeService.saveRecord(record)
             },
             listFileChangeRecords: async (request) =>
-              (await runtime.storageService.aiFileChange.listRecords(request)).items,
+              (await aiFileChangeService.listRecords(request)).items,
+            beginTerminalCommandTracking: async (tracking) => {
+              await aiFileChangeService.beginTerminalCommandTracking(tracking)
+            },
+            finishTerminalCommandTracking: async (commandId) =>
+              await aiFileChangeService.finishTerminalCommandTracking(commandId),
+            discardTerminalCommandTracking: (commandId) => {
+              aiFileChangeService.discardTerminalCommandTracking(commandId)
+            },
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
@@ -209,18 +221,20 @@ describe('ai human mock-llm backend', () => {
         const humanSteps = filterAiRunEventsByType(result.events, 'human_step')
 
         runtime.assertThat(
-          result.result.status === 'failed' &&
-            result.result.error === '运行失败，请重试。如果问题持续出现，请查看应用日志。' &&
-            result.result.resumeSnapshotSaved === false &&
+            result.result.status === 'failed' &&
+            result.result.failureCode === 'unexpected_error' &&
+            result.result.error === '运行失败，请重试' &&
+            result.result.failureRawMessage === 'embedding preflight failed for test' &&
             humanSteps.length === 0,
           {
             name: 'ai-run-service-aborts-before-human-on-preflight-failure',
             message:
-              'embedding preflight 失败时，run 应直接失败、不进入 human stage，并隐藏底层错误。',
+              'embedding preflight 失败时，run 应直接失败、不进入 human stage，并保留短标题与原文。',
             data: {
               status: result.result.status,
+              failureCode: result.result.failureCode,
               error: result.result.error,
-              resumeSnapshotSaved: result.result.resumeSnapshotSaved,
+              failureRawMessage: result.result.failureRawMessage,
               humanStepCount: humanSteps.length
             }
           }

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
 import { Empty, Spin } from 'antd'
 import type { SelectedReference } from '../../../../../shared/types'
 import { workbenchSelectors } from '../../../testing/selectors'
@@ -9,10 +9,12 @@ import { getScopeKey } from './utils'
 
 type ReferenceMentionPanelProps = {
   loading: boolean
+  loadingMore: boolean
   options: SelectedReference[]
   activeIndex: number
-  hasWorkspace: boolean
+  hasMore: boolean
   onSelect: (reference: SelectedReference) => void
+  onLoadMore: () => void
 }
 
 type ReferenceMentionGroup = {
@@ -22,6 +24,7 @@ type ReferenceMentionGroup = {
 
 const getReferenceParentDisplayPath = (reference: SelectedReference): string => {
   if (reference.kind === 'web') return reference.url
+  if (!reference.relativePath) return ''
   const pathParts = reference.relativePath.split('/').filter(Boolean)
   pathParts.pop()
   return pathParts.join('/')
@@ -29,11 +32,14 @@ const getReferenceParentDisplayPath = (reference: SelectedReference): string => 
 
 const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
   loading,
+  loadingMore,
   options,
   activeIndex,
-  hasWorkspace,
-  onSelect
+  hasMore,
+  onSelect,
+  onLoadMore
 }) => {
+  const scrollRef = useRef<HTMLDivElement>(null)
   const groups = [
     {
       title: '文件',
@@ -46,21 +52,36 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
   ] satisfies ReferenceMentionGroup[]
   const visibleGroups = groups.filter((group) => group.items.length > 0)
 
+  useEffect(() => {
+    const root = scrollRef.current
+    if (!root) return
+    const active = root.querySelector<HTMLElement>('[data-mention-active="true"]')
+    active?.scrollIntoView({ block: 'nearest' })
+  }, [activeIndex, options])
+
+  const handleScroll = (): void => {
+    const root = scrollRef.current
+    if (!root || loading || loadingMore || !hasMore) return
+    const remaining = root.scrollHeight - root.scrollTop - root.clientHeight
+    if (remaining < 48) onLoadMore()
+  }
+
   return (
     <div
       className="absolute inset-x-0 bottom-full mb-2 overflow-hidden rounded-[14px] border border-[#E5E4E0] bg-white px-2 py-2 shadow-[0_16px_36px_rgba(15,15,15,0.1)]"
       data-testid={workbenchSelectors.mentionPanel}
     >
-      <div className="max-h-[180px] overflow-y-auto pr-1">
+      <div
+        ref={scrollRef}
+        className="max-h-[180px] overflow-y-auto pr-1"
+        onScroll={handleScroll}
+      >
         {loading ? (
           <div className="flex items-center justify-center py-8 text-[#9B9A97]">
             <Spin size="small" />
           </div>
         ) : options.length === 0 ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description={hasWorkspace ? '当前工作区中没有匹配项' : '请先选择工作区'}
-          />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="没有匹配的资料" />
         ) : (
           <div className="space-y-2">
             {visibleGroups.map((group) => (
@@ -91,7 +112,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                         }}
                       >
                         <ReferenceIcon reference={reference} size="sm" />
-                        <span className="min-w-0 flex flex-1 items-center gap-2">
+                        <span className="flex min-w-0 flex-1 items-center gap-2">
                           <span
                             className={`truncate text-[13px] font-normal leading-5 ${visualSpec.labelClassName}`}
                           >
@@ -103,7 +124,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                             </span>
                           ) : null}
                         </span>
-                        <span className="shrink-0 text-[11px] font-medium leading-4 text-[#9B9A97]">
+                        <span className="shrink-0 text-[10px] text-[#B1B0AD]">
                           {getKbAvailabilityLabel(reference.kbAvailability)}
                         </span>
                       </button>
@@ -112,6 +133,11 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                 </div>
               </div>
             ))}
+            {loadingMore ? (
+              <div className="flex justify-center py-2 text-[#9B9A97]">
+                <Spin size="small" />
+              </div>
+            ) : null}
           </div>
         )}
       </div>

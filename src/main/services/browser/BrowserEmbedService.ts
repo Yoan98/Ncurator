@@ -2,7 +2,14 @@ import { randomUUID } from 'node:crypto'
 import { shell, webContents, WebContentsView } from 'electron'
 import type { BrowserWindow, Rectangle, WebContents } from 'electron'
 import { z } from 'zod/v4'
-import type { BrowserActionCandidate, BrowserUsePage, BrowserUseService } from '../ai/types'
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import type {
+  BrowserActionCandidate,
+  BrowserStagehandAction,
+  BrowserUsePage,
+  BrowserUseService
+} from '../ai/types'
 import {
   EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS,
   EMBEDDED_BROWSER_PARTITION,
@@ -12,7 +19,7 @@ import type { CdpEndpointService } from './CdpEndpointService'
 import type { BrowserPanelBoundsState, BrowserUseRunInput, BrowserUseRunResult } from './types'
 import type { BrowserTabState } from '../../../shared/types'
 import { resolveStagehandRuntimeModel } from '../llm/stagehandModel'
-import { BrowserActionVisualizer } from './BrowserActionVisualizer'
+import { BrowserActionVisualizer, createHideCursorScript } from './BrowserActionVisualizer'
 import { BrowserMenuWindowService } from './BrowserMenuWindowService'
 import type {
   BrowserTabStateStore,
@@ -51,35 +58,91 @@ const normalizeUrl = (rawUrl: string): string => {
   return parsed.toString()
 }
 
-const waitForWebContentsLoad = async (contents: WebContents): Promise<void> => {
-  if (!contents.isLoadingMainFrame()) return
-  await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(
-      () => finish(new Error('浏览器页面加载超时')),
-      EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS
+const createCancelledError = (): Error & { code: 'CANCELLED' } => {
+  const error = new Error('cancelled') as Error & { code: 'CANCELLED' }
+  error.code = 'CANCELLED'
+  return error
+}
+
+const raceAbort = async <T>(
+  promise: Promise<T>,
+  signal: AbortSignal | undefined,
+  onAbort?: () => void | Promise<void>
+): Promise<T> => {
+  if (!signal) return promise
+  if (signal.aborted) {
+    void Promise.resolve(onAbort?.()).catch(() => undefined)
+    throw createCancelledError()
+  }
+  return await new Promise<T>((resolve, reject) => {
+    const onAbortEvent = (): void => {
+      signal.removeEventListener('abort', onAbortEvent)
+      void Promise.resolve(onAbort?.()).catch(() => undefined)
+      reject(createCancelledError())
+    }
+    signal.addEventListener('abort', onAbortEvent, { once: true })
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbortEvent)
+        resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbortEvent)
+        reject(error)
+      }
     )
-    const cleanup = (): void => {
-      clearTimeout(timeout)
-      contents.removeListener('did-finish-load', onDone)
-      contents.removeListener('did-stop-loading', onDone)
-      contents.removeListener('did-fail-load', onFail)
-    }
-    const finish = (error?: Error): void => {
-      cleanup()
-      error ? reject(error) : resolve()
-    }
-    const onDone = (): void => finish()
-    const onFail = (_event: Electron.Event, _code: number, description: string): void =>
-      finish(new Error(description || '浏览器页面加载失败'))
-    contents.once('did-finish-load', onDone)
-    contents.once('did-stop-loading', onDone)
-    contents.once('did-fail-load', onFail)
   })
 }
 
-const loadWebContentsUrl = async (contents: WebContents, url: string): Promise<void> => {
-  await contents.loadURL(url)
-  await waitForWebContentsLoad(contents)
+const waitForWebContentsLoad = async (
+  contents: WebContents,
+  signal?: AbortSignal
+): Promise<void> => {
+  if (!contents.isLoadingMainFrame()) return
+  await raceAbort(
+    new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(
+        () => finish(new Error('浏览器页面加载超时')),
+        EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS
+      )
+      const cleanup = (): void => {
+        clearTimeout(timeout)
+        contents.removeListener('did-finish-load', onDone)
+        contents.removeListener('did-stop-loading', onDone)
+        contents.removeListener('did-fail-load', onFail)
+      }
+      const finish = (error?: Error): void => {
+        cleanup()
+        error ? reject(error) : resolve()
+      }
+      const onDone = (): void => finish()
+      const onFail = (_event: Electron.Event, _code: number, description: string): void =>
+        finish(new Error(description || '浏览器页面加载失败'))
+      contents.once('did-finish-load', onDone)
+      contents.once('did-stop-loading', onDone)
+      contents.once('did-fail-load', onFail)
+    }),
+    signal,
+    () => {
+      if (!contents.isDestroyed()) contents.stop()
+    }
+  )
+}
+
+const loadWebContentsUrl = async (
+  contents: WebContents,
+  url: string,
+  signal?: AbortSignal
+): Promise<void> => {
+  await raceAbort(contents.loadURL(url), signal, () => {
+    if (!contents.isDestroyed()) contents.stop()
+  })
+  await waitForWebContentsLoad(contents, signal)
+}
+
+/** User/UI navigation: start load immediately without waiting for did-finish-load. */
+const startWebContentsUrl = (contents: WebContents, url: string): void => {
+  void contents.loadURL(url).catch(() => undefined)
 }
 
 const stringifyStagehandExtraction = (value: object): string =>
@@ -87,14 +150,27 @@ const stringifyStagehandExtraction = (value: object): string =>
     ? value.extraction
     : JSON.stringify(value)
 
-const toBrowserActionCandidate = (action: {
+const toBrowserStagehandAction = (action: {
   description: string
   method?: string
   arguments?: string[]
-}): BrowserActionCandidate => ({
+  selector?: string
+}): BrowserStagehandAction => ({
   description: action.description,
-  ...(action.method ? { method: action.method } : {}),
-  ...(action.arguments ? { arguments: action.arguments } : {})
+  method: action.method || 'click',
+  arguments: Array.isArray(action.arguments) ? action.arguments.map(String) : [],
+  selector: action.selector || ''
+})
+
+const toBrowserActionCandidate = (
+  actionId: string,
+  action: BrowserStagehandAction
+): BrowserActionCandidate => ({
+  actionId,
+  description: action.description,
+  method: action.method,
+  arguments: action.arguments,
+  selector: action.selector
 })
 
 const toBrowserUsePage = (url: string, title?: string): BrowserUsePage => ({
@@ -110,11 +186,24 @@ const clampZoomFactor = (value: number): number =>
 
 export class BrowserEmbedService implements BrowserUseService {
   private readonly tabs = new Map<string, BrowserTabRuntime>()
+  private readonly runTabMap = new Map<string, Set<string>>()
   private readonly hydratedOwnerIds = new Set<string>()
   private activeTabId: string | null = null
   private presentedTabId: string | null = null
   private presentationId = 0
   private bounds: BrowserPanelBoundsState = EMPTY_BOUNDS
+  // 垂直 inset（顶/底到内容边缘的固定距离）来自 renderer 的权威 bounds；
+  // 水平锚点（splitLeft/rightMargin/ratio）来自 renderer 的布局注册。
+  // 两者齐备后，窗口 resize 时主进程可同进程实时重算 bounds。
+  private verticalInset: { top: number; bottom: number } | null = null
+  private followLayout: {
+    splitLeft: number
+    rightMargin: number
+    ratio: number
+    minWidth: number
+    middleMin: number
+    maxRatio: number
+  } | null = null
   private readonly menuWindowService: BrowserMenuWindowService
   public constructor(
     private readonly mainWindow: BrowserWindow,
@@ -122,6 +211,52 @@ export class BrowserEmbedService implements BrowserUseService {
     private readonly stateStore: BrowserTabStateStore
   ) {
     this.menuWindowService = new BrowserMenuWindowService(mainWindow)
+    this.mainWindow.on('resize', this.handleWindowResize)
+    this.mainWindow.once('closed', () => {
+      this.mainWindow.removeListener('resize', this.handleWindowResize)
+    })
+  }
+
+  private readonly handleWindowResize = (): void => {
+    if (!this.presentedTabId || !this.followLayout || !this.verticalInset) return
+    if (this.mainWindow.isDestroyed()) return
+    const content = this.mainWindow.getContentBounds()
+    const next = this.computeFollowBounds(content.width, content.height)
+    if (!next) return
+    this.bounds = next
+    this.applyAllVisibility()
+  }
+
+  private computeFollowBounds(
+    contentWidth: number,
+    contentHeight: number
+  ): BrowserPanelBoundsState | null {
+    const fl = this.followLayout
+    const vi = this.verticalInset
+    if (!fl || !vi || contentWidth <= 0 || contentHeight <= 0) return null
+    const splitWidth = Math.max(1, contentWidth - fl.splitLeft - fl.rightMargin)
+    const maxByMiddle = Math.max(0, splitWidth - fl.middleMin)
+    const maxByRatio = splitWidth * fl.maxRatio
+    const maxWidth = Math.max(0, Math.min(maxByMiddle, maxByRatio))
+    if (maxWidth <= 0) return null
+    const minWidth = Math.min(fl.minWidth, maxWidth)
+    const width = Math.round(Math.max(minWidth, Math.min(maxWidth, splitWidth * fl.ratio)))
+    const x = Math.round(contentWidth - fl.rightMargin - width)
+    const height = Math.round(contentHeight - vi.top - vi.bottom)
+    if (width <= 0 || height <= 0) return null
+    return { x, y: Math.round(vi.top), width, height }
+  }
+
+  public setFollowLayout(layout: {
+    splitLeft: number
+    rightMargin: number
+    ratio: number
+    minWidth: number
+    middleMin: number
+    maxRatio: number
+  }): void {
+    if (!Number.isFinite(layout.ratio) || layout.ratio <= 0) return
+    this.followLayout = layout
   }
 
   public listTabs(ownerId: string): BrowserTabState[] {
@@ -240,7 +375,12 @@ export class BrowserEmbedService implements BrowserUseService {
       runtime.ready = null
       runtime.attached = false
       runtime.visible = false
-      void this.ensureReady(runtime)
+      void this.ensureReady(runtime).then(() => {
+        if (this.presentedTabId === tabId) this.applyAllVisibility()
+      })
+    } else {
+      // 后台加载完成后再挂载时，强制重绘，避免地址栏有 URL 但视口白屏。
+      this.forcePresentedPaint(runtime)
     }
     this.emitState(runtime)
     return this.presentationId
@@ -255,7 +395,26 @@ export class BrowserEmbedService implements BrowserUseService {
 
   public setBounds(tabId: string, presentationId: number, bounds: BrowserPanelBoundsState): void {
     if (!this.isCurrentPresentation(tabId, presentationId)) return
+    // renderer 的 bounds 是权威值：顺带刷新垂直 inset，供窗口 resize 时主进程实时跟随。
+    if (!this.mainWindow.isDestroyed()) {
+      const contentHeight = this.mainWindow.getContentBounds().height
+      if (contentHeight > 0 && bounds.height > 0) {
+        this.verticalInset = {
+          top: bounds.y,
+          bottom: Math.max(0, contentHeight - (bounds.y + bounds.height))
+        }
+      }
+    }
+    const prev = this.bounds
+    const unchanged =
+      Math.round(prev.x) === Math.round(bounds.x) &&
+      Math.round(prev.y) === Math.round(bounds.y) &&
+      Math.round(prev.width) === Math.round(bounds.width) &&
+      Math.round(prev.height) === Math.round(bounds.height)
     this.bounds = bounds
+    const runtime = this.tabs.get(tabId)
+    // bounds 相同也必须继续 apply：show 时 view 可能尚未创建，或 hide 后未重新挂载。
+    if (unchanged && runtime?.attached && runtime.visible) return
     this.applyAllVisibility()
   }
 
@@ -263,7 +422,12 @@ export class BrowserEmbedService implements BrowserUseService {
     const runtime = this.requireTab(tabId || this.activeTabId)
     const url = normalizeUrl(rawUrl)
     const view = await this.ensureReady(runtime)
-    await loadWebContentsUrl(view.webContents, url)
+    runtime.persisted.url = url
+    runtime.persisted.updatedAt = Date.now()
+    this.stateStore.save(runtime.persisted)
+    // Emit target URL before load finishes so the panel address bar updates immediately.
+    this.emitState(runtime)
+    startWebContentsUrl(view.webContents, url)
     this.captureRuntimeState(runtime)
   }
 
@@ -305,7 +469,8 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   public openExternal(tabId: string): void {
-    const url = this.requireTab(tabId).view?.webContents.getURL()
+    const runtime = this.requireTab(tabId)
+    const url = runtime.view?.webContents.getURL() || runtime.persisted.url
     if (url) void shell.openExternal(url)
   }
 
@@ -318,8 +483,7 @@ export class BrowserEmbedService implements BrowserUseService {
       actions: {
         zoomIn: () => this.zoomIn(tabId),
         zoomOut: () => this.zoomOut(tabId),
-        zoomReset: () => this.zoomReset(tabId),
-        openExternal: () => this.openExternal(tabId)
+        zoomReset: () => this.zoomReset(tabId)
       }
     })
   }
@@ -368,18 +532,86 @@ export class BrowserEmbedService implements BrowserUseService {
     return this.toState(runtime)
   }
 
+  public getActiveTabId(): string | null {
+    return this.activeTabId
+  }
+
   public async run(input: BrowserUseRunInput): Promise<BrowserUseRunResult> {
-    const runtime = this.requireTab(input.tabId || this.activeTabId)
+    if (input.action === 'list_tabs') {
+      const tabs = this.listTabs(input.ownerId)
+      return {
+        action: 'list_tabs',
+        tabs: tabs.map((tab) => ({
+          tabId: tab.id,
+          title: tab.title || tab.url || 'Untitled',
+          url: tab.url || '',
+          active: tab.id === this.activeTabId
+        })),
+        result: null
+      }
+    }
+
     if (input.action === 'navigate') {
-      await this.navigate(input.url, runtime.persisted.id)
+      const tabId = input.tabId
+        ? this.requireTab(input.tabId).persisted.id
+        : (await this.createTab(input.ownerId)).id
+      if (input.abortSignal?.aborted) throw createCancelledError()
+      if (input.runId) {
+        this.trackRunTab(input.runId, tabId)
+      }
+      const runtime = this.requireTab(tabId)
       const view = await this.ensureReady(runtime)
+      if (input.abortSignal?.aborted) throw createCancelledError()
+      const url = normalizeUrl(input.url)
+      runtime.persisted.url = url
+      runtime.persisted.updatedAt = Date.now()
+      this.stateStore.save(runtime.persisted)
+      this.emitState(runtime)
+      await loadWebContentsUrl(view.webContents, url, input.abortSignal)
+      this.captureRuntimeState(runtime)
       return {
         action: 'navigate',
+        tabId,
         page: toBrowserUsePage(view.webContents.getURL(), view.webContents.getTitle()),
         result: null
       }
     }
+
+    if (input.runId && input.tabId) {
+      this.trackRunTab(input.runId, input.tabId)
+    }
+
+    const runtime = this.requireTab(input.tabId)
     return await this.runDom(input, runtime)
+  }
+
+  public async releaseRun(runId: string): Promise<void> {
+    const normalizedRunId = String(runId || '').trim()
+    if (!normalizedRunId) return
+    const tabIds = this.runTabMap.get(normalizedRunId)
+    this.runTabMap.delete(normalizedRunId)
+    if (!tabIds || tabIds.size === 0) return
+
+    const hideScript = createHideCursorScript()
+    await Promise.allSettled(
+      [...tabIds].map(async (tabId) => {
+        const runtime = this.tabs.get(tabId)
+        if (!runtime?.view || runtime.view.webContents.isDestroyed()) return
+        await runtime.view.webContents.executeJavaScript(hideScript).catch(() => undefined)
+      })
+    )
+  }
+
+  private trackRunTab(runId: string, tabId: string): void {
+    const normalizedRunId = String(runId || '').trim()
+    const normalizedTabId = String(tabId || '').trim()
+    if (!normalizedRunId || !normalizedTabId) return
+    let tabIds = this.runTabMap.get(normalizedRunId)
+    if (!tabIds) {
+      tabIds = new Set()
+      this.runTabMap.set(normalizedRunId, tabIds)
+    }
+    tabIds.add(normalizedTabId)
   }
 
   public async dispose(): Promise<void> {
@@ -421,10 +653,20 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   private async ensureReady(runtime: BrowserTabRuntime): Promise<WebContentsView> {
-    if (runtime.view && runtime.ready) {
+    if (runtime.ready) {
       await runtime.ready
-      return runtime.view
+      if (runtime.view && !runtime.view.webContents.isDestroyed()) return runtime.view
+      runtime.view = null
+      runtime.ready = null
+      runtime.attached = false
+      runtime.visible = false
     }
+
+    let resolveReady: (() => void) | undefined
+    runtime.ready = new Promise<void>((resolve) => {
+      resolveReady = resolve
+    })
+
     const view = new WebContentsView({
       webPreferences: {
         backgroundThrottling: false,
@@ -438,9 +680,13 @@ export class BrowserEmbedService implements BrowserUseService {
     runtime.view = view
     runtime.attached = false
     this.bindViewEvents(runtime, view)
-    runtime.ready = this.restoreRuntime(runtime, view)
     this.applyAllVisibility()
-    await runtime.ready
+    try {
+      await this.restoreRuntime(runtime, view)
+    } finally {
+      resolveReady?.()
+      if (this.presentedTabId === runtime.persisted.id) this.applyAllVisibility()
+    }
     return view
   }
 
@@ -464,23 +710,46 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   private async restoreRuntime(runtime: BrowserTabRuntime, view: WebContentsView): Promise<void> {
-    view.webContents.setZoomFactor(clampZoomFactor(runtime.persisted.zoomFactor || 1))
-    const history = runtime.persisted.history
-    if (history?.entries.length) {
-      runtime.restoring = true
-      try {
+    const restoredZoom = clampZoomFactor(runtime.persisted.zoomFactor || 1)
+    const restoredHistory = runtime.persisted.history
+      ? {
+          entries: runtime.persisted.history.entries.map((entry) => ({ ...entry })),
+          index: runtime.persisted.history.index
+        }
+      : undefined
+
+    runtime.restoring = true
+    try {
+      view.webContents.setZoomFactor(restoredZoom)
+      if (restoredHistory?.entries.length) {
         await view.webContents.navigationHistory.restore({
-          entries: history.entries,
-          index: history.index
+          entries: restoredHistory.entries,
+          index: restoredHistory.index
         })
-      } finally {
-        runtime.restoring = false
+        await waitForWebContentsLoad(view.webContents)
+      } else if (runtime.persisted.url) {
+        await loadWebContentsUrl(view.webContents, runtime.persisted.url)
       }
-      this.captureRuntimeState(runtime)
-      this.emitState(runtime)
-      return
+      // Navigation restore often resets zoom to 1; re-apply the persisted factor after load.
+      view.webContents.setZoomFactor(restoredZoom)
+      runtime.persisted.zoomFactor = restoredZoom
+      if (restoredHistory?.entries.length) {
+        runtime.persisted.history = restoredHistory
+      }
+      runtime.persisted.updatedAt = Date.now()
+      this.stateStore.save(runtime.persisted)
+    } finally {
+      runtime.restoring = false
     }
-    if (runtime.persisted.url) await loadWebContentsUrl(view.webContents, runtime.persisted.url)
+    this.emitState(runtime)
+  }
+
+  private forcePresentedPaint(runtime: BrowserTabRuntime): void {
+    if (!runtime.view || runtime.view.webContents.isDestroyed()) return
+    if (runtime.persisted.id !== this.presentedTabId) return
+    if (this.bounds.width <= 0 || this.bounds.height <= 0) return
+    runtime.view.setVisible(true)
+    runtime.view.webContents.invalidate()
   }
 
   private applyAllVisibility(): void {
@@ -499,13 +768,14 @@ export class BrowserEmbedService implements BrowserUseService {
           width: Math.max(1, Math.round(this.bounds.width)),
           height: Math.max(1, Math.round(this.bounds.height))
         }
+        const becomingVisible = !runtime.visible || !runtime.attached
         if (!runtime.attached) {
           this.mainWindow.contentView.addChildView(runtime.view)
           runtime.attached = true
         }
         runtime.view.setBounds(nextBounds)
         runtime.view.setVisible(true)
-        if (!runtime.visible) {
+        if (becomingVisible) {
           runtime.view.webContents.invalidate()
         }
       } else {
@@ -513,6 +783,7 @@ export class BrowserEmbedService implements BrowserUseService {
           this.mainWindow.contentView.removeChildView(runtime.view)
           runtime.attached = false
         }
+        runtime.view.setVisible(false)
       }
       runtime.visible = visible
     }
@@ -533,9 +804,17 @@ export class BrowserEmbedService implements BrowserUseService {
     if (runtime.restoring) return
     const contents = runtime.view?.webContents
     if (!contents || contents.isDestroyed()) return
-    runtime.persisted.url = contents.getURL()
+    const nextUrl = contents.getURL()
+    // Keep the optimistic navigate target until webContents reports a real URL.
+    if (nextUrl) runtime.persisted.url = nextUrl
     runtime.persisted.title = contents.getTitle().trim() || undefined
-    runtime.persisted.zoomFactor = contents.getZoomFactor()
+    // Zoom is owned by changeZoom / restoreRuntime. Do not mirror getZoomFactor() here:
+    // navigation restore briefly reports 1.0 and would wipe the persisted zoom.
+    // Navigation also resets Electron's live factor — re-apply the owned value.
+    const ownedZoom = clampZoomFactor(runtime.persisted.zoomFactor || 1)
+    if (Math.abs(contents.getZoomFactor() - ownedZoom) > 0.001) {
+      contents.setZoomFactor(ownedZoom)
+    }
     runtime.persisted.updatedAt = Date.now()
     const entries = contents.navigationHistory.getAllEntries()
     if (entries.length) {
@@ -569,9 +848,8 @@ export class BrowserEmbedService implements BrowserUseService {
       ...(contents?.getTitle().trim() || runtime.persisted.title
         ? { title: contents?.getTitle().trim() || runtime.persisted.title }
         : {}),
-      zoomPercent: Math.round(
-        (contents?.getZoomFactor() || runtime.persisted.zoomFactor || 1) * 100
-      ),
+      // Prefer persisted zoom: live getZoomFactor() is briefly 1.0 across navigations.
+      zoomPercent: Math.round((runtime.persisted.zoomFactor || contents?.getZoomFactor() || 1) * 100),
       canGoBack: history?.canGoBack() || Boolean(persistedHistory && persistedHistory.index > 0),
       canGoForward:
         history?.canGoForward() ||
@@ -624,15 +902,23 @@ export class BrowserEmbedService implements BrowserUseService {
   }
 
   private async runDom(
-    input: Extract<BrowserUseRunInput, { action: 'extract' | 'observe' | 'act' }>,
+    input: Extract<
+      BrowserUseRunInput,
+      { action: 'extract' | 'observe' | 'act' | 'act_instruction' | 'screenshot' | 'scroll' }
+    >,
     runtime: BrowserTabRuntime
   ): Promise<BrowserUseRunResult> {
+    const signal = input.abortSignal
     const view = await this.ensureReady(runtime)
-    await waitForWebContentsLoad(view.webContents)
+    await waitForWebContentsLoad(view.webContents, signal)
+    const tabId = runtime.persisted.id
     const stagehandModule = await import('@browserbasehq/stagehand')
     const cdpUrl = await this.getCdpWebSocketUrl()
     const targetId = await this.resolveDevToolsTargetId(view.webContents)
     const runtimeModel = resolveStagehandRuntimeModel(input.llmConfig)
+    if (runtimeModel.mode === 'langchain-client') {
+      runtimeModel.llmClient.setAbortSignal(signal)
+    }
     const stagehand = new stagehandModule.Stagehand({
       env: 'LOCAL',
       disablePino: true,
@@ -645,48 +931,153 @@ export class BrowserEmbedService implements BrowserUseService {
       actTimeoutMs: EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS,
       domSettleTimeout: 1_000
     })
+    const abortStagehand = (): Promise<void> => this.closeStagehand(stagehand)
     try {
-      await stagehand.init()
+      await raceAbort(stagehand.init(), signal, abortStagehand)
       const page = stagehand.context.pages().find((candidate) => candidate.targetId() === targetId)
       if (!page) throw new Error('Stagehand target page not found')
       stagehand.context.setActivePage(page)
-      const title = await page.title()
+      const title = await raceAbort(page.title(), signal, abortStagehand)
+      const pageInfo = toBrowserUsePage(page.url(), title)
+
       if (input.action === 'extract') {
-        const result = await stagehand.extract(input.instruction, { page })
+        const result = await raceAbort(stagehand.extract(input.instruction, { page }), signal, abortStagehand)
         return {
           action: 'extract',
-          page: toBrowserUsePage(page.url(), title),
+          tabId,
+          page: pageInfo,
           result: { extracted: stringifyStagehandExtraction(result) }
         }
       }
+
       if (input.action === 'observe') {
-        const actions = await stagehand.observe(input.instruction, { page })
+        const actions = await raceAbort(
+          stagehand.observe(input.instruction, { page }),
+          signal,
+          abortStagehand
+        )
         return {
           action: 'observe',
-          page: toBrowserUsePage(page.url(), title),
-          result: { actions: actions.map(toBrowserActionCandidate) }
+          tabId,
+          page: pageInfo,
+          result: { actions: actions.map(toBrowserStagehandAction) }
         }
       }
+
+      if (input.action === 'screenshot') {
+        await fs.mkdir(path.dirname(input.screenshotPath), { recursive: true })
+        await raceAbort(
+          page.screenshot({
+            fullPage: false,
+            animations: 'disabled',
+            caret: 'hide',
+            scale: 'device',
+            path: input.screenshotPath,
+            type: 'png'
+          }),
+          signal,
+          abortStagehand
+        )
+        return {
+          action: 'screenshot',
+          tabId,
+          page: pageInfo,
+          result: { path: input.screenshotPath }
+        }
+      }
+
+      if (input.action === 'scroll') {
+        const percentage = Math.max(1, Math.min(200, input.percentage ?? 80))
+        const direction = input.direction ?? 'down'
+        const { w, h } = (await raceAbort(
+          page.mainFrame().evaluate('({ w: window.innerWidth, h: window.innerHeight })'),
+          signal,
+          abortStagehand
+        )) as { w: number; h: number }
+        const scrollDistance = Math.round((h * percentage) / 100)
+        const cx = Math.floor(w / 2)
+        const cy = Math.floor(h / 2)
+        const deltaY = direction === 'up' ? -scrollDistance : scrollDistance
+
+        await raceAbort(page.scroll(cx, cy, 0, deltaY), signal, abortStagehand)
+        await raceAbort(page.waitForTimeout(300), signal, abortStagehand)
+
+        return {
+          action: 'scroll',
+          tabId,
+          page: toBrowserUsePage(page.url(), await page.title()),
+          result: {
+            message: `Scrolled ${percentage}% ${direction} (${scrollDistance}px)`,
+            scrolledPixels: scrollDistance
+          }
+        }
+      }
+
+      if (input.action === 'act_instruction') {
+        const visualizer = new BrowserActionVisualizer()
+        await visualizer.prepare(page)
+        const listener = (event: unknown): void => visualizer.handleFlowEvent(page, event)
+        stagehand.bus.on('*', listener)
+        let result: Awaited<ReturnType<StagehandInstance['act']>>
+        try {
+          result = await raceAbort(
+            stagehand.act(input.instruction, { page }),
+            signal,
+            abortStagehand
+          )
+        } finally {
+          stagehand.bus.off('*', listener)
+          await visualizer.flush()
+        }
+        return {
+          action: 'act_instruction',
+          tabId,
+          page: toBrowserUsePage(page.url(), await page.title()),
+          result: {
+            success: result.success,
+            message: result.message,
+            actionDescription: result.actionDescription || input.instruction
+          }
+        }
+      }
+
+      if (input.action !== 'act') {
+        throw new Error(`unsupported browser run action: ${String(input.action)}`)
+      }
+
       const visualizer = new BrowserActionVisualizer()
       await visualizer.prepare(page)
       const listener = (event: unknown): void => visualizer.handleFlowEvent(page, event)
       stagehand.bus.on('*', listener)
       let result: Awaited<ReturnType<StagehandInstance['act']>>
       try {
-        result = await stagehand.act(input.instruction, { page })
+        result = await raceAbort(
+          stagehand.act(
+            {
+              selector: input.stagehandAction.selector,
+              description: input.stagehandAction.description,
+              method: input.stagehandAction.method,
+              arguments: input.stagehandAction.arguments
+            },
+            { page }
+          ),
+          signal,
+          abortStagehand
+        )
       } finally {
         stagehand.bus.off('*', listener)
         await visualizer.flush()
-        await visualizer.hide(page)
       }
+      const executed = toBrowserActionCandidate(input.actionId, input.stagehandAction)
       return {
         action: 'act',
+        tabId,
         page: toBrowserUsePage(page.url(), await page.title()),
         result: {
           success: result.success,
           message: result.message,
-          actionDescription: result.actionDescription,
-          actions: result.actions.map(toBrowserActionCandidate)
+          actionDescription: result.actionDescription || input.stagehandAction.description,
+          executed
         }
       }
     } finally {

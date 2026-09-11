@@ -6,6 +6,7 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
+  buildLearnSkillsDecision,
   buildToolDecision,
   filterAiRunEventsByType
 } from '../testUtils'
@@ -21,7 +22,7 @@ describe('ai human mock-llm image generation backend', () => {
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证 human 直接使用 builtin 图片生成工具生成图片并完成交付。',
+      description: '验证 human 学习图片生成技能后生成图片并完成交付。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
@@ -30,20 +31,23 @@ describe('ai human mock-llm image generation backend', () => {
           structuredOutputScript: {
             'human.brain': [
               {
+                output: buildLearnSkillsDecision({
+                  skillIds: ['image-generation'],
+                  summary: '学习图片生成技能。'
+                })
+              },
+              {
                 output: buildToolDecision({
                   toolName: 'image_generate',
                   args: { outputPath, svg: SVG },
                   summary: '生成目标图片'
                 })
               },
-              { output: buildCompleteTaskDecision({ summary: '图片已生成。' }) }
-            ],
-            'human.mouth': [
               {
-                output: {
+                output: buildCompleteTaskDecision({
                   summary: '图片已生成。',
                   deliveryMarkdown: '图片已生成：human-generated.png'
-                }
+                })
               }
             ]
           }
@@ -70,7 +74,6 @@ describe('ai human mock-llm image generation backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             stages.has('human_hand') &&
-            stages.has('human_mouth') &&
             starts.filter((event) => event.toolName === 'image_generate').length === 1 &&
             artifacts.some(
               (event) =>

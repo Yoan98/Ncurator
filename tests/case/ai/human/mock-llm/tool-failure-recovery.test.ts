@@ -33,16 +33,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '工具失败已被识别并吸收。'
-                })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
                   summary: '工具失败已被识别并吸收。',
                   deliveryMarkdown: '# Failure Recovery\n\n已确认命令失败，并在最终结果中说明限制。'
-                }
+                })
               }
             ]
           }
@@ -62,20 +55,19 @@ describe('ai human mock-llm backend', () => {
         const toolResults = filterAiRunEventsByType(result.events, 'tool_call_result')
         const failedResult = toolResults.find((event) => event.toolName === 'terminal_run')
         const terminalData = failedResult?.result?.data
-        const exitCode =
+        const status =
           typeof terminalData === 'object' &&
           terminalData !== null &&
           !Array.isArray(terminalData) &&
-          typeof terminalData.exitCode === 'number'
-            ? terminalData.exitCode
+          typeof terminalData.status === 'string'
+            ? terminalData.status
             : null
 
         runtime.assertThat(
           result.output.status === 'completed' &&
             Boolean(failedResult) &&
             failedResult?.result?.ok === true &&
-            exitCode !== null &&
-            exitCode !== 0,
+            status === 'failed',
           {
             name: 'human-recovers-from-real-tool-failure',
             message: '终端命令非零退出后，human 仍应识别失败事实并继续完成最终交付。',

@@ -1,27 +1,23 @@
 import { BrowserWindow } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
-import { Jieba } from '@node-rs/jieba'
-import { dict } from '@node-rs/jieba/dict'
 import { AiRunService } from './AiRunService'
-import { toRendererRunFailure } from './errors'
-import {
-  buildConversationMemorySummary,
-  CONVERSATION_MEMORY_RECENT_TURNS,
-  CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
-} from './memory'
+import { getPartnerDigestCoordinator } from './human/memory/partnerDigestCoordinator'
+import { settleStalePendingDigests } from './human/node/brainNode/runDigest'
+import { classifyThrownErrorToAiRunFailure } from './utils/runFailure'
+import { resolveAiRunFailurePresentation } from './runFailureCatalog'
 import { terminalSessionManager } from './human/tools/terminal/TerminalSessionManager'
 import type { AiRunResourceManager } from './run/AiRunResourceManager'
-import { normalizeSelectedReferences, normalizeWorkspaceBinding } from './utils/runContext'
+import { normalizeSelectedReferences } from './utils/runContext'
 import { validateSelectedReferencesForRun } from '../sourceScope/validation'
-import { normalizeForIpc } from '../../utils/serialization'
 import type { AiFileChangeService } from './fileChanges/AiFileChangeService'
 import type { DocxApplyService } from './human/tools/docx/review/DocxApplyService'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
-import type { ChatStore } from '../storage/domains/ChatStore'
+import type { PartnerStore } from '../storage/domains/PartnerStore'
 import type { AiRunStore } from '../storage/domains/AiRunStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
 import type { AiRuntimeSettingsStore } from '../storage/domains/AiRuntimeSettingsStore'
 import type { WorkspaceStore } from '../storage/domains/WorkspaceStore'
+import type { WorkspaceIndexJobStore } from '../storage/domains/WorkspaceIndexJobStore'
 import type { WebSourceStore } from '../storage/domains/WebSourceStore'
 import type { EmbeddingService } from '../vector/EmbeddingService'
 import type { BrowserEmbedService } from '../browser/BrowserEmbedService'
@@ -29,6 +25,7 @@ import type { WebCrawlerService } from '../webCrawler/types'
 import type { TelemetryService } from '../telemetry/TelemetryService'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 import type { AiRunDeps } from './types'
+import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
@@ -39,22 +36,20 @@ import type {
   AiRunApprovalBatchDecisionRequest,
   AiRunApprovalBatchDecisionResponse,
   AiRunCancelResponse,
-  AiRunUserTakeoverConfirmRequest,
-  AiRunUserTakeoverConfirmResponse,
   AiRunEvent,
   AiRunRecord,
-  ChatRunEventsResponse,
   ChatMessage,
-  ChatSessionOpenResponse,
-  ChatSessionRunSummariesResponse,
-  ChatSessionSnapshotResponse,
+  PartnerClearContextResponse,
+  PartnerOpenRequest,
+  PartnerOpenResponse,
+  PartnerRunSummariesResponse,
+  PartnerSnapshotResponse,
   ChatTurnRetractLatestRequest,
   ChatTurnRetractLatestResponse,
   ChatSubmitRequest,
   ChatSubmitResponse
 } from '../../../shared/types'
-
-type ConversationMemorySummaryBuilder = typeof buildConversationMemorySummary
+import { projectAiConversationMessages } from '../../../shared/workbench/conversationProjection'
 
 type ActiveApproval = {
   batchId: string
@@ -73,12 +68,6 @@ type ActiveApproval = {
   ) => void
 }
 
-type ActiveUserTakeover = {
-  requestId: string
-  taskId: string
-  resolve: (result: { confirmed: true } | { confirmed: false; error: string }) => void
-}
-
 type ActiveRun = {
   run: AiRunRecord
   cancelled: boolean
@@ -89,13 +78,15 @@ type ActiveRun = {
 }
 
 type ChatRunServiceDeps = {
-  chatStore: ChatStore
+  partnerStore: PartnerStore
+  chatMessageLogStore: ChatMessageLogStore
   aiRunStore: AiRunStore
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   llmStore: LlmConfigStore
   aiRuntimeSettingsStore: AiRuntimeSettingsStore
   workspaceStore: WorkspaceStore
+  workspaceIndexJobStore: WorkspaceIndexJobStore
   webSourceStore: WebSourceStore
   ensureEmbeddingReady: () => Promise<void>
   docxApplyService: DocxApplyService
@@ -108,7 +99,6 @@ type ChatRunServiceDeps = {
   recordLlmIo?: (record: AiLlmIoRecord) => void
   broadcastEvent?: (event: AiRunEvent) => void
   autoStartRuns?: boolean
-  conversationMemorySummaryBuilder?: ConversationMemorySummaryBuilder
   resolveHumanRuntimeOverrides?: (
     run: AiRunRecord
   ) => AiRunDeps['humanRuntimeOverrides'] | undefined
@@ -118,12 +108,7 @@ type ChatRunServiceDeps = {
   ) => void | Promise<void>
 }
 
-const jieba = Jieba.withDict(dict)
-const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = [
-  'running',
-  'waiting_approval',
-  'waiting_user_takeover'
-]
+const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = ['running', 'waiting_approval']
 const INTERRUPTED_RUN_MESSAGE = '运行已中断，请重新发送消息。'
 const PARTIAL_SAVE_DELAY_MS = 500
 
@@ -132,8 +117,7 @@ const normalizeAiPreference = (value: unknown): AiPreference =>
 
 const normalizeExecutionPermission = (
   value: AiExecutionPermission | undefined
-): AiExecutionPermission =>
-  value === 'full_access' ? 'full_access' : 'review'
+): AiExecutionPermission => (value === 'full_access' ? 'full_access' : 'review')
 
 const appendArtifact = (artifacts: AiArtifactRef[] | undefined, artifact: AiArtifactRef) => {
   const current = artifacts || []
@@ -144,17 +128,53 @@ const appendArtifact = (artifacts: AiArtifactRef[] | undefined, artifact: AiArti
   return [...current, artifact]
 }
 
-const isSnapshotEvent = (event: AiRunEvent): boolean =>
-  event.type !== 'answer_token' && event.type !== 'llm_stream_delta'
-
 export class ChatRunService {
   private readonly activeRuns = new Map<string, ActiveRun>()
   private readonly activeApprovals = new Map<string, ActiveApproval>()
-  private readonly activeUserTakeovers = new Map<string, ActiveUserTakeover>()
-  private readonly conversationMemoryJobs = new Map<string, Promise<void>>()
-  private readonly pendingSessionSubmissions = new Set<string>()
+  private readonly pendingPartnerSubmissions = new Set<string>()
 
   public constructor(private readonly deps: ChatRunServiceDeps) {}
+
+  private async loadProjectedPartnerMessages(partnerId: string): Promise<ChatMessage[]> {
+    const [records, runs] = await Promise.all([
+      this.deps.chatMessageLogStore.list(partnerId),
+      this.deps.aiRunStore.listRunsByPartner(partnerId)
+    ])
+    return projectAiConversationMessages({ partnerId, records, runs })
+  }
+
+  private async getProjectedMessagesPage(input: {
+    partnerId: string
+    limit: number
+    beforeTimestamp?: number
+  }): Promise<{ messages: ChatMessage[]; hasMoreBefore: boolean }> {
+    const safeLimit = Math.max(1, Math.min(100, Number(input.limit || 50)))
+    const sorted = (await this.loadProjectedPartnerMessages(input.partnerId)).sort(
+      (left, right) => left.timestamp - right.timestamp
+    )
+    const beforeTimestamp = Number(input.beforeTimestamp)
+    const eligible = Number.isFinite(beforeTimestamp)
+      ? sorted.filter((message) => message.timestamp < beforeTimestamp)
+      : sorted
+    const hasMoreBefore = eligible.length > safeLimit
+    return {
+      messages: eligible.slice(-safeLimit),
+      hasMoreBefore
+    }
+  }
+
+  public async listPartnerMessages(partnerId: string): Promise<ChatMessage[]> {
+    return await this.loadProjectedPartnerMessages(partnerId)
+  }
+
+  public hasActivePartnerRun(partnerId: string): boolean {
+    const id = String(partnerId || '').trim()
+    if (!id) return false
+    return (
+      this.pendingPartnerSubmissions.has(id) ||
+      Array.from(this.activeRuns.values()).some((entry) => entry.run.partnerId === id)
+    )
+  }
 
   public async failInterruptedRuns(): Promise<void> {
     const interrupted = await this.deps.aiRunStore.listRunsByStatuses(ACTIVE_RUN_STATUSES)
@@ -163,54 +183,43 @@ export class ChatRunService {
       const nextRun: AiRunRecord = {
         ...run,
         status: 'failed',
+        failureCode: 'process_interrupted',
         error: INTERRUPTED_RUN_MESSAGE,
         partialAnswer: run.partialAnswer || INTERRUPTED_RUN_MESSAGE,
         finalAnswer: run.finalAnswer || INTERRUPTED_RUN_MESSAGE,
         pendingApproval: undefined,
-        pendingUserTakeover: undefined,
         updatedAt: now,
         finishedAt: now
       }
       await this.deps.aiRunStore.saveRun(nextRun)
-      await this.deps.chatStore.saveChatMessage({
-        id: run.assistantMessageId,
-        session_id: run.sessionId,
-        role: 'assistant',
-        content: nextRun.finalAnswer || INTERRUPTED_RUN_MESSAGE,
-        timestamp: now,
-        artifacts: nextRun.artifacts,
-        error: true
-      })
-      await this.deps.aiRunStore.appendEvent({
-        runId: run.id,
-        sessionId: run.sessionId,
-        event: {
-          type: 'run_failed',
-          runId: run.id,
-          source: 'internal',
-          message: INTERRUPTED_RUN_MESSAGE,
-          code: 'process_interrupted',
-          resumeSnapshotSaved: Boolean(
-            await this.deps.chatStore.getSessionResumeSnapshot(run.sessionId)
-          )
-        }
-      })
       try {
         await this.deps.onRunTerminal?.(nextRun, 'failed')
       } catch (error) {
         console.error('[CHAT-RUN] terminal notification failed:', error)
       }
     }
+    const partners = await this.deps.partnerStore.listPartners()
+    for (const partner of partners) {
+      await settleStalePendingDigests({
+        loadMessageLog: () => this.deps.chatMessageLogStore.list(partner.id),
+        appendMessageLog: async (entries, options) => {
+          const runId = String(options?.runId || '').trim()
+          if (!runId) return
+          await this.deps.chatMessageLogStore.appendBatch({
+            partnerId: partner.id,
+            runId,
+            entries
+          })
+        }
+      })
+    }
   }
 
-  public async getSessionSnapshot(sessionId: string): Promise<ChatSessionSnapshotResponse> {
-    const normalizedSessionId = String(sessionId || '').trim()
-    if (!normalizedSessionId) return { messages: [], runs: [], activeRuns: [] }
-    const messages = await this.deps.chatStore.getChatMessages(normalizedSessionId)
-    const messageIds = new Set(messages.map((message) => message.id))
-    const runs = (await this.deps.aiRunStore.listRunsBySession(normalizedSessionId)).filter((run) =>
-      messageIds.has(run.assistantMessageId)
-    )
+  public async getPartnerSnapshot(partnerId: string): Promise<PartnerSnapshotResponse> {
+    const normalizedPartnerId = String(partnerId || '').trim()
+    if (!normalizedPartnerId) return { messages: [], runs: [], activeRuns: [] }
+    const messages = await this.loadProjectedPartnerMessages(normalizedPartnerId)
+    const runs = await this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId)
     const runSnapshots = await Promise.all(runs.map((run) => this.buildRunSnapshot(run)))
     const activeRuns = runSnapshots.filter((snapshot) =>
       ACTIVE_RUN_STATUSES.includes(snapshot.run.status)
@@ -218,153 +227,101 @@ export class ChatRunService {
     return { messages, runs: runSnapshots, activeRuns }
   }
 
-  public async openSession(input: {
-    sessionId: string
-    limit?: number
-    beforeTimestamp?: number
-  }): Promise<ChatSessionOpenResponse> {
+  public async openPartner(input: PartnerOpenRequest): Promise<PartnerOpenResponse> {
     const startedAt = Date.now()
-    const normalizedSessionId = String(input.sessionId || '').trim()
-    if (!normalizedSessionId) return { messages: [], hasMoreBefore: false, activeRuns: [] }
-    const [session, page, activeRunRecords] = await Promise.all([
-      this.deps.chatStore.getChatSession(normalizedSessionId),
-      this.deps.chatStore.getChatMessagesPage({
-        sessionId: normalizedSessionId,
+    const normalizedPartnerId = String(input.partnerId || '').trim()
+    if (!normalizedPartnerId) return { messages: [], hasMoreBefore: false, activeRuns: [] }
+    const [partner, page, activeRunRecords] = await Promise.all([
+      this.deps.partnerStore.getPartner(normalizedPartnerId),
+      this.getProjectedMessagesPage({
+        partnerId: normalizedPartnerId,
         limit: input.limit || 50,
         beforeTimestamp: input.beforeTimestamp
       }),
-      this.deps.aiRunStore.listRunsBySession(normalizedSessionId, ACTIVE_RUN_STATUSES)
+      this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId, ACTIVE_RUN_STATUSES)
     ])
     const activeRuns = await Promise.all(activeRunRecords.map((run) => this.buildRunSnapshot(run)))
-    const response = {
-      session: session || undefined,
+    const response: PartnerOpenResponse = {
+      partner: partner || undefined,
       messages: page.messages,
       hasMoreBefore: page.hasMoreBefore,
       activeRuns
     }
-    this.logSlowChatQuery('chat-session-open', startedAt, {
-      sessionId: normalizedSessionId,
+    this.logSlowChatQuery('partner-open', startedAt, {
+      partnerId: normalizedPartnerId,
       messages: response.messages.length,
       activeRuns: response.activeRuns.length
     })
     return response
   }
 
-  public async getSessionRunSummaries(sessionId: string): Promise<ChatSessionRunSummariesResponse> {
+  public async getPartnerRunSummaries(partnerId: string): Promise<PartnerRunSummariesResponse> {
     const startedAt = Date.now()
-    const normalizedSessionId = String(sessionId || '').trim()
-    if (!normalizedSessionId) return { runs: [] }
-    const recentMessages = await this.deps.chatStore.getRecentChatMessages(normalizedSessionId, 50)
-    const recentMessageIds = recentMessages.map((message) => message.id)
-    const runs = await this.deps.aiRunStore.listRunsByMessageIds(
-      normalizedSessionId,
-      recentMessageIds
-    )
+    const normalizedPartnerId = String(partnerId || '').trim()
+    if (!normalizedPartnerId) return { runs: [] }
+    const runs = await this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId)
+    const recentRuns = [...runs].sort((left, right) => right.createdAt - left.createdAt).slice(0, 50)
     const response = {
-      runs: await Promise.all(runs.map((run) => this.buildRunSnapshot(run)))
+      runs: await Promise.all(recentRuns.map((run) => this.buildRunSnapshot(run)))
     }
-    this.logSlowChatQuery('chat-session-run-summaries', startedAt, {
-      sessionId: normalizedSessionId,
+    this.logSlowChatQuery('partner-run-summaries', startedAt, {
+      partnerId: normalizedPartnerId,
       runs: response.runs.length
     })
     return response
   }
 
-  public async getRunEvents(runId: string): Promise<ChatRunEventsResponse> {
-    const startedAt = Date.now()
-    const normalizedRunId = String(runId || '').trim()
-    if (!normalizedRunId) return { events: [] }
-    const events = (await this.deps.aiRunStore.listEvents(normalizedRunId))
-      .map((record) => record.event)
-      .filter(isSnapshotEvent)
-    this.logSlowChatQuery('chat-run-events-get', startedAt, {
-      runId: normalizedRunId,
-      events: events.length
-    })
-    return { events }
-  }
-
   public async retractLatestTurn(
     payload: ChatTurnRetractLatestRequest
   ): Promise<ChatTurnRetractLatestResponse> {
-    const sessionId = String(payload?.sessionId || '').trim()
+    const partnerId = String(payload?.partnerId || '').trim()
     const userMessageId = String(payload?.userMessageId || '').trim()
-    if (!sessionId || !userMessageId) {
-      return { success: false, messages: [], error: 'sessionId and userMessageId are required' }
+    if (!partnerId || !userMessageId) {
+      return { success: false, messages: [], error: 'partnerId and userMessageId are required' }
     }
     const activeRuns = Array.from(this.activeRuns.values()).filter(
-      (entry) => entry.run.sessionId === sessionId
+      (entry) => entry.run.partnerId === partnerId
     )
     if (activeRuns.length > 0) {
-      return { success: false, messages: [], error: '当前会话仍在运行，不能编辑消息' }
+      return { success: false, messages: [], error: '当前伙伴仍在运行，不能编辑消息' }
     }
 
-    const messages = await this.deps.chatStore.getChatMessages(sessionId)
-    const targetIndex = messages.findIndex((message) => message.id === userMessageId)
-    const target = targetIndex >= 0 ? messages[targetIndex] : null
-    if (!target || target.role !== 'user') {
-      return { success: false, messages, error: '只能撤回用户消息' }
-    }
-    const latestUser = [...messages].reverse().find((message) => message.role === 'user')
-    if (latestUser?.id !== target.id) {
+    const runs = await this.deps.aiRunStore.listRunsByPartner(partnerId)
+    const latestRun = [...runs].sort((left, right) => right.createdAt - left.createdAt)[0]
+    if (!latestRun || latestRun.userMessageId !== userMessageId) {
+      const messages = await this.loadProjectedPartnerMessages(partnerId)
       return { success: false, messages, error: '只能编辑最新一条用户消息' }
     }
 
-    const following = messages.slice(targetIndex + 1)
-    if (following.some((message) => message.role === 'user')) {
-      return { success: false, messages, error: '只能撤回最后一轮对话' }
+    const messages = await this.loadProjectedPartnerMessages(partnerId)
+    const target = messages.find((message) => message.id === userMessageId)
+    if (!target || target.role !== 'user') {
+      return { success: false, messages, error: '只能撤回用户消息' }
     }
-    const assistantMessage = following.find((message) => message.role === 'assistant')
-    const runs = await this.deps.aiRunStore.listRunsBySession(sessionId)
-    const run = runs.find(
-      (item) =>
-        item.userMessageId === target.id ||
-        (assistantMessage ? item.assistantMessageId === assistantMessage.id : false)
-    )
-    const messageIdsToDelete = [
-      target.id,
-      ...following
-        .filter((message) => !run || message.id === run.assistantMessageId)
-        .map((message) => message.id)
-    ]
 
-    const memory = await this.deps.chatStore.getConversationMemory(sessionId)
-    const memoryCleared =
-      Boolean(memory?.coveredTimestamp && target.timestamp <= Number(memory.coveredTimestamp)) ||
-      Boolean(memory?.coveredMessageId && messageIdsToDelete.includes(memory.coveredMessageId))
+    const run = latestRun
+    const assistantMessage = messages.find((message) => message.id === run.assistantMessageId)
 
-    // A snapshot for this run would make the edited message resume the withdrawn task.
-    const resumeSnapshot = await this.deps.chatStore.getSessionResumeSnapshot(sessionId)
-    const shouldClearResumeSnapshot = Boolean(run && resumeSnapshot?.runId === run.id)
-
-    await this.deps.chatStore.deleteChatMessagesByIds(messageIdsToDelete)
-    if (run) {
-      await this.deps.aiRunStore.deleteRunsByIds([run.id])
-    }
-    if (shouldClearResumeSnapshot) {
-      await this.deps.chatStore.clearSessionResumeSnapshot(sessionId)
-    }
-    if (memoryCleared) {
-      await this.deps.chatStore.clearConversationMemory(sessionId)
-    }
-    const nextMessages = await this.deps.chatStore.getChatMessages(sessionId)
+    await getPartnerDigestCoordinator().cancelForRun(run.id)
+    await this.deps.aiRunStore.deleteRunsByIds([run.id])
+    await this.deps.chatMessageLogStore.deleteByRunIds([run.id])
+    const nextMessages = await this.loadProjectedPartnerMessages(partnerId)
 
     return {
       success: true,
       userMessage: target,
       assistantMessageId: assistantMessage?.id,
-      runId: run?.id,
-      messages: nextMessages,
-      memoryCleared
+      runId: run.id,
+      messages: nextMessages
     }
   }
 
-  public async deleteSession(sessionId: string): Promise<void> {
-    const normalizedSessionId = String(sessionId || '').trim()
-    if (!normalizedSessionId) return
+  public async deletePartner(partnerId: string): Promise<void> {
+    const normalizedPartnerId = String(partnerId || '').trim()
+    if (!normalizedPartnerId) return
 
     const affectedRuns = Array.from(this.activeRuns.entries()).filter(
-      ([, entry]) => entry.run.sessionId === normalizedSessionId
+      ([, entry]) => entry.run.partnerId === normalizedPartnerId
     )
     for (const [runId, entry] of affectedRuns) {
       entry.cancelled = true
@@ -372,77 +329,75 @@ export class ChatRunService {
       entry.abortController.abort()
       this.clearProjectionFlush(runId)
       const approval = this.activeApprovals.get(runId)
-      approval?.resolve({ accepted: false, error: '当前会话已删除' })
+      approval?.resolve({ accepted: false, error: '当前伙伴已删除' })
       this.activeApprovals.delete(runId)
-      const takeover = this.activeUserTakeovers.get(runId)
-      takeover?.resolve({ confirmed: false, error: '当前会话已删除' })
-      this.activeUserTakeovers.delete(runId)
     }
 
     await Promise.all(affectedRuns.map(([, entry]) => entry.eventQueue.catch(() => {})))
-    await terminalSessionManager.closeByChatSession(normalizedSessionId)
-    await this.deps.chatStore.deleteChatSession(normalizedSessionId)
-    await this.deps.aiRunStore.deleteRunsBySession(normalizedSessionId)
+    await getPartnerDigestCoordinator().cancelForPartner(normalizedPartnerId)
+    await terminalSessionManager.closeByChatSession(normalizedPartnerId)
+    await this.deps.partnerStore.deletePartner(normalizedPartnerId)
+    await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
+  }
+
+  public async clearPartnerContext(partnerId: string): Promise<PartnerClearContextResponse> {
+    const normalizedPartnerId = String(partnerId || '').trim()
+    if (!normalizedPartnerId) return { success: false, error: 'partnerId is required' }
+    const partner = await this.deps.partnerStore.getPartner(normalizedPartnerId)
+    if (!partner) return { success: false, error: 'partner not found' }
+    if (
+      this.pendingPartnerSubmissions.has(normalizedPartnerId) ||
+      Array.from(this.activeRuns.values()).some((entry) => entry.run.partnerId === normalizedPartnerId)
+    ) {
+      return { success: false, error: '当前伙伴仍在运行，不能清空消息记录' }
+    }
+    const clearedAt = Date.now()
+    await getPartnerDigestCoordinator().cancelForPartner(normalizedPartnerId)
+    // 物理删除消息 log 与 ai_run；保留 ai_file_change（回退入口）与伙伴 / UI 状态。
+    await this.deps.chatMessageLogStore.deleteByPartner(normalizedPartnerId)
+    await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
+    return { success: true, clearedAt }
   }
 
   public async submit(payload: ChatSubmitRequest): Promise<ChatSubmitResponse> {
-    const mode = payload?.mode === 'search' ? 'search' : 'ai'
-    const sessionId = String(payload?.sessionId || '').trim()
+    const partnerId = String(payload?.partnerId || '').trim()
     const input = String(payload?.input || '').trim()
-    if (!sessionId) return { success: false, error: 'sessionId is required' }
+    if (!partnerId) return { success: false, error: 'partnerId is required' }
     if (!input) return { success: false, error: 'input is required' }
-    if (mode === 'search') {
-      try {
-        const response = await this.submitSearch({ ...payload, mode, sessionId, input })
-        this.trackSubmitResult(mode, response)
-        return response
-      } catch (error) {
-        this.deps.telemetryService?.track('message_submit_completed', {
-          mode,
-          outcome: 'failed',
-          failureCode: 'UNKNOWN'
-        })
-        throw error
-      }
-    }
     if (
-      this.pendingSessionSubmissions.has(sessionId) ||
-      Array.from(this.activeRuns.values()).some((entry) => entry.run.sessionId === sessionId)
+      this.pendingPartnerSubmissions.has(partnerId) ||
+      Array.from(this.activeRuns.values()).some((entry) => entry.run.partnerId === partnerId)
     ) {
       this.deps.telemetryService?.track('message_submit_completed', {
-        mode,
         outcome: 'failed',
         failureCode: 'REQUEST_FAILED'
       })
-      return { success: false, error: '当前会话已有运行中的任务，请等待完成后再发送。' }
+      return { success: false, error: '当前伙伴已有运行中的任务，请等待完成后再发送。' }
     }
-    this.pendingSessionSubmissions.add(sessionId)
+    this.pendingPartnerSubmissions.add(partnerId)
     try {
-      const response = await this.submitAi({ ...payload, mode, sessionId, input })
-      this.trackSubmitResult(mode, response)
+      const response = await this.submitAi({ ...payload, partnerId, input })
+      this.trackSubmitResult(response)
       return response
     } catch (error) {
       this.deps.telemetryService?.track('message_submit_completed', {
-        mode,
         outcome: 'failed',
         failureCode: 'UNKNOWN'
       })
       throw error
     } finally {
-      this.pendingSessionSubmissions.delete(sessionId)
+      this.pendingPartnerSubmissions.delete(partnerId)
     }
   }
 
-  private trackSubmitResult(mode: 'ai' | 'search', response: ChatSubmitResponse): void {
+  private trackSubmitResult(response: ChatSubmitResponse): void {
     if (response.success) {
       this.deps.telemetryService?.track('message_submit_completed', {
-        mode,
         outcome: 'succeeded'
       })
       return
     }
     this.deps.telemetryService?.track('message_submit_completed', {
-      mode,
       outcome: 'failed',
       failureCode: 'REQUEST_FAILED'
     })
@@ -458,41 +413,6 @@ export class ChatRunService {
     const approval = this.activeApprovals.get(normalizedRunId)
     approval?.resolve({ accepted: false, error: '已取消' })
     this.activeApprovals.delete(normalizedRunId)
-    const takeover = this.activeUserTakeovers.get(normalizedRunId)
-    takeover?.resolve({ confirmed: false, error: '已取消' })
-    this.activeUserTakeovers.delete(normalizedRunId)
-    return { success: true }
-  }
-
-  public async confirmUserTakeover(
-    payload: AiRunUserTakeoverConfirmRequest
-  ): Promise<AiRunUserTakeoverConfirmResponse> {
-    const runId = String(payload?.runId || '').trim()
-    const requestId = String(payload?.requestId || '').trim()
-    if (!runId || !requestId) return { success: false, error: 'runId and requestId are required' }
-
-    const pending = this.activeUserTakeovers.get(runId)
-    if (!pending) return { success: false, error: '当前运行已结束' }
-    if (pending.requestId !== requestId) return { success: false, error: 'user takeover not found' }
-
-    const confirmedEvent: AiRunEvent = {
-      type: 'user_takeover_confirmed',
-      runId,
-      taskId: pending.taskId,
-      requestId,
-      confirmedAt: Date.now()
-    }
-    this.activeUserTakeovers.delete(runId)
-    try {
-      await this.queueRunEvent(runId, confirmedEvent)
-    } catch (error) {
-      this.activeUserTakeovers.set(runId, pending)
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error)
-      }
-    }
-    pending.resolve({ confirmed: true })
     return { success: true }
   }
 
@@ -545,8 +465,7 @@ export class ChatRunService {
     }
     const persisted = await this.deps.aiRunStore.decideApprovalBatchTransaction({
       runId,
-      request: payload,
-      event: decisionEvent
+      request: payload
     })
     if (!persisted.ok) return { success: false, error: persisted.error || 'approval failed' }
 
@@ -571,31 +490,12 @@ export class ChatRunService {
   }
 
   private async buildRunSnapshot(run: AiRunRecord) {
-    const inlineEvents = (run.processEvents || []).filter(isSnapshotEvent)
-    const events =
-      inlineEvents.length > 0
-        ? inlineEvents
-        : (await this.deps.aiRunStore.listEvents(run.id))
-            .map((record) => record.event)
-            .filter(isSnapshotEvent)
+    const records = await this.deps.chatMessageLogStore.listByRun(run.id)
     return {
-      run: {
-        ...run,
-        processEvents: events,
-        eventCount: run.eventCount ?? events.length,
-        visibleEventCount: run.visibleEventCount ?? events.length
-      },
-      events,
-      pendingApproval: run.pendingApproval,
-      pendingUserTakeover: run.pendingUserTakeover
+      run,
+      messageLogRecords: records,
+      pendingApproval: run.pendingApproval
     }
-  }
-
-  private appendProcessEvent(run: AiRunRecord, event: AiRunEvent, now: number): void {
-    if (!isSnapshotEvent(event)) return
-    run.eventCount = (run.eventCount || 0) + 1
-    run.visibleEventCount = (run.visibleEventCount || 0) + 1
-    run.lastEventAt = now
   }
 
   private logSlowChatQuery(
@@ -608,74 +508,19 @@ export class ChatRunService {
     console.debug('[CHAT-PERF]', { label, durationMs, ...metadata })
   }
 
-  private async submitSearch(
-    payload: ChatSubmitRequest & { mode: 'search'; sessionId: string; input: string }
-  ): Promise<ChatSubmitResponse> {
-    const createdAt = Date.now()
-    const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
-    const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
-    const userMessage: ChatMessage = {
-      id: uuidv4(),
-      session_id: payload.sessionId,
-      role: 'user',
-      content: payload.input,
-      timestamp: createdAt,
-      contentNodes: payload.contentNodes,
-      selectedReferences: normalizedReferences,
-      attachments
-    }
-    await this.saveUserMessageAndTitle(userMessage)
-
-    const { data: queryVector } = await this.deps.embeddingService.embed(payload.input)
-    const documentIds = Array.isArray(payload.searchDocumentIds)
-      ? payload.searchDocumentIds.map((id) => String(id).trim()).filter(Boolean)
-      : undefined
-    const results = await this.deps.documentsStore.search(
-      queryVector,
-      payload.input,
-      5,
-      undefined,
-      undefined,
-      documentIds
-    )
-    const tokens = jieba.cutForSearch(payload.input, true)
-    const normalizedResults = results.map(normalizeForIpc)
-    const content =
-      normalizedResults.length > 0
-        ? `已在当前资料范围中找到 ${normalizedResults.length} 条结果，右侧可以直接查看命中详情。`
-        : '未在当前资料范围中找到匹配结果。'
-    const assistantMessage: ChatMessage = {
-      id: uuidv4(),
-      session_id: payload.sessionId,
-      role: 'assistant',
-      content,
-      timestamp: Date.now()
-    }
-    await this.deps.chatStore.saveChatMessage(assistantMessage)
-
-    return {
-      success: true,
-      mode: 'search',
-      userMessage,
-      assistantMessage,
-      results: normalizedResults,
-      tokens,
-      content
-    }
-  }
-
   private async submitAi(
-    payload: ChatSubmitRequest & { mode: 'ai'; sessionId: string; input: string }
+    payload: ChatSubmitRequest & { partnerId: string; input: string }
   ): Promise<ChatSubmitResponse> {
-    const sessionHasActiveRun = Array.from(this.activeRuns.values()).some(
-      (entry) => entry.run.sessionId === payload.sessionId
+    const partnerHasActiveRun = Array.from(this.activeRuns.values()).some(
+      (entry) => entry.run.partnerId === payload.partnerId
     )
-    if (sessionHasActiveRun) {
-      return { success: false, error: '当前会话已有运行中的任务，请等待完成后再发送。' }
+    if (partnerHasActiveRun) {
+      return { success: false, error: '当前伙伴已有运行中的任务，请等待完成后再发送。' }
     }
+    const partner = await this.deps.partnerStore.getPartner(payload.partnerId)
+    if (!partner) return { success: false, error: 'partner not found' }
     const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
     const attachments = Array.isArray(payload.attachments) ? payload.attachments : []
-    const normalizedWorkspace = normalizeWorkspaceBinding(payload.workspace)
     const mainModel = payload.mainModel || null
     const modelName = String(mainModel?.modelName || '').trim()
     const preference = normalizeAiPreference(payload.preference)
@@ -685,9 +530,6 @@ export class ChatRunService {
         success: false,
         error: '请先在输入框右下角选择主模型'
       }
-    }
-    if (!normalizedWorkspace) {
-      return { success: false, error: 'AI 运行必须绑定工作区，当前请求缺少工作区信息。' }
     }
 
     const runId = uuidv4()
@@ -703,7 +545,7 @@ export class ChatRunService {
     const createdAt = Date.now()
     const userMessage: ChatMessage = {
       id: uuidv4(),
-      session_id: payload.sessionId,
+      partner_id: payload.partnerId,
       role: 'user',
       content: payload.input,
       timestamp: createdAt,
@@ -714,37 +556,30 @@ export class ChatRunService {
     }
     const assistantMessage: ChatMessage = {
       id: uuidv4(),
-      session_id: payload.sessionId,
+      partner_id: payload.partnerId,
       role: 'assistant',
       content: '',
       timestamp: createdAt + 1
     }
     const run: AiRunRecord = {
       id: runId,
-      sessionId: payload.sessionId,
+      partnerId: payload.partnerId,
       userMessageId: userMessage.id,
       assistantMessageId: assistantMessage.id,
       status: 'running',
       input: payload.input,
       selectedReferences: normalizedReferences,
       attachments,
-      workspace: normalizedWorkspace,
       modelName,
       mainModel,
-      visionModel: payload.visionModel || undefined,
       preference,
       executionPermission,
       partialAnswer: '',
       artifacts: [],
-      processEvents: [],
-      eventCount: 0,
-      visibleEventCount: 0,
       createdAt,
       updatedAt: createdAt
     }
 
-    await this.saveUserMessageAndTitle(userMessage)
-    await this.deps.chatStore.saveChatMessage(assistantMessage)
     await this.deps.aiRunStore.saveRun(run)
 
     const activeRun: ActiveRun = {
@@ -765,24 +600,10 @@ export class ChatRunService {
 
     return {
       success: true,
-      mode: 'ai',
       userMessage,
       assistantMessage,
       run
     }
-  }
-
-  private async saveUserMessageAndTitle(userMessage: ChatMessage): Promise<void> {
-    const existingMessages = await this.deps.chatStore.getChatMessages(userMessage.session_id)
-    await this.deps.chatStore.saveChatMessage(userMessage)
-    if (existingMessages.length !== 0) return
-    const sessions = await this.deps.chatStore.getChatSessions()
-    const session = sessions.find((item) => item.id === userMessage.session_id)
-    if (!session) return
-    await this.deps.chatStore.saveChatSession({
-      ...session,
-      title: userMessage.content.slice(0, 20)
-    })
   }
 
   private async startAiRun(runId: string): Promise<void> {
@@ -792,46 +613,54 @@ export class ChatRunService {
     const sendEvent = (event: AiRunEvent): void => {
       void this.queueRunEvent(runId, event)
     }
+    const partner = await this.deps.partnerStore.getPartner(run.partnerId)
+    const workspaceRoots = (await this.deps.workspaceStore.listWorkspaces())
+      .map((workspace) => String(workspace.root_path || '').trim())
+      .filter(Boolean)
     await this.queueRunEvent(runId, {
       type: 'run_started',
       runId,
-      sessionId: run.sessionId,
+      partnerId: run.partnerId,
       createdAt: Date.now(),
       input: run.input
     })
     this.deps.docxApplyService.beginRun({
       runId,
-      sessionId: run.sessionId,
+      partnerId: run.partnerId,
       inputText: run.input
     })
 
     try {
+      await getPartnerDigestCoordinator().awaitIdle(run.partnerId)
       const runtimeSettings = await this.deps.aiRuntimeSettingsStore.get()
       const result = await AiRunService.getInstance().run(
         {
           runId,
-          sessionId: run.sessionId,
+          partnerId: run.partnerId,
+          partnerName: partner?.name || '馆长',
           userMessageId: run.userMessageId,
           assistantMessageId: run.assistantMessageId,
           input: run.input,
           selectedReferences: run.selectedReferences,
           attachments: run.attachments,
           mainModel: run.mainModel,
-          visionModel: run.visionModel,
           preference: run.preference,
           executionPermission: run.executionPermission,
-          workspace: run.workspace
+          workspaceRoots
         },
         {
           runtimeSettings,
           llmStore: this.deps.llmStore,
-          chatStore: this.deps.chatStore,
+          partnerStore: this.deps.partnerStore,
+          chatMessageLogStore: this.deps.chatMessageLogStore,
           documentsStore: this.deps.documentsStore,
           embeddingService: this.deps.embeddingService,
           ensureEmbeddingReady: this.deps.ensureEmbeddingReady,
+          hasRunningKnowledgeIndexJob: async () =>
+            await this.deps.workspaceIndexJobStore.hasRunningPrepareJob(),
           docxApplyService: this.deps.docxApplyService,
-          saveFileChangeRecord: async (record, workspaceRootPath) => {
-            await this.deps.aiFileChangeService.saveRecord(record, workspaceRootPath)
+          saveFileChangeRecord: async (record) => {
+            await this.deps.aiFileChangeService.saveRecord(record)
           },
           listFileChangeRecords: async (request) =>
             (await this.deps.aiFileChangeService.listRecords(request)).items,
@@ -848,7 +677,6 @@ export class ChatRunService {
           sendEvent,
           recordLlmIo: this.deps.recordLlmIo,
           requestApprovalBatch: async (request) => await this.requestApprovalBatch(runId, request),
-          requestUserTakeover: async (request) => await this.requestUserTakeover(runId, request),
           browserUseService: this.deps.browserUseService,
           webCrawlerService: this.deps.webCrawlerService,
           humanRuntimeOverrides: this.deps.resolveHumanRuntimeOverrides?.(run)
@@ -860,8 +688,7 @@ export class ChatRunService {
         this.deps.docxApplyService.discardRun(runId)
         await this.queueRunEvent(runId, {
           type: 'run_cancelled',
-          runId,
-          resumeSnapshotSaved: result.resumeSnapshotSaved
+          runId
         })
         return
       }
@@ -871,18 +698,13 @@ export class ChatRunService {
         this.deps.errorLogService?.write({
           module: 'ai-run',
           error: result.error || 'AI run failed',
-          context: { source: result.failureSource, code: result.failureCode }
+          context: {
+            source: result.failureSource,
+            code: result.failureCode,
+            rawMessage: result.failureRawMessage
+          }
         })
-        await this.queueRunEvent(runId, {
-          type: 'run_failed',
-          runId,
-          source: result.failureSource || 'internal',
-          message: result.error || '运行失败，请重试。',
-          httpStatus: result.failureHttpStatus,
-          providerCode: result.failureProviderCode,
-          code: result.failureCode,
-          resumeSnapshotSaved: result.resumeSnapshotSaved
-        })
+        // run_failed 已由 AiRunService 唯一发送，这里不再补发。
         return
       }
 
@@ -893,28 +715,17 @@ export class ChatRunService {
           runId,
           taskId: runId,
           text: result.finalDeliveryMarkdown || completedRun.partialAnswer || '',
-          stage: 'human_mouth'
+          stage: 'human_brain'
         })
       }
       await this.flushRunEvents(runId)
       await this.queueRunEvent(runId, { type: 'run_completed', runId })
-      this.scheduleConversationMemoryUpdate({
-        runId,
-        sessionId: run.sessionId,
-        runtimeSettings,
-        modelConfigId: run.mainModel?.configId || '',
-        modelName: run.modelName || '',
-        sendEvent
-      })
     } catch (error) {
       this.deps.docxApplyService.discardRun(runId)
       if (this.activeRuns.get(runId)?.cancelled) {
         await this.queueRunEvent(runId, {
           type: 'run_cancelled',
-          runId,
-          resumeSnapshotSaved: Boolean(
-            await this.deps.chatStore.getSessionResumeSnapshot(run.sessionId)
-          )
+          runId
         })
         return
       }
@@ -924,24 +735,27 @@ export class ChatRunService {
         error: error instanceof Error ? error : String(error),
         context: { source: 'unexpected' }
       })
-      const failure = toRendererRunFailure(error)
+      const failure = classifyThrownErrorToAiRunFailure(error)
+      const presentation = resolveAiRunFailurePresentation(
+        failure.failureCode,
+        failure.rawMessage
+      )
+      const failureSource = presentation.source === 'user' ? 'internal' : presentation.source
       await this.queueRunEvent(runId, {
         type: 'run_failed',
         runId,
-        source: failure.source,
-        message: failure.message,
+        source: failureSource,
+        message: presentation.message,
+        rawMessage: presentation.rawMessage,
         httpStatus: failure.httpStatus,
         providerCode: failure.providerCode,
-        code: 'error'
+        code: failure.failureCode
       })
     } finally {
       await this.deps.runResourceManager.releaseRun(runId)
       const approval = this.activeApprovals.get(runId)
       approval?.resolve({ accepted: false, error: 'run closed' })
       this.activeApprovals.delete(runId)
-      const takeover = this.activeUserTakeovers.get(runId)
-      takeover?.resolve({ confirmed: false, error: 'run closed' })
-      this.activeUserTakeovers.delete(runId)
       await this.flushRunEvents(runId)
       this.clearProjectionFlush(runId)
       this.activeRuns.delete(runId)
@@ -1019,123 +833,6 @@ export class ChatRunService {
     })
   }
 
-  private async requestUserTakeover(
-    runId: string,
-    request: {
-      taskId: string
-      requestId: string
-      message: string
-    }
-  ): Promise<{ confirmed: true } | { confirmed: false; error: string }> {
-    if (this.activeRuns.get(runId)?.cancelled) {
-      return { confirmed: false, error: '当前运行已结束' }
-    }
-    if (this.activeUserTakeovers.has(runId)) {
-      return { confirmed: false, error: 'user takeover already pending' }
-    }
-    const message = String(request.message || '').trim()
-    if (!message || message.length > 30) {
-      return { confirmed: false, error: 'message must contain 1 to 30 characters' }
-    }
-
-    return await new Promise((resolve) => {
-      this.activeUserTakeovers.set(runId, {
-        requestId: request.requestId,
-        taskId: request.taskId,
-        resolve
-      })
-      void this.queueRunEvent(runId, {
-        type: 'user_takeover_required',
-        runId,
-        taskId: request.taskId,
-        requestId: request.requestId,
-        message,
-        createdAt: Date.now()
-      }).catch((error) => {
-        this.activeUserTakeovers.delete(runId)
-        resolve({
-          confirmed: false,
-          error: error instanceof Error ? error.message : String(error)
-        })
-      })
-    })
-  }
-
-  private scheduleConversationMemoryUpdate(input: {
-    runId: string
-    sessionId: string
-    runtimeSettings: Awaited<ReturnType<AiRuntimeSettingsStore['get']>>
-    modelConfigId: string
-    modelName: string
-    sendEvent: (event: AiRunEvent) => void
-  }): Promise<void> | null {
-    const sessionId = String(input.sessionId || '').trim()
-    if (!sessionId || this.conversationMemoryJobs.has(sessionId)) return null
-
-    const job = this.runConversationMemoryJob(input)
-      .catch((error) => {
-        console.error('[CONVERSATION-MEMORY] background update failed:', error)
-      })
-      .finally(() => {
-        if (this.conversationMemoryJobs.get(sessionId) === job) {
-          this.conversationMemoryJobs.delete(sessionId)
-        }
-      })
-    this.conversationMemoryJobs.set(sessionId, job)
-    return job
-  }
-
-  private async runConversationMemoryJob(input: {
-    runId: string
-    sessionId: string
-    runtimeSettings: Awaited<ReturnType<AiRuntimeSettingsStore['get']>>
-    modelConfigId: string
-    modelName: string
-    sendEvent: (event: AiRunEvent) => void
-  }): Promise<void> {
-    for (;;) {
-      const compaction = await this.deps.chatStore.getConversationMemoryCompaction({
-        sessionId: input.sessionId,
-        recentTurns: CONVERSATION_MEMORY_RECENT_TURNS,
-        triggerTurns: CONVERSATION_MEMORY_SUMMARY_TRIGGER_TURNS
-      })
-      if (!compaction) return
-
-      const startMemory = compaction.memory
-      const summaryBuilder =
-        this.deps.conversationMemorySummaryBuilder || buildConversationMemorySummary
-      const summary = await summaryBuilder({
-        runId: input.runId,
-        sessionId: input.sessionId,
-        previousSummary: startMemory?.summary || '',
-        messages: compaction.messagesToSummarize,
-        runtimeSettings: input.runtimeSettings,
-        llmStore: this.deps.llmStore,
-        modelConfigId: input.modelConfigId,
-        modelName: input.modelName,
-        sendEvent: input.sendEvent,
-        recordLlmIo: this.deps.recordLlmIo
-      })
-      if (!summary) return
-
-      const saved = await this.deps.chatStore.saveConversationMemoryIfCurrent({
-        sessionId: input.sessionId,
-        expectedRevision: startMemory?.revision || 0,
-        expectedCoveredMessageId: startMemory?.coveredMessageId || null,
-        expectedUpdatedAt: startMemory?.updatedAt || null,
-        memory: {
-          summary,
-          coveredMessageId: compaction.targetCoveredMessageId,
-          coveredTimestamp: compaction.targetCoveredTimestamp,
-          coveredMessageCount: compaction.targetCoveredMessageCount,
-          revision: (startMemory?.revision || 0) + 1,
-          updatedAt: Date.now()
-        }
-      })
-      if (!saved) continue
-    }
-  }
-
   private queueRunEvent(runId: string, event: AiRunEvent): Promise<void> {
     const entry = this.activeRuns.get(runId)
     if (entry?.deleted) return Promise.resolve()
@@ -1163,11 +860,6 @@ export class ChatRunService {
     if (entry?.deleted) return
     const run = await this.getMutableRun(runId)
     if (!run) return
-    await this.deps.aiRunStore.appendEvent({
-      runId,
-      sessionId: run.sessionId,
-      event
-    })
     await this.projectEvent(runId, run, event)
     if (
       event.type === 'run_completed' ||
@@ -1193,20 +885,40 @@ export class ChatRunService {
     const entry = this.activeRuns.get(runId)
     const now = Date.now()
     let saveImmediately = event.type !== 'answer_token'
-    let assistantMessage: ChatMessage | null = null
 
-    this.appendProcessEvent(run, event, now)
-
-    if (event.type === 'answer_token') {
-      run.partialAnswer = `${run.partialAnswer || ''}${event.token}`
+    if (event.type === 'assistant_brain_stream_started') {
+      run.partialAnswer = ''
+      run.partialAnswerRole = 'answer'
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, run.partialAnswer)
+    } else if (event.type === 'assistant_brain_stream_delta') {
+      run.partialAnswer = `${run.partialAnswer || ''}${event.text}`
+      run.updatedAt = now
+      this.scheduleProjectionFlush(runId)
+    } else if (event.type === 'assistant_brain_stream_reset') {
+      run.partialAnswer = ''
+      run.partialAnswerRole = 'answer'
+      run.updatedAt = now
+    } else if (event.type === 'assistant_brain_stream_classified') {
+      run.partialAnswerRole = 'thought'
+      run.updatedAt = now
+    } else if (event.type === 'assistant_brain_stream_completed') {
+      run.partialAnswerRole = event.role
+      run.partialAnswer = event.text
+      run.updatedAt = now
+    } else if (event.type === 'assistant_process_thought') {
+      run.partialAnswer = ''
+      run.partialAnswerRole = 'answer'
+      run.updatedAt = now
+    } else if (event.type === 'answer_token') {
+      run.partialAnswer = `${run.partialAnswer || ''}${event.token}`
+      run.partialAnswerRole = 'answer'
+      run.updatedAt = now
       this.scheduleProjectionFlush(runId)
     } else if (event.type === 'answer_completed') {
       run.partialAnswer = event.text
+      run.partialAnswerRole = 'answer'
       run.finalAnswer = event.text
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, event.text)
     } else if (event.type === 'file_artifact') {
       run.artifacts = appendArtifact(run.artifacts, {
         kind: 'file',
@@ -1217,7 +929,6 @@ export class ChatRunService {
         applyId: event.applyId
       })
       run.updatedAt = now
-      assistantMessage = this.buildAssistantMessage(run, run.finalAnswer || run.partialAnswer)
     } else if (event.type === 'approval_batch_required') {
       run.status = 'waiting_approval'
       run.pendingApproval = event
@@ -1226,54 +937,41 @@ export class ChatRunService {
       run.status = 'running'
       run.pendingApproval = undefined
       run.updatedAt = now
-    } else if (event.type === 'user_takeover_required') {
-      run.status = 'waiting_user_takeover'
-      run.pendingUserTakeover = event
-      run.updatedAt = now
-    } else if (event.type === 'user_takeover_confirmed') {
-      run.status = 'running'
-      run.pendingUserTakeover = undefined
-      run.updatedAt = now
     } else if (event.type === 'run_completed') {
       run.status = run.status === 'failed' || run.status === 'cancelled' ? run.status : 'completed'
       run.pendingApproval = undefined
-      run.pendingUserTakeover = undefined
       run.updatedAt = now
       run.finishedAt = now
-      assistantMessage = this.buildAssistantMessage(run, run.finalAnswer || run.partialAnswer)
     } else if (event.type === 'run_failed') {
       run.status = 'failed'
+      run.failureCode = event.code
       run.pendingApproval = undefined
-      run.pendingUserTakeover = undefined
       run.error = event.message
+      run.failureRawMessage = event.rawMessage
       run.updatedAt = now
       run.finishedAt = now
       const content = run.partialAnswer
         ? `${run.partialAnswer}\n\n失败：${event.message}`
         : `失败：${event.message}`
-      assistantMessage = this.buildAssistantMessage(run, content, true)
+      run.partialAnswer = content
+      run.finalAnswer = content
     } else if (event.type === 'run_cancelled') {
       run.status = 'cancelled'
+      run.failureCode = 'user_cancelled'
       run.pendingApproval = undefined
-      run.pendingUserTakeover = undefined
       run.error = '已取消'
       run.updatedAt = now
       run.finishedAt = now
       const content = run.partialAnswer ? `${run.partialAnswer}\n\n已取消` : '已取消'
-      assistantMessage = this.buildAssistantMessage(run, content, true)
-    } else if (!event.internal && event.type === 'runtime_issue') {
-      run.status = 'failed'
-      run.pendingApproval = undefined
-      run.pendingUserTakeover = undefined
-      run.error = event.message
+      run.partialAnswer = content
+      run.finalAnswer = content
+    } else if (event.type === 'run_warning') {
       run.updatedAt = now
-      saveImmediately = true
     } else {
       run.updatedAt = now
     }
 
     if (entry) entry.run = run
-    if (assistantMessage) await this.deps.chatStore.saveChatMessage(assistantMessage)
     if (saveImmediately) {
       this.clearProjectionFlush(runId)
       await this.deps.aiRunStore.saveRun(run)
@@ -1296,18 +994,6 @@ export class ChatRunService {
     if (!entry?.projectionFlushTimer) return
     clearTimeout(entry.projectionFlushTimer)
     entry.projectionFlushTimer = null
-  }
-
-  private buildAssistantMessage(run: AiRunRecord, content: string, error = false): ChatMessage {
-    return {
-      id: run.assistantMessageId,
-      session_id: run.sessionId,
-      role: 'assistant',
-      content,
-      timestamp: run.createdAt + 1,
-      artifacts: run.artifacts && run.artifacts.length > 0 ? run.artifacts : undefined,
-      error
-    }
   }
 
   private broadcastEvent(event: AiRunEvent): void {

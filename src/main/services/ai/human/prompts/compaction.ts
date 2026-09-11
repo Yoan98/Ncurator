@@ -1,74 +1,90 @@
-export const buildHistoryCompactionPrompt = (input: {
-  userGoal: string
-  existingCompactSummary?: string
-  historyRounds: string
-  targetCompressionRatio: number
-}) => {
-  const percent = Math.max(1, Math.min(99, Math.round(input.targetCompressionRatio * 100)))
-  const system = `
-<system>
-<role>
-你是一个上下文压缩整理器，负责把一段已经发生过的任务历史和已经压缩过的信息，整合压缩成更短的文本。
-</role>
-
-<principles>
-- 第一目标：缩短长度，尽量压缩到原内容的大约 ${String(percent)}% 左右。
-- 第二目标：保留与当前目标仍相关的客观事实，并缩小无效与重复内容。
-- 必须保留：已确认事实、仍有效约束、仍影响任务推进的未解决问题、与当前目标仍相关的失败原因。
-- 必须强力压缩：重复尝试、低价值中间过程、无法直接支撑目标覆盖的搜索噪声、重复参数细节。
-- 可以降级为背景：仅用于解释上下文但已不再影响当前目标推进的信息。
-- 禁止编造过程、结果、资料、用户偏好或未发生的动作。
-- 禁止对客观事实进行多余描述，比如文件名、路径、资料名、工具名、人物职责绑定等已经有明确标识的对象，必须复用原文锚点。
-</principles>
-
-<context_block_guide>
-    - user_goal：用户原始诉求。
-    - existing_compact_summary：之前压缩的总结信息；如果之前已经有过压缩总结，则本次压缩需要在它的基础上进行迭代压缩。
-    - history_rounds：当前任务已发生的历史轮次信息，包含所有细节；它是本次压缩的主要依据。
-  </context_block_guide>
-
-<output_contract>
-- 输出纯文本，不要输出 JSON，不要输出解释。
-- 必须严格使用以下固定结构与标题，不要新增或删减段落：
-任务锚点：
-- 目标：...
-- 当前交付：...
-
-已确认事实：
-- ...
-
-仍有效约束：
-- ...
-
-已尝试但未解决：
-- ...
-
-重复或低价值内容：
-- ...
-
-已失效或仅作背景的信息：
-- ...
-</output_contract>
-
-
-</system>
-`.trim()
-
-  const user = `
-<compaction_task>
-  <user_goal>
-${input.userGoal.trim() || 'none'}
-  </user_goal>
-
-  <existing_compact_summary>
-  ${input.existingCompactSummary?.trim() || 'none'}
-  </existing_compact_summary>
-
-  <history_rounds>
-${input.historyRounds}
-  </history_rounds>
-</compaction_task>
-`.trim()
-
-  return { system, user }
+export const wrapCompactionCheckpointContent = (summary: string): string => {
+  const body = summary.trim() || '无'
+  return [
+    'The conversation history before this point was compacted into the following summary:',
+    '',
+    '<summary>',
+    body,
+    '</summary>'
+  ].join('\n')
 }
+
+export const COMPACTION_SYSTEM_PROMPT = `你是上下文摘要助手。阅读用户与 AI 助手之间的对话，按指定格式输出结构化摘要。
+
+不要继续对话。不要回答对话里的任何问题。只输出结构化摘要。`
+
+const historyUserPrompt = (conversationText: string) => `<conversation>
+${conversationText.trim() || '无'}
+</conversation>
+
+以上消息是需要摘要的对话。请写成一份结构化的上下文检查点摘要，供后续模型继续工作。
+
+严格使用以下格式：
+
+## 目标
+[用户想完成什么。一次会话里有多件事就并列。]
+
+## 约束与偏好
+- [用户提到的约束、偏好或要求]
+- [若没有则写「无」]
+
+## 进度
+### 已完成
+- [x] [已完成的任务/改动]
+
+### 进行中
+- [ ] [当前工作]
+
+### 阻塞
+- [阻碍进度的问题，如有]
+
+## 关键决策
+- **[决策]**：[简要理由]
+
+## 下一步
+1. [接下来该做什么，有序列表]
+
+## 关键上下文
+- [继续工作所需的数据、例子或引用]
+- [若不适用则写「无」]
+
+各栏保持简短。保留精确的文件路径、函数名和报错原文。`
+
+const turnPrefixUserPrompt = (conversationText: string) => `<conversation>
+${conversationText.trim() || '无'}
+</conversation>
+
+这是一轮中因过长而无法整轮保留的前缀。该轮后缀（近期工作）仍会保留。
+
+请摘要此前缀，以便理解被留下的后缀：
+
+## 原始请求
+[用户在这一轮要求什么？]
+
+## 前期进展
+- [此前缀中的关键决策和已完成工作]
+
+## 后缀所需上下文
+- [理解被留下的近期工作所需要的信息]
+
+保持简短。聚焦于理解留下的后缀所必需的内容。`
+
+export const buildHistoryCompactionPrompt = (input: {
+  conversationText: string
+}): { system: string; user: string } => ({
+  system: COMPACTION_SYSTEM_PROMPT,
+  user: historyUserPrompt(input.conversationText)
+})
+
+export const buildTurnPrefixCompactionPrompt = (input: {
+  conversationText: string
+}): { system: string; user: string } => ({
+  system: COMPACTION_SYSTEM_PROMPT,
+  user: turnPrefixUserPrompt(input.conversationText)
+})
+
+export const joinSplitCompactionSummary = (
+  historySummary: string,
+  turnPrefixSummary: string
+): string =>
+  `${historySummary.trim() || '无更早历史'}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixSummary.trim() || '无'}`

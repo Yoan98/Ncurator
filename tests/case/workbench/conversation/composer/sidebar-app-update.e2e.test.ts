@@ -90,6 +90,7 @@ describe('sidebar app update e2e', () => {
           await page.goto(`${page.url().split('#')[0]}#/settings/app`)
           await page.waitForURL(/#\/settings\/model$/u)
           const settingsText = (await page.getByTestId('settings-page').textContent()) || ''
+          const redirectedHash = await page.evaluate(() => window.location.hash)
 
           const signals = await runtime.collectSignals()
           return {
@@ -98,7 +99,7 @@ describe('sidebar app update e2e', () => {
             versionHiddenWhenUpdate,
             progressLabel,
             retryLabel,
-            redirectedHash: await page.evaluate(() => window.location.hash),
+            redirectedHash,
             settingsHasUpdateEntry: settingsText.includes('应用更新'),
             ipcCalls: signals.ipcInvokeEntries.map((entry) => entry.name)
           }

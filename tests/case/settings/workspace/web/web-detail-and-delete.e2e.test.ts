@@ -7,8 +7,7 @@ import {
   getSettingsLocator,
   getSettingsPrefixLocator,
   navigateToSettingsSection,
-  seedWebSources,
-  workspaceCardLocator
+  seedWebSources
 } from '../../../../harness/e2e/settings'
 
 describe('settings workspace web e2e', () => {
@@ -39,8 +38,7 @@ describe('settings workspace web e2e', () => {
                 'https://example.com/detail-delete'
               ])
               await navigateToSettingsSection(page, 'workspace')
-              await workspaceCardLocator(page, workspace.workspace!.id).click()
-              await page.getByRole('tab', { name: '网页 1' }).click()
+              await page.getByRole('tab', { name: /网页/u }).click()
               await getSettingsPrefixLocator(page, importSelectors.webSourceCardPrefix)
                 .filter({ hasText: 'https://example.com/detail-delete' })
                 .first()

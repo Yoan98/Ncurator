@@ -4,6 +4,7 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
+  assertWorkbenchLocalSearchResultsPanelHidden,
   recordWorkbenchAiEvidence,
   sendWorkbenchMessage,
   setupWorkbenchWithTempWorkspace,
@@ -17,9 +18,9 @@ const WEB_READ_CODE = 'WEB_READ_DONE_731'
 const isObjectRecord = (value: JsonValue | undefined): value is Record<string, JsonValue> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
-const readToolInputString = (
+const readWebSearchInput = (
   event: Extract<AiRunEvent, { type: 'tool_call_started' }>,
-  key: string
+  key: 'query' | 'url' | 'type'
 ): string => {
   const input = event.input as JsonValue
   if (!isObjectRecord(input)) return ''
@@ -75,17 +76,19 @@ describe('workbench run e2e', () => {
             (event): event is Extract<AiRunEvent, { type: 'tool_call_started' }> =>
               event.type === 'tool_call_started'
           )
-          const crawlStarts = toolStarts.filter((event) => event.toolName === 'web_crawl')
+          const crawlStarts = toolStarts.filter((event) => event.toolName === 'web_search')
           const browserUseStarts = toolStarts.filter((event) => event.toolName === 'browser_use')
           const crawlResults = evidence.events.filter(
             (event): event is Extract<AiRunEvent, { type: 'tool_call_result' }> =>
-              event.type === 'tool_call_result' && event.toolName === 'web_crawl'
+              event.type === 'tool_call_result' && event.toolName === 'web_search'
           )
 
           return {
             finalAnswerText: evidence.finalAnswerText,
             eventTypes: evidence.events.map((event) => event.type),
-            crawlUrls: crawlStarts.map((event) => readToolInputString(event, 'url')),
+            crawlUrls: crawlStarts
+              .filter((event) => readWebSearchInput(event, 'type') === 'fetch')
+              .map((event) => readWebSearchInput(event, 'url')),
             usedBrowserUse: browserUseStarts.length > 0,
             crawlOk: crawlResults.some((event) => event.result?.ok === true),
             crawlErrors: crawlResults.map((event) => event.error || '').filter(Boolean)
@@ -101,11 +104,12 @@ describe('workbench run e2e', () => {
             {
               name: 'workbench-web-read-direct-url',
               message:
-                '真实 e2e 应对用户直接提供的 URL 使用 web_crawl 读取正文，并回答网页里的唯一口令。',
+                '真实 e2e 应对用户直接提供的 URL 使用 web_search 读取正文，并回答网页里的唯一口令。',
               data: result
             }
           )
           await assertNoWorkbenchFakeSignals(runtime)
+          await assertWorkbenchLocalSearchResultsPanelHidden(runtime.page)
         }
       })
     },

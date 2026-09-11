@@ -5,7 +5,6 @@ type BrowserMenuActions = {
   zoomIn: () => BrowserTabState
   zoomOut: () => BrowserTabState
   zoomReset: () => BrowserTabState
-  openExternal: () => void
 }
 
 type BrowserMenuOpenOptions = {
@@ -22,7 +21,7 @@ type ResourceMenuOpenOptions = {
 }
 
 const MENU_WIDTH = 286
-const MENU_HEIGHT = 116
+const MENU_HEIGHT = 68
 const MIN_ZOOM_PERCENT = 50
 const MAX_ZOOM_PERCENT = 200
 const RESOURCE_MENU_WIDTH = 166
@@ -75,20 +74,6 @@ const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
       .control:hover { background: #f1f1ef; color: #24231f; }
       .control[data-disabled="true"] { color: #c9c7c2; pointer-events: none; }
       .percent { min-width: 58px; border-right: 1px solid #deddd9; border-left: 1px solid #deddd9; font-variant-numeric: tabular-nums; }
-      .separator { height: 1px; margin: 0 8px; background: #eeeeec; }
-      .external {
-        display: flex;
-        height: 47px;
-        align-items: center;
-        margin: 0 5px;
-        padding: 0 8px;
-        border-radius: 6px;
-        color: #37352f;
-        text-decoration: none;
-        user-select: none;
-      }
-      .external:hover { background: #f4f4f2; }
-      .external[data-disabled="true"] { color: #c9c7c2; pointer-events: none; }
     </style>
   </head>
   <body>
@@ -121,14 +106,6 @@ const renderMenuHtml = (state: BrowserTabState): string => `<!doctype html>
           >+</a>
         </div>
       </div>
-      <div class="separator"></div>
-      <a
-        class="external"
-        href="ncurator-browser-menu://open-external"
-        target="_blank"
-        role="menuitem"
-        data-disabled="${!state.url}"
-      >在系统浏览器中打开</a>
     </div>
   </body>
 </html>`
@@ -177,7 +154,6 @@ export class BrowserMenuWindowService {
 
   public constructor(private readonly mainWindow: BrowserWindow) {
     this.mainWindow.on('move', this.close)
-    this.mainWindow.on('resize', this.close)
     this.mainWindow.on('closed', this.close)
   }
 
@@ -205,10 +181,6 @@ export class BrowserMenuWindowService {
       if (action === 'zoom-out') updateZoom(options.actions.zoomOut())
       if (action === 'zoom-reset') updateZoom(options.actions.zoomReset())
       if (action === 'zoom-in') updateZoom(options.actions.zoomIn())
-      if (action === 'open-external') {
-        options.actions.openExternal()
-        this.close()
-      }
       return { action: 'deny' }
     })
     await this.present(menuWindow, renderMenuHtml(options.state))
@@ -296,10 +268,18 @@ export class BrowserMenuWindowService {
       if (this.menuWindow !== menuWindow || menuWindow.isDestroyed()) return
       menuWindow.show()
       menuWindow.focus()
+      // 内置 WebContentsView 可能在菜单获得焦点后立刻抢回焦点；延迟并复核 isFocused，
+      // 避免加号 / 三点菜单刚打开就被误关（表现为“点击没反应”）。
       setTimeout(() => {
         if (this.menuWindow !== menuWindow || menuWindow.isDestroyed()) return
-        menuWindow.once('blur', this.close)
-      }, 100)
+        menuWindow.on('blur', () => {
+          setTimeout(() => {
+            if (this.menuWindow !== menuWindow || menuWindow.isDestroyed()) return
+            if (menuWindow.isFocused()) return
+            this.close()
+          }, 50)
+        })
+      }, 150)
     })
     try {
       await menuWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(html)}`)
@@ -326,7 +306,6 @@ export class BrowserMenuWindowService {
     this.close()
     if (!this.mainWindow.isDestroyed()) {
       this.mainWindow.removeListener('move', this.close)
-      this.mainWindow.removeListener('resize', this.close)
       this.mainWindow.removeListener('closed', this.close)
     }
   }

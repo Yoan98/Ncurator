@@ -56,16 +56,9 @@ describe('ai human mock-llm backend', () => {
               },
               {
                 output: buildCompleteTaskDecision({
-                  summary: '多工具协作已完成。'
-                })
-              }
-            ],
-            'human.mouth': [
-              {
-                output: {
                   summary: '多工具协作已完成。',
                   deliveryMarkdown: '# Multi Tool\n\n已完成真实顺序多工具协作。'
-                }
+                })
               }
             ]
           }

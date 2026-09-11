@@ -7,10 +7,12 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import type { Locator, Page } from 'playwright'
 import type {
+  LlmProviderId,
   WorkspaceIndexJobRecord,
   WorkspaceListItem,
   WorkspaceTreeListResponse
 } from '../../../src/shared/types'
+import { getPresetProvider } from '../../../src/shared/llmPresets'
 import {
   importSelectors,
   settingsSelectors,
@@ -165,8 +167,8 @@ const SETTINGS_TARGET_HASHES: Record<SettingsPageTarget, string> = {
 
 const SETTINGS_TARGET_SELECTORS: Record<SettingsPageTarget, string> = {
   general: settingsSelectors.generalPanel,
-  model: settingsSelectors.page,
-  workspace: settingsSelectors.page,
+  model: settingsSelectors.modelPanel,
+  workspace: settingsSelectors.workspacePanel,
   vector: vectorSelectors.page
 }
 
@@ -250,7 +252,8 @@ const readElectronProcessId = async (page: Page): Promise<number | null> =>
 
 const selectDirectoryInNativeDialog = async (
   directoryPath: string,
-  electronProcessId: number | null
+  electronProcessId: number | null,
+  strategy: 'applescript-paste' | 'applescript-type' | 'swift' = 'applescript-paste'
 ): Promise<string> => {
   if (process.platform === 'win32') {
     return await selectDirectoryInWindowsDialog(directoryPath, electronProcessId)
@@ -259,6 +262,71 @@ const selectDirectoryInNativeDialog = async (
   if (!electronProcessId) {
     throw new Error('native directory dialog automation requires Electron process id')
   }
+  if (strategy === 'swift') {
+    const NATIVE_DIALOG_SWIFT_SCRIPT_PATH = path.join(
+      os.tmpdir(),
+      'ncurator-settings-select-directory.swift'
+    )
+    const NATIVE_DIALOG_SWIFT_SCRIPT = `
+import AppKit
+import ApplicationServices
+import Foundation
+
+func postKey(_ keyCode: CGKeyCode, _ flags: CGEventFlags = []) {
+  let source = CGEventSource(stateID: .hidSystemState)
+  guard let keyDown = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: true),
+        let keyUp = CGEvent(keyboardEventSource: source, virtualKey: keyCode, keyDown: false) else {
+    return
+  }
+  keyDown.flags = flags
+  keyUp.flags = flags
+  keyDown.post(tap: .cghidEventTap)
+  keyUp.post(tap: .cghidEventTap)
+}
+
+let targetPath = CommandLine.arguments[1]
+let processId = pid_t(Int32(CommandLine.arguments[2]) ?? 0)
+let bundleIdentifier = CommandLine.arguments[3]
+
+let beforeFrontmost = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+let processApp = NSRunningApplication(processIdentifier: processId)
+let bundleApp = NSRunningApplication.runningApplications(withBundleIdentifier: bundleIdentifier).first
+let targetApp = processApp ?? bundleApp
+
+if let app = targetApp {
+  app.activate(options: [.activateAllWindows])
+}
+
+Thread.sleep(forTimeInterval: 0.25)
+NSPasteboard.general.clearContents()
+NSPasteboard.general.setString(targetPath, forType: .string)
+
+postKey(5, [.maskCommand, .maskShift])
+Thread.sleep(forTimeInterval: 0.6)
+postKey(9, [.maskCommand])
+Thread.sleep(forTimeInterval: 0.15)
+postKey(36)
+Thread.sleep(forTimeInterval: 0.8)
+postKey(36)
+Thread.sleep(forTimeInterval: 0.15)
+
+let afterFrontmost = NSWorkspace.shared.frontmostApplication?.localizedName ?? ""
+print("frontmost-before=\\(beforeFrontmost); frontmost-after=\\(afterFrontmost); target-app=\\(targetApp?.localizedName ?? "none")")
+`
+    await writeFile(NATIVE_DIALOG_SWIFT_SCRIPT_PATH, NATIVE_DIALOG_SWIFT_SCRIPT, 'utf8')
+    const output = await execFileAsync(
+      '/usr/bin/swift',
+      [
+        NATIVE_DIALOG_SWIFT_SCRIPT_PATH,
+        directoryPath,
+        String(electronProcessId),
+        MACOS_ELECTRON_BUNDLE_ID
+      ],
+      { timeout: 30_000 }
+    )
+    return `${output.stdout}\n${output.stderr}`.trim()
+  }
+
   await writeFile(NATIVE_DIALOG_APPLESCRIPT_PATH, NATIVE_DIALOG_APPLESCRIPT, 'utf8')
   const output = await execFileAsync(
     '/usr/bin/osascript',
@@ -267,7 +335,8 @@ const selectDirectoryInNativeDialog = async (
       directoryPath,
       String(electronProcessId),
       MACOS_ELECTRON_BUNDLE_ID,
-      MACOS_ELECTRON_PROCESS_NAME
+      MACOS_ELECTRON_PROCESS_NAME,
+      strategy === 'applescript-type' ? 'type' : 'paste'
     ],
     {
       timeout: 30_000
@@ -318,15 +387,44 @@ export const readWorkspaceIdFromSettingsCard = async (
   return testId.slice(prefix.length)
 }
 
+export const waitForSettingsAppReady = async (page: Page): Promise<void> => {
+  await page.waitForFunction(() => Boolean(window.api))
+  await page.waitForFunction(async () => {
+    const status = await window.api.appStartupGetStatus()
+    return status.mode === 'normal'
+  })
+}
+
 export const navigateToSettingsSection = async (
   page: Page,
   section: SettingsPageTarget
 ): Promise<void> => {
+  await waitForSettingsAppReady(page)
   await page.evaluate((nextHash: string) => {
     window.location.hash = nextHash
   }, SETTINGS_TARGET_HASHES[section])
   await getSettingsLocator(page, SETTINGS_TARGET_SELECTORS[section]).waitFor({ state: 'visible' })
   await page.getByRole('heading', { name: SETTINGS_TARGET_HEADINGS[section] }).first().waitFor({
+    state: 'visible'
+  })
+}
+
+export const selectSettingsPresetProviderOption = async (
+  page: Page,
+  label: string
+): Promise<void> => {
+  const providerSelect = getSettingsLocator(page, settingsSelectors.modelPresetProviderSelect)
+  await providerSelect.waitFor({ state: 'visible' })
+  await providerSelect.locator('.ant-select-selector').click()
+  const dropdown = page.locator('.ant-select-dropdown:not(.ant-select-dropdown-hidden)').last()
+  await dropdown.waitFor({ state: 'visible' })
+  const option = dropdown.locator('.ant-select-item-option').filter({ hasText: label }).first()
+  await option.waitFor({ state: 'attached' })
+  await option.scrollIntoViewIfNeeded()
+  // Ant Select virtual list / animated options can briefly report as unstable; force keeps the
+  // real UI click path without waiting out the animation race.
+  await option.click({ force: true })
+  await providerSelect.locator('.ant-select-selection-item').filter({ hasText: label }).waitFor({
     state: 'visible'
   })
 }
@@ -337,11 +435,11 @@ export const createModelConfigThroughSettingsUi = async (
 ): Promise<void> => {
   await navigateToSettingsSection(page, 'model')
   await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
+  await getSettingsLocator(page, settingsSelectors.modelTypeCustom).click()
   await getSettingsLocator(page, settingsSelectors.modelNameInput).fill(input.name || input.baseUrl)
   await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({ state: 'visible' })
-  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput)
-    .locator('input')
-    .fill(input.baseUrl)
+  // data-testid is on the real <input>; do not nest another .locator('input').
+  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).fill(input.baseUrl)
   await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(input.apiKey)
   await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
   await page
@@ -350,22 +448,38 @@ export const createModelConfigThroughSettingsUi = async (
     .waitFor({ state: 'visible' })
 }
 
+export const createPresetModelConfigThroughSettingsUi = async (
+  page: Page,
+  input: { providerId: LlmProviderId; apiKey: string }
+): Promise<void> => {
+  await navigateToSettingsSection(page, 'model')
+  await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
+  const label = getPresetProvider(input.providerId)?.label || input.providerId
+  await selectSettingsPresetProviderOption(page, label)
+  await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(input.apiKey)
+  await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
+  await page.locator('tbody tr').filter({ hasText: label }).waitFor({ state: 'visible' })
+}
+
 export const createWorkspaceThroughSettingsUi = async (
   page: Page,
-  workspaceName: string
+  rootPath: string
 ): Promise<string> => {
   await navigateToSettingsSection(page, 'workspace')
-  await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
-  await getSettingsLocator(page, importSelectors.createWorkspaceNameInput).fill(workspaceName)
-  await getSettingsLocator(page, importSelectors.createWorkspaceConfirmButton).click()
+  const resolvedRootPath = path.resolve(rootPath)
+  const response = await page.evaluate(
+    async (workspaceRootPath) => await window.api.workspaceCreate({ rootPath: workspaceRootPath }),
+    resolvedRootPath
+  )
+  if (!response.success || !response.workspace) {
+    throw new Error(response.error || 'failed to add workspace root')
+  }
+  const displayName = path.basename(resolvedRootPath)
   await getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix)
-    .filter({ hasText: workspaceName })
+    .filter({ hasText: displayName })
     .first()
     .waitFor({ state: 'visible' })
-  await getSettingsLocator(page, importSelectors.workspaceDetail)
-    .getByRole('tab', { name: /文件/u })
-    .waitFor({ state: 'visible' })
-  return await readWorkspaceIdFromSettingsCard(page, workspaceName)
+  return response.workspace.id
 }
 
 export const bindWorkspaceRootThroughSettingsUi = async (
@@ -378,19 +492,34 @@ export const bindWorkspaceRootThroughSettingsUi = async (
   await rootPathButton.waitFor({ state: 'visible' })
   const diagnostics: string[] = []
   const electronProcessId = await readElectronProcessId(page)
-  if (process.platform === 'win32') {
-    await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
-  }
+
+  // E2E observer intercepts pick-directory IPC on every platform; prefer this over native UI automation.
+  await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
   await rootPathButton.click()
-  try {
-    if (process.platform !== 'win32') {
-      await page.waitForTimeout(1_000)
-      diagnostics.push(await selectDirectoryInNativeDialog(rootPath, electronProcessId))
+  if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
+
+  if (process.platform === 'darwin') {
+    const strategies: Array<'applescript-paste' | 'applescript-type' | 'swift'> = [
+      'applescript-paste',
+      'applescript-type',
+      'swift'
+    ]
+    for (const strategy of strategies) {
+      try {
+        await page.waitForTimeout(1_000)
+        diagnostics.push(
+          await selectDirectoryInNativeDialog(rootPath, electronProcessId, strategy)
+        )
+        if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
+      } catch (error) {
+        diagnostics.push(error instanceof Error ? error.message : String(error))
+      }
+      await queueE2ENativeDialogSelection(page, { kind: 'directory', path: rootPath })
+      await rootPathButton.click()
+      if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
     }
-    if (await waitForWorkspaceRootPathVisible(page, rootPath)) return
-  } catch (error) {
-    diagnostics.push(error instanceof Error ? error.message : String(error))
   }
+
   throw new Error(
     [
       `failed to select workspace root path through native dialog: ${rootPath}`,
@@ -401,35 +530,25 @@ export const bindWorkspaceRootThroughSettingsUi = async (
 
 export const bindWorkspaceRootDirectly = async (
   page: Page,
-  workspaceId: string,
+  _workspaceId: string,
   rootPath: string
-): Promise<void> => {
-  const response = await page.evaluate(
-    async (input) => await window.api.workspaceSetRootPath(input),
-    { workspaceId, rootPath: path.resolve(rootPath) }
-  )
-  if (!response.success) {
-    throw new Error(
-      `failed to bind workspace root through IPC: ${response.error || 'unknown error'}`
-    )
-  }
+): Promise<string> => {
+  return await createWorkspaceThroughSettingsUi(page, rootPath)
 }
 
 export const createFixtureWorkspace = async (
   page: Page,
   input: { name: string; rootPath?: string }
 ): Promise<WorkspaceCreateUiResponse> => {
-  const workspaceId = await createWorkspaceThroughSettingsUi(page, input.name)
-  if (input.rootPath) {
-    const rootPath = path.resolve(input.rootPath)
-    await mkdir(rootPath, { recursive: true })
-    await bindWorkspaceRootDirectly(page, workspaceId, rootPath)
-    await navigateToSettingsSection(page, 'workspace')
-    if (!(await waitForWorkspaceRootPathVisible(page, rootPath))) {
-      throw new Error(
-        `workspace root was bound through ipc but not reflected in settings ui: ${rootPath}`
-      )
-    }
+  if (!input.rootPath) {
+    throw new Error('workspace rootPath is required')
+  }
+  const rootPath = path.resolve(input.rootPath)
+  await mkdir(rootPath, { recursive: true })
+  const workspaceId = await createWorkspaceThroughSettingsUi(page, rootPath)
+  await navigateToSettingsSection(page, 'workspace')
+  if (!(await waitForWorkspaceRootPathVisible(page, rootPath))) {
+    throw new Error(`workspace root was created but not reflected in settings ui: ${rootPath}`)
   }
   const response = await page.evaluate(async () => await window.api.workspaceList())
   const workspace = response.items.find((item) => item.id === workspaceId)

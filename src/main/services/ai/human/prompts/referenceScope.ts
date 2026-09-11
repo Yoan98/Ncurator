@@ -1,5 +1,5 @@
 import type { ChatAttachment, KbAvailability, SelectedReference } from '../../../../../shared/types'
-import type { AiReferenceScope, AiWorkspaceBinding } from '../../types'
+import type { AiReferenceScope } from '../../types'
 
 const KB_AVAILABILITY_LABEL: Record<KbAvailability, string> = {
   indexed: '已索引',
@@ -27,56 +27,40 @@ const renderSelectedReference = (reference: SelectedReference, index: number): s
    知识库文档ID：${kbDocumentIds}`
 }
 
-export const buildReferenceScope = (input: {
-  workspace: AiWorkspaceBinding
-  selectedReferences?: SelectedReference[]
-  attachments?: ChatAttachment[]
-}): AiReferenceScope => {
-  const selectedReferences = input.selectedReferences || []
-
-  return {
-    workspace: input.workspace,
-    selectedReferences,
-    attachments: input.attachments || []
-  }
-}
-
 const renderAttachment = (attachment: ChatAttachment, index: number): string => {
   return `第 ${index} 个附件：${attachment.name}
 - 路径：${attachment.path}`
 }
 
-export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
-  const selectedReferences = scope.selectedReferences || []
-  const attachments = scope.attachments || []
-  const workspaceText = `用户工作区域：
-- 根目录：${scope.workspace.rootPath}`
-
-  const fieldGuideText = `字段说明：
-- 类型：资料来源类型，目前支持本地文件、本地目录、网页资料。
-- 资源地址：这份资料对应的本地路径或网页地址。
-- 文档知识库状态：这份资料本身是否可被知识库检索。
-- 知识库文档ID：这份资料在知识库中的文档标识；没有对应知识库文档时显示为“无”。`
-
-  const selectedReferencesText =
-    selectedReferences.length > 0
-      ? `用户指定的参考范围：
-${selectedReferences.map((reference, index) => renderSelectedReference(reference, index + 1)).join('\n')}`
-      : `用户指定的参考范围：
-- 当前没有用户显式指定的参考范围。`
-
-  const attachmentsText =
-    attachments.length > 0
-      ? `用户添加的附件：
-${attachments.map((attachment, index) => renderAttachment(attachment, index + 1)).join('\n\n')}`
-      : `用户添加的附件：
-- 当前没有用户添加的附件。`
-
-  return `${workspaceText}
-
-${fieldGuideText}
-
-${selectedReferencesText}
-
-${attachmentsText}`
+const renderOptionalUserBlock = (title: string, body: string): string => {
+  const content = body.trim()
+  if (!content) return ''
+  return `${title}：
+${content}`
 }
+
+export const buildReferenceScope = (input: {
+  selectedReferences?: SelectedReference[]
+  attachments?: ChatAttachment[]
+}): AiReferenceScope => ({
+  selectedReferences: input.selectedReferences || [],
+  attachments: input.attachments || []
+})
+
+export const renderSelectedReferencesText = (scope: AiReferenceScope): string =>
+  (scope.selectedReferences || [])
+    .map((reference, index) => renderSelectedReference(reference, index + 1))
+    .join('\n')
+
+export const renderAttachmentsText = (scope: AiReferenceScope): string =>
+  (scope.attachments || [])
+    .map((attachment, index) => renderAttachment(attachment, index + 1))
+    .join('\n\n')
+
+export const renderReferenceScopeText = (scope: AiReferenceScope): string =>
+  [
+    renderOptionalUserBlock('用户@的参考资料', renderSelectedReferencesText(scope)),
+    renderOptionalUserBlock('用户添加的附件', renderAttachmentsText(scope))
+  ]
+    .filter((block) => block.length > 0)
+    .join('\n\n')

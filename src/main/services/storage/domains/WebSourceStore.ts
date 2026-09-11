@@ -39,7 +39,6 @@ const normalizeIndexStatus = (value: unknown): WebSourceIndexStatus => {
 
 const toWebSourceRecord = (row: WebSourceRow): WebSourceRecord => ({
   id: toRequiredString(row.id),
-  workspace_id: toRequiredString(row.workspace_id),
   identity_kind: normalizeIdentityKind(row.identity_kind),
   normalized_url: toRequiredString(row.normalized_url),
   url: toRequiredString(row.url),
@@ -64,14 +63,9 @@ const toWebSourceRecord = (row: WebSourceRow): WebSourceRecord => ({
 export class WebSourceStore {
   public constructor(private readonly sqlite: SqliteCore) {}
 
-  private buildWorkspaceWhere(workspaceId?: string): string | undefined {
-    return String(workspaceId || '').trim() ? 'workspace_id = @workspace_id' : undefined
-  }
-
   public async saveWebSource(source: WebSourceRecord): Promise<void> {
     insertOrReplace(this.sqlite, 'web_source', {
       id: source.id,
-      workspace_id: source.workspace_id,
       identity_kind: source.identity_kind,
       normalized_url: source.normalized_url,
       url: source.url,
@@ -94,47 +88,30 @@ export class WebSourceStore {
     })
   }
 
-  public async listWebSources(workspaceId?: string): Promise<WebSourceRecord[]> {
-    const params = { workspace_id: workspaceId || null }
-    const where = this.buildWorkspaceWhere(workspaceId)
+  public async listWebSources(): Promise<WebSourceRecord[]> {
     const rows = this.sqlite
-      .prepare(
-        `SELECT * FROM web_source ${where ? `WHERE ${where}` : ''} ORDER BY created_at ASC`
-      )
-      .all(params) as WebSourceRow[]
+      .prepare('SELECT * FROM web_source ORDER BY created_at ASC')
+      .all() as WebSourceRow[]
     return rows.map(toWebSourceRecord)
   }
 
-  public async getWebSourceById(id: string, workspaceId?: string): Promise<WebSourceRecord | null> {
-    const params = { id, workspace_id: workspaceId || null }
-    const where = buildWhere(['id = @id', this.buildWorkspaceWhere(workspaceId)])
-    const row = this.sqlite.prepare(`SELECT * FROM web_source WHERE ${where} LIMIT 1`).get(params) as
+  public async getWebSourceById(id: string): Promise<WebSourceRecord | null> {
+    const row = this.sqlite.prepare('SELECT * FROM web_source WHERE id = ? LIMIT 1').get(id) as
       | WebSourceRow
       | undefined
     return row ? toWebSourceRecord(row) : null
   }
 
-  public async getWebSourceByNormalizedUrl(
-    normalizedUrl: string,
-    workspaceId?: string
-  ): Promise<WebSourceRecord | null> {
-    const params = { normalized_url: normalizedUrl, workspace_id: workspaceId || null }
-    const where = buildWhere(['normalized_url = @normalized_url', this.buildWorkspaceWhere(workspaceId)])
-    const row = this.sqlite.prepare(`SELECT * FROM web_source WHERE ${where} LIMIT 1`).get(params) as
-      | WebSourceRow
-      | undefined
+  public async getWebSourceByNormalizedUrl(normalizedUrl: string): Promise<WebSourceRecord | null> {
+    const row = this.sqlite
+      .prepare('SELECT * FROM web_source WHERE normalized_url = ? LIMIT 1')
+      .get(normalizedUrl) as WebSourceRow | undefined
     return row ? toWebSourceRecord(row) : null
   }
 
-  public async listWebSourcesByDocumentIds(
-    documentIds: string[],
-    workspaceId?: string
-  ): Promise<WebSourceRecord[]> {
-    const params: Record<string, string | number | null> = { workspace_id: workspaceId || null }
-    const where = buildWhere([
-      buildInClause('document_id', documentIds, params, 'document_id'),
-      this.buildWorkspaceWhere(workspaceId)
-    ])
+  public async listWebSourcesByDocumentIds(documentIds: string[]): Promise<WebSourceRecord[]> {
+    const params: Record<string, string | number | null> = {}
+    const where = buildWhere([buildInClause('document_id', documentIds, params, 'document_id')])
     const rows = this.sqlite
       .prepare(`SELECT * FROM web_source WHERE ${where}`)
       .all(params) as WebSourceRow[]
@@ -149,7 +126,6 @@ export class WebSourceStore {
         | 'url'
         | 'title'
         | 'document_id'
-        | 'workspace_id'
         | 'index_status'
         | 'include_selectors'
         | 'exclude_selectors'
@@ -170,7 +146,6 @@ export class WebSourceStore {
       url: values.url,
       title: values.title,
       document_id: values.document_id,
-      workspace_id: values.workspace_id,
       index_status: values.index_status,
       include_selectors_json: values.include_selectors
         ? JSON.stringify(values.include_selectors)
@@ -191,23 +166,20 @@ export class WebSourceStore {
     })
   }
 
-  public async deleteWebSource(id: string, workspaceId?: string): Promise<void> {
-    const params = { id, workspace_id: workspaceId || null }
-    const where = buildWhere(['id = @id', this.buildWorkspaceWhere(workspaceId)])
-    this.sqlite.prepare(`DELETE FROM web_source WHERE ${where}`).run(params)
+  public async deleteWebSource(id: string): Promise<void> {
+    this.sqlite.prepare('DELETE FROM web_source WHERE id = ?').run(id)
   }
 
-  public async getWorkspaceWebSummary(workspaceId: string): Promise<WorkspaceWebSummary> {
+  public async getWebSummary(): Promise<WorkspaceWebSummary> {
     const rows = this.sqlite
       .prepare(
         `
         SELECT index_status, COUNT(*) AS count
         FROM web_source
-        WHERE workspace_id = ?
         GROUP BY index_status
       `
       )
-      .all(workspaceId) as Array<{ index_status?: unknown; count?: unknown }>
+      .all() as Array<{ index_status?: unknown; count?: unknown }>
     const summary: WorkspaceWebSummary = { web_count: 0, needs_index_count: 0, failed_count: 0 }
     for (const row of rows) {
       const count = toRequiredNumber(row.count)

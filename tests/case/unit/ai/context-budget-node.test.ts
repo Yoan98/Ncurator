@@ -1,17 +1,19 @@
+import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages'
 import { describe, expect, it } from 'vitest'
 import { createContextBudgetNode } from '../../../../src/main/services/ai/human/node/contextBudgetNode'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
-import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import {
-  appendRoundRecord,
-  buildLearningExecution
-} from '../../../../src/main/services/ai/human/memory/rounds'
+  createCurrentBrainUserMessage,
+  createDiscardBrainUserMessage
+} from '../../../../src/main/services/ai/human/node/utils/messageTail'
+import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from '../../../../src/main/services/ai/human/constants'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
-import type { AiRunEvent } from '../../../../src/shared/types'
+import type { AiRunEvent, ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../src/shared/types'
+import { LlmInputTooLongError } from '../../../../src/main/services/ai/errors'
 
 const DEFAULT_COMPACTION_TRIGGER_TOKENS = Math.floor(
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS * CONTEXT_COMPACTION_TRIGGER_RATIO
@@ -21,13 +23,20 @@ const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
   ({
     runId: 'run-1',
     platform: 'macos',
+    partnerId: 'partner-1',
+    partnerName: '测试伙伴',
+    workspaceRoots: ['/tmp/workspace'],
+    runStartedAt: 0,
+    preference: 'default',
+    executionPermission: 'review',
     referenceScope: {
       workspace: {
         workspaceId: 'ws-1',
         workspaceName: 'Workspace',
         rootPath: '/tmp/workspace'
       },
-      selectedReferences: []
+      selectedReferences: [],
+      attachments: []
     },
     workspace: {
       workspaceId: 'ws-1',
@@ -43,14 +52,10 @@ const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
     },
     sendEvent: (event) => events.push(event),
     requestApprovalBatch: async () => ({ accepted: true, decisions: [] }),
-    loadConversationContext: async () => ({
-      recentTurnsText: '',
-      conversationSummaryText: ''
-    }),
-    loadConversationMemory: async () => null,
+    loadMessageLog: async () => [],
+    appendMessageLog: async () => undefined,
     trackDocxOpen: () => undefined,
     trackDocxChanges: () => undefined,
-    trackDocxBatchChanges: () => undefined,
     resolveDocxOpenTarget: async () => {
       throw new Error('not used in context budget test')
     },
@@ -60,6 +65,15 @@ const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
     documentsStore: {} as AiRunContext['documentsStore'],
     embeddingService: {} as AiRunContext['embeddingService']
   }) satisfies AiRunContext
+
+const budgetLogRecord = (seq: number, entry: ChatMessageLogEntry): ChatMessageLogRecord => ({
+  id: `log-${seq}`,
+  partnerId: 'partner-1',
+  runId: 'run-1',
+  seq,
+  entry,
+  createdAt: seq
+})
 
 describe('ai unit context budget node', () => {
   it('records continue decision with brain context budget snapshot', async () => {
@@ -81,7 +95,7 @@ describe('ai unit context budget node', () => {
       contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
       compactionTriggerTokens: DEFAULT_COMPACTION_TRIGGER_TOKENS,
       hasCompressibleHistory: false,
-      usageAvailable: false,
+      usageAvailable: true,
       evaluationId: expect.any(String)
     })
     const event = events.find((item) => item.type === 'context_budget_evaluated')
@@ -99,71 +113,58 @@ describe('ai unit context budget node', () => {
     const events: AiRunEvent[] = []
     const ctx = createBaseContext(events)
     const cache = createHumanRuntimeCache()
-    const baseState = createInitialHumanState({
+    const state = createInitialHumanState({
       taskId: 'task-2',
       userInput: '请完成一个会触发压缩的长任务。'
     })
-    const roundState = {
-      ...baseState,
-      memory: {
-        ...baseState.memory,
-        taskRun: (() => {
-          const stateWithRound1 = {
-            ...baseState,
-            memory: {
-              ...baseState.memory,
-              taskRun: appendRoundRecord({
-                state: baseState,
-                thought: {
-                  next: `第一轮先学习 docx-read。${'需要保留的长历史。'.repeat(40)}`
-                },
-                nextAction: {
-                  action: 'learning',
-                  wantLearnSkillIds: ['docx-read']
-                },
-                execution: buildLearningExecution({
-                  learningOutcome: {
-                    requestedSkillIds: ['docx-read'],
-                    loadedSkillIds: ['docx-read'],
-                    skippedDuplicateSkillIds: [],
-                    skippedUnknownSkillIds: [],
-                    evictedSkillIds: [],
-                    activeToolCount: 4
-                  }
-                }),
-                createdAt: 1
-              })
-            }
-          }
-          return appendRoundRecord({
-            state: stateWithRound1,
-            thought: {
-              next: '第二轮继续学习 docx-write。'
-            },
-            nextAction: {
-              action: 'learning',
-              wantLearnSkillIds: ['docx-write']
-            },
-            execution: buildLearningExecution({
-              learningOutcome: {
-                requestedSkillIds: ['docx-write'],
-                loadedSkillIds: ['docx-write'],
-                skippedDuplicateSkillIds: [],
-                skippedUnknownSkillIds: [],
-                evictedSkillIds: [],
-                activeToolCount: 8
-              }
-            }),
-            createdAt: 2
-          })
-        })()
-      },
-      humanRuntimeOverrides: undefined
-    }
+    cache.messages = [
+      ...Array.from(
+        { length: 6 },
+        (_, index) => [
+          new AIMessage({ content: `long message ${index} ${'x'.repeat(400)}` }),
+          new ToolMessage({ content: `tool result ${index} ${'x'.repeat(400)}`, tool_call_id: `call-${index}` })
+        ]
+      ).flat(),
+      new AIMessage({ content: 'previous brain turn' }),
+      new HumanMessage({
+        content: '请完成一个会触发压缩的长任务。',
+        additional_kwargs: { ncurator_current_user: true }
+      })
+    ]
+    const records: ChatMessageLogRecord[] = Array.from({ length: 6 }, (_, index) => [
+      budgetLogRecord(index * 2 + 1, {
+        kind: 'assistant',
+        content: `long message ${index} ${'x'.repeat(400)}`,
+        toolCalls: [{ id: `call-${index}`, name: 'docx_read_nodes', args: {} }]
+      }),
+      budgetLogRecord(index * 2 + 2, {
+        kind: 'tool',
+        toolCallId: `call-${index}`,
+        toolName: 'docx_read_nodes',
+        ok: true,
+        content: `tool result ${index} ${'x'.repeat(400)}`
+      })
+    ]).flat()
+    const appended: Array<{ kind: string; origin?: string }> = []
+    const calls: string[] = []
     const ctxWithSmallWindow = {
       ...ctx,
       humanRuntimeOverrides: {
         modelContextWindowTokens: 600
+      },
+      loadMessageLog: async () => {
+        calls.push('load')
+        return [...records]
+      },
+      appendMessageLog: async (entries) => {
+        calls.push('append')
+        const maxSeq = records.reduce((max, record) => Math.max(max, record.seq), 0)
+        entries.forEach((entry, index) => {
+          records.push(
+            budgetLogRecord(maxSeq + index + 1, entry)
+          )
+        })
+        appended.push(...entries.map((entry) => ({ kind: entry.kind })))
       }
     } satisfies AiRunContext
     const smallWindowNode = createContextBudgetNode({
@@ -171,11 +172,14 @@ describe('ai unit context budget node', () => {
       cache
     })
     cache.lastBrainInputTokens = 500
-    cache.lastBrainRoundCount = 1
 
-    const nextState = await smallWindowNode(roundState)
+    const nextState = await smallWindowNode(state)
 
+    expect(calls[0]).toBe('append')
+    expect(calls.at(-1)).toBe('load')
     expect(nextState.execution.stage).toBe('context_compaction')
+    expect(appended).toEqual([{ kind: 'user' }])
+    expect(cache.currentUserLogAppended).toBe(true)
     const event = events.find((item) => item.type === 'context_budget_evaluated')
     expect(event).toMatchObject({
       type: 'context_budget_evaluated',
@@ -214,82 +218,152 @@ describe('ai unit context budget node', () => {
       snapshot: {
         basis: 'usage_unavailable',
         budgetTokens: 0,
-        usageAvailable: false,
+        usageAvailable: true,
         hasCompressibleHistory: false,
         contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
       }
     })
   })
 
-  it('does not compact when the available round history is too small to reduce context', async () => {
+  it('does not compact when post-user process fits in the retain window', async () => {
     const events: AiRunEvent[] = []
     const ctx = createBaseContext(events)
     const cache = createHumanRuntimeCache()
-    const baseState = createInitialHumanState({
-      taskId: 'task-small-history',
+    const state = createInitialHumanState({
+      taskId: 'task-retain-only',
       userInput: '请继续当前任务。'
     })
-    const firstTaskRun = appendRoundRecord({
-      state: baseState,
-      thought: { next: '继续。' },
-      nextAction: { action: 'learning', wantLearnSkillIds: ['docx-read'] },
-      execution: buildLearningExecution({
-        learningOutcome: {
-          requestedSkillIds: ['docx-read'],
-          loadedSkillIds: ['docx-read'],
-          skippedDuplicateSkillIds: [],
-          skippedUnknownSkillIds: [],
-          evictedSkillIds: [],
-          activeToolCount: 4
-        }
+    cache.messages = [
+      new HumanMessage({
+        content: '请继续当前任务。',
+        additional_kwargs: { ncurator_current_user: true }
       }),
-      createdAt: 1
-    })
-    const firstRoundState = {
-      ...baseState,
-      memory: {
-        ...baseState.memory,
-        taskRun: firstTaskRun
-      }
-    }
-    const secondTaskRun = appendRoundRecord({
-      state: firstRoundState,
-      thought: { next: '完成。' },
-      nextAction: { action: 'learning', wantLearnSkillIds: ['docx-write'] },
-      execution: buildLearningExecution({
-        learningOutcome: {
-          requestedSkillIds: ['docx-write'],
-          loadedSkillIds: ['docx-write'],
-          skippedDuplicateSkillIds: [],
-          skippedUnknownSkillIds: [],
-          evictedSkillIds: [],
-          activeToolCount: 8
-        }
-      }),
-      createdAt: 2
-    })
-    const roundState = {
-      ...firstRoundState,
-      memory: {
-        ...firstRoundState.memory,
-        taskRun: secondTaskRun
-      }
-    }
+      new AIMessage({ content: 'short step' }),
+      new ToolMessage({ content: 'ok', tool_call_id: 'call-1' })
+    ]
+    cache.currentUserLogAppended = true
     const node = createContextBudgetNode({
       ctx: {
         ...ctx,
-        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 }
+        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 },
+        loadMessageLog: async () => [
+          budgetLogRecord(1, {
+            kind: 'user',
+            content: '请继续当前任务。',
+            input: '请继续当前任务。',
+            context: { selectedReferences: [], attachments: [] }
+          }),
+          budgetLogRecord(2, {
+            kind: 'assistant',
+            content: 'short step',
+            toolCalls: []
+          }),
+          budgetLogRecord(3, {
+            kind: 'tool',
+            toolCallId: 'call-1',
+            toolName: 'docx_read_nodes',
+            ok: true,
+            content: 'ok'
+          })
+        ]
       },
       cache
     })
     cache.lastBrainInputTokens = 9_000
-    cache.lastBrainRoundCount = 1
 
-    const nextState = await node(roundState)
+    const nextState = await node(state)
 
     expect(nextState.execution.stage).toBe('brain')
     expect(events.find((event) => event.type === 'context_budget_evaluated')).toMatchObject({
-      decision: 'continue'
+      decision: 'continue',
+      snapshot: { hasCompressibleHistory: false }
+    })
+  })
+
+  it('does not compact when only the current user is in the message array', async () => {
+    const events: AiRunEvent[] = []
+    const ctx = createBaseContext(events)
+    const cache = createHumanRuntimeCache()
+    const state = createInitialHumanState({
+      taskId: 'task-small-history',
+      userInput: '请继续当前任务。'
+    })
+    cache.messages = [
+      new HumanMessage({
+        content: '请继续当前任务。',
+        additional_kwargs: { ncurator_current_user: true }
+      })
+    ]
+    cache.currentUserLogAppended = true
+    const node = createContextBudgetNode({
+      ctx: {
+        ...ctx,
+        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 },
+        loadMessageLog: async () => [
+          budgetLogRecord(1, {
+            kind: 'user',
+            content: '请继续当前任务。',
+            input: '请继续当前任务。',
+            context: { selectedReferences: [], attachments: [] }
+          })
+        ]
+      },
+      cache
+    })
+    cache.lastBrainInputTokens = 9_000
+
+    const nextState = await node(state)
+
+    expect(nextState.execution.stage).toBe('brain')
+    expect(events.find((event) => event.type === 'context_budget_evaluated')).toMatchObject({
+      decision: 'continue',
+      snapshot: { hasCompressibleHistory: false }
+    })
+  })
+
+  it('does not compact when folded history is only a Discard User', async () => {
+    const events: AiRunEvent[] = []
+    const ctx = createBaseContext(events)
+    const cache = createHumanRuntimeCache()
+    const state = createInitialHumanState({
+      taskId: 'task-discard-only',
+      userInput: '法国首都是哪里？'
+    })
+    const current = createCurrentBrainUserMessage('法国首都是哪里？')
+    const discard = createDiscardBrainUserMessage('以下是最近的会话内容\n\n用户：调研SECRET')
+    cache.messages = [discard, current]
+    cache.currentUserLogAppended = true
+    const node = createContextBudgetNode({
+      ctx: {
+        ...ctx,
+        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 },
+        loadMessageLog: async () => [
+          budgetLogRecord(1, {
+            kind: 'annotation',
+            eventType: 'discard_checkpoint',
+            payload: {
+              throughSeq: 1,
+              conversationHistory: '用户：调研SECRET'
+            }
+          }),
+          budgetLogRecord(2, {
+            kind: 'user',
+            content: '法国首都是哪里？',
+            input: '法国首都是哪里？',
+            context: { selectedReferences: [], attachments: [] }
+          })
+        ]
+      },
+      cache
+    })
+    cache.lastBrainInputTokens = 9_000
+
+    const nextState = await node(state)
+
+    expect(nextState.execution.stage).toBe('brain')
+    expect(events.find((event) => event.type === 'context_budget_evaluated')).toMatchObject({
+      decision: 'continue',
+      snapshot: { hasCompressibleHistory: false }
     })
   })
 
@@ -314,9 +388,98 @@ describe('ai unit context budget node', () => {
       snapshot: {
         basis: 'post_compaction',
         budgetTokens: 0,
-        usageAvailable: false,
+        usageAvailable: true,
         contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
       }
+    })
+  })
+
+  it('rejects a current user message larger than the model context window', async () => {
+    const events: AiRunEvent[] = []
+    const ctx = createBaseContext(events)
+    const cache = createHumanRuntimeCache()
+    cache.messages = [
+      new HumanMessage({
+        content: 'x'.repeat(10_000),
+        additional_kwargs: { ncurator_current_user: true }
+      })
+    ]
+    const node = createContextBudgetNode({
+      ctx: { ...ctx, humanRuntimeOverrides: { modelContextWindowTokens: 100 } },
+      cache
+    })
+
+    await expect(
+      node(
+        createInitialHumanState({
+          taskId: 'task-input-too-long',
+          userInput: 'x'.repeat(10_000)
+        })
+      )
+    ).rejects.toBeInstanceOf(LlmInputTooLongError)
+  })
+
+  it('writes context_scope_decided and discard_checkpoint with the user in one batch', async () => {
+    const events: AiRunEvent[] = []
+    const appended: ChatMessageLogEntry[] = []
+    const ctx = {
+      ...createBaseContext(events),
+      loadMessageLog: async () => [
+        {
+          id: 'log-1',
+          partnerId: 'partner-1',
+          runId: 'run-0',
+          seq: 3,
+          entry: {
+            kind: 'user' as const,
+            content: 'prev',
+            input: 'prev',
+            context: { selectedReferences: [], attachments: [] }
+          },
+          createdAt: 1
+        }
+      ],
+      appendMessageLog: async (entries: ChatMessageLogEntry[]) => {
+        appended.push(...entries)
+      }
+    }
+    const cache = createHumanRuntimeCache()
+    cache.contextScopeDecision = {
+      needsHistory: false,
+      basis: 'model_decision',
+      budgetTokens: 90
+    }
+    cache.messages = [
+      new HumanMessage({
+        content: '<user_context>分析 Excel</user_context>',
+        additional_kwargs: { ncurator_current_user: true }
+      })
+    ]
+    const node = createContextBudgetNode({ ctx, cache })
+    await node(
+      createInitialHumanState({
+        taskId: 'task-scope',
+        userInput: '分析 Excel'
+      })
+    )
+    expect(appended).toHaveLength(3)
+    expect(appended[0]).toMatchObject({
+      kind: 'annotation',
+      eventType: 'context_scope_decided',
+      payload: {
+        needsHistory: false,
+        basis: 'model_decision'
+      }
+    })
+    expect(appended[1]).toMatchObject({
+      kind: 'annotation',
+      eventType: 'discard_checkpoint',
+      payload: { throughSeq: 3 }
+    })
+    expect(appended[2]).toMatchObject({
+      kind: 'user',
+      content: '<user_context>分析 Excel</user_context>',
+      input: '分析 Excel'
     })
   })
 })
