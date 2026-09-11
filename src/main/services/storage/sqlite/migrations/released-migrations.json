@@ -1,5 +1,5 @@
 {
-  "publishedThrough": 9,
+  "publishedThrough": 10,
   "migrations": [
     {
       "version": 1,
@@ -54,6 +54,12 @@
       "name": "repair_ai_runtime_system_notifications_column",
       "file": "009_repair_ai_runtime_system_notifications_column.ts",
       "sha256": "963ec3586c987fb9355afa1e2183a57b592d5cd6ef167fec5679ed32783f79c1"
+    },
+    {
+      "version": 10,
+      "name": "upgrade_from_v9",
+      "file": "010_upgrade_from_v9.ts",
+      "sha256": "4ed966b38b4b23671dff81075f6169179ce92504a7151da9444469a4f24c809f"
     }
   ]
 }
