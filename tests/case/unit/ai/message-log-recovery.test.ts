@@ -126,7 +126,7 @@ describe('ai human message-log recovery', () => {
       { runId: 'run-2', entry: user('change the title') }
     ])
     expect(resolveCompactionThroughSeq(log)).toBe(3)
-    expect(resolveCompactionThroughSeq(log, 0)).toBe(3)
+    expect(resolveCompactionThroughSeq(log, undefined)).toBe(3)
   })
 
   it('covers the current user and dropped process while leaving the kept tail', () => {
@@ -161,9 +161,10 @@ describe('ai human message-log recovery', () => {
         }
       }
     ])
-    expect(resolveCompactionThroughSeq(log, 0)).toBe(5)
-    expect(resolveCompactionThroughSeq(log, 2)).toBe(3)
-    expect(resolveCompactionThroughSeq(log, 4)).toBe(1)
+    expect(resolveCompactionThroughSeq(log)).toBe(5)
+    expect(resolveCompactionThroughSeq(log, 4)).toBe(3)
+    expect(resolveCompactionThroughSeq(log, 2)).toBe(1)
+    expect(resolveCompactionThroughSeq(log, 1)).toBeUndefined()
   })
 
   it('sets throughSeq through the message before a kept user when the tail includes that user', () => {
@@ -199,7 +200,7 @@ describe('ai human message-log recovery', () => {
         }
       }
     ])
-    expect(resolveCompactionThroughSeq(log, 3)).toBe(3)
+    expect(resolveCompactionThroughSeq(log, 4)).toBe(3)
   })
 
   it('projects retained tail process after the compacted user when throughSeq sits before the tail', () => {

@@ -1,9 +1,5 @@
-import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages'
 import { describe, expect, it } from 'vitest'
-import {
-  buildCompactedMessages,
-  createContextCompactionNode
-} from '../../../../src/main/services/ai/human/node/contextCompactionNode'
+import { createContextCompactionNode } from '../../../../src/main/services/ai/human/node/contextCompactionNode'
 import {
   buildHistoryCompactionPrompt,
   buildTurnPrefixCompactionPrompt,
@@ -13,9 +9,8 @@ import {
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import type { ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../src/shared/types'
 import {
-  createCompactedBrainUserMessage,
-  createCurrentBrainUserMessage,
-  createDiscardBrainUserMessage
+  isCompactedBrainUserMessage,
+  isCurrentBrainUserMessage
 } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
@@ -24,6 +19,7 @@ import {
   CONTEXT_COMPACTION_TRIGGER_RATIO,
   resolveCompactionTailTokens
 } from '../../../../src/main/services/ai/human/constants'
+import { messagesFromLogEntries } from '../../../../src/main/services/ai/human/memory/conversationLogMessages'
 import { estimateMessagesForContext } from '../../../../src/main/services/ai/human/memory/multimodal'
 
 const contextWindowForTail = (retainTokens: number): number => {
@@ -52,46 +48,6 @@ const createContext = (): AiRunContext =>
       attachments: []
     }
   }) as AiRunContext
-
-describe('ai human context compaction message shape', () => {
-  it('rebuilds system, a synthesized checkpoint user, and the retained original tail', () => {
-    const current = createCurrentBrainUserMessage('<user_context>继续完成任务</user_context>')
-    const tail = [
-      current,
-      new AIMessage({
-        content: '正在写初稿',
-        tool_calls: [{ id: '1', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
-      }),
-      new ToolMessage({ content: 'draft nodes', tool_call_id: '1' })
-    ]
-    const summary =
-      '## 目标\n准备交付\n## 约束与偏好\n无\n## 进度\n无\n## 下一步\n无\n## 关键上下文\n无'
-
-    const messages = buildCompactedMessages({
-      ctx: createContext(),
-      summary,
-      tail
-    })
-
-    expect(messages.map((message) => message.getType())).toEqual([
-      'system',
-      'human',
-      'human',
-      'ai',
-      'tool'
-    ])
-    expect(messages[2]).toBe(current)
-    expect(messages[3]).toBe(tail[1])
-    expect(messages[4]).toBe(tail[2])
-    const compactionUser = String(messages[1]?.content)
-    expect(compactionUser).toBe(wrapCompactionCheckpointContent(summary))
-    expect(compactionUser).toContain('<summary>')
-    expect(compactionUser).toContain('## 目标')
-    expect(compactionUser).not.toContain('<user_context>')
-    expect(compactionUser).not.toContain('<memory>')
-    expect(compactionUser).not.toContain('<active_state>')
-  })
-})
 
 describe('ai human history compaction prompt', () => {
   it('puts the format in the user message and locks the system role', () => {
@@ -150,71 +106,51 @@ const logRecord = (
   createdAt: seq
 })
 
+const userEntry = (content: string): ChatMessageLogEntry => ({
+  kind: 'user',
+  content,
+  input: content,
+  context: { selectedReferences: [], attachments: [] }
+})
+
+const assistantEntry = (id: string, content: string): ChatMessageLogEntry => ({
+  kind: 'assistant',
+  content,
+  toolCalls: [{ id, name: 'docx_read_nodes', args: {} }]
+})
+
+const toolEntry = (id: string, content: string): ChatMessageLogEntry => ({
+  kind: 'tool',
+  toolCallId: id,
+  toolName: 'docx_read_nodes',
+  ok: true,
+  content
+})
+
+const costOf = (records: ChatMessageLogRecord[]): number =>
+  estimateMessagesForContext(messagesFromLogEntries(records.map((record) => record.entry)))
+
 describe('ai human context compaction node', () => {
-  it('writes only a checkpoint with summary and synthesizes the user at runtime', async () => {
-    const current = createCurrentBrainUserMessage('continue the task')
-    const earlierUser = new HumanMessage('old task')
-    const earlierPair = [
-      new AIMessage({
-        content: 'old work',
-        tool_calls: [{ id: '1', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
-      }),
-      new ToolMessage({ content: 'old result', tool_call_id: '1' })
+  it('writes a checkpoint then re-projects system, compact user, and retained tail', async () => {
+    const tail = [
+      logRecord(4, userEntry('continue the task')),
+      logRecord(5, assistantEntry('2', 'current work')),
+      logRecord(6, toolEntry('2', 'current result'))
     ]
-    const tailPair = [
-      new AIMessage({
-        content: 'current work',
-        tool_calls: [{ id: '2', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
-      }),
-      new ToolMessage({ content: 'current result', tool_call_id: '2' })
+    const records = [
+      logRecord(1, userEntry('old task')),
+      logRecord(2, assistantEntry('1', 'old work')),
+      logRecord(3, toolEntry('1', 'old result')),
+      ...tail
     ]
     const appended: ChatMessageLogEntry[] = []
     const prompts: Array<{ system: string; user: string }> = []
     const ctx = {
       ...createContext(),
       humanRuntimeOverrides: {
-        modelContextWindowTokens: contextWindowForTail(
-          estimateMessagesForContext([current, ...tailPair])
-        )
+        modelContextWindowTokens: contextWindowForTail(costOf(tail))
       },
-      loadMessageLog: async () => [
-        logRecord(1, {
-          kind: 'user',
-          content: 'old task',
-          input: 'old task',
-          context: { selectedReferences: [], attachments: [] }
-        }),
-        logRecord(2, {
-          kind: 'assistant',
-          content: 'old work',
-          toolCalls: [{ id: '1', name: 'docx_read_nodes', args: {} }]
-        }),
-        logRecord(3, {
-          kind: 'tool',
-          toolCallId: '1',
-          toolName: 'docx_read_nodes',
-          ok: true,
-          content: 'old result'
-        }),
-        logRecord(4, {
-          kind: 'user',
-          content: 'continue the task',
-          input: 'continue the task',
-          context: { selectedReferences: [], attachments: [] }
-        }),
-        logRecord(5, {
-          kind: 'assistant',
-          content: 'current work',
-          toolCalls: [{ id: '2', name: 'docx_read_nodes', args: {} }]
-        }),
-        logRecord(6, {
-          kind: 'tool',
-          toolCallId: '2',
-          toolName: 'docx_read_nodes',
-          ok: true,
-          content: 'current result'
-        })
-      ],
+      loadMessageLog: async () => records,
       appendMessageLog: async (entries) => {
         appended.push(...entries)
       },
@@ -226,7 +162,6 @@ describe('ai human context compaction node', () => {
       sendEvent: () => undefined
     } as AiRunContext
     const cache = createHumanRuntimeCache()
-    cache.messages = [earlierUser, ...earlierPair, current, ...tailPair]
     cache.currentUserLogAppended = true
     const node = createContextCompactionNode({ ctx, cache })
     const next = await node(
@@ -246,80 +181,51 @@ describe('ai human context compaction node', () => {
     })
     if (appended[0]?.kind === 'annotation' && appended[0].eventType === 'compaction_checkpoint') {
       expect(appended[0].payload.summary).toContain('## 目标')
+      expect(appended[0].payload.throughSeq).toBe(3)
     }
-    expect(cache.messages?.[1] && String(cache.messages[1].content)).toBe(
-      wrapCompactionCheckpointContent('## 目标\n继续交付')
-    )
+    expect(cache.messages?.map((message) => message.getType())).toEqual([
+      'system',
+      'human',
+      'human',
+      'ai',
+      'tool'
+    ])
+    expect(isCompactedBrainUserMessage(cache.messages![1]!)).toBe(true)
+    expect(String(cache.messages![1]?.content)).toBe(wrapCompactionCheckpointContent('## 目标\n继续交付'))
+    expect(String(cache.messages![2]?.content)).toBe('continue the task')
+    expect(isCurrentBrainUserMessage(cache.messages![2]!)).toBe(false)
+    expect(cache.messages?.filter(isCurrentBrainUserMessage)).toHaveLength(0)
     expect(next.execution.stage).toBe('context_budget')
   })
 
   it('sends Discard User into the compaction conversation as a user block', async () => {
-    const current = createCurrentBrainUserMessage('continue the task')
-    const discard = createDiscardBrainUserMessage(
-      '以下是最近的会话内容\n\n用户：调研SECRET\n交付：已记下调研'
-    )
-    const earlierUser = new HumanMessage('old task')
-    const earlierPair = [
-      new AIMessage({
-        content: 'old work',
-        tool_calls: [{ id: '1', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
-      }),
-      new ToolMessage({ content: 'old result', tool_call_id: '1' })
+    const tail = [
+      logRecord(5, userEntry('continue the task')),
+      logRecord(6, assistantEntry('2', 'current work')),
+      logRecord(7, toolEntry('2', 'current result'))
     ]
-    const tailPair = [
-      new AIMessage({
-        content: 'current work',
-        tool_calls: [{ id: '2', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
+    const records = [
+      logRecord(1, {
+        kind: 'annotation',
+        eventType: 'discard_checkpoint',
+        payload: {
+          throughSeq: 1,
+          conversationHistory: '用户：调研SECRET\n交付：已记下调研'
+        }
       }),
-      new ToolMessage({ content: 'current result', tool_call_id: '2' })
+      logRecord(2, userEntry('old task')),
+      logRecord(3, assistantEntry('1', 'old work')),
+      logRecord(4, toolEntry('1', 'old result')),
+      ...tail
     ]
     const appended: ChatMessageLogEntry[] = []
     const prompts: Array<{ system: string; user: string }> = []
     const ctx = {
       ...createContext(),
       humanRuntimeOverrides: {
-        modelContextWindowTokens: contextWindowForTail(
-          estimateMessagesForContext([current, ...tailPair])
-        )
+        modelContextWindowTokens: contextWindowForTail(costOf(tail))
       },
-      loadMessageLog: async () => [
-        logRecord(1, {
-          kind: 'user',
-          content: 'old task',
-          input: 'old task',
-          context: { selectedReferences: [], attachments: [] }
-        }),
-        logRecord(2, {
-          kind: 'assistant',
-          content: 'old work',
-          toolCalls: [{ id: '1', name: 'docx_read_nodes', args: {} }]
-        }),
-        logRecord(3, {
-          kind: 'tool',
-          toolCallId: '1',
-          toolName: 'docx_read_nodes',
-          ok: true,
-          content: 'old result'
-        }),
-        logRecord(4, {
-          kind: 'user',
-          content: 'continue the task',
-          input: 'continue the task',
-          context: { selectedReferences: [], attachments: [] }
-        }),
-        logRecord(5, {
-          kind: 'assistant',
-          content: 'current work',
-          toolCalls: [{ id: '2', name: 'docx_read_nodes', args: {} }]
-        }),
-        logRecord(6, {
-          kind: 'tool',
-          toolCallId: '2',
-          toolName: 'docx_read_nodes',
-          ok: true,
-          content: 'current result'
-        })
-      ],
+      loadMessageLog: async () => records,
       appendMessageLog: async (entries) => {
         appended.push(...entries)
       },
@@ -331,7 +237,6 @@ describe('ai human context compaction node', () => {
       sendEvent: () => undefined
     } as AiRunContext
     const cache = createHumanRuntimeCache()
-    cache.messages = [discard, earlierUser, ...earlierPair, current, ...tailPair]
     cache.currentUserLogAppended = true
     const node = createContextCompactionNode({ ctx, cache })
     await node(
@@ -350,38 +255,21 @@ describe('ai human context compaction node', () => {
       kind: 'annotation',
       eventType: 'compaction_checkpoint'
     })
-    expect(cache.messages?.[1] && String(cache.messages[1].content)).toContain('调研SECRET')
+    expect(isCompactedBrainUserMessage(cache.messages![1]!)).toBe(true)
+    expect(String(cache.messages![1]?.content)).toContain('调研SECRET')
     expect(cache.messages?.some((message) => String(message.content).includes('以下是最近的会话内容'))).toBe(
       false
     )
   })
 
-  it('throws internal_error when throughSeq cannot be resolved', async () => {
-    const current = createCurrentBrainUserMessage('continue the task')
-    const earlierUser = new HumanMessage('old task')
-    const earlierPair = [
-      new AIMessage({
-        content: 'old work',
-        tool_calls: [{ id: '1', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
-      }),
-      new ToolMessage({ content: 'old result', tool_call_id: '1' })
-    ]
-    const tailPair = [
-      new AIMessage({
-        content: 'current work',
-        tool_calls: [{ id: '2', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
-      }),
-      new ToolMessage({ content: 'current result', tool_call_id: '2' })
-    ]
+  it('returns to budget when the log has nothing compressible', async () => {
     const prompts: Array<{ system: string; user: string }> = []
     const appended: ChatMessageLogEntry[] = []
     const events: Array<{ type: string }> = []
     const ctx = {
       ...createContext(),
       humanRuntimeOverrides: {
-        modelContextWindowTokens: contextWindowForTail(
-          estimateMessagesForContext([current, ...tailPair])
-        )
+        modelContextWindowTokens: contextWindowForTail(32)
       },
       loadMessageLog: async () => [],
       appendMessageLog: async (entries: ChatMessageLogEntry[]) => {
@@ -397,88 +285,54 @@ describe('ai human context compaction node', () => {
       }
     } as AiRunContext
     const cache = createHumanRuntimeCache()
-    const beforeMessages = [earlierUser, ...earlierPair, current, ...tailPair]
-    cache.messages = beforeMessages
     cache.currentUserLogAppended = true
     const node = createContextCompactionNode({ ctx, cache })
+    const next = await node(
+      createInitialHumanState({
+        taskId: 'task-no-bookmark',
+        userInput: 'continue the task'
+      })
+    )
 
-    await expect(
-      node(
-        createInitialHumanState({
-          taskId: 'task-no-bookmark',
-          userInput: 'continue the task'
-        })
-      )
-    ).rejects.toMatchObject({
-      name: 'AiRunFailure',
-      failureCode: 'internal_error',
-      rawMessage: 'compaction_bookmark_unresolved'
-    })
-
+    expect(next.execution.stage).toBe('context_budget')
     expect(prompts).toHaveLength(0)
     expect(appended).toHaveLength(0)
     expect(events.some((event) => event.type === 'context_compaction_started')).toBe(false)
-    expect(cache.messages).toEqual(beforeMessages)
+    expect(cache.messages).toBeUndefined()
   })
 
   it('calls history then turn-prefix prompts on a mid-turn split and keeps checkpoint in conversation', async () => {
-    const checkpoint = createCompactedBrainUserMessage(
-      wrapCompactionCheckpointContent('## 目标\n写周报')
-    )
-    const older = new HumanMessage('old task')
-    const olderPair = [
-      new AIMessage({
-        content: 'old work',
-        tool_calls: [{ id: '0', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
-      }),
-      new ToolMessage({ content: 'old result', tool_call_id: '0' })
-    ]
-    const user = new HumanMessage('u'.repeat(80))
-    const middle = [
-      new AIMessage({
-        content: 'm'.repeat(8000),
-        tool_calls: [{ id: '1', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
-      }),
-      new ToolMessage({ content: 'n'.repeat(8000), tool_call_id: '1' })
-    ]
     const lastPair = [
-      new AIMessage({
-        content: 'b'.repeat(400),
-        tool_calls: [{ id: '2', name: 'docx_read_nodes', args: {}, type: 'tool_call' }]
+      logRecord(8, assistantEntry('2', 'b'.repeat(400))),
+      logRecord(9, toolEntry('2', 'c'.repeat(400)))
+    ]
+    const records = [
+      logRecord(1, {
+        kind: 'annotation',
+        eventType: 'compaction_checkpoint',
+        payload: {
+          compactBlockId: 'old',
+          throughSeq: 1,
+          sourceMessageCount: 2,
+          summary: '## 目标\n写周报'
+        }
       }),
-      new ToolMessage({ content: 'c'.repeat(400), tool_call_id: '2' })
+      logRecord(2, userEntry('old task')),
+      logRecord(3, assistantEntry('0', 'old work')),
+      logRecord(4, toolEntry('0', 'old result')),
+      logRecord(5, userEntry('u'.repeat(80))),
+      logRecord(6, assistantEntry('1', 'm'.repeat(8000))),
+      logRecord(7, toolEntry('1', 'n'.repeat(8000))),
+      ...lastPair
     ]
     const prompts: Array<{ system: string; user: string }> = []
     const appended: ChatMessageLogEntry[] = []
     const ctx = {
       ...createContext(),
       humanRuntimeOverrides: {
-        modelContextWindowTokens: contextWindowForTail(estimateMessagesForContext(lastPair))
+        modelContextWindowTokens: contextWindowForTail(costOf(lastPair))
       },
-      loadMessageLog: async () => [
-        logRecord(1, {
-          kind: 'annotation',
-          eventType: 'compaction_checkpoint',
-          payload: {
-            compactBlockId: 'old',
-            throughSeq: 1,
-            sourceMessageCount: 2,
-            summary: '## 目标\n写周报'
-          }
-        }),
-        logRecord(2, {
-          kind: 'user',
-          content: 'old task',
-          input: 'old task',
-          context: { selectedReferences: [], attachments: [] }
-        }),
-        logRecord(3, {
-          kind: 'user',
-          content: 'u'.repeat(80),
-          input: 'u'.repeat(80),
-          context: { selectedReferences: [], attachments: [] }
-        })
-      ],
+      loadMessageLog: async () => records,
       appendMessageLog: async (entries) => {
         appended.push(...entries)
       },
@@ -490,7 +344,7 @@ describe('ai human context compaction node', () => {
       sendEvent: () => undefined
     } as AiRunContext
     const cache = createHumanRuntimeCache()
-    cache.messages = [checkpoint, older, ...olderPair, user, ...middle, ...lastPair]
+    cache.currentUserLogAppended = true
     const node = createContextCompactionNode({ ctx, cache })
     await node(
       createInitialHumanState({
@@ -510,6 +364,11 @@ describe('ai human context compaction node', () => {
       expect(appended[0].payload.summary).toContain('历史摘要')
       expect(appended[0].payload.summary).toContain('**Turn Context (split turn):**')
       expect(appended[0].payload.summary).toContain('前半轮摘要')
+      expect(appended[0].payload.throughSeq).toBe(7)
     }
+    expect(cache.messages?.map((message) => message.getType())).toEqual(['system', 'human', 'ai', 'tool'])
+    expect(isCompactedBrainUserMessage(cache.messages![1]!)).toBe(true)
+    expect(cache.messages?.some((message) => String(message.content) === 'u'.repeat(80))).toBe(false)
+    expect(cache.messages?.filter(isCurrentBrainUserMessage)).toHaveLength(0)
   })
 })

@@ -203,23 +203,12 @@ export const resolveMaxMessageLogSeq = (records: readonly ChatMessageLogRecord[]
 
 export const resolveCompactionThroughSeq = (
   records: ChatMessageLogRecord[],
-  keepTailVisibleCount = 0
+  firstKeptSeq?: number
 ): number | undefined => {
   const ordered = orderMessageLogBySeq(records)
-  const visible = ordered.filter(
-    (record) =>
-      record.entry.kind === 'user' ||
-      record.entry.kind === 'assistant' ||
-      record.entry.kind === 'tool'
-  )
-  if (visible.length === 0) return undefined
-  const keepCount = Math.min(Math.max(0, keepTailVisibleCount), visible.length)
-  if (keepCount === 0) {
-    return visible.at(-1)?.seq
-  }
-  const firstKept = visible[visible.length - keepCount]
-  if (!firstKept) return visible.at(-1)?.seq
-  return [...ordered].reverse().find((record) => record.seq < firstKept.seq)?.seq
+  if (ordered.length === 0) return undefined
+  if (firstKeptSeq === undefined) return ordered.at(-1)?.seq
+  return [...ordered].reverse().find((record) => record.seq < firstKeptSeq)?.seq
 }
 
 /**

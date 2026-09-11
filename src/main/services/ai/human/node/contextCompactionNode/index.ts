@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { SystemMessage, type BaseMessage } from '@langchain/core/messages'
+import type { ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { resolveCompactionTailTokens, resolveContextWindowTokens } from '../../constants'
 import {
@@ -8,18 +9,22 @@ import {
   joinSplitCompactionSummary,
   wrapCompactionCheckpointContent
 } from '../../prompts/compaction'
+import { wrapDiscardConversationHistory } from '../../prompts/contextScope'
 import { buildBrainSystemPrompt } from '../../prompts/brain'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
 import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/processEvents'
-import { resolveCompactionThroughSeq } from '../../memory/transcript'
+import { projectBrainMessagesFromLog } from '../../memory/brainMessageProjection'
 import {
-  countTailBookmarkMessages,
-  createCompactedBrainUserMessage,
   hasCompressibleCompactionHistory,
-  isCurrentBrainUserMessage,
-  renderMessagesForCompaction,
-  splitMessagesForCompactionTail
+  splitLogForCompactionTail
+} from '../../memory/compactionSplit'
+import { messagesFromLogEntries } from '../../memory/conversationLogMessages'
+import { resolveHistoryFloor, resolveMaxMessageLogSeq } from '../../memory/transcript'
+import {
+  createCompactedBrainUserMessage,
+  createDiscardBrainUserMessage,
+  renderMessagesForCompaction
 } from '../utils/messageTail'
 import { createAiRunFailure } from '../../../utils/runFailure'
 
@@ -67,6 +72,25 @@ const compactTurnPrefix = async (input: {
   })
 }
 
+const messagesFromRecords = (records: ChatMessageLogRecord[]): BaseMessage[] =>
+  messagesFromLogEntries(records.map((record) => record.entry))
+
+const prependFloorHistoryUsers = (
+  records: ChatMessageLogRecord[],
+  conversation: BaseMessage[]
+): BaseMessage[] => {
+  const floor = resolveHistoryFloor(records)
+  const prefix: BaseMessage[] = []
+  const checkpointSummary = floor.compactionCheckpoint?.summary.trim()
+  if (floor.includeCheckpoint && checkpointSummary) {
+    prefix.push(createCompactedBrainUserMessage(wrapCompactionCheckpointContent(checkpointSummary)))
+  } else if (floor.includeDiscard) {
+    const wrapped = wrapDiscardConversationHistory(floor.discardCheckpoint?.conversationHistory || '')
+    if (wrapped) prefix.push(createDiscardBrainUserMessage(wrapped))
+  }
+  return [...prefix, ...conversation]
+}
+
 export const createContextCompactionNode = (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
@@ -75,22 +99,16 @@ export const createContextCompactionNode = (input: {
     input.ctx.checkCancelled()
     input.cache.currentState = state
 
-    const messages = input.cache.messages || []
     const retainTokens = resolveCompactionTailTokens(
       resolveContextWindowTokens(input.ctx.humanRuntimeOverrides?.modelContextWindowTokens)
     )
-    if (!hasCompressibleCompactionHistory(messages, retainTokens)) {
+    const currentRecords = await input.ctx.loadMessageLog()
+    if (!hasCompressibleCompactionHistory(currentRecords, retainTokens)) {
       return returnToContextBudget(state)
     }
 
-    const split = splitMessagesForCompactionTail(messages, retainTokens)
-    const { folded, tail, history, turnPrefix, isSplitTurn } = split
-    const currentRecords = await input.ctx.loadMessageLog()
-    const throughSeq = resolveCompactionThroughSeq(
-      currentRecords,
-      countTailBookmarkMessages(tail)
-    )
-    // Bookmark 对齐失败是实现不变量破坏：硬停，禁止回 budget 空转烧 key。
+    const split = splitLogForCompactionTail(currentRecords, retainTokens)
+    const { folded, history, turnPrefix, isSplitTurn, throughSeq } = split
     if (throughSeq === undefined) {
       throw createAiRunFailure({
         failureCode: 'internal_error',
@@ -114,15 +132,16 @@ export const createContextCompactionNode = (input: {
       stage: 'human_brain'
     })
 
-    const historyText = renderMessagesForCompaction(isSplitTurn ? history : folded)
-    const prefixText = isSplitTurn ? renderMessagesForCompaction(turnPrefix) : ''
+    const historyMessages = prependFloorHistoryUsers(currentRecords, messagesFromRecords(history))
+    const historyText = renderMessagesForCompaction(historyMessages)
+    const prefixText = isSplitTurn ? renderMessagesForCompaction(messagesFromRecords(turnPrefix)) : ''
     const sourceHistoryTokenEstimate = estimateTextTokens(
       isSplitTurn ? `${historyText}\n${prefixText}` : historyText
     )
 
     let summary: string
     if (isSplitTurn) {
-      const historySummary = history.length
+      const historySummary = historyMessages.length
         ? await compactConversation({
             ctx: input.ctx,
             taskId: state.task.taskId,
@@ -155,18 +174,17 @@ export const createContextCompactionNode = (input: {
       tokenEstimateAfter
     }
 
-    await input.ctx.appendMessageLog([
-      {
-        kind: 'annotation',
-        eventType: 'compaction_checkpoint',
-        payload: {
-          compactBlockId,
-          throughSeq,
-          sourceMessageCount: folded.length,
-          summary: compactBlock.summary
-        }
+    const checkpointEntry: ChatMessageLogEntry = {
+      kind: 'annotation',
+      eventType: 'compaction_checkpoint',
+      payload: {
+        compactBlockId,
+        throughSeq,
+        sourceMessageCount: folded.length,
+        summary: compactBlock.summary
       }
-    ])
+    }
+    await input.ctx.appendMessageLog([checkpointEntry])
 
     emitCompactionCompleted({
       sendEvent: input.ctx.sendEvent,
@@ -189,12 +207,29 @@ export const createContextCompactionNode = (input: {
     input.cache.lastBrainMessageTokenEstimate = undefined
     input.cache.postCompactionNeedsFreshBrainUsage = true
     input.cache.lastBrainUsageUnavailable = false
-    input.cache.messages = buildCompactedMessages({
+
+    const projectedRecords: ChatMessageLogRecord[] = [
+      ...currentRecords,
+      {
+        id: compactBlockId,
+        partnerId: input.ctx.partnerId,
+        runId: input.ctx.runId,
+        seq: resolveMaxMessageLogSeq(currentRecords) + 1,
+        entry: checkpointEntry,
+        createdAt: Date.now()
+      }
+    ]
+    const projection = projectBrainMessagesFromLog({
+      records: projectedRecords,
       ctx: input.ctx,
-      summary: compactBlock.summary,
-      tail
+      state,
+      appendCurrentUser: false
     })
-    input.cache.currentUserMessageIndex = input.cache.messages.findIndex(isCurrentBrainUserMessage)
+    input.cache.messages = [
+      new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
+      ...projection.messages
+    ]
+    input.cache.currentUserMessageIndex = projection.currentUserMessageIndex + 1
     input.cache.currentUserLogAppended = true
 
     return {
@@ -209,13 +244,3 @@ export const createContextCompactionNode = (input: {
     }
   }
 }
-
-export const buildCompactedMessages = (input: {
-  ctx: AiRunContext
-  summary: string
-  tail?: readonly BaseMessage[]
-}): BaseMessage[] => [
-  new SystemMessage(buildBrainSystemPrompt({ ctx: input.ctx })),
-  createCompactedBrainUserMessage(wrapCompactionCheckpointContent(input.summary)),
-  ...(input.tail || [])
-]

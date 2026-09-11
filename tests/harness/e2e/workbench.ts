@@ -1299,9 +1299,14 @@ export const sendWorkbenchMessage = async (page: Page, value: string): Promise<v
   await submitWorkbenchCurrentDraft(page)
 }
 
-export const createWorkbenchNewSession = async (page: Page): Promise<void> => {
+export const createWorkbenchNewSession = async (
+  page: Page,
+  options?: { modelName?: string }
+): Promise<void> => {
   await createPartnerThroughWorkbenchUi(page, `伙伴 ${Date.now()}`)
   await getWorkbenchLocator(page, workbenchSelectors.input).waitFor({ state: 'visible' })
+  // New partners persist empty UI state (mainModel: null). Re-select so send stays enabled.
+  await selectWorkbenchModel(page, options?.modelName || loadWorkbenchLiveModelEnv().modelName)
 }
 
 export const selectWorkbenchAiPreference = async (

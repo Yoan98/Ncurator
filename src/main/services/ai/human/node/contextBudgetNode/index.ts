@@ -7,9 +7,10 @@ import {
   resolveContextWindowTokens
 } from '../../constants'
 import type { HumanRuntimeCache, HumanState } from '../../types'
+import { hasCompressibleCompactionHistory } from '../../memory/compactionSplit'
 import { estimateMessagesForContext } from '../../memory/multimodal'
 import { buildBrainUserMessage } from '../../prompts/brain'
-import { hasCompressibleCompactionHistory, isCurrentBrainUserMessage } from '../utils/messageTail'
+import { isCurrentBrainUserMessage } from '../utils/messageTail'
 import { LlmInputTooLongError } from '../../../errors'
 import { buildContextScopeLogEntries } from '../contextScopeDecision'
 
@@ -76,34 +77,11 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
     const compactionTriggerTokens = resolveCompactionTriggerTokens(contextWindowTokens)
     const messages = input.cache.messages || []
     const retainTokens = resolveCompactionTailTokens(contextWindowTokens)
-    const hasCompressibleHistory = hasCompressibleCompactionHistory(messages, retainTokens)
     const currentMessageTokenEstimate = estimateMessagesForContext(messages)
     const currentUser = messages.find(isCurrentBrainUserMessage)
     if (currentUser && estimateMessagesForContext([currentUser]) > contextWindowTokens) {
       throw new LlmInputTooLongError()
     }
-    const contextBudgetSnapshot = buildBudgetSnapshot({
-      cache: input.cache,
-      contextWindowTokens,
-      compactionTriggerTokens,
-      hasCompressibleHistory,
-      currentMessageTokenEstimate
-    })
-    const shouldCompact =
-      contextBudgetSnapshot.usageAvailable &&
-      contextBudgetSnapshot.budgetTokens > compactionTriggerTokens &&
-      hasCompressibleHistory
-    const createdAt = Date.now()
-    const decision = shouldCompact ? 'compact' : 'continue'
-    input.ctx.sendEvent({
-      type: 'context_budget_evaluated',
-      runId: input.ctx.runId,
-      taskId: state.task.taskId,
-      stage: 'human_brain',
-      decision,
-      snapshot: contextBudgetSnapshot,
-      createdAt
-    })
 
     if (!input.cache.currentUserLogAppended) {
       const builtText = String(
@@ -139,6 +117,31 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
       await input.ctx.appendMessageLog(entries)
       input.cache.currentUserLogAppended = true
     }
+
+    const records = await input.ctx.loadMessageLog()
+    const hasCompressibleHistory = hasCompressibleCompactionHistory(records, retainTokens)
+    const contextBudgetSnapshot = buildBudgetSnapshot({
+      cache: input.cache,
+      contextWindowTokens,
+      compactionTriggerTokens,
+      hasCompressibleHistory,
+      currentMessageTokenEstimate
+    })
+    const shouldCompact =
+      contextBudgetSnapshot.usageAvailable &&
+      contextBudgetSnapshot.budgetTokens > compactionTriggerTokens &&
+      hasCompressibleHistory
+    const createdAt = Date.now()
+    const decision = shouldCompact ? 'compact' : 'continue'
+    input.ctx.sendEvent({
+      type: 'context_budget_evaluated',
+      runId: input.ctx.runId,
+      taskId: state.task.taskId,
+      stage: 'human_brain',
+      decision,
+      snapshot: contextBudgetSnapshot,
+      createdAt
+    })
 
     return {
       ...state,

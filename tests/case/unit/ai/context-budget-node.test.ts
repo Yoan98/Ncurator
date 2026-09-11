@@ -12,7 +12,7 @@ import {
   DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 } from '../../../../src/main/services/ai/human/constants'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
-import type { AiRunEvent, ChatMessageLogEntry } from '../../../../src/shared/types'
+import type { AiRunEvent, ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../src/shared/types'
 import { LlmInputTooLongError } from '../../../../src/main/services/ai/errors'
 
 const DEFAULT_COMPACTION_TRIGGER_TOKENS = Math.floor(
@@ -65,6 +65,15 @@ const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
     documentsStore: {} as AiRunContext['documentsStore'],
     embeddingService: {} as AiRunContext['embeddingService']
   }) satisfies AiRunContext
+
+const budgetLogRecord = (seq: number, entry: ChatMessageLogEntry): ChatMessageLogRecord => ({
+  id: `log-${seq}`,
+  partnerId: 'partner-1',
+  runId: 'run-1',
+  seq,
+  entry,
+  createdAt: seq
+})
 
 describe('ai unit context budget node', () => {
   it('records continue decision with brain context budget snapshot', async () => {
@@ -122,13 +131,39 @@ describe('ai unit context budget node', () => {
         additional_kwargs: { ncurator_current_user: true }
       })
     ]
+    const records: ChatMessageLogRecord[] = Array.from({ length: 6 }, (_, index) => [
+      budgetLogRecord(index * 2 + 1, {
+        kind: 'assistant',
+        content: `long message ${index} ${'x'.repeat(400)}`,
+        toolCalls: [{ id: `call-${index}`, name: 'docx_read_nodes', args: {} }]
+      }),
+      budgetLogRecord(index * 2 + 2, {
+        kind: 'tool',
+        toolCallId: `call-${index}`,
+        toolName: 'docx_read_nodes',
+        ok: true,
+        content: `tool result ${index} ${'x'.repeat(400)}`
+      })
+    ]).flat()
     const appended: Array<{ kind: string; origin?: string }> = []
+    const calls: string[] = []
     const ctxWithSmallWindow = {
       ...ctx,
       humanRuntimeOverrides: {
         modelContextWindowTokens: 600
       },
+      loadMessageLog: async () => {
+        calls.push('load')
+        return [...records]
+      },
       appendMessageLog: async (entries) => {
+        calls.push('append')
+        const maxSeq = records.reduce((max, record) => Math.max(max, record.seq), 0)
+        entries.forEach((entry, index) => {
+          records.push(
+            budgetLogRecord(maxSeq + index + 1, entry)
+          )
+        })
         appended.push(...entries.map((entry) => ({ kind: entry.kind })))
       }
     } satisfies AiRunContext
@@ -140,6 +175,8 @@ describe('ai unit context budget node', () => {
 
     const nextState = await smallWindowNode(state)
 
+    expect(calls[0]).toBe('append')
+    expect(calls.at(-1)).toBe('load')
     expect(nextState.execution.stage).toBe('context_compaction')
     expect(appended).toEqual([{ kind: 'user' }])
     expect(cache.currentUserLogAppended).toBe(true)
@@ -204,10 +241,31 @@ describe('ai unit context budget node', () => {
       new AIMessage({ content: 'short step' }),
       new ToolMessage({ content: 'ok', tool_call_id: 'call-1' })
     ]
+    cache.currentUserLogAppended = true
     const node = createContextBudgetNode({
       ctx: {
         ...ctx,
-        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 }
+        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 },
+        loadMessageLog: async () => [
+          budgetLogRecord(1, {
+            kind: 'user',
+            content: '请继续当前任务。',
+            input: '请继续当前任务。',
+            context: { selectedReferences: [], attachments: [] }
+          }),
+          budgetLogRecord(2, {
+            kind: 'assistant',
+            content: 'short step',
+            toolCalls: []
+          }),
+          budgetLogRecord(3, {
+            kind: 'tool',
+            toolCallId: 'call-1',
+            toolName: 'docx_read_nodes',
+            ok: true,
+            content: 'ok'
+          })
+        ]
       },
       cache
     })
@@ -236,10 +294,19 @@ describe('ai unit context budget node', () => {
         additional_kwargs: { ncurator_current_user: true }
       })
     ]
+    cache.currentUserLogAppended = true
     const node = createContextBudgetNode({
       ctx: {
         ...ctx,
-        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 }
+        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 },
+        loadMessageLog: async () => [
+          budgetLogRecord(1, {
+            kind: 'user',
+            content: '请继续当前任务。',
+            input: '请继续当前任务。',
+            context: { selectedReferences: [], attachments: [] }
+          })
+        ]
       },
       cache
     })
@@ -265,10 +332,27 @@ describe('ai unit context budget node', () => {
     const current = createCurrentBrainUserMessage('法国首都是哪里？')
     const discard = createDiscardBrainUserMessage('以下是最近的会话内容\n\n用户：调研SECRET')
     cache.messages = [discard, current]
+    cache.currentUserLogAppended = true
     const node = createContextBudgetNode({
       ctx: {
         ...ctx,
-        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 }
+        humanRuntimeOverrides: { modelContextWindowTokens: 10_000 },
+        loadMessageLog: async () => [
+          budgetLogRecord(1, {
+            kind: 'annotation',
+            eventType: 'discard_checkpoint',
+            payload: {
+              throughSeq: 1,
+              conversationHistory: '用户：调研SECRET'
+            }
+          }),
+          budgetLogRecord(2, {
+            kind: 'user',
+            content: '法国首都是哪里？',
+            input: '法国首都是哪里？',
+            context: { selectedReferences: [], attachments: [] }
+          })
+        ]
       },
       cache
     })

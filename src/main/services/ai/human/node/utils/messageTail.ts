@@ -1,6 +1,5 @@
 import { AIMessage, HumanMessage, type BaseMessage } from '@langchain/core/messages'
 import { normalizeThoughtText } from '../../../../../../shared/thoughtText'
-import { estimateMessagesForContext } from '../../memory/multimodal'
 
 const CURRENT_USER_MARKER = 'ncurator_current_user'
 const COMPACTION_USER_MARKER = 'ncurator_compaction_user'
@@ -48,117 +47,6 @@ const isBoundaryUser = (message: BaseMessage): boolean =>
   message.getType() === 'human' &&
   !isImageReferenceHuman(message) &&
   !isSyntheticHistoryUserMessage(message)
-
-const groupMessagesForCompaction = (messages: BaseMessage[]): BaseMessage[][] => {
-  const groups: BaseMessage[][] = []
-  let current: BaseMessage[] = []
-  const flush = (): void => {
-    if (current.length === 0) return
-    groups.push(current)
-    current = []
-  }
-  for (const message of messages) {
-    if (isBoundaryUser(message) || message.getType() === 'ai') {
-      flush()
-      current = [message]
-      continue
-    }
-    if (current.length === 0) {
-      current = [message]
-      continue
-    }
-    current.push(message)
-  }
-  flush()
-  return groups
-}
-
-const keepGroupsFromEnd = (
-  groups: BaseMessage[][],
-  retainTokens: number
-): number => {
-  if (groups.length === 0) return 0
-  let used = 0
-  let firstKeptIndex = groups.length
-  for (let index = groups.length - 1; index >= 0; index -= 1) {
-    const group = groups[index]
-    if (!group) continue
-    const cost = estimateMessagesForContext(group)
-    if (firstKeptIndex === groups.length || used + cost <= retainTokens) {
-      firstKeptIndex = index
-      used += cost
-      continue
-    }
-    break
-  }
-  return firstKeptIndex
-}
-
-const findTurnStartGroupIndex = (
-  groups: BaseMessage[][],
-  beforeIndex: number
-): number => {
-  for (let index = beforeIndex - 1; index >= 0; index -= 1) {
-    const group = groups[index]
-    if (group?.[0] && isBoundaryUser(group[0])) return index
-  }
-  return -1
-}
-
-export type CompactionMessageSplit = {
-  folded: BaseMessage[]
-  tail: BaseMessage[]
-  history: BaseMessage[]
-  turnPrefix: BaseMessage[]
-  isSplitTurn: boolean
-}
-
-export const splitMessagesForCompactionTail = (
-  messages: BaseMessage[],
-  retainTokens: number
-): CompactionMessageSplit => {
-  const compactable = messages.filter((message) => message.getType() !== 'system')
-  const groups = groupMessagesForCompaction(compactable)
-  if (groups.length === 0) {
-    return { folded: [], tail: [], history: [], turnPrefix: [], isSplitTurn: false }
-  }
-  const keptIndex = keepGroupsFromEnd(groups, retainTokens)
-  const folded = groups.slice(0, keptIndex).flat()
-  const tail = groups.slice(keptIndex).flat()
-  const firstKept = groups[keptIndex]
-  const splitAtProcess = Boolean(firstKept?.[0] && !isBoundaryUser(firstKept[0]))
-  const turnStartIndex = splitAtProcess ? findTurnStartGroupIndex(groups, keptIndex) : -1
-  if (turnStartIndex < 0) {
-    return {
-      folded,
-      tail,
-      history: folded,
-      turnPrefix: [],
-      isSplitTurn: false
-    }
-  }
-  return {
-    folded,
-    tail,
-    history: groups.slice(0, turnStartIndex).flat(),
-    turnPrefix: groups.slice(turnStartIndex, keptIndex).flat(),
-    isSplitTurn: true
-  }
-}
-
-export const hasCompressibleCompactionHistory = (
-  messages: BaseMessage[],
-  retainTokens: number
-): boolean => {
-  const { folded } = splitMessagesForCompactionTail(messages, retainTokens)
-  return folded.some((message) => !isSyntheticHistoryUserMessage(message))
-}
-
-export const countTailBookmarkMessages = (tail: BaseMessage[]): number =>
-  tail.filter(
-    (message) =>
-      message.getType() === 'ai' || message.getType() === 'tool' || isBoundaryUser(message)
-  ).length
 
 const MAX_TOOL_CALL_ARG_LENGTH = 300
 

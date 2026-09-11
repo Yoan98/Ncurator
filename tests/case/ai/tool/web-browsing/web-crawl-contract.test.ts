@@ -1,6 +1,7 @@
 import http from 'node:http'
 import { describe, it } from 'vitest'
 import { createWebToolHarness } from '../../../../harness/backend/aiToolHarness'
+import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createWebCrawlerService } from '../../../../harness/backend/webCrawlerTestUtils'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
@@ -471,7 +472,7 @@ describe('ai tool web backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         await runtime.seedLlmConfig({
-          id: 'ai-live-config',
+          id: loadLiveLlmConfigFromEnv().id,
           name: 'Browser tab binding test model',
           providerKind: 'openai-compatible',
           base_url: 'https://example.com/v1',
@@ -623,7 +624,7 @@ describe('ai tool web backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         await runtime.seedLlmConfig({
-          id: 'ai-live-config',
+          id: loadLiveLlmConfigFromEnv().id,
           name: 'Browser act test model',
           providerKind: 'openai-compatible',
           base_url: 'https://example.com/v1',

@@ -81,11 +81,21 @@ const createToolInvoker = (tools: readonly ToolLike[]) => {
   }
 }
 
+/** Keep AiRunContext.runId aligned with the harness/worker session key. */
+const createAlignedAiRunContext = (
+  runtime: BackendTestRuntime,
+  contextInput: CreateAiRunContextInput = {}
+) =>
+  runtime.createAiRunContext({
+    ...contextInput,
+    runId: contextInput.runId || runtime.runId
+  })
+
 export const createDocxToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const resourceManager = new AiRunResourceManager([
@@ -121,7 +131,7 @@ export const createPptToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const built = buildPptCapabilityTools({
@@ -145,7 +155,7 @@ export const createExcelToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const built = buildExcelCapabilityTools({
@@ -170,7 +180,7 @@ export const createTerminalToolHarness = (
   contextInput: CreateAiRunContextInput = {},
   options: TerminalToolHarnessOptions = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const sessionManager = new TerminalSessionManager({
@@ -210,7 +220,7 @@ export const createTextFileToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const built = buildTextFileCapabilityTools({
@@ -236,7 +246,7 @@ export const createPdfToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const resourceManager = new AiRunResourceManager([
@@ -269,7 +279,7 @@ export const createRetrievalToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
 
   return {
     ...createToolInvoker(
@@ -287,7 +297,7 @@ export const createWebToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
 
   return {
@@ -308,7 +318,7 @@ export const createImageGenerationToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   const activities: CapturedToolActivity[] = []
   const built = buildImageGenerationCapabilityTools({
@@ -332,7 +342,7 @@ export const createAgentControlToolHarness = (
   runtime: BackendTestRuntime,
   contextInput: CreateAiRunContextInput = {}
 ) => {
-  const ctx = runtime.createAiRunContext(contextInput)
+  const ctx = createAlignedAiRunContext(runtime, contextInput)
   const cache = createHumanRuntimeCache()
   return {
     ...createToolInvoker(

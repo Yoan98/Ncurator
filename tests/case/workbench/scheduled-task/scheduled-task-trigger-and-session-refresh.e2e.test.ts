@@ -19,8 +19,9 @@ const TASK_PROMPT = '定时任务触发验证，请只回复 ok。'
 
 const padTimePart = (value: number): string => String(value).padStart(2, '0')
 
-const nextMinuteHhmm = (): string => {
-  const next = new Date(Date.now() + 50_000)
+/** Pick an HH:MM far enough ahead that fill → save → enable cannot miss the slot. */
+const upcomingDailyHhmm = (bufferMs = 120_000): string => {
+  const next = new Date(Date.now() + bufferMs)
   return `${padTimePart(next.getHours())}:${padTimePart(next.getMinutes())}`
 }
 
@@ -74,7 +75,8 @@ describe('workbench scheduled-task e2e', () => {
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('触发验证任务')
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPrompt).fill(TASK_PROMPT)
           await selectScheduledTaskModel(page, setup.env.modelName)
-          const scheduledHhmm = nextMinuteHhmm()
+          // Compute time immediately before save/enable so we do not miss the daily slot.
+          const scheduledHhmm = upcomingDailyHhmm(120_000)
           await fillScheduledTaskTime(page, scheduledHhmm)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
 
@@ -89,6 +91,16 @@ describe('workbench scheduled-task e2e', () => {
             `${scheduledTaskSelectors.itemTogglePrefix}-${createdTask.id}`
           ).click()
 
+          const tasksAfterEnable = await listTasks(page)
+          const enabledTask = tasksAfterEnable.find((task) => task.id === createdTask.id)
+          const nextRunAt = Number(enabledTask?.nextRunAt || 0)
+          const delayMs = nextRunAt - Date.now()
+          if (!Number.isFinite(nextRunAt) || nextRunAt <= 0 || delayMs > 180_000) {
+            throw new Error(
+              `scheduled task nextRunAt is not within 3 minutes after enable: scheduledHhmm=${scheduledHhmm} nextRunAt=${nextRunAt} delayMs=${delayMs}`
+            )
+          }
+
           const partnersAfterConfig = await listPartners(page)
           if (partnersAfterConfig.length !== partnersBefore.length) {
             throw new Error('enabling a scheduled task should not create a partner')
@@ -100,7 +112,7 @@ describe('workbench scheduled-task e2e', () => {
             `${workbenchSelectors.partnerItemPrefix}-${viewingPartner.id}`
           ).click()
 
-          const deadline = Date.now() + 150_000
+          const deadline = Date.now() + 210_000
           let boundPartnerId = ''
           let triggeredMessage = false
           while (Date.now() < deadline) {

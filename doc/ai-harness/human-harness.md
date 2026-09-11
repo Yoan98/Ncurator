@@ -372,7 +372,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | 时机 | 谁拼 messages | 形态 |
 |------|---------------|------|
 | **新 run / resume 启动** | `projectBrainMessagesFromLog` + graph 包 System | 需要历史：`[System] + [Compact User \| Discard User]? + [seq > historyFloorSeq 原文] + [Current User]`；不需要历史：`[System] + [Discard User] + [Current User]` |
-| **同 run 刚压完** | `buildCompactedMessages`（runtime 整段替换） | `[System] + [Compact User] + [当时留下的 tail 原文]`；当前 build User 若在 tail 里则保留，不再末尾重投影一条 |
+| **同 run 刚压完** | `projectBrainMessagesFromLog`（`appendCurrentUser=false`）+ graph 包 System | `[System] + [Compact User]? + [seq > historyFloorSeq 原文]`；本轮 user 若 `seq > throughSeq` 出现在原文里，不再末尾 append 一条 |
 
 ```mermaid
 flowchart TD
@@ -732,13 +732,13 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 `discard_checkpoint` 与 `compaction_checkpoint` 共用 `historyFloorSeq = max(两个 throughSeq)`。`compact.throughSeq >= discard.throughSeq` 时只合成 Compact User；`discard.throughSeq > compact.throughSeq` 时只合成 Discard User（第 4.5 节）。范围判定本身不触发压缩。
 
-**Discard User 必须进压缩输入。** Discard User 不在 log 里，压缩只看见发给主模型的消息。`throughSeq` 归 compact 之后不再合成 Discard User；若这次压缩又把它排除，那份 `conversationHistory` 既不进 summary 也不再被合成，`seq <= historyFloorSeq` 的原文也不投影——召回彻底蒸发。进压缩只是把它作为 `[user]` 降级成摘要，这正是压缩的职责，也与 Compact User 已有的闭环一致。
+**Discard User 必须进压缩输入。** Discard User 不在 log 里，压缩从 floor checkpoint 读 `conversationHistory` 再合成。`throughSeq` 归 compact 之后不再合成 Discard User；若这次压缩又把它排除，那份 `conversationHistory` 既不进 summary 也不再被合成，`seq <= historyFloorSeq` 的原文也不投影——召回彻底蒸发。进压缩只是把它作为 `[user]` 降级成摘要，这正是压缩的职责，也与 Compact User 已有的闭环一致。
 
 三个判定分开：
 
-- **渲染进 `<conversation>`：要。** Compact User / Discard User 都走 `renderMessagesForCompaction` 的 `role === 'human'` 分支。
-- **`isBoundaryUser`（tail 切点）：不算。** 避免残留 AI/tool 被当成「这一轮」而把整份文本送进半截压缩。
-- **`hasCompressibleCompactionHistory`（防空转）：算 synthetic。** folded 里只剩 Compact/Discard User、没有真对话时不调压缩模型。
+- **渲染进 `<conversation>`：要。** Compact User / Discard User 都从 floor checkpoint 读出，按 conversation 里的一条 `[user]` 渲染。
+- **切点：不算。** Compact / Discard 不是 log 行；真 User 只认 `kind === 'user'`。避免残留 AI/tool 被当成「这一轮」而把整份文本送进半截压缩。
+- **`hasCompressibleCompactionHistory`（防空转）：不算 synthetic。** 可见 log 行里去掉 tail 之后若没有 `user|assistant|tool`，不调压缩模型。
 
 **并排是正式规则**（摘要占位 + 切点后原文保留）。tail 含边界 User 时出现 `[Compact User][History User]`；半轮切点把该轮 User 折进摘要时则是 `[Compact User][AI/Tool…]`。禁止的是「摘要与 **已被压进 Compact User** 的全文」同时发送，不是禁止与 retained User 相邻。Compact User / Discard User 只在发给主模型时合成，不是 log `user`。新 run 续发时新 User 只在末尾 append。压完 runtime 是 `[System] + [Compact User] + tail`，floor 归 compact，下次再压只见 Compact User。
 
@@ -754,22 +754,23 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 ### 6.2 Tail 切点
 
-从当时发给主模型的消息数组去掉 System，按 **组**（边界 User 起一组，或 AI 起一组并吞其后 tool / 图片 Human）从末尾往回累加 `estimateMessagesForContext`（文本 `ceil(字符数 / 4)` + 图 tile）。
+只认伙伴 log。可见行：`seq > historyFloorSeq` 且 `kind` 为 `user | assistant | tool`。已压进 checkpoint 的原文不再进压缩模型。按 **组**（一条 `user` 一组，或一条 `assistant` 带上紧随的 `tool`，含挂在 tool 上的图）从末尾往回累加 token；一条 `tool` 若带 `images[]`，按「ToolMessage + 图片 Human」估，与 `messagesFromLogEntries` 一致。
 
-- 额度：`floor(触发线 × 10%)`（`CONTEXT_COMPACTION_TAIL_RATIO`）。生产窗口 256k 时触发 204_800、tail 20_480。测试 / live 只 override 窗口，tail 由同一比例算出。
-- 碰到边界 User（string content 的 human，**不含** Compact User / Discard User）**不停**（整组可留在 tail）。图片合成 HumanMessage 算过程，不是边界。Compact User / Discard User 进 compactable，但不是边界 User，避免 leftover AI/tool 被当成「这一轮」而把整份文本送进半截。
+- 额度：`floor(触发线 × 10%)`（`CONTEXT_COMPACTION_TAIL_RATIO`）。生产窗口 256k 时触发 204_800、tail 20_480。测试 / live 只 override 窗口，tail 由同一比例算出。历史压缩无上限。
+- 真 User = `kind === 'user'`。图片不是 log 行，Compact / Discard 不是 log 行，都不能当切点。碰到 User **不停**（整组可留在 tail）。
 - 切断必须落在完整组上，禁止拆开一对 tool_call / result。单轮自己大于 keep 时允许切在轮中间（split）。
-- 压缩对象是切点之前的那一段。按消息顺序拼成纯文本：一轮内部不要空行；只在下一轮 `[user]` 前空一行。User 原文整段进去。这里的 tool 正文 **从头 2000 字符**；主模型 tail 里的 tool **不截**。Compact User / Discard User 都按 conversation 里的一条 `[user]` 渲染，没有单独标签。
-- 切点落在一轮中间（tail 第一条不是边界 User）时：**两次**压缩。第一次压该轮 User **之前**的历史；第二次压该轮被切掉的前半（含 User）。无更早历史则第一次省略。已有 Compact User 时，旧摘要作为 conversation 里的一条 `[user]` 送进历史那次，不再使用 `<previous-summary>`。
+- 刀落在 `user`：只做历史压缩（该 user 起为 tail）。刀落在 `assistant|tool`：往前最近 `user` 到刀 = 当前轮压缩；再往前 = 历史压缩。
+- 压缩对象是切点之前的那一段。按消息顺序拼成纯文本：一轮内部不要空行；只在下一轮 `[user]` 前空一行。User 原文整段进去。这里的 tool 正文 **从头 2000 字符**；主模型 tail 里的 tool **不截**。已有 Compact User / Discard User 从 floor checkpoint 读出，作为历史压缩 `<conversation>` 里的一条 `[user]`，没有单独标签。
+- 切点落在一轮中间时：**两次**压缩。第一次压该轮 User **之前**的历史；第二次压该轮被切掉的前半（含 User）。无更早历史则第一次省略。已有 Compact User 时，旧摘要作为 conversation 里的一条 `[user]` 送进历史那次，不再使用 `<previous-summary>`。
 
 ### 6.3 执行
 
-1. `context_budget` 在进入 compaction 前，若本轮 human user 尚未写入 log，先 append `user`。
+1. `context_budget` **先** append 本轮 `user`（若尚未写入），再 load 伙伴 log 判断有无可折、是否 compact。当前 User 必须已经在 log 里再切。
 2. 压缩模型：system 只锁角色（不要继续对话，只出摘要）。格式指令在 user 侧。切点前的原文进 `<conversation>`。历史压缩只用六栏提示词；半截压缩用三栏提示词。不要 `<previous-summary>`。各栏保持简短，保留精确路径、函数名和报错原文。
-3. **先**算 `throughSeq`（对全伙伴 log 中 `user|assistant|tool` 可见行，取与 `countTailBookmarkMessages(tail)` 对齐的 keep 窗口；值为第一条 kept 可见行之前、log 中最大的 `seq`，可为 annotation）。算不出则 **不调** 压缩模型、不发 started、不写 checkpoint，`stage → context_budget`。
+3. **先**算 `throughSeq`（全量 log 里 `< firstKept.seq` 的最大 seq，可以是 annotation；tail 为空时取全量最大 seq）。对不上则 **硬停** `compaction_bookmark_unresolved`：不调压缩模型、不发 started、不写 checkpoint。
 4. 再调压缩模型；只 append **一条** `compaction_checkpoint`（`throughSeq`、`summary` 等）。`summary` 是压缩模型原文，不含英文外壳。
-5. 整段替换 runtime：`[System, 合成 Compact User, …tail]`（`buildCompactedMessages`）。不写 snapshot。
-6. `stage → context_budget`（与图边 `context_compaction → context_budget` 一致），再由 budget 进 brain。
+5. 写完 checkpoint 后整段重投影：`projectBrainMessagesFromLog({ appendCurrentUser: false })`，再 `[System, …projection]`。同 run 压完时本轮 user 已在 log：若它 `seq > throughSeq` 会出现在 tail；若半截把它折进摘要，则不会再投影出来，也不得再 append 一条当前 User。
+6. `stage → context_budget`（与图边 `context_compaction → context_budget` 一致），再由 budget 进 brain。同 run 过程继续 `appendLogEntriesToCache`，不每次全量重投影。
 
 压缩 system：
 

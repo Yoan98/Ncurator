@@ -46,9 +46,11 @@ export const projectBrainMessagesFromLog = (input: {
   ctx: AiRunContext
   state: HumanState
   needsHistory?: boolean
+  appendCurrentUser?: boolean
 }): BrainMessagesProjection => {
   const ordered = orderMessageLogBySeq(input.records)
   const needsHistory = input.needsHistory !== false
+  const appendCurrentUser = input.appendCurrentUser !== false
   const messages: BaseMessage[] = []
   const contextWindowTokens = resolveContextWindowTokens(
     input.ctx.humanRuntimeOverrides?.modelContextWindowTokens
@@ -78,11 +80,13 @@ export const projectBrainMessagesFromLog = (input: {
     appendDiscardUser(messages, assembleConversationHistory(ordered, discardHistoryTokens))
   }
 
-  messages.push(buildCurrentUserMessage(input))
+  if (appendCurrentUser) {
+    messages.push(buildCurrentUserMessage(input))
+  }
 
   const repaired = repairInterruptedToolCalls(messages)
   return {
     messages: repaired,
-    currentUserMessageIndex: repaired.length - 1
+    currentUserMessageIndex: repaired.length > 0 ? repaired.length - 1 : 0
   }
 }
