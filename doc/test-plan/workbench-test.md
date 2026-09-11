@@ -6,6 +6,7 @@
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
 - Workbench UI E2E 回归测试必须通过真实 Electron UI 配模型、创建伙伴、发送消息、选择 `@` 资料、预览、回退和操作右侧面板。设置页可另加文件地址，但发送不再要求绑定工作空间目录。
 - 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；live 配置只读内置服务商 Key 池与选中目标：`AI_LIVE_KEY_<PROVIDER>`（`DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`）、可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）、可选 `AI_LIVE_MODEL`（默认该服务商测试默认模型，通义为 `qwen3.8-flash`）。`baseUrl` / `providerKind` 由产品 registry 推导。日常 case 通过 Settings「推荐」类型写入当前目标服务商；全服务商冒烟见 `live-preset-provider-smoke`。
+- 日常 `pnpm test:workbench` / `pnpm test:e2e:source` 默认 `--exclude-group provider-matrix`，不跑全服务商冒烟；需要时执行 `pnpm test:workbench:provider-matrix` 或 `--case live-preset-provider-smoke`。
 - case 因生产行为缺口失败时，不在测试中硬改业务行为，统一记录为产品或生产实现待决项。
 
 ## 2. 测试边界
@@ -218,12 +219,12 @@ tests/case/workbench/
 
 #### `live-preset-provider-smoke`
 
-- 测试类型：`e2e / live`
-- What：对 `.env` 中已填写 `AI_LIVE_KEY_*` 的每个内置服务商，走 Settings 推荐配置 + 该服务商默认测试模型，各发一句「你好」确认可跑通。
+- 测试类型：`e2e / live`（路径 `conversation/provider-matrix/`，**opt-in**）
+- What：对 `.env` 中已填写 `AI_LIVE_KEY_*` 的每个内置服务商，经真实 Settings「推荐」配置 + Composer 预设 option（稳定调用名 testid）选模，各发一句「你好」确认可跑通。
 - Why：日常全量 live 只跑 `AI_LIVE_PROVIDER`/`AI_LIVE_MODEL` 选定目标；需要单独 smoke 覆盖「有 Key 的全部内置服务商」连通性。
-- How：读取 `listConfiguredLiveLlmTargets()`；为每个目标创建推荐服务商配置；创建伙伴后依次选默认模型并发送「你好」，等待 run 完成。
+- How：读取 `listConfiguredLiveLlmTargets()`；为每个目标走 Settings UI 创建推荐服务商；创建伙伴后依次点预设 option（不得走自定义搜索兜底）并发送「你好」，等待 run 完成。
 - Oracle：每个已配置 Key 的服务商都有非空最终回答；未配置 Key 的服务商不参与、不失败。
-- Not：不评价回答质量；不替代日常 workbench/ai live 的默认目标配置。
+- Not：不评价回答质量；不进入默认全量 e2e（须 `pnpm test:workbench:provider-matrix` 或 `--case live-preset-provider-smoke`）。
 
 #### `user-message-actions`
 

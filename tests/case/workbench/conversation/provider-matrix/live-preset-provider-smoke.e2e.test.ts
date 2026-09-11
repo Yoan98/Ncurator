@@ -7,7 +7,6 @@ import {
   configureLiveModelThroughSettingsUi,
   getWorkbenchLocator,
   navigateToWorkbench,
-  selectWorkbenchModel,
   sendWorkbenchMessage,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
@@ -15,6 +14,31 @@ import {
 
 const CASE_ID = 'live-preset-provider-smoke'
 const PARTNER_NAME = '内置服务商冒烟'
+
+const selectPresetModelThroughUi = async (
+  page: import('playwright').Page,
+  modelName: string
+): Promise<string> => {
+  const modelSelect = getWorkbenchLocator(page, workbenchSelectors.modelSelect)
+  await modelSelect.click()
+  const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
+  await menu.waitFor({ state: 'visible' })
+  await menu
+    .getByText('正在加载模型目录…', { exact: true })
+    .waitFor({ state: 'hidden', timeout: 30_000 })
+    .catch(() => undefined)
+
+  const presetOption = menu.getByTestId(
+    `${workbenchSelectors.modelSelectPresetOptionPrefix}-${modelName}`
+  )
+  await presetOption.waitFor({ state: 'visible', timeout: 30_000 })
+  const disabled = (await presetOption.getAttribute('aria-disabled')) === 'true'
+  if (disabled) {
+    throw new Error(`预设模型 ${modelName} 在 UI 中不可用（aria-disabled）`)
+  }
+  await presetOption.click()
+  return (await modelSelect.innerText()).trim()
+}
 
 describe('workbench conversation e2e', () => {
   it(
@@ -24,9 +48,9 @@ describe('workbench conversation e2e', () => {
         caseId: CASE_ID,
         domain: 'workbench',
         suite: 'conversation',
-        groups: ['composer', 'provider-matrix'],
+        groups: ['provider-matrix'],
         description:
-          '对 .env 中已配置 Key 的每个内置服务商，走推荐配置 + 默认模型发一句「你好」确认可跑通。',
+          'opt-in：对已配置 Key 的每个内置服务商，经 Settings 推荐配置 + Composer 预设选模，真实发送「你好」。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -51,14 +75,12 @@ describe('workbench conversation e2e', () => {
           const results: Array<{
             providerId: string
             modelName: string
+            selectedLabel: string
             finalAnswerText: string
           }> = []
 
           for (const target of targets) {
-            await selectWorkbenchModel(page, target.modelName)
-            const selectedLabel = (
-              await getWorkbenchLocator(page, workbenchSelectors.modelSelect).innerText()
-            ).trim()
+            const selectedLabel = await selectPresetModelThroughUi(page, target.modelName)
             const startedAt = Date.now()
             await sendWorkbenchMessage(page, '你好')
             const evidence = await waitForWorkbenchAiRunCompletion(
@@ -71,6 +93,7 @@ describe('workbench conversation e2e', () => {
             results.push({
               providerId: target.providerId,
               modelName: target.modelName,
+              selectedLabel,
               finalAnswerText: evidence.finalAnswerText
             })
             await runtime.captureScreenshot({
@@ -79,15 +102,24 @@ describe('workbench conversation e2e', () => {
             })
           }
 
-          return { results }
+          return {
+            expectedProviderIds: targets.map((item) => item.providerId),
+            results
+          }
         },
         assert: async (result, runtime) => {
+          const providerIds = result.results.map((item) => item.providerId)
           await runtime.assertThat(
-            result.results.length > 0 &&
-              result.results.every((item) => item.finalAnswerText.trim().length > 0),
+            result.results.length === result.expectedProviderIds.length &&
+              result.expectedProviderIds.every((id) => providerIds.includes(id)) &&
+              result.results.every(
+                (item) =>
+                  item.finalAnswerText.trim().length > 0 && item.selectedLabel.trim().length > 0
+              ),
             {
               name: 'live-preset-provider-smoke-ok',
-              message: '每个已配置 Key 的内置服务商都应能完成一次「你好」live 调用。',
+              message:
+                '必须经真实 Settings 推荐配置与 Composer 预设 option 选模；每个已配置 Key 的内置服务商都应完成一次「你好」live 回答。',
               data: result
             }
           )
