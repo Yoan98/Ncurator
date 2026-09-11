@@ -138,7 +138,8 @@ describe('workbench conversation e2e', () => {
         domain: 'workbench',
         suite: 'conversation',
         groups: ['composer'],
-        description: '验证未配置预设模型隐藏与空态、搜索空状态，以及模型服务 404 的统一错误处理。',
+        description:
+          '验证未配置预设隐藏、统一目录 UI（刷新/无分区标题/无侧栏）、免费行或空态、搜索空状态，以及模型服务错误处理。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -165,17 +166,48 @@ describe('workbench conversation e2e', () => {
           await modelSelect.click()
           const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
           await menu.waitFor({ state: 'visible' })
+          await menu
+            .getByText('正在加载模型目录…', { exact: true })
+            .waitFor({ state: 'hidden', timeout: 20_000 })
+            .catch(() => undefined)
           const customEntry = menu.locator(
             `[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`
           )
           await customEntry.waitFor({ state: 'visible' })
+          const catalogRefresh = menu.getByTestId(workbenchSelectors.modelSelectCatalogRefresh)
+          const catalogRefreshVisible = await catalogRefresh.isVisible()
+          const freeSectionTitleAbsent = !(await menu
+            .getByText('免费模型', { exact: true })
+            .isVisible()
+            .catch(() => false))
+          const inspectorAbsent = !(await page
+            .getByTestId(workbenchSelectors.inspector)
+            .isVisible()
+            .catch(() => false))
           const presetOptions = menu.locator(
             `[data-testid^="${workbenchSelectors.modelSelectPresetOptionPrefix}-"]`
           )
+          const freeOptions = menu.locator(
+            `[data-testid^="${workbenchSelectors.modelSelectFreeOptionPrefix}-"]`
+          )
           const presetOptionCount = await presetOptions.count()
+          const freeOptionCount = await freeOptions.count()
           const presetEmptyStateVisible = await menu
             .getByText('暂无已配置的预设模型', { exact: true })
             .isVisible()
+            .catch(() => false)
+          const catalogErrorVisible = await menu
+            .getByText('模型目录加载失败', { exact: true })
+            .isVisible()
+            .catch(() => false)
+          const freeRowHasBadge =
+            freeOptionCount === 0
+              ? true
+              : ((await freeOptions.first().innerText()) || '').includes('免费')
+          const freeRowHasIcon =
+            freeOptionCount === 0
+              ? true
+              : (await freeOptions.first().locator('img').count()) > 0
           const visionUiTextAbsent = !/(视觉模型|跟随主模型|图片能力)/u.test(
             (await menu.textContent()) || ''
           )
@@ -254,7 +286,14 @@ describe('workbench conversation e2e', () => {
 
           return {
             presetOptionCount,
+            freeOptionCount,
             presetEmptyStateVisible,
+            catalogErrorVisible,
+            catalogRefreshVisible,
+            freeSectionTitleAbsent,
+            inspectorAbsent,
+            freeRowHasBadge,
+            freeRowHasIcon,
             visionUiTextAbsent,
             providerGroupVisible,
             missingOptionCount,
@@ -269,19 +308,35 @@ describe('workbench conversation e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          const catalogSettled =
+            result.freeOptionCount > 0 ||
+            result.presetEmptyStateVisible ||
+            result.catalogErrorVisible
           await runtime.assertThat(
             result.presetOptionCount === 0 &&
-              result.presetEmptyStateVisible &&
+              catalogSettled &&
+              result.catalogRefreshVisible &&
+              result.freeSectionTitleAbsent &&
+              result.inspectorAbsent &&
+              result.freeRowHasBadge &&
+              result.freeRowHasIcon &&
               result.visionUiTextAbsent &&
               result.providerGroupVisible &&
               result.missingOptionCount === 0,
             {
               name: 'main-model-selector-search',
               message:
-                '未配置预设服务商时预设区不展示预设模型并显示空态；没有视觉模型入口；自定义视图搜索无结果时只显示空状态。',
+                '未配置预设服务商时不展示付费预设行；统一列表无「免费模型」标题与信息侧栏；顶部刷新可见；免费目录或空/失败态之一成立；自定义搜索无结果只显示空状态。',
               data: {
                 presetOptionCount: result.presetOptionCount,
+                freeOptionCount: result.freeOptionCount,
                 presetEmptyStateVisible: result.presetEmptyStateVisible,
+                catalogErrorVisible: result.catalogErrorVisible,
+                catalogRefreshVisible: result.catalogRefreshVisible,
+                freeSectionTitleAbsent: result.freeSectionTitleAbsent,
+                inspectorAbsent: result.inspectorAbsent,
+                freeRowHasBadge: result.freeRowHasBadge,
+                freeRowHasIcon: result.freeRowHasIcon,
                 visionUiTextAbsent: result.visionUiTextAbsent,
                 providerGroupVisible: result.providerGroupVisible,
                 missingOptionCount: result.missingOptionCount

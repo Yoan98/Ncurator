@@ -46,7 +46,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：连接配置是后续 workbench 可用性的前提，类型、去重和改名语义任一失真，用户很容易保存出重复或不可用配置。
 - How：从空配置列表进入新增流，默认推荐类型下从纯下拉选择服务商并只填写 API Key 保存，确认无名称输入框；再尝试对同一服务商再次新增，确认下拉中该服务商禁用并标注「已配置」；切到自定义类型覆盖名称查重、必填校验；编辑推荐配置确认服务商下拉可改，改为其他服务商保存后仍为推荐类型且未新增记录。
 - Oracle：新增弹框存在「类型（推荐 / 自定义）」且默认推荐，推荐类型无名称输入框、只要求下拉选择服务商并填写 API Key，对齐 `SET-MODEL-002-AC1`；推荐配置保存后名称等于服务商名、地址为目录默认地址、同服务商仅一条，已配置服务商在下拉中禁用并标注「已配置」，对齐 `SET-MODEL-002-AC2`；自定义类型名称重复时保存被拦截，对齐 `SET-MODEL-002-AC3`；编辑推荐配置服务商下拉可改、改为其他服务商仍为推荐类型且未新增记录，编辑自定义配置带出完整值，对齐 `SET-MODEL-002-AC4`；必填字段不完整时保存被拦截，对齐 `SET-MODEL-002-AC5`；弹窗点击遮罩后保持打开且输入不丢失，对齐 `SET-MODEL-002-AC6`。
-- Not：不验证 workbench 模型选择。
+- Not：不验证 workbench 模型选择。官网 `preset-models` / `free-models` 目录拼装、刷新与 iconUrl 由 Workbench `model-selector-and-provider-error` 与 unit `llm-presets-contract` 覆盖，本 suite 只测 Settings 连接配置。
 
 #### `model-delete-config-feedback`
 
