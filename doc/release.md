@@ -8,7 +8,7 @@
 
 发布只遵循四项原则：
 
-- 平台 Tag 创建后不可修改或覆盖。
+- 平台 Tag **正式上线后**不可修改、覆盖或删除；未上线（构建/测试失败、中断）用 `release:abort` 删掉后可重打同版本，不要堆无效 Tag。
 - 候选包必须从 Tag 导出的干净代码构建。
 - 根据当前版本与上一已发布同平台版本的差异选择正式包 E2E，并测试实际安装后的候选包。
 - 问题处理完后，发布测试过的同一份候选包，并验证公开下载和更新通道。
@@ -25,11 +25,13 @@ flowchart TD
     G --> H["发布同一候选包"]
     H --> I["验证下载、更新元数据和公开状态"]
     I --> J["清理本地旧候选包和临时工作区"]
+    C -->|未上线失败| K["release:abort 删除 Tag"]
+    K --> B
 ```
 
 ### 发布准备与 Tag
 
-在干净且与 `origin/main` 完全一致的 `main` 上开始发布。新版本必须高于该平台已有的最高版本。
+在干净且与 `origin/main` 完全一致的 `main` 上开始发布。新版本必须高于该平台**当前仍存在的**最高 Tag；若上一轮从未上线，先 abort 再重打同版本，不要另起一串版本号。
 
 `release:start` 会先执行：
 
@@ -49,6 +51,28 @@ Windows 在本地 Windows x64 构建候选包；macOS 只创建 Tag，候选包�
 pnpm release:start -- --platform windows --version X.Y.Z
 pnpm release:start -- --platform mac --version X.Y.Z
 ```
+
+### 未上线 Tag 中止与重打
+
+Tag 已推送但**尚未**成为国内或海外 `releases/latest` 上的 live 版本时，可以中止并重打同版本：
+
+```bash
+export NCURATOR_ALLOW_ABORT_TAG=abort-unpublished-tag
+pnpm release:abort -- --tag mac-vX.Y.Z
+# 或
+pnpm release:abort -- --tag windows-vX.Y.Z
+```
+
+`release:abort` 会：
+
+- 拒绝删除任一公开通道（`download.guanzhangai.cn` / `download.ncurator.com`）上已 live 的 Tag；
+- 拒绝删除本地候选状态为 `published` 的 Tag；
+- 删除 origin 与本地的该 annotated Tag；
+- 删除该 Tag 的本地候选目录。
+
+`main` 上的 `release: prepare …` 提交会保留（版本号与 migration 锁仍在）。abort 后重新执行同版本 `release:start` 即可重打 Tag。若误多打了更高版本的 prepare 提交且尚未需要，用常规 git 手段回退该提交后再 abort / 重打目标版本。
+
+已正式上线的版本有问题：发布更高版本修复；不要 abort live Tag。
 
 ### 干净构建与候选包
 
@@ -102,7 +126,10 @@ macOS arm64 候选包必须通过选定的回归范围。项目不再构建、�
 
 发现问题后先定位原因，修复实现或测试，再重新判断修复带来的影响并复测相关正式包用例，直到没有发布阻塞问题。同一次发布中的后续改动不影响已通过用例时，无需重复执行这些用例。
 
-临时环境问题可以复测同一候选包；如果修改了产品、打包或测试代码，由于 Tag 不可变，必须创建更高版本的新 Tag 和候选包。
+临时环境问题可以复测同一候选包。若修改了产品、打包或测试代码：
+
+- **尚未上线**：`release:abort` 删除该 Tag 后，在修复后的 `main` 上重打**同版本**并重新 prepare；
+- **已经上线**：必须发布更高版本的新 Tag 与候选包。
 
 测试完成后应向用户说明本次版本、主要影响范围、执行的回归、结果和剩余风险。确认可发布后，publish 阶段只读取已经通过测试的候选包，不重新构建。
 
@@ -269,12 +296,13 @@ Windows 更新采用“先完成应用关闭、再启动安装器”的时序：
 
 ### 中断、恢复与回滚
 
-- Tag 已创建但 prepare 中断：基于原 Tag 重新执行 `--prepare-only`。
+- Tag 已创建但 prepare 中断：基于原 Tag 重新执行 `--prepare-only`；若源码已改且未上线，先 `release:abort` 再重打同版本。
 - 候选包已生成但测试中断：基于原候选包重新执行 `--test-only`。
 - 上传或 finalize 中断：基于原候选包恢复 publish，或使用 `release:storage:finalize`。
+- 未上线整轮作废：`release:abort` 删除 Tag 后重打同版本，不要另起无用版本号。
 - 已发布版本存在问题：通常发布更高版本修复包。回退下载通道不会让已安装客户端自动降级。
 
-同一个 Tag 的对象如果已存在但哈希不同，禁止覆盖。恢复过程中也不能重新构建并替换候选包。
+同一个 Tag 在对象存储中若已存在但哈希不同，禁止覆盖。恢复过程中也不能重新构建并替换候选包；未上线需要换产物时走 abort + 同版本重打。
 
 ## 4. 命令参考
 
@@ -314,6 +342,8 @@ pnpm test:e2e:package -- --bundle <release-bundle.json> --case <caseId-1> --case
 
 ```bash
 pnpm release:status -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
+export NCURATOR_ALLOW_ABORT_TAG=abort-unpublished-tag
+pnpm release:abort -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
 pnpm release:storage:plan
 pnpm release:storage:finalize -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
 ```

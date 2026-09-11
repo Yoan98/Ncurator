@@ -32,6 +32,7 @@
     "test:update:e2e": "node scripts/test/workflow.mjs --domain workbench --type e2e --case sidebar-app-update --case database-version-update-required --target source",
     "test:update:real:win": "node scripts/test/update-real-windows.mjs",
     "release:start": "node scripts/release/prepare.mjs",
+    "release:abort": "node scripts/release/abort.mjs",
     "release:win": "node scripts/release/windows.mjs",
     "release:doctor": "node scripts/release/doctor.mjs",
     "release:status": "node scripts/release/status.mjs",

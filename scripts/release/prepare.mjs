@@ -83,7 +83,9 @@ const platformVersions = platformTagsOutput
   .sort(compareReleaseVersions)
 const latestPlatformVersion = platformVersions.at(-1)
 if (latestPlatformVersion && compareReleaseVersions(version, latestPlatformVersion) <= 0) {
-  throw new Error(`new ${platform} version ${version} must be higher than ${latestPlatformVersion}`)
+  throw new Error(
+    `new ${platform} version ${version} must be higher than ${latestPlatformVersion}; abort an unpublished tag with pnpm release:abort -- --tag ${platform}-v${latestPlatformVersion} before reusing a version`
+  )
 }
 
 const tagExists = await execFileAsync('git', ['rev-parse', '--verify', '--quiet', releaseTag], {
@@ -91,7 +93,11 @@ const tagExists = await execFileAsync('git', ['rev-parse', '--verify', '--quiet'
 })
   .then(() => true)
   .catch(() => false)
-if (tagExists) throw new Error(`tag already exists: ${releaseTag}`)
+if (tagExists) {
+  throw new Error(
+    `tag already exists: ${releaseTag}; abort it with pnpm release:abort -- --tag ${releaseTag} if it was never published live`
+  )
+}
 
 if (platform === 'windows') {
   const localInspection = await inspectLocalWindowsRelease(ROOT)

@@ -72,16 +72,18 @@ describe('app update publish config', () => {
   })
 
   it('runs the Windows pipeline on a local build backend only', async () => {
-    const [packageJsonText, windowsRelease, prepareRelease] = await Promise.all([
+    const [packageJsonText, windowsRelease, prepareRelease, abortRelease] = await Promise.all([
       readFile(path.resolve('package.json'), 'utf8'),
       readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
-      readFile(path.resolve('scripts/release/prepare.mjs'), 'utf8')
+      readFile(path.resolve('scripts/release/prepare.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/abort.mjs'), 'utf8')
     ])
     const packageJson = JSON.parse(packageJsonText) as {
       scripts: Record<string, string>
     }
 
     expect(packageJson.scripts['release:win']).toContain('release/windows.mjs')
+    expect(packageJson.scripts['release:abort']).toContain('release/abort.mjs')
     expect(packageJson.scripts['release:win:auto']).toBeUndefined()
     expect(windowsRelease).toContain('inspectLocalWindowsRelease')
     expect(windowsRelease).not.toContain('dispatchWindowsRelease')
@@ -98,6 +100,7 @@ describe('app update publish config', () => {
     expect(prepareRelease).toContain("valueAfter('--platform')")
     expect(prepareRelease).toContain("['mac', 'windows']")
     expect(prepareRelease).toContain('latestPlatformVersion')
+    expect(prepareRelease).toContain('release:abort')
     expect(prepareRelease).toContain('prepared for independent macOS release')
     expect(prepareRelease).toContain("'--exclude-group'")
     expect(prepareRelease).toContain("'live'")
@@ -108,6 +111,10 @@ describe('app update publish config', () => {
     expect(prepareRelease).not.toContain('test:update:e2e')
     expect(prepareRelease).not.toContain('--package-e2e')
     expect(prepareRelease).not.toContain('--actions')
+    expect(abortRelease).toContain('NCURATOR_ALLOW_ABORT_TAG')
+    expect(abortRelease).toContain('abort-unpublished-tag')
+    expect(abortRelease).toContain('findLiveChannelsForTag')
+    expect(abortRelease).toContain(`:refs/tags/`)
   })
 
   it('finalizes Windows and macOS release channels independently with a live-publish lock', async () => {
