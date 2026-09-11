@@ -6,6 +6,7 @@ import {
   WORKBENCH_RESULT_E2E_TIMEOUT_MS,
   appendWorkbenchInputText,
   assertNoWorkbenchFakeSignals,
+  configureLiveModelThroughSettingsUi,
   createPartnerThroughWorkbenchUi,
   createTemporaryWorkbenchWorkspace,
   createWorkbenchNewSession,
@@ -33,6 +34,7 @@ const setupScopeWorkspace = async (
   workspace: Awaited<ReturnType<typeof createTemporaryWorkbenchWorkspace>>
   workspaceName: string
 }> => {
+  await configureLiveModelThroughSettingsUi(page)
   const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
   await prepareWorkbenchWorkspaceThroughUi(page, {
     workspaceName: input.workspaceName,
