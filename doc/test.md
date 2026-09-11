@@ -87,13 +87,13 @@ tests/
 
 - UI E2E 必须通过真实 UI 和产品链路完成被测行为，不得用 fake、mock、stub、直接写状态或内部 IPC 绕过。
 - fixture 和 helper 只能准备真实输入、执行用户可见操作、等待结果和收集证据，不能替代产品输出。
-- Settings / Workbench E2E 固定使用 `serviceMode: real`；自动更新模拟是当前唯一已批准例外。
+- Settings / Workbench E2E 固定使用 `serviceMode: real`；已批准例外仅限：自动更新模拟；以及时间轴月/年选天 case 在隔离 `userData` 上用 `scripts/dev/seed-partner-timeline.mjs` 写入跨日消息（墙钟下一次 live 发送无法产生月/年节点，后续点击仍走真实 UI）。
 - Workbench 和需要真实文件的 Settings case 将 `tests/fixtures/workspace` 复制到临时目录，case 结束并关闭应用后删除临时副本。
 - fixture 只能准备用户实际可拥有的文件、目录和配置输入；不得直接写应用状态、调用内部写 IPC 或替换产品服务。
 - observer、只读 IPC 和截图只能收集证据，不能触发被测行为或改变运行结果。
 - `ai/human/live` 必须使用 env 真实模型且不得跳过、模拟或替换模型决策、工具结果或业务产物，允许仅为触发真实机制的可测性 override，case 不设评分门槛，运行后由人工依据 raw logs 与 artifact 将最新 0-100 评估回写至 ai-test 顶部快照。
 - 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。
-- 除自动更新外，任何假数据或模拟路径都必须先说明必要性、取得用户确认，并在本文简短记录例外及边界。
+- 除自动更新、以及时间轴月/年选天 case 用 seed 脚本向隔离 userData 写入跨日消息外，任何假数据或模拟路径都必须先说明必要性、取得用户确认，并在本文简短记录例外及边界。
 - 不得为了 E2E 增加生产环境变量、故障开关、全局探针或其他生产代码入口；确需修改生产代码时，必须先取得用户确认。
 - 向量模型下载 E2E 使用产品现有模型清单和下载逻辑，不替换下载源；执行前必须关闭代理软件的 TUN 模式。网络异常按测试失败处理，并通过 raw logs 定位原因。
 
@@ -186,7 +186,7 @@ runner 支持的过滤参数：
 
 ### 4.3 自动更新模拟测试
 
-自动更新是当前唯一允许在测试侧注入受控状态的 E2E 特例：可提供更新可用、下载进度、完成和失败快照，但不得修改生产代码来支持模拟。该用例还允许测试框架在 Electron 启动前向隔离 `userData/app.sqlite` 写入未来 migration 记录，用于真实触发仅更新模式；只能准备数据库输入，不能伪造主进程启动状态或绕过版本检查。
+自动更新是允许在测试侧注入受控状态的 E2E 特例之一：可提供更新可用、下载进度、完成和失败快照，但不得修改生产代码来支持模拟。该用例还允许测试框架在 Electron 启动前向隔离 `userData/app.sqlite` 写入未来 migration 记录，用于真实触发仅更新模式；只能准备数据库输入，不能伪造主进程启动状态或绕过版本检查。
 
 自动更新测试运行后端契约测试和模拟页面 E2E：
 
@@ -233,10 +233,16 @@ pnpm test:update:real:win -- \
 
 报告写入 `tests/logs/settings/update/real-windows/<运行时间>/report.json`，附截图与 `process.log`。卸载失败会表现为版本无法升级，脚本会明确报错并关联该失败模式。
 
-### 4.4 读取与分析 raw logs
+### 4.4 时间轴跨日种子（月/年选天 E2E）
+
+墙钟下一次真实发送只能产生「今天」节点，无法在单次 run 里点到月/年 DatePicker。`timeline-month-day-pick` 允许在应用重启前用 `scripts/dev/seed-partner-timeline.mjs` 向隔离 `userData/app.sqlite` 写入专用伙伴的跨日消息；打开伙伴、点搜索、选天、再选同一天、点月节点必须走真实 UI，不得用 IPC 或内部状态跳转。
+
+### 4.5 读取与分析 raw logs
+
 
 - 默认先读取目标 run 的 `timeline.jsonl`，理解语义步骤、断言事实和失败位置。
 - 如果 `timeline.jsonl` 仍不足以解释结果，再继续读取 `runtime-events.jsonl` 与关键附件。
+- 压缩切点先看 `runtime-events.jsonl` 的 `context_compaction_*` 字段；prompt 原文看 `llm-io.jsonl`；伙伴 bookmark 看可选 `artifacts/message-log-annotations.json`。
 - 必要时回看 `meta.json` 与 `artifacts.json`，确认 run 摘要、统计值和附件索引。
 - 所有分析结论都必须可回溯到 raw logs 与 artifacts，不得脱离证据做推断。
 
@@ -251,6 +257,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   meta.json
   timeline.jsonl
   runtime-events.jsonl
+  llm-io.jsonl            # backend
   artifacts.json
   artifacts/
 ```
@@ -263,15 +270,20 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - `timeline.jsonl`
   - 单次 run 的事实事件流。
   - 用来回答“本次 run 按顺序发生了什么”。
+  - `data` 只放按需原始观测值；压缩等长文本回看 `llm-io.jsonl`，不要把整段 prompt 再拷进 assertion `data`。
 - `runtime-events.jsonl`
   - 单次 run 的完整运行时原始事件流。
   - 用来回答“底层 runtime 真实发出了哪些事件”。
+  - 压缩切点以 `context_compaction_started` / `completed` 上的 `throughSeq`、`firstKeptSeq`、`historyFloorSeq`、`historyFloorKind`、`isSplitTurn`、`foldedCount`、`tailCount` 为准。
+- `llm-io.jsonl`
+  - backend 额外文件，e2e 不要求。
+  - 用来回答“发给模型的 conversation / system 实际是什么”。
 - `artifacts.json`
   - 单次 run 的附件索引。
   - 用来回答“本次 run 产生了哪些可回看的附件”。
 - `artifacts/`
   - 可选目录。
-  - 只有确实生成 trace、截图、HTML 诊断页等实体附件时才创建。
+  - 只有确实生成 trace、截图、HTML 诊断页、可选 human bookmark 快照等实体附件时才创建。
 
 目录与命名规则：
 
@@ -303,7 +315,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 
 关键约束：
 
-- `schemaVersion` 固定值为 `4`。
+- `schemaVersion` 固定值为 `5`。
 - `scope` 格式为 `<domain>/<suite>/<groups...>`，不包含 `caseId`。
 - `status` 当前值域是 `passed` / `failed`。
 - backend run 在执行中允许临时写出 `running`；正式结束后必须收口为 `passed` 或 `failed`。
@@ -382,7 +394,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 
 关键约束：
 
-- `schemaVersion` 固定值为 `4`。
+- `schemaVersion` 固定值为 `5`。
 - `kind` 当前值域：
   - `trace`
   - `screenshot`
@@ -396,6 +408,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   - `assertionId`
 - `artifacts.json` 必须始终写出，即使 `items` 为空数组。
 - `artifacts/` 目录只有在确实存在实体附件文件时才创建。
+- human live 可按 case 选择写出 `artifacts/message-log-annotations.json`（`kind=other`）：只含 `compaction_checkpoint` / `discard_checkpoint` 的 seq、`throughSeq`、`compactBlockId` 与正文长度，不含摘要或召回全文。默认关闭。
 
 ### 5.6 不同测试类型的统一约束
 

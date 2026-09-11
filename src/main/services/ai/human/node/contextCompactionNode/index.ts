@@ -1,6 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { SystemMessage, type BaseMessage } from '@langchain/core/messages'
-import type { ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../../../shared/types'
+import type {
+  ChatMessageLogEntry,
+  ChatMessageLogRecord,
+  ContextCompactionCut
+} from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import { resolveCompactionTailTokens, resolveContextWindowTokens } from '../../constants'
 import {
@@ -17,10 +21,15 @@ import { emitCompactionCompleted, emitCompactionStarted } from '../../../events/
 import { projectBrainMessagesFromLog } from '../../memory/brainMessageProjection'
 import {
   hasCompressibleCompactionHistory,
-  splitLogForCompactionTail
+  splitLogForCompactionTail,
+  type CompactionLogSplit
 } from '../../memory/compactionSplit'
 import { messagesFromLogEntries } from '../../memory/conversationLogMessages'
-import { resolveHistoryFloor, resolveMaxMessageLogSeq } from '../../memory/transcript'
+import {
+  resolveHistoryFloor,
+  resolveMaxMessageLogSeq,
+  type HistoryFloor
+} from '../../memory/transcript'
 import {
   createCompactedBrainUserMessage,
   createDiscardBrainUserMessage,
@@ -75,6 +84,24 @@ const compactTurnPrefix = async (input: {
 const messagesFromRecords = (records: ChatMessageLogRecord[]): BaseMessage[] =>
   messagesFromLogEntries(records.map((record) => record.entry))
 
+const buildCompactionCut = (
+  split: CompactionLogSplit,
+  throughSeq: number,
+  floor: HistoryFloor
+): ContextCompactionCut => ({
+  throughSeq,
+  ...(split.firstKeptSeq === undefined ? {} : { firstKeptSeq: split.firstKeptSeq }),
+  historyFloorSeq: floor.historyFloorSeq,
+  historyFloorKind: floor.includeCheckpoint
+    ? 'compaction'
+    : floor.includeDiscard
+      ? 'discard'
+      : 'none',
+  isSplitTurn: split.isSplitTurn,
+  foldedCount: split.folded.length,
+  tailCount: split.tail.length
+})
+
 const prependFloorHistoryUsers = (
   records: ChatMessageLogRecord[],
   conversation: BaseMessage[]
@@ -117,6 +144,8 @@ export const createContextCompactionNode = (input: {
     }
 
     const budgetTokensBefore = state.execution.contextBudget?.budgetTokens || 0
+    const floor = resolveHistoryFloor(currentRecords)
+    const cut = buildCompactionCut(split, throughSeq, floor)
     emitCompactionStarted({
       sendEvent: input.ctx.sendEvent,
       runId: input.ctx.runId
@@ -129,7 +158,8 @@ export const createContextCompactionNode = (input: {
       budgetTokensBefore,
       thresholdTokens: state.execution.contextBudget?.compactionTriggerTokens || 0,
       createdAt: Date.now(),
-      stage: 'human_brain'
+      stage: 'human_brain',
+      ...cut
     })
 
     const historyMessages = prependFloorHistoryUsers(currentRecords, messagesFromRecords(history))
@@ -201,7 +231,8 @@ export const createContextCompactionNode = (input: {
       tokenEstimateAfter,
       summaryPreview: compactBlock.summary,
       completedAt: Date.now(),
-      stage: 'human_brain'
+      stage: 'human_brain',
+      ...cut
     })
     input.cache.lastBrainInputTokens = undefined
     input.cache.lastBrainMessageTokenEstimate = undefined

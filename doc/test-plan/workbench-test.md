@@ -285,9 +285,18 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：有消息后时间轴出现「今天」日节点；点击跳到当天最早一条消息；时间轴无独立滚动；已在可视区时点击不带动侧栏/Composer；节点固定间距贴底。Composer 左侧 gutter 不足时进入紧凑态（仅圆点，悬浮 Tooltip）；gutter 足够时即使右侧面板展开也不收起。
 - Why：伙伴是一条一直聊下去的记录，用户需要按日定位；月/年用 DatePicker 选天，不再展开子节点；挤不挤取决于轴文案可用 gutter，而非面板开关。
-- How：创建伙伴并完成一次真实 AI run（当天消息）；打开时间轴，记录侧栏/Composer/消息列表位置后点击今天日节点；对「仅今天」时间轴截图，核对轴线底端靠近输入框顶部、顶端与顶栏留空、由下向上渐隐。把中间栏收窄到 Composer 左侧 gutter 小于 72px 后确认 `data-compact=true`；再拉宽至 gutter 充足确认恢复完整态。月/年聚合与可选日集合（`WB-SESSION-010-AC2`、`WB-SESSION-010-AC5`）由 unit `message-timeline` 覆盖；滚顶懒加载与轴不独立滚动（`WB-SESSION-010-AC4`）沿用消息区既有懒加载，本 case 断言轴容器无独立滚动条。跨月假数据本机用 `scripts/dev/seed-partner-timeline.mjs` 灌入专用伙伴「时间轴 · 预览」（有则复用、无则新建；已有种子跳过，`--force` 重灌）后真机截图核对固定间距与搜索图标。
-- Oracle：时间轴可见且含「今天」、无空的昨/前天；点击今天后将该天最早一条贴到消息列表顶部；轴自身无独立滚动；侧栏与 Composer 位置不变，对齐 `WB-SESSION-010-AC1`、`WB-SESSION-010-AC2`、`WB-SESSION-010-AC3`、`WB-SESSION-010-AC4`、`WB-SESSION-010-AC5`、`WB-SESSION-010-AC6`、`WB-SESSION-010-AC7`（轴线止于最新节点、不向下突出）、`WB-SESSION-010-AC8`（按 gutter 宽度紧凑，不强制跟面板）。
-- Not：不在 E2E 里直接写 SQLite / 伪造系统时钟灌跨月数据；不验证压缩算法。
+- How：创建伙伴并完成一次真实 AI run（当天消息）；打开时间轴，记录侧栏/Composer/消息列表位置后点击今天日节点；对「仅今天」时间轴截图，核对轴线底端靠近输入框顶部、顶端与顶栏留空、由下向上渐隐。把中间栏收窄到 Composer 左侧 gutter 小于 72px 后确认 `data-compact=true`；再拉宽至 gutter 充足确认恢复完整态。滚顶懒加载与轴不独立滚动（`WB-SESSION-010-AC4`）沿用消息区既有懒加载，本 case 断言轴容器无独立滚动条。月/年聚合与可选日集合由 unit `message-timeline` 与 `timeline-month-day-pick` 覆盖。
+- Oracle：时间轴可见且含「今天」、无空的昨/前天；点击今天后将该天最早一条瞬时贴顶；轴自身无独立滚动；侧栏与 Composer 位置不变；gutter 不足进入紧凑态、充足时恢复，对齐 `WB-SESSION-010-AC1`、`WB-SESSION-010-AC3`、`WB-SESSION-010-AC4`、`WB-SESSION-010-AC6`、`WB-SESSION-010-AC7`、`WB-SESSION-010-AC8`。
+- Not：不覆盖月/年 DatePicker 选天（见 `timeline-month-day-pick`）；不验证压缩算法。
+
+#### `timeline-month-day-pick`
+
+- 测试类型：`e2e`
+- What：月节点搜索可选有消息的天；选天后瞬时跳到该天且轴不展开；同一天再打开仍可点并再次跳转；选天关闭弹层后不会再跳到该月最早日；点月节点才跳该月最早日；高亮节点大于未选中节点。
+- Why：墙钟一次发送只有「今天」，月/年选天、重复点同一天、弹层点击穿透是真实会踩的交互；必须走 Electron UI。
+- How：启动 Workbench 让隔离 `userData` 落库后重启，`prepareUserData` 调用 `scripts/dev/seed-partner-timeline.mjs --force` 写入专用伙伴「时间轴 · 预览」的跨日/月/年消息（已批准例外，见 `doc/test.md`）；通过真实 UI 点开该伙伴。打开某月节点 DatePicker，确认无消息日不可选；点该月较晚的有消息日，断言贴顶的是那天而不是该月最早日，轴仍是月节点。点「今天」滚走后再打开同一搜索点同一天，仍能跳回。再点该月节点，跳到该月最早有消息日并稳定停留。截图核对比例与高亮节点更大。
+- Oracle：对齐 `WB-SESSION-010-AC2`、`WB-SESSION-010-AC5`、`WB-SESSION-010-AC6`、`WB-SESSION-010-AC9`。
+- Not：不发真实 AI；不测紧凑态与懒加载（由 `timeline-day-jump` 覆盖）；不伪造系统时钟。
 
 #### `context-clear-capsule`
 

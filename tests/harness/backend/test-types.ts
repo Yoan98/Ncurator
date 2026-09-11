@@ -229,4 +229,5 @@ export type TestCaseDefinition<TResult> = {
   runtimeModelName?: string | null
   execute: (runtime: BackendTestRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: BackendTestRuntime) => Promise<void>
+  messageLogAnnotationPartnerIds?: (runtime: BackendTestRuntime) => readonly string[]
 }

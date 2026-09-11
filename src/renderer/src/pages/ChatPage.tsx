@@ -1369,7 +1369,7 @@ const ChatPage: React.FC = () => {
     const targetRect = element.getBoundingClientRect()
     const nextTop = Math.max(0, scroller.scrollTop + (targetRect.top - scrollerRect.top))
     if (Math.abs(scroller.scrollTop - nextTop) < 2) return
-    scroller.scrollTo({ top: nextTop, behavior: 'smooth' })
+    scroller.scrollTo({ top: nextTop })
   }, [])
 
   const scrollToOldestMessageOfDay = useCallback((dayStart: number, messages: ChatMessage[]): boolean => {

@@ -2062,6 +2062,10 @@ mark {
   color: #5f5e5a;
 }
 
+.nc-message-timeline-item.is-click-blocked {
+  pointer-events: none;
+}
+
 .nc-message-timeline-track {
   display: flex;
   width: var(--nc-timeline-track);
@@ -2100,14 +2104,24 @@ mark {
 }
 
 .nc-message-timeline-row.is-active .nc-message-timeline-dot-day,
-.nc-message-timeline-row.is-active .nc-message-timeline-dot-month,
+.nc-message-timeline-row.is-active .nc-message-timeline-dot-month {
+  width: 10px;
+  height: 10px;
+  background: #5f5e5a;
+  border-color: #5f5e5a;
+}
+
 .nc-message-timeline-row.is-active .nc-message-timeline-dot-year {
+  width: 10px;
+  height: 10px;
   background: #5f5e5a;
   border-color: #5f5e5a;
 }
 
 .nc-message-timeline-row.is-active .nc-message-timeline-label {
-  color: #5f5e5a;
+  color: #37352F;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .nc-message-timeline-label {

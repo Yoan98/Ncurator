@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { readdir } from 'node:fs/promises'
 import { collectBackendRunArtifacts } from './artifactCollector'
+import { collectMessageLogAnnotationArtifact } from './messageLogAnnotations'
 import { assertRequiredFixtures } from './fixtureGuard'
 import type {
   BackendSeedManifest,
@@ -154,6 +155,7 @@ export const runBackendCase = async <TResult>(
   let fixtureBindings: FixtureBinding[] = []
   let status: TestRunStatus = 'failed'
   let runtime: BackendTestRuntime | undefined
+  let annotationArtifacts: Awaited<ReturnType<typeof collectMessageLogAnnotationArtifact>> = []
   const counters = {
     steps: 0,
     assertions: 0,
@@ -240,7 +242,19 @@ export const runBackendCase = async <TResult>(
       await definition.assert(result, runtime)
       status = 'passed'
     } finally {
-      await harness.dispose()
+      try {
+        if (definition.messageLogAnnotationPartnerIds) {
+          annotationArtifacts = await collectMessageLogAnnotationArtifact({
+            scope,
+            caseId: definition.caseId,
+            runId,
+            storageService: runtime.storageService,
+            partnerIds: definition.messageLogAnnotationPartnerIds(runtime)
+          })
+        }
+      } finally {
+        await harness.dispose()
+      }
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -278,7 +292,7 @@ export const runBackendCase = async <TResult>(
           artifacts: [],
           persistedManifest: emptySeedManifest
         }
-    const artifacts = [...runArtifacts, ...seedArtifacts.artifacts]
+    const artifacts = [...runArtifacts, ...seedArtifacts.artifacts, ...annotationArtifacts]
     recordEvent({
       type: 'run',
       name: 'end',

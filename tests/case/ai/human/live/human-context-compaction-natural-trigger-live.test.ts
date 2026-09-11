@@ -23,7 +23,7 @@ import {
 } from '../testUtils'
 
 const PARTNER_ID = 'live-context-compaction'
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 40_000
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '## 目标',
@@ -83,6 +83,48 @@ const firstBrainAfterCompaction = (
     if (seenCompaction && record.caller === 'human.brain') return record
   }
   return undefined
+}
+
+const pickCompactionCut = (
+  event:
+    | Extract<AiRunEvent, { type: 'context_compaction_started' }>
+    | Extract<AiRunEvent, { type: 'context_compaction_completed' }>
+) => ({
+  type: event.type,
+  throughSeq: event.throughSeq,
+  firstKeptSeq: event.firstKeptSeq,
+  historyFloorSeq: event.historyFloorSeq,
+  historyFloorKind: event.historyFloorKind,
+  isSplitTurn: event.isSplitTurn,
+  foldedCount: event.foldedCount,
+  tailCount: event.tailCount,
+  ...(event.type === 'context_compaction_completed'
+    ? { compactBlockId: event.compactBlockId }
+    : {})
+})
+
+const hasValidCompactionCut = (
+  event:
+    | Extract<AiRunEvent, { type: 'context_compaction_started' }>
+    | Extract<AiRunEvent, { type: 'context_compaction_completed' }>
+): boolean => {
+  const foldedCount =
+    event.type === 'context_compaction_started'
+      ? event.targetMessageCount
+      : event.sourceMessageCount
+  return (
+    Number.isInteger(event.throughSeq) &&
+    event.throughSeq >= 1 &&
+    (event.firstKeptSeq === undefined || event.firstKeptSeq > event.throughSeq) &&
+    Number.isInteger(event.historyFloorSeq) &&
+    (event.historyFloorKind === 'compaction' ||
+      event.historyFloorKind === 'discard' ||
+      event.historyFloorKind === 'none') &&
+    typeof event.isSplitTurn === 'boolean' &&
+    event.foldedCount >= 1 &&
+    event.tailCount >= 0 &&
+    event.foldedCount === foldedCount
+  )
 }
 
 const collectRunCompaction = (input: {
@@ -183,6 +225,7 @@ describe('ai human live backend', () => {
           '验证 live 模式下 human 在普通短问之后的周报长任务中会自然触发压缩；同一次可走历史+半截；压完后以 System + Compact User + 原文 tail 交付；Run 2 未压出 checkpoint 则不发 Run 3；续做再压，且 Run3 首轮 brain 须明显复用 Run2 末次前缀缓存。',
         fixtures: [CONTEXT_COMPACTION_SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
+        messageLogAnnotationPartnerIds: () => [PARTNER_ID],
         execute: async (runtime) => {
           const workspaceSeed = await loadContextCompactionWorkspaceSeed(runtime)
           await runtime.seedLlmConfig(loadLiveLlmConfigFromEnv())
@@ -322,6 +365,8 @@ describe('ai human live backend', () => {
 
           runtime.assertThat(
             run2Compaction.lifecycleSatisfied &&
+              run2Compaction.startedEvents.every(hasValidCompactionCut) &&
+              run2Compaction.completedEvents.every(hasValidCompactionCut) &&
               checkpointFormatOk(run2Compaction.summaries) &&
               run2Compaction.compactionRecords.every(compactionPromptOk) &&
               run2SummaryQualitySatisfied &&
@@ -336,15 +381,19 @@ describe('ai human live backend', () => {
               message:
                 'Run 2 应至少压缩一次；落库 checkpoint 为六栏或含 Turn Context，含「上周周报」、不编造「上周工作周报.docx」；压完后 brain 为 system + Compact User + 原文 tail，并成功交付周报。',
               data: {
-                startedEvents: run2Compaction.startedEvents,
-                completedEvents: run2Compaction.completedEvents,
-                compactionSummaries: run2Compaction.summaries,
-                compactionPrompts: run2Compaction.compactionRecords.map((record) => record.user),
+                compactionCuts: [
+                  ...run2Compaction.startedEvents,
+                  ...run2Compaction.completedEvents
+                ].map(pickCompactionCut),
+                summaryHeadingsOk: checkpointFormatOk(run2Compaction.summaries),
+                compactionCallCount: run2Compaction.compactionRecords.length,
                 postCompactBrainRoles: run2PostCompactBrain
                   ? parseBrainMessageRoles(run2PostCompactBrain.user)
                   : [],
                 toolNames: run2Docx.toolNames,
-                artifacts: result.run2Output?.artifacts
+                artifactKinds: (result.run2Output?.artifacts || []).map(
+                  (artifact) => artifact.kind || artifact.capability || ''
+                )
               }
             }
           )
@@ -377,6 +426,8 @@ describe('ai human live backend', () => {
 
           runtime.assertThat(
             run3Compaction.lifecycleSatisfied &&
+              run3Compaction.startedEvents.every(hasValidCompactionCut) &&
+              run3Compaction.completedEvents.every(hasValidCompactionCut) &&
               run3FirstBrainSatisfied &&
               run3HistorySatisfied &&
               run3CurrentTaskSatisfied &&
@@ -387,11 +438,14 @@ describe('ai human live backend', () => {
               message:
                 'Run 3 首次 brain 应为 system + Compact User + 原文过程 + 新任务 user，不能 System 后直接 AI；并再压至少一次。落库摘要只要六栏（半轮可含 Turn Context），目标/进度/下一步/约束与偏好应围绕对照、改标题或法务。',
               data: {
-                startedEvents: run3Compaction.startedEvents,
-                completedEvents: run3Compaction.completedEvents,
+                compactionCuts: [
+                  ...run3Compaction.startedEvents,
+                  ...run3Compaction.completedEvents
+                ].map(pickCompactionCut),
                 run3FirstBrainRoles,
-                compactionSummaries: run3Compaction.summaries,
-                latestRun3Summary,
+                latestRun3SummaryHeadings: REQUIRED_COMPACTION_HEADINGS.filter((heading) =>
+                  latestRun3Summary.includes(heading)
+                ),
                 run3CurrentSection,
                 run3Status: result.run3Output?.status
               }

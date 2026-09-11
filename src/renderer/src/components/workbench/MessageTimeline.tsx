@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { DatePicker, Tooltip } from 'antd'
 import type { Dayjs } from 'dayjs'
 import dayjs from 'dayjs'
@@ -63,6 +63,7 @@ export const MessageTimeline = ({
 }: MessageTimelineProps): React.JSX.Element | null => {
   const rootRef = useRef<HTMLDivElement>(null)
   const [openPickerNodeId, setOpenPickerNodeId] = useState<string | null>(null)
+  const [blockNodeClicks, setBlockNodeClicks] = useState(false)
   const [aligned, setAligned] = useState(false)
   const [compact, setCompact] = useState(false)
 
@@ -117,7 +118,9 @@ export const MessageTimeline = ({
           const itemButton = (
             <button
               type="button"
-              className="nc-message-timeline-item"
+              className={`nc-message-timeline-item${
+                blockNodeClicks || openPickerNodeId ? ' is-click-blocked' : ''
+              }`}
               data-testid={`${workbenchSelectors.timelineItemPrefix}-${node.id}`}
               aria-label={node.label}
               onClick={() => onSelectNode(node)}
@@ -149,8 +152,10 @@ export const MessageTimeline = ({
                   open={openPickerNodeId === node.id}
                   onOpenChange={(open) => setOpenPickerNodeId(open ? node.id : null)}
                   onPickDay={(dayStart) => {
+                    setBlockNodeClicks(true)
                     setOpenPickerNodeId(null)
                     onPickDay(dayStart)
+                    window.setTimeout(() => setBlockNodeClicks(false), 80)
                   }}
                 />
               ) : null}
@@ -186,6 +191,15 @@ const TimelineDayPicker = ({
     const latest = selectableDays[selectableDays.length - 1]
     return dayjs(latest ?? node.jumpDayStart)
   }, [node.jumpDayStart, selectableDays])
+  const [pickerEpoch, setPickerEpoch] = useState(0)
+  const wasOpenRef = useRef(false)
+
+  useEffect(() => {
+    if (wasOpenRef.current && !open) {
+      setPickerEpoch((current) => current + 1)
+    }
+    wasOpenRef.current = open
+  }, [open])
 
   return (
     <div className="nc-message-timeline-picker">
@@ -202,9 +216,10 @@ const TimelineDayPicker = ({
         <HiMagnifyingGlass className="h-3 w-3" />
       </button>
       <DatePicker
+        key={pickerEpoch}
         open={open}
         onOpenChange={onOpenChange}
-        value={undefined}
+        value={null}
         allowClear={false}
         showToday={false}
         inputReadOnly

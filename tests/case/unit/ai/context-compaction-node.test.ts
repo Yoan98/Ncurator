@@ -7,7 +7,11 @@ import {
   wrapCompactionCheckpointContent
 } from '../../../../src/main/services/ai/human/prompts/compaction'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
-import type { ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../src/shared/types'
+import type {
+  AiRunEvent,
+  ChatMessageLogEntry,
+  ChatMessageLogRecord
+} from '../../../../src/shared/types'
 import {
   isCompactedBrainUserMessage,
   isCurrentBrainUserMessage
@@ -130,6 +134,11 @@ const toolEntry = (id: string, content: string): ChatMessageLogEntry => ({
 const costOf = (records: ChatMessageLogRecord[]): number =>
   estimateMessagesForContext(messagesFromLogEntries(records.map((record) => record.entry)))
 
+const compactionEvents = (events: readonly AiRunEvent[]) => ({
+  started: events.filter((event) => event.type === 'context_compaction_started'),
+  completed: events.filter((event) => event.type === 'context_compaction_completed')
+})
+
 describe('ai human context compaction node', () => {
   it('writes a checkpoint then re-projects system, compact user, and retained tail', async () => {
     const tail = [
@@ -145,6 +154,7 @@ describe('ai human context compaction node', () => {
     ]
     const appended: ChatMessageLogEntry[] = []
     const prompts: Array<{ system: string; user: string }> = []
+    const events: AiRunEvent[] = []
     const ctx = {
       ...createContext(),
       humanRuntimeOverrides: {
@@ -159,7 +169,9 @@ describe('ai human context compaction node', () => {
         return '## 目标\n继续交付'
       },
       checkCancelled: () => undefined,
-      sendEvent: () => undefined
+      sendEvent: (event: AiRunEvent) => {
+        events.push(event)
+      }
     } as AiRunContext
     const cache = createHumanRuntimeCache()
     cache.currentUserLogAppended = true
@@ -196,6 +208,26 @@ describe('ai human context compaction node', () => {
     expect(isCurrentBrainUserMessage(cache.messages![2]!)).toBe(false)
     expect(cache.messages?.filter(isCurrentBrainUserMessage)).toHaveLength(0)
     expect(next.execution.stage).toBe('context_budget')
+    const { started, completed } = compactionEvents(events)
+    expect(started).toHaveLength(1)
+    expect(completed).toHaveLength(1)
+    expect(started[0]).toMatchObject({
+      throughSeq: 3,
+      firstKeptSeq: 4,
+      historyFloorSeq: -1,
+      historyFloorKind: 'none',
+      isSplitTurn: false,
+      foldedCount: 3,
+      tailCount: 3
+    })
+    expect(completed[0]).toMatchObject({
+      throughSeq: 3,
+      firstKeptSeq: 4,
+      historyFloorKind: 'none',
+      isSplitTurn: false,
+      foldedCount: 3,
+      tailCount: 3
+    })
   })
 
   it('sends Discard User into the compaction conversation as a user block', async () => {
@@ -220,6 +252,7 @@ describe('ai human context compaction node', () => {
     ]
     const appended: ChatMessageLogEntry[] = []
     const prompts: Array<{ system: string; user: string }> = []
+    const events: AiRunEvent[] = []
     const ctx = {
       ...createContext(),
       humanRuntimeOverrides: {
@@ -234,7 +267,9 @@ describe('ai human context compaction node', () => {
         return '## 关键上下文\n调研SECRET'
       },
       checkCancelled: () => undefined,
-      sendEvent: () => undefined
+      sendEvent: (event: AiRunEvent) => {
+        events.push(event)
+      }
     } as AiRunContext
     const cache = createHumanRuntimeCache()
     cache.currentUserLogAppended = true
@@ -260,6 +295,15 @@ describe('ai human context compaction node', () => {
     expect(cache.messages?.some((message) => String(message.content).includes('以下是最近的会话内容'))).toBe(
       false
     )
+    expect(compactionEvents(events).completed[0]).toMatchObject({
+      throughSeq: 4,
+      firstKeptSeq: 5,
+      historyFloorSeq: 1,
+      historyFloorKind: 'discard',
+      isSplitTurn: false,
+      foldedCount: 3,
+      tailCount: 3
+    })
   })
 
   it('returns to budget when the log has nothing compressible', async () => {
@@ -327,6 +371,7 @@ describe('ai human context compaction node', () => {
     ]
     const prompts: Array<{ system: string; user: string }> = []
     const appended: ChatMessageLogEntry[] = []
+    const events: AiRunEvent[] = []
     const ctx = {
       ...createContext(),
       humanRuntimeOverrides: {
@@ -341,7 +386,9 @@ describe('ai human context compaction node', () => {
         return request.user.includes('原始请求') ? '前半轮摘要' : '历史摘要'
       },
       checkCancelled: () => undefined,
-      sendEvent: () => undefined
+      sendEvent: (event: AiRunEvent) => {
+        events.push(event)
+      }
     } as AiRunContext
     const cache = createHumanRuntimeCache()
     cache.currentUserLogAppended = true
@@ -370,5 +417,14 @@ describe('ai human context compaction node', () => {
     expect(isCompactedBrainUserMessage(cache.messages![1]!)).toBe(true)
     expect(cache.messages?.some((message) => String(message.content) === 'u'.repeat(80))).toBe(false)
     expect(cache.messages?.filter(isCurrentBrainUserMessage)).toHaveLength(0)
+    expect(compactionEvents(events).completed[0]).toMatchObject({
+      throughSeq: 7,
+      firstKeptSeq: 8,
+      historyFloorSeq: 1,
+      historyFloorKind: 'compaction',
+      isSplitTurn: true,
+      foldedCount: 6,
+      tailCount: 2
+    })
   })
 })

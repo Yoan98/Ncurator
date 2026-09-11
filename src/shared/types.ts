@@ -1094,6 +1094,18 @@ export type BrainContextBudgetSnapshot = {
   lastBrainInputTokens?: number
   deltaTokenEstimate?: number
 }
+
+export type ContextCompactionHistoryFloorKind = 'compaction' | 'discard' | 'none'
+
+export type ContextCompactionCut = {
+  throughSeq: number
+  firstKeptSeq?: number
+  historyFloorSeq: number
+  historyFloorKind: ContextCompactionHistoryFloorKind
+  isSplitTurn: boolean
+  foldedCount: number
+  tailCount: number
+}
 export type AiLlmRequestWireToolCall = {
   id: string
   name: string
@@ -1809,7 +1821,8 @@ type AiRunEventPayload =
       budgetTokensBefore: number
       thresholdTokens: number
       createdAt: number
-    }
+      stage?: 'human_brain'
+    } & ContextCompactionCut
   | {
       type: 'context_compaction_completed'
       runId: string
@@ -1821,7 +1834,8 @@ type AiRunEventPayload =
       tokenEstimateAfter: number
       summaryPreview: string
       completedAt: number
-    }
+      stage?: 'human_brain'
+    } & ContextCompactionCut
   | {
       type: 'run_warning'
       runId: string

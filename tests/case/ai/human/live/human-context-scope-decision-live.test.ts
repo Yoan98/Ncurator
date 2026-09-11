@@ -119,6 +119,7 @@ describe('ai human live backend', () => {
         fixtures: [SHARED_WORKSPACE_FIXTURE_PATH],
         runMode: 'single',
         runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
+        messageLogAnnotationPartnerIds: (runtime) => [`${runtime.runId}-scope`],
         execute: async (runtime) => {
           const partnerId = `${runtime.runId}-scope`
           const overrides = { modelContextWindowTokens: WINDOW_TOKENS }
