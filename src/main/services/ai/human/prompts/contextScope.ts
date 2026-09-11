@@ -1,7 +1,9 @@
 export const wrapDiscardConversationHistory = (historyText: string): string => {
   const body = historyText.trim()
   if (!body) return ''
-  return ['以下是最近的会话内容', '', body].join('\n')
+  return `以下是最近的会话内容
+
+${body}`
 }
 
 export const CONTEXT_SCOPE_SYSTEM_PROMPT = `你是上下文范围判定助手。根据近期已完成任务的 digest 和新诉求，判断这一轮还需不需要当前这段对话历史原文。
@@ -16,13 +18,11 @@ export const buildContextScopeDecisionPrompt = (input: {
   taskGoal: string
 }): { system: string; user: string } => ({
   system: CONTEXT_SCOPE_SYSTEM_PROMPT,
-  user: [
-    '近期任务：',
-    input.digestText.trim() || '无',
-    '',
-    '新诉求：',
-    input.taskGoal.trim() || '无'
-  ].join('\n')
+  user: `近期任务：
+${input.digestText.trim() || '无'}
+
+新诉求：
+${input.taskGoal.trim() || '无'}`
 })
 
 export const RUN_DIGEST_SYSTEM_PROMPT = `你是任务摘要助手。把这一轮用户诉求和最终交付压成一句 20 到 40 字的中文摘要，供后续判断是否需要这段历史。
@@ -34,12 +34,15 @@ export const buildRunDigestPrompt = (input: {
   deliveryMarkdown: string
   compactReferences?: string
 }): { system: string; user: string } => {
-  const lines = [`用户：${input.userInput.trim() || '无'}`]
   const compactReferences = input.compactReferences?.trim()
-  if (compactReferences) lines.push(`参考：${compactReferences}`)
-  lines.push(`交付：${input.deliveryMarkdown.trim() || '无'}`)
   return {
     system: RUN_DIGEST_SYSTEM_PROMPT,
-    user: lines.join('\n')
+    user: [
+      `用户：${input.userInput.trim() || '无'}`,
+      compactReferences ? `参考：${compactReferences}` : '',
+      `交付：${input.deliveryMarkdown.trim() || '无'}`
+    ]
+      .filter((line) => line.length > 0)
+      .join('\n')
   }
 }

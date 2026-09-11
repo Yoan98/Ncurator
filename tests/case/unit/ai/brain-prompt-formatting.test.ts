@@ -49,7 +49,7 @@ describe('ai unit brain prompt formatting', () => {
   it('keeps stable local environment in system and puts workspace roots in the user message', () => {
     const ctx = createFakeCtx()
     const system = buildBrainSystemPrompt({ ctx })
-    const environment = titledSection(system, '运行环境')
+    const environment = titledSection(system, '当前运行环境')
     const state = createInitialHumanState({
       taskId: 'task-prompt-formatting',
       userInput: '继续处理任务'
@@ -64,25 +64,27 @@ describe('ai unit brain prompt formatting', () => {
     expect(environment).not.toContain('current_time')
     expect(system).not.toContain('current_time.local_iso')
     expect(system).not.toContain('工作区：')
-    expect(user).toContain('工作区：')
+    expect(user).toContain('默认工作区：')
+    expect(titledSection(user, '默认工作区')).toBe('- D:\\workspace')
+    expect(user).not.toContain('用户默认工作区域')
     expect(user).toContain('D:\\workspace')
     expect(user).not.toContain('偏好：')
     expect(user).not.toContain('参考：')
-    expect(user.indexOf('工作区：')).toBeLessThan(user.indexOf('时间：'))
+    expect(user.indexOf('默认工作区：')).toBeLessThan(user.indexOf('当前时间：'))
     expect(system).not.toContain('reference_field_guide')
     expect(system).not.toContain('字段说明')
-    expect(system.indexOf('原则：')).toBeLessThan(system.indexOf('终端等待：'))
-    expect(system.indexOf('终端等待：')).toBeLessThan(system.indexOf('计算：'))
-    expect(system.indexOf('计算：')).toBeLessThan(system.indexOf('计划：'))
-    expect(system.indexOf('计划：')).toBeLessThan(system.indexOf('交付：'))
-    expect(system.indexOf('交付：')).toBeLessThan(system.indexOf('特别说明：'))
-    expect(system.indexOf('特别说明：')).toBeLessThan(system.indexOf('技能目录：'))
-    expect(system.indexOf('技能目录：')).toBeLessThan(system.indexOf('运行环境：'))
+    expect(system.indexOf('原则：')).toBeLessThan(system.indexOf('终端等待规则：'))
+    expect(system.indexOf('终端等待规则：')).toBeLessThan(system.indexOf('计算规则：'))
+    expect(system.indexOf('计算规则：')).toBeLessThan(system.indexOf('计划规则：'))
+    expect(system.indexOf('计划规则：')).toBeLessThan(system.indexOf('交付规则：'))
+    expect(system.indexOf('交付规则：')).toBeLessThan(system.indexOf('特别说明规则：'))
+    expect(system.indexOf('特别说明规则：')).toBeLessThan(system.indexOf('技能目录：'))
+    expect(system.indexOf('技能目录：')).toBeLessThan(system.indexOf('当前运行环境：'))
   })
 
   it('keeps context efficiency and planning rules concise', () => {
     const system = buildBrainSystemPrompt({ ctx: createFakeCtx() })
-    const planContract = titledSection(system, '计划')
+    const planContract = titledSection(system, '计划规则')
 
     expect(planContract).toBe(
       '- 只在复杂任务时使用计划，并只在关键阶段完成、方案需要变化时才更新。'
@@ -102,12 +104,12 @@ describe('ai unit brain prompt formatting', () => {
     } as AiRunContext
     const emptyUser = buildBrainUserMessage({ state, ctx: emptyCtx })
 
-    expect(emptyUser).toContain('任务：')
+    expect(emptyUser).toContain('用户诉求：')
     expect(emptyUser).toContain('继续处理任务')
     expect(emptyUser).not.toContain('偏好：')
-    expect(emptyUser).not.toContain('工作区：')
+    expect(emptyUser).not.toContain('默认工作区：')
     expect(emptyUser).not.toContain('参考：')
-    expect(emptyUser).toContain('时间：')
+    expect(emptyUser).toContain('当前时间：')
     expect(emptyUser).toContain('current_time.local_iso')
     expect(emptyUser).not.toContain('<active_state>')
   })
@@ -141,15 +143,15 @@ describe('ai unit brain prompt formatting', () => {
     expect(titledSection(user, '偏好')).toBe(
       '优先使用知识库内容和用户工作区域文件内容作为依据来推进任务'
     )
-    expect(user).toContain('工作区：')
+    expect(user).toContain('默认工作区：')
     expect(user).toContain('参考：')
     expect(user).toContain('1. note.md')
     expect(user).not.toContain('当前没有用户显式指定的参考范围')
     expect(user).not.toContain('当前没有用户添加的附件')
-    expect(user.indexOf('任务：')).toBeLessThan(user.indexOf('偏好：'))
-    expect(user.indexOf('偏好：')).toBeLessThan(user.indexOf('工作区：'))
-    expect(user.indexOf('工作区：')).toBeLessThan(user.indexOf('参考：'))
-    expect(user.indexOf('参考：')).toBeLessThan(user.indexOf('时间：'))
+    expect(user.indexOf('用户诉求：')).toBeLessThan(user.indexOf('偏好：'))
+    expect(user.indexOf('偏好：')).toBeLessThan(user.indexOf('默认工作区：'))
+    expect(user.indexOf('默认工作区：')).toBeLessThan(user.indexOf('参考：'))
+    expect(user.indexOf('参考：')).toBeLessThan(user.indexOf('当前时间：'))
   })
 
   it('omits memory and active_state even if skills and plan exist', () => {

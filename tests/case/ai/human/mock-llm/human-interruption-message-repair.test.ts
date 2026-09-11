@@ -287,7 +287,7 @@ describe('ai human mock-llm backend', () => {
             result.run2Result.status === 'completed' &&
             result.orderTypes[0] === 'system' &&
             result.orderLastType === 'human' &&
-            result.orderLastContent.includes('任务：') &&
+            result.orderLastContent.includes('用户诉求：') &&
             result.orderLastContent.includes('保留刚才的过拟合信息，再补充反走样') &&
             result.orderHasRun1Final &&
             result.orderHasResumeBuildUsers &&
@@ -296,7 +296,7 @@ describe('ai human mock-llm backend', () => {
             result.danglingRun1Result.failureCode === 'user_cancelled' &&
             result.danglingRun2Result.status === 'completed' &&
             result.danglingLastType === 'human' &&
-            result.danglingLastContent.includes('任务：') &&
+            result.danglingLastContent.includes('用户诉求：') &&
             result.danglingHasAssistantToolCalls &&
             result.danglingInterrupted,
           {

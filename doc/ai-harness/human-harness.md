@@ -143,7 +143,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 ```json
 {
   "kind": "user",
-  "content": "任务：\n按模板写本周周报，不要封面页。",
+  "content": "用户诉求：\n按模板写本周周报，不要封面页。",
   "input": "按模板写本周周报，不要封面页。",
   "context": {
     "selectedReferences": [
@@ -349,7 +349,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 ### 2.5 运行时注入（不进库）
 
-新 run 的参考范围来自 **Composer 当前 `@` 引用与附件**，由 `buildBrainUserMessage` 渲染进 build user 的「参考」段。工作地址列表不进参考段，单独渲染为 build user 的「工作区」（位于「参考」之上），按设置页现表快照，不进 System。
+新 run 的参考范围来自 **Composer 当前 `@` 引用与附件**，由 `buildBrainUserMessage` 渲染进 build user 的「参考」段。工作地址列表不进参考段，单独渲染为 build user 的「默认工作区」（位于「参考」之上），按设置页现表快照，不进 System。
 
 | | log 里的 `user.context` | Composer → build user |
 |--|-------------------------|------------------------|
@@ -435,22 +435,22 @@ flowchart TD
 | 过程 | assistant / tool / 多模态合成 HumanMessage |
 | User（续发） | 新 run 末尾 append 的 build 全文 |
 
-**build user 块**（各字段来源见第 3.3 节；`偏好` / `工作区` / `参考` 无内容时整块省略）：
+**build user 块**（各字段来源见第 3.3 节；`偏好` / `默认工作区` / `参考` 无内容时整块省略）：
 
 ```text
-任务：
+用户诉求：
 …
 
 偏好：
 …          ← 仅非 default
 
-工作区：
+默认工作区：
 …          ← 仅有工作地址时
 
 参考：
 …          ← 仅有 @ 或附件时
 
-时间：
+当前时间：
 …
 ```
 
@@ -478,11 +478,11 @@ flowchart TD
 
 | 块 | 来源 |
 |----|------|
-| `任务` | 当时那条 User 对应 run 的 `input` |
+| `用户诉求` | 当时那条 User 对应 run 的 `input` |
 | `偏好` | 当时 Composer；`default` 时整块省略 |
-| `工作区` | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
+| `默认工作区` | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
 | `参考` | 当时 Composer 的 `@` 与附件（第 2.5 节）；两者皆空时整块省略，有一侧为空时只渲染有内容的一侧 |
-| `时间` | 当时 run 的 `runStartedAt`（历史行不再改） |
+| `当前时间` | 当时 run 的 `runStartedAt`（历史行不再改） |
 
 annotation 扫描该伙伴**全部**剩余 log（不受 `historyFloorSeq` 限制）：技能从最新 `skill_state_updated` 恢复。计划仍按 `plan_updated` / `finalizing_started` 扫描。清空消息记录会物理删除 log，因此技能 / 计划不会从已删除的历史恢复。
 
@@ -700,7 +700,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 - System 跨 run **字节稳定**（platform / paths / 技能目录；**不含** `current_time`）。
 - tail 只许 **末尾 append** assistant/tool（过程 `toolCalls.args` 见第 2.2 节）。
-- 同 run 内：**不改** 当前 build user；「时间」取本 run `runStartedAt`。
+- 同 run 内：**不改** 当前 build user；「当前时间」取本 run `runStartedAt`。
 - resume：**append** 新 User 在整段末尾；历史 User / 过程 **一字不改**（来自 log `content`）。
 
 ### 5.2 稳态下如何保持命中
@@ -864,7 +864,7 @@ log 行 append-only 保留；`seq <= compaction_checkpoint.throughSeq` 的行不
 1. **log**：进 brain 前 append 新 `user` 行（`content` = 当次 build 全文；`input` = 人打的字；含 Composer `context`）。
 2. **brain**：在已有历史末尾 append 新 User（新 run 的 input + Composer + 本 run `current_time`）；**不替换**前面的 User，**不改写**中间过程。
 3. 历史 User = 对应 log 行的 `content`。
-4. 新诉求只出现在 **末尾** 那条 User 的「任务」段。新 User 不抄 Compact / Discard User。
+4. 新诉求只出现在 **末尾** 那条 User 的「用户诉求」段。新 User 不抄 Compact / Discard User。
 5. 符合 第 5 节：历史前缀不变 → 缓存可命中；打破前缀的是 compaction 与「不需要历史」。未完成的上一 run 不会走「不需要历史」（第 4 节门控 1）。有交付但 digest 不可用走门控 2，同样带历史。
 6. **tools**：`bindTools` 按该伙伴剩余 log 最新 `learnedSkillIds` 重绑，不是冻住进程内 tool 对象。
 
@@ -888,16 +888,16 @@ log 行 append-only 保留；`seq <= compaction_checkpoint.throughSeq` 的行不
 [Assistant]    …
 [Tool]         …
 [Tool]         Error: The run was interrupted…
-[User]         任务=继续把周报写完                  ← append
-               时间=本 run
+[User]         用户诉求=继续把周报写完                  ← append
+               当前时间=本 run
 ```
 
 log 侧（示意）：
 
 ```text
-seq …  user      content=任务：…
+seq …  user      content=用户诉求：…
 seq …  assistant / tool / …
-seq N  user      content=任务：继续把周报写完…
+seq N  user      content=用户诉求：继续把周报写完…
 ```
 
 压过后再说话：
@@ -921,7 +921,7 @@ seq N  user      content=任务：继续把周报写完…
 
 | 情况 | 行为 |
 |------|------|
-| 多次 resume | 每次 append 新 build user 在末尾；首条 `User built₁` 保留原始 task_goal |
+| 多次 resume | 每次 append 新 build user 在末尾；首条 `User built₁` 保留原始用户诉求 |
 | `output_truncated` / `runtime_limit` | 可继续；半截 assistant 已在 log/tail |
 | `input_too_long` | 不写 log user，不调 brain |
 | 编辑重发 | 先取消并等待该 run 的 digest job，再删除该 `runId` 的 `ai_run` 与全部 message log（user/assistant/tool/digest/`context_scope_decided`/`discard_checkpoint`）。若该轮写过 discard 书签，删后回到此前 floor；已写入文件与 `ai_file_change` 不回滚 |

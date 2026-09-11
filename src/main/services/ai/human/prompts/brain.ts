@@ -16,11 +16,8 @@ export const renderLocalEnvironmentText = (ctx: AiRunContext): string =>
     `- runtime_paths.assets：${getPartnerAssetsRootDir(ctx.partnerId)}（运行期生成的临时产物目录，如图片、渲染中间结果等）`
   ].join('\n')
 
-export const renderWorkspaceRootsText = (ctx: AiRunContext): string => {
-  if (ctx.workspaceRoots.length === 0) return ''
-  return `用户默认工作区域：
-${ctx.workspaceRoots.map((rootPath) => `- ${rootPath}`).join('\n')}`
-}
+export const renderWorkspaceRootsText = (ctx: AiRunContext): string =>
+  ctx.workspaceRoots.map((rootPath) => `- ${rootPath}`).join('\n')
 
 export const renderCurrentTimeText = (ctx: AiRunContext): string => {
   const startedAt = new Date(ctx.runStartedAt)
@@ -111,8 +108,8 @@ ${renderSkillCatalog(input.ctx.platform)}
 ${renderLocalEnvironmentText(input.ctx)}
 `.trim()
 
-export const buildBrainUserMessage = (input: { state: HumanState; ctx: AiRunContext }): string => {
-  const blocks = [
+export const buildBrainUserMessage = (input: { state: HumanState; ctx: AiRunContext }): string =>
+  [
     `用户诉求：
 ${input.state.task.userInput}`,
     renderOptionalUserBlock('偏好', renderPreferenceText(input.ctx.preference)),
@@ -120,7 +117,6 @@ ${input.state.task.userInput}`,
     renderOptionalUserBlock('参考', renderReferenceScopeText(input.ctx.referenceScope)),
     `当前时间：
 ${renderCurrentTimeText(input.ctx)}`
-  ].filter((block) => block.length > 0)
-
-  return blocks.join('\n\n')
-}
+  ]
+    .filter((block) => block.length > 0)
+    .join('\n\n')

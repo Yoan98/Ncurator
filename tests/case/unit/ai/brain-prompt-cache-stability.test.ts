@@ -172,8 +172,8 @@ describe('ai unit brain prompt cache stability', () => {
     expect(aUser).not.toBe(bUser)
     expect(aUser).toContain('任务 A')
     expect(bUser).toContain('任务 B')
-    expect(aUser).toContain('时间：')
-    expect(bUser).toContain('时间：')
+    expect(aUser).toContain('当前时间：')
+    expect(bUser).toContain('当前时间：')
   })
 
   it('keeps system static when workspace roots change and puts roots only in the user message', () => {
