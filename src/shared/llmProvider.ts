@@ -47,13 +47,6 @@ export const LLM_PROVIDER_REGISTRY: LlmProviderRegistryEntry[] = [
     defaultBaseUrl: 'https://api.xiaomimimo.com/v1'
   },
   {
-    id: 'moonshot',
-    label: 'Kimi',
-    hosts: ['api.moonshot.cn'],
-    providerKind: 'openai-compatible',
-    defaultBaseUrl: 'https://api.moonshot.cn/v1'
-  },
-  {
     id: 'zhipu',
     label: '智谱 GLM',
     hosts: ['open.bigmodel.cn', 'api.z.ai'],

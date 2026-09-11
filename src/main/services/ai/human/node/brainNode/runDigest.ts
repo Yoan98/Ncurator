@@ -2,7 +2,7 @@ import type { ChatMessageLogEntry } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import type { HumanState } from '../../types'
 import { buildRunDigestPrompt } from '../../prompts/contextScope'
-import { renderCompactReferenceScope } from '../../prompts/referenceScope'
+import { renderReferenceScopeText } from '../../prompts/referenceScope'
 import {
   collectSessionRunSlices
 } from '../../memory/runDigestCatalog'
@@ -87,7 +87,7 @@ const generateAndAppendRunDigest = async (input: {
     const prompt = buildRunDigestPrompt({
       userInput: clipText(input.state.task.userInput, RUN_DIGEST_USER_MAX_CHARS),
       deliveryMarkdown: clipText(input.deliveryMarkdown, RUN_DIGEST_DELIVERY_MAX_CHARS),
-      compactReferences: renderCompactReferenceScope(input.ctx.referenceScope)
+      referenceScopeText: renderReferenceScopeText(input.ctx.referenceScope)
     })
     const raw = await input.ctx.chatText({
       caller: 'human.run_digest',

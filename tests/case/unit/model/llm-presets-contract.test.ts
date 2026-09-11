@@ -41,7 +41,7 @@ describe('shared llm presets catalog', () => {
       getPresetProviderByBaseUrl('https://dashscope.aliyuncs.com/compatible-mode/v1')?.providerId
     ).toBe('dashscope')
     expect(getPresetProviderByBaseUrl('https://api.xiaomimimo.com/v1')?.providerId).toBe('mimo')
-    expect(getPresetProviderByBaseUrl('https://api.moonshot.cn/v1')?.providerId).toBe('moonshot')
+    expect(getPresetProviderByBaseUrl('https://api.moonshot.cn/v1')).toBeNull()
     expect(getPresetProviderByBaseUrl('https://open.bigmodel.cn/api/paas/v4')?.providerId).toBe(
       'zhipu'
     )
@@ -120,9 +120,9 @@ describe('shared llm presets mode derivation', () => {
     ).toBe('deepseek')
     expect(
       resolvePresetModeProvider(
-        buildConfig({ name: 'Kimi', base_url: 'https://api.moonshot.cn/v1' })
+        buildConfig({ name: '智谱 GLM', base_url: 'https://open.bigmodel.cn/api/paas/v4' })
       )?.providerId
-    ).toBe('moonshot')
+    ).toBe('zhipu')
   })
 
   it('classifies custom mode when name differs from the provider label', () => {
@@ -151,6 +151,11 @@ describe('shared llm presets mode derivation', () => {
     ).toBeNull()
     expect(
       resolvePresetModeProvider(
+        buildConfig({ name: 'Kimi', base_url: 'https://api.moonshot.cn/v1' })
+      )
+    ).toBeNull()
+    expect(
+      resolvePresetModeProvider(
         buildConfig({ name: '本地', base_url: 'http://localhost:11434/v1' })
       )
     ).toBeNull()
@@ -164,8 +169,8 @@ describe('shared llm presets mode derivation', () => {
     ).toBe('deepseek')
     expect(
       resolvePresetModeProvider(
-        buildConfig({ name: 'Kimi', base_url: 'https://API.MOONSHOT.CN/v1/' })
+        buildConfig({ name: '智谱 GLM', base_url: 'https://OPEN.BIGMODEL.CN/api/paas/v4/' })
       )?.providerId
-    ).toBe('moonshot')
+    ).toBe('zhipu')
   })
 })

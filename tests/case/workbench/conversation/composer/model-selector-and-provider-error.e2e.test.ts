@@ -3,10 +3,10 @@ import type { AddressInfo } from 'node:net'
 import { describe, it } from 'vitest'
 import type { AiRunEvent } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { createModelConfigThroughSettingsUi } from '../../../../harness/e2e/settings'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-  configureLiveModelThroughSettingsUi,
   createTemporaryWorkbenchWorkspace,
   createPartnerThroughWorkbenchUi,
   getWorkbenchLocator,
@@ -148,17 +148,20 @@ describe('workbench conversation e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const liveEnv = loadWorkbenchLiveModelEnv()
-          const provider = await startProviderServer(liveEnv)
+          const provider = await startProviderServer({
+            baseUrl: liveEnv.baseUrl,
+            apiKey: liveEnv.apiKey
+          })
           runtime.registerResource({
             name: 'model-provider-server',
             phase: 'before-app-close',
             dispose: provider.close
           })
           const workspace = await createTemporaryWorkbenchWorkspace(CASE_ID)
-          await configureLiveModelThroughSettingsUi(page, {
+          await createModelConfigThroughSettingsUi(page, {
+            name: liveEnv.modelName,
             baseUrl: provider.baseUrl,
-            apiKey: liveEnv.apiKey,
-            modelName: liveEnv.modelName
+            apiKey: liveEnv.apiKey
           })
           await navigateToWorkbench(page, { waitForSessionListText: false })
           await createPartnerThroughWorkbenchUi(page, WORKSPACE_NAME)

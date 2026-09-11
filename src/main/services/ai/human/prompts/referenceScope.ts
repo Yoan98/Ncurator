@@ -27,6 +27,18 @@ const renderSelectedReference = (reference: SelectedReference, index: number): s
    知识库文档ID：${kbDocumentIds}`
 }
 
+const renderAttachment = (attachment: ChatAttachment, index: number): string => {
+  return `第 ${index} 个附件：${attachment.name}
+- 路径：${attachment.path}`
+}
+
+const renderOptionalUserBlock = (title: string, body: string): string => {
+  const content = body.trim()
+  if (!content) return ''
+  return `${title}：
+${content}`
+}
+
 export const buildReferenceScope = (input: {
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
@@ -35,44 +47,20 @@ export const buildReferenceScope = (input: {
   attachments: input.attachments || []
 })
 
-const renderAttachment = (attachment: ChatAttachment, index: number): string => {
-  return `第 ${index} 个附件：${attachment.name}
-- 路径：${attachment.path}`
-}
+export const renderSelectedReferencesText = (scope: AiReferenceScope): string =>
+  (scope.selectedReferences || [])
+    .map((reference, index) => renderSelectedReference(reference, index + 1))
+    .join('\n')
 
-export const renderCompactReferenceItem = (name: string, address: string): string => {
-  const trimmedName = name.trim() || '未命名'
-  const trimmedAddress = address.trim()
-  return trimmedAddress ? `${trimmedName}（${trimmedAddress}）` : trimmedName
-}
+export const renderAttachmentsText = (scope: AiReferenceScope): string =>
+  (scope.attachments || [])
+    .map((attachment, index) => renderAttachment(attachment, index + 1))
+    .join('\n\n')
 
-export const renderCompactReferenceScope = (scope: AiReferenceScope): string => {
-  const items: string[] = []
-  for (const reference of scope.selectedReferences || []) {
-    items.push(
-      renderCompactReferenceItem(reference.name, getReferenceResourceAddress(reference))
-    )
-  }
-  for (const attachment of scope.attachments || []) {
-    items.push(renderCompactReferenceItem(attachment.name, attachment.path))
-  }
-  return items.join('、')
-}
-
-export const renderReferenceScopeText = (scope: AiReferenceScope): string => {
-  const selectedReferences = scope.selectedReferences || []
-  const attachments = scope.attachments || []
-  const parts: string[] = []
-
-  if (selectedReferences.length > 0) {
-    parts.push(`用户指定的参考范围：
-${selectedReferences.map((reference, index) => renderSelectedReference(reference, index + 1)).join('\n')}`)
-  }
-
-  if (attachments.length > 0) {
-    parts.push(`用户添加的附件：
-${attachments.map((attachment, index) => renderAttachment(attachment, index + 1)).join('\n\n')}`)
-  }
-
-  return parts.join('\n\n')
-}
+export const renderReferenceScopeText = (scope: AiReferenceScope): string =>
+  [
+    renderOptionalUserBlock('用户@的参考资料', renderSelectedReferencesText(scope)),
+    renderOptionalUserBlock('用户添加的附件', renderAttachmentsText(scope))
+  ]
+    .filter((block) => block.length > 0)
+    .join('\n\n')

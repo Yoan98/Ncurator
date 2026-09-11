@@ -99,6 +99,7 @@ tests/
 
 ### 3.4 真实 AI / live 断言规则
 
+- live 模型配置（backend `ai/human/live` 与 Workbench AI E2E 共用）：`.env` 只填内置服务商 Key（`AI_LIVE_KEY_DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`），可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）与 `AI_LIVE_MODEL`（默认该服务商测试默认模型；通义为 `qwen3.8-flash`）。不再使用 `AI_LIVE_BASE_URL` / `AI_LIVE_API_KEY` / `AI_LIVE_PRIMARY_MODEL_NAME`。
 - 涉及真实 AI 调用的回归测试，硬断言只验证完成态、关键事实、关键工具或事件、关键 artifact，以及用户诉求是否落地；最终自然语言回答不得作为主要正确性证据。
 - 不对最终文案做逐字断言，不断言固定工具顺序，不断言固定 prompt 原文，不因表达差异判失败。
 - 如果用户诉求已落地但断言过严，应先调整 `Oracle` 和测试代码，再根据 raw logs 记录完成度评分。

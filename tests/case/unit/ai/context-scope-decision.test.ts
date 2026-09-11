@@ -217,7 +217,7 @@ describe('run digest list', () => {
     expect(renderRunDigests(collectRunDigests(log))).toContain('已有交付，但摘要未生成')
   })
 
-  it('renders compact references in recall and the judge catalog', () => {
+  it('renders full reference and attachment blocks in recall, not in the judge catalog', () => {
     const log = records([
       {
         runId: 'run-1',
@@ -251,10 +251,19 @@ describe('run digest list', () => {
       { runId: 'run-1', entry: digest('按模板写周报', ['/Users/me/workspace/周报.docx']) }
     ])
     const history = assembleConversationHistory(log, 10_000)
-    expect(history).toContain('参考：周报模板.docx（/Users/me/workspace/周报模板.docx）、备注.txt（/tmp/备注.txt）')
-    expect(renderRunDigests(collectRunDigests(log))).toContain(
-      '参考：周报模板.docx（/Users/me/workspace/周报模板.docx）、备注.txt（/tmp/备注.txt）'
-    )
+    expect(history).toContain('用户@的参考资料：')
+    expect(history).toContain('1. 周报模板.docx')
+    expect(history).toContain('资源地址：/Users/me/workspace/周报模板.docx')
+    expect(history).toContain('用户添加的附件：')
+    expect(history).toContain('第 1 个附件：备注.txt')
+    expect(history).toContain('- 路径：/tmp/备注.txt')
+    expect(history).not.toContain('参考：周报模板.docx')
+    const catalog = renderRunDigests(collectRunDigests(log))
+    expect(catalog).toContain('按模板写周报')
+    expect(catalog).toContain('改动文件：/Users/me/workspace/周报.docx')
+    expect(catalog).not.toContain('用户@的参考资料：')
+    expect(catalog).not.toContain('用户添加的附件：')
+    expect(catalog).not.toContain('参考：')
   })
 })
 
@@ -636,9 +645,25 @@ describe('context scope decision prompt', () => {
       buildRunDigestPrompt({
         userInput: '写周报',
         deliveryMarkdown: '已写完',
-        compactReferences: '周报.docx（/tmp/周报.docx）'
+        referenceScopeText: `用户@的参考资料：
+1. 周报.docx
+   类型：本地文件
+   资源地址：/tmp/周报.docx
+   文档知识库状态：已索引
+   知识库文档ID：doc-1`
       }).user
-    ).toBe(['用户：写周报', '参考：周报.docx（/tmp/周报.docx）', '交付：已写完'].join('\n'))
+    ).toBe(
+      [
+        '用户：写周报',
+        '用户@的参考资料：',
+        '1. 周报.docx',
+        '   类型：本地文件',
+        '   资源地址：/tmp/周报.docx',
+        '   文档知识库状态：已索引',
+        '   知识库文档ID：doc-1',
+        '交付：已写完'
+      ].join('\n')
+    )
     expect(
       buildRunDigestPrompt({
         userInput: '写周报',

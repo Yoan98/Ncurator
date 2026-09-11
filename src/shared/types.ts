@@ -490,7 +490,6 @@ export type LlmProviderId =
   | 'deepseek'
   | 'dashscope'
   | 'mimo'
-  | 'moonshot'
   | 'zhipu'
   | 'local'
   | 'custom'

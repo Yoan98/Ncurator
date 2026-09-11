@@ -28,8 +28,8 @@ describe('settings model e2e', () => {
             message: '通过 Settings UI 新增一条预设配置和一条自定义配置。',
             run: async () => {
               await createPresetModelConfigThroughSettingsUi(page, {
-                providerId: 'moonshot',
-                apiKey: 'sk-model-page-load-kimi'
+                providerId: 'zhipu',
+                apiKey: 'sk-model-page-load-zhipu'
               })
               await createModelConfigThroughSettingsUi(page, {
                 name: '公司自定义',
@@ -45,13 +45,13 @@ describe('settings model e2e', () => {
             run: async () => {
               await navigateToSettingsSection(page, 'workspace')
               await navigateToSettingsSection(page, 'model')
-              await page.locator('tbody tr').filter({ hasText: 'Kimi' }).waitFor({
+              await page.locator('tbody tr').filter({ hasText: '智谱 GLM' }).waitFor({
                 state: 'visible'
               })
             }
           })
 
-          const kimiRow = page.locator('tbody tr').filter({ hasText: 'Kimi' }).first()
+          const zhipuRow = page.locator('tbody tr').filter({ hasText: '智谱 GLM' }).first()
           const customRow = page
             .locator('tbody tr')
             .filter({ hasText: '公司自定义' })
@@ -59,7 +59,7 @@ describe('settings model e2e', () => {
 
           return {
             rowCount: await page.locator('tbody tr').count(),
-            kimiRowText: (await kimiRow.textContent()) || '',
+            zhipuRowText: (await zhipuRow.textContent()) || '',
             customRowText: (await customRow.textContent()) || '',
             customTagCount: await page
               .locator(`[data-testid="${settingsSelectors.modelCustomTag}"]`)
@@ -74,8 +74,8 @@ describe('settings model e2e', () => {
           })
 
           await runtime.assertThat(
-            result.kimiRowText.includes('Kimi') &&
-              !result.kimiRowText.includes('自定义') &&
+            result.zhipuRowText.includes('智谱 GLM') &&
+              !result.zhipuRowText.includes('自定义') &&
               result.customRowText.includes('公司自定义') &&
               result.customTagCount === 1,
             {

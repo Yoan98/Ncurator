@@ -277,7 +277,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
   "eventType": "discard_checkpoint",
   "payload": {
     "throughSeq": 20,
-    "conversationHistory": "2026-03-14 16:20\n用户：按模板写本周周报，不要封面页。\n参考：周报模板.docx（/Users/me/workspace/周报模板.docx）\n交付：本周周报已写入，去掉了封面页。\n改动文件：/Users/me/workspace/周报.docx"
+    "conversationHistory": "2026-03-14 16:20\n用户：按模板写本周周报，不要封面页。\n用户@的参考资料：\n1. 周报模板.docx\n   类型：本地文件\n   资源地址：/Users/me/workspace/周报模板.docx\n   文档知识库状态：已索引\n   知识库文档ID：doc-1\n交付：本周周报已写入，去掉了封面页。\n改动文件：/Users/me/workspace/周报.docx"
   }
 }
 ```
@@ -349,13 +349,13 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 ### 2.5 运行时注入（不进库）
 
-新 run 的参考范围来自 **Composer 当前 `@` 引用与附件**，由 `buildBrainUserMessage` 渲染进 build user 的「参考」段。工作地址列表不进参考段，单独渲染为 build user 的「默认工作区」（位于「参考」之上），按设置页现表快照，不进 System。
+新 run 的参考资料和附件来自 **Composer 当前 `@` 引用与附件**，由 `buildBrainUserMessage` 分别渲染进 build user 的「用户@的参考资料」「用户添加的附件」段。工作地址列表不进这两段，单独渲染为 build user 的「默认工作区」（位于资料段之上），按设置页现表快照，不进 System。
 
 | | log 里的 `user.context` | Composer → build user |
 |--|-------------------------|------------------------|
 | 作用 | 审计「当时用户说了什么、配了什么」 | 驱动**当前 run** brain 输入 |
-| 同 run | 首条 build user 的「参考」段 | 来自发送时 Composer（仅 `@` 与附件） |
-| resume | 每条 log `user` 各存各的 snapshot | **append** 新 build user 在末尾；「参考」用**当前** Composer |
+| 同 run | 首条 build user 的资料段 | 来自发送时 Composer（仅 `@` 与附件） |
+| resume | 每条 log `user` 各存各的 snapshot | **append** 新 build user 在末尾；资料段用**当前** Composer |
 
 ---
 
@@ -435,7 +435,7 @@ flowchart TD
 | 过程 | assistant / tool / 多模态合成 HumanMessage |
 | User（续发） | 新 run 末尾 append 的 build 全文 |
 
-**build user 块**（各字段来源见第 3.3 节；`偏好` / `默认工作区` / `参考` 无内容时整块省略）：
+**build user 块**（各字段来源见第 3.3 节；`偏好` / `默认工作区` / `用户@的参考资料` / `用户添加的附件` 无内容时整块省略）：
 
 ```text
 用户诉求：
@@ -447,8 +447,11 @@ flowchart TD
 默认工作区：
 …          ← 仅有工作地址时
 
-参考：
-…          ← 仅有 @ 或附件时
+用户@的参考资料：
+…          ← 仅有 @ 时
+
+用户添加的附件：
+…          ← 仅有附件时
 
 当前时间：
 …
@@ -481,7 +484,8 @@ flowchart TD
 | `用户诉求` | 当时那条 User 对应 run 的 `input` |
 | `偏好` | 当时 Composer；`default` 时整块省略 |
 | `默认工作区` | 当时设置页工作地址现表（发送时快照；不进 System，以保护 System 缓存）；空列表时整块省略 |
-| `参考` | 当时 Composer 的 `@` 与附件（第 2.5 节）；两者皆空时整块省略，有一侧为空时只渲染有内容的一侧 |
+| `用户@的参考资料` | 当时 Composer 的 `@`（第 2.5 节）；空时整块省略 |
+| `用户添加的附件` | 当时 Composer 的附件（第 2.5 节）；空时整块省略 |
 | `当前时间` | 当时 run 的 `runStartedAt`（历史行不再改） |
 
 annotation 扫描该伙伴**全部**剩余 log（不受 `historyFloorSeq` 限制）：技能从最新 `skill_state_updated` 恢复。计划仍按 `plan_updated` / `finalizing_started` 扫描。清空消息记录会物理删除 log，因此技能 / 计划不会从已删除的历史恢复。
@@ -580,7 +584,7 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 结果只有两种：
 
 - **要**（`needsHistory=true`）：主模型继续看到还没丢掉、还没压进摘要的那些对话原文。
-- **不要**（`needsHistory=false`）：那些原文不再发给主模型，改成一份「最近会话」召回（人打的字、参考、交付或失败说明、改过的文件）。
+- **不要**（`needsHistory=false`）：那些原文不再发给主模型，改成一份「最近会话」召回（人打的字、用户@的参考资料、用户添加的附件、交付或失败说明、改过的文件）。
 
 判定本身不把 digest 塞给主模型。丢掉时把召回正文冻进 `discard_checkpoint.conversationHistory`；之后如果又要带历史，只读这份冻好的正文去合成 Discard User。
 
@@ -591,7 +595,7 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 ### 4.1 几个名字
 
 - **`run_digest`（digest）**：一轮**正常交付**后由 `finalizeDelivery` 写入的 annotation。先写 `status=pending` 并立即完成气泡；后台生成 20–40 字 `summary` 后追加 `completed`，失败追加 `failed`。不是用户原话，不是交付全文，也不是压缩摘要。只给判定模型看，**绝不**塞进 `conversationHistory` 或主模型。
-- **判定模型看到的近期任务**：`seq > historyFloorSeq` 的轮次，按 `runId` 分段。正常完成轮用一句话 digest，并追加紧凑参考与改动文件；有交付但摘要失败则用「用户原句 + 参考 + 已有交付，但摘要未生成」，不得丢轮。条数不封顶。
+- **判定模型看到的近期任务**：`seq > historyFloorSeq` 的轮次，按 `runId` 分段。正常完成轮用一句话 digest，并追加改动文件；有交付但摘要失败则用「用户原句 + 已有交付，但摘要未生成」，不得丢轮。条数不封顶。判定目录不附资料块。
 - `context_scope_decided`：记下本 run 的 `needsHistory` / `basis` / `budgetTokens`；判定模型给出的一句话 `reason` 只在 `basis=model_decision` 时写入。投影不读它。
 - `discard_checkpoint`：`needsHistory=false` 时写入。`throughSeq` 是当时伙伴 log 的最大 `seq`；`conversationHistory` 是当时拼好的召回正文（还没有外壳）。
 - `needsHistory`：`true` 带 `seq > historyFloorSeq` 的对话原文，必要时再合成 Compact User 或 Discard User；`false` 丢掉这些原文，当场拼并写入 `conversationHistory`。
@@ -637,11 +641,11 @@ log 投影 tail 时：`tool.images[]` 在对应 ToolMessage **之后** flush 为
 
 召回正文按 **`runId` + 伙伴内 `seq`** 分段，生产和 live 每次发送都必须使用独立 `runId`。同一轮只提供事实来源，再按用途生成两种投影，**绝不把 digest 塞进 `conversationHistory`**：
 
-- 给主模型的 `conversationHistory`：正常完成轮为 `用户原句 + 参考 + 真实交付 + 改动文件`；中断/失败且没有交付的轮为 `用户原句 + 参考 + 运行失败，没有交付`。有交付但 digest 失败时召回仍用真实交付。
+- 给主模型的 `conversationHistory`：正常完成轮为 `用户原句 + 用户@的参考资料 + 用户添加的附件 + 真实交付 + 改动文件`；中断/失败且没有交付的轮为 `用户原句 + 用户@的参考资料 + 用户添加的附件 + 运行失败，没有交付`。有交付但 digest 失败时召回仍用真实交付。
 - 失败段只在发生 discard、生成 `conversationHistory` 时收成。尚未 discard 的失败尾部继续保留 `seq > historyFloorSeq` 原始 `user.content/assistant/tool`。
 - 夹在两轮完成之间的失败轮不得用下一轮交付配段。失败轮前面已经正常交付过的轮仍各自成段。
 
-`referenceScope` 统一从 log `user.context` 读取：主模型原文继续携带完整参考与附件；digest 输入和判定目录用紧凑的名称 + 地址；`conversationHistory` 每段可有 `参考：…`，失败段同样保留。
+`referenceScope` 统一从 log `user.context` 读取。Brain user、digest 输入、`conversationHistory` 使用同一份完整资料块（`用户@的参考资料` / `用户添加的附件`，空则整块省略）。判定目录只放 `时间 | 一句话 digest | 改动文件`，不附资料块。失败段同样保留当时的资料块。
 
 从新到旧往里加，整段 token ≤ 窗口 × **10%**（`CONTEXT_SCOPE_DISCARD_HISTORY_RATIO`）。只有最新那一段就超了，才只裁这一段的交付。冻进 `discard_checkpoint.conversationHistory`（不含外壳）。之后 `needsHistory=true` 且 `includeDiscard` 只读这份冻结正文，不再重扫 log；再次 discard 才按当前完整 log 重拼。
 

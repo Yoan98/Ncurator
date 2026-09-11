@@ -12,7 +12,6 @@ import { LLM_PROVIDER_REGISTRY } from '../../../../shared/llmProvider'
 
 import deepseekLogo from '../../assets/img/deepseek.png'
 import qianwenLogo from '../../assets/img/qianwen.png'
-import kimiLogo from '../../assets/img/kimi.png'
 import zhipuLogo from '../../assets/img/zhipu.png'
 import mimoLogo from '../../assets/img/mimo.png'
 
@@ -91,7 +90,6 @@ export const PROVIDER_LOGO_MAP: Partial<Record<LlmProviderId, ReactNode>> = {
   deepseek: <img src={deepseekLogo} alt="DeepSeek" className="w-4 h-4" />,
   dashscope: <img src={qianwenLogo} alt="Qianwen" className="w-4 h-4" />,
   mimo: <img src={mimoLogo} alt="MiMo" className="w-4 h-4" />,
-  moonshot: <img src={kimiLogo} alt="Kimi" className="w-4 h-4" />,
   zhipu: <img src={zhipuLogo} alt="Zhipu" className="w-4 h-4" />
 }
 

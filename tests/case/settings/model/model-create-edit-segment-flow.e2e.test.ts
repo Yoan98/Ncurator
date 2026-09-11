@@ -104,7 +104,7 @@ describe('settings model e2e', () => {
 
           await runtime.step({
             name: 'edit-preset-change-provider',
-            message: '编辑 DeepSeek 推荐配置，服务商下拉可改，换成 Kimi 保存。',
+            message: '编辑 DeepSeek 推荐配置，服务商下拉可改，换成智谱 GLM 保存。',
             run: async () => {
               await page
                 .locator('tbody tr')
@@ -115,24 +115,24 @@ describe('settings model e2e', () => {
               await providerSelect().waitFor({ state: 'visible' })
               presetProviderSelectLocked =
                 (await providerSelect().locator('.ant-select-disabled').count()) > 0
-              await selectSettingsPresetProviderOption(page, 'Kimi')
+              await selectSettingsPresetProviderOption(page, '智谱 GLM')
               await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
               await page
                 .locator('tbody tr')
-                .filter({ hasText: 'Kimi' })
+                .filter({ hasText: '智谱 GLM' })
                 .waitFor({ state: 'visible' })
             }
           })
 
           const customRow = page.locator('tbody tr').filter({ hasText: 'Segment 自定义' }).first()
-          const kimiRow = page.locator('tbody tr').filter({ hasText: 'Kimi' }).first()
+          const zhipuRow = page.locator('tbody tr').filter({ hasText: '智谱 GLM' }).first()
 
           return {
             presetNameInputCount,
             presetProviderDisabled,
             presetProviderSelectLocked,
             customRowText: (await customRow.textContent()) || '',
-            kimiRowText: (await kimiRow.textContent()) || '',
+            zhipuRowText: (await zhipuRow.textContent()) || '',
             rowCount: await page.locator('tbody tr').count()
           }
         },
@@ -160,8 +160,8 @@ describe('settings model e2e', () => {
 
           await runtime.assertThat(
             !result.presetProviderSelectLocked &&
-              result.kimiRowText.includes('Kimi') &&
-              !result.kimiRowText.includes('自定义') &&
+              result.zhipuRowText.includes('智谱 GLM') &&
+              !result.zhipuRowText.includes('自定义') &&
               result.rowCount === 2,
             {
               name: 'preset-provider-select-editable',

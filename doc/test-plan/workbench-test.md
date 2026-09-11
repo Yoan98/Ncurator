@@ -5,7 +5,7 @@
 - 本计划定义 Workbench 用户可见交互的回归范围，并对齐 [workbench.md](../prd/workbench.md) 的 `WB-*` 需求和验收编号。
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
 - Workbench UI E2E 回归测试必须通过真实 Electron UI 配模型、创建伙伴、发送消息、选择 `@` 资料、预览、回退和操作右侧面板。设置页可另加文件地址，但发送不再要求绑定工作空间目录。
-- 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；测试只从 `AI_LIVE_BASE_URL`、`AI_LIVE_API_KEY`、`AI_LIVE_PRIMARY_MODEL_NAME` 读取 live 配置，并在应用内未配置时通过 Settings UI 新增配置。
+- 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；live 配置只读内置服务商 Key 池与选中目标：`AI_LIVE_KEY_<PROVIDER>`（`DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`）、可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）、可选 `AI_LIVE_MODEL`（默认该服务商测试默认模型，通义为 `qwen3.8-flash`）。`baseUrl` / `providerKind` 由产品 registry 推导。日常 case 通过 Settings「推荐」类型写入当前目标服务商；全服务商冒烟见 `live-preset-provider-smoke`。
 - case 因生产行为缺口失败时，不在测试中硬改业务行为，统一记录为产品或生产实现待决项。
 
 ## 2. 测试边界
@@ -13,7 +13,7 @@
 - Workbench UI E2E 回归测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录；需要文件资料时通过 Settings UI 添加文件地址、检查更新和更新索引。前置始终是创建伙伴；不断言工作区选择器、`.ncurator` 或 `__draft__`。
 - Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；Source 与正式包 E2E 在多 case 时都先执行 `warmup` 预热共享 fixture，正式包 E2E 再把缓存种子复制给隔离 case。
-- Workbench 模型选择 helper 优先在预设模型区直接选择命中 `AI_LIVE_PRIMARY_MODEL_NAME` 的预设模型；未命中时通过底部「自定义模型」入口进入全部模型视图，按名称搜索选择 `AI_LIVE_PRIMARY_MODEL_NAME`。
+- Workbench 模型选择 helper 优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选；未命中再按展示名；仍未命中则进入「自定义模型」按名称搜索。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
 - `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
@@ -214,7 +214,16 @@ tests/case/workbench/
 - Why：主模型配置是智能任务能否启动的直接前提，预设区是用户首选的模型入口。
 - How：通过真实设置页配置 live 自定义模型（非预设服务商模式）；回到 Workbench 展开选择器，等待目录结束 loading；检查无「免费模型」分区标题、无信息侧栏、顶部刷新按钮可见；预设 option 数为 0；若官网免费目录可用则可见免费 option 与「免费」文案及图标，否则可见「暂无已配置的预设模型」空态；进入自定义模型视图按名称搜索并选中后 pill 保持该模型名，随后完成一次真实请求并触发受控 provider 错误。
 - Oracle：未配置预设服务商时不展示付费预设行，对齐 `WB-COMPOSER-007-AC2`；无信息侧栏对齐 `WB-COMPOSER-007-AC3`；统一列表 / 刷新入口 / 免费行（若目录非空）对齐 `WB-COMPOSER-007-AC14` 的 UI 部分；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中、自定义选中不被强制改回预设与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且不另加视觉图标，对齐 `WB-COMPOSER-013-AC1`；伙伴保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次，气泡短标题为「模型请求失败」，「查看详情」可见 HTTP/原文，对齐 `WB-COMPOSER-007`、`WB-CORE-006`、`WB-SESSION-007-AC8`。
-- Not：不评价模型回答质量。不在本 case 制造无磁盘缓存 + 双目录均失败的 loading/失败空态（`WB-COMPOSER-007-AC14` 失败态）；不在本 case 配置 DeepSeek 预设 Key 断言 `deepseek-flash` 下发（`WB-COMPOSER-007-AC15` 由 unit `llm-presets-contract` / 官网目录契约覆盖）。
+- Not：不评价模型回答质量。不在本 case 制造无磁盘缓存 + 双目录均失败的 loading/失败空态（`WB-COMPOSER-007-AC14` 失败态）；不在本 case 配置 DeepSeek 预设 Key 断言 `deepseek-flash` 下发（`WB-COMPOSER-007-AC15` 由 `live-preset-provider-smoke` / unit `llm-presets-contract` / 官网目录契约覆盖）。
+
+#### `live-preset-provider-smoke`
+
+- 测试类型：`e2e / live`
+- What：对 `.env` 中已填写 `AI_LIVE_KEY_*` 的每个内置服务商，走 Settings 推荐配置 + 该服务商默认测试模型，各发一句「你好」确认可跑通。
+- Why：日常全量 live 只跑 `AI_LIVE_PROVIDER`/`AI_LIVE_MODEL` 选定目标；需要单独 smoke 覆盖「有 Key 的全部内置服务商」连通性。
+- How：读取 `listConfiguredLiveLlmTargets()`；为每个目标创建推荐服务商配置；创建伙伴后依次选默认模型并发送「你好」，等待 run 完成。
+- Oracle：每个已配置 Key 的服务商都有非空最终回答；未配置 Key 的服务商不参与、不失败。
+- Not：不评价回答质量；不替代日常 workbench/ai live 的默认目标配置。
 
 #### `user-message-actions`
 

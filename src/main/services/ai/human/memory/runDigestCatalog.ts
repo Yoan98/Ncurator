@@ -4,7 +4,7 @@ import type {
   RunDigestStatus
 } from '../../../../../shared/types'
 import { estimateTextTokens } from '../utils/tokenEstimate'
-import { buildReferenceScope, renderCompactReferenceScope } from '../prompts/referenceScope'
+import { buildReferenceScope, renderReferenceScopeText } from '../prompts/referenceScope'
 import { orderMessageLogBySeq, resolveLastConversationRunId } from './transcript'
 
 export const FAILED_RUN_DELIVERY_TEXT = '运行失败，没有交付'
@@ -14,13 +14,12 @@ export type RunDigestCatalogEntry = {
   createdAt: number
   summary: string
   fileChangePaths: string[]
-  compactReferences: string
 }
 
 export type ConversationHistoryBlock = {
   createdAt: number
   userInput: string
-  compactReferences: string
+  referenceScopeText: string
   delivery: string
   fileChangePaths: string[]
   kind: 'completed' | 'failed'
@@ -30,7 +29,7 @@ export type SessionRunSlice = {
   runId: string
   createdAt: number
   userInput: string
-  compactReferences: string
+  referenceScopeText: string
   delivery: string
   fileChangePaths: string[]
   digestStatus: RunDigestStatus | 'none'
@@ -64,8 +63,8 @@ export const resolveRunDigestStatus = (payload?: {
   return payload.summary?.trim() ? 'completed' : 'none'
 }
 
-const compactReferencesFromContext = (context: ChatMessageLogUserContext): string =>
-  renderCompactReferenceScope(
+const referenceScopeTextFromContext = (context: ChatMessageLogUserContext): string =>
+  renderReferenceScopeText(
     buildReferenceScope({
       selectedReferences: context.selectedReferences,
       attachments: context.attachments
@@ -103,8 +102,8 @@ export const collectSessionRunSlices = (
       runId,
       createdAt: userRecord?.createdAt ?? group[0]?.createdAt ?? 0,
       userInput,
-      compactReferences:
-        userRecord?.entry.kind === 'user' ? compactReferencesFromContext(userRecord.entry.context) : '',
+      referenceScopeText:
+        userRecord?.entry.kind === 'user' ? referenceScopeTextFromContext(userRecord.entry.context) : '',
       delivery,
       fileChangePaths: (digestPayload?.fileChangePaths || []).map((path) => path.trim()).filter(Boolean),
       digestStatus: resolveRunDigestStatus(digestPayload),
@@ -123,16 +122,14 @@ export const collectRunDigests = (
       entries.push({
         createdAt: slice.createdAt,
         summary: slice.digestSummary,
-        fileChangePaths: slice.fileChangePaths,
-        compactReferences: slice.compactReferences
+        fileChangePaths: slice.fileChangePaths
       })
       continue
     }
     entries.push({
       createdAt: slice.createdAt,
       summary: `${slice.userInput} | ${DIGEST_UNAVAILABLE_FALLBACK}`,
-      fileChangePaths: slice.fileChangePaths,
-      compactReferences: slice.compactReferences
+      fileChangePaths: slice.fileChangePaths
     })
   }
   return entries
@@ -142,7 +139,6 @@ export const renderRunDigests = (entries: readonly RunDigestCatalogEntry[]): str
   entries
     .map((entry) => {
       const parts = [formatCatalogTimestamp(entry.createdAt), entry.summary]
-      if (entry.compactReferences) parts.push(`参考：${entry.compactReferences}`)
       if (entry.fileChangePaths.length > 0) {
         parts.push(`改动文件：${entry.fileChangePaths.join(', ')}`)
       }
@@ -161,7 +157,7 @@ export const collectConversationHistoryBlocks = (
       blocks.push({
         createdAt: slice.createdAt,
         userInput: slice.userInput,
-        compactReferences: slice.compactReferences,
+        referenceScopeText: slice.referenceScopeText,
         delivery: slice.delivery,
         fileChangePaths: slice.fileChangePaths,
         kind: 'completed'
@@ -172,7 +168,7 @@ export const collectConversationHistoryBlocks = (
     blocks.push({
       createdAt: slice.createdAt,
       userInput: slice.userInput,
-      compactReferences: slice.compactReferences,
+      referenceScopeText: slice.referenceScopeText,
       delivery: FAILED_RUN_DELIVERY_TEXT,
       fileChangePaths: slice.fileChangePaths,
       kind: 'failed'
@@ -186,7 +182,7 @@ export const collectCompletedSessionBlocks = collectConversationHistoryBlocks
 
 export const renderSessionBlock = (block: ConversationHistoryBlock): string => {
   const lines = [formatCatalogTimestamp(block.createdAt), `用户：${block.userInput || '无'}`]
-  if (block.compactReferences) lines.push(`参考：${block.compactReferences}`)
+  if (block.referenceScopeText) lines.push(block.referenceScopeText)
   lines.push(`交付：${block.delivery || '无'}`)
   if (block.fileChangePaths.length > 0) {
     lines.push(`改动文件：${block.fileChangePaths.join(', ')}`)

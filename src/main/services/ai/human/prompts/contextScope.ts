@@ -32,17 +32,14 @@ export const RUN_DIGEST_SYSTEM_PROMPT = `你是任务摘要助手。把这一轮
 export const buildRunDigestPrompt = (input: {
   userInput: string
   deliveryMarkdown: string
-  compactReferences?: string
-}): { system: string; user: string } => {
-  const compactReferences = input.compactReferences?.trim()
-  return {
-    system: RUN_DIGEST_SYSTEM_PROMPT,
-    user: [
-      `用户：${input.userInput.trim() || '无'}`,
-      compactReferences ? `参考：${compactReferences}` : '',
-      `交付：${input.deliveryMarkdown.trim() || '无'}`
-    ]
-      .filter((line) => line.length > 0)
-      .join('\n')
-  }
-}
+  referenceScopeText?: string
+}): { system: string; user: string } => ({
+  system: RUN_DIGEST_SYSTEM_PROMPT,
+  user: [
+    `用户：${input.userInput.trim() || '无'}`,
+    input.referenceScopeText?.trim() || '',
+    `交付：${input.deliveryMarkdown.trim() || '无'}`
+  ]
+    .filter((line) => line.length > 0)
+    .join('\n')
+})

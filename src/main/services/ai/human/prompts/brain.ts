@@ -1,5 +1,5 @@
 import type { AiRunContext } from '../../types'
-import { renderReferenceScopeText } from './referenceScope'
+import { renderAttachmentsText, renderSelectedReferencesText } from './referenceScope'
 import {
   getPartnerAssetsRootDir,
   getPartnerScriptsRootDir
@@ -114,7 +114,8 @@ export const buildBrainUserMessage = (input: { state: HumanState; ctx: AiRunCont
 ${input.state.task.userInput}`,
     renderOptionalUserBlock('偏好', renderPreferenceText(input.ctx.preference)),
     renderOptionalUserBlock('默认工作区', renderWorkspaceRootsText(input.ctx)),
-    renderOptionalUserBlock('参考', renderReferenceScopeText(input.ctx.referenceScope)),
+    renderOptionalUserBlock('用户@的参考资料', renderSelectedReferencesText(input.ctx.referenceScope)),
+    renderOptionalUserBlock('用户添加的附件', renderAttachmentsText(input.ctx.referenceScope)),
     `当前时间：
 ${renderCurrentTimeText(input.ctx)}`
   ]

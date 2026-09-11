@@ -62,9 +62,9 @@
   - 覆盖要求：要通过不同 case 把关键节点与关键边都跑到，而不是只验证一条 happy path。
 - `live`
   - 目标：验证真实模型下 `human` 的真实业务执行。
-  - 约束：必须走真实统一 LLM executor（包括 `ctx.chatStructured / ctx.chatText`）、真实 KB、真实工具、真实 apply / artifact。
+  - 约束：必须走真实统一 LLM executor（包括 `ctx.chatStructured / ctx.chatText`）、真实 KB、真实工具、真实 apply / artifact。live 连接来自 `.env` 内置服务商 Key 池与 `AI_LIVE_PROVIDER`/`AI_LIVE_MODEL`（见 `doc/test.md` §3.4），由 registry 推导 baseUrl。
   - 禁止：任何 scripted driver、`chatStructuredOverride`、fixture store override。
-  - 覆盖要求：至少保留 1 条简单任务和 1 条复杂任务回归 case；如复杂任务有多条稳定用例，可同时保留。
+  - 覆盖要求：至少保留 1 条简单任务和 1 条复杂任务回归 case；如复杂任务有多条稳定用例，可同时保留。全内置服务商连通性由 Workbench `live-preset-provider-smoke` 覆盖，不在每条 human live 上乘服务商。
 
 ## 3. 领域特有规则
 
@@ -988,7 +988,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 - 测试类型：`backend / live`
 - What：同一伙伴连续七轮走真实发送路径，验证 Discard / digest / 参考召回闭环。1 带参考资料的短任务完成；2 真实 provider 故障中断、无交付无 digest；3 恢复后正常交付；4 相关缩短且跨 run 前缀缓存命中；5 无关新题 discard，召回含失败前完成轮、失败轮固定文案、恢复后轮和相关追问，失败轮不得配下一轮交付；6 includeDiscard 只读冻结正文并命中前缀缓存；7 再提更早轮，判定只看 floor 以上近期任务，再次 discard 后完整召回仍正确。
-- Why：用户不管理会话，真实模型必须把续做、中断恢复、换题丢掉、丢掉后再续做和再提旧任务走对；`conversationHistory` 必须按真实 `runId` 分段并冻字节。失败轮只在 discard 时收成「用户原句 + 参考 + 运行失败，没有交付」。
+- Why：用户不管理会话，真实模型必须把续做、中断恢复、换题丢掉、丢掉后再续做和再提旧任务走对；`conversationHistory` 必须按真实 `runId` 分段并冻字节。失败轮只在 discard 时收成「用户原句 + 当时的资料块 + 运行失败，没有交付」。
 - How：把 `modelContextWindowTokens` 收到 3500，使范围判定仍会过阈值，同时 discard 10% 窗口够装下失败前完成轮到相关追问。每次发送使用独立生产式 `runId`。不得 `appendBatch` 伪造 user/assistant/digest/失败或完成状态，不得脚本化 `human.context_scope` / `human.run_digest` / `human.brain` 输出。唯一测试 override 是已批准的真实 provider 请求故障注入（对齐 `human-partner-resume-with-new-selection-live`）。硬断言只验证 run 状态、`context_scope_decided`/`reason`、真实 LLM I/O、`conversationHistory` 结构、参考资料、失败提示与前缀缓存；不按最终回答的额外措辞判失败。
 - Oracle：七轮除中断轮外均 `completed`；中断轮为 `llm_request_failed` 且无交付/digest。Run 4 `needsHistory=true`，首次 brain 含上一轮原文、末尾为新 user、**无** Discard User，且跨 run 前缀缓存命中。Run 5 `needsHistory=false`，`conversationHistory` 依次包含失败前完成轮、失败轮（交付固定为「运行失败，没有交付」）、恢复后完成轮和相关追问；失败轮不得配下一轮交付；首次 brain 含「以下是最近的会话内容」。Run 6 `needsHistory=true`，Discard User 字节与 Run 5 相同且前缀缓存命中。Run 7 判定只看到 floor 以上近期任务（不含更早轮关键词）；再次 discard 按窗口 10% 从新到旧装入，完整召回仍含失败轮与 discard 之后的完成轮。`basis=model_decision` 须有非空 `reason`。
 - Not：不验证 UI；不要求固定工具；不验证 compaction；不因模型交付多说一句失败。

@@ -49,7 +49,6 @@ const PRESET_PROVIDER_IDS = new Set<LlmPresetProviderId>([
   'deepseek',
   'dashscope',
   'mimo',
-  'moonshot',
   'zhipu'
 ])
 

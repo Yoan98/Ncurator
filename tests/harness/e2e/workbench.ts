@@ -19,11 +19,15 @@ import {
   settingsSelectors,
   workbenchSelectors
 } from '../../../src/renderer/src/testing/selectors'
-import { loadRootEnvOnce } from '../core/rootEnv'
+import {
+  resolveLiveLlmTarget,
+  type LiveLlmTarget
+} from '../core/liveProviders'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
   bindWorkspaceRootDirectly,
+  createPresetModelConfigThroughSettingsUi,
   getWorkspaceIndexCounts,
   getSettingsLocator,
   getSettingsPrefixLocator,
@@ -54,11 +58,7 @@ export const WORKBENCH_PARTNER_NAME_MAX_LENGTH = 40
 export const clampWorkbenchPartnerName = (name: string): string =>
   name.trim().slice(0, WORKBENCH_PARTNER_NAME_MAX_LENGTH)
 
-export type WorkbenchLiveModelEnv = {
-  baseUrl: string
-  apiKey: string
-  modelName: string
-}
+export type WorkbenchLiveModelEnv = LiveLlmTarget
 
 export type TemporaryWorkbenchWorkspace = TemporaryE2EWorkspace
 
@@ -440,11 +440,6 @@ type NativeDirectoryDialogDiagnostics = {
 const MACOS_ELECTRON_BUNDLE_ID = 'com.github.Electron'
 const MACOS_ELECTRON_PROCESS_NAME = 'Electron'
 
-const readEnv = (name: string): string => {
-  loadRootEnvOnce()
-  return String(process.env[name] || '').trim()
-}
-
 const closeServer = async (server: Server): Promise<void> => {
   const forceCloseTimer = setTimeout(() => {
     const closeableServer = server as Server & {
@@ -492,25 +487,18 @@ export const getWorkbenchPrefixLocator = (page: Page, testIdPrefix: string): Loc
   page.locator(byTestIdPrefix(testIdPrefix))
 
 export const loadWorkbenchLiveModelEnv = (): WorkbenchLiveModelEnv => {
-  const baseUrl = readEnv('AI_LIVE_BASE_URL')
-  const apiKey = readEnv('AI_LIVE_API_KEY')
-  const modelName = readEnv('AI_LIVE_PRIMARY_MODEL_NAME')
-
-  if (!baseUrl || !apiKey || !modelName) {
+  try {
+    return resolveLiveLlmTarget()
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
     throw new Error(
       [
-        'Workbench formal AI e2e 缺少真实模型配置，必须设置：',
-        '- AI_LIVE_BASE_URL',
-        '- AI_LIVE_API_KEY',
-        '- AI_LIVE_PRIMARY_MODEL_NAME'
+        'Workbench formal AI e2e 缺少内置服务商 live 配置。',
+        '请设置 AI_LIVE_KEY_<PROVIDER>（如 AI_LIVE_KEY_DASHSCOPE），',
+        '可选 AI_LIVE_PROVIDER / AI_LIVE_MODEL（默认 dashscope + qwen3.8-flash）。',
+        detail
       ].join('\n')
     )
-  }
-
-  return {
-    baseUrl,
-    apiKey,
-    modelName
   }
 }
 
@@ -596,19 +584,9 @@ export const configureLiveModelThroughSettingsUi = async (
   page: Page,
   env: WorkbenchLiveModelEnv = loadWorkbenchLiveModelEnv()
 ): Promise<void> => {
-  await navigateToSettingsSection(page, 'model')
-  await getSettingsLocator(page, settingsSelectors.modelAddButton).click()
-  await getSettingsLocator(page, settingsSelectors.modelTypeCustom).click()
-  await getSettingsLocator(page, settingsSelectors.modelNameInput).fill(env.modelName)
-  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).waitFor({
-    state: 'visible'
-  })
-  // data-testid is on the real <input>; do not nest another .locator('input').
-  await getSettingsLocator(page, settingsSelectors.modelBaseUrlInput).fill(env.baseUrl)
-  await getSettingsLocator(page, settingsSelectors.modelApiKeyInput).fill(env.apiKey)
-  await getSettingsLocator(page, settingsSelectors.modelSaveButton).click()
-  await page.locator('tbody tr').filter({ hasText: env.modelName }).waitFor({
-    state: 'visible'
+  await createPresetModelConfigThroughSettingsUi(page, {
+    providerId: env.providerId,
+    apiKey: env.apiKey
   })
 }
 
@@ -1413,6 +1391,20 @@ export const selectWorkbenchModel = async (
   await menu.waitFor({ state: 'visible' })
 
   if (!selection?.preferCustom) {
+    const byPresetId = menu.getByTestId(
+      `${workbenchSelectors.modelSelectPresetOptionPrefix}-${modelName}`
+    )
+    if (await byPresetId.isVisible().catch(() => false)) {
+      await byPresetId.click()
+      return
+    }
+    const byFreeId = menu.getByTestId(
+      `${workbenchSelectors.modelSelectFreeOptionPrefix}-${modelName}`
+    )
+    if (await byFreeId.isVisible().catch(() => false)) {
+      await byFreeId.click()
+      return
+    }
     const presetOption = menu.getByRole('option').filter({ hasText: modelName }).first()
     if (await presetOption.isVisible().catch(() => false)) {
       await presetOption.click()
@@ -1437,7 +1429,7 @@ export const selectWorkbenchModel = async (
     const optionTexts = (await modelOptions.allTextContents()).map((item) => item.trim()).filter(Boolean)
     throw new Error(
       [
-        `AI_LIVE_PRIMARY_MODEL_NAME="${modelName}" was not found in the Workbench model menu.`,
+        `AI_LIVE_MODEL="${modelName}" was not found in the Workbench model menu.`,
         `Available models: ${optionTexts.join(', ') || '(none)'}`,
         'Workbench formal AI e2e cannot continue without a real UI-selectable live model.'
       ].join('\n')
@@ -1463,6 +1455,14 @@ export const selectScheduledTaskModel = async (page: Page, modelName: string): P
   await modelSelect.click()
   const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
   await menu.waitFor({ state: 'visible' })
+
+  const byPresetId = menu.getByTestId(
+    `${workbenchSelectors.modelSelectPresetOptionPrefix}-${modelName}`
+  )
+  if (await byPresetId.isVisible().catch(() => false)) {
+    await byPresetId.click()
+    return
+  }
 
   const presetOption = menu.getByRole('option').filter({ hasText: modelName }).first()
   if (await presetOption.isVisible().catch(() => false)) {
