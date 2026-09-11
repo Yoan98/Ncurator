@@ -17,6 +17,14 @@ const CASE_ID = 'file-change-run-scope'
 const FIRST_FILE = 'run-scope-first.txt'
 const SECOND_FILE = 'run-scope-second.txt'
 
+const writeFileViaTerminalPrompt = (fileName: string, contents: string): string => {
+  const command =
+    process.platform === 'win32'
+      ? `Set-Content -LiteralPath '${fileName}' -Value '${contents}' -NoNewline`
+      : `printf '${contents}' > ${fileName}`
+  return `请只使用 terminal_run，在工作区根目录执行：${command}。不要修改其他文件。`
+}
+
 const getRunStarted = (events: import('../../../../../src/shared/types').AiRunEvent[]) => {
   const event = events.find(
     (item): item is Extract<import('../../../../../src/shared/types').AiRunEvent, { type: 'run_started' }> =>
@@ -65,10 +73,7 @@ describe('workbench result e2e', () => {
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
 
           const firstStartedAtMs = Date.now()
-          await sendWorkbenchMessage(
-            page,
-            `请只使用 terminal_run，在工作区根目录执行 printf 'first-run' > ${FIRST_FILE}。不要修改其他文件。`
-          )
+          await sendWorkbenchMessage(page, writeFileViaTerminalPrompt(FIRST_FILE, 'first-run'))
           const firstEvidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             firstStartedAtMs,
@@ -86,10 +91,7 @@ describe('workbench result e2e', () => {
           await createWorkbenchNewSession(page)
           await selectWorkbenchWorkspace(page, setup.workspaceName)
           const secondStartedAtMs = Date.now()
-          await sendWorkbenchMessage(
-            page,
-            `请只使用 terminal_run，在工作区根目录执行 printf 'second-run' > ${SECOND_FILE}。不要修改其他文件。`
-          )
+          await sendWorkbenchMessage(page, writeFileViaTerminalPrompt(SECOND_FILE, 'second-run'))
           const secondEvidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             secondStartedAtMs,

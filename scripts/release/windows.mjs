@@ -24,9 +24,11 @@ import { parseReleaseTag } from './tag.mjs'
 import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
 import { cleanupLocalTestLogs } from './shared/test-logs.mjs'
 import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
+import { loadReleaseEnvironment } from './shared/environment.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
+await loadReleaseEnvironment(ROOT)
 const stageDeadline = createReleaseStageDeadline('Windows release stage')
 const args = process.argv.slice(2)
 const valueAfter = (name) => {
