@@ -192,17 +192,21 @@ const sanitizedTestEnvironment = () => {
   return environment
 }
 
-const runCandidateE2E = async ({ candidates, sourceDirectory, pnpmPath }) => {
+const runCandidateE2E = async ({ candidates, sourceDirectory }) => {
   const resultPaths = candidates.map((candidate) =>
     path.join(candidate.directory, 'package-e2e-result.json')
   )
   try {
     await run(
-      pnpmPath,
+      process.execPath,
       [
-        'run',
-        'test:e2e:package',
-        '--',
+        path.join(sourceDirectory, 'scripts', 'test', 'workflow.mjs'),
+        '--type',
+        'e2e',
+        '--target',
+        'package',
+        '--exclude-group',
+        'provider-matrix',
         ...candidates.flatMap((candidate, index) => [
           '--bundle',
           candidate.bundlePath,
@@ -302,7 +306,7 @@ if (mode === 'test') {
     if (candidate.state.commit !== taggedCommit) {
       throw new Error(`${MACOS_PLATFORM} candidate commit does not match release tag`)
     }
-    await runCandidateE2E({ candidates: [candidate], sourceDirectory, pnpmPath: tools.pnpmPath })
+    await runCandidateE2E({ candidates: [candidate], sourceDirectory })
   } finally {
     await workspace.dispose()
   }

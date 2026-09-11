@@ -196,11 +196,15 @@ const runCandidateE2E = async ({ candidate, sourceDirectory, environment }) => {
   const resultPath = path.join(candidate.directory, 'package-e2e-result.json')
   try {
     await run(
-      inspection.pnpmExecutable,
+      process.execPath,
       [
-        'run',
-        'test:e2e:package',
-        '--',
+        path.join(sourceDirectory, 'scripts', 'test', 'workflow.mjs'),
+        '--type',
+        'e2e',
+        '--target',
+        'package',
+        '--exclude-group',
+        'provider-matrix',
         '--bundle',
         candidate.bundlePath,
         '--result',
