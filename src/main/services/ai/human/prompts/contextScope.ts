@@ -27,7 +27,7 @@ ${input.taskGoal.trim() || '无'}`
 
 export const RUN_DIGEST_SYSTEM_PROMPT = `你是任务摘要助手。把这一轮用户诉求和最终交付压成一句 20 到 40 字的中文摘要，供后续判断是否需要这段历史。
 
-不要继续对话。不要复述全文。只输出这一句话。保留关键对象、文件名或结论。禁止编造不存在事项`
+不要继续对话。不要复述全文。只输出这一句话。保留关键对象、文件名或结论。`
 
 export const buildRunDigestPrompt = (input: {
   userInput: string
