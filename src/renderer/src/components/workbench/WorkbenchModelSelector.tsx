@@ -34,6 +34,7 @@ import {
   type LlmPriceTier
 } from '../../../../shared/llmPresets'
 import {
+  FREE_MODEL_NOTICE,
   FREE_MODEL_PRICE_LABEL,
   type FreeModelPublicEntry
 } from '../../../../shared/freeModels'
@@ -76,6 +77,22 @@ type PanelView = 'preset' | 'custom'
 type CatalogLoadStatus = 'loading' | 'ready' | 'error'
 type CatalogRefreshStatus = 'idle' | 'loading' | 'success' | 'error'
 
+type PresetInspector = {
+  kind: 'preset'
+  provider: LlmPresetProvider
+  model: LlmPresetModel
+  available: boolean
+  top: number
+}
+
+type FreeInspector = {
+  kind: 'free'
+  model: FreeModelPublicEntry
+  top: number
+}
+
+type ModelInspector = PresetInspector | FreeInspector
+
 type MenuPosition = {
   top?: number
   bottom?: number
@@ -89,6 +106,9 @@ const PRESET_MENU_MAX_WIDTH = 300
 const CUSTOM_MENU_MIN_WIDTH = 280
 const CUSTOM_MENU_MAX_WIDTH = 360
 const PRESET_LIST_MAX_HEIGHT = 300
+const INSPECTOR_WIDTH = 200
+const INSPECTOR_GAP = 1
+const VIEWPORT_PADDING = 12
 const CATALOG_REFRESH_FEEDBACK_MS = 1400
 const DEFAULT_POSITION: MenuPosition = {
   left: 0,
@@ -176,6 +196,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   const rootRef = useRef<HTMLDivElement | null>(null)
   const triggerRef = useRef<HTMLButtonElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
+  const inspectorRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const refreshFeedbackTimerRef = useRef<number | null>(null)
   const listboxId = useId()
@@ -187,6 +208,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     () => new Set()
   )
   const [position, setPosition] = useState<MenuPosition>(DEFAULT_POSITION)
+  const [inspectedModel, setInspectedModel] = useState<ModelInspector | null>(null)
   const [freeModels, setFreeModels] = useState<FreeModelPublicEntry[]>([])
   const [presetProviders, setPresetProviders] = useState<LlmPresetProvider[]>([])
   const [freeFetchedAt, setFreeFetchedAt] = useState<number | null>(null)
@@ -404,22 +426,33 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       align: 'end',
       topInset: WORKBENCH_TITLEBAR_HEIGHT + 12
     })
+    let nextLeft = placement.left
+    // Keep the inspector fixed to the menu's right. If the pair would overflow,
+    // shift the menu left so both stay in viewport.
+    if (view === 'preset' && inspectedModel) {
+      const pairWidth = nextWidth + INSPECTOR_GAP + INSPECTOR_WIDTH
+      const maxLeft = Math.max(
+        VIEWPORT_PADDING,
+        window.innerWidth - VIEWPORT_PADDING - pairWidth
+      )
+      nextLeft = Math.min(nextLeft, maxLeft)
+    }
     if (
       Math.abs(nextWidth - position.width) < 1 &&
-      Math.abs(placement.left - position.left) < 1 &&
+      Math.abs(nextLeft - position.left) < 1 &&
       placement.top === position.top &&
       placement.bottom === position.bottom
     ) {
       return
     }
     setPosition({
-      left: placement.left,
+      left: nextLeft,
       top: placement.top,
       bottom: placement.bottom,
       width: nextWidth,
       maxHeight: placement.maxHeight
     })
-  }, [open, view, position, query, configs, modelListsByConfigId, freeModels, presetProviders])
+  }, [open, view, position, inspectedModel, query, configs, modelListsByConfigId, freeModels, presetProviders])
 
   useEffect(() => {
     if (!open) return
@@ -428,6 +461,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       if (!(target instanceof Node)) return
       if (rootRef.current?.contains(target)) return
       if (menuRef.current?.contains(target)) return
+      if (inspectorRef.current?.contains(target)) return
       setOpen(false)
     }
     const handleResize = (): void => updatePosition()
@@ -453,6 +487,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     if (!open) {
       setView('preset')
       setQuery('')
+      setInspectedModel(null)
       return
     }
     if (view === 'preset') return
@@ -542,6 +577,24 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           if (!available) return
           selectModel(matchedConfig.id, model.id)
         }}
+        onMouseEnter={(event) =>
+          setInspectedModel({
+            kind: 'preset',
+            provider,
+            model,
+            available,
+            top: event.currentTarget.getBoundingClientRect().top
+          })
+        }
+        onFocus={(event) =>
+          setInspectedModel({
+            kind: 'preset',
+            provider,
+            model,
+            available,
+            top: event.currentTarget.getBoundingClientRect().top
+          })
+        }
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <CatalogModelIcon src={model.iconUrl} alt={model.label} />
@@ -577,6 +630,20 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
           selected ? 'workbench-select-option-selected' : ''
         )}
         onClick={() => selectModel(model.configId, model.modelName)}
+        onMouseEnter={(event) =>
+          setInspectedModel({
+            kind: 'free',
+            model,
+            top: event.currentTarget.getBoundingClientRect().top
+          })
+        }
+        onFocus={(event) =>
+          setInspectedModel({
+            kind: 'free',
+            model,
+            top: event.currentTarget.getBoundingClientRect().top
+          })
+        }
       >
         <span className="flex min-w-0 flex-1 items-center gap-2">
           <CatalogModelIcon src={model.iconUrl} alt={model.label} />
@@ -639,62 +706,72 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
 
     return (
       <>
-        <div className="flex items-center justify-end px-2.5 pt-1.5">
-          {renderCatalogRefreshButton()}
-        </div>
-        <div
-          className="overflow-y-auto py-1.5"
-          style={{ maxHeight: PRESET_LIST_MAX_HEIGHT, minHeight: 0 }}
-        >
-          {showLoading ? (
-            <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
-              正在加载模型目录…
+        <div className="relative min-h-0 flex-1">
+          <div className="pointer-events-none absolute right-1.5 top-1.5 z-10">
+            <div className="pointer-events-auto rounded-[6px] bg-white/90 backdrop-blur-[2px]">
+              {renderCatalogRefreshButton()}
             </div>
-          ) : showError ? (
-            <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
-              <div className="text-[12px] text-[#91918E]">模型目录加载失败</div>
-              <button
-                type="button"
-                className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5E4E0] px-3 text-[12px] font-medium text-[#37352F] hover:bg-[#F4F4F2]"
-                onClick={(event) => {
-                  event.stopPropagation()
-                  void refreshCatalog({ showOutcome: true })
-                }}
-              >
-                <HiArrowPath
-                  className={joinClassNames(
-                    'h-3.5 w-3.5',
-                    catalogRefreshStatus === 'loading' ? 'animate-spin' : ''
-                  )}
-                />
-                刷新
-              </button>
-            </div>
-          ) : showEmpty ? (
-            <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
-              暂无已配置的预设模型
-            </div>
-          ) : (
-            <>
-              {presetGroups.map(({ provider, matchedConfig }) =>
-                provider.models.map((model) =>
-                  renderPresetModelOption(provider, model, matchedConfig)
-                )
-              )}
-              {freeModels.length > 0 ? (
-                <div className={presetGroups.length > 0 ? 'mt-1 border-t border-[#EEEEEC] pt-1' : ''}>
-                  {freeModels.map((model) => renderFreeModelOption(model))}
-                </div>
-              ) : null}
-            </>
-          )}
+          </div>
+          <div
+            className="overflow-y-auto py-1.5"
+            style={{ maxHeight: PRESET_LIST_MAX_HEIGHT, minHeight: 0 }}
+          >
+            {showLoading ? (
+              <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
+                正在加载模型目录…
+              </div>
+            ) : showError ? (
+              <div className="flex flex-col items-center gap-3 px-4 py-6 text-center">
+                <div className="text-[12px] text-[#91918E]">模型目录加载失败</div>
+                <button
+                  type="button"
+                  className="inline-flex h-8 items-center gap-1.5 rounded-[8px] border border-[#E5E4E0] px-3 text-[12px] font-medium text-[#37352F] hover:bg-[#F4F4F2]"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void refreshCatalog({ showOutcome: true })
+                  }}
+                >
+                  <HiArrowPath
+                    className={joinClassNames(
+                      'h-3.5 w-3.5',
+                      catalogRefreshStatus === 'loading' ? 'animate-spin' : ''
+                    )}
+                  />
+                  刷新
+                </button>
+              </div>
+            ) : showEmpty ? (
+              <div className="flex flex-col items-center px-4 py-6 text-center text-[12px] text-[#91918E]">
+                暂无已配置的预设模型
+              </div>
+            ) : (
+              <>
+                {presetGroups.map(({ provider, matchedConfig }) =>
+                  provider.models.map((model) =>
+                    renderPresetModelOption(provider, model, matchedConfig)
+                  )
+                )}
+                {freeModels.length > 0 ? (
+                  <div
+                    className={presetGroups.length > 0 ? 'mt-1 border-t border-[#EEEEEC] pt-1' : ''}
+                  >
+                    {freeModels.map((model) => renderFreeModelOption(model))}
+                  </div>
+                ) : null}
+              </>
+            )}
+          </div>
         </div>
         <div className="border-t border-[#EEEEEC] py-1.5">
           <button
             type="button"
             className="workbench-select-option min-h-[44px]"
             data-testid={workbenchSelectors.modelSelectCustomEntry}
-            onClick={() => setView('custom')}
+            onClick={() => {
+              setInspectedModel(null)
+              setView('custom')
+            }}
+            onMouseEnter={() => setInspectedModel(null)}
           >
             <span className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
               <HiAdjustmentsHorizontal className="h-3.5 w-3.5 shrink-0 text-[#787774]" />
@@ -815,6 +892,104 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     </>
   )
 
+  const inspectorTop = inspectedModel?.top ?? 0
+  const inspectorLeft = position.left + position.width + INSPECTOR_GAP
+
+  const renderInspector = (): React.ReactNode => {
+    if (view !== 'preset' || !inspectedModel) return null
+    if (inspectedModel.kind === 'free') {
+      const supportsVision = inspectedModel.model.capabilities.includes('vision')
+      return (
+        <div
+          ref={inspectorRef}
+          data-testid={workbenchSelectors.inspector}
+          className="rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3"
+          style={{
+            position: 'fixed',
+            top: inspectorTop,
+            left: inspectorLeft,
+            width: INSPECTOR_WIDTH,
+            zIndex: 1001
+          }}
+        >
+          <div
+            data-testid={workbenchSelectors.inspectorTitle}
+            className="text-[14px] font-semibold text-[#252521]"
+          >
+            {inspectedModel.model.label}
+          </div>
+          <p className="mt-1.5 text-[12px] leading-[18px] text-[#5F5E5A]">
+            {inspectedModel.model.description}
+          </p>
+          <p className="mt-1.5 text-[12px] leading-[18px] text-[#9B9A97]">{FREE_MODEL_NOTICE}</p>
+          <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px]">
+            <div className="flex items-center justify-between gap-3 py-0.5">
+              <span className="shrink-0 text-[#9B9A97]">价格档位</span>
+              <span className="font-medium text-[#37352F]">{FREE_MODEL_PRICE_LABEL}</span>
+            </div>
+            <div className="flex items-center justify-between gap-3 py-0.5">
+              <span className="shrink-0 text-[#9B9A97]">视觉理解</span>
+              <span className="font-medium text-[#37352F]">
+                {supportsVision ? '支持' : '不支持'}
+              </span>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    const supportsVision = inspectedModel.model.capabilities.includes('vision')
+    return (
+      <div
+        ref={inspectorRef}
+        data-testid={workbenchSelectors.inspector}
+        className="rounded-[12px] border border-[#E5E4E0] bg-white px-3 py-3"
+        style={{
+          position: 'fixed',
+          top: inspectorTop,
+          left: inspectorLeft,
+          width: INSPECTOR_WIDTH,
+          zIndex: 1001
+        }}
+      >
+        <div
+          data-testid={workbenchSelectors.inspectorTitle}
+          className="text-[14px] font-semibold text-[#252521]"
+        >
+          {inspectedModel.model.label}
+        </div>
+        {inspectedModel.available ? (
+          <>
+            <p className="mt-1.5 text-[12px] leading-[18px] text-[#5F5E5A]">
+              {inspectedModel.model.description}
+            </p>
+            <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px]">
+              <div className="flex items-center justify-between gap-3 py-0.5">
+                <span className="shrink-0 text-[#9B9A97]">价格档位</span>
+                <span className="font-medium text-[#37352F]">
+                  {PRICE_TIER_LABELS[inspectedModel.model.priceTier]}
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3 py-0.5">
+                <span className="shrink-0 text-[#9B9A97]">视觉理解</span>
+                <span className="font-medium text-[#37352F]">
+                  {supportsVision ? '支持' : '不支持'}
+                </span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="mt-2.5 border-t border-[#EEEEEC] pt-2.5 text-[12px] leading-[18px] text-[#5F5E5A]">
+            <div>该模型不存在</div>
+            <div className="mt-1.5 break-all text-[#9B9A97]">
+              模型名：{inspectedModel.model.id}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div
       ref={rootRef}
@@ -874,26 +1049,29 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       </button>
       {open
         ? createPortal(
-            <div
-              ref={menuRef}
-              id={listboxId}
-              role="listbox"
-              className="workbench-select-menu workbench-composer-menu"
-              data-workbench-select-root="true"
-              style={{
-                position: 'fixed',
-                top: position.top,
-                bottom: position.bottom,
-                left: position.left,
-                width: position.width,
-                maxHeight: position.maxHeight,
-                display: 'flex',
-                flexDirection: 'column',
-                zIndex: 1000
-              }}
-            >
-              {view === 'preset' ? renderPresetView() : renderCustomView()}
-            </div>,
+            <>
+              <div
+                ref={menuRef}
+                id={listboxId}
+                role="listbox"
+                className="workbench-select-menu workbench-composer-menu"
+                data-workbench-select-root="true"
+                style={{
+                  position: 'fixed',
+                  top: position.top,
+                  bottom: position.bottom,
+                  left: position.left,
+                  width: position.width,
+                  maxHeight: position.maxHeight,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  zIndex: 1000
+                }}
+              >
+                {view === 'preset' ? renderPresetView() : renderCustomView()}
+              </div>
+              {renderInspector()}
+            </>,
             document.body
           )
         : null}

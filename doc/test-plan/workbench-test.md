@@ -211,10 +211,10 @@ tests/case/workbench/
 #### `model-selector-and-provider-error`
 
 - 测试类型：`e2e`
-- What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示；无已配置预设且无免费目录时显示空态，有免费目录则在统一列表展示免费行；推荐配置默认选中预设稳定调用名；预设统一列表（付费在上、免费在下、无分区标题与信息侧栏）；列表顶部有统一目录刷新；预设/免费行含接口 `iconUrl`；不可用预设禁用；自定义入口可选中 remote id 且不被强制改回预设，并正确展示 provider 错误反馈。
+- What：主模型选择只展示已配置服务商的预设模型，未配置服务商不展示；无已配置预设且无免费目录时显示空态，有免费目录则在统一列表展示免费行；推荐配置默认选中预设稳定调用名；预设统一列表（付费在上、免费在下、无分区标题）；列表右上角有统一目录刷新（不单独占顶栏行）；悬浮/聚焦预设或免费行时右侧显示信息侧栏；预设/免费行含接口 `iconUrl`；不可用预设禁用；自定义入口可选中 remote id 且不被强制改回预设，并正确展示 provider 错误反馈。
 - Why：主模型配置是智能任务能否启动的直接前提，预设区是用户首选的模型入口。
-- How：通过真实设置页配置 live 自定义模型（非预设服务商模式）；回到 Workbench 展开选择器，等待目录结束 loading；检查无「免费模型」分区标题、无信息侧栏、顶部刷新按钮可见；预设 option 数为 0；若官网免费目录可用则可见免费 option 与「免费」文案及图标，否则可见「暂无已配置的预设模型」空态；进入自定义模型视图按名称搜索并选中后 pill 保持该模型名，随后完成一次真实请求并触发受控 provider 错误。
-- Oracle：未配置预设服务商时不展示付费预设行，对齐 `WB-COMPOSER-007-AC2`；无信息侧栏对齐 `WB-COMPOSER-007-AC3`；统一列表 / 刷新入口 / 免费行（若目录非空）对齐 `WB-COMPOSER-007-AC14` 的 UI 部分；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中、自定义选中不被强制改回预设与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且不另加视觉图标，对齐 `WB-COMPOSER-013-AC1`；伙伴保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次，气泡短标题为「模型请求失败」，「查看详情」可见 HTTP/原文，对齐 `WB-COMPOSER-007`、`WB-CORE-006`、`WB-SESSION-007-AC8`。
+- How：通过真实设置页配置 live 自定义模型（非预设服务商模式）；回到 Workbench 展开选择器，等待目录结束 loading；检查无「免费模型」分区标题、右上角刷新按钮可见；若有免费行则悬停并断言右侧信息侧栏出现；预设 option 数为 0；若官网免费目录可用则可见免费 option 与「免费」文案及图标，否则可见「暂无已配置的预设模型」空态；进入自定义模型视图后侧栏消失，按名称搜索并选中后 pill 保持该模型名，随后完成一次真实请求并触发受控 provider 错误。
+- Oracle：未配置预设服务商时不展示付费预设行，对齐 `WB-COMPOSER-007-AC2`；悬浮信息侧栏对齐 `WB-COMPOSER-007-AC3`；统一列表 / 右上角刷新入口 / 免费行（若目录非空）与侧栏「免费」+ 稳定性提示对齐 `WB-COMPOSER-007-AC14` 的 UI 部分；自定义入口和分组搜索对齐 `WB-COMPOSER-007-AC1`；默认选中、自定义选中不被强制改回预设与展示对齐 `WB-COMPOSER-007-AC4`；选择器只保留主模型且不另加视觉图标，对齐 `WB-COMPOSER-013-AC1`；伙伴保存 `configId + modelName`，对齐 `WB-COMPOSER-007-AC4`；provider 失败只请求一次，气泡短标题为「模型请求失败」，「查看详情」可见 HTTP/原文，对齐 `WB-COMPOSER-007`、`WB-CORE-006`、`WB-SESSION-007-AC8`。
 - Not：不评价模型回答质量。不在本 case 制造无磁盘缓存 + 双目录均失败的 loading/失败空态（`WB-COMPOSER-007-AC14` 失败态）；不在本 case 配置 DeepSeek 预设 Key 断言 `deepseek-flash` 下发（`WB-COMPOSER-007-AC15` 由 `live-preset-provider-smoke` / unit `llm-presets-contract` / 官网目录契约覆盖）。
 
 #### `live-preset-provider-smoke`

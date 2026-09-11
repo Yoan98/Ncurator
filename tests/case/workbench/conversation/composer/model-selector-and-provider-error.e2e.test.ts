@@ -139,7 +139,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['composer'],
         description:
-          '验证未配置预设隐藏、统一目录 UI（刷新/无分区标题/无侧栏）、免费行或空态、搜索空状态，以及模型服务错误处理。',
+          '验证未配置预设隐藏、统一目录 UI（右上角刷新/无分区标题/悬浮信息侧栏）、免费行或空态、搜索空状态，以及模型服务错误处理。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -183,10 +183,6 @@ describe('workbench conversation e2e', () => {
             .getByText('免费模型', { exact: true })
             .isVisible()
             .catch(() => false))
-          const inspectorAbsent = !(await page
-            .getByTestId(workbenchSelectors.inspector)
-            .isVisible()
-            .catch(() => false))
           const presetOptions = menu.locator(
             `[data-testid^="${workbenchSelectors.modelSelectPresetOptionPrefix}-"]`
           )
@@ -195,6 +191,17 @@ describe('workbench conversation e2e', () => {
           )
           const presetOptionCount = await presetOptions.count()
           const freeOptionCount = await freeOptions.count()
+          let inspectorVisibleOnHover = false
+          let inspectorHasFreeNotice = false
+          if (freeOptionCount > 0) {
+            await freeOptions.first().hover()
+            const inspector = page.getByTestId(workbenchSelectors.inspector)
+            await inspector.waitFor({ state: 'visible' })
+            inspectorVisibleOnHover = true
+            inspectorHasFreeNotice = ((await inspector.innerText()) || '').includes(
+              '不保证稳定和隐私性'
+            )
+          }
           const presetEmptyStateVisible = await menu
             .getByText('暂无已配置的预设模型', { exact: true })
             .isVisible()
@@ -215,6 +222,10 @@ describe('workbench conversation e2e', () => {
             (await menu.textContent()) || ''
           )
           await customEntry.click()
+          const inspectorHiddenInCustom = !(await page
+            .getByTestId(workbenchSelectors.inspector)
+            .isVisible()
+            .catch(() => false))
           const searchInput = menu.locator('input[placeholder="搜索模型"]')
           await searchInput.waitFor({ state: 'visible' })
 
@@ -294,7 +305,9 @@ describe('workbench conversation e2e', () => {
             catalogErrorVisible,
             catalogRefreshVisible,
             freeSectionTitleAbsent,
-            inspectorAbsent,
+            inspectorVisibleOnHover,
+            inspectorHasFreeNotice,
+            inspectorHiddenInCustom,
             freeRowHasBadge,
             freeRowHasIcon,
             visionUiTextAbsent,
@@ -315,12 +328,18 @@ describe('workbench conversation e2e', () => {
             result.freeOptionCount > 0 ||
             result.presetEmptyStateVisible ||
             result.catalogErrorVisible
+          const inspectorOk =
+            result.freeOptionCount === 0
+              ? result.inspectorHiddenInCustom
+              : result.inspectorVisibleOnHover &&
+                result.inspectorHasFreeNotice &&
+                result.inspectorHiddenInCustom
           await runtime.assertThat(
             result.presetOptionCount === 0 &&
               catalogSettled &&
               result.catalogRefreshVisible &&
               result.freeSectionTitleAbsent &&
-              result.inspectorAbsent &&
+              inspectorOk &&
               result.freeRowHasBadge &&
               result.freeRowHasIcon &&
               result.visionUiTextAbsent &&
@@ -329,7 +348,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'main-model-selector-search',
               message:
-                '未配置预设服务商时不展示付费预设行；统一列表无「免费模型」标题与信息侧栏；顶部刷新可见；免费目录或空/失败态之一成立；自定义搜索无结果只显示空状态。',
+                '未配置预设服务商时不展示付费预设行；统一列表无「免费模型」标题；右上角刷新可见；有免费行时悬浮显示信息侧栏（含稳定性提示），自定义视图侧栏关闭；免费目录或空/失败态之一成立；自定义搜索无结果只显示空状态。',
               data: {
                 presetOptionCount: result.presetOptionCount,
                 freeOptionCount: result.freeOptionCount,
@@ -337,7 +356,9 @@ describe('workbench conversation e2e', () => {
                 catalogErrorVisible: result.catalogErrorVisible,
                 catalogRefreshVisible: result.catalogRefreshVisible,
                 freeSectionTitleAbsent: result.freeSectionTitleAbsent,
-                inspectorAbsent: result.inspectorAbsent,
+                inspectorVisibleOnHover: result.inspectorVisibleOnHover,
+                inspectorHasFreeNotice: result.inspectorHasFreeNotice,
+                inspectorHiddenInCustom: result.inspectorHiddenInCustom,
                 freeRowHasBadge: result.freeRowHasBadge,
                 freeRowHasIcon: result.freeRowHasIcon,
                 visionUiTextAbsent: result.visionUiTextAbsent,
