@@ -235,7 +235,7 @@ pnpm test:update:real:win -- \
 
 ### 4.4 时间轴跨日种子（月/年选天 E2E）
 
-墙钟下一次真实发送只能产生「今天」节点，无法在单次 run 里点到月/年 DatePicker。`timeline-month-day-pick` 允许在应用重启前用 `scripts/dev/seed-partner-timeline.mjs` 向隔离 `userData/app.sqlite` 写入专用伙伴的跨日消息；打开伙伴、点搜索、选天、再选同一天、点月节点必须走真实 UI，不得用 IPC 或内部状态跳转。
+墙钟下一次真实发送只能产生「今天」节点，无法在单次 run 里点到月/年 DatePicker。`timeline-month-day-pick` 允许在应用重启前用 `scripts/dev/seed-partner-timeline.mjs` 向隔离 `userData/app.sqlite` 写入专用伙伴的跨日消息；打开伙伴、点近端日节点、点搜索、选天、再选同一天、点月节点必须走真实 UI，不得用 IPC 或内部状态跳转。
 
 ### 4.5 读取与分析 raw logs
 

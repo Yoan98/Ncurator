@@ -23,6 +23,7 @@ const CASE_ID = 'timeline-month-day-pick'
 const TIMELINE_SEED_PARTNER_NAME = '时间轴 · 预览'
 const LATER_DAY_TEXT = '[timeline-seed] 约一个半月前次日'
 const EARLIEST_DAY_TEXT = '[timeline-seed] 约一个半月前'
+const RECENT_DAY_TEXT = '[timeline-seed] 四天前（近一周内）'
 
 const seedTimelineIntoUserData = async (userDataDir: string): Promise<void> => {
   const dbPath = path.join(userDataDir, 'app.sqlite')
@@ -51,7 +52,7 @@ const readTopUserMessage = async (
 
 const waitForTopUserMatching = async (
   page: import('playwright').Page,
-  match: 'later' | 'earliest'
+  match: 'later' | 'earliest' | 'recent'
 ): Promise<void> => {
   await page.waitForFunction((kind) => {
     const scroller = document.querySelector('.nc-document-scroll')
@@ -64,9 +65,18 @@ const waitForTopUserMatching = async (
     })
     const text = ((atTop instanceof HTMLElement ? atTop.innerText : '') || '').replace(/\s+/g, ' ')
     if (kind === 'later') return text.includes('[timeline-seed] 约一个半月前次日')
+    if (kind === 'recent') return text.includes('[timeline-seed] 四天前（近一周内）')
     return text.includes('[timeline-seed] 约一个半月前') && !text.includes('次日')
   }, match)
 }
+
+const readActiveTimelineItemTestId = async (page: import('playwright').Page): Promise<string> =>
+  page.evaluate(() => {
+    const active = document.querySelector(
+      '.nc-message-timeline-row.is-active [data-testid^="workbench-timeline-item-"]'
+    )
+    return active instanceof HTMLElement ? active.getAttribute('data-testid') || '' : ''
+  })
 
 const readActiveDotSizes = async (
   page: import('playwright').Page
@@ -94,7 +104,7 @@ describe('workbench conversation e2e', () => {
         suite: 'conversation',
         groups: ['timeline'],
         description:
-          '月节点 DatePicker 选天瞬时跳转，同一天可再选，关闭弹层不穿透跳到该月最早日。',
+          '近端日节点第一次点击即贴顶且不闪回月；月节点 DatePicker 选天瞬时跳转，同一天可再选，关闭弹层不穿透跳到该月最早日。',
         fixtures: [],
         serviceMode: 'real',
         windowMode: 'visible',
@@ -115,6 +125,24 @@ describe('workbench conversation e2e', () => {
 
           const timeline = getWorkbenchLocator(page, workbenchSelectors.timeline)
           await timeline.waitFor({ state: 'visible' })
+
+          const recentDayStart = startOfLocalDay(Date.now()) - 3 * DAY_MS
+          const recentDayNode = getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.timelineItemPrefix}-day-${recentDayStart}`
+          )
+          await recentDayNode.waitFor({ state: 'visible' })
+          await recentDayNode.click()
+          await waitForTopUserMatching(page, 'recent')
+          const afterRecentClick = await readTopUserMessage(page)
+          const afterRecentActiveId = await readActiveTimelineItemTestId(page)
+          await page.waitForTimeout(300)
+          const afterRecentSettled = await readTopUserMessage(page)
+          const afterRecentSettledActiveId = await readActiveTimelineItemTestId(page)
+          await runtime.captureScreenshot({
+            name: 'timeline-after-recent-day-click',
+            message: '近端日节点第一次点击后目标日贴顶，高亮不闪回月节点。'
+          })
 
           const laterDayStart = startOfLocalDay(Date.now()) - 44 * DAY_MS
           const monthStart = startOfLocalMonth(laterDayStart)
@@ -203,6 +231,12 @@ describe('workbench conversation e2e', () => {
             disabledCount,
             pickedTitle,
             monthNodeStillPresent,
+            expectedRecentActiveId: `${workbenchSelectors.timelineItemPrefix}-day-${recentDayStart}`,
+            afterRecentClickText: afterRecentClick.text,
+            afterRecentClickInView: afterRecentClick.inView,
+            afterRecentActiveId,
+            afterRecentSettledText: afterRecentSettled.text,
+            afterRecentSettledActiveId,
             afterPickText: afterPick.text,
             afterPickInView: afterPick.inView,
             afterTodayText: afterToday.text,
@@ -218,6 +252,11 @@ describe('workbench conversation e2e', () => {
             result.enabledCount >= 2 &&
               result.disabledCount > 0 &&
               result.monthNodeStillPresent &&
+              result.afterRecentClickInView &&
+              result.afterRecentClickText.includes(RECENT_DAY_TEXT) &&
+              result.afterRecentSettledText === result.afterRecentClickText &&
+              result.afterRecentActiveId === result.expectedRecentActiveId &&
+              result.afterRecentSettledActiveId === result.expectedRecentActiveId &&
               result.afterPickInView &&
               result.afterPickText.includes(LATER_DAY_TEXT) &&
               !result.afterTodayText.includes(LATER_DAY_TEXT) &&
@@ -229,7 +268,7 @@ describe('workbench conversation e2e', () => {
             {
               name: 'workbench-timeline-month-day-pick',
               message:
-                '月节点搜索应能选有消息的天并瞬时贴顶，同一天可再选，关闭弹层不得跳到该月最早日，高亮节点应更大。',
+                '近端日第一次点击应贴顶且不闪回月；月节点搜索应能选有消息的天并瞬时贴顶，同一天可再选，关闭弹层不得跳到该月最早日，高亮节点应更大。',
               data: result
             }
           )

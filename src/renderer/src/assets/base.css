@@ -1236,6 +1236,11 @@ textarea,
   @apply mx-auto flex w-full max-w-[760px] flex-col gap-5 pb-8;
 }
 
+.nc-timeline-jump-spacer {
+  height: 0;
+  pointer-events: none;
+}
+
 .nc-empty-state {
   @apply relative flex min-h-[58vh] items-center justify-center overflow-hidden px-8 py-12 text-center;
 }

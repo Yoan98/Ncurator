@@ -23,7 +23,7 @@ import {
 } from '../testUtils'
 
 const PARTNER_ID = 'live-context-compaction'
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 40_000
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '## 目标',
@@ -422,7 +422,9 @@ describe('ai human live backend', () => {
               /\.docx|周报/.test(latestRun3Summary))
           const run3CurrentTaskSatisfied =
             /(对照|标题|九月|法务)/.test(run3CurrentSection) &&
-            !/从空白模板整份|整份重填周报/.test(run3CurrentSection)
+            !/从空白模板整份|整份重填周报/.test(
+              run3CurrentSection.replace(/不(?:要)?从空白模板整份重填周报/g, '')
+            )
 
           runtime.assertThat(
             run3Compaction.lifecycleSatisfied &&
