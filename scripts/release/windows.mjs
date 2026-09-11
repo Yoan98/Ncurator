@@ -25,6 +25,7 @@ import { hasRegressionSelectionArgs, readRegressionSelection } from './regressio
 import { cleanupLocalTestLogs } from './shared/test-logs.mjs'
 import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
+import { cpSync, existsSync } from 'node:fs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -167,6 +168,15 @@ const testEnvironment = (environment) => {
   return sanitized
 }
 
+const seedNativeCacheFromRoot = (sourceDirectory) => {
+  const relativeCache = path.join('node_modules', '.native-cache')
+  const from = path.join(ROOT, relativeCache)
+  const to = path.join(sourceDirectory, relativeCache)
+  if (!existsSync(from)) return
+  cpSync(from, to, { recursive: true, force: true })
+  process.stdout.write(`[release] seeded native cache into test worktree from ${relativeCache}\n`)
+}
+
 const extractTagSource = async (defaultRootName) => {
   const workspace = await prepareReleaseWorkspace({
     releaseTag,
@@ -283,6 +293,7 @@ if (mode === 'test') {
       cwd: sourceDirectory,
       env: environment
     })
+    seedNativeCacheFromRoot(sourceDirectory)
     candidate = await runCandidateE2E({ candidate, sourceDirectory, environment })
     process.stdout.write(`[release] candidate E2E passed: ${candidate.bundlePath}\n`)
   } finally {
