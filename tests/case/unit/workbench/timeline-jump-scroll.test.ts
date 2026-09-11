@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import {
-  jumpSpacerIsHoldingView,
   measureTimelineJumpSpacerPx,
   measureTimelinePinScrollTop
 } from '../../../../src/shared/workbench/messageTimeline'
@@ -55,22 +54,23 @@ describe('timelineJumpScroll', () => {
     ).toBe(280)
   })
 
-  it('treats extra scroll range as holding the jumped view', () => {
-    expect(
-      jumpSpacerIsHoldingView({
-        scrollTop: 500,
-        scrollHeight: 1300,
-        clientHeight: 800,
-        spacerPx: 100
-      })
-    ).toBe(true)
-    expect(
-      jumpSpacerIsHoldingView({
-        scrollTop: 200,
-        scrollHeight: 1300,
-        clientHeight: 800,
-        spacerPx: 100
-      })
-    ).toBe(false)
+  it('needs more spacer to pin the latest day than an earlier day', () => {
+    const latestDay = measureTimelineJumpSpacerPx({
+      scrollTop: 0,
+      scrollHeight: 1000,
+      clientHeight: 800,
+      targetTop: 600,
+      scrollerTop: 0,
+      currentSpacerPx: 0
+    })
+    const earlierDay = measureTimelineJumpSpacerPx({
+      scrollTop: 0,
+      scrollHeight: 1000,
+      clientHeight: 800,
+      targetTop: 120,
+      scrollerTop: 0,
+      currentSpacerPx: 0
+    })
+    expect(latestDay).toBeGreaterThan(earlierDay)
   })
 })

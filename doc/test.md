@@ -233,9 +233,9 @@ pnpm test:update:real:win -- \
 
 报告写入 `tests/logs/settings/update/real-windows/<运行时间>/report.json`，附截图与 `process.log`。卸载失败会表现为版本无法升级，脚本会明确报错并关联该失败模式。
 
-### 4.4 时间轴跨日种子（月/年选天 E2E）
+### 4.4 时间轴跨日种子
 
-墙钟下一次真实发送只能产生「今天」节点，无法在单次 run 里点到月/年 DatePicker。`timeline-month-day-pick` 允许在应用重启前用 `scripts/dev/seed-partner-timeline.mjs` 向隔离 `userData/app.sqlite` 写入专用伙伴的跨日消息；打开伙伴、点近端日节点、点搜索、选天、再选同一天、点月节点必须走真实 UI，不得用 IPC 或内部状态跳转。
+墙钟下一次真实发送只能产生「今天」节点，无法覆盖月/年选天。已批准例外：E2E 可在应用重启前用 `scripts/dev/seed-partner-timeline.mjs` 向隔离 `userData/app.sqlite` 写入跨日消息。种子只负责造出墙钟一次发送得不到的日期分布；此后交互仍走真实 UI，不得用 IPC 或内部状态跳转。
 
 ### 4.5 读取与分析 raw logs
 

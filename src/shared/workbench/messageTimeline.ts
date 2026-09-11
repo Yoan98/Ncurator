@@ -180,13 +180,6 @@ export const resolveActiveTimelineNodeId = (input: {
 
 export const TIMELINE_PIN_TOLERANCE_PX = 2
 
-export type TimelineJumpScrollMetrics = {
-  scrollTop: number
-  scrollHeight: number
-  clientHeight: number
-  spacerPx: number
-}
-
 export const measureTimelineJumpSpacerPx = (input: {
   scrollTop: number
   scrollHeight: number
@@ -206,9 +199,3 @@ export const measureTimelinePinScrollTop = (input: {
   targetTop: number
   scrollerTop: number
 }): number => Math.max(0, input.scrollTop + (input.targetTop - input.scrollerTop))
-
-export const jumpSpacerIsHoldingView = (input: TimelineJumpScrollMetrics): boolean => {
-  if (input.spacerPx <= 0) return false
-  const maxWithoutSpacer = Math.max(0, input.scrollHeight - input.spacerPx - input.clientHeight)
-  return input.scrollTop > maxWithoutSpacer + 1
-}

@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Button, Input, Modal, Spin, Tooltip } from 'antd'
 import {
   HiArrowUp,
@@ -62,7 +62,6 @@ import { MessageTimeline } from '../components/workbench/MessageTimeline'
 import {
   buildTimelineNodes,
   collectMessageDayStarts,
-  jumpSpacerIsHoldingView,
   measureTimelineJumpSpacerPx,
   measureTimelinePinScrollTop,
   resolveActiveTimelineNodeId,
@@ -163,6 +162,23 @@ type ApprovalDraftDecision = {
 }
 
 const SCROLL_BOTTOM_TOLERANCE = 72
+
+const queryOldestMessageElementOfDay = (
+  dayStart: number,
+  messages: readonly ChatMessage[]
+): HTMLElement | null => {
+  const dayEnd = dayStart + DAY_MS
+  const ofDay = messages.filter(
+    (item) => item.timestamp >= dayStart && item.timestamp < dayEnd
+  )
+  if (ofDay.length === 0) return null
+  const oldest = ofDay.reduce((current, item) =>
+    item.timestamp < current.timestamp ? item : current
+  )
+  const element = document.querySelector(`[data-message-id="${oldest.id}"]`)
+  return element instanceof HTMLElement ? element : null
+}
+
 const WORKBENCH_DRAG_REGION_STYLE = {
   WebkitAppRegion: 'drag'
 } as React.CSSProperties
@@ -922,11 +938,8 @@ const ChatPage: React.FC = () => {
   const [uiStateReadyKey, setUiStateReadyKey] = useState<string | null>(null)
   const persistTimersRef = useRef<Record<string, number>>({})
   const pendingTimelineJumpDayRef = useRef<number | null>(null)
-  const jumpSpacerRef = useRef<HTMLDivElement>(null)
-  const timelineJumpLockRef = useRef(false)
+  const timelinePinSpacerRef = useRef<HTMLDivElement>(null)
   const programmaticScrollRef = useRef(false)
-  const timelineUserScrollRef = useRef<'up' | 'down' | 'pointer' | null>(null)
-  const lastScrollTopRef = useRef(0)
   const persistQueuesRef = useRef<Record<string, Promise<void>>>({})
   const persistRevisionsRef = useRef<Record<string, number>>({})
   const persistRetryTimersRef = useRef<Record<string, number>>({})
@@ -1322,28 +1335,43 @@ const ChatPage: React.FC = () => {
     return (approvalDraftDecisions[currentApprovalItem.itemId]?.message || '').trim().length === 0
   }, [approvalDraftDecisions, approvalSubmitting, currentApprovalItem])
 
-  const clearTimelineJumpSpacer = (): void => {
-    const spacer = jumpSpacerRef.current
-    if (spacer) spacer.style.height = '0px'
+  const syncLatestDayPinSpacer = (messages: ChatMessage[]): void => {
+    const scroller = scrollRef.current
+    const spacer = timelinePinSpacerRef.current
+    if (!scroller || !spacer) return
+    if (messages.length === 0) {
+      spacer.style.height = '0px'
+      return
+    }
+    const latestDayStart = startOfLocalDay(messages[messages.length - 1]!.timestamp)
+    const target = queryOldestMessageElementOfDay(latestDayStart, messages)
+    if (!target) return
+    const nextSpacerPx = measureTimelineJumpSpacerPx({
+      scrollTop: scroller.scrollTop,
+      scrollHeight: scroller.scrollHeight,
+      clientHeight: scroller.clientHeight,
+      targetTop: target.getBoundingClientRect().top,
+      scrollerTop: scroller.getBoundingClientRect().top,
+      currentSpacerPx: spacer.offsetHeight
+    })
+    if (Math.abs(nextSpacerPx - spacer.offsetHeight) > 1) {
+      spacer.style.height = `${nextSpacerPx}px`
+    }
   }
 
   const scrollToBottom = (force = false): void => {
     if (!force && !shouldAutoScrollRef.current) return
-    timelineJumpLockRef.current = false
-    programmaticScrollRef.current = true
-    clearTimelineJumpSpacer()
     if (scrollFrameRef.current !== null) {
       window.cancelAnimationFrame(scrollFrameRef.current)
     }
     scrollFrameRef.current = window.requestAnimationFrame(() => {
       const scrollElement = scrollRef.current
       scrollFrameRef.current = null
-      if (scrollElement) {
-        scrollElement.scrollTop = scrollElement.scrollHeight
-        lastScrollTopRef.current = scrollElement.scrollTop
-      }
+      if (!scrollElement) return
+      programmaticScrollRef.current = true
+      syncLatestDayPinSpacer(currentMessages)
+      scrollElement.scrollTop = scrollElement.scrollHeight
       programmaticScrollRef.current = false
-      if (force) setActiveTimelineDayStart(null)
     })
   }
 
@@ -1385,46 +1413,21 @@ const ChatPage: React.FC = () => {
 
   const pinMessageToTop = useCallback((element: HTMLElement): void => {
     const scroller = scrollRef.current
-    const spacer = jumpSpacerRef.current
     if (!scroller) return
-    const scrollerRect = scroller.getBoundingClientRect()
-    const targetRect = element.getBoundingClientRect()
-    const currentSpacerPx = spacer?.offsetHeight ?? 0
-    const nextSpacerPx = measureTimelineJumpSpacerPx({
-      scrollTop: scroller.scrollTop,
-      scrollHeight: scroller.scrollHeight,
-      clientHeight: scroller.clientHeight,
-      targetTop: targetRect.top,
-      scrollerTop: scrollerRect.top,
-      currentSpacerPx
-    })
-    programmaticScrollRef.current = true
-    if (spacer && Math.abs(nextSpacerPx - currentSpacerPx) > 1) {
-      spacer.style.height = `${nextSpacerPx}px`
-    }
     const nextTop = measureTimelinePinScrollTop({
       scrollTop: scroller.scrollTop,
       targetTop: element.getBoundingClientRect().top,
       scrollerTop: scroller.getBoundingClientRect().top
     })
-    if (Math.abs(scroller.scrollTop - nextTop) >= TIMELINE_PIN_TOLERANCE_PX) {
-      scroller.scrollTo({ top: nextTop })
-    }
-    lastScrollTopRef.current = scroller.scrollTop
+    if (Math.abs(scroller.scrollTop - nextTop) < TIMELINE_PIN_TOLERANCE_PX) return
+    programmaticScrollRef.current = true
+    scroller.scrollTo({ top: nextTop })
     programmaticScrollRef.current = false
   }, [])
 
   const scrollToOldestMessageOfDay = useCallback((dayStart: number, messages: ChatMessage[]): boolean => {
-    const dayEnd = dayStart + DAY_MS
-    const ofDay = messages.filter(
-      (item) => item.timestamp >= dayStart && item.timestamp < dayEnd
-    )
-    if (ofDay.length === 0) return false
-    const oldest = ofDay.reduce((current, item) =>
-      item.timestamp < current.timestamp ? item : current
-    )
-    const element = document.querySelector(`[data-message-id="${oldest.id}"]`)
-    if (!(element instanceof HTMLElement)) return false
+    const element = queryOldestMessageElementOfDay(dayStart, messages)
+    if (!element) return false
     shouldAutoScrollRef.current = false
     pinMessageToTop(element)
     return true
@@ -1433,7 +1436,6 @@ const ChatPage: React.FC = () => {
   const jumpToTimelineDay = useCallback(
     (dayStart: number): void => {
       setActiveTimelineDayStart(dayStart)
-      timelineJumpLockRef.current = true
       shouldAutoScrollRef.current = false
       if (scrollToOldestMessageOfDay(dayStart, currentMessages)) return
       if (!hasMoreMessagesBefore || !currentPartnerId) return
@@ -1500,52 +1502,37 @@ const ChatPage: React.FC = () => {
     if (scrollElement.scrollTop <= 80) {
       void loadOlderMessages()
     }
-    if (programmaticScrollRef.current) {
-      lastScrollTopRef.current = scrollElement.scrollTop
-      return
-    }
-
-    let userIntent = timelineUserScrollRef.current
-    timelineUserScrollRef.current = null
-    if (userIntent === 'pointer') {
-      userIntent = scrollElement.scrollTop > lastScrollTopRef.current + 1 ? 'down' : 'up'
-    }
-    lastScrollTopRef.current = scrollElement.scrollTop
-
-    if (timelineJumpLockRef.current && !userIntent) {
-      shouldAutoScrollRef.current = false
-      return
-    }
-
-    if (userIntent) {
-      timelineJumpLockRef.current = false
-      const spacerPx = jumpSpacerRef.current?.offsetHeight ?? 0
-      const metrics = {
-        scrollTop: scrollElement.scrollTop,
-        scrollHeight: scrollElement.scrollHeight,
-        clientHeight: scrollElement.clientHeight,
-        spacerPx
-      }
-      if (userIntent === 'down' && jumpSpacerIsHoldingView(metrics)) {
-        programmaticScrollRef.current = true
-        clearTimelineJumpSpacer()
-        scrollElement.scrollTop = scrollElement.scrollHeight
-        lastScrollTopRef.current = scrollElement.scrollTop
-        programmaticScrollRef.current = false
-        shouldAutoScrollRef.current = true
-      } else if (spacerPx > 0 && !jumpSpacerIsHoldingView(metrics)) {
-        clearTimelineJumpSpacer()
-      }
-    }
-
+    if (programmaticScrollRef.current) return
     const distanceToBottom =
       scrollElement.scrollHeight - scrollElement.scrollTop - scrollElement.clientHeight
-    if (!timelineJumpLockRef.current) {
-      shouldAutoScrollRef.current = distanceToBottom <= SCROLL_BOTTOM_TOLERANCE
-    }
+    shouldAutoScrollRef.current = distanceToBottom <= SCROLL_BOTTOM_TOLERANCE
     const nextActiveDay = resolveActiveDayFromScroll()
     if (nextActiveDay != null) setActiveTimelineDayStart(nextActiveDay)
   }
+
+  useLayoutEffect(() => {
+    const scroller = scrollRef.current
+    if (!scroller) return
+
+    const sync = (): void => {
+      const distanceToBottom =
+        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
+      const stickToLatest =
+        shouldAutoScrollRef.current || distanceToBottom <= SCROLL_BOTTOM_TOLERANCE
+      programmaticScrollRef.current = true
+      syncLatestDayPinSpacer(currentMessages)
+      if (stickToLatest) scroller.scrollTop = scroller.scrollHeight
+      programmaticScrollRef.current = false
+      if (!stickToLatest) return
+      const latest = currentMessages[currentMessages.length - 1]
+      if (latest) setActiveTimelineDayStart(startOfLocalDay(latest.timestamp))
+    }
+
+    sync()
+    const observer = new ResizeObserver(sync)
+    observer.observe(scroller)
+    return () => observer.disconnect()
+  }, [currentMessages])
 
   const emitSuccessMessage = useCallback(
     (content: string): void => {
@@ -1973,8 +1960,6 @@ const ChatPage: React.FC = () => {
       applyPartnerUiState(partnerId, opened.uiState || null)
       setActiveTimelineDayStart(null)
       pendingTimelineJumpDayRef.current = null
-      timelineJumpLockRef.current = false
-      clearTimelineJumpSpacer()
       const restoredActiveTab = opened.uiState?.panel.tabs.find(
         (tab) => tab.id === opened.uiState?.panel.activeTabId
       )
@@ -3639,8 +3624,6 @@ const ChatPage: React.FC = () => {
           setCurrentMessages([])
           setHasMoreMessagesBefore(false)
           setActiveTimelineDayStart(null)
-          timelineJumpLockRef.current = false
-          clearTimelineJumpSpacer()
           void loadPartners()
         } catch (error) {
           emitErrorMessage(error instanceof Error ? error.message : '清空消息记录失败')
@@ -4613,13 +4596,6 @@ const ChatPage: React.FC = () => {
                     className={`nc-document-scroll ${isNewSession ? '!hidden' : ''}`}
                     ref={scrollRef}
                     onScroll={handleMessageScroll}
-                    onPointerDown={() => {
-                      timelineUserScrollRef.current = 'pointer'
-                    }}
-                    onWheel={(event) => {
-                      if (event.deltaY === 0) return
-                      timelineUserScrollRef.current = event.deltaY > 0 ? 'down' : 'up'
-                    }}
                   >
                     <div className="nc-document" data-testid={workbenchSelectors.messageList}>
                       {loadingOlderMessages ? (
@@ -4634,8 +4610,8 @@ const ChatPage: React.FC = () => {
                       )}
                     </div>
                     <div
-                      ref={jumpSpacerRef}
-                      className="nc-timeline-jump-spacer"
+                      ref={timelinePinSpacerRef}
+                      className="nc-timeline-pin-spacer"
                       aria-hidden="true"
                     />
                   </div>

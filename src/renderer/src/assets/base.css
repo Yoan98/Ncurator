@@ -1236,7 +1236,7 @@ textarea,
   @apply mx-auto flex w-full max-w-[760px] flex-col gap-5 pb-8;
 }
 
-.nc-timeline-jump-spacer {
+.nc-timeline-pin-spacer {
   height: 0;
   pointer-events: none;
 }
