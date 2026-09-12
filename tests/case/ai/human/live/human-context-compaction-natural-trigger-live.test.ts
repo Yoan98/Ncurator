@@ -23,7 +23,7 @@ import {
 } from '../testUtils'
 
 const PARTNER_ID = 'live-context-compaction'
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 45_000
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 60_000
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '## 目标',
