@@ -290,9 +290,41 @@ Windows 更新采用“先完成应用关闭、再启动安装器”的时序：
 
 应用不支持数据库降级，也不自动备份数据库。旧应用发现数据库版本更高时不初始化 Storage、LanceDB、AI、Workbench、定时任务或业务 IPC，只提供自动更新、前往官网下载和退出。已经公开发布的历史安装包无法被追溯加入安装器保护；完整保护从包含本方案的版本开始。
 
-页面 fixture 只验证更新交互，不证明真实安装包下载或升级成功。真实更新验证需要使用已发布的旧版本安装包连接公开更新通道。
+页面 fixture / 模拟 E2E（`sidebar-app-update`、`database-version-update-required`，规格与 `pnpm test:update*` 见 `doc/test-plan/workbench-test.md`）只验证更新交互，不证明真实安装包下载或升级成功。
 
-正式发布涉及 SQLite 变更时，除 Tag 前全量 Unit 外，正式包回归至少包含 `sidebar-app-update` 和 `database-version-update-required`，并用上一公开 schema 的可审查 fixture 验证原地升级。Windows 禁止降级专项必须使用两个都包含新版 NSIS 保护的候选安装包：先安装较高版本，再运行较低版本，断言安装被拒绝且已安装版本和隔离 userData 不变。不能拿历史旧安装包验证这一点，因为历史安装包本身没有可追溯增加的版本检查。
+正式发布涉及 SQLite 变更时，除 Tag 前全量 Unit 外，正式包回归至少包含上述两个更新 case，并用上一公开 schema 的可审查 fixture 验证原地升级。
+
+#### 按需：Windows 真实覆盖升级验证（不进回归 / 发布门禁）
+
+需要验证真实覆盖升级（例如 Windows 安装器能否静默卸载旧版文件并完成升级）时，可单独运行：
+
+```bash
+pnpm test:update:real:win -- \
+  --source-installer <已发布旧版安装包.exe> \
+  --source-version 0.1.68 \
+  --expected-version 0.1.69 \
+  --downgrade-installer <包含禁止降级逻辑的较低版本候选包.exe>
+```
+
+该专项是独立、按需的工具，与回归测试和发布门禁完全隔离：
+
+- 脚本是 `scripts/test/update-real-windows.mjs`（`.mjs` 而非 `.test.ts`），不在 `tests/case/**` 下，runner 的自动发现与测试架构校验都不会扫到它；
+- 不加入 `test:update` 或任何聚合、发布命令，只有显式执行本命令才会运行；
+- 全程离线：脚本在 `127.0.0.1` 起本地 HTTP feed 托管新版安装包并生成 `latest.yml`，安装旧版后把其 `resources/app-update.yml` 指向本地 feed，不触碰生产 `latest.yml`、R2 或公开更新通道；
+- 运行时自隔离：拒绝覆盖已有 Ncurator 安装、使用独立 user-data 与 updater 缓存、结束后卸载测试安装并恢复缓存。
+
+流程与通过标准：
+
+1. 安装 `--source-installer`（应使用不含本次修复的已发布旧版安装包复现问题；若用 `--source-version` 从当前代码构建旧版，旧版也会包含修复，无法复现升级失败）；
+2. 用当前代码构建 `--expected-version`（比旧版更高）并放入本地 feed；
+3. 启动旧版，检查更新、下载、触发重启安装；
+4. 安装器以静默方式完成覆盖升级，不再出现 "Failed to uninstall old application files"；
+5. 已安装版本变成 `--expected-version`，测试用户数据（`update-smoke-marker.txt`）保留；
+6. 传入 `--downgrade-installer` 时，升级完成后静默运行该较低版本候选包，断言安装被拒绝、已安装版本仍为 `--expected-version` 且 marker 不变。该参数只能使用已经包含本方案 NSIS 检查的候选包；历史旧安装包不具备保护，不能用于此断言。
+
+报告写入 `tests/logs/settings/update/real-windows/<运行时间>/report.json`，附截图与 `process.log`。卸载失败会表现为版本无法升级，脚本会明确报错并关联该失败模式。
+
+Windows 禁止降级专项必须使用两个都包含新版 NSIS 保护的候选安装包：先安装较高版本，再运行较低版本，断言安装被拒绝且已安装版本和隔离 userData 不变。不能拿历史旧安装包验证这一点，因为历史安装包本身没有可追溯增加的版本检查。
 
 ### 中断、恢复与回滚
 

@@ -87,15 +87,16 @@ tests/
 
 - UI E2E 必须通过真实 UI 和产品链路完成被测行为，不得用 fake、mock、stub、直接写状态或内部 IPC 绕过。
 - fixture 和 helper 只能准备真实输入、执行用户可见操作、等待结果和收集证据，不能替代产品输出。
-- Settings / Workbench E2E 固定使用 `serviceMode: real`；已批准例外仅限：自动更新模拟；以及时间轴月/年选天 case 在隔离 `userData` 上用 `scripts/dev/seed-partner-timeline.mjs` 写入跨日消息（墙钟下一次 live 发送无法产生月/年节点，后续点击仍走真实 UI）。
+- Settings / Workbench E2E 固定使用 `serviceMode: real`。
+- 允许的模拟、种子或受控注入只写在对应 `doc/test-plan/**` case 的 How / Not；本文不展开操作步骤。新增假数据或模拟路径须先说明必要性、取得用户确认，并写入该 case 所在测试计划。
 - Workbench 和需要真实文件的 Settings case 将 `tests/fixtures/workspace` 复制到临时目录，case 结束并关闭应用后删除临时副本。
 - fixture 只能准备用户实际可拥有的文件、目录和配置输入；不得直接写应用状态、调用内部写 IPC 或替换产品服务。
 - observer、只读 IPC 和截图只能收集证据，不能触发被测行为或改变运行结果。
 - `ai/human/live` 必须使用 env 真实模型且不得跳过、模拟或替换模型决策、工具结果或业务产物，允许仅为触发真实机制的可测性 override，case 不设评分门槛，运行后由人工依据 raw logs 与 artifact 将最新 0-100 评估回写至 ai-test 顶部快照。
 - 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。
-- 除自动更新、以及时间轴月/年选天 case 用 seed 脚本向隔离 userData 写入跨日消息外，任何假数据或模拟路径都必须先说明必要性、取得用户确认，并在本文简短记录例外及边界。
 - 不得为了 E2E 增加生产环境变量、故障开关、全局探针或其他生产代码入口；确需修改生产代码时，必须先取得用户确认。
 - 向量模型下载 E2E 使用产品现有模型清单和下载逻辑，不替换下载源；执行前必须关闭代理软件的 TUN 模式。网络异常按测试失败处理，并通过 raw logs 定位原因。
+- 真实安装包下载与覆盖升级验证见 `doc/release.md`，不属于回归体系。
 
 ### 3.4 真实 AI / live 断言规则
 
@@ -184,60 +185,7 @@ runner 支持的过滤参数：
 - native binding、知识库缓存和临时 Electron app 由 runner 自动准备；普通回归不手工修改 `node_modules` 或复用正式包缓存。
 - 正式包测试、发布门禁、Tag 前 Unit/非 live AI 以及发布后日志清理只在 `doc/release.md` 定义，本文不重复发布流程。
 
-### 4.3 自动更新模拟测试
-
-自动更新是允许在测试侧注入受控状态的 E2E 特例之一：可提供更新可用、下载进度、完成和失败快照，但不得修改生产代码来支持模拟。该用例还允许测试框架在 Electron 启动前向隔离 `userData/app.sqlite` 写入未来 migration 记录，用于真实触发仅更新模式；只能准备数据库输入，不能伪造主进程启动状态或绕过版本检查。
-
-自动更新测试运行后端契约测试和模拟页面 E2E：
-
-```bash
-pnpm test:update
-```
-
-也可以分开运行：
-
-```bash
-pnpm test:update:backend
-pnpm test:update:e2e
-```
-
-后端测试验证主进程更新状态、发布配置、R2 元数据和 release fragment。模拟 E2E 分为两个独立 case：`sidebar-app-update` 验证普通更新入口，`database-version-update-required` 验证高版本数据库恢复页的按钮、进度、中文错误提示、官网下载入口和 IPC，并验证恢复模式不加载 Workbench。自动化测试不下载或安装真实更新包。
-
-#### 4.3.1 自动更新真实升级专项（按需，不进回归/发布门禁）
-
-模拟测试不证明真实安装包下载或升级成功。需要验证真实覆盖升级（例如 Windows 安装器能否静默卸载旧版文件并完成升级）时，可单独运行真实升级专项：
-
-```bash
-pnpm test:update:real:win -- \
-  --source-installer <已发布旧版安装包.exe> \
-  --source-version 0.1.68 \
-  --expected-version 0.1.69 \
-  --downgrade-installer <包含禁止降级逻辑的较低版本候选包.exe>
-```
-
-该专项是独立、按需的工具，与回归测试和发布门禁完全隔离：
-
-- 脚本是 `scripts/test/update-real-windows.mjs`（`.mjs` 而非 `.test.ts`），不在 `tests/case/**` 下，runner 的自动发现与测试架构校验都不会扫到它；
-- 不加入 `test:update` 或任何聚合、发布命令，只有显式执行本命令才会运行；
-- 全程离线：脚本在 `127.0.0.1` 起本地 HTTP feed 托管新版安装包并生成 `latest.yml`，安装旧版后把其 `resources/app-update.yml` 指向本地 feed，不触碰生产 `latest.yml`、R2 或公开更新通道；
-- 运行时自隔离：拒绝覆盖已有 Ncurator 安装、使用独立 user-data 与 updater 缓存、结束后卸载测试安装并恢复缓存。
-
-流程与通过标准：
-
-1. 安装 `--source-installer`（应使用不含本次修复的已发布旧版安装包复现问题；若用 `--source-version` 从当前代码构建旧版，旧版也会包含修复，无法复现升级失败）；
-2. 用当前代码构建 `--expected-version`（比旧版更高）并放入本地 feed；
-3. 启动旧版，检查更新、下载、触发重启安装；
-4. 安装器以静默方式完成覆盖升级，不再出现 "Failed to uninstall old application files"；
-5. 已安装版本变成 `--expected-version`，测试用户数据（`update-smoke-marker.txt`）保留。
-6. 传入 `--downgrade-installer` 时，升级完成后静默运行该较低版本候选包，断言安装被拒绝、已安装版本仍为 `--expected-version` 且 marker 不变。该参数只能使用已经包含本方案 NSIS 检查的候选包；历史旧安装包不具备保护，不能用于此断言。
-
-报告写入 `tests/logs/settings/update/real-windows/<运行时间>/report.json`，附截图与 `process.log`。卸载失败会表现为版本无法升级，脚本会明确报错并关联该失败模式。
-
-### 4.4 时间轴跨日种子
-
-墙钟下一次真实发送只能产生「今天」节点，无法覆盖月/年选天。已批准例外：E2E 可在应用重启前用 `scripts/dev/seed-partner-timeline.mjs` 向隔离 `userData/app.sqlite` 写入跨日消息。种子只负责造出墙钟一次发送得不到的日期分布；此后交互仍走真实 UI，不得用 IPC 或内部状态跳转。
-
-### 4.5 读取与分析 raw logs
+### 4.3 读取与分析 raw logs
 
 
 - 默认先读取目标 run 的 `timeline.jsonl`，理解语义步骤、断言事实和失败位置。

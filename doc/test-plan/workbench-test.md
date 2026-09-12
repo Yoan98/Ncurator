@@ -80,6 +80,20 @@ tests/case/workbench/
 - `node scripts/test/workflow.mjs --domain workbench`
 - `node scripts/test/workflow.mjs --domain workbench --type e2e`
 
+自动更新模拟（聚合入口，不证明真实安装成功）：
+
+```bash
+pnpm test:update
+pnpm test:update:backend
+pnpm test:update:e2e
+```
+
+- `test:update` = backend 契约 + 模拟页面 E2E。
+- `test:update:backend`：`unit/release`，验证主进程更新状态、发布配置、R2 元数据和 release fragment。
+- `test:update:e2e`：Workbench case `sidebar-app-update` 与 `database-version-update-required`（见下方 case 规格）。
+- 自动更新是允许在测试侧注入受控状态的 E2E 特例：可提供更新可用、下载进度、完成和失败快照，但不得修改生产代码来支持模拟；`database-version-update-required` 还允许在 Electron 启动前向隔离 `userData/app.sqlite` 写入未来 migration 记录以真实触发仅更新模式，只能准备数据库输入，不能伪造主进程启动状态或绕过版本检查。
+- 真实覆盖升级与禁止降级验证见 `doc/release.md`，不在本计划与 `test:update` 内。
+
 补充规则：
 
 - `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 回归测试入口。
@@ -294,9 +308,9 @@ tests/case/workbench/
 - 测试类型：`e2e`
 - What：打开伙伴或滚到底部后最新日贴顶且轴高亮该日；近端日节点第一次点击即贴顶且高亮不闪回月节点；月节点搜索可选有消息的天；选天后瞬时跳到该天且轴不展开；同一天再打开仍可点并再次跳转；选天关闭弹层后不会再跳到该月最早日；点月节点才跳该月最早日；高亮节点大于未选中节点。
 - Why：墙钟一次发送只有「今天」，近端日期下方消息往往撑不满一屏；常驻阅读留白让滚到底与点轴共用「顶部是哪天」；月/年选天、重复点同一天、弹层点击穿透必须走 Electron UI。
-- How：启动 Workbench 让隔离 `userData` 落库后重启，`prepareUserData` 调用 `scripts/dev/seed-partner-timeline.mjs --force` 写入专用伙伴「时间轴 · 预览」的跨日/月/年消息（已批准例外，见 `doc/test.md`）；通过真实 UI 点开该伙伴。打开后断言「今天」贴顶且轴高亮今天。再点近一周内的日节点一次，断言目标日贴顶且高亮停在该日、短等后不闪回月节点。打开某月节点 DatePicker，确认无消息日不可选；点该月较晚的有消息日，断言贴顶的是那天而不是该月最早日，轴仍是月节点。把消息列表滚到底后断言回到今天贴顶且轴高亮今天，再打开同一搜索点同一天仍能跳回。再点该月节点，跳到该月最早有消息日并稳定停留。截图核对比例与高亮节点更大。
+- How：墙钟下一次真实发送只能产生「今天」节点，无法覆盖月/年选天。已批准例外：启动 Workbench 让隔离 `userData` 落库后重启，`prepareUserData` 调用 `scripts/dev/seed-partner-timeline.mjs --force` 向隔离 `userData/app.sqlite` 写入专用伙伴「时间轴 · 预览」的跨日/月/年消息；种子只造出墙钟一次发送得不到的日期分布，此后交互仍走真实 UI，不得用 IPC 或内部状态跳转。通过真实 UI 点开该伙伴。打开后断言「今天」贴顶且轴高亮今天。再点近一周内的日节点一次，断言目标日贴顶且高亮停在该日、短等后不闪回月节点。打开某月节点 DatePicker，确认无消息日不可选；点该月较晚的有消息日，断言贴顶的是那天而不是该月最早日，轴仍是月节点。把消息列表滚到底后断言回到今天贴顶且轴高亮今天，再打开同一搜索点同一天仍能跳回。再点该月节点，跳到该月最早有消息日并稳定停留。截图核对比例与高亮节点更大。
 - Oracle：对齐 `WB-SESSION-010-AC2`、`WB-SESSION-010-AC3`、`WB-SESSION-010-AC5`、`WB-SESSION-010-AC6`、`WB-SESSION-010-AC9`。
-- Not：不发真实 AI；不测紧凑态与懒加载（由 `timeline-day-jump` 覆盖）；不伪造系统时钟。
+- Not：不发真实 AI；不测紧凑态与懒加载（由 `timeline-day-jump` 覆盖）；不伪造系统时钟；种子不得替代真实 UI 点击。
 
 #### `context-clear-capsule`
 
