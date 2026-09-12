@@ -1,6 +1,6 @@
 # 桌面端构建与发布
 
-本文是 Windows、macOS 构建、正式包回归和对象存储发布的统一说明。国内默认发布到腾讯云 COS，海外可显式切换到 Cloudflare R2。当前只发布 Windows x64 和 macOS arm64；Windows 使用 `windows-vX.Y.Z`，macOS 使用 `mac-vX.Y.Z`，两平台独立递增。
+本文是 Windows、macOS 构建、正式包回归和对象存储发布的统一说明。当前桌面端正式发布只发腾讯云 COS（一次即停）；不要在国内发布后再把同一 Tag 同步到 Cloudflare R2。R2 仅预留给未来海外版，须显式设置 `RELEASE_STORAGE_TARGET=r2`，不是同一轮发布的并行通道。当前只发布 Windows x64 和 macOS arm64；Windows 使用 `windows-vX.Y.Z`，macOS 使用 `mac-vX.Y.Z`，两平台独立递增。
 
 ## 1. 发布流程
 
@@ -9,7 +9,7 @@
 - 平台 Tag **正式上线后**不可修改、覆盖或删除；未上线用 `release:abort` 删掉后可重打同版本。
 - 候选包必须从 Tag 导出的干净代码构建。
 - 按当前版本与上一已发布同平台版本的差异选择正式包 E2E，测实际安装后的候选包；影响面可控时定向回归，不必默认全量。
-- 发布测试过的同一份候选包，并验证公开下载和更新通道。
+- 发布测试过的同一份候选包到 COS，并验证国内公开下载和更新通道；COS 验证通过即结束，不要再对同一 Tag 上传或 finalize 到 R2。
 
 ```mermaid
 flowchart TD
@@ -20,8 +20,8 @@ flowchart TD
     E -->|存在问题| F["修复问题并重新评估影响范围"]
     F --> E
     E -->|通过| G["说明构建、测试和剩余风险"]
-    G --> H["发布同一候选包"]
-    H --> I["验证下载、更新元数据和公开状态"]
+    G --> H["发布同一候选包到 COS"]
+    H --> I["验证国内下载、更新元数据和公开状态"]
     I --> J["清理本地旧候选包和临时工作区"]
     C -->|未上线失败| K["release:abort 删除 Tag"]
     K --> B
@@ -79,7 +79,7 @@ git diff <previous-platform-tag>..<current-platform-tag>
 - **未上线**：`release:abort` 后在修复后的 `main` 重打**同版本**并重新 prepare；
 - **已上线**：必须发更高版本新 Tag 与候选包。
 
-同一次发布中，修复不影响已通过用例时不必重跑那些用例。测试完成后说明版本、影响范围、回归结果与剩余风险。publish 只读已通过候选包，不重新构建。
+同一次发布中，修复不影响已通过用例时不必重跑那些用例。测试完成后说明版本、影响范围、回归结果与剩余风险。publish 只读已通过候选包，不重新构建；默认写入 COS，国内通道验证成功即完成。不要再设 `RELEASE_STORAGE_TARGET=r2` 对同一 Tag 做第二次上传或 finalize。
 
 真实发布默认锁定；用户明确批准上线后，在该终端设置：
 
@@ -93,7 +93,7 @@ export NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production
 
 ### Windows
 
-本地 Windows x64：Node.js 22 x64、项目指定 pnpm、Python 3.12 x64、Git、tar；发 COS/R2 时还需 AWS CLI 与对应存储配置。`pnpm release:doctor` 检查本机条件。prepare / test / publish 只消费本机候选包。
+本地 Windows x64：Node.js 22 x64、项目指定 pnpm、Python 3.12 x64、Git、tar；发 COS 时还需 AWS CLI 与 COS 存储配置。仅未来海外版才需要 R2 配置。`pnpm release:doctor` 检查本机条件。prepare / test / publish 只消费本机候选包。
 
 ### macOS
 
@@ -122,11 +122,11 @@ releases/latest/macos.json
 
 不再发布 `downloads/latest/*`。`artifacts` 不可变长缓存；`updates/latest` 与 `releases/latest` 为 `no-store`。`latest.yml` / `latest-mac.yml` 供 electron-updater；`releases/latest/*.json` 供官网 `fetch` 后导航到 artifacts。对象带 `Content-Disposition`，导航下载可得带版本文件名。
 
-国内默认（COS）环境变量：`SecretId` / `SecretKey`（或 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY`）。桶与公开地址已固化为 `ncurator-1324873382` / `ap-guangzhou` / `https://download.guanzhangai.cn`，无需写入 `.env`。CDN、DNS、资费与采购见 `doc/tencent-cdn-billing.md`。发布子用户权限模板：[`scripts/release/cos/cam-policy.json`](../scripts/release/cos/cam-policy.json)。
+当前正式发布只写 COS：环境变量 `SecretId` / `SecretKey`（或 `TENCENT_SECRET_ID` / `TENCENT_SECRET_KEY`）。桶与公开地址已固化为 `ncurator-1324873382` / `ap-guangzhou` / `https://download.guanzhangai.cn`，无需写入 `.env`。CDN、DNS、资费与采购见 `doc/tencent-cdn-billing.md`。发布子用户权限模板：[`scripts/release/cos/cam-policy.json`](../scripts/release/cos/cam-policy.json)。
 
-海外：`RELEASE_STORAGE_TARGET=r2`，并设置 `R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_ACCOUNT_ID`、`R2_BUCKET_NAME`、`R2_PUBLIC_BASE_URL=https://download.ncurator.com`。
+国内官网 / 下载：`https://www.guanzhangai.cn`、`https://download.guanzhangai.cn`。海外官网 `www.ncurator.com` 存在，但当前桌面端发行包与自动更新只走国内通道。国内 COS 发布完成后不要再同步同一 Tag 到 R2。
 
-国内官网 / 下载：`https://www.guanzhangai.cn`、`https://download.guanzhangai.cn`。海外官网 `www.ncurator.com`；桌面端发行包统一走国内官网与国内更新通道。
+仅当有意发布未来海外版时才切 R2（非当前常规循环）：`RELEASE_STORAGE_TARGET=r2`，并设置 `R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_ACCOUNT_ID`、`R2_BUCKET_NAME`、`R2_PUBLIC_BASE_URL=https://download.ncurator.com`。
 
 publish 上传候选与 fragment，更新该平台自动更新 metadata 与官网 manifest，验证公开 yml / 清单 / artifacts 的大小、sha512、`Content-Disposition` 与 manifest URL。验证成功后标记 `published`，清理本地 `tests/logs/**`，并清理该平台更早 artifacts / release-status 与遗留 `downloads/latest/*`。失败、prepare-only、test-only 不清理 logs。
 
@@ -217,6 +217,8 @@ export NCURATOR_ALLOW_ABORT_TAG=abort-unpublished-tag
 pnpm release:abort -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
 pnpm release:storage:plan
 pnpm release:storage:finalize -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
+# 以上默认针对 COS。不要在国内 COS 发布后再对同一 Tag 设 RELEASE_STORAGE_TARGET=r2 做第二次 plan / finalize。
+# 仅未来海外版才显式：RELEASE_STORAGE_TARGET=r2
 ```
 
 硬规则：构建 / 审计失败不放宽包规则；公开 metadata / 下载 / 哈希验证失败不更新 latest 通道。

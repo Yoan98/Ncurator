@@ -117,5 +117,5 @@ HTTPS：账号每月约 **300 万次**免费，超出约 0.05 元/万次。
 ## 7. 与发版的关系
 
 - 正式包公开地址：`https://download.guanzhangai.cn`（清单 `releases/latest/*.json`，更新 `updates/latest/*`）。
-- 桌面端默认只发 COS；海外才显式 `RELEASE_STORAGE_TARGET=r2`。发版流程见 `doc/release.md`。
+- 桌面端正式发布只发 COS 一次即停；不要在国内发布后再同步同一 Tag 到 R2。仅未来海外版才显式 `RELEASE_STORAGE_TARGET=r2`。发版流程见 `doc/release.md`。
 - 子用户密钥只给 COS 对象权限；CDN 刷新权限不混入上传密钥。
