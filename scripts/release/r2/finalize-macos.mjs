@@ -186,13 +186,6 @@ try {
       (key) => key !== activeStatusKey
     )
   )
-  removable.push(...(await listKeys('downloads/latest/')))
-  removable.push(
-    ...(await listKeys('artifacts/v')).filter((key) => /\/Ncurator-mac-[^/]+$/u.test(key))
-  )
-  removable.push(
-    ...(await listKeys('release-status/v')).filter((key) => /\/macos-arm64\.json$/u.test(key))
-  )
   await deleteKeys(removable)
   process.stdout.write(`[release] macOS arm64 ${releaseTag} is live at ${installerUrl}\n`)
 } finally {

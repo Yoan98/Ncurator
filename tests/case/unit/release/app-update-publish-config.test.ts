@@ -136,8 +136,6 @@ describe('app update publish config', () => {
     expect(macFinalize).not.toContain('releases/latest/windows.json')
     expect(windowsFinalize).not.toContain('copy-object')
     expect(macFinalize).not.toContain('copy-object')
-    expect(windowsFinalize).toContain("listKeys('downloads/latest/')")
-    expect(macFinalize).toContain("listKeys('downloads/latest/')")
     expect(windowsFinalize).toContain('installerUrl')
     expect(macFinalize).toContain('installerUrl')
     expect(windowsFinalize).not.toContain('--keep-old')

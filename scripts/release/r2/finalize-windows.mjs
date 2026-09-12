@@ -154,13 +154,6 @@ try {
       (key) => key !== statusKey(releaseTag, 'windows-x64')
     )
   )
-  removable.push(...(await listKeys('downloads/latest/')))
-  removable.push(
-    ...(await listKeys('artifacts/v')).filter((key) => /\/Ncurator-windows-[^/]+$/u.test(key))
-  )
-  removable.push(
-    ...(await listKeys('release-status/v')).filter((key) => key.endsWith('/windows-x64.json'))
-  )
   await deleteKeys(removable)
   process.stdout.write(
     `[release] Windows ${releaseTag} is live at ${installerUrl}\n`
