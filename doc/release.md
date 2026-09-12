@@ -145,7 +145,7 @@ Windows 更新：https://download.guanzhangai.cn/updates/latest/latest.yml
 macOS 更新：https://download.guanzhangai.cn/updates/latest/latest-mac.yml
 ```
 
-官网下载页写死上述清单地址，`fetch` 后导航到 artifacts；不要 `fetch` 整包。运行时检查频率、安装时序、DB 高版本恢复页与 NSIS 禁止降级见 `doc/database.md`。
+官网下载页写死上述清单地址，`fetch` 后导航到 artifacts；不要 `fetch` 整包。
 
 模拟 E2E（`sidebar-app-update`、`database-version-update-required` 与 `pnpm test:update*`）见 `doc/test-plan/workbench-test.md`，不证明真实安装成功。涉及 SQLite 变更的正式包回归至少包含上述两 case，并用上一公开 schema 的可审查 fixture 验证原地升级。
 

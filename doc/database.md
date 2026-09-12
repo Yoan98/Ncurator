@@ -78,12 +78,6 @@ SQLite 保存以下业务数据：
 
 Windows 从本方案发布的 NSIS 安装包开始，会在卸载或写文件前读取 HKCU/HKLM 已安装版本：允许更高版本安装和同版本修复，拒绝低版本安装包。macOS DMG 无法阻止手动用旧 `.app` 覆盖，由上述运行时版本检查兜底。历史上已经发布的旧安装包无法追溯增加安装器保护。
 
-### 应用自动更新
-
-- 启动 5 秒后静默检查更新；持续运行时每 4 小时检查一次。发现新版本后由用户主动下载；下载完成后可以立即重启或稍后安装。
-- Windows：点击立即安装时先完成应用关闭（刷新工作区、终止 embedding / 网页抓取 sidecar / 终端会话等子进程），再调用 `quitAndInstall` 触发 NSIS，避免旧文件被占用导致 “Failed to uninstall old application files”。
-- 应用不支持数据库降级，也不自动备份数据库。公开更新通道与安装包发布见 `doc/release.md`。
-
 ### DDL 与数据安全规则
 
 - 新增普通字段优先使用 `ALTER TABLE ... ADD COLUMN`。
