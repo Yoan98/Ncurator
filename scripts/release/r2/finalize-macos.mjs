@@ -141,23 +141,48 @@ try {
   ) {
     throw new Error('public latest-mac.yml does not match the Mac release')
   }
+  const originInstaller = JSON.parse(
+    (
+      await aws([
+        's3api',
+        'head-object',
+        '--bucket',
+        bucket,
+        '--key',
+        installerKey,
+        '--output',
+        'json'
+      ])
+    ).stdout
+  )
+  const originDisposition = String(originInstaller.ContentDisposition || '')
+  if (
+    Number(originInstaller.ContentLength) !== installer.size ||
+    !(
+      originDisposition.includes(`filename*=UTF-8''${encodeURIComponent(downloadName)}`) ||
+      originDisposition.includes(`filename="${downloadName}"`)
+    )
+  ) {
+    throw new Error(`origin macOS artifact Content-Disposition verification failed: ${installerKey}`)
+  }
+
   const response = await fetchWithRetry(`${installerUrl}?check=${Date.now()}`, {
     method: 'HEAD',
     cache: 'no-store'
   })
+  if (!response.ok || Number(response.headers.get('content-length')) !== installer.size) {
+    throw new Error(`public macOS artifact download verification failed: ${installerKey}`)
+  }
+  const publicDisposition = String(response.headers.get('content-disposition') || '')
   if (
-    !response.ok ||
-    Number(response.headers.get('content-length')) !== installer.size ||
     !(
-      String(response.headers.get('content-disposition') || '').includes(
-        `filename*=UTF-8''${encodeURIComponent(downloadName)}`
-      ) ||
-      String(response.headers.get('content-disposition') || '').includes(
-        `filename="${downloadName}"`
-      )
+      publicDisposition.includes(`filename*=UTF-8''${encodeURIComponent(downloadName)}`) ||
+      publicDisposition.includes(`filename="${downloadName}"`)
     )
   ) {
-    throw new Error(`public macOS artifact download verification failed: ${installerKey}`)
+    process.stderr.write(
+      `[release] warning: CDN Content-Disposition still stale for ${installerKey}; origin is correct (purge CDN if clients still see the old filename)\n`
+    )
   }
 
   const publicManifestResponse = await fetchWithRetry(
