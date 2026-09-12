@@ -61,7 +61,8 @@ try {
     path.join(ROOT, 'scripts', 'release', 'r2', 'metadata.mjs'),
     metadataInput,
     metadataOutput,
-    releaseTag
+    releaseTag,
+    path.join(workDirectory, 'macos-arm64.json')
   ])
   await aws([
     's3',
