@@ -294,8 +294,8 @@ describe('ai unit llm executor text path', () => {
             }
           }
           return {
-            output: { needsHistory: false },
-            rawText: '{"needsHistory":false}'
+            output: { ok: true },
+            rawText: '{"ok":true}'
           }
         }
       }
@@ -313,9 +313,9 @@ describe('ai unit llm executor text path', () => {
       })
 
       const resultPromise = executor.chatStructured({
-        caller: 'human.context_scope',
-        schemaName: 'human_context_scope',
-        schema: z.object({ needsHistory: z.boolean() }),
+        caller: 'human.brain',
+        schemaName: 'human_brain',
+        schema: z.object({ ok: z.boolean() }),
         system: 'Return JSON only.',
         user: 'Decide.',
         retryOutputErrors: true
@@ -324,7 +324,7 @@ describe('ai unit llm executor text path', () => {
       await vi.advanceTimersByTimeAsync(500)
       await vi.advanceTimersByTimeAsync(750)
       const result = await resultPromise
-      expect(result.output).toEqual({ needsHistory: false })
+      expect(result.output).toEqual({ ok: true })
       expect(callCount).toBe(3)
     } finally {
       vi.useRealTimers()

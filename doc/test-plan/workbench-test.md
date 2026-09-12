@@ -246,7 +246,7 @@ pnpm test:update:e2e
 - What：用户消息 hover 操作、latest turn 编辑撤回、running 态编辑入口隐藏，以及用户消息附件展示。
 - Why：用户编辑上一条消息依赖撤回最新 turn、回填 composer 和附件 UI 协同；任一状态错误都会导致重复发送、误编辑运行中消息或附件被正文挤压遮挡。
 - How：使用真实 Workbench UI 创建伙伴，必要时通过设置页添加文件地址；真实粘贴图片和 `md` 附件并发送 AI 请求；hover 用户消息并触发复制与编辑；在 running 状态检查用户消息气泡和附件布局。首条用户消息应可见居中时间条。
-- Oracle：hover 后显示复制和编辑、不含时间；复制给出成功反馈；编辑会撤回最新 turn（含该 run 的 digest / 判定 / discard 书签）并回填原草稿，running 状态不显示编辑，对齐 `WB-SESSION-006`；首条用户消息上方居中时间条对齐 `WB-SESSION-013-AC1`、`WB-SESSION-013-AC5`；附件独立展示在消息气泡上方（条宽可宽于气泡、卡片顶边不被横滑容器裁切，规格与输入框附件卡对齐），输入框附件关闭按钮可点击且不被遮挡。
+- Oracle：hover 后显示复制和编辑、不含时间；复制给出成功反馈；编辑会撤回最新 turn 并回填原草稿，running 状态不显示编辑，对齐 `WB-SESSION-006`；首条用户消息上方居中时间条对齐 `WB-SESSION-013-AC1`、`WB-SESSION-013-AC5`；附件独立展示在消息气泡上方（条宽可宽于气泡、卡片顶边不被横滑容器裁切，规格与输入框附件卡对齐），输入框附件关闭按钮可点击且不被遮挡。
 - Not：不验证模型回答质量；附件输入通过真实保存与传递链路进入产品。不在本 case 制造跨日或 30 分钟间隔（`WB-SESSION-013-AC2`、`WB-SESSION-013-AC3`、`WB-SESSION-013-AC4` 由 unit `message-time-label` 覆盖）。
 
 #### `composer-attachments-context`
@@ -318,7 +318,7 @@ pnpm test:update:e2e
 - What：伙伴有消息且空闲时出现「清空消息记录」胶囊；hover tooltip 含伙伴名与无法恢复说明；点击先确认，取消不删；确认后消息列表为空，仍停留在同一伙伴，草稿不变。
 - Why：用户需要可理解的「清空对话」动作：确认后消息列表为空，下次发送不再带旧上下文；切换伙伴后只要仍有消息也应能清空。
 - How：创建伙伴并完成一次真实 AI run；检查胶囊文案与 tooltip；点击胶囊后取消确认并断言消息仍在；再点胶囊并确认清空；断言消息为空、仍在同一伙伴、输入草稿不变。运行中不得出现清空入口。
-- Oracle：有消息且空闲时可见对齐 `WB-SESSION-011-AC8`；确认后列表为空对齐 `WB-SESSION-011-AC1`；不换伙伴 / 草稿对齐 `WB-SESSION-011-AC2`；下次发送无旧上下文对齐 `WB-SESSION-011-AC3`（由清空后 message log 为空保证）；运行中不可用对齐 `WB-SESSION-011-AC4`；文案与 tooltip 对齐 `WB-SESSION-011-AC5`；确认框取消/确认对齐 `WB-SESSION-011-AC6`。
+- Oracle：有消息且空闲时可见对齐 `WB-SESSION-011-AC8`；确认后列表为空对齐 `WB-SESSION-011-AC1`；不换伙伴 / 草稿对齐 `WB-SESSION-011-AC2`；下次发送无旧上下文对齐 `WB-SESSION-011-AC3`（由清空后 message log 为空保证）；运行中不可用对齐 `WB-SESSION-011-AC4`；文案与 tooltip 对齐 `WB-SESSION-011-AC5`；确认框取消/确认对齐 `WB-SESSION-011-AC6`。换无关新话题用清空消息记录得到干净上下文，对齐 `WB-SESSION-005-AC3`、`WB-SESSION-014-AC3`、`WB-SESSION-014-AC4`。
 - Not：不验证 compaction；不在本 case 制造文件回退记录（`WB-SESSION-011-AC7` 由 unit `clear-partner-context-deletes-messages-and-runs-keeps-file-changes` 覆盖）。
 
 ### 5.2 `run`
@@ -365,8 +365,8 @@ pnpm test:update:e2e
 - What：同一伙伴的多轮 AI run 能复用已学习的技能并继续上一轮任务主线。
 - Why：续做不能丢失已有上下文，也不能每轮重复学习同一技能。
 - How：通过真实 Workbench UI 完成两轮请求，检查两轮 human steps、工具选择和最终结果。
-- Oracle：第一轮学习 `docx-read` 技能；第二轮不重复 learning 且能使用该技能继续读取文档；两轮结果均完成，对齐 `WB-SESSION-005-AC1`、`WB-SESSION-005-AC2`。
-- Not：不替代 AI backend 对技能图和 memory store 的契约测试。无关新诉求丢弃旧对话原文、相关追问续做、未完成上一轮仍带历史，由 AI `human-context-scope-decision-live` / `context-scope-incomplete-run` 覆盖，对齐 `WB-SESSION-005-AC3`、`WB-SESSION-014-AC1`、`WB-SESSION-014-AC2`、`WB-SESSION-014-AC3`、`WB-SESSION-014-AC4`；用户侧无新的记忆指示或会话切换控件。
+- Oracle：第一轮学习 `docx-read` 技能；第二轮不重复 learning 且能使用该技能继续读取文档；两轮结果均完成，对齐 `WB-SESSION-005-AC1`、`WB-SESSION-005-AC2`。同一伙伴续做不自动丢掉还没压缩的历史原文，对齐 `WB-SESSION-005-AC3`、`WB-SESSION-014-AC1`、`WB-SESSION-014-AC2`。
+- Not：不替代 AI backend 对技能图和 memory store 的契约测试。换话题用清空消息记录或新建伙伴，由 `context-clear-capsule` 与 `WB-SESSION-011` / `WB-SESSION-014` 覆盖；跨轮续做与中断恢复由 AI `human-partner-continuation-live` / `human-partner-resume-with-new-selection-live` 覆盖。
 
 #### `approval-batch-flow`
 
@@ -392,7 +392,7 @@ pnpm test:update:e2e
 - What：同一伙伴中的任务因达到 Graph 运行上限等原因中断后，从不可变消息日志恢复，并在用户后续消息中继续原任务。
 - Why：恢复能力必须经过真实 Workbench、真实模型、Main 进程、持久化和 Renderer 的完整链路验证，不能只依赖 Mock LLM。
 - How：真实模型 E2E 把首轮 Graph 上限降为 2，验证上限错误后发送继续语句；第二轮恢复正式上限并完成。Backend 覆盖日志投影、相同 `tool_call_id` 修复、计划投影、`compaction_checkpoint` 边界、重启标记、跨伙伴隔离、编辑和删除。
-- Oracle：全部中断原因均可只靠日志继续；恢复语句只追加一次，历史 user 配置不变；未压缩时为历史过程 + 尾部新 user，已压缩时为 Compact User + 还没压进摘要的原文（可空）+ 尾部新 user；连续多次恢复不递归嵌套原始任务；切换伙伴或重启后只投影所属日志；编辑只撤回目标 user、关联 assistant/run 和该 run 全部日志（含 digest 与 discard 书签），不回滚已写文件；正常完成清空计划但保留日志；真实模型首轮显示“已达到运行上限，可继续对话推进”且第二轮恢复完成；失败气泡短标题 +「查看详情」保留原文，对齐 `WB-SESSION-007-AC1`、`WB-SESSION-007-AC2`、`WB-SESSION-007-AC3`、`WB-SESSION-007-AC4`、`WB-SESSION-007-AC5`、`WB-SESSION-007-AC6`、`WB-SESSION-007-AC7`、`WB-SESSION-007-AC8`。
+- Oracle：全部中断原因均可只靠日志继续；恢复语句只追加一次，历史 user 配置不变；未压缩时为历史过程 + 尾部新 user，已压缩时为 Compact User + 还没压进摘要的原文（可空）+ 尾部新 user；连续多次恢复不递归嵌套原始任务；切换伙伴或重启后只投影所属日志；编辑只撤回目标 user、关联 assistant/run 和该 run 全部日志，不回滚已写文件；正常完成清空计划但保留日志；真实模型首轮显示“已达到运行上限，可继续对话推进”且第二轮恢复完成；失败气泡短标题 +「查看详情」保留原文，对齐 `WB-SESSION-007-AC1`、`WB-SESSION-007-AC2`、`WB-SESSION-007-AC3`、`WB-SESSION-007-AC4`、`WB-SESSION-007-AC5`、`WB-SESSION-007-AC6`、`WB-SESSION-007-AC7`、`WB-SESSION-007-AC8`。
 - Not：不使用真实模型执行 200 个 Graph 步骤或调用 120 次真实工具；测试覆盖参数不能通过产品正常请求传入，也不改变工具软上限语义。
 
 #### `cancelled-run-keeps-artifact`

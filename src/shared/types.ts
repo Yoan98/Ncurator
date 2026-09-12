@@ -1049,13 +1049,6 @@ export type AiRunWarningCode =
 export type RuntimeIssueCode = AiRunWarningCode
 export type RuntimeSkillId = RegisteredRuntimeSkillId
 export type AiRunEventStage = 'human_brain' | 'human_learning' | 'human_plan' | 'human_hand'
-export type ContextScopeDecisionBasis =
-  | 'gate_incomplete_run'
-  | 'gate_digest_unavailable'
-  | 'gate_below_threshold'
-  | 'model_decision'
-  | 'fallback'
-export type RunDigestStatus = 'pending' | 'completed' | 'failed'
 export type AssistantProcessDisplay =
   | { kind: 'thinking' }
   | { kind: 'learning'; skillId: RuntimeSkillId }
@@ -1095,7 +1088,7 @@ export type BrainContextBudgetSnapshot = {
   deltaTokenEstimate?: number
 }
 
-export type ContextCompactionHistoryFloorKind = 'compaction' | 'discard' | 'none'
+export type ContextCompactionHistoryFloorKind = 'compaction' | 'none'
 
 export type ContextCompactionCut = {
   throughSeq: number
@@ -1923,33 +1916,6 @@ export type ChatMessageLogAnnotationEntry =
         throughSeq: number
         sourceMessageCount: number
         summary: string
-      }
-    }
-    | {
-      kind: 'annotation'
-      eventType: 'run_digest'
-      payload: {
-        status: RunDigestStatus
-        summary: string
-        fileChangePaths: string[]
-      }
-    }
-  | {
-      kind: 'annotation'
-      eventType: 'context_scope_decided'
-      payload: {
-        needsHistory: boolean
-        basis: ContextScopeDecisionBasis
-        budgetTokens: number
-        reason?: string
-      }
-    }
-  | {
-      kind: 'annotation'
-      eventType: 'discard_checkpoint'
-      payload: {
-        throughSeq: number
-        conversationHistory: string
       }
     }
   | {

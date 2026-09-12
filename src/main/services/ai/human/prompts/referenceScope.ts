@@ -32,13 +32,6 @@ const renderAttachment = (attachment: ChatAttachment, index: number): string => 
 - 路径：${attachment.path}`
 }
 
-const renderOptionalUserBlock = (title: string, body: string): string => {
-  const content = body.trim()
-  if (!content) return ''
-  return `${title}：
-${content}`
-}
-
 export const buildReferenceScope = (input: {
   selectedReferences?: SelectedReference[]
   attachments?: ChatAttachment[]
@@ -55,12 +48,4 @@ export const renderSelectedReferencesText = (scope: AiReferenceScope): string =>
 export const renderAttachmentsText = (scope: AiReferenceScope): string =>
   (scope.attachments || [])
     .map((attachment, index) => renderAttachment(attachment, index + 1))
-    .join('\n\n')
-
-export const renderReferenceScopeText = (scope: AiReferenceScope): string =>
-  [
-    renderOptionalUserBlock('用户@的参考资料', renderSelectedReferencesText(scope)),
-    renderOptionalUserBlock('用户添加的附件', renderAttachmentsText(scope))
-  ]
-    .filter((block) => block.length > 0)
     .join('\n\n')

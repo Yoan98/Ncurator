@@ -34,7 +34,7 @@ SQLite 保存以下业务数据：
 关键规则：
 
 - `partner` 保存名称、头像外形与颜色，以及 `pinned` / `pinned_at` 置顶状态；列表按置顶优先、置顶时间、更新时间、创建时间排序。标题就是伙伴 `name`，不因消息改名。
-- `chat_session_message_log` 使用 `partner_id + seq` 保证伙伴内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated`、`compaction_checkpoint`、`run_digest`、`context_scope_decided` 和 `discard_checkpoint` 是强类型 annotation。`compaction_checkpoint` 与 `discard_checkpoint` 都用 `throughSeq` 记下到哪一条为止的原文不再发给主模型。`run_digest` 先写 `pending`，后台再追加 `completed`（一句话摘要 + `fileChangePaths`）或 `failed`。`context_scope_decided` 每轮记录是否带历史（模型判定时带一句话 `reason`）；`needsHistory=false` 时另写 `discard_checkpoint`（含 `conversationHistory`）。`user.content` 是发给模型的 build 全文，`user.input` 是人打的字。已经丢掉或已经压进摘要的原文不再发给主模型，再按书签合成 Compact User 或 Discard User。气泡文案用 `ai_run.input`。用户「清空消息记录」会物理删除该伙伴全部 message log 行及对应 `ai_run`，不删除 `ai_file_change`。编辑最新轮会取消该轮 digest 并删除该 `runId` 的 run 与全部 log。
+- `chat_session_message_log` 使用 `partner_id + seq` 保证伙伴内消息转录的稳定顺序（`user`/`assistant`/`tool`/`annotation` 条目）；`plan_updated`、`compaction_checkpoint` 是强类型 annotation。`compaction_checkpoint.throughSeq` 记下到哪一条为止的原文不再发给主模型，投影时再合成 Compact User。`user.content` 是发给模型的 build 全文，`user.input` 是人打的字。已经压进摘要的原文不再发给主模型。气泡文案用 `ai_run.input`。用户「清空消息记录」会物理删除该伙伴全部 message log 行及对应 `ai_run`，不删除 `ai_file_change`。编辑最新轮会删除该 `runId` 的 run 与全部 log。
 - `ai_run` 挂 `partner_id`，不再保存 `workspace_json`。`partial_answer` 与 `partial_answer_role` 只保存当前流式 UI 草稿；它们不参与下一次模型上下文恢复。`failure_code` 保存互斥终止原因（`llm_request_failed` / `process_interrupted` / `output_truncated` / `input_too_long` / `runtime_limit` / `internal_error` / `unexpected_error` 等）；`failure_raw_message` 保存失败原文供 UI「查看详情」。
 - 待审批状态以 SQLite 中的 run 记录为准。
 - `document.active_generation_id` 是当前有效索引版本，只用于写入后删除旧 chunk 和启动/任务结束时的孤儿清理，不进入检索 `where`。

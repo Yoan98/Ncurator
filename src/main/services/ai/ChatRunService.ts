@@ -1,8 +1,6 @@
 import { BrowserWindow } from 'electron'
 import { v4 as uuidv4 } from 'uuid'
 import { AiRunService } from './AiRunService'
-import { getPartnerDigestCoordinator } from './human/memory/partnerDigestCoordinator'
-import { settleStalePendingDigests } from './human/node/brainNode/runDigest'
 import { classifyThrownErrorToAiRunFailure } from './utils/runFailure'
 import { resolveAiRunFailurePresentation } from './runFailureCatalog'
 import { terminalSessionManager } from './human/tools/terminal/TerminalSessionManager'
@@ -198,21 +196,6 @@ export class ChatRunService {
         console.error('[CHAT-RUN] terminal notification failed:', error)
       }
     }
-    const partners = await this.deps.partnerStore.listPartners()
-    for (const partner of partners) {
-      await settleStalePendingDigests({
-        loadMessageLog: () => this.deps.chatMessageLogStore.list(partner.id),
-        appendMessageLog: async (entries, options) => {
-          const runId = String(options?.runId || '').trim()
-          if (!runId) return
-          await this.deps.chatMessageLogStore.appendBatch({
-            partnerId: partner.id,
-            runId,
-            entries
-          })
-        }
-      })
-    }
   }
 
   public async getPartnerSnapshot(partnerId: string): Promise<PartnerSnapshotResponse> {
@@ -302,7 +285,6 @@ export class ChatRunService {
     const run = latestRun
     const assistantMessage = messages.find((message) => message.id === run.assistantMessageId)
 
-    await getPartnerDigestCoordinator().cancelForRun(run.id)
     await this.deps.aiRunStore.deleteRunsByIds([run.id])
     await this.deps.chatMessageLogStore.deleteByRunIds([run.id])
     const nextMessages = await this.loadProjectedPartnerMessages(partnerId)
@@ -334,7 +316,6 @@ export class ChatRunService {
     }
 
     await Promise.all(affectedRuns.map(([, entry]) => entry.eventQueue.catch(() => {})))
-    await getPartnerDigestCoordinator().cancelForPartner(normalizedPartnerId)
     await terminalSessionManager.closeByChatSession(normalizedPartnerId)
     await this.deps.partnerStore.deletePartner(normalizedPartnerId)
     await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
@@ -352,7 +333,6 @@ export class ChatRunService {
       return { success: false, error: '当前伙伴仍在运行，不能清空消息记录' }
     }
     const clearedAt = Date.now()
-    await getPartnerDigestCoordinator().cancelForPartner(normalizedPartnerId)
     // 物理删除消息 log 与 ai_run；保留 ai_file_change（回退入口）与伙伴 / UI 状态。
     await this.deps.chatMessageLogStore.deleteByPartner(normalizedPartnerId)
     await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
@@ -631,7 +611,6 @@ export class ChatRunService {
     })
 
     try {
-      await getPartnerDigestCoordinator().awaitIdle(run.partnerId)
       const runtimeSettings = await this.deps.aiRuntimeSettingsStore.get()
       const result = await AiRunService.getInstance().run(
         {

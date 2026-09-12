@@ -3,7 +3,6 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ChatRunService } from '../../../../../src/main/services/ai/ChatRunService'
-import { getPartnerDigestCoordinator, resetPartnerDigestCoordinatorForTests } from '../../../../../src/main/services/ai/human/memory/partnerDigestCoordinator'
 import { resolveHistoryFloor } from '../../../../../src/main/services/ai/human/memory/transcript'
 import { AiRunService } from '../../../../../src/main/services/ai/AiRunService'
 import { AiRunResourceManager } from '../../../../../src/main/services/ai/run/AiRunResourceManager'
@@ -181,7 +180,6 @@ const submitAiRun = async (
 }
 
 afterEach(async () => {
-  resetPartnerDigestCoordinatorForTests()
   await Promise.all(activeStorages.splice(0).map((storage) => storage.close()))
   await Promise.all(tempRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
@@ -764,7 +762,7 @@ describe('unit ai persistence backend', () => {
     expect(fileChanges.items[0]?.id).toBe('file-change-1')
   })
 
-  it('retract-latest-turn-cancels-pending-digest-and-does-not-write-it-back', async () => {
+  it('retract-latest-turn-deletes-run-and-message-log', async () => {
     const setup = await createTestService()
     await seedPartner(setup.storage)
     const baseTime = Date.now()
@@ -786,49 +784,21 @@ describe('unit ai persistence backend', () => {
           input: 'retract me',
           context: { selectedReferences: [], attachments: [] }
         },
-        { kind: 'assistant', content: 'done', toolCalls: [] },
-        {
-          kind: 'annotation',
-          eventType: 'run_digest',
-          payload: { status: 'pending', summary: '', fileChangePaths: [] }
-        }
+        { kind: 'assistant', content: 'done', toolCalls: [] }
       ]
-    })
-    let wroteAfterCancel = false
-    getPartnerDigestCoordinator().enqueue({
-      partnerId: 'partner-1',
-      runId: 'retract-run',
-      work: async (signal) => {
-        await new Promise((resolve) => setTimeout(resolve, 80))
-        if (signal.aborted) return
-        wroteAfterCancel = true
-        await setup.storage.chatMessageLog.appendBatch({
-          partnerId: 'partner-1',
-          runId: 'retract-run',
-          entries: [
-            {
-              kind: 'annotation',
-              eventType: 'run_digest',
-              payload: { status: 'completed', summary: '不该写回来', fileChangePaths: [] }
-            }
-          ]
-        })
-      }
     })
 
     const response = await setup.service.retractLatestTurn({
       partnerId: 'partner-1',
       userMessageId: 'retract-user'
     })
-    await new Promise((resolve) => setTimeout(resolve, 120))
 
     expect(response.success).toBe(true)
-    expect(wroteAfterCancel).toBe(false)
     expect(await setup.storage.chatMessageLog.listByRun('retract-run')).toEqual([])
-    expect(getPartnerDigestCoordinator().hasRun('retract-run')).toBe(false)
+    expect(await setup.storage.aiRun.getRun('retract-run')).toBeNull()
   })
 
-  it('retract-latest-turn-removes-discard-checkpoint-and-restores-previous-floor', async () => {
+  it('retract-latest-turn-removes-compaction-checkpoint-and-restores-previous-floor', async () => {
     const setup = await createTestService()
     await seedPartner(setup.storage)
     const baseTime = Date.now()
@@ -853,8 +823,13 @@ describe('unit ai persistence backend', () => {
         { kind: 'assistant', content: 'kept reply', toolCalls: [] },
         {
           kind: 'annotation',
-          eventType: 'run_digest',
-          payload: { status: 'completed', summary: '保留这轮', fileChangePaths: [] }
+          eventType: 'compaction_checkpoint',
+          payload: {
+            compactBlockId: 'kept-compact',
+            throughSeq: 2,
+            sourceMessageCount: 2,
+            summary: '保留这轮'
+          }
         }
       ]
     })
@@ -871,22 +846,27 @@ describe('unit ai persistence backend', () => {
       runId: 'retract-run',
       entries: [
         {
-          kind: 'annotation',
-          eventType: 'discard_checkpoint',
-          payload: { throughSeq: 3, conversationHistory: 'frozen' }
-        },
-        {
           kind: 'user',
           content: 'new topic',
           input: 'new topic',
           context: { selectedReferences: [], attachments: [] }
         },
-        { kind: 'assistant', content: 'new reply', toolCalls: [] }
+        { kind: 'assistant', content: 'new reply', toolCalls: [] },
+        {
+          kind: 'annotation',
+          eventType: 'compaction_checkpoint',
+          payload: {
+            compactBlockId: 'retract-compact',
+            throughSeq: 5,
+            sourceMessageCount: 2,
+            summary: '新摘要'
+          }
+        }
       ]
     })
 
     const before = resolveHistoryFloor(await setup.storage.chatMessageLog.list('partner-1'))
-    expect(before.historyFloorSeq).toBe(3)
+    expect(before.historyFloorSeq).toBe(5)
     const response = await setup.service.retractLatestTurn({
       partnerId: 'partner-1',
       userMessageId: 'retract-user'
@@ -896,7 +876,7 @@ describe('unit ai persistence backend', () => {
 
     expect(response.success).toBe(true)
     expect(remaining.every((record) => record.runId === 'kept-run')).toBe(true)
-    expect(after.historyFloorSeq).toBe(-1)
-    expect(after.includeDiscard).toBe(false)
+    expect(after.historyFloorSeq).toBe(2)
+    expect(after.compactionCheckpoint?.compactBlockId).toBe('kept-compact')
   })
 })

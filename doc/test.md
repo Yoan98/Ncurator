@@ -349,7 +349,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   - `assertionId`
 - `artifacts.json` 必须始终写出，即使 `items` 为空数组。
 - `artifacts/` 目录只有在确实存在实体附件文件时才创建。
-- human live 可按 case 选择写出 `artifacts/message-log-annotations.json`（`kind=other`）：只含 `compaction_checkpoint` / `discard_checkpoint` 的 seq、`throughSeq`、`compactBlockId` 与正文长度，不含摘要或召回全文。默认关闭。
+- human live 可按 case 选择写出 `artifacts/message-log-annotations.json`（`kind=other`）：只含 `compaction_checkpoint` 的 seq、`throughSeq`、`compactBlockId` 与摘要长度，不含摘要全文。默认关闭。
 
 ### 5.6 不同测试类型的统一约束
 

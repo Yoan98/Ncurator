@@ -13,54 +13,33 @@ export type MessageLogBookmarkSnapshot = {
   seq: number
   runId: string
   createdAt: number
-  eventType: 'compaction_checkpoint' | 'discard_checkpoint'
+  eventType: 'compaction_checkpoint'
   throughSeq: number
   compactBlockId?: string
   sourceMessageCount?: number
   summaryChars?: number
-  conversationHistoryChars?: number
 }
 
 const isBookmarkRecord = (
   record: ChatMessageLogRecord
 ): record is ChatMessageLogRecord & {
-  entry: Extract<
-    ChatMessageLogRecord['entry'],
-    { eventType: 'compaction_checkpoint' | 'discard_checkpoint' }
-  >
-} =>
-  record.entry.kind === 'annotation' &&
-  (record.entry.eventType === 'compaction_checkpoint' ||
-    record.entry.eventType === 'discard_checkpoint')
+  entry: Extract<ChatMessageLogRecord['entry'], { eventType: 'compaction_checkpoint' }>
+} => record.entry.kind === 'annotation' && record.entry.eventType === 'compaction_checkpoint'
 
 export const snapshotMessageLogBookmarks = (
   records: readonly ChatMessageLogRecord[]
 ): MessageLogBookmarkSnapshot[] =>
-  records.filter(isBookmarkRecord).map((record) => {
-    const payload = record.entry.payload
-    if (record.entry.eventType === 'compaction_checkpoint') {
-      return {
-        partnerId: record.partnerId,
-        seq: record.seq,
-        runId: record.runId,
-        createdAt: record.createdAt,
-        eventType: 'compaction_checkpoint',
-        throughSeq: payload.throughSeq,
-        compactBlockId: payload.compactBlockId,
-        sourceMessageCount: payload.sourceMessageCount,
-        summaryChars: payload.summary.length
-      }
-    }
-    return {
-      partnerId: record.partnerId,
-      seq: record.seq,
-      runId: record.runId,
-      createdAt: record.createdAt,
-      eventType: 'discard_checkpoint',
-      throughSeq: payload.throughSeq,
-      conversationHistoryChars: payload.conversationHistory.length
-    }
-  })
+  records.filter(isBookmarkRecord).map((record) => ({
+    partnerId: record.partnerId,
+    seq: record.seq,
+    runId: record.runId,
+    createdAt: record.createdAt,
+    eventType: 'compaction_checkpoint',
+    throughSeq: record.entry.payload.throughSeq,
+    compactBlockId: record.entry.payload.compactBlockId,
+    sourceMessageCount: record.entry.payload.sourceMessageCount,
+    summaryChars: record.entry.payload.summary.length
+  }))
 
 export const collectMessageLogAnnotationArtifact = async (input: {
   scope: string

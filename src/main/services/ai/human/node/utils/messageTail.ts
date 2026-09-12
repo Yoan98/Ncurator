@@ -3,7 +3,6 @@ import { normalizeThoughtText } from '../../../../../../shared/thoughtText'
 
 const CURRENT_USER_MARKER = 'ncurator_current_user'
 const COMPACTION_USER_MARKER = 'ncurator_compaction_user'
-const DISCARD_USER_MARKER = 'ncurator_discard_user'
 const COMPACTION_TOOL_RESULT_MAX_CHARS = 2000
 
 export const createCurrentBrainUserMessage = (content: string): HumanMessage =>
@@ -20,25 +19,11 @@ export const createCompactedBrainUserMessage = (content: string): HumanMessage =
     }
   })
 
-export const createDiscardBrainUserMessage = (content: string): HumanMessage =>
-  new HumanMessage({
-    content,
-    additional_kwargs: {
-      [DISCARD_USER_MARKER]: true
-    }
-  })
-
 export const isCurrentBrainUserMessage = (message: BaseMessage): boolean =>
   message.getType() === 'human' && message.additional_kwargs?.[CURRENT_USER_MARKER] === true
 
 export const isCompactedBrainUserMessage = (message: BaseMessage): boolean =>
   message.getType() === 'human' && message.additional_kwargs?.[COMPACTION_USER_MARKER] === true
-
-export const isDiscardBrainUserMessage = (message: BaseMessage): boolean =>
-  message.getType() === 'human' && message.additional_kwargs?.[DISCARD_USER_MARKER] === true
-
-const isSyntheticHistoryUserMessage = (message: BaseMessage): boolean =>
-  isCompactedBrainUserMessage(message) || isDiscardBrainUserMessage(message)
 
 const isImageReferenceHuman = (message: BaseMessage): boolean =>
   message.getType() === 'human' && typeof message.content !== 'string'
@@ -46,7 +31,7 @@ const isImageReferenceHuman = (message: BaseMessage): boolean =>
 const isBoundaryUser = (message: BaseMessage): boolean =>
   message.getType() === 'human' &&
   !isImageReferenceHuman(message) &&
-  !isSyntheticHistoryUserMessage(message)
+  !isCompactedBrainUserMessage(message)
 
 const MAX_TOOL_CALL_ARG_LENGTH = 300
 

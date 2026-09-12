@@ -117,9 +117,7 @@ const hasValidCompactionCut = (
     event.throughSeq >= 1 &&
     (event.firstKeptSeq === undefined || event.firstKeptSeq > event.throughSeq) &&
     Number.isInteger(event.historyFloorSeq) &&
-    (event.historyFloorKind === 'compaction' ||
-      event.historyFloorKind === 'discard' ||
-      event.historyFloorKind === 'none') &&
+    (event.historyFloorKind === 'compaction' || event.historyFloorKind === 'none') &&
     typeof event.isSplitTurn === 'boolean' &&
     event.foldedCount >= 1 &&
     event.tailCount >= 0 &&

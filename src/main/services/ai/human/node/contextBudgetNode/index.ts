@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import type { BrainContextBudgetSnapshot, ChatMessageLogEntry } from '../../../../../../shared/types'
+import type { BrainContextBudgetSnapshot } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import {
   resolveCompactionTailTokens,
@@ -12,7 +12,6 @@ import { estimateMessagesForContext } from '../../memory/multimodal'
 import { buildBrainUserMessage } from '../../prompts/brain'
 import { isCurrentBrainUserMessage } from '../utils/messageTail'
 import { LlmInputTooLongError } from '../../../errors'
-import { buildContextScopeLogEntries } from '../contextScopeDecision'
 
 const buildBudgetSnapshot = (input: {
   cache: HumanRuntimeCache
@@ -94,27 +93,17 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
       if (!builtText) {
         throw new Error('当前 build user 文本为空，无法写入消息日志。')
       }
-      const entries: ChatMessageLogEntry[] = []
-      if (input.cache.contextScopeDecision) {
-        const records = await input.ctx.loadMessageLog()
-        entries.push(
-          ...buildContextScopeLogEntries({
-            decision: input.cache.contextScopeDecision,
-            records,
-            contextWindowTokens
-          })
-        )
-      }
-      entries.push({
-        kind: 'user',
-        content: builtText,
-        input: state.task.userInput,
-        context: {
-          selectedReferences: input.ctx.referenceScope.selectedReferences,
-          attachments: input.ctx.referenceScope.attachments
+      await input.ctx.appendMessageLog([
+        {
+          kind: 'user',
+          content: builtText,
+          input: state.task.userInput,
+          context: {
+            selectedReferences: input.ctx.referenceScope.selectedReferences,
+            attachments: input.ctx.referenceScope.attachments
+          }
         }
-      })
-      await input.ctx.appendMessageLog(entries)
+      ])
       input.cache.currentUserLogAppended = true
     }
 

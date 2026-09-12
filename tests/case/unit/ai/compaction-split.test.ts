@@ -181,28 +181,6 @@ describe('splitLogForCompactionTail', () => {
     expect(split.turnPrefix).toEqual([])
   })
 
-  it('does not treat a discard checkpoint as a visible boundary', () => {
-    const leftover = pair(2, '1', 'x'.repeat(2000), 'y'.repeat(2000))
-    const lastPair = pair(4, '2', 'b'.repeat(400), 'c'.repeat(400))
-    const records = [
-      logRecord(1, {
-        kind: 'annotation',
-        eventType: 'discard_checkpoint',
-        payload: {
-          throughSeq: 1,
-          conversationHistory: '用户：调研SECRET'
-        }
-      }),
-      ...leftover,
-      ...lastPair
-    ]
-    const split = splitLogForCompactionTail(records, costOf(lastPair))
-    expect(split.tail.map((record) => record.seq)).toEqual([4, 5])
-    expect(split.folded.map((record) => record.seq)).toEqual([2, 3])
-    expect(split.isSplitTurn).toBe(false)
-    expect(split.turnPrefix).toEqual([])
-  })
-
   it('treats consecutive users as separate groups', () => {
     const first = logRecord(1, user('first task'))
     const second = logRecord(2, user('second task'))
@@ -232,28 +210,6 @@ describe('hasCompressibleCompactionHistory', () => {
               throughSeq: 1,
               sourceMessageCount: 2,
               summary: 'checkpoint summary'
-            }
-          }),
-          current,
-          ...tail
-        ],
-        costOf([current, ...tail])
-      )
-    ).toBe(false)
-  })
-
-  it('is false when only a discard checkpoint sits below the history floor', () => {
-    const current = logRecord(2, user('continue'))
-    const tail = pair(3, '2', 'current work', 'current result')
-    expect(
-      hasCompressibleCompactionHistory(
-        [
-          logRecord(1, {
-            kind: 'annotation',
-            eventType: 'discard_checkpoint',
-            payload: {
-              throughSeq: 1,
-              conversationHistory: '用户：调研SECRET'
             }
           }),
           current,

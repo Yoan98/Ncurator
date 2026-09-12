@@ -13,7 +13,6 @@ import {
   joinSplitCompactionSummary,
   wrapCompactionCheckpointContent
 } from '../../prompts/compaction'
-import { wrapDiscardConversationHistory } from '../../prompts/contextScope'
 import { buildBrainSystemPrompt } from '../../prompts/brain'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { estimateTextTokens } from '../../utils/tokenEstimate'
@@ -32,7 +31,6 @@ import {
 } from '../../memory/transcript'
 import {
   createCompactedBrainUserMessage,
-  createDiscardBrainUserMessage,
   renderMessagesForCompaction
 } from '../utils/messageTail'
 import { createAiRunFailure } from '../../../utils/runFailure'
@@ -92,11 +90,7 @@ const buildCompactionCut = (
   throughSeq,
   ...(split.firstKeptSeq === undefined ? {} : { firstKeptSeq: split.firstKeptSeq }),
   historyFloorSeq: floor.historyFloorSeq,
-  historyFloorKind: floor.includeCheckpoint
-    ? 'compaction'
-    : floor.includeDiscard
-      ? 'discard'
-      : 'none',
+  historyFloorKind: floor.compactionCheckpoint ? 'compaction' : 'none',
   isSplitTurn: split.isSplitTurn,
   foldedCount: split.folded.length,
   tailCount: split.tail.length
@@ -109,11 +103,8 @@ const prependFloorHistoryUsers = (
   const floor = resolveHistoryFloor(records)
   const prefix: BaseMessage[] = []
   const checkpointSummary = floor.compactionCheckpoint?.summary.trim()
-  if (floor.includeCheckpoint && checkpointSummary) {
+  if (checkpointSummary) {
     prefix.push(createCompactedBrainUserMessage(wrapCompactionCheckpointContent(checkpointSummary)))
-  } else if (floor.includeDiscard) {
-    const wrapped = wrapDiscardConversationHistory(floor.discardCheckpoint?.conversationHistory || '')
-    if (wrapped) prefix.push(createDiscardBrainUserMessage(wrapped))
   }
   return [...prefix, ...conversation]
 }

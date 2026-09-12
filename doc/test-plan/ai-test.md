@@ -4,9 +4,8 @@
 
 | caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                         | 简短依据                                                                                               |
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| human-context-scope-decision-live                   | 完成 |            96 | qwen3.8-flash                    | 2026-09-11 15:09 CST | tests/logs/ai/human/live/human-context-scope-decision-live/20260911-150806-511                   | 七轮五断言通过（104s）。Run2 `llm_request_failed` 无交付/digest；Run4 原文续接无 Discard User，缓存 92.0%（5120/5568）；Run5 `false`，完成轮含完整 @ 块，失败轮固定「运行失败，没有交付」；Run6 冻字节续做，缓存 93.1%（5120/5499）；Run7 判定只看法兰西岛 digest，再次 discard 仍召回 ALPHA 与失败轮。brain 前缀缓存 86.3%。 |
 | human-risk-report-draft-live                        | 完成 |            97 | qwen3.8-flash                    | 2026-08-31 18:42 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260831-183231-689                        | 读取模板/上周周报/工作文档后 cp 模板建新周报并用 docx 写入，applyId 落盘，原文件未改（Oracle 已按结果口径放宽）。 |
-| human-context-compaction-natural-trigger-live       | 完成 |            93 | qwen3.8-flash                    | 2026-09-11 16:57 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260911-163610-120       | 45k 窗口四断言通过（1300s）。Run1 未压；Run2 预算 36271 过 36k 触发，半截 throughSeq=86 后两次历史压（115/192）并交付；Run3 再压 230/274（含半截），切点字段可直接读。跨 run 缓存 0.998（33280/33343）。过程有 stale nodeId / update_plan 失败但自恢复；同 run 连续压多次偏慢。 |
+| human-context-compaction-natural-trigger-live       | 完成 |            90 | qwen3.8-flash                    | 2026-09-12 13:38 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260912-130017-162       | 去掉 discard/digest 后四断言通过（2269s）。Run1 未压；Run2 预算 36297 过 36k，半截 throughSeq=75 后多次历史压（112/136/182/235/283/304）并交付；Run3 再压 333/366（半截）/376/397/437。`historyFloorKind` 仅 none/compaction。跨 run 缓存 0.993（35840/36101）。同 run 连续压偏慢；并行另一次撞过 400 步上限。 |
 | human-excel-read-weekly-review-live                | 完成 |            91 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-134623-663                   | Oracle 通过；四表结构/公式/退货异常/口径不对等讲清；6×excel_read。过程仍 6×terminal 验算略多。缓存 83.6%。 |
 | human-excel-edit-weekly-review-live                  | 完成 |            95 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-edit-weekly-review-live/20260830-134623-663                   | 先读后写：4×set_range，无多余 set_style；66s 交付，1 条记录。缓存 86.0%。           |
 | human-excel-create-monthly-budget-live             | 完成 |            92 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-create-monthly-budget-live/20260830-134623-662                 | Oracle 通过；9×excel_edit（2 表 + 2 set_range + 5 set_style），87s。较 qwen 300 步失败大幅改善。缓存 89.3%。 |
@@ -17,8 +16,8 @@
 | human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。              |
 | human-runtime-script-system-python-live             | 完成 |            95 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-script-system-python-live/20260814-160300-706             | 本机 Python 在临时脚本目录运行临时脚本，得到确定性结果并核对。                                         |
 | human-runtime-download-python-live                  | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-download-python-live/20260814-160340-415                  | Python 不可用时自主下载便携运行时并运行临时脚本，得到正确结果。                                        |
-| human-partner-resume-with-new-selection-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:11 CST | tests/logs/ai/human/live/human-partner-resume-with-new-selection-live/20260813-201154-716        | 新选中文件后同一伙伴记忆与任务主线延续，完整完成任务。                                                     |
-| human-partner-continuation-live                     | 完成 |            90 | qwen3.8-flash                    | 2026-09-01 10:52 CST | tests/logs/ai/human/live/human-partner-continuation-live/20260901-105227-658                | run1+run2 双主题对比交付（深度学习过拟合 → 图形学反走样），text_file 落盘；2 次失败（terminal_not_found、stale nodeId）自恢复。超时放宽到 30min。 |
+| human-partner-resume-with-new-selection-live        | 完成 |            95 | qwen3.8-flash                    | 2026-09-12 12:35 CST | tests/logs/ai/human/live/human-partner-resume-with-new-selection-live/20260912-122841-441        | Run1 `llm_request_failed` 后同伙伴续做：历史过拟合原文仍在，新选图形学.docx 补反走样并写草稿；未写项标清。跨 run 缓存 0.992（9216/9287）。无 Discard User。 |
+| human-partner-continuation-live                     | 完成 |            93 | qwen3.8-flash                    | 2026-09-12 12:46 CST | tests/logs/ai/human/live/human-partner-continuation-live/20260912-122841-439                | 去掉 discard 后长历史不丢：Run2 消息数组叠 Run1 build user/交付再追加新 user，双主题对比交付。跨 run 缓存 0.997（73728/73954）。1084s。 |
 | human-docx-positioned-structural-edit-fallback-live | 完成 |            95 | deepseek-v4-flash                | 2026-08-13 20:13 CST | tests/logs/ai/human/live/human-docx-positioned-structural-edit-fallback-live/20260813-201354-419 | 复杂定位区域写入被保护并返回明确诊断，其余区域编辑安全完成。                                           |
 | human-legacy-doc-reading-live                       | 完成 |            94 | deepseek-v4-flash                | 2026-08-13 19:56 CST | tests/logs/ai/human/live/human-legacy-doc-reading-live/20260813-195642-815                       | 通过 docx 读取工具成功读取旧版 .doc 并准确回答五级风险与区别率，源文件未改。                           |
 | human-text-file-write-checkout-cutover-live         | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:17 CST | tests/logs/ai/human/live/human-text-file-write-checkout-cutover-live/20260813-201727-173         | 两处端点和超时精确更新，重试与 telemetry 不变，写后核对完整。                                          |
@@ -124,8 +123,6 @@ AI 回归测试目录：
 | `human/live/human-text-file-read-write-live.test.ts` | `human-text-file-*-live` |
 | `human/live/human-runtime-script-execution-live.test.ts` | `human-runtime-*-python-live` |
 | `human/live/human-legacy-doc-reading-live.test.ts` | `human-legacy-doc-*-live` |
-| `human/live/human-context-scope-decision-live.test.ts` | `human-context-scope-decision-live` |
-| `human/mock-llm/context-scope-fresh-topic.test.ts` | `context-scope-fresh-topic`、`context-scope-incomplete-run`、`context-scope-digest-unavailable` |
 
 AI unit / 辅助测试目录：
 
@@ -820,33 +817,6 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：第三轮 `brain` prompt 同时命中 Bob、上线窗口冲突与还缺少回滚负责人；最终交付带出负责人候选、未完成审批与下一步安排。
 - Not：不验证 live 模型总结质量；不验证伙伴隔离。
 
-##### `context-scope-fresh-topic`
-
-- 测试类型：`backend / mock-llm`
-- What：上一轮正常交付并写入 `run_digest` 后，发无关新任务且上下文超过判定阈值时，主模型收到 Discard User（含上一轮用户原句）和新 user，不含历史 build。
-- Why：长期伙伴若把无关历史整段带进下一轮会浪费 token；范围判定必须在真实 graph 启动路径上生效，丢掉的召回要冻成 `conversationHistory`。
-- How：Run 1 脚本化交付周报并写 digest。Run 2 把窗口降到 200 token，脚本化 `human.context_scope` 返回 `needsHistory=false` 与 `reason`，捕获首次 brain 的拼接 user。
-- Oracle：Run 2 的 `context_scope_decided.needsHistory=false` 且带非空 `reason`，同批写有 `discard_checkpoint.conversationHistory`；brain user 含「以下是最近的会话内容」和 Run 1 用户原句，不含历史 build 的任务原文外壳。
-- Not：不验证真实模型的判定质量（由 `human-context-scope-decision-live` 覆盖）；不验证 compaction。
-
-##### `context-scope-incomplete-run`
-
-- 测试类型：`backend / mock-llm`
-- What：上一轮没有交付时，下一轮走 `gate_incomplete_run`，不调判定模型。
-- Why：resume / 中断不能被范围判定误当成新话题。
-- How：Run 1 在首次 brain 请求路径注入失败，不写交付；Run 2 续发。检查 annotation `basis` 与 `human.context_scope` 调用次数。
-- Oracle：Run 2 `completed`；`basis=gate_incomplete_run`；`needsHistory=true`；Run 2 没有 `human.context_scope` LLM 调用。
-- Not：不验证真实中断码文案（由 resume live / context-scope live 覆盖）。
-
-##### `context-scope-digest-unavailable`
-
-- 测试类型：`backend / mock-llm`
-- What：上一轮正常交付但 digest 最终失败时，下一轮走 `gate_digest_unavailable`，不调判定模型，并带上历史。
-- Why：摘要失败不能丢掉已有交付，也不能被误判成全新话题。
-- How：Run 1 脚本化交付，但 `human.run_digest` 抛错并落 `failed`；Run 2 续发。检查 annotation `basis` 与 `human.context_scope` 调用次数。
-- Oracle：Run 2 `completed`；`basis=gate_digest_unavailable`；`needsHistory=true`；Run 2 没有 `human.context_scope` LLM 调用。
-- Not：不验证真实中断码文案。
-
 ##### `human-interruption-message-repair`
 
 - 测试类型：`backend / mock-llm`
@@ -982,16 +952,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：跨轮续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文；历史前缀字节不变时 provider 前缀缓存应命中。
 - How：使用共享 workspace fixture（运行时为文件地址 + 伙伴），默认上下文窗口。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同伙伴改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组与跨 run 前缀缓存（公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，当前 0.6）。
 - Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 user.content 与最终交付，末尾是 Run 2 当前 User；该当前 User 无 `<memory>`、无 `<active_state>`；Run 2 通过任一 DOCX 读工具（`docx_read_outline` / `docx_search` / `docx_read_nodes`）使用文件 B；最终交付同时包含过拟合与反走样关键事实。Run 2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
-- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [Compact User] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。不验证无关新任务丢弃历史（由 `human-context-scope-decision-live` 覆盖）。
-
-##### `human-context-scope-decision-live`
-
-- 测试类型：`backend / live`
-- What：同一伙伴连续七轮走真实发送路径，验证 Discard / digest / 参考召回闭环。1 带参考资料的短任务完成；2 真实 provider 故障中断、无交付无 digest；3 恢复后正常交付；4 相关缩短且跨 run 前缀缓存命中；5 无关新题 discard，召回含失败前完成轮、失败轮固定文案、恢复后轮和相关追问，失败轮不得配下一轮交付；6 includeDiscard 只读冻结正文并命中前缀缓存；7 再提更早轮，判定只看 floor 以上近期任务，再次 discard 后完整召回仍正确。
-- Why：用户不管理会话，真实模型必须把续做、中断恢复、换题丢掉、丢掉后再续做和再提旧任务走对；`conversationHistory` 必须按真实 `runId` 分段并冻字节。失败轮只在 discard 时收成「用户原句 + 当时的资料块 + 运行失败，没有交付」。
-- How：把 `modelContextWindowTokens` 收到 3500，使范围判定仍会过阈值，同时 discard 10% 窗口够装下失败前完成轮到相关追问。每次发送使用独立生产式 `runId`。不得 `appendBatch` 伪造 user/assistant/digest/失败或完成状态，不得脚本化 `human.context_scope` / `human.run_digest` / `human.brain` 输出。唯一测试 override 是已批准的真实 provider 请求故障注入（对齐 `human-partner-resume-with-new-selection-live`）。硬断言只验证 run 状态、`context_scope_decided`/`reason`、真实 LLM I/O、`conversationHistory` 结构、参考资料、失败提示与前缀缓存；不按最终回答的额外措辞判失败。case 结束写出 `artifacts/message-log-annotations.json`，便于核对 discard bookmark 的 `throughSeq`。
-- Oracle：七轮除中断轮外均 `completed`；中断轮为 `llm_request_failed` 且无交付/digest。Run 4 `needsHistory=true`，首次 brain 含上一轮原文、末尾为新 user、**无** Discard User，且跨 run 前缀缓存命中。Run 5 `needsHistory=false`，`conversationHistory` 依次包含失败前完成轮、失败轮（交付固定为「运行失败，没有交付」）、恢复后完成轮和相关追问；失败轮不得配下一轮交付；首次 brain 含「以下是最近的会话内容」。Run 6 `needsHistory=true`，Discard User 字节与 Run 5 相同且前缀缓存命中。Run 7 判定只看到 floor 以上近期任务（不含更早轮关键词）；再次 discard 按窗口 10% 从新到旧装入，完整召回仍含失败轮与 discard 之后的完成轮。`basis=model_decision` 须有非空 `reason`。
-- Not：不验证 UI；不要求固定工具；不验证 compaction；不因模型交付多说一句失败。
+- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [Compact User] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。本 case 同时覆盖「长历史全程不丢」：同一伙伴连续发送始终带上还没压进摘要的原文。
 
 ##### `human-skill-eviction-relearn-loop-live`
 
@@ -1052,7 +1013,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：live 模式下 `human` 会先用普通短问铺出一条完整历史轮，再在风险周报长任务中自然触发压缩；压完后发给主模型的数组为 `[System] + [Compact User] + 原文 tail`。同一次可走历史 + 半截。Run 2 未压出 checkpoint 则不发 Run 3。续做再压，且 Run 3 首轮 brain 必须明显复用 Run 2 末次前缀缓存。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩、当前工作仍能做完”的能力；同时守住跨 run 只 append 新 user、历史前缀字节不变时 provider 前缀缓存应命中。
-- How：复用风险周报 live 的真实文件地址。窗口为既定标准线 `humanRuntimeOverrides.modelContextWindowTokens=45_000`（触发线 36_000），禁止为求稳降到 40k。tail 由触发线 × `CONTEXT_COMPACTION_TAIL_RATIO`（0.1）算出，不再单独 override keep。切点只认伙伴 log 可见行（`seq > historyFloorSeq` 的 `user|assistant|tool`），`throughSeq` 为 firstKept 之前最大 seq；压完用同一投影函数（`appendCurrentUser=false`）重投影。`context_compaction_started` / `completed` 带 `throughSeq` / `firstKeptSeq` / `historyFloorSeq` / `historyFloorKind` / `isSplitTurn` / `foldedCount` / `tailCount`；timeline assertion `data` 只记切点与 roles，prompt 回看 `llm-io.jsonl`。case 结束写出 `artifacts/message-log-annotations.json`。Run 1 发普通短问（上周周报文件名），不要求自己压到。Run 2 用更重的周报诉求（必须逐份打开模板、上周周报、客户周会、交付合规、供应商、法务、站会、Q2 复盘及三份 txt，按材料分小节写，不能只扫目录或写成一段总述），靠材料正文堆过 36k，应压到，覆盖历史 + 半截。Run 2 若未压出 checkpoint，不发 Run 3，直接按 Run 2 断言失败。Run 3 同伙伴、不再 @ 上周周报/已交周报，要求对照刚写的本周周报和上周周报、补风险对照、标题改为「九月第一周」、核法务口径，从而再压至少一次。Run 3 首次 brain 用 `cachedInputTokens / Run2 末次 brain inputTokens` 与公用跨 run 门槛 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.6，定义于 `tests/harness/core/continuation-prefix-cache.ts`）对比。brain 的 `llm-io` 另记 `requestWire`（发给 LangChain 的 messages 含 assistant `toolCalls.arguments` 字符串，以及每个工具的完整 `parameters` schema），跨 run 缓存断言会把 Run2 末次 vs Run3 首次的第一处 diff 写进 timeline。固定开销（工具 schema + system）几乎不随压缩减少，过小窗口会连续压缩；过线靠加重 Run 2 用户诉求，不靠降阈值。continuation / resume live 仍分开，不并入本 case。
+- How：复用风险周报 live 的真实文件地址。窗口为既定标准线 `humanRuntimeOverrides.modelContextWindowTokens=45_000`（触发线 36_000），禁止为求稳降到 40k。tail 由触发线 × `CONTEXT_COMPACTION_TAIL_RATIO`（0.1）算出，不再单独 override keep。切点只认伙伴 log 可见行（`seq > historyFloorSeq` 的 `user|assistant|tool`），`throughSeq` 为 firstKept 之前最大 seq；压完用同一投影函数（`appendCurrentUser=false`）重投影。`context_compaction_started` / `completed` 带 `throughSeq` / `firstKeptSeq` / `historyFloorSeq` / `historyFloorKind`（`compaction` / `none`） / `isSplitTurn` / `foldedCount` / `tailCount`；timeline assertion `data` 只记切点与 roles，prompt 回看 `llm-io.jsonl`。case 结束写出 `artifacts/message-log-annotations.json`。Run 1 发普通短问（上周周报文件名），不要求自己压到。Run 2 用更重的周报诉求（必须逐份打开模板、上周周报、客户周会、交付合规、供应商、法务、站会、Q2 复盘及三份 txt，按材料分小节写，不能只扫目录或写成一段总述），靠材料正文堆过 36k，应压到，覆盖历史 + 半截。Run 2 若未压出 checkpoint，不发 Run 3，直接按 Run 2 断言失败。Run 3 同伙伴、不再 @ 上周周报/已交周报，要求对照刚写的本周周报和上周周报、补风险对照、标题改为「九月第一周」、核法务口径，从而再压至少一次。Run 3 首次 brain 用 `cachedInputTokens / Run2 末次 brain inputTokens` 与公用跨 run 门槛 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.6，定义于 `tests/harness/core/continuation-prefix-cache.ts`）对比。brain 的 `llm-io` 另记 `requestWire`（发给 LangChain 的 messages 含 assistant `toolCalls.arguments` 字符串，以及每个工具的完整 `parameters` schema），跨 run 缓存断言会把 Run2 末次 vs Run3 首次的第一处 diff 写进 timeline。固定开销（工具 schema + system）几乎不随压缩减少，过小窗口会连续压缩；过线靠加重 Run 2 用户诉求，不靠降阈值。continuation / resume live 仍分开，不并入本 case。
 - Oracle：Run 1 `completed`，不要求压缩。Run 2 至少一次完整 compaction；每次 started/completed 都带有效切点字段；压完后下一次 brain 消息为 `system + human(checkpoint) + 原文 tail`，不能 System 后直接 AI；落库 checkpoint 为六栏（半轮可含 Turn Context）；提示词无 `<previous-summary>` / `[round]` / `<current>` / `<earlier>`；含「上周周报」、不编造「上周工作周报.docx」；周报 docx 交付成功；不对 tail 逐条复述。Run 3 首次 brain 为 `system, human(checkpoint), …原文…, human(新任务)`，不能 System 后直接 AI；再压至少一次且 `completed`，切点字段同样有效；「目标 / 进度 / 下一步 / 约束与偏好」说的是对照、改标题或法务，而不是整段重填周报。Run 3 首次 brain 必须带回 provider 缓存 usage，且 `cachedInputTokens / Run2 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。按 10 分制评估压缩生命周期、摘要结构和文件交付，严格超过 8 分通过。
 - Not：不绑定压缩次数，不要求固定资料读取顺序，也不因合理表达差异判失败。不拿半截 `rawText` 去要六栏，不要求每条压缩 user 都有 `[user]`。不验证未压缩时的历史 user 叠加（由 `human-partner-continuation-live` 覆盖），不验证中断恢复（由 `human-partner-resume-with-new-selection-live` 覆盖）。不要求 Run 3 全程高命中（同 run 内再次 compaction 会按设计打破前缀缓存）。Run 2 未压出 checkpoint 时不启动 Run 3。
 

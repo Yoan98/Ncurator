@@ -81,10 +81,6 @@ export type MessageLogProjection = {
     summary: string
     createdAt: number
   }
-  discardCheckpoint?: {
-    throughSeq: number
-    conversationHistory: string
-  }
   historyFloorSeq: number
 }
 
@@ -100,9 +96,6 @@ export const isConversationLogRecord = (record: ChatMessageLogRecord): boolean =
 export type HistoryFloor = {
   historyFloorSeq: number
   compactionCheckpoint?: MessageLogProjection['compactionCheckpoint']
-  discardCheckpoint?: MessageLogProjection['discardCheckpoint']
-  includeCheckpoint: boolean
-  includeDiscard: boolean
 }
 
 export const resolveHistoryFloor = (records: readonly ChatMessageLogRecord[]): HistoryFloor => {
@@ -122,81 +115,11 @@ export const resolveHistoryFloor = (records: readonly ChatMessageLogRecord[]): H
           createdAt: compactionCheckpointRecord.createdAt
         }
       : undefined
-  const discardRecord = [...ordered]
-    .reverse()
-    .find((record) => {
-      if (
-        record.entry.kind !== 'annotation' ||
-        record.entry.eventType !== 'discard_checkpoint'
-      ) {
-        return false
-      }
-      return ordered.some(
-        (candidate) => candidate.runId === record.runId && isConversationLogRecord(candidate)
-      )
-    })
-  const discardCheckpoint =
-    discardRecord?.entry.kind === 'annotation' &&
-    discardRecord.entry.eventType === 'discard_checkpoint'
-      ? {
-          throughSeq: discardRecord.entry.payload.throughSeq,
-          conversationHistory: discardRecord.entry.payload.conversationHistory
-        }
-      : undefined
-  const historyFloorSeq = Math.max(
-    compactionCheckpoint?.throughSeq ?? -1,
-    discardCheckpoint?.throughSeq ?? -1
-  )
-  const includeCheckpoint = Boolean(
-    compactionCheckpoint &&
-      compactionCheckpoint.throughSeq >= (discardCheckpoint?.throughSeq ?? -1)
-  )
-  const includeDiscard = Boolean(
-    discardCheckpoint && discardCheckpoint.throughSeq > (compactionCheckpoint?.throughSeq ?? -1)
-  )
   return {
-    historyFloorSeq,
-    compactionCheckpoint: includeCheckpoint ? compactionCheckpoint : undefined,
-    discardCheckpoint: includeDiscard ? discardCheckpoint : undefined,
-    includeCheckpoint,
-    includeDiscard
+    historyFloorSeq: compactionCheckpoint?.throughSeq ?? -1,
+    compactionCheckpoint
   }
 }
-
-export const resolveLastConversationRunId = (
-  records: readonly ChatMessageLogRecord[]
-): string | undefined =>
-  [...orderMessageLogBySeq([...records])].reverse().find(isConversationLogRecord)?.runId
-
-export const runHasDelivery = (
-  records: readonly ChatMessageLogRecord[],
-  runId: string
-): boolean =>
-  records.some(
-    (record) =>
-      record.runId === runId &&
-      record.entry.kind === 'assistant' &&
-      record.entry.toolCalls.length === 0
-  )
-
-export const runHasCompletedDigest = (
-  records: readonly ChatMessageLogRecord[],
-  runId: string
-): boolean =>
-  records.some((record) => {
-    if (
-      record.runId !== runId ||
-      record.entry.kind !== 'annotation' ||
-      record.entry.eventType !== 'run_digest'
-    ) {
-      return false
-    }
-    const { status, summary } = record.entry.payload
-    if (status === 'completed') return true
-    return !status && Boolean(String(summary || '').trim())
-  })
-
-export const runHasDigest = runHasCompletedDigest
 
 export const resolveMaxMessageLogSeq = (records: readonly ChatMessageLogRecord[]): number =>
   records.reduce((maxSeq, record) => Math.max(maxSeq, record.seq), -1)
@@ -246,7 +169,6 @@ export const projectMessageLogRecords = (
     plan,
     learnedSkillIds,
     compactionCheckpoint: floor.compactionCheckpoint,
-    discardCheckpoint: floor.discardCheckpoint,
     historyFloorSeq: floor.historyFloorSeq
   }
 }

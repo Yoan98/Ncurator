@@ -15,9 +15,6 @@ import { createHumanRunStateSchema, createInitialHumanState } from '../state/sch
 import { buildBrainSystemPrompt } from '../prompts/brain'
 import { projectMessageLogRecords } from '../memory/transcript'
 import { projectBrainMessagesFromLog } from '../memory/brainMessageProjection'
-import { decideContextScope } from '../node/contextScopeDecision'
-import { settleStalePendingDigests } from '../node/brainNode/runDigest'
-import { getPartnerDigestCoordinator } from '../memory/partnerDigestCoordinator'
 import { isLearnableSkillId } from '../skills'
 import {
   classifyThrownErrorToAiRunFailure
@@ -106,11 +103,6 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
 
       const baseInitialState = options.initialState || createInitialHumanState(taskInput)
       cache.currentState = baseInitialState
-      await getPartnerDigestCoordinator().awaitIdle(ctx.partnerId)
-      await settleStalePendingDigests({
-        loadMessageLog: ctx.loadMessageLog,
-        appendMessageLog: ctx.appendMessageLog
-      })
       const messageLogRecords = await ctx.loadMessageLog()
       const logProjection = projectMessageLogRecords(messageLogRecords)
       const learnedSkillIds = Array.from(new Set(logProjection.learnedSkillIds)).filter(
@@ -129,17 +121,10 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       }
       cache.currentState = initialState
       cache.currentUserLogAppended = false
-      const contextScope = await decideContextScope({
-        ctx,
-        state: initialState,
-        records: messageLogRecords
-      })
-      cache.contextScopeDecision = contextScope
       const brainProjection = projectBrainMessagesFromLog({
         records: messageLogRecords,
         ctx,
-        state: initialState,
-        needsHistory: contextScope.needsHistory
+        state: initialState
       })
       cache.messages = [
         new SystemMessage(buildBrainSystemPrompt({ ctx })),

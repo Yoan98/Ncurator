@@ -1,30 +1,32 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildReferenceScope,
-  renderReferenceScopeText
+  renderAttachmentsText,
+  renderSelectedReferencesText
 } from '../../../../src/main/services/ai/human/prompts/referenceScope'
 
 describe('ai unit selected context workspace path', () => {
   it('does not render empty reference scope placeholders', () => {
-    const text = renderReferenceScopeText(
-      buildReferenceScope({
-        selectedReferences: []
-      })
-    )
+    const scope = buildReferenceScope({
+      selectedReferences: []
+    })
+    const references = renderSelectedReferencesText(scope)
+    const attachments = renderAttachmentsText(scope)
 
-    expect(text).toBe('')
-    expect(text).not.toContain('用户@的参考资料：')
-    expect(text).not.toContain('当前没有用户显式指定的参考范围')
-    expect(text).not.toContain('用户添加的附件：')
-    expect(text).not.toContain('当前没有用户添加的附件')
-    expect(text).not.toContain('用户工作区域：')
-    expect(text).not.toContain('根目录：')
-    expect(text).not.toContain('默认应优先在此目录内完成用户任务')
-    expect(text).not.toContain('cwd')
+    expect(references).toBe('')
+    expect(attachments).toBe('')
+    expect(references).not.toContain('用户@的参考资料：')
+    expect(references).not.toContain('当前没有用户显式指定的参考范围')
+    expect(attachments).not.toContain('用户添加的附件：')
+    expect(attachments).not.toContain('当前没有用户添加的附件')
+    expect(references).not.toContain('用户工作区域：')
+    expect(references).not.toContain('根目录：')
+    expect(references).not.toContain('默认应优先在此目录内完成用户任务')
+    expect(references).not.toContain('cwd')
   })
 
   it('renders selected references and direct kb narrowing pairs when user explicitly selected inputs', () => {
-    const text = renderReferenceScopeText(
+    const text = renderSelectedReferencesText(
       buildReferenceScope({
         selectedReferences: [
           {
@@ -41,13 +43,12 @@ describe('ai unit selected context workspace path', () => {
       })
     )
 
-    expect(text).toContain('用户@的参考资料：')
     expect(text).toContain('1. weekly-risk.md')
     expect(text).toContain('类型：本地文件')
     expect(text).toContain('资源地址：/tmp/real-workspace-root/reports/weekly-risk.md')
 
     expect(
-      renderReferenceScopeText(
+      renderSelectedReferencesText(
         buildReferenceScope({
           selectedReferences: [
             {
@@ -76,7 +77,7 @@ describe('ai unit selected context workspace path', () => {
       )
     ).toContain('资源地址：/tmp/real-workspace-root/reports')
     expect(
-      renderReferenceScopeText(
+      renderSelectedReferencesText(
         buildReferenceScope({
           selectedReferences: [
             {
@@ -99,7 +100,7 @@ describe('ai unit selected context workspace path', () => {
   })
 
   it('renders user selected attachments with compact content-info template', () => {
-    const text = renderReferenceScopeText(
+    const text = renderAttachmentsText(
       buildReferenceScope({
         selectedReferences: [],
         attachments: [
@@ -121,7 +122,6 @@ describe('ai unit selected context workspace path', () => {
       })
     )
 
-    expect(text).toContain('用户添加的附件：')
     expect(text).toContain('第 1 个附件：screen.png')
     expect(text).toContain('- 路径：/tmp/screen.png')
     expect(text).toContain('第 2 个附件：README.md')

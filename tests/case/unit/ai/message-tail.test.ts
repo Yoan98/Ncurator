@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { AIMessage, HumanMessage, ToolMessage } from '@langchain/core/messages'
 import {
   renderMessagesForCompaction,
-  createCompactedBrainUserMessage,
-  createDiscardBrainUserMessage
+  createCompactedBrainUserMessage
 } from '../../../../src/main/services/ai/human/node/utils/messageTail'
 
 const toolCall = (id: string, name: string, args: Record<string, unknown>) => ({
@@ -112,17 +111,6 @@ describe('renderMessagesForCompaction', () => {
       ].join('\n')
     )
     expect(rendered).not.toContain('<previous-summary>')
-  })
-
-  it('renders a Discard User as a conversation user block', () => {
-    const rendered = renderMessagesForCompaction([
-      createDiscardBrainUserMessage('以下是最近的会话内容\n\n用户：调研SECRET\n交付：已记下'),
-      new AIMessage({ content: '巴黎' }),
-      new HumanMessage('再问一句')
-    ])
-    expect(rendered).toContain('[user]\n以下是最近的会话内容\n\n用户：调研SECRET\n交付：已记下')
-    expect(rendered).toContain('[ai] 巴黎')
-    expect(rendered).toContain('[user]\n再问一句')
   })
 
   it('inserts a blank line only between turns', () => {
