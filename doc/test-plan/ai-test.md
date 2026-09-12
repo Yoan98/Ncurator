@@ -62,7 +62,7 @@
   - 覆盖要求：要通过不同 case 把关键节点与关键边都跑到，而不是只验证一条 happy path。
 - `live`
   - 目标：验证真实模型下 `human` 的真实业务执行。
-  - 约束：必须走真实统一 LLM executor（包括 `ctx.chatStructured / ctx.chatText`）、真实 KB、真实工具、真实 apply / artifact。live 连接来自 `.env` 内置服务商 Key 池与 `AI_LIVE_PROVIDER`/`AI_LIVE_MODEL`（见 `doc/test.md` §3.4），由 registry 推导 baseUrl。
+  - 约束：必须走真实统一 LLM executor（包括 `ctx.chatStructured / ctx.chatText`）、真实 KB、真实工具、真实 apply / artifact。live 连接来自 `.env` 内置服务商 Key 池（`AI_LIVE_KEY_DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`）与可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）、`AI_LIVE_MODEL`（默认该服务商测试默认模型；通义为 `qwen3.8-flash`），由 registry 推导 baseUrl；不再使用 `AI_LIVE_BASE_URL` / `AI_LIVE_API_KEY` / `AI_LIVE_PRIMARY_MODEL_NAME`。不得跳过、模拟或替换模型决策、工具结果或业务产物；允许仅为触发真实机制的可测性 override。case 不设评分门槛，运行后由人工依据 raw logs 与 artifact 将最新 0-100 评估回写至本文顶部快照。
   - 禁止：任何 scripted driver、`chatStructuredOverride`、fixture store override。
   - 覆盖要求：至少保留 1 条简单任务和 1 条复杂任务回归 case；如复杂任务有多条稳定用例，可同时保留。全内置服务商连通性由 Workbench `live-preset-provider-smoke` 覆盖，不在每条 human live 上乘服务商。
 

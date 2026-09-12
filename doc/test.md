@@ -85,23 +85,16 @@ tests/
 
 ### 3.3 UI E2E 回归规则
 
-- UI E2E 必须通过真实 UI 和产品链路完成被测行为，不得用 fake、mock、stub、直接写状态或内部 IPC 绕过。
+- UI E2E 必须通过真实 UI 和产品链路完成被测行为；禁止 fake、mock、stub、直接写状态或内部写 IPC 绕过。
 - fixture 和 helper 只能准备真实输入、执行用户可见操作、等待结果和收集证据，不能替代产品输出。
 - Settings / Workbench E2E 固定使用 `serviceMode: real`。
-- 允许的模拟、种子或受控注入只写在对应 `doc/test-plan/**` case 的 How / Not；本文不展开操作步骤。新增假数据或模拟路径须先说明必要性、取得用户确认，并写入该 case 所在测试计划。
-- Workbench 和需要真实文件的 Settings case 将 `tests/fixtures/workspace` 复制到临时目录，case 结束并关闭应用后删除临时副本。
-- fixture 只能准备用户实际可拥有的文件、目录和配置输入；不得直接写应用状态、调用内部写 IPC 或替换产品服务。
+- 允许的模拟、种子或受控注入只写在对应 `doc/test-plan/**` case 的 How / Not；新增假数据或模拟路径须先说明必要性、取得用户确认，并写入该 case 所在测试计划。
 - observer、只读 IPC 和截图只能收集证据，不能触发被测行为或改变运行结果。
-- `ai/human/live` 必须使用 env 真实模型且不得跳过、模拟或替换模型决策、工具结果或业务产物，允许仅为触发真实机制的可测性 override，case 不设评分门槛，运行后由人工依据 raw logs 与 artifact 将最新 0-100 评估回写至 ai-test 顶部快照。
-- 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。
-- 不得为了 E2E 增加生产环境变量、故障开关、全局探针或其他生产代码入口；确需修改生产代码时，必须先取得用户确认。
-- 向量模型下载 E2E 使用产品现有模型清单和下载逻辑，不替换下载源；执行前必须关闭代理软件的 TUN 模式。网络异常按测试失败处理，并通过 raw logs 定位原因。
-- 真实安装包下载与覆盖升级验证见 `doc/release.md`，不属于回归体系。
+- 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。不为 E2E 增加生产环境变量、故障开关、全局探针或其他生产代码入口；确需修改生产代码时，必须先取得用户确认。
 
 ### 3.4 真实 AI / live 断言规则
 
-- live 模型配置（backend `ai/human/live` 与 Workbench AI E2E 共用）：`.env` 只填内置服务商 Key（`AI_LIVE_KEY_DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`），可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）与 `AI_LIVE_MODEL`（默认该服务商测试默认模型；通义为 `qwen3.8-flash`）。不再使用 `AI_LIVE_BASE_URL` / `AI_LIVE_API_KEY` / `AI_LIVE_PRIMARY_MODEL_NAME`。
-- 全内置服务商「你好」冒烟（`live-preset-provider-smoke`）为 opt-in：默认 `test:e2e:*` / `test:workbench*` 排除 `provider-matrix`；需要时 `pnpm test:workbench:provider-matrix`。
+- live 模型配置（backend `ai/human/live` 与 Workbench AI E2E 共用）与 opt-in 命令只在对应 `doc/test-plan/**` 维护，本文不重复。
 - 涉及真实 AI 调用的回归测试，硬断言只验证完成态、关键事实、关键工具或事件、关键 artifact，以及用户诉求是否落地；最终自然语言回答不得作为主要正确性证据。
 - 不对最终文案做逐字断言，不断言固定工具顺序，不断言固定 prompt 原文，不因表达差异判失败。
 - 如果用户诉求已落地但断言过严，应先调整 `Oracle` 和测试代码，再根据 raw logs 记录完成度评分。
