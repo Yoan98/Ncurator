@@ -215,7 +215,112 @@ describe('release fragment', () => {
     ).toThrow(/package size budget did not pass/u)
   })
 
+  it('requires macOS installer display name to use 馆长 while storage stays ASCII', () => {
+    const sha512 = createHash('sha512').update('mac-installer').digest('base64')
+    const macFragment = {
+      schemaVersion: 3,
+      tag: 'mac-v0.1.3',
+      platform: 'macos-arm64',
+      version: '0.1.3',
+      createdAt: '2026-07-17T00:00:00.000Z',
+      files: [
+        {
+          name: '馆长-0.1.3-macos-arm64.dmg',
+          storageName: 'Ncurator-mac-arm64.dmg',
+          role: 'installer',
+          size: 10,
+          sha512
+        },
+        {
+          name: 'Ncurator-mac-arm64.dmg.blockmap',
+          storageName: 'Ncurator-mac-arm64.dmg.blockmap',
+          role: 'update',
+          size: 10,
+          sha512
+        },
+        {
+          name: 'Ncurator-mac-arm64.zip',
+          storageName: 'Ncurator-mac-arm64.zip',
+          role: 'update',
+          size: 10,
+          sha512
+        },
+        {
+          name: 'Ncurator-mac-arm64.zip.blockmap',
+          storageName: 'Ncurator-mac-arm64.zip.blockmap',
+          role: 'update',
+          size: 10,
+          sha512
+        }
+      ],
+      metadata: 'version: 0.1.3\npath: Ncurator-mac-arm64.zip\n',
+      signature: 'mac-update-signature',
+      audit: {
+        schemaVersion: 1,
+        generatedAt: '2026-07-17T00:00:00.000Z',
+        platform: 'darwin',
+        arch: 'arm64',
+        applications: [
+          {
+            root: 'mac-arm64/Ncurator.app',
+            totalBytes: 1_000,
+            archiveBytes: 500,
+            archiveFileCount: 20
+          }
+        ],
+        sizeBudget: {
+          status: 'passed',
+          platform: 'darwin-arm64',
+          metrics: [
+            {
+              name: 'installedApp',
+              status: 'passed',
+              actualBytes: 10,
+              baselineBytes: 10,
+              hardLimitBytes: 20,
+              growthPercent: 0
+            },
+            {
+              name: 'appAsar',
+              status: 'passed',
+              actualBytes: 10,
+              baselineBytes: 10,
+              hardLimitBytes: 20,
+              growthPercent: 0
+            },
+            {
+              name: 'dmg',
+              status: 'passed',
+              actualBytes: 10,
+              baselineBytes: 10,
+              hardLimitBytes: 20,
+              growthPercent: 0
+            },
+            {
+              name: 'zip',
+              status: 'passed',
+              actualBytes: 10,
+              baselineBytes: 10,
+              hardLimitBytes: 20,
+              growthPercent: 0
+            }
+          ]
+        }
+      }
+    }
+    expect(() => assertReleaseFragment(macFragment)).not.toThrow()
+    expect(() =>
+      assertReleaseFragment({
+        ...macFragment,
+        files: macFragment.files.map((file, index) =>
+          index === 0 ? { ...file, name: 'Ncurator-0.1.3-macos-arm64.dmg' } : file
+        )
+      })
+    ).toThrow(/macOS asset names do not match/u)
+  })
+
   it('requires all four macOS size metrics before publishing', () => {
+
     expect(() =>
       assertPackageAudit(
         {

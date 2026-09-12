@@ -1,3 +1,5 @@
+import { access } from 'node:fs/promises'
+import path from 'node:path'
 import { parseReleaseTag } from '../tag.mjs'
 
 const PLATFORM_AUDIT = Object.freeze({
@@ -15,6 +17,25 @@ const isValidDate = (value) => isNonEmptyString(value) && !Number.isNaN(Date.par
 
 const fail = (label, reason) => {
   throw new Error(`${label} is invalid: ${reason}`)
+}
+
+export const resolveReleaseAssetPath = async (directory, file) => {
+  const byName = path.join(directory, file.name)
+  const byStorage = path.join(directory, file.storageName)
+  try {
+    await access(byName)
+    return byName
+  } catch {
+    // Mac installer display name may differ from on-disk electron-builder artifactName.
+  }
+  try {
+    await access(byStorage)
+    return byStorage
+  } catch {
+    throw new Error(
+      `release asset missing: ${file.name} (looked for ${file.name} and ${file.storageName} in ${directory})`
+    )
+  }
 }
 
 export const assertPackageAudit = (audit, platform, label = 'package audit') => {
@@ -124,6 +145,20 @@ export const assertReleaseFragment = (
       fragment.files.some((file) => expectedAssets.get(file.name) !== file.storageName)
     ) {
       fail(label, 'Windows asset names do not match the user-visible and storage naming contract')
+    }
+  }
+  if (fragment.platform === 'macos-arm64') {
+    const expectedAssets = new Map([
+      [`馆长-${fragment.version}-macos-arm64.dmg`, 'Ncurator-mac-arm64.dmg'],
+      [`Ncurator-mac-arm64.dmg.blockmap`, 'Ncurator-mac-arm64.dmg.blockmap'],
+      ['Ncurator-mac-arm64.zip', 'Ncurator-mac-arm64.zip'],
+      ['Ncurator-mac-arm64.zip.blockmap', 'Ncurator-mac-arm64.zip.blockmap']
+    ])
+    if (
+      fragment.files.length !== expectedAssets.size ||
+      fragment.files.some((file) => expectedAssets.get(file.name) !== file.storageName)
+    ) {
+      fail(label, 'macOS asset names do not match the user-visible and storage naming contract')
     }
   }
 

@@ -78,8 +78,8 @@ try {
   const installer = arm64.files.find((file) => file.role === 'installer')
   const installerKey = artifactKey(arm64, installer.storageName)
   const installerUrl = `${publicBaseUrl}/${installerKey}`
-  const downloadName = `Ncurator-${arm64.version}-macos-arm64.dmg`
-  const downloadDisposition = `attachment; filename="${downloadName}"`
+  const downloadName = installer.name
+  const downloadDisposition = `attachment; filename="${installer.storageName}"; filename*=UTF-8''${encodeURIComponent(installer.name)}`
 
   await aws([
     's3api',
@@ -148,8 +148,13 @@ try {
   if (
     !response.ok ||
     Number(response.headers.get('content-length')) !== installer.size ||
-    !String(response.headers.get('content-disposition') || '').includes(
-      `filename="${downloadName}"`
+    !(
+      String(response.headers.get('content-disposition') || '').includes(
+        `filename*=UTF-8''${encodeURIComponent(downloadName)}`
+      ) ||
+      String(response.headers.get('content-disposition') || '').includes(
+        `filename="${downloadName}"`
+      )
     )
   ) {
     throw new Error(`public macOS artifact download verification failed: ${installerKey}`)

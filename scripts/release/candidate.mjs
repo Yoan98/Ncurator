@@ -13,6 +13,7 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { verifyReleaseBundle } from './artifact-bundle.mjs'
+import { resolveReleaseAssetPath } from './r2/fragment-contract.mjs'
 import { compareReleaseVersions, parseReleaseTag } from './tag.mjs'
 
 const CANDIDATE_STATES = new Set(['prepared', 'ready', 'rejected', 'published'])
@@ -82,7 +83,8 @@ export const materializeReleaseCandidate = async ({ bundlePath }) => {
   await copyFile(bundlePath, path.join(directory, bundleName))
   await copyFile(verified.fragmentPath, path.join(directory, path.basename(verified.fragmentPath)))
   for (const file of verified.bundle.files) {
-    await copyFile(path.join(verified.directory, file.name), path.join(directory, file.name))
+    const source = await resolveReleaseAssetPath(verified.directory, file)
+    await copyFile(source, path.join(directory, file.name))
   }
 
   const candidateBundlePath = path.join(directory, bundleName)

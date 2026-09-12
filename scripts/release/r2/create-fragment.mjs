@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { assertPackageAudit, assertReleaseFragment } from './fragment-contract.mjs'
+import { assertPackageAudit, assertReleaseFragment, resolveReleaseAssetPath } from './fragment-contract.mjs'
 import { parseReleaseTag } from '../tag.mjs'
 
 const [inputDirectory = '', outputPath = '', releaseTag = '', platform = ''] = process.argv.slice(2)
@@ -19,8 +19,8 @@ const definitions = {
   'macos-arm64': {
     metadata: 'latest-mac.yml',
     signature: 'mac-update-signature.txt',
-    assets: () => [
-      ['Ncurator-mac-arm64.dmg', 'Ncurator-mac-arm64.dmg', 'installer'],
+    assets: (version) => [
+      [`馆长-${version}-macos-arm64.dmg`, 'Ncurator-mac-arm64.dmg', 'installer'],
       ['Ncurator-mac-arm64.dmg.blockmap', 'Ncurator-mac-arm64.dmg.blockmap', 'update'],
       ['Ncurator-mac-arm64.zip', 'Ncurator-mac-arm64.zip', 'update'],
       ['Ncurator-mac-arm64.zip.blockmap', 'Ncurator-mac-arm64.zip.blockmap', 'update']
@@ -52,7 +52,7 @@ const sha512 = async (filePath) =>
 
 const files = []
 for (const [name, storageName, role] of definition.assets(version)) {
-  const filePath = path.join(inputDirectory, name)
+  const filePath = await resolveReleaseAssetPath(inputDirectory, { name, storageName })
   const fileStat = await stat(filePath)
   files.push({ name, storageName, role, size: fileStat.size, sha512: await sha512(filePath) })
 }

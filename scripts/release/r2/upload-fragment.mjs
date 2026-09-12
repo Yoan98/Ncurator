@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
-import { assertReleaseFragment } from './fragment-contract.mjs'
+import { assertReleaseFragment, resolveReleaseAssetPath } from './fragment-contract.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import { artifactKey, statusKey } from './storage-layout.mjs'
 import { createReleaseStorageClient } from '../storage/client.mjs'
@@ -45,7 +45,7 @@ const readRemoteObject = async (key) => {
 }
 
 for (const file of fragment.files) {
-  const source = path.join(inputDirectory, file.name)
+  const source = await resolveReleaseAssetPath(inputDirectory, file)
   const key = artifactKey(fragment, file.storageName)
   const existing = await readRemoteObject(key)
   if (existing) {

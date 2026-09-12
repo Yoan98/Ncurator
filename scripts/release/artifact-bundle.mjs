@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { assertReleaseFragment } from './r2/fragment-contract.mjs'
+import { assertReleaseFragment, resolveReleaseAssetPath } from './r2/fragment-contract.mjs'
 import { parseReleaseTag } from './tag.mjs'
 
 const SHA256_HEX = /^[a-f0-9]{64}$/u
@@ -87,7 +87,7 @@ export const createReleaseBundle = async ({ fragmentPath, outputPath, commit }) 
   const directory = path.dirname(fragmentPath)
   const files = []
   for (const file of fragment.files) {
-    const filePath = path.join(directory, file.name)
+    const filePath = await resolveReleaseAssetPath(directory, file)
     const fileStat = await stat(filePath)
     const sha512 = await hashFile(filePath, 'sha512', 'base64')
     if (fileStat.size !== file.size || sha512 !== file.sha512) {
@@ -140,7 +140,7 @@ export const verifyReleaseBundle = async (bundlePath, expected = {}) => {
     ) {
       throw new Error(`release bundle does not match fragment: ${file.name}`)
     }
-    const filePath = path.join(directory, file.name)
+    const filePath = await resolveReleaseAssetPath(directory, file)
     const fileStat = await stat(filePath)
     if (fileStat.size !== file.size) throw new Error(`release asset size changed: ${file.name}`)
     const [sha256, sha512] = await Promise.all([
