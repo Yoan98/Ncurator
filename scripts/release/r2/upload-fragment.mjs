@@ -23,9 +23,6 @@ const contentType = (name) => {
   return 'application/octet-stream'
 }
 
-const contentDisposition = (name, fallbackName) =>
-  `attachment; filename="${fallbackName}"; filename*=UTF-8''${encodeURIComponent(name)}`
-
 const readRemoteObject = async (key) => {
   try {
     const { stdout } = await aws([
@@ -46,7 +43,7 @@ const readRemoteObject = async (key) => {
 
 for (const file of fragment.files) {
   const source = await resolveReleaseAssetPath(inputDirectory, file)
-  const key = artifactKey(fragment, file.storageName)
+  const key = artifactKey(fragment, file.name)
   const existing = await readRemoteObject(key)
   if (existing) {
     if (Number(existing.ContentLength) !== file.size || existing.Metadata?.sha512 !== file.sha512) {
@@ -62,8 +59,6 @@ for (const file of fragment.files) {
       'public, max-age=31536000, immutable',
       '--content-type',
       contentType(file.name),
-      '--content-disposition',
-      contentDisposition(file.name, file.storageName),
       '--metadata',
       `sha512=${file.sha512}`,
       '--no-progress'

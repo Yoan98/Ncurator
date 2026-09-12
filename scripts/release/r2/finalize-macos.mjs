@@ -38,7 +38,7 @@ const downloadAndVerifyFragment = async (platform) => {
   const fragment = JSON.parse(await readFile(target, 'utf8'))
   assertReleaseFragment(fragment, { tag: releaseTag, platform })
   for (const file of fragment.files) {
-    const key = artifactKey(fragment, file.storageName)
+    const key = artifactKey(fragment, file.name)
     const remote = JSON.parse(
       (await aws(['s3api', 'head-object', '--bucket', bucket, '--key', key, '--output', 'json']))
         .stdout
@@ -76,31 +76,9 @@ try {
   ])
 
   const installer = arm64.files.find((file) => file.role === 'installer')
-  const installerKey = artifactKey(arm64, installer.storageName)
+  const installerKey = artifactKey(arm64, installer.name)
   const installerUrl = `${publicBaseUrl}/${installerKey}`
   const downloadName = installer.name
-  const downloadDisposition = `attachment; filename="${installer.storageName}"; filename*=UTF-8''${encodeURIComponent(installer.name)}`
-
-  await aws([
-    's3api',
-    'copy-object',
-    '--bucket',
-    bucket,
-    '--copy-source',
-    `${bucket}/${installerKey}`,
-    '--key',
-    installerKey,
-    '--content-type',
-    'application/octet-stream',
-    '--cache-control',
-    'public, max-age=31536000, immutable',
-    '--content-disposition',
-    downloadDisposition,
-    '--metadata-directive',
-    'REPLACE',
-    '--metadata',
-    `sha512=${installer.sha512}`
-  ])
 
   const download = {
     name: downloadName,
@@ -155,15 +133,8 @@ try {
       ])
     ).stdout
   )
-  const originDisposition = String(originInstaller.ContentDisposition || '')
-  if (
-    Number(originInstaller.ContentLength) !== installer.size ||
-    !(
-      originDisposition.includes(`filename*=UTF-8''${encodeURIComponent(downloadName)}`) ||
-      originDisposition.includes(`filename="${downloadName}"`)
-    )
-  ) {
-    throw new Error(`origin macOS artifact Content-Disposition verification failed: ${installerKey}`)
+  if (Number(originInstaller.ContentLength) !== installer.size) {
+    throw new Error(`origin macOS artifact size verification failed: ${installerKey}`)
   }
 
   const response = await fetchWithRetry(`${installerUrl}?check=${Date.now()}`, {
@@ -173,16 +144,8 @@ try {
   if (!response.ok || Number(response.headers.get('content-length')) !== installer.size) {
     throw new Error(`public macOS artifact download verification failed: ${installerKey}`)
   }
-  const publicDisposition = String(response.headers.get('content-disposition') || '')
-  if (
-    !(
-      publicDisposition.includes(`filename*=UTF-8''${encodeURIComponent(downloadName)}`) ||
-      publicDisposition.includes(`filename="${downloadName}"`)
-    )
-  ) {
-    process.stderr.write(
-      `[release] warning: CDN Content-Disposition still stale for ${installerKey}; origin is correct (purge CDN if clients still see the old filename)\n`
-    )
+  if (!installerUrl.endsWith(`/${encodeURI(downloadName)}`) && !installerUrl.endsWith(`/${downloadName}`)) {
+    throw new Error(`macOS installer URL must end with the user-visible name: ${installerUrl}`)
   }
 
   const publicManifestResponse = await fetchWithRetry(
@@ -204,7 +167,7 @@ try {
     (key) => !key.startsWith(`artifacts/macos/${releaseTag}/`)
   )
   const activeArtifactKeys = new Set(
-    arm64.files.map((file) => artifactKey(arm64, file.storageName))
+    arm64.files.map((file) => artifactKey(arm64, file.name))
   )
   removable.push(
     ...(await listKeys(`artifacts/macos/${releaseTag}/`)).filter(

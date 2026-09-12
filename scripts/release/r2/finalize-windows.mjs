@@ -34,7 +34,7 @@ try {
   const fragment = JSON.parse(await readFile(fragmentPath, 'utf8'))
   assertReleaseFragment(fragment, { tag: releaseTag, platform: 'windows-x64' })
   for (const file of fragment.files) {
-    const key = artifactKey(fragment, file.storageName)
+    const key = artifactKey(fragment, file.name)
     const remote = JSON.parse(
       (await aws(['s3api', 'head-object', '--bucket', bucket, '--key', key, '--output', 'json']))
         .stdout
@@ -75,9 +75,8 @@ try {
   ])
 
   const installer = fragment.files.find((file) => file.role === 'installer')
-  const installerKey = artifactKey(fragment, installer.storageName)
+  const installerKey = artifactKey(fragment, installer.name)
   const installerUrl = `${publicBaseUrl}/${installerKey}`
-  const downloadDisposition = `attachment; filename="${installer.storageName}"; filename*=UTF-8''${encodeURIComponent(installer.name)}`
 
   const manifest = {
     schemaVersion: 2,
@@ -128,10 +127,15 @@ try {
   }
   if (
     !installerResponse.ok ||
-    Number(installerResponse.headers.get('content-length')) !== installer.size ||
-    String(installerResponse.headers.get('content-disposition') || '') !== downloadDisposition
+    Number(installerResponse.headers.get('content-length')) !== installer.size
   ) {
     throw new Error('public Windows artifact download verification failed')
+  }
+  if (
+    !installerUrl.endsWith(`/${encodeURI(installer.name)}`) &&
+    !installerUrl.endsWith(`/${installer.name}`)
+  ) {
+    throw new Error(`Windows installer URL must end with the user-visible name: ${installerUrl}`)
   }
   const publicManifest = manifestResponse.ok ? await manifestResponse.json() : undefined
   if (

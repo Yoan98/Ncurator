@@ -50,8 +50,48 @@ describe('R2 update metadata', () => {
 
     const windowsMetadata = await readFile(path.join(outputDirectory, 'latest.yml'), 'utf8')
     expect(windowsMetadata).toContain(
-      '../../artifacts/windows/windows-v0.1.1/Ncurator-windows-x64.exe'
+      '../../artifacts/windows/windows-v0.1.1/馆长-0.1.1-Windows-x64.exe'
     )
+  })
+
+
+  it('maps on-disk storageName citations to the user-visible public object key', async () => {
+    temporaryDirectory = await mkdtemp(path.join(os.tmpdir(), 'ncurator-update-metadata-'))
+    const inputDirectory = path.join(temporaryDirectory, 'input')
+    const outputDirectory = path.join(temporaryDirectory, 'output')
+    await import('node:fs/promises').then(({ mkdir }) => mkdir(inputDirectory, { recursive: true }))
+    await writeFile(
+      path.join(inputDirectory, 'latest-mac.yml'),
+      'version: 0.1.4\nfiles:\n  - url: Ncurator-mac-arm64.dmg\n  - url: Ncurator-mac-arm64.zip\npath: Ncurator-mac-arm64.zip\n',
+      'utf8'
+    )
+    const fragmentPath = path.join(temporaryDirectory, 'macos-arm64.json')
+    await writeFile(
+      fragmentPath,
+      JSON.stringify({
+        files: [
+          {
+            name: '馆长-0.1.4-macos-arm64.dmg',
+            storageName: 'Ncurator-mac-arm64.dmg'
+          },
+          {
+            name: 'Ncurator-mac-arm64.zip',
+            storageName: 'Ncurator-mac-arm64.zip'
+          }
+        ]
+      }),
+      'utf8'
+    )
+    await execFileAsync(process.execPath, [
+      path.resolve('scripts/release/r2/metadata.mjs'),
+      inputDirectory,
+      outputDirectory,
+      'mac-v0.1.4',
+      fragmentPath
+    ])
+    const macMetadata = await readFile(path.join(outputDirectory, 'latest-mac.yml'), 'utf8')
+    expect(macMetadata).toContain('../../artifacts/macos/mac-v0.1.4/馆长-0.1.4-macos-arm64.dmg')
+    expect(macMetadata).toContain('../../artifacts/macos/mac-v0.1.4/Ncurator-mac-arm64.zip')
   })
 
   it('can prepare only macOS metadata for a platform-only release', async () => {

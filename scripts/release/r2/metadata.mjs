@@ -15,10 +15,15 @@ parseReleaseTag(releaseTag)
 
 const familyForMetadata = (fileName) => (fileName === 'latest.yml' ? 'windows' : 'macos')
 
-const storageNames = new Map()
+const publicNames = new Map()
 if (fragmentPath) {
   const fragment = JSON.parse(await readFile(fragmentPath, 'utf8'))
-  for (const file of fragment.files || []) storageNames.set(file.name, file.storageName)
+  for (const file of fragment.files || []) {
+    // YAML may cite either the on-disk storageName or the user-visible name;
+    // public object keys always use file.name.
+    publicNames.set(file.name, file.name)
+    publicNames.set(file.storageName, file.name)
+  }
 }
 
 const rewriteMetadata = (content, fileName) =>
@@ -26,11 +31,14 @@ const rewriteMetadata = (content, fileName) =>
     /^(\s*(?:- url:|path:)\s+)([^\s/][^\s]*)$/gmu,
     (_line, prefix, assetName) => {
       const family = familyForMetadata(fileName)
-      const storageName = storageNames.get(assetName) || assetName
-      if (family === 'windows' && !storageNames.has(assetName)) {
-        throw new Error(`Windows metadata contains an unmapped release asset: ${assetName}`)
+      const publicName = publicNames.get(assetName)
+      if (!publicName) {
+        if (family === 'windows' || publicNames.size > 0) {
+          throw new Error(`update metadata contains an unmapped release asset: ${assetName}`)
+        }
+        return `${prefix}../../artifacts/${family}/${releaseTag}/${assetName}`
       }
-      return `${prefix}../../artifacts/${family}/${releaseTag}/${storageName}`
+      return `${prefix}../../artifacts/${family}/${releaseTag}/${publicName}`
     }
   )
 

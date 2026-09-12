@@ -4,6 +4,7 @@ export const platformFamily = (platform) => {
   throw new Error(`unsupported release platform: ${platform}`)
 }
 
+/** Object keys use the user-visible asset name (`file.name`), not storageName. */
 export const artifactKey = (fragment, fileName) =>
   `artifacts/${platformFamily(fragment.platform)}/${fragment.tag}/${fileName}`
 
