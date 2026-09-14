@@ -1,4 +1,7 @@
 export const APP_ID = 'com.yoan.ncurator'
+/** 中文版用户可见产品名；英文品牌 NCurator 仅预留海外，中文 UI 不得出现。 */
+export const PRODUCT_NAME_ZH = '馆长'
+export const PRODUCT_NAME_EN = 'NCurator'
 export const OFFICIAL_WEBSITE_URL = 'https://www.guanzhangai.cn'
 export const USER_MANUAL_URL = `${OFFICIAL_WEBSITE_URL}/zh/manual`
 export const OFFICIAL_DOWNLOAD_PAGE_URL = `${OFFICIAL_WEBSITE_URL}/zh`

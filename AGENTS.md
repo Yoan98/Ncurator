@@ -12,6 +12,7 @@
 ### 1.2 项目整体相关
 
 - `doc/release.md`：涉及桌面端打包、发布仓库、自动更新或发版流程时阅读。
+- `doc/brand.md`：涉及产品显示名、下载文件名、缓存/技术标识分层或中英品牌口径时阅读。
 - `doc/tencent-cdn-billing.md`：涉及腾讯云 COS/CDN 国内下载通道的资费、采购、封顶与余额策略时阅读。
 - `doc/ui-style.md`：涉及全前端视觉系统、主题或通用交互规范时阅读。
 
@@ -41,6 +42,7 @@
 │   │   └── tool-design.md            # 工具 schema 与结果投递
 │   ├── database.md                   # SQLite 与 LanceDB 存储说明
 │   ├── release.md                    # 打包、发布和更新
+│   ├── brand.md                      # 产品命名与技术标识分层
 │   ├── tencent-cdn-billing.md        # 腾讯云 COS/CDN 资费与采购定稿
 │   ├── test.md                       # 测试体系和执行规则
 │   ├── ui-style.md                   # UI 风格和交互规范

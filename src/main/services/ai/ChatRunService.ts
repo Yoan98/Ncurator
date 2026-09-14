@@ -23,6 +23,7 @@ import type { WebCrawlerService } from '../webCrawler/types'
 import type { TelemetryService } from '../telemetry/TelemetryService'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
 import type { AiRunDeps } from './types'
+import { PRODUCT_NAME_ZH } from '../../../shared/constants'
 import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
 import type {
   AiApprovalBatchDecision,
@@ -616,7 +617,7 @@ export class ChatRunService {
         {
           runId,
           partnerId: run.partnerId,
-          partnerName: partner?.name || '馆长',
+          partnerName: partner?.name || PRODUCT_NAME_ZH,
           userMessageId: run.userMessageId,
           assistantMessageId: run.assistantMessageId,
           input: run.input,

@@ -44,7 +44,11 @@ import {
   PARTNER_AVATAR_SHAPES,
   PARTNER_AVATAR_COLORS
 } from '../../../shared/types'
-import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE, USER_MANUAL_URL } from '../../../shared/constants'
+import {
+  NO_EFFECTIVE_FILE_CHANGE_MESSAGE,
+  PRODUCT_NAME_ZH,
+  USER_MANUAL_URL
+} from '../../../shared/constants'
 import { findBrowserTabByUrl } from '../../../shared/browserUrl'
 import {
   pickFallbackWorkbenchModel,
@@ -4377,7 +4381,9 @@ const ChatPage: React.FC = () => {
                 className="h-[22px] w-[22px] shrink-0"
                 aria-hidden="true"
               />
-              <span className="truncate text-[14px] font-semibold text-[#37352F]">馆长</span>
+              <span className="truncate text-[14px] font-semibold text-[#37352F]">
+                {PRODUCT_NAME_ZH}
+              </span>
             </div>
           </div>
         ) : (
@@ -4740,7 +4746,7 @@ const ChatPage: React.FC = () => {
                               <div className="mt-3 flex items-center gap-2 border-t border-[#EEEEEC] px-4 py-4">
                                 <input
                                   className="min-w-0 flex-1 rounded-[6px] border border-[#EEEEEC] bg-[#FFFFFF] px-3 py-2 text-sm text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#37352F] focus:ring-2 focus:ring-[#EFEFED]"
-                                  placeholder="告诉 AI 接下来怎么做"
+                                  placeholder={`告诉${PRODUCT_NAME_ZH}该怎么做`}
                                   value={
                                     approvalDraftDecisions[currentApprovalItem.itemId]?.message ||
                                     ''

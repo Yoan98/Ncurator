@@ -1,5 +1,6 @@
 import React, { useEffect, useRef } from 'react'
 import { RiArrowRightUpLine, RiDownloadCloud2Line, RiRefreshLine } from 'react-icons/ri'
+import { PRODUCT_NAME_ZH } from '../../../shared/constants'
 import type { AppStartupStatus } from '../../../shared/types'
 import { useAppUpdate } from '../contexts/AppUpdateContext'
 import { workbenchSelectors } from '../testing/selectors'
@@ -54,7 +55,7 @@ const UpdateRequiredPage: React.FC<{ startupStatus: UpdateRequiredStatus }> = ({
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-[#EEEEEC]" />
       <section className="w-full max-w-[560px]" aria-labelledby="update-required-title">
         <h1 id="update-required-title" className="m-0 text-[30px] font-semibold tracking-normal">
-          需要升级馆长
+          需要升级{PRODUCT_NAME_ZH}
         </h1>
         <p className="mt-3 max-w-[500px] text-[14px] leading-7 text-[#787774]">
           当前应用版本太低，与本机数据库版本不匹配。继续使用可能导致您的本地数据丢失，请升级后再使用。

@@ -1,5 +1,6 @@
 import React from 'react'
 import { Tooltip } from 'antd'
+import { PRODUCT_NAME_ZH } from '../../../../shared/constants'
 import { useAppUpdate } from '../../contexts/AppUpdateContext'
 import { workbenchSelectors } from '../../testing/selectors'
 
@@ -40,7 +41,7 @@ const SidebarUpdateControl: React.FC = () => {
           : '更新'
   const tooltip =
     snapshot.status === 'downloading'
-      ? `正在下载 Ncurator ${snapshot.availableVersion || ''}`
+      ? `正在下载 ${PRODUCT_NAME_ZH} ${snapshot.availableVersion || ''}`
       : snapshot.status === 'downloaded'
         ? '更新已下载，点击重启安装'
         : retryable

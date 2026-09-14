@@ -58,7 +58,7 @@ pnpm release:abort -- --tag windows-vX.Y.Z
 
 prepare 从 Tag 建独立工作区，执行 `pnpm install --frozen-lockfile`、正式构建、安装包审计和 bundle 固化；不复用当前源码、旧 `node_modules` / `dist`，也不上传对象存储。
 
-Windows / macOS 用户可见安装包名为“馆长-…”。npm 包名、`appId`、`.ncurator` 与本地 `storageName`（ASCII）等内部标识可不变；**公开 artifacts 对象键与用户可见名一致**。
+Windows / macOS 用户可见安装包名为“馆长-…”。**公开 artifacts 对象键与用户可见名一致。** 产品命名分层、技术标识冻结清单见 [`doc/brand.md`](./brand.md)。
 
 候选包目录：`~/.ncurator/release-candidates/<tag>/<platform>/`。状态：`prepared` → 正式包 E2E 通过（或明确 `skipped`）后 `ready`；失败 `rejected`；公开发布并验证后 `published`。
 

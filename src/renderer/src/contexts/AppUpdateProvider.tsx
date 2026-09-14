@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { App as AntdApp, Modal } from 'antd'
+import { PRODUCT_NAME_ZH } from '../../../shared/constants'
 import type { AppUpdateSnapshot } from '../../../shared/types'
 import { workbenchSelectors } from '../testing/selectors'
 import { normalizeUserFacingError } from '../utils/userFacingError'
@@ -115,7 +116,7 @@ export const AppUpdateProvider: React.FC<React.PropsWithChildren> = ({ children 
         data-testid={workbenchSelectors.updateRestartModal}
       >
         <p className="m-0 text-[13px] leading-6 text-[#5F5E5B]">
-          Ncurator {snapshot?.availableVersion || ''} 已下载完成，重启应用即可完成更新。
+          {`${PRODUCT_NAME_ZH} ${snapshot?.availableVersion || ''} 已下载完成，重启应用即可完成更新。`}
         </p>
       </Modal>
     </AppUpdateContext.Provider>
