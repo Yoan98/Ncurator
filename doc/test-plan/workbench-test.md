@@ -201,7 +201,7 @@ pnpm test:update:e2e
 - What：A/B 伙伴分别保存 Composer（包括执行权限）、资源标签、活动标签和展开状态，反复切换互不覆盖。
 - Why：伙伴状态串联会让用户把输入、模型或资料发到错误上下文。
 - How：给两个真实伙伴设置不同偏好、执行权限、模型、输入、引用、附件和右侧内容，通过真实伙伴列表来回切换。不断言工作区选择器或搜索模式。
-- Oracle：每次切回只出现目标伙伴自己的完整 `partner_ui_state`，执行权限与其他 Composer 状态分别恢复，对齐 `WB-SESSION-002`、`WB-SESSION-008-AC1`、`WB-SESSION-008-AC2`。
+- Oracle：每次切回只出现目标伙伴自己的完整 `partner_ui_state`，执行权限与其他 Composer 状态分别恢复，对齐 `WB-SESSION-002`、`WB-SESSION-008-AC1`、`WB-SESSION-008-AC2`。目标伙伴若仍在 Brain 思考等待，切回后「让俺想想」仍在，对齐 `WB-SESSION-002-AC3`。
 - Not：不验证跨设备同步。
 
 #### `partner-ui-state-restart-persistence`
@@ -383,7 +383,7 @@ pnpm test:update:e2e
 - What：智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死。
 - How：E2E 发送真实长任务和审批等待请求，运行中点击停止。
-- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`。
+- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中按钮禁用并提示「正在清理中」，对齐 `WB-COMPOSER-006-AC5`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`。
 - Not：不覆盖 Graph 运行上限；上限触发与恢复由 `interrupted-task-resume-flow` 覆盖。
 
 #### `interrupted-task-resume-flow`

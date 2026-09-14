@@ -816,7 +816,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const sendButtonDisabled = showCancel ? cancelling : loading || !canSubmit
   const sendButtonTooltip = showCancel
     ? cancelling
-      ? '正在停止本次运行'
+      ? '正在清理中'
       : ''
     : loading
       ? '正在处理上一条请求'
@@ -1093,7 +1093,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                         : 'border-[#37352F] bg-[#37352F] text-white hover:bg-[#2F3437]'
                   }`}
                   data-testid={workbenchSelectors.sendButton}
-                  aria-label={showCancel ? '停止本次运行' : '发送'}
+                  aria-label={
+                    showCancel ? (cancelling ? '正在清理中' : '停止本次运行') : '发送'
+                  }
                 >
                   {showCancel ? (
                     cancelling ? (

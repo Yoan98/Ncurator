@@ -12,6 +12,7 @@ import {
   type FreeModelPublicEntry
 } from '../../../shared/freeModels'
 import type { LlmRuntimeConfig } from '../../../shared/types'
+import { cacheModelIcons, resolveCachedIconUrls } from './modelIconCache'
 import { getUserDataPath } from '../../utils/paths'
 
 const FREE_MODELS_ENDPOINT = FREE_MODELS_CATALOG_URL
@@ -113,14 +114,21 @@ export class FreeModelCatalogService {
     return path.join(getUserDataPath(), CACHE_FILE_NAME)
   }
 
-  private toSnapshot(cache: CachePayload | null): FreeModelsSnapshot {
+  private async toSnapshot(cache: CachePayload | null): Promise<FreeModelsSnapshot> {
     if (!cache) {
       return { updatedAt: null, fetchedAt: null, models: [] }
     }
+    const resolvedIcons = await resolveCachedIconUrls(cache.models.map((item) => item.iconUrl))
     return {
       updatedAt: cache.updatedAt,
       fetchedAt: cache.fetchedAt,
-      models: cache.models.map(toFreeModelPublicEntry)
+      models: cache.models.map((entry) => {
+        const publicEntry = toFreeModelPublicEntry(entry)
+        return {
+          ...publicEntry,
+          iconUrl: resolvedIcons.get(entry.iconUrl) || entry.iconUrl
+        }
+      })
     }
   }
 
@@ -202,7 +210,7 @@ export class FreeModelCatalogService {
 
   async getSnapshot(options?: { refreshIfStale?: boolean }): Promise<FreeModelsSnapshot> {
     await this.ensureLoaded()
-    const snapshot = this.toSnapshot(this.cache)
+    const snapshot = await this.toSnapshot(this.cache)
     if (options?.refreshIfStale && this.isStale(this.cache)) {
       void this.refresh().catch((error) => {
         console.error('[FREE-MODELS] Background refresh failed:', error)
@@ -218,7 +226,8 @@ export class FreeModelCatalogService {
       const next = await this.fetchRemote()
       this.cache = next
       await this.persist(next)
-      return this.toSnapshot(next)
+      await cacheModelIcons(next.models.map((item) => item.iconUrl))
+      return await this.toSnapshot(next)
     })()
     try {
       return await this.refreshPromise

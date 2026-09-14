@@ -70,7 +70,8 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     eventCtx: {
       runId: payload.runId,
       sendEvent: deps.sendEvent,
-      recordLlmIo: deps.recordLlmIo
+      recordLlmIo: deps.recordLlmIo,
+      abortSignal: deps.abortSignal
     },
     runtimeSettings: deps.runtimeSettings,
     getConfig: loadRequestedConfig,

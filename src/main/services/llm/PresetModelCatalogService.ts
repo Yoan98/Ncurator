@@ -12,6 +12,7 @@ import {
   type PresetModelsSnapshot,
   isLlmPresetProviderId
 } from '../../../shared/llmPresets'
+import { cacheModelIcons, resolveCachedIconUrls } from './modelIconCache'
 import { getUserDataPath } from '../../utils/paths'
 
 const CACHE_FILE_NAME = 'preset-models-catalog.json'
@@ -107,14 +108,25 @@ export class PresetModelCatalogService {
     return path.join(getUserDataPath(), CACHE_FILE_NAME)
   }
 
-  private toSnapshot(cache: CachePayload | null): PresetModelsSnapshot {
+  private collectIconUrls(providers: readonly LlmPresetProvider[]): string[] {
+    return providers.flatMap((provider) => provider.models.map((model) => model.iconUrl))
+  }
+
+  private async toSnapshot(cache: CachePayload | null): Promise<PresetModelsSnapshot> {
     if (!cache || cache.providers.length === 0) {
       return emptyPresetModelsSnapshot()
     }
+    const resolvedIcons = await resolveCachedIconUrls(this.collectIconUrls(cache.providers))
     return {
       updatedAt: cache.updatedAt,
       fetchedAt: cache.fetchedAt,
-      providers: cache.providers
+      providers: cache.providers.map((provider) => ({
+        ...provider,
+        models: provider.models.map((model) => ({
+          ...model,
+          iconUrl: resolvedIcons.get(model.iconUrl) || model.iconUrl
+        }))
+      }))
     }
   }
 
@@ -202,7 +214,7 @@ export class PresetModelCatalogService {
         console.error('[PRESET-MODELS] Background refresh failed', error)
       })
     }
-    return this.toSnapshot(this.cache)
+    return await this.toSnapshot(this.cache)
   }
 
   async refresh(): Promise<PresetModelsSnapshot> {
@@ -213,10 +225,11 @@ export class PresetModelCatalogService {
         const next = await this.fetchRemote()
         this.cache = next
         await this.persist(next)
-        return this.toSnapshot(next)
+        await cacheModelIcons(this.collectIconUrls(next.providers))
+        return await this.toSnapshot(next)
       } catch (error) {
         if (this.cache && this.cache.providers.length > 0) {
-          return this.toSnapshot(this.cache)
+          return await this.toSnapshot(this.cache)
         }
         throw error
       }

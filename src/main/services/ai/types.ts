@@ -418,7 +418,10 @@ export type AiRunFailureMetadata = {
   failureCode?: AiRunFailureCode
 }
 
-export type AiEventDispatchContext = Pick<AiRunContext, 'runId' | 'sendEvent' | 'recordLlmIo'>
+export type AiEventDispatchContext = Pick<
+  AiRunContext,
+  'runId' | 'sendEvent' | 'recordLlmIo' | 'abortSignal'
+>
 
 export type TerminalToolContext = Pick<
   AiRunContext,

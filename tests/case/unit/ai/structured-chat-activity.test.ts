@@ -46,6 +46,40 @@ describe('ai unit structured chat activity', () => {
     expect(visible).toBe('fresh')
   })
 
+  it('aborts retry sleep when the run is cancelled', async () => {
+    const controller = new AbortController()
+    let attempt = 0
+    const startedAt = Date.now()
+    await expect(
+      runLlmCallWithActivity({
+        ctx: { runId: 'cancel-sleep-run', sendEvent: () => undefined, abortSignal: controller.signal },
+        runId: 'cancel-sleep-run',
+        system: 'system',
+        user: 'user',
+        telemetry: {
+          actionType: 'llm_tool_calls',
+          caller: 'human.brain',
+          schemaName: 'brain',
+          modelName: 'model',
+          baseUrl: 'https://example.test/v1',
+          streamingMode: 'force_stream'
+        },
+        maxAttempts: 3,
+        classifyRetry: () => ({ retryable: true, message: 'retry', delayMs: 20_000 }),
+        execute: async () => {
+          attempt += 1
+          if (attempt === 1) {
+            setTimeout(() => controller.abort(), 20)
+            throw new Error('timeout')
+          }
+          return { output: 'fresh', rawText: 'fresh', streamed: true }
+        }
+      })
+    ).rejects.toMatchObject({ code: 'CANCELLED' })
+    expect(attempt).toBe(1)
+    expect(Date.now() - startedAt).toBeLessThan(3_000)
+  })
+
   it('uses exponential backoff for provider capacity exhaustion', () => {
     const error = Object.assign(
       new Error('ResourceExhausted: Worker local total request limit reached (69/48)'),

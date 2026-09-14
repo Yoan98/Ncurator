@@ -548,7 +548,7 @@ describe('ai unit llm executor text path', () => {
     })
 
     expect(createChatModelMock.mock.calls[0]?.[1]).toMatchObject({
-      timeout: 480000
+      timeout: 300000
     })
   })
 })

@@ -60,8 +60,28 @@ type LlmCallRetryDecision = {
   delayMs?: number
 }
 
-const sleep = async (ms: number): Promise<void> =>
-  await new Promise((resolve) => setTimeout(resolve, ms))
+const createCancelledError = (): Error & { code: string } => {
+  const error = new Error('已取消') as Error & { code: string }
+  error.code = 'CANCELLED'
+  return error
+}
+
+const sleep = async (ms: number, signal?: AbortSignal): Promise<void> => {
+  const delay = Math.max(0, ms)
+  if (delay === 0) return
+  if (signal?.aborted) throw createCancelledError()
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, delay)
+    const onAbort = (): void => {
+      clearTimeout(timer)
+      reject(createCancelledError())
+    }
+    signal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
 
 const reasonFromError = (error: unknown): string =>
   error instanceof Error && error.message.trim() ? error.message.trim() : String(error || 'unknown')
@@ -269,7 +289,7 @@ export const runLlmCallWithActivity = async <T>(input: {
           message: retry.message
         })
         const delayMs = retry.delayMs ?? Math.min(1_500, 250 * attempt)
-        await sleep(Math.max(0, delayMs))
+        await sleep(Math.max(0, delayMs), input.ctx.abortSignal)
       }
     }
     if (!result) throw new Error('llm_call_missing_result')

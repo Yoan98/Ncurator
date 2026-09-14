@@ -126,6 +126,7 @@ import {
 } from '../components/workbench/utils'
 import { clipPartnerListPreview, PARTNER_LIST_EMPTY_PREVIEW } from '../../../shared/workbench/conversationProjection'
 import { projectApprovalReviews, projectProcessGroups } from '../components/workbench/messageLogProjection'
+import { resumeAssistantTurnFromLive } from '../components/workbench/partnerLiveTurns'
 import {
   groupApplyTargetsByRunId,
   mergeApplyTargets
@@ -872,6 +873,9 @@ const ChatPage: React.FC = () => {
 
   const activeRunMessageIdsRef = useRef<Record<string, string>>({})
   const activeRunPartnerIdsRef = useRef<Record<string, string>>({})
+  const liveAssistantTurnsByPartnerRef = useRef<
+    Record<string, Record<string, AssistantTurnViewModel>>
+  >({})
   const assistantArtifactsRef = useRef<Record<string, AiArtifactRef[]>>({})
   const currentPartnerIdRef = useRef<string | null>(null)
   const submitInFlightRef = useRef(false)
@@ -1854,18 +1858,38 @@ const ChatPage: React.FC = () => {
     setApplyRevertConfirm(null)
   }
 
+  const rememberPartnerTurns = (
+    partnerId: string | null,
+    turns: Record<string, AssistantTurnViewModel>
+  ): void => {
+    if (!partnerId) return
+    liveAssistantTurnsByPartnerRef.current[partnerId] = turns
+  }
+
   const updateTurnForRun = (
     runId: string,
     updater: (current: AssistantTurnViewModel) => AssistantTurnViewModel
   ): void => {
     const messageId = activeRunMessageIdsRef.current[runId]
     if (!messageId) return
+    const partnerId = activeRunPartnerIdsRef.current[runId] || currentPartnerIdRef.current
+    if (partnerId && partnerId !== currentPartnerIdRef.current) {
+      const turns = liveAssistantTurnsByPartnerRef.current[partnerId] || {}
+      const current = turns[messageId] || createAssistantTurn(messageId)
+      liveAssistantTurnsByPartnerRef.current[partnerId] = {
+        ...turns,
+        [messageId]: updater(current)
+      }
+      return
+    }
     setAssistantTurns((previous) => {
       const current = previous[messageId] || createAssistantTurn(messageId)
-      return {
+      const next = {
         ...previous,
         [messageId]: updater(current)
       }
+      rememberPartnerTurns(currentPartnerIdRef.current, next)
+      return next
     })
   }
 
@@ -1905,15 +1929,21 @@ const ChatPage: React.FC = () => {
   }, [])
 
   const hydratePartnerView = (
+    partnerId: string,
     messages: ChatMessage[],
     runSnapshots: PartnerRunSnapshot[],
     activeRuns: PartnerRunSnapshot[]
   ): void => {
     assistantArtifactsRef.current = {}
-    activeRunMessageIdsRef.current = {}
     const runAssistantMessageIds = new Set(
       runSnapshots.map((snapshot) => snapshot.run.assistantMessageId)
     )
+    const activeRunIds = new Set(activeRuns.map((item) => item.run.id))
+    for (const [runId, mappedPartnerId] of Object.entries(activeRunPartnerIdsRef.current)) {
+      if (mappedPartnerId === partnerId && !activeRunIds.has(runId)) {
+        delete activeRunMessageIdsRef.current[runId]
+      }
+    }
     setAssistantTurns(() => {
       const nextTurns: Record<string, AssistantTurnViewModel> = {}
       for (const message of messages) {
@@ -1921,7 +1951,8 @@ const ChatPage: React.FC = () => {
           nextTurns[message.id] = buildSearchTurnFromProjectedMessage(message)
         }
       }
-      const activeRunIds = new Set(activeRuns.map((item) => item.run.id))
+      const liveTurns = liveAssistantTurnsByPartnerRef.current[partnerId]
+      const liveTurnList = liveTurns ? Object.values(liveTurns) : []
       for (const runSnapshot of runSnapshots) {
         activeRunPartnerIdsRef.current[runSnapshot.run.id] = runSnapshot.run.partnerId
         if (activeRunIds.has(runSnapshot.run.id)) {
@@ -1934,12 +1965,20 @@ const ChatPage: React.FC = () => {
         if (projectedMessage?.linkAccess !== undefined) {
           turn.linkAccess = projectedMessage.linkAccess
         }
-        nextTurns[runSnapshot.run.assistantMessageId] = turn
+        const liveTurn =
+          liveTurns?.[runSnapshot.run.assistantMessageId] ||
+          liveTurnList.find((item) => item.runId === runSnapshot.run.id) ||
+          (activeRunIds.has(runSnapshot.run.id)
+            ? liveTurnList.find((item) => item.isBrainThinking && !item.runFinished)
+            : undefined)
+        const resumed = resumeAssistantTurnFromLive(turn, liveTurn)
+        nextTurns[runSnapshot.run.assistantMessageId] = resumed
         if (runSnapshot.run.artifacts && runSnapshot.run.artifacts.length > 0) {
           assistantArtifactsRef.current[runSnapshot.run.assistantMessageId] =
             runSnapshot.run.artifacts
         }
       }
+      rememberPartnerTurns(partnerId, nextTurns)
       return nextTurns
     })
     const visibleActiveRun =
@@ -1976,12 +2015,12 @@ const ChatPage: React.FC = () => {
       }
       setCurrentMessages(opened.messages)
       setHasMoreMessagesBefore(opened.hasMoreBefore)
-      hydratePartnerView(opened.messages, opened.activeRuns, opened.activeRuns)
+      hydratePartnerView(partnerId, opened.messages, opened.activeRuns, opened.activeRuns)
       setSwitchingPartnerId(null)
 
       void window.api.partnerRunSummaries({ partnerId }).then((summary) => {
         if (partnerSwitchRequestRef.current !== requestId) return
-        hydratePartnerView(opened.messages, summary.runs, opened.activeRuns)
+        hydratePartnerView(partnerId, opened.messages, summary.runs, opened.activeRuns)
         void hydrateFileChangeTargetsForPartner(partnerId, opened.messages)
       })
     } catch (error) {
@@ -2440,6 +2479,14 @@ const ChatPage: React.FC = () => {
 
     uiStateInteractionVersionRef.current += 1
     if (options?.saveCurrentDraft !== false) await flushCurrentUiState()
+
+    const previousPartnerId = currentPartnerIdRef.current
+    if (previousPartnerId && previousPartnerId !== session.id) {
+      liveAssistantTurnsByPartnerRef.current[previousPartnerId] = {
+        ...liveAssistantTurnsByPartnerRef.current[previousPartnerId],
+        ...assistantTurns
+      }
+    }
 
     const requestId = partnerSwitchRequestRef.current + 1
     partnerSwitchRequestRef.current = requestId
@@ -3210,6 +3257,9 @@ const ChatPage: React.FC = () => {
         if (event.type === 'browser_panel_opened' && eventPartnerId) {
           persistBackgroundBrowserTab(eventPartnerId, event.browserTabId)
         }
+        if (messageId) {
+          updateTurnForRun(event.runId, (current) => reduceAssistantTurnByRunEvent(current, event))
+        }
         return
       }
 
@@ -3531,10 +3581,14 @@ const ChatPage: React.FC = () => {
     setCurrentMessages((previous) =>
       appendMessagesDedupe(previous, [optimisticUserMessage, optimisticAssistantMessage])
     )
-    setAssistantTurns((previous) => ({
-      ...previous,
-      [optimisticAssistantMessage.id]: createThinkingAssistantTurn(optimisticAssistantMessage.id)
-    }))
+    setAssistantTurns((previous) => {
+      const next = {
+        ...previous,
+        [optimisticAssistantMessage.id]: createThinkingAssistantTurn(optimisticAssistantMessage.id)
+      }
+      rememberPartnerTurns(submitPartnerId, next)
+      return next
+    })
 
     submitInFlightRef.current = true
     try {
@@ -3574,7 +3628,7 @@ const ChatPage: React.FC = () => {
       setAssistantTurns((previous) => {
         const next = removeOptimisticAssistantTurn(previous)
         const optimisticTurn = previous[optimisticAssistantMessage.id]
-        return {
+        const merged = {
           ...next,
           [assistantMessageId]: {
             ...(previous[assistantMessageId] ||
@@ -3584,6 +3638,8 @@ const ChatPage: React.FC = () => {
             runId: run.id
           }
         }
+        rememberPartnerTurns(run.partnerId, merged)
+        return merged
       })
       void loadPartners()
     } catch (error) {
