@@ -224,6 +224,18 @@ const MAX_CONSECUTIVE_BLANK_STREAM_MS = 120_000
 const createRunnableConfig = (signal?: AbortSignal): Partial<RunnableConfig> | undefined =>
   signal ? { signal } : undefined
 
+const createCancelledError = (): Error & { code: string } => {
+  const error = new Error('已取消') as Error & { code: string }
+  error.code = 'CANCELLED'
+  return error
+}
+
+const listenForAbort = (signal: AbortSignal, onAbort: () => void): (() => void) => {
+  signal.addEventListener('abort', onAbort, { once: true })
+  if (signal.aborted) onAbort()
+  return () => signal.removeEventListener('abort', onAbort)
+}
+
 const withAbortTimeout = async <T>(input: {
   execute: (signal: AbortSignal) => Promise<T>
   externalSignal?: AbortSignal
@@ -246,30 +258,65 @@ const withAbortTimeout = async <T>(input: {
   const externalAbortPromise = new Promise<never>((_resolve, reject) => {
     if (!input.externalSignal) return
     const onAbort = () => {
-      const cancelledError = new Error('已取消') as Error & { code?: string }
-      cancelledError.code = 'CANCELLED'
+      const cancelledError = createCancelledError()
       controller.abort(cancelledError)
       reject(cancelledError)
     }
-    if (input.externalSignal.aborted) {
-      onAbort()
-      return
-    }
-    input.externalSignal.addEventListener('abort', onAbort, { once: true })
-    cleanupAbortListener = () => {
-      input.externalSignal?.removeEventListener('abort', onAbort)
-    }
+    cleanupAbortListener = listenForAbort(input.externalSignal, onAbort)
   })
 
   try {
-    return await Promise.race([
+    const result = await Promise.race([
       input.execute(controller.signal),
       timeoutPromise,
       externalAbortPromise
     ])
+    if (input.externalSignal?.aborted) throw createCancelledError()
+    return result
   } finally {
     if (timeoutId) clearTimeout(timeoutId)
     cleanupAbortListener?.()
+  }
+}
+
+const nextWithAbort = async <T>(
+  iterator: AsyncIterator<T>,
+  signal?: AbortSignal
+): Promise<IteratorResult<T>> => {
+  if (!signal) return await iterator.next()
+  if (signal.aborted) throw createCancelledError()
+  return await new Promise<IteratorResult<T>>((resolve, reject) => {
+    const onAbort = () => reject(createCancelledError())
+    const stop = listenForAbort(signal, onAbort)
+    void iterator.next().then(
+      (result) => {
+        stop()
+        resolve(result)
+      },
+      (error) => {
+        stop()
+        reject(error)
+      }
+    )
+  })
+}
+
+const iterateWithAbort = async function* <T>(
+  iterable: AsyncIterable<T>,
+  signal?: AbortSignal
+): AsyncGenerator<T> {
+  const iterator = iterable[Symbol.asyncIterator]()
+  try {
+    for (;;) {
+      const result = await nextWithAbort(iterator, signal)
+      if (result.done) return
+      yield result.value
+    }
+  } finally {
+    void iterator.return?.()?.then(
+      () => undefined,
+      () => undefined
+    )
   }
 }
 
@@ -345,7 +392,7 @@ const streamTextFromRunnable = async (input: {
   let lastChunk: TextMessage | undefined
   let blankChunkCount = 0
   let blankStreakStartedAt: number | undefined
-  for await (const chunk of stream) {
+  for await (const chunk of iterateWithAbort(stream, input.signal)) {
     input.checkCancelled()
     lastChunk = chunk
     const text = extractTextContent(chunk.content)
@@ -598,7 +645,7 @@ const streamToolCallingCore = async (input: {
   const textChunks: string[] = []
   const toolCallChunks: ToolCallChunk[] = []
   let lastChunk: AIMessageChunk | undefined
-  for await (const chunk of stream) {
+  for await (const chunk of iterateWithAbort(stream, request.signal)) {
     input.checkCancelled()
     lastChunk = chunk
     const text = extractTextContent(chunk.content)

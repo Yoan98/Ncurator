@@ -386,13 +386,14 @@
 
 #### WB-COMPOSER-006 AI 运行取消
 
-- 系统行为：智能模式在当前任务仍在运行时，composer 不展示独立取消按钮；底部发送按钮切换为停止图标，点击后直接中止当前 run。停止后 UI 保持占用当前 run，直到 Main 发出 `run_cancelled` / 失败 / 完成；清理期间按钮为转圈态，悬浮提示「正在清理中」，不得再发下一条消息。若当前 run 正在等待审批，停止也必须释放审批等待并结束本次 run。正在执行 `browser_use`（含页面加载与 Stagehand observe/act/extract）时，停止须立刻中断并结束 run，不得等页面或 Stagehand 自然完成后再结束。
+- 系统行为：智能模式在当前任务仍在运行时，composer 不展示独立取消按钮；底部发送按钮切换为停止图标，点击后直接中止当前 run。停止后 UI 保持占用当前 run，直到 Main 发出 `run_cancelled` / 失败 / 完成；清理期间按钮为转圈态，悬浮提示「正在停止本次运行」，不得再发下一条消息。若当前 run 正在等待审批，停止也必须释放审批等待并结束本次 run。正在执行 `browser_use`（含页面加载与 Stagehand observe/act/extract）时，停止须立刻中断并结束 run，不得等页面或 Stagehand 自然完成后再结束。当前 run 仍在等待模型首个 token（流式尚未返回）时，停止也须立刻按 `user_cancelled` 结束，不得等待服务商拆掉连接或 stream 自然结束。
 - 验收：
   - `WB-COMPOSER-006-AC1` 运行中发送按钮切换为停止图标，页面不再显示独立“取消”按钮。
   - `WB-COMPOSER-006-AC2` 点击停止图标后，当前运行结束并给出已取消反馈。
   - `WB-COMPOSER-006-AC3` 当前运行卡在审批等待时，点击停止图标也会结束本次 run，而不是继续等待审批提交。
   - `WB-COMPOSER-006-AC4` 当前 run 正在执行 `browser_use` 导航或 Stagehand 操作时，点击停止图标后须立刻结束本次 run（`user_cancelled`），不得继续等待页面加载完成或 Stagehand 超时。
-  - `WB-COMPOSER-006-AC5` 点击停止后、运行尚未终态前，发送按钮保持禁用并展示「正在清理中」；清理完成前不能发送新消息。
+  - `WB-COMPOSER-006-AC5` 点击停止后、运行尚未终态前，发送按钮保持禁用并展示「正在停止本次运行」；清理完成前不能发送新消息。
+  - `WB-COMPOSER-006-AC6` 当前 run 仍在等待模型首个 token 时点击停止，须立刻结束本次 run（`user_cancelled`），不得等待 stream 拆连接或底层 AbortError 被当成普通失败。
 
 #### WB-COMPOSER-010 附件保存与传递规则
 

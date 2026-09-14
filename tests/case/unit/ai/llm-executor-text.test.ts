@@ -511,6 +511,107 @@ describe('ai unit llm executor text path', () => {
     })
   })
 
+  it('cancels a hanging first-token stream within 500ms', async () => {
+    const controller = new AbortController()
+    createChatModelMock.mockImplementation(() => ({
+      bindTools: () => ({
+        stream: async () => ({
+          async *[Symbol.asyncIterator]() {
+            await new Promise(() => undefined)
+          }
+        })
+      }),
+      stream: async () => ({
+        async *[Symbol.asyncIterator]() {
+          await new Promise(() => undefined)
+        }
+      }),
+      invoke: async () => {
+        await new Promise(() => undefined)
+        return { content: 'unreachable' }
+      }
+    }))
+
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-hanging-stream',
+        sendEvent: () => undefined
+      },
+      runtimeSettings: {
+        llmStreamingMode: 'force_stream'
+      },
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
+      checkCancelled: () => undefined,
+      abortSignal: controller.signal
+    })
+
+    const pending = executor.chatTools({
+      caller: 'human.brain',
+      taskId: 'task-hanging-stream',
+      messages: [new HumanMessage('你好')],
+      tools: []
+    })
+    setTimeout(() => controller.abort(), 20)
+    const startedAt = Date.now()
+
+    await expect(pending).rejects.toMatchObject({
+      message: '已取消',
+      code: 'CANCELLED'
+    })
+    expect(Date.now() - startedAt).toBeLessThan(500)
+  })
+
+  it('treats a stream that silently ends on abort as cancellation', async () => {
+    const controller = new AbortController()
+    createChatModelMock.mockImplementation(() => ({
+      stream: async (_messages: unknown, config?: { signal?: AbortSignal }) => ({
+        async *[Symbol.asyncIterator]() {
+          const signal = config?.signal
+          await new Promise<void>((resolve) => {
+            if (!signal) return
+            if (signal.aborted) {
+              resolve()
+              return
+            }
+            signal.addEventListener('abort', () => resolve(), { once: true })
+          })
+        }
+      }),
+      invoke: async () => ({ content: 'unreachable' })
+    }))
+
+    const executor = createAiLlmExecutor({
+      eventCtx: {
+        runId: 'run-silent-abort',
+        sendEvent: () => undefined
+      },
+      runtimeSettings: {
+        llmStreamingMode: 'force_stream'
+      },
+      getConfig: async () => baseConfig,
+      saveConfig: async () => undefined,
+      checkCancelled: () => undefined,
+      abortSignal: controller.signal
+    })
+
+    const pending = executor.chatText({
+      caller: 'human.mouth',
+      taskId: 'task-silent-abort',
+      schemaName: 'human_mouth_markdown',
+      system: 'system prompt',
+      user: '你好'
+    })
+    setTimeout(() => controller.abort(), 20)
+    const startedAt = Date.now()
+
+    await expect(pending).rejects.toMatchObject({
+      message: '已取消',
+      code: 'CANCELLED'
+    })
+    expect(Date.now() - startedAt).toBeLessThan(500)
+  })
+
   it('passes the fixed llm timeout into model creation', async () => {
     createChatModelMock.mockImplementation(() => ({
       invoke: async () => ({

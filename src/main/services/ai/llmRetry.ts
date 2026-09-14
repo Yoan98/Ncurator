@@ -1,5 +1,6 @@
 import { isLlmOutputError } from './errors'
 import { normalizeStructuredOutputError } from './structuredOutput'
+import { isCancelledError } from './utils/runFailure'
 
 export type LlmErrorClassification = 'fatal' | 'retryable' | 'unknown'
 
@@ -31,13 +32,6 @@ const normalizeSignal = (value: string | undefined): string | undefined => {
   if (!value) return undefined
   const normalized = value.trim()
   return normalized ? normalized.toLowerCase() : undefined
-}
-
-const isCancellationError = (error: unknown): boolean => {
-  const code = error && typeof error === 'object' ? (error as { code?: unknown }).code : undefined
-  const message =
-    error instanceof Error ? error.message.toLowerCase() : String(error || '').toLowerCase()
-  return code === 'CANCELLED' || message.includes('cancel')
 }
 
 const isResourceExhaustedError = (error: unknown, extraText = ''): boolean => {
@@ -89,7 +83,7 @@ export const classifyLlmRetry = (
   const body = `${info.rawText} ${error instanceof Error ? error.message : ''}`.toLowerCase()
 
   // Do not trust LlmProviderError.retryable; always reclassify from signals.
-  if (isCancellationError(error)) {
+  if (isCancelledError(error)) {
     return { retryable: false, message }
   }
 

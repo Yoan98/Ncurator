@@ -133,7 +133,8 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       cache.currentUserMessageIndex = brainProjection.currentUserMessageIndex + 1
       const output = (await graph.invoke(initialState as HumanState, {
         recursionLimit:
-          ctx.humanRuntimeOverrides?.graphRecursionLimit || HUMAN_GRAPH_RECURSION_LIMIT
+          ctx.humanRuntimeOverrides?.graphRecursionLimit || HUMAN_GRAPH_RECURSION_LIMIT,
+        signal: ctx.abortSignal
       })) as HumanState
 
       return {

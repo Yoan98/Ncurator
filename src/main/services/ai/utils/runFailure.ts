@@ -31,8 +31,19 @@ export const isContentSafetyError = (error: unknown): boolean => {
   )
 }
 
-export const isCancelledError = (error: unknown): boolean =>
-  Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'CANCELLED')
+export const isCancelledError = (error: unknown): boolean => {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined
+  const name =
+    error && typeof error === 'object' && 'name' in error ? String(error.name || '') : ''
+  const message = getErrorMessage(error).toLowerCase()
+  return (
+    code === 'CANCELLED' ||
+    name === 'AbortError' ||
+    name === 'ModelAbortError' ||
+    message.includes('cancel') ||
+    message.includes('aborted')
+  )
+}
 
 export const isGraphRuntimeLimitError = (error: unknown): boolean =>
   Boolean(

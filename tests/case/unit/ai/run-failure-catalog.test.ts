@@ -87,6 +87,16 @@ describe('ai unit run failure catalog', () => {
     expect(failure.rawMessage).toContain('llm_call_timeout')
   })
 
+  it('maps AbortError and aborted transport errors to user_cancelled', () => {
+    const abortError = new Error('This operation was aborted')
+    abortError.name = 'AbortError'
+    expect(classifyThrownErrorToAiRunFailure(abortError).failureCode).toBe('user_cancelled')
+
+    const modelAbort = new Error('The user aborted a request')
+    modelAbort.name = 'ModelAbortError'
+    expect(classifyThrownErrorToAiRunFailure(modelAbort).failureCode).toBe('user_cancelled')
+  })
+
   it('createAiRunFailure embeds catalog title and optional rawMessage', () => {
     const failure = createAiRunFailure({
       failureCode: 'internal_error',

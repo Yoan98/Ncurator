@@ -383,7 +383,7 @@ pnpm test:update:e2e
 - What：智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死。
 - How：E2E 发送真实长任务和审批等待请求，运行中点击停止。
-- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中按钮禁用并提示「正在清理中」，对齐 `WB-COMPOSER-006-AC5`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`。
+- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中按钮禁用并提示「正在停止本次运行」，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`。
 - Not：不覆盖 Graph 运行上限；上限触发与恢复由 `interrupted-task-resume-flow` 覆盖。
 
 #### `interrupted-task-resume-flow`

@@ -182,4 +182,14 @@ describe('ai unit llm error classification', () => {
       ).retryable
     ).toBe(true)
   })
+
+  it('does not retry AbortError or aborted transport errors', () => {
+    const abortError = new Error('This operation was aborted')
+    abortError.name = 'AbortError'
+    expect(classifyLlmRetry(abortError).retryable).toBe(false)
+
+    const modelAbort = new Error('aborted')
+    modelAbort.name = 'ModelAbortError'
+    expect(classifyLlmRetry(modelAbort).retryable).toBe(false)
+  })
 })
