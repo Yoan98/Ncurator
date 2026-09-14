@@ -3,7 +3,7 @@ import path from 'node:path'
 import process from 'node:process'
 import { assertReleaseFragment, resolveReleaseAssetPath } from './fragment-contract.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
-import { artifactKey, statusKey } from './storage-layout.mjs'
+import { artifactKey, fragmentKey } from './storage-layout.mjs'
 import { createReleaseStorageClient } from '../storage/client.mjs'
 
 const [inputDirectory = '', fragmentPath = ''] = process.argv.slice(2)
@@ -80,12 +80,12 @@ for (const file of fragment.files) {
   }
 }
 
-const fragmentStatusKey = statusKey(fragment.tag, fragment.platform)
+const uploadedFragmentKey = fragmentKey(fragment.tag, fragment.platform)
 await aws([
   's3',
   'cp',
   fragmentPath,
-  `s3://${bucket}/${fragmentStatusKey}`,
+  `s3://${bucket}/${uploadedFragmentKey}`,
   '--content-type',
   'application/json',
   '--cache-control',

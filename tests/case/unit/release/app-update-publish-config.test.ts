@@ -118,14 +118,16 @@ describe('app update publish config', () => {
   })
 
   it('finalizes Windows and macOS release channels independently with a live-publish lock', async () => {
-    const [windowsRelease, macRelease, windowsFinalize, macFinalize, tagContract, storageConfig] =
+    const [windowsRelease, macRelease, windowsFinalize, macFinalize, tagContract, storageConfig, windowsShared, uploadFragment] =
       await Promise.all([
         readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
         readFile(path.resolve('scripts/release/macos.mjs'), 'utf8'),
         readFile(path.resolve('scripts/release/r2/finalize-windows.mjs'), 'utf8'),
         readFile(path.resolve('scripts/release/r2/finalize-macos.mjs'), 'utf8'),
         readFile(path.resolve('scripts/release/tag.mjs'), 'utf8'),
-        readFile(path.resolve('scripts/release/storage/config.mjs'), 'utf8')
+        readFile(path.resolve('scripts/release/storage/config.mjs'), 'utf8'),
+        readFile(path.resolve('scripts/release/shared/windows.mjs'), 'utf8'),
+        readFile(path.resolve('scripts/release/r2/upload-fragment.mjs'), 'utf8')
       ])
 
     expect(windowsRelease).toContain("'r2', 'finalize-windows.mjs'")
@@ -140,6 +142,17 @@ describe('app update publish config', () => {
     expect(macFinalize).toContain('installerUrl')
     expect(windowsFinalize).not.toContain('--keep-old')
     expect(macFinalize).not.toContain('--keep-old')
+    expect(windowsFinalize).toContain('fragmentKey')
+    expect(macFinalize).toContain('fragmentKey')
+    expect(windowsFinalize).toContain('legacyStatusPrefix')
+    expect(macFinalize).toContain('legacyStatusPrefix')
+    expect(windowsFinalize).not.toContain('release-status/windows/')
+    expect(macFinalize).not.toContain('release-status/macos/')
+    expect(uploadFragment).toContain('fragmentKey')
+    expect(uploadFragment).toContain("'no-store'")
+    expect(windowsShared).toContain('fragmentKey')
+    expect(windowsShared).toContain('artifactKey(fragment, file.name)')
+    expect(windowsShared).not.toContain('file.storageName')
     expect(tagContract).toContain('/^(mac|windows)-v')
     expect(windowsRelease).toContain('assertLivePublishAllowed')
     expect(macRelease).toContain('assertLivePublishAllowed')

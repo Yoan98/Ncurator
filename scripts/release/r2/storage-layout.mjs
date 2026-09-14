@@ -8,16 +8,10 @@ export const platformFamily = (platform) => {
 export const artifactKey = (fragment, fileName) =>
   `artifacts/${platformFamily(fragment.platform)}/${fragment.tag}/${fileName}`
 
-export const statusKey = (tag, platform) => {
-  const family = platformFamily(platform)
-  return family === 'windows'
-    ? `release-status/windows/${tag}.json`
-    : `release-status/macos/${tag}/${platform}.json`
-}
+export const fragmentKey = (tag, platform) =>
+  `${artifactPrefix(platformFamily(platform), tag)}fragment.json`
 
 export const artifactPrefix = (family, tag = '') => `artifacts/${family}/${tag ? `${tag}/` : ''}`
 
-export const statusPrefix = (family, tag = '') =>
-  family === 'windows'
-    ? `release-status/windows/${tag}`
-    : `release-status/macos/${tag ? `${tag}/` : ''}`
+/** Legacy prefix from the old top-level release-status tree; next finalize deletes it. */
+export const legacyStatusPrefix = (family) => `release-status/${family}/`

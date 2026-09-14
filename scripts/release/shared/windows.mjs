@@ -7,7 +7,7 @@ import { promisify } from 'node:util'
 import { loadReleaseEnvironment } from './environment.mjs'
 import { assertReleaseFragment } from '../r2/fragment-contract.mjs'
 import { fetchWithRetry } from './http.mjs'
-import { artifactKey, statusKey } from '../r2/storage-layout.mjs'
+import { artifactKey, fragmentKey } from '../r2/storage-layout.mjs'
 import { DOMESTIC_DOWNLOAD_BASE_URL, resolveReleaseStorageConfig } from '../storage/config.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -162,7 +162,7 @@ export const readPublicReleaseFragment = async (
   publicBaseUrl = PUBLIC_RELEASE_BASE_URL
 ) => {
   const response = await fetch(
-    `${publicBaseUrl}/${statusKey(releaseTag, platform)}?check=${Date.now()}`,
+    `${publicBaseUrl}/${fragmentKey(releaseTag, platform)}?check=${Date.now()}`,
     { cache: 'no-store' }
   )
   if (response.status === 404) return undefined
@@ -184,7 +184,7 @@ export const verifyPublicReleaseFragment = async (
 ) => {
   for (const file of fragment.files) {
     const response = await fetchWithRetry(
-      `${publicBaseUrl}/${artifactKey(fragment, file.storageName)}`,
+      `${publicBaseUrl}/${artifactKey(fragment, file.name)}`,
       {
         method: 'HEAD',
         cache: 'no-store'
@@ -202,7 +202,7 @@ export const verifyReleaseStorageFragment = async (fragment, awsExecutable) => {
   const { createAwsCliRuntime } = await import('../storage/client.mjs')
   const runtime = await createAwsCliRuntime(config)
   for (const file of fragment.files) {
-    const key = artifactKey(fragment, file.storageName)
+    const key = artifactKey(fragment, file.name)
     const result = await commandResult(
       awsExecutable,
       [

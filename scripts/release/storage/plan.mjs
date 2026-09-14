@@ -9,7 +9,7 @@ const plan = {
   publicBaseUrl: String(process.env.COS_PUBLIC_BASE_URL || DOMESTIC_DOWNLOAD_BASE_URL),
   writes: [
     'artifacts/<platform>/<tag>/*',
-    'release-status/<tag>/<platform>.json',
+    'artifacts/<platform>/<tag>/fragment.json',
     'updates/latest/latest*.yml',
     'releases/latest/<platform>.json'
   ],

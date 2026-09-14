@@ -111,16 +111,18 @@ electron-builder 只从 `release-stage/app` 打包。安装包不得含源码、
 
 ```text
 artifacts/windows/windows-vX.Y.Z/*
+artifacts/windows/windows-vX.Y.Z/fragment.json
 artifacts/macos/mac-vX.Y.Z/*
-release-status/windows/windows-vX.Y.Z.json
-release-status/macos/mac-vX.Y.Z/macos-arm64.json
+artifacts/macos/mac-vX.Y.Z/fragment.json
 updates/latest/latest.yml
 updates/latest/latest-mac.yml
 releases/latest/windows.json
 releases/latest/macos.json
 ```
 
-`artifacts` 不可变长缓存；`updates/latest` 与 `releases/latest` 为 `no-store`。`latest.yml` / `latest-mac.yml` 供 electron-updater；`releases/latest/*.json` 供官网 `fetch` 后导航到 artifacts。
+`fragment.json` 是该 Tag 的发版快照（文件清单、sha512、更新 YAML、审计），给 upload → finalize 和 `release:status` 用，不是给官网或客户端的 live 指针。旧的顶层 `release-status/` 前缀在下一次该平台 finalize 时删除。
+
+CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=31536000, immutable`；`fragment.json`、`updates/latest` 与 `releases/latest` 为 `no-store`。控制台另保留 `/updates/latest`、`/releases/latest` 目录不缓存，作为源站头写错时的保险。`latest.yml` / `latest-mac.yml` 供 electron-updater；`releases/latest/*.json` 供官网 `fetch` 后导航到 artifacts。
 
 公开对象键使用用户可见文件名（如 `馆长-X.Y.Z-macos-arm64.dmg` / `馆长-X.Y.Z-Windows-x64.exe`），官网 `/api/download/*` 仍 307 到该直链；浏览器保存名取自 URL 末段。本地构建产物与 fragment 的 `storageName` 可仍为 ASCII（如 `Ncurator-mac-arm64.dmg`），仅用于解析磁盘文件。
 
@@ -130,7 +132,7 @@ releases/latest/macos.json
 
 仅当有意发布未来海外版时才切 R2（非当前常规循环）：`RELEASE_STORAGE_TARGET=r2`，并设置 `R2_ACCESS_KEY_ID`、`R2_SECRET_ACCESS_KEY`、`R2_ACCOUNT_ID`、`R2_BUCKET_NAME`、`R2_PUBLIC_BASE_URL=https://download.ncurator.com`。
 
-publish 上传候选与 fragment，更新该平台自动更新 metadata 与官网 manifest，验证公开 yml / 清单 / artifacts 的大小、sha512 与 manifest URL（安装包 URL 须以用户可见文件名结尾）。验证成功后标记 `published`，清理本地 `tests/logs/**`，并清理该平台更早 artifacts / release-status。失败、prepare-only、test-only 不清理 logs。
+publish 上传候选与 fragment，更新该平台自动更新 metadata 与官网 manifest，验证公开 yml / 清单 / artifacts 的大小、sha512 与 manifest URL（安装包 URL 须以用户可见文件名结尾）。验证成功后标记 `published`，清理本地 `tests/logs/**`，并清理该平台更早 artifacts（含旧 `release-status/`）。失败、prepare-only、test-only 不清理 logs。
 
 ### 本地保留与清理
 

@@ -2,6 +2,8 @@
 import { FiCheckCircle } from 'react-icons/fi'
 import { MdOutlineSmsFailed } from 'react-icons/md'
 import { RiForbidLine } from 'react-icons/ri'
+import { FaSpider } from 'react-icons/fa'
+import { PiBrowsers, PiEyes } from 'react-icons/pi'
 import {
   HiChevronDown,
   HiChevronRight,
@@ -9,7 +11,6 @@ import {
   HiOutlineAcademicCap,
   HiOutlineArchiveBox,
   HiOutlineArrowsUpDown,
-  HiOutlineArrowDownTray,
   HiOutlineBolt,
   HiOutlineBookOpen,
   HiOutlineCamera,
@@ -20,9 +21,7 @@ import {
   HiOutlineGlobeAlt,
   HiOutlineMagnifyingGlass,
   HiOutlinePhoto,
-  HiOutlinePencilSquare,
-  HiOutlineQueueList,
-  HiOutlineWindow
+  HiOutlinePencilSquare
 } from 'react-icons/hi2'
 import MarkdownRenderer from '../MarkdownRenderer'
 import type {
@@ -96,9 +95,9 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   if (iconKind === 'eye') return <HiOutlineEye {...iconProps} />
   if (iconKind === 'camera') return <HiOutlineCamera {...iconProps} />
   if (iconKind === 'scroll') return <HiOutlineArrowsUpDown {...iconProps} />
-  if (iconKind === 'extract') return <HiOutlineQueueList {...iconProps} />
-  if (iconKind === 'window') return <HiOutlineWindow {...iconProps} />
-  if (iconKind === 'fetch') return <HiOutlineArrowDownTray {...iconProps} />
+  if (iconKind === 'extract') return <PiEyes {...iconProps} />
+  if (iconKind === 'window') return <PiBrowsers {...iconProps} />
+  if (iconKind === 'fetch') return <FaSpider {...iconProps} />
   return <HiOutlineDocumentText {...iconProps} />
 }
 

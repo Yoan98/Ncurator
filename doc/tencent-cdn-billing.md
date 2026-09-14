@@ -29,7 +29,7 @@
 | HTTPS 请求 | HTTPS 访问次数 | 每月前 300 万次免费 | 更新检查通常够用，不买请求包 |
 | QUIC | 开启 QUIC 后按请求 | — | **不要开** |
 
-对象布局（与资费相关）：每平台只保留最新 `artifacts/...` 大文件并长缓存；`updates/latest`、`releases/latest` 指针不缓存。官网与自动更新共用同一 artifacts URL，减少回源。
+对象布局（与资费相关）：每平台只保留最新 `artifacts/...` 大文件；CDN 节点缓存遵循源站 `Cache-Control`（安装包一年 `immutable`，`fragment.json` 与 `updates/latest`、`releases/latest` 指针 `no-store`）。官网与自动更新共用同一 artifacts URL，减少回源。
 
 ## 3. 已落地的防刷 / 控费配置
 
@@ -42,6 +42,8 @@
 | 余额预警 | **低于 50 元** | 费用中心订阅；连续提醒最多约 5 天 |
 | 自动充值 | **不开** | 避免异常划卡 |
 | COS 默认域名 | 标「高风险」可忽略 | 不对用户暴露；对外只用自定义 CDN 域名 |
+| HTTP 头部缓存 | 已开启 | 透传源站 `Cache-Control` 等头部 |
+| 节点缓存 | 全部文件遵循源站；`/updates/latest`、`/releases/latest` 不缓存 | 安装包按源站一年 `immutable` 缓存；指针 `no-store`。浏览器缓存不另配，跟随源站头 |
 
 粗算：100GB/日封顶量级约对应「最多几十元级 CDN 日费」的上限（刊例约 0.21 元/GB），不是无限账单。
 

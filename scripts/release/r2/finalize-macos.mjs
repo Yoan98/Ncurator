@@ -7,7 +7,7 @@ import { promisify } from 'node:util'
 import { assertReleaseFragment } from './fragment-contract.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import { createReleaseStorageClient } from '../storage/client.mjs'
-import { artifactKey, statusKey } from './storage-layout.mjs'
+import { artifactKey, artifactPrefix, fragmentKey, legacyStatusPrefix } from './storage-layout.mjs'
 import { parseReleaseTag } from '../tag.mjs'
 
 const execFileAsync = promisify(execFile)
@@ -31,7 +31,7 @@ const downloadAndVerifyFragment = async (platform) => {
   await aws([
     's3',
     'cp',
-    `s3://${bucket}/${statusKey(releaseTag, platform)}`,
+    `s3://${bucket}/${fragmentKey(releaseTag, platform)}`,
     target,
     '--no-progress'
   ])
@@ -164,28 +164,20 @@ try {
     throw new Error('public macOS release manifest verification failed')
   }
 
-  const removable = (await listKeys('artifacts/macos/')).filter(
-    (key) => !key.startsWith(`artifacts/macos/${releaseTag}/`)
+  const uploadedFragmentKey = fragmentKey(releaseTag, arm64.platform)
+  const removable = (await listKeys(artifactPrefix('macos'))).filter(
+    (key) => !key.startsWith(artifactPrefix('macos', releaseTag))
   )
-  const activeArtifactKeys = new Set(
-    arm64.files.map((file) => artifactKey(arm64, file.name))
-  )
+  const activeArtifactKeys = new Set([
+    uploadedFragmentKey,
+    ...arm64.files.map((file) => artifactKey(arm64, file.name))
+  ])
   removable.push(
-    ...(await listKeys(`artifacts/macos/${releaseTag}/`)).filter(
+    ...(await listKeys(artifactPrefix('macos', releaseTag))).filter(
       (key) => !activeArtifactKeys.has(key)
     )
   )
-  removable.push(
-    ...(await listKeys('release-status/macos/')).filter(
-      (key) => !key.startsWith(`release-status/macos/${releaseTag}/`)
-    )
-  )
-  const activeStatusKey = statusKey(releaseTag, arm64.platform)
-  removable.push(
-    ...(await listKeys(`release-status/macos/${releaseTag}/`)).filter(
-      (key) => key !== activeStatusKey
-    )
-  )
+  removable.push(...(await listKeys(legacyStatusPrefix('macos'))))
   await deleteKeys(removable)
   process.stdout.write(`[release] macOS arm64 ${releaseTag} is live at ${installerUrl}\n`)
 } finally {

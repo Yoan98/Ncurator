@@ -7,6 +7,8 @@ import { workbenchSelectors } from '../testing/selectors'
 
 const { Text } = Typography
 
+const LLM_CONFIG_MISSING_SHOWN_STORAGE_KEY = 'workbench.llm-config-missing.shown'
+
 export interface NotificationItem {
   id: string
   title: string
@@ -15,6 +17,22 @@ export interface NotificationItem {
   action: {
     label: string
     onClick: () => void
+  }
+}
+
+const hasShownLlmConfigMissing = (): boolean => {
+  try {
+    return window.localStorage.getItem(LLM_CONFIG_MISSING_SHOWN_STORAGE_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+const markLlmConfigMissingShown = (): void => {
+  try {
+    window.localStorage.setItem(LLM_CONFIG_MISSING_SHOWN_STORAGE_KEY, '1')
+  } catch {
+    // ignore quota / private-mode failures; in-memory dismiss still applies
   }
 }
 
@@ -48,7 +66,8 @@ const NotificationCenter: React.FC = () => {
       const config = await getActiveConfig()
       if (disposed) return
       if (!config) {
-        if (isWorkbenchPage) {
+        if (isWorkbenchPage && !hasShownLlmConfigMissing()) {
+          markLlmConfigMissingShown()
           updateNotification('llm-config-missing', {
             id: 'llm-config-missing',
             title: '未配置大模型 API',

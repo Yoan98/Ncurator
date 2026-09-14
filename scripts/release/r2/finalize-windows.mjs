@@ -3,7 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { assertReleaseFragment } from './fragment-contract.mjs'
-import { artifactKey, statusKey } from './storage-layout.mjs'
+import { artifactKey, artifactPrefix, fragmentKey, legacyStatusPrefix } from './storage-layout.mjs'
 import { createReleaseStorageClient } from '../storage/client.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'
 import { parseReleaseTag } from '../tag.mjs'
@@ -27,7 +27,7 @@ try {
   await aws([
     's3',
     'cp',
-    `s3://${bucket}/${statusKey(releaseTag, 'windows-x64')}`,
+    `s3://${bucket}/${fragmentKey(releaseTag, 'windows-x64')}`,
     fragmentPath,
     '--no-progress'
   ])
@@ -146,14 +146,10 @@ try {
     throw new Error('public Windows release manifest verification failed')
   }
 
-  const removable = (await listKeys('artifacts/windows/')).filter(
-    (key) => !key.startsWith(`artifacts/windows/${releaseTag}/`)
+  const removable = (await listKeys(artifactPrefix('windows'))).filter(
+    (key) => !key.startsWith(artifactPrefix('windows', releaseTag))
   )
-  removable.push(
-    ...(await listKeys('release-status/windows/')).filter(
-      (key) => key !== statusKey(releaseTag, 'windows-x64')
-    )
-  )
+  removable.push(...(await listKeys(legacyStatusPrefix('windows'))))
   await deleteKeys(removable)
   process.stdout.write(
     `[release] Windows ${releaseTag} is live at ${installerUrl}\n`
