@@ -31,6 +31,8 @@ import { SystemNotificationService } from './services/SystemNotificationService'
 import { TelemetryService } from './services/telemetry/TelemetryService'
 import { AppErrorLogService } from './services/logging/AppErrorLogService'
 import { DatabaseVersionTooNewError, SqliteCore } from './services/storage/sqlite/SqliteCore'
+import { WpsSyncService } from './services/wps/WpsSyncService'
+import { setOfficeFileWriteListener } from './services/wps/officeFileWriteNotify'
 
 if (!app.isPackaged) {
   loadRootEnvOnce()
@@ -403,9 +405,24 @@ if (!singleInstanceLock) {
       telemetryService,
       errorLogService
     })
+    const wpsSyncService = new WpsSyncService()
+    setOfficeFileWriteListener((filePath) => wpsSyncService.notifyWritten(filePath))
+    await wpsSyncService.start().catch((error) => {
+      console.warn(
+        '[WPS-SYNC] start skipped:',
+        error instanceof Error ? error.message : String(error)
+      )
+    })
     telemetryService.track('app_started')
     appUpdateService.checkForUpdatesOnLaunch()
 
+    shutdownCoordinator.register({
+      name: 'wps-sync',
+      dispose: async () => {
+        setOfficeFileWriteListener(undefined)
+        await wpsSyncService.stop()
+      }
+    })
     shutdownCoordinator.register({
       name: 'workspace-index-jobs',
       dispose: () => storageService.failInterruptedWorkspaceIndexJobs()

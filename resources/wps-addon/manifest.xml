@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest xmlns="http://schemas.wps.cn/oaassist/2019/manifest"
+          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <id>ncurator-sync</id>
+  <version>1.0.0</version>
+  <name>馆长</name>
+  <description>本地文件被改写后刷新已打开的 WPS 文档。</description>
+  <author>ncurator</author>
+  <hosts>
+    <host name="wps"/>
+    <host name="et"/>
+    <host name="wpp"/>
+  </hosts>
+  <permissions>
+    <permission name="document.read"/>
+    <permission name="document.write"/>
+  </permissions>
+  <ribbon src="ribbon.xml"/>
+  <scripts>
+    <script src="main.js"/>
+  </scripts>
+</manifest>

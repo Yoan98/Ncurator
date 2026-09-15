@@ -17,6 +17,10 @@ extraResources:
     to: open-with
     filter:
       - '**/*'
+  - from: release-stage/app/resources/wps-addon
+    to: wps-addon
+    filter:
+      - '**/*'
   - from: release-stage/app/resources/web_crawler_sidecar/bin
     to: web_crawler_sidecar/bin
     filter:

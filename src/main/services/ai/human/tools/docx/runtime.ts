@@ -28,6 +28,7 @@ import {
   createReplaySnapshot
 } from './review/replayTree'
 import { isLegacyDocPath, isReadableWordPath } from './legacyDocPolicy'
+import { notifyOfficeFileWritten } from '../../../../wps/officeFileWriteNotify'
 
 type FailedWorkerResponse = Extract<DocxWorkerResponse, { ok: false }>
 
@@ -963,6 +964,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         await fs.rm(backupPath, { force: true })
         hasBackup = false
       }
+      notifyOfficeFileWritten(sourcePath)
       return {
         checksum,
         byteSize: buffer.byteLength,
@@ -974,6 +976,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
           await fs.rm(sourcePath, { force: true })
           await fs.rename(backupPath, sourcePath)
           hasBackup = false
+          notifyOfficeFileWritten(sourcePath)
         } catch {
           // Preserve the original error. The backup remains beside the target for recovery.
           preserveBackup = true

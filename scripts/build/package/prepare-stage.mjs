@@ -24,6 +24,7 @@ const ROOT_LOCKFILE_PATH = path.join(ROOT, 'pnpm-lock.yaml')
 const SIDECAR_BIN_DIR = path.join(ROOT, 'resources', 'web_crawler_sidecar', 'bin')
 const NATIVE_RESOURCE_DIR = path.join(ROOT, 'resources', 'native')
 const OPEN_WITH_RESOURCE_DIR = path.join(ROOT, 'resources', 'open-with')
+const WPS_ADDON_RESOURCE_DIR = path.join(ROOT, 'resources', 'wps-addon')
 const VC_REDIST_DIR = path.join(ROOT, 'build', 'vc-redist', 'win-x64')
 const RUNTIME_TRACE_POLICY_PATH = path.join(ROOT, 'build', 'runtime-trace-policy.json')
 const RUNTIME_TRACE_REPORT_PATH = path.join(ROOT, 'release-stage', 'runtime-trace-report.json')
@@ -412,7 +413,7 @@ const pruneStagedResources = () => {
       const lowerName = entry.name.toLowerCase()
       if (entry.isSymbolicLink()) continue
       if (entry.isDirectory()) {
-        if (lowerName === 'open-with') continue
+        if (lowerName === 'open-with' || lowerName === 'wps-addon') continue
         if (
           REMOVE_DIRECTORY_NAMES.has(lowerName) ||
           lowerName === 'patchright' ||
@@ -498,6 +499,11 @@ const main = async () => {
     verbatimSymlinks: true
   })
   fs.cpSync(OPEN_WITH_RESOURCE_DIR, path.join(STAGE_DIR, 'resources', 'open-with'), {
+    recursive: true,
+    force: true,
+    verbatimSymlinks: true
+  })
+  fs.cpSync(WPS_ADDON_RESOURCE_DIR, path.join(STAGE_DIR, 'resources', 'wps-addon'), {
     recursive: true,
     force: true,
     verbatimSymlinks: true

@@ -21,6 +21,7 @@ import {
   ensurePartnerRuntimeDirs,
   getPartnerObjectsDir
 } from '../../assets/WorkspaceAssetService'
+import { notifyOfficeFileWritten } from '../../wps/officeFileWriteNotify'
 
 const FORCE_REVERT_WARNING =
   '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。'
@@ -232,6 +233,11 @@ export class AiFileChangeService {
         await fs.copyFile(record.beforeSnapshotPath, tempOutputPath)
         await fs.rm(restorePath, { force: true })
         await fs.rename(tempOutputPath, restorePath)
+      }
+
+      notifyOfficeFileWritten(currentPath)
+      if (record.operation !== 'created') {
+        notifyOfficeFileWritten(record.beforePath || record.path)
       }
 
       const reverted: AiFileChangeRecord = {

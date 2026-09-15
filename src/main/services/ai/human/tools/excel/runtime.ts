@@ -11,6 +11,7 @@ import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { ExcelCapabilityToolsInput, ExcelRuntimeState, ExcelToolRuntime } from './types'
 import type { ExcelEditInput, ExcelReadInput, ExcelStyle } from './toolSchemas'
 import { EXCEL_SEARCH_MAX_MATCHES } from './constants'
+import { notifyOfficeFileWritten } from '../../../../wps/officeFileWriteNotify'
 
 const EXCEL_READ_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xltx', '.xltm'])
 const EXCEL_WRITE_EXTENSIONS = new Set(['.xlsx'])
@@ -107,6 +108,7 @@ const atomicReplace = async (sourcePath: string, bytes: Buffer): Promise<void> =
     await fs.rm(tempPath, { force: true }).catch(() => undefined)
     throw error
   })
+  notifyOfficeFileWritten(sourcePath)
 }
 
 const cellKey = (sheetName: string, address: string): string => `${sheetName}\u0000${address}`

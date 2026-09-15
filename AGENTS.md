@@ -81,6 +81,7 @@
 ├── resources/                        # 运行期资源
 │   ├── native/                       # 原生模块预编译产物
 │   ├── open-with/                    # 系统打开方式相关资源
+│   ├── wps-addon/                    # WPS 离线 JS 加载项
 │   └── web_crawler_sidecar/          # 网页抓取 sidecar 资源
 ├── scripts/                          # 工程脚本
 │   ├── postinstall.mjs               # 安装后的唯一根级入口

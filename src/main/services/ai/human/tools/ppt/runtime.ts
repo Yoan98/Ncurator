@@ -130,6 +130,7 @@ import type {
   PptRuntimeDocument,
   PptToolRuntime
 } from './types'
+import { notifyOfficeFileWritten } from '../../../../wps/officeFileWriteNotify'
 
 export { buildPptDiffManifest } from './diff'
 
@@ -161,12 +162,14 @@ const replaceFileWithBytes = async (targetPath: string, bytes: Uint8Array): Prom
       await fs.rm(targetPath, { force: true })
       await fs.rename(tempPath, targetPath)
     }
+    notifyOfficeFileWritten(targetPath)
   } catch (error) {
     if (hasBackup) {
       try {
         await fs.rm(targetPath, { force: true })
         await fs.rename(backupPath, targetPath)
         hasBackup = false
+        notifyOfficeFileWritten(targetPath)
       } catch {
         // Preserve the original error. The backup remains beside the target for recovery.
         preserveBackup = true

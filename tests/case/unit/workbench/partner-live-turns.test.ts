@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resumeAssistantTurnFromLive } from '../../../../src/renderer/src/components/workbench/partnerLiveTurns'
-import type { AssistantTurnViewModel } from '../../../../src/renderer/src/components/workbench/types'
+import {
+  resumeAssistantTurnFromLive,
+  type AssistantTurnViewModel
+} from '../../../harness/core/partnerLiveTurns'
 
 const createTurn = (
   overrides: Partial<AssistantTurnViewModel> = {}
