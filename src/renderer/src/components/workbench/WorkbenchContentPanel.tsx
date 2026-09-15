@@ -8,7 +8,8 @@ import {
   HiDocumentText,
   HiFolder,
   HiFolderOpen,
-  HiChevronDown
+  HiChevronDown,
+  HiOutlineQuestionMarkCircle
 } from 'react-icons/hi2'
 import type {
   AiFileChangeRecord,
@@ -28,6 +29,7 @@ import { TextFileDiffViewer } from './TextFileDiffViewer'
 import PptDiffViewer from './PptDiffViewer'
 import WorkbenchTabBar from './WorkbenchTabBar'
 import WorkspaceFileExplorer, { type WorkspaceFileExplorerMode } from './WorkspaceFileExplorer'
+import { shouldShowWpsOpenWithHint, WPS_OPEN_WITH_HINT } from './wpsOpenWithHint'
 
 type WorkbenchContentPanelProps = {
   state: WorkbenchContentPanelState
@@ -241,6 +243,7 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
   const showReviewActions = mode === 'edit' && (!onSwitchDisplayMode || displayMode === 'review')
   const defaultApplication = openWithApplications.find((application) => application.isDefault)
   const openWithLabel = defaultApplication?.name || '系统默认打开'
+  const showWpsOpenWithHint = shouldShowWpsOpenWithHint(filePath, openWithApplications)
   const showExternalApplicationHint = (): void => {
     if (showStaleExternalApplicationHint) {
       onInfoMessage('如果外部应用仍显示旧内容，请关闭该文档后重新打开。')
@@ -407,6 +410,18 @@ export const WorkbenchDocumentPreviewPanelBase: React.FC<WorkbenchDocumentPrevie
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {showWpsOpenWithHint ? (
+            <Tooltip title={WPS_OPEN_WITH_HINT} placement="bottom">
+              <button
+                type="button"
+                className="flex h-8 w-7 shrink-0 cursor-help items-center justify-center text-[#91918E] transition-colors hover:text-[#37352F]"
+                aria-label={WPS_OPEN_WITH_HINT}
+                data-testid={workbenchSelectors.wpsOpenWithHint}
+              >
+                <HiOutlineQuestionMarkCircle className="h-4 w-4" />
+              </button>
+            </Tooltip>
+          ) : null}
           <Dropdown
             trigger={['click']}
             placement="bottomRight"

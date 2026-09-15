@@ -18,6 +18,7 @@ import {
   setWorkbenchInput,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
+import { isWpsOpenWithApplication } from '../../../../../src/renderer/src/components/workbench/wpsOpenWithHint'
 
 const CASE_ID = 'file-preview-actions'
 
@@ -186,6 +187,20 @@ const verifyDocxPreviewStaysMountedWhileTyping = async (page: Page): Promise<boo
   return !viewerWasRemoved && viewerStillVisible
 }
 
+const readWpsHintVisible = async (page: Page): Promise<boolean> =>
+  getWorkbenchLocator(page, workbenchSelectors.wpsOpenWithHint)
+    .isVisible()
+    .catch(() => false)
+
+const readOpenWithHasWps = async (page: Page): Promise<boolean> => {
+  await page.getByRole('button', { name: '选择打开应用' }).last().click()
+  const items = getWorkbenchPrefixLocator(page, workbenchSelectors.openWithApplicationPrefix)
+  await items.first().waitFor({ state: 'visible', timeout: 15_000 })
+  const labels = await items.allTextContents()
+  await page.keyboard.press('Escape')
+  return labels.some((label) => isWpsOpenWithApplication({ name: label }))
+}
+
 describe('workbench result e2e', () => {
   it(
     CASE_ID,
@@ -209,6 +224,7 @@ describe('workbench result e2e', () => {
           const pdfPageVisible = await waitForPdfPreviewPage(page)
           await page.getByRole('button', { name: '选择打开应用' }).last().click()
           await page.getByRole('menuitem', { name: '打开所在文件夹' }).last().click()
+          const pdfWpsHintVisible = await readWpsHintVisible(page)
 
           await openWorkbenchWorkspaceFile(runtime, '学习笔记/深度学习.docx')
           const docxViewerVisible = await getWorkbenchLocator(page, workbenchSelectors.docxViewer)
@@ -225,11 +241,15 @@ describe('workbench result e2e', () => {
             .last()
             .isVisible()
             .catch(() => false)
+          const docxOpenWithHasWps = await readOpenWithHasWps(page)
+          const docxWpsHintVisible = await readWpsHintVisible(page)
           await openWorkbenchWorkspaceFile(runtime, 'workbench-preview.md')
           const markdownPreviewVisible = await waitForMarkdownPreview(page)
+          const markdownWpsHintVisible = await readWpsHintVisible(page)
 
           await openWorkbenchWorkspaceFile(runtime, 'human-input.txt')
           const plainTextPreviewVisible = await waitForPlainTextPreview(page)
+          const txtWpsHintVisible = await readWpsHintVisible(page)
           const openWithMenuButton = page.getByRole('button', { name: '选择打开应用' }).last()
           await openWithMenuButton.click()
           const openWithApplicationItems = getWorkbenchPrefixLocator(
@@ -262,6 +282,9 @@ describe('workbench result e2e', () => {
             .catch(() => false)
           const excelPreviewResults: boolean[] = []
           let excelPreviewReadOnly = false
+          let xlsxOpenWithHasWps = false
+          let xlsxWpsHintVisible = false
+          let xlsmWpsHintVisible = false
           const workspaceFileFilter = page.getByPlaceholder('筛选文件…')
           for (const extension of ['xlsx', 'xlsm', 'xltx', 'xltm']) {
             const fileName = `normal-preview.${extension}`
@@ -272,7 +295,12 @@ describe('workbench result e2e', () => {
             await workspaceFileFilter.fill(fileName)
             await page.getByTitle(fileName, { exact: true }).click()
             excelPreviewResults.push(await waitForExcelPreview(page, fileName))
-            if (extension === 'xlsx') excelPreviewReadOnly = await verifyExcelPreviewReadOnly(page)
+            if (extension === 'xlsx') {
+              excelPreviewReadOnly = await verifyExcelPreviewReadOnly(page)
+              xlsxOpenWithHasWps = await readOpenWithHasWps(page)
+              xlsxWpsHintVisible = await readWpsHintVisible(page)
+            }
+            if (extension === 'xlsm') xlsmWpsHintVisible = await readWpsHintVisible(page)
           }
           const resourceTabCount = await resourceTabs.count()
           const launcherTabCount = await resourceTabs.filter({ hasText: '打开文件' }).count()
@@ -280,6 +308,14 @@ describe('workbench result e2e', () => {
 
           return {
             pdfPageVisible,
+            pdfWpsHintVisible,
+            docxOpenWithHasWps,
+            docxWpsHintVisible,
+            markdownWpsHintVisible,
+            txtWpsHintVisible,
+            xlsxOpenWithHasWps,
+            xlsxWpsHintVisible,
+            xlsmWpsHintVisible,
             docxViewerVisible,
             docxModeTagCount,
             docxPreviewStableWhileTyping,
@@ -325,11 +361,17 @@ describe('workbench result e2e', () => {
               result.workspaceFileFilterVisible &&
               result.resourceTabCount === 8 &&
               result.launcherTabCount === 0 &&
-              result.revealPathCalls >= 1,
+              result.revealPathCalls >= 1 &&
+              !result.pdfWpsHintVisible &&
+              result.docxWpsHintVisible === result.docxOpenWithHasWps &&
+              !result.markdownWpsHintVisible &&
+              !result.txtWpsHintVisible &&
+              result.xlsxWpsHintVisible === result.xlsxOpenWithHasWps &&
+              !result.xlsmWpsHintVisible,
             {
               name: 'workbench-file-preview-actions-real',
               message:
-                '右侧普通文件预览应能打开真实 pdf/docx/md/txt/xlsx/xlsm/xltx/xltm，并通过系统关联应用查询提供打开方式下拉和默认标记；文件从工作区文件列表打开；从“打开文件”选择器选中文件后选择器 Tab 被文件 Tab 原位替换，不残留。',
+                '右侧普通文件预览应能打开真实 pdf/docx/md/txt/xlsx/xlsm/xltx/xltm，并通过系统关联应用查询提供打开方式下拉和默认标记；docx/xlsx 在打开方式含 WPS 时显示授权问号，其它格式不显示；文件从工作区文件列表打开；从“打开文件”选择器选中文件后选择器 Tab 被文件 Tab 原位替换，不残留。',
               data: result
             }
           )

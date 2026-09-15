@@ -248,6 +248,7 @@ export const workbenchSelectors = {
   openWithButton: 'workbench-open-with-button',
   openWithMenu: 'workbench-open-with-menu',
   openWithApplicationPrefix: 'workbench-open-with-application',
+  wpsOpenWithHint: 'workbench-wps-open-with-hint',
   documentModeToggle: 'workbench-document-mode-toggle',
   browserPanel: 'workbench-browser-panel',
   browserViewport: 'workbench-browser-viewport',
