@@ -36,10 +36,55 @@ const readBytes = async (document: XlsxDocument): Promise<ArrayBuffer> => {
   throw new Error('缺少 Excel 预览数据')
 }
 
+const DIFF_MARKER_RGB = new Set(['#22A06B', '#D14343'])
+
 const color = (input?: Partial<ExcelJS.Color>): { rgb: string } | undefined => {
   const argb = input?.argb
   if (!argb) return undefined
   return { rgb: `#${argb.slice(-6)}` }
+}
+
+const isDiffMarkerColor = (input?: Partial<ExcelJS.Color>): boolean => {
+  const rgb = color(input)?.rgb
+  return Boolean(rgb && DIFF_MARKER_RGB.has(rgb.toUpperCase()))
+}
+
+const cellHasDiffMarkerBorder = (cell: ExcelJS.Cell): boolean => {
+  const border = cell.border
+  if (!border) return false
+  return [border.top, border.right, border.bottom, border.left].some(
+    (side) => side?.style === 'medium' && isDiffMarkerColor(side.color)
+  )
+}
+
+const sheetHasDiffMarker = (sheet: ExcelJS.Worksheet): boolean => {
+  if (isDiffMarkerColor(sheet.properties.tabColor)) return true
+  let found = false
+  sheet.eachRow({ includeEmpty: true }, (row) => {
+    if (found) return
+    row.eachCell({ includeEmpty: true }, (cell) => {
+      if (!found && cellHasDiffMarkerBorder(cell)) found = true
+    })
+  })
+  return found
+}
+
+const sheetPreviewId = (sheet: ExcelJS.Worksheet): string => `sheet-${String(sheet.id)}`
+
+const escapeCssIdent = (value: string): string => {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value)
+  return value.replace(/([^\w-])/g, '\\$1')
+}
+
+const changedSheetDotStyle = (sheetIds: string[]): string => {
+  if (sheetIds.length === 0) return ''
+  return sheetIds
+    .map((id) => {
+      const selector = `[data-testid="${workbenchSelectors.excelViewer}"] [data-u-comp="slide-tab-item"][data-id="${escapeCssIdent(id)}"]`
+      return `${selector}{position:relative;overflow:visible;}
+${selector}::after{content:"";position:absolute;top:2px;right:2px;width:6px;height:6px;border-radius:50%;background:#22A06B;box-shadow:0 0 0 1px #fff;pointer-events:none;}`
+    })
+    .join('')
 }
 
 const borderStyle = (
@@ -125,14 +170,26 @@ const cellData = (cell: ExcelJS.Cell): ICellData => {
   }
 }
 
-const toWorkbookData = async (bytes: ArrayBuffer, name: string): Promise<IWorkbookData> => {
+type ExcelPreviewWorkbook = {
+  data: IWorkbookData
+  changedSheetIds: string[]
+  changedSheetNames: string[]
+}
+
+const toWorkbookData = async (bytes: ArrayBuffer, name: string): Promise<ExcelPreviewWorkbook> => {
   const workbook = new ExcelJS.Workbook()
   await workbook.xlsx.load(bytes as never)
   const sheets: Record<string, Partial<IWorksheetData>> = {}
   const sheetOrder: string[] = []
+  const changedSheetIds: string[] = []
+  const changedSheetNames: string[] = []
   workbook.eachSheet((sheet) => {
-    const id = `sheet-${String(sheet.id)}`
+    const id = sheetPreviewId(sheet)
     sheetOrder.push(id)
+    if (sheetHasDiffMarker(sheet)) {
+      changedSheetIds.push(id)
+      changedSheetNames.push(sheet.name)
+    }
     const cells: Record<number, Record<number, ICellData>> = {}
     sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
       row.eachCell({ includeEmpty: false }, (cell, columnNumber) => {
@@ -175,13 +232,17 @@ const toWorkbookData = async (bytes: ArrayBuffer, name: string): Promise<IWorkbo
   })
   if (sheetOrder.length === 0) throw new Error('工作簿没有可预览的工作表')
   return {
-    id: `xlsx-${Date.now().toString(36)}`,
-    name,
-    appVersion: '1.0.0',
-    locale: LocaleType.ZH_CN,
-    styles: {},
-    sheetOrder,
-    sheets
+    data: {
+      id: `xlsx-${Date.now().toString(36)}`,
+      name,
+      appVersion: '1.0.0',
+      locale: LocaleType.ZH_CN,
+      styles: {},
+      sheetOrder,
+      sheets
+    },
+    changedSheetIds,
+    changedSheetNames
   }
 }
 
@@ -206,6 +267,8 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   const containerRef = useRef<HTMLDivElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
+  const [changedSheetIds, setChangedSheetIds] = useState<string[]>([])
+  const [changedSheetNames, setChangedSheetNames] = useState<string[]>([])
 
   useEffect(() => {
     if (!document || !containerRef.current) return
@@ -214,6 +277,8 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
     let dispose: (() => void) | undefined
     setReady(false)
     setError(null)
+    setChangedSheetIds([])
+    setChangedSheetNames([])
     void Promise.all([
       readBytes(document).then((bytes) => toWorkbookData(bytes, document.fileName || 'Excel')),
       import('@univerjs/core'),
@@ -223,7 +288,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
     ])
       .then(
         async ([
-          data,
+          preview,
           { Univer, LogLevel },
           { FUniver },
           { UniverSheetsCorePreset },
@@ -265,7 +330,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
             )
           }
           const univerAPI = FUniver.newAPI(univer)
-          univerAPI.createWorkbook(data)
+          univerAPI.createWorkbook(preview.data)
           dispose = () => univer.dispose()
           if (cancelled) {
             dispose()
@@ -273,12 +338,18 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
           }
           const canvasReady = await waitForRenderedCanvas(container, () => cancelled)
           if (!cancelled && !canvasReady) throw new Error('Excel 预览画布加载超时')
-          if (!cancelled) setReady(true)
+          if (!cancelled) {
+            setChangedSheetIds(preview.changedSheetIds)
+            setChangedSheetNames(preview.changedSheetNames)
+            setReady(true)
+          }
         }
       )
       .catch((reason) => {
         if (!cancelled) {
           setReady(false)
+          setChangedSheetIds([])
+          setChangedSheetNames([])
           setError(reason instanceof Error ? reason.message : String(reason))
         }
       })
@@ -290,6 +361,7 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
   }, [document])
 
   if (!document) return null
+  const sheetDotCss = changedSheetDotStyle(changedSheetIds)
   return (
     <div
       className="relative h-full w-full bg-white"
@@ -297,7 +369,9 @@ const CustomXlsxRenderer = ({ mainState }: DocRendererProps) => {
       data-excel-ready={ready ? 'true' : 'false'}
       data-excel-file-name={document.fileName || ''}
       data-excel-uri={document.uri || ''}
+      data-excel-changed-sheets={JSON.stringify(changedSheetNames)}
     >
+      {sheetDotCss ? <style>{sheetDotCss}</style> : null}
       {error ? (
         <div className="flex h-full items-center justify-center text-sm text-[#787774]">
           Excel 预览失败：{error}

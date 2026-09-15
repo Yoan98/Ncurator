@@ -67,6 +67,26 @@ describe('workbench result e2e', () => {
             { timeout: 30_000 }
           )
           const diffCanvasVisible = (await viewer.locator('canvas').count()) > 0
+          const rawChangedSheets = await viewer.getAttribute('data-excel-changed-sheets')
+          const parsedChangedSheets: unknown = rawChangedSheets ? JSON.parse(rawChangedSheets) : []
+          const diffChangedSheets = Array.isArray(parsedChangedSheets)
+            ? parsedChangedSheets.filter((item): item is string => typeof item === 'string')
+            : []
+          const sheetTabHasChangeDot = async (sheetName: string): Promise<boolean> =>
+            page.evaluate(
+              ({ testId, sheetName }) => {
+                const root = document.querySelector(`[data-testid="${testId}"]`)
+                if (!root) return false
+                const tab = Array.from(root.querySelectorAll('[data-u-comp="slide-tab-item"]')).find(
+                  (item) => item.textContent?.trim() === sheetName
+                )
+                if (!tab) return false
+                return getComputedStyle(tab, '::after').backgroundColor === 'rgb(34, 160, 107)'
+              },
+              { testId: workbenchSelectors.excelViewer, sheetName }
+            )
+          const diffDataTabHasDot = await sheetTabHasChangeDot('Data')
+          const diffNotesTabHasDot = await sheetTabHasChangeDot('Notes')
           const notesSheetTab = viewer.getByText('Notes', { exact: true }).last()
           await notesSheetTab.click()
           const notesSheetVisible = await notesSheetTab.isVisible().catch(() => false)
@@ -85,6 +105,9 @@ describe('workbench result e2e', () => {
             dataValue: workbook.getWorksheet('Data')?.getCell('B2').value,
             notesValue: workbook.getWorksheet('Notes')?.getCell('A1').value,
             diffCanvasVisible,
+            diffChangedSheets,
+            diffDataTabHasDot,
+            diffNotesTabHasDot,
             notesSheetVisible,
             fileExistsAfterRevert,
             toolNames: evidence.events
@@ -99,6 +122,10 @@ describe('workbench result e2e', () => {
               result.dataValue === 12 &&
               result.notesValue === 'created by AI' &&
               result.diffCanvasVisible &&
+              result.diffChangedSheets.includes('Data') &&
+              result.diffChangedSheets.includes('Notes') &&
+              result.diffDataTabHasDot &&
+              result.diffNotesTabHasDot &&
               result.notesSheetVisible &&
               result.fileExistsAfterRevert === false &&
               result.toolNames.includes('excel_edit') &&

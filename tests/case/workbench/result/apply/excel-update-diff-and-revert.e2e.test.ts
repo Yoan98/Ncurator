@@ -121,6 +121,30 @@ describe('workbench result e2e', () => {
             )
           }
           await waitForExcelReady()
+          const readChangedSheets = async (): Promise<string[]> => {
+            const raw = await viewer.getAttribute('data-excel-changed-sheets')
+            if (!raw) return []
+            const parsed: unknown = JSON.parse(raw)
+            return Array.isArray(parsed)
+              ? parsed.filter((item): item is string => typeof item === 'string')
+              : []
+          }
+          const sheetTabHasChangeDot = async (sheetName: string): Promise<boolean> =>
+            page.evaluate(
+              ({ testId, sheetName }) => {
+                const root = document.querySelector(`[data-testid="${testId}"]`)
+                if (!root) return false
+                const tab = Array.from(root.querySelectorAll('[data-u-comp="slide-tab-item"]')).find(
+                  (item) => item.textContent?.trim() === sheetName
+                )
+                if (!tab) return false
+                return getComputedStyle(tab, '::after').backgroundColor === 'rgb(34, 160, 107)'
+              },
+              { testId: workbenchSelectors.excelViewer, sheetName }
+            )
+          const diffChangedSheets = await readChangedSheets()
+          const diffDataTabHasDot = await sheetTabHasChangeDot('Data')
+          const diffNotesTabHasDot = await sheetTabHasChangeDot('Notes')
           await getWorkbenchLocator(page, workbenchSelectors.applyOpenSystemButton).click()
           const xlsxOpenWithApplication = page
             .locator(`[data-testid^="${workbenchSelectors.openWithApplicationPrefix}-"]`)
@@ -148,6 +172,8 @@ describe('workbench result e2e', () => {
           const diffUri = await viewer.getAttribute('data-excel-uri')
           await documentModeToggle.click()
           await waitForExcelReady(diffUri)
+          const previewChangedSheets = await readChangedSheets()
+          const previewDataTabHasDot = await sheetTabHasChangeDot('Data')
           const fileModeToggleLabel = await documentModeToggle.getAttribute('aria-label')
           const previewModeTag = (await documentModeTag.textContent())?.trim()
           const fileReadOnly = await verifyExcelViewerReadOnly(page)
@@ -195,6 +221,11 @@ describe('workbench result e2e', () => {
             externalApplicationHintVisible,
             diffCanvasVisible,
             diffReadOnly,
+            diffChangedSheets,
+            diffDataTabHasDot,
+            diffNotesTabHasDot,
+            previewChangedSheets,
+            previewDataTabHasDot,
             diffNotesSheetVisible,
             initialToggleLabel,
             fileModeToggleLabel,
@@ -221,6 +252,12 @@ describe('workbench result e2e', () => {
               result.externalApplicationHintVisible &&
               result.diffCanvasVisible &&
               result.diffReadOnly &&
+              result.diffChangedSheets.includes('Data') &&
+              result.diffChangedSheets.includes('Notes') === false &&
+              result.diffDataTabHasDot &&
+              result.diffNotesTabHasDot === false &&
+              result.previewChangedSheets.length === 0 &&
+              result.previewDataTabHasDot === false &&
               result.diffNotesSheetVisible &&
               result.initialModeTag === '审核' &&
               result.previewModeTag === '预览' &&
