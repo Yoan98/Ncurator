@@ -157,10 +157,37 @@ describe('WPS authaddin merge', () => {
       enable: true,
       mode: 2,
       name: 'ncurator-sync',
-      path: 'http://127.0.0.1:58123/addon'
+      path: 'http://127.0.0.1:58123/addon/'
     })
     expect(parsed.et.other.path).toBe('/tmp/other')
     expect(parsed.et.other.mode).toBe(1)
+  })
+
+  it('drops orphan namelist hashes so incomplete PPT/Excel auth can prompt again', () => {
+    const merged = mergeAuthAddin(
+      JSON.stringify({
+        et: {
+          abc: {
+            enable: true,
+            mode: 2,
+            name: 'ncurator-sync',
+            path: 'http://127.0.0.1:56749/addon'
+          },
+          namelist: 'abc'
+        },
+        wpp: {
+          namelist: 'abc'
+        }
+      }),
+      'http://127.0.0.1:58123/addon'
+    )
+    const parsed = JSON.parse(merged) as {
+      et: { abc: { path: string }; namelist?: string }
+      wpp: { namelist?: string }
+    }
+    expect(parsed.et.abc.path).toBe('http://127.0.0.1:58123/addon/')
+    expect(parsed.et.namelist).toBe('abc')
+    expect(parsed.wpp.namelist).toBeUndefined()
   })
 })
 
@@ -258,7 +285,13 @@ describe('office file write notify', () => {
     setOfficeFileWriteListener((filePath) => received.push(filePath))
     notifyOfficeFileWritten('/tmp/notes.md')
     notifyOfficeFileWritten('/tmp/report.DOCX')
-    expect(received).toEqual([path.resolve('/tmp/report.DOCX')])
+    notifyOfficeFileWritten('/tmp/sheet.XLSX')
+    notifyOfficeFileWritten('/tmp/deck.PPTX')
+    expect(received).toEqual([
+      path.resolve('/tmp/report.DOCX'),
+      path.resolve('/tmp/sheet.XLSX'),
+      path.resolve('/tmp/deck.PPTX')
+    ])
   })
 })
 
@@ -416,5 +449,71 @@ describe('WpsSyncService', () => {
     }
     expect(status.lastAddonFetches.some((item) => item.path === '/ribbon.xml')).toBe(true)
     expect(status.lastAddonFetches.some((item) => item.path === '/port.json')).toBe(true)
+  })
+
+  it('starts a fallback observer server and restores the live preferred port on stop', async () => {
+    const first = new WpsSyncService({
+      skipInstall: true,
+      preferredPort: 0,
+      installer: {
+        install: async () => ({ installed: true }),
+        writePort: async () => undefined
+      }
+    })
+    services.push(first)
+    await first.start()
+    const livePort = first.getPort()
+    expect(livePort).toBeTruthy()
+
+    const writePort = vi.fn(async () => undefined)
+    const second = new WpsSyncService({
+      skipInstall: true,
+      preferredPort: livePort,
+      installer: {
+        install: async () => ({ installed: true }),
+        writePort
+      }
+    })
+    services.push(second)
+    await second.start()
+    const fallbackPort = second.getPort()
+    expect(fallbackPort).toBeTruthy()
+    expect(fallbackPort).not.toBe(livePort)
+    expect(writePort).toHaveBeenCalledWith(fallbackPort)
+    expect(
+      ((await (await fetch(`http://127.0.0.1:${livePort}/status`)).json()) as { ok: boolean }).ok
+    ).toBe(true)
+
+    await second.stop()
+    expect(writePort).toHaveBeenCalledWith(livePort)
+  })
+
+  it('does not bind a fallback when a production instance finds the preferred port already serving', async () => {
+    const first = new WpsSyncService({
+      skipInstall: true,
+      preferredPort: 0,
+      installer: {
+        install: async () => ({ installed: true }),
+        writePort: async () => undefined
+      }
+    })
+    services.push(first)
+    await first.start()
+    const livePort = first.getPort()
+    expect(livePort).toBeTruthy()
+
+    const writePort = vi.fn(async () => undefined)
+    const second = new WpsSyncService({
+      skipInstall: false,
+      preferredPort: livePort,
+      installer: {
+        install: async () => ({ installed: true }),
+        writePort
+      }
+    })
+    services.push(second)
+    await second.start()
+    expect(second.getPort()).toBeUndefined()
+    expect(writePort).toHaveBeenCalledWith(livePort)
   })
 })

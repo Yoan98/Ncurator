@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { app } from 'electron'
@@ -128,6 +128,61 @@ const resolveAddonSourceDir = (override?: string): string => {
 
 const shouldSkipWpsInstall = (): boolean => process.env.NCURATOR_E2E_OBSERVER === '1'
 
+const isWpsSyncStatusBody = (body: unknown): boolean => {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return false
+  const record = body as { ok?: unknown; clients?: unknown }
+  return record.ok === true && Array.isArray(record.clients)
+}
+
+const probeWpsSyncPort = async (port: number, timeoutMs = 400): Promise<boolean> => {
+  if (!Number.isInteger(port) || port <= 0) return false
+  return await new Promise((resolve) => {
+    let settled = false
+    const finish = (value: boolean): void => {
+      if (settled) return
+      settled = true
+      resolve(value)
+    }
+    const request = http.get(
+      {
+        host: '127.0.0.1',
+        port,
+        path: '/status',
+        timeout: timeoutMs
+      },
+      (response) => {
+        const chunks: Buffer[] = []
+        let size = 0
+        response.on('data', (chunk: Buffer) => {
+          size += chunk.byteLength
+          if (size > 64 * 1024) {
+            request.destroy()
+            finish(false)
+            return
+          }
+          chunks.push(chunk)
+        })
+        response.on('end', () => {
+          if (response.statusCode !== 200) {
+            finish(false)
+            return
+          }
+          try {
+            finish(isWpsSyncStatusBody(JSON.parse(Buffer.concat(chunks).toString('utf8'))))
+          } catch {
+            finish(false)
+          }
+        })
+      }
+    )
+    request.on('timeout', () => {
+      request.destroy()
+      finish(false)
+    })
+    request.on('error', () => finish(false))
+  })
+}
+
 const readRequestBody = (request: IncomingMessage): Promise<string> =>
   new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
@@ -203,13 +258,28 @@ export class WpsSyncService {
       if (!result.installed) return
     }
 
-    await this.listen()
+    if (!this.skipInstall && this.preferredPort > 0 && (await probeWpsSyncPort(this.preferredPort))) {
+      await this.rewriteRegistration(this.preferredPort, { whenSkipInstall: false })
+      return
+    }
+
+    const listenResult = await this.listen()
     if (this.stopped) {
       await this.stop()
       return
     }
+    if (listenResult === 'already-serving') return
     if (this.port === undefined) return
-    await Promise.resolve(this.installer.writePort(this.port)).catch((error: unknown) => {
+    await this.rewriteRegistration(this.port, { whenSkipInstall: true })
+  }
+
+  private async rewriteRegistration(
+    port: number,
+    options: { whenSkipInstall: boolean }
+  ): Promise<void> {
+    if (this.skipInstall && !options.whenSkipInstall) return
+    if (!Number.isInteger(port) || port <= 0) return
+    await Promise.resolve(this.installer.writePort(port)).catch((error: unknown) => {
       console.warn(
         '[WPS-SYNC] failed to write port.json:',
         error instanceof Error ? error.message : String(error)
@@ -231,6 +301,7 @@ export class WpsSyncService {
 
   public async stop(): Promise<void> {
     this.stopped = true
+    const ownedPort = this.port
     for (const client of this.clients) {
       try {
         client.response.end()
@@ -246,14 +317,25 @@ export class WpsSyncService {
     const server = this.server
     this.server = undefined
     this.port = undefined
-    if (!server) return
-    await new Promise<void>((resolve) => {
-      server.close(() => resolve())
-    })
+    if (server) {
+      await new Promise<void>((resolve) => {
+        server.close(() => resolve())
+      })
+    }
+    if (
+      ownedPort === undefined ||
+      this.preferredPort <= 0 ||
+      ownedPort === this.preferredPort
+    ) {
+      return
+    }
+    if (await probeWpsSyncPort(this.preferredPort)) {
+      await this.rewriteRegistration(this.preferredPort, { whenSkipInstall: true })
+    }
   }
 
-  private async listen(): Promise<void> {
-    this.server = createServer((request, response) => {
+  private async listen(): Promise<'bound' | 'already-serving'> {
+    this.server = http.createServer((request, response) => {
       void this.handleRequest(request, response)
     })
     this.server.on('error', (error) => {
@@ -280,10 +362,23 @@ export class WpsSyncService {
 
     try {
       this.port = await bind(this.preferredPort)
+      return 'bound'
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
       if (code !== 'EADDRINUSE') throw error
+      if (!this.skipInstall && this.preferredPort > 0 && (await probeWpsSyncPort(this.preferredPort))) {
+        const server = this.server
+        this.server = undefined
+        this.port = undefined
+        if (server) {
+          await new Promise<void>((resolve) => {
+            server.close(() => resolve())
+          })
+        }
+        return 'already-serving'
+      }
       this.port = await bind(0)
+      return 'bound'
     }
   }
 

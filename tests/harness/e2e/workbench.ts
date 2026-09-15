@@ -5,7 +5,9 @@ import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import ExcelJS from 'exceljs'
 import JSZip from 'jszip'
+import { getSlides, getSlideText, loadPresentation } from 'pptx-kit'
 import type { Locator, Page } from 'playwright'
 import type { AiRunEvent, JsonValue, WorkspaceIndexJobAction } from '../../../src/shared/types'
 import {
@@ -1644,6 +1646,14 @@ export const waitForApplyEntry = async (page: Page, changeIdPart?: string): Prom
   return locator.first()
 }
 
+export const waitForApplyEntryByFileName = async (page: Page, fileName: string): Promise<Locator> => {
+  const locator = getWorkbenchPrefixLocator(page, workbenchSelectors.assistantTurnApplyPrefix).filter({
+    hasText: fileName
+  })
+  await locator.last().waitFor({ state: 'visible' })
+  return locator.last()
+}
+
 export const waitForWorkbenchApplyPanelReady = async (page: Page): Promise<Locator> => {
   const panel = getWorkbenchLocator(page, workbenchSelectors.applyPanel)
   await panel.waitFor({ state: 'visible' })
@@ -2191,4 +2201,35 @@ export const readDocxPlainText = async (filePath: string): Promise<string> => {
     .outline.filter((node) => node.type !== 'table_cell')
     .map((node) => node.text)
     .join('\n')
+}
+
+export const readXlsxPlainText = async (filePath: string): Promise<string> => {
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load((await readFile(filePath)) as never)
+  const chunks: string[] = []
+  workbook.eachSheet((sheet) => {
+    sheet.eachRow((row) => {
+      row.eachCell((cell) => {
+        const text = String(cell.text || cell.value || '').trim()
+        if (text) chunks.push(text)
+      })
+    })
+  })
+  return chunks.join('\n')
+}
+
+export const readPptxPlainText = async (filePath: string): Promise<string> => {
+  const presentation = await loadPresentation(new Uint8Array(await readFile(filePath)))
+  return getSlides(presentation)
+    .map((slide) => getSlideText(slide).trim())
+    .filter(Boolean)
+    .join('\n')
+}
+
+export const readOfficePlainText = async (filePath: string): Promise<string> => {
+  const extension = path.extname(filePath).toLowerCase()
+  if (extension === '.docx') return readDocxPlainText(filePath)
+  if (extension === '.xlsx') return readXlsxPlainText(filePath)
+  if (extension === '.pptx') return readPptxPlainText(filePath)
+  throw new Error(`unsupported office text path: ${filePath}`)
 }

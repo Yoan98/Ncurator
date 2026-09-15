@@ -6,6 +6,7 @@ import path from 'node:path'
 import { promisify } from 'node:util'
 import {
   WPS_ADDON_DIR_NAME,
+  WPS_ADDON_LEGACY_NAMES,
   WPS_ADDON_NAME,
   WPS_ADDON_PORT_FILE,
   WPS_PREFERRED_SYNC_PORT
@@ -18,11 +19,69 @@ import type {
   WpsSyncStatus
 } from '../../../src/main/services/wps/WpsSyncService'
 
-const execFileAsync = promisify(execFile)
+export type WpsAddonHost = 'wps' | 'et' | 'wpp'
+
+export type WpsOfficeCoverageTarget = {
+  kind: 'docx' | 'xlsx' | 'pptx'
+  fileName: string
+  component: WpsAddonHost
+  prompt: (marker: string) => string
+}
+
+export const WPS_OFFICE_COVERAGE_TARGETS: WpsOfficeCoverageTarget[] = [
+  {
+    kind: 'docx',
+    fileName: 'sample-edit.docx',
+    component: 'wps',
+    prompt: (marker) =>
+      `请直接修改我刚选中的 sample-edit.docx，在文末新增一段：“${marker}”。完成后告诉我已写回。`
+  },
+  {
+    kind: 'xlsx',
+    fileName: '经营周报.xlsx',
+    component: 'et',
+    prompt: (marker) =>
+      `请直接修改我刚选中的 经营周报.xlsx，在第一个工作表找一个空白单元格写入纯文本“${marker}”，不要改现有数字、公式或其他单元格。完成后告诉我已写回。`
+  },
+  {
+    kind: 'pptx',
+    fileName: '品牌策略提案.pptx',
+    component: 'wpp',
+    prompt: (marker) =>
+      `请直接修改我刚选中的 品牌策略提案.pptx，在第一页已有正文末尾追加“${marker}”，不要删除原有内容。完成后告诉我已写回。`
+  }
+]
+
+export const isWpsAddonHostEnabled = (host: WpsAddonHost): boolean => {
+  const jsAddonsDir = resolveWpsJsAddonsDir({
+    platform: process.platform,
+    homedir: os.homedir(),
+    env: process.env
+  })
+  if (!jsAddonsDir) return false
+  try {
+    const parsed = JSON.parse(fs.readFileSync(path.join(jsAddonsDir, 'authaddin.json'), 'utf8')) as Record<
+      string,
+      unknown
+    >
+    const section = parsed[host]
+    if (!section || typeof section !== 'object' || Array.isArray(section)) return false
+    const names = new Set<string>([WPS_ADDON_NAME, ...WPS_ADDON_LEGACY_NAMES])
+    return Object.values(section).some((value) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+      const entry = value as { name?: string; enable?: boolean }
+      return Boolean(entry.name && names.has(entry.name) && entry.enable === true)
+    })
+  } catch {
+    return false
+  }
+}
 
 const sleep = async (ms: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
+
+const execFileAsync = promisify(execFile)
 
 const darwinAppCandidates = (): string[] => [
   '/Applications/wpsoffice.localized/wpsoffice.app',
@@ -162,6 +221,7 @@ export const openDocumentInWpsBackground = async (filePath: string): Promise<voi
 
 export const waitForWpsAddonReady = async (options: {
   filePath: string
+  component?: WpsAddonHost
   timeoutMs?: number
 }): Promise<{ port: number; status: WpsSyncStatus }> => {
   const timeoutMs = options.timeoutMs ?? 45_000
@@ -171,14 +231,20 @@ export const waitForWpsAddonReady = async (options: {
     try {
       const port = await resolveInstalledWpsSyncPort()
       const status = await fetchWpsSyncStatus(port)
-      const documentOpen = status.openDocuments.some((item) => matchesPath(item.fullName, options.filePath))
-      if (status.clientCount >= 1 && documentOpen) {
+      const documentOpen = status.openDocuments.some(
+        (item) =>
+          matchesPath(item.fullName, options.filePath) &&
+          (!options.component || item.component === options.component)
+      )
+      const componentReady =
+        !options.component || status.clients.some((client) => client.component === options.component)
+      if (status.clientCount >= 1 && documentOpen && componentReady) {
         return { port, status }
       }
       lastError = new Error(
-        `clients=${status.clientCount} fetches=${
+        `clients=${status.clients.map((item) => item.component).join(',') || '(none)'} fetches=${
           status.lastAddonFetches?.map((item) => item.path).join(',') || '(none)'
-        } open=${status.openDocuments.map((item) => item.fullName).join('|') || '(none)'}`
+        } open=${status.openDocuments.map((item) => `${item.component}:${item.fullName}`).join('|') || '(none)'}`
       )
     } catch (error) {
       lastError = error

@@ -50,169 +50,228 @@
     }
   }
 
+  function tryActive(app, name) {
+    try {
+      return Boolean(app[name])
+    } catch (error) {
+      return false
+    }
+  }
+
+  function tryCollection(app, name) {
+    try {
+      var collection = app[name]
+      if (!collection) return false
+      void collection.Count
+      return true
+    } catch (error) {
+      return false
+    }
+  }
+
+  function markSavedThenClose(item, withFalse) {
+    try {
+      item.Saved = true
+    } catch (error) {
+      // 部分组件不接受 Saved 赋值。
+    }
+    if (withFalse) {
+      try {
+        item.Close(false)
+        return
+      } catch (error) {
+        // 回落到无参 Close。
+      }
+    }
+    item.Close()
+  }
+
+  function createWppAdapter(app) {
+    return {
+      kind: 'wpp',
+      collection: function () {
+        return app.Presentations
+      },
+      open: function (filePath) {
+        return app.Presentations.Open(filePath)
+      },
+      close: function (item) {
+        markSavedThenClose(item, false)
+      },
+      captureView: function () {
+        var view = {}
+        try {
+          view.slideIndex = app.ActiveWindow.View.Slide.SlideIndex
+        } catch (error) {
+          view.slideIndex = null
+        }
+        return view
+      },
+      restoreView: function (view) {
+        if (view.slideIndex === null || view.slideIndex === undefined) return { slide: false }
+        app.ActiveWindow.View.GotoSlide(view.slideIndex)
+        return { slide: true }
+      },
+      excerpt: function () {
+        try {
+          var slides = app.ActivePresentation.Slides
+          var parts = []
+          var slideLimit = Math.min(slides.Count, 3)
+          for (var slideIndex = 1; slideIndex <= slideLimit; slideIndex += 1) {
+            var shapes = slides.Item(slideIndex).Shapes
+            for (var shapeIndex = 1; shapeIndex <= shapes.Count; shapeIndex += 1) {
+              try {
+                var text = String(shapes.Item(shapeIndex).TextFrame.TextRange.Text || '').trim()
+                if (text) parts.push(text)
+              } catch (error) {
+                // 非文本形状忽略。
+              }
+            }
+          }
+          return parts.join('\n').slice(0, 2000)
+        } catch (error) {
+          return ''
+        }
+      }
+    }
+  }
+
+  function createEtAdapter(app) {
+    return {
+      kind: 'et',
+      collection: function () {
+        return app.Workbooks
+      },
+      open: function (filePath) {
+        return app.Workbooks.Open(filePath)
+      },
+      close: function (item) {
+        markSavedThenClose(item, true)
+      },
+      captureView: function () {
+        var view = {}
+        try {
+          view.sheetName = app.ActiveSheet.Name
+          view.scrollRow = app.ActiveWindow.ScrollRow
+          view.scrollColumn = app.ActiveWindow.ScrollColumn
+          view.selection = app.Selection ? app.Selection.Address : null
+        } catch (error) {
+          view.error = describeError(error)
+        }
+        return view
+      },
+      restoreView: function (view) {
+        var restored = {}
+        try {
+          if (view.sheetName) {
+            app.Worksheets.Item(view.sheetName).Activate()
+            restored.sheet = true
+          }
+          if (view.scrollRow) app.ActiveWindow.ScrollRow = view.scrollRow
+          if (view.scrollColumn) app.ActiveWindow.ScrollColumn = view.scrollColumn
+          restored.scroll = true
+          if (view.selection) {
+            app.Range(view.selection).Select()
+            restored.selection = true
+          }
+        } catch (error) {
+          restored.error = describeError(error)
+        }
+        return restored
+      },
+      excerpt: function () {
+        try {
+          var range = app.ActiveSheet.UsedRange
+          var parts = []
+          var rowCount = Math.min(range.Rows.Count, 20)
+          var columnCount = Math.min(range.Columns.Count, 12)
+          for (var row = 1; row <= rowCount; row += 1) {
+            for (var column = 1; column <= columnCount; column += 1) {
+              try {
+                var text = String(range.Cells.Item(row, column).Text || '').trim()
+                if (text) parts.push(text)
+              } catch (error) {
+                // 空单元格忽略。
+              }
+            }
+          }
+          if (parts.length) return parts.join('\n').slice(0, 2000)
+        } catch (error) {
+          // 回落到 A1。
+        }
+        try {
+          return String(app.ActiveSheet.Cells.Item(1, 1).Text || '').slice(0, 2000)
+        } catch (inner) {
+          return ''
+        }
+      }
+    }
+  }
+
+  function createWpsAdapter(app) {
+    return {
+      kind: 'wps',
+      collection: function () {
+        return app.Documents
+      },
+      open: function (filePath) {
+        return app.Documents.Open(filePath)
+      },
+      close: function (item) {
+        markSavedThenClose(item, true)
+      },
+      captureView: function () {
+        var view = {}
+        try {
+          view.selectionStart = app.Selection ? app.Selection.Start : null
+        } catch (error) {
+          view.selectionStart = null
+        }
+        try {
+          view.verticalPercentScrolled = app.ActiveWindow.ActivePane.VerticalPercentScrolled
+        } catch (error) {
+          view.verticalPercentScrolled = null
+        }
+        return view
+      },
+      restoreView: function (view) {
+        var restored = {}
+        try {
+          if (view.selectionStart !== null && view.selectionStart !== undefined && app.Selection) {
+            app.Selection.SetRange(view.selectionStart, view.selectionStart)
+            restored.selection = true
+          }
+        } catch (error) {
+          restored.selectionError = describeError(error)
+        }
+        try {
+          if (view.verticalPercentScrolled !== null && view.verticalPercentScrolled !== undefined) {
+            app.ActiveWindow.ActivePane.VerticalPercentScrolled = view.verticalPercentScrolled
+            restored.scroll = true
+          }
+        } catch (error) {
+          restored.scrollError = describeError(error)
+        }
+        return restored
+      },
+      excerpt: function () {
+        try {
+          return String(app.ActiveDocument.Content.Text || '').slice(0, 2000)
+        } catch (error) {
+          return ''
+        }
+      }
+    }
+  }
+
   function createAdapter(app) {
     if (!app) return null
-
-    function tryCollection(name) {
-      try {
-        return app[name] || null
-      } catch (error) {
-        return null
-      }
-    }
-
-    if (tryCollection('Presentations')) {
-      return {
-        kind: 'wpp',
-        collection: function () {
-          return app.Presentations
-        },
-        open: function (filePath) {
-          return app.Presentations.Open(filePath)
-        },
-        close: function (item) {
-          item.Saved = true
-          item.Close()
-        },
-        captureView: function () {
-          var view = {}
-          try {
-            view.slideIndex = app.ActiveWindow.View.Slide.SlideIndex
-          } catch (error) {
-            view.slideIndex = null
-          }
-          return view
-        },
-        restoreView: function (view) {
-          if (view.slideIndex === null || view.slideIndex === undefined) return { slide: false }
-          app.ActiveWindow.View.GotoSlide(view.slideIndex)
-          return { slide: true }
-        },
-        excerpt: function () {
-          try {
-            return String(
-              app.ActivePresentation.Slides.Item(1).Shapes.Item(1).TextFrame.TextRange.Text || ''
-            ).slice(0, 2000)
-          } catch (error) {
-            return ''
-          }
-        }
-      }
-    }
-
-    if (tryCollection('Workbooks')) {
-      return {
-        kind: 'et',
-        collection: function () {
-          return app.Workbooks
-        },
-        open: function (filePath) {
-          return app.Workbooks.Open(filePath)
-        },
-        close: function (item) {
-          item.Close(false)
-        },
-        captureView: function () {
-          var view = {}
-          try {
-            view.sheetName = app.ActiveSheet.Name
-            view.scrollRow = app.ActiveWindow.ScrollRow
-            view.scrollColumn = app.ActiveWindow.ScrollColumn
-            view.selection = app.Selection ? app.Selection.Address : null
-          } catch (error) {
-            view.error = describeError(error)
-          }
-          return view
-        },
-        restoreView: function (view) {
-          var restored = {}
-          try {
-            if (view.sheetName) {
-              app.Worksheets.Item(view.sheetName).Activate()
-              restored.sheet = true
-            }
-            if (view.scrollRow) app.ActiveWindow.ScrollRow = view.scrollRow
-            if (view.scrollColumn) app.ActiveWindow.ScrollColumn = view.scrollColumn
-            restored.scroll = true
-            if (view.selection) {
-              app.Range(view.selection).Select()
-              restored.selection = true
-            }
-          } catch (error) {
-            restored.error = describeError(error)
-          }
-          return restored
-        },
-        excerpt: function () {
-          try {
-            return String(app.ActiveSheet.UsedRange.Text || '').slice(0, 2000)
-          } catch (error) {
-            try {
-              return String(app.ActiveSheet.Cells.Item(1, 1).Text || '').slice(0, 2000)
-            } catch (inner) {
-              return ''
-            }
-          }
-        }
-      }
-    }
-
-    if (tryCollection('Documents')) {
-      return {
-        kind: 'wps',
-        collection: function () {
-          return app.Documents
-        },
-        open: function (filePath) {
-          return app.Documents.Open(filePath)
-        },
-        close: function (item) {
-          item.Close(false)
-        },
-        captureView: function () {
-          var view = {}
-          try {
-            view.selectionStart = app.Selection ? app.Selection.Start : null
-          } catch (error) {
-            view.selectionStart = null
-          }
-          try {
-            view.verticalPercentScrolled = app.ActiveWindow.ActivePane.VerticalPercentScrolled
-          } catch (error) {
-            view.verticalPercentScrolled = null
-          }
-          return view
-        },
-        restoreView: function (view) {
-          var restored = {}
-          try {
-            if (view.selectionStart !== null && view.selectionStart !== undefined && app.Selection) {
-              app.Selection.SetRange(view.selectionStart, view.selectionStart)
-              restored.selection = true
-            }
-          } catch (error) {
-            restored.selectionError = describeError(error)
-          }
-          try {
-            if (view.verticalPercentScrolled !== null && view.verticalPercentScrolled !== undefined) {
-              app.ActiveWindow.ActivePane.VerticalPercentScrolled = view.verticalPercentScrolled
-              restored.scroll = true
-            }
-          } catch (error) {
-            restored.scrollError = describeError(error)
-          }
-          return restored
-        },
-        excerpt: function () {
-          try {
-            return String(app.ActiveDocument.Content.Text || '').slice(0, 2000)
-          } catch (error) {
-            return ''
-          }
-        }
-      }
-    }
-
+    if (tryActive(app, 'ActiveWorkbook')) return createEtAdapter(app)
+    if (tryActive(app, 'ActivePresentation')) return createWppAdapter(app)
+    if (tryActive(app, 'ActiveDocument')) return createWpsAdapter(app)
+    if (tryCollection(app, 'Workbooks')) return createEtAdapter(app)
+    if (tryCollection(app, 'Presentations')) return createWppAdapter(app)
+    if (tryCollection(app, 'Documents')) return createWpsAdapter(app)
     return null
   }
 
@@ -284,6 +343,7 @@
     if (!payload || payload.type === 'ping') return
     if (payload.type === 'reload') {
       try {
+        adapter = createAdapter(getApp())
         if (!adapter || !findItem(payload.path)) {
           report('reload-result', {
             ok: false,
@@ -306,7 +366,7 @@
   }
 
   function connectEvents() {
-    if (!adapter) adapter = createAdapter(getApp())
+    adapter = createAdapter(getApp())
     var server = window.__ncuratorServer
     if (!server || typeof EventSource !== 'function') {
       scheduleReconnect()
@@ -352,10 +412,40 @@
     }, reconnectDelayMs)
   }
 
+  function uniquePorts(ports) {
+    var out = []
+    for (var index = 0; index < ports.length; index += 1) {
+      var port = Number(ports[index])
+      if (port > 0 && out.indexOf(port) === -1) out.push(port)
+    }
+    return out
+  }
+
+  function probePort(port, done) {
+    try {
+      var xhr = new XMLHttpRequest()
+      xhr.open('GET', 'http://127.0.0.1:' + port + '/status', true)
+      xhr.timeout = 800
+      xhr.onload = function () {
+        done(xhr.status >= 200 && xhr.status < 300)
+      }
+      xhr.onerror = function () {
+        done(false)
+      }
+      xhr.ontimeout = function () {
+        done(false)
+      }
+      xhr.send()
+    } catch (error) {
+      done(false)
+    }
+  }
+
   function readPortFile(done) {
     try {
       var xhr = new XMLHttpRequest()
       xhr.open('GET', 'port.json?t=' + Date.now(), true)
+      xhr.timeout = 800
       xhr.onload = function () {
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
@@ -373,30 +463,52 @@
       xhr.onerror = function () {
         done(DEFAULT_PORT)
       }
+      xhr.ontimeout = function () {
+        done(DEFAULT_PORT)
+      }
       xhr.send()
     } catch (error) {
       done(DEFAULT_PORT)
     }
   }
 
-  function resolveServer(done) {
+  function locationPort() {
     try {
       var loc = window.location
-      if (loc && /^https?:$/i.test(loc.protocol)) {
-        var host = loc.hostname
-        var port = Number(loc.port || (loc.protocol === 'https:' ? 443 : 80))
-        if ((host === '127.0.0.1' || host === 'localhost') && port > 0) {
-          window.__ncuratorServer = 'http://127.0.0.1:' + port
-          done()
-          return
-        }
-      }
+      if (!loc || !/^https?:$/i.test(loc.protocol)) return 0
+      var host = loc.hostname
+      var port = Number(loc.port || (loc.protocol === 'https:' ? 443 : 80))
+      if ((host === '127.0.0.1' || host === 'localhost') && port > 0) return port
     } catch (error) {
       // 非 HTTP 加载时改读 port.json。
     }
-    readPortFile(function (port) {
-      window.__ncuratorServer = 'http://127.0.0.1:' + port
-      done()
+    return 0
+  }
+
+  function resolveServer(done) {
+    readPortFile(function (filePort) {
+      var candidates = uniquePorts([locationPort(), DEFAULT_PORT, filePort])
+      if (candidates.length === 0) {
+        window.__ncuratorServer = 'http://127.0.0.1:' + DEFAULT_PORT
+        done()
+        return
+      }
+      var tryAt = function (index) {
+        if (index >= candidates.length) {
+          window.__ncuratorServer = 'http://127.0.0.1:' + candidates[0]
+          done()
+          return
+        }
+        probePort(candidates[index], function (ok) {
+          if (ok) {
+            window.__ncuratorServer = 'http://127.0.0.1:' + candidates[index]
+            done()
+            return
+          }
+          tryAt(index + 1)
+        })
+      }
+      tryAt(0)
     })
   }
 
