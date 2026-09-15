@@ -2,14 +2,14 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { mergeAuthAddin } from './authAddin'
+import { authAddinNeedsRewrite, mergeAuthAddin } from './authAddin'
 import {
   WPS_ADDON_DIR_NAME,
   WPS_ADDON_NAME,
   WPS_ADDON_PORT_FILE,
   WPS_PREFERRED_SYNC_PORT
 } from './constants'
-import { mergePublishXml, toAddonLoopbackUrl } from './publishXml'
+import { mergePublishXml, publishXmlHasAddonUrl, toAddonLoopbackUrl } from './publishXml'
 
 export type WpsAddonInstallResult = {
   installed: boolean
@@ -98,25 +98,27 @@ export class WpsAddonInstaller implements WpsAddonInstallerLike {
     await this.writeLoopbackRegistration(jsAddonsDir, port)
   }
 
-  private async writeLoopbackRegistration(jsAddonsDir: string, port: number): Promise<void> {
-    const addonUrl = toAddonLoopbackUrl(port)
+  private async writeLoopbackRegistration(jsAddonsDir: string, listenPort: number): Promise<void> {
+    const addonUrl = toAddonLoopbackUrl(WPS_PREFERRED_SYNC_PORT)
     const publishPath = path.join(jsAddonsDir, 'publish.xml')
     const existingPublish = await fsp.readFile(publishPath, 'utf8').catch(() => '')
-    if (existingPublish) {
-      await fsp.writeFile(`${publishPath}.ncurator-backup`, existingPublish, 'utf8').catch(() => undefined)
+    if (!publishXmlHasAddonUrl(existingPublish, addonUrl)) {
+      if (existingPublish) {
+        await fsp.writeFile(`${publishPath}.ncurator-backup`, existingPublish, 'utf8').catch(() => undefined)
+      }
+      await fsp.writeFile(publishPath, mergePublishXml(existingPublish, addonUrl), 'utf8')
     }
-    await fsp.writeFile(publishPath, mergePublishXml(existingPublish, addonUrl), 'utf8')
 
     const authPath = path.join(jsAddonsDir, 'authaddin.json')
     const existingAuth = await fsp.readFile(authPath, 'utf8').catch(() => '')
-    if (existingAuth) {
+    if (existingAuth && authAddinNeedsRewrite(existingAuth, addonUrl)) {
       await fsp.writeFile(`${authPath}.ncurator-backup`, existingAuth, 'utf8').catch(() => undefined)
       await fsp.writeFile(authPath, mergeAuthAddin(existingAuth, addonUrl), 'utf8')
     }
 
     await fsp.writeFile(
       path.join(jsAddonsDir, WPS_ADDON_PORT_FILE),
-      `${JSON.stringify({ port })}\n`,
+      `${JSON.stringify({ port: listenPort })}\n`,
       'utf8'
     )
     await fsp.rm(path.join(jsAddonsDir, 'jsaddinblockhost.ini'), { force: true })

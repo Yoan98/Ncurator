@@ -15,17 +15,45 @@ const namesToRewrite = (): Set<string> => new Set([WPS_ADDON_NAME, ...WPS_ADDON_
 const normalizeAddonLoopbackUrl = (addonUrl: string): string =>
   addonUrl.endsWith('/') ? addonUrl : `${addonUrl}/`
 
-const namelistTokens = (value: unknown): string[] => {
-  if (typeof value !== 'string') return []
-  const trimmed = value.trim()
-  if (!trimmed) return []
-  if (trimmed.includes(',') || trimmed.includes(';')) {
-    return trimmed
-      .split(/[,;]+/)
-      .map((item) => item.trim())
-      .filter(Boolean)
+export const addonUrlsEquivalent = (left: string, right: string): boolean =>
+  left.trim().replace(/\/+$/, '').toLowerCase() === right.trim().replace(/\/+$/, '').toLowerCase()
+
+const eachAddonAuthEntry = (
+  raw: string,
+  visit: (entry: AuthEntry) => void
+): boolean => {
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(raw) as Record<string, unknown>
+  } catch {
+    return false
   }
-  return [trimmed]
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return false
+
+  const names = namesToRewrite()
+  for (const host of WPS_ADDON_HOSTS) {
+    const section = parsed[host]
+    if (!section || typeof section !== 'object' || Array.isArray(section)) continue
+    const record = section as Record<string, unknown>
+    for (const [key, value] of Object.entries(record)) {
+      if (key === NAMELIST_KEY || !value || typeof value !== 'object' || Array.isArray(value)) continue
+      const entry = value as AuthEntry
+      if (!entry.name || !names.has(entry.name)) continue
+      visit(entry)
+    }
+  }
+  return true
+}
+
+export const authAddinNeedsRewrite = (raw: string, addonUrl: string): boolean => {
+  let sawEntry = false
+  let needsRewrite = false
+  const parsed = eachAddonAuthEntry(raw, (entry) => {
+    sawEntry = true
+    if (entry.mode !== 2) needsRewrite = true
+    if (!addonUrlsEquivalent(String(entry.path || ''), addonUrl)) needsRewrite = true
+  })
+  return parsed && sawEntry && needsRewrite
 }
 
 export const mergeAuthAddin = (raw: string, addonUrl: string): string => {
@@ -43,20 +71,14 @@ export const mergeAuthAddin = (raw: string, addonUrl: string): string => {
     const section = parsed[host]
     if (!section || typeof section !== 'object' || Array.isArray(section)) continue
     const record = section as Record<string, unknown>
-    const knownKeys = new Set(Object.keys(record).filter((key) => key !== NAMELIST_KEY))
     for (const [key, value] of Object.entries(record)) {
       if (key === NAMELIST_KEY || !value || typeof value !== 'object' || Array.isArray(value)) continue
       const entry = value as AuthEntry
       if (!entry.name || !names.has(entry.name)) continue
       entry.mode = 2
-      entry.path = normalizedUrl
-    }
-    if (!Object.prototype.hasOwnProperty.call(record, NAMELIST_KEY)) continue
-    const kept = namelistTokens(record[NAMELIST_KEY]).filter((token) => knownKeys.has(token))
-    if (kept.length === 0) {
-      delete record[NAMELIST_KEY]
-    } else {
-      record[NAMELIST_KEY] = kept.join(',')
+      if (!addonUrlsEquivalent(String(entry.path || ''), normalizedUrl)) {
+        entry.path = normalizedUrl
+      }
     }
   }
   return `${JSON.stringify(parsed, null, 4)}\n`

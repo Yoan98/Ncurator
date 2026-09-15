@@ -12,6 +12,13 @@ const readAttribute = (tag: string, name: string): string | undefined =>
 
 export const toAddonLoopbackUrl = (port: number): string => `http://127.0.0.1:${port}/addon/`
 
+export const publishXmlHasAddonUrl = (raw: string, addonUrl: string): boolean => {
+  const url = escapeXml(addonUrl)
+  return WPS_ADDON_HOSTS.every((type) =>
+    raw.includes(`<jspluginonline name="${WPS_ADDON_NAME}" type="${type}" url="${url}"`)
+  )
+}
+
 export const mergePublishXml = (raw: string, addonUrl: string): string => {
   const replaceNames = namesToReplace()
   const source = String(raw || '').trim() || '<jsplugins>\n</jsplugins>'

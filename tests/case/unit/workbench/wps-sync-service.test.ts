@@ -9,13 +9,17 @@ vi.mock('electron', () => ({
   }
 }))
 
-import { mergeAuthAddin } from '../../../../src/main/services/wps/authAddin'
+import { authAddinNeedsRewrite, mergeAuthAddin } from '../../../../src/main/services/wps/authAddin'
 import { WPS_ADDON_DIR_NAME, WPS_ADDON_NAME, WPS_ADDON_PORT_FILE } from '../../../../src/main/services/wps/constants'
 import {
   notifyOfficeFileWritten,
   setOfficeFileWriteListener
 } from '../../../../src/main/services/wps/officeFileWriteNotify'
-import { mergePublishXml, toAddonLoopbackUrl } from '../../../../src/main/services/wps/publishXml'
+import {
+  mergePublishXml,
+  publishXmlHasAddonUrl,
+  toAddonLoopbackUrl
+} from '../../../../src/main/services/wps/publishXml'
 import {
   resolveWpsJsAddonsDir,
   WpsAddonInstaller
@@ -107,6 +111,8 @@ describe('WPS publish.xml merge', () => {
     expect(merged).toContain('<jspluginonline ')
     expect(merged).toContain('enable="enable_dev"')
     expect(merged).toContain('debug=""')
+    expect(publishXmlHasAddonUrl(merged, toAddonLoopbackUrl(58123))).toBe(true)
+    expect(publishXmlHasAddonUrl(merged, toAddonLoopbackUrl(58129))).toBe(false)
   })
 
   it('does not keep an XML declaration inside jsplugins', () => {
@@ -163,31 +169,56 @@ describe('WPS authaddin merge', () => {
     expect(parsed.et.other.mode).toBe(1)
   })
 
-  it('drops orphan namelist hashes so incomplete PPT/Excel auth can prompt again', () => {
-    const merged = mergeAuthAddin(
-      JSON.stringify({
-        et: {
-          abc: {
-            enable: true,
-            mode: 2,
-            name: 'ncurator-sync',
-            path: 'http://127.0.0.1:56749/addon'
-          },
-          namelist: 'abc'
+  it('does not rewrite auth when the loopback URL already matches', () => {
+    const raw = JSON.stringify({
+      et: {
+        abc: {
+          enable: true,
+          mode: 2,
+          name: 'ncurator-sync',
+          path: 'http://127.0.0.1:58123/addon'
         },
-        wpp: {
-          namelist: 'abc'
-        }
-      }),
-      'http://127.0.0.1:58123/addon'
-    )
+        namelist: 'abc'
+      },
+      wpp: {
+        namelist: 'orphan'
+      }
+    })
+    expect(authAddinNeedsRewrite(raw, 'http://127.0.0.1:58123/addon/')).toBe(false)
+    const merged = mergeAuthAddin(raw, 'http://127.0.0.1:58123/addon/')
+    const parsed = JSON.parse(merged) as {
+      et: { abc: { path: string }; namelist?: string }
+      wpp: { namelist?: string }
+    }
+    expect(parsed.et.abc.path).toBe('http://127.0.0.1:58123/addon')
+    expect(parsed.et.namelist).toBe('abc')
+    expect(parsed.wpp.namelist).toBe('orphan')
+  })
+
+  it('rewrites a stolen temporary port back to the preferred loopback URL', () => {
+    const raw = JSON.stringify({
+      et: {
+        abc: {
+          enable: true,
+          mode: 2,
+          name: 'ncurator-sync',
+          path: 'http://127.0.0.1:56749/addon'
+        },
+        namelist: 'abc'
+      },
+      wpp: {
+        namelist: 'abc'
+      }
+    })
+    expect(authAddinNeedsRewrite(raw, 'http://127.0.0.1:58123/addon')).toBe(true)
+    const merged = mergeAuthAddin(raw, 'http://127.0.0.1:58123/addon')
     const parsed = JSON.parse(merged) as {
       et: { abc: { path: string }; namelist?: string }
       wpp: { namelist?: string }
     }
     expect(parsed.et.abc.path).toBe('http://127.0.0.1:58123/addon/')
     expect(parsed.et.namelist).toBe('abc')
-    expect(parsed.wpp.namelist).toBeUndefined()
+    expect(parsed.wpp.namelist).toBe('abc')
   })
 })
 
@@ -250,17 +281,21 @@ describe('WpsAddonInstaller', () => {
           enable: true,
           mode: 2,
           path: 'http://127.0.0.1:58123/addon/'
-        }
+        },
+        namelist: 'abc'
       }
     })
 
+    const authAfterInstall = await fs.readFile(path.join(jsAddonsDir, 'authaddin.json'), 'utf8')
     await installer.writePort(58129)
     expect(JSON.parse(await fs.readFile(path.join(jsAddonsDir, WPS_ADDON_PORT_FILE), 'utf8'))).toEqual({
       port: 58129
     })
-    expect(await fs.readFile(path.join(jsAddonsDir, 'publish.xml'), 'utf8')).toContain(
-      'url="http://127.0.0.1:58129/addon/"'
-    )
+    const publishAfterFallback = await fs.readFile(path.join(jsAddonsDir, 'publish.xml'), 'utf8')
+    expect(publishAfterFallback).toContain('url="http://127.0.0.1:58123/addon/"')
+    expect(publishAfterFallback).not.toContain('58129')
+    expect(publishXmlHasAddonUrl(publishAfterFallback, toAddonLoopbackUrl(58123))).toBe(true)
+    expect(await fs.readFile(path.join(jsAddonsDir, 'authaddin.json'), 'utf8')).toBe(authAfterInstall)
   })
 
   it('writes the loopback port file without installing', async () => {

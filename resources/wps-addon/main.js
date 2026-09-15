@@ -50,23 +50,24 @@
     }
   }
 
-  function tryActive(app, name) {
+  function detectKind(app) {
     try {
-      return Boolean(app[name])
+      var search = String((window.location && window.location.search) || '')
+      var hash = String((window.location && window.location.hash) || '')
+      var fromLocation = /(?:[?&#]host=)(wps|et|wpp)\b/.exec(search + hash)
+      if (fromLocation) return fromLocation[1]
     } catch (error) {
-      return false
+      // location 不可用时改读 Application.Name。
     }
-  }
-
-  function tryCollection(app, name) {
     try {
-      var collection = app[name]
-      if (!collection) return false
-      void collection.Count
-      return true
+      var name = String((app && (app.Name || app.Caption)) || '').toLowerCase()
+      if (/spreadsheet|excel|\bet\b|表格|workbook/.test(name)) return 'et'
+      if (/presentation|\bwpp\b|powerpoint|\bppt\b|演示/.test(name)) return 'wpp'
+      if (/writer|\bword\b|文字/.test(name)) return 'wps'
     } catch (error) {
-      return false
+      // Name 读失败时宁可不刷新，也不去碰其他组件的 COM 对象。
     }
+    return ''
   }
 
   function markSavedThenClose(item, withFalse) {
@@ -264,15 +265,32 @@
     }
   }
 
+  function tryCollection(app, name) {
+    try {
+      return app[name] != null
+    } catch (error) {
+      return false
+    }
+  }
+
   function createAdapter(app) {
     if (!app) return null
-    if (tryActive(app, 'ActiveWorkbook')) return createEtAdapter(app)
-    if (tryActive(app, 'ActivePresentation')) return createWppAdapter(app)
-    if (tryActive(app, 'ActiveDocument')) return createWpsAdapter(app)
-    if (tryCollection(app, 'Workbooks')) return createEtAdapter(app)
-    if (tryCollection(app, 'Presentations')) return createWppAdapter(app)
-    if (tryCollection(app, 'Documents')) return createWpsAdapter(app)
+    var kind = detectKind(app)
+    if (!kind) {
+      if (tryCollection(app, 'Workbooks')) kind = 'et'
+      else if (tryCollection(app, 'Presentations')) kind = 'wpp'
+      else if (tryCollection(app, 'Documents')) kind = 'wps'
+    }
+    if (kind === 'et') return createEtAdapter(app)
+    if (kind === 'wpp') return createWppAdapter(app)
+    if (kind === 'wps') return createWpsAdapter(app)
     return null
+  }
+
+  function bindAdapter() {
+    var next = createAdapter(getApp())
+    if (next) adapter = next
+    return adapter
   }
 
   function listItems() {
@@ -343,7 +361,7 @@
     if (!payload || payload.type === 'ping') return
     if (payload.type === 'reload') {
       try {
-        adapter = createAdapter(getApp())
+        bindAdapter()
         if (!adapter || !findItem(payload.path)) {
           report('reload-result', {
             ok: false,
@@ -366,7 +384,7 @@
   }
 
   function connectEvents() {
-    adapter = createAdapter(getApp())
+    bindAdapter()
     var server = window.__ncuratorServer
     if (!server || typeof EventSource !== 'function') {
       scheduleReconnect()
@@ -515,6 +533,7 @@
   var API_EVENTS = ['DocumentOpen', 'DocumentBeforeSave', 'DocumentAfterClose', 'DocumentChange']
 
   function registerApiEvents() {
+    if (!adapter || adapter.kind !== 'wps') return
     var app = getApp()
     if (!app || !app.ApiEvent) return
     for (var index = 0; index < API_EVENTS.length; index += 1) {
@@ -540,7 +559,7 @@
   function startSync() {
     if (started) return
     started = true
-    adapter = createAdapter(getApp())
+    bindAdapter()
     registerApiEvents()
     resolveServer(function () {
       report('addin-load', { items: listItems().items })
@@ -566,5 +585,7 @@
   window.ribbon = ribbon
   window.OnAddinLoad = ribbon.OnAddinLoad
   window.OnStatus = ribbon.OnStatus
-  setTimeout(startSync, 0)
+  setTimeout(function () {
+    if (!started) startSync()
+  }, 1500)
 })()
