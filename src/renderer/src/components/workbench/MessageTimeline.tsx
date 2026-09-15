@@ -5,17 +5,11 @@ import dayjs from 'dayjs'
 import { HiMagnifyingGlass } from 'react-icons/hi2'
 import {
   collectSelectableDaysForNode,
+  shouldUseCompactTimeline,
   startOfLocalDay,
   type TimelineNode
 } from '../../../../shared/workbench/messageTimeline'
 import { workbenchSelectors } from '../../testing/selectors'
-
-/**
- * Composer 左缘相对消息主区左缘的可用 gutter 低于此值时收起文案。
- * 与总栏宽无关：右侧展开后总宽仍可能很大，但左侧留给轴文案的空间已不够。
- * 约等于完整态时间轴宽（56px）+ 少量余量。
- */
-const TIMELINE_LABEL_MIN_GUTTER_PX = 72
 
 type MessageTimelineProps = {
   nodes: TimelineNode[]
@@ -25,17 +19,23 @@ type MessageTimelineProps = {
   onPickDay: (dayStart: number) => void
 }
 
+const resolveTimelineLayoutAnchor = (host: HTMLElement): HTMLElement | null => {
+  const anchor = host.querySelector('.nc-timeline-layout-anchor')
+  return anchor instanceof HTMLElement ? anchor : null
+}
+
 const measureTimelineLayout = (
   timelineRoot: HTMLElement
-): { composerClearancePx: number; lineEndPx: number; leftGutterPx: number } | null => {
+): { composerClearancePx: number; lineEndPx: number; leftGutterPx: number; hostWidthPx: number } | null => {
   const host = timelineRoot.parentElement
   if (!host) return null
-  const composer = host.querySelector('.nc-floating-composer')
-  if (!(composer instanceof HTMLElement)) return null
+  const anchor = resolveTimelineLayoutAnchor(host)
+  if (!anchor) return null
   const hostRect = host.getBoundingClientRect()
-  const composerRect = composer.getBoundingClientRect()
-  const composerClearancePx = Math.max(0, Math.round(hostRect.bottom - composerRect.top))
-  const leftGutterPx = Math.max(0, Math.round(composerRect.left - hostRect.left))
+  const anchorRect = anchor.getBoundingClientRect()
+  const composerClearancePx = Math.max(0, Math.round(hostRect.bottom - anchorRect.top))
+  const leftGutterPx = Math.max(0, Math.round(anchorRect.left - hostRect.left))
+  const hostWidthPx = Math.max(0, Math.round(hostRect.width))
   timelineRoot.style.setProperty('--nc-timeline-composer-clearance', `${composerClearancePx}px`)
 
   const lastTrack = timelineRoot.querySelector(
@@ -51,7 +51,7 @@ const measureTimelineLayout = (
     )
   }
   timelineRoot.style.setProperty('--nc-timeline-line-end', `${lineEndPx}px`)
-  return { composerClearancePx, lineEndPx, leftGutterPx }
+  return { composerClearancePx, lineEndPx, leftGutterPx, hostWidthPx }
 }
 
 export const MessageTimeline = ({
@@ -80,24 +80,42 @@ export const MessageTimeline = ({
 
     const sync = (): void => {
       const layout = measureTimelineLayout(root)
-      setAligned(layout != null)
-      const nextCompact =
-        layout == null ? false : layout.leftGutterPx < TIMELINE_LABEL_MIN_GUTTER_PX
+      if (layout == null) {
+        // 短暂无锚点（Composer↔审批切换）时保留上一帧，避免轴线闪断、紧凑态被误关。
+        return
+      }
+      setAligned(true)
+      const nextCompact = shouldUseCompactTimeline({
+        hostWidthPx: layout.hostWidthPx,
+        leftGutterPx: layout.leftGutterPx
+      })
       setCompact(nextCompact)
       if (nextCompact) setOpenPickerNodeId(null)
     }
 
     sync()
-    const observer = new ResizeObserver(sync)
-    observer.observe(host)
-    observer.observe(root)
+    const resizeObserver = new ResizeObserver(sync)
+    resizeObserver.observe(host)
+    resizeObserver.observe(root)
     const shell = host.querySelector(`[data-testid="${workbenchSelectors.composerShell}"]`)
-    if (shell instanceof Element) observer.observe(shell)
-    const composer = host.querySelector('.nc-floating-composer')
-    if (composer instanceof Element) observer.observe(composer)
+    const mutationObserver =
+      shell instanceof Element
+        ? new MutationObserver(() => {
+            const nextAnchor = resolveTimelineLayoutAnchor(host)
+            if (nextAnchor) resizeObserver.observe(nextAnchor)
+            sync()
+          })
+        : null
+    if (shell instanceof Element) {
+      resizeObserver.observe(shell)
+      mutationObserver?.observe(shell, { childList: true, subtree: true })
+    }
+    const anchor = resolveTimelineLayoutAnchor(host)
+    if (anchor) resizeObserver.observe(anchor)
     window.addEventListener('resize', sync)
     return () => {
-      observer.disconnect()
+      resizeObserver.disconnect()
+      mutationObserver?.disconnect()
       window.removeEventListener('resize', sync)
     }
   }, [nodes.length])

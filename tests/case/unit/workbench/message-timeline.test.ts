@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   DAY_MS,
+  TIMELINE_COMPOSER_MAX_PX,
+  TIMELINE_FULL_WIDTH_PX,
   buildTimelineNodes,
   collectMessageDayStarts,
   collectSelectableDaysForNode,
   resolveActiveTimelineNodeId,
+  resolveTimelineLeftPx,
+  shouldUseCompactTimeline,
   startOfLocalDay,
   startOfLocalMonth
 } from '../../../../src/shared/workbench/messageTimeline'
@@ -92,5 +96,24 @@ describe('messageTimeline', () => {
     const b = startOfLocalDay(atLocalDay(2026, 8, 1, 20))
     const c = startOfLocalDay(atLocalDay(2026, 8, 2, 9))
     expect(collectMessageDayStarts([c, a, b])).toEqual([a, c])
+  })
+
+  it('enters compact before full timeline labels overlap the composer gutter', () => {
+    // 旧阈值「gutter < 72」在 host≈920 时仍显示完整文案，但轴 left+56 已越过 Composer 左缘。
+    const overlappingHostWidth = 920
+    const leftGutter = Math.round((overlappingHostWidth - TIMELINE_COMPOSER_MAX_PX) / 2)
+    expect(leftGutter).toBeGreaterThanOrEqual(72)
+    expect(
+      resolveTimelineLeftPx(overlappingHostWidth) + TIMELINE_FULL_WIDTH_PX
+    ).toBeGreaterThan(leftGutter)
+    expect(
+      shouldUseCompactTimeline({ hostWidthPx: overlappingHostWidth, leftGutterPx: leftGutter })
+    ).toBe(true)
+
+    const roomyHostWidth = 1100
+    const roomyGutter = Math.round((roomyHostWidth - TIMELINE_COMPOSER_MAX_PX) / 2)
+    expect(
+      shouldUseCompactTimeline({ hostWidthPx: roomyHostWidth, leftGutterPx: roomyGutter })
+    ).toBe(false)
   })
 })

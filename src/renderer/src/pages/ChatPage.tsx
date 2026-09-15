@@ -4698,7 +4698,7 @@ const ChatPage: React.FC = () => {
                         </div>
                       ) : pendingApprovalBatch ? (
                         <div
-                          className="min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
+                          className="nc-timeline-layout-anchor min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
                           data-testid={chatSelectors.approvalBatchCard}
                         >
                           {pendingApprovalBatch && currentApprovalItem ? (

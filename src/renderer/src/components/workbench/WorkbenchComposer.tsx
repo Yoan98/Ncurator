@@ -842,7 +842,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       ) : null}
 
       <div
-        className="nc-floating-composer px-4 pb-2.5 pt-3 transition-all duration-200"
+        className="nc-floating-composer nc-timeline-layout-anchor px-4 pb-2.5 pt-3 transition-all duration-200"
         data-testid={workbenchSelectors.referenceField}
         onMouseDown={(event) => {
           const target = event.target

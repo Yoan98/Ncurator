@@ -180,6 +180,34 @@ export const resolveActiveTimelineNodeId = (input: {
 
 export const TIMELINE_PIN_TOLERANCE_PX = 2
 
+/** 完整态时间轴占位宽（圆点轨 + 文案列），与 `.nc-message-timeline` 非紧凑态 width 一致。 */
+export const TIMELINE_FULL_WIDTH_PX = 56
+/** 与 CSS `--nc-timeline-composer-max` / Composer `max-w-[760px]` 对齐。 */
+export const TIMELINE_COMPOSER_MAX_PX = 760
+/** 与 CSS `--nc-timeline-track` 对齐。 */
+export const TIMELINE_TRACK_PX = 16
+
+/**
+ * 完整态时间轴 left，与 CSS
+ * `max(4px, calc((100% - 760px) / 4 - track/2))` 一致。
+ */
+export const resolveTimelineLeftPx = (hostWidthPx: number): number => {
+  const centered = (hostWidthPx - TIMELINE_COMPOSER_MAX_PX) / 4 - TIMELINE_TRACK_PX / 2
+  return Math.max(4, Math.round(centered))
+}
+
+/**
+ * 完整态轴文案会与 Composer/审批卡左缘碰撞时进入紧凑态。
+ * 不能只用「host→composer 的 gutter < 72」：轴本身有左偏移，gutter 仍 ≥72 时文案已可能叠进卡片。
+ */
+export const shouldUseCompactTimeline = (input: {
+  hostWidthPx: number
+  leftGutterPx: number
+}): boolean => {
+  const timelineLeftPx = resolveTimelineLeftPx(input.hostWidthPx)
+  return input.leftGutterPx < timelineLeftPx + TIMELINE_FULL_WIDTH_PX
+}
+
 export const measureTimelineJumpSpacerPx = (input: {
   scrollTop: number
   scrollHeight: number

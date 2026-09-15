@@ -56,7 +56,7 @@ describe('assistant process icons and activity summary', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('learn_skill'))).toBe('learning')
   })
 
-  it('joins up to three tool short texts with commas and drops param segments', () => {
+  it('joins up to three tool short texts with enumeration commas and drops param segments', () => {
     const groups = [
       ...createToolGroup('learn_skill', 1, {
         completedText: [{ text: '已学会 ' }, { text: 'docx 阅读器' }],
@@ -70,11 +70,11 @@ describe('assistant process icons and activity summary', () => {
 
     expect(resolveAssistantExecutionIcon(groups)).toBe('workflow')
     expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe(
-      '已学会 docx 阅读器,执行命令'
+      '已学会 docx 阅读器、执行命令'
     )
   })
 
-  it('joins failed later items with commas like other kinds', () => {
+  it('joins failed later items with enumeration commas like other kinds', () => {
     const groups = [
       ...createToolGroup('web_search', 1, {
         completedText: [{ text: '搜索网页 ' }, { text: 'React', param: true }],
@@ -88,7 +88,7 @@ describe('assistant process icons and activity summary', () => {
     ]
     groups[1] = { ...groups[1], status: 'failed' }
 
-    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页,读取文件')
+    expect(toPlainText(buildAssistantExecutionSummaryText(groups))).toBe('搜索网页、读取文件')
   })
 
   it('merges same tool kind with count instead of repeating short text', () => {
@@ -237,7 +237,7 @@ describe('assistant process icons and activity summary', () => {
     expect(resolveAssistantExecutionIcon(groups)).toBe('eye')
   })
 
-  it('joins heterogeneous tool actions with commas and resolves to workflow icon', () => {
+  it('joins heterogeneous tool actions with enumeration commas and resolves to workflow icon', () => {
     const cases = [
       {
         groups: [
@@ -250,7 +250,7 @@ describe('assistant process icons and activity summary', () => {
             headerShortText: '查看页面'
           })
         ],
-        expectedText: '打开网页,查看页面'
+        expectedText: '打开网页、查看页面'
       },
       {
         groups: [
@@ -263,7 +263,7 @@ describe('assistant process icons and activity summary', () => {
             headerShortText: '抓取网页'
           })
         ],
-        expectedText: '搜索网页,抓取网页'
+        expectedText: '搜索网页、抓取网页'
       }
     ]
 
@@ -292,7 +292,7 @@ describe('assistant process icons and activity summary', () => {
       })
     ]
     expect(toPlainText(buildAssistantExecutionSummaryText(screenshotAndRead))).toBe(
-      '截取页面,读取图片'
+      '截取页面、读取图片'
     )
     expect(resolveAssistantExecutionIcon(screenshotAndRead)).toBe('image')
   })

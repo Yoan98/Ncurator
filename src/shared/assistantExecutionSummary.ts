@@ -422,7 +422,7 @@ export const buildAssistantExecutionSummaryText = (
     const shortSegments = trimHeaderSegments(
       getItemHeaderShortSegments(representative, kindStatus)
     )
-    const prefix = index === 0 ? '' : ','
+    const prefix = index === 0 ? '' : '、'
     const countSuffix =
       kindItems.length > 1 ? [text(` ${kindItems.length} 次`)] : ([] as AssistantExecutionTextSegment[])
     return sentence(text(prefix), ...shortSegments, ...countSuffix)
