@@ -16,7 +16,7 @@
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；Source 与正式包 E2E 在多 case 时都先执行 `warmup` 预热共享 fixture，正式包 E2E 再把缓存种子复制给隔离 case。
 - Workbench 模型选择 helper 优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选；未命中再按展示名；仍未命中则进入「自定义模型」按名称搜索。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听。WPS 客户端自动刷新由 `wps-office-reload-on-write-and-revert` 覆盖：真实 AI 写回/回退后，测试进程按加载项协议只读连接 `127.0.0.1:58123/events` 收集 reload；E2E 不写入本机 WPS `jsaddons`、不启动真实 WPS、不对授权弹窗做断言。安装器与 `publish.xml` 合并仍由 unit 覆盖。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听。安装器、`publish.xml` 与写盘后的回环 reload 由 unit 覆盖。WPS 窗口 close+open 依赖本机客户端和首次授权，不作为自动化 e2e。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
@@ -40,7 +40,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 
 - `conversation` 验证伙伴、composer、时间轴与清空、模型偏好和 `@` 参考资料 token。发送门禁是已有伙伴 + 输入非空。
 - `run` 验证智能模式运行中的过程流、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
-- `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退、多文件修改入口，以及 AI 写回/回退后的 WPS 回环刷新。不再覆盖 Composer 搜索结果面板。
+- `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退和多文件修改入口。不再覆盖 Composer 搜索结果面板。
 - `scheduled-task` 验证定时任务的入口、配置保存不建伙伴、到点/立即执行时按需创建专属伙伴、启用开关与往专属伙伴追加任务。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
@@ -49,6 +49,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - 依赖本地文件语义的测试统一复用 `tests/fixtures/workspace` 作为共享输入目录，但该目录只作为真实输入文件来源；运行时通过设置页添加为文件地址，并先创建伙伴。
 - `How` 和 `Oracle` 必须映射到 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - `WB-BLOCKER-003`（上下文压缩提示）依赖真实模型使用量与正式压缩阈值触发，运行成本不确定，不作为每次源码回归的固定 case，发布时按影响评估单独执行真实检查，检查运行中与完成态过程组，且不得为 E2E 降低生产阈值或伪造 compaction 事件。
+- `WB-WPS-001`（已打开 WPS 文档随写回自动刷新）依赖本机 WPS 与首次授权提示，不作为自动化 e2e；安装器、回环通道和写盘通知由 unit 覆盖，窗口刷新由人工验证。Workbench e2e 启动时跳过加载项安装，以免改写测试机 `jsaddons`。
 
 ## 4. 目录与命令
 
@@ -558,15 +559,6 @@ pnpm test:update:e2e
 - How：通过 UI 选择真实 docx 资料并发送真实编辑请求；等待 AI 写回但不点击 assistant turn 中的修改文件入口，确认它显示真实非零 `+/-` 数量；再点击入口检查右侧文件面包屑、无模式标签状态、预览，以及系统应用下拉内的“打开所在文件夹”；通过 E2E no-op 成功分支选择关联应用，再执行回退并重新读取文件内容。
 - Oracle：受支持写回类型边界对齐 `WB-CORE-003`；修改后源文件成为最终净稿，Run 结束后入口在未点击时已显示真实非零数量；DOCX 已应用记录成功交给外部应用后显示“关闭后重新打开”提示；右侧默认选中、Review Docx、写回和回退闭环对齐 `WB-PANEL-003-AC19`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`。
 - Not：不验证 docx 编辑算法的所有格式保真细节，该能力归 AI tool docx 测试。
-
-#### `wps-office-reload-on-write-and-revert`
-
-- 测试类型：`e2e / live`
-- What：真实 AI 写回并回退已有 docx 后，本机 WPS 同步回环通道对同一路径各推送至少一次 reload。
-- Why：WPS 窗口刷新发生在加载项进程内，Workbench UI 看不到；若不在产品回环协议上取证，写盘成功也无法证明已打开的 WPS 会被通知刷新。
-- How：通过真实 Workbench UI 选择 `sample-edit.docx` 并发送真实编辑请求。应用启动后测试进程只读连接 `http://127.0.0.1:58123/events`（加载项同一协议），不 POST `/report`、不写入本机 WPS `jsaddons`。能连上即证明 E2E 跳过安装后仍启动回环服务。等待写回完成后记录该路径 reload 次数，再从右侧修改记录执行确认回退，等待 reload 次数增加。
-- Oracle：磁盘在写回后包含标记、回退后恢复原文；写回后该路径至少 1 次 `type=reload`，回退后次数继续增加，对齐 `WB-WPS-001-AC2`、`WB-WPS-001-AC3`。写盘不因通道连接而失败，对齐 `WB-WPS-001-AC4`。E2E 不写本机 `jsaddons` 但仍监听 `58123`，对齐 `WB-WPS-001-AC1`。
-- Not：不启动真实 WPS，不断言授权弹窗、功能区页签、滚动恢复或 `.pptx` / `.xlsx` 的 close+open 细节；安装器与 `publish.xml` 由 unit 覆盖；`WB-WPS-001-AC5` 不测。
 
 #### `docx-attachment-apply-status-and-cell-diff`
 
