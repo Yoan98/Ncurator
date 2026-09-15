@@ -134,7 +134,7 @@ flowchart LR
 | Image                 | 外部 skill；需 `learn_skill`；按绝对路径生成或更新 PNG / JPEG / WebP                                                                                          |
 | Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                            |
 | 定时任务              | 独立主区配置与启用开关；到点向专属伙伴追加提示词                                                                                                                |
-| WPS 刷新              | 启动后默认安装离线 JS 加载项并开本机回环通道；AI 写回或回退 `.docx` / `.pptx` / `.xlsx` 后，已打开的 WPS 窗口 close + 再打开。无设置项；未安装 WPS 或加载项未授权时静默跳过 |
+| WPS 刷新              | 启动后回环服务同时提供 `/addon` 与 SSE；`publish.xml` 指向 `http://127.0.0.1:端口/addon`。功能区「馆长」页签表示已载入，验收以 `GET /status` 为准。AI 写回或回退 `.docx` / `.pptx` / `.xlsx` 后 close + 再打开。无设置项；未安装 WPS 或加载项未授权时静默跳过 |
 
 各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准；工具契约见 `tool-design.md`，活例子按需生成（`pnpm doc:ai-tool-prompt-audit`，不入库）。
 

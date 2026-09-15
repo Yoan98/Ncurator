@@ -106,4 +106,21 @@ describe('FileWatchService', () => {
     expect(firstChange).not.toHaveBeenCalled()
     expect(secondChange).not.toHaveBeenCalled()
   })
+
+  it('ignores metadata-only changes and sibling lock files when content is unchanged', async () => {
+    const { directory, filePath } = await createWatchedFile()
+    const service = new FileWatchService({ debounceMs: 40 })
+    services.push(service)
+    const onChange = vi.fn()
+    const { watchId } = await service.start({ ownerId: 6, filePath, onChange })
+    const later = new Date(Date.now() + 10_000)
+
+    await fs.utimes(filePath, later, later)
+    await fs.writeFile(path.join(directory, '~$current.md'), 'lock')
+    await fs.writeFile(filePath, '# original')
+    await new Promise((resolve) => setTimeout(resolve, 120))
+
+    expect(await service.check(watchId)).toBe(false)
+    expect(onChange).not.toHaveBeenCalled()
+  })
 })

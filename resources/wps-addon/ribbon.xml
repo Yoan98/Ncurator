@@ -1,4 +1,17 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui" onLoad="ribbon.OnAddinLoad">
-  <ribbon startFromScratch="false"></ribbon>
+<customUI xmlns="http://schemas.microsoft.com/office/2006/01/customui" onLoad="OnAddinLoad">
+  <ribbon startFromScratch="false">
+    <tabs>
+      <tab id="ncuratorSyncTab" label="馆长">
+        <group id="ncuratorSyncGroup" label="文档">
+          <button
+            id="ncuratorSyncStatus"
+            label="自动刷新"
+            onAction="OnStatus"
+            enabled="true"
+          />
+        </group>
+      </tab>
+    </tabs>
+  </ribbon>
 </customUI>

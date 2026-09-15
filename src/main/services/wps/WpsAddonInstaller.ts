@@ -2,8 +2,14 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { WPS_ADDON_FILES, WPS_ADDON_NAME } from './constants'
-import { mergePublishXml, toAddonFileUrl } from './publishXml'
+import { mergeAuthAddin } from './authAddin'
+import {
+  WPS_ADDON_DIR_NAME,
+  WPS_ADDON_NAME,
+  WPS_ADDON_PORT_FILE,
+  WPS_PREFERRED_SYNC_PORT
+} from './constants'
+import { mergePublishXml, toAddonLoopbackUrl } from './publishXml'
 
 export type WpsAddonInstallResult = {
   installed: boolean
@@ -67,8 +73,6 @@ export const resolveWpsJsAddonsDir = (options: {
 }
 
 export class WpsAddonInstaller implements WpsAddonInstallerLike {
-  private addonDir: string | undefined
-
   public constructor(private readonly options: WpsAddonInstallerOptions) {}
 
   public async install(): Promise<WpsAddonInstallResult> {
@@ -80,32 +84,49 @@ export class WpsAddonInstaller implements WpsAddonInstallerLike {
       return { installed: false, jsAddonsDir, reason: 'addon-source-missing' }
     }
 
-    const addonDir = path.join(jsAddonsDir, WPS_ADDON_NAME)
-    await fsp.mkdir(addonDir, { recursive: true })
     await fsp.mkdir(jsAddonsDir, { recursive: true })
-    for (const fileName of WPS_ADDON_FILES) {
-      await fsp.copyFile(
-        path.join(this.options.addonSourceDir, fileName),
-        path.join(addonDir, fileName)
-      )
-    }
-
-    const publishPath = path.join(jsAddonsDir, 'publish.xml')
-    const existing = await fsp.readFile(publishPath, 'utf8').catch(() => '')
-    if (existing) {
-      await fsp.writeFile(`${publishPath}.ncurator-backup`, existing, 'utf8').catch(() => undefined)
-    }
-    await fsp.writeFile(publishPath, mergePublishXml(existing, toAddonFileUrl(addonDir)), 'utf8')
-    this.addonDir = addonDir
-    return { installed: true, addonDir, jsAddonsDir }
+    await this.removeOfflineAddonDirs(jsAddonsDir)
+    await this.writeLoopbackRegistration(jsAddonsDir, WPS_PREFERRED_SYNC_PORT)
+    return { installed: true, jsAddonsDir }
   }
 
   public async writePort(port: number): Promise<void> {
-    if (!this.addonDir) return
+    const jsAddonsDir = resolveWpsJsAddonsDir(this.options)
+    if (!jsAddonsDir) return
+    await fsp.mkdir(jsAddonsDir, { recursive: true })
+    await this.removeOfflineAddonDirs(jsAddonsDir)
+    await this.writeLoopbackRegistration(jsAddonsDir, port)
+  }
+
+  private async writeLoopbackRegistration(jsAddonsDir: string, port: number): Promise<void> {
+    const addonUrl = toAddonLoopbackUrl(port)
+    const publishPath = path.join(jsAddonsDir, 'publish.xml')
+    const existingPublish = await fsp.readFile(publishPath, 'utf8').catch(() => '')
+    if (existingPublish) {
+      await fsp.writeFile(`${publishPath}.ncurator-backup`, existingPublish, 'utf8').catch(() => undefined)
+    }
+    await fsp.writeFile(publishPath, mergePublishXml(existingPublish, addonUrl), 'utf8')
+
+    const authPath = path.join(jsAddonsDir, 'authaddin.json')
+    const existingAuth = await fsp.readFile(authPath, 'utf8').catch(() => '')
+    if (existingAuth) {
+      await fsp.writeFile(`${authPath}.ncurator-backup`, existingAuth, 'utf8').catch(() => undefined)
+      await fsp.writeFile(authPath, mergeAuthAddin(existingAuth, addonUrl), 'utf8')
+    }
+
     await fsp.writeFile(
-      path.join(this.addonDir, 'port.json'),
+      path.join(jsAddonsDir, WPS_ADDON_PORT_FILE),
       `${JSON.stringify({ port })}\n`,
       'utf8'
+    )
+    await fsp.rm(path.join(jsAddonsDir, 'jsaddinblockhost.ini'), { force: true })
+  }
+
+  private async removeOfflineAddonDirs(jsAddonsDir: string): Promise<void> {
+    await Promise.all(
+      [WPS_ADDON_DIR_NAME, WPS_ADDON_NAME].map((dirName) =>
+        fsp.rm(path.join(jsAddonsDir, dirName), { recursive: true, force: true })
+      )
     )
   }
 }

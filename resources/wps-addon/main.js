@@ -87,6 +87,15 @@
           if (view.slideIndex === null || view.slideIndex === undefined) return { slide: false }
           app.ActiveWindow.View.GotoSlide(view.slideIndex)
           return { slide: true }
+        },
+        excerpt: function () {
+          try {
+            return String(
+              app.ActivePresentation.Slides.Item(1).Shapes.Item(1).TextFrame.TextRange.Text || ''
+            ).slice(0, 2000)
+          } catch (error) {
+            return ''
+          }
         }
       }
     }
@@ -133,6 +142,17 @@
             restored.error = describeError(error)
           }
           return restored
+        },
+        excerpt: function () {
+          try {
+            return String(app.ActiveSheet.UsedRange.Text || '').slice(0, 2000)
+          } catch (error) {
+            try {
+              return String(app.ActiveSheet.Cells.Item(1, 1).Text || '').slice(0, 2000)
+            } catch (inner) {
+              return ''
+            }
+          }
         }
       }
     }
@@ -182,6 +202,13 @@
             restored.scrollError = describeError(error)
           }
           return restored
+        },
+        excerpt: function () {
+          try {
+            return String(app.ActiveDocument.Content.Text || '').slice(0, 2000)
+          } catch (error) {
+            return ''
+          }
         }
       }
     }
@@ -236,6 +263,7 @@
       adapter.close(item)
       adapter.open(fullName)
       var restored = adapter.restoreView(view)
+      var excerpt = adapter.excerpt ? adapter.excerpt() : ''
       suppressEvents = false
       return {
         ok: true,
@@ -243,7 +271,8 @@
         wasDirty: wasDirty,
         elapsedMs: Date.now() - startedAt,
         view: view,
-        restored: restored
+        restored: restored,
+        excerpt: excerpt
       }
     } catch (error) {
       suppressEvents = false
@@ -254,8 +283,23 @@
   function handlePayload(payload) {
     if (!payload || payload.type === 'ping') return
     if (payload.type === 'reload') {
-      if (!adapter || !findItem(payload.path)) return
-      report('reload-result', reload(payload.path))
+      try {
+        if (!adapter || !findItem(payload.path)) {
+          report('reload-result', {
+            ok: false,
+            reason: adapter ? 'not open here' : 'no adapter',
+            targetPath: payload.path
+          })
+          return
+        }
+        report('reload-result', reload(payload.path))
+      } catch (error) {
+        report('reload-result', {
+          ok: false,
+          reason: describeError(error),
+          targetPath: payload.path
+        })
+      }
       return
     }
     if (payload.type === 'list') report('items', { items: listItems().items })
@@ -336,6 +380,20 @@
   }
 
   function resolveServer(done) {
+    try {
+      var loc = window.location
+      if (loc && /^https?:$/i.test(loc.protocol)) {
+        var host = loc.hostname
+        var port = Number(loc.port || (loc.protocol === 'https:' ? 443 : 80))
+        if ((host === '127.0.0.1' || host === 'localhost') && port > 0) {
+          window.__ncuratorServer = 'http://127.0.0.1:' + port
+          done()
+          return
+        }
+      }
+    } catch (error) {
+      // 非 HTTP 加载时改读 port.json。
+    }
     readPortFile(function (port) {
       window.__ncuratorServer = 'http://127.0.0.1:' + port
       done()
@@ -382,6 +440,10 @@
     OnAddinLoad: function () {
       startSync()
       return true
+    },
+    OnStatus: function () {
+      startSync()
+      return true
     }
   }
 
@@ -390,5 +452,7 @@
   }
 
   window.ribbon = ribbon
+  window.OnAddinLoad = ribbon.OnAddinLoad
+  window.OnStatus = ribbon.OnStatus
   setTimeout(startSync, 0)
 })()

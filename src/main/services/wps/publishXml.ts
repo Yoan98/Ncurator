@@ -1,7 +1,6 @@
-import { pathToFileURL } from 'node:url'
 import { WPS_ADDON_HOSTS, WPS_ADDON_LEGACY_NAMES, WPS_ADDON_NAME } from './constants'
 
-const PLUGIN_TAG = /<jspluginonline\b[^>]*\/?>/gi
+const PLUGIN_TAG = /<jsplugin(?:online)?\b[^>]*\/?>/gi
 
 const escapeXml = (value: string): string =>
   value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
@@ -11,12 +10,9 @@ const namesToReplace = (): Set<string> => new Set([WPS_ADDON_NAME, ...WPS_ADDON_
 const readAttribute = (tag: string, name: string): string | undefined =>
   new RegExp(`\\b${name}="([^"]*)"`, 'i').exec(tag)?.[1]
 
-export const toAddonFileUrl = (addonDir: string): string => {
-  const url = pathToFileURL(addonDir).href
-  return url.endsWith('/') ? url : `${url}/`
-}
+export const toAddonLoopbackUrl = (port: number): string => `http://127.0.0.1:${port}/addon/`
 
-export const mergePublishXml = (raw: string, addonFileUrl: string): string => {
+export const mergePublishXml = (raw: string, addonUrl: string): string => {
   const replaceNames = namesToReplace()
   const source = String(raw || '').trim() || '<jsplugins>\n</jsplugins>'
   const kept: string[] = []
@@ -26,7 +22,10 @@ export const mergePublishXml = (raw: string, addonFileUrl: string): string => {
     kept.push(tag.trim())
     return ''
   })
-  const leftover = scanned.replace(/<\/?jsplugins>/gi, '').trim()
+  const leftover = scanned
+    .replace(/<\/?jsplugins>/gi, '')
+    .replace(/<\?xml[\s\S]*?\?>/gi, '')
+    .trim()
   if (leftover) {
     leftover
       .split(/\n+/)
@@ -35,10 +34,11 @@ export const mergePublishXml = (raw: string, addonFileUrl: string): string => {
       .forEach((line) => kept.push(line))
   }
   const uniqueKept = [...new Set(kept)]
+  const url = escapeXml(addonUrl)
   const entries = WPS_ADDON_HOSTS.map(
     (type) =>
-      `<jspluginonline name="${WPS_ADDON_NAME}" type="${type}" url="${escapeXml(addonFileUrl)}" enable="true" install=""/>`
+      `<jspluginonline name="${WPS_ADDON_NAME}" type="${type}" url="${url}" debug="" enable="enable_dev" install="null"/>`
   )
   const inner = [...uniqueKept, ...entries].join('\n')
-  return `<jsplugins>\n${inner}\n</jsplugins>\n`
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<jsplugins>\n${inner}\n</jsplugins>\n`
 }
