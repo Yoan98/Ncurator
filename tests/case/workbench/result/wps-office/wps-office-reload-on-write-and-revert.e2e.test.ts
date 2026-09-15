@@ -49,9 +49,9 @@ describe('workbench result e2e', () => {
         caseId: CASE_ID,
         domain: 'workbench',
         suite: 'result',
-        groups: ['apply'],
+        groups: ['wps-office'],
         description:
-          '本机已授权的 WPS 打开目标 docx / xlsx / pptx 后，AI 写回/回退应让对应组件 close+open 并读到新/旧正文。',
+          'opt-in：本机已授权的 WPS 打开目标 docx / xlsx / pptx 后，AI 写回/回退应让对应组件 close+open 并读到新/旧正文。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'exclusive',

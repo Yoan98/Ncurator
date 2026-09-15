@@ -207,6 +207,8 @@ const runCandidateE2E = async ({ candidates, sourceDirectory }) => {
         'package',
         '--exclude-group',
         'provider-matrix',
+        '--exclude-group',
+        'wps-office',
         ...candidates.flatMap((candidate, index) => [
           '--bundle',
           candidate.bundlePath,

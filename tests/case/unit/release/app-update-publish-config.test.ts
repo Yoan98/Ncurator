@@ -132,6 +132,10 @@ describe('app update publish config', () => {
 
     expect(windowsRelease).toContain("'r2', 'finalize-windows.mjs'")
     expect(macRelease).toContain("'r2', 'finalize-macos.mjs'")
+    expect(windowsRelease).toContain("'provider-matrix'")
+    expect(windowsRelease).toContain("'wps-office'")
+    expect(macRelease).toContain("'provider-matrix'")
+    expect(macRelease).toContain("'wps-office'")
     expect(windowsFinalize).toContain('releases/latest/windows.json')
     expect(windowsFinalize).not.toContain('releases/latest/macos.json')
     expect(macFinalize).toContain('releases/latest/macos.json')

@@ -217,6 +217,8 @@ const runCandidateE2E = async ({ candidate, sourceDirectory, environment }) => {
         'package',
         '--exclude-group',
         'provider-matrix',
+        '--exclude-group',
+        'wps-office',
         '--bundle',
         candidate.bundlePath,
         '--result',

@@ -6,7 +6,7 @@
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
 - Workbench UI E2E 回归测试必须通过真实 Electron UI 配模型、创建伙伴、发送消息、选择 `@` 资料、预览、回退和操作右侧面板。设置页可另加文件地址，但发送不再要求绑定工作空间目录。
 - 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；live 配置只读内置服务商 Key 池与选中目标：`AI_LIVE_KEY_<PROVIDER>`（`DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`）、可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）、可选 `AI_LIVE_MODEL`（默认该服务商测试默认模型，通义为 `qwen3.8-flash`）。`baseUrl` / `providerKind` 由产品 registry 推导。日常 case 通过 Settings「推荐」类型写入当前目标服务商；全服务商冒烟见 `live-preset-provider-smoke`。
-- 日常 `pnpm test:workbench` / `pnpm test:e2e:source` 默认 `--exclude-group provider-matrix`，不跑全服务商冒烟；需要时执行 `pnpm test:workbench:provider-matrix` 或 `--case live-preset-provider-smoke`。
+- 日常 `pnpm test:workbench` / `pnpm test:e2e:source` 默认 `--exclude-group provider-matrix --exclude-group wps-office`，不跑全服务商冒烟与真开 WPS 窗口刷新；需要时分别执行 `pnpm test:workbench:provider-matrix` / `pnpm test:workbench:wps-office`，或对应 `--case`。
 - case 因生产行为缺口失败时，不在测试中硬改业务行为，统一记录为产品或生产实现待决项。
 
 ## 2. 测试边界
@@ -16,7 +16,7 @@
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；Source 与正式包 E2E 在多 case 时都先执行 `warmup` 预热共享 fixture，正式包 E2E 再把缓存种子复制给隔离 case。
 - Workbench 模型选择 helper 优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选；未命中再按展示名；仍未命中则进入「自定义模型」按名称搜索。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 断言馆长对 docx / xlsx / pptx 的 `/status` dispatch；`wps-office-reload-on-write-and-revert` 在本机已装且已授权的 WPS 上验证文字 / 表格 / 演示 close+open。日常 e2e 仍跳过覆盖拷加载项文件，但会启动回环 `/addon`；`publish.xml` 与授权 path 固定 `http://127.0.0.1:58123/addon/`，端口文件记录实际监听端口。若 `58123` 上已是本馆长 `/status` 通道，后启动实例不得把 `publish.xml` / 授权 path 改到临时端口。安装器与 `publish.xml` / `authaddin` 合并由 unit 覆盖。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：日常回归只跑 `wps-sync-dispatch-on-write-and-revert`（断言馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS）；真窗口刷新 `wps-office-reload-on-write-and-revert` 在路径 `result/wps-office/`，**opt-in**（`pnpm test:workbench:wps-office`），因本机授权弹窗可能卡住自动化。日常 e2e 仍跳过覆盖拷加载项文件，但会启动回环 `/addon`；`publish.xml` 与授权 path 固定 `http://127.0.0.1:58123/addon/`，端口文件记录实际监听端口。若 `58123` 上已是本馆长 `/status` 通道，后启动实例不得把 `publish.xml` / 授权 path 改到临时端口。安装器与 `publish.xml` / `authaddin` 合并由 unit 覆盖。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
@@ -49,7 +49,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - 依赖本地文件语义的测试统一复用 `tests/fixtures/workspace` 作为共享输入目录，但该目录只作为真实输入文件来源；运行时通过设置页添加为文件地址，并先创建伙伴。
 - `How` 和 `Oracle` 必须映射到 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - `WB-BLOCKER-003`（上下文压缩提示）依赖真实模型使用量与正式压缩阈值触发，运行成本不确定，不作为每次源码回归的固定 case，发布时按影响评估单独执行真实检查，检查运行中与完成态过程组，且不得为 E2E 降低生产阈值或伪造 compaction 事件。
-- `WB-WPS-001` 由 `wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 dispatch，由 `wps-office-reload-on-write-and-revert` 覆盖已授权 WPS 文字 / 表格 / 演示窗口刷新；未安装 WPS 或对应组件加载项未授权时后者跳过该格式。已授权却连不上则失败，不得只测 docx 就当作三种格式都过。Workbench e2e 启动时跳过覆盖拷加载项文件，仍启动回环 `/addon`；`publish.xml` 与授权 path 固定优先端口 `58123`，不得改写到临时端口。xlsx / pptx 窗口刷新还要求 `/status` 的 `clients` 出现 `et` / `wpp`，不能只靠文字组件。加载项不得探测其他组件 `Active*` 对象。
+- `WB-WPS-001` 日常回归由 `wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 dispatch；真窗口刷新由 opt-in `wps-office-reload-on-write-and-revert`（`pnpm test:workbench:wps-office`）覆盖已授权 WPS 文字 / 表格 / 演示，不进默认 e2e / 发版 package e2e。未安装 WPS 或对应组件加载项未授权时后者跳过该格式；已授权却连不上则失败，不得只测 docx 就当作三种格式都过。Workbench e2e 启动时跳过覆盖拷加载项文件，仍启动回环 `/addon`；`publish.xml` 与授权 path 固定优先端口 `58123`，不得改写到临时端口。xlsx / pptx 窗口刷新还要求 `/status` 的 `clients` 出现 `et` / `wpp`，不能只靠文字组件。加载项不得探测其他组件 `Active*` 对象。
 
 ## 4. 目录与命令
 
@@ -63,6 +63,7 @@ tests/case/workbench/
     timeline/
     message/
     scope/
+    provider-matrix/   # opt-in
   run/
     process/
     blocker/
@@ -71,6 +72,7 @@ tests/case/workbench/
   result/
     preview/
     apply/
+    wps-office/        # opt-in：真开 WPS
   scheduled-task/
 ```
 
@@ -78,6 +80,7 @@ tests/case/workbench/
 
 - `pnpm test:workbench`
 - `pnpm test:workbench:e2e`
+- `pnpm test:workbench:wps-office`（本机已授权 WPS，不进日常 / 发版）
 - `node scripts/test/workflow.mjs --domain workbench`
 - `node scripts/test/workflow.mjs --domain workbench --type e2e`
 
@@ -571,12 +574,12 @@ pnpm test:update:e2e
 
 #### `wps-office-reload-on-write-and-revert`
 
-- 测试类型：`e2e / exclusive`
+- 测试类型：`e2e / exclusive`（路径 `result/wps-office/`，**opt-in**；对齐 `test:update:real:win` 的「不进回归 / 发布门禁」口径）
 - What：本机已授权的 WPS 打开目标 docx、xlsx、pptx 后，真实 AI 写回/回退让对应组件加载项 close+open，窗口摘录分别含标记和恢复原文。
-- Why：只证明馆长 dispatch 不能证明用户看到的 WPS 窗口已换新稿。文字、表格、演示是独立客户端，只测 docx 不能证明 Excel / PPT 窗口会刷新。
-- How：不覆盖拷加载项、不点授权、不 `killall`、不用辅助功能点 UI。馆长回环先起来；`publish.xml` 与授权 path 保持 `http://127.0.0.1:58123/addon/`。若回环不在优先端口 `58123`（说明本机另有馆长占用），跳过整案，因为已打开的 WPS 仍从优先端口拉加载项。独占 `58123` 时，对 `sample-edit.docx`、`经营周报.xlsx`、`品牌策略提案.pptx` 分别用 `open -a` 打开临时工作区文件。等待 `/status` 出现对应组件客户端（`wps` / `et` / `wpp`）且该文档已登记。再通过真实 Workbench UI 发送编辑；写回后读该路径 `reload-result` 摘录含标记，回退后摘录不含标记。本机未装 WPS、或该组件 `authaddin` 未授权则跳过该格式；该组件已授权但约 90 秒内加载项未连接则失败。三种格式都未授权才跳过整案。
+- Why：只证明馆长 dispatch 不能证明用户看到的 WPS 窗口已换新稿。文字、表格、演示是独立客户端，只测 docx 不能证明 Excel / PPT 窗口会刷新。授权弹窗可能卡住无人值守自动化，故不进日常 / 发版 package e2e。
+- How：执行 `pnpm test:workbench:wps-office` 或 `--case wps-office-reload-on-write-and-revert`。不覆盖拷加载项、不点授权、不 `killall`、不用辅助功能点 UI。馆长回环先起来；`publish.xml` 与授权 path 保持 `http://127.0.0.1:58123/addon/`。若回环不在优先端口 `58123`（说明本机另有馆长占用），跳过整案，因为已打开的 WPS 仍从优先端口拉加载项。独占 `58123` 时，对 `sample-edit.docx`、`经营周报.xlsx`、`品牌策略提案.pptx` 分别用 `open -a` 打开临时工作区文件。等待 `/status` 出现对应组件客户端（`wps` / `et` / `wpp`）且该文档已登记。再通过真实 Workbench UI 发送编辑；写回后读该路径 `reload-result` 摘录含标记，回退后摘录不含标记。本机未装 WPS、或该组件 `authaddin` 未授权则跳过该格式；该组件已授权但约 90 秒内加载项未连接则失败。三种格式都未授权才跳过整案。
 - Oracle：磁盘写回含标记、回退恢复原文；已覆盖格式的加载项 `reload-result` 写回后摘录含标记、回退后不含标记，对齐 `WB-WPS-001-AC1`、`WB-WPS-001-AC2`、`WB-WPS-001-AC3`。写盘不因刷新失败，对齐 `WB-WPS-001-AC4`。
-- Not：不断言授权弹窗文案、功能区页签肉眼可见或滚动恢复。`WB-WPS-001-AC5` 只作为未授权跳过说明。验收以 `/status` 为准。
+- Not：不断言授权弹窗文案、功能区页签肉眼可见或滚动恢复。`WB-WPS-001-AC5` 只作为未授权跳过说明。验收以 `/status` 为准。不进入 `pnpm test:workbench` / `test:e2e:*` / 发版 package e2e。
 
 #### `docx-attachment-apply-status-and-cell-diff`
 
