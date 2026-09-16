@@ -315,6 +315,23 @@
       .toLowerCase()
   }
 
+  function extensionOf(filePath) {
+    var value = String(filePath || '')
+    var slash = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'))
+    var base = slash >= 0 ? value.slice(slash + 1) : value
+    var dot = base.lastIndexOf('.')
+    return dot >= 0 ? base.slice(dot).toLowerCase() : ''
+  }
+
+  function isOwnPath(filePath) {
+    if (!adapter) return false
+    var ext = extensionOf(filePath)
+    if (adapter.kind === 'et') return ext === '.xlsx'
+    if (adapter.kind === 'wpp') return ext === '.pptx'
+    if (adapter.kind === 'wps') return ext === '.docx'
+    return false
+  }
+
   function findItem(targetPath) {
     var collection = adapter.collection()
     var count = collection.Count
@@ -357,8 +374,101 @@
     }
   }
 
+  var pendingViews = {}
+
+  function closeForWrite(targetPath) {
+    if (!adapter) return { ok: false, reason: 'no adapter', targetPath: targetPath }
+    try {
+      var item = targetPath ? findItem(targetPath) : null
+      if (!item) return { ok: false, reason: 'not open here', targetPath: targetPath }
+      var fullName = item.FullName
+      if (!fullName) return { ok: false, reason: 'never saved, no path', targetPath: targetPath }
+      var view = adapter.captureView()
+      pendingViews[normalizePath(fullName)] = view
+      suppressEvents = true
+      adapter.close(item)
+      suppressEvents = false
+      return { ok: true, fullName: fullName, view: view }
+    } catch (error) {
+      suppressEvents = false
+      return { ok: false, reason: describeError(error), targetPath: targetPath }
+    }
+  }
+
+  function openAfterWrite(targetPath) {
+    if (!adapter) return { ok: false, reason: 'no adapter', targetPath: targetPath }
+    var startedAt = Date.now()
+    try {
+      var existing = targetPath ? findItem(targetPath) : null
+      if (existing) {
+        return {
+          ok: true,
+          fullName: existing.FullName,
+          excerpt: adapter.excerpt ? adapter.excerpt() : '',
+          alreadyOpen: true,
+          elapsedMs: Date.now() - startedAt
+        }
+      }
+      if (!targetPath) return { ok: false, reason: 'never saved, no path' }
+      if (!isOwnPath(targetPath)) return { ok: false, reason: 'not open here', targetPath: targetPath }
+      var view = pendingViews[normalizePath(targetPath)]
+      delete pendingViews[normalizePath(targetPath)]
+      suppressEvents = true
+      adapter.open(targetPath)
+      var restored = view ? adapter.restoreView(view) : {}
+      var excerpt = adapter.excerpt ? adapter.excerpt() : ''
+      suppressEvents = false
+      return {
+        ok: true,
+        fullName: targetPath,
+        excerpt: excerpt,
+        restored: restored,
+        view: view,
+        elapsedMs: Date.now() - startedAt
+      }
+    } catch (error) {
+      suppressEvents = false
+      return {
+        ok: false,
+        reason: describeError(error),
+        targetPath: targetPath,
+        elapsedMs: Date.now() - startedAt
+      }
+    }
+  }
+
   function handlePayload(payload) {
     if (!payload || payload.type === 'ping') return
+    if (payload.type === 'close') {
+      try {
+        bindAdapter()
+        var closed = closeForWrite(payload.path)
+        if (closed.ok) closed.items = listItems().items
+        report('close-result', closed)
+      } catch (error) {
+        report('close-result', {
+          ok: false,
+          reason: describeError(error),
+          targetPath: payload.path
+        })
+      }
+      return
+    }
+    if (payload.type === 'open') {
+      try {
+        bindAdapter()
+        var opened = openAfterWrite(payload.path)
+        if (opened.ok) opened.items = listItems().items
+        report('reload-result', opened)
+      } catch (error) {
+        report('reload-result', {
+          ok: false,
+          reason: describeError(error),
+          targetPath: payload.path
+        })
+      }
+      return
+    }
     if (payload.type === 'reload') {
       try {
         bindAdapter()

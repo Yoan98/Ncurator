@@ -31,7 +31,7 @@ describe('workbench result e2e', () => {
         suite: 'result',
         groups: ['apply'],
         description:
-          '真实 AI 写回并回退 docx / xlsx / pptx 后，馆长回环 /status 对各路径记录 reload dispatch。',
+          '真实 AI 写回并回退 docx / xlsx / pptx 后，馆长回环 /status 对各路径记录 open dispatch。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',

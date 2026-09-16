@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, execFileSync, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
@@ -89,23 +89,135 @@ const darwinAppCandidates = (): string[] => [
   '/Applications/WPS Office.app'
 ]
 
-const windowsExeCandidates = (): string[] => {
+const uniqueExistingFiles = (candidates: readonly string[]): string[] => {
+  const seen = new Set<string>()
+  const files: string[] = []
+  for (const candidate of candidates) {
+    const value = String(candidate || '').trim()
+    if (!value) continue
+    const resolved = path.resolve(value)
+    const key = resolved.toLowerCase()
+    if (seen.has(key) || !fs.existsSync(resolved)) continue
+    seen.add(key)
+    files.push(resolved)
+  }
+  return files
+}
+
+const readWindowsRegistryValues = (key: string, valueName: string): string[] => {
+  try {
+    const raw = execFileSync('reg', ['query', key, '/v', valueName], {
+      encoding: 'utf8',
+      timeout: 5_000,
+      windowsHide: true
+    })
+    const pattern = new RegExp(`${valueName}\\s+REG_\\w+\\s+(.+)`, 'gi')
+    return [...raw.matchAll(pattern)]
+      .map((match) => match[1].trim().replace(/^"|"$/g, ''))
+      .filter(Boolean)
+  } catch {
+    return []
+  }
+}
+
+const windowsInstallRoots = (): string[] => {
+  const keys = [
+    'HKLM\\Software\\Kingsoft\\Office\\6.0\\Common',
+    'HKLM\\Software\\WOW6432Node\\Kingsoft\\Office\\6.0\\Common',
+    'HKCU\\Software\\Kingsoft\\Office\\6.0\\Common'
+  ]
+  const roots: string[] = []
+  const seen = new Set<string>()
+  for (const key of keys) {
+    for (const root of readWindowsRegistryValues(key, 'InstallRoot')) {
+      const resolved = path.resolve(root)
+      const normalized = resolved.toLowerCase()
+      if (seen.has(normalized) || !fs.existsSync(resolved)) continue
+      seen.add(normalized)
+      roots.push(resolved)
+    }
+  }
+  return roots
+}
+
+const windowsLauncherCandidates = (): string[] => {
   const localAppData = String(process.env.LOCALAPPDATA || '').trim()
   const programFiles = String(process.env.ProgramFiles || '').trim()
   const programFilesX86 = String(process.env['ProgramFiles(x86)'] || '').trim()
-  return [
+  const candidates = [
     localAppData ? path.join(localAppData, 'Kingsoft', 'WPS Office', 'ksolaunch.exe') : '',
     programFiles ? path.join(programFiles, 'Kingsoft', 'WPS Office', 'office6', 'wps.exe') : '',
     programFilesX86 ? path.join(programFilesX86, 'Kingsoft', 'WPS Office', 'office6', 'wps.exe') : ''
-  ].filter(Boolean)
+  ]
+  for (const root of windowsInstallRoots()) {
+    candidates.push(
+      path.join(root, 'office6', 'ksolaunch.exe'),
+      path.join(path.dirname(root), 'ksolaunch.exe'),
+      path.join(root, 'office6', 'wps.exe')
+    )
+  }
+  return uniqueExistingFiles(candidates)
 }
+
+const windowsOffice6Dirs = (): string[] => {
+  const dirs: string[] = []
+  const seen = new Set<string>()
+  const addDir = (dir: string): void => {
+    const resolved = path.resolve(dir)
+    const key = resolved.toLowerCase()
+    if (seen.has(key) || !fs.existsSync(path.join(resolved, 'wps.exe'))) return
+    seen.add(key)
+    dirs.push(resolved)
+  }
+  for (const root of windowsInstallRoots()) {
+    addDir(path.join(root, 'office6'))
+  }
+  for (const launcher of windowsLauncherCandidates()) {
+    const dir = path.dirname(launcher)
+    if (path.basename(dir).toLowerCase() === 'office6') addDir(dir)
+    else addDir(path.join(dir, 'office6'))
+  }
+  return dirs
+}
+
+const preferWindowsLauncher = (launchers: readonly string[]): string | undefined =>
+  launchers.find((item) => path.basename(item).toLowerCase() === 'ksolaunch.exe') ?? launchers[0]
+
+const windowsComponentExeName = (filePath: string): string => {
+  const ext = path.extname(filePath).toLowerCase()
+  if (ext === '.xlsx' || ext === '.xlsm') return 'et.exe'
+  if (ext === '.pptx' || ext === '.pptm') return 'wpp.exe'
+  return 'wps.exe'
+}
+
+const resolveWindowsOpenExe = (filePath: string): string | undefined => {
+  const exeName = windowsComponentExeName(filePath)
+  for (const dir of windowsOffice6Dirs()) {
+    const exe = path.join(dir, exeName)
+    if (fs.existsSync(exe)) return exe
+  }
+  return resolveWpsOfficeAppPath()
+}
+
+const spawnWindowsDetached = async (exePath: string, args: readonly string[]): Promise<void> =>
+  await new Promise((resolve, reject) => {
+    const child = spawn(exePath, [...args], {
+      detached: true,
+      stdio: 'ignore'
+    })
+    child.once('error', reject)
+    child.once('spawn', () => {
+      child.unref()
+      resolve()
+    })
+  })
 
 export const resolveWpsOfficeAppPath = (): string | undefined => {
   if (process.platform === 'darwin') {
     return darwinAppCandidates().find((candidate) => fs.existsSync(candidate))
   }
   if (process.platform === 'win32') {
-    return windowsExeCandidates().find((candidate) => fs.existsSync(candidate))
+    return preferWindowsLauncher(windowsLauncherCandidates())
   }
   return undefined
 }
@@ -213,7 +325,11 @@ export const openDocumentInWpsBackground = async (filePath: string): Promise<voi
     return
   }
   if (process.platform === 'win32') {
-    await execFileAsync(appPath, [filePath], { timeout: 20_000, windowsHide: true })
+    const exePath = resolveWindowsOpenExe(filePath)
+    if (!exePath) {
+      throw new Error('本机未找到 WPS Office')
+    }
+    await spawnWindowsDetached(exePath, [filePath])
     return
   }
   throw new Error(`WPS e2e 不支持当前平台 ${process.platform}`)
@@ -266,7 +382,7 @@ export const waitForWpsReloadResult = async (options: {
   excerptExcludes?: string
   timeoutMs?: number
 }): Promise<WpsReloadResult> => {
-  const timeoutMs = options.timeoutMs ?? 20_000
+  const timeoutMs = options.timeoutMs ?? 30_000
   const deadline = Date.now() + timeoutMs
   let lastError: unknown
   while (Date.now() < deadline) {
@@ -281,7 +397,15 @@ export const waitForWpsReloadResult = async (options: {
         return true
       })
       if (matched) return matched
-      lastError = new Error(`reload-result count=${status.lastReloadResults.length}`)
+      lastError = new Error(
+        `reload-result count=${status.lastReloadResults.length} close-result=${
+          status.lastCloseResults?.length ?? 0
+        } dispatches=${status.lastDispatches.length} clients=${
+          status.clients.map((item) => item.component).join(',') || '(none)'
+        } open=${
+          status.openDocuments.map((item) => `${item.component}:${item.fullName}`).join('|') || '(none)'
+        } last=${JSON.stringify(status.lastReloadResults.at(-1) ?? null)}`
+      )
     } catch (error) {
       lastError = error
     }

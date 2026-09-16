@@ -1,10 +1,10 @@
 import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http'
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { app } from 'electron'
+import { app, shell } from 'electron'
 import { WPS_ADDON_FILES, WPS_PREFERRED_SYNC_PORT } from './constants'
 import { WpsAddonInstaller, type WpsAddonInstallerLike } from './WpsAddonInstaller'
-import { normalizeOfficePath } from './officeFileWriteNotify'
+import { normalizeOfficePath, officeWriteHostForPath } from './officeFileWriteNotify'
 
 export type WpsOpenDocument = {
   name?: string
@@ -33,6 +33,21 @@ export class WpsOpenDocumentRegistry {
     return false
   }
 
+  public remove(filePath: string): void {
+    const key = normalizeOfficePath(filePath)
+    for (const documents of this.byComponent.values()) {
+      documents.delete(key)
+    }
+  }
+
+  public componentFor(filePath: string): string | undefined {
+    const key = normalizeOfficePath(filePath)
+    for (const [component, documents] of this.byComponent) {
+      if (documents.has(key)) return component
+    }
+    return undefined
+  }
+
   public listOpenDocuments(): Array<{ component: string; fullName: string }> {
     const listed: Array<{ component: string; fullName: string }> = []
     for (const [component, documents] of this.byComponent) {
@@ -43,6 +58,20 @@ export class WpsOpenDocumentRegistry {
       }
     }
     return listed
+  }
+
+  public upsert(component: string, filePath: string): void {
+    const fullName = String(filePath || '').trim()
+    if (!fullName) return
+    let documents = this.byComponent.get(component)
+    if (!documents) {
+      documents = new Map()
+      this.byComponent.set(component, documents)
+    }
+    documents.set(normalizeOfficePath(fullName), {
+      name: path.basename(fullName),
+      fullName
+    })
   }
 
   public clear(): void {
@@ -76,6 +105,14 @@ export type WpsAddonFetch = {
   at: number
 }
 
+export type WpsCloseResult = {
+  at: number
+  component: string
+  ok: boolean
+  fullName: string
+  targetPath?: string
+}
+
 export type WpsSyncStatus = {
   ok: true
   clientCount: number
@@ -83,6 +120,7 @@ export type WpsSyncStatus = {
   openDocuments: Array<{ component: string; fullName: string }>
   lastDispatches: WpsReloadDispatch[]
   lastReloadResults: WpsReloadResult[]
+  lastCloseResults: WpsCloseResult[]
   lastAddonFetches: WpsAddonFetch[]
 }
 
@@ -109,6 +147,17 @@ export type WpsSyncServiceOptions = {
 
 const MAX_REPORT_BYTES = 1024 * 1024
 const MAX_STATUS_EVENTS = 32
+const CLOSE_WAIT_MS = 3_000
+const CLOSE_POLL_MS = 50
+const ORPHAN_REOPEN_MS = 300
+
+type PendingOpen = {
+  path: string
+  component: string
+  at: number
+  openedByShell?: boolean
+}
+
 const ADDON_FILE_SET = new Set<string>(WPS_ADDON_FILES)
 const ADDON_CONTENT_TYPE: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -222,6 +271,10 @@ export class WpsSyncService {
   private readonly lastDispatches: WpsReloadDispatch[] = []
   private readonly lastReloadResults: WpsReloadResult[] = []
   private readonly lastAddonFetches: WpsAddonFetch[] = []
+  private readonly lastCloseResults: WpsCloseResult[] = []
+  private readonly releasedComponents = new Map<string, string>()
+  private readonly pendingOpens = new Map<string, PendingOpen>()
+  private readonly orphanReopenTimers = new Set<ReturnType<typeof setTimeout>>()
   private server: Server | undefined
   private port: number | undefined
   private stopped = false
@@ -287,20 +340,64 @@ export class WpsSyncService {
     })
   }
 
+  public async prepareClose(filePath: string): Promise<boolean> {
+    if (!this.server || this.clients.size === 0) return false
+    const resolvedPath = path.resolve(filePath)
+    if (!this.registry.isOpen(resolvedPath)) return false
+    const component = this.registry.componentFor(resolvedPath)
+    const startedAt = Date.now()
+    this.broadcast({ type: 'close', path: resolvedPath }, component)
+    const deadline = startedAt + CLOSE_WAIT_MS
+    while (Date.now() < deadline) {
+      if (this.hasReleased(resolvedPath, startedAt)) {
+        this.releasedComponents.set(normalizeOfficePath(resolvedPath), component || 'unknown')
+        return true
+      }
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, CLOSE_POLL_MS)
+      })
+    }
+    if (!this.hasReleased(resolvedPath, startedAt)) return false
+    this.releasedComponents.set(normalizeOfficePath(resolvedPath), component || 'unknown')
+    return true
+  }
+
   public notifyWritten(filePath: string): void {
     if (!this.server) return
     const resolvedPath = path.resolve(filePath)
+    const releasedComponent = this.releasedComponents.get(normalizeOfficePath(resolvedPath))
+    this.releasedComponents.delete(normalizeOfficePath(resolvedPath))
     this.pushCapped(this.lastDispatches, {
       path: resolvedPath,
       at: Date.now(),
       clientCount: this.clients.size
     })
-    if (this.clients.size === 0) return
-    this.broadcast({ type: 'reload', path: resolvedPath })
+    if (!releasedComponent && this.clients.size === 0) return
+    const component =
+      releasedComponent && releasedComponent !== 'unknown'
+        ? releasedComponent
+        : officeWriteHostForPath(resolvedPath) || 'unknown'
+    this.pendingOpens.set(normalizeOfficePath(resolvedPath), {
+      path: resolvedPath,
+      component,
+      at: Date.now()
+    })
+    if (this.hasComponentClient(component)) {
+      this.broadcast({ type: 'open', path: resolvedPath }, component === 'unknown' ? undefined : component)
+      return
+    }
+    if (!releasedComponent) return
+    const pending = this.pendingOpens.get(normalizeOfficePath(resolvedPath))
+    if (pending) pending.openedByShell = true
+    this.reopenReleasedPath(resolvedPath)
   }
 
   public async stop(): Promise<void> {
     this.stopped = true
+    for (const timer of this.orphanReopenTimers) {
+      clearTimeout(timer)
+    }
+    this.orphanReopenTimers.clear()
     const ownedPort = this.port
     for (const client of this.clients) {
       try {
@@ -314,6 +411,9 @@ export class WpsSyncService {
     this.lastDispatches.length = 0
     this.lastReloadResults.length = 0
     this.lastAddonFetches.length = 0
+    this.lastCloseResults.length = 0
+    this.releasedComponents.clear()
+    this.pendingOpens.clear()
     const server = this.server
     this.server = undefined
     this.port = undefined
@@ -382,14 +482,56 @@ export class WpsSyncService {
     }
   }
 
-  private broadcast(payload: unknown): void {
+  private hasComponentClient(component: string): boolean {
+    if (component === 'unknown') return this.clients.size > 0
+    return [...this.clients].some((client) => client.component === component)
+  }
+
+  private reopenReleasedPath(resolvedPath: string): void {
+    void shell.openPath(resolvedPath).catch(() => undefined)
+  }
+
+  private scheduleOrphanReopen(component: string): void {
+    const timer = setTimeout(() => {
+      this.orphanReopenTimers.delete(timer)
+      if (!this.server) return
+      for (const pending of this.pendingOpens.values()) {
+        if (pending.component !== 'unknown' && pending.component !== component) continue
+        if (this.hasComponentClient(pending.component)) continue
+        if (pending.openedByShell) continue
+        pending.openedByShell = true
+        this.reopenReleasedPath(pending.path)
+      }
+    }, ORPHAN_REOPEN_MS)
+    this.orphanReopenTimers.add(timer)
+  }
+
+  private broadcast(payload: unknown, component?: string): void {
     for (const client of this.clients) {
+      if (component && client.component !== component) continue
       try {
         writeSse(client.response, payload)
       } catch {
         this.clients.delete(client)
       }
     }
+  }
+
+  private flushPendingOpens(client: SseClient): void {
+    for (const pending of this.pendingOpens.values()) {
+      if (pending.component !== 'unknown' && pending.component !== client.component) continue
+      try {
+        writeSse(client.response, { type: 'open', path: pending.path })
+      } catch {
+        this.clients.delete(client)
+        return
+      }
+    }
+  }
+
+  private clearPendingOpen(filePath: string | undefined): void {
+    if (!filePath) return
+    this.pendingOpens.delete(normalizeOfficePath(filePath))
   }
 
   private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -432,16 +574,37 @@ export class WpsSyncService {
         if (Array.isArray(body.data?.items)) {
           this.registry.setDocuments(component, body.data.items)
         }
+        if (body.kind === 'close-result') {
+          const fullName = String(body.data?.fullName || '')
+          const targetPath = body.data?.targetPath ? String(body.data.targetPath) : undefined
+          const ok = body.data?.ok === true
+          this.pushCapped(this.lastCloseResults, {
+            at: typeof body.at === 'number' ? body.at : Date.now(),
+            component,
+            ok,
+            fullName,
+            targetPath
+          })
+          if (ok && (fullName || targetPath)) this.registry.remove(fullName || targetPath || '')
+        }
         if (body.kind === 'reload-result') {
+          const fullName = String(body.data?.fullName || '')
+          const targetPath = body.data?.targetPath ? String(body.data.targetPath) : undefined
+          const ok = body.data?.ok === true
           this.pushCapped(this.lastReloadResults, {
             at: typeof body.at === 'number' ? body.at : Date.now(),
             component,
-            ok: body.data?.ok === true,
-            fullName: String(body.data?.fullName || ''),
+            ok,
+            fullName,
             excerpt: String(body.data?.excerpt || ''),
             reason: body.data?.reason ? String(body.data.reason) : undefined,
-            targetPath: body.data?.targetPath ? String(body.data.targetPath) : undefined
+            targetPath
           })
+          if (ok) {
+            this.clearPendingOpen(fullName)
+            this.clearPendingOpen(targetPath)
+            if (fullName || targetPath) this.registry.upsert(component, fullName || targetPath || '')
+          }
         }
         sendJson(response, 200, { ok: true })
       } catch {
@@ -451,6 +614,26 @@ export class WpsSyncService {
     }
 
     sendJson(response, 404, { ok: false })
+  }
+
+  private hasReleased(filePath: string, afterAt: number): boolean {
+    if (!this.registry.isOpen(filePath)) return true
+    const matched = this.lastCloseResults.some(
+      (item) =>
+        item.at >= afterAt &&
+        item.ok &&
+        (this.matchesOfficePath(item.fullName, filePath) ||
+          this.matchesOfficePath(item.targetPath, filePath))
+    )
+    if (matched) {
+      this.registry.remove(filePath)
+      return true
+    }
+    return false
+  }
+
+  private matchesOfficePath(left: string | undefined, right: string): boolean {
+    return Boolean(left) && normalizeOfficePath(left) === normalizeOfficePath(right)
   }
 
   private pushCapped<T>(items: T[], item: T): void {
@@ -468,6 +651,7 @@ export class WpsSyncService {
       openDocuments: this.registry.listOpenDocuments(),
       lastDispatches: [...this.lastDispatches],
       lastReloadResults: [...this.lastReloadResults],
+      lastCloseResults: [...this.lastCloseResults],
       lastAddonFetches: [...this.lastAddonFetches]
     }
   }
@@ -483,8 +667,10 @@ export class WpsSyncService {
     this.clients.add(client)
     writeSse(response, { type: 'ping' })
     writeSse(response, { type: 'list' })
+    this.flushPendingOpens(client)
     request.on('close', () => {
       this.clients.delete(client)
+      this.scheduleOrphanReopen(client.component)
     })
   }
 

@@ -21,7 +21,7 @@ import {
   ensurePartnerRuntimeDirs,
   getPartnerObjectsDir
 } from '../../assets/WorkspaceAssetService'
-import { notifyOfficeFileWritten } from '../../wps/officeFileWriteNotify'
+import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../wps/officeFileWriteNotify'
 
 const FORCE_REVERT_WARNING =
   '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。'
@@ -217,28 +217,36 @@ export class AiFileChangeService {
 
     const updatedAt = Date.now()
     try {
-      if (record.operation === 'created') {
-        await fs.rm(currentPath, { force: true })
-      } else {
-        if (!record.beforeSnapshotPath) throw new Error('checkpoint snapshot is missing')
-        const restorePath = record.beforePath || record.path
-        if (record.operation === 'renamed' && currentPath !== restorePath) {
+      const restorePath = record.operation === 'created' ? currentPath : record.beforePath || record.path
+      const applyRevert = async (): Promise<void> => {
+        if (record.operation === 'created') {
           await fs.rm(currentPath, { force: true })
+        } else {
+          if (!record.beforeSnapshotPath) throw new Error('checkpoint snapshot is missing')
+          if (record.operation === 'renamed' && currentPath !== restorePath) {
+            await fs.rm(currentPath, { force: true })
+          }
+          await fs.mkdir(path.dirname(restorePath), { recursive: true })
+          const tempOutputPath = path.join(
+            path.dirname(restorePath),
+            `${path.basename(restorePath)}.revert-${record.id}.tmp`
+          )
+          await fs.copyFile(record.beforeSnapshotPath, tempOutputPath)
+          await fs.rm(restorePath, { force: true })
+          await fs.rename(tempOutputPath, restorePath)
         }
-        await fs.mkdir(path.dirname(restorePath), { recursive: true })
-        const tempOutputPath = path.join(
-          path.dirname(restorePath),
-          `${path.basename(restorePath)}.revert-${record.id}.tmp`
-        )
-        await fs.copyFile(record.beforeSnapshotPath, tempOutputPath)
-        await fs.rm(restorePath, { force: true })
-        await fs.rename(tempOutputPath, restorePath)
+        notifyOfficeFileWritten(currentPath)
+        if (record.operation !== 'created') {
+          notifyOfficeFileWritten(record.beforePath || record.path)
+        }
       }
-
-      notifyOfficeFileWritten(currentPath)
-      if (record.operation !== 'created') {
-        notifyOfficeFileWritten(record.beforePath || record.path)
-      }
+      await withOfficeFileWrite(currentPath, async () => {
+        if (restorePath !== currentPath) {
+          await withOfficeFileWrite(restorePath, applyRevert)
+          return
+        }
+        await applyRevert()
+      })
 
       const reverted: AiFileChangeRecord = {
         ...record,

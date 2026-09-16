@@ -6,14 +6,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({
   app: {
     isPackaged: false
+  },
+  shell: {
+    openPath: async () => ''
   }
 }))
+
+import { shell } from 'electron'
 
 import { authAddinNeedsRewrite, mergeAuthAddin } from '../../../../src/main/services/wps/authAddin'
 import { WPS_ADDON_DIR_NAME, WPS_ADDON_NAME, WPS_ADDON_PORT_FILE } from '../../../../src/main/services/wps/constants'
 import {
   notifyOfficeFileWritten,
-  setOfficeFileWriteListener
+  setOfficeFileWriteListener,
+  withOfficeFileWrite
 } from '../../../../src/main/services/wps/officeFileWriteNotify'
 import {
   mergePublishXml,
@@ -38,20 +44,24 @@ const createTempDir = async (prefix: string): Promise<string> => {
   return directory
 }
 
-const waitFor = async (predicate: () => boolean, timeoutMs = 2_000): Promise<void> => {
+const waitFor = async (
+  predicate: () => boolean | Promise<boolean>,
+  timeoutMs = 2_000
+): Promise<void> => {
   const deadline = Date.now() + timeoutMs
-  while (!predicate()) {
+  while (!(await predicate())) {
     if (Date.now() >= deadline) throw new Error('Timed out waiting for WPS sync event')
     await new Promise((resolve) => setTimeout(resolve, 20))
   }
 }
 
 const readSseEvents = (
-  port: number
+  port: number,
+  component = 'wps'
 ): { events: Array<{ type?: string; path?: string }>; close: () => void } => {
   const events: Array<{ type?: string; path?: string }> = []
   const controller = new AbortController()
-  void fetch(`http://127.0.0.1:${port}/events?component=wps`, {
+  void fetch(`http://127.0.0.1:${port}/events?component=${component}`, {
     signal: controller.signal
   })
     .then(async (response) => {
@@ -317,7 +327,9 @@ describe('WpsAddonInstaller', () => {
 describe('office file write notify', () => {
   it('notifies resolved office paths and ignores other files', () => {
     const received: string[] = []
-    setOfficeFileWriteListener((filePath) => received.push(filePath))
+    setOfficeFileWriteListener({
+      notifyWritten: (filePath) => received.push(filePath)
+    })
     notifyOfficeFileWritten('/tmp/notes.md')
     notifyOfficeFileWritten('/tmp/report.DOCX')
     notifyOfficeFileWritten('/tmp/sheet.XLSX')
@@ -327,6 +339,27 @@ describe('office file write notify', () => {
       path.resolve('/tmp/sheet.XLSX'),
       path.resolve('/tmp/deck.PPTX')
     ])
+  })
+
+  it('closes an open office file before write and reopens after failure', async () => {
+    const events: string[] = []
+    const reportPath = path.resolve('/tmp/report.docx')
+    setOfficeFileWriteListener({
+      prepareClose: async (filePath) => {
+        events.push(`close:${filePath}`)
+        return true
+      },
+      notifyWritten: (filePath) => {
+        events.push(`open:${filePath}`)
+      }
+    })
+    await expect(
+      withOfficeFileWrite(reportPath, async () => {
+        events.push('write')
+        throw new Error('write failed')
+      })
+    ).rejects.toThrow('write failed')
+    expect(events).toEqual([`close:${reportPath}`, 'write', `open:${reportPath}`])
   })
 })
 
@@ -340,6 +373,11 @@ describe('WpsOpenDocumentRegistry', () => {
     expect(registry.listOpenDocuments()).toEqual([
       { component: 'wps', fullName: '/Users/Me/Docs/A.docx' }
     ])
+    registry.remove('/users/me/docs/a.docx')
+    expect(registry.isOpen('/Users/Me/Docs/A.docx')).toBe(false)
+    registry.upsert('wps', '/Users/Me/Docs/A.docx')
+    expect(registry.isOpen('/users/me/docs/a.docx')).toBe(true)
+    expect(registry.componentFor('/Users/Me/Docs/A.docx')).toBe('wps')
   })
 })
 
@@ -357,7 +395,190 @@ describe('WpsSyncService', () => {
     expect(service.getPort()).toBeUndefined()
   })
 
-  it('broadcasts reload to connected add-ins after an office file write', async () => {
+  it('closes an open document then opens it after write', async () => {
+    const addonDir = await createTempDir('ncurator-wps-addon-dir-')
+    const service = new WpsSyncService({
+      skipInstall: false,
+      preferredPort: 0,
+      installer: {
+        install: async () => ({ installed: true, addonDir }),
+        writePort: async () => undefined
+      }
+    })
+    services.push(service)
+    await service.start()
+    const port = service.getPort()
+    expect(port).toBeTruthy()
+
+    const stream = readSseEvents(port as number)
+    await waitFor(() => stream.events.some((event) => event.type === 'ping'))
+
+    await fetch(`http://127.0.0.1:${port}/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        component: 'wps',
+        data: { items: [{ name: 'a.docx', fullName: '/tmp/opened.docx' }] }
+      })
+    })
+    expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(true)
+
+    const closing = service.prepareClose('/tmp/opened.docx')
+    await waitFor(() => stream.events.some((event) => event.type === 'close'))
+    await fetch(`http://127.0.0.1:${port}/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'close-result',
+        component: 'wps',
+        data: {
+          ok: true,
+          fullName: '/tmp/opened.docx',
+          items: []
+        }
+      })
+    })
+    expect(await closing).toBe(true)
+    expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(false)
+
+    const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
+    service.notifyWritten('/tmp/opened.docx')
+    await waitFor(() => stream.events.some((event) => event.type === 'open'))
+    expect(
+      stream.events.some(
+        (event) => event.type === 'open' && event.path === path.resolve('/tmp/opened.docx')
+      )
+    ).toBe(true)
+    expect(openPath).not.toHaveBeenCalled()
+    stream.close()
+    openPath.mockRestore()
+  })
+
+  it('flushes a pending open when the add-in reconnects after last-document close', async () => {
+    const addonDir = await createTempDir('ncurator-wps-addon-dir-')
+    const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
+    const service = new WpsSyncService({
+      skipInstall: false,
+      preferredPort: 0,
+      installer: {
+        install: async () => ({ installed: true, addonDir }),
+        writePort: async () => undefined
+      }
+    })
+    services.push(service)
+    await service.start()
+    const port = service.getPort()
+    expect(port).toBeTruthy()
+
+    const first = readSseEvents(port as number)
+    await waitFor(() => first.events.some((event) => event.type === 'ping'))
+    await fetch(`http://127.0.0.1:${port}/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        component: 'wps',
+        data: { items: [{ name: 'a.docx', fullName: '/tmp/opened.docx' }] }
+      })
+    })
+    const closing = service.prepareClose('/tmp/opened.docx')
+    await waitFor(() => first.events.some((event) => event.type === 'close'))
+    await fetch(`http://127.0.0.1:${port}/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'close-result',
+        component: 'wps',
+        data: { ok: true, fullName: '/tmp/opened.docx', items: [] }
+      })
+    })
+    expect(await closing).toBe(true)
+    first.close()
+    await waitFor(async () => {
+      const status = (await (await fetch(`http://127.0.0.1:${port}/status`)).json()) as {
+        clientCount: number
+      }
+      return status.clientCount === 0
+    })
+
+    service.notifyWritten('/tmp/opened.docx')
+    expect(openPath).toHaveBeenCalledWith(path.resolve('/tmp/opened.docx'))
+
+    const second = readSseEvents(port as number)
+    await waitFor(() =>
+      second.events.some(
+        (event) => event.type === 'open' && event.path === path.resolve('/tmp/opened.docx')
+      )
+    )
+    second.close()
+    openPath.mockRestore()
+  })
+
+  it('registers a successful reload-result so the next close can find the document', async () => {
+    const addonDir = await createTempDir('ncurator-wps-addon-dir-')
+    const service = new WpsSyncService({
+      skipInstall: false,
+      preferredPort: 0,
+      installer: {
+        install: async () => ({ installed: true, addonDir }),
+        writePort: async () => undefined
+      }
+    })
+    services.push(service)
+    await service.start()
+    const port = service.getPort()
+    expect(port).toBeTruthy()
+    expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(false)
+
+    await fetch(`http://127.0.0.1:${port}/report`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        kind: 'reload-result',
+        component: 'wps',
+        data: {
+          ok: true,
+          fullName: '/tmp/opened.docx',
+          excerpt: 'hello',
+          items: [{ name: 'a.docx', fullName: '/tmp/opened.docx' }]
+        }
+      })
+    })
+    expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(true)
+    expect(service.getOpenRegistry().componentFor('/tmp/opened.docx')).toBe('wps')
+  })
+
+  it('sends open only to the matching office component', async () => {
+    const addonDir = await createTempDir('ncurator-wps-addon-dir-')
+    const service = new WpsSyncService({
+      skipInstall: false,
+      preferredPort: 0,
+      installer: {
+        install: async () => ({ installed: true, addonDir }),
+        writePort: async () => undefined
+      }
+    })
+    services.push(service)
+    await service.start()
+    const port = service.getPort()
+    expect(port).toBeTruthy()
+
+    const word = readSseEvents(port as number, 'wps')
+    const excel = readSseEvents(port as number, 'et')
+    await waitFor(() => word.events.some((event) => event.type === 'ping'))
+    await waitFor(() => excel.events.some((event) => event.type === 'ping'))
+
+    service.notifyWritten('/tmp/opened.docx')
+    await waitFor(() =>
+      word.events.some(
+        (event) => event.type === 'open' && event.path === path.resolve('/tmp/opened.docx')
+      )
+    )
+    expect(excel.events.some((event) => event.type === 'open')).toBe(false)
+    word.close()
+    excel.close()
+  })
+
+  it('broadcasts open to connected add-ins after an office file write', async () => {
     const addonDir = await createTempDir('ncurator-wps-addon-dir-')
     let writtenPort: number | undefined
     const service = new WpsSyncService({
@@ -390,10 +611,10 @@ describe('WpsSyncService', () => {
     expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(true)
 
     service.notifyWritten('/tmp/opened.docx')
-    await waitFor(() => stream.events.some((event) => event.type === 'reload'))
+    await waitFor(() => stream.events.some((event) => event.type === 'open'))
     expect(
       stream.events.some(
-        (event) => event.type === 'reload' && event.path === path.resolve('/tmp/opened.docx')
+        (event) => event.type === 'open' && event.path === path.resolve('/tmp/opened.docx')
       )
     ).toBe(true)
     stream.close()

@@ -15,7 +15,7 @@ import { toAiFileChangeRecordFromDocxApply } from '../../../../utils/artifacts'
 import { RunDocxEditTracker } from './RunDocxEditTracker'
 import type { ResolvedDocxOpenTarget } from './types'
 import { calculateFileStats, fileExists } from './utils'
-import { notifyOfficeFileWritten } from '../../../../../wps/officeFileWriteNotify'
+import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../../../../wps/officeFileWriteNotify'
 
 const FORCE_REVERT_WARNING =
   '当前文件在这次 AI 修改后又发生了变化。继续操作会恢复到这次修改前的版本，并丢失之后的修改。'
@@ -99,22 +99,23 @@ export class DocxApplyService {
 
     const updatedAt = Date.now()
     try {
-      if (record.operation === 'created') {
-        await fs.rm(record.source_path, { force: true })
-      } else {
-        if (!record.before_snapshot_path) {
-          throw new Error('checkpoint snapshot is missing')
+      await withOfficeFileWrite(record.source_path, async () => {
+        if (record.operation === 'created') {
+          await fs.rm(record.source_path, { force: true })
+        } else {
+          if (!record.before_snapshot_path) {
+            throw new Error('checkpoint snapshot is missing')
+          }
+          await fs.mkdir(path.dirname(record.source_path), { recursive: true })
+          const tempOutputPath = path.join(
+            path.dirname(record.source_path),
+            `${path.basename(record.source_path)}.revert-${record.id}.tmp`
+          )
+          await fs.copyFile(record.before_snapshot_path, tempOutputPath)
+          await fs.rename(tempOutputPath, record.source_path)
         }
-        await fs.mkdir(path.dirname(record.source_path), { recursive: true })
-        const tempOutputPath = path.join(
-          path.dirname(record.source_path),
-          `${path.basename(record.source_path)}.revert-${record.id}.tmp`
-        )
-        await fs.copyFile(record.before_snapshot_path, tempOutputPath)
-        await fs.rename(tempOutputPath, record.source_path)
-      }
-
-      notifyOfficeFileWritten(record.source_path)
+        notifyOfficeFileWritten(record.source_path)
+      })
 
       const reverted: DocxApplyRecord = {
         ...record,

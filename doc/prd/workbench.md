@@ -609,12 +609,12 @@ Composer 只有智能模式，不再提供 AI / 搜索切换。
 
 #### WB-WPS-001 已打开的 WPS 文档随写回自动刷新
 
-- 系统行为：这是默认功能，设置页没有开关。馆长启动后在 `127.0.0.1` 开启回环服务（优先端口 `58123`；若该端口已是本馆长 `/status` 通道则不再另开端口；仅当该端口被其他程序占用时才改用空闲端口监听）。`publish.xml` 与已授权 `ncurator-sync` 的 path 始终写成 `http://127.0.0.1:58123/addon/`，不随临时监听端口改写，避免 WPS 把加载项当成新身份反复弹授权；实际监听端口只写入 port.json，加载项用它连接 SSE。授权条目的 mode/path 已经正确时不再重写 `authaddin.json`，也不改 namelist。文字、表格、演示是独立组件，需各自载入加载项（每个组件授权一次）；只有对应组件连上后，该格式窗口才会 close+open。加载项只按当前组件识别，不得探测其他组件的 `ActiveWorkbook` / `ActivePresentation` / `ActiveDocument`。本机 WPS 7.3 上 `file://` / `jsplugin` 离线目录只会弹出授权、不会载入功能区和 JS；加载项代码必须由回环 HTTP 提供。加载项带「馆长」功能区页签（文字组件功能区上的中文页签名）。加载项连上后，AI 成功写回或回退 `.docx` / `.pptx` / `.xlsx` 时立刻推送 reload；加载项在对应 WPS 组件内关闭该文档再打开磁盘文件，并尽量恢复滚动/选区。本机回环 `GET /status` 提供诊断：已连接客户端、最近一次 dispatch、加载项最近一次 reload-result、WPS 对 `/addon` 的请求。验收以 `/status` 为准，不靠人眼看功能区。未安装 WPS、加载项未授权、未连接或文件未在 WPS 打开时静默跳过写盘，不得阻塞或回滚写盘；加载项路径未命中时仍上报 reload-result。WPS 里有未保存编辑时同样照刷，会丢这些未保存内容。`.doc` / `.ppt` / `.xls` 以及 Microsoft Office 不在范围内。知识库不因这次刷新而重索引。
+- 系统行为：这是默认功能，设置页没有开关。馆长启动后在 `127.0.0.1` 开启回环服务（优先端口 `58123`；若该端口已是本馆长 `/status` 通道则不再另开端口；仅当该端口被其他程序占用时才改用空闲端口监听）。`publish.xml` 与已授权 `ncurator-sync` 的 path 始终写成 `http://127.0.0.1:58123/addon/`，不随临时监听端口改写，避免 WPS 把加载项当成新身份反复弹授权；实际监听端口只写入 port.json，加载项用它连接 SSE。授权条目的 mode/path 已经正确时不再重写 `authaddin.json`，也不改 namelist。文字、表格、演示是独立组件，需各自载入加载项（每个组件授权一次）；只有对应组件连上后，该格式窗口才会先 close 放锁再写盘再 open。加载项只按当前组件识别，不得探测其他组件的 `ActiveWorkbook` / `ActivePresentation` / `ActiveDocument`。本机 WPS 7.3 上 `file://` / `jsplugin` 离线目录只会弹出授权、不会载入功能区和 JS；加载项代码必须由回环 HTTP 提供。加载项带「馆长」功能区页签（文字组件功能区上的中文页签名）。加载项连上且文档已打开时，AI 写回或回退 `.docx` / `.pptx` / `.xlsx` 前先推送 close；写盘成功后再推送 open，加载项打开磁盘文件并尽量恢复滚动/选区。关掉该组件最后一个文档时加载项可能卸载：写盘后若对应组件客户端已断开，才用系统打开路径拉起文档，并在重新连上 SSE 时补发 open。加载项仍连着时只发 open，避免和系统打开抢同一份文件。open 只发给该文件所属组件，其他组件收到后只上报 `not open here`，不得 `Open` 不属于自己的文件。Windows 上 WPS 对已打开文档持独占锁，不先 close 则无法覆盖。本机回环 `GET /status` 提供诊断：已连接客户端、最近一次 dispatch、最近一次 close-result、加载项最近一次 reload-result、WPS 对 `/addon` 的请求。验收以 `/status` 为准，不靠人眼看功能区。未安装 WPS、加载项未授权、未连接或文件未在 WPS 打开时不发 close，直接尝试写盘，写成功后再发 open（无客户端则为空操作）；不得因刷新失败而回滚已成功的写盘。Windows 上文件仍被 WPS 独占时写盘会失败，这是系统锁而不是馆长回滚。加载项路径未命中时仍上报 reload-result。WPS 里有未保存编辑时同样照刷，会丢这些未保存内容。`.doc` / `.ppt` / `.xls` 以及 Microsoft Office 不在范围内。知识库不因这次刷新而重索引。
 - 验收：
   - `WB-WPS-001-AC1` 馆长启动即启动回环服务，把 `publish.xml` 写成回环 `/addon` 地址 `http://127.0.0.1:58123/addon/`，并把已有 `ncurator-sync` 授权条目从离线目录改写为同一 HTTP 地址；不把加载项再拷成 WPS 离线目录。未发现 WPS 加载项目录时不写系统配置。Workbench e2e 跳过覆盖拷文件，仍启动回环服务；`publish.xml` / 授权 path 保持优先端口，端口文件记录实际监听端口。
-  - `WB-WPS-001-AC2` AI 成功写回 `.docx` / `.pptx` / `.xlsx` 后，已连接的加载项立即收到该路径的 reload。
-  - `WB-WPS-001-AC3` 回退上述文件成功后走同一通道再推一次 reload。
-  - `WB-WPS-001-AC4` 加载项未连接或用户拒绝 WPS 授权时，写盘与回退仍成功。
+  - `WB-WPS-001-AC2` AI 成功写回 `.docx` / `.pptx` / `.xlsx` 后，已连接的加载项对该路径完成 open，`/status` 的 `reload-result` 成功。
+  - `WB-WPS-001-AC3` 回退上述文件成功后走同一通道再 open 一次；关最后一篇文档导致加载项卸载时，重连后仍要完成这次 open。
+  - `WB-WPS-001-AC4` 加载项未连接或用户拒绝 WPS 授权时，不发 close；文件未被独占则写盘与回退仍成功。文件正被 WPS 独占且加载项无法 close 时，写盘可以失败。
   - `WB-WPS-001-AC5` 加载项首次启用可能出现 WPS 系统授权提示，文案由 WPS 客户端决定，馆长不能改写弹窗模板；发版与本地开发同一套加载项，弹窗不会因发版换成另一套文案。每个组件对同一回环地址授权成功后，馆长不得因改写临时端口、重写 namelist 或重复写 `authaddin.json` 再次触发该组件授权。安装时 WPS 已在运行、或更新了加载项 ribbon/JS 时需重启 WPS 后才加载。功能区出现「馆长」页签表示加载项已载入。Workbench 仅在打开方式旁用问号提示用户需要授权，对齐 `WB-PANEL-003-AC22`。授权弹窗由 WPS 客户端负责，不作为馆长 UI 验收。
 
 #### WB-APPLY-004 后续修改后的强制回退
