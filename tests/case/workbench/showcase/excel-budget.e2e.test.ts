@@ -18,21 +18,19 @@ import {
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
+import { EXCEL_CREATE_PROMPT, EXCEL_FILE_NAME } from './createSeeds'
 import {
   computeShowcaseCost,
+  copyShowcaseFixture,
   ensureDocumentMode,
   readApplyChangeCounts,
+  screenshotExcelUsedRange,
   seedEmptyShowcaseWorkspace
 } from './shared'
 
 const CASE_ID = 'excel-budget'
-const FILE_NAME = '云枢智服-9月费用预算.xlsx'
+const FILE_NAME = EXCEL_FILE_NAME
 const EXPORT_DIR = path.resolve('tests/logs/workbench/showcase-export/excel-budget')
-const PROMPT = [
-  `新建《${FILE_NAME}》。要「部门明细」和「汇总看板」两张表。`,
-  '明细含市场、研发、交付、人事，每部门 2～3 条科目和预算金额。',
-  '汇总用 SUM 或 SUMIF，不要手填合计。金额列用千分位。做成能拿去部门对齐的表。'
-].join('')
 
 const waitExcelReady = async (page: Parameters<typeof getWorkbenchLocator>[0]) => {
   const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
@@ -65,11 +63,8 @@ const screenshotSheets = async (
       await tab.click()
       await page.waitForTimeout(500)
     }
-    const fileName = `${prefix}-${index + 1}.png`
-    await viewer.screenshot({
-      path: path.join(outputDir, fileName),
-      type: 'png'
-    })
+            const fileName = `${prefix}-${index + 1}.png`
+            await screenshotExcelUsedRange(viewer, path.join(outputDir, fileName))
     names.push(fileName)
   }
   return names
@@ -110,7 +105,7 @@ describe('workbench showcase e2e', () => {
           await selectWorkbenchModel(page, env.modelName)
 
           const startedAtMs = Date.now()
-          await sendWorkbenchMessage(page, PROMPT)
+          await sendWorkbenchMessage(page, EXCEL_CREATE_PROMPT)
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
@@ -125,6 +120,7 @@ describe('workbench showcase e2e', () => {
             .access(filePath)
             .then(() => true)
             .catch(() => false)
+          if (fileExists) await copyShowcaseFixture(filePath, FILE_NAME)
           const workbook = new ExcelJS.Workbook()
           if (fileExists) {
             await workbook.xlsx.load((await fs.readFile(filePath)) as never)
@@ -153,7 +149,7 @@ describe('workbench showcase e2e', () => {
 
           const cost = computeShowcaseCost(evidence.events, {
             modelName: env.modelName,
-            prompt: PROMPT,
+            prompt: EXCEL_CREATE_PROMPT,
             fileName: FILE_NAME,
             sheetNames,
             screenshotNames,

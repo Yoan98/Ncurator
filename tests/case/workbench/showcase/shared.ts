@@ -7,6 +7,39 @@ import { getWorkbenchLocator, workbenchSelectors } from '../../../harness/e2e/wo
 
 export const USD_CNY = 7.2
 
+export const SHOWCASE_FIXTURE_DIR = path.resolve('tests/fixtures/showcase')
+
+export const showcaseFixturePath = (fileName: string): string =>
+  path.join(SHOWCASE_FIXTURE_DIR, fileName)
+
+export const hasShowcaseFixture = async (fileName: string): Promise<boolean> => {
+  try {
+    await fs.access(showcaseFixturePath(fileName))
+    return true
+  } catch {
+    return false
+  }
+}
+
+export const requireShowcaseFixture = async (fileName: string): Promise<void> => {
+  if (await hasShowcaseFixture(fileName)) return
+  throw new Error(`缺少过关 fixture：${fileName}，禁止再新建一份凑审核图。`)
+}
+
+export const copyShowcaseFixture = async (sourcePath: string, fileName: string): Promise<void> => {
+  await fs.mkdir(SHOWCASE_FIXTURE_DIR, { recursive: true })
+  await fs.copyFile(sourcePath, showcaseFixturePath(fileName))
+}
+
+export const seedWorkspaceWithFixture = async (
+  prefix: string,
+  fileName: string
+): Promise<string> => {
+  const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), prefix))
+  await fs.copyFile(showcaseFixturePath(fileName), path.join(rootPath, fileName))
+  return rootPath
+}
+
 export const seedEmptyShowcaseWorkspace = async (prefix: string): Promise<string> => {
   const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), prefix))
   await fs.writeFile(path.join(rootPath, '工作区说明.txt'), '空工作区，可直接新建文件。\n', 'utf8')
@@ -103,6 +136,65 @@ export const ensureDocumentMode = async (page: Page, mode: '审核' | '预览'):
     await getWorkbenchLocator(page, workbenchSelectors.documentModeToggle).click()
     await modeTag.filter({ hasText: mode }).waitFor({ state: 'visible', timeout: 10_000 })
   }
+}
+
+export const screenshotExcelUsedRange = async (
+  target: ReturnType<Page['locator']>,
+  outputPath: string
+): Promise<void> => {
+  const box = await target.boundingBox()
+  if (!box) {
+    await target.screenshot({ path: outputPath, type: 'png' })
+    return
+  }
+  await target.screenshot({
+    path: outputPath,
+    type: 'png',
+    clip: {
+      x: 0,
+      y: 0,
+      width: Math.max(1, Math.floor(box.width)),
+      height: Math.max(1, Math.min(520, Math.floor(box.height)))
+    }
+  })
+}
+
+export const inspectExcelEditResult = async (
+  filePath: string
+): Promise<{
+  sheetNames: string[]
+  hasOccurredColumn: boolean
+  adAmount: number | null
+}> => {
+  const ExcelJS = (await import('exceljs')).default
+  const workbook = new ExcelJS.Workbook()
+  await workbook.xlsx.load((await fs.readFile(filePath)) as never)
+  const sheetNames = workbook.worksheets.map((sheet) => sheet.name)
+  const detail = workbook.worksheets[0]
+  let hasOccurredColumn = false
+  let adAmount: number | null = null
+  if (!detail) return { sheetNames, hasOccurredColumn, adAmount }
+  detail.eachRow((row) => {
+    const texts: string[] = []
+    const numbers: number[] = []
+    row.eachCell((cell) => {
+      const text = String(cell.value ?? '')
+      texts.push(text)
+      if (/(已发生|已花|花费|实际)/u.test(text)) hasOccurredColumn = true
+      const raw = cell.value
+      const numeric =
+        typeof raw === 'number'
+          ? raw
+          : typeof raw === 'object' && raw && 'result' in raw
+            ? Number((raw as { result?: unknown }).result)
+            : Number(String(raw).replace(/,/g, ''))
+      if (Number.isFinite(numeric) && numeric >= 1000) numbers.push(numeric)
+    })
+    if (texts.some((text) => /广告|投放|品牌推广/u.test(text))) {
+      adAmount = numbers[0] ?? adAmount
+    }
+  })
+  return { sheetNames, hasOccurredColumn, adAmount }
 }
 
 export const screenshotScrollerPages = async (

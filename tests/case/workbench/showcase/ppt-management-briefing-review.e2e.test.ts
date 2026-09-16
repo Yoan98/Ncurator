@@ -19,6 +19,7 @@ import {
 } from '../../../harness/e2e/workbench'
 import {
   computeShowcaseCost,
+  copyShowcaseFixture,
   ensureDocumentMode,
   readApplyChangeCounts,
   seedEmptyShowcaseWorkspace
@@ -112,6 +113,7 @@ describe('workbench showcase e2e', () => {
             .access(filePath)
             .then(() => true)
             .catch(() => false)
+          if (fileExists) await copyShowcaseFixture(filePath, FILE_NAME)
 
           const applyEntry = await waitForApplyEntryByFileName(page, FILE_NAME)
           await applyEntry.click()

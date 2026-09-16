@@ -707,3 +707,30 @@ pnpm test:update:e2e
 - How：空工作区创建伙伴，发送简报诉求；打开修改入口，留在审核态按缩略图截 `pptDiffAfter`。
 - Oracle：pptx 写回；截到至少 1 页审核图并记录 token 用量。
 - Not：不进日常 / 发版回归。不覆盖官网已过关的 6 页交付图。
+
+#### `docx-weekly-report-edit`
+
+- 测试类型：`e2e / live`（路径 `showcase/`，**opt-in**）
+- What：按意见改已有《云枢智服-9月第2周经营周报.docx》，截审核态绿增红删。
+- Why：官网「编辑文件」需要改已有稿，而不是建稿全文新增。
+- How：底稿必须是 showcase 过关 fixture，没有文件就失败，禁止再新建一份；发送修订诉求；留在审核态截 `.docx-content`。
+- Oracle：产生 docx 写回；截到能看出绿增红删的审核图并记录 token 用量。
+- Not：不另写一份周报。预览图换成这次建稿结果。
+
+#### `excel-budget-edit`
+
+- 测试类型：`e2e / live`（路径 `showcase/`，**opt-in**）
+- What：按意见改已有《云枢智服-9月费用预算.xlsx》，截审核态绿红框。
+- Why：官网 Excel 编辑样例需要红绿框，而不是建表绿框。
+- How：底稿用过关 fixture，禁止 harvest；发送下调广告并补一列已经花了多少；截有数据区域的审核网格。
+- Oracle：xlsx 写回且含花费列、广告约 15 万；截到能看出改动的审核图并记录用量。
+- Not：不另建一份表。预览图换成这次建稿结果。
+
+#### `ppt-management-briefing-edit`
+
+- 测试类型：`e2e / live`（路径 `showcase/`，**opt-in**）
+- What：改已有 `Q2经营复盘.pptx` 原件，截左右「修改前 / 修改后」加右侧缩略栏。
+- Why：只有 updated 才有左右对照，官网审核 tab 必须对着预览同一份 Q2 简报。
+- How：底稿必须是 `Q2经营复盘.pptx` 原件，禁止 harvest；发送封面改内部通气会、KPI 未达标标红；留在审核态截整块 `pptDiffViewer`。
+- Oracle：pptx 写回且出现修改前画布，修改前能认出预览那几页；截到至少 1 页并记录用量。
+- Not：不覆盖官网已过关的 6 页预览图。不截整桌面壳。不另做一份简报。
