@@ -346,7 +346,7 @@ pnpm test:update:e2e
 - What：受控 429 后过程区出现自动重试行：第一次为 `正在重试 1/5`，随后在同一行更新次数；运行中不得与“让俺想想”同时出现，也不得叠多行。
 - Why：免费/共享额度模型会稳定打出 429；重试行叠层或与思考等待并存是用户可直接看见的过程层 bug，过程流主 case 不保证本轮出现重试。
 - How：经 Settings 添加自定义模型，指向本地 OpenAI 兼容代理；代理对前两次 `chat/completions` 返回真实 HTTP 429，其后转发 live 上游。Workbench 选中该自定义模型并发送短请求；运行中持续采集过程区重试行数、次数文案与“让俺想想”是否共存，直至 run 完成。
-- Oracle：必须见到 `正在重试 1/5` 且随后在同一行见到 `2/5`，对齐 `WB-COMPOSER-015-AC1`；任一时刻过程区最多一行“正在重试 / 已重试 / 重试失败”，对齐 `WB-COMPOSER-015-AC2`；重试行 running 时不得同时出现“让俺想想”，对齐 `WB-COMPOSER-015-AC3`、`WB-COMPOSER-003-AC3`。前两次 chat 为 429、第三次起转发上游；429 退避毫秒由 unit `llm-error-classification` 覆盖，本 case 对齐出现重试行并最终收口，对齐 `WB-COMPOSER-015-AC4`。
+- Oracle：必须见到 `正在重试 1/5` 且随后在同一行见到 `2/5`，对齐 `WB-COMPOSER-015-AC1`；任一时刻过程区最多一行“正在重试 / 重试失败”，对齐 `WB-COMPOSER-015-AC2`；重试行 running 时不得同时出现“让俺想想”，对齐 `WB-COMPOSER-015-AC3`、`WB-COMPOSER-003-AC3`。前两次 chat 为 429、第三次起转发上游；429 退避毫秒由 unit `llm-error-classification` 覆盖。run 完成后过程区不得再留“已重试 / 正在重试”，对齐 `WB-COMPOSER-015-AC4`。
 - Not：不伪造 renderer / AI 过程事件；不把 5 次耗尽失败作为本 case 主路径（过长）；不替代 `WB-COMPOSER-014-AC3` 的草稿拼接断言。
 
 #### `terminal-background-service-flow`

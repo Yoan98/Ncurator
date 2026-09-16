@@ -431,7 +431,6 @@ const getDisplayGroupText = (
   if (display.kind === 'retry') {
     const progress = `${display.attempt}/${display.maxAttempts}`
     if (status === 'running') return sentence(text(`正在重试 ${progress}`))
-    if (status === 'completed') return sentence(text(`已重试 ${progress}`))
     if (status === 'partial_failed') return sentence(text(`部分重试失败 ${progress}`))
     return sentence(text(`重试失败 ${progress}`))
   }
@@ -667,10 +666,14 @@ export const completeAssistantProcessGroups = (
   status: AssistantProcessStatus = 'completed'
 ): AssistantProcessGroup[] =>
   groups
-    .filter(
-      (group) =>
-        group.kind !== 'finalizing' && group.kind !== 'learning' && group.kind !== 'thinking'
-    )
+    .filter((group) => {
+      if (group.kind === 'finalizing' || group.kind === 'learning' || group.kind === 'thinking') {
+        return false
+      }
+      // Successful retry is not a retained process row.
+      if (status === 'completed' && group.kind === 'retry') return false
+      return true
+    })
     .map((group) => {
       if (group.status !== 'running') return group
       const nextItems = group.items.map((item) =>
@@ -703,6 +706,14 @@ export const reduceAssistantProcessThoughts = (
 
 const withoutThinkingGroups = (groups: AssistantProcessGroup[]): AssistantProcessGroup[] =>
   groups.filter((group) => group.kind !== 'thinking')
+
+const withoutRetryGroups = (groups: AssistantProcessGroup[]): AssistantProcessGroup[] =>
+  groups.filter((group) => group.kind !== 'retry')
+
+const isRetryProcessEvent = (event: {
+  groupId: string
+  display?: AssistantProcessDisplay
+}): boolean => event.display?.kind === 'retry' || event.groupId.includes(':llm-retry')
 
 const upsertGroupFromDisplayEvent = (
   current: AssistantProcessGroup[],
@@ -904,6 +915,9 @@ export const reduceAssistantProcessGroups = (
     if (event.groupId.endsWith(':thinking') || event.display?.kind === 'thinking') {
       return withoutThinkingGroups(current)
     }
+    if (isRetryProcessEvent(event)) {
+      return withoutRetryGroups(current)
+    }
     if (event.groupId.endsWith(':finalizing')) {
       return current.filter((group) => group.id !== event.groupId)
     }
@@ -931,6 +945,9 @@ export const reduceAssistantProcessGroups = (
   }
 
   if (event.type === 'assistant_process_item_completed') {
+    if (isRetryProcessEvent(event)) {
+      return withoutRetryGroups(current)
+    }
     return completeProcessItem(current, {
       groupId: event.groupId,
       itemId: event.itemId,

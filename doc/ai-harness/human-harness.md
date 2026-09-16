@@ -901,7 +901,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 `run_failed` 后：**零自动重试**。Resume（第 6 节）：新建 run；log append `user`；不自动重试 failed run。
 
-#### LLM 调用层重试（定案前）
+#### LLM 调用层重试
 
 仅 `classifyLlmRetry`（`llmRetry.ts`）驱动 `runLlmCallWithActivity`；**不再**盲信 `LlmProviderError.retryable` 旧戳。
 
@@ -912,7 +912,6 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | 3 | 短文案白名单 | 弱补充 |
 | 4 | unknown | **不重试** |
 
-上限：`AI_LLM_CALL_MAX_RETRY_ATTEMPTS`（当前 5）表示**首次失败后最多再试 5 次**；过程流文案为「正在重试 n/5」（第一次重试为 1/5）。同一 run 只发一个 `groupId`（`${runId}:llm-retry`），过程区只保留一行并就地更新次数；出现该行时隐藏「让俺想想」。产品验收见 `WB-COMPOSER-015`。
 
 #### 告警（不停跑）
 
