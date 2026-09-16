@@ -47,7 +47,7 @@ const docxBorderSchema = z
   .object({
     style: z.enum(['none', 'single', 'dashed', 'dotted', 'double']),
     color: docxHexColorSchema.optional(),
-    size: z.number().positive().optional()
+    size: z.number().positive().optional().describe('线宽，单位磅')
   })
   .strict()
 const docxBordersSchema = z

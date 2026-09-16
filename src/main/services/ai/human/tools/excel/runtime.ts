@@ -10,6 +10,7 @@ import { createToolEventEmitter } from '../utils/toolEvents'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { ExcelCapabilityToolsInput, ExcelRuntimeState, ExcelToolRuntime } from './types'
 import type { ExcelEditInput, ExcelReadInput, ExcelStyle } from './toolSchemas'
+import { toExcelArgb, toExcelRgb } from './color'
 import { EXCEL_SEARCH_MAX_MATCHES } from './constants'
 import { notifyOfficeFileWritten } from '../../../../wps/officeFileWriteNotify'
 
@@ -653,7 +654,7 @@ const applyStyle = (cell: ExcelJS.Cell, style: ExcelStyle | undefined): void => 
       bold: typeof style.bold === 'boolean' ? style.bold : currentFont.bold,
       italic: typeof style.italic === 'boolean' ? style.italic : currentFont.italic,
       color: style.fontColor
-        ? { argb: String(style.fontColor).replace(/^#/, '') }
+        ? { argb: toExcelArgb(style.fontColor) }
         : currentFont.color
     }
   }
@@ -661,7 +662,7 @@ const applyStyle = (cell: ExcelJS.Cell, style: ExcelStyle | undefined): void => 
     cell.fill = {
       type: 'pattern',
       pattern: 'solid',
-      fgColor: { argb: String(style.fillColor).replace(/^#/, '') }
+      fgColor: { argb: toExcelArgb(style.fillColor) }
     }
   if (style.numberFormat) cell.numFmt = String(style.numberFormat)
   if (style.horizontalAlignment || style.verticalAlignment) {
@@ -716,10 +717,13 @@ const projectStyleCell = (
 ): { bold?: boolean; fontColor?: string; fillColor?: string; numberFormat?: string } | null => {
   const style: { bold?: boolean; fontColor?: string; fillColor?: string; numberFormat?: string } = {}
   if (cell.font?.bold) style.bold = true
-  const fontColor = cell.font?.color?.argb
+  const fontColor = toExcelRgb(cell.font?.color?.argb)
   if (fontColor) style.fontColor = fontColor
   const fill = cell.fill
-  if (fill && fill.type === 'pattern' && fill.fgColor?.argb) style.fillColor = fill.fgColor.argb
+  if (fill && fill.type === 'pattern' && fill.fgColor?.argb) {
+    const fillColor = toExcelRgb(fill.fgColor.argb)
+    if (fillColor) style.fillColor = fillColor
+  }
   if (cell.numFmt) style.numberFormat = cell.numFmt
   return Object.keys(style).length > 0 ? style : null
 }

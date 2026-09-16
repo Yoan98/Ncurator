@@ -8,8 +8,8 @@ const styleSchema = z
   .object({
     bold: z.boolean().optional().describe('是否加粗'),
     italic: z.boolean().optional().describe('是否斜体'),
-    fontColor: z.string().optional().describe('字体颜色，如 FF0000'),
-    fillColor: z.string().optional().describe('填充色，如 FFD14343'),
+    fontColor: z.string().optional().describe('字体颜色，6 位十六进制，如 FF0000'),
+    fillColor: z.string().optional().describe('填充色，6 位十六进制，如 FF0000'),
     numberFormat: z.string().optional().describe('数字格式，如 #,##0 或 0%'),
     horizontalAlignment: z.enum(['left', 'center', 'right']).optional().describe('水平对齐'),
     verticalAlignment: z.enum(['top', 'middle', 'bottom']).optional().describe('垂直对齐')
@@ -173,7 +173,7 @@ export const excelEditSchema = z.discriminatedUnion('type', [
       column: z
         .union([z.string().trim().min(1), z.number().int().min(1)])
         .describe('列字母或从 1 开始的列号'),
-      width: z.number().positive().describe('列宽')
+      width: z.number().positive().describe('列宽，Excel 字符宽度')
     })
     .strict(),
   z
@@ -182,7 +182,7 @@ export const excelEditSchema = z.discriminatedUnion('type', [
       type: z.literal('set_row_height').describe('设置行高'),
       sheetName: sheetNameSchema,
       row: z.number().int().min(1).describe('行号，从 1 开始'),
-      height: z.number().positive().describe('行高')
+      height: z.number().positive().describe('行高，单位磅')
     })
     .strict(),
   z

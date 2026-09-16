@@ -388,7 +388,7 @@ describe('ai tool excel edit backend', () => {
         runtime.assertThat(
           result.operations.headerFont.bold === true &&
             result.operations.headerFont.italic === true &&
-            result.operations.headerFill.fgColor?.argb === '2266AA' &&
+            result.operations.headerFill.fgColor?.argb === 'FF2266AA' &&
             result.operations.headerNumFmt === '0.00' &&
             result.operations.insertedValue === 'Inserted' &&
             result.operations.movedValue === 'A' &&

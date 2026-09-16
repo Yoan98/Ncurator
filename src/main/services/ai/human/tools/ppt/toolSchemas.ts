@@ -39,7 +39,7 @@ export const pptElementStyleSchema = z
   .object({
     fill: pptHexColorSchema.optional(),
     stroke: pptHexColorSchema.optional(),
-    strokeWidth: z.number().min(0).optional().describe('描边宽度'),
+    strokeWidth: z.number().min(0).optional().describe('描边宽度，单位 pt'),
     color: pptHexColorSchema.optional(),
     fontFamily: z.string().optional().describe('字体'),
     fontSize: z
@@ -54,7 +54,7 @@ export const pptElementStyleSchema = z
     underline: z.boolean().optional().describe('是否下划线'),
     textAlign: z.enum(['left', 'center', 'right']).optional().describe('水平对齐'),
     verticalAlign: z.enum(['top', 'middle', 'bottom']).optional().describe('垂直对齐'),
-    rotation: z.number().optional().describe('旋转角度'),
+    rotation: z.number().optional().describe('旋转角度，单位度'),
     shadow: z.boolean().optional().describe('是否投影')
   })
   .strict()
@@ -166,7 +166,7 @@ export const pptElementSchema = z
         from: pptPointSchema.describe('起点'),
         to: pptPointSchema.describe('终点'),
         color: pptHexColorSchema.optional().describe('线条颜色；#RRGGBB'),
-        width: z.number().positive().optional().describe('线条宽度'),
+        width: z.number().positive().optional().describe('线条宽度，单位 pt'),
         arrowEnd: z.boolean().optional().describe('终点是否带箭头')
       })
       .strict(),
