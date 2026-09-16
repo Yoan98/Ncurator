@@ -153,6 +153,7 @@ export const runLlmCallWithActivity = async <T>(input: {
   onTextReset?: () => void
   onToolCallDelta?: () => void
   execute: (observer: LlmCallStreamObserver, callId: string) => Promise<LlmCallExecutionResult<T>>
+  /** Max automatic retries after the first failure (UI shows 正在重试 n/{maxAttempts}). */
   maxAttempts?: number
   classifyRetry?: (error: unknown, attempt: number) => LlmCallRetryDecision
 }): Promise<LlmCallExecutionResult<T>> => {
@@ -237,8 +238,8 @@ export const runLlmCallWithActivity = async <T>(input: {
   observer.onStart?.()
 
   try {
-    const maxAttempts = Math.max(1, Math.floor(input.maxAttempts || 1))
-    let attempt = 1
+    const maxRetries = Math.max(0, Math.floor(input.maxAttempts || 0))
+    let retryCount = 0
     let retryGroupStarted = false
     let result: LlmCallExecutionResult<T> | undefined
     for (;;) {
@@ -253,10 +254,11 @@ export const runLlmCallWithActivity = async <T>(input: {
         }
         break
       } catch (error) {
+        const nextRetry = retryCount + 1
         const retry =
-          input.classifyRetry?.(error, attempt) ||
+          input.classifyRetry?.(error, nextRetry) ||
           ({ retryable: false, message: reasonFromError(error) } satisfies LlmCallRetryDecision)
-        if (!retry.retryable || attempt >= maxAttempts) {
+        if (!retry.retryable || retryCount >= maxRetries) {
           if (retryGroupStarted) {
             emitLlmRetryProcessFailed({
               sendEvent: input.ctx.sendEvent,
@@ -267,7 +269,7 @@ export const runLlmCallWithActivity = async <T>(input: {
           }
           throw toProviderFailure(error, retry.retryable)
         }
-        attempt += 1
+        retryCount = nextRetry
         latestRawText = ''
         chunkCount = 0
         firstTokenAt = undefined
@@ -277,11 +279,11 @@ export const runLlmCallWithActivity = async <T>(input: {
           sendEvent: input.ctx.sendEvent,
           runId: input.runId,
           callId,
-          attempt,
-          maxAttempts,
+          attempt: retryCount,
+          maxAttempts: maxRetries,
           message: retry.message
         })
-        const delayMs = retry.delayMs ?? Math.min(1_500, 250 * attempt)
+        const delayMs = retry.delayMs ?? Math.min(1_500, 250 * retryCount)
         await sleep(Math.max(0, delayMs), input.ctx.abortSignal)
       }
     }

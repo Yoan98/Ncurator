@@ -385,7 +385,7 @@ describe('ai unit structured chat activity', () => {
         kind: 'retry',
         display: {
           kind: 'retry',
-          attempt: 2,
+          attempt: 1,
           maxAttempts: 3,
           message: 'Rate limit exceeded'
         }
@@ -396,7 +396,7 @@ describe('ai unit structured chat activity', () => {
         type: 'assistant_process_item_started',
         display: {
           kind: 'retry',
-          attempt: 2,
+          attempt: 1,
           maxAttempts: 3,
           message: 'Rate limit exceeded'
         }

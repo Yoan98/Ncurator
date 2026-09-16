@@ -912,7 +912,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | 3 | 短文案白名单 | 弱补充 |
 | 4 | unknown | **不重试** |
 
-上限：`AI_LLM_CALL_MAX_RETRY_ATTEMPTS`（当前 5）。
+上限：`AI_LLM_CALL_MAX_RETRY_ATTEMPTS`（当前 5）表示**首次失败后最多再试 5 次**；过程流文案为「正在重试 n/5」（第一次重试为 1/5）。
 
 #### 告警（不停跑）
 

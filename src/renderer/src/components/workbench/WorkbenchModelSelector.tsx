@@ -108,7 +108,13 @@ const CUSTOM_MENU_MAX_WIDTH = 360
 const PRESET_LIST_MAX_HEIGHT = 300
 const INSPECTOR_WIDTH = 200
 const INSPECTOR_GAP = 1
+const INSPECTOR_FALLBACK_HEIGHT = 168
 const VIEWPORT_PADDING = 12
+
+const clampInspectorTop = (rowTop: number, height: number): number => {
+  const maxTop = window.innerHeight - VIEWPORT_PADDING - Math.max(1, height)
+  return Math.min(Math.max(rowTop, VIEWPORT_PADDING), Math.max(VIEWPORT_PADDING, maxTop))
+}
 const CATALOG_REFRESH_FEEDBACK_MS = 1400
 const DEFAULT_POSITION: MenuPosition = {
   left: 0,
@@ -209,6 +215,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   )
   const [position, setPosition] = useState<MenuPosition>(DEFAULT_POSITION)
   const [inspectedModel, setInspectedModel] = useState<ModelInspector | null>(null)
+  const [inspectorTop, setInspectorTop] = useState(0)
   const [freeModels, setFreeModels] = useState<FreeModelPublicEntry[]>([])
   const [presetProviders, setPresetProviders] = useState<LlmPresetProvider[]>([])
   const [freeFetchedAt, setFreeFetchedAt] = useState<number | null>(null)
@@ -453,6 +460,15 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       maxHeight: placement.maxHeight
     })
   }, [open, view, position, inspectedModel, query, configs, modelListsByConfigId, freeModels, presetProviders])
+
+  useLayoutEffect(() => {
+    if (!open || !inspectedModel) {
+      setInspectorTop(0)
+      return
+    }
+    const height = inspectorRef.current?.offsetHeight || INSPECTOR_FALLBACK_HEIGHT
+    setInspectorTop(clampInspectorTop(inspectedModel.top, height))
+  }, [open, inspectedModel])
 
   useEffect(() => {
     if (!open) return
@@ -892,7 +908,6 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
     </>
   )
 
-  const inspectorTop = inspectedModel?.top ?? 0
   const inspectorLeft = position.left + position.width + INSPECTOR_GAP
 
   const renderInspector = (): React.ReactNode => {

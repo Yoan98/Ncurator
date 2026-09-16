@@ -167,15 +167,15 @@ describe('workbench model selection', () => {
 
   it('keeps free model selections and falls back to free catalog when no user configs', () => {
     const freeEntry: FreeModelCatalogEntry = {
-      id: 'free-deepseek-v4-flash',
+      id: 'free-glm-4.7-flash',
       providerKind: 'openai-compatible',
-      modelName: 'deepseek-ai/deepseek-v4-flash-0731',
-      label: 'DeepSeek V4 Flash',
-      description: '更快更省，适合日常问答与轻量任务。',
+      modelName: 'glm-4.7-flash',
+      label: 'GLM-4.7 Flash',
+      description: '智谱免费主力：更强工具协同与长任务，高峰可能排队。',
       capabilities: ['text'],
-      iconUrl: 'https://www.guanzhangai.cn/llm/deepseek.png',
-      baseUrl: 'https://integrate.api.nvidia.com/v1',
-      apiKey: 'nvapi-test'
+      iconUrl: 'https://www.guanzhangai.cn/llm/zhipu.png',
+      baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+      apiKey: 'zhipu-test'
     }
     const freeModels = [toFreeModelPublicEntry(freeEntry)]
     expect(

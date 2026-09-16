@@ -266,8 +266,8 @@ describe('ai unit llm executor text path', () => {
       expect(result.output).toEqual({ answer: 'recovered on attempt 3' })
       expect(callCount).toBe(3)
       expect(retryStarted.map((event) => event.display)).toEqual([
-        expect.objectContaining({ kind: 'retry', attempt: 2, maxAttempts: 5 }),
-        expect.objectContaining({ kind: 'retry', attempt: 3, maxAttempts: 5 })
+        expect.objectContaining({ kind: 'retry', attempt: 1, maxAttempts: 5 }),
+        expect.objectContaining({ kind: 'retry', attempt: 2, maxAttempts: 5 })
       ])
       expect(
         events.some((event) => event.type === 'assistant_process_group_completed')
