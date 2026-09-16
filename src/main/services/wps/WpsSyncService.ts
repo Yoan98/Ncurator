@@ -62,16 +62,6 @@ export class WpsOpenDocumentRegistry {
     return listed
   }
 
-  public hasOtherDocuments(component: string, exceptPath: string): boolean {
-    const documents = this.byComponent.get(component)
-    if (!documents || documents.size === 0) return false
-    const except = normalizeOfficePath(exceptPath)
-    for (const key of documents.keys()) {
-      if (key !== except) return true
-    }
-    return false
-  }
-
   public upsert(component: string, filePath: string): void {
     const fullName = String(filePath || '').trim()
     if (!fullName) return
@@ -122,6 +112,7 @@ export type WpsCloseResult = {
   component: string
   ok: boolean
   fullName: string
+  remaining: number
   targetPath?: string
 }
 
@@ -147,6 +138,7 @@ type WpsAddonReport = {
     excerpt?: string
     reason?: string
     targetPath?: string
+    remaining?: number
   }
 }
 
@@ -161,23 +153,25 @@ const MAX_REPORT_BYTES = 1024 * 1024
 const MAX_STATUS_EVENTS = 32
 const CLOSE_WAIT_MS = 3_000
 const CLOSE_POLL_MS = 50
-const LAST_DOC_DISCONNECT_WAIT_MS = 1_000
-const LAST_DOC_DISCONNECT_POLL_MS = 50
+const ADDON_OPEN_FALLBACK_MS = 5_000
+const SHELL_LIST_POLL_MS = 500
+const SHELL_LIST_TIMEOUT_MS = 40_000
 
-type PendingReopen = 'pending' | 'addin' | 'shell'
+type PendingReopen = 'addin' | 'shell'
 
 type PendingOpen = {
   path: string
   component: string
   at: number
   reopen: PendingReopen
+  shellUsed: boolean
   excerptSent?: boolean
+  timer?: ReturnType<typeof setTimeout>
 }
 
-const sleep = async (ms: number): Promise<void> => {
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
+type ReleasedClose = {
+  component: string
+  remaining: number
 }
 
 const ADDON_FILE_SET = new Set<string>(WPS_ADDON_FILES)
@@ -294,7 +288,7 @@ export class WpsSyncService {
   private readonly lastReloadResults: WpsReloadResult[] = []
   private readonly lastAddonFetches: WpsAddonFetch[] = []
   private readonly lastCloseResults: WpsCloseResult[] = []
-  private readonly releasedComponents = new Map<string, string>()
+  private readonly releasedCloses = new Map<string, ReleasedClose>()
   private readonly pendingOpens = new Map<string, PendingOpen>()
   private server: Server | undefined
   private port: number | undefined
@@ -365,55 +359,66 @@ export class WpsSyncService {
     if (!this.server || this.clients.size === 0) return false
     const resolvedPath = path.resolve(filePath)
     if (!this.registry.isOpen(resolvedPath)) return false
-    const component = this.registry.componentFor(resolvedPath)
+    const component = this.registry.componentFor(resolvedPath) || 'unknown'
     const startedAt = Date.now()
     this.broadcast({ type: 'close', path: resolvedPath }, component)
     const deadline = startedAt + CLOSE_WAIT_MS
     while (Date.now() < deadline) {
-      if (this.hasReleased(resolvedPath, startedAt)) {
-        this.releasedComponents.set(normalizeOfficePath(resolvedPath), component || 'unknown')
+      const closed = this.findCloseResult(resolvedPath, startedAt)
+      if (closed) {
+        this.registry.remove(resolvedPath)
+        this.releasedCloses.set(normalizeOfficePath(resolvedPath), {
+          component: closed.component || component,
+          remaining: closed.remaining
+        })
         return true
       }
-      if (component && !this.hasComponentClient(component)) {
+      if (!this.hasComponentClient(component)) {
         this.registry.remove(resolvedPath)
-        this.releasedComponents.set(normalizeOfficePath(resolvedPath), component)
+        this.releasedCloses.set(normalizeOfficePath(resolvedPath), { component, remaining: 0 })
         return true
       }
       await new Promise<void>((resolve) => {
         setTimeout(resolve, CLOSE_POLL_MS)
       })
     }
-    if (!this.hasReleased(resolvedPath, startedAt)) return false
-    this.releasedComponents.set(normalizeOfficePath(resolvedPath), component || 'unknown')
-    return true
+    return false
   }
 
   public notifyWritten(filePath: string): void {
     if (!this.server) return
     const resolvedPath = path.resolve(filePath)
-    const releasedComponent = this.releasedComponents.get(normalizeOfficePath(resolvedPath))
-    this.releasedComponents.delete(normalizeOfficePath(resolvedPath))
+    const key = normalizeOfficePath(resolvedPath)
+    const released = this.releasedCloses.get(key)
+    this.releasedCloses.delete(key)
     this.pushCapped(this.lastDispatches, {
       path: resolvedPath,
       at: Date.now(),
       clientCount: this.clients.size
     })
-    if (!releasedComponent && this.clients.size === 0) return
+    if (!released && this.clients.size === 0) return
     const component =
-      releasedComponent && releasedComponent !== 'unknown'
-        ? releasedComponent
+      released && released.component !== 'unknown'
+        ? released.component
         : officeWriteHostForPath(resolvedPath) || 'unknown'
-    this.pendingOpens.set(normalizeOfficePath(resolvedPath), {
+    this.clearPendingOpen(resolvedPath)
+    this.pendingOpens.set(key, {
       path: resolvedPath,
       component,
       at: Date.now(),
-      reopen: 'pending'
+      reopen: 'addin',
+      shellUsed: false
     })
-    if (!releasedComponent) {
-      if (this.hasComponentClient(component)) this.markAddinReopen(resolvedPath, component)
+    // 加载项卸载后 SSE 可能仍连着，只有它自报的剩余文档数能说明还能不能 Open。
+    if (released && released.remaining <= 0) {
+      this.startShellReopen(resolvedPath)
       return
     }
-    void this.reopenAfterClose(resolvedPath, component)
+    if (!this.hasComponentClient(component)) {
+      if (released) this.startShellReopen(resolvedPath)
+      return
+    }
+    this.startAddonReopen(resolvedPath, component)
   }
 
   public async stop(): Promise<void> {
@@ -432,7 +437,10 @@ export class WpsSyncService {
     this.lastReloadResults.length = 0
     this.lastAddonFetches.length = 0
     this.lastCloseResults.length = 0
-    this.releasedComponents.clear()
+    this.releasedCloses.clear()
+    for (const pending of this.pendingOpens.values()) {
+      this.clearPendingTimer(pending)
+    }
     this.pendingOpens.clear()
     const server = this.server
     this.server = undefined
@@ -523,39 +531,60 @@ export class WpsSyncService {
     void shell.openPath(resolvedPath).catch(() => undefined)
   }
 
-  private markAddinReopen(resolvedPath: string, component: string): void {
+  private startAddonReopen(resolvedPath: string, component: string): void {
     const pending = this.pendingOpens.get(normalizeOfficePath(resolvedPath))
-    if (pending) pending.reopen = 'addin'
+    if (!pending) return
+    pending.reopen = 'addin'
     this.broadcast(
       { type: 'open', path: resolvedPath },
       component === 'unknown' ? undefined : component
     )
+    // 加载项可能收下 open 却打不开（组件已无活动文档），超时就换系统打开。
+    this.setPendingTimer(pending, ADDON_OPEN_FALLBACK_MS, () => {
+      this.startShellReopen(resolvedPath)
+    })
   }
 
-  private markShellReopen(resolvedPath: string, component: string): void {
+  private startShellReopen(resolvedPath: string): void {
     const pending = this.pendingOpens.get(normalizeOfficePath(resolvedPath))
-    if (pending) pending.reopen = 'shell'
-    this.reopenReleasedPath(resolvedPath, component)
+    if (!pending || pending.shellUsed) return
+    pending.reopen = 'shell'
+    pending.shellUsed = true
+    this.clearPendingTimer(pending)
+    this.reopenReleasedPath(resolvedPath, pending.component)
+    this.pollShellReopen(pending, Date.now() + SHELL_LIST_TIMEOUT_MS)
   }
 
-  private async reopenAfterClose(resolvedPath: string, component: string): Promise<void> {
-    if (this.registry.hasOtherDocuments(component, resolvedPath) && this.hasComponentClient(component)) {
-      this.markAddinReopen(resolvedPath, component)
-      return
-    }
-    const deadline = Date.now() + LAST_DOC_DISCONNECT_WAIT_MS
-    while (Date.now() < deadline) {
+  // 表格 / 演示组件不注册 ApiEvent，系统打开后不会主动上报文档列表，只能主动问。
+  private pollShellReopen(pending: PendingOpen, deadline: number): void {
+    this.setPendingTimer(pending, SHELL_LIST_POLL_MS, () => {
+      if (!this.server || pending.excerptSent) return
+      if (!this.pendingOpens.has(normalizeOfficePath(pending.path))) return
+      this.completeShellOpens()
+      if (pending.excerptSent || Date.now() >= deadline) return
+      this.broadcast(
+        { type: 'list' },
+        pending.component === 'unknown' ? undefined : pending.component
+      )
+      this.pollShellReopen(pending, deadline)
+    })
+  }
+
+  private setPendingTimer(pending: PendingOpen, delayMs: number, run: () => void): void {
+    this.clearPendingTimer(pending)
+    const timer = setTimeout(() => {
+      pending.timer = undefined
       if (!this.server || this.stopped) return
-      if (!this.hasComponentClient(component)) break
-      await sleep(LAST_DOC_DISCONNECT_POLL_MS)
-    }
-    const pending = this.pendingOpens.get(normalizeOfficePath(resolvedPath))
-    if (!this.server || !pending || pending.reopen !== 'pending') return
-    if (this.hasComponentClient(component)) {
-      this.markAddinReopen(resolvedPath, component)
-      return
-    }
-    this.markShellReopen(resolvedPath, component)
+      run()
+    }, delayMs)
+    timer.unref?.()
+    pending.timer = timer
+  }
+
+  private clearPendingTimer(pending: PendingOpen): void {
+    if (!pending.timer) return
+    clearTimeout(pending.timer)
+    pending.timer = undefined
   }
 
   private completeShellOpens(): void {
@@ -597,7 +626,18 @@ export class WpsSyncService {
 
   private clearPendingOpen(filePath: string | undefined): void {
     if (!filePath) return
-    this.pendingOpens.delete(normalizeOfficePath(filePath))
+    const key = normalizeOfficePath(filePath)
+    const pending = this.pendingOpens.get(key)
+    if (pending) this.clearPendingTimer(pending)
+    this.pendingOpens.delete(key)
+  }
+
+  private fallbackFailedOpen(component: string, filePath: string | undefined): void {
+    if (!filePath) return
+    const pending = this.pendingOpens.get(normalizeOfficePath(filePath))
+    if (!pending || pending.reopen !== 'addin' || pending.shellUsed) return
+    if (pending.component !== 'unknown' && pending.component !== component) return
+    this.startShellReopen(pending.path)
   }
 
   private async handleRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -650,6 +690,7 @@ export class WpsSyncService {
             component,
             ok,
             fullName,
+            remaining: Math.max(0, Number(body.data?.remaining) || 0),
             targetPath
           })
           if (ok && (fullName || targetPath)) this.registry.remove(fullName || targetPath || '')
@@ -671,6 +712,8 @@ export class WpsSyncService {
             this.clearPendingOpen(fullName)
             this.clearPendingOpen(targetPath)
             if (fullName || targetPath) this.registry.upsert(component, fullName || targetPath || '')
+          } else {
+            this.fallbackFailedOpen(component, targetPath || fullName)
           }
         }
         sendJson(response, 200, { ok: true })
@@ -683,24 +726,18 @@ export class WpsSyncService {
     sendJson(response, 404, { ok: false })
   }
 
-  private hasReleased(filePath: string, afterAt: number): boolean {
-    if (!this.registry.isOpen(filePath)) return true
-    const matched = this.lastCloseResults.some(
+  private findCloseResult(filePath: string, afterAt: number): WpsCloseResult | undefined {
+    return this.lastCloseResults.find(
       (item) =>
         item.at >= afterAt &&
         item.ok &&
         (this.matchesOfficePath(item.fullName, filePath) ||
           this.matchesOfficePath(item.targetPath, filePath))
     )
-    if (matched) {
-      this.registry.remove(filePath)
-      return true
-    }
-    return false
   }
 
   private matchesOfficePath(left: string | undefined, right: string): boolean {
-    return Boolean(left) && normalizeOfficePath(left) === normalizeOfficePath(right)
+    return left ? normalizeOfficePath(left) === normalizeOfficePath(right) : false
   }
 
   private pushCapped<T>(items: T[], item: T): void {

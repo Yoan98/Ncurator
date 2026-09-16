@@ -397,7 +397,13 @@
       var view = adapter.captureView()
       pendingViews[normalizePath(fullName)] = view
       if (targetPath) pendingViews[normalizePath(targetPath)] = view
-      return { ok: true, fullName: fullName, view: view, item: item }
+      var remaining = 0
+      try {
+        remaining = Math.max(0, adapter.collection().Count - 1)
+      } catch (error) {
+        remaining = 0
+      }
+      return { ok: true, fullName: fullName, view: view, remaining: remaining, item: item }
     } catch (error) {
       return { ok: false, reason: describeError(error), targetPath: targetPath }
     }
