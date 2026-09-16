@@ -1,10 +1,12 @@
 import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http'
+import { spawn } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { app, shell } from 'electron'
 import { WPS_ADDON_FILES, WPS_PREFERRED_SYNC_PORT } from './constants'
 import { WpsAddonInstaller, type WpsAddonInstallerLike } from './WpsAddonInstaller'
 import { normalizeOfficePath, officeWriteHostForPath } from './officeFileWriteNotify'
+import { resolveWpsComponentExe } from './wpsOfficeLaunch'
 
 export type WpsOpenDocument = {
   name?: string
@@ -58,6 +60,16 @@ export class WpsOpenDocumentRegistry {
       }
     }
     return listed
+  }
+
+  public hasOtherDocuments(component: string, exceptPath: string): boolean {
+    const documents = this.byComponent.get(component)
+    if (!documents || documents.size === 0) return false
+    const except = normalizeOfficePath(exceptPath)
+    for (const key of documents.keys()) {
+      if (key !== except) return true
+    }
+    return false
   }
 
   public upsert(component: string, filePath: string): void {
@@ -149,13 +161,23 @@ const MAX_REPORT_BYTES = 1024 * 1024
 const MAX_STATUS_EVENTS = 32
 const CLOSE_WAIT_MS = 3_000
 const CLOSE_POLL_MS = 50
-const ORPHAN_REOPEN_MS = 300
+const LAST_DOC_DISCONNECT_WAIT_MS = 1_000
+const LAST_DOC_DISCONNECT_POLL_MS = 50
+
+type PendingReopen = 'pending' | 'addin' | 'shell'
 
 type PendingOpen = {
   path: string
   component: string
   at: number
-  openedByShell?: boolean
+  reopen: PendingReopen
+  excerptSent?: boolean
+}
+
+const sleep = async (ms: number): Promise<void> => {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
 }
 
 const ADDON_FILE_SET = new Set<string>(WPS_ADDON_FILES)
@@ -274,7 +296,6 @@ export class WpsSyncService {
   private readonly lastCloseResults: WpsCloseResult[] = []
   private readonly releasedComponents = new Map<string, string>()
   private readonly pendingOpens = new Map<string, PendingOpen>()
-  private readonly orphanReopenTimers = new Set<ReturnType<typeof setTimeout>>()
   private server: Server | undefined
   private port: number | undefined
   private stopped = false
@@ -353,6 +374,11 @@ export class WpsSyncService {
         this.releasedComponents.set(normalizeOfficePath(resolvedPath), component || 'unknown')
         return true
       }
+      if (component && !this.hasComponentClient(component)) {
+        this.registry.remove(resolvedPath)
+        this.releasedComponents.set(normalizeOfficePath(resolvedPath), component)
+        return true
+      }
       await new Promise<void>((resolve) => {
         setTimeout(resolve, CLOSE_POLL_MS)
       })
@@ -380,24 +406,18 @@ export class WpsSyncService {
     this.pendingOpens.set(normalizeOfficePath(resolvedPath), {
       path: resolvedPath,
       component,
-      at: Date.now()
+      at: Date.now(),
+      reopen: 'pending'
     })
-    if (this.hasComponentClient(component)) {
-      this.broadcast({ type: 'open', path: resolvedPath }, component === 'unknown' ? undefined : component)
+    if (!releasedComponent) {
+      if (this.hasComponentClient(component)) this.markAddinReopen(resolvedPath, component)
       return
     }
-    if (!releasedComponent) return
-    const pending = this.pendingOpens.get(normalizeOfficePath(resolvedPath))
-    if (pending) pending.openedByShell = true
-    this.reopenReleasedPath(resolvedPath)
+    void this.reopenAfterClose(resolvedPath, component)
   }
 
   public async stop(): Promise<void> {
     this.stopped = true
-    for (const timer of this.orphanReopenTimers) {
-      clearTimeout(timer)
-    }
-    this.orphanReopenTimers.clear()
     const ownedPort = this.port
     for (const client of this.clients) {
       try {
@@ -487,23 +507,68 @@ export class WpsSyncService {
     return [...this.clients].some((client) => client.component === component)
   }
 
-  private reopenReleasedPath(resolvedPath: string): void {
+  private reopenReleasedPath(resolvedPath: string, component: string): void {
+    if (process.platform === 'win32') {
+      const exe = resolveWpsComponentExe(component, resolvedPath)
+      if (exe) {
+        const child = spawn(exe, [resolvedPath], {
+          detached: true,
+          stdio: 'ignore'
+        })
+        child.once('error', () => undefined)
+        child.unref()
+        return
+      }
+    }
     void shell.openPath(resolvedPath).catch(() => undefined)
   }
 
-  private scheduleOrphanReopen(component: string): void {
-    const timer = setTimeout(() => {
-      this.orphanReopenTimers.delete(timer)
-      if (!this.server) return
-      for (const pending of this.pendingOpens.values()) {
-        if (pending.component !== 'unknown' && pending.component !== component) continue
-        if (this.hasComponentClient(pending.component)) continue
-        if (pending.openedByShell) continue
-        pending.openedByShell = true
-        this.reopenReleasedPath(pending.path)
-      }
-    }, ORPHAN_REOPEN_MS)
-    this.orphanReopenTimers.add(timer)
+  private markAddinReopen(resolvedPath: string, component: string): void {
+    const pending = this.pendingOpens.get(normalizeOfficePath(resolvedPath))
+    if (pending) pending.reopen = 'addin'
+    this.broadcast(
+      { type: 'open', path: resolvedPath },
+      component === 'unknown' ? undefined : component
+    )
+  }
+
+  private markShellReopen(resolvedPath: string, component: string): void {
+    const pending = this.pendingOpens.get(normalizeOfficePath(resolvedPath))
+    if (pending) pending.reopen = 'shell'
+    this.reopenReleasedPath(resolvedPath, component)
+  }
+
+  private async reopenAfterClose(resolvedPath: string, component: string): Promise<void> {
+    if (this.registry.hasOtherDocuments(component, resolvedPath) && this.hasComponentClient(component)) {
+      this.markAddinReopen(resolvedPath, component)
+      return
+    }
+    const deadline = Date.now() + LAST_DOC_DISCONNECT_WAIT_MS
+    while (Date.now() < deadline) {
+      if (!this.server || this.stopped) return
+      if (!this.hasComponentClient(component)) break
+      await sleep(LAST_DOC_DISCONNECT_POLL_MS)
+    }
+    const pending = this.pendingOpens.get(normalizeOfficePath(resolvedPath))
+    if (!this.server || !pending || pending.reopen !== 'pending') return
+    if (this.hasComponentClient(component)) {
+      this.markAddinReopen(resolvedPath, component)
+      return
+    }
+    this.markShellReopen(resolvedPath, component)
+  }
+
+  private completeShellOpens(): void {
+    for (const pending of this.pendingOpens.values()) {
+      if (pending.reopen !== 'shell' || pending.excerptSent) continue
+      if (!this.registry.isOpen(pending.path)) continue
+      if (!this.hasComponentClient(pending.component)) continue
+      pending.excerptSent = true
+      this.broadcast(
+        { type: 'excerpt', path: pending.path },
+        pending.component === 'unknown' ? undefined : pending.component
+      )
+    }
   }
 
   private broadcast(payload: unknown, component?: string): void {
@@ -520,6 +585,7 @@ export class WpsSyncService {
   private flushPendingOpens(client: SseClient): void {
     for (const pending of this.pendingOpens.values()) {
       if (pending.component !== 'unknown' && pending.component !== client.component) continue
+      if (pending.reopen !== 'addin') continue
       try {
         writeSse(client.response, { type: 'open', path: pending.path })
       } catch {
@@ -573,6 +639,7 @@ export class WpsSyncService {
         const component = String(body.component || 'unknown')
         if (Array.isArray(body.data?.items)) {
           this.registry.setDocuments(component, body.data.items)
+          this.completeShellOpens()
         }
         if (body.kind === 'close-result') {
           const fullName = String(body.data?.fullName || '')
@@ -670,7 +737,6 @@ export class WpsSyncService {
     this.flushPendingOpens(client)
     request.on('close', () => {
       this.clients.delete(client)
-      this.scheduleOrphanReopen(client.component)
     })
   }
 

@@ -23,7 +23,7 @@
     return saved === false || saved === 0
   }
 
-  function report(kind, data) {
+  function report(kind, data, sync) {
     var server = window.__ncuratorServer
     if (!server) return
     try {
@@ -33,6 +33,13 @@
         at: Date.now(),
         data: data === undefined ? null : data
       })
+      if (sync) {
+        var xhr = new XMLHttpRequest()
+        xhr.open('POST', server + '/report', false)
+        xhr.setRequestHeader('Content-Type', 'application/json')
+        xhr.send(body)
+        return
+      }
       if (typeof fetch === 'function') {
         fetch(server + '/report', {
           method: 'POST',
@@ -41,10 +48,10 @@
         }).catch(function () {})
         return
       }
-      var xhr = new XMLHttpRequest()
-      xhr.open('POST', server + '/report', true)
-      xhr.setRequestHeader('Content-Type', 'application/json')
-      xhr.send(body)
+      var asyncXhr = new XMLHttpRequest()
+      asyncXhr.open('POST', server + '/report', true)
+      asyncXhr.setRequestHeader('Content-Type', 'application/json')
+      asyncXhr.send(body)
     } catch (error) {
       // 上报失败时静默，由重连补偿。
     }
@@ -184,8 +191,8 @@
         try {
           var range = app.ActiveSheet.UsedRange
           var parts = []
-          var rowCount = Math.min(range.Rows.Count, 20)
-          var columnCount = Math.min(range.Columns.Count, 12)
+          var rowCount = Math.min(range.Rows.Count, 40)
+          var columnCount = Math.min(range.Columns.Count, 20)
           for (var row = 1; row <= rowCount; row += 1) {
             for (var column = 1; column <= columnCount; column += 1) {
               try {
@@ -196,7 +203,11 @@
               }
             }
           }
-          if (parts.length) return parts.join('\n').slice(0, 2000)
+          if (parts.length) {
+            var joined = parts.join('\n')
+            if (joined.length <= 4000) return joined
+            return joined.slice(0, 800) + '\n...\n' + joined.slice(-2000)
+          }
         } catch (error) {
           // 回落到 A1。
         }
@@ -385,12 +396,9 @@
       if (!fullName) return { ok: false, reason: 'never saved, no path', targetPath: targetPath }
       var view = adapter.captureView()
       pendingViews[normalizePath(fullName)] = view
-      suppressEvents = true
-      adapter.close(item)
-      suppressEvents = false
-      return { ok: true, fullName: fullName, view: view }
+      if (targetPath) pendingViews[normalizePath(targetPath)] = view
+      return { ok: true, fullName: fullName, view: view, item: item }
     } catch (error) {
-      suppressEvents = false
       return { ok: false, reason: describeError(error), targetPath: targetPath }
     }
   }
@@ -411,8 +419,12 @@
       }
       if (!targetPath) return { ok: false, reason: 'never saved, no path' }
       if (!isOwnPath(targetPath)) return { ok: false, reason: 'not open here', targetPath: targetPath }
-      var view = pendingViews[normalizePath(targetPath)]
-      delete pendingViews[normalizePath(targetPath)]
+      var viewKey = normalizePath(targetPath)
+      if (!Object.prototype.hasOwnProperty.call(pendingViews, viewKey)) {
+        return { ok: false, reason: 'not open here', targetPath: targetPath }
+      }
+      var view = pendingViews[viewKey]
+      delete pendingViews[viewKey]
       suppressEvents = true
       adapter.open(targetPath)
       var restored = view ? adapter.restoreView(view) : {}
@@ -443,10 +455,47 @@
       try {
         bindAdapter()
         var closed = closeForWrite(payload.path)
-        if (closed.ok) closed.items = listItems().items
-        report('close-result', closed)
+        var item = closed.item
+        delete closed.item
+        report('close-result', closed, closed.ok)
+        if (item) {
+          suppressEvents = true
+          try {
+            adapter.close(item)
+          } finally {
+            suppressEvents = false
+          }
+        }
       } catch (error) {
         report('close-result', {
+          ok: false,
+          reason: describeError(error),
+          targetPath: payload.path
+        })
+      }
+      return
+    }
+    if (payload.type === 'excerpt') {
+      try {
+        bindAdapter()
+        var existing = payload.path ? findItem(payload.path) : null
+        if (!existing) {
+          report('reload-result', {
+            ok: false,
+            reason: adapter ? 'not open here' : 'no adapter',
+            targetPath: payload.path
+          })
+          return
+        }
+        report('reload-result', {
+          ok: true,
+          fullName: existing.FullName,
+          excerpt: adapter.excerpt ? adapter.excerpt() : '',
+          alreadyOpen: true,
+          items: listItems().items
+        })
+      } catch (error) {
+        report('reload-result', {
           ok: false,
           reason: describeError(error),
           targetPath: payload.path

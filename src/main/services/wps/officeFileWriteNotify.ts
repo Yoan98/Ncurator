@@ -1,3 +1,4 @@
+import fs from 'node:fs/promises'
 import path from 'node:path'
 
 export type OfficeWriteHost = 'wps' | 'et' | 'wpp'
@@ -7,6 +8,9 @@ const OFFICE_WRITE_HOSTS: Record<string, OfficeWriteHost> = {
   '.xlsx': 'et',
   '.pptx': 'wpp'
 }
+
+const UNLOCK_WAIT_MS = 4_000
+const UNLOCK_POLL_MS = 50
 
 export const officeWriteHostForPath = (filePath: string): OfficeWriteHost | undefined =>
   OFFICE_WRITE_HOSTS[path.extname(filePath).toLowerCase()]
@@ -34,6 +38,30 @@ const resolveOfficeWritePath = (filePath: string): string | undefined => {
   return path.resolve(value)
 }
 
+const sleep = async (ms: number): Promise<void> => {
+  await new Promise((resolve) => {
+    setTimeout(resolve, ms)
+  })
+}
+
+export const waitForOfficePathUnlocked = async (
+  filePath: string,
+  timeoutMs = UNLOCK_WAIT_MS
+): Promise<void> => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    try {
+      const handle = await fs.open(filePath, 'r+')
+      await handle.close()
+      return
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') return
+      await sleep(UNLOCK_POLL_MS)
+    }
+  }
+}
+
 export const notifyOfficeFileWritten = (filePath: string): void => {
   const resolved = resolveOfficeWritePath(filePath)
   if (!resolved) return
@@ -56,11 +84,7 @@ export const withOfficeFileWrite = async <T>(
   } catch {
     released = false
   }
-  if (released) {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 100)
-    })
-  }
+  if (released) await waitForOfficePathUnlocked(resolved)
   try {
     return await write()
   } catch (error) {
