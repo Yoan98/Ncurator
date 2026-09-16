@@ -2,7 +2,6 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import type { AiLlmUsage, AiRunEvent } from '../../../../src/shared/types'
 import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
@@ -20,11 +19,16 @@ import {
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
+import {
+  computeShowcaseCost,
+  ensureDocumentMode,
+  readApplyChangeCounts,
+  screenshotScrollerPages
+} from './shared'
 
 const CASE_ID = 'docx-weekly-report'
 const FILE_NAME = '云枢智服-9月第2周经营周报.docx'
 const EXPORT_DIR = path.resolve('tests/logs/workbench/showcase-export/docx-weekly-report')
-const USD_CNY = 7.2
 const PROMPT = [
   '根据工作区里的《站会纪要-0908.txt》《客户风险-星河.txt》《本周数字.md》，',
   '写一份可发给管理层的《云枢智服 9 月第 2 周经营周报》。',
@@ -73,55 +77,6 @@ const WEEKLY_NUMBERS = `# 本周数字（财务草稿，未对外）
 口径：收入含订阅，不含未验收的实施尾款。
 `
 
-const isDeepseekPeak = (date: Date): boolean => {
-  const utcDay = date.getUTCDay()
-  if (utcDay === 0 || utcDay === 6) return false
-  const minutes = date.getUTCHours() * 60 + date.getUTCMinutes()
-  return (minutes >= 60 && minutes < 240) || (minutes >= 360 && minutes < 600)
-}
-
-const collectUsage = (events: readonly AiRunEvent[]) => {
-  let calls = 0
-  let unavailableCalls = 0
-  let inputTokens = 0
-  let outputTokens = 0
-  let cachedInputTokens = 0
-  let cacheMissInputTokens = 0
-
-  for (const event of events) {
-    if (event.type !== 'activity' || event.status !== 'completed') continue
-    const usage = event.details?.usage as AiLlmUsage | undefined
-    if (!usage) continue
-    calls += 1
-    if (usage.source === 'unavailable') {
-      unavailableCalls += 1
-      continue
-    }
-    const input = usage.inputTokens || 0
-    const cached = usage.cachedInputTokens || 0
-    inputTokens += input
-    outputTokens += usage.outputTokens || 0
-    cachedInputTokens += cached
-    cacheMissInputTokens += usage.cacheMissInputTokens || Math.max(0, input - cached)
-  }
-
-  return {
-    calls,
-    unavailableCalls,
-    inputTokens,
-    outputTokens,
-    cachedInputTokens,
-    cacheMissInputTokens
-  }
-}
-
-const priceUsdPerMillion = (peak: boolean) =>
-  peak
-    ? { hit: 0.006, miss: 0.3, output: 1.2 }
-    : { hit: 0.003, miss: 0.15, output: 0.6 }
-
-const roundCny = (value: number): number => Math.round(value * 100) / 100
-
 const seedWorkspace = async (): Promise<string> => {
   const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-showcase-docx-'))
   await fs.writeFile(path.join(rootPath, '站会纪要-0908.txt'), STANDUP_NOTES, 'utf8')
@@ -139,7 +94,7 @@ describe('workbench showcase e2e', () => {
         domain: 'workbench',
         suite: 'showcase',
         groups: ['docx'],
-        description: '官网样例：根据零散材料生成可发给管理层的 Word 周报，并截取预览页。',
+        description: '官网样例：根据零散材料生成可发给管理层的 Word 周报，并截取预览页与审核页。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -186,64 +141,41 @@ describe('workbench showcase e2e', () => {
           await applyEntry.click()
           const viewer = getWorkbenchLocator(page, workbenchSelectors.docxViewer)
           await viewer.waitFor({ state: 'visible', timeout: 30_000 })
-          const modeTag = getWorkbenchLocator(page, workbenchSelectors.documentModeTag)
-          const modeText = ((await modeTag.textContent()) || '').trim()
-          if (modeText.includes('审核')) {
-            await getWorkbenchLocator(page, workbenchSelectors.documentModeToggle).click()
-          }
           const scroller = viewer.locator('.docx-content')
-          await scroller.locator('p, table, section').first().waitFor({
+          await scroller.locator('p, table, section, ins, del').first().waitFor({
             state: 'visible',
             timeout: 30_000
           })
           await page.waitForTimeout(1200)
 
           await fs.rm(EXPORT_DIR, { recursive: true, force: true })
-          await fs.mkdir(EXPORT_DIR, { recursive: true })
-          const metrics = await scroller.evaluate((element) => ({
-            scrollHeight: element.scrollHeight,
-            clientHeight: element.clientHeight
-          }))
-          const screenshotNames: string[] = []
-          const step = Math.max(160, metrics.clientHeight - 32)
-          let offset = 0
-          for (let index = 0; index < 4; index += 1) {
-            await scroller.evaluate((element, top) => {
-              element.scrollTop = top
-            }, offset)
-            await page.waitForTimeout(250)
-            const fileName = `page-${index + 1}.png`
-            await scroller.screenshot({
-              path: path.join(EXPORT_DIR, fileName),
-              type: 'png'
-            })
-            screenshotNames.push(fileName)
-            if (offset + metrics.clientHeight >= metrics.scrollHeight - 8) break
-            offset += step
-          }
+          await ensureDocumentMode(page, '审核')
+          const changeCounts = await readApplyChangeCounts(page)
+          const reviewNames = await screenshotScrollerPages(
+            scroller,
+            path.join(EXPORT_DIR, 'review'),
+            'page'
+          )
 
-          const usage = collectUsage(evidence.events)
-          const peak = isDeepseekPeak(new Date())
-          const rates = priceUsdPerMillion(peak)
-          const usd =
-            (usage.cachedInputTokens / 1_000_000) * rates.hit +
-            (usage.cacheMissInputTokens / 1_000_000) * rates.miss +
-            (usage.outputTokens / 1_000_000) * rates.output
-          const cny = roundCny(usd * USD_CNY)
-          const cost = {
+          await ensureDocumentMode(page, '预览')
+          await scroller.locator('p, table, section').first().waitFor({
+            state: 'visible',
+            timeout: 30_000
+          })
+          await page.waitForTimeout(800)
+          const screenshotNames = await screenshotScrollerPages(scroller, EXPORT_DIR, 'page')
+
+          const cost = computeShowcaseCost(evidence.events, {
             modelName: env.modelName,
-            modelLabel: 'DeepSeek V4.1 Flash',
-            peak,
-            usdCny: USD_CNY,
             prompt: PROMPT,
             fileName: FILE_NAME,
             pageCount: screenshotNames.length,
-            usage,
-            usd: roundCny(usd),
-            cny,
+            reviewPageCount: reviewNames.length,
             screenshotNames,
-            durationMs: evidence.durationMs
-          }
+            reviewScreenshotNames: reviewNames.map((name) => `review/${name}`),
+            durationMs: evidence.durationMs,
+            ...changeCounts
+          })
           await fs.writeFile(path.join(EXPORT_DIR, 'cost.json'), `${JSON.stringify(cost, null, 2)}\n`)
           runtime.signal({
             name: 'showcase-docx-cost',
@@ -255,8 +187,10 @@ describe('workbench showcase e2e', () => {
             fileExists,
             docxText,
             screenshotCount: screenshotNames.length,
-            usageCalls: usage.calls,
-            cny,
+            reviewCount: reviewNames.length,
+            insertCount: changeCounts.insertCount,
+            usageCalls: cost.usage.calls,
+            cny: cost.cny,
             toolNames: evidence.events
               .filter((event) => event.type === 'tool_call_started')
               .map((event) => event.toolName)
@@ -266,12 +200,13 @@ describe('workbench showcase e2e', () => {
           await runtime.assertThat(
             result.fileExists &&
               result.screenshotCount >= 1 &&
+              result.reviewCount >= 1 &&
               result.usageCalls > 0 &&
               /周报|进展|风险|下周/u.test(result.docxText) &&
               result.toolNames.some((name) => name.startsWith('docx_')),
             {
               name: 'showcase-docx-weekly-report-ready',
-              message: '应生成可预览的管理层周报 Word，并截到至少 1 页、记录到真实用量。',
+              message: '应生成可预览的管理层周报 Word，并截到预览页、审核页和真实用量。',
               data: result
             }
           )
