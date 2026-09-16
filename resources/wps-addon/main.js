@@ -1,5 +1,10 @@
 ;(function () {
   var DEFAULT_PORT = 58123
+  // 摘录用于证明窗口已换成磁盘新稿，采样窗口太小会漏掉正文末尾或右侧的改动。
+  var EXCERPT_MAX_CHARS = 20000
+  var EXCERPT_MAX_ROWS = 200
+  var EXCERPT_MAX_COLUMNS = 50
+  var EXCERPT_MAX_SLIDES = 10
   var suppressEvents = false
   var eventSource = null
   var reconnectTimer = null
@@ -124,7 +129,7 @@
         try {
           var slides = app.ActivePresentation.Slides
           var parts = []
-          var slideLimit = Math.min(slides.Count, 3)
+          var slideLimit = Math.min(slides.Count, EXCERPT_MAX_SLIDES)
           for (var slideIndex = 1; slideIndex <= slideLimit; slideIndex += 1) {
             var shapes = slides.Item(slideIndex).Shapes
             for (var shapeIndex = 1; shapeIndex <= shapes.Count; shapeIndex += 1) {
@@ -136,7 +141,7 @@
               }
             }
           }
-          return parts.join('\n').slice(0, 2000)
+          return parts.join('\n').slice(0, EXCERPT_MAX_CHARS)
         } catch (error) {
           return ''
         }
@@ -191,28 +196,32 @@
         try {
           var range = app.ActiveSheet.UsedRange
           var parts = []
-          var rowCount = Math.min(range.Rows.Count, 40)
-          var columnCount = Math.min(range.Columns.Count, 20)
+          var used = 0
+          var rowCount = Math.min(range.Rows.Count, EXCERPT_MAX_ROWS)
+          var columnCount = Math.min(range.Columns.Count, EXCERPT_MAX_COLUMNS)
           for (var row = 1; row <= rowCount; row += 1) {
             for (var column = 1; column <= columnCount; column += 1) {
               try {
                 var text = String(range.Cells.Item(row, column).Text || '').trim()
-                if (text) parts.push(text)
+                if (!text) continue
+                if (used + text.length > EXCERPT_MAX_CHARS) {
+                  parts.push('...')
+                  row = rowCount
+                  break
+                }
+                parts.push(text)
+                used += text.length + 1
               } catch (error) {
                 // 空单元格忽略。
               }
             }
           }
-          if (parts.length) {
-            var joined = parts.join('\n')
-            if (joined.length <= 4000) return joined
-            return joined.slice(0, 800) + '\n...\n' + joined.slice(-2000)
-          }
+          if (parts.length) return parts.join('\n')
         } catch (error) {
           // 回落到 A1。
         }
         try {
-          return String(app.ActiveSheet.Cells.Item(1, 1).Text || '').slice(0, 2000)
+          return String(app.ActiveSheet.Cells.Item(1, 1).Text || '').slice(0, EXCERPT_MAX_CHARS)
         } catch (inner) {
           return ''
         }
@@ -268,7 +277,7 @@
       },
       excerpt: function () {
         try {
-          return String(app.ActiveDocument.Content.Text || '').slice(0, 2000)
+          return String(app.ActiveDocument.Content.Text || '').slice(0, EXCERPT_MAX_CHARS)
         } catch (error) {
           return ''
         }

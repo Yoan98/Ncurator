@@ -28,7 +28,9 @@ const readWindowsRegistryValues = (key: string, valueName: string): string[] => 
     const raw = execFileSync('reg', ['query', key, '/v', valueName], {
       encoding: 'utf8',
       timeout: 5_000,
-      windowsHide: true
+      windowsHide: true,
+      // 键不存在是正常的探测结果，不要把 reg 的报错透给日志。
+      stdio: ['ignore', 'pipe', 'ignore']
     })
     const pattern = new RegExp(`${valueName}\\s+REG_\\w+\\s+(.+)`, 'gi')
     return [...raw.matchAll(pattern)]

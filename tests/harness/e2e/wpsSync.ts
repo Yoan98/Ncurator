@@ -42,7 +42,7 @@ export const WPS_OFFICE_COVERAGE_TARGETS: WpsOfficeCoverageTarget[] = [
     fileName: '经营周报.xlsx',
     component: 'et',
     prompt: (marker) =>
-      `请直接修改我刚选中的 经营周报.xlsx，在第一个工作表找一个空白单元格写入纯文本“${marker}”，不要改现有数字、公式或其他单元格。完成后告诉我已写回。`
+      `请直接修改我刚选中的 经营周报.xlsx，在第一个工作表的 H1 单元格写入纯文本“${marker}”，不要改现有数字、公式或其他单元格。完成后告诉我已写回。`
   },
   {
     kind: 'pptx',
