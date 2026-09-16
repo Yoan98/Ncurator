@@ -550,20 +550,24 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     hasStreamingThought ||
     turn?.status === 'completed' ||
     turn?.status === 'failed'
+  const processGroups = useMemo(
+    () => (turn?.processGroups || []).filter((group) => group.kind !== 'thinking'),
+    [turn?.processGroups]
+  )
+  const hasRunningRetry = processGroups.some(
+    (group) => group.kind === 'retry' && group.status === 'running'
+  )
   const showThinkingIndicator = shouldShowAssistantThinkingIndicator({
     isBrainThinking: turn?.isBrainThinking,
     waitingApproval: Boolean(turn?.waitingApproval),
     runFinished: Boolean(turn?.runFinished),
-    hasFinalAnswer
+    hasFinalAnswer,
+    hasRunningRetry
   })
   /** 运行未结束且尚无最终回答时预留固定行高，避免「让俺想想」显隐把页面顶抖 */
   const reserveThinkingSlot =
     showThinkingIndicator ||
     (!Boolean(turn?.runFinished) && !Boolean(turn?.waitingApproval) && !hasFinalAnswer)
-  const processGroups = useMemo(
-    () => (turn?.processGroups || []).filter((group) => group.kind !== 'thinking'),
-    [turn?.processGroups]
-  )
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({

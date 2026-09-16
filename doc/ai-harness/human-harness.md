@@ -907,12 +907,12 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 | 优先级 | 信号 | 判定 |
 |--------|------|------|
-| 1 | HTTP status | 401/402/403 → 不重试；408/429/5xx 等 → 可重试（有上限） |
+| 1 | HTTP status | 401/402/403 → 不重试；408/429/5xx 等 → 可重试（有上限）；**429 / rate limit / ResourceExhausted 使用指数退避**（2s 起、上限 15s） |
 | 2 | providerCode / type | `insufficient_balance`、`quota_exceeded`、`invalid_api_key`… → 不重试；`rate_limit_exceeded`、`timeout`、`server_error`… → 可重试 |
 | 3 | 短文案白名单 | 弱补充 |
 | 4 | unknown | **不重试** |
 
-上限：`AI_LLM_CALL_MAX_RETRY_ATTEMPTS`（当前 5）表示**首次失败后最多再试 5 次**；过程流文案为「正在重试 n/5」（第一次重试为 1/5）。
+上限：`AI_LLM_CALL_MAX_RETRY_ATTEMPTS`（当前 5）表示**首次失败后最多再试 5 次**；过程流文案为「正在重试 n/5」（第一次重试为 1/5）。同一 run 只发一个 `groupId`（`${runId}:llm-retry`），过程区只保留一行并就地更新次数；出现该行时隐藏「让俺想想」。产品验收见 `WB-COMPOSER-015`。
 
 #### 告警（不停跑）
 

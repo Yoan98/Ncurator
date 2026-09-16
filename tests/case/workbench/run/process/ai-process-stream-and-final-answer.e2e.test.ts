@@ -123,10 +123,42 @@ const isShortActivityHeader = (summaryText: string, itemCount: number): boolean 
   if (/项操作/u.test(summaryText)) return false
 
   if (itemCount >= 2) {
-    // Same-kind merge uses「N 次」; multi-kind uses 并/但.
-    return /并|但|\d+\s*次/u.test(summaryText)
+    // Same-kind merge uses「N 次」; 2–3 kinds use顿号 `、`.
+    return /、|\d+\s*次/u.test(summaryText)
   }
   return summaryText.length > 0
+}
+
+const RETRY_HEADING_RE =
+  /正在重试\s*\d+\s*\/\s*\d+|已重试\s*\d+\s*\/\s*\d+|重试失败\s*\d+\s*\/\s*\d+|部分重试失败\s*\d+\s*\/\s*\d+/gu
+
+const inspectProcessRetryState = (
+  processText: string
+): { retryAndThinkingCoexist: boolean; stackedRetryRows: boolean } => ({
+  retryAndThinkingCoexist: /正在重试/u.test(processText) && /让俺想想/u.test(processText),
+  stackedRetryRows: (processText.match(RETRY_HEADING_RE) || []).length > 1
+})
+
+const watchProcessRetryState = async (
+  page: Page,
+  processLocator: Awaited<ReturnType<typeof waitForLatestAssistantProcess>>,
+  isDone: () => boolean
+): Promise<{ retryAndThinkingCoexist: boolean; stackedRetryRows: boolean }> => {
+  let retryAndThinkingCoexist = false
+  let stackedRetryRows = false
+  while (!isDone()) {
+    const processText = ((await processLocator.textContent()) || '').trim()
+    const snapshot = inspectProcessRetryState(processText)
+    retryAndThinkingCoexist = retryAndThinkingCoexist || snapshot.retryAndThinkingCoexist
+    stackedRetryRows = stackedRetryRows || snapshot.stackedRetryRows
+    await page.waitForTimeout(150)
+  }
+  const processText = ((await processLocator.textContent()) || '').trim()
+  const snapshot = inspectProcessRetryState(processText)
+  return {
+    retryAndThinkingCoexist: retryAndThinkingCoexist || snapshot.retryAndThinkingCoexist,
+    stackedRetryRows: stackedRetryRows || snapshot.stackedRetryRows
+  }
 }
 
 const sampleThinkingWaitEarly = async (
@@ -177,16 +209,22 @@ describe('workbench run e2e', () => {
           await sendWorkbenchMessage(page, PROMPT)
           const processLocator = await waitForLatestAssistantProcess(page)
           const earlySample = await sampleThinkingWaitEarly(page, processLocator)
-          const retryAndThinkingCoexist =
-            /正在重试/u.test(earlySample.processTextDuringRun) &&
-            /让俺想想/u.test(earlySample.processTextDuringRun)
+          let runWatchDone = false
+          const retryWatch = watchProcessRetryState(page, processLocator, () => runWatchDone)
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
             setup.env.modelName,
             WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
             { page, blockerPolicy: 'auto_approve' }
-          )
+          ).finally(() => {
+            runWatchDone = true
+          })
+          const retryState = await retryWatch
+          const retryAndThinkingCoexist =
+            retryState.retryAndThinkingCoexist ||
+            inspectProcessRetryState(earlySample.processTextDuringRun).retryAndThinkingCoexist
+          const stackedRetryRows = retryState.stackedRetryRows
           const finalAnswerText = await waitForLatestAssistantFinalAnswerText(page)
           recordWorkbenchAiEvidence(runtime, evidence, 0.85)
           const processRender = await collectProcessRenderSnapshot(page)
@@ -195,6 +233,7 @@ describe('workbench run e2e', () => {
             sawThinkingWait: earlySample.sawThinkingWait,
             processTextDuringRun: earlySample.processTextDuringRun,
             retryAndThinkingCoexist,
+            stackedRetryRows,
             thinkingStuckAfterComplete: /让俺想想/u.test(processRender.processRootText),
             processRender,
             visibleToolNames,
@@ -235,6 +274,7 @@ describe('workbench run e2e', () => {
             )
           const thinkingSegmentOk =
             !result.retryAndThinkingCoexist &&
+            !result.stackedRetryRows &&
             !result.thinkingStuckAfterComplete &&
             (result.sawThinkingWait ||
               hasTools ||

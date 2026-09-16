@@ -39,7 +39,19 @@ const isResourceExhaustedError = (error: unknown, extraText = ''): boolean => {
   return /resourceexhausted|worker local total request limit/i.test(message)
 }
 
-const resolveResourceExhaustedDelay = (attempt: number): number =>
+const isRateLimitOrCapacityError = (
+  error: unknown,
+  info: { status?: number; code?: string; rawText: string; message: string }
+): boolean => {
+  if (info.status === 429) return true
+  const normalizedCode = normalizeSignal(info.code)
+  if (normalizedCode === 'rate_limit_exceeded') return true
+  const body = `${info.rawText} ${info.message} ${error instanceof Error ? error.message : ''}`.toLowerCase()
+  if (body.includes('rate limit') || body.includes('too many requests')) return true
+  return isResourceExhaustedError(error, `${info.rawText} ${info.code} ${info.message}`)
+}
+
+const resolveCapacityBackoffDelay = (attempt: number): number =>
   Math.min(15_000, 2_000 * 2 ** Math.max(0, attempt - 1))
 
 export const classifyLlmErrorKind = (error: unknown): LlmErrorClassification => {
@@ -95,8 +107,8 @@ export const classifyLlmRetry = (
     return {
       retryable: true,
       message,
-      ...(isResourceExhaustedError(error, `${info.rawText} ${info.code} ${info.message}`)
-        ? { delayMs: resolveResourceExhaustedDelay(attempt) }
+      ...(isRateLimitOrCapacityError(error, info)
+        ? { delayMs: resolveCapacityBackoffDelay(attempt) }
         : {})
     }
   }
@@ -109,8 +121,8 @@ export const classifyLlmRetry = (
   return {
     retryable: true,
     message,
-    ...(isResourceExhaustedError(error, `${info.rawText} ${info.code} ${info.message}`)
-      ? { delayMs: resolveResourceExhaustedDelay(attempt) }
+    ...(isRateLimitOrCapacityError(error, info)
+      ? { delayMs: resolveCapacityBackoffDelay(attempt) }
       : {})
   }
 }

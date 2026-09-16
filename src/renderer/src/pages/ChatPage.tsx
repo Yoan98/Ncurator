@@ -385,7 +385,18 @@ const reduceAssistantTurnByRunEvent = (
     event.type === 'assistant_process_group_started' &&
     (event.kind === 'thinking' || event.display?.kind === 'thinking')
   ) {
-    next = { ...next, isBrainThinking: true }
+    const retryRunning = next.processGroups.some(
+      (group) => group.kind === 'retry' && group.status === 'running'
+    )
+    if (!retryRunning) next = { ...next, isBrainThinking: true }
+  }
+
+  if (
+    event.type === 'assistant_process_group_started' &&
+    (event.kind === 'retry' || event.display?.kind === 'retry')
+  ) {
+    // Retry is a competing wait state; hide「让俺想想」while retry UI is shown.
+    next = { ...next, isBrainThinking: false }
   }
 
   if (
@@ -445,9 +456,12 @@ const reduceAssistantTurnByRunEvent = (
   }
 
   if (event.type === 'assistant_brain_stream_started') {
+    const retryRunning = next.processGroups.some(
+      (group) => group.kind === 'retry' && group.status === 'running'
+    )
     next = {
       ...next,
-      isBrainThinking: true,
+      isBrainThinking: retryRunning ? false : true,
       streamingRoundId: event.roundId,
       streamingMarkdown: '',
       streamingRole: 'answer'

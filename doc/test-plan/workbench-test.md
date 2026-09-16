@@ -6,7 +6,7 @@
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
 - Workbench UI E2E 回归测试必须通过真实 Electron UI 配模型、创建伙伴、发送消息、选择 `@` 资料、预览、回退和操作右侧面板。设置页可另加文件地址，但发送不再要求绑定工作空间目录。
 - 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；live 配置只读内置服务商 Key 池与选中目标：`AI_LIVE_KEY_<PROVIDER>`（`DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`）、可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）、可选 `AI_LIVE_MODEL`（默认该服务商测试默认模型，通义为 `qwen3.8-flash`）。`baseUrl` / `providerKind` 由产品 registry 推导。日常 case 通过 Settings「推荐」类型写入当前目标服务商；全服务商冒烟见 `live-preset-provider-smoke`。
-- 日常 `pnpm test:workbench` / `pnpm test:e2e:source` 默认 `--exclude-group provider-matrix --exclude-group wps-office`，不跑全服务商冒烟与真开 WPS 窗口刷新；需要时分别执行 `pnpm test:workbench:provider-matrix` / `pnpm test:workbench:wps-office`，或对应 `--case`。
+- 日常 `pnpm test:workbench` / `pnpm test:e2e:source` 默认 `--exclude-group provider-matrix --exclude-group wps-office --exclude-group showcase`，不跑全服务商冒烟、真开 WPS 窗口刷新与官网样例采集；需要时分别执行 `pnpm test:workbench:provider-matrix` / `pnpm test:workbench:wps-office` / `pnpm test:workbench:showcase`，或对应 `--case`。
 - case 因生产行为缺口失败时，不在测试中硬改业务行为，统一记录为产品或生产实现待决项。
 
 ## 2. 测试边界
@@ -35,6 +35,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 2. `run`
 3. `result`
 4. `scheduled-task`
+5. `showcase`（opt-in：官网样例采集，不进日常 / 发版回归）
 
 领域规则：
 
@@ -42,6 +43,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - `run` 验证智能模式运行中的过程流、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
 - `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退、多文件修改入口，以及馆长 WPS 通道对 docx / xlsx / pptx 的 dispatch 与本机已授权 WPS 文字 / 表格 / 演示窗口刷新。不再覆盖 Composer 搜索结果面板。
 - `scheduled-task` 验证定时任务的入口、配置保存不建伙伴、到点/立即执行时按需创建专属伙伴、启用开关与往专属伙伴追加任务。
+- `showcase` 只为官网采集真实任务产物与预览截图，不作为产品回归门禁。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
@@ -74,6 +76,7 @@ tests/case/workbench/
     apply/
     wps-office/        # opt-in：真开 WPS
   scheduled-task/
+  showcase/            # opt-in：官网样例采集
 ```
 
 回归测试命令：
@@ -81,6 +84,7 @@ tests/case/workbench/
 - `pnpm test:workbench`
 - `pnpm test:workbench:e2e`
 - `pnpm test:workbench:wps-office`（本机已授权 WPS，不进日常 / 发版）
+- `pnpm test:workbench:showcase`（官网样例采集，不进日常 / 发版）
 - `node scripts/test/workflow.mjs --domain workbench`
 - `node scripts/test/workflow.mjs --domain workbench --type e2e`
 
@@ -333,8 +337,17 @@ pnpm test:update:e2e
 - What：智能模式真实发送后，验证 Thought / Activity 过程层渲染与最终 markdown 收口（过程流主 case）。
 - Why：重构后过程层是用户扫进度的主界面；需覆盖 Activity 折叠 header、展开平铺、学习/工具统一渲染，以及最终回答，而不是只断言“有过程块”。
 - How：真实文件地址内准备带唯一事实的文件；先创建伙伴；用户通过 UI 发送自然语言总结请求；等待真实 AI run 完成；展开全部 Activity 面板并采集 header / body 文案。
-- Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；用户与 assistant 消息不展示头像，用户消息右对齐气泡，assistant 过程流/最终输出与 composer 内容 rail 对齐，最终 markdown 无独立背景卡片，对齐 `WB-COMPOSER-009-AC1`、`WB-COMPOSER-009-AC2`、`WB-COMPOSER-009-AC3`、`WB-COMPOSER-009-AC4`。运行中过程流可见，且“正在重试”与“让俺想想”不同时出现；“让俺想想”在 Brain 请求期间于过程区最下方展示，run 完成 / 失败 / 取消或产出正文后过程区不得仍挂着“让俺想想”，对齐 `WB-COMPOSER-003-AC3`。决策层（Thought）短摘要可见且不暴露原始长推理，以浅灰文本展示，未超出单行时不展示折叠图标，超出单行时单行省略，hover 时展示展开图标且垂直居中于单行文本，展开后常驻浅灰卡片背景、折叠按钮居顶对齐第一行并在内部滚动，对齐 `WB-COMPOSER-003-AC5`、`WB-COMPOSER-009-AC10`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」），根据单一动作或混合工具精准呈现对应专属语义图标（浏览器打开/查看/操作/提取/截图/滚动/标签、网页抓取/搜索、图片读取/生成或工作流闪电图标；截取页面并读取图片的成对视觉动作统一呈现为照片图标，不退化为闪电；浏览器操作不产生审批卡片与展开行审核绿勾）；展开行为带对象的工具原句且不含冒号强调；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`、`WB-BLOCKER-001-AC8`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用顿号 `、` 拼接（两侧无空格）；>3 类 summary 为「已完成 n 项」。若事件含 `learn_skill`：展开行文案含“正在学习 / 已学会”，且不作为独立学习层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。文件名、query、命令、URL 和技能名不使用粗体或冒号强调，对齐 `WB-COMPOSER-009-AC7`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试与截断提示、计划进度环等由相关运行态 case 覆盖并继续对齐 `WB-COMPOSER-014-AC3`、`WB-COMPOSER-014-AC4`。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。仅切换伙伴或新建干净对话时不得凭空出现“正在 / 已检索知识库”，对齐 `WB-COMPOSER-009-AC12`。
-- Not：不对最终文案逐字断言；不把真实模型是否调用某工具误归因为 UI bug（工具相关断言均以本轮实际事件为条件）。
+- Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；用户与 assistant 消息不展示头像，用户消息右对齐气泡，assistant 过程流/最终输出与 composer 内容 rail 对齐，最终 markdown 无独立背景卡片，对齐 `WB-COMPOSER-009-AC1`、`WB-COMPOSER-009-AC2`、`WB-COMPOSER-009-AC3`、`WB-COMPOSER-009-AC4`。运行中过程流可见；“让俺想想”在 Brain 请求期间于过程区最下方展示，run 完成 / 失败 / 取消或产出正文后过程区不得仍挂着“让俺想想”，对齐 `WB-COMPOSER-003-AC3`。若本轮碰巧出现自动重试，仍不得与“让俺想想”同时出现；强制打出重试行、单行就地更新与 429 退避由 `llm-retry-process-row` 覆盖，对齐 `WB-COMPOSER-015`。决策层（Thought）短摘要可见且不暴露原始长推理，以浅灰文本展示，未超出单行时不展示折叠图标，超出单行时单行省略，hover 时展示展开图标且垂直居中于单行文本，展开后常驻浅灰卡片背景、折叠按钮居顶对齐第一行并在内部滚动，对齐 `WB-COMPOSER-003-AC5`、`WB-COMPOSER-009-AC10`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」），根据单一动作或混合工具精准呈现对应专属语义图标（浏览器打开/查看/操作/提取/截图/滚动/标签、网页抓取/搜索、图片读取/生成或工作流闪电图标；截取页面并读取图片的成对视觉动作统一呈现为照片图标，不退化为闪电；浏览器操作不产生审批卡片与展开行审核绿勾）；展开行为带对象的工具原句且不含冒号强调；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`、`WB-BLOCKER-001-AC8`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用顿号 `、` 拼接（两侧无空格）；>3 类 summary 为「已完成 n 项」。若事件含 `learn_skill`：展开行文案含“正在学习 / 已学会”，且不作为独立学习层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。文件名、query、命令、URL 和技能名不使用粗体或冒号强调，对齐 `WB-COMPOSER-009-AC7`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试与截断提示、计划进度环等由相关运行态 case 覆盖并继续对齐 `WB-COMPOSER-014-AC3`、`WB-COMPOSER-014-AC4`。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。仅切换伙伴或新建干净对话时不得凭空出现“正在 / 已检索知识库”，对齐 `WB-COMPOSER-009-AC12`。
+- Not：不对最终文案逐字断言；不把真实模型是否调用某工具误归因为 UI bug（工具相关断言均以本轮实际事件为条件）。不强制本轮出现 LLM 自动重试。
+
+#### `llm-retry-process-row`
+
+- 测试类型：`e2e`
+- What：受控 429 后过程区出现自动重试行：第一次为 `正在重试 1/5`，随后在同一行更新次数；运行中不得与“让俺想想”同时出现，也不得叠多行。
+- Why：免费/共享额度模型会稳定打出 429；重试行叠层或与思考等待并存是用户可直接看见的过程层 bug，过程流主 case 不保证本轮出现重试。
+- How：经 Settings 添加自定义模型，指向本地 OpenAI 兼容代理；代理对前两次 `chat/completions` 返回真实 HTTP 429，其后转发 live 上游。Workbench 选中该自定义模型并发送短请求；运行中持续采集过程区重试行数、次数文案与“让俺想想”是否共存，直至 run 完成。
+- Oracle：必须见到 `正在重试 1/5` 且随后在同一行见到 `2/5`，对齐 `WB-COMPOSER-015-AC1`；任一时刻过程区最多一行“正在重试 / 已重试 / 重试失败”，对齐 `WB-COMPOSER-015-AC2`；重试行 running 时不得同时出现“让俺想想”，对齐 `WB-COMPOSER-015-AC3`、`WB-COMPOSER-003-AC3`。前两次 chat 为 429、第三次起转发上游；429 退避毫秒由 unit `llm-error-classification` 覆盖，本 case 对齐出现重试行并最终收口，对齐 `WB-COMPOSER-015-AC4`。
+- Not：不伪造 renderer / AI 过程事件；不把 5 次耗尽失败作为本 case 主路径（过长）；不替代 `WB-COMPOSER-014-AC3` 的草稿拼接断言。
 
 #### `terminal-background-service-flow`
 
@@ -665,3 +678,14 @@ pnpm test:update:e2e
 - How：在真实 UI 配置并启用一个每天 + 当前系统时间下一分钟的任务（保存时不创建专属伙伴）；等待到点，轮询出现 `定时 ·` 专属伙伴、运行状态并完成，同时确认当前选中伙伴不变。
 - Oracle：到点往专属伙伴追加对齐 `ST-RUN-001-AC1`；不改变当前查看伙伴对齐 `ST-RUN-001-AC2`；从定时任务视图点伙伴返回聊天对齐 `ST-VIEW-001-AC2`；伙伴列表刷新对齐 `ST-RUN-002-AC1/AC2`；执行时创建专属伙伴对齐 `ST-PARTNER-001-AC2` / `ST-RUN-001-AC4`。
 - Not：不验证跨天 / 跨周边界调度，不验证程序关闭 / 休眠期间错过补跑（`ST-RUN-003` 由 unit 承担）；不验证忙碌取消胶囊（unit 覆盖）。
+
+### 5.5 `showcase`
+
+#### `docx-weekly-report`
+
+- 测试类型：`e2e / live`（路径 `showcase/`，**opt-in**）
+- What：用零散站会纪要、客户风险和财务草稿，让真实 AI 写成可发给管理层的 Word 周报，并截取预览页供官网展示。
+- Why：官网需要真实任务产物，而不是测试夹具或 live 回归用例。
+- How：在仅含三份材料的临时文件地址创建伙伴，发送周报诉求；等待真实 AI 写回 `云枢智服-9月第2周经营周报.docx`；打开修改入口并切到预览模式，截取 Word 页面。
+- Oracle：正式 Word 可解析且含进展/风险/下周；产生 docx 写回记录，对齐 `WB-APPLY-002-AC2`；截到至少 1 页预览图并记录本次 token 用量。
+- Not：不进 `pnpm test:workbench` / `test:e2e:*` / 发版 package e2e。不评价排版审美，不回退文件。

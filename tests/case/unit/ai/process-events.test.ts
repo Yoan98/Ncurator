@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   emitCompactionCompleted,
+  emitLlmRetryProcessStarted,
   emitToolProcessCompleted,
   emitToolProcessStarted
 } from '../../../../src/main/services/ai/events/processEvents'
@@ -74,5 +75,43 @@ describe('ai process events', () => {
           event.type === 'assistant_process_group_started' && event.display.kind === 'thinking'
       )
     ).toBe(false)
+  })
+
+  it('reuses one run-scoped retry group id across attempts and later LLM calls', () => {
+    const events: AiRunEvent[] = []
+    const sendEvent = (event: AiRunEvent): void => {
+      events.push(event)
+    }
+
+    emitLlmRetryProcessStarted({
+      sendEvent,
+      runId: 'run-1',
+      callId: 'call-a',
+      attempt: 1,
+      maxAttempts: 5,
+      message: '429'
+    })
+    emitLlmRetryProcessStarted({
+      sendEvent,
+      runId: 'run-1',
+      callId: 'call-a',
+      attempt: 2,
+      maxAttempts: 5,
+      message: '429'
+    })
+    emitLlmRetryProcessStarted({
+      sendEvent,
+      runId: 'run-1',
+      callId: 'call-b',
+      attempt: 1,
+      maxAttempts: 5,
+      message: '429'
+    })
+
+    expect(
+      events
+        .filter((event) => event.type === 'assistant_process_group_started')
+        .map((event) => event.groupId)
+    ).toEqual(['run-1:llm-retry', 'run-1:llm-retry', 'run-1:llm-retry'])
   })
 })

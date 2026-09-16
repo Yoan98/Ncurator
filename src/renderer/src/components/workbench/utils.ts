@@ -718,11 +718,18 @@ const upsertGroupFromDisplayEvent = (
   // Thinking UI is driven by thinking started/completed process events.
   // A new thinking started replaces any previous thinking row (incl. optimistic placeholder).
   // Retry is a competing wait state and must replace thinking immediately.
+  // One run has one retry row: later attempts update it instead of stacking.
+  const existingRetry = current.find((group) => group.kind === 'retry')
   const baseGroups =
-    input.kind === 'thinking' || input.kind === 'retry' ? withoutThinkingGroups(current) : current
-  const existing = baseGroups.find((group) => group.id === input.groupId)
+    input.kind === 'retry'
+      ? current.filter((group) => group.kind !== 'thinking' && group.kind !== 'retry')
+      : input.kind === 'thinking'
+        ? withoutThinkingGroups(current)
+        : current
+  const existing =
+    input.kind === 'retry' ? existingRetry : baseGroups.find((group) => group.id === input.groupId)
   const next = createDisplayProcessGroup({
-    groupId: input.groupId,
+    groupId: existing?.id || input.groupId,
     kind: input.kind,
     display: input.display,
     status: input.status,
@@ -735,13 +742,24 @@ const upsertGroupFromDisplayEvent = (
   })
 }
 
+const resolveRetryGroupId = (
+  current: AssistantProcessGroup[],
+  groupId: string,
+  displayKind?: AssistantProcessDisplay['kind']
+): string => {
+  if (displayKind === 'retry' || groupId.includes(':llm-retry')) {
+    return current.find((group) => group.kind === 'retry')?.id || groupId
+  }
+  return groupId
+}
+
 const completeProcessGroupById = (
   current: AssistantProcessGroup[],
   groupId: string,
   status: AssistantProcessStatus,
   display?: AssistantProcessDisplay
 ): AssistantProcessGroup[] =>
-  mergeProcessGroup(current, groupId, (group) => {
+  mergeProcessGroup(current, resolveRetryGroupId(current, groupId, display?.kind), (group) => {
     const nextItems =
       status === 'failed'
         ? group.items.map((item) => (item.status === 'running' ? { ...item, status } : item))
@@ -771,11 +789,12 @@ const upsertProcessItem = (
     sourceEventType: AssistantProcessGroupItem['sourceEventType']
   }
 ): AssistantProcessGroup[] => {
-  const existingGroup = current.find((group) => group.id === input.groupId)
+  const groupId = resolveRetryGroupId(current, input.groupId, input.display.kind)
+  const existingGroup = current.find((group) => group.id === groupId)
   const groupsWithParent = existingGroup
     ? current
     : upsertGroupFromDisplayEvent(current, {
-        groupId: input.groupId,
+        groupId,
         kind: input.display.kind === 'tool' ? 'skill' : input.display.kind,
         display: input.display,
         status: 'running',
@@ -783,7 +802,7 @@ const upsertProcessItem = (
         sourceEventType: input.sourceEventType
       })
 
-  return mergeProcessGroup(groupsWithParent, input.groupId, (group) => {
+  return mergeProcessGroup(groupsWithParent, groupId, (group) => {
     const existingItem = group.items.find((item) => item.id === input.itemId)
     const nextItem = createDisplayProcessItem({
       itemId: input.itemId,
@@ -813,40 +832,44 @@ const completeProcessItem = (
     sourceEventType: AssistantProcessGroupItem['sourceEventType']
   }
 ): AssistantProcessGroup[] =>
-  mergeProcessGroup(current, input.groupId, (group) => {
-    const nextItems = group.items.map((item) => {
-      if (item.id !== input.itemId) return item
-      const toolName =
-        input.display?.kind === 'tool'
-          ? normalizeToolName(input.display.toolName)
-          : item.toolName
+  mergeProcessGroup(
+    current,
+    resolveRetryGroupId(current, input.groupId, input.display?.kind),
+    (group) => {
+      const nextItems = group.items.map((item) => {
+        if (item.id !== input.itemId) return item
+        const toolName =
+          input.display?.kind === 'tool'
+            ? normalizeToolName(input.display.toolName)
+            : item.toolName
+        return {
+          ...item,
+          status: input.status,
+          completedText: input.display
+            ? getDisplayItemText(input.display, 'completed')
+            : item.completedText,
+          failedText: input.display ? getDisplayItemText(input.display, 'failed') : item.failedText,
+          partialFailedText: input.display
+            ? getDisplayItemText(input.display, 'partial_failed')
+            : item.partialFailedText,
+          headerShortText:
+            input.display && toolName
+              ? getToolItemHeaderShort(
+                  toolName,
+                  input.status,
+                  input.display.kind === 'tool' ? input.display.input : item.input
+                )
+              : item.headerShortText,
+          sourceEventType: input.sourceEventType
+        }
+      })
       return {
-        ...item,
-        status: input.status,
-        completedText: input.display
-          ? getDisplayItemText(input.display, 'completed')
-          : item.completedText,
-        failedText: input.display ? getDisplayItemText(input.display, 'failed') : item.failedText,
-        partialFailedText: input.display
-          ? getDisplayItemText(input.display, 'partial_failed')
-          : item.partialFailedText,
-        headerShortText:
-          input.display && toolName
-            ? getToolItemHeaderShort(
-                toolName,
-                input.status,
-                input.display.kind === 'tool' ? input.display.input : item.input
-              )
-            : item.headerShortText,
-        sourceEventType: input.sourceEventType
+        ...group,
+        status: resolveGroupStatus(nextItems),
+        items: nextItems
       }
-    })
-    return {
-      ...group,
-      status: resolveGroupStatus(nextItems),
-      items: nextItems
     }
-  })
+  )
 
 export const reduceAssistantProcessGroups = (
   current: AssistantProcessGroup[],

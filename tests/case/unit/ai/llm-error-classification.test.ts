@@ -146,6 +146,19 @@ describe('ai unit llm error classification', () => {
     ).toBe(true)
   })
 
+  it('uses capacity backoff for 429 rate limits', () => {
+    const error = {
+      status: 429,
+      response: {
+        status: 429,
+        data: { error: { code: 'rate_limit_exceeded', message: 'Rate limit exceeded' } }
+      }
+    }
+    expect([1, 2, 3, 4, 5].map((attempt) => classifyLlmRetry(error, attempt).delayMs)).toEqual([
+      2_000, 4_000, 8_000, 15_000, 15_000
+    ])
+  })
+
   it('reclassifies LlmProviderError instead of trusting its retryable stamp', () => {
     const stampedRetryable = new LlmProviderError({
       message: 'Insufficient Balance',

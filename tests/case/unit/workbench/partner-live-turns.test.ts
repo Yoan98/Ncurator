@@ -41,4 +41,62 @@ describe('resumeAssistantTurnFromLive', () => {
     const live = createTurn({ isBrainThinking: true, streamingMarkdown: '' })
     expect(resumeAssistantTurnFromLive(snapshot, live).isBrainThinking).toBe(true)
   })
+
+  it('hides snapshot thinking while live retry is running', () => {
+    const snapshot = createTurn({
+      isBrainThinking: true,
+      processGroups: [
+        {
+          id: 'run-1:thinking',
+          kind: 'thinking',
+          skillKey: 'generic',
+          iconKind: 'default',
+          status: 'running',
+          runningText: [],
+          completedText: [],
+          failedText: [],
+          partialFailedText: [],
+          createdAt: 1,
+          sourceEventType: 'assistant_process_group_started',
+          items: []
+        },
+        {
+          id: 'run-1:skill-a',
+          kind: 'skill',
+          skillKey: 'generic',
+          iconKind: 'default',
+          status: 'completed',
+          runningText: [],
+          completedText: [],
+          failedText: [],
+          partialFailedText: [],
+          createdAt: 2,
+          sourceEventType: 'assistant_process_group_started',
+          items: []
+        }
+      ]
+    })
+    const live = createTurn({
+      isBrainThinking: false,
+      processGroups: [
+        {
+          id: 'run-1:llm-retry',
+          kind: 'retry',
+          skillKey: 'generic',
+          iconKind: 'retry',
+          status: 'running',
+          runningText: [],
+          completedText: [],
+          failedText: [],
+          partialFailedText: [],
+          createdAt: 1,
+          sourceEventType: 'assistant_process_group_started',
+          items: []
+        }
+      ]
+    })
+    const merged = resumeAssistantTurnFromLive(snapshot, live)
+    expect(merged.isBrainThinking).toBe(false)
+    expect(merged.processGroups).toEqual(live.processGroups)
+  })
 })

@@ -15,8 +15,7 @@ const getFinalizingProcessGroupId = (runId: string): string => `${runId}:finaliz
 const getToolProcessGroupId = (runId: string, toolCallId: string): string =>
   `${runId}:tool:${toolCallId}`
 
-const getLlmRetryProcessGroupId = (runId: string, callId: string): string =>
-  `${runId}:llm-retry:${callId}`
+const getLlmRetryProcessGroupId = (runId: string): string => `${runId}:llm-retry`
 
 export const emitAssistantProcessThought = (input: {
   sendEvent: SendEvent
@@ -167,7 +166,7 @@ export const emitLlmRetryProcessStarted = (input: {
   createdAt?: number
 }): void => {
   const createdAt = input.createdAt || Date.now()
-  const groupId = getLlmRetryProcessGroupId(input.runId, input.callId)
+  const groupId = getLlmRetryProcessGroupId(input.runId)
   const display: AssistantProcessDisplay = {
     kind: 'retry',
     attempt: input.attempt,
@@ -198,7 +197,7 @@ export const emitLlmRetryProcessCompleted = (input: {
   callId: string
   completedAt?: number
 }): void => {
-  const groupId = getLlmRetryProcessGroupId(input.runId, input.callId)
+  const groupId = getLlmRetryProcessGroupId(input.runId)
   const completedAt = input.completedAt || Date.now()
   input.sendEvent({
     type: 'assistant_process_item_completed',
@@ -222,7 +221,7 @@ export const emitLlmRetryProcessFailed = (input: {
   error?: string
   failedAt?: number
 }): void => {
-  const groupId = getLlmRetryProcessGroupId(input.runId, input.callId)
+  const groupId = getLlmRetryProcessGroupId(input.runId)
   const failedAt = input.failedAt || Date.now()
   input.sendEvent({
     type: 'assistant_process_item_failed',

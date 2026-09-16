@@ -52,6 +52,15 @@ describe('shouldShowAssistantThinkingIndicator', () => {
       })
     ).toBe(false)
   })
+
+  it('hides while an LLM retry is running even if brain thinking is still flagged', () => {
+    expect(
+      shouldShowAssistantThinkingIndicator({
+        isBrainThinking: true,
+        hasRunningRetry: true
+      })
+    ).toBe(false)
+  })
 })
 
 describe('shouldActivityHeaderShimmer', () => {

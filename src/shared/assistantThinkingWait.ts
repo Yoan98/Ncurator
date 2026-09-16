@@ -19,11 +19,14 @@ export type AssistantThinkingIndicatorInput = {
   waitingApproval?: boolean
   runFinished?: boolean
   hasFinalAnswer?: boolean
+  /** Competing wait state: hide thinking while an LLM retry row is running. */
+  hasRunningRetry?: boolean
 }
 
 /**
  * “让俺想想”展示判断规则：
  * - 请求时展示（isBrainThinking 为 true）；
+ * - 出现「正在重试」时隐藏（与重试过程组互斥）；
  * - 结束时隐藏（收到输出、出错、run 结束、等待审批或已产出最终交付时隐藏）。
  */
 export const shouldShowAssistantThinkingIndicator = (
@@ -32,6 +35,7 @@ export const shouldShowAssistantThinkingIndicator = (
   if (input.runFinished) return false
   if (input.waitingApproval) return false
   if (input.hasFinalAnswer) return false
+  if (input.hasRunningRetry) return false
   return Boolean(input.isBrainThinking)
 }
 
