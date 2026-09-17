@@ -504,7 +504,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：真实 PTY 终端从用户主目录执行命令、长命令让出控制权并可增量读取，命令级文件追踪与退出码正确；允许后台分离执行，放行 fd 合并重定向。
 - Why：后台服务和长任务不能依赖单次 shell 超时；分离执行（`&` / `Start-Process`）由模型自行管理生命周期，框架只关闭 PTY 会话本身；`2>&1` 等 fd 合并重定向只是输出流合并，不能误判为危险重定向。
-- How：通过 `terminal_run` 分别执行 `pwd`、单命令内 `cd + pwd`、写文件后长 sleep、持续输出命令、写文件后非零退出；通过 `terminal_read` 携带返回的 `readEndPosition` 增量读取持续输出命令，验证单次读取有字符上限、`hasMoreOutput` 指示未读完且可用返回位置连续读完。以 `sleep … & wait`（windows `Start-Process … -Wait`）验证分离执行可完成，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。`maxWaitSeconds` 由 unit 覆盖：指定后本次调用按该秒数盯，到点命令仍在跑。
+- How：通过 `terminal_run` 分别执行 `pwd`、单命令内 `cd + pwd`、写文件后长 sleep、持续输出命令、写文件后非零退出；通过 `terminal_read` 携带返回的 `readEndPosition` 增量读取持续输出命令，验证单次读取有字符上限、`hasMoreOutput` 指示未读完且可用返回位置连续读完。以 `sleep … & wait`（windows `Start-Process … -Wait`）验证分离执行可完成，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。`maxWaitSeconds` 由本 case 与 unit 覆盖：指定后本次调用按该秒数盯，到点命令仍在跑。
 - Oracle：命令默认从用户主目录（`os.homedir()`）执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出；仅当**有效 cwd**（主目录起始 + 前导 `cd`/`Set-Location` 落入工作地址）时，写文件命令（完成与非零退出）才生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`；有效 cwd 仍在主目录时用绝对路径写入工作地址不记修改。分离执行成功完成且输出含 `detached-ok`；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。`maxWaitSeconds` 到点后为 `command_still_running` 且进程仍在，对齐 `WB-TERMINAL-001-AC8`。
 - Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖；不在会话结束时强制清理模型拆出去的后台进程。
 

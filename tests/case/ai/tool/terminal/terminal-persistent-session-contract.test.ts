@@ -108,6 +108,12 @@ describe('ai tool terminal backend', () => {
         const redirectAllowed = await harness.invoke<TerminalRunResult>('terminal_run', {
           command: 'echo redirect-ok 2>&1'
         })
+        const watchedStartedAt = Date.now()
+        const watched = await harness.invoke<TerminalRunResult>('terminal_run', {
+          command: isWindows ? 'Start-Sleep -Seconds 8' : 'sleep 8',
+          maxWaitSeconds: 1
+        })
+        const watchedElapsedMs = Date.now() - watchedStartedAt
         const trackedFileNames = [
           'terminal-completed.txt',
           'terminal-running.txt',
@@ -126,6 +132,8 @@ describe('ai tool terminal backend', () => {
           nonZero,
           detachedAllowed,
           redirectAllowed,
+          watched,
+          watchedElapsedMs,
           records,
           artifactEvents
         }
@@ -156,6 +164,19 @@ describe('ai tool terminal backend', () => {
             data: result
           }
         )
+        runtime.assertThat(
+          result.watched.status === 'running' &&
+            result.watchedElapsedMs >= 800 &&
+            result.watchedElapsedMs < 1_800,
+          {
+          name: 'terminal-max-wait-yields-without-stopping',
+          message: 'maxWaitSeconds 到点后本次调用不再盯，命令继续执行。',
+          data: {
+            status: result.watched.status,
+            watchedElapsedMs: result.watchedElapsedMs,
+            output: result.watched.output
+          }
+        })
         runtime.assertThat(
           result.redirectAllowed.status === 'succeeded' &&
             result.redirectAllowed.output.includes('redirect-ok') &&
