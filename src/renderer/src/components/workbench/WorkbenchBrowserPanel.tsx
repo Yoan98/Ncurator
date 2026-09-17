@@ -322,7 +322,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         >
           <div
             data-testid={workbenchSelectors.browserProgress}
-            className="h-full bg-[#1a73e8] transition-[width,opacity] duration-150 ease-linear"
+            className="h-full bg-[#8AB4F8] shadow-[0_0_6px_rgba(138,180,248,0.7)] transition-[width,opacity] duration-150 ease-linear"
             style={{
               width: `${progress}%`,
               opacity: progressVisible ? 1 : 0

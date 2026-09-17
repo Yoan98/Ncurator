@@ -444,9 +444,18 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：内置浏览器对未写协议的地址先 https 再 http；写明 https 失败停在馆长统一错误页并保留 tabId；加载中地址栏底边可见进度线；AI `navigate` 等到真实内容再成功，失败把 `Error` 与 `tabId` 一并返回。
 - Why：不少官网 https 会直接掐连接，Chrome 会回退到 http；馆长若只加 https 或把空白验证页当成打开成功，用户看到白屏、模型也会盲目新开标签。WebContentsView 不会画出 Chrome 外壳那张 `chrome-error://` 页，必须自己写入错误文档。
-- How：启动只提供 HTTP 的本地页面（https 打到同一端口会 TLS 失败）。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，加载中可见底线，等到页面口令出现且地址栏是 http；再对同一类地址走 AI `navigate`；随后对该 Tab 走 `screenshot`（Stagehand 连本机 CDP 桥）验证按需挂桥；另一次写明 `https://127.0.0.1:1/path`（未监听端口，连接被拒绝），确认错误页标题为「无法访问此网站」且含 `ERR_` 错误码、地址栏仍是 https、工具失败含 `tabId`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
-- Oracle：裸主机最终打开 http 页且含口令，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC9`；加载中可见地址栏底边进度线，对齐 `WB-PANEL-004-AC19`；对该 Tab 截图成功即证明 Stagehand 走按需 CDP 桥，对齐 `WB-PANEL-004-AC10`；明确 https 不回退 http，地址栏无 `chrome-error://`，错误页为馆长统一「无法访问此网站」页并含错误码，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。Playwright 驱动窗口会自带 `--remote-debugging-port`，不作为本 case 失败条件。
-- Not：不打公网专利站；不跑 live 模型整轮问答；不验证 Stagehand 填表。公网样例见 `patent-search`。
+- How：启动只提供 HTTP 的本地页面（https 打到同一端口会 TLS 失败）。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，加载中可见浅蓝色底线，等到页面口令出现且地址栏是 http；再对同一类地址走 AI `navigate`；随后对该 Tab 走 `screenshot`（Stagehand 连本机 CDP 桥）验证按需挂桥；另一次写明 `https://127.0.0.1:1/path`（未监听端口，连接被拒绝），确认错误页标题为「无法访问此站点」、含「无法加载」与 `ERR_` 错误码、地址栏仍是 https、工具失败含 `tabId`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
+- Oracle：裸主机最终打开 http 页且含口令，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC9`；加载中可见地址栏底边浅蓝色进度线，对齐 `WB-PANEL-004-AC19`；对该 Tab 截图成功即证明 Stagehand 走按需 CDP 桥，对齐 `WB-PANEL-004-AC10`；明确 https 不回退 http，地址栏无 `chrome-error://`，错误页为馆长统一 Chrome 式「无法访问此站点」页并含错误码，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。Playwright 驱动窗口会自带 `--remote-debugging-port`，不作为本 case 失败条件。
+- Not：不打公网专利站；不跑 live 模型整轮问答；不验证 Stagehand 填表。公网样例见 `browser-navigate-cnipa-http-fallback` 与 `patent-search`。
+
+#### `browser-navigate-cnipa-http-fallback`
+
+- 测试类型：`e2e`
+- What：地址栏只填 `epub.cnipa.gov.cn` 时，https 被掐后回退 http，打开中国专利公布公告首页。
+- Why：这是触发协议回退与反爬空页的真实站点；本地 HTTP 桩无法代替这台服务器的连接关闭行为。
+- How：Workbench 打开浏览器 Tab，输入裸主机，等待地址栏变成 `http://epub.cnipa.gov.cn`，加载中可见浅蓝色进度线。真实首页正文由无进程级调试口的 unit host `cnipa-http-fallback.host` 覆盖，因为 Playwright 驱动窗口会自带调试口，专利站可能吐空白页。
+- Oracle：最终 URL 为 http 且不是 `chrome-error://`，不是馆长「无法访问此站点」错误页，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC16`、`WB-PANEL-004-AC19`。
+- Not：不搜索专利、不跑 live 模型；检索样例仍由 `patent-search` 覆盖。首页正文与无调试口由 unit `cnipa-http-fallback.host` 覆盖。
 
 #### `web-read-from-search-result`
 

@@ -73,7 +73,7 @@ describe('navigatePlan', () => {
     expect(
       isNetErrorDocument({
         url: 'https://127.0.0.1:1/task',
-        title: '无法访问此网站',
+        title: '无法访问此站点',
         bodyText: 'ERR_CONNECTION_REFUSED 重新加载'
       })
     ).toBe(true)

@@ -17,6 +17,10 @@ import {
   EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS
 } from './constants'
 import {
+  BROWSER_RELOAD_CONSOLE_TOKEN,
+  buildNetErrorDocumentHtml
+} from './netErrorPage'
+import {
   BLANK_PAGE_ERROR,
   formatNavigateNetError,
   isBlankDocument,
@@ -215,41 +219,14 @@ const loadUrlOnce = async (
   return failedCode
 }
 
-const BROWSER_RELOAD_CONSOLE_TOKEN = 'ncurator:browser-reload'
-
 const paintNetErrorDocument = async (
   contents: WebContents,
   code: string,
-  _attemptedUrl: string,
+  attemptedUrl: string,
   isCurrent: () => boolean = () => true
 ): Promise<void> => {
   if (contents.isDestroyed() || !isCurrent()) return
-  const html = `<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <title>无法访问此网站</title>
-    <style>
-      html,body{height:100%;margin:0;background:#fff;color:#5f6368;font:14px/1.6 system-ui,-apple-system,sans-serif}
-      main{max-width:540px;margin:14vh auto;padding:0 24px}
-      h1{margin:0 0 12px;font-size:22px;font-weight:400;color:#202124}
-      button{margin-top:18px;padding:6px 16px;border:1px solid #dadce0;border-radius:4px;background:#fff;color:#1a73e8;cursor:pointer}
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>无法访问此网站</h1>
-      <p>${code.replace(/[<>]/g, '')}</p>
-      <button id="reload">重新加载</button>
-    </main>
-    <script>
-      document.getElementById('reload')?.addEventListener('click', function (event) {
-        event.preventDefault();
-        console.debug(${JSON.stringify(BROWSER_RELOAD_CONSOLE_TOKEN)});
-      });
-    </script>
-  </body>
-</html>`
+  const html = buildNetErrorDocumentHtml(code, attemptedUrl)
   if (contents.isDestroyed() || !isCurrent()) return
   await contents
     .executeJavaScript(`document.open();document.write(${JSON.stringify(html)});document.close();`)

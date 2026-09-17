@@ -561,10 +561,10 @@ Composer 只有智能模式，不再提供 AI / 搜索切换。
   - `WB-PANEL-004-AC13` AI 通过 `browser_use` 的 `act` 触发网页操作时，通过 DOM 虚拟光标提供移动和点击视觉反馈；单次动作执行完毕时光标保持常驻在最后操作位置（不提前隐藏），后续动作平滑连续移动；仅当整轮 AI Run 结束（正常完成、用户取消或异常中断）时，通过运行资源管理器统一平滑淡出隐藏。
   - `WB-PANEL-004-AC14` 地址栏右侧提供“将打开外部浏览器”按钮（右上角外链图标）；有可打开 URL 时可点击，tooltip 与无障碍名称为“将打开外部浏览器”，点击后通过系统默认浏览器打开当前页或地址栏中的 URL。
   - `WB-PANEL-004-AC15` 用户地址栏与 AI `navigate` 对网址协议的处理一致：只填主机（如 `epub.cnipa.gov.cn`）时先 https、连接/TLS 类失败再自动改 http，一次打开完成；写明 `http://` 只走 http；写明 `https://` 只走 https，失败不悄悄改 http。发生 https→http 回退时，地址栏与成功结果展示最终 http 地址。
-  - `WB-PANEL-004-AC16` 网络打不开时由馆长在同一内置页写入错误文档：标题「无法访问此网站」、一行错误码（如 `ERR_CONNECTION_CLOSED`）、按钮「重新加载」。只认主框架 `did-fail-load` 且非 `ERR_ABORTED`；裸主机 https 失败且还可试 http 时不画错误页、立刻改走 http。不另画 React 遮罩，不等 `chrome-error://`。地址栏显示尝试的站点，不显示 `chrome-error://`。`navigate` 一开始就打开右侧浏览器面板，失败也打开。重新加载走当前地址栏同一套导航（含裸主机 https→http）。
+  - `WB-PANEL-004-AC16` 网络打不开时由馆长在同一内置页写入 Chrome 式错误文档：标题「无法访问此站点」、副文「无法加载 {主机}」、建议列表、「ERR_」错误码、灰色圆角「重新加载」按钮。只认主框架 `did-fail-load` 且非 `ERR_ABORTED`；裸主机 https 失败且还可试 http 时不画错误页、立刻改走 http。不另画 React 遮罩，不等 `chrome-error://`。地址栏显示尝试的站点，不显示 `chrome-error://`。`navigate` 一开始就打开右侧浏览器面板，失败也打开。重新加载走当前地址栏同一套导航（含裸主机 https→http）。
   - `WB-PANEL-004-AC17` AI `navigate` 不得把反爬/安全验证空白第一屏当成成功。等到有真实标题或正文/表单，或超时仍空白则失败（说明可能卡在站点安全验证）。Chromium 把网址当成标题（主机、主机:端口、路径）时不算真实标题。等待期间不挂 Stagehand。`observe` / `extract` / `screenshot` / `act` / `scroll` 若当前已是系统错误页或仍空白，同样失败，不得空结果报完成。
   - `WB-PANEL-004-AC18` `navigate` 成功给模型：`Tab`（tabId）、有标题时 `Title`、`URL`（最终地址）；若发生过 https→http 回退再加 `Note: 已从 https 回退到 http。`。失败给模型：`Error`（含中文说明与错误码，需要时写入尝试过的地址）和 `Tab`（tabId），便于模型决定是否在同一标签重试，而不是盲目新开标签。JSON 仍用 `page: { title, url }`，文案不再把标题和地址挤在一行 `Page:` 里。
-  - `WB-PANEL-004-AC19` 主框架加载期间，地址栏行底边出现约 2px 进度线（约 12% 起向 85% 推进）；`isLoadingMainFrame()` 变为 false 后走到 100% 并淡出。不在原生网页上叠转圈遮罩。
+  - `WB-PANEL-004-AC19` 主框架加载期间，地址栏行底边出现约 2px 浅蓝色进度线（约 12% 起向 85% 推进）；`isLoadingMainFrame()` 变为 false 后走到 100% 并淡出。不在原生网页上叠转圈遮罩。
 
 ### 8.8 直接写回与回退
 

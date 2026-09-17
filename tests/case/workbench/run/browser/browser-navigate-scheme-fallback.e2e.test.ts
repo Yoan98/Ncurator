@@ -315,8 +315,10 @@ describe('workbench browser navigate e2e', () => {
             const errorText = `${snapshot?.title || ''} ${snapshot?.bodyText || ''}`
             if (
               snapshot &&
-              snapshot.title.includes('无法访问此网站') &&
+              snapshot.title.includes('无法访问此站点') &&
               /ERR_[A-Z0-9_]+/u.test(snapshot.bodyText) &&
+              snapshot.bodyText.includes('无法加载') &&
+              snapshot.bodyText.includes('尝试') &&
               errorText.includes('重新加载')
             ) {
               errorSnapshot = snapshot
@@ -327,7 +329,7 @@ describe('workbench browser navigate e2e', () => {
           if (!errorSnapshot) {
             const last = await inspectEmbedded(userSnapshot.id)
             throw new Error(
-              `expected embedded 无法访问此网站 error page, got url=${last?.url || '(none)'} title=${last?.title || ''} body=${(last?.bodyText || '').slice(0, 200)}`
+              `expected embedded 无法访问此站点 error page, got url=${last?.url || '(none)'} title=${last?.title || ''} body=${(last?.bodyText || '').slice(0, 200)}`
             )
           }
           runtime.signal({
@@ -364,7 +366,8 @@ describe('workbench browser navigate e2e', () => {
               !result.failAddress.includes('chrome-error://') &&
               result.sawProgress &&
               existsSync(result.screenshotPath) &&
-              result.errorText.includes('无法访问此网站') &&
+              result.errorText.includes('无法访问此站点') &&
+              result.errorText.includes('无法加载') &&
               /ERR_[A-Z0-9_]+/u.test(result.errorText),
             {
               name: 'browser-navigate-scheme-fallback',
