@@ -23,6 +23,7 @@ import {
   isBlankDocument,
   isHttpsFallbackWorthy,
   isInternalBrowserErrorUrl,
+  isNetErrorDocument,
   parseNavigatePlan,
   parseNetErrorCode,
   type NavigatePlan
@@ -163,19 +164,103 @@ const loadUrlOnce = async (
   url: string,
   signal?: AbortSignal
 ): Promise<string | null> => {
-  try {
-    await raceAbort(contents.loadURL(url), signal, () => {
+  const failedCode = await raceAbort(
+    new Promise<string | null>((resolve) => {
+      let settled = false
+      const timeout = setTimeout(
+        () => finish(parseNetErrorCode('ERR_TIMED_OUT')),
+        EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS
+      )
+      const cleanup = (): void => {
+        clearTimeout(timeout)
+        contents.removeListener('did-fail-load', onFail)
+        contents.removeListener('did-finish-load', onDone)
+      }
+      const finish = (code: string | null): void => {
+        if (settled) return
+        settled = true
+        cleanup()
+        resolve(code)
+      }
+      const onFail = (
+        _event: Electron.Event,
+        code: number,
+        description: string,
+        _failedUrl: string,
+        isMainFrame: boolean
+      ): void => {
+        if (!isMainFrame) return
+        finish(parseNetErrorCode(description || String(code)))
+      }
+      const onDone = (): void => {
+        if (isInternalBrowserErrorUrl(contents.getURL())) {
+          finish(parseNetErrorCode(contents.getTitle()) || 'ERR_FAILED')
+          return
+        }
+        finish(null)
+      }
+      contents.on('did-fail-load', onFail)
+      contents.once('did-finish-load', onDone)
+      // 不要 await loadURL 的拒绝：否则 Electron 可能在画出系统错误页前拆掉这次失败导航。
+      void contents.loadURL(url).catch(() => undefined)
+    }),
+    signal,
+    () => {
       if (!contents.isDestroyed()) contents.stop()
-    })
-  } catch (error) {
-    if (signal?.aborted) throw createCancelledError()
-    return parseNetErrorCode(error)
+    }
+  )
+  if (failedCode) await waitForNativeErrorPage(contents, signal, failedCode, url)
+  return failedCode
+}
+
+const waitForNativeErrorPage = async (
+  contents: WebContents,
+  signal: AbortSignal | undefined,
+  code: string,
+  attemptedUrl: string
+): Promise<void> => {
+  const deadline = Date.now() + EMBEDDED_BROWSER_PAGE_CONTENT_POLL_MS * 2
+  while (Date.now() < deadline && !contents.isDestroyed()) {
+    if (isInternalBrowserErrorUrl(contents.getURL())) return
+    const document = await inspectDocument(contents)
+    if (document.status === 'net-error') return
+    await raceAbort(sleep(EMBEDDED_BROWSER_PAGE_CONTENT_POLL_MS), signal)
   }
-  await waitForWebContentsLoad(contents, signal)
-  if (isInternalBrowserErrorUrl(contents.getURL())) {
-    return parseNetErrorCode(contents.getTitle()) || 'ERR_FAILED'
-  }
-  return null
+  if (contents.isDestroyed() || isInternalBrowserErrorUrl(contents.getURL())) return
+  await paintNetErrorDocument(contents, code, attemptedUrl)
+}
+
+const paintNetErrorDocument = async (
+  contents: WebContents,
+  code: string,
+  attemptedUrl: string
+): Promise<void> => {
+  if (contents.isDestroyed()) return
+  const html = `<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>无法访问此网站</title>
+    <style>
+      html,body{height:100%;margin:0;background:#fff;color:#5f6368;font:14px/1.6 system-ui,-apple-system,sans-serif}
+      main{max-width:540px;margin:14vh auto;padding:0 24px}
+      h1{margin:0 0 12px;font-size:22px;font-weight:400;color:#202124}
+      button{margin-top:18px;padding:6px 16px;border:1px solid #dadce0;border-radius:4px;background:#fff;color:#1a73e8;cursor:pointer}
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>无法访问此网站</h1>
+      <p>已尝试打开 ${attemptedUrl.replace(/[<>]/g, '')}，但连接失败。</p>
+      <p>${code.replace(/[<>]/g, '')}</p>
+      <button id="reload">重新加载</button>
+    </main>
+    <script>document.getElementById('reload')?.addEventListener('click',function(){location.reload()})</script>
+  </body>
+</html>`
+  await contents.executeJavaScript(
+    `document.open();document.write(${JSON.stringify(html)});document.close();`
+  )
 }
 
 const inspectDocument = async (contents: WebContents): Promise<DocumentInspection> => {
@@ -191,11 +276,15 @@ const inspectDocument = async (contents: WebContents): Promise<DocumentInspectio
       controlCount: document.querySelectorAll('input,textarea,button,select').length
     })`)) as { title?: string; bodyText?: string; controlCount?: number }
     const inspectedTitle = String(info.title || title || '').trim()
+    const bodyText = String(info.bodyText || '')
+    if (isNetErrorDocument({ url, title: inspectedTitle, bodyText })) {
+      return { status: 'net-error', url, title: inspectedTitle }
+    }
     if (
       isBlankDocument({
         url,
         title: inspectedTitle,
-        bodyText: String(info.bodyText || ''),
+        bodyText,
         controlCount: Number(info.controlCount || 0)
       })
     ) {
@@ -583,42 +672,49 @@ export class BrowserEmbedService implements BrowserUseService {
     this.emitState(runtime)
     const contents = view.webContents
     const fallbackUrl = plan.urls[1]
-    if (fallbackUrl) {
-      const onFail = (
-        _event: Electron.Event,
-        code: number,
-        description: string,
-        _url: string,
-        isMainFrame: boolean
-      ): void => {
-        if (runtime.navGeneration !== generation) {
-          cleanup()
-          return
-        }
-        if (!isMainFrame) return
-        if (!isHttpsFallbackWorthy(description || code)) return
+    const onFail = (
+      _event: Electron.Event,
+      code: number,
+      description: string,
+      _url: string,
+      isMainFrame: boolean
+    ): void => {
+      if (runtime.navGeneration !== generation) {
+        cleanup()
+        return
+      }
+      if (!isMainFrame) return
+      if (fallbackUrl && isHttpsFallbackWorthy(description || code)) {
         cleanup()
         runtime.persisted.url = fallbackUrl
         runtime.persisted.updatedAt = Date.now()
         this.stateStore.save(runtime.persisted)
         this.emitState(runtime)
         startWebContentsUrl(contents, fallbackUrl)
+        return
       }
-      const onFinish = (): void => {
-        if (runtime.navGeneration !== generation) {
-          cleanup()
-          return
-        }
-        if (isInternalBrowserErrorUrl(contents.getURL())) return
-        cleanup()
-      }
-      const cleanup = (): void => {
-        contents.removeListener('did-fail-load', onFail)
-        contents.removeListener('did-finish-load', onFinish)
-      }
-      contents.on('did-fail-load', onFail)
-      contents.on('did-finish-load', onFinish)
+      cleanup()
+      void waitForNativeErrorPage(
+        contents,
+        undefined,
+        parseNetErrorCode(description || String(code)),
+        primaryUrl
+      )
     }
+    const onFinish = (): void => {
+      if (runtime.navGeneration !== generation) {
+        cleanup()
+        return
+      }
+      if (isInternalBrowserErrorUrl(contents.getURL())) return
+      cleanup()
+    }
+    const cleanup = (): void => {
+      contents.removeListener('did-fail-load', onFail)
+      contents.removeListener('did-finish-load', onFinish)
+    }
+    contents.on('did-fail-load', onFail)
+    contents.on('did-finish-load', onFinish)
     startWebContentsUrl(contents, primaryUrl)
     this.captureRuntimeState(runtime)
   }

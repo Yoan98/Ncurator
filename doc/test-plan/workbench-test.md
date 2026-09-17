@@ -427,7 +427,7 @@ pnpm test:update:e2e
 - What：AI 通过内置浏览器完成网页任务时，文件 / 多浏览器 Tab、独立页面导航、持久站点数据和真实网页操作结果形成闭环；并验证 `observe → act(actionId)`（含文本输入和 hover 后出现的退出入口）。
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题；Stagehand 需以 observe 规划、actionId 确定性执行为主路径，且支持文本输入直接注入。
 - How：先打开真实 Markdown 文件，再让 AI 使用 `browser_use` 操作本地测试页（在操作备注输入框输入内容 + 诱饵角色切换 + hover 消息图标才出现「退出登录」）；AI Run 仍在进行时，用户通过 `+` 新建另一个浏览器标签并折叠右栏，验证后续 observe / act / extract 在后台继续操作原目标；任务完成后展开右栏并切回 AI 浏览器标签，再切换文件和浏览器检查状态保持。
-- Oracle：`navigate` 结果含 `tabId`；后续 observe/act 必带该 `tabId`；`act` 使用 `actionId`，支持输入类动作注入 `text` 参数；observe actions 含 `actionId/method/description/arguments/selector`；折叠期间原浏览器 `webContents` 不销毁且 AI 能完成输入、hover 与退出，展开后同一个 `webContents.id` 直接显示最新包含退出口令与备注内容的 `LOGOUT_OK_*` 结果；操作期间光标常驻且仅在 AI Run 结束时释放隐藏；对齐 `WB-PANEL-004`、`WB-PANEL-004-AC13`。
+- Oracle：`navigate` 结果含 `tabId`；后续 observe/act 必带该 `tabId`；成功 `navigate` 给模型拆成 Title / URL 而不是一行 Page；`act` 使用 `actionId`，支持输入类动作注入 `text` 参数；observe actions 含 `actionId/method/description/arguments/selector`；折叠期间原浏览器 `webContents` 不销毁且 AI 能完成输入、hover 与退出，展开后同一个 `webContents.id` 直接显示最新包含退出口令与备注内容的 `LOGOUT_OK_*` 结果；操作期间光标常驻且仅在 AI Run 结束时释放隐藏；对齐 `WB-PANEL-004`、`WB-PANEL-004-AC13`、`WB-PANEL-004-AC18`。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成退出并出现口令即可判定 browser panel 能力有效。
 
 #### `browser-view-lifecycle`
@@ -437,7 +437,16 @@ pnpm test:update:e2e
 - Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换伙伴时误销毁仍在运行的网页。分栏拖拽期间高频更新 bounds 会导致 Windows DirectComposition 下原生视图原点跑偏且旧画面错位遮挡对话区，松手时的 CSS transition 补间动画会导致半秒滞后。分栏拖拽期间采用静态快照占位并阻断高频 bounds，松手瞬时无补间对齐并恢复原生 View，确保拖拽期间平滑跟手、松手无缝切回。伙伴切换后浏览器呈现依赖 `contentPanelCollapsed` 值变化触发的恢复，若前后两个伙伴面板均展开（值不变）会漏掉重新呈现，表现为地址栏正常但网页白屏。`setBounds` 在 bounds 未变时跳过 `applyAllVisibility`、或后台加载完成后挂载未强制重绘，也会出现同样白屏；此时加号 / 三点菜单还可能因 `WebContentsView` 抢焦点被立刻关掉。
 - How：通过 Settings UI 添加文件地址并创建伙伴；在 Workbench UI 新建浏览器 Tab，导航真实本地网页并调整缩放；折叠、切换伙伴后验证运行期状态，再正常重启同一用户目录，验证 URL、历史和缩放恢复；最后分别通过关闭 Tab 和删除所属伙伴销毁浏览器。伙伴切换分支覆盖两种路径：新建伙伴（面板默认折叠）后切回，以及切到面板已展开的伙伴后切回，并直接断言主窗口 `contentView.children` 原生挂载计数恢复到 1 而非仅依赖像素采样。
 - Oracle：运行期折叠或切换伙伴不销毁 WebContents；无论切走的伙伴面板是否展开，切回后同一 `webContents.id` 必须重新挂载到主窗口并恢复显示；重启后重新创建 WebContents 并恢复 URL、历史和缩放，但不要求表单、滚动内存或 JS 连续；关闭 Tab 或删除所属伙伴后状态清理；地址栏右侧“将打开外部浏览器”按钮可见且更多菜单不再含系统浏览器入口，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC8`、`WB-PANEL-004-AC14`、`WB-PANEL-004-AC12`。
-- Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。
+- Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。网址协议回退与系统错误页由 `browser-navigate-scheme-fallback` 覆盖。
+
+#### `browser-navigate-scheme-fallback`
+
+- 测试类型：`e2e`
+- What：内置浏览器对未写协议的地址先 https 再 http；写明 https 失败停在系统错误页并保留 tabId；AI `navigate` 等到真实内容再成功，失败把 `Error` 与 `tabId` 一并返回。
+- Why：不少官网 https 会直接掐连接，Chrome 会回退到 http；馆长若只加 https 或把空白验证页当成打开成功，用户看到白屏、模型也会盲目新开标签。
+- How：启动只提供 HTTP 的本地页面（https 打到同一端口会 TLS 失败）。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，等到页面口令出现且地址栏是 http；再对同一类地址走 AI `navigate`；另一次写明 `https://127.0.0.1:1/path`（未监听端口，连接被拒绝），确认系统错误页、地址栏仍是 https、工具失败含 `tabId`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
+- Oracle：裸主机最终打开 http 页且含口令，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC9`；明确 https 不回退 http，地址栏无 `chrome-error://`，错误页为系统无法访问页，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。
+- Not：不打公网专利站；不跑 live 模型整轮问答；不验证 Stagehand 填表。公网样例见 `patent-search`。
 
 #### `web-read-from-search-result`
 
@@ -502,7 +511,16 @@ pnpm test:update:e2e
 - Why：即时渲染点击即编辑与自动保存是本次产品能力核心，任何渲染、保存或外部覆盖分支错误都会导致内容丢失或磁盘不一致；编辑区布局、标题标签/标记与窗口缩放稳定性影响核心编辑体验。
 - How：用真实临时文件地址创建 Markdown 文件（含标题、段落、链接、代码块），从文件列表打开；确认编辑器无工具栏且内容渲染为排版；点击段落输入追加文字，等待约 500ms 后读取磁盘校验已自动落盘且编辑区实时渲染；创建含链接的内容，点击链接确认局部露出 `[text](url)` 源码、离开恢复渲染；空闲时测试进程外部写入文件，确认编辑区自动重载为外部内容；编辑中输入新内容后外部写入文件，等待自动保存，确认磁盘为本地新内容（纯覆盖，无冲突提示）；测量编辑区宽度与父容器宽度一致（无灰色残留）；点击标题后确认 `.vditor-ir__marker--heading` 保持隐藏、标题 `::before` 计算样式 `content` 为 `none`（无 H1/H2 标签）；通过 Electron `setSize` 拉宽窗口后确认根节点仍在且编辑器仍可见（不白屏）。
 - Oracle：Markdown 打开即 IR 编辑态，无保存按钮/工具栏/未保存标记；输入自动落盘，磁盘字节与编辑结果一致；链接局部转源码、其余保持渲染；空闲外部写入自动重载、编辑中外部写入被自动覆盖，对齐 `WB-EDIT-001-AC1`、`WB-EDIT-001-AC2`、`WB-EDIT-001-AC4`、`WB-EDIT-001-AC5`；AI 修改记录「审核」态仍为只读 Diff，切入「预览」后可编辑文本进入编辑态，对齐 `WB-EDIT-001-AC7`；保存不产生 AI 修改记录，对齐 `WB-EDIT-001-AC8`；编辑区宽度等于父容器宽度且背景为白（无灰色残留）；标题前无可见标题级别标签与标题源标记、标题无下划线，对齐 `WB-EDIT-001-AC9`；拉宽窗口后页面保持存活不白屏。
-- Not：不验证 markdown 语法解析的所有细节；不验证编辑器内点击 assistant 标准 Markdown 链接打开行为。
+- Not：不验证 markdown 语法解析的所有细节；不验证编辑器内点击 assistant 标准 Markdown 链接打开行为；图片相对路径解析与双击预览由 `markdown-editor-image-preview` 覆盖。
+
+#### `markdown-editor-image-preview`
+
+- 测试类型：`e2e`
+- What：右侧打开含相对路径本地图与失效图的 Markdown 后，存在的本地图正文可显示；双击好图打开 `ImageLightbox`；双击失效图不打开预览并出现「图片无法加载」toast；保存后磁盘源仍保留原相对路径。
+- Why：微信导出等真实 Markdown 常用相对图片路径；若只挡双击而不解析路径，预览能力不可用；若继续用 Vditor 默认白底预览，失效图会出现空白破图层。
+- How：在临时文件地址写入 1×1 PNG 与 Markdown（`![](./media/preview-ok.png)` 与缺失相对路径图）；从文件列表打开 Markdown；等待好图 `img` 加载且 `src` 为 `blob:`；双击好图断言出现附件预览 modal（关闭/下载按钮）且无 `.vditor-img`；双击失效图断言无 modal、页面出现「图片无法加载」文案；读取磁盘 Markdown 确认仍含 `./media/preview-ok.png`。
+- Oracle：相对路径图可显示且双击进 `ImageLightbox`，对齐 `WB-EDIT-001-AC11`、`WB-EDIT-001-AC12`；失效图双击 toast 且不进预览，对齐 `WB-EDIT-001-AC13`；磁盘源路径不被改写，对齐 `WB-EDIT-001-AC11`；`http(s)` 可直接显示见 `WB-EDIT-001-AC14`。
+- Not：本 case 不单独拉真实外网 `http` 图；不验证外链单击打开；不评价图片审美。
 
 #### `plain-text-editor-edit-save`
 

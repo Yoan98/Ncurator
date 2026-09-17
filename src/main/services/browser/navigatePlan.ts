@@ -62,23 +62,47 @@ export const isHttpsFallbackWorthy = (codeOrDescription: string | number): boole
   return Number.isInteger(code) && code <= -100 && code >= -220 && code !== -105 && code !== -106
 }
 
+const isPlaceholderTitle = (url: string, title: string): boolean => {
+  const value = title.trim()
+  if (!value) return true
+  try {
+    const parsed = new URL(url)
+    const hostPort = parsed.port ? `${parsed.hostname}:${parsed.port}` : parsed.hostname
+    const hostPortPath = `${hostPort}${parsed.pathname}`
+    const withoutProtocol = `${hostPort}${parsed.pathname}${parsed.search}`.replace(/\/$/u, '')
+    return (
+      value === parsed.hostname ||
+      value === hostPort ||
+      value === hostPortPath ||
+      value === withoutProtocol ||
+      value === parsed.href ||
+      value === url
+    )
+  } catch {
+    return false
+  }
+}
+
+export const isNetErrorDocument = (input: {
+  url: string
+  title: string
+  bodyText: string
+}): boolean => {
+  if (isInternalBrowserErrorUrl(input.url)) return true
+  const text = `${input.title} ${input.bodyText}`
+  return /无法访问此网站|无法访问此站点|ERR_[A-Z0-9_]{3,}|This site can.?t be reached/u.test(text)
+}
+
 export const isBlankDocument = (input: {
   url: string
   title: string
   bodyText: string
   controlCount: number
 }): boolean => {
-  if (isInternalBrowserErrorUrl(input.url)) return false
+  if (isNetErrorDocument(input)) return false
   if (input.bodyText.trim().length > 0) return false
   if (input.controlCount > 0) return false
-  let hostname = ''
-  try {
-    hostname = new URL(input.url).hostname
-  } catch {
-    hostname = ''
-  }
-  const title = input.title.trim()
-  return !title || title === hostname
+  return isPlaceholderTitle(input.url, input.title)
 }
 
 export const formatNavigateNetError = (input: {

@@ -376,6 +376,13 @@ if (!singleInstanceLock) {
       cdpEndpointService,
       storageService.browserTabs
     )
+    if (process.env.NCURATOR_E2E_OBSERVER) {
+      ;(
+        globalThis as typeof globalThis & {
+          __NCURATOR_E2E_BROWSER_USE_RUN__?: BrowserEmbedService['run']
+        }
+      ).__NCURATOR_E2E_BROWSER_USE_RUN__ = (input) => browserEmbedService.run(input)
+    }
     const telemetryService = new TelemetryService({
       userDataPath: app.getPath('userData'),
       appVersion: app.getVersion(),

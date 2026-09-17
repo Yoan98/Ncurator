@@ -46,7 +46,7 @@
 - `tool / text-file` 覆盖普通文本按行分页读取、四种写入 action、修改记录、结构化 diff 与回退前置数据，以及按行号定位的文本搜索；unit 侧见 `tests/case/unit/ai/text-file-tool-contract.test.ts`。
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作地址内修改记录、Artifact、安全校验和工作地址外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作地址外绝对路径读取、损坏文件和结果大小限制。
-- `tool / web-browsing` 包含 `web-search-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。
+- `tool / web-browsing` 包含 `web-search-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。`browser_use` 网址协议回退、系统错误页与 `navigate` 成败字段由 Workbench `browser-navigate-scheme-fallback` 与 unit `navigate-plan` 覆盖。
 - 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。

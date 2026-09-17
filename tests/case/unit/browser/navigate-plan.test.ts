@@ -5,6 +5,7 @@ import {
   isBlankDocument,
   isHttpsFallbackWorthy,
   isInternalBrowserErrorUrl,
+  isNetErrorDocument,
   parseNavigatePlan,
   parseNetErrorCode
 } from '../../../../src/main/services/browser/navigatePlan'
@@ -38,12 +39,20 @@ describe('navigatePlan', () => {
     expect(isHttpsFallbackWorthy('ERR_NAME_NOT_RESOLVED')).toBe(false)
   })
 
-  it('treats chrome error pages and hostname-only documents as unusable', () => {
+  it('treats chrome error pages and Chromium URL-as-title documents as unusable', () => {
     expect(isInternalBrowserErrorUrl('chrome-error://chromewebdata/')).toBe(true)
     expect(
       isBlankDocument({
         url: 'http://epub.cnipa.gov.cn/',
         title: 'epub.cnipa.gov.cn',
+        bodyText: '',
+        controlCount: 0
+      })
+    ).toBe(true)
+    expect(
+      isBlankDocument({
+        url: 'http://127.0.0.1:64467/task',
+        title: '127.0.0.1:64467/task',
         bodyText: '',
         controlCount: 0
       })
@@ -56,6 +65,16 @@ describe('navigatePlan', () => {
         controlCount: 18
       })
     ).toBe(false)
+  })
+
+  it('detects net error documents even when the visible url stays https', () => {
+    expect(
+      isNetErrorDocument({
+        url: 'https://127.0.0.1:1/task',
+        title: '无法访问此网站',
+        bodyText: 'ERR_CONNECTION_REFUSED 重新加载'
+      })
+    ).toBe(true)
   })
 
   it('formats net errors for the model', () => {
