@@ -1,4 +1,6 @@
 import { describe, it } from 'vitest'
+import { existsSync } from 'node:fs'
+import path from 'node:path'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_E2E_TIMEOUT_MS,
@@ -29,12 +31,13 @@ type EmbeddedSnapshot = {
   whiteRatio: number
 }
 
-type BrowserUseNavigateResult = {
+type BrowserUseRunResult = {
   action?: string
   tabId?: string
   error?: string
   fallback?: string
   page?: { url?: string; title?: string }
+  path?: string
 }
 
 const delayReadyHtml = `<!doctype html>
@@ -68,6 +71,19 @@ describe('workbench browser navigate e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
+          const processCdp = await runtime.electronApp.evaluate(async ({ app }) => {
+            const { existsSync } = await import('node:fs')
+            const { join } = await import('node:path')
+            return {
+              hasRemoteDebuggingPort: app.commandLine.hasSwitch('remote-debugging-port'),
+              hasDevToolsActivePort: existsSync(join(app.getPath('userData'), 'DevToolsActivePort'))
+            }
+          })
+          if (processCdp.hasRemoteDebuggingPort || processCdp.hasDevToolsActivePort) {
+            throw new Error(
+              `process-level CDP must stay closed: switch=${String(processCdp.hasRemoteDebuggingPort)} file=${String(processCdp.hasDevToolsActivePort)}`
+            )
+          }
           const server = await startLocalWorkbenchHttpServer(delayReadyHtml)
           runtime.registerResource({
             name: 'browser-navigate-http-server',
@@ -226,26 +242,28 @@ describe('workbench browser navigate e2e', () => {
           })
 
           const ownerId = userState.ownerId
-          const runNavigate = async (url: string, tabId: string): Promise<BrowserUseNavigateResult> => {
+          const runBrowser = async (payload: Record<string, unknown>): Promise<BrowserUseRunResult> => {
             return (await runtime.electronApp.evaluate(
-              async (_electron, payload) => {
+              async (_electron, input) => {
                 const run = (
                   globalThis as typeof globalThis & {
-                    __NCURATOR_E2E_BROWSER_USE_RUN__?: (input: unknown) => Promise<unknown>
+                    __NCURATOR_E2E_BROWSER_USE_RUN__?: (value: unknown) => Promise<unknown>
                   }
                 ).__NCURATOR_E2E_BROWSER_USE_RUN__
                 if (!run) throw new Error('e2e browser run hook missing')
-                return await run(payload)
+                return await run(input)
               },
-              {
-                action: 'navigate',
-                ownerId,
-                tabId,
-                url,
-                llmConfig: E2E_LLM_CONFIG
-              }
-            )) as BrowserUseNavigateResult
+              payload
+            )) as BrowserUseRunResult
           }
+          const runNavigate = async (url: string, tabId: string): Promise<BrowserUseRunResult> =>
+            runBrowser({
+              action: 'navigate',
+              ownerId,
+              tabId,
+              url,
+              llmConfig: E2E_LLM_CONFIG
+            })
 
           const aiSuccess = await runNavigate(bareHost, browserTabId)
           if (aiSuccess.error) {
@@ -267,6 +285,25 @@ describe('workbench browser navigate e2e', () => {
             name: 'browser-navigate-ai-fallback',
             message: 'AI navigate 裸主机回退 http 成功',
             data: { tabId: aiSuccess.tabId, url: aiSuccess.page?.url, fallback: aiSuccess.fallback }
+          })
+
+          const screenshotPath = path.join(runtime.userDataDir, 'cdp-bridge-screenshot.png')
+          const screenshot = await runBrowser({
+            action: 'screenshot',
+            tabId: browserTabId,
+            screenshotPath,
+            llmConfig: E2E_LLM_CONFIG
+          })
+          if (screenshot.error) {
+            throw new Error(`CDP screenshot failed without process debug port: ${screenshot.error}`)
+          }
+          if (!existsSync(screenshotPath)) {
+            throw new Error(`CDP screenshot did not write ${screenshotPath}`)
+          }
+          runtime.signal({
+            name: 'browser-cdp-bridge-screenshot',
+            message: '无进程级调试口时仍能按 Tab 挂桥截图',
+            data: { tabId: screenshot.tabId || browserTabId, path: screenshotPath }
           })
 
           const aiHttpsFail = await runNavigate(httpsFailUrl, browserTabId)
@@ -323,6 +360,7 @@ describe('workbench browser navigate e2e', () => {
             failTabId: aiHttpsFail.tabId || '',
             failAddress: failState.url,
             sawProgress,
+            screenshotPath: screenshot.path || screenshotPath,
             errorText: `${errorSnapshot.title} ${errorSnapshot.bodyText}`
           }
         },
@@ -337,6 +375,7 @@ describe('workbench browser navigate e2e', () => {
               result.failAddress.startsWith('https://') &&
               !result.failAddress.includes('chrome-error://') &&
               result.sawProgress &&
+              existsSync(result.screenshotPath) &&
               result.errorText.includes('无法访问此网站') &&
               /ERR_[A-Z0-9_]+/u.test(result.errorText),
             {

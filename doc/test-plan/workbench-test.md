@@ -444,8 +444,8 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：内置浏览器对未写协议的地址先 https 再 http；写明 https 失败停在馆长统一错误页并保留 tabId；加载中地址栏底边可见进度线；AI `navigate` 等到真实内容再成功，失败把 `Error` 与 `tabId` 一并返回。
 - Why：不少官网 https 会直接掐连接，Chrome 会回退到 http；馆长若只加 https 或把空白验证页当成打开成功，用户看到白屏、模型也会盲目新开标签。WebContentsView 不会画出 Chrome 外壳那张 `chrome-error://` 页，必须自己写入错误文档。
-- How：启动只提供 HTTP 的本地页面（https 打到同一端口会 TLS 失败）。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，加载中可见底线，等到页面口令出现且地址栏是 http；再对同一类地址走 AI `navigate`；另一次写明 `https://127.0.0.1:1/path`（未监听端口，连接被拒绝），确认错误页标题为「无法访问此网站」且含 `ERR_` 错误码、地址栏仍是 https、工具失败含 `tabId`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
-- Oracle：裸主机最终打开 http 页且含口令，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC9`；加载中可见地址栏底边进度线，对齐 `WB-PANEL-004-AC19`；明确 https 不回退 http，地址栏无 `chrome-error://`，错误页为馆长统一「无法访问此网站」页并含错误码，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。
+- How：启动只提供 HTTP 的本地页面（https 打到同一端口会 TLS 失败）。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，加载中可见底线，等到页面口令出现且地址栏是 http；再对同一类地址走 AI `navigate`；随后在无进程级调试口下对该 Tab 截图以验证按需 CDP 桥；另一次写明 `https://127.0.0.1:1/path`（未监听端口，连接被拒绝），确认错误页标题为「无法访问此网站」且含 `ERR_` 错误码、地址栏仍是 https、工具失败含 `tabId`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
+- Oracle：裸主机最终打开 http 页且含口令，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC9`；加载中可见地址栏底边进度线，对齐 `WB-PANEL-004-AC19`；无 `--remote-debugging-port` / `DevToolsActivePort` 时截图仍成功，对齐 `WB-PANEL-004-AC10`；明确 https 不回退 http，地址栏无 `chrome-error://`，错误页为馆长统一「无法访问此网站」页并含错误码，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。
 - Not：不打公网专利站；不跑 live 模型整轮问答；不验证 Stagehand 填表。公网样例见 `patent-search`。
 
 #### `web-read-from-search-result`
