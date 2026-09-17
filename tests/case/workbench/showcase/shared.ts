@@ -2,8 +2,9 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import type { Page } from '@playwright/test'
+import type { ElectronApplication } from 'playwright'
 import type { AiLlmUsage, AiRunEvent } from '../../../../src/shared/types'
-import { getWorkbenchLocator, workbenchSelectors } from '../../../harness/e2e/workbench'
+import { getWorkbenchLocator, getWorkbenchPrefixLocator, workbenchSelectors } from '../../../harness/e2e/workbench'
 
 export const USD_CNY = 7.2
 
@@ -226,4 +227,96 @@ export const screenshotScrollerPages = async (
     offset += step
   }
   return screenshotNames
+}
+
+export const rasterizePdfPages = async (
+  pdfPath: string,
+  outputDir: string,
+  prefix = 'page'
+): Promise<string[]> => {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
+  const { createCanvas } = await import('@napi-rs/canvas')
+  await fs.mkdir(outputDir, { recursive: true })
+  const data = new Uint8Array(await fs.readFile(pdfPath))
+  const document = await pdfjs.getDocument({ data }).promise
+  const names: string[] = []
+  for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber += 1) {
+    const page = await document.getPage(pageNumber)
+    const viewport = page.getViewport({ scale: 2 })
+    const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height))
+    const canvasContext = canvas.getContext('2d')
+    await page.render({
+      canvas: canvas as unknown as HTMLCanvasElement,
+      canvasContext: canvasContext as unknown as CanvasRenderingContext2D,
+      viewport
+    }).promise
+    const fileName = `${prefix}-${pageNumber}.png`
+    await fs.writeFile(path.join(outputDir, fileName), canvas.toBuffer('image/png'))
+    names.push(fileName)
+  }
+  await document.destroy()
+  return names
+}
+
+export const screenshotAssistantAnswer = async (
+  page: Page,
+  outputPath: string
+): Promise<void> => {
+  await fs.mkdir(path.dirname(outputPath), { recursive: true })
+  const answer = getWorkbenchPrefixLocator(
+    page,
+    workbenchSelectors.assistantFinalAnswerPrefix
+  ).last()
+  await answer.waitFor({ state: 'visible', timeout: 30_000 })
+  await page.waitForTimeout(400)
+  await answer.screenshot({ path: outputPath, type: 'png' })
+}
+
+export type EmbeddedBrowserSnapshot = {
+  url: string
+  title: string
+  inputValues: string[]
+  bodyText: string
+}
+
+export const inspectEmbeddedBrowser = async (
+  electronApp: ElectronApplication,
+  hostIncludes: string
+): Promise<EmbeddedBrowserSnapshot | null> => {
+  return await electronApp.evaluate(async ({ webContents }, host) => {
+    const contents = webContents
+      .getAllWebContents()
+      .find((candidate) => !candidate.isDestroyed() && candidate.getURL().includes(host))
+    if (!contents) return null
+    const snapshot = (await contents.executeJavaScript(`({
+      url: location.href,
+      title: document.title,
+      inputValues: Array.from(document.querySelectorAll('input, textarea, [contenteditable="true"]')).map((el) => {
+        if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return el.value || ''
+        return (el.textContent || '').trim()
+      }),
+      bodyText: ((document.body && document.body.innerText) || '').slice(0, 4000)
+    })`)) as EmbeddedBrowserSnapshot
+    return snapshot
+  }, hostIncludes)
+}
+
+export const captureEmbeddedBrowserPng = async (
+  electronApp: ElectronApplication,
+  hostIncludes: string,
+  outputPath: string
+): Promise<boolean> => {
+  const pngBase64 = await electronApp.evaluate(async ({ webContents }, host) => {
+    const contents = webContents
+      .getAllWebContents()
+      .find((candidate) => !candidate.isDestroyed() && candidate.getURL().includes(host))
+    if (!contents) return null
+    const image = await contents.capturePage()
+    if (image.isEmpty()) return null
+    return image.toPNG().toString('base64')
+  }, hostIncludes)
+  if (!pngBase64) return false
+  await fs.mkdir(path.dirname(outputPath), { recursive: true })
+  await fs.writeFile(outputPath, Buffer.from(pngBase64, 'base64'))
+  return true
 }
