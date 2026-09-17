@@ -442,10 +442,10 @@ pnpm test:update:e2e
 #### `browser-navigate-error-page`
 
 - 测试类型：`e2e`
-- What：地址栏输入什么协议就打开什么；裸主机只补 https 且失败不改 http；写明 http 能打开真实页；写明 https 失败停在馆长统一错误页并保留 tabId；本地连接一直不返回时 30 秒超时也画出 `ERR_TIMED_OUT` 错误页；加载中地址栏底边可见进度线；AI `navigate` 等到真实内容再成功，失败把 `Error` 与 `tabId` 一并返回。
-- Why：用户倾向访问啥就是啥，不自动 https→http。WebContentsView 不会画出 Chrome 外壳那张 `chrome-error://` 页；有的站点 https 会掐连接，有的会一直转圈，都必须落到同一张馆长错误页，不能停在白屏。
-- How：启动只提供 HTTP 的本地页面，另设 `/hang` 接受连接但不返回。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，确认停在 https 错误页且没有改成 http；再填明确 `http://…` ，加载中可见浅蓝色底线，等到页面口令出现；再对同一 http 地址走 AI `navigate` 与 `screenshot`（Stagehand 连本机 CDP 桥）；另一次写明 `https://127.0.0.1:1/path`（未监听端口，连接被拒绝），确认错误页标题为「无法访问此站点」、含「无法加载」与 `ERR_` 错误码、地址栏仍是 https、工具失败含 `tabId`；最后打开 `/hang`，等到超过导航超时后出现 `ERR_TIMED_OUT`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
-- Oracle：裸主机保持 https 并出现错误页，对齐 `WB-PANEL-004-AC15`；明确 http 打开含口令的页并对齐 `WB-PANEL-004-AC9`；加载中可见地址栏底边浅蓝色进度线，错误页出现后进度线必须淡出，对齐 `WB-PANEL-004-AC19`；对该 Tab 截图成功即证明 Stagehand 走按需 CDP 桥，对齐 `WB-PANEL-004-AC10`；明确 https 失败与加载超时均无 `chrome-error://`，错误页为馆长统一 Chrome 式「无法访问此站点」页并含错误码，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。Playwright 驱动窗口会自带 `--remote-debugging-port`，不作为本 case 失败条件。
+- What：地址栏输入什么协议就打开什么；裸主机只补 https 且失败不改 http；写明 http 能打开真实页；写明 https 失败停在馆长统一错误页并展示 Chromium 错误码、保留 tabId；加载中地址栏底边可见进度线，错误页出现后进度线淡出；AI `navigate` 等到真实内容再成功，失败把 `Error` 与 `tabId` 一并返回。
+- Why：用户倾向访问啥就是啥，不自动 https→http。WebContentsView 不会画出 Chrome 外壳那张 `chrome-error://` 页；主框架 `did-fail-load` 必须落到同一张馆长错误页，底部是 Chromium 给出的真实 `ERR_` 码，不能停在白屏。
+- How：启动只提供 HTTP 的本地页面。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，确认停在 https 错误页且没有改成 http；再填明确 `http://…` ，加载中可见浅蓝色底线，等到页面口令出现；再对同一 http 地址走 AI `navigate` 与 `screenshot`（Stagehand 连本机 CDP 桥）；另一次写明无法解析的 https 主机，确认错误页标题为「无法访问此站点」、含「无法加载」与 Chromium `ERR_` 错误码、地址栏仍是 https、工具失败含 `tabId`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
+- Oracle：裸主机保持 https 并出现错误页，对齐 `WB-PANEL-004-AC15`；明确 http 打开含口令的页并对齐 `WB-PANEL-004-AC9`；加载中可见地址栏底边浅蓝色进度线，错误页出现后进度线必须淡出，对齐 `WB-PANEL-004-AC19`；对该 Tab 截图成功即证明 Stagehand 走按需 CDP 桥，对齐 `WB-PANEL-004-AC10`；明确 https 失败无 `chrome-error://`，错误页为馆长统一 Chrome 式「无法访问此站点」页并含 Chromium `ERR_` 错误码，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。Playwright 驱动窗口会自带 `--remote-debugging-port`，不作为本 case 失败条件。
 - Not：不打公网专利站；不跑 live 模型整轮问答；不验证 Stagehand 填表。公网样例见 `browser-navigate-cnipa-https` 与 `patent-search`。
 
 #### `browser-navigate-cnipa-https`
@@ -454,7 +454,7 @@ pnpm test:update:e2e
 - What：地址栏打开 `https://epub.cnipa.gov.cn/` 时保持 https，失败或超时时画出馆长错误页，不自动改 http。
 - Why：这是会掐 https 或长时间转圈的真实站点；去掉协议降级后，用户必须看到错误页而不是白屏进度条。
 - How：Workbench 打开浏览器 Tab，输入明确 https 地址，加载中可见浅蓝色进度线，等到错误页或真实首页，且地址栏仍是 https。明确 http 打开真实首页由无进程级调试口的 unit host `cnipa-http.host` 覆盖，因为 Playwright 驱动窗口会自带调试口，专利站 http 可能吐空白页。
-- Oracle：最终 URL 仍是 https，不是 `chrome-error://`，不是自动改成的 http；若打不开则出现馆长「无法访问此站点」页（含 `ERR_`，超时则为 `ERR_TIMED_OUT`）且进度线淡出，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC16`、`WB-PANEL-004-AC19`。
+- Oracle：最终 URL 仍是 https，不是 `chrome-error://`，不是自动改成的 http；若打不开则出现馆长「无法访问此站点」页（底部为 Chromium `ERR_`）且进度线淡出，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC16`、`WB-PANEL-004-AC19`。
 - Not：不搜索专利、不跑 live 模型；检索样例仍由 `patent-search` 覆盖。明确 http 首页与无调试口由 unit `cnipa-http.host` 覆盖。
 
 #### `web-read-from-search-result`

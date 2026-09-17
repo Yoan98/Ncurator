@@ -519,9 +519,6 @@ export const startLocalWorkbenchHttpServer = async (
       response.end()
       return
     }
-    if (requestUrl.startsWith('/hang')) {
-      return
-    }
     if (requestUrl === '/' || requestUrl.startsWith('/task')) {
       response.writeHead(200, {
         'content-type': 'text/html; charset=utf-8',

@@ -23,6 +23,7 @@ import {
 import {
   BLANK_PAGE_ERROR,
   formatNavigateNetError,
+  formatEmbeddedNetErrorLabel,
   isBlankDocument,
   isAbortedNetError,
   isInternalBrowserErrorUrl,
@@ -174,12 +175,7 @@ const loadUrlOnce = async (
   const failedCode = await raceAbort(
     new Promise<string | null>((resolve) => {
       let settled = false
-      const timeout = setTimeout(() => {
-        if (!contents.isDestroyed()) contents.stop()
-        finish(parseNetErrorCode('ERR_TIMED_OUT'))
-      }, EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS)
       const cleanup = (): void => {
-        clearTimeout(timeout)
         contents.removeListener('did-fail-load', onFail)
         contents.removeListener('did-finish-load', onDone)
       }
@@ -198,11 +194,11 @@ const loadUrlOnce = async (
       ): void => {
         if (!isMainFrame) return
         if (isAbortedNetError(code, description)) return
-        finish(parseNetErrorCode(description || String(code)))
+        finish(formatEmbeddedNetErrorLabel(description, code))
       }
       const onDone = (): void => {
         if (isInternalBrowserErrorUrl(contents.getURL())) {
-          finish(parseNetErrorCode(contents.getTitle()) || 'ERR_FAILED')
+          finish(formatEmbeddedNetErrorLabel(contents.getTitle()) || 'ERR_FAILED')
           return
         }
         finish(null)
@@ -613,7 +609,6 @@ export class BrowserEmbedService implements BrowserUseService {
     const view = await this.ensureReady(runtime)
     const primaryUrl = plan.url
     runtime.navGeneration += 1
-    const generation = runtime.navGeneration
     runtime.lastNavigateRaw = rawUrl
     runtime.pendingNavigateUrl = primaryUrl
     runtime.showingNetError = false
@@ -621,85 +616,7 @@ export class BrowserEmbedService implements BrowserUseService {
     runtime.persisted.updatedAt = Date.now()
     this.stateStore.save(runtime.persisted)
     this.emitState(runtime)
-    const contents = view.webContents
-    const isCurrent = (): boolean => runtime.navGeneration === generation
-    let loadTimeout: ReturnType<typeof setTimeout> | null = null
-    const cleanup = (): void => {
-      if (loadTimeout) {
-        clearTimeout(loadTimeout)
-        loadTimeout = null
-      }
-      contents.removeListener('did-fail-load', onFail)
-      contents.removeListener('did-finish-load', onFinish)
-    }
-    const paintCurrentError = (code: string): void => {
-      runtime.showingNetError = true
-      this.emitState(runtime)
-      void paintNetErrorDocument(contents, code, runtime.persisted.url || primaryUrl, isCurrent).then(
-        () => {
-          if (isCurrent()) this.emitState(runtime)
-        }
-      )
-    }
-    const onFail = (
-      _event: Electron.Event,
-      code: number,
-      description: string,
-      _url: string,
-      isMainFrame: boolean
-    ): void => {
-      if (!isCurrent()) {
-        cleanup()
-        return
-      }
-      if (
-        !shouldPaintEmbeddedNetError({
-          isMainFrame,
-          errorCode: code,
-          description
-        })
-      ) {
-        return
-      }
-      cleanup()
-      paintCurrentError(parseNetErrorCode(description || String(code)))
-    }
-    const onFinish = (): void => {
-      if (!isCurrent()) {
-        cleanup()
-        return
-      }
-      if (isInternalBrowserErrorUrl(contents.getURL())) return
-      cleanup()
-    }
-    loadTimeout = setTimeout(() => {
-      if (!isCurrent() || contents.isDestroyed() || runtime.showingNetError) {
-        cleanup()
-        return
-      }
-      if (!contents.isLoadingMainFrame()) {
-        cleanup()
-        return
-      }
-      cleanup()
-      runtime.showingNetError = true
-      this.emitState(runtime)
-      contents.stop()
-      void (async () => {
-        await sleep(50)
-        if (!isCurrent() || contents.isDestroyed()) return
-        await paintNetErrorDocument(
-          contents,
-          'ERR_TIMED_OUT',
-          runtime.persisted.url || primaryUrl,
-          isCurrent
-        )
-        if (isCurrent()) this.emitState(runtime)
-      })()
-    }, EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS)
-    contents.on('did-fail-load', onFail)
-    contents.on('did-finish-load', onFinish)
-    startWebContentsUrl(contents, primaryUrl)
+    startWebContentsUrl(view.webContents, primaryUrl)
     this.captureRuntimeState(runtime)
   }
 
@@ -1013,6 +930,28 @@ export class BrowserEmbedService implements BrowserUseService {
       this.captureRuntimeState(runtime)
       this.emitState(runtime)
     }
+    view.webContents.on('did-fail-load', (_event, code, description, _url, isMainFrame) => {
+      if (
+        !shouldPaintEmbeddedNetError({
+          isMainFrame,
+          errorCode: code,
+          description
+        })
+      ) {
+        return
+      }
+      const generation = runtime.navGeneration
+      runtime.showingNetError = true
+      this.emitState(runtime)
+      void paintNetErrorDocument(
+        view.webContents,
+        formatEmbeddedNetErrorLabel(description, code),
+        runtime.persisted.url || view.webContents.getURL(),
+        () => runtime.navGeneration === generation
+      ).then(() => {
+        if (runtime.navGeneration === generation) this.emitState(runtime)
+      })
+    })
     view.webContents.on('did-start-loading', update)
     view.webContents.on('did-stop-loading', update)
     view.webContents.on('did-navigate', update)

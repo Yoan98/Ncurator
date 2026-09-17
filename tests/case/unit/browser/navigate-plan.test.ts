@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BLANK_PAGE_ERROR,
   formatNavigateNetError,
+  formatEmbeddedNetErrorLabel,
   isBlankDocument,
   isAbortedNetError,
   isInternalBrowserErrorUrl,
@@ -115,6 +116,12 @@ describe('navigatePlan', () => {
     expect(parseNetErrorCode(-102)).toBe('ERR_CONNECTION_REFUSED')
     expect(parseNetErrorCode(-7)).toBe('ERR_TIMED_OUT')
     expect(isAbortedNetError(-3, 'net::ERR_ABORTED')).toBe(true)
+  })
+
+  it('renders Chromium did-fail-load descriptions as the error page label', () => {
+    expect(formatEmbeddedNetErrorLabel('net::ERR_CONNECTION_CLOSED', -100)).toBe('ERR_CONNECTION_CLOSED')
+    expect(formatEmbeddedNetErrorLabel('net::ERR_NAME_NOT_RESOLVED', -105)).toBe('ERR_NAME_NOT_RESOLVED')
+    expect(formatEmbeddedNetErrorLabel('', -102)).toBe('ERR_CONNECTION_REFUSED')
   })
 
   it('formats net errors for the model without suggesting http fallback', () => {

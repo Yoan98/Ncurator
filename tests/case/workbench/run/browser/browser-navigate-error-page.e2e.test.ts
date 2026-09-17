@@ -10,7 +10,6 @@ import {
   startLocalWorkbenchHttpServer,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
-import { EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS } from '../../../../../src/main/services/browser/constants'
 
 const CASE_ID = 'browser-navigate-error-page'
 const PAGE_TOKEN = 'SCHEME_FALLBACK_OK'
@@ -71,7 +70,7 @@ describe('workbench browser navigate e2e', () => {
         suite: 'run',
         groups: ['browser'],
         description:
-          '本地页验证输入什么协议就打开什么：裸主机只补 https 失败不改 http，明确 http 能打开，明确 https 与加载超时停在馆长统一错误页，加载中可见地址栏底线，AI navigate 成功/失败都带回 tabId。',
+          '本地页验证输入什么协议就打开什么：裸主机只补 https 失败不改 http，明确 http 能打开，明确 https 失败停在馆长统一错误页并展示 Chromium 错误码，加载中可见地址栏底线，AI navigate 成功/失败都带回 tabId。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'exclusive',
@@ -88,7 +87,6 @@ describe('workbench browser navigate e2e', () => {
           const parsed = new URL(server.url)
           const bareHost = `${parsed.hostname}:${parsed.port}${parsed.pathname}`
           const httpUrl = server.url
-          const hangUrl = `http://${parsed.hostname}:${parsed.port}/hang`
           const httpsFailUrl = 'https://no-such-ncurator-host.invalid/task'
 
           await setupWorkbenchWithTempWorkspace(page, {
@@ -310,33 +308,6 @@ describe('workbench browser navigate e2e', () => {
             data: { tabId: screenshot.tabId || browserTabId, path: writtenScreenshot }
           })
 
-          await page.evaluate(async (payload) => {
-            const response = await window.api.browserTabNavigate({
-              tabId: payload.tabId,
-              url: payload.url
-            })
-            if (!response.success) throw new Error(response.error || 'browserTabNavigate failed')
-          }, { tabId: browserTabId, url: hangUrl })
-          const sawHangProgress = await waitForProgress(8_000)
-          if (!sawHangProgress) {
-            throw new Error('address bar progress line did not appear while hanging')
-          }
-          const timedOut = await waitForSnapshot(
-            (state, snapshot) =>
-              Boolean(state?.url.includes('/hang')) &&
-              !String(state?.url || '').includes('chrome-error://') &&
-              isErrorPage(snapshot) &&
-              /ERR_(?:CONNECTION_)?TIMED_OUT/u.test(snapshot?.bodyText || ''),
-            EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS + 8_000,
-            'hanging http should paint a timed-out error page after the navigation timeout'
-          )
-          await waitForProgressGone(4_000)
-          runtime.signal({
-            name: 'browser-navigate-timeout-error',
-            message: '加载超时停在馆长 ERR_TIMED_OUT 错误页',
-            data: { url: timedOut.state?.url, body: timedOut.snapshot?.bodyText }
-          })
-
           const aiHttpsFail = await runNavigate(httpsFailUrl, browserTabId)
           if (!aiHttpsFail.error) {
             throw new Error('explicit https navigate should fail')
@@ -352,7 +323,7 @@ describe('workbench browser navigate e2e', () => {
               Boolean(state?.url.startsWith('https://')) &&
               !String(state?.url || '').includes('chrome-error://') &&
               isErrorPage(snapshot),
-            EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS + 8_000,
+            20_000,
             'explicit https should stay https and show the embedded error page'
           )
           await waitForProgressGone(4_000)
@@ -374,10 +345,7 @@ describe('workbench browser navigate e2e', () => {
             failError: aiHttpsFail.error,
             failTabId: aiHttpsFail.tabId || '',
             failAddress: String(httpsError.state?.url || ''),
-            timeoutUrl: String(timedOut.state?.url || ''),
-            timeoutText: `${timedOut.snapshot?.title || ''} ${timedOut.snapshot?.bodyText || ''}`,
             sawProgress,
-            sawHangProgress,
             screenshotPath: writtenScreenshot,
             errorText: `${httpsError.snapshot?.title || ''} ${httpsError.snapshot?.bodyText || ''}`
           }
@@ -393,18 +361,14 @@ describe('workbench browser navigate e2e', () => {
               result.failTabId.length > 0 &&
               result.failAddress.startsWith('https://') &&
               !result.failAddress.includes('chrome-error://') &&
-              result.timeoutUrl.startsWith('http://') &&
-              result.timeoutText.includes('无法访问此站点') &&
-              /ERR_(?:CONNECTION_)?TIMED_OUT/u.test(result.timeoutText) &&
               result.sawProgress &&
-              result.sawHangProgress &&
               existsSync(result.screenshotPath) &&
               result.errorText.includes('无法访问此站点') &&
               result.errorText.includes('无法加载') &&
               /ERR_[A-Z0-9_]+/u.test(result.errorText),
             {
               name: 'browser-navigate-error-page',
-              message: '裸主机不降级、明确 http 可打开、进度线、按需 CDP 截图，以及 https 失败与加载超时错误页',
+              message: '裸主机不降级、明确 http 可打开、进度线、按需 CDP 截图，以及 https 失败展示 Chromium 错误码',
               data: result
             }
           )

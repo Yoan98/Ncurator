@@ -7,7 +7,6 @@ import {
   setupWorkbenchWithTempWorkspace,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
-import { EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS } from '../../../../../src/main/services/browser/constants'
 
 const CASE_ID = 'browser-navigate-cnipa-https'
 const TARGET_HOST = 'epub.cnipa.gov.cn'
@@ -84,7 +83,7 @@ describe('workbench browser cnipa e2e', () => {
             throw new Error('address bar progress line did not appear while loading CNIPA https')
           }
 
-          const deadline = Date.now() + EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS + 12_000
+          const deadline = Date.now() + 90_000
           let finalUrl = ''
           let title = ''
           let bodyText = ''

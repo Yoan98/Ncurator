@@ -72,6 +72,13 @@ export const parseNetErrorCode = (error: unknown): string => {
   return 'ERR_FAILED'
 }
 
+export const formatEmbeddedNetErrorLabel = (description?: string, errorCode?: number | string): string => {
+  const fromDescription = String(description || '').match(/ERR_[A-Z0-9_]+/u)?.[0]
+  if (fromDescription) return fromDescription
+  if (errorCode !== undefined && errorCode !== '') return parseNetErrorCode(errorCode)
+  return parseNetErrorCode(description || '')
+}
+
 export const isAbortedNetError = (code: number | string, description = ''): boolean => {
   if (code === NET_ERROR_ABORTED_CODE || code === '-3') return true
   return String(description || code).includes('ERR_ABORTED')
