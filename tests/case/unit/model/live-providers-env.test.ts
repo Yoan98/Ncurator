@@ -8,8 +8,11 @@ import {
   resolveLiveLlmTarget
 } from '../../../../tests/harness/core/liveProviders'
 import { LLM_PROVIDER_REGISTRY } from '../../../../src/shared/llmProvider'
+import { loadRootEnvOnce } from '../../../../src/main/utils/rootEnv'
 
 const clearLiveEnv = (): void => {
+  // Seal dotenv before deletes so a later loadRootEnvOnce cannot refill from .env.
+  loadRootEnvOnce()
   delete process.env.AI_LIVE_PROVIDER
   delete process.env.AI_LIVE_MODEL
   for (const providerId of LIVE_PRESET_PROVIDER_IDS) {

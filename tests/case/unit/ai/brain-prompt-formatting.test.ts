@@ -74,13 +74,14 @@ describe('ai unit brain prompt formatting', () => {
     expect(user.indexOf('默认工作区：')).toBeLessThan(user.indexOf('当前时间：'))
     expect(system).not.toContain('reference_field_guide')
     expect(system).not.toContain('字段说明')
-    expect(system.indexOf('原则：')).toBeLessThan(system.indexOf('终端等待规则：'))
-    expect(system.indexOf('终端等待规则：')).toBeLessThan(system.indexOf('计算规则：'))
+    expect(system).not.toContain('终端等待规则：')
+    expect(system.indexOf('原则：')).toBeLessThan(system.indexOf('计算规则：'))
     expect(system.indexOf('计算规则：')).toBeLessThan(system.indexOf('计划规则：'))
     expect(system.indexOf('计划规则：')).toBeLessThan(system.indexOf('交付规则：'))
     expect(system.indexOf('交付规则：')).toBeLessThan(system.indexOf('特别说明规则：'))
     expect(system.indexOf('特别说明规则：')).toBeLessThan(system.indexOf('技能目录：'))
     expect(system.indexOf('技能目录：')).toBeLessThan(system.indexOf('当前运行环境：'))
+    expect(titledSection(system, '特别说明规则')).toContain('合理使用终端等待命令')
   })
 
   it('keeps context efficiency and planning rules concise', () => {
