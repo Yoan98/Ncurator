@@ -114,29 +114,26 @@ describe('workbench result e2e', () => {
           await openAllModeExplorer(page)
           const lateBVisibleAfterReopen = await waitForExplorerFile(page, LATE_FILE_B)
 
-          assertNoWorkbenchFakeSignals(runtime)
-
           return {
-            pass:
-              seedVisibleOnLauncher && lateAVisibleAfterOpen && lateBVisibleAfterReopen,
-            evidence: {
-              seedVisibleOnLauncher,
-              lateAVisibleAfterOpen,
-              lateBVisibleAfterReopen,
-              workspaceRoot: workspace.rootPath
-            },
-            summary:
-              seedVisibleOnLauncher && lateAVisibleAfterOpen && lateBVisibleAfterReopen
-                ? '打开文件列表两次均读到外部新建文件。'
-                : '打开文件列表未及时展示外部新建文件。',
-            expected:
-              '关闭列表期间写入的文件，在下次打开“全部”列表后必须可见，对齐 WB-PANEL-003-AC13。',
-            observed: {
-              seedVisibleOnLauncher,
-              lateAVisibleAfterOpen,
-              lateBVisibleAfterReopen
-            }
+            seedVisibleOnLauncher,
+            lateAVisibleAfterOpen,
+            lateBVisibleAfterReopen,
+            workspaceRoot: workspace.rootPath
           }
+        },
+        assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.seedVisibleOnLauncher &&
+              result.lateAVisibleAfterOpen &&
+              result.lateBVisibleAfterReopen,
+            {
+              name: 'workspace-file-explorer-open-refresh-real',
+              message:
+                '打开工作区文件列表时应重新读取磁盘最新目录；关闭列表期间外部新建的文件在下次打开“全部”后必须可见。',
+              data: result
+            }
+          )
+          await assertNoWorkbenchFakeSignals(runtime)
         }
       })
     },
