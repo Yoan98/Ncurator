@@ -217,6 +217,7 @@ export const restoreWindowsPackageE2ELaunchers = ({
   const result = runPowerShellJson(
     `
 $ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue'
 $OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::UTF8
 ${windowsHelpersPs}
 $productName = ${JSON.stringify(PACKAGE_PRODUCT_NAME)}
@@ -226,20 +227,39 @@ $executablePath = [IO.Path]::GetFullPath(${JSON.stringify(executablePath)})
 $snapshotPath = ${JSON.stringify(snapshotPath)}
 $productLnk = "$productName.lnk"
 $e2eLnk = "$e2eDisplayName.lnk"
+function Remove-ShortcutSafe([string]$lnkPath) {
+  if (-not (Test-Path -LiteralPath $lnkPath)) { return $true }
+  for ($i = 0; $i -lt 6; $i++) {
+    try {
+      [IO.File]::Delete((Resolve-Path -LiteralPath $lnkPath).Path)
+      return $true
+    } catch {
+      Start-Sleep -Milliseconds 250
+    }
+  }
+  try {
+    $stale = Join-Path (Split-Path -Parent $lnkPath) ("$e2eDisplayName-stale-$([guid]::NewGuid().ToString('N').Substring(0,8)).lnk")
+    Move-Item -LiteralPath $lnkPath -Destination $stale -Force
+    return $true
+  } catch {
+    return $false
+  }
+}
 $snapshot = Get-Content -LiteralPath $snapshotPath -Raw -Encoding utf8 | ConvertFrom-Json
 $shell = New-Object -ComObject WScript.Shell
 $restoredShortcuts = 0
 $createdE2eShortcuts = 0
 $removedE2eProductShortcuts = 0
+$snapshotPaths = @{}
+if ($snapshot.shortcuts) {
+  foreach ($item in @($snapshot.shortcuts)) {
+    if ($item.path) { $snapshotPaths[[string]$item.path] = $true }
+  }
+}
 
 foreach ($dir in Get-ShortcutDirs) {
   $productPath = Join-Path $dir $productLnk
   $e2ePath = Join-Path $dir $e2eLnk
-  $current = Read-Shortcut $shell $productPath
-  if ($null -ne $current -and (Test-E2EPath $current.targetPath $installRoot)) {
-    Remove-Item -LiteralPath $productPath -Force
-    $removedE2eProductShortcuts++
-  }
   Write-Shortcut $shell @{
     path = $e2ePath
     targetPath = $executablePath
@@ -264,6 +284,19 @@ if ($snapshot.shortcuts) {
       description = [string]$item.description
     }
     $restoredShortcuts++
+  }
+}
+
+foreach ($dir in Get-ShortcutDirs) {
+  $productPath = Join-Path $dir $productLnk
+  $current = Read-Shortcut $shell $productPath
+  if ($null -eq $current) { continue }
+  if (-not (Test-E2EPath $current.targetPath $installRoot)) { continue }
+  if ($snapshotPaths.ContainsKey($productPath)) { continue }
+  if (Remove-ShortcutSafe $productPath) {
+    $removedE2eProductShortcuts++
+  } else {
+    throw "无法隔离仍指向 E2E 的正式快捷方式（文件被占用）：$productPath"
   }
 }
 
@@ -293,7 +326,6 @@ if ($snapshot.uninstall) {
   }
 }
 
-# If NSIS created a separate uninstall key for the E2E install, keep files but point DisplayName away from production.
 $root = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall'
 if (Test-Path $root) {
   Get-ChildItem $root -ErrorAction SilentlyContinue | ForEach-Object {
@@ -329,6 +361,7 @@ Write-Output (@{
   )
   return result
 }
+
 
 export const readWindowsPackageE2ESnapshot = (snapshotPath) => {
   const raw = readFileSync(snapshotPath, 'utf8')
