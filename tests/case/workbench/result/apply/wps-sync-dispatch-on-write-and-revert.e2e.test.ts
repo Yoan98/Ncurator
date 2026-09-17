@@ -34,7 +34,8 @@ describe('workbench result e2e', () => {
           '真实 AI 写回并回退 docx / xlsx / pptx 后，馆长回环 /status 对各路径记录 open dispatch。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
-        execution: 'live',
+        // 独占：回环固定优先端口 58123，并行包测会抢端口导致 /status 读到别的实例。
+        execution: 'exclusive',
         windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {

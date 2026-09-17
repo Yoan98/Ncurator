@@ -51,6 +51,8 @@ const readTopUserMessage = async (
     return { text, inView: Boolean(atTop) }
   })
 
+const localDayOfMonth = (dayStart: number): number => new Date(dayStart).getDate()
+
 const waitForTopUserMatching = async (
   page: import('playwright').Page,
   match: 'later' | 'earliest' | 'recent' | 'today'
@@ -187,8 +189,14 @@ describe('workbench conversation e2e', () => {
           const disabledCount = await popup
             .locator('.ant-picker-cell-in-view.ant-picker-cell-disabled')
             .count()
-          const pickedCell = enabledDays.last()
-          const pickedTitle = (await pickedCell.getAttribute('title')) || ''
+          // 同月可能有多天有消息；按种子「约一个半月前次日」的日号选格，不能用 .last()（会落到更近的同月日）。
+          const laterDayOfMonth = localDayOfMonth(laterDayStart)
+          const pickedCell = enabledDays.filter({
+            has: page.locator('.ant-picker-cell-inner', {
+              hasText: new RegExp(`^${String(laterDayOfMonth)}$`)
+            })
+          })
+          await pickedCell.waitFor({ state: 'visible' })
           await pickedCell.click()
           await popup.waitFor({ state: 'hidden' })
           await waitForTopUserMatching(page, 'later')
@@ -220,9 +228,13 @@ describe('workbench conversation e2e', () => {
           await monthSearch.click()
           const popupAgain = page.locator('.nc-message-timeline-datepicker-popup').last()
           await popupAgain.waitFor({ state: 'visible' })
-          const sameDayCell = pickedTitle
-            ? popupAgain.locator(`.ant-picker-cell-in-view[title="${pickedTitle}"]`)
-            : popupAgain.locator('.ant-picker-cell-in-view:not(.ant-picker-cell-disabled)').last()
+          const sameDayCell = popupAgain
+            .locator('.ant-picker-cell-in-view:not(.ant-picker-cell-disabled)')
+            .filter({
+              has: page.locator('.ant-picker-cell-inner', {
+                hasText: new RegExp(`^${String(laterDayOfMonth)}$`)
+              })
+            })
           await sameDayCell.click()
           await popupAgain.waitFor({ state: 'hidden' })
           await waitForTopUserMatching(page, 'later')
@@ -246,7 +258,7 @@ describe('workbench conversation e2e', () => {
           return {
             enabledCount,
             disabledCount,
-            pickedTitle,
+            laterDayOfMonth,
             monthNodeStillPresent,
             expectedTodayActiveId,
             afterOpenText: afterOpen.text,
