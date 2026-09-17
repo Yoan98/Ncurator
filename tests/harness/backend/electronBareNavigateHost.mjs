@@ -11,7 +11,6 @@ app.setPath('userData', userDataPath)
 
 const TARGET_HOST = 'epub.cnipa.gov.cn'
 const PAGE_TOKEN = '中国专利公布公告'
-const HTTPS_URL = `https://${TARGET_HOST}/`
 const HTTP_URL = `http://${TARGET_HOST}/`
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -97,18 +96,10 @@ app.whenReady().then(async () => {
   hostWindow.contentView.addChildView(view)
   view.setBounds({ x: 0, y: 0, width: 1280, height: 800 })
 
-  const httpsResult = await loadOnce(view.webContents, HTTPS_URL)
-  let usedFallback = false
-  let last = httpsResult
-  if (!httpsResult.ok) {
-    usedFallback = true
-    last = await loadOnce(view.webContents, HTTP_URL)
-  }
+  const last = await loadOnce(view.webContents, HTTP_URL)
   const document = last.ok ? await waitForToken(view.webContents) : { title: last.title || '', bodyText: '' }
   emit({
     ok: last.ok && (document.title.includes(PAGE_TOKEN) || document.bodyText.includes(PAGE_TOKEN)),
-    usedFallback,
-    httpsError: httpsResult.ok ? '' : httpsResult.code,
     url: view.webContents.getURL(),
     title: document.title || view.webContents.getTitle(),
     bodyText: document.bodyText.slice(0, 240),

@@ -163,8 +163,7 @@ const normalizeBrowserUseOutput = (
       return {
         action: 'navigate',
         tabId: result.tabId,
-        page: toBrowserUsePageJson(result.page),
-        ...(result.fallback ? { fallback: result.fallback } : {})
+        page: toBrowserUsePageJson(result.page)
       }
     case 'list_tabs':
       return {

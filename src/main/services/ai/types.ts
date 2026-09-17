@@ -172,7 +172,6 @@ export type BrowserUseResult =
       tabId: string
       page: BrowserUsePage
       result: null
-      fallback?: 'https-to-http'
     }
   | {
       action: 'list_tabs'

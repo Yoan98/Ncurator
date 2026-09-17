@@ -677,9 +677,7 @@ export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
   if (action === 'navigate') {
     const title = readString(page.title)
     const url = readString(page.url)
-    const note =
-      readString(obj.note) ||
-      (readString(obj.fallback) === 'https-to-http' ? '已从 https 回退到 http。' : '')
+    const note = readString(obj.note)
     return renderProse([
       'Browser navigate completed.',
       tabLine,

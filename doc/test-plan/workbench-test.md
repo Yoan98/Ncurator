@@ -437,25 +437,25 @@ pnpm test:update:e2e
 - Why：`WebContentsView` 由 Main 管理并覆盖在 Renderer 上方；生命周期或 bounds 同步错误会导致白屏、原生视图遮挡菜单、恢复后尺寸跳变，或切换伙伴时误销毁仍在运行的网页。分栏拖拽期间高频更新 bounds 会导致 Windows DirectComposition 下原生视图原点跑偏且旧画面错位遮挡对话区，松手时的 CSS transition 补间动画会导致半秒滞后。分栏拖拽期间采用静态快照占位并阻断高频 bounds，松手瞬时无补间对齐并恢复原生 View，确保拖拽期间平滑跟手、松手无缝切回。伙伴切换后浏览器呈现依赖 `contentPanelCollapsed` 值变化触发的恢复，若前后两个伙伴面板均展开（值不变）会漏掉重新呈现，表现为地址栏正常但网页白屏。`setBounds` 在 bounds 未变时跳过 `applyAllVisibility`、或后台加载完成后挂载未强制重绘，也会出现同样白屏；此时加号 / 三点菜单还可能因 `WebContentsView` 抢焦点被立刻关掉。
 - How：通过 Settings UI 添加文件地址并创建伙伴；在 Workbench UI 新建浏览器 Tab，导航真实本地网页并调整缩放；折叠、切换伙伴后验证运行期状态，再正常重启同一用户目录，验证 URL、历史和缩放恢复；最后分别通过关闭 Tab 和删除所属伙伴销毁浏览器。伙伴切换分支覆盖两种路径：新建伙伴（面板默认折叠）后切回，以及切到面板已展开的伙伴后切回，并直接断言主窗口 `contentView.children` 原生挂载计数恢复到 1 而非仅依赖像素采样。
 - Oracle：运行期折叠或切换伙伴不销毁 WebContents；无论切走的伙伴面板是否展开，切回后同一 `webContents.id` 必须重新挂载到主窗口并恢复显示；重启后重新创建 WebContents 并恢复 URL、历史和缩放，但不要求表单、滚动内存或 JS 连续；关闭 Tab 或删除所属伙伴后状态清理；地址栏右侧“将打开外部浏览器”按钮可见且更多菜单不再含系统浏览器入口，对齐 `WB-PANEL-001-AC5`、`WB-PANEL-004-AC8`、`WB-PANEL-004-AC14`、`WB-PANEL-004-AC12`。
-- Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。网址协议回退与系统错误页由 `browser-navigate-scheme-fallback` 覆盖。
+- Not：不验证公网网页、Stagehand 操作或最终 AI 回答；这些由 `browser-use-task-panel` 覆盖。网址协议、系统错误页与加载超时由 `browser-navigate-error-page` 覆盖。
 
-#### `browser-navigate-scheme-fallback`
-
-- 测试类型：`e2e`
-- What：内置浏览器对未写协议的地址先 https 再 http；写明 https 失败停在馆长统一错误页并保留 tabId；加载中地址栏底边可见进度线；AI `navigate` 等到真实内容再成功，失败把 `Error` 与 `tabId` 一并返回。
-- Why：不少官网 https 会直接掐连接，Chrome 会回退到 http；馆长若只加 https 或把空白验证页当成打开成功，用户看到白屏、模型也会盲目新开标签。WebContentsView 不会画出 Chrome 外壳那张 `chrome-error://` 页，必须自己写入错误文档。
-- How：启动只提供 HTTP 的本地页面（https 打到同一端口会 TLS 失败）。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，加载中可见浅蓝色底线，等到页面口令出现且地址栏是 http；再对同一类地址走 AI `navigate`；随后对该 Tab 走 `screenshot`（Stagehand 连本机 CDP 桥）验证按需挂桥；另一次写明 `https://127.0.0.1:1/path`（未监听端口，连接被拒绝），确认错误页标题为「无法访问此站点」、含「无法加载」与 `ERR_` 错误码、地址栏仍是 https、工具失败含 `tabId`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
-- Oracle：裸主机最终打开 http 页且含口令，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC9`；加载中可见地址栏底边浅蓝色进度线，对齐 `WB-PANEL-004-AC19`；对该 Tab 截图成功即证明 Stagehand 走按需 CDP 桥，对齐 `WB-PANEL-004-AC10`；明确 https 不回退 http，地址栏无 `chrome-error://`，错误页为馆长统一 Chrome 式「无法访问此站点」页并含错误码，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。Playwright 驱动窗口会自带 `--remote-debugging-port`，不作为本 case 失败条件。
-- Not：不打公网专利站；不跑 live 模型整轮问答；不验证 Stagehand 填表。公网样例见 `browser-navigate-cnipa-http-fallback` 与 `patent-search`。
-
-#### `browser-navigate-cnipa-http-fallback`
+#### `browser-navigate-error-page`
 
 - 测试类型：`e2e`
-- What：地址栏只填 `epub.cnipa.gov.cn` 时，https 被掐后回退 http，打开中国专利公布公告首页。
-- Why：这是触发协议回退与反爬空页的真实站点；本地 HTTP 桩无法代替这台服务器的连接关闭行为。
-- How：Workbench 打开浏览器 Tab，输入裸主机，等待地址栏变成 `http://epub.cnipa.gov.cn`，加载中可见浅蓝色进度线。真实首页正文由无进程级调试口的 unit host `cnipa-http-fallback.host` 覆盖，因为 Playwright 驱动窗口会自带调试口，专利站可能吐空白页。
-- Oracle：最终 URL 为 http 且不是 `chrome-error://`，不是馆长「无法访问此站点」错误页，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC16`、`WB-PANEL-004-AC19`。
-- Not：不搜索专利、不跑 live 模型；检索样例仍由 `patent-search` 覆盖。首页正文与无调试口由 unit `cnipa-http-fallback.host` 覆盖。
+- What：地址栏输入什么协议就打开什么；裸主机只补 https 且失败不改 http；写明 http 能打开真实页；写明 https 失败停在馆长统一错误页并保留 tabId；本地连接一直不返回时 30 秒超时也画出 `ERR_TIMED_OUT` 错误页；加载中地址栏底边可见进度线；AI `navigate` 等到真实内容再成功，失败把 `Error` 与 `tabId` 一并返回。
+- Why：用户倾向访问啥就是啥，不自动 https→http。WebContentsView 不会画出 Chrome 外壳那张 `chrome-error://` 页；有的站点 https 会掐连接，有的会一直转圈，都必须落到同一张馆长错误页，不能停在白屏。
+- How：启动只提供 HTTP 的本地页面，另设 `/hang` 接受连接但不返回。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，确认停在 https 错误页且没有改成 http；再填明确 `http://…` ，加载中可见浅蓝色底线，等到页面口令出现；再对同一 http 地址走 AI `navigate` 与 `screenshot`（Stagehand 连本机 CDP 桥）；另一次写明 `https://127.0.0.1:1/path`（未监听端口，连接被拒绝），确认错误页标题为「无法访问此站点」、含「无法加载」与 `ERR_` 错误码、地址栏仍是 https、工具失败含 `tabId`；最后打开 `/hang`，等到超过导航超时后出现 `ERR_TIMED_OUT`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
+- Oracle：裸主机保持 https 并出现错误页，对齐 `WB-PANEL-004-AC15`；明确 http 打开含口令的页并对齐 `WB-PANEL-004-AC9`；加载中可见地址栏底边浅蓝色进度线，错误页出现后进度线必须淡出，对齐 `WB-PANEL-004-AC19`；对该 Tab 截图成功即证明 Stagehand 走按需 CDP 桥，对齐 `WB-PANEL-004-AC10`；明确 https 失败与加载超时均无 `chrome-error://`，错误页为馆长统一 Chrome 式「无法访问此站点」页并含错误码，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。Playwright 驱动窗口会自带 `--remote-debugging-port`，不作为本 case 失败条件。
+- Not：不打公网专利站；不跑 live 模型整轮问答；不验证 Stagehand 填表。公网样例见 `browser-navigate-cnipa-https` 与 `patent-search`。
+
+#### `browser-navigate-cnipa-https`
+
+- 测试类型：`e2e`
+- What：地址栏打开 `https://epub.cnipa.gov.cn/` 时保持 https，失败或超时时画出馆长错误页，不自动改 http。
+- Why：这是会掐 https 或长时间转圈的真实站点；去掉协议降级后，用户必须看到错误页而不是白屏进度条。
+- How：Workbench 打开浏览器 Tab，输入明确 https 地址，加载中可见浅蓝色进度线，等到错误页或真实首页，且地址栏仍是 https。明确 http 打开真实首页由无进程级调试口的 unit host `cnipa-http.host` 覆盖，因为 Playwright 驱动窗口会自带调试口，专利站 http 可能吐空白页。
+- Oracle：最终 URL 仍是 https，不是 `chrome-error://`，不是自动改成的 http；若打不开则出现馆长「无法访问此站点」页（含 `ERR_`，超时则为 `ERR_TIMED_OUT`）且进度线淡出，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC16`、`WB-PANEL-004-AC19`。
+- Not：不搜索专利、不跑 live 模型；检索样例仍由 `patent-search` 覆盖。明确 http 首页与无调试口由 unit `cnipa-http.host` 覆盖。
 
 #### `web-read-from-search-result`
 

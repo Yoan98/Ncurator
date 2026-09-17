@@ -4,7 +4,6 @@ import {
   formatNavigateNetError,
   isBlankDocument,
   isAbortedNetError,
-  isHttpsFallbackWorthy,
   isInternalBrowserErrorUrl,
   isNetErrorDocument,
   parseNavigatePlan,
@@ -13,32 +12,27 @@ import {
 } from '../../../../src/main/services/browser/navigatePlan'
 
 describe('navigatePlan', () => {
-  it('tries https then http when the url has no scheme', () => {
+  it('fills https only when the url has no scheme', () => {
     expect(parseNavigatePlan('epub.cnipa.gov.cn')).toEqual({
       mode: 'bare',
-      urls: ['https://epub.cnipa.gov.cn/', 'http://epub.cnipa.gov.cn/']
+      url: 'https://epub.cnipa.gov.cn/'
     })
   })
 
-  it('keeps an explicit http or https url without fallback', () => {
-    expect(parseNavigatePlan('http://epub.cnipa.gov.cn/').urls).toEqual(['http://epub.cnipa.gov.cn/'])
+  it('keeps an explicit http or https url without changing the protocol', () => {
+    expect(parseNavigatePlan('http://epub.cnipa.gov.cn/')).toEqual({
+      mode: 'http',
+      url: 'http://epub.cnipa.gov.cn/'
+    })
     expect(parseNavigatePlan('https://epub.cnipa.gov.cn/')).toEqual({
       mode: 'https',
-      urls: ['https://epub.cnipa.gov.cn/']
+      url: 'https://epub.cnipa.gov.cn/'
     })
   })
 
   it('rejects empty and non-http schemes', () => {
     expect(() => parseNavigatePlan('')).toThrow('请输入网址')
     expect(() => parseNavigatePlan('ftp://example.com')).toThrow('内置浏览器只支持 http/https 地址')
-  })
-
-  it('falls back to http only for connection and tls failures', () => {
-    expect(isHttpsFallbackWorthy('ERR_CONNECTION_CLOSED')).toBe(true)
-    expect(isHttpsFallbackWorthy(-100)).toBe(true)
-    expect(isHttpsFallbackWorthy('ERR_SSL_PROTOCOL_ERROR')).toBe(true)
-    expect(isHttpsFallbackWorthy('ERR_ABORTED')).toBe(false)
-    expect(isHttpsFallbackWorthy('ERR_NAME_NOT_RESOLVED')).toBe(false)
   })
 
   it('treats chrome error pages and Chromium URL-as-title documents as unusable', () => {
@@ -77,69 +71,65 @@ describe('navigatePlan', () => {
         bodyText: 'ERR_CONNECTION_REFUSED 重新加载'
       })
     ).toBe(true)
+    expect(
+      isNetErrorDocument({
+        url: 'https://epub.cnipa.gov.cn/',
+        title: '无法访问此站点',
+        bodyText: 'ERR_TIMED_OUT 重新加载'
+      })
+    ).toBe(true)
   })
 
-  it('paints an embedded error page only for main-frame failures that are not aborted and cannot fall back', () => {
+  it('paints an embedded error page only for main-frame failures that are not aborted', () => {
     expect(
       shouldPaintEmbeddedNetError({
         isMainFrame: true,
         errorCode: -100,
-        description: 'ERR_CONNECTION_CLOSED',
-        canFallbackToHttp: false
+        description: 'ERR_CONNECTION_CLOSED'
       })
     ).toBe(true)
     expect(
       shouldPaintEmbeddedNetError({
         isMainFrame: true,
-        errorCode: -100,
-        description: 'ERR_CONNECTION_CLOSED',
-        canFallbackToHttp: true
+        errorCode: -7,
+        description: 'ERR_TIMED_OUT'
       })
-    ).toBe(false)
+    ).toBe(true)
     expect(
       shouldPaintEmbeddedNetError({
         isMainFrame: true,
         errorCode: -3,
-        description: 'ERR_ABORTED',
-        canFallbackToHttp: false
+        description: 'ERR_ABORTED'
       })
     ).toBe(false)
     expect(
       shouldPaintEmbeddedNetError({
         isMainFrame: false,
         errorCode: -102,
-        description: 'ERR_CONNECTION_REFUSED',
-        canFallbackToHttp: false
+        description: 'ERR_CONNECTION_REFUSED'
       })
     ).toBe(false)
   })
 
   it('maps numeric net error codes', () => {
     expect(parseNetErrorCode(-102)).toBe('ERR_CONNECTION_REFUSED')
+    expect(parseNetErrorCode(-7)).toBe('ERR_TIMED_OUT')
     expect(isAbortedNetError(-3, 'net::ERR_ABORTED')).toBe(true)
   })
 
-  it('formats net errors for the model', () => {
+  it('formats net errors for the model without suggesting http fallback', () => {
     expect(
       formatNavigateNetError({
         code: parseNetErrorCode("ERR_CONNECTION_CLOSED (-100) loading 'https://epub.cnipa.gov.cn/'"),
-        url: 'https://epub.cnipa.gov.cn/',
-        httpsUrl: 'https://epub.cnipa.gov.cn/',
-        httpUrl: 'http://epub.cnipa.gov.cn/',
-        mode: 'bare',
-        exhaustedFallback: true
+        url: 'https://epub.cnipa.gov.cn/'
       })
-    ).toBe(
-      '无法访问此站点（ERR_CONNECTION_CLOSED）。https://epub.cnipa.gov.cn/ 与 http://epub.cnipa.gov.cn/ 均无法打开。'
-    )
+    ).toBe('无法访问此站点（ERR_CONNECTION_CLOSED）。https://epub.cnipa.gov.cn/ 连接被服务器断开。')
     expect(
       formatNavigateNetError({
-        code: 'ERR_CONNECTION_CLOSED',
-        url: 'https://epub.cnipa.gov.cn/',
-        mode: 'https',
-        exhaustedFallback: false
+        code: 'ERR_TIMED_OUT',
+        url: 'https://epub.cnipa.gov.cn/'
       })
-    ).toContain('可改试 http。')
+    ).toBe('无法访问此站点（ERR_TIMED_OUT）。https://epub.cnipa.gov.cn/ 连接被服务器断开。')
     expect(BLANK_PAGE_ERROR).toContain('安全验证')
   })
 })

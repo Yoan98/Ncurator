@@ -59,7 +59,6 @@ export type BrowserUseNavigateOutput = {
   action: 'navigate'
   tabId: string
   page: BrowserUsePage
-  fallback?: 'https-to-http'
 }
 
 export type BrowserUseListTabsOutput = {

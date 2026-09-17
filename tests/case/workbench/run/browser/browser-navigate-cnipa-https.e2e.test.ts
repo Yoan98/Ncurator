@@ -7,9 +7,11 @@ import {
   setupWorkbenchWithTempWorkspace,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
+import { EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS } from '../../../../../src/main/services/browser/constants'
 
-const CASE_ID = 'browser-navigate-cnipa-http-fallback'
+const CASE_ID = 'browser-navigate-cnipa-https'
 const TARGET_HOST = 'epub.cnipa.gov.cn'
+const TARGET_URL = `https://${TARGET_HOST}/`
 const PAGE_TOKEN = '中国专利公布公告'
 
 describe('workbench browser cnipa e2e', () => {
@@ -22,7 +24,7 @@ describe('workbench browser cnipa e2e', () => {
         suite: 'run',
         groups: ['browser'],
         description:
-          '公网专利公布公告裸主机先 https 失败再回退 http，打开真实公告首页而不是馆长错误页。',
+          '公网专利公布公告明确 https 不改 http；打不开或超时时停在馆长统一错误页，而不是白屏。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'exclusive',
@@ -32,7 +34,7 @@ describe('workbench browser cnipa e2e', () => {
           const { page } = runtime
           await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
-            workspaceName: '专利公布协议回退',
+            workspaceName: '专利公布 https',
             configureModel: false
           })
 
@@ -56,7 +58,7 @@ describe('workbench browser cnipa e2e', () => {
 
           const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
           const addressInput = browserPanel.getByRole('textbox', { name: /浏览器地址/u })
-          await addressInput.fill(TARGET_HOST)
+          await addressInput.fill(TARGET_URL)
           await addressInput.press('Enter')
 
           const progress = browserPanel.locator(`[data-testid="${workbenchSelectors.browserProgress}"]`)
@@ -79,10 +81,10 @@ describe('workbench browser cnipa e2e', () => {
             await page.waitForTimeout(50)
           }
           if (!sawProgress) {
-            throw new Error('address bar progress line did not appear while loading CNIPA')
+            throw new Error('address bar progress line did not appear while loading CNIPA https')
           }
 
-          const deadline = Date.now() + 60_000
+          const deadline = Date.now() + EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS + 12_000
           let finalUrl = ''
           let title = ''
           let bodyText = ''
@@ -96,7 +98,9 @@ describe('workbench browser cnipa e2e', () => {
                 .getAllWebContents()
                 .find(
                   (candidate) =>
-                    !candidate.isDestroyed() && candidate.getURL().includes('epub.cnipa.gov.cn')
+                    !candidate.isDestroyed() &&
+                    (candidate.getURL().includes('epub.cnipa.gov.cn') ||
+                      candidate.getTitle().includes('无法访问此站点'))
                 )
               if (!contents) return null
               let text = ''
@@ -117,36 +121,45 @@ describe('workbench browser cnipa e2e', () => {
             title = snapshot?.title || ''
             bodyText = snapshot?.bodyText || ''
             const visible = `${title} ${bodyText}`
-            if (
-              finalUrl.startsWith('http://') &&
+            const stayedHttps =
+              finalUrl.startsWith('https://') &&
               finalUrl.includes(TARGET_HOST) &&
-              !finalUrl.includes('chrome-error://') &&
-              !visible.includes('无法访问此站点')
-            ) {
+              !finalUrl.includes('chrome-error://')
+            const isErrorPage =
+              visible.includes('无法访问此站点') && /ERR_[A-Z0-9_]+/u.test(visible)
+            const isHomepage = visible.includes(PAGE_TOKEN)
+            if (stayedHttps && (isErrorPage || isHomepage)) {
               runtime.signal({
-                name: 'browser-navigate-cnipa-http',
-                message: '专利公布公告已回退到 http',
-                data: { url: finalUrl, title, sawProgress, hasHomepage: visible.includes(PAGE_TOKEN) }
+                name: 'browser-navigate-cnipa-https',
+                message: isErrorPage
+                  ? '专利公布公告 https 停在馆长错误页，没有改成 http'
+                  : '专利公布公告 https 打开了首页，没有改成 http',
+                data: { url: finalUrl, title, sawProgress, isErrorPage, isHomepage }
               })
               return {
                 url: finalUrl,
                 title,
+                bodyText,
                 sawProgress,
-                hasHomepage: visible.includes(PAGE_TOKEN)
+                isErrorPage,
+                isHomepage
               }
             }
             await page.waitForTimeout(400)
           }
           throw new Error(
-            `CNIPA did not fall back to http homepage, url=${finalUrl || '(empty)'} title=${title} body=${bodyText.slice(0, 180)}`
+            `CNIPA https did not settle on error page or homepage, url=${finalUrl || '(empty)'} title=${title} body=${bodyText.slice(0, 180)}`
           )
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.url.startsWith(`http://${TARGET_HOST}`) && result.sawProgress,
+            result.url.startsWith(`https://${TARGET_HOST}`) &&
+              result.sawProgress &&
+              !result.url.includes('chrome-error://') &&
+              (result.isErrorPage || result.isHomepage),
             {
-              name: 'browser-navigate-cnipa-http-fallback',
-              message: '裸主机打开专利公布公告时 https 失败后回退 http',
+              name: 'browser-navigate-cnipa-https',
+              message: '明确 https 打开专利公布公告时不降级 http，失败或超时画出错误页',
               data: result
             }
           )

@@ -25,7 +25,6 @@ import {
   formatNavigateNetError,
   isBlankDocument,
   isAbortedNetError,
-  isHttpsFallbackWorthy,
   isInternalBrowserErrorUrl,
   isNetErrorDocument,
   parseNavigatePlan,
@@ -58,6 +57,7 @@ type BrowserTabRuntime = {
   restoring: boolean
   navGeneration: number
   lastNavigateRaw: string
+  pendingNavigateUrl: string
   showingNetError: boolean
 }
 
@@ -174,10 +174,10 @@ const loadUrlOnce = async (
   const failedCode = await raceAbort(
     new Promise<string | null>((resolve) => {
       let settled = false
-      const timeout = setTimeout(
-        () => finish(parseNetErrorCode('ERR_TIMED_OUT')),
-        EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS
-      )
+      const timeout = setTimeout(() => {
+        if (!contents.isDestroyed()) contents.stop()
+        finish(parseNetErrorCode('ERR_TIMED_OUT'))
+      }, EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS)
       const cleanup = (): void => {
         clearTimeout(timeout)
         contents.removeListener('did-fail-load', onFail)
@@ -226,11 +226,15 @@ const paintNetErrorDocument = async (
   isCurrent: () => boolean = () => true
 ): Promise<void> => {
   if (contents.isDestroyed() || !isCurrent()) return
+  if (contents.isLoadingMainFrame()) contents.stop()
   const html = buildNetErrorDocumentHtml(code, attemptedUrl)
   if (contents.isDestroyed() || !isCurrent()) return
   await contents
     .executeJavaScript(`document.open();document.write(${JSON.stringify(html)});document.close();`)
     .catch(() => undefined)
+  if (!contents.isDestroyed() && isCurrent() && contents.isLoadingMainFrame()) {
+    contents.stop()
+  }
 }
 
 const inspectDocument = async (contents: WebContents): Promise<DocumentInspection> => {
@@ -282,71 +286,41 @@ const waitForUsableDocument = async (
   return last
 }
 
-const formatPlanNetError = (plan: NavigatePlan, code: string, url: string, exhaustedFallback: boolean): string =>
-  formatNavigateNetError({
-    code,
-    url,
-    httpsUrl: plan.urls[0],
-    httpUrl: plan.urls[1],
-    mode: plan.mode,
-    exhaustedFallback
-  })
-
 const loadNavigatePlan = async (
   contents: WebContents,
   plan: NavigatePlan,
   signal?: AbortSignal
 ): Promise<
-  | { ok: true; url: string; title: string; fallback?: 'https-to-http' }
+  | { ok: true; url: string; title: string }
   | { ok: false; error: string; displayUrl: string }
 > => {
-  let lastCode = 'ERR_FAILED'
-  let lastUrl = plan.urls[0] || ''
-  for (let index = 0; index < plan.urls.length; index += 1) {
-    const url = plan.urls[index]
-    if (!url) continue
-    lastUrl = url
-    const failedCode = await loadUrlOnce(contents, url, signal)
-    const canFallback =
-      index === 0 &&
-      plan.urls.length > 1 &&
-      typeof failedCode === 'string' &&
-      isHttpsFallbackWorthy(failedCode)
-    if (failedCode) {
-      lastCode = failedCode
-      if (canFallback) continue
-      await paintNetErrorDocument(contents, failedCode, url)
-      return {
-        ok: false,
-        error: formatPlanNetError(plan, failedCode, url, index > 0),
-        displayUrl: url
-      }
-    }
-    const document = await waitForUsableDocument(contents, signal)
-    if (document.status === 'net-error') {
-      lastCode = parseNetErrorCode(document.title) || 'ERR_FAILED'
-      if (index === 0 && plan.urls.length > 1) continue
-      await paintNetErrorDocument(contents, lastCode, url)
-      return {
-        ok: false,
-        error: formatPlanNetError(plan, lastCode, url, index > 0),
-        displayUrl: url
-      }
-    }
-    if (document.status === 'blank') {
-      return { ok: false, error: BLANK_PAGE_ERROR, displayUrl: url }
-    }
+  const url = plan.url
+  const failedCode = await loadUrlOnce(contents, url, signal)
+  if (failedCode) {
+    await paintNetErrorDocument(contents, failedCode, url)
     return {
-      ok: true,
-      url: document.url,
-      title: document.title,
-      ...(index > 0 ? { fallback: 'https-to-http' as const } : {})
+      ok: false,
+      error: formatNavigateNetError({ code: failedCode, url }),
+      displayUrl: url
     }
   }
+  const document = await waitForUsableDocument(contents, signal)
+  if (document.status === 'net-error') {
+    const lastCode = parseNetErrorCode(document.title) || 'ERR_FAILED'
+    await paintNetErrorDocument(contents, lastCode, url)
+    return {
+      ok: false,
+      error: formatNavigateNetError({ code: lastCode, url }),
+      displayUrl: url
+    }
+  }
+  if (document.status === 'blank') {
+    return { ok: false, error: BLANK_PAGE_ERROR, displayUrl: url }
+  }
   return {
-    ok: false,
-    error: formatPlanNetError(plan, lastCode, lastUrl, plan.urls.length > 1),
-    displayUrl: lastUrl
+    ok: true,
+    url: document.url,
+    title: document.title
   }
 }
 
@@ -499,6 +473,7 @@ export class BrowserEmbedService implements BrowserUseService {
       restoring: false,
       navGeneration: 0,
       lastNavigateRaw: '',
+      pendingNavigateUrl: '',
       showingNetError: false
     }
     this.tabs.set(persisted.id, runtime)
@@ -636,20 +611,36 @@ export class BrowserEmbedService implements BrowserUseService {
     const runtime = this.requireTab(tabId || this.activeTabId)
     const plan = parseNavigatePlan(rawUrl)
     const view = await this.ensureReady(runtime)
-    const primaryUrl = plan.urls[0]
-    if (!primaryUrl) return
+    const primaryUrl = plan.url
     runtime.navGeneration += 1
     const generation = runtime.navGeneration
     runtime.lastNavigateRaw = rawUrl
+    runtime.pendingNavigateUrl = primaryUrl
     runtime.showingNetError = false
     runtime.persisted.url = primaryUrl
     runtime.persisted.updatedAt = Date.now()
     this.stateStore.save(runtime.persisted)
     this.emitState(runtime)
     const contents = view.webContents
-    const fallbackUrl = plan.urls[1]
-    let usedFallback = false
     const isCurrent = (): boolean => runtime.navGeneration === generation
+    let loadTimeout: ReturnType<typeof setTimeout> | null = null
+    const cleanup = (): void => {
+      if (loadTimeout) {
+        clearTimeout(loadTimeout)
+        loadTimeout = null
+      }
+      contents.removeListener('did-fail-load', onFail)
+      contents.removeListener('did-finish-load', onFinish)
+    }
+    const paintCurrentError = (code: string): void => {
+      runtime.showingNetError = true
+      this.emitState(runtime)
+      void paintNetErrorDocument(contents, code, runtime.persisted.url || primaryUrl, isCurrent).then(
+        () => {
+          if (isCurrent()) this.emitState(runtime)
+        }
+      )
+    }
     const onFail = (
       _event: Electron.Event,
       code: number,
@@ -661,34 +652,17 @@ export class BrowserEmbedService implements BrowserUseService {
         cleanup()
         return
       }
-      const canFallback = Boolean(fallbackUrl) && !usedFallback && isHttpsFallbackWorthy(description || code)
       if (
         !shouldPaintEmbeddedNetError({
           isMainFrame,
           errorCode: code,
-          description,
-          canFallbackToHttp: canFallback
+          description
         })
       ) {
-        if (!isMainFrame || isAbortedNetError(code, description)) return
-        if (canFallback && fallbackUrl) {
-          usedFallback = true
-          runtime.persisted.url = fallbackUrl
-          runtime.persisted.updatedAt = Date.now()
-          this.stateStore.save(runtime.persisted)
-          this.emitState(runtime)
-          startWebContentsUrl(contents, fallbackUrl)
-        }
         return
       }
       cleanup()
-      runtime.showingNetError = true
-      void paintNetErrorDocument(
-        contents,
-        parseNetErrorCode(description || String(code)),
-        runtime.persisted.url || primaryUrl,
-        isCurrent
-      )
+      paintCurrentError(parseNetErrorCode(description || String(code)))
     }
     const onFinish = (): void => {
       if (!isCurrent()) {
@@ -698,10 +672,31 @@ export class BrowserEmbedService implements BrowserUseService {
       if (isInternalBrowserErrorUrl(contents.getURL())) return
       cleanup()
     }
-    const cleanup = (): void => {
-      contents.removeListener('did-fail-load', onFail)
-      contents.removeListener('did-finish-load', onFinish)
-    }
+    loadTimeout = setTimeout(() => {
+      if (!isCurrent() || contents.isDestroyed() || runtime.showingNetError) {
+        cleanup()
+        return
+      }
+      if (!contents.isLoadingMainFrame()) {
+        cleanup()
+        return
+      }
+      cleanup()
+      runtime.showingNetError = true
+      this.emitState(runtime)
+      contents.stop()
+      void (async () => {
+        await sleep(50)
+        if (!isCurrent() || contents.isDestroyed()) return
+        await paintNetErrorDocument(
+          contents,
+          'ERR_TIMED_OUT',
+          runtime.persisted.url || primaryUrl,
+          isCurrent
+        )
+        if (isCurrent()) this.emitState(runtime)
+      })()
+    }, EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS)
     contents.on('did-fail-load', onFail)
     contents.on('did-finish-load', onFinish)
     startWebContentsUrl(contents, primaryUrl)
@@ -850,7 +845,8 @@ export class BrowserEmbedService implements BrowserUseService {
       runtime.showingNetError = false
       const view = await this.ensureReady(runtime)
       if (input.abortSignal?.aborted) throw createCancelledError()
-      const primaryUrl = plan.urls[0] || ''
+      const primaryUrl = plan.url
+      runtime.pendingNavigateUrl = primaryUrl
       runtime.persisted.url = primaryUrl
       runtime.persisted.updatedAt = Date.now()
       this.stateStore.save(runtime.persisted)
@@ -872,8 +868,7 @@ export class BrowserEmbedService implements BrowserUseService {
           action: 'navigate',
           tabId,
           page: toBrowserUsePage(outcome.url, outcome.title),
-          result: null,
-          ...(outcome.fallback ? { fallback: outcome.fallback } : {})
+          result: null
         }
       } catch (error) {
         if (isCancelledError(error) || input.abortSignal?.aborted) throw createCancelledError()
@@ -958,6 +953,7 @@ export class BrowserEmbedService implements BrowserUseService {
         restoring: false,
         navGeneration: 0,
         lastNavigateRaw: persisted.url || '',
+        pendingNavigateUrl: '',
         showingNetError: false
       })
     }
@@ -1134,7 +1130,16 @@ export class BrowserEmbedService implements BrowserUseService {
     const nextUrl = contents.getURL()
     // Keep the optimistic navigate target until webContents reports a real URL.
     // Chromium error pages use chrome-error://; the address bar should keep the attempted site.
-    if (nextUrl && !isInternalBrowserErrorUrl(nextUrl)) runtime.persisted.url = nextUrl
+    if (nextUrl && !isInternalBrowserErrorUrl(nextUrl)) {
+      if (runtime.pendingNavigateUrl) {
+        if (nextUrl === runtime.pendingNavigateUrl) {
+          runtime.persisted.url = nextUrl
+          runtime.pendingNavigateUrl = ''
+        }
+      } else {
+        runtime.persisted.url = nextUrl
+      }
+    }
     runtime.persisted.title = contents.getTitle().trim() || undefined
     // Zoom is owned by changeZoom / restoreRuntime. Do not mirror getZoomFactor() here:
     // navigation restore briefly reports 1.0 and would wipe the persisted zoom.
@@ -1170,8 +1175,15 @@ export class BrowserEmbedService implements BrowserUseService {
     const history = contents?.navigationHistory
     const persistedHistory = runtime.persisted.history
     const liveUrl = contents?.getURL() || ''
-    const url =
-      liveUrl && !isInternalBrowserErrorUrl(liveUrl) ? liveUrl : runtime.persisted.url || liveUrl
+    const preferPersisted =
+      runtime.showingNetError ||
+      Boolean(runtime.pendingNavigateUrl) ||
+      Boolean(contents?.isLoadingMainFrame())
+    const url = preferPersisted
+      ? runtime.persisted.url || liveUrl
+      : liveUrl && !isInternalBrowserErrorUrl(liveUrl)
+        ? liveUrl
+        : runtime.persisted.url || liveUrl
     return {
       id: runtime.persisted.id,
       ownerId: runtime.persisted.ownerId,
@@ -1185,7 +1197,7 @@ export class BrowserEmbedService implements BrowserUseService {
       canGoForward:
         history?.canGoForward() ||
         Boolean(persistedHistory && persistedHistory.index < persistedHistory.entries.length - 1),
-      isLoading: contents?.isLoadingMainFrame() || false
+      isLoading: runtime.showingNetError ? false : contents?.isLoadingMainFrame() || false
     }
   }
 

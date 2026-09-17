@@ -53,15 +53,14 @@ const runHost = async (): Promise<Record<string, unknown>> => {
   return payload
 }
 
-describe('cnipa http fallback host', () => {
+describe('cnipa explicit http host', () => {
   it(
-    'opens 中国专利公布公告 over http without a process-level debug port',
+    'opens 中国专利公布公告 over explicit http without a process-level debug port',
     async () => {
       const result = await runHost()
       expect(result.hasRemoteDebuggingPort).toBe(false)
       expect(result.hasDevToolsActivePort).toBe(false)
       expect(result.hasDevToolsActivePortAfterExit).toBe(false)
-      expect(result.usedFallback).toBe(true)
       expect(String(result.url || '')).toMatch(/^http:\/\/epub\.cnipa\.gov\.cn\/?/)
       expect(result.ok).toBe(true)
       expect(`${String(result.title || '')} ${String(result.bodyText || '')}`).toContain('中国专利公布公告')
