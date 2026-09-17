@@ -141,6 +141,13 @@ const decodeCwd = (encoded: string): string | null => {
 
 const isSessionClosed = (session: ManagedTerminalSession): boolean => session.status === 'closed'
 
+const MIN_WATCH_MS = 50
+
+const resolveWatchMs = (maxWaitSeconds: number | undefined, fallbackMs: number): number => {
+  if (typeof maxWaitSeconds !== 'number' || !Number.isFinite(maxWaitSeconds)) return fallbackMs
+  return Math.max(MIN_WATCH_MS, Math.trunc(maxWaitSeconds) * 1000)
+}
+
 export class TerminalSessionManager {
   private readonly sessions = new Map<string, ManagedTerminalSession>()
   private readonly completedCommandExitCodes = new Map<string, number>()
@@ -152,7 +159,7 @@ export class TerminalSessionManager {
   private readonly environment?: Record<string, string>
 
   public constructor(options: TerminalSessionManagerOptions = {}) {
-    this.yieldMs = Math.max(50, Number(options.yieldMs || 8000))
+    this.yieldMs = Math.max(MIN_WATCH_MS, Number(options.yieldMs || 8000))
     this.stopGraceMs = Math.max(50, Number(options.stopGraceMs || 2000))
     this.retainedScrollbackChars = Math.max(
       1024,
@@ -192,6 +199,7 @@ export class TerminalSessionManager {
     platform: AiRuntimePlatform
     runId: string
     command: string
+    maxWaitSeconds?: number
   }): Promise<TerminalCommandResult> {
     const session = await this.createSession({
       chatSessionId: input.chatSessionId,
@@ -241,7 +249,9 @@ export class TerminalSessionManager {
 
     await Promise.race([
       commandState.completion,
-      new Promise<void>((resolve) => setTimeout(resolve, this.yieldMs))
+      new Promise<void>((resolve) =>
+        setTimeout(resolve, resolveWatchMs(input.maxWaitSeconds, this.yieldMs))
+      )
     ])
 
     const completed = commandState.returnReason !== undefined

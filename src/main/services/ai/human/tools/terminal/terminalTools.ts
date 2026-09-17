@@ -220,6 +220,10 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
         execute: async (session) => {
           input.ctx.checkCancelled()
           const command = String(args.command || '').trim()
+          const maxWaitSeconds =
+            typeof args.maxWaitSeconds === 'number' && Number.isFinite(args.maxWaitSeconds)
+              ? Math.trunc(args.maxWaitSeconds)
+              : undefined
           if (!command) {
             const failure = buildFailure({ error: 'empty command' })
             session.fail(
@@ -295,7 +299,8 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               environment: input.ctx.humanRuntimeOverrides?.terminalEnvironment,
               platform: input.ctx.platform,
               runId: input.runId,
-              command
+              command,
+              maxWaitSeconds
             })
           } catch (error) {
             if (trackingStarted) input.ctx.discardTerminalCommandTracking(trackingId)

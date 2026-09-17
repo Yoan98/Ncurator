@@ -47,6 +47,29 @@ describe('ai unit terminal tool contract', () => {
     ).toBe(false)
   })
 
+  it('accepts optional maxWaitSeconds without teaching defaults or next steps', () => {
+    expect(TERMINAL_TOOL_SPECS[0]?.promptSpec.description).toBe(
+      '在用户本机终端执行命令。默认工作目录为用户主目录。'
+    )
+    expect(TERMINAL_RUN_SCHEMA.shape.maxWaitSeconds.description).toBe(
+      '本次调用最长盯着命令结束的秒数；到点后命令继续执行'
+    )
+    expect(
+      TERMINAL_RUN_SCHEMA.safeParse({
+        command: 'sleep 40; echo done',
+        commandExplanation: '等待页面就绪',
+        maxWaitSeconds: 40
+      }).success
+    ).toBe(true)
+    expect(
+      TERMINAL_RUN_SCHEMA.safeParse({
+        command: 'pwd',
+        commandExplanation: '查看当前目录',
+        maxWaitSeconds: 1.5
+      }).success
+    ).toBe(false)
+  })
+
   it('requires terminalId for terminal_read and accepts optional readEndPosition', () => {
     expect(TERMINAL_READ_SCHEMA.safeParse({ terminalId: 'term-1' }).success).toBe(true)
     expect(

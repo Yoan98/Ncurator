@@ -97,6 +97,60 @@ describe.skipIf(process.platform === 'win32')('terminal session manager', () => 
     expect(stopped.terminalStatus).toBe('closed')
   })
 
+  it('watches a command for maxWaitSeconds then yields without stopping it', async () => {
+    const manager = createManager(undefined, 2_000)
+    const root = await createRoot()
+    const startedAt = Date.now()
+    const running = await manager.run({
+      chatSessionId: 'chat-max-wait',
+      workspaceId: 'workspace-max-wait',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-max-wait',
+      command: 'sleep 10; printf WAIT_FINISHED\\n',
+      maxWaitSeconds: 1
+    })
+    const elapsedMs = Date.now() - startedAt
+
+    expect(running.returnReason).toBe('command_still_running')
+    expect(elapsedMs).toBeGreaterThanOrEqual(900)
+    expect(elapsedMs).toBeLessThan(1_800)
+
+    const stillRunning = await manager.read({
+      terminalId: running.terminalId,
+      chatSessionId: 'chat-max-wait',
+      workspaceId: 'workspace-max-wait'
+    })
+    expect(stillRunning.terminalStatus).toBe('running')
+    expect(stillRunning.output).not.toContain('WAIT_FINISHED')
+
+    const stopped = await manager.stop({
+      terminalId: running.terminalId,
+      chatSessionId: 'chat-max-wait',
+      workspaceId: 'workspace-max-wait',
+      closeTerminal: true
+    })
+    expect(stopped.terminalStatus).toBe('closed')
+  })
+
+  it('can watch longer than the session default until the command finishes', async () => {
+    const manager = createManager(undefined, 80)
+    const root = await createRoot()
+    const completed = await manager.run({
+      chatSessionId: 'chat-max-wait-finish',
+      workspaceId: 'workspace-max-wait-finish',
+      workspaceRootPath: root,
+      platform: 'macos',
+      runId: 'run-max-wait-finish',
+      command: 'sleep 0.2; printf done\\n',
+      maxWaitSeconds: 2
+    })
+
+    expect(completed.returnReason).toBe('command_completed')
+    expect(completed.exitCode).toBe(0)
+    expect(completed.output).toContain('done')
+  })
+
   it('uses deterministic UTF-8 for Chinese files even when the parent locale is invalid', async () => {
     const manager = createManager({ LANG: 'C', LC_ALL: 'C', LC_CTYPE: 'C' }, 1000)
     const root = await createRoot()
