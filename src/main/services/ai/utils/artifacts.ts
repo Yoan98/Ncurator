@@ -7,34 +7,9 @@ import type {
   AiFileArtifactRef,
   AiRunEvent,
   DocxApplyRecord,
-  FileChangesSummary,
-  JsonObject,
-  JsonValue
+  FileChangesSummary
 } from '../../../../shared/types'
 import type { ToolCallResult } from '../human/types'
-
-const isJsonObject = (value: JsonValue | undefined): value is JsonObject => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
-  return true
-}
-
-const readNonEmptyString = (input: JsonObject, key: string): string | undefined => {
-  const value = input[key]
-  if (typeof value !== 'string') return undefined
-  const trimmed = value.trim()
-  return trimmed.length > 0 ? trimmed : undefined
-}
-
-const readArtifactOperation = (
-  input: JsonObject,
-  key: string,
-  fallback: AiFileArtifactOperation
-): AiFileArtifactOperation => {
-  const value = input[key]
-  return value === 'created' || value === 'updated' || value === 'deleted' || value === 'renamed'
-    ? value
-    : fallback
-}
 
 const createFileArtifactRef = (input: {
   capability: AiFileArtifactRef['capability']
@@ -49,24 +24,6 @@ const createFileArtifactRef = (input: {
   operation: input.operation,
   applyId: input.applyId
 })
-
-const extractTerminalArtifacts = (result: ToolCallResult): AiArtifactRef[] => {
-  if (result.toolName !== 'terminal_run' || !isJsonObject(result.data)) return []
-  const rawArtifacts = result.data.artifacts
-  if (!Array.isArray(rawArtifacts)) return []
-  return rawArtifacts.flatMap((item) => {
-    if (!isJsonObject(item)) return []
-    const artifactPath = readNonEmptyString(item, 'path')
-    if (!artifactPath) return []
-    return [
-      createFileArtifactRef({
-        capability: 'terminal_exec',
-        artifactPath,
-        operation: readArtifactOperation(item, 'operation', 'created')
-      })
-    ]
-  })
-}
 
 const getArtifactKey = (artifact: AiArtifactRef): string =>
   `file:${artifact.path}:${artifact.applyId || ''}`
@@ -85,8 +42,7 @@ export const mergeArtifactRefs = (
   return Array.from(merged.values())
 }
 
-export const extractArtifactRefsFromToolResult = (result: ToolCallResult): AiArtifactRef[] =>
-  mergeArtifactRefs(extractTerminalArtifacts(result))
+export const extractArtifactRefsFromToolResult = (_result: ToolCallResult): AiArtifactRef[] => []
 
 export const extractArtifactRefsFromToolResults = (
   results: readonly ToolCallResult[]

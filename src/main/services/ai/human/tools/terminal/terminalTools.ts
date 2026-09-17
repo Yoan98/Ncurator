@@ -11,12 +11,10 @@ import {
   inspectTerminalOutputQuality,
   TERMINAL_UNUSABLE_OUTPUT_PLACEHOLDER
 } from './terminalExec'
-import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
-import { resolveTerminalTrackingCwd } from './resolveLeadingCommandCwd'
-import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
-import { createTerminalRunToolSpec, TERMINAL_READ_TOOL_SPEC } from './toolSpecs'
 import { mapTerminalReadStatus, mapTerminalRunStatus } from './terminalToolStatus'
 import { TERMINAL_MAX_CONCURRENT_SESSIONS } from './terminalConstants'
+import type { TerminalCapabilityToolsInput, TerminalCapabilityToolsRuntimeState } from './types'
+import { createTerminalRunToolSpec, TERMINAL_READ_TOOL_SPEC } from './toolSpecs'
 
 type PendingTerminalCommand = {
   terminalId: string
@@ -28,7 +26,6 @@ type PendingTerminalCommand = {
   stepIndex: number
   command: string
   cwd: string
-  trackingId?: string
   emitActivity: (activity: CapabilityActivityInput) => void
   finalized: boolean
   finalization?: Promise<void>
@@ -121,34 +118,6 @@ const emitTerminalStepFailed = (input: PendingTerminalCommand, error: string): v
   input.emitActivity({ actionType: 'terminal_exec', status: 'failed', summary: error })
 }
 
-const finishTerminalFileChangeTracking = async (pending: PendingTerminalCommand): Promise<void> => {
-  if (!pending.trackingId) return
-  try {
-    const records = await pending.ctx.finishTerminalCommandTracking(pending.trackingId)
-    records.forEach((record) => {
-      if (record.status !== 'applied') return
-      emitFileArtifactEvent({
-        ctx: pending.ctx,
-        runId: pending.runId,
-        taskId: pending.taskId,
-        capability:
-          record.capability === 'docx' || record.capability === 'text_file'
-            ? record.capability
-            : 'terminal_exec',
-        artifactPath: record.path,
-        operation: record.operation,
-        applyId: record.id,
-        changeCount: record.changeCount,
-        insertCount: record.insertCount,
-        deleteCount: record.deleteCount,
-        stepId: pending.stepId
-      })
-    })
-  } catch (error) {
-    console.error(`[TERMINAL] file change tracking failed for ${pending.command}:`, error)
-  }
-}
-
 const finalizeCommand = async (input: {
   commandId: string
   exitCode: number
@@ -159,7 +128,6 @@ const finalizeCommand = async (input: {
   if (pending.finalization) return await pending.finalization
   pending.finalized = true
   pending.finalization = (async () => {
-    await finishTerminalFileChangeTracking(pending)
     emitTerminalStepCompleted(pending, input.exitCode, input.executionStatus || 'completed')
     pendingCommands.delete(input.commandId)
   })()
@@ -172,7 +140,6 @@ const failCommand = async (commandId: string, error: unknown): Promise<void> => 
   if (pending.finalization) return await pending.finalization
   pending.finalized = true
   pending.finalization = (async () => {
-    await finishTerminalFileChangeTracking(pending)
     emitTerminalStepFailed(pending, error instanceof Error ? error.message : String(error))
     pendingCommands.delete(commandId)
   })()
@@ -253,28 +220,10 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             return failure
           }
 
-          // Default session start is homedir; tracking uses effective cwd (start + leading cd).
-          const cwd = await resolveTerminalTrackingCwd({
-            command,
-            sessionStartPath: input.workspaceRootPath
-          })
+          // Default session start is homedir.
+          const cwd = input.workspaceRootPath
           state.stepIndex += 1
           const stepId = randomUUID()
-          const trackingId = randomUUID()
-          let trackingStarted = false
-          try {
-            await input.ctx.beginTerminalCommandTracking({
-              commandId: trackingId,
-              runId: input.runId,
-              partnerId: input.partnerId,
-              cwd,
-              command,
-              workspaceRoots: input.workspaceRoots
-            })
-            trackingStarted = true
-          } catch (error) {
-            console.error('[TERMINAL] file change baseline failed:', error)
-          }
           emitTerminalStepStarted({
             ctx: input.ctx,
             runId: input.runId,
@@ -303,7 +252,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
               maxWaitSeconds
             })
           } catch (error) {
-            if (trackingStarted) input.ctx.discardTerminalCommandTracking(trackingId)
             const message = error instanceof Error ? error.message : String(error)
             const failure =
               message === SESSION_LIMIT_ERROR
@@ -331,7 +279,6 @@ export const buildTerminalCapabilityTools = (input: TerminalCapabilityToolsInput
             stepIndex: state.stepIndex,
             command,
             cwd,
-            trackingId: trackingStarted ? trackingId : undefined,
             emitActivity: input.emitActivity,
             finalized: false
           })

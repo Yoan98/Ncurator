@@ -16,7 +16,7 @@ export type ResolveLeadingCommandCwdInput = {
 
 /**
  * Resolve the effective cwd for a command that starts with an explicit directory change.
- * Used both for session path updates and for file-change tracking baseline (before the PTY runs).
+ * Used for session path updates after the PTY runs.
  */
 export const resolveLeadingCommandCwd = async (
   input: ResolveLeadingCommandCwdInput
@@ -31,16 +31,4 @@ export const resolveLeadingCommandCwd = async (
   } catch {
     return undefined
   }
-}
-
-/** Session start path + optional leading cd → cwd used for terminal change tracking. */
-export const resolveTerminalTrackingCwd = async (input: {
-  command: string
-  sessionStartPath: string
-}): Promise<string> => {
-  const leading = await resolveLeadingCommandCwd({
-    command: input.command,
-    currentPath: input.sessionStartPath
-  })
-  return leading || path.resolve(input.sessionStartPath)
 }

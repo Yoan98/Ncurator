@@ -78,14 +78,6 @@ describe('ai human mock-llm backend', () => {
             },
             listFileChangeRecords: async (request) =>
               (await aiFileChangeService.listRecords(request)).items,
-            beginTerminalCommandTracking: async (tracking) => {
-              await aiFileChangeService.beginTerminalCommandTracking(tracking)
-            },
-            finishTerminalCommandTracking: async (commandId) =>
-              await aiFileChangeService.finishTerminalCommandTracking(commandId),
-            discardTerminalCommandTracking: (commandId) => {
-              aiFileChangeService.discardTerminalCommandTracking(commandId)
-            },
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),
@@ -196,14 +188,6 @@ describe('ai human mock-llm backend', () => {
             },
             listFileChangeRecords: async (request) =>
               (await aiFileChangeService.listRecords(request)).items,
-            beginTerminalCommandTracking: async (tracking) => {
-              await aiFileChangeService.beginTerminalCommandTracking(tracking)
-            },
-            finishTerminalCommandTracking: async (commandId) =>
-              await aiFileChangeService.finishTerminalCommandTracking(commandId),
-            discardTerminalCommandTracking: (commandId) => {
-              aiFileChangeService.discardTerminalCommandTracking(commandId)
-            },
             isCancelled: () => false,
             sendEvent: (event) => runtime.eventCollector.add(event),
             recordLlmIo: (record) => runtime.eventCollector.addLlmIo(record),

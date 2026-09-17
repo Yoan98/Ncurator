@@ -644,14 +644,6 @@ export class ChatRunService {
           },
           listFileChangeRecords: async (request) =>
             (await this.deps.aiFileChangeService.listRecords(request)).items,
-          beginTerminalCommandTracking: async (input) => {
-            await this.deps.aiFileChangeService.beginTerminalCommandTracking(input)
-          },
-          finishTerminalCommandTracking: async (commandId) =>
-            await this.deps.aiFileChangeService.finishTerminalCommandTracking(commandId),
-          discardTerminalCommandTracking: (commandId) => {
-            this.deps.aiFileChangeService.discardTerminalCommandTracking(commandId)
-          },
           isCancelled: () => Boolean(this.activeRuns.get(runId)?.cancelled),
           abortSignal: this.activeRuns.get(runId)?.abortController.signal,
           sendEvent,

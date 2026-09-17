@@ -47,7 +47,7 @@ const createRecord = (input: Partial<AiFileChangeRecord>): AiFileChangeRecord =>
   partnerId: input.partnerId || 'partner-1',
   runId: input.runId || 'run-1',
   status: input.status || 'applied',
-  capability: input.capability || 'terminal_exec',
+  capability: input.capability || 'text_file',
   path: input.path || '',
   fileName: input.fileName || 'target.txt',
   operation: input.operation || 'updated',
@@ -89,86 +89,6 @@ describe('ai file change service', () => {
     }
   })
 
-  it('skips terminal tracking when effective cwd is outside workspace roots', async () => {
-    const outside = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-outside-'))
-    const workspace = tempDir
-    const targetPath = path.join(workspace, 'ignored.txt')
-    try {
-      await service.beginTerminalCommandTracking({
-        commandId: 'outside-command',
-        runId: 'outside-run',
-        partnerId: 'partner-1',
-        cwd: outside,
-        workspaceRoots: [workspace],
-        command: `printf x > "${targetPath}"`
-      })
-      await fs.writeFile(targetPath, 'should not be tracked from outside cwd')
-
-      const completed = await service.finishTerminalCommandTracking('outside-command')
-      expect(completed).toEqual([])
-      expect((await service.listRecords({ runId: 'outside-run' })).items).toEqual([])
-    } finally {
-      await fs.rm(outside, { recursive: true, force: true })
-    }
-  })
-
-  it('tracks changes when effective cwd is inside a workspace root after leading cd', async () => {
-    const targetPath = path.join(tempDir, 'from-cd.txt')
-    await service.beginTerminalCommandTracking({
-      commandId: 'cd-command',
-      runId: 'cd-run',
-      partnerId: 'partner-1',
-      cwd: tempDir,
-      workspaceRoots: [tempDir],
-      command: `cd "${tempDir}" && printf 'ok\\n' > from-cd.txt`
-    })
-    await fs.writeFile(targetPath, 'ok\n')
-
-    const completed = await service.finishTerminalCommandTracking('cd-command')
-    expect(completed).toHaveLength(1)
-    expect(completed[0]?.operation).toBe('created')
-    expect(completed[0]?.source).toBe('terminal_tool')
-    expect(completed[0]?.path).toBe(targetPath)
-  })
-
-  it('captures terminal command changes and materializes text diff before the run result is shown', async () => {
-    const targetPath = path.join(tempDir, 'notes.txt')
-    await fs.writeFile(targetPath, 'line 1\nline 2\nline 3\n')
-    await service.beginTerminalCommandTracking({
-      commandId: 'scan-command',
-      runId: 'scan-run',
-      partnerId: 'partner-1',
-      cwd: tempDir,
-      workspaceRoots: [tempDir],
-      command: 'replace notes.txt'
-    })
-    await fs.writeFile(targetPath, 'line 1\nchanged\nline 3\n')
-
-    const completed = await service.finishTerminalCommandTracking('scan-command')
-    expect(completed).toHaveLength(1)
-    expect(completed[0]?.operation).toBe('updated')
-    expect(completed[0]?.previewPath).toBeTruthy()
-    expect(completed[0]?.beforeObjectHash).not.toBe(completed[0]?.afterObjectHash)
-
-    const listed = await service.listRecords({ runId: 'scan-run' })
-    expect(listed.items[0]?.previewPath).toBe(completed[0]?.previewPath)
-    expect(listed.items[0]?.insertCount).toBe(1)
-    expect(listed.items[0]?.deleteCount).toBe(1)
-
-    const opened = await service.getRecord({ changeId: completed[0]!.id })
-    const artifact = JSON.parse(await fs.readFile(opened.record!.previewPath!, 'utf8')) as Record<
-      string,
-      unknown
-    >
-    expect(artifact.version).toBe(2)
-    expect(artifact).not.toHaveProperty('afterLines')
-    expect(opened.record?.insertCount).toBe(1)
-    expect(opened.record?.deleteCount).toBe(1)
-
-    const reopened = await service.getRecord({ changeId: completed[0]!.id })
-    expect(reopened.record?.previewPath).toBe(opened.record?.previewPath)
-  })
-
   it('stores direct tool snapshots immediately without a run-end scan', async () => {
     const targetPath = path.join(tempDir, 'deck.pptx')
     const previewPath = path.join(tempDir, '.ncurator', 'runtime', 'ppt-diff.json')
@@ -184,8 +104,7 @@ describe('ai file change service', () => {
         fileName: 'deck.pptx',
         operation: 'created',
         previewPath
-      }),
-      tempDir
+      })
     )
 
     const completed = await service.getRecord({ changeId: 'ppt-change' })
@@ -245,77 +164,6 @@ describe('ai file change service', () => {
     const completed = await service.getRecord({ changeId: 'no-op-change' })
     expect(completed.record?.status).toBe('failed')
     expect(completed.record?.error).toBe(NO_EFFECTIVE_FILE_CHANGE_MESSAGE)
-  })
-
-  it('captures create delete and rename in one terminal command', async () => {
-    const deletedPath = path.join(tempDir, 'deleted.txt')
-    const renamedBeforePath = path.join(tempDir, 'before-name.txt')
-    const renamedAfterPath = path.join(tempDir, 'after-name.txt')
-    await fs.writeFile(deletedPath, 'delete me')
-    await fs.writeFile(renamedBeforePath, 'unique rename content')
-    await service.beginTerminalCommandTracking({
-      commandId: 'operations-command',
-      runId: 'operations-run',
-      partnerId: 'partner-1',
-      cwd: tempDir,
-      workspaceRoots: [tempDir],
-      command: 'organize files'
-    })
-    await fs.rm(deletedPath)
-    await fs.rename(renamedBeforePath, renamedAfterPath)
-    await fs.writeFile(path.join(tempDir, 'created.txt'), 'new file')
-
-    const completed = await service.finishTerminalCommandTracking('operations-command')
-    expect(completed.map((item) => item.operation).sort()).toEqual([
-      'created',
-      'deleted',
-      'renamed'
-    ])
-    const renamed = completed.find((item) => item.operation === 'renamed')
-    expect(renamed?.beforePath).toBe(renamedBeforePath)
-    expect(renamed?.afterPath).toBe(renamedAfterPath)
-    const openedRename = await service.getRecord({ changeId: renamed!.id })
-    expect(openedRename.record?.previewPath).toBeUndefined()
-  })
-
-  it('allows overlapping terminal command tracking without cross-run filtering', async () => {
-    const targetPath = path.join(tempDir, 'overlap.txt')
-    await fs.writeFile(targetPath, 'before')
-    await Promise.all([
-      service.beginTerminalCommandTracking({
-        commandId: 'command-a',
-        runId: 'run-a',
-        partnerId: 'partner-a',
-        cwd: tempDir,
-        workspaceRoots: [tempDir],
-        command: 'write overlap.txt'
-      }),
-      service.beginTerminalCommandTracking({
-        commandId: 'command-b',
-        runId: 'run-b',
-        partnerId: 'partner-b',
-        cwd: tempDir,
-        workspaceRoots: [tempDir],
-        command: 'write overlap.txt'
-      })
-    ])
-    await fs.writeFile(targetPath, 'after')
-
-    const [changesA, changesB] = await Promise.all([
-      service.finishTerminalCommandTracking('command-a'),
-      service.finishTerminalCommandTracking('command-b')
-    ])
-
-    expect(changesA).toHaveLength(1)
-    expect(changesB).toHaveLength(1)
-    expect(changesA[0]?.runId).toBe('run-a')
-    expect(changesB[0]?.runId).toBe('run-b')
-    expect(
-      (await service.listRecords({ partnerId: 'partner-a', runId: 'run-a' })).items
-    ).toHaveLength(1)
-    expect(
-      (await service.listRecords({ partnerId: 'partner-b', runId: 'run-b' })).items
-    ).toHaveLength(1)
   })
 
   it('restores deleted and renamed files during revert', async () => {

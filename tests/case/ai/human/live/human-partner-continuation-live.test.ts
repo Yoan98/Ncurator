@@ -72,14 +72,6 @@ const buildAiRunDeps = async (input: {
     },
     listFileChangeRecords: async (request) =>
       (await aiFileChangeService.listRecords(request)).items,
-    beginTerminalCommandTracking: async (tracking) => {
-      await aiFileChangeService.beginTerminalCommandTracking(tracking)
-    },
-    finishTerminalCommandTracking: async (commandId) =>
-      await aiFileChangeService.finishTerminalCommandTracking(commandId),
-    discardTerminalCommandTracking: (commandId) => {
-      aiFileChangeService.discardTerminalCommandTracking(commandId)
-    },
     chatMessageLogStore: input.runtime.storageService.chatMessageLog,
     isCancelled: () => controller.signal.aborted,
     abortSignal: controller.signal,

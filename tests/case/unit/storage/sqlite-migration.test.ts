@@ -117,7 +117,8 @@ describe('SQLite migration contract', () => {
     upgraded.close()
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
-    expect(migrationRows.at(-1)).toEqual({ version: 10, name: 'upgrade_from_v9' })
+    expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
+    expect(migrationRows.at(-1)).toEqual({ version: 11, name: 'drop_terminal_file_change_records' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -209,7 +210,7 @@ describe('SQLite migration contract', () => {
     current.initialize()
     current
       .prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)')
-      .run(11, 'future_schema', 1)
+      .run(12, 'future_schema', 1)
     current.close()
 
     const sqlite = new SqliteCore(databasePath)
@@ -220,15 +221,15 @@ describe('SQLite migration contract', () => {
       thrown = error
     }
     expect(thrown).toBeInstanceOf(DatabaseVersionTooNewError)
-    expect(thrown).toMatchObject({ databaseVersion: 11, supportedDatabaseVersion: 10 })
+    expect(thrown).toMatchObject({ databaseVersion: 12, supportedDatabaseVersion: 11 })
 
     const inspected = openRawDatabase(databasePath)
     const rows = inspected
       .prepare('SELECT version, name FROM schema_migrations ORDER BY version')
       .all()
     inspected.close()
-    expect(rows.at(-1)).toEqual({ version: 11, name: 'future_schema' })
-    expect(rows).toHaveLength(11)
+    expect(rows.at(-1)).toEqual({ version: 12, name: 'future_schema' })
+    expect(rows).toHaveLength(12)
   })
 
   it('accepts the known version 2 alias and rejects unknown names or gaps', async () => {
@@ -262,6 +263,40 @@ describe('SQLite migration contract', () => {
     gap.prepare('DELETE FROM schema_migrations WHERE version = 5').run()
     gap.close()
     expect(() => new SqliteCore(gapPath).initialize()).toThrow(InvalidMigrationHistoryError)
+  })
+
+  it('drops leftover terminal file-change rows on upgrade to v11', async () => {
+    const databasePath = await createDatabasePath()
+    const prepared = new SqliteCore(databasePath)
+    prepared.initialize()
+    prepared.prepare('DELETE FROM schema_migrations WHERE version = 11').run()
+    prepared
+      .prepare(
+        `INSERT INTO partner (
+          id, name, avatar_shape, avatar_color, pinned, created_at, updated_at, last_viewed_at
+        ) VALUES (?, ?, ?, ?, 0, 1, 1, 1)`
+      )
+      .run('partner-1', 'partner', 'circle', 'blue')
+    const insertChange = prepared.prepare(
+      `INSERT INTO ai_file_change (
+        id, partner_id, run_id, status, capability, path, file_name, operation, source,
+        change_count, insert_count, delete_count, created_at, updated_at
+      ) VALUES (?, 'partner-1', 'run-1', 'applied', ?, '/tmp/a.txt', ?, 'updated', ?, 1, 0, 0, 1, 1)`
+    )
+    insertChange.run('keep-text', 'text_file', 'keep.txt', 'text_tool')
+    insertChange.run('drop-terminal-source', 'text_file', 'tracked.txt', 'terminal_tool')
+    insertChange.run('drop-scan-source', 'text_file', 'scanned.txt', 'workspace_scan')
+    insertChange.run('drop-terminal-capability', 'terminal_exec', 'exec.bin', 'text_tool')
+    prepared.close()
+
+    const upgraded = new SqliteCore(databasePath)
+    upgraded.initialize()
+    const rows = upgraded
+      .prepare('SELECT id, source, capability FROM ai_file_change ORDER BY id')
+      .all()
+    upgraded.close()
+
+    expect(rows).toEqual([{ id: 'keep-text', source: 'text_tool', capability: 'text_file' }])
   })
 
   it('keeps the published migration lock valid and rejects a changed locked migration', async () => {

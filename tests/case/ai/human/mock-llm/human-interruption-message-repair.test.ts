@@ -35,14 +35,6 @@ const buildDeps = async (input: {
     },
     listFileChangeRecords: async (request) =>
       (await aiFileChangeService.listRecords(request)).items,
-    beginTerminalCommandTracking: async (tracking) => {
-      await aiFileChangeService.beginTerminalCommandTracking(tracking)
-    },
-    finishTerminalCommandTracking: async (commandId) =>
-      aiFileChangeService.finishTerminalCommandTracking(commandId),
-    discardTerminalCommandTracking: (commandId) => {
-      aiFileChangeService.discardTerminalCommandTracking(commandId)
-    },
     isCancelled: () => input.controller.signal.aborted,
     abortSignal: input.controller.signal,
     sendEvent: (event) => input.runtime.eventCollector.add(event),

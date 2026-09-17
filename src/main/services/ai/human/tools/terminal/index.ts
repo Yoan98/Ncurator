@@ -12,11 +12,7 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
         platform: ctx.platform,
         checkCancelled: ctx.checkCancelled,
         humanRuntimeOverrides: ctx.humanRuntimeOverrides,
-        sendEvent: ctx.sendEvent,
-        saveFileChangeRecord: ctx.saveFileChangeRecord,
-        beginTerminalCommandTracking: ctx.beginTerminalCommandTracking,
-        finishTerminalCommandTracking: ctx.finishTerminalCommandTracking,
-        discardTerminalCommandTracking: ctx.discardTerminalCommandTracking
+        sendEvent: ctx.sendEvent
       },
       cache,
       runId,
@@ -24,7 +20,6 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
       taskId,
       workspaceRootPath: os.homedir(),
       workspaceId: '',
-      workspaceRoots: ctx.workspaceRoots,
       sessionManager: terminalSessionManager,
       emitActivity
     }).tools

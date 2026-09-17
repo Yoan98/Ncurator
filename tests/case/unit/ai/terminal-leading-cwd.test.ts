@@ -3,8 +3,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  resolveLeadingCommandCwd,
-  resolveTerminalTrackingCwd
+  resolveLeadingCommandCwd
 } from '../../../../src/main/services/ai/human/tools/terminal/resolveLeadingCommandCwd'
 
 const tempRoots: string[] = []
@@ -85,32 +84,6 @@ describe('resolveLeadingCommandCwd', () => {
         currentPath: root
       })
     ).resolves.toBeUndefined()
-  })
-
-  it('builds tracking cwd from session start plus leading cd', async () => {
-    const home = await createRoot()
-    const workspace = await createRoot()
-
-    await expect(
-      resolveTerminalTrackingCwd({
-        command: `printf x > "${path.join(workspace, 'a.txt')}"`,
-        sessionStartPath: home
-      })
-    ).resolves.toBe(path.resolve(home))
-
-    await expect(
-      resolveTerminalTrackingCwd({
-        command: `cd "${workspace}" && printf x > a.txt`,
-        sessionStartPath: home
-      })
-    ).resolves.toBe(path.resolve(workspace))
-
-    await expect(
-      resolveTerminalTrackingCwd({
-        command: `Set-Location -LiteralPath '${workspace}'; Set-Content a.txt x`,
-        sessionStartPath: home
-      })
-    ).resolves.toBe(path.resolve(workspace))
   })
 
   it('resolves PowerShell -LiteralPath / -Path and cmd-style cd /d', async () => {

@@ -29,7 +29,6 @@ const normalizeCapability = (value: unknown): AiFileChangeCapability => {
   const normalized = String(value ?? '').trim()
   if (
     normalized === 'text_file' ||
-    normalized === 'terminal_exec' ||
     normalized === 'ppt' ||
     normalized === 'excel' ||
     normalized === 'image'
@@ -46,8 +45,6 @@ const normalizeOperation = (value: unknown): AiFileChangeOperation => {
 
 const normalizeSource = (value: unknown): AiFileChangeSource | undefined => {
   if (
-    value === 'workspace_scan' ||
-    value === 'terminal_tool' ||
     value === 'text_tool' ||
     value === 'docx_tool' ||
     value === 'ppt_tool' ||

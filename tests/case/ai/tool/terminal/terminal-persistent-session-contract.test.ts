@@ -1,7 +1,6 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import type { AiFileChangeRecord, AiRunEvent } from '../../../../../src/shared/types'
 import { createTerminalToolHarness } from '../../../../harness/backend/aiToolHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 
@@ -31,41 +30,12 @@ describe('ai tool terminal backend', () => {
       suite: 'tool',
       groups: ['terminal'],
       description:
-        '验证终端在工作区根目录执行命令、长命令让出控制权并可增量读取、文件追踪与退出码；允许后台分离执行。',
+        '验证终端在用户主目录执行命令、长命令让出控制权并可增量读取、退出码与分离执行。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         await fs.mkdir(path.join(runtime.workspaceRoot, 'nested'))
         const harness = createTerminalToolHarness(runtime, {}, { yieldMs: 2000 })
-
-        const waitForTrackedRecords = async (
-          fileNames: readonly string[]
-        ): Promise<AiFileChangeRecord[]> => {
-          for (let attempt = 0; attempt < 60; attempt += 1) {
-            const records = await harness.ctx.listFileChangeRecords({ runId: runtime.runId })
-            if (fileNames.every((fileName) => records.some((record) => record.fileName === fileName))) {
-              return records
-            }
-            await new Promise<void>((resolve) => setTimeout(resolve, 50))
-          }
-          throw new Error(`terminal change records were not saved: ${fileNames.join(', ')}`)
-        }
-        const waitForArtifactEvents = async (
-          fileNames: readonly string[]
-        ): Promise<Extract<AiRunEvent, { type: 'file_artifact' }>[]> => {
-          for (let attempt = 0; attempt < 60; attempt += 1) {
-            const events = runtime.eventCollector
-              .snapshot()
-              .filter((event): event is Extract<AiRunEvent, { type: 'file_artifact' }> =>
-                event.type === 'file_artifact'
-              )
-            if (fileNames.every((fileName) => events.some((event) => event.fileName === fileName))) {
-              return events
-            }
-            await new Promise<void>((resolve) => setTimeout(resolve, 50))
-          }
-          throw new Error(`terminal artifact events were not emitted: ${fileNames.join(', ')}`)
-        }
 
         const pwdAtRoot = await harness.invoke<TerminalRunResult>('terminal_run', {
           command: isWindows ? 'Get-Location' : 'pwd'
@@ -114,14 +84,22 @@ describe('ai tool terminal backend', () => {
           maxWaitSeconds: 1
         })
         const watchedElapsedMs = Date.now() - watchedStartedAt
-        const trackedFileNames = [
-          'terminal-completed.txt',
-          'terminal-running.txt',
-          'terminal-nonzero.txt'
-        ] as const
-        const records = await waitForTrackedRecords(trackedFileNames)
-        const artifactEvents = await waitForArtifactEvents(trackedFileNames)
         await harness.release()
+        const writtenFiles = {
+          completed: await fs.readFile(
+            path.join(runtime.workspaceRoot, 'terminal-completed.txt'),
+            'utf8'
+          ),
+          running: await fs.readFile(
+            path.join(runtime.workspaceRoot, 'terminal-running.txt'),
+            'utf8'
+          ),
+          nonzero: await fs.readFile(
+            path.join(runtime.workspaceRoot, 'terminal-nonzero.txt'),
+            'utf8'
+          )
+        }
+        const fileChangeRecords = await harness.ctx.listFileChangeRecords({ runId: runtime.runId })
         return {
           pwdAtRoot,
           cdNested,
@@ -134,8 +112,8 @@ describe('ai tool terminal backend', () => {
           redirectAllowed,
           watched,
           watchedElapsedMs,
-          records,
-          artifactEvents
+          writtenFiles,
+          fileChangeRecords
         }
       },
       assert: async (result, runtime) => {
@@ -182,29 +160,16 @@ describe('ai tool terminal backend', () => {
         runtime.assertThat(
           result.redirectAllowed.status === 'succeeded' &&
             result.redirectAllowed.output.includes('redirect-ok') &&
-            result.nonZero.status === 'failed',
+            result.nonZero.status === 'failed' &&
+            result.writtenFiles.completed.includes('completed') &&
+            result.writtenFiles.running.includes('running') &&
+            result.writtenFiles.nonzero.includes('nonzero') &&
+            result.fileChangeRecords.length === 0,
           {
-            name: 'terminal-returns-status-and-allows-fd-merge-redirection',
-            message: '命令应返回 succeeded/failed 状态，带 2>&1 fd 合并重定向的验证命令应正常执行。',
+            name: 'terminal-returns-status-writes-files-without-apply-records',
+            message:
+              '命令应返回 succeeded/failed 状态，写文件只落磁盘，不产生修改记录；带 2>&1 的验证命令应正常执行。',
             data: result
-          }
-        )
-        const trackedFileNames = new Set(result.records.map((record) => record.fileName))
-        const artifactFileNames = new Set(result.artifactEvents.map((event) => event.fileName))
-        runtime.assertThat(
-          ['terminal-completed.txt', 'terminal-running.txt', 'terminal-nonzero.txt'].every(
-            (fileName) => trackedFileNames.has(fileName) && artifactFileNames.has(fileName)
-          ) &&
-            result.records
-              .filter((record) => trackedFileNames.has(record.fileName))
-              .every((record) => record.source === 'terminal_tool' && record.runId === runtime.runId),
-          {
-            name: 'terminal-finalizes-command-scoped-file-changes',
-            message: '命令完成和非零退出都必须按命令窗口保存文件变化并发出当前 run 的 artifact。',
-            data: {
-              records: result.records,
-              artifactEvents: result.artifactEvents
-            }
           }
         )
       }

@@ -166,14 +166,6 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     listFileChangeRecords: async (input) => {
       return await deps.listFileChangeRecords(input)
     },
-    beginTerminalCommandTracking: async (input) => {
-      await deps.beginTerminalCommandTracking(input)
-    },
-    finishTerminalCommandTracking: async (commandId) =>
-      await deps.finishTerminalCommandTracking(commandId),
-    discardTerminalCommandTracking: (commandId) => {
-      deps.discardTerminalCommandTracking(commandId)
-    },
     documentsStore: deps.documentsStore,
     embeddingService: deps.embeddingService,
     assertKbSearchAvailable: async () => {

@@ -833,17 +833,9 @@ export interface WriteTextFileResponse {
 }
 
 export type AiFileChangeStatus = 'applied' | 'reverted' | 'failed'
-export type AiFileChangeCapability =
-  | 'docx'
-  | 'text_file'
-  | 'terminal_exec'
-  | 'ppt'
-  | 'excel'
-  | 'image'
+export type AiFileChangeCapability = 'docx' | 'text_file' | 'ppt' | 'excel' | 'image'
 export type AiFileChangeOperation = 'created' | 'updated' | 'deleted' | 'renamed'
 export type AiFileChangeSource =
-  | 'workspace_scan'
-  | 'terminal_tool'
   | 'text_tool'
   | 'docx_tool'
   | 'ppt_tool'
@@ -1173,13 +1165,7 @@ export type AiRuntimeSettings = {
   systemNotificationsEnabled: boolean
 }
 
-export type AiFileArtifactCapability =
-  | 'terminal_exec'
-  | 'docx'
-  | 'ppt'
-  | 'excel'
-  | 'text_file'
-  | 'image'
+export type AiFileArtifactCapability = 'docx' | 'ppt' | 'excel' | 'text_file' | 'image'
 export type AiFileArtifactOperation = AiFileChangeOperation
 export type AiFileArtifactRef = {
   kind: 'file'

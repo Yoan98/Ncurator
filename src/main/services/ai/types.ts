@@ -292,15 +292,6 @@ export type BrowserUseService = {
   releaseRun?: (runId: string) => Promise<void>
 }
 
-export type TerminalCommandChangeTrackingInput = {
-  commandId: string
-  runId: string
-  partnerId: string
-  cwd: string
-  command: string
-  workspaceRoots: string[]
-}
-
 export type AiRunDeps = {
   runtimeSettings: AiRuntimeSettings
   llmStore: LlmConfigStore
@@ -313,9 +304,6 @@ export type AiRunDeps = {
   docxApplyService: DocxApplyService
   saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
   listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
-  beginTerminalCommandTracking: (input: TerminalCommandChangeTrackingInput) => Promise<void>
-  finishTerminalCommandTracking: (commandId: string) => Promise<AiFileChangeRecord[]>
-  discardTerminalCommandTracking: (commandId: string) => void
   isCancelled: () => boolean
   abortSignal?: AbortSignal
   sendEvent: (event: AiRunEvent) => void
@@ -406,9 +394,6 @@ export type AiRunContext = {
   discardDocxApplyRun: () => void
   saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
   listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
-  beginTerminalCommandTracking: (input: TerminalCommandChangeTrackingInput) => Promise<void>
-  finishTerminalCommandTracking: (commandId: string) => Promise<AiFileChangeRecord[]>
-  discardTerminalCommandTracking: (commandId: string) => void
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   assertKbSearchAvailable: () => Promise<void>
@@ -425,15 +410,7 @@ export type AiEventDispatchContext = Pick<
 
 export type TerminalToolContext = Pick<
   AiRunContext,
-  | 'runId'
-  | 'platform'
-  | 'checkCancelled'
-  | 'sendEvent'
-  | 'humanRuntimeOverrides'
-  | 'saveFileChangeRecord'
-  | 'beginTerminalCommandTracking'
-  | 'finishTerminalCommandTracking'
-  | 'discardTerminalCommandTracking'
+  'runId' | 'platform' | 'checkCancelled' | 'sendEvent' | 'humanRuntimeOverrides'
 >
 
 export type KnowledgeRetrievalContext = Pick<

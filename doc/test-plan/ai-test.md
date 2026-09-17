@@ -96,7 +96,7 @@
 - 目的：验证真实业务场景在真实生产调用下可以完成。
 - case 设计必须使用真实用户风格输入，不得把内部固定工具顺序写进用户输入。
 - 断言口径统一遵循 `doc/test.md` 的真实 AI / live 断言规则。
-- 涉及数据计算 / 对账 / 统计的真实 AI 场景，brain 系统提示词已要求计算必须通过 terminal 工具真实执行；live case 硬断言校验完成态、关键产物与 terminal 计算是否真实发生。修改记录 `source=terminal_tool` 仅在有效 cwd 进入工作地址的可追踪写入路径上断言（见 `human-terminal-data-reconciliation-live`）。
+- 涉及数据计算 / 对账 / 统计的真实 AI 场景，brain 系统提示词已要求计算必须通过 terminal 工具真实执行；live case 硬断言校验完成态、关键产物与 terminal 计算是否真实发生。终端改文件不进入修改记录。
 - `human / live` 的完整证据写入测试运行产物；顶部“最新 Live 评估”仅由人工在复核 raw logs 与 artifact 后覆盖更新。
 
 ### 3.3 目录与命令
@@ -114,7 +114,6 @@ AI 回归测试目录：
 | `tool/web-browsing/web-crawl-contract.test.ts` | `web-search-*`、`browser-use-*` |
 | `tool/pdf/pdf-read-contract.test.ts` | `pdf-*-contract` |
 | `tool/text-file/text-file-read-write-contract.test.ts` | `text-file-read-write-contract`、`text-file-atomic-guards-and-format-preservation` |
-| `tool/terminal/terminal-inline-edit-artifact-contract.test.ts` | `terminal-inline-edit-artifact-contract`、`terminal-tracking-start-failure-cleanup` |
 | `tool/image-generation/image-generate-contract.test.ts` | `image-generate-*-contract` |
 | `tool/excel/excel-diff-row-structure-semantics.test.ts` | `excel-diff-row-structure-semantics`、`excel-diff-cumulative-net-semantics` |
 | `tool/agent-control/read-image-multimodal-contract.test.ts` | `read-image-multimodal-contract`、`multimodal-image-budget-contract` |
@@ -141,8 +140,8 @@ AI unit / 辅助测试目录：
 ### 3.4 覆盖归属与去重规则
 
 - `ai/tool` 负责生产工具 runtime 的完整输入输出、读写链、错误边界、原子性、修改记录与回退契约。
-- `ChatRunService` 合同测试验证 run 结束不会扫描并归属未受控的工作地址变化；只有受控文件工具与 terminal 命令窗口能创建 run 级修改记录。terminal 仅当**有效 cwd**（会话起始路径 + 前导 `cd`/`Set-Location`）落在某个 `workspace_source.root_path` 内时才扫描该 cwd 子树。`ChatRunService` 不再校验工作空间绑定与搜索模式。
-- sqlite migration unit 覆盖空库到 v10、v9→v10 破坏性升级后最终 schema 一致：存在 `partner` / `partner_ui_state`；不存在 `chat_session`、`chat_search_turn`、`chat_session_ui_state`；`chat_session_message_log` / `ai_run` / `ai_file_change` 挂 `partner_id`；`workbench_ui_state` 只留 `active_view_key`。UI store 为伙伴。
+- `ChatRunService` 合同测试验证 run 结束不会扫描并归属未受控的工作地址变化；只有受控文件工具能创建 run 级修改记录。`ChatRunService` 不再校验工作空间绑定与搜索模式。
+- sqlite migration unit 覆盖空库到 v11、v9→v10 破坏性升级后最终 schema 一致，以及 v11 删除终端修改行：存在 `partner` / `partner_ui_state`；不存在 `chat_session`、`chat_search_turn`、`chat_session_ui_state`；`chat_session_message_log` / `ai_run` / `ai_file_change` 挂 `partner_id`；`workbench_ui_state` 只留 `active_view_key`。UI store 为伙伴。
 - `ai/human/mock-llm` 负责真实 human graph 下的工具学习、工具选择、串联执行、暂停恢复和结果交付；只允许固定 LLM 输出，不允许替换工具执行结果。
 - `ai/human/live` 负责真实模型在自然语言输入下能否自主选择并正确使用能力；用户输入不得包含内部工具名或固定调用顺序。
 - Workbench E2E 负责用户可见的附件、预览、Diff、跨 Sheet 交互与回退闭环，不重复验证工具内部算法。
@@ -472,24 +471,6 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：两次 hand 各产生一次非 internal 的审批要求与 reject 决策；不产生 `terminal_step_started` / `tool_call_result(terminal_run)` / `terminal_step_error`；受保护文件仍存在、目标目录未创建。
 - Not：不验证 UI 提示；不验证 `terminal_run` 被直接调用时的行为（工具层不再独立请求审批）。
 
-##### `terminal-inline-edit-artifact-contract`
-
-- 测试类型：`backend`
-- What：terminal 只通过真实命令前后差异生成修改记录和 artifact，不根据命令字符串猜测文件产物。
-- Why：terminal 命令需要在不依赖整次 Run 收尾扫描的前提下，记录无法静态分析的真实文件变化。
-- How：通过 terminal 修改已有文件并创建新文件，检查工具结果、文件结果、工具期修改记录和 `file_artifact` 事件。
-- Oracle：命令真实生效；不在 `terminal_run` 内产生审批事件；terminal 工具结果不包含 `artifacts`；命令完成后产生带当前 Run ID 的修改记录和 `file_artifact`。
-- Not：不根据命令文本推断文件路径；差异只来自命令前后工作区快照。
-
-##### `terminal-tracking-start-failure-cleanup`
-
-- 测试类型：`backend`
-- What：终端命令已建立追踪基线但 PTY 启动失败时，追踪上下文会被立即丢弃。
-- Why：启动失败不应留下无法完成的快照、修改记录或文件 artifact。
-- How：真实构建 terminal 工具，替换终端会话启动为明确失败的实现，并记录开始、完成和丢弃追踪调用。
-- Oracle：恰好开始并丢弃同一个命令追踪 ID；不调用完成追踪，不产生修改记录或 `file_artifact`。
-- Not：不验证 PTY 本身的启动错误归因；该能力由终端会话管理测试覆盖。
-
 ##### `terminal-inline-interpreter-execution`
 
 - 测试类型：`backend`
@@ -502,10 +483,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `terminal-execution-contract`
 
 - 测试类型：`backend`
-- What：真实 PTY 终端从用户主目录执行命令、长命令让出控制权并可增量读取，命令级文件追踪与退出码正确；允许后台分离执行，放行 fd 合并重定向。
+- What：真实 PTY 终端从用户主目录执行命令、长命令让出控制权并可增量读取，退出码正确；允许后台分离执行，放行 fd 合并重定向。
 - Why：后台服务和长任务不能依赖单次 shell 超时；分离执行（`&` / `Start-Process`）由模型自行管理生命周期，框架只关闭 PTY 会话本身；`2>&1` 等 fd 合并重定向只是输出流合并，不能误判为危险重定向。
 - How：通过 `terminal_run` 分别执行 `pwd`、单命令内 `cd + pwd`、写文件后长 sleep、持续输出命令、写文件后非零退出；通过 `terminal_read` 携带返回的 `readEndPosition` 增量读取持续输出命令，验证单次读取有字符上限、`hasMoreOutput` 指示未读完且可用返回位置连续读完。以 `sleep … & wait`（windows `Start-Process … -Wait`）验证分离执行可完成，以 `echo redirect-ok 2>&1` 验证 fd 合并重定向正常执行。`maxWaitSeconds` 由本 case 与 unit 覆盖：指定后本次调用按该秒数盯，到点命令仍在跑。
-- Oracle：命令默认从用户主目录（`os.homedir()`）执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出；仅当**有效 cwd**（主目录起始 + 前导 `cd`/`Set-Location`（含 `-Path`/`-LiteralPath`、以及模型偶发的 `cd /d`）落入工作地址）时，写文件命令（完成与非零退出）才生成当前 run 的 `terminal_tool` 修改记录和 `file_artifact`；有效 cwd 仍在主目录时用绝对路径写入工作地址不记修改。Windows 会话内覆写的 `Set-Location` 必须接受 `-LiteralPath`/`-Path`，否则模型常用写法会失败并退化成绝对路径改文件（无 apply）。分离执行成功完成且输出含 `detached-ok`；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。`maxWaitSeconds` 到点后为 `command_still_running` 且进程仍在，对齐 `WB-TERMINAL-001-AC8`。
+- Oracle：命令默认从用户主目录（`os.homedir()`）执行；长命令返回 `command_still_running` 且进程仍在；读取能取得真实增量输出。写文件命令只落磁盘，不产生修改记录或 `file_artifact`。Windows 会话内覆写的 `Set-Location` 必须接受 `-LiteralPath`/`-Path`。分离执行成功完成且输出含 `detached-ok`；`2>&1` 命令以 completed 和退出码 0 结束且输出包含 `redirect-ok`。`maxWaitSeconds` 到点后为 `command_still_running` 且进程仍在，对齐 `WB-TERMINAL-001-AC8`。
 - Not：不验证 Workbench 浏览器联动，该能力由真实 e2e 覆盖；不在会话结束时强制清理模型拆出去的后台进程。
 
 #### web-browsing 类别
@@ -987,7 +968,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：真实模型将发票与回款数据对账，并为财务交付异常清单 CSV。
 - Why：这是独立的真实终端智能性场景，不与 Excel 读写 case 混合。
 - How：用户只描述对账和财务异常清单需求，不出现终端或命令概念。
-- Oracle：输入文件不变；对账计算与 `reconciliation-exceptions.csv` 产出必须经过 terminal 脚本（`python/awk/join` 等真实计算命令）；异常行和金额正确。修改记录 `source=terminal_tool` **仅当**存在有效 cwd 落在工作地址内、且非纯核验（`cat`/`md5`/`ls` 等）的 terminal 命令时才硬断言——家目录起用绝对路径写入、仅 cd 进去核验时不要求修改记录（对齐当前追踪边界）。
+- Oracle：输入文件不变；对账计算与 `reconciliation-exceptions.csv` 产出必须经过 terminal 脚本（`python/awk/join` 等真实计算命令）；异常行和金额正确。结果文件不要求进入修改记录。
 - Not：不生成测试专用 JSON，不混入终端协议、runtime 下载或临时目录契约；不强制模型必须先 `cd` 再写。
 
 ##### `human-runtime-script-system-python-live`

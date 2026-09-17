@@ -15,7 +15,7 @@ import {
   createTextFileDiffArtifact
 } from '../human/tools/textFile/textDiff'
 import { decodeTextFile } from '../human/tools/textFile/textFileUtils'
-import { TerminalCommandChangeTracker, WorkspaceObjectStore } from './WorkspaceChangeTracker'
+import { WorkspaceObjectStore } from './WorkspaceObjectStore'
 import { NO_EFFECTIVE_FILE_CHANGE_MESSAGE } from '../../../../shared/constants'
 import {
   ensurePartnerRuntimeDirs,
@@ -33,35 +33,7 @@ export interface AiFileChangeRecordStore {
 }
 
 export class AiFileChangeService {
-  private readonly terminalCommandChangeTracker = new TerminalCommandChangeTracker()
-
   public constructor(private readonly store: AiFileChangeRecordStore) {}
-
-  public async beginTerminalCommandTracking(input: {
-    commandId: string
-    runId: string
-    partnerId: string
-    cwd: string
-    command: string
-    workspaceRoots: string[]
-  }): Promise<void> {
-    await this.terminalCommandChangeTracker.beginCommand(input)
-  }
-
-  public discardTerminalCommandTracking(commandId: string): void {
-    this.terminalCommandChangeTracker.discardCommand(commandId)
-  }
-
-  public async finishTerminalCommandTracking(commandId: string): Promise<AiFileChangeRecord[]> {
-    const records = await this.terminalCommandChangeTracker.finishCommand(commandId)
-    return await Promise.all(
-      records.map(async (record) => {
-        await this.saveRecord(record)
-        const response = await this.getRecord({ changeId: record.id })
-        return response.record || record
-      })
-    )
-  }
 
   public async saveRecord(record: AiFileChangeRecord): Promise<void> {
     const existing = (await this.store.getRecord({ changeId: record.id })).record
@@ -147,7 +119,6 @@ export class AiFileChangeService {
   }
 
   private hasNoEffectiveChange(record: AiFileChangeRecord): boolean {
-    if (record.source === 'terminal_tool' || record.source === 'workspace_scan') return false
     if (record.operation === 'created') return !record.afterChecksum
     if (record.operation === 'deleted') return !record.beforeChecksum
     if (record.operation === 'renamed') {

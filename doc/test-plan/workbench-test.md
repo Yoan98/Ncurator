@@ -559,15 +559,6 @@ pnpm test:update:e2e
 - Oracle：AI 写入后编辑态显示最新内容且不误报外部修改；编辑态与审核模式共用一个文件 Tab；Run 终态后修改入口在未点击时已显示真实非零数量；切换伙伴再切回后未点击时数量仍为真实非零，不重置为 0，对齐 `WB-APPLY-005-AC4`；审核模式展示差异数量、修改状态和回退，预览模式全部隐藏；预览模式对 Markdown/UTF-8 文本进入应用内编辑态（与普通打开一致），对齐 `WB-EDIT-001-AC7`、`WB-PANEL-003-AC14`；已应用记录打开外部应用后显示重新打开提醒；文件夹入口打开的文件列表从工具栏底部贴右悬浮，不改变预览宽度，可通过外部点击、Escape 或选择文件关闭；当前已经是最新记录且处于预览模式时，再次点击文件总分类仍会重置到最新审核模式；历史批次、结构化 Diff、不可变展开和回退刷新整体对齐 `WB-PANEL-003`、`WB-APPLY-001`、`WB-APPLY-002`、`WB-APPLY-003`；确认回退后 bytes 与原始输入一致且有效改动标记消失。
 - Not：不验证 unified diff 字符串；UI 只消费结构化 diff artifact。
 
-#### `file-change-run-scope`
-
-- 测试类型：`e2e / live`
-- What：两个伙伴各完成一次真实终端写入后，每条 assistant 修改入口与右侧“本次运行改动”只展示该 `{ partnerId, runId }` 的文件。
-- Why：文件改动归属已经是 run 级，后台或历史伙伴完成时不能把其他 run 的记录混入当前审核列表。
-- How：在首个伙伴让真实 AI 只通过 `terminal_run` 创建第一个文件；再创建第二个伙伴（可共用同一文件地址），让真实 AI 创建另一个文件；分别打开两条修改入口，再回到首个伙伴复查右侧变更列表。
-- Oracle：两条 run 和两个伙伴 ID 均不同；每条 assistant 卡片只含自身文件；右侧“本次运行改动 1”只含当前 run 文件，切回历史伙伴后仍不出现另一 run 的文件，对齐 `WB-PANEL-003`、`WB-APPLY-003`。
-- Not：不要求两个终端命令实际时间重叠；重叠命令的允许重复归属由后端并发单测覆盖。
-
 #### `ppt-create-diff-and-revert`
 
 - 测试类型：`e2e / live`
@@ -639,24 +630,6 @@ pnpm test:update:e2e
 - How：在临时文件地址根目录创建包含已有表格的 DOCX，通过 `+` 附件流程添加并发送明确的单元格替换和样式修改请求；等待 Run 完成后打开 assistant 修改入口，检查状态、Review Docx、预览模式监听真实资产文件、审核模式快照和真实磁盘文件。
 - Oracle：正式 DOCX 包含最终单元格内容；修改记录为 `applied` 且路径保持文件地址内源文件绝对路径，不出现失败红条或“本次未检测到文件内容变化”；审核预览在对应单元格展示红绿净变化，未变单元格不整表高亮，对齐 `WB-PANEL-003-AC20`、`WB-PANEL-003-AC21`、`WB-APPLY-003-AC9`、`WB-COMPOSER-010-AC2`。
 - Not：不使用 fake DOCX、fake AI event 或伪造修改记录；不验证粘贴副本保存链路，该链路由 `composer-attachments-context` 覆盖。
-
-#### `terminal-rename-change-notice-and-revert`
-
-- 测试类型：`e2e`
-- What：真实 AI 通过终端 `mv` 重命名文件后，验证命令级差异记录、非专用变更说明和确认回退闭环。
-- Why：终端和脚本没有专用 Diff，但仍属于本次运行的 AI 改动；若只覆盖内置编辑工具，会漏掉产品的重要通用执行路径。
-- How：在临时文件地址要求真实 AI 只使用 `terminal_run` 重命名文件；等待 Run 完成后点击修改入口，检查前后文件名和内容未变化说明；点击回退并确认，再读取磁盘状态。
-- Oracle：重命名记录在 terminal 命令结束后进入 assistant 修改入口和“本次运行改动”；预览区展示原文件名、当前文件名和“文件内容没有变化”，不出现“没有专用预览稿”；统一回退确认出现后才执行，最终原文件名及原始 bytes 恢复，重命名目标消失。
-- Not：不尝试区分重叠 terminal 命令共同看到的变化；允许按各自命令窗口重复记录。
-
-#### `terminal-update-delete-change-and-revert`
-
-- 测试类型：`e2e / live`
-- What：真实 AI 通过终端修改文本文件内容和删除文件后，分别验证行级 Diff 预览与回退恢复原始 bytes、删除记录说明与回退恢复文件。
-- Why：终端是通用执行路径，内容修改和删除两条记录与内置文件工具共用同一回退入口；若只覆盖重命名，会漏掉终端产生的最常见两类可回退记录。
-- How：在临时文件地址要求真实 AI 只使用 `terminal_run`，在一次 Run 中修改一个文本文件内容（如追加唯一标记行）并删除另一个文件；等待 Run 完成后分别打开两条修改入口：修改记录检查行级 Diff 预览（不出现“没有专用预览稿”），删除记录检查“本次删除了该文件”说明；分别点击回退并确认，再读取磁盘状态。
-- Oracle：两条记录在 terminal 命令结束后进入 assistant 修改入口和“本次运行改动”；修改记录在审核模式展示普通行级 Diff，对齐 `WB-APPLY-003-AC4`；回退后文本文件恢复原始 bytes 且记录状态变为 `reverted`，对齐 `WB-APPLY-003-AC1`；删除记录展示删除说明，回退后文件恢复且 bytes 与删除前一致，对齐 `WB-APPLY-003-AC2`。
-- Not：不验证 terminal 命令审批交互和重叠命令窗口归属，该能力由 AI tool terminal 回归和 `terminal-rename-change-notice-and-revert` 覆盖。
 
 #### `docx-apply-force-revert-warning`
 

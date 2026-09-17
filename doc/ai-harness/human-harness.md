@@ -297,7 +297,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 |--------------|------|
 | `run_id` / `partner_id` | 归属 |
 | `path` / `fileName` / `operation` | 文件身份与操作类型 |
-| `capability` | `text_file` / `docx` / `ppt` / `terminal_exec` 等（`source` 才是 `terminal_tool`） |
+| `capability` | `text_file` / `docx` / `ppt` / `excel` / `image` |
 | `status` | `applied` / `failed` / `reverted` 等 |
 | `changeCount` / `insertCount` / `deleteCount` | 改动统计 |
 | `previewArtifactHash` 等 | diff 预览对象 |
