@@ -99,12 +99,14 @@ describe('workbench result e2e', () => {
 
           const link = editor.getByText('example', { exact: true }).first()
           const linkVisible = await link.isVisible().catch(() => false)
-          let linkSourceRevealed = false
+          let linkOpenExternalCalled = false
           if (linkVisible) {
             await link.click()
-            await page.waitForTimeout(600)
-            const text = (await editor.textContent()) || ''
-            linkSourceRevealed = text.includes('[example](https://example.com)')
+            await page.waitForTimeout(800)
+            const signalsAfterLink = await runtime.collectSignals()
+            linkOpenExternalCalled = signalsAfterLink.ipcInvokeEntries.some(
+              (entry) => entry.name === 'openExternal' && entry.payload === 'https://example.com'
+            )
           }
 
           await fs.writeFile(firstPath, '# First Title\n\nidle external content\n\n[example](https://example.com)')
@@ -201,7 +203,7 @@ describe('workbench result e2e', () => {
             paragraphVisible,
             autoSavedAfterTyping,
             linkVisible,
-            linkSourceRevealed,
+            linkOpenExternalCalled,
             idleReloaded,
             editingOverwroteExternal,
             emptyEditorHasVditor,
@@ -225,7 +227,7 @@ describe('workbench result e2e', () => {
               result.paragraphVisible &&
               result.autoSavedAfterTyping &&
               result.linkVisible &&
-              result.linkSourceRevealed &&
+              result.linkOpenExternalCalled &&
               result.idleReloaded &&
               result.editingOverwroteExternal &&
               result.emptyEditorHasVditor &&
@@ -237,7 +239,7 @@ describe('workbench result e2e', () => {
             {
               name: 'workbench-markdown-editor-edit-save-real',
               message:
-                'Markdown 打开即即时渲染编辑且无工具栏；输入自动落盘；空闲外部改动自动重载、编辑中外部改动被自动覆盖；链接点击局部露出 markdown 源；编辑区撑满面板无右侧灰色残留；标题前无 H1/H2 标签与 #/## 标记；拉宽窗口不白屏。\n' +
+                'Markdown 打开即即时渲染编辑且无工具栏；输入自动落盘；空闲外部改动自动重载、编辑中外部改动被自动覆盖；点击 https 链接调用 openExternal；编辑区撑满面板无右侧灰色残留；标题前无 H1/H2 标签与 #/## 标记；拉宽窗口不白屏。\n' +
                 JSON.stringify(result),
               data: result
             }

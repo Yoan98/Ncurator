@@ -12,6 +12,7 @@ import {
   resolvePreviewImageName,
   type MarkdownImageBlobCache
 } from './markdownImages'
+import { openMarkdownEditorLink } from './markdownEditorLinks'
 import ImageLightbox from '../workbench/ImageLightbox'
 import type { ImageLightboxImage } from '../workbench/ImageLightbox'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -28,6 +29,7 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
   const blobCacheRef = useRef<MarkdownImageBlobCache>(new Map())
   const hydrateTimerRef = useRef<number | null>(null)
   const previewHandlerRef = useRef<(img: HTMLImageElement) => void>(() => undefined)
+  const linkHandlerRef = useRef<(element: Element) => void>(() => undefined)
   const [previewImage, setPreviewImage] = useState<ImageLightboxImage | null>(null)
   const { initialText, autoSave, flushSave } = file
 
@@ -44,6 +46,22 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
       setPreviewImage({
         name: resolvePreviewImageName(img),
         src: img.currentSrc || img.src
+      })
+    }
+  }, [message])
+
+  useEffect(() => {
+    linkHandlerRef.current = (element) => {
+      void openMarkdownEditorLink({
+        element,
+        markdownFilePath: filePathRef.current
+      }).then((result) => {
+        if (result.ok) return
+        if (result.reason === 'missing') {
+          message.warning('链接无法访问')
+          return
+        }
+        message.warning(result.detail || '无法打开链接')
       })
     }
   }, [message])
@@ -74,7 +92,11 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
       value: initialText,
       cdn: resolveVditorCdn(),
       placeholder: '开始输入…',
-      link: { isOpen: false },
+      link: {
+        click: (element) => {
+          linkHandlerRef.current(element)
+        }
+      },
       image: {
         preview: (element) => {
           previewHandlerRef.current(element as HTMLImageElement)

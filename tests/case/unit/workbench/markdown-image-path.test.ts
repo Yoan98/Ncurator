@@ -4,22 +4,17 @@ import {
   joinFsPath,
   resolveMarkdownImageLocalPath
 } from '../../../../src/shared/markdownImagePath'
+import { resolveMarkdownEditorLinkTarget } from '../../../../src/shared/markdownEditorLink'
 
 describe('markdownImagePath', () => {
   it('resolves relative paths against the markdown file directory', () => {
     expect(
-      resolveMarkdownImageLocalPath(
-        '/Users/test/docs/note.md',
-        './media/cover.png'
-      )
+      resolveMarkdownImageLocalPath('/Users/test/docs/note.md', './media/cover.png')
     ).toBe('/Users/test/docs/media/cover.png')
 
-    expect(
-      resolveMarkdownImageLocalPath(
-        '/Users/test/docs/note.md',
-        '../assets/a.jpg'
-      )
-    ).toBe('/Users/test/assets/a.jpg')
+    expect(resolveMarkdownImageLocalPath('/Users/test/docs/note.md', '../assets/a.jpg')).toBe(
+      '/Users/test/assets/a.jpg'
+    )
   })
 
   it('keeps absolute and file:// local paths', () => {
@@ -37,5 +32,18 @@ describe('markdownImagePath', () => {
   it('normalizes dirname and join helpers', () => {
     expect(dirnamePath('/Users/test/docs/note.md')).toBe('/Users/test/docs')
     expect(joinFsPath('/Users/test/docs', 'media/./x.png')).toBe('/Users/test/docs/media/x.png')
+  })
+})
+
+describe('markdownEditorLink', () => {
+  it('classifies https as web and relative paths as local files', () => {
+    expect(resolveMarkdownEditorLinkTarget('/tmp/a.md', 'https://example.com/x')).toEqual({
+      kind: 'web',
+      url: 'https://example.com/x'
+    })
+    expect(resolveMarkdownEditorLinkTarget('/tmp/docs/a.md', './notes.txt')).toEqual({
+      kind: 'file',
+      path: '/tmp/docs/notes.txt'
+    })
   })
 })
