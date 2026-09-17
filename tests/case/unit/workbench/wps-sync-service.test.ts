@@ -27,7 +27,7 @@ import { spawn } from 'node:child_process'
 import { shell } from 'electron'
 
 import { authAddinNeedsRewrite, mergeAuthAddin } from '../../../../src/main/services/wps/authAddin'
-import { WPS_ADDON_DIR_NAME, WPS_ADDON_NAME, WPS_ADDON_PORT_FILE } from '../../../../src/main/services/wps/constants'
+import { WPS_ADDON_DIR_NAME, WPS_ADDON_NAME, WPS_ADDON_PORT_FILE, WPS_PREFERRED_SYNC_PORT } from '../../../../src/main/services/wps/constants'
 import {
   notifyOfficeFileWritten,
   setOfficeFileWriteListener,
@@ -90,11 +90,16 @@ const expectShellReopen = async (filePath: string, component: string): Promise<v
 
 const readSseEvents = (
   port: number,
-  component = 'wps'
-): { events: Array<{ type?: string; path?: string }>; close: () => void } => {
+  component = 'wps',
+  clientId = `client-${component}-${Math.random().toString(36).slice(2, 8)}`
+): {
+  clientId: string
+  events: Array<{ type?: string; path?: string }>
+  close: () => void
+} => {
   const events: Array<{ type?: string; path?: string }> = []
   const controller = new AbortController()
-  void fetch(`http://127.0.0.1:${port}/events?component=${component}`, {
+  void fetch(`http://127.0.0.1:${port}/events?component=${component}&clientId=${clientId}`, {
     signal: controller.signal
   })
     .then(async (response) => {
@@ -117,9 +122,40 @@ const readSseEvents = (
     })
     .catch(() => undefined)
   return {
+    clientId,
     events,
     close: () => controller.abort()
   }
+}
+
+const postReport = async (
+  port: number,
+  body: {
+    kind?: string
+    component: string
+    clientId: string
+    at?: number
+    data: Record<string, unknown>
+  }
+): Promise<void> => {
+  await fetch(`http://127.0.0.1:${port}/report`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  })
+}
+
+const reportOpenItems = async (
+  port: number,
+  input: { component: string; clientId: string; fullNames: readonly string[] }
+): Promise<void> => {
+  await postReport(port, {
+    component: input.component,
+    clientId: input.clientId,
+    data: {
+      items: input.fullNames.map((fullName) => ({ name: path.basename(fullName), fullName }))
+    }
+  })
 }
 
 afterEach(async () => {
@@ -312,19 +348,19 @@ describe('WpsAddonInstaller', () => {
       code: 'ENOENT'
     })
     const publish = await fs.readFile(path.join(jsAddonsDir, 'publish.xml'), 'utf8')
-    expect(publish).toContain('url="http://127.0.0.1:58123/addon/"')
+    expect(publish).toContain(`url="http://127.0.0.1:${WPS_PREFERRED_SYNC_PORT}/addon/"`)
     expect(publish).toContain('<jspluginonline ')
     expect(publish).toContain('name="ncurator-sync"')
     expect(publish).toContain('enable="enable_dev"')
     expect(JSON.parse(await fs.readFile(path.join(jsAddonsDir, WPS_ADDON_PORT_FILE), 'utf8'))).toEqual({
-      port: 58123
+      port: WPS_PREFERRED_SYNC_PORT
     })
     expect(JSON.parse(await fs.readFile(path.join(jsAddonsDir, 'authaddin.json'), 'utf8'))).toMatchObject({
       wps: {
         abc: {
           enable: true,
           mode: 2,
-          path: 'http://127.0.0.1:58123/addon/'
+          path: `http://127.0.0.1:${WPS_PREFERRED_SYNC_PORT}/addon/`
         },
         namelist: 'abc'
       }
@@ -336,9 +372,9 @@ describe('WpsAddonInstaller', () => {
       port: 58129
     })
     const publishAfterFallback = await fs.readFile(path.join(jsAddonsDir, 'publish.xml'), 'utf8')
-    expect(publishAfterFallback).toContain('url="http://127.0.0.1:58123/addon/"')
+    expect(publishAfterFallback).toContain(`url="http://127.0.0.1:${WPS_PREFERRED_SYNC_PORT}/addon/"`)
     expect(publishAfterFallback).not.toContain('58129')
-    expect(publishXmlHasAddonUrl(publishAfterFallback, toAddonLoopbackUrl(58123))).toBe(true)
+    expect(publishXmlHasAddonUrl(publishAfterFallback, toAddonLoopbackUrl(WPS_PREFERRED_SYNC_PORT))).toBe(true)
     expect(await fs.readFile(path.join(jsAddonsDir, 'authaddin.json'), 'utf8')).toBe(authAfterInstall)
   })
 
@@ -350,9 +386,9 @@ describe('WpsAddonInstaller', () => {
       addonSourceDir: path.join(process.cwd(), 'resources', 'wps-addon'),
       jsAddonsDir
     })
-    await installer.writePort(58123)
+    await installer.writePort(WPS_PREFERRED_SYNC_PORT)
     expect(JSON.parse(await fs.readFile(path.join(jsAddonsDir, WPS_ADDON_PORT_FILE), 'utf8'))).toEqual({
-      port: 58123
+      port: WPS_PREFERRED_SYNC_PORT
     })
     await expect(fs.stat(leftoverDir)).rejects.toMatchObject({ code: 'ENOENT' })
   })
@@ -406,18 +442,35 @@ describe('office file write notify', () => {
 describe('WpsOpenDocumentRegistry', () => {
   it('matches open documents across path separators and case', () => {
     const registry = new WpsOpenDocumentRegistry()
-    registry.setDocuments('wps', [{ name: 'a.docx', fullName: '/Users/Me/Docs/A.docx' }])
+    registry.setDocuments('client-a', 'wps', [{ name: 'a.docx', fullName: '/Users/Me/Docs/A.docx' }])
     expect(registry.isOpen('/Users/Me/Docs/A.docx')).toBe(true)
     expect(registry.isOpen('/users/me/docs/a.docx')).toBe(true)
     expect(registry.isOpen('/Users/Me/Docs/other.docx')).toBe(false)
     expect(registry.listOpenDocuments()).toEqual([
-      { component: 'wps', fullName: '/Users/Me/Docs/A.docx' }
+      { clientId: 'client-a', component: 'wps', fullName: '/Users/Me/Docs/A.docx' }
     ])
     registry.remove('/users/me/docs/a.docx')
     expect(registry.isOpen('/Users/Me/Docs/A.docx')).toBe(false)
-    registry.upsert('wps', '/Users/Me/Docs/A.docx')
+    registry.upsert('client-a', 'wps', '/Users/Me/Docs/A.docx')
     expect(registry.isOpen('/users/me/docs/a.docx')).toBe(true)
     expect(registry.componentFor('/Users/Me/Docs/A.docx')).toBe('wps')
+    expect(registry.clientFor('/Users/Me/Docs/A.docx')).toBe('client-a')
+  })
+
+  it('keeps each add-in instance of the same component separate', () => {
+    const registry = new WpsOpenDocumentRegistry()
+    registry.setDocuments('stale-et', 'et', [{ name: 'old.xlsx', fullName: '/old/run/sheet.xlsx' }])
+    registry.setDocuments('live-et', 'et', [{ name: 'new.xlsx', fullName: '/new/run/sheet.xlsx' }])
+
+    // 旧实例上报文档列表不得把新实例的文档顶掉，否则 close / open 会投错人。
+    expect(registry.isOpen('/old/run/sheet.xlsx')).toBe(true)
+    expect(registry.isOpen('/new/run/sheet.xlsx')).toBe(true)
+    expect(registry.clientFor('/new/run/sheet.xlsx')).toBe('live-et')
+    expect(registry.clientFor('/old/run/sheet.xlsx')).toBe('stale-et')
+
+    registry.dropClient('stale-et')
+    expect(registry.isOpen('/old/run/sheet.xlsx')).toBe(false)
+    expect(registry.isOpen('/new/run/sheet.xlsx')).toBe(true)
   })
 })
 
@@ -453,30 +506,24 @@ describe('WpsSyncService', () => {
     const stream = readSseEvents(port as number)
     await waitFor(() => stream.events.some((event) => event.type === 'ping'))
 
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        component: 'wps',
-        data: { items: [{ name: 'a.docx', fullName: '/tmp/opened.docx' }] }
-      })
+    await reportOpenItems(port as number, {
+      component: 'wps',
+      clientId: stream.clientId,
+      fullNames: ['/tmp/opened.docx']
     })
     expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(true)
 
     const closing = service.prepareClose('/tmp/opened.docx')
     await waitFor(() => stream.events.some((event) => event.type === 'close'))
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'close-result',
-        component: 'wps',
-        data: {
-          ok: true,
-          fullName: '/tmp/opened.docx',
-          remaining: 1
-        }
-      })
+    await postReport(port as number, {
+      kind: 'close-result',
+      component: 'wps',
+      clientId: stream.clientId,
+      data: {
+        ok: true,
+        fullName: '/tmp/opened.docx',
+        remaining: 1
+      }
     })
     expect(await closing).toBe(true)
     expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(false)
@@ -512,19 +559,150 @@ describe('WpsSyncService', () => {
 
     const stream = readSseEvents(port as number)
     await waitFor(() => stream.events.some((event) => event.type === 'ping'))
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        component: 'wps',
-        data: { items: [{ name: 'a.docx', fullName: '/tmp/opened.docx' }] }
-      })
+    await reportOpenItems(port as number, {
+      component: 'wps',
+      clientId: stream.clientId,
+      fullNames: ['/tmp/opened.docx']
     })
     const closing = service.prepareClose('/tmp/opened.docx')
     await waitFor(() => stream.events.some((event) => event.type === 'close'))
     stream.close()
     expect(await closing).toBe(true)
     expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(false)
+  })
+
+  it('refuses to write when the add-in reports the close failed', async () => {
+    const addonDir = await createTempDir('ncurator-wps-addon-dir-')
+    const service = new WpsSyncService({
+      skipInstall: false,
+      preferredPort: 0,
+      installer: {
+        install: async () => ({ installed: true, addonDir }),
+        writePort: async () => undefined
+      }
+    })
+    services.push(service)
+    await service.start()
+    const port = service.getPort() as number
+
+    const stream = readSseEvents(port)
+    await waitFor(() => stream.events.some((event) => event.type === 'ping'))
+    await reportOpenItems(port, {
+      component: 'wps',
+      clientId: stream.clientId,
+      fullNames: ['/tmp/opened.docx']
+    })
+
+    const closing = service.prepareClose('/tmp/opened.docx')
+    await waitFor(() => stream.events.some((event) => event.type === 'close'))
+    await postReport(port, {
+      kind: 'close-result',
+      component: 'wps',
+      clientId: stream.clientId,
+      data: {
+        ok: false,
+        reason: 'still open after close',
+        targetPath: '/tmp/opened.docx',
+        remaining: 1
+      }
+    })
+    // 文档还开着就写盘会让窗口显示旧稿而磁盘已变，必须让写入方知道没释放。
+    expect(await closing).toBe(false)
+    expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(true)
+    stream.close()
+  })
+
+  it('sends close and open only to the add-in instance holding the document', async () => {
+    const addonDir = await createTempDir('ncurator-wps-addon-dir-')
+    const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
+    const service = new WpsSyncService({
+      skipInstall: false,
+      preferredPort: 0,
+      installer: {
+        install: async () => ({ installed: true, addonDir }),
+        writePort: async () => undefined
+      }
+    })
+    services.push(service)
+    await service.start()
+    const port = service.getPort() as number
+
+    const stale = readSseEvents(port, 'et', 'stale-et')
+    const live = readSseEvents(port, 'et', 'live-et')
+    await waitFor(() => stale.events.some((event) => event.type === 'ping'))
+    await waitFor(() => live.events.some((event) => event.type === 'ping'))
+    await reportOpenItems(port, {
+      component: 'et',
+      clientId: 'stale-et',
+      fullNames: ['/old/run/sheet.xlsx']
+    })
+    await reportOpenItems(port, {
+      component: 'et',
+      clientId: 'live-et',
+      fullNames: ['/new/run/sheet.xlsx']
+    })
+
+    const closing = service.prepareClose('/new/run/sheet.xlsx')
+    await waitFor(() => live.events.some((event) => event.type === 'close'))
+    expect(stale.events.some((event) => event.type === 'close')).toBe(false)
+    await postReport(port, {
+      kind: 'close-result',
+      component: 'et',
+      clientId: 'live-et',
+      data: { ok: true, fullName: '/new/run/sheet.xlsx', remaining: 1 }
+    })
+    expect(await closing).toBe(true)
+
+    service.notifyWritten('/new/run/sheet.xlsx')
+    await waitFor(() =>
+      live.events.some(
+        (event) => event.type === 'open' && event.path === path.resolve('/new/run/sheet.xlsx')
+      )
+    )
+    expect(stale.events.some((event) => event.type === 'open')).toBe(false)
+
+    // 旁边的实例说打不开不能算数，否则会把正在干活的实例踢去走系统重开。
+    await postReport(port, {
+      kind: 'reload-result',
+      component: 'et',
+      clientId: 'stale-et',
+      data: { ok: false, reason: 'not open here', targetPath: '/new/run/sheet.xlsx' }
+    })
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(vi.mocked(spawn)).not.toHaveBeenCalled()
+    expect(openPath).not.toHaveBeenCalled()
+
+    stale.close()
+    live.close()
+    openPath.mockRestore()
+  })
+
+  it('drops an instance documents when its stream disconnects', async () => {
+    const addonDir = await createTempDir('ncurator-wps-addon-dir-')
+    const service = new WpsSyncService({
+      skipInstall: false,
+      preferredPort: 0,
+      installer: {
+        install: async () => ({ installed: true, addonDir }),
+        writePort: async () => undefined
+      }
+    })
+    services.push(service)
+    await service.start()
+    const port = service.getPort() as number
+
+    const stream = readSseEvents(port, 'wpp', 'ghost-wpp')
+    await waitFor(() => stream.events.some((event) => event.type === 'ping'))
+    await reportOpenItems(port, {
+      component: 'wpp',
+      clientId: 'ghost-wpp',
+      fullNames: ['/tmp/deck.pptx']
+    })
+    expect(service.getOpenRegistry().isOpen('/tmp/deck.pptx')).toBe(true)
+
+    stream.close()
+    await waitFor(() => !service.getOpenRegistry().isOpen('/tmp/deck.pptx'))
+    expect(service.getOpenRegistry().listOpenDocuments()).toEqual([])
   })
 
   it('flushes a pending excerpt when the add-in reconnects after last-document close', async () => {
@@ -545,24 +723,18 @@ describe('WpsSyncService', () => {
 
     const first = readSseEvents(port as number)
     await waitFor(() => first.events.some((event) => event.type === 'ping'))
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        component: 'wps',
-        data: { items: [{ name: 'a.docx', fullName: '/tmp/opened.docx' }] }
-      })
+    await reportOpenItems(port as number, {
+      component: 'wps',
+      clientId: first.clientId,
+      fullNames: ['/tmp/opened.docx']
     })
     const closing = service.prepareClose('/tmp/opened.docx')
     await waitFor(() => first.events.some((event) => event.type === 'close'))
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'close-result',
-        component: 'wps',
-        data: { ok: true, fullName: '/tmp/opened.docx', remaining: 0 }
-      })
+    await postReport(port as number, {
+      kind: 'close-result',
+      component: 'wps',
+      clientId: first.clientId,
+      data: { ok: true, fullName: '/tmp/opened.docx', remaining: 0, placeholder: false }
     })
     expect(await closing).toBe(true)
     first.close()
@@ -579,13 +751,10 @@ describe('WpsSyncService', () => {
     const second = readSseEvents(port as number)
     await waitFor(() => second.events.some((event) => event.type === 'ping'))
     expect(second.events.some((event) => event.type === 'open')).toBe(false)
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        component: 'wps',
-        data: { items: [{ name: 'a.docx', fullName: '/tmp/opened.docx' }] }
-      })
+    await reportOpenItems(port as number, {
+      component: 'wps',
+      clientId: second.clientId,
+      fullNames: ['/tmp/opened.docx']
     })
     await waitFor(() =>
       second.events.some(
@@ -614,41 +783,32 @@ describe('WpsSyncService', () => {
 
     const stream = readSseEvents(port as number, 'et')
     await waitFor(() => stream.events.some((event) => event.type === 'ping'))
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        component: 'et',
-        data: { items: [{ name: 'sheet.xlsx', fullName: '/tmp/sheet.xlsx' }] }
-      })
+    await reportOpenItems(port as number, {
+      component: 'et',
+      clientId: stream.clientId,
+      fullNames: ['/tmp/sheet.xlsx']
     })
     const closing = service.prepareClose('/tmp/sheet.xlsx')
     await waitFor(() => stream.events.some((event) => event.type === 'close'))
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'close-result',
-        component: 'et',
-        data: { ok: true, fullName: '/tmp/sheet.xlsx', remaining: 0 }
-      })
+    await postReport(port as number, {
+      kind: 'close-result',
+      component: 'et',
+      clientId: stream.clientId,
+      data: { ok: true, fullName: '/tmp/sheet.xlsx', remaining: 0, placeholder: false }
     })
     expect(await closing).toBe(true)
 
-    // SSE 仍连着，但加载项自报已无文档，必须走系统打开而不是发 open。
+    // SSE 仍连着，但加载项自报已无文档且没能建占位，必须走系统打开而不是发 open。
     service.notifyWritten('/tmp/sheet.xlsx')
     await expectShellReopen('/tmp/sheet.xlsx', 'et')
     expect(stream.events.some((event) => event.type === 'open')).toBe(false)
     expect(vi.mocked(spawn).mock.calls.length + openPath.mock.calls.length).toBe(1)
 
     await waitFor(() => stream.events.some((event) => event.type === 'list'), 3_000)
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        component: 'et',
-        data: { items: [{ name: 'sheet.xlsx', fullName: '/tmp/sheet.xlsx' }] }
-      })
+    await reportOpenItems(port as number, {
+      component: 'et',
+      clientId: stream.clientId,
+      fullNames: ['/tmp/sheet.xlsx']
     })
     await waitFor(() =>
       stream.events.some(
@@ -656,6 +816,51 @@ describe('WpsSyncService', () => {
       )
     )
     expect(vi.mocked(spawn).mock.calls.length + openPath.mock.calls.length).toBe(1)
+    stream.close()
+    openPath.mockRestore()
+  })
+
+  it('keeps using the add-in when a placeholder document held the component alive', async () => {
+    const addonDir = await createTempDir('ncurator-wps-addon-dir-')
+    const openPath = vi.spyOn(shell, 'openPath').mockResolvedValue('')
+    const service = new WpsSyncService({
+      skipInstall: false,
+      preferredPort: 0,
+      installer: {
+        install: async () => ({ installed: true, addonDir }),
+        writePort: async () => undefined
+      }
+    })
+    services.push(service)
+    await service.start()
+    const port = service.getPort() as number
+
+    const stream = readSseEvents(port, 'et')
+    await waitFor(() => stream.events.some((event) => event.type === 'ping'))
+    await reportOpenItems(port, {
+      component: 'et',
+      clientId: stream.clientId,
+      fullNames: ['/tmp/sheet.xlsx']
+    })
+    const closing = service.prepareClose('/tmp/sheet.xlsx')
+    await waitFor(() => stream.events.some((event) => event.type === 'close'))
+    await postReport(port, {
+      kind: 'close-result',
+      component: 'et',
+      clientId: stream.clientId,
+      data: { ok: true, fullName: '/tmp/sheet.xlsx', remaining: 0, placeholder: true }
+    })
+    expect(await closing).toBe(true)
+
+    // 占位文档撑住了进程，加载项还能执行 Open，不该退化成系统重开。
+    service.notifyWritten('/tmp/sheet.xlsx')
+    await waitFor(() =>
+      stream.events.some(
+        (event) => event.type === 'open' && event.path === path.resolve('/tmp/sheet.xlsx')
+      )
+    )
+    expect(vi.mocked(spawn)).not.toHaveBeenCalled()
+    expect(openPath).not.toHaveBeenCalled()
     stream.close()
     openPath.mockRestore()
   })
@@ -678,24 +883,18 @@ describe('WpsSyncService', () => {
 
     const stream = readSseEvents(port as number, 'et')
     await waitFor(() => stream.events.some((event) => event.type === 'ping'))
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        component: 'et',
-        data: { items: [{ name: 'sheet.xlsx', fullName: '/tmp/sheet.xlsx' }] }
-      })
+    await reportOpenItems(port as number, {
+      component: 'et',
+      clientId: stream.clientId,
+      fullNames: ['/tmp/sheet.xlsx']
     })
     const closing = service.prepareClose('/tmp/sheet.xlsx')
     await waitFor(() => stream.events.some((event) => event.type === 'close'))
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'close-result',
-        component: 'et',
-        data: { ok: true, fullName: '/tmp/sheet.xlsx', remaining: 2 }
-      })
+    await postReport(port as number, {
+      kind: 'close-result',
+      component: 'et',
+      clientId: stream.clientId,
+      data: { ok: true, fullName: '/tmp/sheet.xlsx', remaining: 2 }
     })
     expect(await closing).toBe(true)
 
@@ -708,14 +907,11 @@ describe('WpsSyncService', () => {
     expect(vi.mocked(spawn)).not.toHaveBeenCalled()
     expect(openPath).not.toHaveBeenCalled()
 
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'reload-result',
-        component: 'et',
-        data: { ok: false, reason: 'Workbooks unavailable', targetPath: '/tmp/sheet.xlsx' }
-      })
+    await postReport(port as number, {
+      kind: 'reload-result',
+      component: 'et',
+      clientId: stream.clientId,
+      data: { ok: false, reason: 'Workbooks unavailable', targetPath: '/tmp/sheet.xlsx' }
     })
     await expectShellReopen('/tmp/sheet.xlsx', 'et')
     expect(vi.mocked(spawn).mock.calls.length + openPath.mock.calls.length).toBe(1)
@@ -739,22 +935,20 @@ describe('WpsSyncService', () => {
     expect(port).toBeTruthy()
     expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(false)
 
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'reload-result',
-        component: 'wps',
-        data: {
-          ok: true,
-          fullName: '/tmp/opened.docx',
-          excerpt: 'hello',
-          items: [{ name: 'a.docx', fullName: '/tmp/opened.docx' }]
-        }
-      })
+    await postReport(port as number, {
+      kind: 'reload-result',
+      component: 'wps',
+      clientId: 'writer-1',
+      data: {
+        ok: true,
+        fullName: '/tmp/opened.docx',
+        excerpt: 'hello',
+        items: [{ name: 'a.docx', fullName: '/tmp/opened.docx' }]
+      }
     })
     expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(true)
     expect(service.getOpenRegistry().componentFor('/tmp/opened.docx')).toBe('wps')
+    expect(service.getOpenRegistry().clientFor('/tmp/opened.docx')).toBe('writer-1')
   })
 
   it('sends open only to the matching office component', async () => {
@@ -810,13 +1004,10 @@ describe('WpsSyncService', () => {
     const stream = readSseEvents(port as number)
     await waitFor(() => stream.events.some((event) => event.type === 'ping'))
 
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        component: 'wps',
-        data: { items: [{ name: 'a.docx', fullName: '/tmp/opened.docx' }] }
-      })
+    await reportOpenItems(port as number, {
+      component: 'wps',
+      clientId: stream.clientId,
+      fullNames: ['/tmp/opened.docx']
     })
     expect(service.getOpenRegistry().isOpen('/tmp/opened.docx')).toBe(true)
 
@@ -846,19 +1037,16 @@ describe('WpsSyncService', () => {
     expect(port).toBeTruthy()
 
     service.notifyWritten('/tmp/opened.docx')
-    await fetch(`http://127.0.0.1:${port}/report`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        kind: 'reload-result',
-        component: 'wps',
-        at: 1_700_000_000_000,
-        data: {
-          ok: false,
-          reason: 'not open here',
-          targetPath: '/tmp/opened.docx'
-        }
-      })
+    await postReport(port as number, {
+      kind: 'reload-result',
+      component: 'wps',
+      clientId: 'writer-1',
+      at: 1_700_000_000_000,
+      data: {
+        ok: false,
+        reason: 'not open here',
+        targetPath: '/tmp/opened.docx'
+      }
     })
 
     const status = (await (await fetch(`http://127.0.0.1:${port}/status`)).json()) as {
@@ -878,6 +1066,7 @@ describe('WpsSyncService', () => {
       {
         at: 1_700_000_000_000,
         component: 'wps',
+        clientId: 'writer-1',
         ok: false,
         fullName: '',
         excerpt: '',

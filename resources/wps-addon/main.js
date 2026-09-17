@@ -1,5 +1,5 @@
 ;(function () {
-  var DEFAULT_PORT = 58123
+  var DEFAULT_PORT = 18723
   // 摘录用于证明窗口已换成磁盘新稿，采样窗口太小会漏掉正文末尾或右侧的改动。
   var EXCERPT_MAX_CHARS = 20000
   var EXCERPT_MAX_ROWS = 200
@@ -10,6 +10,12 @@
   var reconnectTimer = null
   var reconnectDelayMs = 1000
   var adapter = null
+  // 同一组件可能同时活着多个实例（上一轮没退干净、或用户自己开了第二个窗口），
+  // 只有页面级唯一 id 才能让馆长把 close / open 投给真正持有该文档的那个实例。
+  var clientId =
+    'c' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
+  // 组件关掉最后一个文档就会退出进程，close 前用它撑住，open 回来后再关掉。
+  var placeholderItem = null
 
   function getApp() {
     if (typeof window.Application !== 'undefined' && window.Application) return window.Application
@@ -24,10 +30,6 @@
     return error.message ? String(error.message) : String(error)
   }
 
-  function isDirty(saved) {
-    return saved === false || saved === 0
-  }
-
   function report(kind, data, sync) {
     var server = window.__ncuratorServer
     if (!server) return
@@ -35,6 +37,7 @@
       var body = JSON.stringify({
         kind: kind,
         component: adapter ? adapter.kind : 'unknown',
+        clientId: clientId,
         at: Date.now(),
         data: data === undefined ? null : data
       })
@@ -363,34 +366,22 @@
     return null
   }
 
-  function reload(targetPath) {
-    if (!adapter) return { ok: false, reason: 'no adapter' }
-    var startedAt = Date.now()
+  function addPlaceholder() {
     try {
-      var item = targetPath ? findItem(targetPath) : null
-      if (!item) return { ok: false, reason: 'not open here', targetPath: targetPath }
-      var fullName = item.FullName
-      if (!fullName) return { ok: false, reason: 'never saved, no path' }
-      var wasDirty = isDirty(item.Saved)
-      var view = adapter.captureView()
-      suppressEvents = true
-      adapter.close(item)
-      adapter.open(fullName)
-      var restored = adapter.restoreView(view)
-      var excerpt = adapter.excerpt ? adapter.excerpt() : ''
-      suppressEvents = false
-      return {
-        ok: true,
-        fullName: fullName,
-        wasDirty: wasDirty,
-        elapsedMs: Date.now() - startedAt,
-        view: view,
-        restored: restored,
-        excerpt: excerpt
-      }
+      return adapter.collection().Add()
     } catch (error) {
-      suppressEvents = false
-      return { ok: false, reason: describeError(error), elapsedMs: Date.now() - startedAt }
+      return null
+    }
+  }
+
+  function closePlaceholder() {
+    if (!placeholderItem) return
+    var item = placeholderItem
+    placeholderItem = null
+    try {
+      markSavedThenClose(item, true)
+    } catch (error) {
+      // 占位文档关不掉只是多一个空窗口，不影响正文已经换成新稿。
     }
   }
 
@@ -422,28 +413,36 @@
     if (!adapter) return { ok: false, reason: 'no adapter', targetPath: targetPath }
     var startedAt = Date.now()
     try {
-      var existing = targetPath ? findItem(targetPath) : null
-      if (existing) {
-        return {
-          ok: true,
-          fullName: existing.FullName,
-          excerpt: adapter.excerpt ? adapter.excerpt() : '',
-          alreadyOpen: true,
-          elapsedMs: Date.now() - startedAt
-        }
-      }
       if (!targetPath) return { ok: false, reason: 'never saved, no path' }
       if (!isOwnPath(targetPath)) return { ok: false, reason: 'not open here', targetPath: targetPath }
       var viewKey = normalizePath(targetPath)
-      if (!Object.prototype.hasOwnProperty.call(pendingViews, viewKey)) {
-        return { ok: false, reason: 'not open here', targetPath: targetPath }
-      }
-      var view = pendingViews[viewKey]
+      var closedHere = Object.prototype.hasOwnProperty.call(pendingViews, viewKey)
+      var view = closedHere ? pendingViews[viewKey] : null
       delete pendingViews[viewKey]
       suppressEvents = true
+      var existing = findItem(targetPath)
+      if (existing) {
+        // 还开着说明上一步的 close 没落地，此刻内存里是写盘前的旧稿，必须真关掉再重开。
+        if (!view) view = adapter.captureView()
+        adapter.close(existing)
+        if (findItem(targetPath)) {
+          suppressEvents = false
+          return {
+            ok: false,
+            reason: 'still open after close',
+            targetPath: targetPath,
+            elapsedMs: Date.now() - startedAt
+          }
+        }
+      } else if (!closedHere) {
+        // 本实例既没 close 过、当前也没开着，不能抢开别人的文档。
+        suppressEvents = false
+        return { ok: false, reason: 'not open here', targetPath: targetPath, elapsedMs: Date.now() - startedAt }
+      }
       adapter.open(targetPath)
       var restored = view ? adapter.restoreView(view) : {}
       var excerpt = adapter.excerpt ? adapter.excerpt() : ''
+      closePlaceholder()
       suppressEvents = false
       return {
         ok: true,
@@ -472,15 +471,31 @@
         var closed = closeForWrite(payload.path)
         var item = closed.item
         delete closed.item
-        report('close-result', closed, closed.ok)
-        if (item) {
-          suppressEvents = true
-          try {
-            adapter.close(item)
-          } finally {
-            suppressEvents = false
-          }
+        if (!closed.ok || !item) {
+          report('close-result', closed, true)
+          return
         }
+        closed.placeholder = false
+        try {
+          suppressEvents = true
+          // 关掉最后一个文档组件就会退出，先建一个空文档撑住进程，重开后再关掉它。
+          if (closed.remaining <= 0) {
+            placeholderItem = addPlaceholder()
+            closed.placeholder = placeholderItem !== null
+          }
+          adapter.close(item)
+        } catch (error) {
+          closed.ok = false
+          closed.reason = describeError(error)
+        } finally {
+          suppressEvents = false
+        }
+        // Close 失败在部分组件里是静默的，必须复查，否则馆长会以为锁已释放而照写。
+        if (closed.ok && findItem(payload.path)) {
+          closed.ok = false
+          closed.reason = 'still open after close'
+        }
+        report('close-result', closed, true)
       } catch (error) {
         report('close-result', {
           ok: false,
@@ -533,27 +548,6 @@
       }
       return
     }
-    if (payload.type === 'reload') {
-      try {
-        bindAdapter()
-        if (!adapter || !findItem(payload.path)) {
-          report('reload-result', {
-            ok: false,
-            reason: adapter ? 'not open here' : 'no adapter',
-            targetPath: payload.path
-          })
-          return
-        }
-        report('reload-result', reload(payload.path))
-      } catch (error) {
-        report('reload-result', {
-          ok: false,
-          reason: describeError(error),
-          targetPath: payload.path
-        })
-      }
-      return
-    }
     if (payload.type === 'list') report('items', { items: listItems().items })
   }
 
@@ -569,7 +563,13 @@
         eventSource.close()
         eventSource = null
       }
-      var source = new EventSource(server + '/events?component=' + (adapter ? adapter.kind : 'none'))
+      var source = new EventSource(
+        server +
+          '/events?component=' +
+          (adapter ? adapter.kind : 'none') +
+          '&clientId=' +
+          encodeURIComponent(clientId)
+      )
       eventSource = source
       source.onopen = function () {
         reconnectDelayMs = 1000

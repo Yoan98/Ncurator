@@ -11,7 +11,7 @@ export type TemporaryE2EWorkspace = {
   rootPath: string
 }
 
-const resolveE2ETempRoot = (): string =>
+export const resolveE2ETempRoot = (): string =>
   path.resolve(String(process.env.NCURATOR_E2E_TEMP_ROOT || '').trim() || os.tmpdir())
 
 const WINDOWS_FILE_LOCK_CODES = new Set(['EBUSY', 'EPERM', 'EACCES', 'ENOTEMPTY'])

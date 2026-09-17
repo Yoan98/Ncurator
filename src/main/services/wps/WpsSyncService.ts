@@ -14,76 +14,97 @@ export type WpsOpenDocument = {
   saved?: unknown
 }
 
-export class WpsOpenDocumentRegistry {
-  private readonly byComponent = new Map<string, Map<string, WpsOpenDocument>>()
+type ClientDocuments = {
+  component: string
+  documents: Map<string, WpsOpenDocument>
+}
 
-  public setDocuments(component: string, items: WpsOpenDocument[]): void {
-    const next = new Map<string, WpsOpenDocument>()
+// 同一组件可能同时活着多个加载项实例，按 component 存会互相覆盖，只有按 clientId 存才对得上。
+export class WpsOpenDocumentRegistry {
+  private readonly byClient = new Map<string, ClientDocuments>()
+
+  public setDocuments(clientId: string, component: string, items: WpsOpenDocument[]): void {
+    const documents = new Map<string, WpsOpenDocument>()
     for (const item of items) {
       const fullName = String(item.fullName || '').trim()
       if (!fullName) continue
-      next.set(normalizeOfficePath(fullName), item)
+      documents.set(normalizeOfficePath(fullName), item)
     }
-    this.byComponent.set(component, next)
+    this.byClient.set(clientId, { component, documents })
   }
 
   public isOpen(filePath: string): boolean {
-    const key = normalizeOfficePath(filePath)
-    for (const documents of this.byComponent.values()) {
-      if (documents.has(key)) return true
-    }
-    return false
+    return this.clientFor(filePath) !== undefined
   }
 
   public remove(filePath: string): void {
     const key = normalizeOfficePath(filePath)
-    for (const documents of this.byComponent.values()) {
-      documents.delete(key)
+    for (const entry of this.byClient.values()) {
+      entry.documents.delete(key)
     }
   }
 
-  public componentFor(filePath: string): string | undefined {
+  public clientFor(filePath: string): string | undefined {
     const key = normalizeOfficePath(filePath)
-    for (const [component, documents] of this.byComponent) {
-      if (documents.has(key)) return component
+    for (const [clientId, entry] of this.byClient) {
+      if (entry.documents.has(key)) return clientId
     }
     return undefined
   }
 
-  public listOpenDocuments(): Array<{ component: string; fullName: string }> {
-    const listed: Array<{ component: string; fullName: string }> = []
-    for (const [component, documents] of this.byComponent) {
-      for (const item of documents.values()) {
+  public componentFor(filePath: string): string | undefined {
+    const key = normalizeOfficePath(filePath)
+    for (const entry of this.byClient.values()) {
+      if (entry.documents.has(key)) return entry.component
+    }
+    return undefined
+  }
+
+  public listOpenDocuments(): Array<{ clientId: string; component: string; fullName: string }> {
+    const listed: Array<{ clientId: string; component: string; fullName: string }> = []
+    for (const [clientId, entry] of this.byClient) {
+      for (const item of entry.documents.values()) {
         const fullName = String(item.fullName || '').trim()
         if (!fullName) continue
-        listed.push({ component, fullName })
+        listed.push({ clientId, component: entry.component, fullName })
       }
     }
     return listed
   }
 
-  public upsert(component: string, filePath: string): void {
+  public upsert(clientId: string, component: string, filePath: string): void {
     const fullName = String(filePath || '').trim()
     if (!fullName) return
-    let documents = this.byComponent.get(component)
-    if (!documents) {
-      documents = new Map()
-      this.byComponent.set(component, documents)
+    let entry = this.byClient.get(clientId)
+    if (!entry) {
+      entry = { component, documents: new Map() }
+      this.byClient.set(clientId, entry)
     }
-    documents.set(normalizeOfficePath(fullName), {
+    entry.documents.set(normalizeOfficePath(fullName), {
       name: path.basename(fullName),
       fullName
     })
   }
 
+  // 实例断开后它的文档就不存在了，留着会让馆长把 close / open 投给幽灵客户端。
+  public dropClient(clientId: string): void {
+    this.byClient.delete(clientId)
+  }
+
   public clear(): void {
-    this.byComponent.clear()
+    this.byClient.clear()
   }
 }
 
 type SseClient = {
   response: ServerResponse
   component: string
+  clientId: string
+}
+
+type BroadcastTarget = {
+  clientId?: string
+  component?: string
 }
 
 export type WpsReloadDispatch = {
@@ -95,6 +116,7 @@ export type WpsReloadDispatch = {
 export type WpsReloadResult = {
   at: number
   component: string
+  clientId: string
   ok: boolean
   fullName: string
   excerpt: string
@@ -110,17 +132,20 @@ export type WpsAddonFetch = {
 export type WpsCloseResult = {
   at: number
   component: string
+  clientId: string
   ok: boolean
   fullName: string
   remaining: number
+  placeholder: boolean
+  reason?: string
   targetPath?: string
 }
 
 export type WpsSyncStatus = {
   ok: true
   clientCount: number
-  clients: Array<{ component: string }>
-  openDocuments: Array<{ component: string; fullName: string }>
+  clients: Array<{ component: string; clientId: string }>
+  openDocuments: Array<{ clientId: string; component: string; fullName: string }>
   lastDispatches: WpsReloadDispatch[]
   lastReloadResults: WpsReloadResult[]
   lastCloseResults: WpsCloseResult[]
@@ -130,6 +155,7 @@ export type WpsSyncStatus = {
 type WpsAddonReport = {
   kind?: string
   component?: string
+  clientId?: string
   at?: number
   data?: {
     items?: WpsOpenDocument[]
@@ -139,6 +165,7 @@ type WpsAddonReport = {
     reason?: string
     targetPath?: string
     remaining?: number
+    placeholder?: boolean
   }
 }
 
@@ -162,6 +189,7 @@ type PendingReopen = 'addin' | 'shell'
 type PendingOpen = {
   path: string
   component: string
+  clientId?: string
   at: number
   reopen: PendingReopen
   shellUsed: boolean
@@ -171,7 +199,9 @@ type PendingOpen = {
 
 type ReleasedClose = {
   component: string
+  clientId?: string
   remaining: number
+  placeholder: boolean
 }
 
 const ADDON_FILE_SET = new Set<string>(WPS_ADDON_FILES)
@@ -358,24 +388,34 @@ export class WpsSyncService {
   public async prepareClose(filePath: string): Promise<boolean> {
     if (!this.server || this.clients.size === 0) return false
     const resolvedPath = path.resolve(filePath)
-    if (!this.registry.isOpen(resolvedPath)) return false
+    const clientId = this.registry.clientFor(resolvedPath)
+    if (!clientId) return false
     const component = this.registry.componentFor(resolvedPath) || 'unknown'
     const startedAt = Date.now()
-    this.broadcast({ type: 'close', path: resolvedPath }, component)
+    this.broadcast({ type: 'close', path: resolvedPath }, { clientId })
     const deadline = startedAt + CLOSE_WAIT_MS
     while (Date.now() < deadline) {
       const closed = this.findCloseResult(resolvedPath, startedAt)
       if (closed) {
+        // 关不掉就别写盘，否则窗口里还是旧稿而磁盘已经变了。
+        if (!closed.ok) return false
         this.registry.remove(resolvedPath)
         this.releasedCloses.set(normalizeOfficePath(resolvedPath), {
           component: closed.component || component,
-          remaining: closed.remaining
+          clientId: closed.clientId || clientId,
+          remaining: closed.remaining,
+          placeholder: closed.placeholder
         })
         return true
       }
-      if (!this.hasComponentClient(component)) {
+      if (!this.hasClient(clientId)) {
         this.registry.remove(resolvedPath)
-        this.releasedCloses.set(normalizeOfficePath(resolvedPath), { component, remaining: 0 })
+        this.releasedCloses.set(normalizeOfficePath(resolvedPath), {
+          component,
+          clientId,
+          remaining: 0,
+          placeholder: false
+        })
         return true
       }
       await new Promise<void>((resolve) => {
@@ -405,20 +445,21 @@ export class WpsSyncService {
     this.pendingOpens.set(key, {
       path: resolvedPath,
       component,
+      clientId: released?.clientId,
       at: Date.now(),
       reopen: 'addin',
       shellUsed: false
     })
-    // 加载项卸载后 SSE 可能仍连着，只有它自报的剩余文档数能说明还能不能 Open。
-    if (released && released.remaining <= 0) {
+    // 关掉最后一个文档组件就会退出，只有加载项建起了占位文档才还有人能执行 Open。
+    if (released && released.remaining <= 0 && !released.placeholder) {
       this.startShellReopen(resolvedPath)
       return
     }
-    if (!this.hasComponentClient(component)) {
+    if (!this.hasReopenClient(released?.clientId, component)) {
       if (released) this.startShellReopen(resolvedPath)
       return
     }
-    this.startAddonReopen(resolvedPath, component)
+    this.startAddonReopen(resolvedPath)
   }
 
   public async stop(): Promise<void> {
@@ -493,8 +534,13 @@ export class WpsSyncService {
       return 'bound'
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code
-      if (code !== 'EADDRINUSE') throw error
-      if (!this.skipInstall && this.preferredPort > 0 && (await probeWpsSyncPort(this.preferredPort))) {
+      if (code !== 'EADDRINUSE' && code !== 'EACCES') throw error
+      if (
+        code === 'EADDRINUSE' &&
+        !this.skipInstall &&
+        this.preferredPort > 0 &&
+        (await probeWpsSyncPort(this.preferredPort))
+      ) {
         const server = this.server
         this.server = undefined
         this.port = undefined
@@ -510,9 +556,22 @@ export class WpsSyncService {
     }
   }
 
+  private hasClient(clientId: string): boolean {
+    return [...this.clients].some((client) => client.clientId === clientId)
+  }
+
   private hasComponentClient(component: string): boolean {
     if (component === 'unknown') return this.clients.size > 0
     return [...this.clients].some((client) => client.component === component)
+  }
+
+  private hasReopenClient(clientId: string | undefined, component: string): boolean {
+    return clientId ? this.hasClient(clientId) : this.hasComponentClient(component)
+  }
+
+  private reopenTarget(pending: PendingOpen): BroadcastTarget {
+    if (pending.clientId) return { clientId: pending.clientId }
+    return pending.component === 'unknown' ? {} : { component: pending.component }
   }
 
   private reopenReleasedPath(resolvedPath: string, component: string): void {
@@ -531,14 +590,11 @@ export class WpsSyncService {
     void shell.openPath(resolvedPath).catch(() => undefined)
   }
 
-  private startAddonReopen(resolvedPath: string, component: string): void {
+  private startAddonReopen(resolvedPath: string): void {
     const pending = this.pendingOpens.get(normalizeOfficePath(resolvedPath))
     if (!pending) return
     pending.reopen = 'addin'
-    this.broadcast(
-      { type: 'open', path: resolvedPath },
-      component === 'unknown' ? undefined : component
-    )
+    this.broadcast({ type: 'open', path: resolvedPath }, this.reopenTarget(pending))
     // 加载项可能收下 open 却打不开（组件已无活动文档），超时就换系统打开。
     this.setPendingTimer(pending, ADDON_OPEN_FALLBACK_MS, () => {
       this.startShellReopen(resolvedPath)
@@ -562,9 +618,10 @@ export class WpsSyncService {
       if (!this.pendingOpens.has(normalizeOfficePath(pending.path))) return
       this.completeShellOpens()
       if (pending.excerptSent || Date.now() >= deadline) return
+      // 系统重开会换一个新实例，此时还不知道新 clientId，只能问整个组件。
       this.broadcast(
         { type: 'list' },
-        pending.component === 'unknown' ? undefined : pending.component
+        pending.component === 'unknown' ? {} : { component: pending.component }
       )
       this.pollShellReopen(pending, deadline)
     })
@@ -590,19 +647,19 @@ export class WpsSyncService {
   private completeShellOpens(): void {
     for (const pending of this.pendingOpens.values()) {
       if (pending.reopen !== 'shell' || pending.excerptSent) continue
-      if (!this.registry.isOpen(pending.path)) continue
-      if (!this.hasComponentClient(pending.component)) continue
+      // 系统重开后持有该文档的是新实例，摘录只能向它要。
+      const ownerClientId = this.registry.clientFor(pending.path)
+      if (!ownerClientId || !this.hasClient(ownerClientId)) continue
+      pending.clientId = ownerClientId
       pending.excerptSent = true
-      this.broadcast(
-        { type: 'excerpt', path: pending.path },
-        pending.component === 'unknown' ? undefined : pending.component
-      )
+      this.broadcast({ type: 'excerpt', path: pending.path }, { clientId: ownerClientId })
     }
   }
 
-  private broadcast(payload: unknown, component?: string): void {
+  private broadcast(payload: unknown, target: BroadcastTarget = {}): void {
     for (const client of this.clients) {
-      if (component && client.component !== component) continue
+      if (target.clientId && client.clientId !== target.clientId) continue
+      if (target.component && client.component !== target.component) continue
       try {
         writeSse(client.response, payload)
       } catch {
@@ -613,8 +670,12 @@ export class WpsSyncService {
 
   private flushPendingOpens(client: SseClient): void {
     for (const pending of this.pendingOpens.values()) {
-      if (pending.component !== 'unknown' && pending.component !== client.component) continue
       if (pending.reopen !== 'addin') continue
+      if (pending.clientId) {
+        if (pending.clientId !== client.clientId) continue
+      } else if (pending.component !== 'unknown' && pending.component !== client.component) {
+        continue
+      }
       try {
         writeSse(client.response, { type: 'open', path: pending.path })
       } catch {
@@ -632,11 +693,20 @@ export class WpsSyncService {
     this.pendingOpens.delete(key)
   }
 
-  private fallbackFailedOpen(component: string, filePath: string | undefined): void {
+  // 只有被指派的那个实例说打不开才算失败，别让旁边的实例替它宣告失败。
+  private fallbackFailedOpen(
+    clientId: string,
+    component: string,
+    filePath: string | undefined
+  ): void {
     if (!filePath) return
     const pending = this.pendingOpens.get(normalizeOfficePath(filePath))
     if (!pending || pending.reopen !== 'addin' || pending.shellUsed) return
-    if (pending.component !== 'unknown' && pending.component !== component) return
+    if (pending.clientId) {
+      if (pending.clientId !== clientId) return
+    } else if (pending.component !== 'unknown' && pending.component !== component) {
+      return
+    }
     this.startShellReopen(pending.path)
   }
 
@@ -659,7 +729,13 @@ export class WpsSyncService {
     }
 
     if (request.method === 'GET' && url.pathname === '/events') {
-      this.acceptSse(request, response, url.searchParams.get('component') || 'unknown')
+      const component = url.searchParams.get('component') || 'unknown'
+      this.acceptSse(
+        request,
+        response,
+        component,
+        url.searchParams.get('clientId')?.trim() || `legacy:${component}`
+      )
       return
     }
 
@@ -677,8 +753,9 @@ export class WpsSyncService {
       try {
         const body = JSON.parse(await readRequestBody(request)) as WpsAddonReport
         const component = String(body.component || 'unknown')
+        const clientId = String(body.clientId || '').trim() || `legacy:${component}`
         if (Array.isArray(body.data?.items)) {
-          this.registry.setDocuments(component, body.data.items)
+          this.registry.setDocuments(clientId, component, body.data.items)
           this.completeShellOpens()
         }
         if (body.kind === 'close-result') {
@@ -688,9 +765,12 @@ export class WpsSyncService {
           this.pushCapped(this.lastCloseResults, {
             at: typeof body.at === 'number' ? body.at : Date.now(),
             component,
+            clientId,
             ok,
             fullName,
             remaining: Math.max(0, Number(body.data?.remaining) || 0),
+            placeholder: body.data?.placeholder === true,
+            reason: body.data?.reason ? String(body.data.reason) : undefined,
             targetPath
           })
           if (ok && (fullName || targetPath)) this.registry.remove(fullName || targetPath || '')
@@ -702,6 +782,7 @@ export class WpsSyncService {
           this.pushCapped(this.lastReloadResults, {
             at: typeof body.at === 'number' ? body.at : Date.now(),
             component,
+            clientId,
             ok,
             fullName,
             excerpt: String(body.data?.excerpt || ''),
@@ -711,9 +792,11 @@ export class WpsSyncService {
           if (ok) {
             this.clearPendingOpen(fullName)
             this.clearPendingOpen(targetPath)
-            if (fullName || targetPath) this.registry.upsert(component, fullName || targetPath || '')
+            if (fullName || targetPath) {
+              this.registry.upsert(clientId, component, fullName || targetPath || '')
+            }
           } else {
-            this.fallbackFailedOpen(component, targetPath || fullName)
+            this.fallbackFailedOpen(clientId, component, targetPath || fullName)
           }
         }
         sendJson(response, 200, { ok: true })
@@ -730,7 +813,6 @@ export class WpsSyncService {
     return this.lastCloseResults.find(
       (item) =>
         item.at >= afterAt &&
-        item.ok &&
         (this.matchesOfficePath(item.fullName, filePath) ||
           this.matchesOfficePath(item.targetPath, filePath))
     )
@@ -751,7 +833,10 @@ export class WpsSyncService {
     return {
       ok: true,
       clientCount: this.clients.size,
-      clients: [...this.clients].map((client) => ({ component: client.component })),
+      clients: [...this.clients].map((client) => ({
+        component: client.component,
+        clientId: client.clientId
+      })),
       openDocuments: this.registry.listOpenDocuments(),
       lastDispatches: [...this.lastDispatches],
       lastReloadResults: [...this.lastReloadResults],
@@ -760,20 +845,26 @@ export class WpsSyncService {
     }
   }
 
-  private acceptSse(request: IncomingMessage, response: ServerResponse, component: string): void {
+  private acceptSse(
+    request: IncomingMessage,
+    response: ServerResponse,
+    component: string,
+    clientId: string
+  ): void {
     response.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
       'Access-Control-Allow-Origin': '*'
     })
-    const client: SseClient = { response, component }
+    const client: SseClient = { response, component, clientId }
     this.clients.add(client)
     writeSse(response, { type: 'ping' })
     writeSse(response, { type: 'list' })
     this.flushPendingOpens(client)
     request.on('close', () => {
       this.clients.delete(client)
+      if (!this.hasClient(clientId)) this.registry.dropClient(clientId)
     })
   }
 

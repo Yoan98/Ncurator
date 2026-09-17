@@ -4,6 +4,7 @@ import fsp from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { promisify } from 'node:util'
+import { resolveE2ETempRoot } from './workspaceFixture'
 import {
   WPS_ADDON_DIR_NAME,
   WPS_ADDON_LEGACY_NAMES,
@@ -103,6 +104,114 @@ const spawnWindowsDetached = async (exePath: string, args: readonly string[]): P
   })
 
 export { resolveWpsOfficeAppPath }
+
+const WPS_COMPONENT_IMAGES = ['wps.exe', 'et.exe', 'wpp.exe'] as const
+const WPS_DARWIN_PROCESS_PATTERN = 'wpsoffice'
+// 用例专属的临时工作区前缀，只清自己造的，不碰别的 e2e 目录。
+const WPS_STALE_WORKSPACE_PREFIX = 'ncurator-workbench-wps-'
+const WPS_EXIT_POLL_MS = 250
+
+export type WpsEnvironmentReset = {
+  running: boolean
+  forced: boolean
+  removedWorkspaces: string[]
+}
+
+const runQuietly = async (file: string, args: readonly string[]): Promise<string> => {
+  try {
+    const { stdout } = await execFileAsync(file, [...args], {
+      timeout: 20_000,
+      windowsHide: true
+    })
+    return stdout
+  } catch {
+    // 进程不存在时 tasklist / taskkill / pkill 都以非 0 退出，属正常结果。
+    return ''
+  }
+}
+
+const isWpsRunning = async (): Promise<boolean> => {
+  if (process.platform === 'win32') {
+    for (const image of WPS_COMPONENT_IMAGES) {
+      const stdout = await runQuietly('tasklist', ['/FI', `IMAGENAME eq ${image}`, '/NH', '/FO', 'CSV'])
+      if (stdout.toLowerCase().includes(image)) return true
+    }
+    return false
+  }
+  if (process.platform === 'darwin') {
+    return (await runQuietly('pgrep', ['-f', WPS_DARWIN_PROCESS_PATTERN])).trim().length > 0
+  }
+  return false
+}
+
+const requestWpsShutdown = async (force: boolean): Promise<void> => {
+  if (process.platform === 'win32') {
+    for (const image of WPS_COMPONENT_IMAGES) {
+      // 不带 /F 的 taskkill 只是请求关闭窗口，给 WPS 自己保存和退出的机会。
+      await runQuietly('taskkill', force ? ['/IM', image, '/F', '/T'] : ['/IM', image])
+    }
+    return
+  }
+  if (process.platform === 'darwin') {
+    await runQuietly('pkill', [force ? '-KILL' : '-TERM', '-f', WPS_DARWIN_PROCESS_PATTERN])
+  }
+}
+
+const waitForWpsExit = async (timeoutMs: number): Promise<boolean> => {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (!(await isWpsRunning())) return true
+    await sleep(WPS_EXIT_POLL_MS)
+  }
+  return !(await isWpsRunning())
+}
+
+const removeStaleWpsWorkspaces = async (): Promise<string[]> => {
+  const tempRoot = resolveE2ETempRoot()
+  let entries: Awaited<ReturnType<typeof fsp.readdir>>
+  try {
+    entries = await fsp.readdir(tempRoot)
+  } catch {
+    return []
+  }
+  const removed: string[] = []
+  for (const name of entries) {
+    if (!name.startsWith(WPS_STALE_WORKSPACE_PREFIX)) continue
+    const target = path.join(tempRoot, name)
+    try {
+      await fsp.rm(target, { recursive: true, force: true, maxRetries: 5, retryDelay: 300 })
+      removed.push(target)
+    } catch {
+      // 仍被别的进程占着就留给下一轮，不该因为清理失败让用例挂掉。
+    }
+  }
+  return removed
+}
+
+// WPS 打开的文档会一直锁着临时工作区，不归零就会把残留实例带进下一轮，
+// 让 registry、dispatch 和断言全部对不上。先温和关，超时再强杀。
+// removeWorkspaces 必须显式打开：用例进行中调用时本轮工作区还在用，不能一起删。
+export const resetWpsEnvironment = async (options?: {
+  gracefulTimeoutMs?: number
+  removeWorkspaces?: boolean
+}): Promise<WpsEnvironmentReset> => {
+  const gracefulTimeoutMs = options?.gracefulTimeoutMs ?? 6_000
+  const running = await isWpsRunning()
+  let forced = false
+  if (running) {
+    await requestWpsShutdown(false)
+    if (!(await waitForWpsExit(gracefulTimeoutMs))) {
+      forced = true
+      await requestWpsShutdown(true)
+      await waitForWpsExit(5_000)
+    }
+  }
+  return {
+    running,
+    forced,
+    removedWorkspaces: options?.removeWorkspaces === true ? await removeStaleWpsWorkspaces() : []
+  }
+}
 
 export const resolveInstalledWpsSyncPort = async (): Promise<number> => {
   const jsAddonsDir = resolveWpsJsAddonsDir({
@@ -242,9 +351,13 @@ export const waitForWpsAddonReady = async (options: {
         return { port, status }
       }
       lastError = new Error(
-        `clients=${status.clients.map((item) => item.component).join(',') || '(none)'} fetches=${
-          status.lastAddonFetches?.map((item) => item.path).join(',') || '(none)'
-        } open=${status.openDocuments.map((item) => `${item.component}:${item.fullName}`).join('|') || '(none)'}`
+        `clients=${
+          status.clients.map((item) => `${item.component}#${item.clientId}`).join(',') || '(none)'
+        } fetches=${status.lastAddonFetches?.map((item) => item.path).join(',') || '(none)'} open=${
+          status.openDocuments
+            .map((item) => `${item.component}#${item.clientId}:${item.fullName}`)
+            .join('|') || '(none)'
+        }`
       )
     } catch (error) {
       lastError = error
@@ -256,6 +369,19 @@ export const waitForWpsAddonReady = async (options: {
       lastError instanceof Error ? `: ${lastError.message}` : ''
     }`
   )
+}
+
+// 只认 ok:true 会把「别的实例抢答说打不开」整个藏掉，超时报错必须带上这些应答。
+const describeRejectedResults = (status: WpsSyncStatus): string => {
+  const rejected = [
+    ...status.lastCloseResults
+      .filter((item) => !item.ok)
+      .map((item) => `close/${item.component}#${item.clientId}:${item.reason || 'unknown'}`),
+    ...status.lastReloadResults
+      .filter((item) => !item.ok)
+      .map((item) => `open/${item.component}#${item.clientId}:${item.reason || 'unknown'}`)
+  ]
+  return rejected.length > 0 ? rejected.join('|') : '(none)'
 }
 
 export const waitForWpsReloadResult = async (options: {
@@ -285,10 +411,14 @@ export const waitForWpsReloadResult = async (options: {
         `reload-result count=${status.lastReloadResults.length} close-result=${
           status.lastCloseResults?.length ?? 0
         } dispatches=${status.lastDispatches.length} clients=${
-          status.clients.map((item) => item.component).join(',') || '(none)'
+          status.clients.map((item) => `${item.component}#${item.clientId}`).join(',') || '(none)'
         } open=${
-          status.openDocuments.map((item) => `${item.component}:${item.fullName}`).join('|') || '(none)'
-        } last=${JSON.stringify(status.lastReloadResults.at(-1) ?? null)}`
+          status.openDocuments
+            .map((item) => `${item.component}#${item.clientId}:${item.fullName}`)
+            .join('|') || '(none)'
+        } rejected=${describeRejectedResults(status)} last=${JSON.stringify(
+          status.lastReloadResults.at(-1) ?? null
+        )}`
       )
     } catch (error) {
       lastError = error
