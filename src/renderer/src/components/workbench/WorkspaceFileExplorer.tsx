@@ -27,6 +27,8 @@ type WorkspaceFileExplorerProps = {
   mode: WorkspaceFileExplorerMode
   /** 递增时重新拉取根目录与当前已展开目录，不折叠展开态 */
   reloadToken?: number
+  /** 为 true 时才响应窗口焦点 / 可见性变化并刷新目录 */
+  liveRefreshEnabled?: boolean
   activeFilePath?: string | null
   activeChangeId?: string | null
   onModeChange: (mode: WorkspaceFileExplorerMode) => void
@@ -49,6 +51,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   changeRecords,
   mode,
   reloadToken = 0,
+  liveRefreshEnabled = false,
   activeFilePath,
   activeChangeId,
   onModeChange,
@@ -139,7 +142,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   }, [reloadToken, refreshVisibleDirectories, workspace])
 
   useEffect(() => {
-    if (!workspace) return
+    if (!workspace || !liveRefreshEnabled) return
     const refreshOnFocus = (): void => {
       refreshVisibleDirectories()
     }
@@ -152,7 +155,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
       window.removeEventListener('focus', refreshOnFocus)
       document.removeEventListener('visibilitychange', refreshOnVisibility)
     }
-  }, [refreshVisibleDirectories, workspace])
+  }, [liveRefreshEnabled, refreshVisibleDirectories, workspace])
 
   const toggleDirectory = (entry: WorkspaceTreeEntry): void => {
     const entryPath = entry.relative_path
