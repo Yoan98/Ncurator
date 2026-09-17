@@ -163,7 +163,8 @@ const normalizeBrowserUseOutput = (
       return {
         action: 'navigate',
         tabId: result.tabId,
-        page: toBrowserUsePageJson(result.page)
+        page: toBrowserUsePageJson(result.page),
+        ...(result.fallback ? { fallback: result.fallback } : {})
       }
     case 'list_tabs':
       return {
@@ -492,9 +493,11 @@ export const webToolFamily: ToolFamilyDefinition = {
                   abortSignal,
                   runId
                 })
-                if (!('error' in result) && result.action === 'navigate') {
-                  emitBrowserPanelOpened(result.tabId)
-                }
+                const openedTabId =
+                  'tabId' in result && typeof result.tabId === 'string' && result.tabId.trim()
+                    ? result.tabId
+                    : undefined
+                if (openedTabId) emitBrowserPanelOpened(openedTabId)
               } else if (args.action === 'observe') {
                 const tabId = String(args.tabId || '').trim()
                 emitBrowserPanelOpened(tabId)
@@ -632,8 +635,18 @@ export const webToolFamily: ToolFamilyDefinition = {
               })
             } catch (error) {
               if (isCancelledError(error)) throw error
+              const tabIdArg =
+                typeof args === 'object' && args && 'tabId' in args
+                  ? String((args as { tabId?: unknown }).tabId || '').trim()
+                  : ''
+              const actionArg =
+                typeof args === 'object' && args && 'action' in args
+                  ? String((args as { action?: unknown }).action || '').trim()
+                  : ''
               const payload = {
-                error: getErrorMessage(error instanceof Error ? error : new Error(String(error)))
+                error: getErrorMessage(error instanceof Error ? error : new Error(String(error))),
+                ...(actionArg ? { action: actionArg } : {}),
+                ...(tabIdArg ? { tabId: tabIdArg } : {})
               }
               session.fail(
                 payload.error,

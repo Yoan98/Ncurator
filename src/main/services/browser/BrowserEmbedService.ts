@@ -12,9 +12,21 @@ import type {
 } from '../ai/types'
 import {
   EMBEDDED_BROWSER_NAVIGATION_TIMEOUT_MS,
+  EMBEDDED_BROWSER_PAGE_CONTENT_POLL_MS,
+  EMBEDDED_BROWSER_PAGE_CONTENT_WAIT_MS,
   EMBEDDED_BROWSER_PARTITION,
   EMBEDDED_BROWSER_STAGEHAND_TIMEOUT_MS
 } from './constants'
+import {
+  BLANK_PAGE_ERROR,
+  formatNavigateNetError,
+  isBlankDocument,
+  isHttpsFallbackWorthy,
+  isInternalBrowserErrorUrl,
+  parseNavigatePlan,
+  parseNetErrorCode,
+  type NavigatePlan
+} from './navigatePlan'
 import type { CdpEndpointService } from './CdpEndpointService'
 import type { BrowserPanelBoundsState, BrowserUseRunInput, BrowserUseRunResult } from './types'
 import type { BrowserTabState } from '../../../shared/types'
@@ -38,6 +50,13 @@ type BrowserTabRuntime = {
   attached: boolean
   visible: boolean
   restoring: boolean
+  navGeneration: number
+}
+
+type DocumentInspection = {
+  status: 'ready' | 'blank' | 'net-error'
+  url: string
+  title: string
 }
 
 const EMPTY_BOUNDS: BrowserPanelBoundsState = {
@@ -47,22 +66,21 @@ const EMPTY_BOUNDS: BrowserPanelBoundsState = {
   height: 0
 }
 
-const normalizeUrl = (rawUrl: string): string => {
-  const value = String(rawUrl || '').trim()
-  if (!value) throw new Error('请输入网址')
-  const withProtocol = /^[a-z][a-z\d+.-]*:/i.test(value) ? value : `https://${value}`
-  const parsed = new URL(withProtocol)
-  if (!['http:', 'https:'].includes(parsed.protocol)) {
-    throw new Error('内置浏览器只支持 http/https 地址')
-  }
-  return parsed.toString()
-}
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 const createCancelledError = (): Error & { code: 'CANCELLED' } => {
   const error = new Error('cancelled') as Error & { code: 'CANCELLED' }
   error.code = 'CANCELLED'
   return error
 }
+
+const isCancelledError = (error: unknown): boolean =>
+  Boolean(
+    error &&
+      typeof error === 'object' &&
+      'code' in error &&
+      (error as { code?: unknown }).code === 'CANCELLED'
+  )
 
 const raceAbort = async <T>(
   promise: Promise<T>,
@@ -138,6 +156,137 @@ const loadWebContentsUrl = async (
     if (!contents.isDestroyed()) contents.stop()
   })
   await waitForWebContentsLoad(contents, signal)
+}
+
+const loadUrlOnce = async (
+  contents: WebContents,
+  url: string,
+  signal?: AbortSignal
+): Promise<string | null> => {
+  try {
+    await raceAbort(contents.loadURL(url), signal, () => {
+      if (!contents.isDestroyed()) contents.stop()
+    })
+  } catch (error) {
+    if (signal?.aborted) throw createCancelledError()
+    return parseNetErrorCode(error)
+  }
+  await waitForWebContentsLoad(contents, signal)
+  if (isInternalBrowserErrorUrl(contents.getURL())) {
+    return parseNetErrorCode(contents.getTitle()) || 'ERR_FAILED'
+  }
+  return null
+}
+
+const inspectDocument = async (contents: WebContents): Promise<DocumentInspection> => {
+  const url = contents.getURL()
+  const title = contents.getTitle().trim()
+  if (isInternalBrowserErrorUrl(url)) {
+    return { status: 'net-error', url, title }
+  }
+  try {
+    const info = (await contents.executeJavaScript(`({
+      title: document.title,
+      bodyText: ((document.body && document.body.innerText) || '').replace(/\\s+/g, ' ').trim(),
+      controlCount: document.querySelectorAll('input,textarea,button,select').length
+    })`)) as { title?: string; bodyText?: string; controlCount?: number }
+    const inspectedTitle = String(info.title || title || '').trim()
+    if (
+      isBlankDocument({
+        url,
+        title: inspectedTitle,
+        bodyText: String(info.bodyText || ''),
+        controlCount: Number(info.controlCount || 0)
+      })
+    ) {
+      return { status: 'blank', url, title: inspectedTitle }
+    }
+    return { status: 'ready', url, title: inspectedTitle }
+  } catch {
+    return { status: 'blank', url, title }
+  }
+}
+
+const waitForUsableDocument = async (
+  contents: WebContents,
+  signal?: AbortSignal
+): Promise<DocumentInspection> => {
+  const deadline = Date.now() + EMBEDDED_BROWSER_PAGE_CONTENT_WAIT_MS
+  let last = await inspectDocument(contents)
+  if (last.status !== 'blank') return last
+  while (Date.now() < deadline) {
+    await raceAbort(sleep(EMBEDDED_BROWSER_PAGE_CONTENT_POLL_MS), signal)
+    if (contents.isDestroyed()) return last
+    last = await inspectDocument(contents)
+    if (last.status !== 'blank') return last
+  }
+  return last
+}
+
+const formatPlanNetError = (plan: NavigatePlan, code: string, url: string, exhaustedFallback: boolean): string =>
+  formatNavigateNetError({
+    code,
+    url,
+    httpsUrl: plan.urls[0],
+    httpUrl: plan.urls[1],
+    mode: plan.mode,
+    exhaustedFallback
+  })
+
+const loadNavigatePlan = async (
+  contents: WebContents,
+  plan: NavigatePlan,
+  signal?: AbortSignal
+): Promise<
+  | { ok: true; url: string; title: string; fallback?: 'https-to-http' }
+  | { ok: false; error: string; displayUrl: string }
+> => {
+  let lastCode = 'ERR_FAILED'
+  let lastUrl = plan.urls[0] || ''
+  for (let index = 0; index < plan.urls.length; index += 1) {
+    const url = plan.urls[index]
+    if (!url) continue
+    lastUrl = url
+    const failedCode = await loadUrlOnce(contents, url, signal)
+    const canFallback =
+      index === 0 &&
+      plan.urls.length > 1 &&
+      typeof failedCode === 'string' &&
+      isHttpsFallbackWorthy(failedCode)
+    if (failedCode) {
+      lastCode = failedCode
+      if (canFallback) continue
+      return {
+        ok: false,
+        error: formatPlanNetError(plan, failedCode, url, index > 0),
+        displayUrl: url
+      }
+    }
+    const document = await waitForUsableDocument(contents, signal)
+    if (document.status === 'net-error') {
+      lastCode = parseNetErrorCode(document.title) || 'ERR_FAILED'
+      if (index === 0 && plan.urls.length > 1) continue
+      return {
+        ok: false,
+        error: formatPlanNetError(plan, lastCode, url, index > 0),
+        displayUrl: url
+      }
+    }
+    if (document.status === 'blank') {
+      return { ok: false, error: BLANK_PAGE_ERROR, displayUrl: url }
+    }
+    return {
+      ok: true,
+      url: document.url,
+      title: document.title,
+      ...(index > 0 ? { fallback: 'https-to-http' as const } : {})
+    }
+  }
+  return {
+    ok: false,
+    error: formatPlanNetError(plan, lastCode, lastUrl, plan.urls.length > 1),
+    displayUrl: lastUrl
+  }
 }
 
 /** User/UI navigation: start load immediately without waiting for did-finish-load. */
@@ -286,7 +435,8 @@ export class BrowserEmbedService implements BrowserUseService {
       ready: null,
       attached: false,
       visible: false,
-      restoring: false
+      restoring: false,
+      navGeneration: 0
     }
     this.tabs.set(persisted.id, runtime)
     this.stateStore.save(persisted)
@@ -420,14 +570,56 @@ export class BrowserEmbedService implements BrowserUseService {
 
   public async navigate(rawUrl: string, tabId?: string): Promise<void> {
     const runtime = this.requireTab(tabId || this.activeTabId)
-    const url = normalizeUrl(rawUrl)
+    const plan = parseNavigatePlan(rawUrl)
     const view = await this.ensureReady(runtime)
-    runtime.persisted.url = url
+    const primaryUrl = plan.urls[0]
+    if (!primaryUrl) return
+    runtime.navGeneration += 1
+    const generation = runtime.navGeneration
+    runtime.persisted.url = primaryUrl
     runtime.persisted.updatedAt = Date.now()
     this.stateStore.save(runtime.persisted)
     // Emit target URL before load finishes so the panel address bar updates immediately.
     this.emitState(runtime)
-    startWebContentsUrl(view.webContents, url)
+    const contents = view.webContents
+    const fallbackUrl = plan.urls[1]
+    if (fallbackUrl) {
+      const onFail = (
+        _event: Electron.Event,
+        code: number,
+        description: string,
+        _url: string,
+        isMainFrame: boolean
+      ): void => {
+        if (runtime.navGeneration !== generation) {
+          cleanup()
+          return
+        }
+        if (!isMainFrame) return
+        if (!isHttpsFallbackWorthy(description || code)) return
+        cleanup()
+        runtime.persisted.url = fallbackUrl
+        runtime.persisted.updatedAt = Date.now()
+        this.stateStore.save(runtime.persisted)
+        this.emitState(runtime)
+        startWebContentsUrl(contents, fallbackUrl)
+      }
+      const onFinish = (): void => {
+        if (runtime.navGeneration !== generation) {
+          cleanup()
+          return
+        }
+        if (isInternalBrowserErrorUrl(contents.getURL())) return
+        cleanup()
+      }
+      const cleanup = (): void => {
+        contents.removeListener('did-fail-load', onFail)
+        contents.removeListener('did-finish-load', onFinish)
+      }
+      contents.on('did-fail-load', onFail)
+      contents.on('did-finish-load', onFinish)
+    }
+    startWebContentsUrl(contents, primaryUrl)
     this.captureRuntimeState(runtime)
   }
 
@@ -552,6 +744,7 @@ export class BrowserEmbedService implements BrowserUseService {
     }
 
     if (input.action === 'navigate') {
+      const plan = parseNavigatePlan(input.url)
       const tabId = input.tabId
         ? this.requireTab(input.tabId).persisted.id
         : (await this.createTab(input.ownerId)).id
@@ -562,18 +755,38 @@ export class BrowserEmbedService implements BrowserUseService {
       const runtime = this.requireTab(tabId)
       const view = await this.ensureReady(runtime)
       if (input.abortSignal?.aborted) throw createCancelledError()
-      const url = normalizeUrl(input.url)
-      runtime.persisted.url = url
+      const primaryUrl = plan.urls[0] || ''
+      runtime.persisted.url = primaryUrl
       runtime.persisted.updatedAt = Date.now()
       this.stateStore.save(runtime.persisted)
       this.emitState(runtime)
-      await loadWebContentsUrl(view.webContents, url, input.abortSignal)
-      this.captureRuntimeState(runtime)
-      return {
-        action: 'navigate',
-        tabId,
-        page: toBrowserUsePage(view.webContents.getURL(), view.webContents.getTitle()),
-        result: null
+      try {
+        const outcome = await loadNavigatePlan(view.webContents, plan, input.abortSignal)
+        this.captureRuntimeState(runtime)
+        if (!outcome.ok) {
+          return {
+            action: 'navigate',
+            tabId,
+            page: toBrowserUsePage(outcome.displayUrl),
+            error: outcome.error
+          }
+        }
+        return {
+          action: 'navigate',
+          tabId,
+          page: toBrowserUsePage(outcome.url, outcome.title),
+          result: null,
+          ...(outcome.fallback ? { fallback: outcome.fallback } : {})
+        }
+      } catch (error) {
+        if (isCancelledError(error) || input.abortSignal?.aborted) throw createCancelledError()
+        this.captureRuntimeState(runtime)
+        return {
+          action: 'navigate',
+          tabId,
+          page: toBrowserUsePage(primaryUrl),
+          error: error instanceof Error ? error.message : String(error)
+        }
       }
     }
 
@@ -642,7 +855,8 @@ export class BrowserEmbedService implements BrowserUseService {
         ready: null,
         attached: false,
         visible: false,
-        restoring: false
+        restoring: false,
+        navGeneration: 0
       })
     }
     this.hydratedOwnerIds.add(normalizedOwnerId)
@@ -806,7 +1020,8 @@ export class BrowserEmbedService implements BrowserUseService {
     if (!contents || contents.isDestroyed()) return
     const nextUrl = contents.getURL()
     // Keep the optimistic navigate target until webContents reports a real URL.
-    if (nextUrl) runtime.persisted.url = nextUrl
+    // Chromium error pages use chrome-error://; the address bar should keep the attempted site.
+    if (nextUrl && !isInternalBrowserErrorUrl(nextUrl)) runtime.persisted.url = nextUrl
     runtime.persisted.title = contents.getTitle().trim() || undefined
     // Zoom is owned by changeZoom / restoreRuntime. Do not mirror getZoomFactor() here:
     // navigation restore briefly reports 1.0 and would wipe the persisted zoom.
@@ -841,10 +1056,13 @@ export class BrowserEmbedService implements BrowserUseService {
     const contents = runtime.view?.webContents
     const history = contents?.navigationHistory
     const persistedHistory = runtime.persisted.history
+    const liveUrl = contents?.getURL() || ''
+    const url =
+      liveUrl && !isInternalBrowserErrorUrl(liveUrl) ? liveUrl : runtime.persisted.url || liveUrl
     return {
       id: runtime.persisted.id,
       ownerId: runtime.persisted.ownerId,
-      url: contents?.getURL() || runtime.persisted.url,
+      url,
       ...(contents?.getTitle().trim() || runtime.persisted.title
         ? { title: contents?.getTitle().trim() || runtime.persisted.title }
         : {}),
@@ -911,7 +1129,22 @@ export class BrowserEmbedService implements BrowserUseService {
     const signal = input.abortSignal
     const view = await this.ensureReady(runtime)
     await waitForWebContentsLoad(view.webContents, signal)
+    const usable = await waitForUsableDocument(view.webContents, signal)
     const tabId = runtime.persisted.id
+    if (usable.status !== 'ready') {
+      const displayUrl = isInternalBrowserErrorUrl(view.webContents.getURL())
+        ? runtime.persisted.url || usable.url
+        : usable.url
+      return {
+        action: input.action,
+        tabId,
+        page: toBrowserUsePage(displayUrl, usable.title),
+        error:
+          usable.status === 'blank'
+            ? BLANK_PAGE_ERROR
+            : `无法访问此站点（${parseNetErrorCode(usable.title) || 'ERR_FAILED'}）。当前页面无法打开。`
+      }
+    }
     const stagehandModule = await import('@browserbasehq/stagehand')
     const cdpUrl = await this.getCdpWebSocketUrl()
     const targetId = await this.resolveDevToolsTargetId(view.webContents)

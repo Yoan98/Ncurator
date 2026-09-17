@@ -221,4 +221,42 @@ describe('ai unit model tool result renderers', () => {
     expect(rendered).toContain('Result: Scrolled 80% down (720px)')
     expect(rendered).not.toContain('Success:')
   })
+
+  it('renders browser_use navigate success with title and url lines', () => {
+    const rendered = renderBrowserUseModelResult({
+      toolName: 'browser_use',
+      args: { action: 'navigate', url: 'epub.cnipa.gov.cn' },
+      data: {
+        action: 'navigate',
+        tabId: 'tab_nav',
+        page: { url: 'http://epub.cnipa.gov.cn/', title: '中国专利公布公告' },
+        fallback: 'https-to-http'
+      }
+    })
+
+    expect(rendered).toContain('Browser navigate completed.')
+    expect(rendered).toContain('Tab: tab_nav')
+    expect(rendered).toContain('Title: 中国专利公布公告')
+    expect(rendered).toContain('URL: http://epub.cnipa.gov.cn/')
+    expect(rendered).toContain('Note: 已从 https 回退到 http。')
+    expect(rendered).not.toContain('Page:')
+  })
+
+  it('renders browser_use navigate failure with error and tab id', () => {
+    const rendered = renderBrowserUseModelError({
+      toolName: 'browser_use',
+      args: { action: 'navigate', url: 'epub.cnipa.gov.cn' },
+      data: {
+        action: 'navigate',
+        tabId: 'tab_nav',
+        error:
+          '无法访问此站点（ERR_CONNECTION_CLOSED）。https://epub.cnipa.gov.cn/ 与 http://epub.cnipa.gov.cn/ 均无法打开。'
+      }
+    })
+
+    expect(rendered).toContain('Error: 无法访问此站点（ERR_CONNECTION_CLOSED）')
+    expect(rendered).toContain('Tab: tab_nav')
+    expect(rendered).not.toContain('Title:')
+    expect(rendered).not.toContain('URL:')
+  })
 })

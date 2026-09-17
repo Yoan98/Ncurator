@@ -675,10 +675,17 @@ export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
   const pageLabel = [readString(page.title), readString(page.url)].filter(Boolean).join(' — ')
   const tabLine = tabId ? `Tab: ${tabId}` : ''
   if (action === 'navigate') {
+    const title = readString(page.title)
+    const url = readString(page.url)
+    const note =
+      readString(obj.note) ||
+      (readString(obj.fallback) === 'https-to-http' ? '已从 https 回退到 http。' : '')
     return renderProse([
       'Browser navigate completed.',
       tabLine,
-      pageLabel ? `Page: ${pageLabel}` : ''
+      title ? `Title: ${title}` : '',
+      url ? `URL: ${url}` : '',
+      note ? `Note: ${note}` : ''
     ])
   }
   if (action === 'list_tabs') {
@@ -792,31 +799,34 @@ export const renderBrowserUseModelResult: ModelResultRenderer = ({ data }) => {
 export const renderBrowserUseModelError: ModelResultRenderer = (input) => {
   const obj = isObject(input.data) ? input.data : {}
   const action = readString(obj.action) || ''
-  if (action !== 'act') return renderGenericModelError(input)
   const tabId = readString(obj.tabId) || ''
   const page = isObject(obj.page) ? obj.page : {}
   const pageLabel = [readString(page.title), readString(page.url)].filter(Boolean).join(' — ')
-  const message = readString(obj.message) || readString(obj.error) || ''
-  const executed = isObject(obj.executed) ? obj.executed : {}
-  const executedArgs = Array.isArray(executed.arguments)
-    ? executed.arguments.map((value) => String(value))
-    : []
-  const executedLine = [
-    readString(executed.actionId) ? `actionId=${readString(executed.actionId)}` : '',
-    readString(executed.method) ? `method=${readString(executed.method)}` : '',
-    `arguments=${JSON.stringify(executedArgs)}`
-  ]
-    .filter(Boolean)
-    .join('; ')
-  return renderProse([
-    'Browser act failed.',
-    tabId ? `Tab: ${tabId}` : '',
-    pageLabel ? `Page: ${pageLabel}` : '',
-    message ? `Message: ${message}` : '',
-    readString(obj.actionDescription) ? `Action: ${readString(obj.actionDescription)}` : '',
-    executedLine ? `Executed: ${executedLine}` : '',
-    readString(executed.selector) ? `selector: ${readString(executed.selector)}` : ''
-  ])
+  if (action === 'act') {
+    const message = readString(obj.message) || readString(obj.error) || ''
+    const executed = isObject(obj.executed) ? obj.executed : {}
+    const executedArgs = Array.isArray(executed.arguments)
+      ? executed.arguments.map((value) => String(value))
+      : []
+    const executedLine = [
+      readString(executed.actionId) ? `actionId=${readString(executed.actionId)}` : '',
+      readString(executed.method) ? `method=${readString(executed.method)}` : '',
+      `arguments=${JSON.stringify(executedArgs)}`
+    ]
+      .filter(Boolean)
+      .join('; ')
+    return renderProse([
+      'Browser act failed.',
+      tabId ? `Tab: ${tabId}` : '',
+      pageLabel ? `Page: ${pageLabel}` : '',
+      message ? `Message: ${message}` : '',
+      readString(obj.actionDescription) ? `Action: ${readString(obj.actionDescription)}` : '',
+      executedLine ? `Executed: ${executedLine}` : '',
+      readString(executed.selector) ? `selector: ${readString(executed.selector)}` : ''
+    ])
+  }
+  const detail = readString(obj.error) || readString(obj.message) || `${input.toolName} failed.`
+  return renderProse([`Error: ${detail}`, tabId ? `Tab: ${tabId}` : ''])
 }
 
 export const renderPlanUpdateModelResult: ModelResultRenderer = () =>
