@@ -406,7 +406,10 @@ if (!singleInstanceLock) {
       errorLogService
     })
     const wpsSyncService = new WpsSyncService()
-    setOfficeFileWriteListener((filePath) => wpsSyncService.notifyWritten(filePath))
+    setOfficeFileWriteListener({
+      prepareClose: (filePath) => wpsSyncService.prepareClose(filePath),
+      notifyWritten: (filePath) => wpsSyncService.notifyWritten(filePath)
+    })
     await wpsSyncService.start().catch((error) => {
       console.warn(
         '[WPS-SYNC] start skipped:',

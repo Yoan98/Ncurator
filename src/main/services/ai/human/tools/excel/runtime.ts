@@ -12,7 +12,7 @@ import type { ExcelCapabilityToolsInput, ExcelRuntimeState, ExcelToolRuntime } f
 import type { ExcelEditInput, ExcelReadInput, ExcelStyle } from './toolSchemas'
 import { toExcelArgb, toExcelRgb } from './color'
 import { EXCEL_SEARCH_MAX_MATCHES } from './constants'
-import { notifyOfficeFileWritten } from '../../../../wps/officeFileWriteNotify'
+import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../../../wps/officeFileWriteNotify'
 
 const EXCEL_READ_EXTENSIONS = new Set(['.xlsx', '.xlsm', '.xltx', '.xltm'])
 const EXCEL_WRITE_EXTENSIONS = new Set(['.xlsx'])
@@ -103,13 +103,15 @@ const loadWorkbook = async (bytes: Uint8Array): Promise<ExcelJS.Workbook> => {
 const readBytes = async (sourcePath: string): Promise<Buffer> => await fs.readFile(sourcePath)
 
 const atomicReplace = async (sourcePath: string, bytes: Buffer): Promise<void> => {
-  const tempPath = `${sourcePath}.${randomUUID()}.tmp`
-  await fs.writeFile(tempPath, bytes)
-  await fs.rename(tempPath, sourcePath).catch(async (error) => {
-    await fs.rm(tempPath, { force: true }).catch(() => undefined)
-    throw error
+  await withOfficeFileWrite(sourcePath, async () => {
+    const tempPath = `${sourcePath}.${randomUUID()}.tmp`
+    await fs.writeFile(tempPath, bytes)
+    await fs.rename(tempPath, sourcePath).catch(async (error) => {
+      await fs.rm(tempPath, { force: true }).catch(() => undefined)
+      throw error
+    })
+    notifyOfficeFileWritten(sourcePath)
   })
-  notifyOfficeFileWritten(sourcePath)
 }
 
 const cellKey = (sheetName: string, address: string): string => `${sheetName}\u0000${address}`

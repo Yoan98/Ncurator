@@ -130,7 +130,7 @@ import type {
   PptRuntimeDocument,
   PptToolRuntime
 } from './types'
-import { notifyOfficeFileWritten } from '../../../../wps/officeFileWriteNotify'
+import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../../../wps/officeFileWriteNotify'
 
 export { buildPptDiffManifest } from './diff'
 
@@ -141,6 +141,7 @@ const hashBytes = (bytes: Uint8Array | string): string =>
   createHash('sha256').update(bytes).digest('hex')
 
 const replaceFileWithBytes = async (targetPath: string, bytes: Uint8Array): Promise<void> => {
+  await withOfficeFileWrite(targetPath, async () => {
   await fs.mkdir(path.dirname(targetPath), { recursive: true })
   const token = randomUUID()
   const tempPath = `${targetPath}.ncurator-${token}.tmp`
@@ -182,6 +183,7 @@ const replaceFileWithBytes = async (targetPath: string, bytes: Uint8Array): Prom
       await fs.rm(backupPath, { force: true }).catch(() => undefined)
     }
   }
+  })
 }
 
 const normalizeHex = (value: string | undefined, fallback = '#FFFFFF'): string => {

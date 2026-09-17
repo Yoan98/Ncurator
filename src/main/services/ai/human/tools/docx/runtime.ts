@@ -28,7 +28,7 @@ import {
   createReplaySnapshot
 } from './review/replayTree'
 import { isLegacyDocPath, isReadableWordPath } from './legacyDocPolicy'
-import { notifyOfficeFileWritten } from '../../../../wps/officeFileWriteNotify'
+import { notifyOfficeFileWritten, withOfficeFileWrite } from '../../../../wps/officeFileWriteNotify'
 
 type FailedWorkerResponse = Extract<DocxWorkerResponse, { ok: false }>
 
@@ -923,6 +923,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
     docId: string
   }): Promise<{ checksum: string; byteSize: number; modifiedAt: number }> => {
     const sourcePath = path.resolve(inputValue.sourcePath)
+    return await withOfficeFileWrite(sourcePath, async () => {
     await fs.mkdir(path.dirname(sourcePath), { recursive: true })
     const tempPath = path.join(
       path.dirname(sourcePath),
@@ -989,6 +990,7 @@ export const createDocxToolRuntime = (input: DocxCapabilityToolsInput): DocxTool
         await fs.rm(backupPath, { force: true }).catch(() => undefined)
       }
     }
+    })
   }
 
   return {

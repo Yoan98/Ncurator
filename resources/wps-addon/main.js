@@ -1,5 +1,10 @@
 ;(function () {
   var DEFAULT_PORT = 58123
+  // 摘录用于证明窗口已换成磁盘新稿，采样窗口太小会漏掉正文末尾或右侧的改动。
+  var EXCERPT_MAX_CHARS = 20000
+  var EXCERPT_MAX_ROWS = 200
+  var EXCERPT_MAX_COLUMNS = 50
+  var EXCERPT_MAX_SLIDES = 10
   var suppressEvents = false
   var eventSource = null
   var reconnectTimer = null
@@ -23,7 +28,7 @@
     return saved === false || saved === 0
   }
 
-  function report(kind, data) {
+  function report(kind, data, sync) {
     var server = window.__ncuratorServer
     if (!server) return
     try {
@@ -33,6 +38,13 @@
         at: Date.now(),
         data: data === undefined ? null : data
       })
+      if (sync) {
+        var xhr = new XMLHttpRequest()
+        xhr.open('POST', server + '/report', false)
+        xhr.setRequestHeader('Content-Type', 'application/json')
+        xhr.send(body)
+        return
+      }
       if (typeof fetch === 'function') {
         fetch(server + '/report', {
           method: 'POST',
@@ -41,10 +53,10 @@
         }).catch(function () {})
         return
       }
-      var xhr = new XMLHttpRequest()
-      xhr.open('POST', server + '/report', true)
-      xhr.setRequestHeader('Content-Type', 'application/json')
-      xhr.send(body)
+      var asyncXhr = new XMLHttpRequest()
+      asyncXhr.open('POST', server + '/report', true)
+      asyncXhr.setRequestHeader('Content-Type', 'application/json')
+      asyncXhr.send(body)
     } catch (error) {
       // 上报失败时静默，由重连补偿。
     }
@@ -117,7 +129,7 @@
         try {
           var slides = app.ActivePresentation.Slides
           var parts = []
-          var slideLimit = Math.min(slides.Count, 3)
+          var slideLimit = Math.min(slides.Count, EXCERPT_MAX_SLIDES)
           for (var slideIndex = 1; slideIndex <= slideLimit; slideIndex += 1) {
             var shapes = slides.Item(slideIndex).Shapes
             for (var shapeIndex = 1; shapeIndex <= shapes.Count; shapeIndex += 1) {
@@ -129,7 +141,7 @@
               }
             }
           }
-          return parts.join('\n').slice(0, 2000)
+          return parts.join('\n').slice(0, EXCERPT_MAX_CHARS)
         } catch (error) {
           return ''
         }
@@ -184,24 +196,32 @@
         try {
           var range = app.ActiveSheet.UsedRange
           var parts = []
-          var rowCount = Math.min(range.Rows.Count, 20)
-          var columnCount = Math.min(range.Columns.Count, 12)
+          var used = 0
+          var rowCount = Math.min(range.Rows.Count, EXCERPT_MAX_ROWS)
+          var columnCount = Math.min(range.Columns.Count, EXCERPT_MAX_COLUMNS)
           for (var row = 1; row <= rowCount; row += 1) {
             for (var column = 1; column <= columnCount; column += 1) {
               try {
                 var text = String(range.Cells.Item(row, column).Text || '').trim()
-                if (text) parts.push(text)
+                if (!text) continue
+                if (used + text.length > EXCERPT_MAX_CHARS) {
+                  parts.push('...')
+                  row = rowCount
+                  break
+                }
+                parts.push(text)
+                used += text.length + 1
               } catch (error) {
                 // 空单元格忽略。
               }
             }
           }
-          if (parts.length) return parts.join('\n').slice(0, 2000)
+          if (parts.length) return parts.join('\n')
         } catch (error) {
           // 回落到 A1。
         }
         try {
-          return String(app.ActiveSheet.Cells.Item(1, 1).Text || '').slice(0, 2000)
+          return String(app.ActiveSheet.Cells.Item(1, 1).Text || '').slice(0, EXCERPT_MAX_CHARS)
         } catch (inner) {
           return ''
         }
@@ -257,7 +277,7 @@
       },
       excerpt: function () {
         try {
-          return String(app.ActiveDocument.Content.Text || '').slice(0, 2000)
+          return String(app.ActiveDocument.Content.Text || '').slice(0, EXCERPT_MAX_CHARS)
         } catch (error) {
           return ''
         }
@@ -315,6 +335,23 @@
       .toLowerCase()
   }
 
+  function extensionOf(filePath) {
+    var value = String(filePath || '')
+    var slash = Math.max(value.lastIndexOf('/'), value.lastIndexOf('\\'))
+    var base = slash >= 0 ? value.slice(slash + 1) : value
+    var dot = base.lastIndexOf('.')
+    return dot >= 0 ? base.slice(dot).toLowerCase() : ''
+  }
+
+  function isOwnPath(filePath) {
+    if (!adapter) return false
+    var ext = extensionOf(filePath)
+    if (adapter.kind === 'et') return ext === '.xlsx'
+    if (adapter.kind === 'wpp') return ext === '.pptx'
+    if (adapter.kind === 'wps') return ext === '.docx'
+    return false
+  }
+
   function findItem(targetPath) {
     var collection = adapter.collection()
     var count = collection.Count
@@ -357,8 +394,145 @@
     }
   }
 
+  var pendingViews = {}
+
+  function closeForWrite(targetPath) {
+    if (!adapter) return { ok: false, reason: 'no adapter', targetPath: targetPath }
+    try {
+      var item = targetPath ? findItem(targetPath) : null
+      if (!item) return { ok: false, reason: 'not open here', targetPath: targetPath }
+      var fullName = item.FullName
+      if (!fullName) return { ok: false, reason: 'never saved, no path', targetPath: targetPath }
+      var view = adapter.captureView()
+      pendingViews[normalizePath(fullName)] = view
+      if (targetPath) pendingViews[normalizePath(targetPath)] = view
+      var remaining = 0
+      try {
+        remaining = Math.max(0, adapter.collection().Count - 1)
+      } catch (error) {
+        remaining = 0
+      }
+      return { ok: true, fullName: fullName, view: view, remaining: remaining, item: item }
+    } catch (error) {
+      return { ok: false, reason: describeError(error), targetPath: targetPath }
+    }
+  }
+
+  function openAfterWrite(targetPath) {
+    if (!adapter) return { ok: false, reason: 'no adapter', targetPath: targetPath }
+    var startedAt = Date.now()
+    try {
+      var existing = targetPath ? findItem(targetPath) : null
+      if (existing) {
+        return {
+          ok: true,
+          fullName: existing.FullName,
+          excerpt: adapter.excerpt ? adapter.excerpt() : '',
+          alreadyOpen: true,
+          elapsedMs: Date.now() - startedAt
+        }
+      }
+      if (!targetPath) return { ok: false, reason: 'never saved, no path' }
+      if (!isOwnPath(targetPath)) return { ok: false, reason: 'not open here', targetPath: targetPath }
+      var viewKey = normalizePath(targetPath)
+      if (!Object.prototype.hasOwnProperty.call(pendingViews, viewKey)) {
+        return { ok: false, reason: 'not open here', targetPath: targetPath }
+      }
+      var view = pendingViews[viewKey]
+      delete pendingViews[viewKey]
+      suppressEvents = true
+      adapter.open(targetPath)
+      var restored = view ? adapter.restoreView(view) : {}
+      var excerpt = adapter.excerpt ? adapter.excerpt() : ''
+      suppressEvents = false
+      return {
+        ok: true,
+        fullName: targetPath,
+        excerpt: excerpt,
+        restored: restored,
+        view: view,
+        elapsedMs: Date.now() - startedAt
+      }
+    } catch (error) {
+      suppressEvents = false
+      return {
+        ok: false,
+        reason: describeError(error),
+        targetPath: targetPath,
+        elapsedMs: Date.now() - startedAt
+      }
+    }
+  }
+
   function handlePayload(payload) {
     if (!payload || payload.type === 'ping') return
+    if (payload.type === 'close') {
+      try {
+        bindAdapter()
+        var closed = closeForWrite(payload.path)
+        var item = closed.item
+        delete closed.item
+        report('close-result', closed, closed.ok)
+        if (item) {
+          suppressEvents = true
+          try {
+            adapter.close(item)
+          } finally {
+            suppressEvents = false
+          }
+        }
+      } catch (error) {
+        report('close-result', {
+          ok: false,
+          reason: describeError(error),
+          targetPath: payload.path
+        })
+      }
+      return
+    }
+    if (payload.type === 'excerpt') {
+      try {
+        bindAdapter()
+        var existing = payload.path ? findItem(payload.path) : null
+        if (!existing) {
+          report('reload-result', {
+            ok: false,
+            reason: adapter ? 'not open here' : 'no adapter',
+            targetPath: payload.path
+          })
+          return
+        }
+        report('reload-result', {
+          ok: true,
+          fullName: existing.FullName,
+          excerpt: adapter.excerpt ? adapter.excerpt() : '',
+          alreadyOpen: true,
+          items: listItems().items
+        })
+      } catch (error) {
+        report('reload-result', {
+          ok: false,
+          reason: describeError(error),
+          targetPath: payload.path
+        })
+      }
+      return
+    }
+    if (payload.type === 'open') {
+      try {
+        bindAdapter()
+        var opened = openAfterWrite(payload.path)
+        if (opened.ok) opened.items = listItems().items
+        report('reload-result', opened)
+      } catch (error) {
+        report('reload-result', {
+          ok: false,
+          reason: describeError(error),
+          targetPath: payload.path
+        })
+      }
+      return
+    }
     if (payload.type === 'reload') {
       try {
         bindAdapter()

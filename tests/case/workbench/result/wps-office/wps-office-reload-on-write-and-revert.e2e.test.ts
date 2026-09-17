@@ -51,7 +51,7 @@ describe('workbench result e2e', () => {
         suite: 'result',
         groups: ['wps-office'],
         description:
-          'opt-in：本机已授权的 WPS 打开目标 docx / xlsx / pptx 后，AI 写回/回退应让对应组件 close+open 并读到新/旧正文。',
+          'opt-in：本机已授权的 WPS 打开目标 docx / xlsx / pptx 后，AI 写回/回退应先 close 再写盘再 open，窗口正文出现标记并在回退后恢复。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'exclusive',

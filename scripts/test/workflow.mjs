@@ -707,18 +707,12 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     else results.push(taskResult)
   }
 
-  const runTask = async (task, seedPath = '', retry = false) => {
+  const runTask = async (task, seedPath = '') => {
     const relativeFile = path.relative(ROOT, task.testFile)
-    if (retry) {
-      process.stdout.write(
-        `[test-workflow] e2e retry [${task.targetId}/${task.execution}] ${relativeFile}\n`
-      )
-    } else {
-      completed += 1
-      process.stdout.write(
-        `[test-workflow] e2e ${String(completed)}/${String(tasks.length)} [${task.targetId}/${task.execution}] ${relativeFile}\n`
-      )
-    }
+    completed += 1
+    process.stdout.write(
+      `[test-workflow] e2e ${String(completed)}/${String(tasks.length)} [${task.targetId}/${task.execution}] ${relativeFile}\n`
+    )
     const startedAt = Date.now()
     const caseEnv =
       task.cacheMode === 'direct'
@@ -734,7 +728,6 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
       deadlineAt
     })
     const previousResultIndex = results.findIndex((result) => result.index === task.index)
-    const previousResult = previousResultIndex >= 0 ? results[previousResultIndex] : undefined
     const taskResult = {
       index: task.index,
       file: relativeFile,
@@ -743,7 +736,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
       status: code === 0 ? 'passed' : code === DEADLINE_EXIT_CODE ? 'timed_out' : 'failed',
       exitCode: code,
       durationMs: Date.now() - startedAt,
-      attempts: Number(previousResult?.attempts || 0) + 1
+      attempts: 1
     }
     if (previousResultIndex >= 0) results[previousResultIndex] = taskResult
     else results.push(taskResult)
@@ -815,28 +808,13 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
     if (active.size > 0) await Promise.race(active)
   }
 
-  const failedConcurrentTasks = concurrentTasks.filter((task) =>
-    results.some((result) => result.index === task.index && result.exitCode !== 0)
-  )
-  for (let index = 0; index < failedConcurrentTasks.length; index += 1) {
-    const task = failedConcurrentTasks[index]
-    if (Date.now() >= deadlineAt) {
-      for (const remaining of failedConcurrentTasks.slice(index)) recordDeadline(remaining)
-      break
-    }
-    await runTask(task, warmupCacheByTarget.get(task.targetId), true)
-  }
-
   for (let index = 0; index < exclusiveTasks.length; index += 1) {
     const task = exclusiveTasks[index]
     if (Date.now() >= deadlineAt) {
       for (const remaining of exclusiveTasks.slice(index)) recordDeadline(remaining)
       break
     }
-    const outcome = await runTask(task, warmupCacheByTarget.get(task.targetId))
-    if (outcome.code !== 0 && Date.now() < deadlineAt) {
-      await runTask(task, warmupCacheByTarget.get(task.targetId), true)
-    }
+    await runTask(task, warmupCacheByTarget.get(task.targetId))
   }
 
   exitCode = results.reduce((code, result) => {

@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import os from 'node:os'
@@ -11,7 +11,8 @@ import {
   WPS_ADDON_PORT_FILE,
   WPS_PREFERRED_SYNC_PORT
 } from '../../../src/main/services/wps/constants'
-import { normalizeOfficePath } from '../../../src/main/services/wps/officeFileWriteNotify'
+import { normalizeOfficePath, officeWriteHostForPath } from '../../../src/main/services/wps/officeFileWriteNotify'
+import { resolveWpsComponentExe, resolveWpsOfficeAppPath } from '../../../src/main/services/wps/wpsOfficeLaunch'
 import { resolveWpsJsAddonsDir } from '../../../src/main/services/wps/WpsAddonInstaller'
 import type {
   WpsReloadDispatch,
@@ -41,7 +42,7 @@ export const WPS_OFFICE_COVERAGE_TARGETS: WpsOfficeCoverageTarget[] = [
     fileName: '经营周报.xlsx',
     component: 'et',
     prompt: (marker) =>
-      `请直接修改我刚选中的 经营周报.xlsx，在第一个工作表找一个空白单元格写入纯文本“${marker}”，不要改现有数字、公式或其他单元格。完成后告诉我已写回。`
+      `请直接修改我刚选中的 经营周报.xlsx，在第一个工作表的 H1 单元格写入纯文本“${marker}”，不要改现有数字、公式或其他单元格。完成后告诉我已写回。`
   },
   {
     kind: 'pptx',
@@ -83,32 +84,25 @@ const sleep = async (ms: number): Promise<void> => {
 
 const execFileAsync = promisify(execFile)
 
-const darwinAppCandidates = (): string[] => [
-  '/Applications/wpsoffice.localized/wpsoffice.app',
-  '/Applications/wpsoffice.app',
-  '/Applications/WPS Office.app'
-]
-
-const windowsExeCandidates = (): string[] => {
-  const localAppData = String(process.env.LOCALAPPDATA || '').trim()
-  const programFiles = String(process.env.ProgramFiles || '').trim()
-  const programFilesX86 = String(process.env['ProgramFiles(x86)'] || '').trim()
-  return [
-    localAppData ? path.join(localAppData, 'Kingsoft', 'WPS Office', 'ksolaunch.exe') : '',
-    programFiles ? path.join(programFiles, 'Kingsoft', 'WPS Office', 'office6', 'wps.exe') : '',
-    programFilesX86 ? path.join(programFilesX86, 'Kingsoft', 'WPS Office', 'office6', 'wps.exe') : ''
-  ].filter(Boolean)
+const resolveWindowsOpenExe = (filePath: string): string | undefined => {
+  const host = officeWriteHostForPath(filePath) || 'wps'
+  return resolveWpsComponentExe(host, filePath) ?? resolveWpsOfficeAppPath()
 }
 
-export const resolveWpsOfficeAppPath = (): string | undefined => {
-  if (process.platform === 'darwin') {
-    return darwinAppCandidates().find((candidate) => fs.existsSync(candidate))
-  }
-  if (process.platform === 'win32') {
-    return windowsExeCandidates().find((candidate) => fs.existsSync(candidate))
-  }
-  return undefined
-}
+const spawnWindowsDetached = async (exePath: string, args: readonly string[]): Promise<void> =>
+  await new Promise((resolve, reject) => {
+    const child = spawn(exePath, [...args], {
+      detached: true,
+      stdio: 'ignore'
+    })
+    child.once('error', reject)
+    child.once('spawn', () => {
+      child.unref()
+      resolve()
+    })
+  })
+
+export { resolveWpsOfficeAppPath }
 
 export const resolveInstalledWpsSyncPort = async (): Promise<number> => {
   const jsAddonsDir = resolveWpsJsAddonsDir({
@@ -136,7 +130,9 @@ export const resolveInstalledWpsSyncPort = async (): Promise<number> => {
 }
 
 export const fetchWpsSyncStatus = async (port: number): Promise<WpsSyncStatus> => {
-  const response = await fetch(`http://127.0.0.1:${port}/status`)
+  const response = await fetch(`http://127.0.0.1:${port}/status`, {
+    signal: AbortSignal.timeout(1_500)
+  })
   if (!response.ok) {
     throw new Error(`WPS sync /status HTTP ${response.status}`)
   }
@@ -213,7 +209,11 @@ export const openDocumentInWpsBackground = async (filePath: string): Promise<voi
     return
   }
   if (process.platform === 'win32') {
-    await execFileAsync(appPath, [filePath], { timeout: 20_000, windowsHide: true })
+    const exePath = resolveWindowsOpenExe(filePath)
+    if (!exePath) {
+      throw new Error('本机未找到 WPS Office')
+    }
+    await spawnWindowsDetached(exePath, [filePath])
     return
   }
   throw new Error(`WPS e2e 不支持当前平台 ${process.platform}`)
@@ -266,7 +266,7 @@ export const waitForWpsReloadResult = async (options: {
   excerptExcludes?: string
   timeoutMs?: number
 }): Promise<WpsReloadResult> => {
-  const timeoutMs = options.timeoutMs ?? 20_000
+  const timeoutMs = options.timeoutMs ?? 45_000
   const deadline = Date.now() + timeoutMs
   let lastError: unknown
   while (Date.now() < deadline) {
@@ -281,7 +281,15 @@ export const waitForWpsReloadResult = async (options: {
         return true
       })
       if (matched) return matched
-      lastError = new Error(`reload-result count=${status.lastReloadResults.length}`)
+      lastError = new Error(
+        `reload-result count=${status.lastReloadResults.length} close-result=${
+          status.lastCloseResults?.length ?? 0
+        } dispatches=${status.lastDispatches.length} clients=${
+          status.clients.map((item) => item.component).join(',') || '(none)'
+        } open=${
+          status.openDocuments.map((item) => `${item.component}:${item.fullName}`).join('|') || '(none)'
+        } last=${JSON.stringify(status.lastReloadResults.at(-1) ?? null)}`
+      )
     } catch (error) {
       lastError = error
     }
