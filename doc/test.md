@@ -143,7 +143,7 @@ runner 不负责：
   - `pnpm test:unit:ai`
 - 全量 E2E
   - `pnpm test:e2e:source`：构建当前源码并运行全部 E2E。
-  - `pnpm test:e2e:package -- --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行全部 E2E。安装落在本机 `NCurator-E2E` 目录；Windows 会恢复正式「馆长」快捷方式并另建「馆长 E2E」，macOS 将安装副本命名为「馆长 E2E.app」，避免与已装正式版入口混淆（细节见 `doc/release.md`）。
+  - `pnpm test:e2e:package -- --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行全部 E2E。安装落在本机 `NCurator-E2E` 目录；Windows 可能覆盖本机已安装的正式包。测完删除 E2E 安装目录及指向它的入口（细节见 `doc/release.md`）。
 - Settings
   - `pnpm test:settings`
   - `pnpm test:settings:e2e`

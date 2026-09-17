@@ -1084,6 +1084,7 @@ const main = async () => {
   let exitCode = 0
   let packageTargets = []
 
+  try {
   if (!args.type || args.type === 'e2e') {
     const validationCode = validateE2EContract()
     if (validationCode !== 0) process.exit(validationCode)
@@ -1093,26 +1094,33 @@ const main = async () => {
     if (args.results.length > 0 && args.results.length !== args.bundles.length) {
       throw new Error('each --bundle must have a matching --result when result paths are provided')
     }
-    packageTargets = await Promise.all(
-      args.bundles.map(async (bundle, index) => {
-        const session = await preparePackagedE2EApplication(bundle, {
-          resultPath: args.results[index] || ''
-        })
-        const knowledgeCache = await prepareKnowledgeCache({
-          namespace: `package/${session.releasePlatform}`,
-          buildFingerprint: session.artifactSha256,
-          fresh: args.freshKnowledgeCache,
-          reuse: args.reuseKnowledgeCache
-        })
-        return {
-          id: session.releasePlatform,
-          env: { ...session.env, ...knowledgeCache.env },
-          cacheMode: 'warmup',
-          session,
-          knowledgeCache
-        }
+    packageTargets = []
+    for (const [index, bundle] of args.bundles.entries()) {
+      const session = await preparePackagedE2EApplication(bundle, {
+        resultPath: args.results[index] || ''
       })
-    )
+      const target = {
+        id: session.releasePlatform,
+        env: { ...session.env },
+        cacheMode: 'warmup',
+        session,
+        knowledgeCache: {
+          knowledgeCacheEnabled: false,
+          knowledgeCachePath: '',
+          knowledgeCacheNamespace: `package/${session.releasePlatform}`,
+          buildFingerprint: session.artifactSha256
+        }
+      }
+      packageTargets.push(target)
+      const knowledgeCache = await prepareKnowledgeCache({
+        namespace: `package/${session.releasePlatform}`,
+        buildFingerprint: session.artifactSha256,
+        fresh: args.freshKnowledgeCache,
+        reuse: args.reuseKnowledgeCache
+      })
+      target.env = { ...session.env, ...knowledgeCache.env }
+      target.knowledgeCache = knowledgeCache
+    }
   }
 
   if (!args.type || args.type === 'backend') {
@@ -1154,6 +1162,20 @@ const main = async () => {
         }
       })
     }
+  }
+  } finally {
+    let cleanupFailed = false
+    for (const target of packageTargets) {
+      try {
+        target.session.cleanup()
+      } catch (error) {
+        cleanupFailed = true
+        process.stderr.write(
+          `[package-e2e-cleanup] 清理正式包 E2E 安装失败：${error instanceof Error ? error.message : String(error)}\n`
+        )
+      }
+    }
+    if (cleanupFailed && exitCode === 0) exitCode = 1
   }
 
   process.exit(exitCode)

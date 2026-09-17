@@ -1,20 +1,62 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, renameSync, rmSync } from 'node:fs'
+import os from 'node:os'
 import path from 'node:path'
 
-/** 与 electron-builder productName / shortcutName 一致；候选包本身不改名。 */
+/** 与 electron-builder productName 一致；候选包本身不改名。 */
 export const PACKAGE_PRODUCT_NAME = '馆长'
+/** macOS 测试安装副本显示名；测完随 NCurator-E2E 目录删除。 */
 export const PACKAGE_E2E_DISPLAY_NAME = '馆长 E2E'
+const PACKAGE_E2E_ROOT_NAME = 'NCurator-E2E'
 
-const WINDOWS_E2E_INSTALL_MARKER = `${path.sep}NCurator-E2E`
-const MAC_E2E_INSTALL_MARKER = `${path.sep}NCurator-E2E`
+const e2ePathSegmentPattern = /(^|[\\/])NCurator-E2E(?=[\\/]|$)/iu
 
-export const isPackageE2EInstallPath = (targetPath, platform = process.platform) => {
-  const normalized = path.resolve(String(targetPath || ''))
-  if (!normalized) return false
-  const marker = platform === 'darwin' ? MAC_E2E_INSTALL_MARKER : WINDOWS_E2E_INSTALL_MARKER
-  return normalized.toLowerCase().includes(marker.toLowerCase())
+export const isPackageE2EInstallPath = (targetPath) => {
+  const raw = String(targetPath || '').trim()
+  if (!raw) return false
+  return e2ePathSegmentPattern.test(raw)
 }
+
+export const resolvePackageE2ECleanupRoot = (targetPath) => {
+  const raw = String(targetPath || '').trim()
+  if (!isPackageE2EInstallPath(raw)) {
+    throw new Error(`拒绝清理非 E2E 安装路径：${raw || '(empty)'}`)
+  }
+  let current = path.resolve(raw)
+  while (path.basename(current) !== PACKAGE_E2E_ROOT_NAME) {
+    const parent = path.dirname(current)
+    if (parent === current) {
+      throw new Error(`无法解析 E2E 安装根目录：${raw}`)
+    }
+    current = parent
+  }
+  return current
+}
+
+export const isPackageE2ELauncherTarget = (targetPath, installRoot) => {
+  if (!isPackageE2EInstallPath(installRoot) || !String(targetPath || '').trim()) return false
+  const root = path.resolve(installRoot)
+  let target
+  try {
+    target = path.resolve(String(targetPath))
+  } catch {
+    return false
+  }
+  const prefix = root.endsWith(path.sep) ? root : `${root}${path.sep}`
+  if (process.platform === 'win32') {
+    return (
+      target.toLowerCase() === root.toLowerCase() ||
+      target.toLowerCase().startsWith(prefix.toLowerCase())
+    )
+  }
+  return target === root || target.startsWith(prefix)
+}
+
+export const resolveWindowsPackageE2EInstallRoot = () =>
+  path.join(os.homedir(), 'AppData', 'Local', PACKAGE_E2E_ROOT_NAME)
+
+export const resolveMacPackageE2EInstallRoot = () =>
+  path.join(os.homedir(), 'Applications', PACKAGE_E2E_ROOT_NAME)
 
 export const resolveMacPackageE2EAppPath = (installedAppPath) => {
   const currentName = path.basename(installedAppPath)
@@ -45,18 +87,22 @@ export const renameMacPackageE2EApp = (installedAppPath, { log = () => {} } = {}
   return targetAppPath
 }
 
-const runPowerShellJson = (script, { log = () => {} } = {}) => {
+const runPowerShell = (script) => {
   const encoded = Buffer.from(script, 'utf16le').toString('base64')
-  const result = spawnSync(
+  return spawnSync(
     'powershell.exe',
     ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded],
     { encoding: 'utf8', windowsHide: true, maxBuffer: 4 * 1024 * 1024 }
   )
+}
+
+const runPowerShellJson = (script, { log = () => {} } = {}) => {
+  const result = runPowerShell(script)
   const stdout = String(result.stdout || '').trim()
   const stderr = String(result.stderr || '').trim()
   if (result.status !== 0) {
     throw new Error(
-      `PowerShell 隔离步骤失败：${stderr || stdout || `exit ${String(result.status)}`}`
+      `PowerShell E2E 清理失败：${stderr || stdout || `exit ${String(result.status)}`}`
     )
   }
   if (!stdout) return null
@@ -73,297 +119,117 @@ const runPowerShellJson = (script, { log = () => {} } = {}) => {
   return JSON.parse(jsonLine)
 }
 
-const windowsHelpersPs = `
-function Test-E2EPath([string]$target, [string]$installRoot) {
+const stopWindowsPackageE2EProcesses = (cleanupRoot, { log = () => {} } = {}) => {
+  const result = runPowerShell(`
+$ErrorActionPreference = 'SilentlyContinue'
+$root = [IO.Path]::GetFullPath(${JSON.stringify(cleanupRoot)}).TrimEnd('\\') + '\\'
+Get-CimInstance Win32_Process | Where-Object {
+  $_.ExecutablePath -and $_.ExecutablePath.StartsWith($root, [StringComparison]::OrdinalIgnoreCase)
+} | ForEach-Object {
+  Stop-Process -Id $_.ProcessId -Force
+}
+`)
+  if (result.status !== 0) {
+    log(`结束 E2E 进程时出现警告：${String(result.stderr || result.stdout || '').trim()}`)
+  }
+}
+
+const cleanupWindowsPackageE2ELaunchers = (cleanupRoot, { log = () => {} } = {}) => {
+  const result = runPowerShellJson(
+    `
+$ErrorActionPreference = 'Stop'
+$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::UTF8
+$installRoot = [IO.Path]::GetFullPath(${JSON.stringify(cleanupRoot)})
+function Test-E2EPath([string]$target) {
   if ([string]::IsNullOrWhiteSpace($target)) { return $false }
-  try { $full = [IO.Path]::GetFullPath($target) } catch { return $false }
-  return $full.StartsWith($installRoot, [StringComparison]::OrdinalIgnoreCase)
-}
-
-function Get-ShortcutDirs() {
-  @(
-    [Environment]::GetFolderPath('Desktop'),
-    (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs')
-  ) | Where-Object { $_ -and (Test-Path $_) }
-}
-
-function Read-Shortcut($shell, [string]$lnkPath) {
-  if (-not (Test-Path -LiteralPath $lnkPath)) { return $null }
-  $s = $shell.CreateShortcut($lnkPath)
-  return @{
-    path = $lnkPath
-    targetPath = [string]$s.TargetPath
-    arguments = [string]$s.Arguments
-    workingDirectory = [string]$s.WorkingDirectory
-    iconLocation = [string]$s.IconLocation
-    description = [string]$s.Description
-  }
-}
-
-function Write-Shortcut($shell, $info) {
-  $dir = Split-Path -Parent $info.path
-  if (-not (Test-Path -LiteralPath $dir)) {
-    New-Item -ItemType Directory -Path $dir -Force | Out-Null
-  }
-  $s = $shell.CreateShortcut($info.path)
-  $s.TargetPath = [string]$info.targetPath
-  $s.Arguments = [string]$info.arguments
-  $s.WorkingDirectory = [string]$info.workingDirectory
-  if ($info.iconLocation) { $s.IconLocation = [string]$info.iconLocation }
-  if ($info.description) { $s.Description = [string]$info.description }
-  $s.Save()
-}
-`
-
-/** 正式包 E2E 静默安装前：备份正式「馆长」快捷方式与非 E2E 卸载项。 */
-export const snapshotWindowsPackageE2EState = ({
-  installRoot,
-  snapshotPath,
-  log = () => {}
-}) => {
-  if (process.platform !== 'win32') {
-    throw new Error('snapshotWindowsPackageE2EState 仅支持 Windows')
-  }
-  mkdirSync(path.dirname(snapshotPath), { recursive: true })
-
-  const result = runPowerShellJson(
-    `
-$ErrorActionPreference = 'Stop'
-$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::UTF8
-${windowsHelpersPs}
-$productName = ${JSON.stringify(PACKAGE_PRODUCT_NAME)}
-$installRoot = [IO.Path]::GetFullPath(${JSON.stringify(installRoot)})
-$snapshotPath = ${JSON.stringify(snapshotPath)}
-$productLnk = "$productName.lnk"
-$shell = New-Object -ComObject WScript.Shell
-$shortcutSnapshots = @()
-foreach ($dir in Get-ShortcutDirs) {
-  $info = Read-Shortcut $shell (Join-Path $dir $productLnk)
-  if ($null -eq $info) { continue }
-  if (Test-E2EPath $info.targetPath $installRoot) { continue }
-  $shortcutSnapshots += $info
-}
-$uninstallSnapshots = @()
-$root = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall'
-if (Test-Path $root) {
-  Get-ChildItem $root -ErrorAction SilentlyContinue | ForEach-Object {
-    $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
-    if ($null -eq $p) { return }
-    $displayName = [string]$p.DisplayName
-    $installLocation = [string]$p.InstallLocation
-    $uninstallString = [string]$p.UninstallString
-    $matchesProduct =
-      ($displayName -eq $productName) -or
-      ($uninstallString -match [regex]::Escape($productName)) -or
-      ($installLocation -match 'Ncurator|NCurator|馆长')
-    if (-not $matchesProduct) { return }
-    if (Test-E2EPath $installLocation $installRoot) { return }
-    if (Test-E2EPath $uninstallString $installRoot) { return }
-    $uninstallSnapshots += @{
-      key = $_.PSChildName
-      DisplayName = $displayName
-      DisplayVersion = [string]$p.DisplayVersion
-      InstallLocation = $installLocation
-      UninstallString = $uninstallString
-      QuietUninstallString = [string]$p.QuietUninstallString
-      Publisher = [string]$p.Publisher
-      DisplayIcon = [string]$p.DisplayIcon
-    }
-  }
-}
-$snapshot = @{
-  schemaVersion = 1
-  capturedAt = (Get-Date).ToString('o')
-  installRoot = $installRoot
-  shortcuts = @($shortcutSnapshots)
-  uninstall = @($uninstallSnapshots)
-}
-$snapshotDir = Split-Path -Parent $snapshotPath
-if (-not (Test-Path -LiteralPath $snapshotDir)) {
-  New-Item -ItemType Directory -Path $snapshotDir -Force | Out-Null
-}
-$json = ($snapshot | ConvertTo-Json -Depth 6 -Compress)
-[IO.File]::WriteAllText($snapshotPath, $json, [Text.UTF8Encoding]::new($false))
-Write-Output $json
-`,
-    { log }
-  )
-
-  const shortcutCount = Array.isArray(result?.shortcuts) ? result.shortcuts.length : 0
-  const uninstallCount = Array.isArray(result?.uninstall) ? result.uninstall.length : 0
-  log(
-    `已备份正式启动入口：快捷方式 ${String(shortcutCount)} 个，卸载项 ${String(uninstallCount)} 个 → ${snapshotPath}`
-  )
-  return result
-}
-
-/** 正式包 E2E 静默安装后：隔离 E2E 快捷方式并恢复正式入口。 */
-export const restoreWindowsPackageE2ELaunchers = ({
-  installRoot,
-  executablePath,
-  snapshotPath,
-  log = () => {}
-}) => {
-  if (process.platform !== 'win32') {
-    throw new Error('restoreWindowsPackageE2ELaunchers 仅支持 Windows')
-  }
-  if (!existsSync(executablePath)) {
-    throw new Error(`Windows E2E 可执行文件不存在：${executablePath}`)
-  }
-  if (!existsSync(snapshotPath)) {
-    throw new Error(`缺少 Windows E2E 隔离快照：${snapshotPath}`)
-  }
-
-  const result = runPowerShellJson(
-    `
-$ErrorActionPreference = 'Stop'
-$ProgressPreference = 'SilentlyContinue'
-$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::UTF8
-${windowsHelpersPs}
-$productName = ${JSON.stringify(PACKAGE_PRODUCT_NAME)}
-$e2eDisplayName = ${JSON.stringify(PACKAGE_E2E_DISPLAY_NAME)}
-$installRoot = [IO.Path]::GetFullPath(${JSON.stringify(installRoot)})
-$executablePath = [IO.Path]::GetFullPath(${JSON.stringify(executablePath)})
-$snapshotPath = ${JSON.stringify(snapshotPath)}
-$productLnk = "$productName.lnk"
-$e2eLnk = "$e2eDisplayName.lnk"
-function Remove-ShortcutSafe([string]$lnkPath) {
-  if (-not (Test-Path -LiteralPath $lnkPath)) { return $true }
-  for ($i = 0; $i -lt 6; $i++) {
-    try {
-      [IO.File]::Delete((Resolve-Path -LiteralPath $lnkPath).Path)
-      return $true
-    } catch {
-      Start-Sleep -Milliseconds 250
-    }
-  }
+  if ($target.ToLower().Contains($installRoot.ToLower())) { return $true }
   try {
-    $stale = Join-Path (Split-Path -Parent $lnkPath) ("$e2eDisplayName-stale-$([guid]::NewGuid().ToString('N').Substring(0,8)).lnk")
-    Move-Item -LiteralPath $lnkPath -Destination $stale -Force
-    return $true
+    $full = [IO.Path]::GetFullPath($target.Trim().Trim('"'))
+    return $full.StartsWith($installRoot, [StringComparison]::OrdinalIgnoreCase)
   } catch {
     return $false
   }
 }
-$snapshot = Get-Content -LiteralPath $snapshotPath -Raw -Encoding utf8 | ConvertFrom-Json
+$dirs = @(
+  [Environment]::GetFolderPath('Desktop'),
+  [Environment]::GetFolderPath('CommonDesktopDirectory'),
+  (Join-Path $env:APPDATA 'Microsoft\\Windows\\Start Menu\\Programs'),
+  (Join-Path $env:ProgramData 'Microsoft\\Windows\\Start Menu\\Programs')
+) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
 $shell = New-Object -ComObject WScript.Shell
-$restoredShortcuts = 0
-$createdE2eShortcuts = 0
-$removedE2eProductShortcuts = 0
-$snapshotPaths = @{}
-if ($snapshot.shortcuts) {
-  foreach ($item in @($snapshot.shortcuts)) {
-    if ($item.path) { $snapshotPaths[[string]$item.path] = $true }
+$removedShortcuts = 0
+foreach ($dir in $dirs) {
+  Get-ChildItem -LiteralPath $dir -Filter '*.lnk' -Recurse -ErrorAction SilentlyContinue | ForEach-Object {
+    $shortcut = $shell.CreateShortcut($_.FullName)
+    if (-not (Test-E2EPath ([string]$shortcut.TargetPath))) { return }
+    Remove-Item -LiteralPath $_.FullName -Force
+    $script:removedShortcuts++
   }
 }
-
-foreach ($dir in Get-ShortcutDirs) {
-  $productPath = Join-Path $dir $productLnk
-  $e2ePath = Join-Path $dir $e2eLnk
-  Write-Shortcut $shell @{
-    path = $e2ePath
-    targetPath = $executablePath
-    arguments = ''
-    workingDirectory = $installRoot
-    iconLocation = "$executablePath,0"
-    description = $e2eDisplayName
-  }
-  $createdE2eShortcuts++
-}
-
-if ($snapshot.shortcuts) {
-  foreach ($item in @($snapshot.shortcuts)) {
-    if (-not $item.path -or -not $item.targetPath) { continue }
-    if (Test-E2EPath ([string]$item.targetPath) $installRoot) { continue }
-    Write-Shortcut $shell @{
-      path = [string]$item.path
-      targetPath = [string]$item.targetPath
-      arguments = [string]$item.arguments
-      workingDirectory = [string]$item.workingDirectory
-      iconLocation = [string]$item.iconLocation
-      description = [string]$item.description
+$removedUninstall = 0
+$uninstallRoot = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall'
+if (Test-Path $uninstallRoot) {
+  Get-ChildItem $uninstallRoot -ErrorAction SilentlyContinue | ForEach-Object {
+    $props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+    if ($null -eq $props) { return }
+    $hit = $false
+    foreach ($value in @($props.InstallLocation, $props.UninstallString, $props.QuietUninstallString, $props.DisplayIcon)) {
+      if (Test-E2EPath ([string]$value)) { $hit = $true; break }
     }
-    $restoredShortcuts++
+    if (-not $hit) { return }
+    Remove-Item -LiteralPath $_.PSPath -Recurse -Force
+    $script:removedUninstall++
   }
 }
-
-foreach ($dir in Get-ShortcutDirs) {
-  $productPath = Join-Path $dir $productLnk
-  $current = Read-Shortcut $shell $productPath
-  if ($null -eq $current) { continue }
-  if (-not (Test-E2EPath $current.targetPath $installRoot)) { continue }
-  if ($snapshotPaths.ContainsKey($productPath)) { continue }
-  if (Remove-ShortcutSafe $productPath) {
-    $removedE2eProductShortcuts++
-  } else {
-    throw "无法隔离仍指向 E2E 的正式快捷方式（文件被占用）：$productPath"
+$softwareKey = 'HKCU:\\Software\\com.yoan.ncurator'
+if (Test-Path $softwareKey) {
+  $installLocation = [string](Get-ItemProperty $softwareKey -ErrorAction SilentlyContinue).InstallLocation
+  if (Test-E2EPath $installLocation) {
+    Remove-Item -LiteralPath $softwareKey -Recurse -Force
   }
 }
-
-$restoredUninstall = 0
-if ($snapshot.uninstall) {
-  foreach ($item in @($snapshot.uninstall)) {
-    if (-not $item.key) { continue }
-    $keyPath = "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\$($item.key)"
-    if (-not (Test-Path $keyPath)) {
-      New-Item -Path $keyPath -Force | Out-Null
-    }
-    $props = @{
-      DisplayName = [string]$item.DisplayName
-      DisplayVersion = [string]$item.DisplayVersion
-      InstallLocation = [string]$item.InstallLocation
-      UninstallString = [string]$item.UninstallString
-      QuietUninstallString = [string]$item.QuietUninstallString
-      Publisher = [string]$item.Publisher
-      DisplayIcon = [string]$item.DisplayIcon
-    }
-    foreach ($name in $props.Keys) {
-      $value = $props[$name]
-      if ([string]::IsNullOrWhiteSpace($value)) { continue }
-      New-ItemProperty -Path $keyPath -Name $name -Value $value -PropertyType String -Force | Out-Null
-    }
-    $restoredUninstall++
-  }
-}
-
-$root = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall'
-if (Test-Path $root) {
-  Get-ChildItem $root -ErrorAction SilentlyContinue | ForEach-Object {
-    $p = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
-    if ($null -eq $p) { return }
-    $installLocation = [string]$p.InstallLocation
-    $uninstallString = [string]$p.UninstallString
-    if (-not ((Test-E2EPath $installLocation $installRoot) -or (Test-E2EPath $uninstallString $installRoot))) {
-      return
-    }
-    New-ItemProperty -Path $_.PSPath -Name 'DisplayName' -Value $e2eDisplayName -PropertyType String -Force | Out-Null
-  }
-}
-
 Write-Output (@{
-  restoredShortcuts = $restoredShortcuts
-  createdE2eShortcuts = $createdE2eShortcuts
-  removedE2eProductShortcuts = $removedE2eProductShortcuts
-  restoredUninstall = $restoredUninstall
+  removedShortcuts = $removedShortcuts
+  removedUninstall = $removedUninstall
 } | ConvertTo-Json -Compress)
 `,
     { log }
   )
-
   log(
-    [
-      'Windows E2E 启动入口已隔离：',
-      `恢复正式快捷方式 ${String(result?.restoredShortcuts ?? 0)}`,
-      `创建「${PACKAGE_E2E_DISPLAY_NAME}」${String(result?.createdE2eShortcuts ?? 0)}`,
-      `移除误指向 E2E 的「${PACKAGE_PRODUCT_NAME}」${String(result?.removedE2eProductShortcuts ?? 0)}`,
-      `恢复卸载项 ${String(result?.restoredUninstall ?? 0)}`
-    ].join('；')
+    `已清理指向 E2E 的启动入口：快捷方式 ${String(result?.removedShortcuts ?? 0)} 个，卸载项 ${String(result?.removedUninstall ?? 0)} 个`
   )
   return result
 }
 
+const sleep = (ms) => {
+  const buffer = new Int32Array(new SharedArrayBuffer(4))
+  Atomics.wait(buffer, 0, 0, ms)
+}
 
-export const readWindowsPackageE2ESnapshot = (snapshotPath) => {
-  const raw = readFileSync(snapshotPath, 'utf8')
-  return JSON.parse(raw)
+export const removePackageE2EInstallDirectory = (installRoot, { log = () => {} } = {}) => {
+  const cleanupRoot = resolvePackageE2ECleanupRoot(installRoot)
+  if (!existsSync(cleanupRoot)) {
+    log(`E2E 安装目录不存在，跳过：${cleanupRoot}`)
+    return { cleanupRoot, removed: false }
+  }
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    rmSync(cleanupRoot, { recursive: true, force: true })
+    if (!existsSync(cleanupRoot)) {
+      log(`已删除 E2E 安装目录：${cleanupRoot}`)
+      return { cleanupRoot, removed: true }
+    }
+    sleep(250)
+  }
+  throw new Error(`无法删除 E2E 安装目录：${cleanupRoot}`)
+}
+
+/** 测完删除 NCurator-E2E 安装目录；Windows 同时去掉指向它的快捷方式和卸载项。 */
+export const cleanupPackagedE2EInstall = ({ installRoot, log = () => {} } = {}) => {
+  const cleanupRoot = resolvePackageE2ECleanupRoot(installRoot)
+  if (process.platform === 'win32') {
+    stopWindowsPackageE2EProcesses(cleanupRoot, { log })
+    cleanupWindowsPackageE2ELaunchers(cleanupRoot, { log })
+    sleep(400)
+  }
+  return removePackageE2EInstallDirectory(cleanupRoot, { log })
 }

@@ -25,7 +25,6 @@
 安装后应用名：     馆长.app / 馆长.exe
 运行时数据目录：   …/ncurator（或 ncurator-dev）
 更新缓存目录：     ncurator-updater
-正式包 E2E 本机名： 馆长 E2E（仅测试安装副本/快捷方式；候选包与公开下载仍为「馆长」）
 ```
 
 Windows / macOS **公开**安装包名与对象键均为「馆长-…」，与用户可见名一致。mac 本地 `electron-builder` 产物仍可为 `Ncurator-mac-*.dmg`，发布时映射到公开键；自动更新 zip / blockmap 继续走 ASCII storageName。
