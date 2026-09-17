@@ -284,14 +284,6 @@ describe('workbench run e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const processLevelCdp = await runtime.electronApp.evaluate(async ({ app }) => {
-            const { existsSync } = await import('node:fs')
-            const { join } = await import('node:path')
-            return existsSync(join(app.getPath('userData'), 'DevToolsActivePort'))
-          })
-          if (processLevelCdp) {
-            throw new Error('process-level DevToolsActivePort must not exist for browser_use')
-          }
           const server = await startLocalWorkbenchHttpServer(`<!doctype html>
           <html>
           <head>

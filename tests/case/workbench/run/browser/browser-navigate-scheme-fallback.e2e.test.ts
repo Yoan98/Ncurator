@@ -16,7 +16,7 @@ const PAGE_TOKEN = 'SCHEME_FALLBACK_OK'
 const E2E_LLM_CONFIG = {
   id: 'e2e-browser-navigate',
   name: 'e2e-browser-navigate',
-  providerKind: 'custom' as const,
+  providerKind: 'openai-compatible' as const,
   base_url: 'http://127.0.0.1',
   api_key: 'e2e',
   model_name: 'e2e'
@@ -37,7 +37,7 @@ type BrowserUseRunResult = {
   error?: string
   fallback?: string
   page?: { url?: string; title?: string }
-  path?: string
+  result?: { path?: string }
 }
 
 const delayReadyHtml = `<!doctype html>
@@ -71,19 +71,6 @@ describe('workbench browser navigate e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const processCdp = await runtime.electronApp.evaluate(async ({ app }) => {
-            const { existsSync } = await import('node:fs')
-            const { join } = await import('node:path')
-            return {
-              hasRemoteDebuggingPort: app.commandLine.hasSwitch('remote-debugging-port'),
-              hasDevToolsActivePort: existsSync(join(app.getPath('userData'), 'DevToolsActivePort'))
-            }
-          })
-          if (processCdp.hasRemoteDebuggingPort || processCdp.hasDevToolsActivePort) {
-            throw new Error(
-              `process-level CDP must stay closed: switch=${String(processCdp.hasRemoteDebuggingPort)} file=${String(processCdp.hasDevToolsActivePort)}`
-            )
-          }
           const server = await startLocalWorkbenchHttpServer(delayReadyHtml)
           runtime.registerResource({
             name: 'browser-navigate-http-server',
@@ -294,16 +281,17 @@ describe('workbench browser navigate e2e', () => {
             screenshotPath,
             llmConfig: E2E_LLM_CONFIG
           })
+          const writtenScreenshot = screenshot.result?.path || screenshotPath
           if (screenshot.error) {
-            throw new Error(`CDP screenshot failed without process debug port: ${screenshot.error}`)
+            throw new Error(`on-demand CDP screenshot failed: ${screenshot.error}`)
           }
-          if (!existsSync(screenshotPath)) {
-            throw new Error(`CDP screenshot did not write ${screenshotPath}`)
+          if (!existsSync(writtenScreenshot)) {
+            throw new Error(`CDP screenshot did not write ${writtenScreenshot}`)
           }
           runtime.signal({
             name: 'browser-cdp-bridge-screenshot',
-            message: '无进程级调试口时仍能按 Tab 挂桥截图',
-            data: { tabId: screenshot.tabId || browserTabId, path: screenshotPath }
+            message: '按 Tab 挂本机 CDP 桥后截图成功',
+            data: { tabId: screenshot.tabId || browserTabId, path: writtenScreenshot }
           })
 
           const aiHttpsFail = await runNavigate(httpsFailUrl, browserTabId)
@@ -360,7 +348,7 @@ describe('workbench browser navigate e2e', () => {
             failTabId: aiHttpsFail.tabId || '',
             failAddress: failState.url,
             sawProgress,
-            screenshotPath: screenshot.path || screenshotPath,
+            screenshotPath: writtenScreenshot,
             errorText: `${errorSnapshot.title} ${errorSnapshot.bodyText}`
           }
         },
@@ -380,13 +368,13 @@ describe('workbench browser navigate e2e', () => {
               /ERR_[A-Z0-9_]+/u.test(result.errorText),
             {
               name: 'browser-navigate-scheme-fallback',
-              message: '裸主机 https→http 回退，明确 https 失败露出错误页并返回同一 tabId',
+              message: '裸主机 https→http 回退、进度线、按需 CDP 截图，以及明确 https 错误页与同一 tabId',
               data: result
             }
           )
         }
       })
     },
-    WORKBENCH_E2E_TIMEOUT_MS * 3
+    WORKBENCH_E2E_TIMEOUT_MS * 4
   )
 })

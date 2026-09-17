@@ -1,6 +1,14 @@
 import { EventEmitter } from 'node:events'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CdpEndpointService, type CdpDebuggableContents } from '../../../../src/main/services/browser/CdpEndpointService'
+
+const APP_BOOT_SOURCE = readFileSync(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../src/main/index.ts'),
+  'utf8'
+)
 
 class FakeDebugger extends EventEmitter {
   public attached = false
@@ -159,5 +167,13 @@ describe('CdpEndpointService bridge', () => {
     socket.close()
     service.unregisterTarget(targetId)
     expect((contents as unknown as FakeContents).debugger.attached).toBe(false)
+  })
+})
+
+describe('app boot CDP policy', () => {
+  it('does not append a process-level remote-debugging-port', () => {
+    expect(APP_BOOT_SOURCE).toContain('new CdpEndpointService()')
+    expect(APP_BOOT_SOURCE).not.toMatch(/appendSwitch\(\s*['"]remote-debugging-port['"]/u)
+    expect(APP_BOOT_SOURCE).not.toMatch(/appendSwitch\(\s*['"]remote-debugging-address['"]/u)
   })
 })
