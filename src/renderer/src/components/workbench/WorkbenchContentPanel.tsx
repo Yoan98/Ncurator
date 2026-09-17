@@ -621,13 +621,18 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
   const [explorerMode, setExplorerMode] = useState<WorkspaceFileExplorerMode>(
     state.kind === 'apply_workspace' ? 'changed' : 'all'
   )
+  const [explorerReloadToken, setExplorerReloadToken] = useState(0)
   const [documentDisplayMode, setDocumentDisplayMode] = useState<DocumentDisplayMode>('review')
   const [previewRevision, setPreviewRevision] = useState(0)
   const [editableKind, setEditableKind] = useState<EditableTextKind>(null)
   const aiRunActiveRef = React.useRef(isAiRunActive)
   const previousAiRunActiveRef = React.useRef(isAiRunActive)
+  const previousExplorerOpenRef = React.useRef(explorerOpen)
   const suppressExternalNoticeUntilRef = React.useRef(isAiRunActive ? Number.POSITIVE_INFINITY : 0)
   const floatingExplorer = state.kind === 'file_preview' || state.kind === 'apply_workspace'
+  const bumpExplorerReload = React.useCallback((): void => {
+    setExplorerReloadToken((current) => current + 1)
+  }, [])
   const activeEditableFile =
     state.kind === 'file_preview' && !state.file.isDirectory
       ? { path: state.file.path, fileName: state.file.fileName }
@@ -659,12 +664,19 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     if (state.kind === 'file_launcher') {
       setExplorerOpen(true)
       setExplorerMode('all')
+      bumpExplorerReload()
     }
     if (state.kind === 'apply_workspace') {
       setExplorerOpen(false)
       setExplorerMode('changed')
     }
-  }, [state.kind])
+  }, [bumpExplorerReload, state.kind])
+  useEffect(() => {
+    if (explorerOpen && !previousExplorerOpenRef.current) {
+      bumpExplorerReload()
+    }
+    previousExplorerOpenRef.current = explorerOpen
+  }, [bumpExplorerReload, explorerOpen])
   useEffect(
     () => setDocumentDisplayMode(getDefaultDocumentDisplayMode(activeApplyRecord?.status)),
     [activeApplyRecord?.id, activeApplyRecord?.status]
@@ -675,9 +687,10 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
       suppressExternalNoticeUntilRef.current = Number.POSITIVE_INFINITY
     } else if (previousAiRunActiveRef.current) {
       suppressExternalNoticeUntilRef.current = Date.now() + 1_500
+      if (explorerOpen) bumpExplorerReload()
     }
     previousAiRunActiveRef.current = isAiRunActive
-  }, [isAiRunActive])
+  }, [bumpExplorerReload, explorerOpen, isAiRunActive])
   useEffect(() => {
     if (!previewWatchPath) return () => undefined
     let disposed = false
@@ -930,6 +943,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                 workspace={selectedWorkspace}
                 changeRecords={fileChangeRecords}
                 mode={explorerMode}
+                reloadToken={explorerReloadToken}
                 activeFilePath={activePath}
                 activeChangeId={activeApplyRecord?.id}
                 onModeChange={setExplorerMode}
@@ -958,6 +972,7 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
                   workspace={selectedWorkspace}
                   changeRecords={fileChangeRecords}
                   mode={explorerMode}
+                  reloadToken={explorerReloadToken}
                   activeFilePath={activePath}
                   activeChangeId={activeApplyRecord?.id}
                   onModeChange={setExplorerMode}

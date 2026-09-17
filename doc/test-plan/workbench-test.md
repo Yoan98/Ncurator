@@ -16,7 +16,7 @@
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；Source 与正式包 E2E 在多 case 时都先执行 `warmup` 预热共享 fixture，正式包 E2E 再把缓存种子复制给隔离 case。
 - Workbench 模型选择 helper 优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选；未命中再按展示名；仍未命中则进入「自定义模型」按名称搜索。
 - Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：日常回归只跑 `wps-sync-dispatch-on-write-and-revert`（断言馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS）；真窗口刷新 `wps-office-reload-on-write-and-revert` 在路径 `result/wps-office/`，**opt-in**（`pnpm test:workbench:wps-office`），因本机授权弹窗可能卡住自动化。日常 e2e 仍跳过覆盖拷加载项文件，但会启动回环 `/addon`；`publish.xml` 与授权 path 固定 `http://127.0.0.1:18723/addon/`，端口文件记录实际监听端口。若 `18723` 上已是本馆长 `/status` 通道，后启动实例不得把 `publish.xml` / 授权 path 改到临时端口。安装器与 `publish.xml` / `authaddin` 合并由 unit 覆盖。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖工作区文件列表在打开时重新读取磁盘最新目录（含外部新建文件）。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：日常回归只跑 `wps-sync-dispatch-on-write-and-revert`（断言馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS）；真窗口刷新 `wps-office-reload-on-write-and-revert` 在路径 `result/wps-office/`，**opt-in**（`pnpm test:workbench:wps-office`），因本机授权弹窗可能卡住自动化。日常 e2e 仍跳过覆盖拷加载项文件，但会启动回环 `/addon`；`publish.xml` 与授权 path 固定 `http://127.0.0.1:18723/addon/`，端口文件记录实际监听端口。若 `18723` 上已是本馆长 `/status` 通道，后启动实例不得把 `publish.xml` / 授权 path 改到临时端口。安装器与 `publish.xml` / `authaddin` 合并由 unit 覆盖。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
@@ -502,8 +502,17 @@ pnpm test:update:e2e
 - What：右侧普通文件预览态、“全部 / 本次运行改动”文件模式、稳定选中态、多个文件 Tab、定位文件、系统打开方式下拉、PDF 命中定位、Markdown / 纯文本预览，以及 Excel 只读预览。
 - Why：右侧面板是用户消费引用结果和打开文件的主要区域，预览布局错误会直接阻断阅读。
 - How：创建伙伴并添加文件地址后，从文件列表连续打开真实 pdf、docx、md、txt 文件；检查预览内容和工具条；展开打开方式菜单，确认触发系统关联应用查询、存在默认应用标记和至少一个系统返回的 Handler；docx / xlsx 在打开方式含 WPS 时工具栏问号可见，pdf / md / txt / xlsm 不可见；确认产生四个文件 Tab，再切回 Markdown Tab；从文件列表打开 `xlsx/xlsm/xltx/xltm`，对 `xlsx` 尝试双击输入、切 Sheet 和拖列宽。
-- Oracle：加号文件标签、目录懒加载、PDF 命中定位、Markdown / UTF-8 文本预览、Excel 只读且可浏览、选中态、面包屑、系统打开方式与工具栏行为整体对齐 `WB-PANEL-003`、`WB-EXCEL-002-AC1`；WPS 问号提示对齐 `WB-PANEL-003-AC22`；各文件分别保留且旧 Tab 可恢复；从“打开文件”选择器选中文件后选择器 Tab 被文件 Tab 原位替换、不残留，对齐 `WB-PANEL-001-AC1`。
+- Oracle：加号文件标签、目录懒加载、PDF 命中定位、Markdown / UTF-8 文本预览、Excel 只读且可浏览、选中态、面包屑、系统打开方式与工具栏行为整体对齐 `WB-PANEL-003`、`WB-EXCEL-002-AC1`；WPS 问号提示对齐 `WB-PANEL-003-AC22`；各文件分别保留且旧 Tab 可恢复；从“打开文件”选择器选中文件后选择器 Tab 被文件 Tab 原位替换、不残留，对齐 `WB-PANEL-001-AC1`。目录打开刷新由 `workspace-file-explorer-open-refresh` 覆盖。
 - Not：不在自动测试中真正启动外部应用或修改操作系统默认关联；不伪造 md/txt 搜索结果或右侧预览状态。
+
+#### `workspace-file-explorer-open-refresh`
+
+- 测试类型：`e2e`
+- What：右侧工作区文件列表打开时重新读取磁盘最新目录，外部新建文件在下次打开列表后可见。
+- Why：列表若继续使用挂载时缓存，用户在资源管理器或 AI 写盘后打开列表会长时间看不到新文件，直接阻断选文件预览。
+- How：通过 Settings UI 添加真实临时文件地址并创建伙伴；打开“打开文件”列表确认种子文件可见；打开种子文件使列表关闭；测试进程在磁盘写入新文件后再次点击文件夹图标打开列表并切到“全部”；再关闭列表、写入第二个新文件后再次打开，确认两次新文件都出现。
+- Oracle：每次打开文件列表后都能看到打开前已写入磁盘的新文件名，对齐 `WB-PANEL-003-AC13`；不依赖手动点文件夹刷新或重启应用。
+- Not：不验证目录 watcher 实时推送、不验证索引状态角标、不启动外部应用、不覆盖文件内容预览自动刷新（见 `file-preview-external-change-auto-refresh`）。
 
 #### `file-preview-external-change-auto-refresh`
 

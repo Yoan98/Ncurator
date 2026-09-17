@@ -70,6 +70,11 @@ git diff <previous-platform-tag>..<current-platform-tag>
 
 按提交与模块影响从 `doc/test-plan/**` 选正式包 E2E；影响面广或无法收敛则全量。正式包 E2E 只消费已构建的 `release-bundle-*.json`：复验 Tag/commit/fragment/哈希，安装 EXE/DMG 后对安装态程序跑测试，不重新构建。过滤参数与执行契约（含 warmup、并发）见 `doc/test.md` §4.2；命令见本文 §6。
 
+正式包 E2E **不改候选包品牌**（仍是同一份将上线的「馆长」安装包），只在本机安装侧隔离，避免盖住开发者已装的正式版入口：
+
+- Windows：静默装到 `%LOCALAPPDATA%\\NCurator-E2E`；装前备份桌面/开始菜单「馆长」快捷方式与非 E2E 卸载项，装后恢复正式入口，并另建「馆长 E2E」指向候选安装目录。
+- macOS：ditto 到 `~/Applications/NCurator-E2E/<platform>/`，再把安装副本改名为「馆长 E2E.app」，不触碰 `/Applications` 或 `~/Applications` 下的正式「馆长.app」。
+
 选中的正式包 E2E 全部执行（含真实 AI / 服务 case）。源码 E2E、backend、unit、独立 `test:ai*` 不替代正式包 E2E，不属于标准发布门。
 
 ### 问题处理与发布

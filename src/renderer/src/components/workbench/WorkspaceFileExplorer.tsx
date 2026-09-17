@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   HiChevronDown,
   HiChevronRight,
@@ -25,6 +25,8 @@ type WorkspaceFileExplorerProps = {
   workspace: WorkspaceSource | null
   changeRecords: AiFileChangeRecord[]
   mode: WorkspaceFileExplorerMode
+  /** 递增时重新拉取根目录与当前已展开目录，不折叠展开态 */
+  reloadToken?: number
   activeFilePath?: string | null
   activeChangeId?: string | null
   onModeChange: (mode: WorkspaceFileExplorerMode) => void
@@ -46,6 +48,7 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   workspace,
   changeRecords,
   mode,
+  reloadToken = 0,
   activeFilePath,
   activeChangeId,
   onModeChange,
@@ -57,6 +60,10 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   const [expandedChangeGroups, setExpandedChangeGroups] = useState<Set<string>>(() => new Set())
   const [loading, setLoading] = useState<Set<string>>(() => new Set())
   const [query, setQuery] = useState('')
+  const directoryRequestIds = useRef<Record<string, number>>({})
+  const expandedRef = useRef(expanded)
+  const appliedReloadTokenRef = useRef(reloadToken)
+  expandedRef.current = expanded
 
   const activeChanges = useMemo(
     () => groupSessionFileChanges(filterVisibleFileChangeRecords(changeRecords)),
@@ -74,27 +81,78 @@ const WorkspaceFileExplorer: React.FC<WorkspaceFileExplorerProps> = ({
   const loadDirectory = useCallback(
     async (relativePath: string): Promise<void> => {
       if (!workspace) return
+      const requestId = (directoryRequestIds.current[relativePath] || 0) + 1
+      directoryRequestIds.current[relativePath] = requestId
+      const isLatestRequest = (): boolean =>
+        directoryRequestIds.current[relativePath] === requestId
       setLoading((current) => new Set(current).add(relativePath))
-      const response = await window.api.workspaceDirectoryList({
-        workspaceId: workspace.id,
-        relativePath
-      })
-      setLoading((current) => {
-        const next = new Set(current)
-        next.delete(relativePath)
-        return next
-      })
-      setChildrenByPath((current) => ({ ...current, [relativePath]: response.items }))
+      try {
+        const response = await window.api.workspaceDirectoryList({
+          workspaceId: workspace.id,
+          relativePath
+        })
+        if (!isLatestRequest()) return
+        if (response.error) {
+          setChildrenByPath((current) => {
+            if (current[relativePath]) return current
+            return { ...current, [relativePath]: [] }
+          })
+          return
+        }
+        setChildrenByPath((current) => ({ ...current, [relativePath]: response.items }))
+      } finally {
+        if (isLatestRequest()) {
+          setLoading((current) => {
+            const next = new Set(current)
+            next.delete(relativePath)
+            return next
+          })
+        }
+      }
     },
     [workspace]
   )
 
+  const refreshVisibleDirectories = useCallback((): void => {
+    if (!workspace) return
+    void loadDirectory('')
+    for (const relativePath of expandedRef.current) {
+      void loadDirectory(relativePath)
+    }
+  }, [loadDirectory, workspace])
+
   useEffect(() => {
+    directoryRequestIds.current = {}
+    appliedReloadTokenRef.current = reloadToken
     setChildrenByPath({})
     setExpanded(new Set())
     setExpandedChangeGroups(new Set())
     if (workspace) void loadDirectory('')
+    // reloadToken 只在工作区切换时同步，避免每次刷新都清空展开态
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when workspace/loader changes
   }, [loadDirectory, workspace])
+
+  useEffect(() => {
+    if (!workspace || reloadToken === appliedReloadTokenRef.current) return
+    appliedReloadTokenRef.current = reloadToken
+    refreshVisibleDirectories()
+  }, [reloadToken, refreshVisibleDirectories, workspace])
+
+  useEffect(() => {
+    if (!workspace) return
+    const refreshOnFocus = (): void => {
+      refreshVisibleDirectories()
+    }
+    const refreshOnVisibility = (): void => {
+      if (!document.hidden) refreshVisibleDirectories()
+    }
+    window.addEventListener('focus', refreshOnFocus)
+    document.addEventListener('visibilitychange', refreshOnVisibility)
+    return () => {
+      window.removeEventListener('focus', refreshOnFocus)
+      document.removeEventListener('visibilitychange', refreshOnVisibility)
+    }
+  }, [refreshVisibleDirectories, workspace])
 
   const toggleDirectory = (entry: WorkspaceTreeEntry): void => {
     const entryPath = entry.relative_path

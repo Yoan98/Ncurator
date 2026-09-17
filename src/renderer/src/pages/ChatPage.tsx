@@ -1300,19 +1300,26 @@ const ChatPage: React.FC = () => {
     }
   }, [applyComposerDraft, saveComposerDraftForPartner])
 
-  const selectedWorkspace = useMemo(
-    () =>
-      workspaces.find((workspace) =>
-        contentPanel.kind === 'file_preview'
-          ? contentPanel.file.path
-              .replace(/\\/g, '/')
-              .startsWith(String(workspace.root_path || '').replace(/\\/g, '/'))
-          : false
-      ) ||
-      workspaces[0] ||
-      null,
-    [contentPanel, workspaces]
-  )
+  const selectedWorkspace = useMemo(() => {
+    const normalizeRoot = (value: string): string =>
+      value.replace(/\\/g, '/').replace(/\/+$/g, '')
+    const matchByFilePath = (filePath: string): WorkspaceSource | undefined =>
+      workspaces.find((workspace) => {
+        const root = normalizeRoot(String(workspace.root_path || ''))
+        if (!root) return false
+        const normalizedFile = filePath.replace(/\\/g, '/')
+        return normalizedFile === root || normalizedFile.startsWith(`${root}/`)
+      })
+
+    if (contentPanel.kind === 'file_preview') {
+      return matchByFilePath(contentPanel.file.path) || workspaces[0] || null
+    }
+    if (contentPanel.kind === 'apply_workspace' && activeApplyRecord?.path) {
+      return matchByFilePath(activeApplyRecord.path) || workspaces[0] || null
+    }
+    return workspaces[0] || null
+  }, [activeApplyRecord?.path, contentPanel, workspaces])
+
   const selectedWorkspaceName = useMemo(() => {
     if (!selectedWorkspace?.root_path) return null
     const parts = selectedWorkspace.root_path.replace(/\\/g, '/').split('/').filter(Boolean)

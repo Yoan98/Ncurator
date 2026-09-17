@@ -79,47 +79,46 @@ export class WorkspaceSourceService {
         if (left.isDirectory() !== right.isDirectory()) return left.isDirectory() ? -1 : 1
         return left.name.localeCompare(right.name)
       })
-    const entries: WorkspaceTreeEntry[] = []
-    for (const entry of visible) {
-      if (!entry.isDirectory() && !entry.isFile()) continue
-      const childRelativePath = [relativePath, entry.name].filter(Boolean).join('/')
-      const absolutePath = path.join(currentPath, entry.name)
-      const supportedForIndex = entry.isFile() && isSupportedLocalFilePath(absolutePath)
-      const base = {
-        id: toEntryId(
-          input.workspaceId,
-          entry.isDirectory() ? 'directory' : 'file',
-          childRelativePath
-        ),
-        workspace_id: input.workspaceId,
-        parent_id: toParentId(input.workspaceId, relativePath),
-        kind: entry.isDirectory() ? ('directory' as const) : ('file' as const),
-        name: entry.name,
-        relative_path: childRelativePath,
-        absolute_path: absolutePath,
-        supported_for_index: supportedForIndex
-      }
-      if (entry.isDirectory()) {
-        entries.push(base)
-        continue
-      }
-      if (!supportedForIndex) {
-        entries.push({
+    const entries = await Promise.all(
+      visible.map(async (entry): Promise<WorkspaceTreeEntry | null> => {
+        if (!entry.isDirectory() && !entry.isFile()) return null
+        const childRelativePath = [relativePath, entry.name].filter(Boolean).join('/')
+        const absolutePath = path.join(currentPath, entry.name)
+        const supportedForIndex = entry.isFile() && isSupportedLocalFilePath(absolutePath)
+        const base = {
+          id: toEntryId(
+            input.workspaceId,
+            entry.isDirectory() ? 'directory' : 'file',
+            childRelativePath
+          ),
+          workspace_id: input.workspaceId,
+          parent_id: toParentId(input.workspaceId, relativePath),
+          kind: entry.isDirectory() ? ('directory' as const) : ('file' as const),
+          name: entry.name,
+          relative_path: childRelativePath,
+          absolute_path: absolutePath,
+          supported_for_index: supportedForIndex
+        }
+        if (entry.isDirectory()) {
+          return base
+        }
+        if (!supportedForIndex) {
+          return {
+            ...base,
+            file_ext: path.extname(entry.name).toLowerCase().slice(1) || undefined
+          }
+        }
+        const stat = await fs.stat(absolutePath)
+        const fileExt = path.extname(entry.name).toLowerCase()
+        return {
           ...base,
-          file_ext: path.extname(entry.name).toLowerCase().slice(1) || undefined
-        })
-        continue
-      }
-      const stat = await fs.stat(absolutePath)
-      const fileExt = path.extname(entry.name).toLowerCase()
-      entries.push({
-        ...base,
-        file_ext: fileExt.slice(1) || undefined,
-        size: stat.size,
-        mtime_ms: Math.trunc(stat.mtimeMs)
+          file_ext: fileExt.slice(1) || undefined,
+          size: stat.size,
+          mtime_ms: Math.trunc(stat.mtimeMs)
+        }
       })
-    }
-    return entries
+    )
+    return entries.filter((entry): entry is WorkspaceTreeEntry => entry !== null)
   }
 
   public async normalizeWorkspaceRoot(inputPath: string): Promise<WorkspaceValidationResult> {

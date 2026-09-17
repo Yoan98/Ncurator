@@ -4,6 +4,14 @@ import { mkdtemp } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { resolveBundleInstaller } from '../release/artifact-bundle.mjs'
+import {
+  PACKAGE_E2E_DISPLAY_NAME,
+  PACKAGE_PRODUCT_NAME,
+  renameMacPackageE2EApp,
+  resolveMacPackageE2EAppPath,
+  restoreWindowsPackageE2ELaunchers,
+  snapshotWindowsPackageE2EState
+} from './package-e2e-isolation.mjs'
 
 const ROOT = process.cwd()
 const LOGS_ROOT = path.join(ROOT, 'tests', 'logs', 'package')
@@ -135,16 +143,24 @@ export const preparePackagedE2EApplication = async (bundlePath, { resultPath = '
       ])
       mounted = true
       const sourceAppPath = findMountedMacApp(mountPath)
+      if (path.basename(sourceAppPath) !== `${PACKAGE_PRODUCT_NAME}.app`) {
+        throw new Error(
+          `macOS DMG 应用名须为 ${PACKAGE_PRODUCT_NAME}.app，实际为 ${path.basename(sourceAppPath)}`
+        )
+      }
       const installRoot = path.join(os.homedir(), 'Applications', 'NCurator-E2E', bundle.platform)
-      installedAppPath = path.join(installRoot, path.basename(sourceAppPath))
-      const previousExecutable = existsSync(installedAppPath)
-        ? resolveMacExecutable(installedAppPath)
-        : ''
-      if (previousExecutable) assertMacAppNotRunning(previousExecutable)
+      const stagedAppPath = path.join(installRoot, `${PACKAGE_PRODUCT_NAME}.app`)
+      const isolatedAppPath = resolveMacPackageE2EAppPath(stagedAppPath)
+      for (const existingAppPath of [stagedAppPath, isolatedAppPath]) {
+        if (!existsSync(existingAppPath)) continue
+        assertMacAppNotRunning(resolveMacExecutable(existingAppPath))
+      }
       mkdirSync(installRoot, { recursive: true })
-      rmSync(installedAppPath, { recursive: true, force: true })
-      await runLogged('/usr/bin/ditto', [sourceAppPath, installedAppPath])
-      clearQuarantine(installedAppPath)
+      rmSync(stagedAppPath, { recursive: true, force: true })
+      rmSync(isolatedAppPath, { recursive: true, force: true })
+      await runLogged('/usr/bin/ditto', [sourceAppPath, stagedAppPath])
+      clearQuarantine(stagedAppPath)
+      installedAppPath = renameMacPackageE2EApp(stagedAppPath, { log })
       executablePath = resolveMacExecutable(installedAppPath)
     } finally {
       if (mounted) {
@@ -157,12 +173,24 @@ export const preparePackagedE2EApplication = async (bundlePath, { resultPath = '
       throw new Error(`Windows release bundle installer must be an EXE: ${artifactPath}`)
     }
     const installRoot = path.join(os.homedir(), 'AppData', 'Local', 'NCurator-E2E')
+    const snapshotPath = path.join(logDir, 'windows-launcher-snapshot.json')
     mkdirSync(installRoot, { recursive: true })
+    snapshotWindowsPackageE2EState({ installRoot, snapshotPath, log })
     await runLogged(artifactPath, ['/S', `/D=${installRoot}`])
     installedAppPath = installRoot
-    executablePath = path.join(installRoot, '馆长.exe')
-    if (!existsSync(executablePath))
+    executablePath = path.join(installRoot, `${PACKAGE_PRODUCT_NAME}.exe`)
+    if (!existsSync(executablePath)) {
       throw new Error(`Windows 安装后的应用不存在：${executablePath}`)
+    }
+    restoreWindowsPackageE2ELaunchers({
+      installRoot,
+      executablePath,
+      snapshotPath,
+      log
+    })
+    log(
+      `Windows 正式入口保持「${PACKAGE_PRODUCT_NAME}」；E2E 请使用「${PACKAGE_E2E_DISPLAY_NAME}」快捷方式或 ${executablePath}`
+    )
   }
 
   const artifactSha256 = installer.sha256
