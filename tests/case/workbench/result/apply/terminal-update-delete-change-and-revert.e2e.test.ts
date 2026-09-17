@@ -20,6 +20,25 @@ const UPDATE_FILE = 'workbench-preview.md'
 const DELETE_FILE = 'human-input.txt'
 const MARKER = 'cedar-terminal-update-552'
 
+const buildTerminalMutationPrompt = (workspaceRoot: string): string => {
+  if (process.platform === 'win32') {
+    // 单条命令内先切到工作区再改文件：追踪 cwd 依赖可解析的前导 Set-Location，
+    // 且 Windows 会话每次 terminal_run 都从用户主目录新建，不能依赖跨调用 cwd。
+    const command = [
+      `Set-Location -LiteralPath '${workspaceRoot}'`,
+      `Add-Content -LiteralPath '${UPDATE_FILE}' -Value "\`n${MARKER}" -Encoding utf8`,
+      `Remove-Item -LiteralPath '${DELETE_FILE}' -Force`
+    ].join('; ')
+    return `请只使用一次 terminal_run，原样执行以下 PowerShell 命令（不要改写、不要拆成多条、不要使用其他工具）：${command}。完成后确认 ${UPDATE_FILE} 已追加「${MARKER}」且 ${DELETE_FILE} 已删除。`
+  }
+  const command = [
+    `cd '${workspaceRoot}'`,
+    `printf '\\n${MARKER}' >> '${UPDATE_FILE}'`,
+    `rm -f '${DELETE_FILE}'`
+  ].join('; ')
+  return `请只使用一次 terminal_run，原样执行以下命令（不要改写、不要拆成多条、不要使用其他工具）：${command}。完成后确认 ${UPDATE_FILE} 已追加「${MARKER}」且 ${DELETE_FILE} 已删除。`
+}
+
 describe('workbench result e2e', () => {
   it(
     CASE_ID,
@@ -46,10 +65,7 @@ describe('workbench result e2e', () => {
           const deleteBeforeBytes = await fs.readFile(deletePath)
           const startedAtMs = Date.now()
 
-          await sendWorkbenchMessage(
-            page,
-            `请只使用 terminal_run 完成以下两件事，不要使用任何其他工具：(1) 在工作区根目录的 ${UPDATE_FILE} 末尾追加一行文本「${MARKER}」；(2) 删除工作区根目录的 ${DELETE_FILE}。完成后确认两个文件的状态并告诉我。`
-          )
+          await sendWorkbenchMessage(page, buildTerminalMutationPrompt(setup.workspace.rootPath))
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
@@ -58,6 +74,11 @@ describe('workbench result e2e', () => {
             { page, blockerPolicy: 'auto_approve' }
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
+          if (evidence.fileArtifactCount < 1) {
+            throw new Error(
+              `terminal mutation produced no file_artifact (count=${String(evidence.fileArtifactCount)}); tracking cwd likely missed the workspace`
+            )
+          }
 
           const updateEntry = getWorkbenchPrefixLocator(
             page,
@@ -112,12 +133,14 @@ describe('workbench result e2e', () => {
             deleteRestoredToBaseline: deleteRestoredBytes.equals(deleteBeforeBytes),
             terminalCalls: evidence.events.filter(
               (event) => event.type === 'tool_call_started' && event.toolName === 'terminal_run'
-            ).length
+            ).length,
+            fileArtifactCount: evidence.fileArtifactCount
           }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.updateEntryText.includes(UPDATE_FILE) &&
+            result.fileArtifactCount >= 1 &&
+              result.updateEntryText.includes(UPDATE_FILE) &&
               result.deleteEntryText.includes(DELETE_FILE) &&
               result.updateAppliedBytes.includes(MARKER) &&
               result.deleteExistsAfterRun === false &&

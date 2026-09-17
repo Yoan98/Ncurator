@@ -43,5 +43,7 @@ describe('terminal platform adapters', () => {
     expect(windowsBootstrap).toContain('[Console]::OutputEncoding')
     expect(windowsBootstrap).toContain('$OutputEncoding')
     expect(windowsBootstrap).toContain('chcp.com 65001')
+    expect(windowsBootstrap).toContain('-LiteralPath')
+    expect(windowsBootstrap).toContain('Microsoft.PowerShell.Management\\Set-Location')
   })
 })

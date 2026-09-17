@@ -104,5 +104,39 @@ describe('resolveLeadingCommandCwd', () => {
         sessionStartPath: home
       })
     ).resolves.toBe(path.resolve(workspace))
+
+    await expect(
+      resolveTerminalTrackingCwd({
+        command: `Set-Location -LiteralPath '${workspace}'; Set-Content a.txt x`,
+        sessionStartPath: home
+      })
+    ).resolves.toBe(path.resolve(workspace))
+  })
+
+  it('resolves PowerShell -LiteralPath / -Path and cmd-style cd /d', async () => {
+    const root = await createRoot()
+    const nested = path.join(root, 'nested')
+    await fs.mkdir(nested)
+
+    await expect(
+      resolveLeadingCommandCwd({
+        command: `Set-Location -LiteralPath '${nested}'; Get-ChildItem`,
+        currentPath: root
+      })
+    ).resolves.toBe(nested)
+
+    await expect(
+      resolveLeadingCommandCwd({
+        command: `Set-Location -Path "${nested}"; Write-Output ok`,
+        currentPath: root
+      })
+    ).resolves.toBe(nested)
+
+    await expect(
+      resolveLeadingCommandCwd({
+        command: `cd /d "${nested}" && dir`,
+        currentPath: root
+      })
+    ).resolves.toBe(nested)
   })
 })

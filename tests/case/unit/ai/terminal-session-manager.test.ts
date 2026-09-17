@@ -461,6 +461,27 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
     expect(changed.output).toContain('持续中文')
   })
 
+  it('accepts Set-Location -LiteralPath and tracks the resolved cwd', async () => {
+    const manager = createManager(undefined, 2000)
+    const root = await createRoot()
+    const nested = path.join(root, 'nested-literal')
+    await fs.mkdir(nested)
+
+    const relocated = await manager.run({
+      chatSessionId: 'chat-windows-literal-path',
+      workspaceId: 'workspace-windows-literal-path',
+      workspaceRootPath: root,
+      platform: 'windows',
+      runId: 'run-windows-literal-path',
+      command: `Set-Location -LiteralPath '${nested}'; Write-Output ((Get-Location).Path)`
+    })
+
+    expect(relocated.exitCode).toBe(0)
+    expect(relocated.output).not.toContain('LiteralPath')
+    expect(relocated.output).toContain('nested-literal')
+    expect(relocated.currentTerminalPath.toLowerCase()).toBe(nested.toLowerCase())
+  })
+
   it('updates cwd before yielding a long-running command', async () => {
     const manager = createManager(undefined, 250)
     const root = await createRoot()

@@ -29,7 +29,26 @@ export class WindowsTerminalAdapter implements TerminalPlatformAdapter {
         `$global:__ncurator_cwd_prefix = ${decodeProtocolLiteral(protocol.cwdPrefix)}`,
         `$global:__ncurator_start_prefix = ${decodeProtocolLiteral(protocol.startPrefix)}`,
         `$global:__ncurator_done_prefix = ${decodeProtocolLiteral(protocol.donePrefix)}`,
-        `function global:Set-Location { param([Parameter(Position=0)][string]$Path) Microsoft.PowerShell.Management\\Set-Location -Path $Path; $__cwd = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Location).Path)); Write-Output ($global:__ncurator_cwd_prefix + $__cwd + '__') }`,
+        `function global:Set-Location {` +
+          `[CmdletBinding()] param(` +
+          `[Parameter(Position=0, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]` +
+          `[string]$Path,` +
+          `[Alias('PSPath')][string]$LiteralPath,` +
+          `[switch]$PassThru` +
+          `)` +
+          `process {` +
+          `if ($PSBoundParameters.ContainsKey('LiteralPath')) {` +
+          `Microsoft.PowerShell.Management\\Set-Location -LiteralPath $LiteralPath` +
+          `} elseif ($PSBoundParameters.ContainsKey('Path') -or $Path) {` +
+          `Microsoft.PowerShell.Management\\Set-Location -Path $Path` +
+          `} else {` +
+          `Microsoft.PowerShell.Management\\Set-Location @PSBoundParameters` +
+          `}` +
+          `if ($PassThru) { Get-Location }` +
+          `$__cwd = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Location).Path));` +
+          `Write-Output ($global:__ncurator_cwd_prefix + $__cwd + '__')` +
+          `}` +
+          `}`,
         `Write-Output (${decodeProtocolLiteral(protocol.readyMarker)})`
       ].join('; ') + this.shell.lineEnding
     )

@@ -1,9 +1,13 @@
 import path from 'node:path'
 import { stat } from 'node:fs/promises'
 
-/** Leading `cd` / `Set-Location` before `;` or `&&` (Windows PowerShell + POSIX shells). */
+/**
+ * Leading directory change before `;` / `&&` / end.
+ * Covers POSIX `cd`, PowerShell `Set-Location`, optional `-Path` / `-LiteralPath`,
+ * and cmd-style `cd /d` (models sometimes emit it even under PowerShell).
+ */
 const LEADING_CWD_PATTERN =
-  /^\s*(?:cd|Set-Location)\s+(?:"([^"]+)"|'([^']+)'|([^\s;|&]+))\s*(?:&&|;|$)/iu
+  /^\s*(?:cd(?:\s+\/d)?|Set-Location)(?:\s+-(?:Literal)?Path)?\s+(?:"([^"]+)"|'([^']+)'|([^\s;|&]+))\s*(?:&&|;|$)/iu
 
 export type ResolveLeadingCommandCwdInput = {
   command: string
