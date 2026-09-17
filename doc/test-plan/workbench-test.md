@@ -446,7 +446,7 @@ pnpm test:update:e2e
 - Why：用户倾向访问啥就是啥，不自动 https→http。WebContentsView 不会画出 Chrome 外壳那张 `chrome-error://` 页；主框架 `did-fail-load` 必须落到同一张馆长错误页，底部是 Chromium 给出的真实 `ERR_` 码，不能停在白屏。
 - How：启动只提供 HTTP 的本地页面。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，确认停在 https 错误页且没有改成 http；再填明确 `http://…` ，加载中可见浅蓝色底线，等到页面口令出现；再对同一 http 地址走 AI `navigate` 与 `screenshot`（Stagehand 连本机 CDP 桥）；另一次写明无法解析的 https 主机，确认错误页标题为「无法访问此站点」、含「无法加载」与 Chromium `ERR_` 错误码、地址栏仍是 https、工具失败含 `tabId`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
 - Oracle：裸主机保持 https 并出现错误页，对齐 `WB-PANEL-004-AC15`；明确 http 打开含口令的页并对齐 `WB-PANEL-004-AC9`；加载中可见地址栏底边浅蓝色进度线，错误页出现后进度线必须淡出，对齐 `WB-PANEL-004-AC19`；对该 Tab 截图成功即证明 Stagehand 走按需 CDP 桥，对齐 `WB-PANEL-004-AC10`；明确 https 失败无 `chrome-error://`，错误页为馆长统一 Chrome 式「无法访问此站点」页并含 Chromium `ERR_` 错误码，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。Playwright 驱动窗口会自带 `--remote-debugging-port`，不作为本 case 失败条件。
-- Not：不打公网专利站；不跑 live 模型整轮问答；不验证 Stagehand 填表。公网样例见 `browser-navigate-cnipa-https` 与 `patent-search`。
+- Not：不打公网专利站；不跑 live 模型整轮问答；不验证 Stagehand 填表。公网样例见 `browser-navigate-cnipa-https` 与 `wenshu-search`。
 
 #### `browser-navigate-cnipa-https`
 
@@ -455,7 +455,7 @@ pnpm test:update:e2e
 - Why：这是会掐 https 或长时间转圈的真实站点；去掉协议降级后，用户必须看到错误页而不是白屏进度条。
 - How：Workbench 打开浏览器 Tab，输入明确 https 地址，加载中可见浅蓝色进度线，等到错误页或真实首页，且地址栏仍是 https。明确 http 打开真实首页由无进程级调试口的 unit host `cnipa-http.host` 覆盖，因为 Playwright 驱动窗口会自带调试口，专利站 http 可能吐空白页。
 - Oracle：最终 URL 仍是 https，不是 `chrome-error://`，不是自动改成的 http；若打不开则出现馆长「无法访问此站点」页（底部为 Chromium `ERR_`）且进度线淡出，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC16`、`WB-PANEL-004-AC19`。
-- Not：不搜索专利、不跑 live 模型；检索样例仍由 `patent-search` 覆盖。明确 http 首页与无调试口由 unit `cnipa-http.host` 覆盖。
+- Not：不搜索专利、不跑 live 模型；检索样例仍由 `wenshu-search` 覆盖。明确 http 首页与无调试口由 unit `cnipa-http.host` 覆盖。
 
 #### `web-read-from-search-result`
 
@@ -771,11 +771,11 @@ pnpm test:update:e2e
 - Oracle：回答含终验/验收与十个工作日；原件字节不变；渲到至少 2 页原文和 1 张回答图，并记录用量。
 - Not：不进日常 / 发版回归。不改合同、不写新文件。
 
-#### `patent-search`
+#### `wenshu-search`
 
 - 测试类型：`e2e / live`（路径 `showcase/`，**opt-in**）
-- What：用内置浏览器打开中国专利公布公告，搜索「智能仓储」，截空白检索、已填词、结果三帧。
+- What：用内置浏览器打开中国裁判文书网，检索服务合同逾期付款与违约金类案，截空白检索、已填词、结果三帧。
 - Why：官网浏览器样例要能看出输入和提交，不能只是打开一个官网首页。
-- How：空工作区发「帮我去中国专利公布公告搜一下智能仓储」；run 过程中对嵌入页 `capturePage`，按输入框和结果文案分帧。
-- Oracle：调用 `browser_use`；三帧都截到；最终回答提到智能仓储；记录用量。
-- Not：不进日常 / 发版回归。不用本地 HTML。不把 web_search 当浏览器操作。
+- How：空工作区发律师原句，点名去中国裁判文书网找类似判决、看法院怎么处理违约金；run 过程中对嵌入页 `capturePage`，按输入框和结果文案分帧。
+- Oracle：调用 `browser_use`；三帧都截到；最终回答提到违约金、判决或案例；记录用量。
+- Not：不进日常 / 发版回归。不用本地 HTML。不把 web_search 当浏览器操作。不对合同做对照。

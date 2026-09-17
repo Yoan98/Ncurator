@@ -37,9 +37,10 @@ export const PPT_EDIT_PROMPT =
 export const PDF_FILE_NAME = '星河项目服务合同.pdf'
 export const PDF_PROMPT = '@星河项目服务合同.pdf 尾款什么时候付？'
 
-export const PATENT_SEARCH_PROMPT = '帮我去中国专利公布公告搜一下智能仓储'
-export const PATENT_SEARCH_KEYWORD = '智能仓储'
-export const PATENT_SEARCH_HOST = 'cnipa.gov.cn'
+export const WENSHU_SEARCH_PROMPT =
+  '我这边有个服务合同纠纷，对方拖了几个月一直没付服务费，合同里还约定了比较高的违约金。你帮我去中国裁判文书网找几个类似的判决，看看这种逾期付款的情况下，法院一般会怎么处理违约金，找几个比较接近的案例给我参考一下。'
+export const WENSHU_SEARCH_KEYWORDS = ['服务合同', '违约金', '逾期付款']
+export const WENSHU_SEARCH_HOST = 'wenshu.court.gov.cn'
 
 const CONTRACT_FONT_FAMILY = 'ContractFont'
 const CONTRACT_FONT_PATH = '/Library/Fonts/Arial Unicode.ttf'
