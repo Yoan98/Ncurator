@@ -15,9 +15,9 @@ import {
   waitForWorkbenchAiRunCompletion
 } from '../../../harness/e2e/workbench'
 import {
-  WENSHU_SEARCH_HOST,
-  WENSHU_SEARCH_KEYWORDS,
-  WENSHU_SEARCH_PROMPT
+  COURT_SEARCH_HOST,
+  COURT_SEARCH_KEYWORDS,
+  COURT_SEARCH_PROMPT
 } from './createSeeds'
 import {
   captureEmbeddedBrowserPng,
@@ -27,23 +27,25 @@ import {
   type EmbeddedBrowserSnapshot
 } from './shared'
 
-const CASE_ID = 'wenshu-search'
-const EXPORT_DIR = path.resolve('tests/logs/workbench/showcase-export/wenshu-search')
+const CASE_ID = 'court-typical-cases'
+const EXPORT_DIR = path.resolve('tests/logs/workbench/showcase-export/court-typical-cases')
 
-type WenshuFrame = 'empty' | 'filled' | 'results'
+type CourtFrame = 'empty' | 'filled' | 'results'
 
 const hasSearchKeyword = (text: string): boolean =>
-  WENSHU_SEARCH_KEYWORDS.some((keyword) => text.includes(keyword))
+  COURT_SEARCH_KEYWORDS.some((keyword) => text.includes(keyword))
 
-const classifyWenshuFrame = (snapshot: EmbeddedBrowserSnapshot): WenshuFrame | null => {
+const classifyCourtFrame = (snapshot: EmbeddedBrowserSnapshot): CourtFrame | null => {
   const typed = snapshot.inputValues.join(' ')
   const hasKeyword = hasSearchKeyword(typed)
   const hasResults =
     hasSearchKeyword(snapshot.bodyText) &&
-    /检索结果|判决书|裁定书|民事判决|文书列表|共\s*\d+|条结果/u.test(snapshot.bodyText)
+    /典型案例|指导案例|工程价款|工程款结算|基本案情|裁判要点|案例[一二三四五六]/u.test(
+      snapshot.bodyText
+    )
   if (hasResults) return 'results'
   if (hasKeyword) return 'filled'
-  if (snapshot.url.includes(WENSHU_SEARCH_HOST)) return 'empty'
+  if (snapshot.url.includes(COURT_SEARCH_HOST)) return 'empty'
   return null
 }
 
@@ -57,7 +59,7 @@ describe('workbench showcase e2e', () => {
         suite: 'showcase',
         groups: ['browser'],
         description:
-          '官网样例：用内置浏览器打开中国裁判文书网，检索服务合同逾期付款与违约金类案。',
+          '官网样例：用内置浏览器打开最高人民法院官网，检索建设工程施工合同纠纷典型案例。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -66,7 +68,7 @@ describe('workbench showcase e2e', () => {
         execute: async (runtime) => {
           const { page, electronApp } = runtime
           const env = loadWorkbenchLiveModelEnv()
-          const rootPath = await seedEmptyShowcaseWorkspace('ncurator-showcase-wenshu-')
+          const rootPath = await seedEmptyShowcaseWorkspace('ncurator-showcase-court-')
           runtime.registerResource({
             name: `showcase-workspace:${rootPath}`,
             phase: 'after-app-close',
@@ -76,16 +78,16 @@ describe('workbench showcase e2e', () => {
           })
           await configureLiveModelThroughSettingsUi(page, env)
           await prepareWorkbenchWorkspaceThroughUi(page, {
-            workspaceName: '服务合同类案检索',
+            workspaceName: '建设工程类案检索',
             rootPath
           })
-          await createPartnerThroughWorkbenchUi(page, '服务合同类案检索')
+          await createPartnerThroughWorkbenchUi(page, '建设工程类案检索')
           await selectWorkbenchModel(page, env.modelName)
 
           await fs.rm(EXPORT_DIR, { recursive: true, force: true })
           await fs.mkdir(EXPORT_DIR, { recursive: true })
-          const captured = new Set<WenshuFrame>()
-          const frameFiles: Partial<Record<WenshuFrame, string>> = {
+          const captured = new Set<CourtFrame>()
+          const frameFiles: Partial<Record<CourtFrame, string>> = {
             empty: 'frame-1.png',
             filled: 'frame-2.png',
             results: 'frame-3.png'
@@ -93,22 +95,22 @@ describe('workbench showcase e2e', () => {
           let stopCapture = false
           const tryCaptureFrames = async (): Promise<void> => {
             if (captured.size >= 3) return
-            const snapshot = await inspectEmbeddedBrowser(electronApp, WENSHU_SEARCH_HOST)
+            const snapshot = await inspectEmbeddedBrowser(electronApp, COURT_SEARCH_HOST)
             if (!snapshot) return
-            const frame = classifyWenshuFrame(snapshot)
+            const frame = classifyCourtFrame(snapshot)
             if (!frame || captured.has(frame)) return
             const fileName = frameFiles[frame]
             if (!fileName) return
             const ok = await captureEmbeddedBrowserPng(
               electronApp,
-              WENSHU_SEARCH_HOST,
+              COURT_SEARCH_HOST,
               path.join(EXPORT_DIR, fileName)
             )
             if (!ok) return
             captured.add(frame)
             runtime.signal({
-              name: `showcase-wenshu-frame-${frame}`,
-              message: `截到裁判文书检索 ${frame} 帧`,
+              name: `showcase-court-frame-${frame}`,
+              message: `截到最高法官网检索 ${frame} 帧`,
               data: {
                 url: snapshot.url,
                 title: snapshot.title,
@@ -128,7 +130,7 @@ describe('workbench showcase e2e', () => {
           })()
 
           const startedAtMs = Date.now()
-          await sendWorkbenchMessage(page, WENSHU_SEARCH_PROMPT)
+          await sendWorkbenchMessage(page, COURT_SEARCH_PROMPT)
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
@@ -156,8 +158,8 @@ describe('workbench showcase e2e', () => {
             .map((event) => event.toolName)
           const cost = computeShowcaseCost(evidence.events, {
             modelName: env.modelName,
-            prompt: WENSHU_SEARCH_PROMPT,
-            fileName: '中国裁判文书网',
+            prompt: COURT_SEARCH_PROMPT,
+            fileName: '最高人民法院官网',
             screenshotNames: orderedNames,
             capturedFrames: Array.from(captured),
             durationMs: evidence.durationMs,
@@ -165,8 +167,8 @@ describe('workbench showcase e2e', () => {
           })
           await fs.writeFile(path.join(EXPORT_DIR, 'cost.json'), `${JSON.stringify(cost, null, 2)}\n`)
           runtime.signal({
-            name: 'showcase-wenshu-cost',
-            message: '官网浏览器裁判文书检索样例实际消耗',
+            name: 'showcase-court-cost',
+            message: '官网浏览器最高法典型案例检索样例实际消耗',
             data: cost
           })
 
@@ -189,11 +191,11 @@ describe('workbench showcase e2e', () => {
               result.minScreenshotBytes > 20_000 &&
               result.usageCalls > 0 &&
               result.toolNames.includes('browser_use') &&
-              /违约金|判决|案例/u.test(result.finalAnswerText),
+              /工程款|结算|违约|典型案例|建设工程/u.test(result.finalAnswerText),
             {
-              name: 'showcase-wenshu-search-ready',
+              name: 'showcase-court-typical-cases-ready',
               message:
-                '应打开中国裁判文书网，完成检索并截到空白检索、已填词、结果三帧，回答提到违约金或类案。',
+                '应打开最高人民法院官网，完成检索并截到空白检索、已填词、结果三帧，回答提到工程款、结算或典型案例。',
               data: {
                 screenshotCount: result.screenshotCount,
                 capturedFrames: result.capturedFrames,

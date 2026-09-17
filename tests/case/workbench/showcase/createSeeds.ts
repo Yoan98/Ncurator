@@ -37,10 +37,10 @@ export const PPT_EDIT_PROMPT =
 export const PDF_FILE_NAME = '星河项目服务合同.pdf'
 export const PDF_PROMPT = '@星河项目服务合同.pdf 尾款什么时候付？'
 
-export const WENSHU_SEARCH_PROMPT =
-  '我这边有个服务合同纠纷，对方拖了几个月一直没付服务费，合同里还约定了比较高的违约金。你帮我去中国裁判文书网找几个类似的判决，看看这种逾期付款的情况下，法院一般会怎么处理违约金，找几个比较接近的案例给我参考一下。'
-export const WENSHU_SEARCH_KEYWORDS = ['服务合同', '违约金', '逾期付款']
-export const WENSHU_SEARCH_HOST = 'wenshu.court.gov.cn'
+export const COURT_SEARCH_PROMPT =
+  '我最近在处理一个建设工程合同纠纷，想参考一下最高法有没有类似的典型案例。你帮我去最高人民法院官网找几个和建设工程施工合同纠纷比较接近的案例，重点看看法院对工程款结算、违约责任这些问题是怎么认定的，把比较有参考价值的几个案例整理给我。'
+export const COURT_SEARCH_KEYWORDS = ['建设工程', '施工合同', '工程款']
+export const COURT_SEARCH_HOST = 'www.court.gov.cn'
 
 const CONTRACT_FONT_FAMILY = 'ContractFont'
 const CONTRACT_FONT_PATH = '/Library/Fonts/Arial Unicode.ttf'
