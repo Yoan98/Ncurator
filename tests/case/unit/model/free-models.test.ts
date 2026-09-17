@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   isFreeModelConfigId,
+  isMysteryFreeModelEntry,
   toFreeModelConfigId,
   toFreeModelPublicEntry,
   type FreeModelCatalogEntry
@@ -36,5 +37,18 @@ describe('free model catalog helpers', () => {
   it('keeps catalog context window tokens on public entries', () => {
     const entry = sampleEntry({ contextWindowTokens: 128000 })
     expect(toFreeModelPublicEntry(entry).contextWindowTokens).toBe(128000)
+  })
+
+  it('detects mystery catalog entries by id or proxy base url', () => {
+    expect(isMysteryFreeModelEntry(sampleEntry({ id: 'free-mystery' }))).toBe(true)
+    expect(
+      isMysteryFreeModelEntry(
+        sampleEntry({
+          id: 'other',
+          baseUrl: 'https://www.guanzhangai.cn/api/v1/mystery-proxy/v1'
+        })
+      )
+    ).toBe(true)
+    expect(isMysteryFreeModelEntry(sampleEntry())).toBe(false)
   })
 })

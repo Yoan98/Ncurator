@@ -3,6 +3,7 @@ import { ChatDeepSeek } from '@langchain/deepseek'
 import type { LlmRuntimeConfig } from '../../types/store'
 import { resolveLlmProviderKind } from '../../../shared/llmProvider'
 import { resolveOpenAICompatibleRuntimeOptions } from './openaiCompatible'
+import { createOfficialApiFetch, isMysteryProxyUrl } from '../officialApi/appClient'
 
 export type ChatModelFactoryOptions = {
   temperature?: number
@@ -40,7 +41,8 @@ export const createChatModel = (cfg: LlmRuntimeConfig, opts?: ChatModelFactoryOp
     timeout: opts?.timeout,
     streaming: opts?.streaming === true,
     configuration: {
-      baseURL: runtimeOptions.baseURL
+      baseURL: runtimeOptions.baseURL,
+      ...(isMysteryProxyUrl(runtimeOptions.baseURL) ? { fetch: createOfficialApiFetch() } : {})
     }
   })
 }

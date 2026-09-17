@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { OFFICIAL_WEBSITE_URL } from '../../../shared/constants'
+import { buildDesktopAppGatewayHeaders } from '../officialApi/appClient'
 
 export type TelemetryEventName = 'app_started' | 'message_submit_completed'
 
@@ -227,11 +228,19 @@ export class TelemetryService {
 
   private async deliver(event: TelemetryEventPayload): Promise<DeliveryResult> {
     try {
+      const body = JSON.stringify(event)
       const response = await fetch(this.endpoint, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          ...buildDesktopAppGatewayHeaders({
+            method: 'POST',
+            url: this.endpoint,
+            body
+          })
+        },
         signal: AbortSignal.timeout(DELIVERY_TIMEOUT_MS),
-        body: JSON.stringify(event)
+        body
       })
       if (!response.ok) {
         if (

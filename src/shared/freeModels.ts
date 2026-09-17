@@ -92,3 +92,8 @@ export const toFreeModelRuntimeConfig = (
   ...toFreeModelLlmConfig(entry),
   model_name: String(modelName || entry.modelName).trim() || entry.modelName
 })
+
+export const MYSTERY_FREE_MODEL_ID = 'free-mystery'
+
+export const isMysteryFreeModelEntry = (entry: Pick<FreeModelCatalogEntry, 'id' | 'baseUrl'>): boolean =>
+  entry.id === MYSTERY_FREE_MODEL_ID || entry.baseUrl.includes('/api/v1/mystery-proxy/')

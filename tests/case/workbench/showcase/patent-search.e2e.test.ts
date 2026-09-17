@@ -115,7 +115,11 @@ describe('workbench showcase e2e', () => {
           const captureLoop = (async () => {
             while (!stopCapture) {
               await tryCaptureFrames().catch(() => undefined)
-              await page.waitForTimeout(700)
+              try {
+                await page.waitForTimeout(700)
+              } catch {
+                stopCapture = true
+              }
             }
           })()
 

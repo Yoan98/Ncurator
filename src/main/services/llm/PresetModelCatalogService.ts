@@ -16,6 +16,7 @@ import {
 import { parseCatalogContextWindowTokens } from '../../../shared/freeModels'
 import { cacheModelIcons, resolveCachedIconUrls } from './modelIconCache'
 import { getUserDataPath } from '../../utils/paths'
+import { buildDesktopAppGatewayHeaders } from '../officialApi/appClient'
 
 const CACHE_FILE_NAME = 'preset-models-catalog.json'
 const FETCH_TIMEOUT_MS = 15_000
@@ -189,7 +190,14 @@ export class PresetModelCatalogService {
     try {
       const response = await fetch(PRESET_MODELS_CATALOG_URL, {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers: {
+          Accept: 'application/json',
+          ...buildDesktopAppGatewayHeaders({
+            method: 'GET',
+            url: PRESET_MODELS_CATALOG_URL,
+            body: ''
+          })
+        },
         signal: controller.signal
       })
       if (!response.ok) {

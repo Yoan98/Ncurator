@@ -7,6 +7,7 @@ export const USER_MANUAL_URL = `${OFFICIAL_WEBSITE_URL}/zh/manual`
 export const OFFICIAL_DOWNLOAD_PAGE_URL = `${OFFICIAL_WEBSITE_URL}/zh`
 export const FREE_MODELS_CATALOG_URL = `${OFFICIAL_WEBSITE_URL}/api/v1/free-models`
 export const PRESET_MODELS_CATALOG_URL = `${OFFICIAL_WEBSITE_URL}/api/v1/preset-models`
+export const MYSTERY_TOKEN_URL = `${OFFICIAL_WEBSITE_URL}/api/v1/mystery-token`
 export const NO_EFFECTIVE_FILE_CHANGE_MESSAGE = '本次未检测到文件内容变化'
 
 export const APP_UPDATE_GET_SNAPSHOT_CHANNEL = 'app-update-get-snapshot'

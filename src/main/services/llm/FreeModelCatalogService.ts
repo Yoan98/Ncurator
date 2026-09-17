@@ -3,6 +3,7 @@ import path from 'path'
 import { FREE_MODELS_CATALOG_URL } from '../../../shared/constants'
 import {
   FREE_MODEL_CATALOG_TTL_MS,
+  isMysteryFreeModelEntry,
   parseCatalogContextWindowTokens,
   type FreeModelCatalogEntry,
   type FreeModelsCatalogResponse,
@@ -15,6 +16,8 @@ import {
 import type { LlmRuntimeConfig } from '../../../shared/types'
 import { cacheModelIcons, resolveCachedIconUrls } from './modelIconCache'
 import { getUserDataPath } from '../../utils/paths'
+import { buildDesktopAppGatewayHeaders } from '../officialApi/appClient'
+import { ensureMysteryToken } from '../officialApi/mysteryToken'
 
 const FREE_MODELS_ENDPOINT = FREE_MODELS_CATALOG_URL
 const CACHE_FILE_NAME = 'free-models-catalog.json'
@@ -189,7 +192,14 @@ export class FreeModelCatalogService {
     try {
       const response = await fetch(FREE_MODELS_ENDPOINT, {
         method: 'GET',
-        headers: { Accept: 'application/json' },
+        headers: {
+          Accept: 'application/json',
+          ...buildDesktopAppGatewayHeaders({
+            method: 'GET',
+            url: FREE_MODELS_ENDPOINT,
+            body: ''
+          })
+        },
         signal: controller.signal
       })
       if (!response.ok) {
@@ -258,9 +268,12 @@ export class FreeModelCatalogService {
     const entry = this.cache?.models.find((item) => item.id === entryId)
     if (!entry) return null
     const requestedName = String(modelName || '').trim()
-    if (requestedName && requestedName !== entry.modelName) {
-      return toFreeModelRuntimeConfig(entry, requestedName)
-    }
-    return toFreeModelRuntimeConfig(entry)
+    const runtime =
+      requestedName && requestedName !== entry.modelName
+        ? toFreeModelRuntimeConfig(entry, requestedName)
+        : toFreeModelRuntimeConfig(entry)
+    if (!isMysteryFreeModelEntry(entry)) return runtime
+    const token = await ensureMysteryToken(entry.apiKey)
+    return { ...runtime, api_key: token }
   }
 }
