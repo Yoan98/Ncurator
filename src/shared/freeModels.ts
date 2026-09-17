@@ -18,6 +18,7 @@ export type FreeModelCatalogEntry = {
   label: string
   description: string
   capabilities: FreeModelCapability[]
+  contextWindowTokens?: number
   iconUrl: string
   baseUrl: string
   apiKey: string
@@ -37,6 +38,7 @@ export type FreeModelPublicEntry = {
   label: string
   description: string
   capabilities: FreeModelCapability[]
+  contextWindowTokens?: number
   iconUrl: string
 }
 
@@ -58,6 +60,11 @@ export const freeModelEntryIdFromConfigId = (configId: string): string | null =>
   return id || null
 }
 
+export const parseCatalogContextWindowTokens = (value: unknown): number | undefined => {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return undefined
+  return Math.floor(value)
+}
+
 export const toFreeModelPublicEntry = (entry: FreeModelCatalogEntry): FreeModelPublicEntry => ({
   id: entry.id,
   configId: toFreeModelConfigId(entry.id),
@@ -66,6 +73,7 @@ export const toFreeModelPublicEntry = (entry: FreeModelCatalogEntry): FreeModelP
   label: entry.label,
   description: entry.description,
   capabilities: entry.capabilities,
+  contextWindowTokens: entry.contextWindowTokens,
   iconUrl: entry.iconUrl
 })
 

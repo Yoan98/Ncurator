@@ -39,10 +39,56 @@ export const isInternalBrowserErrorUrl = (url: string): boolean => {
   return value.startsWith('chrome-error://') || value.startsWith('chrome://')
 }
 
+export const NET_ERROR_ABORTED_CODE = -3
+
+const NET_ERROR_CODE_NAMES: Record<number, string> = {
+  [NET_ERROR_ABORTED_CODE]: 'ERR_ABORTED',
+  [-6]: 'ERR_FILE_NOT_FOUND',
+  [-7]: 'ERR_TIMED_OUT',
+  [-21]: 'ERR_NETWORK_CHANGED',
+  [-100]: 'ERR_CONNECTION_CLOSED',
+  [-101]: 'ERR_CONNECTION_RESET',
+  [-102]: 'ERR_CONNECTION_REFUSED',
+  [-103]: 'ERR_CONNECTION_ABORTED',
+  [-104]: 'ERR_CONNECTION_FAILED',
+  [-105]: 'ERR_NAME_NOT_RESOLVED',
+  [-106]: 'ERR_INTERNET_DISCONNECTED',
+  [-107]: 'ERR_SSL_PROTOCOL_ERROR',
+  [-109]: 'ERR_ADDRESS_UNREACHABLE',
+  [-118]: 'ERR_CONNECTION_TIMED_OUT',
+  [-130]: 'ERR_PROXY_CONNECTION_FAILED',
+  [-137]: 'ERR_NAME_RESOLUTION_FAILED',
+  [-201]: 'ERR_CERT_DATE_INVALID',
+  [-202]: 'ERR_CERT_AUTHORITY_INVALID',
+  [-324]: 'ERR_EMPTY_RESPONSE'
+}
+
 export const parseNetErrorCode = (error: unknown): string => {
   const message = error instanceof Error ? error.message : String(error || '')
   const matched = message.match(/ERR_[A-Z0-9_]+/u)
-  return matched?.[0] || 'ERR_FAILED'
+  if (matched?.[0]) return matched[0]
+  const numeric = Number(message)
+  if (Number.isInteger(numeric) && NET_ERROR_CODE_NAMES[numeric]) {
+    return NET_ERROR_CODE_NAMES[numeric]
+  }
+  return 'ERR_FAILED'
+}
+
+export const isAbortedNetError = (code: number | string, description = ''): boolean => {
+  if (code === NET_ERROR_ABORTED_CODE || code === '-3') return true
+  return String(description || code).includes('ERR_ABORTED')
+}
+
+export const shouldPaintEmbeddedNetError = (input: {
+  isMainFrame: boolean
+  errorCode: number
+  description?: string
+  canFallbackToHttp: boolean
+}): boolean => {
+  if (!input.isMainFrame) return false
+  if (isAbortedNetError(input.errorCode, input.description)) return false
+  if (input.canFallbackToHttp) return false
+  return true
 }
 
 export const isHttpsFallbackWorthy = (codeOrDescription: string | number): boolean => {

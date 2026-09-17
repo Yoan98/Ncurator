@@ -32,4 +32,9 @@ describe('free model catalog helpers', () => {
     expect(publicEntry).not.toHaveProperty('providerId')
     expect(publicEntry.iconUrl).toBe(entry.iconUrl)
   })
+
+  it('keeps catalog context window tokens on public entries', () => {
+    const entry = sampleEntry({ contextWindowTokens: 128000 })
+    expect(toFreeModelPublicEntry(entry).contextWindowTokens).toBe(128000)
+  })
 })

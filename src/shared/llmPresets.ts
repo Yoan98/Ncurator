@@ -1,4 +1,5 @@
 import type { LLMConfig, LlmProviderId } from './types'
+import { parseCatalogContextWindowTokens } from './freeModels'
 import { LLM_PROVIDER_REGISTRY, resolveLlmProvider } from './llmProvider'
 
 export type LlmPriceTier = 'low' | 'mid' | 'high'
@@ -10,6 +11,7 @@ export type LlmPresetModel = {
   priceTier: LlmPriceTier
   description: string
   capabilities: Array<'text' | 'vision'>
+  contextWindowTokens?: number
 }
 
 export type LlmPresetProviderId = Exclude<LlmProviderId, 'local' | 'custom'>
@@ -134,7 +136,8 @@ export const mergePresetCatalogProviders = (
         iconUrl,
         priceTier,
         description: typeof model.description === 'string' ? model.description.trim() : '',
-        capabilities
+        capabilities,
+        contextWindowTokens: parseCatalogContextWindowTokens(model.contextWindowTokens)
       })
     }
     if (models.length === 0) continue

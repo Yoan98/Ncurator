@@ -20,21 +20,25 @@ import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import {
   CONTEXT_COMPACTION_TAIL_RATIO,
-  CONTEXT_COMPACTION_TRIGGER_RATIO,
-  resolveCompactionTailTokens
+  CONTEXT_WINDOW_UTILIZATION_RATIO,
+  resolveCompactionTailTokens,
+  resolveEffectiveContextWindowTokens
 } from '../../../../src/main/services/ai/human/constants'
 import { messagesFromLogEntries } from '../../../../src/main/services/ai/human/memory/conversationLogMessages'
 import { estimateMessagesForContext } from '../../../../src/main/services/ai/human/memory/multimodal'
 
 const contextWindowForTail = (retainTokens: number): number => {
-  let windowTokens = Math.max(
+  let modelContextTokens = Math.max(
     1,
-    Math.ceil(retainTokens / (CONTEXT_COMPACTION_TRIGGER_RATIO * CONTEXT_COMPACTION_TAIL_RATIO))
+    Math.ceil(retainTokens / (CONTEXT_WINDOW_UTILIZATION_RATIO * CONTEXT_COMPACTION_TAIL_RATIO))
   )
-  while (resolveCompactionTailTokens(windowTokens) < retainTokens) {
-    windowTokens += 1
+  while (
+    resolveCompactionTailTokens(resolveEffectiveContextWindowTokens(modelContextTokens)) <
+    retainTokens
+  ) {
+    modelContextTokens += 1
   }
-  return windowTokens
+  return modelContextTokens
 }
 
 const createContext = (): AiRunContext =>

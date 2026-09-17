@@ -4,7 +4,6 @@ import path from 'node:path'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { rm } from 'node:fs/promises'
-import { CdpEndpointService } from '../../../src/main/services/browser/CdpEndpointService'
 import { ManagedWebCrawlerService } from '../../../src/main/services/webCrawler/WebCrawlerService'
 
 const electronExecutablePath = createRequire(import.meta.url)('electron') as string
@@ -24,6 +23,47 @@ const stopProcess = async (child: ChildProcess): Promise<void> => {
     child.kill('SIGKILL')
     await exited
   }
+}
+
+const waitForIsolatedHostCdpUrl = async (
+  userDataPath: string,
+  timeoutMs = 20_000
+): Promise<string> => {
+  const deadline = Date.now() + timeoutMs
+  const activePortPath = path.join(userDataPath, 'DevToolsActivePort')
+  let latestError: unknown
+  while (Date.now() < deadline) {
+    try {
+      const [portText = '', browserPath = ''] = fs.readFileSync(activePortPath, 'utf8').split(/\r?\n/u)
+      const port = Number.parseInt(portText.trim(), 10)
+      const normalizedBrowserPath = browserPath.trim()
+      if (!Number.isInteger(port) || port <= 0 || port > 65_535) {
+        throw new Error('DevToolsActivePort contains an invalid port')
+      }
+      if (!normalizedBrowserPath.startsWith('/devtools/browser/')) {
+        throw new Error('DevToolsActivePort contains an invalid browser path')
+      }
+      const response = await fetch(`http://127.0.0.1:${String(port)}/json/version`, {
+        signal: AbortSignal.timeout(1_000)
+      })
+      if (!response.ok) throw new Error(`CDP version endpoint returned ${response.status}`)
+      const payload = (await response.json()) as { webSocketDebuggerUrl?: unknown }
+      const parsed = new URL(String(payload.webSocketDebuggerUrl || '').trim())
+      if (
+        parsed.protocol !== 'ws:' ||
+        Number(parsed.port) !== port ||
+        parsed.pathname !== normalizedBrowserPath
+      ) {
+        throw new Error('CDP version endpoint returned an unexpected WebSocket URL')
+      }
+      return parsed.toString()
+    } catch (error) {
+      latestError = error
+      await new Promise<void>((resolve) => setTimeout(resolve, 100))
+    }
+  }
+  const reason = latestError instanceof Error ? latestError.message : String(latestError || '')
+  throw new Error(`embedded_browser_cdp_unavailable: ${reason || 'endpoint not ready'}`)
 }
 
 export const createWebCrawlerService = async (): Promise<ManagedWebCrawlerService> => {
@@ -47,13 +87,9 @@ export const createWebCrawlerService = async (): Promise<ManagedWebCrawlerServic
   cdpHost.stderr?.on('data', (chunk) => {
     cdpHostStderr = `${cdpHostStderr}${String(chunk)}`.slice(-8_000)
   })
-  const cdpEndpointService = new CdpEndpointService({
-    userDataPath: cdpUserDataPath,
-    timeoutMs: 20_000
-  })
   let cdpUrl: string
   try {
-    cdpUrl = (await cdpEndpointService.getEndpoint()).browserWebSocketUrl
+    cdpUrl = await waitForIsolatedHostCdpUrl(cdpUserDataPath)
   } catch (error) {
     await stopProcess(cdpHost)
     await Promise.all([

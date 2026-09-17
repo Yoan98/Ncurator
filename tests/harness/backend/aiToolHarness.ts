@@ -15,7 +15,6 @@ import {
 import { buildDocxCapabilityTools } from '../../../src/main/services/ai/human/tools/docx'
 import { releaseDocxRunSession } from '../../../src/main/services/ai/human/tools/docx/worker/docxWorkerClient'
 import { AiRunResourceManager } from '../../../src/main/services/ai/run/AiRunResourceManager'
-import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../../src/main/services/ai/human/constants'
 import { buildKbCapabilityTools } from '../../../src/main/services/ai/human/tools/kb/retrievalTools'
 import { buildTerminalCapabilityTools } from '../../../src/main/services/ai/human/tools/terminal/terminalTools'
 import { TerminalSessionManager } from '../../../src/main/services/ai/human/tools/terminal/TerminalSessionManager'
@@ -108,9 +107,6 @@ export const createDocxToolHarness = (
     partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
-    safePreviewChars: 1400,
-    modelContextWindowTokens:
-      ctx.humanRuntimeOverrides?.modelContextWindowTokens || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
     emitActivity: (activity) => {
       activities.push(activity)
     }
@@ -259,9 +255,6 @@ export const createPdfToolHarness = (
     partnerId: contextInput.partnerId || contextInput.sessionId || 'test-partner',
     taskId: runtime.taskId,
     workspaceRootPath: runtime.workspaceRoot,
-    safePreviewChars: 1400,
-    modelContextWindowTokens:
-      ctx.humanRuntimeOverrides?.modelContextWindowTokens || DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
     emitActivity: (activity) => activities.push(activity)
   })
 

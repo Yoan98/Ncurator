@@ -1,4 +1,3 @@
-import { DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS } from '../../constants'
 import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
 import { createPdfToolRuntime } from './runtime'
 import { buildPdfReadTools } from './tools/readTools'
@@ -11,13 +10,5 @@ export const buildPdfCapabilityTools = (input: Parameters<typeof createPdfToolRu
 
 export const pdfToolFamily = createWorkspaceBoundToolFamily({
   familyId: 'pdf',
-  buildWorkspaceTools: (input) => {
-    return buildPdfCapabilityTools({
-      ...input,
-      safePreviewChars: 1400,
-      modelContextWindowTokens:
-        input.ctx.humanRuntimeOverrides?.modelContextWindowTokens ||
-        DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
-    }).tools
-  }
+  buildWorkspaceTools: (input) => buildPdfCapabilityTools(input).tools
 })

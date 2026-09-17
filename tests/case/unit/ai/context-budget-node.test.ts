@@ -4,16 +4,13 @@ import { createContextBudgetNode } from '../../../../src/main/services/ai/human/
 import { createHumanRuntimeCache } from '../../../../src/main/services/ai/human/node/utils/runtimeCache'
 import { createInitialHumanState } from '../../../../src/main/services/ai/human/state/schema'
 import {
-  CONTEXT_COMPACTION_TRIGGER_RATIO,
-  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+  resolveEffectiveContextWindowTokens
 } from '../../../../src/main/services/ai/human/constants'
 import type { AiRunContext } from '../../../../src/main/services/ai/types'
 import type { AiRunEvent, ChatMessageLogEntry, ChatMessageLogRecord } from '../../../../src/shared/types'
 import { LlmInputTooLongError } from '../../../../src/main/services/ai/errors'
 
-const DEFAULT_COMPACTION_TRIGGER_TOKENS = Math.floor(
-  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS * CONTEXT_COMPACTION_TRIGGER_RATIO
-)
+const DEFAULT_EFFECTIVE_CONTEXT_WINDOW_TOKENS = resolveEffectiveContextWindowTokens()
 
 const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
   ({
@@ -88,8 +85,7 @@ describe('ai unit context budget node', () => {
     expect(nextState.execution.contextBudget).toMatchObject({
       basis: 'initial',
       budgetTokens: 0,
-      contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
-      compactionTriggerTokens: DEFAULT_COMPACTION_TRIGGER_TOKENS,
+      contextWindowTokens: DEFAULT_EFFECTIVE_CONTEXT_WINDOW_TOKENS,
       hasCompressibleHistory: false,
       usageAvailable: true,
       evaluationId: expect.any(String)
@@ -187,8 +183,7 @@ describe('ai unit context budget node', () => {
         usageAvailable: true,
         lastBrainInputTokens: 500,
         deltaTokenEstimate: expect.any(Number),
-        contextWindowTokens: 600,
-        compactionTriggerTokens: 480
+        contextWindowTokens: 480
       }
     })
   })
@@ -216,7 +211,7 @@ describe('ai unit context budget node', () => {
         budgetTokens: 0,
         usageAvailable: true,
         hasCompressibleHistory: false,
-        contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+        contextWindowTokens: DEFAULT_EFFECTIVE_CONTEXT_WINDOW_TOKENS
       }
     })
   })
@@ -339,7 +334,7 @@ describe('ai unit context budget node', () => {
         basis: 'post_compaction',
         budgetTokens: 0,
         usageAvailable: true,
-        contextWindowTokens: DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+        contextWindowTokens: DEFAULT_EFFECTIVE_CONTEXT_WINDOW_TOKENS
       }
     })
   })

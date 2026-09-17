@@ -1081,7 +1081,6 @@ export type BrainContextBudgetSnapshot = {
   basis: 'initial' | 'usage_plus_delta' | 'post_compaction' | 'usage_unavailable'
   budgetTokens: number
   contextWindowTokens: number
-  compactionTriggerTokens: number
   hasCompressibleHistory: boolean
   usageAvailable: boolean
   lastBrainInputTokens?: number

@@ -373,7 +373,7 @@
 
 #### WB-COMPOSER-008 上下文用量提示
 
-- 系统行为：智能模式输入区展示当前伙伴上下文 token 用量圆圈，显示当前已估算 token、默认最大上下文 token 与已用占比；hover 展示已用比例与 token 数，不展示剩余比例。该用量在切换伙伴和 human run 完成后刷新。
+- 系统行为：智能模式输入区展示当前伙伴上下文 token 用量圆圈，显示当前已估算 token、当前模型有效上下文窗口 token 与已用占比；hover 展示已用比例与 token 数，不展示剩余比例。有效窗口 = `min(256000, floor(modelContext × 0.8))`，其中 `modelContext` 来自免费/推荐目录的 `contextWindowTokens`，自定义或缺失字段按 256000。该用量在切换伙伴和 human run 完成后刷新。
 - 验收：
   - `WB-COMPOSER-008-AC1` 智能模式下输入区可见上下文用量圆圈，hover 或辅助文本可读到已用比例与已用 / 最大 token，不展示剩余比例。
   - `WB-COMPOSER-008-AC2` human run 完成后，用量圆圈会基于最新伙伴消息记录刷新。
@@ -544,7 +544,7 @@ Composer 只有智能模式，不再提供 AI / 搜索切换。
 
 #### WB-PANEL-004 内置浏览器面板
 
-- 系统行为：每个浏览器 Tab 对应独立 Electron `WebContentsView`，全部视图共享持久分区 `persist:ncurator-browser`。该面板只服务用户手动开标签和 `browser_use`；`web_search` 的外网抓取使用独立隐藏 CDP host，不得复用或污染本面板。浏览器 Runtime、界面 Presentation 和 AI Automation 相互独立：切换文件、折叠右侧栏或切换伙伴时，只从主窗口显示树移除 View，不关闭 `webContents`，不改变 AI 的 CDP target；重新显示时挂载同一个 View 并展示后台操作后的实时最终状态。浏览器导航栏提供后退、前进、刷新/停止、URL 输入、输入框内“前往”按钮、地址栏右侧“将打开外部浏览器”按钮和更多操作；从 Markdown 网页链接打开内置浏览器时，先按当前伙伴已有 Tab 的当前 URL 匹配，命中则激活已有 Tab，未命中再新建并导航；地址栏导航仍作用于当前 Tab。用户地址栏与 AI `navigate` 共用同一套网址补全：未写协议时先试 https，连接或 TLS 失败再自动改 http；明确写了 `https://` 或 `http://` 时不改协议。加载失败时露出 Chromium 系统错误页，地址栏保留尝试打开的站点，不得显示 `chrome-error://`。页面可在后台继续加载，不得等加载完成才显示面板；AI `navigate` 启动后即打开面板（失败也打开），并等到真实标题、正文或表单后再报成功——Chromium 把网址当成标题且无正文/表单的第一屏视为未就绪；失败结果必须带回 tabId。浏览器更多菜单及新增标签页菜单使用主窗口原生子窗口承载自绘内容，覆盖在浏览器上方且不隐藏浏览器。
+- 系统行为：每个浏览器 Tab 对应独立 Electron `WebContentsView`，全部视图共享持久分区 `persist:ncurator-browser`。该面板只服务用户手动开标签和 `browser_use`；`web_search` 的外网抓取使用独立隐藏 crawler view，不得复用或污染本面板。应用启动不打开进程级 `--remote-debugging-port`；打开网页不挂调试。`observe / act / extract / screenshot / scroll` 与网页抓取 sidecar 仅在需要时把对应 `WebContents` 登记进本机 CDP 桥（`webContents.debugger` + 回环 `/json/version`、`/json/list`），操作结束卸下。浏览器 Runtime、界面 Presentation 和 AI Automation 相互独立：切换文件、折叠右侧栏或切换伙伴时，只从主窗口显示树移除 View，不关闭 `webContents`，不改变 AI 正在操作的那块 View；重新显示时挂载同一个 View 并展示后台操作后的实时最终状态。浏览器导航栏提供后退、前进、刷新/停止、URL 输入、输入框内“前往”按钮、地址栏右侧“将打开外部浏览器”按钮和更多操作；从 Markdown 网页链接打开内置浏览器时，先按当前伙伴已有 Tab 的当前 URL 匹配，命中则激活已有 Tab，未命中再新建并导航；地址栏导航仍作用于当前 Tab。用户地址栏与 AI `navigate` 共用同一套网址补全：未写协议时先试 https，连接或 TLS 失败再自动改 http；明确写了 `https://` 或 `http://` 时不改协议。用户加载态只跟 Chromium `isLoadingMainFrame()` / `did-start-loading` / `did-stop-loading`；加载中地址栏行底边走 Chrome 式进度线。网络失败只认主框架 `did-fail-load`（排除用户停止的 `ERR_ABORTED`），由馆长在同一 `webContents` 写入统一错误页，地址栏保留尝试打开的站点，不得显示 `chrome-error://`。页面可在后台继续加载，不得等加载完成才显示面板；AI `navigate` 启动后即打开面板（失败也打开），并等到真实标题、正文或表单后再报成功——Chromium 把网址当成标题且无正文/表单的第一屏视为未就绪；失败结果必须带回 tabId。浏览器更多菜单及新增标签页菜单使用主窗口原生子窗口承载自绘内容，覆盖在浏览器上方且不隐藏浏览器。
 - 验收：
   - `WB-PANEL-004-AC1` 收到 AI 浏览器面板事件后，右侧显示事件指定的浏览器 Tab；面板动画期间不逐帧缩放原生 View，动画结束后按最终 bounds 一次挂载并与正文视口对齐；分栏拖拽调整面板宽度期间，原生 View 暂停逐帧 bounds 发送并由静态页面快照占位，拖拽结束后在无补间延迟下瞬时对齐并无缝恢复原生视图，垫底快照延时退出以避免白屏闪烁。
   - `WB-PANEL-004-AC2` AI 通过 `browser_use` 的 `navigate` 打开 URL：不传 `tabId` 时新建标签并返回 `tabId`，传了则在指定标签导航。`list_tabs` 可列出当前伙伴标签。`observe / extract / act / act_instruction / screenshot / scroll` 必须显式传入 `tabId`；`screenshot` 截取当前标签页视口截图；`scroll` 支持按视口比例向下或向上滚动页面以加载后续内容；`act` 执行此前 `observe` 返回的单个 `actionId`（确定性回放，支持传入 `text` 为输入/填写动作注入文本，对非输入动作安全过滤参数）；`act_instruction` 支持直接按自然语言指令推导执行页面动作。需要切换页面时先 `navigate`。
@@ -555,15 +555,16 @@ Composer 只有智能模式，不再提供 AI / 搜索切换。
   - `WB-PANEL-004-AC7` 新增标签页和浏览器更多菜单使用无边框原生子窗口显示在浏览器上方；菜单打开期间浏览器保持原尺寸和可见状态，点击外部、按 Escape、主窗口移动或切换 Tab 时关闭菜单。菜单不得因内置 `WebContentsView` 抢焦点或主窗口 `resize` 事件被误关；点击外部关闭需在失焦后短延迟复核菜单仍未聚焦再关闭。
   - `WB-PANEL-004-AC8` 浏览器更多菜单的缩小、百分比、放大必须位于同一行且都可点击；缩放操作不关闭菜单，百分比可恢复 100%；更多菜单不再提供系统浏览器打开入口。
   - `WB-PANEL-004-AC9` 地址为空时“前往”按钮禁用；地址非空时点击按钮或按 Enter 都导航到相同目标，按钮 tooltip 与无障碍名称均为“前往”。用户导航（含 Markdown 网页链接与地址栏前往）启动后立即返回，不等待页面 `did-finish-load`；AI `browser_use` 的 `navigate` 必须等到页面有真实内容，或等到系统错误页 / 空白验证超时后再返回工具结果。
-  - `WB-PANEL-004-AC10` 内置浏览器自动化不得依赖固定 CDP 端口；旧端口 `9333` 或其他本地端口已被占用时，应用仍应正常启动并通过随机回环端口完成浏览器任务。
+  - `WB-PANEL-004-AC10` 内置浏览器自动化不得打开进程级远程调试口，也不得依赖固定 CDP 端口。旧端口 `9333` 或其他本地端口被占用时应用仍应正常启动。Stagehand 与网页抓取只在操作时按当前 Tab 或隐藏 crawler view 挂到本机回环 CDP 桥；用户打开网页时该页不得作为调试目标出现在 `/json/list`。
   - `WB-PANEL-004-AC11` AI 在浏览器未显示时仍可按原 targetId 连续执行 observe、act、extract 和导航；恢复后必须直接显示 AI 操作后的最新网址、页面内容、滚动位置和表单状态，恢复前后 `webContents.id` 不变。
   - `WB-PANEL-004-AC12` 后台浏览器在应用运行期间不得自动销毁；仅应用退出、用户主动关闭浏览器 Tab 或删除所属伙伴时销毁。应用重启后按伙伴恢复标签顺序、URL、导航历史和缩放并按需重新创建；不承诺恢复页面 JS、内存滚动状态或未提交表单。
   - `WB-PANEL-004-AC13` AI 通过 `browser_use` 的 `act` 触发网页操作时，通过 DOM 虚拟光标提供移动和点击视觉反馈；单次动作执行完毕时光标保持常驻在最后操作位置（不提前隐藏），后续动作平滑连续移动；仅当整轮 AI Run 结束（正常完成、用户取消或异常中断）时，通过运行资源管理器统一平滑淡出隐藏。
   - `WB-PANEL-004-AC14` 地址栏右侧提供“将打开外部浏览器”按钮（右上角外链图标）；有可打开 URL 时可点击，tooltip 与无障碍名称为“将打开外部浏览器”，点击后通过系统默认浏览器打开当前页或地址栏中的 URL。
   - `WB-PANEL-004-AC15` 用户地址栏与 AI `navigate` 对网址协议的处理一致：只填主机（如 `epub.cnipa.gov.cn`）时先 https、连接/TLS 类失败再自动改 http，一次打开完成；写明 `http://` 只走 http；写明 `https://` 只走 https，失败不悄悄改 http。发生 https→http 回退时，地址栏与成功结果展示最终 http 地址。
-  - `WB-PANEL-004-AC16` 网络打不开时露出错误页：标题「无法访问此网站」、错误码、「重新加载」。优先用 Chromium 自带页；若当前 WebContents 未提交 `chrome-error://`，则在同一内置页写入上述文案，不另画 React 遮罩。地址栏显示尝试的站点，不显示 `chrome-error://`。`navigate` 一开始就打开右侧浏览器面板，失败也打开。
+  - `WB-PANEL-004-AC16` 网络打不开时由馆长在同一内置页写入错误文档：标题「无法访问此网站」、一行错误码（如 `ERR_CONNECTION_CLOSED`）、按钮「重新加载」。只认主框架 `did-fail-load` 且非 `ERR_ABORTED`；裸主机 https 失败且还可试 http 时不画错误页、立刻改走 http。不另画 React 遮罩，不等 `chrome-error://`。地址栏显示尝试的站点，不显示 `chrome-error://`。`navigate` 一开始就打开右侧浏览器面板，失败也打开。重新加载走当前地址栏同一套导航（含裸主机 https→http）。
   - `WB-PANEL-004-AC17` AI `navigate` 不得把反爬/安全验证空白第一屏当成成功。等到有真实标题或正文/表单，或超时仍空白则失败（说明可能卡在站点安全验证）。Chromium 把网址当成标题（主机、主机:端口、路径）时不算真实标题。等待期间不挂 Stagehand。`observe` / `extract` / `screenshot` / `act` / `scroll` 若当前已是系统错误页或仍空白，同样失败，不得空结果报完成。
   - `WB-PANEL-004-AC18` `navigate` 成功给模型：`Tab`（tabId）、有标题时 `Title`、`URL`（最终地址）；若发生过 https→http 回退再加 `Note: 已从 https 回退到 http。`。失败给模型：`Error`（含中文说明与错误码，需要时写入尝试过的地址）和 `Tab`（tabId），便于模型决定是否在同一标签重试，而不是盲目新开标签。JSON 仍用 `page: { title, url }`，文案不再把标题和地址挤在一行 `Page:` 里。
+  - `WB-PANEL-004-AC19` 主框架加载期间，地址栏行底边出现约 2px 进度线（约 12% 起向 85% 推进）；`isLoadingMainFrame()` 变为 false 后走到 100% 并淡出。不在原生网页上叠转圈遮罩。
 
 ### 8.8 直接写回与回退
 

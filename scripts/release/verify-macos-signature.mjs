@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import net from 'node:net'
 import os from 'node:os'
 import path from 'node:path'
@@ -90,26 +90,6 @@ const verifyPackagedAppLaunch = async () => {
     })
     const page = await electronApp.firstWindow({ timeout: 60_000 })
     await page.waitForFunction(() => Boolean(window.api), undefined, { timeout: 60_000 })
-    const deadline = Date.now() + 10_000
-    let cdpVerified = false
-    while (Date.now() < deadline) {
-      try {
-        const [portText] = (
-          await readFile(path.join(userDataDirectory, 'DevToolsActivePort'), 'utf8')
-        ).split(/\r?\n/u)
-        const port = Number.parseInt(String(portText || '').trim(), 10)
-        if (!Number.isInteger(port) || port <= 0 || port > 65_535) {
-          throw new Error('invalid DevToolsActivePort')
-        }
-        const response = await fetch(`http://127.0.0.1:${String(port)}/json/version`)
-        if (!response.ok) throw new Error(`CDP endpoint returned ${response.status}`)
-        cdpVerified = true
-        break
-      } catch {
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      }
-    }
-    if (!cdpVerified) throw new Error('packaged app CDP endpoint did not become ready')
     process.stdout.write('[release] packaged macOS app launch verification passed\n')
   } catch (error) {
     throw new Error(`packaged macOS app did not become ready: ${String(error)}\n${output}`)

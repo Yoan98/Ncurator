@@ -46,9 +46,6 @@ if (e2eUserDataPath) {
 }
 syncUserDataPathFromElectron()
 
-app.commandLine.appendSwitch('remote-debugging-address', '127.0.0.1')
-app.commandLine.appendSwitch('remote-debugging-port', '0')
-
 const singleInstanceLock = process.env.NCURATOR_E2E_OBSERVER
   ? true
   : app.requestSingleInstanceLock()
@@ -368,9 +365,7 @@ if (!singleInstanceLock) {
       createMainWindow: () => createWindow(),
       notificationIcon: icon
     })
-    const cdpEndpointService = new CdpEndpointService({
-      userDataPath: app.getPath('userData')
-    })
+    const cdpEndpointService = new CdpEndpointService()
     const browserEmbedService = new BrowserEmbedService(
       mainWindow,
       cdpEndpointService,
@@ -451,6 +446,10 @@ if (!singleInstanceLock) {
     shutdownCoordinator.register({
       name: 'browser-embed-service',
       dispose: () => browserEmbedService.dispose()
+    })
+    shutdownCoordinator.register({
+      name: 'cdp-endpoint',
+      dispose: () => cdpEndpointService.dispose()
     })
     shutdownCoordinator.register({
       name: 'terminal-session-manager',

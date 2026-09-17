@@ -20,7 +20,7 @@
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
-- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地内容输入与 hover-退出网页任务（observe→actionId act，支持 text 注入）；同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
+- `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地内容输入与 hover-退出网页任务（observe→actionId act，支持 text 注入）；必须在无进程级远程调试口下完成。同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 验证 type=fetch 读取网页正文后再回答。两类 case 均不得因 `web_search` 自动展开右侧搜索列表（该列表面板已不存在），对齐 `WB-CORE-007-AC4`。Composer 搜索模式与右侧搜索列表面板已删除，废弃 `WB-COMPOSER-004`、`WB-PANEL-002`。
 - Workbench 附件链路不限文件扩展名，任何可被文件选择器选中的普通文件都可以添加，不因扩展名拒绝；`+` 和拖放保留源文件绝对路径，粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
 - Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 回归承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。其中 Excel 工具侧覆盖 `WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC5`、`WB-EXCEL-002-AC6`、`WB-EXCEL-002-AC7`、`WB-EXCEL-002-AC8`（`WB-EXCEL-002-AC3` 记录/baseline **只在 ai-test 硬断言**）；Workbench e2e 覆盖 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9` 用户闭环（UI 可见单入口，不重复硬断言 AC3）。
@@ -50,7 +50,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足回归 case 口径。
 - 依赖本地文件语义的测试统一复用 `tests/fixtures/workspace` 作为共享输入目录，但该目录只作为真实输入文件来源；运行时通过设置页添加为文件地址，并先创建伙伴。
 - `How` 和 `Oracle` 必须映射到 [workbench.md](../prd/workbench.md) 的需求或验收编号。
-- `WB-BLOCKER-003`（上下文压缩提示）依赖真实模型使用量与正式压缩阈值触发，运行成本不确定，不作为每次源码回归的固定 case，发布时按影响评估单独执行真实检查，检查运行中与完成态过程组，且不得为 E2E 降低生产阈值或伪造 compaction 事件。
+- `WB-BLOCKER-003`（上下文压缩提示）依赖真实模型使用量与正式压缩阈值触发，运行成本不确定，不作为每次源码回归的固定 case，发布时按影响评估单独执行真实检查，检查运行中与完成态过程组，且不得为 E2E 降低生产阈值或伪造 compaction 事件。压缩阈值随当前模型 effectiveWindow（`min(256000, floor(modelContext × 0.8))`）。
 - `WB-WPS-001` 日常回归由 `wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 写盘后的 open dispatch；真窗口刷新由 opt-in `wps-office-reload-on-write-and-revert`（`pnpm test:workbench:wps-office`）覆盖已授权 WPS 文字 / 表格 / 演示，不进默认 e2e / 发版 package e2e。已打开文档在写盘前由加载项 close 放锁，写盘前等到文件可写，写成功后再刷新窗口。通道按 close-result 的 `remaining` 选择，不得用 SSE 是否断开判断；`remaining` 为 0 时 Windows 用对应组件 exe 拉起并轮询 list 要摘录，不得 `cmd start`；加载项 open 失败或超时降级为一次系统打开。未安装 WPS 或对应组件加载项未授权时后者跳过该格式；已授权却连不上则失败，不得只测 docx 就当作三种格式都过。Workbench e2e 启动时跳过覆盖拷加载项文件，仍启动回环 `/addon`；`publish.xml` 与授权 path 固定优先端口 `58123`，不得改写到临时端口。xlsx / pptx 窗口刷新还要求 `/status` 的 `clients` 出现 `et` / `wpp`，不能只靠文字组件。加载项不得探测其他组件 `Active*` 对象，也不得 Open 自己没 close 过的路径。
 
 ## 4. 目录与命令
@@ -190,7 +190,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：智能模式上下文用量在 run 后刷新，并可查看已用比例与 tokens。
 - Why：用量提示错误会误导用户对后续可用上下文的判断。
-- How：完成一次真实 AI run，读取圆圈可访问名称和 hover 提示。
+- How：完成一次真实 AI run，读取圆圈可访问名称和 hover 提示。用量环分母为当前所选模型的 effectiveWindow（免费/推荐目录 `contextWindowTokens` × 0.8 再 cap 256k；自定义按 256k 算出）。
 - Oracle：圆圈展示已用信息，hover 展示已用百分比与 tokens、不展示剩余，对齐 `WB-COMPOSER-008`。
 - Not：不验证 token 估算器的逐 token 精度。
 
@@ -427,7 +427,7 @@ pnpm test:update:e2e
 - What：AI 通过内置浏览器完成网页任务时，文件 / 多浏览器 Tab、独立页面导航、持久站点数据和真实网页操作结果形成闭环；并验证 `observe → act(actionId)`（含文本输入和 hover 后出现的退出入口）。
 - Why：内置浏览器是 Electron 与 AI run 深度联动场景，仅 backend 或静态事件无法覆盖视口嵌入、导航和最终收口问题；Stagehand 需以 observe 规划、actionId 确定性执行为主路径，且支持文本输入直接注入。
 - How：先打开真实 Markdown 文件，再让 AI 使用 `browser_use` 操作本地测试页（在操作备注输入框输入内容 + 诱饵角色切换 + hover 消息图标才出现「退出登录」）；AI Run 仍在进行时，用户通过 `+` 新建另一个浏览器标签并折叠右栏，验证后续 observe / act / extract 在后台继续操作原目标；任务完成后展开右栏并切回 AI 浏览器标签，再切换文件和浏览器检查状态保持。
-- Oracle：`navigate` 结果含 `tabId`；后续 observe/act 必带该 `tabId`；成功 `navigate` 给模型拆成 Title / URL 而不是一行 Page；`act` 使用 `actionId`，支持输入类动作注入 `text` 参数；observe actions 含 `actionId/method/description/arguments/selector`；折叠期间原浏览器 `webContents` 不销毁且 AI 能完成输入、hover 与退出，展开后同一个 `webContents.id` 直接显示最新包含退出口令与备注内容的 `LOGOUT_OK_*` 结果；操作期间光标常驻且仅在 AI Run 结束时释放隐藏；对齐 `WB-PANEL-004`、`WB-PANEL-004-AC13`、`WB-PANEL-004-AC18`。
+- Oracle：`navigate` 结果含 `tabId`；后续 observe/act 必带该 `tabId`；成功 `navigate` 给模型拆成 Title / URL 而不是一行 Page；`act` 使用 `actionId`，支持输入类动作注入 `text` 参数；observe actions 含 `actionId/method/description/arguments/selector`；折叠期间原浏览器 `webContents` 不销毁且 AI 能完成输入、hover 与退出，展开后同一个 `webContents.id` 直接显示最新包含退出口令与备注内容的 `LOGOUT_OK_*` 结果；操作期间光标常驻且仅在 AI Run 结束时释放隐藏；userData 下不得出现 `DevToolsActivePort`；对齐 `WB-PANEL-004`、`WB-PANEL-004-AC10`、`WB-PANEL-004-AC13`、`WB-PANEL-004-AC18`。
 - Not：不验证公网网页稳定性；本 case 使用本地测试网页减少外部波动；不允许用 fake browser 或 fake tool result 替代；不要求 live 模型必须在固定时限内结束整轮最终回答，只要真实内置浏览器已完成退出并出现口令即可判定 browser panel 能力有效。
 
 #### `browser-view-lifecycle`
@@ -442,10 +442,10 @@ pnpm test:update:e2e
 #### `browser-navigate-scheme-fallback`
 
 - 测试类型：`e2e`
-- What：内置浏览器对未写协议的地址先 https 再 http；写明 https 失败停在系统错误页并保留 tabId；AI `navigate` 等到真实内容再成功，失败把 `Error` 与 `tabId` 一并返回。
-- Why：不少官网 https 会直接掐连接，Chrome 会回退到 http；馆长若只加 https 或把空白验证页当成打开成功，用户看到白屏、模型也会盲目新开标签。
-- How：启动只提供 HTTP 的本地页面（https 打到同一端口会 TLS 失败）。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，等到页面口令出现且地址栏是 http；再对同一类地址走 AI `navigate`；另一次写明 `https://127.0.0.1:1/path`（未监听端口，连接被拒绝），确认系统错误页、地址栏仍是 https、工具失败含 `tabId`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
-- Oracle：裸主机最终打开 http 页且含口令，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC9`；明确 https 不回退 http，地址栏无 `chrome-error://`，错误页为系统无法访问页，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。
+- What：内置浏览器对未写协议的地址先 https 再 http；写明 https 失败停在馆长统一错误页并保留 tabId；加载中地址栏底边可见进度线；AI `navigate` 等到真实内容再成功，失败把 `Error` 与 `tabId` 一并返回。
+- Why：不少官网 https 会直接掐连接，Chrome 会回退到 http；馆长若只加 https 或把空白验证页当成打开成功，用户看到白屏、模型也会盲目新开标签。WebContentsView 不会画出 Chrome 外壳那张 `chrome-error://` 页，必须自己写入错误文档。
+- How：启动只提供 HTTP 的本地页面（https 打到同一端口会 TLS 失败）。Workbench 打开浏览器 Tab：地址栏只填 `127.0.0.1:端口/path`，加载中可见底线，等到页面口令出现且地址栏是 http；再对同一类地址走 AI `navigate`；另一次写明 `https://127.0.0.1:1/path`（未监听端口，连接被拒绝），确认错误页标题为「无法访问此网站」且含 `ERR_` 错误码、地址栏仍是 https、工具失败含 `tabId`。页面第一屏故意空白、约 1.5s 后再出标题和输入框，覆盖验证页等待。
+- Oracle：裸主机最终打开 http 页且含口令，对齐 `WB-PANEL-004-AC15`、`WB-PANEL-004-AC9`；加载中可见地址栏底边进度线，对齐 `WB-PANEL-004-AC19`；明确 https 不回退 http，地址栏无 `chrome-error://`，错误页为馆长统一「无法访问此网站」页并含错误码，对齐 `WB-PANEL-004-AC16`；AI `navigate` 成功含 `tabId` 与最终 http URL，失败含 `error` 与同一 `tabId`，对齐 `WB-PANEL-004-AC17`、`WB-PANEL-004-AC18`。
 - Not：不打公网专利站；不跑 live 模型整轮问答；不验证 Stagehand 填表。公网样例见 `patent-search`。
 
 #### `web-read-from-search-result`

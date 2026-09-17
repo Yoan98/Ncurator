@@ -21,6 +21,7 @@ import { ScheduledTaskService } from '../services/scheduler/ScheduledTaskService
 import { AiRunResourceManager } from '../services/ai/run/AiRunResourceManager'
 import { AiFileChangeService } from '../services/ai/fileChanges/AiFileChangeService'
 import { getAiContextUsage } from '../services/ai/contextUsage'
+import { lookupCatalogModelContextTokens } from '../services/ai/modelContextWindow'
 import { DocxApplyService } from '../services/ai/human/tools/docx/review/DocxApplyService'
 import { releaseDocxRunSession } from '../services/ai/human/tools/docx/worker/docxWorkerClient'
 import { releasePdfRunSession } from '../services/pdf/worker/pdfWorkerClient'
@@ -307,12 +308,16 @@ export function registerHandlers(services: {
     telemetryService,
     errorLogService,
     recordLlmIo: services.recordLlmIo,
-    resolveHumanRuntimeOverrides: () => {
+    resolveHumanRuntimeOverrides: (run) => {
+      const modelContextWindowTokens = lookupCatalogModelContextTokens(run.mainModel)
       if (!e2eGraphRecursionLimitOnce || e2eGraphRecursionLimitUsesRemaining <= 0) {
-        return undefined
+        return { modelContextWindowTokens }
       }
       e2eGraphRecursionLimitUsesRemaining -= 1
-      return { graphRecursionLimit: e2eGraphRecursionLimitOnce }
+      return {
+        modelContextWindowTokens,
+        graphRecursionLimit: e2eGraphRecursionLimitOnce
+      }
     },
     onRunTerminal: async (run, status) => {
       await services.systemNotificationService?.notifyRunTerminal(run, status)
@@ -2369,7 +2374,11 @@ export function registerHandlers(services: {
     try {
       const partnerId = String(payload?.partnerId || '').trim()
       if (!partnerId) return { success: false, error: 'partnerId is required' }
-      const usage = await getAiContextUsage({ partnerId, chatMessageLogStore })
+      const usage = await getAiContextUsage({
+        partnerId,
+        chatMessageLogStore,
+        workbenchUiStore
+      })
       return { success: true, ...usage }
     } catch (e) {
       return { success: false, error: e instanceof Error ? e.message : String(e) }

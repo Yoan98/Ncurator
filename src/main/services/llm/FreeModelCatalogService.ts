@@ -3,6 +3,7 @@ import path from 'path'
 import { FREE_MODELS_CATALOG_URL } from '../../../shared/constants'
 import {
   FREE_MODEL_CATALOG_TTL_MS,
+  parseCatalogContextWindowTokens,
   type FreeModelCatalogEntry,
   type FreeModelsCatalogResponse,
   type FreeModelsSnapshot,
@@ -74,6 +75,7 @@ const parseEntry = (value: unknown): FreeModelCatalogEntry | null => {
     label,
     description,
     capabilities,
+    contextWindowTokens: parseCatalogContextWindowTokens(row.contextWindowTokens),
     iconUrl,
     baseUrl,
     apiKey
@@ -238,6 +240,12 @@ export class FreeModelCatalogService {
 
   listPublicModels(): FreeModelPublicEntry[] {
     return this.cache?.models.map(toFreeModelPublicEntry) || []
+  }
+
+  findEntryById(entryId: string): FreeModelCatalogEntry | null {
+    const id = String(entryId || '').trim()
+    if (!id) return null
+    return this.cache?.models.find((item) => item.id === id) || null
   }
 
   async resolveRuntimeConfig(

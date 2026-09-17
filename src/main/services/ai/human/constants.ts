@@ -24,21 +24,25 @@ export const HUMAN_STEP_RESULT_STATUSES = ['ok', 'error'] as const
 
 export const HUMAN_MAX_ACTIVE_TOOLS = 25
 export const HUMAN_GRAPH_RECURSION_LIMIT = 400
-// 默认 256k 窗口；触发线为窗口的 80%；tail 为触发线的 10%。
 export const DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS = 256_000
-export const CONTEXT_COMPACTION_TRIGGER_RATIO = 0.8
+export const CONTEXT_WINDOW_UTILIZATION_RATIO = 0.8
 export const CONTEXT_COMPACTION_TAIL_RATIO = 0.1
 export const HUMAN_ROUND_EXECUTION_KINDS = ['learning', 'hand'] as const
 
-export const resolveContextWindowTokens = (override?: number): number => {
+export const resolveModelContextTokens = (override?: number): number => {
   if (typeof override === 'number' && Number.isFinite(override) && override > 0) {
     return Math.floor(override)
   }
   return DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
 }
 
-export const resolveCompactionTriggerTokens = (windowTokens: number): number =>
-  Math.floor(windowTokens * CONTEXT_COMPACTION_TRIGGER_RATIO)
+export const resolveEffectiveContextWindowTokens = (modelContextTokens?: number): number => {
+  const modelContext = resolveModelContextTokens(modelContextTokens)
+  return Math.min(
+    DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
+    Math.floor(modelContext * CONTEXT_WINDOW_UTILIZATION_RATIO)
+  )
+}
 
-export const resolveCompactionTailTokens = (windowTokens: number): number =>
-  Math.floor(resolveCompactionTriggerTokens(windowTokens) * CONTEXT_COMPACTION_TAIL_RATIO)
+export const resolveCompactionTailTokens = (effectiveWindowTokens: number): number =>
+  Math.floor(effectiveWindowTokens * CONTEXT_COMPACTION_TAIL_RATIO)

@@ -1,108 +1,163 @@
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
-import os from 'node:os'
-import path from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  CdpEndpointService,
-  DEVTOOLS_ACTIVE_PORT_FILENAME,
-  parseDevToolsActivePort
-} from '../../../../src/main/services/browser/CdpEndpointService'
+import { EventEmitter } from 'node:events'
+import { afterEach, describe, expect, it } from 'vitest'
+import { CdpEndpointService, type CdpDebuggableContents } from '../../../../src/main/services/browser/CdpEndpointService'
 
-const tempDirectories: string[] = []
+class FakeDebugger extends EventEmitter {
+  public attached = false
+  public commands: Array<{ method: string; params: unknown; sessionId?: string }> = []
 
-const createTempDirectory = async (): Promise<string> => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), 'ncurator-cdp-test-'))
-  tempDirectories.push(directory)
-  return directory
+  public attach(): void {
+    this.attached = true
+  }
+
+  public detach(): void {
+    this.attached = false
+  }
+
+  public isAttached(): boolean {
+    return this.attached
+  }
+
+  public async sendCommand(method: string, params?: unknown, sessionId?: string): Promise<unknown> {
+    this.commands.push({ method, params, sessionId })
+    if (method === 'Runtime.evaluate') {
+      return { result: { type: 'string', value: 'ok' } }
+    }
+    return {}
+  }
 }
 
-const createVersionResponse = (port: number, browserPath: string): Response =>
-  new Response(
-    JSON.stringify({
-      webSocketDebuggerUrl: `ws://127.0.0.1:${String(port)}${browserPath}`
-    }),
-    { status: 200, headers: { 'content-type': 'application/json' } }
-  )
+class FakeContents extends EventEmitter {
+  public readonly debugger = new FakeDebugger()
+
+  public constructor(
+    public readonly id: number,
+    public url = 'https://example.com/',
+    public title = 'Example'
+  ) {
+    super()
+  }
+
+  public isDestroyed(): boolean {
+    return false
+  }
+
+  public getURL(): string {
+    return this.url
+  }
+
+  public getTitle(): string {
+    return this.title
+  }
+}
+
+const services: CdpEndpointService[] = []
+
+const createService = (): CdpEndpointService => {
+  const service = new CdpEndpointService()
+  services.push(service)
+  return service
+}
 
 afterEach(async () => {
-  await Promise.all(
-    tempDirectories.splice(0).map((directory) => rm(directory, { recursive: true, force: true }))
-  )
+  await Promise.all(services.splice(0).map((service) => service.dispose()))
 })
 
-describe('CdpEndpointService', () => {
-  it('parses Chromium DevToolsActivePort content', () => {
-    expect(parseDevToolsActivePort('43125\n/devtools/browser/browser-id\n')).toEqual({
-      port: 43125,
-      browserPath: '/devtools/browser/browser-id'
-    })
+const sendCdp = async (
+  socket: WebSocket,
+  payload: Record<string, unknown>
+): Promise<Record<string, unknown>> => {
+  const id = payload.id
+  return await new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`CDP timeout for ${String(payload.method)}`)), 3_000)
+    const onMessage = (event: MessageEvent): void => {
+      const message = JSON.parse(String(event.data)) as Record<string, unknown>
+      if (message.id !== id) return
+      clearTimeout(timer)
+      socket.removeEventListener('message', onMessage)
+      if (message.error) {
+        reject(new Error(String((message.error as { message?: string }).message || 'cdp error')))
+        return
+      }
+      resolve((message.result as Record<string, unknown>) || {})
+    }
+    socket.addEventListener('message', onMessage)
+    socket.send(JSON.stringify(payload))
+  })
+}
+
+describe('CdpEndpointService bridge', () => {
+  it('registers a WebContents into /json/list and removes it on unregister', async () => {
+    const service = createService()
+    const contents = new FakeContents(11, 'https://example.com/page', 'Demo') as unknown as CdpDebuggableContents
+    const targetId = service.registerTarget(contents)
+    const endpoint = await service.getEndpoint()
+
+    expect(endpoint.browserWebSocketUrl.startsWith('ws://127.0.0.1:')).toBe(true)
+    expect(endpoint.httpOrigin.startsWith('http://127.0.0.1:')).toBe(true)
+
+    const listed = await (await fetch(`${endpoint.httpOrigin}/json/list`)).json()
+    expect(listed).toEqual([
+      expect.objectContaining({
+        id: targetId,
+        title: 'Demo',
+        type: 'page',
+        url: 'https://example.com/page'
+      })
+    ])
+
+    const version = (await (await fetch(`${endpoint.httpOrigin}/json/version`)).json()) as {
+      webSocketDebuggerUrl: string
+    }
+    expect(version.webSocketDebuggerUrl).toBe(endpoint.browserWebSocketUrl)
+
+    service.unregisterTarget(targetId)
+    const empty = await (await fetch(`${endpoint.httpOrigin}/json/list`)).json()
+    expect(empty).toEqual([])
   })
 
-  it.each([
-    '',
-    '0\n/devtools/browser/id',
-    '70000\n/devtools/browser/id',
-    '9333\n/devtools/page/id'
-  ])('rejects malformed DevToolsActivePort content: %s', (content) => {
-    expect(() => parseDevToolsActivePort(content)).toThrow()
-  })
-
-  it('waits for the endpoint, validates it and caches the result', async () => {
-    const directory = await createTempDirectory()
-    const browserPath = '/devtools/browser/dynamic-id'
-    const fetchImpl = vi.fn(async () =>
-      createVersionResponse(43125, browserPath)
-    ) as unknown as typeof fetch
-    const service = new CdpEndpointService({
-      userDataPath: directory,
-      timeoutMs: 500,
-      pollIntervalMs: 5,
-      fetchImpl
+  it('forwards page CDP commands through the attached debugger session', async () => {
+    const service = createService()
+    const contents = new FakeContents(12, 'https://example.com/act', 'Act') as unknown as CdpDebuggableContents
+    const targetId = service.registerTarget(contents)
+    const endpoint = await service.getEndpoint()
+    const socket = new WebSocket(endpoint.browserWebSocketUrl)
+    await new Promise<void>((resolve, reject) => {
+      socket.addEventListener('open', () => resolve())
+      socket.addEventListener('error', () => reject(new Error('websocket error')))
     })
 
-    setTimeout(() => {
-      void writeFile(
-        path.join(directory, DEVTOOLS_ACTIVE_PORT_FILENAME),
-        `43125\n${browserPath}\n`,
-        'utf8'
-      )
-    }, 20)
-
-    const first = await service.getEndpoint()
-    const second = await service.getEndpoint()
-
-    expect(first).toEqual({
-      port: 43125,
-      httpOrigin: 'http://127.0.0.1:43125',
-      browserWebSocketUrl: 'ws://127.0.0.1:43125/devtools/browser/dynamic-id'
+    await sendCdp(socket, {
+      id: 1,
+      method: 'Target.setAutoAttach',
+      params: { autoAttach: true, flatten: true, waitForDebuggerOnStart: true }
     })
-    expect(second).toBe(first)
-    expect(fetchImpl).toHaveBeenCalledOnce()
-  })
+    const targets = await sendCdp(socket, { id: 2, method: 'Target.getTargets', params: {} })
+    const infos = targets.targetInfos as Array<{ targetId: string; attached: boolean }>
+    expect(infos).toEqual([expect.objectContaining({ targetId, attached: true })])
 
-  it('rejects a CDP endpoint that reports a non-loopback WebSocket URL', async () => {
-    const directory = await createTempDirectory()
-    await writeFile(
-      path.join(directory, DEVTOOLS_ACTIVE_PORT_FILENAME),
-      '43125\n/devtools/browser/dynamic-id\n',
-      'utf8'
+    const attached = await sendCdp(socket, {
+      id: 3,
+      method: 'Target.attachToTarget',
+      params: { targetId, flatten: true }
+    })
+    const sessionId = String(attached.sessionId || '')
+    expect(sessionId.length).toBeGreaterThan(0)
+
+    const evaluated = await sendCdp(socket, {
+      id: 4,
+      method: 'Runtime.evaluate',
+      sessionId,
+      params: { expression: '1+1' }
+    })
+    expect(evaluated).toEqual({ result: { type: 'string', value: 'ok' } })
+    expect((contents as unknown as FakeContents).debugger.attached).toBe(true)
+    expect((contents as unknown as FakeContents).debugger.commands.some((item) => item.method === 'Runtime.evaluate')).toBe(
+      true
     )
-    const fetchImpl = vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({
-            webSocketDebuggerUrl: 'ws://192.168.1.20:43125/devtools/browser/dynamic-id'
-          }),
-          { status: 200, headers: { 'content-type': 'application/json' } }
-        )
-    ) as unknown as typeof fetch
-    const service = new CdpEndpointService({
-      userDataPath: directory,
-      timeoutMs: 20,
-      pollIntervalMs: 1,
-      fetchImpl
-    })
 
-    await expect(service.getEndpoint()).rejects.toThrow('embedded_browser_cdp_unavailable')
+    socket.close()
+    service.unregisterTarget(targetId)
+    expect((contents as unknown as FakeContents).debugger.attached).toBe(false)
   })
 })

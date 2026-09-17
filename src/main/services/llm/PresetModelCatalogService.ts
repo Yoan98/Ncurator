@@ -5,6 +5,7 @@ import {
   PRESET_MODEL_CATALOG_TTL_MS,
   emptyPresetModelsSnapshot,
   mergePresetCatalogProviders,
+  type LlmPresetModel,
   type LlmPresetProvider,
   type PresetCatalogModelPayload,
   type PresetCatalogProviderPayload,
@@ -12,6 +13,7 @@ import {
   type PresetModelsSnapshot,
   isLlmPresetProviderId
 } from '../../../shared/llmPresets'
+import { parseCatalogContextWindowTokens } from '../../../shared/freeModels'
 import { cacheModelIcons, resolveCachedIconUrls } from './modelIconCache'
 import { getUserDataPath } from '../../utils/paths'
 
@@ -48,7 +50,8 @@ const parseRemoteModel = (value: unknown): PresetCatalogModelPayload | null => {
     iconUrl,
     priceTier,
     description: typeof row.description === 'string' ? row.description.trim() : '',
-    capabilities
+    capabilities,
+    contextWindowTokens: parseCatalogContextWindowTokens(row.contextWindowTokens)
   }
 }
 
@@ -239,5 +242,15 @@ export class PresetModelCatalogService {
     } finally {
       this.refreshPromise = null
     }
+  }
+
+  findModelById(modelId: string): LlmPresetModel | null {
+    const id = String(modelId || '').trim()
+    if (!id) return null
+    for (const provider of this.cache?.providers || []) {
+      const model = provider.models.find((item) => item.id === id)
+      if (model) return model
+    }
+    return null
   }
 }

@@ -401,10 +401,7 @@ describe('ai tool web backend', () => {
         const webCrawlerService = await createWebCrawlerService()
         try {
           const harness = createWebToolHarness(runtime, {
-            webCrawlerService,
-            humanRuntimeOverrides: {
-              modelContextWindowTokens: 20
-            }
+            webCrawlerService
           })
           return await harness.invoke<WebSearchFetchPayload>('web_search', {
             type: 'fetch',

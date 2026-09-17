@@ -584,19 +584,24 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 
 ### 5.1 触发
 
-`context_budget` 节点判定（默认窗口 256k token）：
+`context_budget` 节点判定。有效窗口：
 
-- 预算 > 窗口 × **80%**（`CONTEXT_COMPACTION_TRIGGER_RATIO`）。没到线不压。有真实 brain usage 时用 `usage + delta`；compaction 后需等下一轮真实 usage（`post_compaction`）。
+```text
+modelContext = 免费/推荐目录 contextWindowTokens | 缺失/自定义 → 256_000
+effectiveWindow = min(256_000, floor(modelContext × 0.8))
+```
+
+- 预算 > **effectiveWindow** 才压。没到线不压。有真实 brain usage 时用 `usage + delta`；compaction 后需等下一轮真实 usage（`post_compaction`）。
 - 去掉从末尾留下的 tail 之后，还剩更早的原文可折。folded 里若只有 Compact User、没有别的原文，视为不可折，避免空转。
-- 仅当前 build user 自身超窗 → `input_too_long`，不 compaction、不写 log user。
-- 无 LLM usage 时 brain 发 `run_warning`（`code: llm_usage_unavailable`），预算改用消息 token estimate；estimate 超触发线且有可折历史时仍可 compaction。
+- 仅当前 build user 自身超 **effectiveWindow** → `input_too_long`，不 compaction、不写 log user。
+- 无 LLM usage 时 brain 发 `run_warning`（`code: llm_usage_unavailable`），预算改用消息 token estimate；estimate 超 effectiveWindow 且有可折历史时仍可 compaction。
 - 去掉 tail 后没有可折内容，或单组已大于 keep 且前面没有可折跨度 → 不压。
 
 ### 5.2 Tail 切点
 
 只认伙伴 log。可见行：`seq > historyFloorSeq` 且 `kind` 为 `user | assistant | tool`。已压进 checkpoint 的原文不再进压缩模型。按 **组**（一条 `user` 一组，或一条 `assistant` 带上紧随的 `tool`，含挂在 tool 上的图）从末尾往回累加 token；一条 `tool` 若带 `images[]`，按「ToolMessage + 图片 Human」估，与 `messagesFromLogEntries` 一致。
 
-- 额度：`floor(触发线 × 10%)`（`CONTEXT_COMPACTION_TAIL_RATIO`）。生产窗口 256k 时触发 204_800、tail 20_480。测试 / live 只 override 窗口，tail 由同一比例算出。历史压缩无上限。
+- 额度：`floor(effectiveWindow × 10%)`（`CONTEXT_COMPACTION_TAIL_RATIO`）。默认 `modelContext=256k` 时 effectiveWindow 204_800、tail 20_480。测试 / live 只 override `modelContextWindowTokens`（真实窗），effective 与 tail 由同一公式算出。历史压缩无上限。
 - 真 User = `kind === 'user'`。图片不是 log 行，Compact User 不是 log 行，都不能当切点。碰到 User **不停**（整组可留在 tail）。
 - 切断必须落在完整组上，禁止拆开一对 tool_call / result。单轮自己大于 keep 时允许切在轮中间（split）。
 - 刀落在 `user`：只做历史压缩（该 user 起为 tail）。刀落在 `assistant|tool`：往前最近 `user` 到刀 = 当前轮压缩；再往前 = 历史压缩。

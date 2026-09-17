@@ -58,6 +58,9 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
   const [address, setAddress] = useState('')
   const [error, setError] = useState('')
   const [menuOpen, setMenuOpen] = useState(false)
+  const [progress, setProgress] = useState(0)
+  const [progressVisible, setProgressVisible] = useState(false)
+  const progressShownRef = useRef(false)
 
   const applyState = useCallback(
     (next: BrowserTabState): void => {
@@ -79,6 +82,29 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
       unsubscribe()
     }
   }, [applyState, tabId])
+
+  useEffect(() => {
+    if (state.isLoading) {
+      progressShownRef.current = true
+      setProgressVisible(true)
+      setProgress((current) => (current < 12 ? 12 : current))
+      const timer = window.setInterval(() => {
+        setProgress((current) => {
+          if (current >= 85) return 85
+          return current + Math.max(0.6, (85 - current) * 0.08)
+        })
+      }, 200)
+      return () => window.clearInterval(timer)
+    }
+    if (!progressShownRef.current) return
+    setProgress(100)
+    const hide = window.setTimeout(() => {
+      progressShownRef.current = false
+      setProgressVisible(false)
+      setProgress(0)
+    }, 220)
+    return () => window.clearTimeout(hide)
+  }, [state.isLoading])
 
   useEffect(() => {
     if (!presentationEnabled) return
@@ -185,7 +211,7 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
       className="flex h-full min-h-0 flex-col bg-white"
       data-testid={workbenchSelectors.browserPanel}
     >
-      <div className="flex h-11 shrink-0 items-center gap-1 border-b border-[#EEEEEC] px-2">
+      <div className="relative flex h-11 shrink-0 items-center gap-1 border-b border-[#EEEEEC] px-2">
         <Tooltip title="后退">
           <button
             type="button"
@@ -290,6 +316,19 @@ const WorkbenchBrowserPanel: React.FC<WorkbenchBrowserPanelProps> = ({
         >
           <HiEllipsisVertical className="h-4 w-4" />
         </button>
+        <div
+          className="pointer-events-none absolute right-0 bottom-0 left-0 h-[2px] overflow-hidden"
+          aria-hidden={!progressVisible}
+        >
+          <div
+            data-testid={workbenchSelectors.browserProgress}
+            className="h-full bg-[#1a73e8] transition-[width,opacity] duration-150 ease-linear"
+            style={{
+              width: `${progress}%`,
+              opacity: progressVisible ? 1 : 0
+            }}
+          />
+        </div>
       </div>
       {error ? (
         <div className="shrink-0 border-b border-[#E7CAC6] px-3 py-1.5 text-xs text-[#B3261E]">

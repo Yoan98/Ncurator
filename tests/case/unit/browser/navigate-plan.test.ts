@@ -3,11 +3,13 @@ import {
   BLANK_PAGE_ERROR,
   formatNavigateNetError,
   isBlankDocument,
+  isAbortedNetError,
   isHttpsFallbackWorthy,
   isInternalBrowserErrorUrl,
   isNetErrorDocument,
   parseNavigatePlan,
-  parseNetErrorCode
+  parseNetErrorCode,
+  shouldPaintEmbeddedNetError
 } from '../../../../src/main/services/browser/navigatePlan'
 
 describe('navigatePlan', () => {
@@ -75,6 +77,46 @@ describe('navigatePlan', () => {
         bodyText: 'ERR_CONNECTION_REFUSED 重新加载'
       })
     ).toBe(true)
+  })
+
+  it('paints an embedded error page only for main-frame failures that are not aborted and cannot fall back', () => {
+    expect(
+      shouldPaintEmbeddedNetError({
+        isMainFrame: true,
+        errorCode: -100,
+        description: 'ERR_CONNECTION_CLOSED',
+        canFallbackToHttp: false
+      })
+    ).toBe(true)
+    expect(
+      shouldPaintEmbeddedNetError({
+        isMainFrame: true,
+        errorCode: -100,
+        description: 'ERR_CONNECTION_CLOSED',
+        canFallbackToHttp: true
+      })
+    ).toBe(false)
+    expect(
+      shouldPaintEmbeddedNetError({
+        isMainFrame: true,
+        errorCode: -3,
+        description: 'ERR_ABORTED',
+        canFallbackToHttp: false
+      })
+    ).toBe(false)
+    expect(
+      shouldPaintEmbeddedNetError({
+        isMainFrame: false,
+        errorCode: -102,
+        description: 'ERR_CONNECTION_REFUSED',
+        canFallbackToHttp: false
+      })
+    ).toBe(false)
+  })
+
+  it('maps numeric net error codes', () => {
+    expect(parseNetErrorCode(-102)).toBe('ERR_CONNECTION_REFUSED')
+    expect(isAbortedNetError(-3, 'net::ERR_ABORTED')).toBe(true)
   })
 
   it('formats net errors for the model', () => {

@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import { CONTEXT_WINDOW_UTILIZATION_RATIO } from '../../../../../src/main/services/ai/human/constants'
 import type { AiLlmIoRecord, AiRunEvent } from '../../../../../src/shared/types'
 import { loadLiveLlmConfigFromEnv } from '../../../../harness/backend/llmConfig'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
@@ -23,7 +24,10 @@ import {
 } from '../testUtils'
 
 const PARTNER_ID = 'live-context-compaction'
-const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = 60_000
+const LIVE_COMPACTION_TRIGGER_TOKENS = 45_000
+const LIVE_CONTEXT_COMPACTION_WINDOW_TOKENS = Math.ceil(
+  LIVE_COMPACTION_TRIGGER_TOKENS / CONTEXT_WINDOW_UTILIZATION_RATIO
+)
 
 const REQUIRED_COMPACTION_HEADINGS = [
   '## 目标',
@@ -152,7 +156,7 @@ const collectRunCompaction = (input: {
         (event) =>
           event.decision === 'compact' &&
           event.snapshot.basis === 'usage_plus_delta' &&
-          event.snapshot.budgetTokens > event.snapshot.compactionTriggerTokens
+          event.snapshot.budgetTokens > event.snapshot.contextWindowTokens
       )
   }
 }

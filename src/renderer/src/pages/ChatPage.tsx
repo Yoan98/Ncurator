@@ -2052,7 +2052,7 @@ const ChatPage: React.FC = () => {
       const response = await window.api.aiContextUsageGet({ partnerId })
       if (!response.success) return
       setContextUsage({
-        contextWindowTokens: response.contextWindowTokens || 200000,
+        contextWindowTokens: response.contextWindowTokens || 0,
         usedContextTokens: response.usedContextTokens || 0,
         ratio: response.ratio || 0,
         updatedAt: response.updatedAt || Date.now()

@@ -6,7 +6,7 @@ import type {
   ContextCompactionCut
 } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
-import { resolveCompactionTailTokens, resolveContextWindowTokens } from '../../constants'
+import { resolveCompactionTailTokens, resolveEffectiveContextWindowTokens } from '../../constants'
 import {
   buildHistoryCompactionPrompt,
   buildTurnPrefixCompactionPrompt,
@@ -118,7 +118,7 @@ export const createContextCompactionNode = (input: {
     input.cache.currentState = state
 
     const retainTokens = resolveCompactionTailTokens(
-      resolveContextWindowTokens(input.ctx.humanRuntimeOverrides?.modelContextWindowTokens)
+      resolveEffectiveContextWindowTokens(input.ctx.humanRuntimeOverrides?.modelContextWindowTokens)
     )
     const currentRecords = await input.ctx.loadMessageLog()
     if (!hasCompressibleCompactionHistory(currentRecords, retainTokens)) {
@@ -147,7 +147,7 @@ export const createContextCompactionNode = (input: {
       taskId: state.task.taskId,
       targetMessageCount: folded.length,
       budgetTokensBefore,
-      thresholdTokens: state.execution.contextBudget?.compactionTriggerTokens || 0,
+      thresholdTokens: state.execution.contextBudget?.contextWindowTokens || 0,
       createdAt: Date.now(),
       stage: 'human_brain',
       ...cut

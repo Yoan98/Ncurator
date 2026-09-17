@@ -60,7 +60,7 @@ describe('workbench browser navigate e2e', () => {
         suite: 'run',
         groups: ['browser'],
         description:
-          '本地 HTTP 页验证未写协议时 https 回退 http、明确 https 停在系统错误页，以及 AI navigate 成功/失败都带回 tabId。',
+          '本地 HTTP 页验证未写协议时 https 回退 http、明确 https 停在馆长统一错误页，加载中可见地址栏底线，以及 AI navigate 成功/失败都带回 tabId。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'exclusive',
@@ -175,6 +175,28 @@ describe('workbench browser navigate e2e', () => {
 
           await addressInput.fill(bareHost)
           await addressInput.press('Enter')
+          const progress = browserPanel.locator(`[data-testid="${workbenchSelectors.browserProgress}"]`)
+          const progressDeadline = Date.now() + 8_000
+          let sawProgress = false
+          while (Date.now() < progressDeadline) {
+            const visible = await progress
+              .evaluate((element) => {
+                if (!(element instanceof HTMLElement)) return false
+                return (
+                  Number.parseFloat(element.style.opacity || '0') > 0 &&
+                  element.getBoundingClientRect().width > 2
+                )
+              })
+              .catch(() => false)
+            if (visible) {
+              sawProgress = true
+              break
+            }
+            await page.waitForTimeout(50)
+          }
+          if (!sawProgress) {
+            throw new Error('address bar progress line did not appear while loading')
+          }
           const userFallbackDeadline = Date.now() + 35_000
           let userSnapshot: EmbeddedSnapshot | null = null
           while (Date.now() < userFallbackDeadline) {
@@ -200,7 +222,7 @@ describe('workbench browser navigate e2e', () => {
           runtime.signal({
             name: 'browser-navigate-user-fallback',
             message: '地址栏裸主机已回退到 http 并出现口令',
-            data: { url: userState.url, title: userSnapshot.title }
+            data: { url: userState.url, title: userSnapshot.title, sawProgress }
           })
 
           const ownerId = userState.ownerId
@@ -268,11 +290,9 @@ describe('workbench browser navigate e2e', () => {
             const errorText = `${snapshot?.title || ''} ${snapshot?.bodyText || ''}`
             if (
               snapshot &&
-              (snapshot.url.startsWith('chrome-error://') ||
-                /无法访问|ERR_|can.?t be reached|took too long to respond/iu.test(errorText) ||
-                (snapshot.url.startsWith('https://') &&
-                  snapshot.darkRatio > 0.006 &&
-                  !snapshot.bodyText.includes(PAGE_TOKEN)))
+              snapshot.title.includes('无法访问此网站') &&
+              /ERR_[A-Z0-9_]+/u.test(snapshot.bodyText) &&
+              errorText.includes('重新加载')
             ) {
               errorSnapshot = snapshot
               break
@@ -282,7 +302,7 @@ describe('workbench browser navigate e2e', () => {
           if (!errorSnapshot) {
             const last = await inspectEmbedded(userSnapshot.id)
             throw new Error(
-              `expected Chromium error page, got url=${last?.url || '(none)'} title=${last?.title || ''} body=${(last?.bodyText || '').slice(0, 200)} dark=${String(last?.darkRatio ?? 0)} white=${String(last?.whiteRatio ?? 1)}`
+              `expected embedded 无法访问此网站 error page, got url=${last?.url || '(none)'} title=${last?.title || ''} body=${(last?.bodyText || '').slice(0, 200)}`
             )
           }
           runtime.signal({
@@ -302,6 +322,7 @@ describe('workbench browser navigate e2e', () => {
             failError: aiHttpsFail.error,
             failTabId: aiHttpsFail.tabId || '',
             failAddress: failState.url,
+            sawProgress,
             errorText: `${errorSnapshot.title} ${errorSnapshot.bodyText}`
           }
         },
@@ -315,7 +336,9 @@ describe('workbench browser navigate e2e', () => {
               result.failTabId.length > 0 &&
               result.failAddress.startsWith('https://') &&
               !result.failAddress.includes('chrome-error://') &&
-              /无法访问|ERR_/u.test(result.errorText),
+              result.sawProgress &&
+              result.errorText.includes('无法访问此网站') &&
+              /ERR_[A-Z0-9_]+/u.test(result.errorText),
             {
               name: 'browser-navigate-scheme-fallback',
               message: '裸主机 https→http 回退，明确 https 失败露出错误页并返回同一 tabId',

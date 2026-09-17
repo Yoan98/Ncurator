@@ -294,9 +294,7 @@ describe('ai tool pdf backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const sourcePath = runtime.getFixtureWorkspacePath(PDF_FIXTURE)
-        const harness = createPdfToolHarness(runtime, {
-          humanRuntimeOverrides: { modelContextWindowTokens: 100 }
-        })
+        const harness = createPdfToolHarness(runtime)
         try {
           return await harness.invoke<PdfFailure>('pdf_read_pages', {
             sourcePath,

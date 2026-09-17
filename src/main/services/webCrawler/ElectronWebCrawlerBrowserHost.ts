@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { BrowserWindow, WebContentsView, type WebContents } from 'electron'
-import type { CdpEndpointService } from '../browser/CdpEndpointService'
+import type { CdpDebuggableContents, CdpEndpointService } from '../browser/CdpEndpointService'
 
 export type WebCrawlerCdpConnection = {
   browserWebSocketUrl: string
@@ -59,6 +59,7 @@ export class ElectronWebCrawlerBrowserHost {
   private view: WebContentsView | null = null
   private hostWindow: BrowserWindow | null = null
   private connectionPromise: Promise<WebCrawlerCdpConnection> | null = null
+  private registeredTargetId: string | null = null
   private closed = false
 
   public constructor(private readonly cdpEndpointService: CdpEndpointService) {}
@@ -127,6 +128,9 @@ export class ElectronWebCrawlerBrowserHost {
     hostWindow.contentView.addChildView(view)
     view.setBounds(WEB_CRAWLER_HOST_VIEW_BOUNDS)
     await waitForWebContentsLoad(view.webContents, contextMarkerUrl)
+    this.registeredTargetId = this.cdpEndpointService.registerTarget(
+      view.webContents as CdpDebuggableContents
+    )
     const endpoint = await this.cdpEndpointService.getEndpoint()
     if (this.closed) {
       throw new Error('Electron web crawler browser host is closed')
@@ -138,6 +142,10 @@ export class ElectronWebCrawlerBrowserHost {
   }
 
   private closeView(): void {
+    if (this.registeredTargetId) {
+      this.cdpEndpointService.unregisterTarget(this.registeredTargetId)
+      this.registeredTargetId = null
+    }
     const view = this.view
     this.view = null
     if (view && !view.webContents.isDestroyed()) {

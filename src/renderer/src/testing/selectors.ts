@@ -253,6 +253,7 @@ export const workbenchSelectors = {
   browserPanel: 'workbench-browser-panel',
   browserViewport: 'workbench-browser-viewport',
   browserMenu: 'workbench-browser-menu',
+  browserProgress: 'workbench-browser-progress',
   browserOpenExternal: 'workbench-browser-open-external',
   browserZoomControls: 'workbench-browser-zoom-controls',
   timeline: 'workbench-timeline',

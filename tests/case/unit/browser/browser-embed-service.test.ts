@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { BrowserEmbedService } from '../../../../src/main/services/browser/BrowserEmbedService'
 import { BROWSER_CURSOR_OVERLAY_ID } from '../../../../src/main/services/browser/BrowserActionVisualizer'
 import { AiRunResourceManager } from '../../../../src/main/services/ai/run/AiRunResourceManager'
-import type { BrowserTabStateStore, PersistedBrowserTabState } from '../../../../src/main/services/storage/domains/BrowserTabStateStore'
+import type { BrowserTabStateStore } from '../../../../src/main/services/storage/domains/BrowserTabStateStore'
 import type { CdpEndpointService } from '../../../../src/main/services/browser/CdpEndpointService'
 
 const createMockStateStore = (): BrowserTabStateStore => ({
@@ -13,14 +13,18 @@ const createMockStateStore = (): BrowserTabStateStore => ({
   reassignOwner: vi.fn()
 })
 
-const createMockCdpEndpointService = (): CdpEndpointService => ({
-  getEndpoint: vi.fn().mockResolvedValue({
-    browserWebSocketUrl: 'ws://127.0.0.1:9222/devtools/browser/mock',
-    port: 9222,
-    browserPath: '/devtools/browser/mock'
-  }),
-  dispose: vi.fn()
-})
+const createMockCdpEndpointService = (): CdpEndpointService =>
+  ({
+    getEndpoint: vi.fn().mockResolvedValue({
+      browserWebSocketUrl: 'ws://127.0.0.1:9222/devtools/browser/mock',
+      port: 9222,
+      httpOrigin: 'http://127.0.0.1:9222'
+    }),
+    registerTarget: vi.fn().mockReturnValue('target-mock'),
+    unregisterTarget: vi.fn(),
+    unregisterContents: vi.fn(),
+    dispose: vi.fn()
+  }) as unknown as CdpEndpointService
 
 const createMockMainWindow = () =>
   ({
@@ -40,7 +44,7 @@ describe('BrowserEmbedService - Run Lifecycle & Cursor Retention', () => {
     const cdpService = createMockCdpEndpointService()
     const mockMainWindow = createMockMainWindow()
 
-    const service = new BrowserEmbedService(mockMainWindow, stateStore, cdpService)
+    const service = new BrowserEmbedService(mockMainWindow, cdpService, stateStore)
 
     const executeJsMock = vi.fn().mockResolvedValue(undefined)
     const tabRuntime = {
@@ -82,7 +86,7 @@ describe('BrowserEmbedService - Run Lifecycle & Cursor Retention', () => {
     const cdpService = createMockCdpEndpointService()
     const mockMainWindow = createMockMainWindow()
 
-    const service = new BrowserEmbedService(mockMainWindow, stateStore, cdpService)
+    const service = new BrowserEmbedService(mockMainWindow, cdpService, stateStore)
     const executeJsMock = vi.fn().mockResolvedValue(undefined)
 
     const tabRuntime = {

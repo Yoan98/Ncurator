@@ -1,14 +1,14 @@
 import type { ChatMessageLogStore } from '../storage/domains/ChatMessageLogStore'
-import {
-  DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS,
-  resolveCompactionTriggerTokens
-} from './human/constants'
+import type { WorkbenchUiStore } from '../storage/domains/WorkbenchUiStore'
+import { resolveEffectiveContextWindowTokens } from './human/constants'
 import { projectMessageLogRecords } from './human/memory/transcript'
 import { estimateMessagesForContext } from './human/memory/multimodal'
+import { lookupCatalogModelContextTokens } from './modelContextWindow'
 
 export const getAiContextUsage = async (input: {
   partnerId: string
   chatMessageLogStore: ChatMessageLogStore
+  workbenchUiStore: WorkbenchUiStore
 }): Promise<{
   contextWindowTokens: number
   usedContextTokens: number
@@ -18,7 +18,10 @@ export const getAiContextUsage = async (input: {
   const records = await input.chatMessageLogStore.list(input.partnerId)
   const messages = projectMessageLogRecords(records).messages
   const usedContextTokens = estimateMessagesForContext(messages)
-  const contextWindowTokens = DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS
+  const partnerState = await input.workbenchUiStore.getPartnerState(input.partnerId)
+  const contextWindowTokens = resolveEffectiveContextWindowTokens(
+    lookupCatalogModelContextTokens(partnerState?.composer.modelSelection.mainModel)
+  )
   return {
     contextWindowTokens,
     usedContextTokens,
@@ -26,6 +29,3 @@ export const getAiContextUsage = async (input: {
     updatedAt: Date.now()
   }
 }
-
-export const getContextCompactionTriggerTokens = (): number =>
-  resolveCompactionTriggerTokens(DEFAULT_MODEL_CONTEXT_WINDOW_TOKENS)

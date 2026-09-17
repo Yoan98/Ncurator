@@ -3,8 +3,7 @@ import type { BrainContextBudgetSnapshot } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import {
   resolveCompactionTailTokens,
-  resolveCompactionTriggerTokens,
-  resolveContextWindowTokens
+  resolveEffectiveContextWindowTokens
 } from '../../constants'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { hasCompressibleCompactionHistory } from '../../memory/compactionSplit'
@@ -16,7 +15,6 @@ import { LlmInputTooLongError } from '../../../errors'
 const buildBudgetSnapshot = (input: {
   cache: HumanRuntimeCache
   contextWindowTokens: number
-  compactionTriggerTokens: number
   hasCompressibleHistory: boolean
   currentMessageTokenEstimate: number
 }): BrainContextBudgetSnapshot => {
@@ -26,7 +24,6 @@ const buildBudgetSnapshot = (input: {
       basis: 'post_compaction' as const,
       budgetTokens: input.currentMessageTokenEstimate,
       contextWindowTokens: input.contextWindowTokens,
-      compactionTriggerTokens: input.compactionTriggerTokens,
       hasCompressibleHistory: input.hasCompressibleHistory,
       usageAvailable: true
     }
@@ -42,7 +39,6 @@ const buildBudgetSnapshot = (input: {
       basis,
       budgetTokens: input.currentMessageTokenEstimate,
       contextWindowTokens: input.contextWindowTokens,
-      compactionTriggerTokens: input.compactionTriggerTokens,
       hasCompressibleHistory: input.hasCompressibleHistory,
       usageAvailable: true
     }
@@ -57,7 +53,6 @@ const buildBudgetSnapshot = (input: {
     basis: 'usage_plus_delta' as const,
     budgetTokens: lastBrainInputTokens + deltaTokenEstimate,
     contextWindowTokens: input.contextWindowTokens,
-    compactionTriggerTokens: input.compactionTriggerTokens,
     hasCompressibleHistory: input.hasCompressibleHistory,
     usageAvailable: true,
     lastBrainInputTokens,
@@ -70,10 +65,9 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
     input.ctx.checkCancelled()
     input.cache.currentState = state
 
-    const contextWindowTokens = resolveContextWindowTokens(
+    const contextWindowTokens = resolveEffectiveContextWindowTokens(
       input.ctx.humanRuntimeOverrides?.modelContextWindowTokens
     )
-    const compactionTriggerTokens = resolveCompactionTriggerTokens(contextWindowTokens)
     const messages = input.cache.messages || []
     const retainTokens = resolveCompactionTailTokens(contextWindowTokens)
     const currentMessageTokenEstimate = estimateMessagesForContext(messages)
@@ -112,13 +106,12 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
     const contextBudgetSnapshot = buildBudgetSnapshot({
       cache: input.cache,
       contextWindowTokens,
-      compactionTriggerTokens,
       hasCompressibleHistory,
       currentMessageTokenEstimate
     })
     const shouldCompact =
       contextBudgetSnapshot.usageAvailable &&
-      contextBudgetSnapshot.budgetTokens > compactionTriggerTokens &&
+      contextBudgetSnapshot.budgetTokens > contextWindowTokens &&
       hasCompressibleHistory
     const createdAt = Date.now()
     const decision = shouldCompact ? 'compact' : 'continue'
