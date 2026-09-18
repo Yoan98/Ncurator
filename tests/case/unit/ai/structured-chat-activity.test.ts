@@ -83,7 +83,7 @@ describe('ai unit structured chat activity', () => {
   it('uses exponential backoff for provider capacity exhaustion', () => {
     const error = Object.assign(
       new Error('ResourceExhausted: Worker local total request limit reached (69/48)'),
-      { status: 503 }
+      { status: 503, code: 'resource_exhausted' }
     )
 
     expect([1, 2, 3, 4, 5].map((attempt) => classifyLlmCallRetry(error, attempt))).toEqual(

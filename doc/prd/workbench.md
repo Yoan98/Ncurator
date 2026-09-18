@@ -364,7 +364,7 @@
 
 #### WB-COMPOSER-015 LLM 自动重试过程层
 
-- 系统行为：Brain / LLM 调用层可重试错误（含 429 / rate limit）由 `classifyLlmRetry` 驱动 `runLlmCallWithActivity`；上限 `AI_LLM_CALL_MAX_RETRY_ATTEMPTS` 表示**首次失败后再试最多 5 次**。过程区以独立重试行展示，不并入 Activity。同一 run 只使用一个过程组 id（`${runId}:llm-retry`），次数在同一行就地更新（`正在重试 1/5` → `2/5`），不按 attempt 或后续 LLM 调用再叠多行。该行 running 时必须隐藏“让俺想想”。**该次调用重试成功后该行消失**，过程流继续（Thought / 工具 / 最终回答），不展示“已重试”。耗尽则收口为“重试失败 n/5”。429 / rate limit / ResourceExhausted 使用 2s 起、上限 15s 的指数退避。自动重试前清空上一尝试草稿仍见 `WB-COMPOSER-014-AC3`。
+- 系统行为：Brain / LLM 调用层可重试错误由 `classifyLlmRetry` 驱动 `runLlmCallWithActivity`，只认结构化信号：HTTP status、providerCode/type、以及连接类类型（`APIConnectionError` / `APIConnectionTimeoutError` / `TimeoutError`）。可重试含 408/429/5xx、限流/容量、断网连接错误、供应商连接超时、以及调用层 `TIMEOUT`。上限 `AI_LLM_CALL_MAX_RETRY_ATTEMPTS` 表示**首次失败后再试最多 5 次**。过程区以独立重试行展示，不并入 Activity。同一 run 只使用一个过程组 id（`${runId}:llm-retry`），次数在同一行就地更新（`正在重试 1/5` → `2/5`），不按 attempt 或后续 LLM 调用再叠多行。该行 running 时必须隐藏“让俺想想”。**该次调用重试成功后该行消失**，过程流继续（Thought / 工具 / 最终回答），不展示“已重试”。耗尽则收口为“重试失败 n/5”，失败码为 `llm_request_failed`。429 / rate_limit_exceeded / ResourceExhausted 使用 2s 起、上限 15s 的指数退避；连接错误与超时使用短退避。自动重试前清空上一尝试草稿仍见 `WB-COMPOSER-014-AC3`。
 - 验收：
   - `WB-COMPOSER-015-AC1` 第一次自动重试展示“正在重试 1/5”；同一调用后续 attempt 在同一行更新为 2/5 … 5/5，不新开一行。
   - `WB-COMPOSER-015-AC2` 同一 run 内后续 LLM 调用若再次进入自动重试，仍只保留这一行并就地更新，不得同时出现多条“正在重试 / 重试失败”。

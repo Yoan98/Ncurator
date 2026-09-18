@@ -87,7 +87,7 @@ describe('ai unit run failure catalog', () => {
     expect(failure.rawMessage).toContain('llm_call_timeout')
   })
 
-  it('maps AbortError and aborted transport errors to user_cancelled', () => {
+  it('maps AbortError and ModelAbortError to user_cancelled', () => {
     const abortError = new Error('This operation was aborted')
     abortError.name = 'AbortError'
     expect(classifyThrownErrorToAiRunFailure(abortError).failureCode).toBe('user_cancelled')
@@ -95,6 +95,38 @@ describe('ai unit run failure catalog', () => {
     const modelAbort = new Error('The user aborted a request')
     modelAbort.name = 'ModelAbortError'
     expect(classifyThrownErrorToAiRunFailure(modelAbort).failureCode).toBe('user_cancelled')
+  })
+
+  it('does not map aborted copy without cancel name or code to user_cancelled', () => {
+    const failure = classifyThrownErrorToAiRunFailure(new Error('aborted'))
+    expect(failure.failureCode).toBe('unexpected_error')
+    expect(failure.rawMessage).toBe('aborted')
+  })
+
+  it('maps SDK connection errors to llm_request_failed after provider wrap', () => {
+    class APIConnectionError extends Error {
+      constructor() {
+        super('Connection error.')
+        this.name = 'Error'
+      }
+    }
+    const failure = classifyThrownErrorToAiRunFailure(toProviderFailure(new APIConnectionError()))
+    expect(failure).toMatchObject({
+      failureCode: 'llm_request_failed',
+      message: '模型请求失败',
+      rawMessage: 'Connection error.'
+    })
+  })
+
+  it('maps TimeoutError to llm_request_failed after provider wrap', () => {
+    const timeout = new Error('Request timed out.')
+    timeout.name = 'TimeoutError'
+    const failure = classifyThrownErrorToAiRunFailure(toProviderFailure(timeout))
+    expect(failure).toMatchObject({
+      failureCode: 'llm_request_failed',
+      message: '模型请求失败',
+      rawMessage: 'Request timed out.'
+    })
   })
 
   it('createAiRunFailure embeds catalog title and optional rawMessage', () => {

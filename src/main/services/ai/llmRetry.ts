@@ -11,7 +11,7 @@ export type LlmRetryDecision = {
 }
 
 export const FATAL_STATUS_CODES = new Set([401, 402, 403])
-export const RETRYABLE_STATUS_CODES = new Set([408, 409, 425, 429, 500, 502, 503, 504])
+export const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504])
 export const FATAL_ERROR_CODES = new Set([
   'invalid_api_key',
   'insufficient_balance',
@@ -28,27 +28,42 @@ export const RETRYABLE_ERROR_CODES = new Set([
   'resource_exhausted'
 ])
 
+const TRANSPORT_CONSTRUCTOR_NAMES = new Set(['APIConnectionError', 'APIConnectionTimeoutError'])
+
 const normalizeSignal = (value: string | undefined): string | undefined => {
   if (!value) return undefined
   const normalized = value.trim()
   return normalized ? normalized.toLowerCase() : undefined
 }
 
-const isResourceExhaustedError = (error: unknown, extraText = ''): boolean => {
-  const message = `${error instanceof Error ? error.message : String(error || '')} ${extraText}`
-  return /resourceexhausted|worker local total request limit/i.test(message)
+const readCause = (error: unknown): unknown =>
+  error && typeof error === 'object' && 'cause' in error ? error.cause : undefined
+
+const readConstructorName = (error: unknown): string => {
+  if (!error || typeof error !== 'object') return ''
+  const name = (error as { constructor?: { name?: unknown } }).constructor?.name
+  return typeof name === 'string' ? name : ''
 }
 
-const isRateLimitOrCapacityError = (
-  error: unknown,
-  info: { status?: number; code?: string; rawText: string; message: string }
-): boolean => {
+const readErrorName = (error: unknown): string =>
+  error && typeof error === 'object' && 'name' in error ? String(error.name || '') : ''
+
+const isTransportErrorNode = (error: unknown): boolean => {
+  const constructorName = readConstructorName(error)
+  if (constructorName && TRANSPORT_CONSTRUCTOR_NAMES.has(constructorName)) return true
+  return readErrorName(error) === 'TimeoutError'
+}
+
+export const isLlmTransportError = (error: unknown): boolean =>
+  isTransportErrorNode(error) || isTransportErrorNode(readCause(error))
+
+const isRateLimitOrCapacityError = (info: {
+  status?: number
+  code?: string
+}): boolean => {
   if (info.status === 429) return true
   const normalizedCode = normalizeSignal(info.code)
-  if (normalizedCode === 'rate_limit_exceeded') return true
-  const body = `${info.rawText} ${info.message} ${error instanceof Error ? error.message : ''}`.toLowerCase()
-  if (body.includes('rate limit') || body.includes('too many requests')) return true
-  return isResourceExhaustedError(error, `${info.rawText} ${info.code} ${info.message}`)
+  return normalizedCode === 'rate_limit_exceeded' || normalizedCode === 'resource_exhausted'
 }
 
 const resolveCapacityBackoffDelay = (attempt: number): number =>
@@ -58,14 +73,10 @@ export const classifyLlmErrorKind = (error: unknown): LlmErrorClassification => 
   const info = normalizeStructuredOutputError(error)
   const normalizedCode = normalizeSignal(info.code)
   const normalizedType = normalizeSignal(info.type)
-  const body = info.rawText.toLowerCase()
 
   if (
     (info.status !== undefined && FATAL_STATUS_CODES.has(info.status)) ||
     (normalizedCode && FATAL_ERROR_CODES.has(normalizedCode)) ||
-    body.includes('insufficient balance') ||
-    body.includes('invalid api key') ||
-    body.includes('authentication failed') ||
     normalizedType === 'authentication_error'
   ) {
     return 'fatal'
@@ -74,11 +85,7 @@ export const classifyLlmErrorKind = (error: unknown): LlmErrorClassification => 
   if (
     (info.status !== undefined && RETRYABLE_STATUS_CODES.has(info.status)) ||
     (normalizedCode && RETRYABLE_ERROR_CODES.has(normalizedCode)) ||
-    body.includes('rate limit') ||
-    body.includes('temporarily unavailable') ||
-    body.includes('service unavailable') ||
-    body.includes('timed out') ||
-    body.includes('timeout')
+    isLlmTransportError(error)
   ) {
     return 'retryable'
   }
@@ -92,7 +99,6 @@ export const classifyLlmRetry = (
 ): LlmRetryDecision => {
   const info = normalizeStructuredOutputError(error)
   const message = info.message || 'unknown'
-  const body = `${info.rawText} ${error instanceof Error ? error.message : ''}`.toLowerCase()
 
   // Do not trust LlmProviderError.retryable; always reclassify from signals.
   if (isCancelledError(error)) {
@@ -103,16 +109,6 @@ export const classifyLlmRetry = (
     return { retryable: true, message }
   }
 
-  if (body.includes('structured_output_retryable') || body.includes('text_output_retryable')) {
-    return {
-      retryable: true,
-      message,
-      ...(isRateLimitOrCapacityError(error, info)
-        ? { delayMs: resolveCapacityBackoffDelay(attempt) }
-        : {})
-    }
-  }
-
   const kind = classifyLlmErrorKind(error)
   if (kind !== 'retryable') {
     return { retryable: false, message }
@@ -121,9 +117,7 @@ export const classifyLlmRetry = (
   return {
     retryable: true,
     message,
-    ...(isRateLimitOrCapacityError(error, info)
-      ? { delayMs: resolveCapacityBackoffDelay(attempt) }
-      : {})
+    ...(isRateLimitOrCapacityError(info) ? { delayMs: resolveCapacityBackoffDelay(attempt) } : {})
   }
 }
 

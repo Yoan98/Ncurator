@@ -87,10 +87,51 @@ describe('ai unit llm error classification', () => {
     ).toBe('retryable')
   })
 
-  it('classifies timeouts as retryable', () => {
+  it('classifies our call timeout via TIMEOUT code as retryable', () => {
     expect(classifyLlmError(Object.assign(new Error('llm_call_timeout'), { code: 'TIMEOUT' }))).toBe(
       'retryable'
     )
+  })
+
+  it('classifies SDK connection errors via constructor name as retryable', () => {
+    class APIConnectionError extends Error {
+      constructor() {
+        super('Connection error.')
+        this.name = 'Error'
+      }
+    }
+    const error = new APIConnectionError()
+    expect(classifyLlmError(error)).toBe('retryable')
+    expect(classifyLlmRetry(error).delayMs).toBeUndefined()
+  })
+
+  it('classifies wrapped SDK connection errors via cause as retryable', () => {
+    class APIConnectionError extends Error {
+      constructor() {
+        super('Connection error.')
+        this.name = 'Error'
+      }
+    }
+    expect(classifyLlmError(new Error('wrapper', { cause: new APIConnectionError() }))).toBe(
+      'retryable'
+    )
+  })
+
+  it('classifies LangChain TimeoutError name as retryable', () => {
+    const error = new Error('Request timed out.')
+    error.name = 'TimeoutError'
+    expect(classifyLlmError(error)).toBe('retryable')
+    expect(classifyLlmRetry(error).delayMs).toBeUndefined()
+  })
+
+  it('classifies unwrapped SDK connection timeout via constructor name as retryable', () => {
+    class APIConnectionTimeoutError extends Error {
+      constructor() {
+        super('Request timed out.')
+        this.name = 'Error'
+      }
+    }
+    expect(classifyLlmError(new APIConnectionTimeoutError())).toBe('retryable')
   })
 
   it('classifies unknown status errors as unknown', () => {
@@ -111,8 +152,23 @@ describe('ai unit llm error classification', () => {
     ).toBe('unknown')
   })
 
-  it('does not treat network socket errors as retryable without signals', () => {
+  it('does not treat connection or timeout copy as retryable without type signals', () => {
     expect(classifyLlmError(new Error('network socket disconnected unexpectedly'))).toBe('unknown')
+    expect(classifyLlmError(new Error('Connection error.'))).toBe('unknown')
+    expect(classifyLlmError(new Error('Request timed out.'))).toBe('unknown')
+  })
+
+  it('does not treat balance copy as fatal without status or provider code', () => {
+    expect(classifyLlmError(new Error('Insufficient Balance'))).toBe('unknown')
+  })
+
+  it('does not treat 409 as retryable', () => {
+    expect(
+      classifyLlmError({
+        status: 409,
+        response: { status: 409, data: { error: { message: 'conflict' } } }
+      })
+    ).toBe('unknown')
   })
 
   it('does not retry unknown or fatal errors via classifyLlmRetry', () => {
@@ -159,6 +215,16 @@ describe('ai unit llm error classification', () => {
     ])
   })
 
+  it('uses capacity backoff for resource_exhausted code', () => {
+    const error = Object.assign(new Error('ResourceExhausted'), {
+      status: 503,
+      code: 'resource_exhausted'
+    })
+    expect([1, 2, 3, 4, 5].map((attempt) => classifyLlmRetry(error, attempt).delayMs)).toEqual([
+      2_000, 4_000, 8_000, 15_000, 15_000
+    ])
+  })
+
   it('reclassifies LlmProviderError instead of trusting its retryable stamp', () => {
     const stampedRetryable = new LlmProviderError({
       message: 'Insufficient Balance',
@@ -196,7 +262,7 @@ describe('ai unit llm error classification', () => {
     ).toBe(true)
   })
 
-  it('does not retry AbortError or aborted transport errors', () => {
+  it('does not retry AbortError or ModelAbortError', () => {
     const abortError = new Error('This operation was aborted')
     abortError.name = 'AbortError'
     expect(classifyLlmRetry(abortError).retryable).toBe(false)
@@ -204,5 +270,10 @@ describe('ai unit llm error classification', () => {
     const modelAbort = new Error('aborted')
     modelAbort.name = 'ModelAbortError'
     expect(classifyLlmRetry(modelAbort).retryable).toBe(false)
+  })
+
+  it('does not treat aborted copy without cancel name or code as cancelled retry skip', () => {
+    expect(classifyLlmRetry(new Error('aborted')).retryable).toBe(false)
+    expect(classifyLlmError(new Error('aborted'))).toBe('unknown')
   })
 })

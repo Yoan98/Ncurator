@@ -18,7 +18,7 @@ import {
 } from '../events/processEvents'
 import { classifyThrownErrorToAiRunFailure, isCancelledError } from './runFailure'
 import { LlmProviderError, isLlmOutputError, isLlmProviderError } from '../errors'
-import { classifyLlmRetry } from '../llmRetry'
+import { classifyLlmRetry, isLlmTransportError } from '../llmRetry'
 import { normalizeStructuredOutputError } from '../structuredOutput'
 
 export type LlmCallStreamObserver = {
@@ -90,7 +90,7 @@ export const toProviderFailure = (error: unknown, retryable?: boolean): unknown 
   if (isLlmProviderError(error) || isLlmOutputError(error)) return error
   if (isCancelledError(error)) return error
   const info = normalizeStructuredOutputError(error)
-  if (!info.hasProviderSignal) return error
+  if (!info.hasProviderSignal && !isLlmTransportError(error)) return error
   // Stamp retryable from the classify result at throw time; later classifyLlmRetry re-parses signals.
   const decision = retryable === undefined ? classifyLlmRetry(error) : undefined
   return new LlmProviderError({

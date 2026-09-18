@@ -224,7 +224,7 @@ describe('ai unit llm executor text path', () => {
             throw new LlmProviderError({
               message: '503 ResourceExhausted: Worker local total request limit reached (48/48)',
               httpStatus: 503,
-              providerCode: 'service_unavailable',
+              providerCode: 'resource_exhausted',
               retryable: true
             })
           }

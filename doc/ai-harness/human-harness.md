@@ -912,10 +912,10 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 | 优先级 | 信号 | 判定 |
 |--------|------|------|
-| 1 | HTTP status | 401/402/403 → 不重试；408/429/5xx 等 → 可重试（有上限）；**429 / rate limit / ResourceExhausted 使用指数退避**（2s 起、上限 15s） |
-| 2 | providerCode / type | `insufficient_balance`、`quota_exceeded`、`invalid_api_key`… → 不重试；`rate_limit_exceeded`、`timeout`、`server_error`… → 可重试 |
-| 3 | 短文案白名单 | 弱补充 |
-| 4 | unknown | **不重试** |
+| 1 | HTTP status | 401/402/403 → 不重试；408/429/500/502/503/504 → 可重试（有上限）；**429 使用指数退避**（2s 起、上限 15s） |
+| 2 | providerCode / type | `insufficient_balance`、`quota_exceeded`、`invalid_api_key`、`authentication_error`… → 不重试；`rate_limit_exceeded`、`timeout`、`request_timeout`、`server_error`、`service_unavailable`、`resource_exhausted`… → 可重试；`rate_limit_exceeded` / `resource_exhausted` 使用同上指数退避 |
+| 3 | 类型信号 | `constructor.name` 为 `APIConnectionError` / `APIConnectionTimeoutError`，或 `error.name === 'TimeoutError'`（含一层 `cause`）→ 可重试、短退避 |
+| 4 | unknown | **不重试**；不匹配文案 |
 
 
 #### 告警（不停跑）
