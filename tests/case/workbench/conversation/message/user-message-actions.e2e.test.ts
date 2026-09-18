@@ -248,6 +248,7 @@ describe('workbench conversation e2e', () => {
           await copyButton.click()
           await waitForAntMessageText(page, '已复制')
           await editButton.click()
+          await getWorkbenchLocator(page, workbenchSelectors.userMessageEditConfirmButton).click()
           await page.waitForFunction(
             (input: { testId: string; expected: string }) => {
               const element = document.querySelector(`[data-testid="${input.testId}"]`)

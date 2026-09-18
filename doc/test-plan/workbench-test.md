@@ -252,11 +252,11 @@ pnpm test:update:e2e
 #### `user-message-actions`
 
 - 测试类型：`e2e`
-- What：用户消息 hover 操作、latest turn 编辑撤回、running 态编辑入口隐藏，以及用户消息附件展示。
-- Why：用户编辑上一条消息依赖撤回最新 turn、回填 composer 和附件 UI 协同；任一状态错误都会导致重复发送、误编辑运行中消息或附件被正文挤压遮挡。
-- How：使用真实 Workbench UI 创建伙伴，必要时通过设置页添加文件地址；真实粘贴图片和 `md` 附件并发送 AI 请求；hover 用户消息并触发复制与编辑；在 running 状态检查用户消息气泡和附件布局。首条用户消息应可见居中时间条。
-- Oracle：hover 后显示复制和编辑、不含时间；复制给出成功反馈；编辑会撤回最新 turn 并回填原草稿，running 状态不显示编辑，对齐 `WB-SESSION-006`；首条用户消息上方居中时间条对齐 `WB-SESSION-013-AC1`、`WB-SESSION-013-AC5`；附件独立展示在消息气泡上方（条宽可宽于气泡、卡片顶边不被横滑容器裁切，规格与输入框附件卡对齐），输入框附件关闭按钮可点击且不被遮挡。
-- Not：不验证模型回答质量；附件输入通过真实保存与传递链路进入产品。不在本 case 制造跨日或 30 分钟间隔（`WB-SESSION-013-AC2`、`WB-SESSION-013-AC3`、`WB-SESSION-013-AC4` 由 unit `message-time-label` 覆盖）。
+- What：用户消息 hover 操作、latest turn 编辑确认与撤回、running 态编辑入口隐藏，以及用户消息附件展示。
+- Why：用户编辑上一条消息依赖确认后撤回最新 turn、回填 composer 和附件 UI 协同；任一状态错误都会导致重复发送、误编辑运行中消息或附件被正文挤压遮挡。
+- How：使用真实 Workbench UI 创建伙伴，必要时通过设置页添加文件地址；真实粘贴图片和 `md` 附件并发送 AI 请求；hover 用户消息并触发复制与编辑；编辑确认框确认后再断言回填；在 running 状态检查用户消息气泡和附件布局。首条用户消息应可见居中时间条。
+- Oracle：hover 后显示复制和编辑、不含时间；复制给出成功反馈；点击编辑出现确认框，确认后撤回最新 turn 并回填原草稿，running 状态不显示编辑，对齐 `WB-SESSION-006`；首条用户消息上方居中时间条对齐 `WB-SESSION-013-AC1`、`WB-SESSION-013-AC5`；附件独立展示在消息气泡上方（条宽可宽于气泡、卡片顶边不被横滑容器裁切，规格与输入框附件卡对齐），输入框附件关闭按钮可点击且不被遮挡。
+- Not：不验证模型回答质量；附件输入通过真实保存与传递链路进入产品。不在本 case 制造跨日或 30 分钟间隔（`WB-SESSION-013-AC2`、`WB-SESSION-013-AC3`、`WB-SESSION-013-AC4` 由 unit `message-time-label` 覆盖）。本 case 覆盖确认路径，不单独覆盖取消确认。
 
 #### `composer-attachments-context`
 

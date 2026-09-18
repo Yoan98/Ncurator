@@ -3997,86 +3997,102 @@ const ChatPage: React.FC = () => {
     }
   }
 
-  const handleEditUserMessage = async (messageItem: ChatMessage): Promise<void> => {
+  const handleEditUserMessage = (messageItem: ChatMessage): void => {
     if (!currentPartnerId || aiRunId || messageItem.id !== latestUserMessageId) return
-    const targetIndex = currentMessages.findIndex((item) => item.id === messageItem.id)
-    if (targetIndex < 0) return
-    const previousMessages = currentMessages
-    const previousAssistantTurns = assistantTurns
-    const previousAssistantArtifacts = { ...assistantArtifactsRef.current }
-    const previousDraft = composerDraftValueRef.current
-    const followingMessages = currentMessages.slice(targetIndex + 1)
-    const followingAssistantIds = followingMessages
-      .filter((item) => item.role === 'assistant')
-      .map((item) => item.id)
-    const draft: ComposerDraftValue = {
-      input: messageItem.content,
-      contentNodes: getUserMessageContentNodes(messageItem),
-      selectedReferences:
-        messageItem.selectedReferences ||
-        getUserMessageContentNodes(messageItem)
-          .filter(
-            (node): node is Extract<ChatMessageContentNode, { kind: 'reference' }> =>
-              node.kind === 'reference'
-          )
-          .map((node) => node.reference),
-      attachments: messageItem.attachments || []
-    }
-    setCurrentMessages(currentMessages.slice(0, targetIndex))
-    followingAssistantIds.forEach((assistantMessageId) => {
-      delete assistantArtifactsRef.current[assistantMessageId]
-    })
-    setAssistantTurns((previous) => {
-      const next = { ...previous }
-      followingAssistantIds.forEach((assistantMessageId) => {
-        delete next[assistantMessageId]
-      })
-      return next
-    })
-    saveComposerDraftForPartner(currentPartnerId, draft)
-    applyComposerDraft(draft, `edit:${messageItem.id}`)
-    shouldAutoScrollRef.current = true
-    try {
-      const response = await window.api.chatTurnRetractLatest({
-        partnerId: currentPartnerId,
-        userMessageId: messageItem.id
-      })
-      if (!response.success || !response.userMessage) {
-        setCurrentMessages(previousMessages)
-        setAssistantTurns(previousAssistantTurns)
-        assistantArtifactsRef.current = previousAssistantArtifacts
-        if (composerDraftValueRef.current.input === draft.input) {
-          saveComposerDraftForPartner(currentPartnerId, previousDraft)
-          applyComposerDraft(previousDraft, `edit-failed:${messageItem.id}`)
+    modal.confirm({
+      title: '编辑这条消息？',
+      content: '将撤回这条消息之后的回答，原文会回到输入框供你修改。已编辑的文件不会被还原。',
+      okText: '编辑',
+      okButtonProps: {
+        danger: true,
+        'data-testid': workbenchSelectors.userMessageEditConfirmButton
+      },
+      cancelText: '取消',
+      cancelButtonProps: {
+        'data-testid': workbenchSelectors.userMessageEditConfirmCancelButton
+      },
+      onOk: async () => {
+        if (!currentPartnerId || aiRunId || messageItem.id !== latestUserMessageId) return
+        const targetIndex = currentMessages.findIndex((item) => item.id === messageItem.id)
+        if (targetIndex < 0) return
+        const previousMessages = currentMessages
+        const previousAssistantTurns = assistantTurns
+        const previousAssistantArtifacts = { ...assistantArtifactsRef.current }
+        const previousDraft = composerDraftValueRef.current
+        const followingMessages = currentMessages.slice(targetIndex + 1)
+        const followingAssistantIds = followingMessages
+          .filter((item) => item.role === 'assistant')
+          .map((item) => item.id)
+        const draft: ComposerDraftValue = {
+          input: messageItem.content,
+          contentNodes: getUserMessageContentNodes(messageItem),
+          selectedReferences:
+            messageItem.selectedReferences ||
+            getUserMessageContentNodes(messageItem)
+              .filter(
+                (node): node is Extract<ChatMessageContentNode, { kind: 'reference' }> =>
+                  node.kind === 'reference'
+              )
+              .map((node) => node.reference),
+          attachments: messageItem.attachments || []
         }
-        emitErrorMessage(response.error || '无法编辑这条消息')
-        return
-      }
-
-      setCurrentMessages(response.messages)
-      if (response.runId) {
-        delete activeRunMessageIdsRef.current[response.runId]
-      }
-      if (response.assistantMessageId) {
-        delete assistantArtifactsRef.current[response.assistantMessageId]
+        setCurrentMessages(currentMessages.slice(0, targetIndex))
+        followingAssistantIds.forEach((assistantMessageId) => {
+          delete assistantArtifactsRef.current[assistantMessageId]
+        })
         setAssistantTurns((previous) => {
           const next = { ...previous }
-          delete next[response.assistantMessageId!]
+          followingAssistantIds.forEach((assistantMessageId) => {
+            delete next[assistantMessageId]
+          })
           return next
         })
+        saveComposerDraftForPartner(currentPartnerId, draft)
+        applyComposerDraft(draft, `edit:${messageItem.id}`)
+        shouldAutoScrollRef.current = true
+        try {
+          const response = await window.api.chatTurnRetractLatest({
+            partnerId: currentPartnerId,
+            userMessageId: messageItem.id
+          })
+          if (!response.success || !response.userMessage) {
+            setCurrentMessages(previousMessages)
+            setAssistantTurns(previousAssistantTurns)
+            assistantArtifactsRef.current = previousAssistantArtifacts
+            if (composerDraftValueRef.current.input === draft.input) {
+              saveComposerDraftForPartner(currentPartnerId, previousDraft)
+              applyComposerDraft(previousDraft, `edit-failed:${messageItem.id}`)
+            }
+            emitErrorMessage(response.error || '无法编辑这条消息')
+            return
+          }
+
+          setCurrentMessages(response.messages)
+          if (response.runId) {
+            delete activeRunMessageIdsRef.current[response.runId]
+          }
+          if (response.assistantMessageId) {
+            delete assistantArtifactsRef.current[response.assistantMessageId]
+            setAssistantTurns((previous) => {
+              const next = { ...previous }
+              delete next[response.assistantMessageId!]
+              return next
+            })
+          }
+          void refreshContextUsage(currentPartnerId)
+        } catch (error) {
+          console.error(error)
+          setCurrentMessages(previousMessages)
+          setAssistantTurns(previousAssistantTurns)
+          assistantArtifactsRef.current = previousAssistantArtifacts
+          if (composerDraftValueRef.current.input === draft.input) {
+            saveComposerDraftForPartner(currentPartnerId, previousDraft)
+            applyComposerDraft(previousDraft, `edit-failed:${messageItem.id}`)
+          }
+          emitErrorMessage('编辑失败')
+        }
       }
-      void refreshContextUsage(currentPartnerId)
-    } catch (error) {
-      console.error(error)
-      setCurrentMessages(previousMessages)
-      setAssistantTurns(previousAssistantTurns)
-      assistantArtifactsRef.current = previousAssistantArtifacts
-      if (composerDraftValueRef.current.input === draft.input) {
-        saveComposerDraftForPartner(currentPartnerId, previousDraft)
-        applyComposerDraft(previousDraft, `edit-failed:${messageItem.id}`)
-      }
-      emitErrorMessage('编辑失败')
-    }
+    })
   }
 
   const renderUserMessage = (messageItem: ChatMessage): React.ReactNode => {
@@ -4197,7 +4213,7 @@ const ChatPage: React.FC = () => {
                       className="inline-flex h-6 w-6 items-center justify-center rounded-[6px] text-[#9B9A97] transition hover:bg-[#F4F4F2] hover:text-[#37352F]"
                       aria-label="编辑消息"
                       data-testid={`${workbenchSelectors.userMessageEditButtonPrefix}-${messageItem.id}`}
-                      onClick={() => void handleEditUserMessage(messageItem)}
+                      onClick={() => handleEditUserMessage(messageItem)}
                     >
                       <HiOutlinePencilSquare className="h-4 w-4" />
                     </button>
