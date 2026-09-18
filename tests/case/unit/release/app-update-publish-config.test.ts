@@ -132,10 +132,17 @@ describe('app update publish config', () => {
 
     expect(windowsRelease).toContain("'r2', 'finalize-windows.mjs'")
     expect(macRelease).toContain("'r2', 'finalize-macos.mjs'")
-    expect(windowsRelease).toContain("'provider-matrix'")
-    expect(windowsRelease).toContain("'wps-office'")
-    expect(macRelease).toContain("'provider-matrix'")
-    expect(macRelease).toContain("'wps-office'")
+    expect(windowsRelease).toContain("e2e-default-excludes.mjs")
+    expect(macRelease).toContain("e2e-default-excludes.mjs")
+    expect(windowsRelease).toContain('e2eDefaultExcludeGroupArgs')
+    expect(macRelease).toContain('e2eDefaultExcludeGroupArgs')
+    const defaultExcludes = await readFile(
+      path.resolve('scripts/test/e2e-default-excludes.mjs'),
+      'utf8'
+    )
+    expect(defaultExcludes).toContain("'provider-matrix'")
+    expect(defaultExcludes).toContain("'wps-office'")
+    expect(defaultExcludes).toContain("'showcase'")
     expect(windowsFinalize).toContain('releases/latest/windows.json')
     expect(windowsFinalize).not.toContain('releases/latest/macos.json')
     expect(macFinalize).toContain('releases/latest/macos.json')

@@ -25,6 +25,7 @@ import { hasRegressionSelectionArgs, readRegressionSelection } from './regressio
 import { cleanupLocalTestLogs } from './shared/test-logs.mjs'
 import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
+import { e2eDefaultExcludeGroupArgs } from '../test/e2e-default-excludes.mjs'
 import { cpSync, existsSync } from 'node:fs'
 
 const execFileAsync = promisify(execFile)
@@ -215,10 +216,7 @@ const runCandidateE2E = async ({ candidate, sourceDirectory, environment }) => {
         'e2e',
         '--target',
         'package',
-        '--exclude-group',
-        'provider-matrix',
-        '--exclude-group',
-        'wps-office',
+        ...e2eDefaultExcludeGroupArgs(),
         '--bundle',
         candidate.bundlePath,
         '--result',

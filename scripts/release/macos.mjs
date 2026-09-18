@@ -19,6 +19,7 @@ import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
 import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
 import { assertLivePublishAllowed, resolveReleaseStorageConfig } from './storage/config.mjs'
+import { e2eDefaultExcludeGroupArgs } from '../test/e2e-default-excludes.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
@@ -205,10 +206,7 @@ const runCandidateE2E = async ({ candidates, sourceDirectory }) => {
         'e2e',
         '--target',
         'package',
-        '--exclude-group',
-        'provider-matrix',
-        '--exclude-group',
-        'wps-office',
+        ...e2eDefaultExcludeGroupArgs(),
         ...candidates.flatMap((candidate, index) => [
           '--bundle',
           candidate.bundlePath,

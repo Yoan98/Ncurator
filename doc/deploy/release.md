@@ -8,7 +8,7 @@
 
 - 平台 Tag **正式上线后**不可修改、覆盖或删除；未上线用 `release:abort` 删掉后可重打同版本。
 - 候选包必须从 Tag 导出的干净代码构建。
-- 按当前版本与上一已发布同平台版本的差异选择正式包 E2E，测实际安装后的候选包；影响面可控时定向回归，不必默认全量。
+- 按当前版本与上一已发布同平台版本的差异选择正式包 E2E，测实际安装后的候选包；影响面可控时定向回归，不必默认跑完整默认门禁。
 - 发布测试过的同一份候选包到 COS，并验证国内公开下载和更新通道；COS 验证通过即结束，不要再对同一 Tag 上传或 finalize 到 R2。
 
 ```mermaid
@@ -74,7 +74,9 @@ Windows / macOS 用户可见安装包名为“馆长-…”。**公开 artifacts
 git diff <previous-platform-tag>..<current-platform-tag>
 ```
 
-按提交与模块影响从 `doc/test-plan/**` 选正式包 E2E；影响面广或无法收敛则全量。正式包 E2E 只消费已构建的 `release-bundle-*.json`：复验 Tag/commit/fragment/哈希，安装 EXE/DMG 后对安装态程序跑测试，不重新构建。过滤参数与执行契约（含 warmup、并发）见 `doc/test.md` §4.2；命令见本文 §4。
+按提交与模块影响从 `doc/test-plan/**` 选正式包 E2E；影响面广或无法收敛则跑默认门禁全集。正式包 E2E 只消费已构建的 `release-bundle-*.json`：复验 Tag/commit/fragment/哈希，安装 EXE/DMG 后对安装态程序跑测试，不重新构建。过滤参数与执行契约（含 warmup、并发）见 `doc/test.md` §4.2；命令见本文 §4。
+
+不带过滤参数时，`--test-only` 与 `pnpm test:e2e:package` 同口径：跑日常默认 E2E，固定排除 opt-in 分组 `provider-matrix`、`wps-office`、`showcase`（`scripts/test/e2e-default-excludes.mjs`）。「默认门禁全集」不含上述分组；需要时单独执行 `pnpm test:workbench:provider-matrix` / `pnpm test:workbench:wps-office` / `pnpm test:workbench:showcase`，或 `--test-only --case <caseId>`。
 
 正式包 E2E **不改候选包品牌**（仍是同一份将上线的「馆长」安装包），只把测试安装落到本机 `NCurator-E2E` 目录；测完删除该目录及指向它的入口。
 
