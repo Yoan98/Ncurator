@@ -108,64 +108,52 @@ const parseArgs = (argv) => {
     freshKnowledgeCache: false,
     reuseKnowledgeCache: false,
     help: false,
-    unknownArgs: []
+    unknownArgs: [],
+    invalidArgs: []
   }
+  const valueOptions = new Set([
+    '--domain',
+    '--type',
+    '--suite',
+    '--group',
+    '--exclude-group',
+    '--case',
+    '--runs',
+    '--target',
+    '--bundle',
+    '--result'
+  ])
 
   for (let index = 0; index < argv.length; index += 1) {
     const current = argv[index]
     const next = argv[index + 1]
-    if (current === '--domain' && next) {
-      parsed.domain = next
-      index += 1
-      continue
-    }
-    if (current === '--type' && next) {
-      parsed.type = next
-      index += 1
-      continue
-    }
-    if (current === '--suite' && next) {
-      parsed.suite = next
-      index += 1
-      continue
-    }
-    if (current === '--group' && next) {
-      parsed.groups.push(next)
-      index += 1
-      continue
-    }
-    if (current === '--exclude-group' && next) {
-      parsed.excludeGroups.push(next)
-      index += 1
-      continue
-    }
-    if (current === '--case' && next) {
-      parsed.caseIds.push(next)
-      index += 1
-      continue
-    }
-    if (current === '--runs' && next) {
-      parsed.runs = Math.max(1, Number(next))
-      index += 1
-      continue
-    }
-    if (current === '--target' && next) {
-      parsed.target = next
+    if (valueOptions.has(current)) {
+      if (!next || next.startsWith('-')) {
+        parsed.invalidArgs.push(`${current} requires a value`)
+        continue
+      }
+      if (current === '--domain') parsed.domain = next
+      if (current === '--type') parsed.type = next
+      if (current === '--suite') parsed.suite = next
+      if (current === '--group') parsed.groups.push(next)
+      if (current === '--exclude-group') parsed.excludeGroups.push(next)
+      if (current === '--case') parsed.caseIds.push(next)
+      if (current === '--target') parsed.target = next
+      if (current === '--bundle') parsed.bundles.push(next)
+      if (current === '--result') parsed.results.push(next)
+      if (current === '--runs') {
+        const runs = Number(next)
+        if (!Number.isInteger(runs) || runs < 1) {
+          parsed.invalidArgs.push('--runs must be a positive integer')
+        } else {
+          parsed.runs = runs
+        }
+      }
       index += 1
       continue
     }
     if (current === '--showcase') {
       parsed.showcase = true
-      continue
-    }
-    if (current === '--bundle' && next) {
-      parsed.bundles.push(next)
-      index += 1
-      continue
-    }
-    if (current === '--result' && next) {
-      parsed.results.push(next)
-      index += 1
       continue
     }
     if (current === '--fresh-knowledge-cache') {
@@ -1064,6 +1052,11 @@ const main = async () => {
     process.stderr.write(USAGE)
     process.exit(2)
   }
+  if (args.invalidArgs.length > 0) {
+    process.stderr.write(`invalid arguments: ${args.invalidArgs.join('; ')}\n\n`)
+    process.stderr.write(USAGE)
+    process.exit(2)
+  }
   const configuredDeadlineMs = Number(process.env.NCURATOR_TEST_RUNNER_DEADLINE_MS || 0)
   const deadlineAt =
     Date.now() +
@@ -1084,6 +1077,9 @@ const main = async () => {
     if (args.type !== expectedType) {
       throw new Error(`${args.domain} 测试只允许 --type ${expectedType}`)
     }
+  }
+  if (args.type && !['backend', 'e2e'].includes(args.type)) {
+    throw new Error(`unsupported --type: ${args.type}`)
   }
 
   if (!['source', 'package'].includes(args.target)) {

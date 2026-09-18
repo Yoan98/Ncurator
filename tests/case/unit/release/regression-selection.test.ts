@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   hasRegressionSelectionArgs,
-  readRegressionSelection
+  readRegressionSelection,
+  validateReleaseArgs
 } from '../../../../scripts/release/regression.mjs'
 
 describe('release regression selection', () => {
@@ -132,5 +133,12 @@ describe('release regression selection', () => {
     expect(() => readRegressionSelection(['--domain', 'workbench', '--group', 'apply'])).toThrow(
       '--group requires --domain and --suite'
     )
+  })
+
+  it('rejects unknown release arguments and missing values', () => {
+    expect(() => validateReleaseArgs(['--test-only', '--unknown'])).toThrow(
+      'unknown argument: --unknown'
+    )
+    expect(() => validateReleaseArgs(['--test-only', '--case'])).toThrow('--case requires a value')
   })
 })

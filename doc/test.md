@@ -132,7 +132,6 @@ runner 不负责：
 当前常用命令按域收口如下。
 
 - AI
-  - `pnpm test:ai`
   - `pnpm test:ai:backend`
   - `pnpm test:ai:non-live`
   - `pnpm test:ai:tool`
@@ -145,10 +144,8 @@ runner 不负责：
   - `pnpm test:e2e:source`：构建当前源码并运行 `tests/case/**` 中的全部 E2E。
   - `pnpm test:e2e:package -- --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行所选正式 E2E。安装落在本机 `NCurator-E2E` 目录；Windows 可能覆盖本机已安装的正式包。测完删除 E2E 安装目录及指向它的入口。
 - Settings
-  - `pnpm test:settings`
   - `pnpm test:settings:e2e`
 - Workbench
-  - `pnpm test:workbench`
   - `pnpm test:workbench:e2e`
 
 runner 支持的过滤参数：

@@ -13,7 +13,18 @@ const ABORT_TOKEN = 'abort-unpublished-tag'
 const args = process.argv.slice(2)
 const valueAfter = (name) => {
   const index = args.indexOf(name)
-  return index >= 0 ? args[index + 1] : undefined
+  if (index < 0) return undefined
+  const value = args[index + 1]
+  if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`)
+  return value
+}
+
+for (let index = 0; index < args.length; index += 1) {
+  const argument = args[index]
+  if (argument !== '--tag') throw new Error(`unknown argument: ${argument}`)
+  const value = args[index + 1]
+  if (!value || value.startsWith('--')) throw new Error('--tag requires a value')
+  index += 1
 }
 
 const releaseTag = valueAfter('--tag') || ''

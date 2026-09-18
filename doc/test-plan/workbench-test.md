@@ -78,7 +78,6 @@ tests/case/workbench/
 
 测试命令：
 
-- `pnpm test:workbench`
 - `pnpm test:workbench:e2e`
 - `pnpm test:workbench:provider-matrix`（全服务商冒烟，可单独执行；发版按影响范围或全量测试）
 - `pnpm test:workbench:wps-office`（本机已授权 WPS，可单独执行；发版按影响范围或全量测试）
@@ -92,7 +91,7 @@ pnpm test:update:e2e
 ```
 
 - `test:update` = backend 契约 + 模拟页面 E2E。
-- `test:update:backend`：`unit/release`，验证主进程更新状态、发布配置、R2 元数据和 release fragment。
+- `test:update:backend`：`unit/release`，验证主进程更新状态、发布配置、发布元数据和 release fragment。
 - `test:update:e2e`：Workbench case `sidebar-app-update` 与 `database-version-update-required`（见下方 case 规格）。
 - 自动更新是允许在测试侧注入受控状态的 E2E 特例：可提供更新可用、下载进度、完成和失败快照，但不得修改生产代码来支持模拟；`database-version-update-required` 还允许在 Electron 启动前向隔离 `userData/app.sqlite` 写入未来 migration 记录以真实触发仅更新模式，只能准备数据库输入，不能伪造主进程启动状态或绕过版本检查。
 - 真实覆盖升级与禁止降级验证见 [`doc/deploy/design.md`](../deploy/design.md)，不在本计划与 `test:update` 内。

@@ -21,7 +21,11 @@ import {
 import { assertLivePublishAllowed, resolveReleaseStorageConfig } from './storage/config.mjs'
 import { prepareReleaseWorkspace } from './workspace.mjs'
 import { parseReleaseTag } from './tag.mjs'
-import { hasRegressionSelectionArgs, readRegressionSelection } from './regression.mjs'
+import {
+  hasRegressionSelectionArgs,
+  readRegressionSelection,
+  validateReleaseArgs
+} from './regression.mjs'
 import { cleanupLocalTestLogs } from './shared/test-logs.mjs'
 import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 import { loadReleaseEnvironment } from './shared/environment.mjs'
@@ -37,6 +41,7 @@ const valueAfter = (name) => {
   return index >= 0 ? args[index + 1] : undefined
 }
 const releaseTag = valueAfter('--tag') || ''
+validateReleaseArgs(args)
 const regression = readRegressionSelection(args)
 const modes = [
   ['prepare', args.includes('--prepare-only')],
@@ -52,7 +57,7 @@ try {
 }
 if (!releaseVersion || modes.length !== 1) {
   throw new Error(
-    'usage: node scripts/release/windows.mjs --tag <windows-v1.2.3> (--prepare-only|--test-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId>] [--fresh-knowledge-cache]'
+    'usage: node scripts/release/windows.mjs --tag <windows-v1.2.3> (--prepare-only|--test-only|--publish-only) [--domain <name>] [--suite <name>] [--group <name>] [--case <caseId> ...] [--fresh-knowledge-cache]'
   )
 }
 const mode = modes[0][0]

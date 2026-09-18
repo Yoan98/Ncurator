@@ -6,6 +6,30 @@ const valueAfter = (args, name) => {
   return value
 }
 
+const VALUE_OPTIONS = new Set(['--tag', '--domain', '--suite', '--group', '--case'])
+const FLAG_OPTIONS = new Set([
+  '--prepare-only',
+  '--test-only',
+  '--publish-only',
+  '--fresh-knowledge-cache'
+])
+
+export const validateReleaseArgs = (args) => {
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index]
+    if (VALUE_OPTIONS.has(argument)) {
+      const value = args[index + 1]
+      if (!value || value.startsWith('--')) {
+        throw new Error(`${argument} requires a value`)
+      }
+      index += 1
+      continue
+    }
+    if (FLAG_OPTIONS.has(argument)) continue
+    throw new Error(`unknown argument: ${argument}`)
+  }
+}
+
 export const readRegressionSelection = (args) => {
   const domain = valueAfter(args, '--domain')
   const suite = valueAfter(args, '--suite')

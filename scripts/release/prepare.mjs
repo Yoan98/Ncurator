@@ -25,8 +25,24 @@ const PREFIX_CACHE_LIVE_CASE = 'human-prefix-cache-retain-live'
 const args = process.argv.slice(2)
 const valueAfter = (name) => {
   const index = args.indexOf(name)
-  return index >= 0 ? args[index + 1] : undefined
+  if (index < 0) return undefined
+  const value = args[index + 1]
+  if (!value || value.startsWith('--')) throw new Error(`${name} requires a value`)
+  return value
 }
+
+const VALUE_OPTIONS = new Set(['--platform', '--version', '--notes'])
+for (let index = 0; index < args.length; index += 1) {
+  const argument = args[index]
+  if (VALUE_OPTIONS.has(argument)) {
+    const value = args[index + 1]
+    if (!value || value.startsWith('--')) throw new Error(`${argument} requires a value`)
+    index += 1
+    continue
+  }
+  throw new Error(`unknown argument: ${argument}`)
+}
+
 const version = valueAfter('--version') || ''
 const platform = valueAfter('--platform') || ''
 const releaseTag =

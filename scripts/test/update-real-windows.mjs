@@ -12,6 +12,26 @@ import { _electron as electron } from 'playwright'
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
 const DEFAULT_TIMEOUT_MS = 45 * 60 * 1000
+const VALUE_OPTIONS = new Set([
+  '--source-installer',
+  '--source-version',
+  '--expected-version',
+  '--target-installer',
+  '--downgrade-installer',
+  '--timeout-ms'
+])
+const USAGE = `Usage:
+  node scripts/test/update-real-windows.mjs
+    --source-installer <path>
+    --source-version <x.y.z>
+    --expected-version <x.y.z>
+    [--target-installer <path>]
+    [--downgrade-installer <path>]
+    [--timeout-ms <positive-integer>]
+    [--keep-work]
+    [--reuse-update-cache]
+    [--help]
+`
 
 const parseArgs = (argv) => {
   const result = {
@@ -22,26 +42,40 @@ const parseArgs = (argv) => {
     downgradeInstaller: '',
     timeoutMs: DEFAULT_TIMEOUT_MS,
     keepWork: false,
-    reuseUpdateCache: false
+    reuseUpdateCache: false,
+    help: false
   }
 
   for (let index = 0; index < argv.length; index += 1) {
     const key = argv[index]
     const value = argv[index + 1]
-    if (key === '--source-installer' && value) result.sourceInstaller = path.resolve(value)
-    else if (key === '--source-version' && value) result.sourceVersion = value
-    else if (key === '--expected-version' && value) result.expectedVersion = value
-    else if (key === '--target-installer' && value) result.targetInstaller = path.resolve(value)
-    else if (key === '--downgrade-installer' && value) {
-      result.downgradeInstaller = path.resolve(value)
-    } else if (key === '--timeout-ms' && value) result.timeoutMs = Number(value)
-    else if (key === '--keep-work') {
+    if (key === '--help') {
+      result.help = true
+      continue
+    }
+    if (key === '--keep-work') {
       result.keepWork = true
       continue
     } else if (key === '--reuse-update-cache') {
       result.reuseUpdateCache = true
       continue
-    } else continue
+    } else if (VALUE_OPTIONS.has(key)) {
+      if (!value || value.startsWith('--')) throw new Error(`${key} requires a value`)
+      if (key === '--source-installer') result.sourceInstaller = path.resolve(value)
+      if (key === '--source-version') result.sourceVersion = value
+      if (key === '--expected-version') result.expectedVersion = value
+      if (key === '--target-installer') result.targetInstaller = path.resolve(value)
+      if (key === '--downgrade-installer') result.downgradeInstaller = path.resolve(value)
+      if (key === '--timeout-ms') {
+        const timeoutMs = Number(value)
+        if (!Number.isInteger(timeoutMs) || timeoutMs < 1) {
+          throw new Error('--timeout-ms must be a positive integer')
+        }
+        result.timeoutMs = timeoutMs
+      }
+    } else {
+      throw new Error(`unknown argument: ${key}`)
+    }
     index += 1
   }
 
@@ -399,11 +433,15 @@ const uninstallTestApp = async (installDirectory, logs) => {
 }
 
 const main = async () => {
+  const options = parseArgs(process.argv.slice(2))
+  if (options.help) {
+    process.stdout.write(USAGE)
+    return
+  }
   if (process.platform !== 'win32' || process.arch !== 'x64') {
     throw new Error('The Windows real update test requires Windows x64')
   }
 
-  const options = parseArgs(process.argv.slice(2))
   validateVersionPair(options.sourceVersion, options.expectedVersion)
   const runId = new Date().toISOString().replace(/[:.]/gu, '-')
   const reportDirectory = path.join(
