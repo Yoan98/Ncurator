@@ -42,6 +42,71 @@ export const COURT_SEARCH_PROMPT =
 export const COURT_SEARCH_KEYWORDS = ['建设工程', '施工合同', '工程款']
 export const COURT_SEARCH_HOST = 'www.court.gov.cn'
 
+export const KB_PROMPT =
+  '星河林总来问交付承诺和验收到底怎么算。你先在本地资料里对一下，按能对上的依据回一封，我直接转给他。对不上的别编，标出来。'
+
+export const WEB_SEARCH_PROMPT =
+  '帮我查一下企业员工国内差旅，住宿和交通税前扣除现在是什么口径。列出来源，写成财务能照着执行的注意点，不要编。'
+
+export const KB_MEETING_FILE = '星河例会纪要-0821.txt'
+export const KB_ACCEPTANCE_FILE = '星河验收口径.md'
+export const KB_QUOTE_FILE = '星河报价口径.md'
+export const KB_DISTRACTOR_FILE = '清和项目例会.txt'
+
+export const KB_SOURCE_PAGES = [
+  {
+    fileName: KB_MEETING_FILE,
+    label: '例会',
+    title: '星河项目例会纪要（8月21日）'
+  },
+  {
+    fileName: KB_ACCEPTANCE_FILE,
+    label: '验收',
+    title: '星河验收口径备忘'
+  }
+] as const
+
+const KB_MEETING_NOTES = `星河项目例会 8/21 内部纪要
+出席：陈嘉禾、苏明远、何书婷、交付一组
+
+承诺
+- 陈嘉禾当场对林总说：按期交付率 95%。这条已经写进纪要，后续对外口径以这次为准。
+- 一期已上线模块按原计划走；二期验收另说，不和 95% 混在一起。
+
+待办
+- 苏明远本周把「按期」的统计口径发给林总助理，避免客户按自然日理解。
+- 何书婷跟进二期尾款节点，验收没过之前不要承诺付款日。
+
+备注：本纪要未讨论报价折扣，报价见单独口径文件。
+`
+
+const KB_ACCEPTANCE_NOTES = `# 星河验收口径备忘（内部）
+
+客户把验收从「功能清单完成」改成「连续 7 天无 P1」。苏明远 9/3 同步。
+
+## 现在怎么算通过
+- 功能可以先按清单点完，但客户只认连续 7 个自然日没有 P1。
+- 培训完成、数据迁移核对仍要做，但不替代这 7 天。
+- 出现 P1 后重新起算，不要口头说「差不多就算过」。
+
+## 还没写进合同的
+- 违约金上限对方法务还在要。本地资料里没有最终数字，对外不要编。
+`
+
+const KB_QUOTE_NOTES = `# 星河报价口径（销售备忘）
+
+- 一期合同额 860 万，已确认。
+- 二期实施费不在本次回复范围，林总问交付时不要主动讲折扣。
+- 续费折扣要等星河验收结果，郑晓彤那边两家在观望。
+`
+
+const KB_DISTRACTOR_NOTES = `清和项目例会 9/5
+
+- 清和这周回款 48 万，何书婷说已经进账。
+- 清和没有 95% 交付承诺，他们验收按功能清单，当天签字就算过。
+- 不要把清和口径套到星河邮件里。
+`
+
 const CONTRACT_FONT_FAMILY = 'ContractFont'
 const CONTRACT_FONT_PATH = '/Library/Fonts/Arial Unicode.ttf'
 let contractFontRegistered = false
@@ -339,5 +404,14 @@ export const seedWordCreateWorkspace = async (): Promise<string> => {
 export const seedPdfContractWorkspace = async (): Promise<string> => {
   const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-showcase-pdf-'))
   await fs.writeFile(path.join(rootPath, PDF_FILE_NAME), await generateXingheContractPdf())
+  return rootPath
+}
+
+export const seedKnowledgeWorkspace = async (): Promise<string> => {
+  const rootPath = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-showcase-kb-'))
+  await fs.writeFile(path.join(rootPath, KB_MEETING_FILE), KB_MEETING_NOTES, 'utf8')
+  await fs.writeFile(path.join(rootPath, KB_ACCEPTANCE_FILE), KB_ACCEPTANCE_NOTES, 'utf8')
+  await fs.writeFile(path.join(rootPath, KB_QUOTE_FILE), KB_QUOTE_NOTES, 'utf8')
+  await fs.writeFile(path.join(rootPath, KB_DISTRACTOR_FILE), KB_DISTRACTOR_NOTES, 'utf8')
   return rootPath
 }

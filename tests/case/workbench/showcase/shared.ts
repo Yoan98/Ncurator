@@ -268,8 +268,111 @@ export const screenshotAssistantAnswer = async (
     workbenchSelectors.assistantFinalAnswerPrefix
   ).last()
   await answer.waitFor({ state: 'visible', timeout: 30_000 })
+  await answer.evaluate((node) => {
+    if (!(node instanceof HTMLElement)) return
+    node.scrollIntoView({ block: 'start', inline: 'nearest' })
+    let parent: HTMLElement | null = node
+    while (parent) {
+      if (parent.scrollHeight > parent.clientHeight + 8) parent.scrollTop = 0
+      parent = parent.parentElement
+    }
+  })
   await page.waitForTimeout(400)
-  await answer.screenshot({ path: outputPath, type: 'png' })
+  const box = await answer.boundingBox()
+  if (!box) {
+    await answer.screenshot({ path: outputPath, type: 'png' })
+    return
+  }
+  const composer = getWorkbenchLocator(page, workbenchSelectors.composerShell)
+  const composerBox = await composer.boundingBox().catch(() => null)
+  const width = Math.max(1, Math.ceil(box.width))
+  const visibleAboveComposer = composerBox ? Math.ceil(composerBox.y - box.y - 12) : 0
+  const height = Math.min(
+    Math.max(visibleAboveComposer >= 80 ? visibleAboveComposer : Math.ceil(box.height), 1),
+    1100
+  )
+  if (visibleAboveComposer >= 80) {
+    await page.screenshot({
+      path: outputPath,
+      type: 'png',
+      clip: {
+        x: Math.max(0, Math.floor(box.x)),
+        y: Math.max(0, Math.floor(box.y)),
+        width,
+        height
+      }
+    })
+    return
+  }
+  await answer.screenshot({
+    path: outputPath,
+    type: 'png',
+    clip: { x: 0, y: 0, width, height }
+  })
+}
+
+export const rasterizeNotePage = async (
+  title: string,
+  body: string,
+  outputPath: string
+): Promise<{ width: number; height: number }> => {
+  const { createCanvas, GlobalFonts } = await import('@napi-rs/canvas')
+  const fontPath = '/Library/Fonts/Arial Unicode.ttf'
+  if (!GlobalFonts.has('NoteBody')) {
+    GlobalFonts.registerFromPath(fontPath, 'NoteBody')
+  }
+  const width = 1191
+  const height = 1684
+  const canvas = createCanvas(width, height)
+  const ctx = canvas.getContext('2d')
+  ctx.fillStyle = '#FBFAF7'
+  ctx.fillRect(0, 0, width, height)
+  ctx.fillStyle = '#37352F'
+  ctx.font = 'bold 28px NoteBody'
+  const titleX = 72
+  let y = 88
+  ctx.fillText(title, titleX, y)
+  y += 36
+  ctx.strokeStyle = '#E8E5DF'
+  ctx.beginPath()
+  ctx.moveTo(titleX, y)
+  ctx.lineTo(width - 72, y)
+  ctx.stroke()
+  y += 42
+  ctx.font = '22px NoteBody'
+  ctx.fillStyle = '#37352F'
+  const maxWidth = width - 144
+  const lineHeight = 36
+  for (const paragraph of body.replace(/\r\n/g, '\n').split('\n')) {
+    const text = paragraph.replace(/^#+\s+/, '').trimEnd()
+    if (!text) {
+      y += lineHeight * 0.45
+      continue
+    }
+    let line = ''
+    for (const char of text) {
+      const next = `${line}${char}`
+      if (ctx.measureText(next).width > maxWidth) {
+        ctx.fillText(line, titleX, y)
+        y += lineHeight
+        line = char
+      } else {
+        line = next
+      }
+    }
+    if (line) {
+      ctx.fillText(line, titleX, y)
+      y += lineHeight
+    }
+  }
+  const cropHeight = Math.min(height, Math.max(Math.round(y + 72), 980))
+  const output = cropHeight < height ? createCanvas(width, cropHeight) : canvas
+  if (output !== canvas) {
+    output.getContext('2d').drawImage(canvas, 0, 0)
+  }
+  await fs.mkdir(path.dirname(outputPath), { recursive: true })
+  await fs.writeFile(outputPath, output.toBuffer('image/png'))
+  return { width, height: cropHeight }
 }
 
 export type EmbeddedBrowserSnapshot = {

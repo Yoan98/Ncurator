@@ -762,3 +762,21 @@ pnpm test:update:e2e
 - How：空工作区发律师原句；run 过程中对嵌入页 `capturePage`，检索结果滚到「为您找到相关结果」再裁切，案例页滚到标题再截；结束后把最后一条 `workbench-assistant-final-answer` 滚到开头并按可视高度截图。
 - Oracle：调用 `browser_use`；截到 search、article 两帧和回答图；最终回答提到工程款、结算、违约或典型案例；记录用量。
 - Not：不进日常 / 发版回归。不用本地 HTML。不把 web_search 当浏览器操作。不截空白首页。不要求登录。不对合同做对照。
+
+#### `xinghe-kb-reply`
+
+- 测试类型：`e2e / live`（路径 `showcase/`，**opt-in**）
+- What：不点名文件，按已索引的本地资料回复星河林总关于交付承诺和验收口径的来问，截资料页和馆长回复。
+- Why：官网知识库样例要对照看本地纪要和据此写的回信，不能做成又一份 @ 文件的周报，也不能截检索命中列表。
+- How：工作区放入星河例会纪要、验收口径、报价口径和一份清和干扰纪要并完成索引；口头发问、不 `@`；结束后把例会/验收两份资料渲成页图，并截最后一条 `workbench-assistant-final-answer`。
+- Oracle：调用 `kb_search` 或 `kb_list_documents`；不调用 `browser_use` / `web_search`；回答含 95% 交付承诺和验收 / P1 / 7 天；截到至少 2 页资料和 1 张回答图，并记录用量。
+- Not：不进日常 / 发版回归。不 @ 文件名。不把网页搜索或浏览器当知识库。不截知识库命中列表。
+
+#### `chailv-tax-deduction`
+
+- 测试类型：`e2e / live`（路径 `showcase/`，**opt-in**）
+- What：不指定网站，按网页搜索查企业员工国内差旅住宿和交通税前扣除口径，截馆长带来源的回答。
+- Why：官网网页搜索样例要和浏览器分开：开口问政策、回答带来源，不截某个官网操作过程。
+- How：空工作区口头发问；结束后截最后一条 `workbench-assistant-final-answer`，并记录用量。
+- Oracle：调用 `web_search`；回答含住宿或交通、税前扣除，以及来源 / 官网依据；截到 1 张回答图。
+- Not：不进日常 / 发版回归。不指定网址。不截搜索命中列表。不把这条做成浏览器操作样例。
