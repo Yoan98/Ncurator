@@ -2,29 +2,27 @@
 
 ## 1. 总体目标
 
-- 本计划定义 Workbench 用户可见交互的回归范围，并对齐 [workbench.md](../prd/workbench.md) 的 `WB-*` 需求和验收编号。
+- 本计划定义 Workbench 用户可见交互的测试范围，并对齐 [workbench.md](../prd/workbench.md) 的 `WB-*` 需求和验收编号。
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
-- Workbench UI E2E 回归测试必须通过真实 Electron UI 配模型、创建伙伴、发送消息、选择 `@` 资料、预览、回退和操作右侧面板。设置页可另加文件地址，但发送不再要求绑定工作空间目录。
-- 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；live 配置只读内置服务商 Key 池与选中目标：`AI_LIVE_KEY_<PROVIDER>`（`DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`）、可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）、可选 `AI_LIVE_MODEL`（默认该服务商测试默认模型，通义为 `qwen3.8-flash`）。`baseUrl` / `providerKind` 由产品 registry 推导。日常 case 通过 Settings「推荐」类型写入当前目标服务商；全服务商冒烟见 `live-preset-provider-smoke`。
-- `provider-matrix` 与 `wps-office` 都是正式 E2E 回归范围内的 Workbench case；发布时按版本影响范围选择，影响面广时随正式 E2E 全量执行。Showcase 已独立为单独采集任务。
-- 发版回归按版本改动影响范围选择正式包 E2E；影响范围较广或无法可靠收敛时执行全部正式 E2E，包含 `provider-matrix` 和 `wps-office`。Showcase 不属于正式 E2E。
+- Workbench UI E2E 测试必须通过真实 Electron UI 配模型、创建伙伴、发送消息、选择 `@` 资料、预览、回退和操作右侧面板。设置页可另加文件地址，但发送不再要求绑定工作空间目录。
+- 涉及 AI 的 Workbench UI E2E 测试必须使用真实模型调用；live 配置只读内置服务商 Key 池与选中目标：`AI_LIVE_KEY_<PROVIDER>`（`DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`）、可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）、可选 `AI_LIVE_MODEL`（默认该服务商测试默认模型，通义为 `qwen3.8-flash`）。`baseUrl` / `providerKind` 由产品 registry 推导。日常 case 通过 Settings「推荐」类型写入当前目标服务商；全服务商冒烟见 `live-preset-provider-smoke`。
 - case 因生产行为缺口失败时，不在测试中硬改业务行为，统一记录为产品或生产实现待决项。
 
 ## 2. 测试边界
 
-- Workbench UI E2E 回归测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录；需要文件资料时通过 Settings UI 添加文件地址、检查更新和更新索引。前置始终是创建伙伴；不断言工作区选择器、`.ncurator` 或 `__draft__`。
+- Workbench UI E2E 测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录；需要文件资料时通过 Settings UI 添加文件地址、检查更新和更新索引。前置始终是创建伙伴；不断言工作区选择器、`.ncurator` 或 `__draft__`。
 - Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；Source 与正式包 E2E 在多 case 时都先执行 `warmup` 预热共享 fixture，正式包 E2E 再把缓存种子复制给隔离 case。
 - Workbench 模型选择 helper 优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选；未命中再按展示名；仍未命中则进入「自定义模型」按名称搜索。
-- Workbench UI E2E 回归测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖工作区文件列表在打开时重新读取磁盘最新目录（含外部新建文件）。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：正式回归由 `wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert` 在路径 `result/wps-office/`，属于正式 E2E，支持 `pnpm test:workbench:wps-office` 单独执行，因本机授权弹窗可能卡住自动化。正式 E2E 启动时跳过覆盖拷加载项文件，但会启动回环 `/addon`；`publish.xml` 与授权 path 固定 `http://127.0.0.1:18723/addon/`，端口文件记录实际监听端口。若 `18723` 上已是本馆长 `/status` 通道，后启动实例不得把 `publish.xml` / 授权 path 改到临时端口。安装器与 `publish.xml` / `authaddin` 合并由 unit 覆盖。
+- Workbench UI E2E 测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖工作区文件列表在打开时重新读取磁盘最新目录（含外部新建文件）。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：正式测试由 `wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert` 在路径 `result/wps-office/`，属于正式 E2E，支持 `pnpm test:workbench:wps-office` 单独执行，因本机授权弹窗可能卡住自动化。正式 E2E 启动时跳过覆盖拷加载项文件，但会启动回环 `/addon`；`publish.xml` 与授权 path 固定 `http://127.0.0.1:18723/addon/`，端口文件记录实际监听端口。若 `18723` 上已是本馆长 `/status` 通道，后启动实例不得把 `publish.xml` / 授权 path 改到临时端口。安装器与 `publish.xml` / `authaddin` 合并由 unit 覆盖。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地内容输入与 hover-退出网页任务（observe→actionId act，支持 text 注入）；必须在无进程级远程调试口下完成。同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 验证 type=fetch 读取网页正文后再回答。两类 case 均不得因 `web_search` 自动展开右侧搜索列表（该列表面板已不存在），对齐 `WB-CORE-007-AC4`。Composer 搜索模式与右侧搜索列表面板已删除，废弃 `WB-COMPOSER-004`、`WB-PANEL-002`。
 - Workbench 附件链路不限文件扩展名，任何可被文件选择器选中的普通文件都可以添加，不因扩展名拒绝；`+` 和拖放保留源文件绝对路径，粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
-- Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 回归承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。其中 Excel 工具侧覆盖 `WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC5`、`WB-EXCEL-002-AC6`、`WB-EXCEL-002-AC7`、`WB-EXCEL-002-AC8`（`WB-EXCEL-002-AC3` 记录/baseline **只在 ai-test 硬断言**）；Workbench e2e 覆盖 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9` 用户闭环（UI 可见单入口，不重复硬断言 AC3）。
+- Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 测试承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。其中 Excel 工具侧覆盖 `WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC5`、`WB-EXCEL-002-AC6`、`WB-EXCEL-002-AC7`、`WB-EXCEL-002-AC8`（`WB-EXCEL-002-AC3` 记录/baseline **只在 ai-test 硬断言**）；Workbench e2e 覆盖 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9` 用户闭环（UI 可见单入口，不重复硬断言 AC3）。
 - DOCX 读取结果和历史结果按递归 children 树展示，Workbench 必须能显示统一的 `nodeId`、visual kind、`imagePath` 和 story；DOCX 写结果复用统一状态展示，普通写入不展示冗余正文，创建操作只展示 `createdIds`。格式操作按 text、paragraph、table、row、cell、section 展示。图片理解统一由 `agent-control` 内置的 `read_image` 把图片加入主模型请求。
 - Workbench 历史只展示白名单内的必要 DOCX 字段，不展示 worker、identity 或 replay 内部状态。DOCX 事件以 `nodeId` 定位，PPT 继续使用自己的 `location`，两套协议互不复用。
 
@@ -46,16 +44,16 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
-- docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足回归 case 口径。
+- docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足测试 case 口径。
 - 依赖本地文件语义的测试统一复用 `tests/fixtures/workspace` 作为共享输入目录，但该目录只作为真实输入文件来源；运行时通过设置页添加为文件地址，并先创建伙伴。
 - `How` 和 `Oracle` 必须映射到 [workbench.md](../prd/workbench.md) 的需求或验收编号。
-- `WB-BLOCKER-003`（上下文压缩提示）依赖真实模型使用量与正式压缩阈值触发，运行成本不确定，不作为每次源码回归的固定 case，发布时按影响评估单独执行真实检查，检查运行中与完成态过程组，且不得为 E2E 降低生产阈值或伪造 compaction 事件。压缩阈值随当前模型 effectiveWindow（`min(256000, floor(modelContext × 0.8))`）。
-- `WB-WPS-001` 正式 E2E 由 `wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 写盘后的 open dispatch；真窗口刷新由 `wps-office-reload-on-write-and-revert`（`pnpm test:workbench:wps-office`）覆盖已授权 WPS 文字 / 表格 / 演示，发布时按影响范围选择，正式 E2E 全量回归包含该组。已打开文档在写盘前由加载项 close 放锁，加载项复查文档确实已关闭才上报成功，关不掉则上报失败且馆长不写盘；写盘前等到文件可写，写成功后再刷新窗口。通道按 close-result 的 `remaining` 与占位文档是否建起来选择，不得用 SSE 是否断开判断；`remaining` 为 0 且占位已建起时仍走加载项 open，占位建不起来才用对应组件 exe 拉起并轮询 list 要摘录，不得 `cmd start`；被指派实例 open 失败或超时降级为一次系统打开。未安装 WPS 或对应组件加载项未授权时后者跳过该格式；已授权却连不上则算该格式失败，不得只测 docx 就当作三种格式都过。Workbench e2e 启动时跳过覆盖拷加载项文件，仍启动回环 `/addon`；`publish.xml` 与授权 path 固定优先端口 `18723`，不得改写到临时端口。xlsx / pptx 窗口刷新还要求 `/status` 的 `clients` 出现 `et` / `wpp`，不能只靠文字组件。加载项不得探测其他组件 `Active*` 对象；同组件多实例时 close / open 只投给持有该文档的 `clientId`，旧实例的文档列表和失败回报都不得影响当前实例。
+- `WB-BLOCKER-003`（上下文压缩提示）依赖真实模型使用量与正式压缩阈值触发，运行成本不确定，不作为每次源码测试的固定 case，发布时按影响评估单独执行真实检查，检查运行中与完成态过程组，且不得为 E2E 降低生产阈值或伪造 compaction 事件。压缩阈值随当前模型 effectiveWindow（`min(256000, floor(modelContext × 0.8))`）。
+- `WB-WPS-001` 正式 E2E 由 `wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 写盘后的 open dispatch；真窗口刷新由 `wps-office-reload-on-write-and-revert`（`pnpm test:workbench:wps-office`）覆盖已授权 WPS 文字 / 表格 / 演示，发布时按影响范围选择，正式 E2E 全量测试包含该组。已打开文档在写盘前由加载项 close 放锁，加载项复查文档确实已关闭才上报成功，关不掉则上报失败且馆长不写盘；写盘前等到文件可写，写成功后再刷新窗口。通道按 close-result 的 `remaining` 与占位文档是否建起来选择，不得用 SSE 是否断开判断；`remaining` 为 0 且占位已建起时仍走加载项 open，占位建不起来才用对应组件 exe 拉起并轮询 list 要摘录，不得 `cmd start`；被指派实例 open 失败或超时降级为一次系统打开。未安装 WPS 或对应组件加载项未授权时后者跳过该格式；已授权却连不上则算该格式失败，不得只测 docx 就当作三种格式都过。Workbench e2e 启动时跳过覆盖拷加载项文件，仍启动回环 `/addon`；`publish.xml` 与授权 path 固定优先端口 `18723`，不得改写到临时端口。xlsx / pptx 窗口刷新还要求 `/status` 的 `clients` 出现 `et` / `wpp`，不能只靠文字组件。加载项不得探测其他组件 `Active*` 对象；同组件多实例时 close / open 只投给持有该文档的 `clientId`，旧实例的文档列表和失败回报都不得影响当前实例。
 - WPS 相关 e2e 必须自带环境归零：进用例前和用例结束后各做一次「先不带 `/F` 请求关闭 wps / et / wpp，超时再强杀」，并清掉 `ncurator-workbench-wps-*` 临时工作区；三种格式之间也要归零。不归零时上一轮残留实例会连上本轮回环冒充本轮客户端，让 registry、dispatch 与断言随机失败，且临时工作区因文件锁删不掉。
 
 ## 4. 目录与命令
 
-Workbench 回归测试目录：
+Workbench 测试目录：
 
 ```text
 tests/case/workbench/
@@ -65,7 +63,7 @@ tests/case/workbench/
     timeline/
     message/
     scope/
-    provider-matrix/   # 正式 E2E：发版按影响范围或全量回归
+    provider-matrix/   # 正式 E2E：发版按影响范围或全量测试
   run/
     process/
     blocker/
@@ -74,16 +72,16 @@ tests/case/workbench/
   result/
     preview/
     apply/
-    wps-office/        # 正式 E2E：真开 WPS；发版按影响范围或全量回归
+    wps-office/        # 正式 E2E：真开 WPS；发版按影响范围或全量测试
   scheduled-task/
 ```
 
-回归测试命令：
+测试命令：
 
 - `pnpm test:workbench`
 - `pnpm test:workbench:e2e`
-- `pnpm test:workbench:provider-matrix`（全服务商冒烟，可单独执行；发版按影响范围或全量回归）
-- `pnpm test:workbench:wps-office`（本机已授权 WPS，可单独执行；发版按影响范围或全量回归）
+- `pnpm test:workbench:provider-matrix`（全服务商冒烟，可单独执行；发版按影响范围或全量测试）
+- `pnpm test:workbench:wps-office`（本机已授权 WPS，可单独执行；发版按影响范围或全量测试）
 
 自动更新模拟（聚合入口，不证明真实安装成功）：
 
@@ -101,12 +99,12 @@ pnpm test:update:e2e
 
 补充规则：
 
-- `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 回归测试入口。
+- `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 测试入口。
 - 需要验证正式安装包时，调试使用 `pnpm test:e2e:package -- --bundle <release-bundle.json>`；它会校验并安装已构建候选包，再对安装后的真实应用执行所选正式 E2E，不重新构建。发布时通过 `release:win` / `release:mac` 的 `--test-only` 按影响评估选择范围，不带过滤参数时执行全部正式 E2E。
 - `conversation / run / result / scheduled-task` 是稳定 suite，不因 PRD 小节增删而轻易重排。
 - suite 下的 `partner / composer / timeline / message / scope / process / blocker / browser / persistence / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。不存在 `search/` 目录。
 
-## 5. 回归测试清单
+## 5. 测试清单
 
 ### 5.1 `conversation`
 
@@ -243,7 +241,7 @@ pnpm test:update:e2e
 - Why：日常全量 live 只跑 `AI_LIVE_PROVIDER`/`AI_LIVE_MODEL` 选定目标；需要单独 smoke 覆盖「有 Key 的全部内置服务商」连通性。
 - How：读取 `listConfiguredLiveLlmTargets()`；为每个目标走 Settings UI 创建推荐服务商；创建伙伴后依次点预设 option（不得走自定义搜索兜底）并发送「你好」，等待 run 完成。
 - Oracle：每个已配置 Key 的服务商都有非空最终回答；未配置 Key 的服务商不参与、不失败。
-- Not：不评价回答质量；正式 E2E 全量回归包含本 case，也可用 `pnpm test:workbench:provider-matrix` 或 `--case live-preset-provider-smoke` 单独执行。
+- Not：不评价回答质量；正式 E2E 全量测试包含本 case，也可用 `pnpm test:workbench:provider-matrix` 或 `--case live-preset-provider-smoke` 单独执行。
 
 #### `user-message-actions`
 
@@ -258,10 +256,10 @@ pnpm test:update:e2e
 
 - 测试类型：`e2e / live`
 - What：`+`、粘贴与拖入中间聊天区添加附件时，图片只以路径和元数据进入伙伴消息记录，常规文档和非白名单扩展名也能加入，并保持图片预览、文件打开、删除、普通文本粘贴和大文件提示行为。粘贴保存到伙伴 runtime assets。
-- Why：`+` 与拖放必须把源文件路径交给 AI，粘贴仍需保存副本，回归必须守住这两条不同链路。
+- Why：`+` 与拖放必须把源文件路径交给 AI，粘贴仍需保存副本，测试必须守住这两条不同链路。
 - How：创建伙伴；需要文件资料时通过设置页添加文件地址；通过系统文件窗口选择图片和多种文件，覆盖拖入、删除后重新添加图片、大文件 warning，并通过真实模型发送一次带附件消息；发送后读取 `ai_run` 与 log 投影消息。
 - Oracle：文件拖入中间聊天区时显示覆盖层，放下后消失；无伙伴时不添加附件；`+` 选择的文件保留原始源路径；粘贴文件落到 `userData/partners/{id}/runtime/assets/`；图片预览和删除正常；发送后图片附件仍是路径，持久消息不含 Base64，对齐 `WB-COMPOSER-010`、`WB-COMPOSER-013-AC2`、`WB-COMPOSER-013-AC3`；运行时缓存、HTTP(S) 原地址和失效占位由 AI tool 契约覆盖，对齐 `WB-COMPOSER-013-AC4`。
-- Not：不在跨平台业务回归中验证系统原生文件选择器的视觉细节；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
+- Not：不在跨平台业务测试中验证系统原生文件选择器的视觉细节；不通过 `attachmentPickResponse` 或直接 `attachmentSaveFile` 伪造附件结果。
 
 #### `reference-mention-keyboard`
 
@@ -285,7 +283,7 @@ pnpm test:update:e2e
 
 - 测试类型：`e2e`
 - What：空伙伴输入区布局、右侧默认无占位折叠、标签栏密度与折叠入口、Tab 溢出滚动、伙伴级标签和展开状态恢复、中间|右分隔条拖拽与阈值吸合、窗口缩放时主区比例同步、浏览器缩放菜单、地址栏“前往”与“将打开外部浏览器”按钮。
-- Why：右侧资源工作台和聊天输入区共享窗口高度与标题栏命中区域，普通功能测试无法发现输入框被推出窗口、折叠按钮放错区域、Tab 无法滚动、分隔条拖拽/吸合失效或原生浏览器遮挡浮层等视觉交互回归。
+- Why：右侧资源工作台和聊天输入区共享窗口高度与标题栏命中区域，普通功能测试无法发现输入框被推出窗口、折叠按钮放错区域、Tab 无法滚动、分隔条拖拽/吸合失效或原生浏览器遮挡浮层等视觉交互测试。
 - How：直接进入真实 Workbench，先确认无伙伴空态右侧 shell 不存在并测量输入区位置；创建伙伴后展开右侧，拖拽中间|右分隔条确认宽度实时变化，拖至阈值以下确认立即吸合折叠；拉宽窗口确认中间与右侧按同一比例同步变宽；在 A/B 伙伴分别创建不同标签并设置不同活动标签和展开状态，来回切换；再连续创建八个浏览器 Tab 验证滚动和菜单。
 - Oracle：各伙伴恢复自己的标签、活动状态和展开状态；右侧宽度比例、分隔条与吸合对齐 `WB-PANEL-001-AC10`（含 macOS 窗口边缘 live-resize 限帧与缩放期关闭面板 transition）；无消息时输入区保持居中，有消息后输入区固定在主区底部，对齐 `WB-COMPOSER-009-AC11`；其余布局、动画、滚动和菜单要求不变，对齐 `WB-PANEL-001`、`WB-SESSION-008`。
 - Not：不验证公网网页、模型回答质量或系统窗口按钮本身；Stagehand targetId、共享持久分区和历史恢复继续由 `browser-use-task-panel` 覆盖。
@@ -611,9 +609,9 @@ pnpm test:update:e2e
 
 #### `wps-office-reload-on-write-and-revert`
 
-- 测试类型：`e2e / exclusive`（路径 `result/wps-office/`；可单独执行，发版按影响范围选择或随全量回归）
+- 测试类型：`e2e / exclusive`（路径 `result/wps-office/`；可单独执行，发版按影响范围选择或随全量测试）
 - What：本机已授权的 WPS 打开目标 docx、xlsx、pptx 后，真实 AI 写回/回退让对应组件加载项先 close 放锁再写盘再 open，窗口摘录分别含标记和恢复原文。
-- Why：只证明馆长 dispatch 不能证明用户看到的 WPS 窗口已换新稿。Windows 上 WPS 独占锁必须先 close 才能写盘。文字、表格、演示是独立客户端，只测 docx 不能证明 Excel / PPT 窗口会刷新。授权弹窗可能卡住无人值守自动化，因此提供单独命令；发版时按影响范围选择，发版全量回归包含该 case。
+- Why：只证明馆长 dispatch 不能证明用户看到的 WPS 窗口已换新稿。Windows 上 WPS 独占锁必须先 close 才能写盘。文字、表格、演示是独立客户端，只测 docx 不能证明 Excel / PPT 窗口会刷新。授权弹窗可能卡住无人值守自动化，因此提供单独命令；发版时按影响范围选择，发版全量测试包含该 case。
 - How：执行 `pnpm test:workbench:wps-office` 或 `--case wps-office-reload-on-write-and-revert`。不覆盖拷加载项、不点授权、不用辅助功能点 UI。进用例前先做 WPS 环境归零（不带 `/F` 请求关闭 wps / et / wpp，超时再强杀，然后清 `ncurator-workbench-wps-*` 临时工作区），否则上一轮残留实例会冒充本轮客户端。馆长回环先起来；`publish.xml` 与授权 path 保持 `http://127.0.0.1:18723/addon/`。若回环不在优先端口 `18723`（说明本机另有馆长占用），跳过整案，因为已打开的 WPS 仍从优先端口拉加载项。独占 `18723` 时，对 `sample-edit.docx`、`经营周报.xlsx`、`品牌策略提案.pptx` 分别用本机 WPS 打开临时工作区文件：macOS 走 `open -a`；Windows 按注册表 `InstallRoot` 与默认安装目录解析启动器 / 对应组件 exe（`wps.exe` / `et.exe` / `wpp.exe`），进程拉起后立即返回、不等待 WPS 退出。等待 `/status` 出现对应组件客户端（`wps` / `et` / `wpp`）且该文档已登记。再通过真实 Workbench UI 发送编辑；写盘前加载项 close 并上报 `remaining`，馆长等到文件锁释放再写盘；写回后读该路径 `reload-result` 摘录含标记，回退后摘录不含标记。标记落点必须在加载项摘录采样范围内（xlsx 指定写 `H1`，不能让模型自选任意空白单元格，否则摘录读不到），摘录采样为表格 200 行 × 50 列、演示前 10 页、单次上限 20000 字符。`remaining` 为 0 时由占位文档撑住组件进程后继续走加载项 open；占位建不起来才用对应组件 exe 拉起（不得 `cmd start` 把表格/演示塞进已打开的文字窗口），再经 list 轮询取摘录、不再二次 Open；被指派实例报 open 失败或超时则降级一次系统打开。每种格式跑完立即归零 WPS，下一种格式从空环境开始；单种格式失败只记该格式失败并继续跑后面的格式，不得让 docx 或 xlsx 的问题把 pptx 挡在门外。本机未装 WPS、或该组件 `authaddin` 未授权则跳过该格式；该组件已授权但约 90 秒内加载项未连接则该格式失败。三种格式都未授权才跳过整案。
 - Oracle：磁盘写回含标记、回退恢复原文；已授权的每种格式都必须给出结论，加载项 `reload-result` 写回后摘录含标记、回退后不含标记，对齐 `WB-WPS-001-AC1`、`WB-WPS-001-AC2`、`WB-WPS-001-AC3`。断言数据按格式列出 covered / failed 及失败原因，任一已授权格式未 covered 即失败。未连接时不发 close；刷新失败不回滚已成功写盘，对齐 `WB-WPS-001-AC4`。超时报错必须带上 `clientId`、已登记文档和被拒的 close / open 回报原因，便于区分「投错实例」和「组件真的打不开」。用例结束后在删除临时工作区前先归零 WPS，清理目录遇到占用不作为失败。
 - Not：不断言授权弹窗文案、功能区页签肉眼可见或滚动恢复。`WB-WPS-001-AC5` 只作为未授权跳过说明。验收以 `/status` 为准。
@@ -656,7 +654,7 @@ pnpm test:update:e2e
 
 ### 5.4 `scheduled-task`
 
-定时任务回归单独归类，Oracle 引用 [`workbench.md`](../prd/workbench.md) 的 `ST-*` 编号。调度触发时点由真实程序运行与系统时间决定，case 通过「下一分钟」级别的短周期调度验证端到端触发，不伪造系统时钟。下列 AC 由 unit `tests/case/unit/scheduled-task-service.test.ts` 承担，不进入 Workbench E2E 发现范围：`ST-PARTNER-001-AC2`、`ST-RUN-001-AC3`、`ST-RUN-001-AC4`、`ST-RUN-003-AC1/AC2`、`ST-RUN-004-AC2/AC3`、`ST-RUN-005-AC1/AC2/AC3`。`ST-PARTNER-001-AC1`（删除专属伙伴后任务仍在）标为不测。
+定时任务测试单独归类，Oracle 引用 [`workbench.md`](../prd/workbench.md) 的 `ST-*` 编号。调度触发时点由真实程序运行与系统时间决定，case 通过「下一分钟」级别的短周期调度验证端到端触发，不伪造系统时钟。下列 AC 由 unit `tests/case/unit/scheduled-task-service.test.ts` 承担，不进入 Workbench E2E 发现范围：`ST-PARTNER-001-AC2`、`ST-RUN-001-AC3`、`ST-RUN-001-AC4`、`ST-RUN-003-AC1/AC2`、`ST-RUN-004-AC2/AC3`、`ST-RUN-005-AC1/AC2/AC3`。`ST-PARTNER-001-AC1`（删除专属伙伴后任务仍在）标为不测。
 
 #### `scheduled-task-view-entry-and-isolation`
 

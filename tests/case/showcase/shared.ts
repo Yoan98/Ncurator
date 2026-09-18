@@ -8,7 +8,7 @@ import {
   getWorkbenchLocator,
   getWorkbenchPrefixLocator,
   workbenchSelectors
-} from '../harness/e2e/workbench'
+} from '../../harness/e2e/workbench'
 
 export const USD_CNY = 7.2
 

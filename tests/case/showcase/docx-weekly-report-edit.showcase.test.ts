@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { runShowcaseCase } from '../harness/e2e/run-e2e-case'
+import { runShowcaseCase } from '../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -16,33 +16,19 @@ import {
   waitForApplyEntryByFileName,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
-} from '../harness/e2e/workbench'
-import { EXCEL_EDIT_PROMPT, EXCEL_FILE_NAME } from './createSeeds'
+} from '../../harness/e2e/workbench'
+import { DOCX_EDIT_PROMPT, DOCX_FILE_NAME } from './createSeeds'
 import {
   computeShowcaseCost,
   ensureDocumentMode,
-  inspectExcelEditResult,
   readApplyChangeCounts,
   requireShowcaseFixture,
-  screenshotExcelUsedRange,
+  screenshotScrollerPages,
   seedWorkspaceWithFixture
 } from './shared'
 
-const CASE_ID = 'excel-budget-edit'
-const EXPORT_DIR = path.resolve('tests/logs/showcase/export/excel-budget-edit')
-
-const waitExcelReady = async (page: Parameters<typeof getWorkbenchLocator>[0]) => {
-  const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
-  await viewer.waitFor({ state: 'visible', timeout: 30_000 })
-  await page.waitForFunction(
-    (testId) =>
-      document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('data-excel-ready') ===
-      'true',
-    workbenchSelectors.excelViewer,
-    { timeout: 30_000 }
-  )
-  return viewer
-}
+const CASE_ID = 'docx-weekly-report-edit'
+const EXPORT_DIR = path.resolve('tests/logs/showcase/export/docx-weekly-report-edit')
 
 describe('showcase collection', () => {
   it(
@@ -50,8 +36,8 @@ describe('showcase collection', () => {
     async () => {
       await runShowcaseCase({
         caseId: CASE_ID,
-        groups: ['excel'],
-        description: '官网样例：改过关预算表同一份文件，截能看出加列和改金额的审核态。',
+        groups: ['docx'],
+        description: '官网样例：改过关周报同一份文件，只截审核态绿增红删。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -60,10 +46,10 @@ describe('showcase collection', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const env = loadWorkbenchLiveModelEnv()
-          await requireShowcaseFixture(EXCEL_FILE_NAME)
+          await requireShowcaseFixture(DOCX_FILE_NAME)
           const rootPath = await seedWorkspaceWithFixture(
-            'ncurator-showcase-excel-edit-',
-            EXCEL_FILE_NAME
+            'ncurator-showcase-docx-edit-',
+            DOCX_FILE_NAME
           )
           runtime.registerResource({
             name: `showcase-workspace:${rootPath}`,
@@ -79,14 +65,14 @@ describe('showcase collection', () => {
           })
           await configureLiveModelThroughSettingsUi(page, env)
           await prepareWorkbenchWorkspaceThroughUi(page, {
-            workspaceName: '云枢费用修订',
+            workspaceName: '云枢周报修订',
             rootPath
           })
-          await createPartnerThroughWorkbenchUi(page, '云枢费用修订')
+          await createPartnerThroughWorkbenchUi(page, '云枢周报修订')
           await selectWorkbenchModel(page, env.modelName)
 
           const startedAtMs = Date.now()
-          await sendWorkbenchMessage(page, EXCEL_EDIT_PROMPT)
+          await sendWorkbenchMessage(page, DOCX_EDIT_PROMPT)
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
@@ -96,36 +82,24 @@ describe('showcase collection', () => {
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
 
-          const inspection = await inspectExcelEditResult(path.join(rootPath, EXCEL_FILE_NAME))
-          const applyEntry = await waitForApplyEntryByFileName(page, EXCEL_FILE_NAME)
+          const applyEntry = await waitForApplyEntryByFileName(page, DOCX_FILE_NAME)
           await applyEntry.click()
-          const viewer = await waitExcelReady(page)
+          const viewer = getWorkbenchLocator(page, workbenchSelectors.docxViewer)
+          await viewer.waitFor({ state: 'visible', timeout: 30_000 })
+          const scroller = viewer.locator('.docx-content')
+          await scroller.locator('p, table, section, ins, del').first().waitFor({
+            state: 'visible',
+            timeout: 30_000
+          })
+          await page.waitForTimeout(1200)
           await fs.rm(EXPORT_DIR, { recursive: true, force: true })
           await ensureDocumentMode(page, '审核')
           const changeCounts = await readApplyChangeCounts(page)
-          const grid = getWorkbenchLocator(page, workbenchSelectors.excelGrid)
-          const target = (await grid.count()) ? grid : viewer
-          const screenshotNames: string[] = []
-          await fs.mkdir(EXPORT_DIR, { recursive: true })
-          const tabs = inspection.sheetNames.length > 0 ? inspection.sheetNames : ['Sheet1']
-          for (const [index, sheetName] of tabs.entries()) {
-            const tab = viewer
-              .locator('[data-u-comp="slide-tab-item"]')
-              .filter({ hasText: sheetName })
-              .first()
-            if (await tab.count()) {
-              await tab.click()
-              await page.waitForTimeout(500)
-            }
-            const fileName = `sheet-${index + 1}.png`
-            await screenshotExcelUsedRange(target, path.join(EXPORT_DIR, fileName))
-            screenshotNames.push(fileName)
-          }
+          const screenshotNames = await screenshotScrollerPages(scroller, EXPORT_DIR, 'page')
           const cost = computeShowcaseCost(evidence.events, {
             modelName: env.modelName,
-            prompt: EXCEL_EDIT_PROMPT,
-            fileName: EXCEL_FILE_NAME,
-            ...inspection,
+            prompt: DOCX_EDIT_PROMPT,
+            fileName: DOCX_FILE_NAME,
             screenshotNames,
             durationMs: evidence.durationMs,
             ...changeCounts
@@ -135,14 +109,13 @@ describe('showcase collection', () => {
             `${JSON.stringify(cost, null, 2)}\n`
           )
           runtime.signal({
-            name: 'showcase-excel-edit-cost',
-            message: '官网 Excel 审核样例实际消耗',
+            name: 'showcase-docx-edit-cost',
+            message: '官网 Word 审核样例实际消耗',
             data: cost
           })
 
           return {
             screenshotCount: screenshotNames.length,
-            ...inspection,
             insertCount: changeCounts.insertCount,
             deleteCount: changeCounts.deleteCount,
             usageCalls: cost.usage.calls,
@@ -155,16 +128,12 @@ describe('showcase collection', () => {
         assert: async (result, runtime) => {
           await runtime.assertThat(
             result.screenshotCount >= 1 &&
-              result.hasOccurredColumn === true &&
-              result.adAmount !== null &&
-              result.adAmount <= 50_000 &&
               (result.insertCount > 0 || result.deleteCount > 0) &&
               result.usageCalls > 0 &&
-              result.toolNames.some((name) => name.startsWith('excel_')),
+              result.toolNames.some((name) => name.startsWith('docx_')),
             {
-              name: 'showcase-excel-budget-edit-ready',
-              message:
-                '应改到过关预算表同一份文件，文件里有已发生列和品牌推广 5 万，并截到能看出的审核改动。',
+              name: 'showcase-docx-weekly-report-edit-ready',
+              message: '应改到过关周报同一份文件，并截到能看出的审核红绿和真实用量。',
               data: result
             }
           )

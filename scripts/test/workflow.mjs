@@ -10,7 +10,7 @@ const ROOT = process.cwd()
 const require = createRequire(import.meta.url)
 const TESTS_ROOT = path.join(ROOT, 'tests')
 const TEST_CASES_ROOT = path.join(TESTS_ROOT, 'case')
-const SHOWCASE_ROOT = path.join(TESTS_ROOT, 'showcase')
+const SHOWCASE_ROOT = path.join(TEST_CASES_ROOT, 'showcase')
 const resolveLocalBin = (name) =>
   path.join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name)
 const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
@@ -665,7 +665,12 @@ const validateTestArchitecture = () => {
 }
 
 const formatScope = (input) =>
-  [[input.domain, input.suite, ...input.groups].filter(Boolean).join('/'), input.type]
+  [
+    input.showcase
+      ? 'showcase'
+      : [input.domain, input.suite, ...input.groups].filter(Boolean).join('/'),
+    input.type
+  ]
     .filter(Boolean)
     .join(' ')
 

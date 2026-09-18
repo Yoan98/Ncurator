@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { runShowcaseCase } from '../harness/e2e/run-e2e-case'
+import { runShowcaseCase } from '../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -13,7 +13,7 @@ import {
   selectWorkbenchModel,
   sendWorkbenchMessage,
   waitForWorkbenchAiRunCompletion
-} from '../harness/e2e/workbench'
+} from '../../harness/e2e/workbench'
 import { COURT_SEARCH_HOST, COURT_SEARCH_KEYWORDS, COURT_SEARCH_PROMPT } from './createSeeds'
 import {
   captureEmbeddedBrowserPng,

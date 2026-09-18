@@ -2,7 +2,7 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   test: {
-    include: ['tests/showcase/**/*.showcase.test.ts'],
+    include: ['tests/case/showcase/**/*.showcase.test.ts'],
     exclude: ['tests/harness/**', 'tests/fixtures/**', 'tests/logs/**'],
     environment: 'node',
     globals: true,
