@@ -27,7 +27,7 @@ NCurator-Desktop 是本地优先的 Electron 桌面应用。文档解析、嵌�
 
 **检索**
 
-向量搜索（语义）+ LanceDB FTS（关键词）+ RRF 融合。设置页「更新索引」进行中时，知识库工具直接失败；检查更新不拦截检索。检索不再按 `generation_id` 过滤。
+向量搜索（语义）+ LanceDB FTS（关键词）+ RRF 融合。设置页「更新索引」进行中时，知识库工具直接失败；检查更新不拦截检索。
 
 ### 分层与主链路
 
@@ -78,13 +78,13 @@ flowchart TB
 
 工作地址是默认执行范围而非硬边界：模型默认在设置页现有文件地址内操作，系统级需求可访问地址外绝对路径。文件工具的 `sourcePath` / `outputPath` 必须为本机绝对路径（`read_image` 的 `sourcePath` 额外接受 HTTP(S) 地址）。内置浏览器由 Electron `WebContentsView` 承载；Stagehand 在操作网页时按 Tab 挂到本机回环 CDP 桥（`webContents.debugger`），不在进程启动时打开 `--remote-debugging-port`。对象存储在 `userData/partners/{id}/objects/sha256/<前 2 位>/<其余>`。
 
-网页搜索由冻结的 Python sidecar 提供搜索与抓取；抓取 sidecar 只把隐藏 crawler view 登记进同一座 CDP 桥。`web_search` 只向 AI 返回结构化结果，不得自动展开右侧面板；右侧浏览器仅由 `browser_use` 或用户手动开标签触发。抓取细节见代码与 `tool-design.md`。
+网页搜索由冻结的 Python sidecar 提供搜索与抓取；抓取 sidecar 只把隐藏 crawler view 登记进同一座 CDP 桥。`web_search` 只向 AI 返回结构化结果，不得自动展开右侧面板；右侧浏览器仅由 `browser_use` 或用户手动开标签触发。抓取细节见代码与 `ai-harness/tool-design.md`。
 
 开发版使用独立 `*-dev` user-data 目录；E2E 可通过 `NCURATOR_USER_DATA_PATH` 提供隔离目录。
 
 ## AI 运行时
 
-AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`context_budget ⇄ context_compaction → brain → dispatch → (learning | plan | hand) → …`，无工具调用时 `finalizeDelivery` 结束 run。节点细节见 `human-harness.md`。
+AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`context_budget ⇄ context_compaction → brain → dispatch → (learning | plan | hand) → …`，无工具调用时 `finalizeDelivery` 结束 run。节点细节见 `ai-harness/human-harness.md`。
 
 **设计文档（修改 AI 行为前必读）**
 
@@ -95,9 +95,9 @@ AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`c
 
 **稳定结构摘要**
 
-- **Transcript 真相源**：`chat_session_message_log`（append-only，表名保留，行挂 `partner_id`）。已经压进摘要的旧对话原文不再发给主模型，由 `compaction_checkpoint` 合成 Compact User。`ai_run` 管生命周期与 UI 运行态；`ai_file_change` 管文件域，不进 brain prompt。不存在 `chat_search_turn`。清空消息记录物理删除该伙伴 log 与对应 `ai_run`。
+- **Transcript 真相源**：`chat_session_message_log`（append-only，行挂 `partner_id`）；压缩、恢复与投影细节见 `ai-harness/human-harness.md`，字段见 `doc/database.md`。
 - **Skill / Tool**：builtin skill 默认可 bind；external 需 `learn_skill`；`agent-control` 承载 `learn_skill`、`update_plan`、`read_image`。
-- **伙伴 UI 状态**：`partner_ui_state(partner_id PK)` 保存 Composer 与右侧资源工作台快照；`workbench_ui_state` 只保存 `active_view_key`（当前伙伴 id）。
+- **伙伴 UI 状态**：`partner_ui_state(partner_id PK)` 与 `workbench_ui_state.active_view_key` 以 SQLite 为唯一真相，字段见 `doc/database.md`。
 
 ### AI 数据源与消费方
 
@@ -135,13 +135,11 @@ flowchart LR
 | Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                            |
 | 定时任务              | 独立主区配置与启用开关；到点向专属伙伴追加提示词                                                                                                                |
 
-各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准；工具契约见 `tool-design.md`，活例子按需生成（`pnpm doc:ai-tool-prompt-audit`，不入库）。
+各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准；工具契约见 `ai-harness/tool-design.md`，活例子按需生成（`pnpm doc:ai-tool-prompt-audit`，不入库）。
 
 ## 存储与索引
 
-业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL；`generation_id` 只用于写后清理，不进检索 `where`。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为唯一持久化真相。详细 schema 见 `doc/database.md`。
-
-文件和网页索引用 `generation_id` 区分新旧写入；成功后删除旧 chunk，失败则删除半成品新 chunk。检索时库中只应留下最新索引。设置页正在「更新索引」时，`kb_search` / `kb_list_documents` 返回错误。
+业务状态只有一个真相：SQLite 存业务与元数据，LanceDB 存可重建索引。检索在 LanceDB 上按 `workspace_id` / `document_id` / `source_type` 过滤，再用 SQLite 文档元数据补来源路径或 URL。Workbench 伙伴 UI 与浏览器 Tab 状态以 SQLite 为唯一持久化真相。索引 generation、写后清理与检索过滤规则见 `doc/database.md`。
 
 ## 主链路
 

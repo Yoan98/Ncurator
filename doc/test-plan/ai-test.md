@@ -4,15 +4,15 @@
 
 | caseId                                              | 状态 | 评分（0-100） | 模型                             | 时间                 | run 路径                                                                                         | 简短依据                                                                                                                                                                                                                                                                                                       |
 | --------------------------------------------------- | ---- | ------------: | -------------------------------- | -------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ |
-| human-risk-report-draft-live                        | 完成 |            97 | qwen3.8-flash                    | 2026-08-31 18:42 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260831-183231-689                        | 读取模板/上周周报/工作文档后 cp 模板建新周报并用 docx 写入，applyId 落盘，原文件未改（Oracle 已按结果口径放宽）。                                                                                                                                                                                              |
-| human-context-compaction-natural-trigger-live       | 完成 |            90 | qwen3.8-flash                    | 2026-09-12 13:38 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260912-130017-162       | 去掉 discard/digest 后四断言通过（2269s）。Run1 未压；Run2 预算 36297 过 36k，半截 throughSeq=75 后多次历史压（112/136/182/235/283/304）并交付；Run3 再压 333/366（半截）/376/397/437。`historyFloorKind` 仅 none/compaction。跨 run 缓存 0.993（35840/36101）。同 run 连续压偏慢；并行另一次撞过 400 步上限。 |
+| human-risk-report-draft-live                        | 完成 |            97 | qwen3.8-flash                    | 2026-08-31 18:42 CST | tests/logs/ai/human/live/human-risk-report-draft-live/20260831-183231-689                        | 读取模板/上周周报/工作文档后 cp 模板建新周报并用 docx 写入，applyId 落盘，原文件未改。                                                                                                                                                                                              |
+| human-context-compaction-natural-trigger-live       | 完成 |            90 | qwen3.8-flash                    | 2026-09-12 13:38 CST | tests/logs/ai/human/live/human-context-compaction-natural-trigger-live/20260912-130017-162       | 去掉 discard/digest 后四断言通过（2269s）。Run1 未压；Run2 预算 36297 过 36k，半截 throughSeq=75 后多次历史压（112/136/182/235/283/304）并交付；Run3 再压 333/366（半截）/376/397/437。`historyFloorKind` 仅 none/compaction。跨 run 缓存 0.993（35840/36101）。 |
 | human-excel-read-weekly-review-live                 | 完成 |            91 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-read-weekly-review-live/20260830-134623-663                 | Oracle 通过；四表结构/公式/退货异常/口径不对等讲清；6×excel_read。过程仍 6×terminal 验算略多。缓存 83.6%。                                                                                                                                                                                                     |
 | human-excel-edit-weekly-review-live                 | 完成 |            95 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-edit-weekly-review-live/20260830-134623-663                 | 先读后写：4×set_range，无多余 set_style；66s 交付，1 条记录。缓存 86.0%。                                                                                                                                                                                                                                      |
 | human-excel-create-monthly-budget-live              | 完成 |            92 | deepseek-v4-flash                | 2026-08-30 13:46 CST | tests/logs/ai/human/live/human-excel-create-monthly-budget-live/20260830-134623-662              | Oracle 通过；9×excel_edit（2 表 + 2 set_range + 5 set_style），87s。较 qwen 300 步失败大幅改善。缓存 89.3%。                                                                                                                                                                                                   |
-| human-kb-guided-docx-comparison-draft-live          | 完成 |            90 | qwen3.8-flash                    | 2026-09-01 09:56 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260901-095608-055          | KB 缩圈后双目标 docx 成功回写并 apply（2 个带 applyId 的 docx artifact），来源课件未改；已修复 isPathInsideRoot 对 macOS symlink 前缀（/var vs /private/var）的误判。                                                                                                                                          |
+| human-kb-guided-docx-comparison-draft-live          | 完成 |            90 | qwen3.8-flash                    | 2026-09-01 09:56 CST | tests/logs/ai/human/live/human-kb-guided-docx-comparison-draft-live/20260901-095608-055          | KB 缩圈后双目标 docx 成功回写并 apply（2 个带 applyId 的 docx artifact），来源课件未改。 |
 | human-ppt-create-executive-deck-live                | 完成 |            82 | qwen3.8-flash                    | 2026-09-01 10:52 CST | tests/logs/ai/human/live/human-ppt-create-executive-deck-live/20260901-105227-657                | 28×ppt_edit 完成 6 页 deck 并 ppt created 落盘；8×read_image 自查修复溢出（产物 0 shape 超 960×540）；过程 8 次失败（update_plan 参数错、元素超画布、找不到 slide）但自恢复。超时已放宽到 30min。                                                                                                              |
 | human-ppt-edit-management-review-live               | 完成 |            93 | qwen3.8-flash                    | 2026-08-30 12:36 CST | tests/logs/ai/human/live/human-ppt-edit-management-review-live/20260830-123643-456               | 中文《品牌策略提案》插执行摘要、王晨→李然、2002→2015；议程/愿景未动，页数+1。缓存 81.2%。                                                                                                                                                                                                                      |
-| human-ppt-read-management-risk-review-live          | 完成 |            90 | qwen3.8-flash                    | 2026-08-30 12:39 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260830-123903-652          | 中文提案只读，Oracle 通过；KPI 85% 等待 raw logs 复核。缓存 74.1%（首轮占比高）。                                                                                                                                                                                                                              |
+| human-ppt-read-management-risk-review-live          | 完成 |            90 | qwen3.8-flash                    | 2026-08-30 12:39 CST | tests/logs/ai/human/live/human-ppt-read-management-risk-review-live/20260830-123903-652          | 中文提案只读，Oracle 通过；KPI 85% 正确。缓存 74.1%（首轮占比高）。 |
 | human-terminal-data-reconciliation-live             | 完成 |            96 | deepseek-v4-flash                | 2026-08-13 20:20 CST | tests/logs/ai/human/live/human-terminal-data-reconciliation-live/20260813-202008-775             | 终端对账，交付财务异常 CSV 金额/记录精确，输入文件未改（type 已按用户语句中文说明填写）。                                                                                                                                                                                                                      |
 | human-runtime-script-system-python-live             | 完成 |            95 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-script-system-python-live/20260814-160300-706             | 本机 Python 在临时脚本目录运行临时脚本，得到确定性结果并核对。                                                                                                                                                                                                                                                 |
 | human-runtime-download-python-live                  | 完成 |            92 | deepseek-v4-flash                | 2026-08-14 16:03 CST | tests/logs/ai/human/live/human-runtime-download-python-live/20260814-160340-415                  | Python 不可用时自主下载便携运行时并运行临时脚本，得到正确结果。                                                                                                                                                                                                                                                |
@@ -24,7 +24,7 @@
 | human-text-file-read-checkout-readiness-live        | 完成 |            93 | deepseek-v4-flash                | 2026-08-13 20:16 CST | tests/logs/ai/human/live/human-text-file-read-checkout-readiness-live/20260813-201642-554        | 只读审查准确识别就绪性风险与保留配置，源文件未改。                                                                                                                                                                                                                                                             |
 | human-web-search-by-url-live                        | 完成 |            95 | qwen3.8-flash                    | 2026-09-01 16:24 CST | tests/logs/ai/human/live/human-web-search-by-url-live/20260901-162353-087                        | 指定地址后连续 2×fetch 通知页与指南页，事实回答正确，errors=0。                                                                                                                                                                                                                                                |
 | human-web-search-intent-query-live                  | 完成 |            90 | qwen3.8-flash                    | 2026-09-01 16:24 CST | tests/logs/ai/human/live/human-web-search-intent-query-live/20260901-162353-087                  | 2×search + 2×fetch 成功读取 read_csv 与 DataFrame.to_csv 官方 API 页，errors=0。                                                                                                                                                                                                                               |
-| human-terminal-preview-service-live                 | 完成 |            88 | qwen3.8-flash                    | 2026-08-31 18:30 CST | tests/logs/ai/human/live/human-terminal-preview-service-live/20260831-183019-685                 | 启动预览服务、确认页面并关闭服务（Oracle 已改为双路径：前台 yield/读终端或后台+wait；不再拒绝 detached）。                                                                                                                                                                                                     |
+| human-terminal-preview-service-live                 | 完成 |            88 | qwen3.8-flash                    | 2026-08-31 18:30 CST | tests/logs/ai/human/live/human-terminal-preview-service-live/20260831-183019-685                 | 启动预览服务、确认页面并关闭服务，前台 yield/读终端或后台+wait 两条路径均可。 |
 | human-legacy-doc-edit-skip-live                     | 完成 |            88 | deepseek-v4-flash                | 2026-08-21 23:11 CST | tests/logs/ai/human/live/human-legacy-doc-edit-skip-live/20260821-231108-129                     | .doc 写入失败后停止重试，源文件不变，任务完成。                                                                                                                                                                                                                                                                |
 | human-docx-visual-reading-live                      | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:04 CST | tests/logs/ai/human/live/human-docx-visual-reading-live/20260821-230430-243                      | 真实读取 DOCX 图片并准确回答，源文件未改。                                                                                                                                                                                                                                                                     |
 | human-pdf-visual-reading-live                       | 完成 |            92 | deepseek-v4-flash / qwen3.6-plus | 2026-08-21 23:07 CST | tests/logs/ai/human/live/human-pdf-visual-reading-live/20260821-230727-871                       | PDF 页级视觉读取与识图，正确回答图形差异，源 PDF 未改。                                                                                                                                                                                                                                                        |
@@ -47,7 +47,7 @@
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作地址内修改记录、Artifact、安全校验和工作地址外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作地址外绝对路径读取、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。`browser_use` 网址协议、系统错误页、加载超时与 `navigate` 成败字段由 Workbench `browser-navigate-error-page` 与 unit `navigate-plan` 覆盖。
-- 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
+- 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](../../src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。
 - `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再让冻结 sidecar bin 的 Python Playwright 显式复用该测试 Electron 的 Node，通过隔离 context 抓取；host 必须 headless 且不得挂主窗口。该独立 host 可以继续开进程级调试口，与正式 App 无关。正式 App 的 `browser_use` 在无进程级 `--remote-debugging-port` 下，于 observe/act 时按 Tab 挂本机 CDP 桥。另覆盖 `browser_use` 服务不可用诊断。禁止使用 sidecar 内置 Node/浏览器或 Electron 默认 context。`web_search` 结果只回模型，不得自动展开右侧搜索列表（该面板已不存在）。
@@ -107,17 +107,21 @@ AI 回归测试目录：
 - `tests/case/ai/human/mock-llm/<case>.test.ts`
 - `tests/case/ai/human/live/<case>.test.ts`
 
-一文件多 `caseId` 合法；计划 headings 与文件归属：
+一文件多 `caseId` 合法；计划 headings 与文件归属（列出文件名 ≠ `caseId`、或一文件多 `caseId` 的文件）：
 
 | 文件                                                        | 包含的 caseId                                                                      |
 |------|----------------|
 | `tool/web-browsing/web-crawl-contract.test.ts`              | `web-search-*`、`browser-use-*`                                                    |
 | `tool/pdf/pdf-read-contract.test.ts`                        | `pdf-*-contract`                                                                   |
 | `tool/text-file/text-file-read-write-contract.test.ts`      | `text-file-read-write-contract`、`text-file-atomic-guards-and-format-preservation` |
+| `tool/text-file/text-file-toolresult-log-guard.test.ts`     | `text-file-bounded-line-window`                                                    |
+| `tool/terminal/terminal-persistent-session-contract.test.ts` | `terminal-execution-contract`                                                      |
+| `tool/ppt/ppt-diff-net-semantics.test.ts`                   | `ppt-diff-slide-and-element-net-semantics`                                         |
 | `tool/image-generation/image-generate-contract.test.ts`     | `image-generate-*-contract`                                                        |
 | `tool/excel/excel-diff-row-structure-semantics.test.ts`     | `excel-diff-row-structure-semantics`、`excel-diff-cumulative-net-semantics`        |
 | `tool/agent-control/read-image-multimodal-contract.test.ts` | `read-image-multimodal-contract`、`multimodal-image-budget-contract`               |
 | `human/mock-llm/human-mixed-tool-dispatch.test.ts`          | `human-mixed-tool-dispatch`、`human-mixed-tool-dispatch-after-invalid-plan`        |
+| `human/mock-llm/human-pdf-main-model-multimodal.test.ts`    | `human-pdf-read-image-collaboration`                                               |
 | `human/mock-llm/ai-run-service-embedding-preflight.test.ts` | `ai-run-service-embedding-preflight`、`ai-run-service-embedding-preflight-failure` |
 | `human/live/human-text-file-read-write-live.test.ts`        | `human-text-file-*-live`                                                           |
 | `human/live/human-runtime-script-execution-live.test.ts`    | `human-runtime-*-python-live`                                                      |
@@ -584,6 +588,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：数量超限时最旧图片按至少 20 张的批次替换为带原路径的占位文本；体积超限时一次至少释放 10 MiB；重新读取的引用出现在消息尾部；只有保留的本地图片才在请求前编码为 data URL，HTTP(S) 地址不计入 data URL 字节预算。
 - Not：不假定 provider 的图片 token 计费方式。
 
+#### browser_use 类别
+
 ##### `browser-use-navigate-returns-tab-for-follow-up`
 
 - 测试类型：`backend`
@@ -649,7 +655,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：human 学习 Excel 能力后读取已有工作簿、修改并复读验证。
 - Why：补齐 Excel 在真实 human graph 中完全缺失的 non-live 回归。
-- How：只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 与 brain 交付。脚本调用 `excel_read` / `excel_edit` 学技能后读-写-复读。脚本调用 `excel_read` / `excel_edit` 学技能后读-写-复读。
+- How：只脚本化 LLM 决策，真实走 learning、hand、Excel runtime、apply/artifact 与 brain 交付。脚本调用 `excel_read` / `excel_edit` 学技能后读-写-复读。
 - Oracle：任务完成；调用包含读、写、复读；正式文件、累计 record、artifact 与最终答复一致。
 - Not：不验证真实模型的工具选择能力。
 
@@ -864,7 +870,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 ##### `human-excel-read-weekly-review-live`
 
-- 测试类型：`live`
+- 测试类型：`backend / live`
 - What：周会前审阅检入的复杂经营 xlsx，口头讲清表结构、关键公式和异常数字，不改文件。
 - Why：真实查看场景必须用现成经营表，不能在 live `execute` 里现造表。
 - How：工作区放入 `tests/fixtures/workspace/经营周报.xlsx`（120 行订单明细）；用户只描述审阅诉求，不出现工具名。运行时将该目录添加为文件地址并创建伙伴。
@@ -873,7 +879,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 ##### `human-excel-edit-weekly-review-live`
 
-- 测试类型：`live`
+- 测试类型：`backend / live`
 - What：在同一份检入的复杂经营 xlsx 上更正/补公式/改表头，并保护部分区域。
 - Why：真实编辑必须先读后写，且不能破坏保护区。
 - How：与查看 live 共用同一 fixture；用户描述要改的几处和不可动区域。
@@ -882,7 +888,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 ##### `human-excel-create-monthly-budget-live`
 
-- 测试类型：`live`
+- 测试类型：`backend / live`
 - What：空文件地址从零做《月度预算.xlsx》（多表、表头、SUM/SUMIF、金额格式）。
 - Why：新建场景覆盖工作簿创建、跨表公式和数字格式。
 - How：空文件地址 + 伙伴，用户描述月度预算交付要求，并约束「内容与公式正确、金额格式到位后立即交付，不要反复微调样式/列宽，也不要用终端解析/核验 xlsx」。
@@ -918,7 +924,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 ##### `human-partner-resume-with-new-selection-live`
 
-- 测试类型：`backend`
+- 测试类型：`backend / live`
 - What：live 模式下第一诉求已经沉淀局部事实后发生网络中断，同一伙伴新诉求可从不可变消息日志恢复旧语义上下文，同时本轮新选择文件只作用于新 user 消息；恢复 run 首轮 brain 须明显复用中断前末次前缀缓存。
 - Why：恢复能力的真实价值是让用户在长任务中断后继续对话；如果中断前已读到的事实丢失，或恢复时忽略最新诉求/最新选中文件，就会把恢复退化成重跑或错误沿用旧入口；跨 run 前缀被改写也会丢失 provider 缓存。
 - How：使用共享 workspace fixture（运行时为文件地址 + 伙伴）。Run 1 选中文件 A `深度学习.docx`，在读取并沉淀过拟合事实后注入 `llm_request_failed`（如 provider `fetch failed`）。Run 2 在同伙伴追加“继续”类 user 消息并改选文件 B `图形学.docx`，检查历史 user 配置未变、新 user 使用文件 B、计划来自 `plan_updated`、技能来自该伙伴剩余 log 的 skill state。跨 run 缓存断言用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）。
@@ -999,7 +1005,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 ##### `human-context-compaction-natural-trigger-live`
 
-- 测试类型：`backend`
+- 测试类型：`backend / live`
 - What：live 模式下 `human` 会先用普通短问铺出一条完整历史轮，再在风险周报长任务中自然触发压缩；压完后发给主模型的数组为 `[System] + [Compact User] + 原文 tail`。同一次可走历史 + 半截。Run 2 未压出 checkpoint 则不发 Run 3。续做再压，且 Run 3 首轮 brain 必须明显复用 Run 2 末次前缀缓存。
 - Why：相比单独直调节点，live 回归更应该守住“真实 graph 中自然压缩、当前工作仍能做完”的能力；同时守住跨 run 只 append 新 user、历史前缀字节不变时 provider 前缀缓存应命中。
 - How：复用风险周报 live 的真实文件地址。override 仍走生产公式（`modelContext × 0.8` 得压缩线）。要让压缩线为 45_000，注入 `humanRuntimeOverrides.modelContextWindowTokens=56_250`（`ceil(45_000 / 0.8)`），effectiveWindow 即 45_000。tail 由 effectiveWindow × `CONTEXT_COMPACTION_TAIL_RATIO`（0.1）算出，不再单独 override keep。切点只认伙伴 log 可见行（`seq > historyFloorSeq` 的 `user|assistant|tool`），`throughSeq` 为 firstKept 之前最大 seq；压完用同一投影函数（`appendCurrentUser=false`）重投影。`context_compaction_started` / `completed` 带 `throughSeq` / `firstKeptSeq` / `historyFloorSeq` / `historyFloorKind`（`compaction` / `none`） / `isSplitTurn` / `foldedCount` / `tailCount`；timeline assertion `data` 只记切点与 roles，prompt 回看 `llm-io.jsonl`。case 结束写出 `artifacts/message-log-annotations.json`。Run 1 发普通短问（上周周报文件名），不要求自己压到。Run 2 用更重的周报诉求（必须逐份打开模板、上周周报、客户周会、交付合规、供应商、法务、站会、Q2 复盘及三份 txt，并打开一次根目录经营周报.xlsx 把关键数字写进财务节；按材料分小节且每节引用原句，不能只扫目录或写成一段总述），靠材料正文与 Excel 阅读技能堆过 45k，应压到，覆盖历史 + 半截。Run 2 若未压出 checkpoint，不发 Run 3，直接按 Run 2 断言失败。Run 3 同伙伴、不再 @ 上周周报/已交周报，要求对照刚写的本周周报和上周周报、补风险对照、标题改为「九月第一周」、核法务口径，从而再压至少一次。Run 3 首次 brain 用 `cachedInputTokens / Run2 末次 brain inputTokens` 与公用跨 run 门槛 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85，定义于 `tests/harness/core/continuation-prefix-cache.ts`）对比。brain 的 `llm-io` 另记 `requestWire`（发给 LangChain 的 messages 含 assistant `toolCalls.arguments` 字符串，以及每个工具的完整 `parameters` schema），跨 run 缓存断言会把 Run2 末次 vs Run3 首次的第一处 diff 写进 timeline。固定开销（工具 schema + system）几乎不随压缩减少，过小窗口会连续压缩；过线靠加重 Run 2 用户诉求，不靠降阈值。continuation / resume live 仍分开，不并入本 case。
@@ -1008,7 +1014,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 ##### `human-risk-report-draft-live`
 
-- 测试类型：`backend`
+- 测试类型：`backend / live`
 - What：live 模式下 `human` 会在一个真实长任务里串起模板定位、上周周报风格参考、多源工作资料取证、新建本周周报 docx 并直接写回交付。
 - Why：`human/live` 需要至少一条长期高价值复杂样例，覆盖 workspace 搜索、真实材料辨别、跨 `docx + txt` 综合、create-target 写入与最终交付链路；同时守住“共享 workspace 中全部已支持文件都已进入真实 KB，且关键事实可能来自 KB 命中的 txt 或后续读取材料”的更真实用户环境。
 - How：注入真实 live LLM 配置；workspace 直接使用 `tests/fixtures/workspace` 共享目录，并在 run 前通过真实生产文件 ingestion 链把该目录下当前所有已支持文件索引进 KB；随后由测试在运行时重建 `工作/` 目录：包含一份不可直接覆盖的周报模板、一份只能参考风格的上周已发版周报、多份提供本周事实的 `docx` 工作文档、数份必须读取的 `txt` 口径/跟进材料，以及少量看起来相关但不应直接采用的干扰文件；直接输入“帮我写下这周的周报，基于这个周报模版和我的工作文档信息，记得参考我上周写的周报风格来哦”的自然语言诉求，让真实 `human` 自主完成。
@@ -1017,7 +1023,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 ##### `human-docx-positioned-structural-edit-fallback-live`
 
-- 测试类型：`backend`
+- 测试类型：`backend / live`
 - What：live 模式下 `human` 在复杂 positioned docx 中会跳过命中的复杂定位排版区域，并继续尝试处理其他可安全编辑的位置。
 - Why：这类由 `framePr` / 绝对定位 shape 组成的 docx 即使只是原地改字也可能因结构重写而错位；这条 case 要长期守住“positioned 区域只读、自动写入必须拒绝并给用户手动提示”的能力，对齐 `WB-CORE-003-AC1`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；只将 `图形学.docx` 作为已选资料复制进 workspace；直接输入“我准备把这份图形学讲义发给同学复习，想把‘反走样’这一节补得更容易记一些。你直接在这一节后面加一段更通俗的说明，再加一个很短的总结表，帮助大家快速区分两种常见做法。”的自然语言诉求，让真实 `human` 自主完成。
@@ -1026,7 +1032,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 ##### `human-kb-guided-docx-comparison-draft-live`
 
-- 测试类型：`backend`
+- 测试类型：`backend / live`
 - What：live 模式下 `human` 会先用 KB 缩圈找出讲“反走样 / 过拟合”的两份源资料，再把内容分别回写到用户明确指定的两份目标 docx。
 - Why：真实用户常常记得主题、不记得文件名，而且希望把资料内容整理回自己的教学文档；这条 case 要长期守住“文件地址默认范围 + KB 缩圈 + 多源读取 + 多目标 docx 回写”的能力，对齐 `WB-CORE-002-AC2`、`WB-CORE-004-AC1`、`WB-CORE-006-AC1`、`WB-CORE-006-AC2`。
 - How：注入真实 live LLM 配置；workspace 使用共享 fixture，只把 `学习笔记/图形学.docx` 与 `学习笔记/深度学习.docx` 建入 KB；用户明确指定根目录的 `人工智能探究课堂PRD.docx` 与 `交互式探究学习案例：产业转移.docx` 为目标文件。case 只开放完成该任务需要的 terminal、KB search、DOCX 读取和写入工具，避免把目标文件误当成待索引来源反复查询。
@@ -1058,11 +1064,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：这条回归覆盖用户真实的“读图 + 分析 + 同文件编辑”闭环，防止底层脏关系再次被算成虚假图片或阻止写入。
 - How：使用真实附件和用户原句，只开放 DOCX 读取、内置 `read_image` 和编辑工具，并注入主模型配置。
 - Oracle：任务完成；调用 DOCX 读取、`read_image` 和成功的 `docx_content_edit`；图片读取没有缺失文件错误，最终答复不出现“图片9”，产出的 DOCX 比原文新增至少 12 条有效工时表达。
-- Not：不要求固定的估时数值、工具调用次数或最终答复措辞；未配置 live 模型时按规范跳过。
+- Not：不要求固定的估时数值、工具调用次数或最终答复措辞。
 
 ##### `human-web-search-by-url-live`
 
-- 测试类型：`backend`
+- 测试类型：`backend / live`
 - What：live 模式下用户直接给指定地址，`human` 通过 `web_search({ type: 'fetch', url })` 读取该页正文并回答。
 - Why：用户给定具体网址时，`human` 应直接 fetch 该地址而不是先搜索，这是网页读取的低成本入口，必须稳定。
 - How：启动本地 HTTP server 承载通知页（含申请对象与截止日期），用户输入明确给出该通知页 URL，要求模型阅读该页并回答两个事实。
@@ -1071,7 +1077,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 ##### `human-web-search-intent-query-live`
 
-- 测试类型：`backend`
+- 测试类型：`backend / live`
 - What：live 模式下用户只给纯文本诉求、不给网址，`human` 提炼搜索意图后通过 `web_search(type=search)` 获取候选，并用 `type=fetch` 读取官方文档回答。
 - Why：真实用户常只描述诉求不给网址；`human` 应提炼关键词走 search 而非直接 fallback 浏览器。
 - How：不向用户输入提供 URL，用户以「记不清官方网址、帮忙搜索官方文档中 CSV 读取与写入 API 用法」的自然语言诉求要求搜索并阅读官方页面；要求模型自行提炼意图并读取官方文档页面完成整理。
@@ -1098,7 +1104,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 ##### `human-terminal-preview-service-live`
 
-- 测试类型：`backend`
+- 测试类型：`backend / live`
 - What：live 模型能在项目子目录启动临时 HTTP 预览服务，真实访问页面、确认服务收到请求并彻底停止服务。
 - Why：工具契约正确不代表模型能完成「起服务 → 确认 → 用完关掉」；放行后台分离后，模型可走前台长跑 + 读终端，也可走 `nohup`/后台 + 等待再确认，不强制 `terminal_read`。
 - How：在临时 workspace 的 `preview-site` 中创建带唯一标记的页面，为用户提供一个随机空闲端口；用户只描述启动预览、真实访问确认标记、确认服务收到请求、用完关闭的诉求，不指定工具或命令。由真实模型自主决策。

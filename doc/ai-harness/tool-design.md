@@ -1,6 +1,6 @@
 # Tool Design
 
-工具契约与结果投递设计约束。涉及 `src/main/services/ai/human/tools/**` 的 schema、modelResult、投递逻辑时必读。
+工具契约与结果投递设计约束。涉及 `src/main/services/ai/human/**` 的 tool schema、modelResult 与 hand 投递逻辑时必读。
 
 活例子按需生成（`pnpm doc:ai-tool-prompt-audit`，输出 `doc/ai-tool-prompt-audit.md`，不入库）；human 消息上下文见 `human-harness.md`；测试约束见 `doc/test-plan/ai-test.md`。
 
@@ -138,7 +138,7 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 
 ### 6.2 写工具输出
 
-写成功多为 **A** 或 `{}`（excel 写回当前无系统锚点）；**不**返回 diff 全文——模型应再 read 验证。
+写成功多为 **A** 或 `{}`（excel 写回不返回系统锚点）；**不**返回 diff 全文——模型应再 read 验证。
 
 ### 6.3 Terminal 契约
 
@@ -172,7 +172,7 @@ hand 收到 call batch
 | 本文 | 设计原则与管道约束 |
 | `doc/ai-tool-prompt-audit.md` | 各工具 input/output/渲染活例子（按需生成，不入库） |
 | `doc/test-plan/ai-test.md` | tool / human 回归范围与 Oracle |
-| `tests/case/unit/ai/*-tool-contract.test.ts` | 按 family 轻量契约（schema + renderSuccess 存在性） |
+| `tests/case/unit/ai/*-tool-contract.test.ts` | 已有 family 的轻量契约（schema + renderSuccess 存在性；覆盖 docx / pdf / ppt / text-file / terminal） |
 | `tests/case/ai/tool/**` | 领域工具行为与 terminal 契约 |
 
 新增工具检查清单：

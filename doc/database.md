@@ -22,11 +22,10 @@ SQLite 使用 `better-sqlite3`。启动时 `SqliteCore` 负责：
 SQLite 保存以下业务数据：
 
 - 伙伴（`partner`）以及用于中断恢复、压缩投影的 append-only 伙伴消息记录（`chat_session_message_log`，表名保留，行挂 `partner_id`）；不保存独立恢复快照。
-- AI run、审批和文件修改记录（均挂 `partner_id`）。不存在 `chat_search_turn`，Composer 已删除搜索模式。
+- AI run、审批和文件修改记录（均挂 `partner_id`）。
 - 消息中的图片只保存运行时路径或 HTTP(S) 地址，以及 MIME、字节数和尺寸；SQLite 不保存 Base64，也不为临时图片建立独立文件表。运行时文件被清理后允许恢复为不可用占位。
 - 工作地址（`workspace_source`，无 name，`root_path UNIQUE`）、逐文件索引记录（`workspace_file_index`）、索引任务（`workspace_index_job`）、文档元数据和全局网页源（`web_source`，无 `workspace_id`，`UNIQUE(normalized_url)`）。
-- LLM 配置和 AI runtime 设置。
-- AI runtime 设置中的 `systemNotificationsEnabled`，默认值为 `1`，控制 AI 运行终态系统通知。
+- LLM 配置、AI runtime 设置，以及其中的 `systemNotificationsEnabled`（默认 `1`，控制 AI 运行终态系统通知）。
 - 文件内容和预览 artifact 的 SHA-256 对象引用；实际对象保存在 `userData/partners/{id}/objects/sha256/<前 2 位>/<其余>`，相同内容只存一份。
 - Workbench 伙伴 UI 快照（`partner_ui_state`）、当前活动伙伴（`workbench_ui_state.active_view_key`）和内置浏览器标签状态（`browser_tab_state.owner_key` = partner_id）。
 - 定时任务（`scheduled_task.partner_id` 绑定专属伙伴，未绑定时写空字符串而非 SQL NULL，到点或立即执行时再创建并回写；无外键 CASCADE；`busy_cancel_notice_at` 记录因占用取消的待展示提示）。
@@ -42,9 +41,8 @@ SQLite 保存以下业务数据：
 ### Workbench 伙伴 UI 状态
 
 - `partner_ui_state` 以 `partner_id` 为主键保存版本化 `state_json`，伙伴删除时通过外键级联删除。
-- `workbench_ui_state` 是 `id = 1` 的单例，只保存 `active_view_key`（当前伙伴 id）；不再保存 `draft_state_json` 或 `__draft__`。
+- `workbench_ui_state` 是 `id = 1` 的单例，只保存 `active_view_key`（当前伙伴 id）。
 - `browser_tab_state` 以 `owner_key` 隔离伙伴标签（`owner_key` = partner_id），保存 URL、标题、缩放、导航历史、顺序和更新时间。
-- 伙伴在创建弹窗提交时即落库，不存在草稿会话提升事务。
 - 删除伙伴级联删除 message log、`ai_run`、`ai_file_change`、`docx_apply`、`partner_ui_state`，并清除 `browser_tab_state`、将 `active_view_key` 置空，同时删除 `userData/partners/{id}`。定时任务不级联删除：专属伙伴被删后任务仍保留，到点或立即执行时由服务自动重建伙伴。
 - Renderer 内存只负责当前交互，SQLite 是重启恢复的真相；浏览器 `WebContentsView` 只负责运行期页面实例，不是持久化真相。
 
@@ -53,10 +51,10 @@ SQLite 保存以下业务数据：
 ### 当前边界
 
 - 当前代码支持的最终 schema version 是 `11`，由 `CURRENT_SCHEMA_VERSION` 定义。
-- 已随正式版发布的 migration 永久保留且不可改写，发布边界以 `migrations/released-migrations.json` 为准。已知历史例外只有 version 2 的旧名称 `workspace_change_sets`；version 9 继续负责修复通知字段。
-- version `10` 是破坏性升级，不迁旧数据。`upgrade_from_v9` 从 v9 升级时 DROP 旧表再建最终结构：新增 `partner`；删除 `chat_session`、`chat_session_ui_state`（以及 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event`、`chat_session_skill_state`、`chat_message`）；`chat_session_message_log` / `ai_run` / `ai_file_change` / `docx_apply` 改挂 `partner_id`；新增 `partner_ui_state`；`workbench_ui_state` 只留 `active_view_key`，删除 `draft_state_json`；`scheduled_task` 改挂 `partner_id`（无外键 CASCADE，专属伙伴删除后任务可保留并由服务重建），并含 `busy_cancel_notice_at`；`workspace_source` 去掉 name 且 `root_path UNIQUE`；`web_source` 去掉 `workspace_id` 且 `UNIQUE(normalized_url)`；`ai_run` 不再保存 `workspace_json`，并含 `failure_raw_message`（失败原文，与短标题 `error` / `failure_code` 分离）。不存在、也不新建 `chat_search_turn`。新增 `schema_migration_hooks`，供版本声明提交后副作用。v10 的 `afterCommit` 在 SQLite 事务提交后、LanceDB 连接前删除 `userData/lancedb`；hook 记 `pending/done`，失败可重试，`done` 后不重跑。空库仍执行 version `1–11`，跑完后结构与 v9 升级路径一致。
+- 已随正式版发布的 migration 永久保留且不可改写，发布边界以 `src/main/services/storage/sqlite/migrations/released-migrations.json` 为准。已知历史例外只有 version 2 的旧名称 `workspace_change_sets`；version 9 继续负责修复通知字段。
+- version `10` 是破坏性升级，不迁旧数据。`upgrade_from_v9` 从 v9 升级时 DROP 旧表再建最终结构：新增 `partner`；删除 `chat_session`、`chat_session_ui_state`（以及 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event`、`chat_session_skill_state`、`chat_message`）；`chat_session_message_log` / `ai_run` / `ai_file_change` / `docx_apply` 改挂 `partner_id`；新增 `partner_ui_state`；`workbench_ui_state` 只留 `active_view_key`，删除 `draft_state_json`；`scheduled_task` 改挂 `partner_id`（无外键 CASCADE，专属伙伴删除后任务可保留并由服务重建），并含 `busy_cancel_notice_at`；`workspace_source` 去掉 name 且 `root_path UNIQUE`；`web_source` 去掉 `workspace_id` 且 `UNIQUE(normalized_url)`；`ai_run` 不再保存 `workspace_json`，并含 `failure_raw_message`（失败原文，与短标题 `error` / `failure_code` 分离）。新增 `schema_migration_hooks`，供版本声明提交后副作用。v10 的 `afterCommit` 在 SQLite 事务提交后、LanceDB 连接前删除 `userData/lancedb`；hook 记 `pending/done`，失败可重试，`done` 后不重跑。空库仍执行 version `1–11`，跑完后结构与 v9 升级路径一致。
 - version `11` 不改表结构，只删除 `ai_file_change` 中 `source` 为 `terminal_tool` / `workspace_scan` 或 `capability` 为 `terminal_exec` 的行。终端不再产生修改记录。
-- 哪些 migration 已正式发布，以 `migrations/released-migrations.json` 为唯一边界。未进入清单的连续迁移可以在发布前合并或重写；进入清单后只能新增更高版本修复。
+- 哪些 migration 已正式发布，以 `src/main/services/storage/sqlite/migrations/released-migrations.json` 为唯一边界。未进入清单的连续迁移可以在发布前合并或重写；进入清单后只能新增更高版本修复。
 
 ### 版本身份与执行规则
 

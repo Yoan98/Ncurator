@@ -20,7 +20,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除，以及预设服务商与自定义配置的类型、锁定和去重语义。
 - `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为，以及错误日志目录入口；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
 - `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。
-- `vector` 属于 Settings 产品域，但页面位于独立路由 `/model-download`，测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
+- `vector` 属于 Settings 产品域，页面路由为 `/settings/vector`（`/model-download` 仅为历史重定向），测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
 - `workspace` 是 Settings 下的 suite，按 `core / files / web` 组织，语义为“文件地址 + 文件 tab + 全局网页 tab”，不是具名容器。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
 - Workbench 发送不再由 Settings case 承担「未绑目录不能发」；该门禁改由 Workbench「未创建伙伴」覆盖。

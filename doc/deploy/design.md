@@ -73,8 +73,8 @@ macOS 更新：https://download.guanzhangai.cn/updates/latest/latest-mac.yml
 ```bash
 pnpm test:update:real:win -- \
   --source-installer <已发布旧版安装包.exe> \
-  --source-version 0.1.68 \
-  --expected-version 0.1.69 \
+  --source-version 1.0.3 \
+  --expected-version 1.0.4 \
   --downgrade-installer <含禁止降级逻辑的较低版本候选包.exe>
 ```
 

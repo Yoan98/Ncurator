@@ -15,14 +15,14 @@
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；Source 与正式包 E2E 在多 case 时都先执行 `warmup` 预热共享 fixture，正式包 E2E 再把缓存种子复制给隔离 case。
 - Workbench 模型选择 helper 优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选；未命中再按展示名；仍未命中则进入「自定义模型」按名称搜索。
 - Workbench UI E2E 测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。
-- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖工作区文件列表在打开时重新读取磁盘最新目录（含外部新建文件）。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：正式测试由 `wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert` 在路径 `result/wps-office/`，属于正式 E2E，支持 `pnpm test:workbench:wps-office` 单独执行，因本机授权弹窗可能卡住自动化。正式 E2E 启动时跳过覆盖拷加载项文件，但会启动回环 `/addon`；`publish.xml` 与授权 path 固定 `http://127.0.0.1:18723/addon/`，端口文件记录实际监听端口。若 `18723` 上已是本馆长 `/status` 通道，后启动实例不得把 `publish.xml` / 授权 path 改到临时端口。安装器与 `publish.xml` / `authaddin` 合并由 unit 覆盖。
+- `file-preview-actions` 当前按生产真实索引能力覆盖 `pdf/docx/md/txt/xlsx/xlsm/xltx/xltm`：连续打开的文件要分别保留为资源 Tab，并能切回旧 Tab；Excel 普通预览还要覆盖只读、切 Sheet 和拖列宽后预览仍可用。`workspace-file-explorer-open-refresh` 覆盖工作区文件列表在打开时重新读取磁盘最新目录（含外部新建文件）。`file-preview-external-change-auto-refresh` 另行覆盖所有实时预览的统一磁盘监听：以普通文本、DOCX、PPTX、XLSX 为代表验证，文件地址内的文件和 `userData/partners/{id}/runtime/assets` 中的真实附件复用同一预览刷新链路；审核 Diff 快照不监听；仅文件内容变化才提示“已自动刷新”，打开外部应用或仅元数据变化不提示。WPS 刷新分两条：`wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 的 `/status` dispatch，不打开 WPS；真窗口刷新 `wps-office-reload-on-write-and-revert`（路径 `result/wps-office/`，`pnpm test:workbench:wps-office`）覆盖已授权 WPS 窗口，因本机授权弹窗可能卡住自动化。加载项与 `publish.xml` / `authaddin` 合并由 unit 覆盖；WPS 通道机制见 `WB-WPS-001`。
 - docx apply case 需要真实 docx 输入、真实 AI 编辑、真实写回记录、真实预览和真实回退。
 - text-file apply case 需要真实 Markdown 或代码文件、真实 `text_file_edit`、真实结构化 diff、独立 `TextFileDiffViewer` 和按原始 bytes 回退。
 - image generation apply case 需要真实模型先学习外置 `image-generation` 技能、真实调用 `image_generate`、生成可解码图片、展示修改入口和图片预览，并完成新建图片回退。
 - `browser-use-task-panel` 需要真实 AI run 触发 `browser_use` 并驱动内置浏览器完成本地内容输入与 hover-退出网页任务（observe→actionId act，支持 text 注入）；必须在无进程级远程调试口下完成。同时验证多个浏览器 Tab 独立历史、共享持久站点数据、切换文件后网页状态不销毁，以及同 URL 标签不会让 Stagehand 串页，不能用 fake browser 替代。
 - `web_search` 单独覆盖：搜索 case 验证 type=search 后 type=fetch 读取网页正文；直接 URL case 验证 type=fetch 读取网页正文后再回答。两类 case 均不得因 `web_search` 自动展开右侧搜索列表（该列表面板已不存在），对齐 `WB-CORE-007-AC4`。Composer 搜索模式与右侧搜索列表面板已删除，废弃 `WB-COMPOSER-004`、`WB-PANEL-002`。
 - Workbench 附件链路不限文件扩展名，任何可被文件选择器选中的普通文件都可以添加，不因扩展名拒绝；`+` 和拖放保留源文件绝对路径，粘贴文件保存到 `userData/partners/{id}/runtime/assets/<assetBucketId>/`。`assetBucketId` 为输入草稿 UUID，发送给 AI 时只传附件名称与路径，不再做发送前识图或文件解析；文件是否可被 AI 工具处理由 AI 工具层自行判断。无伙伴时空态 Composer 不接受附件。
-- Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 测试承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。其中 Excel 工具侧覆盖 `WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC5`、`WB-EXCEL-002-AC6`、`WB-EXCEL-002-AC7`、`WB-EXCEL-002-AC8`（`WB-EXCEL-002-AC3` 记录/baseline **只在 ai-test 硬断言**）；Workbench e2e 覆盖 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9` 用户闭环（UI 可见单入口，不重复硬断言 AC3）。
+- Excel / PPT / DOCX / PDF 工具的输入输出、operation、原子失败与 diff artifact 语义由 AI tool 测试承担；Workbench apply case 只验证真实用户流程、预览入口、审核交互与回退，不重复枚举底层操作矩阵。其中 Excel 工具侧（`WB-EXCEL-001` / `WB-EXCEL-002`）覆盖 `WB-EXCEL-001-AC3`、`WB-EXCEL-001-AC4`、`WB-EXCEL-001-AC6`、`WB-EXCEL-001-AC7`、`WB-EXCEL-002-AC2`、`WB-EXCEL-002-AC3`、`WB-EXCEL-002-AC5`、`WB-EXCEL-002-AC6`、`WB-EXCEL-002-AC7`、`WB-EXCEL-002-AC8`（`WB-EXCEL-002-AC3` 记录/baseline **只在 ai-test 硬断言**）；Workbench e2e 覆盖 `WB-EXCEL-001-AC5`、`WB-EXCEL-002-AC1`、`WB-EXCEL-002-AC4`、`WB-EXCEL-002-AC9` 用户闭环（UI 可见单入口，不重复硬断言 AC3）。
 - DOCX 读取结果和历史结果按递归 children 树展示，Workbench 必须能显示统一的 `nodeId`、visual kind、`imagePath` 和 story；DOCX 写结果复用统一状态展示，普通写入不展示冗余正文，创建操作只展示 `createdIds`。格式操作按 text、paragraph、table、row、cell、section 展示。图片理解统一由 `agent-control` 内置的 `read_image` 把图片加入主模型请求。
 - Workbench 历史只展示白名单内的必要 DOCX 字段，不展示 worker、identity 或 replay 内部状态。DOCX 事件以 `nodeId` 定位，PPT 继续使用自己的 `location`，两套协议互不复用。
 
@@ -39,7 +39,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 
 - `conversation` 验证伙伴、composer、时间轴与清空、模型偏好和 `@` 参考资料 token。发送门禁是已有伙伴 + 输入非空。
 - `run` 验证智能模式运行中的过程流、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
-- `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退、多文件修改入口，以及馆长 WPS 通道对 docx / xlsx / pptx 的 dispatch 与本机已授权 WPS 文字 / 表格 / 演示窗口刷新。不再覆盖 Composer 搜索结果面板。
+- `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退、多文件修改入口，以及馆长 WPS 通道对 docx / xlsx / pptx 的 dispatch 与本机已授权 WPS 文字 / 表格 / 演示窗口刷新。
 - `scheduled-task` 验证定时任务的入口、配置保存不建伙伴、到点/立即执行时按需创建专属伙伴、启用开关与往专属伙伴追加任务。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
@@ -192,9 +192,9 @@ pnpm test:update:e2e
 
 - 测试类型：`e2e`
 - What：缺少模型时的配置提示（本机 localStorage 仅首次出现一次）、发送前置条件（已有伙伴 + 输入非空），以及模型 / AI 推进偏好 / 执行权限按伙伴恢复；创建伙伴后真实发送一次并完成 AI 运行。
-- Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务或把任务发到错误伙伴。原独立 case `partner-required-to-send` 与本 case 等价，已并入此处，避免双倍 live。
-- How：先在无模型配置状态下检查提示，再通过 UI 配置真实模型并创建伙伴；覆盖无伙伴空态、输入保留、模型选择、AI 推进偏好、执行权限菜单的两条说明与完全访问高危风险弹窗确认/取消门禁、切换伙伴后的独立恢复和真实发送（Composer 提交，含 Enter 发送路径）。Composer 不再有 AI / 搜索切换，也不再有工作区选择器。
-- Oracle：无模型且本机从未展示过该提示时快速显示配置提示（展示后写入 localStorage，之后即使仍无模型也不再弹出）；无伙伴时 Composer 空态且不出现发送按钮，对齐 `WB-CORE-001-AC2`、`WB-COMPOSER-001`（无伙伴空态 **只在本 case 硬断言**）；有伙伴、未插 `@` 且输入非空时可发送，对齐 `WB-CORE-001-AC1`；发送走 Composer 提交并完成真实 AI 运行，对齐 `WB-COMPOSER-002-AC1`、`WB-CORE-006-AC1`；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；切换“完全访问”触发风险二次确认弹窗（取消维持审核、确认切换成功，切回审核免二次确认），对齐 `WB-COMPOSER-007-AC13`；模型、推进偏好和执行权限按伙伴恢复，对齐 `WB-MODE-001-AC1`、`WB-COMPOSER-007-AC5`、`WB-COMPOSER-007-AC9`、`WB-COMPOSER-007-AC12`、`WB-SESSION-008`。废弃的 `WB-COMPOSER-005`、`WB-MODE-001-AC2`、`WB-MODE-002`、`WB-MODE-003` 不测。
+- Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务或把任务发到错误伙伴。
+- How：先在无模型配置状态下检查提示，再通过 UI 配置真实模型并创建伙伴；覆盖无伙伴空态、输入保留、模型选择、AI 推进偏好、执行权限菜单的两条说明与完全访问高危风险弹窗确认/取消门禁、切换伙伴后的独立恢复和真实发送（Composer 提交，含 Enter 发送路径）。
+- Oracle：无模型且本机从未展示过该提示时快速显示配置提示（展示后写入 localStorage，之后即使仍无模型也不再弹出）；无伙伴时 Composer 空态且不出现发送按钮，对齐 `WB-CORE-001-AC2`、`WB-COMPOSER-001`（无伙伴空态 **只在本 case 硬断言**）；有伙伴、未插 `@` 且输入非空时可发送，对齐 `WB-CORE-001-AC1`；发送走 Composer 提交并完成真实 AI 运行，对齐 `WB-COMPOSER-002-AC1`、`WB-CORE-006-AC1`；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；切换“完全访问”触发风险二次确认弹窗（取消维持审核、确认切换成功，切回审核免二次确认），对齐 `WB-COMPOSER-007-AC13`；模型、推进偏好和执行权限按伙伴恢复，对齐 `WB-COMPOSER-007-AC5`、`WB-COMPOSER-007-AC9`、`WB-COMPOSER-007-AC12`、`WB-SESSION-008`。废弃的 `WB-COMPOSER-005`、`WB-MODE-001`、`WB-MODE-001-AC2`、`WB-MODE-002`、`WB-MODE-003` 不测。
 - Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。Composer 已删除搜索模式，不再测智能 / 搜索互斥。`WB-COMPOSER-001-AC3`（有伙伴时 hover 禁用原因）、`WB-COMPOSER-007-AC6`（失效模型回退）、`WB-COMPOSER-007-AC11`（偏好写入 run 上下文）标为不测。`WB-COMPOSER-002-AC2`、`WB-COMPOSER-002-AC3`（Shift+Enter 换行、中文输入法组词）标为不测。`WB-CORE-006-AC2/AC3/AC4` 由 AI live 承担。
 
 #### `partner-ui-state-isolation`
@@ -320,7 +320,7 @@ pnpm test:update:e2e
 - What：伙伴有消息且空闲时出现「清空消息记录」胶囊；hover tooltip 含伙伴名与无法恢复说明；点击先确认，取消不删；确认后消息列表为空，仍停留在同一伙伴，草稿不变。
 - Why：用户需要可理解的「清空对话」动作：确认后消息列表为空，下次发送不再带旧上下文；切换伙伴后只要仍有消息也应能清空。
 - How：创建伙伴并完成一次真实 AI run；检查胶囊文案与 tooltip；点击胶囊后取消确认并断言消息仍在；再点胶囊并确认清空；断言消息为空、仍在同一伙伴、输入草稿不变。运行中不得出现清空入口。
-- Oracle：有消息且空闲时可见对齐 `WB-SESSION-011-AC8`；确认后列表为空对齐 `WB-SESSION-011-AC1`；不换伙伴 / 草稿对齐 `WB-SESSION-011-AC2`；下次发送无旧上下文对齐 `WB-SESSION-011-AC3`（由清空后 message log 为空保证）；运行中不可用对齐 `WB-SESSION-011-AC4`；文案与 tooltip 对齐 `WB-SESSION-011-AC5`；确认框取消/确认对齐 `WB-SESSION-011-AC6`。换无关新话题用清空消息记录得到干净上下文，对齐 `WB-SESSION-005-AC3`、`WB-SESSION-014-AC3`、`WB-SESSION-014-AC4`。
+- Oracle：有消息且空闲时可见对齐 `WB-SESSION-011-AC8`；确认后列表为空对齐 `WB-SESSION-011-AC1`；不换伙伴 / 草稿对齐 `WB-SESSION-011-AC2`；下次发送无旧上下文对齐 `WB-SESSION-011-AC3`（由清空后 message log 为空保证）；运行中不可用对齐 `WB-SESSION-011-AC4`；文案与 tooltip 对齐 `WB-SESSION-011-AC5`；确认框取消/确认对齐 `WB-SESSION-011-AC6`。换无关新话题用清空消息记录得到干净上下文，对齐 `WB-SESSION-005-AC3`、`WB-SESSION-005-AC4`、`WB-SESSION-011-AC3`。
 - Not：不验证 compaction；不在本 case 制造文件回退记录（`WB-SESSION-011-AC7` 由 unit `clear-partner-context-deletes-messages-and-runs-keeps-file-changes` 覆盖）。
 
 ### 5.2 `run`
@@ -376,8 +376,8 @@ pnpm test:update:e2e
 - What：同一伙伴的多轮 AI run 能复用已学习的技能并继续上一轮任务主线。
 - Why：续做不能丢失已有上下文，也不能每轮重复学习同一技能。
 - How：通过真实 Workbench UI 完成两轮请求，检查两轮 human steps、工具选择和最终结果。
-- Oracle：第一轮学习 `docx-read` 技能；第二轮不重复 learning 且能使用该技能继续读取文档；两轮结果均完成，对齐 `WB-SESSION-005-AC1`、`WB-SESSION-005-AC2`。同一伙伴续做不自动丢掉还没压缩的历史原文，对齐 `WB-SESSION-005-AC3`、`WB-SESSION-014-AC1`、`WB-SESSION-014-AC2`。
-- Not：不替代 AI backend 对技能图和 memory store 的契约测试。换话题用清空消息记录或新建伙伴，由 `context-clear-capsule` 与 `WB-SESSION-011` / `WB-SESSION-014` 覆盖；跨轮续做与中断恢复由 AI `human-partner-continuation-live` / `human-partner-resume-with-new-selection-live` 覆盖。
+- Oracle：第一轮学习 `docx-read` 技能；第二轮不重复 learning 且能使用该技能继续读取文档；两轮结果均完成，对齐 `WB-SESSION-005-AC1`、`WB-SESSION-005-AC2`。同一伙伴续做不自动丢掉还没压缩的历史原文，对齐 `WB-SESSION-005-AC3`。
+- Not：不替代 AI backend 对技能图和 memory store 的契约测试。换话题用清空消息记录或新建伙伴，由 `context-clear-capsule` 与 `WB-SESSION-005` / `WB-SESSION-011` 覆盖；跨轮续做与中断恢复由 AI `human-partner-continuation-live` / `human-partner-resume-with-new-selection-live` 覆盖。
 
 #### `approval-batch-flow`
 

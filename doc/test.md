@@ -4,7 +4,7 @@
 
 - 本文是 NCurator-Desktop 的唯一测试总规范。
 - 各业务域的 suite、case 和领域规则只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case。
-- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑。
+- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑；`showcase` 是独立官网样例采集，不进入领域测试计划。
 
 测试体系只沉淀一层长期执行产物：
 
@@ -52,7 +52,7 @@ tests/
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的子目录。
 - 各测试 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义。
 - 当某个 `suite` 不需要继续细分时，测试 case 可以直接放在该 `suite` 目录下。
-- `tests/case/{ai,settings,unit,workbench,showcase}/**` 只允许放已在 `doc/test-plan/**` 登记的正式测试 case（`showcase` 例外，不进入测试计划）。
+- `tests/case/{ai,settings,unit,workbench,showcase}/**` 只允许放已在 `doc/test-plan/**` 登记的正式测试 case（`unit`、`showcase` 例外，不进入测试计划）。
 - `tests/fixtures/workspace/` 是共享工作区 fixture 根目录；凡是依赖“工作区里有什么文件”的测试，以及 backend/unit 直接引用的固定文件输入，统一复用该目录。
 - `tests/fixtures/sqlite/` 放数据库迁移 fixture。
 - `tests/fixtures/**` 全部是只读测试输入：测试禁止对其中任何文件原地写入、覆盖或修改；需要写入时，必须通过 `fixtures: []` 声明由 runner/harness 复制到隔离临时 workspace（或按 E2E 规则复制到临时目录），测完删除。fixture 需要更新时直接提交新二进制，禁止引入任何 fixture 生成器脚本（生成器不得以 `.test.ts` 形态进入 `tests/case/**` 自动发现）。
@@ -76,7 +76,7 @@ tests/
 测试 case 在 `doc/test-plan/**` 中统一使用以下字段：
 
 - `测试类型`
-  - `backend` 或 `e2e`。
+  - `backend` 或 `e2e`；需要时以 ` / ` 追加执行方式，如 `backend / live`、`e2e / live`、`e2e / exclusive`。
 - `What`
   - 这条 case 到底要验证什么。
 - `Why`
@@ -146,7 +146,7 @@ runner 不负责：
   - `pnpm test:unit`
   - `pnpm test:unit:ai`
   - `pnpm test:terminal`：直接 `vitest` 运行终端相关 unit 文件。
-- 源码 E2E
+- E2E（源码 / 正式包）
   - `pnpm test:e2e:source`：构建当前源码并运行 `tests/case/**` 中的全部 E2E。
   - `pnpm test:e2e:package -- --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行所选正式 E2E。安装落在本机 `NCurator-E2E` 目录；Windows 可能覆盖本机已安装的正式包。测完删除 E2E 安装目录及指向它的入口。
 - Settings

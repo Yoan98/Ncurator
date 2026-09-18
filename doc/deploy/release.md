@@ -25,7 +25,7 @@
 
 1. 校验 `released-migrations.json` 中已锁定 migration 的版本、名称、文件名和 SHA-256。
 2. 并行执行 `typecheck:node`、`typecheck:web`，并准备网页抓取 sidecar。
-3. 使用 6 个 worker 执行 Unit、update backend 和非 live AI backend（其中 `ppt-browser-files` 组的浏览器用例固定 1 个 worker 串行）。
+3. 使用 6 个 worker 执行 Unit、update backend 和非 live AI backend（其中由 `requiresBackendPptBrowser` 识别的 PPT 浏览器用例 `pptBrowserFiles` 固定 1 个 worker 串行）。
 4. 必跑 `human-prefix-cache-retain-live`，验证同一伙伴的短续接、文本读工具历史、跨 run 前缀缓存和 `toolsHash`；没有 live key 必须失败，不能跳过。
 5. 全部通过后，把当前连续 migration 纳入发布锁，与 `package.json` 版本一并提交，创建 annotated Tag，并原子推送 `main` 和 Tag。
 
@@ -86,7 +86,7 @@ git diff <previous-platform-tag>..<current-platform-tag>
 
 正式包 E2E 不改变候选包品牌，测试安装只落到本机隔离目录：
 
-- Windows 静默安装到 `%LOCALAPPDATA%\\NCurator-E2E`。同一 `appId` 下 NSIS 可能覆盖本机已安装的正式包；测试结束后关闭 E2E 进程，删除指向测试目录的快捷方式、卸载项和安装目录。
+- Windows 静默安装到 `%LOCALAPPDATA%\NCurator-E2E`。同一 `appId` 下 NSIS 可能覆盖本机已安装的正式包；测试结束后关闭 E2E 进程，删除指向测试目录的快捷方式、卸载项和安装目录。
 - macOS 使用 `ditto` 复制到 `~/Applications/NCurator-E2E/<platform>/`，并将副本改名为「馆长 E2E.app」。不触碰正式的「馆长.app」；测试结束后删除 `~/Applications/NCurator-E2E`。
 
 只执行选定的正式包 E2E，真实 AI / 服务用例也按选定范围执行。源码 E2E、backend、Unit 和独立 AI 测试不能替代正式包 E2E。

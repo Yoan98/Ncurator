@@ -84,13 +84,13 @@ Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `
 
 ## 2. 数据源
 
-human harness 涉及的数据从哪来、到哪去。只有 **`chat_session_message_log`** 是 transcript 真相源（表名保留，行挂 `partner_id`）；其余存储与运行时注入见各小节。
+human harness 涉及的数据从哪来、到哪去。只有 **`chat_session_message_log`** 是 transcript 真相源（行挂 `partner_id`）；其余存储与运行时注入见各小节。
 
 ### 2.1 总览
 
 数据源写入与消费方总览见 [`doc/architecture.md`](../architecture.md) 「AI 运行时」「AI 数据源与消费方」。
 
-- **伙伴消息记录**走 human harness。Composer 已删除搜索模式；不存在 `chat_search_turn`。
+- **伙伴消息记录**走 human harness。
 - **实现**：UI 对话轮次由 `chat_session_message_log` + `ai_run` 投影；技能由 `skill_state_updated` annotation 投影。
 
 ### 2.2 Transcript：`chat_session_message_log`
@@ -198,7 +198,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
   "content": "<file path=\"/Users/me/workspace/周报模板.docx\">…</file>",
   "images": [
     {
-      "path": "/Users/me/AppData/Roaming/ncurator/partners/{id}/runtime/assets/read_image-cache/abc…-v1.webp",
+      "path": "userData/partners/{id}/runtime/assets/read_image-cache/abc…-v1.webp",
       "mimeType": "image/webp",
       "sizeBytes": 81920,
       "width": 800,
@@ -461,7 +461,7 @@ annotation 扫描该伙伴**全部**剩余 log（不受 `historyFloorSeq` 限制
 
 ### 3.4 UI 投影
 
-UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投影。AI 伙伴气泡由 `projectAiConversationMessages` 生成。不存在搜索模式轮次。
+UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投影。AI 伙伴气泡由 `projectAiConversationMessages` 生成。
 
 #### 对话轮次（按 run 切分）
 
@@ -543,7 +543,7 @@ human harness 通过 **过程只 append、resume 只 append 新 User（历史 Us
 一次 brain 请求里，**本轮新内容之前**的全部消息，例如：
 
 ```text
-[System] + [User built₁] + … + tail 已发送段 + （resume 时已有的 User built₂ 之前）
+[System] + [User built₁] + … + tail 已发送段（止于 resume 新增的 User built₂ 之前）
 ```
 
 - System 跨 run **字节稳定**（platform / paths / 技能目录；**不含** `current_time`）。
