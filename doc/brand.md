@@ -21,7 +21,7 @@
 ```text
 用户下载看到的：  馆长-{version}-Windows-x64.exe / 馆长-{version}-macos-arm64.dmg
 浏览器保存名：     同上（公开 URL 末段）
-本地构建 / 磁盘：  Ncurator-windows-*.exe、Ncurator-mac-*.dmg（storageName，ASCII）
+本地构建 / 磁盘：  馆长-{version}-Windows-x64.exe、Ncurator-mac-*.dmg（storageName，ASCII）
 安装后应用名：     馆长.app / 馆长.exe
 运行时数据目录：   …/ncurator（或 ncurator-dev）
 更新缓存目录：     ncurator-updater

@@ -12,7 +12,7 @@ prepare 必须在 Apple Silicon Mac；需已信任的 `Ncurator Update Signing` 
 
 ### 构建与审计硬约束
 
-`pnpm run build`：准备 native 与网页抓取 sidecar → 类型检查与应用构建 → 追踪生产依赖并生成最小化 `release-stage/app` → 真实验证关键读取/写入路径 → 混淆 `out/main` → 审计 staging → electron-builder 打安装包 → 审计真实 `win-unpacked` / `.app`（macOS 另做签名与启动验证）。
+`pnpm run build`：准备 native 依赖 → 类型检查 → 构建网页抓取 sidecar 与 vditor 资源 → `electron-vite` 构建 → 追踪生产依赖并生成最小化 `release-stage/app` → 真实验证关键读取/写入路径 → 混淆 `release-stage/app/out/main` → 审计 staging。安装包由 `build:win` / `build:mac:release:arm64` 在 `build` 之后调用 electron-builder 打包，并审计真实 `win-unpacked` / `.app`（macOS 另做签名与启动验证）。
 
 electron-builder 只从 `release-stage/app` 打包。安装包不得含源码、测试、文档、开发配置、`.env`、锁文件、Source Map、测试日志、fixture、私钥或错误平台文件。网页抓取 sidecar 须保留 Playwright 驱动 JS，不得含 Playwright Node、`.local-browsers` 或 `chromium_headless_shell-*`，解包体积 ≤ 400 MiB。被定向裁剪的 Node 目录属审计禁区；trace 若触达则删除前构建失败。`app.asar` 非加密，`VITE_*` 按公开信息处理。使用 `maximum` 压缩。候选 bundle 绑定 Tag、commit、fragment、安装包、更新文件与哈希；测试与发布前复验。
 
@@ -47,7 +47,7 @@ publish 上传候选与 fragment，更新该平台自动更新 metadata 与官�
 
 ### 本地保留与清理
 
-`~/.ncurator/release-work`：prepare/test 临时目录，阶段结束删除。`~/.ncurator/release-candidates`：发布并公开验证后只保留本平台最新候选及其 E2E 结果。`~/.ncurator/release-tools`：可复用构建缓存，不随发布删除。
+`~/.ncurator/release-work`（Windows）或系统临时目录（非 Windows）：prepare/test 临时目录，阶段结束删除。`~/.ncurator/release-candidates`：发布并公开验证后只保留本平台最新候选及其 E2E 结果。`~/.ncurator/release-tools`：可复用构建缓存，不随发布删除。
 
 ## 3. 自动更新通道
 

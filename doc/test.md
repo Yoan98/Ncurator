@@ -23,7 +23,11 @@
   - 放在 `tests/case/unit/**`。
   - 全部是 backend 单元测试，不允许导入 Renderer、React、jsdom 或 Electron UI。
   - 不进入 `doc/test-plan/**`，由 unit runner 独立发现和执行。
-- 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Settings、Workbench 或 Unit。
+- `showcase`
+  - 放在 `tests/case/showcase/**`，文件后缀 `.showcase.test.ts`。
+  - 独立官网样例采集，走真实 E2E 链路，用 `pnpm test:showcase` 单独执行。
+  - 不进入 `doc/test-plan/**`，产出的样例导出到 `tests/logs/showcase/**`。
+- 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Settings、Workbench、Showcase 或 Unit。
 
 ### 2.2 目录结构
 
@@ -36,6 +40,7 @@ tests/
     unit/
     settings/
     workbench/
+    showcase/
   logs/
 ```
 
@@ -47,7 +52,7 @@ tests/
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的子目录。
 - 各测试 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义。
 - 当某个 `suite` 不需要继续细分时，测试 case 可以直接放在该 `suite` 目录下。
-- `tests/case/{ai,settings,unit,workbench}/**` 只允许放已在 `doc/test-plan/**` 登记的正式测试 case。
+- `tests/case/{ai,settings,unit,workbench,showcase}/**` 只允许放已在 `doc/test-plan/**` 登记的正式测试 case（`showcase` 例外，不进入测试计划）。
 - `tests/fixtures/workspace/` 是共享工作区 fixture 根目录；凡是依赖“工作区里有什么文件”的测试，以及 backend/unit 直接引用的固定文件输入，统一复用该目录。
 - `tests/fixtures/sqlite/` 放数据库迁移 fixture。
 - `tests/fixtures/**` 全部是只读测试输入：测试禁止对其中任何文件原地写入、覆盖或修改；需要写入时，必须通过 `fixtures: []` 声明由 runner/harness 复制到隔离临时 workspace（或按 E2E 规则复制到临时目录），测完删除。fixture 需要更新时直接提交新二进制，禁止引入任何 fixture 生成器脚本（生成器不得以 `.test.ts` 形态进入 `tests/case/**` 自动发现）。
@@ -55,7 +60,7 @@ tests/
 
 ### 2.3 稳定映射模型
 
-测试按 `domain / suite / groups... / caseId` 映射到目录和日志；普通 `.test.ts` 为 backend，`.e2e.test.ts` 为 E2E。固定边界为：`ai`、`unit` 只能是 backend，`settings`、`workbench` 只能是 E2E。
+测试按 `domain / suite / groups... / caseId` 映射到目录和日志；普通 `.test.ts` 为 backend，`.e2e.test.ts` 为 E2E，`.showcase.test.ts` 为独立样例采集。固定边界为：`ai`、`unit` 只能是 backend，`settings`、`workbench` 只能是 E2E。
 
 ## 3. 测试用例规则
 
@@ -87,7 +92,7 @@ tests/
 
 - UI E2E 必须通过真实 UI 和产品链路完成被测行为；禁止 fake、mock、stub、直接写状态或内部写 IPC 绕过。
 - fixture 和 helper 只能准备真实输入、执行用户可见操作、等待结果和收集证据，不能替代产品输出。
-- Settings / Workbench E2E 固定使用 `serviceMode: real`。
+- Settings / Workbench E2E 默认使用 `serviceMode: real`；仅自动更新、数据库版本恢复等受控状态的 case 可使用 `fixture`，并在对应 `doc/test-plan/**` 说明原因。
 - 允许的模拟、种子或受控注入只写在对应 `doc/test-plan/**` case 的 How / Not；新增假数据或模拟路径须先说明必要性、取得用户确认，并写入该 case 所在测试计划。
 - observer、只读 IPC 和截图只能收集证据，不能触发被测行为或改变运行结果。
 - 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。不为 E2E 增加生产环境变量、故障开关、全局探针或其他生产代码入口；确需修改生产代码时，必须先取得用户确认。
@@ -140,6 +145,7 @@ runner 不负责：
 - Unit
   - `pnpm test:unit`
   - `pnpm test:unit:ai`
+  - `pnpm test:terminal`：直接 `vitest` 运行终端相关 unit 文件。
 - 源码 E2E
   - `pnpm test:e2e:source`：构建当前源码并运行 `tests/case/**` 中的全部 E2E。
   - `pnpm test:e2e:package -- --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行所选正式 E2E。安装落在本机 `NCurator-E2E` 目录；Windows 可能覆盖本机已安装的正式包。测完删除 E2E 安装目录及指向它的入口。
@@ -147,6 +153,11 @@ runner 不负责：
   - `pnpm test:settings:e2e`
 - Workbench
   - `pnpm test:workbench:e2e`
+- Showcase
+  - `pnpm test:showcase`：独立执行官网样例采集。
+- 更新
+  - `pnpm test:update:backend`、`pnpm test:update:e2e`
+  - `pnpm test:update:real:win`：Windows 真实覆盖升级测试，独立脚本，不属于 runner。
 
 runner 支持的过滤参数：
 
@@ -161,12 +172,14 @@ runner 支持的过滤参数：
 - `--bundle`，正式包 E2E 必填，指向已构建候选包的 `release-bundle-*.json`。
 - `--fresh-knowledge-cache`，删除本次构建对应的知识库缓存，强制从零验证完整索引。
 - `--reuse-knowledge-cache`，人工调试时跨构建复用同一类缓存；不能和 `--fresh-knowledge-cache` 同时使用。
+- `--showcase`，执行 showcase 采集类别。
+- `--result`，showcase/发布流程用的结果输出路径。
 - `--help`（或 `-h`），打印 runner 用法后直接退出；传入未识别的参数会立即报错并退出（退出码 2），防止未知参数被静默忽略而误触发全量执行。
 
 补充规则：
 
-- runner 强制执行固定 domain/type 边界。backend 普通测试并发为 6；Source E2E 与正式包 E2E 在多 case 时都先串行执行全仓唯一的 `warmup` 用例（先冷启动索引共享 fixture，后续 case 复用缓存）。Source 的所有 case 直接共享按构建指纹保存的 split/vector 内容缓存，各 case 只隔离统计文件；正式包 E2E 则把缓存种子复制到后续 case 的隔离缓存目录。随后开放总并发 3、live 并发 2，`exclusive` 用例串行独占；某个 case 失败后不自动重跑，继续收集剩余 case；warm-up 失败则不启动后续并发。
-- E2E（source 与正式包）即使通过 `--domain`/`--suite`/`--case` 过滤范围，只要本次实际执行的 case 数超过 1，runner 也会自动把全仓唯一的 `warmup` 用例纳入执行并先串行预热，避免过滤后漏掉 warmup 导致全部 case 冷启动重复索引；`--case` 过滤时 `warmup` 用例不受 `--testNamePattern` 影响。
+- runner 强制执行固定 domain/type 边界。backend 普通测试并发为 6；Source E2E 与正式包 E2E 在多 case 时都先串行执行全仓唯一的 `warmup` 用例（先冷启动索引共享 fixture，后续 case 复用缓存）。Source 的所有 case 直接共享按构建指纹保存的 split/vector 内容缓存，各 case 只隔离统计文件；正式包 E2E 则把缓存种子复制到后续 case 的隔离缓存目录。随后开放总并发 3、live 并发 3，`exclusive` 用例串行独占；某个 case 失败后不自动重跑，继续收集剩余 case；warm-up 失败则不启动后续并发。
+- E2E（source 与正式包）即使通过 `--domain`/`--suite`/`--case` 过滤范围，只要本次实际执行的测试文件数超过 1，runner 也会自动把全仓唯一的 `warmup` 用例纳入执行并先串行预热，避免过滤后漏掉 warmup 导致全部 case 冷启动重复索引；`--case` 过滤时 `warmup` 用例不受 `--testNamePattern` 影响。
 - E2E 默认执行类型为 `normal`；真实 AI/服务调用声明 `execution: 'live'`，原生对话框、鼠标和桌面焦点用例声明 `execution: 'exclusive'`，唯一的向量冷启动用例声明 `execution: 'warmup'`。
 - `source` 是源码目标，直接复用内容缓存；`package` 只接受既有 release bundle，安装后运行所选 E2E，不负责构建。
 - native binding、知识库缓存和临时 Electron app 由 runner 自动准备；普通测试不手工修改 `node_modules` 或复用正式包缓存。
@@ -192,6 +205,8 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   runtime-events.jsonl
   llm-io.jsonl            # backend
   artifacts.json
+  cache-summary.json
+  seed-manifest.json
   artifacts/
 ```
 
@@ -217,6 +232,10 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
 - `artifacts/`
   - 可选目录。
   - 只有确实生成 trace、截图、HTML 诊断页、可选 human bookmark 快照等实体附件时才创建。
+- `cache-summary.json`
+  - 本次 run 的知识库/向量缓存摘要。
+- `seed-manifest.json`
+  - 本次 run 的 fixture seed 清单。
 
 目录与命名规则：
 
@@ -324,6 +343,8 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   - `kind`
   - `path`
   - `refs`
+  - `fileName`（可选）
+  - `capability`（可选）
 
 关键约束：
 

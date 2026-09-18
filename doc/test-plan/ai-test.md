@@ -46,7 +46,7 @@
 - `tool / text-file` 覆盖普通文本按行分页读取、四种写入 action、修改记录、结构化 diff 与回退前置数据，以及按行号定位的文本搜索；unit 侧见 `tests/case/unit/ai/text-file-tool-contract.test.ts`。
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作地址内修改记录、Artifact、安全校验和工作地址外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作地址外绝对路径读取、损坏文件和结果大小限制。
-- `tool / web-browsing` 包含 `web-search-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。`browser_use` 网址协议、系统错误页、加载超时与 `navigate` 成败字段由 Workbench `browser-navigate-error-page` 与 unit `navigate-plan` 覆盖。
+- `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。`browser_use` 网址协议、系统错误页、加载超时与 `navigate` 成败字段由 Workbench `browser-navigate-error-page` 与 unit `navigate-plan` 覆盖。
 - 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。
@@ -78,7 +78,7 @@
 - KB 索引范围：所有支持文件都会前置「文件名锚点」内容块，保证按文件名可被检索；Excel 只索引文件名、文档标题与工作表名等元数据，单元格内容不进索引，检索命中时引用其真实文件路径。
 - embedding 模型缺失时，harness 应优先通过真实生产下载链自动检查并下载，不得引入测试专用 embedding 替身。
 - 回归 harness 不得使用旧式 fake API。
-- AI backend 回归统一使用默认 `testTimeout=900_000`、`hookTimeout=900_000`；不再为单个回归 case 单独配置超时。
+- AI backend 回归统一使用默认 `testTimeout=900_000`、`hookTimeout=900_000`；少数重型 live case 可覆写更长超时。
 
 ### 3.2 `mock-llm` 与 `live` 设计口径
 

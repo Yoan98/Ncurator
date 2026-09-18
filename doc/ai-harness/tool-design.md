@@ -53,7 +53,6 @@ HumanToolSpec = {
   skillIds[],              // 归属 skill
   inputSchema,             // zod
   promptSpec,              // { name, description }
-  resolveExecutionMeta,    // mutability / resourceKey（审批、并发）
   modelResult: {
     renderSuccess,
     renderError?           // 缺省走通用错误渲染
@@ -96,7 +95,7 @@ brain 在 hand 前、schema 校验前，对**全部** tool call 统一调用：
 | 条件 | 行为 |
 |------|------|
 | > 51,200 UTF-8 bytes **或** > 2,000 行 | `ok: false`，提示缩小范围 |
-| 否则 > 32,000 字符 | 全文落盘 workspace tool-result 目录，返回 head/tail 预览 + 路径 + `text_file_read` 指引 |
+| 否则 > 32,000 字符 | 全文落盘 `userData/partners/{id}/runtime/toolresult/<runId>/` 目录，返回 head/tail 预览 + 路径 + `text_file_read` 指引 |
 | 否则 | 整段直出 ToolMessage |
 
 实现：`buildModelToolResultDelivery`（`shared/modelToolResult.ts`）。
@@ -133,8 +132,8 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 
 | 工具 | 渲染要点 |
 |------|----------|
-| `learn_skill` | loaded / duplicate / unknown / evicted 摘要 |
-| `update_plan` | 计划项列表 `[status] title` |
+| `learn_skill` | 由 `learning` 节点直接写 ToolMessage（loaded / duplicate / unknown / evicted 摘要），不走 `buildModelToolResultDelivery` |
+| `update_plan` | 由 `plan` 节点直接写 ToolMessage（计划项列表 `[status] title`），不走 `buildModelToolResultDelivery` |
 | `read_image` | 路径列表 + 尺寸；`images[]` 进 log 供多模态（human-harness 第 3.5 节） |
 
 ### 6.2 写工具输出
@@ -152,8 +151,7 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 
 ```text
 hand 收到 call batch
-  → resolveExecutionMeta（mutability / resourceKey）
-  → 审批门禁（仅 `terminal_run` + risk policy）
+  → 审批门禁（仅 `terminal_run` 按 risk policy：`analyzeTerminalCommandPolicy`）
   → 执行 tool runtime
   → buildModelToolResultDelivery
   → append ToolMessage + log tool

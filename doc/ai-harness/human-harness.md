@@ -834,8 +834,8 @@ brain 返回 update_plan
 
 每轮 brain 前 `buildAvailableTools`：
 
-- 始终包含 **agent-control** 三工具；
-- 加上 `state.skills.learnedSkillIds` 对应 skill 的全部 tool；
+- 始终包含全部 `builtin` skill（`terminal`、`text-file`、`kb-retrieval`、`web-browsing`、`agent-control`）的全部 tool；
+- 加上 `state.skills.learnedSkillIds` 对应 external skill 的全部 tool；
 - 受 active tool 上限约束（第 7.2 节）。
 
 ### 7.5 read_image（agent-control）
@@ -922,8 +922,8 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 
 | 场景 | 行为 |
 |------|------|
-| brain 无 usage、资料校验等 | `run_warning`（原 `runtime_issue`）；**不改** `ai_run.status`，不结束 run |
-| 审批拒绝 | hand 写失败 `tool`；可发 `run_warning`（`approval_denied`）；继续 dispatch / brain |
+| brain 无 usage、资料校验等 | `run_warning`；**不改** `ai_run.status`，不结束 run |
+| 审批拒绝 | hand 写失败 `tool`；继续 dispatch / brain |
 
 #### 场景对照
 

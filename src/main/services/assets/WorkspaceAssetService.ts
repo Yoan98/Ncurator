@@ -44,8 +44,11 @@ export const getPartnerAssetBucketDir = (partnerId: string, assetBucketId: strin
   return path.join(getPartnerAssetsRootDir(partnerId), normalizedBucketId)
 }
 
-export const ensurePartnerRuntimeDirs = async (partnerId: string): Promise<void> => {
-  const runtimeDir = getPartnerRuntimeDir(partnerId)
+export const deletePartnerRootDir = async (partnerId: string): Promise<void> => {
+  await fs.rm(getPartnerRootDir(partnerId), { recursive: true, force: true })
+}
+
+export const ensurePartnerRuntimeDirs = async (partnerId: string): Promise<void> => {  const runtimeDir = getPartnerRuntimeDir(partnerId)
   await Promise.all([
     fs.mkdir(path.join(runtimeDir, PARTNER_ASSETS_DIR), { recursive: true }),
     fs.mkdir(getPartnerScriptsRootDir(partnerId), { recursive: true }),

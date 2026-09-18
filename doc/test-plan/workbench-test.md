@@ -101,7 +101,7 @@ pnpm test:update:e2e
 - `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 测试入口。
 - 需要验证正式安装包时，调试使用 `pnpm test:e2e:package -- --bundle <release-bundle.json>`；它会校验并安装已构建候选包，再对安装后的真实应用执行所选正式 E2E，不重新构建。发布时通过 `release:win` / `release:mac` 的 `--test-only` 按影响评估选择范围，不带过滤参数时执行全部正式 E2E。
 - `conversation / run / result / scheduled-task` 是稳定 suite，不因 PRD 小节增删而轻易重排。
-- suite 下的 `partner / composer / timeline / message / scope / process / blocker / browser / persistence / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。不存在 `search/` 目录。
+- suite 下的 `partner / composer / timeline / message / scope / provider-matrix / process / blocker / browser / persistence / preview / apply / wps-office` 是 group，只在同一 suite 内用于收敛相近 case。不存在 `search/` 目录。
 
 ## 5. 测试清单
 
@@ -301,7 +301,7 @@ pnpm test:update:e2e
 - 测试类型：`e2e`
 - What：有消息后时间轴出现「今天」日节点；点击跳到当天最早一条消息；时间轴无独立滚动；已在可视区时点击不带动侧栏/Composer；节点固定间距贴底。完整态轴文案会与 Composer / 审批卡左缘碰撞时进入紧凑态（仅圆点，悬浮 Tooltip）；不会碰撞时即使右侧面板展开也不收起；审批替换 Composer 时轴线仍在。
 - Why：伙伴是一条一直聊下去的记录，用户需要按日定位；月/年用 DatePicker 选天，不再展开子节点；挤不挤取决于轴文案可用 gutter，而非面板开关。
-- How：创建伙伴并完成一次真实 AI run（当天消息）；打开时间轴，记录侧栏/Composer/消息列表位置后点击今天日节点；对「仅今天」时间轴截图，核对轴线底端靠近输入框顶部、顶端与顶栏留空、由下向上渐隐。把中间栏收窄到完整态轴文案会与 Composer 左缘碰撞后确认 `data-compact=true`；再拉宽至不再碰撞确认恢复完整态。滚顶懒加载与轴不独立滚动（`WB-SESSION-010-AC4`）沿用消息区既有懒加载，本 case 断言轴容器无独立滚动条。月/年聚合与可选日集合由 unit `message-timeline` 与 `timeline-month-day-pick` 覆盖。
+- How：创建伙伴并完成一次真实 AI run（当天消息）；打开时间轴，记录侧栏/Composer/消息列表位置后点击今天日节点；对「仅今天」时间轴截图，核对轴线底端靠近输入框顶部、顶端与顶栏留空、由下向上渐隐。把中间栏收窄到完整态轴文案会与 Composer 左缘碰撞后确认 `data-compact=true`；再拉宽至不再碰撞确认恢复完整态。滚顶懒加载与轴不独立滚动（`WB-SESSION-010-AC4`）沿用消息区既有懒加载，本 case 断言轴容器无独立滚动条。月/年聚合与可选日集合由 unit `message-timeline` 与 e2e `timeline-month-day-pick` 覆盖。
 - Oracle：时间轴可见且含「今天」、无空的昨/前天；点击今天后将该天最早一条瞬时贴顶；轴自身无独立滚动；侧栏与 Composer 位置不变；gutter 不足进入紧凑态、充足时恢复，对齐 `WB-SESSION-010-AC1`、`WB-SESSION-010-AC3`、`WB-SESSION-010-AC4`、`WB-SESSION-010-AC6`、`WB-SESSION-010-AC7`、`WB-SESSION-010-AC8`。
 - Not：不覆盖月/年 DatePicker 选天（见 `timeline-month-day-pick`）；不验证压缩算法。
 
@@ -399,7 +399,7 @@ pnpm test:update:e2e
 
 #### `interrupted-task-resume-flow`
 
-- 测试类型：`backend contract + real-model e2e`
+- 测试类型：`e2e`
 - What：同一伙伴中的任务因达到 Graph 运行上限等原因中断后，从不可变消息日志恢复，并在用户后续消息中继续原任务。
 - Why：恢复能力必须经过真实 Workbench、真实模型、Main 进程、持久化和 Renderer 的完整链路验证，不能只依赖 Mock LLM。
 - How：真实模型 E2E 把首轮 Graph 上限降为 2，验证上限错误后发送继续语句；第二轮恢复正式上限并完成。Backend 覆盖日志投影、相同 `tool_call_id` 修复、计划投影、`compaction_checkpoint` 边界、重启标记、跨伙伴隔离、编辑和删除。

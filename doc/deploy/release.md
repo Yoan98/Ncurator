@@ -25,7 +25,7 @@
 
 1. 校验 `released-migrations.json` 中已锁定 migration 的版本、名称、文件名和 SHA-256。
 2. 并行执行 `typecheck:node`、`typecheck:web`，并准备网页抓取 sidecar。
-3. 使用 6 个 worker 执行 Unit、update backend 和非 live AI backend。
+3. 使用 6 个 worker 执行 Unit、update backend 和非 live AI backend（其中 `ppt-browser-files` 组的浏览器用例固定 1 个 worker 串行）。
 4. 必跑 `human-prefix-cache-retain-live`，验证同一伙伴的短续接、文本读工具历史、跨 run 前缀缓存和 `toolsHash`；没有 live key 必须失败，不能跳过。
 5. 全部通过后，把当前连续 migration 纳入发布锁，与 `package.json` 版本一并提交，创建 annotated Tag，并原子推送 `main` 和 Tag。
 
@@ -36,7 +36,9 @@ pnpm release:start -- --platform windows --version X.Y.Z
 pnpm release:start -- --platform mac --version X.Y.Z
 ```
 
-Windows 候选包须在本地 Windows x64 构建；macOS 只创建 Tag，候选包须在 Apple Silicon Mac 上构建。平台环境与构建审计见 [`design.md`](./design.md)。
+可用 `--notes <text>` 附加发布说明。
+
+Windows 候选包须在本地 Windows x64 构建；macOS 只创建 Tag，候选包须在 Apple Silicon Mac 上构建。macOS 构建前需先在本机配置更新签名：`pnpm release:signing:setup`（依赖 `CSC_LINK` / `CSC_KEY_PASSWORD`）。平台环境与构建审计见 [`design.md`](./design.md)。
 
 ### 1.2 未上线 Tag 中止
 

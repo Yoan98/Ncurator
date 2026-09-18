@@ -7,6 +7,7 @@ import { terminalSessionManager } from './human/tools/terminal/TerminalSessionMa
 import type { AiRunResourceManager } from './run/AiRunResourceManager'
 import { normalizeSelectedReferences } from './utils/runContext'
 import { validateSelectedReferencesForRun } from '../sourceScope/validation'
+import { deletePartnerRootDir } from '../assets/WorkspaceAssetService'
 import type { AiFileChangeService } from './fileChanges/AiFileChangeService'
 import type { DocxApplyService } from './human/tools/docx/review/DocxApplyService'
 import type { DocumentsStore } from '../storage/domains/DocumentsStore'
@@ -322,6 +323,7 @@ export class ChatRunService {
     await terminalSessionManager.closeByChatSession(normalizedPartnerId)
     await this.deps.partnerStore.deletePartner(normalizedPartnerId)
     await this.deps.aiRunStore.deleteRunsByPartner(normalizedPartnerId)
+    await deletePartnerRootDir(normalizedPartnerId)
   }
 
   public async clearPartnerContext(partnerId: string): Promise<PartnerClearContextResponse> {
