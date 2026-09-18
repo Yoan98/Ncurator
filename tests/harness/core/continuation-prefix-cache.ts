@@ -6,7 +6,7 @@ import { diffChatToolsRequestWire } from '../../../src/main/services/ai/utils/ll
  * 相对上一 run 末次 brain inputTokens 的最低比例。
  * 全 live 跨 run case 共用；调低/调高只改这一处，避免各 case 阈值漂移。
  */
-export const CROSS_RUN_PREFIX_CACHE_MIN_RATIO = 0.6
+export const CROSS_RUN_PREFIX_CACHE_MIN_RATIO = 0.85
 
 const lastBrainRecord = (records: readonly AiLlmIoRecord[]): AiLlmIoRecord | undefined =>
   [...records].reverse().find((record) => record.caller === 'human.brain')
