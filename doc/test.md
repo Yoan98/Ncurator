@@ -5,7 +5,7 @@
 - 本文是 NCurator-Desktop 的唯一测试总规范。
 - 各业务域的 suite、case 和领域规则只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case。
 - `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑。
-- `showcase` 使用同一套 E2E harness 采集官网样例，但属于显式采集任务，不是产品回归门禁；其范围只在 Workbench 测试计划中维护。
+- Showcase 是独立的显式采集任务，不属于产品回归或 E2E 集合；使用独立目录和 `pnpm test:showcase` 命令，范围只在 `doc/test-plan/showcase-test.md` 维护。
 
 测试体系只沉淀一层长期执行产物：
 
@@ -21,13 +21,13 @@
   - 列入 `doc/test-plan/**`，放在 `tests/case/<domain>/<suite>/**`。
   - 用于长期维护、批量执行和生成可追溯运行产物。
 - 显式采集任务
-  - 同样登记在对应测试计划和 `tests/case/<domain>/<suite>/**`，但不计入日常默认 E2E 或发版回归集合。
-  - 必须通过专用命令显式执行，不能被默认测试或发布命令隐式带入。
+  - 登记在 `doc/test-plan/showcase-test.md`，放在 `tests/showcase/**`。
+  - 使用独立采集命令，不能被回归 runner 或发布命令发现。
 - `unit`
   - 放在 `tests/case/unit/**`。
   - 全部是 backend 单元测试，不允许导入 Renderer、React、jsdom 或 Electron UI。
   - 不进入 `doc/test-plan/**`，由 unit runner 独立发现和执行。
-- 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Settings、Workbench 或 Unit。
+- 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Settings、Workbench、Unit 或 Showcase。
 
 ### 2.2 目录结构
 
@@ -40,18 +40,20 @@ tests/
     unit/
     settings/
     workbench/
+  showcase/
   logs/
 ```
 
 规则：
 
 - 目录使用 kebab-case。
-- 测试发现目录使用通用树形结构：`tests/case/<domain>/<suite>/<groups...>/<case>.test.ts`。
-- e2e 测试文件使用 `tests/case/<domain>/<suite>/<groups...>/<case>.e2e.test.ts`。
+- 回归测试发现目录使用通用树形结构：`tests/case/<domain>/<suite>/<groups...>/<case>.test.ts`。
+- 回归 E2E 测试文件使用 `tests/case/<domain>/<suite>/<groups...>/<case>.e2e.test.ts`。
+- Showcase 采集文件使用 `tests/showcase/<case>.showcase.test.ts`，不进入回归 runner。
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的子目录。
-- 各 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义。
+- 各回归 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义；Showcase 不使用回归 domain/suite。
 - 当某个 `suite` 不需要继续细分时，回归 case 可以直接放在该 `suite` 目录下。
-- `tests/case/**` 中除 `unit/**` 外，只允许放已在 `doc/test-plan/**` 登记的回归 case 或显式采集任务。
+- `tests/case/**` 中除 `unit/**` 外，只允许放已在 `doc/test-plan/**` 登记的回归 case。
 - `tests/fixtures/workspace/` 是共享工作区 fixture 根目录；凡是依赖“工作区里有什么文件”的测试，以及 backend/unit 直接引用的固定文件输入，统一复用该目录。
 - `tests/fixtures/sqlite/` 放数据库迁移 fixture。
 - `tests/fixtures/**` 全部是只读测试输入：测试禁止对其中任何文件原地写入、覆盖或修改；需要写入时，必须通过 `fixtures: []` 声明由 runner/harness 复制到隔离临时 workspace（或按 E2E 规则复制到临时目录），测完删除。fixture 需要更新时直接提交新二进制，禁止引入任何 fixture 生成器脚本（生成器不得以 `.test.ts` 形态进入 `tests/case/**` 自动发现）。
@@ -59,20 +61,20 @@ tests/
 
 ### 2.3 稳定映射模型
 
-测试按 `domain / suite / groups... / caseId` 映射到目录和日志；`suite` 与可选 `group` 只在对应测试计划定义。普通 `.test.ts` 为 backend，`.e2e.test.ts` 为 E2E。固定边界为：`ai`、`unit` 只能是 backend，`settings`、`workbench` 只能是 E2E。
+回归测试按 `domain / suite / groups... / caseId` 映射到目录和日志；普通 `.test.ts` 为 backend，`.e2e.test.ts` 为 E2E。固定边界为：`ai`、`unit` 只能是 backend，`settings`、`workbench` 只能是 E2E。Showcase 使用独立的 `showcase / collection / caseId` 采集日志映射。
 
 ## 3. 回归与采集 case 规则
 
 ### 3.1 准入规则
 
 - 新增任何测试文件前，必须先与用户确认目标分类。
-- `doc/test-plan/**` 是回归 case 和显式采集任务的唯一规格来源；新增、修改或补齐其中任一类时，必须先更新对应测试计划，再修改测试代码。
-- `tests/case/<domain>/**` 只能放已登记的回归 case 或显式采集任务；`tests/case/unit/**` 不进入领域回归计划，但仍必须满足 Unit backend 边界。
+- `doc/test-plan/**` 是回归 case 的唯一规格来源；新增、修改或补齐回归 case 时，必须先更新对应测试计划，再修改测试代码。Showcase 采集任务遵循 `doc/test-plan/showcase-test.md`。
+- `tests/case/<domain>/**` 只能放已登记的回归 case；`tests/case/unit/**` 不进入领域回归计划，但仍必须满足 Unit backend 边界。
 - 每个回归 `caseId` 都必须稳定映射到唯一测试定义与唯一日志目录。一个测试文件可以承载多个紧密相关的 case，但 `--case <caseId>` 必须能只执行目标 case。
 
 ### 3.2 回归 case 共享字段
 
-回归 case 和显式采集任务在 `doc/test-plan/**` 中统一使用以下字段：
+回归 case 和 Showcase 采集任务在 `doc/test-plan/**` 中统一使用以下字段：
 
 - `测试类型`
   - `backend` 或 `e2e`。
@@ -110,10 +112,11 @@ tests/
 
 1. 先确认是否新增或调整测试，以及目标分类。
 2. 如果是回归测试，先更新对应 `doc/test-plan/**`，再修改 `tests/case/<domain>/**`。
-3. 如果是 Unit，放入 `tests/case/unit/**`，保持 backend-only，不更新 `doc/test-plan/**`。
-4. 通过 `scripts/test/workflow.mjs` 执行并产出日志。
-5. 先看 `timeline.jsonl`；不足时再看 `runtime-events.jsonl`、`meta.json` 和 `artifacts.json`。
-6. 最后基于 raw logs 回流结论，决定是否需要更新 `doc/test-plan/**` 或实现代码。
+3. 如果是 Showcase 采集，先更新 `doc/test-plan/showcase-test.md`，再修改 `tests/showcase/**`。
+4. 如果是 Unit，放入 `tests/case/unit/**`，保持 backend-only，不更新 `doc/test-plan/**`。
+5. 回归测试通过 `scripts/test/workflow.mjs` 执行；Showcase 通过 `scripts/test/showcase.mjs` 执行。
+6. 先看 `timeline.jsonl`；不足时再看 `runtime-events.jsonl`、`meta.json` 和 `artifacts.json`。
+7. 最后基于 raw logs 回流结论，决定是否需要更新测试计划或实现代码。
 
 ### 4.2 runner 与常用命令
 
@@ -145,9 +148,9 @@ runner 不负责：
 - Unit
   - `pnpm test:unit`
   - `pnpm test:unit:ai`
-- 日常默认 E2E
-  - `pnpm test:e2e:source`：构建当前源码并运行日常默认 E2E，默认排除 `provider-matrix`、`wps-office` 和 `showcase`。
-  - `pnpm test:e2e:package -- --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行同一日常默认集合。安装落在本机 `NCurator-E2E` 目录；Windows 可能覆盖本机已安装的正式包。测完删除 E2E 安装目录及指向它的入口。
+- 源码 E2E
+  - `pnpm test:e2e:source`：构建当前源码并运行 `tests/case/**` 中的全部 E2E。
+  - `pnpm test:e2e:package -- --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行所选正式 E2E。安装落在本机 `NCurator-E2E` 目录；Windows 可能覆盖本机已安装的正式包。测完删除 E2E 安装目录及指向它的入口。
 - 发版回归 E2E
   - `pnpm release:win -- --tag <tag> --test-only [回归过滤参数]`
   - `pnpm release:mac -- --tag <tag> --test-only [回归过滤参数]`
@@ -158,8 +161,9 @@ runner 不负责：
 - Workbench
   - `pnpm test:workbench`
   - `pnpm test:workbench:e2e`
-  - `node scripts/test/workflow.mjs --domain workbench --execution-profile default`
-  - `node scripts/test/workflow.mjs --domain workbench --type e2e --execution-profile default`
+- Showcase
+  - `pnpm test:showcase`
+  - `pnpm test:showcase -- --case <caseId>`
 
 runner 支持的过滤参数：
 
@@ -171,7 +175,6 @@ runner 支持的过滤参数：
 - `--case`
 - `--runs`
 - `--target`，取值为 `source` 或 `package`，默认 `source`。
-- `--execution-profile`，取值为 `default` 或 `release`；`release` 仅由发版命令使用。
 - `--bundle`，正式包 E2E 必填，指向已构建候选包的 `release-bundle-*.json`。
 - `--fresh-knowledge-cache`，删除本次构建对应的知识库缓存，强制从零验证完整索引。
 - `--reuse-knowledge-cache`，人工调试时跨构建复用同一类缓存；不能和 `--fresh-knowledge-cache` 同时使用。
@@ -181,13 +184,12 @@ runner 支持的过滤参数：
 
 - runner 强制执行固定 domain/type 边界。backend 普通测试并发为 6；Source E2E 与正式包 E2E 在多 case 时都先串行执行全仓唯一的 `warmup` 用例（先冷启动索引共享 fixture，后续 case 复用缓存）。Source 的所有 case 直接共享按构建指纹保存的 split/vector 内容缓存，各 case 只隔离统计文件；正式包 E2E 则把缓存种子复制到后续 case 的隔离缓存目录。随后开放总并发 3、live 并发 2，`exclusive` 用例串行独占；某个 case 失败后不自动重跑，继续收集剩余 case；warm-up 失败则不启动后续并发。
 - E2E（source 与正式包）即使通过 `--domain`/`--suite`/`--case` 过滤范围，只要本次实际执行的 case 数超过 1，runner 也会自动把全仓唯一的 `warmup` 用例纳入执行并先串行预热，避免过滤后漏掉 warmup 导致全部 case 冷启动重复索引；`--case` 过滤时 `warmup` 用例不受 `--testNamePattern` 影响。
-- E2E 默认执行类型为 `normal`；真实 AI/服务调用声明 `execution: 'live'`，原生对话框、鼠标和桌面焦点用例声明 `execution: 'exclusive'`，唯一的向量冷启动用例声明 `execution: 'warmup'`。
-- `source` 是日常目标，直接复用内容缓存（多 case 时同样先跑 warm-up 预热共享缓存）；`package` 只接受既有 release bundle，安装后通过 warm-up 验证冷启动并运行所选集合，不负责构建。`default` profile 使用日常排除范围；`release` profile 只排除显式采集任务，并禁止通过发版命令选择该任务。
+- E2E 默认执行类型为 `normal`；真实 AI/服务调用声明 `execution: 'live'`，原生对话框、鼠标和桌面焦点用例声明 `execution: 'exclusive'`，唯一的向量冷启动用例声明 `execution: 'warmup'`。`provider-matrix` 与 `wps-office` 都属于正式 E2E，按影响评估选择或在全量回归时执行。
+- `source` 是源码目标，直接复用内容缓存；`package` 只接受既有 release bundle，安装后运行所选 E2E，不负责构建。两者都不发现 `tests/showcase/**`。
 - native binding、知识库缓存和临时 Electron app 由 runner 自动准备；普通回归不手工修改 `node_modules` 或复用正式包缓存。
 - 正式包测试、发布门禁、Tag 前 Unit/非 live AI（及发布准备必跑的 `human-prefix-cache-retain-live`）以及发布后日志清理只在 `doc/deploy/release.md` 定义，本文不重复发布流程。
 
 ### 4.3 读取与分析 raw logs
-
 
 - 默认先读取目标 run 的 `timeline.jsonl`，理解语义步骤、断言事实和失败位置。
 - 如果 `timeline.jsonl` 仍不足以解释结果，再继续读取 `runtime-events.jsonl` 与关键附件。

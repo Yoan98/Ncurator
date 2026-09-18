@@ -2,15 +2,7 @@ import fs from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { createElement } from 'react'
-import {
-  Document,
-  Font,
-  Page,
-  StyleSheet,
-  Text,
-  View,
-  renderToBuffer
-} from '@react-pdf/renderer'
+import { Document, Font, Page, StyleSheet, Text, View, renderToBuffer } from '@react-pdf/renderer'
 
 export const DOCX_FILE_NAME = '云枢智服-9月第2周经营周报.docx'
 export const EXCEL_FILE_NAME = '云枢智服-9月费用预算.xlsx'
@@ -31,8 +23,7 @@ export const EXCEL_EDIT_PROMPT =
 export const PPT_CREATE_PROMPT =
   '做份 Q2 经营复盘，能直接给领导开会。封面、数字、风险、下一步都要有。写到工作区，文件名用「Q2经营复盘.pptx」。'
 
-export const PPT_EDIT_PROMPT =
-  '@Q2经营复盘.pptx 封面改成内部通气会，KPI 没达标的标红。'
+export const PPT_EDIT_PROMPT = '@Q2经营复盘.pptx 封面改成内部通气会，KPI 没达标的标红。'
 
 export const PDF_FILE_NAME = '星河项目服务合同.pdf'
 export const PDF_PROMPT = '@星河项目服务合同.pdf 尾款什么时候付？'
@@ -341,7 +332,11 @@ export const generateXingheContractPdf = async (): Promise<Buffer> => {
         createElement(
           View,
           { style: contractStyles.signBlock },
-          createElement(Text, { style: contractStyles.p }, '乙方（盖章）：武汉云枢智服科技有限公司'),
+          createElement(
+            Text,
+            { style: contractStyles.p },
+            '乙方（盖章）：武汉云枢智服科技有限公司'
+          ),
           createElement(Text, { style: contractStyles.p }, '授权代表：陈嘉禾'),
           createElement(Text, { style: contractStyles.p }, '日期：2026年6月18日')
         )

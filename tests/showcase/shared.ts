@@ -4,7 +4,11 @@ import path from 'node:path'
 import type { Page } from '@playwright/test'
 import type { ElectronApplication } from 'playwright'
 import type { AiLlmUsage, AiRunEvent } from '../../../../src/shared/types'
-import { getWorkbenchLocator, getWorkbenchPrefixLocator, workbenchSelectors } from '../../../harness/e2e/workbench'
+import {
+  getWorkbenchLocator,
+  getWorkbenchPrefixLocator,
+  workbenchSelectors
+} from '../harness/e2e/workbench'
 
 export const USD_CNY = 7.2
 
@@ -90,13 +94,14 @@ export const collectUsage = (events: readonly AiRunEvent[]) => {
 }
 
 export const priceUsdPerMillion = (peak: boolean) =>
-  peak
-    ? { hit: 0.006, miss: 0.3, output: 1.2 }
-    : { hit: 0.003, miss: 0.15, output: 0.6 }
+  peak ? { hit: 0.006, miss: 0.3, output: 1.2 } : { hit: 0.003, miss: 0.15, output: 0.6 }
 
 export const roundCny = (value: number): number => Math.round(value * 100) / 100
 
-export const computeShowcaseCost = (events: readonly AiRunEvent[], extra: Record<string, unknown>) => {
+export const computeShowcaseCost = (
+  events: readonly AiRunEvent[],
+  extra: Record<string, unknown>
+) => {
   const usage = collectUsage(events)
   const peak = isDeepseekPeak(new Date())
   const rates = priceUsdPerMillion(peak)
@@ -258,10 +263,7 @@ export const rasterizePdfPages = async (
   return names
 }
 
-export const screenshotAssistantAnswer = async (
-  page: Page,
-  outputPath: string
-): Promise<void> => {
+export const screenshotAssistantAnswer = async (page: Page, outputPath: string): Promise<void> => {
   await fs.mkdir(path.dirname(outputPath), { recursive: true })
   const answer = getWorkbenchPrefixLocator(
     page,

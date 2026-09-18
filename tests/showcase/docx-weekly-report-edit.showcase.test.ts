@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import { runShowcaseCase } from '../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -16,7 +16,7 @@ import {
   waitForApplyEntryByFileName,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
-} from '../../../harness/e2e/workbench'
+} from '../harness/e2e/workbench'
 import { DOCX_EDIT_PROMPT, DOCX_FILE_NAME } from './createSeeds'
 import {
   computeShowcaseCost,
@@ -28,16 +28,14 @@ import {
 } from './shared'
 
 const CASE_ID = 'docx-weekly-report-edit'
-const EXPORT_DIR = path.resolve('tests/logs/workbench/showcase-export/docx-weekly-report-edit')
+const EXPORT_DIR = path.resolve('tests/logs/showcase/export/docx-weekly-report-edit')
 
-describe('workbench showcase e2e', () => {
+describe('showcase collection', () => {
   it(
     CASE_ID,
     async () => {
-      await runE2ECase({
+      await runShowcaseCase({
         caseId: CASE_ID,
-        domain: 'workbench',
-        suite: 'showcase',
         groups: ['docx'],
         description: '官网样例：改过关周报同一份文件，只截审核态绿增红删。',
         fixtures: [],
@@ -57,7 +55,12 @@ describe('workbench showcase e2e', () => {
             name: `showcase-workspace:${rootPath}`,
             phase: 'after-app-close',
             dispose: async () => {
-              await fs.rm(rootPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+              await fs.rm(rootPath, {
+                recursive: true,
+                force: true,
+                maxRetries: 10,
+                retryDelay: 500
+              })
             }
           })
           await configureLiveModelThroughSettingsUi(page, env)
@@ -101,7 +104,10 @@ describe('workbench showcase e2e', () => {
             durationMs: evidence.durationMs,
             ...changeCounts
           })
-          await fs.writeFile(path.join(EXPORT_DIR, 'cost.json'), `${JSON.stringify(cost, null, 2)}\n`)
+          await fs.writeFile(
+            path.join(EXPORT_DIR, 'cost.json'),
+            `${JSON.stringify(cost, null, 2)}\n`
+          )
           runtime.signal({
             name: 'showcase-docx-edit-cost',
             message: '官网 Word 审核样例实际消耗',

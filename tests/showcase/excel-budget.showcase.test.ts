@@ -2,7 +2,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import ExcelJS from 'exceljs'
 import { describe, it } from 'vitest'
-import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import { runShowcaseCase } from '../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -17,7 +17,7 @@ import {
   waitForApplyEntryByFileName,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
-} from '../../../harness/e2e/workbench'
+} from '../harness/e2e/workbench'
 import { EXCEL_CREATE_PROMPT, EXCEL_FILE_NAME } from './createSeeds'
 import {
   computeShowcaseCost,
@@ -30,7 +30,7 @@ import {
 
 const CASE_ID = 'excel-budget'
 const FILE_NAME = EXCEL_FILE_NAME
-const EXPORT_DIR = path.resolve('tests/logs/workbench/showcase-export/excel-budget')
+const EXPORT_DIR = path.resolve('tests/logs/showcase/export/excel-budget')
 
 const waitExcelReady = async (page: Parameters<typeof getWorkbenchLocator>[0]) => {
   const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
@@ -63,21 +63,19 @@ const screenshotSheets = async (
       await tab.click()
       await page.waitForTimeout(500)
     }
-            const fileName = `${prefix}-${index + 1}.png`
-            await screenshotExcelUsedRange(viewer, path.join(outputDir, fileName))
+    const fileName = `${prefix}-${index + 1}.png`
+    await screenshotExcelUsedRange(viewer, path.join(outputDir, fileName))
     names.push(fileName)
   }
   return names
 }
 
-describe('workbench showcase e2e', () => {
+describe('showcase collection', () => {
   it(
     CASE_ID,
     async () => {
-      await runE2ECase({
+      await runShowcaseCase({
         caseId: CASE_ID,
-        domain: 'workbench',
-        suite: 'showcase',
         groups: ['excel'],
         description: '官网样例：从零生成可拿去部门对齐的 9 月费用预算表，并截取预览与审核。',
         fixtures: [],
@@ -93,7 +91,12 @@ describe('workbench showcase e2e', () => {
             name: `showcase-workspace:${rootPath}`,
             phase: 'after-app-close',
             dispose: async () => {
-              await fs.rm(rootPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+              await fs.rm(rootPath, {
+                recursive: true,
+                force: true,
+                maxRetries: 10,
+                retryDelay: 500
+              })
             }
           })
           await configureLiveModelThroughSettingsUi(page, env)
@@ -157,7 +160,10 @@ describe('workbench showcase e2e', () => {
             durationMs: evidence.durationMs,
             ...changeCounts
           })
-          await fs.writeFile(path.join(EXPORT_DIR, 'cost.json'), `${JSON.stringify(cost, null, 2)}\n`)
+          await fs.writeFile(
+            path.join(EXPORT_DIR, 'cost.json'),
+            `${JSON.stringify(cost, null, 2)}\n`
+          )
           runtime.signal({
             name: 'showcase-excel-cost',
             message: '官网 Excel 样例实际消耗',

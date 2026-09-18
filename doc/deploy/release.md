@@ -108,9 +108,9 @@ publish 只读取已经测试通过的候选包，不重新构建。默认发布
 export NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production
 ```
 
-未设置时，`--publish-only`、上传和 finalize 必须在网络写入前失败。普通构建、候选包测试和 `pnpm release:storage:plan` 不需要该变量。
+未设置时，`--publish-only`、上传和 finalize 必须在网络写入前失败。普通构建和候选包测试不需要该变量。
 
-国内 COS 发布完成后，不要再对同一 Tag 设置 `RELEASE_STORAGE_TARGET=r2` 执行第二次 plan、上传或 finalize。
+国内 COS 发布完成后，不要再对同一 Tag 设置 `RELEASE_STORAGE_TARGET=r2` 执行第二次上传或 finalize。
 
 ## 4. 中断与恢复
 
@@ -143,16 +143,14 @@ pnpm test:e2e:package -- --bundle <release-bundle.json> --domain workbench
 pnpm test:e2e:package -- --bundle <release-bundle.json> --case <caseId>
 ```
 
-上述独立命令使用日常默认 E2E 集合；发布回归必须通过 `release:win` 或 `release:mac` 的 `--test-only` 执行。
+上述命令用于手动验证已构建候选包；正式发布回归必须通过 `release:win` 或 `release:mac` 的 `--test-only` 执行。
 
-### 状态、恢复与存储
+### 发布中断恢复
+
+上传已经完成但 finalize 中断时，确认当前 Tag 尚未被其他发布流程处理，再执行：
 
 ```bash
-pnpm release:status -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
-export NCURATOR_ALLOW_ABORT_TAG=abort-unpublished-tag
-pnpm release:abort -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
-pnpm release:storage:plan
 pnpm release:storage:finalize -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
 ```
 
-以上命令默认针对 COS。只有未来海外版才显式设置 `RELEASE_STORAGE_TARGET=r2`。
+该命令会校验 COS 上的 fragment 和安装包，写入公开更新 metadata / manifest，并清理旧对象。它不是正常发布入口，也不能用于已经发布完成的 Tag。

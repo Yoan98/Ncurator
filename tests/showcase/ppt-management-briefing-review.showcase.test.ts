@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import { runShowcaseCase } from '../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -16,7 +16,7 @@ import {
   waitForApplyEntryByFileName,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
-} from '../../../harness/e2e/workbench'
+} from '../harness/e2e/workbench'
 import {
   computeShowcaseCost,
   copyShowcaseFixture,
@@ -27,9 +27,7 @@ import {
 
 const CASE_ID = 'ppt-management-briefing-review'
 const FILE_NAME = '管理层季度经营简报.pptx'
-const EXPORT_DIR = path.resolve(
-  'tests/logs/workbench/showcase-export/ppt-management-briefing'
-)
+const EXPORT_DIR = path.resolve('tests/logs/showcase/export/ppt-management-briefing')
 const PROMPT = [
   '做一份可给管理层开会用的 16:9 汇报，约 5–6 页：封面、执行摘要、关键 KPI、交付或业务趋势图、风险与负责人、下一步。',
   `写到工作区，文件名用「${FILE_NAME}」。`
@@ -63,14 +61,12 @@ const screenshotPptSlides = async (
   return names
 }
 
-describe('workbench showcase e2e', () => {
+describe('showcase collection', () => {
   it(
     CASE_ID,
     async () => {
-      await runE2ECase({
+      await runShowcaseCase({
         caseId: CASE_ID,
-        domain: 'workbench',
-        suite: 'showcase',
         groups: ['ppt'],
         description: '官网样例：补拍新建管理层简报的审核态（交付 6 页不替换）。',
         fixtures: [],
@@ -86,7 +82,12 @@ describe('workbench showcase e2e', () => {
             name: `showcase-workspace:${rootPath}`,
             phase: 'after-app-close',
             dispose: async () => {
-              await fs.rm(rootPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+              await fs.rm(rootPath, {
+                recursive: true,
+                force: true,
+                maxRetries: 10,
+                retryDelay: 500
+              })
             }
           })
           await configureLiveModelThroughSettingsUi(page, env)

@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import { runShowcaseCase } from '../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -13,12 +13,8 @@ import {
   selectWorkbenchModel,
   sendWorkbenchMessage,
   waitForWorkbenchAiRunCompletion
-} from '../../../harness/e2e/workbench'
-import {
-  COURT_SEARCH_HOST,
-  COURT_SEARCH_KEYWORDS,
-  COURT_SEARCH_PROMPT
-} from './createSeeds'
+} from '../harness/e2e/workbench'
+import { COURT_SEARCH_HOST, COURT_SEARCH_KEYWORDS, COURT_SEARCH_PROMPT } from './createSeeds'
 import {
   captureEmbeddedBrowserPng,
   computeShowcaseCost,
@@ -28,7 +24,7 @@ import {
 } from './shared'
 
 const CASE_ID = 'court-typical-cases'
-const EXPORT_DIR = path.resolve('tests/logs/workbench/showcase-export/court-typical-cases')
+const EXPORT_DIR = path.resolve('tests/logs/showcase/export/court-typical-cases')
 
 type CourtFrame = 'empty' | 'filled' | 'results'
 
@@ -49,14 +45,12 @@ const classifyCourtFrame = (snapshot: EmbeddedBrowserSnapshot): CourtFrame | nul
   return null
 }
 
-describe('workbench showcase e2e', () => {
+describe('showcase collection', () => {
   it(
     CASE_ID,
     async () => {
-      await runE2ECase({
+      await runShowcaseCase({
         caseId: CASE_ID,
-        domain: 'workbench',
-        suite: 'showcase',
         groups: ['browser'],
         description:
           '官网样例：用内置浏览器打开最高人民法院官网，检索建设工程施工合同纠纷典型案例。',
@@ -73,7 +67,12 @@ describe('workbench showcase e2e', () => {
             name: `showcase-workspace:${rootPath}`,
             phase: 'after-app-close',
             dispose: async () => {
-              await fs.rm(rootPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+              await fs.rm(rootPath, {
+                recursive: true,
+                force: true,
+                maxRetries: 10,
+                retryDelay: 500
+              })
             }
           })
           await configureLiveModelThroughSettingsUi(page, env)
@@ -165,7 +164,10 @@ describe('workbench showcase e2e', () => {
             durationMs: evidence.durationMs,
             finalAnswerText: evidence.finalAnswerText
           })
-          await fs.writeFile(path.join(EXPORT_DIR, 'cost.json'), `${JSON.stringify(cost, null, 2)}\n`)
+          await fs.writeFile(
+            path.join(EXPORT_DIR, 'cost.json'),
+            `${JSON.stringify(cost, null, 2)}\n`
+          )
           runtime.signal({
             name: 'showcase-court-cost',
             message: '官网浏览器最高法典型案例检索样例实际消耗',

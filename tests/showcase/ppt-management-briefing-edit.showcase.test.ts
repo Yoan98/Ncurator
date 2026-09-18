@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import { runShowcaseCase } from '../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -16,7 +16,7 @@ import {
   waitForApplyEntryByFileName,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
-} from '../../../harness/e2e/workbench'
+} from '../harness/e2e/workbench'
 import { PPT_EDIT_PROMPT, PPT_FILE_NAME } from './createSeeds'
 import {
   computeShowcaseCost,
@@ -27,18 +27,14 @@ import {
 } from './shared'
 
 const CASE_ID = 'ppt-management-briefing-edit'
-const EXPORT_DIR = path.resolve(
-  'tests/logs/workbench/showcase-export/ppt-management-briefing-edit'
-)
+const EXPORT_DIR = path.resolve('tests/logs/showcase/export/ppt-management-briefing-edit')
 
-describe('workbench showcase e2e', () => {
+describe('showcase collection', () => {
   it(
     CASE_ID,
     async () => {
-      await runE2ECase({
+      await runShowcaseCase({
         caseId: CASE_ID,
-        domain: 'workbench',
-        suite: 'showcase',
         groups: ['ppt'],
         description: '官网样例：改 Q2 经营复盘原件，截左右对照加右侧缩略栏。',
         fixtures: [],
@@ -63,7 +59,12 @@ describe('workbench showcase e2e', () => {
             name: `showcase-workspace:${rootPath}`,
             phase: 'after-app-close',
             dispose: async () => {
-              await fs.rm(rootPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+              await fs.rm(rootPath, {
+                recursive: true,
+                force: true,
+                maxRetries: 10,
+                retryDelay: 500
+              })
             }
           })
           await configureLiveModelThroughSettingsUi(page, env)
@@ -122,7 +123,10 @@ describe('workbench showcase e2e', () => {
             hasBeforeAfter: await before.isVisible(),
             ...changeCounts
           })
-          await fs.writeFile(path.join(EXPORT_DIR, 'cost.json'), `${JSON.stringify(cost, null, 2)}\n`)
+          await fs.writeFile(
+            path.join(EXPORT_DIR, 'cost.json'),
+            `${JSON.stringify(cost, null, 2)}\n`
+          )
           runtime.signal({
             name: 'showcase-ppt-edit-cost',
             message: '官网 PPT 审核样例实际消耗',

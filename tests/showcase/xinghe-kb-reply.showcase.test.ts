@@ -1,38 +1,34 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import { runShowcaseCase } from '../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-  appendWorkbenchInputText,
   assertNoWorkbenchFakeSignals,
   configureLiveModelThroughSettingsUi,
   createPartnerThroughWorkbenchUi,
-  insertWorkbenchReferenceToken,
   loadWorkbenchLiveModelEnv,
   prepareWorkbenchWorkspaceThroughUi,
   recordWorkbenchAiEvidence,
   selectWorkbenchModel,
-  submitWorkbenchCurrentDraft,
+  sendWorkbenchMessage,
   waitForWorkbenchAiRunCompletion
-} from '../../../harness/e2e/workbench'
-import { PDF_FILE_NAME, PDF_PROMPT, seedPdfContractWorkspace } from './createSeeds'
-import { computeShowcaseCost, copyShowcaseFixture, rasterizePdfPages, screenshotAssistantAnswer } from './shared'
+} from '../harness/e2e/workbench'
+import { KB_PROMPT, KB_SOURCE_PAGES, seedKnowledgeWorkspace } from './createSeeds'
+import { computeShowcaseCost, rasterizeNotePage, screenshotAssistantAnswer } from './shared'
 
-const CASE_ID = 'xinghe-service-contract'
-const EXPORT_DIR = path.resolve('tests/logs/workbench/showcase-export/xinghe-service-contract')
-const QUESTION = '尾款什么时候付？'
+const CASE_ID = 'xinghe-kb-reply'
+const EXPORT_DIR = path.resolve('tests/logs/showcase/export/xinghe-kb-reply')
 
-describe('workbench showcase e2e', () => {
+describe('showcase collection', () => {
   it(
     CASE_ID,
     async () => {
-      await runE2ECase({
+      await runShowcaseCase({
         caseId: CASE_ID,
-        domain: 'workbench',
-        suite: 'showcase',
-        groups: ['pdf'],
-        description: '官网样例：@星河项目服务合同.pdf 追问尾款，截原文页和馆长回答对照。',
+        groups: ['knowledge'],
+        description:
+          '官网样例：不点名文件，按本地知识库对星河交付承诺和验收口径，截资料页和馆长回复。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -41,28 +37,29 @@ describe('workbench showcase e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const env = loadWorkbenchLiveModelEnv()
-          const rootPath = await seedPdfContractWorkspace()
-          const filePath = path.join(rootPath, PDF_FILE_NAME)
-          const beforeBuffer = await fs.readFile(filePath)
+          const rootPath = await seedKnowledgeWorkspace()
           runtime.registerResource({
             name: `showcase-workspace:${rootPath}`,
             phase: 'after-app-close',
             dispose: async () => {
-              await fs.rm(rootPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+              await fs.rm(rootPath, {
+                recursive: true,
+                force: true,
+                maxRetries: 10,
+                retryDelay: 500
+              })
             }
           })
           await configureLiveModelThroughSettingsUi(page, env)
           await prepareWorkbenchWorkspaceThroughUi(page, {
-            workspaceName: '云枢合同资料',
+            workspaceName: '星河客户资料',
             rootPath
           })
-          await createPartnerThroughWorkbenchUi(page, '云枢合同资料')
+          await createPartnerThroughWorkbenchUi(page, '星河客户资料')
           await selectWorkbenchModel(page, env.modelName)
 
           const startedAtMs = Date.now()
-          await insertWorkbenchReferenceToken(page, PDF_FILE_NAME)
-          await appendWorkbenchInputText(page, ` ${QUESTION}`)
-          await submitWorkbenchCurrentDraft(page)
+          await sendWorkbenchMessage(page, KB_PROMPT)
           const evidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             startedAtMs,
@@ -72,43 +69,46 @@ describe('workbench showcase e2e', () => {
           )
           recordWorkbenchAiEvidence(runtime, evidence, 0.8)
 
-          const afterBuffer = await fs.readFile(filePath)
-          await copyShowcaseFixture(filePath, PDF_FILE_NAME)
           await fs.rm(EXPORT_DIR, { recursive: true, force: true })
-          const screenshotNames = await rasterizePdfPages(filePath, EXPORT_DIR)
+          await fs.mkdir(EXPORT_DIR, { recursive: true })
+          const screenshotNames: string[] = []
+          for (const [index, source] of KB_SOURCE_PAGES.entries()) {
+            const body = await fs.readFile(path.join(rootPath, source.fileName), 'utf8')
+            const fileName = `page-${index + 1}.png`
+            await rasterizeNotePage(source.title, body, path.join(EXPORT_DIR, fileName))
+            screenshotNames.push(fileName)
+          }
           const answerName = 'answer/reply.png'
           await screenshotAssistantAnswer(page, path.join(EXPORT_DIR, answerName))
           const screenshotStats = await Promise.all(
             [...screenshotNames, answerName].map((name) => fs.stat(path.join(EXPORT_DIR, name)))
           )
           const minScreenshotBytes = Math.min(...screenshotStats.map((stat) => stat.size))
-
           const toolNames = evidence.events
             .filter((event) => event.type === 'tool_call_started')
             .map((event) => event.toolName)
           const cost = computeShowcaseCost(evidence.events, {
             modelName: env.modelName,
-            prompt: PDF_PROMPT,
-            fileName: PDF_FILE_NAME,
-            pageCount: screenshotNames.length,
+            prompt: KB_PROMPT,
+            fileName: '本地知识库',
             screenshotNames,
             answerScreenshot: answerName,
             durationMs: evidence.durationMs,
-            finalAnswerText: evidence.finalAnswerText,
-            sourceUnchanged: Buffer.compare(beforeBuffer, afterBuffer) === 0
+            finalAnswerText: evidence.finalAnswerText
           })
-          await fs.writeFile(path.join(EXPORT_DIR, 'cost.json'), `${JSON.stringify(cost, null, 2)}\n`)
+          await fs.writeFile(
+            path.join(EXPORT_DIR, 'cost.json'),
+            `${JSON.stringify(cost, null, 2)}\n`
+          )
           runtime.signal({
-            name: 'showcase-pdf-cost',
-            message: '官网 PDF 样例实际消耗',
+            name: 'showcase-kb-cost',
+            message: '官网知识库样例实际消耗',
             data: cost
           })
 
           return {
-            screenshotCount: screenshotNames.length,
-            hasAnswerScreenshot: true,
+            screenshotCount: screenshotNames.length + 1,
             minScreenshotBytes,
-            sourceUnchanged: Buffer.compare(beforeBuffer, afterBuffer) === 0,
             usageCalls: cost.usage.calls,
             cny: cost.cny,
             finalAnswerText: evidence.finalAnswerText,
@@ -117,23 +117,23 @@ describe('workbench showcase e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.sourceUnchanged &&
-              result.screenshotCount >= 2 &&
-              result.hasAnswerScreenshot &&
-              result.minScreenshotBytes > 40_000 &&
+            result.screenshotCount >= 3 &&
+              result.minScreenshotBytes > 20_000 &&
               result.usageCalls > 0 &&
               result.toolNames.some(
-                (name) => name.startsWith('pdf_') || name === 'kb_search' || name === 'terminal_run'
+                (name) => name === 'kb_search' || name === 'kb_list_documents'
               ) &&
-              /终验|验收/u.test(result.finalAnswerText) &&
-              /10|十/u.test(result.finalAnswerText),
+              !result.toolNames.includes('browser_use') &&
+              !result.toolNames.includes('web_search') &&
+              /95\s*%|百分之九十五/u.test(result.finalAnswerText) &&
+              /验收|P1|7\s*天/u.test(result.finalAnswerText),
             {
-              name: 'showcase-xinghe-service-contract-ready',
-              message: '应读取合同 PDF 回答尾款时间，原件不变，并截到原文页、回答和真实用量。',
+              name: 'showcase-xinghe-kb-reply-ready',
+              message:
+                '应从本地知识库对上星河交付承诺和验收口径，截到资料页和回复，且未改走浏览器。',
               data: {
                 screenshotCount: result.screenshotCount,
                 minScreenshotBytes: result.minScreenshotBytes,
-                sourceUnchanged: result.sourceUnchanged,
                 usageCalls: result.usageCalls,
                 cny: result.cny,
                 toolNames: result.toolNames,

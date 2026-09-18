@@ -154,7 +154,7 @@ type E2EServiceConfiguration =
 
 export type E2ETestCaseDefinition<TResult> = E2EServiceConfiguration & {
   caseId: string
-  domain: Extract<TestDomain, 'settings' | 'workbench'>
+  domain: Extract<TestDomain, 'settings' | 'workbench' | 'showcase'>
   suite: string
   groups?: readonly string[]
   description: string
@@ -167,6 +167,11 @@ export type E2ETestCaseDefinition<TResult> = E2EServiceConfiguration & {
   execute: (runtime: E2ETestRuntime) => Promise<TResult>
   assert: (result: TResult, runtime: E2ETestRuntime) => Promise<void>
 }
+
+export type ShowcaseCaseDefinition<TResult> = Omit<
+  E2ETestCaseDefinition<TResult>,
+  'domain' | 'suite'
+>
 
 const buildRunScope = (input: {
   domain: TestDomain
@@ -993,3 +998,12 @@ export const runE2ECase = async <TResult>(
 
   if (primaryError) throw primaryError
 }
+
+export const runShowcaseCase = async <TResult>(
+  definition: ShowcaseCaseDefinition<TResult>
+): Promise<void> =>
+  runE2ECase({
+    ...definition,
+    domain: 'showcase',
+    suite: 'collection'
+  })

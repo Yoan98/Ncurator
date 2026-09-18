@@ -4,13 +4,13 @@ import { cp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
-import { e2eExcludeGroupsForProfile } from './e2e-default-excludes.mjs'
 import { preparePackagedE2EApplication } from './package-app.mjs'
 
 const ROOT = process.cwd()
 const require = createRequire(import.meta.url)
 const TESTS_ROOT = path.join(ROOT, 'tests')
 const TEST_CASES_ROOT = path.join(TESTS_ROOT, 'case')
+const SHOWCASE_ROOT = path.join(TESTS_ROOT, 'showcase')
 const resolveLocalBin = (name) =>
   path.join(ROOT, 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name)
 const PNPM_BIN = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
@@ -102,7 +102,7 @@ const parseArgs = (argv) => {
     caseIds: [],
     runs: 1,
     target: 'source',
-    executionProfile: '',
+    showcase: false,
     bundles: [],
     results: [],
     freshKnowledgeCache: false,
@@ -154,9 +154,8 @@ const parseArgs = (argv) => {
       index += 1
       continue
     }
-    if (current === '--execution-profile' && next) {
-      parsed.executionProfile = next
-      index += 1
+    if (current === '--showcase') {
+      parsed.showcase = true
       continue
     }
     if (current === '--bundle' && next) {
@@ -256,7 +255,7 @@ const prepareKnowledgeCache = async (input) => {
 }
 
 const resolveScopeDir = (input) => {
-  const parts = [TEST_CASES_ROOT]
+  const parts = [input.showcase ? SHOWCASE_ROOT : TEST_CASES_ROOT]
   if (input.domain) parts.push(input.domain)
   if (input.suite) parts.push(input.suite)
   if (input.groups.length > 0) parts.push(...input.groups)
@@ -271,7 +270,8 @@ const requiresBackendPptBrowser = async (filePath) => {
   const source = await readFile(filePath, 'utf8')
   return /\bppt_edit\b/u.test(source) && /\bcreate_presentation\b/u.test(source)
 }
-const toCaseId = (filePath) => path.basename(filePath).replace(/\.e2e\.test\.ts$|\.test\.ts$/u, '')
+const toCaseId = (filePath) =>
+  path.basename(filePath).replace(/\.e2e\.test\.ts$|\.showcase\.test\.ts$|\.test\.ts$/u, '')
 
 const readE2EExecutionClass = async (filePath) => {
   const source = await readFile(filePath, 'utf8')
@@ -346,7 +346,7 @@ const fileDeclaresCaseId = async (filePath, caseId) => {
   return source.includes(`caseId: '${caseId}'`) || source.includes(`caseId: "${caseId}"`)
 }
 
-const findTestFiles = async (input, { ignoreExcludedGroups = false } = {}) => {
+const findTestFiles = async (input) => {
   const scopeDir = resolveScopeDir(input)
   try {
     const scopeStat = await stat(scopeDir)
@@ -359,13 +359,18 @@ const findTestFiles = async (input, { ignoreExcludedGroups = false } = {}) => {
   const candidates = allFiles
     .filter((filePath) => filePath.endsWith('.test.ts'))
     .filter((filePath) => {
-      if (ignoreExcludedGroups || input.excludeGroups.length === 0) return true
-      const segments = path.relative(TEST_CASES_ROOT, filePath).split(path.sep)
+      if (input.excludeGroups.length === 0) return true
+      const root = input.showcase ? SHOWCASE_ROOT : TEST_CASES_ROOT
+      const segments = path.relative(root, filePath).split(path.sep)
       return !input.excludeGroups.some((group) => segments.includes(group))
     })
     .filter((filePath) => {
       if (!input.type) return true
-      return input.type === 'e2e' ? isE2EFile(filePath) : !isE2EFile(filePath)
+      return input.showcase
+        ? path.basename(filePath).endsWith('.showcase.test.ts')
+        : input.type === 'e2e'
+          ? path.basename(filePath).endsWith('.e2e.test.ts')
+          : !isE2EFile(filePath)
     })
   if (input.caseIds.length === 0) return candidates.sort()
   const matches = await Promise.all(
@@ -382,47 +387,6 @@ const findTestFiles = async (input, { ignoreExcludedGroups = false } = {}) => {
     .filter((item) => item.matches)
     .map((item) => item.filePath)
     .sort()
-}
-
-const validateExecutionProfileSelection = async (input) => {
-  if (input.executionProfile !== 'release' || input.type !== 'e2e') return
-
-  const excludedGroups = e2eExcludeGroupsForProfile('release')
-  const requestedGroups = [input.suite, ...input.groups].filter(Boolean)
-  const directlyRequestedExcludedGroup = requestedGroups.find((group) =>
-    excludedGroups.includes(group)
-  )
-  if (directlyRequestedExcludedGroup) {
-    throw new Error(
-      `release package E2E 不允许选择 ${directlyRequestedExcludedGroup} 分组；该分组只能通过独立测试命令执行`
-    )
-  }
-
-  if (input.caseIds.length === 0) return
-  const selectedFiles = await findTestFiles(
-    {
-      ...input,
-      excludeGroups: []
-    },
-    { ignoreExcludedGroups: true }
-  )
-  const excludedFiles = selectedFiles.filter((filePath) => {
-    const segments = path.relative(TEST_CASES_ROOT, filePath).split(path.sep)
-    return excludedGroups.some((group) => segments.includes(group))
-  })
-  if (excludedFiles.length === 0) return
-
-  const groups = [
-    ...new Set(
-      excludedFiles.flatMap((filePath) => {
-        const segments = path.relative(TEST_CASES_ROOT, filePath).split(path.sep)
-        return excludedGroups.filter((group) => segments.includes(group))
-      })
-    )
-  ]
-  throw new Error(
-    `release package E2E 不允许选择 ${groups.join('、')} 分组中的 case；该分组只能通过独立测试命令执行`
-  )
 }
 
 const appendNodeOption = (existing, option) => {
@@ -705,8 +669,15 @@ const formatScope = (input) =>
     .filter(Boolean)
     .join(' ')
 
-const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, deadlineAt) => {
-  if (!testFiles.includes(VECTOR_WARMUP_TEST_FILE) && testFiles.length > 1) {
+const runE2ETestFilesConcurrently = async (
+  testFiles,
+  targets,
+  testNamePattern,
+  deadlineAt,
+  addKnowledgeWarmup = true,
+  configPath = 'vitest.e2e.config.mts'
+) => {
+  if (addKnowledgeWarmup && !testFiles.includes(VECTOR_WARMUP_TEST_FILE) && testFiles.length > 1) {
     testFiles = [...testFiles, VECTOR_WARMUP_TEST_FILE]
   }
   const fileTasks = await Promise.all(
@@ -768,7 +739,7 @@ const runE2ETestFilesConcurrently = async (testFiles, targets, testNamePattern, 
         : await buildCaseKnowledgeCacheEnv(task.env, task.testFile)
     if (task.cacheMode === 'warmup') await seedCaseKnowledgeCache(caseEnv, seedPath)
     const code = await runVitest({
-      configPath: 'vitest.e2e.config.mts',
+      configPath,
       testFiles: [task.testFile],
       env: caseEnv,
       testNamePattern: task.execution === 'warmup' ? '' : testNamePattern,
@@ -1036,7 +1007,9 @@ const runTypeWorkflow = async (input) => {
         testFiles,
         e2eTargets,
         testNamePattern,
-        input.deadlineAt
+        input.deadlineAt,
+        !input.showcase,
+        input.showcase ? 'vitest.showcase.config.mts' : 'vitest.e2e.config.mts'
       )
       e2eResults.push(...runResult.results)
       if (runResult.exitCode !== 0) {
@@ -1062,7 +1035,7 @@ const USAGE = `NCurator 测试 runner
   --case <caseId>                        只执行指定 case，可重复传入
   --runs <n>                             重复执行次数，默认 1
   --target <source|package>              目标，默认 source
-  --execution-profile <default|release>  执行配置；release 仅供发版命令使用
+  --showcase                             仅供独立 Showcase 采集命令使用
   --bundle <release-bundle.json>         正式包 bundle，可重复传入
   --result <path>                        bundle 结果路径，可重复传入
   --fresh-knowledge-cache                删除知识库缓存强制重建
@@ -1111,32 +1084,17 @@ const main = async () => {
   if (!['source', 'package'].includes(args.target)) {
     throw new Error(`unsupported --target: ${args.target}`)
   }
-  if (!['', 'default', 'release'].includes(args.executionProfile)) {
-    throw new Error(`unsupported --execution-profile: ${args.executionProfile}`)
-  }
-  if (args.executionProfile === 'default' || args.executionProfile === 'release') {
-    if (args.type !== 'e2e') {
-      throw new Error(`--execution-profile ${args.executionProfile} 只能与 --type e2e 一起使用`)
+  if (args.showcase) {
+    if (args.type && args.type !== 'e2e') {
+      throw new Error('--showcase 只能与 --type e2e 一起使用')
     }
-    if (args.executionProfile === 'release') {
-      if (args.target !== 'package') {
-        throw new Error('--execution-profile release 只能与 --target package 一起使用')
-      }
-      const releaseExcludedGroups = e2eExcludeGroupsForProfile('release')
-      const unexpectedExcludedGroups = args.excludeGroups.filter(
-        (group) => !releaseExcludedGroups.includes(group)
-      )
-      if (unexpectedExcludedGroups.length > 0) {
-        throw new Error(
-          `--execution-profile release 只允许排除：${releaseExcludedGroups.join('、')}`
-        )
-      }
-      args.excludeGroups = releaseExcludedGroups
-    } else {
-      args.excludeGroups = [
-        ...new Set([...e2eExcludeGroupsForProfile('default'), ...args.excludeGroups])
-      ]
+    if (args.target !== 'source') {
+      throw new Error('--showcase 只能运行 source 目标')
     }
+    if (args.domain || args.suite || args.groups.length > 0 || args.excludeGroups.length > 0) {
+      throw new Error('--showcase 不接受正式 E2E 的 domain、suite、group 或 exclude-group 过滤')
+    }
+    args.type = 'e2e'
   }
   if (args.target === 'package' && args.type !== 'e2e') {
     throw new Error('--target package 只能与 --type e2e 一起使用')
@@ -1153,7 +1111,6 @@ const main = async () => {
   if (args.freshKnowledgeCache && args.reuseKnowledgeCache) {
     throw new Error('--fresh-knowledge-cache 和 --reuse-knowledge-cache 不能同时使用')
   }
-  await validateExecutionProfileSelection(args)
 
   const architectureValidationCode = validateTestArchitecture()
   if (architectureValidationCode !== 0) process.exit(architectureValidationCode)
@@ -1162,84 +1119,86 @@ const main = async () => {
   let packageTargets = []
 
   try {
-  if (!args.type || args.type === 'e2e') {
-    const validationCode = validateE2EContract()
-    if (validationCode !== 0) process.exit(validationCode)
-  }
-
-  if (args.type === 'e2e' && args.target === 'package') {
-    if (args.results.length > 0 && args.results.length !== args.bundles.length) {
-      throw new Error('each --bundle must have a matching --result when result paths are provided')
+    if (!args.type || args.type === 'e2e') {
+      const validationCode = validateE2EContract()
+      if (validationCode !== 0) process.exit(validationCode)
     }
-    packageTargets = []
-    for (const [index, bundle] of args.bundles.entries()) {
-      const session = await preparePackagedE2EApplication(bundle, {
-        resultPath: args.results[index] || ''
-      })
-      const target = {
-        id: session.releasePlatform,
-        env: { ...session.env },
-        cacheMode: 'warmup',
-        session,
-        knowledgeCache: {
-          knowledgeCacheEnabled: false,
-          knowledgeCachePath: '',
-          knowledgeCacheNamespace: `package/${session.releasePlatform}`,
-          buildFingerprint: session.artifactSha256
-        }
+
+    if (args.type === 'e2e' && args.target === 'package') {
+      if (args.results.length > 0 && args.results.length !== args.bundles.length) {
+        throw new Error(
+          'each --bundle must have a matching --result when result paths are provided'
+        )
       }
-      packageTargets.push(target)
-      const knowledgeCache = await prepareKnowledgeCache({
-        namespace: `package/${session.releasePlatform}`,
-        buildFingerprint: session.artifactSha256,
-        fresh: args.freshKnowledgeCache,
-        reuse: args.reuseKnowledgeCache
-      })
-      target.env = { ...session.env, ...knowledgeCache.env }
-      target.knowledgeCache = knowledgeCache
-    }
-  }
-
-  if (!args.type || args.type === 'backend') {
-    const result = await runTypeWorkflow({
-      ...args,
-      type: 'backend',
-      deadlineAt
-    })
-    exitCode = result.exitCode
-  }
-
-  if (exitCode === 0 && (!args.type || args.type === 'e2e')) {
-    const result = await runTypeWorkflow({
-      ...args,
-      type: 'e2e',
-      e2eTargets: packageTargets.map(({ id, env, cacheMode }) => ({
-        id,
-        env,
-        cacheMode
-      })),
-      deadlineAt
-    })
-    exitCode = result.exitCode
-    for (const target of packageTargets) {
-      const targetTests = result.e2eResults.filter((test) => test.targetId === target.id)
-      const targetStatus =
-        targetTests.length > 0 && targetTests.every((test) => Number(test.exitCode) === 0)
-          ? 'passed'
-          : 'failed'
-      target.session.writeSummary({
-        status: targetStatus,
-        tests: targetTests,
-        knowledgeCache: {
-          knowledgeCacheEnabled: target.knowledgeCache.knowledgeCacheEnabled,
-          knowledgeCachePath: target.knowledgeCache.knowledgeCachePath,
-          knowledgeCacheNamespace: target.knowledgeCache.knowledgeCacheNamespace,
-          buildFingerprint: target.knowledgeCache.buildFingerprint,
-          ...(await readKnowledgeCacheStats(target.knowledgeCache.knowledgeCachePath))
+      packageTargets = []
+      for (const [index, bundle] of args.bundles.entries()) {
+        const session = await preparePackagedE2EApplication(bundle, {
+          resultPath: args.results[index] || ''
+        })
+        const target = {
+          id: session.releasePlatform,
+          env: { ...session.env },
+          cacheMode: 'warmup',
+          session,
+          knowledgeCache: {
+            knowledgeCacheEnabled: false,
+            knowledgeCachePath: '',
+            knowledgeCacheNamespace: `package/${session.releasePlatform}`,
+            buildFingerprint: session.artifactSha256
+          }
         }
-      })
+        packageTargets.push(target)
+        const knowledgeCache = await prepareKnowledgeCache({
+          namespace: `package/${session.releasePlatform}`,
+          buildFingerprint: session.artifactSha256,
+          fresh: args.freshKnowledgeCache,
+          reuse: args.reuseKnowledgeCache
+        })
+        target.env = { ...session.env, ...knowledgeCache.env }
+        target.knowledgeCache = knowledgeCache
+      }
     }
-  }
+
+    if (!args.type || args.type === 'backend') {
+      const result = await runTypeWorkflow({
+        ...args,
+        type: 'backend',
+        deadlineAt
+      })
+      exitCode = result.exitCode
+    }
+
+    if (exitCode === 0 && (!args.type || args.type === 'e2e')) {
+      const result = await runTypeWorkflow({
+        ...args,
+        type: 'e2e',
+        e2eTargets: packageTargets.map(({ id, env, cacheMode }) => ({
+          id,
+          env,
+          cacheMode
+        })),
+        deadlineAt
+      })
+      exitCode = result.exitCode
+      for (const target of packageTargets) {
+        const targetTests = result.e2eResults.filter((test) => test.targetId === target.id)
+        const targetStatus =
+          targetTests.length > 0 && targetTests.every((test) => Number(test.exitCode) === 0)
+            ? 'passed'
+            : 'failed'
+        target.session.writeSummary({
+          status: targetStatus,
+          tests: targetTests,
+          knowledgeCache: {
+            knowledgeCacheEnabled: target.knowledgeCache.knowledgeCacheEnabled,
+            knowledgeCachePath: target.knowledgeCache.knowledgeCachePath,
+            knowledgeCacheNamespace: target.knowledgeCache.knowledgeCacheNamespace,
+            buildFingerprint: target.knowledgeCache.buildFingerprint,
+            ...(await readKnowledgeCacheStats(target.knowledgeCache.knowledgeCachePath))
+          }
+        })
+      }
+    }
   } finally {
     let cleanupFailed = false
     for (const target of packageTargets) {

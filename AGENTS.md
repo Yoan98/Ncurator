@@ -25,6 +25,7 @@
 - `doc/test-plan/ai-test.md`：涉及 AI 回归测试范围、live case 设计或 suite 覆盖维护时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
 - `doc/test-plan/workbench-test.md`：涉及 Workbench 回归测试范围、真实 e2e case 设计、发送前置条件验证或 suite 覆盖维护时阅读。
+- `doc/test-plan/showcase-test.md`：涉及官网样例采集任务、采集 case 或 Showcase 命令时阅读。
 - `doc/test.md`：涉及测试体系、UI E2E 回归规则、runner 或回归测试流程时阅读。
 - `doc/tidy.md`：需要按周期整理文档、PRD、测试计划、测试用例或清理代码整洁度（死代码、兼容残留、无用代码、简洁性）时，先按其中流程审计并等待决策。
 
@@ -58,6 +59,7 @@
 │   ├── test-plan/                    # 专项测试计划
 │   │   ├── ai-test.md                # AI 回归测试计划
 │   │   ├── settings-test.md          # Settings 测试计划
+│   │   ├── showcase-test.md          # 官网样例采集计划
 │   │   └── workbench-test.md         # Workbench 测试计划
 │   └── tidy.md                       # 周期性文档、测试与代码整理流程
 ├── src/                              # 应用源码
@@ -76,6 +78,7 @@
 │   │   ├── settings/                 # Settings 测试用例
 │   │   ├── unit/                     # backend 单元测试
 │   │   └── workbench/                # Workbench 测试用例
+│   ├── showcase/                     # 官网样例采集任务
 │   ├── fixtures/                     # 长期复用测试输入
 │   │   ├── workspace/                # 工作区语义测试共享输入目录
 │   │   └── sqlite/                   # SQLite 升级与版本门禁 fixture

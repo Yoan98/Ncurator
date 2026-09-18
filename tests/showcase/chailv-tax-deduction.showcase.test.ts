@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import { runShowcaseCase } from '../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -13,7 +13,7 @@ import {
   selectWorkbenchModel,
   sendWorkbenchMessage,
   waitForWorkbenchAiRunCompletion
-} from '../../../harness/e2e/workbench'
+} from '../harness/e2e/workbench'
 import { WEB_SEARCH_PROMPT } from './createSeeds'
 import {
   computeShowcaseCost,
@@ -22,16 +22,14 @@ import {
 } from './shared'
 
 const CASE_ID = 'chailv-tax-deduction'
-const EXPORT_DIR = path.resolve('tests/logs/workbench/showcase-export/chailv-tax-deduction')
+const EXPORT_DIR = path.resolve('tests/logs/showcase/export/chailv-tax-deduction')
 
-describe('workbench showcase e2e', () => {
+describe('showcase collection', () => {
   it(
     CASE_ID,
     async () => {
-      await runE2ECase({
+      await runShowcaseCase({
         caseId: CASE_ID,
-        domain: 'workbench',
-        suite: 'showcase',
         groups: ['web-search'],
         description:
           '官网样例：不指定网站，按网页搜索查国内差旅住宿和交通税前扣除口径，截馆长带来源的回答。',
@@ -48,7 +46,12 @@ describe('workbench showcase e2e', () => {
             name: `showcase-workspace:${rootPath}`,
             phase: 'after-app-close',
             dispose: async () => {
-              await fs.rm(rootPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+              await fs.rm(rootPath, {
+                recursive: true,
+                force: true,
+                maxRetries: 10,
+                retryDelay: 500
+              })
             }
           })
           await configureLiveModelThroughSettingsUi(page, env)
@@ -87,7 +90,10 @@ describe('workbench showcase e2e', () => {
             durationMs: evidence.durationMs,
             finalAnswerText: evidence.finalAnswerText
           })
-          await fs.writeFile(path.join(EXPORT_DIR, 'cost.json'), `${JSON.stringify(cost, null, 2)}\n`)
+          await fs.writeFile(
+            path.join(EXPORT_DIR, 'cost.json'),
+            `${JSON.stringify(cost, null, 2)}\n`
+          )
           runtime.signal({
             name: 'showcase-web-search-cost',
             message: '官网网页搜索样例实际消耗',

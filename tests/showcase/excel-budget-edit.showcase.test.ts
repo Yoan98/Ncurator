@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { describe, it } from 'vitest'
-import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import { runShowcaseCase } from '../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
@@ -16,7 +16,7 @@ import {
   waitForApplyEntryByFileName,
   waitForWorkbenchAiRunCompletion,
   workbenchSelectors
-} from '../../../harness/e2e/workbench'
+} from '../harness/e2e/workbench'
 import { EXCEL_EDIT_PROMPT, EXCEL_FILE_NAME } from './createSeeds'
 import {
   computeShowcaseCost,
@@ -29,7 +29,7 @@ import {
 } from './shared'
 
 const CASE_ID = 'excel-budget-edit'
-const EXPORT_DIR = path.resolve('tests/logs/workbench/showcase-export/excel-budget-edit')
+const EXPORT_DIR = path.resolve('tests/logs/showcase/export/excel-budget-edit')
 
 const waitExcelReady = async (page: Parameters<typeof getWorkbenchLocator>[0]) => {
   const viewer = getWorkbenchLocator(page, workbenchSelectors.excelViewer)
@@ -44,14 +44,12 @@ const waitExcelReady = async (page: Parameters<typeof getWorkbenchLocator>[0]) =
   return viewer
 }
 
-describe('workbench showcase e2e', () => {
+describe('showcase collection', () => {
   it(
     CASE_ID,
     async () => {
-      await runE2ECase({
+      await runShowcaseCase({
         caseId: CASE_ID,
-        domain: 'workbench',
-        suite: 'showcase',
         groups: ['excel'],
         description: '官网样例：改过关预算表同一份文件，截能看出加列和改金额的审核态。',
         fixtures: [],
@@ -71,7 +69,12 @@ describe('workbench showcase e2e', () => {
             name: `showcase-workspace:${rootPath}`,
             phase: 'after-app-close',
             dispose: async () => {
-              await fs.rm(rootPath, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
+              await fs.rm(rootPath, {
+                recursive: true,
+                force: true,
+                maxRetries: 10,
+                retryDelay: 500
+              })
             }
           })
           await configureLiveModelThroughSettingsUi(page, env)
@@ -127,7 +130,10 @@ describe('workbench showcase e2e', () => {
             durationMs: evidence.durationMs,
             ...changeCounts
           })
-          await fs.writeFile(path.join(EXPORT_DIR, 'cost.json'), `${JSON.stringify(cost, null, 2)}\n`)
+          await fs.writeFile(
+            path.join(EXPORT_DIR, 'cost.json'),
+            `${JSON.stringify(cost, null, 2)}\n`
+          )
           runtime.signal({
             name: 'showcase-excel-edit-cost',
             message: '官网 Excel 审核样例实际消耗',
@@ -157,7 +163,8 @@ describe('workbench showcase e2e', () => {
               result.toolNames.some((name) => name.startsWith('excel_')),
             {
               name: 'showcase-excel-budget-edit-ready',
-              message: '应改到过关预算表同一份文件，文件里有已发生列和品牌推广 5 万，并截到能看出的审核改动。',
+              message:
+                '应改到过关预算表同一份文件，文件里有已发生列和品牌推广 5 万，并截到能看出的审核改动。',
               data: result
             }
           )

@@ -85,9 +85,10 @@ describe('app update publish config', () => {
     expect(packageJson.scripts['release:win']).toContain('release/windows.mjs')
     expect(packageJson.scripts['release:abort']).toContain('release/abort.mjs')
     expect(packageJson.scripts['release:win:auto']).toBeUndefined()
-    expect(packageJson.scripts['test:e2e:source']).toContain('--execution-profile default')
-    expect(packageJson.scripts['test:e2e:package']).toContain('--execution-profile default')
-    expect(packageJson.scripts['test:workbench']).toContain('--execution-profile default')
+    expect(packageJson.scripts['test:e2e:source']).not.toContain('--execution-profile')
+    expect(packageJson.scripts['test:e2e:package']).not.toContain('--execution-profile')
+    expect(packageJson.scripts['test:workbench']).not.toContain('--execution-profile')
+    expect(packageJson.scripts['test:showcase']).toContain('scripts/test/showcase.mjs')
     expect(windowsRelease).toContain('inspectLocalWindowsRelease')
     expect(windowsRelease).not.toContain('dispatchWindowsRelease')
     expect(windowsRelease).not.toContain('--actions')
@@ -121,35 +122,32 @@ describe('app update publish config', () => {
   })
 
   it('finalizes Windows and macOS release channels independently with a live-publish lock', async () => {
-    const [windowsRelease, macRelease, windowsFinalize, macFinalize, tagContract, storageConfig, windowsShared, uploadFragment] =
-      await Promise.all([
-        readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
-        readFile(path.resolve('scripts/release/macos.mjs'), 'utf8'),
-        readFile(path.resolve('scripts/release/r2/finalize-windows.mjs'), 'utf8'),
-        readFile(path.resolve('scripts/release/r2/finalize-macos.mjs'), 'utf8'),
-        readFile(path.resolve('scripts/release/tag.mjs'), 'utf8'),
-        readFile(path.resolve('scripts/release/storage/config.mjs'), 'utf8'),
-        readFile(path.resolve('scripts/release/shared/windows.mjs'), 'utf8'),
-        readFile(path.resolve('scripts/release/r2/upload-fragment.mjs'), 'utf8')
-      ])
+    const [
+      windowsRelease,
+      macRelease,
+      windowsFinalize,
+      macFinalize,
+      tagContract,
+      storageConfig,
+      windowsShared,
+      uploadFragment
+    ] = await Promise.all([
+      readFile(path.resolve('scripts/release/windows.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/macos.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/r2/finalize-windows.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/r2/finalize-macos.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/tag.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/storage/config.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/shared/windows.mjs'), 'utf8'),
+      readFile(path.resolve('scripts/release/r2/upload-fragment.mjs'), 'utf8')
+    ])
 
     expect(windowsRelease).toContain("'r2', 'finalize-windows.mjs'")
     expect(macRelease).toContain("'r2', 'finalize-macos.mjs'")
-    expect(windowsRelease).toContain("e2e-default-excludes.mjs")
-    expect(macRelease).toContain("e2e-default-excludes.mjs")
-    expect(windowsRelease).toContain('e2eReleaseExcludeGroupArgs')
-    expect(macRelease).toContain('e2eReleaseExcludeGroupArgs')
-    expect(windowsRelease).toContain("'--execution-profile'")
-    expect(macRelease).toContain("'--execution-profile'")
-    const e2eProfiles = await readFile(
-      path.resolve('scripts/test/e2e-default-excludes.mjs'),
-      'utf8'
-    )
-    expect(e2eProfiles).toContain('E2E_DEFAULT_EXCLUDE_GROUPS')
-    expect(e2eProfiles).toContain('E2E_RELEASE_EXCLUDE_GROUPS')
-    expect(e2eProfiles).toContain("Object.freeze(['showcase'])")
-    expect(e2eProfiles).toContain("'provider-matrix'")
-    expect(e2eProfiles).toContain("'wps-office'")
+    expect(windowsRelease).not.toContain('e2e-default-excludes.mjs')
+    expect(macRelease).not.toContain('e2e-default-excludes.mjs')
+    expect(windowsRelease).not.toContain('--execution-profile')
+    expect(macRelease).not.toContain('--execution-profile')
     expect(windowsFinalize).toContain('releases/latest/windows.json')
     expect(windowsFinalize).not.toContain('releases/latest/macos.json')
     expect(macFinalize).toContain('releases/latest/macos.json')

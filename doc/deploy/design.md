@@ -31,7 +31,7 @@ releases/latest/windows.json
 releases/latest/macos.json
 ```
 
-`fragment.json` 是该 Tag 的发版快照（文件清单、sha512、更新 YAML、审计），给 upload → finalize 和 `release:status` 用，不是给官网或客户端的 live 指针。旧的顶层 `release-status/` 前缀在下一次该平台 finalize 时删除。
+`fragment.json` 是该 Tag 的发版快照（文件清单、sha512、更新 YAML、审计），给 upload → finalize 使用，不是给官网或客户端的 live 指针。旧的顶层 `release-status/` 前缀在下一次该平台 finalize 时删除。
 
 CDN 节点缓存遵循源站 `Cache-Control`：安装包为 `public, max-age=31536000, immutable`；`fragment.json`、`updates/latest` 与 `releases/latest` 为 `no-store`。控制台另保留 `/updates/latest`、`/releases/latest` 目录不缓存，作为源站头写错时的保险。`latest.yml` / `latest-mac.yml` 供 electron-updater；`releases/latest/*.json` 供官网 `fetch` 后导航到 artifacts。
 

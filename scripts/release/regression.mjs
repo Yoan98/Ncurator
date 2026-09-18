@@ -1,5 +1,3 @@
-import { E2E_RELEASE_EXCLUDE_GROUPS } from '../test/e2e-default-excludes.mjs'
-
 const valueAfter = (args, name) => {
   const index = args.indexOf(name)
   if (index < 0) return ''
@@ -29,13 +27,8 @@ export const readRegressionSelection = (args) => {
   if (groups.length > 0 && (!domain || !suite)) {
     throw new Error('--group requires --domain and --suite')
   }
-  const excludedGroup = [suite, ...groups]
-    .filter(Boolean)
-    .find((group) => E2E_RELEASE_EXCLUDE_GROUPS.includes(group))
-  if (excludedGroup) {
-    throw new Error(
-      `release package E2E 不允许选择 ${excludedGroup} 分组；该分组只能通过独立测试命令执行`
-    )
+  if (suite === 'showcase' || groups.includes('showcase')) {
+    throw new Error('不允许选择 showcase；请使用 pnpm test:showcase')
   }
 
   const workflowArgs = []
