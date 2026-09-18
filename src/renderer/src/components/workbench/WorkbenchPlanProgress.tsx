@@ -7,7 +7,6 @@ type WorkbenchPlanProgressProps = {
 }
 
 const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan }) => {
-  const [pinned, setPinned] = useState(false)
   const [visiblePlan, setVisiblePlan] = useState(plan)
   const [finishing, setFinishing] = useState(false)
 
@@ -22,7 +21,6 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan }) =
     const timer = window.setTimeout(() => {
       setVisiblePlan([])
       setFinishing(false)
-      setPinned(false)
     }, 520)
     return () => window.clearTimeout(timer)
   }, [plan, visiblePlan.length])
@@ -38,19 +36,11 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan }) =
   const progress = done / visiblePlan.length
 
   return (
-    <div
-      className="group/plan absolute left-1/2 top-0 z-30 -translate-x-1/2 -translate-y-[calc(100%+8px)]"
-      onMouseLeave={() => {
-        if (!pinned) setPinned(false)
-      }}
-    >
-      <button
-        type="button"
+    <div className="group/plan absolute left-1/2 top-0 z-30 -translate-x-1/2 -translate-y-[calc(100%+8px)]">
+      <div
         aria-label={`计划进度 ${done}/${visiblePlan.length}`}
-        aria-expanded={pinned}
-        onClick={() => setPinned((value) => !value)}
-        className={`flex h-7 w-7 items-center justify-center rounded-full border border-[#E5E4E0] bg-white shadow-[0_2px_8px_rgba(15,15,15,0.08)] outline-none transition duration-200 hover:border-[#D8D7D3] focus-visible:ring-2 focus-visible:ring-[#D9E2E8] ${
-          finishing ? 'scale-105 border-[#AFC8B5]' : ''
+        className={`flex h-7 w-7 items-center justify-center rounded-full border border-[#E5E4E0] bg-white shadow-[0_2px_8px_rgba(15,15,15,0.08)] transition duration-200 group-hover/plan:border-[#D8D7D3] ${
+          finishing ? 'scale-105 border-[#D8D7D3]' : ''
         }`}
       >
         <svg viewBox="0 0 20 20" className="h-5 w-5 -rotate-90" aria-hidden="true">
@@ -60,7 +50,7 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan }) =
             cy="10"
             r={radius}
             fill="none"
-            stroke="#54745D"
+            stroke="#787774"
             strokeWidth="2"
             strokeLinecap="round"
             strokeDasharray={circumference}
@@ -68,15 +58,9 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan }) =
             className="transition-[stroke-dashoffset] duration-300"
           />
         </svg>
-      </button>
+      </div>
 
-      <div
-        className={`absolute bottom-[36px] left-1/2 w-[300px] -translate-x-1/2 rounded-[10px] border border-[#E5E4E0] bg-white p-2.5 shadow-[0_12px_32px_rgba(15,15,15,0.12)] transition duration-150 group-hover/plan:visible group-hover/plan:translate-y-0 group-hover/plan:opacity-100 group-focus-within/plan:visible group-focus-within/plan:translate-y-0 group-focus-within/plan:opacity-100 ${
-          pinned
-            ? 'visible translate-y-0 opacity-100'
-            : 'invisible translate-y-1 opacity-0'
-        }`}
-      >
+      <div className="invisible absolute bottom-[36px] left-1/2 w-[300px] -translate-x-1/2 translate-y-1 rounded-[10px] border border-[#E5E4E0] bg-white p-2.5 opacity-0 shadow-[0_12px_32px_rgba(15,15,15,0.12)] transition duration-150 group-hover/plan:visible group-hover/plan:translate-y-0 group-hover/plan:opacity-100">
         <div className="space-y-1">
           {visiblePlan.map((item, index) => {
             const completed = item.status === 'done'
@@ -88,7 +72,7 @@ const WorkbenchPlanProgress: React.FC<WorkbenchPlanProgressProps> = ({ plan }) =
                 <span
                   className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
                     completed
-                      ? 'border-[#54745D] bg-[#54745D] text-white'
+                      ? 'border-[#37352F] bg-[#37352F] text-white'
                       : 'border-[#C9C8C3] bg-white'
                   }`}
                   aria-hidden="true"
