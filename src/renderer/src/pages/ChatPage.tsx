@@ -4002,14 +4002,14 @@ const ChatPage: React.FC = () => {
     modal.confirm({
       title: '编辑这条消息？',
       content: '将撤回这条消息之后的回答，原文会回到输入框供你修改。已编辑的文件不会被还原。',
-      okText: '编辑',
+      okText: '确定',
       okButtonProps: {
         danger: true,
-        'data-testid': workbenchSelectors.userMessageEditConfirmButton
+        'data-testid': workbenchSelectors.editMessageConfirmButton
       },
       cancelText: '取消',
       cancelButtonProps: {
-        'data-testid': workbenchSelectors.userMessageEditConfirmCancelButton
+        'data-testid': workbenchSelectors.editMessageConfirmCancelButton
       },
       onOk: async () => {
         if (!currentPartnerId || aiRunId || messageItem.id !== latestUserMessageId) return

@@ -248,7 +248,13 @@ describe('workbench conversation e2e', () => {
           await copyButton.click()
           await waitForAntMessageText(page, '已复制')
           await editButton.click()
-          await getWorkbenchLocator(page, workbenchSelectors.userMessageEditConfirmButton).click()
+          const editConfirmButton = getWorkbenchLocator(
+            page,
+            workbenchSelectors.editMessageConfirmButton
+          )
+          await editConfirmButton.waitFor({ state: 'visible' })
+          await editConfirmButton.click()
+          await page.locator('.ant-modal-confirm').waitFor({ state: 'hidden' })
           await page.waitForFunction(
             (input: { testId: string; expected: string }) => {
               const element = document.querySelector(`[data-testid="${input.testId}"]`)
