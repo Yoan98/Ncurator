@@ -1,56 +1,46 @@
 # 桌面端发布流程
 
-当前正式发布只发腾讯云 COS（一次即停）；不要在国内发布后再把同一 Tag 同步到 Cloudflare R2。R2 仅预留给未来海外版，须显式设置 `RELEASE_STORAGE_TARGET=r2`。当前只发布 Windows x64 和 macOS arm64；Windows 使用 `windows-vX.Y.Z`，macOS 使用 `mac-vX.Y.Z`，两平台独立递增。
+当前正式发布只发腾讯云 COS，一次发布完成后不再把同一 Tag 上传到 Cloudflare R2。R2 仅供未来海外版显式使用 `RELEASE_STORAGE_TARGET=r2`。当前发布平台为 Windows x64 和 macOS arm64，平台 Tag 分别使用 `windows-vX.Y.Z` 与 `mac-vX.Y.Z`，版本号独立递增。
 
 ## 1. 发布流程
 
-原则：
+发布按以下顺序进行：
 
-- 平台 Tag **正式上线后**不可修改、覆盖或删除；未上线用 `release:abort` 删掉后可重打同版本。
-- 候选包必须从 Tag 导出的干净代码构建。
-- 按当前版本与上一已发布同平台版本的差异选择正式包 E2E，测实际安装后的候选包；影响面可控时定向回归，不必默认跑完整默认门禁。
-- 发布测试过的同一份候选包到 COS，并验证国内公开下载和更新通道；COS 验证通过即结束，不要再对同一 Tag 上传或 finalize 到 R2。
+1. 在干净的 `main` 上检查版本、环境和发布前置条件。
+2. 创建并推送平台 annotated Tag。
+3. 从 Tag 导出干净代码，构建并审计候选包。
+4. 对比当前 Tag 与上一已发布同平台版本，评估改动影响并确定正式包回归范围。
+5. 在实际安装的候选包上完成确定范围内的正式包 E2E。
+6. 记录构建信息、回归结果和剩余风险。
+7. 发布测试通过的同一份候选包到 COS，验证公开下载和更新通道。
+8. 清理本地临时工作区和过期候选包。
 
-```mermaid
-flowchart TD
-    A["检查仓库、版本和发布环境"] --> B["创建平台 Tag"]
-    B --> C["从 Tag 导出干净代码并构建候选包"]
-    C --> D["评估当前版本与上一已发布平台版本的改动"]
-    D --> E["选择并执行正式包 E2E"]
-    E -->|存在问题| F["修复问题并重新评估影响范围"]
-    F --> E
-    E -->|通过| G["说明构建、测试和剩余风险"]
-    G --> H["发布同一候选包到 COS"]
-    H --> I["验证国内下载、更新元数据和公开状态"]
-    I --> J["清理本地旧候选包和临时工作区"]
-    C -->|未上线失败| K["release:abort 删除 Tag"]
-    K --> B
-```
+候选包测试或公开验证失败时，不得放宽构建、审计、哈希和公开通道校验。
 
-### 发布准备与 Tag
+### 1.1 发布准备与 Tag
 
-在干净且与 `origin/main` 完全一致的 `main` 上开始。新版本必须高于该平台**当前仍存在的**最高 Tag。发版机须具备 live `.env`（`AI_LIVE_KEY_*`，默认 provider 为 dashscope）。
+必须在干净且与 `origin/main` 完全一致的 `main` 上开始。新版本必须高于该平台当前仍存在的最高 Tag。发版机须具备 live `.env`，包括 `AI_LIVE_KEY_*`；默认 provider 为 `dashscope`。
 
-`release:start` 顺序：
+`release:start` 会依次完成：
 
-1. 校验 `released-migrations.json`（已锁 migration 的 version / name / 文件名 / SHA-256）
-2. 并行 `typecheck:node` 与 `typecheck:web`，并 ensure sidecar
-3. 以 6 worker 跑全部 Unit（含正式 v9→当前 schema）、update backend 与除 `live` 外的 AI backend
-4. **必跑** live 门禁 `human-prefix-cache-retain-live`（同伙伴三轮短续接 + 文本读工具历史；相邻跨 run 前缀缓存与 `toolsHash`；无 live key 直接失败，不 skip；不全量 live）
-5. 通过后把当前连续 migration 纳入发布锁、与 `package.json` 版本号一并提交，创建 annotated Tag 并原子推送 `main` 与 Tag
+1. 校验 `released-migrations.json` 中已锁定 migration 的版本、名称、文件名和 SHA-256。
+2. 并行执行 `typecheck:node`、`typecheck:web`，并准备网页抓取 sidecar。
+3. 使用 6 个 worker 执行 Unit、update backend 和非 live AI backend。
+4. 必跑 `human-prefix-cache-retain-live`，验证同一伙伴的短续接、文本读工具历史、跨 run 前缀缓存和 `toolsHash`；没有 live key 必须失败，不能跳过。
+5. 全部通过后，把当前连续 migration 纳入发布锁，与 `package.json` 版本一并提交，创建 annotated Tag，并原子推送 `main` 和 Tag。
 
-第一个平台执行 `release:start` 时锁定本次新增 migration；另一平台随后使用同一份已锁源码。已锁 migration 不能合并、重排或修改，只能新增更高版本。
+第一个平台执行 `release:start` 时锁定本次新增 migration；另一平台使用同一份已锁源码。已锁 migration 不能合并、重排或修改，只能新增更高版本。
 
 ```bash
 pnpm release:start -- --platform windows --version X.Y.Z
 pnpm release:start -- --platform mac --version X.Y.Z
 ```
 
-Windows 在本地 Windows x64 构建候选包；macOS 只创建 Tag，候选包须在 Apple Silicon Mac 上单独构建。平台环境与构建审计见 [`design.md`](./design.md)。
+Windows 候选包须在本地 Windows x64 构建；macOS 只创建 Tag，候选包须在 Apple Silicon Mac 上构建。平台环境与构建审计见 [`design.md`](./design.md)。
 
-### 未上线 Tag 中止与重打
+### 1.2 未上线 Tag 中止
 
-Tag 已推送但尚未成为任一公开通道 `releases/latest` 上的 live 版本时：
+Tag 已推送但尚未成为公开通道 `releases/latest` 中的 live 版本时，可以删除并重打同版本：
 
 ```bash
 export NCURATOR_ALLOW_ABORT_TAG=abort-unpublished-tag
@@ -58,89 +48,80 @@ pnpm release:abort -- --tag windows-vX.Y.Z
 # 或 mac-vX.Y.Z
 ```
 
-`release:abort` 拒绝删除已 live 或本地状态为 `published` 的 Tag；删除 origin/本地 annotated Tag 与该 Tag 本地候选目录。`main` 上的 `release: prepare …` 提交保留。abort 后同版本重打 `release:start`。已上线版本有问题：发更高版本修复，不要 abort live Tag。
+`release:abort` 拒绝删除已 live 或本地状态为 `published` 的 Tag，同时删除远端和本地 annotated Tag 及该 Tag 的本地候选目录。`main` 上已经产生的 prepare 提交会保留。已上线版本有问题时必须发布更高版本，不能 abort live Tag。
 
-### 干净构建与候选包
+## 2. 候选包与正式包回归
 
-prepare 从 Tag 建独立工作区，执行 `pnpm install --frozen-lockfile`、正式构建、安装包审计和 bundle 固化；不复用当前源码、旧 `node_modules` / `dist`，也不上传对象存储。
+### 2.1 候选包
 
-Windows / macOS 用户可见安装包名为“馆长-…”。**公开 artifacts 对象键与用户可见名一致。** 产品命名分层、技术标识冻结清单见 [`doc/brand.md`](../brand.md)。
+prepare 从 Tag 创建独立工作区，执行 `pnpm install --frozen-lockfile`、正式构建、安装包审计和 bundle 固化。不复用当前源码、旧 `node_modules` 或旧 `dist`，也不上传对象存储。
 
-候选包目录：`~/.ncurator/release-candidates/<tag>/<platform>/`。状态：`prepared` → 正式包 E2E 通过（或明确 `skipped`）后 `ready`；失败 `rejected`；公开发布并验证后 `published`。本地目录约定见 [`design.md`](./design.md)。
+候选包目录为 `~/.ncurator/release-candidates/<tag>/<platform>/`，状态按以下顺序流转：
 
-### 影响评估与正式包回归
+```text
+prepared → ready → published
+             └→ rejected
+```
+
+正式包 E2E 通过后候选包变为 `ready`；测试失败变为 `rejected`；公开发布并验证成功后变为 `published`。候选包、bundle 和对象存储布局见 [`design.md`](./design.md)。
+
+### 2.2 影响评估
+
+先对比当前 Tag 与上一已发布同平台 Tag：
 
 ```bash
 git diff <previous-platform-tag>..<current-platform-tag>
 ```
 
-按提交与模块影响从 `doc/test-plan/**` 选正式包 E2E；影响面广或无法收敛则跑默认门禁全集。正式包 E2E 只消费已构建的 `release-bundle-*.json`：复验 Tag/commit/fragment/哈希，安装 EXE/DMG 后对安装态程序跑测试，不重新构建。过滤参数与执行契约（含 warmup、并发）见 `doc/test.md` §4.2；命令见本文 §4。
+评估版本实际改动涉及的产品能力、数据升级、平台构建、安装更新和跨模块风险，然后从正式包 E2E 回归用例中确定范围：
 
-不带过滤参数时，`--test-only` 与 `pnpm test:e2e:package` 同口径：跑日常默认 E2E，固定排除 opt-in 分组 `provider-matrix`、`wps-office`、`showcase`（`scripts/test/e2e-default-excludes.mjs`）。「默认门禁全集」不含上述分组；需要时单独执行 `pnpm test:workbench:provider-matrix` / `pnpm test:workbench:wps-office` / `pnpm test:workbench:showcase`，或 `--test-only --case <caseId>`。
+- 影响边界可以可靠收敛时，只执行受影响能力对应的用例。
+- 影响范围较广，或无法可靠判断是否遗漏时，执行全部发版回归用例。
+- 修改了 SQLite schema 时，至少包含 `sidebar-app-update`、`database-version-update-required`，并使用上一公开 schema 的可审查 fixture 验证原地升级。
+- 评估结论必须记录版本、影响范围、实际执行的用例、结果和剩余风险。
 
-正式包 E2E **不改候选包品牌**（仍是同一份将上线的「馆长」安装包），只把测试安装落到本机 `NCurator-E2E` 目录；测完删除该目录及指向它的入口。
+正式包 E2E 只消费已构建的 `release-bundle-*.json`：执行前复验 Tag、commit、fragment 和哈希，安装 EXE/DMG 后测试安装态程序，不重新构建。未指定过滤参数时，发版命令执行全部发版回归用例；指定 `--domain`、`--suite`、`--group` 或 `--case` 时执行定向范围。过滤参数只允许用于 `--test-only`。
 
-- Windows：静默装到 `%LOCALAPPDATA%\\NCurator-E2E`。同一 `appId` 下 NSIS 可能覆盖本机已安装的正式包。测完结束 E2E 进程，删除指向 E2E 目录的快捷方式与卸载项，并删除该安装目录。
-- macOS：ditto 到 `~/Applications/NCurator-E2E/<platform>/`，把安装副本改名为「馆长 E2E.app」，不触碰 `/Applications` 或 `~/Applications` 下的正式「馆长.app」。测完删除 `~/Applications/NCurator-E2E`。
+正式包 E2E 不改变候选包品牌，测试安装只落到本机隔离目录：
 
-选中的正式包 E2E 全部执行（含真实 AI / 服务 case）。源码 E2E、backend、unit、独立 `test:ai*` 不替代正式包 E2E，不属于标准发布门。涉及 SQLite 变更的正式包回归至少包含 `sidebar-app-update`、`database-version-update-required`，并用上一公开 schema 的可审查 fixture 验证原地升级（见 `doc/test-plan/workbench-test.md`）。
+- Windows 静默安装到 `%LOCALAPPDATA%\\NCurator-E2E`。同一 `appId` 下 NSIS 可能覆盖本机已安装的正式包；测试结束后关闭 E2E 进程，删除指向测试目录的快捷方式、卸载项和安装目录。
+- macOS 使用 `ditto` 复制到 `~/Applications/NCurator-E2E/<platform>/`，并将副本改名为「馆长 E2E.app」。不触碰正式的「馆长.app」；测试结束后删除 `~/Applications/NCurator-E2E`。
 
-### 问题处理与发布
+只执行选定的正式包 E2E，真实 AI / 服务用例也按选定范围执行。源码 E2E、backend、Unit 和独立 AI 测试不能替代正式包 E2E。
 
-临时环境问题可复测同一候选包。改了产品、打包或测试代码：
+### 2.3 问题处理
 
-- **未上线**：`release:abort` 后在修复后的 `main` 重打**同版本**并重新 prepare；
-- **已上线**：必须发更高版本新 Tag 与候选包。
+临时环境问题可以在同一候选包上复测。修改了产品、打包或测试代码时：
 
-同一次发布中，修复不影响已通过用例时不必重跑那些用例。测试完成后说明版本、影响范围、回归结果与剩余风险。publish 只读已通过候选包，不重新构建；默认写入 COS，国内通道验证成功即完成。不要再设 `RELEASE_STORAGE_TARGET=r2` 对同一 Tag 做第二次上传或 finalize。对象键、CDN Cache-Control 与公开 URL 见 [`design.md`](./design.md)。
+- 未上线：执行 `release:abort`，在修复后的 `main` 上用同一版本重新 `release:start` 和 prepare。
+- 已上线：必须创建更高版本的新 Tag 和候选包。
 
-真实发布默认锁定；用户明确批准上线后，在该终端设置：
+同一次发布中，如果修复不影响已经通过的用例，不必重跑这些用例；但必须重新评估并记录判断。
+
+## 3. 发布与公开验证
+
+publish 只读取已经测试通过的候选包，不重新构建。默认发布到 COS，验证国内公开下载、更新 metadata、公开 manifest、文件大小、sha512 和 URL 成功后才算完成。对象键、CDN Cache-Control 和公开 URL 见 [`design.md`](./design.md)。
+
+真实发布默认锁定。用户明确批准上线后，在当前终端设置：
 
 ```bash
 export NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production
 ```
 
-未设置时，`--publish-only`、上传与 finalize 在网络写入前失败。普通构建、候选包测试与 `pnpm release:storage:plan` 不需要该变量。
+未设置时，`--publish-only`、上传和 finalize 必须在网络写入前失败。普通构建、候选包测试和 `pnpm release:storage:plan` 不需要该变量。
 
-## 2. 按需：Windows 真实覆盖升级（不进回归 / 发布门禁）
+国内 COS 发布完成后，不要再对同一 Tag 设置 `RELEASE_STORAGE_TARGET=r2` 执行第二次 plan、上传或 finalize。
 
-```bash
-pnpm test:update:real:win -- \
-  --source-installer <已发布旧版安装包.exe> \
-  --source-version 0.1.68 \
-  --expected-version 0.1.69 \
-  --downgrade-installer <含禁止降级逻辑的较低版本候选包.exe>
-```
+## 4. 中断与恢复
 
-- 脚本 `scripts/test/update-real-windows.mjs`，不在 `tests/case/**`，不进 runner / `test:update` / 发布命令。
-- 离线本地 HTTP feed 托管新版与 `latest.yml`；不触碰生产通道；独立安装与 user-data，结束后卸载并恢复缓存。
-- 应用不含本次修复的已发布旧包复现问题；`--expected-version` 用当前代码构建更高版本。
-- 通过：静默覆盖升级成功（无 “Failed to uninstall old application files”）、版本变为 `--expected-version`、marker 保留。
-- `--downgrade-installer`：升级后再跑较低版本候选包，断言拒绝安装且版本与 marker 不变；两包都必须含新版 NSIS 保护，不能用历史旧包。
+- Tag 已创建但 prepare 中断：同 Tag 重跑 `--prepare-only`；如果源码已改变且版本尚未上线，先 abort 再用同版本重打。
+- 候选包已生成但测试中断：对同一候选包重跑 `--test-only`。
+- 上传或 finalize 中断：对同一候选包恢复 publish，或执行 `release:storage:finalize`。
+- 未上线整轮作废：abort 后用同一版本重打，不要另起版本号。
+- 已发布版本有问题：发布更高版本；回退下载通道不会让已安装客户端自动降级。
+- 同一 Tag 的对象已存在但哈希不同：禁止覆盖；未上线时执行 abort 后用同一版本重打。
 
-报告：`tests/logs/settings/update/real-windows/<运行时间>/report.json`。
-
-## 3. 中断与恢复
-
-- Tag 已创建但 prepare 中断：同 Tag 重跑 `--prepare-only`；源码已改且未上线则先 abort 再同版本重打。
-- 候选已生成但测试中断：同候选 `--test-only`。
-- 上传 / finalize 中断：同候选恢复 publish，或 `release:storage:finalize`。
-- 未上线整轮作废：abort 后同版本重打，不要另起版本号。
-- 已发布有问题：发更高版本修复；回退下载通道不会让已装客户端自动降级。
-- 同 Tag 对象存储已存在且哈希不同：禁止覆盖；未上线换产物走 abort + 同版本重打。
-
-## 4. 命令参考
-
-### 构建与审计
-
-```bash
-pnpm run build
-pnpm run build:unpack
-pnpm run build:win
-pnpm run build:mac:arm64
-pnpm run package:audit
-pnpm run package:audit:summary
-```
+## 5. 命令参考
 
 ### 候选包
 
@@ -154,7 +135,7 @@ pnpm release:mac -- --tag mac-vX.Y.Z --test-only [回归过滤参数]
 pnpm release:mac -- --tag mac-vX.Y.Z --publish-only
 ```
 
-独立测已构建候选：
+独立验证已构建候选包：
 
 ```bash
 pnpm test:e2e:package -- --bundle <release-bundle.json>
@@ -162,7 +143,9 @@ pnpm test:e2e:package -- --bundle <release-bundle.json> --domain workbench
 pnpm test:e2e:package -- --bundle <release-bundle.json> --case <caseId>
 ```
 
-### 状态与恢复
+上述独立命令使用日常默认 E2E 集合；发布回归必须通过 `release:win` 或 `release:mac` 的 `--test-only` 执行。
+
+### 状态、恢复与存储
 
 ```bash
 pnpm release:status -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
@@ -170,8 +153,6 @@ export NCURATOR_ALLOW_ABORT_TAG=abort-unpublished-tag
 pnpm release:abort -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
 pnpm release:storage:plan
 pnpm release:storage:finalize -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
-# 以上默认针对 COS。不要在国内 COS 发布后再对同一 Tag 设 RELEASE_STORAGE_TARGET=r2 做第二次 plan / finalize。
-# 仅未来海外版才显式：RELEASE_STORAGE_TARGET=r2
 ```
 
-硬规则：构建 / 审计失败不放宽包规则；公开 metadata / 下载 / 哈希验证失败不更新 latest 通道。
+以上命令默认针对 COS。只有未来海外版才显式设置 `RELEASE_STORAGE_TARGET=r2`。

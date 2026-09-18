@@ -6,7 +6,8 @@
 - 通用测试、runner、raw logs、UI E2E 和 live 断言规则遵循 `doc/test.md`。
 - Workbench UI E2E 回归测试必须通过真实 Electron UI 配模型、创建伙伴、发送消息、选择 `@` 资料、预览、回退和操作右侧面板。设置页可另加文件地址，但发送不再要求绑定工作空间目录。
 - 涉及 AI 的 Workbench UI E2E 回归测试必须使用真实模型调用；live 配置只读内置服务商 Key 池与选中目标：`AI_LIVE_KEY_<PROVIDER>`（`DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`）、可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）、可选 `AI_LIVE_MODEL`（默认该服务商测试默认模型，通义为 `qwen3.8-flash`）。`baseUrl` / `providerKind` 由产品 registry 推导。日常 case 通过 Settings「推荐」类型写入当前目标服务商；全服务商冒烟见 `live-preset-provider-smoke`。
-- 日常 `pnpm test:workbench` / `pnpm test:e2e:source` 默认 `--exclude-group provider-matrix --exclude-group wps-office --exclude-group showcase`，不跑全服务商冒烟、真开 WPS 窗口刷新与官网样例采集；需要时分别执行 `pnpm test:workbench:provider-matrix` / `pnpm test:workbench:wps-office` / `pnpm test:workbench:showcase`，或对应 `--case`。
+- 日常 `pnpm test:workbench` / `pnpm test:e2e:source` 使用 `--execution-profile default`，不跑全服务商冒烟、真开 WPS 窗口刷新与官网样例采集；需要时分别执行 `pnpm test:workbench:provider-matrix` / `pnpm test:workbench:wps-office` / `pnpm test:workbench:showcase`，或对应 `--case`。
+- 发版回归按版本改动影响范围选择正式包 E2E；影响范围较广或无法可靠收敛时执行全部发版回归。发版全量回归包含 `provider-matrix` 和 `wps-office`，只排除 `showcase`；发版命令不能执行 `showcase`。
 - case 因生产行为缺口失败时，不在测试中硬改业务行为，统一记录为产品或生产实现待决项。
 
 ## 2. 测试边界
@@ -35,7 +36,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 2. `run`
 3. `result`
 4. `scheduled-task`
-5. `showcase`（opt-in：官网样例采集，不进日常 / 发版回归）
+5. `showcase`（显式采集：官网样例采集，不进日常 / 发版回归）
 
 领域规则：
 
@@ -51,7 +52,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - 依赖本地文件语义的测试统一复用 `tests/fixtures/workspace` 作为共享输入目录，但该目录只作为真实输入文件来源；运行时通过设置页添加为文件地址，并先创建伙伴。
 - `How` 和 `Oracle` 必须映射到 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - `WB-BLOCKER-003`（上下文压缩提示）依赖真实模型使用量与正式压缩阈值触发，运行成本不确定，不作为每次源码回归的固定 case，发布时按影响评估单独执行真实检查，检查运行中与完成态过程组，且不得为 E2E 降低生产阈值或伪造 compaction 事件。压缩阈值随当前模型 effectiveWindow（`min(256000, floor(modelContext × 0.8))`）。
-- `WB-WPS-001` 日常回归由 `wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 写盘后的 open dispatch；真窗口刷新由 opt-in `wps-office-reload-on-write-and-revert`（`pnpm test:workbench:wps-office`）覆盖已授权 WPS 文字 / 表格 / 演示，不进默认 e2e / 发版 package e2e。已打开文档在写盘前由加载项 close 放锁，加载项复查文档确实已关闭才上报成功，关不掉则上报失败且馆长不写盘；写盘前等到文件可写，写成功后再刷新窗口。通道按 close-result 的 `remaining` 与占位文档是否建起来选择，不得用 SSE 是否断开判断；`remaining` 为 0 且占位已建起时仍走加载项 open，占位建不起来才用对应组件 exe 拉起并轮询 list 要摘录，不得 `cmd start`；被指派实例 open 失败或超时降级为一次系统打开。未安装 WPS 或对应组件加载项未授权时后者跳过该格式；已授权却连不上则算该格式失败，不得只测 docx 就当作三种格式都过。Workbench e2e 启动时跳过覆盖拷加载项文件，仍启动回环 `/addon`；`publish.xml` 与授权 path 固定优先端口 `18723`，不得改写到临时端口。xlsx / pptx 窗口刷新还要求 `/status` 的 `clients` 出现 `et` / `wpp`，不能只靠文字组件。加载项不得探测其他组件 `Active*` 对象；同组件多实例时 close / open 只投给持有该文档的 `clientId`，旧实例的文档列表和失败回报都不得影响当前实例。
+- `WB-WPS-001` 日常回归由 `wps-sync-dispatch-on-write-and-revert` 覆盖馆长对 docx / xlsx / pptx 写盘后的 open dispatch；真窗口刷新由 opt-in `wps-office-reload-on-write-and-revert`（`pnpm test:workbench:wps-office`）覆盖已授权 WPS 文字 / 表格 / 演示，不进默认 e2e；发版时按影响范围选择，发版全量回归包含该组。已打开文档在写盘前由加载项 close 放锁，加载项复查文档确实已关闭才上报成功，关不掉则上报失败且馆长不写盘；写盘前等到文件可写，写成功后再刷新窗口。通道按 close-result 的 `remaining` 与占位文档是否建起来选择，不得用 SSE 是否断开判断；`remaining` 为 0 且占位已建起时仍走加载项 open，占位建不起来才用对应组件 exe 拉起并轮询 list 要摘录，不得 `cmd start`；被指派实例 open 失败或超时降级为一次系统打开。未安装 WPS 或对应组件加载项未授权时后者跳过该格式；已授权却连不上则算该格式失败，不得只测 docx 就当作三种格式都过。Workbench e2e 启动时跳过覆盖拷加载项文件，仍启动回环 `/addon`；`publish.xml` 与授权 path 固定优先端口 `18723`，不得改写到临时端口。xlsx / pptx 窗口刷新还要求 `/status` 的 `clients` 出现 `et` / `wpp`，不能只靠文字组件。加载项不得探测其他组件 `Active*` 对象；同组件多实例时 close / open 只投给持有该文档的 `clientId`，旧实例的文档列表和失败回报都不得影响当前实例。
 - WPS 相关 e2e 必须自带环境归零：进用例前和用例结束后各做一次「先不带 `/F` 请求关闭 wps / et / wpp，超时再强杀」，并清掉 `ncurator-workbench-wps-*` 临时工作区；三种格式之间也要归零。不归零时上一轮残留实例会连上本轮回环冒充本轮客户端，让 registry、dispatch 与断言随机失败，且临时工作区因文件锁删不掉。
 
 ## 4. 目录与命令
@@ -66,7 +67,7 @@ tests/case/workbench/
     timeline/
     message/
     scope/
-    provider-matrix/   # opt-in
+    provider-matrix/   # opt-in：不进日常，发版按影响范围或全量回归
   run/
     process/
     blocker/
@@ -75,19 +76,20 @@ tests/case/workbench/
   result/
     preview/
     apply/
-    wps-office/        # opt-in：真开 WPS
+    wps-office/        # opt-in：真开 WPS；不进日常，发版按影响范围或全量回归
   scheduled-task/
-  showcase/            # opt-in：官网样例采集
+  showcase/            # 显式采集：官网样例采集，不进日常 / 发版
 ```
 
 回归测试命令：
 
 - `pnpm test:workbench`
 - `pnpm test:workbench:e2e`
-- `pnpm test:workbench:wps-office`（本机已授权 WPS，不进日常 / 发版）
+- `pnpm test:workbench:provider-matrix`（全服务商冒烟，不进日常；发版按影响范围或全量回归）
+- `pnpm test:workbench:wps-office`（本机已授权 WPS，不进日常；发版按影响范围或全量回归）
 - `pnpm test:workbench:showcase`（官网样例采集，不进日常 / 发版）
-- `node scripts/test/workflow.mjs --domain workbench`
-- `node scripts/test/workflow.mjs --domain workbench --type e2e`
+- `node scripts/test/workflow.mjs --domain workbench --execution-profile default`
+- `node scripts/test/workflow.mjs --domain workbench --type e2e --execution-profile default`
 
 自动更新模拟（聚合入口，不证明真实安装成功）：
 
@@ -101,12 +103,12 @@ pnpm test:update:e2e
 - `test:update:backend`：`unit/release`，验证主进程更新状态、发布配置、R2 元数据和 release fragment。
 - `test:update:e2e`：Workbench case `sidebar-app-update` 与 `database-version-update-required`（见下方 case 规格）。
 - 自动更新是允许在测试侧注入受控状态的 E2E 特例：可提供更新可用、下载进度、完成和失败快照，但不得修改生产代码来支持模拟；`database-version-update-required` 还允许在 Electron 启动前向隔离 `userData/app.sqlite` 写入未来 migration 记录以真实触发仅更新模式，只能准备数据库输入，不能伪造主进程启动状态或绕过版本检查。
-- 真实覆盖升级与禁止降级验证见 `doc/deploy/release.md`，不在本计划与 `test:update` 内。
+- 真实覆盖升级与禁止降级验证见 [`doc/deploy/design.md`](../deploy/design.md)，不在本计划与 `test:update` 内。
 
 补充规则：
 
 - `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 回归测试入口。
-- 需要验证正式安装包时使用 `pnpm test:e2e:package -- --bundle <release-bundle.json>`；它会校验并安装已构建候选包，再对安装后的真实应用执行 E2E，不重新构建，也不属于普通开发回归。发布时按 `doc/deploy/release.md` 的影响评估选择范围，不带过滤参数时执行全部 E2E。
+- 需要验证正式安装包时，日常调试使用 `pnpm test:e2e:package -- --bundle <release-bundle.json>`；它会校验并安装已构建候选包，再对安装后的真实应用执行日常默认 E2E，不重新构建。发布时通过 `release:win` / `release:mac` 的 `--test-only` 按影响评估选择范围，不带过滤参数时执行全部发版回归。
 - `conversation / run / result / scheduled-task` 是稳定 suite，不因 PRD 小节增删而轻易重排。
 - suite 下的 `partner / composer / timeline / message / scope / process / blocker / browser / persistence / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。不存在 `search/` 目录。
 
@@ -615,12 +617,12 @@ pnpm test:update:e2e
 
 #### `wps-office-reload-on-write-and-revert`
 
-- 测试类型：`e2e / exclusive`（路径 `result/wps-office/`，**opt-in**；对齐 `test:update:real:win` 的「不进回归 / 发布门禁」口径）
+- 测试类型：`e2e / exclusive`（路径 `result/wps-office/`，**opt-in**；不进日常，发版按影响范围选择或随全量回归）
 - What：本机已授权的 WPS 打开目标 docx、xlsx、pptx 后，真实 AI 写回/回退让对应组件加载项先 close 放锁再写盘再 open，窗口摘录分别含标记和恢复原文。
-- Why：只证明馆长 dispatch 不能证明用户看到的 WPS 窗口已换新稿。Windows 上 WPS 独占锁必须先 close 才能写盘。文字、表格、演示是独立客户端，只测 docx 不能证明 Excel / PPT 窗口会刷新。授权弹窗可能卡住无人值守自动化，故不进日常 / 发版 package e2e。
+- Why：只证明馆长 dispatch 不能证明用户看到的 WPS 窗口已换新稿。Windows 上 WPS 独占锁必须先 close 才能写盘。文字、表格、演示是独立客户端，只测 docx 不能证明 Excel / PPT 窗口会刷新。授权弹窗可能卡住无人值守自动化，故不进日常；发版时按影响范围选择，发版全量回归包含该 case。
 - How：执行 `pnpm test:workbench:wps-office` 或 `--case wps-office-reload-on-write-and-revert`。不覆盖拷加载项、不点授权、不用辅助功能点 UI。进用例前先做 WPS 环境归零（不带 `/F` 请求关闭 wps / et / wpp，超时再强杀，然后清 `ncurator-workbench-wps-*` 临时工作区），否则上一轮残留实例会冒充本轮客户端。馆长回环先起来；`publish.xml` 与授权 path 保持 `http://127.0.0.1:18723/addon/`。若回环不在优先端口 `18723`（说明本机另有馆长占用），跳过整案，因为已打开的 WPS 仍从优先端口拉加载项。独占 `18723` 时，对 `sample-edit.docx`、`经营周报.xlsx`、`品牌策略提案.pptx` 分别用本机 WPS 打开临时工作区文件：macOS 走 `open -a`；Windows 按注册表 `InstallRoot` 与默认安装目录解析启动器 / 对应组件 exe（`wps.exe` / `et.exe` / `wpp.exe`），进程拉起后立即返回、不等待 WPS 退出。等待 `/status` 出现对应组件客户端（`wps` / `et` / `wpp`）且该文档已登记。再通过真实 Workbench UI 发送编辑；写盘前加载项 close 并上报 `remaining`，馆长等到文件锁释放再写盘；写回后读该路径 `reload-result` 摘录含标记，回退后摘录不含标记。标记落点必须在加载项摘录采样范围内（xlsx 指定写 `H1`，不能让模型自选任意空白单元格，否则摘录读不到），摘录采样为表格 200 行 × 50 列、演示前 10 页、单次上限 20000 字符。`remaining` 为 0 时由占位文档撑住组件进程后继续走加载项 open；占位建不起来才用对应组件 exe 拉起（不得 `cmd start` 把表格/演示塞进已打开的文字窗口），再经 list 轮询取摘录、不再二次 Open；被指派实例报 open 失败或超时则降级一次系统打开。每种格式跑完立即归零 WPS，下一种格式从空环境开始；单种格式失败只记该格式失败并继续跑后面的格式，不得让 docx 或 xlsx 的问题把 pptx 挡在门外。本机未装 WPS、或该组件 `authaddin` 未授权则跳过该格式；该组件已授权但约 90 秒内加载项未连接则该格式失败。三种格式都未授权才跳过整案。
 - Oracle：磁盘写回含标记、回退恢复原文；已授权的每种格式都必须给出结论，加载项 `reload-result` 写回后摘录含标记、回退后不含标记，对齐 `WB-WPS-001-AC1`、`WB-WPS-001-AC2`、`WB-WPS-001-AC3`。断言数据按格式列出 covered / failed 及失败原因，任一已授权格式未 covered 即失败。未连接时不发 close；刷新失败不回滚已成功写盘，对齐 `WB-WPS-001-AC4`。超时报错必须带上 `clientId`、已登记文档和被拒的 close / open 回报原因，便于区分「投错实例」和「组件真的打不开」。用例结束后在删除临时工作区前先归零 WPS，清理目录遇到占用不作为失败。
-- Not：不断言授权弹窗文案、功能区页签肉眼可见或滚动恢复。`WB-WPS-001-AC5` 只作为未授权跳过说明。验收以 `/status` 为准。不进入 `pnpm test:workbench` / `test:e2e:*` / 发版 package e2e。
+- Not：不断言授权弹窗文案、功能区页签肉眼可见或滚动恢复。`WB-WPS-001-AC5` 只作为未授权跳过说明。验收以 `/status` 为准。不进入日常 `pnpm test:workbench` / `test:e2e:*`。
 
 #### `docx-attachment-apply-status-and-cell-diff`
 
@@ -698,7 +700,7 @@ pnpm test:update:e2e
 - Why：官网需要真实任务产物，而不是测试夹具或 live 回归用例。
 - How：在仅含三份材料的临时文件地址创建伙伴，发送周报诉求；等待真实 AI 写回 `云枢智服-9月第2周经营周报.docx`；打开修改入口，先截审核态再切到预览态截 Word 页面。
 - Oracle：正式 Word 可解析且含进展/风险/下周；产生 docx 写回记录，对齐 `WB-APPLY-002-AC2`；截到至少 1 页预览图、1 页审核图并记录本次 token 用量。
-- Not：不进 `pnpm test:workbench` / `test:e2e:*` / 发版 package e2e。不评价排版审美，不回退文件。
+- Not：不评价排版审美，不回退文件。
 
 #### `excel-budget`
 
@@ -707,7 +709,7 @@ pnpm test:update:e2e
 - Why：官网 Excel 样例需要真实任务产物和审核绿框，而不是测试夹具。
 - How：临时文件地址创建伙伴，发送建表诉求；打开修改入口，按工作表截审核态与预览态。
 - Oracle：xlsx 可解析且至少两张表；产生 excel 写回记录；截到预览、审核图并记录 token 用量。
-- Not：不进日常 / 发版回归。不评价科目是否完备，不回退文件。
+- Not：不评价科目是否完备，不回退文件。
 
 #### `ppt-management-briefing-review`
 
@@ -716,7 +718,7 @@ pnpm test:update:e2e
 - Why：新建 PPT 没有左右对照，官网需要真实「审核 + 新增页」画面。
 - How：空工作区创建伙伴，发送简报诉求；打开修改入口，留在审核态按缩略图截 `pptDiffAfter`。
 - Oracle：pptx 写回；截到至少 1 页审核图并记录 token 用量。
-- Not：不进日常 / 发版回归。不覆盖官网已过关的 6 页交付图。
+- Not：不覆盖官网已过关的 6 页交付图。
 
 #### `docx-weekly-report-edit`
 
@@ -752,7 +754,7 @@ pnpm test:update:e2e
 - Why：官网 PDF 能力是只读问答，不是生成或改 PDF；样例要能对照原文和回答。
 - How：工作区放入虚构星河合同；用 `@` 引用后只问「尾款什么时候付？」；按 PDF 页渲成 PNG，并截最后一条 `workbench-assistant-final-answer`。
 - Oracle：回答含终验/验收与十个工作日；原件字节不变；渲到至少 2 页原文和 1 张回答图，并记录用量。
-- Not：不进日常 / 发版回归。不改合同、不写新文件。
+- Not：不改合同、不写新文件。
 
 #### `court-typical-cases`
 
@@ -761,7 +763,7 @@ pnpm test:update:e2e
 - Why：官网浏览器样例要对照看操作和回答；过程帧必须能看出检索命中和点进详情，不能是新闻首页或被裁切的检索框。
 - How：空工作区发律师原句；run 过程中对嵌入页 `capturePage`，检索结果滚到「为您找到相关结果」再裁切，案例页滚到标题再截；结束后把最后一条 `workbench-assistant-final-answer` 滚到开头并按可视高度截图。
 - Oracle：调用 `browser_use`；截到 search、article 两帧和回答图；最终回答提到工程款、结算、违约或典型案例；记录用量。
-- Not：不进日常 / 发版回归。不用本地 HTML。不把 web_search 当浏览器操作。不截空白首页。不要求登录。不对合同做对照。
+- Not：不用本地 HTML。不把 web_search 当浏览器操作。不截空白首页。不要求登录。不对合同做对照。
 
 #### `xinghe-kb-reply`
 
@@ -770,7 +772,7 @@ pnpm test:update:e2e
 - Why：官网知识库样例要对照看本地纪要和据此写的回信，不能做成又一份 @ 文件的周报，也不能截检索命中列表。
 - How：工作区放入星河例会纪要、验收口径、报价口径和一份清和干扰纪要并完成索引；口头发问、不 `@`；结束后把例会/验收两份资料渲成页图，并截最后一条 `workbench-assistant-final-answer`。
 - Oracle：调用 `kb_search` 或 `kb_list_documents`；不调用 `browser_use` / `web_search`；回答含 95% 交付承诺和验收 / P1 / 7 天；截到至少 2 页资料和 1 张回答图，并记录用量。
-- Not：不进日常 / 发版回归。不 @ 文件名。不把网页搜索或浏览器当知识库。不截知识库命中列表。
+- Not：不 @ 文件名。不把网页搜索或浏览器当知识库。不截知识库命中列表。
 
 #### `chailv-tax-deduction`
 
@@ -779,4 +781,4 @@ pnpm test:update:e2e
 - Why：官网网页搜索样例要和浏览器分开：开口问政策、回答带来源，不截某个官网操作过程。
 - How：空工作区口头发问；结束后截最后一条 `workbench-assistant-final-answer`，并记录用量。
 - Oracle：调用 `web_search`；回答含住宿或交通、税前扣除，以及来源 / 官网依据；截到 1 张回答图。
-- Not：不进日常 / 发版回归。不指定网址。不截搜索命中列表。不把这条做成浏览器操作样例。
+- Not：不指定网址。不截搜索命中列表。不把这条做成浏览器操作样例。

@@ -62,4 +62,38 @@ macOS 更新：https://download.guanzhangai.cn/updates/latest/latest-mac.yml
 
 官网下载页写死上述清单地址，`fetch` 后导航到 artifacts；不要 `fetch` 整包。
 
-模拟更新 E2E（`sidebar-app-update`、`database-version-update-required` 与 `pnpm test:update*`）见 `doc/test-plan/workbench-test.md`，不证明真实安装成功。Windows 真实覆盖升级（不进发布门禁）的操作说明见 [`release.md`](./release.md)。
+模拟更新 E2E（`sidebar-app-update`、`database-version-update-required` 与 `pnpm test:update*`）见 `doc/test-plan/workbench-test.md`，不证明真实安装成功。
+
+## 4. Windows 真实覆盖升级测试
+
+本测试验证已安装的 Windows 客户端真实覆盖升级与禁止降级，不属于日常 E2E 或发布回归门禁。它使用离线本地 feed，不接触生产更新通道。
+
+### 执行命令
+
+```bash
+pnpm test:update:real:win -- \
+  --source-installer <已发布旧版安装包.exe> \
+  --source-version 0.1.68 \
+  --expected-version 0.1.69 \
+  --downgrade-installer <含禁止降级逻辑的较低版本候选包.exe>
+```
+
+### 测试边界
+
+- 脚本为 `scripts/test/update-real-windows.mjs`，不在 `tests/case/**`，不进入 runner、`test:update` 或发布命令。
+- 使用离线本地 HTTP feed 托管新版安装包与 `latest.yml`，不触碰生产通道。
+- 使用独立安装目录和 user-data；结束后卸载测试版本并恢复缓存。
+- `--source-installer` 应复现不含本次修复的已发布旧包；`--expected-version` 使用当前代码构建的更高版本。
+
+### 通过条件
+
+- 静默覆盖升级成功，不出现 `Failed to uninstall old application files`。
+- 运行版本变为 `--expected-version`，升级前写入的 marker 保留。
+- 提供 `--downgrade-installer` 时，升级后安装较低版本必须被拒绝，版本和 marker 均保持不变。
+- 两个安装包都必须包含新版 NSIS 防降级保护，不能使用历史旧包替代。
+
+报告写入：
+
+```text
+tests/logs/settings/update/real-windows/<运行时间>/report.json
+```

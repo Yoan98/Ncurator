@@ -17,7 +17,7 @@
 ### 1.3 部署打包相关
 
 - `doc/deploy/release.md`：涉及桌面端发版操作（Tag、候选包、正式包回归、COS 发布）时阅读。
-- `doc/deploy/design.md`：涉及构建约束、对象存储布局、CDN/更新通道或本地发布目录约定时阅读。
+- `doc/deploy/design.md`：涉及构建约束、对象存储布局、CDN/更新通道、本地发布目录或 Windows 真实覆盖升级测试时阅读。
 - `doc/deploy/tencent-cdn-billing.md`：涉及腾讯云 COS/CDN 国内下载通道的资费、采购、封顶与余额策略时阅读。
 
 ### 1.4 测试相关

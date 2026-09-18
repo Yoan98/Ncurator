@@ -4,6 +4,7 @@ import { cp, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { spawn, spawnSync } from 'node:child_process'
+import { e2eExcludeGroupsForProfile } from './e2e-default-excludes.mjs'
 import { preparePackagedE2EApplication } from './package-app.mjs'
 
 const ROOT = process.cwd()
@@ -101,6 +102,7 @@ const parseArgs = (argv) => {
     caseIds: [],
     runs: 1,
     target: 'source',
+    executionProfile: '',
     bundles: [],
     results: [],
     freshKnowledgeCache: false,
@@ -149,6 +151,11 @@ const parseArgs = (argv) => {
     }
     if (current === '--target' && next) {
       parsed.target = next
+      index += 1
+      continue
+    }
+    if (current === '--execution-profile' && next) {
+      parsed.executionProfile = next
       index += 1
       continue
     }
@@ -339,7 +346,7 @@ const fileDeclaresCaseId = async (filePath, caseId) => {
   return source.includes(`caseId: '${caseId}'`) || source.includes(`caseId: "${caseId}"`)
 }
 
-const findTestFiles = async (input) => {
+const findTestFiles = async (input, { ignoreExcludedGroups = false } = {}) => {
   const scopeDir = resolveScopeDir(input)
   try {
     const scopeStat = await stat(scopeDir)
@@ -352,7 +359,7 @@ const findTestFiles = async (input) => {
   const candidates = allFiles
     .filter((filePath) => filePath.endsWith('.test.ts'))
     .filter((filePath) => {
-      if (input.excludeGroups.length === 0) return true
+      if (ignoreExcludedGroups || input.excludeGroups.length === 0) return true
       const segments = path.relative(TEST_CASES_ROOT, filePath).split(path.sep)
       return !input.excludeGroups.some((group) => segments.includes(group))
     })
@@ -375,6 +382,47 @@ const findTestFiles = async (input) => {
     .filter((item) => item.matches)
     .map((item) => item.filePath)
     .sort()
+}
+
+const validateExecutionProfileSelection = async (input) => {
+  if (input.executionProfile !== 'release' || input.type !== 'e2e') return
+
+  const excludedGroups = e2eExcludeGroupsForProfile('release')
+  const requestedGroups = [input.suite, ...input.groups].filter(Boolean)
+  const directlyRequestedExcludedGroup = requestedGroups.find((group) =>
+    excludedGroups.includes(group)
+  )
+  if (directlyRequestedExcludedGroup) {
+    throw new Error(
+      `release package E2E 不允许选择 ${directlyRequestedExcludedGroup} 分组；该分组只能通过独立测试命令执行`
+    )
+  }
+
+  if (input.caseIds.length === 0) return
+  const selectedFiles = await findTestFiles(
+    {
+      ...input,
+      excludeGroups: []
+    },
+    { ignoreExcludedGroups: true }
+  )
+  const excludedFiles = selectedFiles.filter((filePath) => {
+    const segments = path.relative(TEST_CASES_ROOT, filePath).split(path.sep)
+    return excludedGroups.some((group) => segments.includes(group))
+  })
+  if (excludedFiles.length === 0) return
+
+  const groups = [
+    ...new Set(
+      excludedFiles.flatMap((filePath) => {
+        const segments = path.relative(TEST_CASES_ROOT, filePath).split(path.sep)
+        return excludedGroups.filter((group) => segments.includes(group))
+      })
+    )
+  ]
+  throw new Error(
+    `release package E2E 不允许选择 ${groups.join('、')} 分组中的 case；该分组只能通过独立测试命令执行`
+  )
 }
 
 const appendNodeOption = (existing, option) => {
@@ -1014,6 +1062,7 @@ const USAGE = `NCurator 测试 runner
   --case <caseId>                        只执行指定 case，可重复传入
   --runs <n>                             重复执行次数，默认 1
   --target <source|package>              目标，默认 source
+  --execution-profile <default|release>  执行配置；release 仅供发版命令使用
   --bundle <release-bundle.json>         正式包 bundle，可重复传入
   --result <path>                        bundle 结果路径，可重复传入
   --fresh-knowledge-cache                删除知识库缓存强制重建
@@ -1062,6 +1111,33 @@ const main = async () => {
   if (!['source', 'package'].includes(args.target)) {
     throw new Error(`unsupported --target: ${args.target}`)
   }
+  if (!['', 'default', 'release'].includes(args.executionProfile)) {
+    throw new Error(`unsupported --execution-profile: ${args.executionProfile}`)
+  }
+  if (args.executionProfile === 'default' || args.executionProfile === 'release') {
+    if (args.type !== 'e2e') {
+      throw new Error(`--execution-profile ${args.executionProfile} 只能与 --type e2e 一起使用`)
+    }
+    if (args.executionProfile === 'release') {
+      if (args.target !== 'package') {
+        throw new Error('--execution-profile release 只能与 --target package 一起使用')
+      }
+      const releaseExcludedGroups = e2eExcludeGroupsForProfile('release')
+      const unexpectedExcludedGroups = args.excludeGroups.filter(
+        (group) => !releaseExcludedGroups.includes(group)
+      )
+      if (unexpectedExcludedGroups.length > 0) {
+        throw new Error(
+          `--execution-profile release 只允许排除：${releaseExcludedGroups.join('、')}`
+        )
+      }
+      args.excludeGroups = releaseExcludedGroups
+    } else {
+      args.excludeGroups = [
+        ...new Set([...e2eExcludeGroupsForProfile('default'), ...args.excludeGroups])
+      ]
+    }
+  }
   if (args.target === 'package' && args.type !== 'e2e') {
     throw new Error('--target package 只能与 --type e2e 一起使用')
   }
@@ -1077,6 +1153,7 @@ const main = async () => {
   if (args.freshKnowledgeCache && args.reuseKnowledgeCache) {
     throw new Error('--fresh-knowledge-cache 和 --reuse-knowledge-cache 不能同时使用')
   }
+  await validateExecutionProfileSelection(args)
 
   const architectureValidationCode = validateTestArchitecture()
   if (architectureValidationCode !== 0) process.exit(architectureValidationCode)
