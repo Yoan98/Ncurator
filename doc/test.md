@@ -143,7 +143,7 @@ runner 不负责：
   - `pnpm test:unit:ai`
 - 全量 E2E
   - `pnpm test:e2e:source`：构建当前源码并运行全部 E2E。
-  - `pnpm test:e2e:package -- --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行全部 E2E。安装落在本机 `NCurator-E2E` 目录；Windows 可能覆盖本机已安装的正式包。测完删除 E2E 安装目录及指向它的入口（细节见 `doc/release.md`）。
+  - `pnpm test:e2e:package -- --bundle <release-bundle.json>`：校验并安装已经构建的正式包，再对安装后的可执行程序运行全部 E2E。安装落在本机 `NCurator-E2E` 目录；Windows 可能覆盖本机已安装的正式包。测完删除 E2E 安装目录及指向它的入口（细节见 `doc/deploy/release.md`）。
 - Settings
   - `pnpm test:settings`
   - `pnpm test:settings:e2e`
@@ -175,7 +175,7 @@ runner 支持的过滤参数：
 - E2E 默认执行类型为 `normal`；真实 AI/服务调用声明 `execution: 'live'`，原生对话框、鼠标和桌面焦点用例声明 `execution: 'exclusive'`，唯一的向量冷启动用例声明 `execution: 'warmup'`。
 - `source` 是日常目标，直接复用内容缓存（多 case 时同样先跑 warm-up 预热共享缓存）；`package` 只接受既有 release bundle，安装后通过 warm-up 验证冷启动并运行同一批 E2E，不负责构建。
 - native binding、知识库缓存和临时 Electron app 由 runner 自动准备；普通回归不手工修改 `node_modules` 或复用正式包缓存。
-- 正式包测试、发布门禁、Tag 前 Unit/非 live AI 以及发布后日志清理只在 `doc/release.md` 定义，本文不重复发布流程。
+- 正式包测试、发布门禁、Tag 前 Unit/非 live AI（及发布准备必跑的 `human-prefix-cache-retain-live`）以及发布后日志清理只在 `doc/deploy/release.md` 定义，本文不重复发布流程。
 
 ### 4.3 读取与分析 raw logs
 

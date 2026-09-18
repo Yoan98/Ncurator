@@ -933,7 +933,16 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：跨轮续接与中断恢复共用同一套消息重建；如果续接时新诉求被前置而非追加到历史之后，就会破坏对话顺序并丢失上一轮交付上下文；历史前缀字节不变时 provider 前缀缓存应命中。
 - How：使用共享 workspace fixture（运行时为文件地址 + 伙伴），默认上下文窗口。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同伙伴改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组与跨 run 前缀缓存（公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，当前 0.6）。
 - Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 user.content 与最终交付，末尾是 Run 2 当前 User；该当前 User 无 `<memory>`、无 `<active_state>`；Run 2 通过任一 DOCX 读工具（`docx_read_outline` / `docx_search` / `docx_read_nodes`）使用文件 B；最终交付同时包含过拟合与反走样关键事实。Run 2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
-- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [Compact User] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。本 case 同时覆盖「长历史全程不丢」：同一伙伴连续发送始终带上还没压进摘要的原文。
+- Not：不验证 UI 伙伴持久化（由 Workbench E2E 覆盖）；不要求固定工具顺序；不要求 human 消息条数仅为 1（历史 build user 与 `read_image` 合成的多模态 HumanMessage 均允许出现）。不验证压缩后的 `[System] + [Compact User] + 原文 tail` 形态（由 `human-context-compaction-natural-trigger-live` 覆盖）。本 case 同时覆盖「长历史全程不丢」：同一伙伴连续发送始终带上还没压进摘要的原文。不作为发布准备唯一前缀缓存门禁（由 `human-prefix-cache-retain-live` 专职必跑）。
+
+##### `human-prefix-cache-retain-live`
+
+- 测试类型：`backend / live`
+- What：同一伙伴连续两轮极短纯对话，Run 2 首轮 brain 须明显复用 Run 1 末次前缀缓存。
+- Why：发布准备需要一条轻量、专职的前缀缓存回归；若消息重建或请求线前缀被改写，provider 缓存会丢失，拖高成本并放大续接不稳定。本 case 是 `release:start` Tag 前必跑项（不全量 live）。
+- How：无 workspace fixture、无选中文件。Run 1 / Run 2 均为自然语言短问（明确不要工具）。跨 run 缓存断言用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.6）；断言 data 附带 `requestWireDiff` 供排障，不另设阈值。
+- Oracle：Run 1 与 Run 2 均 `completed`；Run 2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
+- Not：不测 compaction / resume / skill / 文件读写 / 文案逐字；不替代 continuation / resume / skill / compaction 上的深度缓存覆盖。
 
 ##### `human-skill-eviction-relearn-loop-live`
 

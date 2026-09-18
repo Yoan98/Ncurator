@@ -11,9 +11,10 @@
 
 ### 1.2 项目整体相关
 
-- `doc/release.md`：涉及桌面端打包、发布仓库、自动更新或发版流程时阅读。
+- `doc/deploy/release.md`：涉及桌面端发版操作（Tag、候选包、正式包回归、COS 发布）时阅读。
+- `doc/deploy/design.md`：涉及构建约束、对象存储布局、CDN/更新通道或本地发布目录约定时阅读。
 - `doc/brand.md`：涉及产品显示名、下载文件名、缓存/技术标识分层或中英品牌口径时阅读。
-- `doc/tencent-cdn-billing.md`：涉及腾讯云 COS/CDN 国内下载通道的资费、采购、封顶与余额策略时阅读。
+- `doc/deploy/tencent-cdn-billing.md`：涉及腾讯云 COS/CDN 国内下载通道的资费、采购、封顶与余额策略时阅读。
 - `doc/ui-style.md`：涉及全前端视觉系统、主题或通用交互规范时阅读。
 
 ### 1.3 测试相关
@@ -41,9 +42,11 @@
 │   │   ├── human-harness.md          # 消息、投影、范围判定、compaction、resume
 │   │   └── tool-design.md            # 工具 schema 与结果投递
 │   ├── database.md                   # SQLite 与 LanceDB 存储说明
-│   ├── release.md                    # 打包、发布和更新
+│   ├── deploy/                       # 发布与部署
+│   │   ├── release.md                # 发版操作流程（AI 遵循）
+│   │   ├── design.md                 # 构建、对象存储与更新通道设计
+│   │   └── tencent-cdn-billing.md    # 腾讯云 COS/CDN 资费与采购定稿
 │   ├── brand.md                      # 产品命名与技术标识分层
-│   ├── tencent-cdn-billing.md        # 腾讯云 COS/CDN 资费与采购定稿
 │   ├── test.md                       # 测试体系和执行规则
 │   ├── ui-style.md                   # UI 风格和交互规范
 │   ├── prd/                          # 产品需求

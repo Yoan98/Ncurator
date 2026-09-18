@@ -101,12 +101,12 @@ pnpm test:update:e2e
 - `test:update:backend`：`unit/release`，验证主进程更新状态、发布配置、R2 元数据和 release fragment。
 - `test:update:e2e`：Workbench case `sidebar-app-update` 与 `database-version-update-required`（见下方 case 规格）。
 - 自动更新是允许在测试侧注入受控状态的 E2E 特例：可提供更新可用、下载进度、完成和失败快照，但不得修改生产代码来支持模拟；`database-version-update-required` 还允许在 Electron 启动前向隔离 `userData/app.sqlite` 写入未来 migration 记录以真实触发仅更新模式，只能准备数据库输入，不能伪造主进程启动状态或绕过版本检查。
-- 真实覆盖升级与禁止降级验证见 `doc/release.md`，不在本计划与 `test:update` 内。
+- 真实覆盖升级与禁止降级验证见 `doc/deploy/release.md`，不在本计划与 `test:update` 内。
 
 补充规则：
 
 - `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 回归测试入口。
-- 需要验证正式安装包时使用 `pnpm test:e2e:package -- --bundle <release-bundle.json>`；它会校验并安装已构建候选包，再对安装后的真实应用执行 E2E，不重新构建，也不属于普通开发回归。发布时按 `doc/release.md` 的影响评估选择范围，不带过滤参数时执行全部 E2E。
+- 需要验证正式安装包时使用 `pnpm test:e2e:package -- --bundle <release-bundle.json>`；它会校验并安装已构建候选包，再对安装后的真实应用执行 E2E，不重新构建，也不属于普通开发回归。发布时按 `doc/deploy/release.md` 的影响评估选择范围，不带过滤参数时执行全部 E2E。
 - `conversation / run / result / scheduled-task` 是稳定 suite，不因 PRD 小节增删而轻易重排。
 - suite 下的 `partner / composer / timeline / message / scope / process / blocker / browser / persistence / preview / apply` 是 group，只在同一 suite 内用于收敛相近 case。不存在 `search/` 目录。
 

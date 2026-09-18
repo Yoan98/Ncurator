@@ -1,4 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import process from 'node:process'
@@ -14,6 +15,13 @@ import { createReleaseStageDeadline } from './shared/stage-deadline.mjs'
 
 const execFileAsync = promisify(execFile)
 const ROOT = process.cwd()
+const LIVE_KEY_ENV_NAMES = [
+  'AI_LIVE_KEY_DASHSCOPE',
+  'AI_LIVE_KEY_DEEPSEEK',
+  'AI_LIVE_KEY_MIMO',
+  'AI_LIVE_KEY_ZHIPU'
+]
+const PREFIX_CACHE_LIVE_CASE = 'human-prefix-cache-retain-live'
 const args = process.argv.slice(2)
 const valueAfter = (name) => {
   const index = args.indexOf(name)
@@ -30,6 +38,50 @@ const stageDeadline = createReleaseStageDeadline('release preparation')
 if (!RELEASE_VERSION_PATTERN.test(version) || !['mac', 'windows'].includes(platform)) {
   throw new Error(
     'usage: node scripts/release/prepare.mjs --platform <mac|windows> --version <1.2.3> [--notes <text>]'
+  )
+}
+
+const loadRootEnv = () => {
+  for (const fileName of ['.env.local', '.env']) {
+    let raw = ''
+    try {
+      raw = readFileSync(path.resolve(ROOT, fileName), 'utf8')
+    } catch {
+      continue
+    }
+    for (const line of raw.split(/\r?\n/u)) {
+      const trimmed = line.trim()
+      if (!trimmed || trimmed.startsWith('#')) continue
+      const separator = trimmed.indexOf('=')
+      if (separator <= 0) continue
+      const key = trimmed.slice(0, separator).trim()
+      const value = trimmed.slice(separator + 1).trim()
+      if (!key || String(process.env[key] || '').trim()) continue
+      const unquoted =
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+          ? value.slice(1, -1)
+          : value
+      process.env[key] = unquoted
+    }
+  }
+}
+
+const assertReleaseLiveKeyConfigured = () => {
+  loadRootEnv()
+  const provider = String(process.env.AI_LIVE_PROVIDER || 'dashscope')
+    .trim()
+    .toLowerCase()
+  const preferredKey = `AI_LIVE_KEY_${provider.toUpperCase()}`
+  if (String(process.env[preferredKey] || '').trim()) return
+  const anyKey = LIVE_KEY_ENV_NAMES.find((name) => String(process.env[name] || '').trim())
+  if (anyKey) {
+    throw new Error(
+      `发布准备必跑 ${PREFIX_CACHE_LIVE_CASE}：已配置 ${anyKey}，但 AI_LIVE_PROVIDER=${provider} 缺少 ${preferredKey}`
+    )
+  }
+  throw new Error(
+    `发布准备必跑 ${PREFIX_CACHE_LIVE_CASE}：请在 .env 配置 ${preferredKey}（或设置 AI_LIVE_PROVIDER 并提供对应 AI_LIVE_KEY_*）`
   )
 }
 
@@ -128,6 +180,23 @@ await run(process.execPath, [
   'backend',
   '--exclude-group',
   'live'
+])
+
+process.env.NCURATOR_RELEASE_PREPARE = '1'
+assertReleaseLiveKeyConfigured()
+process.stdout.write(`[release] running required live gate: ${PREFIX_CACHE_LIVE_CASE}\n`)
+await run(process.execPath, [
+  path.join(ROOT, 'scripts', 'test', 'workflow.mjs'),
+  '--type',
+  'backend',
+  '--domain',
+  'ai',
+  '--suite',
+  'human',
+  '--group',
+  'live',
+  '--case',
+  PREFIX_CACHE_LIVE_CASE
 ])
 
 await run(process.execPath, [sqliteMigrationLockScript, '--promote-current'])

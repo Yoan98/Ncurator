@@ -44,7 +44,7 @@ Windows / macOS **公开**安装包名与对象键均为「馆长-…」，与�
 - 更新签名证书 CN：`Ncurator Update Signing`
 - COS 桶与 env 前缀：`ncurator-*`、`NCURATOR_*`
 
-发布流程细节见 `doc/release.md`。`scripts/release/prepare.mjs` 里默认的 git tag `-m`（如 `Ncurator mac-v…`）只给发布同学看，不是用户可见品牌，可不改。
+发布流程细节见 `doc/deploy/release.md`。`scripts/release/prepare.mjs` 里默认的 git tag `-m`（如 `Ncurator mac-v…`）只给发布同学看，不是用户可见品牌，可不改。
 
 ## 不做
 
