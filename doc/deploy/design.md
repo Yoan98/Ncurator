@@ -1,7 +1,5 @@
 # 桌面端发布设计
 
-本文描述构建约束、对象存储布局、CDN/公开通道与本地目录约定。发版操作步骤见 [`release.md`](./release.md)；国内 CDN 资费与采购见 [`tencent-cdn-billing.md`](./tencent-cdn-billing.md)。
-
 ## 1. 平台与构建
 
 ### Windows

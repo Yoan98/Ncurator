@@ -1,7 +1,5 @@
 # 腾讯云国内下载通道：资费与采购定稿
 
-本文是国内发布（COS + CDN + `download.guanzhangai.cn`）相关的计费与采购结论，供后续查阅。发版操作见 [`release.md`](./release.md)；对象存储与 CDN 缓存设计见 [`design.md`](./design.md)。
-
 定稿日期：2026-09（与 COS/CDN 接入同期）。
 
 ## 1. 结论先看

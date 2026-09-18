@@ -1,7 +1,5 @@
 # 桌面端发布流程
 
-本文供发版操作遵循：Windows / macOS Tag、候选包、正式包回归与 COS 发布。构建约束、对象存储布局、CDN/更新通道设计见 [`design.md`](./design.md)；国内 CDN 资费见 [`tencent-cdn-billing.md`](./tencent-cdn-billing.md)。
-
 当前正式发布只发腾讯云 COS（一次即停）；不要在国内发布后再把同一 Tag 同步到 Cloudflare R2。R2 仅预留给未来海外版，须显式设置 `RELEASE_STORAGE_TARGET=r2`。当前只发布 Windows x64 和 macOS arm64；Windows 使用 `windows-vX.Y.Z`，macOS 使用 `mac-vX.Y.Z`，两平台独立递增。
 
 ## 1. 发布流程

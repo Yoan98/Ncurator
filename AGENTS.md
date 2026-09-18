@@ -11,13 +11,16 @@
 
 ### 1.2 项目整体相关
 
-- `doc/deploy/release.md`：涉及桌面端发版操作（Tag、候选包、正式包回归、COS 发布）时阅读。
-- `doc/deploy/design.md`：涉及构建约束、对象存储布局、CDN/更新通道或本地发布目录约定时阅读。
 - `doc/brand.md`：涉及产品显示名、下载文件名、缓存/技术标识分层或中英品牌口径时阅读。
-- `doc/deploy/tencent-cdn-billing.md`：涉及腾讯云 COS/CDN 国内下载通道的资费、采购、封顶与余额策略时阅读。
 - `doc/ui-style.md`：涉及全前端视觉系统、主题或通用交互规范时阅读。
 
-### 1.3 测试相关
+### 1.3 部署打包相关
+
+- `doc/deploy/release.md`：涉及桌面端发版操作（Tag、候选包、正式包回归、COS 发布）时阅读。
+- `doc/deploy/design.md`：涉及构建约束、对象存储布局、CDN/更新通道或本地发布目录约定时阅读。
+- `doc/deploy/tencent-cdn-billing.md`：涉及腾讯云 COS/CDN 国内下载通道的资费、采购、封顶与余额策略时阅读。
+
+### 1.4 测试相关
 
 - `doc/test-plan/ai-test.md`：涉及 AI 回归测试范围、live case 设计或 suite 覆盖维护时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
@@ -25,7 +28,7 @@
 - `doc/test.md`：涉及测试体系、UI E2E 回归规则、runner 或回归测试流程时阅读。
 - `doc/tidy.md`：需要按周期整理文档、PRD、测试计划、测试用例或清理代码整洁度（死代码、兼容残留、无用代码、简洁性）时，先按其中流程审计并等待决策。
 
-### 1.4 prd产品文档相关
+### 1.5 prd产品文档相关
 
 - `doc/prd/workbench.md`：涉及 Workbench 产品需求、发送前置条件、消息流/过程层交互、定时任务或 composer 偏好验收标准时阅读。
 - `doc/prd/settings.md`：涉及 Settings 产品需求、文件地址森林、全局网页资料、索引/模型/通知或验收标准时阅读。
