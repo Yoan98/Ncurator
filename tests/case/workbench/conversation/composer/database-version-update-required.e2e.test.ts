@@ -1,11 +1,14 @@
 import path from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { describe, it } from 'vitest'
+import { CURRENT_SCHEMA_VERSION } from '../../../../../src/main/services/storage/sqlite/SqliteCore'
 import { OFFICIAL_DOWNLOAD_PAGE_URL } from '../../../../../src/shared/constants'
 import { workbenchSelectors as rendererSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import { SETTINGS_LONG_E2E_TIMEOUT_MS } from '../../../../harness/e2e/settings'
 import { navigateToWorkbench } from '../../../../harness/e2e/workbench'
+
+const FUTURE_SCHEMA_VERSION = CURRENT_SCHEMA_VERSION + 1
 
 const setUpdateSnapshot = async (
   page: import('playwright').Page,
@@ -25,7 +28,7 @@ const markDatabaseAsNewerThanApplication = async (userDataDir: string): Promise<
   try {
     database.exec(`
       INSERT INTO schema_migrations (version, name, applied_at)
-      VALUES (11, 'future_schema', ${String(Date.now())});
+      VALUES (${String(FUTURE_SCHEMA_VERSION)}, 'future_schema', ${String(Date.now())});
     `)
   } finally {
     database.close()
@@ -134,8 +137,12 @@ describe('database version update required e2e', () => {
             title: (await recoveryPage.getByRole('heading', { level: 1 }).textContent()) || '',
             bodyText: (await recoveryPage.textContent()) || '',
             versionsVisible:
-              (await recoveryPage.getByText('v11', { exact: true }).isVisible()) &&
-              (await recoveryPage.getByText('v10', { exact: true }).isVisible()),
+              (await recoveryPage
+                .getByText(`v${String(FUTURE_SCHEMA_VERSION)}`, { exact: true })
+                .isVisible()) &&
+              (await recoveryPage
+                .getByText(`v${String(CURRENT_SCHEMA_VERSION)}`, { exact: true })
+                .isVisible()),
             workbenchUnavailable: (await page.getByTestId(rendererSelectors.page).count()) === 0,
             quitVisible: await page
               .getByTestId(rendererSelectors.updateRequiredQuitButton)
