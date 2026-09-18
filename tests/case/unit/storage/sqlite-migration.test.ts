@@ -301,16 +301,19 @@ describe('SQLite migration contract', () => {
 
   it('keeps the published migration lock valid and rejects a changed locked migration', async () => {
     const script = path.resolve('scripts/release/shared/sqlite-migration-lock.mjs')
+    const lockPath = path.resolve(
+      'src/main/services/storage/sqlite/migrations/released-migrations.json'
+    )
+    const lock = JSON.parse(await fs.readFile(lockPath, 'utf8')) as {
+      publishedThrough: number
+      migrations: Array<{ sha256: string }>
+    }
     const { stdout } = await execFileAsync(process.execPath, [script], { cwd: process.cwd() })
-    expect(stdout).toContain('verified SQLite migrations through published version 10')
+    expect(stdout).toContain(
+      `verified SQLite migrations through published version ${lock.publishedThrough}`
+    )
 
     const tamperedLockPath = await createDatabasePath()
-    const lock = JSON.parse(
-      await fs.readFile(
-        path.resolve('src/main/services/storage/sqlite/migrations/released-migrations.json'),
-        'utf8'
-      )
-    ) as { migrations: Array<{ sha256: string }> }
     lock.migrations[0].sha256 = '0'.repeat(64)
     await fs.writeFile(tamperedLockPath, `${JSON.stringify(lock)}\n`, 'utf8')
 
