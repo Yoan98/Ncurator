@@ -36,7 +36,7 @@ flowchart TD
 1. 校验 `released-migrations.json`（已锁 migration 的 version / name / 文件名 / SHA-256）
 2. 并行 `typecheck:node` 与 `typecheck:web`，并 ensure sidecar
 3. 以 6 worker 跑全部 Unit（含正式 v9→当前 schema）、update backend 与除 `live` 外的 AI backend
-4. **必跑** live 门禁 `human-prefix-cache-retain-live`（跨 run 前缀缓存；无 live key 直接失败，不 skip；不全量 live）
+4. **必跑** live 门禁 `human-prefix-cache-retain-live`（同伙伴三轮短续接 + 文本读工具历史；相邻跨 run 前缀缓存与 `toolsHash`；无 live key 直接失败，不 skip；不全量 live）
 5. 通过后把当前连续 migration 纳入发布锁、与 `package.json` 版本号一并提交，创建 annotated Tag 并原子推送 `main` 与 Tag
 
 第一个平台执行 `release:start` 时锁定本次新增 migration；另一平台随后使用同一份已锁源码。已锁 migration 不能合并、重排或修改，只能新增更高版本。

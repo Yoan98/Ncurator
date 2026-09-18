@@ -938,11 +938,11 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-prefix-cache-retain-live`
 
 - 测试类型：`backend / live`
-- What：同一伙伴连续两轮极短纯对话，Run 2 首轮 brain 须明显复用 Run 1 末次前缀缓存。
-- Why：发布准备需要一条轻量、专职的前缀缓存回归；若消息重建或请求线前缀被改写，provider 缓存会丢失，拖高成本并放大续接不稳定。本 case 是 `release:start` Tag 前必跑项（不全量 live）。
-- How：无 workspace fixture、无选中文件。Run 1 / Run 2 均为自然语言短问（明确不要工具）。跨 run 缓存断言用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.6）；断言 data 附带 `requestWireDiff` 供排障，不另设阈值。
-- Oracle：Run 1 与 Run 2 均 `completed`；Run 2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
-- Not：不测 compaction / resume / skill / 文件读写 / 文案逐字；不替代 continuation / resume / skill / compaction 上的深度缓存覆盖。
+- What：同一伙伴连续三轮短任务（Run1 读极短笔记抽出事实，Run2/Run3 同选中文件追问），相邻跨 run 首轮 brain 均须明显复用上一 run 末次前缀缓存，且 `toolsHash` 一致。
+- Why：发布准备需要一条轻量、专职的前缀缓存回归；纯闲聊测不到 tool 历史投影与 tools 前缀稳态。若消息重建或工具表漂移导致缓存丢失，会拖高成本并放大续接不稳定。本 case 是 `release:start` Tag 前必跑项（不全量 live）。
+- How：case 内写入 `cache-retain-note.txt`，三轮共用同一选中文件与伙伴。Run1 要求读笔记说出项目代号（硬断言文本读工具）；Run2 问发布窗口；Run3 问负责人。两段跨 run 缓存用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.6）；硬断言相邻段 `toolsHash` 相等；断言 data 附带 `requestWireDiff` 供排障。
+- Oracle：三轮均 `completed`；Run1 有 `text_file_read` / `text_file_search` 证据；Run2 首次 brain 相对 Run1 末次、以及 Run3 首次 brain 相对 Run2 末次，均满足 `cachedInputTokens / 上一末次 inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，且两段 `toolsHash` 分别一致。
+- Not：不测换选中文件、compaction、resume、改文件、文案逐字、学新 skill 闭环；不替代 continuation / resume / skill / compaction 上的深度覆盖；不预置 skill（抖再考虑）。
 
 ##### `human-skill-eviction-relearn-loop-live`
 
