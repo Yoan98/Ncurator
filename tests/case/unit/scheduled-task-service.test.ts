@@ -5,7 +5,12 @@ import {
   boundPartnerName,
   computeNextRunAt
 } from '../../../src/main/services/scheduler/ScheduledTaskService'
-import type { ChatSubmitResponse, Partner, PartnerUiStateV1, ScheduledTask } from '../../../src/shared/types'
+import type {
+  ChatSubmitResponse,
+  Partner,
+  PartnerUiStateV1,
+  ScheduledTask
+} from '../../../src/shared/types'
 
 const localAt = (
   year: number,
@@ -103,7 +108,7 @@ const createService = (): ServiceHarness => {
       partners.set(partner.id, partner)
     })
   }
-  const savePartnerUiState = vi.fn(async (_partnerId: string, _state: PartnerUiStateV1) => undefined)
+  const savePartnerUiState = vi.fn(async () => undefined)
   const hasActivePartnerRun = vi.fn(() => false)
   const submitTask = vi.fn(async (): Promise<ChatSubmitResponse> => ({ success: true }))
   const emitSessionListRefresh = vi.fn()
@@ -419,44 +424,44 @@ describe('ScheduledTaskService', () => {
 describe('computeNextRunAt', () => {
   it('returns today slot for a daily task when the time is still ahead', () => {
     const after = localAt(2026, 7, 20, 8, 0)
-    expect(computeNextRunAt({ scheduleType: 'daily', timeOfDay: '09:00', weekday: null }, after)).toBe(
-      localAt(2026, 7, 20, 9, 0)
-    )
+    expect(
+      computeNextRunAt({ scheduleType: 'daily', timeOfDay: '09:00', weekday: null }, after)
+    ).toBe(localAt(2026, 7, 20, 9, 0))
   })
 
   it('rolls to tomorrow for a daily task when the time already passed', () => {
     const after = localAt(2026, 7, 20, 8, 0)
-    expect(computeNextRunAt({ scheduleType: 'daily', timeOfDay: '07:00', weekday: null }, after)).toBe(
-      localAt(2026, 7, 21, 7, 0)
-    )
+    expect(
+      computeNextRunAt({ scheduleType: 'daily', timeOfDay: '07:00', weekday: null }, after)
+    ).toBe(localAt(2026, 7, 21, 7, 0))
   })
 
   it('returns later today for a weekly task on the same weekday', () => {
     const after = localAt(2026, 7, 20, 8, 0)
-    expect(computeNextRunAt({ scheduleType: 'weekly', timeOfDay: '09:00', weekday: 4 }, after)).toBe(
-      localAt(2026, 7, 20, 9, 0)
-    )
+    expect(
+      computeNextRunAt({ scheduleType: 'weekly', timeOfDay: '09:00', weekday: 4 }, after)
+    ).toBe(localAt(2026, 7, 20, 9, 0))
   })
 
   it('rolls to next week for a weekly task whose time already passed', () => {
     const after = localAt(2026, 7, 20, 8, 0)
-    expect(computeNextRunAt({ scheduleType: 'weekly', timeOfDay: '07:00', weekday: 4 }, after)).toBe(
-      localAt(2026, 7, 27, 7, 0)
-    )
+    expect(
+      computeNextRunAt({ scheduleType: 'weekly', timeOfDay: '07:00', weekday: 4 }, after)
+    ).toBe(localAt(2026, 7, 27, 7, 0))
   })
 
   it('returns a later weekday within the same week', () => {
     const after = localAt(2026, 7, 20, 8, 0)
-    expect(computeNextRunAt({ scheduleType: 'weekly', timeOfDay: '09:00', weekday: 5 }, after)).toBe(
-      localAt(2026, 7, 21, 9, 0)
-    )
+    expect(
+      computeNextRunAt({ scheduleType: 'weekly', timeOfDay: '09:00', weekday: 5 }, after)
+    ).toBe(localAt(2026, 7, 21, 9, 0))
   })
 
   it('wraps to the following week for an earlier weekday', () => {
     const after = localAt(2026, 7, 20, 8, 0)
-    expect(computeNextRunAt({ scheduleType: 'weekly', timeOfDay: '09:00', weekday: 2 }, after)).toBe(
-      localAt(2026, 7, 25, 9, 0)
-    )
+    expect(
+      computeNextRunAt({ scheduleType: 'weekly', timeOfDay: '09:00', weekday: 2 }, after)
+    ).toBe(localAt(2026, 7, 25, 9, 0))
   })
 
   it('returns null for an invalid time of day', () => {

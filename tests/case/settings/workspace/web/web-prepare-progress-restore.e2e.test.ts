@@ -117,10 +117,10 @@ describe('settings workspace web e2e', () => {
             }
           })
 
-          await page.waitForFunction(async (selectedWorkspaceId) => {
+          await page.waitForFunction(async () => {
             const response = await window.api.webSourceList({})
             return response.items.every((item) => item.index_status === 'indexed')
-          }, workspaceId)
+          })
 
           return {
             restoredProgressVisible,

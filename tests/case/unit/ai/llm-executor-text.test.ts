@@ -269,12 +269,8 @@ describe('ai unit llm executor text path', () => {
         expect.objectContaining({ kind: 'retry', attempt: 1, maxAttempts: 5 }),
         expect.objectContaining({ kind: 'retry', attempt: 2, maxAttempts: 5 })
       ])
-      expect(
-        events.some((event) => event.type === 'assistant_process_group_completed')
-      ).toBe(true)
-      expect(
-        events.some((event) => event.type === 'assistant_process_group_failed')
-      ).toBe(false)
+      expect(events.some((event) => event.type === 'assistant_process_group_completed')).toBe(true)
+      expect(events.some((event) => event.type === 'assistant_process_group_failed')).toBe(false)
     } finally {
       vi.useRealTimers()
     }
@@ -518,12 +514,14 @@ describe('ai unit llm executor text path', () => {
         stream: async () => ({
           async *[Symbol.asyncIterator]() {
             await new Promise(() => undefined)
+            yield undefined
           }
         })
       }),
       stream: async () => ({
         async *[Symbol.asyncIterator]() {
           await new Promise(() => undefined)
+          yield undefined
         }
       }),
       invoke: async () => {
@@ -576,6 +574,7 @@ describe('ai unit llm executor text path', () => {
             }
             signal.addEventListener('abort', () => resolve(), { once: true })
           })
+          yield undefined
         }
       }),
       invoke: async () => ({ content: 'unreachable' })

@@ -52,7 +52,6 @@ const delayReadyHtml = `<!doctype html>
 
 const isErrorPage = (snapshot: EmbeddedSnapshot | null, code?: string): boolean => {
   if (!snapshot) return false
-  const text = `${snapshot.title} ${snapshot.bodyText}`
   if (!snapshot.title.includes('无法访问此站点')) return false
   if (!snapshot.bodyText.includes('无法加载')) return false
   if (!snapshot.bodyText.includes('重新加载')) return false
@@ -115,7 +114,9 @@ describe('workbench browser navigate e2e', () => {
 
           const browserPanel = getWorkbenchLocator(page, workbenchSelectors.browserPanel)
           const addressInput = browserPanel.getByRole('textbox', { name: /浏览器地址/u })
-          const progress = browserPanel.locator(`[data-testid="${workbenchSelectors.browserProgress}"]`)
+          const progress = browserPanel.locator(
+            `[data-testid="${workbenchSelectors.browserProgress}"]`
+          )
 
           const readTabState = async () => {
             return await page.evaluate(async (tabId) => {
@@ -188,10 +189,16 @@ describe('workbench browser navigate e2e', () => {
           }
 
           const waitForSnapshot = async (
-            predicate: (state: Awaited<ReturnType<typeof readTabState>>, snapshot: EmbeddedSnapshot | null) => boolean,
+            predicate: (
+              state: Awaited<ReturnType<typeof readTabState>>,
+              snapshot: EmbeddedSnapshot | null
+            ) => boolean,
             timeoutMs: number,
             label: string
-          ): Promise<{ state: Awaited<ReturnType<typeof readTabState>>; snapshot: EmbeddedSnapshot | null }> => {
+          ): Promise<{
+            state: Awaited<ReturnType<typeof readTabState>>
+            snapshot: EmbeddedSnapshot | null
+          }> => {
             const deadline = Date.now() + timeoutMs
             let state = await readTabState()
             let snapshot = await inspectEmbedded()
@@ -234,7 +241,7 @@ describe('workbench browser navigate e2e', () => {
               Boolean(state?.url.startsWith('http://')) &&
               Boolean(
                 snapshot &&
-                  (snapshot.title.includes(PAGE_TOKEN) || snapshot.bodyText.includes(PAGE_TOKEN))
+                (snapshot.title.includes(PAGE_TOKEN) || snapshot.bodyText.includes(PAGE_TOKEN))
               ),
             20_000,
             'explicit http should open the local page token'
@@ -246,19 +253,18 @@ describe('workbench browser navigate e2e', () => {
           })
 
           const ownerId = httpReady.state?.ownerId
-          const runBrowser = async (payload: Record<string, unknown>): Promise<BrowserUseRunResult> => {
-            return (await runtime.electronApp.evaluate(
-              async (_electron, input) => {
-                const run = (
-                  globalThis as typeof globalThis & {
-                    __NCURATOR_E2E_BROWSER_USE_RUN__?: (value: unknown) => Promise<unknown>
-                  }
-                ).__NCURATOR_E2E_BROWSER_USE_RUN__
-                if (!run) throw new Error('e2e browser run hook missing')
-                return await run(input)
-              },
-              payload
-            )) as BrowserUseRunResult
+          const runBrowser = async (
+            payload: Record<string, unknown>
+          ): Promise<BrowserUseRunResult> => {
+            return (await runtime.electronApp.evaluate(async (_electron, input) => {
+              const run = (
+                globalThis as typeof globalThis & {
+                  __NCURATOR_E2E_BROWSER_USE_RUN__?: (value: unknown) => Promise<unknown>
+                }
+              ).__NCURATOR_E2E_BROWSER_USE_RUN__
+              if (!run) throw new Error('e2e browser run hook missing')
+              return await run(input)
+            }, payload)) as BrowserUseRunResult
           }
           const runNavigate = async (url: string, tabId: string): Promise<BrowserUseRunResult> =>
             runBrowser({
@@ -368,7 +374,8 @@ describe('workbench browser navigate e2e', () => {
               /ERR_[A-Z0-9_]+/u.test(result.errorText),
             {
               name: 'browser-navigate-error-page',
-              message: '裸主机不降级、明确 http 可打开、进度线、按需 CDP 截图，以及 https 失败展示 Chromium 错误码',
+              message:
+                '裸主机不降级、明确 http 可打开、进度线、按需 CDP 截图，以及 https 失败展示 Chromium 错误码',
               data: result
             }
           )

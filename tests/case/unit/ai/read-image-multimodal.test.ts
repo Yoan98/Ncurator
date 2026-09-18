@@ -65,7 +65,6 @@ describe('ai unit read_image multimodal projection', () => {
   })
 
   it('keeps an HTTP image as its original address instead of copying it into runtime', async () => {
-    const workspace = await fs.mkdtemp(path.join(os.tmpdir(), 'ncurator-read-image-remote-'))
     const server = createServer((_request, response) => {
       response.writeHead(200, {
         'content-type': 'image/png',

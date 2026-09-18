@@ -12,12 +12,12 @@ import {
   waitForWebIndexJobIdle
 } from '../../../../harness/e2e/settings'
 
-const waitForPreparedWebSources = async (page: Page, workspaceId: string): Promise<void> => {
+const waitForPreparedWebSources = async (page: Page): Promise<void> => {
   const deadline = Date.now() + SETTINGS_WEB_E2E_TIMEOUT_MS
   for (;;) {
-    const response = await page.evaluate(async (selectedWorkspaceId) => {
+    const response = await page.evaluate(async () => {
       return await window.api.webSourceList({})
-    }, workspaceId)
+    })
     const prepared =
       response.summary.failed_count === 1 &&
       response.items.some((item) => item.index_status === 'indexed') &&
@@ -105,9 +105,9 @@ describe('settings workspace web e2e', () => {
                 (await page.getByRole('button', { name: '检查更新', exact: true }).isDisabled()) &&
                 (await page.getByRole('button', { name: '更新索引', exact: true }).isDisabled())
               await waitForWebIndexJobIdle(page, workspaceId)
-              const scanResult = await page.evaluate(async (selectedWorkspaceId) => {
+              const scanResult = await page.evaluate(async () => {
                 return await window.api.webSourceList({})
-              }, workspaceId)
+              })
               scanSummary = scanResult.summary
               scanStatuses = scanResult.items.map((item) => item.index_status)
             }
@@ -131,14 +131,14 @@ describe('settings workspace web e2e', () => {
               buttonsDisabled =
                 (await page.getByRole('button', { name: '检查更新', exact: true }).isDisabled()) &&
                 (await page.getByRole('button', { name: '更新索引', exact: true }).isDisabled())
-              await waitForPreparedWebSources(page, workspaceId)
+              await waitForPreparedWebSources(page)
               await waitForWebIndexJobIdle(page, workspaceId)
             }
           })
 
-          const webList = await page.evaluate(async (selectedWorkspaceId) => {
+          const webList = await page.evaluate(async () => {
             return await window.api.webSourceList({})
-          }, workspaceId)
+          })
           const uiSummary = await getWebSourceIndexCounts(page)
 
           return {

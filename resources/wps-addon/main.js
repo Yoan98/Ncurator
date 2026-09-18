@@ -12,8 +12,7 @@
   var adapter = null
   // 同一组件可能同时活着多个实例（上一轮没退干净、或用户自己开了第二个窗口），
   // 只有页面级唯一 id 才能让馆长把 close / open 投给真正持有该文档的那个实例。
-  var clientId =
-    'c' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
+  var clientId = 'c' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10)
   // 组件关掉最后一个文档就会退出进程，close 前用它撑住，open 回来后再关掉。
   var placeholderItem = null
 
@@ -53,14 +52,16 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: body
-        }).catch(function () {})
+        }).catch(function () {
+          return undefined
+        })
         return
       }
       var asyncXhr = new XMLHttpRequest()
       asyncXhr.open('POST', server + '/report', true)
       asyncXhr.setRequestHeader('Content-Type', 'application/json')
       asyncXhr.send(body)
-    } catch (error) {
+    } catch {
       // 上报失败时静默，由重连补偿。
     }
   }
@@ -71,7 +72,7 @@
       var hash = String((window.location && window.location.hash) || '')
       var fromLocation = /(?:[?&#]host=)(wps|et|wpp)\b/.exec(search + hash)
       if (fromLocation) return fromLocation[1]
-    } catch (error) {
+    } catch {
       // location 不可用时改读 Application.Name。
     }
     try {
@@ -79,7 +80,7 @@
       if (/spreadsheet|excel|\bet\b|表格|workbook/.test(name)) return 'et'
       if (/presentation|\bwpp\b|powerpoint|\bppt\b|演示/.test(name)) return 'wpp'
       if (/writer|\bword\b|文字/.test(name)) return 'wps'
-    } catch (error) {
+    } catch {
       // Name 读失败时宁可不刷新，也不去碰其他组件的 COM 对象。
     }
     return ''
@@ -88,14 +89,14 @@
   function markSavedThenClose(item, withFalse) {
     try {
       item.Saved = true
-    } catch (error) {
+    } catch {
       // 部分组件不接受 Saved 赋值。
     }
     if (withFalse) {
       try {
         item.Close(false)
         return
-      } catch (error) {
+      } catch {
         // 回落到无参 Close。
       }
     }
@@ -118,7 +119,7 @@
         var view = {}
         try {
           view.slideIndex = app.ActiveWindow.View.Slide.SlideIndex
-        } catch (error) {
+        } catch {
           view.slideIndex = null
         }
         return view
@@ -139,13 +140,13 @@
               try {
                 var text = String(shapes.Item(shapeIndex).TextFrame.TextRange.Text || '').trim()
                 if (text) parts.push(text)
-              } catch (error) {
+              } catch {
                 // 非文本形状忽略。
               }
             }
           }
           return parts.join('\n').slice(0, EXCERPT_MAX_CHARS)
-        } catch (error) {
+        } catch {
           return ''
         }
       }
@@ -214,18 +215,18 @@
                 }
                 parts.push(text)
                 used += text.length + 1
-              } catch (error) {
+              } catch {
                 // 空单元格忽略。
               }
             }
           }
           if (parts.length) return parts.join('\n')
-        } catch (error) {
+        } catch {
           // 回落到 A1。
         }
         try {
           return String(app.ActiveSheet.Cells.Item(1, 1).Text || '').slice(0, EXCERPT_MAX_CHARS)
-        } catch (inner) {
+        } catch {
           return ''
         }
       }
@@ -248,12 +249,12 @@
         var view = {}
         try {
           view.selectionStart = app.Selection ? app.Selection.Start : null
-        } catch (error) {
+        } catch {
           view.selectionStart = null
         }
         try {
           view.verticalPercentScrolled = app.ActiveWindow.ActivePane.VerticalPercentScrolled
-        } catch (error) {
+        } catch {
           view.verticalPercentScrolled = null
         }
         return view
@@ -281,7 +282,7 @@
       excerpt: function () {
         try {
           return String(app.ActiveDocument.Content.Text || '').slice(0, EXCERPT_MAX_CHARS)
-        } catch (error) {
+        } catch {
           return ''
         }
       }
@@ -291,7 +292,7 @@
   function tryCollection(app, name) {
     try {
       return app[name] != null
-    } catch (error) {
+    } catch {
       return false
     }
   }
@@ -369,7 +370,7 @@
   function addPlaceholder() {
     try {
       return adapter.collection().Add()
-    } catch (error) {
+    } catch {
       return null
     }
   }
@@ -380,7 +381,7 @@
     placeholderItem = null
     try {
       markSavedThenClose(item, true)
-    } catch (error) {
+    } catch {
       // 占位文档关不掉只是多一个空窗口，不影响正文已经换成新稿。
     }
   }
@@ -400,7 +401,7 @@
       var remaining = 0
       try {
         remaining = Math.max(0, adapter.collection().Count - 1)
-      } catch (error) {
+      } catch {
         remaining = 0
       }
       return { ok: true, fullName: fullName, view: view, remaining: remaining, item: item }
@@ -414,7 +415,8 @@
     var startedAt = Date.now()
     try {
       if (!targetPath) return { ok: false, reason: 'never saved, no path' }
-      if (!isOwnPath(targetPath)) return { ok: false, reason: 'not open here', targetPath: targetPath }
+      if (!isOwnPath(targetPath))
+        return { ok: false, reason: 'not open here', targetPath: targetPath }
       var viewKey = normalizePath(targetPath)
       var closedHere = Object.prototype.hasOwnProperty.call(pendingViews, viewKey)
       var view = closedHere ? pendingViews[viewKey] : null
@@ -437,7 +439,12 @@
       } else if (!closedHere) {
         // 本实例既没 close 过、当前也没开着，不能抢开别人的文档。
         suppressEvents = false
-        return { ok: false, reason: 'not open here', targetPath: targetPath, elapsedMs: Date.now() - startedAt }
+        return {
+          ok: false,
+          reason: 'not open here',
+          targetPath: targetPath,
+          elapsedMs: Date.now() - startedAt
+        }
       }
       adapter.open(targetPath)
       var restored = view ? adapter.restoreView(view) : {}
@@ -584,11 +591,11 @@
       source.onmessage = function (event) {
         try {
           handlePayload(JSON.parse(event.data))
-        } catch (error) {
+        } catch {
           report('sse-bad-payload', { raw: String(event.data) })
         }
       }
-    } catch (error) {
+    } catch {
       scheduleReconnect()
     }
   }
@@ -628,7 +635,7 @@
         done(false)
       }
       xhr.send()
-    } catch (error) {
+    } catch {
       done(false)
     }
   }
@@ -646,7 +653,7 @@
               done(Number(parsed.port))
               return
             }
-          } catch (error) {
+          } catch {
             // 回落到默认端口。
           }
         }
@@ -659,7 +666,7 @@
         done(DEFAULT_PORT)
       }
       xhr.send()
-    } catch (error) {
+    } catch {
       done(DEFAULT_PORT)
     }
   }
@@ -671,7 +678,7 @@
       var host = loc.hostname
       var port = Number(loc.port || (loc.protocol === 'https:' ? 443 : 80))
       if ((host === '127.0.0.1' || host === 'localhost') && port > 0) return port
-    } catch (error) {
+    } catch {
       // 非 HTTP 加载时改读 port.json。
     }
     return 0
@@ -712,7 +719,10 @@
     if (!app || !app.ApiEvent) return
     for (var index = 0; index < API_EVENTS.length; index += 1) {
       try {
-        app.ApiEvent.AddApiEventListener(API_EVENTS[index], 'ribbon.OnApiEvent_' + API_EVENTS[index])
+        app.ApiEvent.AddApiEventListener(
+          API_EVENTS[index],
+          'ribbon.OnApiEvent_' + API_EVENTS[index]
+        )
       } catch (error) {
         report('apievent-register-failed', {
           name: API_EVENTS[index],

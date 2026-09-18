@@ -1,5 +1,4 @@
 import { readFile } from 'node:fs/promises'
-import path from 'node:path'
 import process from 'node:process'
 import { assertReleaseFragment, resolveReleaseAssetPath } from './fragment-contract.mjs'
 import { fetchWithRetry } from '../shared/http.mjs'

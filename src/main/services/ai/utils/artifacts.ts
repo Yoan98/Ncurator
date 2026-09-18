@@ -42,7 +42,10 @@ export const mergeArtifactRefs = (
   return Array.from(merged.values())
 }
 
-export const extractArtifactRefsFromToolResult = (_result: ToolCallResult): AiArtifactRef[] => []
+export const extractArtifactRefsFromToolResult = (result: ToolCallResult): AiArtifactRef[] => {
+  void result
+  return []
+}
 
 export const extractArtifactRefsFromToolResults = (
   results: readonly ToolCallResult[]

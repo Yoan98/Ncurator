@@ -21,14 +21,10 @@ import {
   settingsSelectors,
   workbenchSelectors
 } from '../../../src/renderer/src/testing/selectors'
-import {
-  resolveLiveLlmTarget,
-  type LiveLlmTarget
-} from '../core/liveProviders'
+import { resolveLiveLlmTarget, type LiveLlmTarget } from '../core/liveProviders'
 import {
   SETTINGS_E2E_TIMEOUT_MS,
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
-  bindWorkspaceRootDirectly,
   createPresetModelConfigThroughSettingsUi,
   getWorkspaceIndexCounts,
   getSettingsLocator,
@@ -886,22 +882,6 @@ const waitForButtonEnabled = async (locator: Locator): Promise<void> => {
     )
 }
 
-const readWorkspaceIdFromSettingsCard = async (
-  page: Page,
-  workspaceName: string
-): Promise<string> => {
-  const card = getSettingsPrefixLocator(page, importSelectors.workspaceCardPrefix)
-    .filter({ hasText: workspaceName })
-    .first()
-  await card.waitFor({ state: 'visible' })
-  const testId = await card.getAttribute('data-testid')
-  const prefix = `${importSelectors.workspaceCardPrefix}-`
-  if (!testId?.startsWith(prefix)) {
-    throw new Error(`failed to read workspace id from Settings card for "${workspaceName}"`)
-  }
-  return testId.slice(prefix.length)
-}
-
 const waitForWorkspaceFileJobCycle = async (
   page: Page,
   workspaceId: string,
@@ -1360,7 +1340,10 @@ export const selectWorkbenchExecutionPermission = async (
   await menu.getByRole('option').filter({ hasText: permissionLabel }).first().click()
   if (permissionLabel === '完全访问') {
     if (options?.cancelModal) {
-      const cancelButton = getWorkbenchLocator(page, workbenchSelectors.fullAccessConfirmCancelButton)
+      const cancelButton = getWorkbenchLocator(
+        page,
+        workbenchSelectors.fullAccessConfirmCancelButton
+      )
       await cancelButton.waitFor({ state: 'visible', timeout: 3000 })
       await cancelButton.click()
       await cancelButton.waitFor({ state: 'hidden', timeout: 3000 }).catch(() => undefined)
@@ -1419,9 +1402,7 @@ export const selectWorkbenchModel = async (
     }
   }
 
-  const customEntry = menu.locator(
-    `[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`
-  )
+  const customEntry = menu.locator(`[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`)
   await customEntry.waitFor({ state: 'visible' })
   await customEntry.click()
 
@@ -1433,7 +1414,9 @@ export const selectWorkbenchModel = async (
   try {
     await modelOption.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
   } catch {
-    const optionTexts = (await modelOptions.allTextContents()).map((item) => item.trim()).filter(Boolean)
+    const optionTexts = (await modelOptions.allTextContents())
+      .map((item) => item.trim())
+      .filter(Boolean)
     throw new Error(
       [
         `AI_LIVE_MODEL="${modelName}" was not found in the Workbench model menu.`,
@@ -1450,6 +1433,8 @@ export const selectWorkbenchWorkspace = async (
   _workspaceName: string
 ): Promise<void> => {
   // Composer no longer binds a named workspace.
+  void _page
+  void _workspaceName
 }
 
 export const openScheduledTasksView = async (page: Page): Promise<void> => {
@@ -1477,9 +1462,7 @@ export const selectScheduledTaskModel = async (page: Page, modelName: string): P
     return
   }
 
-  const customEntry = menu.locator(
-    `[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`
-  )
+  const customEntry = menu.locator(`[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`)
   await customEntry.waitFor({ state: 'visible' })
   await customEntry.click()
 
@@ -1496,6 +1479,8 @@ export const selectScheduledTaskWorkspace = async (
   _workspaceName: string
 ): Promise<void> => {
   // Scheduled tasks no longer bind a manually selected partner/workspace.
+  void _page
+  void _workspaceName
 }
 
 export const fillScheduledTaskTime = async (page: Page, hhmm: string): Promise<void> => {
@@ -1646,8 +1631,14 @@ export const waitForApplyEntry = async (page: Page, changeIdPart?: string): Prom
   return locator.first()
 }
 
-export const waitForApplyEntryByFileName = async (page: Page, fileName: string): Promise<Locator> => {
-  const locator = getWorkbenchPrefixLocator(page, workbenchSelectors.assistantTurnApplyPrefix).filter({
+export const waitForApplyEntryByFileName = async (
+  page: Page,
+  fileName: string
+): Promise<Locator> => {
+  const locator = getWorkbenchPrefixLocator(
+    page,
+    workbenchSelectors.assistantTurnApplyPrefix
+  ).filter({
     hasText: fileName
   })
   await locator.last().waitFor({ state: 'visible' })

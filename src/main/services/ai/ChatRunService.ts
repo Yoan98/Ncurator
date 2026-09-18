@@ -244,7 +244,9 @@ export class ChatRunService {
     const normalizedPartnerId = String(partnerId || '').trim()
     if (!normalizedPartnerId) return { runs: [] }
     const runs = await this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId)
-    const recentRuns = [...runs].sort((left, right) => right.createdAt - left.createdAt).slice(0, 50)
+    const recentRuns = [...runs]
+      .sort((left, right) => right.createdAt - left.createdAt)
+      .slice(0, 50)
     const response = {
       runs: await Promise.all(recentRuns.map((run) => this.buildRunSnapshot(run)))
     }
@@ -329,7 +331,9 @@ export class ChatRunService {
     if (!partner) return { success: false, error: 'partner not found' }
     if (
       this.pendingPartnerSubmissions.has(normalizedPartnerId) ||
-      Array.from(this.activeRuns.values()).some((entry) => entry.run.partnerId === normalizedPartnerId)
+      Array.from(this.activeRuns.values()).some(
+        (entry) => entry.run.partnerId === normalizedPartnerId
+      )
     ) {
       return { success: false, error: '当前伙伴仍在运行，不能清空消息记录' }
     }
@@ -708,10 +712,7 @@ export class ChatRunService {
         context: { source: 'unexpected' }
       })
       const failure = classifyThrownErrorToAiRunFailure(error)
-      const presentation = resolveAiRunFailurePresentation(
-        failure.failureCode,
-        failure.rawMessage
-      )
+      const presentation = resolveAiRunFailurePresentation(failure.failureCode, failure.rawMessage)
       const failureSource = presentation.source === 'user' ? 'internal' : presentation.source
       await this.queueRunEvent(runId, {
         type: 'run_failed',
@@ -856,7 +857,7 @@ export class ChatRunService {
   private async projectEvent(runId: string, run: AiRunRecord, event: AiRunEvent): Promise<void> {
     const entry = this.activeRuns.get(runId)
     const now = Date.now()
-    let saveImmediately = event.type !== 'answer_token'
+    const saveImmediately = event.type !== 'answer_token'
 
     if (event.type === 'assistant_brain_stream_started') {
       run.partialAnswer = ''

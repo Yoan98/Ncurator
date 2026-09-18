@@ -201,9 +201,7 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
       <div
         ref={contentRef}
         className={`min-w-0 flex-1 text-[13.5px] leading-[22px] text-[#787774] ${
-          expanded
-            ? 'max-h-[320px] overflow-y-auto pr-1'
-            : 'assistant-thought-collapsed'
+          expanded ? 'max-h-[320px] overflow-y-auto pr-1' : 'assistant-thought-collapsed'
         }`}
       >
         <MarkdownRenderer content={thought.text} variant="thought" />
@@ -212,9 +210,7 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
         <button
           type="button"
           className={`flex h-[22px] w-4 shrink-0 items-center justify-center rounded-[3px] text-[#9B9A97] transition-all duration-150 hover:text-[#37352F] ${
-            expanded
-              ? 'opacity-100'
-              : 'opacity-0 group-hover/thought:opacity-100'
+            expanded ? 'opacity-100' : 'opacity-0 group-hover/thought:opacity-100'
           }`}
           aria-label={expanded ? '收起思考内容' : '展开思考内容'}
           onClick={(e) => {
@@ -401,9 +397,7 @@ const AssistantActivityItemView: React.FC<{
   const revealText = review ? formatApprovalReviewRevealText(review) : ''
 
   if (!review) {
-    return (
-      <div className={failed ? 'text-[#B3261E]' : undefined}>{renderSegments(toolText)}</div>
-    )
+    return <div className={failed ? 'text-[#B3261E]' : undefined}>{renderSegments(toolText)}</div>
   }
 
   return (
@@ -421,9 +415,7 @@ const AssistantActivityItemView: React.FC<{
       <span className="relative min-w-0 flex-1 overflow-hidden">
         <span
           className={`block truncate transition-all duration-150 ${
-            revealing
-              ? 'pointer-events-none translate-x-1 opacity-0'
-              : 'translate-x-0 opacity-100'
+            revealing ? 'pointer-events-none translate-x-1 opacity-0' : 'translate-x-0 opacity-100'
           }`}
         >
           {renderSegments(toolText)}
@@ -566,8 +558,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   })
   /** 运行未结束且尚无最终回答时预留固定行高，避免「让俺想想」显隐把页面顶抖 */
   const reserveThinkingSlot =
-    showThinkingIndicator ||
-    (!Boolean(turn?.runFinished) && !Boolean(turn?.waitingApproval) && !hasFinalAnswer)
+    showThinkingIndicator || (!turn?.runFinished && !turn?.waitingApproval && !hasFinalAnswer)
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({

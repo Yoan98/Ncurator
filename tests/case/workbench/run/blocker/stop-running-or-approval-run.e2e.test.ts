@@ -62,7 +62,7 @@ describe('workbench run e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
           await sendWorkbenchMessage(page, LONG_RUN_PROMPT)
           const longRunStarted = await waitForWorkbenchAiEvent(runtime, {
             name: 'run_started_for_stop',

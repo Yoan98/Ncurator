@@ -120,13 +120,10 @@ import type {
   ListOpenWithApplicationsResponse,
   OpenFileWithApplicationRequest,
   OpenFileWithApplicationResponse,
-  PrepareWebSourcesRequest,
   PickDirectoryResponse,
   PickFileResponse,
   ReferenceItemListResponse,
-  ScanWebSourcesRequest,
   SetWorkspaceRootPathRequest,
-  ListWebSourcesRequest,
   RefreshWebSourceRequest,
   DeleteWebSourceRequest,
   SelectedReference,
@@ -275,7 +272,10 @@ export function registerHandlers(services: {
   const runResourceManager = new AiRunResourceManager([
     { id: 'docx', releaseRun: releaseDocxRunSession },
     { id: 'pdf', releaseRun: releasePdfRunSession },
-    { id: 'browser', releaseRun: (runId) => browserEmbedService?.releaseRun(runId) ?? Promise.resolve() }
+    {
+      id: 'browser',
+      releaseRun: (runId) => browserEmbedService?.releaseRun(runId) ?? Promise.resolve()
+    }
   ])
   const e2eGraphRecursionLimitOnce = (() => {
     if (process.env.NCURATOR_E2E_OBSERVER !== '1') return undefined
@@ -2076,26 +2076,23 @@ export function registerHandlers(services: {
     }
   )
 
-  ipcMain.handle(
-    'web-source-list',
-    async (_event, _payload: ListWebSourcesRequest): Promise<WebSourceListResponse> => {
-      try {
-        await ensureWebSourcesHydrated()
-        const [items, summary] = await Promise.all([
-          webSourceStore.listWebSources(),
-          webSourceStore.getWebSummary()
-        ])
-        return { items, total: items.length, summary }
-      } catch (error) {
-        console.error('? [WEB-SOURCE-LIST] ERROR:', error)
-        return {
-          items: [],
-          total: 0,
-          summary: { web_count: 0, needs_index_count: 0, failed_count: 0 }
-        }
+  ipcMain.handle('web-source-list', async (): Promise<WebSourceListResponse> => {
+    try {
+      await ensureWebSourcesHydrated()
+      const [items, summary] = await Promise.all([
+        webSourceStore.listWebSources(),
+        webSourceStore.getWebSummary()
+      ])
+      return { items, total: items.length, summary }
+    } catch (error) {
+      console.error('? [WEB-SOURCE-LIST] ERROR:', error)
+      return {
+        items: [],
+        total: 0,
+        summary: { web_count: 0, needs_index_count: 0, failed_count: 0 }
       }
     }
-  )
+  })
 
   ipcMain.handle(
     'workspace-index-job-get',
@@ -2103,9 +2100,7 @@ export function registerHandlers(services: {
       try {
         const sourceKind = payload?.sourceKind === 'web' ? 'web' : 'file'
         const workspaceId =
-          sourceKind === 'web'
-            ? WEB_INDEX_OWNER
-            : String(payload?.workspaceId || '').trim()
+          sourceKind === 'web' ? WEB_INDEX_OWNER : String(payload?.workspaceId || '').trim()
         if (!workspaceId) return { success: false, error: 'workspaceId is required' }
         const job = await workspaceIndexJobStore.getActiveJob(workspaceId, sourceKind)
         return { success: true, job: job || undefined }
@@ -2115,71 +2110,65 @@ export function registerHandlers(services: {
     }
   )
 
-  ipcMain.handle(
-    'web-sources-scan',
-    async (event, _payload: ScanWebSourcesRequest): Promise<WorkspaceJobResponse> => {
-      const workspaceId = WEB_INDEX_OWNER
-      try {
-        const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
-        if (activeJob) return { success: true, workspaceId, job: activeJob }
-        const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
-        if (activeWorkspaceIndexJobs.has(jobKey)) {
-          const runningJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
-          if (runningJob) return { success: true, workspaceId, job: runningJob }
-          return { success: false, workspaceId, error: 'workspace web job already running' }
-        }
-        const job = await saveAndEmitWorkspaceIndexJob(
-          createWorkspaceIndexJob({
-            workspaceId,
-            sourceKind: 'web',
-            action: 'scan',
-            phase: 'scan',
-            stepIndex: 1,
-            stepTotal: 1,
-            message: '正在检查网页更新'
-          })
-        )
-        activeWorkspaceIndexJobs.add(jobKey)
-        void runWebScanJob({ sender: event.sender, job })
-        return { success: true, workspaceId, job }
-      } catch (error) {
-        return { success: false, workspaceId, error: getErrorMessage(error) }
+  ipcMain.handle('web-sources-scan', async (event): Promise<WorkspaceJobResponse> => {
+    const workspaceId = WEB_INDEX_OWNER
+    try {
+      const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
+      if (activeJob) return { success: true, workspaceId, job: activeJob }
+      const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
+      if (activeWorkspaceIndexJobs.has(jobKey)) {
+        const runningJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
+        if (runningJob) return { success: true, workspaceId, job: runningJob }
+        return { success: false, workspaceId, error: 'workspace web job already running' }
       }
+      const job = await saveAndEmitWorkspaceIndexJob(
+        createWorkspaceIndexJob({
+          workspaceId,
+          sourceKind: 'web',
+          action: 'scan',
+          phase: 'scan',
+          stepIndex: 1,
+          stepTotal: 1,
+          message: '正在检查网页更新'
+        })
+      )
+      activeWorkspaceIndexJobs.add(jobKey)
+      void runWebScanJob({ sender: event.sender, job })
+      return { success: true, workspaceId, job }
+    } catch (error) {
+      return { success: false, workspaceId, error: getErrorMessage(error) }
     }
-  )
+  })
 
-  ipcMain.handle(
-    'web-sources-prepare',
-    async (event, _payload: PrepareWebSourcesRequest): Promise<WorkspaceJobResponse> => {
-      const workspaceId = WEB_INDEX_OWNER
-      try {
-        const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
-        if (activeJob) return { success: true, workspaceId, job: activeJob }
-        const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
-        if (activeWorkspaceIndexJobs.has(jobKey)) {
-          const runningJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
-          if (runningJob) return { success: true, workspaceId, job: runningJob }
-          return { success: false, workspaceId, error: 'workspace web job already running' }
-        }
-        const job = await saveAndEmitWorkspaceIndexJob(
-          createWorkspaceIndexJob({
-            workspaceId,
-            sourceKind: 'web',
-            action: 'prepare',
-            phase: 'crawl',
-            stepIndex: 1,
-            stepTotal: 2,
-            message: '正在准备网页索引'
-          })
-        )
-        activeWorkspaceIndexJobs.add(jobKey)
-        void runWebPrepareJob({ sender: event.sender, job })
-        return { success: true, workspaceId, job }
-      } catch (error) {
-        return { success: false, workspaceId, error: getErrorMessage(error) }
+  ipcMain.handle('web-sources-prepare', async (event): Promise<WorkspaceJobResponse> => {
+    const workspaceId = WEB_INDEX_OWNER
+    try {
+      const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
+      if (activeJob) return { success: true, workspaceId, job: activeJob }
+      const jobKey = getWorkspaceIndexJobKey(workspaceId, 'web')
+      if (activeWorkspaceIndexJobs.has(jobKey)) {
+        const runningJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'web')
+        if (runningJob) return { success: true, workspaceId, job: runningJob }
+        return { success: false, workspaceId, error: 'workspace web job already running' }
       }
+      const job = await saveAndEmitWorkspaceIndexJob(
+        createWorkspaceIndexJob({
+          workspaceId,
+          sourceKind: 'web',
+          action: 'prepare',
+          phase: 'crawl',
+          stepIndex: 1,
+          stepTotal: 2,
+          message: '正在准备网页索引'
+        })
+      )
+      activeWorkspaceIndexJobs.add(jobKey)
+      void runWebPrepareJob({ sender: event.sender, job })
+      return { success: true, workspaceId, job }
+    } catch (error) {
+      return { success: false, workspaceId, error: getErrorMessage(error) }
     }
-  )
+  })
 
   ipcMain.handle(
     'web-source-refresh',
@@ -2887,10 +2876,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'chat-session-ui-state-save',
-    async (
-      _event,
-      payload: PartnerUiStateSaveRequest
-    ): Promise<PartnerUiStateSaveResponse> => {
+    async (_event, payload: PartnerUiStateSaveRequest): Promise<PartnerUiStateSaveResponse> => {
       try {
         const updatedAt = await workbenchUiStore.savePartnerState(payload.partnerId, payload.state)
         return { success: true, updatedAt }
@@ -2940,18 +2926,15 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle(
-    'chat-session-set-pinned',
-    async (_event, payload: PartnerSetPinnedRequest) => {
-      try {
-        await partnerStore.setPartnerPinned(payload.id, payload.pinned)
-        return { success: true }
-      } catch (e: unknown) {
-        console.error('[CHAT-SESSION-SET-PINNED] Error:', e)
-        return { success: false, error: getErrorMessage(e) }
-      }
+  ipcMain.handle('chat-session-set-pinned', async (_event, payload: PartnerSetPinnedRequest) => {
+    try {
+      await partnerStore.setPartnerPinned(payload.id, payload.pinned)
+      return { success: true }
+    } catch (e: unknown) {
+      console.error('[CHAT-SESSION-SET-PINNED] Error:', e)
+      return { success: false, error: getErrorMessage(e) }
     }
-  )
+  })
 
   ipcMain.handle('chat-session-delete', async (_event, id: string) => {
     try {
@@ -2991,10 +2974,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'chat-session-run-summaries',
-    async (
-      _event,
-      payload: PartnerRunSummariesRequest
-    ): Promise<PartnerRunSummariesResponse> => {
+    async (_event, payload: PartnerRunSummariesRequest): Promise<PartnerRunSummariesResponse> => {
       try {
         return await chatRunService.getPartnerRunSummaries(payload?.partnerId)
       } catch (e: unknown) {
@@ -3018,10 +2998,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'partner-clear-context',
-    async (
-      _event,
-      payload: PartnerClearContextRequest
-    ): Promise<PartnerClearContextResponse> => {
+    async (_event, payload: PartnerClearContextRequest): Promise<PartnerClearContextResponse> => {
       try {
         return await chatRunService.clearPartnerContext(payload?.partnerId)
       } catch (e: unknown) {
@@ -3244,10 +3221,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle(
     'scheduled-task-run-now',
-    async (
-      _event,
-      payload: ScheduledTaskRunNowRequest
-    ): Promise<ScheduledTaskMutationResponse> => {
+    async (_event, payload: ScheduledTaskRunNowRequest): Promise<ScheduledTaskMutationResponse> => {
       return scheduledTaskService.runNow(payload)
     }
   )

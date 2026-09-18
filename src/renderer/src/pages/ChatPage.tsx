@@ -40,10 +40,7 @@ import type {
   WorkbenchModelSelection,
   WorkspaceSource
 } from '../../../shared/types'
-import {
-  PARTNER_AVATAR_SHAPES,
-  PARTNER_AVATAR_COLORS
-} from '../../../shared/types'
+import { PARTNER_AVATAR_SHAPES, PARTNER_AVATAR_COLORS } from '../../../shared/types'
 import {
   NO_EFFECTIVE_FILE_CHANGE_MESSAGE,
   PRODUCT_NAME_ZH,
@@ -124,8 +121,14 @@ import {
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts
 } from '../components/workbench/utils'
-import { clipPartnerListPreview, PARTNER_LIST_EMPTY_PREVIEW } from '../../../shared/workbench/conversationProjection'
-import { projectApprovalReviews, projectProcessGroups } from '../components/workbench/messageLogProjection'
+import {
+  clipPartnerListPreview,
+  PARTNER_LIST_EMPTY_PREVIEW
+} from '../../../shared/workbench/conversationProjection'
+import {
+  projectApprovalReviews,
+  projectProcessGroups
+} from '../components/workbench/messageLogProjection'
 import { resumeAssistantTurnFromLive } from '../components/workbench/partnerLiveTurns'
 import {
   groupApplyTargetsByRunId,
@@ -173,9 +176,7 @@ const queryOldestMessageElementOfDay = (
   messages: readonly ChatMessage[]
 ): HTMLElement | null => {
   const dayEnd = dayStart + DAY_MS
-  const ofDay = messages.filter(
-    (item) => item.timestamp >= dayStart && item.timestamp < dayEnd
-  )
+  const ofDay = messages.filter((item) => item.timestamp >= dayStart && item.timestamp < dayEnd)
   if (ofDay.length === 0) return null
   const oldest = ofDay.reduce((current, item) =>
     item.timestamp < current.timestamp ? item : current
@@ -468,10 +469,7 @@ const reduceAssistantTurnByRunEvent = (
     }
   }
 
-  if (
-    event.type === 'assistant_brain_stream_delta' &&
-    next.streamingRoundId === event.roundId
-  ) {
+  if (event.type === 'assistant_brain_stream_delta' && next.streamingRoundId === event.roundId) {
     next = {
       ...next,
       isBrainThinking: false,
@@ -479,10 +477,7 @@ const reduceAssistantTurnByRunEvent = (
     }
   }
 
-  if (
-    event.type === 'assistant_brain_stream_reset' &&
-    next.streamingRoundId === event.roundId
-  ) {
+  if (event.type === 'assistant_brain_stream_reset' && next.streamingRoundId === event.roundId) {
     next = { ...next, streamingMarkdown: '', streamingRole: 'answer' }
   }
 
@@ -614,14 +609,11 @@ const applyRunRecordToTurn = (
               : undefined
       }))
     ]),
-    applyTargets: artifacts.reduce<AssistantTurnViewModel['applyTargets']>(
-      (items, artifact) => {
-        const target = artifactToApplyTarget(artifact)
-        if (!target || items.some((item) => item.changeId === target.changeId)) return items
-        return [...items, target]
-      },
-      turn.applyTargets
-    ),
+    applyTargets: artifacts.reduce<AssistantTurnViewModel['applyTargets']>((items, artifact) => {
+      const target = artifactToApplyTarget(artifact)
+      if (!target || items.some((item) => item.changeId === target.changeId)) return items
+      return [...items, target]
+    }, turn.applyTargets),
     waitingApproval: Boolean(run.pendingApproval),
     pendingApprovalItems: run.pendingApproval?.items ?? turn.pendingApprovalItems,
     error: run.error || turn.error,
@@ -1301,8 +1293,7 @@ const ChatPage: React.FC = () => {
   }, [applyComposerDraft, saveComposerDraftForPartner])
 
   const selectedWorkspace = useMemo(() => {
-    const normalizeRoot = (value: string): string =>
-      value.replace(/\\/g, '/').replace(/\/+$/g, '')
+    const normalizeRoot = (value: string): string => value.replace(/\\/g, '/').replace(/\/+$/g, '')
     const matchByFilePath = (filePath: string): WorkspaceSource | undefined =>
       workspaces.find((workspace) => {
         const root = normalizeRoot(String(workspace.root_path || ''))
@@ -1336,10 +1327,7 @@ const ChatPage: React.FC = () => {
   )
   const clearContextVisible = useMemo(
     () =>
-      Boolean(currentPartnerId) &&
-      currentMessages.length > 0 &&
-      !aiRunId &&
-      !pendingApprovalBatch,
+      Boolean(currentPartnerId) && currentMessages.length > 0 && !aiRunId && !pendingApprovalBatch,
     [aiRunId, currentMessages.length, currentPartnerId, pendingApprovalBatch]
   )
   const userMessageTimeIds = useMemo(
@@ -1364,7 +1352,7 @@ const ChatPage: React.FC = () => {
     return (approvalDraftDecisions[currentApprovalItem.itemId]?.message || '').trim().length === 0
   }, [approvalDraftDecisions, approvalSubmitting, currentApprovalItem])
 
-  const syncLatestDayPinSpacer = (messages: ChatMessage[]): void => {
+  const syncLatestDayPinSpacer = useCallback((messages: ChatMessage[]): void => {
     const scroller = scrollRef.current
     const spacer = timelinePinSpacerRef.current
     if (!scroller || !spacer) return
@@ -1386,23 +1374,26 @@ const ChatPage: React.FC = () => {
     if (Math.abs(nextSpacerPx - spacer.offsetHeight) > 1) {
       spacer.style.height = `${nextSpacerPx}px`
     }
-  }
+  }, [])
 
-  const scrollToBottom = (force = false): void => {
-    if (!force && !shouldAutoScrollRef.current) return
-    if (scrollFrameRef.current !== null) {
-      window.cancelAnimationFrame(scrollFrameRef.current)
-    }
-    scrollFrameRef.current = window.requestAnimationFrame(() => {
-      const scrollElement = scrollRef.current
-      scrollFrameRef.current = null
-      if (!scrollElement) return
-      programmaticScrollRef.current = true
-      syncLatestDayPinSpacer(currentMessages)
-      scrollElement.scrollTop = scrollElement.scrollHeight
-      programmaticScrollRef.current = false
-    })
-  }
+  const scrollToBottom = useCallback(
+    (force = false): void => {
+      if (!force && !shouldAutoScrollRef.current) return
+      if (scrollFrameRef.current !== null) {
+        window.cancelAnimationFrame(scrollFrameRef.current)
+      }
+      scrollFrameRef.current = window.requestAnimationFrame(() => {
+        const scrollElement = scrollRef.current
+        scrollFrameRef.current = null
+        if (!scrollElement) return
+        programmaticScrollRef.current = true
+        syncLatestDayPinSpacer(currentMessages)
+        scrollElement.scrollTop = scrollElement.scrollHeight
+        programmaticScrollRef.current = false
+      })
+    },
+    [currentMessages, syncLatestDayPinSpacer]
+  )
 
   const loadOlderMessages = useCallback(async (): Promise<void> => {
     if (
@@ -1454,13 +1445,16 @@ const ChatPage: React.FC = () => {
     programmaticScrollRef.current = false
   }, [])
 
-  const scrollToOldestMessageOfDay = useCallback((dayStart: number, messages: ChatMessage[]): boolean => {
-    const element = queryOldestMessageElementOfDay(dayStart, messages)
-    if (!element) return false
-    shouldAutoScrollRef.current = false
-    pinMessageToTop(element)
-    return true
-  }, [pinMessageToTop])
+  const scrollToOldestMessageOfDay = useCallback(
+    (dayStart: number, messages: ChatMessage[]): boolean => {
+      const element = queryOldestMessageElementOfDay(dayStart, messages)
+      if (!element) return false
+      shouldAutoScrollRef.current = false
+      pinMessageToTop(element)
+      return true
+    },
+    [pinMessageToTop]
+  )
 
   const jumpToTimelineDay = useCallback(
     (dayStart: number): void => {
@@ -1544,8 +1538,7 @@ const ChatPage: React.FC = () => {
     if (!scroller) return
 
     const sync = (): void => {
-      const distanceToBottom =
-        scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
+      const distanceToBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight
       const stickToLatest =
         shouldAutoScrollRef.current || distanceToBottom <= SCROLL_BOTTOM_TOLERANCE
       programmaticScrollRef.current = true
@@ -1561,7 +1554,7 @@ const ChatPage: React.FC = () => {
     const observer = new ResizeObserver(sync)
     observer.observe(scroller)
     return () => observer.disconnect()
-  }, [currentMessages])
+  }, [currentMessages, syncLatestDayPinSpacer])
 
   const emitSuccessMessage = useCallback(
     (content: string): void => {
@@ -1816,9 +1809,7 @@ const ChatPage: React.FC = () => {
     ): Promise<void> => {
       try {
         const opened = await window.api.partnerOpen({ partnerId, limit: 1 })
-        const currentState =
-          opened.uiState ||
-          createDefaultPartnerUiState({ mainModel: null })
+        const currentState = opened.uiState || createDefaultPartnerUiState({ mainModel: null })
         await persistUiStateForKey(partnerId, update(currentState))
       } catch (error) {
         console.error('Failed to update background session UI state', error)
@@ -2530,6 +2521,8 @@ const ChatPage: React.FC = () => {
     fileChangeRunScopeRef.current = null
     void refreshContextUsage(session.id)
   }
+  const openExistingPartnerRef = useRef(openExistingPartner)
+  openExistingPartnerRef.current = openExistingPartner
 
   const selectPartner = (session: PartnerListItem): void => {
     setPartners((items) =>
@@ -2632,7 +2625,10 @@ const ChatPage: React.FC = () => {
   useEffect(() => {
     contentPanelRatioRef.current = contentPanelRatio
     contentPanelCommittedRatioRef.current = contentPanelRatio
-    window.localStorage.setItem(WORKBENCH_CONTENT_PANEL_RATIO_STORAGE_KEY, String(contentPanelRatio))
+    window.localStorage.setItem(
+      WORKBENCH_CONTENT_PANEL_RATIO_STORAGE_KEY,
+      String(contentPanelRatio)
+    )
     applyContentPanelRatioCss(contentPanelRatio)
     if (contentPanelShellMounted && !contentPanelDragStartRef.current) {
       syncContentPanelWidthFromRatio()
@@ -2852,7 +2848,7 @@ const ChatPage: React.FC = () => {
 
   useEffect(() => {
     scrollToBottom()
-  }, [assistantTurns, currentMessages, loading, pendingApprovalBatch])
+  }, [assistantTurns, currentMessages, loading, pendingApprovalBatch, scrollToBottom])
 
   useEffect(() => {
     let startTimer: number | null = null
@@ -2907,18 +2903,13 @@ const ChatPage: React.FC = () => {
     setDeleteConfirmPartner(session)
   }
 
-  const togglePartnerPinned = (
-    event: React.MouseEvent,
-    session: PartnerListItem
-  ): void => {
+  const togglePartnerPinned = (event: React.MouseEvent, session: PartnerListItem): void => {
     event.stopPropagation()
     const nextPinned = !session.pinned
     const nextPinnedAt = nextPinned ? Date.now() : null
     setPartners((items) => {
       const next = items.map((item) =>
-        item.id === session.id
-          ? { ...item, pinned: nextPinned, pinned_at: nextPinnedAt }
-          : item
+        item.id === session.id ? { ...item, pinned: nextPinned, pinned_at: nextPinnedAt } : item
       )
       return next.sort((left, right) => {
         if (left.pinned !== right.pinned) return left.pinned ? -1 : 1
@@ -3049,25 +3040,23 @@ const ChatPage: React.FC = () => {
             browserTabId: browser.id
           }
         })
-        void window.api.browserTabNavigate({
-          tabId: browser.id,
-          url: reference.path
-        }).then((navigateResponse) => {
-          if (!navigateResponse.success) {
-            emitErrorMessage(navigateResponse.error || '打开链接失败')
-          }
-        })
+        void window.api
+          .browserTabNavigate({
+            tabId: browser.id,
+            url: reference.path
+          })
+          .then((navigateResponse) => {
+            if (!navigateResponse.success) {
+              emitErrorMessage(navigateResponse.error || '打开链接失败')
+            }
+          })
         return
       }
 
       await openFile({
         path: reference.path,
         fileName:
-          reference.path
-            .replace(/\\/g, '/')
-            .split('/')
-            .filter(Boolean)
-            .pop() || reference.label,
+          reference.path.replace(/\\/g, '/').split('/').filter(Boolean).pop() || reference.label,
         origin: 'source'
       })
     },
@@ -3711,13 +3700,7 @@ const ChatPage: React.FC = () => {
         }
       }
     })
-  }, [
-    currentPartner?.name,
-    currentPartnerId,
-    emitErrorMessage,
-    loadPartners,
-    modal
-  ])
+  }, [currentPartner?.name, currentPartnerId, emitErrorMessage, loadPartners, modal])
 
   const handleScheduledTaskBusyCancelAction = useCallback((): void => {
     if (!busyCancelTask) return
@@ -3791,15 +3774,11 @@ const ChatPage: React.FC = () => {
       }
       setCreatePartnerOpen(false)
       setCreatePartnerName('')
-      await openExistingPartner(response.partner, { saveCurrentDraft: false })
+      await openExistingPartnerRef.current(response.partner, { saveCurrentDraft: false })
       void loadPartners()
     } catch (error) {
       emitErrorMessage(
-        error instanceof Error
-          ? error.message
-          : editingPartnerId
-            ? '保存伙伴失败'
-            : '创建伙伴失败'
+        error instanceof Error ? error.message : editingPartnerId ? '保存伙伴失败' : '创建伙伴失败'
       )
     } finally {
       setCreatePartnerSubmitting(false)
@@ -4249,15 +4228,15 @@ const ChatPage: React.FC = () => {
 
     return (
       <div key={messageItem.id} {...hoverProps}>
-      <AssistantTurnCard
-        messageId={messageItem.id}
-        turn={turn}
-        isStreaming={loading && Boolean(turn.runId && turn.runId === aiRunId)}
-        onOpenApply={openFileChange}
-        workspaces={workspaces}
-        fallbackWorkspaceName={selectedWorkspaceName}
-        onOpenReference={handleOpenMarkdownReference}
-      />
+        <AssistantTurnCard
+          messageId={messageItem.id}
+          turn={turn}
+          isStreaming={loading && Boolean(turn.runId && turn.runId === aiRunId)}
+          onOpenApply={openFileChange}
+          workspaces={workspaces}
+          fallbackWorkspaceName={selectedWorkspaceName}
+          onOpenReference={handleOpenMarkdownReference}
+        />
       </div>
     )
   }
@@ -4580,487 +4559,497 @@ const ChatPage: React.FC = () => {
             <div className="nc-main-split flex h-full min-h-0 overflow-hidden" ref={mainSplitRef}>
               <div className="relative flex min-w-0 flex-1 flex-col">
                 {isNewSession ? (
-              <div className="nc-main-empty-titlebar" aria-hidden="true">
-                <div
-                  className="nc-main-empty-titlebar-safe-zone"
-                  style={{
-                    width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
-                  }}
-                />
-                <div
-                  className="nc-main-empty-titlebar-drag-region"
-                  data-testid={workbenchSelectors.emptyDragRegion}
-                />
-                {contentPanelCollapsed && !contentPanelShellMounted ? (
-                  <button
-                    type="button"
-                    className="nc-content-panel-titlebar-toggle workbench-no-drag"
-                    style={WORKBENCH_NO_DRAG_REGION_STYLE}
-                    title="展开右侧栏"
-                    onClick={() => {
-                      restoreCollapsedContentPanel()
-                    }}
-                    data-testid={workbenchSelectors.contentPanelToggle}
-                    aria-label="展开右侧栏"
-                  >
-                    <SidebarPanelIcon className="h-4 w-4" variant="expand" />
-                  </button>
+                  <div className="nc-main-empty-titlebar" aria-hidden="true">
+                    <div
+                      className="nc-main-empty-titlebar-safe-zone"
+                      style={{
+                        width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
+                      }}
+                    />
+                    <div
+                      className="nc-main-empty-titlebar-drag-region"
+                      data-testid={workbenchSelectors.emptyDragRegion}
+                    />
+                    {contentPanelCollapsed && !contentPanelShellMounted ? (
+                      <button
+                        type="button"
+                        className="nc-content-panel-titlebar-toggle workbench-no-drag"
+                        style={WORKBENCH_NO_DRAG_REGION_STYLE}
+                        title="展开右侧栏"
+                        onClick={() => {
+                          restoreCollapsedContentPanel()
+                        }}
+                        data-testid={workbenchSelectors.contentPanelToggle}
+                        aria-label="展开右侧栏"
+                      >
+                        <SidebarPanelIcon className="h-4 w-4" variant="expand" />
+                      </button>
+                    ) : null}
+                  </div>
                 ) : null}
-              </div>
-            ) : null}
-            {!isNewSession ? (
-              <div className="nc-topbar" data-testid={workbenchSelectors.topbar}>
+                {!isNewSession ? (
+                  <div className="nc-topbar" data-testid={workbenchSelectors.topbar}>
+                    <div
+                      className="nc-topbar-collapsed-safe-zone"
+                      style={{
+                        width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
+                      }}
+                      aria-hidden="true"
+                    />
+                    <div className="nc-topbar-title-region min-w-0 flex-1 bg-white">
+                      {currentPartner ? (
+                        <div className="flex min-w-0 items-center gap-2 leading-none">
+                          <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]">
+                            {currentPartner.name}
+                          </div>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div
+                      className="nc-topbar-drag-spacer"
+                      style={WORKBENCH_DRAG_REGION_STYLE}
+                      data-testid={workbenchSelectors.topbarDragRegion}
+                      aria-hidden="true"
+                    />
+
+                    {contentPanelCollapsed && !contentPanelShellMounted ? (
+                      <button
+                        type="button"
+                        className="nc-content-panel-titlebar-toggle workbench-no-drag"
+                        style={WORKBENCH_NO_DRAG_REGION_STYLE}
+                        title="展开右侧栏"
+                        onClick={() => {
+                          restoreCollapsedContentPanel()
+                        }}
+                        data-testid={workbenchSelectors.contentPanelToggle}
+                        aria-label="展开右侧栏"
+                      >
+                        <SidebarPanelIcon className="h-4 w-4" variant="expand" />
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+
                 <div
-                  className="nc-topbar-collapsed-safe-zone"
-                  style={{
-                    width: sidebarCollapsed ? WORKBENCH_LEFT_TITLEBAR_COLLAPSED_WIDTH : 0
+                  className="relative flex min-h-0 flex-1 overflow-hidden"
+                  data-testid={workbenchSelectors.attachmentDropTarget}
+                  onDragEnter={(event) => {
+                    if (!event.dataTransfer.types.includes('Files')) return
+                    event.preventDefault()
+                    attachmentDragDepthRef.current += 1
+                    setIsAttachmentDropActive(true)
                   }}
-                  aria-hidden="true"
-                />
-                <div className="nc-topbar-title-region min-w-0 flex-1 bg-white">
-                  {currentPartner ? (
-                    <div className="flex min-w-0 items-center gap-2 leading-none">
-                      <div className="nc-topbar-title-text truncate text-sm font-semibold leading-none text-[#37352F]">
-                        {currentPartner.name}
+                  onDragOver={(event) => {
+                    if (!event.dataTransfer.types.includes('Files')) return
+                    event.preventDefault()
+                    event.dataTransfer.dropEffect = 'copy'
+                  }}
+                  onDragLeave={(event) => {
+                    if (!event.dataTransfer.types.includes('Files')) return
+                    attachmentDragDepthRef.current = Math.max(0, attachmentDragDepthRef.current - 1)
+                    if (attachmentDragDepthRef.current === 0) setIsAttachmentDropActive(false)
+                  }}
+                  onDrop={(event) => {
+                    if (!event.dataTransfer.types.includes('Files')) return
+                    event.preventDefault()
+                    attachmentDragDepthRef.current = 0
+                    setIsAttachmentDropActive(false)
+                    const files = getDroppedFiles(event.dataTransfer)
+                    if (files.length > 0) composerFileDropHandlerRef.current?.(files)
+                  }}
+                >
+                  <div className="relative flex h-full min-h-0 min-w-0 flex-1">
+                    {!isNewSession ? (
+                      <MessageTimeline
+                        nodes={timelineNodes}
+                        messageDayStarts={timelineMessageDayStarts}
+                        activeNodeId={activeTimelineNodeId}
+                        onSelectNode={handleTimelineNodeSelect}
+                        onPickDay={jumpToTimelineDay}
+                      />
+                    ) : null}
+                    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+                      <div
+                        className={`nc-document-scroll ${isNewSession ? '!hidden' : ''}`}
+                        ref={scrollRef}
+                        onScroll={handleMessageScroll}
+                      >
+                        <div className="nc-document" data-testid={workbenchSelectors.messageList}>
+                          {loadingOlderMessages ? (
+                            <div className="py-3 text-center text-xs text-[#8A8781]">
+                              正在加载更早消息
+                            </div>
+                          ) : null}
+                          {currentMessages.map((messageItem) =>
+                            messageItem.role === 'user'
+                              ? renderUserMessage(messageItem)
+                              : renderAssistantMessage(messageItem)
+                          )}
+                        </div>
+                        <div
+                          ref={timelinePinSpacerRef}
+                          className="nc-timeline-pin-spacer"
+                          aria-hidden="true"
+                        />
+                      </div>
+
+                      <div
+                        className={`nc-floating-composer-shell ${
+                          isNewSession ? 'flex flex-1 items-center justify-center pb-[18vh]' : ''
+                        }`}
+                        data-testid={workbenchSelectors.composerShell}
+                      >
+                        <div className="mx-auto w-full max-w-[760px]">
+                          {isNewSession && currentPartnerId ? (
+                            <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
+                              <span>找俺干啥？</span>
+                            </div>
+                          ) : null}
+                          {!currentPartnerId ? (
+                            <div className="px-6 py-16 text-center text-[14px] leading-7 text-[#8A8781]">
+                              {partners.length === 0
+                                ? '还没有伙伴。从左侧创建一个开始对话。'
+                                : '请选择一个伙伴开始对话。'}
+                            </div>
+                          ) : pendingApprovalBatch ? (
+                            <div
+                              className="nc-timeline-layout-anchor min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
+                              data-testid={chatSelectors.approvalBatchCard}
+                            >
+                              {pendingApprovalBatch && currentApprovalItem ? (
+                                <div>
+                                  <div className="flex items-center justify-between gap-3 px-5 pt-4">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <div className="min-w-0">
+                                        <div className="text-[15px] font-semibold text-[#37352F]">
+                                          需要确认此操作
+                                        </div>
+                                        <div className="text-xs text-[#9B9A97]">
+                                          审批 {approvalCurrentIndex + 1} /{' '}
+                                          {pendingApprovalBatch.items.length}
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <Button
+                                        type="text"
+                                        size="small"
+                                        icon={<HiChevronLeft className="h-4 w-4" />}
+                                        disabled={approvalCurrentIndex <= 0 || approvalSubmitting}
+                                        onClick={() =>
+                                          setApprovalCurrentIndex((current) =>
+                                            Math.max(0, current - 1)
+                                          )
+                                        }
+                                        data-testid={chatSelectors.approvalBatchPrevButton}
+                                      />
+                                      <Button
+                                        type="text"
+                                        size="small"
+                                        icon={<HiChevronRight className="h-4 w-4" />}
+                                        disabled={
+                                          approvalCurrentIndex >=
+                                            pendingApprovalBatch.items.length - 1 ||
+                                          approvalSubmitting
+                                        }
+                                        onClick={() =>
+                                          setApprovalCurrentIndex((current) =>
+                                            Math.min(
+                                              pendingApprovalBatch.items.length - 1,
+                                              current + 1
+                                            )
+                                          )
+                                        }
+                                        data-testid={chatSelectors.approvalBatchNextButton}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleCancel()}
+                                        disabled={cancellingRun}
+                                        className={`ml-1 inline-flex h-8 w-8 items-center justify-center rounded-[6px] text-white transition ${
+                                          cancellingRun
+                                            ? 'bg-[#E0DFDC]'
+                                            : 'bg-[#B3261E] hover:bg-[#8F3028]'
+                                        }`}
+                                        data-testid={workbenchSelectors.sendButton}
+                                        aria-label="停止本次运行"
+                                      >
+                                        {cancellingRun ? (
+                                          <Spin size="small" />
+                                        ) : (
+                                          <HiStop className="h-4 w-4" />
+                                        )}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <p className="mx-5 mt-3 text-[13px] leading-6 text-[#787774]">
+                                    {currentApprovalItem.commandExplanation}
+                                  </p>
+                                  <code className="mx-5 mt-3 block max-h-[min(34vh,320px)] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437] [overflow-wrap:anywhere]">
+                                    {currentApprovalItem.command}
+                                  </code>
+                                  <div className="mx-2 mt-3 space-y-1">
+                                    <button
+                                      type="button"
+                                      className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#37352F] shadow-[inset_3px_0_0_#37352F,inset_0_0_0_1px_#EEEEEC] hover:bg-[#F4F4F2]"
+                                      onClick={() =>
+                                        void handleApprovalDecision({
+                                          itemId: currentApprovalItem.itemId,
+                                          action: 'approve'
+                                        })
+                                      }
+                                      disabled={approvalSubmitting}
+                                      data-testid={chatSelectors.approvalBatchApproveButton}
+                                    >
+                                      <span>允许本次操作</span>
+                                      <HiCheck className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#787774] hover:bg-[#F4F4F2]"
+                                      onClick={() =>
+                                        void handleApprovalDecision({
+                                          itemId: currentApprovalItem.itemId,
+                                          action: 'reject'
+                                        })
+                                      }
+                                      disabled={approvalSubmitting}
+                                      data-testid={chatSelectors.approvalBatchDenyButton}
+                                    >
+                                      <span>拒绝本次操作</span>
+                                      <HiXMark className="h-4 w-4 text-[#B3261E]" />
+                                    </button>
+                                  </div>
+                                  <div className="mt-3 flex items-center gap-2 border-t border-[#EEEEEC] px-4 py-4">
+                                    <input
+                                      className="min-w-0 flex-1 rounded-[6px] border border-[#EEEEEC] bg-[#FFFFFF] px-3 py-2 text-sm text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#37352F] focus:ring-2 focus:ring-[#EFEFED]"
+                                      placeholder={`告诉${PRODUCT_NAME_ZH}该怎么做`}
+                                      value={
+                                        approvalDraftDecisions[currentApprovalItem.itemId]
+                                          ?.message || ''
+                                      }
+                                      onChange={(event) =>
+                                        setApprovalGuideMessage(
+                                          currentApprovalItem.itemId,
+                                          event.target.value
+                                        )
+                                      }
+                                      disabled={approvalSubmitting}
+                                      data-testid={chatSelectors.approvalBatchGuideInput}
+                                    />
+                                    <Button
+                                      type="primary"
+                                      className="!flex !h-9 !items-center !gap-1 !rounded-full !border-[#37352F] !bg-[#37352F] !text-white hover:!bg-[#2F3437] disabled:!border-[#EEEEEC] disabled:!bg-[#F4F4F2] disabled:!text-[#9B9A97]"
+                                      icon={<HiArrowUp className="h-4 w-4" />}
+                                      onClick={() => void handleApprovalBatchSubmit()}
+                                      loading={approvalSubmitting}
+                                      disabled={approvalSubmitDisabled}
+                                      data-testid={chatSelectors.approvalBatchSubmitButton}
+                                    >
+                                      提交
+                                    </Button>
+                                  </div>
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <div className="relative">
+                              {busyCancelTask || clearContextVisible ? (
+                                <div className="mb-2 flex flex-col items-start gap-2">
+                                  {busyCancelTask ? (
+                                    <MessageActionCapsule
+                                      icon={<HiOutlineClock className="h-3.5 w-3.5" />}
+                                      label={`立即执行「${busyCancelTask.name}」`}
+                                      tooltip={`「${busyCancelTask.name}」到点时伙伴正忙，本次已取消。点击可立即按该定时任务执行。`}
+                                      onAction={handleScheduledTaskBusyCancelAction}
+                                      dismissible
+                                      onDismiss={() => void handleDismissScheduledTaskBusyCancel()}
+                                      actionTestId={
+                                        workbenchSelectors.scheduledTaskBusyCancelCapsule
+                                      }
+                                      dismissTestId={
+                                        workbenchSelectors.scheduledTaskBusyCancelDismiss
+                                      }
+                                    />
+                                  ) : null}
+                                  {clearContextVisible ? (
+                                    <MessageActionCapsule
+                                      icon={<PiEraser className="h-3.5 w-3.5" />}
+                                      label="清空消息记录"
+                                      tooltip={`清空「${currentPartner?.name || '伙伴'}」的全部消息记录，无法恢复。`}
+                                      onAction={handleClearPartnerContext}
+                                      actionTestId={workbenchSelectors.clearContextButton}
+                                    />
+                                  ) : null}
+                                </div>
+                              ) : null}
+                              <WorkbenchComposer
+                                aiPreference={composerAiPreference}
+                                onAiPreferenceChange={handleAiPreferenceChange}
+                                executionPermission={composerExecutionPermission}
+                                onExecutionPermissionChange={handleExecutionPermissionChange}
+                                modelConfigs={modelConfigs}
+                                modelListsByConfigId={modelListsByConfigId}
+                                modelSelection={modelSelection}
+                                onModelSelectionChange={handleModelSelectionChange}
+                                onRefreshModelLists={refreshModelLists}
+                                onDraftChange={handleComposerDraftChange}
+                                onSubmit={() => void handleSend()}
+                                onCancel={() => void handleCancel()}
+                                onPreviewImage={setPreviewImage}
+                                loading={loading}
+                                cancelling={cancellingRun}
+                                canSubmit={Boolean(
+                                  input.trim() && currentPartnerId && modelSelection.mainModel
+                                )}
+                                submitDisabledReason={composerSubmitDisabledReason}
+                                showCancel={Boolean(aiRunId)}
+                                draftValue={composerDraftValue}
+                                draftKey={composerDraftKey}
+                                contextUsage={contextUsage}
+                                plan={composerPlan}
+                                requestAttachmentTarget={ensureAttachmentTarget}
+                                onFileDropHandlerReady={(handler) => {
+                                  composerFileDropHandlerRef.current = handler
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {isAttachmentDropActive ? (
+                    <div
+                      className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/55 backdrop-blur-[1px]"
+                      data-testid={workbenchSelectors.attachmentDropOverlay}
+                    >
+                      <div className="border border-dashed border-[#7B96A8] bg-white/85 px-5 py-3 text-sm font-medium text-[#37586E] shadow-sm">
+                        松开以添加文件
                       </div>
                     </div>
                   ) : null}
                 </div>
+              </div>
 
-                <div
-                  className="nc-topbar-drag-spacer"
-                  style={WORKBENCH_DRAG_REGION_STYLE}
-                  data-testid={workbenchSelectors.topbarDragRegion}
-                  aria-hidden="true"
-                />
-
-                {contentPanelCollapsed && !contentPanelShellMounted ? (
-                  <button
-                    type="button"
-                    className="nc-content-panel-titlebar-toggle workbench-no-drag"
-                    style={WORKBENCH_NO_DRAG_REGION_STYLE}
-                    title="展开右侧栏"
-                    onClick={() => {
-                      restoreCollapsedContentPanel()
+              {contentPanelShellMounted ? (
+                <>
+                  <div
+                    ref={contentPanelResizeGuideRef}
+                    className="nc-content-panel-resize-guide"
+                    data-active="false"
+                    aria-hidden="true"
+                  />
+                  <div
+                    className="nc-content-panel-resizer workbench-no-drag"
+                    data-testid={workbenchSelectors.contentPanelResizer}
+                    onPointerEnter={() => {
+                      if (
+                        contentPanel.kind === 'browser' &&
+                        contentPanel.browserTabId &&
+                        browserPresentationEnabled &&
+                        browserTransitionImage?.tabId !== contentPanel.browserTabId
+                      ) {
+                        void captureBrowserTransition(contentPanel.browserTabId)
+                      }
                     }}
-                    data-testid={workbenchSelectors.contentPanelToggle}
-                    aria-label="展开右侧栏"
-                  >
-                    <SidebarPanelIcon className="h-4 w-4" variant="expand" />
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
+                    onPointerDown={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      event.currentTarget.setPointerCapture(event.pointerId)
 
-            <div
-              className="relative flex min-h-0 flex-1 overflow-hidden"
-              data-testid={workbenchSelectors.attachmentDropTarget}
-              onDragEnter={(event) => {
-                if (!event.dataTransfer.types.includes('Files')) return
-                event.preventDefault()
-                attachmentDragDepthRef.current += 1
-                setIsAttachmentDropActive(true)
-              }}
-              onDragOver={(event) => {
-                if (!event.dataTransfer.types.includes('Files')) return
-                event.preventDefault()
-                event.dataTransfer.dropEffect = 'copy'
-              }}
-              onDragLeave={(event) => {
-                if (!event.dataTransfer.types.includes('Files')) return
-                attachmentDragDepthRef.current = Math.max(0, attachmentDragDepthRef.current - 1)
-                if (attachmentDragDepthRef.current === 0) setIsAttachmentDropActive(false)
-              }}
-              onDrop={(event) => {
-                if (!event.dataTransfer.types.includes('Files')) return
-                event.preventDefault()
-                attachmentDragDepthRef.current = 0
-                setIsAttachmentDropActive(false)
-                const files = getDroppedFiles(event.dataTransfer)
-                if (files.length > 0) composerFileDropHandlerRef.current?.(files)
-              }}
-            >
-              <div className="relative flex h-full min-h-0 min-w-0 flex-1">
-                {!isNewSession ? (
-                  <MessageTimeline
-                    nodes={timelineNodes}
-                    messageDayStarts={timelineMessageDayStarts}
-                    activeNodeId={activeTimelineNodeId}
-                    onSelectNode={handleTimelineNodeSelect}
-                    onPickDay={jumpToTimelineDay}
-                  />
-                ) : null}
-                <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
-                  <div
-                    className={`nc-document-scroll ${isNewSession ? '!hidden' : ''}`}
-                    ref={scrollRef}
-                    onScroll={handleMessageScroll}
-                  >
-                    <div className="nc-document" data-testid={workbenchSelectors.messageList}>
-                      {loadingOlderMessages ? (
-                        <div className="py-3 text-center text-xs text-[#8A8781]">
-                          正在加载更早消息
-                        </div>
-                      ) : null}
-                      {currentMessages.map((messageItem) =>
-                        messageItem.role === 'user'
-                          ? renderUserMessage(messageItem)
-                          : renderAssistantMessage(messageItem)
-                      )}
-                    </div>
-                    <div
-                      ref={timelinePinSpacerRef}
-                      className="nc-timeline-pin-spacer"
-                      aria-hidden="true"
-                    />
-                  </div>
+                      if (contentPanelDragRestoreTimerRef.current !== null) {
+                        window.clearTimeout(contentPanelDragRestoreTimerRef.current)
+                        contentPanelDragRestoreTimerRef.current = null
+                      }
+                      if (contentPanelDragSettlingFrameRef.current !== null) {
+                        window.cancelAnimationFrame(contentPanelDragSettlingFrameRef.current)
+                        contentPanelDragSettlingFrameRef.current = null
+                      }
+                      document.body.classList.remove('workbench-content-panel-settling')
 
-                  <div
-                    className={`nc-floating-composer-shell ${
-                      isNewSession ? 'flex flex-1 items-center justify-center pb-[18vh]' : ''
-                    }`}
-                    data-testid={workbenchSelectors.composerShell}
-                  >
-                    <div className="mx-auto w-full max-w-[760px]">
-                      {isNewSession && currentPartnerId ? (
-                        <div className="mb-8 flex items-center justify-center text-center text-[28px] font-normal tracking-[-0.02em] text-[#37352F]">
-                          <span>找俺干啥？</span>
-                        </div>
-                      ) : null}
-                      {!currentPartnerId ? (
-                        <div className="px-6 py-16 text-center text-[14px] leading-7 text-[#8A8781]">
-                          {partners.length === 0
-                            ? '还没有伙伴。从左侧创建一个开始对话。'
-                            : '请选择一个伙伴开始对话。'}
-                        </div>
-                      ) : pendingApprovalBatch ? (
-                        <div
-                          className="nc-timeline-layout-anchor min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
-                          data-testid={chatSelectors.approvalBatchCard}
-                        >
-                          {pendingApprovalBatch && currentApprovalItem ? (
-                            <div>
-                              <div className="flex items-center justify-between gap-3 px-5 pt-4">
-                                <div className="flex min-w-0 items-center gap-2">
-                                  <div className="min-w-0">
-                                    <div className="text-[15px] font-semibold text-[#37352F]">
-                                      需要确认此操作
-                                    </div>
-                                    <div className="text-xs text-[#9B9A97]">
-                                      审批 {approvalCurrentIndex + 1} /{' '}
-                                      {pendingApprovalBatch.items.length}
-                                    </div>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Button
-                                    type="text"
-                                    size="small"
-                                    icon={<HiChevronLeft className="h-4 w-4" />}
-                                    disabled={approvalCurrentIndex <= 0 || approvalSubmitting}
-                                    onClick={() =>
-                                      setApprovalCurrentIndex((current) => Math.max(0, current - 1))
-                                    }
-                                    data-testid={chatSelectors.approvalBatchPrevButton}
-                                  />
-                                  <Button
-                                    type="text"
-                                    size="small"
-                                    icon={<HiChevronRight className="h-4 w-4" />}
-                                    disabled={
-                                      approvalCurrentIndex >=
-                                        pendingApprovalBatch.items.length - 1 || approvalSubmitting
-                                    }
-                                    onClick={() =>
-                                      setApprovalCurrentIndex((current) =>
-                                        Math.min(pendingApprovalBatch.items.length - 1, current + 1)
-                                      )
-                                    }
-                                    data-testid={chatSelectors.approvalBatchNextButton}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => void handleCancel()}
-                                    disabled={cancellingRun}
-                                    className={`ml-1 inline-flex h-8 w-8 items-center justify-center rounded-[6px] text-white transition ${
-                                      cancellingRun
-                                        ? 'bg-[#E0DFDC]'
-                                        : 'bg-[#B3261E] hover:bg-[#8F3028]'
-                                    }`}
-                                    data-testid={workbenchSelectors.sendButton}
-                                    aria-label="停止本次运行"
-                                  >
-                                    {cancellingRun ? (
-                                      <Spin size="small" />
-                                    ) : (
-                                      <HiStop className="h-4 w-4" />
-                                    )}
-                                  </button>
-                                </div>
-                              </div>
-                              <p className="mx-5 mt-3 text-[13px] leading-6 text-[#787774]">
-                                {currentApprovalItem.commandExplanation}
-                              </p>
-                              <code className="mx-5 mt-3 block max-h-[min(34vh,320px)] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437] [overflow-wrap:anywhere]">
-                                {currentApprovalItem.command}
-                              </code>
-                              <div className="mx-2 mt-3 space-y-1">
-                                <button
-                                  type="button"
-                                  className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#37352F] shadow-[inset_3px_0_0_#37352F,inset_0_0_0_1px_#EEEEEC] hover:bg-[#F4F4F2]"
-                                  onClick={() =>
-                                    void handleApprovalDecision({
-                                      itemId: currentApprovalItem.itemId,
-                                      action: 'approve'
-                                    })
-                                  }
-                                  disabled={approvalSubmitting}
-                                  data-testid={chatSelectors.approvalBatchApproveButton}
-                                >
-                                  <span>允许本次操作</span>
-                                  <HiCheck className="h-4 w-4" />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#787774] hover:bg-[#F4F4F2]"
-                                  onClick={() =>
-                                    void handleApprovalDecision({
-                                      itemId: currentApprovalItem.itemId,
-                                      action: 'reject'
-                                    })
-                                  }
-                                  disabled={approvalSubmitting}
-                                  data-testid={chatSelectors.approvalBatchDenyButton}
-                                >
-                                  <span>拒绝本次操作</span>
-                                  <HiXMark className="h-4 w-4 text-[#B3261E]" />
-                                </button>
-                              </div>
-                              <div className="mt-3 flex items-center gap-2 border-t border-[#EEEEEC] px-4 py-4">
-                                <input
-                                  className="min-w-0 flex-1 rounded-[6px] border border-[#EEEEEC] bg-[#FFFFFF] px-3 py-2 text-sm text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#37352F] focus:ring-2 focus:ring-[#EFEFED]"
-                                  placeholder={`告诉${PRODUCT_NAME_ZH}该怎么做`}
-                                  value={
-                                    approvalDraftDecisions[currentApprovalItem.itemId]?.message ||
-                                    ''
-                                  }
-                                  onChange={(event) =>
-                                    setApprovalGuideMessage(
-                                      currentApprovalItem.itemId,
-                                      event.target.value
-                                    )
-                                  }
-                                  disabled={approvalSubmitting}
-                                  data-testid={chatSelectors.approvalBatchGuideInput}
-                                />
-                                <Button
-                                  type="primary"
-                                  className="!flex !h-9 !items-center !gap-1 !rounded-full !border-[#37352F] !bg-[#37352F] !text-white hover:!bg-[#2F3437] disabled:!border-[#EEEEEC] disabled:!bg-[#F4F4F2] disabled:!text-[#9B9A97]"
-                                  icon={<HiArrowUp className="h-4 w-4" />}
-                                  onClick={() => void handleApprovalBatchSubmit()}
-                                  loading={approvalSubmitting}
-                                  disabled={approvalSubmitDisabled}
-                                  data-testid={chatSelectors.approvalBatchSubmitButton}
-                                >
-                                  提交
-                                </Button>
-                              </div>
-                            </div>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div className="relative">
-                          {busyCancelTask || clearContextVisible ? (
-                            <div className="mb-2 flex flex-col items-start gap-2">
-                              {busyCancelTask ? (
-                                <MessageActionCapsule
-                                  icon={<HiOutlineClock className="h-3.5 w-3.5" />}
-                                  label={`立即执行「${busyCancelTask.name}」`}
-                                  tooltip={`「${busyCancelTask.name}」到点时伙伴正忙，本次已取消。点击可立即按该定时任务执行。`}
-                                  onAction={handleScheduledTaskBusyCancelAction}
-                                  dismissible
-                                  onDismiss={() => void handleDismissScheduledTaskBusyCancel()}
-                                  actionTestId={workbenchSelectors.scheduledTaskBusyCancelCapsule}
-                                  dismissTestId={workbenchSelectors.scheduledTaskBusyCancelDismiss}
-                                />
-                              ) : null}
-                              {clearContextVisible ? (
-                                <MessageActionCapsule
-                                  icon={<PiEraser className="h-3.5 w-3.5" />}
-                                  label="清空消息记录"
-                                  tooltip={`清空「${currentPartner?.name || '伙伴'}」的全部消息记录，无法恢复。`}
-                                  onAction={handleClearPartnerContext}
-                                  actionTestId={workbenchSelectors.clearContextButton}
-                                />
-                              ) : null}
-                            </div>
-                          ) : null}
-                          <WorkbenchComposer
-                          aiPreference={composerAiPreference}
-                          onAiPreferenceChange={handleAiPreferenceChange}
-                          executionPermission={composerExecutionPermission}
-                          onExecutionPermissionChange={handleExecutionPermissionChange}
-                          modelConfigs={modelConfigs}
-                          modelListsByConfigId={modelListsByConfigId}
-                          modelSelection={modelSelection}
-                          onModelSelectionChange={handleModelSelectionChange}
-                          onRefreshModelLists={refreshModelLists}
-                          onDraftChange={handleComposerDraftChange}
-                          onSubmit={() => void handleSend()}
-                          onCancel={() => void handleCancel()}
-                          onPreviewImage={setPreviewImage}
-                          loading={loading}
-                          cancelling={cancellingRun}
-                          canSubmit={Boolean(
-                            input.trim() && currentPartnerId && modelSelection.mainModel
-                          )}
-                          submitDisabledReason={composerSubmitDisabledReason}
-                          showCancel={Boolean(aiRunId)}
-                          draftValue={composerDraftValue}
-                          draftKey={composerDraftKey}
-                          contextUsage={contextUsage}
-                          plan={composerPlan}
-                          requestAttachmentTarget={ensureAttachmentTarget}
-                          onFileDropHandlerReady={(handler) => {
-                            composerFileDropHandlerRef.current = handler
-                          }}
-                        />
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {isAttachmentDropActive ? (
-                <div
-                  className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-white/55 backdrop-blur-[1px]"
-                  data-testid={workbenchSelectors.attachmentDropOverlay}
-                >
-                  <div className="border border-dashed border-[#7B96A8] bg-white/85 px-5 py-3 text-sm font-medium text-[#37586E] shadow-sm">
-                    松开以添加文件
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          </div>
+                      // 用当前真实渲染宽度作为起点，避免从 flex-basis 比例切到像素时跳变。
+                      const startWidth = Math.round(
+                        contentPanelShellRef.current?.getBoundingClientRect().width ??
+                          contentPanelWidthPxRef.current
+                      )
+                      applyContentPanelWidthPx(startWidth)
+                      enterContentPanelPixelResize()
+                      contentPanelDragStartRef.current = {
+                        pointerId: event.pointerId,
+                        startX: event.clientX,
+                        startWidth
+                      }
+                      const splitLeft = mainSplitRef.current?.getBoundingClientRect().left ?? 0
+                      const available = mainSplitRef.current?.clientWidth ?? 0
+                      setContentPanelResizeGuide(true, splitLeft + available - startWidth)
+                      document.body.classList.add('workbench-content-panel-resizing')
 
-          {contentPanelShellMounted ? (
-            <>
-              <div
-                ref={contentPanelResizeGuideRef}
-                className="nc-content-panel-resize-guide"
-                data-active="false"
-                aria-hidden="true"
-              />
-              <div
-                className="nc-content-panel-resizer workbench-no-drag"
-                data-testid={workbenchSelectors.contentPanelResizer}
-                onPointerEnter={() => {
-                  if (
-                    contentPanel.kind === 'browser' &&
-                    contentPanel.browserTabId &&
-                    browserPresentationEnabled &&
-                    browserTransitionImage?.tabId !== contentPanel.browserTabId
-                  ) {
-                    void captureBrowserTransition(contentPanel.browserTabId)
-                  }
-                }}
-                onPointerDown={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  event.currentTarget.setPointerCapture(event.pointerId)
-
-                  if (contentPanelDragRestoreTimerRef.current !== null) {
-                    window.clearTimeout(contentPanelDragRestoreTimerRef.current)
-                    contentPanelDragRestoreTimerRef.current = null
-                  }
-                  if (contentPanelDragSettlingFrameRef.current !== null) {
-                    window.cancelAnimationFrame(contentPanelDragSettlingFrameRef.current)
-                    contentPanelDragSettlingFrameRef.current = null
-                  }
-                  document.body.classList.remove('workbench-content-panel-settling')
-
-                  // 用当前真实渲染宽度作为起点，避免从 flex-basis 比例切到像素时跳变。
-                  const startWidth = Math.round(
-                    contentPanelShellRef.current?.getBoundingClientRect().width ??
-                      contentPanelWidthPxRef.current
-                  )
-                  applyContentPanelWidthPx(startWidth)
-                  enterContentPanelPixelResize()
-                  contentPanelDragStartRef.current = {
-                    pointerId: event.pointerId,
-                    startX: event.clientX,
-                    startWidth
-                  }
-                  const splitLeft = mainSplitRef.current?.getBoundingClientRect().left ?? 0
-                  const available = mainSplitRef.current?.clientWidth ?? 0
-                  setContentPanelResizeGuide(true, splitLeft + available - startWidth)
-                  document.body.classList.add('workbench-content-panel-resizing')
-
-                  if (contentPanel.kind === 'browser' && contentPanel.browserTabId) {
-                    const tabId = contentPanel.browserTabId
-                    const switchViewToSnapshot = (): void => {
-                      setBrowserPresentationEnabled(false)
-                      void window.api.browserPanelHide()
-                    }
-                    if (browserTransitionImage?.tabId === tabId) {
-                      switchViewToSnapshot()
-                    } else {
-                      void captureBrowserTransition(tabId).then((dataUrl) => {
-                        if (contentPanelDragStartRef.current && dataUrl) {
-                          switchViewToSnapshot()
+                      if (contentPanel.kind === 'browser' && contentPanel.browserTabId) {
+                        const tabId = contentPanel.browserTabId
+                        const switchViewToSnapshot = (): void => {
+                          setBrowserPresentationEnabled(false)
+                          void window.api.browserPanelHide()
                         }
-                      })
-                    }
-                  }
-                }}
-              />
-              <div
-                ref={contentPanelShellRef}
-                className="nc-content-panel-shell"
-                data-testid={workbenchSelectors.contentPanelShell}
-                data-panel-visible={contentPanelShellVisible ? 'true' : 'false'}
-              >
-                <div
-                  className="nc-content-panel-shell-inner"
-                  style={{
-                    transform: contentPanelShellVisible ? 'translateX(0)' : 'translateX(24px)',
-                    opacity: contentPanelShellVisible ? 1 : 0
-                  }}
-                >
-                  <WorkbenchContentPanel
-                    state={contentPanel}
-                    tabs={tabWorkspace.tabs}
-                    activeTabId={tabWorkspace.activeTabId}
-                    activeApplyRecord={activeApplyRecord}
-                    applyLoading={applyLoading}
-                    applyReverting={applyReverting}
-                    workspaces={workspaces}
-                    fallbackWorkspaceName={selectedWorkspaceName}
-                    selectedWorkspace={selectedWorkspace || null}
-                    fileChangeRecords={fileChangeRecords}
-                    onRevertApply={() => void handleApplyRevert()}
-                    onBackToPanelState={showContentPanel}
-                    onOpenPath={openPathOrNotify}
-                    onRevealPath={revealPathOrNotify}
-                    onActivateTab={activateResourceTab}
-                    onCloseTab={closeResourceTab}
-                    onAddFileTab={addFileTab}
-                    onAddBrowserTab={addBrowserTab}
-                    onCollapse={collapseContentPanel}
-                    onBrowserStateChange={handleBrowserStateChange}
-                    onOpenWorkspaceFile={openWorkspaceFile}
-                    onOpenWorkspaceChange={openWorkspaceChange}
-                    isAiRunActive={Boolean(aiRunId)}
-                    onSuccessMessage={emitSuccessMessage}
-                    onInfoMessage={emitInfoMessage}
-                    browserPresentationEnabled={browserPresentationEnabled}
-                    browserTransitionImage={browserTransitionImage}
+                        if (browserTransitionImage?.tabId === tabId) {
+                          switchViewToSnapshot()
+                        } else {
+                          void captureBrowserTransition(tabId).then((dataUrl) => {
+                            if (contentPanelDragStartRef.current && dataUrl) {
+                              switchViewToSnapshot()
+                            }
+                          })
+                        }
+                      }
+                    }}
                   />
-                </div>
-              </div>
-            </>
-          ) : null}
+                  <div
+                    ref={contentPanelShellRef}
+                    className="nc-content-panel-shell"
+                    data-testid={workbenchSelectors.contentPanelShell}
+                    data-panel-visible={contentPanelShellVisible ? 'true' : 'false'}
+                  >
+                    <div
+                      className="nc-content-panel-shell-inner"
+                      style={{
+                        transform: contentPanelShellVisible ? 'translateX(0)' : 'translateX(24px)',
+                        opacity: contentPanelShellVisible ? 1 : 0
+                      }}
+                    >
+                      <WorkbenchContentPanel
+                        state={contentPanel}
+                        tabs={tabWorkspace.tabs}
+                        activeTabId={tabWorkspace.activeTabId}
+                        activeApplyRecord={activeApplyRecord}
+                        applyLoading={applyLoading}
+                        applyReverting={applyReverting}
+                        workspaces={workspaces}
+                        fallbackWorkspaceName={selectedWorkspaceName}
+                        selectedWorkspace={selectedWorkspace || null}
+                        fileChangeRecords={fileChangeRecords}
+                        onRevertApply={() => void handleApplyRevert()}
+                        onBackToPanelState={showContentPanel}
+                        onOpenPath={openPathOrNotify}
+                        onRevealPath={revealPathOrNotify}
+                        onActivateTab={activateResourceTab}
+                        onCloseTab={closeResourceTab}
+                        onAddFileTab={addFileTab}
+                        onAddBrowserTab={addBrowserTab}
+                        onCollapse={collapseContentPanel}
+                        onBrowserStateChange={handleBrowserStateChange}
+                        onOpenWorkspaceFile={openWorkspaceFile}
+                        onOpenWorkspaceChange={openWorkspaceChange}
+                        isAiRunActive={Boolean(aiRunId)}
+                        onSuccessMessage={emitSuccessMessage}
+                        onInfoMessage={emitInfoMessage}
+                        browserPresentationEnabled={browserPresentationEnabled}
+                        browserTransitionImage={browserTransitionImage}
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : null}
             </div>
           </>
         )}
