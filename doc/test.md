@@ -26,7 +26,7 @@
 - `showcase`
   - 放在 `tests/case/showcase/**`，文件后缀 `.showcase.test.ts`。
   - 独立官网样例采集，走真实 E2E 链路，用 `pnpm test:showcase` 单独执行。
-  - 不进入 `doc/test-plan/**`，产出的样例导出到 `tests/logs/showcase/**`。
+  - 这个是大概率不维护的，需要用也只会单独执行，基本忽略即可。
 - 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Settings、Workbench、Showcase 或 Unit。
 
 ### 2.2 目录结构
