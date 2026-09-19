@@ -98,7 +98,7 @@ git diff <previous-platform-tag>..<current-platform-tag>
 - 未上线：执行 `release:abort`，在修复后的 `main` 上用同一版本重新 `release:start` 和 prepare。
 - 已上线：必须创建更高版本的新 Tag 和候选包。
 
-同一次发布中，如果修复不影响已经通过的用例，不必重跑这些用例；但必须重新评估并记录判断。
+同一次发布中，如果修复不影响已经通过的用例，不必重跑这些用例；但必须重新评估修改的影响范围，定向测试需要回归的。
 
 ## 3. 发布与公开验证
 
