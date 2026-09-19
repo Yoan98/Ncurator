@@ -124,6 +124,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const mentionHasMoreRef = useRef(false)
   const mentionLoadingMoreRef = useRef(false)
   const mentionNextOffsetRef = useRef(0)
+  const mentionOptionsRef = useRef<SelectedReference[]>([])
+  const mentionActiveIndexRef = useRef(0)
   const controlFocusTimeoutRef = useRef<number | null>(null)
   const compositionGuardTimeoutRef = useRef<number | null>(null)
   const isComposingRef = useRef(false)
@@ -139,6 +141,9 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   const [hasContent, setHasContent] = useState(false)
   const [attachmentPreviewUrls, setAttachmentPreviewUrls] = useState<Record<string, string>>({})
 
+  mentionOptionsRef.current = mentionOptions
+  mentionActiveIndexRef.current = mentionActiveIndex
+
   useEffect(() => {
     draftValueRef.current = draftValue
     setHasContent(
@@ -153,11 +158,13 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     setMentionQuery(null)
     setMentionSessionId(null)
     setMentionOptions([])
+    mentionOptionsRef.current = []
     setMentionHasMore(false)
     mentionHasMoreRef.current = false
     mentionNextOffsetRef.current = 0
     setMentionLoadingMore(false)
     mentionLoadingMoreRef.current = false
+    mentionActiveIndexRef.current = 0
     setMentionActiveIndex(0)
   }, [])
 
@@ -195,11 +202,23 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         pageItems.forEach((scope) => {
           knownScopesRef.current.set(getScopeKey(scope), scope)
         })
-        setMentionOptions((current) => (input.append ? [...current, ...pageItems] : pageItems))
+        setMentionOptions((current) => {
+          const next = input.append ? [...current, ...pageItems] : pageItems
+          mentionOptionsRef.current = next
+          return next
+        })
         setMentionHasMore(Boolean(response.hasMore))
         mentionHasMoreRef.current = Boolean(response.hasMore)
         mentionNextOffsetRef.current = response.offset + response.items.length
-        if (!input.append) setMentionActiveIndex(0)
+        // Keep the user's keyboard selection across late/same-query refetches.
+        // Only clamp so a shorter result list cannot leave activeIndex out of range.
+        if (!input.append) {
+          setMentionActiveIndex((current) => {
+            const next = pageItems.length === 0 ? 0 : Math.min(current, pageItems.length - 1)
+            mentionActiveIndexRef.current = next
+            return next
+          })
+        }
       } finally {
         if (requestSeq === mentionRequestSeqRef.current) {
           setMentionLoading(false)
@@ -372,8 +391,10 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     if (isNewMentionSession) {
       mentionSessionSequenceRef.current += 1
       setMentionOptions([])
+      mentionOptionsRef.current = []
       setMentionSessionId(mentionSessionSequenceRef.current)
     }
+    mentionActiveIndexRef.current = 0
     setMentionActiveIndex(0)
   }, [closeMention, getMentionContext])
 
@@ -674,6 +695,64 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     insertTextAtSelection(pastedText)
   }
 
+  const handleMentionKeyDown = useCallback(
+    (event: KeyboardEvent): boolean => {
+      if (mentionQueryRef.current === null) return false
+      if (event.isComposing || isComposingRef.current) return false
+      // Same native event can reach both the window capture listener and the editor handler.
+      if (event.defaultPrevented) return true
+      const options = mentionOptionsRef.current
+      if (event.key === 'ArrowDown' && options.length > 0) {
+        event.preventDefault()
+        event.stopPropagation()
+        setMentionActiveIndex((current) => {
+          const next = (current + 1) % options.length
+          mentionActiveIndexRef.current = next
+          return next
+        })
+        return true
+      }
+      if (event.key === 'ArrowUp' && options.length > 0) {
+        event.preventDefault()
+        event.stopPropagation()
+        setMentionActiveIndex((current) => {
+          const next = current === 0 ? options.length - 1 : current - 1
+          mentionActiveIndexRef.current = next
+          return next
+        })
+        return true
+      }
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        event.stopPropagation()
+        const nextOption = options[mentionActiveIndexRef.current]
+        if (nextOption) insertMentionScope(nextOption)
+        return true
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        closeMention()
+        return true
+      }
+      return false
+    },
+    [closeMention, insertMentionScope]
+  )
+
+  useEffect(() => {
+    if (mentionQuery === null) return
+    const onKeyDown = (event: KeyboardEvent): void => {
+      handleMentionKeyDown(event)
+    }
+    // Capture on window so ArrowDown/Up still move the highlight when focus left the editor
+    // (e.g. mention option buttons), which matches the packaged E2E failure mode.
+    window.addEventListener('keydown', onKeyDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, true)
+    }
+  }, [handleMentionKeyDown, mentionQuery])
+
   const handleEditorKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>): void => {
     if (event.nativeEvent.isComposing || isComposingRef.current) return
     if (event.key === 'Enter' && compositionJustEndedRef.current) {
@@ -681,31 +760,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
       return
     }
 
-    if (mentionQuery !== null) {
-      if (event.key === 'ArrowDown' && mentionOptions.length > 0) {
-        event.preventDefault()
-        setMentionActiveIndex((current) => (current + 1) % mentionOptions.length)
-        return
-      }
-      if (event.key === 'ArrowUp' && mentionOptions.length > 0) {
-        event.preventDefault()
-        setMentionActiveIndex((current) =>
-          current === 0 ? mentionOptions.length - 1 : current - 1
-        )
-        return
-      }
-      if (event.key === 'Enter') {
-        event.preventDefault()
-        const nextOption = mentionOptions[mentionActiveIndex]
-        if (nextOption) insertMentionScope(nextOption)
-        return
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        closeMention()
-        return
-      }
-    }
+    if (handleMentionKeyDown(event.nativeEvent)) return
 
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
@@ -942,8 +997,17 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
             onKeyDown={handleEditorKeyDown}
             onPaste={handleEditorPaste}
             onFocus={handleEditorFocus}
-            onKeyUp={() => {
+            onKeyUp={(event) => {
               if (isComposingRef.current) return
+              if (
+                mentionQueryRef.current !== null &&
+                (event.key === 'ArrowDown' ||
+                  event.key === 'ArrowUp' ||
+                  event.key === 'Enter' ||
+                  event.key === 'Escape')
+              ) {
+                return
+              }
               scheduleMentionRefresh()
             }}
             onCompositionStart={() => {

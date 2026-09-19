@@ -101,6 +101,7 @@ const ReferenceMentionPanel: React.FC<ReferenceMentionPanelProps> = ({
                       <button
                         key={getScopeKey(reference)}
                         type="button"
+                        tabIndex={-1}
                         className={`flex h-8 w-full items-center gap-[2px] rounded-[8px] px-2.5 text-left transition-colors ${
                           active ? 'bg-[#F1F1F0]' : 'hover:bg-[#F7F7F5]'
                         }`}
