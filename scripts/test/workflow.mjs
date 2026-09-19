@@ -251,6 +251,7 @@ const resolveScopeDir = (input) => {
 }
 
 const isE2EFile = (filePath) => path.basename(filePath).endsWith('.e2e.test.ts')
+const isShowcaseFile = (filePath) => path.basename(filePath).endsWith('.showcase.test.ts')
 const isLiveBackendFile = (filePath) =>
   filePath.includes(`${path.sep}live${path.sep}`) && !isE2EFile(filePath)
 const requiresBackendPptBrowser = async (filePath) => {
@@ -355,10 +356,10 @@ const findTestFiles = async (input) => {
     .filter((filePath) => {
       if (!input.type) return true
       return input.showcase
-        ? path.basename(filePath).endsWith('.showcase.test.ts')
+        ? isShowcaseFile(filePath)
         : input.type === 'e2e'
-          ? path.basename(filePath).endsWith('.e2e.test.ts')
-          : !isE2EFile(filePath)
+          ? isE2EFile(filePath)
+          : !isE2EFile(filePath) && !isShowcaseFile(filePath)
     })
   if (input.caseIds.length === 0) return candidates.sort()
   const matches = await Promise.all(
