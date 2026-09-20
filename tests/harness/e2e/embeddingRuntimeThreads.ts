@@ -15,12 +15,26 @@ export type EmbeddingRuntimeThreadMeasurement = {
   intraOpNumThreads: number | null
 }
 
+const TITLE_SEARCH_INTERVAL_MS = 500
+
 const wait = async (ms: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-const readEmbeddingRuntimeSnapshot = async (page: Page): Promise<EmbeddingRuntimeSnapshot> =>
-  await page.evaluate(async () => await window.api.getEmbeddingStatus())
+const isPageClosedError = (error: unknown): boolean => {
+  const message = error instanceof Error ? error.message : String(error)
+  return /Target page, context or browser has been closed|Target closed|Page closed/i.test(message)
+}
+
+const readEmbeddingRuntimeSnapshot = async (page: Page): Promise<EmbeddingRuntimeSnapshot | null> => {
+  if (page.isClosed()) return null
+  try {
+    return await page.evaluate(async () => await window.api.getEmbeddingStatus())
+  } catch (error) {
+    if (page.isClosed() || isPageClosedError(error)) return null
+    throw error
+  }
+}
 
 export const waitForEmbeddingReady = async (page: Page, timeoutMs = 60_000): Promise<void> => {
   await page.waitForFunction(
@@ -59,13 +73,23 @@ export const measureEmbeddingRuntimeThreadDelta = async (input: {
   let readyAt: number | null = null
   let after = 0
   let lastSnapshot: EmbeddingRuntimeSnapshot | null = null
+  let lastTitleSearchAt = 0
 
   while (Date.now() < deadline) {
+    if (input.page.isClosed()) {
+      throw new Error('embedding runtime measurement stopped because the page closed')
+    }
     const snapshot = await readEmbeddingRuntimeSnapshot(input.page)
+    if (!snapshot) {
+      throw new Error('embedding runtime measurement stopped because the page closed')
+    }
     lastSnapshot = snapshot
-    const titled = findEmbeddingRuntimeProcess(input.electronPid, input.excludePid)
-    const snapshotPid =
-      snapshot.pid && snapshot.pid !== input.excludePid ? snapshot.pid : 0
+    const snapshotPid = snapshot.pid && snapshot.pid !== input.excludePid ? snapshot.pid : 0
+    let titled: { pid: number; command?: string } | null = null
+    if (!snapshotPid && Date.now() - lastTitleSearchAt >= TITLE_SEARCH_INTERVAL_MS) {
+      lastTitleSearchAt = Date.now()
+      titled = findEmbeddingRuntimeProcess(input.electronPid, input.excludePid)
+    }
     const resolvedPid = snapshotPid || titled?.pid || 0
     if (resolvedPid) {
       pid = resolvedPid
@@ -74,7 +98,13 @@ export const measureEmbeddingRuntimeThreadDelta = async (input: {
           ? snapshot.intraOpNumThreads
           : (parseEmbeddingRuntimeBudgetFromCommand(titled?.command)?.intraOpNumThreads ??
             intraOpNumThreads)
-      const threads = countProcessThreads(resolvedPid)
+      let threads: number
+      try {
+        threads = countProcessThreads(resolvedPid)
+      } catch {
+        await wait(10)
+        continue
+      }
       if (snapshot.status !== 'ready') {
         before = before === null ? threads : Math.min(before, threads)
         readyAt = null

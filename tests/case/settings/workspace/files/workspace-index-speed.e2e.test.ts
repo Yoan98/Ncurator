@@ -1,12 +1,16 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { resolveOrtThreadBudget } from '../../../../../src/main/services/vector/indexSpeed'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import { osThreadDeltasFollowIndexSpeed } from '../../../../harness/core/indexSpeedThreads'
-import { measureEmbeddingRuntimeThreadDelta, waitForEmbeddingRuntimeProcessGone } from '../../../../harness/e2e/embeddingRuntimeThreads'
+import {
+  measureEmbeddingRuntimeThreadDelta,
+  waitForEmbeddingRuntimeProcessGone
+} from '../../../../harness/e2e/embeddingRuntimeThreads'
 import {
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
   addWorkspaceDirectoryThroughNativeDialog,
@@ -15,6 +19,64 @@ import {
   selectWorkspaceIndexSpeedThroughSettingsUi,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
+
+const waitForPrepareEnabled = async (page: Page): Promise<void> => {
+  await page.waitForFunction((testId) => {
+    const element = document.querySelector(`[data-testid="${testId}"]`)
+    return element instanceof HTMLButtonElement && !element.disabled
+  }, importSelectors.workspaceQuickPrepareButton)
+}
+
+const waitForActionableIndexCount = async (page: Page, minimum: number): Promise<void> => {
+  await page.waitForFunction(
+    (input) => {
+      const element = document.querySelector(`[data-testid="${input.testId}"]`)
+      return Number(element?.textContent || '0') >= input.minimum
+    },
+    { testId: importSelectors.workspaceActionableIndexCount, minimum }
+  )
+}
+
+const waitForSpeedButtonsDisabled = async (page: Page, disabled: boolean): Promise<void> => {
+  await page.waitForFunction(
+    (input) => {
+      const slow = document.querySelector(`[data-testid="${input.slow}"]`)
+      const fast = document.querySelector(`[data-testid="${input.fast}"]`)
+      return (
+        slow instanceof HTMLButtonElement &&
+        fast instanceof HTMLButtonElement &&
+        slow.disabled === input.disabled &&
+        fast.disabled === input.disabled
+      )
+    },
+    {
+      slow: importSelectors.workspaceIndexSpeedSlow,
+      fast: importSelectors.workspaceIndexSpeedFast,
+      disabled
+    }
+  )
+}
+
+const scanPendingFileThenPrepare = async (input: {
+  page: Page
+  workspaceId: string
+  filePath: string
+  content: string
+}): Promise<void> => {
+  await writeFile(input.filePath, input.content)
+  await getSettingsLocator(input.page, importSelectors.workspaceQuickScanButton).click()
+  await waitForFileIndexJobIdle(input.page, input.workspaceId)
+  await waitForActionableIndexCount(input.page, 1)
+  await waitForPrepareEnabled(input.page)
+}
+
+const clickPrepareUntilProgressVisible = async (page: Page): Promise<void> => {
+  await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
+  await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
+    state: 'visible',
+    timeout: SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS
+  })
+}
 
 describe('settings workspace e2e', () => {
   it(
@@ -33,7 +95,6 @@ describe('settings workspace e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), 'settings-index-speed-'))
-          await writeFile(path.join(workspaceRoot, 'slow.txt'), 'slow index speed\n')
           runtime.registerResource({
             name: `settings-index-speed:${workspaceRoot}`,
             phase: 'after-app-close',
@@ -54,76 +115,48 @@ describe('settings workspace e2e', () => {
           const defaultSlowSelected = await slowSpeed.evaluate((element) =>
             element.classList.contains('ant-btn-primary')
           )
-          await page.waitForFunction((testId) => {
-            const element = document.querySelector(`[data-testid="${testId}"]`)
-            return element instanceof HTMLButtonElement && !element.disabled
-          }, importSelectors.workspaceQuickPrepareButton)
 
           const electronPid = runtime.electronApp.process()?.pid
           if (!electronPid) throw new Error('electron pid is required to measure embedding threads')
           const slowBudget = resolveOrtThreadBudget('slow')
           const fastBudget = resolveOrtThreadBudget('fast')
 
-          const slowWatch = measureEmbeddingRuntimeThreadDelta({
+          await scanPendingFileThenPrepare({
+            page,
+            workspaceId,
+            filePath: path.join(workspaceRoot, 'slow.txt'),
+            content: 'slow index speed\n'
+          })
+          await clickPrepareUntilProgressVisible(page)
+          await waitForSpeedButtonsDisabled(page, true)
+          const speedLockedWhileIndexing = true
+          const slowThreads = await measureEmbeddingRuntimeThreadDelta({
             page,
             electronPid,
             timeoutMs: SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS
           })
-          await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-          await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
-            state: 'visible'
-          })
-          await page.waitForFunction((ids) => {
-            const slow = document.querySelector(`[data-testid="${ids.slow}"]`)
-            const fast = document.querySelector(`[data-testid="${ids.fast}"]`)
-            return (
-              slow instanceof HTMLButtonElement &&
-              fast instanceof HTMLButtonElement &&
-              slow.disabled &&
-              fast.disabled
-            )
-          }, {
-            slow: importSelectors.workspaceIndexSpeedSlow,
-            fast: importSelectors.workspaceIndexSpeedFast
-          })
-          const speedLockedWhileIndexing = true
-          const slowThreads = await slowWatch
           await waitForFileIndexJobIdle(page, workspaceId)
-          await page.waitForFunction((ids) => {
-            const slow = document.querySelector(`[data-testid="${ids.slow}"]`)
-            const fast = document.querySelector(`[data-testid="${ids.fast}"]`)
-            return (
-              slow instanceof HTMLButtonElement &&
-              fast instanceof HTMLButtonElement &&
-              !slow.disabled &&
-              !fast.disabled
-            )
-          }, {
-            slow: importSelectors.workspaceIndexSpeedSlow,
-            fast: importSelectors.workspaceIndexSpeedFast
-          })
+          await waitForSpeedButtonsDisabled(page, false)
           const speedUnlockedAfterIndex = true
 
-          await writeFile(path.join(workspaceRoot, 'fast.txt'), 'fast index speed\n')
-          await getSettingsLocator(page, importSelectors.workspaceQuickScanButton).click()
-          await waitForFileIndexJobIdle(page, workspaceId)
-          await page.waitForFunction((testId) => {
-            const element = document.querySelector(`[data-testid="${testId}"]`)
-            return element instanceof HTMLButtonElement && !element.disabled
-          }, importSelectors.workspaceQuickPrepareButton)
+          await scanPendingFileThenPrepare({
+            page,
+            workspaceId,
+            filePath: path.join(workspaceRoot, 'fast.txt'),
+            content: 'fast index speed\n'
+          })
           await selectWorkspaceIndexSpeedThroughSettingsUi(page, 'fast')
           await waitForEmbeddingRuntimeProcessGone({ pid: slowThreads.pid })
           const knowledgeIndexSpeed = (await page.evaluate(() => window.api.appSettingsGet()))
             .knowledgeIndexSpeed
 
-          const fastWatch = measureEmbeddingRuntimeThreadDelta({
+          await clickPrepareUntilProgressVisible(page)
+          const fastThreads = await measureEmbeddingRuntimeThreadDelta({
             page,
             electronPid,
             excludePid: slowThreads.pid,
             timeoutMs: SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS
           })
-          await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-          const fastThreads = await fastWatch
           const result = await waitForFileIndexJobIdle(page, workspaceId)
 
           return {

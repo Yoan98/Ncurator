@@ -528,6 +528,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
       setFileCancelModalOpen(true)
       return
     }
+    if (hasVectorModel !== true) {
+      message.warning('请先安装向量模型后再更新索引')
+      return
+    }
     setFilePrepareHeld(true)
     void handleWorkspacePrepareAll()
   }
