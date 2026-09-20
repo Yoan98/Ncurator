@@ -123,7 +123,7 @@ describe('settings workspace web e2e', () => {
                 state: 'visible'
               })
               const progressBlock = page.getByTestId(importSelectors.webSourceIndexJobProgress)
-              await progressBlock.getByText('步骤 1/2 抓取网页', { exact: true }).waitFor({
+              await progressBlock.getByText('抓取网页', { exact: true }).waitFor({
                 state: 'visible'
               })
               crawlStepVisible = true

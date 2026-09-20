@@ -14,8 +14,8 @@ const getJobTitle = (job: WorkspaceIndexJobRecord): string => {
     if (job.phase === 'diff') return '步骤 2/2 比对文件索引'
   }
   if (job.source_kind === 'web' && job.action === 'prepare') {
-    if (job.phase === 'crawl') return '步骤 1/2 抓取网页'
-    if (job.phase === 'index') return '步骤 2/2 建立索引'
+    if (job.phase === 'crawl') return '抓取网页'
+    if (job.phase === 'index') return '建立索引'
   }
   if (job.action === 'scan') return job.source_kind === 'web' ? '检查网页更新' : '检查文件更新'
   return job.source_kind === 'web' ? '更新网页索引' : '更新文件索引'
