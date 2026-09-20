@@ -77,8 +77,8 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：目录树只读取各地址或被展开目录的直属子项，并以加载反馈承载读取过程。
 - Why：文件地址可能包含 `node_modules` 等超大目录；进入设置页不能递归枚举整个森林。
-- How：添加包含根目录文件、普通子目录、`node_modules` 和点开头文件/目录的真实临时目录；进入文件 tab 后验证顶层首层，展开普通子目录后验证其直属文件，再确认点开头项始终不可见。
-- Oracle：`node_modules` 在顶层可见但其内容不会在首次加载时出现；子目录展开前不读取其子项，展开时显示局部 loading；点开头文件或目录在任意层级均不显示；页面没有全部展开/折叠入口，顶层地址行可单独折叠，对齐 `SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC4`、`SET-WORKSPACE-008-AC5`。新添加后只展开该地址、其余折叠由产品交互覆盖，本 case 不强制断言。
+- How：添加包含根目录文件、普通子目录、`node_modules` 和点开头文件/目录的真实临时目录；进入文件 tab 后验证顶层首层，展开普通子目录后验证其直属文件，再确认点开头项始终不可见。展开后点击目录树右上刷新，确认已展开节点仍展开、未展开目录不会被全部展开。
+- Oracle：`node_modules` 在顶层可见但其内容不会在首次加载时出现；子目录展开前不读取其子项，展开时显示局部 loading；点开头文件或目录在任意层级均不显示；页面没有全部展开/折叠入口，顶层地址行可单独折叠，对齐 `SET-WORKSPACE-008-AC1`、`SET-WORKSPACE-008-AC4`、`SET-WORKSPACE-008-AC5`。目录树右上刷新只更新已展示节点状态、不重置展开折叠，对齐 `SET-WORKSPACE-008-AC6`。新添加后只展开该地址、其余折叠由产品交互覆盖，本 case 不强制断言。
 
 #### `workspace-remove-from-list`
 
@@ -114,7 +114,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：点击“更新索引”后，文件状态会刷新为已索引并同步更新摘要。
 - Why：“索引已经可用”的核心用户反馈链路。全仓唯一的向量 warmup，预热共享 fixture 的 split/vector 缓存。
 - How：复制共享 workspace 输入的隔离副本，通过 Settings UI 添加为文件地址并点击更新索引，读取刷新后的文件树和全部支持文件状态。共享 fixture 含 `.doc`、`docx`、`pdf`、`md`、`txt`、`xlsx`、`xlsm` 等全部受支持类型，其中 excel 只以元数据方式索引进库。不切换、不断言索引速度。
-- Oracle：更新索引过程中出现持久化总进度，「检查更新」可用，「更新索引」文案变为「取消」且可点，对齐 `SET-WORKSPACE-004-AC3`、`SET-WORKSPACE-004-AC12`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC7`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+- Oracle：更新索引过程中出现持久化总进度，「检查更新」可用，「更新索引」文案变为「取消」且可点，对齐 `SET-WORKSPACE-004-AC3`、`SET-WORKSPACE-004-AC12`；进度从开始即以进度条呈现，未知总数时不先闪准备文案；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC7`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 
 #### `workspace-index-speed`
 

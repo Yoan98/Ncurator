@@ -61,7 +61,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const filePrepareSessionRef = useRef({ completed: 0, startedIds: new Set<string>() })
   const workspaceDirectoryRequestIds = useRef<Record<string, Record<string, number>>>({})
   const workspaceDirectoriesRef = useRef<WorkspaceDirectoryMap>({})
+  const workspacesRef = useRef(workspaces)
   workspaceDirectoriesRef.current = workspaceDirectories
+  workspacesRef.current = workspaces
 
   const loadWorkspaceDirectory = useCallback(
     async (workspaceId: string, relativePath: string): Promise<void> => {
@@ -75,10 +77,13 @@ const WorkspaceSettingsPanel: React.FC = () => {
       }
       const isLatestRequest = (): boolean =>
         workspaceDirectoryRequestIds.current[workspaceId]?.[relativePath] === requestId
-      setWorkspaceDirectoryLoading((previous) => ({
-        ...previous,
-        [workspaceId]: { ...previous[workspaceId], [relativePath]: true }
-      }))
+      const existingItems = workspaceDirectoriesRef.current[workspaceId]?.[relativePath]
+      if (!existingItems) {
+        setWorkspaceDirectoryLoading((previous) => ({
+          ...previous,
+          [workspaceId]: { ...previous[workspaceId], [relativePath]: true }
+        }))
+      }
       setWorkspaceDirectoryErrors((previous) => ({
         ...previous,
         [workspaceId]: { ...previous[workspaceId], [relativePath]: undefined }
@@ -123,13 +128,31 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const refreshWorkspaceDirectories = useCallback(
     (workspaceId: string): void => {
       const cachedPaths = Object.keys(workspaceDirectoriesRef.current[workspaceId] || {})
-      const relativePaths = cachedPaths.includes('') ? cachedPaths : ['', ...cachedPaths]
+      const relativePaths = cachedPaths.length > 0 ? cachedPaths : ['']
+      if (!relativePaths.includes('')) relativePaths.unshift('')
       relativePaths.forEach((relativePath) => {
         void loadWorkspaceDirectory(workspaceId, relativePath)
       })
     },
     [loadWorkspaceDirectory]
   )
+
+  const refreshVisibleWorkspaceTree = useCallback(async (): Promise<void> => {
+    setWorkspaceLoading(true)
+    try {
+      const workspaceResponse = await window.api.workspaceList()
+      setWorkspaces(workspaceResponse.items)
+      workspaceResponse.items.forEach((workspace) => {
+        if (!workspace.root_path || workspace.root_kind === 'file') return
+        refreshWorkspaceDirectories(workspace.id)
+      })
+    } catch (error) {
+      console.error(error)
+      message.error('刷新失败')
+    } finally {
+      setWorkspaceLoading(false)
+    }
+  }, [refreshWorkspaceDirectories])
 
   const loadWorkspaces = useCallback(async (options?: { focusRootId?: string }): Promise<void> => {
     setWorkspaceLoading(true)
@@ -198,7 +221,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
         [job.workspace_id]: job.status === 'running' ? job : undefined
       }))
       if (job.status !== 'running') {
-        refreshWorkspaceDirectories(job.workspace_id)
+        workspacesRef.current.forEach((workspace) => {
+          if (!workspace.root_path || workspace.root_kind === 'file') return
+          refreshWorkspaceDirectories(workspace.id)
+        })
       }
     }
     return window.api.onWorkspaceIndexJobProgress(handleProgress)
@@ -669,6 +695,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                           <Tooltip title="刷新">
                             <Button
                               size="small"
+                              aria-label="刷新目录树"
                               icon={
                                 <HiArrowPath
                                   className={
@@ -676,7 +703,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                   }
                                 />
                               }
-                              onClick={() => void loadWorkspaces()}
+                              onClick={() => void refreshVisibleWorkspaceTree()}
+                              data-testid={importSelectors.workspaceTreeRefreshButton}
                             />
                           </Tooltip>
                         </div>

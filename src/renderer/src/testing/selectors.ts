@@ -45,6 +45,7 @@ export const importSelectors = {
   workspaceIndexJobProgress: 'import-workspace-index-job-progress',
   workspaceRemoveButton: 'import-workspace-remove-button',
   workspaceTree: 'import-workspace-tree',
+  workspaceTreeRefreshButton: 'import-workspace-tree-refresh-button',
   workspaceDeleteConfirmButton: 'import-workspace-delete-confirm-button',
   workspaceDeleteCancelButton: 'import-workspace-delete-cancel-button',
   createWorkspaceModal: 'import-create-workspace-modal',
