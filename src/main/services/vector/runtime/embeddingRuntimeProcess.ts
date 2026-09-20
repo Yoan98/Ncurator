@@ -27,6 +27,7 @@ export const createEmbeddingRuntimeRequestHandler = (executor: EmbeddingExecutor
   async (request: EmbeddingRuntimeRequest): Promise<EmbeddingRuntimeResponse> => {
     try {
       if (request.action === 'initialize') {
+        if (request.payload) executor.setThreadBudget?.(request.payload)
         await executor.initialize()
         return {
           requestId: request.requestId,

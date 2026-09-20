@@ -70,10 +70,7 @@ export class EmbeddingService {
   }
 
   public async applyThreadBudget(budget: EmbeddingThreadBudget): Promise<void> {
-    const runtime = this.executor as EmbeddingExecutor & {
-      setThreadBudget?: (next: EmbeddingThreadBudget) => void
-    }
-    runtime.setThreadBudget?.(budget)
+    this.executor.setThreadBudget?.(budget)
     await this.executor.restart?.()
     this.status = 'uninitialized'
   }

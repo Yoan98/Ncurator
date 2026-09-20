@@ -86,10 +86,10 @@
 #### `index-speed-thread-budget`
 
 - 测试类型：`backend`
-- What：慢速/高速按逻辑核数映射不同的 ORT `session_options` 与嵌入 runtime env；保存档位走生产 `AppSettingsStore.save` 与 `EmbeddingService.applyIndexSpeed`。
-- Why：档位是否有效，看的是嵌入进程拿到的线程数和 spinning，以及保存后真实嵌入仍可用，不是页面文案，也不是一次索引的墙钟时间。
-- How：对 4/8/16 核分别计算慢速与高速预算；比较同核数下 `toOrtSessionOptions` / `toEmbeddingRuntimeEnv`；用生产 sqlite 与 `TransformersEmbeddingExecutor` 保存高速并 `applyIndexSpeed`，再真实 `embed`。不 fork Electron `utilityProcess`。
-- Oracle：慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；同核数高速线程数大于慢速；runtime env 解析后还原预算；默认慢速，保存后 sqlite 为高速、executor 预算为高速，且真实嵌入维度为 768。
+- What：慢速/高速按逻辑核数映射不同的 ORT `session_options`；真实 ORT session 的操作系统线程数随 `intraOpNumThreads` 变化。
+- Why：档位是否有效，看的是独立进程里 `ps`/进程线程数是否按预算增加，不是页面文案，也不是墙钟时间。
+- How：对 4/8/16 核分别计算慢速与高速预算；用生产 `toOrtSessionOptions(resolveOrtThreadBudget)` 在两个新进程里各建一次真实 embedding session，比较建 session 前后的操作系统线程数；再用生产 `createEmbeddingRuntimeRequestHandler` 覆盖 initialize payload，并 `applyIndexSpeed` 重建。不 fork Electron `utilityProcess`。
+- Oracle：独立进程中高速与慢速的线程数差等于 `intraOpNumThreads` 差；慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；initialize payload 后 applied session 为高速；applyIndexSpeed 后回到慢速；sqlite 保存为高速；嵌入维度 768。
 
 #### `prepare-workspaces-sequentially`
 

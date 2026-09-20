@@ -6,10 +6,12 @@ type FeatureExtractorResult = {
   dims: unknown
 }
 
-type FeatureExtractor = (
+type FeatureExtractor = ((
   texts: string[],
   options: { pooling: 'mean'; normalize: true }
-) => Promise<FeatureExtractorResult>
+) => Promise<FeatureExtractorResult>) & {
+  dispose?: () => Promise<void>
+}
 
 const toEmbeddingDims = (value: unknown): [number, number] => {
   if (!Array.isArray(value)) return [0, 0]
@@ -29,6 +31,7 @@ export class TransformersEmbeddingExecutor implements EmbeddingExecutor {
   private readonly modelsPath: string
   private readonly modelName: string
   private threadBudget: EmbeddingThreadBudget
+  private appliedSessionOptions: ReturnType<typeof toOrtSessionOptions> | null = null
   private extractor: FeatureExtractor | null = null
   private initializationPromise: Promise<void> | null = null
 
@@ -54,9 +57,16 @@ export class TransformersEmbeddingExecutor implements EmbeddingExecutor {
     return this.threadBudget
   }
 
+  public getAppliedSessionOptions(): ReturnType<typeof toOrtSessionOptions> | null {
+    return this.appliedSessionOptions
+  }
+
   public async restart(): Promise<void> {
+    const extractor = this.extractor
     this.extractor = null
+    this.appliedSessionOptions = null
     this.initializationPromise = null
+    await extractor?.dispose?.()
   }
 
   public async close(): Promise<void> {
@@ -80,9 +90,11 @@ export class TransformersEmbeddingExecutor implements EmbeddingExecutor {
         model: string,
         options: { dtype: 'fp32'; session_options: ReturnType<typeof toOrtSessionOptions> }
       ) => Promise<FeatureExtractor>
+      const sessionOptions = toOrtSessionOptions(this.threadBudget)
+      this.appliedSessionOptions = sessionOptions
       this.extractor = await createExtractor('feature-extraction', this.modelName, {
         dtype: 'fp32',
-        session_options: toOrtSessionOptions(this.threadBudget)
+        session_options: sessionOptions
       })
     })().finally(() => {
       this.initializationPromise = null

@@ -11,6 +11,7 @@ export type EmbeddingThreadBudget = {
 export type EmbeddingExecutor = {
   initialize: () => Promise<void>
   embed: (texts: string[]) => Promise<EmbeddingResult>
+  setThreadBudget?: (budget: EmbeddingThreadBudget) => void
   restart?: () => Promise<void>
   close?: () => Promise<void>
 }
