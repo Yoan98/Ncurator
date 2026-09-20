@@ -212,7 +212,7 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   meta.json
   timeline.jsonl
   runtime-events.jsonl
-  llm-io.jsonl            # backend
+  llm-io.jsonl
   artifacts.json
   cache-summary.json
   seed-manifest.json
@@ -233,8 +233,8 @@ tests/logs/<domain>/<suite>/<groups...>/<caseId>/<runId>/
   - 用来回答“底层 runtime 真实发出了哪些事件”。
   - 压缩切点以 `context_compaction_started` / `completed` 上的 `throughSeq`、`firstKeptSeq`、`historyFloorSeq`、`historyFloorKind`、`isSplitTurn`、`foldedCount`、`tailCount` 为准。
 - `llm-io.jsonl`
-  - backend 额外文件，e2e 不要求。
-  - 用来回答“发给模型的 conversation / system 实际是什么”。
+  - 发给模型的 conversation / system / usage / requestWire。
+  - backend 始终写入；e2e 由 observer 桥接生产 `recordLlmIo` 写入 `llm-io.jsonl`（无 LLM 调用时为空文件）。
 - `artifacts.json`
   - 单次 run 的附件索引。
   - 用来回答“本次 run 产生了哪些可回看的附件”。

@@ -9,7 +9,7 @@ import ExcelJS from 'exceljs'
 import JSZip from 'jszip'
 import { getSlides, getSlideText, loadPresentation } from 'pptx-kit'
 import type { Locator, Page } from 'playwright'
-import type { AiRunEvent, JsonValue, WorkspaceIndexJobAction } from '../../../src/shared/types'
+import type { AiLlmIoRecord, AiRunEvent, JsonValue, WorkspaceIndexJobAction } from '../../../src/shared/types'
 import {
   buildDocumentNodeIndex,
   loadDocxBundle
@@ -1842,6 +1842,13 @@ export const collectWorkbenchAiRunEvents = async (
 ): Promise<AiRunEvent[]> => {
   const signals = await runtime.collectSignals()
   return signals.aiRunEventEntries.map((entry) => entry.event)
+}
+
+export const collectWorkbenchLlmIoRecords = async (
+  runtime: E2ETestRuntime
+): Promise<AiLlmIoRecord[]> => {
+  const signals = await runtime.collectSignals()
+  return (signals.llmIoEntries || []).map((entry) => entry.record)
 }
 
 export const waitForWorkbenchAiEvent = async (

@@ -22,7 +22,7 @@ import { getModelsPath } from '../../../src/main/utils/paths'
 import type { AiLlmStreamingMode } from '../../../src/shared/types'
 import type { BackendHarnessMode, CreateAiRunContextInput, LiveLlmConfig } from './test-types'
 import type { EventCollector } from '../core/eventCollector'
-import { loadLiveLlmConfigFromEnv } from './llmConfig'
+import { loadLiveLlmConfigFromEnv, TOOL_REAL_LLM_CONFIG_ID } from './llmConfig'
 import { createScriptedStructuredOutputDriver } from './scriptedStructuredOutputDriver'
 
 const SCRIPTED_LLM_CONFIG: LiveLlmConfig = {
@@ -48,8 +48,11 @@ const resolveRuntimeModelName = (input: {
   return input.mode === 'mock-llm' ? SCRIPTED_LLM_CONFIG.model_name : undefined
 }
 
-const resolveRuntimeConfigId = (mode: BackendHarnessMode): string =>
-  mode === 'mock-llm' ? SCRIPTED_LLM_CONFIG.id : loadLiveLlmConfigFromEnv().id
+const resolveRuntimeConfigId = (mode: BackendHarnessMode): string => {
+  if (mode === 'live') return loadLiveLlmConfigFromEnv().id
+  if (mode === 'mock-llm') return SCRIPTED_LLM_CONFIG.id
+  return TOOL_REAL_LLM_CONFIG_ID
+}
 
 const buildApprovalResolver = (
   policy: CreateAiRunContextInput['approvalPolicy']

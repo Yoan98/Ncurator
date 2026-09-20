@@ -857,14 +857,6 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - How：使用共享 workspace fixture（运行时为文件地址 + 伙伴），默认上下文窗口。Run 1 选中 `深度学习.docx` 整理“过拟合”概念并正常完成；Run 2 同伙伴改选 `图形学.docx`，要求保留过拟合信息并补充反走样形成对比小结。检查 Run 2 首次 brain 消息数组与跨 run 前缀缓存（公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，当前 0.85）。
 - Oracle：Run 1 与 Run 2 均 `completed`；未压缩时 Run 2 消息数组历史中含 Run 1 的 user.content 与最终交付，末尾是 Run 2 当前 User；该当前 User 无 `<memory>`、无 `<active_state>`；Run 2 通过任一 DOCX 读工具（`docx_read_outline` / `docx_search` / `docx_read_nodes`）使用文件 B；最终交付同时包含过拟合与反走样关键事实。Run 2 首次 brain 的 `cachedInputTokens / Run1 末次 brain inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`。
 
-##### `human-prefix-cache-retain-live`
-
-- 测试类型：`backend / live`
-- What：同一伙伴连续三轮短任务（Run1 读极短笔记抽出事实，Run2/Run3 同选中文件追问），相邻跨 run 首轮 brain 均须明显复用上一 run 末次前缀缓存，且 `toolsHash` 一致。
-- Why：发布准备需要一条轻量、专职的前缀缓存回归；纯闲聊测不到 tool 历史投影与 tools 前缀稳态。若消息重建或工具表漂移导致缓存丢失，会拖高成本并放大续接不稳定。本 case 是 `release:start` Tag 前必跑项（不全量 live）。
-- How：case 内写入 `cache-retain-note.txt`，三轮共用同一选中文件与伙伴。Run1 要求读笔记说出项目代号（硬断言文本读工具）；Run2 问发布窗口；Run3 问负责人。两段跨 run 缓存用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）；硬断言相邻段 `toolsHash` 相等；断言 data 附带 `requestWireDiff` 供排障。
-- Oracle：三轮均 `completed`；Run1 有 `text_file_read` / `text_file_search` 证据；Run2 首次 brain 相对 Run1 末次、以及 Run3 首次 brain 相对 Run2 末次，均满足 `cachedInputTokens / 上一末次 inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，且两段 `toolsHash` 分别一致。
-
 ##### `human-skill-eviction-relearn-loop-live`
 
 - 测试类型：`backend / live`

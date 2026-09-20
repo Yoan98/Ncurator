@@ -21,7 +21,7 @@ const LIVE_KEY_ENV_NAMES = [
   'AI_LIVE_KEY_MIMO',
   'AI_LIVE_KEY_ZHIPU'
 ]
-const PREFIX_CACHE_LIVE_CASE = 'human-prefix-cache-retain-live'
+const PREFIX_CACHE_LIVE_CASE = 'prefix-cache-retain-live'
 const args = process.argv.slice(2)
 const valueAfter = (name) => {
   const index = args.indexOf(name)
@@ -204,15 +204,17 @@ process.stdout.write(`[release] running required live gate: ${PREFIX_CACHE_LIVE_
 await run(process.execPath, [
   path.join(ROOT, 'scripts', 'test', 'workflow.mjs'),
   '--type',
-  'backend',
+  'e2e',
   '--domain',
-  'ai',
+  'workbench',
   '--suite',
-  'human',
+  'conversation',
   '--group',
-  'live',
+  'prefix-cache',
   '--case',
-  PREFIX_CACHE_LIVE_CASE
+  PREFIX_CACHE_LIVE_CASE,
+  '--target',
+  'source'
 ])
 
 await run(process.execPath, [sqliteMigrationLockScript, '--promote-current'])

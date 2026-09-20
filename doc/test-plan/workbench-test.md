@@ -63,6 +63,7 @@ tests/case/workbench/
     timeline/
     message/
     scope/
+    prefix-cache/      # 正式 E2E：发布准备必跑跨 run 前缀缓存
     provider-matrix/   # 正式 E2E：发版按影响范围或全量测试
   run/
     process/
@@ -101,7 +102,7 @@ pnpm test:update:e2e
 - `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 测试入口。
 - 需要验证正式安装包时，调试使用 `pnpm test:e2e:package -- --bundle <release-bundle.json>`；它会校验并安装已构建候选包，再对安装后的真实应用执行所选正式 E2E，不重新构建。发布时通过 `release:win` / `release:mac` 的 `--test-only` 按影响评估选择范围，不带过滤参数时执行全部正式 E2E。
 - `conversation / run / result / scheduled-task` 是稳定 suite，不因 PRD 小节增删而轻易重排。
-- suite 下的 `partner / composer / timeline / message / scope / provider-matrix / process / blocker / browser / persistence / preview / apply / wps-office` 是 group，只在同一 suite 内用于收敛相近 case。不存在 `search/` 目录。
+- suite 下的 `partner / composer / timeline / message / scope / prefix-cache / provider-matrix / process / blocker / browser / persistence / preview / apply / wps-office` 是 group，只在同一 suite 内用于收敛相近 case。不存在 `search/` 目录。
 
 ## 5. 测试清单
 
@@ -226,6 +227,14 @@ pnpm test:update:e2e
 - Why：日常全量 live 只跑 `AI_LIVE_PROVIDER`/`AI_LIVE_MODEL` 选定目标；需要单独 smoke 覆盖「有 Key 的全部内置服务商」连通性。
 - How：读取 `listConfiguredLiveLlmTargets()`；为每个目标走 Settings UI 创建推荐服务商；创建伙伴后依次点预设 option（不得走自定义搜索兜底）并发送「你好」，等待 run 完成。
 - Oracle：每个已配置 Key 的服务商都有非空最终回答；未配置 Key 的服务商不参与、不失败。
+
+#### `prefix-cache-retain-live`
+
+- 测试类型：`e2e / live`（路径 `conversation/prefix-cache/`；`release:start` Tag 前必跑）
+- What：同一伙伴经真实 Workbench UI 连续三轮短任务（Run1 `@` 选中极短笔记抽出事实，Run2/Run3 同选中文件追问），相邻跨 run 首轮 brain 均须明显复用上一 run 末次前缀缓存，且 `toolsHash` 一致。
+- Why：发布准备需要一条轻量、专职的前缀缓存回归。纯闲聊测不到 tool 历史投影与 tools 前缀稳态；backend 直调 `AiRunService` 也绕过 Composer `@` 选中与生产发送组装。若消息重建或工具表漂移导致缓存丢失，会拖高成本并放大续接不稳定。
+- How：临时 workspace 写入 `cache-retain-note.txt` 后经 Settings 添加文件地址并建伙伴、选 live 模型。每轮用 `@` 选中该文件再发送（不得 `sendWorkbenchMessage` 清空 token）。Run1 要求读笔记说出项目代号（硬断言文本读工具）；Run2 问发布窗口；Run3 问负责人。e2e observer 只采集生产 `recordLlmIo` 并写入 `llm-io.jsonl`。两段跨 run 缓存用公用 `CROSS_RUN_PREFIX_CACHE_MIN_RATIO`（当前 0.85）；硬断言相邻段 `toolsHash` 相等；断言 data 附带 `requestWireDiff` 供排障。
+- Oracle：三轮均 `completed`，对齐 `WB-SESSION-005`；Run1 有 `text_file_read` / `text_file_search` 证据，且发送带 `@` 选中，对齐 `WB-CORE-002`；Run2 首次 brain 相对 Run1 末次、以及 Run3 首次 brain 相对 Run2 末次，均满足 `cachedInputTokens / 上一末次 inputTokens ≥ CROSS_RUN_PREFIX_CACHE_MIN_RATIO`，且两段 `toolsHash` 分别一致。没有 live key 必须失败，不能跳过。
 
 #### `user-message-actions`
 

@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type {
+  AiLlmIoRecord,
   AiRunEvent,
   AppStartupStatus,
   AppUpdateSnapshot,
@@ -70,6 +71,15 @@ const emitE2EAiRunEvent = (event: AiRunEvent): void => {
   )
 }
 
+const emitE2ELlmIo = (record: AiLlmIoRecord): void => {
+  if (!isE2EObserverEnabled) return
+  window.dispatchEvent(
+    new CustomEvent<AiLlmIoRecord>('ncurator-e2e-llm-io', {
+      detail: record
+    })
+  )
+}
+
 const emitDownloadProgress = (payload: DownloadProgress): void => {
   for (const listener of downloadProgressListeners) {
     listener(payload)
@@ -84,6 +94,9 @@ ipcRenderer.on('system-notification-open-session', (_event, partnerId: string) =
 if (isE2EObserverEnabled) {
   ipcRenderer.on('ai-run-event', (_event: Electron.IpcRendererEvent, data: AiRunEvent) => {
     emitE2EAiRunEvent(data)
+  })
+  ipcRenderer.on('e2e-llm-io', (_event: Electron.IpcRendererEvent, data: AiLlmIoRecord) => {
+    emitE2ELlmIo(data)
   })
 }
 

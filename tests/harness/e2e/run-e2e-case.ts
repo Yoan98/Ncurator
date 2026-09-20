@@ -214,6 +214,10 @@ const getRuntimeEventKey = (entry: E2ERuntimeSignals['aiRunEventEntries'][number
   return [entry.ts, event.type, runId, createdAt].join(':')
 }
 
+const getLlmIoKey = (entry: E2ERuntimeSignals['llmIoEntries'][number]): string =>
+  entry.record.callId ||
+  [entry.ts, entry.record.runId, entry.record.caller, String(entry.record.startedAt)].join(':')
+
 const getTimelineSignalKey = (input: {
   source: string
   ts: string
@@ -346,6 +350,7 @@ export const runE2ECase = async <TResult>(
     : { ...EMPTY_KNOWLEDGE_CACHE_STATS }
   const emittedTimelineSignalKeys = new Set<string>()
   const emittedRuntimeEventKeys = new Set<string>()
+  const emittedLlmIoKeys = new Set<string>()
   let launchedApp: LaunchedElectronApp | null = null
   let status: TestRunStatus = 'failed'
   let stepCounter = 0
@@ -370,6 +375,13 @@ export const runE2ECase = async <TResult>(
     if (emittedRuntimeEventKeys.has(key)) return
     emittedRuntimeEventKeys.add(key)
     streamingLogWriter.appendRuntimeEvent(entry.event)
+  }
+
+  const appendLlmIoOnce = (entry: E2ERuntimeSignals['llmIoEntries'][number]): void => {
+    const key = getLlmIoKey(entry)
+    if (emittedLlmIoKeys.has(key)) return
+    emittedLlmIoKeys.add(key)
+    streamingLogWriter.appendLlmIoRecord(entry.record)
   }
 
   const pushSignalEventOnce = (input: { source: string; event: TestLogEvent }): void => {
@@ -559,6 +571,7 @@ export const runE2ECase = async <TResult>(
           routeEntries: allSignals.flatMap((signals) => signals.routeEntries),
           ipcInvokeEntries: allSignals.flatMap((signals) => signals.ipcInvokeEntries),
           aiRunEventEntries: allSignals.flatMap((signals) => signals.aiRunEventEntries),
+          llmIoEntries: allSignals.flatMap((signals) => signals.llmIoEntries || []),
           domEventEntries: allSignals.flatMap((signals) => signals.domEventEntries),
           consoleEntries: allSignals.flatMap((signals) => signals.consoleEntries),
           lifecycleEntries: allSignals.flatMap((signals) => signals.lifecycleEntries)
@@ -653,6 +666,9 @@ export const runE2ECase = async <TResult>(
         }
       })
     },
+    onLlmIo: (entry: E2ERuntimeSignals['llmIoEntries'][number]) => {
+      appendLlmIoOnce(entry)
+    },
     onConsole: (entry: E2ERuntimeSignals['consoleEntries'][number]) => {
       if (entry.level === 'log') return
       pushSignalEventOnce({
@@ -735,6 +751,7 @@ export const runE2ECase = async <TResult>(
           routeEntries: [],
           ipcInvokeEntries: [],
           aiRunEventEntries: [],
+          llmIoEntries: [],
           domEventEntries: [],
           consoleEntries: [],
           lifecycleEntries: []
@@ -787,6 +804,10 @@ export const runE2ECase = async <TResult>(
           }
         }
       })
+    }
+
+    for (const llmIoEntry of signals.llmIoEntries || []) {
+      appendLlmIoOnce(llmIoEntry)
     }
 
     for (const consoleEntry of signals.consoleEntries) {

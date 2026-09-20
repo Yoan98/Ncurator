@@ -8,7 +8,7 @@ import {
   type ElectronApplication,
   type Page
 } from 'playwright'
-import type { AiRunEvent, JsonValue } from '../../../src/shared/types'
+import type { AiLlmIoRecord, AiRunEvent, JsonValue } from '../../../src/shared/types'
 
 type E2EConsoleLevel = 'log' | 'warning' | 'error'
 
@@ -26,6 +26,11 @@ export type E2EIpcInvokeEntry = {
 export type E2EAiRunEventEntry = {
   ts: string
   event: AiRunEvent
+}
+
+export type E2ELlmIoEntry = {
+  ts: string
+  record: AiLlmIoRecord
 }
 
 export type E2EDomEventEntry = {
@@ -73,6 +78,7 @@ type E2EObserverState = {
   routeEntries: E2ERouteEntry[]
   ipcInvokeEntries: E2EIpcInvokeEntry[]
   aiRunEventEntries: E2EAiRunEventEntry[]
+  llmIoEntries: E2ELlmIoEntry[]
   domEventEntries: E2EDomEventEntry[]
 }
 
@@ -80,12 +86,14 @@ type E2EWindow = Window & {
   __NCURATOR_E2E_OBSERVER__?: E2EObserverState
   __NCURATOR_E2E_ELECTRON_PROCESS_ID__?: number
   __NCURATOR_E2E_RECORD_AI_RUN_EVENT__?: (entry: E2EAiRunEventEntry) => void
+  __NCURATOR_E2E_RECORD_LLM_IO__?: (entry: E2ELlmIoEntry) => void
 }
 
 export type E2ERuntimeSignals = {
   routeEntries: E2ERouteEntry[]
   ipcInvokeEntries: E2EIpcInvokeEntry[]
   aiRunEventEntries: E2EAiRunEventEntry[]
+  llmIoEntries: E2ELlmIoEntry[]
   domEventEntries: E2EDomEventEntry[]
   consoleEntries: E2EConsoleEntry[]
   lifecycleEntries: E2ELifecycleEntry[]
@@ -117,6 +125,7 @@ export type E2EAppInfo = {
 
 export type ElectronSignalSink = {
   onAiRunEvent?: (entry: E2EAiRunEventEntry) => void
+  onLlmIo?: (entry: E2ELlmIoEntry) => void
   onConsole?: (entry: E2EConsoleEntry) => void
   onLifecycle?: (entry: E2ELifecycleEntry) => void
 }
@@ -300,6 +309,11 @@ const installPageObservers = async (page: Page, sink?: ElectronSignalSink): Prom
       }
     )
   }
+  if (sink?.onLlmIo) {
+    await page.exposeFunction('__NCURATOR_E2E_RECORD_LLM_IO__', (entry: E2ELlmIoEntry) => {
+      sink.onLlmIo?.(entry)
+    })
+  }
 
   await page.evaluate(() => {
     const currentWindow = window as E2EWindow
@@ -307,12 +321,14 @@ const installPageObservers = async (page: Page, sink?: ElectronSignalSink): Prom
     const routeEntries: E2ERouteEntry[] = [{ ts: now(), route: window.location.hash || '#/' }]
     const ipcInvokeEntries: E2EIpcInvokeEntry[] = []
     const aiRunEventEntries: E2EAiRunEventEntry[] = []
+    const llmIoEntries: E2ELlmIoEntry[] = []
     const domEventEntries: E2EDomEventEntry[] = []
 
     currentWindow.__NCURATOR_E2E_OBSERVER__ = {
       routeEntries,
       ipcInvokeEntries,
       aiRunEventEntries,
+      llmIoEntries,
       domEventEntries
     }
 
@@ -340,6 +356,16 @@ const installPageObservers = async (page: Page, sink?: ElectronSignalSink): Prom
       }
       currentWindow.__NCURATOR_E2E_OBSERVER__?.aiRunEventEntries.push(entry)
       currentWindow.__NCURATOR_E2E_RECORD_AI_RUN_EVENT__?.(entry)
+    })
+
+    window.addEventListener('ncurator-e2e-llm-io', (event) => {
+      const detail = (event as CustomEvent<AiLlmIoRecord>).detail
+      const entry = {
+        ts: now(),
+        record: detail
+      }
+      currentWindow.__NCURATOR_E2E_OBSERVER__?.llmIoEntries.push(entry)
+      currentWindow.__NCURATOR_E2E_RECORD_LLM_IO__?.(entry)
     })
 
     window.addEventListener('check-llm-config', () => {
@@ -524,6 +550,7 @@ export const launchElectronApp = async (input: {
         routeEntries: [],
         ipcInvokeEntries: [],
         aiRunEventEntries: [],
+        llmIoEntries: [],
         domEventEntries: []
       }
 
@@ -536,6 +563,7 @@ export const launchElectronApp = async (input: {
                 routeEntries: [],
                 ipcInvokeEntries: [],
                 aiRunEventEntries: [],
+                llmIoEntries: [],
                 domEventEntries: []
               }
             )
@@ -545,6 +573,7 @@ export const launchElectronApp = async (input: {
             routeEntries: [],
             ipcInvokeEntries: [],
             aiRunEventEntries: [],
+            llmIoEntries: [],
             domEventEntries: []
           }
         }
@@ -552,6 +581,7 @@ export const launchElectronApp = async (input: {
 
       return {
         ...state,
+        llmIoEntries: state.llmIoEntries || [],
         consoleEntries,
         lifecycleEntries
       }

@@ -24,7 +24,7 @@ import {
   APP_STARTUP_GET_STATUS_CHANNEL,
   OFFICIAL_DOWNLOAD_PAGE_URL
 } from '../shared/constants'
-import type { AppStartupStatus } from '../shared/types'
+import type { AiLlmIoRecord, AppStartupStatus } from '../shared/types'
 import { getModelsPath, syncUserDataPathFromElectron } from './utils/paths'
 import { terminalSessionManager } from './services/ai/human/tools/terminal/TerminalSessionManager'
 import { AppShutdownCoordinator } from './services/AppShutdownCoordinator'
@@ -400,7 +400,17 @@ if (!singleInstanceLock) {
       webCrawlerService,
       systemNotificationService,
       telemetryService,
-      errorLogService
+      errorLogService,
+      recordLlmIo:
+        process.env.NCURATOR_E2E_OBSERVER === '1'
+          ? (record: AiLlmIoRecord) => {
+              BrowserWindow.getAllWindows().forEach((window) => {
+                if (!window.webContents.isDestroyed()) {
+                  window.webContents.send('e2e-llm-io', record)
+                }
+              })
+            }
+          : undefined
     })
     const wpsSyncService = new WpsSyncService()
     setOfficeFileWriteListener({
