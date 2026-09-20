@@ -26,6 +26,7 @@ import { KnowledgeIndexSpeedControl } from './KnowledgeIndexSpeedControl'
 import IndexPrepareCancelModal from './IndexPrepareCancelModal'
 import { getTreeEntryStatusMeta } from './utils/workspace'
 import { prepareWorkspacesSequentially } from '../../../../shared/prepareWorkspacesSequentially'
+import { beginPrepareHeld, endPrepareHeld } from './prepareHeld'
 import type { WorkspaceJobMap } from './types'
 
 type WorkspaceDirectoryMap = Record<string, Record<string, WorkspaceTreeEntry[]>>
@@ -494,7 +495,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       message.warning('请先安装向量模型后再更新索引')
       return
     }
-    setFilePrepareHeld(true)
+    const heldAt = beginPrepareHeld(setFilePrepareHeld)
     try {
       filePrepareSessionRef.current = { completed: 0, startedIds: new Set<string>() }
       await window.api.workspaceIndexPrepareSessionBegin({ sourceKind: 'file' })
@@ -518,7 +519,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
       console.error(error)
       message.error('更新索引失败')
     } finally {
-      setFilePrepareHeld(false)
+      await endPrepareHeld(setFilePrepareHeld, heldAt)
     }
   }
 
@@ -528,7 +529,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
       setFileCancelModalOpen(true)
       return
     }
-    setFilePrepareHeld(true)
+    if (hasVectorModel !== true) {
+      message.warning('请先安装向量模型后再更新索引')
+      return
+    }
+    beginPrepareHeld(setFilePrepareHeld)
     void handleWorkspacePrepareAll()
   }
 
@@ -676,7 +681,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               ) : null}
                             </div>
                           </div>
-                          <KnowledgeIndexSpeedControl />
+                          <KnowledgeIndexSpeedControl prepareRunning={filePrepareRunning} />
                           <div className="mt-4 grid grid-cols-2 gap-2">
                             <Tooltip title="检查当前目录里有哪些新增、变更或删除。">
                               <Button

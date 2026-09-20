@@ -46,6 +46,23 @@ describe('EmbeddingService', () => {
     expect(service.getStatus()).toBe('error')
   })
 
+  it('exposes the live embedding runtime pid and intraOp from the executor', () => {
+    const executor: EmbeddingExecutor = {
+      initialize: vi.fn(async () => undefined),
+      embed: vi.fn(async () => result),
+      getRuntimeProcessInfo: () => ({
+        pid: 4242,
+        intraOpNumThreads: 7
+      })
+    }
+    const service = new EmbeddingService({ executor })
+    expect(service.getRuntimeSnapshot()).toEqual({
+      status: 'uninitialized',
+      pid: 4242,
+      intraOpNumThreads: 7
+    })
+  })
+
   it('retries initialization after a failure', async () => {
     const initialize = vi
       .fn<EmbeddingExecutor['initialize']>()

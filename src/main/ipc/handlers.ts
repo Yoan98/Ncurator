@@ -2599,7 +2599,7 @@ export function registerHandlers(services: {
   })
 
   ipcMain.handle('get-embedding-status', () => {
-    return embeddingService.getStatus()
+    return embeddingService.getRuntimeSnapshot()
   })
 
   ipcMain.handle('ai-run-cancel', async (_event, runId: string): Promise<AiRunCancelResponse> => {

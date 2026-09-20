@@ -20,6 +20,7 @@ import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import { KnowledgeIndexSpeedControl } from './KnowledgeIndexSpeedControl'
 import IndexPrepareCancelModal from './IndexPrepareCancelModal'
 import { formatDateTime, getWebStatusBadge } from './utils/workspace'
+import { beginPrepareHeld, endPrepareHeld } from './prepareHeld'
 
 type WebSourcesSettingsPanelProps = {
   embedded?: boolean
@@ -179,7 +180,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       return
     }
 
-    setWebPrepareHeld(true)
+    const heldAt = beginPrepareHeld(setWebPrepareHeld)
     try {
       const response = await window.api.webSourcesPrepare({})
       if (!response.success) {
@@ -192,7 +193,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       console.error(error)
       message.error('更新网页索引失败')
     } finally {
-      setWebPrepareHeld(false)
+      await endPrepareHeld(setWebPrepareHeld, heldAt)
     }
   }
 
@@ -202,7 +203,11 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       setWebCancelModalOpen(true)
       return
     }
-    setWebPrepareHeld(true)
+    if (hasVectorModel !== true) {
+      message.warning('请先安装向量模型后再更新索引')
+      return
+    }
+    beginPrepareHeld(setWebPrepareHeld)
     void handlePrepareWebSources()
   }
 
@@ -342,7 +347,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
             </div>
           </div>
 
-          <KnowledgeIndexSpeedControl />
+          <KnowledgeIndexSpeedControl prepareRunning={webPrepareRunning} />
           <div className="mt-4 grid grid-cols-2 gap-2">
             <Button
               icon={<HiArrowPath className="h-4 w-4" />}

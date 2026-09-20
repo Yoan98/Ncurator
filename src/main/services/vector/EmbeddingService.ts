@@ -1,18 +1,20 @@
 import type { EmbeddingExecutor, EmbeddingResult, EmbeddingThreadBudget } from './runtime/types'
 import { toEmbeddingInitializationMessage } from './embeddingError'
 import { resolveOrtThreadBudget } from './indexSpeed'
-import type { KnowledgeIndexSpeed } from '../../../shared/types'
+import type {
+  EmbeddingRuntimeSnapshot,
+  EmbeddingServiceStatus,
+  KnowledgeIndexSpeed
+} from '../../../shared/types'
 
 export type { EmbeddingExecutor, EmbeddingResult } from './runtime/types'
-
-type ServiceStatus = 'uninitialized' | 'initializing' | 'ready' | 'error'
 
 export const DEFAULT_EMBEDDING_MODEL_NAME = 'jinaai/jina-embeddings-v2-base-zh'
 
 export class EmbeddingService {
   private readonly executor: EmbeddingExecutor
   private readonly modelName: string
-  private status: ServiceStatus = 'uninitialized'
+  private status: EmbeddingServiceStatus = 'uninitialized'
   private initializationPromise: Promise<void> | null = null
 
   public constructor(input: { executor: EmbeddingExecutor; modelName?: string }) {
@@ -24,8 +26,17 @@ export class EmbeddingService {
     return this.modelName
   }
 
-  public getStatus(): ServiceStatus {
+  public getStatus(): EmbeddingServiceStatus {
     return this.status
+  }
+
+  public getRuntimeSnapshot(): EmbeddingRuntimeSnapshot {
+    const processInfo = this.executor.getRuntimeProcessInfo?.()
+    return {
+      status: this.status,
+      pid: processInfo?.pid ?? null,
+      intraOpNumThreads: processInfo?.intraOpNumThreads ?? 0
+    }
   }
 
   public async initialize(): Promise<void> {

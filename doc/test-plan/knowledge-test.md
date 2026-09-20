@@ -36,6 +36,7 @@
 - 线程预算以逻辑核 `N` 为准（Mac / Windows 相同）：
   - 慢速：`max(1, floor(N/2))`，关闭 spinning
   - 高速：`max(2, N - reserve)`，`reserve = N≤8 ? 1 : 2`
+  - 操作系统线程增量：Mac 期望 `delta >= intraOp`；Windows 上 ORT/Eigen 把调用线程算进池，`Get-Process.Threads.Count` 增量通常是 `intraOp - 1`，断言下限为 `intraOp - 1`。两档增量之差仍须等于 intraOp 之差。
 - 多文件地址更新索引必须顺序 kickoff，且 `workspacePrepare` IPC 等到该地址 job 终态。
 - 用户取消更新索引后，已完成保留，未完成回退为可索引或原来的失败，不得标成取消失败；后续地址不得 kickoff；`cancelled` 不拦截检索。程序关闭中断仍收敛为失败，与用户取消区分。
 - 不在 `foundation` 比较召回优劣。
@@ -90,7 +91,7 @@
 - What：慢速/高速按逻辑核数映射不同的 ORT `session_options`；独立进程里真实 embedding session 的操作系统线程数随 `intraOpNumThreads` 增加。
 - Why：档位是否有效，看的是建 session 前后的操作系统线程增量，不是只读配置。
 - How：对 4/8/16 核分别计算慢速与高速预算；用生产 `toOrtSessionOptions(resolveOrtThreadBudget)` 在两个新 Node 进程里各建一次真实 embedding session 并 embed；Mac 用 `ps -M`、Windows 用 `Get-Process.Threads.Count` 比较建 session 前后的线程数。Electron `utilityProcess` 的闭环在 Settings `workspace-index-speed`。
-- Oracle：慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；每个子进程 `after - before` 不少于该档 intraOp；高速增量大于慢速，且两档增量之差等于 intraOp 之差。
+- Oracle：慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；每个子进程 `after - before` 在 Mac 上不少于该档 intraOp，在 Windows 上不少于 `intraOp - 1`（ORT/Eigen 把调用线程算进池，OS 线程增量通常是 `intraOp - 1`）；高速增量大于慢速，且两档增量之差等于 intraOp 之差。
 
 #### `prepare-workspaces-sequentially`
 
