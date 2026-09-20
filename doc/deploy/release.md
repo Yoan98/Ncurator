@@ -81,7 +81,7 @@ git diff <previous-platform-tag>..<current-platform-tag>
 - 影响范围较广，或无法可靠判断是否遗漏时，执行全部发版回归用例。
 - 修改了 SQLite schema 时，至少包含 `sidebar-app-update`、`database-version-update-required`，并使用上一公开 schema 的可审查 fixture 验证原地升级。
 - 评估结论必须记录版本、影响范围、实际执行的用例、结果和剩余风险。
-- 同一次发布中，已通过且后续修复未波及的用例不要重跑；每次改动都先仔细评估影响，禁止动不动全量重跑。
+- 同一次发布中，已通过且后续修复未波及的用例不要重跑；每次跑正式包 E2E 回归时，应仔细评估改动影响范围来跑对应用例，禁止偷懒直接全量重跑。
 
 正式包 E2E 只消费已构建的 `release-bundle-*.json`：执行前复验 Tag、commit、fragment 和哈希，安装 EXE/DMG 后测试安装态程序，不重新构建。未指定过滤参数时，发版命令执行全部发版回归用例；指定 `--domain`、`--suite`、`--group` 或 `--case` 时执行定向范围。过滤参数只允许用于 `--test-only`。
 
