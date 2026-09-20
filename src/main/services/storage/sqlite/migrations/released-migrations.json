@@ -1,5 +1,5 @@
 {
-  "publishedThrough": 11,
+  "publishedThrough": 12,
   "migrations": [
     {
       "version": 1,
@@ -66,6 +66,12 @@
       "name": "drop_terminal_file_change_records",
       "file": "011_drop_terminal_file_change_records.ts",
       "sha256": "94ce87696091784b52b443d7015232abe68f5e2cf1c5fb455222d8e2af7c112a"
+    },
+    {
+      "version": 12,
+      "name": "app_settings",
+      "file": "012_app_settings.ts",
+      "sha256": "0fd373bf26854cb7c6816cc60621242691b2fb9fd93200c40d33c8651e584230"
     }
   ]
 }
