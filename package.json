@@ -19,6 +19,7 @@
     "test:ai:tool": "node scripts/test/workflow.mjs --domain ai --suite tool --type backend",
     "test:ai:human:mock-llm": "node scripts/test/workflow.mjs --domain ai --suite human --group mock-llm --type backend",
     "test:ai:human:live": "node scripts/test/workflow.mjs --domain ai --suite human --group live --type backend",
+    "test:knowledge:backend": "node scripts/test/workflow.mjs --domain knowledge --type backend",
     "test:unit": "node scripts/test/workflow.mjs --domain unit --type backend",
     "test:unit:ai": "node scripts/test/workflow.mjs --domain unit --suite ai --type backend",
     "test:terminal": "node scripts/build/native/node-pty.mjs ensure node && vitest run --config vitest.backend.config.mts tests/case/unit/ai/terminal-session-manager.test.ts tests/case/unit/ai/terminal-protocol.test.ts tests/case/unit/ai/terminal-platform-adapter.test.ts tests/case/unit/ai/terminal-command-policy.test.ts",

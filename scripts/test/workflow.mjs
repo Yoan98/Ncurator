@@ -1021,7 +1021,7 @@ const USAGE = `NCurator 测试 runner
   node scripts/test/workflow.mjs [选项]
 
 选项:
-  --domain <ai|unit|settings|workbench>  测试域；默认全量
+  --domain <ai|knowledge|unit|settings|workbench>  测试域；默认全量
   --type <backend|e2e>                  执行类型；不带时按 backend -> e2e 顺序
   --suite <suite>                        过滤 suite
   --group <group>                        过滤 group，可重复传入
@@ -1067,6 +1067,7 @@ const main = async () => {
 
   const expectedTypeByDomain = {
     ai: 'backend',
+    knowledge: 'backend',
     unit: 'backend',
     settings: 'e2e',
     workbench: 'e2e'

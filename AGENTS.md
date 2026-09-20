@@ -24,7 +24,7 @@
 ### 1.4 测试相关
 
 - `doc/test-plan/ai-test.md`：涉及 AI 回归测试范围、live case 设计或 suite 覆盖维护时阅读。
-- `doc/test-plan/knowledge-test.md`：涉及知识库专项（嵌入线程、索引调度、存储与检索基建）时阅读。
+- `doc/test-plan/knowledge-test.md`：涉及知识库专项时阅读。当前尚未登记 case。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
 - `doc/test-plan/workbench-test.md`：涉及 Workbench 回归测试范围、真实 e2e case 设计、发送前置条件验证或 suite 覆盖维护时阅读。
 - `doc/test.md`：涉及测试体系、UI E2E 回归规则、runner 或回归测试流程时阅读。
@@ -61,7 +61,7 @@
 │   │   └── workbench.md              # Workbench 产品需求（含定时任务）
 │   ├── test-plan/                    # 专项测试计划
 │   │   ├── ai-test.md                # AI 回归测试计划
-│   │   ├── knowledge-test.md         # 知识库专项测试计划
+│   │   ├── knowledge-test.md         # 知识库专项测试计划（当前无 case）
 │   │   ├── settings-test.md          # Settings 测试计划
 │   │   └── workbench-test.md         # Workbench 测试计划
 │   └── tidy.md                       # 周期性文档、测试与代码整理流程
@@ -78,6 +78,7 @@
 ├── tests/                            # 自动化测试
 │   ├── case/                         # 测试用例
 │   │   ├── ai/                       # AI 测试用例
+│   │   ├── knowledge/                # 知识库专项测试（当前无 case）
 │   │   ├── showcase/                 # 独立官网样例采集
 │   │   ├── settings/                 # Settings 测试用例
 │   │   ├── unit/                     # backend 单元测试

@@ -7,6 +7,7 @@ const PLAN_ROOT = path.join(ROOT, 'doc', 'test-plan')
 const PRD_ROOT = path.join(ROOT, 'doc', 'prd')
 const DOMAIN_RULES = {
   ai: { type: 'backend', plan: 'ai-test.md' },
+  knowledge: { type: 'backend', plan: 'knowledge-test.md' },
   settings: { type: 'e2e', plan: 'settings-test.md', prd: 'settings.md', acPrefix: 'SET-' },
   workbench: { type: 'e2e', plan: 'workbench-test.md', prd: 'workbench.md', acPrefix: 'WB-' },
   unit: { type: 'backend', plan: '' }
