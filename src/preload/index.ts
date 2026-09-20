@@ -202,6 +202,14 @@ const api: DesktopApi = {
     })
     return ipcRenderer.invoke('workspace-prepare', payload)
   },
+  workspaceIndexPrepareSessionBegin: (payload) =>
+    ipcRenderer.invoke('workspace-index-prepare-session-begin', payload),
+  workspaceIndexCancel: (payload) => {
+    emitE2EIpcCall('workspaceIndexCancel', {
+      sourceKind: payload.sourceKind
+    })
+    return ipcRenderer.invoke('workspace-index-cancel', payload)
+  },
   workspaceIndexJobGet: (payload) => ipcRenderer.invoke('workspace-index-job-get', payload),
   onWorkspaceIndexJobProgress: (cb) => {
     workspaceIndexJobProgressListeners.add(cb)

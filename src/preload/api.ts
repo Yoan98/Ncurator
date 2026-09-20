@@ -88,6 +88,8 @@ import type {
   ScanWebSourcesRequest,
   WebSourceListResponse,
   WebSourceMutationResponse,
+  WorkspaceIndexCancelRequest,
+  WorkspaceIndexPrepareSessionBeginRequest,
   WebIngestPayload,
   SetWorkspaceRootPathRequest,
   GetDocxApplyRecordRequest,
@@ -180,6 +182,12 @@ export type DesktopApi = {
   ) => Promise<WorkspaceDirectoryListResponse>
   workspaceScan: (payload: { workspaceId: string }) => Promise<WorkspaceJobResponse>
   workspacePrepare: (payload: PrepareWorkspaceRequest) => Promise<WorkspaceJobResponse>
+  workspaceIndexPrepareSessionBegin: (
+    payload: WorkspaceIndexPrepareSessionBeginRequest
+  ) => Promise<{ success: boolean; error?: string }>
+  workspaceIndexCancel: (
+    payload: WorkspaceIndexCancelRequest
+  ) => Promise<{ success: boolean; error?: string }>
   workspaceIndexJobGet: (payload: WorkspaceIndexJobGetRequest) => Promise<WorkspaceIndexJobResponse>
   onWorkspaceIndexJobProgress: (cb: (job: WorkspaceIndexJobRecord) => void) => () => void
   referenceItemList: (payload: ListReferenceItemsRequest) => Promise<ReferenceItemListResponse>

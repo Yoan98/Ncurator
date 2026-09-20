@@ -71,6 +71,7 @@ export type WorkspaceKnowledgeWebInput = {
   contentHash: string
   createdAt?: number
   cache?: WorkspaceKnowledgeCache
+  signal?: AbortSignal
 }
 
 export type WorkspaceKnowledgeIndexInput = {
@@ -80,6 +81,7 @@ export type WorkspaceKnowledgeIndexInput = {
   documentName: string
   createdAt?: number
   cache?: WorkspaceKnowledgeCache
+  signal?: AbortSignal
 }
 
 /** 文件解析 worker 入参：只负责读取和切分，不负责向量推理 */

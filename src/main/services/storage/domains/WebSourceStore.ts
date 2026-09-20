@@ -208,4 +208,29 @@ export class WebSourceStore {
       .run({ message, now })
     return result.changes
   }
+
+  public async revertRunningSource(
+    id: string,
+    values: {
+      index_status: Extract<WebSourceIndexStatus, 'needs_index' | 'crawl_failed' | 'index_failed'>
+      last_error?: string
+      updated_at: number
+    }
+  ): Promise<number> {
+    const result = this.sqlite
+      .prepare(
+        `
+        UPDATE web_source
+        SET index_status = @index_status, last_error = @last_error, updated_at = @updated_at
+        WHERE id = @id AND index_status IN ('crawling','indexing')
+      `
+      )
+      .run({
+        id,
+        index_status: values.index_status,
+        last_error: values.last_error ?? null,
+        updated_at: values.updated_at
+      })
+    return result.changes
+  }
 }

@@ -244,7 +244,7 @@ export interface WorkspaceSyncProgress {
 
 export type WorkspaceIndexJobSourceKind = 'file' | 'web'
 export type WorkspaceIndexJobAction = 'scan' | 'prepare'
-export type WorkspaceIndexJobStatus = 'running' | 'succeeded' | 'failed'
+export type WorkspaceIndexJobStatus = 'running' | 'succeeded' | 'failed' | 'cancelled'
 export type WorkspaceIndexJobPhase = 'scan' | 'diff' | 'crawl' | 'index' | 'complete'
 
 export interface WorkspaceIndexJobRecord {
@@ -387,6 +387,7 @@ export interface WorkspaceJobResponse {
   job?: WorkspaceIndexJobRecord
   progress?: WorkspaceSyncProgress
   error?: string
+  cancelled?: boolean
 }
 
 export interface WorkspaceIndexJobGetRequest {
@@ -410,6 +411,14 @@ export interface ScanWebSourcesRequest {
 
 export interface PrepareWebSourcesRequest {
   sourceKind?: 'web'
+}
+
+export interface WorkspaceIndexCancelRequest {
+  sourceKind: WorkspaceIndexJobSourceKind
+}
+
+export interface WorkspaceIndexPrepareSessionBeginRequest {
+  sourceKind: WorkspaceIndexJobSourceKind
 }
 
 export interface DeleteWebSourceRequest {

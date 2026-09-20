@@ -264,7 +264,7 @@ DOCX 应用/回退记录。
 | `workspace_id` | TEXT | 文件地址 id；网页任务可为空串 |
 | `source_kind` | TEXT | `file` / `web` |
 | `action` | TEXT | `scan` / `prepare` |
-| `status` | TEXT | `running` / `succeeded` / `failed` |
+| `status` | TEXT | `running` / `succeeded` / `failed` / `cancelled` |
 | `phase` | TEXT | 当前阶段 |
 | `step_index` | INTEGER | 当前步骤 |
 | `step_total` | INTEGER | 总步骤 |

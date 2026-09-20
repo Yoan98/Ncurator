@@ -21,6 +21,10 @@ import {
 } from './utils/knowledge'
 import { WorkspacePrepareWorkerClient } from './worker/workspacePrepareWorkerClient'
 import type { AppErrorLogService } from '../logging/AppErrorLogService'
+import {
+  IndexPrepareCancelledError,
+  isIndexPrepareCancelledError
+} from './WorkspaceIndexPrepareController'
 
 export class WorkspaceKnowledgePrepareService {
   private readonly workerClient: WorkspacePrepareWorkerClient
@@ -47,115 +51,165 @@ export class WorkspaceKnowledgePrepareService {
     return await this.workerClient.prepareSource(input)
   }
 
+  private throwIfAborted(signal?: AbortSignal): void {
+    if (signal?.aborted) throw new IndexPrepareCancelledError()
+  }
+
+  private listenForAbort(signal: AbortSignal | undefined, onAbort: () => void): () => void {
+    if (!signal) return () => {}
+    if (signal.aborted) {
+      onAbort()
+      return () => {}
+    }
+    const listener = (): void => onAbort()
+    signal.addEventListener('abort', listener, { once: true })
+    return () => signal.removeEventListener('abort', listener)
+  }
+
+  public async abortActivePrepare(): Promise<void> {
+    await this.workerClient.close()
+  }
+
   public async indexLocalFile(
     input: WorkspaceKnowledgeIndexInput
   ): Promise<WorkspaceKnowledgeIndexResult> {
+    this.throwIfAborted(input.signal)
     if (!isSupportedLocalFilePath(input.filePath)) {
       throw new Error(`Unsupported file type: ${input.filePath}`)
     }
 
-    const contentHash = await this.computeContentHash(input.filePath)
-    const fileExt = path.extname(input.filePath).toLowerCase()
-    const cachedSplit = input.cache
-      ? await input.cache.loadSplitSnapshot({ contentHash, fileExt })
-      : null
-    const cachedVectors = input.cache
-      ? await input.cache.loadVectorSnapshot({
-          contentHash,
-          fileExt,
-          modelName: this.deps.embeddingService.getModelName()
-        })
-      : null
-    const preparedSource = await this.prepareSource({
-      sourceType: 'file',
-      filePath: input.filePath,
-      cachedSplit
+    const stopAbort = this.listenForAbort(input.signal, () => {
+      void this.abortActivePrepare()
     })
-    const indexedDocument = await this.buildPreparedDocument({
-      preparedSource,
-      workspaceId: input.workspaceId,
-      documentId: input.documentId,
-      documentName: input.documentName,
-      cachedVectors
-    })
+    try {
+      const contentHash = await this.computeContentHash(input.filePath)
+      this.throwIfAborted(input.signal)
+      const fileExt = path.extname(input.filePath).toLowerCase()
+      const cachedSplit = input.cache
+        ? await input.cache.loadSplitSnapshot({ contentHash, fileExt })
+        : null
+      const cachedVectors = input.cache
+        ? await input.cache.loadVectorSnapshot({
+            contentHash,
+            fileExt,
+            modelName: this.deps.embeddingService.getModelName()
+          })
+        : null
+      const preparedSource = await this.prepareSource({
+        sourceType: 'file',
+        filePath: input.filePath,
+        cachedSplit
+      })
+      this.throwIfAborted(input.signal)
+      const indexedDocument = await this.buildPreparedDocument({
+        preparedSource,
+        workspaceId: input.workspaceId,
+        documentId: input.documentId,
+        documentName: input.documentName,
+        cachedVectors
+      })
+      this.throwIfAborted(input.signal)
 
-    const usedCachedSplit = this.isUsableCachedSplit(cachedSplit, preparedSource)
-    const usedCachedVectors = this.isUsableCachedVectors(cachedVectors, preparedSource)
-    await this.persistCacheSnapshots({
-      indexedDocument,
-      cache: input.cache,
-      usedCachedSplit,
-      usedCachedVectors
-    })
+      const usedCachedSplit = this.isUsableCachedSplit(cachedSplit, preparedSource)
+      const usedCachedVectors = this.isUsableCachedVectors(cachedVectors, preparedSource)
+      await this.persistCacheSnapshots({
+        indexedDocument,
+        cache: input.cache,
+        usedCachedSplit,
+        usedCachedVectors
+      })
+      this.throwIfAborted(input.signal)
 
-    return await this.writeIndexedDocument({
-      indexedDocument,
-      workspaceId: input.workspaceId,
-      documentId: input.documentId,
-      documentName: input.documentName,
-      filePath: input.filePath,
-      sourceType: 'file',
-      contentHash: preparedSource.contentHash,
-      fileExt: preparedSource.fileExt,
-      createdAt: input.createdAt,
-      usedCachedSplit,
-      usedCachedVectors
-    })
+      return await this.writeIndexedDocument({
+        indexedDocument,
+        workspaceId: input.workspaceId,
+        documentId: input.documentId,
+        documentName: input.documentName,
+        filePath: input.filePath,
+        sourceType: 'file',
+        contentHash: preparedSource.contentHash,
+        fileExt: preparedSource.fileExt,
+        createdAt: input.createdAt,
+        usedCachedSplit,
+        usedCachedVectors,
+        signal: input.signal
+      })
+    } catch (error) {
+      if (input.signal?.aborted) throw new IndexPrepareCancelledError()
+      throw error
+    } finally {
+      stopAbort()
+    }
   }
 
   public async indexWebText(
     input: WorkspaceKnowledgeWebInput
   ): Promise<WorkspaceKnowledgeIndexResult> {
-    const contentHash = input.contentHash
-    const fileExt = '.html'
-    const cachedSplit = input.cache
-      ? await input.cache.loadSplitSnapshot({ contentHash, fileExt })
-      : null
-    const cachedVectors = input.cache
-      ? await input.cache.loadVectorSnapshot({
-          contentHash,
-          fileExt,
-          modelName: this.deps.embeddingService.getModelName()
-        })
-      : null
-    const preparedSource = await this.prepareSource({
-      sourceType: 'web',
-      documentName: input.documentName,
-      sourceUrl: input.sourceUrl,
-      rawText: input.rawText,
-      contentHash,
-      cachedSplit
+    this.throwIfAborted(input.signal)
+    const stopAbort = this.listenForAbort(input.signal, () => {
+      void this.abortActivePrepare()
     })
-    const indexedDocument = await this.buildPreparedDocument({
-      preparedSource,
-      workspaceId: input.workspaceId,
-      documentId: input.documentId,
-      documentName: input.documentName,
-      cachedVectors
-    })
+    try {
+      const contentHash = input.contentHash
+      const fileExt = '.html'
+      const cachedSplit = input.cache
+        ? await input.cache.loadSplitSnapshot({ contentHash, fileExt })
+        : null
+      const cachedVectors = input.cache
+        ? await input.cache.loadVectorSnapshot({
+            contentHash,
+            fileExt,
+            modelName: this.deps.embeddingService.getModelName()
+          })
+        : null
+      const preparedSource = await this.prepareSource({
+        sourceType: 'web',
+        documentName: input.documentName,
+        sourceUrl: input.sourceUrl,
+        rawText: input.rawText,
+        contentHash,
+        cachedSplit
+      })
+      this.throwIfAborted(input.signal)
+      const indexedDocument = await this.buildPreparedDocument({
+        preparedSource,
+        workspaceId: input.workspaceId,
+        documentId: input.documentId,
+        documentName: input.documentName,
+        cachedVectors
+      })
+      this.throwIfAborted(input.signal)
 
-    const usedCachedSplit = this.isUsableCachedSplit(cachedSplit, preparedSource)
-    const usedCachedVectors = this.isUsableCachedVectors(cachedVectors, preparedSource)
-    await this.persistCacheSnapshots({
-      indexedDocument,
-      cache: input.cache,
-      usedCachedSplit,
-      usedCachedVectors
-    })
+      const usedCachedSplit = this.isUsableCachedSplit(cachedSplit, preparedSource)
+      const usedCachedVectors = this.isUsableCachedVectors(cachedVectors, preparedSource)
+      await this.persistCacheSnapshots({
+        indexedDocument,
+        cache: input.cache,
+        usedCachedSplit,
+        usedCachedVectors
+      })
+      this.throwIfAborted(input.signal)
 
-    return await this.writeIndexedDocument({
-      indexedDocument,
-      workspaceId: input.workspaceId,
-      documentId: input.documentId,
-      documentName: input.documentName,
-      filePath: input.sourceUrl,
-      sourceType: 'web',
-      contentHash: preparedSource.contentHash,
-      fileExt: preparedSource.fileExt,
-      createdAt: input.createdAt,
-      usedCachedSplit,
-      usedCachedVectors
-    })
+      return await this.writeIndexedDocument({
+        indexedDocument,
+        workspaceId: input.workspaceId,
+        documentId: input.documentId,
+        documentName: input.documentName,
+        filePath: input.sourceUrl,
+        sourceType: 'web',
+        contentHash: preparedSource.contentHash,
+        fileExt: preparedSource.fileExt,
+        createdAt: input.createdAt,
+        usedCachedSplit,
+        usedCachedVectors,
+        signal: input.signal
+      })
+    } catch (error) {
+      if (input.signal?.aborted) throw new IndexPrepareCancelledError()
+      throw error
+    } finally {
+      stopAbort()
+    }
   }
 
   private isUsableCachedSplit(
@@ -265,6 +319,7 @@ export class WorkspaceKnowledgePrepareService {
     createdAt?: number
     usedCachedSplit: boolean
     usedCachedVectors: boolean
+    signal?: AbortSignal
   }): Promise<WorkspaceKnowledgeIndexResult> {
     const indexedDocument = input.indexedDocument
 
@@ -274,6 +329,7 @@ export class WorkspaceKnowledgePrepareService {
     let wroteChunks = false
     let activated = false
     try {
+      this.throwIfAborted(input.signal)
       const existingDocument = await this.deps.documentsStore.getDocumentById(input.documentId)
       oldGenerationId = existingDocument?.active_generation_id
       if (existingDocument) {
@@ -299,6 +355,7 @@ export class WorkspaceKnowledgePrepareService {
         })
       }
 
+      this.throwIfAborted(input.signal)
       if (indexedDocument.chunks.length > 0) {
         await this.addChunksFromVectorSnapshot({
           chunks: indexedDocument.chunks,
@@ -307,6 +364,7 @@ export class WorkspaceKnowledgePrepareService {
         })
         wroteChunks = true
       }
+      this.throwIfAborted(input.signal)
       await this.deps.documentsStore.activateDocumentGeneration({
         documentId: input.documentId,
         generationId: newGenerationId,
@@ -340,12 +398,8 @@ export class WorkspaceKnowledgePrepareService {
         }))
       }
     } catch (error) {
-      await this.deps.documentsStore
-        .markDocumentIndexFailed(
-          input.documentId,
-          error instanceof Error ? error.message : String(error)
-        )
-        .catch(() => {})
+      const cancelled =
+        isIndexPrepareCancelledError(error) || Boolean(input.signal?.aborted)
       if (wroteChunks && !activated) {
         await this.deps.documentsStore
           .deleteChunksByGeneration({
@@ -355,6 +409,13 @@ export class WorkspaceKnowledgePrepareService {
           })
           .catch(() => {})
       }
+      if (cancelled) throw new IndexPrepareCancelledError()
+      await this.deps.documentsStore
+        .markDocumentIndexFailed(
+          input.documentId,
+          error instanceof Error ? error.message : String(error)
+        )
+        .catch(() => {})
       throw new Error(error instanceof Error ? error.message : String(error))
     }
   }

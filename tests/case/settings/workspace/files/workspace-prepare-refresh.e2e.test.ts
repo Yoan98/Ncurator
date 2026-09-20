@@ -35,6 +35,7 @@ describe('settings workspace e2e', () => {
           })
           const workspaceId = workspace.workspace!.id
           let prepareProgressVisible = false
+          let prepareButtonName = ''
           let buttonsDisabled = false
           let directoryCallBaseline = 0
           let directoryCallsWhileRunning = -1
@@ -64,6 +65,12 @@ describe('settings workspace e2e', () => {
                 state: 'visible'
               })
               prepareProgressVisible = true
+              prepareButtonName = (
+                (await getSettingsLocator(
+                  page,
+                  importSelectors.workspaceQuickPrepareButton
+                ).innerText()) || ''
+              ).trim()
               buttonsDisabled =
                 (await getSettingsLocator(
                   page,
@@ -99,6 +106,7 @@ describe('settings workspace e2e', () => {
 
           return {
             prepareProgressVisible,
+            prepareButtonName,
             buttonsDisabled,
             directoryCallsWhileRunning,
             directoryCallsAfterCompletion,
@@ -107,12 +115,17 @@ describe('settings workspace e2e', () => {
           }
         },
         assert: async (result, runtime) => {
-          await runtime.assertThat(result.prepareProgressVisible && !result.buttonsDisabled, {
-            name: 'prepare-progress-is-visible',
-            message:
-              '更新索引执行中，界面应展示持久化总进度且两个索引操作按钮保持可用，对齐 SET-WORKSPACE-004-AC3。',
-            data: result
-          })
+          await runtime.assertThat(
+            result.prepareProgressVisible &&
+              !result.buttonsDisabled &&
+              result.prepareButtonName.includes('取消'),
+            {
+              name: 'prepare-progress-is-visible',
+              message:
+                '更新索引执行中，界面应展示持久化总进度，「检查更新」可用，「更新索引」文案变为「取消」且可点，对齐 SET-WORKSPACE-004-AC3、SET-WORKSPACE-004-AC12。',
+              data: result
+            }
+          )
 
           await runtime.assertThat(
             result.directoryCallsWhileRunning === 0 && result.directoryCallsAfterCompletion === 1,

@@ -49,7 +49,16 @@ describe('knowledge foundation', () => {
           events.push(`end:${workspaceId}`)
           return indexed.documentId
         })
-        return { results, events }
+        const cancelCalls: string[] = []
+        await prepareWorkspacesSequentially(
+          workspaceIds,
+          async (workspaceId) => {
+            cancelCalls.push(workspaceId)
+            return { cancelled: workspaceId === 'ws-a' }
+          },
+          (result) => !result.cancelled
+        )
+        return { results, events, cancelCalls }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
@@ -62,6 +71,12 @@ describe('knowledge foundation', () => {
             data: result
           }
         )
+        runtime.assertThat(result.cancelCalls.join(',') === 'ws-a', {
+          name: 'prepare-stops-after-cancelled',
+          message:
+            '首个地址 cancelled 后不得再启动后续地址，对齐 SET-WORKSPACE-004-AC15。',
+          data: result
+        })
       }
     })
   })

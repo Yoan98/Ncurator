@@ -27,6 +27,7 @@ describe('settings workspace web e2e', () => {
           let workspaceId = ''
           let restoredProgressVisible = false
           let restoredButtonsDisabled = false
+          let restoredPrepareButtonName = ''
           let restoredActiveJob = false
           let restoredStepText = ''
           let restoredScanProgressVisible = false
@@ -111,7 +112,9 @@ describe('settings workspace web e2e', () => {
                 .isVisible()
               restoredButtonsDisabled =
                 (await page.getByRole('button', { name: '检查更新', exact: true }).isDisabled()) &&
-                (await page.getByRole('button', { name: '更新索引', exact: true }).isDisabled())
+                (await page.getByRole('button', { name: '取消', exact: true }).isDisabled())
+              restoredPrepareButtonName =
+                (await page.getByRole('button', { name: '取消', exact: true }).innerText()) || ''
               restoredActiveJob =
                 activeJobResponse.success && activeJobResponse.job?.status === 'running'
             }
@@ -125,6 +128,7 @@ describe('settings workspace web e2e', () => {
           return {
             restoredProgressVisible,
             restoredButtonsDisabled,
+            restoredPrepareButtonName,
             restoredActiveJob,
             restoredStepText,
             restoredScanProgressVisible,
@@ -144,12 +148,13 @@ describe('settings workspace web e2e', () => {
           await runtime.assertThat(
             result.restoredProgressVisible &&
               !result.restoredButtonsDisabled &&
+              result.restoredPrepareButtonName.includes('取消') &&
               result.restoredActiveJob &&
               /步骤 [12]\/2/.test(result.restoredStepText),
             {
               name: 'web-progress-restores-after-return',
               message:
-                '离开并返回网页 tab 后，应通过持久化 running job 恢复分阶段进度且两个按钮保持可用，对齐 SET-WEB-004-AC5。',
+                '离开并返回网页 tab 后，应通过持久化 running job 恢复分阶段进度，「检查更新」可用，「更新索引」文案为「取消」且可点，对齐 SET-WEB-004-AC5、SET-WEB-004-AC10。',
               data: result
             }
           )

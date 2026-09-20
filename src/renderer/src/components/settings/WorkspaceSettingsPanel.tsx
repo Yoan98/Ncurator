@@ -23,7 +23,12 @@ import { normalizeUserFacingError } from '../../utils/userFacingError'
 import WebSourcesSettingsPanel from './WebSourcesSettingsPanel'
 import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import { KnowledgeIndexSpeedControl } from './KnowledgeIndexSpeedControl'
+import IndexPrepareCancelModal from './IndexPrepareCancelModal'
 import { getTreeEntryStatusMeta } from './utils/workspace'
+import {
+  formatIndexCancelContent,
+  getFileIndexCancelPreview
+} from './utils/indexPrepareCancel'
 import { prepareWorkspacesSequentially } from '../../../../shared/prepareWorkspacesSequentially'
 import type { WorkspaceJobMap } from './types'
 
@@ -55,6 +60,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const [deleteWorkspaceId, setDeleteWorkspaceId] = useState<string | null>(null)
   const [hasVectorModel, setHasVectorModel] = useState<boolean | null>(null)
   const [webSourceCount, setWebSourceCount] = useState(0)
+  const [filePrepareCancelling, setFilePrepareCancelling] = useState(false)
+  const [fileCancelModalOpen, setFileCancelModalOpen] = useState(false)
+  const [fileCancelPreview, setFileCancelPreview] = useState({ completed: 0, remaining: 0 })
+  const filePrepareSessionRef = useRef({ completed: 0, startedIds: new Set<string>() })
   const workspaceDirectoryRequestIds = useRef<Record<string, Record<string, number>>>({})
 
   const loadWorkspaceDirectory = useCallback(
@@ -239,6 +248,12 @@ const WorkspaceSettingsPanel: React.FC = () => {
     [workspaceIndexJobs]
   )
 
+  useEffect(() => {
+    if (runningFileJob?.action === 'prepare') return
+    setFilePrepareCancelling(false)
+    setFileCancelModalOpen(false)
+  }, [runningFileJob])
+
   const toggleWorkspaceDirectory = (workspaceId: string, entry: WorkspaceTreeEntry): void => {
     if (entry.kind !== 'directory') return
     const path = entry.relative_path
@@ -413,8 +428,19 @@ const WorkspaceSettingsPanel: React.FC = () => {
       return
     }
     try {
-      const results = await prepareWorkspacesSequentially(workspaces.map((workspace) => workspace.id), (workspaceId) =>
-        window.api.workspacePrepare({ workspaceId })
+      filePrepareSessionRef.current = { completed: 0, startedIds: new Set<string>() }
+      await window.api.workspaceIndexPrepareSessionBegin({ sourceKind: 'file' })
+      const results = await prepareWorkspacesSequentially(
+        workspaces.map((workspace) => workspace.id),
+        async (workspaceId) => {
+          filePrepareSessionRef.current.startedIds.add(workspaceId)
+          const response = await window.api.workspacePrepare({ workspaceId })
+          if (response.job && (response.job.status === 'succeeded' || response.job.status === 'failed')) {
+            filePrepareSessionRef.current.completed += response.job.processed_count
+          }
+          return response
+        },
+        (response) => !response.cancelled && response.job?.status !== 'cancelled'
       )
       const failed = results.find((response) => !response.success)
       if (failed) {
@@ -423,6 +449,44 @@ const WorkspaceSettingsPanel: React.FC = () => {
     } catch (error) {
       console.error(error)
       message.error('更新索引失败')
+    }
+  }
+
+  const handleWorkspacePrepareButtonClick = (): void => {
+    if (filePrepareCancelling) return
+    if (runningFileJob?.action === 'prepare') {
+      const unstartedActionableCount = workspaces.reduce((sum, workspace) => {
+        if (filePrepareSessionRef.current.startedIds.has(workspace.id)) return sum
+        const summary = workspaceTreeSummaries[workspace.id]
+        if (!summary) return sum
+        return sum + summary.needs_index_count + summary.failed_file_count
+      }, 0)
+      setFileCancelPreview(
+        getFileIndexCancelPreview({
+          runningJob: runningFileJob,
+          sessionCompleted: filePrepareSessionRef.current.completed,
+          unstartedActionableCount
+        })
+      )
+      setFileCancelModalOpen(true)
+      return
+    }
+    void handleWorkspacePrepareAll()
+  }
+
+  const handleConfirmFilePrepareCancel = async (): Promise<void> => {
+    setFileCancelModalOpen(false)
+    setFilePrepareCancelling(true)
+    try {
+      const response = await window.api.workspaceIndexCancel({ sourceKind: 'file' })
+      if (!response.success) {
+        setFilePrepareCancelling(false)
+        message.error(normalizeUserFacingError(response.error, '停止更新索引失败'))
+      }
+    } catch (error) {
+      setFilePrepareCancelling(false)
+      console.error(error)
+      message.error('停止更新索引失败')
     }
   }
 
@@ -446,7 +510,17 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const vectorModelMissing = hasVectorModel === false
   const hasWorkspaceList = workspaces.length > 0
   const workspaceScanDisabled = !hasWorkspaceList
-  const workspacePrepareDisabled = hasVectorModel !== true || actionableIndexCount === 0
+  const filePrepareRunning = runningFileJob?.action === 'prepare'
+  const workspacePrepareDisabled = filePrepareCancelling
+    ? true
+    : filePrepareRunning
+      ? false
+      : hasVectorModel !== true || actionableIndexCount === 0
+  const workspacePrepareLabel = filePrepareCancelling
+    ? '停止中'
+    : filePrepareRunning
+      ? '取消'
+      : '更新索引'
   const workspacePrepareTooltip =
     hasVectorModel === null
       ? '正在检查向量模型状态'
@@ -454,7 +528,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
         ? ''
         : actionableIndexCount === 0
           ? '当前没有需要更新的索引'
-          : '检查目录变化并更新可索引文件。'
+          : filePrepareRunning
+            ? '停止本次更新索引，已完成的会保留。'
+            : '检查目录变化并更新可索引文件。'
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
       <div className="text-[13px] font-medium text-[#37352F]">先安装向量模型</div>
@@ -559,13 +635,12 @@ const WorkspaceSettingsPanel: React.FC = () => {
                                 <Button
                                   type="primary"
                                   icon={<HiCircleStack className="h-4 w-4" />}
-                                  onClick={() => void handleWorkspacePrepareAll()}
+                                  onClick={handleWorkspacePrepareButtonClick}
                                   disabled={workspacePrepareDisabled}
-                                  loading={runningFileJob?.action === 'prepare'}
                                   className={`w-full min-w-0 ${vectorModelMissing ? '!pr-9' : ''}`}
                                   data-testid={importSelectors.workspaceQuickPrepareButton}
                                 >
-                                  更新索引
+                                  {workspacePrepareLabel}
                                 </Button>
                               </Tooltip>
                               {vectorModelMissing ? (
@@ -732,6 +807,18 @@ const WorkspaceSettingsPanel: React.FC = () => {
           移除后，该路径将不再作为资料根。若仍需使用，请重新添加并重新建立索引。
         </p>
       </Modal>
+      <IndexPrepareCancelModal
+        open={fileCancelModalOpen}
+        content={formatIndexCancelContent(
+          'file',
+          fileCancelPreview.completed,
+          fileCancelPreview.remaining
+        )}
+        confirmTestId={importSelectors.workspaceIndexCancelConfirmButton}
+        continueTestId={importSelectors.workspaceIndexCancelContinueButton}
+        onStop={() => void handleConfirmFilePrepareCancel()}
+        onContinue={() => setFileCancelModalOpen(false)}
+      />
     </div>
   )
 }

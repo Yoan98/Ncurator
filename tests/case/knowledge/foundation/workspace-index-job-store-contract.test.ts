@@ -83,6 +83,23 @@ describe('unit workspace backend', () => {
         const hasRunningPrepareJobAfterFail =
           await runtime.storageService.workspaceIndexJob.hasRunningPrepareJob()
 
+        const cancelledJob = createJob({
+          id: 'cancelled-file-job',
+          sourceKind: 'file',
+          status: 'cancelled',
+          startedAt: NOW + 5
+        })
+        await runtime.storageService.workspaceIndexJob.saveJob(cancelledJob)
+        const activeAfterCancelled = await runtime.storageService.workspaceIndexJob.getActiveJob(
+          cancelledJob.workspace_id,
+          'file'
+        )
+        const hasRunningPrepareJobAfterCancelled =
+          await runtime.storageService.workspaceIndexJob.hasRunningPrepareJob()
+        const storedCancelled = await runtime.storageService.workspaceIndexJob.getJobById(
+          cancelledJob.id
+        )
+
         return {
           activeFileJob,
           updatedFileJob,
@@ -90,7 +107,10 @@ describe('unit workspace backend', () => {
           hasRunningPrepareJobAfterFail,
           failedCount,
           runningJobCount: runningJobs.length,
-          failedWebJob
+          failedWebJob,
+          activeAfterCancelled,
+          hasRunningPrepareJobAfterCancelled,
+          storedCancelled
         }
       },
       assert: async (result, runtime) => {
@@ -127,6 +147,18 @@ describe('unit workspace backend', () => {
             name: 'running-jobs-fail-together',
             message:
               '恢复逻辑应能批量把 running job 收敛为失败，对齐 SET-WORKSPACE-004-AC5、SET-WEB-004-AC6。',
+            data: result
+          }
+        )
+
+        runtime.assertThat(
+          result.storedCancelled?.status === 'cancelled' &&
+            result.activeAfterCancelled === null &&
+            result.hasRunningPrepareJobAfterCancelled === false,
+          {
+            name: 'cancelled-job-is-not-active',
+            message:
+              'cancelled 不是 active job，且不再拦截知识库检索，对齐 SET-WORKSPACE-004-AC14。',
             data: result
           }
         )

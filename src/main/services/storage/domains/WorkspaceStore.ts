@@ -295,4 +295,29 @@ export class WorkspaceStore {
       .run({ message, now })
     return result.changes
   }
+
+  public async revertIndexingFileRecord(
+    id: string,
+    values: {
+      index_status: Extract<WorkspaceFileIndexStatus, 'needs_index' | 'failed'>
+      last_error?: string
+      updated_at: number
+    }
+  ): Promise<number> {
+    const result = this.sqlite
+      .prepare(
+        `
+        UPDATE workspace_file_index
+        SET index_status = @index_status, last_error = @last_error, updated_at = @updated_at
+        WHERE id = @id AND index_status = 'indexing'
+      `
+      )
+      .run({
+        id,
+        index_status: values.index_status,
+        last_error: values.last_error ?? null,
+        updated_at: values.updated_at
+      })
+    return result.changes
+  }
 }

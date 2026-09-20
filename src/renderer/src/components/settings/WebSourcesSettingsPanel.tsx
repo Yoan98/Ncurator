@@ -18,7 +18,12 @@ import { normalizeUserFacingError } from '../../utils/userFacingError'
 import StatusTag from './StatusTag'
 import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import { KnowledgeIndexSpeedControl } from './KnowledgeIndexSpeedControl'
+import IndexPrepareCancelModal from './IndexPrepareCancelModal'
 import { formatDateTime, getWebStatusBadge } from './utils/workspace'
+import {
+  formatIndexCancelContent,
+  getWebIndexCancelPreview
+} from './utils/indexPrepareCancel'
 
 type WebSourcesSettingsPanelProps = {
   embedded?: boolean
@@ -40,6 +45,9 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   const [webSubmitting, setWebSubmitting] = useState(false)
   const [webIndexJob, setWebIndexJob] = useState<WorkspaceIndexJobRecord | undefined>(undefined)
   const [deleteWebSource, setDeleteWebSource] = useState<WebSourceRecord | null>(null)
+  const [webPrepareCancelling, setWebPrepareCancelling] = useState(false)
+  const [webCancelModalOpen, setWebCancelModalOpen] = useState(false)
+  const [webCancelPreview, setWebCancelPreview] = useState({ completed: 0, remaining: 0 })
   const [webSummary, setWebSummary] = useState<WebSourceListResponse['summary']>({
     web_count: 0,
     needs_index_count: 0,
@@ -93,6 +101,12 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     }
     return window.api.onWorkspaceIndexJobProgress(handleProgress)
   }, [loadWebSources])
+
+  useEffect(() => {
+    if (webIndexJob?.action === 'prepare') return
+    setWebPrepareCancelling(false)
+    setWebCancelModalOpen(false)
+  }, [webIndexJob])
 
   const handleWebImport = async (): Promise<void> => {
     const urls = webUrlsText
@@ -160,6 +174,37 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     }
   }
 
+  const handleWebPrepareButtonClick = (): void => {
+    if (webPrepareCancelling) return
+    if (webIndexJob?.action === 'prepare') {
+      setWebCancelPreview(
+        getWebIndexCancelPreview({
+          job: webIndexJob,
+          sources: webSources
+        })
+      )
+      setWebCancelModalOpen(true)
+      return
+    }
+    void handlePrepareWebSources()
+  }
+
+  const handleConfirmWebPrepareCancel = async (): Promise<void> => {
+    setWebCancelModalOpen(false)
+    setWebPrepareCancelling(true)
+    try {
+      const response = await window.api.workspaceIndexCancel({ sourceKind: 'web' })
+      if (!response.success) {
+        setWebPrepareCancelling(false)
+        message.error(normalizeUserFacingError(response.error, '停止更新索引失败'))
+      }
+    } catch (error) {
+      setWebPrepareCancelling(false)
+      console.error(error)
+      message.error('停止更新索引失败')
+    }
+  }
+
   const handleDeleteWebSource = async (): Promise<void> => {
     if (!deleteWebSource) return
     try {
@@ -182,15 +227,23 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   const vectorModelMissing = hasVectorModel === false
   const hasWebList = webSources.length > 0
   const webScanDisabled = !hasWebList
-  const webPrepareDisabled = hasVectorModel !== true || actionableWebIndexCount === 0
+  const webPrepareRunning = webIndexJob?.action === 'prepare'
+  const webPrepareDisabled = webPrepareCancelling
+    ? true
+    : webPrepareRunning
+      ? false
+      : hasVectorModel !== true || actionableWebIndexCount === 0
+  const webPrepareLabel = webPrepareCancelling ? '停止中' : webPrepareRunning ? '取消' : '更新索引'
   const webPrepareTooltip =
     hasVectorModel === null
       ? '正在检查向量模型状态'
       : vectorModelMissing
         ? ''
-        : actionableWebIndexCount === 0
-          ? '当前没有需要更新的索引'
-          : '检查网页变化并更新索引。'
+        : webPrepareRunning
+          ? '停止本次更新索引，已完成的会保留。'
+          : actionableWebIndexCount === 0
+            ? '当前没有需要更新的索引'
+            : '检查网页变化并更新索引。'
   const vectorModelRequirementContent = (
     <div className="w-[220px]">
       <div className="text-[13px] font-medium text-[#37352F]">先安装向量模型</div>
@@ -277,12 +330,11 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
                 <Button
                   type="primary"
                   icon={<HiCircleStack className="h-4 w-4" />}
-                  onClick={() => void handlePrepareWebSources()}
+                  onClick={handleWebPrepareButtonClick}
                   disabled={webPrepareDisabled}
-                  loading={webIndexJob?.action === 'prepare'}
                   className={`w-full min-w-0 ${vectorModelMissing ? '!pr-9' : ''}`}
                 >
-                  更新索引
+                  {webPrepareLabel}
                 </Button>
               </Tooltip>
               {vectorModelMissing ? (
@@ -445,6 +497,18 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
             : '将删除该网页。'}
         </p>
       </Modal>
+      <IndexPrepareCancelModal
+        open={webCancelModalOpen}
+        content={formatIndexCancelContent(
+          'web',
+          webCancelPreview.completed,
+          webCancelPreview.remaining
+        )}
+        confirmTestId={importSelectors.webSourceIndexCancelConfirmButton}
+        continueTestId={importSelectors.webSourceIndexCancelContinueButton}
+        onStop={() => void handleConfirmWebPrepareCancel()}
+        onContinue={() => setWebCancelModalOpen(false)}
+      />
     </div>
   )
 }

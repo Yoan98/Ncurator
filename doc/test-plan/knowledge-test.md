@@ -8,7 +8,7 @@
 
 本计划覆盖两类：
 
-1. `foundation`：知识库功能（扫描、建索引、job、索引中拦截检索、索引速度线程预算、多地址顺序更新）。
+1. `foundation`：知识库功能（扫描、建索引、job、索引中拦截检索、用户取消更新索引、索引速度线程预算、多地址顺序更新）。
 2. `optimization`：召回率、检索与索引效果。当前无 case，后续做优化时再设计。
 
 边界：
@@ -37,6 +37,7 @@
   - 慢速：`max(1, floor(N/2))`，关闭 spinning
   - 高速：`max(2, N - reserve)`，`reserve = N≤8 ? 1 : 2`
 - 多文件地址更新索引必须顺序 kickoff，且 `workspacePrepare` IPC 等到该地址 job 终态。
+- 用户取消更新索引后，已完成保留，未完成回退为可索引或原来的失败，不得标成取消失败；后续地址不得 kickoff；`cancelled` 不拦截检索。程序关闭中断仍收敛为失败，与用户取消区分。
 - 不在 `foundation` 比较召回优劣。
 
 ## 4. 回归清单
@@ -54,10 +55,10 @@
 #### `workspace-index-job-store-contract`
 
 - 测试类型：`backend`
-- What：`workspace_index_job` 支持创建、active 查询、阶段进度更新和失败收敛。
-- Why：更新索引的进度恢复与中断收敛依赖 job store。
-- How：真实 job store 写入 running/failed 记录并查询 active、进度与批量失败。
-- Oracle：active 取最新 running；进度可持久化读取；running job 可批量失败，对齐 `SET-WORKSPACE-004-AC3`、`SET-WORKSPACE-004-AC4`、`SET-WORKSPACE-004-AC5`。
+- What：`workspace_index_job` 支持创建、active 查询、阶段进度更新、失败收敛和 cancelled 终态。
+- Why：更新索引的进度恢复、中断收敛与用户取消都依赖 job store。
+- How：真实 job store 写入 running/failed/cancelled 记录并查询 active、进度与批量失败。
+- Oracle：active 取最新 running，cancelled 不是 active；进度可持久化读取；running job 可批量失败；cancelled 后 `hasRunningPrepareJob` 为 false，对齐 `SET-WORKSPACE-004-AC3`、`SET-WORKSPACE-004-AC4`、`SET-WORKSPACE-004-AC5`、`SET-WORKSPACE-004-AC14`。
 
 #### `workspace-index-worker-contract`
 
@@ -94,10 +95,18 @@
 #### `prepare-workspaces-sequentially`
 
 - 测试类型：`backend`
-- What：多地址更新索引按顺序等待前一个完成再启动下一个。
-- Why：并行 kickoff 会叠满嵌入线程，和慢/高速档位冲突。
-- How：三个真实工作目录各写一个 txt，用生产 `prepareWorkspacesSequentially` 依次调用 `WorkspaceKnowledgePrepareService.indexLocalFile`（切分走生产 `prepareWorkspaceSource`，嵌入走生产 embedding），记录 start/end。
-- Oracle：事件顺序为每个地址 start→end 后再开始下一个，对齐 `SET-WORKSPACE-004-AC11`。
+- What：多地址更新索引按顺序等待前一个完成再启动下一个；首个结果 cancelled 时不再启动后续地址。
+- Why：并行 kickoff 会叠满嵌入线程，和慢/高速档位冲突；取消必须拦住还没开始的地址。
+- How：三个真实工作目录各写一个 txt，用生产 `prepareWorkspacesSequentially` 依次调用 `WorkspaceKnowledgePrepareService.indexLocalFile`（切分走生产 `prepareWorkspaceSource`，嵌入走生产 embedding），记录 start/end。另用 `shouldContinue` 在首个结果 cancelled 时停止，确认后续 prepare 不被调用。
+- Oracle：事件顺序为每个地址 start→end 后再开始下一个，对齐 `SET-WORKSPACE-004-AC11`；cancelled 后不再 kickoff 后续地址，对齐 `SET-WORKSPACE-004-AC15`。
+
+#### `workspace-index-cancel-contract`
+
+- 测试类型：`backend`
+- What：取消 prepare 后 job 为 cancelled；已完成保留；未完成回退且不失败；后续地址不启动；检索恢复。网页 crawling/indexing 同样回退。
+- Why：用户取消不是故障，剩余资料必须还能再次更新索引，也不能继续占用嵌入或拦截检索。
+- How：生产 store + 取消控制器；多文件/多地址用可闸门的索引函数在第二份未写库时取消；网页写执行中条目后调同一回退。
+- Oracle：job 为 cancelled；已索引保留；未完成回到 `needs_index` 或原 `failed`，不出现成批失败，对齐 `SET-WORKSPACE-004-AC14`、`SET-WORKSPACE-004-AC16`；后续地址不启动，对齐 `SET-WORKSPACE-004-AC15`；取消后 `hasRunningPrepareJob` 为 false，检索不再拦截，对齐 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`；网页执行中条目回到进入本轮前状态，对齐 `SET-WEB-004-AC12`、`SET-WEB-004-AC13`。不测弹框。
 
 ### 4.2 `optimization`
 

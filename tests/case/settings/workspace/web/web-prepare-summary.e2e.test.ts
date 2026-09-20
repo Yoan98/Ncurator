@@ -48,6 +48,7 @@ describe('settings workspace web e2e', () => {
           let workspaceId = ''
           let progressVisible = false
           let buttonsDisabled = false
+          let prepareButtonName = ''
           let crawlStepVisible = false
           let progressText = ''
           let scanProgressVisible = false
@@ -130,7 +131,9 @@ describe('settings workspace web e2e', () => {
               progressVisible = true
               buttonsDisabled =
                 (await page.getByRole('button', { name: '检查更新', exact: true }).isDisabled()) &&
-                (await page.getByRole('button', { name: '更新索引', exact: true }).isDisabled())
+                (await page.getByRole('button', { name: '取消', exact: true }).isDisabled())
+              prepareButtonName =
+                (await page.getByRole('button', { name: '取消', exact: true }).innerText()) || ''
               await waitForPreparedWebSources(page)
               await waitForWebIndexJobIdle(page, workspaceId)
             }
@@ -144,6 +147,7 @@ describe('settings workspace web e2e', () => {
           return {
             progressVisible,
             buttonsDisabled,
+            prepareButtonName,
             crawlStepVisible,
             progressText,
             scanProgressVisible,
@@ -170,11 +174,14 @@ describe('settings workspace web e2e', () => {
           )
 
           await runtime.assertThat(
-            result.progressVisible && !result.buttonsDisabled && result.crawlStepVisible,
+            result.progressVisible &&
+              !result.buttonsDisabled &&
+              result.prepareButtonName.includes('取消') &&
+              result.crawlStepVisible,
             {
               name: 'prepare-web-progress-is-visible',
               message:
-                '网页索引执行中应展示抓取/索引进度且两个索引操作按钮保持可用，对齐 SET-WEB-004-AC4。',
+                '网页索引执行中应展示抓取/索引进度，「检查更新」可用，「更新索引」文案变为「取消」且可点，对齐 SET-WEB-004-AC4、SET-WEB-004-AC10。',
               data: result
             }
           )

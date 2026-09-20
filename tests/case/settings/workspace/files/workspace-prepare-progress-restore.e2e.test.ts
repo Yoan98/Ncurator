@@ -37,7 +37,7 @@ describe('settings workspace e2e', () => {
         domain: 'settings',
         suite: 'workspace',
         groups: ['files'],
-        description: '文件索引执行中离开并返回工作空间页后，应恢复持久化进度块和按钮禁用状态。',
+        description: '文件索引执行中离开并返回工作空间页后，应恢复持久化进度块和取消按钮状态。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
@@ -69,6 +69,7 @@ describe('settings workspace e2e', () => {
 
           let restoredProgressVisible = false
           let restoredButtonsDisabled = false
+          let restoredPrepareButtonName = ''
 
           await runtime.step({
             name: 'restore-progress-after-route-change',
@@ -92,6 +93,12 @@ describe('settings workspace e2e', () => {
                   page,
                   importSelectors.workspaceQuickPrepareButton
                 ).isDisabled())
+              restoredPrepareButtonName = (
+                (await getSettingsLocator(
+                  page,
+                  importSelectors.workspaceQuickPrepareButton
+                ).innerText()) || ''
+              ).trim()
             }
           })
 
@@ -104,6 +111,7 @@ describe('settings workspace e2e', () => {
           return {
             restoredProgressVisible,
             restoredButtonsDisabled,
+            restoredPrepareButtonName,
             failedFileCount: idle.tree.summary.failed_file_count
           }
         },
@@ -111,11 +119,12 @@ describe('settings workspace e2e', () => {
           await runtime.assertThat(
             result.restoredProgressVisible &&
               !result.restoredButtonsDisabled &&
+              result.restoredPrepareButtonName.includes('取消') &&
               result.failedFileCount > 0,
             {
               name: 'file-progress-restores-after-return',
               message:
-                '离开并返回文件 tab 后，应通过持久化 running job 恢复进度块且两个按钮保持可用，对齐 SET-WORKSPACE-004-AC4。',
+                '离开并返回文件 tab 后，应通过持久化 running job 恢复进度块，「检查更新」可用，「更新索引」文案为「取消」且可点，对齐 SET-WORKSPACE-004-AC4、SET-WORKSPACE-004-AC12。',
               data: result
             }
           )

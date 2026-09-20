@@ -19,7 +19,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除，以及预设服务商与自定义配置的类型、锁定和去重语义。
 - `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为，以及错误日志目录入口；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
-- `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。`SET-WORKSPACE-009` 由独立 `workspace-index-speed` 用临时小目录做两次真实更新索引覆盖，并断言同一嵌入进程 ready 前后的操作系统线程增量；`SET-WORKSPACE-004-AC11` 由 `workspace-prepare-sequential-addresses` 在页面添加两个地址后走真实更新索引覆盖；慢/高速在独立 Node 进程里的线程增量由 knowledge `index-speed-thread-budget` 覆盖。问号文案与网页 tab 同步不单独测。
+- `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。`SET-WORKSPACE-009` 由独立 `workspace-index-speed` 用临时小目录做两次真实更新索引覆盖，并断言同一嵌入进程 ready 前后的操作系统线程增量；`SET-WORKSPACE-004-AC11` 由 `workspace-prepare-sequential-addresses` 在页面添加两个地址后走真实更新索引覆盖；取消弹框由 `workspace-prepare-cancel` / `web-prepare-cancel` 覆盖；慢/高速在独立 Node 进程里的线程增量由 knowledge `index-speed-thread-budget` 覆盖。问号文案与网页 tab 同步不单独测。
 - `vector` 属于 Settings 产品域，页面路由为 `/settings/vector`（`/model-download` 仅为历史重定向），测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
 - `workspace` 是 Settings 下的 suite，按 `core / files / web` 组织，语义为“文件地址 + 文件 tab + 全局网页 tab”，不是具名容器。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
@@ -98,7 +98,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 ### 3.3 `workspace / files`
 
-索引 job 运行期间目录树 IPC 必须为 0；任务成功或失败终态后，目录树只允许刷新一次。测试同时确认旧目录节点不因刷新被清空或折叠，扫描无可计算总数时显示活动状态而不是静态 0%。左侧可索引数字对全部文件地址合计。向量模型未安装时「更新索引」禁用与说明（`SET-WORKSPACE-004-AC6`、网页侧 `SET-WEB-004-AC7`）标为手动 / 暂缓，不进日常自动化。无文件地址时「检查更新」禁用、可索引为 0 时「更新索引」禁用（`SET-WORKSPACE-004-AC10`）与网页侧同构规则（`SET-WEB-003-AC5`、`SET-WEB-004-AC9`）标为 **不测**（低价值 UI 门禁，不单独立自动化 case）。文件更新索引中断后 job 与条目收敛为失败由 knowledge `workspace-interrupted-job-recovery-contract` / `workspace-index-job-store-contract` 覆盖 `SET-WORKSPACE-004-AC5`。更新索引执行中 `kb_search` / `kb_list_documents` 拦截由 knowledge `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。多地址顺序执行由 `workspace-prepare-sequential-addresses` 覆盖 `SET-WORKSPACE-004-AC11`。索引速度由 `workspace-index-speed` 与 knowledge `index-speed-thread-budget` 覆盖。
+索引 job 运行期间目录树 IPC 必须为 0；任务成功、失败或取消终态后，目录树只允许刷新一次。测试同时确认旧目录节点不因刷新被清空或折叠，扫描无可计算总数时显示活动状态而不是静态 0%。左侧可索引数字对全部文件地址合计。向量模型未安装时「更新索引」禁用与说明（`SET-WORKSPACE-004-AC6`、网页侧 `SET-WEB-004-AC7`）标为手动 / 暂缓，不进日常自动化。无文件地址时「检查更新」禁用、可索引为 0 时「更新索引」禁用（`SET-WORKSPACE-004-AC10`）与网页侧同构规则（`SET-WEB-003-AC5`、`SET-WEB-004-AC9`）标为 **不测**（低价值 UI 门禁，不单独立自动化 case）。文件更新索引中断后 job 与条目收敛为失败由 knowledge `workspace-interrupted-job-recovery-contract` / `workspace-index-job-store-contract` 覆盖 `SET-WORKSPACE-004-AC5`。更新索引执行中 `kb_search` / `kb_list_documents` 拦截由 knowledge `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`；用户取消后的状态机、后续地址拦截与检索恢复由 knowledge `workspace-index-cancel-contract` 覆盖 `SET-WORKSPACE-004-AC14/AC15/AC16` 与取消后的 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。多地址顺序执行由 `workspace-prepare-sequential-addresses` 覆盖 `SET-WORKSPACE-004-AC11`。索引速度由 `workspace-index-speed` 与 knowledge `index-speed-thread-budget` 覆盖。取消弹框与按钮文案由 `workspace-prepare-cancel` / `web-prepare-cancel` 覆盖。
 
 #### `workspace-scan-progress-refresh`
 
@@ -114,7 +114,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：点击“更新索引”后，文件状态会刷新为已索引并同步更新摘要。
 - Why：“索引已经可用”的核心用户反馈链路。全仓唯一的向量 warmup，预热共享 fixture 的 split/vector 缓存。
 - How：复制共享 workspace 输入的隔离副本，通过 Settings UI 添加为文件地址并点击更新索引，读取刷新后的文件树和全部支持文件状态。共享 fixture 含 `.doc`、`docx`、`pdf`、`md`、`txt`、`xlsx`、`xlsm` 等全部受支持类型，其中 excel 只以元数据方式索引进库。不切换、不断言索引速度。
-- Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮保持可用，对齐 `SET-WORKSPACE-004-AC3`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC7`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+- Oracle：更新索引过程中出现持久化总进度，「检查更新」可用，「更新索引」文案变为「取消」且可点，对齐 `SET-WORKSPACE-004-AC3`、`SET-WORKSPACE-004-AC12`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC7`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
 
 #### `workspace-index-speed`
 
@@ -137,7 +137,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：已有失败文件再次点击“更新索引”时会被纳入本次处理范围。
 - Why：失败文件是用户最常见的重试对象，如果失败记录不再进入目标集，用户会误判“没有东西可更新”。
-- How：通过原生目录选择添加包含真实损坏 docx 的临时目录，首次点击“更新索引”形成真实 failed 文件；再次点击更新索引，读取 active job 与文件状态。
+- How：通过原生目录选择添加包含真实损坏 docx 的临时目录，首次点击“更新索引”形成真实 failed 文件；等 job idle 后再点击更新索引，读取 active job 与文件状态。两次点击之间必须等到终态，避免第二次点到「取消」。
 - Oracle：本次 job 的目标数量包含失败文件，对齐 `SET-WORKSPACE-004-AC1`；失败文件重试后状态发生收敛，对齐 `SET-WORKSPACE-004-AC2`。可索引数含失败与「含失败 N 个」文案由 `workspace-detail-status-and-error` 覆盖 `SET-WORKSPACE-005-AC2`，本 case 不断言。
 
 #### `workspace-prepare-file-failure-isolated`
@@ -154,7 +154,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：文件索引执行中离开并返回工作空间页后，进度块和按钮状态会恢复。
 - Why：索引任务已切换为持久化后台 job，页面生命周期不能影响用户对任务状态的判断。
 - How：添加真实文件地址并通过 UI 触发更新索引，执行中切到其他设置页，再返回工作空间页读取 active job 与 UI 状态。
-- Oracle：返回后仍能看到 running job 对应的进度块，且检查更新/更新索引按钮保持可用，对齐 `SET-WORKSPACE-004-AC4`。
+- Oracle：返回后仍能看到 running job 对应的进度块，「检查更新」可用，「更新索引」文案为「取消」且可点，对齐 `SET-WORKSPACE-004-AC4`、`SET-WORKSPACE-004-AC12`。
 
 #### `workspace-detail-status-and-error`
 
@@ -163,6 +163,14 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：文件问题通常发生在索引阶段，如果失败只留在控制台，用户无法判断资料是否可用。
 - How：通过原生目录选择添加包含真实损坏 docx 的临时目录，点击更新索引并读取刷新后的文件树响应。
 - Oracle：文件 tab 的可索引数字包含失败数量并对全部地址合计，展示 `含失败 N 个` 辅助文案，对齐 `SET-WORKSPACE-005-AC2`；文件索引失败后，失败状态和错误信息保留在文件级记录中，目录树文件项只保留文件名与状态标记，对齐 `SET-WORKSPACE-008-AC2`。
+
+#### `workspace-prepare-cancel`
+
+- 测试类型：`e2e`
+- What：更新索引进行中点「取消」，确认框展示已完成/剩余数量；继续则任务接着跑，停止则保留已完成、剩余仍可索引，按钮回到「更新索引」。
+- Why：用户需要能停掉长时间索引并关掉应用，不能把没做完的文件标成失败。
+- How：添加含多个真实文件的临时目录，进度可见且 `processed_count < total_count` 后点「取消」；先选「继续更新」确认任务仍 running，再点「取消」并「停止」。
+- Oracle：进行中按钮文案为「取消」且可点，对齐 `SET-WORKSPACE-004-AC12`；弹框展示已完成 N 与剩余 M，继续则任务继续，对齐 `SET-WORKSPACE-004-AC13`；停止后已索引保留、剩余仍为可索引或原失败、按钮回到「更新索引」，对齐 `SET-WORKSPACE-004-AC3`、`SET-WORKSPACE-004-AC14`。多地址不再 kickoff 与当前文件不落库由 knowledge `workspace-index-cancel-contract` 覆盖 `SET-WORKSPACE-004-AC15`、`SET-WORKSPACE-004-AC16`。
 
 ### 3.4 `workspace / web`
 
@@ -180,7 +188,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：网页“检查更新 → 更新索引”完整链路会先刷新可索引状态，再区分成功索引与爬取失败并刷新摘要。
 - Why：网页索引是“爬取 + 建索引”两阶段链路，失败类型必须可区分。
 - How：预置一条成功网页和一条带失败标记的网页，先执行“检查更新”，再执行“更新索引”。
-- Oracle：网页列表、摘要、失败数量和操作区初始化对齐 `SET-WEB-001-AC1`、`SET-WEB-001-AC2`；检查进度和完成状态对齐 `SET-WEB-003-AC1`、`SET-WEB-003-AC2`；更新时网页进入抓取/索引状态，对齐 `SET-WEB-004-AC1`；成功与失败分别收敛，对齐 `SET-WEB-004-AC2`、`SET-WEB-004-AC3`；分阶段进度对齐 `SET-WEB-004-AC4`。
+- Oracle：网页列表、摘要、失败数量和操作区初始化对齐 `SET-WEB-001-AC1`、`SET-WEB-001-AC2`；检查进度和完成状态对齐 `SET-WEB-003-AC1`、`SET-WEB-003-AC2`；更新时网页进入抓取/索引状态，对齐 `SET-WEB-004-AC1`；成功与失败分别收敛，对齐 `SET-WEB-004-AC2`、`SET-WEB-004-AC3`；分阶段进度可见，「检查更新」可用，「更新索引」文案变为「取消」且可点，对齐 `SET-WEB-004-AC4`、`SET-WEB-004-AC10`。
 
 #### `web-prepare-progress-restore`
 
@@ -188,7 +196,15 @@ Settings 顶层 suite 对齐 PRD 模块：
 - What：网页索引执行中离开并返回网页 tab 后，分阶段进度块和按钮状态会恢复。
 - Why：网页索引包含抓取与索引两阶段，恢复时不能只恢复“执行中”标签而丢失当前阶段。
 - How：通过 UI 添加延迟响应的本地真实网页，触发网页检查和更新索引后分别切到其他设置页，再返回网页 tab 读取 active job 与进度文案。
-- Oracle：检查更新离开再返回时恢复当前进度，对齐 `SET-WEB-003-AC3`；更新索引离开再返回时恢复当前阶段且两个按钮保持可用，对齐 `SET-WEB-004-AC5`。
+- Oracle：检查更新离开再返回时恢复当前进度，对齐 `SET-WEB-003-AC3`；更新索引离开再返回时恢复当前阶段，「检查更新」可用，「更新索引」文案为「取消」且可点，对齐 `SET-WEB-004-AC5`、`SET-WEB-004-AC10`。
+
+#### `web-prepare-cancel`
+
+- 测试类型：`e2e`
+- What：网页更新索引进行中点「取消」，确认框展示已完成/剩余网页数量，停止后未完成网页不落成已索引。
+- Why：网页抓取可能很慢，用户需要和文件 tab 同一套停法。
+- How：添加延迟响应的本地真实网页，进度可见后点「取消」；覆盖继续与停止。
+- Oracle：进行中按钮为「取消」且可点，弹框展示 N/M，继续则任务继续，对齐 `SET-WEB-004-AC10`、`SET-WEB-004-AC11`；停止后已完成保留、未完成回到进入本轮前状态、按钮回到「更新索引」，对齐 `SET-WEB-004-AC12`、`SET-WEB-004-AC13`。
 
 #### `web-detail-and-delete`
 

@@ -27,7 +27,8 @@ const normalizeAction = (value: unknown): WorkspaceIndexJobAction =>
 
 const normalizeStatus = (value: unknown): WorkspaceIndexJobStatus => {
   const next = String(value ?? '').trim()
-  return next === 'succeeded' || next === 'failed' ? next : 'running'
+  if (next === 'succeeded' || next === 'failed' || next === 'cancelled') return next
+  return 'running'
 }
 
 const normalizePhase = (value: unknown): WorkspaceIndexJobPhase => {

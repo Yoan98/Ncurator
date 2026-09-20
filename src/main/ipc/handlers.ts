@@ -44,6 +44,13 @@ import type {
 import { listReferenceItemsPage } from '../services/sourceScope/referenceList'
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
 import { WorkspaceKnowledgePrepareService } from '../services/workspace/WorkspaceKnowledgePrepareService'
+import {
+  IndexPrepareCancelledError,
+  isIndexPrepareCancelledError,
+  toFilePreparePreviousSnapshot,
+  toWebPreparePreviousSnapshot,
+  WorkspaceIndexPrepareController
+} from '../services/workspace/WorkspaceIndexPrepareController'
 import { createWorkspaceKnowledgeCache } from '../services/workspace/WorkspaceKnowledgeCache'
 import { WebSourceService } from '../services/web/WebSourceService'
 import { OpenWithService } from '../services/openWith/OpenWithService'
@@ -142,7 +149,9 @@ import type {
   WorkspaceTreeEntry,
   WorkspaceTreeListResponse,
   WorkspaceSource,
-  WorkspaceListResponse
+  WorkspaceListResponse,
+  WorkspaceIndexCancelRequest,
+  WorkspaceIndexPrepareSessionBeginRequest
 } from '../types/store'
 import path from 'path'
 import fs from 'fs'
@@ -266,6 +275,10 @@ export function registerHandlers(services: {
   const webSourceStore = storageService.webSource
   const workspaceStore = storageService.workspace
   const workspaceIndexJobStore = storageService.workspaceIndexJob
+  const prepareController = new WorkspaceIndexPrepareController({
+    workspaceStore,
+    webSourceStore
+  })
   const aiFileChangeService = new AiFileChangeService(storageService.aiFileChange)
   const docxApplyService = new DocxApplyService(storageService.docxApply, aiFileChangeService)
   const attachmentService = new AttachmentService()
@@ -691,6 +704,16 @@ export function registerHandlers(services: {
     let job = input.job
     const workspaceId = job.workspace_id
     try {
+      if (prepareController.isCancelled('file')) {
+        await updateAndEmitWorkspaceIndexJob(job, {
+          status: 'cancelled',
+          phase: 'complete',
+          message: '已停止更新索引',
+          updated_at: Date.now(),
+          finished_at: Date.now()
+        })
+        return
+      }
       const currentWorkspace = await workspaceStore.getWorkspaceById(workspaceId)
       if (!currentWorkspace) throw new Error('workspace not found')
       if (!currentWorkspace.root_path) throw new Error('请先设置工作目录')
@@ -701,30 +724,57 @@ export function registerHandlers(services: {
         workspace: currentWorkspace,
         now: prepareStartedAt
       })
+      if (prepareController.isCancelled('file')) {
+        await updateAndEmitWorkspaceIndexJob(job, {
+          status: 'cancelled',
+          phase: 'complete',
+          total_count: targets.length,
+          target_ids: targets.map((record) => record.id),
+          message: '已停止更新索引',
+          updated_at: Date.now(),
+          finished_at: Date.now()
+        })
+        return
+      }
       job = await updateAndEmitWorkspaceIndexJob(job, {
         total_count: targets.length,
         target_ids: targets.map((record) => record.id),
         message: `准备更新 ${targets.length} 个文件`,
         updated_at: Date.now()
       })
-
-      for (const record of targets) {
-        await workspaceStore.upsertWorkspaceFileIndexRecords([
-          {
+      if (targets.length > 0) {
+        await workspaceStore.upsertWorkspaceFileIndexRecords(
+          targets.map((record) => ({
             ...record,
-            index_status: 'indexing',
-            last_error: undefined,
             last_checked_at: prepareStartedAt,
             updated_at: prepareStartedAt
-          }
-        ])
+          }))
+        )
       }
+
       let processed = 0
       let failed = 0
+      let cancelled = false
       const knowledgeCache = createWorkspaceKnowledgeCache()
       for (const target of targets) {
+        if (prepareController.isCancelled('file')) {
+          cancelled = true
+          break
+        }
         const currentRecord = recordMap.get(target.relative_path) || target
+        prepareController.rememberFilePrevious(
+          currentRecord.id,
+          toFilePreparePreviousSnapshot(currentRecord)
+        )
         const documentId = currentRecord.document_id || uuidv4()
+        await workspaceStore.upsertWorkspaceFileIndexRecords([
+          {
+            ...currentRecord,
+            index_status: 'indexing',
+            last_checked_at: prepareStartedAt,
+            updated_at: Date.now()
+          }
+        ])
         job = await updateAndEmitWorkspaceIndexJob(job, {
           message: `正在处理 ${processed + 1}/${targets.length}：${currentRecord.relative_path}`,
           updated_at: Date.now()
@@ -735,7 +785,8 @@ export function registerHandlers(services: {
             documentId,
             filePath: currentRecord.absolute_path,
             documentName: currentRecord.name,
-            cache: knowledgeCache || undefined
+            cache: knowledgeCache || undefined,
+            signal: prepareController.getSignal('file')
           })
           const preparedAt = Date.now()
           const preparedRecord: WorkspaceFileIndexRecord = {
@@ -758,7 +809,12 @@ export function registerHandlers(services: {
             last_error: preparedRecord.last_error,
             updated_at: preparedRecord.updated_at
           })
+          if (prepareController.isCancelled('file')) cancelled = true
         } catch (error) {
+          if (isIndexPrepareCancelledError(error)) {
+            cancelled = true
+            break
+          }
           failed += 1
           errorLogService?.write({
             module: 'workspace-index',
@@ -787,6 +843,7 @@ export function registerHandlers(services: {
             last_error: failedRecord.last_error,
             updated_at: failedRecord.updated_at
           })
+          if (prepareController.isCancelled('file')) cancelled = true
         }
         processed += 1
         job = await updateAndEmitWorkspaceIndexJob(job, {
@@ -795,6 +852,22 @@ export function registerHandlers(services: {
           message: `已处理 ${processed}/${targets.length}`,
           updated_at: Date.now()
         })
+        if (cancelled) break
+      }
+
+      if (cancelled || prepareController.isCancelled('file')) {
+        await prepareController.revertUnfinishedFiles()
+        await updateAndEmitWorkspaceIndexJob(job, {
+          status: 'cancelled',
+          phase: 'complete',
+          processed_count: processed,
+          failed_count: failed,
+          message: `已停止更新索引，完成 ${processed} 个`,
+          updated_at: Date.now(),
+          finished_at: Date.now()
+        })
+        await documentsStore.purgeStaleChunks()
+        return
       }
 
       await updateAndEmitWorkspaceIndexJob(job, {
@@ -809,6 +882,18 @@ export function registerHandlers(services: {
       })
       await documentsStore.purgeStaleChunks()
     } catch (error) {
+      if (isIndexPrepareCancelledError(error) || prepareController.isCancelled('file')) {
+        await prepareController.revertUnfinishedFiles()
+        await updateAndEmitWorkspaceIndexJob(job, {
+          status: 'cancelled',
+          phase: 'complete',
+          message: '已停止更新索引',
+          updated_at: Date.now(),
+          finished_at: Date.now()
+        })
+        await documentsStore.purgeStaleChunks()
+        return
+      }
       const message = getErrorMessage(error)
       errorLogService?.write({
         module: 'workspace-index',
@@ -1119,6 +1204,9 @@ export function registerHandlers(services: {
         includeSelectors: source.include_selectors,
         excludeSelectors: source.exclude_selectors
       })
+      if (prepareController.isCancelled('web')) {
+        throw new IndexPrepareCancelledError()
+      }
       const crawledAt = Date.now()
       const crawlingDoneSource: WebSourceRecord = {
         ...nextPendingSource,
@@ -1137,6 +1225,9 @@ export function registerHandlers(services: {
       emitSourceListRefreshToAll()
       return { source: crawlingDoneSource, documentId: nextDocumentId, inspection }
     } catch (error) {
+      if (isIndexPrepareCancelledError(error)) {
+        throw new IndexPrepareCancelledError()
+      }
       await documentsStore
         .markDocumentIndexFailed(nextDocumentId, getErrorMessage(error))
         .catch(() => {})
@@ -1171,9 +1262,9 @@ export function registerHandlers(services: {
         sourceUrl: input.source.url,
         rawText: input.inspection.text,
         contentHash: input.inspection.contentHash,
-        cache: createWorkspaceKnowledgeCache() || undefined
+        cache: createWorkspaceKnowledgeCache() || undefined,
+        signal: prepareController.getSignal('web')
       })
-
       const indexedAt = Date.now()
       const refreshedSource: WebSourceRecord = {
         ...input.source,
@@ -1188,6 +1279,9 @@ export function registerHandlers(services: {
       emitSourceListRefresh(input.sender)
       emitSourceListRefreshToAll()
     } catch (error) {
+      if (isIndexPrepareCancelledError(error)) {
+        throw new IndexPrepareCancelledError()
+      }
       await documentsStore
         .markDocumentIndexFailed(input.documentId, getErrorMessage(error))
         .catch(() => {})
@@ -1266,6 +1360,16 @@ export function registerHandlers(services: {
     let job = input.job
     const workspaceId = job.workspace_id
     try {
+      if (prepareController.isCancelled('web')) {
+        await updateAndEmitWorkspaceIndexJob(job, {
+          status: 'cancelled',
+          phase: 'complete',
+          message: '已停止更新索引',
+          updated_at: Date.now(),
+          finished_at: Date.now()
+        })
+        return
+      }
       await ensureWebSourcesHydrated()
       const sources = await webSourceStore.listWebSources()
       const targets = sources.filter(
@@ -1286,6 +1390,16 @@ export function registerHandlers(services: {
             : '步骤 2/2 建立索引：无需处理',
         updated_at: Date.now()
       })
+      if (prepareController.isCancelled('web')) {
+        await updateAndEmitWorkspaceIndexJob(job, {
+          status: 'cancelled',
+          phase: 'complete',
+          message: '已停止更新索引',
+          updated_at: Date.now(),
+          finished_at: Date.now()
+        })
+        return
+      }
 
       const crawledSources: Array<{
         source: WebSourceRecord
@@ -1298,12 +1412,15 @@ export function registerHandlers(services: {
       let crawlIndex = 0
       const runCrawlOne = async (): Promise<void> => {
         for (;;) {
+          if (prepareController.isCancelled('web')) return
           const current = targets[crawlIndex++]
           if (!current) return
+          prepareController.rememberWebPrevious(current.id, toWebPreparePreviousSnapshot(current))
           try {
             const crawled = await crawlWebSourceForIndexJob(input.sender, current)
             crawledSources.push(crawled)
           } catch (error) {
+            if (isIndexPrepareCancelledError(error)) return
             void error
             crawlFailed += 1
           }
@@ -1314,9 +1431,25 @@ export function registerHandlers(services: {
             message: `步骤 1/2 抓取网页：${crawlProcessed}/${targets.length}`,
             updated_at: Date.now()
           })
+          if (prepareController.isCancelled('web')) return
         }
       }
       await Promise.all(Array.from({ length: concurrency }, () => runCrawlOne()))
+      if (prepareController.isCancelled('web')) {
+        await prepareController.revertUnfinishedWebSources()
+        await updateAndEmitWorkspaceIndexJob(job, {
+          status: 'cancelled',
+          phase: 'complete',
+          total_count: targets.length,
+          processed_count: crawlProcessed,
+          failed_count: crawlFailed,
+          message: '已停止更新索引',
+          updated_at: Date.now(),
+          finished_at: Date.now()
+        })
+        await documentsStore.purgeStaleChunks()
+        return
+      }
 
       job = await updateAndEmitWorkspaceIndexJob(job, {
         phase: 'index',
@@ -1335,6 +1468,7 @@ export function registerHandlers(services: {
       let indexIndex = 0
       const runIndexOne = async (): Promise<void> => {
         for (;;) {
+          if (prepareController.isCancelled('web')) return
           const current = crawledSources[indexIndex++]
           if (!current) return
           try {
@@ -1345,10 +1479,12 @@ export function registerHandlers(services: {
               inspection: current.inspection
             })
           } catch (error) {
+            if (isIndexPrepareCancelledError(error)) return
             void error
             indexFailed += 1
           }
           indexProcessed += 1
+          if (prepareController.isCancelled('web')) return
           job = await updateAndEmitWorkspaceIndexJob(job, {
             processed_count: indexProcessed,
             failed_count: indexFailed,
@@ -1358,6 +1494,21 @@ export function registerHandlers(services: {
         }
       }
       await Promise.all(Array.from({ length: concurrency }, () => runIndexOne()))
+      if (prepareController.isCancelled('web')) {
+        await prepareController.revertUnfinishedWebSources()
+        await updateAndEmitWorkspaceIndexJob(job, {
+          status: 'cancelled',
+          phase: 'complete',
+          total_count: targets.length,
+          processed_count: crawlProcessed + indexProcessed,
+          failed_count: crawlFailed + indexFailed,
+          message: '已停止更新索引',
+          updated_at: Date.now(),
+          finished_at: Date.now()
+        })
+        await documentsStore.purgeStaleChunks()
+        return
+      }
 
       const totalFailed = crawlFailed + indexFailed
       await updateAndEmitWorkspaceIndexJob(job, {
@@ -1372,6 +1523,18 @@ export function registerHandlers(services: {
       })
       await documentsStore.purgeStaleChunks()
     } catch (error) {
+      if (isIndexPrepareCancelledError(error) || prepareController.isCancelled('web')) {
+        await prepareController.revertUnfinishedWebSources()
+        await updateAndEmitWorkspaceIndexJob(job, {
+          status: 'cancelled',
+          phase: 'complete',
+          message: '已停止更新索引',
+          updated_at: Date.now(),
+          finished_at: Date.now()
+        })
+        await documentsStore.purgeStaleChunks()
+        return
+      }
       const message = getErrorMessage(error)
       await updateAndEmitWorkspaceIndexJob(job, {
         status: 'failed',
@@ -2038,6 +2201,9 @@ export function registerHandlers(services: {
       const workspaceId = String(payload.workspaceId || '').trim()
       if (!workspaceId) return { success: false, error: 'workspaceId is required' }
       try {
+        if (prepareController.isCancelled('file')) {
+          return { success: true, workspaceId, cancelled: true }
+        }
         const activeJob = await workspaceIndexJobStore.getActiveJob(workspaceId, 'file')
         if (activeJob) return { success: true, workspaceId, job: activeJob }
 
@@ -2069,7 +2235,12 @@ export function registerHandlers(services: {
         activeWorkspaceIndexJobs.add(jobKey)
         await runFilePrepareJob({ sender: event.sender, job })
         const finished = await workspaceIndexJobStore.getJobById(job.id)
-        return { success: true, workspaceId, job: finished || job }
+        return {
+          success: true,
+          workspaceId,
+          job: finished || job,
+          cancelled: finished?.status === 'cancelled'
+        }
       } catch (error) {
         return { success: false, error: getErrorMessage(error), workspaceId }
       }
@@ -2104,6 +2275,39 @@ export function registerHandlers(services: {
         if (!workspaceId) return { success: false, error: 'workspaceId is required' }
         const job = await workspaceIndexJobStore.getActiveJob(workspaceId, sourceKind)
         return { success: true, job: job || undefined }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'workspace-index-prepare-session-begin',
+    async (
+      _event,
+      payload: WorkspaceIndexPrepareSessionBeginRequest
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const sourceKind = payload?.sourceKind === 'web' ? 'web' : 'file'
+        prepareController.beginSession(sourceKind)
+        return { success: true }
+      } catch (error) {
+        return { success: false, error: getErrorMessage(error) }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'workspace-index-cancel',
+    async (
+      _event,
+      payload: WorkspaceIndexCancelRequest
+    ): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const sourceKind = payload?.sourceKind === 'web' ? 'web' : 'file'
+        prepareController.requestCancel(sourceKind)
+        await workspaceKnowledgePrepareService.abortActivePrepare()
+        return { success: true }
       } catch (error) {
         return { success: false, error: getErrorMessage(error) }
       }
@@ -2151,6 +2355,7 @@ export function registerHandlers(services: {
         if (runningJob) return { success: true, workspaceId, job: runningJob }
         return { success: false, workspaceId, error: 'workspace web job already running' }
       }
+      prepareController.beginSession('web')
       const job = await saveAndEmitWorkspaceIndexJob(
         createWorkspaceIndexJob({
           workspaceId,
