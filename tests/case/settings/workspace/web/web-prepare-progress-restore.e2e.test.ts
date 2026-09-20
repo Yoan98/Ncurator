@@ -83,7 +83,7 @@ describe('settings workspace web e2e', () => {
               })
               await page
                 .getByTestId(importSelectors.webSourceIndexJobProgress)
-                .getByText('步骤 1/2 抓取网页', { exact: true })
+                .getByText('抓取网页', { exact: true })
                 .waitFor({ state: 'visible' })
             }
           })

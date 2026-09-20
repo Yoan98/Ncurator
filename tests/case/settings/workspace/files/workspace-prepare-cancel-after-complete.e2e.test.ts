@@ -56,10 +56,18 @@ describe('settings workspace e2e', () => {
           await waitForFileIndexJobIdle(page, workspaceId, SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS)
           const dialogVisibleAfterIdle = await dialog.isVisible().catch(() => false)
           if (dialogVisibleAfterIdle) {
-            await getSettingsLocator(
+            const confirmButton = getSettingsLocator(
               page,
               importSelectors.workspaceIndexCancelConfirmButton
-            ).click()
+            )
+            // Job may reach a terminal state and close the dialog before click; stop is then a no-op.
+            if (await confirmButton.isVisible().catch(() => false)) {
+              try {
+                await confirmButton.click({ timeout: 5_000 })
+              } catch {
+                // Dialog closed while clicking; keep going and assert final indexed state.
+              }
+            }
           }
           const idle = await waitForFileIndexJobIdle(
             page,
