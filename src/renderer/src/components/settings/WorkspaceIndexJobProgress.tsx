@@ -1,6 +1,10 @@
 ﻿import React from 'react'
 import { Progress, Spin } from 'antd'
 import type { WorkspaceIndexJobRecord } from '../../../../shared/types'
+import {
+  formatIndexJobProgressLabel,
+  getIndexJobProgressNumbers
+} from '../../../../shared/indexJobProgress'
 
 type WorkspaceIndexJobProgressProps = {
   job?: WorkspaceIndexJobRecord
@@ -23,10 +27,7 @@ const getJobTitle = (job: WorkspaceIndexJobRecord): string => {
 const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ job, testId }) => {
   if (!job || job.status !== 'running') return null
   const title = getJobTitle(job)
-  const total = Math.max(0, job.total_count)
-  const done = Math.min(total, Math.max(0, job.processed_count + job.failed_count))
-  const percent = total > 0 ? Math.round((done / total) * 100) : 0
-  const hasDeterminateProgress = total > 0
+  const progress = getIndexJobProgressNumbers(job)
   const message = job.message || '正在处理'
   const shouldHideMessage = message.startsWith(`${title}：`) || message === title
 
@@ -37,17 +38,15 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
     >
       <div className="flex items-center justify-between gap-3 text-[12px]">
         <span className="font-medium text-[#37352F]">{title}</span>
-        {hasDeterminateProgress ? (
-          <span className="shrink-0 text-[#9B9A97]">
-            {percent}% · {done}/{total}
-          </span>
+        {progress.hasDeterminateProgress ? (
+          <span className="shrink-0 text-[#9B9A97]">{formatIndexJobProgressLabel(progress)}</span>
         ) : (
           <Spin size="small" />
         )}
       </div>
       <Progress
-        percent={hasDeterminateProgress ? percent : 0}
-        status={hasDeterminateProgress && percent > 0 ? 'active' : 'normal'}
+        percent={progress.hasDeterminateProgress ? progress.percent : 0}
+        status={progress.hasDeterminateProgress && progress.percent > 0 ? 'active' : 'normal'}
         showInfo={false}
         size="small"
         strokeColor="#37352F"

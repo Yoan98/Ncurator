@@ -9,6 +9,7 @@ import {
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
 import { copySharedWorkspaceFixture, toSupportedFileStatuses } from './realWorkspaceHelpers'
+import { INDEX_JOB_PROGRESS_LABEL_PATTERN } from '../../../../../src/shared/indexJobProgress'
 
 const LEGACY_DOC_NAME = '风险等级判断标准-图案设计【2026.2.10更新】.doc'
 
@@ -35,6 +36,7 @@ describe('settings workspace e2e', () => {
           })
           const workspaceId = workspace.workspace!.id
           let prepareProgressVisible = false
+          let prepareProgressText = ''
           let prepareButtonName = ''
           let buttonsDisabled = false
           let directoryCallBaseline = 0
@@ -65,6 +67,22 @@ describe('settings workspace e2e', () => {
                 state: 'visible'
               })
               prepareProgressVisible = true
+              await page.waitForFunction(
+                (testId) => {
+                  const el = document.querySelector(`[data-testid="${testId}"]`)
+                  return (
+                    el instanceof HTMLElement && /\d+%\s*·\s*\d+\/\d+/.test(el.innerText || '')
+                  )
+                },
+                importSelectors.workspaceIndexJobProgress,
+                { timeout: SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS }
+              )
+              prepareProgressText = (
+                (await getSettingsLocator(
+                  page,
+                  importSelectors.workspaceIndexJobProgress
+                ).innerText()) || ''
+              ).trim()
               prepareButtonName = (
                 (await getSettingsLocator(
                   page,
@@ -106,6 +124,7 @@ describe('settings workspace e2e', () => {
 
           return {
             prepareProgressVisible,
+            prepareProgressText,
             prepareButtonName,
             buttonsDisabled,
             directoryCallsWhileRunning,
@@ -118,11 +137,12 @@ describe('settings workspace e2e', () => {
           await runtime.assertThat(
             result.prepareProgressVisible &&
               !result.buttonsDisabled &&
-              result.prepareButtonName.includes('取消'),
+              result.prepareButtonName.includes('取消') &&
+              INDEX_JOB_PROGRESS_LABEL_PATTERN.test(result.prepareProgressText),
             {
               name: 'prepare-progress-is-visible',
               message:
-                '更新索引执行中，界面应展示持久化总进度，「检查更新」可用，「更新索引」文案变为「取消」且可点，对齐 SET-WORKSPACE-004-AC3、SET-WORKSPACE-004-AC12。',
+                '更新索引执行中，界面应展示持久化总进度，「检查更新」可用，「更新索引」文案变为「取消」且可点；目标总数算出后进度文案含百分比和已处理/总数，不得停在无数字的准备空进度，对齐 SET-WORKSPACE-004-AC3、SET-WORKSPACE-004-AC12。',
               data: result
             }
           )
