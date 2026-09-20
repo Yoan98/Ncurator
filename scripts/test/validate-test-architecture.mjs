@@ -182,6 +182,11 @@ for (const [domain, rule] of Object.entries(DOMAIN_RULES)) {
       }
     }
     const isAiLive = relativePath.split(path.sep).join('/').includes('tests/case/ai/human/live/')
+    if ((domain === 'ai' || domain === 'knowledge') && /\bvi\.(?:fn|mock|spyOn)\b/u.test(source)) {
+      failures.push(
+        `${relativePath}: 正式 backend 禁止 vi.fn / vi.mock / vi.spyOn，假对象只属于 unit`
+      )
+    }
     if (isAiLive) {
       const prohibited = [
         ['skipped live result', /\bskipped\s*:/u],

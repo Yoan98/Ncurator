@@ -87,7 +87,15 @@ tests/
 - `Oracle`
   - 必须成立的明确断言集合。
 
-### 3.3 UI E2E 测试规则
+### 3.3 backend 正式 case 规则
+
+- `ai` / `knowledge` 正式 backend 必须打到页面或 IPC 会调用的生产实现（真实 store、真实服务、真实文件、真实工具）。
+- 禁止用假 executor、假 store、假 `assert*`、`vi.fn` / `vi.mock` / `vi.spyOn` 顶替被测依赖。
+- 纯函数和假对象只属于 `tests/case/unit/**`，不能充当正式计划里的功能 case。
+- How 必须写明生产入口。vitest 起不了 Electron `utilityProcess` / Worker 时，允许同一份生产实现 in-process，缺口写进 How，禁止另写假类。
+- 新增任何模拟路径必须先说明必要性、取得用户确认，并写入该 case 所在测试计划。
+
+### 3.4 UI E2E 测试规则
 
 - UI E2E 必须通过真实 UI 和产品链路完成被测行为；禁止 fake、mock、stub、直接写状态或内部写 IPC 绕过。
 - fixture 和 helper 只能准备真实输入、执行用户可见操作、等待结果和收集证据，不能替代产品输出。
@@ -96,7 +104,7 @@ tests/
 - observer、只读 IPC 和截图只能收集证据，不能触发被测行为或改变运行结果。
 - 产品缺少必要 testability 入口时，应记录缺口，不能改用模拟路径绕过。不为 E2E 增加生产环境变量、故障开关、全局探针或其他生产代码入口；确需修改生产代码时，必须先取得用户确认。
 
-### 3.4 真实 AI / live 断言规则
+### 3.5 真实 AI / live 断言规则
 
 - live 模型配置（backend `ai/human/live` 与 Workbench AI E2E 共用）与 opt-in 命令只在对应 `doc/test-plan/**` 维护，本文不重复。
 - 涉及真实 AI 调用的测试，硬断言只验证完成态、关键事实、关键工具或事件、关键 artifact，以及用户诉求是否落地；最终自然语言回答不得作为主要正确性证据。

@@ -49,7 +49,7 @@
 - `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。`browser_use` 网址协议、系统错误页、加载超时与 `navigate` 成败字段由 Workbench `browser-navigate-error-page` 与 unit `navigate-plan` 覆盖。
 - 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](../../src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
 - 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
-- 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。
+- 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。`web-crawl-contract` 里 `browser-use-navigate-returns-tab-for-follow-up` 等仍注入假 `browserUseService`、`web-search-returns-serp-by-search-type` 仍 mock search，待改为真实 CDP / 本地网页，不得当作已批准例外。
 - `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再让冻结 sidecar bin 的 Python Playwright 显式复用该测试 Electron 的 Node，通过隔离 context 抓取；host 必须 headless 且不得挂主窗口。该独立 host 可以继续开进程级调试口，与正式 App 无关。正式 App 的 `browser_use` 在无进程级 `--remote-debugging-port` 下，于 observe/act 时按 Tab 挂本机 CDP 桥。另覆盖 `browser_use` 服务不可用诊断。禁止使用 sidecar 内置 Node/浏览器或 Electron 默认 context。`web_search` 结果只回模型，不得自动展开右侧搜索列表（该面板已不存在）。
 
 ### 2.2 `human`

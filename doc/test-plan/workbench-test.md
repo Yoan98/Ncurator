@@ -11,7 +11,7 @@
 ## 2. 测试边界
 
 - Workbench UI E2E 测试通过脚本在 case 运行时把 `tests/fixtures/workspace` 复制到临时目录；需要文件资料时通过 Settings UI 添加文件地址、检查更新和更新索引。前置始终是创建伙伴；不断言工作区选择器、`.ncurator` 或 `__draft__`。
-- Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。
+- Workbench 正式 e2e 不允许直接调用 `workspacePrepare`、直接写模型配置、fake model、fake search、fake docx、fake AI event、fake attachment pick 或固定 document id。下列 case 仍用写 IPC 造状态，待改为真实 UI 点击：`partner-ui-state-isolation`、`partner-ui-state-restart-persistence`、`background-partner-ui-event-isolation`、`partner-pin-toggle`；`browser-view-lifecycle` 中部分 `browserTabNavigate` 同样待改。只读 IPC 取证仍允许。
 - Workbench e2e 的 workspace 文件索引允许在测试环境通过 `NCURATOR_WORKSPACE_KNOWLEDGE_CACHE=1` 启用真实 split / vector 缓存；缓存只按文件内容 hash、扩展名、splitter 参数和 embedding model 复用计算结果，不替代 workspace 文件记录、document id、搜索结果或 UI 状态。Source E2E 直接共享内容缓存并按 case 隔离统计；Source 与正式包 E2E 在多 case 时都先执行 `warmup` 预热共享 fixture，正式包 E2E 再把缓存种子复制给隔离 case。
 - Workbench 模型选择 helper 优先按预设 option 的稳定调用名 `data-testid`（`AI_LIVE_MODEL`）点选；未命中再按展示名；仍未命中则进入「自定义模型」按名称搜索。
 - Workbench UI E2E 测试需要真实索引完成信号和 UI 可见状态作为等待条件；IPC observer 和 job 查询只能作为辅助证据，不能用来造业务状态。

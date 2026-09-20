@@ -4,7 +4,7 @@ import {
   buildKbCapabilityTools,
   KB_INDEXING_IN_PROGRESS_ERROR
 } from '../../../../src/main/services/ai/human/tools/kb/retrievalTools'
-import type { AiRunContext, KnowledgeRetrievalContext } from '../../../../src/main/services/ai/types'
+import type { KnowledgeRetrievalContext } from '../../../../src/main/services/ai/types'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const MODEL_FACING_INDEXING_ERROR = `Error: ${KB_INDEXING_IN_PROGRESS_ERROR}`
@@ -30,17 +30,31 @@ describe('knowledge foundation', () => {
       description: 'prepare 索引进行中时 kb_search / kb_list_documents 失败并投递模型可读错误。',
       fixtures: [],
       runMode: 'single',
-      execute: async () => {
-        const ctx = {
-          runId: 'run-kb-indexing',
-          checkCancelled: () => undefined,
-          sendEvent: () => undefined,
-          documentsStore: {} as KnowledgeRetrievalContext['documentsStore'],
-          embeddingService: {} as KnowledgeRetrievalContext['embeddingService'],
-          assertKbSearchAvailable: async () => {
-            throw new Error(KB_INDEXING_IN_PROGRESS_ERROR)
-          }
-        } as KnowledgeRetrievalContext
+      execute: async (runtime) => {
+        const now = Date.now()
+        await runtime.storageService.workspace.saveWorkspace({
+          id: 'kb-indexing-blocks-search',
+          root_path: runtime.workspaceRoot,
+          created_at: now,
+          updated_at: now
+        })
+        await runtime.storageService.workspaceIndexJob.saveJob({
+          id: 'kb-indexing-running-prepare',
+          workspace_id: 'kb-indexing-blocks-search',
+          source_kind: 'file',
+          action: 'prepare',
+          status: 'running',
+          phase: 'index',
+          step_index: 1,
+          step_total: 1,
+          total_count: 1,
+          processed_count: 0,
+          failed_count: 0,
+          target_ids: [],
+          started_at: now,
+          updated_at: now
+        })
+        const ctx = runtime.createAiRunContext()
 
         const searchError = await invokeTool(ctx, 'kb_search', { queryText: '合同' }).then(
           () => '',
@@ -54,7 +68,7 @@ describe('knowledge foundation', () => {
         const deliveries = []
         for (const toolName of ['kb_search', 'kb_list_documents'] as const) {
           const delivery = await buildModelToolResultDelivery({
-            ctx: { platform: 'win32' } as AiRunContext,
+            ctx,
             toolCallId: `call-${toolName}`,
             args: toolName === 'kb_search' ? { queryText: '合同' } : {},
             result: {

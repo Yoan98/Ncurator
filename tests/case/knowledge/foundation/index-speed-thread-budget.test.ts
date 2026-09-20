@@ -1,6 +1,8 @@
 import { describe, it } from 'vitest'
 import { EmbeddingService } from '../../../../src/main/services/vector/EmbeddingService'
-import type { EmbeddingExecutor, EmbeddingThreadBudget } from '../../../../src/main/services/vector/runtime/types'
+import { TransformersEmbeddingExecutor } from '../../../../src/main/services/vector/runtime/TransformersEmbeddingExecutor'
+import { ensureEmbeddingReady } from '../../../../src/main/services/vector/ensureEmbeddingReady'
+import { getModelsPath } from '../../../../src/main/utils/paths'
 import {
   parseEmbeddingRuntimeEnv,
   resolveOrtThreadBudget,
@@ -17,10 +19,10 @@ describe('knowledge foundation', () => {
       domain: 'knowledge',
       suite: 'foundation',
       description:
-        '慢速/高速映射到不同的 ORT session_options 与 runtime env，保存后 applyThreadBudget 会写入预算并重启。',
+        '页面保存档位走生产 AppSettingsStore 与嵌入 executor：ORT session_options / runtime env 随档位变化，apply 后真实嵌入仍可用。',
       fixtures: [],
       runMode: 'single',
-      execute: async () => {
+      execute: async (runtime) => {
         const budgets = {
           slow4: resolveOrtThreadBudget('slow', 4),
           slow8: resolveOrtThreadBudget('slow', 8),
@@ -38,23 +40,19 @@ describe('knowledge foundation', () => {
           fast8: toEmbeddingRuntimeEnv(budgets.fast8)
         }
 
-        let appliedBudget: EmbeddingThreadBudget | null = null
-        let restartCount = 0
-        const executor: EmbeddingExecutor & {
-          setThreadBudget: (next: EmbeddingThreadBudget) => void
-        } = {
-          initialize: async () => undefined,
-          embed: async () => ({ data: new Float32Array(), dims: [0, 0] }),
-          setThreadBudget: (next) => {
-            appliedBudget = next
-          },
-          restart: async () => {
-            restartCount += 1
-          }
+        const executor = new TransformersEmbeddingExecutor({
+          modelsPath: getModelsPath(),
+          modelName: 'jinaai/jina-embeddings-v2-base-zh'
+        })
+        const embeddingService = new EmbeddingService({ executor })
+        const store = runtime.storageService.appSettings
+        const defaultSettings = await store.get()
+        const saved = await store.save({ ...defaultSettings, knowledgeIndexSpeed: 'fast' })
+        if (defaultSettings.knowledgeIndexSpeed !== saved.knowledgeIndexSpeed) {
+          await embeddingService.applyIndexSpeed(saved.knowledgeIndexSpeed)
         }
-        const service = new EmbeddingService({ executor })
-        await service.initialize()
-        await service.applyThreadBudget(budgets.fast8)
+        await ensureEmbeddingReady({ embeddingService })
+        const embedded = await embeddingService.embed('索引速度')
 
         return {
           budgets,
@@ -64,11 +62,11 @@ describe('knowledge foundation', () => {
             slow8: parseEmbeddingRuntimeEnv(runtimeEnv.slow8),
             fast8: parseEmbeddingRuntimeEnv(runtimeEnv.fast8)
           },
-          apply: {
-            appliedBudget,
-            restartCount,
-            status: service.getStatus()
-          }
+          defaultSpeed: defaultSettings.knowledgeIndexSpeed,
+          persistedSpeed: saved.knowledgeIndexSpeed,
+          appliedBudget: executor.getThreadBudget(),
+          statusAfterSave: embeddingService.getStatus() === 'ready' ? 'ready' : embeddingService.getStatus(),
+          embeddingDims: embedded.dims
         }
       },
       assert: async (result, runtime) => {
@@ -144,14 +142,23 @@ describe('knowledge foundation', () => {
           }
         )
         runtime.assertThat(
-          result.apply.appliedBudget?.intraOpNumThreads === result.budgets.fast8.intraOpNumThreads &&
-            result.apply.appliedBudget?.allowSpinning === true &&
-            result.apply.restartCount === 1 &&
-            result.apply.status === 'uninitialized',
+          result.defaultSpeed === 'slow' &&
+            result.persistedSpeed === 'fast' &&
+            result.appliedBudget.allowSpinning === true &&
+            result.appliedBudget.intraOpNumThreads === resolveOrtThreadBudget('fast').intraOpNumThreads &&
+            result.statusAfterSave === 'ready' &&
+            result.embeddingDims[1] === 768,
           {
-            name: 'apply-thread-budget-restarts',
-            message: '保存档位后必须把预算写入 runtime 并重启，使下次索引使用新 session。',
-            data: result.apply
+            name: 'save-settings-applies-production-executor',
+            message:
+              '保存档位必须走生产 store 与 EmbeddingService.applyIndexSpeed：默认慢速，保存高速后预算写入、session 重建，且真实嵌入可用。',
+            data: {
+              defaultSpeed: result.defaultSpeed,
+              persistedSpeed: result.persistedSpeed,
+              appliedBudget: result.appliedBudget,
+              statusAfterSave: result.statusAfterSave,
+              embeddingDims: result.embeddingDims
+            }
           }
         )
       }

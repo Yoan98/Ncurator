@@ -7,9 +7,11 @@ import { queueE2ENativeDialogSelection } from '../../../../harness/e2e/electronA
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
-  createWorkspaceThroughSettingsUi,
+  addWorkspaceDirectoryThroughNativeDialog,
   getSettingsLocator,
-  navigateToSettingsSection
+  navigateToSettingsSection,
+  removeWorkspaceDirectoryThroughSettingsUi,
+  waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
 
 const normalizeVisibleText = (value: string): string => value.replace(/\s+/g, '')
@@ -58,15 +60,8 @@ describe('settings workspace e2e', () => {
             name: 'add-root-path',
             message: '通过添加目录按钮加入真实父目录。',
             run: async () => {
-              await queueE2ENativeDialogSelection(page, {
-                kind: 'directory',
-                path: parentRoot
-              })
-              await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
-              await getSettingsLocator(page, importSelectors.workspaceTree)
-                .getByText(path.basename(parentRoot))
-                .first()
-                .waitFor({ state: 'visible' })
+              const workspaceId = await addWorkspaceDirectoryThroughNativeDialog(page, parentRoot)
+              await waitForFileIndexJobIdle(page, workspaceId)
             }
           })
 
@@ -74,10 +69,6 @@ describe('settings workspace e2e', () => {
             name: 'reject-nested-child',
             message: '再添加已包含的子目录，应弹出目录已包含并拒绝入库。',
             run: async () => {
-              const apiConflict = await page.evaluate(
-                async (rootPath) => await window.api.workspaceCreate({ rootPath }),
-                childRoot
-              )
               await queueE2ENativeDialogSelection(page, {
                 kind: 'directory',
                 path: childRoot
@@ -89,7 +80,6 @@ describe('settings workspace e2e', () => {
               const list = await page.evaluate(async () => await window.api.workspaceList())
               return {
                 dialogVisible: true,
-                apiConflict,
                 workspaceCount: list.items.length,
                 roots: list.items.map((item) => item.root_path)
               }
@@ -100,22 +90,16 @@ describe('settings workspace e2e', () => {
             name: 'parent-replaces-child',
             message: '先加子目录再加父目录，父目录应自动替换子根。',
             run: async () => {
-              for (const item of (
-                await page.evaluate(async () => await window.api.workspaceList())
-              ).items) {
-                await page.evaluate(
-                  async (workspaceId) => await window.api.workspaceDelete(workspaceId),
-                  item.id
-                )
-              }
-              await createWorkspaceThroughSettingsUi(page, nestedUnderGrand)
-              const replaceResponse = await page.evaluate(
-                async (rootPath) => await window.api.workspaceCreate({ rootPath }),
-                grandParent
+              await removeWorkspaceDirectoryThroughSettingsUi(page, parentRoot)
+              const nestedId = await addWorkspaceDirectoryThroughNativeDialog(
+                page,
+                nestedUnderGrand
               )
+              await waitForFileIndexJobIdle(page, nestedId)
+              const workspaceId = await addWorkspaceDirectoryThroughNativeDialog(page, grandParent)
+              await waitForFileIndexJobIdle(page, workspaceId)
               const list = await page.evaluate(async () => await window.api.workspaceList())
               return {
-                replaceResponse,
                 workspaceCount: list.items.length,
                 roots: list.items.map((item) => item.root_path),
                 grandParentReal: await realpath(grandParent)
@@ -127,15 +111,9 @@ describe('settings workspace e2e', () => {
             name: 'expand-tree',
             message: '确认目录树可展开看到子文件。',
             run: async () => {
-              for (const item of (
-                await page.evaluate(async () => await window.api.workspaceList())
-              ).items) {
-                await page.evaluate(
-                  async (workspaceId) => await window.api.workspaceDelete(workspaceId),
-                  item.id
-                )
-              }
-              await createWorkspaceThroughSettingsUi(page, parentRoot)
+              await removeWorkspaceDirectoryThroughSettingsUi(page, grandParent)
+              const workspaceId = await addWorkspaceDirectoryThroughNativeDialog(page, parentRoot)
+              await waitForFileIndexJobIdle(page, workspaceId)
               await navigateToSettingsSection(page, 'workspace')
               const tree = getSettingsLocator(page, importSelectors.workspaceTree)
               const docsNode = tree.getByText('docs').first()
@@ -171,10 +149,7 @@ describe('settings workspace e2e', () => {
             }
           })
           await runtime.assertThat(
-            result.nestedConflict.dialogVisible &&
-              result.nestedConflict.apiConflict.success === false &&
-              result.nestedConflict.apiConflict.conflict?.reason === 'nested' &&
-              result.nestedConflict.workspaceCount === 1,
+            result.nestedConflict.dialogVisible && result.nestedConflict.workspaceCount === 1,
             {
               name: 'nested-child-rejected-with-dialog',
               message: '添加已包含子目录应弹窗拒绝且不入库，对齐 SET-WORKSPACE-006-AC5。',
@@ -182,8 +157,7 @@ describe('settings workspace e2e', () => {
             }
           )
           await runtime.assertThat(
-            result.parentReplace.replaceResponse.success === true &&
-              result.parentReplace.workspaceCount === 1 &&
+            result.parentReplace.workspaceCount === 1 &&
               result.parentReplace.roots.some(
                 (root) =>
                   normalizeVisibleText(root) ===

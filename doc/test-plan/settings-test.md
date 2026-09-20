@@ -19,7 +19,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除，以及预设服务商与自定义配置的类型、锁定和去重语义。
 - `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为，以及错误日志目录入口；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
-- `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。`SET-WORKSPACE-009` 由 `workspace-prepare-refresh` 在页面切换档位后走真实更新索引覆盖；线程公式与多地址顺序由 knowledge `foundation` 覆盖。问号文案与网页 tab 同步不单独测。
+- `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。`SET-WORKSPACE-009` 由 `workspace-prepare-refresh` 在页面切换档位后走真实更新索引覆盖；`SET-WORKSPACE-004-AC11` 由 `workspace-prepare-sequential-addresses` 在页面添加两个地址后走真实更新索引覆盖；线程公式由 knowledge `index-speed-thread-budget` 覆盖。问号文案与网页 tab 同步不单独测。
 - `vector` 属于 Settings 产品域，页面路由为 `/settings/vector`（`/model-download` 仅为历史重定向），测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
 - `workspace` 是 Settings 下的 suite，按 `core / files / web` 组织，语义为“文件地址 + 文件 tab + 全局网页 tab”，不是具名容器。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
@@ -98,7 +98,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 ### 3.3 `workspace / files`
 
-索引 job 运行期间目录树 IPC 必须为 0；任务成功或失败终态后，目录树只允许刷新一次。测试同时确认旧目录节点不因刷新被清空或折叠，扫描无可计算总数时显示活动状态而不是静态 0%。左侧可索引数字对全部文件地址合计。向量模型未安装时「更新索引」禁用与说明（`SET-WORKSPACE-004-AC6`、网页侧 `SET-WEB-004-AC7`）标为手动 / 暂缓，不进日常自动化。无文件地址时「检查更新」禁用、可索引为 0 时「更新索引」禁用（`SET-WORKSPACE-004-AC10`）与网页侧同构规则（`SET-WEB-003-AC5`、`SET-WEB-004-AC9`）标为 **不测**（低价值 UI 门禁，不单独立自动化 case）。文件更新索引中断后 job 与条目收敛为失败由 knowledge `workspace-interrupted-job-recovery-contract` / `workspace-index-job-store-contract` 覆盖 `SET-WORKSPACE-004-AC5`。更新索引执行中 `kb_search` / `kb_list_documents` 拦截由 knowledge `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。多地址顺序执行由 knowledge `prepare-workspaces-sequentially` 覆盖 `SET-WORKSPACE-004-AC11`。线程预算由 knowledge `index-speed-thread-budget` 覆盖。
+索引 job 运行期间目录树 IPC 必须为 0；任务成功或失败终态后，目录树只允许刷新一次。测试同时确认旧目录节点不因刷新被清空或折叠，扫描无可计算总数时显示活动状态而不是静态 0%。左侧可索引数字对全部文件地址合计。向量模型未安装时「更新索引」禁用与说明（`SET-WORKSPACE-004-AC6`、网页侧 `SET-WEB-004-AC7`）标为手动 / 暂缓，不进日常自动化。无文件地址时「检查更新」禁用、可索引为 0 时「更新索引」禁用（`SET-WORKSPACE-004-AC10`）与网页侧同构规则（`SET-WEB-003-AC5`、`SET-WEB-004-AC9`）标为 **不测**（低价值 UI 门禁，不单独立自动化 case）。文件更新索引中断后 job 与条目收敛为失败由 knowledge `workspace-interrupted-job-recovery-contract` / `workspace-index-job-store-contract` 覆盖 `SET-WORKSPACE-004-AC5`。更新索引执行中 `kb_search` / `kb_list_documents` 拦截由 knowledge `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。多地址顺序执行由 `workspace-prepare-sequential-addresses` 覆盖 `SET-WORKSPACE-004-AC11`。线程预算由 knowledge `index-speed-thread-budget` 覆盖。
 
 #### `workspace-scan-progress-refresh`
 
@@ -115,6 +115,14 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：“索引已经可用”的核心用户反馈链路。
 - How：复制共享 workspace 输入的隔离副本，通过 Settings UI 添加为文件地址；确认默认慢速后切换为高速并保存，再点击更新索引，读取刷新后的文件树和全部支持文件状态。共享 fixture 含 `.doc`、`docx`、`pdf`、`md`、`txt`、`xlsx`、`xlsm` 等全部受支持类型，其中 excel 只以元数据方式索引进库。
 - Oracle：默认慢速后可切换高速，本次更新索引在切换后的档位上执行，对齐 `SET-WORKSPACE-009-AC1`；更新索引过程中出现持久化总进度，且检查更新/更新索引按钮保持可用，对齐 `SET-WORKSPACE-004-AC3`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC7`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+
+#### `workspace-prepare-sequential-addresses`
+
+- 测试类型：`e2e`
+- What：多个文件地址时，「更新索引」等前一个地址 job 终态后再启动下一个。
+- Why：并行 kickoff 会叠满嵌入线程，和慢/高速档位冲突，也违反更新索引的地址顺序。
+- How：通过原生目录选择添加两个真实临时目录（各含一个 txt）；切换高速后点击更新索引；只读 job IPC 记录两个地址的 running / 终态时间。
+- Oracle：第二个地址的 job `started_at` 不早于第一个地址 `finished_at`，且第一个 running 期间第二个没有 running job，对齐 `SET-WORKSPACE-004-AC11`。
 
 #### `workspace-prepare-failed-retry`
 

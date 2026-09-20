@@ -5,7 +5,6 @@ import type { AppErrorLogService } from '../services/logging/AppErrorLogService'
 import type { OpenDialogOptions } from 'electron'
 import { IngestionService } from '../services/ingestion/loader'
 import { EmbeddingService } from '../services/vector/EmbeddingService'
-import { resolveOrtThreadBudget } from '../services/vector/indexSpeed'
 import { ensureEmbeddingReady } from '../services/vector/ensureEmbeddingReady'
 import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
@@ -2068,8 +2067,9 @@ export function registerHandlers(services: {
           })
         )
         activeWorkspaceIndexJobs.add(jobKey)
-        void runFilePrepareJob({ sender: event.sender, job })
-        return { success: true, workspaceId, job }
+        await runFilePrepareJob({ sender: event.sender, job })
+        const finished = await workspaceIndexJobStore.getJobById(job.id)
+        return { success: true, workspaceId, job: finished || job }
       } catch (error) {
         return { success: false, error: getErrorMessage(error), workspaceId }
       }
@@ -3155,7 +3155,7 @@ export function registerHandlers(services: {
       const previous = await appSettingsStore.get()
       const saved = await appSettingsStore.save(settings)
       if (previous.knowledgeIndexSpeed !== saved.knowledgeIndexSpeed) {
-        await embeddingService.applyThreadBudget(resolveOrtThreadBudget(saved.knowledgeIndexSpeed))
+        await embeddingService.applyIndexSpeed(saved.knowledgeIndexSpeed)
       }
       return { success: true, settings: saved }
     } catch (e: unknown) {

@@ -1,5 +1,7 @@
 import type { EmbeddingExecutor, EmbeddingResult, EmbeddingThreadBudget } from './runtime/types'
 import { toEmbeddingInitializationMessage } from './embeddingError'
+import { resolveOrtThreadBudget } from './indexSpeed'
+import type { KnowledgeIndexSpeed } from '../../../shared/types'
 
 export type { EmbeddingExecutor, EmbeddingResult } from './runtime/types'
 
@@ -61,6 +63,10 @@ export class EmbeddingService {
     }
     const inputTexts = Array.isArray(texts) ? texts : [texts]
     return await this.executor.embed(inputTexts)
+  }
+
+  public async applyIndexSpeed(speed: KnowledgeIndexSpeed): Promise<void> {
+    await this.applyThreadBudget(resolveOrtThreadBudget(speed))
   }
 
   public async applyThreadBudget(budget: EmbeddingThreadBudget): Promise<void> {

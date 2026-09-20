@@ -482,6 +482,72 @@ export const createWorkspaceThroughSettingsUi = async (
   return response.workspace.id
 }
 
+export const addWorkspaceDirectoryThroughNativeDialog = async (
+  page: Page,
+  rootPath: string
+): Promise<string> => {
+  await navigateToSettingsSection(page, 'workspace')
+  const resolvedRootPath = path.resolve(rootPath)
+  await queueE2ENativeDialogSelection(page, {
+    kind: 'directory',
+    path: resolvedRootPath
+  })
+  await getSettingsLocator(page, importSelectors.createWorkspaceButton).click()
+  await getSettingsLocator(page, importSelectors.workspaceTree)
+    .getByText(path.basename(rootPath))
+    .first()
+    .waitFor({ state: 'visible' })
+  const list = await page.evaluate(async () => await window.api.workspaceList())
+  const workspace = list.items.find((item) => {
+    const left = item.root_path.replace(/\\/g, '/').toLowerCase()
+    const right = resolvedRootPath.replace(/\\/g, '/').toLowerCase()
+    return left === right || left.endsWith(`/${path.basename(rootPath).toLowerCase()}`)
+  })
+  if (!workspace) {
+    throw new Error(`added directory was not listed: ${resolvedRootPath}`)
+  }
+  return workspace.id
+}
+
+export const removeWorkspaceDirectoryThroughSettingsUi = async (
+  page: Page,
+  rootPath: string
+): Promise<void> => {
+  const displayName = path.basename(rootPath)
+  const removeButton = page.getByRole('button', { name: `移除 ${displayName}` })
+  await removeButton.hover()
+  await removeButton.click()
+  await getSettingsLocator(page, importSelectors.workspaceDeleteConfirmButton).click()
+  await getSettingsLocator(page, importSelectors.workspaceTree)
+    .getByText(displayName)
+    .first()
+    .waitFor({ state: 'hidden' })
+}
+
+export const selectWorkspaceIndexSpeedThroughSettingsUi = async (
+  page: Page,
+  speed: 'slow' | 'fast'
+): Promise<void> => {
+  const testId =
+    speed === 'fast'
+      ? importSelectors.workspaceIndexSpeedFast
+      : importSelectors.workspaceIndexSpeedSlow
+  const button = getSettingsLocator(page, testId)
+  await button.waitFor({ state: 'visible' })
+  await page.waitForFunction((speedTestId) => {
+    const element = document.querySelector(`[data-testid="${speedTestId}"]`)
+    return element instanceof HTMLButtonElement && !element.disabled
+  }, testId)
+  await button.click()
+  await page.waitForFunction(
+    (speedTestId) =>
+      document.querySelector(`[data-testid="${speedTestId}"]`)?.classList.contains(
+        'ant-btn-primary'
+      ) === true,
+    testId
+  )
+}
+
 export const bindWorkspaceRootThroughSettingsUi = async (
   page: Page,
   rootPath: string

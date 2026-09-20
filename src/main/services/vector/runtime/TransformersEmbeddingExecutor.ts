@@ -46,6 +46,23 @@ export class TransformersEmbeddingExecutor implements EmbeddingExecutor {
     this.threadBudget = input.threadBudget || resolveOrtThreadBudget('slow')
   }
 
+  public setThreadBudget(budget: EmbeddingThreadBudget): void {
+    this.threadBudget = budget
+  }
+
+  public getThreadBudget(): EmbeddingThreadBudget {
+    return this.threadBudget
+  }
+
+  public async restart(): Promise<void> {
+    this.extractor = null
+    this.initializationPromise = null
+  }
+
+  public async close(): Promise<void> {
+    await this.restart()
+  }
+
   public async initialize(): Promise<void> {
     if (this.extractor) return
     if (this.initializationPromise) {

@@ -13,7 +13,7 @@
 
 边界：
 
-- 不替代 Settings「更新索引」产品 E2E。E2E 在页面上改慢/高速后再走真实更新索引；本计划证明档位会改写 ORT 会话参数与嵌入 runtime env。
+- 不替代 Settings「更新索引」产品 E2E。E2E 在页面上改慢/高速后再走真实更新索引，并用双地址 case 证明顺序执行；本计划用生产 `AppSettingsStore.save` 与 `EmbeddingService.applyIndexSpeed`、真实嵌入 executor 证明档位会改写 ORT 会话参数。
 - 不替代 `ai-test` 中的 kb tool / live。
 - 不登记 unit。函数级补足仍在 `tests/case/unit/knowledge/**`。
 
@@ -22,7 +22,7 @@
 ### 2.1 `foundation`
 
 - 目标：守住知识库可回归的功能主链。
-- 约束：走生产 store / job / 扫描 / worker；索引速度 case 断言 ORT session_options、runtime env 与保存后重启，不测 UI、不测真实 CPU / 耗时。
+- 约束：走生产 store / job / 扫描 / worker / 嵌入 executor；禁止假 executor 或假 `assertKbSearchAvailable`。索引速度 case 断言生产保存档位后的 ORT session_options、runtime env 与真实嵌入，不测 UI、不测真实 CPU / 耗时。
 - 目录：`tests/case/knowledge/foundation/<case>.test.ts`
 
 ### 2.2 `optimization`
@@ -36,7 +36,7 @@
 - 线程预算以逻辑核 `N` 为准（Mac / Windows 相同）：
   - 慢速：`max(1, floor(N/2))`，关闭 spinning
   - 高速：`max(2, N - reserve)`，`reserve = N≤8 ? 1 : 2`
-- 多文件地址更新索引必须顺序 kickoff。
+- 多文件地址更新索引必须顺序 kickoff，且 `workspacePrepare` IPC 等到该地址 job 终态。
 - 不在 `foundation` 比较召回优劣。
 
 ## 4. 回归清单
@@ -80,23 +80,23 @@
 - 测试类型：`backend`
 - What：prepare 索引进行中时 `kb_search` / `kb_list_documents` 失败，并投递模型可读错误。
 - Why：更新索引期间检索必须明确失败，避免半库结果。
-- How：构造索引中上下文调用两个工具，并检查 model-facing 投递文案。
+- How：隔离 sqlite 写入 running prepare job，再走生产 `createAiRunContext` 调用两个工具，并检查 model-facing 投递文案。
 - Oracle：两工具抛出正在更新知识库错误；模型侧结果为 `Error: 正在更新知识库索引，请完成后再检索。`，对齐 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。
 
 #### `index-speed-thread-budget`
 
 - 测试类型：`backend`
-- What：慢速/高速按逻辑核数映射不同的 ORT `session_options` 与嵌入 runtime env，保存档位后 `applyThreadBudget` 写入预算并重启。
-- Why：档位是否有效，看的是嵌入进程拿到的线程数和 spinning，不是页面文案，也不是一次索引的墙钟时间。
-- How：对 4/8/16 核分别计算慢速与高速预算；比较同核数下 `toOrtSessionOptions` / `toEmbeddingRuntimeEnv`；用假 executor 走 `EmbeddingService.applyThreadBudget`。
-- Oracle：慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；同核数高速线程数大于慢速；runtime env 解析后还原预算；apply 后预算写入、restart 一次、服务回到 uninitialized。
+- What：慢速/高速按逻辑核数映射不同的 ORT `session_options` 与嵌入 runtime env；保存档位走生产 `AppSettingsStore.save` 与 `EmbeddingService.applyIndexSpeed`。
+- Why：档位是否有效，看的是嵌入进程拿到的线程数和 spinning，以及保存后真实嵌入仍可用，不是页面文案，也不是一次索引的墙钟时间。
+- How：对 4/8/16 核分别计算慢速与高速预算；比较同核数下 `toOrtSessionOptions` / `toEmbeddingRuntimeEnv`；用生产 sqlite 与 `TransformersEmbeddingExecutor` 保存高速并 `applyIndexSpeed`，再真实 `embed`。不 fork Electron `utilityProcess`。
+- Oracle：慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；同核数高速线程数大于慢速；runtime env 解析后还原预算；默认慢速，保存后 sqlite 为高速、executor 预算为高速，且真实嵌入维度为 768。
 
 #### `prepare-workspaces-sequentially`
 
 - 测试类型：`backend`
 - What：多地址更新索引按顺序等待前一个完成再启动下一个。
 - Why：并行 kickoff 会叠满嵌入线程，和慢/高速档位冲突。
-- How：对三个 workspace id 顺序调用 prepare，记录 start/end。
+- How：三个真实工作目录各写一个 txt，用生产 `prepareWorkspacesSequentially` 依次调用 `WorkspaceKnowledgePrepareService.indexLocalFile`（切分走生产 `prepareWorkspaceSource`，嵌入走生产 embedding），记录 start/end。
 - Oracle：事件顺序为每个地址 start→end 后再开始下一个，对齐 `SET-WORKSPACE-004-AC11`。
 
 ### 4.2 `optimization`
