@@ -24,7 +24,7 @@ import type {
   WorkbenchContextUsage,
   WorkbenchExecutionPermission
 } from './types'
-import { COMPOSER_PLACEHOLDER, COMPOSER_REFERENCE_KINDS } from './composer/constants'
+import { buildComposerPlaceholder, COMPOSER_REFERENCE_KINDS } from './composer/constants'
 import AttachmentFileIcon from './composer/AttachmentFileIcon'
 import ReferenceMentionPanel from './composer/ReferenceMentionPanel'
 import type { ComposerDraftValue, ComposerNode } from './composer/types'
@@ -53,6 +53,7 @@ type MentionContext = {
 }
 
 type WorkbenchComposerProps = {
+  partnerName?: string | null
   aiPreference: WorkbenchAiPreference
   onAiPreferenceChange: (preference: WorkbenchAiPreference) => void
   executionPermission: WorkbenchExecutionPermission
@@ -87,6 +88,7 @@ const CARET_ANCHOR_ROLE = 'composer-caret-anchor'
 const LARGE_FILE_WARNING_BYTES = 10 * 1024 * 1024
 
 const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
+  partnerName,
   aiPreference,
   onAiPreferenceChange,
   executionPermission,
@@ -1042,7 +1044,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               hasContent ? 'hidden' : ''
             }`}
           >
-            {COMPOSER_PLACEHOLDER}
+            {buildComposerPlaceholder(partnerName)}
           </div>
         </div>
 

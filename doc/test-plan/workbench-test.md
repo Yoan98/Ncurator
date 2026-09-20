@@ -195,7 +195,7 @@ pnpm test:update:e2e
 - Why：Workbench 的任务入口依赖这些基础交互；任一状态失真都会导致用户无法发起任务或把任务发到错误伙伴。
 - How：先在无模型配置状态下检查提示，再通过 UI 配置真实模型并创建伙伴；覆盖无伙伴空态、输入保留、模型选择、AI 推进偏好、执行权限菜单的两条说明与完全访问高危风险弹窗确认/取消门禁、切换伙伴后的独立恢复和真实发送（Composer 提交，含 Enter 发送路径）。
 - Oracle：无模型且本机从未展示过该提示时快速显示配置提示（展示后写入 localStorage，之后即使仍无模型也不再弹出）；无伙伴时 Composer 空态且不出现发送按钮，对齐 `WB-CORE-001-AC2`、`WB-COMPOSER-001`（无伙伴空态 **只在本 case 硬断言**）；有伙伴、未插 `@` 且输入非空时可发送，对齐 `WB-CORE-001-AC1`；发送走 Composer 提交并完成真实 AI 运行，对齐 `WB-COMPOSER-002-AC1`、`WB-CORE-006-AC1`；权限菜单同时展示“审核 / 涉及到风险操作需要你审核”和“完全访问 / 不受限制的操作你的电脑”；切换“完全访问”触发风险二次确认弹窗（取消维持审核、确认切换成功，切回审核免二次确认），对齐 `WB-COMPOSER-007-AC13`；模型、推进偏好和执行权限按伙伴恢复，对齐 `WB-COMPOSER-007-AC5`、`WB-COMPOSER-007-AC9`、`WB-COMPOSER-007-AC12`、`WB-SESSION-008`。废弃的 `WB-COMPOSER-005`、`WB-MODE-001`、`WB-MODE-001-AC2`、`WB-MODE-002`、`WB-MODE-003` 不测。
-- Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。Composer 已删除搜索模式，不再测智能 / 搜索互斥。`WB-COMPOSER-001-AC3`（有伙伴时 hover 禁用原因）、`WB-COMPOSER-007-AC6`（失效模型回退）、`WB-COMPOSER-007-AC11`（偏好写入 run 上下文）标为不测。`WB-COMPOSER-002-AC2`、`WB-COMPOSER-002-AC3`（Shift+Enter 换行、中文输入法组词）标为不测。`WB-CORE-006-AC2/AC3/AC4` 由 AI live 承担。
+- Not：不验证真实模型回答质量，只验证用户路径和发送前置条件。Composer 已删除搜索模式，不再测智能 / 搜索互斥。`WB-COMPOSER-001-AC3`（有伙伴时 hover 禁用原因）、`WB-COMPOSER-001-AC4`（Composer/审批占位与 Brain 自称跟伙伴名）、`WB-COMPOSER-007-AC6`（失效模型回退）、`WB-COMPOSER-007-AC11`（偏好写入 run 上下文）标为不测（AC4 由 AI unit brain prompt 覆盖）。`WB-COMPOSER-002-AC2`、`WB-COMPOSER-002-AC3`（Shift+Enter 换行、中文输入法组词）标为不测。`WB-CORE-006-AC2/AC3/AC4` 由 AI live 承担。
 
 #### `partner-ui-state-isolation`
 

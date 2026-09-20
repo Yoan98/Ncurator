@@ -191,6 +191,18 @@ describe('ai unit brain prompt cache stability', () => {
     expect(buildBrainUserMessage({ state, ctx: ctxA })).not.toContain('/tmp/another-workspace')
   })
 
+  it('changes system when partnerName changes', () => {
+    const ctxA = createFakeCtx()
+    const ctxB = {
+      ...createFakeCtx(),
+      partnerName: '另一个名字'
+    }
+
+    expect(buildBrainSystemPrompt({ ctx: ctxA })).toContain('你叫测试伙伴')
+    expect(buildBrainSystemPrompt({ ctx: ctxB })).toContain('你叫另一个名字')
+    expect(buildBrainSystemPrompt({ ctx: ctxA })).not.toBe(buildBrainSystemPrompt({ ctx: ctxB }))
+  })
+
   it('rebuilds resume messages from frozen historical build user and current build user', () => {
     const state = createInitialHumanState({
       taskId: 'run-2',

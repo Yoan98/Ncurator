@@ -6,11 +6,13 @@
 
 | 层 | 名称 | 用途 | 当前阶段 |
 |---|---|---|---|
-| 用户可见（中文） | `馆长` | 窗口标题、侧边栏、安装包 / 快捷方式 / 卸载名、更新 UI、公开下载文件名、AI 人设兜底 | **唯一对外品牌** |
+| 用户可见（中文） | `馆长` | 窗口标题、侧边栏品牌、安装包 / 快捷方式 / 卸载名、更新 UI、公开下载文件名；伙伴名为空时的 AI 人设与 Composer/审批文案兜底 | **唯一对外品牌** |
 | 英文品牌（预留） | `NCurator` | 海外站、未来英文 UI | 常量预留；**中文版 UI 不得出现** |
 | 技术标识 | `ncurator` / `com.yoan.ncurator` | npm name、userData、协议、env、签名、COS、发布 storageName | **冻结** |
 
 规范：**用户看见「馆长」；代码与磁盘认 `ncurator`；英文品牌 `NCurator` 只留给海外。** 中文版 UI 出现 `NCurator` / `Ncurator` 视为缺陷。
+
+会话层（当前伙伴）：Brain 系统提示自称、Composer 输入占位、审批「告诉…该怎么做」使用 `Partner.name`；名称为空时回落 `PRODUCT_NAME_ZH`。侧栏品牌行、更新提示、通知 logo、WPS 等产品壳文案仍用「馆长」，不跟伙伴名走。
 
 代码常量：`PRODUCT_NAME_ZH` / `PRODUCT_NAME_EN`（`src/shared/constants.ts`）。中文版面向用户的字符串只使用 `PRODUCT_NAME_ZH`。
 

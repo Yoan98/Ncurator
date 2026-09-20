@@ -59,6 +59,7 @@ import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import { FullAccessConfirmModal } from '../components/workbench/FullAccessConfirmModal'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
+import { buildApprovalGuidePlaceholder } from '../components/workbench/composer/constants'
 import { MessageTimeline } from '../components/workbench/MessageTimeline'
 import {
   buildTimelineNodes,
@@ -4824,7 +4825,7 @@ const ChatPage: React.FC = () => {
                                   <div className="mt-3 flex items-center gap-2 border-t border-[#EEEEEC] px-4 py-4">
                                     <input
                                       className="min-w-0 flex-1 rounded-[6px] border border-[#EEEEEC] bg-[#FFFFFF] px-3 py-2 text-sm text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#37352F] focus:ring-2 focus:ring-[#EFEFED]"
-                                      placeholder={`告诉${PRODUCT_NAME_ZH}该怎么做`}
+                                      placeholder={buildApprovalGuidePlaceholder(currentPartner?.name)}
                                       value={
                                         approvalDraftDecisions[currentApprovalItem.itemId]
                                           ?.message || ''
@@ -4885,6 +4886,7 @@ const ChatPage: React.FC = () => {
                                 </div>
                               ) : null}
                               <WorkbenchComposer
+                                partnerName={currentPartner?.name}
                                 aiPreference={composerAiPreference}
                                 onAiPreferenceChange={handleAiPreferenceChange}
                                 executionPermission={composerExecutionPermission}

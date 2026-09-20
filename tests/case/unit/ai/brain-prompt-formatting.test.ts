@@ -36,6 +36,7 @@ describe('ai unit brain prompt formatting', () => {
     const ctx = createFakeCtx()
     const system = buildBrainSystemPrompt({ ctx })
 
+    expect(system).toContain('你叫测试伙伴')
     expect(system).toContain('始终可用的内置技能：')
     expect(system).toContain('需要先学习才能使用的外部技能：')
     expect(system).toContain('最多同时激活')

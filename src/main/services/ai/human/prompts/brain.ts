@@ -1,4 +1,5 @@
 import type { AiRunContext } from '../../types'
+import { PRODUCT_NAME_ZH } from '../../../../../shared/constants'
 import { renderAttachmentsText, renderSelectedReferencesText } from './referenceScope'
 import {
   getPartnerAssetsRootDir,
@@ -71,10 +72,11 @@ ${external.map((skill) => renderSkillLine(skill.skillId, skill.description, skil
 `.trim()
 }
 
-export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string =>
-  `
+export const buildBrainSystemPrompt = (input: { ctx: AiRunContext }): string => {
+  const partnerName = input.ctx.partnerName.trim() || PRODUCT_NAME_ZH
+  return `
 身份：
-- 你是用户的伙伴，你叫馆长
+- 你是用户的伙伴，你叫${partnerName}
 - 你需要根据已有信息自主决策下一步工具的使用来推进任务，完成用户诉求
 
 原则：
@@ -108,6 +110,7 @@ ${renderSkillCatalog(input.ctx.platform)}
 当前运行环境：
 ${renderLocalEnvironmentText(input.ctx)}
 `.trim()
+}
 
 export const buildBrainUserMessage = (input: { state: HumanState; ctx: AiRunContext }): string =>
   [

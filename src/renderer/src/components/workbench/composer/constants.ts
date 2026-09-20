@@ -1,5 +1,13 @@
 ﻿import type { ReferenceKind } from '../../../../../shared/types'
+import { PRODUCT_NAME_ZH } from '../../../../../shared/constants'
 
-export const COMPOSER_PLACEHOLDER = '输入你想让馆长做的事情或者@文件'
+export const resolvePartnerDisplayName = (partnerName?: string | null): string =>
+  partnerName?.trim() || PRODUCT_NAME_ZH
+
+export const buildComposerPlaceholder = (partnerName?: string | null): string =>
+  `输入你想让${resolvePartnerDisplayName(partnerName)}做的事情或者@文件`
+
+export const buildApprovalGuidePlaceholder = (partnerName?: string | null): string =>
+  `告诉${resolvePartnerDisplayName(partnerName)}该怎么做`
 
 export const COMPOSER_REFERENCE_KINDS: ReferenceKind[] = ['directory', 'file', 'web']
