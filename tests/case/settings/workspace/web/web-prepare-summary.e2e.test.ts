@@ -1,6 +1,5 @@
 import { describe, it } from 'vitest'
 import type { Page } from 'playwright'
-import { INDEX_JOB_PROGRESS_LABEL_PATTERN } from '../../../../../src/shared/indexJobProgress'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -132,7 +131,9 @@ describe('settings workspace web e2e', () => {
                 (testId) => {
                   const el = document.querySelector(`[data-testid="${testId}"]`)
                   return (
-                    el instanceof HTMLElement && /\d+%\s*·\s*\d+\/\d+/.test(el.innerText || '')
+                    el instanceof HTMLElement &&
+                    el.querySelector('.ant-progress') !== null &&
+                    /步骤 [12]\/2 (抓取网页|建立索引)：\d+\/\d+/.test(el.innerText || '')
                   )
                 },
                 importSelectors.webSourceIndexJobProgress,
@@ -189,11 +190,12 @@ describe('settings workspace web e2e', () => {
               !result.buttonsDisabled &&
               result.prepareButtonName.includes('取消') &&
               result.crawlStepVisible &&
-              INDEX_JOB_PROGRESS_LABEL_PATTERN.test(result.progressText),
+              /步骤 [12]\/2 (抓取网页|建立索引)：\d+\/\d+/.test(result.progressText) &&
+              !/\d+%\s*·\s*\d+\/\d+/.test(result.progressText),
             {
               name: 'prepare-web-progress-is-visible',
               message:
-                '网页索引执行中应展示抓取/索引进度，「检查更新」可用，「更新索引」文案变为「取消」且可点；目标总数算出后进度文案含百分比和已处理/总数，对齐 SET-WEB-004-AC4、SET-WEB-004-AC10。',
+                '网页索引执行中应展示抓取/索引进度条和下方阶段处理文案，右上角不再重复展示百分比与已处理/总数；「检查更新」可用，「更新索引」文案变为「取消」且可点，对齐 SET-WEB-004-AC4、SET-WEB-004-AC10。',
               data: result
             }
           )

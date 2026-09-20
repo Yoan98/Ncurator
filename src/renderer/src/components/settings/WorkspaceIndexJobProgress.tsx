@@ -1,10 +1,7 @@
 ﻿import React from 'react'
-import { Progress, Spin } from 'antd'
+import { Progress } from 'antd'
 import type { WorkspaceIndexJobRecord } from '../../../../shared/types'
-import {
-  formatIndexJobProgressLabel,
-  getIndexJobProgressNumbers
-} from '../../../../shared/indexJobProgress'
+import { getIndexJobProgressNumbers } from '../../../../shared/indexJobProgress'
 
 type WorkspaceIndexJobProgressProps = {
   job?: WorkspaceIndexJobRecord
@@ -29,24 +26,19 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
   const title = getJobTitle(job)
   const progress = getIndexJobProgressNumbers(job)
   const message = job.message || '正在处理'
-  const shouldHideMessage = message.startsWith(`${title}：`) || message === title
+  const shouldHideMessage = message === title
 
   return (
     <div
       className="mt-3 rounded-[6px] border border-[#EEEEEC] bg-white px-3 py-2"
       data-testid={testId}
     >
-      <div className="flex items-center justify-between gap-3 text-[12px]">
+      <div className="flex items-center text-[12px]">
         <span className="font-medium text-[#37352F]">{title}</span>
-        {progress.hasDeterminateProgress ? (
-          <span className="shrink-0 text-[#9B9A97]">{formatIndexJobProgressLabel(progress)}</span>
-        ) : (
-          <Spin size="small" />
-        )}
       </div>
       <Progress
         percent={progress.hasDeterminateProgress ? progress.percent : 0}
-        status={progress.hasDeterminateProgress && progress.percent > 0 ? 'active' : 'normal'}
+        status={!progress.hasDeterminateProgress || progress.percent > 0 ? 'active' : 'normal'}
         showInfo={false}
         size="small"
         strokeColor="#37352F"

@@ -9,7 +9,8 @@ export const getIndexJobProgressNumbers = (job: {
   hasDeterminateProgress: boolean
 } => {
   const total = Math.max(0, job.total_count)
-  const done = Math.min(total, Math.max(0, job.processed_count + job.failed_count))
+  // processed_count already includes failed items; failed_count is a subset used for reporting.
+  const done = Math.min(total, Math.max(0, job.processed_count))
   const percent = total > 0 ? Math.round((done / total) * 100) : 0
   return {
     total,
@@ -18,11 +19,3 @@ export const getIndexJobProgressNumbers = (job: {
     hasDeterminateProgress: total > 0
   }
 }
-
-export const formatIndexJobProgressLabel = (input: {
-  percent: number
-  done: number
-  total: number
-}): string => `${input.percent}% · ${input.done}/${input.total}`
-
-export const INDEX_JOB_PROGRESS_LABEL_PATTERN = /\d+%\s*·\s*\d+\/\d+/

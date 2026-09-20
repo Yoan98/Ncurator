@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  formatIndexJobProgressLabel,
-  getIndexJobProgressNumbers,
-  INDEX_JOB_PROGRESS_LABEL_PATTERN
-} from '../../../../../src/shared/indexJobProgress'
+import { getIndexJobProgressNumbers } from '../../../../../src/shared/indexJobProgress'
 
 describe('unit workspace files', () => {
   it('workspace-index-job-progress', () => {
@@ -27,10 +23,6 @@ describe('unit workspace files', () => {
       percent: 0,
       hasDeterminateProgress: true
     })
-    expect(formatIndexJobProgressLabel(oneFilePending)).toBe('0% · 0/1')
-    expect(INDEX_JOB_PROGRESS_LABEL_PATTERN.test(formatIndexJobProgressLabel(oneFilePending))).toBe(
-      true
-    )
 
     const halfDone = getIndexJobProgressNumbers({
       total_count: 4,
@@ -43,6 +35,17 @@ describe('unit workspace files', () => {
       percent: 50,
       hasDeterminateProgress: true
     })
-    expect(formatIndexJobProgressLabel(halfDone)).toBe('50% · 2/4')
+
+    const failedItemsAreNotCountedTwice = getIndexJobProgressNumbers({
+      total_count: 30,
+      processed_count: 23,
+      failed_count: 20
+    })
+    expect(failedItemsAreNotCountedTwice).toEqual({
+      total: 30,
+      done: 23,
+      percent: 77,
+      hasDeterminateProgress: true
+    })
   })
 })

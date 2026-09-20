@@ -9,7 +9,6 @@ import {
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
 import { copySharedWorkspaceFixture, toSupportedFileStatuses } from './realWorkspaceHelpers'
-import { INDEX_JOB_PROGRESS_LABEL_PATTERN } from '../../../../../src/shared/indexJobProgress'
 
 const LEGACY_DOC_NAME = '风险等级判断标准-图案设计【2026.2.10更新】.doc'
 
@@ -56,9 +55,11 @@ describe('settings workspace e2e', () => {
               })
               directoryCallBaseline = await page.evaluate(
                 () =>
-                  (window as typeof window & {
-                    __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
-                  }).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
+                  (
+                    window as typeof window & {
+                      __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
+                    }
+                  ).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
                     (entry) => entry.name === 'workspaceDirectoryList'
                   ).length || 0
               )
@@ -71,7 +72,9 @@ describe('settings workspace e2e', () => {
                 (testId) => {
                   const el = document.querySelector(`[data-testid="${testId}"]`)
                   return (
-                    el instanceof HTMLElement && /\d+%\s*·\s*\d+\/\d+/.test(el.innerText || '')
+                    el instanceof HTMLElement &&
+                    el.querySelector('.ant-progress') !== null &&
+                    /(?:正在处理|已处理)\s+\d+\/\d+/.test(el.innerText || '')
                   )
                 },
                 importSelectors.workspaceIndexJobProgress,
@@ -100,9 +103,11 @@ describe('settings workspace e2e', () => {
                 ).isDisabled())
               directoryCallsWhileRunning = await page.evaluate(
                 () =>
-                  (window as typeof window & {
-                    __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
-                  }).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
+                  (
+                    window as typeof window & {
+                      __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
+                    }
+                  ).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
                     (entry) => entry.name === 'workspaceDirectoryList'
                   ).length || 0
               )
@@ -113,9 +118,11 @@ describe('settings workspace e2e', () => {
           const result = await waitForFileIndexJobIdle(page, workspaceId)
           directoryCallsAfterCompletion = await page.evaluate(
             () =>
-              (window as typeof window & {
-                __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
-              }).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
+              (
+                window as typeof window & {
+                  __NCURATOR_E2E_OBSERVER__?: { ipcInvokeEntries: Array<{ name: string }> }
+                }
+              ).__NCURATOR_E2E_OBSERVER__?.ipcInvokeEntries.filter(
                 (entry) => entry.name === 'workspaceDirectoryList'
               ).length || 0
           )
@@ -138,11 +145,12 @@ describe('settings workspace e2e', () => {
             result.prepareProgressVisible &&
               !result.buttonsDisabled &&
               result.prepareButtonName.includes('取消') &&
-              INDEX_JOB_PROGRESS_LABEL_PATTERN.test(result.prepareProgressText),
+              /(?:正在处理|已处理)\s+\d+\/\d+/.test(result.prepareProgressText) &&
+              !/\d+%\s*·\s*\d+\/\d+/.test(result.prepareProgressText),
             {
               name: 'prepare-progress-is-visible',
               message:
-                '更新索引执行中，界面应展示持久化总进度，「检查更新」可用，「更新索引」文案变为「取消」且可点；目标总数算出后进度文案含百分比和已处理/总数，不得停在无数字的准备空进度，对齐 SET-WORKSPACE-004-AC3、SET-WORKSPACE-004-AC12。',
+                '更新索引执行中，界面应展示进度条和下方当前处理项文案，右上角不再重复展示百分比与已处理/总数；「检查更新」可用，「更新索引」文案变为「取消」且可点，对齐 SET-WORKSPACE-004-AC3、SET-WORKSPACE-004-AC12。',
               data: result
             }
           )
