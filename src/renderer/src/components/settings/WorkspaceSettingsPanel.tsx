@@ -32,6 +32,23 @@ type WorkspaceDirectoryMap = Record<string, Record<string, WorkspaceTreeEntry[]>
 type WorkspaceDirectoryLoadingMap = Record<string, Record<string, boolean>>
 type WorkspaceDirectoryErrorMap = Record<string, Record<string, string | undefined>>
 
+const HELD_FILE_PREPARE_JOB: WorkspaceIndexJobRecord = {
+  id: 'held-file-prepare',
+  workspace_id: '',
+  source_kind: 'file',
+  action: 'prepare',
+  status: 'running',
+  phase: 'index',
+  step_index: 1,
+  step_total: 1,
+  total_count: 0,
+  processed_count: 0,
+  failed_count: 0,
+  target_ids: [],
+  started_at: 0,
+  updated_at: 0
+}
+
 const getRootDisplayName = (workspace: WorkspaceListItem): string =>
   workspace.root_path.split(/[/\\]/).filter(Boolean).pop() || workspace.root_path
 
@@ -58,7 +75,9 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const [webSourceCount, setWebSourceCount] = useState(0)
   const [filePrepareCancelling, setFilePrepareCancelling] = useState(false)
   const [fileCancelModalOpen, setFileCancelModalOpen] = useState(false)
+  const [filePrepareHeld, setFilePrepareHeld] = useState(false)
   const filePrepareSessionRef = useRef({ completed: 0, startedIds: new Set<string>() })
+  const lastPrepareJobRef = useRef<WorkspaceIndexJobRecord | undefined>(undefined)
   const workspaceDirectoryRequestIds = useRef<Record<string, Record<string, number>>>({})
   const workspaceDirectoriesRef = useRef<WorkspaceDirectoryMap>({})
   const workspacesRef = useRef(workspaces)
@@ -236,10 +255,13 @@ const WorkspaceSettingsPanel: React.FC = () => {
         .workspaceIndexJobGet({ workspaceId: workspace.id, sourceKind: 'file' })
         .then((response) => {
           if (!response.success) return
-          setWorkspaceIndexJobs((previous) => ({
-            ...previous,
-            [workspace.id]: response.job?.status === 'running' ? response.job : undefined
-          }))
+          setWorkspaceIndexJobs((previous) => {
+            if (response.job?.status === 'running') {
+              return { ...previous, [workspace.id]: response.job }
+            }
+            if (previous[workspace.id]?.status === 'running') return previous
+            return { ...previous, [workspace.id]: undefined }
+          })
         })
         .catch(console.error)
     })
@@ -281,12 +303,22 @@ const WorkspaceSettingsPanel: React.FC = () => {
     () => Object.values(workspaceIndexJobs).find((job) => job?.status === 'running'),
     [workspaceIndexJobs]
   )
+  if (runningFileJob?.action === 'prepare') {
+    lastPrepareJobRef.current = runningFileJob
+  }
+  const displayFileIndexJob = useMemo(() => {
+    if (runningFileJob) return runningFileJob
+    if (!filePrepareHeld) return undefined
+    return lastPrepareJobRef.current
+      ? { ...lastPrepareJobRef.current, status: 'running' as const }
+      : HELD_FILE_PREPARE_JOB
+  }, [filePrepareHeld, runningFileJob])
 
   useEffect(() => {
-    if (runningFileJob?.action === 'prepare') return
+    if (runningFileJob?.action === 'prepare' || filePrepareHeld) return
     setFilePrepareCancelling(false)
     setFileCancelModalOpen(false)
-  }, [runningFileJob])
+  }, [filePrepareHeld, runningFileJob])
 
   const toggleWorkspaceDirectory = (workspaceId: string, entry: WorkspaceTreeEntry): void => {
     if (entry.kind !== 'directory') return
@@ -458,9 +490,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
   const handleWorkspacePrepareAll = async (): Promise<void> => {
     if (hasVectorModel !== true) {
+      setFilePrepareHeld(false)
       message.warning('请先安装向量模型后再更新索引')
       return
     }
+    setFilePrepareHeld(true)
     try {
       filePrepareSessionRef.current = { completed: 0, startedIds: new Set<string>() }
       await window.api.workspaceIndexPrepareSessionBegin({ sourceKind: 'file' })
@@ -483,21 +517,24 @@ const WorkspaceSettingsPanel: React.FC = () => {
     } catch (error) {
       console.error(error)
       message.error('更新索引失败')
+    } finally {
+      setFilePrepareHeld(false)
     }
   }
 
   const handleWorkspacePrepareButtonClick = (): void => {
     if (filePrepareCancelling) return
-    if (runningFileJob?.action === 'prepare') {
+    if (runningFileJob?.action === 'prepare' || filePrepareHeld) {
       setFileCancelModalOpen(true)
       return
     }
+    setFilePrepareHeld(true)
     void handleWorkspacePrepareAll()
   }
 
   const handleConfirmFilePrepareCancel = async (): Promise<void> => {
     setFileCancelModalOpen(false)
-    const hasRunningPrepare = runningFileJob?.action === 'prepare'
+    const hasRunningPrepare = runningFileJob?.action === 'prepare' || filePrepareHeld
     if (hasRunningPrepare) setFilePrepareCancelling(true)
     try {
       const response = await window.api.workspaceIndexCancel({ sourceKind: 'file' })
@@ -532,7 +569,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const vectorModelMissing = hasVectorModel === false
   const hasWorkspaceList = workspaces.length > 0
   const workspaceScanDisabled = !hasWorkspaceList
-  const filePrepareRunning = runningFileJob?.action === 'prepare'
+  const filePrepareRunning = runningFileJob?.action === 'prepare' || filePrepareHeld
   const workspacePrepareDisabled = filePrepareCancelling
     ? true
     : filePrepareRunning
@@ -683,7 +720,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                             </div>
                           </div>
                           <WorkspaceIndexJobProgress
-                            job={runningFileJob}
+                            job={displayFileIndexJob}
                             testId={importSelectors.workspaceIndexJobProgress}
                           />
                         </section>

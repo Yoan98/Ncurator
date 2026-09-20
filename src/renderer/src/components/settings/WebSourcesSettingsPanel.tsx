@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useState } from 'react'
+﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Button, Empty, Input, Modal, Popover, Tooltip, message } from 'antd'
 import type {
   WorkspaceIndexJobRecord,
@@ -28,6 +28,23 @@ type WebSourcesSettingsPanelProps = {
   onSummaryChange?: (summary: WebSourceListResponse['summary']) => void
 }
 
+const HELD_WEB_PREPARE_JOB: WorkspaceIndexJobRecord = {
+  id: 'held-web-prepare',
+  workspace_id: '',
+  source_kind: 'web',
+  action: 'prepare',
+  status: 'running',
+  phase: 'index',
+  step_index: 2,
+  step_total: 2,
+  total_count: 0,
+  processed_count: 0,
+  failed_count: 0,
+  target_ids: [],
+  started_at: 0,
+  updated_at: 0
+}
+
 const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   hasVectorModel,
   onVectorModelSettingsOpen,
@@ -43,6 +60,8 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   const [deleteWebSource, setDeleteWebSource] = useState<WebSourceRecord | null>(null)
   const [webPrepareCancelling, setWebPrepareCancelling] = useState(false)
   const [webCancelModalOpen, setWebCancelModalOpen] = useState(false)
+  const [webPrepareHeld, setWebPrepareHeld] = useState(false)
+  const lastWebPrepareJobRef = useRef<WorkspaceIndexJobRecord | undefined>(undefined)
   const [webSummary, setWebSummary] = useState<WebSourceListResponse['summary']>({
     web_count: 0,
     needs_index_count: 0,
@@ -83,7 +102,11 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       .workspaceIndexJobGet({ workspaceId: '', sourceKind: 'web' })
       .then((response) => {
         if (!response.success) return
-        setWebIndexJob(response.job?.status === 'running' ? response.job : undefined)
+        setWebIndexJob((previous) => {
+          if (response.job?.status === 'running') return response.job
+          if (previous?.status === 'running') return previous
+          return undefined
+        })
       })
       .catch(console.error)
   }, [])
@@ -92,16 +115,16 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
     const handleProgress = (job: WorkspaceIndexJobRecord): void => {
       if (job.source_kind !== 'web') return
       setWebIndexJob(job.status === 'running' ? job : undefined)
-      void loadWebSources()
+      if (job.status !== 'running') void loadWebSources()
     }
     return window.api.onWorkspaceIndexJobProgress(handleProgress)
   }, [loadWebSources])
 
   useEffect(() => {
-    if (webIndexJob?.action === 'prepare') return
+    if (webIndexJob?.action === 'prepare' || webPrepareHeld) return
     setWebPrepareCancelling(false)
     setWebCancelModalOpen(false)
-  }, [webIndexJob])
+  }, [webIndexJob, webPrepareHeld])
 
   const handleWebImport = async (): Promise<void> => {
     const urls = webUrlsText
@@ -151,36 +174,41 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
 
   const handlePrepareWebSources = async (): Promise<void> => {
     if (hasVectorModel !== true) {
+      setWebPrepareHeld(false)
       message.warning('请先安装向量模型后再更新索引')
       return
     }
 
+    setWebPrepareHeld(true)
     try {
       const response = await window.api.webSourcesPrepare({})
       if (!response.success) {
         message.error(normalizeUserFacingError(response.error, '更新网页索引失败'))
         return
       }
-      setWebIndexJob(response.job)
+      if (response.job?.status === 'running') setWebIndexJob(response.job)
       await loadWebSources()
     } catch (error) {
       console.error(error)
       message.error('更新网页索引失败')
+    } finally {
+      setWebPrepareHeld(false)
     }
   }
 
   const handleWebPrepareButtonClick = (): void => {
     if (webPrepareCancelling) return
-    if (webIndexJob?.action === 'prepare') {
+    if (webIndexJob?.action === 'prepare' || webPrepareHeld) {
       setWebCancelModalOpen(true)
       return
     }
+    setWebPrepareHeld(true)
     void handlePrepareWebSources()
   }
 
   const handleConfirmWebPrepareCancel = async (): Promise<void> => {
     setWebCancelModalOpen(false)
-    const hasRunningPrepare = webIndexJob?.action === 'prepare'
+    const hasRunningPrepare = webIndexJob?.action === 'prepare' || webPrepareHeld
     if (hasRunningPrepare) setWebPrepareCancelling(true)
     try {
       const response = await window.api.workspaceIndexCancel({ sourceKind: 'web' })
@@ -217,7 +245,17 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   const vectorModelMissing = hasVectorModel === false
   const hasWebList = webSources.length > 0
   const webScanDisabled = !hasWebList
-  const webPrepareRunning = webIndexJob?.action === 'prepare'
+  const webPrepareRunning = webIndexJob?.action === 'prepare' || webPrepareHeld
+  if (webIndexJob?.action === 'prepare') {
+    lastWebPrepareJobRef.current = webIndexJob
+  }
+  const displayWebIndexJob = useMemo(() => {
+    if (webIndexJob?.status === 'running') return webIndexJob
+    if (!webPrepareHeld) return webIndexJob
+    return lastWebPrepareJobRef.current
+      ? { ...lastWebPrepareJobRef.current, status: 'running' as const }
+      : HELD_WEB_PREPARE_JOB
+  }, [webIndexJob, webPrepareHeld])
   const webPrepareDisabled = webPrepareCancelling
     ? true
     : webPrepareRunning
@@ -345,7 +383,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
             </div>
           </div>
           <WorkspaceIndexJobProgress
-            job={webIndexJob}
+            job={displayWebIndexJob}
             testId={importSelectors.webSourceIndexJobProgress}
           />
         </section>

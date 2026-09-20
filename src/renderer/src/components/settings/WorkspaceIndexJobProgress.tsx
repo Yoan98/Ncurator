@@ -28,8 +28,7 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
   const percent = total > 0 ? Math.round((done / total) * 100) : 0
   const hasDeterminateProgress = total > 0
   const message = job.message || '正在处理'
-  const shouldHideMessage =
-    !hasDeterminateProgress || message.startsWith(`${title}：`) || message === title
+  const shouldHideMessage = message.startsWith(`${title}：`) || message === title
 
   return (
     <div
@@ -39,18 +38,20 @@ const WorkspaceIndexJobProgress: React.FC<WorkspaceIndexJobProgressProps> = ({ j
       <div className="flex items-center justify-between gap-3 text-[12px]">
         <span className="font-medium text-[#37352F]">{title}</span>
         {hasDeterminateProgress ? (
-          <span className="shrink-0 text-[#9B9A97]">{percent}%</span>
+          <span className="shrink-0 text-[#9B9A97]">
+            {percent}% · {done}/{total}
+          </span>
         ) : (
           <Spin size="small" />
         )}
       </div>
       <Progress
         percent={hasDeterminateProgress ? percent : 0}
-        status="active"
+        status={hasDeterminateProgress && percent > 0 ? 'active' : 'normal'}
         showInfo={false}
         size="small"
         strokeColor="#37352F"
-        trailColor="#F1EFEC"
+        trailColor="#E8E6E3"
         className="mt-1.5"
       />
       {shouldHideMessage ? null : (
