@@ -16,6 +16,7 @@ export type EmbeddingRuntimeThreadMeasurement = {
 }
 
 const TITLE_SEARCH_INTERVAL_MS = 500
+const THREAD_SAMPLE_INTERVAL_MS = 250
 
 const wait = async (ms: number): Promise<void> => {
   await new Promise((resolve) => setTimeout(resolve, ms))
@@ -74,6 +75,9 @@ export const measureEmbeddingRuntimeThreadDelta = async (input: {
   let after = 0
   let lastSnapshot: EmbeddingRuntimeSnapshot | null = null
   let lastTitleSearchAt = 0
+  let lastThreadSampleAt = 0
+  let lastThreads = 0
+  let sawNonReady = false
 
   while (Date.now() < deadline) {
     if (input.page.isClosed()) {
@@ -98,21 +102,27 @@ export const measureEmbeddingRuntimeThreadDelta = async (input: {
           ? snapshot.intraOpNumThreads
           : (parseEmbeddingRuntimeBudgetFromCommand(titled?.command)?.intraOpNumThreads ??
             intraOpNumThreads)
-      let threads: number
-      try {
-        threads = countProcessThreads(resolvedPid)
-      } catch {
-        await wait(10)
-        continue
+      const now = Date.now()
+      if (now - lastThreadSampleAt >= THREAD_SAMPLE_INTERVAL_MS || lastThreads === 0) {
+        try {
+          lastThreads = countProcessThreads(resolvedPid)
+          lastThreadSampleAt = now
+        } catch {
+          await wait(10)
+          continue
+        }
       }
+      const threads = lastThreads
       if (snapshot.status !== 'ready') {
+        sawNonReady = true
         before = before === null ? threads : Math.min(before, threads)
         readyAt = null
       } else {
         if (before === null) before = threads
         after = Math.max(after, threads)
         if (readyAt === null) readyAt = Date.now()
-        if (Date.now() - readyAt >= 400) {
+        const settleMs = sawNonReady ? 400 : 600
+        if (Date.now() - readyAt >= settleMs) {
           return {
             pid,
             before,
