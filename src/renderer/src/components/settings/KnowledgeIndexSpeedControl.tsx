@@ -18,23 +18,17 @@ const SPEED_HELP = (
   </div>
 )
 
-export const KnowledgeIndexSpeedControl: React.FC = () => {
+export const KnowledgeIndexSpeedControl: React.FC<{ prepareRunning: boolean }> = ({
+  prepareRunning
+}) => {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [saving, setSaving] = useState(false)
-  const [prepareRunning, setPrepareRunning] = useState(false)
 
   useEffect(() => {
     void window.api
       .appSettingsGet()
       .then(setSettings)
       .catch(() => message.error('读取索引速度失败'))
-  }, [])
-
-  useEffect(() => {
-    return window.api.onWorkspaceIndexJobProgress((job) => {
-      if (job.action !== 'prepare') return
-      setPrepareRunning(job.status === 'running')
-    })
   }, [])
 
   const locked = !settings || saving || prepareRunning

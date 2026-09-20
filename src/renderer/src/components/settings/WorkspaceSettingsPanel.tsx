@@ -676,7 +676,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               ) : null}
                             </div>
                           </div>
-                          <KnowledgeIndexSpeedControl />
+                          <KnowledgeIndexSpeedControl prepareRunning={filePrepareRunning} />
                           <div className="mt-4 grid grid-cols-2 gap-2">
                             <Tooltip title="检查当前目录里有哪些新增、变更或删除。">
                               <Button

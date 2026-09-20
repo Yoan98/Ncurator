@@ -342,7 +342,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
             </div>
           </div>
 
-          <KnowledgeIndexSpeedControl />
+          <KnowledgeIndexSpeedControl prepareRunning={webPrepareRunning} />
           <div className="mt-4 grid grid-cols-2 gap-2">
             <Button
               icon={<HiArrowPath className="h-4 w-4" />}
