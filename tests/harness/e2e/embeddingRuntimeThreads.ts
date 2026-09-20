@@ -8,7 +8,9 @@ import {
 
 export type EmbeddingRuntimeThreadMeasurement = {
   pid: number
-  threads: number
+  before: number
+  after: number
+  delta: number
   intraOpNumThreads: number | null
 }
 
@@ -24,28 +26,66 @@ export const waitForEmbeddingReady = async (page: Page, timeoutMs = 60_000): Pro
   )
 }
 
-export const measureEmbeddingRuntimeThreads = async (input: {
+export const waitForEmbeddingRuntimeProcessGone = async (input: {
+  pid: number
+  timeoutMs?: number
+}): Promise<void> => {
+  const deadline = Date.now() + (input.timeoutMs || 10_000)
+  while (Date.now() < deadline) {
+    try {
+      process.kill(input.pid, 0)
+    } catch {
+      return
+    }
+    await wait(20)
+  }
+  throw new Error(`embedding runtime pid ${String(input.pid)} did not exit`)
+}
+
+export const measureEmbeddingRuntimeThreadDelta = async (input: {
   page: Page
   electronPid: number
   excludePid?: number
   timeoutMs?: number
 }): Promise<EmbeddingRuntimeThreadMeasurement> => {
-  await waitForEmbeddingReady(input.page, input.timeoutMs)
-  const deadline = Date.now() + (input.timeoutMs || 30_000)
+  const deadline = Date.now() + (input.timeoutMs || 60_000)
+  let pid = 0
+  let before: number | null = null
+  let intraOpNumThreads: number | null = null
+  let readyAt: number | null = null
+  let after = 0
+
   while (Date.now() < deadline) {
     const proc = findEmbeddingRuntimeProcess(input.electronPid, input.excludePid)
     if (proc) {
-      const budget = parseEmbeddingRuntimeBudgetFromCommand(proc.command)
-      return {
-        pid: proc.pid,
-        threads: countProcessThreads(proc.pid),
-        intraOpNumThreads: budget?.intraOpNumThreads ?? null
+      pid = proc.pid
+      intraOpNumThreads =
+        parseEmbeddingRuntimeBudgetFromCommand(proc.command)?.intraOpNumThreads ?? intraOpNumThreads
+      const threads = countProcessThreads(proc.pid)
+      const status = await input.page.evaluate(async () => await window.api.getEmbeddingStatus())
+      if (status !== 'ready') {
+        before = before === null ? threads : Math.min(before, threads)
+        readyAt = null
+      } else {
+        if (before === null) before = threads
+        after = Math.max(after, threads)
+        if (readyAt === null) readyAt = Date.now()
+        if (Date.now() - readyAt >= 400) {
+          return {
+            pid,
+            before,
+            after,
+            delta: after - before,
+            intraOpNumThreads
+          }
+        }
       }
     }
-    await wait(200)
+    await wait(10)
   }
+
   throw new Error(
-    `embedding runtime process not found under electron pid ${String(input.electronPid)}: ${JSON.stringify(
+    `embedding runtime process was not measured under electron pid ${String(input.electronPid)}: ${JSON.stringify(
       summarizeDirectChildren(input.electronPid)
     )}`
   )

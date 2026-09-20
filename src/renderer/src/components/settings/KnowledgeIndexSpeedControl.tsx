@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Segmented, Tooltip, message } from 'antd'
+import { Button, Tooltip, message } from 'antd'
 import { HiOutlineQuestionMarkCircle } from 'react-icons/hi2'
 import { LuRabbit, LuTurtle } from 'react-icons/lu'
 import type { AppSettings, KnowledgeIndexSpeed } from '../../../../shared/types'
@@ -21,6 +21,7 @@ const SPEED_HELP = (
 export const KnowledgeIndexSpeedControl: React.FC = () => {
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [saving, setSaving] = useState(false)
+  const [prepareRunning, setPrepareRunning] = useState(false)
 
   useEffect(() => {
     void window.api
@@ -29,8 +30,17 @@ export const KnowledgeIndexSpeedControl: React.FC = () => {
       .catch(() => message.error('读取索引速度失败'))
   }, [])
 
+  useEffect(() => {
+    return window.api.onWorkspaceIndexJobProgress((job) => {
+      if (job.action !== 'prepare') return
+      setPrepareRunning(job.status === 'running')
+    })
+  }, [])
+
+  const locked = !settings || saving || prepareRunning
+
   const updateSpeed = async (knowledgeIndexSpeed: KnowledgeIndexSpeed): Promise<void> => {
-    if (!settings || saving || settings.knowledgeIndexSpeed === knowledgeIndexSpeed) return
+    if (!settings || locked || settings.knowledgeIndexSpeed === knowledgeIndexSpeed) return
     const previous = settings
     const next = { ...settings, knowledgeIndexSpeed }
     setSettings(next)
@@ -64,26 +74,30 @@ export const KnowledgeIndexSpeedControl: React.FC = () => {
           </button>
         </Tooltip>
       </div>
-      <div className="mt-3">
-        <Segmented
-          block
+      <div className="mt-3 flex overflow-hidden rounded-[6px] border border-[#EEEEEC]">
+        <Button
           size="small"
-          value={current}
-          disabled={!settings || saving}
-          onChange={(value) => void updateSpeed(value as KnowledgeIndexSpeed)}
-          options={[
-            {
-              value: 'slow',
-              icon: <LuTurtle className="h-3.5 w-3.5" />,
-              label: <span data-testid={importSelectors.workspaceIndexSpeedSlow}>慢速</span>
-            },
-            {
-              value: 'fast',
-              icon: <LuRabbit className="h-3.5 w-3.5" />,
-              label: <span data-testid={importSelectors.workspaceIndexSpeedFast}>高速</span>
-            }
-          ]}
-        />
+          type={current === 'slow' ? 'primary' : 'text'}
+          icon={<LuTurtle className="h-3.5 w-3.5" />}
+          onClick={() => void updateSpeed('slow')}
+          loading={!settings && saving}
+          disabled={locked}
+          className="!h-7 flex-1 !rounded-none"
+          data-testid={importSelectors.workspaceIndexSpeedSlow}
+        >
+          慢速
+        </Button>
+        <Button
+          size="small"
+          type={current === 'fast' ? 'primary' : 'text'}
+          icon={<LuRabbit className="h-3.5 w-3.5" />}
+          onClick={() => void updateSpeed('fast')}
+          disabled={locked}
+          className="!h-7 flex-1 !rounded-none"
+          data-testid={importSelectors.workspaceIndexSpeedFast}
+        >
+          高速
+        </Button>
       </div>
     </div>
   )

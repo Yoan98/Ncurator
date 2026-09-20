@@ -13,7 +13,7 @@
 
 边界：
 
-- 不替代 Settings「更新索引」产品 E2E。E2E 在真实 Electron 里切换档位并跑更新索引，断言嵌入 `utilityProcess` 进程名中的 intraOp 随档位变化；本计划用同一套档位走生产 `indexLocalFile`，断言索引时 applied session 随慢/高速变化。
+- 不替代 Settings「更新索引」产品 E2E。E2E 在真实 Electron 里对独立小目录各做一次慢/高速更新索引，断言同一嵌入进程的操作系统线程增量；本计划在干净 Node 子进程里用生产 `session_options` 建真实 embedding session，断言线程增量随档位变化。
 - 不替代 `ai-test` 中的 kb tool / live。
 - 不登记 unit。函数级补足仍在 `tests/case/unit/knowledge/**`。
 
@@ -22,7 +22,7 @@
 ### 2.1 `foundation`
 
 - 目标：守住知识库可回归的功能主链。
-- 约束：走生产 store / job / 扫描 / worker / 嵌入 executor；禁止假 executor 或假 `assertKbSearchAvailable`。索引速度 case 必须真实调用更新索引，断言当时档位落到 embedding session，不测 UI、不测真实 CPU / 耗时。
+- 约束：走生产 store / job / 扫描 / worker / 嵌入 executor；禁止假 executor 或假 `assertKbSearchAvailable`。索引速度 case 必须在独立 Node 进程里建真实 embedding session，并用操作系统线程数证明档位生效，不测 UI、不测墙钟 / CPU%。
 - 目录：`tests/case/knowledge/foundation/<case>.test.ts`
 
 ### 2.2 `optimization`
@@ -86,10 +86,10 @@
 #### `index-speed-thread-budget`
 
 - 测试类型：`backend`
-- What：慢速/高速按逻辑核数映射不同的 ORT `session_options`；真实更新索引调用必须带上当时档位。
-- Why：档位是否有效，看的是索引链路里 embedding session 是否换档，不是单独探测线程公式。
-- How：对 4/8/16 核分别计算慢速与高速预算；保存慢速后对真实 txt 走生产 `indexLocalFile`，再保存高速并对另一份 txt 再索引一次。Electron `utilityProcess` 的闭环在 Settings `workspace-prepare-refresh`。
-- Oracle：慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；两次索引都写出 chunk 且未走向量缓存；慢速索引时 applied session 为慢速 intraOp 并关闭 spinning，高速索引时为高速 intraOp 并开启 spinning。
+- What：慢速/高速按逻辑核数映射不同的 ORT `session_options`；独立进程里真实 embedding session 的操作系统线程数随 `intraOpNumThreads` 增加。
+- Why：档位是否有效，看的是建 session 前后的操作系统线程增量，不是只读配置。
+- How：对 4/8/16 核分别计算慢速与高速预算；用生产 `toOrtSessionOptions(resolveOrtThreadBudget)` 在两个新 Node 进程里各建一次真实 embedding session 并 embed；Mac 用 `ps -M`、Windows 用 `Get-Process.Threads.Count` 比较建 session 前后的线程数。Electron `utilityProcess` 的闭环在 Settings `workspace-index-speed`。
+- Oracle：慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；每个子进程 `after - before` 不少于该档 intraOp；高速增量大于慢速，且两档增量之差等于 intraOp 之差。
 
 #### `prepare-workspaces-sequentially`
 

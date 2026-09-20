@@ -1,10 +1,6 @@
-import { mkdir, writeFile } from 'node:fs/promises'
-import path from 'node:path'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
 import { describe, it } from 'vitest'
-import { EmbeddingService } from '../../../../src/main/services/vector/EmbeddingService'
-import { TransformersEmbeddingExecutor } from '../../../../src/main/services/vector/runtime/TransformersEmbeddingExecutor'
-import { WorkspaceKnowledgePrepareService } from '../../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
-import { prepareWorkspaceSource } from '../../../../src/main/services/workspace/worker/workspacePrepareWorker'
 import { getModelsPath } from '../../../../src/main/utils/paths'
 import {
   resolveOrtThreadBudget,
@@ -12,8 +8,53 @@ import {
 } from '../../../../src/main/services/vector/indexSpeed'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
-const spinningOf = (options: ReturnType<typeof toOrtSessionOptions> | null): string =>
-  options?.extra['session.intra_op.allow_spinning'] || ''
+const PROBE_PATH = fileURLToPath(
+  new URL('../../../harness/backend/measure-index-speed-threads.mjs', import.meta.url)
+)
+const PROBE_PREFIX = 'NCURATOR_THREAD_PROBE:'
+
+type ThreadProbeResult = {
+  before: number
+  after: number
+  delta: number
+  dims: unknown
+}
+
+const parseProbeResult = (stdout: string): ThreadProbeResult => {
+  const line = stdout
+    .split('\n')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(PROBE_PREFIX))
+  if (!line) {
+    throw new Error(`thread probe did not print result: ${stdout}`)
+  }
+  return JSON.parse(line.slice(PROBE_PREFIX.length)) as ThreadProbeResult
+}
+
+const measureIndexSpeedThreads = (speed: 'slow' | 'fast'): ThreadProbeResult => {
+  const budget = resolveOrtThreadBudget(speed)
+  const result = spawnSync(
+    process.execPath,
+    [
+      PROBE_PATH,
+      JSON.stringify({
+        modelsPath: getModelsPath(),
+        sessionOptions: toOrtSessionOptions(budget)
+      })
+    ],
+    {
+      encoding: 'utf8',
+      timeout: 180_000,
+      env: { ...process.env }
+    }
+  )
+  if (result.status !== 0) {
+    throw new Error(
+      `thread probe failed for ${speed}: ${result.stderr || result.stdout || result.error?.message}`
+    )
+  }
+  return parseProbeResult(result.stdout)
+}
 
 describe('knowledge foundation', () => {
   it('index-speed-thread-budget', async () => {
@@ -22,10 +63,11 @@ describe('knowledge foundation', () => {
       harnessMode: 'tool-real',
       domain: 'knowledge',
       suite: 'foundation',
-      description: '慢/高速必须作用在真实更新索引调用上，索引时 ORT session 随档位变化。',
+      description:
+        '慢/高速必须在独立 Node 进程的真实 embedding session 上改变操作系统线程数。',
       fixtures: [],
       runMode: 'single',
-      execute: async (runtime) => {
+      execute: async () => {
         const budgets = {
           slow4: resolveOrtThreadBudget('slow', 4),
           slow8: resolveOrtThreadBudget('slow', 8),
@@ -36,77 +78,14 @@ describe('knowledge foundation', () => {
         }
         const slowBudget = resolveOrtThreadBudget('slow')
         const fastBudget = resolveOrtThreadBudget('fast')
-        const executor = new TransformersEmbeddingExecutor({
-          modelsPath: getModelsPath(),
-          modelName: 'jinaai/jina-embeddings-v2-base-zh'
-        })
-        const embeddingService = new EmbeddingService({ executor })
-        const prepareService = new WorkspaceKnowledgePrepareService({
-          embeddingService,
-          documentsStore: runtime.documentsStore,
-          prepareSource: prepareWorkspaceSource
-        })
-        const store = runtime.storageService.appSettings
-        const defaultSettings = await store.get()
-        const now = Date.now()
-        const slowWorkspaceId = 'index-speed-slow'
-        const fastWorkspaceId = 'index-speed-fast'
-        const slowRoot = path.join(runtime.workspaceRoot, slowWorkspaceId)
-        const fastRoot = path.join(runtime.workspaceRoot, fastWorkspaceId)
-        await mkdir(slowRoot, { recursive: true })
-        await mkdir(fastRoot, { recursive: true })
-        await writeFile(path.join(slowRoot, 'slow.txt'), 'slow index speed\n')
-        await writeFile(path.join(fastRoot, 'fast.txt'), 'fast index speed\n')
-        await runtime.storageService.workspace.saveWorkspace({
-          id: slowWorkspaceId,
-          root_path: slowRoot,
-          created_at: now,
-          updated_at: now
-        })
-        await runtime.storageService.workspace.saveWorkspace({
-          id: fastWorkspaceId,
-          root_path: fastRoot,
-          created_at: now,
-          updated_at: now
-        })
-
-        await embeddingService.applyIndexSpeed('slow')
-        const slowIndexed = await prepareService.indexLocalFile({
-          workspaceId: slowWorkspaceId,
-          documentId: `${slowWorkspaceId}-doc`,
-          filePath: path.join(slowRoot, 'slow.txt'),
-          documentName: 'slow.txt'
-        })
-        const appliedSlow = executor.getAppliedSessionOptions()
-
-        const saved = await store.save({ ...defaultSettings, knowledgeIndexSpeed: 'fast' })
-        await embeddingService.applyIndexSpeed('fast')
-        const fastIndexed = await prepareService.indexLocalFile({
-          workspaceId: fastWorkspaceId,
-          documentId: `${fastWorkspaceId}-doc`,
-          filePath: path.join(fastRoot, 'fast.txt'),
-          documentName: 'fast.txt'
-        })
-        const appliedFast = executor.getAppliedSessionOptions()
-
+        const slowThreads = measureIndexSpeedThreads('slow')
+        const fastThreads = measureIndexSpeedThreads('fast')
         return {
           budgets,
           slowBudget,
           fastBudget,
-          defaultSpeed: defaultSettings.knowledgeIndexSpeed,
-          persistedSpeed: saved.knowledgeIndexSpeed,
-          appliedSlow,
-          appliedFast,
-          slowIndexed: {
-            documentId: slowIndexed.documentId,
-            chunkCount: slowIndexed.chunkCount,
-            usedCachedVectors: slowIndexed.usedCachedVectors
-          },
-          fastIndexed: {
-            documentId: fastIndexed.documentId,
-            chunkCount: fastIndexed.chunkCount,
-            usedCachedVectors: fastIndexed.usedCachedVectors
-          }
+          slowThreads,
+          fastThreads
         }
       },
       assert: async (result, runtime) => {
@@ -163,31 +142,20 @@ describe('knowledge foundation', () => {
           }
         )
         runtime.assertThat(
-          result.defaultSpeed === 'slow' &&
-            result.persistedSpeed === 'fast' &&
-            result.slowIndexed.chunkCount > 0 &&
-            result.fastIndexed.chunkCount > 0 &&
-            result.slowIndexed.usedCachedVectors === false &&
-            result.fastIndexed.usedCachedVectors === false &&
-            result.appliedSlow?.intraOpNumThreads === result.slowBudget.intraOpNumThreads &&
-            spinningOf(result.appliedSlow) === '0' &&
-            result.appliedFast?.intraOpNumThreads === result.fastBudget.intraOpNumThreads &&
-            spinningOf(result.appliedFast) === '1' &&
-            (result.appliedFast?.intraOpNumThreads || 0) >
-              (result.appliedSlow?.intraOpNumThreads || 0),
+          result.slowThreads.delta >= result.slowBudget.intraOpNumThreads &&
+            result.fastThreads.delta >= result.fastBudget.intraOpNumThreads &&
+            result.fastThreads.delta - result.slowThreads.delta ===
+              result.fastBudget.intraOpNumThreads - result.slowBudget.intraOpNumThreads &&
+            result.fastThreads.after > result.slowThreads.after,
           {
-            name: 'index-calls-follow-speed',
+            name: 'index-session-os-threads-follow-speed',
             message:
-              '真实 indexLocalFile 必须在慢速/高速档位下各完成一次索引；两次 embedding session 的 intraOp 与 spinning 必须等于当时档位。',
+              '独立 Node 进程里真实 embedding session 的操作系统线程增量必须不少于该档 intraOp；高速增量大于慢速，且两档增量之差等于 intraOp 之差。',
             data: {
-              defaultSpeed: result.defaultSpeed,
-              persistedSpeed: result.persistedSpeed,
               slowBudget: result.slowBudget,
               fastBudget: result.fastBudget,
-              appliedSlow: result.appliedSlow,
-              appliedFast: result.appliedFast,
-              slowIndexed: result.slowIndexed,
-              fastIndexed: result.fastIndexed
+              slowThreads: result.slowThreads,
+              fastThreads: result.fastThreads
             }
           }
         )

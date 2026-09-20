@@ -19,7 +19,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除，以及预设服务商与自定义配置的类型、锁定和去重语义。
 - `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为，以及错误日志目录入口；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
-- `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。`SET-WORKSPACE-009` 由 `workspace-prepare-refresh` 在页面切换档位后走真实更新索引覆盖，并断言真实嵌入子进程档位；`SET-WORKSPACE-004-AC11` 由 `workspace-prepare-sequential-addresses` 在页面添加两个地址后走真实更新索引覆盖；慢/高速作用在真实索引调用上由 knowledge `index-speed-thread-budget` 覆盖。问号文案与网页 tab 同步不单独测。
+- `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。`SET-WORKSPACE-009` 由独立 `workspace-index-speed` 用临时小目录做两次真实更新索引覆盖，并断言同一嵌入进程 ready 前后的操作系统线程增量；`SET-WORKSPACE-004-AC11` 由 `workspace-prepare-sequential-addresses` 在页面添加两个地址后走真实更新索引覆盖；慢/高速在独立 Node 进程里的线程增量由 knowledge `index-speed-thread-budget` 覆盖。问号文案与网页 tab 同步不单独测。
 - `vector` 属于 Settings 产品域，页面路由为 `/settings/vector`（`/model-download` 仅为历史重定向），测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
 - `workspace` 是 Settings 下的 suite，按 `core / files / web` 组织，语义为“文件地址 + 文件 tab + 全局网页 tab”，不是具名容器。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
@@ -98,7 +98,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 ### 3.3 `workspace / files`
 
-索引 job 运行期间目录树 IPC 必须为 0；任务成功或失败终态后，目录树只允许刷新一次。测试同时确认旧目录节点不因刷新被清空或折叠，扫描无可计算总数时显示活动状态而不是静态 0%。左侧可索引数字对全部文件地址合计。向量模型未安装时「更新索引」禁用与说明（`SET-WORKSPACE-004-AC6`、网页侧 `SET-WEB-004-AC7`）标为手动 / 暂缓，不进日常自动化。无文件地址时「检查更新」禁用、可索引为 0 时「更新索引」禁用（`SET-WORKSPACE-004-AC10`）与网页侧同构规则（`SET-WEB-003-AC5`、`SET-WEB-004-AC9`）标为 **不测**（低价值 UI 门禁，不单独立自动化 case）。文件更新索引中断后 job 与条目收敛为失败由 knowledge `workspace-interrupted-job-recovery-contract` / `workspace-index-job-store-contract` 覆盖 `SET-WORKSPACE-004-AC5`。更新索引执行中 `kb_search` / `kb_list_documents` 拦截由 knowledge `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。多地址顺序执行由 `workspace-prepare-sequential-addresses` 覆盖 `SET-WORKSPACE-004-AC11`。线程预算由 knowledge `index-speed-thread-budget` 覆盖。
+索引 job 运行期间目录树 IPC 必须为 0；任务成功或失败终态后，目录树只允许刷新一次。测试同时确认旧目录节点不因刷新被清空或折叠，扫描无可计算总数时显示活动状态而不是静态 0%。左侧可索引数字对全部文件地址合计。向量模型未安装时「更新索引」禁用与说明（`SET-WORKSPACE-004-AC6`、网页侧 `SET-WEB-004-AC7`）标为手动 / 暂缓，不进日常自动化。无文件地址时「检查更新」禁用、可索引为 0 时「更新索引」禁用（`SET-WORKSPACE-004-AC10`）与网页侧同构规则（`SET-WEB-003-AC5`、`SET-WEB-004-AC9`）标为 **不测**（低价值 UI 门禁，不单独立自动化 case）。文件更新索引中断后 job 与条目收敛为失败由 knowledge `workspace-interrupted-job-recovery-contract` / `workspace-index-job-store-contract` 覆盖 `SET-WORKSPACE-004-AC5`。更新索引执行中 `kb_search` / `kb_list_documents` 拦截由 knowledge `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`。多地址顺序执行由 `workspace-prepare-sequential-addresses` 覆盖 `SET-WORKSPACE-004-AC11`。索引速度由 `workspace-index-speed` 与 knowledge `index-speed-thread-budget` 覆盖。
 
 #### `workspace-scan-progress-refresh`
 
@@ -112,9 +112,17 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 - 测试类型：`e2e`
 - What：点击“更新索引”后，文件状态会刷新为已索引并同步更新摘要。
-- Why：“索引已经可用”的核心用户反馈链路。
-- How：复制共享 workspace 输入的隔离副本，通过 Settings UI 添加为文件地址；默认慢速嵌入就绪后，按进程名 `ncurator-emb-<intraOp>` 定位真实 Electron 嵌入子进程；切换高速并保存后点击更新索引，在真实索引期间再定位新嵌入进程，然后读取刷新后的文件树和全部支持文件状态。共享 fixture 含 `.doc`、`docx`、`pdf`、`md`、`txt`、`xlsx`、`xlsm` 等全部受支持类型，其中 excel 只以元数据方式索引进库。
-- Oracle：默认慢速后可切换高速，本次更新索引在切换后的档位上执行，对齐 `SET-WORKSPACE-009-AC1`；两次嵌入子进程 pid 不同，进程名中的 intraOp 与慢/高速档位一致；更新索引过程中出现持久化总进度，且检查更新/更新索引按钮保持可用，对齐 `SET-WORKSPACE-004-AC3`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC7`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+- Why：“索引已经可用”的核心用户反馈链路。全仓唯一的向量 warmup，预热共享 fixture 的 split/vector 缓存。
+- How：复制共享 workspace 输入的隔离副本，通过 Settings UI 添加为文件地址并点击更新索引，读取刷新后的文件树和全部支持文件状态。共享 fixture 含 `.doc`、`docx`、`pdf`、`md`、`txt`、`xlsx`、`xlsm` 等全部受支持类型，其中 excel 只以元数据方式索引进库。不切换、不断言索引速度。
+- Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮保持可用，对齐 `SET-WORKSPACE-004-AC3`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC7`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
+
+#### `workspace-index-speed`
+
+- 测试类型：`e2e / exclusive`
+- What：独立小目录上，默认慢速真实更新索引一次，再补文件切高速再更新索引一次；同一嵌入进程 ready 前后的操作系统线程增量随档位变化。
+- Why：档位是否生效，看的是更新索引时电脑上嵌入进程的线程数是否按 intraOp 增加，不是进程名里的数字，也不是共享 warmup fixture。
+- How：通过原生目录选择添加只含一个 txt 的临时目录；默认慢速点击更新索引，进程出现后立即数线程，ready 后再数一次；更新索引期间确认慢/高速禁用。再写入第二个 txt、检查更新、切换高速，对新嵌入进程做同样的 before/after。Mac 用 `ps` 进程名/参数中的 `ncurator-emb-<n>`，Windows 用 `CommandLine` 中的同一 fork 参数，线程数分别用 `ps -M` 与 `Get-Process.Threads.Count`。
+- Oracle：默认慢速后可切换高速，对齐 `SET-WORKSPACE-009-AC1`；更新索引进行中禁用慢/高速，终态后恢复，对齐 `SET-WORKSPACE-009-AC4`；两次更新索引拉起不同嵌入进程；每次 `after - before` 不少于本机该档 `intraOpNumThreads`，高速 `after` 大于慢速且两档增量之差等于档位差。两个 txt 均索引完成。
 
 #### `workspace-prepare-sequential-addresses`
 

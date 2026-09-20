@@ -10,7 +10,7 @@ import type {
   EmbeddingThreadBudget
 } from './types'
 import {
-  EMBEDDING_RUNTIME_PROCESS_ARG,
+  embeddingRuntimeProcessTitle,
   resolveOrtThreadBudget,
   toEmbeddingRuntimeEnv
 } from '../indexSpeed'
@@ -64,16 +64,20 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
       throw error
     }
 
-    const child = utilityProcess.fork(this.entryPath, [EMBEDDING_RUNTIME_PROCESS_ARG], {
-      serviceName: 'Ncurator Embedding Runtime',
-      stdio: 'pipe',
-      env: {
-        ...process.env,
-        NCURATOR_EMBEDDING_MODELS_PATH: this.modelsPath,
-        NCURATOR_EMBEDDING_MODEL_NAME: this.modelName,
-        ...toEmbeddingRuntimeEnv(this.threadBudget)
+    const child = utilityProcess.fork(
+      this.entryPath,
+      [`--${embeddingRuntimeProcessTitle(this.threadBudget.intraOpNumThreads)}`],
+      {
+        serviceName: 'Ncurator Embedding Runtime',
+        stdio: 'pipe',
+        env: {
+          ...process.env,
+          NCURATOR_EMBEDDING_MODELS_PATH: this.modelsPath,
+          NCURATOR_EMBEDDING_MODEL_NAME: this.modelName,
+          ...toEmbeddingRuntimeEnv(this.threadBudget)
+        }
       }
-    })
+    )
     this.process = child
     this.initializedProcess = null
 

@@ -3153,6 +3153,12 @@ export function registerHandlers(services: {
   ipcMain.handle('app-settings-save', async (_event, settings: AppSettings) => {
     try {
       const previous = await appSettingsStore.get()
+      if (
+        previous.knowledgeIndexSpeed !== settings.knowledgeIndexSpeed &&
+        (await workspaceIndexJobStore.hasRunningPrepareJob())
+      ) {
+        return { success: false, error: '正在更新索引，请完成后再切换速度' }
+      }
       const saved = await appSettingsStore.save(settings)
       if (previous.knowledgeIndexSpeed !== saved.knowledgeIndexSpeed) {
         await embeddingService.applyIndexSpeed(saved.knowledgeIndexSpeed)

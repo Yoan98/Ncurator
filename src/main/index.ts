@@ -345,14 +345,6 @@ if (!singleInstanceLock) {
     await storageService.initialize()
     const appSettings = await storageService.appSettings.get()
     embeddingRuntimeClient.setThreadBudget(resolveOrtThreadBudget(appSettings.knowledgeIndexSpeed))
-    embeddingService.initialize().catch((err) => {
-      console.error('Failed to initialize EmbeddingService:', err)
-      errorLogService.write({
-        module: 'embedding-runtime',
-        error: err,
-        context: { event: 'startup' }
-      })
-    })
 
     const mainWindow = createWindow()
     mainWindow.webContents.on('render-process-gone', (_event, details) => {

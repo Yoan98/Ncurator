@@ -524,17 +524,6 @@ export const removeWorkspaceDirectoryThroughSettingsUi = async (
     .waitFor({ state: 'hidden' })
 }
 
-const isIndexSpeedOptionEnabled = (testId: string): boolean => {
-  const element = document.querySelector(`[data-testid="${testId}"]`)
-  const root = element?.closest('.ant-segmented')
-  return root instanceof HTMLElement && !root.classList.contains('ant-segmented-disabled')
-}
-
-const isIndexSpeedOptionSelected = (testId: string): boolean =>
-  document.querySelector(`[data-testid="${testId}"]`)
-    ?.closest('.ant-segmented-item')
-    ?.classList.contains('ant-segmented-item-selected') === true
-
 export const selectWorkspaceIndexSpeedThroughSettingsUi = async (
   page: Page,
   speed: 'slow' | 'fast'
@@ -543,11 +532,24 @@ export const selectWorkspaceIndexSpeedThroughSettingsUi = async (
     speed === 'fast'
       ? importSelectors.workspaceIndexSpeedFast
       : importSelectors.workspaceIndexSpeedSlow
-  const option = getSettingsLocator(page, testId)
-  await option.waitFor({ state: 'visible' })
-  await page.waitForFunction(isIndexSpeedOptionEnabled, testId)
-  await option.click()
-  await page.waitForFunction(isIndexSpeedOptionSelected, testId)
+  const button = getSettingsLocator(page, testId)
+  await button.waitFor({ state: 'visible' })
+  await page.waitForFunction((speedTestId) => {
+    const element = document.querySelector(`[data-testid="${speedTestId}"]`)
+    return element instanceof HTMLButtonElement && !element.disabled
+  }, testId)
+  await button.click()
+  await page.waitForFunction(
+    (speedTestId) => {
+      const element = document.querySelector(`[data-testid="${speedTestId}"]`)
+      return (
+        element instanceof HTMLButtonElement &&
+        !element.disabled &&
+        element.classList.contains('ant-btn-primary')
+      )
+    },
+    testId
+  )
 }
 
 export const bindWorkspaceRootThroughSettingsUi = async (
