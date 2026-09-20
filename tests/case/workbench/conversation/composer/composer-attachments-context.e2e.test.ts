@@ -330,7 +330,7 @@ describe('workbench conversation e2e', () => {
             submitStartedAtMs,
             setup.env.modelName,
             WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
-            { page }
+            { page, blockerPolicy: 'auto_approve' }
           )
           const submittedMessages = await page.evaluate(async () => {
             const partners = [...(await window.api.partnerList())].sort(

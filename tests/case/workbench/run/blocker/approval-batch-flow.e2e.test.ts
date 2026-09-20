@@ -147,10 +147,14 @@ describe('workbench run e2e', () => {
           const guidedFile = path.join(setup.workspace.rootPath, 'approval-guided.txt')
           const fullAccessFile = path.join(setup.workspace.rootPath, 'approval-full-access.txt')
 
+          await selectWorkbenchExecutionPermission(page, '审核')
           const approveStartedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            '请使用终端命令在当前工作区创建 approval-approved.txt，内容写 approved-by-workbench-e2e。'
+            [
+              '请使用终端命令在当前工作区创建 approval-approved.txt，内容写 approved-by-workbench-e2e。',
+              '必须真正发起会触发审批的终端写入命令，并等待用户审批；不要声称已有授权或跳过审批。'
+            ].join('')
           )
           const approvedApproval = await waitForWorkbenchAiEvent(runtime, {
             name: 'approval_approved_batch_required',
