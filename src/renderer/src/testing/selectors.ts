@@ -232,6 +232,7 @@ export const workbenchSelectors = {
   assistantProcessPrefix: 'workbench-assistant-process',
   assistantThoughts: 'workbench-assistant-thoughts',
   assistantProcessItemPrefix: 'workbench-assistant-process-item',
+  readImageThumbPrefix: 'workbench-read-image-thumb',
   assistantApprovalWaiting: 'workbench-assistant-approval-waiting',
   assistantApprovalReviewedItem: 'workbench-assistant-approval-reviewed-item',
   assistantFinalAnswerPrefix: 'workbench-assistant-final-answer',

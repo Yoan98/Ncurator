@@ -4237,6 +4237,7 @@ const ChatPage: React.FC = () => {
           workspaces={workspaces}
           fallbackWorkspaceName={selectedWorkspaceName}
           onOpenReference={handleOpenMarkdownReference}
+          onPreviewImage={setPreviewImage}
         />
       </div>
     )

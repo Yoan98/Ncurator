@@ -52,6 +52,9 @@ import {
 } from '../../../../shared/assistantThinkingWait'
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
+import ReadImageThumbs from './ReadImageThumbs'
+import { readImagePathsFromInput } from './readImageThumbUtils'
+import type { ImageLightboxImage } from './ImageLightbox'
 
 type AssistantTurnCardProps = {
   messageId: string
@@ -61,6 +64,7 @@ type AssistantTurnCardProps = {
   workspaces: WorkspaceSource[]
   fallbackWorkspaceName?: string | null
   onOpenReference: (reference: OpenableMarkdownReference) => void
+  onPreviewImage?: (image: ImageLightboxImage) => void
 }
 
 const getProcessStatusClassName = (status: AssistantProcessGroup['status']): string => {
@@ -390,44 +394,59 @@ const ApprovalReviewIcon: React.FC<{ action: AssistantApprovalReview['action'] }
 const AssistantActivityItemView: React.FC<{
   item: AssistantProcessGroup['items'][number]
   review?: AssistantApprovalReview
-}> = ({ item, review }) => {
+  onPreviewImage?: (image: ImageLightboxImage) => void
+}> = ({ item, review, onPreviewImage }) => {
   const [revealing, setRevealing] = useState(false)
   const failed = item.status === 'failed' || item.status === 'partial_failed'
   const toolText = getItemText(item)
   const revealText = review ? formatApprovalReviewRevealText(review) : ''
+  const readImagePaths =
+    item.toolName === 'read_image' ? readImagePathsFromInput(item.input) : []
+  const thumbs =
+    readImagePaths.length > 0 ? (
+      <ReadImageThumbs paths={readImagePaths} onPreviewImage={onPreviewImage} />
+    ) : null
 
   if (!review) {
-    return <div className={failed ? 'text-[#B3261E]' : undefined}>{renderSegments(toolText)}</div>
+    return (
+      <div className={failed ? 'text-[#B3261E]' : undefined}>
+        {renderSegments(toolText)}
+        {thumbs}
+      </div>
+    )
   }
 
   return (
     <div
       data-testid={workbenchSelectors.assistantApprovalReviewedItem}
-      className={`flex min-w-0 items-center gap-1.5 leading-[22px] ${failed ? 'text-[#B3261E]' : ''}`}
+      className={failed ? 'text-[#B3261E]' : undefined}
     >
-      <span
-        className="inline-flex h-5 w-5 shrink-0 cursor-help items-center justify-center rounded-[4px] transition-colors duration-150 hover:bg-[#EFEFEE]"
-        onMouseEnter={() => setRevealing(true)}
-        onMouseLeave={() => setRevealing(false)}
-      >
-        <ApprovalReviewIcon action={review.action} />
-      </span>
-      <span className="relative min-w-0 flex-1 overflow-hidden">
+      <div className="flex min-w-0 items-center gap-1.5 leading-[22px]">
         <span
-          className={`block truncate transition-all duration-150 ${
-            revealing ? 'pointer-events-none translate-x-1 opacity-0' : 'translate-x-0 opacity-100'
-          }`}
+          className="inline-flex h-5 w-5 shrink-0 cursor-help items-center justify-center rounded-[4px] transition-colors duration-150 hover:bg-[#EFEFEE]"
+          onMouseEnter={() => setRevealing(true)}
+          onMouseLeave={() => setRevealing(false)}
         >
-          {renderSegments(toolText)}
+          <ApprovalReviewIcon action={review.action} />
         </span>
-        <span
-          className={`absolute inset-0 flex items-center truncate text-[#787774] transition-all duration-150 ${
-            revealing ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-1 opacity-0'
-          }`}
-        >
-          {revealText}
+        <span className="relative min-w-0 flex-1 overflow-hidden">
+          <span
+            className={`block truncate transition-all duration-150 ${
+              revealing ? 'pointer-events-none translate-x-1 opacity-0' : 'translate-x-0 opacity-100'
+            }`}
+          >
+            {renderSegments(toolText)}
+          </span>
+          <span
+            className={`absolute inset-0 flex items-center truncate text-[#787774] transition-all duration-150 ${
+              revealing ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-1 opacity-0'
+            }`}
+          >
+            {revealText}
+          </span>
         </span>
-      </span>
+      </div>
+      {thumbs}
     </div>
   )
 }
@@ -438,7 +457,15 @@ const AssistantActivityGroupView: React.FC<{
   shimmerActive: boolean
   waitingApproval?: boolean
   approvalReviews?: readonly AssistantApprovalReview[]
-}> = ({ groups, id, shimmerActive, waitingApproval = false, approvalReviews = [] }) => {
+  onPreviewImage?: (image: ImageLightboxImage) => void
+}> = ({
+  groups,
+  id,
+  shimmerActive,
+  waitingApproval = false,
+  approvalReviews = [],
+  onPreviewImage
+}) => {
   const status = resolveAssistantExecutionStatus(groups)
   const items = groups
     .flatMap((group) => group.items)
@@ -504,6 +531,7 @@ const AssistantActivityGroupView: React.FC<{
             <AssistantActivityItemView
               key={item.id}
               item={item}
+              onPreviewImage={onPreviewImage}
               review={findApprovalReviewForProcessItem({
                 itemId: item.id,
                 toolName: item.toolName,
@@ -526,7 +554,8 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   onOpenApply,
   workspaces,
   fallbackWorkspaceName,
-  onOpenReference
+  onOpenReference,
+  onPreviewImage
 }) => {
   const [applyTargetsExpanded, setApplyTargetsExpanded] = useState(false)
   const processThoughts = useMemo(() => turn?.processThoughts || [], [turn?.processThoughts])
@@ -604,6 +633,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                       groups={entry.groups}
                       waitingApproval={entry.waitingApproval}
                       approvalReviews={approvalReviews}
+                      onPreviewImage={onPreviewImage}
                       shimmerActive={
                         Boolean(entry.waitingApproval) ||
                         shouldActivityHeaderShimmer({
