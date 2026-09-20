@@ -1,4 +1,4 @@
-import type { EmbeddingExecutor, EmbeddingResult } from './runtime/types'
+import type { EmbeddingExecutor, EmbeddingResult, EmbeddingThreadBudget } from './runtime/types'
 import { toEmbeddingInitializationMessage } from './embeddingError'
 
 export type { EmbeddingExecutor, EmbeddingResult } from './runtime/types'
@@ -61,6 +61,15 @@ export class EmbeddingService {
     }
     const inputTexts = Array.isArray(texts) ? texts : [texts]
     return await this.executor.embed(inputTexts)
+  }
+
+  public async applyThreadBudget(budget: EmbeddingThreadBudget): Promise<void> {
+    const runtime = this.executor as EmbeddingExecutor & {
+      setThreadBudget?: (next: EmbeddingThreadBudget) => void
+    }
+    runtime.setThreadBudget?.(budget)
+    await this.executor.restart?.()
+    this.status = 'uninitialized'
   }
 
   public async close(): Promise<void> {

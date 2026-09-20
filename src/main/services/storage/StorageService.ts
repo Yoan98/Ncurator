@@ -1,7 +1,7 @@
 import path from 'node:path'
 import { AiFileChangeStore } from './domains/AiFileChangeStore'
 import { AiRunStore } from './domains/AiRunStore'
-import { AiRuntimeSettingsStore } from './domains/AiRuntimeSettingsStore'
+import { AppSettingsStore } from './domains/AppSettingsStore'
 import { LanceDbCore } from './core/LanceDbCore'
 import { SqliteCore } from './sqlite/SqliteCore'
 import { PartnerStore } from './domains/PartnerStore'
@@ -29,7 +29,7 @@ export class StorageService {
   public readonly aiRun: AiRunStore
   public readonly docxApply: DocxApplyStore
   public readonly llm: LlmConfigStore
-  public readonly aiRuntimeSettings: AiRuntimeSettingsStore
+  public readonly appSettings: AppSettingsStore
   public readonly workspace: WorkspaceStore
   public readonly workspaceIndexJob: WorkspaceIndexJobStore
   public readonly workbenchUi: WorkbenchUiStore
@@ -57,7 +57,7 @@ export class StorageService {
     this.aiRun = new AiRunStore(this.sqlite)
     this.docxApply = new DocxApplyStore(this.sqlite)
     this.llm = new LlmConfigStore(this.sqlite)
-    this.aiRuntimeSettings = new AiRuntimeSettingsStore(this.sqlite)
+    this.appSettings = new AppSettingsStore(this.sqlite)
     this.workspace = new WorkspaceStore(this.sqlite)
     this.workspaceIndexJob = new WorkspaceIndexJobStore(this.sqlite)
     this.workbenchUi = new WorkbenchUiStore(this.sqlite)

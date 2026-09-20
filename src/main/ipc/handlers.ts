@@ -5,6 +5,7 @@ import type { AppErrorLogService } from '../services/logging/AppErrorLogService'
 import type { OpenDialogOptions } from 'electron'
 import { IngestionService } from '../services/ingestion/loader'
 import { EmbeddingService } from '../services/vector/EmbeddingService'
+import { resolveOrtThreadBudget } from '../services/vector/indexSpeed'
 import { ensureEmbeddingReady } from '../services/vector/ensureEmbeddingReady'
 import { StorageService } from '../services/storage/StorageService'
 import { ModelService } from '../services/model/ModelService'
@@ -78,7 +79,7 @@ import type {
   AttachmentCreateFromPathRequest,
   AttachmentProcessResponse,
   AttachmentSaveRequest,
-  AiRuntimeSettings,
+  AppSettings,
   LLMConfig,
   LlmModelListResponse,
   AiRunCancelResponse,
@@ -262,7 +263,7 @@ export function registerHandlers(services: {
   const chatMessageLogStore = storageService.chatMessageLog
   const aiRunStore = storageService.aiRun
   const llmStore = storageService.llm
-  const aiRuntimeSettingsStore = storageService.aiRuntimeSettings
+  const appSettingsStore = storageService.appSettings
   const webSourceStore = storageService.webSource
   const workspaceStore = storageService.workspace
   const workspaceIndexJobStore = storageService.workspaceIndexJob
@@ -290,7 +291,6 @@ export function registerHandlers(services: {
     documentsStore,
     embeddingService,
     llmStore,
-    aiRuntimeSettingsStore,
     workspaceStore,
     workspaceIndexJobStore,
     webSourceStore,
@@ -3138,24 +3138,28 @@ export function registerHandlers(services: {
     }
   })
 
-  ipcMain.handle('ai-runtime-settings-get', async () => {
+  ipcMain.handle('app-settings-get', async () => {
     try {
-      return await aiRuntimeSettingsStore.get()
+      return await appSettingsStore.get()
     } catch (e: unknown) {
-      console.error('[AI-RUNTIME-SETTINGS-GET] Error:', e)
+      console.error('[APP-SETTINGS-GET] Error:', e)
       return {
-        llmStreamingMode: 'force_stream',
-        systemNotificationsEnabled: true
+        systemNotificationsEnabled: true,
+        knowledgeIndexSpeed: 'slow'
       }
     }
   })
 
-  ipcMain.handle('ai-runtime-settings-save', async (_event, settings: AiRuntimeSettings) => {
+  ipcMain.handle('app-settings-save', async (_event, settings: AppSettings) => {
     try {
-      await aiRuntimeSettingsStore.save(settings)
-      return { success: true, settings: await aiRuntimeSettingsStore.get() }
+      const previous = await appSettingsStore.get()
+      const saved = await appSettingsStore.save(settings)
+      if (previous.knowledgeIndexSpeed !== saved.knowledgeIndexSpeed) {
+        await embeddingService.applyThreadBudget(resolveOrtThreadBudget(saved.knowledgeIndexSpeed))
+      }
+      return { success: true, settings: saved }
     } catch (e: unknown) {
-      console.error('[AI-RUNTIME-SETTINGS-SAVE] Error:', e)
+      console.error('[APP-SETTINGS-SAVE] Error:', e)
       return { success: false, error: getErrorMessage(e) }
     }
   })

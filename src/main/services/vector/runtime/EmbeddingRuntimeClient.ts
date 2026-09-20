@@ -6,8 +6,10 @@ import type {
   EmbeddingResult,
   EmbeddingRuntimePendingRequest,
   EmbeddingRuntimeRequest,
-  EmbeddingRuntimeResponse
+  EmbeddingRuntimeResponse,
+  EmbeddingThreadBudget
 } from './types'
+import { resolveOrtThreadBudget } from '../indexSpeed'
 import type { AppErrorLogService } from '../../logging/AppErrorLogService'
 
 const DEFAULT_RUNTIME_TIMEOUT_MS = 180_000
@@ -18,6 +20,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
   private readonly modelName: string
   private readonly timeoutMs: number
   private readonly errorLogService?: AppErrorLogService
+  private threadBudget: EmbeddingThreadBudget
   private process: UtilityProcess | null = null
   private processReady: Promise<UtilityProcess> | null = null
   private initializedProcess: UtilityProcess | null = null
@@ -30,16 +33,22 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
     modelsPath: string
     modelName: string
     timeoutMs?: number
+    threadBudget?: EmbeddingThreadBudget
     errorLogService?: AppErrorLogService
   }) {
     this.entryPath = String(input.entryPath || '').trim()
     this.modelsPath = String(input.modelsPath || '').trim()
     this.modelName = String(input.modelName || '').trim()
     this.timeoutMs = Math.max(1_000, input.timeoutMs || DEFAULT_RUNTIME_TIMEOUT_MS)
+    this.threadBudget = input.threadBudget || resolveOrtThreadBudget('slow')
     this.errorLogService = input.errorLogService
     if (!this.entryPath) throw new Error('embedding runtime entryPath is required')
     if (!this.modelsPath) throw new Error('embedding runtime modelsPath is required')
     if (!this.modelName) throw new Error('embedding runtime modelName is required')
+  }
+
+  public setThreadBudget(budget: EmbeddingThreadBudget): void {
+    this.threadBudget = budget
   }
 
   private async ensureProcess(): Promise<UtilityProcess> {
@@ -57,7 +66,9 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
       env: {
         ...process.env,
         NCURATOR_EMBEDDING_MODELS_PATH: this.modelsPath,
-        NCURATOR_EMBEDDING_MODEL_NAME: this.modelName
+        NCURATOR_EMBEDDING_MODEL_NAME: this.modelName,
+        NCURATOR_EMBEDDING_INTRA_OP_THREADS: String(this.threadBudget.intraOpNumThreads),
+        NCURATOR_EMBEDDING_ALLOW_SPINNING: this.threadBudget.allowSpinning ? '1' : '0'
       }
     })
     this.process = child
@@ -147,7 +158,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
       const response = await this.call({
         requestId: randomUUID(),
         action: 'initialize',
-        payload: null
+        payload: this.threadBudget
       })
       if (response.action !== 'initialize' || !response.ok) {
         const error = new Error(response.error || 'embedding runtime initialization failed')
@@ -174,6 +185,11 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
       throw error
     }
     return response.payload
+  }
+
+  public async restart(): Promise<void> {
+    await this.close()
+    this.closing = false
   }
 
   public async close(): Promise<void> {

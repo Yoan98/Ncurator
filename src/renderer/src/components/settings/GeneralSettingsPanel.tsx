@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from 'react'
 import { Switch, message } from 'antd'
 import { HiFolderOpen } from 'react-icons/hi2'
-import type { AiRuntimeSettings } from '../../../../shared/types'
+import type { AppSettings } from '../../../../shared/types'
 import { settingsSelectors } from '../../testing/selectors'
 
 const GeneralSettingsPanel: React.FC = () => {
-  const [settings, setSettings] = useState<AiRuntimeSettings | null>(null)
+  const [settings, setSettings] = useState<AppSettings | null>(null)
   const [saving, setSaving] = useState(false)
   const [openingLogDirectory, setOpeningLogDirectory] = useState(false)
 
   useEffect(() => {
     void window.api
-      .aiRuntimeSettingsGet()
+      .appSettingsGet()
       .then(setSettings)
       .catch(() => message.error('读取通知设置失败'))
   }, [])
@@ -23,7 +23,7 @@ const GeneralSettingsPanel: React.FC = () => {
     setSettings(next)
     setSaving(true)
     try {
-      const response = await window.api.aiRuntimeSettingsSave(next)
+      const response = await window.api.appSettingsSave(next)
       if (!response.success) throw new Error(response.error || '保存失败')
       setSettings(response.settings || next)
     } catch (error) {

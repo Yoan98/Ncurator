@@ -22,7 +22,9 @@ import { importSelectors, settingsSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import WebSourcesSettingsPanel from './WebSourcesSettingsPanel'
 import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
+import { KnowledgeIndexSpeedControl } from './KnowledgeIndexSpeedControl'
 import { getTreeEntryStatusMeta } from './utils/workspace'
+import { prepareWorkspacesSequentially } from '../../../../shared/prepareWorkspacesSequentially'
 import type { WorkspaceJobMap } from './types'
 
 type WorkspaceDirectoryMap = Record<string, Record<string, WorkspaceTreeEntry[]>>
@@ -411,8 +413,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
       return
     }
     try {
-      const results = await Promise.all(
-        workspaces.map((workspace) => window.api.workspacePrepare({ workspaceId: workspace.id }))
+      const results = await prepareWorkspacesSequentially(workspaces.map((workspace) => workspace.id), (workspaceId) =>
+        window.api.workspacePrepare({ workspaceId })
       )
       const failed = results.find((response) => !response.success)
       if (failed) {
@@ -539,6 +541,7 @@ const WorkspaceSettingsPanel: React.FC = () => {
                               ) : null}
                             </div>
                           </div>
+                          <KnowledgeIndexSpeedControl />
                           <div className="mt-4 grid grid-cols-2 gap-2">
                             <Tooltip title="检查当前目录里有哪些新增、变更或删除。">
                               <Button

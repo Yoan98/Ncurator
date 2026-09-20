@@ -81,7 +81,6 @@ const createTestService = async (options?: {
     documentsStore: storage.documents,
     embeddingService,
     llmStore: storage.llm,
-    aiRuntimeSettingsStore: storage.aiRuntimeSettings,
     workspaceStore: storage.workspace,
     workspaceIndexJobStore: storage.workspaceIndexJob,
     webSourceStore: storage.webSource,

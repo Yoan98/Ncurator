@@ -16,9 +16,8 @@ import { BrowserTabStateStore } from '../../../../src/main/services/storage/doma
 import { WorkbenchUiStore } from '../../../../src/main/services/storage/domains/WorkbenchUiStore'
 import { StorageService } from '../../../../src/main/services/storage/StorageService'
 import { SqliteCore } from '../../../../src/main/services/storage/sqlite/SqliteCore'
-import { AiRuntimeSettingsStore } from '../../../../src/main/services/storage/domains/AiRuntimeSettingsStore'
+import { AppSettingsStore } from '../../../../src/main/services/storage/domains/AppSettingsStore'
 import { repairFalseDocxChangeFailuresMigration } from '../../../../src/main/services/storage/sqlite/migrations/005_repair_false_docx_change_failures'
-import { repairAiRuntimeSystemNotificationsColumnMigration } from '../../../../src/main/services/storage/sqlite/migrations/009_repair_ai_runtime_system_notifications_column'
 
 type VectorRow = Record<string, unknown>
 
@@ -264,7 +263,8 @@ describe('sqlite storage core and stores', () => {
       { version: 8, name: 'drop_llm_strategy_preference' },
       { version: 9, name: 'repair_ai_runtime_system_notifications_column' },
       { version: 10, name: 'upgrade_from_v9' },
-      { version: 11, name: 'drop_terminal_file_change_records' }
+      { version: 11, name: 'drop_terminal_file_change_records' },
+      { version: 12, name: 'app_settings' }
     ])
 
     const legacyTables = sqlite
@@ -276,25 +276,25 @@ describe('sqlite storage core and stores', () => {
     expect(legacyTables).toEqual([])
   })
 
-  it('repairs notification settings after a historical migration version collision', async () => {
-    sqlite.exec("UPDATE schema_migrations SET name = 'workspace_change_sets' WHERE version = 2")
-    sqlite.exec('ALTER TABLE ai_runtime_settings DROP COLUMN systemNotificationsEnabled')
-    repairAiRuntimeSystemNotificationsColumnMigration.run?.(sqlite.getConnection())
-    sqlite.close()
-    sqlite.initialize()
-
-    const columns = sqlite.prepare('PRAGMA table_info(ai_runtime_settings)').all() as Array<{
-      name: string
-    }>
-    const settingsStore = new AiRuntimeSettingsStore(sqlite)
+  it('persists app settings after replacing the legacy runtime settings table', async () => {
+    const tables = sqlite
+      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('app_settings', 'ai_runtime_settings')")
+      .all() as Array<{ name: string }>
+    const settingsStore = new AppSettingsStore(sqlite)
     const saved = await settingsStore.save({
-      llmStreamingMode: 'force_stream',
-      systemNotificationsEnabled: false
+      systemNotificationsEnabled: false,
+      knowledgeIndexSpeed: 'fast'
     })
 
-    expect(columns.some((column) => column.name === 'systemNotificationsEnabled')).toBe(true)
-    expect(saved.systemNotificationsEnabled).toBe(false)
-    expect(await settingsStore.get()).toMatchObject({ systemNotificationsEnabled: false })
+    expect(tables).toEqual([{ name: 'app_settings' }])
+    expect(saved).toEqual({
+      systemNotificationsEnabled: false,
+      knowledgeIndexSpeed: 'fast'
+    })
+    expect(await settingsStore.get()).toEqual({
+      systemNotificationsEnabled: false,
+      knowledgeIndexSpeed: 'fast'
+    })
   })
 
   it('persists versioned partner UI state and rejects invalid writes', async () => {

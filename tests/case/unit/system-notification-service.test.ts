@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { SystemNotificationService } from '../../../src/main/services/SystemNotificationService'
-import type { AiRunRecord, AiRuntimeSettings } from '../../../src/shared/types'
+import type { AiRunRecord, AppSettings } from '../../../src/shared/types'
 
 const run = (status: AiRunRecord['status'] = 'completed'): AiRunRecord => ({
   id: 'run-1',
@@ -15,7 +15,7 @@ const run = (status: AiRunRecord['status'] = 'completed'): AiRunRecord => ({
   updatedAt: 1
 })
 
-const settingsStore = (settings: AiRuntimeSettings) => ({
+const settingsStore = (settings: AppSettings) => ({
   get: vi.fn(async () => settings)
 })
 
@@ -30,8 +30,8 @@ describe('SystemNotificationService', () => {
     const createNotification = vi.fn(() => ({ show, on }))
     const service = new SystemNotificationService({
       settingsStore: settingsStore({
-        llmStreamingMode: 'force_stream',
-        systemNotificationsEnabled: true
+        systemNotificationsEnabled: true,
+        knowledgeIndexSpeed: 'slow'
       }) as never,
       getMainWindow: () => null,
       isSupported: () => true,
@@ -52,8 +52,8 @@ describe('SystemNotificationService', () => {
     const createNotification = vi.fn()
     const service = new SystemNotificationService({
       settingsStore: settingsStore({
-        llmStreamingMode: 'force_stream',
-        systemNotificationsEnabled: false
+        systemNotificationsEnabled: false,
+        knowledgeIndexSpeed: 'slow'
       }) as never,
       getMainWindow: () => null,
       isSupported: () => true,
@@ -68,8 +68,8 @@ describe('SystemNotificationService', () => {
     const createNotification = vi.fn()
     const service = new SystemNotificationService({
       settingsStore: settingsStore({
-        llmStreamingMode: 'force_stream',
-        systemNotificationsEnabled: true
+        systemNotificationsEnabled: true,
+        knowledgeIndexSpeed: 'slow'
       }) as never,
       getMainWindow: () => null,
       isSupported: () => false,
@@ -96,8 +96,8 @@ describe('SystemNotificationService', () => {
     }
     const service = new SystemNotificationService({
       settingsStore: settingsStore({
-        llmStreamingMode: 'force_stream',
-        systemNotificationsEnabled: true
+        systemNotificationsEnabled: true,
+        knowledgeIndexSpeed: 'slow'
       }) as never,
       getMainWindow: () => window as never,
       isSupported: () => true,
@@ -137,8 +137,8 @@ describe('SystemNotificationService', () => {
     }
     const service = new SystemNotificationService({
       settingsStore: settingsStore({
-        llmStreamingMode: 'force_stream',
-        systemNotificationsEnabled: true
+        systemNotificationsEnabled: true,
+        knowledgeIndexSpeed: 'slow'
       }) as never,
       getMainWindow: () => null,
       createMainWindow: () => window as never,

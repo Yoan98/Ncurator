@@ -1,4 +1,5 @@
-import type { EmbeddingExecutor, EmbeddingResult } from './types'
+import type { EmbeddingExecutor, EmbeddingResult, EmbeddingThreadBudget } from './types'
+import { resolveOrtThreadBudget } from '../indexSpeed'
 
 type FeatureExtractorResult = {
   data: unknown
@@ -24,19 +25,33 @@ const toEmbeddingVector = (value: unknown): Float32Array => {
   return new Float32Array()
 }
 
+const toSessionOptions = (budget: EmbeddingThreadBudget) => ({
+  intraOpNumThreads: budget.intraOpNumThreads,
+  interOpNumThreads: 1,
+  extra: {
+    'session.intra_op.allow_spinning': budget.allowSpinning ? '1' : '0'
+  }
+})
+
 export class TransformersEmbeddingExecutor implements EmbeddingExecutor {
   private readonly modelsPath: string
   private readonly modelName: string
+  private threadBudget: EmbeddingThreadBudget
   private extractor: FeatureExtractor | null = null
   private initializationPromise: Promise<void> | null = null
 
-  public constructor(input: { modelsPath: string; modelName: string }) {
+  public constructor(input: {
+    modelsPath: string
+    modelName: string
+    threadBudget?: EmbeddingThreadBudget
+  }) {
     const modelsPath = String(input.modelsPath || '').trim()
     const modelName = String(input.modelName || '').trim()
     if (!modelsPath) throw new Error('embedding runtime modelsPath is required')
     if (!modelName) throw new Error('embedding runtime modelName is required')
     this.modelsPath = modelsPath
     this.modelName = modelName
+    this.threadBudget = input.threadBudget || resolveOrtThreadBudget('slow')
   }
 
   public async initialize(): Promise<void> {
@@ -54,9 +69,12 @@ export class TransformersEmbeddingExecutor implements EmbeddingExecutor {
       const createExtractor = pipeline as (
         task: string,
         model: string,
-        options: { dtype: 'fp32' }
+        options: { dtype: 'fp32'; session_options: ReturnType<typeof toSessionOptions> }
       ) => Promise<FeatureExtractor>
-      this.extractor = await createExtractor('feature-extraction', this.modelName, { dtype: 'fp32' })
+      this.extractor = await createExtractor('feature-extraction', this.modelName, {
+        dtype: 'fp32',
+        session_options: toSessionOptions(this.threadBudget)
+      })
     })().finally(() => {
       this.initializationPromise = null
     })

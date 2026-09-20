@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { buildModelToolResultDelivery } from '../../../../src/main/services/ai/human/shared/modelToolResult'
+import { buildModelToolResultDelivery } from '../../../../../src/main/services/ai/human/shared/modelToolResult'
 import {
   buildKbCapabilityTools,
   KB_INDEXING_IN_PROGRESS_ERROR
-} from '../../../../src/main/services/ai/human/tools/kb/retrievalTools'
-import type { AiRunContext, KnowledgeRetrievalContext } from '../../../../src/main/services/ai/types'
+} from '../../../../../src/main/services/ai/human/tools/kb/retrievalTools'
+import type { AiRunContext, KnowledgeRetrievalContext } from '../../../../../src/main/services/ai/types'
 
 const MODEL_FACING_INDEXING_ERROR = `Error: ${KB_INDEXING_IN_PROGRESS_ERROR}`
 

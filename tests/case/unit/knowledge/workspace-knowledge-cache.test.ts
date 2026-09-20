@@ -2,7 +2,7 @@ import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createWorkspaceKnowledgeCache } from '../../../src/main/services/workspace/WorkspaceKnowledgeCache'
+import { createWorkspaceKnowledgeCache } from '../../../../src/main/services/workspace/WorkspaceKnowledgeCache'
 
 const createdDirectories: string[] = []
 const originalEnabled = process.env.NCURATOR_WORKSPACE_KNOWLEDGE_CACHE

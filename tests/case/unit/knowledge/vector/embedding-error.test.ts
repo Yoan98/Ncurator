@@ -4,7 +4,7 @@ import {
   VC_RUNTIME_ERROR_MESSAGE,
   isVcRuntimeError,
   toEmbeddingInitializationMessage
-} from '../../../../src/main/services/vector/embeddingError'
+} from '../../../../../src/main/services/vector/embeddingError'
 
 describe('embeddingError', () => {
   it('recognizes VC++ runtime load failures', () => {

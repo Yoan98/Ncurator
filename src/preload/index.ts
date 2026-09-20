@@ -359,8 +359,8 @@ const api: DesktopApi = {
   presetModelsGet: (options) => ipcRenderer.invoke('preset-models-get', options),
   presetModelsRefresh: () => ipcRenderer.invoke('preset-models-refresh'),
   isE2EMode: () => isE2EObserverEnabled,
-  aiRuntimeSettingsGet: () => ipcRenderer.invoke('ai-runtime-settings-get'),
-  aiRuntimeSettingsSave: (settings) => ipcRenderer.invoke('ai-runtime-settings-save', settings),
+  appSettingsGet: () => ipcRenderer.invoke('app-settings-get'),
+  appSettingsSave: (settings) => ipcRenderer.invoke('app-settings-save', settings),
   errorLogOpenDirectory: () => {
     emitE2EIpcCall('errorLogOpenDirectory')
     return ipcRenderer.invoke('error-log-open-directory')

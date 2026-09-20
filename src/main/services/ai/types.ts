@@ -23,7 +23,6 @@ import type {
   AiExecutionPermission,
   AiPreference,
   AiRunFailureCode,
-  AiRuntimeSettings,
   AiRunEvent,
   AiRunEventStage,
   AiRunStatus,
@@ -293,7 +292,7 @@ export type BrowserUseService = {
 }
 
 export type AiRunDeps = {
-  runtimeSettings: AiRuntimeSettings
+  defaultStreamingMode?: AiLlmStreamingMode
   llmStore: LlmConfigStore
   partnerStore: PartnerStore
   chatMessageLogStore: ChatMessageLogStore

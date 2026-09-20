@@ -2,15 +2,15 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { afterEach, beforeEach, describe, it, vi } from 'vitest'
-import { EmbeddingService } from '../../../../src/main/services/vector/EmbeddingService'
-import { ModelService } from '../../../../src/main/services/model/ModelService'
-import { VectorModelDownloadService } from '../../../../src/main/services/model/VectorModelDownloadService'
+import { EmbeddingService } from '../../../../../src/main/services/vector/EmbeddingService'
+import { ModelService } from '../../../../../src/main/services/model/ModelService'
+import { VectorModelDownloadService } from '../../../../../src/main/services/model/VectorModelDownloadService'
 import type {
   ModelDownloadProgress,
   ModelDownloadProgressReporter
-} from '../../../../src/main/services/model/ModelService'
-import { runBackendCase } from '../../../harness/backend/run-backend-case'
-import { TransformersEmbeddingExecutor } from '../../../../src/main/services/vector/runtime/TransformersEmbeddingExecutor'
+} from '../../../../../src/main/services/model/ModelService'
+import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+import { TransformersEmbeddingExecutor } from '../../../../../src/main/services/vector/runtime/TransformersEmbeddingExecutor'
 
 const REPO_A = 'jinaai/jina-embeddings-v2-base-zh'
 const REPO_B = 'jinaai/jina-embeddings-v2-base-zh-secondary'
@@ -64,7 +64,8 @@ describe('unit vector download service contract', () => {
       caseId: 'vector-download-single-task-contract',
       harnessMode: 'tool-real',
       domain: 'unit',
-      suite: 'vector',
+      suite: 'knowledge',
+      groups: ['vector'],
       description: '向量模型下载在服务层只允许单任务进行，并对活跃任务持续上报进度字段。',
       fixtures: [],
       runMode: 'single',
@@ -178,7 +179,8 @@ describe('unit vector download service contract', () => {
       caseId: 'vector-download-delete-while-active-contract',
       harnessMode: 'tool-real',
       domain: 'unit',
-      suite: 'vector',
+      suite: 'knowledge',
+      groups: ['vector'],
       description:
         '下载中的向量模型允许删除：删除应中断活跃下载任务、收敛到取消态并移除模型文件，而不是返回 download in progress。',
       fixtures: [],
@@ -314,7 +316,8 @@ describe('unit vector download service contract', () => {
       caseId: 'vector-download-startup-resume-contract',
       harnessMode: 'tool-real',
       domain: 'unit',
-      suite: 'vector',
+      suite: 'knowledge',
+      groups: ['vector'],
       description:
         'When a persisted active download snapshot exists, vector model startup initialization resumes the download in the background and clears the snapshot after completion.',
       fixtures: [],

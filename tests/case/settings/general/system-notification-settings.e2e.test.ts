@@ -28,7 +28,7 @@ describe('settings system notification e2e', () => {
           await toggle.click()
           await page.waitForTimeout(100)
           const changed = await toggle.isChecked()
-          const settingsAfterSave = await page.evaluate(() => window.api.aiRuntimeSettingsGet())
+          const settingsAfterSave = await page.evaluate(() => window.api.appSettingsGet())
           await toggle.click()
           return { initial, changed, persisted: settingsAfterSave.systemNotificationsEnabled }
         },

@@ -14,7 +14,6 @@ import type { DocumentsStore } from '../storage/domains/DocumentsStore'
 import type { PartnerStore } from '../storage/domains/PartnerStore'
 import type { AiRunStore } from '../storage/domains/AiRunStore'
 import type { LlmConfigStore } from '../storage/domains/LlmConfigStore'
-import type { AiRuntimeSettingsStore } from '../storage/domains/AiRuntimeSettingsStore'
 import type { WorkspaceStore } from '../storage/domains/WorkspaceStore'
 import type { WorkspaceIndexJobStore } from '../storage/domains/WorkspaceIndexJobStore'
 import type { WebSourceStore } from '../storage/domains/WebSourceStore'
@@ -84,7 +83,6 @@ type ChatRunServiceDeps = {
   documentsStore: DocumentsStore
   embeddingService: EmbeddingService
   llmStore: LlmConfigStore
-  aiRuntimeSettingsStore: AiRuntimeSettingsStore
   workspaceStore: WorkspaceStore
   workspaceIndexJobStore: WorkspaceIndexJobStore
   webSourceStore: WebSourceStore
@@ -618,7 +616,6 @@ export class ChatRunService {
     })
 
     try {
-      const runtimeSettings = await this.deps.aiRuntimeSettingsStore.get()
       const result = await AiRunService.getInstance().run(
         {
           runId,
@@ -635,7 +632,6 @@ export class ChatRunService {
           workspaceRoots
         },
         {
-          runtimeSettings,
           llmStore: this.deps.llmStore,
           partnerStore: this.deps.partnerStore,
           chatMessageLogStore: this.deps.chatMessageLogStore,

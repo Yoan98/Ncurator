@@ -61,9 +61,7 @@ describe('ai human live backend', () => {
           const beforeHash = await fileHash(absolutePath)
           const runner = createHumanTestRunner(runtime, {
             selectedReferences: [reference],
-            runtimeSettingsOverride: {
-              llmStreamingMode: 'force_non_stream'
-            }
+            streamingModeOverride: 'force_non_stream'
           })
           const output = await runner.run({
             taskId: runtime.taskId,
@@ -143,9 +141,7 @@ describe('ai human live backend', () => {
           const beforeHash = await fileHash(absolutePath)
           const runner = createHumanTestRunner(runtime, {
             selectedReferences: [reference],
-            runtimeSettingsOverride: {
-              llmStreamingMode: 'force_non_stream'
-            }
+            streamingModeOverride: 'force_non_stream'
           })
           const output = await runner.run({
             taskId: runtime.taskId,

@@ -55,9 +55,7 @@ describe('ai unit llm executor text path', () => {
         sendEvent: (event) => events.push(event),
         recordLlmIo: (record) => llmIoRecords.push(record)
       },
-      runtimeSettings: {
-        llmStreamingMode: 'force_non_stream'
-      },
+      defaultStreamingMode: 'force_non_stream',
       getConfig: async () => baseConfig,
       saveConfig: async () => undefined,
       checkCancelled: () => undefined
@@ -103,7 +101,7 @@ describe('ai unit llm executor text path', () => {
     createChatModelMock.mockImplementation(() => ({ invoke }))
     const executor = createAiLlmExecutor({
       eventCtx: { runId: 'run-image-unsupported', sendEvent: () => undefined },
-      runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+      defaultStreamingMode: 'force_non_stream',
       getConfig: async () => baseConfig,
       saveConfig: async () => undefined,
       checkCancelled: () => undefined
@@ -142,7 +140,7 @@ describe('ai unit llm executor text path', () => {
         sendEvent: () => undefined,
         recordLlmIo: (record) => llmIoRecords.push(record)
       },
-      runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+      defaultStreamingMode: 'force_non_stream',
       getConfig: async () => baseConfig,
       saveConfig: async () => undefined,
       checkCancelled: () => undefined
@@ -186,7 +184,7 @@ describe('ai unit llm executor text path', () => {
         runId: 'run-driver',
         sendEvent: () => undefined
       },
-      runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+      defaultStreamingMode: 'force_non_stream',
       getConfig: async () => baseConfig,
       saveConfig,
       checkCancelled: () => undefined,
@@ -240,7 +238,7 @@ describe('ai unit llm executor text path', () => {
           runId: 'run-resource-exhausted-recovery',
           sendEvent: (event) => events.push(event)
         },
-        runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+        defaultStreamingMode: 'force_non_stream',
         getConfig: async () => baseConfig,
         saveConfig: async () => undefined,
         checkCancelled: () => undefined,
@@ -301,7 +299,7 @@ describe('ai unit llm executor text path', () => {
           runId: 'run-output-retry',
           sendEvent: () => undefined
         },
-        runtimeSettings: { llmStreamingMode: 'force_non_stream' },
+        defaultStreamingMode: 'force_non_stream',
         getConfig: async () => baseConfig,
         saveConfig: async () => undefined,
         checkCancelled: () => undefined,
@@ -350,9 +348,7 @@ describe('ai unit llm executor text path', () => {
         sendEvent: (event) => events.push(event),
         recordLlmIo: (record) => llmIoRecords.push(record)
       },
-      runtimeSettings: {
-        llmStreamingMode: 'force_stream'
-      },
+      defaultStreamingMode: 'force_stream',
       getConfig: async () => baseConfig,
       saveConfig: async () => undefined,
       checkCancelled: () => undefined,
@@ -423,9 +419,7 @@ describe('ai unit llm executor text path', () => {
         sendEvent: (event) => events.push(event),
         recordLlmIo: (record) => llmIoRecords.push(record)
       },
-      runtimeSettings: {
-        llmStreamingMode: 'force_stream'
-      },
+      defaultStreamingMode: 'force_stream',
       getConfig: async () => baseConfig,
       saveConfig: async () => undefined,
       checkCancelled: () => undefined
@@ -482,9 +476,7 @@ describe('ai unit llm executor text path', () => {
         runId: 'run-cancel',
         sendEvent: () => undefined
       },
-      runtimeSettings: {
-        llmStreamingMode: 'force_non_stream'
-      },
+      defaultStreamingMode: 'force_non_stream',
       getConfig: async () => baseConfig,
       saveConfig: async () => undefined,
       checkCancelled: () => undefined,
@@ -535,9 +527,7 @@ describe('ai unit llm executor text path', () => {
         runId: 'run-hanging-stream',
         sendEvent: () => undefined
       },
-      runtimeSettings: {
-        llmStreamingMode: 'force_stream'
-      },
+      defaultStreamingMode: 'force_stream',
       getConfig: async () => baseConfig,
       saveConfig: async () => undefined,
       checkCancelled: () => undefined,
@@ -585,9 +575,7 @@ describe('ai unit llm executor text path', () => {
         runId: 'run-silent-abort',
         sendEvent: () => undefined
       },
-      runtimeSettings: {
-        llmStreamingMode: 'force_stream'
-      },
+      defaultStreamingMode: 'force_stream',
       getConfig: async () => baseConfig,
       saveConfig: async () => undefined,
       checkCancelled: () => undefined,
@@ -631,9 +619,7 @@ describe('ai unit llm executor text path', () => {
         runId: 'run-timeout-prop',
         sendEvent: () => undefined
       },
-      runtimeSettings: {
-        llmStreamingMode: 'force_non_stream'
-      },
+      defaultStreamingMode: 'force_non_stream',
       getConfig: async () => baseConfig,
       saveConfig: async () => undefined,
       checkCancelled: () => undefined

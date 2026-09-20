@@ -3,9 +3,15 @@ export type EmbeddingResult = {
   dims: [number, number]
 }
 
+export type EmbeddingThreadBudget = {
+  intraOpNumThreads: number
+  allowSpinning: boolean
+}
+
 export type EmbeddingExecutor = {
   initialize: () => Promise<void>
   embed: (texts: string[]) => Promise<EmbeddingResult>
+  restart?: () => Promise<void>
   close?: () => Promise<void>
 }
 
@@ -13,7 +19,7 @@ export type EmbeddingRuntimeRequest =
   | {
       requestId: string
       action: 'initialize'
-      payload: null
+      payload: EmbeddingThreadBudget | null
     }
   | {
       requestId: string

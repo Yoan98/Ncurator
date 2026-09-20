@@ -14,6 +14,7 @@ import { dropLlmStrategyPreferenceMigration } from './migrations/008_drop_llm_st
 import { repairAiRuntimeSystemNotificationsColumnMigration } from './migrations/009_repair_ai_runtime_system_notifications_column'
 import { upgradeFromV9Migration } from './migrations/010_upgrade_from_v9'
 import { dropTerminalFileChangeRecordsMigration } from './migrations/011_drop_terminal_file_change_records'
+import { appSettingsMigration } from './migrations/012_app_settings'
 
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
@@ -29,10 +30,11 @@ const MIGRATIONS: readonly Migration[] = [
   dropLlmStrategyPreferenceMigration,
   repairAiRuntimeSystemNotificationsColumnMigration,
   upgradeFromV9Migration,
-  dropTerminalFileChangeRecordsMigration
+  dropTerminalFileChangeRecordsMigration,
+  appSettingsMigration
 ]
 
-export const CURRENT_SCHEMA_VERSION = 11
+export const CURRENT_SCHEMA_VERSION = 12
 
 const MIGRATION_NAME_ALIASES = new Map<number, ReadonlySet<string>>([
   [2, new Set(['workspace_change_sets'])]

@@ -43,7 +43,7 @@ describe('ai human live backend', () => {
           const sourceText = await readDocxText(reference.absolutePath || '')
           const runner = createHumanTestRunner(runtime, {
             selectedReferences: [reference],
-            runtimeSettingsOverride: { llmStreamingMode: 'force_non_stream' }
+            streamingModeOverride: 'force_non_stream'
           })
           const output = await runner.run({ taskId: runtime.taskId, userInput: USER_INPUT })
           const applyRecord = (await runtime.docxApplyStore.listRecords()).items.find(

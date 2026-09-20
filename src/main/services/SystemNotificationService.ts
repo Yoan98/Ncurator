@@ -1,6 +1,6 @@
 import { BrowserWindow, Notification } from 'electron'
 import type { AiRunRecord, AiRunStatus } from '../../shared/types'
-import type { AiRuntimeSettingsStore } from './storage/domains/AiRuntimeSettingsStore'
+import type { AppSettingsStore } from './storage/domains/AppSettingsStore'
 
 export type RunTerminalStatus = Extract<AiRunStatus, 'completed' | 'failed' | 'cancelled'>
 
@@ -10,7 +10,7 @@ type NotificationLike = {
 }
 
 type SystemNotificationServiceDeps = {
-  settingsStore: AiRuntimeSettingsStore
+  settingsStore: AppSettingsStore
   getMainWindow: () => BrowserWindow | null
   createMainWindow?: () => BrowserWindow
   createNotification?: (options: Electron.NotificationConstructorOptions) => NotificationLike

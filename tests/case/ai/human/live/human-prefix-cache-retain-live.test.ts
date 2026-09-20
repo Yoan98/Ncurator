@@ -64,10 +64,8 @@ const toolsHashStable = (reuse: ContinuationPrefixCacheReuse): boolean => {
 
 const buildAiRunDeps = async (runtime: BackendTestRuntime): Promise<AiRunDeps> => {
   const controller = new AbortController()
-  const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
   const aiFileChangeService = new AiFileChangeService(runtime.storageService.aiFileChange)
   return {
-    runtimeSettings,
     llmStore: runtime.llmStore,
     chatStore: runtime.chatStore,
     documentsStore: runtime.documentsStore,

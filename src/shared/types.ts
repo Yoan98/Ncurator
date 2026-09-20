@@ -485,6 +485,7 @@ export interface DocumentListResponse {
 // Chat & LLM Types
 
 export type AiLlmStreamingMode = 'force_stream' | 'force_non_stream'
+export type KnowledgeIndexSpeed = 'slow' | 'fast'
 export type LlmProviderKind = 'openai' | 'deepseek' | 'openai-compatible'
 export type LlmProviderId =
   | 'deepseek'
@@ -1160,9 +1161,9 @@ export type AiLlmIoRecord = {
 export type HumanStepAction = 'brain_decision' | 'learn_skill' | 'call_tool' | 'deliver_result'
 export type HumanStepResultStatus = 'ok' | 'error'
 
-export type AiRuntimeSettings = {
-  llmStreamingMode: AiLlmStreamingMode
+export type AppSettings = {
   systemNotificationsEnabled: boolean
+  knowledgeIndexSpeed: KnowledgeIndexSpeed
 }
 
 export type AiFileArtifactCapability = 'docx' | 'ppt' | 'excel' | 'text_file' | 'image'

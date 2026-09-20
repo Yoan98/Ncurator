@@ -19,7 +19,7 @@ import { ensureEmbeddingReady } from '../../../src/main/services/vector/ensureEm
 import { WorkspaceKnowledgePrepareService } from '../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
 import { WorkspaceSourceService } from '../../../src/main/services/workspace/WorkspaceSourceService'
 import { getModelsPath } from '../../../src/main/utils/paths'
-import type { AiRuntimeSettings } from '../../../src/shared/types'
+import type { AiLlmStreamingMode } from '../../../src/shared/types'
 import type { BackendHarnessMode, CreateAiRunContextInput, LiveLlmConfig } from './test-types'
 import type { EventCollector } from '../core/eventCollector'
 import { loadLiveLlmConfigFromEnv } from './llmConfig'
@@ -32,10 +32,6 @@ const SCRIPTED_LLM_CONFIG: LiveLlmConfig = {
   base_url: 'https://scripted.local/v1',
   model_name: 'scripted-llm',
   api_key: 'scripted'
-}
-
-const DEFAULT_RUNTIME_SETTINGS: AiRuntimeSettings = {
-  llmStreamingMode: 'force_stream'
 }
 
 const resolveRuntimeModelName = (input: {
@@ -155,10 +151,8 @@ export const createRealAiDepsFactory = async (input: {
 
     const bindWorkspace = contextInput.bindWorkspace !== false
     const approvalResolver = buildApprovalResolver(contextInput.approvalPolicy)
-    const runtimeSettings: AiRuntimeSettings = {
-      ...DEFAULT_RUNTIME_SETTINGS,
-      ...contextInput.runtimeSettingsOverride
-    }
+    const defaultStreamingMode: AiLlmStreamingMode | undefined =
+      contextInput.streamingModeOverride
 
     const partnerId = contextInput.partnerId || contextInput.sessionId || 'test-partner'
     terminalSessionIds.add(partnerId)
@@ -203,7 +197,7 @@ export const createRealAiDepsFactory = async (input: {
         workspaceRoots: bindWorkspace ? [input.workspaceRoot] : []
       },
       {
-        runtimeSettings,
+        defaultStreamingMode,
         llmStore: storageService.llm,
         partnerStore: storageService.partner,
         chatMessageLogStore: storageService.chatMessageLog,

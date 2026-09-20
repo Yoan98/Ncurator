@@ -73,7 +73,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       recordLlmIo: deps.recordLlmIo,
       abortSignal: deps.abortSignal
     },
-    runtimeSettings: deps.runtimeSettings,
+    defaultStreamingMode: deps.defaultStreamingMode,
     getConfig: loadRequestedConfig,
     saveConfig: async () => undefined,
     checkCancelled,

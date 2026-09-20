@@ -118,7 +118,7 @@ describe('SQLite migration contract', () => {
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
-    expect(migrationRows.at(-1)).toEqual({ version: 11, name: 'drop_terminal_file_change_records' })
+    expect(migrationRows.at(-1)).toEqual({ version: 12, name: 'app_settings' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -208,9 +208,10 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const current = new SqliteCore(databasePath)
     current.initialize()
+    const futureVersion = CURRENT_SCHEMA_VERSION + 1
     current
       .prepare('INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)')
-      .run(12, 'future_schema', 1)
+      .run(futureVersion, 'future_schema', 1)
     current.close()
 
     const sqlite = new SqliteCore(databasePath)
@@ -221,15 +222,18 @@ describe('SQLite migration contract', () => {
       thrown = error
     }
     expect(thrown).toBeInstanceOf(DatabaseVersionTooNewError)
-    expect(thrown).toMatchObject({ databaseVersion: 12, supportedDatabaseVersion: 11 })
+    expect(thrown).toMatchObject({
+      databaseVersion: futureVersion,
+      supportedDatabaseVersion: CURRENT_SCHEMA_VERSION
+    })
 
     const inspected = openRawDatabase(databasePath)
     const rows = inspected
       .prepare('SELECT version, name FROM schema_migrations ORDER BY version')
       .all()
     inspected.close()
-    expect(rows.at(-1)).toEqual({ version: 12, name: 'future_schema' })
-    expect(rows).toHaveLength(12)
+    expect(rows.at(-1)).toEqual({ version: futureVersion, name: 'future_schema' })
+    expect(rows).toHaveLength(futureVersion)
   })
 
   it('accepts the known version 2 alias and rejects unknown names or gaps', async () => {
@@ -269,7 +273,8 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const prepared = new SqliteCore(databasePath)
     prepared.initialize()
-    prepared.prepare('DELETE FROM schema_migrations WHERE version = 11').run()
+    prepared.prepare('DELETE FROM schema_migrations WHERE version >= 11').run()
+    prepared.exec('DROP TABLE IF EXISTS app_settings')
     prepared
       .prepare(
         `INSERT INTO partner (

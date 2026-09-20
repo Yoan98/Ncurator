@@ -7,6 +7,7 @@ import { registerHandlers, registerOpenExternalHandler } from './ipc/handlers'
 import { IngestionService } from './services/ingestion/loader'
 import { DEFAULT_EMBEDDING_MODEL_NAME, EmbeddingService } from './services/vector/EmbeddingService'
 import { EmbeddingRuntimeClient } from './services/vector/runtime/EmbeddingRuntimeClient'
+import { resolveOrtThreadBudget } from './services/vector/indexSpeed'
 import { StorageService } from './services/storage/StorageService'
 import { ModelService } from './services/model/ModelService'
 import { VectorModelDownloadService } from './services/model/VectorModelDownloadService'
@@ -342,6 +343,8 @@ if (!singleInstanceLock) {
 
     console.log('Starting background initialization of services...')
     await storageService.initialize()
+    const appSettings = await storageService.appSettings.get()
+    embeddingRuntimeClient.setThreadBudget(resolveOrtThreadBudget(appSettings.knowledgeIndexSpeed))
     embeddingService.initialize().catch((err) => {
       console.error('Failed to initialize EmbeddingService:', err)
       errorLogService.write({
@@ -360,7 +363,7 @@ if (!singleInstanceLock) {
       })
     })
     const systemNotificationService = new SystemNotificationService({
-      settingsStore: storageService.aiRuntimeSettings,
+      settingsStore: storageService.appSettings,
       getMainWindow: () => BrowserWindow.getAllWindows()[0] || null,
       createMainWindow: () => createWindow(),
       notificationIcon: icon

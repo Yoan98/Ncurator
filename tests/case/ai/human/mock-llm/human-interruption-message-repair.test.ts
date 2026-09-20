@@ -17,10 +17,8 @@ const buildDeps = async (input: {
   controller: AbortController
   chatToolsWrapper?: AiRunDeps['chatToolsWrapper']
 }): Promise<AiRunDeps> => {
-  const runtimeSettings = await input.runtime.storageService.aiRuntimeSettings.get()
   const aiFileChangeService = new AiFileChangeService(input.runtime.storageService.aiFileChange)
   return {
-    runtimeSettings,
     llmStore: input.runtime.llmStore,
     chatStore: input.runtime.chatStore,
     chatMessageLogStore: input.runtime.storageService.chatMessageLog,

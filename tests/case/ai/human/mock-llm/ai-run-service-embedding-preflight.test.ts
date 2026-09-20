@@ -47,7 +47,6 @@ describe('ai human mock-llm backend', () => {
 
         let ensureReadyCalls = 0
         const initialEmbeddingStatus = runtime.embeddingService.getStatus()
-        const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
         const aiFileChangeService = new AiFileChangeService(runtime.storageService.aiFileChange)
         const result = await AiRunService.getInstance().run(
           {
@@ -62,7 +61,6 @@ describe('ai human mock-llm backend', () => {
             workspaceRoots: [runtime.workspaceRoot]
           },
           {
-            runtimeSettings,
             llmStore: runtime.llmStore,
             partnerStore: runtime.chatStore,
             chatMessageLogStore: runtime.storageService.chatMessageLog,
@@ -158,7 +156,6 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
         const aiFileChangeService = new AiFileChangeService(runtime.storageService.aiFileChange)
         const result = await AiRunService.getInstance().run(
           {
@@ -173,7 +170,6 @@ describe('ai human mock-llm backend', () => {
             workspaceRoots: [runtime.workspaceRoot]
           },
           {
-            runtimeSettings,
             llmStore: runtime.llmStore,
             partnerStore: runtime.chatStore,
             chatMessageLogStore: runtime.storageService.chatMessageLog,

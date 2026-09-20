@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { createEmbeddingRuntimeDispatcher } from '../../../../src/main/services/vector/runtime/embeddingRuntimeProcess'
+import { createEmbeddingRuntimeDispatcher } from '../../../../../src/main/services/vector/runtime/embeddingRuntimeProcess'
 import type {
   EmbeddingExecutor,
   EmbeddingRuntimeRequest,
   EmbeddingRuntimeResponse
-} from '../../../../src/main/services/vector/runtime/types'
+} from '../../../../../src/main/services/vector/runtime/types'
 
 describe('embedding runtime contract', () => {
   it('serializes every inference request through one executor', async () => {

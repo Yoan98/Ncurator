@@ -84,9 +84,7 @@ describe('ai human live backend', () => {
         )
 
         const runner = createHumanTestRunner(runtime, {
-          runtimeSettingsOverride: {
-            llmStreamingMode: 'force_non_stream'
-          }
+          streamingModeOverride: 'force_non_stream'
         })
         const output = await runner.run({
           taskId: runtime.taskId,

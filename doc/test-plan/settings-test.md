@@ -19,7 +19,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除，以及预设服务商与自定义配置的类型、锁定和去重语义。
 - `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为，以及错误日志目录入口；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
-- `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。
+- `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。索引速度档位的线程公式与多地址顺序由 `knowledge-test` unit 覆盖，不在本计划重复测算力。
 - `vector` 属于 Settings 产品域，页面路由为 `/settings/vector`（`/model-download` 仅为历史重定向），测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
 - `workspace` 是 Settings 下的 suite，按 `core / files / web` 组织，语义为“文件地址 + 文件 tab + 全局网页 tab”，不是具名容器。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。
@@ -124,7 +124,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - Why：“索引已经可用”的核心用户反馈链路。
 - How：复制共享 workspace 输入的隔离副本，通过 Settings UI 添加为文件地址；随后点击更新索引，读取刷新后的文件树和全部支持文件状态。共享 fixture 含 `.doc`、`docx`、`pdf`、`md`、`txt`、`xlsx`、`xlsm` 等全部受支持类型，其中 excel 只以元数据方式索引进库。
 - Oracle：更新索引过程中出现持久化总进度，且检查更新/更新索引按钮保持可用，对齐 `SET-WORKSPACE-004-AC3`；运行期间目录读取次数为 0，终态只刷新一次且不因逐文件完成而闪烁或折叠，对齐 `SET-WORKSPACE-004-AC7`；共享 fixture 中全部支持文件真实进入处理范围，对齐 `SET-WORKSPACE-004-AC1`；更新后所有支持文件收敛为 `indexed / failed`，摘要和节点状态同步刷新，对齐 `SET-WORKSPACE-004-AC2`。
-- Not：不验证向量内容质量和搜索召回结果。更新索引执行中 Workbench `kb_search` / `kb_list_documents` 返回错误、检查更新不拦截，由 unit `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`。
+- Not：不验证向量内容质量和搜索召回结果。更新索引执行中 Workbench `kb_search` / `kb_list_documents` 返回错误、检查更新不拦截，由 knowledge unit `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`。多地址顺序执行由 knowledge unit 覆盖 `SET-WORKSPACE-004-AC11`。索引速度档位 UI 与线程预算由 `SET-WORKSPACE-009` / knowledge-test 覆盖。
 
 #### `workspace-prepare-failed-retry`
 
@@ -274,7 +274,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e`
 - What：通用设置中的 AI 运行完成通知开关可以关闭，并通过真实 IPC 持久化。
 - Why：通知是跨进程能力，开关状态必须由主进程保存，不能只停留在 Renderer 内存。
-- How：通过 Settings UI 打开通用页，关闭开关，重新读取 `ai-runtime-settings-get`，再恢复开关。
+- How：通过 Settings UI 打开通用页，关闭开关，重新读取 `app-settings-get`，再恢复开关。
 - Oracle：开关默认开启，关闭后 UI 与主进程设置均为关闭，对齐 `SET-GENERAL-001-AC1`、`SET-GENERAL-001-AC3`。
 - Not：自动化不伪造通知对象、终态或点击事件；系统通知展示和点击导航保留为发布前真实人工检查。
 

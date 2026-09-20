@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { EmbeddingService, type EmbeddingExecutor } from '../../../../src/main/services/vector/EmbeddingService'
+import { EmbeddingService, type EmbeddingExecutor } from '../../../../../src/main/services/vector/EmbeddingService'
 
 const result = {
   data: new Float32Array([1, 2]),

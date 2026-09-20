@@ -2,7 +2,7 @@ import type { ModelSource } from '../shared/modelSources'
 import type { FreeModelsSnapshot } from '../shared/freeModels'
 import type { PresetModelsSnapshot } from '../shared/llmPresets'
 import type {
-  AiRuntimeSettings,
+  AppSettings,
   BrowserPanelBoundsRequest,
   BrowserPanelFollowRequest,
   BrowserPanelHideRequest,
@@ -269,10 +269,10 @@ export type DesktopApi = {
     error?: string
   }>
   isE2EMode: () => boolean
-  aiRuntimeSettingsGet: () => Promise<AiRuntimeSettings>
-  aiRuntimeSettingsSave: (
-    settings: AiRuntimeSettings
-  ) => Promise<{ success: boolean; settings?: AiRuntimeSettings; error?: string }>
+  appSettingsGet: () => Promise<AppSettings>
+  appSettingsSave: (
+    settings: AppSettings
+  ) => Promise<{ success: boolean; settings?: AppSettings; error?: string }>
   errorLogOpenDirectory: () => Promise<{ success: boolean; error?: string }>
   aiRunCancel: (runId: string) => Promise<AiRunCancelResponse>
   aiRunApprovalBatchDecide: (

@@ -24,7 +24,6 @@ describe('ai human mock-llm backend', () => {
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
-        const runtimeSettings = await runtime.storageService.aiRuntimeSettings.get()
         const aiFileChangeService = new AiFileChangeService(runtime.storageService.aiFileChange)
         await runtime.chatStore.savePartner({
           id: 'human-only-session',
@@ -50,7 +49,6 @@ describe('ai human mock-llm backend', () => {
             workspaceRoots: [runtime.workspaceRoot]
           },
           {
-            runtimeSettings,
             llmStore: runtime.llmStore,
             partnerStore: runtime.chatStore,
             chatMessageLogStore: runtime.storageService.chatMessageLog,

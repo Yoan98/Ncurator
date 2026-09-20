@@ -18,7 +18,7 @@ const config: LlmRuntimeConfig = {
 const run = async (driver: AiLlmDriver) => {
   const executor = createAiLlmExecutor({
     eventCtx: { runId: 'run-1', sendEvent: () => undefined },
-    runtimeSettings: { llmStreamingMode: 'force_stream' },
+    defaultStreamingMode: 'force_stream',
     getConfig: async () => config,
     saveConfig: async () => undefined,
     checkCancelled: () => undefined,

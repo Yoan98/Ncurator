@@ -16,7 +16,6 @@ import { resolveLlmProviderKind } from '../../../shared/llmProvider'
 import type {
   AiLlmUsage,
   AiLlmStreamingMode,
-  AiRuntimeSettings,
   BrainContextBudgetSnapshot,
   JsonObject,
   LLMConfig,
@@ -210,8 +209,8 @@ export type AiLlmExecutor = {
   chatTools: (input: AiLlmToolCallRequest) => Promise<AiLlmToolCallResult>
 }
 
-const resolveStreamingMode = (settings: AiRuntimeSettings): AiLlmStreamingMode =>
-  settings.llmStreamingMode === 'force_non_stream' ? 'force_non_stream' : 'force_stream'
+const resolveStreamingMode = (mode?: AiLlmStreamingMode): AiLlmStreamingMode =>
+  mode === 'force_non_stream' ? 'force_non_stream' : 'force_stream'
 
 const buildMessages = (system: string, user: string): Array<SystemMessage | HumanMessage> => [
   new SystemMessage(system),
@@ -748,14 +747,14 @@ const invokeToolCallingCore = async (input: {
 
 export const createAiLlmExecutor = (input: {
   eventCtx: AiEventDispatchContext
-  runtimeSettings: AiRuntimeSettings
+  defaultStreamingMode?: AiLlmStreamingMode
   getConfig: () => Promise<LlmRuntimeConfig>
   saveConfig: (cfg: LlmRuntimeConfig) => Promise<void>
   checkCancelled: () => void
   abortSignal?: AbortSignal
   driver?: AiLlmDriver
 }): AiLlmExecutor => {
-  const defaultStreamingMode = resolveStreamingMode(input.runtimeSettings)
+  const defaultStreamingMode = resolveStreamingMode(input.defaultStreamingMode)
 
   return {
     chatStructured: async <T extends Record<string, unknown>>(

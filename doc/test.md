@@ -4,7 +4,7 @@
 
 - 本文是 NCurator-Desktop 的唯一测试总规范。
 - 各业务域的 suite、case 和领域规则只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case。
-- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑；`showcase` 是独立官网样例采集，不进入领域测试计划。
+- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`knowledge-test` 专门覆盖知识库基础设施（嵌入、索引调度、存储与检索基建），当前以 unit 为主；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑；`showcase` 是独立官网样例采集，不进入领域测试计划。
 
 测试体系只沉淀一层长期执行产物：
 
@@ -22,12 +22,13 @@
 - `unit`
   - 放在 `tests/case/unit/**`。
   - 全部是 backend 单元测试，不允许导入 Renderer、React、jsdom 或 Electron UI。
-  - 不进入 `doc/test-plan/**`，由 unit runner 独立发现和执行。
+  - 默认不进入 `doc/test-plan/**`，由 unit runner 独立发现和执行。
+  - `knowledge-test` 是例外：知识库 unit 登记在该计划中，代码仍放 `tests/case/unit/knowledge/**`。
 - `showcase`
   - 放在 `tests/case/showcase/**`，文件后缀 `.showcase.test.ts`。
   - 独立官网样例采集，走真实 E2E 链路，用 `pnpm test:showcase` 单独执行。
   - 这个是大概率不维护的，需要用也只会单独执行，基本忽略即可。
-- 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Settings、Workbench、Showcase 或 Unit。
+- 不落测试文件的排查不属于测试文档治理对象；新增测试文件前必须先确认归入 AI、Knowledge、Settings、Workbench、Showcase 或 Unit。
 
 ### 2.2 目录结构
 
@@ -52,7 +53,7 @@ tests/
 - `suite` 是第一层稳定分类；`groups...` 是 suite 下可选的子目录。
 - 各测试 domain 的 `suite` 列表与归属，只在对应 `doc/test-plan/**` 中定义。
 - 当某个 `suite` 不需要继续细分时，测试 case 可以直接放在该 `suite` 目录下。
-- `tests/case/{ai,settings,unit,workbench,showcase}/**` 只允许放已在 `doc/test-plan/**` 登记的正式测试 case（`unit`、`showcase` 例外，不进入测试计划）。
+- `tests/case/{ai,settings,unit,workbench,showcase}/**` 只允许放已在 `doc/test-plan/**` 登记的正式测试 case。`showcase` 不进入测试计划；`unit` 除 `knowledge/` 外不进入测试计划，`knowledge-test` 登记 `tests/case/unit/knowledge/**`。
 - `tests/fixtures/workspace/` 是共享工作区 fixture 根目录；凡是依赖“工作区里有什么文件”的测试，以及 backend/unit 直接引用的固定文件输入，统一复用该目录。
 - `tests/fixtures/sqlite/` 放数据库迁移 fixture。
 - `tests/fixtures/**` 全部是只读测试输入：测试禁止对其中任何文件原地写入、覆盖或修改；需要写入时，必须通过 `fixtures: []` 声明由 runner/harness 复制到隔离临时 workspace（或按 E2E 规则复制到临时目录），测完删除。fixture 需要更新时直接提交新二进制，禁止引入任何 fixture 生成器脚本（生成器不得以 `.test.ts` 形态进入 `tests/case/**` 自动发现）。
@@ -68,7 +69,7 @@ tests/
 
 - 新增任何测试文件前，必须先与用户确认目标分类。
 - `doc/test-plan/**` 是测试 case 的唯一规格来源；新增、修改或补齐测试 case 时，必须先更新对应测试计划，再修改测试代码。
-- `tests/case/<domain>/**` 只能放已登记的测试 case；`tests/case/unit/**` 不进入领域测试计划，但仍必须满足 Unit backend 边界。
+- `tests/case/<domain>/**` 只能放已登记的测试 case；`tests/case/unit/**` 默认不进入领域测试计划，但仍必须满足 Unit backend 边界。`tests/case/unit/knowledge/**` 由 `knowledge-test` 登记。
 - 每个测试 `caseId` 都必须稳定映射到唯一测试定义与唯一日志目录。一个测试文件可以承载多个紧密相关的 case，但 `--case <caseId>` 必须能只执行目标 case。
 
 ### 3.2 测试 case 共享字段

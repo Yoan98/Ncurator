@@ -1,6 +1,6 @@
-# NCurator-Desktop 数据库架构
+# NCurator-Desktop 数据库设计
 
-本文说明项目的本地存储边界、SQLite 与 LanceDB 的职责关系，以及索引一致性规则。具体表字段和查询细节以 migration、Store 和测试为准。
+本文说明项目的本地存储边界、SQLite 与 LanceDB 的职责关系，以及索引一致性规则。当前表名、字段与类型见 [`tables.md`](tables.md)。历史 migration 源码以 `src/main/services/storage/sqlite/migrations/**` 为准。
 
 ## 总体原则
 
@@ -25,7 +25,7 @@ SQLite 保存以下业务数据：
 - AI run、审批和文件修改记录（均挂 `partner_id`）。
 - 消息中的图片只保存运行时路径或 HTTP(S) 地址，以及 MIME、字节数和尺寸；SQLite 不保存 Base64，也不为临时图片建立独立文件表。运行时文件被清理后允许恢复为不可用占位。
 - 工作地址（`workspace_source`，无 name，`root_path UNIQUE`）、逐文件索引记录（`workspace_file_index`）、索引任务（`workspace_index_job`）、文档元数据和全局网页源（`web_source`，无 `workspace_id`，`UNIQUE(normalized_url)`）。
-- LLM 配置、AI runtime 设置，以及其中的 `systemNotificationsEnabled`（默认 `1`，控制 AI 运行终态系统通知）。
+- LLM 配置（`llm_config`）与全局偏好（`app_settings`：系统通知、知识库索引速度）。
 - 文件内容和预览 artifact 的 SHA-256 对象引用；实际对象保存在 `userData/partners/{id}/objects/sha256/<前 2 位>/<其余>`，相同内容只存一份。
 - Workbench 伙伴 UI 快照（`partner_ui_state`）、当前活动伙伴（`workbench_ui_state.active_view_key`）和内置浏览器标签状态（`browser_tab_state.owner_key` = partner_id）。
 - 定时任务（`scheduled_task.partner_id` 绑定专属伙伴，未绑定时写空字符串而非 SQL NULL，到点或立即执行时再创建并回写；无外键 CASCADE；`busy_cancel_notice_at` 记录因占用取消的待展示提示）。
@@ -50,10 +50,11 @@ SQLite 保存以下业务数据：
 
 ### 当前边界
 
-- 当前代码支持的最终 schema version 是 `11`，由 `CURRENT_SCHEMA_VERSION` 定义。
+- 当前代码支持的最终 schema version 是 `12`，由 `CURRENT_SCHEMA_VERSION` 定义。
 - 已随正式版发布的 migration 永久保留且不可改写，发布边界以 `src/main/services/storage/sqlite/migrations/released-migrations.json` 为准。已知历史例外只有 version 2 的旧名称 `workspace_change_sets`；version 9 继续负责修复通知字段。
-- version `10` 是破坏性升级，不迁旧数据。`upgrade_from_v9` 从 v9 升级时 DROP 旧表再建最终结构：新增 `partner`；删除 `chat_session`、`chat_session_ui_state`（以及 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event`、`chat_session_skill_state`、`chat_message`）；`chat_session_message_log` / `ai_run` / `ai_file_change` / `docx_apply` 改挂 `partner_id`；新增 `partner_ui_state`；`workbench_ui_state` 只留 `active_view_key`，删除 `draft_state_json`；`scheduled_task` 改挂 `partner_id`（无外键 CASCADE，专属伙伴删除后任务可保留并由服务重建），并含 `busy_cancel_notice_at`；`workspace_source` 去掉 name 且 `root_path UNIQUE`；`web_source` 去掉 `workspace_id` 且 `UNIQUE(normalized_url)`；`ai_run` 不再保存 `workspace_json`，并含 `failure_raw_message`（失败原文，与短标题 `error` / `failure_code` 分离）。新增 `schema_migration_hooks`，供版本声明提交后副作用。v10 的 `afterCommit` 在 SQLite 事务提交后、LanceDB 连接前删除 `userData/lancedb`；hook 记 `pending/done`，失败可重试，`done` 后不重跑。空库仍执行 version `1–11`，跑完后结构与 v9 升级路径一致。
+- version `10` 是破坏性升级，不迁旧数据。`upgrade_from_v9` 从 v9 升级时 DROP 旧表再建最终结构：新增 `partner`；删除 `chat_session`、`chat_session_ui_state`（以及 `chat_conversation_memory`、`chat_session_resume_snapshot`、`ai_run_event`、`chat_session_skill_state`、`chat_message`）；`chat_session_message_log` / `ai_run` / `ai_file_change` / `docx_apply` 改挂 `partner_id`；新增 `partner_ui_state`；`workbench_ui_state` 只留 `active_view_key`，删除 `draft_state_json`；`scheduled_task` 改挂 `partner_id`（无外键 CASCADE，专属伙伴删除后任务可保留并由服务重建），并含 `busy_cancel_notice_at`；`workspace_source` 去掉 name 且 `root_path UNIQUE`；`web_source` 去掉 `workspace_id` 且 `UNIQUE(normalized_url)`；`ai_run` 不再保存 `workspace_json`，并含 `failure_raw_message`（失败原文，与短标题 `error` / `failure_code` 分离）。新增 `schema_migration_hooks`，供版本声明提交后副作用。v10 的 `afterCommit` 在 SQLite 事务提交后、LanceDB 连接前删除 `userData/lancedb`；hook 记 `pending/done`，失败可重试，`done` 后不重跑。空库仍执行 version `1–12`，跑完后结构与 v9 升级路径一致。
 - version `11` 不改表结构，只删除 `ai_file_change` 中 `source` 为 `terminal_tool` / `workspace_scan` 或 `capability` 为 `terminal_exec` 的行。终端不再产生修改记录。
+- version `12` 用 `app_settings` 替换 `ai_runtime_settings`：保留系统通知开关，新增知识库索引速度 `knowledge_index_speed`（默认 `slow`），删除 `llmStreamingMode` 与 `updated_at`。
 - 哪些 migration 已正式发布，以 `src/main/services/storage/sqlite/migrations/released-migrations.json` 为唯一边界。未进入清单的连续迁移可以在发布前合并或重写；进入清单后只能新增更高版本修复。
 
 ### 版本身份与执行规则

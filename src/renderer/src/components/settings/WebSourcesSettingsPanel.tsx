@@ -17,6 +17,7 @@ import { importSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import StatusTag from './StatusTag'
 import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
+import { KnowledgeIndexSpeedControl } from './KnowledgeIndexSpeedControl'
 import { formatDateTime, getWebStatusBadge } from './utils/workspace'
 
 type WebSourcesSettingsPanelProps = {
@@ -260,6 +261,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
             </div>
           </div>
 
+          <KnowledgeIndexSpeedControl />
           <div className="mt-4 grid grid-cols-2 gap-2">
             <Button
               icon={<HiArrowPath className="h-4 w-4" />}

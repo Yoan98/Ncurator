@@ -7,7 +7,8 @@
 - `doc/architecture.md`：项目整体架构、模块关系、领域能力概要。
 - `doc/ai-harness/human-harness.md`：human graph 消息、投影、范围判定、compaction、resume、brain 上下文。
 - `doc/ai-harness/tool-design.md`：工具 schema、modelResult、统一投递管道。
-- `doc/database.md`：涉及 SQLite、LanceDB、索引、持久化关系或数据库结构时阅读。
+- `doc/db/design.md`：涉及 SQLite、LanceDB、索引、持久化关系或数据库设计时阅读。
+- `doc/db/tables.md`：涉及当前 SQLite / LanceDB 表名、作用或字段时阅读。
 
 ### 1.2 项目整体相关
 
@@ -23,6 +24,7 @@
 ### 1.4 测试相关
 
 - `doc/test-plan/ai-test.md`：涉及 AI 回归测试范围、live case 设计或 suite 覆盖维护时阅读。
+- `doc/test-plan/knowledge-test.md`：涉及知识库专项（嵌入线程、索引调度、存储与检索基建）时阅读。
 - `doc/test-plan/settings-test.md`：涉及 Settings 测试范围或测试边界时阅读。
 - `doc/test-plan/workbench-test.md`：涉及 Workbench 回归测试范围、真实 e2e case 设计、发送前置条件验证或 suite 覆盖维护时阅读。
 - `doc/test.md`：涉及测试体系、UI E2E 回归规则、runner 或回归测试流程时阅读。
@@ -44,7 +46,9 @@
 │   ├── ai-harness/                   # AI human harness 与工具契约
 │   │   ├── human-harness.md          # 消息、投影、范围判定、compaction、resume
 │   │   └── tool-design.md            # 工具 schema 与结果投递
-│   ├── database.md                   # SQLite 与 LanceDB 存储说明
+│   ├── db/                           # 数据库设计与表目录
+│   │   ├── design.md                 # SQLite 与 LanceDB 存储设计
+│   │   └── tables.md                 # 当前表名、作用与字段
 │   ├── deploy/                       # 发布与部署
 │   │   ├── release.md                # 发版操作流程（AI 遵循）
 │   │   ├── design.md                 # 构建、对象存储与更新通道设计
@@ -57,6 +61,7 @@
 │   │   └── workbench.md              # Workbench 产品需求（含定时任务）
 │   ├── test-plan/                    # 专项测试计划
 │   │   ├── ai-test.md                # AI 回归测试计划
+│   │   ├── knowledge-test.md         # 知识库专项测试计划
 │   │   ├── settings-test.md          # Settings 测试计划
 │   │   └── workbench-test.md         # Workbench 测试计划
 │   └── tidy.md                       # 周期性文档、测试与代码整理流程

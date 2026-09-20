@@ -18,6 +18,7 @@ import type { WorkspaceKnowledgePrepareService } from '../../../src/main/service
 import type { WebCrawlerService } from '../../../src/main/services/webCrawler/types'
 import type {
   ChatMessage,
+  AiLlmStreamingMode,
   AiLlmUsage,
   JsonObject,
   JsonValue,
@@ -165,7 +166,7 @@ export type CreateAiRunContextInput = {
   runId?: string
   userInput?: string
   selectedReferences?: SelectedReference[]
-  runtimeSettingsOverride?: Partial<AiRuntimeSettings>
+  streamingModeOverride?: AiLlmStreamingMode
   modelName?: string
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   checkCancelledOverride?: () => void
