@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { Button, Tooltip, message } from 'antd'
-import { HiOutlineBolt, HiOutlineClock, HiOutlineQuestionMarkCircle } from 'react-icons/hi2'
+import { Segmented, Tooltip, message } from 'antd'
+import { HiOutlineQuestionMarkCircle } from 'react-icons/hi2'
+import { LuRabbit, LuTurtle } from 'react-icons/lu'
 import type { AppSettings, KnowledgeIndexSpeed } from '../../../../shared/types'
 import { importSelectors } from '../../testing/selectors'
 
@@ -8,11 +9,11 @@ const SPEED_HELP = (
   <div className="w-[260px] text-[12px] leading-5 text-[#5F5F5B]">
     <div>
       <span className="font-medium text-[#37352F]">慢速：</span>
-      优先保证其它工作流畅，按电脑核数大约占用一半算力，后台继续建索引。
+      占用电脑较少的资源来完成索引，完成速度会比较慢
     </div>
     <div className="mt-2">
       <span className="font-medium text-[#37352F]">高速：</span>
-      尽量占满算力加快建索引，只留少量核给系统操作；适合暂时不用电脑时。
+      全力使用电脑资源来完成索引，完成速度会比较快
     </div>
   </div>
 )
@@ -49,9 +50,9 @@ export const KnowledgeIndexSpeedControl: React.FC = () => {
   const current = settings?.knowledgeIndexSpeed || 'slow'
 
   return (
-    <div className="mb-3 flex items-center justify-between gap-2">
-      <div className="inline-flex items-center gap-1">
-        <span className="text-[12px] text-[#787774]">索引速度</span>
+    <div className="mt-3">
+      <div className="flex items-center gap-1.5">
+        <div className="text-[14px] font-semibold text-[#37352F]">索引速度</div>
         <Tooltip title={SPEED_HELP}>
           <button
             type="button"
@@ -63,30 +64,26 @@ export const KnowledgeIndexSpeedControl: React.FC = () => {
           </button>
         </Tooltip>
       </div>
-      <div className="inline-flex overflow-hidden rounded-[6px] border border-[#EEEEEC]">
-        <Button
+      <div className="mt-3">
+        <Segmented
+          block
           size="small"
-          type={current === 'slow' ? 'primary' : 'text'}
-          icon={<HiOutlineClock className="h-3.5 w-3.5" />}
-          onClick={() => void updateSpeed('slow')}
-          loading={!settings && saving}
+          value={current}
           disabled={!settings || saving}
-          className="!h-7 !rounded-none !px-2"
-          data-testid={importSelectors.workspaceIndexSpeedSlow}
-        >
-          慢速
-        </Button>
-        <Button
-          size="small"
-          type={current === 'fast' ? 'primary' : 'text'}
-          icon={<HiOutlineBolt className="h-3.5 w-3.5" />}
-          onClick={() => void updateSpeed('fast')}
-          disabled={!settings || saving}
-          className="!h-7 !rounded-none !px-2"
-          data-testid={importSelectors.workspaceIndexSpeedFast}
-        >
-          高速
-        </Button>
+          onChange={(value) => void updateSpeed(value as KnowledgeIndexSpeed)}
+          options={[
+            {
+              value: 'slow',
+              icon: <LuTurtle className="h-3.5 w-3.5" />,
+              label: <span data-testid={importSelectors.workspaceIndexSpeedSlow}>慢速</span>
+            },
+            {
+              value: 'fast',
+              icon: <LuRabbit className="h-3.5 w-3.5" />,
+              label: <span data-testid={importSelectors.workspaceIndexSpeedFast}>高速</span>
+            }
+          ]}
+        />
       </div>
     </div>
   )

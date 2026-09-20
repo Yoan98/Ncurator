@@ -19,7 +19,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 
 - `model` 验证大模型可用服务配置的加载、创建、编辑、删除，以及预设服务商与自定义配置的类型、锁定和去重语义。
 - `general` 验证 AI 运行系统通知开关的加载、保存和关闭后的静默行为，以及错误日志目录入口；系统通知中心的真实视觉展示按 macOS 与 Windows 发布前手动验证。
-- `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。`SET-WORKSPACE-009` 由 `workspace-prepare-refresh` 在页面切换档位后走真实更新索引覆盖，并在真实嵌入子进程上断言慢/高速线程差；`SET-WORKSPACE-004-AC11` 由 `workspace-prepare-sequential-addresses` 在页面添加两个地址后走真实更新索引覆盖；线程公式由 knowledge `index-speed-thread-budget` 交叉验证。问号文案与网页 tab 同步不单独测。
+- `workspace` 验证文件地址森林及其并列的全局网页资料：添加/删除地址、包含关系、树顶层节点、合计索引进度、网页全局列表。`SET-WORKSPACE-009` 由 `workspace-prepare-refresh` 在页面切换档位后走真实更新索引覆盖，并断言真实嵌入子进程档位；`SET-WORKSPACE-004-AC11` 由 `workspace-prepare-sequential-addresses` 在页面添加两个地址后走真实更新索引覆盖；慢/高速作用在真实索引调用上由 knowledge `index-speed-thread-budget` 覆盖。问号文案与网页 tab 同步不单独测。
 - `vector` 属于 Settings 产品域，页面路由为 `/settings/vector`（`/model-download` 仅为历史重定向），测试目录与 runner 仍统一归入 `tests/case/settings/vector/**`。
 - `workspace` 是 Settings 下的 suite，按 `core / files / web` 组织，语义为“文件地址 + 文件 tab + 全局网页 tab”，不是具名容器。
 - `workspace` 相关回归测试默认复用 `tests/fixtures/workspace` 作为共享输入目录。

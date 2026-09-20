@@ -13,7 +13,7 @@
 
 边界：
 
-- 不替代 Settings「更新索引」产品 E2E。E2E 在真实 Electron 里切换档位并跑更新索引，断言嵌入 `utilityProcess` 进程名中的 intraOp 随档位变化；本计划用同一套 `session_options` 在独立 Node 进程里验证 ORT 操作系统线程数差。
+- 不替代 Settings「更新索引」产品 E2E。E2E 在真实 Electron 里切换档位并跑更新索引，断言嵌入 `utilityProcess` 进程名中的 intraOp 随档位变化；本计划用同一套档位走生产 `indexLocalFile`，断言索引时 applied session 随慢/高速变化。
 - 不替代 `ai-test` 中的 kb tool / live。
 - 不登记 unit。函数级补足仍在 `tests/case/unit/knowledge/**`。
 
@@ -22,7 +22,7 @@
 ### 2.1 `foundation`
 
 - 目标：守住知识库可回归的功能主链。
-- 约束：走生产 store / job / 扫描 / worker / 嵌入 executor；禁止假 executor 或假 `assertKbSearchAvailable`。索引速度 case 断言生产保存档位后的 ORT session_options、runtime env 与真实嵌入，不测 UI、不测真实 CPU / 耗时。
+- 约束：走生产 store / job / 扫描 / worker / 嵌入 executor；禁止假 executor 或假 `assertKbSearchAvailable`。索引速度 case 必须真实调用更新索引，断言当时档位落到 embedding session，不测 UI、不测真实 CPU / 耗时。
 - 目录：`tests/case/knowledge/foundation/<case>.test.ts`
 
 ### 2.2 `optimization`
@@ -86,10 +86,10 @@
 #### `index-speed-thread-budget`
 
 - 测试类型：`backend`
-- What：慢速/高速按逻辑核数映射不同的 ORT `session_options`；真实 ORT session 的操作系统线程数随 `intraOpNumThreads` 变化。
-- Why：档位是否有效，看的是独立进程里 `ps`/进程线程数是否按预算增加，不是页面文案，也不是墙钟时间。
-- How：对 4/8/16 核分别计算慢速与高速预算；用生产 `toOrtSessionOptions(resolveOrtThreadBudget)` 在两个新进程里各建一次真实 embedding session，比较建 session 前后的操作系统线程数；再用生产 `createEmbeddingRuntimeRequestHandler` 覆盖 initialize payload，并 `applyIndexSpeed` 重建。Electron `utilityProcess` 的闭环在 Settings `workspace-prepare-refresh`。
-- Oracle：独立进程中高速与慢速的线程数差等于 `intraOpNumThreads` 差；慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；initialize payload 后 applied session 为高速；applyIndexSpeed 后回到慢速；sqlite 保存为高速；嵌入维度 768。
+- What：慢速/高速按逻辑核数映射不同的 ORT `session_options`；真实更新索引调用必须带上当时档位。
+- Why：档位是否有效，看的是索引链路里 embedding session 是否换档，不是单独探测线程公式。
+- How：对 4/8/16 核分别计算慢速与高速预算；保存慢速后对真实 txt 走生产 `indexLocalFile`，再保存高速并对另一份 txt 再索引一次。Electron `utilityProcess` 的闭环在 Settings `workspace-prepare-refresh`。
+- Oracle：慢速 2/4/8 且关闭 spinning；高速 3/7/14 且开启 spinning；两次索引都写出 chunk 且未走向量缓存；慢速索引时 applied session 为慢速 intraOp 并关闭 spinning，高速索引时为高速 intraOp 并开启 spinning。
 
 #### `prepare-workspaces-sequentially`
 

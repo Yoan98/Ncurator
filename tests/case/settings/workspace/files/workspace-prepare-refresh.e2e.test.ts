@@ -66,15 +66,19 @@ describe('settings workspace e2e', () => {
               })
               const slowSpeed = getSettingsLocator(page, importSelectors.workspaceIndexSpeedSlow)
               await slowSpeed.waitFor({ state: 'visible' })
-              await page.waitForFunction(
-                (testId) => {
-                  const element = document.querySelector(`[data-testid="${testId}"]`)
-                  return element instanceof HTMLButtonElement && !element.disabled
-                },
-                importSelectors.workspaceIndexSpeedSlow
-              )
-              defaultSlowSelected = await slowSpeed.evaluate((element) =>
-                element.classList.contains('ant-btn-primary')
+              await page.waitForFunction((testId) => {
+                const element = document.querySelector(`[data-testid="${testId}"]`)
+                const root = element?.closest('.ant-segmented')
+                return (
+                  root instanceof HTMLElement &&
+                  !root.classList.contains('ant-segmented-disabled')
+                )
+              }, importSelectors.workspaceIndexSpeedSlow)
+              defaultSlowSelected = await slowSpeed.evaluate(
+                (element) =>
+                  element.closest('.ant-segmented-item')?.classList.contains(
+                    'ant-segmented-item-selected'
+                  ) === true
               )
               slowThreads = await measureEmbeddingRuntimeThreads({ page, electronPid })
               await selectWorkspaceIndexSpeedThroughSettingsUi(page, 'fast')
