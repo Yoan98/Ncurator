@@ -20,10 +20,6 @@ import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import { KnowledgeIndexSpeedControl } from './KnowledgeIndexSpeedControl'
 import IndexPrepareCancelModal from './IndexPrepareCancelModal'
 import { formatDateTime, getWebStatusBadge } from './utils/workspace'
-import {
-  formatIndexCancelContent,
-  getWebIndexCancelPreview
-} from './utils/indexPrepareCancel'
 
 type WebSourcesSettingsPanelProps = {
   embedded?: boolean
@@ -47,7 +43,6 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   const [deleteWebSource, setDeleteWebSource] = useState<WebSourceRecord | null>(null)
   const [webPrepareCancelling, setWebPrepareCancelling] = useState(false)
   const [webCancelModalOpen, setWebCancelModalOpen] = useState(false)
-  const [webCancelPreview, setWebCancelPreview] = useState({ completed: 0, remaining: 0 })
   const [webSummary, setWebSummary] = useState<WebSourceListResponse['summary']>({
     web_count: 0,
     needs_index_count: 0,
@@ -177,12 +172,6 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
   const handleWebPrepareButtonClick = (): void => {
     if (webPrepareCancelling) return
     if (webIndexJob?.action === 'prepare') {
-      setWebCancelPreview(
-        getWebIndexCancelPreview({
-          job: webIndexJob,
-          sources: webSources
-        })
-      )
       setWebCancelModalOpen(true)
       return
     }
@@ -191,7 +180,8 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
 
   const handleConfirmWebPrepareCancel = async (): Promise<void> => {
     setWebCancelModalOpen(false)
-    setWebPrepareCancelling(true)
+    const hasRunningPrepare = webIndexJob?.action === 'prepare'
+    if (hasRunningPrepare) setWebPrepareCancelling(true)
     try {
       const response = await window.api.workspaceIndexCancel({ sourceKind: 'web' })
       if (!response.success) {
@@ -499,11 +489,6 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       </Modal>
       <IndexPrepareCancelModal
         open={webCancelModalOpen}
-        content={formatIndexCancelContent(
-          'web',
-          webCancelPreview.completed,
-          webCancelPreview.remaining
-        )}
         confirmTestId={importSelectors.webSourceIndexCancelConfirmButton}
         continueTestId={importSelectors.webSourceIndexCancelContinueButton}
         onStop={() => void handleConfirmWebPrepareCancel()}

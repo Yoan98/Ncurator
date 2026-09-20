@@ -106,7 +106,8 @@ export class WorkspaceKnowledgePrepareService {
         workspaceId: input.workspaceId,
         documentId: input.documentId,
         documentName: input.documentName,
-        cachedVectors
+        cachedVectors,
+        signal: input.signal
       })
       this.throwIfAborted(input.signal)
 
@@ -176,7 +177,8 @@ export class WorkspaceKnowledgePrepareService {
         workspaceId: input.workspaceId,
         documentId: input.documentId,
         documentName: input.documentName,
-        cachedVectors
+        cachedVectors,
+        signal: input.signal
       })
       this.throwIfAborted(input.signal)
 
@@ -237,6 +239,7 @@ export class WorkspaceKnowledgePrepareService {
     documentId: string
     documentName: string
     cachedVectors: WorkspaceKnowledgeVectorSnapshot | null
+    signal?: AbortSignal
   }): Promise<WorkspaceKnowledgePreparedDocument> {
     const { preparedSource } = input
     const usesCachedVectors = this.isUsableCachedVectors(input.cachedVectors, preparedSource)
@@ -266,7 +269,8 @@ export class WorkspaceKnowledgePrepareService {
         vectors: (
           await buildWorkspaceKnowledgeVectors({
             embeddingService: this.deps.embeddingService,
-            chunks: preparedSource.splitSnapshot.chunks
+            chunks: preparedSource.splitSnapshot.chunks,
+            signal: input.signal
           })
         ).vectors
       }

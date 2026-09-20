@@ -105,8 +105,8 @@
 - 测试类型：`backend`
 - What：取消 prepare 后 job 为 cancelled；已完成保留；未完成回退且不失败；后续地址不启动；检索恢复。网页 crawling/indexing 同样回退。
 - Why：用户取消不是故障，剩余资料必须还能再次更新索引，也不能继续占用嵌入或拦截检索。
-- How：生产 store + 取消控制器；多文件/多地址用可闸门的索引函数在第二份未写库时取消；网页写执行中条目后调同一回退。
-- Oracle：job 为 cancelled；已索引保留；未完成回到 `needs_index` 或原 `failed`，不出现成批失败，对齐 `SET-WORKSPACE-004-AC14`、`SET-WORKSPACE-004-AC16`；后续地址不启动，对齐 `SET-WORKSPACE-004-AC15`；取消后 `hasRunningPrepareJob` 为 false，检索不再拦截，对齐 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`；网页执行中条目回到进入本轮前状态，对齐 `SET-WEB-004-AC12`、`SET-WEB-004-AC13`。不测弹框。
+- How：生产 store + 取消控制器；多文件/多地址用可闸门的索引函数在第二份未写库时取消；网页写执行中条目后调同一回退。另用可闸门的多批 `buildWorkspaceKnowledgeVectors` 验证取消后不再送后续批次。另写入已成功 job 后再走取消收口，确认不改写终态。
+- Oracle：job 为 cancelled；已索引保留；未完成回到 `needs_index` 或原 `failed`，不出现成批失败，对齐 `SET-WORKSPACE-004-AC14`、`SET-WORKSPACE-004-AC16`；后续地址不启动，对齐 `SET-WORKSPACE-004-AC15`；取消后 `hasRunningPrepareJob` 为 false，检索不再拦截，对齐 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`；网页执行中条目回到进入本轮前状态，对齐 `SET-WEB-004-AC12`、`SET-WEB-004-AC13`。当前文件多批嵌入时，取消后只完成当前批、后续批不得调用，对齐 `SET-WORKSPACE-004-AC16`。已是 succeeded 后再取消，状态仍为 succeeded，对齐 `SET-WORKSPACE-004-AC17`。不测弹框。
 
 ### 4.2 `optimization`
 

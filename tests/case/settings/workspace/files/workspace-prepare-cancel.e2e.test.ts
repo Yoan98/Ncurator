@@ -32,7 +32,7 @@ describe('settings workspace e2e', () => {
         domain: 'settings',
         suite: 'workspace',
         groups: ['files'],
-        description: '更新索引进行中可取消，确认框展示进度，停止后保留已完成并回退未完成。',
+        description: '更新索引进行中可取消，确认框说明尚未完成的不再继续，停止后保留已完成并回退未完成。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
@@ -122,13 +122,15 @@ describe('settings workspace e2e', () => {
             }
           )
           await runtime.assertThat(
-            /已完成 \d+ 个文件/.test(result.dialogText) &&
-              /剩余 \d+ 个文件将停止/.test(result.dialogText) &&
+            result.dialogText.includes('尚未完成的将不会继续索引') &&
+              result.dialogText.includes('已经完成的索引会保留') &&
+              !/已完成 \d+ 个文件/.test(result.dialogText) &&
+              !/剩余 \d+ 个文件将停止/.test(result.dialogText) &&
               result.continuedProgressVisible,
             {
-              name: 'cancel-dialog-shows-counts-and-continue-keeps-running',
+              name: 'cancel-dialog-confirms-stop-and-continue-keeps-running',
               message:
-                '取消确认框应展示已完成 N 与剩余 M；继续更新后任务继续跑，对齐 SET-WORKSPACE-004-AC13。',
+                '取消确认框应说明尚未完成的将不会继续索引，且不展示已完成/剩余数量；继续更新后任务继续跑，对齐 SET-WORKSPACE-004-AC13。',
               data: result
             }
           )

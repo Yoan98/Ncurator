@@ -19,7 +19,7 @@ describe('settings workspace web e2e', () => {
         domain: 'settings',
         suite: 'workspace',
         groups: ['web'],
-        description: '网页更新索引进行中可取消，确认框展示进度，停止后未完成网页不落成已索引。',
+        description: '网页更新索引进行中可取消，确认框说明尚未完成的不再继续，停止后未完成网页不落成已索引。',
         fixtures: [],
         serviceMode: 'real',
         runMode: 'single',
@@ -96,13 +96,15 @@ describe('settings workspace web e2e', () => {
             data: result
           })
           await runtime.assertThat(
-            /已完成 \d+ 个网页/.test(result.dialogText) &&
-              /剩余 \d+ 个网页将停止/.test(result.dialogText) &&
+            result.dialogText.includes('尚未完成的将不会继续索引') &&
+              result.dialogText.includes('已经完成的索引会保留') &&
+              !/已完成 \d+ 个网页/.test(result.dialogText) &&
+              !/剩余 \d+ 个网页将停止/.test(result.dialogText) &&
               result.continuedProgressVisible,
             {
-              name: 'web-cancel-dialog-shows-counts-and-continue-keeps-running',
+              name: 'web-cancel-dialog-confirms-stop-and-continue-keeps-running',
               message:
-                '取消确认框应展示已完成 N 与剩余 M 个网页；继续更新后任务继续跑，对齐 SET-WEB-004-AC11。',
+                '取消确认框应说明尚未完成的将不会继续索引，且不展示已完成/剩余数量；继续更新后任务继续跑，对齐 SET-WEB-004-AC11。',
               data: result
             }
           )

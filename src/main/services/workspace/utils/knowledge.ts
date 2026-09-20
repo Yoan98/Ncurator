@@ -3,6 +3,7 @@ import fs from 'node:fs/promises'
 import path from 'node:path'
 import { IngestionService } from '../../ingestion/loader'
 import type { EmbeddingService } from '../../vector/EmbeddingService'
+import { IndexPrepareCancelledError } from '../WorkspaceIndexPrepareController'
 import {
   WORKSPACE_EMBEDDING_BATCH_CHUNK_COUNT,
   WORKSPACE_EMBEDDING_BATCH_MAX_CHARS,
@@ -157,10 +158,12 @@ export const createWorkspaceEmbeddingBatches = (
 export const buildWorkspaceKnowledgeVectors = async (input: {
   embeddingService: EmbeddingService
   chunks: WorkspaceKnowledgeChunkSnapshot[]
+  signal?: AbortSignal
 }): Promise<WorkspaceKnowledgeVectorBuildResult> => {
   const vectors: number[][] = []
   const batches = createWorkspaceEmbeddingBatches(input.chunks)
   for (const batch of batches) {
+    if (input.signal?.aborted) throw new IndexPrepareCancelledError()
     const embeddings = await input.embeddingService.embed(batch.map((chunk) => chunk.text))
     const vectorSize = embeddings.dims[1]
     vectors.push(
@@ -169,5 +172,6 @@ export const buildWorkspaceKnowledgeVectors = async (input: {
       )
     )
   }
+  if (input.signal?.aborted) throw new IndexPrepareCancelledError()
   return { vectors }
 }

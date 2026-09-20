@@ -25,10 +25,6 @@ import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import { KnowledgeIndexSpeedControl } from './KnowledgeIndexSpeedControl'
 import IndexPrepareCancelModal from './IndexPrepareCancelModal'
 import { getTreeEntryStatusMeta } from './utils/workspace'
-import {
-  formatIndexCancelContent,
-  getFileIndexCancelPreview
-} from './utils/indexPrepareCancel'
 import { prepareWorkspacesSequentially } from '../../../../shared/prepareWorkspacesSequentially'
 import type { WorkspaceJobMap } from './types'
 
@@ -62,9 +58,10 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const [webSourceCount, setWebSourceCount] = useState(0)
   const [filePrepareCancelling, setFilePrepareCancelling] = useState(false)
   const [fileCancelModalOpen, setFileCancelModalOpen] = useState(false)
-  const [fileCancelPreview, setFileCancelPreview] = useState({ completed: 0, remaining: 0 })
   const filePrepareSessionRef = useRef({ completed: 0, startedIds: new Set<string>() })
   const workspaceDirectoryRequestIds = useRef<Record<string, Record<string, number>>>({})
+  const workspaceDirectoriesRef = useRef<WorkspaceDirectoryMap>({})
+  workspaceDirectoriesRef.current = workspaceDirectories
 
   const loadWorkspaceDirectory = useCallback(
     async (workspaceId: string, relativePath: string): Promise<void> => {
@@ -121,6 +118,17 @@ const WorkspaceSettingsPanel: React.FC = () => {
       }
     },
     []
+  )
+
+  const refreshWorkspaceDirectories = useCallback(
+    (workspaceId: string): void => {
+      const cachedPaths = Object.keys(workspaceDirectoriesRef.current[workspaceId] || {})
+      const relativePaths = cachedPaths.includes('') ? cachedPaths : ['', ...cachedPaths]
+      relativePaths.forEach((relativePath) => {
+        void loadWorkspaceDirectory(workspaceId, relativePath)
+      })
+    },
+    [loadWorkspaceDirectory]
   )
 
   const loadWorkspaces = useCallback(async (options?: { focusRootId?: string }): Promise<void> => {
@@ -190,11 +198,11 @@ const WorkspaceSettingsPanel: React.FC = () => {
         [job.workspace_id]: job.status === 'running' ? job : undefined
       }))
       if (job.status !== 'running') {
-        void loadWorkspaceDirectory(job.workspace_id, '')
+        refreshWorkspaceDirectories(job.workspace_id)
       }
     }
     return window.api.onWorkspaceIndexJobProgress(handleProgress)
-  }, [loadWorkspaceDirectory])
+  }, [refreshWorkspaceDirectories])
 
   useEffect(() => {
     workspaces.forEach((workspace) => {
@@ -455,19 +463,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
   const handleWorkspacePrepareButtonClick = (): void => {
     if (filePrepareCancelling) return
     if (runningFileJob?.action === 'prepare') {
-      const unstartedActionableCount = workspaces.reduce((sum, workspace) => {
-        if (filePrepareSessionRef.current.startedIds.has(workspace.id)) return sum
-        const summary = workspaceTreeSummaries[workspace.id]
-        if (!summary) return sum
-        return sum + summary.needs_index_count + summary.failed_file_count
-      }, 0)
-      setFileCancelPreview(
-        getFileIndexCancelPreview({
-          runningJob: runningFileJob,
-          sessionCompleted: filePrepareSessionRef.current.completed,
-          unstartedActionableCount
-        })
-      )
       setFileCancelModalOpen(true)
       return
     }
@@ -476,7 +471,8 @@ const WorkspaceSettingsPanel: React.FC = () => {
 
   const handleConfirmFilePrepareCancel = async (): Promise<void> => {
     setFileCancelModalOpen(false)
-    setFilePrepareCancelling(true)
+    const hasRunningPrepare = runningFileJob?.action === 'prepare'
+    if (hasRunningPrepare) setFilePrepareCancelling(true)
     try {
       const response = await window.api.workspaceIndexCancel({ sourceKind: 'file' })
       if (!response.success) {
@@ -809,11 +805,6 @@ const WorkspaceSettingsPanel: React.FC = () => {
       </Modal>
       <IndexPrepareCancelModal
         open={fileCancelModalOpen}
-        content={formatIndexCancelContent(
-          'file',
-          fileCancelPreview.completed,
-          fileCancelPreview.remaining
-        )}
         confirmTestId={importSelectors.workspaceIndexCancelConfirmButton}
         continueTestId={importSelectors.workspaceIndexCancelContinueButton}
         onStop={() => void handleConfirmFilePrepareCancel()}

@@ -3,7 +3,8 @@ import type {
   WebSourceRecord,
   WorkspaceFileIndexRecord,
   WorkspaceFileIndexStatus,
-  WorkspaceIndexJobSourceKind
+  WorkspaceIndexJobSourceKind,
+  WorkspaceIndexJobStatus
 } from '../../../shared/types'
 import type { WebSourceStore } from '../storage/domains/WebSourceStore'
 import type { WorkspaceStore } from '../storage/domains/WorkspaceStore'
@@ -46,6 +47,19 @@ export const toWebPreparePreviousSnapshot = (
     return { index_status: source.index_status, last_error: source.last_error }
   }
   return { index_status: 'needs_index', last_error: source.last_error }
+}
+
+export const resolveCancelledPrepareJobStatus = (input: {
+  unfinishedCount: number
+  processedCount: number
+  totalCount: number
+  failedCount: number
+}): Extract<WorkspaceIndexJobStatus, 'cancelled' | 'succeeded' | 'failed'> => {
+  const finishedAll = input.totalCount === 0 || input.processedCount >= input.totalCount
+  if (input.unfinishedCount === 0 && finishedAll) {
+    return input.failedCount > 0 ? 'failed' : 'succeeded'
+  }
+  return 'cancelled'
 }
 
 export const runCancellablePrepareLoop = async <T>(input: {

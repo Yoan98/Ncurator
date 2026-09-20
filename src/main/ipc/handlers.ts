@@ -47,6 +47,7 @@ import { WorkspaceKnowledgePrepareService } from '../services/workspace/Workspac
 import {
   IndexPrepareCancelledError,
   isIndexPrepareCancelledError,
+  resolveCancelledPrepareJobStatus,
   toFilePreparePreviousSnapshot,
   toWebPreparePreviousSnapshot,
   WorkspaceIndexPrepareController
@@ -856,13 +857,24 @@ export function registerHandlers(services: {
       }
 
       if (cancelled || prepareController.isCancelled('file')) {
-        await prepareController.revertUnfinishedFiles()
+        const unfinishedCount = await prepareController.revertUnfinishedFiles()
+        const status = resolveCancelledPrepareJobStatus({
+          unfinishedCount,
+          processedCount: processed,
+          totalCount: targets.length,
+          failedCount: failed
+        })
         await updateAndEmitWorkspaceIndexJob(job, {
-          status: 'cancelled',
+          status,
           phase: 'complete',
           processed_count: processed,
           failed_count: failed,
-          message: `已停止更新索引，完成 ${processed} 个`,
+          message:
+            status === 'cancelled'
+              ? `已停止更新索引，完成 ${processed} 个`
+              : failed > 0
+                ? `索引完成，失败 ${failed} 个；新增 ${added}，变更 ${updated}，移除 ${removed}`
+                : `索引完成；新增 ${added}，变更 ${updated}，移除 ${removed}`,
           updated_at: Date.now(),
           finished_at: Date.now()
         })
@@ -883,11 +895,17 @@ export function registerHandlers(services: {
       await documentsStore.purgeStaleChunks()
     } catch (error) {
       if (isIndexPrepareCancelledError(error) || prepareController.isCancelled('file')) {
-        await prepareController.revertUnfinishedFiles()
+        const unfinishedCount = await prepareController.revertUnfinishedFiles()
+        const status = resolveCancelledPrepareJobStatus({
+          unfinishedCount,
+          processedCount: job.processed_count,
+          totalCount: job.total_count,
+          failedCount: job.failed_count
+        })
         await updateAndEmitWorkspaceIndexJob(job, {
-          status: 'cancelled',
+          status,
           phase: 'complete',
-          message: '已停止更新索引',
+          message: status === 'cancelled' ? '已停止更新索引' : job.message,
           updated_at: Date.now(),
           finished_at: Date.now()
         })
@@ -1436,14 +1454,20 @@ export function registerHandlers(services: {
       }
       await Promise.all(Array.from({ length: concurrency }, () => runCrawlOne()))
       if (prepareController.isCancelled('web')) {
-        await prepareController.revertUnfinishedWebSources()
+        const unfinishedCount = await prepareController.revertUnfinishedWebSources()
+        const status = resolveCancelledPrepareJobStatus({
+          unfinishedCount,
+          processedCount: crawlProcessed,
+          totalCount: targets.length,
+          failedCount: crawlFailed
+        })
         await updateAndEmitWorkspaceIndexJob(job, {
-          status: 'cancelled',
+          status,
           phase: 'complete',
           total_count: targets.length,
           processed_count: crawlProcessed,
           failed_count: crawlFailed,
-          message: '已停止更新索引',
+          message: status === 'cancelled' ? '已停止更新索引' : job.message,
           updated_at: Date.now(),
           finished_at: Date.now()
         })
@@ -1495,14 +1519,20 @@ export function registerHandlers(services: {
       }
       await Promise.all(Array.from({ length: concurrency }, () => runIndexOne()))
       if (prepareController.isCancelled('web')) {
-        await prepareController.revertUnfinishedWebSources()
+        const unfinishedCount = await prepareController.revertUnfinishedWebSources()
+        const status = resolveCancelledPrepareJobStatus({
+          unfinishedCount,
+          processedCount: indexProcessed,
+          totalCount: crawledSources.length,
+          failedCount: crawlFailed + indexFailed
+        })
         await updateAndEmitWorkspaceIndexJob(job, {
-          status: 'cancelled',
+          status,
           phase: 'complete',
           total_count: targets.length,
           processed_count: crawlProcessed + indexProcessed,
           failed_count: crawlFailed + indexFailed,
-          message: '已停止更新索引',
+          message: status === 'cancelled' ? '已停止更新索引' : job.message,
           updated_at: Date.now(),
           finished_at: Date.now()
         })
@@ -1524,11 +1554,17 @@ export function registerHandlers(services: {
       await documentsStore.purgeStaleChunks()
     } catch (error) {
       if (isIndexPrepareCancelledError(error) || prepareController.isCancelled('web')) {
-        await prepareController.revertUnfinishedWebSources()
+        const unfinishedCount = await prepareController.revertUnfinishedWebSources()
+        const status = resolveCancelledPrepareJobStatus({
+          unfinishedCount,
+          processedCount: job.processed_count,
+          totalCount: job.total_count,
+          failedCount: job.failed_count
+        })
         await updateAndEmitWorkspaceIndexJob(job, {
-          status: 'cancelled',
+          status,
           phase: 'complete',
-          message: '已停止更新索引',
+          message: status === 'cancelled' ? '已停止更新索引' : job.message,
           updated_at: Date.now(),
           finished_at: Date.now()
         })
@@ -2305,8 +2341,14 @@ export function registerHandlers(services: {
     ): Promise<{ success: boolean; error?: string }> => {
       try {
         const sourceKind = payload?.sourceKind === 'web' ? 'web' : 'file'
+        const runningJobs = await workspaceIndexJobStore.listRunningJobs()
+        const hasRunningPrepare = runningJobs.some(
+          (runningJob) => runningJob.source_kind === sourceKind && runningJob.action === 'prepare'
+        )
         prepareController.requestCancel(sourceKind)
-        await workspaceKnowledgePrepareService.abortActivePrepare()
+        if (hasRunningPrepare) {
+          await workspaceKnowledgePrepareService.abortActivePrepare()
+        }
         return { success: true }
       } catch (error) {
         return { success: false, error: getErrorMessage(error) }

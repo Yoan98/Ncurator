@@ -3,7 +3,6 @@ import { Modal } from 'antd'
 
 type IndexPrepareCancelModalProps = {
   open: boolean
-  content: string
   confirmTestId: string
   continueTestId: string
   onStop: () => void
@@ -12,7 +11,6 @@ type IndexPrepareCancelModalProps = {
 
 const IndexPrepareCancelModal: React.FC<IndexPrepareCancelModalProps> = ({
   open,
-  content,
   confirmTestId,
   continueTestId,
   onStop,
@@ -31,7 +29,9 @@ const IndexPrepareCancelModal: React.FC<IndexPrepareCancelModalProps> = ({
       cancelButtonProps={{ 'data-testid': continueTestId }}
       className="[&_.ant-modal-content]:!rounded-[8px]"
     >
-      <p className="mb-0 text-[#787774]">{content}</p>
+      <p className="mb-0 text-[#787774]">
+        确认停止后，尚未完成的将不会继续索引。已经完成的索引会保留。
+      </p>
     </Modal>
   )
 }
