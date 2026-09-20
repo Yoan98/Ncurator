@@ -9,7 +9,7 @@ import type {
   EmbeddingRuntimeResponse,
   EmbeddingThreadBudget
 } from './types'
-import { resolveOrtThreadBudget } from '../indexSpeed'
+import { resolveOrtThreadBudget, toEmbeddingRuntimeEnv } from '../indexSpeed'
 import type { AppErrorLogService } from '../../logging/AppErrorLogService'
 
 const DEFAULT_RUNTIME_TIMEOUT_MS = 180_000
@@ -67,8 +67,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
         ...process.env,
         NCURATOR_EMBEDDING_MODELS_PATH: this.modelsPath,
         NCURATOR_EMBEDDING_MODEL_NAME: this.modelName,
-        NCURATOR_EMBEDDING_INTRA_OP_THREADS: String(this.threadBudget.intraOpNumThreads),
-        NCURATOR_EMBEDDING_ALLOW_SPINNING: this.threadBudget.allowSpinning ? '1' : '0'
+        ...toEmbeddingRuntimeEnv(this.threadBudget)
       }
     })
     this.process = child

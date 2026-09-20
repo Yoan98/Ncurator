@@ -1,5 +1,5 @@
 import type { EmbeddingExecutor, EmbeddingResult, EmbeddingThreadBudget } from './types'
-import { resolveOrtThreadBudget } from '../indexSpeed'
+import { resolveOrtThreadBudget, toOrtSessionOptions } from '../indexSpeed'
 
 type FeatureExtractorResult = {
   data: unknown
@@ -24,14 +24,6 @@ const toEmbeddingVector = (value: unknown): Float32Array => {
   }
   return new Float32Array()
 }
-
-const toSessionOptions = (budget: EmbeddingThreadBudget) => ({
-  intraOpNumThreads: budget.intraOpNumThreads,
-  interOpNumThreads: 1,
-  extra: {
-    'session.intra_op.allow_spinning': budget.allowSpinning ? '1' : '0'
-  }
-})
 
 export class TransformersEmbeddingExecutor implements EmbeddingExecutor {
   private readonly modelsPath: string
@@ -69,11 +61,11 @@ export class TransformersEmbeddingExecutor implements EmbeddingExecutor {
       const createExtractor = pipeline as (
         task: string,
         model: string,
-        options: { dtype: 'fp32'; session_options: ReturnType<typeof toSessionOptions> }
+        options: { dtype: 'fp32'; session_options: ReturnType<typeof toOrtSessionOptions> }
       ) => Promise<FeatureExtractor>
       this.extractor = await createExtractor('feature-extraction', this.modelName, {
         dtype: 'fp32',
-        session_options: toSessionOptions(this.threadBudget)
+        session_options: toOrtSessionOptions(this.threadBudget)
       })
     })().finally(() => {
       this.initializationPromise = null

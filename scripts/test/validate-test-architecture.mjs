@@ -12,7 +12,7 @@ const DOMAIN_RULES = {
   workbench: { type: 'e2e', plan: 'workbench-test.md', prd: 'workbench.md', acPrefix: 'WB-' },
   unit: { type: 'backend', plan: '' }
 }
-const PLAN_FIELDS = ['测试类型', 'What', 'Why', 'How', 'Oracle', 'Not']
+const PLAN_FIELDS = ['测试类型', 'What', 'Why', 'How', 'Oracle']
 
 const walk = async (directory) => {
   const files = []

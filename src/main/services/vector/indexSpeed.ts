@@ -13,6 +13,31 @@ export const resolveLogicalCoreCount = (logicalCores?: number): number => {
   return Math.max(1, Math.floor(resolved))
 }
 
+export const EMBEDDING_INTRA_OP_THREADS_ENV = 'NCURATOR_EMBEDDING_INTRA_OP_THREADS'
+export const EMBEDDING_ALLOW_SPINNING_ENV = 'NCURATOR_EMBEDDING_ALLOW_SPINNING'
+
+export const toOrtSessionOptions = (budget: OrtThreadBudget) => ({
+  intraOpNumThreads: budget.intraOpNumThreads,
+  interOpNumThreads: 1,
+  extra: {
+    'session.intra_op.allow_spinning': budget.allowSpinning ? '1' : '0'
+  }
+})
+
+export const toEmbeddingRuntimeEnv = (budget: OrtThreadBudget) => ({
+  [EMBEDDING_INTRA_OP_THREADS_ENV]: String(budget.intraOpNumThreads),
+  [EMBEDDING_ALLOW_SPINNING_ENV]: budget.allowSpinning ? '1' : '0'
+})
+
+export const parseEmbeddingRuntimeEnv = (env: NodeJS.ProcessEnv): OrtThreadBudget | null => {
+  const threads = Number(env[EMBEDDING_INTRA_OP_THREADS_ENV])
+  if (!Number.isInteger(threads) || threads <= 0) return null
+  return {
+    intraOpNumThreads: threads,
+    allowSpinning: env[EMBEDDING_ALLOW_SPINNING_ENV] === '1'
+  }
+}
+
 export const resolveOrtThreadBudget = (
   speed: KnowledgeIndexSpeed,
   logicalCores = resolveLogicalCoreCount()

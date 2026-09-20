@@ -1,5 +1,5 @@
 import { TransformersEmbeddingExecutor } from './TransformersEmbeddingExecutor'
-import { resolveOrtThreadBudget } from '../indexSpeed'
+import { parseEmbeddingRuntimeEnv, resolveOrtThreadBudget } from '../indexSpeed'
 import type {
   EmbeddingRuntimeRequest,
   EmbeddingRuntimeResponse,
@@ -20,16 +20,8 @@ const runtimeProcess = process as NodeJS.Process & {
 const modelsPath = String(process.env.NCURATOR_EMBEDDING_MODELS_PATH || '').trim()
 const modelName = String(process.env.NCURATOR_EMBEDDING_MODEL_NAME || '').trim()
 
-const parseEnvThreadBudget = (): EmbeddingThreadBudget => {
-  const threads = Number(process.env.NCURATOR_EMBEDDING_INTRA_OP_THREADS)
-  if (Number.isInteger(threads) && threads > 0) {
-    return {
-      intraOpNumThreads: threads,
-      allowSpinning: process.env.NCURATOR_EMBEDDING_ALLOW_SPINNING === '1'
-    }
-  }
-  return resolveOrtThreadBudget('slow')
-}
+const parseEnvThreadBudget = (): EmbeddingThreadBudget =>
+  parseEmbeddingRuntimeEnv(process.env) || resolveOrtThreadBudget('slow')
 
 export const createEmbeddingRuntimeRequestHandler = (executor: EmbeddingExecutor) =>
   async (request: EmbeddingRuntimeRequest): Promise<EmbeddingRuntimeResponse> => {
