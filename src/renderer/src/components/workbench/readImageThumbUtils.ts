@@ -18,7 +18,7 @@ export const isReadImageRemotePath = isRemoteImagePath
 
 export const readImagePathsFromInput = (input?: IpcJsonObject): string[] => {
   if (!input) return []
-  const raw = input.paths
+  const raw = (input as Record<string, IpcJsonValue>).paths
   if (!Array.isArray(raw)) return []
   return raw.flatMap((value: IpcJsonValue) => {
     if (typeof value !== 'string') return []
