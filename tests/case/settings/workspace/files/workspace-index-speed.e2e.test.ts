@@ -5,6 +5,7 @@ import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
 import { resolveOrtThreadBudget } from '../../../../../src/main/services/vector/indexSpeed'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { osThreadDeltasFollowIndexSpeed } from '../../../../harness/core/indexSpeedThreads'
 import { measureEmbeddingRuntimeThreadDelta, waitForEmbeddingRuntimeProcessGone } from '../../../../harness/e2e/embeddingRuntimeThreads'
 import {
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
@@ -160,15 +161,18 @@ describe('settings workspace e2e', () => {
             result.slowThreads.pid !== result.fastThreads.pid &&
               result.slowThreads.intraOpNumThreads === result.slowBudget.intraOpNumThreads &&
               result.fastThreads.intraOpNumThreads === result.fastBudget.intraOpNumThreads &&
-              result.slowThreads.delta >= result.slowBudget.intraOpNumThreads &&
-              result.fastThreads.delta >= result.fastBudget.intraOpNumThreads &&
-              result.fastThreads.delta - result.slowThreads.delta ===
-                result.fastBudget.intraOpNumThreads - result.slowBudget.intraOpNumThreads &&
-              result.fastThreads.after > result.slowThreads.after,
+              osThreadDeltasFollowIndexSpeed({
+                slowDelta: result.slowThreads.delta,
+                fastDelta: result.fastThreads.delta,
+                slowAfter: result.slowThreads.after,
+                fastAfter: result.fastThreads.after,
+                slowIntraOp: result.slowBudget.intraOpNumThreads,
+                fastIntraOp: result.fastBudget.intraOpNumThreads
+              }),
             {
               name: 'prepare-os-threads-follow-index-speed',
               message:
-                '两次真实更新索引必须各自拉起嵌入进程；同一进程 ready 前后的操作系统线程增量不少于该档 intraOp，高速大于慢速且增量之差等于档位差。',
+                '两次真实更新索引必须各自拉起嵌入进程；同一进程 ready 前后的操作系统线程增量跟随档位：Mac 不少于该档 intraOp，Windows 不少于 intraOp-1；高速 after 大于慢速且增量之差等于档位差。',
               data: {
                 slowBudget: result.slowBudget,
                 fastBudget: result.fastBudget,

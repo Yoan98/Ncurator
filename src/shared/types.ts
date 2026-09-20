@@ -495,6 +495,14 @@ export interface DocumentListResponse {
 
 export type AiLlmStreamingMode = 'force_stream' | 'force_non_stream'
 export type KnowledgeIndexSpeed = 'slow' | 'fast'
+export type EmbeddingServiceStatus = 'uninitialized' | 'initializing' | 'ready' | 'error'
+export type EmbeddingRuntimeProcessInfo = {
+  pid: number | null
+  intraOpNumThreads: number
+}
+export type EmbeddingRuntimeSnapshot = EmbeddingRuntimeProcessInfo & {
+  status: EmbeddingServiceStatus
+}
 export type LlmProviderKind = 'openai' | 'deepseek' | 'openai-compatible'
 export type LlmProviderId =
   | 'deepseek'

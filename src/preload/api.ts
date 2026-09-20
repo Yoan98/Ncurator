@@ -30,6 +30,7 @@ import type {
   AppUpdateActionResponse,
   AppUpdateSnapshot,
   AppStartupStatus,
+  EmbeddingRuntimeSnapshot,
   ChatMessage,
   AttachmentPickRequest,
   AttachmentPickResponse,
@@ -206,7 +207,7 @@ export type DesktopApi = {
   getActiveDownload: () => Promise<ActiveDownloadSnapshot | null>
   deleteModel: (repoId: string) => Promise<{ success: boolean; error?: string }>
   getModels: () => Promise<ModelInfo[]>
-  getEmbeddingStatus: () => Promise<'uninitialized' | 'initializing' | 'ready' | 'error'>
+  getEmbeddingStatus: () => Promise<EmbeddingRuntimeSnapshot>
   readFile: (filePath: string) => Promise<Uint8Array>
   fileExists: (filePath: string) => Promise<boolean>
   writeTextFile: (payload: WriteTextFileRequest) => Promise<WriteTextFileResponse>

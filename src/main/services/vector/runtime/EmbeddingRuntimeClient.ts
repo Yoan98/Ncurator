@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import { randomUUID } from 'node:crypto'
 import { utilityProcess, type UtilityProcess } from 'electron'
+import type { EmbeddingRuntimeProcessInfo } from '../../../../shared/types'
 import type {
   EmbeddingExecutor,
   EmbeddingResult,
@@ -26,6 +27,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
   private readonly errorLogService?: AppErrorLogService
   private threadBudget: EmbeddingThreadBudget
   private process: UtilityProcess | null = null
+  private runtimePid: number | null = null
   private processReady: Promise<UtilityProcess> | null = null
   private initializedProcess: UtilityProcess | null = null
   private initializationPromise: Promise<void> | null = null
@@ -55,6 +57,19 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
     this.threadBudget = budget
   }
 
+  public getRuntimeProcessInfo(): EmbeddingRuntimeProcessInfo {
+    const pid = this.runtimePid ?? this.process?.pid
+    return {
+      pid: typeof pid === 'number' && Number.isInteger(pid) && pid > 0 ? pid : null,
+      intraOpNumThreads: this.threadBudget.intraOpNumThreads
+    }
+  }
+
+  private rememberRuntimePid(child: UtilityProcess): void {
+    const pid = child.pid
+    this.runtimePid = typeof pid === 'number' && Number.isInteger(pid) && pid > 0 ? pid : null
+  }
+
   private async ensureProcess(): Promise<UtilityProcess> {
     if (this.closing) throw new Error('embedding runtime client is closed')
     if (this.process && this.processReady) return await this.processReady
@@ -79,6 +94,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
       }
     )
     this.process = child
+    this.rememberRuntimePid(child)
     this.initializedProcess = null
 
     child.on('message', (message: unknown) => {
@@ -107,6 +123,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
     this.processReady = new Promise<UtilityProcess>((resolve, reject) => {
       const onSpawn = (): void => {
         child.removeListener('exit', onEarlyExit)
+        this.rememberRuntimePid(child)
         resolve(child)
       }
       const onEarlyExit = (code: number): void => {
@@ -124,6 +141,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
     const error = new Error(`embedding runtime exited with code ${code}`)
     if (!this.closing) this.logError(error, 'exit', code)
     this.process = null
+    this.runtimePid = null
     this.processReady = null
     this.initializedProcess = null
     this.initializationPromise = null
@@ -203,6 +221,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
     this.closing = true
     const child = this.process
     this.process = null
+    this.runtimePid = null
     this.processReady = null
     this.initializedProcess = null
     this.initializationPromise = null

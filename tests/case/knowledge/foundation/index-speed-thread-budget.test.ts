@@ -6,6 +6,7 @@ import {
   resolveOrtThreadBudget,
   toOrtSessionOptions
 } from '../../../../src/main/services/vector/indexSpeed'
+import { osThreadDeltasFollowIndexSpeed } from '../../../harness/core/indexSpeedThreads'
 import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const PROBE_PATH = fileURLToPath(
@@ -142,15 +143,18 @@ describe('knowledge foundation', () => {
           }
         )
         runtime.assertThat(
-          result.slowThreads.delta >= result.slowBudget.intraOpNumThreads &&
-            result.fastThreads.delta >= result.fastBudget.intraOpNumThreads &&
-            result.fastThreads.delta - result.slowThreads.delta ===
-              result.fastBudget.intraOpNumThreads - result.slowBudget.intraOpNumThreads &&
-            result.fastThreads.after > result.slowThreads.after,
+          osThreadDeltasFollowIndexSpeed({
+            slowDelta: result.slowThreads.delta,
+            fastDelta: result.fastThreads.delta,
+            slowAfter: result.slowThreads.after,
+            fastAfter: result.fastThreads.after,
+            slowIntraOp: result.slowBudget.intraOpNumThreads,
+            fastIntraOp: result.fastBudget.intraOpNumThreads
+          }),
           {
             name: 'index-session-os-threads-follow-speed',
             message:
-              '独立 Node 进程里真实 embedding session 的操作系统线程增量必须不少于该档 intraOp；高速增量大于慢速，且两档增量之差等于 intraOp 之差。',
+              '独立 Node 进程里真实 embedding session 的操作系统线程增量必须跟随档位：Mac 不少于该档 intraOp，Windows 不少于 intraOp-1（ORT 调用线程计入池）；高速 after 大于慢速，且两档增量之差等于 intraOp 之差。',
             data: {
               slowBudget: result.slowBudget,
               fastBudget: result.fastBudget,
