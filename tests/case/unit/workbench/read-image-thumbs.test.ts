@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   readImageDisplayName,
   readImagePathsFromInput
-} from '../../../../src/renderer/src/components/workbench/readImageThumbUtils'
+} from '../../../../src/shared/workbench/readImageThumbUtils'
 
 describe('read_image activity thumb helpers', () => {
   it('reads trimmed paths from tool input', () => {

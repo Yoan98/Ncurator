@@ -6,9 +6,9 @@ import {
   guessImageMimeType,
   isReadImageRemotePath,
   readImageDisplayName
-} from './readImageThumbUtils'
+} from '../../../../shared/workbench/readImageThumbUtils'
 
-export { readImageDisplayName, readImagePathsFromInput } from './readImageThumbUtils'
+export { readImageDisplayName, readImagePathsFromInput } from '../../../../shared/workbench/readImageThumbUtils'
 
 type ReadImageThumbsProps = {
   paths: string[]

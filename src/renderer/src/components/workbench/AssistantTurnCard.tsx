@@ -53,7 +53,7 @@ import {
 import ChangeCountBadges from './ChangeCountBadges'
 import WorkspacePathLabel from './WorkspacePathLabel'
 import ReadImageThumbs from './ReadImageThumbs'
-import { readImagePathsFromInput } from './readImageThumbUtils'
+import { readImagePathsFromInput } from '../../../../shared/workbench/readImageThumbUtils'
 import type { ImageLightboxImage } from './ImageLightbox'
 
 type AssistantTurnCardProps = {

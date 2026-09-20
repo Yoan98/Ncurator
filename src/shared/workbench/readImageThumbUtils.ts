@@ -1,4 +1,4 @@
-import type { IpcJsonObject, IpcJsonValue } from '../../../../shared/types'
+import type { IpcJsonObject, IpcJsonValue } from '../types'
 
 const isRemoteImagePath = (value: string): boolean => /^https?:\/\//i.test(value)
 
