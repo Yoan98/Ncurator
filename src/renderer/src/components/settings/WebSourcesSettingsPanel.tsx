@@ -20,6 +20,7 @@ import WorkspaceIndexJobProgress from './WorkspaceIndexJobProgress'
 import { KnowledgeIndexSpeedControl } from './KnowledgeIndexSpeedControl'
 import IndexPrepareCancelModal from './IndexPrepareCancelModal'
 import { formatDateTime, getWebStatusBadge } from './utils/workspace'
+import { beginPrepareHeld, endPrepareHeld } from './prepareHeld'
 
 type WebSourcesSettingsPanelProps = {
   embedded?: boolean
@@ -179,7 +180,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       return
     }
 
-    setWebPrepareHeld(true)
+    const heldAt = beginPrepareHeld(setWebPrepareHeld)
     try {
       const response = await window.api.webSourcesPrepare({})
       if (!response.success) {
@@ -192,7 +193,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       console.error(error)
       message.error('更新网页索引失败')
     } finally {
-      setWebPrepareHeld(false)
+      await endPrepareHeld(setWebPrepareHeld, heldAt)
     }
   }
 
@@ -206,7 +207,7 @@ const WebSourcesSettingsPanel: React.FC<WebSourcesSettingsPanelProps> = ({
       message.warning('请先安装向量模型后再更新索引')
       return
     }
-    setWebPrepareHeld(true)
+    beginPrepareHeld(setWebPrepareHeld)
     void handlePrepareWebSources()
   }
 

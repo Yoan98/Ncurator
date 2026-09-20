@@ -121,7 +121,7 @@ Settings 顶层 suite 对齐 PRD 模块：
 - 测试类型：`e2e / exclusive`
 - What：独立小目录上，默认慢速真实更新索引一次，再补文件切高速再更新索引一次；同一嵌入进程 ready 前后的操作系统线程增量随档位变化。
 - Why：档位是否生效，看的是更新索引时电脑上嵌入进程的线程数是否按 intraOp 增加，不是进程名里的数字，也不是共享 warmup fixture。
-- How：通过原生目录选择添加空临时目录；每次更新索引前先写入一个新 txt 并检查更新，确认可索引数 ≥ 1 后再点更新索引，避免第一次 prepare 空跑或过快导致进度块不可见。进度块可见且慢/高速已锁定后，才开始数嵌入进程线程（ready 后再数一次）。再写入第二个 txt、检查更新、切换高速，同样先等进度再测线程。嵌入 runtime PID 由主进程只读 IPC（`getEmbeddingStatus` 的 `pid` / `intraOpNumThreads`）提供；argv/title 解析只作次要信号，且不得在 Windows 上高频枚举进程。线程数分别用 `ps -M` 与 `Get-Process.Threads.Count`。
+- How：通过原生目录选择添加空临时目录；每次更新索引前写入 ≥50KB / 约 400 段待索引 txt 并检查更新，确认可索引数 ≥ 1 且「更新索引」可点。点击后以慢/高速变为 disabled 为同步点（允许进度块可见作为并列信号，10–30s，失败 dump actionable / 按钮 / embedding / job）；不要把进度条可见当作唯一同步点，也不用 360s 去等它。锁定后再数嵌入进程线程。嵌入 runtime PID 由主进程只读 IPC 提供。线程数分别用 `ps -M` 与 `Get-Process.Threads.Count`。
 - Oracle：默认慢速后可切换高速，对齐 `SET-WORKSPACE-009-AC1`；更新索引进行中禁用慢/高速，终态后恢复，对齐 `SET-WORKSPACE-009-AC4`；两次更新索引拉起不同嵌入进程；每次 `after - before` 在 Mac 上不少于本机该档 `intraOpNumThreads`，在 Windows 上不少于 `intraOp - 1`（ORT/Eigen 把调用线程算进池）；高速 `after` 大于慢速且两档增量之差等于档位差。两个 txt 均索引完成。
 
 #### `workspace-prepare-sequential-addresses`

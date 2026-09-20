@@ -12,6 +12,8 @@ import {
   waitForEmbeddingRuntimeProcessGone
 } from '../../../../harness/e2e/embeddingRuntimeThreads'
 import {
+  SETTINGS_E2E_TIMEOUT_MS,
+  SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS,
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
   addWorkspaceDirectoryThroughNativeDialog,
   getSettingsLocator,
@@ -20,11 +22,26 @@ import {
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
 
+const UI_WAIT_MS = SETTINGS_E2E_TIMEOUT_MS
+const PREPARE_LOCK_WAIT_MS = 30_000
+
+const buildPendingIndexText = (label: string): string => {
+  const paragraphs = Array.from({ length: 400 }, (_, index) => {
+    const n = index + 1
+    return `${label} ${n} unique indexing block ${label}-${n} ${'body '.repeat(20)}`.trim()
+  })
+  return `${paragraphs.join('\n\n')}\n`
+}
+
 const waitForPrepareEnabled = async (page: Page): Promise<void> => {
-  await page.waitForFunction((testId) => {
-    const element = document.querySelector(`[data-testid="${testId}"]`)
-    return element instanceof HTMLButtonElement && !element.disabled
-  }, importSelectors.workspaceQuickPrepareButton)
+  await page.waitForFunction(
+    (testId) => {
+      const element = document.querySelector(`[data-testid="${testId}"]`)
+      return element instanceof HTMLButtonElement && !element.disabled
+    },
+    importSelectors.workspaceQuickPrepareButton,
+    { timeout: UI_WAIT_MS }
+  )
 }
 
 const waitForActionableIndexCount = async (page: Page, minimum: number): Promise<void> => {
@@ -33,7 +50,8 @@ const waitForActionableIndexCount = async (page: Page, minimum: number): Promise
       const element = document.querySelector(`[data-testid="${input.testId}"]`)
       return Number(element?.textContent || '0') >= input.minimum
     },
-    { testId: importSelectors.workspaceActionableIndexCount, minimum }
+    { testId: importSelectors.workspaceActionableIndexCount, minimum },
+    { timeout: UI_WAIT_MS }
   )
 }
 
@@ -53,8 +71,47 @@ const waitForSpeedButtonsDisabled = async (page: Page, disabled: boolean): Promi
       slow: importSelectors.workspaceIndexSpeedSlow,
       fast: importSelectors.workspaceIndexSpeedFast,
       disabled
-    }
+    },
+    { timeout: UI_WAIT_MS }
   )
+}
+
+const dumpPrepareDiagnostics = async (page: Page): Promise<string> => {
+  const diagnostics = await page.evaluate(async (selectors) => {
+    const actionable = document.querySelector(`[data-testid="${selectors.actionable}"]`)
+    const prepare = document.querySelector(`[data-testid="${selectors.prepare}"]`)
+    const slow = document.querySelector(`[data-testid="${selectors.slow}"]`)
+    const fast = document.querySelector(`[data-testid="${selectors.fast}"]`)
+    const progress = document.querySelector(`[data-testid="${selectors.progress}"]`)
+    const embedding = await window.api.getEmbeddingStatus()
+    const workspaces = await window.api.workspaceList()
+    const jobs = await Promise.all(
+      workspaces.items.map(async (item) => {
+        const response = await window.api.workspaceIndexJobGet({
+          workspaceId: item.id,
+          sourceKind: 'file'
+        })
+        return { workspaceId: item.id, job: response.job || null }
+      })
+    )
+    return {
+      actionableCount: Number(actionable?.textContent || 0),
+      prepareDisabled: prepare instanceof HTMLButtonElement ? prepare.disabled : null,
+      prepareLabel: prepare instanceof HTMLElement ? prepare.innerText.trim() : null,
+      slowDisabled: slow instanceof HTMLButtonElement ? slow.disabled : null,
+      fastDisabled: fast instanceof HTMLButtonElement ? fast.disabled : null,
+      progressVisible: progress instanceof HTMLElement,
+      embedding,
+      jobs
+    }
+  }, {
+    actionable: importSelectors.workspaceActionableIndexCount,
+    prepare: importSelectors.workspaceQuickPrepareButton,
+    slow: importSelectors.workspaceIndexSpeedSlow,
+    fast: importSelectors.workspaceIndexSpeedFast,
+    progress: importSelectors.workspaceIndexJobProgress
+  })
+  return JSON.stringify(diagnostics)
 }
 
 const scanPendingFileThenPrepare = async (input: {
@@ -70,12 +127,35 @@ const scanPendingFileThenPrepare = async (input: {
   await waitForPrepareEnabled(input.page)
 }
 
-const clickPrepareUntilProgressVisible = async (page: Page): Promise<void> => {
+const clickPrepareUntilSpeedLocked = async (page: Page): Promise<void> => {
   await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).click()
-  await getSettingsLocator(page, importSelectors.workspaceIndexJobProgress).waitFor({
-    state: 'visible',
-    timeout: SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS
-  })
+  try {
+    await page.waitForFunction(
+      (input) => {
+        const slow = document.querySelector(`[data-testid="${input.slow}"]`)
+        const fast = document.querySelector(`[data-testid="${input.fast}"]`)
+        const progress = document.querySelector(`[data-testid="${input.progress}"]`)
+        const speedLocked =
+          slow instanceof HTMLButtonElement &&
+          fast instanceof HTMLButtonElement &&
+          slow.disabled &&
+          fast.disabled
+        return speedLocked || progress instanceof HTMLElement
+      },
+      {
+        slow: importSelectors.workspaceIndexSpeedSlow,
+        fast: importSelectors.workspaceIndexSpeedFast,
+        progress: importSelectors.workspaceIndexJobProgress
+      },
+      { timeout: PREPARE_LOCK_WAIT_MS }
+    )
+  } catch (error) {
+    throw new Error(
+      `prepare did not lock index speed or show progress: ${await dumpPrepareDiagnostics(page)}; ${
+        error instanceof Error ? error.message : String(error)
+      }`
+    )
+  }
 }
 
 describe('settings workspace e2e', () => {
@@ -107,11 +187,15 @@ describe('settings workspace e2e', () => {
           await waitForFileIndexJobIdle(page, workspaceId)
           await navigateToSettingsSection(page, 'workspace')
           const slowSpeed = getSettingsLocator(page, importSelectors.workspaceIndexSpeedSlow)
-          await slowSpeed.waitFor({ state: 'visible' })
-          await page.waitForFunction((testId) => {
-            const element = document.querySelector(`[data-testid="${testId}"]`)
-            return element instanceof HTMLButtonElement && !element.disabled
-          }, importSelectors.workspaceIndexSpeedSlow)
+          await slowSpeed.waitFor({ state: 'visible', timeout: UI_WAIT_MS })
+          await page.waitForFunction(
+            (testId) => {
+              const element = document.querySelector(`[data-testid="${testId}"]`)
+              return element instanceof HTMLButtonElement && !element.disabled
+            },
+            importSelectors.workspaceIndexSpeedSlow,
+            { timeout: UI_WAIT_MS }
+          )
           const defaultSlowSelected = await slowSpeed.evaluate((element) =>
             element.classList.contains('ant-btn-primary')
           )
@@ -125,15 +209,14 @@ describe('settings workspace e2e', () => {
             page,
             workspaceId,
             filePath: path.join(workspaceRoot, 'slow.txt'),
-            content: 'slow index speed\n'
+            content: buildPendingIndexText('slow')
           })
-          await clickPrepareUntilProgressVisible(page)
-          await waitForSpeedButtonsDisabled(page, true)
+          await clickPrepareUntilSpeedLocked(page)
           const speedLockedWhileIndexing = true
           const slowThreads = await measureEmbeddingRuntimeThreadDelta({
             page,
             electronPid,
-            timeoutMs: SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS
+            timeoutMs: SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS
           })
           await waitForFileIndexJobIdle(page, workspaceId)
           await waitForSpeedButtonsDisabled(page, false)
@@ -143,19 +226,19 @@ describe('settings workspace e2e', () => {
             page,
             workspaceId,
             filePath: path.join(workspaceRoot, 'fast.txt'),
-            content: 'fast index speed\n'
+            content: buildPendingIndexText('fast')
           })
           await selectWorkspaceIndexSpeedThroughSettingsUi(page, 'fast')
           await waitForEmbeddingRuntimeProcessGone({ pid: slowThreads.pid })
           const knowledgeIndexSpeed = (await page.evaluate(() => window.api.appSettingsGet()))
             .knowledgeIndexSpeed
 
-          await clickPrepareUntilProgressVisible(page)
+          await clickPrepareUntilSpeedLocked(page)
           const fastThreads = await measureEmbeddingRuntimeThreadDelta({
             page,
             electronPid,
             excludePid: slowThreads.pid,
-            timeoutMs: SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS
+            timeoutMs: SETTINGS_REAL_WORKSPACE_E2E_TIMEOUT_MS
           })
           const result = await waitForFileIndexJobIdle(page, workspaceId)
 
