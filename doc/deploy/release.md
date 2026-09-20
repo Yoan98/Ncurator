@@ -2,6 +2,19 @@
 
 当前正式发布只发腾讯云 COS，一次发布完成后不再把同一 Tag 上传到 Cloudflare R2。R2 仅供未来海外版显式使用 `RELEASE_STORAGE_TARGET=r2`。当前发布平台为 Windows x64 和 macOS arm64，平台 Tag 分别使用 `windows-vX.Y.Z` 与 `mac-vX.Y.Z`，版本号独立递增。
 
+## 0. 执行约定（助手 / 发版机）
+
+用户已明确要求发布时，助手应在发版机上按本文流程**自主执行到发布完成**（`release:start` → prepare → 正式包 E2E → COS publish 与公开验证），不要把 typecheck、测试架构、候选包构建、定向回归选择、上传失败重试等工程问题停下来逐项询问。
+
+仅在下列**产品级**事项需要用户介入时再中断询问：
+
+- 版本号、发布范围或是否上线尚不明确
+- 需要取舍的产品行为 / 文案 / 兼容性决策
+- 签名证书、密钥、COS/CDN 控制台权限等只有用户能提供或批准的事项
+- 正式包 E2E 暴露出需要产品拍板的缺陷（修代码重打 vs 带已知风险上线等）
+
+用户说「按发布文档发布」即视为批准设置 `NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production` 完成本次 COS 上线；默认仍只发 COS，不主动同步 R2。
+
 ## 1. 发布流程
 
 发布按以下顺序进行：
@@ -104,7 +117,7 @@ git diff <previous-platform-tag>..<current-platform-tag>
 
 publish 只读取已经测试通过的候选包，不重新构建。默认发布到 COS，验证国内公开下载、更新 metadata、公开 manifest、文件大小、sha512 和 URL 成功后才算完成。对象键、CDN Cache-Control 和公开 URL 见 [`design.md`](./design.md)。
 
-真实发布默认锁定。用户明确批准上线后，在当前终端设置：
+真实发布默认锁定。用户已按第 0 节批准本次上线后，在当前终端设置：
 
 ```bash
 export NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production
