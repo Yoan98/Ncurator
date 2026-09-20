@@ -1,25 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { pipeline, env } from '@huggingface/transformers'
-
-const countProcessThreads = (pid = process.pid) => {
-  if (process.platform === 'darwin') {
-    const out = execFileSync('ps', ['-M', '-p', String(pid)], { encoding: 'utf8' })
-    return Math.max(0, out.trim().split('\n').length - 1)
-  }
-  if (process.platform === 'win32') {
-    const out = execFileSync(
-      'powershell.exe',
-      ['-NoProfile', '-NonInteractive', '-Command', `(Get-Process -Id ${pid}).Threads.Count`],
-      { encoding: 'utf8' }
-    )
-    const count = Number(out.trim())
-    if (!Number.isInteger(count) || count <= 0) {
-      throw new Error(`invalid windows thread count: ${out}`)
-    }
-    return count
-  }
-  throw new Error(`unsupported platform: ${process.platform}`)
-}
+import { countProcessThreads } from '../core/processThreads.mjs'
 
 const sessionOptions = JSON.parse(String(process.argv[2] || 'null'))
 if (!sessionOptions || !Number.isInteger(sessionOptions.intraOpNumThreads)) {

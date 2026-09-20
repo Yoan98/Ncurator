@@ -15,6 +15,11 @@ export const resolveLogicalCoreCount = (logicalCores?: number): number => {
 
 export const EMBEDDING_INTRA_OP_THREADS_ENV = 'NCURATOR_EMBEDDING_INTRA_OP_THREADS'
 export const EMBEDDING_ALLOW_SPINNING_ENV = 'NCURATOR_EMBEDDING_ALLOW_SPINNING'
+export const EMBEDDING_RUNTIME_PROCESS_TITLE = 'ncurator-emb'
+export const EMBEDDING_RUNTIME_PROCESS_ARG = `--${EMBEDDING_RUNTIME_PROCESS_TITLE}`
+
+export const embeddingRuntimeProcessTitle = (intraOpNumThreads: number): string =>
+  `${EMBEDDING_RUNTIME_PROCESS_TITLE}-${intraOpNumThreads}`
 
 export const toOrtSessionOptions = (budget: OrtThreadBudget) => ({
   intraOpNumThreads: budget.intraOpNumThreads,

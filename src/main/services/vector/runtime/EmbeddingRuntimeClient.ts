@@ -9,7 +9,11 @@ import type {
   EmbeddingRuntimeResponse,
   EmbeddingThreadBudget
 } from './types'
-import { resolveOrtThreadBudget, toEmbeddingRuntimeEnv } from '../indexSpeed'
+import {
+  EMBEDDING_RUNTIME_PROCESS_ARG,
+  resolveOrtThreadBudget,
+  toEmbeddingRuntimeEnv
+} from '../indexSpeed'
 import type { AppErrorLogService } from '../../logging/AppErrorLogService'
 
 const DEFAULT_RUNTIME_TIMEOUT_MS = 180_000
@@ -60,7 +64,7 @@ export class EmbeddingRuntimeClient implements EmbeddingExecutor {
       throw error
     }
 
-    const child = utilityProcess.fork(this.entryPath, [], {
+    const child = utilityProcess.fork(this.entryPath, [EMBEDDING_RUNTIME_PROCESS_ARG], {
       serviceName: 'Ncurator Embedding Runtime',
       stdio: 'pipe',
       env: {

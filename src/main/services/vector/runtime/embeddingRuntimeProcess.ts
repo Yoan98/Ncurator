@@ -1,5 +1,9 @@
 import { TransformersEmbeddingExecutor } from './TransformersEmbeddingExecutor'
-import { parseEmbeddingRuntimeEnv, resolveOrtThreadBudget } from '../indexSpeed'
+import {
+  embeddingRuntimeProcessTitle,
+  parseEmbeddingRuntimeEnv,
+  resolveOrtThreadBudget
+} from '../indexSpeed'
 import type {
   EmbeddingRuntimeRequest,
   EmbeddingRuntimeResponse,
@@ -27,7 +31,12 @@ export const createEmbeddingRuntimeRequestHandler = (executor: EmbeddingExecutor
   async (request: EmbeddingRuntimeRequest): Promise<EmbeddingRuntimeResponse> => {
     try {
       if (request.action === 'initialize') {
-        if (request.payload) executor.setThreadBudget?.(request.payload)
+        if (request.payload) {
+          executor.setThreadBudget?.(request.payload)
+          if (runtimeProcess.parentPort) {
+            process.title = embeddingRuntimeProcessTitle(request.payload.intraOpNumThreads)
+          }
+        }
         await executor.initialize()
         return {
           requestId: request.requestId,
@@ -74,10 +83,12 @@ export const createEmbeddingRuntimeDispatcher = (input: {
 const parentPort = runtimeProcess.parentPort
 
 if (parentPort) {
+  const threadBudget = parseEnvThreadBudget()
+  process.title = embeddingRuntimeProcessTitle(threadBudget.intraOpNumThreads)
   const executor = new TransformersEmbeddingExecutor({
     modelsPath,
     modelName,
-    threadBudget: parseEnvThreadBudget()
+    threadBudget
   })
   const dispatcher = createEmbeddingRuntimeDispatcher({
     executor,

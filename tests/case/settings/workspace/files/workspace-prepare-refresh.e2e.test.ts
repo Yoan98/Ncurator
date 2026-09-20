@@ -1,11 +1,14 @@
 import { describe, it } from 'vitest'
 import { importSelectors } from '../../../../../src/renderer/src/testing/selectors'
+import { resolveOrtThreadBudget } from '../../../../../src/main/services/vector/indexSpeed'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
+import { measureEmbeddingRuntimeThreads } from '../../../../harness/e2e/embeddingRuntimeThreads'
 import {
   SETTINGS_REAL_WORKSPACE_LONG_E2E_TIMEOUT_MS,
   createRealWorkspaceWithRoot,
   getSettingsLocator,
   navigateToSettingsSection,
+  selectWorkspaceIndexSpeedThroughSettingsUi,
   waitForFileIndexJobIdle
 } from '../../../../harness/e2e/settings'
 import { copySharedWorkspaceFixture, toSupportedFileStatuses } from './realWorkspaceHelpers'
@@ -43,6 +46,12 @@ describe('settings workspace e2e', () => {
           let directoryCallBaseline = 0
           let directoryCallsWhileRunning = -1
           let directoryCallsAfterCompletion = -1
+          const slowBudget = resolveOrtThreadBudget('slow')
+          const fastBudget = resolveOrtThreadBudget('fast')
+          let slowThreads = { pid: 0, threads: 0 }
+          let fastThreads = { pid: 0, threads: 0 }
+          const electronPid = runtime.electronApp.process()?.pid
+          if (!electronPid) throw new Error('electron pid is required to measure embedding threads')
 
           await runtime.step({
             name: 'prepare-workspace-through-ui',
@@ -56,7 +65,6 @@ describe('settings workspace e2e', () => {
                 state: 'visible'
               })
               const slowSpeed = getSettingsLocator(page, importSelectors.workspaceIndexSpeedSlow)
-              const fastSpeed = getSettingsLocator(page, importSelectors.workspaceIndexSpeedFast)
               await slowSpeed.waitFor({ state: 'visible' })
               await page.waitForFunction(
                 (testId) => {
@@ -68,14 +76,8 @@ describe('settings workspace e2e', () => {
               defaultSlowSelected = await slowSpeed.evaluate((element) =>
                 element.classList.contains('ant-btn-primary')
               )
-              await fastSpeed.click()
-              await page.waitForFunction(
-                (testId) =>
-                  document.querySelector(`[data-testid="${testId}"]`)?.classList.contains(
-                    'ant-btn-primary'
-                  ) === true,
-                importSelectors.workspaceIndexSpeedFast
-              )
+              slowThreads = await measureEmbeddingRuntimeThreads({ page, electronPid })
+              await selectWorkspaceIndexSpeedThroughSettingsUi(page, 'fast')
               knowledgeIndexSpeed = (await page.evaluate(() => window.api.appSettingsGet()))
                 .knowledgeIndexSpeed
               directoryCallBaseline = await page.evaluate(
@@ -109,6 +111,11 @@ describe('settings workspace e2e', () => {
                   ).length || 0
               )
               directoryCallsWhileRunning -= directoryCallBaseline
+              fastThreads = await measureEmbeddingRuntimeThreads({
+                page,
+                electronPid,
+                excludePid: slowThreads.pid
+              })
             }
           })
 
@@ -129,6 +136,10 @@ describe('settings workspace e2e', () => {
             buttonsDisabled,
             defaultSlowSelected,
             knowledgeIndexSpeed,
+            slowBudget,
+            fastBudget,
+            slowThreads,
+            fastThreads,
             directoryCallsWhileRunning,
             directoryCallsAfterCompletion,
             summary: result.tree.summary,
@@ -143,6 +154,24 @@ describe('settings workspace e2e', () => {
               message:
                 '默认慢速，切换高速并保存后再更新索引，对齐 SET-WORKSPACE-009-AC1；本次索引走切换后的档位。',
               data: result
+            }
+          )
+          await runtime.assertThat(
+            result.slowThreads.pid !== result.fastThreads.pid &&
+              result.slowThreads.intraOpNumThreads === result.slowBudget.intraOpNumThreads &&
+              result.fastThreads.intraOpNumThreads === result.fastBudget.intraOpNumThreads &&
+              (result.fastThreads.intraOpNumThreads || 0) >
+                (result.slowThreads.intraOpNumThreads || 0),
+            {
+              name: 'embedding-utility-threads-follow-index-speed',
+              message:
+                '真实更新索引用的 Electron 嵌入子进程必须重启，且进程名中的 intraOp 等于当前慢/高速档位。',
+              data: {
+                slowBudget: result.slowBudget,
+                fastBudget: result.fastBudget,
+                slowThreads: result.slowThreads,
+                fastThreads: result.fastThreads
+              }
             }
           )
 
