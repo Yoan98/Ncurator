@@ -69,5 +69,31 @@ describe('index speed OS thread accounting', () => {
         'win32'
       )
     ).toBe(false)
+    expect(
+      osThreadDeltasFollowIndexSpeed(
+        {
+          slowDelta: 0,
+          fastDelta: 0,
+          slowAfter: 40,
+          fastAfter: 49,
+          slowIntraOp: 12,
+          fastIntraOp: 22
+        },
+        'win32'
+      )
+    ).toBe(true)
+    expect(
+      osThreadDeltasFollowIndexSpeed(
+        {
+          slowDelta: 0,
+          fastDelta: 0,
+          slowAfter: 40,
+          fastAfter: 49,
+          slowIntraOp: 12,
+          fastIntraOp: 22
+        },
+        'darwin'
+      )
+    ).toBe(false)
   })
 })

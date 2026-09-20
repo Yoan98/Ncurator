@@ -12,7 +12,10 @@ export const osThreadDeltaMeetsBudget = (
   platform = process.platform
 ): boolean => delta >= minExpectedOsThreadDelta(intraOpNumThreads, platform)
 
-/** Ready-state after counts may be the only signal when the embedding worker was already warm. */
+/**
+ * Ready-state after counts may be the only signal when the embedding worker was
+ * already warm on Windows (measurement starts after ORT threads are up).
+ */
 export const osThreadAfterCountsFollowIndexSpeed = (
   input: {
     slowAfter: number
@@ -22,12 +25,12 @@ export const osThreadAfterCountsFollowIndexSpeed = (
   },
   platform = process.platform
 ): boolean => {
+  if (platform !== "win32") return false
   const budgetDiff = input.fastIntraOp - input.slowIntraOp
   if (budgetDiff <= 0) return false
   if (!(input.fastAfter > input.slowAfter)) return false
   const afterDiff = input.fastAfter - input.slowAfter
-  const tolerance = platform === "win32" ? 1 : 0
-  return Math.abs(afterDiff - budgetDiff) <= tolerance
+  return Math.abs(afterDiff - budgetDiff) <= 1
 }
 
 export const osThreadDeltasFollowIndexSpeed = (
@@ -48,6 +51,9 @@ export const osThreadDeltasFollowIndexSpeed = (
     input.fastDelta - input.slowDelta === input.fastIntraOp - input.slowIntraOp &&
     input.fastAfter > input.slowAfter
   if (deltaPath) return true
-  // E2E: embedding worker often reaches ready before measurement can sample the ramp.
-  return osThreadAfterCountsFollowIndexSpeed(input, platform)
+  // Warm-worker path only: both deltas stayed at 0 because ORT was already ready.
+  if (platform === "win32" && input.slowDelta === 0 && input.fastDelta === 0) {
+    return osThreadAfterCountsFollowIndexSpeed(input, platform)
+  }
+  return false
 }
