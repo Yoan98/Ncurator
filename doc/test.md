@@ -4,7 +4,7 @@
 
 - 本文是 NCurator-Desktop 的唯一测试总规范。
 - 各业务域的 suite、case 和领域规则只在对应 `doc/test-plan/**` 中维护，本文不重复登记 case。
-- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`knowledge-test` 专门覆盖知识库的功能测试（如搜索和索引等），优化设计测试（如召回率、检索与索引优化等），全部是 backend，当前尚未登记 case；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑；`showcase` 是独立官网样例采集，不进入领域测试计划。
+- `ai-test` 专门覆盖 AI 架构及其工具，全部是 backend；`knowledge-test` 专门覆盖知识库的功能测试（如搜索和索引等），优化设计测试（如召回率、检索与索引优化等），全部是 backend；`settings-test` 和 `workbench-test` 专门覆盖对应 PRD 功能点，全部是 E2E；Unit 只补足前述范围未覆盖的 backend 函数、类和底层逻辑；`showcase` 是独立官网样例采集，不进入领域测试计划。
 
 测试体系只沉淀一层长期执行产物：
 
@@ -144,7 +144,7 @@ runner 不负责：
   - `pnpm test:ai:human:mock-llm`
   - `pnpm test:ai:human:live`
 - Knowledge
-  - `pnpm test:knowledge:backend`：知识库专项；当前尚未登记 case。
+  - `pnpm test:knowledge:backend`
 - Unit
   - `pnpm test:unit`
   - `pnpm test:unit:ai`

@@ -38,13 +38,15 @@ describe('settings workspace e2e', () => {
           const workspaceId = workspace.workspace!.id
           let prepareProgressVisible = false
           let buttonsDisabled = false
+          let defaultSlowSelected = false
+          let knowledgeIndexSpeed = ''
           let directoryCallBaseline = 0
           let directoryCallsWhileRunning = -1
           let directoryCallsAfterCompletion = -1
 
           await runtime.step({
             name: 'prepare-workspace-through-ui',
-            message: '通过 UI 点击更新索引，并确认执行中进度块和按钮禁用状态。',
+            message: '通过 UI 先切换索引速度，再点击更新索引，并确认执行中进度块和按钮状态。',
             run: async () => {
               await navigateToSettingsSection(page, 'workspace')
               await getSettingsLocator(page, importSelectors.workspaceQuickPrepareButton).waitFor({
@@ -53,6 +55,29 @@ describe('settings workspace e2e', () => {
               await getSettingsLocator(page, importSelectors.workspaceTree).waitFor({
                 state: 'visible'
               })
+              const slowSpeed = getSettingsLocator(page, importSelectors.workspaceIndexSpeedSlow)
+              const fastSpeed = getSettingsLocator(page, importSelectors.workspaceIndexSpeedFast)
+              await slowSpeed.waitFor({ state: 'visible' })
+              await page.waitForFunction(
+                (testId) => {
+                  const element = document.querySelector(`[data-testid="${testId}"]`)
+                  return element instanceof HTMLButtonElement && !element.disabled
+                },
+                importSelectors.workspaceIndexSpeedSlow
+              )
+              defaultSlowSelected = await slowSpeed.evaluate((element) =>
+                element.classList.contains('ant-btn-primary')
+              )
+              await fastSpeed.click()
+              await page.waitForFunction(
+                (testId) =>
+                  document.querySelector(`[data-testid="${testId}"]`)?.classList.contains(
+                    'ant-btn-primary'
+                  ) === true,
+                importSelectors.workspaceIndexSpeedFast
+              )
+              knowledgeIndexSpeed = (await page.evaluate(() => window.api.appSettingsGet()))
+                .knowledgeIndexSpeed
               directoryCallBaseline = await page.evaluate(
                 () =>
                   (window as typeof window & {
@@ -102,6 +127,8 @@ describe('settings workspace e2e', () => {
           return {
             prepareProgressVisible,
             buttonsDisabled,
+            defaultSlowSelected,
+            knowledgeIndexSpeed,
             directoryCallsWhileRunning,
             directoryCallsAfterCompletion,
             summary: result.tree.summary,
@@ -109,6 +136,16 @@ describe('settings workspace e2e', () => {
           }
         },
         assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.defaultSlowSelected === true && result.knowledgeIndexSpeed === 'fast',
+            {
+              name: 'prepare-runs-after-switching-index-speed',
+              message:
+                '默认慢速，切换高速并保存后再更新索引，对齐 SET-WORKSPACE-009-AC1；本次索引走切换后的档位。',
+              data: result
+            }
+          )
+
           await runtime.assertThat(result.prepareProgressVisible && !result.buttonsDisabled, {
             name: 'prepare-progress-is-visible',
             message:

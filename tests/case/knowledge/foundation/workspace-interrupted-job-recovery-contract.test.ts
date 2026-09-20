@@ -4,8 +4,8 @@ import type {
   WorkspaceFileIndexRecord,
   WorkspaceIndexJobRecord,
   WorkspaceSource
-} from '../../../../../src/shared/types'
-import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+} from '../../../../src/shared/types'
+import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const NOW = 1_716_200_000_000
 const WORKSPACE: WorkspaceSource = {
@@ -69,9 +69,8 @@ describe('unit workspace backend', () => {
     await runBackendCase({
       caseId: 'workspace-interrupted-job-recovery-contract',
       harnessMode: 'tool-real',
-      domain: 'unit',
-      suite: 'knowledge',
-      groups: ['indexing'],
+      domain: 'knowledge',
+      suite: 'foundation',
       description: '启动恢复会把遗留 running job 和条目级执行中状态收敛为失败。',
       fixtures: [],
       runMode: 'single',

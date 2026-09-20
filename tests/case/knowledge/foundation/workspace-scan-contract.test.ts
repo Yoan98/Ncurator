@@ -1,16 +1,15 @@
 import { describe, it } from 'vitest'
 import path from 'node:path'
 import { mkdir, writeFile } from 'node:fs/promises'
-import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 describe('unit workspace backend', () => {
   it('workspace-scan-contract', async () => {
     await runBackendCase({
       caseId: 'workspace-scan-contract',
       harnessMode: 'tool-real',
-      domain: 'unit',
-      suite: 'knowledge',
-      groups: ['indexing'],
+      domain: 'knowledge',
+      suite: 'foundation',
       description: '工作空间扫描服务生成文件索引记录，并由派生摘要支撑页面刷新。',
       fixtures: ['tests/fixtures/workspace'],
       runMode: 'single',

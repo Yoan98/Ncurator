@@ -6,20 +6,20 @@ import {
   WORKSPACE_EMBEDDING_BATCH_CHUNK_COUNT,
   WORKSPACE_EMBEDDING_BATCH_MAX_CHARS,
   WORKSPACE_EMBEDDING_CHUNK_MAX_CHARS
-} from '../../../../../src/main/services/workspace/constants'
+} from '../../../../src/main/services/workspace/constants'
 import {
   IngestionService,
   isSupportedLocalFilePath
-} from '../../../../../src/main/services/ingestion/loader'
+} from '../../../../src/main/services/ingestion/loader'
 import {
   buildWorkspaceKnowledgeSplitSnapshot,
   computeWorkspaceFileContentHash,
   createWorkspaceEmbeddingBatches
-} from '../../../../../src/main/services/workspace/utils/knowledge'
-import { handleWorkspacePrepareWorkerRequest } from '../../../../../src/main/services/workspace/worker/workspacePrepareWorker'
-import { WorkspacePrepareWorkerClient } from '../../../../../src/main/services/workspace/worker/workspacePrepareWorkerClient'
-import type { WorkspacePrepareWorkerRequest } from '../../../../../src/main/services/workspace/types'
-import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+} from '../../../../src/main/services/workspace/utils/knowledge'
+import { handleWorkspacePrepareWorkerRequest } from '../../../../src/main/services/workspace/worker/workspacePrepareWorker'
+import { WorkspacePrepareWorkerClient } from '../../../../src/main/services/workspace/worker/workspacePrepareWorkerClient'
+import type { WorkspacePrepareWorkerRequest } from '../../../../src/main/services/workspace/types'
+import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const createChunk = (length: number, page: number): { text: string; page: number } => ({
   text: 'x'.repeat(length),
@@ -31,9 +31,8 @@ describe('unit workspace backend', () => {
     await runBackendCase({
       caseId: 'workspace-index-worker-contract',
       harnessMode: 'tool-real',
-      domain: 'unit',
-      suite: 'knowledge',
-      groups: ['indexing'],
+      domain: 'knowledge',
+      suite: 'foundation',
       description: 'workspace 文件索引 worker 协议与 embedding batch 限制保持稳定。',
       fixtures: ['tests/fixtures/workspace'],
       runMode: 'single',

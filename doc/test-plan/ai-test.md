@@ -434,7 +434,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：KB tool family 必须显式覆盖每个回归工具。
 - How：对已 seed 的文件与网页数据分别执行三种检索，并覆盖 `documentIds` 缩圈。
 - Oracle：三种检索都返回稳定 `items`；`documentIds` 缩圈语义成立（含全部不存在时返回空）；文件命中保留 `sourceType=file` 与 `filePath`，网页命中保留 `sourceType=web` 与 `sourceUrl`，供最终引用生成可追溯地址。
-- Not：不比较召回优劣；不测人造跨 workspace 脏数据隔离。设置页「更新索引」期间的拦截由 unit `kb-indexing-blocks-search` 覆盖 `SET-WORKSPACE-004-AC9`、`SET-WEB-004-AC8`（工具失败，模型侧结果为 `Error: 正在更新知识库索引，请完成后再检索。`）；「检查更新」不拦截。
+- Not：不比较召回优劣；
 
 #### terminal 类别
 

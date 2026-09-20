@@ -1,6 +1,6 @@
 import { describe, it } from 'vitest'
-import type { WorkspaceIndexJobRecord } from '../../../../../src/shared/types'
-import { runBackendCase } from '../../../../harness/backend/run-backend-case'
+import type { WorkspaceIndexJobRecord } from '../../../../src/shared/types'
+import { runBackendCase } from '../../../harness/backend/run-backend-case'
 
 const NOW = 1_716_200_000_000
 
@@ -32,9 +32,8 @@ describe('unit workspace backend', () => {
     await runBackendCase({
       caseId: 'workspace-index-job-store-contract',
       harnessMode: 'tool-real',
-      domain: 'unit',
-      suite: 'knowledge',
-      groups: ['indexing'],
+      domain: 'knowledge',
+      suite: 'foundation',
       description: 'workspace_index_job store 支持创建、active 查询、阶段进度更新和失败收敛。',
       fixtures: [],
       runMode: 'single',
