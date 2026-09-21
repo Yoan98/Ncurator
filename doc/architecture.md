@@ -67,14 +67,14 @@ flowchart TB
 
 ## 核心模块
 
-| 模块                      | 职责                                                                                       |
-| ------------------------- | ------------------------------------------------------------------------------------------ |
-| Application Shell         | Renderer / Main / Preload / Shared 协作；伙伴 UI 快照与浏览器 Tab 状态持久化到 SQLite |
-| AI Runtime                | 一次用户请求的 run 生命周期：事件流、审批、工具调用、最终答复                              |
-| Storage                   | `SqliteCore` + `LanceDbCore` + 各领域 Store                                                |
-| Retrieval                 | 文档索引、混合召回、结果融合                                                               |
-| Tool Runtime              | 文件、终端、浏览器等本地能力；审批、命令安全                                      |
-| File Change Records       | 只有受控文件工具写回才记修改、Diff 与回退；terminal 只执行，不扫描记账             |
+| 模块                | 职责                                                                                  |
+| ------------------- | ------------------------------------------------------------------------------------- |
+| Application Shell   | Renderer / Main / Preload / Shared 协作；伙伴 UI 快照与浏览器 Tab 状态持久化到 SQLite |
+| AI Runtime          | 一次用户请求的 run 生命周期：事件流、审批、工具调用、最终答复                         |
+| Storage             | `SqliteCore` + `LanceDbCore` + 各领域 Store                                           |
+| Retrieval           | 文档索引、混合召回、结果融合                                                          |
+| Tool Runtime        | 文件、终端、浏览器等本地能力；审批、命令安全                                          |
+| File Change Records | 只有受控文件工具写回才记修改、Diff 与回退；terminal 只执行，不扫描记账                |
 
 工作地址是默认执行范围而非硬边界：模型默认在设置页现有文件地址内操作，系统级需求可访问地址外绝对路径。文件工具的 `sourcePath` / `outputPath` 必须为本机绝对路径（`read_image` 的 `sourcePath` 额外接受 HTTP(S) 地址）。内置浏览器由 Electron `WebContentsView` 承载；Stagehand 在操作网页时按 Tab 挂到本机回环 CDP 桥（`webContents.debugger`），不在进程启动时打开 `--remote-debugging-port`。对象存储在 `userData/partners/{id}/objects/sha256/<前 2 位>/<其余>`。
 
@@ -88,10 +88,10 @@ AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`c
 
 **设计文档（修改 AI 行为前必读）**
 
-| 文档 | 范围 |
-|------|------|
+| 文档                                                             | 范围                                                                                     |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | [`doc/ai-harness/human-harness.md`](ai-harness/human-harness.md) | Graph 流转、log 数据源、brain 投影、前缀缓存、compaction、resume、skill/plan、交付与失败 |
-| [`doc/ai-harness/tool-design.md`](ai-harness/tool-design.md) | 工具九条原则、HumanToolSpec、参数规范化、统一投递、渲染格式族 |
+| [`doc/ai-harness/tool-design.md`](ai-harness/tool-design.md)     | 工具九条原则、HumanToolSpec、参数规范化、统一投递、渲染格式族                            |
 
 **稳定结构摘要**
 
@@ -124,16 +124,16 @@ flowchart LR
 
 ## 领域能力（概要）
 
-| 领域                  | 思路                                                                                                                                                            |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DOCX                  | 文档聚合模型 + story 内容树；root、可编辑子节点和 visual 共用一个 `nodesById`，visual 只使用 `nodeId`；读写拆成两个 skill；Source / Working 双态 + 净 Diff 审核 |
-| PDF                   | `pdf_outline` 元数据与书签；页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                                 |
-| PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；`ppt_read_slides` 支持 `detail=full` 或 `detail=images` |
+| 领域                  | 思路                                                                                                                                                                    |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DOCX                  | 文档聚合模型 + story 内容树；root、可编辑子节点和 visual 共用一个 `nodesById`，visual 只使用 `nodeId`；读写拆成两个 skill；Source / Working 双态 + 净 Diff 审核         |
+| PDF                   | `pdf_outline` 元数据与书签；页级读取与检索；Worker 隔离解析；读取页面同时返回 pageImagePath                                                                             |
+| PPT                   | 结构化页规格创建与整页替换，按 slideId / elementId 锚点编辑；`ppt_read_slides` 支持 `detail=full` 或 `detail=images`                                                    |
 | Excel                 | 工作表地图 + A1 范围；`excel_read` 四种 type（workbook / range / style / search）；`excel_edit` 一次一个 type；写回成功时结构化 `data` 多为 `{}`，模型侧另有 prose 确认 |
-| KB                    | 混合召回检索全部已索引文件地址与全局网页                                                                                                                        |
-| Image                 | 外部 skill；需 `learn_skill`；按绝对路径生成或更新 PNG / JPEG / WebP                                                                                          |
-| Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                            |
-| 定时任务              | 独立主区配置与启用开关；到点向绑定伙伴追加任务描述，并读取伙伴最新 Composer 配置                                                                                  |
+| KB                    | 混合召回检索全部已索引文件地址与全局网页                                                                                                                                |
+| Image                 | 外部 skill；需 `learn_skill`；按绝对路径生成或更新 PNG / JPEG / WebP                                                                                                    |
+| Text / Terminal / Web | 普通文本读写搜索、命令执行、网页抓取与内置浏览器操作                                                                                                                    |
+| 定时任务              | 独立主区配置与启用开关；到点向绑定伙伴追加任务描述，并读取伙伴最新 Composer 配置                                                                                        |
 
 各领域工具名、operation 与 OOXML / 事务 / Diff 细节以代码为准；工具契约见 `ai-harness/tool-design.md`，活例子按需生成（`pnpm doc:ai-tool-prompt-audit`，不入库）。
 

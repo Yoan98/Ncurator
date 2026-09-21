@@ -314,9 +314,6 @@ export const scheduledTaskSelectors = {
   formTime: 'scheduled-task-form-time',
   formSave: 'scheduled-task-form-save',
   formCancel: 'scheduled-task-form-cancel',
-  modelSelect: 'scheduled-task-model-select',
-  preferenceSelect: 'scheduled-task-preference-select',
-  permissionSelect: 'scheduled-task-permission-select',
   busyCancelCapsule: 'scheduled-task-busy-cancel-capsule',
   busyCancelDismiss: 'scheduled-task-busy-cancel-dismiss'
 } as const

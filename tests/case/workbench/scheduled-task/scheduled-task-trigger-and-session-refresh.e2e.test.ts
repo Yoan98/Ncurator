@@ -7,7 +7,6 @@ import {
   getWorkbenchLocator,
   openScheduledTasksView,
   scheduledTaskSelectors,
-  selectScheduledTaskModel,
   selectWorkbenchModel,
   setupWorkbenchWithTempWorkspace,
   workbenchSelectors
@@ -49,8 +48,7 @@ describe('workbench scheduled-task e2e', () => {
         domain: 'workbench',
         suite: 'scheduled-task',
         groups: [],
-        description:
-          '启用下一分钟触发的定时任务后，向专属伙伴追加消息并发送，不切换当前查看伙伴。',
+        description: '创建下一分钟触发的定时任务后，向绑定伙伴追加消息并发送，不切换当前查看伙伴。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -74,7 +72,8 @@ describe('workbench scheduled-task e2e', () => {
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('触发验证任务')
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPrompt).fill(TASK_PROMPT)
-          await selectScheduledTaskModel(page, setup.env.modelName)
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
+          await page.getByRole('option', { name: '触发查看伙伴', exact: true }).click()
           // Compute time immediately before save/enable so we do not miss the daily slot.
           const scheduledHhmm = upcomingDailyHhmm(120_000)
           await fillScheduledTaskTime(page, scheduledHhmm)
@@ -83,27 +82,17 @@ describe('workbench scheduled-task e2e', () => {
           const createdTasks = await listTasks(page)
           const createdTask = createdTasks.find((task) => task.name === '触发验证任务')
           if (!createdTask) throw new Error('failed to create the scheduled task')
-          if (createdTask.partnerId) {
-            throw new Error('scheduled task should not create a partner on save')
+          if (createdTask.partnerId !== viewingPartner.id) {
+            throw new Error('scheduled task should bind the selected partner on save')
           }
-          await getWorkbenchLocator(
-            page,
-            `${scheduledTaskSelectors.itemTogglePrefix}-${createdTask.id}`
-          ).click()
 
-          const tasksAfterEnable = await listTasks(page)
-          const enabledTask = tasksAfterEnable.find((task) => task.id === createdTask.id)
+          const enabledTask = (await listTasks(page)).find((task) => task.id === createdTask.id)
           const nextRunAt = Number(enabledTask?.nextRunAt || 0)
           const delayMs = nextRunAt - Date.now()
           if (!Number.isFinite(nextRunAt) || nextRunAt <= 0 || delayMs > 180_000) {
             throw new Error(
               `scheduled task nextRunAt is not within 3 minutes after enable: scheduledHhmm=${scheduledHhmm} nextRunAt=${nextRunAt} delayMs=${delayMs}`
             )
-          }
-
-          const partnersAfterConfig = await listPartners(page)
-          if (partnersAfterConfig.length !== partnersBefore.length) {
-            throw new Error('enabling a scheduled task should not create a partner')
           }
 
           // 回到原查看伙伴，确认触发不抢焦点。
@@ -154,10 +143,7 @@ describe('workbench scheduled-task e2e', () => {
 
           return {
             scheduledHhmm,
-            boundPartnerCreated:
-              Boolean(boundPartner) &&
-              boundPartner?.name === '定时 · 触发验证任务' &&
-              partnersAfterTrigger.length === partnersBefore.length + 1,
+            boundPartnerCreated: Boolean(boundPartner) && boundPartner?.id === viewingPartner.id,
             sameViewingPartner: selectedStillViewing,
             triggeredMessage,
             triggeredRunCompleted
@@ -172,7 +158,7 @@ describe('workbench scheduled-task e2e', () => {
             {
               name: 'scheduled-task-trigger-appends-to-bound-partner',
               message:
-                '定时任务到点后应向专属伙伴追加消息并完成运行，且不切换当前查看伙伴，对齐 ST-RUN-001 / ST-RUN-002。',
+                '定时任务到点后应向绑定伙伴追加消息并完成运行，且不切换当前查看伙伴，对齐 ST-RUN-001 / ST-RUN-002。',
               data: result
             }
           )

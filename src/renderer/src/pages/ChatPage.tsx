@@ -2539,7 +2539,7 @@ const ChatPage: React.FC = () => {
     await window.api.workbenchUiStateSave({
       activeViewKey: session.id
     })
-    void loadPartnerOpen(session.id, requestId)
+    await loadPartnerOpen(session.id, requestId)
     setFileChangeRecords([])
     fileChangeRunScopeRef.current = null
     void refreshContextUsage(session.id)

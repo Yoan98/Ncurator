@@ -73,12 +73,11 @@ describe('workbench scheduled-task e2e', () => {
           const partnersAfterCreate = await listPartners(page)
           const createdCorrectly = Boolean(
             created &&
-              created.enabled &&
-              created.scheduleType === 'daily' &&
-              created.timeOfDay === '09:05' &&
-              created.partnerId === partnersBefore[0]?.id &&
-              partnersAfterCreate.length === partnersBefore.length &&
-              !partnersAfterCreate.some((partner) => partner.name === `定时 · ${TASK_NAME}`)
+            created.enabled &&
+            created.scheduleType === 'daily' &&
+            created.timeOfDay === '09:05' &&
+            created.partnerId === partnersBefore[0]?.id &&
+            partnersAfterCreate.length === partnersBefore.length
           )
           const item = created
             ? getWorkbenchLocator(page, `${scheduledTaskSelectors.itemPrefix}-${created.id}`)

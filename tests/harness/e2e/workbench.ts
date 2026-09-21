@@ -1452,38 +1452,6 @@ export const openScheduledTasksView = async (page: Page): Promise<void> => {
   await getWorkbenchLocator(page, scheduledTaskSelectors.view).waitFor({ state: 'visible' })
 }
 
-export const selectScheduledTaskModel = async (page: Page, modelName: string): Promise<void> => {
-  const modelSelect = getWorkbenchLocator(page, scheduledTaskSelectors.modelSelect)
-  await modelSelect.click()
-  const menu = page.locator('.workbench-select-menu.workbench-composer-menu').last()
-  await menu.waitFor({ state: 'visible' })
-
-  const byPresetId = menu.getByTestId(
-    `${workbenchSelectors.modelSelectPresetOptionPrefix}-${modelName}`
-  )
-  if (await byPresetId.isVisible().catch(() => false)) {
-    await byPresetId.click()
-    return
-  }
-
-  const presetOption = menu.getByRole('option').filter({ hasText: modelName }).first()
-  if (await presetOption.isVisible().catch(() => false)) {
-    await presetOption.click()
-    return
-  }
-
-  const customEntry = menu.locator(`[data-testid="${workbenchSelectors.modelSelectCustomEntry}"]`)
-  await customEntry.waitFor({ state: 'visible' })
-  await customEntry.click()
-
-  const searchInput = menu.locator('input[placeholder="搜索模型"]')
-  await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
-  await searchInput.fill(modelName)
-  const modelOption = menu.getByRole('option').filter({ hasText: modelName }).first()
-  await modelOption.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
-  await modelOption.click()
-}
-
 export const selectScheduledTaskWorkspace = async (
   _page: Page,
   _workspaceName: string
