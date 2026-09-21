@@ -17,6 +17,8 @@ import type { z } from 'zod/v4'
 import type {
   AiApprovalBatchDecision,
   AiApprovalBatchItem,
+  AskUserQuestionInput,
+  AskUserQuestionResult,
   AiLlmIoRecord,
   AiLlmStreamingMode,
   AiLlmUsage,
@@ -308,6 +310,13 @@ export type AiRunDeps = {
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
+  requestUserQuestion?: (request: {
+    taskId: string
+    interactionId: string
+    toolCallId: string
+    questions: AskUserQuestionInput['questions']
+    stage?: AiRunEventStage
+  }) => Promise<{ accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }>
   llmDriver?: AiLlmDriver
   chatToolsWrapper?: (real: AiRunContext['chatTools']) => AiRunContext['chatTools']
   browserUseService?: BrowserUseService
@@ -367,6 +376,13 @@ export type AiRunContext = {
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
   requestApprovalBatch: (request: AiApprovalBatchRequest) => Promise<AiApprovalBatchResult>
+  requestUserQuestion: (request: {
+    taskId: string
+    interactionId: string
+    toolCallId: string
+    questions: AskUserQuestionInput['questions']
+    stage?: AiRunEventStage
+  }) => Promise<{ accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }>
   getLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService

@@ -571,6 +571,12 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 #### human hand 类别
 
+##### `human-ask-user-question`
+
+- 测试类型：`backend / mock-llm`
+- What：提问工具校验 1 至 3 个问题，支持单选、多选和自定义答案，并在回答前阻止副作用工具。
+- Oracle：run 进入 `waiting_human`；回答前没有写操作；结构化 `{ answers: [...] }` tool result 回到下一轮 brain；同一 run 不能有两个 pending interaction；`full_access` 不会自动回答。
+
 ##### `hand-invalid-tool-input`
 
 - 测试类型：`backend`

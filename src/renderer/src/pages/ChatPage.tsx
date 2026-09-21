@@ -38,7 +38,10 @@ import type {
   ScheduledTask,
   SelectedReference,
   WorkbenchModelSelection,
-  WorkspaceSource
+  WorkspaceSource,
+  PendingHumanInteraction,
+  AskUserQuestionAnswer,
+  AiRunHumanInteractionRequest
 } from '../../../shared/types'
 import { PARTNER_AVATAR_SHAPES, PARTNER_AVATAR_COLORS } from '../../../shared/types'
 import {
@@ -59,6 +62,7 @@ import { HiOutlineCog6Tooth } from 'react-icons/hi2'
 import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import { FullAccessConfirmModal } from '../components/workbench/FullAccessConfirmModal'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
+import HumanInteractionCard from '../components/workbench/HumanInteractionCard'
 import { buildApprovalGuidePlaceholder } from '../components/workbench/composer/constants'
 import { MessageTimeline } from '../components/workbench/MessageTimeline'
 import {
@@ -457,6 +461,14 @@ const reduceAssistantTurnByRunEvent = (
     }
   }
 
+  if (event.type === 'human_interaction_required' && event.interaction.kind === 'question') {
+    next = { ...next, isBrainThinking: false, waitingApproval: true }
+  }
+
+  if (event.type === 'human_interaction_resolved' && event.kind === 'question') {
+    next = { ...next, waitingApproval: false }
+  }
+
   if (event.type === 'assistant_brain_stream_started') {
     const retryRunning = next.processGroups.some(
       (group) => group.kind === 'retry' && group.status === 'running'
@@ -642,7 +654,7 @@ const buildAssistantTurnFromRunSnapshot = (
     processThoughts: projected.processThoughts,
     processGroups: projected.processGroups,
     isBrainThinking: projected.isBrainThinking,
-    waitingApproval: Boolean(snapshot.run.pendingApproval),
+    waitingApproval: Boolean(snapshot.run.pendingApproval || snapshot.run.pendingInteraction),
     pendingApprovalItems: snapshot.run.pendingApproval?.items || [],
     approvalReviews
   }
@@ -877,6 +889,10 @@ const ChatPage: React.FC = () => {
     Record<string, ApprovalDraftDecision>
   >({})
   const [approvalSubmitting, setApprovalSubmitting] = useState(false)
+  const [pendingQuestion, setPendingQuestion] = useState<{
+    runId: string
+    interaction: Extract<PendingHumanInteraction, { kind: 'question' }>
+  } | null>(null)
 
   const activeRunMessageIdsRef = useRef<Record<string, string>>({})
   const activeRunPartnerIdsRef = useRef<Record<string, string>>({})
@@ -2002,6 +2018,12 @@ const ChatPage: React.FC = () => {
       activeRuns.find((item) => item.pendingApproval && !item.pendingApproval.internal)
         ?.pendingApproval || null
     setPendingApprovalBatch(approval)
+    const questionRun = activeRuns.find((item) => item.pendingInteraction?.kind === 'question')
+    setPendingQuestion(
+      questionRun?.pendingInteraction?.kind === 'question'
+        ? { runId: questionRun.run.id, interaction: questionRun.pendingInteraction }
+        : null
+    )
     setApprovalCurrentIndex(0)
     setApprovalDraftDecisions({})
     setApprovalSubmitting(false)
@@ -3330,6 +3352,22 @@ const ChatPage: React.FC = () => {
         return
       }
 
+      if (event.type === 'human_interaction_required') {
+        if (event.interaction.kind === 'question') {
+          setLoading(false)
+          setPendingQuestion({ runId: event.runId, interaction: event.interaction })
+        }
+        return
+      }
+
+      if (event.type === 'human_interaction_resolved') {
+        if (event.kind === 'question') {
+          setPendingQuestion(null)
+          setLoading(true)
+        }
+        return
+      }
+
       if (event.type === 'approval_batch_decision') {
         if (event.internal) return
         setApprovalSubmitting(false)
@@ -3370,6 +3408,7 @@ const ChatPage: React.FC = () => {
         setAiRunId(null)
         setCancellingRun(false)
         setPendingApprovalBatch(null)
+        setPendingQuestion(null)
         setApprovalSubmitting(false)
         setCurrentMessages((previous) =>
           previous.map((item) =>
@@ -3396,6 +3435,7 @@ const ChatPage: React.FC = () => {
         setAiRunId(null)
         setCancellingRun(false)
         setPendingApprovalBatch(null)
+        setPendingQuestion(null)
         setApprovalSubmitting(false)
         setCurrentMessages((previous) =>
           previous.map((item) =>
@@ -3420,6 +3460,7 @@ const ChatPage: React.FC = () => {
         setAiRunId(null)
         setCancellingRun(false)
         setPendingApprovalBatch(null)
+        setPendingQuestion(null)
         setApprovalSubmitting(false)
         if (eventPartnerId && eventPartnerId === currentPartnerIdRef.current) {
           void loadFileChangesForPartnerRef.current(eventPartnerId, event.runId, {
@@ -3576,6 +3617,7 @@ const ChatPage: React.FC = () => {
     scrollToBottom(true)
     setCancellingRun(false)
     setPendingApprovalBatch(null)
+    setPendingQuestion(null)
     setApprovalSubmitting(false)
     lastSubmittedInputRef.current = userQuery
     setPartners((items) =>
@@ -3830,6 +3872,21 @@ const ChatPage: React.FC = () => {
     setPendingApprovalBatch(null)
     setApprovalCurrentIndex(0)
     setApprovalDraftDecisions({})
+  }
+
+  const submitHumanQuestion = async (answers: { answers: AskUserQuestionAnswer[] }): Promise<void> => {
+    if (!pendingQuestion) return
+    const response = await window.api.aiRunHumanInteractionSubmit({
+      runId: pendingQuestion.runId,
+      interactionId: pendingQuestion.interaction.interactionId,
+      answers
+    } satisfies AiRunHumanInteractionRequest)
+    if (!response.success) {
+      emitErrorMessage(response.error || '提交问题回答失败')
+      return
+    }
+    setPendingQuestion(null)
+    setLoading(true)
   }
 
   const flushApprovalBatch = async (
@@ -4714,6 +4771,12 @@ const ChatPage: React.FC = () => {
                                 ? '还没有伙伴。从左侧创建一个开始对话。'
                                 : '请选择一个伙伴开始对话。'}
                             </div>
+                          ) : pendingQuestion ? (
+                            <HumanInteractionCard
+                              interaction={pendingQuestion.interaction}
+                              onSubmit={submitHumanQuestion}
+                              onCancel={() => void handleCancel()}
+                            />
                           ) : pendingApprovalBatch ? (
                             <div
                               className="nc-timeline-layout-anchor min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"

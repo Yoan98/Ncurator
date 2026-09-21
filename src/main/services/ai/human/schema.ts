@@ -108,6 +108,12 @@ export const humanReferenceSchema = brainEvidenceReferenceSchema.extend({
 
 export const humanNextActionSchema = z.discriminatedUnion('action', [
   z.object({
+    action: z.literal('interaction'),
+    toolCallId: z.string().min(1),
+    toolName: z.literal('ask_user_question'),
+    args: jsonObjectSchema
+  }),
+  z.object({
     action: z.literal('learning'),
     wantLearnSkillIds: z.array(z.string().min(1)).min(1),
     toolCallId: z.string().min(1)
@@ -162,7 +168,7 @@ export const humanDispatchItemSchema = z.object({
   toolCallId: z.string().min(1),
   toolName: z.string().min(1),
   args: jsonObjectSchema,
-  target: z.enum(['learning', 'plan', 'hand'])
+  target: z.enum(['learning', 'plan', 'hand', 'interaction'])
 })
 
 export const humanExecutionSchema = z.object({

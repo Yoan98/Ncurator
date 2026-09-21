@@ -1,5 +1,5 @@
 {
-  "publishedThrough": 12,
+  "publishedThrough": 13,
   "migrations": [
     {
       "version": 1,
@@ -72,6 +72,12 @@
       "name": "app_settings",
       "file": "012_app_settings.ts",
       "sha256": "0fd373bf26854cb7c6816cc60621242691b2fb9fd93200c40d33c8651e584230"
+    },
+    {
+      "version": 13,
+      "name": "ai_run_pending_interaction",
+      "file": "013_ai_run_pending_interaction.ts",
+      "sha256": "e214a7f29b3354dd824eb94d581811dc8b8155b199348c7c0490d7be6500ba22"
     }
   ]
 }

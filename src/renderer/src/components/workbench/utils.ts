@@ -375,6 +375,7 @@ const TOOL_ITEM_RENDERERS = {
     return toolCopy('操作浏览器', sentence(text('操作浏览器 '), param(instructionLabel)))
   },
   read_image: () => toolCopy('读取图片', sentence(text('读取图片'))),
+  ask_user_question: () => toolCopy('询问用户', sentence(text('等待用户确认关键信息'))),
   image_generate: (input) =>
     toolCopy('生成图片', sentence(text('生成图片 '), param(readToolFileLabel(input)))),
   learn_skill: (input, status) => {

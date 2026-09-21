@@ -1,7 +1,4 @@
 ﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { FiCheckCircle } from 'react-icons/fi'
-import { MdOutlineSmsFailed } from 'react-icons/md'
-import { RiForbidLine } from 'react-icons/ri'
 import { FaSpider } from 'react-icons/fa'
 import { PiBrowsers, PiEyes } from 'react-icons/pi'
 import {
@@ -35,7 +32,6 @@ import type { WorkspaceSource } from '../../../../shared/types'
 import type { OpenableMarkdownReference } from '../markdownReference'
 import {
   findApprovalReviewForProcessItem,
-  formatApprovalReviewRevealText,
   type AssistantApprovalReview
 } from '../../../../shared/workbench/approvalReview'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -377,29 +373,15 @@ const buildAssistantTimeline = (input: {
   return timeline
 }
 
-const WAITING_APPROVAL_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户审核中' }]
-
-const ApprovalReviewIcon: React.FC<{ action: AssistantApprovalReview['action'] }> = ({
-  action
-}) => {
-  if (action === 'approve') {
-    return <FiCheckCircle className="h-4 w-4 shrink-0 text-[#2F6F4E]" aria-hidden />
-  }
-  if (action === 'reject') {
-    return <RiForbidLine className="h-4 w-4 shrink-0 text-[#B3261E]" aria-hidden />
-  }
-  return <MdOutlineSmsFailed className="h-4 w-4 shrink-0 text-[#B45309]" aria-hidden />
-}
+const WAITING_APPROVAL_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户处理' }]
 
 const AssistantActivityItemView: React.FC<{
   item: AssistantProcessGroup['items'][number]
   review?: AssistantApprovalReview
   onPreviewImage?: (image: ImageLightboxImage) => void
 }> = ({ item, review, onPreviewImage }) => {
-  const [revealing, setRevealing] = useState(false)
   const failed = item.status === 'failed' || item.status === 'partial_failed'
   const toolText = getItemText(item)
-  const revealText = review ? formatApprovalReviewRevealText(review) : ''
   const readImagePaths =
     item.toolName === 'read_image' ? readImagePathsFromInput(item.input) : []
   const thumbs =
@@ -411,6 +393,7 @@ const AssistantActivityItemView: React.FC<{
     return (
       <div className={failed ? 'text-[#B3261E]' : undefined}>
         {renderSegments(toolText)}
+        {item.interaction ? <InteractionResultView interaction={item.interaction} /> : null}
         {thumbs}
       </div>
     )
@@ -421,35 +404,23 @@ const AssistantActivityItemView: React.FC<{
       data-testid={workbenchSelectors.assistantApprovalReviewedItem}
       className={failed ? 'text-[#B3261E]' : undefined}
     >
-      <div className="flex min-w-0 items-center gap-1.5 leading-[22px]">
-        <span
-          className="inline-flex h-5 w-5 shrink-0 cursor-help items-center justify-center rounded-[4px] transition-colors duration-150 hover:bg-[#EFEFEE]"
-          onMouseEnter={() => setRevealing(true)}
-          onMouseLeave={() => setRevealing(false)}
-        >
-          <ApprovalReviewIcon action={review.action} />
-        </span>
-        <span className="relative min-w-0 flex-1 overflow-hidden">
-          <span
-            className={`block truncate transition-all duration-150 ${
-              revealing ? 'pointer-events-none translate-x-1 opacity-0' : 'translate-x-0 opacity-100'
-            }`}
-          >
-            {renderSegments(toolText)}
-          </span>
-          <span
-            className={`absolute inset-0 flex items-center truncate text-[#787774] transition-all duration-150 ${
-              revealing ? 'translate-x-0 opacity-100' : 'pointer-events-none -translate-x-1 opacity-0'
-            }`}
-          >
-            {revealText}
-          </span>
-        </span>
-      </div>
+      <div className="min-w-0 leading-[22px]">{renderSegments(toolText)}</div>
+      <div className="mt-1 text-xs text-[#787774]">审核结果：{review.action === 'approve' ? '已允许' : review.action === 'reject' ? '已拒绝' : `已提供指导${review.message ? `：${review.message}` : ''}`}</div>
       {thumbs}
     </div>
   )
 }
+
+const InteractionResultView: React.FC<{ interaction: NonNullable<AssistantProcessGroup['items'][number]['interaction']> }> = ({ interaction }) => (
+  <div className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#787774]">
+    {interaction.questions.map((question) => {
+      const answer = interaction.answers?.find((item) => item.id === question.id)
+      const labels = question.options.filter((option) => answer?.selected.includes(option.id)).map((option) => option.label)
+      if (answer?.custom) labels.push(answer.custom)
+      return <div key={question.id}><div>{question.question}</div><div className="text-[#37352F]">{labels.join('、') || '未填写'}</div></div>
+    })}
+  </div>
+)
 
 const AssistantActivityGroupView: React.FC<{
   groups: AssistantProcessGroup[]

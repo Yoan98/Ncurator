@@ -39,7 +39,9 @@ import type {
   ScheduledTaskRunNowRequest,
   ScheduledTaskDismissBusyNoticeRequest,
   WriteTextFileRequest,
-  WriteTextFileResponse
+  WriteTextFileResponse,
+  AiRunHumanInteractionRequest,
+  AiRunHumanInteractionResponse
 } from '../../shared/types'
 import { listReferenceItemsPage } from '../services/sourceScope/referenceList'
 import { WorkspaceSourceService } from '../services/workspace/WorkspaceSourceService'
@@ -2933,6 +2935,12 @@ export function registerHandlers(services: {
   )
 
   ipcMain.handle(
+    'ai-run-human-interaction-submit',
+    async (_event, payload: AiRunHumanInteractionRequest): Promise<AiRunHumanInteractionResponse> =>
+      await chatRunService.submitHumanInteraction(payload)
+  )
+
+  ipcMain.handle(
     'docx-apply-get',
     async (_event, payload: GetDocxApplyRecordRequest): Promise<GetDocxApplyRecordResponse> => {
       try {
@@ -3032,7 +3040,7 @@ export function registerHandlers(services: {
       const [partners, activePartnerIds, unreadCompletedPartnerIds, latestUserInputs] =
         await Promise.all([
           partnerStore.listPartners(),
-          aiRunStore.listPartnerIdsByRunStatuses(['running', 'waiting_approval']),
+          aiRunStore.listPartnerIdsByRunStatuses(['running', 'waiting_human', 'waiting_approval']),
           partnerStore.listUnreadCompletedPartnerIds(),
           aiRunStore.listLatestUserInputs()
         ])

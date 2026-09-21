@@ -392,6 +392,10 @@ const api: DesktopApi = {
     emitE2EIpcCall('aiRunApprovalBatchDecide')
     return ipcRenderer.invoke('ai-run-approval-batch-decide', payload)
   },
+  aiRunHumanInteractionSubmit: (payload) => {
+    emitE2EIpcCall('aiRunHumanInteractionSubmit')
+    return ipcRenderer.invoke('ai-run-human-interaction-submit', payload)
+  },
   aiContextUsageGet: (payload) => ipcRenderer.invoke('ai-context-usage-get', payload),
   browserPanelSetBounds: (payload) => ipcRenderer.invoke('browser-panel-set-bounds', payload),
   browserPanelSetFollow: (payload) => ipcRenderer.send('browser-panel-set-follow', payload),

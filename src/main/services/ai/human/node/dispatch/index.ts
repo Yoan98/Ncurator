@@ -7,6 +7,7 @@ const classifyToolCallTarget = (toolName: string): HumanDispatchTarget => {
   const normalized = String(toolName || '').trim()
   if (normalized === 'learn_skill') return 'learning'
   if (normalized === 'update_plan') return 'plan'
+  if (normalized === 'ask_user_question') return 'interaction'
   return 'hand'
 }
 
@@ -16,8 +17,11 @@ type RawToolCall = {
   args?: Record<string, unknown>
 }
 
-export const buildDispatchQueue = (toolCalls: RawToolCall[]): HumanDispatchItem[] =>
-  toolCalls
+export const buildDispatchQueue = (toolCalls: RawToolCall[]): HumanDispatchItem[] => {
+  if (toolCalls.some((call) => call.name.trim() === 'ask_user_question') && toolCalls.length !== 1) {
+    throw new Error('ask_user_question must be the only tool call in a model response')
+  }
+  return toolCalls
     .filter((call) => call.name.trim().length > 0)
     .map((call) => ({
       toolCallId: call.id,
@@ -25,10 +29,19 @@ export const buildDispatchQueue = (toolCalls: RawToolCall[]): HumanDispatchItem[
       args: (call.args || {}) as JsonObject,
       target: classifyToolCallTarget(call.name.trim())
     }))
+}
 
 const dispatchGroupToNextAction = (group: HumanDispatchItem[]): HumanNextAction => {
   const first = group[0]!
   switch (first.target) {
+    case 'interaction':
+      if (group.length !== 1) throw new Error('ask_user_question must be called alone')
+      return {
+        action: 'interaction',
+        toolCallId: first.toolCallId,
+        toolName: 'ask_user_question',
+        args: first.args
+      }
     case 'learning': {
       const skillIds = Array.isArray(first.args.skillIds)
         ? first.args.skillIds.filter((item): item is string => typeof item === 'string')

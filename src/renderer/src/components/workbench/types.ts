@@ -127,6 +127,10 @@ export type AssistantProcessGroupItem = {
   toolName?: AssistantToolName
   targetLabel?: string
   input?: IpcJsonObject
+  interaction?: {
+    questions: Array<{ id: string; question: string; options: Array<{ id: string; label: string }> }>
+    answers?: Array<{ id: string; selected: string[]; custom?: string }>
+  }
 }
 
 export type AssistantProcessGroup = {

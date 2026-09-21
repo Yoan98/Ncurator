@@ -9,8 +9,29 @@ import {
 import {
   LEARN_SKILL_SCHEMA,
   READ_IMAGE_SCHEMA,
-  UPDATE_PLAN_SCHEMA
+  UPDATE_PLAN_SCHEMA,
+  ASK_USER_QUESTION_SCHEMA
 } from './toolSchemas'
+
+const ASK_USER_QUESTION_DESCRIPTION =
+  '向用户询问会实际改变任务定义或执行结果的关键信息。能从资料确定的信息不要询问；每批最多 3 个相关问题，选项要具体、互斥、可执行，并在有合理默认方案时标记 recommended。用户始终可以选择“其他，请填写”。必须单独调用，不能与写文件、运行命令等工具调用混在同一批。'
+
+export const ASK_USER_QUESTION_TOOL_SPEC: HumanToolSpec<
+  z.infer<typeof ASK_USER_QUESTION_SCHEMA>,
+  'ask_user_question',
+  'agent-control'
+> = {
+  name: 'ask_user_question',
+  familyId: 'agent-control',
+  skillIds: ['agent-control'],
+  inputSchema: ASK_USER_QUESTION_SCHEMA,
+  promptSpec: { name: 'ask_user_question', description: ASK_USER_QUESTION_DESCRIPTION },
+  resolveExecutionMeta: createStaticExecutionMetaResolver({
+    mutability: 'read_only',
+    defaultResourceKey: 'agent-control'
+  }),
+  modelResult: { renderSuccess: (result) => JSON.stringify(result) }
+}
 
 export const LEARN_SKILL_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof LEARN_SKILL_SCHEMA>,
@@ -75,5 +96,6 @@ export const READ_IMAGE_TOOL_SPEC: HumanToolSpec<
 export const AGENT_CONTROL_TOOL_SPECS = [
   LEARN_SKILL_TOOL_SPEC,
   UPDATE_PLAN_TOOL_SPEC,
-  READ_IMAGE_TOOL_SPEC
+  READ_IMAGE_TOOL_SPEC,
+  ASK_USER_QUESTION_TOOL_SPEC
 ] as const

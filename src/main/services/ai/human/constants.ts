@@ -8,6 +8,7 @@ export const HUMAN_STAGES = [
   'learning',
   'plan',
   'hand',
+  'interaction',
   'context_budget',
   'context_compaction'
 ] as const

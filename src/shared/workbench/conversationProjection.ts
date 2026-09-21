@@ -7,7 +7,7 @@ import type {
   SelectedReference
 } from '../types'
 
-const ACTIVE_RUN_STATUSES = new Set<AiRunRecord['status']>(['running', 'waiting_approval'])
+const ACTIVE_RUN_STATUSES = new Set<AiRunRecord['status']>(['running', 'waiting_human', 'waiting_approval'])
 
 const isDeliveryAssistant = (record: ChatMessageLogRecord): boolean =>
   record.entry.kind === 'assistant' && record.entry.toolCalls.length === 0

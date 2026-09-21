@@ -1,6 +1,11 @@
 import { tool } from '@langchain/core/tools'
 import type { ToolFamilyDefinition } from '../types'
-import { LEARN_SKILL_TOOL_SPEC, READ_IMAGE_TOOL_SPEC, UPDATE_PLAN_TOOL_SPEC } from './toolSpecs'
+import {
+  ASK_USER_QUESTION_TOOL_SPEC,
+  LEARN_SKILL_TOOL_SPEC,
+  READ_IMAGE_TOOL_SPEC,
+  UPDATE_PLAN_TOOL_SPEC
+} from './toolSpecs'
 import { prepareImagesForMainModel } from './readImage'
 
 // agent-control 工具只用于让模型通过原生 tool call 表达控制意图（学习技能、更新计划），
@@ -35,6 +40,12 @@ export const agentControlToolFamily: ToolFamilyDefinition = {
       }
     )
 
-    return [learnSkill, updatePlan, readImage]
+    const askUserQuestion = tool(async () => ({}), {
+      name: ASK_USER_QUESTION_TOOL_SPEC.name,
+      description: ASK_USER_QUESTION_TOOL_SPEC.promptSpec.description,
+      schema: ASK_USER_QUESTION_TOOL_SPEC.inputSchema
+    })
+
+    return [learnSkill, updatePlan, readImage, askUserQuestion]
   }
 }

@@ -93,7 +93,13 @@ export const returnToBrainAfterTraceState = (input: {
 }
 
 const resolveBrainNextStage = (action: HumanNextAction['action']): HumanState['execution']['stage'] =>
-  action === 'learning' ? 'learning' : action === 'hand' ? 'hand' : 'plan'
+  action === 'learning'
+    ? 'learning'
+    : action === 'hand'
+      ? 'hand'
+      : action === 'interaction'
+        ? 'interaction'
+        : 'plan'
 
 export const applyBrainDecisionState = (input: {
   state: HumanState

@@ -240,6 +240,7 @@ export const workbenchSelectors = {
   readImageThumbPrefix: 'workbench-read-image-thumb',
   assistantApprovalWaiting: 'workbench-assistant-approval-waiting',
   assistantApprovalReviewedItem: 'workbench-assistant-approval-reviewed-item',
+  humanQuestionCard: 'workbench-human-question-card',
   assistantFinalAnswerPrefix: 'workbench-assistant-final-answer',
   assistantRunFailurePrefix: 'workbench-assistant-run-failure-card',
   assistantRunFailureDetailTogglePrefix: 'workbench-assistant-run-failure-detail-toggle',

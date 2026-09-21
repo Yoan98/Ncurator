@@ -9,6 +9,7 @@ import { createContextBudgetNode } from '../node/contextBudgetNode'
 import { createLearningNode } from '../node/learningNode'
 import { createPlanNode } from '../node/planNode'
 import { createHandNode } from '../node/handNode'
+import { createHumanInteractionNode } from '../node/humanInteractionNode'
 import { createHumanRuntimeCache } from '../node/utils/runtimeCache'
 import { advanceDispatchState } from '../node/dispatch'
 import { createHumanRunStateSchema, createInitialHumanState } from '../state/schema'
@@ -50,6 +51,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
       const learningNode = createLearningNode({ ctx, cache })
       const planNode = createPlanNode({ ctx, cache })
       const handNode = createHandNode({ ctx, cache })
+      const humanInteractionNode = createHumanInteractionNode({ ctx, cache })
 
       const routeToolReturn = (state: HumanState): string => {
         if (state.execution.stage === 'context_budget') return 'human_context_budget_node'
@@ -74,6 +76,9 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         )
         .addNode('human_plan_node', (state) => runNode(state as HumanState, planNode))
         .addNode('human_hand_node', (state) => runNode(state as HumanState, handNode))
+        .addNode('human_interaction_node', (state) =>
+          runNode(state as HumanState, humanInteractionNode)
+        )
         .addEdge(START, 'human_context_budget_node')
         .addConditionalEdges('human_context_budget_node', (state) => {
           const humanState = state as HumanState
@@ -94,11 +99,13 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           if (humanState.execution.stage === 'learning') return 'human_learning_node'
           if (humanState.execution.stage === 'plan') return 'human_plan_node'
           if (humanState.execution.stage === 'hand') return 'human_hand_node'
+          if (humanState.execution.stage === 'interaction') return 'human_interaction_node'
           return 'human_context_budget_node'
         })
         .addConditionalEdges('human_learning_node', (state) => routeToolReturn(state as HumanState))
         .addConditionalEdges('human_plan_node', (state) => routeToolReturn(state as HumanState))
         .addConditionalEdges('human_hand_node', (state) => routeToolReturn(state as HumanState))
+        .addEdge('human_interaction_node', 'human_brain_node')
         .compile()
 
       const baseInitialState = options.initialState || createInitialHumanState(taskInput)

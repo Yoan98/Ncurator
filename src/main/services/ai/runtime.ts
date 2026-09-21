@@ -119,6 +119,10 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
     requestApprovalBatch: deps.requestApprovalBatch,
+    requestUserQuestion: deps.requestUserQuestion || (async () => ({
+      accepted: false as const,
+      error: '当前运行不支持用户提问'
+    })),
     getLlmConfig: loadRequestedConfig,
     browserUseService: deps.browserUseService,
     webCrawlerService: deps.webCrawlerService,

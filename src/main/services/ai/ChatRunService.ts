@@ -46,7 +46,13 @@ import type {
   ChatTurnRetractLatestRequest,
   ChatTurnRetractLatestResponse,
   ChatSubmitRequest,
-  ChatSubmitResponse
+  ChatSubmitResponse,
+  AskUserQuestionResult,
+  AiRunHumanInteractionRequest,
+  AiRunHumanInteractionResponse,
+  PendingHumanInteraction,
+  UserQuestion,
+  JsonObject
 } from '../../../shared/types'
 import { projectAiConversationMessages } from '../../../shared/workbench/conversationProjection'
 
@@ -65,6 +71,14 @@ type ActiveApproval = {
         }
       | { accepted: false; error: string }
   ) => void
+}
+
+type ActiveQuestion = {
+  interactionId: string
+  taskId: string
+  toolCallId: string
+  questions: UserQuestion[]
+  resolve: (result: { accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }) => void
 }
 
 type ActiveRun = {
@@ -106,7 +120,7 @@ type ChatRunServiceDeps = {
   ) => void | Promise<void>
 }
 
-const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = ['running', 'waiting_approval']
+const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = ['running', 'waiting_human', 'waiting_approval']
 const INTERRUPTED_RUN_MESSAGE = '运行已中断，请重新发送消息。'
 const PARTIAL_SAVE_DELAY_MS = 500
 
@@ -129,6 +143,7 @@ const appendArtifact = (artifacts: AiArtifactRef[] | undefined, artifact: AiArti
 export class ChatRunService {
   private readonly activeRuns = new Map<string, ActiveRun>()
   private readonly activeApprovals = new Map<string, ActiveApproval>()
+  private readonly activeQuestions = new Map<string, ActiveQuestion>()
   private readonly pendingPartnerSubmissions = new Set<string>()
 
   public constructor(private readonly deps: ChatRunServiceDeps) {}
@@ -175,7 +190,7 @@ export class ChatRunService {
   }
 
   public async failInterruptedRuns(): Promise<void> {
-    const interrupted = await this.deps.aiRunStore.listRunsByStatuses(ACTIVE_RUN_STATUSES)
+    const interrupted = await this.deps.aiRunStore.listRunsByStatuses(['running'])
     for (const run of interrupted) {
       const now = Date.now()
       const nextRun: AiRunRecord = {
@@ -186,6 +201,7 @@ export class ChatRunService {
         partialAnswer: run.partialAnswer || INTERRUPTED_RUN_MESSAGE,
         finalAnswer: run.finalAnswer || INTERRUPTED_RUN_MESSAGE,
         pendingApproval: undefined,
+        pendingInteraction: undefined,
         updatedAt: now,
         finishedAt: now
       }
@@ -398,6 +414,51 @@ export class ChatRunService {
     const approval = this.activeApprovals.get(normalizedRunId)
     approval?.resolve({ accepted: false, error: '已取消' })
     this.activeApprovals.delete(normalizedRunId)
+    const question = this.activeQuestions.get(normalizedRunId)
+    question?.resolve({ accepted: false, error: '已取消' })
+    this.activeQuestions.delete(normalizedRunId)
+    return { success: true }
+  }
+
+  public async submitHumanInteraction(
+    payload: AiRunHumanInteractionRequest
+  ): Promise<AiRunHumanInteractionResponse> {
+    const runId = String(payload?.runId || '').trim()
+    const pending = this.activeQuestions.get(runId)
+    if (!pending) return { success: false, error: '当前运行没有待回答问题' }
+    if (pending.interactionId !== payload.interactionId) {
+      return { success: false, error: 'interaction not found' }
+    }
+    const answers = Array.isArray(payload.answers?.answers) ? payload.answers.answers : []
+    if (answers.length !== pending.questions.length) return { success: false, error: '每个问题都必须回答' }
+    const questionIds = new Set(pending.questions.map((question) => question.id))
+    const seenAnswerIds = new Set<string>()
+    for (const answer of answers) {
+      if (!answer || !questionIds.has(answer.id) || seenAnswerIds.has(answer.id) || !Array.isArray(answer.selected)) {
+        return { success: false, error: '答案格式无效' }
+      }
+      seenAnswerIds.add(answer.id)
+      const question = pending.questions.find((item) => item.id === answer.id)
+      const optionIds = new Set(question?.options.map((option) => option.id) || [])
+      if (answer.selected.some((id) => !optionIds.has(id))) return { success: false, error: '存在无效选项' }
+      if (question && !question.multiSelect && answer.selected.length > 1) {
+        return { success: false, error: '单选问题只能选择一个选项' }
+      }
+      if (answer.selected.length === 0 && !String(answer.custom || '').trim()) {
+        return { success: false, error: '请选择选项或填写其他内容' }
+      }
+    }
+    await this.queueRunEvent(runId, {
+      type: 'human_interaction_resolved',
+      runId,
+      taskId: pending.taskId,
+      interactionId: pending.interactionId,
+      kind: 'question',
+      result: payload.answers as unknown as JsonObject,
+      resolvedAt: Date.now()
+    })
+    this.activeQuestions.delete(runId)
+    pending.resolve({ accepted: true, result: payload.answers })
     return { success: true }
   }
 
@@ -460,7 +521,8 @@ export class ChatRunService {
         ...entry.run,
         ...(persisted.run || {}),
         status: 'running',
-        pendingApproval: undefined
+        pendingApproval: undefined,
+        pendingInteraction: undefined
       }
     }
 
@@ -479,7 +541,8 @@ export class ChatRunService {
     return {
       run,
       messageLogRecords: records,
-      pendingApproval: run.pendingApproval
+      pendingApproval: run.pendingApproval,
+      pendingInteraction: run.pendingInteraction
     }
   }
 
@@ -651,6 +714,7 @@ export class ChatRunService {
           sendEvent,
           recordLlmIo: this.deps.recordLlmIo,
           requestApprovalBatch: async (request) => await this.requestApprovalBatch(runId, request),
+          requestUserQuestion: async (request) => await this.requestUserQuestion(runId, request),
           browserUseService: this.deps.browserUseService,
           webCrawlerService: this.deps.webCrawlerService,
           humanRuntimeOverrides: this.deps.resolveHumanRuntimeOverrides?.(run)
@@ -727,6 +791,9 @@ export class ChatRunService {
       const approval = this.activeApprovals.get(runId)
       approval?.resolve({ accepted: false, error: 'run closed' })
       this.activeApprovals.delete(runId)
+      const question = this.activeQuestions.get(runId)
+      question?.resolve({ accepted: false, error: 'run closed' })
+      this.activeQuestions.delete(runId)
       await this.flushRunEvents(runId)
       this.clearProjectionFlush(runId)
       this.activeRuns.delete(runId)
@@ -757,8 +824,8 @@ export class ChatRunService {
         decisions: request.items.map((item) => ({ itemId: item.itemId, action: 'approve' }))
       }
     }
-    if (this.activeApprovals.has(runId)) {
-      return { accepted: false, error: 'approval batch already pending' }
+    if (this.activeApprovals.has(runId) || this.activeQuestions.has(runId)) {
+      return { accepted: false, error: '已有待处理的人机交互' }
     }
 
     await this.queueRunEvent(runId, {
@@ -802,6 +869,56 @@ export class ChatRunService {
         }
       })
     })
+  }
+
+  private async requestUserQuestion(
+    runId: string,
+    request: {
+      taskId: string
+      interactionId: string
+      toolCallId: string
+      questions: UserQuestion[]
+      stage?: AiRunEvent['stage']
+    }
+  ): Promise<{ accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }> {
+    if (this.activeQuestions.has(runId) || this.activeApprovals.has(runId)) {
+      return { accepted: false, error: '已有待处理的人机交互' }
+    }
+    const interaction: PendingHumanInteraction = {
+      kind: 'question',
+      interactionId: request.interactionId,
+      toolCallId: request.toolCallId,
+      questions: request.questions
+    }
+    const resultPromise = new Promise<
+      { accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }
+    >((resolve) => {
+      this.activeQuestions.set(runId, {
+        interactionId: request.interactionId,
+        taskId: request.taskId,
+        toolCallId: request.toolCallId,
+        questions: request.questions,
+        resolve: (result) => {
+          this.activeQuestions.delete(runId)
+          resolve(result)
+        }
+      })
+    })
+    try {
+      await this.queueRunEvent(runId, {
+        type: 'human_interaction_required',
+        runId,
+        taskId: request.taskId,
+        interactionId: request.interactionId,
+        interaction,
+        createdAt: Date.now(),
+        stage: request.stage
+      })
+    } catch (error) {
+      const pending = this.activeQuestions.get(runId)
+      pending?.resolve({ accepted: false, error: error instanceof Error ? error.message : String(error) })
+    }
+    return await resultPromise
   }
 
   private queueRunEvent(runId: string, event: AiRunEvent): Promise<void> {
@@ -903,20 +1020,37 @@ export class ChatRunService {
     } else if (event.type === 'approval_batch_required') {
       run.status = 'waiting_approval'
       run.pendingApproval = event
+      run.pendingInteraction = {
+        kind: 'approval',
+        interactionId: event.batchId,
+        batchId: event.batchId,
+        items: event.items
+      }
       run.updatedAt = now
     } else if (event.type === 'approval_batch_decision') {
       run.status = 'running'
       run.pendingApproval = undefined
+      run.pendingInteraction = undefined
+      run.updatedAt = now
+    } else if (event.type === 'human_interaction_required') {
+      run.status = 'waiting_human'
+      run.pendingInteraction = event.interaction
+      run.updatedAt = now
+    } else if (event.type === 'human_interaction_resolved') {
+      run.status = 'running'
+      run.pendingInteraction = undefined
       run.updatedAt = now
     } else if (event.type === 'run_completed') {
       run.status = run.status === 'failed' || run.status === 'cancelled' ? run.status : 'completed'
       run.pendingApproval = undefined
+      run.pendingInteraction = undefined
       run.updatedAt = now
       run.finishedAt = now
     } else if (event.type === 'run_failed') {
       run.status = 'failed'
       run.failureCode = event.code
       run.pendingApproval = undefined
+      run.pendingInteraction = undefined
       run.error = event.message
       run.failureRawMessage = event.rawMessage
       run.updatedAt = now
@@ -930,6 +1064,7 @@ export class ChatRunService {
       run.status = 'cancelled'
       run.failureCode = 'user_cancelled'
       run.pendingApproval = undefined
+      run.pendingInteraction = undefined
       run.error = '已取消'
       run.updatedAt = now
       run.finishedAt = now

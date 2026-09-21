@@ -38,6 +38,7 @@ type AiRunRow = {
   failure_code?: unknown
   failure_raw_message?: unknown
   pending_approval_json?: unknown
+  pending_interaction_json?: unknown
   artifacts_json?: unknown
   created_at?: unknown
   updated_at?: unknown
@@ -48,6 +49,7 @@ const normalizeRunStatus = (value: unknown): AiRunStatus => {
   const status = String(value || '')
   if (
     status === 'running' ||
+    status === 'waiting_human' ||
     status === 'waiting_approval' ||
     status === 'completed' ||
     status === 'failed' ||
@@ -82,6 +84,9 @@ const toRunRecord = (row: AiRunRow): AiRunRecord => ({
     : undefined,
   failureRawMessage: row.failure_raw_message ? String(row.failure_raw_message) : undefined,
   pendingApproval: parseJsonObject<AiRunRecord['pendingApproval']>(row.pending_approval_json),
+  pendingInteraction: parseJsonObject<AiRunRecord['pendingInteraction']>(
+    row.pending_interaction_json || row.pending_approval_json
+  ),
   artifacts: parseJsonArray<AiArtifactRef>(row.artifacts_json),
   createdAt: toRequiredNumber(row.created_at),
   updatedAt: toRequiredNumber(row.updated_at),
@@ -100,13 +105,13 @@ export class AiRunStore {
           selected_references_json, attachments_json, model_name,
           main_model_json, execution_permission,
           partial_answer, partial_answer_role, final_answer, error, failure_code, failure_raw_message,
-          pending_approval_json, artifacts_json, created_at, updated_at, finished_at
+          pending_approval_json, pending_interaction_json, artifacts_json, created_at, updated_at, finished_at
         ) VALUES (
           @id, @partner_id, @user_message_id, @assistant_message_id, @status, @input,
           @selected_references_json, @attachments_json, @model_name,
           @main_model_json, @execution_permission,
           @partial_answer, @partial_answer_role, @final_answer, @error, @failure_code, @failure_raw_message,
-          @pending_approval_json, @artifacts_json, @created_at, @updated_at, @finished_at
+          @pending_approval_json, @pending_interaction_json, @artifacts_json, @created_at, @updated_at, @finished_at
         )
         ON CONFLICT(id) DO UPDATE SET
           partner_id = excluded.partner_id,
@@ -126,6 +131,7 @@ export class AiRunStore {
           failure_code = excluded.failure_code,
           failure_raw_message = excluded.failure_raw_message,
           pending_approval_json = excluded.pending_approval_json,
+          pending_interaction_json = excluded.pending_interaction_json,
           artifacts_json = excluded.artifacts_json,
           updated_at = excluded.updated_at,
           finished_at = excluded.finished_at
@@ -149,7 +155,8 @@ export class AiRunStore {
         error: record.error || null,
         failure_code: record.failureCode || null,
         failure_raw_message: record.failureRawMessage || null,
-        pending_approval_json: jsonStringify(record.pendingApproval),
+        pending_approval_json: jsonStringify(record.pendingInteraction || record.pendingApproval),
+        pending_interaction_json: jsonStringify(record.pendingInteraction),
         artifacts_json: jsonStringify(record.artifacts),
         created_at: record.createdAt,
         updated_at: record.updatedAt,
@@ -281,7 +288,10 @@ export class AiRunStore {
         | undefined
       if (!runRow) return { ok: false, error: 'run not found' }
       const run = toRunRecord(runRow)
-      if (run.status !== 'waiting_approval' || !run.pendingApproval) {
+      if (
+        (run.status !== 'waiting_human' && run.status !== 'waiting_approval') ||
+        !run.pendingApproval
+      ) {
         return { ok: false, error: 'approval batch not found' }
       }
       if (run.pendingApproval.batchId !== input.request.batchId) {
@@ -295,6 +305,7 @@ export class AiRunStore {
           UPDATE ai_run
           SET status = 'running',
               pending_approval_json = NULL,
+              pending_interaction_json = NULL,
               updated_at = @updated_at
           WHERE id = @id
         `

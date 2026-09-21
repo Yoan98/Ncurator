@@ -1048,7 +1048,7 @@ export interface OpenFileWithApplicationResponse {
   error?: string
 }
 
-export type AiRunStatus = 'running' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
+export type AiRunStatus = 'running' | 'waiting_human' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
 export type AiRunWarningCode =
   | 'workspace_binding_missing'
   | 'workspace_missing'
@@ -1203,6 +1203,52 @@ export type AiArtifactRef = AiFileArtifactRef
 export type AiPreference = 'default' | 'local_sources_relaxed' | 'local_sources_strict'
 export type AiExecutionPermission = 'review' | 'full_access'
 
+export type UserQuestionOption = {
+  id: string
+  label: string
+  description?: string
+  recommended?: boolean
+}
+
+export type UserQuestion = {
+  id: string
+  question: string
+  options: UserQuestionOption[]
+  multiSelect?: boolean
+}
+
+export type AskUserQuestionInput = { questions: UserQuestion[] }
+
+export type AskUserQuestionAnswer = {
+  id: string
+  selected: string[]
+  custom?: string
+}
+
+export type AskUserQuestionResult = { answers: AskUserQuestionAnswer[] }
+
+export type PendingHumanInteraction =
+  | {
+      kind: 'question'
+      interactionId: string
+      toolCallId: string
+      questions: UserQuestion[]
+    }
+  | {
+      kind: 'approval'
+      interactionId: string
+      items: AiApprovalBatchItem[]
+      batchId?: string
+    }
+
+export type AiRunHumanInteractionRequest = {
+  runId: string
+  interactionId: string
+  answers: AskUserQuestionResult
+}
+
+export type AiRunHumanInteractionResponse = { success: boolean; error?: string }
+
 export type ChatSubmitRequest = {
   preference?: AiPreference
   executionPermission?: AiExecutionPermission
@@ -1286,6 +1332,7 @@ export type AiRunRecord = {
   failureCode?: AiRunFailureCode
   failureRawMessage?: string
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+  pendingInteraction?: PendingHumanInteraction
   artifacts?: AiArtifactRef[]
   createdAt: number
   updatedAt: number
@@ -1296,6 +1343,7 @@ export type PartnerRunSnapshot = {
   run: AiRunRecord
   messageLogRecords?: ChatMessageLogRecord[]
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
+  pendingInteraction?: PendingHumanInteraction
 }
 
 export type PartnerSnapshotRequest = {
@@ -1860,6 +1908,25 @@ type AiRunEventPayload =
       type: 'run_cancelled'
       runId: string
     }
+  | {
+      type: 'human_interaction_required'
+      runId: string
+      taskId: string
+      interactionId: string
+      interaction: PendingHumanInteraction
+      createdAt: number
+      stage?: AiRunEventStage
+    }
+  | {
+      type: 'human_interaction_resolved'
+      runId: string
+      taskId: string
+      interactionId: string
+      kind: 'question' | 'approval'
+      result: JsonObject
+      resolvedAt: number
+      stage?: AiRunEventStage
+    }
 
 export type AiRunEvent = AiRunEventPayload & {
   internal?: boolean
@@ -1934,6 +2001,15 @@ export type ChatMessageLogAnnotationEntry =
           action: 'approve' | 'reject' | 'guide'
           message?: string
         }>
+      }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'human_interaction_resolved'
+      payload: {
+        interactionId: string
+        kind: 'question' | 'approval'
+        result: JsonObject
       }
     }
 

@@ -600,6 +600,12 @@ pnpm test:update:e2e
 - How：真实 AI 修改一个 Markdown 文件并打开审核模式；折叠面板后创建第二个伙伴，再切回原伙伴，等待异步记录刷新窗口；确认面板保持折叠，再手动展开并检查审核内容与文件 Tab。
 - Oracle：切回后 shell 不存在且仅保留右缘展开按钮，对齐 `WB-PANEL-001-AC5`；手动展开后展示目标文件的最新审核内容且文件 Tab 保留，对齐 `WB-PANEL-001-AC1`。
 
+#### `human-interaction-question-card`
+
+- 测试类型：`e2e / live`
+- What：模糊任务触发 AI 提问，用户完成 A/B/C/D、其他输入和多问题切换；回答前不显示写入结果，提交后 run 恢复。
+- Oracle：composer 上方出现统一交互卡片；刷新后 pending 问题可恢复；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。
+
 ### 5.4 `scheduled-task`
 
 定时任务测试单独归类，Oracle 引用 [`workbench.md`](../prd/workbench.md) 的 `ST-*` 编号。调度触发时点由真实程序运行与系统时间决定，case 通过「下一分钟」级别的短周期调度验证端到端触发，不伪造系统时钟。下列 AC 由 unit `tests/case/unit/scheduled-task-service.test.ts` 承担，不进入 Workbench E2E 发现范围：`ST-PARTNER-001-AC2`、`ST-RUN-001-AC3`、`ST-RUN-001-AC4`、`ST-RUN-003-AC1/AC2`、`ST-RUN-004-AC2/AC3`、`ST-RUN-005-AC1/AC2/AC3`。`ST-PARTNER-001-AC1`（删除专属伙伴后任务仍在）标为不测。

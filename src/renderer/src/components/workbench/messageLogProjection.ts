@@ -101,6 +101,17 @@ export const projectProcessGroups = (input: {
         createdAt,
         sourceEventType: 'assistant_process_item_started'
       })
+      const interaction = entry.toolName === 'ask_user_question'
+        ? (() => {
+            try {
+              const parsed = JSON.parse(entry.content) as { answers?: Array<{ id: string; selected: string[]; custom?: string }> }
+              const questions = Array.isArray((toolArgsById.get(entry.toolCallId) as { questions?: unknown })?.questions)
+                ? ((toolArgsById.get(entry.toolCallId) as { questions: Array<{ id: string; question: string; options: Array<{ id: string; label: string }> }> }).questions)
+                : []
+              return { questions, answers: parsed.answers }
+            } catch { return undefined }
+          })()
+        : undefined
       const group = createDisplayProcessGroup({
         groupId: `${input.runId}:tool:${entry.toolCallId}`,
         kind: 'skill',
@@ -109,7 +120,7 @@ export const projectProcessGroups = (input: {
         createdAt,
         sourceEventType: 'assistant_process_group_started'
       })
-      upsertGroup({ ...group, items: [item] })
+      upsertGroup({ ...group, items: [interaction ? { ...item, interaction } : item] })
     }
   }
 

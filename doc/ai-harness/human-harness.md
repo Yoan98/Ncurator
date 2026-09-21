@@ -43,7 +43,7 @@ graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
 | `dispatch` | 否 | 否 | 消费 `tool_calls` 队列，路由下一 stage |
 | `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`** | 加载 skill 工具；**不**改 build user |
 | `plan` | 否 | `tool` + `plan_updated` | 更新 state.plan；**不**改 build user |
-| `hand` | 否 | `tool`（+ 可选 `images[]`）+ 审批后 `approval_batch_resolved` | append ToolMessage；`read_image` 后 append 多模态 HumanMessage |
+| `hand` / `human_interaction` | 否 | `tool`（+ 可选 `images[]`）+ `human_interaction_resolved` annotation | append ToolMessage；`read_image` 后 append 多模态 HumanMessage；问题答案作为结构化 tool result 回到 brain |
 
 交付收尾由 brain 内的 `finalizeDelivery` 完成（**不是**独立图节点）：docx/ppt 落盘 side effect → `finalizing_started` → 写交付 `assistant`（`toolCalls: []`）→ 立即 `answer_completed` / `run_completed`。下一轮同伙伴发送可立刻创建。
 无 `tool_calls` 的正常交付路径上，**brain 不向 log 写 `assistant`**（流式 Answer 只走事件 / `partial_answer`）。
@@ -128,7 +128,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `plan_updated` | `{ plan: [{ title, status }] }` | UI 计划条；新 run 从图启动扫描该伙伴剩余 log 最新一条 |
 | `compaction_checkpoint` | `{ compactBlockId, throughSeq, sourceMessageCount, summary }` | 压缩书签 + 摘要正文；`seq <= historyFloorSeq` 的原文不再进 brain；发给主模型时再合成 Compact User |
 | `finalizing_started` | `{}` | 投影时**清空** plan |
-| `approval_batch_resolved` | `{ batchId, items: [{ toolCallId, toolName, command, commandExplanation?, action, message? }] }` | UI Activity：走过审批的工具行图标 / 悬停揭示文案；`hand` 在审批决策后写入 |
+| `human_interaction_resolved` | `{ interactionId, kind, result }` | UI Activity：在对应工具行下按顺序展示问题答案或审批结果 |
 
 #### `entry_json` 示例
 
@@ -277,11 +277,11 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 
 | 字段（要点） | 用途 |
 |--------------|------|
-| `status` | `running` / `waiting_approval` / `completed` / `failed` / `cancelled` |
+| `status` | `running` / `waiting_human` / `completed` / `failed` / `cancelled` |
 | `input` | 本轮用户输入原文 |
 | `partial_answer` / `partial_answer_role` | 流式 UI 草稿；**不参与** resume 与下次 brain |
 | `final_answer` / `error` / `failure_code` / `failure_raw_message` | 终态展示（短标题 + 原文详情） |
-| `pending_approval` | 等待批量审批 |
+| `pending_interaction` | 等待用户问题回答或批量审批；`full_access` 只自动通过审批，不自动回答问题 |
 | `artifacts` | run 级产物引用（Workbench 展示） |
 | `selectedReferences` / `attachments` | run 创建时 Composer 快照（与 log `user.context` 对应） |
 
