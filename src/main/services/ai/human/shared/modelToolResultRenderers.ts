@@ -27,6 +27,20 @@ import {
 export const renderGenericModelResult: ModelResultRenderer = ({ toolName }) =>
   wrapModelTextLines(`${toolName} completed successfully.`)
 
+export const renderAskUserQuestionModelResult: ModelResultRenderer = ({ data }) => {
+  const answers = isObject(data) && Array.isArray(data.answers) ? data.answers.filter(isObject) : []
+  return joinGroupedSections([
+    renderGroupedHeader('The user answered the clarification questions.'),
+    ...answers.map((answer) => {
+      const selected = Array.isArray(answer.selected)
+        ? answer.selected.filter((value): value is string => typeof value === 'string')
+        : []
+      const custom = readString(answer.custom)
+      return `  questionId=${readString(answer.id) || ''}; selected=${JSON.stringify(selected)}${custom ? `; custom=${JSON.stringify(custom)}` : ''}`
+    })
+  ])
+}
+
 const containsOnlyModelSafeDiagnosticText = (value: string): boolean =>
   /^[\x20-\x7E\r\n\t]+$/u.test(value)
 

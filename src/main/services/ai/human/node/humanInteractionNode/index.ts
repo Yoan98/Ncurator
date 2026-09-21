@@ -3,6 +3,7 @@ import type { JsonObject, UserQuestion } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
 import type { HumanRuntimeCache, HumanState, ToolCallResult } from '../../types'
 import { appendLogEntriesToCache } from '../../memory/conversationLogMessages'
+import { renderAskUserQuestionModelResult } from '../../shared/modelToolResultRenderers'
 import { returnToBrain } from '../utils/stateTransitions'
 
 export const createHumanInteractionNode = (input: {
@@ -30,7 +31,11 @@ export const createHumanInteractionNode = (input: {
       ok: true,
       data: response.result as unknown as JsonObject
     }
-    const content = JSON.stringify(response.result)
+    const content = renderAskUserQuestionModelResult({
+      toolName: 'ask_user_question',
+      args: action.args,
+      data: response.result as unknown as JsonObject
+    })
     appendLogEntriesToCache(input.cache, [
       { kind: 'tool', toolCallId: action.toolCallId, toolName: 'ask_user_question', ok: true, content },
       {

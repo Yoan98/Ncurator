@@ -2,6 +2,7 @@ import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 import {
+  renderAskUserQuestionModelResult,
   renderLearnSkillModelResult,
   renderPlanUpdateModelResult,
   renderReadImageModelResult
@@ -14,7 +15,7 @@ import {
 } from './toolSchemas'
 
 const ASK_USER_QUESTION_DESCRIPTION =
-  '向用户询问会实际改变任务定义或执行结果的关键信息。能从资料确定的信息不要询问；每批最多 3 个相关问题，选项要具体、互斥、可执行，并在有合理默认方案时标记 recommended。用户始终可以选择“其他，请填写”。必须单独调用，不能与写文件、运行命令等工具调用混在同一批。'
+  '在推进任务时，如果对用户意图存在无法自行消除的疑惑或歧义，并且不同理解可能改变结果或违背用户本意，向用户确认后再继续。能够从已有信息或资料中可靠确定的内容不要询问。'
 
 export const ASK_USER_QUESTION_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof ASK_USER_QUESTION_SCHEMA>,
@@ -30,7 +31,7 @@ export const ASK_USER_QUESTION_TOOL_SPEC: HumanToolSpec<
     mutability: 'read_only',
     defaultResourceKey: 'agent-control'
   }),
-  modelResult: { renderSuccess: (result) => JSON.stringify(result) }
+  modelResult: { renderSuccess: renderAskUserQuestionModelResult }
 }
 
 export const LEARN_SKILL_TOOL_SPEC: HumanToolSpec<
