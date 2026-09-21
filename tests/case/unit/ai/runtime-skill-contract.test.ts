@@ -5,6 +5,10 @@ import {
   listBuiltinSkillDefinitions,
   listExternalSkillDefinitions
 } from '../../../../src/main/services/ai/human/skills'
+import {
+  SCHEDULED_TASK_ACTION_SPEC,
+  SCHEDULED_TASK_LIST_SPEC
+} from '../../../../src/main/services/ai/human/tools/scheduledTasks/toolSpecs'
 
 describe('ai unit runtime skill contract', () => {
   it('exposes builtin skills', () => {
@@ -38,6 +42,36 @@ describe('ai unit runtime skill contract', () => {
       'scheduled_task_list',
       'scheduled_task_action'
     ])
+  })
+
+  it('keeps scheduled task operations in one action schema', () => {
+    expect(SCHEDULED_TASK_LIST_SPEC.resolveExecutionMeta({})).toMatchObject({
+      mutability: 'read_only'
+    })
+    expect(SCHEDULED_TASK_ACTION_SPEC.resolveExecutionMeta({ action: 'create' })).toMatchObject({
+      mutability: 'mutating'
+    })
+
+    const create = SCHEDULED_TASK_ACTION_SPEC.inputSchema.safeParse({
+      action: 'create',
+      name: '晨报',
+      description: '整理今天的安排',
+      scheduleType: 'daily',
+      timeOfDay: '09:00'
+    })
+    expect(create.success).toBe(true)
+    const createWithUnknownField = SCHEDULED_TASK_ACTION_SPEC.inputSchema.parse({
+      action: 'create',
+      name: '晨报',
+      description: '整理今天的安排',
+      scheduleType: 'daily',
+      timeOfDay: '09:00',
+      enabled: false
+    })
+    expect('enabled' in createWithUnknownField).toBe(false)
+    expect(
+      SCHEDULED_TASK_ACTION_SPEC.inputSchema.safeParse({ action: 'delete', id: 'task-1' }).success
+    ).toBe(true)
   })
 
   it('includes builtin skills in effective skills before any external learning', () => {

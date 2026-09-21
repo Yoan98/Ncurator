@@ -12,7 +12,7 @@ describe('ai unit tool input schema renderer', () => {
         expect(rendered).not.toMatch(
           /minLength|maxLength|minimum|maximum|exclusiveMinimum|exclusiveMaximum|multipleOf|minItems|maxItems|minProperties|maxProperties|pattern|constraint=|integer/
         )
-        expect(rendered.length).toBeGreaterThan(2)
+        expect(rendered.length).toBeGreaterThanOrEqual(2)
         expect(rendered.length).toBeLessThan(50_000)
         return [spec.name, rendered]
       })

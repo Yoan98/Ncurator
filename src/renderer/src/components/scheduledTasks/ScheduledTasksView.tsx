@@ -13,15 +13,23 @@ import {
   TimePicker
 } from 'antd'
 import dayjs from 'dayjs'
-import { HiOutlineClock, HiOutlinePencilSquare, HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi2'
+import {
+  HiOutlineClock,
+  HiOutlinePencilSquare,
+  HiOutlinePlus,
+  HiOutlineTrash
+} from 'react-icons/hi2'
 import type {
+  ChatMessageContentNode,
   PartnerListItem,
+  SelectedReference,
   ScheduledTask,
   ScheduledTaskSaveRequest,
-  ScheduledTaskScheduleType,
+  ScheduledTaskScheduleType
 } from '../../../../shared/types'
 import { scheduledTaskSelectors } from '../../testing/selectors'
 import ScheduledTaskCountChip from './ScheduledTaskCountChip'
+import ComposerInputEditor from '../workbench/composer/ComposerInputEditor'
 
 const WEEKDAY_OPTIONS = [
   { value: 0, label: '周日' },
@@ -42,7 +50,9 @@ type FormState = {
   id: string
   partnerId: string
   name: string
-  prompt: string
+  description: string
+  contentNodes: ChatMessageContentNode[]
+  selectedReferences: SelectedReference[]
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday: number | null
@@ -52,10 +62,12 @@ const emptyForm = (): FormState => ({
   id: '',
   partnerId: '',
   name: '',
-  prompt: '',
+  description: '',
+  contentNodes: [],
+  selectedReferences: [],
   scheduleType: 'daily',
   timeOfDay: '09:00',
-  weekday: null,
+  weekday: null
 })
 
 const normalizeWeekday = (value: number | null | undefined): number | null => {
@@ -90,17 +102,27 @@ const RequiredFieldLabel = ({ children }: { children: string }) => (
 
 type ScheduledTasksViewProps = {
   onEnabledCountChange?: (enabledCount: number) => void
+  onAiCreate?: (partnerId: string) => Promise<void> | void
 }
 
-const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountChange }) => {
+const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
+  onEnabledCountChange,
+  onAiCreate
+}) => {
   const { message, modal } = AntdApp.useApp()
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
   const [partners, setPartners] = useState<PartnerListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [formOpen, setFormOpen] = useState(false)
+  const [aiCreateOpen, setAiCreateOpen] = useState(false)
+  const [aiPartnerId, setAiPartnerId] = useState('')
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm())
   const enabledCount = useMemo(() => countEnabledTasks(tasks), [tasks])
+  const partnerNames = useMemo(
+    () => new Map(partners.map((partner) => [partner.id, partner.name])),
+    [partners]
+  )
 
   const loadTasks = useCallback(async (): Promise<void> => {
     try {
@@ -115,7 +137,10 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
 
   useEffect(() => {
     void loadTasks()
-    void window.api.partnerList().then(setPartners).catch(() => setPartners([]))
+    void window.api
+      .partnerList()
+      .then(setPartners)
+      .catch(() => setPartners([]))
   }, [loadTasks])
 
   useEffect(() => {
@@ -133,21 +158,27 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
       id: task.id,
       partnerId: task.partnerId,
       name: task.name,
-      prompt: task.description,
+      description: task.description,
+      contentNodes: task.contentNodes,
+      selectedReferences: task.selectedReferences,
       scheduleType: task.scheduleType,
       timeOfDay: task.timeOfDay,
-      weekday: task.weekday,
+      weekday: task.weekday
     })
     setFormOpen(true)
   }
 
   const buildSaveRequest = (): ScheduledTaskSaveRequest | null => {
     const timeOfDay = form.timeOfDay.trim()
+    if (!form.partnerId) {
+      message.warning('请选择伙伴')
+      return null
+    }
     if (!form.name.trim()) {
       message.warning('请填写任务名称')
       return null
     }
-    if (!form.prompt.trim()) {
+    if (!form.description.trim()) {
       message.warning('请填写任务描述')
       return null
     }
@@ -162,11 +193,13 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
     return {
       id: form.id || undefined,
       name: form.name.trim(),
-      description: form.prompt.trim(),
+      description: form.description.trim(),
+      contentNodes: form.contentNodes,
+      selectedReferences: form.selectedReferences,
       scheduleType: form.scheduleType,
       timeOfDay,
       weekday: form.scheduleType === 'weekly' ? normalizeWeekday(form.weekday) : null,
-      partnerId: form.partnerId,
+      partnerId: form.partnerId
     }
   }
 
@@ -198,7 +231,9 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
         message.error(response.error || '操作失败')
         return
       }
-      setTasks((current) => current.map((item) => (item.id === task.id ? response.task || { ...item, enabled } : item)))
+      setTasks((current) =>
+        current.map((item) => (item.id === task.id ? response.task || { ...item, enabled } : item))
+      )
     } catch (error) {
       message.error('操作失败')
       console.error('[SCHEDULED-TASKS] toggle failed:', error)
@@ -208,7 +243,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
   const handleRunNow = (task: ScheduledTask): void => {
     modal.confirm({
       title: '立即执行定时任务？',
-      content: `将按「${task.name}」的配置在专属伙伴执行。`,
+      content: `将按「${task.name}」的配置在绑定伙伴执行。`,
       okText: '立即执行',
       cancelText: '取消',
       onOk: async () => {
@@ -259,8 +294,25 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
           />
         </div>
         <div className="flex items-center gap-2">
-          <Button type="default" size="small" icon={<HiOutlinePlus />} onClick={openCreate} data-testid={scheduledTaskSelectors.addButton}>手动创建</Button>
-          <Button type="primary" size="small" onClick={openCreate}>AI 创建</Button>
+          <Button
+            type="default"
+            size="small"
+            icon={<HiOutlinePlus />}
+            onClick={openCreate}
+            data-testid={scheduledTaskSelectors.addButton}
+          >
+            手动创建
+          </Button>
+          <Button
+            type="primary"
+            size="small"
+            onClick={() => {
+              setAiPartnerId(partners[0]?.id || '')
+              setAiCreateOpen(true)
+            }}
+          >
+            AI 创建
+          </Button>
         </div>
       </div>
 
@@ -273,7 +325,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
           <div className="flex flex-1 items-center justify-center px-6">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description="还没有定时任务，点击右上角「新增配置」创建"
+              description="还没有定时任务，点击右上角「手动创建」或「AI 创建」"
             />
           </div>
         ) : (
@@ -290,7 +342,10 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
                       {task.name}
                     </div>
                     <div className="mt-0.5 truncate text-[12px] text-[#91918E]">
-                      {scheduleLabel(task)}
+                      {task.partnerId
+                        ? partnerNames.get(task.partnerId) || '伙伴已删除'
+                        : '未绑定 / 已停用'}{' '}
+                      · {scheduleLabel(task)}
                     </div>
                   </div>
                   <Switch
@@ -347,7 +402,13 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
         <div className="flex flex-col gap-4 pt-2">
           <label className="flex flex-col gap-1.5">
             <RequiredFieldLabel>伙伴</RequiredFieldLabel>
-            <Select value={form.partnerId || undefined} placeholder="选择伙伴" options={partners.map((partner) => ({ value: partner.id, label: partner.name }))} onChange={(partnerId) => setForm((current) => ({ ...current, partnerId }))} />
+            <Select
+              value={form.partnerId || undefined}
+              placeholder="选择伙伴"
+              data-testid={scheduledTaskSelectors.formPartner}
+              options={partners.map((partner) => ({ value: partner.id, label: partner.name }))}
+              onChange={(partnerId) => setForm((current) => ({ ...current, partnerId }))}
+            />
           </label>
 
           <label className="flex flex-col gap-1.5">
@@ -362,14 +423,22 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
 
           <label className="flex flex-col gap-1.5">
             <RequiredFieldLabel>任务描述</RequiredFieldLabel>
-            <Input.TextArea
-              value={form.prompt}
-              rows={3}
-              placeholder="描述你希望ta完成的事，也可使用@"
-              data-testid={scheduledTaskSelectors.formPrompt}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, prompt: event.target.value }))
+            <ComposerInputEditor
+              value={{
+                input: form.description,
+                contentNodes: form.contentNodes,
+                selectedReferences: form.selectedReferences
+              }}
+              onChange={(next) =>
+                setForm((current) => ({
+                  ...current,
+                  description: next.input,
+                  contentNodes: next.contentNodes,
+                  selectedReferences: next.selectedReferences
+                }))
               }
+              placeholder="描述你希望ta完成的事，也可使用@"
+              dataTestId={scheduledTaskSelectors.formPrompt}
             />
           </label>
 
@@ -415,8 +484,28 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
               </span>
             </div>
           </div>
-
         </div>
+      </Modal>
+      <Modal
+        open={aiCreateOpen}
+        title="选择伙伴"
+        okText="开始 AI 创建"
+        cancelText="取消"
+        okButtonProps={{ disabled: !aiPartnerId }}
+        onCancel={() => setAiCreateOpen(false)}
+        onOk={() => {
+          if (!aiPartnerId) return
+          setAiCreateOpen(false)
+          if (onAiCreate) void onAiCreate(aiPartnerId)
+        }}
+      >
+        <Select
+          className="w-full"
+          value={aiPartnerId || undefined}
+          placeholder="选择伙伴"
+          options={partners.map((partner) => ({ value: partner.id, label: partner.name }))}
+          onChange={setAiPartnerId}
+        />
       </Modal>
     </div>
   )

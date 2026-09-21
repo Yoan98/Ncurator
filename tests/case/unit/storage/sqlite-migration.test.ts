@@ -118,7 +118,7 @@ describe('SQLite migration contract', () => {
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
-    expect(migrationRows.at(-1)).toEqual({ version: 12, name: 'app_settings' })
+    expect(migrationRows.at(-1)).toEqual({ version: 14, name: 'scheduled_task_partner_binding' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -131,9 +131,7 @@ describe('SQLite migration contract', () => {
     const databasePath = await createDatabasePath()
     const sqlite = new SqliteCore(databasePath)
     sqlite.initialize()
-    const pending = sqlite
-      .prepare('SELECT version, name, status FROM schema_migration_hooks')
-      .all()
+    const pending = sqlite.prepare('SELECT version, name, status FROM schema_migration_hooks').all()
     expect(pending).toEqual([{ version: 10, name: 'upgrade_from_v9', status: 'pending' }])
 
     const lanceDbPath = path.join(path.dirname(databasePath), 'lancedb')

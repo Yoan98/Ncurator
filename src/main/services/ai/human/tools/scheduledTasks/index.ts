@@ -1,4 +1,5 @@
 import { tool } from '@langchain/core/tools'
+import type { AiToolCallResult, JsonValue } from '../../../../../../shared/types'
 import type { ToolFamilyDefinition } from '../types'
 import { withToolLifecycle } from '../utils/lifecycle'
 import { createToolEventEmitter } from '../utils/toolEvents'
@@ -7,6 +8,24 @@ import {
   SCHEDULED_TASK_LIST_SPEC,
   type ScheduledTaskActionInput
 } from './toolSpecs'
+
+const buildToolResult = (input: {
+  toolName: string
+  ok: boolean
+  data: JsonValue
+}): AiToolCallResult => ({
+  toolName: input.toolName,
+  ok: input.ok,
+  data: input.data
+})
+
+const toJsonValue = (value: object): JsonValue => JSON.parse(JSON.stringify(value)) as JsonValue
+
+const successResult = (toolName: string, data: object): AiToolCallResult =>
+  buildToolResult({ toolName, ok: true, data: toJsonValue(data) })
+
+const failureResult = (toolName: string, error: string): AiToolCallResult =>
+  buildToolResult({ toolName, ok: false, data: { error } })
 
 export const scheduledTasksToolFamily: ToolFamilyDefinition = {
   familyId: 'scheduled-tasks',
@@ -23,12 +42,23 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
           execute: async (session) => {
             if (!service) {
               const result = { error: '定时任务服务不可用' }
-              session.fail(result.error)
+              session.fail(
+                result.error,
+                undefined,
+                failureResult(SCHEDULED_TASK_LIST_SPEC.name, result.error)
+              )
               return result
             }
             const tasks = await service.listForPartner(ctx.partnerId)
-            session.succeed()
+            session.succeed(undefined, successResult(SCHEDULED_TASK_LIST_SPEC.name, { tasks }))
             return tasks
+          },
+          onError: (error, session) => {
+            session.fail(
+              error.message,
+              undefined,
+              failureResult(SCHEDULED_TASK_LIST_SPEC.name, error.message)
+            )
           }
         }),
       {
@@ -47,7 +77,11 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
           execute: async (session) => {
             if (!service) {
               const result = { error: '定时任务服务不可用' }
-              session.fail(result.error)
+              session.fail(
+                result.error,
+                undefined,
+                failureResult(SCHEDULED_TASK_ACTION_SPEC.name, result.error)
+              )
               return result
             }
             const input = args as ScheduledTaskActionInput
@@ -62,25 +96,38 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
                 selectedReferences: []
               })
               if (!result.success) {
-                session.fail(result.error || '创建定时任务失败')
-                return { error: result.error || '创建定时任务失败' }
+                const error = result.error || '创建定时任务失败'
+                session.fail(
+                  error,
+                  undefined,
+                  failureResult(SCHEDULED_TASK_ACTION_SPEC.name, error)
+                )
+                return { error }
               }
-              session.succeed()
-              return { id: result.task?.id }
+              const payload = { id: result.task?.id || '' }
+              session.succeed(undefined, successResult(SCHEDULED_TASK_ACTION_SPEC.name, payload))
+              return payload
             }
             const current = await service.getForPartner(input.id, ctx.partnerId)
             if (!current) {
-              session.fail('定时任务不存在')
-              return { error: '定时任务不存在' }
+              const error = '定时任务不存在'
+              session.fail(error, undefined, failureResult(SCHEDULED_TASK_ACTION_SPEC.name, error))
+              return { error }
             }
             if (input.action === 'delete') {
               const result = await service.deleteForPartner(input.id, ctx.partnerId)
               if (!result.success) {
-                session.fail(result.error || '删除定时任务失败')
-                return { error: result.error || '删除定时任务失败' }
+                const error = result.error || '删除定时任务失败'
+                session.fail(
+                  error,
+                  undefined,
+                  failureResult(SCHEDULED_TASK_ACTION_SPEC.name, error)
+                )
+                return { error }
               }
-              session.succeed()
-              return { id: input.id }
+              const payload = { id: input.id }
+              session.succeed(undefined, successResult(SCHEDULED_TASK_ACTION_SPEC.name, payload))
+              return payload
             }
             const result = await service.saveForPartner(ctx.partnerId, {
               id: current.id,
@@ -93,18 +140,35 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
               selectedReferences: current.selectedReferences
             })
             if (!result.success) {
-              session.fail(result.error || '修改定时任务失败')
-              return { error: result.error || '修改定时任务失败' }
+              const error = result.error || '修改定时任务失败'
+              session.fail(error, undefined, failureResult(SCHEDULED_TASK_ACTION_SPEC.name, error))
+              return { error }
             }
             if (input.enabled !== undefined) {
-              const enabledResult = await service.setEnabled({ id: current.id, enabled: input.enabled })
+              const enabledResult = await service.setEnabled({
+                id: current.id,
+                enabled: input.enabled
+              })
               if (!enabledResult.success) {
-                session.fail(enabledResult.error || '更新定时任务状态失败')
-                return { error: enabledResult.error || '更新定时任务状态失败' }
+                const error = enabledResult.error || '更新定时任务状态失败'
+                session.fail(
+                  error,
+                  undefined,
+                  failureResult(SCHEDULED_TASK_ACTION_SPEC.name, error)
+                )
+                return { error }
               }
             }
-            session.succeed()
-            return { id: current.id }
+            const payload = { id: current.id }
+            session.succeed(undefined, successResult(SCHEDULED_TASK_ACTION_SPEC.name, payload))
+            return payload
+          },
+          onError: (error, session) => {
+            session.fail(
+              error.message,
+              undefined,
+              failureResult(SCHEDULED_TASK_ACTION_SPEC.name, error.message)
+            )
           }
         }),
       {

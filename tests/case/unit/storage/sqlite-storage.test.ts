@@ -264,7 +264,9 @@ describe('sqlite storage core and stores', () => {
       { version: 9, name: 'repair_ai_runtime_system_notifications_column' },
       { version: 10, name: 'upgrade_from_v9' },
       { version: 11, name: 'drop_terminal_file_change_records' },
-      { version: 12, name: 'app_settings' }
+      { version: 12, name: 'app_settings' },
+      { version: 13, name: 'ai_run_pending_interaction' },
+      { version: 14, name: 'scheduled_task_partner_binding' }
     ])
 
     const legacyTables = sqlite
@@ -278,7 +280,9 @@ describe('sqlite storage core and stores', () => {
 
   it('persists app settings after replacing the legacy runtime settings table', async () => {
     const tables = sqlite
-      .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('app_settings', 'ai_runtime_settings')")
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('app_settings', 'ai_runtime_settings')"
+      )
       .all() as Array<{ name: string }>
     const settingsStore = new AppSettingsStore(sqlite)
     const saved = await settingsStore.save({

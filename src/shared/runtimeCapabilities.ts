@@ -48,8 +48,8 @@ export const RUNTIME_TOOL_CATALOG = {
   image_generate: { familyId: 'image-generation', skillId: 'image-generation' },
   learn_skill: { familyId: 'agent-control', skillId: 'agent-control' },
   update_plan: { familyId: 'agent-control', skillId: 'agent-control' },
-  read_image: { familyId: 'agent-control', skillId: 'agent-control' }
-  ,ask_user_question: { familyId: 'agent-control', skillId: 'agent-control' },
+  read_image: { familyId: 'agent-control', skillId: 'agent-control' },
+  ask_user_question: { familyId: 'agent-control', skillId: 'agent-control' },
   scheduled_task_list: { familyId: 'scheduled-tasks', skillId: 'scheduled-tasks' },
   scheduled_task_action: { familyId: 'scheduled-tasks', skillId: 'scheduled-tasks' }
 } as const satisfies Record<string, RuntimeToolCatalogEntry>

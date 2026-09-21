@@ -7,7 +7,14 @@ const scheduleFields = {
   description: z.string().min(1).describe('任务描述。'),
   scheduleType: z.enum(['daily', 'weekly']).describe('执行周期：daily 每天，weekly 每周。'),
   timeOfDay: z.string().min(1).describe('执行时间，格式 HH:mm。'),
-  weekday: z.number().int().min(0).max(6).nullable().optional().describe('每周执行的星期，0 为周日，6 为周六。')
+  weekday: z
+    .number()
+    .int()
+    .min(0)
+    .max(6)
+    .nullable()
+    .optional()
+    .describe('每周执行的星期，0 为周日，6 为周六。')
 }
 
 const scheduledTaskActionSchema = z.discriminatedUnion('action', [

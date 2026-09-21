@@ -504,13 +504,7 @@ export type EmbeddingRuntimeSnapshot = EmbeddingRuntimeProcessInfo & {
   status: EmbeddingServiceStatus
 }
 export type LlmProviderKind = 'openai' | 'deepseek' | 'openai-compatible'
-export type LlmProviderId =
-  | 'deepseek'
-  | 'dashscope'
-  | 'mimo'
-  | 'zhipu'
-  | 'local'
-  | 'custom'
+export type LlmProviderId = 'deepseek' | 'dashscope' | 'mimo' | 'zhipu' | 'local' | 'custom'
 export interface LLMConfig {
   id: string
   name: string
@@ -1048,7 +1042,13 @@ export interface OpenFileWithApplicationResponse {
   error?: string
 }
 
-export type AiRunStatus = 'running' | 'waiting_human' | 'waiting_approval' | 'completed' | 'failed' | 'cancelled'
+export type AiRunStatus =
+  | 'running'
+  | 'waiting_human'
+  | 'waiting_approval'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
 export type AiRunWarningCode =
   | 'workspace_binding_missing'
   | 'workspace_missing'
@@ -1274,7 +1274,7 @@ export type ScheduledTask = {
   weekday: number | null
   partnerId: string
   nextRunAt: number | null
-  /** 到点因专属伙伴占用而取消本次时写入；关闭胶囊或立即执行成功后清空 */
+  /** 到点因绑定伙伴占用而跳过本次时写入；关闭提示或立即执行成功后清空 */
   busyCancelNoticeAt: number | null
   createdAt: number
   updatedAt: number
@@ -1856,7 +1856,7 @@ type AiRunEventPayload =
       snapshot: BrainContextBudgetSnapshot
       createdAt: number
     }
-  | {
+  | ({
       type: 'context_compaction_started'
       runId: string
       taskId?: string
@@ -1865,8 +1865,8 @@ type AiRunEventPayload =
       thresholdTokens: number
       createdAt: number
       stage?: 'human_brain'
-    } & ContextCompactionCut
-  | {
+    } & ContextCompactionCut)
+  | ({
       type: 'context_compaction_completed'
       runId: string
       taskId?: string
@@ -1878,7 +1878,7 @@ type AiRunEventPayload =
       summaryPreview: string
       completedAt: number
       stage?: 'human_brain'
-    } & ContextCompactionCut
+    } & ContextCompactionCut)
   | {
       type: 'run_warning'
       runId: string

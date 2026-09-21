@@ -21,23 +21,24 @@ describe('ai human clarification live backend', () => {
         fixtures: [],
         runMode: 'repeatable',
         execute: async (runtime) => {
-          const filePath = path.join(runtime.workspaceRoot, 'clarification-brief.md')
+          const filePath = path.join(runtime.workspaceRoot, 'brief.md')
           await fs.writeFile(filePath, '# Brief\n\n主题：待定\n', 'utf8')
           const interactionIds: string[] = []
           const questionResolver: QuestionResolver = async (request) => {
             interactionIds.push(request.interactionId)
-            const first = request.questions[0]
-            const selected = first?.options[0]?.id
             return {
               accepted: true as const,
               result: {
-                answers: [
-                  {
-                    id: first?.id || 'clarification',
-                    selected: selected ? [selected] : [],
-                    custom: interactionIds.length === 2 ? '用深绿色和白色，整体保持克制' : undefined
+                answers: request.questions.map((question, index) => {
+                  const custom = interactionIds.length === 2 && index === 0
+                    ? '用深绿色和白色，整体保持克制'
+                    : undefined
+                  return {
+                    id: question.id,
+                    selected: custom ? [] : question.options[0] ? [question.options[0].id] : [],
+                    custom
                   }
-                ]
+                })
               }
             }
           }
@@ -63,6 +64,10 @@ describe('ai human clarification live backend', () => {
           const events = runtime.eventCollector.snapshot()
           const questions = filterAiRunEventsByType(events, 'human_interaction_required')
           const resolved = filterAiRunEventsByType(events, 'human_interaction_resolved')
+          const resolvedAnswerCounts = resolved.map((event) => {
+            const answers = event.result.answers
+            return Array.isArray(answers) ? answers.length : 0
+          })
           return {
             first,
             second,
@@ -71,6 +76,7 @@ describe('ai human clarification live backend', () => {
             interactionIds,
             questions,
             resolved,
+            resolvedAnswerCounts,
             content: await fs.readFile(filePath, 'utf8')
           }
         },
@@ -82,6 +88,7 @@ describe('ai human clarification live backend', () => {
               result.questions.length >= 1 &&
               result.resolved.length === result.questions.length &&
               result.interactionIds.length === result.questions.length &&
+              result.resolvedAnswerCounts.every((count) => count > 0) &&
               result.beforeThird === result.interactionIds.length &&
               result.content.includes('季度客户回访'),
             {

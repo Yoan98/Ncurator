@@ -14,9 +14,6 @@ import {
   ASK_USER_QUESTION_SCHEMA
 } from './toolSchemas'
 
-const ASK_USER_QUESTION_DESCRIPTION =
-  '在推进任务时，如果对用户意图存在无法自行消除的疑惑或歧义，并且不同理解可能改变结果或违背用户本意，向用户确认后再继续。能够从已有信息或资料中可靠确定的内容不要询问。'
-
 export const ASK_USER_QUESTION_TOOL_SPEC: HumanToolSpec<
   z.infer<typeof ASK_USER_QUESTION_SCHEMA>,
   'ask_user_question',
@@ -26,7 +23,11 @@ export const ASK_USER_QUESTION_TOOL_SPEC: HumanToolSpec<
   familyId: 'agent-control',
   skillIds: ['agent-control'],
   inputSchema: ASK_USER_QUESTION_SCHEMA,
-  promptSpec: { name: 'ask_user_question', description: ASK_USER_QUESTION_DESCRIPTION },
+  promptSpec: {
+    name: 'ask_user_question',
+    description:
+      '在推进任务时，如果对用户意图存在无法自行消除的疑惑或歧义，并且不同理解可能改变结果或违背用户本意，向用户确认后再继续。能够从已有信息或资料中可靠确定的内容不要询问。'
+  },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',
     defaultResourceKey: 'agent-control'

@@ -10,11 +10,7 @@ export const UPDATE_PLAN_SCHEMA = z.object({
 })
 
 export const READ_IMAGE_SCHEMA = z.object({
-  paths: z
-    .array(z.string().min(1))
-    .min(1)
-    .max(10)
-    .describe('本地或远程图片路径，1 至 10 个')
+  paths: z.array(z.string().min(1)).min(1).max(10).describe('本地或远程图片路径，1 至 10 个')
 })
 
 export const ASK_USER_QUESTION_SCHEMA = z.object({
@@ -39,11 +35,13 @@ export const ASK_USER_QUESTION_SCHEMA = z.object({
     )
     .min(1)
     .max(3)
-    .describe('最多 3 个会改变执行结果的问题')
+    .describe('询问用户的问题列表')
 })
 
 export type AskUserQuestionInput = z.infer<typeof ASK_USER_QUESTION_SCHEMA>
-export type AskUserQuestionResult = { answers: Array<{ id: string; selected: string[]; custom?: string }> }
+export type AskUserQuestionResult = {
+  answers: Array<{ id: string; selected: string[]; custom?: string }>
+}
 
 export type {
   LearnSkillOutput,

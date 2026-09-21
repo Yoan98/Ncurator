@@ -8,7 +8,6 @@ import {
   getWorkbenchLocator,
   openScheduledTasksView,
   scheduledTaskSelectors,
-  selectScheduledTaskModel,
   selectWorkbenchModel,
   setupWorkbenchWithTempWorkspace,
   workbenchSelectors
@@ -37,7 +36,7 @@ describe('workbench scheduled-task e2e', () => {
         suite: 'scheduled-task',
         groups: [],
         description:
-          '验证定时任务新增、必填校验、保存不建专属伙伴、编辑保存不改启用、启用开关、立即执行确认与删除闭环。',
+          '验证定时任务新增、伙伴必填、默认开启、编辑保存不改启用、立即执行确认与删除闭环。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         runMode: 'single',
@@ -64,7 +63,8 @@ describe('workbench scheduled-task e2e', () => {
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill(TASK_NAME)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPrompt).fill(TASK_PROMPT)
           await fillScheduledTaskTime(page, '09:05')
-          await selectScheduledTaskModel(page, setup.env.modelName)
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
+          await page.getByRole('option', { name: PARTNER_NAME, exact: true }).click()
           await saveButton.click()
           await saveButton.waitFor({ state: 'hidden' })
 
@@ -73,12 +73,10 @@ describe('workbench scheduled-task e2e', () => {
           const partnersAfterCreate = await listPartners(page)
           const createdCorrectly = Boolean(
             created &&
-              !created.enabled &&
+              created.enabled &&
               created.scheduleType === 'daily' &&
               created.timeOfDay === '09:05' &&
-              !created.partnerId &&
-              created.mainModel.configId &&
-              created.mainModel.modelName &&
+              created.partnerId === partnersBefore[0]?.id &&
               partnersAfterCreate.length === partnersBefore.length &&
               !partnersAfterCreate.some((partner) => partner.name === `定时 · ${TASK_NAME}`)
           )
@@ -104,6 +102,10 @@ describe('workbench scheduled-task e2e', () => {
           const toggle = created
             ? getWorkbenchLocator(page, `${scheduledTaskSelectors.itemTogglePrefix}-${created.id}`)
             : null
+          await toggle?.click()
+          const disabledAfterToggle = created
+            ? !(await listTasks(page)).find((task) => task.id === created.id)?.enabled
+            : false
           await toggle?.click()
           const enabledAfterToggle = created
             ? Boolean((await listTasks(page)).find((task) => task.id === created.id)?.enabled)
@@ -182,6 +184,7 @@ describe('workbench scheduled-task e2e', () => {
             createdCorrectly,
             itemShowsSummary,
             runNowConfirmCancelKeptIdle,
+            disabledAfterToggle,
             enabledAfterToggle,
             countChipVisibleAfterEnable,
             editedCorrectly,

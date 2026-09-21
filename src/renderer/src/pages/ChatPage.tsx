@@ -3750,7 +3750,7 @@ const ChatPage: React.FC = () => {
     const task = busyCancelTask
     modal.confirm({
       title: '立即执行定时任务？',
-      content: `将按「${task.name}」的配置在专属伙伴执行。`,
+      content: `将按「${task.name}」的配置在绑定伙伴执行。`,
       okText: '立即执行',
       cancelText: '取消',
       onOk: async () => {
@@ -3874,7 +3874,9 @@ const ChatPage: React.FC = () => {
     setApprovalDraftDecisions({})
   }
 
-  const submitHumanQuestion = async (answers: { answers: AskUserQuestionAnswer[] }): Promise<void> => {
+  const submitHumanQuestion = async (answers: {
+    answers: AskUserQuestionAnswer[]
+  }): Promise<void> => {
     if (!pendingQuestion) return
     const response = await window.api.aiRunHumanInteractionSubmit({
       runId: pendingQuestion.runId,
@@ -4612,7 +4614,22 @@ const ChatPage: React.FC = () => {
 
       <div className="nc-main-pane min-w-0 flex-1" style={WORKBENCH_POSITIONED_PANE_STYLE}>
         {scheduledTasksActive ? (
-          <ScheduledTasksView onEnabledCountChange={setScheduledTaskEnabledCount} />
+          <ScheduledTasksView
+            onEnabledCountChange={setScheduledTaskEnabledCount}
+            onAiCreate={async (partnerId) => {
+              const partner = partners.find((item) => item.id === partnerId)
+              if (!partner) return
+              await openExistingPartner(partner)
+              applyComposerDraft(
+                {
+                  ...createEmptyComposerDraft(),
+                  input:
+                    '我们一起来设置一个定时任务吧。询问我需要安排什么，以及应该在什么时候运行。'
+                },
+                'scheduled-task-ai-create'
+              )
+            }}
+          />
         ) : (
           <>
             <div className="nc-main-split flex h-full min-h-0 overflow-hidden" ref={mainSplitRef}>
@@ -4889,7 +4906,9 @@ const ChatPage: React.FC = () => {
                                   <div className="mt-3 flex items-center gap-2 border-t border-[#EEEEEC] px-4 py-4">
                                     <input
                                       className="min-w-0 flex-1 rounded-[6px] border border-[#EEEEEC] bg-[#FFFFFF] px-3 py-2 text-sm text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#37352F] focus:ring-2 focus:ring-[#EFEFED]"
-                                      placeholder={buildApprovalGuidePlaceholder(currentPartner?.name)}
+                                      placeholder={buildApprovalGuidePlaceholder(
+                                        currentPartner?.name
+                                      )}
                                       value={
                                         approvalDraftDecisions[currentApprovalItem.itemId]
                                           ?.message || ''

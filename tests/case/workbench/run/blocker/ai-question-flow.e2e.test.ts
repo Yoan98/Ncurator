@@ -1,3 +1,5 @@
+import fs from 'node:fs/promises'
+import path from 'node:path'
 import { describe, it } from 'vitest'
 import type { AiRunEvent } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
@@ -36,7 +38,15 @@ describe('workbench AI question e2e', () => {
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          // Keep this live case focused on clarification. The generic E2E workspace
+          // contains many unrelated documents, which can make the model spend its
+          // entire turn exploring instead of resolving the stated ambiguity.
+          await fs.writeFile(
+            path.join(setup.workspace.rootPath, 'brief.md'),
+            '# Brief\n\n主题：待定\n\n视觉风格：未说明\n',
+            'utf8'
+          )
           // This case isolates AI clarification. Full access auto-approves
           // ordinary tools, while ask_user_question still waits for the user.
           await selectWorkbenchExecutionPermission(page, '完全访问')
@@ -54,19 +64,31 @@ describe('workbench AI question e2e', () => {
 
           const card = page.getByTestId(workbenchSelectors.humanQuestionCard)
           await card.waitFor({ state: 'visible', timeout: 30_000 })
-          const question = required.interaction.questions[0]
-          if (!question) throw new Error('question payload is empty')
-          const firstOption = question.options[0]
-          if (!firstOption) throw new Error('question options are empty')
+          const questions = required.interaction.questions
+          if (questions.length !== 3) {
+            throw new Error(`expected three questions, received ${questions.length}`)
+          }
           await page.reload()
           await card.waitFor({ state: 'visible', timeout: 30_000 })
-          const customOption = card.getByTestId(
-            `workbench-human-question-option-${question.id}-custom`
-          )
-          await customOption.click()
-          await card
-            .getByTestId(`workbench-human-question-custom-input-${question.id}`)
-            .fill('使用深绿色和白色，整体保持克制')
+          for (const [index, question] of questions.entries()) {
+            if (index === 0) {
+              await card.getByTestId(
+                `workbench-human-question-option-${question.id}-custom`
+              ).click()
+              await card
+                .getByTestId(`workbench-human-question-custom-input-${question.id}`)
+                .fill('使用深绿色和白色，整体保持克制')
+            } else {
+              const firstOption = question.options[0]
+              if (!firstOption) throw new Error(`question ${question.id} options are empty`)
+              await card.getByTestId(
+                `workbench-human-question-option-${question.id}-${firstOption.id}`
+              ).click()
+            }
+            if (index < questions.length - 1) {
+              await card.getByTestId(workbenchSelectors.humanQuestionNext).click()
+            }
+          }
           await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
 
           const resolved = await waitForWorkbenchAiEvent(runtime, {
@@ -87,19 +109,27 @@ describe('workbench AI question e2e', () => {
             (event) => event.runId === required.runId
           )
           return {
-            firstOption: firstOption.label,
             resolved,
+            questionCount: questions.length,
             processText,
             completion,
             events
           }
         },
         assert: async (result) => {
+          if (result.questionCount !== 3) {
+            throw new Error(`expected three questions, received ${result.questionCount}`)
+          }
+          const resolvedEvent = result.resolved
+          if (resolvedEvent.type !== 'human_interaction_resolved') {
+            throw new Error('question resolved event was not recorded')
+          }
+          const answers = resolvedEvent.result.answers
+          if (!Array.isArray(answers) || answers.length !== 3) {
+            throw new Error('the submitted result did not contain all three answers')
+          }
           if (!result.processText.includes('使用深绿色和白色，整体保持克制')) {
             throw new Error('Activity did not show the submitted custom answer')
-          }
-          if (!result.events.some((event) => event.type === 'human_interaction_resolved')) {
-            throw new Error('question resolved event was not recorded')
           }
         }
       })

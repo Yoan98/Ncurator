@@ -1,4 +1,9 @@
-import type { ChatMessageContentNode, ScheduledTask, ScheduledTaskScheduleType, SelectedReference } from '../../../../shared/types'
+import type {
+  ChatMessageContentNode,
+  ScheduledTask,
+  ScheduledTaskScheduleType,
+  SelectedReference
+} from '../../../../shared/types'
 import type { SqliteCore } from '../sqlite/SqliteCore'
 import { fromSqliteBoolean, parseJsonArray, toOptionalNumber } from '../sqlite/sqliteUtils'
 
