@@ -112,7 +112,7 @@ const tagCandidateRoot = path.dirname(resolveCandidateDirectory(releaseTag, plat
 await rm(tagCandidateRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 500 })
 
 process.stdout.write(
-  `[release] aborted unpublished ${releaseTag}; re-run: pnpm release:start -- --platform ${family} --version ${version}\n`
+  `[release] aborted unpublished ${releaseTag}; re-run: pnpm release:start --platform ${family} --version ${version}\n`
 )
 process.stdout.write(
   '[release] prepare commits on main are kept; only the tag and local candidates are removed\n'

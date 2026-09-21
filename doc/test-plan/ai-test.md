@@ -121,9 +121,11 @@ AI 回归测试目录：
 | `tool/excel/excel-diff-row-structure-semantics.test.ts`     | `excel-diff-row-structure-semantics`、`excel-diff-cumulative-net-semantics`        |
 | `tool/agent-control/read-image-multimodal-contract.test.ts` | `read-image-multimodal-contract`、`multimodal-image-budget-contract`               |
 | `human/mock-llm/human-mixed-tool-dispatch.test.ts`          | `human-mixed-tool-dispatch`、`human-mixed-tool-dispatch-after-invalid-plan`        |
+| `human/mock-llm/ask-user-question.test.ts`                  | `human-ask-user-question`、`human-ask-user-question-rejects-mixed-tools`、`human-ask-user-question-does-not-auto-answer` |
 | `human/mock-llm/human-pdf-main-model-multimodal.test.ts`    | `human-pdf-read-image-collaboration`                                               |
 | `human/mock-llm/ai-run-service-embedding-preflight.test.ts` | `ai-run-service-embedding-preflight`、`ai-run-service-embedding-preflight-failure` |
 | `human/live/human-text-file-read-write-live.test.ts`        | `human-text-file-*-live`                                                           |
+| `human/live/human-clarification-multi-run-live.test.ts`     | `human-clarification-multi-run-live`                                                |
 | `human/live/human-runtime-script-execution-live.test.ts`    | `human-runtime-*-python-live`                                                      |
 | `human/live/human-legacy-doc-reading-live.test.ts`          | `human-legacy-doc-*-live`                                                          |
 
@@ -575,6 +577,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 - 测试类型：`backend / mock-llm`
 - What：提问工具校验 1 至 3 个问题，支持单选、多选和自定义答案，并在回答前阻止副作用工具。
+- Why：AI 只有在无法自行消除、可能违背用户意图的歧义处才应停下来询问；审批权限不能替用户表达任务意图。
+- How：`ask-user-question.test.ts` 通过生产 `createAiRunContext -> human graph -> real text_file_edit`，只脚本化 brain 输出；另用真实 dispatch 验证提问与副作用工具混合时整轮拒绝，并在 `full_access` 策略下不提供 resolver。
 - Oracle：run 进入 `waiting_human`；回答前没有写操作；结构化 `{ answers: [...] }` tool result 回到下一轮 brain；同一 run 不能有两个 pending interaction；`full_access` 不会自动回答。
 
 ##### `hand-invalid-tool-input`
@@ -732,6 +736,30 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Why：控制工具失败不能清空同一 assistant 消息尚未消费的工具队列。
 - How：同一轮依次返回无效 `update_plan` 与 `kb_list_documents`，下一轮检查消息记录。
 - Oracle：plan 获得失败 ToolMessage，KB 工具获得成功 ToolMessage，任务正常完成且没有悬空 tool_call_id。
+
+##### `human-ask-user-question-rejects-mixed-tools`
+
+- 测试类型：`backend / mock-llm`
+- What：提问与写文件工具同时返回时，整轮被拒绝。
+- Why：确认用户意图前不能让同一轮的副作用工具抢先执行。
+- How：生产 graph 收到同一轮 `ask_user_question + text_file_edit`，不提供任何替代执行路径。
+- Oracle：run 失败但没有 `human_interaction_required`，目标文件保持原内容。
+
+##### `human-ask-user-question-does-not-auto-answer`
+
+- 测试类型：`backend / mock-llm`
+- What：`full_access` 或审批自动通过策略不会替 AI 提问自动作答。
+- Why：审批权限只决定受控操作是否放行，不能替用户表达意图。
+- How：生产 graph 使用 `approvalPolicy=auto-approve` 触发提问，但不提供 question resolver。
+- Oracle：只有 question required、没有 question resolved，run 不会继续执行。
+
+##### `human-clarification-multi-run-live`
+
+- 测试类型：`backend / live`
+- What：同一伙伴连续三次真实模型运行，分别覆盖模糊任务、用户自定义回答和明确任务。
+- Why：单轮 happy path 不能证明模型会在真正的意图歧义处停下来，也不能证明回答会影响后续执行或明确任务不会被无意义打断。
+- How：使用真实 LLM、真实 graph、真实文本文件和真实 question resolver；resolver 只按 `interactionId` 记录并返回答案，不匹配固定选项文字。第一轮回答预设选项，第二轮回答“其他，请填写”的自定义内容，第三轮给出明确要求。
+- Oracle：前两轮的问题必要性、清晰度、选项覆盖、选项差异和答案有效性通过 raw logs 人工评分；回答前无写操作；自定义文字进入结果并影响产物；第三轮不产生无意义提问。
 
 ##### `conversation-memory-multi-run-recall`
 

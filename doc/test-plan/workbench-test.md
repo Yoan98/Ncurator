@@ -42,6 +42,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退、多文件修改入口，以及馆长 WPS 通道对 docx / xlsx / pptx 的 dispatch 与本机已授权 WPS 文字 / 表格 / 演示窗口刷新。
 - `scheduled-task` 验证定时任务的入口、配置保存不建伙伴、到点/立即执行时按需创建专属伙伴、启用开关与往专属伙伴追加任务。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
+- AI 提问统一归入 `run/blocker`：真实 UI 展示 A/B/C/D 和“其他，请填写”，支持多问题切换、刷新恢复；提交后在对应 Activity 工具行下按顺序显示问题与用户答案。审批结果也在对应工具行下显示，不再使用旧图标前缀或 hover 替换文案。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
 - docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足测试 case 口径。
@@ -100,7 +101,7 @@ pnpm test:update:e2e
 补充规则：
 
 - `pnpm test:workbench:e2e` 是 Workbench UI 源码 E2E 测试入口。
-- 需要验证正式安装包时，调试使用 `pnpm test:e2e:package -- --bundle <release-bundle.json>`；它会校验并安装已构建候选包，再对安装后的真实应用执行所选正式 E2E，不重新构建。发布时通过 `release:win` / `release:mac` 的 `--test-only` 按影响评估选择范围，不带过滤参数时执行全部正式 E2E。
+- 需要验证正式安装包时，调试使用 `pnpm test:e2e:package --bundle <release-bundle.json>`；它会校验并安装已构建候选包，再对安装后的真实应用执行所选正式 E2E，不重新构建。发布时通过 `release:win` / `release:mac` 的 `--test-only` 按影响评估选择范围，不带过滤参数时执行全部正式 E2E。
 - `conversation / run / result / scheduled-task` 是稳定 suite，不因 PRD 小节增删而轻易重排。
 - suite 下的 `partner / composer / timeline / message / scope / prefix-cache / provider-matrix / process / blocker / browser / persistence / preview / apply / wps-office` 是 group，只在同一 suite 内用于收敛相近 case。不存在 `search/` 目录。
 
@@ -604,7 +605,9 @@ pnpm test:update:e2e
 
 - 测试类型：`e2e / live`
 - What：模糊任务触发 AI 提问，用户完成 A/B/C/D、其他输入和多问题切换；回答前不显示写入结果，提交后 run 恢复。
-- Oracle：composer 上方出现统一交互卡片；刷新后 pending 问题可恢复；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。
+- Why：问题和答案是任务定义的一部分，必须在真实 UI 中可操作、可恢复、可追溯，不能只在 IPC 或 backend 日志中存在。
+- How：通过真实 Workbench UI 发送存在结果歧义的任务，等待 `human_interaction_required`；检查 A/B/C/D、其他输入和 pending 卡片，刷新后继续选择自定义答案并提交；展开 Activity 检查问答投影。审批展示由 `approval-batch-flow` 同时覆盖。
+- Oracle：composer 上方出现统一交互卡片；刷新后 pending 问题可恢复；提交前无写入；提交后 run 恢复并完成；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。
 
 ### 5.4 `scheduled-task`
 

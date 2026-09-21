@@ -25,6 +25,11 @@ import type {
   LlmRuntimeConfig,
   SelectedReference
 } from '../../../src/shared/types'
+import type {
+  AiRunEventStage,
+  AskUserQuestionInput,
+  AskUserQuestionResult
+} from '../../../src/shared/types'
 import type { EventCollector } from '../core/eventCollector'
 import type { TestDomain, TestType, TestLogEvent } from '../core/run-log-contract'
 
@@ -33,6 +38,17 @@ export type { TestDomain, TestType, TestLogEvent, TestRunMeta } from '../core/ru
 export type ApprovalPolicy = 'auto-approve' | 'deny-medium-high' | 'deny-all'
 
 export type ApprovalResolver = (request: AiApprovalBatchRequest) => AiApprovalBatchResult
+
+export type QuestionResolver = (request: {
+  taskId: string
+  interactionId: string
+  toolCallId: string
+  questions: AskUserQuestionInput['questions']
+  stage?: AiRunEventStage
+}) => Promise<
+  | { accepted: true; result: AskUserQuestionResult }
+  | { accepted: false; error: string }
+>
 
 export type BackendHarnessMode = 'tool-real' | 'mock-llm' | 'live'
 
@@ -169,6 +185,7 @@ export type CreateAiRunContextInput = {
   streamingModeOverride?: AiLlmStreamingMode
   modelName?: string
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
+  questionResolver?: QuestionResolver
   checkCancelledOverride?: () => void
   humanRuntimeOverrides?: {
     graphRecursionLimit?: number

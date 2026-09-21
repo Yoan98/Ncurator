@@ -32,8 +32,8 @@
 第一个平台执行 `release:start` 时锁定本次新增 migration；另一平台使用同一份已锁源码。已锁 migration 不能合并、重排或修改，只能新增更高版本。
 
 ```bash
-pnpm release:start -- --platform windows --version X.Y.Z
-pnpm release:start -- --platform mac --version X.Y.Z
+pnpm release:start --platform windows --version X.Y.Z
+pnpm release:start --platform mac --version X.Y.Z
 ```
 
 可用 `--notes <text>` 附加发布说明。
@@ -46,7 +46,7 @@ Tag 已推送但尚未成为公开通道 `releases/latest` 中的 live 版本时
 
 ```bash
 export NCURATOR_ALLOW_ABORT_TAG=abort-unpublished-tag
-pnpm release:abort -- --tag windows-vX.Y.Z
+pnpm release:abort --tag windows-vX.Y.Z
 # 或 mac-vX.Y.Z
 ```
 
@@ -127,21 +127,21 @@ export NCURATOR_ALLOW_LIVE_PUBLISH=publish-to-production
 ### 候选包
 
 ```bash
-pnpm release:win -- --tag windows-vX.Y.Z --prepare-only
-pnpm release:win -- --tag windows-vX.Y.Z --test-only [回归过滤参数]
-pnpm release:win -- --tag windows-vX.Y.Z --publish-only
+pnpm release:win --tag windows-vX.Y.Z --prepare-only
+pnpm release:win --tag windows-vX.Y.Z --test-only [回归过滤参数]
+pnpm release:win --tag windows-vX.Y.Z --publish-only
 
-pnpm release:mac -- --tag mac-vX.Y.Z --prepare-only
-pnpm release:mac -- --tag mac-vX.Y.Z --test-only [回归过滤参数]
-pnpm release:mac -- --tag mac-vX.Y.Z --publish-only
+pnpm release:mac --tag mac-vX.Y.Z --prepare-only
+pnpm release:mac --tag mac-vX.Y.Z --test-only [回归过滤参数]
+pnpm release:mac --tag mac-vX.Y.Z --publish-only
 ```
 
 独立验证已构建候选包：
 
 ```bash
-pnpm test:e2e:package -- --bundle <release-bundle.json>
-pnpm test:e2e:package -- --bundle <release-bundle.json> --domain workbench
-pnpm test:e2e:package -- --bundle <release-bundle.json> --case <caseId>
+pnpm test:e2e:package --bundle <release-bundle.json>
+pnpm test:e2e:package --bundle <release-bundle.json> --domain workbench
+pnpm test:e2e:package --bundle <release-bundle.json> --case <caseId>
 ```
 
 上述命令用于手动验证已构建候选包；正式发布回归必须通过 `release:win` 或 `release:mac` 的 `--test-only` 执行。
@@ -151,7 +151,7 @@ pnpm test:e2e:package -- --bundle <release-bundle.json> --case <caseId>
 上传已经完成但 finalize 中断时，确认当前 Tag 尚未被其他发布流程处理，再执行：
 
 ```bash
-pnpm release:storage:finalize -- --tag <windows-vX.Y.Z|mac-vX.Y.Z>
+pnpm release:storage:finalize --tag <windows-vX.Y.Z|mac-vX.Y.Z>
 ```
 
 该命令会校验 COS 上的 fragment 和安装包，写入公开更新 metadata / manifest，并清理旧对象。它不是正常发布入口，也不能用于已经发布完成的 Tag。

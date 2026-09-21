@@ -20,7 +20,12 @@ import { WorkspaceKnowledgePrepareService } from '../../../src/main/services/wor
 import { WorkspaceSourceService } from '../../../src/main/services/workspace/WorkspaceSourceService'
 import { getModelsPath } from '../../../src/main/utils/paths'
 import type { AiLlmStreamingMode } from '../../../src/shared/types'
-import type { BackendHarnessMode, CreateAiRunContextInput, LiveLlmConfig } from './test-types'
+import type {
+  BackendHarnessMode,
+  CreateAiRunContextInput,
+  LiveLlmConfig,
+  QuestionResolver
+} from './test-types'
 import type { EventCollector } from '../core/eventCollector'
 import { loadLiveLlmConfigFromEnv, TOOL_REAL_LLM_CONFIG_ID } from './llmConfig'
 import { createScriptedStructuredOutputDriver } from './scriptedStructuredOutputDriver'
@@ -82,6 +87,16 @@ const buildApprovalResolver = (
       itemId: item.itemId,
       action: 'approve'
     }))
+  })
+}
+
+const buildQuestionResolver = (
+  resolver: CreateAiRunContextInput['questionResolver']
+): QuestionResolver => {
+  if (resolver) return resolver
+  return async () => ({
+    accepted: false as const,
+    error: '测试未提供 questionResolver，不能隐式回答 AI 提问'
   })
 }
 
@@ -154,6 +169,7 @@ export const createRealAiDepsFactory = async (input: {
 
     const bindWorkspace = contextInput.bindWorkspace !== false
     const approvalResolver = buildApprovalResolver(contextInput.approvalPolicy)
+    const questionResolver = buildQuestionResolver(contextInput.questionResolver)
     const defaultStreamingMode: AiLlmStreamingMode | undefined =
       contextInput.streamingModeOverride
 
@@ -247,6 +263,36 @@ export const createRealAiDepsFactory = async (input: {
             internal: request.internal
           })
           return decision
+        },
+        requestUserQuestion: async (request) => {
+          input.eventCollector.add({
+            type: 'human_interaction_required',
+            runId,
+            taskId: request.taskId,
+            interactionId: request.interactionId,
+            interaction: {
+              kind: 'question',
+              interactionId: request.interactionId,
+              toolCallId: request.toolCallId,
+              questions: request.questions
+            },
+            createdAt: Date.now(),
+            stage: request.stage
+          })
+          const result = await questionResolver(request)
+          if (result.accepted) {
+            input.eventCollector.add({
+              type: 'human_interaction_resolved',
+              runId,
+              taskId: request.taskId,
+              interactionId: request.interactionId,
+              kind: 'question',
+              result: result.result as unknown as Record<string, unknown>,
+              resolvedAt: Date.now(),
+              stage: request.stage
+            })
+          }
+          return result
         },
         llmDriver: llmScript ? createScriptedStructuredOutputDriver(llmScript) : undefined,
         chatToolsWrapper: contextInput.chatToolsWrapper,
