@@ -8,7 +8,8 @@ export const AI_TOOL_FAMILY_IDS = [
   'excel',
   'web',
   'image-generation',
-  'agent-control'
+  'agent-control',
+  'scheduled-tasks'
 ] as const
 
 export type RuntimeToolFamilyId = (typeof AI_TOOL_FAMILY_IDS)[number]
@@ -48,7 +49,9 @@ export const RUNTIME_TOOL_CATALOG = {
   learn_skill: { familyId: 'agent-control', skillId: 'agent-control' },
   update_plan: { familyId: 'agent-control', skillId: 'agent-control' },
   read_image: { familyId: 'agent-control', skillId: 'agent-control' }
-  ,ask_user_question: { familyId: 'agent-control', skillId: 'agent-control' }
+  ,ask_user_question: { familyId: 'agent-control', skillId: 'agent-control' },
+  scheduled_task_list: { familyId: 'scheduled-tasks', skillId: 'scheduled-tasks' },
+  scheduled_task_action: { familyId: 'scheduled-tasks', skillId: 'scheduled-tasks' }
 } as const satisfies Record<string, RuntimeToolCatalogEntry>
 
 export type RuntimeToolName = keyof typeof RUNTIME_TOOL_CATALOG
@@ -74,7 +77,8 @@ export const RUNTIME_SKILL_DISPLAY_NAMES = {
   'excel-read': 'Excel 阅读器',
   'excel-write': 'Excel 编辑器',
   'image-generation': '图片生成',
-  'agent-control': '任务控制'
+  'agent-control': '任务控制',
+  'scheduled-tasks': '定时任务'
 } as const satisfies Record<RuntimeSkillId, string>
 
 export const isRuntimeSkillId = (value: unknown): value is RuntimeSkillId =>

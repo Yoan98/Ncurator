@@ -20,6 +20,7 @@ const TOOL_FAMILY_BUILDERS: Record<
   web: TOOL_FAMILY_DEFINITIONS.web.buildTools,
   'image-generation': TOOL_FAMILY_DEFINITIONS['image-generation'].buildTools,
   'agent-control': TOOL_FAMILY_DEFINITIONS['agent-control'].buildTools
+  , 'scheduled-tasks': TOOL_FAMILY_DEFINITIONS['scheduled-tasks'].buildTools
 }
 
 const ensureFamilyTools = (input: {

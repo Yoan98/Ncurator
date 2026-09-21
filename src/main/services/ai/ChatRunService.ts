@@ -106,6 +106,7 @@ type ChatRunServiceDeps = {
   runResourceManager: AiRunResourceManager
   browserUseService?: BrowserEmbedService
   webCrawlerService?: WebCrawlerService
+  scheduledTaskService?: import('../scheduler/ScheduledTaskService').ScheduledTaskService
   telemetryService?: TelemetryService
   errorLogService?: AppErrorLogService
   recordLlmIo?: (record: AiLlmIoRecord) => void
@@ -717,6 +718,7 @@ export class ChatRunService {
           requestUserQuestion: async (request) => await this.requestUserQuestion(runId, request),
           browserUseService: this.deps.browserUseService,
           webCrawlerService: this.deps.webCrawlerService,
+          scheduledTaskService: this.deps.scheduledTaskService,
           humanRuntimeOverrides: this.deps.resolveHumanRuntimeOverrides?.(run)
         }
       )

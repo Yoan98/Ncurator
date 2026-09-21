@@ -28,7 +28,7 @@ SQLite 保存以下业务数据：
 - LLM 配置（`llm_config`）与全局偏好（`app_settings`：系统通知、知识库索引速度）。
 - 文件内容和预览 artifact 的 SHA-256 对象引用；实际对象保存在 `userData/partners/{id}/objects/sha256/<前 2 位>/<其余>`，相同内容只存一份。
 - Workbench 伙伴 UI 快照（`partner_ui_state`）、当前活动伙伴（`workbench_ui_state.active_view_key`）和内置浏览器标签状态（`browser_tab_state.owner_key` = partner_id）。
-- 定时任务（`scheduled_task.partner_id` 绑定专属伙伴，未绑定时写空字符串而非 SQL NULL，到点或立即执行时再创建并回写；无外键 CASCADE；`busy_cancel_notice_at` 记录因占用取消的待展示提示）。
+- 定时任务（`scheduled_task.partner_id` 绑定真实伙伴，未绑定任务保留但停用；任务描述和引用独立保存；无外键 CASCADE；`busy_cancel_notice_at` 记录因占用取消的待展示提示）。
 
 关键规则：
 
@@ -43,7 +43,7 @@ SQLite 保存以下业务数据：
 - `partner_ui_state` 以 `partner_id` 为主键保存版本化 `state_json`，伙伴删除时通过外键级联删除。
 - `workbench_ui_state` 是 `id = 1` 的单例，只保存 `active_view_key`（当前伙伴 id）。
 - `browser_tab_state` 以 `owner_key` 隔离伙伴标签（`owner_key` = partner_id），保存 URL、标题、缩放、导航历史、顺序和更新时间。
-- 删除伙伴级联删除 message log、`ai_run`、`ai_file_change`、`docx_apply`、`partner_ui_state`，并清除 `browser_tab_state`、将 `active_view_key` 置空，同时删除 `userData/partners/{id}`。定时任务不级联删除：专属伙伴被删后任务仍保留，到点或立即执行时由服务自动重建伙伴。
+- 删除伙伴级联删除 message log、`ai_run`、`ai_file_change`、`docx_apply`、`partner_ui_state`，并清除 `browser_tab_state`、将 `active_view_key` 置空，同时删除 `userData/partners/{id}`。定时任务不级联删除：关联任务保留、清空绑定并停用。
 - Renderer 内存只负责当前交互，SQLite 是重启恢复的真相；浏览器 `WebContentsView` 只负责运行期页面实例，不是持久化真相。
 
 ## SQLite Migration

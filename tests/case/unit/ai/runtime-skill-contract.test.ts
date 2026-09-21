@@ -23,13 +23,21 @@ describe('ai unit runtime skill contract', () => {
       'ppt-write',
       'excel-read',
       'excel-write',
-      'image-generation'
+      'image-generation',
+      'scheduled-tasks'
     ])
   })
 
   it('binds excel skills to their tool names', () => {
     expect(getSkillDefinition('excel-read').toolNames).toEqual(['excel_read'])
     expect(getSkillDefinition('excel-write').toolNames).toEqual(['excel_edit'])
+  })
+
+  it('binds scheduled task skill to one read tool and one action tool', () => {
+    expect(getSkillDefinition('scheduled-tasks').toolNames).toEqual([
+      'scheduled_task_list',
+      'scheduled_task_action'
+    ])
   })
 
   it('includes builtin skills in effective skills before any external learning', () => {

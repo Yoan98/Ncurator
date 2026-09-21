@@ -126,6 +126,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     getLlmConfig: loadRequestedConfig,
     browserUseService: deps.browserUseService,
     webCrawlerService: deps.webCrawlerService,
+    scheduledTaskService: deps.scheduledTaskService,
     appendMessageLog,
     loadMessageLog,
     trackDocxOpen: ({ docId, sourcePath, replaySession }) => {

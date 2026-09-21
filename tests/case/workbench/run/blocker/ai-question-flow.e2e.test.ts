@@ -37,7 +37,9 @@ describe('workbench AI question e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
-          await selectWorkbenchExecutionPermission(page, '审核')
+          // This case isolates AI clarification. Full access auto-approves
+          // ordinary tools, while ask_user_question still waits for the user.
+          await selectWorkbenchExecutionPermission(page, '完全访问')
           await sendWorkbenchMessage(
             page,
             '请帮我完善当前工作区里的 brief。里面没有说明最终要突出哪种风格，请先问我一个会影响结果的关键问题，再继续修改。'

@@ -110,6 +110,10 @@ export const RUNTIME_SKILL_CATALOG = {
     countsTowardToolBudget: false,
     title: 'agent-control',
     description: '管理任务推进：学习技能、维护计划，并加载图片到主模型上下文。'
+  },
+  'scheduled-tasks': {
+    familyId: 'scheduled-tasks', source: 'external', countsTowardToolBudget: true,
+    title: 'scheduled-tasks', description: '读取、创建、修改和删除当前伙伴的定时任务。'
   }
 } as const satisfies Record<RuntimeSkillId, RuntimeSkillCatalogEntry>
 

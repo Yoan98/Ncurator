@@ -111,7 +111,9 @@ const TOOL_UI_KINDS = {
   learn_skill: 'learning',
   update_plan: 'generic',
   read_image: 'image-read',
-  ask_user_question: 'generic'
+  ask_user_question: 'generic',
+  scheduled_task_list: 'generic',
+  scheduled_task_action: 'generic'
 } as const satisfies Record<RuntimeToolName, AssistantExecutionSkillKey>
 
 export const getAssistantToolUiKind = (

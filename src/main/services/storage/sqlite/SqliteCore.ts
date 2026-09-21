@@ -16,6 +16,7 @@ import { upgradeFromV9Migration } from './migrations/010_upgrade_from_v9'
 import { dropTerminalFileChangeRecordsMigration } from './migrations/011_drop_terminal_file_change_records'
 import { appSettingsMigration } from './migrations/012_app_settings'
 import { aiRunPendingInteractionMigration } from './migrations/013_ai_run_pending_interaction'
+import { scheduledTaskPartnerBindingMigration } from './migrations/014_scheduled_task_partner_binding'
 
 export type SqliteDatabase = Database.Database
 export type SqliteStatement = Database.Statement
@@ -33,10 +34,11 @@ const MIGRATIONS: readonly Migration[] = [
   upgradeFromV9Migration,
   dropTerminalFileChangeRecordsMigration,
   appSettingsMigration,
-  aiRunPendingInteractionMigration
+  aiRunPendingInteractionMigration,
+  scheduledTaskPartnerBindingMigration
 ]
 
-export const CURRENT_SCHEMA_VERSION = 13
+export const CURRENT_SCHEMA_VERSION = 14
 
 const MIGRATION_NAME_ALIASES = new Map<number, ReadonlySet<string>>([
   [2, new Set(['workspace_change_sets'])]

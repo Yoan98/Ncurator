@@ -1395,9 +1395,14 @@ export const selectWorkbenchModel = async (
       await byFreeId.click()
       return
     }
-    const presetOption = menu.getByRole('option').filter({ hasText: modelName }).first()
-    if (await presetOption.isVisible().catch(() => false)) {
-      await presetOption.click()
+    const presetOptions = menu.getByRole('option')
+    const presetOptionIndex = await presetOptions.evaluateAll(
+      (elements, expected) =>
+        elements.findIndex((element) => (element.textContent || '').trim() === expected),
+      modelName
+    )
+    if (presetOptionIndex >= 0) {
+      await presetOptions.nth(presetOptionIndex).click()
       return
     }
   }
@@ -1410,10 +1415,15 @@ export const selectWorkbenchModel = async (
   await searchInput.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
   await searchInput.fill(modelName)
   const modelOptions = menu.getByRole('option')
-  const modelOption = modelOptions.filter({ hasText: modelName }).first()
-  try {
-    await modelOption.waitFor({ state: 'visible', timeout: WORKBENCH_MODEL_LIST_TIMEOUT_MS })
-  } catch {
+  // Remote providers can expose both `modelName` and prefixed variants such as
+  // `vanchin/${modelName}`. Prefer the exact ID so the UI E2E exercises the
+  // same model configured by AI_LIVE_MODEL as the backend live harness.
+  const exactModelOptionIndex = await modelOptions.evaluateAll(
+    (elements, expected) =>
+      elements.findIndex((element) => (element.textContent || '').trim() === expected),
+    modelName
+  )
+  if (exactModelOptionIndex < 0) {
     const optionTexts = (await modelOptions.allTextContents())
       .map((item) => item.trim())
       .filter(Boolean)
@@ -1425,7 +1435,7 @@ export const selectWorkbenchModel = async (
       ].join('\n')
     )
   }
-  await modelOption.click()
+  await modelOptions.nth(exactModelOptionIndex).click()
 }
 
 export const selectWorkbenchWorkspace = async (

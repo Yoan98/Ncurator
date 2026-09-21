@@ -299,6 +299,7 @@ export function registerHandlers(services: {
     return Number.isInteger(value) && value > 0 ? value : undefined
   })()
   let e2eGraphRecursionLimitUsesRemaining = e2eGraphRecursionLimitOnce ? 1 : 0
+  let scheduledTaskService: ScheduledTaskService | undefined
   const chatRunService = new ChatRunService({
     partnerStore,
     chatMessageLogStore,
@@ -320,6 +321,7 @@ export function registerHandlers(services: {
     runResourceManager,
     browserUseService: browserEmbedService,
     webCrawlerService,
+    scheduledTaskService,
     telemetryService,
     errorLogService,
     recordLlmIo: services.recordLlmIo,
@@ -357,13 +359,10 @@ export function registerHandlers(services: {
     })
   }
 
-  const scheduledTaskService = new ScheduledTaskService({
+  scheduledTaskService = new ScheduledTaskService({
     taskStore: storageService.scheduledTask,
     partnerStore,
-    savePartnerUiState: async (partnerId, state) => {
-      await workbenchUiStore.savePartnerState(partnerId, state)
-    },
-    createEmptyPartnerUiState,
+    getPartnerUiState: (partnerId) => workbenchUiStore.getPartnerState(partnerId),
     hasActivePartnerRun: (partnerId) => chatRunService.hasActivePartnerRun(partnerId),
     submitTask: (payload) => chatRunService.submit(payload),
     emitSessionListRefresh: emitSessionListRefreshToAll
@@ -3193,6 +3192,7 @@ export function registerHandlers(services: {
 
   ipcMain.handle('chat-session-delete', async (_event, id: string) => {
     try {
+      await storageService.scheduledTask.clearPartner(id, Date.now())
       await chatRunService.deletePartner(id)
       await browserEmbedService?.closeOwnerTabs(id)
       return { success: true }

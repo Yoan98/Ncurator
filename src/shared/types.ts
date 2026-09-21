@@ -1265,15 +1265,14 @@ export type ScheduledTaskScheduleType = 'daily' | 'weekly'
 export type ScheduledTask = {
   id: string
   name: string
-  prompt: string
+  description: string
+  contentNodes: ChatMessageContentNode[]
+  selectedReferences: SelectedReference[]
   enabled: boolean
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday: number | null
   partnerId: string
-  mainModel: WorkbenchSelectedModel
-  aiPreference: AiPreference
-  executionPermission: AiExecutionPermission
   nextRunAt: number | null
   /** 到点因专属伙伴占用而取消本次时写入；关闭胶囊或立即执行成功后清空 */
   busyCancelNoticeAt: number | null
@@ -1284,13 +1283,13 @@ export type ScheduledTask = {
 export type ScheduledTaskSaveRequest = {
   id?: string
   name: string
-  prompt: string
+  description: string
+  contentNodes?: ChatMessageContentNode[]
+  selectedReferences?: SelectedReference[]
+  partnerId: string
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday?: number | null
-  mainModel: WorkbenchSelectedModel
-  aiPreference?: AiPreference
-  executionPermission?: AiExecutionPermission
 }
 
 export type ScheduledTaskMutationResponse = {

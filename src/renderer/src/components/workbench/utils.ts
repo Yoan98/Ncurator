@@ -397,7 +397,9 @@ const TOOL_ITEM_RENDERERS = {
       sentence(text('学习 '), text(skillName), text(' 失败了'))
     )
   },
-  update_plan: () => toolCopy('更新任务计划', sentence(text('更新任务计划')))
+  update_plan: () => toolCopy('更新任务计划', sentence(text('更新任务计划'))),
+  scheduled_task_list: () => toolCopy('查看定时任务', sentence(text('查看当前伙伴的定时任务'))),
+  scheduled_task_action: () => toolCopy('操作定时任务', sentence(text('操作定时任务')))
 } satisfies Record<RuntimeToolName, ToolItemRenderer>
 
 const getToolItemCopy = (

@@ -15,22 +15,11 @@ import {
 import dayjs from 'dayjs'
 import { HiOutlineClock, HiOutlinePencilSquare, HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi2'
 import type {
-  AiExecutionPermission,
-  AiPreference,
-  LLMConfig,
-  LlmRemoteModel,
+  PartnerListItem,
   ScheduledTask,
   ScheduledTaskSaveRequest,
   ScheduledTaskScheduleType,
-  WorkbenchModelSelection
 } from '../../../../shared/types'
-import WorkbenchModelSelector from '../workbench/WorkbenchModelSelector'
-import WorkbenchSelect from '../workbench/WorkbenchSelect'
-import { AI_PREFERENCE_OPTIONS, EXECUTION_PERMISSION_OPTIONS } from '../workbench/selectOptions'
-import type {
-  WorkbenchAiPreference,
-  WorkbenchExecutionPermission
-} from '../workbench/types'
 import { scheduledTaskSelectors } from '../../testing/selectors'
 import ScheduledTaskCountChip from './ScheduledTaskCountChip'
 
@@ -51,26 +40,22 @@ const SCHEDULE_TYPE_OPTIONS = [
 
 type FormState = {
   id: string
+  partnerId: string
   name: string
   prompt: string
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday: number | null
-  modelSelection: WorkbenchModelSelection
-  aiPreference: AiPreference
-  executionPermission: AiExecutionPermission
 }
 
 const emptyForm = (): FormState => ({
   id: '',
+  partnerId: '',
   name: '',
   prompt: '',
   scheduleType: 'daily',
   timeOfDay: '09:00',
   weekday: null,
-  modelSelection: { mainModel: null },
-  aiPreference: 'default',
-  executionPermission: 'full_access'
 })
 
 const normalizeWeekday = (value: number | null | undefined): number | null => {
@@ -110,9 +95,8 @@ type ScheduledTasksViewProps = {
 const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountChange }) => {
   const { message, modal } = AntdApp.useApp()
   const [tasks, setTasks] = useState<ScheduledTask[]>([])
+  const [partners, setPartners] = useState<PartnerListItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
-  const [modelLists, setModelLists] = useState<Record<string, LlmRemoteModel[]>>({})
   const [formOpen, setFormOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<FormState>(emptyForm())
@@ -131,49 +115,13 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
 
   useEffect(() => {
     void loadTasks()
-    void (async () => {
-      try {
-        const configs = await window.api.llmConfigList()
-        setModelConfigs(configs)
-        const entries = await Promise.all(
-          configs.map(async (config): Promise<[string, LlmRemoteModel[]]> => {
-            try {
-              const response = await window.api.llmConfigModelList(config.id)
-              return [config.id, response.success ? response.items : []]
-            } catch {
-              return [config.id, []]
-            }
-          })
-        )
-        setModelLists(Object.fromEntries(entries))
-      } catch (error) {
-        console.error('[SCHEDULED-TASKS] model config list failed:', error)
-      }
-    })()
+    void window.api.partnerList().then(setPartners).catch(() => setPartners([]))
   }, [loadTasks])
 
   useEffect(() => {
     if (loading) return
     onEnabledCountChange?.(enabledCount)
   }, [enabledCount, loading, onEnabledCountChange])
-
-  const refreshModelLists = useCallback(async (): Promise<void> => {
-    try {
-      const entries = await Promise.all(
-        modelConfigs.map(async (config): Promise<[string, LlmRemoteModel[]]> => {
-          try {
-            const response = await window.api.llmConfigModelList(config.id)
-            return [config.id, response.success ? response.items : []]
-          } catch {
-            return [config.id, []]
-          }
-        })
-      )
-      setModelLists(Object.fromEntries(entries))
-    } catch (error) {
-      console.error('[SCHEDULED-TASKS] model list refresh failed:', error)
-    }
-  }, [modelConfigs])
 
   const openCreate = (): void => {
     setForm(emptyForm())
@@ -183,14 +131,12 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
   const openEdit = (task: ScheduledTask): void => {
     setForm({
       id: task.id,
+      partnerId: task.partnerId,
       name: task.name,
-      prompt: task.prompt,
+      prompt: task.description,
       scheduleType: task.scheduleType,
       timeOfDay: task.timeOfDay,
       weekday: task.weekday,
-      modelSelection: { mainModel: task.mainModel },
-      aiPreference: task.aiPreference,
-      executionPermission: task.executionPermission
     })
     setFormOpen(true)
   }
@@ -202,15 +148,11 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
       return null
     }
     if (!form.prompt.trim()) {
-      message.warning('请填写任务提示词')
+      message.warning('请填写任务描述')
       return null
     }
     if (!timeOfDay) {
       message.warning('请选择执行时间')
-      return null
-    }
-    if (!form.modelSelection.mainModel) {
-      message.warning('请选择主模型')
       return null
     }
     if (form.scheduleType === 'weekly' && form.weekday === null) {
@@ -220,13 +162,11 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
     return {
       id: form.id || undefined,
       name: form.name.trim(),
-      prompt: form.prompt.trim(),
+      description: form.prompt.trim(),
       scheduleType: form.scheduleType,
       timeOfDay,
       weekday: form.scheduleType === 'weekly' ? normalizeWeekday(form.weekday) : null,
-      mainModel: form.modelSelection.mainModel,
-      aiPreference: form.aiPreference,
-      executionPermission: form.executionPermission
+      partnerId: form.partnerId,
     }
   }
 
@@ -258,9 +198,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
         message.error(response.error || '操作失败')
         return
       }
-      setTasks((current) =>
-        current.map((item) => (item.id === task.id ? { ...item, enabled } : item))
-      )
+      setTasks((current) => current.map((item) => (item.id === task.id ? response.task || { ...item, enabled } : item)))
     } catch (error) {
       message.error('操作失败')
       console.error('[SCHEDULED-TASKS] toggle failed:', error)
@@ -320,15 +258,10 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
             dataTestId={scheduledTaskSelectors.countChip}
           />
         </div>
-        <Button
-          type="primary"
-          size="small"
-          icon={<HiOutlinePlus />}
-          onClick={openCreate}
-          data-testid={scheduledTaskSelectors.addButton}
-        >
-          新增配置
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button type="default" size="small" icon={<HiOutlinePlus />} onClick={openCreate} data-testid={scheduledTaskSelectors.addButton}>手动创建</Button>
+          <Button type="primary" size="small" onClick={openCreate}>AI 创建</Button>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
@@ -357,12 +290,13 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
                       {task.name}
                     </div>
                     <div className="mt-0.5 truncate text-[12px] text-[#91918E]">
-                      {scheduleLabel(task)} · {task.mainModel.modelName}
+                      {scheduleLabel(task)}
                     </div>
                   </div>
                   <Switch
                     size="small"
                     checked={task.enabled}
+                    disabled={!task.partnerId}
                     onChange={(checked) => void handleToggle(task, checked)}
                     data-testid={`${scheduledTaskSelectors.itemTogglePrefix}-${task.id}`}
                   />
@@ -412,7 +346,12 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
       >
         <div className="flex flex-col gap-4 pt-2">
           <label className="flex flex-col gap-1.5">
-            <RequiredFieldLabel>名称</RequiredFieldLabel>
+            <RequiredFieldLabel>伙伴</RequiredFieldLabel>
+            <Select value={form.partnerId || undefined} placeholder="选择伙伴" options={partners.map((partner) => ({ value: partner.id, label: partner.name }))} onChange={(partnerId) => setForm((current) => ({ ...current, partnerId }))} />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <RequiredFieldLabel>任务名称</RequiredFieldLabel>
             <Input
               value={form.name}
               placeholder="例如：每日晨报"
@@ -422,11 +361,11 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <RequiredFieldLabel>任务提示词</RequiredFieldLabel>
+            <RequiredFieldLabel>任务描述</RequiredFieldLabel>
             <Input.TextArea
               value={form.prompt}
               rows={3}
-              placeholder="描述想让 AI 完成的事"
+              placeholder="描述你希望ta完成的事，也可使用@"
               data-testid={scheduledTaskSelectors.formPrompt}
               onChange={(event) =>
                 setForm((current) => ({ ...current, prompt: event.target.value }))
@@ -477,56 +416,6 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({ onEnabledCountC
             </div>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <RequiredFieldLabel>模型</RequiredFieldLabel>
-            <WorkbenchModelSelector
-              configs={modelConfigs}
-              modelListsByConfigId={modelLists}
-              value={form.modelSelection}
-              onChange={(selection) =>
-                setForm((current) => ({ ...current, modelSelection: selection }))
-              }
-              onRefreshModelLists={refreshModelLists}
-              variant="form"
-              className="w-full"
-              data-testid={scheduledTaskSelectors.modelSelect}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-[#37352F]">偏好</span>
-            <WorkbenchSelect
-              value={form.aiPreference}
-              options={AI_PREFERENCE_OPTIONS}
-              onChange={(nextValue) =>
-                setForm((current) => ({
-                  ...current,
-                  aiPreference: nextValue as WorkbenchAiPreference
-                }))
-              }
-              placeholder="偏好"
-              minMenuWidth={220}
-              data-testid={scheduledTaskSelectors.preferenceSelect}
-            />
-          </div>
-
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[13px] text-[#37352F]">执行权限</span>
-            <WorkbenchSelect
-              value={form.executionPermission}
-              options={EXECUTION_PERMISSION_OPTIONS}
-              onChange={(nextValue) =>
-                setForm((current) => ({
-                  ...current,
-                  executionPermission: nextValue as WorkbenchExecutionPermission
-                }))
-              }
-              placeholder="权限"
-              minMenuWidth={220}
-              showDescriptions
-              data-testid={scheduledTaskSelectors.permissionSelect}
-            />
-          </div>
         </div>
       </Modal>
     </div>

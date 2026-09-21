@@ -205,16 +205,14 @@ DOCX 应用/回退记录。
 | --- | --- | --- |
 | `id` | TEXT PK | 任务 id |
 | `name` | TEXT | 名称 |
-| `prompt` | TEXT | 提示词 |
+| `description` | TEXT | 任务描述 |
 | `enabled` | INTEGER | 是否启用 |
 | `schedule_type` | TEXT | 周期类型 |
 | `time_of_day` | TEXT | 每日时刻 |
 | `weekday` | INTEGER | 星期，可空 |
-| `partner_id` | TEXT | 专属伙伴 id，无外键级联 |
-| `main_model_config_id` | TEXT | 主模型配置 |
-| `main_model_name` | TEXT | 主模型名 |
-| `ai_preference` | TEXT | AI 偏好 |
-| `execution_permission` | TEXT | 执行权限 |
+| `content_nodes_json` | TEXT | 描述内容节点 JSON |
+| `selected_references_json` | TEXT | 描述引用 JSON |
+| `partner_id` | TEXT | 真实伙伴 id；空值表示未绑定且任务停用 |
 | `next_run_at` | INTEGER | 下次执行时间 |
 | `busy_cancel_notice_at` | INTEGER | 占用取消提示时间 |
 | `created_at` | INTEGER | 创建时间 |
