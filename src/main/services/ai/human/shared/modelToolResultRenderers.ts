@@ -27,8 +27,11 @@ import {
 export const renderGenericModelResult: ModelResultRenderer = ({ toolName }) =>
   wrapModelTextLines(`${toolName} completed successfully.`)
 
-export const renderAskUserQuestionModelResult: ModelResultRenderer = ({ data }) => {
+export const renderAskUserQuestionModelResult: ModelResultRenderer = ({ args, data }) => {
   const answers = isObject(data) && Array.isArray(data.answers) ? data.answers.filter(isObject) : []
+  const questions = Array.isArray(args.questions)
+    ? args.questions.filter(isObject)
+    : []
   return joinGroupedSections([
     renderGroupedHeader('The user answered the clarification questions.'),
     ...answers.map((answer) => {
@@ -36,7 +39,15 @@ export const renderAskUserQuestionModelResult: ModelResultRenderer = ({ data }) 
         ? answer.selected.filter((value): value is string => typeof value === 'string')
         : []
       const custom = readString(answer.custom)
-      return `  questionId=${readString(answer.id) || ''}; selected=${JSON.stringify(selected)}${custom ? `; custom=${JSON.stringify(custom)}` : ''}`
+      const question = questions.find((item) => readString(item.id) === readString(answer.id))
+      const options = question && Array.isArray(question.options)
+        ? question.options.filter(isObject)
+        : []
+      const selectedLabels = selected.map((optionId) => {
+        const option = options.find((item) => readString(item.id) === optionId)
+        return readString(option?.label) || optionId
+      })
+      return `  questionId=${readString(answer.id) || ''}; selected=${JSON.stringify(selectedLabels)}${custom ? `; custom=${JSON.stringify(custom)}` : ''}`
     })
   ])
 }

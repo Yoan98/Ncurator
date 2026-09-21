@@ -137,10 +137,18 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
 
   useEffect(() => {
     void loadTasks()
-    void window.api
-      .partnerList()
-      .then(setPartners)
-      .catch(() => setPartners([]))
+    const loadPartners = (): void => {
+      void window.api
+        .partnerList()
+        .then(setPartners)
+        .catch(() => setPartners([]))
+    }
+    loadPartners()
+    const unsubscribe = window.api.onPartnerListRefresh(() => {
+      void loadTasks()
+      loadPartners()
+    })
+    return unsubscribe
   }, [loadTasks])
 
   useEffect(() => {

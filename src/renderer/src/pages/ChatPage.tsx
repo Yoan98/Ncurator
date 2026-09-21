@@ -54,6 +54,11 @@ import {
   pickFallbackWorkbenchModel,
   resolveSelectedWorkbenchModel
 } from '../../../shared/workbenchModelSelection'
+import type { FreeModelPublicEntry } from '../../../shared/freeModels'
+import {
+  FREE_MODEL_NO_VISION_WITH_IMAGE_HISTORY_REASON,
+  shouldBlockFreeModelWithoutVision
+} from '../../../shared/messageLogVisionContext'
 import type { LlmPresetProvider } from '../../../shared/llmPresets'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'

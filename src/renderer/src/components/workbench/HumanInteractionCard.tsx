@@ -30,8 +30,11 @@ const HumanInteractionCard: React.FC<Props> = ({ interaction, onSubmit, onCancel
     setSelected((previous) => {
       const values = previous[question.id] || []
       if (id === OTHER_ID) return { ...previous, [question.id]: values.includes(id) ? values.filter((value) => value !== id) : question.multiSelect ? [...values, id] : [id] }
-      if (!question.multiSelect) return { ...previous, [question.id]: [id] }
-      return { ...previous, [question.id]: values.includes(id) ? values.filter((value) => value !== id) : [...values.filter((value) => value !== OTHER_ID), id] }
+      if (!question.multiSelect) {
+        setCustom((current) => ({ ...current, [question.id]: '' }))
+        return { ...previous, [question.id]: [id] }
+      }
+      return { ...previous, [question.id]: values.includes(id) ? values.filter((value) => value !== id) : [...values, id] }
     })
   }
   const submit = async (): Promise<void> => {

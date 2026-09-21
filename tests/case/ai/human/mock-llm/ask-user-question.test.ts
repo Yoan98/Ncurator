@@ -19,6 +19,36 @@ const questionArgs = {
   ]
 }
 
+const multiQuestionArgs = {
+  questions: [
+    {
+      id: 'accent',
+      question: '封面强调哪种主色？',
+      options: [
+        { id: 'blue', label: '蓝色', recommended: true },
+        { id: 'green', label: '绿色' }
+      ]
+    },
+    {
+      id: 'scope',
+      question: '内容覆盖哪些来源？',
+      options: [
+        { id: 'local', label: '本地资料' },
+        { id: 'web', label: '网页资料' }
+      ],
+      multiSelect: true
+    },
+    {
+      id: 'format',
+      question: '最终交付使用什么形式？',
+      options: [
+        { id: 'brief', label: '简要说明' },
+        { id: 'detailed', label: '详细方案' }
+      ]
+    }
+  ]
+}
+
 const waitFor = async (predicate: () => boolean, timeoutMs = 10_000): Promise<void> => {
   const deadline = Date.now() + timeoutMs
   while (!predicate()) {
