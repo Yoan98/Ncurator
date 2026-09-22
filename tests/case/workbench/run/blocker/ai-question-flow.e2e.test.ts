@@ -79,7 +79,7 @@ describe('workbench AI question e2e', () => {
           const initialCardText = ((await card.textContent()) || '').trim()
           const guidePlaceholder =
             (await card
-              .getByTestId(`workbench-human-question-custom-input-${questions[0].id}`)
+              .getByTestId(`workbench-human-question-user-text-${questions[0].id}`)
               .getAttribute('placeholder')) || ''
           const stopLabel =
             (await card
@@ -90,10 +90,10 @@ describe('workbench AI question e2e', () => {
             for (const [index, question] of currentQuestions.entries()) {
               if (index === 0) {
                 await card
-                  .getByTestId(`workbench-human-question-option-${question.id}-custom`)
+                  .getByTestId(`workbench-human-question-option-${question.id}-other`)
                   .click()
                 await card
-                  .getByTestId(`workbench-human-question-custom-input-${question.id}`)
+                  .getByTestId(`workbench-human-question-user-text-${question.id}`)
                   .fill('使用深绿色和白色，整体保持克制')
               } else {
                 const firstOption = question.options[0]
@@ -102,7 +102,7 @@ describe('workbench AI question e2e', () => {
                   .getByTestId(`workbench-human-question-option-${question.id}-${firstOption.id}`)
                   .click()
               }
-              if (index < currentQuestions.length - 1) {
+              if (index < currentQuestions.length - 1 && (index === 0 || question.multiSelect)) {
                 await card.getByTestId(workbenchSelectors.humanQuestionNext).click()
               }
             }
@@ -209,7 +209,7 @@ describe('workbench AI question e2e', () => {
             throw new Error('the submitted result did not contain one answer for every question')
           }
           const questionIds = new Set(result.questionIds)
-          const answerIds = new Set(answers.map((answer) => answer.id))
+          const answerIds = new Set(answers.map((answer) => answer.questionId))
           if (
             questionIds.size !== answerIds.size ||
             [...questionIds].some((id) => !answerIds.has(id))

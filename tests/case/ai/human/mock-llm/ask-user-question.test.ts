@@ -75,12 +75,20 @@ describe('ai human question backend', () => {
         let resolveQuestion:
           | ((value: {
               accepted: true
-              result: { answers: Array<{ id: string; selected: string[]; custom?: string }> }
+              result: {
+                answers: Array<{
+                  questionId: string
+                  selectedOptionIds: string[]
+                  userText?: string
+                }>
+              }
             }) => void)
           | undefined
         const questionPending = new Promise<{
           accepted: true
-          result: { answers: Array<{ id: string; selected: string[]; custom?: string }> }
+          result: {
+            answers: Array<{ questionId: string; selectedOptionIds: string[]; userText?: string }>
+          }
         }>((resolve) => {
           resolveQuestion = resolve
         })
@@ -91,9 +99,13 @@ describe('ai human question backend', () => {
               accepted: true as const,
               result: {
                 answers: [
-                  { id: 'accent', selected: [], custom: '蓝绿色' },
-                  { id: 'scope', selected: ['local'], custom: '不要引用外部网页' },
-                  { id: 'format', selected: ['brief'] }
+                  { questionId: 'accent', selectedOptionIds: [], userText: '蓝绿色' },
+                  {
+                    questionId: 'scope',
+                    selectedOptionIds: ['local'],
+                    userText: '不要引用外部网页'
+                  },
+                  { questionId: 'format', selectedOptionIds: ['brief'] }
                 ]
               }
             }
@@ -107,7 +119,11 @@ describe('ai human question backend', () => {
                 }
               },
               ({ user }) => {
-                if (!user.includes('custom=\"蓝绿色\"') || !user.includes('selected=[\"本地资料\"]')) {
+                if (
+                  !user.includes('userText="蓝绿色"') ||
+                  !user.includes('selectedOptionIds=["local"]') ||
+                  !user.includes('A=first, B=second')
+                ) {
                   throw new Error('提问结果没有回到下一轮模型上下文')
                 }
                 return buildToolDecision({
@@ -134,7 +150,11 @@ describe('ai human question backend', () => {
           taskId: runtime.taskId,
           userInput: '完善 brief.md 的封面信息。'
         })
-        await waitFor(() => filterAiRunEventsByType(runtime.eventCollector.snapshot(), 'human_interaction_required').length === 1)
+        await waitFor(
+          () =>
+            filterAiRunEventsByType(runtime.eventCollector.snapshot(), 'human_interaction_required')
+              .length === 1
+        )
         const beforeAnswer = await fs.readFile(filePath, 'utf8')
         runtime.assertThat(beforeAnswer === '主色：待定\n', {
           name: 'question-waits-before-side-effect',
@@ -145,9 +165,9 @@ describe('ai human question backend', () => {
           accepted: true,
           result: {
             answers: [
-              { id: 'accent', selected: [], custom: '蓝绿色' },
-              { id: 'scope', selected: ['local'], custom: '不要引用外部网页' },
-              { id: 'format', selected: ['brief'] }
+              { questionId: 'accent', selectedOptionIds: [], userText: '蓝绿色' },
+              { questionId: 'scope', selectedOptionIds: ['local'], userText: '不要引用外部网页' },
+              { questionId: 'format', selectedOptionIds: ['brief'] }
             ]
           }
         })
@@ -167,7 +187,7 @@ describe('ai human question backend', () => {
           (record) => record.entry.kind === 'tool' && record.entry.toolName === 'ask_user_question'
         )
         runtime.assertThat(
-            result.output.status === 'completed' &&
+          result.output.status === 'completed' &&
             required.length === 1 &&
             resolved.length === 1 &&
             Array.isArray(resolved[0]?.result.answers) &&
@@ -176,8 +196,9 @@ describe('ai human question backend', () => {
             toolResults.some((event) => event.toolName === 'text_file_edit') &&
             questionEntry?.entry.kind === 'tool' &&
             questionEntry.entry.ok === true &&
-            questionEntry.entry.content.includes('custom="蓝绿色"') &&
-            questionEntry.entry.content.includes('selected=["本地资料"]'),
+            questionEntry.entry.content.includes('userText="蓝绿色"') &&
+            questionEntry.entry.content.includes('selectedOptionIds=["local"]') &&
+            !questionEntry.entry.content.includes('本地资料'),
           {
             name: 'question-answer-resumes-production-graph',
             message: '回答应写入结构化 tool result，恢复 graph，并影响真实文件产物。',
@@ -204,7 +225,7 @@ describe('ai human question backend', () => {
         const runner = createHumanTestRunner(runtime, {
           questionResolver: async () => ({
             accepted: true as const,
-            result: { answers: [{ id: 'accent', selected: ['blue'] }] }
+            result: { answers: [{ questionId: 'accent', selectedOptionIds: ['blue'] }] }
           }),
           structuredOutputScript: {
             'human.brain': [
@@ -233,11 +254,16 @@ describe('ai human question backend', () => {
         } catch (cause) {
           error = cause instanceof Error ? cause.message : String(cause)
         }
-        return { error, content: await fs.readFile(filePath, 'utf8'), events: runtime.eventCollector.snapshot() }
+        return {
+          error,
+          content: await fs.readFile(filePath, 'utf8'),
+          events: runtime.eventCollector.snapshot()
+        }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.error === '运行失败，请重试' && result.content === '主色：待定\n' &&
+          result.error === '运行失败，请重试' &&
+            result.content === '主色：待定\n' &&
             filterAiRunEventsByType(result.events, 'human_interaction_required').length === 0,
           {
             name: 'question-cannot-mix-with-side-effects',
@@ -287,9 +313,9 @@ describe('ai human question backend', () => {
             filterAiRunEventsByType(result.events, 'human_interaction_required').length === 1 &&
             filterAiRunEventsByType(result.events, 'human_interaction_resolved').length === 0,
           {
-          name: 'full-access-does-not-answer-question',
-          message: '提问必须等待真实用户回答，不能沿用审批自动通过。',
-          data: result
+            name: 'full-access-does-not-answer-question',
+            message: '提问必须等待真实用户回答，不能沿用审批自动通过。',
+            data: result
           }
         )
       }

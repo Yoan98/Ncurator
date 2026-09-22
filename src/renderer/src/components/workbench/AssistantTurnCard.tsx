@@ -384,8 +384,7 @@ const AssistantActivityItemView: React.FC<{
   const failed = item.status === 'failed' || item.status === 'partial_failed'
   const interaction = resolveQuestionInteraction(item)
   const toolText = getItemText(item)
-  const readImagePaths =
-    item.toolName === 'read_image' ? readImagePathsFromInput(item.input) : []
+  const readImagePaths = item.toolName === 'read_image' ? readImagePathsFromInput(item.input) : []
   const thumbs =
     readImagePaths.length > 0 ? (
       <ReadImageThumbs paths={readImagePaths} onPreviewImage={onPreviewImage} />
@@ -407,19 +406,35 @@ const AssistantActivityItemView: React.FC<{
       className={failed ? 'text-[#B3261E]' : undefined}
     >
       <div className="min-w-0 leading-[22px]">{renderSegments(toolText)}</div>
-      <div className="mt-1 text-xs text-[#787774]">审核结果：{review.action === 'approve' ? '已允许' : review.action === 'reject' ? '已拒绝' : `已提供指导${review.message ? `：${review.message}` : ''}`}</div>
+      <div className="mt-1 text-xs text-[#787774]">
+        审核结果：
+        {review.action === 'approve'
+          ? '已允许'
+          : review.action === 'reject'
+            ? '已拒绝'
+            : `已提供指导${review.message ? `：${review.message}` : ''}`}
+      </div>
       {thumbs}
     </div>
   )
 }
 
-const InteractionResultView: React.FC<{ interaction: NonNullable<AssistantProcessGroup['items'][number]['interaction']> }> = ({ interaction }) => (
+const InteractionResultView: React.FC<{
+  interaction: NonNullable<AssistantProcessGroup['items'][number]['interaction']>
+}> = ({ interaction }) => (
   <div className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#787774]">
     {interaction.questions.map((question) => {
-      const answer = interaction.answers?.find((item) => item.id === question.id)
-      const labels = question.options.filter((option) => answer?.selected.includes(option.id)).map((option) => option.label)
-      if (answer?.custom) labels.push(answer.custom)
-      return <div key={question.id}><div>{question.question}</div><div className="text-[#37352F]">{labels.join('、') || '未填写'}</div></div>
+      const answer = interaction.answers?.find((item) => item.questionId === question.id)
+      const labels = question.options
+        .filter((option) => answer?.selectedOptionIds.includes(option.id))
+        .map((option) => option.label)
+      if (answer?.userText) labels.push(answer.userText)
+      return (
+        <div key={question.id}>
+          <div>{question.question}</div>
+          <div className="text-[#37352F]">{labels.join('、') || '未填写'}</div>
+        </div>
+      )
     })}
   </div>
 )
@@ -540,9 +555,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   const hasFinalAnswer = visibleAnswerMarkdown.trim().length > 0
   const hasStreamingThought = streamingRole === 'thought' && streamingMarkdown.trim().length > 0
   const hasNextAiContentForActivity =
-    hasFinalAnswer ||
-    hasStreamingThought ||
-    Boolean(turn?.runFinished)
+    hasFinalAnswer || hasStreamingThought || Boolean(turn?.runFinished)
   const processGroups = useMemo(
     () => (turn?.processGroups || []).filter((group) => group.kind !== 'thinking'),
     [turn?.processGroups]

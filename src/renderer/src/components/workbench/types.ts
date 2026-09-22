@@ -136,7 +136,11 @@ export type AssistantProcessGroupItem = {
       options: Array<{ id: string; label: string; description?: string; recommended?: boolean }>
       multiSelect?: boolean
     }>
-    answers?: Array<{ id: string; selected: string[]; custom?: string }>
+    answers?: Array<{
+      questionId: string
+      selectedOptionIds: string[]
+      userText?: string
+    }>
   }
 }
 

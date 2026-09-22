@@ -24,24 +24,17 @@ import {
 export const renderGenericModelResult: ModelResultRenderer = ({ toolName }) =>
   wrapModelTextLines(`${toolName} completed successfully.`)
 
-export const renderAskUserQuestionModelResult: ModelResultRenderer = ({ args, data }) => {
+export const renderAskUserQuestionModelResult: ModelResultRenderer = ({ data }) => {
   const answers = isObject(data) && Array.isArray(data.answers) ? data.answers.filter(isObject) : []
-  const questions = Array.isArray(args.questions) ? args.questions.filter(isObject) : []
   return joinGroupedSections([
     renderGroupedHeader('The user answered the clarification questions.'),
+    'Letters mentioned in userText follow the original option order: A=first, B=second, C=third, and so on.',
     ...answers.map((answer) => {
-      const selected = Array.isArray(answer.selected)
-        ? answer.selected.filter((value): value is string => typeof value === 'string')
+      const selectedOptionIds = Array.isArray(answer.selectedOptionIds)
+        ? answer.selectedOptionIds.filter((value): value is string => typeof value === 'string')
         : []
-      const custom = readString(answer.custom)
-      const question = questions.find((item) => readString(item.id) === readString(answer.id))
-      const options =
-        question && Array.isArray(question.options) ? question.options.filter(isObject) : []
-      const selectedLabels = selected.map((optionId) => {
-        const option = options.find((item) => readString(item.id) === optionId)
-        return readString(option?.label) || optionId
-      })
-      return `  questionId=${readString(answer.id) || ''}; selected=${JSON.stringify(selectedLabels)}${custom ? `; custom=${JSON.stringify(custom)}` : ''}`
+      const userText = readString(answer.userText)
+      return `  questionId=${readString(answer.questionId) || ''}; selectedOptionIds=${JSON.stringify(selectedOptionIds)}${userText ? `; userText=${JSON.stringify(userText)}` : ''}`
     })
   ])
 }

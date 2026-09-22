@@ -93,9 +93,9 @@ describe('message log question projection', () => {
             kind: 'question',
             result: {
               answers: [
-                { id: 'accent', selected: [], custom: '蓝绿色' },
-                { id: 'scope', selected: ['local'], custom: '不要引用外部网页' },
-                { id: 'format', selected: ['brief'] }
+                { questionId: 'accent', selectedOptionIds: [], userText: '蓝绿色' },
+                { questionId: 'scope', selectedOptionIds: ['local'], userText: '不要引用外部网页' },
+                { questionId: 'format', selectedOptionIds: ['brief'] }
               ]
             }
           }
@@ -111,9 +111,9 @@ describe('message log question projection', () => {
     expect(item?.interaction?.questions).toHaveLength(3)
     expect(item?.interaction?.questions[1]?.options[0]?.label).toBe('本地资料')
     expect(item?.interaction?.answers).toEqual([
-      { id: 'accent', selected: [], custom: '蓝绿色' },
-      { id: 'scope', selected: ['local'], custom: '不要引用外部网页' },
-      { id: 'format', selected: ['brief'] }
+      { questionId: 'accent', selectedOptionIds: [], userText: '蓝绿色' },
+      { questionId: 'scope', selectedOptionIds: ['local'], userText: '不要引用外部网页' },
+      { questionId: 'format', selectedOptionIds: ['brief'] }
     ])
   })
 
@@ -128,11 +128,13 @@ describe('message log question projection', () => {
         kind: 'question',
         interactionId: 'interaction-1',
         toolCallId: 'question-call',
-        questions: [{
-          id: 'style',
-          question: '选择风格',
-          options: [{ id: 'minimal', label: '极简' }]
-        }]
+        questions: [
+          {
+            id: 'style',
+            question: '选择风格',
+            options: [{ id: 'minimal', label: '极简' }]
+          }
+        ]
       },
       createdAt: 1
     }
@@ -143,13 +145,15 @@ describe('message log question projection', () => {
       taskId: runId,
       interactionId: 'interaction-1',
       kind: 'question',
-      result: { answers: [{ id: 'style', selected: [], custom: '深绿色和白色' }] },
+      result: {
+        answers: [{ questionId: 'style', selectedOptionIds: [], userText: '深绿色和白色' }]
+      },
       resolvedAt: 3
     }
     const updated = applyQuestionInteractionResult(groups, event)
     const item = updated.flatMap((group) => group.items)[0]
     expect(item?.interaction?.answers).toEqual([
-      { id: 'style', selected: [], custom: '深绿色和白色' }
+      { questionId: 'style', selectedOptionIds: [], userText: '深绿色和白色' }
     ])
   })
 
@@ -164,11 +168,13 @@ describe('message log question projection', () => {
         kind: 'question',
         interactionId: 'interaction-1',
         toolCallId: 'question-call',
-        questions: [{
-          id: 'style',
-          question: '选择风格',
-          options: [{ id: 'minimal', label: '极简' }]
-        }]
+        questions: [
+          {
+            id: 'style',
+            question: '选择风格',
+            options: [{ id: 'minimal', label: '极简' }]
+          }
+        ]
       },
       createdAt: 1
     }
@@ -179,7 +185,9 @@ describe('message log question projection', () => {
       taskId: runId,
       interactionId: 'interaction-1',
       kind: 'question',
-      result: { answers: [{ id: 'style', selected: [], custom: '深绿色和白色' }] },
+      result: {
+        answers: [{ questionId: 'style', selectedOptionIds: [], userText: '深绿色和白色' }]
+      },
       resolvedAt: 2
     })
 
@@ -206,7 +214,7 @@ describe('message log question projection', () => {
 
     const item = groups.flatMap((group) => group.items)[0]
     expect(item?.interaction?.answers).toEqual([
-      { id: 'style', selected: [], custom: '深绿色和白色' }
+      { questionId: 'style', selectedOptionIds: [], userText: '深绿色和白色' }
     ])
   })
 })

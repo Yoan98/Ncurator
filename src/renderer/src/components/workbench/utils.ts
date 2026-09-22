@@ -241,8 +241,7 @@ const TOOL_ITEM_RENDERERS = {
     toolCopy('编辑文件', sentence(text('编辑文件 '), param(readToolFileLabel(input)))),
   kb_search: (input) =>
     toolCopy('在知识库中搜索', sentence(text('在知识库中搜索 '), param(readToolQueryLabel(input)))),
-  kb_list_documents: () =>
-    toolCopy('查看工作空间文档列表', sentence(text('查看工作空间文档列表'))),
+  kb_list_documents: () => toolCopy('查看工作空间文档列表', sentence(text('查看工作空间文档列表'))),
   docx_read_outline: (input) =>
     toolCopy(
       '查看 Word 文档结构',
@@ -361,16 +360,10 @@ const TOOL_ITEM_RENDERERS = {
       )
     }
     if (action === 'screenshot') {
-      return toolCopy(
-        '截取页面',
-        sentence(text('截取页面 '), param(tabIdLabel || '当前标签'))
-      )
+      return toolCopy('截取页面', sentence(text('截取页面 '), param(tabIdLabel || '当前标签')))
     }
     if (action === 'scroll') {
-      return toolCopy(
-        '滚动页面',
-        sentence(text('滚动页面 '), param(tabIdLabel || '当前标签'))
-      )
+      return toolCopy('滚动页面', sentence(text('滚动页面 '), param(tabIdLabel || '当前标签')))
     }
     return toolCopy('操作浏览器', sentence(text('操作浏览器 '), param(instructionLabel)))
   },
@@ -865,9 +858,7 @@ const completeProcessItem = (
       const nextItems = group.items.map((item) => {
         if (item.id !== input.itemId) return item
         const toolName =
-          input.display?.kind === 'tool'
-            ? normalizeToolName(input.display.toolName)
-            : item.toolName
+          input.display?.kind === 'tool' ? normalizeToolName(input.display.toolName) : item.toolName
         return {
           ...item,
           status: input.status,
@@ -1031,33 +1022,53 @@ export const applyQuestionInteractionResult = (
   if (event.type !== 'human_interaction_resolved' || event.kind !== 'question') return current
   const rawAnswers = event.result.answers
   if (!Array.isArray(rawAnswers)) return current
-  const answers = rawAnswers.filter((answer): answer is { id: string; selected: string[]; custom?: string } => {
-    if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return false
-    const candidate = answer as { id?: unknown; selected?: unknown; custom?: unknown }
-    return typeof candidate.id === 'string' &&
-      Array.isArray(candidate.selected) &&
-      candidate.selected.every((value) => typeof value === 'string') &&
-      (candidate.custom === undefined || typeof candidate.custom === 'string')
-  })
+  const answers = rawAnswers.filter(
+    (
+      answer
+    ): answer is {
+      questionId: string
+      selectedOptionIds: string[]
+      userText?: string
+    } => {
+      if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return false
+      const candidate = answer as {
+        questionId?: unknown
+        selectedOptionIds?: unknown
+        userText?: unknown
+      }
+      return (
+        typeof candidate.questionId === 'string' &&
+        Array.isArray(candidate.selectedOptionIds) &&
+        candidate.selectedOptionIds.every((value) => typeof value === 'string') &&
+        (candidate.userText === undefined || typeof candidate.userText === 'string')
+      )
+    }
+  )
   if (answers.length === 0) return current
 
   let targetFound = false
-  const next = [...current].reverse().flatMap((group) => {
-    const items = [...group.items].reverse().map((item) => {
-      if (
-        targetFound ||
-        item.toolName !== 'ask_user_question' ||
-        !resolveQuestionInteraction(item) ||
-        resolveQuestionInteraction(item)?.answers
-      ) {
-        return item
-      }
-      targetFound = true
-      const interaction = resolveQuestionInteraction(item)
-      return interaction ? { ...item, interaction: { ...interaction, answers } } : item
-    }).reverse()
-    return [{ ...group, items }]
-  }).reverse()
+  const next = [...current]
+    .reverse()
+    .flatMap((group) => {
+      const items = [...group.items]
+        .reverse()
+        .map((item) => {
+          if (
+            targetFound ||
+            item.toolName !== 'ask_user_question' ||
+            !resolveQuestionInteraction(item) ||
+            resolveQuestionInteraction(item)?.answers
+          ) {
+            return item
+          }
+          targetFound = true
+          const interaction = resolveQuestionInteraction(item)
+          return interaction ? { ...item, interaction: { ...interaction, answers } } : item
+        })
+        .reverse()
+      return [{ ...group, items }]
+    })
+    .reverse()
   return targetFound ? next : current
 }
 

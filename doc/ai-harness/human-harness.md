@@ -45,7 +45,7 @@ graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
 | `dispatch` | 否 | 否 | 消费 `tool_calls` 队列，路由下一 stage |
 | `learning` | 否 | `learning_*` + `tool` + **`skill_state_updated`** | 加载 skill 工具；**不**改 build user |
 | `plan` | 否 | `tool` + `plan_updated` | 更新 state.plan；**不**改 build user |
-| `hand` / `human_interaction` | 否 | `tool`（+ 可选 `images[]`）+ `human_interaction_resolved` annotation | append ToolMessage；`read_image` 后 append 多模态 HumanMessage；问题答案作为结构化 tool result 回到 brain |
+| `hand` / `human_interaction` | 否 | `tool`（+ 可选 `images[]`）+ `human_interaction_resolved` annotation | append ToolMessage；`read_image` 后 append 多模态 HumanMessage；
 
 交付收尾由 brain 内的 `finalizeDelivery` 完成（**不是**独立图节点）：docx/ppt 落盘 side effect → `finalizing_started` → 写交付 `assistant`（`toolCalls: []`）→ 立即 `answer_completed` / `run_completed`。下一轮同伙伴发送可立刻创建。
 无 `tool_calls` 的正常交付路径上，**brain 不向 log 写 `assistant`**（流式 Answer 只走事件 / `partial_answer`）。

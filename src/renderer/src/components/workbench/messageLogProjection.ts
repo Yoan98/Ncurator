@@ -64,7 +64,10 @@ export const projectProcessGroups = (input: {
             sourceEventType: 'assistant_process_group_started'
           })
         )
-      } else if (entry.eventType === 'human_interaction_resolved' && entry.payload.kind === 'question') {
+      } else if (
+        entry.eventType === 'human_interaction_resolved' &&
+        entry.payload.kind === 'question'
+      ) {
         const toolCallId = pendingQuestionToolCallIds.shift()
         if (toolCallId) {
           const group = groupById.get(`${input.runId}:tool:${toolCallId}`)
@@ -72,14 +75,28 @@ export const projectProcessGroups = (input: {
           if (item?.interaction) {
             const result = entry.payload.result
             const answers = Array.isArray(result.answers)
-              ? result.answers.filter((answer): answer is { id: string; selected: string[]; custom?: string } => {
-                  if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return false
-                  const candidate = answer as { id?: unknown; selected?: unknown; custom?: unknown }
-                  return typeof candidate.id === 'string' &&
-                    Array.isArray(candidate.selected) &&
-                    candidate.selected.every((value) => typeof value === 'string') &&
-                    (candidate.custom === undefined || typeof candidate.custom === 'string')
-                })
+              ? result.answers.filter(
+                  (
+                    answer
+                  ): answer is {
+                    questionId: string
+                    selectedOptionIds: string[]
+                    userText?: string
+                  } => {
+                    if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return false
+                    const candidate = answer as {
+                      questionId?: unknown
+                      selectedOptionIds?: unknown
+                      userText?: unknown
+                    }
+                    return (
+                      typeof candidate.questionId === 'string' &&
+                      Array.isArray(candidate.selectedOptionIds) &&
+                      candidate.selectedOptionIds.every((value) => typeof value === 'string') &&
+                      (candidate.userText === undefined || typeof candidate.userText === 'string')
+                    )
+                  }
+                )
               : undefined
             item.interaction = { ...item.interaction, answers }
           }
@@ -123,19 +140,22 @@ export const projectProcessGroups = (input: {
         createdAt,
         sourceEventType: 'assistant_process_item_started'
       })
-      const interaction = entry.toolName === 'ask_user_question'
-        ? (() => {
-            const args = toolArgsById.get(entry.toolCallId) as {
-              questions?: Array<{
-                id: string
-                question: string
-                options: Array<{ id: string; label: string }>
-              }>
-            } | undefined
-            if (!Array.isArray(args?.questions)) return undefined
-            return { questions: args.questions }
-          })()
-        : undefined
+      const interaction =
+        entry.toolName === 'ask_user_question'
+          ? (() => {
+              const args = toolArgsById.get(entry.toolCallId) as
+                | {
+                    questions?: Array<{
+                      id: string
+                      question: string
+                      options: Array<{ id: string; label: string }>
+                    }>
+                  }
+                | undefined
+              if (!Array.isArray(args?.questions)) return undefined
+              return { questions: args.questions }
+            })()
+          : undefined
       const group = createDisplayProcessGroup({
         groupId: `${input.runId}:tool:${entry.toolCallId}`,
         kind: 'skill',

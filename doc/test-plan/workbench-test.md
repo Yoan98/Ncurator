@@ -42,7 +42,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退、多文件修改入口，以及馆长 WPS 通道对 docx / xlsx / pptx 的 dispatch 与本机已授权 WPS 文字 / 表格 / 演示窗口刷新。
 - `scheduled-task` 验证伙伴必选且位于表单第一项、任务描述支持引用、手动创建默认开启、AI 创建预填聊天草稿、删除伙伴后任务停用，以及执行时读取伙伴最新 Composer 配置。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
-- AI 提问统一归入 `run/blocker`：真实 UI 展示 A/B/C/D 和“其他，请填写”，支持多问题切换、刷新恢复；提交后在对应 Activity 工具行下按顺序显示问题与用户答案。审批结果也在对应工具行下显示，不再使用旧图标前缀或 hover 替换文案。
+- AI 提问统一归入 `run/blocker`：真实 UI 展示 A/B/C/D 和“其他，请填写”，用圆形/方形标记区分单选与多选，展示选择类型和推荐 Tag，覆盖普通单选自动跳题、多问题手动切换与刷新恢复；提交后在对应 Activity 工具行下按顺序显示问题与用户答案。审批结果也在对应工具行下显示，不再使用旧图标前缀或 hover 替换文案。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
 - docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足测试 case 口径。
@@ -604,10 +604,10 @@ pnpm test:update:e2e
 #### `human-interaction-question-card`
 
 - 测试类型：`e2e / live`
-- What：模糊任务触发 AI 提问，提问卡与审批卡使用相同的标题数量层级、左右切换、右上角停止按钮和底部输入提交区；用户完成 A/B/C/D、其他输入和多问题切换；回答前不显示写入结果，提交后 run 恢复；同一 run 若继续产生澄清问题，交互卡片可以继续处理直到完成。
+- What：模糊任务触发 AI 提问，提问卡与审批卡使用相同的标题数量层级、左右切换、右上角停止按钮和底部输入提交区；提问卡区分单选/多选、显示推荐 Tag，用户完成 A/B/C/D、其他输入和多问题切换，普通单选自动跳到下一题；回答前不显示写入结果，提交后 run 恢复；同一 run 若继续产生澄清问题，交互卡片可以继续处理直到完成。
 - Why：问题和答案是任务定义的一部分，必须在真实 UI 中可操作、可恢复、可追溯，不能只在 IPC 或 backend 日志中存在。
 - How：通过真实 Workbench UI 发送存在结果歧义的任务，等待 `human_interaction_required`；按实际返回的 1 至 3 个问题检查 A/B/C/D、其他输入和 pending 卡片，刷新后继续选择自定义答案并提交；若同一 run 再次产生 `human_interaction_required`，继续完成该 interaction；最终展开 Activity 检查问答投影。审批展示由 `approval-batch-flow` 同时覆盖。
-- Oracle：composer 上方出现统一交互卡片，标题下显示「问题 1 / N」，右上角提供左右切换和停止按钮，底部展示「告诉{伙伴名}该怎么做」与提交按钮，不重复展示文字停止按钮，对齐 `WB-BLOCKER-001-AC9`；刷新后 pending 问题可恢复；提交前无写入；提交后 run 恢复并完成；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。
+- Oracle：composer 上方出现统一交互卡片，标题下显示「问题 1 / N」，右上角提供左右切换和停止按钮，底部展示「告诉{伙伴名}该怎么做」与提交按钮，不重复展示文字停止按钮，对齐 `WB-BLOCKER-001-AC9`；单选/多选控件、类型文字、推荐 Tag 和自动跳题对齐 `WB-BLOCKER-001-AC11`；刷新后 pending 问题可恢复；提交前无写入；提交后 run 恢复并完成；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。
 
 ### 5.4 `scheduled-task`
 

@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react'
+import { HiCheck } from 'react-icons/hi2'
 import type { PendingHumanInteraction, AskUserQuestionAnswer } from '../../../../shared/types'
 import { buildPartnerGuidePlaceholder } from './composer/constants'
 import { WorkbenchInteractionCard, WorkbenchInteractionFooter } from './WorkbenchInteractionCard'
@@ -11,8 +12,6 @@ type Props = {
   onCancel: () => void
 }
 
-const OTHER_ID = '__custom__'
-
 const HumanInteractionCard: React.FC<Props> = ({
   interaction,
   partnerName,
@@ -21,67 +20,66 @@ const HumanInteractionCard: React.FC<Props> = ({
   onCancel
 }) => {
   const [index, setIndex] = useState(0)
-  const [selected, setSelected] = useState<Record<string, string[]>>({})
-  const [custom, setCustom] = useState<Record<string, string>>({})
+  const [selectedOptionIds, setSelectedOptionIds] = useState<Record<string, string[]>>({})
+  const [otherSelected, setOtherSelected] = useState<Record<string, boolean>>({})
+  const [userText, setUserText] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
-  const customInputRef = useRef<HTMLInputElement>(null)
+  const userTextInputRef = useRef<HTMLInputElement>(null)
   const questions = useMemo(
     () => (Array.isArray(interaction.questions) ? interaction.questions : []),
     [interaction.questions]
   )
   const question = questions[index] || { id: '', question: '', options: [], multiSelect: false }
-  const currentSelected = selected[question.id] || []
-  const isCustom = currentSelected.includes(OTHER_ID)
+  const currentSelectedOptionIds = selectedOptionIds[question.id] || []
+  const isOtherSelected = otherSelected[question.id] === true
   const canSubmit = useMemo(
     () =>
       questions.every((item) => {
-        const values = selected[item.id] || []
-        return values.length > 0 && (!values.includes(OTHER_ID) || Boolean(custom[item.id]?.trim()))
+        const hasSelectedOption = (selectedOptionIds[item.id] || []).length > 0
+        const hasOtherAnswer = otherSelected[item.id] === true
+        return (
+          (hasSelectedOption || hasOtherAnswer) &&
+          (!hasOtherAnswer || Boolean(userText[item.id]?.trim()))
+        )
       }),
-    [custom, questions, selected]
+    [otherSelected, questions, selectedOptionIds, userText]
   )
-  const toggle = (id: string): void => {
-    const deselectingCustom = id === OTHER_ID && currentSelected.includes(OTHER_ID)
-    if (deselectingCustom) {
-      setCustom((current) => ({ ...current, [question.id]: '' }))
-    }
-    setSelected((previous) => {
+  const toggleOption = (optionId: string): void => {
+    setSelectedOptionIds((previous) => {
       const values = previous[question.id] || []
-      if (id === OTHER_ID)
-        return {
-          ...previous,
-          [question.id]: values.includes(id)
-            ? values.filter((value) => value !== id)
-            : question.multiSelect
-              ? [...values, id]
-              : [id]
-        }
       if (!question.multiSelect) {
-        setCustom((current) => ({ ...current, [question.id]: '' }))
-        return { ...previous, [question.id]: [id] }
+        return { ...previous, [question.id]: [optionId] }
       }
       return {
         ...previous,
-        [question.id]: values.includes(id)
-          ? values.filter((value) => value !== id)
-          : [...values, id]
+        [question.id]: values.includes(optionId)
+          ? values.filter((value) => value !== optionId)
+          : [...values, optionId]
       }
     })
-    if (id === OTHER_ID && !deselectingCustom) {
-      window.requestAnimationFrame(() => customInputRef.current?.focus())
+    if (!question.multiSelect) {
+      setOtherSelected((previous) => ({ ...previous, [question.id]: false }))
+      if (index < questions.length - 1) setIndex(index + 1)
     }
   }
-  const updateCustom = (value: string): void => {
-    setCustom((previous) => ({ ...previous, [question.id]: value }))
-    if (!value.trim()) return
-    setSelected((previous) => {
-      const values = previous[question.id] || []
-      if (values.includes(OTHER_ID)) return previous
-      return {
-        ...previous,
-        [question.id]: question.multiSelect ? [...values, OTHER_ID] : [OTHER_ID]
-      }
-    })
+  const toggleOther = (): void => {
+    const nextSelected = !isOtherSelected
+    setOtherSelected((previous) => ({ ...previous, [question.id]: nextSelected }))
+    if (!question.multiSelect && nextSelected) {
+      setSelectedOptionIds((previous) => ({ ...previous, [question.id]: [] }))
+    }
+    if (!nextSelected) setUserText((previous) => ({ ...previous, [question.id]: '' }))
+    if (nextSelected) window.requestAnimationFrame(() => userTextInputRef.current?.focus())
+  }
+  const updateUserText = (value: string): void => {
+    setUserText((previous) => ({ ...previous, [question.id]: value }))
+    if (!value.trim()) {
+      setOtherSelected((previous) => ({ ...previous, [question.id]: false }))
+      return
+    }
+    if (question.multiSelect || currentSelectedOptionIds.length === 0) {
+      setOtherSelected((previous) => ({ ...previous, [question.id]: true }))
+    }
   }
   const submit = async (): Promise<void> => {
     if (!canSubmit || submitting) return
@@ -89,11 +87,11 @@ const HumanInteractionCard: React.FC<Props> = ({
     try {
       await onSubmit({
         answers: questions.map((item) => {
-          const values = selected[item.id] || []
+          const text = userText[item.id]?.trim()
           return {
-            id: item.id,
-            selected: values.filter((value) => value !== OTHER_ID),
-            custom: values.includes(OTHER_ID) ? custom[item.id]?.trim() || undefined : undefined
+            questionId: item.id,
+            selectedOptionIds: selectedOptionIds[item.id] || [],
+            userText: text || undefined
           }
         })
       })
@@ -118,37 +116,58 @@ const HumanInteractionCard: React.FC<Props> = ({
       cancelTestId="workbench-human-question-cancel"
       footer={
         <WorkbenchInteractionFooter
-          inputRef={customInputRef}
-          value={custom[question.id] || ''}
+          inputRef={userTextInputRef}
+          value={userText[question.id] || ''}
           placeholder={buildPartnerGuidePlaceholder(partnerName)}
           submitting={submitting}
           inputDisabled={cancelling}
           disabled={!canSubmit || cancelling}
-          onChange={updateCustom}
+          onChange={updateUserText}
           onSubmit={() => void submit()}
-          inputTestId={`workbench-human-question-custom-input-${question.id}`}
+          inputTestId={`workbench-human-question-user-text-${question.id}`}
           submitTestId="workbench-human-question-submit"
         />
       }
     >
-      <div className="px-5 pt-3 text-[14px] leading-6 text-[#37352F]">{question.question}</div>
+      <div className="flex items-start gap-2 px-5 pt-3">
+        <div className="min-w-0 flex-1 text-[14px] leading-6 text-[#37352F]">
+          {question.question}
+        </div>
+        <span className="mt-0.5 shrink-0 rounded-[4px] border border-[#E0DFDC] bg-[#F8F8F7] px-1.5 py-0.5 text-[11px] leading-4 text-[#787774]">
+          {question.multiSelect ? '可多选' : '单选'}
+        </span>
+      </div>
       <div className="mx-2 mt-3 space-y-1">
         {question.options.map((option, optionIndex) => {
-          const active = currentSelected.includes(option.id)
+          const active = currentSelectedOptionIds.includes(option.id)
           return (
             <button
               key={option.id}
               data-testid={`workbench-human-question-option-${question.id}-${option.id}`}
               type="button"
-              className={`grid min-h-11 w-full grid-cols-[auto_1fr] gap-2 rounded-[6px] px-3 text-left text-[13px] ${active ? 'bg-[#F4F4F2] shadow-[inset_3px_0_0_#37352F]' : 'hover:bg-[#F8F8F7]'}`}
-              onClick={() => toggle(option.id)}
+              aria-pressed={active}
+              className={`grid min-h-11 w-full grid-cols-[16px_auto_1fr] items-start gap-2 rounded-[6px] px-3 py-2 text-left text-[13px] transition-colors ${active ? 'bg-[#F4F4F2]' : 'hover:bg-[#F8F8F7]'}`}
+              onClick={() => toggleOption(option.id)}
             >
+              <span
+                className={`mt-0.5 flex h-4 w-4 items-center justify-center border ${question.multiSelect ? 'rounded-[4px]' : 'rounded-full'} ${active ? 'border-[#37352F] bg-[#37352F]' : 'border-[#C8C7C4] bg-white'}`}
+              >
+                {active ? (
+                  question.multiSelect ? (
+                    <HiCheck className="h-3 w-3 text-white" />
+                  ) : (
+                    <span className="h-1.5 w-1.5 rounded-full bg-white" />
+                  )
+                ) : null}
+              </span>
               <span className="font-medium">{String.fromCharCode(65 + optionIndex)}.</span>
               <span>
                 <span>
                   {option.label}
                   {option.recommended ? (
-                    <span className="ml-2 text-xs text-[#9B9A97]">推荐</span>
+                    <span className="ml-2 inline-flex rounded-[4px] border border-[#D8DDD6] bg-[#F2F5F1] px-1.5 py-px text-[11px] leading-4 text-[#52604F]">
+                      推荐
+                    </span>
                   ) : null}
                 </span>
                 {option.description ? (
@@ -160,10 +179,22 @@ const HumanInteractionCard: React.FC<Props> = ({
         })}
         <button
           type="button"
-          data-testid={`workbench-human-question-option-${question.id}-custom`}
-          className={`grid min-h-11 w-full grid-cols-[auto_1fr] gap-2 rounded-[6px] px-3 text-left text-[13px] ${isCustom ? 'bg-[#F4F4F2] shadow-[inset_3px_0_0_#37352F]' : 'hover:bg-[#F8F8F7]'}`}
-          onClick={() => toggle(OTHER_ID)}
+          data-testid={`workbench-human-question-option-${question.id}-other`}
+          aria-pressed={isOtherSelected}
+          className={`grid min-h-11 w-full grid-cols-[16px_auto_1fr] items-start gap-2 rounded-[6px] px-3 py-2 text-left text-[13px] transition-colors ${isOtherSelected ? 'bg-[#F4F4F2]' : 'hover:bg-[#F8F8F7]'}`}
+          onClick={toggleOther}
         >
+          <span
+            className={`mt-0.5 flex h-4 w-4 items-center justify-center border ${question.multiSelect ? 'rounded-[4px]' : 'rounded-full'} ${isOtherSelected ? 'border-[#37352F] bg-[#37352F]' : 'border-[#C8C7C4] bg-white'}`}
+          >
+            {isOtherSelected ? (
+              question.multiSelect ? (
+                <HiCheck className="h-3 w-3 text-white" />
+              ) : (
+                <span className="h-1.5 w-1.5 rounded-full bg-white" />
+              )
+            ) : null}
+          </span>
           <span className="font-medium">{String.fromCharCode(65 + question.options.length)}.</span>
           <span>其他，请填写</span>
         </button>

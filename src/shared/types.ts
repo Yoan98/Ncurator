@@ -1220,9 +1220,9 @@ export type UserQuestion = {
 export type AskUserQuestionInput = { questions: UserQuestion[] }
 
 export type AskUserQuestionAnswer = {
-  id: string
-  selected: string[]
-  custom?: string
+  questionId: string
+  selectedOptionIds: string[]
+  userText?: string
 }
 
 export type AskUserQuestionResult = { answers: AskUserQuestionAnswer[] }

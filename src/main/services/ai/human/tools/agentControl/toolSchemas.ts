@@ -40,7 +40,7 @@ export const ASK_USER_QUESTION_SCHEMA = z.object({
 
 export type AskUserQuestionInput = z.infer<typeof ASK_USER_QUESTION_SCHEMA>
 export type AskUserQuestionResult = {
-  answers: Array<{ id: string; selected: string[]; custom?: string }>
+  answers: Array<{ questionId: string; selectedOptionIds: string[]; userText?: string }>
 }
 
 export type {

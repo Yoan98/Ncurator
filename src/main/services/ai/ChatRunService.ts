@@ -437,17 +437,24 @@ export class ChatRunService {
     const questionIds = new Set(pending.questions.map((question) => question.id))
     const seenAnswerIds = new Set<string>()
     for (const answer of answers) {
-      if (!answer || !questionIds.has(answer.id) || seenAnswerIds.has(answer.id) || !Array.isArray(answer.selected)) {
+      if (
+        !answer ||
+        !questionIds.has(answer.questionId) ||
+        seenAnswerIds.has(answer.questionId) ||
+        !Array.isArray(answer.selectedOptionIds)
+      ) {
         return { success: false, error: '答案格式无效' }
       }
-      seenAnswerIds.add(answer.id)
-      const question = pending.questions.find((item) => item.id === answer.id)
+      seenAnswerIds.add(answer.questionId)
+      const question = pending.questions.find((item) => item.id === answer.questionId)
       const optionIds = new Set(question?.options.map((option) => option.id) || [])
-      if (answer.selected.some((id) => !optionIds.has(id))) return { success: false, error: '存在无效选项' }
-      if (question && !question.multiSelect && answer.selected.length > 1) {
+      if (answer.selectedOptionIds.some((id) => !optionIds.has(id))) {
+        return { success: false, error: '存在无效选项' }
+      }
+      if (question && !question.multiSelect && answer.selectedOptionIds.length > 1) {
         return { success: false, error: '单选问题只能选择一个选项' }
       }
-      if (answer.selected.length === 0 && !String(answer.custom || '').trim()) {
+      if (answer.selectedOptionIds.length === 0 && !String(answer.userText || '').trim()) {
         return { success: false, error: '请选择选项或填写其他内容' }
       }
     }

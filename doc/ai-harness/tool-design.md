@@ -140,7 +140,7 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 | `learn_skill` | 由 `learning` 节点直接写 ToolMessage（loaded / duplicate / unknown / evicted 摘要），不走 `buildModelToolResultDelivery` |
 | `update_plan` | 由 `plan` 节点直接写 ToolMessage（计划项列表 `[status] title`），不走 `buildModelToolResultDelivery` |
 | `read_image` | 路径列表 + 尺寸；`images[]` 进 log 供多模态（human-harness 第 3.5 节） |
-| `ask_user_question` | 只询问会改变执行结果的信息；每批 1 至 3 个问题，选项具体互斥，用户始终可选择“其他，请填写”；问题调用不得与副作用工具混用。答案通过 tool result 回到 brain。 |
+| `ask_user_question` | 只询问会改变执行结果的信息；每批 1 至 3 个问题，选项具体互斥，用户始终可选择“其他，请填写”；问题调用不得与副作用工具混用。|
 
 ### 6.2 写工具输出
 

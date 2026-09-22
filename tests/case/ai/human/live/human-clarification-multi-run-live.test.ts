@@ -37,13 +37,16 @@ describe('ai human clarification live backend', () => {
               accepted: true as const,
               result: {
                 answers: request.questions.map((question, index) => {
-                  const custom = isCustomScenario && index === 0
-                    ? '用深绿色和白色，整体保持克制'
-                    : undefined
+                  const userText =
+                    isCustomScenario && index === 0 ? '用深绿色和白色，整体保持克制' : undefined
                   return {
-                    id: question.id,
-                    selected: custom ? [] : question.options[0] ? [question.options[0].id] : [],
-                    custom
+                    questionId: question.id,
+                    selectedOptionIds: userText
+                      ? []
+                      : question.options[0]
+                        ? [question.options[0].id]
+                        : [],
+                    userText
                   }
                 })
               }
@@ -58,15 +61,18 @@ describe('ai human clarification live backend', () => {
             return await runner.run({ taskId: `${runtime.taskId}-${runNumber}`, userInput })
           }
 
-          const first = await run(1,
+          const first = await run(
+            1,
             `请根据 brief.md 完善主题并产出一个可继续编辑的方向。当前没有说明视觉风格，请先确认会影响结果的关键选择。`
           )
-          const second = await run(2,
+          const second = await run(
+            2,
             `继续完善 brief.md。若需要确认，请允许我用“其他，请填写”补充具体要求；我的补充是：用深绿色和白色，整体保持克制。`
           )
           const beforeThird = interactionIds.length
           const thirdTaskId = `${runtime.taskId}-3`
-          const third = await run(3,
+          const third = await run(
+            3,
             `请直接把 brief.md 的“主题：待定”替换为“主题：季度客户回访”，只做这一处明确的文本修改，保留其他内容，不需要再向我确认。`
           )
           const events = runtime.eventCollector.snapshot()
@@ -85,14 +91,21 @@ describe('ai human clarification live backend', () => {
             if (interaction.kind !== 'question') return false
             const resolution = resolvedByInteractionId.get(event.interactionId)
             const answers = resolution?.result.answers
-            if (!Array.isArray(answers) || answers.length !== interaction.questions.length) return false
+            if (!Array.isArray(answers) || answers.length !== interaction.questions.length)
+              return false
             const answerIds = new Set(
               answers
-                .filter((answer): answer is { id: string } => Boolean(answer && typeof answer === 'object' && typeof answer.id === 'string'))
-                .map((answer) => answer.id)
+                .filter((answer): answer is { questionId: string } =>
+                  Boolean(
+                    answer && typeof answer === 'object' && typeof answer.questionId === 'string'
+                  )
+                )
+                .map((answer) => answer.questionId)
             )
-            return answerIds.size === interaction.questions.length &&
+            return (
+              answerIds.size === interaction.questions.length &&
               interaction.questions.every((question) => answerIds.has(question.id))
+            )
           })
           return {
             first,
