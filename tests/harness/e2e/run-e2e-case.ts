@@ -22,6 +22,7 @@ import {
 } from '../core/write-run-log'
 import {
   launchElectronApp,
+  isExpectedForceKilledTeardownExit,
   isExpectedWindowsInspectorTeardownExit,
   type E2ERuntimeSignals,
   type E2EServiceMode,
@@ -873,10 +874,15 @@ export const runE2ECase = async <TResult>(
       const processExitData = processExit?.data as
         | { code?: number | null; signal?: string | null }
         | undefined
+      const testPassed = status === 'passed' && !primaryError
       const isKnownWindowsInspectorExit = isExpectedWindowsInspectorTeardownExit({
         platform: process.platform,
         lifecycleEntries: signals.lifecycleEntries,
-        testPassed: status === 'passed' && !primaryError
+        testPassed
+      })
+      const isKnownForceKilledExit = isExpectedForceKilledTeardownExit({
+        lifecycleEntries: signals.lifecycleEntries,
+        testPassed
       })
       if (isKnownWindowsInspectorExit) {
         recordEvent({
@@ -884,6 +890,14 @@ export const runE2ECase = async <TResult>(
           name: 'electron-inspector-exit-warning',
           status: 'info',
           message: `Electron exited with known Windows inspector status ${String(processExitData?.code)}`,
+          data: processExitData
+        })
+      } else if (isKnownForceKilledExit) {
+        recordEvent({
+          type: 'signal',
+          name: 'electron-force-kill-exit-warning',
+          status: 'info',
+          message: `Electron force-killed after hung close (signal=${String(processExitData?.signal || '')})`,
           data: processExitData
         })
       } else if (

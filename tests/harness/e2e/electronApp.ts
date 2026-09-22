@@ -74,6 +74,31 @@ export const isExpectedWindowsInspectorTeardownExit = (input: {
   return (exitData?.code === 3221225477 || exitData?.code === 3221226505) && !exitData.signal
 }
 
+/** Playwright close 挂死后由 harness SIGKILL；测试已通过时不算 teardown 失败。 */
+export const isExpectedForceKilledTeardownExit = (input: {
+  lifecycleEntries: readonly E2ELifecycleEntry[]
+  testPassed: boolean
+}): boolean => {
+  if (!input.testPassed) return false
+  if (!input.lifecycleEntries.some((entry) => entry.name === 'electron-force-killed')) return false
+
+  const exitIndex = input.lifecycleEntries.findLastIndex(
+    (entry) => entry.name === 'electron-process-exit'
+  )
+  if (exitIndex < 0) return false
+
+  const teardownIndex = input.lifecycleEntries.findIndex(
+    (entry) => entry.name === 'electron-teardown-started'
+  )
+  if (teardownIndex < 0 || teardownIndex >= exitIndex) return false
+  if (input.lifecycleEntries.some((entry) => entry.name === 'page-crash')) return false
+
+  const exitData = input.lifecycleEntries[exitIndex]?.data as
+    | { code?: number | null; signal?: string | null }
+    | undefined
+  return exitData?.signal === 'SIGKILL'
+}
+
 type E2EObserverState = {
   routeEntries: E2ERouteEntry[]
   ipcInvokeEntries: E2EIpcInvokeEntry[]
