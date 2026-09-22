@@ -646,7 +646,12 @@ export const launchElectronApp = async (input: {
       }
       if (!gracefulExitRequested || (electronProcess && electronProcess.exitCode === null)) {
         try {
-          await electronApp.close()
+          await Promise.race([
+            electronApp.close(),
+            new Promise<void>((_, reject) => {
+              setTimeout(() => reject(new Error('electronApp.close timed out after 15s')), 15_000)
+            })
+          ])
         } catch (error) {
           pushProcessLog(
             consoleEntries,
@@ -656,6 +661,28 @@ export const launchElectronApp = async (input: {
             input.signalSink
           )
         }
+      }
+      // Playwright close 偶发挂死时强制结束，避免 release:start live 门禁拖到 45min 超时
+      if (electronProcess && electronProcess.exitCode === null && !electronProcess.killed) {
+        try {
+          electronProcess.kill('SIGKILL')
+          recordLifecycle('electron-force-killed')
+        } catch (error) {
+          pushProcessLog(
+            consoleEntries,
+            'warning',
+            'electron-force-kill',
+            error instanceof Error ? error.message : String(error),
+            input.signalSink
+          )
+        }
+        await new Promise<void>((resolve) => {
+          const timeout = setTimeout(resolve, 3_000)
+          electronProcess.once('exit', () => {
+            clearTimeout(timeout)
+            resolve()
+          })
+        })
       }
       if (!closeInput.preserveUserData) {
         await rm(userDataDir, {
