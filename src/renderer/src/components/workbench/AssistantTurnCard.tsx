@@ -1,6 +1,7 @@
 ﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { FaSpider } from 'react-icons/fa'
 import { PiBrowsers, PiEyes } from 'react-icons/pi'
+import { TbMoodConfuzed } from 'react-icons/tb'
 import {
   HiChevronDown,
   HiChevronRight,
@@ -99,6 +100,7 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   if (iconKind === 'extract') return <PiEyes {...iconProps} />
   if (iconKind === 'window') return <PiBrowsers {...iconProps} />
   if (iconKind === 'fetch') return <FaSpider {...iconProps} />
+  if (iconKind === 'question') return <TbMoodConfuzed {...iconProps} />
   return <HiOutlineDocumentText {...iconProps} />
 }
 

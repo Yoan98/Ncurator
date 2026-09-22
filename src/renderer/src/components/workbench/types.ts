@@ -85,6 +85,7 @@ export type AssistantProcessIconKind =
   | 'extract'
   | 'window'
   | 'fetch'
+  | 'question'
   | 'default'
 
 export type AssistantProcessGroupKind =

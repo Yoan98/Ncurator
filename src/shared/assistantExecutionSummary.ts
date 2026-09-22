@@ -22,6 +22,7 @@ export type AssistantExecutionIconKind =
   | 'extract'
   | 'window'
   | 'fetch'
+  | 'question'
   | 'default'
 
 export type AssistantExecutionSkillKey =
@@ -440,6 +441,7 @@ export const resolveItemIconKind = (
   },
   fallbackSkillKey?: AssistantExecutionSkillKey
 ): AssistantExecutionIconKind => {
+  if (item.toolName === 'ask_user_question') return 'question'
   if (item.toolName === 'browser_use') {
     const action = readInputProperty(item.input, 'action')
     const headerShort = item.headerShortText || ''

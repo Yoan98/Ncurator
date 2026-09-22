@@ -54,6 +54,7 @@ describe('assistant process icons and activity summary', () => {
     expect(resolveAssistantExecutionIcon(createToolGroup('ppt_search'))).toBe('search')
     expect(resolveAssistantExecutionIcon(createToolGroup('ppt_edit'))).toBe('edit')
     expect(resolveAssistantExecutionIcon(createToolGroup('learn_skill'))).toBe('learning')
+    expect(resolveAssistantExecutionIcon(createToolGroup('ask_user_question'))).toBe('question')
   })
 
   it('joins up to three tool short texts with enumeration commas and drops param segments', () => {
