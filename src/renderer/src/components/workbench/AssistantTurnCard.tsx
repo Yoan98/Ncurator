@@ -542,8 +542,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   const hasNextAiContentForActivity =
     hasFinalAnswer ||
     hasStreamingThought ||
-    turn?.status === 'completed' ||
-    turn?.status === 'failed'
+    Boolean(turn?.runFinished)
   const processGroups = useMemo(
     () => (turn?.processGroups || []).filter((group) => group.kind !== 'thinking'),
     [turn?.processGroups]

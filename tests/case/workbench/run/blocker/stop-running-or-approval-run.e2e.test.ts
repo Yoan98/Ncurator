@@ -142,7 +142,19 @@ describe('workbench run e2e', () => {
             if (approvalCancelled.type !== 'run_cancelled') {
               throw new Error('approval cancellation did not reach the cancelled state')
             }
+            await page.waitForFunction(
+              (testId) => document.querySelectorAll(`[data-testid="${testId}"]`).length === 0,
+              workbenchSelectors.assistantApprovalWaiting,
+              { timeout: 10_000 }
+            )
           }
+
+          const waitingForUserCountAfterCancel = await page
+            .getByTestId(workbenchSelectors.assistantApprovalWaiting)
+            .count()
+          const failureCardCountAfterCancel = await page
+            .locator(`[data-testid^="${workbenchSelectors.assistantRunFailurePrefix}-"]`)
+            .count()
 
           return {
             normalRunState,
@@ -151,7 +163,9 @@ describe('workbench run e2e', () => {
             sessionRunningIndicatorVisible,
             sessionRunningIndicatorHiddenAfterCancel,
             stopButtonVisibleDuringApproval,
-            stopLabelDuringApproval
+            stopLabelDuringApproval,
+            waitingForUserCountAfterCancel,
+            failureCardCountAfterCancel
           }
         },
         assert: async (result, runtime) => {
@@ -164,11 +178,13 @@ describe('workbench run e2e', () => {
                   result.sessionRunningIndicatorVisible &&
                   result.sessionRunningIndicatorHiddenAfterCancel)) &&
               result.stopButtonVisibleDuringApproval &&
-              result.stopLabelDuringApproval.includes('停止'),
+              result.stopLabelDuringApproval.includes('停止') &&
+              result.waitingForUserCountAfterCancel === 0 &&
+              result.failureCardCountAfterCancel === 0,
             {
               name: 'workbench-stop-running-and-approval-real',
               message:
-                '普通运行中发送按钮应切换为停止并可取消，会话列表同步显示运行标记并在取消后清除；审批等待中也应保留可见停止入口并结束 run。',
+                '普通运行中发送按钮应切换为停止并可取消；审批等待中也应保留停止入口，取消后清除等待状态且不展示失败卡。',
               data: result
             }
           )

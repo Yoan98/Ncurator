@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import { reduceAssistantProcessGroups } from '../../../harness/core/assistantProcessGroups'
 import {
   applyQuestionInteractionResult,
-  reduceAssistantProcessGroups
-} from '../../../../src/renderer/src/components/workbench/utils'
-import { projectProcessGroups } from '../../../../src/renderer/src/components/workbench/messageLogProjection'
+  projectProcessGroups
+} from '../../../harness/core/messageLogProjection'
 import type { AiRunEvent, ChatMessageLogRecord } from '../../../../src/shared/types'
 
 describe('message log question projection', () => {

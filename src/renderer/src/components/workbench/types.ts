@@ -181,7 +181,7 @@ export type AssistantArtifactItem = WorkbenchFileRef & {
 export type AssistantTurnViewModel = {
   messageId: string
   runId?: string
-  status: 'running' | 'completed' | 'failed'
+  status: 'running' | 'completed' | 'failed' | 'cancelled'
   runFinished: boolean
   isBrainThinking?: boolean
   processThoughts: AssistantProcessThought[]

@@ -386,10 +386,10 @@ pnpm test:update:e2e
 #### `cancelled-run-keeps-artifact`
 
 - 测试类型：`e2e`
-- What：文件修改已经落地后取消运行，终态仍保留普通取消文案、修改文件入口和审核模式。
+- What：文件修改已经落地后取消运行，终态不展示取消或失败内容，但仍保留修改文件入口和审核模式。
 - Why：取消只应停止后续 AI 执行，不能隐藏已经发生的文件修改，否则用户无法检查和回退副作用。
 - How：真实 AI 使用 `text_file_edit` 修改 Markdown，等待 `file_artifact` 后点击停止，再打开本轮修改记录。
-- Oracle：assistant turn 显示不含 Markdown 标记的“已取消”；修改文件入口仍存在；文件内容已经更新；文本审核模式可打开。
+- Oracle：assistant turn 不显示失败气泡或“已取消”正文，Activity 不残留「等待用户处理」；修改文件入口仍存在，文件内容已经更新，文本审核模式可打开；对齐 `WB-BLOCKER-001-AC10`。
 
 #### `browser-use-task-panel`
 
@@ -604,10 +604,10 @@ pnpm test:update:e2e
 #### `human-interaction-question-card`
 
 - 测试类型：`e2e / live`
-- What：模糊任务触发 AI 提问，用户完成 A/B/C/D、其他输入和多问题切换；回答前不显示写入结果，提交后 run 恢复；同一 run 若继续产生澄清问题，交互卡片可以继续处理直到完成。
+- What：模糊任务触发 AI 提问，提问卡与审批卡使用相同的标题数量层级、左右切换、右上角停止按钮和底部输入提交区；用户完成 A/B/C/D、其他输入和多问题切换；回答前不显示写入结果，提交后 run 恢复；同一 run 若继续产生澄清问题，交互卡片可以继续处理直到完成。
 - Why：问题和答案是任务定义的一部分，必须在真实 UI 中可操作、可恢复、可追溯，不能只在 IPC 或 backend 日志中存在。
 - How：通过真实 Workbench UI 发送存在结果歧义的任务，等待 `human_interaction_required`；按实际返回的 1 至 3 个问题检查 A/B/C/D、其他输入和 pending 卡片，刷新后继续选择自定义答案并提交；若同一 run 再次产生 `human_interaction_required`，继续完成该 interaction；最终展开 Activity 检查问答投影。审批展示由 `approval-batch-flow` 同时覆盖。
-- Oracle：composer 上方出现统一交互卡片；刷新后 pending 问题可恢复；提交前无写入；提交后 run 恢复并完成；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。
+- Oracle：composer 上方出现统一交互卡片，标题下显示「问题 1 / N」，右上角提供左右切换和停止按钮，底部展示「告诉{伙伴名}该怎么做」与提交按钮，不重复展示文字停止按钮，对齐 `WB-BLOCKER-001-AC9`；刷新后 pending 问题可恢复；提交前无写入；提交后 run 恢复并完成；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。
 
 ### 5.4 `scheduled-task`
 

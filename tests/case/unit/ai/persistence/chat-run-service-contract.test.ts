@@ -310,9 +310,9 @@ describe('unit ai persistence backend', () => {
         type: 'run_cancelled',
         runId
       }),
-      expectedContent: '草稿内容\n\n已取消'
+      expectedContent: '草稿内容'
     }
-  ])('keeps applied artifacts when a run is $name', async ({ terminalEvent, expectedContent }) => {
+  ])('keeps applied artifacts when a run is $name', async ({ name, terminalEvent, expectedContent }) => {
     const setup = await createTestService()
     const run = await submitAiRun(setup)
     const service = setup.service as ChatRunServicePrivate
@@ -353,6 +353,11 @@ describe('unit ai persistence backend', () => {
       }
     ])
     expect(storedRun?.artifacts).toEqual(assistantMessage?.artifacts)
+    if (name === 'cancelled') {
+      expect(storedRun?.status).toBe('cancelled')
+      expect(storedRun?.error).toBeUndefined()
+      expect(storedRun?.finalAnswer).toBeUndefined()
+    }
   })
 
   it('autostart-run-emits-process-events-after-run-started', async () => {

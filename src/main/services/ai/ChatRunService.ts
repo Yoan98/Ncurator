@@ -1074,12 +1074,11 @@ export class ChatRunService {
       run.failureCode = 'user_cancelled'
       run.pendingApproval = undefined
       run.pendingInteraction = undefined
-      run.error = '已取消'
+      run.error = undefined
+      run.failureRawMessage = undefined
       run.updatedAt = now
       run.finishedAt = now
-      const content = run.partialAnswer ? `${run.partialAnswer}\n\n已取消` : '已取消'
-      run.partialAnswer = content
-      run.finalAnswer = content
+      run.finalAnswer = undefined
     } else if (event.type === 'run_warning') {
       run.updatedAt = now
     } else {

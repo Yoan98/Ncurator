@@ -1,17 +1,13 @@
 ﻿import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { App as AntdApp, Button, Input, Modal, Spin, Tooltip } from 'antd'
+import { App as AntdApp, Input, Modal, Tooltip } from 'antd'
 import {
-  HiArrowUp,
   HiCheck,
-  HiChevronLeft,
-  HiChevronRight,
   HiOutlineClipboardDocument,
   HiOutlineClock,
   HiOutlinePencilSquare,
   HiOutlineQuestionMarkCircle,
   HiPhoto,
   HiPlus,
-  HiStop,
   HiTrash,
   HiXMark
 } from 'react-icons/hi2'
@@ -68,7 +64,11 @@ import AssistantTurnCard from '../components/workbench/AssistantTurnCard'
 import { FullAccessConfirmModal } from '../components/workbench/FullAccessConfirmModal'
 import WorkbenchComposer from '../components/workbench/WorkbenchComposer'
 import HumanInteractionCard from '../components/workbench/HumanInteractionCard'
-import { buildApprovalGuidePlaceholder } from '../components/workbench/composer/constants'
+import {
+  WorkbenchInteractionCard,
+  WorkbenchInteractionFooter
+} from '../components/workbench/WorkbenchInteractionCard'
+import { buildPartnerGuidePlaceholder } from '../components/workbench/composer/constants'
 import { MessageTimeline } from '../components/workbench/MessageTimeline'
 import {
   buildTimelineNodes,
@@ -565,13 +565,24 @@ const reduceAssistantTurnByRunEvent = (
       isBrainThinking: false,
       status: 'failed',
       runFinished: true,
+      waitingApproval: false,
+      pendingApprovalItems: [],
       error: formatRunFailureTitle(event),
       errorDetail: formatRunFailureDetail(event)
     }
   }
 
   if (event.type === 'run_cancelled') {
-    next = { ...next, isBrainThinking: false, status: 'failed', runFinished: true, error: '已取消' }
+    next = {
+      ...next,
+      isBrainThinking: false,
+      status: 'cancelled',
+      runFinished: true,
+      waitingApproval: false,
+      pendingApprovalItems: [],
+      error: undefined,
+      errorDetail: undefined
+    }
   }
 
   if (event.type === 'run_completed') {
@@ -579,7 +590,9 @@ const reduceAssistantTurnByRunEvent = (
       ...next,
       isBrainThinking: false,
       runFinished: true,
-      status: next.status === 'failed' ? 'failed' : 'completed',
+      status: next.status === 'failed' || next.status === 'cancelled' ? next.status : 'completed',
+      waitingApproval: false,
+      pendingApprovalItems: [],
       plan: []
     }
   }
@@ -597,9 +610,11 @@ const applyRunRecordToTurn = (
   const status =
     run.status === 'completed'
       ? 'completed'
-      : run.status === 'failed' || run.status === 'cancelled'
+      : run.status === 'failed'
         ? 'failed'
-        : 'running'
+        : run.status === 'cancelled'
+          ? 'cancelled'
+          : 'running'
   return {
     ...turn,
     runId: run.id,
@@ -610,7 +625,7 @@ const applyRunRecordToTurn = (
       ? completeAssistantProcessGroups(turn.processGroups)
       : turn.processGroups,
     finalAnswerMarkdown:
-      run.finalAnswer ||
+      (run.status === 'cancelled' ? undefined : run.finalAnswer) ||
       (run.partialAnswerRole !== 'thought' ? run.partialAnswer : '') ||
       turn.finalAnswerMarkdown,
     streamingMarkdown: run.finalAnswer ? '' : run.partialAnswer || turn.streamingMarkdown,
@@ -636,10 +651,12 @@ const applyRunRecordToTurn = (
       if (!target || items.some((item) => item.changeId === target.changeId)) return items
       return [...items, target]
     }, turn.applyTargets),
-    waitingApproval: Boolean(run.pendingApproval),
-    pendingApprovalItems: run.pendingApproval?.items ?? turn.pendingApprovalItems,
-    error: run.error || turn.error,
-    errorDetail: run.failureRawMessage || turn.errorDetail
+    waitingApproval: !runFinished && Boolean(run.pendingApproval),
+    pendingApprovalItems: runFinished
+      ? []
+      : run.pendingApproval?.items ?? turn.pendingApprovalItems,
+    error: run.status === 'failed' ? run.error || turn.error : undefined,
+    errorDetail: run.status === 'failed' ? run.failureRawMessage || turn.errorDetail : undefined
   }
 }
 
@@ -3493,8 +3510,7 @@ const ChatPage: React.FC = () => {
             item.id === messageId
               ? {
                   ...item,
-                  error: true,
-                  content: item.content ? `${item.content}\n\n已取消` : '已取消'
+                  error: false
                 }
               : item
           )
@@ -4863,152 +4879,92 @@ const ChatPage: React.FC = () => {
                           ) : pendingQuestion ? (
                             <HumanInteractionCard
                               interaction={pendingQuestion.interaction}
+                              partnerName={currentPartner?.name}
+                              cancelling={cancellingRun}
                               onSubmit={submitHumanQuestion}
                               onCancel={() => void handleCancel()}
                             />
                           ) : pendingApprovalBatch ? (
-                            <div
-                              className="nc-timeline-layout-anchor min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-[#FFFFFF] shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
-                              data-testid={chatSelectors.approvalBatchCard}
-                            >
-                              {pendingApprovalBatch && currentApprovalItem ? (
-                                <div>
-                                  <div className="flex items-center justify-between gap-3 px-5 pt-4">
-                                    <div className="flex min-w-0 items-center gap-2">
-                                      <div className="min-w-0">
-                                        <div className="text-[15px] font-semibold text-[#37352F]">
-                                          需要确认此操作
-                                        </div>
-                                        <div className="text-xs text-[#9B9A97]">
-                                          审批 {approvalCurrentIndex + 1} /{' '}
-                                          {pendingApprovalBatch.items.length}
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <Button
-                                        type="text"
-                                        size="small"
-                                        icon={<HiChevronLeft className="h-4 w-4" />}
-                                        disabled={approvalCurrentIndex <= 0 || approvalSubmitting}
-                                        onClick={() =>
-                                          setApprovalCurrentIndex((current) =>
-                                            Math.max(0, current - 1)
-                                          )
-                                        }
-                                        data-testid={chatSelectors.approvalBatchPrevButton}
-                                      />
-                                      <Button
-                                        type="text"
-                                        size="small"
-                                        icon={<HiChevronRight className="h-4 w-4" />}
-                                        disabled={
-                                          approvalCurrentIndex >=
-                                            pendingApprovalBatch.items.length - 1 ||
-                                          approvalSubmitting
-                                        }
-                                        onClick={() =>
-                                          setApprovalCurrentIndex((current) =>
-                                            Math.min(
-                                              pendingApprovalBatch.items.length - 1,
-                                              current + 1
-                                            )
-                                          )
-                                        }
-                                        data-testid={chatSelectors.approvalBatchNextButton}
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => void handleCancel()}
-                                        disabled={cancellingRun}
-                                        className={`ml-1 inline-flex h-8 w-8 items-center justify-center rounded-[6px] text-white transition ${
-                                          cancellingRun
-                                            ? 'bg-[#E0DFDC]'
-                                            : 'bg-[#B3261E] hover:bg-[#8F3028]'
-                                        }`}
-                                        data-testid={workbenchSelectors.sendButton}
-                                        aria-label="停止本次运行"
-                                      >
-                                        {cancellingRun ? (
-                                          <Spin size="small" />
-                                        ) : (
-                                          <HiStop className="h-4 w-4" />
-                                        )}
-                                      </button>
-                                    </div>
-                                  </div>
-                                  <p className="mx-5 mt-3 text-[13px] leading-6 text-[#787774]">
-                                    {currentApprovalItem.commandExplanation}
-                                  </p>
-                                  <code className="mx-5 mt-3 block max-h-[min(34vh,320px)] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437] [overflow-wrap:anywhere]">
-                                    {currentApprovalItem.command}
-                                  </code>
-                                  <div className="mx-2 mt-3 space-y-1">
-                                    <button
-                                      type="button"
-                                      className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#37352F] shadow-[inset_3px_0_0_#37352F,inset_0_0_0_1px_#EEEEEC] hover:bg-[#F4F4F2]"
-                                      onClick={() =>
-                                        void handleApprovalDecision({
-                                          itemId: currentApprovalItem.itemId,
-                                          action: 'approve'
-                                        })
-                                      }
-                                      disabled={approvalSubmitting}
-                                      data-testid={chatSelectors.approvalBatchApproveButton}
-                                    >
-                                      <span>允许本次操作</span>
-                                      <HiCheck className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#787774] hover:bg-[#F4F4F2]"
-                                      onClick={() =>
-                                        void handleApprovalDecision({
-                                          itemId: currentApprovalItem.itemId,
-                                          action: 'reject'
-                                        })
-                                      }
-                                      disabled={approvalSubmitting}
-                                      data-testid={chatSelectors.approvalBatchDenyButton}
-                                    >
-                                      <span>拒绝本次操作</span>
-                                      <HiXMark className="h-4 w-4 text-[#B3261E]" />
-                                    </button>
-                                  </div>
-                                  <div className="mt-3 flex items-center gap-2 border-t border-[#EEEEEC] px-4 py-4">
-                                    <input
-                                      className="min-w-0 flex-1 rounded-[6px] border border-[#EEEEEC] bg-[#FFFFFF] px-3 py-2 text-sm text-[#37352F] outline-none placeholder:text-[#9B9A97] focus:border-[#37352F] focus:ring-2 focus:ring-[#EFEFED]"
-                                      placeholder={buildApprovalGuidePlaceholder(
-                                        currentPartner?.name
-                                      )}
-                                      value={
-                                        approvalDraftDecisions[currentApprovalItem.itemId]
-                                          ?.message || ''
-                                      }
-                                      onChange={(event) =>
-                                        setApprovalGuideMessage(
-                                          currentApprovalItem.itemId,
-                                          event.target.value
-                                        )
-                                      }
-                                      disabled={approvalSubmitting}
-                                      data-testid={chatSelectors.approvalBatchGuideInput}
-                                    />
-                                    <Button
-                                      type="primary"
-                                      className="!flex !h-9 !items-center !gap-1 !rounded-full !border-[#37352F] !bg-[#37352F] !text-white hover:!bg-[#2F3437] disabled:!border-[#EEEEEC] disabled:!bg-[#F4F4F2] disabled:!text-[#9B9A97]"
-                                      icon={<HiArrowUp className="h-4 w-4" />}
-                                      onClick={() => void handleApprovalBatchSubmit()}
-                                      loading={approvalSubmitting}
-                                      disabled={approvalSubmitDisabled}
-                                      data-testid={chatSelectors.approvalBatchSubmitButton}
-                                    >
-                                      提交
-                                    </Button>
-                                  </div>
+                            pendingApprovalBatch && currentApprovalItem ? (
+                              <WorkbenchInteractionCard
+                                title="需要确认此操作"
+                                itemLabel="审批"
+                                currentIndex={approvalCurrentIndex}
+                                total={pendingApprovalBatch.items.length}
+                                busy={approvalSubmitting}
+                                cancelling={cancellingRun}
+                                onPrevious={() =>
+                                  setApprovalCurrentIndex((current) => Math.max(0, current - 1))
+                                }
+                                onNext={() =>
+                                  setApprovalCurrentIndex((current) =>
+                                    Math.min(pendingApprovalBatch.items.length - 1, current + 1)
+                                  )
+                                }
+                                onCancel={() => void handleCancel()}
+                                cardTestId={chatSelectors.approvalBatchCard}
+                                previousTestId={chatSelectors.approvalBatchPrevButton}
+                                nextTestId={chatSelectors.approvalBatchNextButton}
+                                cancelTestId={workbenchSelectors.sendButton}
+                                footer={
+                                  <WorkbenchInteractionFooter
+                                    value={
+                                      approvalDraftDecisions[currentApprovalItem.itemId]?.message ||
+                                      ''
+                                    }
+                                    placeholder={buildPartnerGuidePlaceholder(currentPartner?.name)}
+                                    submitting={approvalSubmitting}
+                                    inputDisabled={cancellingRun}
+                                    disabled={approvalSubmitDisabled || cancellingRun}
+                                    onChange={(value) =>
+                                      setApprovalGuideMessage(currentApprovalItem.itemId, value)
+                                    }
+                                    onSubmit={() => void handleApprovalBatchSubmit()}
+                                    inputTestId={chatSelectors.approvalBatchGuideInput}
+                                    submitTestId={chatSelectors.approvalBatchSubmitButton}
+                                  />
+                                }
+                              >
+                                <p className="mx-5 mt-3 text-[13px] leading-6 text-[#787774]">
+                                  {currentApprovalItem.commandExplanation}
+                                </p>
+                                <code className="mx-5 mt-3 block max-h-[min(34vh,320px)] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437] [overflow-wrap:anywhere]">
+                                  {currentApprovalItem.command}
+                                </code>
+                                <div className="mx-2 mt-3 space-y-1">
+                                  <button
+                                    type="button"
+                                    className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#37352F] shadow-[inset_3px_0_0_#37352F,inset_0_0_0_1px_#EEEEEC] hover:bg-[#F4F4F2]"
+                                    onClick={() =>
+                                      void handleApprovalDecision({
+                                        itemId: currentApprovalItem.itemId,
+                                        action: 'approve'
+                                      })
+                                    }
+                                    disabled={approvalSubmitting}
+                                    data-testid={chatSelectors.approvalBatchApproveButton}
+                                  >
+                                    <span>允许本次操作</span>
+                                    <HiCheck className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="grid min-h-11 w-full grid-cols-[1fr_auto] items-center rounded-[6px] px-3 text-left text-[13px] text-[#787774] hover:bg-[#F4F4F2]"
+                                    onClick={() =>
+                                      void handleApprovalDecision({
+                                        itemId: currentApprovalItem.itemId,
+                                        action: 'reject'
+                                      })
+                                    }
+                                    disabled={approvalSubmitting}
+                                    data-testid={chatSelectors.approvalBatchDenyButton}
+                                  >
+                                    <span>拒绝本次操作</span>
+                                    <HiXMark className="h-4 w-4 text-[#B3261E]" />
+                                  </button>
                                 </div>
-                              ) : null}
-                            </div>
+                              </WorkbenchInteractionCard>
+                            ) : null
                           ) : (
                             <div className="relative">
                               {busyCancelTask || clearContextVisible ? (

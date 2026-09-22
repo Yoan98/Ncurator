@@ -83,6 +83,12 @@ describe('workbench run e2e', () => {
               .textContent()
               .catch(() => '')) || ''
           ).trim()
+          const failureCardCount = await page
+            .locator(`[data-testid^="${workbenchSelectors.assistantRunFailurePrefix}-"]`)
+            .count()
+          const waitingForUserCount = await page
+            .getByTestId(workbenchSelectors.assistantApprovalWaiting)
+            .count()
           const fileContent = await fs.readFile(targetPath, 'utf8')
 
           await applyEntry.click()
@@ -93,6 +99,8 @@ describe('workbench run e2e', () => {
 
           return {
             assistantText,
+            failureCardCount,
+            waitingForUserCount,
             applyEntryText,
             fileContent,
             diffVisible: await getWorkbenchLocator(
@@ -103,15 +111,18 @@ describe('workbench run e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.assistantText.includes('已取消') &&
-              !result.assistantText.includes('**') &&
+            !result.assistantText.includes('已取消') &&
+              !result.assistantText.includes('失败：') &&
+              result.failureCardCount === 0 &&
+              result.waitingForUserCount === 0 &&
               result.applyEntryText.includes('workbench-preview.md') &&
               result.fileContent.includes(AFTER_TEXT) &&
               !result.fileContent.includes(BEFORE_TEXT) &&
               result.diffVisible,
             {
               name: 'cancelled-run-keeps-applied-file-artifact',
-              message: '文件修改成功后取消运行，取消文案、修改文件入口和审核模式都应保留。',
+              message:
+                '文件修改成功后取消运行，不应保留取消/失败内容或等待状态，但修改文件入口和审核模式必须保留。',
               data: result
             }
           )

@@ -76,24 +76,31 @@ describe('workbench AI question e2e', () => {
           if (questions.length < 1 || questions.length > 3) {
             throw new Error(`expected one to three questions, received ${questions.length}`)
           }
-          const answerQuestionCard = async (
-            currentQuestions: typeof questions
-          ): Promise<void> => {
+          const initialCardText = ((await card.textContent()) || '').trim()
+          const guidePlaceholder =
+            (await card
+              .getByTestId(`workbench-human-question-custom-input-${questions[0].id}`)
+              .getAttribute('placeholder')) || ''
+          const stopLabel =
+            (await card
+              .getByTestId(workbenchSelectors.humanQuestionCancel)
+              .getAttribute('aria-label')) || ''
+          const answerQuestionCard = async (currentQuestions: typeof questions): Promise<void> => {
             await card.waitFor({ state: 'visible', timeout: 30_000 })
             for (const [index, question] of currentQuestions.entries()) {
               if (index === 0) {
-                await card.getByTestId(
-                  `workbench-human-question-option-${question.id}-custom`
-                ).click()
+                await card
+                  .getByTestId(`workbench-human-question-option-${question.id}-custom`)
+                  .click()
                 await card
                   .getByTestId(`workbench-human-question-custom-input-${question.id}`)
                   .fill('使用深绿色和白色，整体保持克制')
               } else {
                 const firstOption = question.options[0]
                 if (!firstOption) throw new Error(`question ${question.id} options are empty`)
-                await card.getByTestId(
-                  `workbench-human-question-option-${question.id}-${firstOption.id}`
-                ).click()
+                await card
+                  .getByTestId(`workbench-human-question-option-${question.id}-${firstOption.id}`)
+                  .click()
               }
               if (index < currentQuestions.length - 1) {
                 await card.getByTestId(workbenchSelectors.humanQuestionNext).click()
@@ -113,7 +120,11 @@ describe('workbench AI question e2e', () => {
             'ppt_edit',
             'excel_edit'
           ])
-          if (beforeAnswerEvents.some((event) => event.type === 'tool_call_started' && mutatingTools.has(event.toolName))) {
+          if (
+            beforeAnswerEvents.some(
+              (event) => event.type === 'tool_call_started' && mutatingTools.has(event.toolName)
+            )
+          ) {
             throw new Error('a mutating tool ran before the first question was answered')
           }
 
@@ -135,9 +146,12 @@ describe('workbench AI question e2e', () => {
               continue
             }
             if (events.some((event) => event.type === 'run_completed')) break
-            const failure = events.find((event) => event.type === 'run_failed' || event.type === 'run_cancelled')
+            const failure = events.find(
+              (event) => event.type === 'run_failed' || event.type === 'run_cancelled'
+            )
             if (failure) throw new Error(`question flow ended with ${failure.type}`)
-            if (Date.now() >= completionDeadline) throw new Error('question flow did not reach completion')
+            if (Date.now() >= completionDeadline)
+              throw new Error('question flow did not reach completion')
             await new Promise((resolve) => setTimeout(resolve, 500))
           }
 
@@ -148,7 +162,10 @@ describe('workbench AI question e2e', () => {
             workbenchSelectors.assistantProcessPrefix
           )
           for (const activity of await processLocators.all()) {
-            await activity.locator('summary').click().catch(() => undefined)
+            await activity
+              .locator('summary')
+              .click()
+              .catch(() => undefined)
           }
           const processText = (await processLocators.allTextContents()).join('\n')
           const events = (await collectWorkbenchAiRunEvents(runtime)).filter(
@@ -163,6 +180,9 @@ describe('workbench AI question e2e', () => {
           return {
             resolved,
             questionCount: questions.length,
+            initialCardText,
+            guidePlaceholder,
+            stopLabel,
             processText,
             events,
             questionIds: questions.map((question) => question.id)
@@ -171,6 +191,14 @@ describe('workbench AI question e2e', () => {
         assert: async (result) => {
           if (result.questionCount < 1 || result.questionCount > 3) {
             throw new Error(`expected one to three questions, received ${result.questionCount}`)
+          }
+          if (
+            !result.initialCardText.includes(`问题 1 / ${result.questionCount}`) ||
+            !result.guidePlaceholder.startsWith('告诉') ||
+            !result.guidePlaceholder.endsWith('该怎么做') ||
+            !result.stopLabel.includes('停止本次运行')
+          ) {
+            throw new Error('question card did not align with the approval card controls')
           }
           const resolvedEvent = result.resolved
           if (resolvedEvent.type !== 'human_interaction_resolved') {
@@ -182,7 +210,10 @@ describe('workbench AI question e2e', () => {
           }
           const questionIds = new Set(result.questionIds)
           const answerIds = new Set(answers.map((answer) => answer.id))
-          if (questionIds.size !== answerIds.size || [...questionIds].some((id) => !answerIds.has(id))) {
+          if (
+            questionIds.size !== answerIds.size ||
+            [...questionIds].some((id) => !answerIds.has(id))
+          ) {
             throw new Error('the submitted result did not preserve every question id')
           }
           if (!result.processText.includes('使用深绿色和白色，整体保持克制')) {

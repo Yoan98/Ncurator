@@ -904,7 +904,7 @@ brain 在进入本路径前**不得**再 `appendMessageLog(assistant)`，否则�
 | `internal_error` | 运行遇到内部错误 | **必留 detail** | 主动断言（如 compaction bookmark `undefined`） |
 | `unexpected_error` | 运行失败，请重试 | **必留**异常原文 | 未知兜底 |
 
-落库：`ai_run.error` = 短标题；`ai_run.failure_raw_message` = 原文；UI：气泡「失败：{title}」+「查看详情」展开 `rawMessage`（及 HTTP / providerCode）。
+落库：真正失败时 `ai_run.error` = 短标题，`ai_run.failure_raw_message` = 原文；UI：气泡「失败：{title}」+「查看详情」展开 `rawMessage`（及 HTTP / providerCode）。`user_cancelled` 只保留 `cancelled` 状态和 `failure_code`，不写 `error`、不合成 `final_answer`，UI 不生成失败气泡或「已取消」正文；已有 answer 片段与 `ai_file_change` 保留。
 
 `run_failed` 后：**零自动重试**。Resume（第 6 节）：新建 run；log append `user`；不自动重试 failed run。
 

@@ -1013,11 +1013,12 @@ export const reduceAssistantProcessGroups = (
     })
   }
 
-  if (
-    event.type === 'run_failed' ||
-    event.type === 'run_cancelled'
-  ) {
+  if (event.type === 'run_failed') {
     return completeAssistantProcessGroups(current, 'failed')
+  }
+
+  if (event.type === 'run_cancelled') {
+    return completeAssistantProcessGroups(current)
   }
 
   return current

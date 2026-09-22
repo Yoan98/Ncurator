@@ -7,7 +7,7 @@ export const resolvePartnerDisplayName = (partnerName?: string | null): string =
 export const buildComposerPlaceholder = (partnerName?: string | null): string =>
   `输入你想让${resolvePartnerDisplayName(partnerName)}做的事情或者@文件`
 
-export const buildApprovalGuidePlaceholder = (partnerName?: string | null): string =>
+export const buildPartnerGuidePlaceholder = (partnerName?: string | null): string =>
   `告诉${resolvePartnerDisplayName(partnerName)}该怎么做`
 
 export const COMPOSER_REFERENCE_KINDS: ReferenceKind[] = ['directory', 'file', 'web']
