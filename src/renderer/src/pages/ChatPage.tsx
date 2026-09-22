@@ -4888,7 +4888,7 @@ const ChatPage: React.FC = () => {
                           ) : pendingApprovalBatch ? (
                             pendingApprovalBatch && currentApprovalItem ? (
                               <WorkbenchInteractionCard
-                                title="需要确认此操作"
+                                title={currentApprovalItem.commandExplanation}
                                 itemLabel="审批"
                                 currentIndex={approvalCurrentIndex}
                                 total={pendingApprovalBatch.items.length}
@@ -4926,9 +4926,6 @@ const ChatPage: React.FC = () => {
                                   />
                                 }
                               >
-                                <p className="mx-5 mt-3 text-[13px] leading-6 text-[#787774]">
-                                  {currentApprovalItem.commandExplanation}
-                                </p>
                                 <code className="mx-5 mt-3 block max-h-[min(34vh,320px)] overflow-auto whitespace-pre-wrap break-words rounded-[6px] border border-[#EEEEEC] bg-[#F4F4F2] px-3.5 py-3 font-mono text-[13px] leading-6 text-[#2F3437] [overflow-wrap:anywhere]">
                                   {currentApprovalItem.command}
                                 </code>

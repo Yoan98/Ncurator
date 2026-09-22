@@ -41,8 +41,13 @@ export const WorkbenchInteractionCard: React.FC<WorkbenchInteractionCardProps> =
     className="nc-timeline-layout-anchor min-w-0 overflow-hidden rounded-[12px] border border-[#E0DFDC] bg-white shadow-[0_8px_24px_rgba(15,15,15,0.08)]"
     data-testid={cardTestId}
   >
-    <div className="flex items-center justify-between gap-3 px-5 pt-4">
-      <div className="min-w-0 truncate text-[15px] font-semibold text-[#37352F]">{title}</div>
+    <div className="flex items-start justify-between gap-3 px-5 pt-4">
+      <div
+        className="min-w-0 flex-1 break-words text-[15px] font-semibold leading-6 text-[#37352F]"
+        data-testid={`${cardTestId}-title`}
+      >
+        {title}
+      </div>
       <div className="flex shrink-0 items-center gap-1">
         <div
           className="mr-1 whitespace-nowrap text-xs text-[#9B9A97]"

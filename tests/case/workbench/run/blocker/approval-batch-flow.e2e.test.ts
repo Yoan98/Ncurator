@@ -53,8 +53,11 @@ const readApprovalWaitingSnapshot = async (
   processText: string
   hasBlockerNotice: boolean
   antMessageText: string
+  titleText: string
+  positionText: string
 }> => {
-  await getApprovalCard(page).waitFor({ state: 'visible', timeout: 30_000 })
+  const card = getApprovalCard(page)
+  await card.waitFor({ state: 'visible', timeout: 30_000 })
   const processRoot = await waitForLatestAssistantProcess(page)
   const waiting = page.getByTestId(workbenchSelectors.assistantApprovalWaiting)
   const waitingVisible = await waiting.isVisible().catch(() => false)
@@ -65,7 +68,13 @@ const readApprovalWaitingSnapshot = async (
     waitingText,
     processText,
     hasBlockerNotice: processText.includes('等待批量审核'),
-    antMessageText: await getAntMessageText(page)
+    antMessageText: await getAntMessageText(page),
+    titleText: (
+      (await card.getByTestId(`${chatSelectors.approvalBatchCard}-title`).textContent()) || ''
+    ).trim(),
+    positionText: (
+      (await card.getByTestId(`${chatSelectors.approvalBatchCard}-position`).textContent()) || ''
+    ).trim()
   }
 }
 
@@ -164,6 +173,8 @@ describe('workbench run e2e', () => {
             throw new Error('approval approved batch was not required')
           }
           const approveWaiting = await readApprovalWaitingSnapshot(page)
+          const approveExpectedTitle = approvedApproval.items[0]?.commandExplanation || ''
+          const approveExpectedPosition = `审批 1 / ${approvedApproval.items.length}`
           await decideWorkbenchApprovalBatch(runtime, page, {
             event: approvedApproval,
             action: 'approve'
@@ -207,6 +218,8 @@ describe('workbench run e2e', () => {
             throw new Error('approval denied batch was not required')
           }
           const deniedWaiting = await readApprovalWaitingSnapshot(page)
+          const deniedExpectedTitle = firstDeniedApproval.items[0]?.commandExplanation || ''
+          const deniedExpectedPosition = `审批 1 / ${firstDeniedApproval.items.length}`
           const rejectedBatchIds = new Set([firstDeniedApproval.batchId])
           await decideWorkbenchApprovalBatch(runtime, page, {
             event: firstDeniedApproval,
@@ -273,7 +286,11 @@ describe('workbench run e2e', () => {
             fullAccessApprovalCardVisible,
             composerPermissionAfterFullAccessSend,
             approveWaiting,
+            approveExpectedTitle,
+            approveExpectedPosition,
             deniedWaiting,
+            deniedExpectedTitle,
+            deniedExpectedPosition,
             antMessageAfterApprove,
             approvedReviewedItemCount,
             deniedReviewedItemCount,
@@ -302,10 +319,14 @@ describe('workbench run e2e', () => {
           )
           await runtime.assertThat(
             result.approveWaiting.waitingVisible &&
+              result.approveWaiting.titleText === result.approveExpectedTitle &&
+              result.approveWaiting.positionText === result.approveExpectedPosition &&
               result.approveWaiting.waitingText.includes('等待用户审核中') &&
               !result.approveWaiting.hasBlockerNotice &&
               !result.approveWaiting.antMessageText.includes('需要审核') &&
               result.deniedWaiting.waitingVisible &&
+              result.deniedWaiting.titleText === result.deniedExpectedTitle &&
+              result.deniedWaiting.positionText === result.deniedExpectedPosition &&
               result.deniedWaiting.waitingText.includes('等待用户审核中') &&
               !result.deniedWaiting.hasBlockerNotice &&
               !result.deniedWaiting.antMessageText.includes('需要审核') &&

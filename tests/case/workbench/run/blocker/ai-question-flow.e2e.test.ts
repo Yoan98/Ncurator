@@ -82,6 +82,12 @@ describe('workbench AI question e2e', () => {
             throw new Error('expected every question to contain two to four options')
           }
           const initialCardText = ((await card.textContent()) || '').trim()
+          const titleText = (
+            (await card
+              .getByTestId(`${workbenchSelectors.humanQuestionCard}-title`)
+              .textContent()) || ''
+          ).trim()
+          const selectionTypeTagCount = await card.getByText(/^(单选|可多选)$/).count()
           const position = card.getByTestId(`${workbenchSelectors.humanQuestionCard}-position`)
           const positionText = ((await position.textContent()) || '').trim()
           const positionBox = await position.boundingBox()
@@ -191,7 +197,10 @@ describe('workbench AI question e2e', () => {
           return {
             resolved,
             questionCount: questions.length,
+            firstQuestionText: questions[0]?.question || '',
             initialCardText,
+            titleText,
+            selectionTypeTagCount,
             positionText,
             positionBox,
             previousBox,
@@ -208,6 +217,8 @@ describe('workbench AI question e2e', () => {
           }
           if (
             !result.initialCardText.includes(`问题 1 / ${result.questionCount}`) ||
+            result.titleText !== result.firstQuestionText ||
+            result.selectionTypeTagCount !== 0 ||
             result.positionText !== `问题 1 / ${result.questionCount}` ||
             !result.positionBox ||
             !result.previousBox ||

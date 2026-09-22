@@ -101,7 +101,7 @@ const HumanInteractionCard: React.FC<Props> = ({
   }
   return (
     <WorkbenchInteractionCard
-      title="需要补充一点信息"
+      title={question.question}
       itemLabel="问题"
       currentIndex={index}
       total={questions.length}
@@ -129,14 +129,6 @@ const HumanInteractionCard: React.FC<Props> = ({
         />
       }
     >
-      <div className="flex items-start gap-2 px-5 pt-3">
-        <div className="min-w-0 flex-1 text-[14px] leading-6 text-[#37352F]">
-          {question.question}
-        </div>
-        <span className="mt-0.5 shrink-0 rounded-[4px] border border-[#E0DFDC] bg-[#F8F8F7] px-1.5 py-0.5 text-[11px] leading-4 text-[#787774]">
-          {question.multiSelect ? '可多选' : '单选'}
-        </span>
-      </div>
       <div className="mx-2 mt-3 space-y-1">
         {question.options.map((option, optionIndex) => {
           const active = currentSelectedOptionIds.includes(option.id)
