@@ -31,22 +31,32 @@ export const hasEffectiveImageContextInMessageLog = (
   })
 }
 
-/**
- * 免费且无 vision 的模型：有效上下文含图时 Composer 应拦截发送。
- * 目录尚未加载到该条目时不拦截，避免误伤。
- */
-export const shouldBlockFreeModelWithoutVision = (input: {
+/** 当前选中模型是否为免费目录中的无 vision 条目。目录未命中时视为否，避免误拦。 */
+export const isFreeModelWithoutVision = (input: {
   mainModel: WorkbenchSelectedModel | null | undefined
   freeModels: readonly FreeModelPublicEntry[]
-  messageLogRecords?: readonly Pick<ChatMessageLogRecord, 'seq' | 'entry'>[]
-  /** 已按压缩下界算过时直接传入，避免把整段 log 再送到 Renderer。 */
-  hasEffectiveImageContext?: boolean
 }): boolean => {
   const mainModel = input.mainModel
   if (!mainModel?.configId || !isFreeModelConfigId(mainModel.configId)) return false
   const entry = input.freeModels.find((item) => item.configId === mainModel.configId)
-  if (!entry || entry.capabilities.includes('vision')) return false
-  if (typeof input.hasEffectiveImageContext === 'boolean') return input.hasEffectiveImageContext
+  if (!entry) return false
+  return !entry.capabilities.includes('vision')
+}
+
+/**
+ * 免费且无 vision 的模型：有效上下文含图时 Composer 应拦截发送。
+ * 可传入已算好的 `hasEffectiveImageContext`，或直接传入 message log。
+ */
+export const shouldBlockFreeModelWithoutVision = (input: {
+  mainModel: WorkbenchSelectedModel | null | undefined
+  freeModels: readonly FreeModelPublicEntry[]
+  hasEffectiveImageContext?: boolean
+  messageLogRecords?: readonly Pick<ChatMessageLogRecord, 'seq' | 'entry'>[]
+}): boolean => {
+  if (!isFreeModelWithoutVision(input)) return false
+  if (typeof input.hasEffectiveImageContext === 'boolean') {
+    return input.hasEffectiveImageContext
+  }
   return hasEffectiveImageContextInMessageLog(input.messageLogRecords || [])
 }
 

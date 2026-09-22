@@ -54,6 +54,11 @@ import {
   pickFallbackWorkbenchModel,
   resolveSelectedWorkbenchModel
 } from '../../../shared/workbenchModelSelection'
+import type { FreeModelPublicEntry } from '../../../shared/freeModels'
+import {
+  FREE_MODEL_NO_VISION_WITH_IMAGE_HISTORY_REASON,
+  shouldBlockFreeModelWithoutVision
+} from '../../../shared/messageLogVisionContext'
 import type { LlmPresetProvider } from '../../../shared/llmPresets'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
@@ -832,6 +837,7 @@ const ChatPage: React.FC = () => {
   const [assetBucketId, setAssetBucketId] = useState<string | null>(null)
   const [workspaces, setWorkspaces] = useState<WorkspaceSource[]>([])
   const [modelConfigs, setModelConfigs] = useState<LLMConfig[]>([])
+  const [freeModels, setFreeModels] = useState<FreeModelPublicEntry[]>([])
   const [presetProviders, setPresetProviders] = useState<LlmPresetProvider[]>([])
   const [modelCatalogLoaded, setModelCatalogLoaded] = useState(false)
   const [modelListsByConfigId, setModelListsByConfigId] = useState<
@@ -1362,8 +1368,30 @@ const ChatPage: React.FC = () => {
     if (!currentPartnerId) return '请先选择伙伴'
     if (switchingPartnerId) return '当前伙伴未就绪'
     if (!modelSelection.mainModel) return '请先选择主模型'
+    const hasEffectiveImageContext =
+      contextUsage?.partnerId === currentPartnerId && contextUsage.hasEffectiveImageContext
+    if (
+      shouldBlockFreeModelWithoutVision({
+        mainModel: modelSelection.mainModel,
+        freeModels,
+        hasEffectiveImageContext
+      })
+    ) {
+      return FREE_MODEL_NO_VISION_WITH_IMAGE_HISTORY_REASON
+    }
     return null
-  }, [currentPartnerId, input, modelSelection.mainModel, switchingPartnerId])
+  }, [
+    contextUsage,
+    currentPartnerId,
+    freeModels,
+    input,
+    modelSelection.mainModel,
+    switchingPartnerId
+  ])
+
+  const composerCanSubmit = Boolean(
+    input.trim() && currentPartnerId && modelSelection.mainModel && !composerSubmitDisabledReason
+  )
 
   const approvalSubmitDisabled = useMemo(() => {
     if (!currentApprovalItem || approvalSubmitting) return true
@@ -2115,6 +2143,7 @@ const ChatPage: React.FC = () => {
       ])
       const freeModels = freeSnapshot.models
       const nextPresetProviders = presetSnapshot.providers
+      setFreeModels(freeModels)
       setPresetProviders(nextPresetProviders)
       setModelConfigs(list)
       if (list.length === 0) {
@@ -3550,6 +3579,10 @@ const ChatPage: React.FC = () => {
       message.warning('请先在输入框右下角选择主模型')
       return
     }
+    if (composerSubmitDisabledReason) {
+      message.warning(composerSubmitDisabledReason)
+      return
+    }
 
     const submitPartnerId = currentPartnerId
     const userQuery = input.trim()
@@ -3743,13 +3776,30 @@ const ChatPage: React.FC = () => {
           setCurrentMessages([])
           setHasMoreMessagesBefore(false)
           setActiveTimelineDayStart(null)
+          setAssistantTurns({})
+          if (currentPartnerId) {
+            delete liveAssistantTurnsByPartnerRef.current[currentPartnerId]
+          }
+          setContextUsage((previous) =>
+            previous && previous.partnerId === currentPartnerId
+              ? { ...previous, hasEffectiveImageContext: false, usedContextTokens: 0, ratio: 0 }
+              : previous
+          )
           void loadPartners()
+          void refreshContextUsage(currentPartnerId)
         } catch (error) {
           emitErrorMessage(error instanceof Error ? error.message : '清空消息记录失败')
         }
       }
     })
-  }, [currentPartner?.name, currentPartnerId, emitErrorMessage, loadPartners, modal])
+  }, [
+    currentPartner?.name,
+    currentPartnerId,
+    emitErrorMessage,
+    loadPartners,
+    modal,
+    refreshContextUsage
+  ])
 
   const handleScheduledTaskBusyCancelAction = useCallback((): void => {
     if (!busyCancelTask) return
@@ -4985,15 +5035,14 @@ const ChatPage: React.FC = () => {
                                 modelSelection={modelSelection}
                                 onModelSelectionChange={handleModelSelectionChange}
                                 onRefreshModelLists={refreshModelLists}
+                                onFreeModelsChange={setFreeModels}
                                 onDraftChange={handleComposerDraftChange}
                                 onSubmit={() => void handleSend()}
                                 onCancel={() => void handleCancel()}
                                 onPreviewImage={setPreviewImage}
                                 loading={loading}
                                 cancelling={cancellingRun}
-                                canSubmit={Boolean(
-                                  input.trim() && currentPartnerId && modelSelection.mainModel
-                                )}
+                                canSubmit={composerCanSubmit}
                                 submitDisabledReason={composerSubmitDisabledReason}
                                 showCancel={Boolean(aiRunId)}
                                 draftValue={composerDraftValue}

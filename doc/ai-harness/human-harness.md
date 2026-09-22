@@ -842,7 +842,7 @@ brain 返回 update_plan
 
 - 一次 1–10 路径；不调用第二模型。
 - 成功：`tool` + `images[]` ref；runtime append 多模态 HumanMessage（第 3.5 节）。
-- 不预判主模型是否支持 vision；由 provider 处理。
+- 不预判主模型是否支持 vision；由 provider 处理
 - 缓存与 evict 规则见第 3.5 节。
 
 ---

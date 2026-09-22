@@ -17,6 +17,7 @@ import type {
 } from '../../../../shared/types'
 import { REFERENCE_ITEM_PAGE_SIZE } from '../../../../shared/types'
 import type { ChatMessageLogPlanItem } from '../../../../shared/types'
+import type { FreeModelPublicEntry } from '../../../../shared/freeModels'
 import { workbenchSelectors } from '../../testing/selectors'
 import { normalizeUserFacingError } from '../../utils/userFacingError'
 import type {
@@ -63,6 +64,7 @@ type WorkbenchComposerProps = {
   modelSelection: WorkbenchModelSelection
   onModelSelectionChange: (selection: WorkbenchModelSelection) => void
   onRefreshModelLists?: () => void | Promise<void>
+  onFreeModelsChange?: (models: FreeModelPublicEntry[]) => void
   onDraftChange: (draft: ComposerDraftValue) => void
   onSubmit: () => void
   onCancel: () => void
@@ -98,6 +100,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   modelSelection,
   onModelSelectionChange,
   onRefreshModelLists,
+  onFreeModelsChange,
   onDraftChange,
   onSubmit,
   onCancel,
@@ -766,7 +769,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
-      onSubmit()
+      if (!showCancel && !loading && canSubmit) onSubmit()
       return
     }
 
@@ -1137,6 +1140,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               onChange={onModelSelectionChange}
               onAfterChange={focusEditorAfterControlChange}
               onRefreshModelLists={onRefreshModelLists}
+              onFreeModelsChange={onFreeModelsChange}
               noDrag
               hideTriggerIcon
               className="workbench-composer-model-select"

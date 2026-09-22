@@ -10,7 +10,6 @@ import {
   setupWorkbenchWithTempWorkspace,
   sendWorkbenchMessage,
   waitForWorkbenchAiEvent,
-  waitForWorkbenchAiRunCompletion,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
 
@@ -68,33 +67,72 @@ describe('workbench AI question e2e', () => {
           if (questions.length < 1 || questions.length > 3) {
             throw new Error(`expected one to three questions, received ${questions.length}`)
           }
-          await page.reload()
-          await card.waitFor({ state: 'visible', timeout: 30_000 })
-          for (const [index, question] of questions.entries()) {
-            if (index === 0) {
-              await card.getByTestId(
-                `workbench-human-question-option-${question.id}-custom`
-              ).click()
-              await card
-                .getByTestId(`workbench-human-question-custom-input-${question.id}`)
-                .fill('使用深绿色和白色，整体保持克制')
-            } else {
-              const firstOption = question.options[0]
-              if (!firstOption) throw new Error(`question ${question.id} options are empty`)
-              await card.getByTestId(
-                `workbench-human-question-option-${question.id}-${firstOption.id}`
-              ).click()
+          const answerQuestionCard = async (
+            currentQuestions: typeof questions
+          ): Promise<void> => {
+            await card.waitFor({ state: 'visible', timeout: 30_000 })
+            for (const [index, question] of currentQuestions.entries()) {
+              if (index === 0) {
+                await card.getByTestId(
+                  `workbench-human-question-option-${question.id}-custom`
+                ).click()
+                await card
+                  .getByTestId(`workbench-human-question-custom-input-${question.id}`)
+                  .fill('使用深绿色和白色，整体保持克制')
+              } else {
+                const firstOption = question.options[0]
+                if (!firstOption) throw new Error(`question ${question.id} options are empty`)
+                await card.getByTestId(
+                  `workbench-human-question-option-${question.id}-${firstOption.id}`
+                ).click()
+              }
+              if (index < currentQuestions.length - 1) {
+                await card.getByTestId(workbenchSelectors.humanQuestionNext).click()
+              }
             }
-            if (index < questions.length - 1) {
-              await card.getByTestId(workbenchSelectors.humanQuestionNext).click()
-            }
+            await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
           }
-          await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
 
-          const completion = await waitForWorkbenchAiRunCompletion(runtime, Date.now(), undefined, undefined, {
-            page,
-            blockerPolicy: 'fail'
-          })
+          const beforeAnswerEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
+            (event) => event.runId === required.runId
+          )
+          const mutatingTools = new Set([
+            'text_file_edit',
+            'terminal_run',
+            'docx_content_edit',
+            'docx_format',
+            'docx_table_edit',
+            'ppt_edit',
+            'excel_edit'
+          ])
+          if (beforeAnswerEvents.some((event) => event.type === 'tool_call_started' && mutatingTools.has(event.toolName))) {
+            throw new Error('a mutating tool ran before the first question was answered')
+          }
+
+          await page.reload()
+          await answerQuestionCard(questions)
+
+          const seenInteractionIds = new Set([required.interactionId])
+          const completionDeadline = Date.now() + 180_000
+          for (;;) {
+            const events = (await collectWorkbenchAiRunEvents(runtime)).filter(
+              (event) => event.runId === required.runId
+            )
+            const nextRequired = events.find(
+              (event) => isQuestionRequired(event) && !seenInteractionIds.has(event.interactionId)
+            )
+            if (nextRequired) {
+              seenInteractionIds.add(nextRequired.interactionId)
+              await answerQuestionCard(nextRequired.interaction.questions)
+              continue
+            }
+            if (events.some((event) => event.type === 'run_completed')) break
+            const failure = events.find((event) => event.type === 'run_failed' || event.type === 'run_cancelled')
+            if (failure) throw new Error(`question flow ended with ${failure.type}`)
+            if (Date.now() >= completionDeadline) throw new Error('question flow did not reach completion')
+            await new Promise((resolve) => setTimeout(resolve, 500))
+          }
+
           const process = page.getByTestId(workbenchSelectors.assistantProcessPrefix).last()
           await process.click()
           const processText = (await process.textContent()) || ''
@@ -111,8 +149,8 @@ describe('workbench AI question e2e', () => {
             resolved,
             questionCount: questions.length,
             processText,
-            completion,
-            events
+            events,
+            questionIds: questions.map((question) => question.id)
           }
         },
         assert: async (result) => {
@@ -127,7 +165,7 @@ describe('workbench AI question e2e', () => {
           if (!Array.isArray(answers) || answers.length !== result.questionCount) {
             throw new Error('the submitted result did not contain one answer for every question')
           }
-          const questionIds = new Set(required.interaction.questions.map((question) => question.id))
+          const questionIds = new Set(result.questionIds)
           const answerIds = new Set(answers.map((answer) => answer.id))
           if (questionIds.size !== answerIds.size || [...questionIds].some((id) => !answerIds.has(id))) {
             throw new Error('the submitted result did not preserve every question id')

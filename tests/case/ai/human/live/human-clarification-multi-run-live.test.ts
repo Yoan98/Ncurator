@@ -24,13 +24,20 @@ describe('ai human clarification live backend', () => {
           const filePath = path.join(runtime.workspaceRoot, 'brief.md')
           await fs.writeFile(filePath, '# Brief\n\n主题：待定\n', 'utf8')
           const interactionIds: string[] = []
+          const interactionCountsByTask = new Map<string, number>()
           const questionResolver: QuestionResolver = async (request) => {
             interactionIds.push(request.interactionId)
+            const count = (interactionCountsByTask.get(request.taskId) || 0) + 1
+            interactionCountsByTask.set(request.taskId, count)
+            if (count > 6) {
+              throw new Error(`同一 run 的提问次数超过 6 次：${request.taskId}`)
+            }
+            const isCustomScenario = request.taskId.endsWith('-2')
             return {
               accepted: true as const,
               result: {
                 answers: request.questions.map((question, index) => {
-                  const custom = interactionIds.length === 2 && index === 0
+                  const custom = isCustomScenario && index === 0
                     ? '用深绿色和白色，整体保持克制'
                     : undefined
                   return {
@@ -43,27 +50,29 @@ describe('ai human clarification live backend', () => {
             }
           }
 
-          const run = async (userInput: string) => {
+          const run = async (runNumber: number, userInput: string) => {
             const runner = createHumanTestRunner(runtime, {
               partnerId: PARTNER_ID,
               questionResolver
             })
-            return await runner.run({ taskId: `${runtime.taskId}-${interactionIds.length + 1}`, userInput })
+            return await runner.run({ taskId: `${runtime.taskId}-${runNumber}`, userInput })
           }
 
-          const first = await run(
+          const first = await run(1,
             `请根据 brief.md 完善主题并产出一个可继续编辑的方向。当前没有说明视觉风格，请先确认会影响结果的关键选择。`
           )
-          const second = await run(
+          const second = await run(2,
             `继续完善 brief.md。若需要确认，请允许我用“其他，请填写”补充具体要求；我的补充是：用深绿色和白色，整体保持克制。`
           )
           const beforeThird = interactionIds.length
-          const third = await run(
-            `请把 brief.md 的主题明确改为“季度客户回访”，使用 Markdown，保留现有结构，不需要再向我确认。`
+          const thirdTaskId = `${runtime.taskId}-3`
+          const third = await run(3,
+            `请直接把 brief.md 的“主题：待定”替换为“主题：季度客户回访”，只做这一处明确的文本修改，保留其他内容，不需要再向我确认。`
           )
           const events = runtime.eventCollector.snapshot()
           const questions = filterAiRunEventsByType(events, 'human_interaction_required')
           const resolved = filterAiRunEventsByType(events, 'human_interaction_resolved')
+          const thirdQuestions = questions.filter((event) => event.taskId === thirdTaskId)
           const resolvedAnswerCounts = resolved.map((event) => {
             const answers = event.result.answers
             return Array.isArray(answers) ? answers.length : 0
@@ -95,6 +104,7 @@ describe('ai human clarification live backend', () => {
             resolved,
             resolvedAnswerCounts,
             answerIdsMatchQuestions,
+            thirdQuestions,
             content: await fs.readFile(filePath, 'utf8')
           }
         },
@@ -108,7 +118,7 @@ describe('ai human clarification live backend', () => {
               result.interactionIds.length === result.questions.length &&
               result.resolvedAnswerCounts.every((count) => count > 0) &&
               result.answerIdsMatchQuestions &&
-              result.beforeThird === result.interactionIds.length &&
+              result.thirdQuestions.length === 0 &&
               result.content.includes('季度客户回访'),
             {
               name: 'live-clarification-quality-and-multi-run-continuation',

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import type { FreeModelPublicEntry } from '../../../src/shared/freeModels'
+import type { FreeModelPublicEntry } from '../../../../src/shared/freeModels'
 import {
   FREE_MODEL_NO_VISION_WITH_IMAGE_HISTORY_REASON,
   hasEffectiveImageContextInMessageLog,
+  isFreeModelWithoutVision,
   resolveMessageLogHistoryFloorSeq,
   shouldBlockFreeModelWithoutVision
-} from '../../../src/shared/messageLogVisionContext'
-import type { ChatMessageLogRecord } from '../../../src/shared/types'
+} from '../../../../src/shared/messageLogVisionContext'
+import type { ChatMessageLogRecord } from '../../../../src/shared/types'
 
 const imageRef = {
   path: '/tmp/a.webp',
@@ -136,6 +137,29 @@ describe('messageLogVisionContext', () => {
         mainModel: { configId: freeTextOnly.configId, modelName: freeTextOnly.modelName },
         freeModels: [],
         messageLogRecords: records
+      })
+    ).toBe(false)
+  })
+
+  it('accepts precomputed hasEffectiveImageContext for composer gating', () => {
+    expect(
+      isFreeModelWithoutVision({
+        mainModel: { configId: freeTextOnly.configId, modelName: freeTextOnly.modelName },
+        freeModels: [freeTextOnly]
+      })
+    ).toBe(true)
+    expect(
+      shouldBlockFreeModelWithoutVision({
+        mainModel: { configId: freeTextOnly.configId, modelName: freeTextOnly.modelName },
+        freeModels: [freeTextOnly],
+        hasEffectiveImageContext: true
+      })
+    ).toBe(true)
+    expect(
+      shouldBlockFreeModelWithoutVision({
+        mainModel: { configId: freeTextOnly.configId, modelName: freeTextOnly.modelName },
+        freeModels: [freeTextOnly],
+        hasEffectiveImageContext: false
       })
     ).toBe(false)
   })

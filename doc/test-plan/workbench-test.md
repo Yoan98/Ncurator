@@ -251,7 +251,7 @@ pnpm test:update:e2e
 - What：`+`、粘贴与拖入中间聊天区添加附件时，图片只以路径和元数据进入伙伴消息记录，常规文档和非白名单扩展名也能加入，并保持图片预览、文件打开、删除、普通文本粘贴和大文件提示行为。粘贴保存到伙伴 runtime assets。
 - Why：`+` 与拖放必须把源文件路径交给 AI，粘贴仍需保存副本，测试必须守住这两条不同链路。
 - How：创建伙伴；需要文件资料时通过设置页添加文件地址；通过系统文件窗口选择图片和多种文件，覆盖拖入、删除后重新添加图片、大文件 warning，并通过真实模型发送一次带附件消息；发送后读取 `ai_run` 与 log 投影消息。
-- Oracle：文件拖入中间聊天区时显示覆盖层，放下后消失；无伙伴时不添加附件；`+` 选择的文件保留原始源路径；粘贴文件落到 `userData/partners/{id}/runtime/assets/`；图片预览和删除正常；发送后图片附件仍是路径，持久消息不含 Base64，对齐 `WB-COMPOSER-010`、`WB-COMPOSER-013-AC2`、`WB-COMPOSER-013-AC3`；运行时缓存、HTTP(S) 原地址和失效占位由 AI tool 契约覆盖，对齐 `WB-COMPOSER-013-AC4`。
+- Oracle：文件拖入中间聊天区时显示覆盖层，放下后消失；无伙伴时不添加附件；`+` 选择的文件保留原始源路径；粘贴文件落到 `userData/partners/{id}/runtime/assets/`；图片预览和删除正常；发送后图片附件仍是路径，持久消息不含 Base64，对齐 `WB-COMPOSER-010`、`WB-COMPOSER-013-AC2`、`WB-COMPOSER-013-AC3`；运行时缓存、HTTP(S) 原地址和失效占位由 AI tool 契约覆盖，对齐 `WB-COMPOSER-013-AC4`。免费且无 vision 模型在有效图片历史下的发送拦截由 unit `message-log-vision-context` 与 Composer 前置条件覆盖，对齐 `WB-COMPOSER-013-AC5`。
 
 #### `reference-mention-keyboard`
 
@@ -604,9 +604,9 @@ pnpm test:update:e2e
 #### `human-interaction-question-card`
 
 - 测试类型：`e2e / live`
-- What：模糊任务触发 AI 提问，用户完成 A/B/C/D、其他输入和多问题切换；回答前不显示写入结果，提交后 run 恢复。
+- What：模糊任务触发 AI 提问，用户完成 A/B/C/D、其他输入和多问题切换；回答前不显示写入结果，提交后 run 恢复；同一 run 若继续产生澄清问题，交互卡片可以继续处理直到完成。
 - Why：问题和答案是任务定义的一部分，必须在真实 UI 中可操作、可恢复、可追溯，不能只在 IPC 或 backend 日志中存在。
-- How：通过真实 Workbench UI 发送存在结果歧义的任务，等待 `human_interaction_required`；检查 A/B/C/D、其他输入和 pending 卡片，刷新后继续选择自定义答案并提交；展开 Activity 检查问答投影。审批展示由 `approval-batch-flow` 同时覆盖。
+- How：通过真实 Workbench UI 发送存在结果歧义的任务，等待 `human_interaction_required`；按实际返回的 1 至 3 个问题检查 A/B/C/D、其他输入和 pending 卡片，刷新后继续选择自定义答案并提交；若同一 run 再次产生 `human_interaction_required`，继续完成该 interaction；最终展开 Activity 检查问答投影。审批展示由 `approval-batch-flow` 同时覆盖。
 - Oracle：composer 上方出现统一交互卡片；刷新后 pending 问题可恢复；提交前无写入；提交后 run 恢复并完成；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。
 
 ### 5.4 `scheduled-task`

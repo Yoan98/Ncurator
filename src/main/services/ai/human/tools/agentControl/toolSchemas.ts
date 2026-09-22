@@ -18,19 +18,19 @@ export const ASK_USER_QUESTION_SCHEMA = z.object({
     .array(
       z.object({
         id: z.string().min(1).describe('问题的稳定标识'),
-        question: z.string().min(1).describe('需要确认、且答案会影响任务结果或执行方案的问题'),
+        question: z.string().min(1).describe('需要向用户询问的疑惑或歧义问题'),
         options: z
           .array(
             z.object({
               id: z.string().min(1).describe('选项的稳定标识'),
               label: z.string().min(1).describe('用户看到的选项文字'),
-              description: z.string().min(1).optional().describe('选项影响说明'),
-              recommended: z.boolean().optional().describe('是否为推荐方案')
+              description: z.string().min(1).optional().describe('该方案的影响或适用情况'),
+              recommended: z.boolean().optional().describe('是否推荐该方案')
             })
           )
           .min(1)
-          .describe('供用户选择的具体、互斥、可执行方案；方案之间应有明确差异。用户还可以选择其他并填写。'),
-        multiSelect: z.boolean().optional().describe('是否允许同时选择多个选项；未设置时为单选')
+          .describe('供用户选择的具体方案'),
+        multiSelect: z.boolean().optional().describe('是否允许同时选择多个方案')
       })
     )
     .min(1)

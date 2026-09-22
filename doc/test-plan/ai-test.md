@@ -768,8 +768,8 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend / live`
 - What：同一伙伴连续三次真实模型运行，分别覆盖模糊任务、用户自定义回答和明确任务。
 - Why：单轮 happy path 不能证明模型会在真正的意图歧义处停下来，也不能证明回答会影响后续执行或明确任务不会被无意义打断。
-- How：使用真实 LLM、真实 graph、真实文本文件和真实 question resolver；resolver 只按 `interactionId` 记录并返回答案，不匹配固定选项文字。第一轮回答预设选项，第二轮回答“其他，请填写”的自定义内容，第三轮给出明确要求。
-- Oracle：前两轮的问题必要性、清晰度、选项覆盖、选项差异和答案有效性通过 raw logs 人工评分；回答前无写操作；自定义文字进入结果并影响产物；第三轮不产生无意义提问。
+- How：使用真实 LLM、真实 graph、真实文本文件和真实 question resolver；resolver 按 `taskId` 区分三次运行，并对同一 run 内出现的每个 `interactionId` 返回完整答案，不匹配固定选项文字。第一轮回答预设选项，第二轮回答“其他，请填写”的自定义内容，第三轮给出明确的单点修改要求。
+- Oracle：每个 interaction 的答案数量和 id 集合必须与问题一致；回答前无写操作；自定义文字进入结果并影响产物；真实模型出现追加澄清时测试继续完成该轮并保留 raw logs；第三轮在明确要求下不产生无意义提问，问题必要性、清晰度、选项覆盖、选项差异和答案有效性通过 raw logs 人工评分。
 
 ##### `conversation-memory-multi-run-recall`
 

@@ -64,6 +64,7 @@ type WorkbenchModelSelectorProps = {
   onChange: (value: WorkbenchModelSelection) => void
   onAfterChange?: () => void
   onRefreshModelLists?: () => void | Promise<void>
+  onFreeModelsChange?: (models: FreeModelPublicEntry[]) => void
   disabled?: boolean
   noDrag?: boolean
   hideTriggerIcon?: boolean
@@ -192,6 +193,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
   onChange,
   onAfterChange,
   onRefreshModelLists,
+  onFreeModelsChange,
   disabled = false,
   noDrag = false,
   hideTriggerIcon = false,
@@ -246,6 +248,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       presetFetchedAt: number | null
     }): boolean => {
       setFreeModels(input.freeModels)
+      onFreeModelsChange?.(input.freeModels)
       setFreeFetchedAt(input.freeFetchedAt)
       if (input.presetProviders.length > 0) {
         setPresetProviders(input.presetProviders)
@@ -253,7 +256,7 @@ const WorkbenchModelSelector: React.FC<WorkbenchModelSelectorProps> = ({
       setPresetFetchedAt(input.presetFetchedAt)
       return input.freeModels.length > 0 || input.presetProviders.length > 0
     },
-    []
+    [onFreeModelsChange]
   )
 
   const loadCatalogFromCache = useCallback(
