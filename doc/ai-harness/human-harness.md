@@ -20,16 +20,18 @@ flowchart TD
   BR -->|有 tool_calls| DP[dispatch]
   DP -->|learn_skill| LN[learning]
   DP -->|update_plan| PN[plan]
+  DP -->|ask_user_question| HI[human_interaction]
   DP -->|其余工具| HN[hand]
   LN --> DP
   PN --> DP
+  HI --> DP
   HN --> DP
   DP -->|队列空| CB
 ```
 
 graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
 
-**循环主干**：`context_budget → brain → dispatch → (learning | plan | hand) → dispatch →（队列空）context_budget`。
+**循环主干**：`context_budget → brain → dispatch → (human_interaction | learning | plan | hand) → dispatch →（队列空）context_budget`。
 
 ### 1.2 节点职责
 
