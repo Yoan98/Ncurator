@@ -77,7 +77,8 @@ describe('ai human mock-llm scheduled task', () => {
                 )[0]
                 return buildToolDecision({
                   toolName: 'scheduled_task_action',
-                  args: { action: 'update', id: task.id, timeOfDay: '10:00', enabled: false },
+                  // Models may encode booleans as strings; the shared brain repair should fix it.
+                  args: { action: 'update', id: task.id, timeOfDay: '10:00', enabled: 'false' },
                   summary: '修改并停用晨报任务'
                 })
               },
@@ -103,8 +104,15 @@ describe('ai human mock-llm scheduled task', () => {
         })
         const tasks = await runtime.storageService.scheduledTask.listByPartner(partnerId)
         const events = runtime.eventCollector.snapshot()
+        const schemaFeedback = events.filter(
+          (event) =>
+            event.type === 'tool_call_result' &&
+            event.toolName === 'scheduled_task_action' &&
+            event.result?.ok === false &&
+            JSON.stringify(event.result.data || '').includes('arguments do not match the schema')
+        )
         service.stop()
-        return { output, tasks, events }
+        return { output, tasks, events, schemaFeedback }
       },
       assert: async (result, runtime) => {
         const started = filterAiRunEventsByType(result.events, 'tool_call_started').map(
@@ -118,7 +126,8 @@ describe('ai human mock-llm scheduled task', () => {
             started.filter((name) => name === 'scheduled_task_list').length === 2 &&
             task?.partnerId === 'scheduled-task-mock-partner' &&
             task.timeOfDay === '10:00' &&
-            task.enabled === false,
+            task.enabled === false &&
+            result.schemaFeedback.length === 0,
           {
             name: 'scheduled-task-human-flow',
             message: '模型应学习技能后在当前伙伴内创建、复读、修改并再次复读。',

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeToolCallArgs } from '../../../../src/main/services/ai/human/shared/toolArgsNormalize'
+import { z } from 'zod/v4'
+import {
+  normalizeToolCallArgs,
+  repairBooleanStringToolArgs
+} from '../../../../src/main/services/ai/human/shared/toolArgsNormalize'
 
 describe('ai unit tool args normalize', () => {
   it('expands stringified arrays and objects at any depth', () => {
@@ -89,5 +93,44 @@ describe('ai unit tool args normalize', () => {
     expect(normalized.elements).toEqual([
       { type: 'text', text: 'ok', bounds: { x: 1, y: 1, width: 2, height: 3 } }
     ])
+  })
+
+  it('repairs only schema-identified boolean strings', () => {
+    const schema = z.object({ enabled: z.boolean(), label: z.string() })
+    const args = { enabled: ' FALSE ', label: 'false' }
+    const parsed = schema.safeParse(args)
+    expect(parsed.success).toBe(false)
+    if (parsed.success) return
+
+    const repaired = repairBooleanStringToolArgs(args, parsed.error.issues)
+    expect(repaired.args).toEqual({ enabled: false, label: 'false' })
+    expect(repaired.repairs).toEqual([
+      { path: ['enabled'], kind: 'boolean_string', from: ' FALSE ', to: false }
+    ])
+    expect(schema.safeParse(repaired.args).success).toBe(true)
+  })
+
+  it('does not guess non-boolean values or unrelated fields', () => {
+    const schema = z.object({ enabled: z.boolean(), count: z.number(), label: z.string() })
+    const args = { enabled: 'yes', count: '1', label: 'true' }
+    const parsed = schema.safeParse(args)
+    expect(parsed.success).toBe(false)
+    if (parsed.success) return
+
+    const repaired = repairBooleanStringToolArgs(args, parsed.error.issues)
+    expect(repaired.repairs).toEqual([])
+    expect(repaired.args).toEqual(args)
+  })
+
+  it('repairs boolean strings at nested paths', () => {
+    const schema = z.object({ items: z.array(z.object({ enabled: z.boolean() })) })
+    const args = { items: [{ enabled: 'true' }] }
+    const parsed = schema.safeParse(args)
+    expect(parsed.success).toBe(false)
+    if (parsed.success) return
+
+    const repaired = repairBooleanStringToolArgs(args, parsed.error.issues)
+    expect(repaired.args).toEqual({ items: [{ enabled: true }] })
+    expect(schema.safeParse(repaired.args).success).toBe(true)
   })
 })

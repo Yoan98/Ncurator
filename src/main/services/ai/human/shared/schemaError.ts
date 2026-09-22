@@ -1,5 +1,6 @@
 export type ZodIssueLike = {
   code?: string
+  expected?: string
   path?: Array<string | number>
   message?: string
   errors?: ZodIssueLike[][]

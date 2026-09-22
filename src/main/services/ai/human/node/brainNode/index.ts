@@ -20,7 +20,10 @@ import { buildDispatchQueue } from '../dispatch'
 import { appendToolFeedback } from '../../shared/toolFeedback'
 import { appendLogEntriesToCache } from '../../memory/conversationLogMessages'
 import { formatZodErrorForTool, type ZodIssueLike } from '../../shared/schemaError'
-import { normalizeToolCallArgs } from '../../shared/toolArgsNormalize'
+import {
+  normalizeToolCallArgs,
+  repairBooleanStringToolArgs
+} from '../../shared/toolArgsNormalize'
 import { estimateMessagesForContext, projectMessagesForMainModel } from '../../memory/multimodal'
 import {
   emitAssistantProcessThought,
@@ -317,6 +320,22 @@ export const createBrainNode = (input: {
         if (parsed.success) {
           executableCalls.push({ ...call, args })
         } else {
+          const repaired = repairBooleanStringToolArgs(args, parsed.error?.issues ?? [])
+          if (repaired.repairs.length > 0) {
+            const reparsed = schema.safeParse(repaired.args)
+            if (reparsed.success) {
+              executableCalls.push({ ...call, args: repaired.args })
+              continue
+            }
+            schemaInvalidCalls.push({
+              id: call.id,
+              name: call.name,
+              errorMessage: formatZodErrorForTool(call.name, {
+                issues: reparsed.error?.issues ?? []
+              })
+            })
+            continue
+          }
           schemaInvalidCalls.push({
             id: call.id,
             name: call.name,

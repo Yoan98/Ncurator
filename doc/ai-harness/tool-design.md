@@ -12,7 +12,7 @@ AI 通过工具操作本地环境。工具应像「手」：模型指定**位置
 
 1. **锚点，非重建** — 读写通过稳定引用（nodeId、路径、行号等）定位；不要求模型一次生成深层结构树。
 2. **读写分离、职责单一** — 发现用 read，变更用 write；同一领域少量工具 + `operation` 区分，不为小能力膨胀工具数。
-3. **Schema 即契约** — 参数扁平、语义必填、字段带 describe；校验失败返回可修复错误，不静默改写。模型偶发把嵌套 object/array 再编码成 JSON 字符串时，brain 在 schema 校验前经统一的 `normalizeToolCallArgs` 展开（全工具单一入口），不改变业务校验语义。
+3. **Schema 即契约** — 参数扁平、语义必填、字段带 describe；校验失败返回可修复错误，不做语义猜测。模型偶发把嵌套 object/array 再编码成 JSON 字符串时，brain 在 schema 校验前经统一的 `normalizeToolCallArgs` 展开（全工具单一入口），不改变业务校验语义。
 4. **结果双通道** — 结构化结果是真相；面向模型的文本是投影，不承担 ID / 锚点解析职责。工具级成败只放在 `ToolCallResult.ok`（由返回 payload 是否含 `error` 推导）；工具 `return` 的领域 payload **不得**再带 `ok` / `success`。
 5. **原子与可预期** — 一次调用一个 operation；成功或整次失败；同类输入语义稳定。
 6. **描述声明边界，不教流程** — skill / tool 描述只说明能做什么、不能做什么；组合策略由模型自主决定。
@@ -75,6 +75,11 @@ brain 在 hand 前、schema 校验前，对**全部** tool call 统一调用：
 - 递归展开「被 JSON 字符串化的 object/array」（最多 3 层 unwrap）；
 - 普通 prose、路径、非容器标量**不改写**；
 - 开放括号不完整的 fragment 不强行 jsonrepair。
+
+brain 在 schema 校验失败后允许做一次受 schema 约束的基础类型修复：只有 issue 明确指出目标字段期望
+`boolean`，且实际值是字符串 `true` / `false`（允许首尾空格和大小写差异）时，才转换为真正的
+boolean 并重新校验。修复成功后按正常工具调用执行，不产生校验错误反馈；其他字符串、数字和语义值不做猜测，
+仍按原 schema 错误处理。修复规则集中在共享参数层，工具不单独实现类型兜底。
 
 ### 4.2 节点自有校验
 
