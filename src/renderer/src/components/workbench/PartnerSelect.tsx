@@ -53,8 +53,6 @@ const PartnerSelect: React.FC<PartnerSelectProps> = ({
       placeholder={placeholder}
       data-testid={dataTestId}
       options={options}
-      showSearch
-      optionFilterProp="label"
       notFoundContent="暂无伙伴"
       onChange={onChange}
       labelRender={({ value: selectedValue, label }) => {

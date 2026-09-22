@@ -580,6 +580,11 @@ textarea,
   overflow: visible;
 }
 
+.nc-partner-select .ant-select-selection-search-input {
+  cursor: pointer;
+  caret-color: transparent;
+}
+
 .nc-partner-select-row {
   display: flex;
   min-width: 0;
