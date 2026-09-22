@@ -18,9 +18,6 @@ type RawToolCall = {
 }
 
 export const buildDispatchQueue = (toolCalls: RawToolCall[]): HumanDispatchItem[] => {
-  if (toolCalls.some((call) => call.name.trim() === 'ask_user_question') && toolCalls.length !== 1) {
-    throw new Error('ask_user_question must be the only tool call in a model response')
-  }
   return toolCalls
     .filter((call) => call.name.trim().length > 0)
     .map((call) => ({
@@ -35,7 +32,6 @@ const dispatchGroupToNextAction = (group: HumanDispatchItem[]): HumanNextAction 
   const first = group[0]!
   switch (first.target) {
     case 'interaction':
-      if (group.length !== 1) throw new Error('ask_user_question must be called alone')
       return {
         action: 'interaction',
         toolCallId: first.toolCallId,
@@ -75,7 +71,12 @@ const dispatchGroupToNextAction = (group: HumanDispatchItem[]): HumanNextAction 
 
 export type DispatchPeek =
   | { empty: true }
-  | { empty: false; target: HumanDispatchTarget; nextAction: HumanNextAction; rest: HumanDispatchItem[] }
+  | {
+      empty: false
+      target: HumanDispatchTarget
+      nextAction: HumanNextAction
+      rest: HumanDispatchItem[]
+    }
 
 export const peekDispatchGroup = (queue: HumanDispatchItem[]): DispatchPeek => {
   if (queue.length === 0) return { empty: true }
@@ -84,6 +85,7 @@ export const peekDispatchGroup = (queue: HumanDispatchItem[]): DispatchPeek => {
   let splitIndex = 1
   while (
     target !== 'learning' &&
+    target !== 'interaction' &&
     splitIndex < queue.length &&
     queue[splitIndex]!.target === target
   ) {

@@ -515,10 +515,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-ask-user-question`
 
 - 测试类型：`backend / mock-llm`
-- What：提问工具校验 1 至 3 个问题，支持单选、多选和自定义答案，并在回答前阻止副作用工具。
+- What：提问工具校验 1 至 3 个问题，支持单选、多选和自定义答案，并在回答前阻止排在其后的副作用工具。
 - Why：AI 只有在无法自行消除、可能违背用户意图的歧义处才应停下来询问；审批权限不能替用户表达任务意图。
-- How：`ask-user-question.test.ts` 通过生产 `createAiRunContext -> human graph -> real text_file_edit`，只脚本化 brain 输出；另用真实 dispatch 验证提问与副作用工具混合时整轮拒绝，并在 `full_access` 策略下不提供 resolver。
-- Oracle：run 进入 `waiting_human`；回答前没有写操作；结构化 `{ answers: [...] }` tool result 回到下一轮 brain；同一 run 不能有两个 pending interaction；`full_access` 不会自动回答。
+- How：`ask-user-question.test.ts` 通过生产 `createAiRunContext -> human graph -> real text_file_edit`，只脚本化 brain 输出；另用真实 dispatch 验证多个提问及提问与副作用工具混合时严格按原顺序执行，并在 `full_access` 策略下不提供 resolver。
+- Oracle：run 进入 `waiting_human`；回答前排在提问后的写操作不会执行；结构化 `{ answers: [...] }` tool result 回到下一轮 brain；任一时刻只有一个 pending interaction；`full_access` 不会自动回答。
 
 ##### `hand-invalid-tool-input`
 
@@ -676,13 +676,21 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - How：同一轮依次返回无效 `update_plan` 与 `kb_list_documents`，下一轮检查消息记录。
 - Oracle：plan 获得失败 ToolMessage，KB 工具获得成功 ToolMessage，任务正常完成且没有悬空 tool_call_id。
 
-##### `human-ask-user-question-rejects-mixed-tools`
+##### `human-ask-user-question-runs-mixed-tools-in-order`
 
 - 测试类型：`backend / mock-llm`
-- What：提问与写文件工具同时返回时，整轮被拒绝。
-- Why：确认用户意图前不能让同一轮的副作用工具抢先执行。
-- How：生产 graph 收到同一轮 `ask_user_question + text_file_edit`，不提供任何替代执行路径。
-- Oracle：run 失败但没有 `human_interaction_required`，目标文件保持原内容。
+- What：提问与写文件工具同时返回时，按模型返回顺序执行。
+- Why：同一 assistant 消息的每个 `tool_call_id` 都必须得到结果，提问也不能让整轮直接失败。
+- How：生产 graph 收到同一轮 `ask_user_question + text_file_edit`，回答提问后继续消费 dispatch。
+- Oracle：先出现提问，回答后文件修改成功；两项结果齐全后才继续 brain 并正常完成。
+
+##### `human-ask-user-question-runs-multiple-calls-sequentially`
+
+- 测试类型：`backend / mock-llm`
+- What：同一模型回复可返回多个提问调用。
+- Why：单次提问最多 3 题，模型可能需要用多个调用表达更多独立问题。
+- How：同一轮连续返回两个 `ask_user_question`，resolver 依次回答。
+- Oracle：两个 interaction 使用不同 ID 并按原顺序出现；每次只处理一个；两个 ToolMessage 齐全后才继续 brain。
 
 ##### `human-ask-user-question-does-not-auto-answer`
 

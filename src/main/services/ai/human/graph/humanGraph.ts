@@ -105,7 +105,9 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         .addConditionalEdges('human_learning_node', (state) => routeToolReturn(state as HumanState))
         .addConditionalEdges('human_plan_node', (state) => routeToolReturn(state as HumanState))
         .addConditionalEdges('human_hand_node', (state) => routeToolReturn(state as HumanState))
-        .addEdge('human_interaction_node', 'human_brain_node')
+        .addConditionalEdges('human_interaction_node', (state) =>
+          routeToolReturn(state as HumanState)
+        )
         .compile()
 
       const baseInitialState = options.initialState || createInitialHumanState(taskInput)

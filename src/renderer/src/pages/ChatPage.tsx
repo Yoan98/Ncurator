@@ -4878,6 +4878,7 @@ const ChatPage: React.FC = () => {
                             </div>
                           ) : pendingQuestion ? (
                             <HumanInteractionCard
+                              key={pendingQuestion.interaction.interactionId}
                               interaction={pendingQuestion.interaction}
                               partnerName={currentPartner?.name}
                               cancelling={cancellingRun}

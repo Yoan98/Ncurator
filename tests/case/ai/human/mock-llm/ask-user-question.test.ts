@@ -49,6 +49,19 @@ const multiQuestionArgs = {
   ]
 }
 
+const followUpQuestionArgs = {
+  questions: [
+    {
+      id: 'density',
+      question: '内容密度如何安排？',
+      options: [
+        { id: 'compact', label: '精简' },
+        { id: 'detailed', label: '详细' }
+      ]
+    }
+  ]
+}
+
 const waitFor = async (predicate: () => boolean, timeoutMs = 10_000): Promise<void> => {
   const deadline = Date.now() + timeoutMs
   while (!predicate()) {
@@ -209,29 +222,36 @@ describe('ai human question backend', () => {
     })
   })
 
-  it('human-ask-user-question-rejects-mixed-tools', async () => {
+  it('human-ask-user-question-runs-mixed-tools-in-order', async () => {
     await runBackendCase({
-      caseId: 'human-ask-user-question-rejects-mixed-tools',
+      caseId: 'human-ask-user-question-runs-mixed-tools-in-order',
       harnessMode: 'mock-llm',
       domain: 'ai',
       suite: 'human',
       groups: ['mock-llm'],
-      description: '验证提问不能和副作用工具出现在同一轮。',
+      description: '验证提问与副作用工具按模型返回顺序执行。',
       fixtures: [],
       runMode: 'single',
       execute: async (runtime) => {
         const filePath = path.join(runtime.workspaceRoot, 'brief.md')
         await fs.writeFile(filePath, '主色：待定\n', 'utf8')
+        let answerQuestion: (() => void) | undefined
+        const questionPending = new Promise<void>((resolve) => {
+          answerQuestion = resolve
+        })
         const runner = createHumanTestRunner(runtime, {
-          questionResolver: async () => ({
-            accepted: true as const,
-            result: { answers: [{ questionId: 'accent', selectedOptionIds: ['blue'] }] }
-          }),
+          questionResolver: async () => {
+            await questionPending
+            return {
+              accepted: true as const,
+              result: { answers: [{ questionId: 'accent', selectedOptionIds: ['blue'] }] }
+            }
+          },
           structuredOutputScript: {
             'human.brain': [
               {
                 output: {
-                  thought: { next: '不应混合调用。' },
+                  thought: { next: '先确认，再按当前参数执行。' },
                   toolCalls: [
                     { name: 'ask_user_question', args: questionArgs },
                     {
@@ -244,30 +264,128 @@ describe('ai human question backend', () => {
                     }
                   ]
                 }
+              },
+              ({ user }) => {
+                if (!user.includes('questionId=accent')) {
+                  throw new Error('提问结果没有回到模型上下文')
+                }
+                return buildCompleteTaskDecision({
+                  summary: '已完成。',
+                  deliveryMarkdown: '已按确认内容修改。'
+                })
               }
             ]
           }
         })
-        let error = ''
-        try {
-          await runner.run({ taskId: runtime.taskId, userInput: '确认后修改 brief。' })
-        } catch (cause) {
-          error = cause instanceof Error ? cause.message : String(cause)
-        }
+        const runPromise = runner.run({
+          taskId: runtime.taskId,
+          userInput: '确认后修改 brief。'
+        })
+        await waitFor(
+          () =>
+            filterAiRunEventsByType(runtime.eventCollector.snapshot(), 'human_interaction_required')
+              .length === 1
+        )
+        runtime.assertThat((await fs.readFile(filePath, 'utf8')) === '主色：待定\n', {
+          name: 'mixed-tools-wait-for-question-before-write',
+          message: '同一轮中排在提问后的写工具不能在用户回答前执行。'
+        })
+        answerQuestion?.()
+        const output = await runPromise
         return {
-          error,
+          output,
           content: await fs.readFile(filePath, 'utf8'),
           events: runtime.eventCollector.snapshot()
         }
       },
       assert: async (result, runtime) => {
         runtime.assertThat(
-          result.error === '运行失败，请重试' &&
-            result.content === '主色：待定\n' &&
-            filterAiRunEventsByType(result.events, 'human_interaction_required').length === 0,
+          result.output.status === 'completed' &&
+            result.content === '主色：蓝色\n' &&
+            filterAiRunEventsByType(result.events, 'human_interaction_required').length === 1 &&
+            filterAiRunEventsByType(result.events, 'tool_call_result').some(
+              (event) => event.toolName === 'text_file_edit'
+            ),
           {
-            name: 'question-cannot-mix-with-side-effects',
-            message: '提问与写工具混合时应拒绝整轮，且不能产生写入。',
+            name: 'question-and-side-effect-run-in-order',
+            message: '提问回答后应继续执行同一轮剩余写工具，并正常完成。',
+            data: result
+          }
+        )
+      }
+    })
+  })
+
+  it('human-ask-user-question-runs-multiple-calls-sequentially', async () => {
+    await runBackendCase({
+      caseId: 'human-ask-user-question-runs-multiple-calls-sequentially',
+      harnessMode: 'mock-llm',
+      domain: 'ai',
+      suite: 'human',
+      groups: ['mock-llm'],
+      description: '验证同一模型回复中的多个提问逐张展示，全部回答后才继续模型。',
+      fixtures: [],
+      runMode: 'single',
+      execute: async (runtime) => {
+        const requestedQuestionIds: string[] = []
+        const runner = createHumanTestRunner(runtime, {
+          questionResolver: async (request) => {
+            const question = request.questions[0]
+            if (!question) return { accepted: false as const, error: '问题为空' }
+            requestedQuestionIds.push(question.id)
+            return {
+              accepted: true as const,
+              result: {
+                answers: [{ questionId: question.id, selectedOptionIds: [question.options[0]!.id] }]
+              }
+            }
+          },
+          structuredOutputScript: {
+            'human.brain': [
+              {
+                output: {
+                  thought: { next: '依次确认颜色和内容密度。' },
+                  toolCalls: [
+                    { name: 'ask_user_question', args: questionArgs },
+                    { name: 'ask_user_question', args: followUpQuestionArgs }
+                  ]
+                }
+              },
+              ({ user }) => {
+                if (!user.includes('questionId=accent') || !user.includes('questionId=density')) {
+                  throw new Error('两个提问结果必须齐全后才能继续模型')
+                }
+                return buildCompleteTaskDecision({
+                  summary: '已完成确认。',
+                  deliveryMarkdown: '已记录两项选择。'
+                })
+              }
+            ]
+          }
+        })
+
+        const output = await runner.run({ taskId: runtime.taskId, userInput: '请确认两个设置。' })
+        return {
+          output,
+          requestedQuestionIds,
+          events: runtime.eventCollector.snapshot(),
+          messageLog: await runner.ctx.loadMessageLog()
+        }
+      },
+      assert: async (result, runtime) => {
+        const required = filterAiRunEventsByType(result.events, 'human_interaction_required')
+        const questionResults = result.messageLog.filter(
+          (record) => record.entry.kind === 'tool' && record.entry.toolName === 'ask_user_question'
+        )
+        runtime.assertThat(
+          result.output.status === 'completed' &&
+            result.requestedQuestionIds.join(',') === 'accent,density' &&
+            required.length === 2 &&
+            required[0]?.interactionId !== required[1]?.interactionId &&
+            questionResults.length === 2,
+          {
+            name: 'multiple-question-calls-run-sequentially',
+            message: '两个提问应按原顺序逐张处理，并各自写入 tool result。',
             data: result
           }
         )

@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { ASK_USER_QUESTION_SCHEMA } from '../../../../src/main/services/ai/human/tools/agentControl/toolSchemas'
-import { buildDispatchQueue } from '../../../../src/main/services/ai/human/node/dispatch'
+import {
+  buildDispatchQueue,
+  peekDispatchGroup
+} from '../../../../src/main/services/ai/human/node/dispatch'
 import { renderAskUserQuestionModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 
 describe('ask_user_question contract', () => {
@@ -60,16 +63,45 @@ describe('ask_user_question contract', () => {
     expect(JSON.stringify(parsed)).not.toContain('header')
   })
 
-  it('must be the only tool call in a model response', () => {
-    expect(() =>
-      buildDispatchQueue([{ id: 'q', name: 'ask_user_question', args: {} }])
-    ).not.toThrow()
-    expect(() =>
+  it('keeps multiple questions and mixed tools in order while dispatching one question at a time', () => {
+    const queue = buildDispatchQueue([
+      { id: 'q1', name: 'ask_user_question', args: { questions: [] } },
+      { id: 'q2', name: 'ask_user_question', args: { questions: [] } },
+      { id: 'w', name: 'text_file_edit', args: {} }
+    ])
+
+    const first = peekDispatchGroup(queue)
+    expect(first).toMatchObject({
+      empty: false,
+      target: 'interaction',
+      nextAction: { action: 'interaction', toolCallId: 'q1' },
+      rest: [
+        { toolCallId: 'q2', target: 'interaction' },
+        { toolCallId: 'w', target: 'hand' }
+      ]
+    })
+    if (first.empty) throw new Error('expected the first interaction')
+
+    const second = peekDispatchGroup(first.rest)
+    expect(second).toMatchObject({
+      empty: false,
+      target: 'interaction',
+      nextAction: { action: 'interaction', toolCallId: 'q2' },
+      rest: [{ toolCallId: 'w', target: 'hand' }]
+    })
+
+    const handFirst = peekDispatchGroup(
       buildDispatchQueue([
-        { id: 'q', name: 'ask_user_question', args: {} },
-        { id: 'w', name: 'text_file_edit', args: {} }
+        { id: 'w', name: 'text_file_edit', args: {} },
+        { id: 'q', name: 'ask_user_question', args: { questions: [] } }
       ])
-    ).toThrow(/must be the only tool call/)
+    )
+    expect(handFirst).toMatchObject({
+      empty: false,
+      target: 'hand',
+      nextAction: { action: 'hand', calls: [{ toolCallId: 'w' }] },
+      rest: [{ toolCallId: 'q', target: 'interaction' }]
+    })
   })
 
   it('returns ids and user text without repeating question or option copy', () => {

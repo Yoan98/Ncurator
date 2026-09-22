@@ -57,10 +57,11 @@ graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
 | `toolName` | 目标节点 | 批处理 |
 |------------|----------|--------|
 | `learn_skill` | `learning` | 单次仅处理队首一条 |
+| `ask_user_question` | `human_interaction` | 单次仅处理队首一条，回答后继续消费队列 |
 | `update_plan` | `plan` | 连续同类 call 合并一批 |
 | 其余 | `hand` | 连续同类 call 合并一批 |
 
-`learning` / `plan` / `hand` 执行完后先回 `dispatch` 继续消费队列；**队列空**才 `stage → context_budget`（不是直接回 brain）。
+`learning` / `human_interaction` / `plan` / `hand` 执行完后先回 `dispatch` 继续消费队列；**队列空**才 `stage → context_budget`（不是直接回 brain）。同一 assistant 消息可包含多个提问或混合其他工具，dispatch 不合并提问、不重排调用；每个 `tool_call_id` 都获得结果后才进入下一轮 brain。
 `brain` 在 schema 校验前对全部 call 做 `normalizeToolCallArgs`；`learn_skill` / `update_plan` 的参数校验由各节点负责。
 
 ### 1.4 启动与 cache 初始化

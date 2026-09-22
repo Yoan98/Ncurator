@@ -4,7 +4,8 @@ import type { AiRunContext } from '../../../types'
 import type { HumanRuntimeCache, HumanState, ToolCallResult } from '../../types'
 import { appendLogEntriesToCache } from '../../memory/conversationLogMessages'
 import { renderAskUserQuestionModelResult } from '../../shared/modelToolResultRenderers'
-import { returnToBrain } from '../utils/stateTransitions'
+import { ASK_USER_QUESTION_SCHEMA } from '../../tools/agentControl/toolSchemas'
+import { returnToBrain, returnToDispatch } from '../utils/stateTransitions'
 import { emitToolProcessCompleted, emitToolProcessStarted } from '../../../events/processEvents'
 
 export const createHumanInteractionNode = (input: {
@@ -15,10 +16,7 @@ export const createHumanInteractionNode = (input: {
     input.ctx.checkCancelled()
     const action = state.execution.pendingRound?.nextAction
     if (!action || action.action !== 'interaction') return returnToBrain(state)
-    const questions = Array.isArray(action.args.questions) ? action.args.questions : []
-    if (questions.length < 1 || questions.length > 3) {
-      throw new Error('ask_user_question requires 1 to 3 questions')
-    }
+    const { questions } = ASK_USER_QUESTION_SCHEMA.parse(action.args)
     emitToolProcessStarted({
       sendEvent: input.ctx.sendEvent,
       runId: input.ctx.runId,
@@ -32,9 +30,16 @@ export const createHumanInteractionNode = (input: {
       taskId: state.task.taskId,
       interactionId,
       toolCallId: action.toolCallId,
-      questions: questions as unknown as UserQuestion[]
+      questions: questions satisfies UserQuestion[]
     })
     if (!response.accepted) throw new Error(response.error)
+    const responseData: JsonObject = {
+      answers: response.result.answers.map((answer) => ({
+        questionId: answer.questionId,
+        selectedOptionIds: answer.selectedOptionIds,
+        ...(answer.userText ? { userText: answer.userText } : {})
+      }))
+    }
     // The renderer may have been refreshed while the question was pending. Re-emit
     // the stable tool activity so the resumed UI can reconstruct the question row.
     emitToolProcessStarted({
@@ -56,30 +61,50 @@ export const createHumanInteractionNode = (input: {
     const result: ToolCallResult = {
       toolName: 'ask_user_question',
       ok: true,
-      data: response.result as unknown as JsonObject
+      data: responseData
     }
     const content = renderAskUserQuestionModelResult({
       toolName: 'ask_user_question',
       args: action.args,
-      data: response.result as unknown as JsonObject
+      data: responseData
     })
     appendLogEntriesToCache(input.cache, [
-      { kind: 'tool', toolCallId: action.toolCallId, toolName: 'ask_user_question', ok: true, content },
+      {
+        kind: 'tool',
+        toolCallId: action.toolCallId,
+        toolName: 'ask_user_question',
+        ok: true,
+        content
+      },
       {
         kind: 'annotation',
         eventType: 'human_interaction_resolved',
-        payload: { interactionId, kind: 'question', result: response.result as unknown as JsonObject }
+        payload: {
+          interactionId,
+          kind: 'question',
+          result: responseData
+        }
       }
     ])
     await input.ctx.appendMessageLog([
-      { kind: 'tool', toolCallId: action.toolCallId, toolName: 'ask_user_question', ok: true, content },
+      {
+        kind: 'tool',
+        toolCallId: action.toolCallId,
+        toolName: 'ask_user_question',
+        ok: true,
+        content
+      },
       {
         kind: 'annotation',
         eventType: 'human_interaction_resolved',
-        payload: { interactionId, kind: 'question', result: response.result as unknown as JsonObject }
+        payload: {
+          interactionId,
+          kind: 'question',
+          result: responseData
+        }
       }
     ])
-    return returnToBrain(state, {
+    return returnToDispatch(state, {
       execution: { pendingRound: undefined, lastToolResults: [result] }
     })
   }
