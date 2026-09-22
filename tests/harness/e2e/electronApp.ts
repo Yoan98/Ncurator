@@ -343,7 +343,14 @@ const installPageObservers = async (page: Page, sink?: ElectronSignalSink): Prom
   exposedObserverPages.add(page)
 
   await page.evaluate(() => {
-    const currentWindow = window as E2EWindow
+    const currentWindow = window as E2EWindow & {
+      __NCURATOR_E2E_OBSERVER_BOUND__?: boolean
+    }
+    // framenavigated reinstalls observers after SPA navigations, but the same
+    // document keeps prior listeners. Re-binding would double-count every IPC.
+    if (currentWindow.__NCURATOR_E2E_OBSERVER_BOUND__ && currentWindow.__NCURATOR_E2E_OBSERVER__) {
+      return
+    }
     const now = (): string => new Date().toISOString()
     const routeEntries: E2ERouteEntry[] = [{ ts: now(), route: window.location.hash || '#/' }]
     const ipcInvokeEntries: E2EIpcInvokeEntry[] = []
@@ -358,6 +365,7 @@ const installPageObservers = async (page: Page, sink?: ElectronSignalSink): Prom
       llmIoEntries,
       domEventEntries
     }
+    currentWindow.__NCURATOR_E2E_OBSERVER_BOUND__ = true
 
     window.addEventListener('hashchange', () => {
       currentWindow.__NCURATOR_E2E_OBSERVER__?.routeEntries.push({
