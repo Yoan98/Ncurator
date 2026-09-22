@@ -570,10 +570,6 @@ textarea,
   overflow: visible;
 }
 
-.nc-partner-select.ant-select-single {
-  height: 44px;
-}
-
 .nc-partner-select .ant-select-selector,
 .nc-partner-select .ant-select-selection-wrap,
 .nc-partner-select .ant-select-selection-item {
@@ -593,17 +589,7 @@ textarea,
   color: var(--notion-text);
 }
 
-.nc-partner-select-row-selected {
-  height: 42px;
-}
-
-.nc-partner-select-row-option {
-  min-height: 44px;
-}
-
 .nc-partner-select-dropdown .ant-select-item-option {
-  min-height: 52px;
-  padding: 4px 10px;
   overflow: visible;
 }
 
