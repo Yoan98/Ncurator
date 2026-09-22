@@ -28,7 +28,8 @@ export const ASK_USER_QUESTION_SCHEMA = z.object({
               recommended: z.boolean().optional().describe('是否推荐该方案')
             })
           )
-          .min(1)
+          .min(2)
+          .max(4)
           .describe('供用户选择的具体方案'),
         multiSelect: z.boolean().optional().describe('是否允许同时选择多个方案')
       })

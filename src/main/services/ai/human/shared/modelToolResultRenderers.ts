@@ -28,7 +28,7 @@ export const renderAskUserQuestionModelResult: ModelResultRenderer = ({ data }) 
   const answers = isObject(data) && Array.isArray(data.answers) ? data.answers.filter(isObject) : []
   return joinGroupedSections([
     renderGroupedHeader('The user answered the clarification questions.'),
-    'Letters mentioned in userText follow the original option order: A=first, B=second, C=third, and so on.',
+    'The original option order: A=first, B=second, C=third, and so on.',
     ...answers.map((answer) => {
       const selectedOptionIds = Array.isArray(answer.selectedOptionIds)
         ? answer.selectedOptionIds.filter((value): value is string => typeof value === 'string')

@@ -4,12 +4,39 @@ import { buildDispatchQueue } from '../../../../src/main/services/ai/human/node/
 import { renderAskUserQuestionModelResult } from '../../../../src/main/services/ai/human/shared/modelToolResultRenderers'
 
 describe('ask_user_question contract', () => {
-  it('accepts minimal questions and rejects more than three', () => {
-    const question = { id: 'goal', question: '选择目标', options: [{ id: 'a', label: '方案 A' }] }
+  it('accepts one to three questions with two to four options each', () => {
+    const question = {
+      id: 'goal',
+      question: '选择目标',
+      options: [
+        { id: 'a', label: '方案 A' },
+        { id: 'b', label: '方案 B' }
+      ]
+    }
     expect(ASK_USER_QUESTION_SCHEMA.safeParse({ questions: [question] }).success).toBe(true)
     expect(
       ASK_USER_QUESTION_SCHEMA.safeParse({ questions: [question, question, question, question] })
         .success
+    ).toBe(false)
+    expect(
+      ASK_USER_QUESTION_SCHEMA.safeParse({
+        questions: [{ ...question, options: [{ id: 'a', label: '方案 A' }] }]
+      }).success
+    ).toBe(false)
+    expect(
+      ASK_USER_QUESTION_SCHEMA.safeParse({
+        questions: [
+          {
+            ...question,
+            options: [
+              ...question.options,
+              { id: 'c', label: '方案 C' },
+              { id: 'd', label: '方案 D' },
+              { id: 'e', label: '方案 E' }
+            ]
+          }
+        ]
+      }).success
     ).toBe(false)
   })
 
@@ -53,7 +80,10 @@ describe('ask_user_question contract', () => {
           {
             id: 'delivery',
             question: '希望如何交付？',
-            options: [{ id: 'full', label: '完整方案' }]
+            options: [
+              { id: 'full', label: '完整方案' },
+              { id: 'brief', label: '简版方案' }
+            ]
           }
         ]
       },

@@ -76,7 +76,18 @@ describe('workbench AI question e2e', () => {
           if (questions.length < 1 || questions.length > 3) {
             throw new Error(`expected one to three questions, received ${questions.length}`)
           }
+          if (
+            questions.some((question) => question.options.length < 2 || question.options.length > 4)
+          ) {
+            throw new Error('expected every question to contain two to four options')
+          }
           const initialCardText = ((await card.textContent()) || '').trim()
+          const position = card.getByTestId(`${workbenchSelectors.humanQuestionCard}-position`)
+          const positionText = ((await position.textContent()) || '').trim()
+          const positionBox = await position.boundingBox()
+          const previousBox = await card
+            .getByTestId(workbenchSelectors.humanQuestionPrev)
+            .boundingBox()
           const guidePlaceholder =
             (await card
               .getByTestId(`workbench-human-question-user-text-${questions[0].id}`)
@@ -181,6 +192,9 @@ describe('workbench AI question e2e', () => {
             resolved,
             questionCount: questions.length,
             initialCardText,
+            positionText,
+            positionBox,
+            previousBox,
             guidePlaceholder,
             stopLabel,
             processText,
@@ -194,6 +208,10 @@ describe('workbench AI question e2e', () => {
           }
           if (
             !result.initialCardText.includes(`问题 1 / ${result.questionCount}`) ||
+            result.positionText !== `问题 1 / ${result.questionCount}` ||
+            !result.positionBox ||
+            !result.previousBox ||
+            result.positionBox.x + result.positionBox.width > result.previousBox.x ||
             !result.guidePlaceholder.startsWith('告诉') ||
             !result.guidePlaceholder.endsWith('该怎么做') ||
             !result.stopLabel.includes('停止本次运行')

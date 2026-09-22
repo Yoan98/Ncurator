@@ -42,13 +42,14 @@ export const WorkbenchInteractionCard: React.FC<WorkbenchInteractionCardProps> =
     data-testid={cardTestId}
   >
     <div className="flex items-center justify-between gap-3 px-5 pt-4">
-      <div className="min-w-0">
-        <div className="text-[15px] font-semibold text-[#37352F]">{title}</div>
-        <div className="text-xs text-[#9B9A97]">
+      <div className="min-w-0 truncate text-[15px] font-semibold text-[#37352F]">{title}</div>
+      <div className="flex shrink-0 items-center gap-1">
+        <div
+          className="mr-1 whitespace-nowrap text-xs text-[#9B9A97]"
+          data-testid={`${cardTestId}-position`}
+        >
           {itemLabel} {currentIndex + 1} / {total}
         </div>
-      </div>
-      <div className="flex items-center gap-1">
         <Button
           type="text"
           size="small"
