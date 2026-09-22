@@ -9,6 +9,7 @@ import {
   openScheduledTasksView,
   scheduledTaskSelectors,
   setupWorkbenchWithTempWorkspace,
+  selectVisibleWorkbenchOption,
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
 
@@ -27,6 +28,7 @@ describe('workbench scheduled-task e2e', () => {
         description: '验证 AI 创建选择伙伴后切换聊天、预填草稿、不自动发送并持久化草稿。',
         fixtures: [],
         serviceMode: 'real',
+        windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
@@ -48,12 +50,18 @@ describe('workbench scheduled-task e2e', () => {
           await openScheduledTasksView(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.aiAddButton).click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.aiPartner).click()
-          await page.getByRole('option', { name: target.name, exact: true }).click()
+          await selectVisibleWorkbenchOption(page, target.name)
           await getWorkbenchLocator(page, scheduledTaskSelectors.aiConfirm).click()
 
-          const input = getWorkbenchLocator(page, workbenchSelectors.input)
-          await input.waitFor({ state: 'visible' })
-          const draftPrefilled = (await input.textContent())?.trim() === INITIAL_DRAFT
+          const input = getWorkbenchLocator(page, workbenchSelectors.input).last()
+          await input.waitFor({ state: 'attached' })
+          const readVisibleDraft = async (): Promise<boolean> =>
+            page
+              .getByText(INITIAL_DRAFT, { exact: true })
+              .waitFor({ state: 'visible', timeout: 30_000 })
+              .then(() => true)
+              .catch(() => false)
+          const draftPrefilled = await readVisibleDraft()
           const targetOpened = await getWorkbenchLocator(
             page,
             `${workbenchSelectors.partnerItemPrefix}-${target.id}`
@@ -75,7 +83,7 @@ describe('workbench scheduled-task e2e', () => {
             `${workbenchSelectors.partnerItemPrefix}-${target.id}`
           ).click()
           await input.waitFor({ state: 'visible' })
-          const draftPersisted = (await input.textContent())?.trim() === INITIAL_DRAFT
+          const draftPersisted = await readVisibleDraft()
 
           return { draftPrefilled, targetOpened, noAutomaticSend, draftPersisted }
         },

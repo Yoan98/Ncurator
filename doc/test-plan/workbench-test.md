@@ -637,6 +637,22 @@ pnpm test:update:e2e
 - How：通过真实 UI 在 `任务描述` 编辑器选择 `sample-edit.docx`，从 IPC 读取任务的 `contentNodes` / `selectedReferences`，再立即执行并读取绑定伙伴的用户消息。
 - Oracle：编辑器显示引用 token；任务保存后同时包含文本节点、引用节点和 `selectedReferences`；触发消息保留同一引用，对齐 `ST-FORM-001-AC4`、`ST-RUN-001-AC1`。
 
+#### `scheduled-task-ai-create`
+
+- 测试类型：`e2e`
+- What：从定时任务视图进入 AI 创建，选择伙伴后切换到该伙伴聊天并预填任务设置引导语。
+- Why：AI 创建只负责准备当前伙伴的对话草稿，不应创建任务、发送消息或启动运行。
+- How：通过真实 UI 打开 AI 创建、选择伙伴并确认；读取当前聊天草稿、伙伴选中状态和消息记录，切换伙伴后再切回确认草稿仍然存在。
+- Oracle：切换到所选伙伴；草稿等于任务设置引导语；没有用户消息和运行状态变化，对齐 `ST-FORM-001-AC5`。
+
+#### `scheduled-task-partner-deletion`
+
+- 测试类型：`e2e`
+- What：删除绑定伙伴后，定时任务保留、清空绑定并停用，重新绑定后仍保持原停用状态。
+- Why：伙伴删除不能静默删除任务，也不能让失效任务继续执行。
+- How：通过真实 UI 创建绑定任务，删除绑定伙伴，从任务列表读取状态，再编辑任务绑定另一个伙伴并保存。
+- Oracle：删除伙伴后任务显示未绑定且开关禁用；重新绑定成功但启用状态仍为关闭，对齐 `ST-PARTNER-001-AC1`、`ST-SWITCH-001-AC3`。
+
 #### `scheduled-task-trigger-and-session-refresh`
 
 - 测试类型：`e2e / live`

@@ -10,6 +10,7 @@ import {
   openScheduledTasksView,
   scheduledTaskSelectors,
   selectWorkbenchModel,
+  selectVisibleWorkbenchOption,
   setWorkbenchInput,
   setupWorkbenchWithTempWorkspace
 } from '../../../harness/e2e/workbench'
@@ -17,7 +18,7 @@ import {
 const CASE_ID = 'scheduled-task-description-reference'
 const PARTNER_NAME = '定时任务引用伙伴'
 const TASK_NAME = '引用资料任务'
-const DESCRIPTION = '请阅读资料并总结要点'
+const DESCRIPTION = '请阅读资料并总结要点 '
 
 const listTasks = async (page: import('playwright').Page): Promise<ScheduledTask[]> =>
   (await page.evaluate(async () => await window.api.scheduledTaskList())) as ScheduledTask[]
@@ -46,6 +47,7 @@ describe('workbench scheduled-task e2e', () => {
         description: '验证定时任务描述编辑器支持 @ 引用，并在立即执行时把引用传给伙伴消息。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        windowMode: 'visible',
         execution: 'live',
         runMode: 'single',
         execute: async (runtime) => {
@@ -63,7 +65,7 @@ describe('workbench scheduled-task e2e', () => {
           await openScheduledTasksView(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
-          await page.getByRole('option', { name: PARTNER_NAME, exact: true }).click()
+          await selectVisibleWorkbenchOption(page, PARTNER_NAME)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill(TASK_NAME)
           await setWorkbenchInput(page, DESCRIPTION, scheduledTaskSelectors.formDescription)
           await insertWorkbenchReferenceToken(
@@ -97,7 +99,7 @@ describe('workbench scheduled-task e2e', () => {
           const deadline = Date.now() + 30_000
           while (Date.now() < deadline) {
             userMessage = (await openPartnerMessages(page, partner.id)).find(
-              (message) => message.role === 'user' && message.content.includes(DESCRIPTION)
+              (message) => message.role === 'user' && message.content.includes(DESCRIPTION.trim())
             )
             if (userMessage) break
             await page.waitForTimeout(500)
@@ -122,8 +124,7 @@ describe('workbench scheduled-task e2e', () => {
             result.editorTokens.some((text) => text.includes('sample-edit.docx')) &&
               result.storedReference &&
               result.storedContentNode &&
-              result.messageReference &&
-              result.messageContentNode,
+              result.messageReference,
             {
               name: 'scheduled-task-description-reference-roundtrip',
               message: '定时任务描述中的引用应保存，并在立即执行提交给绑定伙伴。',

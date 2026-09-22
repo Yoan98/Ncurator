@@ -68,6 +68,14 @@ describe('ai tool scheduled-task backend', () => {
           enabled: false
         })
         const stored = await runtime.storageService.scheduledTask.getById(created.id)
+        const deleted = await harnessA.invoke<{ id: string }>('scheduled_task_action', {
+          action: 'delete',
+          id: created.id
+        })
+        const listAfterDelete = await harnessA.invoke<{ tasks: unknown[] }>(
+          'scheduled_task_list',
+          {}
+        )
         const resultEvents = runtime.eventCollector
           .snapshot()
           .filter((event) => event.type === 'tool_call_result')
@@ -80,6 +88,8 @@ describe('ai tool scheduled-task backend', () => {
           crossPartnerUpdate,
           updated,
           stored,
+          deleted,
+          listAfterDelete,
           resultEvents
         }
       },
@@ -102,7 +112,9 @@ describe('ai tool scheduled-task backend', () => {
             result.crossPartnerUpdate.error === '定时任务不存在' &&
             result.updated.id === result.created.id &&
             result.stored?.timeOfDay === '10:00' &&
-            result.stored.enabled === false,
+            result.stored.enabled === false &&
+            result.deleted.id === result.created.id &&
+            result.listAfterDelete.tasks.length === 0,
           {
             name: 'scheduled-task-tool-contract',
             message: '工具应只返回当前伙伴的最小任务字段，并原子更新配置和启用状态。',

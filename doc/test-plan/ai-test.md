@@ -845,13 +845,13 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 
 #### live 类别
 
-##### `human-scheduled-task-create-update-live`
+##### `human-scheduled-task-lifecycle-live`
 
 - 测试类型：`backend / live`
-- What：真实模型根据自然语言为当前伙伴创建每日任务，读取确认后在下一轮修改时间并关闭，再次读取确认。
+- What：真实模型在同一伙伴的多个 run 中学习定时任务技能，完成任务创建、读取、修改、停用、删除并复读确认。
 - Why：需要验证真实模型能发现并学习 external skill，正确选择 action，并遵循写后再读的工具设计。
-- How：Run 1 要求创建每天 09:00 的晨报并确认；Run 2 要求改为 10:00、关闭并确认。不等待真实调度触发。
-- Oracle：Run 1 出现 `learn_skill(scheduled-tasks)`、create 和 list；创建默认开启；Run 2 出现 update 和 list，关闭任务后最终数据库只在当前伙伴下存在目标任务，时间为 `10:00` 且 `enabled=false`。
+- How：Run 1 要求创建每天 09:00 的晨报并读取确认；Run 2 要求修改为 10:00、更新描述并关闭，再次读取确认；Run 3 要求删除任务并读取确认。不等待真实调度触发。
+- Oracle：Run 1 出现 `learn_skill(scheduled-tasks)`、create 和 list，创建默认开启；Run 2 出现 update 和 list，时间、描述和停用状态落库；Run 3 出现 delete 和 list，最终当前伙伴没有定时任务。不固定工具调用顺序，只验证这些动作和最终事实。
 
 ##### `human-excel-read-weekly-review-live`
 

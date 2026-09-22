@@ -25,7 +25,7 @@ describe('scheduled task model result renderer', () => {
           ]
         }
       })
-    ).toBe('当前伙伴的定时任务：\n1. task-1｜每日晨报｜每天 09:00｜已启用')
+    ).toBe('当前伙伴的定时任务：\n1. 每日晨报｜每天 09:00｜已启用｜id=task-1\n   描述：整理事项')
     expect(
       renderScheduledTaskListModelResult({
         toolName: 'scheduled_task_list',

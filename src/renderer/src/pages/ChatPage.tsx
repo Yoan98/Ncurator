@@ -128,6 +128,7 @@ import {
   extractReadableFilesFromToolOutput,
   formatRelativeTime,
   getAttachmentTypeLabel,
+  applyQuestionInteractionResult,
   reduceAssistantProcessGroups,
   reduceAssistantProcessThoughts
 } from '../components/workbench/utils'
@@ -345,7 +346,10 @@ const reduceAssistantTurnByRunEvent = (
   let next: AssistantTurnViewModel = {
     ...turn,
     processThoughts: reduceAssistantProcessThoughts(turn.processThoughts, event),
-    processGroups: reduceAssistantProcessGroups(turn.processGroups, event)
+    processGroups: applyQuestionInteractionResult(
+      reduceAssistantProcessGroups(turn.processGroups, event),
+      event
+    )
   }
 
   if (event.type === 'tool_call_result') {
@@ -653,11 +657,23 @@ const buildAssistantTurnFromRunSnapshot = (
   const approvalReviews = projectApprovalReviews({
     records: snapshot.messageLogRecords || []
   })
+  const pendingInteraction = snapshot.pendingInteraction || snapshot.run.pendingInteraction
+  const processGroups =
+    pendingInteraction?.kind === 'question'
+      ? reduceAssistantProcessGroups(projected.processGroups, {
+          type: 'human_interaction_required',
+          runId: snapshot.run.id,
+          taskId: snapshot.run.id,
+          interaction: pendingInteraction,
+          interactionId: pendingInteraction.interactionId,
+          createdAt: snapshot.run.updatedAt || snapshot.run.createdAt
+        })
+      : projected.processGroups
   const base: AssistantTurnViewModel = {
     ...createAssistantTurn(snapshot.run.assistantMessageId),
     runId: snapshot.run.id,
     processThoughts: projected.processThoughts,
-    processGroups: projected.processGroups,
+    processGroups,
     isBrainThinking: projected.isBrainThinking,
     waitingApproval: Boolean(snapshot.run.pendingApproval || snapshot.run.pendingInteraction),
     pendingApprovalItems: snapshot.run.pendingApproval?.items || [],

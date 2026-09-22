@@ -72,7 +72,8 @@ export const renderScheduledTaskListModelResult: ModelResultRenderer = ({ data }
         ? `每周 ${weekdayLabels[weekday] || String(weekday)} ${readString(task.timeOfDay) || ''}`
         : `每天 ${readString(task.timeOfDay) || ''}`
     const state = readBoolean(task.enabled) === true ? '已启用' : '已停用'
-    return `${index + 1}. ${readString(task.id) || ''}｜${readString(task.name) || ''}｜${schedule}｜${state}`
+    const description = (readString(task.description) || '').replace(/\r?\n/gu, '\n   ')
+    return `${index + 1}. ${readString(task.name) || ''}｜${schedule}｜${state}｜id=${readString(task.id) || ''}\n   描述：${description}`
   })
   return ['当前伙伴的定时任务：', ...lines].join('\n')
 }

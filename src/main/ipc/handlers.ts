@@ -299,7 +299,7 @@ export function registerHandlers(services: {
     return Number.isInteger(value) && value > 0 ? value : undefined
   })()
   let e2eGraphRecursionLimitUsesRemaining = e2eGraphRecursionLimitOnce ? 1 : 0
-  let scheduledTaskService: ScheduledTaskService | undefined
+  const scheduledTaskServiceRef: { current?: ScheduledTaskService } = {}
   const chatRunService = new ChatRunService({
     partnerStore,
     chatMessageLogStore,
@@ -321,7 +321,7 @@ export function registerHandlers(services: {
     runResourceManager,
     browserUseService: browserEmbedService,
     webCrawlerService,
-    scheduledTaskService,
+    scheduledTaskService: () => scheduledTaskServiceRef.current,
     telemetryService,
     errorLogService,
     recordLlmIo: services.recordLlmIo,
@@ -359,7 +359,7 @@ export function registerHandlers(services: {
     })
   }
 
-  scheduledTaskService = new ScheduledTaskService({
+  scheduledTaskServiceRef.current = new ScheduledTaskService({
     taskStore: storageService.scheduledTask,
     partnerStore,
     getPartnerUiState: (partnerId) => workbenchUiStore.getPartnerState(partnerId),
@@ -367,6 +367,8 @@ export function registerHandlers(services: {
     submitTask: (payload) => chatRunService.submit(payload),
     emitSessionListRefresh: emitSessionListRefreshToAll
   })
+  const scheduledTaskService = scheduledTaskServiceRef.current
+  if (!scheduledTaskService) throw new Error('定时任务服务初始化失败')
   void scheduledTaskService.start()
 
   const emitSourceListRefresh = (sender: Electron.WebContents) => {
@@ -3195,6 +3197,7 @@ export function registerHandlers(services: {
       await storageService.scheduledTask.clearPartner(id, Date.now())
       await chatRunService.deletePartner(id)
       await browserEmbedService?.closeOwnerTabs(id)
+      emitSessionListRefreshToAll()
       return { success: true }
     } catch (e: unknown) {
       console.error('[CHAT-SESSION-DELETE] Error:', e)

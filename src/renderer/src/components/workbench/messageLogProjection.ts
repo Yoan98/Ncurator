@@ -89,16 +89,17 @@ export const projectProcessGroups = (input: {
     }
 
     if (entry.kind === 'assistant') {
-      if (!thinkingOpen) continue
-      const text = normalizeThoughtText(entry.content)
-      if (text) {
-        const thoughtCreatedAt = resolveCreatedAt(record)
-        thoughts.push({
-          id: `${input.runId}:thought:seq:${record.seq}`,
-          text,
-          createdAt: thoughtCreatedAt,
-          sourceEventType: 'assistant_process_thought'
-        })
+      if (thinkingOpen) {
+        const text = normalizeThoughtText(entry.content)
+        if (text) {
+          const thoughtCreatedAt = resolveCreatedAt(record)
+          thoughts.push({
+            id: `${input.runId}:thought:seq:${record.seq}`,
+            text,
+            createdAt: thoughtCreatedAt,
+            sourceEventType: 'assistant_process_thought'
+          })
+        }
       }
       for (const call of entry.toolCalls) {
         toolArgsById.set(call.id, call.args)

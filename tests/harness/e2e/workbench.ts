@@ -1457,6 +1457,11 @@ export const selectWorkbenchModel = async (
     const optionTexts = (await modelOptions.allTextContents())
       .map((item) => item.trim())
       .filter(Boolean)
+    const matchingOption = modelOptions.filter({ hasText: modelName }).last()
+    if (await matchingOption.count()) {
+      await matchingOption.click({ force: true })
+      return
+    }
     throw new Error(
       [
         `AI_LIVE_MODEL="${modelName}" was not found in the Workbench model menu.`,
@@ -1480,6 +1485,35 @@ export const selectWorkbenchWorkspace = async (
 export const openScheduledTasksView = async (page: Page): Promise<void> => {
   await getWorkbenchLocator(page, workbenchSelectors.scheduledTasksButton).click()
   await getWorkbenchLocator(page, scheduledTaskSelectors.view).waitFor({ state: 'visible' })
+}
+
+export const selectVisibleWorkbenchOption = async (page: Page, name: string): Promise<void> => {
+  const dropdown = page.locator('.ant-select-dropdown').last()
+  await dropdown.waitFor({ state: 'attached' })
+  const optionLabels = await dropdown
+    .locator('[role="option"]')
+    .evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute('aria-label') || element.textContent || '')
+    )
+  const selectedIndex = await dropdown.locator('[role="option"]').evaluateAll((elements) =>
+    elements.findIndex((element) => element.getAttribute('aria-selected') === 'true')
+  )
+  const optionIndex = optionLabels.findIndex((label) => label.trim() === name)
+  if (optionIndex < 0) {
+    throw new Error(`visible Workbench option not found: ${name}`)
+  }
+  const optionCount = optionLabels.length
+  const steps =
+    selectedIndex >= 0
+      ? (optionIndex - selectedIndex + optionCount) % optionCount
+      : optionIndex
+  if (selectedIndex < 0) {
+    await page.keyboard.press('Home')
+  }
+  for (let index = 0; index < steps; index += 1) {
+    await page.keyboard.press('ArrowDown')
+  }
+  await page.keyboard.press('Enter')
 }
 
 export const selectScheduledTaskWorkspace = async (
@@ -1516,8 +1550,18 @@ export const waitForWorkbenchSearchScopeEmptyThroughUi = async (page: Page): Pro
   return panelText
 }
 
-export const waitForWorkbenchMentionPanelText = async (page: Page): Promise<string> => {
-  const panel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
+const getWorkbenchMentionPanel = (page: Page, inputTestId: string): Locator =>
+  inputTestId === workbenchSelectors.input
+    ? getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
+    : getWorkbenchLocator(page, inputTestId)
+        .locator('xpath=..')
+        .getByTestId(workbenchSelectors.mentionPanel)
+
+export const waitForWorkbenchMentionPanelText = async (
+  page: Page,
+  inputTestId = workbenchSelectors.input
+): Promise<string> => {
+  const panel = getWorkbenchMentionPanel(page, inputTestId)
   await panel.waitFor({ state: 'visible', timeout: WORKBENCH_E2E_TIMEOUT_MS })
   await page.waitForFunction(
     (testId: string) => {
@@ -1554,9 +1598,24 @@ export const insertWorkbenchReferenceToken = async (
   queryText = visibleName,
   inputTestId = workbenchSelectors.input
 ): Promise<void> => {
-  await appendWorkbenchInputText(page, `@${queryText}`, inputTestId)
-  const panel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
-  await waitForWorkbenchMentionPanelText(page)
+  if (inputTestId === workbenchSelectors.input) {
+    await appendWorkbenchInputText(page, `@${queryText}`, inputTestId)
+  } else {
+    const input = getWorkbenchLocator(page, inputTestId)
+    await input.evaluate((element) => {
+      if (!(element instanceof HTMLElement)) throw new Error('workbench input is not an HTMLElement')
+      element.focus()
+      const selection = window.getSelection()
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      range.collapse(false)
+      selection?.removeAllRanges()
+      selection?.addRange(range)
+    })
+    await page.keyboard.type(`@${queryText}`)
+  }
+  const panel = getWorkbenchMentionPanel(page, inputTestId)
+  await waitForWorkbenchMentionPanelText(page, inputTestId)
   const option = panel.getByRole('button').filter({ hasText: visibleName }).first()
   try {
     await option.waitFor({ state: 'visible' })

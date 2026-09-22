@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import {
+  applyQuestionInteractionResult,
+  reduceAssistantProcessGroups
+} from '../../../../src/renderer/src/components/workbench/utils'
 import { projectProcessGroups } from '../../../../src/renderer/src/components/workbench/messageLogProjection'
-import type { ChatMessageLogRecord } from '../../../../src/shared/types'
+import type { AiRunEvent, ChatMessageLogRecord } from '../../../../src/shared/types'
 
 describe('message log question projection', () => {
   it('projects questions from the tool call and all answers from the resolved annotation', () => {
@@ -110,6 +114,99 @@ describe('message log question projection', () => {
       { id: 'accent', selected: [], custom: '蓝绿色' },
       { id: 'scope', selected: ['local'], custom: '不要引用外部网页' },
       { id: 'format', selected: ['brief'] }
+    ])
+  })
+
+  it('attaches answers to the live activity when the resolved event arrives', () => {
+    const runId = 'run-question-live'
+    const requiredEvent: AiRunEvent = {
+      type: 'human_interaction_required',
+      runId,
+      taskId: runId,
+      interactionId: 'interaction-1',
+      interaction: {
+        kind: 'question',
+        interactionId: 'interaction-1',
+        toolCallId: 'question-call',
+        questions: [{
+          id: 'style',
+          question: '选择风格',
+          options: [{ id: 'minimal', label: '极简' }]
+        }]
+      },
+      createdAt: 1
+    }
+    const groups = reduceAssistantProcessGroups([], requiredEvent)
+    const event: AiRunEvent = {
+      type: 'human_interaction_resolved',
+      runId,
+      taskId: runId,
+      interactionId: 'interaction-1',
+      kind: 'question',
+      result: { answers: [{ id: 'style', selected: [], custom: '深绿色和白色' }] },
+      resolvedAt: 3
+    }
+    const updated = applyQuestionInteractionResult(groups, event)
+    const item = updated.flatMap((group) => group.items)[0]
+    expect(item?.interaction?.answers).toEqual([
+      { id: 'style', selected: [], custom: '深绿色和白色' }
+    ])
+  })
+
+  it('keeps answers when the tool activity is re-emitted after resolution', () => {
+    const runId = 'run-question-reemit'
+    const requiredEvent: AiRunEvent = {
+      type: 'human_interaction_required',
+      runId,
+      taskId: runId,
+      interactionId: 'interaction-1',
+      interaction: {
+        kind: 'question',
+        interactionId: 'interaction-1',
+        toolCallId: 'question-call',
+        questions: [{
+          id: 'style',
+          question: '选择风格',
+          options: [{ id: 'minimal', label: '极简' }]
+        }]
+      },
+      createdAt: 1
+    }
+    let groups = reduceAssistantProcessGroups([], requiredEvent)
+    groups = applyQuestionInteractionResult(groups, {
+      type: 'human_interaction_resolved',
+      runId,
+      taskId: runId,
+      interactionId: 'interaction-1',
+      kind: 'question',
+      result: { answers: [{ id: 'style', selected: [], custom: '深绿色和白色' }] },
+      resolvedAt: 2
+    })
+
+    const display = {
+      kind: 'tool' as const,
+      toolName: 'ask_user_question',
+      input: { questions: requiredEvent.interaction.questions }
+    }
+    groups = reduceAssistantProcessGroups(groups, {
+      type: 'assistant_process_item_started',
+      runId,
+      groupId: `${runId}:tool:question-call`,
+      itemId: 'question-call',
+      display,
+      createdAt: 3
+    })
+    groups = reduceAssistantProcessGroups(groups, {
+      type: 'assistant_process_item_completed',
+      runId,
+      groupId: `${runId}:tool:question-call`,
+      itemId: 'question-call',
+      completedAt: 4
+    })
+
+    const item = groups.flatMap((group) => group.items)[0]
+    expect(item?.interaction?.answers).toEqual([
+      { id: 'style', selected: [], custom: '深绿色和白色' }
     ])
   })
 })

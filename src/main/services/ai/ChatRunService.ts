@@ -106,7 +106,9 @@ type ChatRunServiceDeps = {
   runResourceManager: AiRunResourceManager
   browserUseService?: BrowserEmbedService
   webCrawlerService?: WebCrawlerService
-  scheduledTaskService?: import('../scheduler/ScheduledTaskService').ScheduledTaskService
+  scheduledTaskService?:
+    | import('../scheduler/ScheduledTaskService').ScheduledTaskService
+    | (() => import('../scheduler/ScheduledTaskService').ScheduledTaskService | undefined)
   telemetryService?: TelemetryService
   errorLogService?: AppErrorLogService
   recordLlmIo?: (record: AiLlmIoRecord) => void
@@ -455,7 +457,7 @@ export class ChatRunService {
       taskId: pending.taskId,
       interactionId: pending.interactionId,
       kind: 'question',
-      result: payload.answers as unknown as JsonObject,
+      result: JSON.parse(JSON.stringify(payload.answers)) as JsonObject,
       resolvedAt: Date.now()
     })
     this.activeQuestions.delete(runId)
@@ -679,6 +681,11 @@ export class ChatRunService {
       inputText: run.input
     })
 
+    const scheduledTaskService =
+      typeof this.deps.scheduledTaskService === 'function'
+        ? this.deps.scheduledTaskService()
+        : this.deps.scheduledTaskService
+
     try {
       const result = await AiRunService.getInstance().run(
         {
@@ -718,7 +725,7 @@ export class ChatRunService {
           requestUserQuestion: async (request) => await this.requestUserQuestion(runId, request),
           browserUseService: this.deps.browserUseService,
           webCrawlerService: this.deps.webCrawlerService,
-          scheduledTaskService: this.deps.scheduledTaskService,
+          scheduledTaskService,
           humanRuntimeOverrides: this.deps.resolveHumanRuntimeOverrides?.(run)
         }
       )

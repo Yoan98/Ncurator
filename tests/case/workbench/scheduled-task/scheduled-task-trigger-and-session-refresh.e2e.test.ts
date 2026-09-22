@@ -8,6 +8,7 @@ import {
   openScheduledTasksView,
   scheduledTaskSelectors,
   selectWorkbenchModel,
+  selectVisibleWorkbenchOption,
   setupWorkbenchWithTempWorkspace,
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
@@ -64,6 +65,7 @@ describe('workbench scheduled-task e2e', () => {
           })
           await createPartnerThroughWorkbenchUi(page, '定时任务目标伙伴')
           await selectWorkbenchModel(page, setup.env.modelName)
+          await page.waitForTimeout(2_000)
           await createPartnerThroughWorkbenchUi(page, '当前查看伙伴')
 
           const partnersBefore = await listPartners(page)
@@ -78,7 +80,7 @@ describe('workbench scheduled-task e2e', () => {
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('触发验证任务')
           await getWorkbenchLocator(page, scheduledTaskSelectors.formDescription).fill(TASK_PROMPT)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
-          await page.getByRole('option', { name: targetPartner.name, exact: true }).click()
+          await selectVisibleWorkbenchOption(page, targetPartner.name)
           // Compute time immediately before save/enable so we do not miss the daily slot.
           const scheduledHhmm = upcomingDailyHhmm(120_000)
           await fillScheduledTaskTime(page, scheduledHhmm)

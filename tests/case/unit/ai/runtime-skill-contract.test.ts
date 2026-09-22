@@ -60,6 +60,34 @@ describe('ai unit runtime skill contract', () => {
       timeOfDay: '09:00'
     })
     expect(create.success).toBe(true)
+    expect(
+      SCHEDULED_TASK_ACTION_SPEC.inputSchema.safeParse({
+        action: 'create',
+        name: '晨报',
+        description: '整理今天的安排',
+        scheduleType: 'daily',
+        timeOfDay: '9:00'
+      }).success
+    ).toBe(false)
+    expect(
+      SCHEDULED_TASK_ACTION_SPEC.inputSchema.safeParse({
+        action: 'create',
+        name: '晨报',
+        description: '整理今天的安排',
+        scheduleType: 'weekly',
+        timeOfDay: '09:00'
+      }).success
+    ).toBe(false)
+    expect(
+      SCHEDULED_TASK_ACTION_SPEC.inputSchema.safeParse({
+        action: 'create',
+        name: '晨报',
+        description: '整理今天的安排',
+        scheduleType: 'weekly',
+        timeOfDay: '09:00',
+        weekday: 1
+      }).success
+    ).toBe(true)
     const createWithUnknownField = SCHEDULED_TASK_ACTION_SPEC.inputSchema.safeParse({
       action: 'create',
       name: '晨报',
@@ -69,6 +97,13 @@ describe('ai unit runtime skill contract', () => {
       enabled: false
     })
     expect(createWithUnknownField.success).toBe(false)
+    expect(
+      SCHEDULED_TASK_ACTION_SPEC.inputSchema.safeParse({
+        action: 'update',
+        id: 'task-1'
+      }).success
+    ).toBe(false)
+    expect(SCHEDULED_TASK_LIST_SPEC.inputSchema.safeParse({ unexpected: true }).success).toBe(false)
     expect(
       SCHEDULED_TASK_ACTION_SPEC.inputSchema.safeParse({ action: 'delete', id: 'task-1' }).success
     ).toBe(true)

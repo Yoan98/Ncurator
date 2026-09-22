@@ -574,7 +574,8 @@ export const createDisplayProcessItem = (input: {
       input.existing?.input || (input.display.kind === 'tool' ? input.display.input : undefined),
     targetLabel:
       input.existing?.targetLabel ||
-      (input.display.kind === 'tool' ? readToolFileLabel(input.display.input) : undefined)
+      (input.display.kind === 'tool' ? readToolFileLabel(input.display.input) : undefined),
+    interaction: input.existing?.interaction
   }
 }
 
@@ -611,6 +612,17 @@ const createFileRefFromObject = (
 
 export const getAssistantToolNarrative = (toolName?: string): string =>
   plainText(getToolSummaryText(getToolUiKind(normalizeToolName(String(toolName || ''))), 'running'))
+
+export const resolveQuestionInteraction = (
+  item: AssistantProcessGroupItem
+): AssistantProcessGroupItem['interaction'] | undefined => {
+  if (item.interaction) return item.interaction
+  if (item.toolName !== 'ask_user_question' || !item.input) return undefined
+  const input = item.input as {
+    questions?: NonNullable<AssistantProcessGroupItem['interaction']>['questions']
+  }
+  return Array.isArray(input.questions) ? { questions: input.questions } : undefined
+}
 
 export const buildAssistantProcessText = (event: AiRunEvent): string | null => {
   if (event.type === 'assistant_process_group_started') {
@@ -889,6 +901,37 @@ export const reduceAssistantProcessGroups = (
   current: AssistantProcessGroup[],
   event: AiRunEvent
 ): AssistantProcessGroup[] => {
+  if (event.type === 'human_interaction_required') {
+    const interaction = event.interaction
+    if (interaction.kind !== 'question') return current
+    const display: AssistantProcessDisplay = {
+      kind: 'tool',
+      toolName: 'ask_user_question',
+      input: { questions: interaction.questions }
+    }
+    const groupId = `${event.runId}:tool:${interaction.toolCallId}`
+    const next = upsertProcessItem(current, {
+      groupId,
+      itemId: interaction.toolCallId,
+      display,
+      status: 'running',
+      createdAt: event.createdAt,
+      sourceEventType: event.type
+    })
+    return next.map((group) =>
+      group.id !== groupId
+        ? group
+        : {
+            ...group,
+            items: group.items.map((item) =>
+              item.id === interaction.toolCallId
+                ? { ...item, interaction: { questions: interaction.questions } }
+                : item
+            )
+          }
+    )
+  }
+
   if (event.type === 'assistant_process_thought') {
     return withoutThinkingGroups(current)
   }
@@ -978,6 +1021,43 @@ export const reduceAssistantProcessGroups = (
   }
 
   return current
+}
+
+export const applyQuestionInteractionResult = (
+  current: AssistantProcessGroup[],
+  event: AiRunEvent
+): AssistantProcessGroup[] => {
+  if (event.type !== 'human_interaction_resolved' || event.kind !== 'question') return current
+  const rawAnswers = event.result.answers
+  if (!Array.isArray(rawAnswers)) return current
+  const answers = rawAnswers.filter((answer): answer is { id: string; selected: string[]; custom?: string } => {
+    if (!answer || typeof answer !== 'object' || Array.isArray(answer)) return false
+    const candidate = answer as { id?: unknown; selected?: unknown; custom?: unknown }
+    return typeof candidate.id === 'string' &&
+      Array.isArray(candidate.selected) &&
+      candidate.selected.every((value) => typeof value === 'string') &&
+      (candidate.custom === undefined || typeof candidate.custom === 'string')
+  })
+  if (answers.length === 0) return current
+
+  let targetFound = false
+  const next = [...current].reverse().flatMap((group) => {
+    const items = [...group.items].reverse().map((item) => {
+      if (
+        targetFound ||
+        item.toolName !== 'ask_user_question' ||
+        !resolveQuestionInteraction(item) ||
+        resolveQuestionInteraction(item)?.answers
+      ) {
+        return item
+      }
+      targetFound = true
+      const interaction = resolveQuestionInteraction(item)
+      return interaction ? { ...item, interaction: { ...interaction, answers } } : item
+    }).reverse()
+    return [{ ...group, items }]
+  }).reverse()
+  return targetFound ? next : current
 }
 
 export const shouldShowAssistantApplyTargets = (input: {

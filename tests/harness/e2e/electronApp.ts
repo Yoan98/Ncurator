@@ -133,6 +133,7 @@ export type ElectronSignalSink = {
 const OUT_MAIN_ENTRY = path.resolve(process.cwd(), 'out', 'main', 'index.js')
 const APP_ROOT = process.cwd()
 const electronApplicationByPage = new WeakMap<Page, ElectronApplication>()
+const exposedObserverPages = new WeakSet<Page>()
 
 export const pasteTextThroughElectronClipboard = async (
   page: Page,
@@ -301,7 +302,7 @@ const buildElectronLaunchEnv = (
 
 const installPageObservers = async (page: Page, sink?: ElectronSignalSink): Promise<void> => {
   await page.waitForFunction(() => Boolean(window.api))
-  if (sink?.onAiRunEvent) {
+  if (sink?.onAiRunEvent && !exposedObserverPages.has(page)) {
     await page.exposeFunction(
       '__NCURATOR_E2E_RECORD_AI_RUN_EVENT__',
       (entry: E2EAiRunEventEntry) => {
@@ -309,11 +310,12 @@ const installPageObservers = async (page: Page, sink?: ElectronSignalSink): Prom
       }
     )
   }
-  if (sink?.onLlmIo) {
+  if (sink?.onLlmIo && !exposedObserverPages.has(page)) {
     await page.exposeFunction('__NCURATOR_E2E_RECORD_LLM_IO__', (entry: E2ELlmIoEntry) => {
       sink.onLlmIo?.(entry)
     })
   }
+  exposedObserverPages.add(page)
 
   await page.evaluate(() => {
     const currentWindow = window as E2EWindow
@@ -535,6 +537,10 @@ export const launchElectronApp = async (input: {
   await page.waitForLoadState('domcontentloaded')
   assertLaunchedWorkbenchApp(page)
   await installPageObservers(page, input.signalSink)
+  page.on('framenavigated', (frame) => {
+    if (frame !== page.mainFrame()) return
+    void installPageObservers(page, input.signalSink).catch(() => undefined)
+  })
   await page.evaluate((processId) => {
     const currentWindow = window as E2EWindow
     currentWindow.__NCURATOR_E2E_ELECTRON_PROCESS_ID__ = processId || undefined

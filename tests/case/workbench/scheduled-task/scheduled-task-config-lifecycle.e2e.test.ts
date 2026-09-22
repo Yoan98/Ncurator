@@ -8,7 +8,7 @@ import {
   getWorkbenchLocator,
   openScheduledTasksView,
   scheduledTaskSelectors,
-  selectWorkbenchModel,
+  selectVisibleWorkbenchOption,
   setupWorkbenchWithTempWorkspace,
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
@@ -40,16 +40,17 @@ describe('workbench scheduled-task e2e', () => {
           '验证定时任务新增、伙伴必填、默认开启、编辑保存不改启用、立即执行确认与删除闭环。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
+        windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
-          const setup = await setupWorkbenchWithTempWorkspace(page, {
+          await setupWorkbenchWithTempWorkspace(page, {
             caseId: CASE_ID,
             workspaceName: `Workbench ${CASE_ID}`,
-            createPartner: false
+            createPartner: false,
+            configureModel: false
           })
           await createPartnerThroughWorkbenchUi(page, PARTNER_NAME)
-          await selectWorkbenchModel(page, setup.env.modelName)
           await createPartnerThroughWorkbenchUi(page, REBOUND_PARTNER_NAME)
           const partnersBefore = await listPartners(page)
           const originalPartner = partnersBefore.find((partner) => partner.name === PARTNER_NAME)
@@ -78,7 +79,7 @@ describe('workbench scheduled-task e2e', () => {
           const partnerRequiredBlocked = (await listTasks(page)).length === 0
           const formStillOpenAfterMissingPartner = await saveButton.isVisible()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
-          await page.getByRole('option', { name: PARTNER_NAME, exact: true }).click()
+          await selectVisibleWorkbenchOption(page, PARTNER_NAME)
           await saveButton.click()
           await saveButton.waitFor({ state: 'hidden' })
 
@@ -150,7 +151,7 @@ describe('workbench scheduled-task e2e', () => {
             await nameInput.waitFor({ state: 'visible' })
             await nameInput.fill(TASK_NAME_EDITED)
             await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
-            await page.getByRole('option', { name: REBOUND_PARTNER_NAME, exact: true }).click()
+            await selectVisibleWorkbenchOption(page, REBOUND_PARTNER_NAME)
             await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
             await nameInput.waitFor({ state: 'hidden' })
           }

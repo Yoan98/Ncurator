@@ -39,6 +39,7 @@ import {
   buildAssistantExecutionSummaryText,
   resolveAssistantExecutionIcon,
   resolveAssistantExecutionStatus,
+  resolveQuestionInteraction,
   shouldShowAssistantApplyTargets,
   isAssistantActivityToolGroup
 } from './utils'
@@ -381,6 +382,7 @@ const AssistantActivityItemView: React.FC<{
   onPreviewImage?: (image: ImageLightboxImage) => void
 }> = ({ item, review, onPreviewImage }) => {
   const failed = item.status === 'failed' || item.status === 'partial_failed'
+  const interaction = resolveQuestionInteraction(item)
   const toolText = getItemText(item)
   const readImagePaths =
     item.toolName === 'read_image' ? readImagePathsFromInput(item.input) : []
@@ -393,7 +395,7 @@ const AssistantActivityItemView: React.FC<{
     return (
       <div className={failed ? 'text-[#B3261E]' : undefined}>
         {renderSegments(toolText)}
-        {item.interaction ? <InteractionResultView interaction={item.interaction} /> : null}
+        {interaction ? <InteractionResultView interaction={interaction} /> : null}
         {thumbs}
       </div>
     )

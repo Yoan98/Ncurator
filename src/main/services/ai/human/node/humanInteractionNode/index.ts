@@ -5,6 +5,7 @@ import type { HumanRuntimeCache, HumanState, ToolCallResult } from '../../types'
 import { appendLogEntriesToCache } from '../../memory/conversationLogMessages'
 import { renderAskUserQuestionModelResult } from '../../shared/modelToolResultRenderers'
 import { returnToBrain } from '../utils/stateTransitions'
+import { emitToolProcessCompleted, emitToolProcessStarted } from '../../../events/processEvents'
 
 export const createHumanInteractionNode = (input: {
   ctx: AiRunContext
@@ -18,6 +19,14 @@ export const createHumanInteractionNode = (input: {
     if (questions.length < 1 || questions.length > 3) {
       throw new Error('ask_user_question requires 1 to 3 questions')
     }
+    emitToolProcessStarted({
+      sendEvent: input.ctx.sendEvent,
+      runId: input.ctx.runId,
+      toolCallId: action.toolCallId,
+      toolName: 'ask_user_question',
+      args: action.args,
+      createdAt: Date.now()
+    })
     const interactionId = randomUUID()
     const response = await input.ctx.requestUserQuestion({
       taskId: state.task.taskId,
@@ -26,6 +35,24 @@ export const createHumanInteractionNode = (input: {
       questions: questions as unknown as UserQuestion[]
     })
     if (!response.accepted) throw new Error(response.error)
+    // The renderer may have been refreshed while the question was pending. Re-emit
+    // the stable tool activity so the resumed UI can reconstruct the question row.
+    emitToolProcessStarted({
+      sendEvent: input.ctx.sendEvent,
+      runId: input.ctx.runId,
+      toolCallId: action.toolCallId,
+      toolName: 'ask_user_question',
+      args: action.args,
+      createdAt: Date.now()
+    })
+    emitToolProcessCompleted({
+      sendEvent: input.ctx.sendEvent,
+      runId: input.ctx.runId,
+      toolCallId: action.toolCallId,
+      toolName: 'ask_user_question',
+      ok: true,
+      completedAt: Date.now()
+    })
     const result: ToolCallResult = {
       toolName: 'ask_user_question',
       ok: true,

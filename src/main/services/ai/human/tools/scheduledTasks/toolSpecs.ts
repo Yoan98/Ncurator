@@ -1,4 +1,3 @@
-import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
 import {
@@ -6,54 +5,22 @@ import {
   renderScheduledTaskModelError,
   renderScheduledTaskMutationModelResult
 } from '../../shared/modelToolResultRenderers'
-
-const scheduleFields = {
-  name: z.string().min(1).describe('任务名称。'),
-  description: z.string().min(1).describe('任务描述。'),
-  scheduleType: z.enum(['daily', 'weekly']).describe('执行周期：daily 每天，weekly 每周。'),
-  timeOfDay: z.string().min(1).describe('执行时间，格式 HH:mm。')
-}
-
-const weekday = z.number().int().min(0).max(6).describe('每周执行的星期，0 为周日，6 为周六。')
-
-const scheduledTaskActionSchema = z.union([
-  z.strictObject({
-    action: z.literal('create').describe('创建任务。'),
-    ...scheduleFields,
-    scheduleType: z.literal('daily').describe('每天执行。'),
-    weekday: z.null().optional().describe('每天执行时不需要填写。')
-  }),
-  z.strictObject({
-    action: z.literal('create').describe('创建任务。'),
-    ...scheduleFields,
-    scheduleType: z.literal('weekly').describe('每周执行。'),
-    weekday
-  }),
-  z.strictObject({
-    action: z.literal('update').describe('修改任务。'),
-    id: z.string().min(1).describe('要修改的任务 ID。'),
-    name: scheduleFields.name.optional(),
-    description: scheduleFields.description.optional(),
-    scheduleType: scheduleFields.scheduleType.optional(),
-    timeOfDay: scheduleFields.timeOfDay.optional(),
-    weekday: weekday.nullable().optional().describe('每周执行的星期；改为每天时传 null。'),
-    enabled: z.boolean().optional().describe('是否启用任务；未提供时保持原状态。')
-  }),
-  z.strictObject({
-    action: z.literal('delete').describe('删除任务。'),
-    id: z.string().min(1).describe('要删除的任务 ID。')
-  })
-])
+import {
+  SCHEDULED_TASK_ACTION_SCHEMA,
+  SCHEDULED_TASK_LIST_SCHEMA,
+  type ScheduledTaskActionInput,
+  type ScheduledTaskListInput
+} from './toolSchemas'
 
 export const SCHEDULED_TASK_LIST_SPEC: HumanToolSpec<
-  Record<string, never>,
+  ScheduledTaskListInput,
   'scheduled_task_list',
   'scheduled-tasks'
 > = {
   name: 'scheduled_task_list',
   familyId: 'scheduled-tasks',
   skillIds: ['scheduled-tasks'],
-  inputSchema: z.object({}),
+  inputSchema: SCHEDULED_TASK_LIST_SCHEMA,
   promptSpec: {
     name: 'scheduled_task_list',
     description: '读取当前伙伴的定时任务。'
@@ -69,14 +36,14 @@ export const SCHEDULED_TASK_LIST_SPEC: HumanToolSpec<
 }
 
 export const SCHEDULED_TASK_ACTION_SPEC: HumanToolSpec<
-  z.infer<typeof scheduledTaskActionSchema>,
+  ScheduledTaskActionInput,
   'scheduled_task_action',
   'scheduled-tasks'
 > = {
   name: 'scheduled_task_action',
   familyId: 'scheduled-tasks',
   skillIds: ['scheduled-tasks'],
-  inputSchema: scheduledTaskActionSchema,
+  inputSchema: SCHEDULED_TASK_ACTION_SCHEMA,
   promptSpec: {
     name: 'scheduled_task_action',
     description: '创建、修改或删除当前伙伴的定时任务。'
@@ -96,4 +63,4 @@ export const SCHEDULED_TASK_TOOL_SPECS = [
   SCHEDULED_TASK_ACTION_SPEC
 ] as const
 
-export type ScheduledTaskActionInput = z.infer<typeof scheduledTaskActionSchema>
+export type { ScheduledTaskActionInput } from './toolSchemas'

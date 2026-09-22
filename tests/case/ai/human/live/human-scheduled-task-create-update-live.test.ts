@@ -8,14 +8,15 @@ import { collectStartedToolInputs, filterAiRunEventsByType } from '../testUtils'
 const PARTNER_ID = 'live-scheduled-task-partner'
 
 describe('ai human live scheduled task', () => {
-  it('human-scheduled-task-create-update-live', async () => {
+  it('human-scheduled-task-lifecycle-live', async () => {
     await runBackendCase({
-      caseId: 'human-scheduled-task-create-update-live',
+      caseId: 'human-scheduled-task-lifecycle-live',
       harnessMode: 'live',
       domain: 'ai',
       suite: 'human',
       groups: ['live', 'scheduled-task'],
-      description: '验证真实模型学习定时任务技能，在当前伙伴创建、读取、修改并复读确认。',
+      description:
+        '验证真实模型在多个 run 中学习定时任务技能并完成创建、读取、修改、删除生命周期。',
       fixtures: [],
       runMode: 'single',
       runtimeModelName: loadLiveLlmConfigFromEnv().model_name,
@@ -50,6 +51,7 @@ describe('ai human live scheduled task', () => {
         })
         const run1Events = runtime.eventCollector.snapshot()
         const created = (await runtime.storageService.scheduledTask.listByPartner(PARTNER_ID))[0]
+        const createdEnabled = created?.enabled === true
 
         const run2 = await createHumanTestRunner(runtime, {
           partnerId: PARTNER_ID,
@@ -57,44 +59,88 @@ describe('ai human live scheduled task', () => {
         }).run({
           taskId: `${runtime.taskId}-update`,
           userInput:
-            '把刚才的「每日晨报」改到每天 10 点，并关闭它。修改后请再次读取当前定时任务确认结果。'
+            '把刚才的「每日晨报」改到每天 10 点，任务描述改为「整理当天的重要事项并标记风险」，并关闭它。修改后请再次读取当前定时任务确认结果。'
         })
         const allEvents = runtime.eventCollector.snapshot()
         const run2Events = allEvents.slice(run1Events.length)
-        const finalTask = created
+        const updated = created
           ? await runtime.storageService.scheduledTask.getById(created.id)
           : null
+
+        const run3 = await createHumanTestRunner(runtime, {
+          partnerId: PARTNER_ID,
+          scheduledTaskService: service
+        }).run({
+          taskId: `${runtime.taskId}-delete`,
+          userInput: '请删除刚才的「每日晨报」定时任务，然后读取当前伙伴的定时任务确认它已经删除。'
+        })
+        const finalEvents = runtime.eventCollector.snapshot()
+        const run3Events = finalEvents.slice(allEvents.length)
+        const remainingTasks = await runtime.storageService.scheduledTask.listByPartner(PARTNER_ID)
         service.stop()
-        return { run1, run2, run1Events, run2Events, finalTask }
+        return {
+          run1,
+          run2,
+          run3,
+          run1Events,
+          run2Events,
+          run3Events,
+          createdEnabled,
+          created,
+          updated,
+          remainingTasks
+        }
       },
       assert: async (result, runtime) => {
         const run1Names = filterAiRunEventsByType(result.run1Events, 'tool_call_started').map(
           (event) => event.toolName
         )
+        const run1Actions = collectStartedToolInputs(result.run1Events, 'scheduled_task_action')
         const run2Actions = collectStartedToolInputs(result.run2Events, 'scheduled_task_action')
         const run2Names = filterAiRunEventsByType(result.run2Events, 'tool_call_started').map(
+          (event) => event.toolName
+        )
+        const run3Actions = collectStartedToolInputs(result.run3Events, 'scheduled_task_action')
+        const run3Names = filterAiRunEventsByType(result.run3Events, 'tool_call_started').map(
           (event) => event.toolName
         )
         runtime.assertThat(
           result.run1.status === 'completed' &&
             result.run2.status === 'completed' &&
+            result.run3.status === 'completed' &&
             run1Names.includes('learn_skill') &&
             run1Names.includes('scheduled_task_action') &&
             run1Names.includes('scheduled_task_list') &&
+            run1Actions.some((input) => input.action === 'create') &&
+            result.createdEnabled &&
+            run2Names.includes('scheduled_task_action') &&
             run2Names.includes('scheduled_task_list') &&
             run2Actions.some((input) => input.action === 'update' && input.enabled === false) &&
-            result.finalTask?.partnerId === PARTNER_ID &&
-            result.finalTask.timeOfDay === '10:00' &&
-            result.finalTask.enabled === false,
+            result.updated?.partnerId === PARTNER_ID &&
+            result.updated.timeOfDay === '10:00' &&
+            result.updated.enabled === false &&
+            run3Names.includes('scheduled_task_action') &&
+            run3Names.includes('scheduled_task_list') &&
+            run3Actions.some((input) => input.action === 'delete') &&
+            result.remainingTasks.length === 0,
           {
-            name: 'human-scheduled-task-create-update-live',
-            message: '真实模型应学习技能后创建并复读，再修改、停用并复读确认当前伙伴任务。',
+            name: 'human-scheduled-task-lifecycle-live',
+            message: '真实模型应跨多个 run 学习技能并完成当前伙伴任务的创建、读取、修改和删除。',
             data: {
               run1Names,
               run2Names,
+              run3Names,
+              run1Actions,
               run2Actions,
-              finalTask: result.finalTask,
-              deliveries: [result.run1.deliveryMarkdown, result.run2.deliveryMarkdown]
+              run3Actions,
+              created: result.created,
+              updated: result.updated,
+              remainingTasks: result.remainingTasks,
+              deliveries: [
+                result.run1.deliveryMarkdown,
+                result.run2.deliveryMarkdown,
+                result.run3.deliveryMarkdown
+              ]
             }
           }
         )

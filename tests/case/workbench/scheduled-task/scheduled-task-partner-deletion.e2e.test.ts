@@ -9,6 +9,7 @@ import {
   openScheduledTasksView,
   scheduledTaskSelectors,
   setupWorkbenchWithTempWorkspace,
+  selectVisibleWorkbenchOption,
   workbenchSelectors
 } from '../../../harness/e2e/workbench'
 
@@ -26,6 +27,7 @@ describe('workbench scheduled-task e2e', () => {
         description: '验证删除伙伴后任务保留、解绑停用，且可编辑重新绑定。',
         fixtures: [],
         serviceMode: 'real',
+        windowMode: 'visible',
         runMode: 'single',
         execute: async (runtime) => {
           const { page } = runtime
@@ -88,7 +90,7 @@ describe('workbench scheduled-task e2e', () => {
             `${scheduledTaskSelectors.itemEditPrefix}-${taskId}`
           ).click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
-          await page.getByRole('option', { name: reboundPartner.name, exact: true }).click()
+          await selectVisibleWorkbenchOption(page, reboundPartner.name)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
           const rebound = (
             (await page.evaluate(

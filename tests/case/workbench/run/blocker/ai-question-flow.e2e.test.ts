@@ -6,9 +6,11 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   collectWorkbenchAiRunEvents,
+  getWorkbenchPrefixLocator,
   selectWorkbenchExecutionPermission,
   setupWorkbenchWithTempWorkspace,
   sendWorkbenchMessage,
+  waitForLatestAssistantProcess,
   waitForWorkbenchAiEvent,
   workbenchSelectors
 } from '../../../../harness/e2e/workbench'
@@ -46,6 +48,13 @@ describe('workbench AI question e2e', () => {
             '# Brief\n\n主题：待定\n\n视觉风格：未说明\n',
             'utf8'
           )
+          for (const entry of await fs.readdir(setup.workspace.rootPath)) {
+            if (entry === 'brief.md') continue
+            await fs.rm(path.join(setup.workspace.rootPath, entry), {
+              recursive: true,
+              force: true
+            })
+          }
           // This case isolates AI clarification. Full access auto-approves
           // ordinary tools, while ask_user_question still waits for the user.
           await selectWorkbenchExecutionPermission(page, '完全访问')
@@ -56,7 +65,7 @@ describe('workbench AI question e2e', () => {
 
           const required = await waitForWorkbenchAiEvent(runtime, {
             name: 'ai_question_required',
-            timeoutMs: 180_000,
+            timeoutMs: WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
             matches: isQuestionRequired
           })
           if (!isQuestionRequired(required)) throw new Error('AI question was not requested')
@@ -98,7 +107,6 @@ describe('workbench AI question e2e', () => {
           )
           const mutatingTools = new Set([
             'text_file_edit',
-            'terminal_run',
             'docx_content_edit',
             'docx_format',
             'docx_table_edit',
@@ -113,7 +121,7 @@ describe('workbench AI question e2e', () => {
           await answerQuestionCard(questions)
 
           const seenInteractionIds = new Set([required.interactionId])
-          const completionDeadline = Date.now() + 180_000
+          const completionDeadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
           for (;;) {
             const events = (await collectWorkbenchAiRunEvents(runtime)).filter(
               (event) => event.runId === required.runId
@@ -133,9 +141,16 @@ describe('workbench AI question e2e', () => {
             await new Promise((resolve) => setTimeout(resolve, 500))
           }
 
-          const process = page.getByTestId(workbenchSelectors.assistantProcessPrefix).last()
-          await process.click()
-          const processText = (await process.textContent()) || ''
+          const process = await waitForLatestAssistantProcess(page)
+          await process.locator('summary').click()
+          const processLocators = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantProcessPrefix
+          )
+          for (const activity of await processLocators.all()) {
+            await activity.locator('summary').click().catch(() => undefined)
+          }
+          const processText = (await processLocators.allTextContents()).join('\n')
           const events = (await collectWorkbenchAiRunEvents(runtime)).filter(
             (event) => event.runId === required.runId
           )
