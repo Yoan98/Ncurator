@@ -30,6 +30,7 @@ import type {
 import { scheduledTaskSelectors } from '../../testing/selectors'
 import ScheduledTaskCountChip from './ScheduledTaskCountChip'
 import ComposerInputEditor from '../workbench/composer/ComposerInputEditor'
+import PartnerSelect from '../workbench/PartnerSelect'
 
 const WEEKDAY_OPTIONS = [
   { value: 0, label: '周日' },
@@ -411,11 +412,11 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
         <div className="flex flex-col gap-4 pt-2">
           <label className="flex flex-col gap-1.5">
             <RequiredFieldLabel>伙伴</RequiredFieldLabel>
-            <Select
+            <PartnerSelect
+              partners={partners}
               value={form.partnerId || undefined}
               placeholder="选择伙伴"
-              data-testid={scheduledTaskSelectors.formPartner}
-              options={partners.map((partner) => ({ value: partner.id, label: partner.name }))}
+              dataTestId={scheduledTaskSelectors.formPartner}
               onChange={(partnerId) => setForm((current) => ({ ...current, partnerId }))}
             />
           </label>
@@ -511,12 +512,12 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
           if (onAiCreate) void onAiCreate(aiPartnerId)
         }}
       >
-        <Select
+        <PartnerSelect
           className="w-full"
+          partners={partners}
           value={aiPartnerId || undefined}
           placeholder="选择伙伴"
-          data-testid={scheduledTaskSelectors.aiPartner}
-          options={partners.map((partner) => ({ value: partner.id, label: partner.name }))}
+          dataTestId={scheduledTaskSelectors.aiPartner}
           onChange={setAiPartnerId}
         />
       </Modal>

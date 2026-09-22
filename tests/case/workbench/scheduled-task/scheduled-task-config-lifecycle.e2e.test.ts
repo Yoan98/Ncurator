@@ -79,7 +79,19 @@ describe('workbench scheduled-task e2e', () => {
           const partnerRequiredBlocked = (await listTasks(page)).length === 0
           const formStillOpenAfterMissingPartner = await saveButton.isVisible()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
+          const originalPartnerOption = page.getByTestId(
+            `${scheduledTaskSelectors.formPartner}-option-${originalPartner?.id}`
+          )
+          const partnerOptionShowsAnimatedAvatar =
+            (await originalPartnerOption.isVisible()) &&
+            (await originalPartnerOption.locator('.nc-partner-avatar-animated').count()) === 1
           await selectVisibleWorkbenchOption(page, PARTNER_NAME)
+          const selectedPartner = page.getByTestId(
+            `${scheduledTaskSelectors.formPartner}-selected-${originalPartner?.id}`
+          )
+          const partnerSelectionShowsAnimatedAvatar =
+            (await selectedPartner.isVisible()) &&
+            (await selectedPartner.locator('.nc-partner-avatar-animated').count()) === 1
           await saveButton.click()
           await saveButton.waitFor({ state: 'hidden' })
 
@@ -200,6 +212,8 @@ describe('workbench scheduled-task e2e', () => {
             partnerIsFirstField,
             partnerRequiredBlocked,
             formStillOpenAfterMissingPartner,
+            partnerOptionShowsAnimatedAvatar,
+            partnerSelectionShowsAnimatedAvatar,
             createdCorrectly,
             itemShowsSummary,
             runNowConfirmCancelKeptIdle,
@@ -217,6 +231,8 @@ describe('workbench scheduled-task e2e', () => {
             result.partnerIsFirstField &&
               result.partnerRequiredBlocked &&
               result.formStillOpenAfterMissingPartner &&
+              result.partnerOptionShowsAnimatedAvatar &&
+              result.partnerSelectionShowsAnimatedAvatar &&
               result.createdCorrectly &&
               result.itemShowsSummary &&
               result.runNowConfirmCancelKeptIdle &&
@@ -229,7 +245,7 @@ describe('workbench scheduled-task e2e', () => {
             {
               name: 'scheduled-task-config-lifecycle',
               message:
-                '定时任务新增、保存不建伙伴、必填拦截、编辑、启用、立即执行确认、数量 chip 与删除应完整闭环。',
+                '定时任务伙伴选择应展示动态形象，新增、保存不建伙伴、必填拦截、编辑、启用、立即执行确认、数量 chip 与删除应完整闭环。',
               data: result
             }
           )

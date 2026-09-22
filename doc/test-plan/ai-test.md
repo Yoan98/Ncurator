@@ -32,126 +32,55 @@
 
 ## 1. 总体目标
 
-- 本计划定义 AI 域回归范围和领域规则。通用测试、runner、raw logs、UI E2E 和 live 断言规则统一遵循 `doc/test.md`。
-- AI 回归只围绕两类稳定对象：
-  1. `tool`
-  2. `human`
+- 本计划只定义 AI 域回归范围、领域特有规则与 case 清单。
+- 通用测试分类、目录约定、runner / 常用命令、raw logs、UI E2E 与 live 断言规则统一遵循 [`doc/test.md`](../test.md)，本文不重复。
+- AI 回归只围绕两类稳定对象：`tool` 与 `human`（含 `mock-llm` / `live`）。
 
 ## 2. Suite 设计
 
 ### 2.1 `tool`
 
-- `tool` 只验证真实生产工具调用，不允许 fake。
+- 负责生产工具 runtime 的完整输入输出、读写链、错误边界、原子性、修改记录与回退契约；只验证真实生产工具调用，不允许 fake。
 - `tool / docx` 覆盖 7 个公开工具、单 operation 写入、稳定 `nodeId`、跨工具 Working 会话和 Source→Working 净 Diff。
 - `tool / text-file` 覆盖普通文本按行分页读取、四种写入 action、修改记录、结构化 diff 与回退前置数据，以及按行号定位的文本搜索；unit 侧见 `tests/case/unit/ai/text-file-tool-contract.test.ts`。
 - `tool / image-generation` 覆盖 SVG 内部绘制输入、PNG/JPEG/WebP 转码、自动创建或更新、工作地址内修改记录、Artifact、安全校验和工作地址外绝对路径写入不记录回退。
 - `tool / pdf` 使用真实 `深度学习.pdf`，覆盖元数据、页级正文、literal/regex 搜索、页面 PNG、工作地址外绝对路径读取、损坏文件和结果大小限制。
 - `tool / web-browsing` 包含 `web-crawl-contract`，用于守住 `web_search` 和 `browser_use` 工具契约。`browser_use` 网址协议、系统错误页、加载超时与 `navigate` 成败字段由 Workbench `browser-navigate-error-page` 与 unit `navigate-plan` 覆盖。
 - 全部 29 个工具均要求绑定专用 `modelResult.renderSuccess`（[`registry.ts`](../../src/main/services/ai/human/tools/registry.ts) compile-time 完整性检查）；**不对 prompt 措辞或 renderer 投影文字做 unit 单测**。工具契约由 **family unit contract**（如 `docx-tool-contract`、`terminal-tool-contract`、`text-file-tool-contract`）与 **backend tool integration** 保障。
-- 目标：验证 tool 与 `hand` 执行守卫的生产输入输出。
 - 约束：使用真实工具、store、docx apply service 和 artifact 流；禁止 fake `documentsStore`、`embeddingService`、`resolveDocxOpenTarget` 或 tool result。`web-crawl-contract` 里 `browser-use-navigate-returns-tab-for-follow-up` 等仍注入假 `browserUseService`、`web-search-returns-serp-by-search-type` 仍 mock search，待改为真实 CDP / 本地网页，不得当作已批准例外。
 - `web-browsing` 工具测试先启动测试 Electron CDP host 和专用非持久化 partition，再让冻结 sidecar bin 的 Python Playwright 显式复用该测试 Electron 的 Node，通过隔离 context 抓取；host 必须 headless 且不得挂主窗口。该独立 host 可以继续开进程级调试口，与正式 App 无关。正式 App 的 `browser_use` 在无进程级 `--remote-debugging-port` 下，于 observe/act 时按 Tab 挂本机 CDP 桥。另覆盖 `browser_use` 服务不可用诊断。禁止使用 sidecar 内置 Node/浏览器或 Electron 默认 context。`web_search` 结果只回模型，不得自动展开右侧搜索列表（该面板已不存在）。
 
 ### 2.2 `human`
 
-- `mock-llm`
-  - 目标：在 non-live 条件下验证 `AiRunService -> human` 入口和 `human` 主链的真实执行链路。
-  - 约束：只允许 mock LLM 输入输出；必须真实走 `createAiRunContext -> human graph -> learning / hand -> store / apply / artifact`。
-  - 禁止：`humanReasonOverrides`、`toolExecutionOverrides`、手工串 node、fake tool/store/docx apply service。
-  - 覆盖要求：要通过不同 case 把关键节点与关键边都跑到，而不是只验证一条 happy path。
-- `live`
-  - 目标：验证真实模型下 `human` 的真实业务执行。
-  - 约束：必须走真实统一 LLM executor（包括 `ctx.chatStructured / ctx.chatText`）、真实 KB、真实工具、真实 apply / artifact。live 连接来自 `.env` 内置服务商 Key 池（`AI_LIVE_KEY_DEEPSEEK` / `DASHSCOPE` / `MIMO` / `ZHIPU`）与可选 `AI_LIVE_PROVIDER`（默认 `dashscope`）、`AI_LIVE_MODEL`（默认该服务商测试默认模型；通义为 `qwen3.8-flash`），由 registry 推导 baseUrl；不再使用 `AI_LIVE_BASE_URL` / `AI_LIVE_API_KEY` / `AI_LIVE_PRIMARY_MODEL_NAME`。不得跳过、模拟或替换模型决策、工具结果或业务产物；允许仅为触发真实机制的可测性 override。case 不设评分门槛，运行后由人工依据 raw logs 与 artifact 将最新 0-100 评估回写至本文顶部快照。
-  - 禁止：任何 scripted driver、`chatStructuredOverride`、fixture store override。
-  - 覆盖要求：至少保留 1 条简单任务和 1 条复杂任务回归 case；如复杂任务有多条稳定用例，可同时保留。全内置服务商连通性由 Workbench `live-preset-provider-smoke` 覆盖，不在每条 human live 上乘服务商。
+- `mock-llm`：在 non-live 下验证 `AiRunService -> human` 入口与主链；只允许固定 LLM 输入输出，必须真实走 `createAiRunContext -> human graph -> learning / hand -> store / apply / artifact`；禁止 `humanReasonOverrides`、`toolExecutionOverrides`、手工串 node、fake tool/store/docx apply service。要通过不同 case 把关键节点与关键边都跑到。
+- `live`：验证真实模型下的真实业务执行；必须走真实 LLM executor、真实 KB、真实工具与 apply / artifact；禁止 scripted driver、`chatStructuredOverride`、fixture store override。用户输入不得包含内部工具名或固定调用顺序。至少保留 1 条简单与 1 条复杂回归 case；全内置服务商连通性由 Workbench `live-preset-provider-smoke` 覆盖。case 不设评分门槛，人工依据 raw logs 与 artifact 将 0–100 评估回写本文顶部快照。live 环境变量与断言口径见 `doc/test.md`。
 
 ## 3. 领域特有规则
 
 ### 3.1 Harness 规则
 
-- fixture 仍可用 `tests/fixtures/workspace`；运行时作为设置页文件地址 + 伙伴，不再「绑定工作区才能跑」。
-- AI backend 回归必须以生产 `createAiRunContext` 作为唯一 runtime 入口，并使用真实 store、apply service 和 embedding service。
-- 每个 AI run 的文档 worker 资源统一通过 `AiRunResourceManager` 在 run 结束时释放；资源释放失败不能覆盖任务结果。
-- `mock-llm` 只固定 LLM 输出，其余全部真实；`live` 通过真实 `LlmConfigStore` 和生产 LLM executor 执行。
-- 凡是会进入 `human` 的回归 run，必须在进入 `human` 前完成 embedding 基础服务 preflight；不允许把 embedding 初始化推迟到某个工具调用时才暴露。
-- KB fixture 必须走真实导入、真实索引、真实检索。
-- KB 索引范围：所有支持文件都会前置「文件名锚点」内容块，保证按文件名可被检索；Excel 只索引文件名、文档标题与工作表名等元数据，单元格内容不进索引，检索命中时引用其真实文件路径。
-- embedding 模型缺失时，harness 应优先通过真实生产下载链自动检查并下载，不得引入测试专用 embedding 替身。
-- 回归 harness 不得使用旧式 fake API。
-- AI backend 回归统一使用默认 `testTimeout=900_000`、`hookTimeout=900_000`；少数重型 live case 可覆写更长超时。
+- fixture 可用 `tests/fixtures/workspace`；运行时作为设置页文件地址 + 伙伴，不再「绑定工作区才能跑」。
+- AI backend 回归以生产 `createAiRunContext` 为唯一 runtime 入口，使用真实 store、apply service 和 embedding service；文档 worker 经 `AiRunResourceManager` 在 run 结束时释放，释放失败不得覆盖任务结果。
+- `mock-llm` 只固定 LLM 输出，其余全部真实；`live` 走真实 `LlmConfigStore` 与生产 LLM executor。
+- 进入 `human` 前必须完成 embedding preflight；KB fixture 走真实导入 / 索引 / 检索。所有支持文件前置「文件名锚点」内容块；Excel 只索引文件名、文档标题与工作表名等元数据。embedding 缺失时走真实生产下载链，不得用测试替身。
+- 不得使用旧式 fake API。默认 `testTimeout` / `hookTimeout` 为 `900_000`；少数重型 live case 可覆写更长超时。
 
 ### 3.2 `mock-llm` 与 `live` 设计口径
 
-#### mock-llm 类别
+#### mock-llm
 
-- 目的：快速定位非 LLM 问题，并验证每个关键节点、关键边在真实生产 graph 中都能跑通。
-- 允许：脚本化 LLM 输入输出。
-- 不允许：脚本化 runtime 节点执行结果。
+- 目的：快速定位非 LLM 问题，并验证关键节点 / 边在真实生产 graph 中能跑通。
+- 允许脚本化 LLM 输入输出；不允许脚本化 runtime 节点执行结果。
 - 断言重点：节点流转、工具调用、审批事件、artifact、memory、错误收敛、状态收口。
-- artifact 进入伙伴消息记录（`chat_session_message_log`）与提示词时只允许包含 `kind / path / operation`；内部 `capability / fileName / applyId` 不得进入提示词。
-- 已经落地的文件修改不得因 `run_failed` 或 `run_cancelled` 丢失，终态消息与 Workbench 都必须继续显示对应修改记录。
+- artifact 进入伙伴消息记录与提示词时只允许 `kind / path / operation`；内部 `capability / fileName / applyId` 不得进入提示词。
+- 已落地的文件修改不得因 `run_failed` / `run_cancelled` 丢失；终态消息与 Workbench 须继续显示对应修改记录。
 
-#### live 类别
+#### live
 
 - 目的：验证真实业务场景在真实生产调用下可以完成。
-- case 设计必须使用真实用户风格输入，不得把内部固定工具顺序写进用户输入。
-- 断言口径统一遵循 `doc/test.md` 的真实 AI / live 断言规则。
-- 涉及数据计算 / 对账 / 统计的真实 AI 场景，brain 系统提示词已要求计算必须通过 terminal 工具真实执行；live case 硬断言校验完成态、关键产物与 terminal 计算是否真实发生。终端改文件不进入修改记录。
-- `human / live` 的完整证据写入测试运行产物；顶部“最新 Live 评估”仅由人工在复核 raw logs 与 artifact 后覆盖更新。
-
-### 3.3 目录与命令
-
-AI 回归测试目录：
-
-- `tests/case/ai/tool/<group>/<case>.test.ts`
-- `tests/case/ai/human/mock-llm/<case>.test.ts`
-- `tests/case/ai/human/live/<case>.test.ts`
-
-一文件多 `caseId` 合法；计划 headings 与文件归属（列出文件名 ≠ `caseId`、或一文件多 `caseId` 的文件）：
-
-| 文件                                                         | 包含的 caseId                                                                                                            |
-| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `tool/web-browsing/web-crawl-contract.test.ts`               | `web-search-*`、`browser-use-*`                                                                                          |
-| `tool/pdf/pdf-read-contract.test.ts`                         | `pdf-*-contract`                                                                                                         |
-| `tool/text-file/text-file-read-write-contract.test.ts`       | `text-file-read-write-contract`、`text-file-atomic-guards-and-format-preservation`                                       |
-| `tool/text-file/text-file-toolresult-log-guard.test.ts`      | `text-file-bounded-line-window`                                                                                          |
-| `tool/terminal/terminal-persistent-session-contract.test.ts` | `terminal-execution-contract`                                                                                            |
-| `tool/ppt/ppt-diff-net-semantics.test.ts`                    | `ppt-diff-slide-and-element-net-semantics`                                                                               |
-| `tool/image-generation/image-generate-contract.test.ts`      | `image-generate-*-contract`                                                                                              |
-| `tool/excel/excel-diff-row-structure-semantics.test.ts`      | `excel-diff-row-structure-semantics`、`excel-diff-cumulative-net-semantics`                                              |
-| `tool/agent-control/read-image-multimodal-contract.test.ts`  | `read-image-multimodal-contract`、`multimodal-image-budget-contract`                                                     |
-| `human/mock-llm/human-mixed-tool-dispatch.test.ts`           | `human-mixed-tool-dispatch`、`human-mixed-tool-dispatch-after-invalid-plan`                                              |
-| `human/mock-llm/ask-user-question.test.ts`                   | `human-ask-user-question`、`human-ask-user-question-rejects-mixed-tools`、`human-ask-user-question-does-not-auto-answer` |
-| `human/mock-llm/human-pdf-main-model-multimodal.test.ts`     | `human-pdf-read-image-collaboration`                                                                                     |
-| `human/mock-llm/ai-run-service-embedding-preflight.test.ts`  | `ai-run-service-embedding-preflight`、`ai-run-service-embedding-preflight-failure`                                       |
-| `human/live/human-text-file-read-write-live.test.ts`         | `human-text-file-*-live`                                                                                                 |
-| `human/live/human-clarification-multi-run-live.test.ts`      | `human-clarification-multi-run-live`                                                                                     |
-| `human/live/human-runtime-script-execution-live.test.ts`     | `human-runtime-*-python-live`                                                                                            |
-| `human/live/human-legacy-doc-reading-live.test.ts`           | `human-legacy-doc-*-live`                                                                                                |
-
-AI unit / 辅助测试目录：
-
-- `tests/case/unit/ai/<case>.test.ts`
-- `tests/case/unit/storage/sqlite-migration.test.ts`、`tests/case/unit/storage/sqlite-storage.test.ts`、`tests/case/unit/ai/persistence/chat-run-service-contract.test.ts`
-- 工具 family 轻量契约（schema / outputTypes / skill 归属，不断言 prompt 或 render 文字）：`terminal-tool-contract`、`text-file-tool-contract`，以及既有 `docx-tool-contract`、`ppt-tool-contract`、`pdf-tool-contract`、`runtime-skill-contract` 等。
-
-推荐命令：
-
-- `pnpm test:ai:backend`
-- `pnpm test:ai:tool`
-- `pnpm test:ai:human:mock-llm`
-- `pnpm test:ai:human:live`
-
-### 3.4 覆盖归属与去重规则
-
-- `ai/tool` 负责生产工具 runtime 的完整输入输出、读写链、错误边界、原子性、修改记录与回退契约。
-- `ChatRunService` 合同测试验证 run 结束不会扫描并归属未受控的工作地址变化；只有受控文件工具能创建 run 级修改记录。`ChatRunService` 不再校验工作空间绑定与搜索模式。
-- sqlite migration unit 覆盖空库到 v11、v9→v10 破坏性升级后最终 schema 一致，以及 v11 删除终端修改行：存在 `partner` / `partner_ui_state`；不存在 `chat_session`、`chat_search_turn`、`chat_session_ui_state`；`chat_session_message_log` / `ai_run` / `ai_file_change` 挂 `partner_id`；`workbench_ui_state` 只留 `active_view_key`。UI store 为伙伴。
-- `ai/human/mock-llm` 负责真实 human graph 下的工具学习、工具选择、串联执行、暂停恢复和结果交付；只允许固定 LLM 输出，不允许替换工具执行结果。
-- `ai/human/live` 负责真实模型在自然语言输入下能否自主选择并正确使用能力；用户输入不得包含内部工具名或固定调用顺序。
-- Workbench E2E 负责用户可见的附件、预览、Diff、跨 Sheet 交互与回退闭环，不重复验证工具内部算法。
-- Unit 只保留 schema、prompt、registry、纯编译/解析/渲染、协议、平台适配和服务算法等底层契约。完整生产工具 runtime 流程一律归 `ai-test`；新增等价 AI 用例并通过后，删除重复 Unit。
-- 间接经过某个函数不算重复。只有测试输入、主要行为和 Oracle 均等价时才迁移或删除 Unit。
+- case 使用真实用户风格输入；断言口径遵循 `doc/test.md` 的真实 AI / live 规则。
+- 涉及计算 / 对账 / 统计时，brain 要求经 terminal 真实计算；live case 硬断言完成态、关键产物与 terminal 计算是否发生。终端改文件不进修改记录。
+- 完整证据写入测试运行产物；顶部“最新 Live 评估”仅由人工复核后覆盖更新。
 
 ## 4. 回归测试清单
 
@@ -763,14 +692,6 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - How：生产 graph 使用 `approvalPolicy=auto-approve` 触发提问，但不提供 question resolver。
 - Oracle：只有 question required、没有 question resolved，run 不会继续执行。
 
-##### `human-clarification-multi-run-live`
-
-- 测试类型：`backend / live`
-- What：同一伙伴连续三次真实模型运行，分别覆盖模糊任务、用户自定义回答和明确任务。
-- Why：单轮 happy path 不能证明模型会在真正的意图歧义处停下来，也不能证明回答会影响后续执行或明确任务不会被无意义打断。
-- How：使用真实 LLM、真实 graph、真实文本文件和真实 question resolver；resolver 按 `taskId` 区分三次运行，并对同一 run 内出现的每个 `interactionId` 返回完整答案，不匹配固定选项文字。第一轮回答预设选项，第二轮回答“其他，请填写”的自定义内容，第三轮给出明确的单点修改要求。
-- Oracle：每个 interaction 的答案数量和 id 集合必须与问题一致；回答前无写操作；自定义文字进入结果并影响产物；真实模型出现追加澄清时测试继续完成该轮并保留 raw logs；第三轮在明确要求下不产生无意义提问，问题必要性、清晰度、选项覆盖、选项差异和答案有效性通过 raw logs 人工评分。
-
 ##### `conversation-memory-multi-run-recall`
 
 - 测试类型：`backend`
@@ -844,6 +765,14 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：只出现 `scheduled_task_list` 与 `scheduled_task_action` 两个领域工具；创建自动绑定当前伙伴且默认开启；修改时间与停用同时成功；两次 list 均能供下一轮 brain 使用。
 
 #### live 类别
+
+##### `human-clarification-multi-run-live`
+
+- 测试类型：`backend / live`
+- What：同一伙伴连续三次真实模型运行，分别覆盖模糊任务、用户自定义回答和明确任务。
+- Why：单轮 happy path 不能证明模型会在真正的意图歧义处停下来，也不能证明回答会影响后续执行或明确任务不会被无意义打断。
+- How：使用真实 LLM、真实 graph、真实文本文件和真实 question resolver；resolver 按 `taskId` 区分三次运行，并对同一 run 内出现的每个 `interactionId` 返回完整答案，不匹配固定选项文字。第一轮回答预设选项，第二轮回答“其他，请填写”的自定义内容，第三轮给出明确的单点修改要求。
+- Oracle：每个 interaction 的答案数量和 id 集合必须与问题一致；回答前无写操作；自定义文字进入结果并影响产物；真实模型出现追加澄清时测试继续完成该轮并保留 raw logs；第三轮在明确要求下不产生无意义提问，问题必要性、清晰度、选项覆盖、选项差异和答案有效性通过 raw logs 人工评分。
 
 ##### `human-scheduled-task-lifecycle-live`
 

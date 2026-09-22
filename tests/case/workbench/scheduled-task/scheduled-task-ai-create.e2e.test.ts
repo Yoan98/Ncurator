@@ -50,7 +50,19 @@ describe('workbench scheduled-task e2e', () => {
           await openScheduledTasksView(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.aiAddButton).click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.aiPartner).click()
+          const targetOption = page.getByTestId(
+            `${scheduledTaskSelectors.aiPartner}-option-${target.id}`
+          )
+          const partnerOptionShowsAnimatedAvatar =
+            (await targetOption.isVisible()) &&
+            (await targetOption.locator('.nc-partner-avatar-animated').count()) === 1
           await selectVisibleWorkbenchOption(page, target.name)
+          const selectedPartner = page.getByTestId(
+            `${scheduledTaskSelectors.aiPartner}-selected-${target.id}`
+          )
+          const partnerSelectionShowsAnimatedAvatar =
+            (await selectedPartner.isVisible()) &&
+            (await selectedPartner.locator('.nc-partner-avatar-animated').count()) === 1
           await getWorkbenchLocator(page, scheduledTaskSelectors.aiConfirm).click()
 
           const input = getWorkbenchLocator(page, workbenchSelectors.input).last()
@@ -85,17 +97,27 @@ describe('workbench scheduled-task e2e', () => {
           await input.waitFor({ state: 'visible' })
           const draftPersisted = await readVisibleDraft()
 
-          return { draftPrefilled, targetOpened, noAutomaticSend, draftPersisted }
+          return {
+            partnerOptionShowsAnimatedAvatar,
+            partnerSelectionShowsAnimatedAvatar,
+            draftPrefilled,
+            targetOpened,
+            noAutomaticSend,
+            draftPersisted
+          }
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.draftPrefilled &&
+            result.partnerOptionShowsAnimatedAvatar &&
+              result.partnerSelectionShowsAnimatedAvatar &&
+              result.draftPrefilled &&
               result.targetOpened &&
               result.noAutomaticSend &&
               result.draftPersisted,
             {
               name: 'scheduled-task-ai-create-prefills-draft',
-              message: 'AI 创建应选择并切换伙伴，只预填持久草稿，不发送消息或启动运行。',
+              message:
+                'AI 创建应展示动态伙伴形象、选择并切换伙伴，只预填持久草稿，不发送消息或启动运行。',
               data: result
             }
           )
