@@ -20,6 +20,7 @@ import type {
 import { FileRenderViewer } from '../fileRenders'
 import type { FileRenderDocument } from '../fileRenders'
 import { classifyEditableTextKind, type EditableTextKind } from '../fileRenders/editableTextKind'
+import { resolveRegisteredPreviewType } from '../fileRenders/capabilities'
 import WorkbenchBrowserPanel from './WorkbenchBrowserPanel'
 import type { WorkbenchContentPanelState, WorkbenchResourceTab } from './types'
 import { workbenchSelectors } from '../../testing/selectors'
@@ -647,6 +648,16 @@ const WorkbenchContentPanelBase: React.FC<WorkbenchContentPanelProps> = ({
     const fileName = activeEditableFile?.fileName
     if (!path || !fileName) {
       setEditableKind(null)
+      return
+    }
+    // 已知扩展名先同步标记，避免先只读预览再切编辑器造成空白闪一下
+    const registered = resolveRegisteredPreviewType(fileName)
+    if (registered === 'md') {
+      setEditableKind('markdown')
+      return
+    }
+    if (registered === 'txt') {
+      setEditableKind('plain-text')
       return
     }
     let cancelled = false

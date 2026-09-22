@@ -21,12 +21,14 @@ type Props = {
   ) => void
   placeholder?: string
   dataTestId?: string
+  /** Extra classes for the editable surface (e.g. max-height + overflow for forms). */
+  editorClassName?: string
 }
 type MentionContext = { textNode: Text; caretOffset: number; triggerIndex: number; query: string }
 
 const isTextNode = (value: Node | null): value is Text => value instanceof Text
 
-const ComposerInputEditor: React.FC<Props> = ({ value, onChange, placeholder, dataTestId }) => {
+const ComposerInputEditor: React.FC<Props> = ({ value, onChange, placeholder, dataTestId, editorClassName }) => {
   const { input, contentNodes, selectedReferences } = value
   const editorRef = useRef<HTMLSpanElement | null>(null)
   const knownScopesRef = useRef(new Map<string, SelectedReference>())
@@ -157,7 +159,7 @@ const ComposerInputEditor: React.FC<Props> = ({ value, onChange, placeholder, da
         aria-multiline="true"
         data-testid={dataTestId}
         data-placeholder={placeholder}
-        className="block min-h-[72px] whitespace-pre-wrap break-words rounded-[6px] border border-[#E5E4E0] px-3 py-2 text-[14px] leading-6 text-[#37352F] outline-none empty:before:pointer-events-none empty:before:text-[#9B9A97] empty:before:content-[attr(data-placeholder)]"
+        className={`block min-h-[72px] whitespace-pre-wrap break-words rounded-[6px] border border-[#E5E4E0] px-3 py-2 text-[14px] leading-6 text-[#37352F] outline-none empty:before:pointer-events-none empty:before:text-[#9B9A97] empty:before:content-[attr(data-placeholder)] ${editorClassName || ''}`}
         onInput={sync}
         onKeyDown={(event) => {
           if (mentionQuery !== null) {

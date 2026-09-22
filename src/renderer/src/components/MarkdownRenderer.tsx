@@ -104,8 +104,9 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
                   data-ref-path={reference.path}
                   data-ref-resource-type={reference.resourceType}
                   onClick={(event) => {
-                    if (!onOpenReference) return
+                    // 即使回调缺失也要拦住默认导航，避免 Electron 整页闪白
                     event.preventDefault()
+                    if (!onOpenReference) return
                     onOpenReference(reference)
                   }}
                 >

@@ -80,9 +80,25 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
     }, 80)
   }
 
+  const destroyVditor = (): void => {
+    const vditor = vditorRef.current
+    vditorRef.current = null
+    readyRef.current = false
+    if (!vditor) return
+    try {
+      vditor.destroy()
+    } catch (error) {
+      console.error('[APP-ERROR] vditor destroy failed', error)
+    }
+  }
+
+  // filePath 变化或卸载时必须销毁，否则 loading 换掉 DOM 后 vditorRef 仍在，会跳过重建导致空白
+  useEffect(() => () => destroyVditor(), [filePath])
+
   useEffect(() => {
     if (initialText === null || !rootRef.current || vditorRef.current) return
     readyRef.current = false
+    rootRef.current.replaceChildren()
     const vditor = new Vditor(rootRef.current, {
       mode: 'ir',
       lang: 'zh_CN',
@@ -141,31 +157,24 @@ const MarkdownEditor: React.FC<{ filePath: string }> = ({ filePath }) => {
         hydrateTimerRef.current = null
       }
       revokeMarkdownImageBlobs(blobCacheRef.current)
-      const vditor = vditorRef.current
-      vditorRef.current = null
-      if (!vditor || !readyRef.current) return
-      try {
-        vditor.destroy()
-      } catch (error) {
-        console.error('[APP-ERROR] vditor destroy failed', error)
-      }
-      readyRef.current = false
+      destroyVditor()
     },
     [flushSave]
   )
 
-  if (file.loading) {
+  if (file.loadError || (!file.loading && file.initialText === null)) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-white">
-        <Spin />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={file.loadError || '文件加载失败'} />
       </div>
     )
   }
 
-  if (file.loadError || file.initialText === null) {
+  // 仅在尚无内容时展示 Spin；已有内容时保持根节点挂载，避免拆掉 Vditor DOM 后无法重建
+  if (file.loading && file.initialText === null) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-white">
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={file.loadError || '文件加载失败'} />
+        <Spin />
       </div>
     )
   }

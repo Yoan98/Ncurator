@@ -449,6 +449,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
               }
               placeholder="描述你希望ta完成的事，也可使用@"
               dataTestId={scheduledTaskSelectors.formDescription}
+              editorClassName="max-h-[240px] overflow-y-auto"
             />
           </label>
 

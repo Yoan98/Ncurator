@@ -80,28 +80,58 @@ const LayerIcon: React.FC<{ iconKind: AssistantProcessIconKind; className?: stri
   iconKind,
   className
 }) => {
-  const iconClassName = `h-4 w-4 shrink-0 ${getLayerIconClassName(iconKind)} ${className || ''}`
+  // CommandLine 光学中心偏上，单独微下调与同行文字对齐
+  const iconClassName = `block h-4 w-4 ${
+    iconKind === 'terminal' ? 'translate-y-[0.5px] ' : ''
+  }${getLayerIconClassName(iconKind)} ${className || ''}`
   const iconProps = { className: iconClassName, 'data-process-icon-kind': iconKind }
-  if (iconKind === 'learning') return <HiOutlineAcademicCap {...iconProps} />
-  if (iconKind === 'compaction') return <HiOutlineArchiveBox {...iconProps} />
-  if (iconKind === 'document') return <HiOutlineDocumentText {...iconProps} />
-  if (iconKind === 'edit') return <HiOutlinePencilSquare {...iconProps} />
-  if (iconKind === 'search') return <HiOutlineMagnifyingGlass {...iconProps} />
-  if (iconKind === 'browser') return <HiOutlineCursorArrowRays {...iconProps} />
-  if (iconKind === 'web') return <HiOutlineGlobeAlt {...iconProps} />
-  if (iconKind === 'image') return <HiOutlinePhoto {...iconProps} />
-  if (iconKind === 'knowledge') return <HiOutlineBookOpen {...iconProps} />
-  if (iconKind === 'workflow') return <HiOutlineBolt {...iconProps} />
-  if (iconKind === 'terminal') return <HiOutlineCommandLine {...iconProps} />
-  if (iconKind === 'retry') return <HiArrowPath {...iconProps} />
-  if (iconKind === 'eye') return <HiOutlineEye {...iconProps} />
-  if (iconKind === 'camera') return <HiOutlineCamera {...iconProps} />
-  if (iconKind === 'scroll') return <HiOutlineArrowsUpDown {...iconProps} />
-  if (iconKind === 'extract') return <PiEyes {...iconProps} />
-  if (iconKind === 'window') return <PiBrowsers {...iconProps} />
-  if (iconKind === 'fetch') return <FaSpider {...iconProps} />
-  if (iconKind === 'question') return <TbMoodConfuzed {...iconProps} />
-  return <HiOutlineDocumentText {...iconProps} />
+  const icon =
+    iconKind === 'learning' ? (
+      <HiOutlineAcademicCap {...iconProps} />
+    ) : iconKind === 'compaction' ? (
+      <HiOutlineArchiveBox {...iconProps} />
+    ) : iconKind === 'document' ? (
+      <HiOutlineDocumentText {...iconProps} />
+    ) : iconKind === 'edit' ? (
+      <HiOutlinePencilSquare {...iconProps} />
+    ) : iconKind === 'search' ? (
+      <HiOutlineMagnifyingGlass {...iconProps} />
+    ) : iconKind === 'browser' ? (
+      <HiOutlineCursorArrowRays {...iconProps} />
+    ) : iconKind === 'web' ? (
+      <HiOutlineGlobeAlt {...iconProps} />
+    ) : iconKind === 'image' ? (
+      <HiOutlinePhoto {...iconProps} />
+    ) : iconKind === 'knowledge' ? (
+      <HiOutlineBookOpen {...iconProps} />
+    ) : iconKind === 'workflow' ? (
+      <HiOutlineBolt {...iconProps} />
+    ) : iconKind === 'terminal' ? (
+      <HiOutlineCommandLine {...iconProps} />
+    ) : iconKind === 'retry' ? (
+      <HiArrowPath {...iconProps} />
+    ) : iconKind === 'eye' ? (
+      <HiOutlineEye {...iconProps} />
+    ) : iconKind === 'camera' ? (
+      <HiOutlineCamera {...iconProps} />
+    ) : iconKind === 'scroll' ? (
+      <HiOutlineArrowsUpDown {...iconProps} />
+    ) : iconKind === 'extract' ? (
+      <PiEyes {...iconProps} />
+    ) : iconKind === 'window' ? (
+      <PiBrowsers {...iconProps} />
+    ) : iconKind === 'fetch' ? (
+      <FaSpider {...iconProps} />
+    ) : iconKind === 'question' ? (
+      <TbMoodConfuzed {...iconProps} />
+    ) : (
+      <HiOutlineDocumentText {...iconProps} />
+    )
+  return (
+    <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center" aria-hidden>
+      {icon}
+    </span>
+  )
 }
 
 const getGroupText = (group: AssistantProcessGroup): AssistantRichTextSegment[] => {
@@ -145,9 +175,11 @@ const renderSegments = (
   </span>
 )
 
-const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }> = ({
-  thought
-}) => {
+const AssistantProcessThoughtView: React.FC<{
+  thought: AssistantProcessThought
+  linkAccess?: import('../../../../shared/types').MarkdownLinkAccessEntry[]
+  onOpenReference?: (reference: OpenableMarkdownReference) => void
+}> = ({ thought, linkAccess, onOpenReference }) => {
   const [expanded, setExpanded] = useState(false)
   const [isOverflowing, setIsOverflowing] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -207,7 +239,12 @@ const AssistantProcessThoughtView: React.FC<{ thought: AssistantProcessThought }
           expanded ? 'max-h-[320px] overflow-y-auto pr-1' : 'assistant-thought-collapsed'
         }`}
       >
-        <MarkdownRenderer content={thought.text} variant="thought" />
+        <MarkdownRenderer
+          content={thought.text}
+          variant="thought"
+          linkAccess={linkAccess}
+          onOpenReference={onOpenReference}
+        />
       </div>
       {canExpand ? (
         <button
@@ -489,7 +526,7 @@ const AssistantActivityGroupView: React.FC<{
       data-approval-waiting={waitingApproval ? 'true' : undefined}
     >
       <summary
-        className={`flex list-none items-start rounded-[8px] outline-none [&::-webkit-details-marker]:hidden ${
+        className={`flex list-none items-center rounded-[8px] outline-none [&::-webkit-details-marker]:hidden ${
           items.length > 0 ? 'cursor-pointer' : ''
         }`}
         data-testid={waitingApproval ? workbenchSelectors.assistantApprovalWaiting : undefined}
@@ -610,7 +647,14 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
             <div className="space-y-2">
               {timeline.map((entry) => {
                 if (entry.kind === 'decision') {
-                  return <AssistantProcessThoughtView key={entry.id} thought={entry.thought} />
+                  return (
+                    <AssistantProcessThoughtView
+                      key={entry.id}
+                      thought={entry.thought}
+                      linkAccess={turn.linkAccess}
+                      onOpenReference={onOpenReference}
+                    />
+                  )
                 }
                 if (entry.kind === 'activity') {
                   return (
@@ -636,7 +680,12 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
               })}
               {streamingRole === 'thought' && streamingMarkdown.trim() ? (
                 <div className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[#787774]">
-                  <MarkdownRenderer content={streamingMarkdown} variant="thought" />
+                  <MarkdownRenderer
+                    content={streamingMarkdown}
+                    variant="thought"
+                    linkAccess={turn.linkAccess}
+                    onOpenReference={onOpenReference}
+                  />
                 </div>
               ) : null}
               {reserveThinkingSlot ? (
