@@ -661,15 +661,17 @@ export const launchElectronApp = async (input: {
         )
       }
       if (gracefulExitRequested && electronProcess && electronProcess.exitCode === null) {
+        // app.exit(0) 后主进程偶发因子进程未退出而卡住；只等一小段，不再死等 Playwright close。
         await new Promise<void>((resolve) => {
-          const timeout = setTimeout(resolve, 10_000)
+          const timeout = setTimeout(resolve, 5_000)
           electronProcess.once('exit', () => {
             clearTimeout(timeout)
             resolve()
           })
         })
       }
-      if (!gracefulExitRequested || (electronProcess && electronProcess.exitCode === null)) {
+      // 未走 graceful，或 graceful 后仍未退出时：Playwright electronApp.close() 会挂死，跳过直接强杀。
+      if (!gracefulExitRequested && electronProcess && electronProcess.exitCode === null) {
         try {
           await Promise.race([
             electronApp.close(),
@@ -687,7 +689,7 @@ export const launchElectronApp = async (input: {
           )
         }
       }
-      // Playwright close 偶发挂死时强制结束，避免 release:start live 门禁拖到 45min 超时
+      // graceful 后仍未退出、或 Playwright close 超时：强制结束，避免 live 门禁卡死
       if (electronProcess && electronProcess.exitCode === null && !electronProcess.killed) {
         try {
           electronProcess.kill('SIGKILL')
