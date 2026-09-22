@@ -177,9 +177,8 @@ const renderSegments = (
 
 const AssistantProcessThoughtView: React.FC<{
   thought: AssistantProcessThought
-  linkAccess?: import('../../../../shared/types').MarkdownLinkAccessEntry[]
   onOpenReference?: (reference: OpenableMarkdownReference) => void
-}> = ({ thought, linkAccess, onOpenReference }) => {
+}> = ({ thought, onOpenReference }) => {
   const [expanded, setExpanded] = useState(false)
   const [isOverflowing, setIsOverflowing] = useState(false)
   const contentRef = useRef<HTMLDivElement>(null)
@@ -242,7 +241,6 @@ const AssistantProcessThoughtView: React.FC<{
         <MarkdownRenderer
           content={thought.text}
           variant="thought"
-          linkAccess={linkAccess}
           onOpenReference={onOpenReference}
         />
       </div>
@@ -651,7 +649,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                     <AssistantProcessThoughtView
                       key={entry.id}
                       thought={entry.thought}
-                      linkAccess={turn.linkAccess}
                       onOpenReference={onOpenReference}
                     />
                   )
@@ -683,7 +680,6 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   <MarkdownRenderer
                     content={streamingMarkdown}
                     variant="thought"
-                    linkAccess={turn.linkAccess}
                     onOpenReference={onOpenReference}
                   />
                 </div>
