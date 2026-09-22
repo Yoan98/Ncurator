@@ -54,11 +54,6 @@ import {
   pickFallbackWorkbenchModel,
   resolveSelectedWorkbenchModel
 } from '../../../shared/workbenchModelSelection'
-import type { FreeModelPublicEntry } from '../../../shared/freeModels'
-import {
-  FREE_MODEL_NO_VISION_WITH_IMAGE_HISTORY_REASON,
-  shouldBlockFreeModelWithoutVision
-} from '../../../shared/messageLogVisionContext'
 import type { LlmPresetProvider } from '../../../shared/llmPresets'
 import MarkdownRenderer from '../components/MarkdownRenderer'
 import { useNavigate } from 'react-router-dom'
@@ -1358,8 +1353,9 @@ const ChatPage: React.FC = () => {
   )
 
   const currentApprovalItem = useMemo(() => {
-    if (!pendingApprovalBatch) return null
-    return pendingApprovalBatch.items[approvalCurrentIndex] || pendingApprovalBatch.items[0] || null
+    const items = pendingApprovalBatch?.items
+    if (!Array.isArray(items) || items.length === 0) return null
+    return items[approvalCurrentIndex] || items[0] || null
   }, [approvalCurrentIndex, pendingApprovalBatch])
   const composerSubmitDisabledReason = useMemo(() => {
     if (!input.trim()) return null
@@ -2019,9 +2015,12 @@ const ChatPage: React.FC = () => {
       activeRuns.find((item) => item.run.status === 'running') || activeRuns[0]
     setAiRunId(visibleActiveRun?.run.id || null)
     setLoading(Boolean(visibleActiveRun && visibleActiveRun.run.status === 'running'))
-    const approval =
+    const approvalCandidate =
       activeRuns.find((item) => item.pendingApproval && !item.pendingApproval.internal)
-        ?.pendingApproval || null
+        ?.pendingApproval
+    const approval = approvalCandidate && Array.isArray(approvalCandidate.items)
+      ? approvalCandidate
+      : null
     setPendingApprovalBatch(approval)
     const questionRun = activeRuns.find((item) => item.pendingInteraction?.kind === 'question')
     setPendingQuestion(
@@ -2077,11 +2076,13 @@ const ChatPage: React.FC = () => {
     try {
       const response = await window.api.aiContextUsageGet({ partnerId })
       if (!response.success) return
-      setContextUsage({
+    setContextUsage({
+        partnerId,
         contextWindowTokens: response.contextWindowTokens || 0,
         usedContextTokens: response.usedContextTokens || 0,
         ratio: response.ratio || 0,
-        updatedAt: response.updatedAt || Date.now()
+        updatedAt: response.updatedAt || Date.now(),
+        hasEffectiveImageContext: response.hasEffectiveImageContext === true
       })
     } catch {
       // Context usage is advisory; failures should not block chat.

@@ -128,6 +128,42 @@ describe('ScheduledTaskService', () => {
     ).toBe(false)
   })
 
+  it('updates enabled explicitly and preserves it on later edits', async () => {
+    const { service } = createService()
+    const created = await service.save({
+      name: '每日晨报',
+      description: '总结',
+      partnerId: 'partner-1',
+      scheduleType: 'daily',
+      timeOfDay: '09:00'
+    })
+    const id = created.task?.id
+    expect(id).toBeTruthy()
+
+    const disabled = await service.save({
+      id,
+      name: '每日晨报',
+      description: '总结',
+      partnerId: 'partner-1',
+      scheduleType: 'daily',
+      timeOfDay: '10:00',
+      enabled: false
+    })
+    expect(disabled.task?.enabled).toBe(false)
+    expect(disabled.task?.nextRunAt).toBeNull()
+
+    const edited = await service.save({
+      id,
+      name: '每日晨报已编辑',
+      description: '总结',
+      partnerId: 'partner-1',
+      scheduleType: 'daily',
+      timeOfDay: '11:00'
+    })
+    expect(edited.task?.enabled).toBe(false)
+    expect(edited.task?.nextRunAt).toBeNull()
+  })
+
   it('reads the latest partner composer settings when running', async () => {
     const { service, taskStore, submitTask, getPartnerUiState } = createService()
     taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
@@ -143,7 +179,7 @@ describe('ScheduledTaskService', () => {
   })
 
   it('fails clearly when the partner has no main model', async () => {
-    const { service, taskStore, submitTask } = createService()
+    const { taskStore, submitTask } = createService()
     taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
     const stateWithoutModel = {
       ...uiState,
@@ -165,7 +201,7 @@ describe('ScheduledTaskService', () => {
   })
 
   it('stops a task when its partner no longer exists', async () => {
-    const { service, taskStore } = createService()
+    const { taskStore } = createService()
     taskStore.set(makeTask({ nextRunAt: NOW - 1 }))
     const missingPartnerService = new ScheduledTaskService({
       taskStore,

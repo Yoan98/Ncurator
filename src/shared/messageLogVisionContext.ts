@@ -38,13 +38,16 @@ export const hasEffectiveImageContextInMessageLog = (
 export const shouldBlockFreeModelWithoutVision = (input: {
   mainModel: WorkbenchSelectedModel | null | undefined
   freeModels: readonly FreeModelPublicEntry[]
-  messageLogRecords: readonly Pick<ChatMessageLogRecord, 'seq' | 'entry'>[]
+  messageLogRecords?: readonly Pick<ChatMessageLogRecord, 'seq' | 'entry'>[]
+  /** 已按压缩下界算过时直接传入，避免把整段 log 再送到 Renderer。 */
+  hasEffectiveImageContext?: boolean
 }): boolean => {
   const mainModel = input.mainModel
   if (!mainModel?.configId || !isFreeModelConfigId(mainModel.configId)) return false
   const entry = input.freeModels.find((item) => item.configId === mainModel.configId)
   if (!entry || entry.capabilities.includes('vision')) return false
-  return hasEffectiveImageContextInMessageLog(input.messageLogRecords)
+  if (typeof input.hasEffectiveImageContext === 'boolean') return input.hasEffectiveImageContext
+  return hasEffectiveImageContextInMessageLog(input.messageLogRecords || [])
 }
 
 export const FREE_MODEL_NO_VISION_WITH_IMAGE_HISTORY_REASON =

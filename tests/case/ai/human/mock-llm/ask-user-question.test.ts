@@ -85,17 +85,29 @@ describe('ai human question backend', () => {
           resolveQuestion = resolve
         })
         const runner = createHumanTestRunner(runtime, {
-          questionResolver: async () => await questionPending,
+          questionResolver: async () => {
+            await questionPending
+            return {
+              accepted: true as const,
+              result: {
+                answers: [
+                  { id: 'accent', selected: [], custom: '蓝绿色' },
+                  { id: 'scope', selected: ['local'], custom: '不要引用外部网页' },
+                  { id: 'format', selected: ['brief'] }
+                ]
+              }
+            }
+          },
           structuredOutputScript: {
             'human.brain': [
               {
                 output: {
                   thought: { next: '主色会影响最终产物，但用户没有说明，先确认。' },
-                  toolCalls: [{ name: 'ask_user_question', args: questionArgs }]
+                  toolCalls: [{ name: 'ask_user_question', args: multiQuestionArgs }]
                 }
               },
               ({ user }) => {
-                if (!user.includes('custom=\"蓝绿色\"')) {
+                if (!user.includes('custom=\"蓝绿色\"') || !user.includes('selected=[\"本地资料\"]')) {
                   throw new Error('提问结果没有回到下一轮模型上下文')
                 }
                 return buildToolDecision({
@@ -131,7 +143,13 @@ describe('ai human question backend', () => {
 
         resolveQuestion?.({
           accepted: true,
-          result: { answers: [{ id: 'accent', selected: [], custom: '蓝绿色' }] }
+          result: {
+            answers: [
+              { id: 'accent', selected: [], custom: '蓝绿色' },
+              { id: 'scope', selected: ['local'], custom: '不要引用外部网页' },
+              { id: 'format', selected: ['brief'] }
+            ]
+          }
         })
         const output = await runPromise
         return {
@@ -149,14 +167,17 @@ describe('ai human question backend', () => {
           (record) => record.entry.kind === 'tool' && record.entry.toolName === 'ask_user_question'
         )
         runtime.assertThat(
-          result.output.status === 'completed' &&
+            result.output.status === 'completed' &&
             required.length === 1 &&
             resolved.length === 1 &&
+            Array.isArray(resolved[0]?.result.answers) &&
+            resolved[0].result.answers.length === 3 &&
             result.content === '主色：蓝绿色\n' &&
             toolResults.some((event) => event.toolName === 'text_file_edit') &&
             questionEntry?.entry.kind === 'tool' &&
             questionEntry.entry.ok === true &&
-            questionEntry.entry.content.includes('custom="蓝绿色"'),
+            questionEntry.entry.content.includes('custom="蓝绿色"') &&
+            questionEntry.entry.content.includes('selected=["本地资料"]'),
           {
             name: 'question-answer-resumes-production-graph',
             message: '回答应写入结构化 tool result，恢复 graph，并影响真实文件产物。',

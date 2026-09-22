@@ -8,6 +8,25 @@ import {
   SCHEDULED_TASK_LIST_SPEC,
   type ScheduledTaskActionInput
 } from './toolSpecs'
+import type { ScheduledTaskListItemOutput } from './outputTypes'
+
+const toListItem = (task: {
+  id: string
+  name: string
+  description: string
+  scheduleType: 'daily' | 'weekly'
+  timeOfDay: string
+  weekday: number | null
+  enabled: boolean
+}): ScheduledTaskListItemOutput => ({
+  id: task.id,
+  name: task.name,
+  description: task.description,
+  scheduleType: task.scheduleType,
+  timeOfDay: task.timeOfDay,
+  weekday: task.weekday,
+  enabled: task.enabled
+})
 
 const buildToolResult = (input: {
   toolName: string
@@ -49,9 +68,10 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
               )
               return result
             }
-            const tasks = await service.listForPartner(ctx.partnerId)
-            session.succeed(undefined, successResult(SCHEDULED_TASK_LIST_SPEC.name, { tasks }))
-            return tasks
+            const tasks = (await service.listForPartner(ctx.partnerId)).map(toListItem)
+            const payload = { tasks }
+            session.succeed(undefined, successResult(SCHEDULED_TASK_LIST_SPEC.name, payload))
+            return payload
           },
           onError: (error, session) => {
             session.fail(
@@ -137,27 +157,13 @@ export const scheduledTasksToolFamily: ToolFamilyDefinition = {
               timeOfDay: input.timeOfDay ?? current.timeOfDay,
               weekday: input.weekday === undefined ? current.weekday : input.weekday,
               contentNodes: current.contentNodes,
-              selectedReferences: current.selectedReferences
+              selectedReferences: current.selectedReferences,
+              enabled: input.enabled
             })
             if (!result.success) {
               const error = result.error || '修改定时任务失败'
               session.fail(error, undefined, failureResult(SCHEDULED_TASK_ACTION_SPEC.name, error))
               return { error }
-            }
-            if (input.enabled !== undefined) {
-              const enabledResult = await service.setEnabled({
-                id: current.id,
-                enabled: input.enabled
-              })
-              if (!enabledResult.success) {
-                const error = enabledResult.error || '更新定时任务状态失败'
-                session.fail(
-                  error,
-                  undefined,
-                  failureResult(SCHEDULED_TASK_ACTION_SPEC.name, error)
-                )
-                return { error }
-              }
             }
             const payload = { id: current.id }
             session.succeed(undefined, successResult(SCHEDULED_TASK_ACTION_SPEC.name, payload))

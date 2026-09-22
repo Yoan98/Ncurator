@@ -15,6 +15,7 @@ import type { ChatMessage, PartnerListItem, ScheduledTask } from '../../../../sr
 
 const CASE_ID = 'scheduled-task-trigger-and-session-refresh'
 const TASK_PROMPT = '定时任务触发验证，请只回复 ok。'
+const VIEWING_DRAFT = '这是查看伙伴尚未发送的草稿'
 
 const padTimePart = (value: number): string => String(value).padStart(2, '0')
 
@@ -61,19 +62,23 @@ describe('workbench scheduled-task e2e', () => {
             workspaceName: `Workbench ${CASE_ID}`,
             createPartner: false
           })
-          await createPartnerThroughWorkbenchUi(page, '触发查看伙伴')
+          await createPartnerThroughWorkbenchUi(page, '定时任务目标伙伴')
           await selectWorkbenchModel(page, setup.env.modelName)
+          await createPartnerThroughWorkbenchUi(page, '当前查看伙伴')
 
           const partnersBefore = await listPartners(page)
-          const viewingPartner = partnersBefore[0]
-          if (!viewingPartner) throw new Error('failed to locate the viewing partner')
+          const targetPartner = partnersBefore.find((item) => item.name === '定时任务目标伙伴')
+          const viewingPartner = partnersBefore.find((item) => item.name === '当前查看伙伴')
+          if (!targetPartner || !viewingPartner)
+            throw new Error('failed to locate target and viewing partners')
+          await getWorkbenchLocator(page, workbenchSelectors.input).fill(VIEWING_DRAFT)
 
           await openScheduledTasksView(page)
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill('触发验证任务')
-          await getWorkbenchLocator(page, scheduledTaskSelectors.formPrompt).fill(TASK_PROMPT)
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formDescription).fill(TASK_PROMPT)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
-          await page.getByRole('option', { name: '触发查看伙伴', exact: true }).click()
+          await page.getByRole('option', { name: targetPartner.name, exact: true }).click()
           // Compute time immediately before save/enable so we do not miss the daily slot.
           const scheduledHhmm = upcomingDailyHhmm(120_000)
           await fillScheduledTaskTime(page, scheduledHhmm)
@@ -82,7 +87,7 @@ describe('workbench scheduled-task e2e', () => {
           const createdTasks = await listTasks(page)
           const createdTask = createdTasks.find((task) => task.name === '触发验证任务')
           if (!createdTask) throw new Error('failed to create the scheduled task')
-          if (createdTask.partnerId !== viewingPartner.id) {
+          if (createdTask.partnerId !== targetPartner.id) {
             throw new Error('scheduled task should bind the selected partner on save')
           }
 
@@ -133,6 +138,7 @@ describe('workbench scheduled-task e2e', () => {
 
           const partnersAfterTrigger = await listPartners(page)
           const boundPartner = partnersAfterTrigger.find((item) => item.id === boundPartnerId)
+          const viewingMessages = await listPartnerMessages(page, viewingPartner.id)
 
           const selectedStillViewing = await page.evaluate((id) => {
             const active = document.querySelector(
@@ -140,11 +146,18 @@ describe('workbench scheduled-task e2e', () => {
             )
             return Boolean(active)
           }, viewingPartner.id)
+          const viewingDraftUnchanged =
+            (await getWorkbenchLocator(page, workbenchSelectors.input).textContent())?.trim() ===
+            VIEWING_DRAFT
 
           return {
             scheduledHhmm,
-            boundPartnerCreated: Boolean(boundPartner) && boundPartner?.id === viewingPartner.id,
+            boundPartnerCreated: Boolean(boundPartner) && boundPartner?.id === targetPartner.id,
             sameViewingPartner: selectedStillViewing,
+            viewingDraftUnchanged,
+            viewingPartnerUntouched: viewingMessages.every(
+              (message) => !message.content.includes(TASK_PROMPT)
+            ),
             triggeredMessage,
             triggeredRunCompleted
           }
@@ -153,6 +166,8 @@ describe('workbench scheduled-task e2e', () => {
           await runtime.assertThat(
             result.boundPartnerCreated &&
               result.sameViewingPartner &&
+              result.viewingDraftUnchanged &&
+              result.viewingPartnerUntouched &&
               result.triggeredMessage &&
               result.triggeredRunCompleted,
             {

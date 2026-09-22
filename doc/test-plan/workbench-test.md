@@ -629,6 +629,14 @@ pnpm test:update:e2e
 - How：通过真实 UI 打开视图新增任务并填写伙伴、名称、任务描述、执行时间和周期，保存后确认任务已绑定且处于开启状态；编辑并重新绑定伙伴，确认启用状态不变；点立即执行弹出确认后取消；删除并二次确认。
 - Oracle：新增与编辑预填对齐 `ST-FORM-001-AC1`；必填缺失拦截对齐 `ST-FORM-001-AC2`；每周必选星期对齐 `ST-FORM-001-AC3`；真实伙伴绑定对齐 `ST-FORM-001-AC6`；编辑保存不改启用对齐 `ST-FORM-001-AC7` / `ST-SWITCH-001-AC3`；新建默认开启对齐 `ST-SWITCH-001-AC1`；删除二次确认对齐 `ST-DELETE-001-AC1/AC2`；列表展示对齐 `ST-LIST-001-AC2/AC4`；启用后数量 chip 对齐 `ST-ENTRY-001-AC3` / `ST-VIEW-001-AC4`；立即执行确认对齐 `ST-RUN-004-AC1`。
 
+#### `scheduled-task-description-reference`
+
+- 测试类型：`e2e`
+- What：在定时任务描述编辑器中输入文本并通过 `@` 选择真实文件，保存后立即执行。
+- Why：定时任务描述与聊天 Composer 共用引用序列化，必须验证引用没有只停留在界面状态。
+- How：通过真实 UI 在 `任务描述` 编辑器选择 `sample-edit.docx`，从 IPC 读取任务的 `contentNodes` / `selectedReferences`，再立即执行并读取绑定伙伴的用户消息。
+- Oracle：编辑器显示引用 token；任务保存后同时包含文本节点、引用节点和 `selectedReferences`；触发消息保留同一引用，对齐 `ST-FORM-001-AC4`、`ST-RUN-001-AC1`。
+
 #### `scheduled-task-trigger-and-session-refresh`
 
 - 测试类型：`e2e / live`

@@ -26,7 +26,7 @@ export const ASK_USER_QUESTION_TOOL_SPEC: HumanToolSpec<
   promptSpec: {
     name: 'ask_user_question',
     description:
-      '在推进任务时，如果对用户意图存在无法自行消除的疑惑或歧义，并且不同理解可能改变结果或违背用户本意，向用户确认后再继续。能够从已有信息或资料中可靠确定的内容不要询问。'
+      '像与人协作一样，在推进任务时遇到无法自行消除的疑惑或歧义，并且不同理解可能改变执行结果或违背用户本意时，向用户确认后再继续。能够通过读取已有资料、上下文或工具可靠确定的信息不要询问；只有答案会实际改变任务定义、执行方案或产物时才提问。一次最多提出 3 个相关问题，问题要具体，选项要互斥、可执行，并在有合理默认方案时标记推荐项。用户始终可以选择“其他，请填写”。本工具必须单独调用，不能与写入、运行命令等其他工具调用混在同一轮。'
   },
   resolveExecutionMeta: createStaticExecutionMetaResolver({
     mutability: 'read_only',

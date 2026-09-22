@@ -222,7 +222,7 @@ export class ScheduledTaskService {
     const now = this.deps.now()
     const existing = input.id ? await this.deps.taskStore.getById(input.id) : null
     if (input.id && !existing) throw new Error('定时任务不存在')
-    const enabled = existing?.enabled ?? true
+    const enabled = input.enabled ?? existing?.enabled ?? true
     return {
       id: existing?.id || uuidv4(),
       name,

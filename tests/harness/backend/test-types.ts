@@ -15,6 +15,7 @@ import type { StorageService } from '../../../src/main/services/storage/StorageS
 import type { EmbeddingService } from '../../../src/main/services/vector/EmbeddingService'
 import type { WorkspaceSourceService } from '../../../src/main/services/workspace/WorkspaceSourceService'
 import type { WorkspaceKnowledgePrepareService } from '../../../src/main/services/workspace/WorkspaceKnowledgePrepareService'
+import type { ScheduledTaskService } from '../../../src/main/services/scheduler/ScheduledTaskService'
 import type { WebCrawlerService } from '../../../src/main/services/webCrawler/types'
 import type {
   ChatMessage,
@@ -46,8 +47,7 @@ export type QuestionResolver = (request: {
   questions: AskUserQuestionInput['questions']
   stage?: AiRunEventStage
 }) => Promise<
-  | { accepted: true; result: AskUserQuestionResult }
-  | { accepted: false; error: string }
+  { accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }
 >
 
 export type BackendHarnessMode = 'tool-real' | 'mock-llm' | 'live'
@@ -197,6 +197,7 @@ export type CreateAiRunContextInput = {
   chatToolsWrapper?: AiRunDeps['chatToolsWrapper']
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
+  scheduledTaskService?: ScheduledTaskService
 }
 
 export type BackendTestRuntime = {

@@ -60,7 +60,7 @@ describe('ai unit runtime skill contract', () => {
       timeOfDay: '09:00'
     })
     expect(create.success).toBe(true)
-    const createWithUnknownField = SCHEDULED_TASK_ACTION_SPEC.inputSchema.parse({
+    const createWithUnknownField = SCHEDULED_TASK_ACTION_SPEC.inputSchema.safeParse({
       action: 'create',
       name: '晨报',
       description: '整理今天的安排',
@@ -68,7 +68,7 @@ describe('ai unit runtime skill contract', () => {
       timeOfDay: '09:00',
       enabled: false
     })
-    expect('enabled' in createWithUnknownField).toBe(false)
+    expect(createWithUnknownField.success).toBe(false)
     expect(
       SCHEDULED_TASK_ACTION_SPEC.inputSchema.safeParse({ action: 'delete', id: 'task-1' }).success
     ).toBe(true)

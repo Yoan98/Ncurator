@@ -13,10 +13,12 @@ export type WorkbenchAiPreference = AiPreference
 export type WorkbenchExecutionPermission = AiExecutionPermission
 
 export type WorkbenchContextUsage = {
+  partnerId: string
   contextWindowTokens: number
   usedContextTokens: number
   ratio: number
   updatedAt: number
+  hasEffectiveImageContext: boolean
 }
 
 export type WorkbenchSelectOption = {
@@ -128,7 +130,12 @@ export type AssistantProcessGroupItem = {
   targetLabel?: string
   input?: IpcJsonObject
   interaction?: {
-    questions: Array<{ id: string; question: string; options: Array<{ id: string; label: string }> }>
+    questions: Array<{
+      id: string
+      question: string
+      options: Array<{ id: string; label: string; description?: string; recommended?: boolean }>
+      multiSelect?: boolean
+    }>
     answers?: Array<{ id: string; selected: string[]; custom?: string }>
   }
 }

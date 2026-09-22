@@ -18,7 +18,7 @@ export const ASK_USER_QUESTION_SCHEMA = z.object({
     .array(
       z.object({
         id: z.string().min(1).describe('问题的稳定标识'),
-        question: z.string().min(1).describe('需要用户回答的问题'),
+        question: z.string().min(1).describe('需要确认、且答案会影响任务结果或执行方案的问题'),
         options: z
           .array(
             z.object({
@@ -29,8 +29,8 @@ export const ASK_USER_QUESTION_SCHEMA = z.object({
             })
           )
           .min(1)
-          .describe('供用户选择的具体方案；方案之间应有明确差异'),
-        multiSelect: z.boolean().optional().describe('是否允许同时选择多个选项')
+          .describe('供用户选择的具体、互斥、可执行方案；方案之间应有明确差异。用户还可以选择其他并填写。'),
+        multiSelect: z.boolean().optional().describe('是否允许同时选择多个选项；未设置时为单选')
       })
     )
     .min(1)

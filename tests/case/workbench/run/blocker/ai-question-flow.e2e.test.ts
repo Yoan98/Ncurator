@@ -65,8 +65,8 @@ describe('workbench AI question e2e', () => {
           const card = page.getByTestId(workbenchSelectors.humanQuestionCard)
           await card.waitFor({ state: 'visible', timeout: 30_000 })
           const questions = required.interaction.questions
-          if (questions.length !== 3) {
-            throw new Error(`expected three questions, received ${questions.length}`)
+          if (questions.length < 1 || questions.length > 3) {
+            throw new Error(`expected one to three questions, received ${questions.length}`)
           }
           await page.reload()
           await card.waitFor({ state: 'visible', timeout: 30_000 })
@@ -91,13 +91,6 @@ describe('workbench AI question e2e', () => {
           }
           await card.getByTestId(workbenchSelectors.humanQuestionSubmit).click()
 
-          const resolved = await waitForWorkbenchAiEvent(runtime, {
-            name: 'ai_question_resolved',
-            timeoutMs: 60_000,
-            matches: (event) =>
-              event.type === 'human_interaction_resolved' &&
-              event.interactionId === required.interactionId
-          })
           const completion = await waitForWorkbenchAiRunCompletion(runtime, Date.now(), undefined, undefined, {
             page,
             blockerPolicy: 'fail'
@@ -108,6 +101,12 @@ describe('workbench AI question e2e', () => {
           const events = (await collectWorkbenchAiRunEvents(runtime)).filter(
             (event) => event.runId === required.runId
           )
+          const resolved = events.find(
+            (event) =>
+              event.type === 'human_interaction_resolved' &&
+              event.interactionId === required.interactionId
+          )
+          if (!resolved) throw new Error('question resolved event was not recorded')
           return {
             resolved,
             questionCount: questions.length,
@@ -117,16 +116,21 @@ describe('workbench AI question e2e', () => {
           }
         },
         assert: async (result) => {
-          if (result.questionCount !== 3) {
-            throw new Error(`expected three questions, received ${result.questionCount}`)
+          if (result.questionCount < 1 || result.questionCount > 3) {
+            throw new Error(`expected one to three questions, received ${result.questionCount}`)
           }
           const resolvedEvent = result.resolved
           if (resolvedEvent.type !== 'human_interaction_resolved') {
             throw new Error('question resolved event was not recorded')
           }
           const answers = resolvedEvent.result.answers
-          if (!Array.isArray(answers) || answers.length !== 3) {
-            throw new Error('the submitted result did not contain all three answers')
+          if (!Array.isArray(answers) || answers.length !== result.questionCount) {
+            throw new Error('the submitted result did not contain one answer for every question')
+          }
+          const questionIds = new Set(required.interaction.questions.map((question) => question.id))
+          const answerIds = new Set(answers.map((answer) => answer.id))
+          if (questionIds.size !== answerIds.size || [...questionIds].some((id) => !answerIds.has(id))) {
+            throw new Error('the submitted result did not preserve every question id')
           }
           if (!result.processText.includes('使用深绿色和白色，整体保持克制')) {
             throw new Error('Activity did not show the submitted custom answer')

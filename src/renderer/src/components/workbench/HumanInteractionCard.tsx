@@ -16,15 +16,16 @@ const HumanInteractionCard: React.FC<Props> = ({ interaction, onSubmit, onCancel
   const [selected, setSelected] = useState<Record<string, string[]>>({})
   const [custom, setCustom] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
-  const question = interaction.questions[index]
+  const questions = Array.isArray(interaction.questions) ? interaction.questions : []
+  const question = questions[index] || { id: '', question: '', options: [], multiSelect: false }
   const currentSelected = selected[question.id] || []
   const isCustom = currentSelected.includes(OTHER_ID)
   const canSubmit = useMemo(
-    () => interaction.questions.every((item) => {
+    () => questions.every((item) => {
       const values = selected[item.id] || []
       return values.length > 0 && (!values.includes(OTHER_ID) || Boolean(custom[item.id]?.trim()))
     }),
-    [custom, interaction.questions, selected]
+    [custom, questions, selected]
   )
   const toggle = (id: string): void => {
     setSelected((previous) => {
@@ -42,7 +43,7 @@ const HumanInteractionCard: React.FC<Props> = ({ interaction, onSubmit, onCancel
     setSubmitting(true)
     try {
       await onSubmit({
-        answers: interaction.questions.map((item) => {
+        answers: questions.map((item) => {
           const values = selected[item.id] || []
           return { id: item.id, selected: values.filter((value) => value !== OTHER_ID), custom: custom[item.id]?.trim() || undefined }
         })
@@ -57,8 +58,8 @@ const HumanInteractionCard: React.FC<Props> = ({ interaction, onSubmit, onCancel
         <div className="text-[15px] font-semibold text-[#37352F]">需要补充一点信息</div>
         <div className="flex items-center gap-1 text-xs text-[#9B9A97]">
           <button type="button" data-testid="workbench-human-question-prev" aria-label="上一个问题" disabled={index === 0 || submitting} onClick={() => setIndex((value) => Math.max(0, value - 1))}><HiChevronLeft /></button>
-          <span>{index + 1} / {interaction.questions.length}</span>
-          <button type="button" data-testid="workbench-human-question-next" aria-label="下一个问题" disabled={index === interaction.questions.length - 1 || submitting} onClick={() => setIndex((value) => Math.min(interaction.questions.length - 1, value + 1))}><HiChevronRight /></button>
+          <span>{index + 1} / {questions.length}</span>
+          <button type="button" data-testid="workbench-human-question-next" aria-label="下一个问题" disabled={index === questions.length - 1 || submitting} onClick={() => setIndex((value) => Math.min(questions.length - 1, value + 1))}><HiChevronRight /></button>
         </div>
       </div>
       <div className="px-5 pt-3 text-[14px] leading-6 text-[#37352F]">{question.question}</div>

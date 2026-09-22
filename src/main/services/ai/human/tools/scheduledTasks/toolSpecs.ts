@@ -1,44 +1,49 @@
 import { z } from 'zod/v4'
 import type { HumanToolSpec } from '../types'
 import { createStaticExecutionMetaResolver } from '../utils/toolSpecUtils'
+import {
+  renderScheduledTaskListModelResult,
+  renderScheduledTaskModelError,
+  renderScheduledTaskMutationModelResult
+} from '../../shared/modelToolResultRenderers'
 
 const scheduleFields = {
   name: z.string().min(1).describe('任务名称。'),
   description: z.string().min(1).describe('任务描述。'),
   scheduleType: z.enum(['daily', 'weekly']).describe('执行周期：daily 每天，weekly 每周。'),
-  timeOfDay: z.string().min(1).describe('执行时间，格式 HH:mm。'),
-  weekday: z
-    .number()
-    .int()
-    .min(0)
-    .max(6)
-    .nullable()
-    .optional()
-    .describe('每周执行的星期，0 为周日，6 为周六。')
+  timeOfDay: z.string().min(1).describe('执行时间，格式 HH:mm。')
 }
 
-const scheduledTaskActionSchema = z.discriminatedUnion('action', [
-  z.object({
+const weekday = z.number().int().min(0).max(6).describe('每周执行的星期，0 为周日，6 为周六。')
+
+const scheduledTaskActionSchema = z.union([
+  z.strictObject({
     action: z.literal('create').describe('创建任务。'),
-    ...scheduleFields
+    ...scheduleFields,
+    scheduleType: z.literal('daily').describe('每天执行。'),
+    weekday: z.null().optional().describe('每天执行时不需要填写。')
   }),
-  z.object({
+  z.strictObject({
+    action: z.literal('create').describe('创建任务。'),
+    ...scheduleFields,
+    scheduleType: z.literal('weekly').describe('每周执行。'),
+    weekday
+  }),
+  z.strictObject({
     action: z.literal('update').describe('修改任务。'),
     id: z.string().min(1).describe('要修改的任务 ID。'),
     name: scheduleFields.name.optional(),
     description: scheduleFields.description.optional(),
     scheduleType: scheduleFields.scheduleType.optional(),
     timeOfDay: scheduleFields.timeOfDay.optional(),
-    weekday: scheduleFields.weekday,
+    weekday: weekday.nullable().optional().describe('每周执行的星期；改为每天时传 null。'),
     enabled: z.boolean().optional().describe('是否启用任务；未提供时保持原状态。')
   }),
-  z.object({
+  z.strictObject({
     action: z.literal('delete').describe('删除任务。'),
     id: z.string().min(1).describe('要删除的任务 ID。')
   })
 ])
-
-const renderScheduledTaskResult = ({ data }: { data: unknown }): string => JSON.stringify(data)
 
 export const SCHEDULED_TASK_LIST_SPEC: HumanToolSpec<
   Record<string, never>,
@@ -57,7 +62,10 @@ export const SCHEDULED_TASK_LIST_SPEC: HumanToolSpec<
     mutability: 'read_only',
     defaultResourceKey: 'scheduled-tasks'
   }),
-  modelResult: { renderSuccess: renderScheduledTaskResult }
+  modelResult: {
+    renderSuccess: renderScheduledTaskListModelResult,
+    renderError: renderScheduledTaskModelError
+  }
 }
 
 export const SCHEDULED_TASK_ACTION_SPEC: HumanToolSpec<
@@ -77,7 +85,10 @@ export const SCHEDULED_TASK_ACTION_SPEC: HumanToolSpec<
     mutability: 'mutating',
     defaultResourceKey: 'scheduled-tasks'
   }),
-  modelResult: { renderSuccess: renderScheduledTaskResult }
+  modelResult: {
+    renderSuccess: renderScheduledTaskMutationModelResult,
+    renderError: renderScheduledTaskModelError
+  }
 }
 
 export const SCHEDULED_TASK_TOOL_SPECS = [

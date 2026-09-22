@@ -1,0 +1,128 @@
+import { describe, it } from 'vitest'
+import type { PartnerListItem, ScheduledTask } from '../../../../src/shared/types'
+import { runE2ECase } from '../../../harness/e2e/run-e2e-case'
+import {
+  WORKBENCH_RESULT_E2E_TIMEOUT_MS,
+  assertNoWorkbenchFakeSignals,
+  createPartnerThroughWorkbenchUi,
+  getWorkbenchLocator,
+  openScheduledTasksView,
+  scheduledTaskSelectors,
+  setupWorkbenchWithTempWorkspace,
+  workbenchSelectors
+} from '../../../harness/e2e/workbench'
+
+const CASE_ID = 'scheduled-task-partner-deletion'
+
+describe('workbench scheduled-task e2e', () => {
+  it(
+    CASE_ID,
+    async () => {
+      await runE2ECase({
+        caseId: CASE_ID,
+        domain: 'workbench',
+        suite: 'scheduled-task',
+        groups: [],
+        description: '验证删除伙伴后任务保留、解绑停用，且可编辑重新绑定。',
+        fixtures: [],
+        serviceMode: 'real',
+        runMode: 'single',
+        execute: async (runtime) => {
+          const { page } = runtime
+          await setupWorkbenchWithTempWorkspace(page, {
+            caseId: CASE_ID,
+            workspaceName: `Workbench ${CASE_ID}`,
+            createPartner: false,
+            configureModel: false
+          })
+          await createPartnerThroughWorkbenchUi(page, '待删除伙伴')
+          await createPartnerThroughWorkbenchUi(page, '重新绑定伙伴')
+          const partners = (await page.evaluate(
+            async () => await window.api.partnerList()
+          )) as PartnerListItem[]
+          const removedPartner = partners.find((item) => item.name === '待删除伙伴')
+          const reboundPartner = partners.find((item) => item.name === '重新绑定伙伴')
+          if (!removedPartner || !reboundPartner) throw new Error('failed to create partners')
+          const saved = await page.evaluate(
+            async ({ partnerId }) =>
+              await window.api.scheduledTaskSave({
+                partnerId,
+                name: '伙伴删除保留任务',
+                description: '验证删除伙伴后的任务状态',
+                scheduleType: 'daily',
+                timeOfDay: '09:00'
+              }),
+            { partnerId: removedPartner.id }
+          )
+          if (!saved.success || !saved.task) throw new Error(saved.error || 'failed to save task')
+          const taskId = saved.task.id
+
+          await openScheduledTasksView(page)
+          const removedItem = getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.partnerItemPrefix}-${removedPartner.id}`
+          )
+          await removedItem.hover()
+          await getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.partnerDeleteButtonPrefix}-${removedPartner.id}`
+          ).click()
+          await getWorkbenchLocator(page, workbenchSelectors.partnerDeleteConfirmButton).click()
+          await removedItem.waitFor({ state: 'detached' })
+
+          const tasksAfterDelete = (await page.evaluate(
+            async () => await window.api.scheduledTaskList()
+          )) as ScheduledTask[]
+          const retained = tasksAfterDelete.find((task) => task.id === taskId)
+          const item = getWorkbenchLocator(page, `${scheduledTaskSelectors.itemPrefix}-${taskId}`)
+          await item.waitFor({ state: 'visible' })
+          const itemText = (await item.textContent()) || ''
+          const toggle = getWorkbenchLocator(
+            page,
+            `${scheduledTaskSelectors.itemTogglePrefix}-${taskId}`
+          )
+          const toggleDisabled = await toggle.isDisabled()
+
+          await getWorkbenchLocator(
+            page,
+            `${scheduledTaskSelectors.itemEditPrefix}-${taskId}`
+          ).click()
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
+          await page.getByRole('option', { name: reboundPartner.name, exact: true }).click()
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
+          const rebound = (
+            (await page.evaluate(
+              async () => await window.api.scheduledTaskList()
+            )) as ScheduledTask[]
+          ).find((task) => task.id === taskId)
+
+          return {
+            retainedAfterDelete: Boolean(
+              retained && !retained.partnerId && !retained.enabled && retained.nextRunAt === null
+            ),
+            itemShowsUnbound: itemText.includes('未绑定 / 已停用'),
+            toggleDisabled,
+            reboundPreservesDisabled: Boolean(
+              rebound?.partnerId === reboundPartner.id && rebound.enabled === false
+            )
+          }
+        },
+        assert: async (result, runtime) => {
+          await runtime.assertThat(
+            result.retainedAfterDelete &&
+              result.itemShowsUnbound &&
+              result.toggleDisabled &&
+              result.reboundPreservesDisabled,
+            {
+              name: 'scheduled-task-survives-partner-deletion',
+              message: '删除伙伴后任务应保留、解绑停用且不可启用，重新绑定时仍保持停用。',
+              data: result
+            }
+          )
+          await assertNoWorkbenchFakeSignals(runtime)
+        }
+      })
+    },
+    WORKBENCH_RESULT_E2E_TIMEOUT_MS
+  )
+})

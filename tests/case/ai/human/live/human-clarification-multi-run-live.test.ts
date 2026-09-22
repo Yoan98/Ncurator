@@ -68,6 +68,23 @@ describe('ai human clarification live backend', () => {
             const answers = event.result.answers
             return Array.isArray(answers) ? answers.length : 0
           })
+          const resolvedByInteractionId = new Map(
+            resolved.map((event) => [event.interactionId, event])
+          )
+          const answerIdsMatchQuestions = questions.every((event) => {
+            const interaction = event.interaction
+            if (interaction.kind !== 'question') return false
+            const resolution = resolvedByInteractionId.get(event.interactionId)
+            const answers = resolution?.result.answers
+            if (!Array.isArray(answers) || answers.length !== interaction.questions.length) return false
+            const answerIds = new Set(
+              answers
+                .filter((answer): answer is { id: string } => Boolean(answer && typeof answer === 'object' && typeof answer.id === 'string'))
+                .map((answer) => answer.id)
+            )
+            return answerIds.size === interaction.questions.length &&
+              interaction.questions.every((question) => answerIds.has(question.id))
+          })
           return {
             first,
             second,
@@ -77,6 +94,7 @@ describe('ai human clarification live backend', () => {
             questions,
             resolved,
             resolvedAnswerCounts,
+            answerIdsMatchQuestions,
             content: await fs.readFile(filePath, 'utf8')
           }
         },
@@ -89,6 +107,7 @@ describe('ai human clarification live backend', () => {
               result.resolved.length === result.questions.length &&
               result.interactionIds.length === result.questions.length &&
               result.resolvedAnswerCounts.every((count) => count > 0) &&
+              result.answerIdsMatchQuestions &&
               result.beforeThird === result.interactionIds.length &&
               result.content.includes('季度客户回访'),
             {

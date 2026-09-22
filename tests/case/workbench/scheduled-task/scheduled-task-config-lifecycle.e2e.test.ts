@@ -16,6 +16,7 @@ import type { PartnerListItem, ScheduledTask } from '../../../../src/shared/type
 
 const CASE_ID = 'scheduled-task-config-lifecycle'
 const PARTNER_NAME = '生命周期伙伴'
+const REBOUND_PARTNER_NAME = '重新绑定伙伴'
 const TASK_NAME = '定时任务生命周期'
 const TASK_NAME_EDITED = '定时任务生命周期已编辑'
 const TASK_PROMPT = '请只回复 ok。'
@@ -49,20 +50,33 @@ describe('workbench scheduled-task e2e', () => {
           })
           await createPartnerThroughWorkbenchUi(page, PARTNER_NAME)
           await selectWorkbenchModel(page, setup.env.modelName)
+          await createPartnerThroughWorkbenchUi(page, REBOUND_PARTNER_NAME)
           const partnersBefore = await listPartners(page)
+          const originalPartner = partnersBefore.find((partner) => partner.name === PARTNER_NAME)
+          const reboundPartner = partnersBefore.find(
+            (partner) => partner.name === REBOUND_PARTNER_NAME
+          )
 
           await openScheduledTasksView(page)
 
           await getWorkbenchLocator(page, scheduledTaskSelectors.addButton).click()
           const saveButton = getWorkbenchLocator(page, scheduledTaskSelectors.formSave)
           await saveButton.waitFor({ state: 'visible' })
-          await saveButton.click()
-          const emptySaveBlocked = (await listTasks(page)).length === 0
-          const formStillOpenAfterEmptySave = await saveButton.isVisible()
-
+          const partnerBox = await getWorkbenchLocator(
+            page,
+            scheduledTaskSelectors.formPartner
+          ).boundingBox()
+          const nameBox = await getWorkbenchLocator(
+            page,
+            scheduledTaskSelectors.formName
+          ).boundingBox()
+          const partnerIsFirstField = Boolean(partnerBox && nameBox && partnerBox.y < nameBox.y)
           await getWorkbenchLocator(page, scheduledTaskSelectors.formName).fill(TASK_NAME)
-          await getWorkbenchLocator(page, scheduledTaskSelectors.formPrompt).fill(TASK_PROMPT)
+          await getWorkbenchLocator(page, scheduledTaskSelectors.formDescription).fill(TASK_PROMPT)
           await fillScheduledTaskTime(page, '09:05')
+          await saveButton.click()
+          const partnerRequiredBlocked = (await listTasks(page)).length === 0
+          const formStillOpenAfterMissingPartner = await saveButton.isVisible()
           await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
           await page.getByRole('option', { name: PARTNER_NAME, exact: true }).click()
           await saveButton.click()
@@ -76,7 +90,7 @@ describe('workbench scheduled-task e2e', () => {
             created.enabled &&
             created.scheduleType === 'daily' &&
             created.timeOfDay === '09:05' &&
-            created.partnerId === partnersBefore[0]?.id &&
+            created.partnerId === originalPartner?.id &&
             partnersAfterCreate.length === partnersBefore.length
           )
           const item = created
@@ -135,12 +149,16 @@ describe('workbench scheduled-task e2e', () => {
             const nameInput = getWorkbenchLocator(page, scheduledTaskSelectors.formName)
             await nameInput.waitFor({ state: 'visible' })
             await nameInput.fill(TASK_NAME_EDITED)
+            await getWorkbenchLocator(page, scheduledTaskSelectors.formPartner).click()
+            await page.getByRole('option', { name: REBOUND_PARTNER_NAME, exact: true }).click()
             await getWorkbenchLocator(page, scheduledTaskSelectors.formSave).click()
             await nameInput.waitFor({ state: 'hidden' })
           }
           const editedTasks = await listTasks(page)
           const edited = editedTasks.find((task) => task.name === TASK_NAME_EDITED)
-          const editedCorrectly = Boolean(edited?.enabled)
+          const editedCorrectly = Boolean(
+            edited?.enabled && edited.partnerId === reboundPartner?.id
+          )
           const countChipVisibleAfterEdit =
             Boolean(edited?.enabled) &&
             (await sidebarCountChip
@@ -178,8 +196,9 @@ describe('workbench scheduled-task e2e', () => {
               .catch(() => false))
 
           return {
-            emptySaveBlocked,
-            formStillOpenAfterEmptySave,
+            partnerIsFirstField,
+            partnerRequiredBlocked,
+            formStillOpenAfterMissingPartner,
             createdCorrectly,
             itemShowsSummary,
             runNowConfirmCancelKeptIdle,
@@ -194,8 +213,9 @@ describe('workbench scheduled-task e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.emptySaveBlocked &&
-              result.formStillOpenAfterEmptySave &&
+            result.partnerIsFirstField &&
+              result.partnerRequiredBlocked &&
+              result.formStillOpenAfterMissingPartner &&
               result.createdCorrectly &&
               result.itemShowsSummary &&
               result.runNowConfirmCancelKeptIdle &&

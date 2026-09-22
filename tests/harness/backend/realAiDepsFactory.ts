@@ -170,8 +170,7 @@ export const createRealAiDepsFactory = async (input: {
     const bindWorkspace = contextInput.bindWorkspace !== false
     const approvalResolver = buildApprovalResolver(contextInput.approvalPolicy)
     const questionResolver = buildQuestionResolver(contextInput.questionResolver)
-    const defaultStreamingMode: AiLlmStreamingMode | undefined =
-      contextInput.streamingModeOverride
+    const defaultStreamingMode: AiLlmStreamingMode | undefined = contextInput.streamingModeOverride
 
     const partnerId = contextInput.partnerId || contextInput.sessionId || 'test-partner'
     terminalSessionIds.add(partnerId)
@@ -297,7 +296,8 @@ export const createRealAiDepsFactory = async (input: {
         llmDriver: llmScript ? createScriptedStructuredOutputDriver(llmScript) : undefined,
         chatToolsWrapper: contextInput.chatToolsWrapper,
         browserUseService: contextInput.browserUseService,
-        webCrawlerService: contextInput.webCrawlerService
+        webCrawlerService: contextInput.webCrawlerService,
+        scheduledTaskService: contextInput.scheduledTaskService
       }
     )
 

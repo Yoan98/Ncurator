@@ -1290,6 +1290,8 @@ export type ScheduledTaskSaveRequest = {
   scheduleType: ScheduledTaskScheduleType
   timeOfDay: string
   weekday?: number | null
+  /** 仅更新已有任务时使用；省略表示保持原状态，新建默认开启。 */
+  enabled?: boolean
 }
 
 export type ScheduledTaskMutationResponse = {
@@ -1540,6 +1542,8 @@ export type AiContextUsageResponse = {
   usedContextTokens?: number
   ratio?: number
   updatedAt?: number
+  /** 压缩后仍会进入下次模型请求的上下文是否含图片。 */
+  hasEffectiveImageContext?: boolean
   error?: string
 }
 

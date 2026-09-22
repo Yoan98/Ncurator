@@ -314,6 +314,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
           <Button
             type="primary"
             size="small"
+            data-testid={scheduledTaskSelectors.aiAddButton}
             onClick={() => {
               setAiPartnerId(partners[0]?.id || '')
               setAiCreateOpen(true)
@@ -446,7 +447,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
                 }))
               }
               placeholder="描述你希望ta完成的事，也可使用@"
-              dataTestId={scheduledTaskSelectors.formPrompt}
+              dataTestId={scheduledTaskSelectors.formDescription}
             />
           </label>
 
@@ -499,7 +500,10 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
         title="选择伙伴"
         okText="开始 AI 创建"
         cancelText="取消"
-        okButtonProps={{ disabled: !aiPartnerId }}
+        okButtonProps={{
+          disabled: !aiPartnerId,
+          'data-testid': scheduledTaskSelectors.aiConfirm
+        }}
         onCancel={() => setAiCreateOpen(false)}
         onOk={() => {
           if (!aiPartnerId) return
@@ -511,6 +515,7 @@ const ScheduledTasksView: React.FC<ScheduledTasksViewProps> = ({
           className="w-full"
           value={aiPartnerId || undefined}
           placeholder="选择伙伴"
+          data-testid={scheduledTaskSelectors.aiPartner}
           options={partners.map((partner) => ({ value: partner.id, label: partner.name }))}
           onChange={setAiPartnerId}
         />

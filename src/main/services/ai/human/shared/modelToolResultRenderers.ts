@@ -12,10 +12,7 @@ import {
   renderPlainConfirmation,
   renderProse
 } from './renderFamilies/prose'
-import {
-  formatTerminalMarker,
-  renderTerminalStream
-} from './renderFamilies/terminal'
+import { formatTerminalMarker, renderTerminalStream } from './renderFamilies/terminal'
 import {
   indentBlock,
   isObject,
@@ -29,9 +26,7 @@ export const renderGenericModelResult: ModelResultRenderer = ({ toolName }) =>
 
 export const renderAskUserQuestionModelResult: ModelResultRenderer = ({ args, data }) => {
   const answers = isObject(data) && Array.isArray(data.answers) ? data.answers.filter(isObject) : []
-  const questions = Array.isArray(args.questions)
-    ? args.questions.filter(isObject)
-    : []
+  const questions = Array.isArray(args.questions) ? args.questions.filter(isObject) : []
   return joinGroupedSections([
     renderGroupedHeader('The user answered the clarification questions.'),
     ...answers.map((answer) => {
@@ -40,9 +35,8 @@ export const renderAskUserQuestionModelResult: ModelResultRenderer = ({ args, da
         : []
       const custom = readString(answer.custom)
       const question = questions.find((item) => readString(item.id) === readString(answer.id))
-      const options = question && Array.isArray(question.options)
-        ? question.options.filter(isObject)
-        : []
+      const options =
+        question && Array.isArray(question.options) ? question.options.filter(isObject) : []
       const selectedLabels = selected.map((optionId) => {
         const option = options.find((item) => readString(item.id) === optionId)
         return readString(option?.label) || optionId
@@ -61,6 +55,38 @@ export const renderGenericModelError: ModelResultRenderer = ({ toolName, data })
     : readString(data)
   if (detail && containsOnlyModelSafeDiagnosticText(detail)) return `Error: ${detail}`
   return `Error: ${toolName} failed. Check the tool arguments and try again.`
+}
+
+const readBoolean = (value: JsonValue | undefined): boolean | undefined =>
+  typeof value === 'boolean' ? value : undefined
+
+export const renderScheduledTaskListModelResult: ModelResultRenderer = ({ data }) => {
+  const tasks = isObject(data) && Array.isArray(data.tasks) ? data.tasks.filter(isObject) : []
+  if (tasks.length === 0) return '当前伙伴没有定时任务。'
+  const weekdayLabels = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+  const lines = tasks.map((task, index) => {
+    const scheduleType = readString(task.scheduleType) === 'weekly' ? '每周' : '每天'
+    const weekday = readNumber(task.weekday)
+    const schedule =
+      scheduleType === '每周' && weekday !== undefined
+        ? `每周 ${weekdayLabels[weekday] || String(weekday)} ${readString(task.timeOfDay) || ''}`
+        : `每天 ${readString(task.timeOfDay) || ''}`
+    const state = readBoolean(task.enabled) === true ? '已启用' : '已停用'
+    return `${index + 1}. ${readString(task.id) || ''}｜${readString(task.name) || ''}｜${schedule}｜${state}`
+  })
+  return ['当前伙伴的定时任务：', ...lines].join('\n')
+}
+
+export const renderScheduledTaskMutationModelResult: ModelResultRenderer = ({ args, data }) => {
+  const id = isObject(data) ? readString(data.id) : undefined
+  const action = readString(args.action)
+  const verb = action === 'create' ? '创建' : action === 'update' ? '更新' : '删除'
+  return `已${verb}定时任务${id ? `，id=${id}` : ''}。`
+}
+
+export const renderScheduledTaskModelError: ModelResultRenderer = ({ toolName, data }) => {
+  const detail = isObject(data) ? readString(data.error) || readString(data.message) : undefined
+  return detail ? `Error: ${detail}` : `Error: ${toolName} 执行失败。`
 }
 
 const buildTerminalMarkers = (

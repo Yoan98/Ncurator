@@ -4,6 +4,7 @@ import { resolveEffectiveContextWindowTokens } from './human/constants'
 import { projectMessageLogRecords } from './human/memory/transcript'
 import { estimateMessagesForContext } from './human/memory/multimodal'
 import { lookupCatalogModelContextTokens } from './modelContextWindow'
+import { hasEffectiveImageContextInMessageLog } from '../../../shared/messageLogVisionContext'
 
 export const getAiContextUsage = async (input: {
   partnerId: string
@@ -14,6 +15,7 @@ export const getAiContextUsage = async (input: {
   usedContextTokens: number
   ratio: number
   updatedAt: number
+  hasEffectiveImageContext: boolean
 }> => {
   const records = await input.chatMessageLogStore.list(input.partnerId)
   const messages = projectMessageLogRecords(records).messages
@@ -26,6 +28,7 @@ export const getAiContextUsage = async (input: {
     contextWindowTokens,
     usedContextTokens,
     ratio: usedContextTokens / contextWindowTokens,
-    updatedAt: Date.now()
+    updatedAt: Date.now(),
+    hasEffectiveImageContext: hasEffectiveImageContextInMessageLog(records)
   }
 }

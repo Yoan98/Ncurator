@@ -9,7 +9,12 @@ import ExcelJS from 'exceljs'
 import JSZip from 'jszip'
 import { getSlides, getSlideText, loadPresentation } from 'pptx-kit'
 import type { Locator, Page } from 'playwright'
-import type { AiLlmIoRecord, AiRunEvent, JsonValue, WorkspaceIndexJobAction } from '../../../src/shared/types'
+import type {
+  AiLlmIoRecord,
+  AiRunEvent,
+  JsonValue,
+  WorkspaceIndexJobAction
+} from '../../../src/shared/types'
 import {
   buildDocumentNodeIndex,
   loadDocxBundle
@@ -1088,7 +1093,11 @@ export const setupWorkbenchWorkspaceOnly = async (
   }
 }
 
-export const pasteWorkbenchText = async (page: Page, value: string): Promise<void> => {
+export const pasteWorkbenchText = async (
+  page: Page,
+  value: string,
+  inputTestId = workbenchSelectors.input
+): Promise<void> => {
   let electronClipboardError: string | null = null
   let pastedThroughElectron = false
   try {
@@ -1127,16 +1136,29 @@ export const pasteWorkbenchText = async (page: Page, value: string): Promise<voi
         clipboardTextLength: pasteEvent.clipboardData?.getData('text/plain').length || 0
       }
     },
-    { testId: workbenchSelectors.input, text: value }
+    { testId: inputTestId, text: value }
   )
   lastWorkbenchPasteDiagnostics = {
     transport: 'synthetic-paste-event',
     electronClipboardError,
     ...syntheticPaste
   }
-  if (!syntheticPaste.dispatched || !syntheticPaste.defaultPrevented) {
+  if (!syntheticPaste.dispatched) {
     throw new Error(
       `failed to dispatch workbench paste event: ${JSON.stringify(lastWorkbenchPasteDiagnostics)}`
+    )
+  }
+  if (!syntheticPaste.defaultPrevented) {
+    // The extracted task-description editor does not own the Workbench paste
+    // handler. Playwright's native text insertion still exercises its input
+    // and mention state without coupling the helper to the chat Composer.
+    if (inputTestId !== workbenchSelectors.input) {
+      await page.keyboard.insertText(value)
+      await page.waitForTimeout(100)
+      return
+    }
+    throw new Error(
+      `workbench paste event was not consumed: ${JSON.stringify(lastWorkbenchPasteDiagnostics)}`
     )
   }
   await page.waitForTimeout(100)
@@ -1144,8 +1166,12 @@ export const pasteWorkbenchText = async (page: Page, value: string): Promise<voi
 
 let lastWorkbenchPasteDiagnostics: unknown = null
 
-export const setWorkbenchInput = async (page: Page, value: string): Promise<void> => {
-  const input = getWorkbenchLocator(page, workbenchSelectors.input)
+export const setWorkbenchInput = async (
+  page: Page,
+  value: string,
+  inputTestId = workbenchSelectors.input
+): Promise<void> => {
+  const input = getWorkbenchLocator(page, inputTestId)
   const selectAllInput = async (): Promise<void> => {
     await input.evaluate((element) => {
       if (!(element instanceof HTMLElement)) {
@@ -1173,7 +1199,7 @@ export const setWorkbenchInput = async (page: Page, value: string): Promise<void
           const tokenCount = element.querySelectorAll('[data-role="scope-token"]').length
           return tokenCount === 0 && !element.textContent?.trim()
         },
-        workbenchSelectors.input,
+        inputTestId,
         { timeout: 1500 }
       )
       .then(() => true)
@@ -1187,7 +1213,7 @@ export const setWorkbenchInput = async (page: Page, value: string): Promise<void
 
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     await input.click()
-    await pasteWorkbenchText(page, value)
+    await pasteWorkbenchText(page, value, inputTestId)
     const typed = await page
       .waitForFunction(
         (inputValue: { testId: string; expected: string }) => {
@@ -1195,7 +1221,7 @@ export const setWorkbenchInput = async (page: Page, value: string): Promise<void
           return Boolean(element?.textContent?.includes(inputValue.expected))
         },
         {
-          testId: workbenchSelectors.input,
+          testId: inputTestId,
           expected: value
         },
         { timeout: 1000 }
@@ -1216,8 +1242,12 @@ export const setWorkbenchInput = async (page: Page, value: string): Promise<void
   )
 }
 
-export const appendWorkbenchInputText = async (page: Page, value: string): Promise<void> => {
-  const input = getWorkbenchLocator(page, workbenchSelectors.input)
+export const appendWorkbenchInputText = async (
+  page: Page,
+  value: string,
+  inputTestId = workbenchSelectors.input
+): Promise<void> => {
+  const input = getWorkbenchLocator(page, inputTestId)
   await input.evaluate((element) => {
     if (!(element instanceof HTMLElement)) {
       throw new Error('workbench input is not an HTMLElement')
@@ -1230,7 +1260,7 @@ export const appendWorkbenchInputText = async (page: Page, value: string): Promi
     selection?.removeAllRanges()
     selection?.addRange(range)
   })
-  await pasteWorkbenchText(page, value)
+  await pasteWorkbenchText(page, value, inputTestId)
 }
 
 export const submitWorkbenchCurrentDraft = async (page: Page): Promise<void> => {
@@ -1521,9 +1551,10 @@ export const readWorkbenchSelectedControlText = async (
 export const insertWorkbenchReferenceToken = async (
   page: Page,
   visibleName: string,
-  queryText = visibleName
+  queryText = visibleName,
+  inputTestId = workbenchSelectors.input
 ): Promise<void> => {
-  await appendWorkbenchInputText(page, `@${queryText}`)
+  await appendWorkbenchInputText(page, `@${queryText}`, inputTestId)
   const panel = getWorkbenchLocator(page, workbenchSelectors.mentionPanel)
   await waitForWorkbenchMentionPanelText(page)
   const option = panel.getByRole('button').filter({ hasText: visibleName }).first()
@@ -1549,14 +1580,17 @@ export const insertWorkbenchReferenceToken = async (
       )
     },
     {
-      testId: workbenchSelectors.input,
+      testId: inputTestId,
       visibleName
     }
   )
 }
 
-export const getWorkbenchReferenceTokenTexts = async (page: Page): Promise<string[]> =>
-  await getWorkbenchLocator(page, workbenchSelectors.input).evaluate((element) => {
+export const getWorkbenchReferenceTokenTexts = async (
+  page: Page,
+  inputTestId = workbenchSelectors.input
+): Promise<string[]> =>
+  await getWorkbenchLocator(page, inputTestId).evaluate((element) => {
     if (!(element instanceof HTMLElement)) {
       throw new Error('workbench input is not an HTMLElement')
     }
