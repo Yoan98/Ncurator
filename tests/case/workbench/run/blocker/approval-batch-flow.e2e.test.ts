@@ -321,20 +321,20 @@ describe('workbench run e2e', () => {
             result.approveWaiting.waitingVisible &&
               result.approveWaiting.titleText === result.approveExpectedTitle &&
               result.approveWaiting.positionText === result.approveExpectedPosition &&
-              result.approveWaiting.waitingText.includes('等待用户审核中') &&
+              result.approveWaiting.waitingText.includes('等待用户处理') &&
               !result.approveWaiting.hasBlockerNotice &&
               !result.approveWaiting.antMessageText.includes('需要审核') &&
               result.deniedWaiting.waitingVisible &&
               result.deniedWaiting.titleText === result.deniedExpectedTitle &&
               result.deniedWaiting.positionText === result.deniedExpectedPosition &&
-              result.deniedWaiting.waitingText.includes('等待用户审核中') &&
+              result.deniedWaiting.waitingText.includes('等待用户处理') &&
               !result.deniedWaiting.hasBlockerNotice &&
               !result.deniedWaiting.antMessageText.includes('需要审核') &&
               !result.antMessageAfterApprove.includes('审核已通过'),
             {
               name: 'workbench-approval-activity-waiting-and-no-toast',
               message:
-                '等待审批时 Activity header 应为「等待用户审核中」，且过程流无 blockers、无开始/通过 toast，对齐 WB-BLOCKER-001-AC6。',
+                '等待审批时 Activity header 应为「等待用户处理」，且过程流无 blockers、无开始/通过 toast，对齐 WB-BLOCKER-001-AC6。',
               data: {
                 approveWaiting: result.approveWaiting,
                 deniedWaiting: result.deniedWaiting,

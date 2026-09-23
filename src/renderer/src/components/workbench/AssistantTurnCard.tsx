@@ -415,7 +415,7 @@ const buildAssistantTimeline = (input: {
   return timeline
 }
 
-const WAITING_APPROVAL_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户审核中' }]
+const WAITING_APPROVAL_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户处理' }]
 const WAITING_INTERACTION_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户处理' }]
 
 const AssistantActivityItemView: React.FC<{

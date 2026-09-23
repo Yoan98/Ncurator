@@ -365,7 +365,7 @@ pnpm test:update:e2e
 - What：真实 AI 运行中触发需审批 terminal 操作后，审核模式下 composer 上方审批卡片的同意、拒绝和指导输入流程，以及完全访问模式下的自动执行。
 - Why：审批是高风险 terminal 执行的用户确认边界；UI 误执行或误恢复都会破坏安全约束。
 - How：通过真实用户请求诱导 AI 产生需要审批的 terminal 操作；审核模式分别覆盖全同意、任一拒绝、填写指导输入和不操作期间保持等待；完全访问在新 run 中执行同类命令。
-- Oracle：审核模式下整批同意后按原 serial 顺序继续，对齐 `WB-BLOCKER-001-AC1`；任一拒绝或填写指导输入时本批命令 0 执行并回到后续 AI 决策，对齐 `WB-BLOCKER-001-AC2`；指导输入不作为独立第三按钮，对齐 `WB-BLOCKER-001-AC3`；审批不因固定超时自动失败，对齐 `WB-BLOCKER-001-AC4`；完全访问下文件实际创建且没有审批事件、等待状态或审批卡片，对齐 `WB-BLOCKER-001-AC5`；等待时 Activity header 为「等待用户审核中」且无 blockers/toast，审完后工具行前缀结果图标且悬停揭示解释文案，对齐 `WB-BLOCKER-001-AC6`、`WB-BLOCKER-001-AC7`；记录模型、耗时、完成度评分和失败归因。
+- Oracle：审核模式下整批同意后按原 serial 顺序继续，对齐 `WB-BLOCKER-001-AC1`；任一拒绝或填写指导输入时本批命令 0 执行并回到后续 AI 决策，对齐 `WB-BLOCKER-001-AC2`；指导输入不作为独立第三按钮，对齐 `WB-BLOCKER-001-AC3`；审批不因固定超时自动失败，对齐 `WB-BLOCKER-001-AC4`；完全访问下文件实际创建且没有审批事件、等待状态或审批卡片，对齐 `WB-BLOCKER-001-AC5`；等待时 Activity header 为「等待用户处理」且无 blockers/toast，审完后工具行前缀结果图标且悬停揭示解释文案，对齐 `WB-BLOCKER-001-AC6`、`WB-BLOCKER-001-AC7`；记录模型、耗时、完成度评分和失败归因。
 
 #### `stop-running-or-approval-run`
 
