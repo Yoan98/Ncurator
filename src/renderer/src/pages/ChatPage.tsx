@@ -268,6 +268,7 @@ const createAssistantTurn = (messageId: string): AssistantTurnViewModel => ({
   artifacts: [],
   applyTargets: [],
   waitingApproval: false,
+  waitingInteraction: false,
   pendingApprovalItems: [],
   approvalReviews: []
 })
@@ -471,11 +472,11 @@ const reduceAssistantTurnByRunEvent = (
   }
 
   if (event.type === 'human_interaction_required' && event.interaction.kind === 'question') {
-    next = { ...next, isBrainThinking: false, waitingApproval: true }
+    next = { ...next, isBrainThinking: false, waitingInteraction: true }
   }
 
   if (event.type === 'human_interaction_resolved' && event.kind === 'question') {
-    next = { ...next, waitingApproval: false }
+    next = { ...next, waitingInteraction: false }
   }
 
   if (event.type === 'assistant_brain_stream_started') {
@@ -566,6 +567,7 @@ const reduceAssistantTurnByRunEvent = (
       status: 'failed',
       runFinished: true,
       waitingApproval: false,
+      waitingInteraction: false,
       pendingApprovalItems: [],
       error: formatRunFailureTitle(event),
       errorDetail: formatRunFailureDetail(event)
@@ -579,6 +581,7 @@ const reduceAssistantTurnByRunEvent = (
       status: 'cancelled',
       runFinished: true,
       waitingApproval: false,
+      waitingInteraction: false,
       pendingApprovalItems: [],
       error: undefined,
       errorDetail: undefined
@@ -592,6 +595,7 @@ const reduceAssistantTurnByRunEvent = (
       runFinished: true,
       status: next.status === 'failed' || next.status === 'cancelled' ? next.status : 'completed',
       waitingApproval: false,
+      waitingInteraction: false,
       pendingApprovalItems: [],
       plan: []
     }
@@ -652,6 +656,7 @@ const applyRunRecordToTurn = (
       return [...items, target]
     }, turn.applyTargets),
     waitingApproval: !runFinished && Boolean(run.pendingApproval),
+    waitingInteraction: !runFinished && Boolean(run.pendingInteraction),
     pendingApprovalItems: runFinished
       ? []
       : run.pendingApproval?.items ?? turn.pendingApprovalItems,
@@ -692,7 +697,8 @@ const buildAssistantTurnFromRunSnapshot = (
     processThoughts: projected.processThoughts,
     processGroups,
     isBrainThinking: projected.isBrainThinking,
-    waitingApproval: Boolean(snapshot.run.pendingApproval || snapshot.run.pendingInteraction),
+    waitingApproval: Boolean(snapshot.run.pendingApproval),
+    waitingInteraction: Boolean(snapshot.run.pendingInteraction),
     pendingApprovalItems: snapshot.run.pendingApproval?.items || [],
     approvalReviews
   }

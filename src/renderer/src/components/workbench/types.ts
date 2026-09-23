@@ -201,6 +201,7 @@ export type AssistantTurnViewModel = {
   artifacts: AssistantArtifactItem[]
   applyTargets: AssistantTurnApplyTarget[]
   waitingApproval: boolean
+  waitingInteraction: boolean
   pendingApprovalItems: import('../../../../shared/types').AiApprovalBatchItem[]
   approvalReviews: import('../../../../shared/workbench/approvalReview').AssistantApprovalReview[]
   error?: string

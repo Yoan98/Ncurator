@@ -327,6 +327,7 @@ type AssistantTimelineEntry =
       createdAt: number
       groups: AssistantProcessGroup[]
       waitingApproval?: boolean
+      waitingInteraction?: boolean
     }
   | {
       kind: 'group'
@@ -355,6 +356,7 @@ const buildAssistantTimeline = (input: {
   thoughts: AssistantProcessThought[]
   groups: AssistantProcessGroup[]
   waitingApproval: boolean
+  waitingInteraction: boolean
   messageId: string
 }): AssistantTimelineEntry[] => {
   const rawEntries: RawTimelineEntry[] = [
@@ -393,11 +395,12 @@ const buildAssistantTimeline = (input: {
     })
   }
 
-  if (!input.waitingApproval) return timeline
+  if (!(input.waitingApproval || input.waitingInteraction)) return timeline
 
   const last = timeline[timeline.length - 1]
   if (last?.kind === 'activity') {
-    last.waitingApproval = true
+    last.waitingApproval = input.waitingApproval || Boolean(last.waitingApproval)
+    last.waitingInteraction = input.waitingInteraction || Boolean(last.waitingInteraction)
     return timeline
   }
 
@@ -406,12 +409,14 @@ const buildAssistantTimeline = (input: {
     id: `${input.messageId}:approval-wait`,
     createdAt: Date.now(),
     groups: [],
-    waitingApproval: true
+    waitingApproval: input.waitingApproval,
+    waitingInteraction: input.waitingInteraction
   })
   return timeline
 }
 
-const WAITING_APPROVAL_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户处理' }]
+const WAITING_APPROVAL_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户审核中' }]
+const WAITING_INTERACTION_SUMMARY: AssistantRichTextSegment[] = [{ text: '等待用户处理' }]
 
 const AssistantActivityItemView: React.FC<{
   item: AssistantProcessGroup['items'][number]
@@ -481,6 +486,7 @@ const AssistantActivityGroupView: React.FC<{
   id: string
   shimmerActive: boolean
   waitingApproval?: boolean
+  waitingInteraction?: boolean
   approvalReviews?: readonly AssistantApprovalReview[]
   onPreviewImage?: (image: ImageLightboxImage) => void
 }> = ({
@@ -488,6 +494,7 @@ const AssistantActivityGroupView: React.FC<{
   id,
   shimmerActive,
   waitingApproval = false,
+  waitingInteraction = false,
   approvalReviews = [],
   onPreviewImage
 }) => {
@@ -495,9 +502,12 @@ const AssistantActivityGroupView: React.FC<{
   const items = groups
     .flatMap((group) => group.items)
     .sort((left, right) => left.createdAt - right.createdAt)
+  const waitingUser = waitingApproval || waitingInteraction
   const summaryText = waitingApproval
     ? WAITING_APPROVAL_SUMMARY
-    : buildAssistantExecutionSummaryText(
+    : waitingInteraction
+      ? WAITING_INTERACTION_SUMMARY
+      : buildAssistantExecutionSummaryText(
         groups.map((group) => ({
           id: group.id,
           skillKey: group.skillKey,
@@ -515,13 +525,14 @@ const AssistantActivityGroupView: React.FC<{
           }))
         }))
       )
-  const iconKind = waitingApproval ? 'terminal' : resolveAssistantExecutionIcon(groups)
-  const headerShimmer = waitingApproval || shimmerActive
+  const iconKind = waitingUser ? 'terminal' : resolveAssistantExecutionIcon(groups)
+  const headerShimmer = waitingUser || shimmerActive
   return (
     <details
       className="group/execution"
       data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${id}`}
       data-approval-waiting={waitingApproval ? 'true' : undefined}
+      data-interaction-waiting={waitingInteraction ? 'true' : undefined}
     >
       <summary
         className={`flex list-none items-center rounded-[8px] outline-none [&::-webkit-details-marker]:hidden ${
@@ -531,7 +542,7 @@ const AssistantActivityGroupView: React.FC<{
       >
         <span
           className={`inline-flex min-w-0 max-w-full items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
-            !waitingApproval && (status === 'failed' || status === 'partial_failed')
+            !waitingUser && (status === 'failed' || status === 'partial_failed')
               ? 'text-[#B3261E]'
               : headerShimmer
                 ? 'text-[#37352F]'
@@ -602,23 +613,24 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   )
   const showThinkingIndicator = shouldShowAssistantThinkingIndicator({
     isBrainThinking: turn?.isBrainThinking,
-    waitingApproval: Boolean(turn?.waitingApproval),
+    waitingApproval: Boolean(turn?.waitingApproval || turn?.waitingInteraction),
     runFinished: Boolean(turn?.runFinished),
     hasFinalAnswer,
     hasRunningRetry
   })
   /** 运行未结束且尚无最终回答时预留固定行高，避免「让俺想想」显隐把页面顶抖 */
   const reserveThinkingSlot =
-    showThinkingIndicator || (!turn?.runFinished && !turn?.waitingApproval && !hasFinalAnswer)
+    showThinkingIndicator || (!turn?.runFinished && !turn?.waitingApproval && !turn?.waitingInteraction && !hasFinalAnswer)
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({
         thoughts: processThoughts,
         groups: processGroups,
         waitingApproval: Boolean(turn?.waitingApproval),
+        waitingInteraction: Boolean(turn?.waitingInteraction),
         messageId
       }),
-    [messageId, processGroups, processThoughts, turn?.waitingApproval]
+    [messageId, processGroups, processThoughts, turn?.waitingApproval, turn?.waitingInteraction]
   )
   const approvalReviews = turn?.approvalReviews || []
   const applyTargets = turn?.applyTargets || []
@@ -660,10 +672,11 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                       id={entry.id}
                       groups={entry.groups}
                       waitingApproval={entry.waitingApproval}
+                      waitingInteraction={entry.waitingInteraction}
                       approvalReviews={approvalReviews}
                       onPreviewImage={onPreviewImage}
                       shimmerActive={
-                        Boolean(entry.waitingApproval) ||
+                        Boolean(entry.waitingApproval || entry.waitingInteraction) ||
                         shouldActivityHeaderShimmer({
                           activityCreatedAt: entry.createdAt,
                           thoughts: processThoughts,
