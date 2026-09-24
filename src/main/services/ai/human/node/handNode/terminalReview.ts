@@ -14,6 +14,7 @@ export type TerminalReviewCandidate = TerminalReviewPromptCommand
 export type TerminalReviewDecision = {
   commandId: string
   decision: 'auto_approve' | 'needs_human_review'
+  reason: string
 }
 
 export type TerminalReviewResult = {
@@ -28,7 +29,8 @@ const reviewSchema = z
       z
         .object({
           commandId: z.string().min(1),
-          decision: z.enum(['auto_approve', 'needs_human_review'])
+          decision: z.enum(['auto_approve', 'needs_human_review']),
+          reason: z.string().trim().min(1)
         })
         .strict()
     )
@@ -38,7 +40,8 @@ const reviewSchema = z
 const humanFallback = (commands: readonly TerminalReviewCandidate[]): TerminalReviewResult => ({
   decisions: commands.map((command) => ({
     commandId: command.commandId,
-    decision: 'needs_human_review'
+    decision: 'needs_human_review',
+    reason: 'AI 审核未能提供有效判定，转人工审核。'
   }))
 })
 
@@ -76,7 +79,8 @@ export const reviewTerminalCommands = async (input: {
     const prompt = buildTerminalReviewPrompt({
       userRequest: input.userInput,
       platform: input.ctx.platform,
-      workingDirectory: getTerminalStartDirectory(),
+      workspaceRoots: input.ctx.workspaceRoots,
+      terminalStartDirectory: getTerminalStartDirectory(),
       commands: input.commands,
       retryHint: retryIndex > 0
     })

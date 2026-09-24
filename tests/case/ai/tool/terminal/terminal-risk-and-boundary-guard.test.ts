@@ -41,13 +41,15 @@ describe('ai tool terminal backend', () => {
               ({ user }) => ({
                 decisions: collectTerminalReviewCommandIds(user).map((commandId) => ({
                   commandId,
-                  decision: 'needs_human_review'
+                  decision: 'needs_human_review',
+                  reason: '该命令会递归删除目录，需人工确认影响范围。'
                 }))
               }),
               ({ user }) => ({
                 decisions: collectTerminalReviewCommandIds(user).map((commandId) => ({
                   commandId,
-                  decision: 'needs_human_review'
+                  decision: 'needs_human_review',
+                  reason: '该命令会修改文件系统，需人工确认。'
                 }))
               })
             ],

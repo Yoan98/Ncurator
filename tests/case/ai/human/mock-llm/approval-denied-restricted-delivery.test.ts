@@ -29,7 +29,8 @@ describe('ai human mock-llm backend', () => {
               ({ user }) => ({
                 decisions: collectTerminalReviewCommandIds(user).map((commandId) => ({
                   commandId,
-                  decision: 'needs_human_review'
+                  decision: 'needs_human_review',
+                  reason: '该写入操作需要人工审批。'
                 }))
               })
             ],

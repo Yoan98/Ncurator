@@ -158,7 +158,7 @@ Terminal：`terminal_read` 输出上限与 inline 字符预算挂钩（见 termi
 ```text
 hand 收到 call batch
   → terminal_run 副作用规则判断（未命中则默认通过）
-  → 命中项由本次主模型做一次结构化 AI 审核
+  → 命中项由本次主模型做一次结构化 AI 审核（传入用户原话、用户默认工作区目录、平台、终端默认启动目录和命令）
   → AI 未自动通过的项进入人工批量审批（整批执行前）
   → 执行 tool runtime
   → buildModelToolResultDelivery

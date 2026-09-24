@@ -2015,6 +2015,7 @@ export type ChatMessageLogAnnotationEntry =
         decisions: Array<{
           commandId: string
           decision: 'auto_approve' | 'needs_human_review'
+          reason: string
         }>
       }
     }

@@ -117,7 +117,8 @@ describe('ai tool hand terminal review', () => {
                 return {
                   decisions: collectTerminalReviewCommandIds(user).map((commandId) => ({
                     commandId,
-                    decision: 'auto_approve'
+                    decision: 'auto_approve',
+                    reason: '用户授权创建指定目录，操作范围清楚。'
                   }))
                 }
               }
@@ -180,7 +181,11 @@ describe('ai tool hand terminal review', () => {
             result.reviewRequests[0].includes('命令 ID：') &&
             result.reviewRequests[0].includes('用途说明：') &&
             result.reviewRequests[0].includes(result.command) &&
-            result.reviewRequests[0].includes('执行目录：') &&
+            result.reviewRequests[0].includes(
+              `用户默认工作区目录：\n- ${runtime.workspaceRoot}`
+            ) &&
+            result.reviewRequests[0].includes('终端默认启动目录：') &&
+            !result.reviewRequests[0].includes('执行目录：') &&
             (result.reviewRequests[0].includes('平台：Windows') ||
               result.reviewRequests[0].includes('平台：macOS')) &&
             !result.reviewRequests[0].startsWith('{') &&
@@ -188,14 +193,15 @@ describe('ai tool hand terminal review', () => {
             !result.reviewRequests[0].includes('macOS / zsh') &&
             !result.reviewRequests[0].includes('Windows / PowerShell') &&
             !result.reviewRequests[0].includes('基础命中：') &&
-            result.reviewRequests[1].includes('上一次响应未通过 JSON') &&
+            result.reviewRequests[1].includes('上一次响应未通过输出格式或字段校验') &&
             result.reviewSystems.length === 2 &&
             result.reviewSystems[0].includes('只返回合法 JSON') &&
-            result.reviewSystems[0].includes('明确授权的具体普通写入') &&
+            result.reviewSystems[0].includes('reason 简短说明判断依据') &&
             result.reviewSystems[0].includes('"decisions"') &&
             result.reviewSystems[0].includes('"commandId"') &&
             result.reviewDecisions.length === 1 &&
             result.reviewDecisions[0].decision === 'auto_approve' &&
+            result.reviewDecisions[0].reason === '用户授权创建指定目录，操作范围清楚。' &&
             result.reviews.length === 1 &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 0 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 1,
@@ -248,8 +254,16 @@ describe('ai tool hand terminal review', () => {
           }
         })
         const output = await runner.run({ taskId: runtime.taskId, userInput: '请处理目录。' })
+        const records = await runner.ctx.loadMessageLog()
+        const reviewDecisions = records.flatMap((record) => {
+          const { entry } = record
+          return entry.kind === 'annotation' && entry.eventType === 'terminal_review_resolved'
+            ? entry.payload.decisions
+            : []
+        })
         return {
           output,
+          reviewDecisions,
           exists: await fs
             .stat(target)
             .then(() => true)
@@ -261,6 +275,8 @@ describe('ai tool hand terminal review', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             !result.exists &&
+            result.reviewDecisions.length === 1 &&
+            result.reviewDecisions[0].reason.includes('审核未能提供有效判定') &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 1 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 0,
           {
@@ -316,9 +332,17 @@ describe('ai tool hand terminal review', () => {
           }
         })
         const output = await runner.run({ taskId: runtime.taskId, userInput: '请处理目录。' })
+        const records = await runner.ctx.loadMessageLog()
+        const reviewDecisions = records.flatMap((record) => {
+          const { entry } = record
+          return entry.kind === 'annotation' && entry.eventType === 'terminal_review_resolved'
+            ? entry.payload.decisions
+            : []
+        })
         return {
           output,
           reviewCallCount,
+          reviewDecisions,
           exists: await fs
             .stat(target)
             .then(() => true)
@@ -331,6 +355,8 @@ describe('ai tool hand terminal review', () => {
           result.output.status === 'completed' &&
             result.reviewCallCount === 4 &&
             !result.exists &&
+            result.reviewDecisions.length === 1 &&
+            result.reviewDecisions[0].reason.includes('审核未能提供有效判定') &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 1 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 0,
           {

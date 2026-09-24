@@ -39,7 +39,11 @@ describe('ai tool hand backend', () => {
               ({ user }) => ({
                 decisions: collectTerminalReviewCommandIds(user).map((commandId, index) => ({
                   commandId,
-                  decision: index === 0 ? 'auto_approve' : 'needs_human_review'
+                  decision: index === 0 ? 'auto_approve' : 'needs_human_review',
+                  reason:
+                    index === 0
+                      ? '该操作范围明确且符合用户诉求。'
+                      : '该操作影响范围需要人工确认。'
                 }))
               })
             ],

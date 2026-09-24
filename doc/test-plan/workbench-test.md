@@ -364,10 +364,10 @@ pnpm test:update:e2e
 #### `approval-batch-flow`
 
 - 测试类型：`e2e`
-- What：真实 Workbench UI 下，验证审核权限的只读目录查询直通、明确授权且范围清晰的目录请求由 AI 自动通过，以及明确要求本人确认的写入进入人工审批并覆盖同意、拒绝或指导；同时验证等待期间不自动超时、审批结果恢复和完全访问跳过审核。
+- What：一个真实 Workbench E2E case 使用多轮 run 验证只读查询直通、明确工作区范围的创建任务完成、真实终端审核结论与审批卡处理，以及完全访问跳过审核。
 - Why：审批是高风险 terminal 执行的用户确认边界；UI 误执行或误恢复都会破坏安全约束。
-- How：使用真实模型与 Workbench UI，不注入审核输出。先在审核权限下发送只读目录查询，再发送明确授权、范围清晰的空目录创建请求；之后分别用明确要求本人确认的输入覆盖审批卡片同意、拒绝和指导。审批等待时保持卡片打开观察 60 秒；结束后刷新伙伴并检查审批结果恢复。最后在完全访问权限下执行同类写入。等待审核结果时同时观察审批事件、run 结束和对话提问，避免模型走到其他分支时把 E2E 挂到全局超时。
-- Oracle：只读查询没有 `human.terminal_review` 调用或审批卡。明确授权且范围清晰的目录创建必须由真实 `human.terminal_review` 返回 `auto_approve`，不出现审批事件或审批卡并创建目录；明确要求本人确认的写入必须由真实审核返回 `needs_human_review` 并展示审批卡。若真实模型走到其他分支或返回相反决策，保留原始输入、审核 I/O 和事件作为失败证据，先分析提示词语义与测试场景是否一致，不通过放宽断言或替换固定审核输出来让测试通过。AI backend case `hand-terminal-ai-review-auto-approve` 覆盖脚本化审核输出下的自动通过契约。人工审批卡在等待 60 秒后仍可见且 run 未结束；同意后命令执行，拒绝或指导后本批命令不执行并回到后续 AI 决策；指导通过输入框提交，不出现独立的第三种操作按钮。逐条覆盖 `WB-BLOCKER-001-AC1`、`WB-BLOCKER-001-AC2`、`WB-BLOCKER-001-AC3`、`WB-BLOCKER-001-AC4`、`WB-BLOCKER-001-AC5`、`WB-BLOCKER-001-AC6`、`WB-BLOCKER-001-AC7`。审后对应工具行以文字显示同意、拒绝或指导结果，刷新伙伴后仍可恢复。只读查询及明确授权自动通过对齐 `WB-BLOCKER-001-AC13`；审核失败和判定不完整转人工由 AI backend case `hand-terminal-ai-review-failure`、`hand-terminal-ai-review-incomplete` 覆盖。混合自动通过与人工项的整批零执行由 AI backend case `hand-terminal-approval-batch` 覆盖，对齐 `WB-BLOCKER-001-AC14`；本 E2E 验证其人工卡片和用户决策链路。完全访问目录实际创建且没有审核模型调用、审批事件或审批卡片，对齐 `WB-BLOCKER-001-AC5`；记录模型、耗时、完成度评分和失败归因。
+- How：使用真实模型与 Workbench UI，不注入或固定审核输出。在同一个 case 中通过多轮 run 分别发送只读查询、明确创建命令、对隔离临时目录递归开放权限并写标记的高影响命令，以及完全访问下的写入；用户文字只描述真实目标，不要求 AI 等待审批或选择某种审核结论。真实模型若返回审批卡，使用真实 UI 执行本轮对应的同意、拒绝或指导，并验证决策后的执行/零副作用及刷新恢复；若本轮没有审批卡，记录实际审核决定和 reason，不伪造卡片，也不因模型选择另一条有效分支而失败。等待审核结果时同时观察审批事件、run 结束和对话提问，避免模型走到其他分支时把 E2E 挂到全局超时。
+- Oracle：只读查询没有 `human.terminal_review` 调用或审批卡；创建任务完成且目标存在。真实 `human.terminal_review` 输入/输出与 reason 保留在 raw logs，但本 E2E 不断言 AI 必须选择 `auto_approve` 或 `needs_human_review`；审核判断正确性由 AI live case 覆盖。权限变更命令的标记文件状态与真实流程一致：同意或 AI 自动通过后标记存在，拒绝或指导后标记不存在。人工审批卡出现时，验证卡片等待状态、无独立指导按钮、真实 UI 决策及 Activity 记录；指导结果在刷新后可恢复。审批卡 UI 与行为对齐 `WB-BLOCKER-001-AC1`、`WB-BLOCKER-001-AC2`、`WB-BLOCKER-001-AC3`、`WB-BLOCKER-001-AC4`、`WB-BLOCKER-001-AC6`、`WB-BLOCKER-001-AC7`；只读查询对齐 `WB-BLOCKER-001-AC13`；同批混合自动通过与人工审批、拒绝后整批零副作用对齐 `WB-BLOCKER-001-AC14`，由 AI backend case `hand-terminal-approval-batch` 覆盖。AI backend case `hand-terminal-ai-review-auto-approve`、`hand-terminal-ai-review-failure`、`hand-terminal-ai-review-incomplete` 覆盖稳定的审核分类与失败回退契约。完全访问文件实际创建且没有审核模型调用、审批事件或审批卡片，对齐 `WB-BLOCKER-001-AC5`；记录模型、耗时、完成度评分和失败归因。
 
 #### `stop-running-or-approval-run`
 
