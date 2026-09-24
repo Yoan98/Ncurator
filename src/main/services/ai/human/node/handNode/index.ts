@@ -5,10 +5,7 @@ import type {
   JsonObject
 } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
-import {
-  emitToolProcessCompleted,
-  emitToolProcessStarted
-} from '../../../events/processEvents'
+import { emitToolProcessCompleted, emitToolProcessStarted } from '../../../events/processEvents'
 import { extractArtifactRefsFromToolResults, mergeArtifactRefs } from '../../../utils/artifacts'
 import { buildModelToolResultDelivery } from '../../shared/modelToolResult'
 import { buildToolFeedback } from '../../shared/toolFeedback'
@@ -19,6 +16,11 @@ import type { HumanRuntimeCache, HumanState, ToolCallResult } from '../../types'
 import { executeToolCall } from './toolExecutor'
 import { returnToBrainAfterTrace, returnToDispatch } from '../utils/stateTransitions'
 import { appendLogEntriesToCache } from '../../memory/conversationLogMessages'
+import {
+  buildTerminalReviewAnnotation,
+  reviewTerminalCommands,
+  type TerminalReviewCandidate
+} from './terminalReview'
 
 const isTerminalRunCall = (toolName: string): boolean => toolName === 'terminal_run'
 
@@ -39,19 +41,16 @@ type ParsedHandCall = {
 }
 
 const collectApprovalBatchItems = (input: {
-  runId: string
-  taskId: string
   calls: ParsedHandCall[]
   platform: AiRunContext['platform']
-  cache: HumanRuntimeCache
-}): Array<{
-  itemId: string
-  order: number
-  toolName: string
-  command: string
-  commandExplanation: string
-  reason: string
-}> => {
+}): Array<
+  TerminalReviewCandidate & {
+    itemId: string
+    order: number
+    toolName: string
+    reason: string
+  }
+> => {
   return input.calls.flatMap((call, index) => {
     if (isTerminalRunCall(call.toolName)) {
       const command = readTerminalCommandArg(call.args)
@@ -65,7 +64,8 @@ const collectApprovalBatchItems = (input: {
           toolName: call.toolName,
           command,
           commandExplanation: readCommandExplanationArg(call.args) || '执行这条终端指令。',
-          reason: riskPolicy.reason
+          reason: riskPolicy.reason,
+          reasons: riskPolicy.reasons
         }
       ]
     }
@@ -285,13 +285,29 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       return returnToDispatch(state)
     }
 
-    const approvalItems = collectApprovalBatchItems({
-      runId: input.ctx.runId,
-      taskId: state.task.taskId,
-      calls,
-      platform: input.ctx.platform,
-      cache: input.cache
-    })
+    const reviewCandidates =
+      input.ctx.executionPermission === 'full_access'
+        ? []
+        : collectApprovalBatchItems({
+            calls,
+            platform: input.ctx.platform
+          })
+
+    let approvalItems: typeof reviewCandidates = []
+    if (reviewCandidates.length > 0) {
+      const reviewId = randomUUID()
+      const decisions = await reviewTerminalCommands({
+        ctx: input.ctx,
+        taskId: state.task.taskId,
+        userInput: state.task.userInput,
+        items: reviewCandidates
+      })
+      await input.ctx.appendMessageLog([buildTerminalReviewAnnotation({ reviewId, decisions })])
+      const decisionById = new Map(decisions.map((decision) => [decision.itemId, decision]))
+      approvalItems = reviewCandidates.filter(
+        (candidate) => decisionById.get(candidate.itemId)?.decision !== 'auto_approve'
+      )
+    }
 
     if (approvalItems.length > 0) {
       const batchId = randomUUID()
@@ -323,10 +339,7 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           decisions: approvalBatchResult.decisions,
           approvalItems
         })
-        await input.ctx.appendMessageLog([
-          approvalResolvedAnnotation,
-          ...blockedTranscriptEntries
-        ])
+        await input.ctx.appendMessageLog([approvalResolvedAnnotation, ...blockedTranscriptEntries])
         input.cache.toolCallCount += calls.length
         return returnToDispatch(state)
       }

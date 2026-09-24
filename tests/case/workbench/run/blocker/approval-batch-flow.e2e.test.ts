@@ -142,7 +142,8 @@ describe('workbench run e2e', () => {
         domain: 'workbench',
         suite: 'run',
         groups: ['blocker'],
-        description: '真实 AI 触发 terminal 操作后，覆盖审核审批、拒绝无副作用、指导输入和完全访问自动执行。',
+        description:
+          '真实 AI 触发 terminal 操作后，覆盖审核审批、拒绝无副作用、指导输入和完全访问自动执行。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -232,7 +233,7 @@ describe('workbench run e2e', () => {
           await selectWorkbenchWorkspace(page, setup.workspaceName)
           await sendWorkbenchMessage(
             page,
-            '请使用终端命令在当前工作区创建 approval-guided.txt，内容写 guided-by-workbench-e2e。'
+            '请使用终端命令在当前工作区创建 approval-guided.txt，内容写 guided-by-workbench-e2e。执行前请先让我本人确认。'
           )
           await getApprovalCard(page).waitFor({ state: 'visible' })
           await getWorkbenchLocator(page, chatSelectors.approvalBatchGuideInput).fill(
@@ -263,9 +264,8 @@ describe('workbench run e2e', () => {
             throw new Error('full access run did not start')
           }
           await selectWorkbenchExecutionPermission(page, '审核')
-          const composerPermissionAfterFullAccessSend = await readWorkbenchExecutionPermissionSelection(
-            page
-          )
+          const composerPermissionAfterFullAccessSend =
+            await readWorkbenchExecutionPermissionSelection(page)
           const fullAccessEvidence = await waitForWorkbenchAiRunCompletion(
             runtime,
             fullAccessStartedAtMs,
@@ -275,7 +275,9 @@ describe('workbench run e2e', () => {
           const fullAccessEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
             (event) => event.runId === fullAccessRunStarted.runId
           )
-          const fullAccessApprovalCardVisible = await getApprovalCard(page).isVisible().catch(() => false)
+          const fullAccessApprovalCardVisible = await getApprovalCard(page)
+            .isVisible()
+            .catch(() => false)
 
           return {
             approvedFileExists: await exists(approvedFile),
@@ -346,8 +348,7 @@ describe('workbench run e2e', () => {
             result.approvedReviewedItemCount >= 1 && result.deniedReviewedItemCount >= 1,
             {
               name: 'workbench-approval-reviewed-activity-items',
-              message:
-                '审完后走过审批的工具行应带审核标记，对齐 WB-BLOCKER-001-AC7。',
+              message: '审完后走过审批的工具行应带审核标记，对齐 WB-BLOCKER-001-AC7。',
               data: {
                 approvedReviewedItemCount: result.approvedReviewedItemCount,
                 deniedReviewedItemCount: result.deniedReviewedItemCount

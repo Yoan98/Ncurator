@@ -24,17 +24,24 @@ describe('ai tool hand backend', () => {
         const runner = createHumanTestRunner(runtime, {
           approvalPolicy: (request) => ({
             accepted: true,
-            decisions: request.items.map((item, index) =>
-              index === 0
-                ? { itemId: item.itemId, action: 'approve' as const }
-                : {
-                    itemId: item.itemId,
-                    action: 'guide' as const,
-                    message: '先不要创建目录，先解释风险并给我备选方案'
-                  }
-            )
+            decisions: request.items.map((item) => ({
+              itemId: item.itemId,
+              action: 'guide' as const,
+              message: '先不要创建目录，先解释风险并给我备选方案'
+            }))
           }),
           structuredOutputScript: {
+            'human.terminal_review': [
+              ({ user }) => ({
+                items: (JSON.parse(user) as { items: Array<{ itemId: string }> }).items.map(
+                  (item, index) => ({
+                    itemId: item.itemId,
+                    decision: index === 0 ? 'auto_approve' : 'needs_human_review',
+                    reason: index === 0 ? '用户已授权复制' : '需要用户确认批量文件操作'
+                  })
+                )
+              })
+            ],
             'human.brain': [
               {
                 output: {
@@ -112,7 +119,7 @@ describe('ai tool hand backend', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             approvalRequiredEvents.length === 1 &&
-            approvalRequiredEvents[0].items.length === 2 &&
+            approvalRequiredEvents[0].items.length === 1 &&
             approvalDecisionEvents.length === 1 &&
             terminalStepStartedEvents.length === 0 &&
             terminalStepResultEvents.length === 0 &&

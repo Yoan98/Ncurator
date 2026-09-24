@@ -21,6 +21,17 @@ describe('ai human mock-llm backend', () => {
         const runner = createHumanTestRunner(runtime, {
           approvalPolicy: 'deny-medium-high',
           structuredOutputScript: {
+            'human.terminal_review': [
+              ({ user }) => ({
+                items: (JSON.parse(user) as { items: Array<{ itemId: string }> }).items.map(
+                  (item) => ({
+                    itemId: item.itemId,
+                    decision: 'needs_human_review',
+                    reason: '需要用户确认'
+                  })
+                )
+              })
+            ],
             'human.brain': [
               {
                 output: {

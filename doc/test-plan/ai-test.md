@@ -367,9 +367,9 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `terminal-risk-and-boundary-guard`
 
 - 测试类型：`backend / mock-llm`
-- What：危险命令与普通文件写入命令都在 `hand` 按统一风险策略进入审批，审批拒绝后不会执行。
+- What：危险命令与普通文件写入先进入 AI 审核；AI 要求人工确认且人工拒绝后不会执行。
 - Why：terminal 风险边界必须靠回归测试长期守住；审批责任在 `hand` 预检，不在 `terminal_run` 内二次问审。
-- How：在临时 workspace 中准备受保护文件，通过 deny-all 审批策略经 human hand 分别发起删除命令和创建目录命令。
+- How：在临时 workspace 中准备受保护文件，mock AI 审核返回 `needs_human_review`，再通过 deny-all 人工审批分别发起删除命令和创建目录命令。
 - Oracle：两次 hand 各产生一次非 internal 的审批要求与 reject 决策；不产生 `terminal_step_started` / `tool_call_result(terminal_run)` / `terminal_step_error`；受保护文件仍存在、目标目录未创建。
 
 ##### `terminal-inline-interpreter-execution`
@@ -531,10 +531,18 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `hand-terminal-approval-batch`
 
 - 测试类型：`backend`
-- What：`hand` 会对当前 `calls` 中需审批的 `terminal_run` 做批量预检，并在整批未全部同意时 0 执行。
+- What：`hand` 对静态命中项批量 AI 审核；同批一个自动通过、一个转人工时，人工指导后整批 0 执行。
 - Why：terminal 审批责任已经前移到 `hand` preflight，回归 case 必须长期守住“先整批审核，再决定是否执行”的主流程；`terminal_run` 不再独立请求审批。
-- How：通过真实 `human` hand 决策构造两个需审批 terminal 命令，并让审批批次返回 `approve + guide` 混合结果。
+- How：通过真实 `human` hand 决策构造两个需审核 terminal 命令，AI 审核分别返回 `auto_approve` 和 `needs_human_review`，人工项返回 `guide`。
 - Oracle：事件流出现 `approval_batch_required / approval_batch_decision`；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；被拦的 terminal 调用会以合成 `ToolMessage` 结果（`approval_blocked`）回流到 `brain`。
+
+##### `hand-terminal-ai-review`
+
+- 测试类型：`backend / mock-llm`
+- What：普通查询不调用 AI；明确授权的写入由 AI 自动通过；AI 异常或漏项转人工；完全访问跳过两层审核。
+- Why：审核分层必须保证无感通过、失败升级和权限差异都有真实 hand 与 terminal 闭环。
+- How：脚本化 `human.terminal_review` 结构化输出，真实执行目录查询与创建；异常和漏项场景采用 deny-all，完全访问场景不提供审核模型输出。
+- Oracle：普通查询无审核记录或人工审批事件；自动通过时有 `terminal_review_resolved` 且无人工审批事件；异常和漏项时有人工审批事件且零执行；完全访问无 AI 审核记录和人工审批事件，命令实际执行。
 
 ### 4.2 `human`
 
@@ -649,7 +657,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - 测试类型：`backend`
 - What：真实批量审批拒绝会阻止需审批命令落地，并把限制带入最终交付。
 - Why：审批拒绝是生产边界，不能只靠 fake 测试覆盖。
-- How：设置 `approvalPolicy=deny-medium-high`，直接尝试真实执行 builtin terminal 命令 `mkdir blocked-dir`，然后进入最终说明。
+- How：AI 审核返回 `needs_human_review`，设置 `approvalPolicy=deny-medium-high`，尝试真实执行 builtin terminal 命令 `mkdir blocked-dir`，然后进入最终说明。
 - Oracle：事件流真实出现 `approval_batch_decision` 且至少一项为 `reject`；对应 terminal 命令不会真实执行；被拦的 terminal 调用以合成 `ToolMessage` 结果（`approval_blocked`）回流给后续 brain；磁盘上不会真的创建 `blocked-dir`，任务最终完成。
 
 ##### `brain-memory-write-boundary`

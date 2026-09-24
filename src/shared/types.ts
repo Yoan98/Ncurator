@@ -2008,6 +2008,18 @@ export type ChatMessageLogAnnotationEntry =
     }
   | {
       kind: 'annotation'
+      eventType: 'terminal_review_resolved'
+      payload: {
+        reviewId: string
+        items: Array<{
+          itemId: string
+          decision: 'auto_approve' | 'needs_human_review'
+          reason: string
+        }>
+      }
+    }
+  | {
+      kind: 'annotation'
       eventType: 'human_interaction_resolved'
       payload: {
         interactionId: string

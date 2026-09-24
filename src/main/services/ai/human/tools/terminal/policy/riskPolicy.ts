@@ -3,14 +3,18 @@ import type { TerminalCommandSegment } from '../types'
 import {
   extractEmbeddedShellPayloads,
   findUnsafeShellSyntax,
-  parseTerminalCommandSegments
+  parseTerminalCommandSegments,
+  stripHereDocumentBodies
 } from './shellSyntax'
-import { buildDangerousCommandRules, isDangerousCommandName, normalizeCommandName } from './dangerousRules'
+import {
+  buildDangerousCommandRules,
+  isDangerousCommandName,
+  normalizeCommandName
+} from './dangerousRules'
 import type { DangerousCommandRule, TerminalRiskAnalysis, TerminalRiskReason } from './types'
 
 const dynamicSyntaxReason = (syntax: string): TerminalRiskReason | undefined => {
   if (syntax === 'redirection') return 'shell_redirection'
-  if (syntax === 'unclosed_quote') return 'parse_uncertain'
   return undefined
 }
 
@@ -161,27 +165,28 @@ export const analyzeTerminalRiskPolicy = (
   const text = String(command || '').trim()
   if (!text) {
     return {
-      decision: 'approval_required',
+      decision: 'auto_allow',
       matchedRuleIds: [],
-      reasons: ['parse_uncertain'],
-      reasonCode: 'parse_uncertain',
-      reason: 'empty command cannot be analyzed'
+      reasons: [],
+      reasonCode: 'none',
+      reason: 'empty command is handled by the terminal tool'
     }
   }
 
-  const segments = parseTerminalCommandSegments(text, { windowsStyle: platform === 'windows' })
+  const shellText = platform === 'macos' ? stripHereDocumentBodies(text) : text
+  const segments = parseTerminalCommandSegments(shellText, { windowsStyle: platform === 'windows' })
   if (segments.length === 0) {
     return {
-      decision: 'approval_required',
+      decision: 'auto_allow',
       matchedRuleIds: [],
-      reasons: ['parse_uncertain'],
-      reasonCode: 'parse_uncertain',
-      reason: 'command could not be parsed'
+      reasons: [],
+      reasonCode: 'none',
+      reason: 'command parsing is handled by the terminal tool'
     }
   }
 
   const rules = buildDangerousCommandRules()
-  const matches = collectRiskMatches(text, platform, rules)
+  const matches = collectRiskMatches(shellText, platform, rules)
   const matchedRuleIds = Array.from(new Set(matches.map((match) => match.ruleId)))
   const reasons = Array.from(new Set(matches.map((match) => match.reason)))
 
