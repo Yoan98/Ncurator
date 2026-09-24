@@ -681,7 +681,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
               turn.runFinished ? (
                 <button
                   type="button"
-                  className="mb-2 flex w-full items-center justify-between gap-2 border-b border-[#EEEEEC] pb-2 text-left text-[14px] leading-6 text-[#85837F] transition-colors hover:text-[#37352F]"
+                  className="mb-2 flex w-full items-center justify-start gap-1.5 border-b border-[#EEEEEC] pb-2 text-left text-[14px] leading-6 text-[#85837F] transition-colors hover:text-[#37352F]"
                   aria-expanded={processExpanded}
                   aria-label={`${processExpanded ? '收起' : '展开'}过程记录`}
                   data-testid={`${workbenchSelectors.assistantProcessTogglePrefix}-${messageId}`}
