@@ -2016,7 +2016,6 @@ export type ChatMessageLogAnnotationEntry =
           commandId: string
           decision: 'auto_approve' | 'needs_human_review'
         }>
-        fallbackCode?: 'invalid_output' | 'review_unavailable'
       }
     }
   | {

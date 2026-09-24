@@ -315,17 +315,9 @@ describe('ai tool hand terminal review', () => {
           }
         })
         const output = await runner.run({ taskId: runtime.taskId, userInput: '请处理目录。' })
-        const records = await runner.ctx.loadMessageLog()
-        const fallbackCodes = records.flatMap((record) => {
-          const { entry } = record
-          return entry.kind === 'annotation' && entry.eventType === 'terminal_review_resolved'
-            ? [entry.payload.fallbackCode]
-            : []
-        })
         return {
           output,
           reviewCallCount,
-          fallbackCodes,
           exists: await fs
             .stat(target)
             .then(() => true)
@@ -337,8 +329,6 @@ describe('ai tool hand terminal review', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             result.reviewCallCount === 4 &&
-            result.fallbackCodes.length === 1 &&
-            result.fallbackCodes[0] === 'invalid_output' &&
             !result.exists &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 1 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 0,

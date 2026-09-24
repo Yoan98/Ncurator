@@ -18,7 +18,6 @@ export type TerminalReviewDecision = {
 
 export type TerminalReviewResult = {
   decisions: TerminalReviewDecision[]
-  fallbackCode?: 'invalid_output' | 'review_unavailable'
 }
 
 const MAX_OUTPUT_RETRIES = 3
@@ -36,15 +35,11 @@ const reviewSchema = z
   })
   .strict()
 
-const humanFallback = (
-  commands: readonly TerminalReviewCandidate[],
-  fallbackCode: TerminalReviewResult['fallbackCode']
-): TerminalReviewResult => ({
+const humanFallback = (commands: readonly TerminalReviewCandidate[]): TerminalReviewResult => ({
   decisions: commands.map((command) => ({
     commandId: command.commandId,
     decision: 'needs_human_review'
-  })),
-  ...(fallbackCode ? { fallbackCode } : {})
+  }))
 })
 
 const matchDecisions = (
@@ -103,12 +98,12 @@ export const reviewTerminalCommands = async (input: {
       if (isCancelledError(error)) throw error
       input.ctx.checkCancelled()
       if (!isLlmOutputError(error)) {
-        return humanFallback(input.commands, 'review_unavailable')
+        return humanFallback(input.commands)
       }
     }
   }
 
-  return humanFallback(input.commands, 'invalid_output')
+  return humanFallback(input.commands)
 }
 
 export const buildTerminalReviewAnnotation = (input: {
@@ -119,7 +114,6 @@ export const buildTerminalReviewAnnotation = (input: {
   eventType: 'terminal_review_resolved',
   payload: {
     reviewId: input.reviewId,
-    decisions: input.result.decisions,
-    ...(input.result.fallbackCode ? { fallbackCode: input.result.fallbackCode } : {})
+    decisions: input.result.decisions
   }
 })
