@@ -101,8 +101,8 @@ const collectProcessRenderSnapshot = async (page: Page): Promise<ProcessRenderSn
 }
 
 const readDurationSeconds = (text: string): number | null => {
-  const match = text.match(/(\d+)分钟(\d+)秒/u)
-  return match ? Number(match[1]) * 60 + Number(match[2]) : null
+  const match = text.match(/(?:(\d+)分钟)?(\d+)秒/u)
+  return match ? Number(match[1] || 0) * 60 + Number(match[2]) : null
 }
 
 const listVisibleToolNames = (events: AiRunEvent[]): string[] =>
@@ -237,6 +237,9 @@ describe('workbench run e2e', () => {
             durationDuringRun.startsWith('已处理') &&
             (readDurationSeconds(durationAfterTick) ?? 0) >
               (readDurationSeconds(durationDuringRun) ?? 0)
+          const durationFormatValidDuringRun = [durationDuringRun, durationAfterTick].every(
+            (duration) => /^已处理\s+(?:[1-9]\d*分钟)?\d+秒$/u.test(duration)
+          )
           const earlySample = await sampleThinkingWaitEarly(page, processLocator)
           let runWatchDone = false
           const retryWatch = watchProcessRetryState(page, processLocator, () => runWatchDone)
@@ -321,6 +324,7 @@ describe('workbench run e2e', () => {
           return {
             durationDuringRun,
             durationAdvanced,
+            durationFormatValidDuringRun,
             durationTextAtCompletion,
             collapsedByDefault,
             expandedAfterClick,
@@ -379,7 +383,8 @@ describe('workbench run e2e', () => {
           await runtime.assertThat(
             result.durationDuringRun.startsWith('已处理') &&
               result.durationAdvanced &&
-              /^用时\s+\d+分钟\d+秒$/u.test(result.durationTextAtCompletion) &&
+              result.durationFormatValidDuringRun &&
+              /^用时\s+(?:[1-9]\d*分钟)?\d+秒$/u.test(result.durationTextAtCompletion) &&
               result.collapsedByDefault &&
               result.expandedAfterClick &&
               result.finalAnswerVisibleWhenCollapsed &&

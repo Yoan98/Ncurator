@@ -42,7 +42,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退、多文件修改入口，以及馆长 WPS 通道对 docx / xlsx / pptx 的 dispatch 与本机已授权 WPS 文字 / 表格 / 演示窗口刷新。
 - `scheduled-task` 验证伙伴必选且位于表单第一项、任务描述支持引用、手动创建默认开启、AI 创建预填聊天草稿、删除伙伴后任务停用，以及执行时读取伙伴最新 Composer 配置。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
-- AI 提问统一归入 `run/blocker`：真实 UI 展示 A/B/C/D 和“其他，请填写”，仅用圆形/方形标记区分单选与多选，不展示选择类型文字 Tag，保留推荐 Tag，覆盖普通单选自动跳题、多问题手动切换与刷新恢复；等待回答时侧栏伙伴行显示「需要你的协助」，提交、取消或结束后清除，审批等待不显示；提交后在对应 Activity 工具行下按顺序显示问题与用户答案。审批结果也在对应工具行下显示，不再使用旧图标前缀或 hover 替换文案。
+- AI 提问统一归入 `run/blocker`：真实 UI 展示 A/B/C/D 和“其他，请填写”，仅用圆形/方形标记区分单选与多选，不展示选择类型文字 Tag，保留推荐 Tag，覆盖普通单选自动跳题、多问题手动切换与刷新恢复；等待回答时侧栏伙伴行显示「需要你的协助」，刷新或切换伙伴后仍保留，提交、取消或结束后清除，审批等待不显示；提交后在对应 Activity 工具行下按顺序显示问题与用户答案。审批结果也在对应工具行下显示，不再使用旧图标前缀或 hover 替换文案。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
 - docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足测试 case 口径。
@@ -319,7 +319,7 @@ pnpm test:update:e2e
 - How：真实文件地址内准备带唯一事实的文件；先创建伙伴；用户通过 UI 发送自然语言总结请求；run 运行期间检查已处理时间出现并递增，完成后检查固定用时、默认收起和最终回答可见；展开过程记录与全部 Activity 面板并采集 header / body 文案。
 - Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；用户与 assistant 消息不展示头像，用户消息右对齐气泡，assistant 过程流/最终输出与 composer 内容 rail 对齐，最终 markdown 无独立背景卡片，对齐 `WB-COMPOSER-009-AC1`、`WB-COMPOSER-009-AC2`、`WB-COMPOSER-009-AC3`、`WB-COMPOSER-009-AC4`。运行中过程流可见；“让俺想想”在 Brain 请求期间于过程区最下方展示，run 完成 / 失败 / 取消或产出正文后过程区不得仍挂着“让俺想想”，对齐 `WB-COMPOSER-003-AC3`。若本轮碰巧出现自动重试，仍不得与“让俺想想”同时出现；强制打出重试行、单行就地更新与 429 退避由 `llm-retry-process-row` 覆盖，对齐 `WB-COMPOSER-015`。决策层（Thought）短摘要可见且不暴露原始长推理，以浅灰文本展示，未超出单行时不展示折叠图标，超出单行时单行省略，hover 时展示展开图标且垂直居中于单行文本，展开后常驻浅灰卡片背景、折叠按钮居顶对齐第一行并在内部滚动，对齐 `WB-COMPOSER-003-AC5`、`WB-COMPOSER-009-AC10`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」），根据单一动作或混合工具精准呈现对应专属语义图标（询问用户使用困惑表情图标；浏览器打开/查看/操作/提取/截图/滚动/标签、网页抓取/搜索、图片读取/生成或工作流闪电图标；截取页面并读取图片的成对视觉动作统一呈现为照片图标，不退化为闪电；浏览器操作不产生审批卡片与展开行审核绿勾）；展开行为带对象的工具原句且不含冒号强调；若含 `read_image`：展开行含「读取图片」文案且按入参 `paths` 展示可点击缩略图（`workbench-read-image-thumb-*`），点击后打开与附件相同的 `ImageLightbox`；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`、`WB-BLOCKER-001-AC8`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用顿号 `、` 拼接（两侧无空格）；>3 类 summary 为「已完成 n 项」。若事件含 `learn_skill`：展开行文案含“正在学习 / 已学会”，且不作为独立学习层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。文件名、query、命令、URL 和技能名不使用粗体或冒号强调，对齐 `WB-COMPOSER-009-AC7`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试与截断提示、计划进度环等由相关运行态 case 覆盖并继续对齐 `WB-COMPOSER-014-AC3`、`WB-COMPOSER-014-AC4`。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。仅切换伙伴或新建干净对话时不得凭空出现“正在 / 已检索知识库”，对齐 `WB-COMPOSER-009-AC12`。
 
-- Oracle：run 开始后过程内容出现前也显示「已处理 X分钟Y秒」和分隔线，且运行至少 1 秒后用时递增；完成后用时变为固定「用时 X分钟Y秒」，过程默认收起。展开过程后 Thought / Activity 可见，再次收起不影响最终回答。对齐 `WB-COMPOSER-016-AC1` 至 `WB-COMPOSER-016-AC3`。
+- Oracle：run 开始后过程内容出现前也显示「已处理」计时和分隔线，且运行至少 1 秒后用时递增；不足一分钟只显示秒数，不出现「0分钟」。完成后用时固定，且不足一分钟只显示秒数；过程默认收起。展开过程后 Thought / Activity 可见，再次收起不影响最终回答。对齐 `WB-COMPOSER-016-AC1` 至 `WB-COMPOSER-016-AC3`。
 
 #### `llm-retry-process-row`
 
@@ -364,10 +364,10 @@ pnpm test:update:e2e
 #### `approval-batch-flow`
 
 - 测试类型：`e2e`
-- What：真实 AI 审核模式下，覆盖明确授权操作自动通过，以及用户要求本人确认时转人工；验证审批卡片同意、拒绝和指导输入，并验证完全访问跳过两层审核。
+- What：真实 Workbench UI 下，验证审核权限的只读目录查询直通、明确授权目录请求按 AI 审核结论执行，以及需人工确认的写入经审批卡片同意、拒绝或指导；同时验证等待期间不自动超时、审批结果恢复和完全访问跳过审核。
 - Why：审批是高风险 terminal 执行的用户确认边界；UI 误执行或误恢复都会破坏安全约束。
-- How：真实 UI 与模型。审核模式先发送明确授权、范围清晰的文件创建请求，验证审核自动通过；后续同意、拒绝和指导场景使用明确要求执行前由本人确认的固定输入，以稳定覆盖人工审批 UI；完全访问在新 run 中执行同类命令。
-- Oracle：明确授权操作由真实 `human.terminal_review` 返回 `auto_approve`，文件创建成功且该 run 无 `approval_batch_required`；要求本人确认的操作由审核模型返回 `needs_human_review` 后展示审批卡，同意后执行、拒绝或指导时本批零执行并回到后续 AI 决策，对齐 `WB-BLOCKER-001-AC1` 至 `AC4`；审批等待和过程流行为对齐 `WB-BLOCKER-001-AC6`、`AC7`；完全访问文件实际创建且没有审核模型调用、审批事件或审批卡片，对齐 `WB-BLOCKER-001-AC5`；记录模型、耗时、完成度评分和失败归因。
+- How：使用真实模型与 Workbench UI。先在审核权限下发送只读目录查询，再发送明确授权、范围清晰的空目录创建请求；之后用明确要求本人确认的固定输入覆盖同意、拒绝和指导。审批等待时保持卡片打开观察 60 秒；结束后刷新伙伴并检查审批结果恢复。最后在完全访问权限下执行同类写入。
+- Oracle：只读查询没有 `human.terminal_review` 调用或审批卡。明确授权目录创建按真实审核结论执行：`auto_approve` 时无审批卡并创建目录；`needs_human_review` 时展示审批卡，用户同意后创建目录。固定审核输出下的自动通过契约由 AI backend case `hand-terminal-ai-review-auto-approve` 覆盖。人工审批卡在等待 60 秒后仍可见且 run 未结束；同意后命令执行，拒绝或指导后本批命令不执行并回到后续 AI 决策；指导通过输入框提交，不出现独立的第三种操作按钮。逐条覆盖 `WB-BLOCKER-001-AC1`、`WB-BLOCKER-001-AC2`、`WB-BLOCKER-001-AC3`、`WB-BLOCKER-001-AC4`、`WB-BLOCKER-001-AC5`、`WB-BLOCKER-001-AC6`、`WB-BLOCKER-001-AC7`。审后对应工具行以文字显示同意、拒绝或指导结果，刷新伙伴后仍可恢复。只读查询及明确授权自动通过对齐 `WB-BLOCKER-001-AC13`；审核失败和判定不完整转人工由 AI backend case `hand-terminal-ai-review-failure`、`hand-terminal-ai-review-incomplete` 覆盖。混合自动通过与人工项的整批零执行由 AI backend case `hand-terminal-approval-batch` 覆盖，对齐 `WB-BLOCKER-001-AC14`；本 E2E 验证其人工卡片和用户决策链路。完全访问目录实际创建且没有审核模型调用、审批事件或审批卡片，对齐 `WB-BLOCKER-001-AC5`；记录模型、耗时、完成度评分和失败归因。
 
 #### `stop-running-or-approval-run`
 

@@ -536,13 +536,45 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - How：通过真实 `human` hand 决策构造两个需审核 terminal 命令，AI 审核分别返回 `auto_approve` 和 `needs_human_review`，人工项返回 `guide`。
 - Oracle：事件流出现 `approval_batch_required / approval_batch_decision`；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；被拦的 terminal 调用会以合成 `ToolMessage` 结果（`approval_blocked`）回流到 `brain`。
 
-##### `hand-terminal-ai-review`
+##### `hand-terminal-ai-review-query`
 
 - 测试类型：`backend / mock-llm`
-- What：普通查询不调用 AI；明确授权的写入由 AI 自动通过；无效 JSON 或命令编号漏项最多重发 3 次后转人工；非输出格式错误的审核调用失败转人工，完全访问跳过两层审核。
-- Why：审核分层必须保证无感通过、失败升级和权限差异都有真实 hand 与 terminal 闭环。
-- How：脚本化 `human.terminal_review` 结构化输出，真实执行目录查询与创建；格式错误后重试得到合法 JSON，连续 4 次无效验证耗尽 3 次重发并转人工；调用异常转人工；完全访问场景不提供审核模型输出。
-- Oracle：普通查询无审核记录或人工审批事件；自动通过时有 `terminal_review_resolved` 且无人工审批事件；无效输出恰好调用 4 次后转人工且零执行；调用异常转人工且零执行；完全访问无 AI 审核记录和人工审批事件，命令实际执行。
+- What：审核权限下的本地目录查询直接执行，不调用 AI 审核或请求人工审批。
+- Why：无副作用的查询不应增加审核等待或阻断正常终端读取。
+- How：只脚本化 `human.brain` 选择真实目录查询命令；使用审核权限和拒绝全部审批的 human runner 执行。
+- Oracle：run 完成；没有 `terminal_review_resolved`、`approval_batch_required` 事件；真实终端步骤启动一次。
+
+##### `hand-terminal-ai-review-auto-approve`
+
+- 测试类型：`backend / mock-llm`
+- What：用户明确授权的文件创建由 AI 审核后自动通过并执行。
+- Why：审核层需要识别范围清晰的授权操作，同时保留审核记录供恢复和排查。
+- How：脚本化 `human.terminal_review` 先返回无效 JSON，再修复为合法 `auto_approve`；真实执行文件创建并检查审核请求和消息日志。
+- Oracle：run 完成且文件存在；修复调用共两次；日志记录 `auto_approve`；没有人工审批事件；真实终端步骤启动一次。
+
+##### `hand-terminal-ai-review-failure`
+
+- 测试类型：`backend / mock-llm`
+- What：AI 审核调用异常时转人工审批，用户拒绝前不执行命令。
+- Why：审核服务故障不能被当成自动通过，也不能丢失人工确认边界。
+- How：让 `human.terminal_review` 调用失败，真实 hand 决策触发目录创建，并由拒绝全部审批的 human runner 收口。
+- Oracle：run 完成；产生一条 `approval_batch_required`；磁盘上没有目标目录；没有 `terminal_step_started`。
+
+##### `hand-terminal-ai-review-incomplete`
+
+- 测试类型：`backend / mock-llm`
+- What：AI 审核连续遗漏待审核命令的判定时，耗尽重试后转人工审批。
+- Why：不完整判定不能遗漏命令或默认放行；重试边界和零副作用需要稳定回归。
+- How：连续四次让 `human.terminal_review` 返回空判定，真实 hand 决策请求创建目录。
+- Oracle：审核恰好调用四次（首次加三次重试）；产生一条 `approval_batch_required`；人工拒绝前目录不存在且没有 `terminal_step_started`。
+
+##### `hand-terminal-ai-review-bypass`
+
+- 测试类型：`backend / mock-llm`
+- What：目录查询不触发审核；完全访问权限下的写入跳过 AI 和人工审核并真实执行。
+- Why：权限策略必须让只读操作直通，并确保完全访问不会残留审核或等待审批状态。
+- How：只脚本化 brain 依次执行目录查询和创建目录，使用 `full_access` 与拒绝全部审批的 human runner。
+- Oracle：run 完成且目录存在；没有审核注释或 `approval_batch_required`；真实终端步骤启动两次。
 
 ### 4.2 `human`
 

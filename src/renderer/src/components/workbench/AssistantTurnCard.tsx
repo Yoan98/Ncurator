@@ -152,7 +152,7 @@ const formatRunDuration = (startedAt: number, finishedAt: number): string => {
   const elapsedSeconds = Math.max(0, Math.floor((finishedAt - startedAt) / 1000))
   const minutes = Math.floor(elapsedSeconds / 60)
   const seconds = elapsedSeconds % 60
-  return `${minutes}分钟${seconds}秒`
+  return minutes > 0 ? `${minutes}分钟${seconds}秒` : `${seconds}秒`
 }
 
 const renderSegments = (

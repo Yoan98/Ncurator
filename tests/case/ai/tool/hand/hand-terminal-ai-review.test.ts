@@ -20,7 +20,7 @@ const complete = buildCompleteTaskDecision({
 })
 
 describe('ai tool hand terminal review', () => {
-  it('runs a file query in review mode without AI or human approval', async () => {
+  it('hand-terminal-ai-review-query', async () => {
     await runBackendCase({
       caseId: 'hand-terminal-ai-review-query',
       harnessMode: 'mock-llm',
@@ -87,7 +87,7 @@ describe('ai tool hand terminal review', () => {
     })
   })
 
-  it('automatically executes an explicitly authorized file creation', async () => {
+  it('hand-terminal-ai-review-auto-approve', async () => {
     await runBackendCase({
       caseId: 'hand-terminal-ai-review-auto-approve',
       harnessMode: 'mock-llm',
@@ -191,6 +191,7 @@ describe('ai tool hand terminal review', () => {
             result.reviewRequests[1].includes('上一次响应未通过 JSON') &&
             result.reviewSystems.length === 2 &&
             result.reviewSystems[0].includes('只返回合法 JSON') &&
+            result.reviewSystems[0].includes('明确授权的具体普通写入') &&
             result.reviewSystems[0].includes('"decisions"') &&
             result.reviewSystems[0].includes('"commandId"') &&
             result.reviewDecisions.length === 1 &&
@@ -208,7 +209,7 @@ describe('ai tool hand terminal review', () => {
     })
   })
 
-  it('escalates a failed AI review to human approval before execution', async () => {
+  it('hand-terminal-ai-review-failure', async () => {
     await runBackendCase({
       caseId: 'hand-terminal-ai-review-failure',
       harnessMode: 'mock-llm',
@@ -272,7 +273,7 @@ describe('ai tool hand terminal review', () => {
     })
   })
 
-  it('escalates an incomplete AI review to human approval', async () => {
+  it('hand-terminal-ai-review-incomplete', async () => {
     await runBackendCase({
       caseId: 'hand-terminal-ai-review-incomplete',
       harnessMode: 'mock-llm',
@@ -342,7 +343,7 @@ describe('ai tool hand terminal review', () => {
     })
   })
 
-  it('does not review a query or a full-access write', async () => {
+  it('hand-terminal-ai-review-bypass', async () => {
     await runBackendCase({
       caseId: 'hand-terminal-ai-review-bypass',
       harnessMode: 'mock-llm',

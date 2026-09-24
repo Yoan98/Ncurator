@@ -31,6 +31,7 @@ import {
 const CASE_ID = 'approval-batch-flow'
 const DENIED_RUN_SETTLE_TIMEOUT_MS = 120_000
 const DENIED_APPROVAL_WAIT_TIMEOUT_MS = 120_000
+const APPROVAL_WAIT_OBSERVATION_MS = 60_000
 
 const exists = async (filePath: string): Promise<boolean> =>
   await access(filePath)
@@ -45,6 +46,11 @@ const isApprovalBatchRequiredEvent = (
   event: AiRunEvent
 ): event is Extract<AiRunEvent, { type: 'approval_batch_required' }> =>
   event.type === 'approval_batch_required'
+
+const isRunTerminalEvent = (event: AiRunEvent): boolean =>
+  event.type === 'run_completed' ||
+  event.type === 'run_failed' ||
+  event.type === 'run_cancelled'
 
 type TerminalReviewDecision = {
   commandId: string
@@ -93,6 +99,8 @@ const readApprovalWaitingSnapshot = async (
   titleText: string
   positionText: string
   hasAssistanceBadge: boolean
+  hasSeparateGuideButton: boolean
+  hasGuideInputAndSubmit: boolean
 }> => {
   const card = getApprovalCard(page)
   await card.waitFor({ state: 'visible', timeout: 30_000 })
@@ -117,23 +125,34 @@ const readApprovalWaitingSnapshot = async (
     positionText: (
       (await card.getByTestId(`${chatSelectors.approvalBatchCard}-position`).textContent()) || ''
     ).trim(),
-    hasAssistanceBadge: await assistanceBadge.isVisible().catch(() => false)
+    hasAssistanceBadge: await assistanceBadge.isVisible().catch(() => false),
+    hasSeparateGuideButton: (await card.getByRole('button', { name: /告诉|指导/ }).count()) > 0,
+    hasGuideInputAndSubmit:
+      (await getWorkbenchLocator(page, chatSelectors.approvalBatchGuideInput).isVisible()) &&
+      (await getWorkbenchLocator(page, chatSelectors.approvalBatchSubmitButton).isVisible())
   }
 }
 
-const countApprovalReviewedItems = async (page: Page): Promise<number> => {
+const readApprovalReviewedItemTexts = async (page: Page): Promise<string[]> => {
   const processRoot = await waitForLatestAssistantProcess(page)
+  const processToggle = getWorkbenchPrefixLocator(
+    page,
+    workbenchSelectors.assistantProcessTogglePrefix
+  ).last()
+  if ((await processToggle.getAttribute('aria-expanded')) === 'false') {
+    await processToggle.click()
+  }
   const panels = getWorkbenchPrefixLocator(page, workbenchSelectors.assistantProcessItemPrefix)
   const panelCount = await panels.count()
   for (let index = 0; index < panelCount; index += 1) {
     const panel = panels.nth(index)
     const className = (await panel.getAttribute('class')) || ''
     if (!className.includes('group/execution')) continue
-    await panel.evaluate((element) => {
-      element.setAttribute('open', '')
-    })
+    if (!(await panel.getAttribute('open'))) await panel.locator('summary').click()
   }
-  return await processRoot.getByTestId(workbenchSelectors.assistantApprovalReviewedItem).count()
+  return await processRoot
+    .getByTestId(workbenchSelectors.assistantApprovalReviewedItem)
+    .allTextContents()
 }
 
 const waitForDeniedRunToSettle = async (
@@ -186,7 +205,7 @@ describe('workbench run e2e', () => {
         suite: 'run',
         groups: ['blocker'],
         description:
-          '真实 AI 触发 terminal 操作后，覆盖审核审批、拒绝无副作用、指导输入和完全访问自动执行。',
+          '真实 AI 触发 terminal 操作后，覆盖只读查询直通、审核自动通过、审批决策、等待恢复和完全访问。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -195,44 +214,95 @@ describe('workbench run e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
-          const autoApprovedFile = path.join(setup.workspace.rootPath, 'approval-ai-auto.txt')
+          const authorizedDirectory = path.join(
+            setup.workspace.rootPath,
+            'approval-ai-auto-dir'
+          )
           const approvedFile = path.join(setup.workspace.rootPath, 'approval-approved.txt')
           const deniedFile = path.join(setup.workspace.rootPath, 'approval-denied.txt')
           const guidedFile = path.join(setup.workspace.rootPath, 'approval-guided.txt')
           const fullAccessFile = path.join(setup.workspace.rootPath, 'approval-full-access.txt')
 
           await selectWorkbenchExecutionPermission(page, '审核')
-          const autoApprovedStartedAtMs = Date.now()
+          const queryStartedAtMs = Date.now()
           await sendWorkbenchMessage(
             page,
-            '请使用终端在当前工作区创建 approval-ai-auto.txt，写入 ai-review-auto-approved。我明确授权创建这个指定文件，你可以直接执行，不需要再向我确认。'
+            '请使用终端命令列出当前工作区的文件名，不要创建、修改或删除任何文件。'
           )
-          const autoApprovedRunStarted = await waitForWorkbenchAiEvent(runtime, {
-            name: 'approval_ai_auto_run_started',
-            matches: (event) =>
-              isRunStartedEvent(event) && event.input.includes('approval-ai-auto.txt')
+          const queryRunStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'approval_readonly_query_run_started',
+            matches: (event) => isRunStartedEvent(event) && event.input.includes('列出当前工作区')
           })
-          if (!isRunStartedEvent(autoApprovedRunStarted)) {
-            throw new Error('AI auto-approve run did not start')
+          if (!isRunStartedEvent(queryRunStarted)) {
+            throw new Error('read-only query run did not start')
           }
-          const autoApprovedEvidence = await waitForWorkbenchAiRunCompletion(
+          const queryEvidence = await waitForWorkbenchAiRunCompletion(
             runtime,
-            autoApprovedStartedAtMs,
+            queryStartedAtMs,
             setup.env.modelName,
             undefined,
             { page, blockerPolicy: 'fail' }
           )
-          recordWorkbenchAiEvidence(runtime, autoApprovedEvidence, 0.8)
-          const autoApprovedEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
-            (event) => event.runId === autoApprovedRunStarted.runId
+          recordWorkbenchAiEvidence(runtime, queryEvidence, 0.8)
+          const queryEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
+            (event) => event.runId === queryRunStarted.runId
           )
-          const autoApprovedReviewDecisions = readTerminalReviewDecisions(
-            await collectWorkbenchLlmIoRecords(runtime),
-            autoApprovedRunStarted.runId
-          )
-          const autoApprovedApprovalCardVisible = await getApprovalCard(page)
+          const queryTerminalStepCount = queryEvents.filter(
+            (event) => event.type === 'terminal_step_started'
+          ).length
+          const queryReviewCallCount = (await collectWorkbenchLlmIoRecords(runtime)).filter(
+            (record) =>
+              record.runId === queryRunStarted.runId && record.caller === 'human.terminal_review'
+          ).length
+          const queryApprovalCardVisible = await getApprovalCard(page)
             .isVisible()
             .catch(() => false)
+
+          await createWorkbenchNewSession(page)
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
+          await selectWorkbenchExecutionPermission(page, '审核')
+          const authorizedStartedAtMs = Date.now()
+          await sendWorkbenchMessage(
+            page,
+            '请使用终端在当前工作区创建名为 approval-ai-auto-dir 的空目录。我明确授权创建这个指定目录，你可以直接执行，不需要再向我确认。'
+          )
+          const authorizedRunStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'approval_authorized_run_started',
+            matches: (event) =>
+              isRunStartedEvent(event) && event.input.includes('approval-ai-auto-dir')
+          })
+          if (!isRunStartedEvent(authorizedRunStarted)) {
+            throw new Error('explicitly authorized run did not start')
+          }
+          const authorizedOutcome = await waitForWorkbenchAiEvent(runtime, {
+            name: 'approval_authorized_review_outcome',
+            matches: (event) =>
+              event.runId === authorizedRunStarted.runId &&
+              (isApprovalBatchRequiredEvent(event) || event.type === 'run_completed')
+          })
+          const authorizedHasApprovalEvent = isApprovalBatchRequiredEvent(authorizedOutcome)
+          let authorizedApprovalCardVisible = false
+          if (isApprovalBatchRequiredEvent(authorizedOutcome)) {
+            const card = getApprovalCard(page)
+            await card.waitFor({ state: 'visible', timeout: 30_000 })
+            authorizedApprovalCardVisible = await card.isVisible()
+            await decideWorkbenchApprovalBatch(runtime, page, {
+              event: authorizedOutcome,
+              action: 'approve'
+            })
+          }
+          const authorizedEvidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            authorizedStartedAtMs,
+            setup.env.modelName,
+            undefined,
+            { page, blockerPolicy: 'fail' }
+          )
+          recordWorkbenchAiEvidence(runtime, authorizedEvidence, 0.8)
+          const authorizedReviewDecisions = readTerminalReviewDecisions(
+            await collectWorkbenchLlmIoRecords(runtime),
+            authorizedRunStarted.runId
+          )
 
           await createWorkbenchNewSession(page)
           await selectWorkbenchWorkspace(page, setup.workspaceName)
@@ -268,6 +338,15 @@ describe('workbench run e2e', () => {
           const approveWaiting = await readApprovalWaitingSnapshot(page)
           const approveExpectedTitle = approvedApproval.items[0]?.commandExplanation || ''
           const approveExpectedPosition = `审批 1 / ${approvedApproval.items.length}`
+          await page.waitForTimeout(APPROVAL_WAIT_OBSERVATION_MS)
+          const approveWaitingAfterObservation = await readApprovalWaitingSnapshot(page)
+          const approvalEventsAfterObservation = (await collectWorkbenchAiRunEvents(runtime)).filter(
+            (event) => event.runId === approvedRunStarted.runId
+          )
+          const approveWaitRemainedPending =
+            approveWaitingAfterObservation.waitingVisible &&
+            approveWaitingAfterObservation.waitingText.includes('等待用户处理') &&
+            !approvalEventsAfterObservation.some(isRunTerminalEvent)
           await decideWorkbenchApprovalBatch(runtime, page, {
             event: approvedApproval,
             action: 'approve'
@@ -281,7 +360,7 @@ describe('workbench run e2e', () => {
             { page, blockerPolicy: 'auto_approve' }
           )
           recordWorkbenchAiEvidence(runtime, approveEvidence, 0.8)
-          const approvedReviewedItemCount = await countApprovalReviewedItems(page)
+          const approvedReviewedItemTexts = await readApprovalReviewedItemTexts(page)
 
           await createWorkbenchNewSession(page)
           await selectWorkbenchWorkspace(page, setup.workspaceName)
@@ -323,13 +402,13 @@ describe('workbench run e2e', () => {
             action: 'reject'
           })
           await waitForDeniedRunToSettle(runtime, page, deniedRunStarted.runId, rejectedBatchIds)
-          const deniedReviewedItemCount = await countApprovalReviewedItems(page)
+          const deniedReviewedItemTexts = await readApprovalReviewedItemTexts(page)
 
           await createWorkbenchNewSession(page)
           await selectWorkbenchWorkspace(page, setup.workspaceName)
           await sendWorkbenchMessage(
             page,
-            '请使用终端命令在当前工作区创建 approval-guided.txt，内容写 guided-by-workbench-e2e。执行前请先让我本人确认。'
+            '请使用终端命令在当前工作区创建 approval-guided.txt，内容写 guided-by-workbench-e2e。执行前需由终端审批卡让我本人确认；请直接提交这条终端命令并等待该审批卡，不要改用对话提问。'
           )
           const guidedRunStarted = await waitForWorkbenchAiEvent(runtime, {
             name: 'approval_guided_run_started',
@@ -356,12 +435,26 @@ describe('workbench run e2e', () => {
             '先不要创建文件，请只说明你打算执行的命令和原因。'
           )
           await getWorkbenchLocator(page, chatSelectors.approvalBatchSubmitButton).click()
-          await waitForWorkbenchAiEvent(runtime, {
+          const guidedDecision = await waitForWorkbenchAiEvent(runtime, {
             name: 'approval_batch_decision_guide',
             matches: (event) =>
               event.type === 'approval_batch_decision' &&
+              event.runId === guidedRunStarted.runId &&
               event.decisions.some((decision) => decision.action === 'guide')
           })
+          if (guidedDecision.type !== 'approval_batch_decision') {
+            throw new Error('guided approval decision was not recorded')
+          }
+          await waitForDeniedRunToSettle(
+            runtime,
+            page,
+            guidedRunStarted.runId,
+            new Set([guidedApproval.batchId])
+          )
+          const guidedReviewedItemTexts = await readApprovalReviewedItemTexts(page)
+          await page.reload()
+          await waitForLatestAssistantProcess(page)
+          const restoredGuidedReviewedItemTexts = await readApprovalReviewedItemTexts(page)
 
           await createWorkbenchNewSession(page)
           await selectWorkbenchWorkspace(page, setup.workspaceName)
@@ -401,44 +494,59 @@ describe('workbench run e2e', () => {
             .catch(() => false)
 
           return {
-            autoApprovedFileExists: await exists(autoApprovedFile),
-            autoApprovedHasApprovalEvent: autoApprovedEvents.some(isApprovalBatchRequiredEvent),
-            autoApprovedApprovalCardVisible,
-            autoApprovedReviewDecisions,
+            queryTerminalStepCount,
+            queryReviewCallCount,
+            queryHadApprovalEvent: queryEvents.some(isApprovalBatchRequiredEvent),
+            queryApprovalCardVisible,
+            authorizedDirectoryExists: await exists(authorizedDirectory),
+            authorizedHasApprovalEvent,
+            authorizedApprovalCardVisible,
+            authorizedReviewDecisions,
             approvedFileExists: await exists(approvedFile),
             approvedReviewDecisions,
             deniedFileExists: await exists(deniedFile),
             deniedReviewDecisions,
             guidedFileExists: await exists(guidedFile),
             guidedReviewDecisions,
+            guidedDecision,
+            guidedReviewedItemTexts,
+            restoredGuidedReviewedItemTexts,
             fullAccessFileExists: await exists(fullAccessFile),
             fullAccessHasApprovalEvent: fullAccessEvents.some(isApprovalBatchRequiredEvent),
             fullAccessApprovalCardVisible,
             fullAccessReviewCallCount,
             composerPermissionAfterFullAccessSend,
             approveWaiting,
+            approveWaitingAfterObservation,
+            approveWaitRemainedPending,
             approveExpectedTitle,
             approveExpectedPosition,
             deniedWaiting,
             deniedExpectedTitle,
             deniedExpectedPosition,
             antMessageAfterApprove,
-            approvedReviewedItemCount,
-            deniedReviewedItemCount,
-            eventTypes: (await runtime.collectSignals()).aiRunEventEntries.map(
-              (entry) => entry.event.type
-            )
+            approvedReviewedItemTexts,
+            deniedReviewedItemTexts,
+            hasApprovalRequiredEvent: isApprovalBatchRequiredEvent(approvedApproval),
+            hasApprovalDecisionEvent: guidedDecision.type === 'approval_batch_decision'
           }
         },
         assert: async (result, runtime) => {
+          const authorizedReviewNeedsHuman = result.authorizedReviewDecisions.some(
+            (decision) => decision.decision === 'needs_human_review'
+          )
           await runtime.assertThat(
-            result.autoApprovedFileExists &&
-              !result.autoApprovedHasApprovalEvent &&
-              !result.autoApprovedApprovalCardVisible &&
-              result.autoApprovedReviewDecisions.length > 0 &&
-              result.autoApprovedReviewDecisions.every(
-                (decision) => decision.decision === 'auto_approve'
+            result.queryTerminalStepCount > 0 &&
+              result.queryReviewCallCount === 0 &&
+              !result.queryHadApprovalEvent &&
+              !result.queryApprovalCardVisible &&
+              result.authorizedDirectoryExists &&
+              result.authorizedReviewDecisions.length > 0 &&
+              result.authorizedReviewDecisions.every((decision) =>
+                ['auto_approve', 'needs_human_review'].includes(decision.decision)
               ) &&
+              result.authorizedHasApprovalEvent === authorizedReviewNeedsHuman &&
+              result.authorizedApprovalCardVisible === authorizedReviewNeedsHuman &&
               result.approvedFileExists &&
               result.approvedReviewDecisions.length > 0 &&
               result.approvedReviewDecisions.every(
@@ -459,12 +567,12 @@ describe('workbench run e2e', () => {
               !result.fullAccessApprovalCardVisible &&
               result.fullAccessReviewCallCount === 0 &&
               result.composerPermissionAfterFullAccessSend.includes('审核') &&
-              result.eventTypes.includes('approval_batch_required') &&
-              result.eventTypes.includes('approval_batch_decision'),
+              result.hasApprovalRequiredEvent &&
+              result.hasApprovalDecisionEvent,
             {
               name: 'workbench-approval-batch-real-ui-decisions',
               message:
-                '审核模式下明确授权的写入应由 AI 自动通过；明确要求本人确认的操作应由 AI 转人工并保留审批卡片、同意和拒绝行为；完全访问下应跳过 AI 与人工审核，对齐 WB-BLOCKER-001。',
+                '只读查询应绕过审核；明确授权目录请求按 AI 审核结论自动执行或展示审批卡，并能完成用户确认；明确要求本人确认的操作保留同意、拒绝和指导行为；完全访问下应跳过两层审核。',
               data: result
             }
           )
@@ -475,13 +583,20 @@ describe('workbench run e2e', () => {
               result.approveWaiting.waitingText.includes('等待用户处理') &&
               !result.approveWaiting.hasBlockerNotice &&
               !result.approveWaiting.hasAssistanceBadge &&
+              !result.approveWaiting.hasSeparateGuideButton &&
+              result.approveWaiting.hasGuideInputAndSubmit &&
               !result.approveWaiting.antMessageText.includes('需要审核') &&
+              result.approveWaitRemainedPending &&
+              !result.approveWaitingAfterObservation.hasSeparateGuideButton &&
+              result.approveWaitingAfterObservation.hasGuideInputAndSubmit &&
               result.deniedWaiting.waitingVisible &&
               result.deniedWaiting.titleText === result.deniedExpectedTitle &&
               result.deniedWaiting.positionText === result.deniedExpectedPosition &&
               result.deniedWaiting.waitingText.includes('等待用户处理') &&
               !result.deniedWaiting.hasBlockerNotice &&
               !result.deniedWaiting.hasAssistanceBadge &&
+              !result.deniedWaiting.hasSeparateGuideButton &&
+              result.deniedWaiting.hasGuideInputAndSubmit &&
               !result.deniedWaiting.antMessageText.includes('需要审核') &&
               !result.antMessageAfterApprove.includes('审核已通过'),
             {
@@ -489,7 +604,7 @@ describe('workbench run e2e', () => {
               message:
                 '等待审批时 Activity header 应为「等待用户处理」，且过程流无 blockers、无开始/通过 toast，对齐 WB-BLOCKER-001-AC6。',
               data: {
-                autoApprovedReviewDecisions: result.autoApprovedReviewDecisions,
+                authorizedReviewDecisions: result.authorizedReviewDecisions,
                 approvedReviewDecisions: result.approvedReviewDecisions,
                 deniedReviewDecisions: result.deniedReviewDecisions,
                 guidedReviewDecisions: result.guidedReviewDecisions,
@@ -501,13 +616,23 @@ describe('workbench run e2e', () => {
             }
           )
           await runtime.assertThat(
-            result.approvedReviewedItemCount >= 1 && result.deniedReviewedItemCount >= 1,
+            result.approvedReviewedItemTexts.some((text) => text.includes('审核结果：已允许')) &&
+              result.deniedReviewedItemTexts.some((text) => text.includes('审核结果：已拒绝')) &&
+              result.guidedReviewedItemTexts.some((text) =>
+                text.includes('审核结果：已提供指导：先不要创建文件，请只说明你打算执行的命令和原因。')
+              ) &&
+              result.restoredGuidedReviewedItemTexts.some((text) =>
+                text.includes('审核结果：已提供指导：先不要创建文件，请只说明你打算执行的命令和原因。')
+              ),
             {
               name: 'workbench-approval-reviewed-activity-items',
-              message: '审完后走过审批的工具行应带审核标记，对齐 WB-BLOCKER-001-AC7。',
+              message:
+                '审后工具行以文字显示同意、拒绝和指导结果，刷新后仍能恢复指导结果，对齐 WB-BLOCKER-001-AC7。',
               data: {
-                approvedReviewedItemCount: result.approvedReviewedItemCount,
-                deniedReviewedItemCount: result.deniedReviewedItemCount
+                approvedReviewedItemTexts: result.approvedReviewedItemTexts,
+                deniedReviewedItemTexts: result.deniedReviewedItemTexts,
+                guidedReviewedItemTexts: result.guidedReviewedItemTexts,
+                restoredGuidedReviewedItemTexts: result.restoredGuidedReviewedItemTexts
               }
             }
           )

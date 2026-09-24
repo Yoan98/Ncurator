@@ -6,7 +6,9 @@ import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   collectWorkbenchAiRunEvents,
+  createPartnerThroughWorkbenchUi,
   getWorkbenchPrefixLocator,
+  getWorkbenchLocator,
   selectWorkbenchExecutionPermission,
   setupWorkbenchWithTempWorkspace,
   sendWorkbenchMessage,
@@ -31,7 +33,8 @@ describe('workbench AI question e2e', () => {
         domain: 'workbench',
         suite: 'run',
         groups: ['blocker'],
-        description: '真实 Workbench 提问卡片、刷新恢复、提交后 Activity 问答投影。',
+        description:
+          '真实 Workbench 提问卡片、伙伴切换与刷新恢复、提交后 Activity 问答投影。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -77,6 +80,11 @@ describe('workbench AI question e2e', () => {
             workbenchSelectors.partnerNeedsAssistancePrefix
           ).first()
           await assistanceBadge.waitFor({ state: 'visible', timeout: 30_000 })
+          const assistanceBadgeTestId = await assistanceBadge.getAttribute('data-testid')
+          const assistancePartnerId = assistanceBadgeTestId?.slice(
+            `${workbenchSelectors.partnerNeedsAssistancePrefix}-`.length
+          )
+          if (!assistancePartnerId) throw new Error('question partner assistance badge is missing')
           const questions = required.interaction.questions
           if (questions.length < 1 || questions.length > 3) {
             throw new Error(`expected one to three questions, received ${questions.length}`)
@@ -150,9 +158,26 @@ describe('workbench AI question e2e', () => {
             throw new Error('a mutating tool ran before the first question was answered')
           }
 
+          await createPartnerThroughWorkbenchUi(page, '切换验证伙伴')
+          await card.waitFor({ state: 'hidden', timeout: 30_000 })
+          const partnerAssistanceBadge = getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.partnerNeedsAssistancePrefix}-${assistancePartnerId}`
+          )
+          await partnerAssistanceBadge.waitFor({ state: 'visible', timeout: 30_000 })
+          const assistancePersistedAfterPartnerSwitch = await partnerAssistanceBadge.isVisible()
+          await getWorkbenchLocator(
+            page,
+            `${workbenchSelectors.partnerItemPrefix}-${assistancePartnerId}`
+          ).click()
+          await card.waitFor({ state: 'visible', timeout: 30_000 })
+          await partnerAssistanceBadge.waitFor({ state: 'visible', timeout: 30_000 })
+          const questionRestoredAfterPartnerSwitch = await card.isVisible()
+
           await page.reload()
-          await assistanceBadge.waitFor({ state: 'visible', timeout: 30_000 })
-          const assistanceRestoredAfterReload = await assistanceBadge.isVisible()
+          await card.waitFor({ state: 'visible', timeout: 30_000 })
+          await partnerAssistanceBadge.waitFor({ state: 'visible', timeout: 30_000 })
+          const assistanceRestoredAfterReload = await partnerAssistanceBadge.isVisible()
           await answerQuestionCard(questions)
 
           const seenInteractionIds = new Set([required.interactionId])
@@ -182,7 +207,7 @@ describe('workbench AI question e2e', () => {
           await assistanceBadge.waitFor({ state: 'hidden', timeout: 30_000 })
           const assistanceClearedAfterCompletion = !(await assistanceBadge.isVisible())
 
-          const process = await waitForLatestAssistantProcess(page)
+          await waitForLatestAssistantProcess(page)
           const processToggle = getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.assistantProcessTogglePrefix
@@ -190,7 +215,6 @@ describe('workbench AI question e2e', () => {
           if ((await processToggle.getAttribute('aria-expanded')) === 'false') {
             await processToggle.click()
           }
-          await process.locator('summary').click()
           const processLocators = getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.assistantProcessPrefix
@@ -223,6 +247,8 @@ describe('workbench AI question e2e', () => {
             previousBox,
             guidePlaceholder,
             stopLabel,
+            assistancePersistedAfterPartnerSwitch,
+            questionRestoredAfterPartnerSwitch,
             assistanceRestoredAfterReload,
             assistanceClearedAfterCompletion,
             processText,
@@ -236,6 +262,8 @@ describe('workbench AI question e2e', () => {
           }
           if (
             !result.assistanceRestoredAfterReload ||
+            !result.assistancePersistedAfterPartnerSwitch ||
+            !result.questionRestoredAfterPartnerSwitch ||
             !result.assistanceClearedAfterCompletion ||
             !result.initialCardText.includes(`问题 1 / ${result.questionCount}`) ||
             result.titleText !== result.firstQuestionText ||
