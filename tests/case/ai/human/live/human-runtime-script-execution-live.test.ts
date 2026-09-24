@@ -101,7 +101,7 @@ describe.skipIf(!SUPPORTED_PLATFORMS.has(process.platform))('ai human live runti
             const reviewDecisions = messageLog.flatMap((record) => {
               const { entry } = record
               return entry.kind === 'annotation' && entry.eventType === 'terminal_review_resolved'
-                ? entry.payload.operations
+                ? entry.payload.decisions
                 : []
             })
             return {

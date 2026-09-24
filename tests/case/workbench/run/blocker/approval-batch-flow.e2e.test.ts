@@ -47,7 +47,7 @@ const isApprovalBatchRequiredEvent = (
   event.type === 'approval_batch_required'
 
 type TerminalReviewDecision = {
-  operationId: string
+  commandId: string
   decision: 'auto_approve' | 'needs_human_review'
 }
 
@@ -65,19 +65,20 @@ const readTerminalReviewDecisions = (
     .flatMap((record) => {
       const output = record.output
       if (!output || typeof output !== 'object' || Array.isArray(output)) return []
-      const operations = output.operations
-      if (!Array.isArray(operations)) return []
-      return operations.flatMap((operation) => {
-        if (!operation || typeof operation !== 'object' || Array.isArray(operation)) return []
-        const operationId = operation.operationId
-        const decision = operation.decision
+      const decisions = output.decisions
+      if (!Array.isArray(decisions)) return []
+      return decisions.flatMap((decisionItem) => {
+        if (!decisionItem || typeof decisionItem !== 'object' || Array.isArray(decisionItem))
+          return []
+        const commandId = decisionItem.commandId
+        const decision = decisionItem.decision
         if (
-          typeof operationId !== 'string' ||
+          typeof commandId !== 'string' ||
           (decision !== 'auto_approve' && decision !== 'needs_human_review')
         ) {
           return []
         }
-        return [{ operationId, decision }]
+        return [{ commandId, decision }]
       })
     })
 
@@ -91,6 +92,7 @@ const readApprovalWaitingSnapshot = async (
   antMessageText: string
   titleText: string
   positionText: string
+  hasAssistanceBadge: boolean
 }> => {
   const card = getApprovalCard(page)
   await card.waitFor({ state: 'visible', timeout: 30_000 })
@@ -99,6 +101,10 @@ const readApprovalWaitingSnapshot = async (
   const waitingVisible = await waiting.isVisible().catch(() => false)
   const waitingText = waitingVisible ? ((await waiting.textContent()) || '').trim() : ''
   const processText = ((await processRoot.textContent()) || '').trim()
+  const assistanceBadge = getWorkbenchPrefixLocator(
+    page,
+    workbenchSelectors.partnerNeedsAssistancePrefix
+  ).first()
   return {
     waitingVisible,
     waitingText,
@@ -110,7 +116,8 @@ const readApprovalWaitingSnapshot = async (
     ).trim(),
     positionText: (
       (await card.getByTestId(`${chatSelectors.approvalBatchCard}-position`).textContent()) || ''
-    ).trim()
+    ).trim(),
+    hasAssistanceBadge: await assistanceBadge.isVisible().catch(() => false)
   }
 }
 
@@ -467,12 +474,14 @@ describe('workbench run e2e', () => {
               result.approveWaiting.positionText === result.approveExpectedPosition &&
               result.approveWaiting.waitingText.includes('等待用户处理') &&
               !result.approveWaiting.hasBlockerNotice &&
+              !result.approveWaiting.hasAssistanceBadge &&
               !result.approveWaiting.antMessageText.includes('需要审核') &&
               result.deniedWaiting.waitingVisible &&
               result.deniedWaiting.titleText === result.deniedExpectedTitle &&
               result.deniedWaiting.positionText === result.deniedExpectedPosition &&
               result.deniedWaiting.waitingText.includes('等待用户处理') &&
               !result.deniedWaiting.hasBlockerNotice &&
+              !result.deniedWaiting.hasAssistanceBadge &&
               !result.deniedWaiting.antMessageText.includes('需要审核') &&
               !result.antMessageAfterApprove.includes('审核已通过'),
             {

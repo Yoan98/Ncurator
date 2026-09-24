@@ -42,7 +42,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 - `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退、多文件修改入口，以及馆长 WPS 通道对 docx / xlsx / pptx 的 dispatch 与本机已授权 WPS 文字 / 表格 / 演示窗口刷新。
 - `scheduled-task` 验证伙伴必选且位于表单第一项、任务描述支持引用、手动创建默认开启、AI 创建预填聊天草稿、删除伙伴后任务停用，以及执行时读取伙伴最新 Composer 配置。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
-- AI 提问统一归入 `run/blocker`：真实 UI 展示 A/B/C/D 和“其他，请填写”，仅用圆形/方形标记区分单选与多选，不展示选择类型文字 Tag，保留推荐 Tag，覆盖普通单选自动跳题、多问题手动切换与刷新恢复；提交后在对应 Activity 工具行下按顺序显示问题与用户答案。审批结果也在对应工具行下显示，不再使用旧图标前缀或 hover 替换文案。
+- AI 提问统一归入 `run/blocker`：真实 UI 展示 A/B/C/D 和“其他，请填写”，仅用圆形/方形标记区分单选与多选，不展示选择类型文字 Tag，保留推荐 Tag，覆盖普通单选自动跳题、多问题手动切换与刷新恢复；等待回答时侧栏伙伴行显示「需要你的协助」，提交、取消或结束后清除，审批等待不显示；提交后在对应 Activity 工具行下按顺序显示问题与用户答案。审批结果也在对应工具行下显示，不再使用旧图标前缀或 hover 替换文案。
 - 涉及 AI 的 case 必须记录模型、耗时、完成度评分和失败归因；Oracle 引用 [workbench.md](../prd/workbench.md) 的需求或验收编号。
 - AI 内置浏览器 case 必须验证右侧浏览器面板、网页操作结果和最终 assistant 输出形成闭环，不能只验证面板出现。
 - docx apply 相关 case 必须使用真实 docx 文件验证预览与回退；仅写入 `.docx` 后缀文本文件不满足测试 case 口径。
@@ -314,10 +314,12 @@ pnpm test:update:e2e
 #### `ai-process-stream-and-final-answer`
 
 - 测试类型：`e2e`
-- What：智能模式真实发送后，验证 Thought / Activity 过程层渲染与最终 markdown 收口（过程流主 case）。
+- What：智能模式真实发送后，验证 run 用时、过程记录折叠、Thought / Activity 过程层渲染与最终 markdown 收口（过程流主 case）。
 - Why：重构后过程层是用户扫进度的主界面；需覆盖 Activity 折叠 header、展开平铺、学习/工具统一渲染，以及最终回答，而不是只断言“有过程块”。
-- How：真实文件地址内准备带唯一事实的文件；先创建伙伴；用户通过 UI 发送自然语言总结请求；等待真实 AI run 完成；展开全部 Activity 面板并采集 header / body 文案。
+- How：真实文件地址内准备带唯一事实的文件；先创建伙伴；用户通过 UI 发送自然语言总结请求；run 运行期间检查已处理时间出现并递增，完成后检查固定用时、默认收起和最终回答可见；展开过程记录与全部 Activity 面板并采集 header / body 文案。
 - Oracle：用户消息与 assistant 过程流逐步出现，对齐 `WB-COMPOSER-003-AC1`、`WB-COMPOSER-003-AC2`；用户与 assistant 消息不展示头像，用户消息右对齐气泡，assistant 过程流/最终输出与 composer 内容 rail 对齐，最终 markdown 无独立背景卡片，对齐 `WB-COMPOSER-009-AC1`、`WB-COMPOSER-009-AC2`、`WB-COMPOSER-009-AC3`、`WB-COMPOSER-009-AC4`。运行中过程流可见；“让俺想想”在 Brain 请求期间于过程区最下方展示，run 完成 / 失败 / 取消或产出正文后过程区不得仍挂着“让俺想想”，对齐 `WB-COMPOSER-003-AC3`。若本轮碰巧出现自动重试，仍不得与“让俺想想”同时出现；强制打出重试行、单行就地更新与 429 退避由 `llm-retry-process-row` 覆盖，对齐 `WB-COMPOSER-015`。决策层（Thought）短摘要可见且不暴露原始长推理，以浅灰文本展示，未超出单行时不展示折叠图标，超出单行时单行省略，hover 时展示展开图标且垂直居中于单行文本，展开后常驻浅灰卡片背景、折叠按钮居顶对齐第一行并在内部滚动，对齐 `WB-COMPOSER-003-AC5`、`WB-COMPOSER-009-AC10`。若本轮确有可见工具调用：至少一块 Activity（`details` + summary + 展开行）；summary 为工具独立维护的 header 短句汇总（可独立成句，不携带命令参数/路径/query，不得出现展开行半截连词如「查看页面并」），根据单一动作或混合工具精准呈现对应专属语义图标（询问用户使用困惑表情图标；浏览器打开/查看/操作/提取/截图/滚动/标签、网页抓取/搜索、图片读取/生成或工作流闪电图标；截取页面并读取图片的成对视觉动作统一呈现为照片图标，不退化为闪电；浏览器操作不产生审批卡片与展开行审核绿勾）；展开行为带对象的工具原句且不含冒号强调；若含 `read_image`：展开行含「读取图片」文案且按入参 `paths` 展示可点击缩略图（`workbench-read-image-thumb-*`），点击后打开与附件相同的 `ImageLightbox`；两次 Thought 之间的工具合并为 Activity，对齐 `WB-COMPOSER-003-AC6`、`WB-COMPOSER-009-AC5`、`WB-COMPOSER-009-AC6`、`WB-COMPOSER-014-AC5`、`WB-BLOCKER-001-AC8`。Header：按工具 UI 类型归并；同类多次为「短句 N 次」；归并后 ≤3 类用顿号 `、` 拼接（两侧无空格）；>3 类 summary 为「已完成 n 项」。若事件含 `learn_skill`：展开行文案含“正在学习 / 已学会”，且不作为独立学习层；若含 docx 工具：展开行文案含“Word 文档”；对齐 `WB-COMPOSER-009-AC8`、`WB-COMPOSER-009-AC9`、`WB-COMPOSER-009-AC10`。文件名、query、命令、URL 和技能名不使用粗体或冒号强调，对齐 `WB-COMPOSER-009-AC7`。过程区不出现最终收尾等待文案（如“让俺收尾”），最终回答直接流式收口，对齐 `WB-COMPOSER-003-AC4`、`WB-COMPOSER-014-AC1`、`WB-COMPOSER-014-AC2`。证据引用与 terminal 状态规则仍由同域其他 case / AI suite 覆盖，本 case 保持 `WB-COMPOSER-003-AC8`、`WB-COMPOSER-003-AC9` 的过程流兼容边界（不因过程层重构破坏）。自动重试与截断提示、计划进度环等由相关运行态 case 覆盖并继续对齐 `WB-COMPOSER-014-AC3`、`WB-COMPOSER-014-AC4`。最终 markdown 围绕工作区事实（Alice/Bob）且不裸露 chain-of-thought，对齐 `WB-CORE-005`、`WB-CORE-006`。仅切换伙伴或新建干净对话时不得凭空出现“正在 / 已检索知识库”，对齐 `WB-COMPOSER-009-AC12`。
+
+- Oracle：run 开始后过程内容出现前也显示「已处理 X分钟Y秒」和分隔线，且运行至少 1 秒后用时递增；完成后用时变为固定「用时 X分钟Y秒」，过程默认收起。展开过程后 Thought / Activity 可见，再次收起不影响最终回答。对齐 `WB-COMPOSER-016-AC1` 至 `WB-COMPOSER-016-AC3`。
 
 #### `llm-retry-process-row`
 
@@ -349,7 +351,7 @@ pnpm test:update:e2e
 - What：真实 AI 输出过程中切到 Settings，完成后回到 Workbench 能通过伙伴消息记录投影恢复过程流和最终 assistant 回答。
 - Why：Workbench route 切换会导致 renderer 重新挂载；如果运行态只存在 renderer 内存中，用户离开页面后会丢失 AI 过程和最终回答。
 - How：通过 UI 配置真实模型、创建伙伴，必要时添加文件地址；发送真实 AI 请求，等待过程流出现后切到 Settings；停留到 AI run 完成，再回到 Workbench 读取恢复后的过程流和最终回答。
-- Oracle：切换后恢复目标历史、过程流、最终回答和自身运行态，上一伙伴状态不泄漏，对齐 `WB-SESSION-002`；run event 包含 `answer_completed` 与 `run_completed`，对齐 `WB-COMPOSER-003-AC7`。
+- Oracle：切换后恢复目标历史、过程流、最终回答和自身运行态，上一伙伴状态不泄漏，对齐 `WB-SESSION-002`；run event 包含 `answer_completed` 与 `run_completed`，对齐 `WB-COMPOSER-003-AC7`。恢复后的用时基于同一 run 的持久化开始和结束时间，完成态过程默认收起，对齐 `WB-COMPOSER-016-AC3`。
 
 #### `session-skill-memory-persistence`
 
@@ -373,7 +375,7 @@ pnpm test:update:e2e
 - What：智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死。
 - How：E2E 发送真实长任务和审批等待请求，运行中点击停止。
-- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中按钮禁用并提示「正在停止本次运行」，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`。
+- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中按钮禁用并提示「正在停止本次运行」，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`；取消后用时停止递增、过程默认收起且仍可展开，对齐 `WB-COMPOSER-016-AC2`；审批等待不显示「需要你的协助」，对齐 `WB-SESSION-014-AC1`。
 
 #### `interrupted-task-resume-flow`
 
@@ -607,7 +609,7 @@ pnpm test:update:e2e
 - What：模糊任务触发 AI 提问，提问卡与审批卡的左上标题直接展示当前问题或当前操作说明，右上当前项数量位于左右箭头前；提问卡每题只接受 2 至 4 个 AI 选项，以圆形/方形控件区分单选/多选但不展示类型文字 Tag，显示推荐 Tag，用户完成 A/B/C/D、其他输入和多问题切换，普通单选自动跳到下一题；回答前不显示写入结果，提交后 run 恢复；同一回复包含多个提问时逐张展示，后一张不继承前一张状态，全部回答后才继续 AI。
 - Why：问题和答案是任务定义的一部分，必须在真实 UI 中可操作、可恢复、可追溯，不能只在 IPC 或 backend 日志中存在。
 - How：通过真实 Workbench UI 发送存在结果歧义的任务，等待 `human_interaction_required`；按实际返回的 1 至 3 个问题检查 A/B/C/D、其他输入和 pending 卡片，刷新后继续选择自定义答案并提交；若同一 run 再次产生 `human_interaction_required`，继续完成该 interaction；最终展开 Activity 检查问答投影。审批展示由 `approval-batch-flow` 同时覆盖。
-- Oracle：composer 上方出现统一交互卡片，左上标题直接显示当前问题或当前操作说明，右上操作区按「问题/审批 1 / N」、左右箭头、停止按钮的顺序排列，底部展示「告诉{伙伴名}该怎么做」与提交按钮，不重复展示文字停按钮，对齐 `WB-BLOCKER-001-AC9`；每题 2 至 4 个 AI 选项、单选/多选控件、无类型文字 Tag、推荐 Tag 和自动跳题对齐 `WB-BLOCKER-001-AC11`；刷新后 pending 问题可恢复；新的 interaction 从首题和空选择开始；提交前无写入；连续提问全部提交后 run 恢复并完成，对齐 `WB-BLOCKER-001-AC12`；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。
+- Oracle：composer 上方出现统一交互卡片，左上标题直接显示当前问题或当前操作说明，右上操作区按「问题/审批 1 / N」、左右箭头、停止按钮的顺序排列，底部展示「告诉{伙伴名}该怎么做」与提交按钮，不重复展示文字停按钮，对齐 `WB-BLOCKER-001-AC9`；每题 2 至 4 个 AI 选项、单选/多选控件、无类型文字 Tag、推荐 Tag 和自动跳题对齐 `WB-BLOCKER-001-AC11`；刷新后 pending 问题可恢复；新的 interaction 从首题和空选择开始；提交前无写入；连续提问全部提交后 run 恢复并完成，对齐 `WB-BLOCKER-001-AC12`；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。等待回答时侧栏显示「需要你的协助」标签，刷新后仍显示，run 完成后消失；审批等待不显示该标签，对齐 `WB-SESSION-014`。
 
 ### 5.4 `scheduled-task`
 

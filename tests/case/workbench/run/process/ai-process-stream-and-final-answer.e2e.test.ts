@@ -36,8 +36,20 @@ type ProcessRenderSnapshot = {
 const HIDDEN_PROCESS_TOOLS = new Set(['update_plan'])
 
 const collectProcessRenderSnapshot = async (page: Page): Promise<ProcessRenderSnapshot> => {
-  const processRoot = getWorkbenchPrefixLocator(page, workbenchSelectors.assistantProcessPrefix).last()
+  const processRoot = getWorkbenchPrefixLocator(
+    page,
+    workbenchSelectors.assistantProcessPrefix
+  ).last()
   await processRoot.waitFor({ state: 'visible', timeout: 30_000 })
+  const processToggle = processRoot.locator(
+    `[data-testid^="${workbenchSelectors.assistantProcessTogglePrefix}-"]`
+  )
+  if (
+    (await processToggle.count()) > 0 &&
+    (await processToggle.getAttribute('aria-expanded')) === 'false'
+  ) {
+    await processToggle.click()
+  }
   const processRootText = ((await processRoot.textContent()) || '').trim()
   const thoughtCount = await processRoot.getByTestId(workbenchSelectors.assistantThoughts).count()
 
@@ -86,6 +98,11 @@ const collectProcessRenderSnapshot = async (page: Page): Promise<ProcessRenderSn
     standaloneTexts,
     processRootText
   }
+}
+
+const readDurationSeconds = (text: string): number | null => {
+  const match = text.match(/(\d+)分钟(\d+)秒/u)
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null
 }
 
 const listVisibleToolNames = (events: AiRunEvent[]): string[] =>
@@ -208,6 +225,18 @@ describe('workbench run e2e', () => {
           const startedAtMs = Date.now()
           await sendWorkbenchMessage(page, PROMPT)
           const processLocator = await waitForLatestAssistantProcess(page)
+          const durationLocator = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantRunDurationPrefix
+          ).last()
+          await durationLocator.waitFor({ state: 'visible', timeout: 30_000 })
+          const durationDuringRun = ((await durationLocator.textContent()) || '').trim()
+          await page.waitForTimeout(1100)
+          const durationAfterTick = ((await durationLocator.textContent()) || '').trim()
+          const durationAdvanced =
+            durationDuringRun.startsWith('已处理') &&
+            (readDurationSeconds(durationAfterTick) ?? 0) >
+              (readDurationSeconds(durationDuringRun) ?? 0)
           const earlySample = await sampleThinkingWaitEarly(page, processLocator)
           let runWatchDone = false
           const retryWatch = watchProcessRetryState(page, processLocator, () => runWatchDone)
@@ -227,9 +256,76 @@ describe('workbench run e2e', () => {
           const stackedRetryRows = retryState.stackedRetryRows
           const finalAnswerText = await waitForLatestAssistantFinalAnswerText(page)
           recordWorkbenchAiEvidence(runtime, evidence, 0.85)
+          await page.waitForFunction(
+            (prefix) => {
+              const nodes = document.querySelectorAll(`[data-testid^="${prefix}-"]`)
+              const latest = nodes.item(nodes.length - 1)
+              return latest?.textContent?.trim().startsWith('用时') === true
+            },
+            workbenchSelectors.assistantRunDurationPrefix,
+            { timeout: 30_000 }
+          )
+          const durationTextAtCompletion = ((await durationLocator.textContent()) || '').trim()
+          const completedProcessToggle = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantProcessTogglePrefix
+          ).last()
+          await completedProcessToggle.waitFor({ state: 'visible', timeout: 30_000 })
+          await page.waitForFunction(
+            (prefix) => {
+              const nodes = document.querySelectorAll(`[data-testid^="${prefix}-"]`)
+              const latest = nodes.item(nodes.length - 1)
+              return latest?.getAttribute('aria-expanded') === 'false'
+            },
+            workbenchSelectors.assistantProcessTogglePrefix,
+            { timeout: 30_000 }
+          )
+          const collapsedByDefault =
+            (await completedProcessToggle.getAttribute('aria-expanded')) === 'false'
+          const finalAnswerVisibleWhenCollapsed = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantFinalAnswerPrefix
+          )
+            .last()
+            .isVisible()
+          await completedProcessToggle.click()
+          await page.waitForFunction(
+            (prefix) => {
+              const nodes = document.querySelectorAll(`[data-testid^="${prefix}-"]`)
+              const latest = nodes.item(nodes.length - 1)
+              return latest?.getAttribute('aria-expanded') === 'true'
+            },
+            workbenchSelectors.assistantProcessTogglePrefix,
+            { timeout: 5_000 }
+          )
+          const expandedAfterClick =
+            (await completedProcessToggle.getAttribute('aria-expanded')) === 'true'
           const processRender = await collectProcessRenderSnapshot(page)
+          await completedProcessToggle.click()
+          await page.waitForFunction(
+            (prefix) => {
+              const nodes = document.querySelectorAll(`[data-testid^="${prefix}-"]`)
+              const latest = nodes.item(nodes.length - 1)
+              return latest?.getAttribute('aria-expanded') === 'false'
+            },
+            workbenchSelectors.assistantProcessTogglePrefix,
+            { timeout: 5_000 }
+          )
+          const finalAnswerVisibleAfterRecollapse = await getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantFinalAnswerPrefix
+          )
+            .last()
+            .isVisible()
           const visibleToolNames = listVisibleToolNames(evidence.events)
           return {
+            durationDuringRun,
+            durationAdvanced,
+            durationTextAtCompletion,
+            collapsedByDefault,
+            expandedAfterClick,
+            finalAnswerVisibleWhenCollapsed,
+            finalAnswerVisibleAfterRecollapse,
             sawThinkingWait: earlySample.sawThinkingWait,
             processTextDuringRun: earlySample.processTextDuringRun,
             retryAndThinkingCoexist,
@@ -251,7 +347,9 @@ describe('workbench run e2e', () => {
           const headerRulesOk = panels.every((panel) =>
             isShortActivityHeader(panel.summaryText, panel.itemTexts.length)
           )
-          const noFinalizingWait = !/让俺收尾|基本完成了/u.test(result.processRender.processRootText)
+          const noFinalizingWait = !/让俺收尾|基本完成了/u.test(
+            result.processRender.processRootText
+          )
           const noColonItemLabels = allItemTexts.every((text) => !text.includes('：'))
           const activityStructureOk =
             !hasTools ||
@@ -276,13 +374,17 @@ describe('workbench run e2e', () => {
             !result.retryAndThinkingCoexist &&
             !result.stackedRetryRows &&
             !result.thinkingStuckAfterComplete &&
-            (result.sawThinkingWait ||
-              hasTools ||
-              result.processRender.thoughtCount > 0 ||
-              result.processTextDuringRun.length > 0)
+            (result.sawThinkingWait || hasTools || result.processRender.thoughtCount > 0)
 
           await runtime.assertThat(
-            result.processTextDuringRun.length > 0 &&
+            result.durationDuringRun.startsWith('已处理') &&
+              result.durationAdvanced &&
+              /^用时\s+\d+分钟\d+秒$/u.test(result.durationTextAtCompletion) &&
+              result.collapsedByDefault &&
+              result.expandedAfterClick &&
+              result.finalAnswerVisibleWhenCollapsed &&
+              result.finalAnswerVisibleAfterRecollapse &&
+              result.processTextDuringRun.length > 0 &&
               thinkingSegmentOk &&
               noFinalizingWait &&
               result.eventTypes.includes('answer_completed') &&

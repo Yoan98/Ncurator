@@ -72,6 +72,11 @@ describe('workbench AI question e2e', () => {
 
           const card = page.getByTestId(workbenchSelectors.humanQuestionCard)
           await card.waitFor({ state: 'visible', timeout: 30_000 })
+          const assistanceBadge = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.partnerNeedsAssistancePrefix
+          ).first()
+          await assistanceBadge.waitFor({ state: 'visible', timeout: 30_000 })
           const questions = required.interaction.questions
           if (questions.length < 1 || questions.length > 3) {
             throw new Error(`expected one to three questions, received ${questions.length}`)
@@ -146,6 +151,8 @@ describe('workbench AI question e2e', () => {
           }
 
           await page.reload()
+          await assistanceBadge.waitFor({ state: 'visible', timeout: 30_000 })
+          const assistanceRestoredAfterReload = await assistanceBadge.isVisible()
           await answerQuestionCard(questions)
 
           const seenInteractionIds = new Set([required.interactionId])
@@ -172,7 +179,17 @@ describe('workbench AI question e2e', () => {
             await new Promise((resolve) => setTimeout(resolve, 500))
           }
 
+          await assistanceBadge.waitFor({ state: 'hidden', timeout: 30_000 })
+          const assistanceClearedAfterCompletion = !(await assistanceBadge.isVisible())
+
           const process = await waitForLatestAssistantProcess(page)
+          const processToggle = getWorkbenchPrefixLocator(
+            page,
+            workbenchSelectors.assistantProcessTogglePrefix
+          ).last()
+          if ((await processToggle.getAttribute('aria-expanded')) === 'false') {
+            await processToggle.click()
+          }
           await process.locator('summary').click()
           const processLocators = getWorkbenchPrefixLocator(
             page,
@@ -206,6 +223,8 @@ describe('workbench AI question e2e', () => {
             previousBox,
             guidePlaceholder,
             stopLabel,
+            assistanceRestoredAfterReload,
+            assistanceClearedAfterCompletion,
             processText,
             events,
             questionIds: questions.map((question) => question.id)
@@ -216,6 +235,8 @@ describe('workbench AI question e2e', () => {
             throw new Error(`expected one to three questions, received ${result.questionCount}`)
           }
           if (
+            !result.assistanceRestoredAfterReload ||
+            !result.assistanceClearedAfterCompletion ||
             !result.initialCardText.includes(`问题 1 / ${result.questionCount}`) ||
             result.titleText !== result.firstQuestionText ||
             result.selectionTypeTagCount !== 0 ||

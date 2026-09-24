@@ -3038,20 +3038,32 @@ export function registerHandlers(services: {
 
   ipcMain.handle('chat-session-list', async (): Promise<PartnerListItem[]> => {
     try {
-      const [partners, activePartnerIds, unreadCompletedPartnerIds, latestUserInputs] =
-        await Promise.all([
-          partnerStore.listPartners(),
-          aiRunStore.listPartnerIdsByRunStatuses(['running', 'waiting_human', 'waiting_approval']),
-          partnerStore.listUnreadCompletedPartnerIds(),
-          aiRunStore.listLatestUserInputs()
-        ])
+      const [
+        partners,
+        activePartnerIds,
+        unreadCompletedPartnerIds,
+        latestUserInputs,
+        waitingHumanRuns
+      ] = await Promise.all([
+        partnerStore.listPartners(),
+        aiRunStore.listPartnerIdsByRunStatuses(['running', 'waiting_human', 'waiting_approval']),
+        partnerStore.listUnreadCompletedPartnerIds(),
+        aiRunStore.listLatestUserInputs(),
+        aiRunStore.listRunsByStatuses(['waiting_human'])
+      ])
       const activePartnerIdSet = new Set(activePartnerIds)
       const unreadCompletedPartnerIdSet = new Set(unreadCompletedPartnerIds)
+      const assistancePartnerIdSet = new Set(
+        waitingHumanRuns
+          .filter((run) => run.pendingInteraction?.kind === 'question')
+          .map((run) => run.partnerId)
+      )
       return partners.map((partner) => {
         const latest = latestUserInputs.get(partner.id)
         return {
           ...partner,
           isRunning: activePartnerIdSet.has(partner.id),
+          needsAssistance: assistancePartnerIdSet.has(partner.id),
           hasUnreadCompletion: unreadCompletedPartnerIdSet.has(partner.id),
           lastUserMessagePreview: latest?.preview ?? null,
           lastActivityAt: latest?.createdAt ?? partner.created_at

@@ -148,6 +148,13 @@ const getItemText = (item: AssistantProcessGroup['items'][number]): AssistantRic
   return item.runningText
 }
 
+const formatRunDuration = (startedAt: number, finishedAt: number): string => {
+  const elapsedSeconds = Math.max(0, Math.floor((finishedAt - startedAt) / 1000))
+  const minutes = Math.floor(elapsedSeconds / 60)
+  const seconds = elapsedSeconds % 60
+  return `${minutes}分钟${seconds}秒`
+}
+
 const renderSegments = (
   segments: AssistantRichTextSegment[],
   options?: { shimmer?: boolean }
@@ -594,6 +601,9 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   onPreviewImage
 }) => {
   const [applyTargetsExpanded, setApplyTargetsExpanded] = useState(false)
+  const [processExpanded, setProcessExpanded] = useState(() => !turn?.runFinished)
+  const [currentTime, setCurrentTime] = useState(() => Date.now())
+  const wasRunFinishedRef = useRef(Boolean(turn?.runFinished))
   const processThoughts = useMemo(() => turn?.processThoughts || [], [turn?.processThoughts])
   const finalAnswerMarkdown = turn?.finalAnswerMarkdown || ''
   const streamingMarkdown = turn?.streamingMarkdown || ''
@@ -640,6 +650,19 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
     ? applyTargets.slice(0, MAX_VISIBLE_APPLY_TARGETS)
     : applyTargets
 
+  useEffect(() => {
+    if (!turn?.startedAt || turn.runFinished) return
+    setCurrentTime(Date.now())
+    const interval = window.setInterval(() => setCurrentTime(Date.now()), 1000)
+    return () => window.clearInterval(interval)
+  }, [turn?.runFinished, turn?.startedAt])
+
+  useLayoutEffect(() => {
+    const wasRunFinished = wasRunFinishedRef.current
+    if (!wasRunFinished && turn?.runFinished) setProcessExpanded(false)
+    wasRunFinishedRef.current = Boolean(turn?.runFinished)
+  }, [turn?.runFinished])
+
   if (!turn) {
     return null
   }
@@ -647,14 +670,45 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   return (
     <div className="w-full" data-testid={`workbench-assistant-turn-${messageId}`}>
       <div className="space-y-4">
-        {timeline.length > 0 || hasStreamingThought || reserveThinkingSlot ? (
+        {timeline.length > 0 || hasStreamingThought || reserveThinkingSlot || turn.startedAt ? (
           <div
             className={`transition-opacity duration-200 ${
               turn.status === 'completed' && hasFinalAnswer ? 'opacity-75' : ''
             }`}
             data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}
           >
-            <div className="space-y-2">
+            {turn.startedAt ? (
+              turn.runFinished ? (
+                <button
+                  type="button"
+                  className="mb-2 flex w-full items-center justify-between gap-2 border-b border-[#EEEEEC] pb-2 text-left text-[14px] leading-6 text-[#85837F] transition-colors hover:text-[#37352F]"
+                  aria-expanded={processExpanded}
+                  aria-label={`${processExpanded ? '收起' : '展开'}过程记录`}
+                  data-testid={`${workbenchSelectors.assistantProcessTogglePrefix}-${messageId}`}
+                  onClick={() => setProcessExpanded((expanded) => !expanded)}
+                >
+                  <span
+                    data-testid={`${workbenchSelectors.assistantRunDurationPrefix}-${messageId}`}
+                  >
+                    用时 {formatRunDuration(turn.startedAt, turn.finishedAt ?? currentTime)}
+                  </span>
+                  {processExpanded ? (
+                    <HiChevronDown className="h-4 w-4 shrink-0" />
+                  ) : (
+                    <HiChevronRight className="h-4 w-4 shrink-0" />
+                  )}
+                </button>
+              ) : (
+                <div className="mb-2 flex items-center border-b border-[#EEEEEC] pb-2 text-[14px] leading-6 text-[#85837F]">
+                  <span
+                    data-testid={`${workbenchSelectors.assistantRunDurationPrefix}-${messageId}`}
+                  >
+                    已处理 {formatRunDuration(turn.startedAt, currentTime)}
+                  </span>
+                </div>
+              )
+            ) : null}
+            <div className={processExpanded ? 'space-y-2' : 'hidden'}>
               {timeline.map((entry) => {
                 if (entry.kind === 'decision') {
                   return (

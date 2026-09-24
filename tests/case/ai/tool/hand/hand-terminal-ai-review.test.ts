@@ -5,7 +5,7 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  collectTerminalReviewOperationIds,
+  collectTerminalReviewCommandIds,
   filterAiRunEventsByType
 } from '../../human/testUtils'
 
@@ -101,17 +101,23 @@ describe('ai tool hand terminal review', () => {
         const target = path.join(runtime.workspaceRoot, 'ai-approved-dir')
         const command = createDirectoryCommand(target)
         const reviewRequests: string[] = []
+        const reviewSystems: string[] = []
         const runner = createHumanTestRunner(runtime, {
           approvalPolicy: 'deny-all',
           structuredOutputScript: {
             'human.terminal_review': [
-              ({ user }) => {
+              ({ system, user }) => {
+                reviewSystems.push(system)
+                reviewRequests.push(user)
+                return { invalid: true }
+              },
+              ({ system, user }) => {
+                reviewSystems.push(system)
                 reviewRequests.push(user)
                 return {
-                  operations: collectTerminalReviewOperationIds(user).map((operationId) => ({
-                    operationId,
-                    decision: 'auto_approve',
-                    reason: '用户明确要求创建该目录'
+                  decisions: collectTerminalReviewCommandIds(user).map((commandId) => ({
+                    commandId,
+                    decision: 'auto_approve'
                   }))
                 }
               }
@@ -140,6 +146,12 @@ describe('ai tool hand terminal review', () => {
           userInput: '请创建 ai-approved-dir 目录。'
         })
         const records = await runner.ctx.loadMessageLog()
+        const reviewDecisions = records.flatMap((record) => {
+          const { entry } = record
+          return entry.kind === 'annotation' && entry.eventType === 'terminal_review_resolved'
+            ? entry.payload.decisions
+            : []
+        })
         return {
           output,
           command,
@@ -148,6 +160,8 @@ describe('ai tool hand terminal review', () => {
             .then(() => true)
             .catch(() => false),
           reviewRequests,
+          reviewSystems,
+          reviewDecisions,
           reviews: records
             .map((record) => record.entry)
             .filter(
@@ -161,14 +175,26 @@ describe('ai tool hand terminal review', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             result.exists &&
-            result.reviewRequests.length === 1 &&
+            result.reviewRequests.length === 2 &&
             result.reviewRequests[0].includes('请创建 ai-approved-dir 目录') &&
-            result.reviewRequests[0].includes('<operation id="') &&
+            result.reviewRequests[0].includes('命令 ID：') &&
             result.reviewRequests[0].includes('用途说明：') &&
-            result.reviewRequests[0].includes('基础规则命中：') &&
             result.reviewRequests[0].includes(result.command) &&
-            result.reviewRequests[0].includes('终端起始目录：') &&
+            result.reviewRequests[0].includes('执行目录：') &&
+            (result.reviewRequests[0].includes('平台：Windows') ||
+              result.reviewRequests[0].includes('平台：macOS')) &&
             !result.reviewRequests[0].startsWith('{') &&
+            !result.reviewRequests[0].includes('<user_request>') &&
+            !result.reviewRequests[0].includes('macOS / zsh') &&
+            !result.reviewRequests[0].includes('Windows / PowerShell') &&
+            !result.reviewRequests[0].includes('基础命中：') &&
+            result.reviewRequests[1].includes('上一次响应未通过 JSON') &&
+            result.reviewSystems.length === 2 &&
+            result.reviewSystems[0].includes('只返回合法 JSON') &&
+            result.reviewSystems[0].includes('"decisions"') &&
+            result.reviewSystems[0].includes('"commandId"') &&
+            result.reviewDecisions.length === 1 &&
+            result.reviewDecisions[0].decision === 'auto_approve' &&
             result.reviews.length === 1 &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 0 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 1,
@@ -258,10 +284,14 @@ describe('ai tool hand terminal review', () => {
       runMode: 'single',
       execute: async (runtime) => {
         const target = path.join(runtime.workspaceRoot, 'incomplete-review-dir')
+        let reviewCallCount = 0
         const runner = createHumanTestRunner(runtime, {
           approvalPolicy: 'deny-all',
           structuredOutputScript: {
-            'human.terminal_review': [{ operations: [] }],
+            'human.terminal_review': Array.from({ length: 4 }, () => () => {
+              reviewCallCount += 1
+              return { decisions: [] }
+            }),
             'human.brain': [
               {
                 output: {
@@ -285,8 +315,17 @@ describe('ai tool hand terminal review', () => {
           }
         })
         const output = await runner.run({ taskId: runtime.taskId, userInput: '请处理目录。' })
+        const records = await runner.ctx.loadMessageLog()
+        const fallbackCodes = records.flatMap((record) => {
+          const { entry } = record
+          return entry.kind === 'annotation' && entry.eventType === 'terminal_review_resolved'
+            ? [entry.payload.fallbackCode]
+            : []
+        })
         return {
           output,
+          reviewCallCount,
+          fallbackCodes,
           exists: await fs
             .stat(target)
             .then(() => true)
@@ -297,6 +336,9 @@ describe('ai tool hand terminal review', () => {
       assert: async (result, runtime) => {
         runtime.assertThat(
           result.output.status === 'completed' &&
+            result.reviewCallCount === 4 &&
+            result.fallbackCodes.length === 1 &&
+            result.fallbackCodes[0] === 'invalid_output' &&
             !result.exists &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 1 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 0,

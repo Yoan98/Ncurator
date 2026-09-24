@@ -59,14 +59,13 @@ const collectApprovalBatchItems = (input: {
       if (riskPolicy.executionPolicy === 'auto_allow') return []
       return [
         {
-          operationId: call.toolCallId,
+          commandId: call.toolCallId,
           itemId: call.toolCallId,
           order: index,
           toolName: call.toolName,
           command,
           commandExplanation: readCommandExplanationArg(call.args) || '执行这条终端指令。',
-          reason: riskPolicy.reason,
-          reasons: riskPolicy.reasons
+          reason: riskPolicy.reason
         }
       ]
     }
@@ -297,16 +296,20 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     let approvalItems: typeof reviewCandidates = []
     if (reviewCandidates.length > 0) {
       const reviewId = randomUUID()
-      const decisions = await reviewTerminalCommands({
+      const reviewResult = await reviewTerminalCommands({
         ctx: input.ctx,
         taskId: state.task.taskId,
         userInput: state.task.userInput,
-        operations: reviewCandidates
+        commands: reviewCandidates
       })
-      await input.ctx.appendMessageLog([buildTerminalReviewAnnotation({ reviewId, decisions })])
-      const decisionById = new Map(decisions.map((decision) => [decision.operationId, decision]))
+      await input.ctx.appendMessageLog([
+        buildTerminalReviewAnnotation({ reviewId, result: reviewResult })
+      ])
+      const decisionById = new Map(
+        reviewResult.decisions.map((decision) => [decision.commandId, decision])
+      )
       approvalItems = reviewCandidates.filter(
-        (candidate) => decisionById.get(candidate.operationId)?.decision !== 'auto_approve'
+        (candidate) => decisionById.get(candidate.commandId)?.decision !== 'auto_approve'
       )
     }
 

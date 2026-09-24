@@ -16,8 +16,8 @@ export const filterAiRunEventsByType = <TType extends AiRunEvent['type']>(
 ): Extract<AiRunEvent, { type: TType }>[] =>
   events.filter((event): event is Extract<AiRunEvent, { type: TType }> => event.type === type)
 
-export const collectTerminalReviewOperationIds = (userMessage: string): string[] =>
-  Array.from(userMessage.matchAll(/<operation id="([^"]+)"/gu), (match) => match[1])
+export const collectTerminalReviewCommandIds = (userMessage: string): string[] =>
+  Array.from(userMessage.matchAll(/命令 ID：([^\s]+)/gu), (match) => match[1])
 
 export const summarizeHumanSteps = (events: readonly AiRunEvent[]): string[] =>
   filterAiRunEventsByType(events, 'human_step').map((event) => {

@@ -673,6 +673,7 @@ export interface Partner {
 
 export interface PartnerListItem extends Partner {
   isRunning: boolean
+  needsAssistance: boolean
   hasUnreadCompletion: boolean
   lastUserMessagePreview: string | null
   lastActivityAt: number
@@ -2011,11 +2012,11 @@ export type ChatMessageLogAnnotationEntry =
       eventType: 'terminal_review_resolved'
       payload: {
         reviewId: string
-        operations: Array<{
-          operationId: string
+        decisions: Array<{
+          commandId: string
           decision: 'auto_approve' | 'needs_human_review'
-          reason: string
         }>
+        fallbackCode?: 'invalid_output' | 'review_unavailable'
       }
     }
   | {

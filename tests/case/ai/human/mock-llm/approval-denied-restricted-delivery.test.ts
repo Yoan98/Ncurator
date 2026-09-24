@@ -5,7 +5,7 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  collectTerminalReviewOperationIds,
+  collectTerminalReviewCommandIds,
   filterAiRunEventsByType
 } from '../testUtils'
 
@@ -27,10 +27,9 @@ describe('ai human mock-llm backend', () => {
           structuredOutputScript: {
             'human.terminal_review': [
               ({ user }) => ({
-                operations: collectTerminalReviewOperationIds(user).map((operationId) => ({
-                  operationId,
-                  decision: 'needs_human_review',
-                  reason: '需要用户确认'
+                decisions: collectTerminalReviewCommandIds(user).map((commandId) => ({
+                  commandId,
+                  decision: 'needs_human_review'
                 }))
               })
             ],

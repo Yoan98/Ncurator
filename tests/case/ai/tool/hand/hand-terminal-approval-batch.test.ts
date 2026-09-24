@@ -5,7 +5,7 @@ import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
 import {
   buildCompleteTaskDecision,
-  collectTerminalReviewOperationIds,
+  collectTerminalReviewCommandIds,
   filterAiRunEventsByType
 } from '../../human/testUtils'
 
@@ -37,10 +37,9 @@ describe('ai tool hand backend', () => {
           structuredOutputScript: {
             'human.terminal_review': [
               ({ user }) => ({
-                operations: collectTerminalReviewOperationIds(user).map((operationId, index) => ({
-                  operationId,
-                  decision: index === 0 ? 'auto_approve' : 'needs_human_review',
-                  reason: index === 0 ? '用户已授权复制' : '需要用户确认批量文件操作'
+                decisions: collectTerminalReviewCommandIds(user).map((commandId, index) => ({
+                  commandId,
+                  decision: index === 0 ? 'auto_approve' : 'needs_human_review'
                 }))
               })
             ],

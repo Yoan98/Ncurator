@@ -353,6 +353,10 @@ const reduceAssistantTurnByRunEvent = (
     )
   }
 
+  if (event.type === 'run_started') {
+    next = { ...next, startedAt: next.startedAt ?? event.createdAt, finishedAt: undefined }
+  }
+
   if (event.type === 'tool_call_result') {
     const toolOutput = event.result?.data ?? null
     const readFiles = extractReadableFilesFromToolOutput(
@@ -569,6 +573,7 @@ const reduceAssistantTurnByRunEvent = (
       waitingApproval: false,
       waitingInteraction: false,
       pendingApprovalItems: [],
+      finishedAt: Date.now(),
       error: formatRunFailureTitle(event),
       errorDetail: formatRunFailureDetail(event)
     }
@@ -583,6 +588,7 @@ const reduceAssistantTurnByRunEvent = (
       waitingApproval: false,
       waitingInteraction: false,
       pendingApprovalItems: [],
+      finishedAt: Date.now(),
       error: undefined,
       errorDetail: undefined
     }
@@ -597,6 +603,7 @@ const reduceAssistantTurnByRunEvent = (
       waitingApproval: false,
       waitingInteraction: false,
       pendingApprovalItems: [],
+      finishedAt: Date.now(),
       plan: []
     }
   }
@@ -622,6 +629,8 @@ const applyRunRecordToTurn = (
   return {
     ...turn,
     runId: run.id,
+    startedAt: turn.startedAt || run.createdAt,
+    finishedAt: runFinished ? run.finishedAt ?? turn.finishedAt ?? run.updatedAt : undefined,
     status,
     runFinished,
     isBrainThinking: runFinished ? false : turn.isBrainThinking,
@@ -1339,6 +1348,15 @@ const ChatPage: React.FC = () => {
       items.map((item) => (item.id === partnerId ? { ...item, isRunning } : item))
     )
   }, [])
+
+  const setPartnerQuestionState = useCallback(
+    (partnerId: string, needsAssistance: boolean): void => {
+      setPartners((items) =>
+        items.map((item) => (item.id === partnerId ? { ...item, needsAssistance } : item))
+      )
+    },
+    []
+  )
 
   useEffect(() => {
     const targetWindow = window as WorkbenchE2EWindow
@@ -3338,6 +3356,14 @@ const ChatPage: React.FC = () => {
       }
       const eventPartnerId = activeRunPartnerIdsRef.current[event.runId]
 
+      if (event.type === 'human_interaction_required' && event.interaction.kind === 'question') {
+        if (eventPartnerId) setPartnerQuestionState(eventPartnerId, true)
+      }
+      if (event.type === 'human_interaction_resolved' && event.kind === 'question') {
+        if (eventPartnerId) setPartnerQuestionState(eventPartnerId, false)
+        void loadPartners()
+      }
+
       if (
         event.type === 'run_completed' ||
         event.type === 'run_failed' ||
@@ -3345,6 +3371,7 @@ const ChatPage: React.FC = () => {
       ) {
         if (eventPartnerId) {
           setPartnerRunningState(eventPartnerId, false)
+          setPartnerQuestionState(eventPartnerId, false)
           delete activeRunPartnerIdsRef.current[event.runId]
         }
         void loadPartners()
@@ -3548,7 +3575,14 @@ const ChatPage: React.FC = () => {
     }
     // AI run listener is intentionally keyed by active run/session identity to avoid resubscribing on UI helper changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPartnerId, loadPartners, message, refreshContextUsage, setPartnerRunningState])
+  }, [
+    currentPartnerId,
+    loadPartners,
+    message,
+    refreshContextUsage,
+    setPartnerQuestionState,
+    setPartnerRunningState
+  ])
 
   const refreshBusyCancelNotice = useCallback(async (): Promise<void> => {
     if (!currentPartnerId) {
@@ -3765,7 +3799,8 @@ const ChatPage: React.FC = () => {
               optimisticTurn ||
               createThinkingAssistantTurn(assistantMessageId)),
             messageId: assistantMessageId,
-            runId: run.id
+            runId: run.id,
+            startedAt: run.createdAt
           }
         }
         rememberPartnerTurns(run.partnerId, merged)
@@ -4540,8 +4575,19 @@ const ChatPage: React.FC = () => {
                 <span>{formatRelativeTime(partner.lastActivityAt)}</span>
               </div>
             </div>
-            <div className="mt-0.5 truncate text-[12px] leading-4 text-[#8A8781]">
-              {partner.lastUserMessagePreview || PARTNER_LIST_EMPTY_PREVIEW}
+            <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[12px] leading-4">
+              <span className="min-w-0 flex-1 truncate text-[#8A8781]">
+                {partner.lastUserMessagePreview || PARTNER_LIST_EMPTY_PREVIEW}
+              </span>
+              {partner.needsAssistance ? (
+                <span
+                  className="shrink-0 rounded-full bg-[#E8F1FF] px-2 py-0.5 text-[11px] leading-4 text-[#3478F6]"
+                  data-testid={`${workbenchSelectors.partnerNeedsAssistancePrefix}-${partner.id}`}
+                  role="status"
+                >
+                  需要你的协助
+                </span>
+              ) : null}
             </div>
           </div>
         </div>
