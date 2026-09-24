@@ -167,8 +167,6 @@ hand 收到 call batch
   → context_budget
 ```
 
-- 副作用规则识别已知的文件增删改、程序/脚本运行与系统或网络写入；错误输出丢弃不视为文件修改，heredoc 正文不作为 shell 语法扫描。AI 审核依据用户原话、命令、说明、平台、cwd 和规则命中类别逐项返回 `auto_approve | needs_human_review`；无效输出或调用失败转人工，结论写 `terminal_review_resolved` annotation。完全访问跳过两层审核。
-- 人工批量审批只覆盖 AI 未自动通过的 `terminal_run`；任一项拒绝时整批写失败 `tool` 且零执行。其它 mutating 工具不走这道门禁。
 - 工具失败：`renderError` 或通用错误 → `ok: false` ToolMessage。
 - 图片 ref 写入 log `tool.images[]`，不进 ToolMessage 正文。
 

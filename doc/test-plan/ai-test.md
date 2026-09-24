@@ -897,10 +897,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-runtime-script-system-python-live`
 
 - 测试类型：`backend / live`
-- What：真实模型在本机 Python 可用时，用本机 Python 在临时脚本目录（`runtime_paths.scripts`）编写并运行临时脚本，完成确定性计算并核对结果。
-- Why：runtime 脚本是 AI 架构的临时执行入口，必须验证真实模型能自主把临时脚本放进运行时目录并用本机解释器执行，而非文本猜测。
+- What：真实模型在本机 Python 可用时，自主完成确定性计算；使用临时脚本目录中的脚本并由终端真实执行，终端审核判断该任务授权范围内的操作可自动通过。
+- Why：runtime 脚本是 AI 架构的临时执行入口；此 case 评估真实模型完成任务的能力，并确认自然、明确授权的脚本任务不会被审核层无故阻塞。
 - How：不限制工具；用户以自然语言要求用 Python 计算并核对，并说明脚本是临时用途、放在临时脚本目录。harness 只检查 terminal 事件、运行产物与脚本目录。
-- Oracle：run completed；terminal 结果包含确定性标记；命令使用 `python`/`python3`；临时脚本目录出现 `.py`；工作区普通目录无正式产物。
+- Oracle：run completed；terminal 结果包含确定性标记；命令使用 `python`/`python3`；临时脚本目录出现 `.py`；工作区普通目录无正式产物；raw log 中存在 `human.terminal_review` 真实模型调用及对应审核记录，明确授权的脚本操作为 `auto_approve`，没有人工审批事件。人工根据 raw logs 评估模型完成度，不断言固定工具顺序或 prompt 原文。
 
 ##### `human-runtime-download-python-live`
 

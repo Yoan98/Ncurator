@@ -1,7 +1,7 @@
-import os from 'node:os'
 import { createWorkspaceBoundToolFamily } from '../utils/workspaceGuards'
 import { buildTerminalCapabilityTools } from './terminalTools'
 import { terminalSessionManager } from './TerminalSessionManager'
+import { getTerminalStartDirectory } from './workingDirectory'
 
 export const terminalToolFamily = createWorkspaceBoundToolFamily({
   familyId: 'terminal',
@@ -18,7 +18,7 @@ export const terminalToolFamily = createWorkspaceBoundToolFamily({
       runId,
       partnerId,
       taskId,
-      workspaceRootPath: os.homedir(),
+      workspaceRootPath: getTerminalStartDirectory(),
       workspaceId: '',
       sessionManager: terminalSessionManager,
       emitActivity

@@ -16,6 +16,9 @@ export const filterAiRunEventsByType = <TType extends AiRunEvent['type']>(
 ): Extract<AiRunEvent, { type: TType }>[] =>
   events.filter((event): event is Extract<AiRunEvent, { type: TType }> => event.type === type)
 
+export const collectTerminalReviewOperationIds = (userMessage: string): string[] =>
+  Array.from(userMessage.matchAll(/<operation id="([^"]+)"/gu), (match) => match[1])
+
 export const summarizeHumanSteps = (events: readonly AiRunEvent[]): string[] =>
   filterAiRunEventsByType(events, 'human_step').map((event) => {
     const stage = event.stage || 'unknown'
@@ -159,9 +162,7 @@ export const hasDocxFileArtifact = (artifacts: readonly AiArtifactRef[] | undefi
 export const hasDocxApplyArtifactEvent = (events: readonly AiRunEvent[]): boolean =>
   filterAiRunEventsByType(events, 'file_artifact').some(
     (event) =>
-      event.capability === 'docx' &&
-      typeof event.applyId === 'string' &&
-      event.applyId.length > 0
+      event.capability === 'docx' && typeof event.applyId === 'string' && event.applyId.length > 0
   )
 
 export const hasDocxDeliveryEvidence = (input: {

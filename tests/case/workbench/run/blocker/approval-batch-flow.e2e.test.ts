@@ -2,13 +2,14 @@ import { access } from 'node:fs/promises'
 import path from 'node:path'
 import type { Page } from 'playwright'
 import { describe, it } from 'vitest'
-import type { AiRunEvent } from '../../../../../src/shared/types'
+import type { AiLlmIoRecord, AiRunEvent } from '../../../../../src/shared/types'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
   WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS,
   assertNoWorkbenchFakeSignals,
   chatSelectors,
   collectWorkbenchAiRunEvents,
+  collectWorkbenchLlmIoRecords,
   createWorkbenchNewSession,
   decideWorkbenchApprovalBatch,
   getAntMessageText,
@@ -44,6 +45,41 @@ const isApprovalBatchRequiredEvent = (
   event: AiRunEvent
 ): event is Extract<AiRunEvent, { type: 'approval_batch_required' }> =>
   event.type === 'approval_batch_required'
+
+type TerminalReviewDecision = {
+  operationId: string
+  decision: 'auto_approve' | 'needs_human_review'
+}
+
+const readTerminalReviewDecisions = (
+  records: readonly AiLlmIoRecord[],
+  runId: string
+): TerminalReviewDecision[] =>
+  records
+    .filter(
+      (record) =>
+        record.runId === runId &&
+        record.caller === 'human.terminal_review' &&
+        record.status === 'completed'
+    )
+    .flatMap((record) => {
+      const output = record.output
+      if (!output || typeof output !== 'object' || Array.isArray(output)) return []
+      const operations = output.operations
+      if (!Array.isArray(operations)) return []
+      return operations.flatMap((operation) => {
+        if (!operation || typeof operation !== 'object' || Array.isArray(operation)) return []
+        const operationId = operation.operationId
+        const decision = operation.decision
+        if (
+          typeof operationId !== 'string' ||
+          (decision !== 'auto_approve' && decision !== 'needs_human_review')
+        ) {
+          return []
+        }
+        return [{ operationId, decision }]
+      })
+    })
 
 const readApprovalWaitingSnapshot = async (
   page: Page
@@ -152,11 +188,47 @@ describe('workbench run e2e', () => {
         execute: async (runtime) => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
+          const autoApprovedFile = path.join(setup.workspace.rootPath, 'approval-ai-auto.txt')
           const approvedFile = path.join(setup.workspace.rootPath, 'approval-approved.txt')
           const deniedFile = path.join(setup.workspace.rootPath, 'approval-denied.txt')
           const guidedFile = path.join(setup.workspace.rootPath, 'approval-guided.txt')
           const fullAccessFile = path.join(setup.workspace.rootPath, 'approval-full-access.txt')
 
+          await selectWorkbenchExecutionPermission(page, '审核')
+          const autoApprovedStartedAtMs = Date.now()
+          await sendWorkbenchMessage(
+            page,
+            '请使用终端在当前工作区创建 approval-ai-auto.txt，写入 ai-review-auto-approved。我明确授权创建这个指定文件，你可以直接执行，不需要再向我确认。'
+          )
+          const autoApprovedRunStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'approval_ai_auto_run_started',
+            matches: (event) =>
+              isRunStartedEvent(event) && event.input.includes('approval-ai-auto.txt')
+          })
+          if (!isRunStartedEvent(autoApprovedRunStarted)) {
+            throw new Error('AI auto-approve run did not start')
+          }
+          const autoApprovedEvidence = await waitForWorkbenchAiRunCompletion(
+            runtime,
+            autoApprovedStartedAtMs,
+            setup.env.modelName,
+            undefined,
+            { page, blockerPolicy: 'fail' }
+          )
+          recordWorkbenchAiEvidence(runtime, autoApprovedEvidence, 0.8)
+          const autoApprovedEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
+            (event) => event.runId === autoApprovedRunStarted.runId
+          )
+          const autoApprovedReviewDecisions = readTerminalReviewDecisions(
+            await collectWorkbenchLlmIoRecords(runtime),
+            autoApprovedRunStarted.runId
+          )
+          const autoApprovedApprovalCardVisible = await getApprovalCard(page)
+            .isVisible()
+            .catch(() => false)
+
+          await createWorkbenchNewSession(page)
+          await selectWorkbenchWorkspace(page, setup.workspaceName)
           await selectWorkbenchExecutionPermission(page, '审核')
           const approveStartedAtMs = Date.now()
           await sendWorkbenchMessage(
@@ -166,13 +238,26 @@ describe('workbench run e2e', () => {
               '必须真正发起会触发审批的终端写入命令，并等待用户审批；不要声称已有授权或跳过审批。'
             ].join('')
           )
+          const approvedRunStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'approval_approved_run_started',
+            matches: (event) =>
+              isRunStartedEvent(event) && event.input.includes('approval-approved.txt')
+          })
+          if (!isRunStartedEvent(approvedRunStarted)) {
+            throw new Error('approval approved run did not start')
+          }
           const approvedApproval = await waitForWorkbenchAiEvent(runtime, {
             name: 'approval_approved_batch_required',
-            matches: isApprovalBatchRequiredEvent
+            matches: (event) =>
+              isApprovalBatchRequiredEvent(event) && event.runId === approvedRunStarted.runId
           })
           if (!isApprovalBatchRequiredEvent(approvedApproval)) {
             throw new Error('approval approved batch was not required')
           }
+          const approvedReviewDecisions = readTerminalReviewDecisions(
+            await collectWorkbenchLlmIoRecords(runtime),
+            approvedRunStarted.runId
+          )
           const approveWaiting = await readApprovalWaitingSnapshot(page)
           const approveExpectedTitle = approvedApproval.items[0]?.commandExplanation || ''
           const approveExpectedPosition = `审批 1 / ${approvedApproval.items.length}`
@@ -218,6 +303,10 @@ describe('workbench run e2e', () => {
           if (!isApprovalBatchRequiredEvent(firstDeniedApproval)) {
             throw new Error('approval denied batch was not required')
           }
+          const deniedReviewDecisions = readTerminalReviewDecisions(
+            await collectWorkbenchLlmIoRecords(runtime),
+            deniedRunStarted.runId
+          )
           const deniedWaiting = await readApprovalWaitingSnapshot(page)
           const deniedExpectedTitle = firstDeniedApproval.items[0]?.commandExplanation || ''
           const deniedExpectedPosition = `审批 1 / ${firstDeniedApproval.items.length}`
@@ -234,6 +323,26 @@ describe('workbench run e2e', () => {
           await sendWorkbenchMessage(
             page,
             '请使用终端命令在当前工作区创建 approval-guided.txt，内容写 guided-by-workbench-e2e。执行前请先让我本人确认。'
+          )
+          const guidedRunStarted = await waitForWorkbenchAiEvent(runtime, {
+            name: 'approval_guided_run_started',
+            matches: (event) =>
+              isRunStartedEvent(event) && event.input.includes('approval-guided.txt')
+          })
+          if (!isRunStartedEvent(guidedRunStarted)) {
+            throw new Error('approval guided run did not start')
+          }
+          const guidedApproval = await waitForWorkbenchAiEvent(runtime, {
+            name: 'approval_guided_batch_required',
+            matches: (event) =>
+              isApprovalBatchRequiredEvent(event) && event.runId === guidedRunStarted.runId
+          })
+          if (!isApprovalBatchRequiredEvent(guidedApproval)) {
+            throw new Error('approval guided batch was not required')
+          }
+          const guidedReviewDecisions = readTerminalReviewDecisions(
+            await collectWorkbenchLlmIoRecords(runtime),
+            guidedRunStarted.runId
           )
           await getApprovalCard(page).waitFor({ state: 'visible' })
           await getWorkbenchLocator(page, chatSelectors.approvalBatchGuideInput).fill(
@@ -275,17 +384,30 @@ describe('workbench run e2e', () => {
           const fullAccessEvents = (await collectWorkbenchAiRunEvents(runtime)).filter(
             (event) => event.runId === fullAccessRunStarted.runId
           )
+          const fullAccessReviewCallCount = (await collectWorkbenchLlmIoRecords(runtime)).filter(
+            (record) =>
+              record.runId === fullAccessRunStarted.runId &&
+              record.caller === 'human.terminal_review'
+          ).length
           const fullAccessApprovalCardVisible = await getApprovalCard(page)
             .isVisible()
             .catch(() => false)
 
           return {
+            autoApprovedFileExists: await exists(autoApprovedFile),
+            autoApprovedHasApprovalEvent: autoApprovedEvents.some(isApprovalBatchRequiredEvent),
+            autoApprovedApprovalCardVisible,
+            autoApprovedReviewDecisions,
             approvedFileExists: await exists(approvedFile),
+            approvedReviewDecisions,
             deniedFileExists: await exists(deniedFile),
+            deniedReviewDecisions,
             guidedFileExists: await exists(guidedFile),
+            guidedReviewDecisions,
             fullAccessFileExists: await exists(fullAccessFile),
             fullAccessHasApprovalEvent: fullAccessEvents.some(isApprovalBatchRequiredEvent),
             fullAccessApprovalCardVisible,
+            fullAccessReviewCallCount,
             composerPermissionAfterFullAccessSend,
             approveWaiting,
             approveExpectedTitle,
@@ -303,19 +425,39 @@ describe('workbench run e2e', () => {
         },
         assert: async (result, runtime) => {
           await runtime.assertThat(
-            result.approvedFileExists &&
+            result.autoApprovedFileExists &&
+              !result.autoApprovedHasApprovalEvent &&
+              !result.autoApprovedApprovalCardVisible &&
+              result.autoApprovedReviewDecisions.length > 0 &&
+              result.autoApprovedReviewDecisions.every(
+                (decision) => decision.decision === 'auto_approve'
+              ) &&
+              result.approvedFileExists &&
+              result.approvedReviewDecisions.length > 0 &&
+              result.approvedReviewDecisions.every(
+                (decision) => decision.decision === 'needs_human_review'
+              ) &&
               !result.deniedFileExists &&
+              result.deniedReviewDecisions.length > 0 &&
+              result.deniedReviewDecisions.every(
+                (decision) => decision.decision === 'needs_human_review'
+              ) &&
               !result.guidedFileExists &&
+              result.guidedReviewDecisions.length > 0 &&
+              result.guidedReviewDecisions.every(
+                (decision) => decision.decision === 'needs_human_review'
+              ) &&
               result.fullAccessFileExists &&
               !result.fullAccessHasApprovalEvent &&
               !result.fullAccessApprovalCardVisible &&
+              result.fullAccessReviewCallCount === 0 &&
               result.composerPermissionAfterFullAccessSend.includes('审核') &&
               result.eventTypes.includes('approval_batch_required') &&
               result.eventTypes.includes('approval_batch_decision'),
             {
               name: 'workbench-approval-batch-real-ui-decisions',
               message:
-                '审核模式应保留审批卡片、同意和拒绝行为；完全访问执行同类终端命令时不应产生审批事件或审批卡片，且文件应实际创建，对齐 WB-BLOCKER-001。',
+                '审核模式下明确授权的写入应由 AI 自动通过；明确要求本人确认的操作应由 AI 转人工并保留审批卡片、同意和拒绝行为；完全访问下应跳过 AI 与人工审核，对齐 WB-BLOCKER-001。',
               data: result
             }
           )
@@ -338,6 +480,11 @@ describe('workbench run e2e', () => {
               message:
                 '等待审批时 Activity header 应为「等待用户处理」，且过程流无 blockers、无开始/通过 toast，对齐 WB-BLOCKER-001-AC6。',
               data: {
+                autoApprovedReviewDecisions: result.autoApprovedReviewDecisions,
+                approvedReviewDecisions: result.approvedReviewDecisions,
+                deniedReviewDecisions: result.deniedReviewDecisions,
+                guidedReviewDecisions: result.guidedReviewDecisions,
+                fullAccessReviewCallCount: result.fullAccessReviewCallCount,
                 approveWaiting: result.approveWaiting,
                 deniedWaiting: result.deniedWaiting,
                 antMessageAfterApprove: result.antMessageAfterApprove

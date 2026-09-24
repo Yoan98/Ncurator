@@ -39,7 +39,10 @@ const collectTerminalResultText = (events: readonly AiRunEvent[]): string =>
       .map((event) => event.result?.data)
   )
 
-const writeUnavailableCommand = async (directoryPath: string, commandName: string): Promise<void> => {
+const writeUnavailableCommand = async (
+  directoryPath: string,
+  commandName: string
+): Promise<void> => {
   const commandPath = path.join(directoryPath, IS_WINDOWS ? `${commandName}.cmd` : commandName)
   await fs.writeFile(
     commandPath,
@@ -94,9 +97,23 @@ describe.skipIf(!SUPPORTED_PLATFORMS.has(process.platform))('ai human live runti
               userInput:
                 '请用 Python 写一个临时脚本，计算 1 到 100 每个整数的平方之和并核对结果。脚本是临时用途，请放在临时脚本目录，不要在工作区普通目录留下文件。'
             })
+            const messageLog = await runner.ctx.loadMessageLog()
+            const reviewDecisions = messageLog.flatMap((record) => {
+              const { entry } = record
+              return entry.kind === 'annotation' && entry.eventType === 'terminal_review_resolved'
+                ? entry.payload.operations
+                : []
+            })
             return {
               output,
               events: runtime.eventCollector.snapshot(),
+              reviewCallCount: runtime.eventCollector
+                .snapshotLlmIo()
+                .filter(
+                  (record) =>
+                    record.caller === 'human.terminal_review' && record.status === 'completed'
+                ).length,
+              reviewDecisions,
               scriptsRoot: getPartnerScriptsRootDir(sessionId),
               scriptFiles: await listFiles(getPartnerScriptsRootDir(sessionId))
             }
@@ -107,18 +124,26 @@ describe.skipIf(!SUPPORTED_PLATFORMS.has(process.platform))('ai human live runti
         assert: async (result, runtime) => {
           const commands = collectTerminalCommands(result.events)
           const resultText = collectTerminalResultText(result.events)
+          const approvalEvents = filterAiRunEventsByType(result.events, 'approval_batch_required')
           runtime.assertThat(
             result.output.status === 'completed' &&
               resultText.includes(SQUARE_SUM_MARKER) &&
               commands.some((command) => /python(?:3)?(?:\s|$)/iu.test(command)) &&
-              result.scriptFiles.some((filePath) => filePath.endsWith('.py')),
+              result.scriptFiles.some((filePath) => filePath.endsWith('.py')) &&
+              result.reviewCallCount > 0 &&
+              result.reviewDecisions.length > 0 &&
+              result.reviewDecisions.every((decision) => decision.decision === 'auto_approve') &&
+              approvalEvents.length === 0,
             {
-              name: 'human-live-runs-temp-script-with-system-python',
+              name: 'human-live-runs-ai-approved-temp-script-with-system-python',
               message:
-                'live human 应用本机 Python 在临时脚本目录（runtime_paths.scripts）运行临时脚本，得到正确计算结果且不污染工作区普通目录。',
+                '真实模型应自主完成计算；其明确授权的临时脚本操作经 AI 审核自动通过，终端得到正确结果且没有人工审批。',
               data: {
                 commands,
                 resultText,
+                reviewCallCount: result.reviewCallCount,
+                reviewDecisions: result.reviewDecisions,
+                approvalEventCount: approvalEvents.length,
                 scriptsRoot: result.scriptsRoot,
                 scriptFiles: result.scriptFiles.map((filePath) =>
                   path.relative(result.scriptsRoot, filePath)

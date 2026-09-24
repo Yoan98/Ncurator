@@ -132,7 +132,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `compaction_checkpoint` | `{ compactBlockId, throughSeq, sourceMessageCount, summary }` | 压缩书签 + 摘要正文；`seq <= historyFloorSeq` 的原文不再进 brain；发给主模型时再合成 Compact User |
 | `finalizing_started` | `{}` | 投影时**清空** plan |
 | `human_interaction_resolved` | `{ interactionId, kind, result }` | UI Activity：在对应工具行下按顺序展示问题答案或审批结果 |
-| `terminal_review_resolved` | `{ reviewId, items: [{ itemId, decision, reason }] }` | `terminal_run` 副作用命中后的 AI 审核结论；自动通过无人工审批卡 |
+| `terminal_review_resolved` | `{ reviewId, operations: [{ operationId, decision, reason }] }` | `terminal_run` 副作用命中后的 AI 审核结论；操作编号对应 hand 批次中的 toolCallId；自动通过无人工审批卡 |
 
 #### `entry_json` 示例
 

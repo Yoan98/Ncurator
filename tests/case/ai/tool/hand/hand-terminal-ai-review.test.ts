@@ -3,7 +3,11 @@ import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { buildCompleteTaskDecision, filterAiRunEventsByType } from '../../human/testUtils'
+import {
+  buildCompleteTaskDecision,
+  collectTerminalReviewOperationIds,
+  filterAiRunEventsByType
+} from '../../human/testUtils'
 
 const isWindows = process.platform === 'win32'
 
@@ -104,13 +108,11 @@ describe('ai tool hand terminal review', () => {
               ({ user }) => {
                 reviewRequests.push(user)
                 return {
-                  items: (JSON.parse(user) as { items: Array<{ itemId: string }> }).items.map(
-                    (item) => ({
-                      itemId: item.itemId,
-                      decision: 'auto_approve',
-                      reason: '用户明确要求创建该目录'
-                    })
-                  )
+                  operations: collectTerminalReviewOperationIds(user).map((operationId) => ({
+                    operationId,
+                    decision: 'auto_approve',
+                    reason: '用户明确要求创建该目录'
+                  }))
                 }
               }
             ],
@@ -140,6 +142,7 @@ describe('ai tool hand terminal review', () => {
         const records = await runner.ctx.loadMessageLog()
         return {
           output,
+          command,
           exists: await fs
             .stat(target)
             .then(() => true)
@@ -160,6 +163,12 @@ describe('ai tool hand terminal review', () => {
             result.exists &&
             result.reviewRequests.length === 1 &&
             result.reviewRequests[0].includes('请创建 ai-approved-dir 目录') &&
+            result.reviewRequests[0].includes('<operation id="') &&
+            result.reviewRequests[0].includes('用途说明：') &&
+            result.reviewRequests[0].includes('基础规则命中：') &&
+            result.reviewRequests[0].includes(result.command) &&
+            result.reviewRequests[0].includes('终端起始目录：') &&
+            !result.reviewRequests[0].startsWith('{') &&
             result.reviews.length === 1 &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 0 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 1,
@@ -252,7 +261,7 @@ describe('ai tool hand terminal review', () => {
         const runner = createHumanTestRunner(runtime, {
           approvalPolicy: 'deny-all',
           structuredOutputScript: {
-            'human.terminal_review': [{ items: [] }],
+            'human.terminal_review': [{ operations: [] }],
             'human.brain': [
               {
                 output: {

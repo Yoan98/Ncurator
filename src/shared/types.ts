@@ -2011,8 +2011,8 @@ export type ChatMessageLogAnnotationEntry =
       eventType: 'terminal_review_resolved'
       payload: {
         reviewId: string
-        items: Array<{
-          itemId: string
+        operations: Array<{
+          operationId: string
           decision: 'auto_approve' | 'needs_human_review'
           reason: string
         }>

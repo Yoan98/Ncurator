@@ -3,7 +3,11 @@ import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { buildCompleteTaskDecision, filterAiRunEventsByType } from '../../human/testUtils'
+import {
+  buildCompleteTaskDecision,
+  collectTerminalReviewOperationIds,
+  filterAiRunEventsByType
+} from '../../human/testUtils'
 
 describe('ai tool hand backend', () => {
   it('hand-terminal-approval-batch', async () => {
@@ -33,13 +37,11 @@ describe('ai tool hand backend', () => {
           structuredOutputScript: {
             'human.terminal_review': [
               ({ user }) => ({
-                items: (JSON.parse(user) as { items: Array<{ itemId: string }> }).items.map(
-                  (item, index) => ({
-                    itemId: item.itemId,
-                    decision: index === 0 ? 'auto_approve' : 'needs_human_review',
-                    reason: index === 0 ? '用户已授权复制' : '需要用户确认批量文件操作'
-                  })
-                )
+                operations: collectTerminalReviewOperationIds(user).map((operationId, index) => ({
+                  operationId,
+                  decision: index === 0 ? 'auto_approve' : 'needs_human_review',
+                  reason: index === 0 ? '用户已授权复制' : '需要用户确认批量文件操作'
+                }))
               })
             ],
             'human.brain': [

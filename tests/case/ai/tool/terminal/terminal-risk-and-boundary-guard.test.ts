@@ -3,7 +3,11 @@ import path from 'node:path'
 import { describe, it } from 'vitest'
 import { createHumanTestRunner } from '../../../../harness/backend/humanHarness'
 import { runBackendCase } from '../../../../harness/backend/run-backend-case'
-import { buildCompleteTaskDecision, filterAiRunEventsByType } from '../../human/testUtils'
+import {
+  buildCompleteTaskDecision,
+  collectTerminalReviewOperationIds,
+  filterAiRunEventsByType
+} from '../../human/testUtils'
 
 const isWindows = process.platform === 'win32'
 
@@ -35,22 +39,18 @@ describe('ai tool terminal backend', () => {
           structuredOutputScript: {
             'human.terminal_review': [
               ({ user }) => ({
-                items: (JSON.parse(user) as { items: Array<{ itemId: string }> }).items.map(
-                  (item) => ({
-                    itemId: item.itemId,
-                    decision: 'needs_human_review',
-                    reason: '需要确认文件影响范围'
-                  })
-                )
+                operations: collectTerminalReviewOperationIds(user).map((operationId) => ({
+                  operationId,
+                  decision: 'needs_human_review',
+                  reason: '需要确认文件影响范围'
+                }))
               }),
               ({ user }) => ({
-                items: (JSON.parse(user) as { items: Array<{ itemId: string }> }).items.map(
-                  (item) => ({
-                    itemId: item.itemId,
-                    decision: 'needs_human_review',
-                    reason: '需要确认文件影响范围'
-                  })
-                )
+                operations: collectTerminalReviewOperationIds(user).map((operationId) => ({
+                  operationId,
+                  decision: 'needs_human_review',
+                  reason: '需要确认文件影响范围'
+                }))
               })
             ],
             'human.brain': [

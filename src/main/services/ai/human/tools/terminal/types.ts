@@ -2,6 +2,7 @@ import type { AiFileArtifactOperation } from '../../../../../../shared/types'
 import type { TerminalToolContext } from '../../../types'
 import type { WorkspaceCapabilityBuildInput } from '../types'
 import type { TerminalSessionManager } from './TerminalSessionManager'
+import type { TerminalRiskReason } from './policy/types'
 
 export type TerminalCommandSegment = {
   text: string
@@ -33,7 +34,7 @@ export type TerminalRiskPolicyResult = {
   executionPolicy: TerminalExecutionPolicy
   decision: TerminalExecutionPolicy
   matchedRuleId?: string
-  reasonCode: string
-  reasons: string[]
+  reasonCode: TerminalRiskReason | 'none'
+  reasons: TerminalRiskReason[]
   reason: string
 }

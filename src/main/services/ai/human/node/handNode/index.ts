@@ -59,6 +59,7 @@ const collectApprovalBatchItems = (input: {
       if (riskPolicy.executionPolicy === 'auto_allow') return []
       return [
         {
+          operationId: call.toolCallId,
           itemId: call.toolCallId,
           order: index,
           toolName: call.toolName,
@@ -300,12 +301,12 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
         ctx: input.ctx,
         taskId: state.task.taskId,
         userInput: state.task.userInput,
-        items: reviewCandidates
+        operations: reviewCandidates
       })
       await input.ctx.appendMessageLog([buildTerminalReviewAnnotation({ reviewId, decisions })])
-      const decisionById = new Map(decisions.map((decision) => [decision.itemId, decision]))
+      const decisionById = new Map(decisions.map((decision) => [decision.operationId, decision]))
       approvalItems = reviewCandidates.filter(
-        (candidate) => decisionById.get(candidate.itemId)?.decision !== 'auto_approve'
+        (candidate) => decisionById.get(candidate.operationId)?.decision !== 'auto_approve'
       )
     }
 
