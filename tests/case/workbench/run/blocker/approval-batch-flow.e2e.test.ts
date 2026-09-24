@@ -30,7 +30,7 @@ import {
 
 const CASE_ID = 'approval-batch-flow'
 const DENIED_RUN_SETTLE_TIMEOUT_MS = 120_000
-const DENIED_APPROVAL_WAIT_TIMEOUT_MS = 120_000
+const TERMINAL_REVIEW_OUTCOME_TIMEOUT_MS = 120_000
 const APPROVAL_WAIT_OBSERVATION_MS = 60_000
 
 const exists = async (filePath: string): Promise<boolean> =>
@@ -87,6 +87,38 @@ const readTerminalReviewDecisions = (
         return [{ commandId, decision }]
       })
     })
+
+const waitForTerminalReviewOutcome = async (
+  runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0],
+  runId: string,
+  name: string
+): Promise<AiRunEvent> =>
+  await waitForWorkbenchAiEvent(runtime, {
+    name,
+    timeoutMs: TERMINAL_REVIEW_OUTCOME_TIMEOUT_MS,
+    matches: (event) =>
+      event.runId === runId &&
+      (isApprovalBatchRequiredEvent(event) ||
+        isRunTerminalEvent(event) ||
+        event.type === 'human_interaction_required')
+  })
+
+const requireApprovalBatch = async (
+  runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0],
+  runId: string,
+  name: string
+): Promise<Extract<AiRunEvent, { type: 'approval_batch_required' }>> => {
+  const outcome = await waitForTerminalReviewOutcome(runtime, runId, name)
+  if (isApprovalBatchRequiredEvent(outcome)) return outcome
+
+  const decisions = readTerminalReviewDecisions(await collectWorkbenchLlmIoRecords(runtime), runId)
+  const outcomeDetail =
+    outcome.type === 'run_failed' ? `${outcome.type}: ${outcome.message}` : outcome.type
+  throw new Error(
+    `Expected a human approval batch for ${name}; run produced ${outcomeDetail}. ` +
+      `Terminal review decisions: ${JSON.stringify(decisions)}`
+  )
+}
 
 const readApprovalWaitingSnapshot = async (
   page: Page
@@ -274,12 +306,28 @@ describe('workbench run e2e', () => {
           if (!isRunStartedEvent(authorizedRunStarted)) {
             throw new Error('explicitly authorized run did not start')
           }
-          const authorizedOutcome = await waitForWorkbenchAiEvent(runtime, {
-            name: 'approval_authorized_review_outcome',
-            matches: (event) =>
-              event.runId === authorizedRunStarted.runId &&
-              (isApprovalBatchRequiredEvent(event) || event.type === 'run_completed')
-          })
+          const authorizedOutcome = await waitForTerminalReviewOutcome(
+            runtime,
+            authorizedRunStarted.runId,
+            'approval_authorized_review_outcome'
+          )
+          if (
+            !isApprovalBatchRequiredEvent(authorizedOutcome) &&
+            authorizedOutcome.type !== 'run_completed'
+          ) {
+            const decisions = readTerminalReviewDecisions(
+              await collectWorkbenchLlmIoRecords(runtime),
+              authorizedRunStarted.runId
+            )
+            const outcomeDetail =
+              authorizedOutcome.type === 'run_failed'
+                ? `${authorizedOutcome.type}: ${authorizedOutcome.message}`
+                : authorizedOutcome.type
+            throw new Error(
+              `Expected explicit authorization to auto-approve or reach a human approval batch; ` +
+                `run produced ${outcomeDetail}. Terminal review decisions: ${JSON.stringify(decisions)}`
+            )
+          }
           const authorizedHasApprovalEvent = isApprovalBatchRequiredEvent(authorizedOutcome)
           let authorizedApprovalCardVisible = false
           if (isApprovalBatchRequiredEvent(authorizedOutcome)) {
@@ -323,14 +371,11 @@ describe('workbench run e2e', () => {
           if (!isRunStartedEvent(approvedRunStarted)) {
             throw new Error('approval approved run did not start')
           }
-          const approvedApproval = await waitForWorkbenchAiEvent(runtime, {
-            name: 'approval_approved_batch_required',
-            matches: (event) =>
-              isApprovalBatchRequiredEvent(event) && event.runId === approvedRunStarted.runId
-          })
-          if (!isApprovalBatchRequiredEvent(approvedApproval)) {
-            throw new Error('approval approved batch was not required')
-          }
+          const approvedApproval = await requireApprovalBatch(
+            runtime,
+            approvedRunStarted.runId,
+            'approval_approved_batch_required'
+          )
           const approvedReviewDecisions = readTerminalReviewDecisions(
             await collectWorkbenchLlmIoRecords(runtime),
             approvedRunStarted.runId
@@ -380,15 +425,11 @@ describe('workbench run e2e', () => {
           if (!isRunStartedEvent(deniedRunStarted)) {
             throw new Error('approval denied run did not start')
           }
-          const firstDeniedApproval = await waitForWorkbenchAiEvent(runtime, {
-            name: 'approval_denied_batch_required',
-            timeoutMs: DENIED_APPROVAL_WAIT_TIMEOUT_MS,
-            matches: (event) =>
-              isApprovalBatchRequiredEvent(event) && event.runId === deniedRunStarted.runId
-          })
-          if (!isApprovalBatchRequiredEvent(firstDeniedApproval)) {
-            throw new Error('approval denied batch was not required')
-          }
+          const firstDeniedApproval = await requireApprovalBatch(
+            runtime,
+            deniedRunStarted.runId,
+            'approval_denied_batch_required'
+          )
           const deniedReviewDecisions = readTerminalReviewDecisions(
             await collectWorkbenchLlmIoRecords(runtime),
             deniedRunStarted.runId
@@ -418,14 +459,11 @@ describe('workbench run e2e', () => {
           if (!isRunStartedEvent(guidedRunStarted)) {
             throw new Error('approval guided run did not start')
           }
-          const guidedApproval = await waitForWorkbenchAiEvent(runtime, {
-            name: 'approval_guided_batch_required',
-            matches: (event) =>
-              isApprovalBatchRequiredEvent(event) && event.runId === guidedRunStarted.runId
-          })
-          if (!isApprovalBatchRequiredEvent(guidedApproval)) {
-            throw new Error('approval guided batch was not required')
-          }
+          const guidedApproval = await requireApprovalBatch(
+            runtime,
+            guidedRunStarted.runId,
+            'approval_guided_batch_required'
+          )
           const guidedReviewDecisions = readTerminalReviewDecisions(
             await collectWorkbenchLlmIoRecords(runtime),
             guidedRunStarted.runId
@@ -532,9 +570,6 @@ describe('workbench run e2e', () => {
           }
         },
         assert: async (result, runtime) => {
-          const authorizedReviewNeedsHuman = result.authorizedReviewDecisions.some(
-            (decision) => decision.decision === 'needs_human_review'
-          )
           await runtime.assertThat(
             result.queryTerminalStepCount > 0 &&
               result.queryReviewCallCount === 0 &&
@@ -542,11 +577,11 @@ describe('workbench run e2e', () => {
               !result.queryApprovalCardVisible &&
               result.authorizedDirectoryExists &&
               result.authorizedReviewDecisions.length > 0 &&
-              result.authorizedReviewDecisions.every((decision) =>
-                ['auto_approve', 'needs_human_review'].includes(decision.decision)
+              result.authorizedReviewDecisions.every(
+                (decision) => decision.decision === 'auto_approve'
               ) &&
-              result.authorizedHasApprovalEvent === authorizedReviewNeedsHuman &&
-              result.authorizedApprovalCardVisible === authorizedReviewNeedsHuman &&
+              !result.authorizedHasApprovalEvent &&
+              !result.authorizedApprovalCardVisible &&
               result.approvedFileExists &&
               result.approvedReviewDecisions.length > 0 &&
               result.approvedReviewDecisions.every(
@@ -572,7 +607,7 @@ describe('workbench run e2e', () => {
             {
               name: 'workbench-approval-batch-real-ui-decisions',
               message:
-                '只读查询应绕过审核；明确授权目录请求按 AI 审核结论自动执行或展示审批卡，并能完成用户确认；明确要求本人确认的操作保留同意、拒绝和指导行为；完全访问下应跳过两层审核。',
+                '只读查询应绕过审核；明确授权且范围清晰的目录请求应由 AI 自动通过并执行；明确要求本人确认的操作应进入人工审批并保留同意、拒绝和指导行为；完全访问下应跳过两层审核。',
               data: result
             }
           )
