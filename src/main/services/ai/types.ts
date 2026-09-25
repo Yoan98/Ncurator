@@ -306,6 +306,7 @@ export type AiRunDeps = {
   saveFileChangeRecord: (record: AiFileChangeRecord) => Promise<void>
   listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
   isCancelled: () => boolean
+  hasPendingUserMessages?: () => boolean
   abortSignal?: AbortSignal
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
@@ -316,7 +317,9 @@ export type AiRunDeps = {
     toolCallId: string
     questions: AskUserQuestionInput['questions']
     stage?: AiRunEventStage
-  }) => Promise<{ accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }>
+  }) => Promise<
+    { accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }
+  >
   llmDriver?: AiLlmDriver
   chatToolsWrapper?: (real: AiRunContext['chatTools']) => AiRunContext['chatTools']
   browserUseService?: BrowserUseService
@@ -332,6 +335,7 @@ export type AiRunDeps = {
 export type AiRunContext = {
   runId: string
   partnerId: string
+  userMessageId: string
   partnerName: string
   workspaceRoots: string[]
   runStartedAt: number
@@ -346,6 +350,7 @@ export type AiRunContext = {
   }
   workspace?: AiWorkspaceBinding
   checkCancelled: () => void
+  hasPendingUserMessages: () => boolean
   abortSignal?: AbortSignal
   chatStructured: <T extends Record<string, unknown>>(input: {
     caller: string
@@ -383,15 +388,14 @@ export type AiRunContext = {
     toolCallId: string
     questions: AskUserQuestionInput['questions']
     stage?: AiRunEventStage
-  }) => Promise<{ accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }>
+  }) => Promise<
+    { accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }
+  >
   getLlmConfig: () => Promise<LlmRuntimeConfig>
   browserUseService?: BrowserUseService
   webCrawlerService?: WebCrawlerService
   scheduledTaskService?: import('../scheduler/ScheduledTaskService').ScheduledTaskService
-  appendMessageLog: (
-    entries: ChatMessageLogEntry[],
-    options?: { runId?: string }
-  ) => Promise<void>
+  appendMessageLog: (entries: ChatMessageLogEntry[], options?: { runId?: string }) => Promise<void>
   loadMessageLog: () => Promise<ChatMessageLogRecord[]>
   trackDocxOpen: (input: {
     docId: string

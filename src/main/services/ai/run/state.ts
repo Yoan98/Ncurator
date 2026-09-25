@@ -29,6 +29,17 @@ export const createCompletedAiRunState = (input: {
   finalArtifacts: input.finalArtifacts || createDefaultFinalArtifacts()
 })
 
+export const createContinuedAiRunState = (input: {
+  runId: string
+  partnerId: string
+  input: string
+  finalArtifacts?: AiRunState['finalArtifacts']
+}): AiRunState => ({
+  ...createInitialAiRunState(input),
+  status: 'continued',
+  finalArtifacts: input.finalArtifacts || createDefaultFinalArtifacts()
+})
+
 export const createCancelledAiRunState = (input: {
   runId: string
   partnerId: string

@@ -4,6 +4,7 @@ import { runAiRuntimePreflight } from './runtimePreflight'
 import {
   createCancelledAiRunState,
   createCompletedAiRunState,
+  createContinuedAiRunState,
   createFailedAiRunState
 } from './run/state'
 import type { AiRunDeps, AiRunStartPayload, AiRunState } from './types'
@@ -36,6 +37,14 @@ export class AiRunService {
           emitAnswerEvents: true
         }
       )
+      if (output.status === 'yielded') {
+        return createContinuedAiRunState({
+          runId: payload.runId,
+          partnerId: payload.partnerId,
+          input: String(payload.input || ''),
+          finalArtifacts: output.artifacts || []
+        })
+      }
       return createCompletedAiRunState({
         runId: payload.runId,
         partnerId: payload.partnerId,
@@ -59,10 +68,7 @@ export class AiRunService {
           input: payload.input
         })
       }
-      const presentation = resolveAiRunFailurePresentation(
-        failure.failureCode,
-        failure.rawMessage
-      )
+      const presentation = resolveAiRunFailurePresentation(failure.failureCode, failure.rawMessage)
       const failureSource = presentation.source === 'user' ? 'internal' : presentation.source
       deps.sendEvent({
         type: 'run_failed',

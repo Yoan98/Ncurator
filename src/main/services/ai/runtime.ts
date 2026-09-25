@@ -99,6 +99,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
   return {
     runId: payload.runId,
     partnerId: payload.partnerId,
+    userMessageId: payload.userMessageId,
     partnerName: payload.partnerName,
     workspaceRoots,
     runStartedAt: Date.now(),
@@ -111,6 +112,7 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
       attachments: payload.attachments
     }),
     checkCancelled,
+    hasPendingUserMessages: () => deps.hasPendingUserMessages?.() === true,
     abortSignal: deps.abortSignal,
     chatStructured: llmExecutor.chatStructured,
     chatText: llmExecutor.chatText,
@@ -119,10 +121,12 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     sendEvent: deps.sendEvent,
     recordLlmIo: deps.recordLlmIo,
     requestApprovalBatch: deps.requestApprovalBatch,
-    requestUserQuestion: deps.requestUserQuestion || (async () => ({
-      accepted: false as const,
-      error: '当前运行不支持用户提问'
-    })),
+    requestUserQuestion:
+      deps.requestUserQuestion ||
+      (async () => ({
+        accepted: false as const,
+        error: '当前运行不支持用户提问'
+      })),
     getLlmConfig: loadRequestedConfig,
     browserUseService: deps.browserUseService,
     webCrawlerService: deps.webCrawlerService,

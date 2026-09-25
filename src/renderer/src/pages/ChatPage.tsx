@@ -630,7 +630,7 @@ const applyRunRecordToTurn = (
     ...turn,
     runId: run.id,
     startedAt: turn.startedAt || run.createdAt,
-    finishedAt: runFinished ? run.finishedAt ?? turn.finishedAt ?? run.updatedAt : undefined,
+    finishedAt: runFinished ? (run.finishedAt ?? turn.finishedAt ?? run.updatedAt) : undefined,
     status,
     runFinished,
     isBrainThinking: runFinished ? false : turn.isBrainThinking,
@@ -668,7 +668,7 @@ const applyRunRecordToTurn = (
     waitingInteraction: !runFinished && Boolean(run.pendingInteraction),
     pendingApprovalItems: runFinished
       ? []
-      : run.pendingApproval?.items ?? turn.pendingApprovalItems,
+      : (run.pendingApproval?.items ?? turn.pendingApprovalItems),
     error: run.status === 'failed' ? run.error || turn.error : undefined,
     errorDetail: run.status === 'failed' ? run.failureRawMessage || turn.errorDetail : undefined
   }
@@ -2100,12 +2100,11 @@ const ChatPage: React.FC = () => {
       activeRuns.find((item) => item.run.status === 'running') || activeRuns[0]
     setAiRunId(visibleActiveRun?.run.id || null)
     setLoading(Boolean(visibleActiveRun && visibleActiveRun.run.status === 'running'))
-    const approvalCandidate =
-      activeRuns.find((item) => item.pendingApproval && !item.pendingApproval.internal)
-        ?.pendingApproval
-    const approval = approvalCandidate && Array.isArray(approvalCandidate.items)
-      ? approvalCandidate
-      : null
+    const approvalCandidate = activeRuns.find(
+      (item) => item.pendingApproval && !item.pendingApproval.internal
+    )?.pendingApproval
+    const approval =
+      approvalCandidate && Array.isArray(approvalCandidate.items) ? approvalCandidate : null
     setPendingApprovalBatch(approval)
     const questionRun = activeRuns.find((item) => item.pendingInteraction?.kind === 'question')
     setPendingQuestion(
@@ -2161,7 +2160,7 @@ const ChatPage: React.FC = () => {
     try {
       const response = await window.api.aiContextUsageGet({ partnerId })
       if (!response.success) return
-    setContextUsage({
+      setContextUsage({
         partnerId,
         contextWindowTokens: response.contextWindowTokens || 0,
         usedContextTokens: response.usedContextTokens || 0,
@@ -3526,6 +3525,9 @@ const ChatPage: React.FC = () => {
         )
         if (eventPartnerId && eventPartnerId === currentPartnerIdRef.current) {
           void loadFileChangesForPartnerRef.current(eventPartnerId, event.runId)
+          const requestId = partnerSwitchRequestRef.current + 1
+          partnerSwitchRequestRef.current = requestId
+          void loadPartnerOpen(eventPartnerId, requestId)
         }
         emitErrorMessage(errorText)
         return
@@ -3550,6 +3552,9 @@ const ChatPage: React.FC = () => {
         )
         if (eventPartnerId && eventPartnerId === currentPartnerIdRef.current) {
           void loadFileChangesForPartnerRef.current(eventPartnerId, event.runId)
+          const requestId = partnerSwitchRequestRef.current + 1
+          partnerSwitchRequestRef.current = requestId
+          void loadPartnerOpen(eventPartnerId, requestId)
         }
         message.info('已取消')
         return
@@ -3638,11 +3643,7 @@ const ChatPage: React.FC = () => {
   }, [assetBucketId, currentPartnerId, message])
 
   const handleSend = async (): Promise<void> => {
-    if (aiRunId) {
-      await handleCancel()
-      return
-    }
-    if (!input.trim() || loading || submitInFlightRef.current) return
+    if (!input.trim() || (loading && !aiRunId) || cancellingRun || submitInFlightRef.current) return
     if (!currentPartnerId) {
       message.warning('请先选择伙伴后再发送消息')
       return
@@ -3657,10 +3658,12 @@ const ChatPage: React.FC = () => {
     }
 
     const submitPartnerId = currentPartnerId
+    const queueAttempt = Boolean(aiRunId)
     const userQuery = input.trim()
     const submittedContentNodes = composerContentNodes
     const submittedReferences = selectedReferences
     const submittedAttachments = attachments
+    const submittedDraft = composerDraftValueRef.current
     const optimisticUserMessage: ChatMessage = {
       id: `local-user-${crypto.randomUUID()}`,
       partner_id: submitPartnerId,
@@ -3670,7 +3673,8 @@ const ChatPage: React.FC = () => {
       contentNodes: submittedContentNodes.length > 0 ? submittedContentNodes : undefined,
       selectedReferences: submittedReferences.length > 0 ? submittedReferences : undefined,
       attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
-      error: false
+      error: false,
+      pending: queueAttempt || undefined
     }
     const optimisticAssistantMessage: ChatMessage = {
       id: `local-assistant-${crypto.randomUUID()}`,
@@ -3695,6 +3699,15 @@ const ChatPage: React.FC = () => {
     }
     const failOptimisticSubmit = (error: string): void => {
       const normalized = normalizeUserFacingError(error)
+      if (queueAttempt) {
+        setCurrentMessages((previous) => removeOptimisticMessages(previous))
+        if (currentPartnerIdRef.current === submitPartnerId) {
+          saveComposerDraftForPartner(submitPartnerId, submittedDraft)
+          applyComposerDraft(submittedDraft, `queue-failed:${submitPartnerId}`)
+        }
+        emitErrorMessage(normalized)
+        return
+      }
       setLoading(false)
       setCurrentMessages((previous) =>
         previous.map((item) =>
@@ -3726,10 +3739,12 @@ const ChatPage: React.FC = () => {
     applyComposerDraft(createEmptyComposerDraft(), `clear:${submitPartnerId}`)
     shouldAutoScrollRef.current = true
     scrollToBottom(true)
-    setCancellingRun(false)
-    setPendingApprovalBatch(null)
-    setPendingQuestion(null)
-    setApprovalSubmitting(false)
+    if (!queueAttempt) {
+      setCancellingRun(false)
+      setPendingApprovalBatch(null)
+      setPendingQuestion(null)
+      setApprovalSubmitting(false)
+    }
     lastSubmittedInputRef.current = userQuery
     setPartners((items) =>
       items.map((item) =>
@@ -3743,16 +3758,23 @@ const ChatPage: React.FC = () => {
       )
     )
     setCurrentMessages((previous) =>
-      appendMessagesDedupe(previous, [optimisticUserMessage, optimisticAssistantMessage])
+      appendMessagesDedupe(
+        previous,
+        queueAttempt ? [optimisticUserMessage] : [optimisticUserMessage, optimisticAssistantMessage]
+      )
     )
-    setAssistantTurns((previous) => {
-      const next = {
-        ...previous,
-        [optimisticAssistantMessage.id]: createThinkingAssistantTurn(optimisticAssistantMessage.id)
-      }
-      rememberPartnerTurns(submitPartnerId, next)
-      return next
-    })
+    if (!queueAttempt) {
+      setAssistantTurns((previous) => {
+        const next = {
+          ...previous,
+          [optimisticAssistantMessage.id]: createThinkingAssistantTurn(
+            optimisticAssistantMessage.id
+          )
+        }
+        rememberPartnerTurns(submitPartnerId, next)
+        return next
+      })
+    }
 
     submitInFlightRef.current = true
     try {
@@ -3766,6 +3788,13 @@ const ChatPage: React.FC = () => {
         attachments: submittedAttachments.length > 0 ? submittedAttachments : undefined,
         mainModel: modelSelection.mainModel
       })
+      if (response.success && response.queued && response.userMessage) {
+        setCurrentMessages((previous) =>
+          appendMessagesDedupe(removeOptimisticMessages(previous), [response.userMessage!])
+        )
+        void loadPartners()
+        return
+      }
       if (
         !response.success ||
         !response.run ||
@@ -4265,12 +4294,18 @@ const ChatPage: React.FC = () => {
 
   const renderUserMessage = (messageItem: ChatMessage): React.ReactNode => {
     const contentNodes = getUserMessageContentNodes(messageItem)
-    const canEdit = Boolean(currentPartnerId) && !aiRunId && messageItem.id === latestUserMessageId
+    const canEdit =
+      Boolean(currentPartnerId) &&
+      !aiRunId &&
+      !messageItem.pending &&
+      messageItem.id === latestUserMessageId
     const showTime = userMessageTimeIds.has(messageItem.id)
     return (
       <div
         key={messageItem.id}
+        className={messageItem.pending ? 'opacity-60' : undefined}
         data-message-id={messageItem.id}
+        data-message-pending={messageItem.pending ? 'true' : undefined}
         data-testid={`${workbenchSelectors.userMessagePrefix}-${messageItem.id}`}
       >
         {showTime ? (

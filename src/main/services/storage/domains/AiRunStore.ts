@@ -39,6 +39,7 @@ type AiRunRow = {
   failure_raw_message?: unknown
   pending_approval_json?: unknown
   pending_interaction_json?: unknown
+  pending_messages_json?: unknown
   artifacts_json?: unknown
   created_at?: unknown
   updated_at?: unknown
@@ -51,6 +52,8 @@ const normalizeRunStatus = (value: unknown): AiRunStatus => {
     status === 'running' ||
     status === 'waiting_human' ||
     status === 'waiting_approval' ||
+    status === 'continued' ||
+    status === 'context_only' ||
     status === 'completed' ||
     status === 'failed' ||
     status === 'cancelled'
@@ -87,6 +90,9 @@ const toRunRecord = (row: AiRunRow): AiRunRecord => ({
   pendingInteraction: parseJsonObject<AiRunRecord['pendingInteraction']>(
     row.pending_interaction_json || row.pending_approval_json
   ),
+  pendingMessages: parseJsonArray<NonNullable<AiRunRecord['pendingMessages']>[number]>(
+    row.pending_messages_json
+  ),
   artifacts: parseJsonArray<AiArtifactRef>(row.artifacts_json),
   createdAt: toRequiredNumber(row.created_at),
   updatedAt: toRequiredNumber(row.updated_at),
@@ -105,13 +111,15 @@ export class AiRunStore {
           selected_references_json, attachments_json, model_name,
           main_model_json, execution_permission,
           partial_answer, partial_answer_role, final_answer, error, failure_code, failure_raw_message,
-          pending_approval_json, pending_interaction_json, artifacts_json, created_at, updated_at, finished_at
+          pending_approval_json, pending_interaction_json, pending_messages_json,
+          artifacts_json, created_at, updated_at, finished_at
         ) VALUES (
           @id, @partner_id, @user_message_id, @assistant_message_id, @status, @input,
           @selected_references_json, @attachments_json, @model_name,
           @main_model_json, @execution_permission,
           @partial_answer, @partial_answer_role, @final_answer, @error, @failure_code, @failure_raw_message,
-          @pending_approval_json, @pending_interaction_json, @artifacts_json, @created_at, @updated_at, @finished_at
+          @pending_approval_json, @pending_interaction_json, @pending_messages_json,
+          @artifacts_json, @created_at, @updated_at, @finished_at
         )
         ON CONFLICT(id) DO UPDATE SET
           partner_id = excluded.partner_id,
@@ -132,6 +140,7 @@ export class AiRunStore {
           failure_raw_message = excluded.failure_raw_message,
           pending_approval_json = excluded.pending_approval_json,
           pending_interaction_json = excluded.pending_interaction_json,
+          pending_messages_json = excluded.pending_messages_json,
           artifacts_json = excluded.artifacts_json,
           updated_at = excluded.updated_at,
           finished_at = excluded.finished_at
@@ -157,6 +166,7 @@ export class AiRunStore {
         failure_raw_message: record.failureRawMessage || null,
         pending_approval_json: jsonStringify(record.pendingInteraction || record.pendingApproval),
         pending_interaction_json: jsonStringify(record.pendingInteraction),
+        pending_messages_json: jsonStringify(record.pendingMessages),
         artifacts_json: jsonStringify(record.artifacts),
         created_at: record.createdAt,
         updated_at: record.updatedAt,

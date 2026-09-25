@@ -15,7 +15,8 @@ import type {
   AiRunEvent,
   AiRunRecord,
   ChatMessage,
-  Partner
+  Partner,
+  PendingChatMessage
 } from '../../../../../src/shared/types'
 
 type TestService = {
@@ -35,7 +36,10 @@ type ChatRunServicePrivate = ChatRunService & {
       items: Array<{ itemId: string; title: string; description: string }>
     }
   ) => Promise<
-    | { accepted: true; decisions: Array<{ itemId: string; action: 'approve' | 'reject' | 'guide' }> }
+    | {
+        accepted: true
+        decisions: Array<{ itemId: string; action: 'approve' | 'reject' | 'guide' }>
+      }
     | { accepted: false; error: string }
   >
 }
@@ -200,6 +204,150 @@ describe('unit ai persistence backend', () => {
     expect(storedRun?.executionPermission).toBe('review')
   })
 
+  it('queues-running-messages-and-starts-one-fifo-continuation', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const submitQueued = async (input: string) =>
+      await setup.service.submit({
+        partnerId: 'partner-1',
+        input,
+        preference: 'local_sources_strict',
+        executionPermission: 'review',
+        mainModel: { configId: 'mock-config', modelName: 'mock-model' }
+      })
+
+    const first = await submitQueued('第一条追加消息')
+    run.status = 'continued'
+    await setup.storage.aiRun.saveRun(run)
+    const second = await submitQueued('第二条追加消息')
+    expect(first).toMatchObject({ success: true, queued: true, userMessage: { pending: true } })
+    expect(second).toMatchObject({ success: true, queued: true, userMessage: { pending: true } })
+    expect(first.run).toBeUndefined()
+    expect(first.assistantMessage).toBeUndefined()
+    expect(first.userMessage?.timestamp).toBeLessThan(second.userMessage?.timestamp ?? 0)
+
+    await (setup.service as ChatRunServicePrivate).queueRunEvent(run.id, {
+      type: 'answer_completed',
+      runId: run.id,
+      text: '第一轮已完成。'
+    })
+    await (setup.service as ChatRunServicePrivate).queueRunEvent(run.id, {
+      type: 'run_completed',
+      runId: run.id
+    })
+
+    const snapshot = await setup.service.getPartnerSnapshot('partner-1')
+    const messages = snapshot.messages.filter((item) => item.role === 'user')
+    const firstQueuedMessage = first.userMessage
+    const secondQueuedMessage = second.userMessage
+    const firstQueuedContextRun = firstQueuedMessage
+      ? await setup.storage.aiRun.getRun(`context-${firstQueuedMessage.id}`)
+      : null
+    const log = firstQueuedMessage ? await setup.storage.chatMessageLog.list('partner-1') : []
+    const firstQueuedLog = log.find((record) => record.runId === firstQueuedContextRun?.id)
+
+    expect(messages.map((item) => item.content)).toEqual([
+      '生成测试回答',
+      '第一条追加消息',
+      '第二条追加消息'
+    ])
+    expect(messages.slice(1).every((item) => item.pending !== true)).toBe(true)
+    expect(firstQueuedContextRun?.status).toBe('context_only')
+    expect(firstQueuedLog?.entry).toMatchObject({
+      kind: 'user',
+      messageId: firstQueuedMessage?.id,
+      input: '第一条追加消息'
+    })
+    expect(snapshot.activeRuns.map((item) => item.run.input)).toEqual(['第二条追加消息'])
+    expect(snapshot.activeRuns[0]?.run.userMessageId).toBe(secondQueuedMessage?.id)
+    expect((await setup.storage.aiRun.getRun(run.id))?.pendingMessages).toEqual([])
+  })
+
+  it('stopped-run-parks-queued-messages-without-starting-ai', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const queued = await setup.service.submit({
+      partnerId: 'partner-1',
+      input: '停止后保留为普通消息',
+      preference: 'default',
+      executionPermission: 'review',
+      mainModel: { configId: 'mock-config', modelName: 'mock-model' }
+    })
+    expect(queued).toMatchObject({ success: true, queued: true, userMessage: { pending: true } })
+
+    await setup.service.cancelRun(run.id)
+    await (setup.service as ChatRunServicePrivate).queueRunEvent(run.id, {
+      type: 'run_cancelled',
+      runId: run.id
+    })
+
+    const snapshot = await setup.service.getPartnerSnapshot('partner-1')
+    const queuedMessage = snapshot.messages.find((item) => item.content === '停止后保留为普通消息')
+    expect(queuedMessage?.role).toBe('user')
+    expect(queuedMessage?.pending).toBeUndefined()
+    expect(snapshot.activeRuns).toHaveLength(0)
+    expect((await setup.storage.aiRun.getRun(run.id))?.pendingMessages).toEqual([])
+    expect(
+      (await setup.storage.aiRun.listRunsByPartner('partner-1')).some(
+        (item) => item.id === `queued-${queued.userMessage?.id}`
+      )
+    ).toBe(false)
+  })
+
+  it('interrupted-yielded-run-parks-queued-messages-without-starting-ai', async () => {
+    const setup = await createTestService()
+    await seedPartner(setup.storage)
+    const createdAt = Date.now()
+    const queuedMessage: PendingChatMessage = {
+      id: 'queued-message-1',
+      input: '应用中断后只保留消息，不自动续跑',
+      preference: 'default',
+      executionPermission: 'review',
+      mainModel: { configId: 'mock-config', modelName: 'mock-model' },
+      selectedReferences: [],
+      attachments: [],
+      workspaceRoots: [setup.workspaceRoot],
+      createdAt: createdAt + 1
+    }
+    await setup.storage.aiRun.saveRun({
+      id: 'interrupted-run',
+      partnerId: 'partner-1',
+      userMessageId: 'original-user',
+      assistantMessageId: 'original-assistant',
+      status: 'continued',
+      input: '原始请求',
+      selectedReferences: [],
+      attachments: [],
+      mainModel: { configId: 'mock-config', modelName: 'mock-model' },
+      modelName: 'mock-model',
+      preference: 'default',
+      executionPermission: 'review',
+      partialAnswer: '',
+      artifacts: [],
+      pendingMessages: [queuedMessage],
+      createdAt,
+      updatedAt: createdAt
+    })
+
+    await setup.service.failInterruptedRuns()
+
+    const recoveredRun = await setup.storage.aiRun.getRun('interrupted-run')
+    const contextRun = await setup.storage.aiRun.getRun(`context-${queuedMessage.id}`)
+    const messages = await setup.service.listPartnerMessages('partner-1')
+    expect(recoveredRun?.status).toBe('failed')
+    expect(recoveredRun?.pendingMessages).toEqual([])
+    expect(contextRun?.status).toBe('context_only')
+    expect(messages.filter((item) => item.role === 'user').map((item) => item.content)).toEqual([
+      '原始请求',
+      queuedMessage.input
+    ])
+    expect(
+      (await setup.storage.aiRun.listRunsByPartner('partner-1')).some((item) =>
+        item.id.startsWith('queued-')
+      )
+    ).toBe(false)
+  })
+
   it('full-access-run-skips-approval-event-and-returns-approve-decisions', async () => {
     const setup = await createTestService()
     const run = await submitAiRun(setup, 'full_access')
@@ -312,53 +460,56 @@ describe('unit ai persistence backend', () => {
       }),
       expectedContent: '草稿内容'
     }
-  ])('keeps applied artifacts when a run is $name', async ({ name, terminalEvent, expectedContent }) => {
-    const setup = await createTestService()
-    const run = await submitAiRun(setup)
-    const service = setup.service as ChatRunServicePrivate
-    const filePath = path.join(setup.workspaceRoot, 'result.md')
+  ])(
+    'keeps applied artifacts when a run is $name',
+    async ({ name, terminalEvent, expectedContent }) => {
+      const setup = await createTestService()
+      const run = await submitAiRun(setup)
+      const service = setup.service as ChatRunServicePrivate
+      const filePath = path.join(setup.workspaceRoot, 'result.md')
 
-    await service.queueRunEvent(run.id, {
-      type: 'answer_token',
-      runId: run.id,
-      token: '草稿内容'
-    })
-    await service.queueRunEvent(run.id, {
-      type: 'file_artifact',
-      runId: run.id,
-      taskId: run.id,
-      artifactId: 'artifact-1',
-      capability: 'text_file',
-      path: filePath,
-      fileName: 'result.md',
-      operation: 'updated',
-      applyId: 'change-1',
-      createdAt: Date.now()
-    })
-    await service.queueRunEvent(run.id, terminalEvent(run.id))
-
-    const messages = await listPartnerMessages(setup.service, 'partner-1')
-    const assistantMessage = messages.find((message) => message.role === 'assistant')
-    const storedRun = await setup.storage.aiRun.getRun(run.id)
-
-    expect(assistantMessage?.content).toBe(expectedContent)
-    expect(assistantMessage?.artifacts).toEqual([
-      {
-        kind: 'file',
+      await service.queueRunEvent(run.id, {
+        type: 'answer_token',
+        runId: run.id,
+        token: '草稿内容'
+      })
+      await service.queueRunEvent(run.id, {
+        type: 'file_artifact',
+        runId: run.id,
+        taskId: run.id,
+        artifactId: 'artifact-1',
         capability: 'text_file',
         path: filePath,
         fileName: 'result.md',
         operation: 'updated',
-        applyId: 'change-1'
+        applyId: 'change-1',
+        createdAt: Date.now()
+      })
+      await service.queueRunEvent(run.id, terminalEvent(run.id))
+
+      const messages = await listPartnerMessages(setup.service, 'partner-1')
+      const assistantMessage = messages.find((message) => message.role === 'assistant')
+      const storedRun = await setup.storage.aiRun.getRun(run.id)
+
+      expect(assistantMessage?.content).toBe(expectedContent)
+      expect(assistantMessage?.artifacts).toEqual([
+        {
+          kind: 'file',
+          capability: 'text_file',
+          path: filePath,
+          fileName: 'result.md',
+          operation: 'updated',
+          applyId: 'change-1'
+        }
+      ])
+      expect(storedRun?.artifacts).toEqual(assistantMessage?.artifacts)
+      if (name === 'cancelled') {
+        expect(storedRun?.status).toBe('cancelled')
+        expect(storedRun?.error).toBeUndefined()
+        expect(storedRun?.finalAnswer).toBeUndefined()
       }
-    ])
-    expect(storedRun?.artifacts).toEqual(assistantMessage?.artifacts)
-    if (name === 'cancelled') {
-      expect(storedRun?.status).toBe('cancelled')
-      expect(storedRun?.error).toBeUndefined()
-      expect(storedRun?.finalAnswer).toBeUndefined()
     }
-  })
+  )
 
   it('autostart-run-emits-process-events-after-run-started', async () => {
     const previousTimeout = process.env.NCURATOR_AI_EMBEDDING_PREFLIGHT_TIMEOUT_MS
@@ -390,7 +541,10 @@ describe('unit ai persistence backend', () => {
     const setup = await createTestService({ autoStartRuns: true })
     const runner = vi.spyOn(AiRunService, 'getInstance').mockReturnValue({
       run: async (payload) => {
-        await writeFile(path.join(setup.workspaceRoot, 'uncontrolled-change.txt'), 'external change')
+        await writeFile(
+          path.join(setup.workspaceRoot, 'uncontrolled-change.txt'),
+          'external change'
+        )
         return createCompletedAiRunState({
           runId: payload.runId,
           partnerId: payload.partnerId,
@@ -407,7 +561,9 @@ describe('unit ai persistence backend', () => {
         partnerId: run.partnerId,
         runId: run.id
       })
-      expect(await access(path.join(setup.workspaceRoot, 'uncontrolled-change.txt')).then(() => true)).toBe(true)
+      expect(
+        await access(path.join(setup.workspaceRoot, 'uncontrolled-change.txt')).then(() => true)
+      ).toBe(true)
       expect(records.items).toEqual([])
       expect(setup.events.filter((event) => event.type === 'file_artifact')).toEqual([])
     } finally {

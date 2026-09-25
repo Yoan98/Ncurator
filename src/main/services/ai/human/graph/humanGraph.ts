@@ -17,9 +17,8 @@ import { buildBrainSystemPrompt } from '../prompts/brain'
 import { projectMessageLogRecords } from '../memory/transcript'
 import { projectBrainMessagesFromLog } from '../memory/brainMessageProjection'
 import { isLearnableSkillId } from '../skills'
-import {
-  classifyThrownErrorToAiRunFailure
-} from '../../utils/runFailure'
+import { classifyThrownErrorToAiRunFailure } from '../../utils/runFailure'
+import { applyDeliverySideEffects } from '../node/brainNode/finalizeDelivery'
 
 export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
   const { ctx } = input
@@ -71,9 +70,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
           cache.currentState = nextState
           return nextState
         })
-        .addNode('human_learning_node', (state) =>
-          runNode(state as HumanState, learningNode)
-        )
+        .addNode('human_learning_node', (state) => runNode(state as HumanState, learningNode))
         .addNode('human_plan_node', (state) => runNode(state as HumanState, planNode))
         .addNode('human_hand_node', (state) => runNode(state as HumanState, handNode))
         .addNode('human_interaction_node', (state) =>
@@ -82,6 +79,7 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         .addEdge(START, 'human_context_budget_node')
         .addConditionalEdges('human_context_budget_node', (state) => {
           const humanState = state as HumanState
+          if (humanState.execution.status === 'yielded') return END
           if (humanState.execution.stage === 'context_compaction') {
             return 'human_context_compaction_node'
           }
@@ -140,15 +138,25 @@ export const createHumanGraphRunner = (input: { ctx: AiRunContext }) => {
         ...brainProjection.messages
       ]
       cache.currentUserMessageIndex = brainProjection.currentUserMessageIndex + 1
-      const output = (await graph.invoke(initialState as HumanState, {
+      let output = (await graph.invoke(initialState as HumanState, {
         recursionLimit:
           ctx.humanRuntimeOverrides?.graphRecursionLimit || HUMAN_GRAPH_RECURSION_LIMIT,
         signal: ctx.abortSignal
       })) as HumanState
 
+      if (output.execution.status === 'yielded') {
+        output = await applyDeliverySideEffects({
+          ctx,
+          cache,
+          state: output,
+          finalizing: false
+        })
+      }
+
       return {
         taskId: taskInput.taskId,
-        status: output.result?.status || 'completed',
+        status:
+          output.execution.status === 'yielded' ? 'yielded' : output.result?.status || 'completed',
         deliveryMarkdown: output.result?.deliveryMarkdown || '',
         artifacts: output.result?.artifacts
       }

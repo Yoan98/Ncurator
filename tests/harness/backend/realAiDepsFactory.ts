@@ -232,7 +232,11 @@ export const createRealAiDepsFactory = async (input: {
         listFileChangeRecords: async (request) =>
           (await aiFileChangeService.listRecords(request)).items,
         isCancelled: contextInput.checkCancelledOverride || (() => false),
-        sendEvent: (event) => input.eventCollector.add(event),
+        hasPendingUserMessages: contextInput.hasPendingUserMessages,
+        sendEvent: (event) => {
+          input.eventCollector.add(event)
+          contextInput.observeEvent?.(event)
+        },
         recordLlmIo: (record) => input.eventCollector.addLlmIo(record),
         requestApprovalBatch: async (request) => {
           input.eventCollector.add({

@@ -160,7 +160,7 @@ export const humanResultSchema = humanDeliveryPayloadSchema.extend({
 
 export const humanTaskOutputSchema = humanDeliveryPayloadSchema.extend({
   taskId: z.string(),
-  status: z.literal('completed'),
+  status: z.enum(['completed', 'yielded']),
   artifacts: z.array(aiArtifactRefSchema).optional()
 })
 

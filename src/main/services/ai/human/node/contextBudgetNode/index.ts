@@ -1,10 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { BrainContextBudgetSnapshot } from '../../../../../../shared/types'
 import type { AiRunContext } from '../../../types'
-import {
-  resolveCompactionTailTokens,
-  resolveEffectiveContextWindowTokens
-} from '../../constants'
+import { resolveCompactionTailTokens, resolveEffectiveContextWindowTokens } from '../../constants'
 import type { HumanRuntimeCache, HumanState } from '../../types'
 import { hasCompressibleCompactionHistory } from '../../memory/compactionSplit'
 import { estimateMessagesForContext } from '../../memory/multimodal'
@@ -90,6 +87,7 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
       await input.ctx.appendMessageLog([
         {
           kind: 'user',
+          messageId: input.ctx.userMessageId,
           content: builtText,
           input: state.task.userInput,
           context: {
@@ -99,6 +97,17 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
         }
       ])
       input.cache.currentUserLogAppended = true
+    }
+
+    if (input.ctx.hasPendingUserMessages()) {
+      return {
+        ...state,
+        execution: {
+          ...state.execution,
+          stage: 'context_budget',
+          status: 'yielded'
+        }
+      }
     }
 
     const records = await input.ctx.loadMessageLog()

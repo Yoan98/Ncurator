@@ -89,7 +89,7 @@ afterEach(async () => {
 })
 
 describe('SQLite migration contract', () => {
-  it('creates v10 directly and upgrades the released v9 schema to the same final structure', async () => {
+  it('creates the current schema directly and upgrades the released v9 schema to the same final structure', async () => {
     const freshPath = await createDatabasePath()
     const upgradedPath = await createDatabasePath()
     const fresh = new SqliteCore(freshPath)
@@ -118,7 +118,7 @@ describe('SQLite migration contract', () => {
 
     expect(migrationRows).toHaveLength(CURRENT_SCHEMA_VERSION)
     expect(migrationRows).toContainEqual({ version: 10, name: 'upgrade_from_v9' })
-    expect(migrationRows.at(-1)).toEqual({ version: 14, name: 'scheduled_task_partner_binding' })
+    expect(migrationRows.at(-1)).toEqual({ version: 15, name: 'ai_run_pending_messages' })
     expect(partnerTable).toEqual({ name: 'partner' })
     expect(sessionTable).toBeUndefined()
     expect(searchTurnTable).toBeUndefined()
@@ -273,6 +273,7 @@ describe('SQLite migration contract', () => {
     prepared.initialize()
     prepared.prepare('DELETE FROM schema_migrations WHERE version >= 11').run()
     prepared.exec('DROP TABLE IF EXISTS app_settings')
+    prepared.exec('ALTER TABLE ai_run DROP COLUMN pending_messages_json')
     prepared
       .prepare(
         `INSERT INTO partner (

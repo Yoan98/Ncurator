@@ -56,6 +56,7 @@ flowchart TB
 
   Composer --> WB
   WB --> IPC --> Run --> Graph
+  Run -. 运行中追加消息 / 终态归档 .-> SQLite
   Graph --> Retrieval
   Retrieval --> SQLite
   Retrieval --> Lance
@@ -84,7 +85,7 @@ flowchart TB
 
 ## AI 运行时
 
-AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`context_budget ⇄ context_compaction → brain → dispatch → (learning | plan | hand) → …`，无工具调用时 `finalizeDelivery` 结束 run。节点细节见 `ai-harness/human-harness.md`。
+AI 架构围绕一次 `run` 展开，由 **`human` LangGraph** 推进任务：`context_budget ⇄ context_compaction → brain → dispatch → (learning | plan | hand) → …`，无工具调用时 `finalizeDelivery` 结束 run。Workbench 可在普通运行期间将追加消息写入当前 `ai_run`；human graph 在工具结果写入、dispatch 队列清空后的 `context_budget` 安全交接，或在最终交付后由 Main 继续下一轮。停止、失败或进程中断时追加消息进入 transcript，不自动启动续接。节点细节见 `ai-harness/human-harness.md`。
 
 **设计文档（修改 AI 行为前必读）**
 
@@ -143,8 +144,8 @@ flowchart LR
 
 ## 主链路
 
-1. Renderer 发起用户请求 → Main 创建 run，读取该伙伴消息记录与设置页文件地址。
-2. AI Runtime 通过 human graph 推进 `context_budget`、brain、learning、plan、hand；需要压缩时走 `context_compaction`。brain 输出最终交付后立即完成 run。
+1. Renderer 发起用户请求 → Main 创建 run，读取该伙伴消息记录与设置页文件地址；普通 run 运行期间的追加消息持久化到该 run。
+2. AI Runtime 通过 human graph 推进 `context_budget`、brain、learning、plan、hand；需要压缩时走 `context_compaction`。追加消息在安全边界触发续接；无追加消息时 brain 输出最终交付并完成 run。
 3. 需要资料时 → Retrieval（SQLite 元数据 + LanceDB 检索）。
 4. 需要本地能力时 → Tool Runtime 调用领域服务。
 5. 工作地址内写回 → 记录修改与预览，供 UI 展示和回退。
