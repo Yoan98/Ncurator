@@ -132,7 +132,7 @@ const answerRunAsWrittenQuestion = async (input: {
   if (!question) throw new Error('approval scope clarification question is missing')
   const option = question.options.find((candidate) => {
     const text = candidate.id + ' ' + candidate.label + ' ' + candidate.description
-    return /原样执行|原样递归删除|照原命令|按原命令|按命令执行|按命令字面|run.?as.?given|run.?as.?written|run.?as.?is/iu.test(
+    return /以命令为准|原样执行|原样递归删除|原样删除整个目录|照原命令|按原命令|按命令执行|按命令字面|run.?as.?given|run.?as.?written|run.?as.?is/iu.test(
       text
     )
   })

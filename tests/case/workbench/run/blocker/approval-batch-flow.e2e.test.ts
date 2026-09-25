@@ -536,7 +536,7 @@ const answerScopeClarification = async (input: {
   const runAsWrittenOption = question.options.find((option) => {
     const optionText = option.id + ' ' + option.label + ' ' + option.description
     return (
-      /原样执行|原样递归删除|照原命令|按原命令|按命令执行|按命令字面|run.?as.?given|run.?as.?written|run.?as.?is/iu.test(
+      /以命令为准|原样执行|原样递归删除|原样删除整个目录|照原命令|按原命令|按命令执行|按命令字面|run.?as.?given|run.?as.?written|run.?as.?is/iu.test(
         optionText
       ) && !/备份|backup/iu.test(optionText)
     )
@@ -997,9 +997,12 @@ describe('workbench run e2e', () => {
               directory: path.join(workspaceRoot, 'approval-delete-guide-target')
             }
           }
+          const terminalAuthorizedDirectory = IS_WINDOWS
+            ? authorizedDirectory.replaceAll('\\', '/')
+            : authorizedDirectory
           const makeDirectoryCommand = IS_WINDOWS
             ? 'New-Item -ItemType Directory -Force -Path ' +
-              quoteShellPath(authorizedDirectory) +
+              quoteShellPath(terminalAuthorizedDirectory) +
               ' | Out-Null'
             : 'mkdir -p ' + quoteShellPath(authorizedDirectory)
           const listWorkspaceCommand = IS_WINDOWS
@@ -1469,6 +1472,15 @@ describe('workbench run e2e', () => {
           const fullAccessFileContentsAreCorrect =
             normalizedFullAccessFileContents === 'full-access-by-workbench-e2e' ||
             normalizedFullAccessFileContents === 'full-access-by-workbench-e2e\n'
+          const createScenarioFailureMessage = createScenarioAutoApproved
+            ? ''
+            : `创建目录轮未自动通过：${JSON.stringify({
+                expectedCommand: result.createScenario.expectedCommand,
+                reviewDecisions: result.createScenario.reviewDecisions,
+                approvalItems: result.createScenario.approvalItems,
+                terminalCommandsStarted: result.createScenario.terminalCommandsStarted,
+                unexpectedApprovalRejected: result.createScenario.unexpectedApprovalRejected
+              })}。`
 
           await runtime.assertThat(
             result.queryTerminalStepCount > 0 &&
@@ -1514,6 +1526,7 @@ describe('workbench run e2e', () => {
             {
               name: 'workbench-terminal-review-real-multi-run-flows',
               message:
+                createScenarioFailureMessage +
                 '只读轮应无文件变化且绕过审核；创建轮应由 AI 审核自动通过并真实创建目录；三个范围冲突删除轮都必须经 AI 审核转人工，再按 UI 同意、拒绝或指导；完全访问应真实写入且跳过审核。',
               data: result
             }
