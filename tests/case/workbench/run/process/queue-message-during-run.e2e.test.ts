@@ -35,7 +35,7 @@ describe('workbench run e2e', () => {
         suite: 'run',
         groups: ['process'],
         description:
-          '真实模型读取资料过程中追加两条消息，验证浅灰待处理态、停止按钮保留及安全边界后的 FIFO 续接。',
+          '真实模型读取资料过程中追加两条消息，验证单一主按钮切换、浅灰待处理态及安全边界后的 FIFO 续接。',
         fixtures: [],
         serviceMode: 'real',
         execution: 'live',
@@ -66,7 +66,18 @@ describe('workbench run e2e', () => {
           })
 
           await setWorkbenchInput(runtime.page, FIRST_QUEUED_INPUT)
-          await getWorkbenchLocator(runtime.page, workbenchSelectors.queueSendButton).click()
+          await runtime.page.waitForFunction(
+            (testId) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-label') ===
+              '发送',
+            workbenchSelectors.sendButton,
+            { timeout: 10_000 }
+          )
+          const sendButtonCountWithDraft = await getWorkbenchLocator(
+            runtime.page,
+            workbenchSelectors.sendButton
+          ).count()
+          await getWorkbenchLocator(runtime.page, workbenchSelectors.sendButton).click()
           await runtime.page.waitForFunction(
             (expected) =>
               Array.from(document.querySelectorAll('[data-message-pending="true"]')).some((node) =>
@@ -85,9 +96,23 @@ describe('workbench run e2e', () => {
             undefined,
             { timeout: 10_000 }
           )
+          await runtime.page.waitForFunction(
+            (testId) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-label') ===
+              '停止本次运行',
+            workbenchSelectors.sendButton,
+            { timeout: 10_000 }
+          )
 
           await setWorkbenchInput(runtime.page, SECOND_QUEUED_INPUT)
-          await getWorkbenchLocator(runtime.page, workbenchSelectors.queueSendButton).click()
+          await runtime.page.waitForFunction(
+            (testId) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.getAttribute('aria-label') ===
+              '发送',
+            workbenchSelectors.sendButton,
+            { timeout: 10_000 }
+          )
+          await getWorkbenchLocator(runtime.page, workbenchSelectors.sendButton).click()
           await runtime.page.waitForFunction(
             (expected) =>
               Array.from(document.querySelectorAll('[data-message-pending="true"]')).some((node) =>
@@ -110,18 +135,18 @@ describe('workbench run e2e', () => {
                 `${workbenchSelectors.userMessageEditButtonPrefix}-${firstPendingMessageId}`
               ).count()
             : 0
-          const stopButtonLabel =
+          const primaryButtonLabel =
             (await getWorkbenchLocator(runtime.page, workbenchSelectors.sendButton).getAttribute(
               'aria-label'
             )) || ''
-          const stopButtonEnabled = await getWorkbenchLocator(
+          const primaryButtonEnabled = await getWorkbenchLocator(
             runtime.page,
             workbenchSelectors.sendButton
           ).isEnabled()
-          const queueButtonVisible = await getWorkbenchLocator(
+          const primaryButtonCount = await getWorkbenchLocator(
             runtime.page,
-            workbenchSelectors.queueSendButton
-          ).isVisible()
+            workbenchSelectors.sendButton
+          ).count()
 
           const firstRunTerminal = await waitForWorkbenchAiEvent(runtime, {
             name: 'initial-run-finished',
@@ -176,9 +201,10 @@ describe('workbench run e2e', () => {
             pendingTexts,
             firstPendingClass,
             pendingEditButtonCount,
-            stopButtonLabel,
-            stopButtonEnabled,
-            queueButtonVisible,
+            primaryButtonLabel,
+            primaryButtonEnabled,
+            primaryButtonCount,
+            sendButtonCountWithDraft,
             firstRunId: firstRunStarted.runId,
             continuationInput:
               continuationStarted.type === 'run_started' ? continuationStarted.input : '',
@@ -199,15 +225,16 @@ describe('workbench run e2e', () => {
               result.pendingTexts[1]?.includes(SECOND_QUEUED_INPUT) &&
               result.firstPendingClass.includes('opacity-60') &&
               result.pendingEditButtonCount === 0 &&
-              result.stopButtonLabel.includes('停止') &&
-              result.stopButtonEnabled &&
-              result.queueButtonVisible &&
+              result.primaryButtonLabel.includes('停止') &&
+              result.primaryButtonEnabled &&
+              result.primaryButtonCount === 1 &&
+              result.sendButtonCountWithDraft === 1 &&
               result.continuationInput === SECOND_QUEUED_INPUT &&
               result.toolResults.some((event) => event.toolName === 'text_file_read' && event.ok),
             {
               name: 'workbench-queues-messages-during-ai-run',
               message:
-                '运行中的新增消息保持浅灰且无编辑入口；原停止按钮可用，并在当前工具完成后按 FIFO 启动一次续接。',
+                '运行中只有一个主按钮，空草稿时停止、有草稿时发送并排队；新增消息保持浅灰且无编辑入口，并在当前工具完成后按 FIFO 启动一次续接。',
               data: result
             }
           )

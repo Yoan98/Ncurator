@@ -453,12 +453,13 @@ const AssistantActivityItemView: React.FC<{
   const toolText = getActivityItemText(item)
   const toolTextShimmer = item.terminalReviewState === 'reviewing'
   const readImagePaths = item.toolName === 'read_image' ? readImagePathsFromInput(item.input) : []
+  const hasReviewResult = Boolean(review || item.terminalReviewDecision)
   const thumbs =
     readImagePaths.length > 0 ? (
       <ReadImageThumbs paths={readImagePaths} onPreviewImage={onPreviewImage} />
     ) : null
 
-  if (!review) {
+  if (!hasReviewResult) {
     return (
       <div
         data-process-item-id={item.id}
@@ -475,22 +476,36 @@ const AssistantActivityItemView: React.FC<{
 
   return (
     <div
-      data-testid={workbenchSelectors.assistantApprovalReviewedItem}
+      data-testid={review ? workbenchSelectors.assistantApprovalReviewedItem : undefined}
       data-process-item-id={item.id}
       data-process-item-status={item.status}
       data-terminal-review-state={item.terminalReviewState}
+      data-terminal-review-decision={item.terminalReviewDecision}
       className={failed ? 'text-[#B3261E]' : undefined}
     >
       <div className="min-w-0 leading-[22px]">
         {renderSegments(toolText, { shimmer: toolTextShimmer })}
       </div>
-      <div className="mt-1 text-xs text-[#787774]">
-        审核结果：
-        {review.action === 'approve'
-          ? '已允许'
-          : review.action === 'reject'
-            ? '已拒绝'
-            : `已提供指导${review.message ? `：${review.message}` : ''}`}
+      <div
+        data-testid={workbenchSelectors.assistantReviewResultRail}
+        className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#787774]"
+      >
+        {item.terminalReviewDecision ? (
+          <div data-review-actor="ai">
+            AI 审核结果：
+            {item.terminalReviewDecision === 'auto_approve' ? '已通过' : '需要人工确认'}
+          </div>
+        ) : null}
+        {review ? (
+          <div data-review-actor="human">
+            人工审核结果：
+            {review.action === 'approve'
+              ? '已允许'
+              : review.action === 'reject'
+                ? '已拒绝'
+                : `已提供指导${review.message ? `：${review.message}` : ''}`}
+          </div>
+        ) : null}
       </div>
       {thumbs}
     </div>

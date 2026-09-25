@@ -110,10 +110,23 @@ export const projectProcessGroups = (input: {
         }
       } else if (entry.eventType === 'terminal_review_resolved') {
         for (const decision of entry.payload.decisions) {
-          setTerminalReviewState(
-            decision.commandId,
-            decision.decision === 'auto_approve' ? 'ready_to_execute' : 'waiting_approval'
-          )
+          const group = groupById.get(`${input.runId}:tool:${decision.commandId}`)
+          if (!group) continue
+          upsertGroup({
+            ...group,
+            items: group.items.map((item) =>
+              item.id !== decision.commandId
+                ? item
+                : {
+                    ...item,
+                    terminalReviewState:
+                      decision.decision === 'auto_approve'
+                        ? 'ready_to_execute'
+                        : 'waiting_approval',
+                    terminalReviewDecision: decision.decision
+                  }
+            )
+          })
         }
       } else if (entry.eventType === 'approval_batch_resolved') {
         for (const item of entry.payload.items) {

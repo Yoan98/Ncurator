@@ -312,6 +312,8 @@ type TerminalReviewRowSnapshot = {
   itemId: string
   state: string | null
   text: string
+  reviewResultText: string
+  reviewResultRailClass: string
   color: string
   headerColor: string
 }
@@ -424,6 +426,14 @@ const readTerminalReviewRows = async (page: Page): Promise<TerminalReviewRowSnap
       itemId: element.getAttribute('data-process-item-id') || '',
       state: element.getAttribute('data-terminal-review-state'),
       text: element.textContent?.trim() || '',
+      reviewResultText:
+        element
+          .querySelector('[data-testid="workbench-assistant-review-result-rail"]')
+          ?.textContent?.trim() || '',
+      reviewResultRailClass:
+        element
+          .querySelector('[data-testid="workbench-assistant-review-result-rail"]')
+          ?.getAttribute('class') || '',
       color: getComputedStyle(element).color,
       headerColor: getComputedStyle(
         element.closest('details')?.querySelector(':scope > summary > span') || element
@@ -1284,6 +1294,14 @@ describe('workbench run e2e', () => {
                 Boolean(itemId && snapshot.itemIds.includes(itemId))
             )
             const matchingRows = scenario.terminalReviewRows.filter((row) => row.itemId === itemId)
+            const expectedAiReviewResult =
+              scenario.action === 'auto_approve'
+                ? 'AI 审核结果：已通过'
+                : 'AI 审核结果：需要人工确认'
+            const internalReasons = scenario.reviewDecisions
+              .filter((decision) => decision.commandId === itemId)
+              .map((decision) => decision.reason.trim())
+              .filter(Boolean)
             return Boolean(
               itemId &&
               scenario.reviewResolvedBeforeFirstExecution &&
@@ -1291,6 +1309,11 @@ describe('workbench run e2e', () => {
               scenario.reviewResolvedCommandIds.includes(itemId) &&
               reviewObservation?.itemIds.filter((candidate) => candidate === itemId).length === 1 &&
               matchingRows.length === 1 &&
+              matchingRows[0]?.reviewResultText.includes(expectedAiReviewResult) &&
+              matchingRows[0]?.reviewResultRailClass.includes('border-l') &&
+              !internalReasons.some((reason) =>
+                matchingRows[0]?.reviewResultText.includes(reason)
+              ) &&
               matchingRows[0]?.headerColor !== 'rgb(179, 38, 30)'
             )
           })
@@ -1298,11 +1321,17 @@ describe('workbench run e2e', () => {
             if (scenario.action === 'auto_approve') return false
             const expectedResult =
               scenario.action === 'approve'
-                ? '审核结果：已允许'
+                ? '人工审核结果：已允许'
                 : scenario.action === 'reject'
-                  ? '审核结果：已拒绝'
-                  : '审核结果：已提供指导：' + GUIDE_MESSAGE
+                  ? '人工审核结果：已拒绝'
+                  : '人工审核结果：已提供指导：' + GUIDE_MESSAGE
             const expectedItemId = scenario.approvalItems[0]?.itemId
+            const reviewedRow = scenario.terminalReviewRows.find(
+              (row) => row.itemId === expectedItemId
+            )
+            const restoredReviewedRow = scenario.restoredTerminalReviewRows.find(
+              (row) => row.itemId === expectedItemId
+            )
             return (
               expectedItemId !== undefined &&
               scenario.approvalDecisions.some(
@@ -1310,8 +1339,13 @@ describe('workbench run e2e', () => {
                   decision.itemId === expectedItemId && decision.action === scenario.action
               ) &&
               scenario.reviewedItemTexts.some((text) => text.includes(expectedResult)) &&
+              reviewedRow?.reviewResultText.includes(expectedResult) === true &&
+              reviewedRow.reviewResultRailClass.includes('border-l') &&
+              reviewedRow.reviewResultText.includes('AI 审核结果：需要人工确认') &&
               (scenario.action !== 'guide' ||
-                scenario.restoredReviewedItemTexts.some((text) => text.includes(expectedResult)))
+                (scenario.restoredReviewedItemTexts.some((text) => text.includes(expectedResult)) &&
+                  restoredReviewedRow?.reviewResultText.includes(expectedResult) === true &&
+                  restoredReviewedRow.reviewResultRailClass.includes('border-l')))
             )
           })
           const refusedCommandsAreMarkedUnexecuted = [

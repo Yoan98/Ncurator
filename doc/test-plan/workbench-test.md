@@ -325,10 +325,10 @@ pnpm test:update:e2e
 #### `queue-message-during-run`
 
 - 测试类型：`e2e / live`
-- What：真实模型读取资料期间从 Composer 追加消息，验证停止入口保持可用、待处理用户气泡浅灰、追加按钮独立，以及工具结果完成后安全续接。
-- Why：AI backend case 不覆盖 Renderer 输入、双按钮状态、pending 气泡投影和 IPC 续接；运行中追加不能让停止操作消失。
-- How：在临时工作区创建三个文本输入，通过真实 UI 发送跨文件汇总请求；观察 `text_file_read` 开始后连续使用追加发送按钮提交两条相关说明；等待原 run 正常结束及续接 run 完成。记录真实模型、run 事件与最终回答。
-- Oracle：读取期间两条待处理消息都按 FIFO 显示为浅灰气泡且无编辑入口；停止按钮继续可用，追加发送入口独立；续接使用第二条消息作为最新诉求并完成。工具结果先于追加消息由 AI live `human-queued-message-safe-boundary-live` 覆盖；FIFO transcript、停止 / 中断后不自动启动由 unit `chat-run-service-contract` 覆盖，对齐 `WB-COMPOSER-017`、`WB-COMPOSER-006`。
+- What：真实模型读取资料期间从 Composer 追加消息，验证单一主按钮在停止与发送间切换、待处理用户气泡浅灰，以及工具结果完成后安全续接。
+- Why：AI backend case 不覆盖 Renderer 输入、运行态单按钮切换、pending 气泡投影和 IPC 续接；发送草稿时停止入口暂时切换为排队发送，发送后必须恢复。
+- How：在临时工作区创建三个文本输入，通过真实 UI 发送跨文件汇总请求；观察 `text_file_read` 开始后检查空草稿时唯一主按钮为停止，输入第一条消息后同一按钮切换为发送并提交排队，再输入第二条消息重复提交；确认每次清空草稿后按钮恢复为停止；等待原 run 正常结束及续接 run 完成。记录真实模型、run 事件与最终回答。
+- Oracle：任一时刻 Composer 仅有一个主按钮；空草稿时标签为停止，有可发送内容时同一按钮标签为发送；发送后草稿清空且标签恢复为停止。两条待处理消息都按 FIFO 显示为浅灰气泡且无编辑入口；续接使用第二条消息作为最新诉求并完成。工具结果先于追加消息由 AI live `human-queued-message-safe-boundary-live` 覆盖；FIFO transcript、停止 / 中断后不自动启动由 unit `chat-run-service-contract` 覆盖，对齐 `WB-COMPOSER-017`、`WB-COMPOSER-006`。
 
 #### `llm-retry-process-row`
 
@@ -377,7 +377,7 @@ pnpm test:update:e2e
 - Why：审批是高风险 terminal 执行的用户确认边界；UI 误执行或误恢复都会破坏安全约束。
 - How：使用真实模型与 Workbench UI，不注入或固定审核输出。同一个 case 依次运行六轮：审核权限下直接运行平台原生只读命令列出工作区一级名称（Windows 使用 PowerShell `Get-ChildItem`，macOS 使用 `ls -1`，不包子 shell）；按用户明确授权创建命名目录；分别在三个隔离临时目录内准备 `cache.tmp` 与 `keep.txt`，用户要求原样执行会删除整个临时目录的完整维护命令，同时说明目标只删除 `cache.tmp`、保留 `keep.txt`；完全访问下写入文件。删除命令按当前平台生成：Windows 使用 PowerShell `Remove-Item -LiteralPath <quoted-path> -Recurse -Force`，macOS 使用 shell `rm -rf <quoted-path>`。若真实模型先通过提问卡澄清删除范围，E2E 通过真实提问卡选择“原样执行”后继续等待终端审核；同意、拒绝和指导都通过真实审批卡操作，指导轮刷新会话并检查 Activity 恢复。完全访问轮若模型通过提问卡指出目标路径错误，E2E 选择实际 workspace 路径后继续，仍须确认真实文件写入且没有审核或审批。所有目标都位于本次 E2E 创建的临时 workspace 内。记录每轮 terminal command、`human.terminal_review` 输入/输出、reason、审批事件、决定事件、终端步骤及文件树快照。真实模型未发出预期命令、审核没有转人工或选择了其他分支时，case 失败并保留实际证据，不跳过该轮、不代为决定。
 - Oracle：只读轮至少有一个 `terminal_step_started`，没有 `human.terminal_review` 调用、审批事件或审批卡，且 workspace 文件树和文件内容前后相同。创建轮的真实审核输出必须对实际 terminal command 返回 `auto_approve` 与非空 reason；无审批事件/卡片，终端确实执行且命名目录存在。三个删除轮都必须有完成态 `human.terminal_review` 输出，decision 为 `needs_human_review`、reason 非空；decision 的 `commandId` 与审批项 `itemId` 对应，审批项命令与该轮要求执行的命令一致（Windows 可由 `powershell -NoProfile -Command` 透明包装，但命令体须逐字一致），并真实出现审批卡。卡片等待态及布局对齐 `WB-BLOCKER-001-AC1`、`WB-BLOCKER-001-AC2`、`WB-BLOCKER-001-AC3`、`WB-BLOCKER-001-AC4`、`WB-BLOCKER-001-AC6`。同意轮记录 `approve` 并执行待审命令，目标临时目录被删除且其余 workspace 文件树不变；拒绝轮记录 `reject`，待审删除命令未启动或执行（允许审批前只读核验），两份文件及内容保持原样；指导轮记录 `guide`、run 正常完成、没有执行删除命令，两份文件及内容保持原样，刷新后 Activity 中仍显示指导结果，对齐 `WB-BLOCKER-001-AC7`。审批决定文字须与实际 UI 动作相符。只读查询对齐 `WB-BLOCKER-001-AC13`；自动通过、人工决策后的影响范围和完全访问边界共同覆盖 `WB-BLOCKER-001-AC5`、`WB-BLOCKER-001-AC14`。AI backend case `hand-terminal-approval-batch`、`hand-terminal-ai-review-auto-approve`、`hand-terminal-ai-review-failure`、`hand-terminal-ai-review-incomplete` 继续覆盖稳定分类与失败回退契约。完全访问轮真实创建目标文件且没有审核调用、审批事件或审批卡片。记录模型、耗时、完成度评分和失败归因。
-- Oracle：在发送前安装只读 DOM 观察记录 `正在审核终端命令` 是否出现；审核期间尚无 `terminal_step_started`；从审核到执行 / 人工等待 / 拒绝，同一命令只对应一个 Activity 工具项且只计一次，对齐 `WB-BLOCKER-001-AC15`。刷新后过程从持久化日志恢复，拒绝或指导显示「命令未执行」，不显示为工具执行失败。Activity header 在成功、失败和部分失败状态下均保持中性色，展开后的失败工具行保留红色提示，对齐 `WB-COMPOSER-009-AC16`。
+- Oracle：在发送前安装只读 DOM 观察记录 `正在审核终端命令` 是否出现；审核期间尚无 `terminal_step_started`；从审核到执行 / 人工等待 / 拒绝，同一命令只对应一个 Activity 工具项且只计一次，对齐 `WB-BLOCKER-001-AC15`。AI 自动通过和转人工结果、人工同意/拒绝/指导结果均显示在命令项下带内嵌竖线的审核结果区域；审核区域只对 AI / 人工审核产生，不展示内部 reason。刷新后过程与审核结论从持久化日志恢复，拒绝或指导显示「命令未执行」，不显示为工具执行失败。Activity header 在成功、失败和部分失败状态下均保持中性色，展开后的失败工具行保留红色提示，对齐 `WB-COMPOSER-009-AC16`。
 
 #### `stop-running-or-approval-run`
 
@@ -385,7 +385,7 @@ pnpm test:update:e2e
 - What：智能模式普通运行期间停止入口保持可用，并能取消普通长任务和审批等待；审批卡替代 Composer 时不提供普通追加消息输入。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死。
 - How：E2E 发送真实长任务和审批等待请求，运行中点击停止。
-- Oracle：运行中停止入口和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中停止按钮转圈且追加入口禁用，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`；取消后用时停止递增、过程默认收起且仍可展开，对齐 `WB-COMPOSER-016-AC2`；审批等待时普通输入框和追加按钮均不存在，且不显示「需要你的协助」，对齐 `WB-COMPOSER-017-AC4`、`WB-SESSION-014-AC1`。
+- Oracle：运行中停止入口和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中唯一主按钮转圈且禁用，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`；取消后用时停止递增、过程默认收起且仍可展开，对齐 `WB-COMPOSER-016-AC2`；审批等待时普通输入框和 Composer 主按钮均不存在，且不显示「需要你的协助」，对齐 `WB-COMPOSER-017-AC4`、`WB-SESSION-014-AC1`。
 
 #### `interrupted-task-resume-flow`
 
@@ -616,10 +616,10 @@ pnpm test:update:e2e
 #### `human-interaction-question-card`
 
 - 测试类型：`e2e / live`
-- What：模糊任务触发 AI 提问，提问卡与审批卡的左上标题直接展示当前问题或当前操作说明，右上当前项数量位于左右箭头前；等待时普通 Composer 与追加按钮均不存在，不能排队。提问卡每题只接受 2 至 4 个 AI 选项，以圆形/方形控件区分单选/多选但不展示类型文字 Tag，显示推荐 Tag，用户完成 A/B/C/D、其他输入和多问题切换，普通单选自动跳到下一题；回答前不显示写入结果，提交后 run 恢复；同一回复包含多个提问时逐张展示，后一张不继承前一张状态，全部回答后才继续 AI。
+- What：模糊任务触发 AI 提问，提问卡与审批卡的左上标题直接展示当前问题或当前操作说明，右上当前项数量位于左右箭头前；等待时普通 Composer 与其主按钮均不存在，不能排队。提问卡每题只接受 2 至 4 个 AI 选项，以圆形/方形控件区分单选/多选但不展示类型文字 Tag，显示推荐 Tag，用户完成 A/B/C/D、其他输入和多问题切换，普通单选自动跳到下一题；回答前不显示写入结果，提交后 run 恢复；同一回复包含多个提问时逐张展示，后一张不继承前一张状态，全部回答后才继续 AI。
 - Why：问题和答案是任务定义的一部分，必须在真实 UI 中可操作、可恢复、可追溯，不能只在 IPC 或 backend 日志中存在。
 - How：通过真实 Workbench UI 发送存在结果歧义的任务，等待 `human_interaction_required`；按实际返回的 1 至 3 个问题检查 A/B/C/D、其他输入和 pending 卡片，刷新后继续选择自定义答案并提交；若同一 run 再次产生 `human_interaction_required`，继续完成该 interaction；最终展开 Activity 检查问答投影。审批展示由 `approval-batch-flow` 同时覆盖。
-- Oracle：composer 上方出现统一交互卡片，普通输入框与追加按钮数量都为 0；左上标题直接显示当前问题或当前操作说明，右上操作区按「问题/审批 1 / N」、左右箭头、停止按钮的顺序排列，底部展示「告诉{伙伴名}该怎么做」与提交按钮，不重复展示文字停按钮，对齐 `WB-BLOCKER-001-AC9`、`WB-COMPOSER-017-AC4`；每题 2 至 4 个 AI 选项、单选/多选控件、无类型文字 Tag、推荐 Tag 和自动跳题对齐 `WB-BLOCKER-001-AC11`；刷新后 pending 问题可恢复；新的 interaction 从首题和空选择开始；提交前无写入；连续提问全部提交后 run 恢复并完成，对齐 `WB-BLOCKER-001-AC12`；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。等待回答时侧栏显示「需要你的协助」标签，刷新后仍显示，run 完成后消失；审批等待不显示该标签，对齐 `WB-SESSION-014`。
+- Oracle：composer 上方出现统一交互卡片，普通输入框与 Composer 发送按钮数量都为 0；交互卡的独立停止按钮可用。左上标题直接显示当前问题或当前操作说明，右上操作区按「问题/审批 1 / N」、左右箭头、停止按钮的顺序排列，底部展示「告诉{伙伴名}该怎么做」与提交按钮，不重复展示文字停按钮，对齐 `WB-BLOCKER-001-AC9`、`WB-COMPOSER-017-AC4`；每题 2 至 4 个 AI 选项、单选/多选控件、无类型文字 Tag、推荐 Tag 和自动跳题对齐 `WB-BLOCKER-001-AC11`；刷新后 pending 问题可恢复；新的 interaction 从首题和空选择开始；提交前无写入；连续提问全部提交后 run 恢复并完成，对齐 `WB-BLOCKER-001-AC12`；Activity 对应工具行下显示问题与答案，AI / 人工审核结果显示在对应工具项的内嵌层级，无审核时不出现审核结果区域；不使用旧图标前缀或 hover 替换工具文案。等待回答时侧栏显示「需要你的协助」标签，刷新后仍显示，run 完成后消失；审批等待不显示该标签，对齐 `WB-SESSION-014`。
 
 ### 5.4 `scheduled-task`
 

@@ -867,14 +867,14 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
     }
   }, [])
 
-  const sendButtonDisabled = showCancel ? cancelling : loading || !canSubmit
-  const sendButtonTooltip = showCancel
-    ? cancelling
-      ? '正在停止本次运行'
-      : ''
-    : loading
+  const sendingWhileRunning = showCancel && !cancelling && canSubmit
+  const stoppingRun = showCancel && !sendingWhileRunning
+  const sendButtonDisabled = cancelling || (!showCancel && (loading || !canSubmit))
+  const sendButtonTooltip = cancelling
+    ? '正在停止本次运行'
+    : !showCancel && loading
       ? '正在处理上一条请求'
-      : !canSubmit
+      : !showCancel && !canSubmit
         ? submitDisabledReason || '当前还不能发送'
         : ''
   const composerHint =
@@ -1141,59 +1141,32 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               data-testid={workbenchSelectors.modelSelect}
             />
 
-            {showCancel ? (
-              <Tooltip
-                title={
-                  cancelling
-                    ? sendButtonTooltip
-                    : !canSubmit
-                      ? submitDisabledReason || '当前还不能发送'
-                      : ''
-                }
-              >
-                <span className="inline-flex h-7 w-7 shrink-0">
-                  <button
-                    type="button"
-                    onClick={onSubmit}
-                    disabled={cancelling || !canSubmit}
-                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
-                      cancelling || !canSubmit
-                        ? 'border-[#E5E4E0] bg-[#F4F4F2] text-[#B5B3AD]'
-                        : 'border-[#37352F] bg-[#37352F] text-white hover:bg-[#2F3437]'
-                    }`}
-                    data-testid={workbenchSelectors.queueSendButton}
-                    aria-label="发送"
-                  >
-                    <HiArrowUp className="h-3 w-3" />
-                  </button>
-                </span>
-              </Tooltip>
-            ) : null}
-
             <Tooltip title={sendButtonDisabled ? sendButtonTooltip : ''}>
               <span className="inline-flex h-7 w-7 shrink-0">
                 <button
                   type="button"
-                  onClick={showCancel ? onCancel : onSubmit}
+                  onClick={stoppingRun ? onCancel : onSubmit}
                   disabled={sendButtonDisabled}
                   className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
                     showCancel
                       ? cancelling
                         ? 'border-[#E5E4E0] bg-[#F4F4F2] text-[#B5B3AD]'
-                        : 'border-[#B3261E] bg-[#B3261E] text-white hover:bg-[#8F3028]'
+                        : stoppingRun
+                          ? 'border-[#B3261E] bg-[#B3261E] text-white hover:bg-[#8F3028]'
+                          : 'border-[#37352F] bg-[#37352F] text-white hover:bg-[#2F3437]'
                       : sendButtonDisabled
                         ? 'border-[#E5E4E0] bg-[#F4F4F2] text-[#B5B3AD]'
                         : 'border-[#37352F] bg-[#37352F] text-white hover:bg-[#2F3437]'
                   }`}
                   data-testid={workbenchSelectors.sendButton}
-                  aria-label={showCancel ? '停止本次运行' : '发送'}
+                  aria-label={
+                    cancelling ? '正在停止本次运行' : stoppingRun ? '停止本次运行' : '发送'
+                  }
                 >
-                  {showCancel ? (
-                    cancelling ? (
-                      <Spin size="small" />
-                    ) : (
-                      <HiStop className="h-3 w-3" />
-                    )
+                  {cancelling ? (
+                    <Spin size="small" />
+                  ) : stoppingRun ? (
+                    <HiStop className="h-3 w-3" />
                   ) : loading ? (
                     <Spin size="small" />
                   ) : (

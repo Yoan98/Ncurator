@@ -542,6 +542,7 @@ export const createDisplayProcessItem = (input: {
   sourceEventType: AssistantProcessGroupItem['sourceEventType']
   existing?: AssistantProcessGroupItem
   terminalReviewState?: AssistantProcessGroupItem['terminalReviewState'] | null
+  terminalReviewDecision?: AssistantProcessGroupItem['terminalReviewDecision'] | null
 }): AssistantProcessGroupItem => {
   const toolName =
     input.display.kind === 'tool' ? normalizeToolName(input.display.toolName) : undefined
@@ -559,6 +560,10 @@ export const createDisplayProcessItem = (input: {
       input.terminalReviewState === null
         ? undefined
         : (input.terminalReviewState ?? input.existing?.terminalReviewState),
+    terminalReviewDecision:
+      input.terminalReviewDecision === null
+        ? undefined
+        : (input.terminalReviewDecision ?? input.existing?.terminalReviewDecision),
     runningText: input.existing?.runningText || getDisplayItemText(input.display, 'running'),
     completedText: input.existing?.completedText || getDisplayItemText(input.display, 'completed'),
     failedText: input.existing?.failedText || getDisplayItemText(input.display, 'failed'),
@@ -812,6 +817,7 @@ const upsertProcessItem = (
     createdAt: number
     sourceEventType: AssistantProcessGroupItem['sourceEventType']
     terminalReviewState?: AssistantProcessGroupItem['terminalReviewState'] | null
+    terminalReviewDecision?: AssistantProcessGroupItem['terminalReviewDecision'] | null
   }
 ): AssistantProcessGroup[] => {
   const groupId = resolveRetryGroupId(current, input.groupId, input.display.kind)
@@ -836,7 +842,8 @@ const upsertProcessItem = (
       createdAt: input.createdAt,
       sourceEventType: input.sourceEventType,
       existing: existingItem,
-      terminalReviewState: input.terminalReviewState
+      terminalReviewState: input.terminalReviewState,
+      terminalReviewDecision: input.terminalReviewDecision
     })
     return {
       ...group,
@@ -904,6 +911,30 @@ const updateTerminalReviewStates = (
     items: group.items.map((item) => {
       const state = states.get(item.id)
       return state ? { ...item, terminalReviewState: state } : item
+    })
+  }))
+
+const updateTerminalReviewResults = (
+  groups: AssistantProcessGroup[],
+  results: ReadonlyMap<
+    string,
+    {
+      state: NonNullable<AssistantProcessGroupItem['terminalReviewState']>
+      decision: NonNullable<AssistantProcessGroupItem['terminalReviewDecision']>
+    }
+  >
+): AssistantProcessGroup[] =>
+  groups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => {
+      const result = results.get(item.id)
+      return result
+        ? {
+            ...item,
+            terminalReviewState: result.state,
+            terminalReviewDecision: result.decision
+          }
+        : item
     })
   }))
 
@@ -982,12 +1013,15 @@ export const reduceAssistantProcessGroups = (
   }
 
   if (event.type === 'terminal_review_resolved') {
-    return updateTerminalReviewStates(
+    return updateTerminalReviewResults(
       current,
       new Map(
         event.decisions.map(({ commandId, decision }) => [
           commandId,
-          decision === 'auto_approve' ? 'ready_to_execute' : 'waiting_approval'
+          {
+            state: decision === 'auto_approve' ? 'ready_to_execute' : 'waiting_approval',
+            decision
+          }
         ])
       )
     )

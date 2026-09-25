@@ -120,6 +120,7 @@ export type AssistantProcessGroupItem = {
   id: string
   status: AssistantProcessStatus
   terminalReviewState?: 'reviewing' | 'ready_to_execute' | 'waiting_approval' | 'not_executed'
+  terminalReviewDecision?: 'auto_approve' | 'needs_human_review'
   runningText: AssistantRichTextSegment[]
   completedText: AssistantRichTextSegment[]
   failedText: AssistantRichTextSegment[]

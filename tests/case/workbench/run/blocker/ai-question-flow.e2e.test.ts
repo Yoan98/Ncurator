@@ -78,9 +78,9 @@ describe('workbench AI question e2e', () => {
             page,
             workbenchSelectors.input
           ).count()
-          const queueSendButtonCountDuringQuestion = await getWorkbenchLocator(
+          const composerSendControlCountDuringQuestion = await getWorkbenchLocator(
             page,
-            workbenchSelectors.queueSendButton
+            workbenchSelectors.sendButton
           ).count()
           const assistanceBadge = getWorkbenchPrefixLocator(
             page,
@@ -255,7 +255,7 @@ describe('workbench AI question e2e', () => {
             guidePlaceholder,
             stopLabel,
             inputCountDuringQuestion,
-            queueSendButtonCountDuringQuestion,
+            composerSendControlCountDuringQuestion,
             assistancePersistedAfterPartnerSwitch,
             questionRestoredAfterPartnerSwitch,
             assistanceRestoredAfterReload,
@@ -265,30 +265,51 @@ describe('workbench AI question e2e', () => {
             questionIds: questions.map((question) => question.id)
           }
         },
-        assert: async (result) => {
+        assert: async (result, runtime) => {
           if (result.questionCount < 1 || result.questionCount > 3) {
             throw new Error(`expected one to three questions, received ${result.questionCount}`)
           }
-          if (
-            !result.assistanceRestoredAfterReload ||
-            !result.assistancePersistedAfterPartnerSwitch ||
-            !result.questionRestoredAfterPartnerSwitch ||
-            !result.assistanceClearedAfterCompletion ||
-            !result.initialCardText.includes(`问题 1 / ${result.questionCount}`) ||
-            result.titleText !== result.firstQuestionText ||
-            result.selectionTypeTagCount !== 0 ||
-            result.positionText !== `问题 1 / ${result.questionCount}` ||
-            !result.positionBox ||
-            !result.previousBox ||
-            result.positionBox.x + result.positionBox.width > result.previousBox.x ||
-            !result.guidePlaceholder.startsWith('告诉') ||
-            !result.guidePlaceholder.endsWith('该怎么做') ||
-            !result.stopLabel.includes('停止本次运行') ||
-            result.inputCountDuringQuestion !== 0 ||
-            result.queueSendButtonCountDuringQuestion !== 0
-          ) {
-            throw new Error('question card did not align with the approval card controls')
-          }
+          await runtime.assertThat(
+            result.assistanceRestoredAfterReload &&
+              result.assistancePersistedAfterPartnerSwitch &&
+              result.questionRestoredAfterPartnerSwitch &&
+              result.assistanceClearedAfterCompletion &&
+              result.initialCardText.includes(`问题 1 / ${result.questionCount}`) &&
+              result.titleText === result.firstQuestionText &&
+              result.selectionTypeTagCount === 0 &&
+              result.positionText === `问题 1 / ${result.questionCount}` &&
+              result.positionBox !== null &&
+              result.previousBox !== null &&
+              result.positionBox.x + result.positionBox.width <= result.previousBox.x &&
+              result.guidePlaceholder.startsWith('告诉') &&
+              result.guidePlaceholder.endsWith('该怎么做') &&
+              result.stopLabel.includes('停止本次运行') &&
+              result.inputCountDuringQuestion === 0 &&
+              result.composerSendControlCountDuringQuestion === 0,
+            {
+              name: 'human-question-card-layout-and-composer-controls',
+              message:
+                '提问时不显示普通输入框或 Composer 发送按钮，交互卡保留其停止按钮；卡片标题、导航和回答区域正确。',
+              data: {
+                assistanceRestoredAfterReload: result.assistanceRestoredAfterReload,
+                assistancePersistedAfterPartnerSwitch: result.assistancePersistedAfterPartnerSwitch,
+                questionRestoredAfterPartnerSwitch: result.questionRestoredAfterPartnerSwitch,
+                assistanceClearedAfterCompletion: result.assistanceClearedAfterCompletion,
+                initialCardText: result.initialCardText,
+                titleText: result.titleText,
+                firstQuestionText: result.firstQuestionText,
+                selectionTypeTagCount: result.selectionTypeTagCount,
+                positionText: result.positionText,
+                positionBox: result.positionBox,
+                previousBox: result.previousBox,
+                guidePlaceholder: result.guidePlaceholder,
+                stopLabel: result.stopLabel,
+                inputCountDuringQuestion: result.inputCountDuringQuestion,
+                composerSendControlCountDuringQuestion:
+                  result.composerSendControlCountDuringQuestion
+              }
+            }
+          )
           const resolvedEvent = result.resolved
           if (resolvedEvent.type !== 'human_interaction_resolved') {
             throw new Error('question resolved event was not recorded')
