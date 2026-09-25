@@ -6,7 +6,11 @@ import type {
 } from '../../../../shared/types'
 import { normalizeThoughtText } from '../../../../shared/thoughtText'
 import { isBrainThinkingOpenInLog } from '../../../../shared/assistantThinkingWait'
-import { createDisplayProcessGroup, createDisplayProcessItem } from './utils'
+import {
+  createDisplayProcessGroup,
+  createDisplayProcessItem,
+  removePendingTerminalReviewItems
+} from './utils'
 import type {
   AssistantProcessGroup,
   AssistantProcessStatus,
@@ -45,6 +49,20 @@ export const projectProcessGroups = (input: {
     groupById.set(group.id, group)
   }
 
+  const setTerminalReviewState = (
+    toolCallId: string,
+    terminalReviewState: NonNullable<AssistantProcessGroup['items'][number]['terminalReviewState']>
+  ): void => {
+    const group = groupById.get(`${input.runId}:tool:${toolCallId}`)
+    if (!group) return
+    upsertGroup({
+      ...group,
+      items: group.items.map((item) =>
+        item.id === toolCallId ? { ...item, terminalReviewState } : item
+      )
+    })
+  }
+
   for (const record of input.records) {
     const entry: ChatMessageLogEntry = record.entry
     if (entry.kind === 'annotation') {
@@ -64,6 +82,49 @@ export const projectProcessGroups = (input: {
             sourceEventType: 'assistant_process_group_started'
           })
         )
+      } else if (entry.eventType === 'terminal_review_started') {
+        const createdAt = resolveCreatedAt(record)
+        for (const commandId of entry.payload.commandIds) {
+          const display: AssistantProcessDisplay = {
+            kind: 'tool',
+            toolName: 'terminal_run',
+            input: toolArgsById.get(commandId) || {}
+          }
+          const item = createDisplayProcessItem({
+            itemId: commandId,
+            display,
+            status: 'running',
+            createdAt,
+            sourceEventType: 'terminal_review_started',
+            terminalReviewState: 'reviewing'
+          })
+          const group = createDisplayProcessGroup({
+            groupId: `${input.runId}:tool:${commandId}`,
+            kind: 'skill',
+            display,
+            status: 'running',
+            createdAt,
+            sourceEventType: 'assistant_process_group_started'
+          })
+          upsertGroup({ ...group, items: [item] })
+        }
+      } else if (entry.eventType === 'terminal_review_resolved') {
+        for (const decision of entry.payload.decisions) {
+          setTerminalReviewState(
+            decision.commandId,
+            decision.decision === 'auto_approve' ? 'ready_to_execute' : 'waiting_approval'
+          )
+        }
+      } else if (entry.eventType === 'approval_batch_resolved') {
+        for (const item of entry.payload.items) {
+          setTerminalReviewState(
+            item.toolCallId,
+            item.action === 'approve' ? 'ready_to_execute' : 'not_executed'
+          )
+        }
+        for (const toolCallId of entry.payload.notExecutedToolCallIds || []) {
+          setTerminalReviewState(toolCallId, 'not_executed')
+        }
       } else if (
         entry.eventType === 'human_interaction_resolved' &&
         entry.payload.kind === 'question'
@@ -126,6 +187,11 @@ export const projectProcessGroups = (input: {
 
     if (entry.kind === 'tool') {
       if (HIDDEN_PROCESS_TOOL_NAMES.has(entry.toolName)) continue
+      const groupId = `${input.runId}:tool:${entry.toolCallId}`
+      const existingGroup = groupById.get(groupId)
+      const existingItem = existingGroup?.items.find(
+        (candidate) => candidate.id === entry.toolCallId
+      )
       const display: AssistantProcessDisplay = {
         kind: 'tool',
         toolName: entry.toolName,
@@ -137,8 +203,11 @@ export const projectProcessGroups = (input: {
         itemId: entry.toolCallId,
         display,
         status,
-        createdAt,
-        sourceEventType: 'assistant_process_item_started'
+        createdAt: existingItem?.createdAt || createdAt,
+        sourceEventType: existingItem?.sourceEventType || 'assistant_process_item_started',
+        existing: existingItem,
+        terminalReviewState:
+          existingItem?.terminalReviewState === 'not_executed' ? 'not_executed' : null
       })
       const interaction =
         entry.toolName === 'ask_user_question'
@@ -157,23 +226,29 @@ export const projectProcessGroups = (input: {
             })()
           : undefined
       const group = createDisplayProcessGroup({
-        groupId: `${input.runId}:tool:${entry.toolCallId}`,
+        groupId,
         kind: 'skill',
         display,
         status,
-        createdAt,
-        sourceEventType: 'assistant_process_group_started'
+        createdAt: existingGroup?.createdAt || createdAt,
+        sourceEventType: existingGroup?.sourceEventType || 'assistant_process_group_started'
       })
-      upsertGroup({ ...group, items: [interaction ? { ...item, interaction } : item] })
+      upsertGroup({
+        ...group,
+        items: [interaction ? { ...item, interaction } : item]
+      })
       if (interaction) pendingQuestionToolCallIds.push(entry.toolCallId)
     }
   }
 
   const processThoughts = thoughts.sort((left, right) => left.createdAt - right.createdAt)
-  const processGroups = orderedGroupIds
+  const projectedGroups = orderedGroupIds
     .map((id) => groupById.get(id))
     .filter((group): group is AssistantProcessGroup => Boolean(group))
     .sort((left, right) => left.createdAt - right.createdAt)
+  const processGroups = input.runFinished
+    ? removePendingTerminalReviewItems(projectedGroups)
+    : projectedGroups
 
   const isBrainThinking = isBrainThinkingOpenInLog(input.records, input.runFinished)
 

@@ -1,8 +1,4 @@
-import type {
-  AiRunEvent,
-  AssistantProcessDisplay,
-  IpcJsonObject
-} from '../../../../shared/types'
+import type { AiRunEvent, AssistantProcessDisplay, IpcJsonObject } from '../../../../shared/types'
 
 type SendEvent = (event: AiRunEvent) => void
 
@@ -88,6 +84,7 @@ export const emitToolProcessStarted = (input: {
   toolCallId: string
   toolName: string
   args: IpcJsonObject
+  terminalReviewState?: 'reviewing' | 'ready_to_execute' | 'waiting_approval' | 'not_executed'
   createdAt?: number
 }): void => {
   const display: AssistantProcessDisplay = {
@@ -109,6 +106,7 @@ export const emitToolProcessStarted = (input: {
     groupId: getToolProcessGroupId(input.runId, input.toolCallId),
     itemId: input.toolCallId,
     display,
+    terminalReviewState: input.terminalReviewState ?? null,
     createdAt: input.createdAt || Date.now()
   })
 }

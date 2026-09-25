@@ -41,9 +41,7 @@ describe('ai tool hand backend', () => {
                   commandId,
                   decision: index === 0 ? 'auto_approve' : 'needs_human_review',
                   reason:
-                    index === 0
-                      ? '该操作范围明确且符合用户诉求。'
-                      : '该操作影响范围需要人工确认。'
+                    index === 0 ? '该操作范围明确且符合用户诉求。' : '该操作影响范围需要人工确认。'
                 }))
               })
             ],
@@ -120,6 +118,18 @@ describe('ai tool hand backend', () => {
           result.events,
           'terminal_step_result'
         )
+        const reviewStartedEvents = filterAiRunEventsByType(
+          result.events,
+          'terminal_review_started'
+        )
+        const reviewResolvedEvents = filterAiRunEventsByType(
+          result.events,
+          'terminal_review_resolved'
+        )
+        const reviewBlockedEvents = filterAiRunEventsByType(
+          result.events,
+          'terminal_review_blocked'
+        )
 
         runtime.assertThat(
           result.output.status === 'completed' &&
@@ -128,6 +138,16 @@ describe('ai tool hand backend', () => {
             approvalDecisionEvents.length === 1 &&
             terminalStepStartedEvents.length === 0 &&
             terminalStepResultEvents.length === 0 &&
+            reviewStartedEvents.length === 1 &&
+            reviewResolvedEvents.length === 1 &&
+            reviewStartedEvents[0].reviewId === reviewResolvedEvents[0].reviewId &&
+            reviewStartedEvents[0].commands.length === 2 &&
+            reviewResolvedEvents[0].decisions.length === 2 &&
+            reviewBlockedEvents.length === 1 &&
+            reviewBlockedEvents[0].toolCallIds.length === 2 &&
+            reviewBlockedEvents[0].toolCallIds.every((id) =>
+              reviewStartedEvents[0].commands.some((command) => command.commandId === id)
+            ) &&
             result.blockedDirExists === false &&
             result.copiedFileExists === false,
           {

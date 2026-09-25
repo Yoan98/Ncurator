@@ -1635,6 +1635,12 @@ type AiRunEventPayload =
       groupId: string
       itemId: string
       display: AssistantProcessDisplay
+      terminalReviewState?:
+        | 'reviewing'
+        | 'ready_to_execute'
+        | 'waiting_approval'
+        | 'not_executed'
+        | null
       createdAt: number
     }
   | {
@@ -1659,6 +1665,32 @@ type AiRunEventPayload =
       runId: string
       thoughtId: string
       text: string
+      createdAt: number
+    }
+  | {
+      type: 'terminal_review_started'
+      runId: string
+      reviewId: string
+      commands: Array<{
+        commandId: string
+        input: IpcJsonObject
+      }>
+      createdAt: number
+    }
+  | {
+      type: 'terminal_review_resolved'
+      runId: string
+      reviewId: string
+      decisions: Array<{
+        commandId: string
+        decision: 'auto_approve' | 'needs_human_review'
+      }>
+      completedAt: number
+    }
+  | {
+      type: 'terminal_review_blocked'
+      runId: string
+      toolCallIds: string[]
       createdAt: number
     }
   | {
@@ -2015,6 +2047,7 @@ export type ChatMessageLogAnnotationEntry =
       eventType: 'approval_batch_resolved'
       payload: {
         batchId: string
+        notExecutedToolCallIds?: string[]
         items: Array<{
           toolCallId: string
           toolName: string
@@ -2023,6 +2056,14 @@ export type ChatMessageLogAnnotationEntry =
           action: 'approve' | 'reject' | 'guide'
           message?: string
         }>
+      }
+    }
+  | {
+      kind: 'annotation'
+      eventType: 'terminal_review_started'
+      payload: {
+        reviewId: string
+        commandIds: string[]
       }
     }
   | {

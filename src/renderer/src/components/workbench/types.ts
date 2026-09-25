@@ -119,6 +119,7 @@ export type AssistantProcessSkillKey =
 export type AssistantProcessGroupItem = {
   id: string
   status: AssistantProcessStatus
+  terminalReviewState?: 'reviewing' | 'ready_to_execute' | 'waiting_approval' | 'not_executed'
   runningText: AssistantRichTextSegment[]
   completedText: AssistantRichTextSegment[]
   failedText: AssistantRichTextSegment[]

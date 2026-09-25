@@ -129,7 +129,7 @@ const buildDeleteScopeConflictRequest = (command: string): string =>
     '维护命令：',
     command,
     '此次清理的目标是只删除目录中的 cache.tmp，并保留 keep.txt。',
-    '完成后说明结果。'
+    '完成后说明结果。若我在后续审批卡拒绝，请立即停止，不要改用替代删除命令，也不要再次询问删除范围。'
   ].join('\n')
 
 const isRunStartedEvent = (
@@ -291,6 +291,31 @@ const waitForScenarioCompletion = async (input: {
   }
 }
 
+type TerminalReviewObserverSnapshot = {
+  activityId: string
+  headerText: string
+  itemIds: string[]
+  itemTexts: string[]
+}
+
+type TerminalReviewObserverState = {
+  snapshots: TerminalReviewObserverSnapshot[]
+  observer?: MutationObserver
+  capture?: () => void
+}
+
+type TerminalReviewObserverWindow = Window & {
+  __terminalReviewObserver?: TerminalReviewObserverState
+}
+
+type TerminalReviewRowSnapshot = {
+  itemId: string
+  state: string | null
+  text: string
+  color: string
+  headerColor: string
+}
+
 const readApprovalWaitingSnapshot = async (
   page: Page
 ): Promise<{
@@ -304,6 +329,7 @@ const readApprovalWaitingSnapshot = async (
   hasAssistanceBadge: boolean
   hasSeparateGuideButton: boolean
   hasGuideInputAndSubmit: boolean
+  pendingTerminalCommandTexts: string[]
 }> => {
   const card = getApprovalCard(page)
   await card.waitFor({ state: 'visible', timeout: 30_000 })
@@ -332,8 +358,78 @@ const readApprovalWaitingSnapshot = async (
     hasSeparateGuideButton: (await card.getByRole('button', { name: /告诉|指导/ }).count()) > 0,
     hasGuideInputAndSubmit:
       (await getWorkbenchLocator(page, chatSelectors.approvalBatchGuideInput).isVisible()) &&
-      (await getWorkbenchLocator(page, chatSelectors.approvalBatchSubmitButton).isVisible())
+      (await getWorkbenchLocator(page, chatSelectors.approvalBatchSubmitButton).isVisible()),
+    pendingTerminalCommandTexts: await processRoot
+      .locator('[data-terminal-review-state="waiting_approval"]')
+      .allTextContents()
   }
+}
+
+const installTerminalReviewObserver = async (page: Page): Promise<void> => {
+  await page.evaluate(() => {
+    const state: TerminalReviewObserverState = { snapshots: [] }
+    const scan = (): void => {
+      const panels = document.querySelectorAll<HTMLElement>('[data-terminal-reviewing="true"]')
+      for (const panel of panels) {
+        const activityId = panel.getAttribute('data-testid')
+        if (!activityId || state.snapshots.some((snapshot) => snapshot.activityId === activityId)) {
+          continue
+        }
+        const items = Array.from(
+          panel.querySelectorAll<HTMLElement>('[data-terminal-review-state="reviewing"]')
+        )
+        state.snapshots.push({
+          activityId,
+          headerText: panel.querySelector(':scope > summary')?.textContent?.trim() || '',
+          itemIds: items.flatMap((item) => {
+            const id = item.getAttribute('data-process-item-id')
+            return id ? [id] : []
+          }),
+          itemTexts: items.map((item) => item.textContent?.trim() || '')
+        })
+      }
+    }
+    state.capture = scan
+    state.observer = new MutationObserver(scan)
+    ;(window as TerminalReviewObserverWindow).__terminalReviewObserver = state
+    state.observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: true
+    })
+    scan()
+  })
+}
+
+const stopTerminalReviewObserver = async (page: Page): Promise<TerminalReviewObserverSnapshot[]> =>
+  page.evaluate(() => {
+    const state = (window as TerminalReviewObserverWindow).__terminalReviewObserver
+    state?.capture?.()
+    state?.observer?.disconnect()
+    return state?.snapshots || []
+  })
+
+const readTerminalReviewRows = async (page: Page): Promise<TerminalReviewRowSnapshot[]> => {
+  const processRoot = await waitForLatestAssistantProcess(page)
+  const processToggle = getWorkbenchPrefixLocator(
+    page,
+    workbenchSelectors.assistantProcessTogglePrefix
+  ).last()
+  if ((await processToggle.getAttribute('aria-expanded')) === 'false') {
+    await processToggle.click()
+  }
+  return await processRoot.locator('[data-process-item-id]').evaluateAll((elements) =>
+    elements.map((element) => ({
+      itemId: element.getAttribute('data-process-item-id') || '',
+      state: element.getAttribute('data-terminal-review-state'),
+      text: element.textContent?.trim() || '',
+      color: getComputedStyle(element).color,
+      headerColor: getComputedStyle(
+        element.closest('details')?.querySelector(':scope > summary > span') || element
+      ).color
+    }))
+  )
 }
 
 const readApprovalReviewedItemTexts = async (page: Page): Promise<string[]> => {
@@ -383,7 +479,13 @@ type TerminalScenarioResult = {
     selectedOptionId: string
   } | null
   approvalWaiting: Awaited<ReturnType<typeof readApprovalWaitingSnapshot>> | null
+  reviewUiObservations: TerminalReviewObserverSnapshot[]
+  reviewStartedCommandIds: string[]
+  reviewResolvedCommandIds: string[]
+  reviewResolvedBeforeFirstExecution: boolean
+  terminalReviewRows: TerminalReviewRowSnapshot[]
   reviewedItemTexts: string[]
+  restoredTerminalReviewRows: TerminalReviewRowSnapshot[]
   restoredReviewedItemTexts: string[]
   terminalCommandsStarted: string[]
   terminalResults: TerminalStepResult[]
@@ -418,7 +520,7 @@ const answerScopeClarification = async (input: {
   const runAsWrittenOption = question.options.find((option) => {
     const optionText = option.id + ' ' + option.label + ' ' + option.description
     return (
-      /原样执行|照原命令|按原命令|按命令字面|run.?as.?given|run.?as.?written|run.?as.?is/iu.test(
+      /原样执行|原样递归删除|照原命令|按原命令|按命令执行|按命令字面|run.?as.?given|run.?as.?written|run.?as.?is/iu.test(
         optionText
       ) && !/备份|backup/iu.test(optionText)
     )
@@ -474,6 +576,7 @@ const answerFullAccessPathQuestion = async (input: {
   runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0]
   page: Page
   runId: string
+  workspaceRoot: string
   event: HumanInteractionRequiredEvent
 }): Promise<string> => {
   if (
@@ -486,16 +589,24 @@ const answerFullAccessPathQuestion = async (input: {
     )
   }
   const question = input.event.interaction.questions[0]
-  if (!question || !/approval-full-access\.txt/iu.test(question.question)) {
+  if (!question) throw new Error('full access path question is missing')
+  const questionEvidence = [
+    question.question,
+    ...question.options.flatMap((option) => [option.label, option.description])
+  ].join('\n')
+  if (!/approval-full-access\.txt/iu.test(questionEvidence)) {
     throw new Error(
       'full access question did not concern the target file path: ' +
         JSON.stringify(input.event.interaction)
     )
   }
+  const workspaceDirectoryName = path.basename(input.workspaceRoot)
   const workspaceOption = question.options.find((option) => {
     const optionText = option.id + ' ' + option.label + ' ' + option.description
     return (
-      /当前工作区|use_workspace/iu.test(optionText) && !/工作区之外|原路径创建/iu.test(optionText)
+      (/当前工作区|use_workspace/iu.test(optionText) ||
+        optionText.includes(workspaceDirectoryName)) &&
+      !/工作区之外|原路径创建/iu.test(optionText)
     )
   })
   if (!workspaceOption) {
@@ -527,6 +638,7 @@ const waitForFullAccessRunCompletion = async (input: {
   runtime: Parameters<typeof collectWorkbenchAiRunEvents>[0]
   page: Page
   runId: string
+  workspaceRoot: string
 }): Promise<void> => {
   const resolvedInteractionIds = new Set<string>()
   const deadline = Date.now() + WORKBENCH_LIVE_AI_E2E_TIMEOUT_MS
@@ -557,6 +669,7 @@ const waitForFullAccessRunCompletion = async (input: {
           runtime: input.runtime,
           page: input.page,
           runId: input.runId,
+          workspaceRoot: input.workspaceRoot,
           event: pendingQuestion
         })
       )
@@ -591,6 +704,7 @@ const runTerminalScenario = async (input: {
 }): Promise<TerminalScenarioResult> => {
   const workspaceBefore = await snapshotWorkspace(input.workspaceRoot)
   const startedAtMs = Date.now()
+  await installTerminalReviewObserver(input.page)
   await sendWorkbenchMessage(input.page, input.userMessage)
   const runStarted = await waitForWorkbenchAiEvent(input.runtime, {
     name: input.name + '_run_started',
@@ -628,6 +742,7 @@ const runTerminalScenario = async (input: {
       resolvedInteractionIds
     )
   }
+  const reviewUiObservations = await stopTerminalReviewObserver(input.page)
   const llmRecords = await collectWorkbenchLlmIoRecords(input.runtime)
   const runLlmRecords = llmRecords.filter((record) => record.runId === runStarted.runId)
   const reviewCallCount = runLlmRecords.filter(
@@ -737,11 +852,39 @@ const runTerminalScenario = async (input: {
   const runEvents = (await collectWorkbenchAiRunEvents(input.runtime)).filter(
     (event) => event.runId === runStarted.runId
   )
+  const reviewStartedEvents = runEvents.filter(
+    (event): event is Extract<AiRunEvent, { type: 'terminal_review_started' }> =>
+      event.type === 'terminal_review_started'
+  )
+  const reviewResolvedEvents = runEvents.filter(
+    (event): event is Extract<AiRunEvent, { type: 'terminal_review_resolved' }> =>
+      event.type === 'terminal_review_resolved'
+  )
+  const reviewedTerminalStepStartedIndex = runEvents.findIndex(
+    (event) =>
+      event.type === 'terminal_step_started' &&
+      reviewStartedEvents.some((review) =>
+        review.commands.some(
+          (command) =>
+            typeof command.input.command === 'string' &&
+            matchesExpectedTerminalCommand(event.command, command.input.command)
+        )
+      )
+  )
+  const reviewStartedIndex = runEvents.findIndex(
+    (event) => event.type === 'terminal_review_started'
+  )
+  const reviewResolvedIndex = runEvents.findIndex(
+    (event) => event.type === 'terminal_review_resolved'
+  )
   const reviewedItemTexts = approvalEvent ? await readApprovalReviewedItemTexts(input.page) : []
+  const terminalReviewRows = await readTerminalReviewRows(input.page)
   let restoredReviewedItemTexts: string[] = []
+  let restoredTerminalReviewRows: TerminalReviewRowSnapshot[] = []
   if (approvalEvent && input.action === 'guide' && !unexpectedApprovalRejected) {
     await input.page.reload()
     await waitForLatestAssistantProcess(input.page)
+    restoredTerminalReviewRows = await readTerminalReviewRows(input.page)
     restoredReviewedItemTexts = await readApprovalReviewedItemTexts(input.page)
   }
   const workspaceAfter = await snapshotWorkspace(input.workspaceRoot)
@@ -774,7 +917,21 @@ const runTerminalScenario = async (input: {
     unexpectedApprovalRejected,
     scopeClarification: scopeClarifications.at(-1) || null,
     approvalWaiting,
+    reviewUiObservations,
+    reviewStartedCommandIds: reviewStartedEvents.flatMap((event) =>
+      event.commands.map((command) => command.commandId)
+    ),
+    reviewResolvedCommandIds: reviewResolvedEvents.flatMap((event) =>
+      event.decisions.map((decision) => decision.commandId)
+    ),
+    reviewResolvedBeforeFirstExecution:
+      reviewStartedIndex >= 0 &&
+      reviewResolvedIndex > reviewStartedIndex &&
+      (reviewedTerminalStepStartedIndex < 0 ||
+        reviewResolvedIndex < reviewedTerminalStepStartedIndex),
+    terminalReviewRows,
     reviewedItemTexts,
+    restoredTerminalReviewRows,
     restoredReviewedItemTexts,
     terminalCommandsStarted: runEvents.flatMap((event) =>
       event.type === 'terminal_step_started' ? [event.command] : []
@@ -1003,7 +1160,8 @@ describe('workbench run e2e', () => {
           await waitForFullAccessRunCompletion({
             runtime,
             page,
-            runId: fullAccessRunStarted.runId
+            runId: fullAccessRunStarted.runId,
+            workspaceRoot
           })
           const fullAccessEvidence = await waitForWorkbenchAiRunCompletion(
             runtime,
@@ -1067,6 +1225,7 @@ describe('workbench run e2e', () => {
             fullAccessFileExists: await exists(fullAccessFile),
             fullAccessFileContents: await readTextIfExists(fullAccessFile),
             fullAccessExpectedCommand: createFileCommand,
+            fullAccessEvents,
             fullAccessTerminalCommandsStarted,
             fullAccessTerminalResults,
             fullAccessHasApprovalEvent: fullAccessEvents.some(isApprovalBatchRequiredEvent),
@@ -1090,6 +1249,7 @@ describe('workbench run e2e', () => {
               snapshot.titleText.length > 0 &&
               snapshot.positionText.startsWith('审批 1 /') &&
               snapshot.waitingText.includes('等待用户处理') &&
+              snapshot.pendingTerminalCommandTexts.some((text) => text.includes('待你确认命令')) &&
               !snapshot.hasBlockerNotice &&
               !snapshot.hasAssistanceBadge &&
               !snapshot.hasSeparateGuideButton &&
@@ -1113,6 +1273,27 @@ describe('workbench run e2e', () => {
               )
             )
           })
+          const reviewLifecycleIsVisibleWithoutDuplicateItems = [
+            ...humanScenarios,
+            result.createScenario
+          ].every((scenario) => {
+            const itemId = scenario.approvalItems[0]?.itemId || scenario.reviewStartedCommandIds[0]
+            const reviewObservation = scenario.reviewUiObservations.find(
+              (snapshot) =>
+                snapshot.headerText.includes('正在审核终端命令') &&
+                Boolean(itemId && snapshot.itemIds.includes(itemId))
+            )
+            const matchingRows = scenario.terminalReviewRows.filter((row) => row.itemId === itemId)
+            return Boolean(
+              itemId &&
+              scenario.reviewResolvedBeforeFirstExecution &&
+              scenario.reviewStartedCommandIds.includes(itemId) &&
+              scenario.reviewResolvedCommandIds.includes(itemId) &&
+              reviewObservation?.itemIds.filter((candidate) => candidate === itemId).length === 1 &&
+              matchingRows.length === 1 &&
+              matchingRows[0]?.headerColor !== 'rgb(179, 38, 30)'
+            )
+          })
           const userDecisionsWereRecorded = humanScenarios.every((scenario) => {
             if (scenario.action === 'auto_approve') return false
             const expectedResult =
@@ -1131,6 +1312,25 @@ describe('workbench run e2e', () => {
               scenario.reviewedItemTexts.some((text) => text.includes(expectedResult)) &&
               (scenario.action !== 'guide' ||
                 scenario.restoredReviewedItemTexts.some((text) => text.includes(expectedResult)))
+            )
+          })
+          const refusedCommandsAreMarkedUnexecuted = [
+            result.rejectScenario,
+            result.guideScenario
+          ].every((scenario) => {
+            const itemId = scenario.approvalItems[0]?.itemId
+            const row = scenario.terminalReviewRows.find((item) => item.itemId === itemId)
+            const restoredRow = scenario.restoredTerminalReviewRows.find(
+              (item) => item.itemId === itemId
+            )
+            return Boolean(
+              row &&
+              row.state === 'not_executed' &&
+              row.text.includes('命令未执行') &&
+              row.color !== 'rgb(179, 38, 30)' &&
+              row.headerColor !== 'rgb(179, 38, 30)' &&
+              (scenario.action !== 'guide' ||
+                (restoredRow?.state === 'not_executed' && restoredRow.text.includes('命令未执行')))
             )
           })
           const hasSuccessfulTerminalResult = (
@@ -1236,8 +1436,10 @@ describe('workbench run e2e', () => {
               result.queryChangedWorkspacePaths.length === 0 &&
               createScenarioAutoApproved &&
               everyDeleteCommandWasSentForReview &&
+              reviewLifecycleIsVisibleWithoutDuplicateItems &&
               approvalCardsAreWellFormed &&
               userDecisionsWereRecorded &&
+              refusedCommandsAreMarkedUnexecuted &&
               !result.approvePermissionScenario.unexpectedApprovalRejected &&
               !result.rejectScenario.unexpectedApprovalRejected &&
               !result.guideScenario.unexpectedApprovalRejected &&
@@ -1261,6 +1463,11 @@ describe('workbench run e2e', () => {
               !result.fullAccessHasApprovalEvent &&
               !result.fullAccessApprovalCardVisible &&
               result.fullAccessReviewCallCount === 0 &&
+              result.fullAccessEvents.every(
+                (event) =>
+                  event.type !== 'terminal_review_started' &&
+                  event.type !== 'terminal_review_resolved'
+              ) &&
               result.composerPermissionAfterFullAccessSend.includes('审核'),
             {
               name: 'workbench-terminal-review-real-multi-run-flows',

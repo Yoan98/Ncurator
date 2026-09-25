@@ -12,7 +12,7 @@ import {
 const isWindows = process.platform === 'win32'
 
 const createDirectoryCommand = (directory: string): string =>
-  isWindows ? `New-Item -ItemType Directory -LiteralPath "${directory}"` : `mkdir "${directory}"`
+  isWindows ? `New-Item -ItemType Directory -Path "${directory}"` : `mkdir "${directory}"`
 
 const complete = buildCompleteTaskDecision({
   summary: '终端审核流程结束。',
@@ -66,7 +66,8 @@ describe('ai tool hand terminal review', () => {
           reviewCount: records.filter(
             (record) =>
               record.entry.kind === 'annotation' &&
-              record.entry.eventType === 'terminal_review_resolved'
+              (record.entry.eventType === 'terminal_review_started' ||
+                record.entry.eventType === 'terminal_review_resolved')
           ).length,
           events: runtime.eventCollector.snapshot()
         }
@@ -75,6 +76,8 @@ describe('ai tool hand terminal review', () => {
         runtime.assertThat(
           result.output.status === 'completed' &&
             result.reviewCount === 0 &&
+            filterAiRunEventsByType(result.events, 'terminal_review_started').length === 0 &&
+            filterAiRunEventsByType(result.events, 'terminal_review_resolved').length === 0 &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 0 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 1,
           {
@@ -147,6 +150,16 @@ describe('ai tool hand terminal review', () => {
           userInput: '请创建 ai-approved-dir 目录。'
         })
         const records = await runner.ctx.loadMessageLog()
+        const reviewStarted = records.filter(
+          (record) =>
+            record.entry.kind === 'annotation' &&
+            record.entry.eventType === 'terminal_review_started'
+        )
+        const reviewResolved = records.filter(
+          (record) =>
+            record.entry.kind === 'annotation' &&
+            record.entry.eventType === 'terminal_review_resolved'
+        )
         const reviewDecisions = records.flatMap((record) => {
           const { entry } = record
           return entry.kind === 'annotation' && entry.eventType === 'terminal_review_resolved'
@@ -163,6 +176,8 @@ describe('ai tool hand terminal review', () => {
           reviewRequests,
           reviewSystems,
           reviewDecisions,
+          reviewStarted,
+          reviewResolved,
           reviews: records
             .map((record) => record.entry)
             .filter(
@@ -173,6 +188,15 @@ describe('ai tool hand terminal review', () => {
         }
       },
       assert: async (result, runtime) => {
+        const reviewStartedEvents = filterAiRunEventsByType(
+          result.events,
+          'terminal_review_started'
+        )
+        const reviewResolvedEvents = filterAiRunEventsByType(
+          result.events,
+          'terminal_review_resolved'
+        )
+        const toolStartedEvents = filterAiRunEventsByType(result.events, 'tool_call_started')
         runtime.assertThat(
           result.output.status === 'completed' &&
             result.exists &&
@@ -181,9 +205,7 @@ describe('ai tool hand terminal review', () => {
             result.reviewRequests[0].includes('命令 ID：') &&
             result.reviewRequests[0].includes('用途说明：') &&
             result.reviewRequests[0].includes(result.command) &&
-            result.reviewRequests[0].includes(
-              `用户默认工作区目录：\n- ${runtime.workspaceRoot}`
-            ) &&
+            result.reviewRequests[0].includes(`用户默认工作区目录：\n- ${runtime.workspaceRoot}`) &&
             result.reviewRequests[0].includes('终端默认启动目录：') &&
             !result.reviewRequests[0].includes('执行目录：') &&
             (result.reviewRequests[0].includes('平台：Windows') ||
@@ -203,6 +225,21 @@ describe('ai tool hand terminal review', () => {
             result.reviewDecisions[0].decision === 'auto_approve' &&
             result.reviewDecisions[0].reason === '用户授权创建指定目录，操作范围清楚。' &&
             result.reviews.length === 1 &&
+            result.reviewStarted.length === 1 &&
+            result.reviewResolved.length === 1 &&
+            result.reviewStarted[0].seq < result.reviewResolved[0].seq &&
+            result.reviewStarted[0].entry.kind === 'annotation' &&
+            result.reviewStarted[0].entry.eventType === 'terminal_review_started' &&
+            result.reviewResolved[0].entry.kind === 'annotation' &&
+            result.reviewResolved[0].entry.eventType === 'terminal_review_resolved' &&
+            result.reviewStarted[0].entry.payload.commandIds.join(',') ===
+              result.reviewResolved[0].entry.payload.decisions
+                .map((item) => item.commandId)
+                .join(',') &&
+            reviewStartedEvents.length === 1 &&
+            reviewResolvedEvents.length === 1 &&
+            reviewStartedEvents[0].reviewId === reviewResolvedEvents[0].reviewId &&
+            reviewStartedEvents[0].commands[0]?.commandId === toolStartedEvents[0]?.toolCallId &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 0 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 1,
           {
@@ -277,6 +314,12 @@ describe('ai tool hand terminal review', () => {
             !result.exists &&
             result.reviewDecisions.length === 1 &&
             result.reviewDecisions[0].reason.includes('审核未能提供有效判定') &&
+            filterAiRunEventsByType(result.events, 'terminal_review_started').length === 1 &&
+            filterAiRunEventsByType(result.events, 'terminal_review_resolved').length === 1 &&
+            filterAiRunEventsByType(result.events, 'terminal_review_started')[0].commands[0]
+              ?.commandId ===
+              filterAiRunEventsByType(result.events, 'terminal_review_resolved')[0].decisions[0]
+                ?.commandId &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 1 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 0,
           {
@@ -357,6 +400,12 @@ describe('ai tool hand terminal review', () => {
             !result.exists &&
             result.reviewDecisions.length === 1 &&
             result.reviewDecisions[0].reason.includes('审核未能提供有效判定') &&
+            filterAiRunEventsByType(result.events, 'terminal_review_started').length === 1 &&
+            filterAiRunEventsByType(result.events, 'terminal_review_resolved').length === 1 &&
+            filterAiRunEventsByType(result.events, 'terminal_review_started')[0].commands[0]
+              ?.commandId ===
+              filterAiRunEventsByType(result.events, 'terminal_review_resolved')[0].decisions[0]
+                ?.commandId &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 1 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 0,
           {
@@ -446,6 +495,8 @@ describe('ai tool hand terminal review', () => {
           result.output.status === 'completed' &&
             result.exists &&
             result.reviewCount === 0 &&
+            filterAiRunEventsByType(result.events, 'terminal_review_started').length === 0 &&
+            filterAiRunEventsByType(result.events, 'terminal_review_resolved').length === 0 &&
             filterAiRunEventsByType(result.events, 'approval_batch_required').length === 0 &&
             filterAiRunEventsByType(result.events, 'terminal_step_started').length === 2,
           {

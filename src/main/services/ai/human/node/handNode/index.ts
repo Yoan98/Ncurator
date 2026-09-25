@@ -18,6 +18,7 @@ import { returnToBrainAfterTrace, returnToDispatch } from '../utils/stateTransit
 import { appendLogEntriesToCache } from '../../memory/conversationLogMessages'
 import {
   buildTerminalReviewAnnotation,
+  buildTerminalReviewStartedAnnotation,
   reviewTerminalCommands,
   type TerminalReviewCandidate
 } from './terminalReview'
@@ -89,6 +90,7 @@ const executeHandCalls = async (input: {
         cache: input.cache,
         taskId: input.taskId,
         learnedSkillIds: input.learnedSkillIds,
+        toolCallId: toolCall.toolCallId,
         toolName: toolCall.toolName,
         args: toolCall.args
       })
@@ -168,6 +170,7 @@ const buildApprovalBlockedToolMessage = (input: {
 const buildApprovalBatchResolvedAnnotation = (input: {
   batchId: string
   decisions: Array<{ itemId: string; action: 'approve' | 'reject' | 'guide'; message?: string }>
+  notExecutedToolCallIds?: string[]
   approvalItems: Array<{
     itemId: string
     toolName: string
@@ -181,6 +184,7 @@ const buildApprovalBatchResolvedAnnotation = (input: {
     eventType: 'approval_batch_resolved',
     payload: {
       batchId: input.batchId,
+      notExecutedToolCallIds: input.notExecutedToolCallIds,
       items: input.approvalItems.map((item) => {
         const decision = decisionByItemId.get(item.itemId)
         return {
@@ -223,7 +227,8 @@ const appendBlockedApprovalToolMessages = (input: {
       runId: input.ctx.runId,
       toolCallId: call.toolCallId,
       toolName: call.toolName,
-      args: call.args
+      args: call.args,
+      terminalReviewState: isTerminalRunCall(call.toolName) ? 'not_executed' : undefined
     })
     emitToolProcessCompleted({
       sendEvent: input.ctx.sendEvent,
@@ -296,6 +301,20 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
     let approvalItems: typeof reviewCandidates = []
     if (reviewCandidates.length > 0) {
       const reviewId = randomUUID()
+      const reviewStartedAt = Date.now()
+      await input.ctx.appendMessageLog([
+        buildTerminalReviewStartedAnnotation({ reviewId, commands: reviewCandidates })
+      ])
+      input.ctx.sendEvent({
+        type: 'terminal_review_started',
+        runId: input.ctx.runId,
+        reviewId,
+        commands: reviewCandidates.map((candidate) => ({
+          commandId: candidate.commandId,
+          input: calls.find((call) => call.toolCallId === candidate.commandId)?.args || {}
+        })),
+        createdAt: reviewStartedAt
+      })
       const reviewResult = await reviewTerminalCommands({
         ctx: input.ctx,
         taskId: state.task.taskId,
@@ -305,6 +324,16 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       await input.ctx.appendMessageLog([
         buildTerminalReviewAnnotation({ reviewId, result: reviewResult })
       ])
+      input.ctx.sendEvent({
+        type: 'terminal_review_resolved',
+        runId: input.ctx.runId,
+        reviewId,
+        decisions: reviewResult.decisions.map(({ commandId, decision }) => ({
+          commandId,
+          decision
+        })),
+        completedAt: Date.now()
+      })
       const decisionById = new Map(
         reviewResult.decisions.map((decision) => [decision.commandId, decision])
       )
@@ -330,10 +359,14 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
       const allApproved = approvalBatchResult.decisions.every(
         (decision) => decision.action === 'approve'
       )
+      const notExecutedToolCallIds = allApproved
+        ? undefined
+        : calls.filter((call) => isTerminalRunCall(call.toolName)).map((call) => call.toolCallId)
       const approvalResolvedAnnotation = buildApprovalBatchResolvedAnnotation({
         batchId,
         decisions: approvalBatchResult.decisions,
-        approvalItems
+        approvalItems,
+        notExecutedToolCallIds
       })
       if (!allApproved) {
         const blockedTranscriptEntries = appendBlockedApprovalToolMessages({
@@ -344,6 +377,14 @@ export const createHandNode = (input: { ctx: AiRunContext; cache: HumanRuntimeCa
           approvalItems
         })
         await input.ctx.appendMessageLog([approvalResolvedAnnotation, ...blockedTranscriptEntries])
+        if (notExecutedToolCallIds?.length) {
+          input.ctx.sendEvent({
+            type: 'terminal_review_blocked',
+            runId: input.ctx.runId,
+            toolCallIds: notExecutedToolCallIds,
+            createdAt: Date.now()
+          })
+        }
         input.cache.toolCallCount += calls.length
         return returnToDispatch(state)
       }

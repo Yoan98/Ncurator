@@ -39,7 +39,6 @@ import { workbenchSelectors } from '../../testing/selectors'
 import {
   buildAssistantExecutionSummaryText,
   resolveAssistantExecutionIcon,
-  resolveAssistantExecutionStatus,
   resolveQuestionInteraction,
   shouldShowAssistantApplyTargets,
   isAssistantActivityToolGroup
@@ -146,6 +145,23 @@ const getItemText = (item: AssistantProcessGroup['items'][number]): AssistantRic
   if (item.status === 'failed') return item.failedText
   if (item.status === 'partial_failed') return item.partialFailedText
   return item.runningText
+}
+
+const getActivityItemText = (
+  item: AssistantProcessGroup['items'][number]
+): AssistantRichTextSegment[] => {
+  if (item.toolName !== 'terminal_run' || !item.terminalReviewState) return getItemText(item)
+  const prefix = {
+    reviewing: '正在审核命令 ',
+    ready_to_execute: '审核通过，准备执行命令 ',
+    waiting_approval: '待你确认命令 ',
+    not_executed: '命令未执行 '
+  }[item.terminalReviewState]
+  const commandSegments = item.runningText.slice(1)
+  return [
+    { text: prefix },
+    ...(commandSegments.length > 0 ? commandSegments : [{ text: '终端命令' }])
+  ]
 }
 
 const formatRunDuration = (startedAt: number, finishedAt: number): string => {
@@ -430,9 +446,12 @@ const AssistantActivityItemView: React.FC<{
   review?: AssistantApprovalReview
   onPreviewImage?: (image: ImageLightboxImage) => void
 }> = ({ item, review, onPreviewImage }) => {
-  const failed = item.status === 'failed' || item.status === 'partial_failed'
+  const failed =
+    (item.status === 'failed' || item.status === 'partial_failed') &&
+    item.terminalReviewState !== 'not_executed'
   const interaction = resolveQuestionInteraction(item)
-  const toolText = getItemText(item)
+  const toolText = getActivityItemText(item)
+  const toolTextShimmer = item.terminalReviewState === 'reviewing'
   const readImagePaths = item.toolName === 'read_image' ? readImagePathsFromInput(item.input) : []
   const thumbs =
     readImagePaths.length > 0 ? (
@@ -441,8 +460,13 @@ const AssistantActivityItemView: React.FC<{
 
   if (!review) {
     return (
-      <div className={failed ? 'text-[#B3261E]' : undefined}>
-        {renderSegments(toolText)}
+      <div
+        data-process-item-id={item.id}
+        data-process-item-status={item.status}
+        data-terminal-review-state={item.terminalReviewState}
+        className={failed ? 'text-[#B3261E]' : undefined}
+      >
+        {renderSegments(toolText, { shimmer: toolTextShimmer })}
         {interaction ? <InteractionResultView interaction={interaction} /> : null}
         {thumbs}
       </div>
@@ -452,9 +476,14 @@ const AssistantActivityItemView: React.FC<{
   return (
     <div
       data-testid={workbenchSelectors.assistantApprovalReviewedItem}
+      data-process-item-id={item.id}
+      data-process-item-status={item.status}
+      data-terminal-review-state={item.terminalReviewState}
       className={failed ? 'text-[#B3261E]' : undefined}
     >
-      <div className="min-w-0 leading-[22px]">{renderSegments(toolText)}</div>
+      <div className="min-w-0 leading-[22px]">
+        {renderSegments(toolText, { shimmer: toolTextShimmer })}
+      </div>
       <div className="mt-1 text-xs text-[#787774]">
         审核结果：
         {review.action === 'approve'
@@ -505,41 +534,60 @@ const AssistantActivityGroupView: React.FC<{
   approvalReviews = [],
   onPreviewImage
 }) => {
-  const status = resolveAssistantExecutionStatus(groups)
   const items = groups
     .flatMap((group) => group.items)
     .sort((left, right) => left.createdAt - right.createdAt)
+  const reviewingCount = items.filter((item) => item.terminalReviewState === 'reviewing').length
+  const onlyNotExecutedTerminalItems =
+    items.length > 0 &&
+    items.every(
+      (item) => item.terminalReviewState === 'not_executed' && item.toolName === 'terminal_run'
+    )
+  const summaryGroups = groups
+    .map((group) => ({
+      id: group.id,
+      skillKey: group.skillKey,
+      status: group.status,
+      items: group.items
+        .filter((item) => item.terminalReviewState !== 'not_executed')
+        .map((item) => ({
+          toolName: item.toolName,
+          targetLabel: item.targetLabel,
+          input: item.input,
+          status: item.status,
+          runningText: item.runningText,
+          completedText: item.completedText,
+          failedText: item.failedText,
+          partialFailedText: item.partialFailedText,
+          headerShortText: item.headerShortText
+        }))
+    }))
+    .filter((group) => group.items.length > 0)
   const waitingUser = waitingApproval || waitingInteraction
   const summaryText = waitingApproval
     ? WAITING_APPROVAL_SUMMARY
     : waitingInteraction
       ? WAITING_INTERACTION_SUMMARY
-      : buildAssistantExecutionSummaryText(
-        groups.map((group) => ({
-          id: group.id,
-          skillKey: group.skillKey,
-          status: group.status,
-          items: group.items.map((item) => ({
-            toolName: item.toolName,
-            targetLabel: item.targetLabel,
-            input: item.input,
-            status: item.status,
-            runningText: item.runningText,
-            completedText: item.completedText,
-            failedText: item.failedText,
-            partialFailedText: item.partialFailedText,
-            headerShortText: item.headerShortText
-          }))
-        }))
-      )
-  const iconKind = waitingUser ? 'terminal' : resolveAssistantExecutionIcon(groups)
-  const headerShimmer = waitingUser || shimmerActive
+      : reviewingCount > 0
+        ? [
+            {
+              text:
+                reviewingCount === 1 ? '正在审核终端命令' : `正在审核 ${reviewingCount} 条终端命令`
+            }
+          ]
+        : onlyNotExecutedTerminalItems
+          ? [{ text: '命令未执行' }]
+          : buildAssistantExecutionSummaryText(summaryGroups)
+  const iconKind =
+    waitingUser || reviewingCount > 0 ? 'terminal' : resolveAssistantExecutionIcon(groups)
+  const headerShimmer = waitingUser || reviewingCount > 0 || shimmerActive
   return (
     <details
       className="group/execution"
       data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${id}`}
       data-approval-waiting={waitingApproval ? 'true' : undefined}
       data-interaction-waiting={waitingInteraction ? 'true' : undefined}
+      data-terminal-reviewing={reviewingCount > 0 ? 'true' : undefined}
     >
       <summary
         className={`flex list-none items-center rounded-[8px] outline-none [&::-webkit-details-marker]:hidden ${
@@ -549,11 +597,7 @@ const AssistantActivityGroupView: React.FC<{
       >
         <span
           className={`inline-flex min-w-0 max-w-full items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
-            !waitingUser && (status === 'failed' || status === 'partial_failed')
-              ? 'text-[#B3261E]'
-              : headerShimmer
-                ? 'text-[#37352F]'
-                : 'text-[#9B9A97] group-hover/execution:text-[#37352F]'
+            headerShimmer ? 'text-[#37352F]' : 'text-[#9B9A97] group-hover/execution:text-[#37352F]'
           }`}
         >
           <LayerIcon iconKind={iconKind} />
@@ -630,7 +674,8 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
   })
   /** 运行未结束且尚无最终回答时预留固定行高，避免「让俺想想」显隐把页面顶抖 */
   const reserveThinkingSlot =
-    showThinkingIndicator || (!turn?.runFinished && !turn?.waitingApproval && !turn?.waitingInteraction && !hasFinalAnswer)
+    showThinkingIndicator ||
+    (!turn?.runFinished && !turn?.waitingApproval && !turn?.waitingInteraction && !hasFinalAnswer)
   const timeline = useMemo(
     () =>
       buildAssistantTimeline({

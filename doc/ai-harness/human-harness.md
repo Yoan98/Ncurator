@@ -141,6 +141,7 @@ append-only 伙伴消息转录；模型上下文、UI、resume 均由此投影�
 | `compaction_checkpoint` | `{ compactBlockId, throughSeq, sourceMessageCount, summary }` | 压缩书签 + 摘要正文；`seq <= historyFloorSeq` 的原文不再进 brain；发给主模型时再合成 Compact User |
 | `finalizing_started` | `{}` | 投影时**清空** plan |
 | `human_interaction_resolved` | `{ interactionId, kind, result }` | UI Activity：在对应工具行下按顺序展示问题答案或审批结果 |
+| `terminal_review_started` | `{ reviewId, commandIds }` | 持久化 AI 终端审核开始；用 assistant toolCalls 中的同一 `toolCallId` 在 Activity 显示审核中 |
 | `terminal_review_resolved` | `{ reviewId, decisions: [{ commandId, decision, reason }] }` | `terminal_run` 副作用命中后的 AI 审核结论；reason 记录逐项判断依据，命令编号对应 hand 批次中的 toolCallId |
 
 #### `entry_json` 示例
@@ -495,6 +496,7 @@ UI **不读** `ai_run.partial_answer` 作历史；对话与过程均从 log 投�
 |----------|-----------|
 | `thinking_started` … `thinking_completed` 之间的 `assistant` | Thought 文本流（`processThoughts`） |
 | `compaction_checkpoint` | compaction 组（单独成行） |
+| `terminal_review_started` / `terminal_review_resolved` | 在审核结果出现前建立或更新同一 `terminal_run` Activity 项；以 `toolCallId` 与 assistant toolCalls、后续工具结果关联。未结束的审核状态刷新后仍显示；reason 不投影到 UI |
 | `tool`（排除 `update_plan`；**含** `learn_skill`） | tool 组；展示 toolName + 入参 snapshot；两次 Thought 之间在 UI 合并为 Activity 面板 |
 | `plan_updated` | 计划条（非过程组；run snapshot 扫描 annotation） |
 | `finalizing_started` | 清空计划条（不渲染过程层） |

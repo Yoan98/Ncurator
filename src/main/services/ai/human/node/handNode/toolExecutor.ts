@@ -8,7 +8,7 @@ import { resolveToolResultErrorText } from '../../shared/toolResultRenderers'
 import { findEffectiveSkillIdByToolName, getEffectiveLearnedSkillIds } from '../../skills'
 import type { HumanRuntimeCache, RuntimeSkillId, ToolCallResult } from '../../types'
 import { withToolLifecycle } from '../../tools/utils/lifecycle'
-import { createToolEventEmitter } from '../../tools/utils/toolEvents'
+import { createToolEventEmitter, withActiveToolCall } from '../../tools/utils/toolEvents'
 import { isCancelledError } from '../../../utils/runFailure'
 
 const findTool = (input: {
@@ -185,6 +185,7 @@ export const executeToolCall = async (input: {
   cache: HumanRuntimeCache
   taskId: string
   learnedSkillIds: RuntimeSkillId[]
+  toolCallId: string
   toolName: string
   args: Record<string, JsonValue>
 }): Promise<ToolCallResult> => {
@@ -192,6 +193,7 @@ export const executeToolCall = async (input: {
     ctx: input.ctx,
     runId: input.ctx.runId,
     taskId: input.taskId,
+    toolCallId: input.toolCallId,
     stage: 'human_hand'
   })
   const matchedSkillId = findEffectiveSkillIdByToolName({
@@ -240,7 +242,10 @@ export const executeToolCall = async (input: {
         try {
           const result = normalizeToolCallResult(
             input.toolName,
-            (await tool.invoke(input.args)) as JsonValue
+            (await withActiveToolCall(
+              { toolName: input.toolName, toolCallId: input.toolCallId },
+              () => tool.invoke(input.args)
+            )) as JsonValue
           )
           if (result.ok) session.succeed(undefined, result)
           else session.fail(resolveToolResultErrorText(result), undefined, result)
@@ -259,7 +264,10 @@ export const executeToolCall = async (input: {
   }
 
   try {
-    const result = await tool.invoke(input.args)
+    const result = await withActiveToolCall(
+      { toolName: input.toolName, toolCallId: input.toolCallId },
+      () => tool.invoke(input.args)
+    )
     return normalizeToolCallResult(input.toolName, result as JsonValue)
   } catch (error) {
     if (isCancelledError(error)) throw error

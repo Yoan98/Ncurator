@@ -1,8 +1,6 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
-import type {
-  AiToolCallResult,
-  IpcJsonObject
-} from '../../../../../../shared/types'
+import type { AiToolCallResult, IpcJsonObject } from '../../../../../../shared/types'
 import type { AiEventDispatchContext } from '../../../types'
 import { emitToolProcessCompleted, emitToolProcessStarted } from '../../../events/processEvents'
 
@@ -10,6 +8,22 @@ type DraftRef = {
   draftSnapshotId: string
   sourcePath?: string
   format: 'docx'
+}
+
+type ActiveToolCallContext = {
+  toolName: string
+  toolCallId: string
+}
+
+const activeToolCallContext = new AsyncLocalStorage<ActiveToolCallContext>()
+
+export const withActiveToolCall = <T>(context: ActiveToolCallContext, execute: () => T): T =>
+  activeToolCallContext.run(context, execute)
+
+const resolveToolCallId = (toolName: string, toolCallId?: string): string | undefined => {
+  if (toolCallId) return toolCallId
+  const activeCall = activeToolCallContext.getStore()
+  return activeCall?.toolName === toolName ? activeCall.toolCallId : undefined
 }
 
 export const emitToolCallStarted = (input: {
@@ -86,6 +100,7 @@ export const createToolEventEmitter = (input: {
   ctx: AiEventDispatchContext
   runId: string
   taskId?: string
+  toolCallId?: string
   stage?: 'human_hand' | 'human_learning' | 'human_plan'
   resolveDraftRef?: (draftDocId: string) => DraftRef | undefined
 }) => ({
@@ -96,6 +111,7 @@ export const createToolEventEmitter = (input: {
       taskId: input.taskId,
       toolName,
       args,
+      toolCallId: resolveToolCallId(toolName, input.toolCallId),
       stage: input.stage
     }),
   emitResult: (params: {

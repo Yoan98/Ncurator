@@ -21,6 +21,18 @@ export type TerminalReviewResult = {
   decisions: TerminalReviewDecision[]
 }
 
+export const buildTerminalReviewStartedAnnotation = (input: {
+  reviewId: string
+  commands: readonly TerminalReviewCandidate[]
+}): ChatMessageLogEntry => ({
+  kind: 'annotation',
+  eventType: 'terminal_review_started',
+  payload: {
+    reviewId: input.reviewId,
+    commandIds: input.commands.map((command) => command.commandId)
+  }
+})
+
 const MAX_OUTPUT_RETRIES = 3
 
 const reviewSchema = z

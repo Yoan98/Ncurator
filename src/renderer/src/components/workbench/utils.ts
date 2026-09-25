@@ -541,6 +541,7 @@ export const createDisplayProcessItem = (input: {
   createdAt: number
   sourceEventType: AssistantProcessGroupItem['sourceEventType']
   existing?: AssistantProcessGroupItem
+  terminalReviewState?: AssistantProcessGroupItem['terminalReviewState'] | null
 }): AssistantProcessGroupItem => {
   const toolName =
     input.display.kind === 'tool' ? normalizeToolName(input.display.toolName) : undefined
@@ -554,6 +555,10 @@ export const createDisplayProcessItem = (input: {
   return {
     id: input.itemId,
     status: input.status,
+    terminalReviewState:
+      input.terminalReviewState === null
+        ? undefined
+        : (input.terminalReviewState ?? input.existing?.terminalReviewState),
     runningText: input.existing?.runningText || getDisplayItemText(input.display, 'running'),
     completedText: input.existing?.completedText || getDisplayItemText(input.display, 'completed'),
     failedText: input.existing?.failedText || getDisplayItemText(input.display, 'failed'),
@@ -806,6 +811,7 @@ const upsertProcessItem = (
     status: AssistantProcessStatus
     createdAt: number
     sourceEventType: AssistantProcessGroupItem['sourceEventType']
+    terminalReviewState?: AssistantProcessGroupItem['terminalReviewState'] | null
   }
 ): AssistantProcessGroup[] => {
   const groupId = resolveRetryGroupId(current, input.groupId, input.display.kind)
@@ -829,7 +835,8 @@ const upsertProcessItem = (
       status: input.status,
       createdAt: input.createdAt,
       sourceEventType: input.sourceEventType,
-      existing: existingItem
+      existing: existingItem,
+      terminalReviewState: input.terminalReviewState
     })
     return {
       ...group,
@@ -888,6 +895,34 @@ const completeProcessItem = (
     }
   )
 
+const updateTerminalReviewStates = (
+  groups: AssistantProcessGroup[],
+  states: ReadonlyMap<string, NonNullable<AssistantProcessGroupItem['terminalReviewState']>>
+): AssistantProcessGroup[] =>
+  groups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => {
+      const state = states.get(item.id)
+      return state ? { ...item, terminalReviewState: state } : item
+    })
+  }))
+
+export const removePendingTerminalReviewItems = (
+  groups: AssistantProcessGroup[]
+): AssistantProcessGroup[] =>
+  groups.flatMap((group) => {
+    const items = group.items.filter(
+      (item) =>
+        item.terminalReviewState !== 'reviewing' &&
+        item.terminalReviewState !== 'ready_to_execute' &&
+        item.terminalReviewState !== 'waiting_approval'
+    )
+    if (items.length === 0 && group.items.length > 0) return []
+    return items.length === group.items.length
+      ? [group]
+      : [{ ...group, items, status: resolveGroupStatus(items) }]
+  })
+
 export const reduceAssistantProcessGroups = (
   current: AssistantProcessGroup[],
   event: AiRunEvent
@@ -925,6 +960,56 @@ export const reduceAssistantProcessGroups = (
 
   if (event.type === 'assistant_process_thought') {
     return withoutThinkingGroups(current)
+  }
+
+  if (event.type === 'terminal_review_started') {
+    return event.commands.reduce((groups, command) => {
+      const display: AssistantProcessDisplay = {
+        kind: 'tool',
+        toolName: 'terminal_run',
+        input: command.input
+      }
+      return upsertProcessItem(groups, {
+        groupId: `${event.runId}:tool:${command.commandId}`,
+        itemId: command.commandId,
+        display,
+        status: 'running',
+        createdAt: event.createdAt,
+        sourceEventType: event.type,
+        terminalReviewState: 'reviewing'
+      })
+    }, current)
+  }
+
+  if (event.type === 'terminal_review_resolved') {
+    return updateTerminalReviewStates(
+      current,
+      new Map(
+        event.decisions.map(({ commandId, decision }) => [
+          commandId,
+          decision === 'auto_approve' ? 'ready_to_execute' : 'waiting_approval'
+        ])
+      )
+    )
+  }
+
+  if (event.type === 'terminal_review_blocked') {
+    return updateTerminalReviewStates(
+      current,
+      new Map(event.toolCallIds.map((toolCallId) => [toolCallId, 'not_executed']))
+    )
+  }
+
+  if (event.type === 'approval_batch_decision') {
+    return updateTerminalReviewStates(
+      current,
+      new Map(
+        event.decisions.map(({ itemId, action }) => [
+          itemId,
+          action === 'approve' ? 'ready_to_execute' : 'not_executed'
+        ])
+      )
+    )
   }
 
   if (event.type === 'assistant_process_group_started') {
@@ -977,7 +1062,8 @@ export const reduceAssistantProcessGroups = (
       display: event.display,
       status: 'running',
       createdAt: event.createdAt,
-      sourceEventType: event.type
+      sourceEventType: event.type,
+      terminalReviewState: event.terminalReviewState
     })
   }
 
@@ -1005,11 +1091,11 @@ export const reduceAssistantProcessGroups = (
   }
 
   if (event.type === 'run_failed') {
-    return completeAssistantProcessGroups(current, 'failed')
+    return removePendingTerminalReviewItems(completeAssistantProcessGroups(current, 'failed'))
   }
 
   if (event.type === 'run_cancelled') {
-    return completeAssistantProcessGroups(current)
+    return removePendingTerminalReviewItems(completeAssistantProcessGroups(current))
   }
 
   return current

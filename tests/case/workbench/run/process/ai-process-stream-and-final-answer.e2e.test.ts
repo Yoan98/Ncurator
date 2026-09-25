@@ -1,4 +1,5 @@
 import { describe, it } from 'vitest'
+import path from 'node:path'
 import type { Page } from 'playwright'
 import { runE2ECase } from '../../../../harness/e2e/run-e2e-case'
 import {
@@ -22,6 +23,8 @@ const PROMPT =
 type ActivityPanelSnapshot = {
   summaryText: string
   itemTexts: string[]
+  headerColor: string
+  failedItemColors: string[]
   hasChevronAffordances: boolean
   summaryTruncates: boolean
 }
@@ -77,16 +80,28 @@ const collectProcessRenderSnapshot = async (page: Page): Promise<ProcessRenderSn
       })
     }
     const summaryText = ((await block.locator(':scope > summary').textContent()) || '').trim()
+    const headerColor = await block
+      .locator(':scope > summary > span')
+      .evaluate((element) => getComputedStyle(element).color)
     const itemTexts = hasExpandableBody
       ? (await body.locator(':scope > div').allTextContents())
           .map((text) => text.trim())
           .filter(Boolean)
+      : []
+    const failedItemColors = hasExpandableBody
+      ? await body
+          .locator(
+            '[data-process-item-status="failed"], [data-process-item-status="partial_failed"]'
+          )
+          .evaluateAll((elements) => elements.map((element) => getComputedStyle(element).color))
       : []
     const hasChevronAffordances = (await block.locator(':scope > summary svg').count()) >= 1
     const summaryTruncates = (await block.locator(':scope > summary .truncate').count()) > 0
     activityPanels.push({
       summaryText,
       itemTexts,
+      headerColor,
+      failedItemColors,
       hasChevronAffordances,
       summaryTruncates
     })
@@ -223,7 +238,11 @@ describe('workbench run e2e', () => {
           const { page } = runtime
           const setup = await setupWorkbenchWithTempWorkspace(page, { caseId: CASE_ID })
           const startedAtMs = Date.now()
-          await sendWorkbenchMessage(page, PROMPT)
+          const missingReadPath = path.join(setup.workspace.rootPath, 'activity-header-missing.txt')
+          await sendWorkbenchMessage(
+            page,
+            `${PROMPT}\n另外请尝试读取这个工作区内的文本文件：${missingReadPath}。如果文件不存在，说明读取失败后继续总结已有资料。`
+          )
           const processLocator = await waitForLatestAssistantProcess(page)
           const durationLocator = getWorkbenchPrefixLocator(
             page,
@@ -321,6 +340,18 @@ describe('workbench run e2e', () => {
             .last()
             .isVisible()
           const visibleToolNames = listVisibleToolNames(evidence.events)
+          const failedTextReads = evidence.events.filter(
+            (event) =>
+              event.type === 'tool_call_result' &&
+              event.toolName === 'text_file_read' &&
+              event.result?.ok === false
+          )
+          const successfulTextReads = evidence.events.filter(
+            (event) =>
+              event.type === 'tool_call_result' &&
+              event.toolName === 'text_file_read' &&
+              event.result?.ok === true
+          )
           return {
             durationDuringRun,
             durationAdvanced,
@@ -336,6 +367,8 @@ describe('workbench run e2e', () => {
             stackedRetryRows,
             thinkingStuckAfterComplete: /让俺想想/u.test(processRender.processRootText),
             processRender,
+            failedTextReadCount: failedTextReads.length,
+            successfulTextReadCount: successfulTextReads.length,
             visibleToolNames,
             finalAnswerText,
             eventTypes: evidence.events.map((event) => event.type)
@@ -351,6 +384,13 @@ describe('workbench run e2e', () => {
           const headerRulesOk = panels.every((panel) =>
             isShortActivityHeader(panel.summaryText, panel.itemTexts.length)
           )
+          const headersStayNeutral = panels.every(
+            (panel) => panel.headerColor !== 'rgb(179, 38, 30)'
+          )
+          const failedItemColors = panels.flatMap((panel) => panel.failedItemColors)
+          const failedRowsStayHighlighted =
+            failedItemColors.length > 0 &&
+            failedItemColors.every((color) => color === 'rgb(179, 38, 30)')
           const noFinalizingWait = !/让俺收尾|基本完成了/u.test(
             result.processRender.processRootText
           )
@@ -401,6 +441,10 @@ describe('workbench run e2e', () => {
               ) &&
               activityStructureOk &&
               headerRulesOk &&
+              headersStayNeutral &&
+              failedRowsStayHighlighted &&
+              result.failedTextReadCount > 0 &&
+              result.successfulTextReadCount > 0 &&
               noColonItemLabels &&
               learnSkillCopyOk &&
               docxCopyOk,

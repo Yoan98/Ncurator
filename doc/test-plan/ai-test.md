@@ -534,7 +534,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：`hand` 对静态命中项批量 AI 审核；同批一个自动通过、一个转人工时，人工指导后整批 0 执行。
 - Why：terminal 审批责任已经前移到 `hand` preflight，回归 case 必须长期守住“先整批审核，再决定是否执行”的主流程；`terminal_run` 不再独立请求审批。
 - How：通过真实 `human` hand 决策构造两个需审核 terminal 命令，AI 审核分别返回 `auto_approve` 和 `needs_human_review`，人工项返回 `guide`。
-- Oracle：事件流出现 `approval_batch_required / approval_batch_decision`；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；被拦的 terminal 调用会以合成 `ToolMessage` 结果（`approval_blocked`）回流到 `brain`。
+- Oracle：事件流和消息日志先出现 `terminal_review_started`，再出现 `terminal_review_resolved` 与 `approval_batch_required / approval_batch_decision`；开始与结果通过同一组模型 `toolCallId` 关联；整批在审批前不发生真实 tool execution；磁盘上不会产生任何副作用；被拦的 terminal 调用会以合成 `ToolMessage` 结果（`approval_blocked`）回流到 `brain`。
 
 ##### `hand-terminal-ai-review-query`
 
@@ -550,7 +550,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：用户明确授权的文件创建由 AI 审核后自动通过并执行。
 - Why：审核层需要识别范围清晰的授权操作，同时保留审核记录供恢复和排查。
 - How：脚本化 `human.terminal_review` 先返回无效 JSON，再修复为含 `decision` 和 `reason` 的合法 `auto_approve`；真实执行文件创建并检查审核请求和消息日志。
-- Oracle：run 完成且文件存在；修复调用共两次；消息日志记录 `auto_approve` 及非空 reason；没有人工审批事件；真实终端步骤启动一次。
+- Oracle：run 完成且文件存在；修复调用共两次；消息日志先记录 `terminal_review_started`，后记录 `terminal_review_resolved` 中的 `auto_approve` 及非空 reason，二者以相同 `toolCallId` 关联；没有人工审批事件；真实终端步骤启动一次。
 
 ##### `hand-terminal-ai-review-failure`
 
@@ -558,7 +558,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：AI 审核调用异常时转人工审批，用户拒绝前不执行命令。
 - Why：审核服务故障不能被当成自动通过，也不能丢失人工确认边界。
 - How：让 `human.terminal_review` 调用失败，真实 hand 决策触发目录创建，并由拒绝全部审批的 human runner 收口。
-- Oracle：run 完成；产生一条 `approval_batch_required`；审核结论记录非空兜底 reason；磁盘上没有目标目录；没有 `terminal_step_started`。
+- Oracle：run 完成；审核开始与结果日志均存在且按顺序记录；产生一条 `approval_batch_required`；审核结论记录非空兜底 reason；磁盘上没有目标目录；没有 `terminal_step_started`。
 
 ##### `hand-terminal-ai-review-incomplete`
 
@@ -566,7 +566,7 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - What：AI 审核连续遗漏待审核命令的判定时，耗尽重试后转人工审批。
 - Why：不完整判定不能遗漏命令或默认放行；重试边界和零副作用需要稳定回归。
 - How：连续四次让 `human.terminal_review` 返回空判定，真实 hand 决策请求创建目录。
-- Oracle：审核恰好调用四次（首次加三次重试）；产生一条 `approval_batch_required`；审核结论记录非空兜底 reason；人工拒绝前目录不存在且没有 `terminal_step_started`。
+- Oracle：审核恰好调用四次（首次加三次重试），期间只有一条对应的审核过程状态；开始与结果日志以同一 `toolCallId` 关联；产生一条 `approval_batch_required`；审核结论记录非空兜底 reason；人工拒绝前目录不存在且没有 `terminal_step_started`。
 
 ##### `hand-terminal-ai-review-bypass`
 

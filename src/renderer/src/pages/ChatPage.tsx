@@ -431,6 +431,14 @@ const reduceAssistantTurnByRunEvent = (
     next = { ...next, isBrainThinking: false }
   }
 
+  if (
+    event.type === 'terminal_review_started' ||
+    event.type === 'terminal_review_resolved' ||
+    event.type === 'terminal_review_blocked'
+  ) {
+    next = { ...next, isBrainThinking: false }
+  }
+
   if (event.type === 'run_warning') {
     // 告警不停跑：仅结束「让俺想想」，不把 turn 标 failed。
     next = { ...next, isBrainThinking: false }
