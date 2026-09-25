@@ -644,6 +644,14 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - How：通过 `AiRunService.getInstance().run(...)` 启动一次真实 run，再用 scripted structured output 驱动 `brain -> learning -> hand -> brain 交付` 完成闭环。
 - Oracle：真实出现 `human_brain`、`human_learning`、`human_hand` 三个 stage，`AiRunState.finalDeliveryMarkdown` 正常落地，且 `AiRunService` 自身不直接发 `run_completed`。
 
+##### `human-queued-message-safe-boundary`
+
+- 测试类型：`backend / mock-llm`
+- What：human 工具执行期间出现追加消息时，在工具结果写入后从 `context_budget` 安全让出；下一次 brain 的数组保留历史工具结果并把追加 user 放在末尾。
+- Why：追加消息若在 tool result / dispatch 完成前启动下一轮，会造成上下文顺序错乱或漏掉已执行事实。
+- How：脚本化 brain 决策调用真实 `kb_list_documents`；工具启动事件后将 pending callback 设为真，验证当前 graph 让出，再用第二个真实 graph run 捕获首轮 brain messages。
+- Oracle：第一轮状态为 `yielded` 且真实工具结果已写入 log；第二轮状态为 `completed`，历史中工具结果先于尾部追加 user；第二轮不重复调用中断前工具。
+
 ##### `ai-run-service-embedding-preflight`
 
 - 测试类型：`backend`
@@ -751,10 +759,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-interruption-message-repair`
 
 - 测试类型：`backend / mock-llm`
-- What：续接（跨伙伴 / 中断恢复）重建消息数组时，顺序为 `system + 历史 user.content + interleaved assistant/tool + 当前 run buildBrainUserMessage user`；每条 log `user` 的 `content` 就是当时发给模型的全文；末条 assistant 有悬空 tool_calls 时补 `interrupted` ToolMessage。
+- What：续接（跨伙伴 / 中断恢复）重建消息数组时，顺序为 `system + 历史 user.content + interleaved assistant/tool + 当前 run buildBrainUserMessage user`；每条 log `user` 的 `content` 就是当时发给模型的全文；末条 assistant 有悬空 tool_calls 时仅在模型上下文投影里补 `interrupted` ToolMessage。
 - Why：模型上下文唯一真相源是伙伴消息记录，续接必须忠实回放**上次发给模型的**历史并把新诉求追加到末尾；若上一条 assistant 声明了 tool_call 却没有对应结果，接口会直接报错，必须补一条意外中断反馈。
 - How：mock-llm 下跑两个子场景：其一 run-1 正常完成（含 learn_skill 与最终交付），run-2 捕获首次 brain 的 `request.messages`；其二 run-1 的 brain 返回 learn_skill tool_call 后在 brain 调用返回时 abort 控制器，run-2 恢复并捕获消息数组。
-- Oracle：子场景一：消息数组首条为 system（无 `current_time`），历史含 run-1 的 user.content、assistant/tool 与 run-2 末尾 build user（共 2 条 human，末条含本 run `current_time`，不含 `<active_state>` / `<memory>`）；子场景二：run-1 为 `user_cancelled`，run-2 在悬空 learn_skill tool_call 后补相同 ID 的失败 ToolMessage，且含 run-1 与 run-2 两条 User。
+- Oracle：子场景一：消息数组首条为 system（无 `current_time`），历史含 run-1 的 user.content、assistant/tool 与 run-2 末尾 build user（共 2 条 human，末条含本 run `current_time`，不含 `<active_state>` / `<memory>`）；子场景二：run-1 为 `user_cancelled`，run-2 在悬空 learn_skill tool_call 后补相同 ID 的合成 ToolMessage；该结果只用于满足本次模型调用的 tool-call 配对要求，不写入 transcript 或伪装成真实工具失败，且消息数组含 run-1 与 run-2 两条 User。
 
 ##### `partner-skill-memory-multi-run`
 
@@ -813,6 +821,14 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 - Oracle：只出现 `scheduled_task_list` 与 `scheduled_task_action` 两个领域工具；创建自动绑定当前伙伴且默认开启；修改时间与停用同时成功；两次 list 均能供下一轮 brain 使用。
 
 #### live 类别
+
+##### `human-queued-message-safe-boundary-live`
+
+- 测试类型：`backend / live`
+- What：真实模型读取临时工作区文件期间收到追加消息，验证读结果先进入 transcript，再按原始 user、工具结果、追加 user 顺序续接。
+- Why：mock 决策可守住图边，但仍需真实模型与生产工具确认工具调用中途的追加会正确停在安全边界，且历史事实能被续接使用。
+- How：让真实模型读取唯一标记文件；真实 `text_file_read` 开始时将 pending callback 设为真。第一轮必须 yielded 且读结果日志包含标记；第二轮携带追加诉求，捕获首个 brain messages 并真实完成。
+- Oracle：第一轮 `yielded`、确实读取文件、tool log 含唯一标记；第二轮 `completed`，标记所在历史 tool message 位于尾部追加 user 之前；保留 raw LLM I/O 与真实工具事件供人工评估。
 
 ##### `human-clarification-multi-run-live`
 

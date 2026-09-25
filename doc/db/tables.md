@@ -124,7 +124,8 @@ Workbench 单例 UI。
 | `failure_code` | TEXT | 失败码 |
 | `failure_raw_message` | TEXT | 失败原文 |
 | `pending_approval_json` | TEXT | 待审批 |
-| `pending_user_takeover_json` | TEXT | 待接管 |
+| `pending_interaction_json` | TEXT | 待处理的人机交互 |
+| `pending_messages_json` | TEXT | 普通运行期间按 FIFO 暂存的追加用户消息；续接或终态归档后清空 |
 | `artifacts_json` | TEXT | 产物 |
 | `created_at` | INTEGER | 创建时间 |
 | `updated_at` | INTEGER | 更新时间 |

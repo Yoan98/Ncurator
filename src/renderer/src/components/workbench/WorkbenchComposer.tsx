@@ -1,12 +1,6 @@
 ﻿import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { App as AntdApp, Spin, Tooltip } from 'antd'
-import {
-  HiArrowUp,
-  HiPhoto,
-  HiPlus,
-  HiStop,
-  HiXMark
-} from 'react-icons/hi2'
+import { HiArrowUp, HiPhoto, HiPlus, HiStop, HiXMark } from 'react-icons/hi2'
 import type {
   ChatAttachment,
   LLMConfig,
@@ -769,7 +763,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
 
     if (event.key === 'Enter' && !event.shiftKey) {
       event.preventDefault()
-      if (!showCancel && !loading && canSubmit) onSubmit()
+      if ((showCancel || !loading) && canSubmit) onSubmit()
       return
     }
 
@@ -1146,6 +1140,35 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
               className="workbench-composer-model-select"
               data-testid={workbenchSelectors.modelSelect}
             />
+
+            {showCancel ? (
+              <Tooltip
+                title={
+                  cancelling
+                    ? sendButtonTooltip
+                    : !canSubmit
+                      ? submitDisabledReason || '当前还不能发送'
+                      : ''
+                }
+              >
+                <span className="inline-flex h-7 w-7 shrink-0">
+                  <button
+                    type="button"
+                    onClick={onSubmit}
+                    disabled={cancelling || !canSubmit}
+                    className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border transition ${
+                      cancelling || !canSubmit
+                        ? 'border-[#E5E4E0] bg-[#F4F4F2] text-[#B5B3AD]'
+                        : 'border-[#37352F] bg-[#37352F] text-white hover:bg-[#2F3437]'
+                    }`}
+                    data-testid={workbenchSelectors.queueSendButton}
+                    aria-label="发送"
+                  >
+                    <HiArrowUp className="h-3 w-3" />
+                  </button>
+                </span>
+              </Tooltip>
+            ) : null}
 
             <Tooltip title={sendButtonDisabled ? sendButtonTooltip : ''}>
               <span className="inline-flex h-7 w-7 shrink-0">

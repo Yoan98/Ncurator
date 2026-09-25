@@ -631,6 +631,7 @@ export interface ChatMessage {
   /** Present on delivery assistant messages after finalizeDelivery access checks. */
   linkAccess?: MarkdownLinkAccessEntry[]
   error?: boolean
+  pending?: boolean
 }
 
 export const PARTNER_AVATAR_SHAPES = [
@@ -1047,9 +1048,24 @@ export type AiRunStatus =
   | 'running'
   | 'waiting_human'
   | 'waiting_approval'
+  | 'continued'
+  | 'context_only'
   | 'completed'
   | 'failed'
   | 'cancelled'
+
+export type PendingChatMessage = {
+  id: string
+  input: string
+  preference: AiPreference
+  executionPermission: AiExecutionPermission
+  mainModel?: WorkbenchSelectedModel
+  contentNodes?: ChatMessageContentNode[]
+  selectedReferences: SelectedReference[]
+  attachments: ChatAttachment[]
+  workspaceRoots: string[]
+  createdAt: number
+}
 export type AiRunWarningCode =
   | 'workspace_binding_missing'
   | 'workspace_missing'
@@ -1335,6 +1351,7 @@ export type AiRunRecord = {
   failureRawMessage?: string
   pendingApproval?: Extract<AiRunEvent, { type: 'approval_batch_required' }>
   pendingInteraction?: PendingHumanInteraction
+  pendingMessages?: PendingChatMessage[]
   artifacts?: AiArtifactRef[]
   createdAt: number
   updatedAt: number
@@ -1382,6 +1399,7 @@ export type PartnerRunSummariesResponse = {
 
 export type ChatSubmitResponse = {
   success: boolean
+  queued?: boolean
   userMessage?: ChatMessage
   assistantMessage?: ChatMessage
   run?: AiRunRecord
@@ -2032,6 +2050,7 @@ export type ChatMessageLogAnnotationEntry =
 export type ChatMessageLogEntry =
   | {
       kind: 'user'
+      messageId?: string
       content: string
       input: string
       context: ChatMessageLogUserContext

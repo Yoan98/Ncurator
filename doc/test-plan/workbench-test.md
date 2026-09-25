@@ -38,7 +38,7 @@ Workbench 顶层 suite 按用户任务闭环划分，不逐一复制 PRD 小节�
 领域规则：
 
 - `conversation` 验证伙伴、composer、时间轴与清空、模型偏好和 `@` 参考资料 token。发送门禁是已有伙伴 + 输入非空。
-- `run` 验证智能模式运行中的过程流、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
+- `run` 验证智能模式运行中的过程流、追加消息安全交接、持久化恢复、停止、审批、压缩提示和 AI 内置浏览器任务。
 - `result` 验证普通文件预览、修改文件工作区、真实 docx 预览、文本 diff、回退、多文件修改入口，以及馆长 WPS 通道对 docx / xlsx / pptx 的 dispatch 与本机已授权 WPS 文字 / 表格 / 演示窗口刷新。
 - `scheduled-task` 验证伙伴必选且位于表单第一项、任务描述支持引用、手动创建默认开启、AI 创建预填聊天草稿、删除伙伴后任务停用，以及执行时读取伙伴最新 Composer 配置。
 - Workbench 测试全部是 `e2e`，覆盖 Electron、renderer、IPC、真实 AI、右侧面板和文件系统联动。
@@ -321,6 +321,14 @@ pnpm test:update:e2e
 
 - Oracle：run 开始后过程内容出现前也显示「已处理」计时和分隔线，且运行至少 1 秒后用时递增；不足一分钟只显示秒数，不出现「0分钟」。完成后用时固定，且不足一分钟只显示秒数；过程默认收起。展开过程后 Thought / Activity 可见，再次收起不影响最终回答。对齐 `WB-COMPOSER-016-AC1` 至 `WB-COMPOSER-016-AC3`。
 
+#### `queue-message-during-run`
+
+- 测试类型：`e2e / live`
+- What：真实模型读取资料期间从 Composer 追加消息，验证停止入口保持可用、待处理用户气泡浅灰、追加按钮独立，以及工具结果完成后安全续接。
+- Why：AI backend case 不覆盖 Renderer 输入、双按钮状态、pending 气泡投影和 IPC 续接；运行中追加不能让停止操作消失。
+- How：在临时工作区创建三个文本输入，通过真实 UI 发送跨文件汇总请求；观察 `text_file_read` 开始后连续使用追加发送按钮提交两条相关说明；等待原 run 正常结束及续接 run 完成。记录真实模型、run 事件与最终回答。
+- Oracle：读取期间两条待处理消息都按 FIFO 显示为浅灰气泡且无编辑入口；停止按钮继续可用，追加发送入口独立；续接使用第二条消息作为最新诉求并完成。工具结果先于追加消息由 AI live `human-queued-message-safe-boundary-live` 覆盖；FIFO transcript、停止 / 中断后不自动启动由 unit `chat-run-service-contract` 覆盖，对齐 `WB-COMPOSER-017`、`WB-COMPOSER-006`。
+
 #### `llm-retry-process-row`
 
 - 测试类型：`e2e`
@@ -372,10 +380,10 @@ pnpm test:update:e2e
 #### `stop-running-or-approval-run`
 
 - 测试类型：`e2e`
-- What：智能模式运行中底部发送按钮切换为停止图标，并能取消普通长任务和审批等待。
+- What：智能模式普通运行期间停止入口保持可用，并能取消普通长任务和审批等待；审批卡替代 Composer 时不提供普通追加消息输入。
 - Why：用户需要可靠中断长任务；审批等待时停止若不能释放等待会造成运行态卡死。
 - How：E2E 发送真实长任务和审批等待请求，运行中点击停止。
-- Oracle：运行中发送按钮和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中按钮禁用并提示「正在停止本次运行」，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`；取消后用时停止递增、过程默认收起且仍可展开，对齐 `WB-COMPOSER-016-AC2`；审批等待不显示「需要你的协助」，对齐 `WB-SESSION-014-AC1`。
+- Oracle：运行中停止入口和取消反馈对齐 `WB-COMPOSER-006`（含 `browser_use`/Stagehand 执行中须立刻结束，对齐 `WB-COMPOSER-006-AC4`；清理中停止按钮转圈且追加入口禁用，对齐 `WB-COMPOSER-006-AC5`；等待模型首个 token 时停止须立刻 `user_cancelled`，对齐 `WB-COMPOSER-006-AC6`），伙伴运行标记对齐 `WB-SESSION-002-AC5`；用户停止后 run 标记为 `user_cancelled`，后续消息只靠日志继续，对齐 `WB-SESSION-007-AC1`；取消后用时停止递增、过程默认收起且仍可展开，对齐 `WB-COMPOSER-016-AC2`；审批等待时普通输入框和追加按钮均不存在，且不显示「需要你的协助」，对齐 `WB-COMPOSER-017-AC4`、`WB-SESSION-014-AC1`。
 
 #### `interrupted-task-resume-flow`
 
@@ -606,10 +614,10 @@ pnpm test:update:e2e
 #### `human-interaction-question-card`
 
 - 测试类型：`e2e / live`
-- What：模糊任务触发 AI 提问，提问卡与审批卡的左上标题直接展示当前问题或当前操作说明，右上当前项数量位于左右箭头前；提问卡每题只接受 2 至 4 个 AI 选项，以圆形/方形控件区分单选/多选但不展示类型文字 Tag，显示推荐 Tag，用户完成 A/B/C/D、其他输入和多问题切换，普通单选自动跳到下一题；回答前不显示写入结果，提交后 run 恢复；同一回复包含多个提问时逐张展示，后一张不继承前一张状态，全部回答后才继续 AI。
+- What：模糊任务触发 AI 提问，提问卡与审批卡的左上标题直接展示当前问题或当前操作说明，右上当前项数量位于左右箭头前；等待时普通 Composer 与追加按钮均不存在，不能排队。提问卡每题只接受 2 至 4 个 AI 选项，以圆形/方形控件区分单选/多选但不展示类型文字 Tag，显示推荐 Tag，用户完成 A/B/C/D、其他输入和多问题切换，普通单选自动跳到下一题；回答前不显示写入结果，提交后 run 恢复；同一回复包含多个提问时逐张展示，后一张不继承前一张状态，全部回答后才继续 AI。
 - Why：问题和答案是任务定义的一部分，必须在真实 UI 中可操作、可恢复、可追溯，不能只在 IPC 或 backend 日志中存在。
 - How：通过真实 Workbench UI 发送存在结果歧义的任务，等待 `human_interaction_required`；按实际返回的 1 至 3 个问题检查 A/B/C/D、其他输入和 pending 卡片，刷新后继续选择自定义答案并提交；若同一 run 再次产生 `human_interaction_required`，继续完成该 interaction；最终展开 Activity 检查问答投影。审批展示由 `approval-batch-flow` 同时覆盖。
-- Oracle：composer 上方出现统一交互卡片，左上标题直接显示当前问题或当前操作说明，右上操作区按「问题/审批 1 / N」、左右箭头、停止按钮的顺序排列，底部展示「告诉{伙伴名}该怎么做」与提交按钮，不重复展示文字停按钮，对齐 `WB-BLOCKER-001-AC9`；每题 2 至 4 个 AI 选项、单选/多选控件、无类型文字 Tag、推荐 Tag 和自动跳题对齐 `WB-BLOCKER-001-AC11`；刷新后 pending 问题可恢复；新的 interaction 从首题和空选择开始；提交前无写入；连续提问全部提交后 run 恢复并完成，对齐 `WB-BLOCKER-001-AC12`；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。等待回答时侧栏显示「需要你的协助」标签，刷新后仍显示，run 完成后消失；审批等待不显示该标签，对齐 `WB-SESSION-014`。
+- Oracle：composer 上方出现统一交互卡片，普通输入框与追加按钮数量都为 0；左上标题直接显示当前问题或当前操作说明，右上操作区按「问题/审批 1 / N」、左右箭头、停止按钮的顺序排列，底部展示「告诉{伙伴名}该怎么做」与提交按钮，不重复展示文字停按钮，对齐 `WB-BLOCKER-001-AC9`、`WB-COMPOSER-017-AC4`；每题 2 至 4 个 AI 选项、单选/多选控件、无类型文字 Tag、推荐 Tag 和自动跳题对齐 `WB-BLOCKER-001-AC11`；刷新后 pending 问题可恢复；新的 interaction 从首题和空选择开始；提交前无写入；连续提问全部提交后 run 恢复并完成，对齐 `WB-BLOCKER-001-AC12`；Activity 对应工具行下显示问题与答案，审批结果以文字显示且没有旧图标前缀或 hover 替换。等待回答时侧栏显示「需要你的协助」标签，刷新后仍显示，run 完成后消失；审批等待不显示该标签，对齐 `WB-SESSION-014`。
 
 ### 5.4 `scheduled-task`
 

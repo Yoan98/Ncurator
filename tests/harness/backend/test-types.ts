@@ -19,6 +19,7 @@ import type { ScheduledTaskService } from '../../../src/main/services/scheduler/
 import type { WebCrawlerService } from '../../../src/main/services/webCrawler/types'
 import type {
   ChatMessage,
+  AiRunEvent,
   AiExecutionPermission,
   AiLlmStreamingMode,
   AiLlmUsage,
@@ -189,6 +190,8 @@ export type CreateAiRunContextInput = {
   approvalPolicy?: ApprovalPolicy | ApprovalResolver
   questionResolver?: QuestionResolver
   checkCancelledOverride?: () => void
+  hasPendingUserMessages?: () => boolean
+  observeEvent?: (event: AiRunEvent) => void
   humanRuntimeOverrides?: {
     graphRecursionLimit?: number
     modelContextWindowTokens?: number

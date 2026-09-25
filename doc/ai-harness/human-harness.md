@@ -15,6 +15,7 @@ flowchart TD
   START([START]) --> CB[context_budget]
   CB -->|超预算且可压缩| CC[context_compaction]
   CB -->|继续| BR[brain]
+  CB -->|已有运行中追加消息；写入当前 user 后安全让出| END
   CC --> CB
   BR -->|无 tool_calls| FD[finalizeDelivery → END]
   BR -->|有 tool_calls| DP[dispatch]
@@ -39,7 +40,7 @@ graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
 
 | 节点 | 调模型 | 写 log | 改 runtime cache |
 |------|--------|--------|------------------|
-| `context_budget` | 否 | 本轮首次进循环时写 `user`（压缩前也会写） | 判定 compaction；不拼消息 |
+| `context_budget` | 否 | 本轮首次进循环时写 `user`（压缩前也会写） | 判定 compaction；发现运行中追加消息时在该边界让出当前 graph |
 | `context_compaction` | 是（压缩模型） | `compaction_checkpoint`（含摘要） | **整段替换** messages 为 System + 合成 Compact User + tail 原文（第 5 节） |
 | `brain` | 是（主模型） | `thinking_*`；**仅当有 `toolCalls`（或截断 / 内容安全）时写 `assistant`** | 有 tool 时 append assistant；**不** refresh build user |
 | `dispatch` | 否 | 否 | 消费 `tool_calls` 队列，路由下一 stage |
@@ -82,6 +83,14 @@ graph 从 `context_budget` 进入；首次进入才写本轮 `user`。
 | `lastBrainInputTokens` | 预算估算；compaction 后需 fresh usage |
 
 Conversation 行（`user` / `assistant` / `tool`）进 `cache.messages` 只经 `messagesFromLogEntries`，与新 run 投影同一入口。System、Compact User、当前 build User 除外。禁止 push 流式 AIMessage；`context_budget` 已写入的 log `user` 不得再投影一遍。
+
+### 1.6 运行中追加消息的安全交接
+
+- 普通 `running` run 可在 `ai_run.pending_messages_json` 保存多条待处理消息。交互处于审批或提问等待时，Workbench 展示交互卡并移除普通 Composer，Main 同时拒绝追加。
+- `context_budget` 先确保当前 user log 已写入，再检查待处理消息。若存在追加消息，graph 以 `yielded` 结束当前调用；该节点只会在前序工具结果已写入 transcript 且 dispatch 队列清空后到达，因此下一次 brain 不会越过尚未记录的工具结果。
+- 若最终回答已经开始，human graph 正常完成原交付；Main 在 `run_completed` 事件后创建一次续接 run。批次内的 user 按 FIFO 进入 transcript，每条消息保留原始输入、参考资料和附件；最后一条消息决定续接模型、偏好与执行权限。
+- 安全交接时较早的追加消息以 `context_only` run 和 user log 落库，最后一条由续接 run 写入。运行正常结束时自动启动续接；停止、失败和应用重启恢复时只把待处理消息转成普通 user log，不自动调用模型。
+- 停止若发生在工具调用中途，已落库结果保持原样。`repairInterruptedToolCalls` 只在模型上下文投影中为没有结果的悬空调用补充合成 ToolMessage（“The run was interrupted before this tool call could be executed.”）；不会写成真实工具失败记录。
 
 ---
 

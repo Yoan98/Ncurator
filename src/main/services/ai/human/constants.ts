@@ -12,7 +12,7 @@ export const HUMAN_STAGES = [
   'context_budget',
   'context_compaction'
 ] as const
-export const HUMAN_STATUSES = ['running', 'completed'] as const
+export const HUMAN_STATUSES = ['running', 'completed', 'yielded'] as const
 
 export const HUMAN_STEP_ACTIONS = [
   'brain_decision',

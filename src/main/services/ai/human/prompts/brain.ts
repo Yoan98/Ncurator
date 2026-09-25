@@ -17,11 +17,11 @@ export const renderLocalEnvironmentText = (ctx: AiRunContext): string =>
     `- runtime_paths.assets：${getPartnerAssetsRootDir(ctx.partnerId)}（运行期生成的临时产物目录，如图片、渲染中间结果等）`
   ].join('\n')
 
-export const renderWorkspaceRootsText = (ctx: AiRunContext): string =>
-  ctx.workspaceRoots.map((rootPath) => `- ${rootPath}`).join('\n')
+export const renderWorkspaceRootsText = (workspaceRoots: string[]): string =>
+  workspaceRoots.map((rootPath) => `- ${rootPath}`).join('\n')
 
-export const renderCurrentTimeText = (ctx: AiRunContext): string => {
-  const startedAt = new Date(ctx.runStartedAt)
+export const renderCurrentTimeText = (runStartedAt: number): string => {
+  const startedAt = new Date(runStartedAt)
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown'
   const offsetMinutes = -startedAt.getTimezoneOffset()
   const offsetSign = offsetMinutes >= 0 ? '+' : '-'
@@ -112,19 +112,31 @@ ${renderLocalEnvironmentText(input.ctx)}
 `.trim()
 }
 
-export const buildBrainUserMessage = (input: { state: HumanState; ctx: AiRunContext }): string =>
+export const buildBrainUserMessageForInput = (input: {
+  userInput: string
+  preference: AiRunContext['preference']
+  referenceScope: AiRunContext['referenceScope']
+  workspaceRoots: string[]
+  runStartedAt: number
+}): string =>
   [
     `用户诉求：
-${input.state.task.userInput}`,
-    renderOptionalUserBlock('偏好', renderPreferenceText(input.ctx.preference)),
-    renderOptionalUserBlock('默认工作区', renderWorkspaceRootsText(input.ctx)),
-    renderOptionalUserBlock(
-      '用户@的参考资料',
-      renderSelectedReferencesText(input.ctx.referenceScope)
-    ),
-    renderOptionalUserBlock('用户添加的附件', renderAttachmentsText(input.ctx.referenceScope)),
+${input.userInput}`,
+    renderOptionalUserBlock('偏好', renderPreferenceText(input.preference)),
+    renderOptionalUserBlock('默认工作区', renderWorkspaceRootsText(input.workspaceRoots)),
+    renderOptionalUserBlock('用户@的参考资料', renderSelectedReferencesText(input.referenceScope)),
+    renderOptionalUserBlock('用户添加的附件', renderAttachmentsText(input.referenceScope)),
     `当前时间：
-${renderCurrentTimeText(input.ctx)}`
+${renderCurrentTimeText(input.runStartedAt)}`
   ]
     .filter((block) => block.length > 0)
     .join('\n\n')
+
+export const buildBrainUserMessage = (input: { state: HumanState; ctx: AiRunContext }): string =>
+  buildBrainUserMessageForInput({
+    userInput: input.state.task.userInput,
+    preference: input.ctx.preference,
+    referenceScope: input.ctx.referenceScope,
+    workspaceRoots: input.ctx.workspaceRoots,
+    runStartedAt: input.ctx.runStartedAt
+  })

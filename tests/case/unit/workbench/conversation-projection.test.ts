@@ -56,7 +56,11 @@ describe('conversationProjection', () => {
       buildLogRecord({
         runId: 'run-1',
         seq: 2,
-        entry: { kind: 'assistant', content: 'thinking', toolCalls: [{ id: 'tool-1', name: 'grep', arguments: '{}' }] }
+        entry: {
+          kind: 'assistant',
+          content: 'thinking',
+          toolCalls: [{ id: 'tool-1', name: 'grep', arguments: '{}' }]
+        }
       }),
       buildLogRecord({
         runId: 'run-1',
@@ -149,5 +153,60 @@ describe('conversationProjection', () => {
 
     expect(messages).toHaveLength(2)
     expect(messages[1]).toMatchObject({ role: 'assistant', content: '' })
+  })
+
+  it('keeps pending messages after active assistant activity in FIFO order', () => {
+    const runs = [
+      buildRun({
+        id: 'run-1',
+        status: 'running',
+        createdAt: 10,
+        updatedAt: 100,
+        partialAnswer: '',
+        finalAnswer: undefined,
+        finishedAt: undefined,
+        pendingMessages: [
+          {
+            id: 'queued-1',
+            input: 'first queued',
+            preference: 'default',
+            executionPermission: 'review',
+            mainModel: { configId: 'config-1', modelName: 'model-1' },
+            selectedReferences: [],
+            attachments: [],
+            workspaceRoots: [],
+            createdAt: 12
+          },
+          {
+            id: 'queued-2',
+            input: 'second queued',
+            preference: 'default',
+            executionPermission: 'review',
+            mainModel: { configId: 'config-1', modelName: 'model-1' },
+            selectedReferences: [],
+            attachments: [],
+            workspaceRoots: [],
+            createdAt: 13
+          }
+        ]
+      })
+    ]
+    const messages = projectAiConversationMessages({
+      partnerId: 'partner-1',
+      records: [],
+      runs
+    })
+    const ordered = [...messages].sort((left, right) => left.timestamp - right.timestamp)
+
+    expect(ordered.map((message) => message.id)).toEqual([
+      'run-1-user',
+      'run-1-assistant',
+      'queued-1',
+      'queued-2'
+    ])
+    expect(ordered.slice(2)).toMatchObject([
+      { role: 'user', content: 'first queued', pending: true },
+      { role: 'user', content: 'second queued', pending: true }
+    ])
   })
 })

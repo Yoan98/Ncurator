@@ -196,6 +196,7 @@ export const workbenchSelectors = {
   attachmentRemoveButtonPrefix: 'workbench-attachment-remove-button',
   attachmentPreviewModal: 'workbench-attachment-preview-modal',
   sendButton: 'workbench-send-button',
+  queueSendButton: 'workbench-queue-send-button',
   cancelButton: 'workbench-cancel-button',
   composerHint: 'workbench-composer-hint',
   referenceField: 'workbench-reference-field',

@@ -51,10 +51,12 @@ import type {
   AiRunHumanInteractionRequest,
   AiRunHumanInteractionResponse,
   PendingHumanInteraction,
+  PendingChatMessage,
   UserQuestion,
   JsonObject
 } from '../../../shared/types'
 import { projectAiConversationMessages } from '../../../shared/workbench/conversationProjection'
+import { buildBrainUserMessageForInput } from './human/prompts/brain'
 
 type ActiveApproval = {
   batchId: string
@@ -78,12 +80,15 @@ type ActiveQuestion = {
   taskId: string
   toolCallId: string
   questions: UserQuestion[]
-  resolve: (result: { accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }) => void
+  resolve: (
+    result: { accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }
+  ) => void
 }
 
 type ActiveRun = {
   run: AiRunRecord
   cancelled: boolean
+  finalizing: boolean
   deleted: boolean
   abortController: AbortController
   eventQueue: Promise<void>
@@ -123,7 +128,14 @@ type ChatRunServiceDeps = {
   ) => void | Promise<void>
 }
 
-const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = ['running', 'waiting_human', 'waiting_approval']
+const ACTIVE_RUN_STATUSES: AiRunRecord['status'][] = [
+  'running',
+  'waiting_human',
+  'waiting_approval'
+]
+const isActiveRunRecord = (run: AiRunRecord): boolean =>
+  ACTIVE_RUN_STATUSES.includes(run.status) ||
+  (run.status === 'continued' && (run.pendingMessages?.length || 0) > 0)
 const INTERRUPTED_RUN_MESSAGE = '运行已中断，请重新发送消息。'
 const PARTIAL_SAVE_DELAY_MS = 500
 
@@ -188,13 +200,30 @@ export class ChatRunService {
     if (!id) return false
     return (
       this.pendingPartnerSubmissions.has(id) ||
-      Array.from(this.activeRuns.values()).some((entry) => entry.run.partnerId === id)
+      Array.from(this.activeRuns.values()).some(
+        (entry) => entry.run.partnerId === id && isActiveRunRecord(entry.run)
+      )
     )
   }
 
   public async failInterruptedRuns(): Promise<void> {
-    const interrupted = await this.deps.aiRunStore.listRunsByStatuses(['running'])
+    const interrupted = await this.deps.aiRunStore.listRunsByStatuses(['running', 'continued'])
+    const removedContinuations = new Set<string>()
     for (const run of interrupted) {
+      if (removedContinuations.has(run.id)) continue
+      if (run.status === 'continued' && (run.pendingMessages?.length || 0) === 0) continue
+      const pending = run.pendingMessages || []
+      const latestQueued = pending[pending.length - 1]
+      if (latestQueued) {
+        const orphanedContinuationId = `queued-${latestQueued.id}`
+        const orphanedContinuation = await this.deps.aiRunStore.getRun(orphanedContinuationId)
+        if (orphanedContinuation?.status === 'running') {
+          await this.deps.chatMessageLogStore.deleteByRunIds([orphanedContinuationId])
+          await this.deps.aiRunStore.deleteRunsByIds([orphanedContinuationId])
+          removedContinuations.add(orphanedContinuationId)
+        }
+      }
+      await this.parkQueuedMessages(run)
       const now = Date.now()
       const nextRun: AiRunRecord = {
         ...run,
@@ -223,9 +252,7 @@ export class ChatRunService {
     const messages = await this.loadProjectedPartnerMessages(normalizedPartnerId)
     const runs = await this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId)
     const runSnapshots = await Promise.all(runs.map((run) => this.buildRunSnapshot(run)))
-    const activeRuns = runSnapshots.filter((snapshot) =>
-      ACTIVE_RUN_STATUSES.includes(snapshot.run.status)
-    )
+    const activeRuns = runSnapshots.filter((snapshot) => isActiveRunRecord(snapshot.run))
     return { messages, runs: runSnapshots, activeRuns }
   }
 
@@ -240,9 +267,14 @@ export class ChatRunService {
         limit: input.limit || 50,
         beforeTimestamp: input.beforeTimestamp
       }),
-      this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId, ACTIVE_RUN_STATUSES)
+      this.deps.aiRunStore.listRunsByPartner(normalizedPartnerId, [
+        ...ACTIVE_RUN_STATUSES,
+        'continued'
+      ])
     ])
-    const activeRuns = await Promise.all(activeRunRecords.map((run) => this.buildRunSnapshot(run)))
+    const activeRuns = await Promise.all(
+      activeRunRecords.filter(isActiveRunRecord).map((run) => this.buildRunSnapshot(run))
+    )
     const response: PartnerOpenResponse = {
       partner: partner || undefined,
       messages: page.messages,
@@ -284,7 +316,7 @@ export class ChatRunService {
       return { success: false, messages: [], error: 'partnerId and userMessageId are required' }
     }
     const activeRuns = Array.from(this.activeRuns.values()).filter(
-      (entry) => entry.run.partnerId === partnerId
+      (entry) => entry.run.partnerId === partnerId && isActiveRunRecord(entry.run)
     )
     if (activeRuns.length > 0) {
       return { success: false, messages: [], error: '当前伙伴仍在运行，不能编辑消息' }
@@ -351,7 +383,7 @@ export class ChatRunService {
     if (
       this.pendingPartnerSubmissions.has(normalizedPartnerId) ||
       Array.from(this.activeRuns.values()).some(
-        (entry) => entry.run.partnerId === normalizedPartnerId
+        (entry) => entry.run.partnerId === normalizedPartnerId && isActiveRunRecord(entry.run)
       )
     ) {
       return { success: false, error: '当前伙伴仍在运行，不能清空消息记录' }
@@ -368,10 +400,7 @@ export class ChatRunService {
     const input = String(payload?.input || '').trim()
     if (!partnerId) return { success: false, error: 'partnerId is required' }
     if (!input) return { success: false, error: 'input is required' }
-    if (
-      this.pendingPartnerSubmissions.has(partnerId) ||
-      Array.from(this.activeRuns.values()).some((entry) => entry.run.partnerId === partnerId)
-    ) {
+    if (this.pendingPartnerSubmissions.has(partnerId)) {
       this.deps.telemetryService?.track('message_submit_completed', {
         outcome: 'failed',
         failureCode: 'REQUEST_FAILED'
@@ -380,7 +409,12 @@ export class ChatRunService {
     }
     this.pendingPartnerSubmissions.add(partnerId)
     try {
-      const response = await this.submitAi({ ...payload, partnerId, input })
+      const activeRun = Array.from(this.activeRuns.values()).find(
+        (entry) => entry.run.partnerId === partnerId && isActiveRunRecord(entry.run)
+      )
+      const response = activeRun
+        ? await this.enqueueMessage(activeRun, { ...payload, partnerId, input })
+        : await this.submitAi({ ...payload, partnerId, input })
       this.trackSubmitResult(response)
       return response
     } catch (error) {
@@ -392,6 +426,240 @@ export class ChatRunService {
     } finally {
       this.pendingPartnerSubmissions.delete(partnerId)
     }
+  }
+
+  private async enqueueMessage(
+    activeRun: ActiveRun,
+    payload: ChatSubmitRequest & { partnerId: string; input: string }
+  ): Promise<ChatSubmitResponse> {
+    const { run } = activeRun
+    if (
+      activeRun.finalizing ||
+      activeRun.cancelled ||
+      (run.status !== 'running' &&
+        !(run.status === 'continued' && (run.pendingMessages?.length || 0) > 0)) ||
+      this.activeApprovals.has(run.id) ||
+      this.activeQuestions.has(run.id)
+    ) {
+      return { success: false, error: '当前正在等待审批或回答，暂时不能追加消息。' }
+    }
+    if (!(await this.deps.partnerStore.getPartner(payload.partnerId))) {
+      return { success: false, error: 'partner not found' }
+    }
+    const normalizedReferences = normalizeSelectedReferences(payload.selectedReferences)
+    const runIdForValidation = uuidv4()
+    const validation = await validateSelectedReferencesForRun({
+      references: normalizedReferences,
+      workspaceStore: this.deps.workspaceStore,
+      webSourceStore: this.deps.webSourceStore,
+      sendEvent: () => {},
+      runId: runIdForValidation
+    })
+    if (!validation.ok) return { success: false, error: validation.error }
+
+    const mainModel = payload.mainModel || null
+    if (!mainModel?.configId || !String(mainModel.modelName || '').trim()) {
+      return { success: false, error: '请先在输入框右下角选择主模型' }
+    }
+
+    const workspaces = await this.deps.workspaceStore.listWorkspaces()
+    if (
+      this.activeRuns.get(run.id) !== activeRun ||
+      activeRun.finalizing ||
+      activeRun.cancelled ||
+      (run.status !== 'running' &&
+        !(run.status === 'continued' && (run.pendingMessages?.length || 0) > 0)) ||
+      this.activeApprovals.has(run.id) ||
+      this.activeQuestions.has(run.id)
+    ) {
+      return { success: false, error: '当前运行已结束或正在等待交互，请重新发送消息。' }
+    }
+
+    const previousCreatedAt =
+      activeRun.run.pendingMessages?.at(-1)?.createdAt ?? activeRun.run.createdAt
+    const queued: PendingChatMessage = {
+      id: uuidv4(),
+      input: payload.input,
+      preference: normalizeAiPreference(payload.preference),
+      executionPermission: normalizeExecutionPermission(payload.executionPermission),
+      mainModel,
+      contentNodes: payload.contentNodes,
+      selectedReferences: normalizedReferences || [],
+      attachments: Array.isArray(payload.attachments) ? payload.attachments : [],
+      workspaceRoots: workspaces
+        .map((workspace) => String(workspace.root_path || '').trim())
+        .filter(Boolean),
+      createdAt: Math.max(Date.now(), previousCreatedAt + 1)
+    }
+    activeRun.run.pendingMessages = [...(activeRun.run.pendingMessages || []), queued]
+    activeRun.run.updatedAt = queued.createdAt
+    await this.deps.aiRunStore.saveRun(activeRun.run)
+    const userMessage: ChatMessage = {
+      id: queued.id,
+      partner_id: run.partnerId,
+      role: 'user',
+      content: queued.input,
+      timestamp: queued.createdAt,
+      contentNodes: queued.contentNodes,
+      selectedReferences: queued.selectedReferences,
+      attachments: queued.attachments,
+      pending: true
+    }
+    return { success: true, queued: true, userMessage }
+  }
+
+  private createContextOnlyRun(partnerId: string, message: PendingChatMessage): AiRunRecord {
+    return {
+      id: `context-${message.id}`,
+      partnerId,
+      userMessageId: message.id,
+      assistantMessageId: `context-assistant-${message.id}`,
+      status: 'context_only',
+      input: message.input,
+      selectedReferences: message.selectedReferences,
+      attachments: message.attachments,
+      mainModel: message.mainModel,
+      modelName: message.mainModel?.modelName,
+      preference: message.preference,
+      executionPermission: message.executionPermission,
+      partialAnswer: '',
+      artifacts: [],
+      createdAt: message.createdAt,
+      updatedAt: message.createdAt,
+      finishedAt: message.createdAt
+    }
+  }
+
+  private async appendContextOnlyMessages(
+    messages: PendingChatMessage[],
+    partnerId: string
+  ): Promise<void> {
+    const writes: Promise<void>[] = []
+    for (const message of messages) {
+      const run = this.createContextOnlyRun(partnerId, message)
+      writes.push(this.deps.aiRunStore.saveRun(run))
+      writes.push(
+        (async () => {
+          const existingRecords = await this.deps.chatMessageLogStore.listByRun(run.id)
+          if (
+            existingRecords.some(
+              (record) => record.entry.kind === 'user' && record.entry.messageId === message.id
+            )
+          ) {
+            return
+          }
+          await this.deps.chatMessageLogStore.appendBatch({
+            partnerId,
+            runId: run.id,
+            createdAt: message.createdAt,
+            entries: [
+              {
+                kind: 'user',
+                messageId: message.id,
+                content: buildBrainUserMessageForInput({
+                  userInput: message.input,
+                  preference: message.preference,
+                  referenceScope: {
+                    selectedReferences: message.selectedReferences,
+                    attachments: message.attachments
+                  },
+                  workspaceRoots: message.workspaceRoots,
+                  runStartedAt: message.createdAt
+                }),
+                input: message.input,
+                context: {
+                  selectedReferences: message.selectedReferences,
+                  attachments: message.attachments
+                }
+              }
+            ]
+          })
+        })()
+      )
+    }
+    await Promise.all(writes)
+  }
+
+  private async createQueuedContinuation(
+    previousRun: AiRunRecord,
+    terminalStatus: 'completed' | 'continued'
+  ): Promise<ActiveRun | null> {
+    const queued = previousRun.pendingMessages || []
+    if (queued.length === 0) return null
+    const timestampFloor = Math.max(Date.now(), previousRun.updatedAt, previousRun.finishedAt || 0)
+    const ordered = [...queued]
+      .sort((left, right) => left.createdAt - right.createdAt)
+      .map((message, index) => ({
+        ...message,
+        createdAt: Math.max(message.createdAt, timestampFloor + index + 1)
+      }))
+    const latest = ordered[ordered.length - 1]
+    if (!latest) return null
+    const mainModel = latest.mainModel
+    if (!mainModel) return null
+    const id = `queued-${latest.id}`
+    const continuationRun: AiRunRecord = {
+      id,
+      partnerId: previousRun.partnerId,
+      userMessageId: latest.id,
+      assistantMessageId: uuidv4(),
+      status: 'running',
+      input: latest.input,
+      selectedReferences: latest.selectedReferences,
+      attachments: latest.attachments,
+      modelName: mainModel.modelName,
+      mainModel,
+      preference: latest.preference,
+      executionPermission: latest.executionPermission,
+      partialAnswer: '',
+      artifacts: [],
+      createdAt: latest.createdAt,
+      updatedAt: latest.createdAt
+    }
+    const child: ActiveRun = {
+      run: continuationRun,
+      cancelled: false,
+      finalizing: false,
+      deleted: false,
+      abortController: new AbortController(),
+      eventQueue: Promise.resolve(),
+      projectionFlushTimer: null
+    }
+
+    previousRun.pendingMessages = []
+    previousRun.status = terminalStatus
+    previousRun.updatedAt = Date.now()
+    previousRun.finishedAt = previousRun.updatedAt
+    if (terminalStatus === 'continued') {
+      previousRun.partialAnswer = ''
+      previousRun.finalAnswer = undefined
+    }
+    this.activeRuns.set(id, child)
+
+    const writePriorMessages = this.appendContextOnlyMessages(
+      ordered.slice(0, -1),
+      previousRun.partnerId
+    )
+    const savePreviousRun = this.deps.aiRunStore.saveRun(previousRun)
+    const saveContinuationRun = this.deps.aiRunStore.saveRun(continuationRun)
+    await Promise.all([writePriorMessages, savePreviousRun, saveContinuationRun])
+    return child
+  }
+
+  private async parkQueuedMessages(run: AiRunRecord): Promise<void> {
+    const queued = run.pendingMessages || []
+    if (queued.length === 0) return
+    const timestampFloor = Math.max(Date.now(), run.updatedAt, run.finishedAt || 0)
+    const ordered = [...queued]
+      .sort((left, right) => left.createdAt - right.createdAt)
+      .map((message, index) => ({
+        ...message,
+        createdAt: Math.max(message.createdAt, timestampFloor + index + 1)
+      }))
+    await this.appendContextOnlyMessages(ordered, run.partnerId)
+    run.pendingMessages = []
+    run.updatedAt = Date.now()
+    await this.deps.aiRunStore.saveRun(run)
   }
 
   private trackSubmitResult(response: ChatSubmitResponse): void {
@@ -410,7 +678,7 @@ export class ChatRunService {
   public async cancelRun(runId: string): Promise<AiRunCancelResponse> {
     const normalizedRunId = String(runId || '').trim()
     const entry = this.activeRuns.get(normalizedRunId)
-    if (!entry) return { success: false, error: '当前运行已结束' }
+    if (!entry || entry.finalizing) return { success: false, error: '当前运行已结束' }
     entry.cancelled = true
     entry.abortController.abort()
     await terminalSessionManager.stopByRun(normalizedRunId)
@@ -433,7 +701,8 @@ export class ChatRunService {
       return { success: false, error: 'interaction not found' }
     }
     const answers = Array.isArray(payload.answers?.answers) ? payload.answers.answers : []
-    if (answers.length !== pending.questions.length) return { success: false, error: '每个问题都必须回答' }
+    if (answers.length !== pending.questions.length)
+      return { success: false, error: '每个问题都必须回答' }
     const questionIds = new Set(pending.questions.map((question) => question.id))
     const seenAnswerIds = new Set<string>()
     for (const answer of answers) {
@@ -643,6 +912,7 @@ export class ChatRunService {
     const activeRun: ActiveRun = {
       run,
       cancelled: false,
+      finalizing: false,
       deleted: false,
       abortController: new AbortController(),
       eventQueue: Promise.resolve(),
@@ -725,6 +995,8 @@ export class ChatRunService {
           listFileChangeRecords: async (request) =>
             (await this.deps.aiFileChangeService.listRecords(request)).items,
           isCancelled: () => Boolean(this.activeRuns.get(runId)?.cancelled),
+          hasPendingUserMessages: () =>
+            (this.activeRuns.get(runId)?.run.pendingMessages?.length || 0) > 0,
           abortSignal: this.activeRuns.get(runId)?.abortController.signal,
           sendEvent,
           recordLlmIo: this.deps.recordLlmIo,
@@ -738,6 +1010,11 @@ export class ChatRunService {
       )
 
       await this.flushRunEvents(runId)
+      if (this.activeRuns.get(runId)?.cancelled && result.status !== 'cancelled') {
+        this.deps.docxApplyService.discardRun(runId)
+        await this.queueRunEvent(runId, { type: 'run_cancelled', runId })
+        return
+      }
       if (result.status === 'cancelled') {
         this.deps.docxApplyService.discardRun(runId)
         await this.queueRunEvent(runId, {
@@ -759,6 +1036,24 @@ export class ChatRunService {
           }
         })
         // run_failed 已由 AiRunService 唯一发送，这里不再补发。
+        return
+      }
+
+      if (result.status === 'continued') {
+        const continuedRun = await this.getMutableRun(runId)
+        if (continuedRun) {
+          continuedRun.status = 'continued'
+          continuedRun.pendingMessages = continuedRun.pendingMessages || []
+          continuedRun.partialAnswer = ''
+          continuedRun.finalAnswer = undefined
+          continuedRun.artifacts = result.finalArtifacts.reduce(
+            (artifacts, artifact) => appendArtifact(artifacts, artifact),
+            continuedRun.artifacts || []
+          )
+          continuedRun.updatedAt = Date.now()
+          await this.deps.aiRunStore.saveRun(continuedRun)
+        }
+        await this.queueRunEvent(runId, { type: 'run_completed', runId })
         return
       }
 
@@ -896,7 +1191,9 @@ export class ChatRunService {
       questions: UserQuestion[]
       stage?: AiRunEvent['stage']
     }
-  ): Promise<{ accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }> {
+  ): Promise<
+    { accepted: true; result: AskUserQuestionResult } | { accepted: false; error: string }
+  > {
     if (this.activeQuestions.has(runId) || this.activeApprovals.has(runId)) {
       return { accepted: false, error: '已有待处理的人机交互' }
     }
@@ -932,7 +1229,10 @@ export class ChatRunService {
       })
     } catch (error) {
       const pending = this.activeQuestions.get(runId)
-      pending?.resolve({ accepted: false, error: error instanceof Error ? error.message : String(error) })
+      pending?.resolve({
+        accepted: false,
+        error: error instanceof Error ? error.message : String(error)
+      })
     }
     return await resultPromise
   }
@@ -962,21 +1262,67 @@ export class ChatRunService {
   private async persistProjectAndBroadcastEvent(runId: string, event: AiRunEvent): Promise<void> {
     const entry = this.activeRuns.get(runId)
     if (entry?.deleted) return
-    const run = await this.getMutableRun(runId)
-    if (!run) return
-    await this.projectEvent(runId, run, event)
-    if (
+    const isTerminalEvent =
       event.type === 'run_completed' ||
       event.type === 'run_failed' ||
       event.type === 'run_cancelled'
+    if (isTerminalEvent && entry) entry.finalizing = true
+    let projectedEvent: AiRunEvent =
+      event.type === 'run_completed' && entry?.cancelled ? { type: 'run_cancelled', runId } : event
+    const run = await this.getMutableRun(runId)
+    if (!run || entry?.deleted) return
+    if (projectedEvent.type === 'run_completed' && entry?.cancelled) {
+      projectedEvent = { type: 'run_cancelled', runId }
+    }
+    let continuation: ActiveRun | null = null
+    const discardUnstartedContinuation = (): void => {
+      if (!continuation) return
+      continuation.deleted = true
+      continuation.cancelled = true
+      continuation.abortController.abort()
+      this.clearProjectionFlush(continuation.run.id)
+      this.activeRuns.delete(continuation.run.id)
+      continuation = null
+    }
+    if (projectedEvent.type === 'run_cancelled' || projectedEvent.type === 'run_failed') {
+      await this.parkQueuedMessages(run)
+    } else if (projectedEvent.type === 'run_completed' && (run.pendingMessages?.length || 0) > 0) {
+      continuation = await this.createQueuedContinuation(
+        run,
+        run.status === 'continued' ? 'continued' : 'completed'
+      )
+    }
+    if (entry?.deleted) {
+      discardUnstartedContinuation()
+      return
+    }
+    await this.projectEvent(runId, run, projectedEvent)
+    if (entry?.deleted) {
+      discardUnstartedContinuation()
+      return
+    }
+    if (
+      (projectedEvent.type === 'run_completed' ||
+        projectedEvent.type === 'run_failed' ||
+        projectedEvent.type === 'run_cancelled') &&
+      (run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled')
     ) {
       try {
-        await this.deps.onRunTerminal?.(run, run.status as 'completed' | 'failed' | 'cancelled')
+        await this.deps.onRunTerminal?.(run, run.status)
       } catch (error) {
         console.error('[CHAT-RUN] terminal notification failed:', error)
       }
     }
-    this.broadcastEvent(event)
+    if (entry?.deleted) {
+      discardUnstartedContinuation()
+      return
+    }
+    this.broadcastEvent(projectedEvent)
+    if (continuation && this.deps.autoStartRuns !== false) {
+      void this.startAiRun(continuation.run.id).catch((error) => {
+        console.error('[CHAT-RUN] queued continuation start failed:', error)
+      })
+    }
   }
 
   private async getMutableRun(runId: string): Promise<AiRunRecord | null> {
@@ -1057,7 +1403,10 @@ export class ChatRunService {
       run.pendingInteraction = undefined
       run.updatedAt = now
     } else if (event.type === 'run_completed') {
-      run.status = run.status === 'failed' || run.status === 'cancelled' ? run.status : 'completed'
+      run.status =
+        run.status === 'failed' || run.status === 'cancelled' || run.status === 'continued'
+          ? run.status
+          : 'completed'
       run.pendingApproval = undefined
       run.pendingInteraction = undefined
       run.updatedAt = now

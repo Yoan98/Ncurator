@@ -30,15 +30,18 @@ export const applyDeliverySideEffects = async (input: {
   ctx: AiRunContext
   cache: HumanRuntimeCache
   state: HumanState
+  finalizing?: boolean
 }): Promise<HumanState> => {
   const docxApplyRecords = await input.ctx.applyDocxRunEdits()
   const pptApplyRecords = (await input.cache.pptRuntime?.commitAll()) || []
   const fileChangeRecords = await input.ctx.listFileChangeRecords({ runId: input.ctx.runId })
   const fileChanges = buildFileChangesSummaryFromFileChangeRecords(fileChangeRecords)
 
-  await input.ctx.appendMessageLog([
-    { kind: 'annotation', eventType: 'finalizing_started', payload: {} }
-  ])
+  if (input.finalizing !== false) {
+    await input.ctx.appendMessageLog([
+      { kind: 'annotation', eventType: 'finalizing_started', payload: {} }
+    ])
+  }
 
   const docxArtifacts =
     docxApplyRecords.length > 0

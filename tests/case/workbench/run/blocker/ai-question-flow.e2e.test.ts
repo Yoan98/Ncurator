@@ -33,8 +33,7 @@ describe('workbench AI question e2e', () => {
         domain: 'workbench',
         suite: 'run',
         groups: ['blocker'],
-        description:
-          '真实 Workbench 提问卡片、伙伴切换与刷新恢复、提交后 Activity 问答投影。',
+        description: '真实 Workbench 提问卡片、伙伴切换与刷新恢复、提交后 Activity 问答投影。',
         fixtures: ['tests/fixtures/workspace'],
         serviceMode: 'real',
         execution: 'live',
@@ -75,6 +74,14 @@ describe('workbench AI question e2e', () => {
 
           const card = page.getByTestId(workbenchSelectors.humanQuestionCard)
           await card.waitFor({ state: 'visible', timeout: 30_000 })
+          const inputCountDuringQuestion = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.input
+          ).count()
+          const queueSendButtonCountDuringQuestion = await getWorkbenchLocator(
+            page,
+            workbenchSelectors.queueSendButton
+          ).count()
           const assistanceBadge = getWorkbenchPrefixLocator(
             page,
             workbenchSelectors.partnerNeedsAssistancePrefix
@@ -247,6 +254,8 @@ describe('workbench AI question e2e', () => {
             previousBox,
             guidePlaceholder,
             stopLabel,
+            inputCountDuringQuestion,
+            queueSendButtonCountDuringQuestion,
             assistancePersistedAfterPartnerSwitch,
             questionRestoredAfterPartnerSwitch,
             assistanceRestoredAfterReload,
@@ -274,7 +283,9 @@ describe('workbench AI question e2e', () => {
             result.positionBox.x + result.positionBox.width > result.previousBox.x ||
             !result.guidePlaceholder.startsWith('告诉') ||
             !result.guidePlaceholder.endsWith('该怎么做') ||
-            !result.stopLabel.includes('停止本次运行')
+            !result.stopLabel.includes('停止本次运行') ||
+            result.inputCountDuringQuestion !== 0 ||
+            result.queueSendButtonCountDuringQuestion !== 0
           ) {
             throw new Error('question card did not align with the approval card controls')
           }
