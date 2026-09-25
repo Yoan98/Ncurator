@@ -296,6 +296,8 @@ type TerminalReviewObserverSnapshot = {
   headerText: string
   itemIds: string[]
   itemTexts: string[]
+  headerHasShimmer: boolean
+  itemHasShimmer: boolean
 }
 
 type TerminalReviewObserverState = {
@@ -387,7 +389,11 @@ const installTerminalReviewObserver = async (page: Page): Promise<void> => {
             const id = item.getAttribute('data-process-item-id')
             return id ? [id] : []
           }),
-          itemTexts: items.map((item) => item.textContent?.trim() || '')
+          itemTexts: items.map((item) => item.textContent?.trim() || ''),
+          headerHasShimmer: Boolean(
+            panel.querySelector(':scope > summary .workbench-thinking-shimmer')
+          ),
+          itemHasShimmer: items.some((item) => item.querySelector('.workbench-thinking-shimmer'))
         })
       }
     }
@@ -1308,6 +1314,8 @@ describe('workbench run e2e', () => {
               scenario.reviewStartedCommandIds.includes(itemId) &&
               scenario.reviewResolvedCommandIds.includes(itemId) &&
               reviewObservation?.itemIds.filter((candidate) => candidate === itemId).length === 1 &&
+              reviewObservation.headerHasShimmer &&
+              !reviewObservation.itemHasShimmer &&
               matchingRows.length === 1 &&
               matchingRows[0]?.reviewResultText.includes(expectedAiReviewResult) &&
               matchingRows[0]?.reviewResultRailClass.includes('border-l') &&

@@ -451,7 +451,6 @@ const AssistantActivityItemView: React.FC<{
     item.terminalReviewState !== 'not_executed'
   const interaction = resolveQuestionInteraction(item)
   const toolText = getActivityItemText(item)
-  const toolTextShimmer = item.terminalReviewState === 'reviewing'
   const readImagePaths = item.toolName === 'read_image' ? readImagePathsFromInput(item.input) : []
   const hasReviewResult = Boolean(review || item.terminalReviewDecision)
   const thumbs =
@@ -467,7 +466,7 @@ const AssistantActivityItemView: React.FC<{
         data-terminal-review-state={item.terminalReviewState}
         className={failed ? 'text-[#B3261E]' : undefined}
       >
-        {renderSegments(toolText, { shimmer: toolTextShimmer })}
+        {renderSegments(toolText)}
         {interaction ? <InteractionResultView interaction={interaction} /> : null}
         {thumbs}
       </div>
@@ -483,9 +482,7 @@ const AssistantActivityItemView: React.FC<{
       data-terminal-review-decision={item.terminalReviewDecision}
       className={failed ? 'text-[#B3261E]' : undefined}
     >
-      <div className="min-w-0 leading-[22px]">
-        {renderSegments(toolText, { shimmer: toolTextShimmer })}
-      </div>
+      <div className="min-w-0 leading-[22px]">{renderSegments(toolText)}</div>
       <div
         data-testid={workbenchSelectors.assistantReviewResultRail}
         className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#787774]"
