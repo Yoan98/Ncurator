@@ -10,13 +10,13 @@ type ReferenceIconProps = {
 const iconSizeClassName = {
   sm: 'h-[18px] w-[18px]',
   md: 'h-[21px] w-[21px]',
-  inline: 'h-[1.22em] w-[1.22em]'
+  inline: 'h-[0.9em] w-[0.9em]'
 } as const
 
 const containerSizeClassName = {
   sm: 'h-[22px] w-[22px]',
   md: 'h-8 w-8',
-  inline: 'h-[1.34em] w-[1.34em]'
+  inline: 'relative top-[0.1em] h-[1em] w-[1em]'
 } as const
 
 const DocumentGlyph: React.FC<{

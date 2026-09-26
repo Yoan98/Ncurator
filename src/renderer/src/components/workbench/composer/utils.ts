@@ -133,7 +133,7 @@ export const readComposerNodesFromEditor = (
 const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): void => {
   const visualSpec = getReferenceVisualSpec(scope)
   const icon = document.createElement('span')
-  icon.className = `inline-flex h-[1.34em] w-[1.34em] shrink-0 items-center justify-center ${visualSpec.iconClassName}`
+  icon.className = `relative top-[0.1em] inline-flex h-[1em] w-[1em] shrink-0 items-center justify-center ${visualSpec.iconClassName}`
   icon.dataset.referenceIconKind = visualSpec.kind
 
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
@@ -142,7 +142,7 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
     visualSpec.kind === 'directory' || visualSpec.kind === 'web' ? '0 0 24 24' : '0 0 18 18'
   )
   svg.setAttribute('aria-hidden', 'true')
-  svg.setAttribute('class', `h-[1.22em] w-[1.22em] ${visualSpec.iconClassName}`)
+  svg.setAttribute('class', `h-[0.9em] w-[0.9em] ${visualSpec.iconClassName}`)
 
   if (visualSpec.kind === 'directory' || visualSpec.kind === 'web') {
     svg.setAttribute('fill', 'none')
@@ -215,7 +215,7 @@ const appendReferenceIcon = (container: HTMLElement, scope: SelectedReference): 
 export const createScopeTokenElement = (scope: SelectedReference): HTMLElement => {
   const visualSpec = getReferenceVisualSpec(scope)
   const token = document.createElement('span')
-  token.className = `inline-flex max-w-full items-center gap-[2px] align-[-0.08em] text-[0.9em] font-medium leading-[inherit] ${visualSpec.labelClassName}`
+  token.className = `inline-flex max-w-full items-baseline gap-[2px] align-baseline text-[0.9em] font-medium leading-[inherit] ${visualSpec.labelClassName}`
   token.contentEditable = 'false'
   token.dataset.role = 'scope-token'
   token.dataset.scopeKey = getScopeKey(scope)

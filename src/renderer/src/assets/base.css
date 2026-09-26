@@ -1739,12 +1739,7 @@ mark {
 }
 
 .markdown-body .markdown-reference-link {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 0.35rem;
-  max-width: 100%;
-  min-width: 0;
-  vertical-align: middle;
+  vertical-align: baseline;
   color: var(--notion-accent-blue);
   text-decoration: none;
   text-underline-offset: 3px;
@@ -1753,18 +1748,28 @@ mark {
 
 .markdown-body .markdown-reference-icon {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  width: 0.95em;
+  height: 0.95em;
+  margin-right: 0.35rem;
   color: var(--notion-accent-blue);
   line-height: 1;
+  vertical-align: -0.12em;
+}
+
+.markdown-body .markdown-reference-icon svg {
+  display: block;
+  width: 0.9em;
+  height: 0.9em;
 }
 
 .markdown-body .markdown-normal-link {
   color: var(--notion-accent-blue);
   text-decoration: none;
   text-underline-offset: 3px;
-  vertical-align: middle;
+  vertical-align: baseline;
   word-break: break-word;
   overflow-wrap: anywhere;
 }
