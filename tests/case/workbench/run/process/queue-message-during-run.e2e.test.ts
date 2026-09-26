@@ -64,6 +64,17 @@ describe('workbench run e2e', () => {
               event.runId === firstRunStarted.runId &&
               event.toolName === 'text_file_read'
           })
+          const firstRunDurationTestId = await runtime.page
+            .waitForFunction(
+              (prefix) =>
+                document
+                  .querySelector(`[data-testid^="${prefix}-"]`)
+                  ?.getAttribute('data-testid') ||
+                null,
+              workbenchSelectors.assistantRunDurationPrefix,
+              { timeout: 10_000 }
+            )
+            .then(async (handle) => await handle.jsonValue<string>())
 
           await setWorkbenchInput(runtime.page, FIRST_QUEUED_INPUT)
           await runtime.page.waitForFunction(
@@ -155,6 +166,39 @@ describe('workbench run e2e', () => {
           if (firstRunTerminal.type !== 'run_completed') {
             throw new Error(`initial run ended with ${firstRunTerminal.type}`)
           }
+          await runtime.page.waitForFunction(
+            (testId) =>
+              document.querySelector(`[data-testid="${testId}"]`)?.textContent?.includes('用时 '),
+            firstRunDurationTestId,
+            { timeout: 10_000 }
+          )
+          const firstRunDurationText =
+            (await runtime.page.locator(`[data-testid="${firstRunDurationTestId}"]`).textContent()) ||
+            ''
+          const firstRunAssistantMessageId = firstRunDurationTestId.slice(
+            `${workbenchSelectors.assistantRunDurationPrefix}-`.length
+          )
+          const firstRunUserBeforeAssistant = await runtime.page.evaluate(
+            ({ assistantMessageId, userInput, userMessagePrefix }) => {
+              const userMessage = Array.from(
+                document.querySelectorAll(`[data-testid^="${userMessagePrefix}-"]`)
+              ).find((element) => element.textContent?.includes(userInput))
+              const assistantTurn = document.querySelector(
+                `[data-testid="workbench-assistant-turn-${assistantMessageId}"]`
+              )
+              return Boolean(
+                userMessage &&
+                  assistantTurn &&
+                  (userMessage.compareDocumentPosition(assistantTurn) &
+                    Node.DOCUMENT_POSITION_FOLLOWING)
+              )
+            },
+            {
+              assistantMessageId: firstRunAssistantMessageId,
+              userInput: FIRST_INPUT,
+              userMessagePrefix: workbenchSelectors.userMessagePrefix
+            }
+          )
 
           const continuationStarted = await waitForWorkbenchAiEvent(runtime, {
             name: 'queued-continuation-started',
@@ -208,6 +252,8 @@ describe('workbench run e2e', () => {
             firstRunId: firstRunStarted.runId,
             continuationInput:
               continuationStarted.type === 'run_started' ? continuationStarted.input : '',
+            firstRunDurationText,
+            firstRunUserBeforeAssistant,
             firstQueuedInput: FIRST_QUEUED_INPUT,
             secondQueuedInput: SECOND_QUEUED_INPUT,
             toolResults: toolResults.map((event) => ({
@@ -230,6 +276,8 @@ describe('workbench run e2e', () => {
               result.primaryButtonCount === 1 &&
               result.sendButtonCountWithDraft === 1 &&
               result.continuationInput === SECOND_QUEUED_INPUT &&
+              result.firstRunDurationText.includes('用时 ') &&
+              result.firstRunUserBeforeAssistant &&
               result.toolResults.some((event) => event.toolName === 'text_file_read' && event.ok),
             {
               name: 'workbench-queues-messages-during-ai-run',

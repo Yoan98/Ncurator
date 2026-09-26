@@ -99,6 +99,9 @@ export const createContextBudgetNode = (input: { ctx: AiRunContext; cache: Human
       input.cache.currentUserLogAppended = true
     }
 
+    await input.ctx.waitForPendingUserMessageSubmissions()
+    input.ctx.checkCancelled()
+
     if (input.ctx.hasPendingUserMessages()) {
       return {
         ...state,

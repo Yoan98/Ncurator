@@ -625,9 +625,12 @@ const applyRunRecordToTurn = (
 ): AssistantTurnViewModel => {
   const artifacts = run.artifacts || []
   const runFinished =
-    run.status === 'completed' || run.status === 'failed' || run.status === 'cancelled'
+    run.status === 'completed' ||
+    run.status === 'failed' ||
+    run.status === 'cancelled' ||
+    run.status === 'continued'
   const status =
-    run.status === 'completed'
+    run.status === 'completed' || run.status === 'continued'
       ? 'completed'
       : run.status === 'failed'
         ? 'failed'
@@ -691,7 +694,8 @@ const buildAssistantTurnFromRunSnapshot = (
     runFinished:
       snapshot.run.status === 'completed' ||
       snapshot.run.status === 'failed' ||
-      snapshot.run.status === 'cancelled'
+      snapshot.run.status === 'cancelled' ||
+      snapshot.run.status === 'continued'
   })
   const approvalReviews = projectApprovalReviews({
     records: snapshot.messageLogRecords || []

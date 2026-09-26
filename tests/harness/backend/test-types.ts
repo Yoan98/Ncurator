@@ -191,6 +191,7 @@ export type CreateAiRunContextInput = {
   questionResolver?: QuestionResolver
   checkCancelledOverride?: () => void
   hasPendingUserMessages?: () => boolean
+  waitForPendingUserMessageSubmissions?: () => Promise<void>
   observeEvent?: (event: AiRunEvent) => void
   humanRuntimeOverrides?: {
     graphRecursionLimit?: number

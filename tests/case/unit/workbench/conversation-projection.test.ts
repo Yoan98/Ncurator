@@ -155,6 +155,47 @@ describe('conversationProjection', () => {
     expect(messages[1]).toMatchObject({ role: 'assistant', content: '' })
   })
 
+  it('orders a continued assistant process immediately after its projected user message', () => {
+    const messages = projectAiConversationMessages({
+      partnerId: 'partner-1',
+      runs: [
+        buildRun({
+          id: 'run-continued',
+          userMessageId: 'continued-user',
+          assistantMessageId: 'continued-assistant',
+          status: 'continued',
+          input: '继续查财报',
+          createdAt: 10,
+          updatedAt: 200,
+          finishedAt: 200,
+          partialAnswer: '',
+          finalAnswer: undefined
+        })
+      ],
+      records: [
+        buildLogRecord({
+          runId: 'run-continued',
+          seq: 1,
+          createdAt: 100,
+          entry: {
+            kind: 'user',
+            messageId: 'continued-user',
+            content: '继续查财报',
+            input: '继续查财报',
+            context: { selectedReferences: [], attachments: [] }
+          }
+        })
+      ]
+    })
+    const ordered = [...messages].sort((left, right) => left.timestamp - right.timestamp)
+
+    expect(ordered.map((message) => message.id)).toEqual([
+      'continued-user',
+      'continued-assistant'
+    ])
+    expect(ordered[1]?.timestamp).toBe(ordered[0]!.timestamp + 1)
+  })
+
   it('keeps pending messages after active assistant activity in FIFO order', () => {
     const runs = [
       buildRun({

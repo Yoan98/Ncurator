@@ -27,6 +27,7 @@ type TestService = {
 }
 
 type ChatRunServicePrivate = ChatRunService & {
+  activeRuns: Map<string, { finalizing: boolean }>
   queueRunEvent: (runId: string, event: AiRunEvent) => Promise<void>
   requestApprovalBatch: (
     runId: string,
@@ -220,8 +221,10 @@ describe('unit ai persistence backend', () => {
     run.status = 'continued'
     await setup.storage.aiRun.saveRun(run)
     const second = await submitQueued('第二条追加消息')
+    const third = await submitQueued('第三条追加消息')
     expect(first).toMatchObject({ success: true, queued: true, userMessage: { pending: true } })
     expect(second).toMatchObject({ success: true, queued: true, userMessage: { pending: true } })
+    expect(third).toMatchObject({ success: true, queued: true, userMessage: { pending: true } })
     expect(first.run).toBeUndefined()
     expect(first.assistantMessage).toBeUndefined()
     expect(first.userMessage?.timestamp).toBeLessThan(second.userMessage?.timestamp ?? 0)
@@ -240,16 +243,22 @@ describe('unit ai persistence backend', () => {
     const messages = snapshot.messages.filter((item) => item.role === 'user')
     const firstQueuedMessage = first.userMessage
     const secondQueuedMessage = second.userMessage
+    const thirdQueuedMessage = third.userMessage
     const firstQueuedContextRun = firstQueuedMessage
       ? await setup.storage.aiRun.getRun(`context-${firstQueuedMessage.id}`)
       : null
     const log = firstQueuedMessage ? await setup.storage.chatMessageLog.list('partner-1') : []
     const firstQueuedLog = log.find((record) => record.runId === firstQueuedContextRun?.id)
+    const secondQueuedContextRun = secondQueuedMessage
+      ? await setup.storage.aiRun.getRun(`context-${secondQueuedMessage.id}`)
+      : null
+    const secondQueuedLog = log.find((record) => record.runId === secondQueuedContextRun?.id)
 
     expect(messages.map((item) => item.content)).toEqual([
       '生成测试回答',
       '第一条追加消息',
-      '第二条追加消息'
+      '第二条追加消息',
+      '第三条追加消息'
     ])
     expect(messages.slice(1).every((item) => item.pending !== true)).toBe(true)
     expect(firstQueuedContextRun?.status).toBe('context_only')
@@ -258,9 +267,73 @@ describe('unit ai persistence backend', () => {
       messageId: firstQueuedMessage?.id,
       input: '第一条追加消息'
     })
-    expect(snapshot.activeRuns.map((item) => item.run.input)).toEqual(['第二条追加消息'])
-    expect(snapshot.activeRuns[0]?.run.userMessageId).toBe(secondQueuedMessage?.id)
+    expect(secondQueuedLog?.entry).toMatchObject({
+      kind: 'user',
+      messageId: secondQueuedMessage?.id,
+      input: '第二条追加消息'
+    })
+    expect(firstQueuedLog?.seq).toBeLessThan(secondQueuedLog?.seq ?? 0)
+    expect(snapshot.activeRuns.map((item) => item.run.input)).toEqual(['第三条追加消息'])
+    expect(snapshot.activeRuns[0]?.run.userMessageId).toBe(thirdQueuedMessage?.id)
     expect((await setup.storage.aiRun.getRun(run.id))?.pendingMessages).toEqual([])
+  })
+
+  it('waits for an in-flight queued submission before finalizing the run', async () => {
+    const setup = await createTestService()
+    const run = await submitAiRun(setup)
+    const workspaceStore = setup.storage.workspace
+    const listWorkspaces = workspaceStore.listWorkspaces.bind(workspaceStore)
+    let releaseValidation: () => void = () => {}
+    let markValidationStarted: () => void = () => {}
+    const validationGate = new Promise<void>((resolve) => {
+      releaseValidation = resolve
+    })
+    const validationStarted = new Promise<void>((resolve) => {
+      markValidationStarted = resolve
+    })
+    workspaceStore.listWorkspaces = async () => {
+      markValidationStarted()
+      await validationGate
+      return await listWorkspaces()
+    }
+
+    const service = setup.service as ChatRunServicePrivate
+    const submission = setup.service.submit({
+      partnerId: 'partner-1',
+      input: '校验期间到达的追加消息',
+      preference: 'default',
+      executionPermission: 'review',
+      mainModel: { configId: 'mock-config', modelName: 'mock-model' }
+    })
+    let terminalFinished = false
+    const terminal = service
+      .queueRunEvent(run.id, { type: 'run_completed', runId: run.id })
+      .then(() => {
+        terminalFinished = true
+      })
+
+    try {
+      await validationStarted
+      await waitForCondition(() => service.activeRuns.get(run.id)?.finalizing === true)
+      expect(terminalFinished).toBe(false)
+      releaseValidation()
+
+      const queued = await submission
+      await terminal
+      const snapshot = await setup.service.getPartnerSnapshot('partner-1')
+
+      expect(queued).toMatchObject({
+        success: true,
+        queued: true,
+        userMessage: { content: '校验期间到达的追加消息', pending: true }
+      })
+      expect(snapshot.activeRuns.map((item) => item.run.input)).toEqual([
+        '校验期间到达的追加消息'
+      ])
+      expect((await setup.storage.aiRun.getRun(run.id))?.pendingMessages).toEqual([])
+    } finally {
+      releaseValidation()
+    }
   })
 
   it('stopped-run-parks-queued-messages-without-starting-ai', async () => {

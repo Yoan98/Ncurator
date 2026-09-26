@@ -19,13 +19,36 @@ describe('ai human mock-llm backend', () => {
       runMode: 'single',
       execute: async (runtime) => {
         let hasQueuedMessage = false
+        let queueSubmissionStarted = false
+        let toolResultRecorded = false
+        let firstBrainCallCount = 0
         let firstBrainMessages: BaseMessage[] | null = null
+        const countFirstBrainCalls: NonNullable<AiRunDeps['chatToolsWrapper']> =
+          (realChatTools) => async (request) => {
+            if (request.caller === 'human.brain') firstBrainCallCount += 1
+            return await realChatTools(request)
+          }
         const firstRunner = createHumanTestRunner(runtime, {
           runId: `${runtime.runId}-queue-first`,
           partnerId: 'queued-message-partner',
           hasPendingUserMessages: () => hasQueuedMessage,
+          waitForPendingUserMessageSubmissions: async () => {
+            if (!queueSubmissionStarted || hasQueuedMessage) return
+            await new Promise<void>((resolve) => setTimeout(resolve, 10))
+            hasQueuedMessage = true
+          },
+          chatToolsWrapper: countFirstBrainCalls,
           observeEvent: (event) => {
-            if (event.type === 'tool_call_started') hasQueuedMessage = true
+            if (event.type === 'tool_call_result') toolResultRecorded = true
+            if (
+              event.type === 'context_budget_evaluated' &&
+              event.decision === 'continue' &&
+              toolResultRecorded
+            ) {
+              // Simulate a send arriving after context_budget checked the queue,
+              // while the pending-message validation is still in flight.
+              queueSubmissionStarted = true
+            }
           },
           structuredOutputScript: {
             'human.brain': [
@@ -93,6 +116,7 @@ describe('ai human mock-llm backend', () => {
           secondOutput,
           firstLog,
           firstEvents: runtime.eventCollector.snapshot(),
+          firstBrainCallCount,
           firstToolResultIndex,
           secondUserMessageIndex,
           lastMessageType: secondLastMessage?.getType()
@@ -102,7 +126,8 @@ describe('ai human mock-llm backend', () => {
         const toolResults = filterAiRunEventsByType(result.firstEvents, 'tool_call_result')
         const toolLogEntries = result.firstLog.filter((record) => record.entry.kind === 'tool')
         runtime.assertThat(
-          result.firstOutput.status === 'yielded' &&
+            result.firstOutput.status === 'yielded' &&
+            result.firstBrainCallCount === 1 &&
             toolResults.some((event) => event.toolName === 'kb_list_documents') &&
             toolLogEntries.some(
               (record) =>
@@ -118,6 +143,7 @@ describe('ai human mock-llm backend', () => {
             message: '安全交接必须等真实工具结果写入后发生，续接消息再按顺序追加到历史上下文末尾。',
             data: {
               firstOutput: result.firstOutput,
+              firstBrainCallCount: result.firstBrainCallCount,
               secondOutput: result.secondOutput,
               toolResults,
               toolLogEntries: toolLogEntries.map((record) => record.entry),

@@ -49,6 +49,10 @@ export const projectAiConversationMessages = (input: {
         attachments: record.entry.context.attachments as ChatAttachment[]
       })
     }
+
+    const runUserMessage = messages.find(
+      (message) => message.id === run.userMessageId && message.role === 'user'
+    )
     if (!loggedMessageIds.has(run.userMessageId)) {
       const userRecord = userRecords[0]
       const userEntry = userRecord?.entry.kind === 'user' ? userRecord.entry : undefined
@@ -86,7 +90,7 @@ export const projectAiConversationMessages = (input: {
         content: deliveryContent,
         timestamp:
           run.status === 'continued'
-            ? run.createdAt + 1
+            ? (runUserMessage?.timestamp ?? run.createdAt) + 1
             : (deliveryRecord?.createdAt ?? run.finishedAt ?? run.updatedAt ?? run.createdAt + 1),
         artifacts: run.artifacts as AiArtifactRef[] | undefined,
         linkAccess: deliveryEntry?.linkAccess,

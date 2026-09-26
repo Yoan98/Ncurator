@@ -49,6 +49,17 @@ export const createBrainNode = (input: {
 }) => {
   return async (state: HumanState): Promise<HumanState> => {
     input.ctx.checkCancelled()
+    await input.ctx.waitForPendingUserMessageSubmissions()
+    input.ctx.checkCancelled()
+    if (input.ctx.hasPendingUserMessages()) {
+      return {
+        ...state,
+        execution: {
+          ...state.execution,
+          stage: 'context_budget'
+        }
+      }
+    }
     assertExternalLearnedSkillIds(state.skills.learnedSkillIds)
     input.cache.currentState = state
 

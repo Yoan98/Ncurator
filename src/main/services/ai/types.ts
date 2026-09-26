@@ -307,6 +307,7 @@ export type AiRunDeps = {
   listFileChangeRecords: (input: { runId: string }) => Promise<AiFileChangeRecord[]>
   isCancelled: () => boolean
   hasPendingUserMessages?: () => boolean
+  waitForPendingUserMessageSubmissions?: () => Promise<void>
   abortSignal?: AbortSignal
   sendEvent: (event: AiRunEvent) => void
   recordLlmIo?: (record: AiLlmIoRecord) => void
@@ -351,6 +352,7 @@ export type AiRunContext = {
   workspace?: AiWorkspaceBinding
   checkCancelled: () => void
   hasPendingUserMessages: () => boolean
+  waitForPendingUserMessageSubmissions: () => Promise<void>
   abortSignal?: AbortSignal
   chatStructured: <T extends Record<string, unknown>>(input: {
     caller: string

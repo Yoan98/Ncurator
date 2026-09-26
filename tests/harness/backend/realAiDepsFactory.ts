@@ -233,6 +233,7 @@ export const createRealAiDepsFactory = async (input: {
           (await aiFileChangeService.listRecords(request)).items,
         isCancelled: contextInput.checkCancelledOverride || (() => false),
         hasPendingUserMessages: contextInput.hasPendingUserMessages,
+        waitForPendingUserMessageSubmissions: contextInput.waitForPendingUserMessageSubmissions,
         sendEvent: (event) => {
           input.eventCollector.add(event)
           contextInput.observeEvent?.(event)

@@ -93,6 +93,7 @@ type ActiveRun = {
   abortController: AbortController
   eventQueue: Promise<void>
   projectionFlushTimer: ReturnType<typeof setTimeout> | null
+  pendingUserMessageSubmissions: Set<Promise<void>>
 }
 
 type ChatRunServiceDeps = {
@@ -412,9 +413,17 @@ export class ChatRunService {
       const activeRun = Array.from(this.activeRuns.values()).find(
         (entry) => entry.run.partnerId === partnerId && isActiveRunRecord(entry.run)
       )
-      const response = activeRun
-        ? await this.enqueueMessage(activeRun, { ...payload, partnerId, input })
-        : await this.submitAi({ ...payload, partnerId, input })
+      let response: ChatSubmitResponse
+      if (activeRun) {
+        const finishSubmission = this.registerPendingUserMessageSubmission(activeRun)
+        try {
+          response = await this.enqueueMessage(activeRun, { ...payload, partnerId, input })
+        } finally {
+          finishSubmission()
+        }
+      } else {
+        response = await this.submitAi({ ...payload, partnerId, input })
+      }
       this.trackSubmitResult(response)
       return response
     } catch (error) {
@@ -425,6 +434,29 @@ export class ChatRunService {
       throw error
     } finally {
       this.pendingPartnerSubmissions.delete(partnerId)
+    }
+  }
+
+  private registerPendingUserMessageSubmission(activeRun: ActiveRun): () => void {
+    let resolveSubmission: () => void = () => {}
+    const submission = new Promise<void>((resolve) => {
+      resolveSubmission = resolve
+    })
+    activeRun.pendingUserMessageSubmissions.add(submission)
+    let released = false
+    return () => {
+      if (released) return
+      released = true
+      activeRun.pendingUserMessageSubmissions.delete(submission)
+      resolveSubmission()
+    }
+  }
+
+  private async waitForPendingUserMessageSubmissions(runId: string): Promise<void> {
+    while (true) {
+      const activeRun = this.activeRuns.get(runId)
+      if (!activeRun || activeRun.pendingUserMessageSubmissions.size === 0) return
+      await Promise.all([...activeRun.pendingUserMessageSubmissions])
     }
   }
 
@@ -465,10 +497,8 @@ export class ChatRunService {
     const workspaces = await this.deps.workspaceStore.listWorkspaces()
     if (
       this.activeRuns.get(run.id) !== activeRun ||
-      activeRun.finalizing ||
       activeRun.cancelled ||
-      (run.status !== 'running' &&
-        !(run.status === 'continued' && (run.pendingMessages?.length || 0) > 0)) ||
+      (run.status !== 'running' && run.status !== 'continued') ||
       this.activeApprovals.has(run.id) ||
       this.activeQuestions.has(run.id)
     ) {
@@ -534,50 +564,44 @@ export class ChatRunService {
     messages: PendingChatMessage[],
     partnerId: string
   ): Promise<void> {
-    const writes: Promise<void>[] = []
     for (const message of messages) {
       const run = this.createContextOnlyRun(partnerId, message)
-      writes.push(this.deps.aiRunStore.saveRun(run))
-      writes.push(
-        (async () => {
-          const existingRecords = await this.deps.chatMessageLogStore.listByRun(run.id)
-          if (
-            existingRecords.some(
-              (record) => record.entry.kind === 'user' && record.entry.messageId === message.id
-            )
-          ) {
-            return
+      await this.deps.aiRunStore.saveRun(run)
+      const existingRecords = await this.deps.chatMessageLogStore.listByRun(run.id)
+      if (
+        existingRecords.some(
+          (record) => record.entry.kind === 'user' && record.entry.messageId === message.id
+        )
+      ) {
+        continue
+      }
+      await this.deps.chatMessageLogStore.appendBatch({
+        partnerId,
+        runId: run.id,
+        createdAt: message.createdAt,
+        entries: [
+          {
+            kind: 'user',
+            messageId: message.id,
+            content: buildBrainUserMessageForInput({
+              userInput: message.input,
+              preference: message.preference,
+              referenceScope: {
+                selectedReferences: message.selectedReferences,
+                attachments: message.attachments
+              },
+              workspaceRoots: message.workspaceRoots,
+              runStartedAt: message.createdAt
+            }),
+            input: message.input,
+            context: {
+              selectedReferences: message.selectedReferences,
+              attachments: message.attachments
+            }
           }
-          await this.deps.chatMessageLogStore.appendBatch({
-            partnerId,
-            runId: run.id,
-            createdAt: message.createdAt,
-            entries: [
-              {
-                kind: 'user',
-                messageId: message.id,
-                content: buildBrainUserMessageForInput({
-                  userInput: message.input,
-                  preference: message.preference,
-                  referenceScope: {
-                    selectedReferences: message.selectedReferences,
-                    attachments: message.attachments
-                  },
-                  workspaceRoots: message.workspaceRoots,
-                  runStartedAt: message.createdAt
-                }),
-                input: message.input,
-                context: {
-                  selectedReferences: message.selectedReferences,
-                  attachments: message.attachments
-                }
-              }
-            ]
-          })
-        })()
-      )
+        ]
+      })
     }
-    await Promise.all(writes)
   }
 
   private async createQueuedContinuation(
@@ -623,7 +647,8 @@ export class ChatRunService {
       deleted: false,
       abortController: new AbortController(),
       eventQueue: Promise.resolve(),
-      projectionFlushTimer: null
+      projectionFlushTimer: null,
+      pendingUserMessageSubmissions: new Set()
     }
 
     previousRun.pendingMessages = []
@@ -916,7 +941,8 @@ export class ChatRunService {
       deleted: false,
       abortController: new AbortController(),
       eventQueue: Promise.resolve(),
-      projectionFlushTimer: null
+      projectionFlushTimer: null,
+      pendingUserMessageSubmissions: new Set()
     }
     this.activeRuns.set(runId, activeRun)
 
@@ -997,6 +1023,8 @@ export class ChatRunService {
           isCancelled: () => Boolean(this.activeRuns.get(runId)?.cancelled),
           hasPendingUserMessages: () =>
             (this.activeRuns.get(runId)?.run.pendingMessages?.length || 0) > 0,
+          waitForPendingUserMessageSubmissions: async () =>
+            await this.waitForPendingUserMessageSubmissions(runId),
           abortSignal: this.activeRuns.get(runId)?.abortController.signal,
           sendEvent,
           recordLlmIo: this.deps.recordLlmIo,
@@ -1266,7 +1294,10 @@ export class ChatRunService {
       event.type === 'run_completed' ||
       event.type === 'run_failed' ||
       event.type === 'run_cancelled'
-    if (isTerminalEvent && entry) entry.finalizing = true
+    if (isTerminalEvent && entry) {
+      entry.finalizing = true
+      await this.waitForPendingUserMessageSubmissions(runId)
+    }
     let projectedEvent: AiRunEvent =
       event.type === 'run_completed' && entry?.cancelled ? { type: 'run_cancelled', runId } : event
     const run = await this.getMutableRun(runId)

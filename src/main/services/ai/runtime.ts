@@ -113,6 +113,9 @@ export const createAiRunContext = (payload: AiRunStartPayload, deps: AiRunDeps):
     }),
     checkCancelled,
     hasPendingUserMessages: () => deps.hasPendingUserMessages?.() === true,
+    waitForPendingUserMessageSubmissions: async () => {
+      await deps.waitForPendingUserMessageSubmissions?.()
+    },
     abortSignal: deps.abortSignal,
     chatStructured: llmExecutor.chatStructured,
     chatText: llmExecutor.chatText,

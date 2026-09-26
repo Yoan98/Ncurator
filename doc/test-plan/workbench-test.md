@@ -325,10 +325,10 @@ pnpm test:update:e2e
 #### `queue-message-during-run`
 
 - 测试类型：`e2e / live`
-- What：真实模型读取资料期间从 Composer 追加消息，验证单一主按钮在停止与发送间切换、待处理用户气泡浅灰，以及工具结果完成后安全续接。
+- What：真实模型读取资料期间从 Composer 追加消息，验证单一主按钮、浅灰待处理气泡、安全续接，以及交接后旧过程固定用时和消息显示顺序。
 - Why：AI backend case 不覆盖 Renderer 输入、运行态单按钮切换、pending 气泡投影和 IPC 续接；发送草稿时停止入口暂时切换为排队发送，发送后必须恢复。
-- How：在临时工作区创建三个文本输入，通过真实 UI 发送跨文件汇总请求；观察 `text_file_read` 开始后检查空草稿时唯一主按钮为停止，输入第一条消息后同一按钮切换为发送并提交排队，再输入第二条消息重复提交；确认每次清空草稿后按钮恢复为停止；等待原 run 正常结束及续接 run 完成。记录真实模型、run 事件与最终回答。
-- Oracle：任一时刻 Composer 仅有一个主按钮；空草稿时标签为停止，有可发送内容时同一按钮标签为发送；发送后草稿清空且标签恢复为停止。两条待处理消息都按 FIFO 显示为浅灰气泡且无编辑入口；续接使用第二条消息作为最新诉求并完成。工具结果先于追加消息由 AI live `human-queued-message-safe-boundary-live` 覆盖；FIFO transcript、停止 / 中断后不自动启动由 unit `chat-run-service-contract` 覆盖，对齐 `WB-COMPOSER-017`、`WB-COMPOSER-006`。
+- How：在临时工作区创建三个文本输入，通过真实 UI 发送跨文件汇总请求；观察 `text_file_read` 开始后检查空草稿时唯一主按钮为停止，输入第一条消息后同一按钮切换为发送并提交排队，再输入第二条消息重复提交；确认每次清空草稿后按钮恢复为停止；等待原 run 正常结束及续接 run 完成，并检查原 user 气泡位于对应助手过程卡之前。记录真实模型、run 事件与最终回答。
+- Oracle：任一时刻 Composer 仅有一个主按钮；空草稿时标签为停止，有可发送内容时同一按钮标签为发送；发送后草稿清空且标签恢复为停止。两条待处理消息都按 FIFO 显示为浅灰气泡且无编辑入口；续接使用第二条消息作为最新诉求并完成。初始 run 交接后原过程行显示固定“用时”，对应用户气泡排在其助手过程行之前。工具结果先于追加消息由 AI live `human-queued-message-safe-boundary-live` 覆盖；FIFO transcript、停止 / 中断后不自动启动由 unit `chat-run-service-contract` 覆盖，对齐 `WB-COMPOSER-017`、`WB-COMPOSER-006`。
 
 #### `llm-retry-process-row`
 

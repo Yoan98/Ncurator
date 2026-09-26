@@ -647,10 +647,10 @@ DOCX tool 回归以 7 个公开工具、story 内容树、稳定 `nodeId`、segm
 ##### `human-queued-message-safe-boundary`
 
 - 测试类型：`backend / mock-llm`
-- What：human 工具执行期间出现追加消息时，在工具结果写入后从 `context_budget` 安全让出；下一次 brain 的数组保留历史工具结果并把追加 user 放在末尾。
+- What：human 工具执行期间出现追加提交时，提交校验完成后不启动下一次 brain；在工具结果写入后安全让出，续接上下文保留历史工具结果并把追加 user 放在末尾。
 - Why：追加消息若在 tool result / dispatch 完成前启动下一轮，会造成上下文顺序错乱或漏掉已执行事实。
-- How：脚本化 brain 决策调用真实 `kb_list_documents`；工具启动事件后将 pending callback 设为真，验证当前 graph 让出，再用第二个真实 graph run 捕获首轮 brain messages。
-- Oracle：第一轮状态为 `yielded` 且真实工具结果已写入 log；第二轮状态为 `completed`，历史中工具结果先于尾部追加 user；第二轮不重复调用中断前工具。
+- How：脚本化 brain 决策调用真实 `kb_list_documents`；在工具结果写入、`context_budget` 已完成检查后模拟一条正在校验的提交，延迟确认入队；验证 Brain 入口等待校验并回到交接边界，再用第二个真实 graph run 捕获首轮 brain messages。
+- Oracle：第一轮状态为 `yielded` 且真实工具结果已写入 log；未确认入队前不会启动第二次 brain 决策；第二轮状态为 `completed`，历史中工具结果先于尾部追加 user；第二轮不重复调用中断前工具。
 
 ##### `ai-run-service-embedding-preflight`
 
