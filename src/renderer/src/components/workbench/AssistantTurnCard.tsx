@@ -485,7 +485,7 @@ const AssistantActivityItemView: React.FC<{
       <div className="min-w-0 leading-[22px]">{renderSegments(toolText)}</div>
       <div
         data-testid={workbenchSelectors.assistantReviewResultRail}
-        className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#37352F]"
+        className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#787774]"
       >
         {item.terminalReviewDecision ? (
           <div data-review-actor="ai">
@@ -512,7 +512,7 @@ const AssistantActivityItemView: React.FC<{
 const InteractionResultView: React.FC<{
   interaction: NonNullable<AssistantProcessGroup['items'][number]['interaction']>
 }> = ({ interaction }) => (
-  <div className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#37352F]">
+  <div className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#787774]">
     {interaction.questions.map((question) => {
       const answer = interaction.answers?.find((item) => item.questionId === question.id)
       const labels = question.options
@@ -607,7 +607,11 @@ const AssistantActivityGroupView: React.FC<{
         }`}
         data-testid={waitingApproval ? workbenchSelectors.assistantApprovalWaiting : undefined}
       >
-        <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-[13px] leading-6 text-[#37352F]">
+        <span
+          className={`inline-flex min-w-0 max-w-full items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
+            headerShimmer ? 'text-[#37352F]' : 'text-[#9B9A97] group-hover/execution:text-[#37352F]'
+          }`}
+        >
           <LayerIcon iconKind={iconKind} />
           <span className={`min-w-0 truncate ${headerShimmer ? 'font-medium' : ''}`}>
             {renderSegments(summaryText, { shimmer: headerShimmer })}
@@ -621,7 +625,7 @@ const AssistantActivityGroupView: React.FC<{
         </span>
       </summary>
       {items.length > 0 ? (
-        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#37352F]">
+        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#787774]">
           {items.map((item) => (
             <AssistantActivityItemView
               key={item.id}
