@@ -27,6 +27,7 @@ import {
 } from 'mdast-util-gfm-task-list-item'
 
 type RemarkPluginData = {
+  settings?: object
   micromarkExtensions?: unknown[]
   fromMarkdownExtensions?: unknown[]
   toMarkdownExtensions?: unknown[]

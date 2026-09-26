@@ -41,7 +41,10 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
       className={`markdown-body ${variant === 'thought' ? 'markdown-body--thought' : ''} ${className || ''}`}
     >
       <ReactMarkdown
-        remarkPlugins={[remarkGfmNoAutolink, remarkMath]}
+        remarkPlugins={[
+          remarkGfmNoAutolink,
+          [remarkMath, { singleDollarTextMath: false }] as const
+        ]}
         rehypePlugins={[rehypeKatex]}
         urlTransform={transformAssistantMarkdownUrl}
         components={{

@@ -1663,6 +1663,14 @@ mark {
   padding-left: 1.35rem;
 }
 
+.markdown-body ul {
+  list-style-type: disc;
+}
+
+.markdown-body ol {
+  list-style-type: decimal;
+}
+
 .markdown-body li {
   margin: 0.24rem 0;
   color: var(--ink);
