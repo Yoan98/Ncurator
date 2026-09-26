@@ -67,7 +67,7 @@ type AssistantTurnCardProps = {
 const getProcessStatusClassName = (status: AssistantProcessGroup['status']): string => {
   if (status === 'running') return 'text-[#37352F]'
   if (status === 'failed' || status === 'partial_failed') return 'text-[#B3261E]'
-  return 'text-[#9B9A97]'
+  return 'text-[#37352F]'
 }
 
 const getLayerIconClassName = (iconKind: AssistantProcessIconKind): string => {
@@ -257,7 +257,7 @@ const AssistantProcessThoughtView: React.FC<{
     >
       <div
         ref={contentRef}
-        className={`min-w-0 flex-1 text-[13.5px] leading-[22px] text-[#787774] ${
+        className={`min-w-0 flex-1 text-[13.5px] leading-[22px] text-[#37352F] ${
           expanded ? 'max-h-[320px] overflow-y-auto pr-1' : 'assistant-thought-collapsed'
         }`}
       >
@@ -318,7 +318,7 @@ const AssistantProcessGroupView: React.FC<{ group: AssistantProcessGroup }> = ({
         </span>
       </summary>
       {group.items.length > 0 ? (
-        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#787774]">
+        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#37352F]">
           {group.items.map((item) => (
             <div
               key={item.id}
@@ -485,7 +485,7 @@ const AssistantActivityItemView: React.FC<{
       <div className="min-w-0 leading-[22px]">{renderSegments(toolText)}</div>
       <div
         data-testid={workbenchSelectors.assistantReviewResultRail}
-        className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#787774]"
+        className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#37352F]"
       >
         {item.terminalReviewDecision ? (
           <div data-review-actor="ai">
@@ -512,7 +512,7 @@ const AssistantActivityItemView: React.FC<{
 const InteractionResultView: React.FC<{
   interaction: NonNullable<AssistantProcessGroup['items'][number]['interaction']>
 }> = ({ interaction }) => (
-  <div className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#787774]">
+  <div className="mt-1 space-y-1 border-l border-[#E0DFDC] pl-3 text-xs text-[#37352F]">
     {interaction.questions.map((question) => {
       const answer = interaction.answers?.find((item) => item.questionId === question.id)
       const labels = question.options
@@ -607,11 +607,7 @@ const AssistantActivityGroupView: React.FC<{
         }`}
         data-testid={waitingApproval ? workbenchSelectors.assistantApprovalWaiting : undefined}
       >
-        <span
-          className={`inline-flex min-w-0 max-w-full items-center gap-1 text-[13px] leading-6 transition-colors duration-200 ${
-            headerShimmer ? 'text-[#37352F]' : 'text-[#9B9A97] group-hover/execution:text-[#37352F]'
-          }`}
-        >
+        <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-[13px] leading-6 text-[#37352F]">
           <LayerIcon iconKind={iconKind} />
           <span className={`min-w-0 truncate ${headerShimmer ? 'font-medium' : ''}`}>
             {renderSegments(summaryText, { shimmer: headerShimmer })}
@@ -625,7 +621,7 @@ const AssistantActivityGroupView: React.FC<{
         </span>
       </summary>
       {items.length > 0 ? (
-        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#787774]">
+        <div className="mt-1 space-y-0.5 pl-5 text-[13px] leading-[22px] text-[#37352F]">
           {items.map((item) => (
             <AssistantActivityItemView
               key={item.id}
@@ -729,16 +725,13 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
       <div className="space-y-4">
         {timeline.length > 0 || hasStreamingThought || reserveThinkingSlot || turn.startedAt ? (
           <div
-            className={`transition-opacity duration-200 ${
-              turn.status === 'completed' && hasFinalAnswer ? 'opacity-75' : ''
-            }`}
             data-testid={`${workbenchSelectors.assistantProcessPrefix}-${messageId}`}
           >
             {turn.startedAt ? (
               turn.runFinished ? (
                 <button
                   type="button"
-                  className="mb-2 flex w-full items-center justify-start gap-1.5 border-b border-[#EEEEEC] pb-2 text-left text-[14px] leading-6 text-[#85837F] transition-colors hover:text-[#37352F]"
+                  className="mb-2 flex w-full items-center justify-start gap-1.5 border-b border-[#EEEEEC] pb-2 text-left text-[14px] leading-6 text-[#37352F]"
                   aria-expanded={processExpanded}
                   aria-label={`${processExpanded ? '收起' : '展开'}过程记录`}
                   data-testid={`${workbenchSelectors.assistantProcessTogglePrefix}-${messageId}`}
@@ -756,7 +749,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                   )}
                 </button>
               ) : (
-                <div className="mb-2 flex items-center border-b border-[#EEEEEC] pb-2 text-[14px] leading-6 text-[#85837F]">
+                <div className="mb-2 flex items-center border-b border-[#EEEEEC] pb-2 text-[14px] leading-6 text-[#37352F]">
                   <span
                     data-testid={`${workbenchSelectors.assistantRunDurationPrefix}-${messageId}`}
                   >
@@ -800,7 +793,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
                 return <AssistantProcessGroupView key={entry.id} group={entry.group} />
               })}
               {streamingRole === 'thought' && streamingMarkdown.trim() ? (
-                <div className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[#787774]">
+                <div className="min-w-0 px-2 py-0.5 -mx-2 text-[13.5px] leading-[22px] text-[#37352F]">
                   <MarkdownRenderer
                     content={streamingMarkdown}
                     variant="thought"
@@ -810,7 +803,7 @@ const AssistantTurnCard: React.FC<AssistantTurnCardProps> = ({
               ) : null}
               {reserveThinkingSlot ? (
                 <div
-                  className="flex h-6 items-center gap-1.5 text-[13px] leading-6 text-[#787774]"
+                  className="flex h-6 items-center gap-1.5 text-[13px] leading-6 text-[#37352F]"
                   data-testid={`${workbenchSelectors.assistantProcessItemPrefix}-${messageId}-thinking`}
                   aria-hidden={!showThinkingIndicator}
                 >

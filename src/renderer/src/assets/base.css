@@ -1677,7 +1677,7 @@ mark {
 }
 
 .markdown-body--thought {
-  color: #787774;
+  color: #37352F;
   font-size: 13.5px;
   line-height: 1.6;
 }
@@ -1691,7 +1691,7 @@ mark {
   margin: 0.5rem 0 0.25rem;
   font-size: 13.5px;
   font-weight: 600;
-  color: #5A5A57;
+  color: #37352F;
 }
 
 .markdown-body--thought p,
@@ -1699,12 +1699,12 @@ mark {
 .markdown-body--thought ol,
 .markdown-body--thought li {
   margin-bottom: 0.35rem;
-  color: #787774;
+  color: #37352F;
 }
 
 .markdown-body--thought .markdown-inline-code,
 .markdown-body--thought :not(pre) > code {
-  color: #5A5A57;
+  color: #37352F;
   background-color: rgba(0, 0, 0, 0.04);
 }
 
@@ -1721,7 +1721,7 @@ mark {
   margin: 0 !important;
   padding: 0 !important;
   white-space: nowrap !important;
-  color: #787774 !important;
+  color: #37352F !important;
 }
 
 .markdown-body a {
