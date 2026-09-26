@@ -1,5 +1,5 @@
 {
-  "publishedThrough": 14,
+  "publishedThrough": 15,
   "migrations": [
     {
       "version": 1,
@@ -84,6 +84,12 @@
       "name": "scheduled_task_partner_binding",
       "file": "014_scheduled_task_partner_binding.ts",
       "sha256": "f63be5b8b0c10294bfeac6b1cb7cd2ab9ca746efb29ea89c79a7c22a0fdea228"
+    },
+    {
+      "version": 15,
+      "name": "ai_run_pending_messages",
+      "file": "015_ai_run_pending_messages.ts",
+      "sha256": "0253a6db8158648fd3540ece4e0d25db43fcc7ec14dd0aa084b6117de83c9111"
     }
   ]
 }
