@@ -7,6 +7,7 @@ import { DOMParser } from '@xmldom/xmldom'
 import type { AiFileChangeOperation, AiFileChangeRecord } from '../../../../../../shared/types'
 import { emitFileArtifactEvent } from '../../../events/fileArtifacts'
 import type { WorkspaceCapabilityBuildInput } from '../types'
+import { isPathInsideRoot } from '../utils/pathBoundary'
 import { getPartnerRuntimeDir } from '../../../../assets/WorkspaceAssetService'
 import { resolveSafeTextFilePath, withTextFileMutationQueue } from '../textFile/textFileUtils'
 import type { ImageGenerateInput, ImageGenerateOutput } from './toolSchemas'
@@ -179,6 +180,7 @@ export const generateImage = async (
     sourcePath: args.outputPath,
     allowMissing: true
   })
+  const shouldTrackChange = isPathInsideRoot(outputPath, buildInput.workspaceRootPath)
   const outputBuffer = await renderImage(args)
 
   return await withTextFileMutationQueue(outputPath, async () => {
@@ -188,12 +190,16 @@ export const generateImage = async (
       allowMissing: true
     })
 
-    const existingRecord = (await buildInput.ctx.listFileChangeRecords({ runId: buildInput.runId }))
-      .filter(
-        (record) =>
-          record.capability === 'image' && record.path === outputPath && record.status === 'applied'
-      )
-      .sort((left, right) => right.updatedAt - left.updatedAt)[0]
+    const existingRecord = shouldTrackChange
+      ? (await buildInput.ctx.listFileChangeRecords({ runId: buildInput.runId }))
+          .filter(
+            (record) =>
+              record.capability === 'image' &&
+              record.path === outputPath &&
+              record.status === 'applied'
+          )
+          .sort((left, right) => right.updatedAt - left.updatedAt)[0]
+      : undefined
     const operationId = existingRecord?.id || randomUUID()
     let beforeBuffer: Buffer | undefined
     let beforeMode = 0o644
@@ -217,10 +223,10 @@ export const generateImage = async (
       'file-changes',
       buildInput.runId
     )
-    let beforeSnapshotPath = beforeBuffer
+    let beforeSnapshotPath = beforeBuffer && shouldTrackChange
       ? path.join(artifactRoot, `${operationId}.before`)
       : undefined
-    let beforeChecksum = beforeBuffer ? checksum(beforeBuffer) : undefined
+    let beforeChecksum = beforeBuffer && shouldTrackChange ? checksum(beforeBuffer) : undefined
     if (existingRecord?.operation === 'created') {
       beforeSnapshotPath = undefined
       beforeChecksum = undefined
@@ -234,7 +240,7 @@ export const generateImage = async (
 
     let targetWritten = false
     try {
-      await fs.mkdir(artifactRoot, { recursive: true })
+      if (shouldTrackChange) await fs.mkdir(artifactRoot, { recursive: true })
       if (!existingRecord && beforeBuffer && beforeSnapshotPath) {
         await fs.writeFile(beforeSnapshotPath, beforeBuffer)
       }
@@ -253,6 +259,7 @@ export const generateImage = async (
         await fs.writeFile(outputPath, outputBuffer, { flag: 'wx', mode: 0o644 })
       }
       targetWritten = true
+      if (!shouldTrackChange) return { outputPath: args.outputPath }
 
       const now = Date.now()
       const record: AiFileChangeRecord = {

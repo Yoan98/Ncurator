@@ -20,6 +20,8 @@ const createBrainContext = (error: Error): AiRunContext =>
       selectedReferences: [],
       attachments: []
     },
+    hasPendingUserMessages: () => false,
+    waitForPendingUserMessageSubmissions: async () => undefined,
     checkCancelled: () => undefined,
     chatTools: async () => {
       throw error

@@ -266,7 +266,8 @@ describe('sqlite storage core and stores', () => {
       { version: 11, name: 'drop_terminal_file_change_records' },
       { version: 12, name: 'app_settings' },
       { version: 13, name: 'ai_run_pending_interaction' },
-      { version: 14, name: 'scheduled_task_partner_binding' }
+      { version: 14, name: 'scheduled_task_partner_binding' },
+      { version: 15, name: 'ai_run_pending_messages' }
     ])
 
     const legacyTables = sqlite

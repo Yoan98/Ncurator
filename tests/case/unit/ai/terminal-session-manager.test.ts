@@ -563,7 +563,8 @@ describe.skipIf(process.platform !== 'win32')('terminal session manager on Windo
     const parts = [running.output]
     const hasMoreValues: boolean[] = []
     let cursor = running.readEndPosition
-    for (let index = 0; index < 200; index += 1) {
+    const readDeadline = Date.now() + 10_000
+    while (Date.now() < readDeadline) {
       const read = await manager.read({
         terminalId: running.terminalId,
         chatSessionId: 'chat-chunk',

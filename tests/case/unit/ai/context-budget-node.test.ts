@@ -37,6 +37,8 @@ const createBaseContext = (events: AiRunEvent[]): AiRunContext =>
       rootPath: '/tmp/workspace'
     },
     checkCancelled: () => undefined,
+    hasPendingUserMessages: () => false,
+    waitForPendingUserMessageSubmissions: async () => undefined,
     chatStructured: async () => {
       throw new Error('not used in context budget test')
     },
