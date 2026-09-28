@@ -6,7 +6,7 @@ import { getReferenceVisualSpec } from './referenceVisuals'
 type AttachmentFileIconProps = {
   fileName: string
   className?: string
-  /** 尺寸类单独传，避免与默认 h-10 w-10 在 Tailwind 中互相覆盖失败 */
+  /** 尺寸类单独传，避免与默认尺寸在 Tailwind 中互相覆盖失败 */
   sizeClassName?: string
 }
 
@@ -39,7 +39,7 @@ const createAttachmentFileReference = (fileName: string): FileReference => ({
 export const AttachmentFileIcon: React.FC<AttachmentFileIconProps> = ({
   fileName,
   className = '',
-  sizeClassName = 'h-10 w-10'
+  sizeClassName = 'h-8 w-8'
 }) => {
   const reference = createAttachmentFileReference(fileName)
   const visualSpec = getReferenceVisualSpec(reference)

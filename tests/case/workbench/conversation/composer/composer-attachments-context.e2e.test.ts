@@ -35,6 +35,8 @@ const createAttachmentFixtures = async (): Promise<{
   xlsmPath: string
   xltxPath: string
   xltmPath: string
+  audioPath: string
+  videoPath: string
   zipPath: string
   largePath: string
   folderPath: string
@@ -51,6 +53,8 @@ const createAttachmentFixtures = async (): Promise<{
   const xlsmPath = path.join(rootPath, 'macro-reference.xlsm')
   const xltxPath = path.join(rootPath, 'template-reference.xltx')
   const xltmPath = path.join(rootPath, 'macro-template-reference.xltm')
+  const audioPath = path.join(rootPath, 'sample-audio.mp3')
+  const videoPath = path.join(rootPath, 'sample-video.mp4')
   const zipPath = path.join(rootPath, 'unknown-bundle.zip')
   const largePath = path.join(rootPath, 'qa-large.json')
   const folderPath = path.join(rootPath, 'reference-folder')
@@ -68,6 +72,8 @@ const createAttachmentFixtures = async (): Promise<{
     writeFile(xlsmPath, workbookBytes),
     writeFile(xltxPath, workbookBytes),
     writeFile(xltmPath, workbookBytes),
+    writeFile(audioPath, 'audio attachment fixture'),
+    writeFile(videoPath, 'video attachment fixture'),
     writeFile(zipPath, 'unknown extension attachment fixture'),
     writeFile(largePath, Buffer.alloc(11 * 1024 * 1024, 65)),
     writeFile(droppedFilePath, '# Dropped path attachment')
@@ -82,6 +88,8 @@ const createAttachmentFixtures = async (): Promise<{
     xlsmPath,
     xltxPath,
     xltmPath,
+    audioPath,
+    videoPath,
     zipPath,
     largePath,
     folderPath,
@@ -162,6 +170,25 @@ describe('workbench conversation e2e', () => {
           }
           await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.zipPath)
           await waitForAttachmentCardByName(page, 'unknown-bundle.zip')
+          await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.audioPath)
+          await waitForAttachmentCardByName(page, 'sample-audio.mp3')
+          await selectWorkbenchAttachmentThroughNativeDialog(page, attachments.videoPath)
+          await waitForAttachmentCardByName(page, 'sample-video.mp4')
+          const audioCard = getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+            .filter({ hasText: 'sample-audio.mp3' })
+            .first()
+          const videoCard = getWorkbenchPrefixLocator(page, workbenchSelectors.attachmentCardPrefix)
+            .filter({ hasText: 'sample-video.mp4' })
+            .first()
+          const audioIconVisible =
+            (await audioCard.locator('[data-reference-icon-kind="audio"]').count()) > 0
+          const videoIconVisible =
+            (await videoCard.locator('[data-reference-icon-kind="video"]').count()) > 0
+          await audioCard.click()
+          await videoCard.click()
+          const mediaRevealCalls = (await runtime.collectSignals()).ipcInvokeEntries.filter(
+            (entry) => entry.name === 'revealPath'
+          )
           await selectWorkbenchDirectoryThroughNativeDialog(page, attachments.folderPath)
           await waitForAttachmentCardByName(page, 'reference-folder')
           const folderCard = getWorkbenchPrefixLocator(
@@ -495,6 +522,11 @@ describe('workbench conversation e2e', () => {
             pptxCardText,
             spreadsheetCardTexts,
             zipCardText,
+            audioIconVisible,
+            videoIconVisible,
+            audioPath: attachments.audioPath,
+            videoPath: attachments.videoPath,
+            mediaRevealPaths: mediaRevealCalls.map((entry) => entry.payload),
             folderCardText,
             submittedAttachmentKinds: submittedAttachments.map((attachment) => attachment.kind),
             submittedAttachmentNames: submittedAttachments.map((attachment) => attachment.name),
@@ -538,6 +570,10 @@ describe('workbench conversation e2e', () => {
                 result.spreadsheetCardTexts[index]?.includes(fileName)
               ) &&
               result.zipCardText.includes('unknown-bundle.zip') &&
+              result.audioIconVisible &&
+              result.videoIconVisible &&
+              result.mediaRevealPaths.includes(result.audioPath) &&
+              result.mediaRevealPaths.includes(result.videoPath) &&
               [
                 'workbench-preview.md',
                 'qa-image.png',
@@ -548,11 +584,13 @@ describe('workbench conversation e2e', () => {
                 'template-reference.xltx',
                 'macro-template-reference.xltm',
                 'unknown-bundle.zip',
+                'sample-audio.mp3',
+                'sample-video.mp4',
                 'qa-large.json',
                 'reference-folder',
                 'dropped-context.md'
               ].every((name) => result.submittedAttachmentNames.includes(name)) &&
-              result.submittedAttachmentPaths.length === 12 &&
+              result.submittedAttachmentPaths.length === 14 &&
               result.submittedAttachmentKinds.includes('directory') &&
               result.folderCardText.includes('reference-folder') &&
               result.inputAttachmentTypeLabelCount === 0 &&

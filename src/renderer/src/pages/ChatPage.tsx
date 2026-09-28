@@ -92,6 +92,7 @@ import ScheduledTaskCountChip from '../components/scheduledTasks/ScheduledTaskCo
 import MessageActionCapsule from '../components/workbench/MessageActionCapsule'
 import ImageLightbox from '../components/workbench/ImageLightbox'
 import AttachmentFileIcon from '../components/workbench/composer/AttachmentFileIcon'
+import { isAttachmentDocumentPreviewable } from '../components/workbench/composer/attachmentPresentation'
 import type { DroppedAttachmentItem } from '../components/workbench/WorkbenchComposer'
 import ReferenceInlineToken from '../components/workbench/composer/ReferenceInlineToken'
 import type { ImageLightboxImage } from '../components/workbench/ImageLightbox'
@@ -4365,10 +4366,10 @@ const ChatPage: React.FC = () => {
                       <button
                         key={attachment.id}
                         type="button"
-                        className={`h-[54px] shrink-0 rounded-[8px] border border-[#E5E4E0] bg-white text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3] ${
+                        className={`h-[44px] shrink-0 rounded-[8px] border border-[#E5E4E0] bg-white text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3] ${
                           attachment.kind === 'image'
-                            ? 'w-[54px] overflow-hidden p-0'
-                            : 'flex w-[220px] items-center gap-2 px-2 py-1.5'
+                            ? 'w-[44px] overflow-hidden p-0'
+                            : 'flex w-[200px] items-center gap-1.5 px-1.5 py-1'
                         }`}
                         title={attachment.name}
                         data-testid={`${workbenchSelectors.userMessageAttachmentPrefix}-${attachment.id}`}
@@ -4378,7 +4379,19 @@ const ChatPage: React.FC = () => {
                             if (src) setPreviewImage({ name: attachment.name, src })
                             return
                           }
-                          void window.api.openPath(attachment.path)
+                          if (attachment.kind === 'directory') {
+                            void openPathOrNotify(attachment.path)
+                            return
+                          }
+                          if (isAttachmentDocumentPreviewable(attachment)) {
+                            void openFile({
+                              path: attachment.path,
+                              fileName: attachment.name,
+                              origin: 'preview'
+                            })
+                            return
+                          }
+                          void revealPathOrNotify(attachment.path)
                         }}
                       >
                         {attachment.kind === 'image' ? (
@@ -4395,8 +4408,8 @@ const ChatPage: React.FC = () => {
                           )
                         ) : attachment.kind === 'directory' ? (
                           <>
-                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#F4F4F2] text-[#787774]">
-                              <HiOutlineFolder className="h-5 w-5" />
+                            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">
+                              <HiOutlineFolder className="h-4 w-4" />
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="block truncate text-[13px] font-medium leading-5 text-[#37352F]">
@@ -5156,6 +5169,7 @@ const ChatPage: React.FC = () => {
                                 contextUsage={contextUsage}
                                 plan={composerPlan}
                                 requestAttachmentTarget={ensureAttachmentTarget}
+                                onPreviewFile={(file) => void openFile(file)}
                                 onFileDropHandlerReady={(handler) => {
                                   composerFileDropHandlerRef.current = handler
                                 }}

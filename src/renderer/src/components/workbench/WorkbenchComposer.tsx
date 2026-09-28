@@ -17,10 +17,12 @@ import { normalizeUserFacingError } from '../../utils/userFacingError'
 import type {
   WorkbenchAiPreference,
   WorkbenchContextUsage,
-  WorkbenchExecutionPermission
+  WorkbenchExecutionPermission,
+  WorkbenchFileRef
 } from './types'
 import { buildComposerPlaceholder, COMPOSER_REFERENCE_KINDS } from './composer/constants'
 import AttachmentFileIcon from './composer/AttachmentFileIcon'
+import { isAttachmentDocumentPreviewable } from './composer/attachmentPresentation'
 import ReferenceMentionPanel from './composer/ReferenceMentionPanel'
 import type { ComposerDraftValue, ComposerNode } from './composer/types'
 import {
@@ -64,6 +66,7 @@ type WorkbenchComposerProps = {
   onSubmit: () => void
   onCancel: () => void
   onPreviewImage?: (image: ImageLightboxImage) => void
+  onPreviewFile?: (file: WorkbenchFileRef) => void
   loading: boolean
   cancelling?: boolean
   canSubmit: boolean
@@ -99,6 +102,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
   onSubmit,
   onCancel,
   onPreviewImage,
+  onPreviewFile,
   loading,
   cancelling = false,
   canSubmit,
@@ -915,15 +919,15 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
         }}
       >
         {currentAttachments.length > 0 ? (
-          <div className="mb-2 flex max-h-[88px] gap-2 overflow-x-auto overflow-y-hidden pb-1 pr-1">
+          <div className="mb-1.5 flex max-h-[72px] gap-1.5 overflow-x-auto overflow-y-hidden pb-0.5 pr-0.5">
             {currentAttachments.map((attachment) => (
               <button
                 key={attachment.id}
                 type="button"
-                className={`group relative h-[54px] shrink-0 rounded-[8px] border border-[#E5E4E0] bg-white text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3] ${
+                className={`group relative h-[44px] shrink-0 rounded-[8px] border border-[#E5E4E0] bg-white text-left shadow-[0_1px_2px_rgba(15,15,15,0.04)] transition hover:border-[#D8D7D3] ${
                   attachment.kind === 'image'
-                    ? 'w-[54px] overflow-hidden p-0'
-                    : 'flex w-[220px] items-center gap-2 px-2 py-1.5 pr-7'
+                    ? 'w-[44px] overflow-hidden p-0'
+                    : 'flex w-[200px] items-center gap-1.5 px-1.5 py-1 pr-6'
                 }`}
                 data-testid={`${workbenchSelectors.attachmentCardPrefix}-${attachment.id}`}
                 onClick={() => {
@@ -932,7 +936,23 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     if (src) onPreviewImage?.({ name: attachment.name, src })
                     return
                   }
-                  void window.api.openPath(attachment.path)
+                  if (attachment.kind === 'directory') {
+                    void window.api.openPath(attachment.path)
+                    return
+                  }
+                  if (isAttachmentDocumentPreviewable(attachment)) {
+                    if (onPreviewFile) {
+                      onPreviewFile({
+                        path: attachment.path,
+                        fileName: attachment.name,
+                        origin: 'preview'
+                      })
+                    } else {
+                      void window.api.revealPath(attachment.path)
+                    }
+                    return
+                  }
+                  void window.api.revealPath(attachment.path)
                 }}
                 title={attachment.name}
               >
@@ -949,8 +969,8 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     )}
                   </span>
                 ) : attachment.kind === 'directory' ? (
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[#F4F4F2] text-[#787774]">
-                    <HiOutlineFolder className="h-5 w-5" />
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[#F4F4F2] text-[#787774]">
+                    <HiOutlineFolder className="h-4 w-4" />
                   </span>
                 ) : (
                   <AttachmentFileIcon fileName={attachment.name} />
@@ -966,7 +986,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                   role="button"
                   tabIndex={0}
                   aria-label="移除附件"
-                  className="absolute right-1 top-1 hidden h-[18px] w-[18px] items-center justify-center rounded-full bg-[#37352F] text-white shadow group-hover:flex"
+                  className="absolute right-1 top-1 hidden h-4 w-4 items-center justify-center rounded-full bg-[#37352F] text-white shadow group-hover:flex"
                   data-testid={`${workbenchSelectors.attachmentRemoveButtonPrefix}-${attachment.id}`}
                   onClick={(event) => {
                     event.preventDefault()
@@ -980,7 +1000,7 @@ const WorkbenchComposer: React.FC<WorkbenchComposerProps> = ({
                     removeAttachment(attachment.id)
                   }}
                 >
-                  <HiXMark className="h-3 w-3" />
+                  <HiXMark className="h-2.5 w-2.5" />
                 </span>
               </button>
             ))}

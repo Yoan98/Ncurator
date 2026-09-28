@@ -1,4 +1,5 @@
 import React from 'react'
+import { HiOutlineMusicalNote, HiOutlineVideoCamera } from 'react-icons/hi2'
 import type { SelectedReference } from '../../../../../shared/types'
 import { getReferenceVisualSpec } from './referenceVisuals'
 
@@ -66,7 +67,11 @@ export const ReferenceIcon: React.FC<ReferenceIconProps> = ({ reference, size = 
       className={`inline-flex shrink-0 items-center justify-center ${containerSizeClassName[size]}`}
       data-reference-icon-kind={visualSpec.kind}
     >
-      {visualSpec.kind !== 'directory' && visualSpec.kind !== 'web' ? (
+      {visualSpec.kind === 'audio' ? (
+        <HiOutlineMusicalNote className={iconClassName} />
+      ) : visualSpec.kind === 'video' ? (
+        <HiOutlineVideoCamera className={iconClassName} />
+      ) : visualSpec.kind !== 'directory' && visualSpec.kind !== 'web' ? (
         <DocumentGlyph
           className={iconClassName}
           fillClassName={visualSpec.documentFillClassName}

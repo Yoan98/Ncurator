@@ -1,6 +1,15 @@
 import type { SelectedReference } from '../../../../../shared/types'
 
-export type ReferenceVisualKind = 'directory' | 'web' | 'pdf' | 'docx' | 'xlsx' | 'ppt' | 'file'
+export type ReferenceVisualKind =
+  | 'directory'
+  | 'web'
+  | 'pdf'
+  | 'docx'
+  | 'xlsx'
+  | 'ppt'
+  | 'audio'
+  | 'video'
+  | 'file'
 
 export type ReferenceVisualSpec = {
   kind: ReferenceVisualKind
@@ -58,6 +67,20 @@ const REFERENCE_VISUAL_SPECS: Record<ReferenceVisualKind, ReferenceVisualSpec> =
     documentAccentClassName: 'fill-[#FDE68A]',
     documentLabel: 'PPT'
   },
+  audio: {
+    kind: 'audio',
+    iconClassName: 'text-[#8B5CF6]',
+    labelClassName: 'text-[#7C3AED]',
+    documentFillClassName: 'fill-none',
+    documentAccentClassName: 'fill-none'
+  },
+  video: {
+    kind: 'video',
+    iconClassName: 'text-[#0F766E]',
+    labelClassName: 'text-[#0F766E]',
+    documentFillClassName: 'fill-none',
+    documentAccentClassName: 'fill-none'
+  },
   file: {
     kind: 'file',
     iconClassName: 'text-[#787774]',
@@ -95,6 +118,12 @@ export const getReferenceVisualKind = (reference: SelectedReference): ReferenceV
   if (fileExt === 'docx') return 'docx'
   if (['xls', 'xlsx', 'xlsm', 'xltx', 'xltm', 'csv'].includes(fileExt)) return 'xlsx'
   if (fileExt === 'ppt' || fileExt === 'pptx') return 'ppt'
+  if (['aac', 'flac', 'm4a', 'mp3', 'oga', 'ogg', 'opus', 'wav', 'weba'].includes(fileExt)) {
+    return 'audio'
+  }
+  if (['avi', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'ogv', 'webm', 'wmv'].includes(fileExt)) {
+    return 'video'
+  }
   return 'file'
 }
 

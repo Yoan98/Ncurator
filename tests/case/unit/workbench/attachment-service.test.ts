@@ -140,6 +140,23 @@ describe('attachment service runtime directories', () => {
     expect(attachment.name).toBe(name)
   })
 
+  it.each([
+    ['song.mp3', 'audio/mpeg'],
+    ['recording.wav', 'audio/wav'],
+    ['movie.mp4', 'video/mp4'],
+    ['movie.webm', 'video/webm']
+  ])('accepts media attachment %s with the expected MIME type', async (name, mimeType) => {
+    const attachment = await service.saveAttachment({
+      partnerId,
+      assetBucketId: 'bucket-media',
+      name,
+      bytes: Buffer.from('media-attachment')
+    })
+
+    expect(attachment.kind).toBe('file')
+    expect(attachment.mimeType).toBe(mimeType)
+  })
+
   it('accepts attachments with unknown extensions without failing', async () => {
     const attachment = await service.saveAttachment({
       partnerId,

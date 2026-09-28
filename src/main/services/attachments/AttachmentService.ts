@@ -33,7 +33,28 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   xlsm: 'application/vnd.ms-excel.sheet.macroEnabled.12',
   xltx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.template',
-  xltm: 'application/vnd.ms-excel.template.macroEnabled.12'
+  xltm: 'application/vnd.ms-excel.template.macroEnabled.12',
+  aac: 'audio/aac',
+  aif: 'audio/aiff',
+  aiff: 'audio/aiff',
+  flac: 'audio/flac',
+  m4a: 'audio/mp4',
+  mp3: 'audio/mpeg',
+  oga: 'audio/ogg',
+  ogg: 'audio/ogg',
+  opus: 'audio/opus',
+  wav: 'audio/wav',
+  weba: 'audio/webm',
+  avi: 'video/x-msvideo',
+  m4v: 'video/x-m4v',
+  mkv: 'video/x-matroska',
+  mov: 'video/quicktime',
+  mp4: 'video/mp4',
+  mpeg: 'video/mpeg',
+  mpg: 'video/mpeg',
+  ogv: 'video/ogg',
+  webm: 'video/webm',
+  wmv: 'video/x-ms-wmv'
 }
 
 const normalizeExt = (value: string): string =>
